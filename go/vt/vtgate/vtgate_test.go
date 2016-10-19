@@ -21,6 +21,7 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver/sandboxconn"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vtgate/gateway"
 	"golang.org/x/net/context"
 
@@ -115,6 +116,9 @@ func TestVTGateExecute(t *testing.T) {
 		false,
 		nil)
 	rpcVTGate.Rollback(context.Background(), session)
+	if sbc.RollbackCount.Get() != 1 {
+		t.Errorf("want 1, got %d", sbc.RollbackCount.Get())
+	}
 }
 
 func TestVTGateExecuteWithKeyspace(t *testing.T) {
@@ -143,7 +147,7 @@ func TestVTGateExecuteWithKeyspace(t *testing.T) {
 		nil,
 		false,
 		nil)
-	want := "keyspace aa not found in vschema"
+	want := "keyspace aa not found in vschema, vtgate: "
 	if err == nil || err.Error() != want {
 		t.Errorf("Execute: %v, want %s", err, want)
 	}
@@ -218,13 +222,9 @@ func TestVTGateExecuteShards(t *testing.T) {
 		false,
 		nil)
 	rpcVTGate.Rollback(context.Background(), session)
-	/*
-		// Flaky: This test should be run manually.
-		runtime.Gosched()
-		if sbc.RollbackCount != 1 {
-			t.Errorf("want 1, got %d", sbc.RollbackCount)
-		}
-	*/
+	if sbc.RollbackCount.Get() != 1 {
+		t.Errorf("want 1, got %d", sbc.RollbackCount.Get())
+	}
 }
 
 func TestVTGateExecuteKeyspaceIds(t *testing.T) {
@@ -1429,4 +1429,616 @@ func verifyBoundQueriesAnnotatedAsUnfriendly(t *testing.T, expectedNumQueries in
 	for i := range queries {
 		verifyBoundQueryAnnotatedAsUnfriendly(t, &queries[i])
 	}
+}
+
+func testErrorPropagation(t *testing.T, sbcs []*sandboxconn.SandboxConn, before func(sbc *sandboxconn.SandboxConn), after func(sbc *sandboxconn.SandboxConn), expected vtrpcpb.ErrorCode) {
+
+	// Execute
+	for _, sbc := range sbcs {
+		before(sbc)
+	}
+	_, err := rpcVTGate.Execute(context.Background(),
+		"select id from t1",
+		nil,
+		"",
+		topodatapb.TabletType_MASTER,
+		nil,
+		false,
+		nil)
+	if err == nil {
+		t.Errorf("error %v not propagated for Execute", expected)
+	} else {
+		ec := vterrors.RecoverVtErrorCode(err)
+		if ec != expected {
+			t.Errorf("unexpected error, got %v want %v: %v", ec, expected, err)
+		}
+	}
+	for _, sbc := range sbcs {
+		after(sbc)
+	}
+
+	// ExecuteShards
+	for _, sbc := range sbcs {
+		before(sbc)
+	}
+	_, err = rpcVTGate.ExecuteShards(context.Background(),
+		"query",
+		nil,
+		KsTestUnsharded,
+		[]string{"0"},
+		topodatapb.TabletType_MASTER,
+		nil,
+		false,
+		executeOptions)
+	if err == nil {
+		t.Errorf("error %v not propagated for ExecuteShards", expected)
+	} else {
+		ec := vterrors.RecoverVtErrorCode(err)
+		if ec != expected {
+			t.Errorf("unexpected error, got %v want %v: %v", ec, expected, err)
+		}
+	}
+	for _, sbc := range sbcs {
+		after(sbc)
+	}
+
+	// ExecuteKeyspaceIds
+	for _, sbc := range sbcs {
+		before(sbc)
+	}
+	_, err = rpcVTGate.ExecuteKeyspaceIds(context.Background(),
+		"query",
+		nil,
+		KsTestUnsharded,
+		[][]byte{{0x10}},
+		topodatapb.TabletType_MASTER,
+		nil,
+		false,
+		executeOptions)
+	if err == nil {
+		t.Errorf("error %v not propagated for ExecuteKeyspaceIds", expected)
+	} else {
+		ec := vterrors.RecoverVtErrorCode(err)
+		if ec != expected {
+			t.Errorf("unexpected error, got %v want %v: %v", ec, expected, err)
+		}
+	}
+	for _, sbc := range sbcs {
+		after(sbc)
+	}
+
+	// ExecuteKeyRanges
+	for _, sbc := range sbcs {
+		before(sbc)
+	}
+	_, err = rpcVTGate.ExecuteKeyRanges(context.Background(),
+		"query",
+		nil,
+		KsTestUnsharded,
+		[]*topodatapb.KeyRange{{End: []byte{0x20}}},
+		topodatapb.TabletType_MASTER,
+		nil,
+		false,
+		executeOptions)
+	if err == nil {
+		t.Errorf("error %v not propagated for ExecuteKeyRanges", expected)
+	} else {
+		ec := vterrors.RecoverVtErrorCode(err)
+		if ec != expected {
+			t.Errorf("unexpected error, got %v want %v: %v", ec, expected, err)
+		}
+	}
+	for _, sbc := range sbcs {
+		after(sbc)
+	}
+
+	// ExecuteEntityIds
+	for _, sbc := range sbcs {
+		before(sbc)
+	}
+	_, err = rpcVTGate.ExecuteEntityIds(context.Background(),
+		"query",
+		nil,
+		KsTestUnsharded,
+		"kid",
+		[]*vtgatepb.ExecuteEntityIdsRequest_EntityId{
+			{
+				Type:       sqltypes.VarBinary,
+				Value:      []byte("id1"),
+				KeyspaceId: []byte{0x10},
+			},
+		},
+		topodatapb.TabletType_MASTER,
+		nil,
+		false,
+		executeOptions)
+	if err == nil {
+		t.Errorf("error %v not propagated for ExecuteEntityIds", expected)
+	} else {
+		ec := vterrors.RecoverVtErrorCode(err)
+		if ec != expected {
+			t.Errorf("unexpected error, got %v want %v: %v", ec, expected, err)
+		}
+	}
+	for _, sbc := range sbcs {
+		after(sbc)
+	}
+
+	// ExecuteBatchShards
+	for _, sbc := range sbcs {
+		before(sbc)
+	}
+	_, err = rpcVTGate.ExecuteBatchShards(context.Background(),
+		[]*vtgatepb.BoundShardQuery{{
+			Query: &querypb.BoundQuery{
+				Sql:           "query",
+				BindVariables: nil,
+			},
+			Keyspace: KsTestUnsharded,
+			Shards:   []string{"0", "0"},
+		}, {
+			Query: &querypb.BoundQuery{
+				Sql:           "query",
+				BindVariables: nil,
+			},
+			Keyspace: KsTestUnsharded,
+			Shards:   []string{"0", "0"},
+		}},
+		topodatapb.TabletType_MASTER,
+		false,
+		nil,
+		executeOptions)
+	if err == nil {
+		t.Errorf("error %v not propagated for ExecuteBatchShards", expected)
+	} else {
+		ec := vterrors.RecoverVtErrorCode(err)
+		if ec != expected {
+			t.Errorf("unexpected error, got %v want %v: %v", ec, expected, err)
+		}
+	}
+	for _, sbc := range sbcs {
+		after(sbc)
+	}
+
+	// ExecuteBatchKeyspaceIds
+	for _, sbc := range sbcs {
+		before(sbc)
+	}
+	kid10 := []byte{0x10}
+	kid30 := []byte{0x30}
+	_, err = rpcVTGate.ExecuteBatchKeyspaceIds(context.Background(),
+		[]*vtgatepb.BoundKeyspaceIdQuery{{
+			Query: &querypb.BoundQuery{
+				Sql:           "query",
+				BindVariables: nil,
+			},
+			Keyspace:    KsTestUnsharded,
+			KeyspaceIds: [][]byte{kid10, kid30},
+		}, {
+			Query: &querypb.BoundQuery{
+				Sql:           "query",
+				BindVariables: nil,
+			},
+			Keyspace:    KsTestUnsharded,
+			KeyspaceIds: [][]byte{kid10, kid30},
+		}},
+		topodatapb.TabletType_MASTER,
+		false,
+		nil,
+		executeOptions)
+	if err == nil {
+		t.Errorf("error %v not propagated for ExecuteBatchShards", expected)
+	} else {
+		ec := vterrors.RecoverVtErrorCode(err)
+		if ec != expected {
+			t.Errorf("unexpected error, got %v want %v: %v", ec, expected, err)
+		}
+	}
+	for _, sbc := range sbcs {
+		after(sbc)
+	}
+
+	// StreamExecute
+	for _, sbc := range sbcs {
+		before(sbc)
+	}
+	err = rpcVTGate.StreamExecute(context.Background(),
+		"select id from t1",
+		nil,
+		"",
+		topodatapb.TabletType_MASTER,
+		executeOptions,
+		func(r *sqltypes.Result) error {
+			return nil
+		})
+	if err == nil {
+		t.Errorf("error %v not propagated for StreamExecute", expected)
+	} else {
+		ec := vterrors.RecoverVtErrorCode(err)
+		if ec != expected {
+			t.Errorf("unexpected error, got %v want %v: %v", ec, expected, err)
+		}
+	}
+	for _, sbc := range sbcs {
+		after(sbc)
+	}
+
+	// StreamExecuteShards
+	for _, sbc := range sbcs {
+		before(sbc)
+	}
+	err = rpcVTGate.StreamExecuteShards(context.Background(),
+		"query",
+		nil,
+		KsTestUnsharded,
+		[]string{"0"},
+		topodatapb.TabletType_MASTER,
+		executeOptions,
+		func(r *sqltypes.Result) error {
+			return nil
+		})
+	if err == nil {
+		t.Errorf("error %v not propagated for StreamExecuteShards", expected)
+	} else {
+		ec := vterrors.RecoverVtErrorCode(err)
+		if ec != expected {
+			t.Errorf("unexpected error, got %v want %v: %v", ec, expected, err)
+		}
+	}
+	for _, sbc := range sbcs {
+		after(sbc)
+	}
+
+	// StreamExecuteKeyspaceIds
+	for _, sbc := range sbcs {
+		before(sbc)
+	}
+	err = rpcVTGate.StreamExecuteKeyspaceIds(context.Background(),
+		"query",
+		nil,
+		KsTestUnsharded,
+		[][]byte{{0x10}},
+		topodatapb.TabletType_MASTER,
+		executeOptions,
+		func(r *sqltypes.Result) error {
+			return nil
+		})
+	if err == nil {
+		t.Errorf("error %v not propagated for StreamExecuteKeyspaceIds", expected)
+	} else {
+		ec := vterrors.RecoverVtErrorCode(err)
+		if ec != expected {
+			t.Errorf("unexpected error, got %v want %v: %v", ec, expected, err)
+		}
+	}
+	for _, sbc := range sbcs {
+		after(sbc)
+	}
+
+	// StreamExecuteKeyRanges
+	for _, sbc := range sbcs {
+		before(sbc)
+	}
+	err = rpcVTGate.StreamExecuteKeyRanges(context.Background(),
+		"query",
+		nil,
+		KsTestUnsharded,
+		[]*topodatapb.KeyRange{{End: []byte{0x20}}},
+		topodatapb.TabletType_MASTER,
+		executeOptions,
+		func(r *sqltypes.Result) error {
+			return nil
+		})
+	if err == nil {
+		t.Errorf("error %v not propagated for StreamExecuteKeyRanges", expected)
+	} else {
+		ec := vterrors.RecoverVtErrorCode(err)
+		if ec != expected {
+			t.Errorf("unexpected error, got %v want %v: %v", ec, expected, err)
+		}
+	}
+	for _, sbc := range sbcs {
+		after(sbc)
+	}
+
+	// Begin is skipped, it doesn't end up going to the tablet.
+
+	// Commit
+	for _, sbc := range sbcs {
+		before(sbc)
+	}
+	session := &vtgatepb.Session{
+		InTransaction: true,
+		ShardSessions: []*vtgatepb.Session_ShardSession{{
+			Target: &querypb.Target{
+				Keyspace:   KsTestUnsharded,
+				Shard:      "0",
+				TabletType: topodatapb.TabletType_MASTER,
+			},
+			TransactionId: 1,
+		}},
+	}
+	err = rpcVTGate.Commit(context.Background(), session)
+	if err == nil {
+		t.Errorf("error %v not propagated for Commit", expected)
+	} else {
+		ec := vterrors.RecoverVtErrorCode(err)
+		if ec != expected {
+			t.Errorf("unexpected error, got %v want %v: %v", ec, expected, err)
+		}
+	}
+	for _, sbc := range sbcs {
+		after(sbc)
+	}
+
+	// Rollback is skipped, it doesn't forward errors.
+
+	// SplitQuery
+	for _, sbc := range sbcs {
+		before(sbc)
+	}
+	_, err = rpcVTGate.SplitQuery(context.Background(),
+		KsTestUnsharded,
+		"select col1, col2 from table",
+		nil,
+		"",
+		24)
+	if err == nil {
+		t.Errorf("error %v not propagated for SplitQuery", expected)
+	} else {
+		ec := vterrors.RecoverVtErrorCode(err)
+		if ec != expected {
+			t.Errorf("unexpected error, got %v want %v: %v", ec, expected, err)
+		}
+	}
+	for _, sbc := range sbcs {
+		after(sbc)
+	}
+
+	// SplitQueryV2
+	for _, sbc := range sbcs {
+		before(sbc)
+	}
+	_, err = rpcVTGate.SplitQueryV2(context.Background(),
+		KsTestUnsharded,
+		"select col1, col2 from table",
+		nil,
+		[]string{"sc1", "sc2"},
+		100,
+		0,
+		querypb.SplitQueryRequest_FULL_SCAN)
+	if err == nil {
+		t.Errorf("error %v not propagated for SplitQueryV2", expected)
+	} else {
+		ec := vterrors.RecoverVtErrorCode(err)
+		if ec != expected {
+			t.Errorf("unexpected error, got %v want %v: %v", ec, expected, err)
+		}
+	}
+	for _, sbc := range sbcs {
+		after(sbc)
+	}
+}
+
+// TestErrorPropagation tests an error returned by sandboxconn is
+// properly propagated through vtgate layers.  We need both a master
+// tablet and a rdonly tablet because we don't control the routing of
+// Commit nor SplitQuery{,V2}.
+func TestErrorPropagation(t *testing.T) {
+	createSandbox(KsTestUnsharded)
+	hcVTGateTest.Reset()
+	sbcm := hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, KsTestUnsharded, "0", topodatapb.TabletType_MASTER, true, 1, nil)
+	sbcrdonly := hcVTGateTest.AddTestTablet("aa", "1.1.1.2", 1001, KsTestUnsharded, "0", topodatapb.TabletType_RDONLY, true, 1, nil)
+	sbcs := []*sandboxconn.SandboxConn{
+		sbcm,
+		sbcrdonly,
+	}
+
+	// ErrorCode_CANCELLED
+	testErrorPropagation(t, sbcs, func(sbc *sandboxconn.SandboxConn) {
+		sbc.MustFailCanceled = 20
+	}, func(sbc *sandboxconn.SandboxConn) {
+		sbc.MustFailCanceled = 0
+	}, vtrpcpb.ErrorCode_CANCELLED)
+
+	// ErrorCode_UNKNOWN_ERROR
+	testErrorPropagation(t, sbcs, func(sbc *sandboxconn.SandboxConn) {
+		sbc.MustFailUnknownError = 20
+	}, func(sbc *sandboxconn.SandboxConn) {
+		sbc.MustFailUnknownError = 0
+	}, vtrpcpb.ErrorCode_UNKNOWN_ERROR)
+
+	// ErrorCode_BAD_INPUT
+	testErrorPropagation(t, sbcs, func(sbc *sandboxconn.SandboxConn) {
+		sbc.MustFailServer = 20
+	}, func(sbc *sandboxconn.SandboxConn) {
+		sbc.MustFailServer = 0
+	}, vtrpcpb.ErrorCode_BAD_INPUT)
+
+	// ErrorCode_DEADLINE_EXCEEDED
+	testErrorPropagation(t, sbcs, func(sbc *sandboxconn.SandboxConn) {
+		sbc.MustFailDeadlineExceeded = 20
+	}, func(sbc *sandboxconn.SandboxConn) {
+		sbc.MustFailDeadlineExceeded = 0
+	}, vtrpcpb.ErrorCode_DEADLINE_EXCEEDED)
+
+	// ErrorCode_INTEGRITY_ERROR
+	testErrorPropagation(t, sbcs, func(sbc *sandboxconn.SandboxConn) {
+		sbc.MustFailIntegrityError = 20
+	}, func(sbc *sandboxconn.SandboxConn) {
+		sbc.MustFailIntegrityError = 0
+	}, vtrpcpb.ErrorCode_INTEGRITY_ERROR)
+
+	// ErrorCode_PERMISSION_DENIED
+	testErrorPropagation(t, sbcs, func(sbc *sandboxconn.SandboxConn) {
+		sbc.MustFailPermissionDenied = 20
+	}, func(sbc *sandboxconn.SandboxConn) {
+		sbc.MustFailPermissionDenied = 0
+	}, vtrpcpb.ErrorCode_PERMISSION_DENIED)
+
+	// ErrorCode_RESOURCE_EXHAUSTED
+	testErrorPropagation(t, sbcs, func(sbc *sandboxconn.SandboxConn) {
+		sbc.MustFailTxPool = 20
+	}, func(sbc *sandboxconn.SandboxConn) {
+		sbc.MustFailTxPool = 0
+	}, vtrpcpb.ErrorCode_RESOURCE_EXHAUSTED)
+
+	// ErrorCode_QUERY_NOT_SERVED
+	testErrorPropagation(t, sbcs, func(sbc *sandboxconn.SandboxConn) {
+		sbc.MustFailRetry = 20
+	}, func(sbc *sandboxconn.SandboxConn) {
+		sbc.MustFailRetry = 0
+	}, vtrpcpb.ErrorCode_QUERY_NOT_SERVED)
+
+	// ErrorCode_NOT_IN_TX
+	testErrorPropagation(t, sbcs, func(sbc *sandboxconn.SandboxConn) {
+		sbc.MustFailNotTx = 20
+	}, func(sbc *sandboxconn.SandboxConn) {
+		sbc.MustFailNotTx = 0
+	}, vtrpcpb.ErrorCode_NOT_IN_TX)
+
+	// ErrorCode_INTERNAL_ERROR
+	testErrorPropagation(t, sbcs, func(sbc *sandboxconn.SandboxConn) {
+		sbc.MustFailFatal = 20
+	}, func(sbc *sandboxconn.SandboxConn) {
+		sbc.MustFailFatal = 0
+	}, vtrpcpb.ErrorCode_INTERNAL_ERROR)
+
+	// ErrorCode_TRANSIENT_ERROR
+	testErrorPropagation(t, sbcs, func(sbc *sandboxconn.SandboxConn) {
+		sbc.MustFailTransientError = 20
+	}, func(sbc *sandboxconn.SandboxConn) {
+		sbc.MustFailTransientError = 0
+	}, vtrpcpb.ErrorCode_TRANSIENT_ERROR)
+
+	// ErrorCode_UNAUTHENTICATED
+	testErrorPropagation(t, sbcs, func(sbc *sandboxconn.SandboxConn) {
+		sbc.MustFailUnauthenticated = 20
+	}, func(sbc *sandboxconn.SandboxConn) {
+		sbc.MustFailUnauthenticated = 0
+	}, vtrpcpb.ErrorCode_UNAUTHENTICATED)
+}
+
+// This test makes sure that if we start a transaction and hit a critical
+// error, a rollback is issued.
+func TestErrorIssuesRollback(t *testing.T) {
+	createSandbox(KsTestUnsharded)
+	hcVTGateTest.Reset()
+	sbc := hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, KsTestUnsharded, "0", topodatapb.TabletType_MASTER, true, 1, nil)
+
+	// Start a transaction, send one statement.
+	// Simulate an error that should trigger a rollback:
+	// vtrpcpb.ErrorCode_NOT_IN_TX case.
+	session, err := rpcVTGate.Begin(context.Background())
+	if err != nil {
+		t.Fatalf("cannot start a transaction: %v", err)
+	}
+	_, err = rpcVTGate.Execute(context.Background(),
+		"select id from t1",
+		nil,
+		"",
+		topodatapb.TabletType_MASTER,
+		session,
+		false,
+		nil)
+	if err != nil {
+		t.Fatalf("want nil, got %v", err)
+	}
+	if sbc.RollbackCount.Get() != 0 {
+		t.Errorf("want 0, got %d", sbc.RollbackCount.Get())
+	}
+	sbc.MustFailNotTx = 20
+	_, err = rpcVTGate.Execute(context.Background(),
+		"select id from t1",
+		nil,
+		"",
+		topodatapb.TabletType_MASTER,
+		session,
+		false,
+		nil)
+	if err == nil {
+		t.Fatalf("want error but got nil")
+	}
+	if sbc.RollbackCount.Get() != 1 {
+		t.Errorf("want 1, got %d", sbc.RollbackCount.Get())
+	}
+	sbc.RollbackCount.Set(0)
+	sbc.MustFailNotTx = 0
+
+	// Start a transaction, send one statement.
+	// Simulate an error that should trigger a rollback:
+	// vtrpcpb.ErrorCode_RESOURCE_EXHAUSTED case.
+	session, err = rpcVTGate.Begin(context.Background())
+	if err != nil {
+		t.Fatalf("cannot start a transaction: %v", err)
+	}
+	_, err = rpcVTGate.Execute(context.Background(),
+		"select id from t1",
+		nil,
+		"",
+		topodatapb.TabletType_MASTER,
+		session,
+		false,
+		nil)
+	if err != nil {
+		t.Fatalf("want nil, got %v", err)
+	}
+	if sbc.RollbackCount.Get() != 0 {
+		t.Errorf("want 0, got %d", sbc.RollbackCount.Get())
+	}
+	sbc.MustFailTxPool = 20
+	_, err = rpcVTGate.Execute(context.Background(),
+		"select id from t1",
+		nil,
+		"",
+		topodatapb.TabletType_MASTER,
+		session,
+		false,
+		nil)
+	if err == nil {
+		t.Fatalf("want error but got nil")
+	}
+	if sbc.RollbackCount.Get() != 1 {
+		t.Errorf("want 1, got %d", sbc.RollbackCount.Get())
+	}
+	sbc.RollbackCount.Set(0)
+	sbc.MustFailTxPool = 0
+
+	// Start a transaction, send one statement.
+	// Simulate an error that should *not* trigger a rollback:
+	// vtrpcpb.ErrorCode_INTEGRITY_ERROR case.
+	session, err = rpcVTGate.Begin(context.Background())
+	if err != nil {
+		t.Fatalf("cannot start a transaction: %v", err)
+	}
+	_, err = rpcVTGate.Execute(context.Background(),
+		"select id from t1",
+		nil,
+		"",
+		topodatapb.TabletType_MASTER,
+		session,
+		false,
+		nil)
+	if err != nil {
+		t.Fatalf("want nil, got %v", err)
+	}
+	if sbc.RollbackCount.Get() != 0 {
+		t.Errorf("want 0, got %d", sbc.RollbackCount.Get())
+	}
+	sbc.MustFailIntegrityError = 20
+	_, err = rpcVTGate.Execute(context.Background(),
+		"select id from t1",
+		nil,
+		"",
+		topodatapb.TabletType_MASTER,
+		session,
+		false,
+		nil)
+	if err == nil {
+		t.Fatalf("want error but got nil")
+	}
+	if sbc.RollbackCount.Get() != 0 {
+		t.Errorf("want 0, got %d", sbc.RollbackCount.Get())
+	}
+	sbc.MustFailIntegrityError = 0
 }

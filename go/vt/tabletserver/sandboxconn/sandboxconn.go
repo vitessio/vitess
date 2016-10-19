@@ -25,12 +25,19 @@ import (
 type SandboxConn struct {
 	tablet *topodatapb.Tablet
 
-	MustFailRetry  int
-	MustFailFatal  int
-	MustFailServer int
-	MustFailConn   int
-	MustFailTxPool int
-	MustFailNotTx  int
+	MustFailRetry            int
+	MustFailFatal            int
+	MustFailServer           int
+	MustFailConn             int
+	MustFailTxPool           int
+	MustFailNotTx            int
+	MustFailCanceled         int
+	MustFailUnknownError     int
+	MustFailDeadlineExceeded int
+	MustFailIntegrityError   int
+	MustFailPermissionDenied int
+	MustFailTransientError   int
+	MustFailUnauthenticated  int
 
 	// These Count vars report how often the corresponding
 	// functions were called.
@@ -116,6 +123,56 @@ func (sbc *SandboxConn) getError() error {
 			ServerCode: vtrpcpb.ErrorCode_NOT_IN_TX,
 		}
 	}
+	if sbc.MustFailCanceled > 0 {
+		sbc.MustFailCanceled--
+		return &tabletconn.ServerError{
+			Err:        "canceled: err",
+			ServerCode: vtrpcpb.ErrorCode_CANCELLED,
+		}
+	}
+	if sbc.MustFailUnknownError > 0 {
+		sbc.MustFailUnknownError--
+		return &tabletconn.ServerError{
+			Err:        "unknown error: err",
+			ServerCode: vtrpcpb.ErrorCode_UNKNOWN_ERROR,
+		}
+	}
+	if sbc.MustFailDeadlineExceeded > 0 {
+		sbc.MustFailDeadlineExceeded--
+		return &tabletconn.ServerError{
+			Err:        "deadline exceeded: err",
+			ServerCode: vtrpcpb.ErrorCode_DEADLINE_EXCEEDED,
+		}
+	}
+	if sbc.MustFailIntegrityError > 0 {
+		sbc.MustFailIntegrityError--
+		return &tabletconn.ServerError{
+			Err:        "integrity error: err",
+			ServerCode: vtrpcpb.ErrorCode_INTEGRITY_ERROR,
+		}
+	}
+	if sbc.MustFailPermissionDenied > 0 {
+		sbc.MustFailPermissionDenied--
+		return &tabletconn.ServerError{
+			Err:        "permission denied: err",
+			ServerCode: vtrpcpb.ErrorCode_PERMISSION_DENIED,
+		}
+	}
+	if sbc.MustFailTransientError > 0 {
+		sbc.MustFailTransientError--
+		return &tabletconn.ServerError{
+			Err:        "transient error: err",
+			ServerCode: vtrpcpb.ErrorCode_TRANSIENT_ERROR,
+		}
+	}
+	if sbc.MustFailUnauthenticated > 0 {
+		sbc.MustFailUnauthenticated--
+		return &tabletconn.ServerError{
+			Err:        "unauthenticated: err",
+			ServerCode: vtrpcpb.ErrorCode_UNAUTHENTICATED,
+		}
+	}
+
 	return nil
 }
 
@@ -292,6 +349,10 @@ var SandboxSQRowCount = int64(10)
 // SplitQuery creates splits from the original query by appending the
 // split index as a comment to the SQL. RowCount is always SandboxSQRowCount
 func (sbc *SandboxConn) SplitQuery(ctx context.Context, target *querypb.Target, query querytypes.BoundQuery, splitColumn string, splitCount int64) ([]querytypes.QuerySplit, error) {
+	err := sbc.getError()
+	if err != nil {
+		return nil, err
+	}
 	splits := []querytypes.QuerySplit{}
 	for i := 0; i < int(splitCount); i++ {
 		split := querytypes.QuerySplit{
@@ -314,6 +375,10 @@ func (sbc *SandboxConn) SplitQueryV2(
 	splitCount int64,
 	numRowsPerQueryPart int64,
 	algorithm querypb.SplitQueryRequest_Algorithm) ([]querytypes.QuerySplit, error) {
+	err := sbc.getError()
+	if err != nil {
+		return nil, err
+	}
 	splits := []querytypes.QuerySplit{
 		{
 			Sql: fmt.Sprintf(

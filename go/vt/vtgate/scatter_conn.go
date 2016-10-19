@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"math/rand"
-	"strings"
 	"sync"
 	"time"
 
@@ -82,28 +81,22 @@ func (stc *ScatterConn) startAction(name, keyspace, shard string, tabletType top
 func (stc *ScatterConn) endAction(startTime time.Time, allErrors *concurrency.AllErrorRecorder, statsKey []string, err *error) {
 	if *err != nil {
 		allErrors.RecordError(*err)
-
 		// Don't increment the error counter for duplicate
-		// keys, as those errors are caused by client queries
-		// and are not VTGate's fault.
-		// TODO(aaijazi): get rid of this string parsing, and
-		// handle all cases of invalid input
-		strErr := (*err).Error()
-		if !strings.Contains(strErr, errDupKey) && !strings.Contains(strErr, errOutOfRange) {
+		// keys or bad queries, as those errors are caused by
+		// client queries and are not VTGate's fault.
+		ec := vterrors.RecoverVtErrorCode(*err)
+		if ec != vtrpcpb.ErrorCode_INTEGRITY_ERROR && ec != vtrpcpb.ErrorCode_BAD_INPUT {
 			stc.tabletCallErrorCount.Add(statsKey, 1)
 		}
 	}
 	stc.timings.Record(statsKey, startTime)
 }
 
-func (stc *ScatterConn) rollbackIfNeeded(ctx context.Context, allErrors *concurrency.AllErrorRecorder, session *SafeSession) {
+func (stc *ScatterConn) rollbackIfNeeded(ctx context.Context, err error, session *SafeSession) {
 	if session.InTransaction() {
-		errstr := allErrors.Error().Error()
-		// We cannot recover from these errors
-		// TODO(aaijazi): get rid of this string parsing. Might
-		// want a function that searches through a deeply
-		// nested error chain for a particular error.
-		if strings.Contains(errstr, "tx_pool_full") || strings.Contains(errstr, "not_in_tx") {
+		ec := vterrors.RecoverVtErrorCode(err)
+		if ec == vtrpcpb.ErrorCode_RESOURCE_EXHAUSTED || ec == vtrpcpb.ErrorCode_NOT_IN_TX {
+			// We cannot recover from these errors
 			stc.Rollback(ctx, session)
 		}
 	}
@@ -157,8 +150,9 @@ func (stc *ScatterConn) Execute(
 		})
 
 	if allErrors.HasErrors() {
-		stc.rollbackIfNeeded(ctx, allErrors, session)
-		return nil, allErrors.AggrError(stc.aggregateErrors)
+		err := allErrors.AggrError(stc.aggregateErrors)
+		stc.rollbackIfNeeded(ctx, err, session)
+		return nil, err
 	}
 	return qr, nil
 }
@@ -212,8 +206,9 @@ func (stc *ScatterConn) ExecuteMulti(
 		})
 
 	if allErrors.HasErrors() {
-		stc.rollbackIfNeeded(ctx, allErrors, session)
-		return nil, allErrors.AggrError(stc.aggregateErrors)
+		err := allErrors.AggrError(stc.aggregateErrors)
+		stc.rollbackIfNeeded(ctx, err, session)
+		return nil, err
 	}
 	return qr, nil
 }
@@ -268,8 +263,9 @@ func (stc *ScatterConn) ExecuteEntityIds(
 			return transactionID, nil
 		})
 	if allErrors.HasErrors() {
-		stc.rollbackIfNeeded(ctx, allErrors, session)
-		return nil, allErrors.AggrError(stc.aggregateErrors)
+		err := allErrors.AggrError(stc.aggregateErrors)
+		stc.rollbackIfNeeded(ctx, err, session)
+		return nil, err
 	}
 	return qr, nil
 }
@@ -349,8 +345,9 @@ func (stc *ScatterConn) ExecuteBatch(
 	// If we want to rollback, we have to do it before closing results
 	// so that the session is updated to be not InTransaction.
 	if allErrors.HasErrors() {
-		stc.rollbackIfNeeded(ctx, allErrors, session)
-		return nil, allErrors.AggrError(stc.aggregateErrors)
+		err := allErrors.AggrError(stc.aggregateErrors)
+		stc.rollbackIfNeeded(ctx, err, session)
+		return nil, err
 	}
 	return results, nil
 }

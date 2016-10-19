@@ -63,6 +63,8 @@ func NewTabletErrorSQL(errCode vtrpcpb.ErrorCode, err error) *TabletError {
 			}
 		case mysql.ErrDupEntry:
 			errCode = vtrpcpb.ErrorCode_INTEGRITY_ERROR
+		case mysql.ErrDataTooLong, mysql.ErrDataOutOfRange:
+			errCode = vtrpcpb.ErrorCode_BAD_INPUT
 		default:
 		}
 	}

@@ -28,6 +28,27 @@ func TestTabletErrorRetriableErrorTypeOverwrite(t *testing.T) {
 	if tabletErr.ErrorCode != vtrpcpb.ErrorCode_QUERY_NOT_SERVED {
 		t.Fatalf("got: %v wanted: QUERY_NOT_SERVED", tabletErr.ErrorCode)
 	}
+
+	sqlErr = sqldb.NewSQLError(mysql.ErrDupEntry, "23000", "error")
+	tabletErr = NewTabletErrorSQL(vtrpcpb.ErrorCode_INTERNAL_ERROR, sqlErr)
+	if tabletErr.ErrorCode != vtrpcpb.ErrorCode_INTEGRITY_ERROR {
+		t.Fatalf("got: %v wanted: INTEGRITY_ERROR", tabletErr.ErrorCode)
+	}
+
+	sqlErr = sqldb.NewSQLError(mysql.ErrDataTooLong, "22001", "error")
+	tabletErr = NewTabletErrorSQL(vtrpcpb.ErrorCode_INTERNAL_ERROR, sqlErr)
+	if tabletErr.ErrorCode != vtrpcpb.ErrorCode_BAD_INPUT {
+		t.Fatalf("got: %v wanted: BAD_INPUT", tabletErr.ErrorCode)
+	}
+
+	sqlErr = sqldb.NewSQLError(mysql.ErrDataOutOfRange, "22003", "error")
+	tabletErr = NewTabletErrorSQL(vtrpcpb.ErrorCode_INTERNAL_ERROR, sqlErr)
+	if tabletErr.ErrorCode != vtrpcpb.ErrorCode_BAD_INPUT {
+		t.Fatalf("got: %v wanted: BAD_INPUT", tabletErr.ErrorCode)
+	}
+}
+
+func TestTabletErrorRetriableErrorTypeOverwrite2(t *testing.T) {
 }
 
 func TestTabletErrorMsgTooLong(t *testing.T) {
