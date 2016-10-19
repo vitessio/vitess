@@ -30,7 +30,6 @@ func TestMultipleBoundaries(t *testing.T) {
 	mockSQLExecuter := splitquery_testing.NewMockSQLExecuter(mockCtrl)
 	expectedCall1 := mockSQLExecuter.EXPECT().SQLExecute(
 		"select id, user_id from test_table"+
-			" where int_col > 5"+
 			" order by id asc, user_id asc"+
 			" limit 1000, 1",
 		map[string]interface{}{})
@@ -42,9 +41,9 @@ func TestMultipleBoundaries(t *testing.T) {
 		nil)
 	expectedCall2 := mockSQLExecuter.EXPECT().SQLExecute(
 		"select id, user_id from test_table"+
-			" where (int_col > 5) and"+
-			" (:_splitquery_prev_id < id or"+
-			" (:_splitquery_prev_id = id and :_splitquery_prev_user_id <= user_id))"+
+			" where"+
+			" :_splitquery_prev_id < id or"+
+			" (:_splitquery_prev_id = id and :_splitquery_prev_user_id <= user_id)"+
 			" order by id asc, user_id asc"+
 			" limit 1000, 1",
 		map[string]interface{}{
@@ -60,9 +59,9 @@ func TestMultipleBoundaries(t *testing.T) {
 	expectedCall2.After(expectedCall1)
 	expectedCall3 := mockSQLExecuter.EXPECT().SQLExecute(
 		"select id, user_id from test_table"+
-			" where (int_col > 5) and"+
-			" (:_splitquery_prev_id < id or"+
-			" (:_splitquery_prev_id = id and :_splitquery_prev_user_id <= user_id))"+
+			" where"+
+			" :_splitquery_prev_id < id or"+
+			" (:_splitquery_prev_id = id and :_splitquery_prev_user_id <= user_id)"+
 			" order by id asc, user_id asc"+
 			" limit 1000, 1",
 		map[string]interface{}{
@@ -109,7 +108,6 @@ func TestSmallNumberOfRows(t *testing.T) {
 	mockSQLExecuter := splitquery_testing.NewMockSQLExecuter(mockCtrl)
 	expectedCall1 := mockSQLExecuter.EXPECT().SQLExecute(
 		"select id, user_id from test_table"+
-			" where int_col > 5"+
 			" order by id asc, user_id asc"+
 			" limit 1000, 1",
 		map[string]interface{}{})
@@ -149,7 +147,6 @@ func TestSQLExecuterReturnsError(t *testing.T) {
 	mockSQLExecuter := splitquery_testing.NewMockSQLExecuter(mockCtrl)
 	expectedCall1 := mockSQLExecuter.EXPECT().SQLExecute(
 		"select id, user_id from test_table"+
-			" where int_col > 5"+
 			" order by id asc, user_id asc"+
 			" limit 1000, 1",
 		map[string]interface{}{})
@@ -161,9 +158,9 @@ func TestSQLExecuterReturnsError(t *testing.T) {
 		nil)
 	expectedCall2 := mockSQLExecuter.EXPECT().SQLExecute(
 		"select id, user_id from test_table"+
-			" where (int_col > 5) and"+
-			" (:_splitquery_prev_id < id or"+
-			" (:_splitquery_prev_id = id and :_splitquery_prev_user_id <= user_id))"+
+			" where"+
+			" :_splitquery_prev_id < id or"+
+			" (:_splitquery_prev_id = id and :_splitquery_prev_user_id <= user_id)"+
 			" order by id asc, user_id asc"+
 			" limit 1000, 1",
 		map[string]interface{}{
