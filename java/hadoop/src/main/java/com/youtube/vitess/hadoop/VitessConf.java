@@ -1,6 +1,10 @@
 package com.youtube.vitess.hadoop;
 
 import com.youtube.vitess.client.RpcClientFactory;
+import com.youtube.vitess.proto.Query.SplitQueryRequest;
+
+import java.util.Collection;
+
 import org.apache.hadoop.conf.Configuration;
 
 /**
@@ -11,8 +15,10 @@ public class VitessConf {
   public static final String CONN_TIMEOUT_MS = "vitess.client.conn_timeout_ms";
   public static final String INPUT_KEYSPACE = "vitess.client.keyspace";
   public static final String INPUT_QUERY = "vitess.client.input_query";
-  public static final String SPLITS = "vitess.client.splits";
-  public static final String SPLIT_COLUMN = "vitess.client.split_column";
+  public static final String SPLIT_COUNT = "vitess.client.split_count";
+  public static final String NUM_ROWS_PER_QUERY_PART = "vitess.client.num_rows_per_query_part";
+  public static final String SPLIT_COLUMNS = "vitess.client.split_columns";
+  public static final String ALGORITHM = "vitess.client.algorithm";
   public static final String RPC_FACTORY_CLASS = "vitess.client.factory";
   public static final String HOSTS_DELIM = ",";
 
@@ -54,20 +60,36 @@ public class VitessConf {
     conf.set(INPUT_QUERY, query);
   }
 
-  public int getSplits() {
-    return conf.getInt(SPLITS, 1);
+  public int getSplitCount() {
+    return conf.getInt(SPLIT_COUNT, 0);
   }
 
-  public void setSplits(int splits) {
-    conf.setInt(SPLITS, splits);
+  public void setSplitCount(int splits) {
+    conf.setInt(SPLIT_COUNT, splits);
   }
 
-  public String getSplitColumn() {
-    return conf.get(SPLIT_COLUMN);
+  public Collection<String> getSplitColumns() {
+    return conf.getStringCollection(SPLIT_COLUMNS);
   }
 
-  public void setSplitColumn(String splitColumn) {
-    conf.set(SPLIT_COLUMN, splitColumn);
+  public void setSplitColumns(Collection<String> splitColumns) {
+    conf.setStrings(SPLIT_COLUMNS, splitColumns.toArray(new String[0]));
+  }
+
+  public int getNumRowsPerQueryPart() {
+    return conf.getInt(NUM_ROWS_PER_QUERY_PART, 100000);
+  }
+
+  public void setNumRowsPerQueryPart(int numRowsPerQueryPart) {
+    conf.setInt(NUM_ROWS_PER_QUERY_PART, numRowsPerQueryPart);
+  }
+
+  public SplitQueryRequest.Algorithm getAlgorithm() {
+    return conf.getEnum(ALGORITHM, SplitQueryRequest.Algorithm.EQUAL_SPLITS);
+  }
+
+  public void setAlgorithm(SplitQueryRequest.Algorithm algorithm) {
+    conf.setEnum(ALGORITHM, algorithm);
   }
 
   public String getRpcFactoryClass() { return conf.get(RPC_FACTORY_CLASS); }

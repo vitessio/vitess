@@ -508,16 +508,6 @@ message SplitQueryRequest {
     FULL_SCAN = 1;
   }
   Algorithm algorithm = 9;
-
-  // Whether to use the new split-query code
-  // that supports multiple split-columns and
-  // the FULL_SCAN algorithm.
-  // This is a temporary field which aids
-  // in the migration of SplitQuery to the new
-  // code.
-  // TODO(erez): Remove this field after the migration
-  // to the SplitQuery version 2.
-  bool use_split_query_v2 = 10;
 }
 
 // QuerySplit represents one query to execute on the tablet

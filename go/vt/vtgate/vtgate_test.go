@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"math"
 	"reflect"
-	"sort"
 	"strings"
 	"testing"
 
@@ -809,66 +808,7 @@ func TestVTGateStreamExecuteShards(t *testing.T) {
 	}
 }
 
-func TestVTGateSplitQuery(t *testing.T) {
-	keyspace := "TestVTGateSplitQuery"
-	keyranges, _ := key.ParseShardingSpec(DefaultShardSpec)
-	createSandbox(keyspace)
-	hcVTGateTest.Reset()
-	port := int32(1001)
-	for _, kr := range keyranges {
-		hcVTGateTest.AddTestTablet("aa", "1.1.1.1", port, keyspace, key.KeyRangeString(kr), topodatapb.TabletType_RDONLY, true, 1, nil)
-		port++
-	}
-	sql := "select col1, col2 from table"
-	splitCount := 24
-	splits, err := rpcVTGate.SplitQuery(context.Background(),
-		keyspace,
-		sql,
-		nil,
-		"",
-		int64(splitCount))
-	if err != nil {
-		t.Errorf("want nil, got %v", err)
-	}
-	_, err = getAllShards(DefaultShardSpec)
-	// Total number of splits should be number of shards * splitsPerShard
-	if splitCount != len(splits) {
-		t.Errorf("wrong number of splits, want \n%+v, got \n%+v", splitCount, len(splits))
-	}
-	actualSqlsByKeyRange := map[string][]string{}
-	for _, split := range splits {
-		if split.Size != sandboxconn.SandboxSQRowCount {
-			t.Errorf("wrong split size, want \n%+v, got \n%+v", sandboxconn.SandboxSQRowCount, split.Size)
-		}
-		if split.KeyRangePart.Keyspace != keyspace {
-			t.Errorf("wrong keyspace, want \n%+v, got \n%+v", keyspace, split.KeyRangePart.Keyspace)
-		}
-		if len(split.KeyRangePart.KeyRanges) != 1 {
-			t.Errorf("wrong number of keyranges, want \n%+v, got \n%+v", 1, len(split.KeyRangePart.KeyRanges))
-		}
-		kr := key.KeyRangeString(split.KeyRangePart.KeyRanges[0])
-		actualSqlsByKeyRange[kr] = append(actualSqlsByKeyRange[kr], split.Query.Sql)
-	}
-	// Sort the sqls for each KeyRange so that we can compare them without
-	// regard to the order in which they were returned by the vtgate.
-	for _, sqlsForKeyRange := range actualSqlsByKeyRange {
-		sort.Strings(sqlsForKeyRange)
-	}
-	expectedSqlsByKeyRange := map[string][]string{}
-	for _, kr := range keyranges {
-		expectedSqlsByKeyRange[key.KeyRangeString(kr)] = []string{
-			"select col1, col2 from table /*split 0 */",
-			"select col1, col2 from table /*split 1 */",
-			"select col1, col2 from table /*split 2 */",
-		}
-	}
-	if !reflect.DeepEqual(actualSqlsByKeyRange, expectedSqlsByKeyRange) {
-		t.Errorf("splits contain the wrong sqls and/or keyranges, got: %v, want: %v", actualSqlsByKeyRange, expectedSqlsByKeyRange)
-	}
-}
-
-// TODO(erez): Rename after migration to SplitQuery V2 is done.
-func TestVTGateSplitQueryV2Sharded(t *testing.T) {
+func TestVTGateSplitQuerySharded(t *testing.T) {
 	keyspace := "TestVTGateSplitQuery"
 	keyranges, err := key.ParseShardingSpec(DefaultShardSpec)
 	if err != nil {
@@ -894,7 +834,7 @@ func TestVTGateSplitQueryV2Sharded(t *testing.T) {
 		{splitCount: 0, numRowsPerQueryPart: 123},
 	}
 	for _, testCase := range testCases {
-		splits, err := rpcVTGate.SplitQueryV2(
+		splits, err := rpcVTGate.SplitQuery(
 			context.Background(),
 			keyspace,
 			sql,
@@ -951,7 +891,7 @@ func TestVTGateSplitQueryV2Sharded(t *testing.T) {
 	}
 }
 
-func TestVTGateSplitQueryV2Unsharded(t *testing.T) {
+func TestVTGateSplitQueryUnsharded(t *testing.T) {
 	keyspace := KsTestUnsharded
 	createSandbox(keyspace)
 	hcVTGateTest.Reset()
@@ -969,7 +909,7 @@ func TestVTGateSplitQueryV2Unsharded(t *testing.T) {
 		{splitCount: 0, numRowsPerQueryPart: 123},
 	}
 	for _, testCase := range testCases {
-		splits, err := rpcVTGate.SplitQueryV2(
+		splits, err := rpcVTGate.SplitQuery(
 			context.Background(),
 			keyspace,
 			sql,
@@ -1781,34 +1721,12 @@ func testErrorPropagation(t *testing.T, sbcs []*sandboxconn.SandboxConn, before 
 		KsTestUnsharded,
 		"select col1, col2 from table",
 		nil,
-		"",
-		24)
-	if err == nil {
-		t.Errorf("error %v not propagated for SplitQuery", expected)
-	} else {
-		ec := vterrors.RecoverVtErrorCode(err)
-		if ec != expected {
-			t.Errorf("unexpected error, got %v want %v: %v", ec, expected, err)
-		}
-	}
-	for _, sbc := range sbcs {
-		after(sbc)
-	}
-
-	// SplitQueryV2
-	for _, sbc := range sbcs {
-		before(sbc)
-	}
-	_, err = rpcVTGate.SplitQueryV2(context.Background(),
-		KsTestUnsharded,
-		"select col1, col2 from table",
-		nil,
 		[]string{"sc1", "sc2"},
 		100,
 		0,
 		querypb.SplitQueryRequest_FULL_SCAN)
 	if err == nil {
-		t.Errorf("error %v not propagated for SplitQueryV2", expected)
+		t.Errorf("error %v not propagated for SplitQuery", expected)
 	} else {
 		ec := vterrors.RecoverVtErrorCode(err)
 		if ec != expected {

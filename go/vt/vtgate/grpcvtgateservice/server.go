@@ -370,9 +370,7 @@ func (vtg *VTGate) SplitQuery(ctx context.Context, request *vtgatepb.SplitQueryR
 	if err != nil {
 		return nil, vterrors.ToGRPCError(err)
 	}
-	splits, vtgErr := vtgateservice.CallCorrectSplitQuery(
-		vtg.server,
-		request.UseSplitQueryV2,
+	splits, vtgErr := vtg.server.SplitQuery(
 		ctx,
 		request.Keyspace,
 		string(request.Query.Sql),

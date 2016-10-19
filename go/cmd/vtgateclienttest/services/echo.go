@@ -286,29 +286,7 @@ func (c *echoClient) StreamExecuteKeyRanges(ctx context.Context, sql string, bin
 	return c.fallbackClient.StreamExecuteKeyRanges(ctx, sql, bindVariables, keyspace, keyRanges, tabletType, options, sendReply)
 }
 
-func (c *echoClient) SplitQuery(ctx context.Context, keyspace string, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int64) ([]*vtgatepb.SplitQueryResponse_Part, error) {
-	if strings.HasPrefix(sql, EchoPrefix) {
-		bv, err := querytypes.BindVariablesToProto3(bindVariables)
-		if err != nil {
-			return nil, err
-		}
-		return []*vtgatepb.SplitQueryResponse_Part{
-			{
-				Query: &querypb.BoundQuery{
-					Sql:           fmt.Sprintf("%v:%v:%v", sql, splitColumn, splitCount),
-					BindVariables: bv,
-				},
-				KeyRangePart: &vtgatepb.SplitQueryResponse_KeyRangePart{
-					Keyspace: keyspace,
-				},
-			},
-		}, nil
-	}
-	return c.fallback.SplitQuery(ctx, sql, keyspace, bindVariables, splitColumn, splitCount)
-}
-
-// TODO(erez): Rename after migration to SplitQuery V2 is done.
-func (c *echoClient) SplitQueryV2(
+func (c *echoClient) SplitQuery(
 	ctx context.Context,
 	keyspace string,
 	sql string,
@@ -336,7 +314,7 @@ func (c *echoClient) SplitQueryV2(
 			},
 		}, nil
 	}
-	return c.fallback.SplitQueryV2(
+	return c.fallback.SplitQuery(
 		ctx,
 		sql,
 		keyspace,

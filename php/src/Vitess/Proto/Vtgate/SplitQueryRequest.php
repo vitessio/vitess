@@ -27,9 +27,6 @@ namespace Vitess\Proto\Vtgate {
     /**  @var int - \Vitess\Proto\Query\SplitQueryRequest\Algorithm */
     public $algorithm = null;
     
-    /**  @var boolean */
-    public $use_split_query_v2 = null;
-    
 
     /** @var \Closure[] */
     protected static $__extensions = array();
@@ -95,14 +92,6 @@ namespace Vitess\Proto\Vtgate {
       $f->type      = \DrSlump\Protobuf::TYPE_ENUM;
       $f->rule      = \DrSlump\Protobuf::RULE_OPTIONAL;
       $f->reference = '\Vitess\Proto\Query\SplitQueryRequest\Algorithm';
-      $descriptor->addField($f);
-
-      // OPTIONAL BOOL use_split_query_v2 = 8
-      $f = new \DrSlump\Protobuf\Field();
-      $f->number    = 8;
-      $f->name      = "use_split_query_v2";
-      $f->type      = \DrSlump\Protobuf::TYPE_BOOL;
-      $f->rule      = \DrSlump\Protobuf::RULE_OPTIONAL;
       $descriptor->addField($f);
 
       foreach (self::$__extensions as $cb) {
@@ -389,43 +378,6 @@ namespace Vitess\Proto\Vtgate {
      */
     public function setAlgorithm( $value){
       return $this->_set(7, $value);
-    }
-    
-    /**
-     * Check if <use_split_query_v2> has a value
-     *
-     * @return boolean
-     */
-    public function hasUseSplitQueryV2(){
-      return $this->_has(8);
-    }
-    
-    /**
-     * Clear <use_split_query_v2> value
-     *
-     * @return \Vitess\Proto\Vtgate\SplitQueryRequest
-     */
-    public function clearUseSplitQueryV2(){
-      return $this->_clear(8);
-    }
-    
-    /**
-     * Get <use_split_query_v2> value
-     *
-     * @return boolean
-     */
-    public function getUseSplitQueryV2(){
-      return $this->_get(8);
-    }
-    
-    /**
-     * Set <use_split_query_v2> value
-     *
-     * @param boolean $value
-     * @return \Vitess\Proto\Vtgate\SplitQueryRequest
-     */
-    public function setUseSplitQueryV2( $value){
-      return $this->_set(8, $value);
     }
   }
 }

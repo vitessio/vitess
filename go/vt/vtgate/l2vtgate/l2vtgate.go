@@ -209,7 +209,7 @@ func (l *L2VTGate) BeginExecuteBatch(ctx context.Context, target *querypb.Target
 }
 
 // SplitQuery is part of the queryservice.QueryService interface
-func (l *L2VTGate) SplitQuery(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int64) (splits []querytypes.QuerySplit, err error) {
+func (l *L2VTGate) SplitQuery(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, splitColumns []string, splitCount int64, numRowsPerQueryPart int64, algorithm querypb.SplitQueryRequest_Algorithm) (splits []querytypes.QuerySplit, err error) {
 	startTime, statsKey := l.startAction("SplitQuery", target)
 	defer l.endAction(startTime, statsKey, &err)
 
@@ -217,19 +217,7 @@ func (l *L2VTGate) SplitQuery(ctx context.Context, target *querypb.Target, sql s
 		Sql:           sql,
 		BindVariables: bindVariables,
 	}
-	return l.gateway.SplitQuery(ctx, target, query, splitColumn, splitCount)
-}
-
-// SplitQueryV2 is part of the queryservice.QueryService interface
-func (l *L2VTGate) SplitQueryV2(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, splitColumns []string, splitCount int64, numRowsPerQueryPart int64, algorithm querypb.SplitQueryRequest_Algorithm) (splits []querytypes.QuerySplit, err error) {
-	startTime, statsKey := l.startAction("SplitQuery", target)
-	defer l.endAction(startTime, statsKey, &err)
-
-	query := querytypes.BoundQuery{
-		Sql:           sql,
-		BindVariables: bindVariables,
-	}
-	return l.gateway.SplitQueryV2(ctx, target, query, splitColumns, splitCount, numRowsPerQueryPart, algorithm)
+	return l.gateway.SplitQuery(ctx, target, query, splitColumns, splitCount, numRowsPerQueryPart, algorithm)
 }
 
 // StreamHealthRegister is part of the queryservice.QueryService interface

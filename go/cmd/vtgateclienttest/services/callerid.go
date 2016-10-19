@@ -146,15 +146,7 @@ func (c *callerIDClient) StreamExecuteKeyRanges(ctx context.Context, sql string,
 	return c.fallbackClient.StreamExecuteKeyRanges(ctx, sql, bindVariables, keyspace, keyRanges, tabletType, options, sendReply)
 }
 
-func (c *callerIDClient) SplitQuery(ctx context.Context, keyspace string, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int64) ([]*vtgatepb.SplitQueryResponse_Part, error) {
-	if ok, err := c.checkCallerID(ctx, sql); ok {
-		return nil, err
-	}
-	return c.fallbackClient.SplitQuery(ctx, sql, keyspace, bindVariables, splitColumn, splitCount)
-}
-
-// TODO(erez): Rename after migration to SplitQuery V2 is done.
-func (c *callerIDClient) SplitQueryV2(
+func (c *callerIDClient) SplitQuery(
 	ctx context.Context,
 	keyspace string,
 	sql string,
@@ -166,7 +158,7 @@ func (c *callerIDClient) SplitQueryV2(
 	if ok, err := c.checkCallerID(ctx, sql); ok {
 		return nil, err
 	}
-	return c.fallbackClient.SplitQueryV2(
+	return c.fallbackClient.SplitQuery(
 		ctx,
 		sql,
 		keyspace,

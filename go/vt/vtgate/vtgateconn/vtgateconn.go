@@ -130,17 +130,10 @@ func (conn *VTGateConn) Close() {
 	conn.impl = nil
 }
 
-// SplitQuery splits a query into equally sized smaller queries by
-// appending primary key range clauses to the original query
-func (conn *VTGateConn) SplitQuery(ctx context.Context, keyspace string, query string, bindVars map[string]interface{}, splitColumn string, splitCount int64) ([]*vtgatepb.SplitQueryResponse_Part, error) {
-	return conn.impl.SplitQuery(ctx, keyspace, query, bindVars, splitColumn, splitCount)
-}
-
-// SplitQueryV2 splits a query into smaller queries. It is mostly used by batch job frameworks
+// SplitQuery splits a query into smaller queries. It is mostly used by batch job frameworks
 // such as MapReduce. See the documentation for the vtgate.SplitQueryRequest protocol buffer message
 // in 'proto/vtgate.proto'.
-// TODO(erez): Rename to SplitQuery after the migration to SplitQuery V2 is done.
-func (conn *VTGateConn) SplitQueryV2(
+func (conn *VTGateConn) SplitQuery(
 	ctx context.Context,
 	keyspace string,
 	query string,
@@ -151,7 +144,7 @@ func (conn *VTGateConn) SplitQueryV2(
 	algorithm querypb.SplitQueryRequest_Algorithm,
 ) ([]*vtgatepb.SplitQueryResponse_Part, error) {
 
-	return conn.impl.SplitQueryV2(
+	return conn.impl.SplitQuery(
 		ctx, keyspace, query, bindVars, splitColumns, splitCount, numRowsPerQueryPart, algorithm)
 }
 
@@ -319,15 +312,10 @@ type Impl interface {
 	// Rollback rolls back the current transaction.
 	Rollback(ctx context.Context, session interface{}) error
 
-	// SplitQuery splits a query into equally sized smaller queries by
-	// appending primary key range clauses to the original query.
-	SplitQuery(ctx context.Context, keyspace string, query string, bindVars map[string]interface{}, splitColumn string, splitCount int64) ([]*vtgatepb.SplitQueryResponse_Part, error)
-
 	// SplitQuery splits a query into smaller queries. It is mostly used by batch job frameworks
 	// such as MapReduce. See the documentation for the vtgate.SplitQueryRequest protocol buffer
 	// message in 'proto/vtgate.proto'.
-	// TODO(erez): Rename to SplitQuery after the migration to SplitQuery V2 is done.
-	SplitQueryV2(
+	SplitQuery(
 		ctx context.Context,
 		keyspace string,
 		query string,

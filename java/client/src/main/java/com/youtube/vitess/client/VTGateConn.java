@@ -325,15 +325,18 @@ public final class VTGateConn implements Closeable {
         }));
   }
 
-  // TODO(erez): Migrate to SplitQueryV2 after it's stable.
   public SQLFuture<List<SplitQueryResponse.Part>> splitQuery(Context ctx, String keyspace,
-      String query, @Nullable Map<String, ?> bindVars, String splitColumn, long splitCount)
-      throws SQLException {
+      String query, @Nullable Map<String, ?> bindVars, Iterable<String> splitColumns, 
+      int splitCount, int numRowsPerQueryPart, 
+      com.youtube.vitess.proto.Query.SplitQueryRequest.Algorithm algorithm) throws SQLException {
     SplitQueryRequest.Builder requestBuilder =
-        SplitQueryRequest.newBuilder().setKeyspace(checkNotNull(keyspace))
+        SplitQueryRequest.newBuilder()
+            .setKeyspace(checkNotNull(keyspace))
             .setQuery(Proto.bindQuery(checkNotNull(query), bindVars))
-            .addSplitColumn(checkNotNull(splitColumn)).setSplitCount(splitCount)
-            .setUseSplitQueryV2(false);
+            .addAllSplitColumn(splitColumns)
+            .setSplitCount(splitCount)
+            .setNumRowsPerQueryPart(numRowsPerQueryPart)
+            .setAlgorithm(algorithm);
     if (ctx.getCallerId() != null) {
       requestBuilder.setCallerId(ctx.getCallerId());
     }

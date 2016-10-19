@@ -56,15 +56,6 @@ type queryResponse struct {
 
 // querySplitQuery contains all the fields we use to test SplitQuery
 type querySplitQuery struct {
-	Keyspace      string
-	SQL           string
-	BindVariables map[string]interface{}
-	SplitColumn   string
-	SplitCount    int64
-}
-
-// TODO(erez): Rename after migration to SplitQuery V2 is done.
-type querySplitQueryV2 struct {
 	Keyspace            string
 	SQL                 string
 	BindVariables       map[string]interface{}
@@ -80,19 +71,10 @@ type splitQueryResponse struct {
 	err        error
 }
 
-// TODO(erez): Rename after migration to SplitQuery V2 is done.
-type splitQueryV2Response struct {
-	splitQuery *querySplitQueryV2
-	reply      []*vtgatepb.SplitQueryResponse_Part
-	err        error
-}
-
 // FakeVTGateConn provides a fake implementation of vtgateconn.Impl
 type FakeVTGateConn struct {
 	execMap       map[string]*queryResponse
 	splitQueryMap map[string]*splitQueryResponse
-	// TODO(erez): Rename after migration to SplitQuery V2 is done.
-	splitQueryV2Map map[string]*splitQueryV2Response
 }
 
 // RegisterFakeVTGateConnDialer registers the proper dialer for this fake,
@@ -101,9 +83,8 @@ type FakeVTGateConn struct {
 func RegisterFakeVTGateConnDialer() (*FakeVTGateConn, string) {
 	protocol := "fake"
 	impl := &FakeVTGateConn{
-		execMap:         make(map[string]*queryResponse),
-		splitQueryMap:   make(map[string]*splitQueryResponse),
-		splitQueryV2Map: make(map[string]*splitQueryV2Response),
+		execMap:       make(map[string]*queryResponse),
+		splitQueryMap: make(map[string]*splitQueryResponse),
 	}
 	vtgateconn.RegisterDialer(protocol, func(ctx context.Context, address string, timeout time.Duration) (vtgateconn.Impl, error) {
 		return impl, nil
@@ -160,32 +141,6 @@ func (conn *FakeVTGateConn) AddSplitQuery(
 	keyspace string,
 	sql string,
 	bindVariables map[string]interface{},
-	splitColumn string,
-	splitCount int64,
-	expectedResult []*vtgatepb.SplitQueryResponse_Part) {
-
-	reply := make([]*vtgatepb.SplitQueryResponse_Part, splitCount)
-	copy(reply, expectedResult)
-	key := getSplitQueryKey(keyspace, sql, splitColumn, splitCount)
-	conn.splitQueryMap[key] = &splitQueryResponse{
-		splitQuery: &querySplitQuery{
-			Keyspace:      keyspace,
-			SQL:           sql,
-			BindVariables: bindVariables,
-			SplitColumn:   splitColumn,
-			SplitCount:    splitCount,
-		},
-		reply: expectedResult,
-		err:   nil,
-	}
-}
-
-// AddSplitQueryV2 adds a split query and expected result.
-// TODO(erez): Rename after migration to SplitQuery V2 is done.
-func (conn *FakeVTGateConn) AddSplitQueryV2(
-	keyspace string,
-	sql string,
-	bindVariables map[string]interface{},
 	splitColumns []string,
 	splitCount int64,
 	numRowsPerQueryPart int64,
@@ -194,9 +149,9 @@ func (conn *FakeVTGateConn) AddSplitQueryV2(
 
 	reply := make([]*vtgatepb.SplitQueryResponse_Part, len(expectedResult))
 	copy(reply, expectedResult)
-	key := getSplitQueryV2Key(keyspace, sql, splitColumns, splitCount, numRowsPerQueryPart, algorithm)
-	conn.splitQueryV2Map[key] = &splitQueryV2Response{
-		splitQuery: &querySplitQueryV2{
+	key := getSplitQueryKey(keyspace, sql, splitColumns, splitCount, numRowsPerQueryPart, algorithm)
+	conn.splitQueryMap[key] = &splitQueryResponse{
+		splitQuery: &querySplitQuery{
 			Keyspace:            keyspace,
 			SQL:                 sql,
 			BindVariables:       bindVariables,
@@ -380,21 +335,7 @@ func (conn *FakeVTGateConn) Rollback(ctx context.Context, session interface{}) e
 }
 
 // SplitQuery please see vtgateconn.Impl.SplitQuery
-func (conn *FakeVTGateConn) SplitQuery(ctx context.Context, keyspace string, query string, bindVars map[string]interface{}, splitColumn string, splitCount int64) ([]*vtgatepb.SplitQueryResponse_Part, error) {
-	response, ok := conn.splitQueryMap[getSplitQueryKey(keyspace, query, splitColumn, splitCount)]
-	if !ok {
-		return nil, fmt.Errorf(
-			"no match for keyspace: %s, query: %v, split column: %v, split count: %d",
-			keyspace, query, splitColumn, splitCount)
-	}
-	reply := make([]*vtgatepb.SplitQueryResponse_Part, splitCount, splitCount)
-	copy(reply, response.reply)
-	return reply, nil
-}
-
-// SplitQueryV2 please see vtgateconn.Impl.SplitQueryV2
-// TODO(erez): Rename after migration to SplitQuery V2 is done.
-func (conn *FakeVTGateConn) SplitQueryV2(
+func (conn *FakeVTGateConn) SplitQuery(
 	ctx context.Context,
 	keyspace string,
 	query string,
@@ -404,7 +345,7 @@ func (conn *FakeVTGateConn) SplitQueryV2(
 	numRowsPerQueryPart int64,
 	algorithm querypb.SplitQueryRequest_Algorithm) ([]*vtgatepb.SplitQueryResponse_Part, error) {
 
-	response, ok := conn.splitQueryV2Map[getSplitQueryV2Key(
+	response, ok := conn.splitQueryMap[getSplitQueryKey(
 		keyspace, query, splitColumns, splitCount, numRowsPerQueryPart, algorithm)]
 	if !ok {
 		return nil, fmt.Errorf(
@@ -440,12 +381,7 @@ func getShardQueryKey(sql string, shards []string) string {
 	return fmt.Sprintf("%s-%s", sql, strings.Join(shards, ":"))
 }
 
-func getSplitQueryKey(keyspace string, query string, splitColumn string, splitCount int64) string {
-	return fmt.Sprintf("%s:%v:%v:%d", keyspace, query, splitColumn, splitCount)
-}
-
-// TODO(erez): Rename after migration to SplitQuery V2 is done.
-func getSplitQueryV2Key(
+func getSplitQueryKey(
 	keyspace string,
 	query string,
 	splitColumns []string,

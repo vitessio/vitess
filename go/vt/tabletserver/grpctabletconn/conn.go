@@ -556,44 +556,7 @@ func (conn *gRPCQueryClient) BeginExecuteBatch(ctx context.Context, target *quer
 }
 
 // SplitQuery is the stub for TabletServer.SplitQuery RPC
-// TODO(erez): Remove this method and rename SplitQueryV2 to SplitQuery once
-// the migration to SplitQuery V2 is done.
-func (conn *gRPCQueryClient) SplitQuery(ctx context.Context, target *querypb.Target, query querytypes.BoundQuery, splitColumn string, splitCount int64) (queries []querytypes.QuerySplit, err error) {
-	conn.mu.RLock()
-	defer conn.mu.RUnlock()
-	if conn.cc == nil {
-		err = tabletconn.ConnClosed
-		return
-	}
-
-	q, err := querytypes.BoundQueryToProto3(query.Sql, query.BindVariables)
-	if err != nil {
-		return nil, tabletconn.TabletErrorFromGRPC(err)
-	}
-	req := &querypb.SplitQueryRequest{
-		Target:              target,
-		EffectiveCallerId:   callerid.EffectiveCallerIDFromContext(ctx),
-		ImmediateCallerId:   callerid.ImmediateCallerIDFromContext(ctx),
-		Query:               q,
-		SplitColumn:         []string{splitColumn},
-		SplitCount:          splitCount,
-		NumRowsPerQueryPart: 0,
-		Algorithm:           querypb.SplitQueryRequest_EQUAL_SPLITS,
-		UseSplitQueryV2:     false,
-	}
-	sqr, err := conn.c.SplitQuery(ctx, req)
-	if err != nil {
-		return nil, tabletconn.TabletErrorFromGRPC(err)
-	}
-	split, err := querytypes.Proto3ToQuerySplits(sqr.Queries)
-	if err != nil {
-		return nil, tabletconn.TabletErrorFromGRPC(err)
-	}
-	return split, nil
-}
-
-// SplitQueryV2 is the stub for TabletServer.SplitQuery RPC
-func (conn *gRPCQueryClient) SplitQueryV2(
+func (conn *gRPCQueryClient) SplitQuery(
 	ctx context.Context,
 	target *querypb.Target,
 	query querytypes.BoundQuery,
@@ -622,7 +585,6 @@ func (conn *gRPCQueryClient) SplitQueryV2(
 		SplitCount:          splitCount,
 		NumRowsPerQueryPart: numRowsPerQueryPart,
 		Algorithm:           algorithm,
-		UseSplitQueryV2:     true,
 	}
 	sqr, err := conn.c.SplitQuery(ctx, req)
 	if err != nil {

@@ -127,9 +127,18 @@ public class VTGateBlockingConn implements Closeable {
     return new VTGateBlockingTx(conn.begin(ctx).checkedGet());
   }
 
-  public List<SplitQueryResponse.Part> splitQuery(Context ctx, String keyspace, String query,
-      Map<String, ?> bindVars, String splitColumn, long splitCount) throws SQLException {
-    return conn.splitQuery(ctx, keyspace, query, bindVars, splitColumn, splitCount).checkedGet();
+  public List<SplitQueryResponse.Part> splitQuery(
+      Context ctx,
+      String keyspace,
+      String query,
+      Map<String, ?> bindVars,
+      Iterable<String> splitColumns,
+      int splitCount,
+      int numRowsPerQueryPart,
+      com.youtube.vitess.proto.Query.SplitQueryRequest.Algorithm algorithm) throws SQLException {
+    return conn.splitQuery(
+        ctx, keyspace, query, bindVars, splitColumns, splitCount, numRowsPerQueryPart, algorithm)
+        .checkedGet();
   }
 
   public SrvKeyspace getSrvKeyspace(Context ctx, String keyspace) throws SQLException {
