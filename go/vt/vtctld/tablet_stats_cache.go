@@ -94,10 +94,10 @@ func (c *tabletStatsCache) StatsUpdate(stats *discovery.TabletStats) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	keyspace := stats.Target.Keyspace
-	shard := stats.Target.Shard
+	keyspace := stats.Tablet.Keyspace
+	shard := stats.Tablet.Shard
 	cell := stats.Tablet.Alias.Cell
-	tabletType := stats.Target.TabletType
+	tabletType := stats.Tablet.Type
 
 	aliasKey := tabletToMapKey(stats)
 	ts, ok := c.statusesByAlias[aliasKey]
