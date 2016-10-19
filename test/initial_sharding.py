@@ -212,7 +212,7 @@ index by_msg (msg)
 
     # create the keyspace with just one shard
     shard_master.init_tablet(
-        'master',
+        'replica',
         keyspace='test_keyspace',
         shard='0',
         tablet_index=0)
@@ -234,8 +234,7 @@ index by_msg (msg)
     shard_replica.start_vttablet(wait_for_state=None)
     shard_rdonly1.start_vttablet(wait_for_state=None)
 
-    shard_master.wait_for_vttablet_state('SERVING')
-    for t in [shard_replica, shard_rdonly1]:
+    for t in [shard_master, shard_replica, shard_rdonly1]:
       t.wait_for_vttablet_state('NOT_SERVING')
 
     # reparent to make the tablets work
@@ -302,7 +301,7 @@ index by_msg (msg)
 
     # create the split shards
     shard_0_master.init_tablet(
-        'master',
+        'replica',
         keyspace='test_keyspace',
         shard='-80',
         tablet_index=0)
@@ -317,7 +316,7 @@ index by_msg (msg)
         shard='-80',
         tablet_index=2)
     shard_1_master.init_tablet(
-        'master',
+        'replica',
         keyspace='test_keyspace',
         shard='80-',
         tablet_index=0)
@@ -332,18 +331,13 @@ index by_msg (msg)
         shard='80-',
         tablet_index=2)
 
-    for t in [shard_0_master, shard_0_replica,
-              shard_1_master, shard_1_replica]:
-      t.create_db('vt_test_keyspace')
-      t.start_vttablet(wait_for_state=None)
-    for t in [shard_0_rdonly1, shard_1_rdonly1]:
+    for t in [shard_0_master, shard_0_replica, shard_0_rdonly1,
+              shard_1_master, shard_1_replica, shard_1_rdonly1]:
       t.create_db('vt_test_keyspace')
       t.start_vttablet(wait_for_state=None)
 
-    for t in [shard_0_master, shard_1_master]:
-      t.wait_for_vttablet_state('SERVING')
-    for t in [shard_0_replica, shard_0_rdonly1,
-              shard_1_replica, shard_1_rdonly1]:
+    for t in [shard_0_master, shard_0_replica, shard_0_rdonly1,
+              shard_1_master, shard_1_replica, shard_1_rdonly1]:
       t.wait_for_vttablet_state('NOT_SERVING')
 
     utils.run_vtctl(['InitShardMaster', '-force', 'test_keyspace/-80',

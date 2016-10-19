@@ -63,11 +63,8 @@ class TestEnv(object):
       for i in xrange(rdonly_count):
         self._start_tablet(keyspace, shard, 'rdonly', i)
 
-    for t in self.master_tablets:
-      t.wait_for_vttablet_state('SERVING')
     for t in self.tablets:
-      if t not in self.master_tablets:
-        t.wait_for_vttablet_state('NOT_SERVING')
+      t.wait_for_vttablet_state('NOT_SERVING')
 
     for t in self.master_tablets:
       utils.run_vtctl(['InitShardMaster', '-force', keyspace+'/'+t.shard,
@@ -104,12 +101,14 @@ class TestEnv(object):
     return t.init_mysql()
 
   def _init_tablet(self, keyspace, shard, tablet_type, index, tablet_index):
+    init_tablet_type = tablet_type
     if tablet_type == 'master':
+      init_tablet_type = 'replica'
       key = '%s.%s.%s' % (keyspace, shard, tablet_type)
     else:
       key = '%s.%s.%s.%s' % (keyspace, shard, tablet_type, index)
     t = self.tablet_map[key]
-    t.init_tablet(tablet_type, keyspace, shard, tablet_index=tablet_index)
+    t.init_tablet(init_tablet_type, keyspace, shard, tablet_index=tablet_index)
 
   def _start_tablet(self, keyspace, shard, tablet_type, index):
     """Start a tablet."""

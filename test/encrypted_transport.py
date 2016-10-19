@@ -220,7 +220,7 @@ def setUpModule():
 
     utils.run_vtctl(['CreateKeyspace', 'test_keyspace'])
 
-    shard_0_master.init_tablet('master', 'test_keyspace', '0')
+    shard_0_master.init_tablet('replica', 'test_keyspace', '0')
     shard_0_slave.init_tablet('replica', 'test_keyspace', '0')
 
     # create databases so vttablet can start behaving normally
@@ -282,6 +282,7 @@ class TestSecure(unittest.TestCase):
 
     # start the tablets
     shard_0_master.start_vttablet(
+        wait_for_state='NOT_SERVING',
         table_acl_config=table_acl_config,
         extra_args=server_extra_args('vttablet-server-instance',
                                      'vttablet-client'))
@@ -292,10 +293,8 @@ class TestSecure(unittest.TestCase):
                                      'vttablet-client'))
 
     # setup replication
-    for t in [shard_0_master, shard_0_slave]:
-      t.reset_replication()
     utils.run_vtctl(tmclient_extra_args('vttablet-client-1') + [
-        'InitShardMaster', 'test_keyspace/0',
+        'InitShardMaster', '-force', 'test_keyspace/0',
         shard_0_master.tablet_alias], auto_log=True)
     utils.run_vtctl(tmclient_extra_args('vttablet-client-1') + [
         'ApplySchema', '-sql', create_vt_insert_test,
