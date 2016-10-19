@@ -4,14 +4,13 @@ import logging
 import time
 import unittest
 
-from vtproto import topodata_pb2
-
 import environment
 import utils
 import tablet
 from mysql_flavor import mysql_flavor
 from protocols_flavor import protocols_flavor
 
+from vtproto import topodata_pb2
 
 tablet_62344 = tablet.Tablet(62344)
 tablet_62044 = tablet.Tablet(62044)
@@ -130,7 +129,7 @@ class TestReparent(unittest.TestCase):
     tablet_31981.create_db('vt_test_keyspace')
 
     # Start up a master mysql and vttablet
-    tablet_62344.init_tablet('master', 'test_keyspace', '0', start=True,
+    tablet_62344.init_tablet('replica', 'test_keyspace', '0', start=True,
                              wait_for_start=False)
 
     # Create a few slaves for testing reparenting.
@@ -142,17 +141,12 @@ class TestReparent(unittest.TestCase):
                              wait_for_start=False)
 
     # wait for all tablets to start
-    tablet_62344.wait_for_vttablet_state('SERVING')
-    for t in [tablet_62044, tablet_41983, tablet_31981]:
+    for t in [tablet_62344, tablet_62044, tablet_41983, tablet_31981]:
       t.wait_for_vttablet_state('NOT_SERVING')
-
-    utils.validate_topology()
 
     # Force the slaves to reparent assuming that all the datasets are
     # identical.
-    for t in [tablet_62344, tablet_62044, tablet_41983, tablet_31981]:
-      t.reset_replication()
-    utils.run_vtctl(['InitShardMaster', 'test_keyspace/0',
+    utils.run_vtctl(['InitShardMaster', '-force', 'test_keyspace/0',
                      tablet_62344.tablet_alias], auto_log=True)
     utils.validate_topology()
     tablet_62344.mquery('vt_test_keyspace', self._create_vt_insert_test)
@@ -183,10 +177,14 @@ class TestReparent(unittest.TestCase):
     self._check_vt_insert_test(tablet_41983, 2)
     self._check_vt_insert_test(tablet_31981, 2)
 
-    tablet.kill_tablets([tablet_62044, tablet_41983, tablet_31981])
-
-    # so the other tests don't have any surprise
+    # bring back the old master as a slave, check that it catches up
     tablet_62344.start_mysql().wait()
+    tablet_62344.init_tablet('replica', 'test_keyspace', '0', start=True,
+                             wait_for_start=False)
+    self._check_vt_insert_test(tablet_62344, 2)
+
+    tablet.kill_tablets(
+        [tablet_62344, tablet_62044, tablet_41983, tablet_31981])
 
   def test_reparent_cross_cell(self, shard_id='0'):
     utils.run_vtctl(['CreateKeyspace', 'test_keyspace'])
@@ -198,7 +196,7 @@ class TestReparent(unittest.TestCase):
     tablet_31981.create_db('vt_test_keyspace')
 
     # Start up a master mysql and vttablet
-    tablet_62344.init_tablet('master', 'test_keyspace', shard_id, start=True,
+    tablet_62344.init_tablet('replica', 'test_keyspace', shard_id, start=True,
                              wait_for_start=False)
     shard = utils.run_vtctl_json(['GetShard', 'test_keyspace/' + shard_id])
     self.assertEqual(shard['cells'], ['test_nj'],
@@ -212,21 +210,16 @@ class TestReparent(unittest.TestCase):
                              wait_for_start=False)
     tablet_31981.init_tablet('replica', 'test_keyspace', shard_id, start=True,
                              wait_for_start=False)
-    tablet_62344.wait_for_vttablet_state('SERVING')
-    for t in [tablet_62044, tablet_41983, tablet_31981]:
+    for t in [tablet_62344, tablet_62044, tablet_41983, tablet_31981]:
       t.wait_for_vttablet_state('NOT_SERVING')
     shard = utils.run_vtctl_json(['GetShard', 'test_keyspace/' + shard_id])
     self.assertEqual(
         shard['cells'], ['test_nj', 'test_ny'],
         'wrong list of cell in Shard: %s' % str(shard['cells']))
 
-    utils.validate_topology()
-
     # Force the slaves to reparent assuming that all the datasets are
     # identical.
-    for t in [tablet_62344, tablet_62044, tablet_41983, tablet_31981]:
-      t.reset_replication()
-    utils.run_vtctl(['InitShardMaster', 'test_keyspace/' + shard_id,
+    utils.run_vtctl(['InitShardMaster', '-force', 'test_keyspace/' + shard_id,
                      tablet_62344.tablet_alias], auto_log=True)
     utils.validate_topology(ping_tablets=True)
 
@@ -262,7 +255,7 @@ class TestReparent(unittest.TestCase):
     tablet_31981.create_db('vt_test_keyspace')
 
     # Start up a master mysql and vttablet
-    tablet_62344.init_tablet('master', 'test_keyspace', shard_id, start=True)
+    tablet_62344.init_tablet('replica', 'test_keyspace', shard_id, start=True)
     if environment.topo_server().flavor() == 'zookeeper':
       shard = utils.run_vtctl_json(['GetShard', 'test_keyspace/' + shard_id])
       self.assertEqual(shard['cells'], ['test_nj'],
@@ -282,13 +275,9 @@ class TestReparent(unittest.TestCase):
       self.assertEqual(shard['cells'], ['test_nj', 'test_ny'],
                        'wrong list of cell in Shard: %s' % str(shard['cells']))
 
-    utils.validate_topology()
-
     # Force the slaves to reparent assuming that all the datasets are
     # identical.
-    for t in [tablet_62344, tablet_62044, tablet_41983, tablet_31981]:
-      t.reset_replication()
-    utils.run_vtctl(['InitShardMaster', 'test_keyspace/' + shard_id,
+    utils.run_vtctl(['InitShardMaster', '-force', 'test_keyspace/' + shard_id,
                      tablet_62344.tablet_alias])
     utils.validate_topology(ping_tablets=True)
     tablet_62344.mquery('vt_test_keyspace', self._create_vt_insert_test)
@@ -348,7 +337,7 @@ class TestReparent(unittest.TestCase):
     tablet_31981.create_db('vt_test_keyspace')
 
     # Start up a master mysql and vttablet
-    tablet_62344.init_tablet('master', 'test_keyspace', shard_id, start=True,
+    tablet_62344.init_tablet('replica', 'test_keyspace', shard_id, start=True,
                              wait_for_start=False)
 
     # Create a few slaves for testing reparenting.
@@ -360,16 +349,11 @@ class TestReparent(unittest.TestCase):
                              wait_for_start=False)
 
     # wait for all tablets to start
-    tablet_62344.wait_for_vttablet_state('SERVING')
-    for t in [tablet_62044, tablet_41983, tablet_31981]:
+    for t in [tablet_62344, tablet_62044, tablet_41983, tablet_31981]:
       t.wait_for_vttablet_state('NOT_SERVING')
-
-    utils.validate_topology()
 
     # Force the slaves to reparent assuming that all the datasets are
     # identical.
-    for t in [tablet_62344, tablet_62044, tablet_41983, tablet_31981]:
-      t.reset_replication()
     utils.run_vtctl(['InitShardMaster', '-force', 'test_keyspace/' + shard_id,
                      tablet_62344.tablet_alias])
     utils.validate_topology(ping_tablets=True)
@@ -396,7 +380,7 @@ class TestReparent(unittest.TestCase):
     tablet_31981.create_db('vt_test_keyspace')
 
     # Start up a master mysql and vttablet
-    tablet_62344.init_tablet('master', 'test_keyspace', '0', start=True,
+    tablet_62344.init_tablet('replica', 'test_keyspace', '0', start=True,
                              wait_for_start=False)
 
     # Create a few slaves for testing reparenting. Won't be healthy
@@ -405,17 +389,12 @@ class TestReparent(unittest.TestCase):
                              wait_for_start=False)
     tablet_31981.init_tablet('replica', 'test_keyspace', '0', start=True,
                              wait_for_start=False)
-    tablet_62344.wait_for_vttablet_state('SERVING')
-    for t in [tablet_62044, tablet_31981]:
+    for t in [tablet_62344, tablet_62044, tablet_31981]:
       t.wait_for_vttablet_state('NOT_SERVING')
-
-    utils.validate_topology()
 
     # Force the slaves to reparent assuming that all the datasets are
     # identical.
-    for t in [tablet_62344, tablet_62044, tablet_31981]:
-      t.reset_replication()
-    utils.run_vtctl(['InitShardMaster', 'test_keyspace/0',
+    utils.run_vtctl(['InitShardMaster', '-force', 'test_keyspace/0',
                      tablet_62344.tablet_alias], auto_log=True)
 
     utils.validate_topology(ping_tablets=True)
@@ -482,7 +461,7 @@ class TestReparent(unittest.TestCase):
       t.create_db('vt_test_keyspace')
 
     # Start up a master mysql and vttablet
-    tablet_62344.init_tablet('master', 'test_keyspace', '0', start=True,
+    tablet_62344.init_tablet('replica', 'test_keyspace', '0', start=True,
                              wait_for_start=False)
 
     # Create a few slaves for testing reparenting.
@@ -494,14 +473,11 @@ class TestReparent(unittest.TestCase):
                              wait_for_start=False)
 
     # wait for all tablets to start
-    tablet_62344.wait_for_vttablet_state('SERVING')
-    for t in [tablet_62044, tablet_41983, tablet_31981]:
+    for t in [tablet_62344, tablet_62044, tablet_41983, tablet_31981]:
       t.wait_for_vttablet_state('NOT_SERVING')
 
     # Reparent as a starting point
-    for t in [tablet_62344, tablet_62044, tablet_41983, tablet_31981]:
-      t.reset_replication()
-    utils.run_vtctl(['InitShardMaster', 'test_keyspace/0',
+    utils.run_vtctl(['InitShardMaster', '-force', 'test_keyspace/0',
                      tablet_62344.tablet_alias], auto_log=True)
 
     # now manually reparent 1 out of 2 tablets
@@ -593,7 +569,7 @@ class TestReparent(unittest.TestCase):
     tablet_31981.create_db('vt_test_keyspace')
 
     # Start up a master mysql and vttablet
-    tablet_62344.init_tablet('master', 'test_keyspace', shard_id, start=True,
+    tablet_62344.init_tablet('replica', 'test_keyspace', shard_id, start=True,
                              wait_for_start=False)
 
     # Create a few slaves for testing reparenting.
@@ -605,16 +581,11 @@ class TestReparent(unittest.TestCase):
                              wait_for_start=False)
 
     # wait for all tablets to start
-    tablet_62344.wait_for_vttablet_state('SERVING')
-    for t in [tablet_62044, tablet_31981, tablet_41983]:
+    for t in [tablet_62344, tablet_62044, tablet_31981, tablet_41983]:
       t.wait_for_vttablet_state('NOT_SERVING')
 
-    utils.validate_topology()
-
     # Force the slaves to reparent assuming that all the datasets are identical.
-    for t in [tablet_62344, tablet_62044, tablet_41983, tablet_31981]:
-      t.reset_replication()
-    utils.run_vtctl(['InitShardMaster', 'test_keyspace/' + shard_id,
+    utils.run_vtctl(['InitShardMaster', '-force', 'test_keyspace/' + shard_id,
                      tablet_62344.tablet_alias])
     utils.validate_topology(ping_tablets=True)
     tablet_62344.mquery('vt_test_keyspace', self._create_vt_insert_test)

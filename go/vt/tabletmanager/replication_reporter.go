@@ -10,6 +10,7 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/vt/health"
+	"github.com/youtube/vitess/go/vt/mysqlctl"
 )
 
 var (
@@ -35,8 +36,9 @@ func (r *replicationReporter) Report(isSlaveType, shouldQueryServiceBeRunning bo
 	}
 
 	status, statusErr := r.agent.MysqlDaemon.SlaveStatus()
-	if statusErr == nil && !status.SlaveSQLRunning && !status.SlaveIORunning {
-		// Slave is configured, but not running.
+	if statusErr == mysqlctl.ErrNotSlave ||
+		(statusErr == nil && !status.SlaveSQLRunning && !status.SlaveIORunning) {
+		// MySQL is up, but slave is either not configured or not running.
 		// Both SQL and IO threads are stopped, so it's probably either
 		// stopped on purpose, or stopped because of a mysqld restart.
 		if !r.agent.slaveStopped() {
