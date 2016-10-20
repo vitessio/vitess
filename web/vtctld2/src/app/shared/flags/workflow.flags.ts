@@ -18,19 +18,17 @@ export class NewWorkflowFlags {
 }
 
 export class FactoryNameFlag extends DropDownFlag {
-  constructor(position: number, id: string, value= 'sleep') {
+  constructor(position: number, id: string, value= 'topovalidator') {
     super(position, id, 'Factory Name', 'Specifies the type of workflow to create.', value);
     let options = [
+      {
+        label: 'Topology Validator',
+        value: 'topovalidator',
+      },
       {
         label: 'Sleep',
         value: 'sleep'
       },
-      // Remove other when we have other workflows. This is just meant to
-      // test the display of the Sleep Duration parameter.
-      {
-        label: 'Other',
-        value: 'other'
-      }
     ];
     this.setOptions(options);
   }

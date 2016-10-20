@@ -10,7 +10,7 @@ export class WorkflowService {
   private stopped = false;
 
   // If using web sockets
-  private ws: WebSocket;
+  private ws: WebSocket = null;
 
   // If using HTTP
   private id = 0;

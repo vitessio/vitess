@@ -93,17 +93,19 @@ export class Node {
     }
     if ('actions' in changes) {
       this.actions = [];
-      for (let actionData of changes.actions) {
-        let message = actionData.message ? actionData.message : '';
-        if ('name' in actionData && 'state' in actionData && 'style' in actionData) {
-          this.actions.push(new Action(actionData.name, actionData.state, actionData.style, message));
+      if (changes.actions !== null) {
+        for (let actionData of changes.actions) {
+          let message = actionData.message ? actionData.message : '';
+          if ('name' in actionData && 'state' in actionData && 'style' in actionData) {
+            this.actions.push(new Action(actionData.name, actionData.state, actionData.style, message));
+          }
         }
       }
     }
   }
 
   public isRoot(): boolean {
-    return this.path.split('/').length === 1;
+    return this.path.split('/').length === 2;
   }
 
   public isDeterminate() {
