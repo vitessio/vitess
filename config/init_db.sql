@@ -64,7 +64,7 @@ GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, RELOAD, PROCESS, FILE,
   ON *.* TO 'vt_filtered'@'localhost';
 
 # User for Orchestrator (https://github.com/outbrain/orchestrator).
-GRANT SUPER, PROCESS, REPLICATION SLAVE
+GRANT SUPER, PROCESS, REPLICATION SLAVE, RELOAD
   ON *.* TO 'orc_client_user'@'%' IDENTIFIED BY 'orc_client_user_password';
 GRANT SELECT
   ON _vt.* TO 'orc_client_user'@'%' IDENTIFIED BY 'orc_client_user_password';
