@@ -160,6 +160,9 @@ func (agent *ActionAgent) InitMaster(ctx context.Context) (string, error) {
 	}
 	defer agent.unlock()
 
+	// Initializing as master implies undoing any previous "do not replicate".
+	agent.setSlaveStopped(false)
+
 	// we need to insert something in the binlogs, so we can get the
 	// current position. Let's just use the mysqlctl.CreateReparentJournal commands.
 	cmds := mysqlctl.CreateReparentJournal()

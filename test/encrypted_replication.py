@@ -152,7 +152,7 @@ def setUpModule():
 
     utils.run_vtctl(['CreateKeyspace', 'test_keyspace'])
 
-    shard_0_master.init_tablet('master', 'test_keyspace', '0')
+    shard_0_master.init_tablet('replica', 'test_keyspace', '0')
     shard_0_slave.init_tablet('replica', 'test_keyspace', '0')
 
     # create databases so vttablet can start behaving normally
@@ -191,7 +191,7 @@ class TestSecure(unittest.TestCase):
 
   def test_secure(self):
     # start the tablets
-    shard_0_master.start_vttablet()
+    shard_0_master.start_vttablet(wait_for_state='NOT_SERVING')
     shard_0_slave.start_vttablet(wait_for_state='NOT_SERVING',
                                  repl_extra_flags={
                                      'flags': '2048',
@@ -201,9 +201,7 @@ class TestSecure(unittest.TestCase):
                                  })
 
     # Reparent using SSL (this will also check replication works)
-    for t in [shard_0_master, shard_0_slave]:
-      t.reset_replication()
-    utils.run_vtctl(['InitShardMaster', 'test_keyspace/0',
+    utils.run_vtctl(['InitShardMaster', '-force', 'test_keyspace/0',
                      shard_0_master.tablet_alias], auto_log=True)
 
 if __name__ == '__main__':

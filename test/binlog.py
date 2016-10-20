@@ -45,21 +45,17 @@ def setUpModule():
     utils.run_vtctl(['SetKeyspaceShardingInfo', '-force', 'test_keyspace',
                      'keyspace_id', keyrange_constants.KIT_UINT64])
 
-    src_master.init_tablet('master', 'test_keyspace', '0')
+    src_master.init_tablet('replica', 'test_keyspace', '0')
     src_replica.init_tablet('replica', 'test_keyspace', '0')
     src_rdonly.init_tablet('rdonly', 'test_keyspace', '0')
 
-    utils.validate_topology()
-
     for t in [src_master, src_replica, src_rdonly]:
-      t.create_db('vt_test_keyspace')
       t.start_vttablet(wait_for_state=None)
 
-    src_master.wait_for_vttablet_state('SERVING')
-    for t in [src_replica, src_rdonly]:
+    for t in [src_master, src_replica, src_rdonly]:
       t.wait_for_vttablet_state('NOT_SERVING')
 
-    utils.run_vtctl(['InitShardMaster', 'test_keyspace/0',
+    utils.run_vtctl(['InitShardMaster', '-force', 'test_keyspace/0',
                      src_master.tablet_alias], auto_log=True)
 
     # Create schema
@@ -82,14 +78,14 @@ def setUpModule():
     utils.run_vtctl(['RunHealthCheck', src_rdonly.tablet_alias])
 
     # Create destination shard (won't be serving as there is no DB)
-    dst_master.init_tablet('master', 'test_keyspace', '-')
+    dst_master.init_tablet('replica', 'test_keyspace', '-')
     dst_replica.init_tablet('replica', 'test_keyspace', '-')
     dst_rdonly.init_tablet('rdonly', 'test_keyspace', '-')
     dst_master.start_vttablet(wait_for_state='NOT_SERVING')
     dst_replica.start_vttablet(wait_for_state='NOT_SERVING')
     dst_rdonly.start_vttablet(wait_for_state='NOT_SERVING')
 
-    utils.run_vtctl(['InitShardMaster', 'test_keyspace/-',
+    utils.run_vtctl(['InitShardMaster', '-force', 'test_keyspace/-',
                      dst_master.tablet_alias], auto_log=True)
 
     # copy the schema

@@ -8,16 +8,15 @@ import logging
 import time
 import unittest
 
-from vtproto import topodata_pb2
-
-from vtdb import keyrange
-from vtdb import keyrange_constants
-from vtdb import vtgate_client
-
 import base_sharding
 import environment
 import tablet
 import utils
+
+from vtproto import topodata_pb2
+from vtdb import keyrange
+from vtdb import keyrange_constants
+from vtdb import vtgate_client
 
 # source keyspace, with 4 tables
 source_master = tablet.Tablet()
@@ -114,7 +113,7 @@ class TestVerticalSplit(unittest.TestCase, base_sharding.BaseShardingTest):
          'destination_keyspace'])
 
     source_master.init_tablet(
-        'master',
+        'replica',
         keyspace='source_keyspace',
         shard='0',
         tablet_index=0)
@@ -134,7 +133,7 @@ class TestVerticalSplit(unittest.TestCase, base_sharding.BaseShardingTest):
         shard='0',
         tablet_index=3)
     destination_master.init_tablet(
-        'master',
+        'replica',
         keyspace='destination_keyspace',
         shard='0',
         tablet_index=0)
@@ -170,13 +169,11 @@ class TestVerticalSplit(unittest.TestCase, base_sharding.BaseShardingTest):
 
     # wait for the tablets
     master_tablets = [source_master, destination_master]
-    for t in master_tablets:
-      t.wait_for_vttablet_state('SERVING')
     replica_tablets = [
         source_replica, source_rdonly1, source_rdonly2,
         destination_replica, destination_rdonly1,
         destination_rdonly2]
-    for t in replica_tablets:
+    for t in master_tablets + replica_tablets:
       t.wait_for_vttablet_state('NOT_SERVING')
 
     # check SrvKeyspace
@@ -198,9 +195,7 @@ class TestVerticalSplit(unittest.TestCase, base_sharding.BaseShardingTest):
               destination_rdonly1, destination_rdonly2]:
       utils.wait_for_tablet_type(t.tablet_alias, 'rdonly')
 
-    for t in master_tablets:
-      t.wait_for_vttablet_state('SERVING')
-    for t in replica_tablets:
+    for t in master_tablets + replica_tablets:
       t.wait_for_vttablet_state('SERVING')
 
   def _create_source_schema(self):
