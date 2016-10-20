@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"math"
 	"net/http"
-	"strings"
 	"sync"
 	"time"
 
@@ -37,11 +36,8 @@ import (
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	vtgatepb "github.com/youtube/vitess/go/vt/proto/vtgate"
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
-
-const errDupKey = "errno 1062"
-const errOutOfRange = "errno 1264"
-const errTxPoolFull = "tx_pool_full"
 
 var (
 	rpcVTGate *VTGate
@@ -187,7 +183,7 @@ func (vtg *VTGate) Execute(ctx context.Context, sql string, bindVariables map[st
 		"NotInTransaction": notInTransaction,
 		"Options":          options,
 	}
-	handleExecuteError(err, statsKey, query, vtg.logExecute)
+	err = handleExecuteError(err, statsKey, query, vtg.logExecute)
 	return nil, err
 }
 
@@ -228,7 +224,7 @@ func (vtg *VTGate) ExecuteShards(ctx context.Context, sql string, bindVariables 
 		"NotInTransaction": notInTransaction,
 		"Options":          options,
 	}
-	handleExecuteError(err, statsKey, query, vtg.logExecuteShards)
+	err = handleExecuteError(err, statsKey, query, vtg.logExecuteShards)
 	return nil, err
 }
 
@@ -257,7 +253,7 @@ func (vtg *VTGate) ExecuteKeyspaceIds(ctx context.Context, sql string, bindVaria
 		"NotInTransaction": notInTransaction,
 		"Options":          options,
 	}
-	handleExecuteError(err, statsKey, query, vtg.logExecuteKeyspaceIds)
+	err = handleExecuteError(err, statsKey, query, vtg.logExecuteKeyspaceIds)
 	return nil, err
 }
 
@@ -286,7 +282,7 @@ func (vtg *VTGate) ExecuteKeyRanges(ctx context.Context, sql string, bindVariabl
 		"NotInTransaction": notInTransaction,
 		"Options":          options,
 	}
-	handleExecuteError(err, statsKey, query, vtg.logExecuteKeyRanges)
+	err = handleExecuteError(err, statsKey, query, vtg.logExecuteKeyRanges)
 	return nil, err
 }
 
@@ -316,7 +312,7 @@ func (vtg *VTGate) ExecuteEntityIds(ctx context.Context, sql string, bindVariabl
 		"NotInTransaction":  notInTransaction,
 		"Options":           options,
 	}
-	handleExecuteError(err, statsKey, query, vtg.logExecuteEntityIds)
+	err = handleExecuteError(err, statsKey, query, vtg.logExecuteEntityIds)
 	return nil, err
 }
 
@@ -354,7 +350,7 @@ func (vtg *VTGate) ExecuteBatchShards(ctx context.Context, queries []*vtgatepb.B
 		"Session":       session,
 		"Options":       options,
 	}
-	handleExecuteError(err, statsKey, query, vtg.logExecuteBatchShards)
+	err = handleExecuteError(err, statsKey, query, vtg.logExecuteBatchShards)
 	return nil, err
 }
 
@@ -390,7 +386,7 @@ func (vtg *VTGate) ExecuteBatchKeyspaceIds(ctx context.Context, queries []*vtgat
 		"Session":       session,
 		"Options":       options,
 	}
-	handleExecuteError(err, statsKey, query, vtg.logExecuteBatchKeyspaceIds)
+	err = handleExecuteError(err, statsKey, query, vtg.logExecuteBatchKeyspaceIds)
 	return nil, err
 }
 
@@ -834,20 +830,25 @@ func isErrorCausedByVTGate(err error) bool {
 	return false
 }
 
-func handleExecuteError(err error, statsKey []string, query map[string]interface{}, logger *logutil.ThrottledLogger) {
-	s := fmt.Sprintf(", vtgate: %v", servenv.ListeningURL.String())
-	newErr := vterrors.WithSuffix(err, s)
-	errStr := newErr.Error()
-	if strings.Contains(errStr, errDupKey) {
+func handleExecuteError(err error, statsKey []string, query map[string]interface{}, logger *logutil.ThrottledLogger) error {
+	// First we log in the right category.
+	ec := vterrors.RecoverVtErrorCode(err)
+	switch ec {
+	case vtrpcpb.ErrorCode_INTEGRITY_ERROR:
+		// Duplicate key error, no need to log.
 		infoErrors.Add("DupKey", 1)
-	} else if strings.Contains(errStr, errOutOfRange) {
-		infoErrors.Add("OutOfRange", 1)
-	} else if strings.Contains(errStr, errTxPoolFull) {
+	case vtrpcpb.ErrorCode_RESOURCE_EXHAUSTED, vtrpcpb.ErrorCode_BAD_INPUT:
+		// Tx pool full error, or bad input, no need to log.
 		normalErrors.Add(statsKey, 1)
-	} else {
+	default:
+		// Regular error, we will log if caused by vtgate.
 		normalErrors.Add(statsKey, 1)
 		logError(err, query, logger)
 	}
+
+	// Then we suffix the error with our address.
+	s := fmt.Sprintf(", vtgate: %v", servenv.ListeningURL.String())
+	return vterrors.WithSuffix(err, s)
 }
 
 func formatError(err error) error {
