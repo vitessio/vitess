@@ -13,6 +13,7 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/discovery"
 	"github.com/youtube/vitess/go/vt/logutil"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -64,8 +65,8 @@ type Swap struct {
 type shardSchemaSwap struct {
 	// parent is the structure with meta-information about the whole schema swap process.
 	parent *Swap
-	// shard is the name of the shard this struct operates on.
-	shard string
+	// shardName is the name of the shard this struct operates on.
+	shardName string
 
 	// tabletHealthCheck watches after the healthiness of all tablets in the shard.
 	tabletHealthCheck discovery.HealthCheck
@@ -92,8 +93,7 @@ type shardSchemaSwap struct {
 
 // shardSwapMetadata contains full metadata about schema swaps on a certain shard.
 type shardSwapMetadata struct {
-	shardName string
-	err       error
+	err error
 	// IDs of last started and last finished schema swap on the shard
 	lastStartedSwap, lastFinishedSwap uint64
 	// currentSQL is the SQL of the currentlr running schema swap (if there is any)
@@ -106,15 +106,13 @@ type shardSwapMetadata struct {
 // input argument is the SQL statements that comprise the schema change that needs to be
 // pushed using the schema swap process.
 func (schemaSwap *Swap) Run(sql string) error {
-	err := schemaSwap.createShardObjects()
-	if err != nil {
+	if err := schemaSwap.createShardObjects(); err != nil {
 		return err
 	}
-	err = schemaSwap.initializeSwap(sql)
-	if err != nil {
+	if err := schemaSwap.initializeSwap(sql); err != nil {
 		return err
 	}
-	err = schemaSwap.runOnAllShards(
+	errHealthWatchers := schemaSwap.runOnAllShards(
 		func(shard *shardSchemaSwap) error {
 			return shard.startHealthWatchers()
 		})
@@ -122,10 +120,10 @@ func (schemaSwap *Swap) Run(sql string) error {
 	// succeed while others fail. We should try to stop health watching on all shards no
 	// matter if there was some failure or not.
 	defer schemaSwap.stopAllHealthWatchers()
-	if err != nil {
-		return err
+	if errHealthWatchers != nil {
+		return errHealthWatchers
 	}
-	err = schemaSwap.runOnAllShards(
+	err := schemaSwap.runOnAllShards(
 		func(shard *shardSchemaSwap) error {
 			return shard.applySeedSchemaChange(sql)
 		})
@@ -161,24 +159,17 @@ func (schemaSwap *Swap) Run(sql string) error {
 // the function fails then the method returns error. If several shards return error then only one
 // of them is returned.
 func (schemaSwap *Swap) runOnAllShards(shardFunc func(shard *shardSchemaSwap) error) error {
-	errorChannel := make(chan error)
+	var errorRecorder concurrency.AllErrorRecorder
+	var waitGroup sync.WaitGroup
 	for _, shardSwap := range schemaSwap.allShards {
+		waitGroup.Add(1)
 		go func(shard *shardSchemaSwap) {
-			err := shardFunc(shard)
-			errorChannel <- err
+			defer waitGroup.Done()
+			errorRecorder.RecordError(shardFunc(shard))
 		}(shardSwap)
 	}
-	var overallErr error
-	cntErrsReceived := 0
-	for cntErrsReceived != len(schemaSwap.allShards) {
-		err := <-errorChannel
-		if err != nil {
-			overallErr = err
-		}
-		cntErrsReceived++
-	}
-	close(errorChannel)
-	return overallErr
+	waitGroup.Wait()
+	return errorRecorder.Error()
 }
 
 // createShardObjects creates per-shard swap objects for all shards in the keyspace.
@@ -189,8 +180,8 @@ func (schemaSwap *Swap) createShardObjects() error {
 	}
 	for _, shardInfo := range shardsList {
 		shardSwap := &shardSchemaSwap{
-			parent: schemaSwap,
-			shard:  shardInfo.ShardName(),
+			parent:    schemaSwap,
+			shardName: shardInfo.ShardName(),
 		}
 		schemaSwap.allShards = append(schemaSwap.allShards, shardSwap)
 	}
@@ -211,48 +202,52 @@ func (schemaSwap *Swap) stopAllHealthWatchers() {
 // the the method just picks up that. Otherwise it starts a new one and writes into the database that
 // the process was started.
 func (schemaSwap *Swap) initializeSwap(sql string) error {
-	metadataChannel := make(chan *shardSwapMetadata)
-	for _, shard := range schemaSwap.allShards {
-		go shard.readShardMetadata(metadataChannel)
+	var waitGroup sync.WaitGroup
+	metadataList := make([]shardSwapMetadata, len(schemaSwap.allShards))
+	for i, shard := range schemaSwap.allShards {
+		waitGroup.Add(1)
+		go shard.readShardMetadata(&metadataList[i], &waitGroup)
 	}
-	var initError error
-	var cntDataReceived int
-	for cntDataReceived != len(schemaSwap.allShards) {
-		metadata := <-metadataChannel
-		cntDataReceived++
-		if metadata.lastStartedSwap == metadata.lastFinishedSwap {
+	waitGroup.Wait()
+
+	var recorder concurrency.AllErrorRecorder
+	for i, metadata := range metadataList {
+		if metadata.err != nil {
+			recorder.RecordError(metadata.err)
+		} else if metadata.lastStartedSwap == metadata.lastFinishedSwap {
 			// The shard doesn't have schema swap started yet.
 			nextSwapID := metadata.lastFinishedSwap + 1
 			if schemaSwap.swapID == 0 {
 				schemaSwap.swapID = nextSwapID
 			} else if schemaSwap.swapID != nextSwapID {
-				initError = fmt.Errorf(
+				recorder.RecordError(fmt.Errorf(
 					"Next schema swap id on shard %v should be %v, while for other shard(s) it should be %v",
-					metadata.shardName, nextSwapID, schemaSwap.swapID)
+					schemaSwap.allShards[i].shardName, nextSwapID, schemaSwap.swapID))
 			}
 		} else if metadata.lastStartedSwap < metadata.lastFinishedSwap {
-			initError = fmt.Errorf(
+			recorder.RecordError(fmt.Errorf(
 				"Bad swap metadata on shard %v: LastFinishedSchemaSwap=%v is greater than LastStartedSchemaSwap=%v",
-				metadata.shardName, metadata.lastFinishedSwap, metadata.lastStartedSwap)
+				schemaSwap.allShards[i].shardName, metadata.lastFinishedSwap, metadata.lastStartedSwap))
 		} else if schemaSwap.swapID != 0 && schemaSwap.swapID != metadata.lastStartedSwap {
-			initError = fmt.Errorf(
+			recorder.RecordError(fmt.Errorf(
 				"Shard %v has an already started schema swap with an id %v, while for other shard(s) id should be equal to %v",
-				metadata.shardName, metadata.lastStartedSwap, schemaSwap.swapID)
+				schemaSwap.allShards[i].shardName, metadata.lastStartedSwap, schemaSwap.swapID))
 		} else if metadata.currentSQL != sql {
-			initError = fmt.Errorf("Shard %v has an already started schema swap with a different set of SQL statements", metadata.shardName)
+			recorder.RecordError(fmt.Errorf(
+				"Shard %v has an already started schema swap with a different set of SQL statements",
+				schemaSwap.allShards[i].shardName))
 		} else {
 			schemaSwap.swapID = metadata.lastStartedSwap
 		}
 	}
-	close(metadataChannel)
-	if initError != nil {
-		return initError
+	if recorder.HasErrors() {
+		return recorder.Error()
 	}
-	initError = schemaSwap.runOnAllShards(
+
+	return schemaSwap.runOnAllShards(
 		func(shard *shardSchemaSwap) error {
 			return shard.writeStartedSwap(sql)
 		})
-	return initError
 }
 
 // finalizeSwap finishes the completed swap process by verifying that it's actually complete
@@ -275,7 +270,7 @@ func (schemaSwap *Swap) finalizeSwap() error {
 // getMasterTablet returns the tablet that is currently master on the shard.
 func (shardSwap *shardSchemaSwap) getMasterTablet() (*topodatapb.Tablet, error) {
 	topoServer := shardSwap.parent.topoServer
-	shardInfo, err := topoServer.GetShard(shardSwap.parent.ctx, shardSwap.parent.keyspace, shardSwap.shard)
+	shardInfo, err := topoServer.GetShard(shardSwap.parent.ctx, shardSwap.parent.keyspace, shardSwap.shardName)
 	if err != nil {
 		return nil, err
 	}
@@ -287,9 +282,8 @@ func (shardSwap *shardSchemaSwap) getMasterTablet() (*topodatapb.Tablet, error) 
 }
 
 // readShardMetadata reads info about schema swaps on this shard from _vt.shard_metadata table.
-func (shardSwap *shardSchemaSwap) readShardMetadata(metadataChannel chan *shardSwapMetadata) {
-	metadata := &shardSwapMetadata{shardName: shardSwap.shard}
-	defer func() { metadataChannel <- metadata }()
+func (shardSwap *shardSchemaSwap) readShardMetadata(metadata *shardSwapMetadata, waitGroup *sync.WaitGroup) {
+	defer waitGroup.Done()
 
 	tablet, err := shardSwap.getMasterTablet()
 	if err != nil {
@@ -393,7 +387,7 @@ func (shardSwap *shardSchemaSwap) startHealthWatchers() error {
 			shardSwap.tabletHealthCheck,
 			cell,
 			shardSwap.parent.keyspace,
-			shardSwap.shard,
+			shardSwap.shardName,
 			*vtctl.HealthCheckTimeout,
 			discovery.DefaultTopoReadConcurrency)
 		shardSwap.tabletWatchers = append(shardSwap.tabletWatchers, watcher)
@@ -599,7 +593,7 @@ func (shardSwap *shardSchemaSwap) findNextTabletToSwap() (*topodatapb.Tablet, er
 			return tabletStats.Tablet, nil
 		}
 	}
-	return nil, fmt.Errorf("Something is wrong! Cannot find master on shard %v", shardSwap.shard)
+	return nil, fmt.Errorf("Something is wrong! Cannot find master on shard %v", shardSwap.shardName)
 }
 
 // applySeedSchemaChange chooses a healthy tablet as a schema swap seed and applies the schema change
@@ -701,7 +695,7 @@ func (shardSwap *shardSchemaSwap) takeSeedBackup() error {
 		}
 	}
 	if seedTablet == nil {
-		return fmt.Errorf("Cannot find the seed tablet on shard %v", shardSwap.shard)
+		return fmt.Errorf("Cannot find the seed tablet on shard %v", shardSwap.shardName)
 	}
 
 	eventStream, err := shardSwap.parent.tabletClient.Backup(shardSwap.parent.ctx, seedTablet, *backupConcurrency)
@@ -837,7 +831,7 @@ func (shardSwap *shardSchemaSwap) propagateToMaster() error {
 	err = wr.PlannedReparentShard(
 		shardSwap.parent.ctx,
 		shardSwap.parent.keyspace,
-		shardSwap.shard,
+		shardSwap.shardName,
 		nil,                /* masterElectTabletAlias */
 		masterTablet.Alias, /* avoidMasterAlias */
 		*reparentTimeout)
