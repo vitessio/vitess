@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"sync"
@@ -57,25 +58,23 @@ func newLongPollingManager(m *Manager) *longPollingManager {
 	return lpm
 }
 
-func (lpm *longPollingManager) create() ([]byte, int, error) {
-	notifications := make(chan []byte, 10)
-	tree, i, err := lpm.manager.NodeManager().GetAndWatchFullTree(notifications)
+func (lpm *longPollingManager) create(servedURL *url.URL) ([]byte, int, error) {
+	tree, notifications, i, err := lpm.manager.getAndWatchFullTree(servedURL)
 	if err != nil {
-		return nil, 0, fmt.Errorf("GetAndWatchFullTree failed: %v", err)
+		return nil, 0, fmt.Errorf("getAndWatchFullTree failed: %v", err)
 	}
 
-	lpm.mu.Lock()
-	defer lpm.mu.Unlock()
-	lpm.connections[i] = &longPollingConnection{
-		notifications:    notifications,
-		nodeManagerIndex: i,
-		lastPoll:         time.Now(),
+	if notifications != nil {
+		lpm.mu.Lock()
+		defer lpm.mu.Unlock()
+		lpm.connections[i] = &longPollingConnection{
+			notifications:    notifications,
+			nodeManagerIndex: i,
+			lastPoll:         time.Now(),
+		}
 	}
-	result := make([]byte, 0, len(tree)+40)
-	result = append(result, []byte(`{"update":`)...)
-	result = append(result, tree...)
-	result = append(result, []byte(fmt.Sprintf(`,"id":%v}`, i))...)
-	return result, i, nil
+
+	return tree, i, err
 }
 
 func (lpm *longPollingManager) poll(i int) ([]byte, error) {
@@ -172,7 +171,7 @@ func (m *Manager) HandleHTTPLongPolling(pattern string) {
 	lpm := newLongPollingManager(m)
 
 	handleAPI(pattern+"/create", func(w http.ResponseWriter, r *http.Request) error {
-		result, i, err := lpm.create()
+		result, i, err := lpm.create(r.URL)
 		if err != nil {
 			return fmt.Errorf("longPollingManager.create failed: %v", err)
 		}
