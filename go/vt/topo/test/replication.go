@@ -28,6 +28,11 @@ func checkShardReplication(t *testing.T, ts topo.Impl) {
 		},
 	}
 	if err := ts.UpdateShardReplicationFields(ctx, cell, "test_keyspace", "-10", func(oldSr *topodatapb.ShardReplication) error {
+		return topo.ErrNoUpdateNeeded
+	}); err != nil {
+		t.Fatalf("UpdateShardReplicationFields() failed: %v", err)
+	}
+	if err := ts.UpdateShardReplicationFields(ctx, cell, "test_keyspace", "-10", func(oldSr *topodatapb.ShardReplication) error {
 		*oldSr = *sr
 		return nil
 	}); err != nil {
