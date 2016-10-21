@@ -438,7 +438,7 @@ class TestVtctldWeb(unittest.TestCase):
     dialog_command = self._get_dialog_cmd(dialog)
     logging.info('Validate command: %s', ', '.join(dialog_command))
     self.assertEqual(2, len(dialog_command))
-    self.assertEqual('-ping-tablets=true', dialog_command[1])
+    self.assertEqual('-ping-tablets', dialog_command[1])
 
     # Validate succeeded
     validate_response = self._get_validate_resp(dialog)
