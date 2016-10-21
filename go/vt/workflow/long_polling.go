@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"sync"
@@ -57,7 +58,30 @@ func newLongPollingManager(m *Manager) *longPollingManager {
 	return lpm
 }
 
-func (lpm *longPollingManager) create() ([]byte, int, error) {
+func (lpm *longPollingManager) create(servedURL *url.URL) ([]byte, int, error) {
+	// first we make sure we are running, and if not redirect.
+	if !lpm.manager.isRunning() {
+		if lpm.manager.redirectFunc == nil {
+			return nil, 0, fmt.Errorf("Manager is not running")
+		}
+
+		host, err := lpm.manager.redirectFunc()
+		if err != nil {
+			return nil, 0, fmt.Errorf("WorkflowManager cannot redirect to proper Manager: %v", err)
+		}
+
+		u := *servedURL
+		u.Host = host
+		u.Path = "/app2/workflows"
+		redirect := u.String()
+
+		result := make([]byte, 0, len(redirect)+40)
+		result = append(result, []byte(`{"redirect":"`)...)
+		result = append(result, []byte(redirect)...)
+		result = append(result, []byte(`"}`)...)
+		return result, 0, nil
+	}
+
 	notifications := make(chan []byte, 10)
 	tree, i, err := lpm.manager.NodeManager().GetAndWatchFullTree(notifications)
 	if err != nil {
@@ -172,7 +196,7 @@ func (m *Manager) HandleHTTPLongPolling(pattern string) {
 	lpm := newLongPollingManager(m)
 
 	handleAPI(pattern+"/create", func(w http.ResponseWriter, r *http.Request) error {
-		result, i, err := lpm.create()
+		result, i, err := lpm.create(r.URL)
 		if err != nil {
 			return fmt.Errorf("longPollingManager.create failed: %v", err)
 		}

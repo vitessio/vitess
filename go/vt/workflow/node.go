@@ -132,6 +132,9 @@ type Update struct {
 
 	// FullUpdate is set to true if this is a full refresh of the data.
 	FullUpdate bool `json:"fullUpdate"`
+
+	// Redirect is set to the URL to go to if we are not the master.
+	Redirect string `json:"redirect"`
 }
 
 // NewToplevelNode returns a UI Node matching the toplevel workflow.

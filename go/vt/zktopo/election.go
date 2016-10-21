@@ -7,6 +7,7 @@ package zktopo
 import (
 	"fmt"
 	"path"
+	"sort"
 	"time"
 
 	log "github.com/golang/glog"
@@ -169,6 +170,7 @@ func (mp *zkMasterParticipation) GetCurrentMasterID() (string, error) {
 			// no current master
 			return "", nil
 		}
+		sort.Strings(children)
 
 		childPath := path.Join(electionPath, children[0])
 		data, _, err := mp.zkts.zconn.Get(childPath)

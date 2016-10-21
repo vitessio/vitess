@@ -56,6 +56,11 @@ type Manager struct {
 	// nodeManager is the NodeManager for UI display.
 	nodeManager *NodeManager
 
+	// redirectFunc is the function to use to redirect web traffic
+	// to the serving Manager, when this manager is not
+	// running. If it is not set, we will just error out.
+	redirectFunc func() (string, error)
+
 	// mu protects the next fields.
 	mu sync.Mutex
 	// ctx is the context passed in the run function. It is only
@@ -99,6 +104,11 @@ func NewManager(ts topo.Server) *Manager {
 		nodeManager: NewNodeManager(),
 		workflows:   make(map[string]*runningWorkflow),
 	}
+}
+
+// SetRedirectFunc sets the redirect function to use.
+func (m *Manager) SetRedirectFunc(rf func() (string, error)) {
+	m.redirectFunc = rf
 }
 
 // TopoServer returns the topo.Server used by the Manager.
@@ -391,6 +401,12 @@ func (m *Manager) getRunningWorkflow(uuid string) (*runningWorkflow, error) {
 		return nil, fmt.Errorf("no running workflow with uuid %v", uuid)
 	}
 	return rw, nil
+}
+
+func (m *Manager) isRunning() bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.ctx != nil
 }
 
 // Register lets implementations register Factory objects.
