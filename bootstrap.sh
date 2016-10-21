@@ -215,7 +215,7 @@ mkdir -p $selenium_dist
 virtualenv $selenium_dist
 $selenium_dist/bin/pip install selenium
 mkdir -p $VTROOT/dist/chromedriver
-curl -sL http://chromedriver.storage.googleapis.com/2.20/chromedriver_linux64.zip > chromedriver_linux64.zip
+curl -sL http://chromedriver.storage.googleapis.com/2.24/chromedriver_linux64.zip > chromedriver_linux64.zip
 unzip -o -q chromedriver_linux64.zip -d $VTROOT/dist/chromedriver
 rm chromedriver_linux64.zip
 
