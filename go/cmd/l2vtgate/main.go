@@ -65,7 +65,7 @@ func main() {
 			tabletTypes = append(tabletTypes, tt)
 		}
 	}
-	l2vtg := l2vtgate.Init(healthCheck, ts, resilientSrvTopoServer, *cell, *retryCount, tabletTypes)
+	l2vtg := l2vtgate.Init(healthCheck, ts, resilientSrvTopoServer, "VttabletCall", *cell, *retryCount, tabletTypes)
 
 	servenv.OnRun(func() {
 		addStatusParts(l2vtg)

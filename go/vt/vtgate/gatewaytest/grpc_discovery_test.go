@@ -105,7 +105,7 @@ func TestL2VTGateDiscovery(t *testing.T) {
 	// L2VTGate: Create the discovery healthcheck, and the gateway.
 	// Wait for the right tablets to be present.
 	hc := discovery.NewHealthCheck(30*time.Second, 10*time.Second, 2*time.Minute)
-	l2vtgate := l2vtgate.Init(hc, ts, ts, cell, 2, nil)
+	l2vtgate := l2vtgate.Init(hc, ts, ts, "", cell, 2, nil)
 	hc.AddTablet(&topodatapb.Tablet{
 		Alias: &topodatapb.TabletAlias{
 			Cell: cell,

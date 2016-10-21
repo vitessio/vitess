@@ -387,13 +387,38 @@ class TestCoreVTGateFunctions(BaseTestCase):
       for result in cursor.results:
         kid = result[2]
         self.assertIn(kid, SHARD_KID_MAP[SHARD_NAMES[shard_index]])
-    # Do a cross shard range query and assert all rows are fetched
+
+    # Do a cross shard range query and assert all rows are fetched.
+    # Use this test to also test the vtgate vars (and l2vtgate vars if
+    # applicable) are correctly updated.
+    v = utils.vtgate.get_vars()
+    key0 = 'Execute.' + KEYSPACE_NAME + '.' + SHARD_NAMES[0] + '.master'
+    key1 = 'Execute.' + KEYSPACE_NAME + '.' + SHARD_NAMES[1] + '.master'
+    before0 = v['VttabletCall']['Histograms'][key0]['Count']
+    before1 = v['VttabletCall']['Histograms'][key1]['Count']
+    if use_l2vtgate:
+      lv = l2vtgate.get_vars()
+      lbefore0 = lv['VttabletCall']['Histograms'][key0]['Count']
+      lbefore1 = lv['VttabletCall']['Histograms'][key1]['Count']
+
     cursor = vtgate_conn.cursor(
         tablet_type='master', keyspace=KEYSPACE_NAME,
         keyranges=[keyrange.KeyRange('75-95')])
     rowcount = cursor.execute('select * from vt_insert_test', {})
     self.assertEqual(rowcount, row_counts[0] + row_counts[1])
     vtgate_conn.close()
+
+    v = utils.vtgate.get_vars()
+    after0 = v['VttabletCall']['Histograms'][key0]['Count']
+    after1 = v['VttabletCall']['Histograms'][key1]['Count']
+    self.assertEqual(after0 - before0, 1)
+    self.assertEqual(after1 - before1, 1)
+    if use_l2vtgate:
+      lv = l2vtgate.get_vars()
+      lafter0 = lv['VttabletCall']['Histograms'][key0]['Count']
+      lafter1 = lv['VttabletCall']['Histograms'][key1]['Count']
+      self.assertEqual(lafter0 - lbefore0, 1)
+      self.assertEqual(lafter1 - lbefore1, 1)
 
   def test_rollback(self):
     vtgate_conn = get_connection()
