@@ -360,8 +360,8 @@ func (mysqld *Mysqld) Shutdown(ctx context.Context, waitForMysqld bool) error {
 		arg := []string{
 			"-u", mysqld.dba.Uname, "-S", mysqld.config.SocketFile}
 		if mysqld.dba.Pass != "" {
-			// --password must be omitted entirely if empty, or else it will prompt.
-			arg = append(arg, "--password", mysqld.dba.Pass)
+			// -p must be omitted entirely if empty, or else it will prompt.
+			arg = append(arg, "-p"+mysqld.dba.Pass)
 		}
 		arg = append(arg, "shutdown")
 		env := []string{
@@ -476,7 +476,7 @@ func (mysqld *Mysqld) Init(ctx context.Context, initDBSQLFile string) error {
 		return fmt.Errorf("can't open init_db_sql_file (%v): %v", initDBSQLFile, err)
 	}
 	defer sqlFile.Close()
-	if err := mysqld.executeMysqlScript("root", sqlFile); err != nil {
+	if err := mysqld.executeMysqlScript("root", "", sqlFile); err != nil {
 		return fmt.Errorf("can't run init_db_sql_file (%v): %v", initDBSQLFile, err)
 	}
 
@@ -687,12 +687,12 @@ func deleteTopDir(dir string) (removalErr error) {
 
 // executeMysqlCommands executes some SQL commands,
 // using the mysql command line tool.
-func (mysqld *Mysqld) executeMysqlCommands(user, sql string) error {
-	return mysqld.executeMysqlScript(user, strings.NewReader(sql))
+func (mysqld *Mysqld) executeMysqlCommands(user, password, sql string) error {
+	return mysqld.executeMysqlScript(user, password, strings.NewReader(sql))
 }
 
 // executeMysqlScript executes a .sql script file with the mysql command line tool.
-func (mysqld *Mysqld) executeMysqlScript(user string, sql io.Reader) error {
+func (mysqld *Mysqld) executeMysqlScript(user, password string, sql io.Reader) error {
 	dir, err := vtenv.VtMysqlRoot()
 	if err != nil {
 		return err
@@ -702,9 +702,9 @@ func (mysqld *Mysqld) executeMysqlScript(user string, sql io.Reader) error {
 		return err
 	}
 	arg := []string{"--batch", "-u", user, "-S", mysqld.config.SocketFile}
-	if mysqld.dba.Pass != "" {
-		// --password must be omitted entirely if empty, or else it will prompt.
-		arg = append(arg, "--password", mysqld.dba.Pass)
+	if password != "" {
+		// -p must be omitted entirely if empty, or else it will prompt.
+		arg = append(arg, "-p"+password)
 	}
 	env := []string{
 		"LD_LIBRARY_PATH=" + path.Join(dir, "lib/mysql"),
