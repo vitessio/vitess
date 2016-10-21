@@ -31,6 +31,9 @@ func (s *Server) UpdateShardReplicationFields(ctx context.Context, cell, keyspac
 			}
 		}
 		if err = updateFunc(sri.ShardReplication); err != nil {
+			if err == topo.ErrNoUpdateNeeded {
+				return nil
+			}
 			return err
 		}
 		if version == -1 {
