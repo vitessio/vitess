@@ -476,7 +476,7 @@ func (mysqld *Mysqld) Init(ctx context.Context, initDBSQLFile string) error {
 		return fmt.Errorf("can't open init_db_sql_file (%v): %v", initDBSQLFile, err)
 	}
 	defer sqlFile.Close()
-	if err := mysqld.executeMysqlScript("root", "", sqlFile); err != nil {
+	if err := mysqld.executeMysqlScript(&sqldb.ConnParams{Uname: "root", Pass: ""}, sqlFile); err != nil {
 		return fmt.Errorf("can't run init_db_sql_file (%v): %v", initDBSQLFile, err)
 	}
 
@@ -687,12 +687,12 @@ func deleteTopDir(dir string) (removalErr error) {
 
 // executeMysqlCommands executes some SQL commands,
 // using the mysql command line tool.
-func (mysqld *Mysqld) executeMysqlCommands(user, password, sql string) error {
-	return mysqld.executeMysqlScript(user, password, strings.NewReader(sql))
+func (mysqld *Mysqld) executeMysqlCommands(connParams *sqldb.ConnParams, sql string) error {
+	return mysqld.executeMysqlScript(connParams, strings.NewReader(sql))
 }
 
 // executeMysqlScript executes a .sql script file with the mysql command line tool.
-func (mysqld *Mysqld) executeMysqlScript(user, password string, sql io.Reader) error {
+func (mysqld *Mysqld) executeMysqlScript(connParams *sqldb.ConnParams, sql io.Reader) error {
 	dir, err := vtenv.VtMysqlRoot()
 	if err != nil {
 		return err
@@ -701,10 +701,10 @@ func (mysqld *Mysqld) executeMysqlScript(user, password string, sql io.Reader) e
 	if err != nil {
 		return err
 	}
-	arg := []string{"--batch", "-u", user, "-S", mysqld.config.SocketFile}
-	if password != "" {
+	arg := []string{"--batch", "-u", connParams.Uname, "-S", mysqld.config.SocketFile}
+	if connParams.Pass != "" {
 		// -p must be omitted entirely if empty, or else it will prompt.
-		arg = append(arg, "-p"+password)
+		arg = append(arg, "-p"+connParams.Pass)
 	}
 	env := []string{
 		"LD_LIBRARY_PATH=" + path.Join(dir, "lib/mysql"),
