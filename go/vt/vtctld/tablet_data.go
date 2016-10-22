@@ -87,7 +87,7 @@ func (th *tabletHealth) stream(ctx context.Context, ts topo.Server, tabletAlias 
 	if err != nil {
 		return err
 	}
-	defer conn.Close()
+	defer conn.Close(ctx)
 
 	stream, err := conn.StreamHealth(ctx)
 	if err != nil {

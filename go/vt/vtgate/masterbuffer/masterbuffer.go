@@ -22,9 +22,11 @@ import (
 	"time"
 
 	"github.com/youtube/vitess/go/stats"
+	"github.com/youtube/vitess/go/vt/vterrors"
+
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
-	"github.com/youtube/vitess/go/vt/vterrors"
 )
 
 var (
@@ -56,15 +58,15 @@ var errBufferFull = vterrors.FromError(
 // on upstream callers. Once the impact is measured, it can be used to tweak parameter values
 // for the best behavior.
 // FakeBuffer should be called before a potential VtTablet Begin, otherwise it will increase transaction times.
-func FakeBuffer(keyspace, shard string, tabletType topodatapb.TabletType, inTransaction bool, attemptNumber int) error {
+func FakeBuffer(target *querypb.Target, inTransaction bool, attemptNumber int) error {
 	if !*enableFakeMasterBuffer {
 		return nil
 	}
 	// Don't buffer non-master traffic, requests that are inside transactions, or retries.
-	if tabletType != topodatapb.TabletType_MASTER || inTransaction || attemptNumber != 0 {
+	if target.TabletType != topodatapb.TabletType_MASTER || inTransaction || attemptNumber != 0 {
 		return nil
 	}
-	if keyspace != *bufferKeyspace || shard != *bufferShard {
+	if target.Keyspace != *bufferKeyspace || target.Shard != *bufferShard {
 		return nil
 	}
 	bufferedRequestsAttempted.Add(1)

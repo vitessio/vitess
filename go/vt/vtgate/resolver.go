@@ -407,7 +407,12 @@ func (res *Resolver) UpdateStream(ctx context.Context, keyspace string, shard st
 		position = event.Position
 		timestamp = 0
 	}
-	return res.scatterConn.UpdateStream(ctx, keyspace, shard, tabletType, timestamp, position, func(se *querypb.StreamEvent) error {
+	target := &querypb.Target{
+		Keyspace:   keyspace,
+		Shard:      shard,
+		TabletType: tabletType,
+	}
+	return res.scatterConn.UpdateStream(ctx, target, timestamp, position, func(se *querypb.StreamEvent) error {
 		var timestamp int64
 		if se.EventToken != nil {
 			timestamp = se.EventToken.Timestamp

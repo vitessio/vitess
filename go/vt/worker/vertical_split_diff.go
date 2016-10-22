@@ -385,7 +385,7 @@ func (vsdw *VerticalSplitDiffWorker) diff(ctx context.Context) error {
 				vsdw.wr.Logger().Errorf("%v", newErr)
 				return
 			}
-			defer sourceQueryResultReader.Close()
+			defer sourceQueryResultReader.Close(ctx)
 
 			destinationQueryResultReader, err := TableScan(ctx, vsdw.wr.Logger(), vsdw.wr.TopoServer(), vsdw.destinationAlias, tableDefinition)
 			if err != nil {
@@ -394,7 +394,7 @@ func (vsdw *VerticalSplitDiffWorker) diff(ctx context.Context) error {
 				vsdw.wr.Logger().Errorf("%v", newErr)
 				return
 			}
-			defer destinationQueryResultReader.Close()
+			defer destinationQueryResultReader.Close(ctx)
 
 			differ, err := NewRowDiffer(sourceQueryResultReader, destinationQueryResultReader, tableDefinition)
 			if err != nil {
