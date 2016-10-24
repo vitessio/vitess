@@ -130,6 +130,119 @@ func (q *query) Rollback(ctx context.Context, request *querypb.RollbackRequest) 
 	return &querypb.RollbackResponse{}, nil
 }
 
+// Prepare is part of the queryservice.QueryServer interface
+func (q *query) Prepare(ctx context.Context, request *querypb.PrepareRequest) (response *querypb.PrepareResponse, err error) {
+	defer q.server.HandlePanic(&err)
+	ctx = callerid.NewContext(callinfo.GRPCCallInfo(ctx),
+		request.EffectiveCallerId,
+		request.ImmediateCallerId,
+	)
+	if err := q.server.Prepare(ctx, request.Target, request.TransactionId, request.Dtid); err != nil {
+		return nil, vterrors.ToGRPCError(err)
+	}
+
+	return &querypb.PrepareResponse{}, nil
+}
+
+// CommitPrepared is part of the queryservice.QueryServer interface
+func (q *query) CommitPrepared(ctx context.Context, request *querypb.CommitPreparedRequest) (response *querypb.CommitPreparedResponse, err error) {
+	defer q.server.HandlePanic(&err)
+	ctx = callerid.NewContext(callinfo.GRPCCallInfo(ctx),
+		request.EffectiveCallerId,
+		request.ImmediateCallerId,
+	)
+	if err := q.server.CommitPrepared(ctx, request.Target, request.Dtid); err != nil {
+		return nil, vterrors.ToGRPCError(err)
+	}
+
+	return &querypb.CommitPreparedResponse{}, nil
+}
+
+// RollbackPrepared is part of the queryservice.QueryServer interface
+func (q *query) RollbackPrepared(ctx context.Context, request *querypb.RollbackPreparedRequest) (response *querypb.RollbackPreparedResponse, err error) {
+	defer q.server.HandlePanic(&err)
+	ctx = callerid.NewContext(callinfo.GRPCCallInfo(ctx),
+		request.EffectiveCallerId,
+		request.ImmediateCallerId,
+	)
+	if err := q.server.RollbackPrepared(ctx, request.Target, request.Dtid, request.TransactionId); err != nil {
+		return nil, vterrors.ToGRPCError(err)
+	}
+
+	return &querypb.RollbackPreparedResponse{}, nil
+}
+
+// CreateTransaction is part of the queryservice.QueryServer interface
+func (q *query) CreateTransaction(ctx context.Context, request *querypb.CreateTransactionRequest) (response *querypb.CreateTransactionResponse, err error) {
+	defer q.server.HandlePanic(&err)
+	ctx = callerid.NewContext(callinfo.GRPCCallInfo(ctx),
+		request.EffectiveCallerId,
+		request.ImmediateCallerId,
+	)
+	if err := q.server.CreateTransaction(ctx, request.Target, request.Dtid, request.Participants); err != nil {
+		return nil, vterrors.ToGRPCError(err)
+	}
+
+	return &querypb.CreateTransactionResponse{}, nil
+}
+
+// StartCommit is part of the queryservice.QueryServer interface
+func (q *query) StartCommit(ctx context.Context, request *querypb.StartCommitRequest) (response *querypb.StartCommitResponse, err error) {
+	defer q.server.HandlePanic(&err)
+	ctx = callerid.NewContext(callinfo.GRPCCallInfo(ctx),
+		request.EffectiveCallerId,
+		request.ImmediateCallerId,
+	)
+	if err := q.server.StartCommit(ctx, request.Target, request.TransactionId, request.Dtid); err != nil {
+		return nil, vterrors.ToGRPCError(err)
+	}
+
+	return &querypb.StartCommitResponse{}, nil
+}
+
+// SetRollback is part of the queryservice.QueryServer interface
+func (q *query) SetRollback(ctx context.Context, request *querypb.SetRollbackRequest) (response *querypb.SetRollbackResponse, err error) {
+	defer q.server.HandlePanic(&err)
+	ctx = callerid.NewContext(callinfo.GRPCCallInfo(ctx),
+		request.EffectiveCallerId,
+		request.ImmediateCallerId,
+	)
+	if err := q.server.SetRollback(ctx, request.Target, request.Dtid, request.TransactionId); err != nil {
+		return nil, vterrors.ToGRPCError(err)
+	}
+
+	return &querypb.SetRollbackResponse{}, nil
+}
+
+// ResolveTransaction is part of the queryservice.QueryServer interface
+func (q *query) ResolveTransaction(ctx context.Context, request *querypb.ResolveTransactionRequest) (response *querypb.ResolveTransactionResponse, err error) {
+	defer q.server.HandlePanic(&err)
+	ctx = callerid.NewContext(callinfo.GRPCCallInfo(ctx),
+		request.EffectiveCallerId,
+		request.ImmediateCallerId,
+	)
+	if err := q.server.ResolveTransaction(ctx, request.Target, request.Dtid); err != nil {
+		return nil, vterrors.ToGRPCError(err)
+	}
+
+	return &querypb.ResolveTransactionResponse{}, nil
+}
+
+// ReadTransaction is part of the queryservice.QueryServer interface
+func (q *query) ReadTransaction(ctx context.Context, request *querypb.ReadTransactionRequest) (response *querypb.ReadTransactionResponse, err error) {
+	defer q.server.HandlePanic(&err)
+	ctx = callerid.NewContext(callinfo.GRPCCallInfo(ctx),
+		request.EffectiveCallerId,
+		request.ImmediateCallerId,
+	)
+	result, err := q.server.ReadTransaction(ctx, request.Target, request.Dtid)
+	if err != nil {
+		return nil, vterrors.ToGRPCError(err)
+	}
+
+	return &querypb.ReadTransactionResponse{Metadata: result}, nil
+}
+
 // BeginExecute is part of the queryservice.QueryServer interface
 func (q *query) BeginExecute(ctx context.Context, request *querypb.BeginExecuteRequest) (response *querypb.BeginExecuteResponse, err error) {
 	defer q.server.HandlePanic(&err)

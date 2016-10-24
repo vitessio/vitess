@@ -96,7 +96,7 @@ def setup_tablets():
   utils.run_vtctl(['SetKeyspaceShardingInfo', '-force', KEYSPACE_NAME,
                    'keyspace_id', 'uint64'])
   shard_0_master.init_tablet(
-      'master',
+      'replica',
       keyspace=KEYSPACE_NAME,
       shard='0',
       tablet_index=0)
@@ -112,12 +112,10 @@ def setup_tablets():
       t.mquery(shard_0_master.dbname, create_table)
     t.start_vttablet(wait_for_state=None)
 
-  for t in [shard_0_master]:
-    t.wait_for_vttablet_state('SERVING')
-  for t in [shard_0_replica1]:
+  for t in [shard_0_master, shard_0_replica1]:
     t.wait_for_vttablet_state('NOT_SERVING')
 
-  utils.run_vtctl(['InitShardMaster', KEYSPACE_NAME+'/0',
+  utils.run_vtctl(['InitShardMaster', '-force', KEYSPACE_NAME+'/0',
                    shard_0_master.tablet_alias], auto_log=True)
 
   for t in [shard_0_replica1]:

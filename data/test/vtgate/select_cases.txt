@@ -28,6 +28,21 @@
   }
 }
 
+# unqualified '*' expression for simple route
+"select * from user"
+{
+  "Original": "select * from user",
+  "Instructions": {
+    "Opcode": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select * from user",
+    "FieldQuery": "select * from user where 1 != 1"
+  }
+}
+
 # RHS route referenced
 "select user_extra.id from user join user_extra"
 {
@@ -360,3 +375,70 @@
 # syntax error
 "the quick brown fox"
 "syntax error at position 4 near 'the'"
+
+# Sharding Key Condition in Parenthesis
+"select * from user where name ='abc' AND (id = 4) limit 5"
+{
+  "Original": "select * from user where name ='abc' AND (id = 4) limit 5",
+  "Instructions": {
+    "Opcode": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select * from user where name = 'abc' and (id = 4) limit 5",
+    "FieldQuery": "select * from user where 1 != 1",
+    "Vindex": "user_index",
+    "Values": 4
+  }
+}
+
+"select * from user where (id = 4) AND (name ='abc') limit 5"
+{
+  "Original": "select * from user where (id = 4) AND (name ='abc') limit 5",
+  "Instructions": {
+    "Opcode": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select * from user where (id = 4) and (name = 'abc') limit 5",
+    "FieldQuery": "select * from user where 1 != 1",
+    "Vindex": "user_index",
+    "Values": 4
+  }
+}
+
+# Column Aliasing with Table.Column
+"select user0_.col as col0_ from user user0_ where id = 1 order by user0_.col desc limit 2"
+{
+  "Original": "select user0_.col as col0_ from user user0_ where id = 1 order by user0_.col desc limit 2",
+  "Instructions": {
+    "Opcode": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select user0_.col as col0_ from user as user0_ where id = 1 order by user0_.col desc limit 2",
+    "FieldQuery": "select user0_.col as col0_ from user as user0_ where 1 != 1",
+    "Vindex": "user_index",
+    "Values": 1
+  }
+}
+
+# Column Aliasing with Column
+"select user0_.col as col0_ from user user0_ where id = 1 order by col0_ desc limit 3"
+{
+  "Original": "select user0_.col as col0_ from user user0_ where id = 1 order by col0_ desc limit 3",
+  "Instructions": {
+    "Opcode": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select user0_.col as col0_ from user as user0_ where id = 1 order by col0_ desc limit 3",
+    "FieldQuery": "select user0_.col as col0_ from user as user0_ where 1 != 1",
+    "Vindex": "user_index",
+    "Values": 1
+  }
+}

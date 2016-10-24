@@ -153,6 +153,159 @@ func (f *FakeQueryService) Rollback(ctx context.Context, target *querypb.Target,
 	return nil
 }
 
+const Dtid string = "aa"
+
+// Prepare is part of the queryservice.QueryService interface
+func (f *FakeQueryService) Prepare(ctx context.Context, target *querypb.Target, transactionID int64, dtid string) (err error) {
+	if f.HasError {
+		return f.TabletError
+	}
+	if f.Panics {
+		panic(fmt.Errorf("test-triggered panic"))
+	}
+	f.checkTargetCallerID(ctx, "Prepare", target)
+	if transactionID != CommitTransactionID {
+		f.t.Errorf("Prepare: invalid TransactionID: got %v expected %v", transactionID, CommitTransactionID)
+	}
+	if dtid != Dtid {
+		f.t.Errorf("Prepare: invalid dtid: got %s expected %s", dtid, Dtid)
+	}
+	return nil
+}
+
+// CommitPrepared is part of the queryservice.QueryService interface
+func (f *FakeQueryService) CommitPrepared(ctx context.Context, target *querypb.Target, dtid string) (err error) {
+	if f.HasError {
+		return f.TabletError
+	}
+	if f.Panics {
+		panic(fmt.Errorf("test-triggered panic"))
+	}
+	f.checkTargetCallerID(ctx, "CommitPrepared", target)
+	if dtid != Dtid {
+		f.t.Errorf("CommitPrepared: invalid dtid: got %s expected %s", dtid, Dtid)
+	}
+	return nil
+}
+
+// RollbackPrepared is part of the queryservice.QueryService interface
+func (f *FakeQueryService) RollbackPrepared(ctx context.Context, target *querypb.Target, dtid string, originalID int64) (err error) {
+	if f.HasError {
+		return f.TabletError
+	}
+	if f.Panics {
+		panic(fmt.Errorf("test-triggered panic"))
+	}
+	f.checkTargetCallerID(ctx, "RollbackPrepared", target)
+	if originalID != RollbackTransactionID {
+		f.t.Errorf("RollbackPrepared: invalid TransactionID: got %v expected %v", originalID, RollbackTransactionID)
+	}
+	if dtid != Dtid {
+		f.t.Errorf("RollbackPrepared: invalid dtid: got %s expected %s", dtid, Dtid)
+	}
+	return nil
+}
+
+var Participants = []*querypb.Target{{
+	Keyspace: "ks0",
+	Shard:    "0",
+}, {
+	Keyspace: "ks1",
+	Shard:    "1",
+}}
+
+// CreateTransaction is part of the queryservice.QueryService interface
+func (f *FakeQueryService) CreateTransaction(ctx context.Context, target *querypb.Target, dtid string, participants []*querypb.Target) (err error) {
+	if f.HasError {
+		return f.TabletError
+	}
+	if f.Panics {
+		panic(fmt.Errorf("test-triggered panic"))
+	}
+	f.checkTargetCallerID(ctx, "CreateTransaction", target)
+	if dtid != Dtid {
+		f.t.Errorf("CreateTransaction: invalid dtid: got %s expected %s", dtid, Dtid)
+	}
+	if !reflect.DeepEqual(participants, Participants) {
+		f.t.Errorf("invalid CreateTransaction participants: got %v, expected %v", participants, Participants)
+	}
+	return nil
+}
+
+// StartCommit is part of the queryservice.QueryService interface
+func (f *FakeQueryService) StartCommit(ctx context.Context, target *querypb.Target, transactionID int64, dtid string) (err error) {
+	if f.HasError {
+		return f.TabletError
+	}
+	if f.Panics {
+		panic(fmt.Errorf("test-triggered panic"))
+	}
+	f.checkTargetCallerID(ctx, "StartCommit", target)
+	if transactionID != CommitTransactionID {
+		f.t.Errorf("StartCommit: invalid TransactionID: got %v expected %v", transactionID, CommitTransactionID)
+	}
+	if dtid != Dtid {
+		f.t.Errorf("StartCommit: invalid dtid: got %s expected %s", dtid, Dtid)
+	}
+	return nil
+}
+
+// SetRollback is part of the queryservice.QueryService interface
+func (f *FakeQueryService) SetRollback(ctx context.Context, target *querypb.Target, dtid string, transactionID int64) (err error) {
+	if f.HasError {
+		return f.TabletError
+	}
+	if f.Panics {
+		panic(fmt.Errorf("test-triggered panic"))
+	}
+	f.checkTargetCallerID(ctx, "SetRollback", target)
+	if transactionID != CommitTransactionID {
+		f.t.Errorf("SetRollback: invalid TransactionID: got %v expected %v", transactionID, CommitTransactionID)
+	}
+	if dtid != Dtid {
+		f.t.Errorf("SetRollback: invalid dtid: got %s expected %s", dtid, Dtid)
+	}
+	return nil
+}
+
+// ResolveTransaction is part of the queryservice.QueryService interface
+func (f *FakeQueryService) ResolveTransaction(ctx context.Context, target *querypb.Target, dtid string) (err error) {
+	if f.HasError {
+		return f.TabletError
+	}
+	if f.Panics {
+		panic(fmt.Errorf("test-triggered panic"))
+	}
+	f.checkTargetCallerID(ctx, "ResolveTransaction", target)
+	if dtid != Dtid {
+		f.t.Errorf("ResolveTransaction: invalid dtid: got %s expected %s", dtid, Dtid)
+	}
+	return nil
+}
+
+var Metadata = &querypb.TransactionMetadata{
+	Dtid:         "aa",
+	State:        querypb.TransactionState_PREPARE,
+	TimeCreated:  1,
+	TimeUpdated:  2,
+	Participants: Participants,
+}
+
+// ReadTransaction is part of the queryservice.QueryService interface
+func (f *FakeQueryService) ReadTransaction(ctx context.Context, target *querypb.Target, dtid string) (metadata *querypb.TransactionMetadata, err error) {
+	if f.HasError {
+		return nil, f.TabletError
+	}
+	if f.Panics {
+		panic(fmt.Errorf("test-triggered panic"))
+	}
+	f.checkTargetCallerID(ctx, "ReadTransaction", target)
+	if dtid != Dtid {
+		f.t.Errorf("ReadTransaction: invalid dtid: got %s expected %s", dtid, Dtid)
+	}
+	return Metadata, nil
+}
+
 const ExecuteQuery = "executeQuery"
 
 var ExecuteBindVars = map[string]interface{}{

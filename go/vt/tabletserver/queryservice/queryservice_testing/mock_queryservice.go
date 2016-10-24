@@ -63,6 +63,87 @@ func (_mr *_MockQueryServiceRecorder) Rollback(arg0, arg1, arg2 interface{}) *go
 	return _mr.mock.ctrl.RecordCall(_mr.mock, "Rollback", arg0, arg1, arg2)
 }
 
+func (_m *MockQueryService) Prepare(ctx context.Context, target *query.Target, transactionID int64, dtid string) error {
+	ret := _m.ctrl.Call(_m, "Prepare", ctx, target, transactionID, dtid)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+func (_mr *_MockQueryServiceRecorder) Prepare(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "Prepare", arg0, arg1, arg2, arg3)
+}
+
+func (_m *MockQueryService) CommitPrepared(ctx context.Context, target *query.Target, dtid string) error {
+	ret := _m.ctrl.Call(_m, "CommitPrepared", ctx, target, dtid)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+func (_mr *_MockQueryServiceRecorder) CommitPrepared(arg0, arg1, arg2 interface{}) *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "CommitPrepared", arg0, arg1, arg2)
+}
+
+func (_m *MockQueryService) RollbackPrepared(ctx context.Context, target *query.Target, dtid string, originalID int64) error {
+	ret := _m.ctrl.Call(_m, "RollbackPrepared", ctx, target, dtid, originalID)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+func (_mr *_MockQueryServiceRecorder) RollbackPrepared(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "RollbackPrepared", arg0, arg1, arg2, arg3)
+}
+
+func (_m *MockQueryService) CreateTransaction(ctx context.Context, target *query.Target, dtid string, participants []*query.Target) error {
+	ret := _m.ctrl.Call(_m, "CreateTransaction", ctx, target, dtid, participants)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+func (_mr *_MockQueryServiceRecorder) CreateTransaction(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "CreateTransaction", arg0, arg1, arg2, arg3)
+}
+
+func (_m *MockQueryService) StartCommit(ctx context.Context, target *query.Target, transactionID int64, dtid string) error {
+	ret := _m.ctrl.Call(_m, "StartCommit", ctx, target, transactionID, dtid)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+func (_mr *_MockQueryServiceRecorder) StartCommit(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "StartCommit", arg0, arg1, arg2, arg3)
+}
+
+func (_m *MockQueryService) SetRollback(ctx context.Context, target *query.Target, dtid string, transactionID int64) error {
+	ret := _m.ctrl.Call(_m, "SetRollback", ctx, target, dtid, transactionID)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+func (_mr *_MockQueryServiceRecorder) SetRollback(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "SetRollback", arg0, arg1, arg2, arg3)
+}
+
+func (_m *MockQueryService) ResolveTransaction(ctx context.Context, target *query.Target, dtid string) error {
+	ret := _m.ctrl.Call(_m, "ResolveTransaction", ctx, target, dtid)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+func (_mr *_MockQueryServiceRecorder) ResolveTransaction(arg0, arg1, arg2 interface{}) *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "ResolveTransaction", arg0, arg1, arg2)
+}
+
+func (_m *MockQueryService) ReadTransaction(ctx context.Context, target *query.Target, dtid string) (*query.TransactionMetadata, error) {
+	ret := _m.ctrl.Call(_m, "ReadTransaction", ctx, target, dtid)
+	ret0, _ := ret[0].(*query.TransactionMetadata)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+func (_mr *_MockQueryServiceRecorder) ReadTransaction(arg0, arg1, arg2 interface{}) *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "ReadTransaction", arg0, arg1, arg2)
+}
+
 func (_m *MockQueryService) Execute(ctx context.Context, target *query.Target, sql string, bindVariables map[string]interface{}, transactionID int64, options *query.ExecuteOptions) (*sqltypes.Result, error) {
 	ret := _m.ctrl.Call(_m, "Execute", ctx, target, sql, bindVariables, transactionID, options)
 	ret0, _ := ret[0].(*sqltypes.Result)

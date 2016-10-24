@@ -15,21 +15,21 @@ import (
 // It iteratively executes the following query over the replica’s database (recall that MySQL
 // performs tuple comparisons lexicographically):
 //    SELECT <split_columns> FROM <table>
-//                           WHERE (<where>) AND (:prev_boundary <= (<split_columns>))
+//                           WHERE :prev_boundary <= (<split_columns>)
 //                           ORDER BY <split_columns>
 //                           LIMIT <num_rows_per_query_part>, 1
-// where <split_columns> denotes the ordered list of split columns, and <table> and <where> are the
-// values of the FROM and WHERE clauses of the input query, respectefully.
+// where <split_columns> denotes the ordered list of split columns and <table> is the
+// value of the FROM clause.
 // The 'prev_boundary' bind variable holds a tuple consisting of split column values.
 // It is updated after each iteration with the result of the query. In the query executed in the
-// first iteration (the initial query) the term 'AND (:prev_boundary <= (<split_columns>))' is
-// ommitted.
+// first iteration (the initial query) the term ':prev_boundary <= (<split_columns>)' is
+// omitted.
 // The algorithm stops when the query returns no results. The result of this algorithm is the list
 // consisting of the result of each query in order.
 //
 // Actually, the code below differs slightly from the above description: the lexicographial tuple
-// inequality in the query above is actually re-written to use only scalar comparisons since MySQL
-// does not optimize queries involving tuple inequalities, correctly. Instead of using a single
+// inequality in the query above is re-written to use only scalar comparisons since MySQL
+// does not optimize queries involving tuple inequalities correctly. Instead of using a single
 // tuple bind variable: 'prev_boundary', the code uses a list of scalar bind-variables--one for each
 // element of the tuple. The bind variable storing the tuple element corresponding to a
 // split-column named 'x' is called <prevBindVariablePrefix><x>, where prevBindVariablePrefix is
@@ -108,7 +108,7 @@ func (a *FullScanAlgorithm) populatePrevTupleInBindVariables(
 //    "SELECT <select exprs> FROM <table> WHERE <where>",
 // the Sql field of the result will be:
 // "SELECT sc_1,sc_2,...,sc_n FROM <table>
-//                            WHERE <where>
+//                            ORDER BY <split_columns>
 //                            LIMIT splitParams.numRowsPerQueryPart, 1",
 // The BindVariables field of the result will contain a deep-copy of splitParams.BindVariables.
 func buildInitialQuery(splitParams *SplitParams) *querytypes.BoundQuery {
@@ -126,6 +126,7 @@ func buildInitialQueryAST(splitParams *SplitParams) *sqlparser.Select {
 			*splitParams))
 	}
 	resultSelectAST := *splitParams.selectAST
+	resultSelectAST.Where = nil
 	resultSelectAST.SelectExprs = convertColumnsToSelectExprs(splitParams.splitColumns)
 	resultSelectAST.Limit = buildLimitClause(splitParams.numRowsPerQueryPart, 1)
 	resultSelectAST.OrderBy = buildOrderByClause(splitParams.splitColumns)
@@ -138,7 +139,8 @@ func buildInitialQueryAST(splitParams *SplitParams) *sqlparser.Select {
 //    "SELECT <select exprs> FROM <table> WHERE <where>",
 // the Sql field of the result will be:
 // "SELECT sc_1,sc_2,...,sc_n FROM <table>
-//                            WHERE (<where>) AND (:prev_sc_1,...,:prev_sc_n) <= (sc_1,...,sc_n)
+//                            WHERE :prev_sc_1,...,:prev_sc_n) <= (sc_1,...,sc_n)
+//                            ORDER BY <split_columns>
 //                            LIMIT splitParams.numRowsPerQueryPart, 1",
 // where sc_1,...,sc_n are the split columns,
 // and :prev_sc_1,...,:_prev_sc_n are the bind variable names for the previous tuple.

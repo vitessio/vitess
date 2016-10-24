@@ -211,6 +211,18 @@ func (ev mysql56BinlogEvent) GTID(f replication.BinlogFormat) (replication.GTID,
 	return replication.Mysql56GTID{Server: sid, Sequence: gno}, nil
 }
 
+// PreviousGTIDs implements BinlogEvent.PreviousGTIDs().
+func (ev mysql56BinlogEvent) PreviousGTIDs(f replication.BinlogFormat) (replication.Position, error) {
+	data := ev.Bytes()[f.HeaderLength:]
+	set, err := replication.NewMysql56GTIDSetFromSIDBlock(data)
+	if err != nil {
+		return replication.Position{}, err
+	}
+	return replication.Position{
+		GTIDSet: set,
+	}, nil
+}
+
 // StripChecksum implements BinlogEvent.StripChecksum().
 func (ev mysql56BinlogEvent) StripChecksum(f replication.BinlogFormat) (replication.BinlogEvent, []byte, error) {
 	switch f.ChecksumAlgorithm {

@@ -124,10 +124,6 @@ type SplitCloneWorker struct {
 	tableStatusListOnline *tableStatusList
 	// populated during WorkerStateCloneOffline
 	tableStatusListOffline *tableStatusList
-	// aliases of tablets that need to have their state refreshed.
-	// Only populated once, read-only after that.
-	refreshAliases [][]*topodatapb.TabletAlias
-	refreshTablets []map[topodatapb.TabletAlias]*topo.TabletInfo
 
 	ev event.Updater
 }
@@ -150,6 +146,11 @@ func newCloneWorker(wr *wrangler.Wrangler, cloneType cloneType, cell, keyspace, 
 	if cloneType != horizontalResharding && cloneType != verticalSplit {
 		return nil, fmt.Errorf("unknown cloneType: %v This is a bug. Please report", cloneType)
 	}
+
+	// Verify user defined flags.
+	if !online && !offline {
+		return nil, errors.New("at least one clone phase (-online, -offline) must be enabled (and not set to false)")
+	}
 	if tables != nil && len(tables) == 0 {
 		return nil, errors.New("list of tablets to be split out must not be empty")
 	}
@@ -157,15 +158,37 @@ func newCloneWorker(wr *wrangler.Wrangler, cloneType cloneType, cell, keyspace, 
 	if err != nil {
 		return nil, err
 	}
+	if chunkCount <= 0 {
+		return nil, fmt.Errorf("chunk_count must be > 0: %v", chunkCount)
+	}
+	if minRowsPerChunk <= 0 {
+		return nil, fmt.Errorf("min_rows_per_chunk must be > 0: %v", minRowsPerChunk)
+	}
+	if sourceReaderCount <= 0 {
+		return nil, fmt.Errorf("source_reader_count must be > 0: %v", sourceReaderCount)
+	}
+	if writeQueryMaxRows <= 0 {
+		return nil, fmt.Errorf("write_query_max_rows must be > 0: %v", writeQueryMaxRows)
+	}
+	if writeQueryMaxSize <= 0 {
+		return nil, fmt.Errorf("write_query_max_size must be > 0: %v", writeQueryMaxSize)
+	}
+	if destinationWriterCount <= 0 {
+		return nil, fmt.Errorf("destination_writer_count must be > 0: %v", destinationWriterCount)
+	}
+	if minHealthyRdonlyTablets < 0 {
+		return nil, fmt.Errorf("min_healthy_rdonly_tablets must be >= 0: %v", minHealthyRdonlyTablets)
+	}
 	if maxTPS != throttler.MaxRateModuleDisabled {
 		wr.Logger().Infof("throttling enabled and set to a max of %v transactions/second", maxTPS)
 	}
 	if maxTPS != throttler.MaxRateModuleDisabled && maxTPS < int64(destinationWriterCount) {
 		return nil, fmt.Errorf("-max_tps must be >= -destination_writer_count: %v >= %v", maxTPS, destinationWriterCount)
 	}
-	if !online && !offline {
-		return nil, errors.New("at least one clone phase (-online, -offline) must be enabled (and not set to false)")
+	if maxReplicationLag <= 0 {
+		return nil, fmt.Errorf("max_replication_lag must be >= 1s: %v", maxReplicationLag)
 	}
+
 	scw := &SplitCloneWorker{
 		StatusWorker:            NewStatusWorker(),
 		wr:                      wr,
@@ -762,23 +785,6 @@ func (scw *SplitCloneWorker) waitForTablets(ctx context.Context, shardInfos []*t
 	return rec.Error()
 }
 
-// Find all tablets on all destination shards. This should be done immediately before refreshing
-// state on these tablets, to minimize the chances of the topo changing in between.
-func (scw *SplitCloneWorker) findRefreshTargets(ctx context.Context) error {
-	scw.refreshAliases = make([][]*topodatapb.TabletAlias, len(scw.destinationShards))
-	scw.refreshTablets = make([]map[topodatapb.TabletAlias]*topo.TabletInfo, len(scw.destinationShards))
-
-	for shardIndex, si := range scw.destinationShards {
-		refreshAliases, refreshTablets, err := resolveRefreshTabletsForShard(ctx, si.Keyspace(), si.ShardName(), scw.wr)
-		if err != nil {
-			return err
-		}
-		scw.refreshAliases[shardIndex], scw.refreshTablets[shardIndex] = refreshAliases, refreshTablets
-	}
-
-	return nil
-}
-
 // copy phase:
 //	- copy the data from source tablets to destination masters (with replication on)
 // Assumes that the schema has already been created on each destination tablet
@@ -1081,28 +1087,32 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 			}
 		}
 
-		// Force a state refresh (re-read topo) on all destination tablets.
-		// The master tablet will end up starting filtered replication at this point.
-		//
-		// Find all tablets first, then refresh the state on each in parallel.
-		err = scw.findRefreshTargets(ctx)
-		if err != nil {
-			return fmt.Errorf("failed before refreshing state on destination tablets: %v", err)
+		// Force a state refresh (re-read of the "Shard" object from the topology)
+		// on all destination masters to start filtered replication.
+		rec := concurrency.AllErrorRecorder{}
+		for _, si := range scw.destinationShards {
+			destinationWaitGroup.Add(1)
+			go func(keyspace, shard string) {
+				defer destinationWaitGroup.Done()
+
+				masters := scw.tsc.GetHealthyTabletStats(keyspace, shard, topodatapb.TabletType_MASTER)
+				if len(masters) == 0 {
+					rec.RecordError(fmt.Errorf("cannot find MASTER tablet for destination shard for %v/%v (in cell: %v) in HealthCheck: empty TabletStats list", keyspace, shard, scw.cell))
+				}
+				master := masters[0]
+				alias := topoproto.TabletAliasString(master.Tablet.Alias)
+
+				scw.wr.Logger().Infof("Refreshing state on tablet %v", alias)
+				shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
+				defer cancel()
+				if err := scw.wr.TabletManagerClient().RefreshState(shortCtx, master.Tablet); err != nil {
+					rec.RecordError(fmt.Errorf("RefreshState failed on tablet %v: %v", alias, err))
+				}
+			}(si.Keyspace(), si.ShardName())
 		}
-		for shardIndex := range scw.destinationShards {
-			for _, tabletAlias := range scw.refreshAliases[shardIndex] {
-				destinationWaitGroup.Add(1)
-				go func(ti *topo.TabletInfo) {
-					defer destinationWaitGroup.Done()
-					scw.wr.Logger().Infof("Refreshing state on tablet %v", ti.AliasString())
-					shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
-					err := scw.wr.TabletManagerClient().RefreshState(shortCtx, ti.Tablet)
-					cancel()
-					if err != nil {
-						processError("RefreshState failed on tablet %v: %v", ti.AliasString(), err)
-					}
-				}(scw.refreshTablets[shardIndex][*tabletAlias])
-			}
+		destinationWaitGroup.Wait()
+		if err := rec.Error(); err != nil {
+			processError("Triggering the start of filtered replication failed for some destination masters. Please run 'vtctl RefreshState' manually on the failed ones. Errors: %v", err)
 		}
 	} // clonePhase == offline
 

@@ -107,39 +107,34 @@ export class DashboardComponent implements OnInit {
   }
 
   prepareNew(flags) {
-    let new_flags = new NewKeyspaceFlags().flags;
+    let newFlags = new NewKeyspaceFlags().flags;
     for (let key of Object.keys(flags)) {
-      new_flags[key].value = flags[key].value;
+      newFlags[key].value = flags[key].value;
     }
-    this.shardColumnAndNameTest(new_flags);
-    return new PrepareResponse(true, new_flags);
+    this.shardColumnAndNameSanitize(newFlags);
+    return new PrepareResponse(true, newFlags);
   }
 
   prepareEdit(flags) {
-    let new_flags = new EditKeyspaceFlags({name: '', shardingColumnName: '', shardingColumnType: ''}).flags;
+    let newFlags = new EditKeyspaceFlags({name: '', shardingColumnName: '', shardingColumnType: ''}).flags;
     for (let key of Object.keys(flags)) {
-      new_flags[key].value = flags[key].value;
+      newFlags[key].value = flags[key].value;
     }
-    this.shardColumnAndNameTest(new_flags);
-    return new PrepareResponse(true, new_flags);
+    this.shardColumnAndNameSanitize(newFlags);
+    return new PrepareResponse(true, newFlags);
   }
 
-  shardColumnAndNameTest(new_flags) {
-    if (!new_flags['sharding_column_name'].value) {
-      new_flags['sharding_column_type']['value'] = '';
+  shardColumnAndNameSanitize(newFlags) {
+    if (!newFlags['sharding_column_name'].value) {
+      newFlags['sharding_column_type']['value'] = '';
     }
-    if (new_flags['sharding_column_name'].value && !new_flags['sharding_column_type'].value) {
-      new_flags['sharding_column_type']['value'] = 'UINT64';
+    if (newFlags['sharding_column_name'].value && !newFlags['sharding_column_type'].value) {
+      newFlags['sharding_column_type']['value'] = 'UINT64';
     }
   }
 
   navigate(keyspaceName: string) {
     this.router.navigate(['/keyspace'], {queryParams: { keyspace: keyspaceName }});
-  }
-
-  logView() {
-    this.dialogSettings.dialogForm = false;
-    this.dialogSettings.dialogLog = true;
   }
 
   canDeactivate(): Observable<boolean> | boolean {

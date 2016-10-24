@@ -46,14 +46,13 @@ import struct
 import logging
 import unittest
 
-from vtproto import topodata_pb2
-
-from vtdb import keyrange_constants
-
 import base_sharding
 import environment
 import tablet
 import utils
+
+from vtproto import topodata_pb2
+from vtdb import keyrange_constants
 
 keyspace_id_type = keyrange_constants.KIT_UINT64
 pack_keyspace_id = struct.Struct('!Q').pack
@@ -255,10 +254,10 @@ primary key (name)
     utils.run_vtctl(['SetKeyspaceShardingInfo', '-force',
                      'test_keyspace', 'custom_ksid_col', keyspace_id_type])
 
-    shard_0_master.init_tablet('master', 'test_keyspace', '-80')
+    shard_0_master.init_tablet('replica', 'test_keyspace', '-80')
     shard_0_replica.init_tablet('replica', 'test_keyspace', '-80')
     shard_0_ny_rdonly.init_tablet('rdonly', 'test_keyspace', '-80')
-    shard_1_master.init_tablet('master', 'test_keyspace', '80-')
+    shard_1_master.init_tablet('replica', 'test_keyspace', '80-')
     shard_1_slave1.init_tablet('replica', 'test_keyspace', '80-')
     shard_1_slave2.init_tablet('replica', 'test_keyspace', '80-')
     shard_1_ny_rdonly.init_tablet('rdonly', 'test_keyspace', '80-')
@@ -278,21 +277,16 @@ primary key (name)
       t.create_db('vt_test_keyspace')
       t.start_vttablet(wait_for_state=None, full_mycnf_args=full_mycnf_args)
 
-    # wait for the tablets (replication is not setup, the slaves won't be
-    # healthy)
-    shard_0_master.wait_for_vttablet_state('SERVING')
-    shard_0_replica.wait_for_vttablet_state('NOT_SERVING')
-    shard_0_ny_rdonly.wait_for_vttablet_state('NOT_SERVING')
-    shard_1_master.wait_for_vttablet_state('SERVING')
-    shard_1_slave1.wait_for_vttablet_state('NOT_SERVING')
-    shard_1_slave2.wait_for_vttablet_state('NOT_SERVING')
-    shard_1_ny_rdonly.wait_for_vttablet_state('NOT_SERVING')
-    shard_1_rdonly1.wait_for_vttablet_state('NOT_SERVING')
+    # wait for the tablets (replication is not setup, they won't be healthy)
+    for t in [shard_0_master, shard_0_replica, shard_0_ny_rdonly,
+              shard_1_master, shard_1_slave1, shard_1_slave2, shard_1_ny_rdonly,
+              shard_1_rdonly1]:
+      t.wait_for_vttablet_state('NOT_SERVING')
 
     # reparent to make the tablets work
-    utils.run_vtctl(['InitShardMaster', 'test_keyspace/-80',
+    utils.run_vtctl(['InitShardMaster', '-force', 'test_keyspace/-80',
                      shard_0_master.tablet_alias], auto_log=True)
-    utils.run_vtctl(['InitShardMaster', 'test_keyspace/80-',
+    utils.run_vtctl(['InitShardMaster', '-force', 'test_keyspace/80-',
                      shard_1_master.tablet_alias], auto_log=True)
 
     # check the shards
@@ -313,10 +307,10 @@ primary key (name)
       utils.run_vtctl(['RunHealthCheck', t.tablet_alias])
 
     # create the split shards
-    shard_2_master.init_tablet('master', 'test_keyspace', '80-c0')
+    shard_2_master.init_tablet('replica', 'test_keyspace', '80-c0')
     shard_2_replica1.init_tablet('replica', 'test_keyspace', '80-c0')
     shard_2_replica2.init_tablet('replica', 'test_keyspace', '80-c0')
-    shard_3_master.init_tablet('master', 'test_keyspace', 'c0-')
+    shard_3_master.init_tablet('replica', 'test_keyspace', 'c0-')
     shard_3_replica.init_tablet('replica', 'test_keyspace', 'c0-')
     shard_3_rdonly1.init_tablet('rdonly', 'test_keyspace', 'c0-')
 
@@ -331,9 +325,9 @@ primary key (name)
               shard_3_master, shard_3_replica, shard_3_rdonly1]:
       t.wait_for_vttablet_state('NOT_SERVING')
 
-    utils.run_vtctl(['InitShardMaster', 'test_keyspace/80-c0',
+    utils.run_vtctl(['InitShardMaster', '-force', 'test_keyspace/80-c0',
                      shard_2_master.tablet_alias], auto_log=True)
-    utils.run_vtctl(['InitShardMaster', 'test_keyspace/c0-',
+    utils.run_vtctl(['InitShardMaster', '-force', 'test_keyspace/c0-',
                      shard_3_master.tablet_alias], auto_log=True)
 
     # check the shards

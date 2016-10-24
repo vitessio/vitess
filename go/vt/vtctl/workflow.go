@@ -32,8 +32,8 @@ func init() {
 		addCommand(workflowsGroupName, command{
 			"WorkflowCreate",
 			commandWorkflowCreate,
-			"[-nostart] <factoryName> [parameters...]",
-			"Creates the workflow with the provided parameters. The workflow is also started, unless -nostart is specified."})
+			"[-skip_start] <factoryName> [parameters...]",
+			"Creates the workflow with the provided parameters. The workflow is also started, unless -skip_start is specified."})
 		addCommand(workflowsGroupName, command{
 			"WorkflowStart",
 			commandWorkflowStart,
@@ -68,7 +68,7 @@ func commandWorkflowCreate(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 		return fmt.Errorf("no workflow.Manager registered")
 	}
 
-	start := subFlags.Bool("start", true, "If set, the workflow will also be started.")
+	skipStart := subFlags.Bool("skip_start", false, "If set, the workflow will not be started.")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -83,7 +83,7 @@ func commandWorkflowCreate(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 	}
 	wr.Logger().Printf("uuid: %v\n", uuid)
 
-	if *start {
+	if !*skipStart {
 		return WorkflowManager.Start(ctx, uuid)
 	}
 	return nil

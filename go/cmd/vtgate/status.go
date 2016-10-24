@@ -12,6 +12,9 @@ import (
 var onStatusRegistered func()
 
 func addStatusParts(vtg *vtgate.VTGate) {
+	servenv.AddStatusPart("VSchema", vtgate.VSchemaTemplate, func() interface{} {
+		return vtg.VSchemaStats()
+	})
 	servenv.AddStatusPart("Topology Cache", vtgate.TopoTemplate, func() interface{} {
 		return resilientSrvTopoServer.CacheStatus()
 	})

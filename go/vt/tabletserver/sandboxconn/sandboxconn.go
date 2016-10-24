@@ -25,20 +25,35 @@ import (
 type SandboxConn struct {
 	tablet *topodatapb.Tablet
 
-	MustFailRetry  int
-	MustFailFatal  int
-	MustFailServer int
-	MustFailConn   int
-	MustFailTxPool int
-	MustFailNotTx  int
+	MustFailRetry            int
+	MustFailFatal            int
+	MustFailServer           int
+	MustFailConn             int
+	MustFailTxPool           int
+	MustFailNotTx            int
+	MustFailCanceled         int
+	MustFailUnknownError     int
+	MustFailDeadlineExceeded int
+	MustFailIntegrityError   int
+	MustFailPermissionDenied int
+	MustFailTransientError   int
+	MustFailUnauthenticated  int
 
 	// These Count vars report how often the corresponding
 	// functions were called.
-	ExecCount          sync2.AtomicInt64
-	BeginCount         sync2.AtomicInt64
-	CommitCount        sync2.AtomicInt64
-	RollbackCount      sync2.AtomicInt64
-	AsTransactionCount sync2.AtomicInt64
+	ExecCount               sync2.AtomicInt64
+	BeginCount              sync2.AtomicInt64
+	CommitCount             sync2.AtomicInt64
+	RollbackCount           sync2.AtomicInt64
+	AsTransactionCount      sync2.AtomicInt64
+	PrepareCount            sync2.AtomicInt64
+	CommitPreparedCount     sync2.AtomicInt64
+	RollbackPreparedCount   sync2.AtomicInt64
+	CreateTransactionCount  sync2.AtomicInt64
+	StartCommitCount        sync2.AtomicInt64
+	SetRollbackCount        sync2.AtomicInt64
+	ResolveTransactionCount sync2.AtomicInt64
+	ReadTransactionCount    sync2.AtomicInt64
 
 	// Queries stores the non-batch requests received.
 	Queries []querytypes.BoundQuery
@@ -108,6 +123,56 @@ func (sbc *SandboxConn) getError() error {
 			ServerCode: vtrpcpb.ErrorCode_NOT_IN_TX,
 		}
 	}
+	if sbc.MustFailCanceled > 0 {
+		sbc.MustFailCanceled--
+		return &tabletconn.ServerError{
+			Err:        "canceled: err",
+			ServerCode: vtrpcpb.ErrorCode_CANCELLED,
+		}
+	}
+	if sbc.MustFailUnknownError > 0 {
+		sbc.MustFailUnknownError--
+		return &tabletconn.ServerError{
+			Err:        "unknown error: err",
+			ServerCode: vtrpcpb.ErrorCode_UNKNOWN_ERROR,
+		}
+	}
+	if sbc.MustFailDeadlineExceeded > 0 {
+		sbc.MustFailDeadlineExceeded--
+		return &tabletconn.ServerError{
+			Err:        "deadline exceeded: err",
+			ServerCode: vtrpcpb.ErrorCode_DEADLINE_EXCEEDED,
+		}
+	}
+	if sbc.MustFailIntegrityError > 0 {
+		sbc.MustFailIntegrityError--
+		return &tabletconn.ServerError{
+			Err:        "integrity error: err",
+			ServerCode: vtrpcpb.ErrorCode_INTEGRITY_ERROR,
+		}
+	}
+	if sbc.MustFailPermissionDenied > 0 {
+		sbc.MustFailPermissionDenied--
+		return &tabletconn.ServerError{
+			Err:        "permission denied: err",
+			ServerCode: vtrpcpb.ErrorCode_PERMISSION_DENIED,
+		}
+	}
+	if sbc.MustFailTransientError > 0 {
+		sbc.MustFailTransientError--
+		return &tabletconn.ServerError{
+			Err:        "transient error: err",
+			ServerCode: vtrpcpb.ErrorCode_TRANSIENT_ERROR,
+		}
+	}
+	if sbc.MustFailUnauthenticated > 0 {
+		sbc.MustFailUnauthenticated--
+		return &tabletconn.ServerError{
+			Err:        "unauthenticated: err",
+			ServerCode: vtrpcpb.ErrorCode_UNAUTHENTICATED,
+		}
+	}
+
 	return nil
 }
 
@@ -207,6 +272,57 @@ func (sbc *SandboxConn) Rollback(ctx context.Context, target *querypb.Target, tr
 	return sbc.getError()
 }
 
+// Prepare prepares the specified transaction.
+func (sbc *SandboxConn) Prepare(ctx context.Context, target *querypb.Target, transactionID int64, dtid string) (err error) {
+	sbc.PrepareCount.Add(1)
+	return sbc.getError()
+}
+
+// CommitPrepared commits the prepared transaction.
+func (sbc *SandboxConn) CommitPrepared(ctx context.Context, target *querypb.Target, dtid string) (err error) {
+	sbc.CommitPreparedCount.Add(1)
+	return sbc.getError()
+}
+
+// RollbackPrepared rolls back the prepared transaction.
+func (sbc *SandboxConn) RollbackPrepared(ctx context.Context, target *querypb.Target, dtid string, originalID int64) (err error) {
+	sbc.RollbackPreparedCount.Add(1)
+	return sbc.getError()
+}
+
+// CreateTransaction creates the metadata for a 2PC transaction.
+func (sbc *SandboxConn) CreateTransaction(ctx context.Context, target *querypb.Target, dtid string, participants []*querypb.Target) (err error) {
+	sbc.CreateTransactionCount.Add(1)
+	return sbc.getError()
+}
+
+// StartCommit atomically commits the transaction along with the
+// decision to commit the associated 2pc transaction.
+func (sbc *SandboxConn) StartCommit(ctx context.Context, target *querypb.Target, transactionID int64, dtid string) (err error) {
+	sbc.StartCommitCount.Add(1)
+	return sbc.getError()
+}
+
+// SetRollback transitions the 2pc transaction to the Rollback state.
+// If a transaction id is provided, that transaction is also rolled back.
+func (sbc *SandboxConn) SetRollback(ctx context.Context, target *querypb.Target, dtid string, transactionID int64) (err error) {
+	sbc.SetRollbackCount.Add(1)
+	return sbc.getError()
+}
+
+// ResolveTransaction deletes the 2pc transaction metadata
+// essentially resolving it.
+func (sbc *SandboxConn) ResolveTransaction(ctx context.Context, target *querypb.Target, dtid string) (err error) {
+	sbc.ResolveTransactionCount.Add(1)
+	return sbc.getError()
+}
+
+// ReadTransaction returns the metadata for the sepcified dtid.
+func (sbc *SandboxConn) ReadTransaction(ctx context.Context, target *querypb.Target, dtid string) (metadata *querypb.TransactionMetadata, err error) {
+	sbc.ReadTransactionCount.Add(1)
+	return nil, sbc.getError()
+}
+
 // BeginExecute is part of the TabletConn interface.
 func (sbc *SandboxConn) BeginExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]interface{}, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, error) {
 	transactionID, err := sbc.Begin(ctx, target)
@@ -233,6 +349,10 @@ var SandboxSQRowCount = int64(10)
 // SplitQuery creates splits from the original query by appending the
 // split index as a comment to the SQL. RowCount is always SandboxSQRowCount
 func (sbc *SandboxConn) SplitQuery(ctx context.Context, target *querypb.Target, query querytypes.BoundQuery, splitColumn string, splitCount int64) ([]querytypes.QuerySplit, error) {
+	err := sbc.getError()
+	if err != nil {
+		return nil, err
+	}
 	splits := []querytypes.QuerySplit{}
 	for i := 0; i < int(splitCount); i++ {
 		split := querytypes.QuerySplit{
@@ -255,6 +375,10 @@ func (sbc *SandboxConn) SplitQueryV2(
 	splitCount int64,
 	numRowsPerQueryPart int64,
 	algorithm querypb.SplitQueryRequest_Algorithm) ([]querytypes.QuerySplit, error) {
+	err := sbc.getError()
+	if err != nil {
+		return nil, err
+	}
 	splits := []querytypes.QuerySplit{
 		{
 			Sql: fmt.Sprintf(

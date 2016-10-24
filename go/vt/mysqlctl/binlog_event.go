@@ -119,6 +119,11 @@ func (ev binlogEvent) IsRand() bool {
 	return ev.Type() == 13
 }
 
+// IsPreviousGTIDs implements BinlogEvent.IsPreviousGTIDs().
+func (ev binlogEvent) IsPreviousGTIDs() bool {
+	return ev.Type() == 35
+}
+
 // Format implements BinlogEvent.Format().
 //
 // Expected format (L = total length of event data):

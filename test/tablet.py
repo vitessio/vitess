@@ -85,7 +85,7 @@ class Tablet(object):
       'EXPERIMENTAL': 5,
       'BACKUP': 6,
       'RESTORE': 7,
-      'WORKER': 8,
+      'DRAINED': 8,
   }
 
   def __init__(self, tablet_uid=None, port=None, mysql_port=None, cell=None,

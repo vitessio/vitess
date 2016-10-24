@@ -413,13 +413,14 @@ func backupFiles(mysqld MysqlDaemon, logger logutil.Logger, bh backupstorage.Bac
 	return nil
 }
 
-// checkNoDB makes sure there is no vt_ db already there. Used by Restore,
-// we do not wnat to destroy an existing DB.
-// Returns true iff the condition is satisfied (there's no DB).
+// checkNoDB makes sure there is no user data already there.
+// Used by Restore, as we do not want to destroy an existing DB.
+// The user's database name must be given since we ignore all others.
+// Returns true iff the specified DB either doesn't exist, or has no tables.
 // Returns (false, nil) if the check succeeds but the condition is not
-// satisfied (there is a DB).
+// satisfied (there is a DB with tables).
 // Returns non-nil error if one occurs while trying to perform the check.
-func checkNoDB(ctx context.Context, mysqld MysqlDaemon) (bool, error) {
+func checkNoDB(ctx context.Context, mysqld MysqlDaemon, dbName string) (bool, error) {
 	// Wait for mysqld to be ready, in case it was launched in parallel with us.
 	if err := mysqld.Wait(ctx); err != nil {
 		return false, err
@@ -431,8 +432,7 @@ func checkNoDB(ctx context.Context, mysqld MysqlDaemon) (bool, error) {
 	}
 
 	for _, row := range qr.Rows {
-		if strings.HasPrefix(row[0].String(), "vt_") {
-			dbName := row[0].String()
+		if row[0].String() == dbName {
 			tableQr, err := mysqld.FetchSuperQuery(ctx, "SHOW TABLES FROM "+dbName)
 			if err != nil {
 				return false, fmt.Errorf("checkNoDB failed: %v", err)
@@ -585,7 +585,8 @@ func Restore(
 	hookExtraEnv map[string]string,
 	localMetadata map[string]string,
 	logger logutil.Logger,
-	deleteBeforeRestore bool) (replication.Position, error) {
+	deleteBeforeRestore bool,
+	dbName string) (replication.Position, error) {
 
 	// find the right backup handle: most recent one, with a MANIFEST
 	logger.Infof("Restore: looking for a suitable backup to restore")
@@ -594,10 +595,21 @@ func Restore(
 		return replication.Position{}, err
 	}
 	defer bs.Close()
+
 	bhs, err := bs.ListBackups(dir)
 	if err != nil {
 		return replication.Position{}, fmt.Errorf("ListBackups failed: %v", err)
 	}
+
+	if len(bhs) == 0 {
+		// There are no backups (not even broken/incomplete ones).
+		logger.Errorf("No backup to restore on BackupStorage for directory %v. Starting up empty.", dir)
+		if err = populateMetadataTables(mysqld, localMetadata); err == nil {
+			err = ErrNoBackup
+		}
+		return replication.Position{}, err
+	}
+
 	var bh backupstorage.BackupHandle
 	var bm BackupManifest
 	var toRestore int
@@ -620,16 +632,15 @@ func Restore(
 		break
 	}
 	if toRestore < 0 {
-		logger.Errorf("No backup to restore on BackupStorage for directory %v. Starting up empty.", dir)
-		if err = populateMetadataTables(mysqld, localMetadata); err == nil {
-			err = ErrNoBackup
-		}
-		return replication.Position{}, err
+		// There is at least one attempted backup, but none could be read.
+		// This implies there is data we ought to have, so it's not safe to start
+		// up empty.
+		return replication.Position{}, errors.New("Backup(s) found but none could be read. Unsafe to start up empty. Restart to retry restore.")
 	}
 
 	if !deleteBeforeRestore {
 		logger.Infof("Restore: checking no existing data is present")
-		ok, err := checkNoDB(ctx, mysqld)
+		ok, err := checkNoDB(ctx, mysqld, dbName)
 		if err != nil {
 			return replication.Position{}, err
 		}

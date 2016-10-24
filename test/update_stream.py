@@ -69,10 +69,9 @@ def setUpModule():
     # Start up a master mysql and vttablet
     logging.debug('Setting up tablets')
     utils.run_vtctl(['CreateKeyspace', 'test_keyspace'])
-    master_tablet.init_tablet('master', 'test_keyspace', '0', tablet_index=0)
+    master_tablet.init_tablet('replica', 'test_keyspace', '0', tablet_index=0)
     replica_tablet.init_tablet('replica', 'test_keyspace', '0', tablet_index=1)
     utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'], auto_log=True)
-    utils.validate_topology()
     master_tablet.create_db('vt_test_keyspace')
     master_tablet.create_db('other_database')
     replica_tablet.create_db('vt_test_keyspace')
@@ -80,12 +79,10 @@ def setUpModule():
 
     master_tablet.start_vttablet(wait_for_state=None)
     replica_tablet.start_vttablet(wait_for_state=None)
-    master_tablet.wait_for_vttablet_state('SERVING')
+    master_tablet.wait_for_vttablet_state('NOT_SERVING')
     replica_tablet.wait_for_vttablet_state('NOT_SERVING')
 
-    for t in [master_tablet, replica_tablet]:
-      t.reset_replication()
-    utils.run_vtctl(['InitShardMaster', 'test_keyspace/0',
+    utils.run_vtctl(['InitShardMaster', '-force', 'test_keyspace/0',
                      master_tablet.tablet_alias], auto_log=True)
 
     utils.wait_for_tablet_type(replica_tablet.tablet_alias, 'replica')
@@ -348,9 +345,9 @@ class TestUpdateStream(unittest.TestCase):
 
   def test_event_token(self):
     """Checks the background binlog monitor thread works."""
-    replica_position = _get_repl_current_position()
     timeout = 10
     while True:
+      replica_position = _get_repl_current_position()
       value = None
       v = utils.get_vars(replica_tablet.port)
       if 'EventTokenPosition' in v:
@@ -366,7 +363,8 @@ class TestUpdateStream(unittest.TestCase):
                         'EventTokenTimestamp is too recent: %d > %d' %(ts, now))
         break
       timeout = utils.wait_step(
-          'EventTokenPosition must be up to date but got %s' % value, timeout)
+          'EventTokenPosition must be up to date but got %s (expected %s)' %
+          (value, replica_position), timeout)
 
     # With vttablet up to date, test a vttablet query returns the EventToken.
     qr = replica_tablet.execute('select * from vt_insert_test',
@@ -617,6 +615,8 @@ class TestUpdateStream(unittest.TestCase):
       logging.debug('_test_timestamp_start: got event: %s @ %d',
                     str(event), resume_timestamp)
       # we might get a couple extra events from the rotation, ignore these.
+      if not event.statements:
+        continue
       if event.statements[0].category == 0:  # Statement.Category.Error
         continue
       self.assertEqual(event.statements[0].table_name, 'vt_b',

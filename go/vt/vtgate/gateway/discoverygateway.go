@@ -114,7 +114,7 @@ func (dg *discoveryGateway) Execute(ctx context.Context, keyspace, shard string,
 		qr, innerErr = conn.Execute(ctx, target, query, bindVars, transactionID, options)
 		dg.updateStats(keyspace, shard, tabletType, startTime, innerErr)
 		return innerErr
-	}, transactionID, false)
+	}, transactionID != 0, false)
 	return qr, err
 }
 
@@ -126,7 +126,7 @@ func (dg *discoveryGateway) ExecuteBatch(ctx context.Context, keyspace, shard st
 		qrs, innerErr = conn.ExecuteBatch(ctx, target, queries, asTransaction, transactionID, options)
 		dg.updateStats(keyspace, shard, tabletType, startTime, innerErr)
 		return innerErr
-	}, transactionID, false)
+	}, transactionID != 0, false)
 	return qrs, err
 }
 
@@ -137,7 +137,7 @@ func (dg *discoveryGateway) StreamExecute(ctx context.Context, keyspace, shard s
 		var err error
 		stream, err = conn.StreamExecute(ctx, target, query, bindVars, options)
 		return err
-	}, 0, true)
+	}, false, true)
 	if err != nil {
 		return nil, err
 	}
@@ -153,7 +153,7 @@ func (dg *discoveryGateway) Begin(ctx context.Context, keyspace string, shard st
 		transactionID, innerErr = conn.Begin(ctx, target)
 		dg.updateStats(keyspace, shard, tabletType, startTime, innerErr)
 		return innerErr
-	}, 0, false)
+	}, false, false)
 	return transactionID, err
 }
 
@@ -164,7 +164,7 @@ func (dg *discoveryGateway) Commit(ctx context.Context, keyspace, shard string, 
 		innerErr := conn.Commit(ctx, target, transactionID)
 		dg.updateStats(keyspace, shard, tabletType, startTime, innerErr)
 		return innerErr
-	}, transactionID, false)
+	}, true, false)
 }
 
 // Rollback rolls back the current transaction for the specified keyspace, shard, and tablet type.
@@ -174,7 +174,89 @@ func (dg *discoveryGateway) Rollback(ctx context.Context, keyspace, shard string
 		innerErr := conn.Rollback(ctx, target, transactionID)
 		dg.updateStats(keyspace, shard, tabletType, startTime, innerErr)
 		return innerErr
-	}, transactionID, false)
+	}, true, false)
+}
+
+// Prepare rolls back the current transaction for the specified keyspace, shard, and tablet type.
+func (dg *discoveryGateway) Prepare(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, transactionID int64, dtid string) error {
+	return dg.withRetry(ctx, keyspace, shard, tabletType, func(conn tabletconn.TabletConn, target *querypb.Target) error {
+		startTime := time.Now()
+		innerErr := conn.Prepare(ctx, target, transactionID, dtid)
+		dg.updateStats(keyspace, shard, tabletType, startTime, innerErr)
+		return innerErr
+	}, true, false)
+}
+
+// CommitPrepared rolls back the current transaction for the specified keyspace, shard, and tablet type.
+func (dg *discoveryGateway) CommitPrepared(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, dtid string) (err error) {
+	return dg.withRetry(ctx, keyspace, shard, tabletType, func(conn tabletconn.TabletConn, target *querypb.Target) error {
+		startTime := time.Now()
+		innerErr := conn.CommitPrepared(ctx, target, dtid)
+		dg.updateStats(keyspace, shard, tabletType, startTime, innerErr)
+		return innerErr
+	}, true, false)
+}
+
+// RollbackPrepared rolls back the current transaction for the specified keyspace, shard, and tablet type.
+func (dg *discoveryGateway) RollbackPrepared(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, dtid string, originalID int64) (err error) {
+	return dg.withRetry(ctx, keyspace, shard, tabletType, func(conn tabletconn.TabletConn, target *querypb.Target) error {
+		startTime := time.Now()
+		innerErr := conn.RollbackPrepared(ctx, target, dtid, originalID)
+		dg.updateStats(keyspace, shard, tabletType, startTime, innerErr)
+		return innerErr
+	}, true, false)
+}
+
+// CreateTransaction rolls back the current transaction for the specified keyspace, shard, and tablet type.
+func (dg *discoveryGateway) CreateTransaction(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, dtid string, participants []*querypb.Target) (err error) {
+	return dg.withRetry(ctx, keyspace, shard, tabletType, func(conn tabletconn.TabletConn, target *querypb.Target) error {
+		startTime := time.Now()
+		innerErr := conn.CreateTransaction(ctx, target, dtid, participants)
+		dg.updateStats(keyspace, shard, tabletType, startTime, innerErr)
+		return innerErr
+	}, true, false)
+}
+
+// StartCommit rolls back the current transaction for the specified keyspace, shard, and tablet type.
+func (dg *discoveryGateway) StartCommit(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, transactionID int64, dtid string) (err error) {
+	return dg.withRetry(ctx, keyspace, shard, tabletType, func(conn tabletconn.TabletConn, target *querypb.Target) error {
+		startTime := time.Now()
+		innerErr := conn.StartCommit(ctx, target, transactionID, dtid)
+		dg.updateStats(keyspace, shard, tabletType, startTime, innerErr)
+		return innerErr
+	}, true, false)
+}
+
+// SetRollback rolls back the current transaction for the specified keyspace, shard, and tablet type.
+func (dg *discoveryGateway) SetRollback(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, dtid string, transactionID int64) (err error) {
+	return dg.withRetry(ctx, keyspace, shard, tabletType, func(conn tabletconn.TabletConn, target *querypb.Target) error {
+		startTime := time.Now()
+		innerErr := conn.SetRollback(ctx, target, dtid, transactionID)
+		dg.updateStats(keyspace, shard, tabletType, startTime, innerErr)
+		return innerErr
+	}, true, false)
+}
+
+// ResolveTransaction rolls back the current transaction for the specified keyspace, shard, and tablet type.
+func (dg *discoveryGateway) ResolveTransaction(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, dtid string) (err error) {
+	return dg.withRetry(ctx, keyspace, shard, tabletType, func(conn tabletconn.TabletConn, target *querypb.Target) error {
+		startTime := time.Now()
+		innerErr := conn.ResolveTransaction(ctx, target, dtid)
+		dg.updateStats(keyspace, shard, tabletType, startTime, innerErr)
+		return innerErr
+	}, true, false)
+}
+
+// ReadTransaction rolls back the current transaction for the specified keyspace, shard, and tablet type.
+func (dg *discoveryGateway) ReadTransaction(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, dtid string) (metadata *querypb.TransactionMetadata, err error) {
+	err = dg.withRetry(ctx, keyspace, shard, tabletType, func(conn tabletconn.TabletConn, target *querypb.Target) error {
+		startTime := time.Now()
+		var innerErr error
+		metadata, innerErr = conn.ReadTransaction(ctx, target, dtid)
+		dg.updateStats(keyspace, shard, tabletType, startTime, innerErr)
+		return innerErr
+	}, false, false)
+	return metadata, err
 }
 
 // BeginExecute executes a begin and the non-streaming query for the
@@ -186,7 +268,7 @@ func (dg *discoveryGateway) BeginExecute(ctx context.Context, keyspace, shard st
 		qr, transactionID, innerErr = conn.BeginExecute(ctx, target, query, bindVars, options)
 		dg.updateStats(keyspace, shard, tabletType, startTime, innerErr)
 		return innerErr
-	}, 0, false)
+	}, false, false)
 	return qr, transactionID, err
 }
 
@@ -199,7 +281,7 @@ func (dg *discoveryGateway) BeginExecuteBatch(ctx context.Context, keyspace, sha
 		qrs, transactionID, innerErr = conn.BeginExecuteBatch(ctx, target, queries, asTransaction, options)
 		dg.updateStats(keyspace, shard, tabletType, startTime, innerErr)
 		return innerErr
-	}, 0, false)
+	}, false, false)
 	return qrs, transactionID, err
 }
 
@@ -214,7 +296,7 @@ func (dg *discoveryGateway) SplitQuery(ctx context.Context, keyspace, shard stri
 		}, splitColumn, splitCount)
 		dg.updateStats(keyspace, shard, tabletType, startTime, innerErr)
 		return innerErr
-	}, 0, false)
+	}, false, false)
 	return
 }
 
@@ -241,7 +323,7 @@ func (dg *discoveryGateway) SplitQueryV2(
 		}, splitColumns, splitCount, numRowsPerQueryPart, algorithm)
 		dg.updateStats(keyspace, shard, tabletType, startTime, innerErr)
 		return innerErr
-	}, 0, false)
+	}, false, false)
 	return
 }
 
@@ -253,7 +335,7 @@ func (dg *discoveryGateway) UpdateStream(ctx context.Context, keyspace, shard st
 		var err error
 		stream, err = conn.UpdateStream(ctx, target, position, timestamp)
 		return err
-	}, 0, true)
+	}, false, true)
 	if err != nil {
 		return nil, err
 	}
@@ -286,10 +368,9 @@ func (dg *discoveryGateway) CacheStatus() TabletCacheStatusList {
 // the middle of a transaction. While returning the error check if it maybe a result of
 // a resharding event, and set the re-resolve bit and let the upper layers
 // re-resolve and retry.
-func (dg *discoveryGateway) withRetry(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, action func(conn tabletconn.TabletConn, target *querypb.Target) error, transactionID int64, isStreaming bool) error {
+func (dg *discoveryGateway) withRetry(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, action func(conn tabletconn.TabletConn, target *querypb.Target) error, inTransaction, isStreaming bool) error {
 	var tabletLastUsed *topodatapb.Tablet
 	var err error
-	inTransaction := (transactionID != 0)
 	invalidTablets := make(map[string]bool)
 
 	for i := 0; i < dg.retryCount+1; i++ {
@@ -332,7 +413,7 @@ func (dg *discoveryGateway) withRetry(ctx context.Context, keyspace, shard strin
 		}
 
 		err = action(conn, ts.Target)
-		if dg.canRetry(ctx, err, transactionID, isStreaming) {
+		if dg.canRetry(ctx, err, inTransaction, isStreaming) {
 			invalidTablets[ts.Key] = true
 			continue
 		}
@@ -344,7 +425,7 @@ func (dg *discoveryGateway) withRetry(ctx context.Context, keyspace, shard strin
 // canRetry determines whether a query can be retried or not.
 // OperationalErrors like retry/fatal are retryable if query is not in a txn.
 // All other errors are non-retryable.
-func (dg *discoveryGateway) canRetry(ctx context.Context, err error, transactionID int64, isStreaming bool) bool {
+func (dg *discoveryGateway) canRetry(ctx context.Context, err error, inTransaction, isStreaming bool) bool {
 	if err == nil {
 		return false
 	}
@@ -369,7 +450,6 @@ func (dg *discoveryGateway) canRetry(ctx context.Context, err error, transaction
 		case vtrpcpb.ErrorCode_QUERY_NOT_SERVED:
 			// Retry on QUERY_NOT_SERVED and
 			// INTERNAL_ERROR if not in a transaction.
-			inTransaction := (transactionID != 0)
 			return !inTransaction
 		default:
 			// Not retry for RESOURCE_EXHAUSTED and normal

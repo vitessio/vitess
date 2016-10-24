@@ -230,7 +230,7 @@ func (mysqld *Mysqld) PreflightSchemaChange(dbName string, changes []string) ([]
 			initialCopySQL += s + ";\n"
 		}
 	}
-	if err = mysqld.executeMysqlCommands(mysqld.dba.Uname, initialCopySQL); err != nil {
+	if err = mysqld.executeMysqlCommands(mysqld.dba, initialCopySQL); err != nil {
 		return nil, err
 	}
 
@@ -245,7 +245,7 @@ func (mysqld *Mysqld) PreflightSchemaChange(dbName string, changes []string) ([]
 		sql := "SET sql_log_bin = 0;\n"
 		sql += "USE _vt_preflight;\n"
 		sql += change
-		if err = mysqld.executeMysqlCommands(mysqld.dba.Uname, sql); err != nil {
+		if err = mysqld.executeMysqlCommands(mysqld.dba, sql); err != nil {
 			return nil, err
 		}
 
@@ -261,7 +261,7 @@ func (mysqld *Mysqld) PreflightSchemaChange(dbName string, changes []string) ([]
 	// and clean up the extra database
 	dropSQL := "SET sql_log_bin = 0;\n"
 	dropSQL += "DROP DATABASE _vt_preflight;\n"
-	if err = mysqld.executeMysqlCommands(mysqld.dba.Uname, dropSQL); err != nil {
+	if err = mysqld.executeMysqlCommands(mysqld.dba, dropSQL); err != nil {
 		return nil, err
 	}
 
@@ -313,7 +313,7 @@ func (mysqld *Mysqld) ApplySchemaChange(dbName string, change *tmutils.SchemaCha
 
 	// execute the schema change using an external mysql process
 	// (to benefit from the extra commands in mysql cli)
-	if err = mysqld.executeMysqlCommands(mysqld.dba.Uname, sql); err != nil {
+	if err = mysqld.executeMysqlCommands(mysqld.dba, sql); err != nil {
 		return nil, err
 	}
 

@@ -9,6 +9,7 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtctl"
 	"github.com/youtube/vitess/go/vt/workflow"
+	"github.com/youtube/vitess/go/vt/workflow/topovalidator"
 )
 
 var (
@@ -17,10 +18,17 @@ var (
 
 func initWorkflowManager(ts topo.Server) {
 	if *workflowManagerInit {
+		// Register the Topo Validators
+		topovalidator.RegisterKeyspaceValidator()
+		topovalidator.RegisterShardValidator()
+		topovalidator.Register()
+
+		// Create the WorkflowManager.
 		vtctl.WorkflowManager = workflow.NewManager(ts)
 
-		// Register the websocket handler.
-		vtctl.WorkflowManager.HandleHTTP(apiPrefix + "workflow")
+		// Register the long polling and websocket handlers.
+		vtctl.WorkflowManager.HandleHTTPLongPolling(apiPrefix + "workflow")
+		vtctl.WorkflowManager.HandleHTTPWebSocket(apiPrefix + "workflow")
 
 		// FIXME(alainjobart) look at a flag to use master
 		// election here.

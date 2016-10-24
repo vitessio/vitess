@@ -79,21 +79,16 @@ class TestSharded(unittest.TestCase):
                      '--sharding_column_type', 'uint64',
                      'test_keyspace'])
 
-    shard_0_master.init_tablet('master', 'test_keyspace', '-80')
+    shard_0_master.init_tablet('replica', 'test_keyspace', '-80')
     shard_0_replica.init_tablet('replica', 'test_keyspace', '-80')
-    shard_1_master.init_tablet('master', 'test_keyspace', '80-')
+    shard_1_master.init_tablet('replica', 'test_keyspace', '80-')
     shard_1_replica.init_tablet('replica', 'test_keyspace', '80-')
-
-    # run checks now before we start the tablets
-    utils.validate_topology()
 
     # create databases, start the tablets, wait for them to start
     for t in [shard_0_master, shard_0_replica, shard_1_master, shard_1_replica]:
       t.create_db('vt_test_keyspace')
       t.start_vttablet(wait_for_state=None)
-    for t in [shard_0_master, shard_1_master]:
-      t.wait_for_vttablet_state('SERVING')
-    for t in [shard_0_replica, shard_1_replica]:
+    for t in [shard_0_master, shard_1_master, shard_0_replica, shard_1_replica]:
       t.wait_for_vttablet_state('NOT_SERVING')
 
     # apply the schema on the first shard through vtctl, so all tablets
@@ -114,11 +109,9 @@ class TestSharded(unittest.TestCase):
     for t in [shard_0_master, shard_0_replica, shard_1_master, shard_1_replica]:
       utils.run_vtctl(['ReloadSchema', t.tablet_alias])
 
-    for t in [shard_0_master, shard_0_replica, shard_1_master, shard_1_replica]:
-      t.reset_replication()
-    utils.run_vtctl(['InitShardMaster', 'test_keyspace/-80',
+    utils.run_vtctl(['InitShardMaster', '-force', 'test_keyspace/-80',
                      shard_0_master.tablet_alias], auto_log=True)
-    utils.run_vtctl(['InitShardMaster', 'test_keyspace/80-',
+    utils.run_vtctl(['InitShardMaster', '-force', 'test_keyspace/80-',
                      shard_1_master.tablet_alias], auto_log=True)
 
     # insert some values directly (db is RO after minority reparent)

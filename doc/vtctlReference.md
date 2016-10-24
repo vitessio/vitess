@@ -1824,6 +1824,7 @@ Blocks until the specified shard has caught up with the filtered replication of 
 * [InitTablet](#inittablet)
 * [Ping](#ping)
 * [RefreshState](#refreshstate)
+* [RefreshStateByShard](#refreshstatebyshard)
 * [ReparentTablet](#reparenttablet)
 * [RestoreFromBackup](#restorefrombackup)
 * [RunHealthCheck](#runhealthcheck)
@@ -2031,7 +2032,6 @@ Initializes a tablet in the topology.<br><br>
 
 | Name | Type | Definition |
 | :-------- | :--------- | :--------- |
-| allow_different_shard | Boolean | Use this flag to force initialization if a tablet with the same name but a different keyspace/shard already exists. Use with caution. |
 | allow_master_override | Boolean | Use this flag to force initialization if a tablet is created as master, and a master for the keyspace/shard already exists. Use with caution. |
 | allow_update | Boolean | Use this flag to force initialization if a tablet with the same name already exists. Use with caution. |
 | db_name_override | string | Overrides the name of the database that the vttablet uses |
@@ -2102,6 +2102,30 @@ Reloads the tablet record on the specified tablet.
 #### Errors
 
 * The <code>&lt;tablet alias&gt;</code> argument is required for the <code>&lt;RefreshState&gt;</code> command. This error occurs if the command is not called with exactly one argument.
+
+
+### RefreshStateByShard
+
+Runs 'RefreshState' on all tablets in the given shard.
+
+#### Example
+
+<pre class="command-example">RefreshStateByShard [-cells=c1,c2,...] &lt;keyspace/shard&gt;</pre>
+
+#### Flags
+
+| Name | Type | Definition |
+| :-------- | :--------- | :--------- |
+| cells | string | Specifies a comma-separated list of cells whose tablets are included. If empty, all cells are considered. |
+
+
+#### Arguments
+
+* <code>&lt;keyspace/shard&gt;</code> &ndash; Required. The name of a sharded database that contains one or more tables as well as the shard associated with the command. The keyspace must be identified by a string that does not contain whitepace, while the shard is typically identified by a string in the format <code>&lt;range start&gt;-&lt;range end&gt;</code>.
+
+#### Errors
+
+* The <code>&lt;keyspace/shard&gt;</code> argument is required for the <code>&lt;RefreshStateByShard&gt;</code> command. This error occurs if the command is not called with exactly one argument.
 
 
 ### ReparentTablet

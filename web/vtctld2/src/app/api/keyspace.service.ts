@@ -87,6 +87,10 @@ export class KeyspaceService {
   getServingShards(keyspaceName: string, srvKeyspace: any): string[] {
     if (srvKeyspace && srvKeyspace[keyspaceName]) {
       let partitions = srvKeyspace[keyspaceName].partitions;
+      if (partitions === undefined) {
+        // This happens for redirected keyspaces.
+        return [];
+      }
       for (let i = 0; i < partitions.length; i++) {
         let partition = partitions[i];
         if (Proto.VT_TABLET_TYPES[partition.served_type] === 'master') {

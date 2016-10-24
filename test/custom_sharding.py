@@ -7,13 +7,13 @@
 import base64
 import unittest
 
-from vtproto import topodata_pb2
-
-from vtdb import vtgate_client
-
 import environment
 import tablet
 import utils
+
+from vtproto import topodata_pb2
+
+from vtdb import vtgate_client
 
 # shards need at least 1 replica for semi-sync ACK, and 1 rdonly for SplitQuery.
 shard_0_master = tablet.Tablet()
@@ -110,7 +110,7 @@ class TestCustomSharding(unittest.TestCase):
 
     # start the first shard only for now
     shard_0_master.init_tablet(
-        'master',
+        'replica',
         keyspace='test_keyspace',
         shard='0',
         tablet_index=0)
@@ -127,13 +127,9 @@ class TestCustomSharding(unittest.TestCase):
 
     for t in [shard_0_master, shard_0_replica, shard_0_rdonly]:
       t.create_db('vt_test_keyspace')
-    shard_0_master.start_vttablet(wait_for_state=None)
-    shard_0_replica.start_vttablet(wait_for_state=None)
-    shard_0_rdonly.start_vttablet(wait_for_state=None)
+      t.start_vttablet(wait_for_state=None)
 
-    for t in [shard_0_master]:
-      t.wait_for_vttablet_state('SERVING')
-    for t in [shard_0_replica, shard_0_rdonly]:
+    for t in [shard_0_master, shard_0_replica, shard_0_rdonly]:
       t.wait_for_vttablet_state('NOT_SERVING')
 
     utils.run_vtctl(['InitShardMaster', '-force', 'test_keyspace/0',
@@ -162,7 +158,7 @@ primary key (id)
 
     # create shard 1
     shard_1_master.init_tablet(
-        'master',
+        'replica',
         keyspace='test_keyspace',
         shard='1',
         tablet_index=0)
@@ -179,13 +175,9 @@ primary key (id)
 
     for t in [shard_1_master, shard_1_replica, shard_1_rdonly]:
       t.create_db('vt_test_keyspace')
-    shard_1_master.start_vttablet(wait_for_state=None)
-    shard_1_replica.start_vttablet(wait_for_state=None)
-    shard_1_rdonly.start_vttablet(wait_for_state=None)
+      t.start_vttablet(wait_for_state=None)
 
-    for t in [shard_1_master]:
-      t.wait_for_vttablet_state('SERVING')
-    for t in [shard_1_replica, shard_1_rdonly]:
+    for t in [shard_1_master, shard_1_replica, shard_1_rdonly]:
       t.wait_for_vttablet_state('NOT_SERVING')
 
     s = utils.run_vtctl_json(['GetShard', 'test_keyspace/1'])

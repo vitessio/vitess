@@ -38,6 +38,39 @@ func TestHistory(t *testing.T) {
 	}
 }
 
+func TestLatest(t *testing.T) {
+	h := New(4)
+
+	// Add first value.
+	h.Add(mod10(1))
+	if got, want := int(h.Records()[0].(mod10)), 1; got != want {
+		t.Errorf("h.Records()[0] = %v, want %v", got, want)
+	}
+	if got, want := int(h.Latest().(mod10)), 1; got != want {
+		t.Errorf("h.Latest() = %v, want %v", got, want)
+	}
+
+	// Add value that isn't a "duplicate".
+	h.Add(mod10(2))
+	if got, want := int(h.Records()[0].(mod10)), 2; got != want {
+		t.Errorf("h.Records()[0] = %v, want %v", got, want)
+	}
+	if got, want := int(h.Latest().(mod10)), 2; got != want {
+		t.Errorf("h.Latest() = %v, want %v", got, want)
+	}
+
+	// Add value that IS a "duplicate".
+	h.Add(mod10(12))
+	// Records()[0] doesn't change.
+	if got, want := int(h.Records()[0].(mod10)), 2; got != want {
+		t.Errorf("h.Records()[0] = %v, want %v", got, want)
+	}
+	// Latest() does change.
+	if got, want := int(h.Latest().(mod10)), 12; got != want {
+		t.Errorf("h.Latest() = %v, want %v", got, want)
+	}
+}
+
 type duplic int
 
 func (d duplic) IsDuplicate(other interface{}) bool {
@@ -51,4 +84,10 @@ func TestIsEquivalent(t *testing.T) {
 	if got, want := len(q.Records()), 1; got != want {
 		t.Errorf("len(q.Records())=%v, want %v", got, want)
 	}
+}
+
+type mod10 int
+
+func (m mod10) IsDuplicate(other interface{}) bool {
+	return m%10 == other.(mod10)%10
 }

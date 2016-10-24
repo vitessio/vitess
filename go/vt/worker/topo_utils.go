@@ -118,6 +118,7 @@ func FindWorkerTablet(ctx context.Context, wr *wrangler.Wrangler, cleaner *wrang
 			tablet.Tags = make(map[string]string)
 		}
 		tablet.Tags["worker"] = ourURL
+		tablet.Tags["drain_reason"] = "Used by vtworker"
 		return nil
 	})
 	cancel()
@@ -128,17 +129,18 @@ func FindWorkerTablet(ctx context.Context, wr *wrangler.Wrangler, cleaner *wrang
 	// ChangeSlaveType back, so we need to record this tag change after the change
 	// slave type change in the cleaner.
 	defer wrangler.RecordTabletTagAction(cleaner, tabletAlias, "worker", "")
+	defer wrangler.RecordTabletTagAction(cleaner, tabletAlias, "drain_reason", "")
 
-	wr.Logger().Infof("Changing tablet %v to '%v'", topoproto.TabletAliasString(tabletAlias), topodatapb.TabletType_WORKER)
+	wr.Logger().Infof("Changing tablet %v to '%v'", topoproto.TabletAliasString(tabletAlias), topodatapb.TabletType_DRAINED)
 	shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
-	err = wr.ChangeSlaveType(shortCtx, tabletAlias, topodatapb.TabletType_WORKER)
+	err = wr.ChangeSlaveType(shortCtx, tabletAlias, topodatapb.TabletType_DRAINED)
 	cancel()
 	if err != nil {
 		return nil, err
 	}
 
 	// Record a clean-up action to take the tablet back to rdonly.
-	wrangler.RecordChangeSlaveTypeAction(cleaner, tabletAlias, topodatapb.TabletType_WORKER, topodatapb.TabletType_RDONLY)
+	wrangler.RecordChangeSlaveTypeAction(cleaner, tabletAlias, topodatapb.TabletType_DRAINED, topodatapb.TabletType_RDONLY)
 	return tabletAlias, nil
 }
 

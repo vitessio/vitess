@@ -174,21 +174,35 @@ func (sc *SlaveConnection) StartBinlogDumpFromPosition(ctx context.Context, star
 	return eventChan, nil
 }
 
-// StartBinlogDumpFromTimestamp requests a replication binlog dump from
-// the master mysqld at the given timestamp and then sends binlog
-// events to the provided channel.
+// StartBinlogDumpFromBinlogBeforeTimestamp requests a replication
+// binlog dump from the master mysqld starting with a file that has
+// timestamps smaller than the provided timestamp, and then sends
+// binlog events to the provided channel.
 //
 // The startup phase will list all the binary logs, and find the one
 // that has events starting strictly before the provided timestamp. It
-// will then start from there, and skip all events that are before the
-// provided timestamp.
+// will then start from there, and stream all events. It is the
+// responsability of the calling site to filter the events more.
+//
+// MySQL 5.6+ note: we need to do it that way because of the way the
+// GTIDSet works. In the previous two streaming functions, we pass in
+// the full GTIDSet (that has the list of all transactions seen in
+// the replication stream). In this case, we don't know it, all we
+// have is the binlog file names. We depend on parsing the first
+// PREVIOUS_GTIDS_EVENT event in the logs to get it. So we need the
+// caller to parse that event, and it can't be skipped because its
+// timestamp is lower. Then, for each subsequent event, the caller
+// also needs to add the event GTID to its GTIDSet. Otherwise it won't
+// be correct ever. So the caller really needs to build up its GTIDSet
+// along the entire file, not just for events whose timestamp is in a
+// given range.
 //
 // The stream will continue in the background, waiting for new events if
 // necessary, until the connection is closed, either by the master or
 // by canceling the context.
 //
 // Note the context is valid and used until eventChan is closed.
-func (sc *SlaveConnection) StartBinlogDumpFromTimestamp(ctx context.Context, timestamp int64) (<-chan replication.BinlogEvent, error) {
+func (sc *SlaveConnection) StartBinlogDumpFromBinlogBeforeTimestamp(ctx context.Context, timestamp int64) (<-chan replication.BinlogEvent, error) {
 	ctx, sc.cancel = context.WithCancel(ctx)
 
 	flavor, err := sc.mysqld.flavor()
@@ -204,7 +218,7 @@ func (sc *SlaveConnection) StartBinlogDumpFromTimestamp(ctx context.Context, tim
 
 	// Start with the most recent binlog file until we find the right event.
 	var binlogIndex int
-	var firstEvent replication.BinlogEvent
+	var event replication.BinlogEvent
 	for binlogIndex = len(binlogs.Rows) - 1; binlogIndex >= 0; binlogIndex-- {
 		// Exit the loop early if context is canceled.
 		select {
@@ -222,8 +236,9 @@ func (sc *SlaveConnection) StartBinlogDumpFromTimestamp(ctx context.Context, tim
 			return nil, fmt.Errorf("failed to send the ComBinlogDump command: %v", err)
 		}
 
-		// Get the first event to get its timestamp. We skip ROTATE
-		// events, as they don't have timestamps.
+		// Get the first event to get its timestamp. We skip
+		// events that don't have timestamps (although it seems
+		// most do anyway).
 		for {
 			buf, err := sc.Conn.ReadPacket()
 			if err != nil {
@@ -236,15 +251,17 @@ func (sc *SlaveConnection) StartBinlogDumpFromTimestamp(ctx context.Context, tim
 			}
 
 			// Parse the full event.
-			firstEvent = flavor.MakeBinlogEvent(buf[1:])
-			if !firstEvent.IsValid() {
+			event = flavor.MakeBinlogEvent(buf[1:])
+			if !event.IsValid() {
 				return nil, fmt.Errorf("first event from binlog %v is not valid", binlog)
 			}
-			if !firstEvent.IsRotate() {
+			if event.Timestamp() > 0 {
+				// We found the first event with a
+				// valid timestamp.
 				break
 			}
 		}
-		if int64(firstEvent.Timestamp()) < timestamp {
+		if int64(event.Timestamp()) < timestamp {
 			// The first event in this binlog has a smaller
 			// timestamp than what we need, we found a good
 			// starting point.
@@ -266,35 +283,6 @@ func (sc *SlaveConnection) StartBinlogDumpFromTimestamp(ctx context.Context, tim
 		return nil, ErrBinlogUnavailable
 	}
 
-	// Now skip all events that have a smaller timestamp
-	var event replication.BinlogEvent
-	for {
-		buf, err := sc.Conn.ReadPacket()
-		if err != nil {
-			return nil, fmt.Errorf("error reading packet while skipping binlog events: %v", err)
-		}
-		if buf[0] == 254 {
-			// The master is telling us to stop.
-			return nil, fmt.Errorf("received EOF packet in binlog dump while skipping packets: %#v", buf)
-		}
-
-		event = flavor.MakeBinlogEvent(buf[1:])
-		if !event.IsValid() {
-			return nil, fmt.Errorf("event from binlog is not valid (while skipping)")
-		}
-		if int64(event.Timestamp()) >= timestamp {
-			// we found the first event to send
-			break
-		}
-
-		// Exit the loop early if context is canceled.
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		default:
-		}
-	}
-
 	// Now just loop sending and reading events.
 	// FIXME(alainjobart) I think we can use a buffered channel for better performance.
 	eventChan := make(chan replication.BinlogEvent)
@@ -307,14 +295,6 @@ func (sc *SlaveConnection) StartBinlogDumpFromTimestamp(ctx context.Context, tim
 			sc.wg.Done()
 		}()
 
-		// Send the first binlog event, it has the format description.
-		select {
-		case eventChan <- firstEvent:
-		case <-ctx.Done():
-			return
-		}
-
-		// Then send the rest.
 		for {
 			select {
 			case eventChan <- event:

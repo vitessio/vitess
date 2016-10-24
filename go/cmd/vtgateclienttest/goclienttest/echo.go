@@ -22,7 +22,7 @@ import (
 var (
 	echoPrefix = "echo://"
 
-	query    = "test query"
+	query    = "test query with unicode: \u6211\u80fd\u541e\u4e0b\u73bb\u7483\u800c\u4e0d\u50b7\u8eab\u9ad4"
 	keyspace = "test_keyspace"
 
 	shards     = []string{"-80", "80-"}
@@ -104,7 +104,7 @@ var (
 	optionsEcho = "exclude_field_names:true include_event_token:true compare_event_token:<" + eventTokenEcho + "> "
 	extrasEcho  = "event_token:<" + eventTokenEcho + "> fresher:true "
 
-	updateStreamEcho = "map[callerId:" + callerIDEcho + " event:" + eventTokenEcho + " keyRange:" + keyRangeZeroEcho + " keyspace:conn_ks shard:echo://test query tabletType:REPLICA timestamp:0]"
+	updateStreamEcho = "map[callerId:" + callerIDEcho + " event:" + eventTokenEcho + " keyRange:" + keyRangeZeroEcho + " keyspace:conn_ks shard:echo://" + query + " tabletType:REPLICA timestamp:0]"
 )
 
 // testEcho exercises the test cases provided by the "echo" service.

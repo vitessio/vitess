@@ -65,7 +65,7 @@ public abstract class RpcClientTest {
           .put("aborted", SQLRecoverableException.class)
           .put("unknown error", SQLNonTransientException.class).build();
 
-  private static final String QUERY = "test query";
+  private static final String QUERY = "test query with unicode: \u6211\u80fd\u541e\u4e0b\u73bb\u7483\u800c\u4e0d\u50b7\u8eab\u9ad4";
   private static final String KEYSPACE = "test_keyspace";
 
   private static final List<String> SHARDS = Arrays.asList("-80", "80-");

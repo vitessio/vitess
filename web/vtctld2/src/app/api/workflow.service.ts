@@ -1,10 +1,20 @@
 import { Injectable } from '@angular/core';
+import { Headers, Http, RequestOptions, Response } from '@angular/http';
+
 import { ReplaySubject } from 'rxjs/Rx';
 
 @Injectable()
 export class WorkflowService {
-  public ws: WebSocket;
-  public subject: ReplaySubject<string> = new ReplaySubject<string>(100);
+  private useWebSocket = false;
+  private subject: ReplaySubject<any> = new ReplaySubject<any>(100);
+  private stopped = false;
+
+  // If using web sockets
+  private ws: WebSocket = null;
+
+  // If using HTTP
+  private id = 0;
+
   /*
   private workflows = [
     {name: 'Going Back to the Future', path: '/UU948312', children: [
@@ -30,11 +40,21 @@ export class WorkflowService {
         ], state: 2}];
 
   */
-  constructor() {
-    this.connect();
+  constructor(private http: Http) {
+    if (this.useWebSocket) {
+      this.connectWebSocket();
+    } else {
+      this.connectHttp();
+    }
   }
 
-  connect() {
+  connectWebSocket() {
+    if (this.stopped) {
+      return;
+    }
+
+    // Save a copy of the pointer to our object. 'this' will be out of
+    // scope in the websocket callbacks below.
     let t = this;
 
     let ws = new WebSocket('ws://' + window.location.hostname +
@@ -49,26 +69,104 @@ export class WorkflowService {
       console.log('Disconnected from server, trying again in 3s.');
       t.ws = null;
       setTimeout(() => {
-        t.connect();
+        t.connectWebSocket();
       }, 3000);
     };
   }
 
-  updates() {
+  connectHttp() {
+    if (this.stopped) {
+      return;
+    }
+
+    // Save a copy of the pointer to our object. 'this' will be out of
+    // scope in the HTTP callbacks below.
+    let t = this;
+
+    this.http.get('../api/workflow/create').subscribe(
+      function (res: Response) {
+        let createResult = res.json();
+        t.id = createResult.id;
+        t.subject.next(createResult.update);
+        t.pollHttp();
+      },
+      function (err) {
+        console.log('Workflow service create error, will try again in 3s: %s', err);
+        setTimeout(() => {
+          t.connectHttp();
+        }, 3000);
+      });
+  }
+
+  pollHttp() {
+    if (this.stopped) {
+      return;
+    }
+
+    // Save a copy of the pointer to our object. 'this' will be out of
+    // scope in the HTTP callbacks below.
+    let t = this;
+
+    this.http.get('../api/workflow/poll/' + this.id).subscribe(
+      function (res: Response) {
+        t.subject.next(res.json());
+        t.pollHttp();
+      },
+      function (err) {
+        console.log('Workflow service poll error, will try again in 3s: %s', err);
+        t.id = 0;
+        setTimeout(() => {
+          t.connectHttp();
+        }, 3000);
+      });
+  }
+
+  updates(): ReplaySubject<any> {
     return this.subject;
   }
 
   sendAction(path: string, name: string) {
-    if (this.ws === null) {
-      alert('Not connected to vtctld, cannot send command.');
-      return;
-    }
     let params = {
       path: path,
       name: name,
     };
     let message = JSON.stringify(params);
+    if (this.useWebSocket) {
+      this.sendActionWebSocket(message);
+    } else {
+      this.sendActionHttp(message);
+    }
+  }
+
+  sendActionWebSocket(message: string) {
+    if (this.ws === null) {
+      alert('Not connected to vtctld via WebSocket, cannot send command.');
+      return;
+    }
     this.ws.send(message);
+  }
+
+  sendActionHttp(message: string) {
+    if (this.id === 0) {
+      alert('Not connected to vtctld via HTTP, cannot send command.');
+      return;
+    }
+
+    let headers = new Headers({
+      'Content-Type': 'application/json; charset=utf-8' });
+    let options = new RequestOptions({ headers: headers });
+    this.http.post('../api/workflow/action/' + this.id, message, options).subscribe(
+      function (res: Response) {},
+      function (err) {
+        alert('Error posting action to server: ' + err);
+      });
+  }
+
+  stop() {
+    this.stopped = true;
+    if (this.ws !== null) {
+      this.ws.close();
+    }
   }
 }
 

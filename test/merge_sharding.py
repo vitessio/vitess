@@ -179,13 +179,13 @@ index by_msg (msg)
                      '--sharding_column_type', base_sharding.keyspace_id_type,
                      'test_keyspace'])
 
-    shard_0_master.init_tablet('master', 'test_keyspace', '-40')
+    shard_0_master.init_tablet('replica', 'test_keyspace', '-40')
     shard_0_replica.init_tablet('replica', 'test_keyspace', '-40')
     shard_0_rdonly.init_tablet('rdonly', 'test_keyspace', '-40')
-    shard_1_master.init_tablet('master', 'test_keyspace', '40-80')
+    shard_1_master.init_tablet('replica', 'test_keyspace', '40-80')
     shard_1_replica.init_tablet('replica', 'test_keyspace', '40-80')
     shard_1_rdonly.init_tablet('rdonly', 'test_keyspace', '40-80')
-    shard_2_master.init_tablet('master', 'test_keyspace', '80-')
+    shard_2_master.init_tablet('replica', 'test_keyspace', '80-')
     shard_2_replica.init_tablet('replica', 'test_keyspace', '80-')
     shard_2_rdonly.init_tablet('rdonly', 'test_keyspace', '80-')
 
@@ -201,22 +201,18 @@ index by_msg (msg)
       t.create_db('vt_test_keyspace')
       t.start_vttablet(wait_for_state=None)
 
-    # masters will be serving
-    for t in [shard_0_master, shard_1_master, shard_2_master]:
-      t.wait_for_vttablet_state('SERVING')
-
-    # slaves won't be, no replication state
-    for t in [shard_0_replica, shard_0_rdonly,
-              shard_1_replica, shard_1_rdonly,
-              shard_2_replica, shard_2_rdonly]:
+    # won't be serving, no replication state
+    for t in [shard_0_master, shard_0_replica, shard_0_rdonly,
+              shard_1_master, shard_1_replica, shard_1_rdonly,
+              shard_2_master, shard_2_replica, shard_2_rdonly]:
       t.wait_for_vttablet_state('NOT_SERVING')
 
     # reparent to make the tablets work
-    utils.run_vtctl(['InitShardMaster', 'test_keyspace/-40',
+    utils.run_vtctl(['InitShardMaster', '-force', 'test_keyspace/-40',
                      shard_0_master.tablet_alias], auto_log=True)
-    utils.run_vtctl(['InitShardMaster', 'test_keyspace/40-80',
+    utils.run_vtctl(['InitShardMaster', '-force', 'test_keyspace/40-80',
                      shard_1_master.tablet_alias], auto_log=True)
-    utils.run_vtctl(['InitShardMaster', 'test_keyspace/80-',
+    utils.run_vtctl(['InitShardMaster', '-force', 'test_keyspace/80-',
                      shard_2_master.tablet_alias], auto_log=True)
 
     # create the tables
@@ -231,7 +227,7 @@ index by_msg (msg)
       utils.run_vtctl(['RunHealthCheck', t.tablet_alias])
 
     # create the merge shards
-    shard_dest_master.init_tablet('master', 'test_keyspace', '-80')
+    shard_dest_master.init_tablet('replica', 'test_keyspace', '-80')
     shard_dest_replica.init_tablet('replica', 'test_keyspace', '-80')
     shard_dest_rdonly.init_tablet('rdonly', 'test_keyspace', '-80')
 
@@ -242,7 +238,7 @@ index by_msg (msg)
     for t in [shard_dest_master, shard_dest_replica, shard_dest_rdonly]:
       t.wait_for_vttablet_state('NOT_SERVING')
 
-    utils.run_vtctl(['InitShardMaster', 'test_keyspace/-80',
+    utils.run_vtctl(['InitShardMaster', '-force', 'test_keyspace/-80',
                      shard_dest_master.tablet_alias], auto_log=True)
 
     utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'],

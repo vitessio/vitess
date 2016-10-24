@@ -170,6 +170,15 @@ type HealthCheck interface {
 	// Note that the default implementation requires to set the
 	// listener before any tablets are added to the healthcheck.
 	SetListener(listener HealthCheckStatsListener, sendDownEvents bool)
+	// WaitForInitialStatsUpdates waits until all tablets added via
+	// AddTablet() call were propagated to the listener via corresponding
+	// StatsUpdate() calls. Note that code path from AddTablet() to
+	// corresponding StatsUpdate() is asynchronous but not cancelable, thus
+	// this function is also non-cancelable and can't return error. Also
+	// note that all AddTablet() calls should happen before calling this
+	// method. WaitForInitialStatsUpdates won't wait for StatsUpdate() calls
+	// corresponding to AddTablet() calls made during its execution.
+	WaitForInitialStatsUpdates()
 	// GetConnection returns the TabletConn of the given tablet.
 	GetConnection(key string) tabletconn.TabletConn
 	// CacheStatus returns a displayable version of the cache.
@@ -215,6 +224,9 @@ type HealthCheckImpl struct {
 
 	// addrToConns maps from address to the healthCheckConn object.
 	addrToConns map[string]*healthCheckConn
+
+	// Wait group that's used to wait until all initial StatsUpdate() calls are made after the AddTablet() calls.
+	initialUpdatesWG sync.WaitGroup
 }
 
 // NewHealthCheck creates a new HealthCheck object.
@@ -277,17 +289,41 @@ func (hc *HealthCheckImpl) servingConnStats() map[string]int64 {
 	return res
 }
 
+// finalizeConn closes the health checking connection and sends the final
+// notification about the tablet to downstream. To be called only on exit from
+// checkConn().
+func (hc *HealthCheckImpl) finalizeConn(hcc *healthCheckConn) {
+	hcc.mu.Lock()
+	if hcc.conn != nil {
+		hcc.conn.Close()
+		hcc.conn = nil
+	}
+	hcc.tabletStats.Up = false
+	hcc.tabletStats.Serving = false
+	// Note: checkConn() exits only when hcc.ctx.Done() is closed. Thus it's
+	// safe to simply get Err() value here and assign to LastError.
+	hcc.tabletStats.LastError = hcc.ctx.Err()
+	ts := hcc.tabletStats
+	hcc.mu.Unlock()
+	if hc.listener != nil {
+		hc.listener.StatsUpdate(&ts)
+	}
+}
+
 // checkConn performs health checking on the given tablet.
 func (hc *HealthCheckImpl) checkConn(hcc *healthCheckConn, name string) {
 	defer hc.wg.Done()
-	defer func() {
-		hcc.mu.Lock()
-		if hcc.conn != nil {
-			hcc.conn.Close()
-			hcc.conn = nil
-		}
-		hcc.mu.Unlock()
-	}()
+	defer hc.finalizeConn(hcc)
+
+	// Initial notification for downstream about the tablet existence.
+	hcc.mu.Lock()
+	ts := hcc.tabletStats
+	hcc.mu.Unlock()
+	if hc.listener != nil {
+		hc.listener.StatsUpdate(&ts)
+	}
+	hc.initialUpdatesWG.Done()
+
 	// retry health check if it fails
 	for {
 		// Try to connect to the tablet.
@@ -541,6 +577,7 @@ func (hc *HealthCheckImpl) AddTablet(tablet *topodatapb.Tablet, name string) {
 		return
 	}
 	hc.addrToConns[key] = hcc
+	hc.initialUpdatesWG.Add(1)
 	hc.mu.Unlock()
 
 	hc.wg.Add(1)
@@ -551,6 +588,12 @@ func (hc *HealthCheckImpl) AddTablet(tablet *topodatapb.Tablet, name string) {
 // It does not block.
 func (hc *HealthCheckImpl) RemoveTablet(tablet *topodatapb.Tablet) {
 	go hc.deleteConn(tablet)
+}
+
+// WaitForInitialStatsUpdates waits until all tablets added via AddTablet() call
+// were propagated to downstream via corresponding StatsUpdate() calls.
+func (hc *HealthCheckImpl) WaitForInitialStatsUpdates() {
+	hc.initialUpdatesWG.Wait()
 }
 
 // GetConnection returns the TabletConn of the given tablet.

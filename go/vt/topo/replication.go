@@ -70,13 +70,16 @@ func UpdateShardReplicationRecord(ctx context.Context, ts Server, keyspace, shar
 	defer span.Finish()
 
 	return ts.UpdateShardReplicationFields(ctx, tabletAlias.Cell, keyspace, shard, func(sr *topodatapb.ShardReplication) error {
-		// not very efficient, but easy to read
+		// Not very efficient, but easy to read, and allows us
+		// to remove duplicate entries if any.
 		nodes := make([]*topodatapb.ShardReplication_Node, 0, len(sr.Nodes)+1)
 		found := false
+		modified := false
 		for _, node := range sr.Nodes {
 			if *node.TabletAlias == *tabletAlias {
 				if found {
 					log.Warningf("Found a second ShardReplication_Node for tablet %v, deleting it", tabletAlias)
+					modified = true
 					continue
 				}
 				found = true
@@ -85,6 +88,10 @@ func UpdateShardReplicationRecord(ctx context.Context, ts Server, keyspace, shar
 		}
 		if !found {
 			nodes = append(nodes, &topodatapb.ShardReplication_Node{TabletAlias: tabletAlias})
+			modified = true
+		}
+		if !modified {
+			return ErrNoUpdateNeeded
 		}
 		sr.Nodes = nodes
 		return nil

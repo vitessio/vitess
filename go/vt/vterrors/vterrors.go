@@ -1,9 +1,3 @@
-// Copyright 2012, Google Inc. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
-// Package vterrors provides helpers for propagating internal errors through the Vitess
-// system (including across RPC boundaries) in a structured way.
 package vterrors
 
 import (

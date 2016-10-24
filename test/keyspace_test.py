@@ -131,7 +131,7 @@ def setup_sharded_keyspace():
                    'keyspace_id', 'uint64'])
 
   shard_0_master.init_tablet(
-      'master',
+      'replica',
       keyspace=SHARDED_KEYSPACE,
       shard='-80',
       tablet_index=0)
@@ -141,7 +141,7 @@ def setup_sharded_keyspace():
       shard='-80',
       tablet_index=1)
   shard_1_master.init_tablet(
-      'master',
+      'replica',
       keyspace=SHARDED_KEYSPACE,
       shard='80-',
       tablet_index=0)
@@ -156,9 +156,7 @@ def setup_sharded_keyspace():
     t.mquery(shard_0_master.dbname, create_vt_insert_test)
     t.start_vttablet(wait_for_state=None)
 
-  for t in [shard_0_master, shard_1_master]:
-    t.wait_for_vttablet_state('SERVING')
-  for t in [shard_0_replica, shard_1_replica]:
+  for t in [shard_0_master, shard_0_replica, shard_1_master, shard_1_replica]:
     t.wait_for_vttablet_state('NOT_SERVING')
 
   utils.run_vtctl(['InitShardMaster', '-force', '%s/-80' % SHARDED_KEYSPACE,
@@ -186,7 +184,7 @@ def setup_unsharded_keyspace():
                    'keyspace_id', 'uint64'])
 
   unsharded_master.init_tablet(
-      'master',
+      'replica',
       keyspace=UNSHARDED_KEYSPACE,
       shard='0',
       tablet_index=0)
@@ -201,9 +199,7 @@ def setup_unsharded_keyspace():
     t.mquery(unsharded_master.dbname, create_vt_insert_test)
     t.start_vttablet(wait_for_state=None)
 
-  for t in [unsharded_master]:
-    t.wait_for_vttablet_state('SERVING')
-  for t in [unsharded_replica]:
+  for t in [unsharded_master, unsharded_replica]:
     t.wait_for_vttablet_state('NOT_SERVING')
 
   utils.run_vtctl(['InitShardMaster', '-force', '%s/0' % UNSHARDED_KEYSPACE,

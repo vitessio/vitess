@@ -122,7 +122,7 @@ var AllTabletTypes = []topodatapb.TabletType{
 	topodatapb.TabletType_EXPERIMENTAL,
 	topodatapb.TabletType_BACKUP,
 	topodatapb.TabletType_RESTORE,
-	topodatapb.TabletType_WORKER,
+	topodatapb.TabletType_DRAINED,
 }
 
 // SlaveTabletTypes contains all the tablet type that can have replication
@@ -135,7 +135,7 @@ var SlaveTabletTypes = []topodatapb.TabletType{
 	topodatapb.TabletType_EXPERIMENTAL,
 	topodatapb.TabletType_BACKUP,
 	topodatapb.TabletType_RESTORE,
-	topodatapb.TabletType_WORKER,
+	topodatapb.TabletType_DRAINED,
 }
 
 // ParseTabletType parses the tablet type into the enum

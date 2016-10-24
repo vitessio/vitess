@@ -73,11 +73,11 @@ class TestBackup(unittest.TestCase):
     for t in tablet_master, tablet_replica1:
       t.create_db('vt_test_keyspace')
 
-    tablet_master.init_tablet('master', 'test_keyspace', '0', start=True,
+    tablet_master.init_tablet('replica', 'test_keyspace', '0', start=True,
                               supports_backups=True)
     tablet_replica1.init_tablet('replica', 'test_keyspace', '0', start=True,
                                 supports_backups=True)
-    utils.run_vtctl(['InitShardMaster', 'test_keyspace/0',
+    utils.run_vtctl(['InitShardMaster', '-force', 'test_keyspace/0',
                      tablet_master.tablet_alias])
 
   def tearDown(self):

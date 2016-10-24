@@ -78,11 +78,12 @@ enum TabletType {
   // startup time.  No queries can be served in RESTORE mode.
   RESTORE = 7;
 
-  // WORKER is the type a server goes into when used by a vtworker
-  // process to perform an offline action. It is a serving type (as
-  // the vtworker processes may need queries to run). In this state,
-  // this tablet is dedicated to the vtworker process that uses it.
-  WORKER = 8;
+  // DRAINED is the type a server goes into when used by Vitess tools
+  // to perform an offline action. It is a serving type (as
+  // the tools processes may need to run queries), but it's not used
+  // to route queries from Vitess users. In this state,
+  // this tablet is dedicated to the process that uses it.
+  DRAINED = 8;
 }
 
 // Tablet represents information about a running instance of vttablet.

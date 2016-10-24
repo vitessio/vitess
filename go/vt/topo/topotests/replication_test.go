@@ -14,7 +14,7 @@ import (
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
-// This file contains tests for the replicatio.go file.  Note we use a
+// This file contains tests for the replication.go file.  Note we use a
 // zktestserver, because memorytopo doesn't support all topo server
 // methods yet.
 

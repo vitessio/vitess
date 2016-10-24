@@ -1143,7 +1143,7 @@ func initQueryExecutorTestDB(db *fakesqldb.DB) {
 }
 
 func fetchRecordedQueries(qre *QueryExecutor) []string {
-	conn, err := qre.qe.txPool.Get(qre.transactionID)
+	conn, err := qre.qe.txPool.Get(qre.transactionID, "for query")
 	if err != nil {
 		panic(err)
 	}

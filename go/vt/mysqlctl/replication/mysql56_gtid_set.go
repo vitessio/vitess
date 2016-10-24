@@ -348,6 +348,51 @@ func (set Mysql56GTIDSet) SIDBlock() []byte {
 	return buf.Bytes()
 }
 
+// NewMysql56GTIDSetFromSIDBlock builds a Mysql56GTIDSet from parsing a SID Block.
+// This is the reverse of the SIDBlock method.
+//
+// Expected format:
+//   # bytes field
+//   8       nSIDs
+// (nSIDs times)
+//   16      SID
+//   8       nIntervals
+// (nIntervals times)
+//   8       start
+//   8       end
+func NewMysql56GTIDSetFromSIDBlock(data []byte) (Mysql56GTIDSet, error) {
+	buf := bytes.NewReader(data)
+	var set Mysql56GTIDSet = make(map[SID][]interval)
+	var nSIDs uint64
+	if err := binary.Read(buf, binary.LittleEndian, &nSIDs); err != nil {
+		return nil, fmt.Errorf("cannot read nSIDs: %v", err)
+	}
+	for i := uint64(0); i < nSIDs; i++ {
+		var sid SID
+		if c, err := buf.Read(sid[:]); err != nil || c != 16 {
+			return nil, fmt.Errorf("cannot read SID %v: %v %v", i, err, c)
+		}
+		var nIntervals uint64
+		if err := binary.Read(buf, binary.LittleEndian, &nIntervals); err != nil {
+			return nil, fmt.Errorf("cannot read nIntervals %v: %v", i, err)
+		}
+		for j := uint64(0); j < nIntervals; j++ {
+			var start, end uint64
+			if err := binary.Read(buf, binary.LittleEndian, &start); err != nil {
+				return nil, fmt.Errorf("cannot read start %v/%v: %v", i, j, err)
+			}
+			if err := binary.Read(buf, binary.LittleEndian, &end); err != nil {
+				return nil, fmt.Errorf("cannot read end %v/%v: %v", i, j, err)
+			}
+			set[sid] = append(set[sid], interval{
+				start: int64(start),
+				end:   int64(end - 1),
+			})
+		}
+	}
+	return set, nil
+}
+
 func init() {
 	gtidSetParsers[mysql56FlavorID] = parseMysql56GTIDSet
 }

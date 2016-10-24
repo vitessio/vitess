@@ -64,18 +64,17 @@ def setUpModule():
     # Start up a master mysql and vttablet
     logging.debug('Setting up tablets')
     utils.run_vtctl(['CreateKeyspace', 'test_keyspace'])
-    master_tablet.init_tablet('master', 'test_keyspace', '0', tablet_index=0)
+    master_tablet.init_tablet('replica', 'test_keyspace', '0', tablet_index=0)
     replica_tablet.init_tablet('replica', 'test_keyspace', '0', tablet_index=1)
     utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'], auto_log=True)
-    utils.validate_topology()
     master_tablet.create_db('vt_test_keyspace')
     replica_tablet.create_db('vt_test_keyspace')
 
     master_tablet.start_vttablet(wait_for_state=None)
     replica_tablet.start_vttablet(wait_for_state=None)
-    master_tablet.wait_for_vttablet_state('SERVING')
+    master_tablet.wait_for_vttablet_state('NOT_SERVING')
     replica_tablet.wait_for_vttablet_state('NOT_SERVING')
-    utils.run_vtctl(['InitShardMaster', 'test_keyspace/0',
+    utils.run_vtctl(['InitShardMaster', '-force', 'test_keyspace/0',
                      master_tablet.tablet_alias], auto_log=True)
 
     utils.wait_for_tablet_type(replica_tablet.tablet_alias, 'replica')
@@ -264,7 +263,7 @@ class InvalidatorThread(threading.Thread):
             self.timestamp)
 
   def invalidate(self, table_name, row_id, token):
-    logging.debug('Invalidating %s(%d):', table_name, row_id)
+    logging.debug('Invalidating %s(%d) - %s:', table_name, row_id, token)
     version, cache_event_token, _ = self.cache.gets(table_name, row_id)
     if version is None:
       logging.debug('  no entry in cache, saving event_token')
