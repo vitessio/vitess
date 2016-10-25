@@ -402,7 +402,8 @@ func (sbc *SandboxConn) UpdateStream(ctx context.Context, target *querypb.Target
 }
 
 // Close does not change ExecCount
-func (sbc *SandboxConn) Close() {
+func (sbc *SandboxConn) Close(ctx context.Context) error {
+	return nil
 }
 
 // Tablet is part of the TabletConn interface.

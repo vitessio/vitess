@@ -107,13 +107,13 @@ type TabletConn interface {
 	Begin(ctx context.Context, target *querypb.Target) (transactionID int64, err error)
 	Commit(ctx context.Context, target *querypb.Target, transactionID int64) error
 	Rollback(ctx context.Context, target *querypb.Target, transactionID int64) error
-	Prepare(ctx context.Context, target *querypb.Target, transactionID int64, dtid string) (err error)
-	CommitPrepared(ctx context.Context, target *querypb.Target, dtid string) (err error)
-	RollbackPrepared(ctx context.Context, target *querypb.Target, dtid string, originalID int64) (err error)
-	CreateTransaction(ctx context.Context, target *querypb.Target, dtid string, participants []*querypb.Target) (err error)
-	StartCommit(ctx context.Context, target *querypb.Target, transactionID int64, dtid string) (err error)
-	SetRollback(ctx context.Context, target *querypb.Target, dtid string, transactionID int64) (err error)
-	ResolveTransaction(ctx context.Context, target *querypb.Target, dtid string) (err error)
+	Prepare(ctx context.Context, target *querypb.Target, transactionID int64, dtid string) error
+	CommitPrepared(ctx context.Context, target *querypb.Target, dtid string) error
+	RollbackPrepared(ctx context.Context, target *querypb.Target, dtid string, originalID int64) error
+	CreateTransaction(ctx context.Context, target *querypb.Target, dtid string, participants []*querypb.Target) error
+	StartCommit(ctx context.Context, target *querypb.Target, transactionID int64, dtid string) error
+	SetRollback(ctx context.Context, target *querypb.Target, dtid string, transactionID int64) error
+	ResolveTransaction(ctx context.Context, target *querypb.Target, dtid string) error
 	ReadTransaction(ctx context.Context, target *querypb.Target, dtid string) (metadata *querypb.TransactionMetadata, err error)
 
 	// Combo RPC calls: they execute both a Begin and another call.
@@ -121,12 +121,6 @@ type TabletConn interface {
 	// and different than zero, if the Begin part worked.
 	BeginExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]interface{}, options *querypb.ExecuteOptions) (result *sqltypes.Result, transactionID int64, err error)
 	BeginExecuteBatch(ctx context.Context, target *querypb.Target, queries []querytypes.BoundQuery, asTransaction bool, options *querypb.ExecuteOptions) (results []sqltypes.Result, transactionID int64, err error)
-
-	// Close must be called for releasing resources.
-	Close()
-
-	// Tablet returns the tablet info.
-	Tablet() *topodatapb.Tablet
 
 	// SplitQuery splits a query into equally sized smaller queries by
 	// appending primary key range clauses to the original query
@@ -153,6 +147,9 @@ type TabletConn interface {
 	// send the request. Otherwise, you can pull values from the
 	// StreamEventReader until io.EOF, or any other error.
 	UpdateStream(ctx context.Context, target *querypb.Target, position string, timestamp int64) (StreamEventReader, error)
+
+	// Close must be called for releasing resources.
+	Close(ctx context.Context) error
 }
 
 var dialers = make(map[string]TabletDialer)

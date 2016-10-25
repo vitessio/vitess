@@ -266,7 +266,8 @@ func (ftc *fakeTabletConn) UpdateStream(ctx context.Context, target *querypb.Tar
 }
 
 // Close is part of the TabletConn interface
-func (ftc *fakeTabletConn) Close() {
+func (ftc *fakeTabletConn) Close(ctx context.Context) error {
+	return nil
 }
 
 // Tablet is part of the TabletConn interface

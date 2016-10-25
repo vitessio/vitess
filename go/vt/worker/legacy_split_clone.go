@@ -570,7 +570,7 @@ func (scw *LegacySplitCloneWorker) copy(ctx context.Context) error {
 						processError("NewRestartableResultReader failed: %v", err)
 						return
 					}
-					defer rr.Close()
+					defer rr.Close(ctx)
 
 					// process the data
 					dbNames := make([]string, len(scw.destinationShards))

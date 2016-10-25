@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
@@ -129,7 +130,12 @@ func TestFakeBuffer(t *testing.T) {
 			tabletType = topodatapb.TabletType_MASTER
 		}
 
-		gotErr := FakeBuffer(test.keyspace, test.shard, tabletType, test.inTransaction, test.attemptNumber)
+		target := &querypb.Target{
+			Keyspace:   test.keyspace,
+			Shard:      test.shard,
+			TabletType: tabletType,
+		}
+		gotErr := FakeBuffer(target, test.inTransaction, test.attemptNumber)
 
 		if gotErr != test.wantErr {
 			t.Errorf("With %v, FakeBuffer() => %v; want: %v", test.desc, gotErr, test.wantErr)
@@ -191,7 +197,12 @@ func TestParallelFakeBuffer(t *testing.T) {
 		var gotErr error
 		go func() {
 			defer wg.Done()
-			gotErr = FakeBuffer(*bufferKeyspace, *bufferShard, topodatapb.TabletType_MASTER, false, 0)
+			target := &querypb.Target{
+				Keyspace:   *bufferKeyspace,
+				Shard:      *bufferShard,
+				TabletType: topodatapb.TabletType_MASTER,
+			}
+			gotErr = FakeBuffer(target, false, 0)
 			close(finished)
 		}()
 

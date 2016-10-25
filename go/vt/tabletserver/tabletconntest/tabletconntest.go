@@ -952,5 +952,5 @@ func TestSuite(t *testing.T, protocol string, tablet *topodatapb.Tablet, fake *F
 	}
 
 	// and we're done
-	conn.Close()
+	conn.Close(context.Background())
 }

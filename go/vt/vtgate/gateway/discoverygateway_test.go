@@ -12,71 +12,72 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vterrors"
 
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 func TestDiscoveryGatewayExecute(t *testing.T) {
-	testDiscoveryGatewayGeneric(t, false, func(dg Gateway, keyspace, shard string, tabletType topodatapb.TabletType) error {
-		_, err := dg.Execute(context.Background(), keyspace, shard, tabletType, "query", nil, 0, nil)
+	testDiscoveryGatewayGeneric(t, false, func(dg Gateway, target *querypb.Target) error {
+		_, err := dg.Execute(context.Background(), target, "query", nil, 0, nil)
 		return err
 	})
-	testDiscoveryGatewayTransact(t, false, func(dg Gateway, keyspace, shard string, tabletType topodatapb.TabletType) error {
-		_, err := dg.Execute(context.Background(), keyspace, shard, tabletType, "query", nil, 1, nil)
+	testDiscoveryGatewayTransact(t, false, func(dg Gateway, target *querypb.Target) error {
+		_, err := dg.Execute(context.Background(), target, "query", nil, 1, nil)
 		return err
 	})
 }
 
 func TestDiscoveryGatewayExecuteBatch(t *testing.T) {
-	testDiscoveryGatewayGeneric(t, false, func(dg Gateway, keyspace, shard string, tabletType topodatapb.TabletType) error {
+	testDiscoveryGatewayGeneric(t, false, func(dg Gateway, target *querypb.Target) error {
 		queries := []querytypes.BoundQuery{{Sql: "query", BindVariables: nil}}
-		_, err := dg.ExecuteBatch(context.Background(), keyspace, shard, tabletType, queries, false, 0, nil)
+		_, err := dg.ExecuteBatch(context.Background(), target, queries, false, 0, nil)
 		return err
 	})
-	testDiscoveryGatewayTransact(t, false, func(dg Gateway, keyspace, shard string, tabletType topodatapb.TabletType) error {
+	testDiscoveryGatewayTransact(t, false, func(dg Gateway, target *querypb.Target) error {
 		queries := []querytypes.BoundQuery{{Sql: "query", BindVariables: nil}}
-		_, err := dg.ExecuteBatch(context.Background(), keyspace, shard, tabletType, queries, false, 1, nil)
+		_, err := dg.ExecuteBatch(context.Background(), target, queries, false, 1, nil)
 		return err
 	})
 }
 
 func TestDiscoveryGatewayExecuteStream(t *testing.T) {
-	testDiscoveryGatewayGeneric(t, true, func(dg Gateway, keyspace, shard string, tabletType topodatapb.TabletType) error {
-		_, err := dg.StreamExecute(context.Background(), keyspace, shard, tabletType, "query", nil, nil)
+	testDiscoveryGatewayGeneric(t, true, func(dg Gateway, target *querypb.Target) error {
+		_, err := dg.StreamExecute(context.Background(), target, "query", nil, nil)
 		return err
 	})
 }
 
 func TestDiscoveryGatewayBegin(t *testing.T) {
-	testDiscoveryGatewayGeneric(t, false, func(dg Gateway, keyspace, shard string, tabletType topodatapb.TabletType) error {
-		_, err := dg.Begin(context.Background(), keyspace, shard, tabletType)
+	testDiscoveryGatewayGeneric(t, false, func(dg Gateway, target *querypb.Target) error {
+		_, err := dg.Begin(context.Background(), target)
 		return err
 	})
 }
 
 func TestDiscoveryGatewayCommit(t *testing.T) {
-	testDiscoveryGatewayTransact(t, false, func(dg Gateway, keyspace, shard string, tabletType topodatapb.TabletType) error {
-		return dg.Commit(context.Background(), keyspace, shard, tabletType, 1)
+	testDiscoveryGatewayTransact(t, false, func(dg Gateway, target *querypb.Target) error {
+		return dg.Commit(context.Background(), target, 1)
 	})
 }
 
 func TestDiscoveryGatewayRollback(t *testing.T) {
-	testDiscoveryGatewayTransact(t, false, func(dg Gateway, keyspace, shard string, tabletType topodatapb.TabletType) error {
-		return dg.Rollback(context.Background(), keyspace, shard, tabletType, 1)
+	testDiscoveryGatewayTransact(t, false, func(dg Gateway, target *querypb.Target) error {
+		return dg.Rollback(context.Background(), target, 1)
 	})
 }
 
 func TestDiscoveryGatewayBeginExecute(t *testing.T) {
-	testDiscoveryGatewayGeneric(t, false, func(dg Gateway, keyspace, shard string, tabletType topodatapb.TabletType) error {
-		_, _, err := dg.BeginExecute(context.Background(), keyspace, shard, tabletType, "query", nil, nil)
+	testDiscoveryGatewayGeneric(t, false, func(dg Gateway, target *querypb.Target) error {
+		_, _, err := dg.BeginExecute(context.Background(), target, "query", nil, nil)
 		return err
 	})
 }
 
 func TestDiscoveryGatewayBeginExecuteBatch(t *testing.T) {
-	testDiscoveryGatewayGeneric(t, false, func(dg Gateway, keyspace, shard string, tabletType topodatapb.TabletType) error {
+	testDiscoveryGatewayGeneric(t, false, func(dg Gateway, target *querypb.Target) error {
 		queries := []querytypes.BoundQuery{{Sql: "query", BindVariables: nil}}
-		_, _, err := dg.BeginExecuteBatch(context.Background(), keyspace, shard, tabletType, queries, false, nil)
+		_, _, err := dg.BeginExecuteBatch(context.Background(), target, queries, false, nil)
 		return err
 	})
 }
@@ -108,10 +109,15 @@ func TestDiscoveryGatewayGetTablets(t *testing.T) {
 	}
 }
 
-func testDiscoveryGatewayGeneric(t *testing.T, streaming bool, f func(dg Gateway, keyspace, shard string, tabletType topodatapb.TabletType) error) {
+func testDiscoveryGatewayGeneric(t *testing.T, streaming bool, f func(dg Gateway, target *querypb.Target) error) {
 	keyspace := "ks"
 	shard := "0"
 	tabletType := topodatapb.TabletType_REPLICA
+	target := &querypb.Target{
+		Keyspace:   keyspace,
+		Shard:      shard,
+		TabletType: tabletType,
+	}
 	hc := discovery.NewFakeHealthCheck()
 	dg := createDiscoveryGateway(hc, topo.Server{}, nil, "cell", 2).(*discoveryGateway)
 
@@ -119,7 +125,7 @@ func testDiscoveryGatewayGeneric(t *testing.T, streaming bool, f func(dg Gateway
 	hc.Reset()
 	dg.tsc.ResetForTesting()
 	want := "shard, host: ks.0.replica, no valid tablet"
-	err := f(dg, keyspace, shard, tabletType)
+	err := f(dg, target)
 	verifyShardError(t, err, want, vtrpcpb.ErrorCode_INTERNAL_ERROR)
 
 	// tablet with error
@@ -127,7 +133,7 @@ func testDiscoveryGatewayGeneric(t *testing.T, streaming bool, f func(dg Gateway
 	dg.tsc.ResetForTesting()
 	hc.AddTestTablet("cell", "1.1.1.1", 1001, keyspace, shard, tabletType, false, 10, fmt.Errorf("no connection"))
 	want = "shard, host: ks.0.replica, no valid tablet"
-	err = f(dg, keyspace, shard, tabletType)
+	err = f(dg, target)
 	verifyShardError(t, err, want, vtrpcpb.ErrorCode_INTERNAL_ERROR)
 
 	// tablet without connection
@@ -135,7 +141,7 @@ func testDiscoveryGatewayGeneric(t *testing.T, streaming bool, f func(dg Gateway
 	dg.tsc.ResetForTesting()
 	ep1 := hc.AddTestTablet("cell", "1.1.1.1", 1001, keyspace, shard, tabletType, false, 10, nil).Tablet()
 	want = fmt.Sprintf(`shard, host: ks.0.replica, no valid tablet`)
-	err = f(dg, keyspace, shard, tabletType)
+	err = f(dg, target)
 	verifyShardError(t, err, want, vtrpcpb.ErrorCode_INTERNAL_ERROR)
 
 	// retry error
@@ -151,7 +157,7 @@ func testDiscoveryGatewayGeneric(t *testing.T, streaming bool, f func(dg Gateway
 		fmt.Sprintf(`shard, host: ks.0.replica, %+v, retry: err`, ep1): 0,
 		fmt.Sprintf(`shard, host: ks.0.replica, %+v, retry: err`, ep2): 0,
 	}
-	err = f(dg, keyspace, shard, tabletType)
+	err = f(dg, target)
 	if _, ok := wants[fmt.Sprintf("%v", err)]; !ok {
 		t.Errorf("wanted error: %+v, got error: %v", wants, err)
 	}
@@ -169,7 +175,7 @@ func testDiscoveryGatewayGeneric(t *testing.T, streaming bool, f func(dg Gateway
 		fmt.Sprintf(`shard, host: ks.0.replica, %+v, fatal: err`, ep1): 0,
 		fmt.Sprintf(`shard, host: ks.0.replica, %+v, fatal: err`, ep2): 0,
 	}
-	err = f(dg, keyspace, shard, tabletType)
+	err = f(dg, target)
 	if _, ok := wants[fmt.Sprintf("%v", err)]; !ok {
 		t.Errorf("wanted error: %+v, got error: %v", wants, err)
 	}
@@ -181,7 +187,7 @@ func testDiscoveryGatewayGeneric(t *testing.T, streaming bool, f func(dg Gateway
 	sc1.MustFailServer = 1
 	ep1 = sc1.Tablet()
 	want = fmt.Sprintf(`shard, host: ks.0.replica, %+v, error: err`, ep1)
-	err = f(dg, keyspace, shard, tabletType)
+	err = f(dg, target)
 	verifyShardError(t, err, want, vtrpcpb.ErrorCode_BAD_INPUT)
 
 	// conn error - no retry
@@ -191,23 +197,28 @@ func testDiscoveryGatewayGeneric(t *testing.T, streaming bool, f func(dg Gateway
 	sc1.MustFailConn = 1
 	ep1 = sc1.Tablet()
 	want = fmt.Sprintf(`shard, host: ks.0.replica, %+v, error: conn`, ep1)
-	err = f(dg, keyspace, shard, tabletType)
+	err = f(dg, target)
 	verifyShardError(t, err, want, vtrpcpb.ErrorCode_UNKNOWN_ERROR)
 
 	// no failure
 	hc.Reset()
 	dg.tsc.ResetForTesting()
 	hc.AddTestTablet("cell", "1.1.1.1", 1001, keyspace, shard, tabletType, true, 10, nil)
-	err = f(dg, keyspace, shard, tabletType)
+	err = f(dg, target)
 	if err != nil {
 		t.Errorf("want nil, got %v", err)
 	}
 }
 
-func testDiscoveryGatewayTransact(t *testing.T, streaming bool, f func(dg Gateway, keyspace, shard string, tabletType topodatapb.TabletType) error) {
+func testDiscoveryGatewayTransact(t *testing.T, streaming bool, f func(dg Gateway, target *querypb.Target) error) {
 	keyspace := "ks"
 	shard := "0"
 	tabletType := topodatapb.TabletType_REPLICA
+	target := &querypb.Target{
+		Keyspace:   keyspace,
+		Shard:      shard,
+		TabletType: tabletType,
+	}
 	hc := discovery.NewFakeHealthCheck()
 	dg := createDiscoveryGateway(hc, topo.Server{}, nil, "cell", 2).(*discoveryGateway)
 
@@ -224,7 +235,7 @@ func testDiscoveryGatewayTransact(t *testing.T, streaming bool, f func(dg Gatewa
 		fmt.Sprintf(`shard, host: ks.0.replica, %+v, retry: err`, ep1): 0,
 		fmt.Sprintf(`shard, host: ks.0.replica, %+v, retry: err`, ep2): 0,
 	}
-	err := f(dg, keyspace, shard, tabletType)
+	err := f(dg, target)
 	if _, ok := wants[fmt.Sprintf("%v", err)]; !ok {
 		t.Errorf("wanted error: %+v, got error: %v", wants, err)
 	}
@@ -236,7 +247,7 @@ func testDiscoveryGatewayTransact(t *testing.T, streaming bool, f func(dg Gatewa
 	sc1.MustFailConn = 1
 	ep1 = sc1.Tablet()
 	want := fmt.Sprintf(`shard, host: ks.0.replica, %+v, error: conn`, ep1)
-	err = f(dg, keyspace, shard, tabletType)
+	err = f(dg, target)
 	verifyShardError(t, err, want, vtrpcpb.ErrorCode_UNKNOWN_ERROR)
 }
 

@@ -295,7 +295,7 @@ func (hc *HealthCheckImpl) servingConnStats() map[string]int64 {
 func (hc *HealthCheckImpl) finalizeConn(hcc *healthCheckConn) {
 	hcc.mu.Lock()
 	if hcc.conn != nil {
-		hcc.conn.Close()
+		hcc.conn.Close(hcc.ctx)
 		hcc.conn = nil
 	}
 	hcc.tabletStats.Up = false
@@ -370,7 +370,7 @@ func (hc *HealthCheckImpl) checkConn(hcc *healthCheckConn, name string) {
 				hcErrorCounters.Add([]string{ts.Target.Keyspace, ts.Target.Shard, topoproto.TabletTypeLString(ts.Target.TabletType)}, 1)
 				if reconnect {
 					hcc.mu.Lock()
-					hcc.conn.Close()
+					hcc.conn.Close(hcc.ctx)
 					hcc.conn = nil
 					hcc.tabletStats.Target = &querypb.Target{}
 					hcc.mu.Unlock()
@@ -397,7 +397,7 @@ func (hcc *healthCheckConn) connect(hc *HealthCheckImpl) (tabletconn.StreamHealt
 	}
 	stream, err := conn.StreamHealth(hcc.ctx)
 	if err != nil {
-		conn.Close()
+		conn.Close(hcc.ctx)
 		return nil, err
 	}
 	hcc.mu.Lock()

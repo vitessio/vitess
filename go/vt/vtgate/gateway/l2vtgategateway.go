@@ -140,33 +140,33 @@ func (lg *l2VTGateGateway) WaitForTablets(ctx context.Context, tabletTypesToWait
 }
 
 // Execute executes the non-streaming query for the specified keyspace, shard, and tablet type.
-func (lg *l2VTGateGateway) Execute(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, query string, bindVars map[string]interface{}, transactionID int64, options *querypb.ExecuteOptions) (qr *sqltypes.Result, err error) {
-	err = lg.withRetry(ctx, keyspace, shard, tabletType, func(conn *l2VTGateConn, target *querypb.Target) error {
+func (lg *l2VTGateGateway) Execute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]interface{}, transactionID int64, options *querypb.ExecuteOptions) (qr *sqltypes.Result, err error) {
+	err = lg.withRetry(ctx, target, func(conn *l2VTGateConn) error {
 		var innerErr error
 		startTime := time.Now()
 		qr, innerErr = conn.conn.Execute(ctx, target, query, bindVars, transactionID, options)
-		lg.updateStats(conn, tabletType, startTime, innerErr)
+		lg.updateStats(conn, target.TabletType, startTime, innerErr)
 		return innerErr
 	}, transactionID != 0, false)
 	return qr, err
 }
 
 // ExecuteBatch executes a group of queries for the specified keyspace, shard, and tablet type.
-func (lg *l2VTGateGateway) ExecuteBatch(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, queries []querytypes.BoundQuery, asTransaction bool, transactionID int64, options *querypb.ExecuteOptions) (qrs []sqltypes.Result, err error) {
-	err = lg.withRetry(ctx, keyspace, shard, tabletType, func(conn *l2VTGateConn, target *querypb.Target) error {
+func (lg *l2VTGateGateway) ExecuteBatch(ctx context.Context, target *querypb.Target, queries []querytypes.BoundQuery, asTransaction bool, transactionID int64, options *querypb.ExecuteOptions) (qrs []sqltypes.Result, err error) {
+	err = lg.withRetry(ctx, target, func(conn *l2VTGateConn) error {
 		var innerErr error
 		startTime := time.Now()
 		qrs, innerErr = conn.conn.ExecuteBatch(ctx, target, queries, asTransaction, transactionID, options)
-		lg.updateStats(conn, tabletType, startTime, innerErr)
+		lg.updateStats(conn, target.TabletType, startTime, innerErr)
 		return innerErr
 	}, transactionID != 0, false)
 	return qrs, err
 }
 
 // StreamExecute executes a streaming query for the specified keyspace, shard, and tablet type.
-func (lg *l2VTGateGateway) StreamExecute(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, query string, bindVars map[string]interface{}, options *querypb.ExecuteOptions) (sqltypes.ResultStream, error) {
+func (lg *l2VTGateGateway) StreamExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]interface{}, options *querypb.ExecuteOptions) (sqltypes.ResultStream, error) {
 	var stream sqltypes.ResultStream
-	err := lg.withRetry(ctx, keyspace, shard, tabletType, func(conn *l2VTGateConn, target *querypb.Target) error {
+	err := lg.withRetry(ctx, target, func(conn *l2VTGateConn) error {
 		var err error
 		stream, err = conn.conn.StreamExecute(ctx, target, query, bindVars, options)
 		return err
@@ -179,114 +179,114 @@ func (lg *l2VTGateGateway) StreamExecute(ctx context.Context, keyspace, shard st
 
 // Begin starts a transaction for the specified keyspace, shard, and tablet type.
 // It returns the transaction ID.
-func (lg *l2VTGateGateway) Begin(ctx context.Context, keyspace string, shard string, tabletType topodatapb.TabletType) (transactionID int64, err error) {
-	err = lg.withRetry(ctx, keyspace, shard, tabletType, func(conn *l2VTGateConn, target *querypb.Target) error {
+func (lg *l2VTGateGateway) Begin(ctx context.Context, target *querypb.Target) (transactionID int64, err error) {
+	err = lg.withRetry(ctx, target, func(conn *l2VTGateConn) error {
 		var innerErr error
 		startTime := time.Now()
 		transactionID, innerErr = conn.conn.Begin(ctx, target)
-		lg.updateStats(conn, tabletType, startTime, innerErr)
+		lg.updateStats(conn, target.TabletType, startTime, innerErr)
 		return innerErr
 	}, false, false)
 	return transactionID, err
 }
 
 // Commit commits the current transaction for the specified keyspace, shard, and tablet type.
-func (lg *l2VTGateGateway) Commit(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, transactionID int64) error {
-	return lg.withRetry(ctx, keyspace, shard, tabletType, func(conn *l2VTGateConn, target *querypb.Target) error {
+func (lg *l2VTGateGateway) Commit(ctx context.Context, target *querypb.Target, transactionID int64) error {
+	return lg.withRetry(ctx, target, func(conn *l2VTGateConn) error {
 		startTime := time.Now()
 		innerErr := conn.conn.Commit(ctx, target, transactionID)
-		lg.updateStats(conn, tabletType, startTime, innerErr)
+		lg.updateStats(conn, target.TabletType, startTime, innerErr)
 		return innerErr
 	}, true, false)
 }
 
 // Rollback rolls back the current transaction for the specified keyspace, shard, and tablet type.
-func (lg *l2VTGateGateway) Rollback(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, transactionID int64) error {
-	return lg.withRetry(ctx, keyspace, shard, tabletType, func(conn *l2VTGateConn, target *querypb.Target) error {
+func (lg *l2VTGateGateway) Rollback(ctx context.Context, target *querypb.Target, transactionID int64) error {
+	return lg.withRetry(ctx, target, func(conn *l2VTGateConn) error {
 		startTime := time.Now()
 		innerErr := conn.conn.Rollback(ctx, target, transactionID)
-		lg.updateStats(conn, tabletType, startTime, innerErr)
+		lg.updateStats(conn, target.TabletType, startTime, innerErr)
 		return innerErr
 	}, true, false)
 }
 
 // Prepare rolls back the current transaction for the specified keyspace, shard, and tablet type.
-func (lg *l2VTGateGateway) Prepare(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, transactionID int64, dtid string) error {
-	return lg.withRetry(ctx, keyspace, shard, tabletType, func(conn *l2VTGateConn, target *querypb.Target) error {
+func (lg *l2VTGateGateway) Prepare(ctx context.Context, target *querypb.Target, transactionID int64, dtid string) error {
+	return lg.withRetry(ctx, target, func(conn *l2VTGateConn) error {
 		startTime := time.Now()
 		innerErr := conn.conn.Prepare(ctx, target, transactionID, dtid)
-		lg.updateStats(conn, tabletType, startTime, innerErr)
+		lg.updateStats(conn, target.TabletType, startTime, innerErr)
 		return innerErr
 	}, true, false)
 }
 
 // CommitPrepared rolls back the current transaction for the specified keyspace, shard, and tablet type.
-func (lg *l2VTGateGateway) CommitPrepared(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, dtid string) (err error) {
-	return lg.withRetry(ctx, keyspace, shard, tabletType, func(conn *l2VTGateConn, target *querypb.Target) error {
+func (lg *l2VTGateGateway) CommitPrepared(ctx context.Context, target *querypb.Target, dtid string) (err error) {
+	return lg.withRetry(ctx, target, func(conn *l2VTGateConn) error {
 		startTime := time.Now()
 		innerErr := conn.conn.CommitPrepared(ctx, target, dtid)
-		lg.updateStats(conn, tabletType, startTime, innerErr)
+		lg.updateStats(conn, target.TabletType, startTime, innerErr)
 		return innerErr
 	}, true, false)
 }
 
 // RollbackPrepared rolls back the current transaction for the specified keyspace, shard, and tablet type.
-func (lg *l2VTGateGateway) RollbackPrepared(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, dtid string, originalID int64) (err error) {
-	return lg.withRetry(ctx, keyspace, shard, tabletType, func(conn *l2VTGateConn, target *querypb.Target) error {
+func (lg *l2VTGateGateway) RollbackPrepared(ctx context.Context, target *querypb.Target, dtid string, originalID int64) (err error) {
+	return lg.withRetry(ctx, target, func(conn *l2VTGateConn) error {
 		startTime := time.Now()
 		innerErr := conn.conn.RollbackPrepared(ctx, target, dtid, originalID)
-		lg.updateStats(conn, tabletType, startTime, innerErr)
+		lg.updateStats(conn, target.TabletType, startTime, innerErr)
 		return innerErr
 	}, true, false)
 }
 
 // CreateTransaction rolls back the current transaction for the specified keyspace, shard, and tablet type.
-func (lg *l2VTGateGateway) CreateTransaction(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, dtid string, participants []*querypb.Target) (err error) {
-	return lg.withRetry(ctx, keyspace, shard, tabletType, func(conn *l2VTGateConn, target *querypb.Target) error {
+func (lg *l2VTGateGateway) CreateTransaction(ctx context.Context, target *querypb.Target, dtid string, participants []*querypb.Target) (err error) {
+	return lg.withRetry(ctx, target, func(conn *l2VTGateConn) error {
 		startTime := time.Now()
 		innerErr := conn.conn.CreateTransaction(ctx, target, dtid, participants)
-		lg.updateStats(conn, tabletType, startTime, innerErr)
+		lg.updateStats(conn, target.TabletType, startTime, innerErr)
 		return innerErr
 	}, true, false)
 }
 
 // StartCommit rolls back the current transaction for the specified keyspace, shard, and tablet type.
-func (lg *l2VTGateGateway) StartCommit(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, transactionID int64, dtid string) (err error) {
-	return lg.withRetry(ctx, keyspace, shard, tabletType, func(conn *l2VTGateConn, target *querypb.Target) error {
+func (lg *l2VTGateGateway) StartCommit(ctx context.Context, target *querypb.Target, transactionID int64, dtid string) (err error) {
+	return lg.withRetry(ctx, target, func(conn *l2VTGateConn) error {
 		startTime := time.Now()
 		innerErr := conn.conn.StartCommit(ctx, target, transactionID, dtid)
-		lg.updateStats(conn, tabletType, startTime, innerErr)
+		lg.updateStats(conn, target.TabletType, startTime, innerErr)
 		return innerErr
 	}, true, false)
 }
 
 // SetRollback rolls back the current transaction for the specified keyspace, shard, and tablet type.
-func (lg *l2VTGateGateway) SetRollback(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, dtid string, transactionID int64) (err error) {
-	return lg.withRetry(ctx, keyspace, shard, tabletType, func(conn *l2VTGateConn, target *querypb.Target) error {
+func (lg *l2VTGateGateway) SetRollback(ctx context.Context, target *querypb.Target, dtid string, transactionID int64) (err error) {
+	return lg.withRetry(ctx, target, func(conn *l2VTGateConn) error {
 		startTime := time.Now()
 		innerErr := conn.conn.SetRollback(ctx, target, dtid, transactionID)
-		lg.updateStats(conn, tabletType, startTime, innerErr)
+		lg.updateStats(conn, target.TabletType, startTime, innerErr)
 		return innerErr
 	}, true, false)
 }
 
 // ResolveTransaction rolls back the current transaction for the specified keyspace, shard, and tablet type.
-func (lg *l2VTGateGateway) ResolveTransaction(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, dtid string) (err error) {
-	return lg.withRetry(ctx, keyspace, shard, tabletType, func(conn *l2VTGateConn, target *querypb.Target) error {
+func (lg *l2VTGateGateway) ResolveTransaction(ctx context.Context, target *querypb.Target, dtid string) (err error) {
+	return lg.withRetry(ctx, target, func(conn *l2VTGateConn) error {
 		startTime := time.Now()
 		innerErr := conn.conn.ResolveTransaction(ctx, target, dtid)
-		lg.updateStats(conn, tabletType, startTime, innerErr)
+		lg.updateStats(conn, target.TabletType, startTime, innerErr)
 		return innerErr
 	}, true, false)
 }
 
 // ReadTransaction rolls back the current transaction for the specified keyspace, shard, and tablet type.
-func (lg *l2VTGateGateway) ReadTransaction(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, dtid string) (metadata *querypb.TransactionMetadata, err error) {
-	err = lg.withRetry(ctx, keyspace, shard, tabletType, func(conn *l2VTGateConn, target *querypb.Target) error {
+func (lg *l2VTGateGateway) ReadTransaction(ctx context.Context, target *querypb.Target, dtid string) (metadata *querypb.TransactionMetadata, err error) {
+	err = lg.withRetry(ctx, target, func(conn *l2VTGateConn) error {
 		startTime := time.Now()
 		var innerErr error
 		metadata, innerErr = conn.conn.ReadTransaction(ctx, target, dtid)
-		lg.updateStats(conn, tabletType, startTime, innerErr)
+		lg.updateStats(conn, target.TabletType, startTime, innerErr)
 		return innerErr
 	}, false, false)
 	return metadata, err
@@ -294,12 +294,12 @@ func (lg *l2VTGateGateway) ReadTransaction(ctx context.Context, keyspace, shard 
 
 // BeginExecute executes a begin and the non-streaming query for the
 // specified keyspace, shard, and tablet type.
-func (lg *l2VTGateGateway) BeginExecute(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, query string, bindVars map[string]interface{}, options *querypb.ExecuteOptions) (qr *sqltypes.Result, transactionID int64, err error) {
-	err = lg.withRetry(ctx, keyspace, shard, tabletType, func(conn *l2VTGateConn, target *querypb.Target) error {
+func (lg *l2VTGateGateway) BeginExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]interface{}, options *querypb.ExecuteOptions) (qr *sqltypes.Result, transactionID int64, err error) {
+	err = lg.withRetry(ctx, target, func(conn *l2VTGateConn) error {
 		var innerErr error
 		startTime := time.Now()
 		qr, transactionID, innerErr = conn.conn.BeginExecute(ctx, target, query, bindVars, options)
-		lg.updateStats(conn, tabletType, startTime, innerErr)
+		lg.updateStats(conn, target.TabletType, startTime, innerErr)
 		return innerErr
 	}, false, false)
 	return qr, transactionID, err
@@ -307,27 +307,24 @@ func (lg *l2VTGateGateway) BeginExecute(ctx context.Context, keyspace, shard str
 
 // BeginExecuteBatch executes a begin and a group of queries for the
 // specified keyspace, shard, and tablet type.
-func (lg *l2VTGateGateway) BeginExecuteBatch(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, queries []querytypes.BoundQuery, asTransaction bool, options *querypb.ExecuteOptions) (qrs []sqltypes.Result, transactionID int64, err error) {
-	err = lg.withRetry(ctx, keyspace, shard, tabletType, func(conn *l2VTGateConn, target *querypb.Target) error {
+func (lg *l2VTGateGateway) BeginExecuteBatch(ctx context.Context, target *querypb.Target, queries []querytypes.BoundQuery, asTransaction bool, options *querypb.ExecuteOptions) (qrs []sqltypes.Result, transactionID int64, err error) {
+	err = lg.withRetry(ctx, target, func(conn *l2VTGateConn) error {
 		var innerErr error
 		startTime := time.Now()
 		qrs, transactionID, innerErr = conn.conn.BeginExecuteBatch(ctx, target, queries, asTransaction, options)
-		lg.updateStats(conn, tabletType, startTime, innerErr)
+		lg.updateStats(conn, target.TabletType, startTime, innerErr)
 		return innerErr
 	}, false, false)
 	return qrs, transactionID, err
 }
 
 // SplitQuery splits a query into sub-queries for the specified keyspace, shard, and tablet type.
-func (lg *l2VTGateGateway) SplitQuery(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int64) (queries []querytypes.QuerySplit, err error) {
-	err = lg.withRetry(ctx, keyspace, shard, tabletType, func(conn *l2VTGateConn, target *querypb.Target) error {
+func (lg *l2VTGateGateway) SplitQuery(ctx context.Context, target *querypb.Target, query querytypes.BoundQuery, splitColumn string, splitCount int64) (queries []querytypes.QuerySplit, err error) {
+	err = lg.withRetry(ctx, target, func(conn *l2VTGateConn) error {
 		var innerErr error
 		startTime := time.Now()
-		queries, innerErr = conn.conn.SplitQuery(ctx, target, querytypes.BoundQuery{
-			Sql:           sql,
-			BindVariables: bindVariables,
-		}, splitColumn, splitCount)
-		lg.updateStats(conn, tabletType, startTime, innerErr)
+		queries, innerErr = conn.conn.SplitQuery(ctx, target, query, splitColumn, splitCount)
+		lg.updateStats(conn, target.TabletType, startTime, innerErr)
 		return innerErr
 	}, false, false)
 	return
@@ -337,33 +334,27 @@ func (lg *l2VTGateGateway) SplitQuery(ctx context.Context, keyspace, shard strin
 // TODO(erez): Rename to SplitQuery after migration to SplitQuery V2.
 func (lg *l2VTGateGateway) SplitQueryV2(
 	ctx context.Context,
-	keyspace,
-	shard string,
-	tabletType topodatapb.TabletType,
-	sql string,
-	bindVariables map[string]interface{},
+	target *querypb.Target,
+	query querytypes.BoundQuery,
 	splitColumns []string,
 	splitCount int64,
 	numRowsPerQueryPart int64,
 	algorithm querypb.SplitQueryRequest_Algorithm) (queries []querytypes.QuerySplit, err error) {
 
-	err = lg.withRetry(ctx, keyspace, shard, tabletType, func(conn *l2VTGateConn, target *querypb.Target) error {
+	err = lg.withRetry(ctx, target, func(conn *l2VTGateConn) error {
 		var innerErr error
 		startTime := time.Now()
-		queries, innerErr = conn.conn.SplitQueryV2(ctx, target, querytypes.BoundQuery{
-			Sql:           sql,
-			BindVariables: bindVariables,
-		}, splitColumns, splitCount, numRowsPerQueryPart, algorithm)
-		lg.updateStats(conn, tabletType, startTime, innerErr)
+		queries, innerErr = conn.conn.SplitQueryV2(ctx, target, query, splitColumns, splitCount, numRowsPerQueryPart, algorithm)
+		lg.updateStats(conn, target.TabletType, startTime, innerErr)
 		return innerErr
 	}, false, false)
 	return
 }
 
 // UpdateStream request an update stream for the specified keyspace, shard, and tablet type.
-func (lg *l2VTGateGateway) UpdateStream(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, position string, timestamp int64) (tabletconn.StreamEventReader, error) {
+func (lg *l2VTGateGateway) UpdateStream(ctx context.Context, target *querypb.Target, position string, timestamp int64) (tabletconn.StreamEventReader, error) {
 	var stream tabletconn.StreamEventReader
-	err := lg.withRetry(ctx, keyspace, shard, tabletType, func(conn *l2VTGateConn, target *querypb.Target) error {
+	err := lg.withRetry(ctx, target, func(conn *l2VTGateConn) error {
 		var err error
 		stream, err = conn.conn.UpdateStream(ctx, target, position, timestamp)
 		return err
@@ -374,6 +365,12 @@ func (lg *l2VTGateGateway) UpdateStream(ctx context.Context, keyspace, shard str
 	return stream, nil
 }
 
+// StreamHealth is currently not implemented.
+// TODO(alainjobart): Maybe we should?
+func (lg *l2VTGateGateway) StreamHealth(ctx context.Context) (tabletconn.StreamHealthReader, error) {
+	panic("not implemented")
+}
+
 // Close shuts down underlying connections.
 func (lg *l2VTGateGateway) Close(ctx context.Context) error {
 	lg.mu.Lock()
@@ -381,7 +378,7 @@ func (lg *l2VTGateGateway) Close(ctx context.Context) error {
 
 	// This will wait for all on-going queries before returning.
 	for _, c := range lg.tabletConnMap {
-		c.Close()
+		c.Close(ctx)
 	}
 	lg.tabletConnMap = make(map[string]tabletconn.TabletConn)
 	lg.connMap = make(map[string][]*l2VTGateConn)
@@ -431,25 +428,20 @@ func (lg *l2VTGateGateway) getConn(keyspace, shard string) (*l2VTGateConn, error
 // the middle of a transaction. While returning the error check if it maybe a result of
 // a resharding event, and set the re-resolve bit and let the upper layers
 // re-resolve and retry.
-func (lg *l2VTGateGateway) withRetry(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, action func(conn *l2VTGateConn, target *querypb.Target) error, inTransaction, isStreaming bool) error {
-	conn, err := lg.getConn(keyspace, shard)
+func (lg *l2VTGateGateway) withRetry(ctx context.Context, target *querypb.Target, action func(conn *l2VTGateConn) error, inTransaction, isStreaming bool) error {
+	conn, err := lg.getConn(target.Keyspace, target.Shard)
 	if err != nil {
-		return fmt.Errorf("no configured destination for %v/%v: %v", keyspace, shard, err)
-	}
-	target := &querypb.Target{
-		Keyspace:   keyspace,
-		Shard:      shard,
-		TabletType: tabletType,
+		return fmt.Errorf("no configured destination for %v/%v: %v", target.Keyspace, target.Shard, err)
 	}
 
 	for i := 0; i < lg.retryCount+1; i++ {
-		err = action(conn, target)
+		err = action(conn)
 		if lg.canRetry(ctx, err, inTransaction, isStreaming) {
 			continue
 		}
 		break
 	}
-	return NewShardError(err, keyspace, shard, tabletType, nil, inTransaction)
+	return NewShardError(err, target, nil, inTransaction)
 }
 
 // canRetry determines whether a query can be retried or not.

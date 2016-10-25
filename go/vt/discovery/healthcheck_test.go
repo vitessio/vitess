@@ -562,5 +562,6 @@ func (fc *fakeConn) Tablet() *topodatapb.Tablet {
 }
 
 // Close closes the connection.
-func (fc *fakeConn) Close() {
+func (fc *fakeConn) Close(ctx context.Context) error {
+	return nil
 }

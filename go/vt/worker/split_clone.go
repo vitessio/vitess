@@ -945,7 +945,7 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 						processError("%v: NewRestartableResultReader for source: %v failed", errPrefix, tp.description())
 						return
 					}
-					defer sourceResultReader.Close()
+					defer sourceResultReader.Close(ctx)
 					sourceReaders[shardIndex] = sourceResultReader
 				}
 
@@ -964,7 +964,7 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 						processError("%v: NewRestartableResultReader for destination: %v failed: %v", errPrefix, tp.description(), err)
 						return
 					}
-					defer destResultReader.Close()
+					defer destResultReader.Close(ctx)
 					destReaders[shardIndex] = destResultReader
 				}
 

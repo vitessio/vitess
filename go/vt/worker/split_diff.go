@@ -439,7 +439,7 @@ func (sdw *SplitDiffWorker) diff(ctx context.Context) error {
 				sdw.wr.Logger().Errorf("%v", newErr)
 				return
 			}
-			defer sourceQueryResultReader.Close()
+			defer sourceQueryResultReader.Close(ctx)
 
 			// On the destination, see if we need a full scan
 			// or a filtered scan.
@@ -455,7 +455,7 @@ func (sdw *SplitDiffWorker) diff(ctx context.Context) error {
 				sdw.wr.Logger().Errorf("%v", newErr)
 				return
 			}
-			defer destinationQueryResultReader.Close()
+			defer destinationQueryResultReader.Close(ctx)
 
 			// Create the row differ.
 			differ, err := NewRowDiffer(sourceQueryResultReader, destinationQueryResultReader, tableDefinition)

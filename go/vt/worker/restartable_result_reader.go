@@ -82,7 +82,7 @@ func NewRestartableResultReader(ctx context.Context, logger logutil.Logger, tp t
 func (r *RestartableResultReader) getTablet() (bool, error) {
 	if r.tablet != nil {
 		// If there was a tablet before, return it to the tabletProvider.
-		r.Close()
+		r.Close(r.ctx)
 
 		r.tablet = nil
 		r.conn = nil
@@ -246,9 +246,9 @@ func (r *RestartableResultReader) Fields() []*querypb.Field {
 }
 
 // Close closes the connection to the tablet.
-func (r *RestartableResultReader) Close() {
+func (r *RestartableResultReader) Close(ctx context.Context) {
 	if r.conn != nil {
-		r.conn.Close()
+		r.conn.Close(ctx)
 		r.tp.returnTablet(r.tablet)
 	}
 }

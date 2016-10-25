@@ -450,7 +450,8 @@ func (itc *internalTabletConn) BeginExecuteBatch(ctx context.Context, target *qu
 }
 
 // Close is part of tabletconn.TabletConn
-func (itc *internalTabletConn) Close() {
+func (itc *internalTabletConn) Close(ctx context.Context) error {
+	return nil
 }
 
 // Tablet is part of tabletconn.TabletConn
