@@ -10,23 +10,14 @@ import numpy
 import logging
 
 import base_end2end_test
-import utils
 import vtctl_helper
 
 from vtproto import topodata_pb2
 from vttest import sharding_utils
 
 
-def setUpModule():
-  pass
-
-
 def tearDownModule():
-  utils.required_teardown()
-  if utils.options.skip_teardown:
-    return
-  utils.kill_sub_processes()
-  utils.remove_tmp_files()
+  pass
 
 
 class ReparentTest(base_end2end_test.BaseEnd2EndTest):
@@ -44,7 +35,17 @@ class ReparentTest(base_end2end_test.BaseEnd2EndTest):
 
     # seconds to wait for reparent to result in a new master
     cls.reparent_timeout_threshold = int(cls.test_params.get(
-        'reparent_timeout_threshold', '300'))
+        'reparent_timeout_threshold', '30'))
+
+    for keyspace, num_shards in zip(cls.env.keyspaces, cls.env.num_shards):
+      for shard in xrange(num_shards):
+        shard_name = sharding_utils.get_shard_name(shard, num_shards)
+        backup_tablet_uid = cls.env.get_random_tablet(
+            keyspace, shard_name, tablet_type='replica')
+        logging.info('Taking a backup on tablet %s for %s/%s',
+                     backup_tablet_uid, keyspace, shard_name)
+        cls.env.vtctl_helper.execute_vtctl_command(
+            ['Backup', backup_tablet_uid])
 
   @classmethod
   def tearDownClass(cls):
@@ -88,21 +89,18 @@ class ReparentTest(base_end2end_test.BaseEnd2EndTest):
       self.env.wait_for_good_failover_status(keyspace, shard_name)
 
       # Call Reparent in a separate thread.
-      def reparent_shard(shard, shard_name, original_master, next_master):
+      def reparent_shard(shard_name, original_master, next_master):
         logging.info('Reparenting %s/%s from %s to %s', keyspace, shard_name,
                      original_master, next_master[2])
-        if external:
-          return_code, return_output = self.env.external_reparent(
-              keyspace, next_master[0], shard, new_task_num=next_master[1])
-        else:
-          return_code, return_output = self.env.internal_reparent(
-              keyspace, shard_name, next_master[2])
+        reparent_fn = self.env.external_reparent if external else (
+            self.env.internal_reparent)
+        return_code, return_output = reparent_fn(
+            keyspace, shard_name, next_master[2])
         logging.info('Reparent returned %d for %s/%s: %s',
                      return_code, keyspace, shard_name, return_output)
 
       thread = threading.Thread(target=reparent_shard,
-                                args=[shard, shard_name, original_master,
-                                      next_master])
+                                args=[shard_name, original_master, next_master])
       start_time = time.time()
       thread.start()
 
@@ -117,8 +115,8 @@ class ReparentTest(base_end2end_test.BaseEnd2EndTest):
             durations.append(duration)
             logging.info('Reparent took %f seconds', duration)
             break
-        except (IndexError, KeyError, vtctl_helper.VtctlClientError):
-          pass
+        except (IndexError, KeyError, vtctl_helper.VtctlClientError) as e:
+          logging.info(e)
       else:
         self.fail('Timed out waiting for reparent on %s/%s' % (
             keyspace, shard_name))
@@ -127,38 +125,42 @@ class ReparentTest(base_end2end_test.BaseEnd2EndTest):
 
     return durations
 
-  def implicit_reparent(self, keyspace, shard, num_shards):
+  def implicit_reparent(
+      self, keyspace, shard, num_shards, perform_emergency_reparent=False):
     """Performs an implicit reparent.
 
-    This function will call borg restart on the current master task and
-    verify that a new task was selected to be the master.
+    This function will restart the current master task and verify that a new
+    task was selected to be the master.
 
     Args:
       keyspace: Name of the keyspace to reparent (string)
       shard: Numeric ID of the shard to reparent (zero based int)
       num_shards: Total number of shards (int)
+      perform_emergency_reparent: Do an emergency reparent as well (bool)
     """
 
     shard_name = sharding_utils.get_shard_name(shard, num_shards)
 
     original_master_name = (
         self.env.get_current_master_name(keyspace, shard_name))
-    original_master_cell = self.env.get_tablet_cell(original_master_name)
-    master_task_num = self.env.get_tablet_task_number(original_master_name)
 
-    logging.info('Restarting %s/%s, current master: %s, task: %d',
-                 keyspace, shard_name, original_master_name, master_task_num)
-    ret_val = self.env.restart_mysql_task(
-        original_master_cell, keyspace, shard, master_task_num, 'replica',
-        'mysql-alloc', True)
+    logging.info('Restarting %s/%s, current master: %s',
+                 keyspace, shard_name, original_master_name)
+    ret_val = self.env.restart_mysql_task(original_master_name, 'mysql')
 
     self.assertEquals(ret_val, 0,
-                      msg='restartalloc failed (returned %d)' % ret_val)
+                      msg='restart failed (returned %d)' % ret_val)
+
+    if perform_emergency_reparent:
+      next_master = self.env.get_next_master(keyspace, shard_name)[2]
+      logging.info('Emergency reparenting %s/%s to %s', keyspace, shard_name,
+                   next_master)
+      self.env.internal_reparent(
+          keyspace, shard_name, next_master, emergency=True)
 
     start_time = time.time()
     while time.time() - start_time < self.reparent_timeout_threshold:
       new_master_name = self.env.get_current_master_name(keyspace, shard_name)
-      new_master_task_num = self.env.get_tablet_task_number(new_master_name)
       if new_master_name != original_master_name:
         break
       time.sleep(1)
@@ -166,12 +168,14 @@ class ReparentTest(base_end2end_test.BaseEnd2EndTest):
         new_master_name, original_master_name,
         msg='Expected master tablet to change, but it remained as %s' % (
             new_master_name))
-    logging.info('restartalloc on %s/%s resulted in new master: %s, task: %d',
-                 keyspace, shard_name, new_master_name, new_master_task_num)
+    logging.info('restart on %s/%s resulted in new master: %s',
+                 keyspace, shard_name, new_master_name)
 
-  # TODO(thompsonja): re-enable this test after Orchestrator integration
-  def _test_implicit_reparent(self):
+  def test_implicit_reparent(self):
     logging.info('Performing %s implicit reparents', self.num_reparents)
+    if not self.env.automatic_reparent_available():
+      logging.info('Automatic reparents are unavailable, skipping test!')
+      return
     for attempt in xrange(1, self.num_reparents + 1):
       logging.info('Implicit reparent iteration number %d of %d', attempt,
                    self.num_reparents)
@@ -180,8 +184,34 @@ class ReparentTest(base_end2end_test.BaseEnd2EndTest):
           self.implicit_reparent(keyspace, shard, num_shards)
       self.env.wait_for_healthy_tablets()
 
+  def _test_explicit_emergency_reparent(self):
+    # This test is currently disabled until the emergency reparent can be
+    # fleshed fleshed out better. If a master tablet is killed and there is no
+    # tool performing automatic reparents (like Orchestrator), then there may be
+    # a race condition between restarting the tablet (in which it would resume
+    # being the master), and the EmergencyReparentShard call. This can sometimes
+    # result in two tablets being master.
+    logging.info('Performing %s explicit emergency reparents',
+                 self.num_reparents)
+    if self.env.automatic_reparent_available():
+      logging.info('Automatic reparents are available, skipping test!')
+      return
+    if not self.env.internal_reparent_available():
+      logging.info('Internal reparent unavailable, skipping test!')
+      return
+    for attempt in xrange(1, self.num_reparents + 1):
+      logging.info('Explicit emergency reparent iteration number %d of %d',
+                   attempt, self.num_reparents)
+      for keyspace, num_shards in zip(self.env.keyspaces, self.env.num_shards):
+        for shard in xrange(num_shards):
+          self.implicit_reparent(keyspace, shard, num_shards, True)
+      self.env.wait_for_healthy_tablets()
+
   def test_explicit_reparent(self):
     logging.info('Performing %s explicit reparents', self.num_reparents)
+    if not self.env.internal_reparent_available():
+      logging.info('Internal reparent unavailable, skipping test!')
+      return
     durations = []
     for attempt in xrange(1, self.num_reparents + 1):
       logging.info('Explicit reparent iteration number %d of %d', attempt,
@@ -196,10 +226,12 @@ class ReparentTest(base_end2end_test.BaseEnd2EndTest):
     self.assertLessEqual(median_duration, self.master_downtime_threshold,
                          'master downtime too high (performance regression)')
 
-  # TODO(thompsonja): re-enable this test after Orchestrator integration
-  def _test_explicit_external_reparent(self):
+  def test_explicit_external_reparent(self):
     logging.info('Performing %s explicit external reparents',
                  self.num_reparents)
+    if not self.env.explicit_external_reparent_available():
+      logging.info('Explicit external reparent unavailable, skipping test!')
+      return
     durations = []
     for attempt in xrange(1, self.num_reparents + 1):
       logging.info('Explicit external reparent iteration number %d of %d',
@@ -219,6 +251,9 @@ class ReparentTest(base_end2end_test.BaseEnd2EndTest):
     if len(self.env.cells) < 2:
       logging.info('Not enough cells to test cross_cell reparents!')
       return
+    if not self.env.internal_reparent_available():
+      logging.info('Internal reparent unavailable, skipping test!')
+      return
     logging.info('Performing %s cross-cell explicit reparents',
                  self.num_reparents)
     for attempt in xrange(1, self.num_reparents + 1):
@@ -227,13 +262,15 @@ class ReparentTest(base_end2end_test.BaseEnd2EndTest):
       for keyspace, num_shards in zip(self.env.keyspaces, self.env.num_shards):
         self.explicit_reparent(keyspace, num_shards, cross_cell=True)
 
-  # TODO(thompsonja): re-enable this test after Orchestrator integration
-  def _test_explicit_external_reparent_cross_cell(self):
+  def test_explicit_external_reparent_cross_cell(self):
+    logging.info('Performing %s cross-cell explicit external reparents',
+                 self.num_reparents)
     if len(self.env.cells) < 2:
       logging.info('Not enough cells to test cross_cell reparents!')
       return
-    logging.info('Performing %s cross-cell explicit external reparents',
-                 self.num_reparents)
+    if not self.env.explicit_external_reparent_available():
+      logging.info('Explicit external reparent unavailable, skipping test!')
+      return
     for attempt in xrange(1, self.num_reparents + 1):
       logging.info('Cross-cell explicit external reparent iteration number %d '
                    'of %d', attempt, self.num_reparents)
@@ -244,3 +281,4 @@ class ReparentTest(base_end2end_test.BaseEnd2EndTest):
 
 if __name__ == '__main__':
   base_end2end_test.main()
+
