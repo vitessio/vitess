@@ -222,7 +222,7 @@ class TestErrors(TestPythonClientBase):
     """Test we raise dbexceptions.ProgrammingError."""
     # Special query that makes vtgateclienttest return a ProgrammingError.
     self._verify_exception_for_all_execute_methods(
-        'error://programming error',
+        'error://bad input',
         dbexceptions.ProgrammingError)
 
   def test_error(self):
