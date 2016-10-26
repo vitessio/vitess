@@ -181,7 +181,7 @@ func testResolverGeneric(t *testing.T, name string, action func(res *Resolver) (
 	// successful execute
 	s := createSandbox(name)
 	hc := discovery.NewFakeHealthCheck()
-	res := NewResolver(hc, topo.Server{}, new(sandboxTopo), "", "aa", 0, nil)
+	res := newTestResolver(hc, topo.Server{}, new(sandboxTopo), "", "aa", 0, nil)
 	sbc0 := hc.AddTestTablet("aa", "1.1.1.1", 1001, name, "-20", topodatapb.TabletType_MASTER, true, 1, nil)
 	sbc1 := hc.AddTestTablet("aa", "1.1.1.1", 1002, name, "20-40", topodatapb.TabletType_MASTER, true, 1, nil)
 
@@ -364,7 +364,7 @@ func testResolverStreamGeneric(t *testing.T, name string, action func(res *Resol
 	// successful execute
 	s := createSandbox(name)
 	hc := discovery.NewFakeHealthCheck()
-	res := NewResolver(hc, topo.Server{}, new(sandboxTopo), "", "aa", 0, nil)
+	res := newTestResolver(hc, topo.Server{}, new(sandboxTopo), "", "aa", 0, nil)
 	sbc0 := hc.AddTestTablet("aa", "1.1.1.1", 1001, name, "-20", topodatapb.TabletType_MASTER, true, 1, nil)
 	hc.AddTestTablet("aa", "1.1.1.1", 1002, name, "20-40", topodatapb.TabletType_MASTER, true, 1, nil)
 	_, err := action(res)
@@ -458,7 +458,7 @@ func TestResolverDmlOnMultipleKeyspaceIds(t *testing.T) {
 	keyspace := "TestResolverDmlOnMultipleKeyspaceIds"
 	createSandbox(keyspace)
 	hc := discovery.NewFakeHealthCheck()
-	res := NewResolver(hc, topo.Server{}, new(sandboxTopo), "", "aa", 0, nil)
+	res := newTestResolver(hc, topo.Server{}, new(sandboxTopo), "", "aa", 0, nil)
 	hc.AddTestTablet("aa", "1.1.1.1", 1001, keyspace, "-20", topodatapb.TabletType_MASTER, true, 1, nil)
 	hc.AddTestTablet("aa", "1.1.1.1", 1002, keyspace, "20-40", topodatapb.TabletType_MASTER, true, 1, nil)
 
@@ -481,7 +481,7 @@ func TestResolverExecBatchReresolve(t *testing.T) {
 	keyspace := "TestResolverExecBatchReresolve"
 	createSandbox(keyspace)
 	hc := discovery.NewFakeHealthCheck()
-	res := NewResolver(hc, topo.Server{}, new(sandboxTopo), "", "aa", 0, nil)
+	res := newTestResolver(hc, topo.Server{}, new(sandboxTopo), "", "aa", 0, nil)
 
 	sbc := hc.AddTestTablet("aa", "0", 1, keyspace, "0", topodatapb.TabletType_MASTER, true, 1, nil)
 	sbc.MustFailRetry = 20
@@ -518,7 +518,7 @@ func TestResolverExecBatchAsTransaction(t *testing.T) {
 	keyspace := "TestResolverExecBatchAsTransaction"
 	createSandbox(keyspace)
 	hc := discovery.NewFakeHealthCheck()
-	res := NewResolver(hc, topo.Server{}, new(sandboxTopo), "", "aa", 0, nil)
+	res := newTestResolver(hc, topo.Server{}, new(sandboxTopo), "", "aa", 0, nil)
 
 	sbc := hc.AddTestTablet("aa", "0", 1, keyspace, "0", topodatapb.TabletType_MASTER, true, 1, nil)
 	sbc.MustFailRetry = 20
@@ -576,4 +576,9 @@ func TestIsRetryableError(t *testing.T) {
 				tt.in, gotBool, tt.outBool)
 		}
 	}
+}
+
+func newTestResolver(hc discovery.HealthCheck, topoServer topo.Server, serv topo.SrvTopoServer, statsName, cell string, retryCount int, tabletTypesToWait []topodatapb.TabletType) *Resolver {
+	sc := newTestScatterConn(hc, topoServer, serv, statsName, cell, retryCount, tabletTypesToWait)
+	return NewResolver(serv, cell, sc)
 }
