@@ -824,5 +824,7 @@ public class VitessConnection implements Connection {
         return CommonUtils.createContext(this.vitessJDBCUrl.getUsername(), deadlineAfter);
     }
 
-
+    public String getUsername() {
+        return this.vitessJDBCUrl.getUsername();
+    }
 }

@@ -15,6 +15,7 @@ import org.powermock.modules.junit4.PowerMockRunner;
 
 import java.sql.*;
 import java.util.ArrayList;
+import java.util.Properties;
 
 /**
  * Created by ashudeep.sharma on 08/03/16.
@@ -1276,6 +1277,29 @@ import java.util.ArrayList;
                         break;
                 }
             }
+        }
+    }
+
+    @Test public void getUserNameTest() {
+        try {
+            VitessConnection vitessConnection =
+                new VitessConnection("jdbc:vitess://username@ip1:port1/keyspace", null);
+            VitessDatabaseMetaData vitessDatabaseMetaData =
+                new VitessMySQLDatabaseMetadata(vitessConnection);
+            Assert.assertEquals("username", vitessDatabaseMetaData.getUserName());
+
+            vitessConnection = new VitessConnection("jdbc:vitess://ip1:port1/keyspace", null);
+            vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(vitessConnection);
+            Assert.assertEquals(null, vitessDatabaseMetaData.getUserName());
+
+            Properties properties = new Properties();
+            properties.put(Constants.Property.USERNAME, "username");
+            vitessConnection = new VitessConnection("jdbc:vitess://ip1:port1/keyspace", properties);
+            vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(vitessConnection);
+            Assert.assertEquals("username", vitessDatabaseMetaData.getUserName());
+
+        } catch (SQLException e) {
+            Assert.fail("Exception Occured: " + e.getMessage());
         }
     }
 
