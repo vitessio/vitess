@@ -120,6 +120,11 @@ func trimmedRequestToError(received string) error {
 			vtrpcpb.ErrorCode_QUERY_NOT_SERVED,
 			errors.New("vtgate test client forced error: query not served"),
 		)
+	case "programming error":
+		return vterrors.FromError(
+			vtrpcpb.ErrorCode_BAD_INPUT,
+			errors.New("vtgate test client forced error: programming error"),
+		)
 	case "unknown error":
 		return vterrors.FromError(
 			vtrpcpb.ErrorCode_UNKNOWN_ERROR,

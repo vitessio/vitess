@@ -288,6 +288,8 @@ def _convert_exception(exc, *args, **kwargs):
         new_exc = _prune_integrity_error(details, new_args)
       elif code == grpc.StatusCode.FAILED_PRECONDITION:
         return dbexceptions.QueryNotServed(details, new_args)
+      elif code == grpc.StatusCode.INVALID_ARGUMENT:
+        return dbexceptions.ProgrammingError(details, new_args)
       else:
         # Other RPC error that we don't specifically handle.
         new_exc = dbexceptions.DatabaseError(new_args + (code, details))
