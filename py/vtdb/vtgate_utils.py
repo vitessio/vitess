@@ -142,7 +142,8 @@ class VitessError(Exception):
       pruned_msg = msg[:msg.find(parts[2])]
       new_args = (pruned_msg,) + tuple(args[1:])
       return dbexceptions.IntegrityError(new_args)
-
+    if self.code == vtrpc_pb2.BAD_INPUT:
+      return dbexceptions.ProgrammingError(args)
     return dbexceptions.DatabaseError(args)
 
 
