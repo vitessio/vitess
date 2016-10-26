@@ -17,9 +17,7 @@ import (
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/binlog/eventtoken"
 	"github.com/youtube/vitess/go/vt/concurrency"
-	"github.com/youtube/vitess/go/vt/discovery"
 	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
-	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vtgate/gateway"
@@ -35,6 +33,7 @@ import (
 type ScatterConn struct {
 	timings              *stats.MultiTimings
 	tabletCallErrorCount *stats.MultiCounters
+	txConn               *TxConn
 	gateway              gateway.Gateway
 }
 
@@ -55,19 +54,16 @@ type shardActionFunc func(target *querypb.Target) error
 // the results and errors for the caller.
 type shardActionTransactionFunc func(target *querypb.Target, shouldBegin bool, transactionID int64) (int64, error)
 
-// NewScatterConn creates a new ScatterConn. All input parameters are passed through
-// for creating the appropriate connections.
-func NewScatterConn(hc discovery.HealthCheck, topoServer topo.Server, serv topo.SrvTopoServer, statsName, cell string, retryCount int, tabletTypesToWait []topodatapb.TabletType) *ScatterConn {
+// NewScatterConn creates a new ScatterConn.
+func NewScatterConn(statsName string, txConn *TxConn, gw gateway.Gateway) *ScatterConn {
 	tabletCallErrorCountStatsName := ""
 	if statsName != "" {
 		tabletCallErrorCountStatsName = statsName + "ErrorCount"
 	}
-	gw := gateway.GetCreator()(hc, topoServer, serv, cell, retryCount)
-	gateway.WaitForTablets(gw, tabletTypesToWait)
-
 	return &ScatterConn{
 		timings:              stats.NewMultiTimings(statsName, []string{"Operation", "Keyspace", "ShardName", "DbType"}),
 		tabletCallErrorCount: stats.NewMultiCounters(tabletCallErrorCountStatsName, []string{"Operation", "Keyspace", "ShardName", "DbType"}),
+		txConn:               txConn,
 		gateway:              gw,
 	}
 }
@@ -90,16 +86,6 @@ func (stc *ScatterConn) endAction(startTime time.Time, allErrors *concurrency.Al
 		}
 	}
 	stc.timings.Record(statsKey, startTime)
-}
-
-func (stc *ScatterConn) rollbackIfNeeded(ctx context.Context, err error, session *SafeSession) {
-	if session.InTransaction() {
-		ec := vterrors.RecoverVtErrorCode(err)
-		if ec == vtrpcpb.ErrorCode_RESOURCE_EXHAUSTED || ec == vtrpcpb.ErrorCode_NOT_IN_TX {
-			// We cannot recover from these errors
-			stc.Rollback(ctx, session)
-		}
-	}
 }
 
 // Execute executes a non-streaming query on the specified shards.
@@ -151,7 +137,7 @@ func (stc *ScatterConn) Execute(
 
 	if allErrors.HasErrors() {
 		err := allErrors.AggrError(stc.aggregateErrors)
-		stc.rollbackIfNeeded(ctx, err, session)
+		stc.txConn.RollbackIfNeeded(ctx, err, session)
 		return nil, err
 	}
 	return qr, nil
@@ -207,7 +193,7 @@ func (stc *ScatterConn) ExecuteMulti(
 
 	if allErrors.HasErrors() {
 		err := allErrors.AggrError(stc.aggregateErrors)
-		stc.rollbackIfNeeded(ctx, err, session)
+		stc.txConn.RollbackIfNeeded(ctx, err, session)
 		return nil, err
 	}
 	return qr, nil
@@ -264,7 +250,7 @@ func (stc *ScatterConn) ExecuteEntityIds(
 		})
 	if allErrors.HasErrors() {
 		err := allErrors.AggrError(stc.aggregateErrors)
-		stc.rollbackIfNeeded(ctx, err, session)
+		stc.txConn.RollbackIfNeeded(ctx, err, session)
 		return nil, err
 	}
 	return qr, nil
@@ -347,7 +333,7 @@ func (stc *ScatterConn) ExecuteBatch(
 	// so that the session is updated to be not InTransaction.
 	if allErrors.HasErrors() {
 		err := allErrors.AggrError(stc.aggregateErrors)
-		stc.rollbackIfNeeded(ctx, err, session)
+		stc.txConn.RollbackIfNeeded(ctx, err, session)
 		return nil, err
 	}
 	return results, nil
@@ -455,46 +441,6 @@ func (stc *ScatterConn) StreamExecuteMulti(
 		allErrors.RecordError(replyErr)
 	}
 	return allErrors.AggrError(stc.aggregateErrors)
-}
-
-// Commit commits the current transaction. There are no retries on this operation.
-func (stc *ScatterConn) Commit(ctx context.Context, session *SafeSession) (err error) {
-	if session == nil {
-		return vterrors.FromError(
-			vtrpcpb.ErrorCode_BAD_INPUT,
-			fmt.Errorf("cannot commit: empty session"),
-		)
-	}
-	if !session.InTransaction() {
-		return vterrors.FromError(
-			vtrpcpb.ErrorCode_NOT_IN_TX,
-			fmt.Errorf("cannot commit: not in transaction"),
-		)
-	}
-	committing := true
-	for _, shardSession := range session.ShardSessions {
-		if !committing {
-			stc.gateway.Rollback(ctx, shardSession.Target, shardSession.TransactionId)
-			continue
-		}
-		if err = stc.gateway.Commit(ctx, shardSession.Target, shardSession.TransactionId); err != nil {
-			committing = false
-		}
-	}
-	session.Reset()
-	return err
-}
-
-// Rollback rolls back the current transaction. There are no retries on this operation.
-func (stc *ScatterConn) Rollback(ctx context.Context, session *SafeSession) (err error) {
-	if session == nil {
-		return nil
-	}
-	for _, shardSession := range session.ShardSessions {
-		stc.gateway.Rollback(ctx, shardSession.Target, shardSession.TransactionId)
-	}
-	session.Reset()
-	return nil
 }
 
 // UpdateStream just sends the query to the gateway,
