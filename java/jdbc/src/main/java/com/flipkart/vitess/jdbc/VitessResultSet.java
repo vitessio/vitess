@@ -34,6 +34,7 @@ public class VitessResultSet implements ResultSet {
     private Row row;
     private int currentRow;
     private int maxRows;
+    private int fetchSize;
     /**
      * Last column name index read
      */
@@ -58,6 +59,7 @@ public class VitessResultSet implements ResultSet {
         this.currentRow = 0;
         if (null != vitessStatement) {
             this.maxRows = vitessStatement.getMaxRows();
+            this.fetchSize = vitessStatement.getFetchSize();
         }
     }
 
@@ -575,12 +577,15 @@ public class VitessResultSet implements ResultSet {
 
     public int getFetchSize() throws SQLException {
         checkOpen();
-        return 0;
+        return this.fetchSize;
     }
 
     public void setFetchSize(int rows) throws SQLException {
-        throw new SQLFeatureNotSupportedException(
-            Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
+        checkOpen();
+        if (rows < 0) {
+            throw new SQLException(Constants.SQLExceptionMessages.ILLEGAL_VALUE_FOR + "fetch size");
+        }
+        this.fetchSize = rows;
     }
 
     public int getType() throws SQLException {
