@@ -318,11 +318,13 @@ func TestExecutorReadTransaction(t *testing.T) {
 		TimeCreated: 1,
 		TimeUpdated: 2,
 		Participants: []*querypb.Target{{
-			Keyspace: "test1",
-			Shard:    "0",
+			Keyspace:   "test1",
+			Shard:      "0",
+			TabletType: topodatapb.TabletType_MASTER,
 		}, {
-			Keyspace: "test2",
-			Shard:    "1",
+			Keyspace:   "test2",
+			Shard:      "1",
+			TabletType: topodatapb.TabletType_MASTER,
 		}},
 	}
 	if !reflect.DeepEqual(got, want) {
