@@ -2,7 +2,7 @@ app = angular.module('vtctld', ['ngMaterial', 'ngRoute', 'ngResource', 'ngMessag
 
 vtTabletTypes = [
   'unknown', 'master', 'replica', 'rdonly', 'spare', 'experimental',
-  'backup', 'restore', 'worker'
+  'backup', 'restore', 'drained'
 ];
 
 app.constant('routes', [
