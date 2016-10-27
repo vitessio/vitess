@@ -86,9 +86,15 @@ export class WorkflowService {
     this.http.get('../api/workflow/create').subscribe(
       function (res: Response) {
         let createResult = res.json();
-        t.id = createResult.id;
-        t.subject.next(createResult.update);
-        t.pollHttp();
+        t.subject.next(createResult);
+        if ('index' in createResult) {
+          t.id = createResult.index;
+          t.pollHttp();
+        } else {
+          setTimeout(() => {
+            t.connectHttp();
+          }, 3000);
+        }
       },
       function (err) {
         console.log('Workflow service create error, will try again in 3s: %s', err);

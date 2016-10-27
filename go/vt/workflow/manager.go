@@ -1,7 +1,9 @@
 package workflow
 
 import (
+	"encoding/json"
 	"fmt"
+	"net/url"
 	"sync"
 	"time"
 
@@ -56,6 +58,11 @@ type Manager struct {
 	// nodeManager is the NodeManager for UI display.
 	nodeManager *NodeManager
 
+	// redirectFunc is the function to use to redirect web traffic
+	// to the serving Manager, when this manager is not
+	// running. If it is not set, HTTP handlers will return an error.
+	redirectFunc func() (string, error)
+
 	// mu protects the next fields.
 	mu sync.Mutex
 	// ctx is the context passed in the run function. It is only
@@ -99,6 +106,11 @@ func NewManager(ts topo.Server) *Manager {
 		nodeManager: NewNodeManager(),
 		workflows:   make(map[string]*runningWorkflow),
 	}
+}
+
+// SetRedirectFunc sets the redirect function to use.
+func (m *Manager) SetRedirectFunc(rf func() (string, error)) {
+	m.redirectFunc = rf
 }
 
 // TopoServer returns the topo.Server used by the Manager.
@@ -391,6 +403,57 @@ func (m *Manager) getRunningWorkflow(uuid string) (*runningWorkflow, error) {
 		return nil, fmt.Errorf("no running workflow with uuid %v", uuid)
 	}
 	return rw, nil
+}
+
+func (m *Manager) isRunning() bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.ctx != nil
+}
+
+// getAndWatchFullTree returns the initial tree and a channel to watch
+// the changes.
+// If this manager is not the master, and we have a redirectFunc
+// defined, the initial bytes will be set, but the channel will be nil,
+// and the index is undefined.
+// So return can have one of three combinations:
+// 1. error case: <undefined>, <undefined>, <undefined>, error
+// 2. redirect case: update, nil, <undefined>, nil
+// 3. working case: update, notifications, index, nil
+func (m *Manager) getAndWatchFullTree(servedURL *url.URL) ([]byte, chan []byte, int, error) {
+	if !m.isRunning() {
+		if m.redirectFunc == nil {
+			return nil, nil, 0, fmt.Errorf("WorkflowManager is not running")
+		}
+
+		host, err := m.redirectFunc()
+		if err != nil {
+			return nil, nil, 0, fmt.Errorf("WorkflowManager cannot redirect to proper Manager: %v", err)
+		}
+
+		cu := *servedURL
+		cu.Host = host
+		cu.Path = "/app2/workflows"
+		redirect := cu.String()
+
+		u := &Update{
+			Redirect: redirect,
+		}
+		b, err := json.Marshal(u)
+		if err != nil {
+			return nil, nil, 0, fmt.Errorf("WorkflowManager cannot JSON-encode update: %v", err)
+		}
+
+		return b, nil, -1, nil
+	}
+
+	notifications := make(chan []byte, 10)
+	tree, i, err := m.NodeManager().GetAndWatchFullTree(notifications)
+	if err != nil {
+		log.Warningf("GetAndWatchFullTree failed: %v", err)
+		return nil, nil, 0, err
+	}
+	return tree, notifications, i, nil
 }
 
 // Register lets implementations register Factory objects.

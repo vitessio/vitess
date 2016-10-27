@@ -1246,6 +1246,7 @@ class Vtctld(object):
         protocols_flavor().throttler_client_protocol(),
         '-vtgate_protocol', protocols_flavor().vtgate_protocol(),
         '-workflow_manager_init',
+        '-workflow_manager_use_election',
     ] + environment.topo_server().flags()
     # TODO(b/26388813): Remove the next two lines once vtctl WaitForDrain is
     #                   integrated in the vtctl MigrateServed* commands.
