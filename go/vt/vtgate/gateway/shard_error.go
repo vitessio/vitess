@@ -33,7 +33,7 @@ func (e *ShardError) Error() string {
 	if e.ShardIdentifier == "" {
 		return fmt.Sprintf("%v", e.Err)
 	}
-	return fmt.Sprintf("shard, host: %s, %v", e.ShardIdentifier, e.Err)
+	return fmt.Sprintf("%s, %v", e.ShardIdentifier, e.Err)
 }
 
 // VtErrorCode returns the underlying Vitess error code.
@@ -52,9 +52,9 @@ func NewShardError(in error, target *querypb.Target, tablet *topodatapb.Tablet, 
 	}
 	var shardIdentifier string
 	if tablet != nil {
-		shardIdentifier = fmt.Sprintf("%s.%s.%s, %+v", target.Keyspace, target.Shard, topoproto.TabletTypeLString(target.TabletType), tablet)
+		shardIdentifier = fmt.Sprintf("target: %s.%s.%s, used tablet: (%+v)", target.Keyspace, target.Shard, topoproto.TabletTypeLString(target.TabletType), tablet)
 	} else {
-		shardIdentifier = fmt.Sprintf("%s.%s.%s", target.Keyspace, target.Shard, topoproto.TabletTypeLString(target.TabletType))
+		shardIdentifier = fmt.Sprintf("target: %s.%s.%s", target.Keyspace, target.Shard, topoproto.TabletTypeLString(target.TabletType))
 	}
 
 	return &ShardError{
