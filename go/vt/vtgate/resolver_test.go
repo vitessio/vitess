@@ -204,8 +204,8 @@ func testResolverGeneric(t *testing.T, name string, action func(res *Resolver) (
 	sbc0.MustFailServer = 1
 	sbc1.MustFailRetry = 1
 	_, err = action(res)
-	want1 := fmt.Sprintf("shard, host: %s.-20.master, alias:<cell:\"aa\" > hostname:\"-20\" port_map:<key:\"vt\" value:1 > keyspace:\"%s\" shard:\"-20\" type:MASTER , error: err", name, name)
-	want2 := fmt.Sprintf("shard, host: %s.20-40.master, alias:<cell:\"aa\" > hostname:\"20-40\" port_map:<key:\"vt\" value:1 > keyspace:\"%s\" shard:\"20-40\" type:MASTER , retry: err", name, name)
+	want1 := fmt.Sprintf("target: %s.-20.master, used tablet: (alias:<cell:\"aa\" > hostname:\"-20\" port_map:<key:\"vt\" value:1 > keyspace:\"%s\" shard:\"-20\" type:MASTER ), error: err", name, name)
+	want2 := fmt.Sprintf("target: %s.20-40.master, used tablet: (alias:<cell:\"aa\" > hostname:\"20-40\" port_map:<key:\"vt\" value:1 > keyspace:\"%s\" shard:\"20-40\" type:MASTER ), retry: err", name, name)
 	want := []string{want1, want2}
 	sort.Strings(want)
 	if err == nil {
@@ -237,8 +237,8 @@ func testResolverGeneric(t *testing.T, name string, action func(res *Resolver) (
 	sbc0.MustFailRetry = 1
 	sbc1.MustFailFatal = 1
 	_, err = action(res)
-	want1 = fmt.Sprintf("shard, host: %s.-20.master, alias:<cell:\"aa\" > hostname:\"-20\" port_map:<key:\"vt\" value:1 > keyspace:\"%s\" shard:\"-20\" type:MASTER , retry: err", name, name)
-	want2 = fmt.Sprintf("shard, host: %s.20-40.master, alias:<cell:\"aa\" > hostname:\"20-40\" port_map:<key:\"vt\" value:1 > keyspace:\"%s\" shard:\"20-40\" type:MASTER , fatal: err", name, name)
+	want1 = fmt.Sprintf("target: %s.-20.master, used tablet: (alias:<cell:\"aa\" > hostname:\"-20\" port_map:<key:\"vt\" value:1 > keyspace:\"%s\" shard:\"-20\" type:MASTER ), retry: err", name, name)
+	want2 = fmt.Sprintf("target: %s.20-40.master, used tablet: (alias:<cell:\"aa\" > hostname:\"20-40\" port_map:<key:\"vt\" value:1 > keyspace:\"%s\" shard:\"20-40\" type:MASTER ), fatal: err", name, name)
 	want = []string{want1, want2}
 	sort.Strings(want)
 	if err == nil {
@@ -382,7 +382,7 @@ func testResolverStreamGeneric(t *testing.T, name string, action func(res *Resol
 	hc.AddTestTablet("aa", "20-40", 1, name, "20-40", topodatapb.TabletType_MASTER, true, 1, nil)
 	sbc0.MustFailRetry = 1
 	_, err = action(res)
-	want := fmt.Sprintf("shard, host: %s.-20.master, alias:<cell:\"aa\" > hostname:\"-20\" port_map:<key:\"vt\" value:1 > keyspace:\"%s\" shard:\"-20\" type:MASTER , retry: err", name, name)
+	want := fmt.Sprintf("target: %s.-20.master, used tablet: (alias:<cell:\"aa\" > hostname:\"-20\" port_map:<key:\"vt\" value:1 > keyspace:\"%s\" shard:\"-20\" type:MASTER ), retry: err", name, name)
 	if err == nil || err.Error() != want {
 		t.Errorf("want\n%s\ngot\n%v", want, err)
 	}
@@ -501,7 +501,7 @@ func TestResolverExecBatchReresolve(t *testing.T) {
 	}
 
 	_, err := res.ExecuteBatch(context.Background(), topodatapb.TabletType_MASTER, false, nil, nil, buildBatchRequest)
-	want := "shard, host: TestResolverExecBatchReresolve.0.master, alias:<cell:\"aa\" > hostname:\"0\" port_map:<key:\"vt\" value:1 > keyspace:\"TestResolverExecBatchReresolve\" shard:\"0\" type:MASTER , retry: err"
+	want := "target: TestResolverExecBatchReresolve.0.master, used tablet: (alias:<cell:\"aa\" > hostname:\"0\" port_map:<key:\"vt\" value:1 > keyspace:\"TestResolverExecBatchReresolve\" shard:\"0\" type:MASTER ), retry: err"
 	if err == nil || err.Error() != want {
 		t.Errorf("want %s, got %v", want, err)
 	}
@@ -538,7 +538,7 @@ func TestResolverExecBatchAsTransaction(t *testing.T) {
 	}
 
 	_, err := res.ExecuteBatch(context.Background(), topodatapb.TabletType_MASTER, true, nil, nil, buildBatchRequest)
-	want := "shard, host: TestResolverExecBatchAsTransaction.0.master, alias:<cell:\"aa\" > hostname:\"0\" port_map:<key:\"vt\" value:1 > keyspace:\"TestResolverExecBatchAsTransaction\" shard:\"0\" type:MASTER , retry: err"
+	want := "target: TestResolverExecBatchAsTransaction.0.master, used tablet: (alias:<cell:\"aa\" > hostname:\"0\" port_map:<key:\"vt\" value:1 > keyspace:\"TestResolverExecBatchAsTransaction\" shard:\"0\" type:MASTER ), retry: err"
 	if err == nil || err.Error() != want {
 		t.Errorf("want %v, got %v", want, err)
 	}
