@@ -42,6 +42,7 @@ spec:
               su -p -c "/vt/bin/vtctld
               -cell {{cell}}
               -web_dir $VTTOP/web/vtctld
+              -web_dir2 $VTTOP/web/vtctld2/app
               -log_dir $VTDATAROOT/tmp
               -alsologtostderr
               -port 15000
