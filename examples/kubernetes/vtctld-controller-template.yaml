@@ -43,6 +43,7 @@ spec:
               -cell {{cell}}
               -web_dir $VTTOP/web/vtctld
               -web_dir2 $VTTOP/web/vtctld2/app
+              -workflow_manager_init
               -log_dir $VTDATAROOT/tmp
               -alsologtostderr
               -port 15000
