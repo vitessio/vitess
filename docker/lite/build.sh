@@ -29,6 +29,7 @@ cp -R base/vt/dist lite/vt/
 mkdir -p $lite/$vttop/go/cmd/vtctld
 mkdir -p $lite/$vttop/web
 cp -R base/$vttop/web/vtctld $lite/$vttop/web/
+cp -R base/$vttop/web/vtctld2 $lite/$vttop/web/
 
 mkdir -p $lite/$vttop/config
 cp -R base/$vttop/config/* $lite/$vttop/config/
