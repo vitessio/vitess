@@ -94,7 +94,8 @@ def _teardown_shard_2():
   tablet.kill_tablets(shard_2_tablets)
 
   utils.run_vtctl(
-      ['DeleteShard', '-recursive', 'test_keyspace/2'], auto_log=True)
+      ['DeleteShard', '-recursive', '-even_if_serving', 'test_keyspace/2'],
+      auto_log=True)
 
   for t in shard_2_tablets:
     t.reset_replication()
