@@ -109,8 +109,7 @@ func TestTxConnCommit2PC(t *testing.T) {
 	session := NewSafeSession(&vtgatepb.Session{InTransaction: true})
 	sc.Execute(context.Background(), "query1", nil, "TestTxConnCommit2PC", []string{"0"}, topodatapb.TabletType_MASTER, session, false, nil)
 	sc.Execute(context.Background(), "query1", nil, "TestTxConnCommit2PC", []string{"0", "1"}, topodatapb.TabletType_MASTER, session, false, nil)
-	err := sc.txConn.Commit(context.Background(), true, session)
-	if err != nil {
+	if err := sc.txConn.Commit(context.Background(), true, session); err != nil {
 		t.Error(err)
 	}
 	if c := sbc0.CreateTransactionCount.Get(); c != 1 {
@@ -134,8 +133,7 @@ func TestTxConnCommit2PCOneParticipant(t *testing.T) {
 	sc, sbc0, _ := newTestTxConnEnv("TestTxConnCommit2PCOneParticipant")
 	session := NewSafeSession(&vtgatepb.Session{InTransaction: true})
 	sc.Execute(context.Background(), "query1", nil, "TestTxConnCommit2PCOneParticipant", []string{"0"}, topodatapb.TabletType_MASTER, session, false, nil)
-	err := sc.txConn.Commit(context.Background(), true, session)
-	if err != nil {
+	if err := sc.txConn.Commit(context.Background(), true, session); err != nil {
 		t.Error(err)
 	}
 	if c := sbc0.CommitCount.Get(); c != 1 {
@@ -305,8 +303,7 @@ func TestTxConnRollback(t *testing.T) {
 	session := NewSafeSession(&vtgatepb.Session{InTransaction: true})
 	sc.Execute(context.Background(), "query1", nil, "TestTxConn", []string{"0"}, topodatapb.TabletType_MASTER, session, false, nil)
 	sc.Execute(context.Background(), "query1", nil, "TestTxConn", []string{"0", "1"}, topodatapb.TabletType_MASTER, session, false, nil)
-	err := sc.txConn.Rollback(context.Background(), session)
-	if err != nil {
+	if err := sc.txConn.Rollback(context.Background(), session); err != nil {
 		t.Error(err)
 	}
 	wantSession := vtgatepb.Session{}
@@ -365,8 +362,7 @@ func TestTxConnResumeOnRollback(t *testing.T) {
 			TabletType: topodatapb.TabletType_MASTER,
 		}},
 	}}
-	err := sc.txConn.Resume(context.Background(), dtid)
-	if err != nil {
+	if err := sc.txConn.Resume(context.Background(), dtid); err != nil {
 		t.Error(err)
 	}
 	if c := sbc0.SetRollbackCount.Get(); c != 0 {
@@ -396,8 +392,7 @@ func TestTxConnResumeOnCommit(t *testing.T) {
 			TabletType: topodatapb.TabletType_MASTER,
 		}},
 	}}
-	err := sc.txConn.Resume(context.Background(), dtid)
-	if err != nil {
+	if err := sc.txConn.Resume(context.Background(), dtid); err != nil {
 		t.Error(err)
 	}
 	if c := sbc0.SetRollbackCount.Get(); c != 0 {
@@ -596,12 +591,12 @@ func TestTxConnMultiGoSessions(t *testing.T) {
 			Keyspace: "0",
 		},
 	}}
-	err := txc.multiGoSessions(input, func(s *vtgatepb.Session_ShardSession) error {
+	err := txc.runSessions(input, func(s *vtgatepb.Session_ShardSession) error {
 		return vterrors.FromError(vtrpcpb.ErrorCode_INTERNAL_ERROR, fmt.Errorf("err %s", s.Target.Keyspace))
 	})
 	want := "err 0"
 	if err == nil || err.Error() != want {
-		t.Errorf("multiGoSessions(1): %v, want %s", err, want)
+		t.Errorf("runSessions(1): %v, want %s", err, want)
 	}
 
 	input = []*vtgatepb.Session_ShardSession{{
@@ -613,12 +608,12 @@ func TestTxConnMultiGoSessions(t *testing.T) {
 			Keyspace: "1",
 		},
 	}}
-	err = txc.multiGoSessions(input, func(s *vtgatepb.Session_ShardSession) error {
+	err = txc.runSessions(input, func(s *vtgatepb.Session_ShardSession) error {
 		return vterrors.FromError(vtrpcpb.ErrorCode_INTERNAL_ERROR, fmt.Errorf("err %s", s.Target.Keyspace))
 	})
 	want = "err 0\nerr 1"
 	if err == nil || err.Error() != want {
-		t.Errorf("multiGoSessions(2): %v, want %s", err, want)
+		t.Errorf("runSessions(2): %v, want %s", err, want)
 	}
 	errCode := err.(*ScatterConnError).VtErrorCode()
 	wantCode := vtrpcpb.ErrorCode_INTERNAL_ERROR
@@ -626,7 +621,7 @@ func TestTxConnMultiGoSessions(t *testing.T) {
 		t.Errorf("Error code: %v, want %v", errCode, wantCode)
 	}
 
-	err = txc.multiGoSessions(input, func(s *vtgatepb.Session_ShardSession) error {
+	err = txc.runSessions(input, func(s *vtgatepb.Session_ShardSession) error {
 		return nil
 	})
 	if err != nil {
@@ -639,12 +634,12 @@ func TestTxConnMultiGoTargets(t *testing.T) {
 	input := []*querypb.Target{{
 		Keyspace: "0",
 	}}
-	err := txc.multiGoTargets(input, func(t *querypb.Target) error {
+	err := txc.runTargets(input, func(t *querypb.Target) error {
 		return vterrors.FromError(vtrpcpb.ErrorCode_INTERNAL_ERROR, fmt.Errorf("err %s", t.Keyspace))
 	})
 	want := "err 0"
 	if err == nil || err.Error() != want {
-		t.Errorf("multiGoTargets(1): %v, want %s", err, want)
+		t.Errorf("runTargets(1): %v, want %s", err, want)
 	}
 
 	input = []*querypb.Target{{
@@ -652,12 +647,12 @@ func TestTxConnMultiGoTargets(t *testing.T) {
 	}, {
 		Keyspace: "1",
 	}}
-	err = txc.multiGoTargets(input, func(t *querypb.Target) error {
+	err = txc.runTargets(input, func(t *querypb.Target) error {
 		return vterrors.FromError(vtrpcpb.ErrorCode_INTERNAL_ERROR, fmt.Errorf("err %s", t.Keyspace))
 	})
 	want = "err 0\nerr 1"
 	if err == nil || err.Error() != want {
-		t.Errorf("multiGoTargets(2): %v, want %s", err, want)
+		t.Errorf("runTargets(2): %v, want %s", err, want)
 	}
 	errCode := err.(*ScatterConnError).VtErrorCode()
 	wantCode := vtrpcpb.ErrorCode_INTERNAL_ERROR
@@ -665,7 +660,7 @@ func TestTxConnMultiGoTargets(t *testing.T) {
 		t.Errorf("Error code: %v, want %v", errCode, wantCode)
 	}
 
-	err = txc.multiGoTargets(input, func(t *querypb.Target) error {
+	err = txc.runTargets(input, func(t *querypb.Target) error {
 		return nil
 	})
 	if err != nil {
