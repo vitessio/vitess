@@ -2,6 +2,7 @@ package schemaswap
 
 import (
 	"bytes"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
@@ -17,9 +18,11 @@ import (
 	"github.com/youtube/vitess/go/vt/discovery"
 	"github.com/youtube/vitess/go/vt/logutil"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	workflowpb "github.com/youtube/vitess/go/vt/proto/workflow"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtctl"
+	"github.com/youtube/vitess/go/vt/workflow"
 	"github.com/youtube/vitess/go/vt/wrangler"
 )
 
@@ -39,6 +42,8 @@ const (
 	lastFinishedMetadataName = "LastFinishedSchemaSwap"
 	currentSQLMetadataName   = "CurrentSchemaSwapSQL"
 	lastAppliedMetadataName  = "LastAppliedSchemaSwap"
+
+	workflowFactoryName = "schema_swap"
 )
 
 // Swap contains meta-information and methods controlling schema swap process as a whole.
@@ -46,17 +51,27 @@ type Swap struct {
 	// ctx is the context of the whole schema swap process. Once this context is cancelled
 	// the schema swap process stops.
 	ctx context.Context
+
+	// workflowManager is the manager for the workflow represented by this Swap object.
+	workflowManager *workflow.Manager
+	// rootUINode is the root node in workflow UI representing this schema swap.
+	rootUINode *workflow.Node
+
 	// keyspace is the name of the keyspace on which schema swap process operates.
 	keyspace string
+	// sql is the query representing schema change being propagated via schema swap process.
+	sql string
 	// swapID is the id of the executed schema swap. This is recorded in the database to
 	// distinguish backups from before and after an applied schema change, and to prevent
 	// several schema swaps from running at the same time.
 	swapID uint64
+
 	// topoServer is the topo server implementation used to discover the topology of the keyspace.
 	topoServer topo.Server
 	// tabletClient is the client implementation used by the schema swap process to control
 	// all tablets in the keyspace.
 	tabletClient tmclient.TabletManagerClient
+
 	// allShards is a list of schema swap objects for each shard in the keyspace.
 	allShards []*shardSchemaSwap
 }
@@ -100,16 +115,90 @@ type shardSwapMetadata struct {
 	currentSQL string
 }
 
+// SwapWorkflowFactory is a factory to create Swap objects as workflows.
+type SwapWorkflowFactory struct{}
+
+// swapWorkflowData contains info about a new schema swap that is about to be started.
+type swapWorkflowData struct {
+	Keyspace, SQL string
+}
+
+// RegisterWorkflowFactory registers schema swap as a valid factory in the workflow framework.
+func RegisterWorkflowFactory() {
+	workflow.Register(workflowFactoryName, &SwapWorkflowFactory{})
+}
+
+// Init is a part of workflow.Factory interface. It initializes a Workflow protobuf object.
+func (*SwapWorkflowFactory) Init(workflowProto *workflowpb.Workflow, args []string) error {
+	subFlags := flag.NewFlagSet(workflowFactoryName, flag.ContinueOnError)
+
+	keyspace := subFlags.String("keyspace", "", "Name of a keyspace to perform schema swap on")
+	sql := subFlags.String("sql", "", "Query representing schema change being pushed by schema swap")
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+	if *keyspace == "" || *sql == "" {
+		return fmt.Errorf("Keyspace name and SQL query must be provided for schema swap")
+	}
+
+	workflowProto.Name = fmt.Sprintf("Schema swap on keyspace %s", *keyspace)
+	data := &swapWorkflowData{
+		Keyspace: *keyspace,
+		SQL:      *sql,
+	}
+	var err error
+	workflowProto.Data, err = json.Marshal(data)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// Instantiate is a part of workflow.Factory interface. It instantiates workflow.Workflow object from
+// workflowpb.Workflow protobuf object.
+func (*SwapWorkflowFactory) Instantiate(workflowProto *workflowpb.Workflow) (workflow.Workflow, error) {
+	data := &swapWorkflowData{}
+	if err := json.Unmarshal(workflowProto.Data, data); err != nil {
+		return nil, err
+	}
+	return &Swap{keyspace: data.Keyspace, sql: data.SQL}, nil
+}
+
+// Run is a part of workflow.Workflow interface. This is the main entrance point of the schema swap workflow.
+func (schemaSwap *Swap) Run(ctx context.Context, manager *workflow.Manager, workflowInfo *topo.WorkflowInfo) error {
+	schemaSwap.ctx = ctx
+	schemaSwap.workflowManager = manager
+	schemaSwap.topoServer = topo.GetServer()
+	schemaSwap.tabletClient = tmclient.NewTabletManagerClient()
+
+	rootUINode := workflow.NewToplevelNode(workflowInfo, schemaSwap)
+	rootUINode.State = workflowpb.WorkflowState_Running
+	rootUINode.Display = workflow.NodeDisplayIndeterminate
+	rootUINode.Message = fmt.Sprintf("Schema swap is executed on the keyspace %s", schemaSwap.keyspace)
+	if err := manager.NodeManager().AddRootNode(rootUINode); err != nil {
+		return err
+	}
+	defer manager.NodeManager().RemoveRootNode(rootUINode)
+
+	schemaSwap.rootUINode = rootUINode
+	return schemaSwap.executeSwap()
+}
+
+// Action is a part of workflow.Workflow interface. It implements UI actions with the workflow.
+func (*Swap) Action(ctx context.Context, path, name string) error {
+	return fmt.Errorf("Cannot execute action '%s', '%s' on schema swap", path, name)
+}
+
 // Run is the main entry point of the schema swap process. It drives the process from start
 // to finish, including possible restart of already started process. In the latter case the
 // method should be just called again and it will pick up already started process. The only
 // input argument is the SQL statements that comprise the schema change that needs to be
 // pushed using the schema swap process.
-func (schemaSwap *Swap) Run(sql string) error {
+func (schemaSwap *Swap) executeSwap() error {
 	if err := schemaSwap.createShardObjects(); err != nil {
 		return err
 	}
-	if err := schemaSwap.initializeSwap(sql); err != nil {
+	if err := schemaSwap.initializeSwap(); err != nil {
 		return err
 	}
 	errHealthWatchers := schemaSwap.runOnAllShards(
@@ -125,7 +214,7 @@ func (schemaSwap *Swap) Run(sql string) error {
 	}
 	err := schemaSwap.runOnAllShards(
 		func(shard *shardSchemaSwap) error {
-			return shard.applySeedSchemaChange(sql)
+			return shard.applySeedSchemaChange()
 		})
 	if err != nil {
 		return err
@@ -201,7 +290,7 @@ func (schemaSwap *Swap) stopAllHealthWatchers() {
 // initializeSwap starts the schema swap process. If there is already a schema swap process started
 // the the method just picks up that. Otherwise it starts a new one and writes into the database that
 // the process was started.
-func (schemaSwap *Swap) initializeSwap(sql string) error {
+func (schemaSwap *Swap) initializeSwap() error {
 	var waitGroup sync.WaitGroup
 	metadataList := make([]shardSwapMetadata, len(schemaSwap.allShards))
 	for i, shard := range schemaSwap.allShards {
@@ -232,7 +321,7 @@ func (schemaSwap *Swap) initializeSwap(sql string) error {
 			recorder.RecordError(fmt.Errorf(
 				"Shard %v has an already started schema swap with an id %v, while for other shard(s) id should be equal to %v",
 				schemaSwap.allShards[i].shardName, metadata.lastStartedSwap, schemaSwap.swapID))
-		} else if metadata.currentSQL != sql {
+		} else if metadata.currentSQL != schemaSwap.sql {
 			recorder.RecordError(fmt.Errorf(
 				"Shard %v has an already started schema swap with a different set of SQL statements",
 				schemaSwap.allShards[i].shardName))
@@ -246,7 +335,7 @@ func (schemaSwap *Swap) initializeSwap(sql string) error {
 
 	return schemaSwap.runOnAllShards(
 		func(shard *shardSchemaSwap) error {
-			return shard.writeStartedSwap(sql)
+			return shard.writeStartedSwap()
 		})
 }
 
@@ -322,7 +411,7 @@ func (shardSwap *shardSchemaSwap) readShardMetadata(metadata *shardSwapMetadata,
 
 // writeStartedSwap registers in the _vt.shard_metadata table in the database the information
 // about the new schema swap process being started.
-func (shardSwap *shardSchemaSwap) writeStartedSwap(sql string) error {
+func (shardSwap *shardSchemaSwap) writeStartedSwap() error {
 	tablet, err := shardSwap.getMasterTablet()
 	if err != nil {
 		return err
@@ -338,7 +427,7 @@ func (shardSwap *shardSchemaSwap) writeStartedSwap(sql string) error {
 	queryBuf.WriteString("INSERT INTO _vt.shard_metadata (name, value) VALUES ('")
 	queryBuf.WriteString(currentSQLMetadataName)
 	queryBuf.WriteString("',")
-	sqlValue, err := sqltypes.BuildValue(sql)
+	sqlValue, err := sqltypes.BuildValue(shardSwap.parent.sql)
 	if err != nil {
 		return err
 	}
@@ -372,6 +461,8 @@ func (shardSwap *shardSchemaSwap) writeFinishedSwap() error {
 // all tablets on the shard. Function should be called before the start of the schema
 // swap process.
 func (shardSwap *shardSchemaSwap) startHealthWatchers() error {
+	shardSwap.allTablets = make(map[string]*discovery.TabletStats)
+
 	shardSwap.tabletHealthCheck = discovery.NewHealthCheck(
 		*vtctl.HealthCheckTopologyRefresh, *vtctl.HealthcheckRetryDelay, *vtctl.HealthCheckTimeout)
 	shardSwap.tabletHealthCheck.SetListener(shardSwap, true /* sendDownEvents */)
@@ -518,7 +609,7 @@ func tabletSortIndex(tabletStats *discovery.TabletStats) int {
 		return 5
 	case tabletStats.Tablet.Type == topodatapb.TabletType_BACKUP || tabletStats.Tablet.Type == topodatapb.TabletType_RESTORE:
 		return 4
-	case tabletStats.Stats.HealthError != "":
+	case tabletStats.Stats == nil || tabletStats.Stats.HealthError != "":
 		return 3
 	case tabletStats.Tablet.Type == topodatapb.TabletType_REPLICA:
 		return 2
@@ -601,7 +692,7 @@ func (shardSwap *shardSchemaSwap) findNextTabletToSwap() (*topodatapb.Tablet, er
 // RDONLY tablets the REPLICA one is chosen. If there are any non-MASTER tablets indicating that the
 // schema swap was already applied on them, then the method assumes that it's the seed tablet from the
 // already started process and doesn't try to apply the schema change on any other tablet.
-func (shardSwap *shardSchemaSwap) applySeedSchemaChange(sql string) error {
+func (shardSwap *shardSchemaSwap) applySeedSchemaChange() error {
 	tabletList := shardSwap.getTabletList()
 	sort.Sort(orderTabletsForSwap(tabletList))
 	for _, tabletStats := range tabletList {
@@ -625,6 +716,9 @@ func (shardSwap *shardSchemaSwap) applySeedSchemaChange(sql string) error {
 	}
 	_, err = shardSwap.parent.topoServer.UpdateTabletFields(shardSwap.parent.ctx, seedTablet.Alias,
 		func(tablet *topodatapb.Tablet) error {
+			if tablet.Tags == nil {
+				tablet.Tags = make(map[string]string)
+			}
 			tablet.Tags["drain_reason"] = "Drained as online schema swap seed"
 			return nil
 		})
@@ -637,7 +731,7 @@ func (shardSwap *shardSchemaSwap) applySeedSchemaChange(sql string) error {
 		shardSwap.parent.ctx,
 		seedTablet,
 		true, /* usePool */
-		[]byte(sql),
+		[]byte(shardSwap.parent.sql),
 		0,    /* maxRows */
 		true, /* disableBinlogs */
 		true /* reloadSchema */)
