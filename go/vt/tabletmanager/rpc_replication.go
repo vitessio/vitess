@@ -124,10 +124,8 @@ func (agent *ActionAgent) StartSlave(ctx context.Context) error {
 		}
 	}()
 
-	if *enableSemiSync {
-		if err := agent.enableSemiSync(false); err != nil {
-			return err
-		}
+	if err := agent.fixSemiSync(agent.Tablet().Type); err != nil {
+		return err
 	}
 	return mysqlctl.StartSlave(agent.MysqlDaemon, agent.hookExtraEnv())
 }
@@ -177,10 +175,8 @@ func (agent *ActionAgent) InitMaster(ctx context.Context) (string, error) {
 	}
 
 	// If using semi-sync, we need to enable it before going read-write.
-	if *enableSemiSync {
-		if err := agent.enableSemiSync(true); err != nil {
-			return "", err
-		}
+	if err := agent.fixSemiSync(topodatapb.TabletType_MASTER); err != nil {
+		return "", err
 	}
 
 	// Set the server read-write, from now on we can accept real
@@ -238,10 +234,14 @@ func (agent *ActionAgent) InitSlave(ctx context.Context, parent *topodatapb.Tabl
 	agent.setSlaveStopped(false)
 
 	// If using semi-sync, we need to enable it before connecting to master.
-	if *enableSemiSync {
-		if err := agent.enableSemiSync(false); err != nil {
-			return err
-		}
+	// If we were a master type, we need to switch back to replica settings.
+	// Otherwise we won't be able to commit anything.
+	tt := agent.Tablet().Type
+	if tt == topodatapb.TabletType_MASTER {
+		tt = topodatapb.TabletType_REPLICA
+	}
+	if err := agent.fixSemiSync(tt); err != nil {
+		return err
 	}
 
 	cmds, err := agent.MysqlDaemon.SetSlavePositionCommands(pos)
@@ -259,6 +259,19 @@ func (agent *ActionAgent) InitSlave(ctx context.Context, parent *topodatapb.Tabl
 		return err
 	}
 	agent.initReplication = true
+
+	// If we were a master type, switch our type to replica.  This
+	// is used on the old master when using InitShardMaster with
+	// -force, and the new master is different from the old master.
+	if agent.Tablet().Type == topodatapb.TabletType_MASTER {
+		if _, err := topotools.ChangeType(ctx, agent.TopoServer, agent.TabletAlias, topodatapb.TabletType_REPLICA); err != nil {
+			return err
+		}
+
+		if err := agent.refreshTablet(ctx, "InitSlave"); err != nil {
+			return err
+		}
+	}
 
 	// wait until we get the replicated row, or our context times out
 	return agent.MysqlDaemon.WaitForReparentJournal(ctx, timeCreatedNS)
@@ -289,10 +302,8 @@ func (agent *ActionAgent) DemoteMaster(ctx context.Context) (string, error) {
 	}
 
 	// If using semi-sync, we need to disable master-side.
-	if *enableSemiSync {
-		if err := agent.enableSemiSync(false); err != nil {
-			return "", err
-		}
+	if err := agent.fixSemiSync(topodatapb.TabletType_REPLICA); err != nil {
+		return "", err
 	}
 
 	pos, err := agent.MysqlDaemon.DemoteMaster()
@@ -330,10 +341,8 @@ func (agent *ActionAgent) PromoteSlaveWhenCaughtUp(ctx context.Context, position
 	}
 
 	// If using semi-sync, we need to enable it before going read-write.
-	if *enableSemiSync {
-		if err := agent.enableSemiSync(true); err != nil {
-			return "", err
-		}
+	if err := agent.fixSemiSync(topodatapb.TabletType_MASTER); err != nil {
+		return "", err
 	}
 
 	if err := agent.MysqlDaemon.SetReadOnly(false); err != nil {
@@ -400,7 +409,11 @@ func (agent *ActionAgent) setMasterLocked(ctx context.Context, parentAlias *topo
 
 	// If using semi-sync, we need to enable it before connecting to master.
 	if *enableSemiSync {
-		if err := agent.enableSemiSync(false); err != nil {
+		tt := agent.Tablet().Type
+		if tt == topodatapb.TabletType_MASTER {
+			tt = topodatapb.TabletType_REPLICA
+		}
+		if err := agent.fixSemiSync(tt); err != nil {
 			return err
 		}
 	}
@@ -524,10 +537,8 @@ func (agent *ActionAgent) PromoteSlave(ctx context.Context) (string, error) {
 	}
 
 	// If using semi-sync, we need to enable it before going read-write.
-	if *enableSemiSync {
-		if err := agent.enableSemiSync(true); err != nil {
-			return "", err
-		}
+	if err := agent.fixSemiSync(topodatapb.TabletType_MASTER); err != nil {
+		return "", err
 	}
 
 	// Set the server read-write
@@ -555,14 +566,69 @@ func isMasterEligible(tabletType topodatapb.TabletType) bool {
 	return false
 }
 
-func (agent *ActionAgent) enableSemiSync(master bool) error {
+func (agent *ActionAgent) fixSemiSync(tabletType topodatapb.TabletType) error {
+	if !*enableSemiSync {
+		// Semi-sync handling is not enabled.
+		return nil
+	}
+
 	// Only enable if we're eligible for becoming master (REPLICA type).
 	// Ineligible slaves (RDONLY) shouldn't ACK because we'll never promote them.
-	if !isMasterEligible(agent.Tablet().Type) {
-		return nil
+	if !isMasterEligible(tabletType) {
+		return agent.MysqlDaemon.SetSemiSyncEnabled(false, false)
 	}
 
 	// Always enable slave-side since it doesn't hurt to keep it on for a master.
 	// The master-side needs to be off for a slave, or else it will get stuck.
-	return agent.MysqlDaemon.SetSemiSyncEnabled(master, true)
+	return agent.MysqlDaemon.SetSemiSyncEnabled(tabletType == topodatapb.TabletType_MASTER, true)
+}
+
+func (agent *ActionAgent) fixSemiSyncAndReplication(tabletType topodatapb.TabletType) error {
+	if !*enableSemiSync {
+		// Semi-sync handling is not enabled.
+		return nil
+	}
+
+	if tabletType == topodatapb.TabletType_MASTER {
+		// Master is special. It is always handled at the
+		// right time by the reparent operations, it doesn't
+		// need to be fixed.
+		return nil
+	}
+
+	if err := agent.fixSemiSync(tabletType); err != nil {
+		return fmt.Errorf("failed to fixSemiSync(%v): %v", tabletType, err)
+	}
+
+	// If replication is running, but the status is wrong,
+	// we should restart replication. First, let's make sure
+	// replication is running.
+	status, err := agent.MysqlDaemon.SlaveStatus()
+	if err != nil {
+		// Replication is not configured, nothing to do.
+		return nil
+	}
+	if !status.SlaveIORunning {
+		// IO thread is not running, nothing to do.
+		return nil
+	}
+
+	shouldAck := isMasterEligible(tabletType)
+	acking, err := agent.MysqlDaemon.SemiSyncSlaveStatus()
+	if err != nil {
+		return fmt.Errorf("failed to get SemiSyncSlaveStatus: %v", err)
+	}
+	if shouldAck == acking {
+		return nil
+	}
+
+	// We need to restart replication
+	log.Infof("Restarting replication for semi-sync flag change to take effect from %v to %v", acking, shouldAck)
+	if err := mysqlctl.StopSlave(agent.MysqlDaemon, agent.hookExtraEnv()); err != nil {
+		return fmt.Errorf("failed to StopSlave: %v", err)
+	}
+	if err := mysqlctl.StartSlave(agent.MysqlDaemon, agent.hookExtraEnv()); err != nil {
+		return fmt.Errorf("failed to StartSlave: %v", err)
+	}
+	return nil
 }

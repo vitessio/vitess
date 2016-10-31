@@ -64,13 +64,16 @@ func (agent *ActionAgent) restoreDataLocked(ctx context.Context, logger logutil.
 	switch err {
 	case nil:
 		// Reconnect to master.
-		if err := agent.startReplication(ctx, pos); err != nil {
+		if err := agent.startReplication(ctx, pos, originalType); err != nil {
 			return err
 		}
 	case mysqlctl.ErrNoBackup:
 		// No-op, starting with empty database.
 	case mysqlctl.ErrExistingDB:
-		// No-op, assuming we've just restarted.
+		// No-op, assuming we've just restarted.  Note the
+		// replication reporter may restart replication at the
+		// next health check if it thinks it should. We do not
+		// alter replication here.
 	default:
 		return fmt.Errorf("Can't restore backup: %v", err)
 	}
@@ -91,7 +94,7 @@ func (agent *ActionAgent) restoreDataLocked(ctx context.Context, logger logutil.
 	return nil
 }
 
-func (agent *ActionAgent) startReplication(ctx context.Context, pos replication.Position) error {
+func (agent *ActionAgent) startReplication(ctx context.Context, pos replication.Position, tabletType topodatapb.TabletType) error {
 	// Set the position at which to resume from the master.
 	cmds, err := agent.MysqlDaemon.SetSlavePositionCommands(pos)
 	if err != nil {
@@ -129,10 +132,8 @@ func (agent *ActionAgent) startReplication(ctx context.Context, pos replication.
 	}
 
 	// If using semi-sync, we need to enable it before connecting to master.
-	if *enableSemiSync {
-		if err := agent.enableSemiSync(false); err != nil {
-			return err
-		}
+	if err := agent.fixSemiSync(tabletType); err != nil {
+		return err
 	}
 
 	// Set master and start slave.
