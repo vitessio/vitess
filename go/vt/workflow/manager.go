@@ -326,7 +326,16 @@ func (m *Manager) runWorkflow(ctx context.Context, uuid string, rw *runningWorkf
 	//
 	// 3. The workflow is done (with a valid context). err can be
 	// anything (including nil), we just need to save it.
+	log.Infof("Running workflow %s (%s, %s)",
+		rw.wi.Workflow.Uuid, rw.wi.Workflow.FactoryName, rw.wi.Workflow.Name)
 	err := rw.workflow.Run(ctx, m, rw.wi)
+	if err == nil {
+		log.Infof("Workflow %s (%s, %s) finished successfully",
+			rw.wi.Workflow.Uuid, rw.wi.Workflow.FactoryName, rw.wi.Workflow.Name)
+	} else {
+		log.Infof("Workflow %s (%s, %s) finished with error %v",
+			rw.wi.Workflow.Uuid, rw.wi.Workflow.FactoryName, rw.wi.Workflow.Name, err)
+	}
 
 	// Change the Manager state.
 	m.mu.Lock()
