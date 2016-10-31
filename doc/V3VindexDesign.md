@@ -1,5 +1,19 @@
 # VTGate V3 Vindex design
 
+## Updates
+
+Some changes have been made to the system since the last time the doc was written. This is the list:
+* More flexibility has been added for using table names:
+  * Allow applications to specify a keyspace at connection time. If so, an unqualified reference to a table is assumed to belong to the connection’s keyspace.
+  * Support constructs like `keyspace.table`, which will force VSchema to only look inside that keyspace for that table.
+  * Allow duplicate table names across keyspaces. If so, one of the above two methods can be used by the application for disambiguation.
+  * If the application uses an anonymous connection, then we still allow queries to reference tables without qualification, as long as there are no duplicates.
+* There's one VSchema per keyspace instead of a global one.
+* The concept of Table Class has been eliminated.
+* A new `sequence` table has been introduced, and sequences are orthogonal to vindexes. Any column can now be tied to a sequence.
+* We've introduced the concept of a pinned table, which allows an unsharded table to be pinned to a keypsace id, allowing you to avoid creating a separate keyspace for tiny tables. This is yet to be implemented.
+* Instead of a vschema editor, the DDL language will be extended to manage vindexes, and the DDL deployment tools will perform the necessary work.
+
 ## Objective
 
 The goal of the V3 API is to simplify the application’s view of the physical databases served by VTGate. At a high level, this means that the application should not have to specify either the keyspace or the keyspace id while issuing queries to VTGate.
