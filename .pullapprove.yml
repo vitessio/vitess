@@ -1,25 +1,26 @@
+version: 2
 approve_by_comment: true
 approve_regex: ':lgtm:|^(LGTM|lgtm)'
 reject_regex: '^Rejected'
 reset_on_push: false
-reviewers:
-  name: vitess-eng
-  required: 1
-  members:
-  - alainjobart
-  - alainjobart-bot
-  - AndyDiamondstein
-  - dumbunny
-  - enisoc
-  - enisoc-bot
-  - erzel
-  - erzel-bot
-  - mberlin-bot
-  - michael-berlin
-  - sougou
-  - sougou-bot
-  - thompsonja
-  - thompsonja-bot
-  - pivanof
-  - pivanof-bot
+groups:
+  vitess-eng:
+    required: 1
+    users:
+      - alainjobart
+      - alainjobart-bot
+      - AndyDiamondstein
+      - dumbunny
+      - enisoc
+      - enisoc-bot
+      - erzel
+      - erzel-bot
+      - mberlin-bot
+      - michael-berlin
+      - sougou
+      - sougou-bot
+      - thompsonja
+      - thompsonja-bot
+      - pivanof
+      - pivanof-bot
 
