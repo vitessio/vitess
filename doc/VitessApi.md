@@ -663,7 +663,7 @@ StreamExecute executes a streaming query based on shards. It depends on the quer
 | <code>EXPERIMENTAL</code> | <code>5</code> | EXPERIMENTAL is like SPARE, except it can serve queries. This type can be used for usages not planned by Vitess, like online export to another storage engine.  |
 | <code>BACKUP</code> | <code>6</code> | BACKUP is the type a server goes to when taking a backup. No queries can be served in BACKUP mode.  |
 | <code>RESTORE</code> | <code>7</code> | RESTORE is the type a server uses when restoring a backup, at startup time.  No queries can be served in RESTORE mode.  |
-| <code>WORKER</code> | <code>8</code> | WORKER is the type a server goes into when used by a vtworker process to perform an offline action. It is a serving type (as the vtworker processes may need queries to run). In this state, this tablet is dedicated to the vtworker process that uses it.  |
+| <code>DRAINED</code> | <code>8</code> | DRAINED is the type a server goes into when a process needs a separate tablet set aside for a specific action. For example, a vtworker process may set a tablet to drained to perform an offline action. It is a serving type (as the vtworker processes may need queries to run). In this state, this tablet is dedicated to the background process that uses it.  |
 
 ### vtrpc.ErrorCode
 

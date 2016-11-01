@@ -617,7 +617,12 @@ func (itmc *internalTabletManagerClient) SetReadWrite(ctx context.Context, table
 }
 
 func (itmc *internalTabletManagerClient) ChangeType(ctx context.Context, tablet *topodatapb.Tablet, dbType topodatapb.TabletType) error {
-	return fmt.Errorf("not implemented in vtcombo")
+	t, ok := tabletMap[tablet.Alias.Uid]
+	if !ok {
+		return fmt.Errorf("tmclient: cannot find tablet %v", tablet.Alias.Uid)
+	}
+	t.agent.ChangeType(ctx, dbType)
+	return nil
 }
 
 func (itmc *internalTabletManagerClient) Sleep(ctx context.Context, tablet *topodatapb.Tablet, duration time.Duration) error {
