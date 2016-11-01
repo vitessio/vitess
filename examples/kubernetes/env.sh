@@ -58,3 +58,6 @@ fi
 
 source $config_file
 
+# Fill in defaults for new variables, so old config.sh files still work.
+vitess_image=${vitess_image:-vitess/lite}
+

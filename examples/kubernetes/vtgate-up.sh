@@ -31,7 +31,7 @@ for cell in $cells; do
   cat vtgate-service-template.yaml | sed -e "$sed_script" | $KUBECTL create --namespace=$VITESS_NAME -f -
 
   sed_script=""
-  for var in replicas vtdataroot_volume cell; do
+  for var in vitess_image replicas vtdataroot_volume cell; do
     sed_script+="s,{{$var}},${!var},g;"
   done
 
