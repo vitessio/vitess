@@ -93,14 +93,14 @@ type Config struct {
 // bigger than this).
 var DefaultQsConfig = Config{
 	PoolSize:             16,
-	StreamPoolSize:       750,
+	StreamPoolSize:       200,
 	TransactionCap:       20,
 	TransactionTimeout:   30,
 	MaxResultSize:        10000,
 	MaxDMLRows:           500,
 	QueryCacheSize:       5000,
 	SchemaReloadTime:     30 * 60,
-	QueryTimeout:         0,
+	QueryTimeout:         30,
 	TxPoolTimeout:        1,
 	IdleTimeout:          30 * 60,
 	StreamBufferSize:     32 * 1024,

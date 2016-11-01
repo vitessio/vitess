@@ -124,7 +124,7 @@ func testDiscoveryGatewayGeneric(t *testing.T, streaming bool, f func(dg Gateway
 	// no tablet
 	hc.Reset()
 	dg.tsc.ResetForTesting()
-	want := "shard, host: ks.0.replica, no valid tablet"
+	want := "target: ks.0.replica, no valid tablet"
 	err := f(dg, target)
 	verifyShardError(t, err, want, vtrpcpb.ErrorCode_INTERNAL_ERROR)
 
@@ -132,7 +132,7 @@ func testDiscoveryGatewayGeneric(t *testing.T, streaming bool, f func(dg Gateway
 	hc.Reset()
 	dg.tsc.ResetForTesting()
 	hc.AddTestTablet("cell", "1.1.1.1", 1001, keyspace, shard, tabletType, false, 10, fmt.Errorf("no connection"))
-	want = "shard, host: ks.0.replica, no valid tablet"
+	want = "target: ks.0.replica, no valid tablet"
 	err = f(dg, target)
 	verifyShardError(t, err, want, vtrpcpb.ErrorCode_INTERNAL_ERROR)
 
@@ -140,7 +140,7 @@ func testDiscoveryGatewayGeneric(t *testing.T, streaming bool, f func(dg Gateway
 	hc.Reset()
 	dg.tsc.ResetForTesting()
 	ep1 := hc.AddTestTablet("cell", "1.1.1.1", 1001, keyspace, shard, tabletType, false, 10, nil).Tablet()
-	want = fmt.Sprintf(`shard, host: ks.0.replica, no valid tablet`)
+	want = fmt.Sprintf(`target: ks.0.replica, no valid tablet`)
 	err = f(dg, target)
 	verifyShardError(t, err, want, vtrpcpb.ErrorCode_INTERNAL_ERROR)
 
@@ -154,8 +154,8 @@ func testDiscoveryGatewayGeneric(t *testing.T, streaming bool, f func(dg Gateway
 	ep1 = sc1.Tablet()
 	ep2 := sc2.Tablet()
 	wants := map[string]int{
-		fmt.Sprintf(`shard, host: ks.0.replica, %+v, retry: err`, ep1): 0,
-		fmt.Sprintf(`shard, host: ks.0.replica, %+v, retry: err`, ep2): 0,
+		fmt.Sprintf(`target: ks.0.replica, used tablet: (%+v), retry: err`, ep1): 0,
+		fmt.Sprintf(`target: ks.0.replica, used tablet: (%+v), retry: err`, ep2): 0,
 	}
 	err = f(dg, target)
 	if _, ok := wants[fmt.Sprintf("%v", err)]; !ok {
@@ -172,8 +172,8 @@ func testDiscoveryGatewayGeneric(t *testing.T, streaming bool, f func(dg Gateway
 	ep1 = sc1.Tablet()
 	ep2 = sc2.Tablet()
 	wants = map[string]int{
-		fmt.Sprintf(`shard, host: ks.0.replica, %+v, fatal: err`, ep1): 0,
-		fmt.Sprintf(`shard, host: ks.0.replica, %+v, fatal: err`, ep2): 0,
+		fmt.Sprintf(`target: ks.0.replica, used tablet: (%+v), fatal: err`, ep1): 0,
+		fmt.Sprintf(`target: ks.0.replica, used tablet: (%+v), fatal: err`, ep2): 0,
 	}
 	err = f(dg, target)
 	if _, ok := wants[fmt.Sprintf("%v", err)]; !ok {
@@ -186,7 +186,7 @@ func testDiscoveryGatewayGeneric(t *testing.T, streaming bool, f func(dg Gateway
 	sc1 = hc.AddTestTablet("cell", "1.1.1.1", 1001, keyspace, shard, tabletType, true, 10, nil)
 	sc1.MustFailServer = 1
 	ep1 = sc1.Tablet()
-	want = fmt.Sprintf(`shard, host: ks.0.replica, %+v, error: err`, ep1)
+	want = fmt.Sprintf(`target: ks.0.replica, used tablet: (%+v), error: err`, ep1)
 	err = f(dg, target)
 	verifyShardError(t, err, want, vtrpcpb.ErrorCode_BAD_INPUT)
 
@@ -196,7 +196,7 @@ func testDiscoveryGatewayGeneric(t *testing.T, streaming bool, f func(dg Gateway
 	sc1 = hc.AddTestTablet("cell", "1.1.1.1", 1001, keyspace, shard, tabletType, true, 10, nil)
 	sc1.MustFailConn = 1
 	ep1 = sc1.Tablet()
-	want = fmt.Sprintf(`shard, host: ks.0.replica, %+v, error: conn`, ep1)
+	want = fmt.Sprintf(`target: ks.0.replica, used tablet: (%+v), error: conn`, ep1)
 	err = f(dg, target)
 	verifyShardError(t, err, want, vtrpcpb.ErrorCode_UNKNOWN_ERROR)
 
@@ -232,8 +232,8 @@ func testDiscoveryGatewayTransact(t *testing.T, streaming bool, f func(dg Gatewa
 	ep1 := sc1.Tablet()
 	ep2 := sc2.Tablet()
 	wants := map[string]int{
-		fmt.Sprintf(`shard, host: ks.0.replica, %+v, retry: err`, ep1): 0,
-		fmt.Sprintf(`shard, host: ks.0.replica, %+v, retry: err`, ep2): 0,
+		fmt.Sprintf(`target: ks.0.replica, used tablet: (%+v), retry: err`, ep1): 0,
+		fmt.Sprintf(`target: ks.0.replica, used tablet: (%+v), retry: err`, ep2): 0,
 	}
 	err := f(dg, target)
 	if _, ok := wants[fmt.Sprintf("%v", err)]; !ok {
@@ -246,7 +246,7 @@ func testDiscoveryGatewayTransact(t *testing.T, streaming bool, f func(dg Gatewa
 	sc1 = hc.AddTestTablet("cell", "1.1.1.1", 1001, keyspace, shard, tabletType, true, 10, nil)
 	sc1.MustFailConn = 1
 	ep1 = sc1.Tablet()
-	want := fmt.Sprintf(`shard, host: ks.0.replica, %+v, error: conn`, ep1)
+	want := fmt.Sprintf(`target: ks.0.replica, used tablet: (%+v), error: conn`, ep1)
 	err = f(dg, target)
 	verifyShardError(t, err, want, vtrpcpb.ErrorCode_UNKNOWN_ERROR)
 }

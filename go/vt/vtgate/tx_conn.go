@@ -8,13 +8,18 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
+	"strings"
 	"sync"
+
+	log "github.com/golang/glog"
 
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vtgate/gateway"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	vtgatepb "github.com/youtube/vitess/go/vt/proto/vtgate"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
@@ -71,9 +76,7 @@ func (txc *TxConn) commit2PC(ctx context.Context, session *SafeSession) error {
 		participants = append(participants, s.Target)
 	}
 	mmShard := session.ShardSessions[0]
-	// TODO(sougou): Change query_engine to start off transaction id counting
-	// above the highest number used by dtids. This will prevent collisions.
-	dtid := fmt.Sprintf("%s:%s:0:%d", mmShard.Target.Keyspace, mmShard.Target.Shard, mmShard.TransactionId)
+	dtid := txc.generateDTID(mmShard)
 	err := txc.gateway.CreateTransaction(ctx, mmShard.Target, dtid, participants)
 	if err != nil {
 		// Normal rollback is safe because nothing was prepared yet.
@@ -81,11 +84,16 @@ func (txc *TxConn) commit2PC(ctx context.Context, session *SafeSession) error {
 		return err
 	}
 
-	err = txc.multiGo(session.ShardSessions[1:], func(s *vtgatepb.Session_ShardSession) error {
+	err = txc.runSessions(session.ShardSessions[1:], func(s *vtgatepb.Session_ShardSession) error {
 		return txc.gateway.Prepare(ctx, s.Target, s.TransactionId, dtid)
 	})
 	if err != nil {
-		// TODO(sougou): We could call RollbackPrepared here once it's ready.
+		// TODO(sougou): Perform a more fine-grained cleanup
+		// including unprepared transactions.
+		if resumeErr := txc.Resume(ctx, dtid); resumeErr != nil {
+			log.Warningf("Rollback failed after Prepare failure: %v", resumeErr)
+		}
+		// Return the original error even if the previous operation fails.
 		return err
 	}
 
@@ -94,7 +102,7 @@ func (txc *TxConn) commit2PC(ctx context.Context, session *SafeSession) error {
 		return err
 	}
 
-	err = txc.multiGo(session.ShardSessions[1:], func(s *vtgatepb.Session_ShardSession) error {
+	err = txc.runSessions(session.ShardSessions[1:], func(s *vtgatepb.Session_ShardSession) error {
 		return txc.gateway.CommitPrepared(ctx, s.Target, dtid)
 	})
 	if err != nil {
@@ -110,7 +118,7 @@ func (txc *TxConn) Rollback(ctx context.Context, session *SafeSession) error {
 		return nil
 	}
 	defer session.Reset()
-	return txc.multiGo(session.ShardSessions, func(s *vtgatepb.Session_ShardSession) error {
+	return txc.runSessions(session.ShardSessions, func(s *vtgatepb.Session_ShardSession) error {
 		return txc.gateway.Rollback(ctx, s.Target, s.TransactionId)
 	})
 }
@@ -126,8 +134,92 @@ func (txc *TxConn) RollbackIfNeeded(ctx context.Context, err error, session *Saf
 	}
 }
 
-// multiGo executes the action for all shardSessions in parallel and returns a consolildated error.
-func (txc *TxConn) multiGo(shardSessions []*vtgatepb.Session_ShardSession, action func(*vtgatepb.Session_ShardSession) error) error {
+// Resume resumes the specified 2PC transaction.
+func (txc *TxConn) Resume(ctx context.Context, dtid string) error {
+	mmShard, err := txc.dtidToShardSession(dtid)
+	if err != nil {
+		return err
+	}
+
+	transaction, err := txc.gateway.ReadTransaction(ctx, mmShard.Target, dtid)
+	if err != nil {
+		return err
+	}
+	if transaction == nil || transaction.Dtid == "" {
+		// It was already resolved.
+		return nil
+	}
+	switch transaction.State {
+	case querypb.TransactionState_PREPARE:
+		// If state is PREPARE, make a decision to rollback and
+		// fallthrough to the rollback workflow.
+		if err := txc.gateway.SetRollback(ctx, mmShard.Target, transaction.Dtid, mmShard.TransactionId); err != nil {
+			return err
+		}
+		fallthrough
+	case querypb.TransactionState_ROLLBACK:
+		if err := txc.resumeRollback(ctx, mmShard.Target, transaction); err != nil {
+			return err
+		}
+	case querypb.TransactionState_COMMIT:
+		if err := txc.resumeCommit(ctx, mmShard.Target, transaction); err != nil {
+			return err
+		}
+	default:
+		// Should never happen.
+		return vterrors.FromError(vtrpcpb.ErrorCode_INTERNAL_ERROR, fmt.Errorf("invalid state: %v", transaction.State))
+	}
+	return nil
+}
+
+func (txc *TxConn) resumeRollback(ctx context.Context, target *querypb.Target, transaction *querypb.TransactionMetadata) error {
+	err := txc.runTargets(transaction.Participants, func(t *querypb.Target) error {
+		return txc.gateway.RollbackPrepared(ctx, t, transaction.Dtid, 0)
+	})
+	if err != nil {
+		return err
+	}
+	return txc.gateway.ResolveTransaction(ctx, target, transaction.Dtid)
+}
+
+func (txc *TxConn) resumeCommit(ctx context.Context, target *querypb.Target, transaction *querypb.TransactionMetadata) error {
+	err := txc.runTargets(transaction.Participants, func(t *querypb.Target) error {
+		return txc.gateway.CommitPrepared(ctx, t, transaction.Dtid)
+	})
+	if err != nil {
+		return err
+	}
+	return txc.gateway.ResolveTransaction(ctx, target, transaction.Dtid)
+}
+
+func (txc *TxConn) generateDTID(mmShard *vtgatepb.Session_ShardSession) string {
+	// TODO(sougou): Change query_engine to start off transaction id counting
+	// above the highest number used by dtids. This will prevent collisions.
+	return fmt.Sprintf("%s:%s:0:%d", mmShard.Target.Keyspace, mmShard.Target.Shard, mmShard.TransactionId)
+}
+
+func (txc *TxConn) dtidToShardSession(dtid string) (*vtgatepb.Session_ShardSession, error) {
+	splits := strings.Split(dtid, ":")
+	if len(splits) != 4 {
+		return nil, vterrors.FromError(vtrpcpb.ErrorCode_BAD_INPUT, fmt.Errorf("invalid parts in dtid: %s", dtid))
+	}
+	target := &querypb.Target{
+		Keyspace:   splits[0],
+		Shard:      splits[1],
+		TabletType: topodatapb.TabletType_MASTER,
+	}
+	txid, err := strconv.ParseInt(splits[3], 10, 0)
+	if err != nil {
+		return nil, vterrors.FromError(vtrpcpb.ErrorCode_BAD_INPUT, fmt.Errorf("invalid transaction id in dtid: %s", dtid))
+	}
+	return &vtgatepb.Session_ShardSession{
+		Target:        target,
+		TransactionId: txid,
+	}, nil
+}
+
+// runSessions executes the action for all shardSessions in parallel and returns a consolildated error.
+func (txc *TxConn) runSessions(shardSessions []*vtgatepb.Session_ShardSession, action func(*vtgatepb.Session_ShardSession) error) error {
 	// Fastpath.
 	if len(shardSessions) == 1 {
 		return action(shardSessions[0])
@@ -145,8 +237,34 @@ func (txc *TxConn) multiGo(shardSessions []*vtgatepb.Session_ShardSession, actio
 		}(s)
 	}
 	wg.Wait()
-	// Transactional statements should not be retried. No need
-	// to scavenge error codes to see if retry is possible. Use
-	// simple aggregation to consolidate all errors.
-	return allErrors.Error()
+	return allErrors.AggrError(aggregateTxConnErrors)
+}
+
+// runTargets executes the action for all targets in parallel and returns a consolildated error.
+// Flow is identical to runSessions.
+func (txc *TxConn) runTargets(targets []*querypb.Target, action func(*querypb.Target) error) error {
+	if len(targets) == 1 {
+		return action(targets[0])
+	}
+	allErrors := new(concurrency.AllErrorRecorder)
+	var wg sync.WaitGroup
+	for _, t := range targets {
+		wg.Add(1)
+		go func(t *querypb.Target) {
+			defer wg.Done()
+			if err := action(t); err != nil {
+				allErrors.RecordError(err)
+			}
+		}(t)
+	}
+	wg.Wait()
+	return allErrors.AggrError(aggregateTxConnErrors)
+}
+
+func aggregateTxConnErrors(errors []error) error {
+	return &ScatterConnError{
+		Retryable:  false,
+		Errs:       errors,
+		serverCode: vterrors.AggregateVtGateErrorCodes(errors),
+	}
 }

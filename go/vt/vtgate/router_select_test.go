@@ -16,7 +16,6 @@ import (
 	"github.com/youtube/vitess/go/vt/discovery"
 	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 	"github.com/youtube/vitess/go/vt/tabletserver/sandboxconn"
-	"github.com/youtube/vitess/go/vt/topo"
 	_ "github.com/youtube/vitess/go/vt/vtgate/vindexes"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
@@ -647,7 +646,7 @@ func TestSelectScatter(t *testing.T) {
 	s.VSchema = routerVSchema
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
 	serv := new(sandboxTopo)
-	scatterConn := newTestScatterConn(hc, topo.Server{}, serv, "", cell, 10, nil)
+	scatterConn := newTestScatterConn(hc, serv, cell)
 	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
 	var conns []*sandboxconn.SandboxConn
 	for _, shard := range shards {
@@ -679,7 +678,7 @@ func TestStreamSelectScatter(t *testing.T) {
 	s.VSchema = routerVSchema
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
 	serv := new(sandboxTopo)
-	scatterConn := newTestScatterConn(hc, topo.Server{}, serv, "", cell, 10, nil)
+	scatterConn := newTestScatterConn(hc, serv, cell)
 	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
 	var conns []*sandboxconn.SandboxConn
 	for _, shard := range shards {
@@ -727,7 +726,7 @@ func TestSelectScatterFail(t *testing.T) {
 		conns = append(conns, sbc)
 	}
 	serv := new(sandboxTopo)
-	scatterConn := newTestScatterConn(hc, topo.Server{}, serv, "", cell, 10, nil)
+	scatterConn := newTestScatterConn(hc, serv, cell)
 	router := NewRouter(context.Background(), serv, cell, "", scatterConn)
 
 	_, err := routerExec(router, "select id from user", nil)

@@ -81,6 +81,9 @@ type SandboxConn struct {
 	// no results left, SingleRowResult is returned.
 	results []*sqltypes.Result
 
+	// ReadTransactionResults is used for returning results for ReadTransaction.
+	ReadTransactionResults []*querypb.TransactionMetadata
+
 	// transaction id generator
 	TransactionID sync2.AtomicInt64
 }
@@ -380,7 +383,15 @@ func (sbc *SandboxConn) ResolveTransaction(ctx context.Context, target *querypb.
 // ReadTransaction returns the metadata for the sepcified dtid.
 func (sbc *SandboxConn) ReadTransaction(ctx context.Context, target *querypb.Target, dtid string) (metadata *querypb.TransactionMetadata, err error) {
 	sbc.ReadTransactionCount.Add(1)
-	return nil, sbc.getError()
+	if err := sbc.getError(); err != nil {
+		return nil, err
+	}
+	if len(sbc.ReadTransactionResults) >= 1 {
+		res := sbc.ReadTransactionResults[0]
+		sbc.ReadTransactionResults = sbc.ReadTransactionResults[1:]
+		return res, nil
+	}
+	return nil, nil
 }
 
 // BeginExecute is part of the TabletConn interface.

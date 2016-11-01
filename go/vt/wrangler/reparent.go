@@ -505,7 +505,8 @@ func (wr *Wrangler) chooseNewMaster(
 	}
 	for tabletAlias, tabletInfo := range tabletMap {
 		if (masterCell != "" && tabletAlias.Cell != masterCell) ||
-			topoproto.TabletAliasEqual(&tabletAlias, avoidMasterTabletAlias) {
+			topoproto.TabletAliasEqual(&tabletAlias, avoidMasterTabletAlias) ||
+			tabletInfo.Tablet.Type != topodatapb.TabletType_REPLICA {
 			continue
 		}
 		maxPosSearch.waitGroup.Add(1)

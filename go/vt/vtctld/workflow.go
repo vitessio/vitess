@@ -7,6 +7,7 @@ import (
 	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
+	"github.com/youtube/vitess/go/vt/schemamanager/schemaswap"
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtctl"
@@ -25,6 +26,8 @@ func initWorkflowManager(ts topo.Server) {
 		topovalidator.RegisterKeyspaceValidator()
 		topovalidator.RegisterShardValidator()
 		topovalidator.Register()
+
+		schemaswap.RegisterWorkflowFactory()
 
 		// Create the WorkflowManager.
 		vtctl.WorkflowManager = workflow.NewManager(ts)

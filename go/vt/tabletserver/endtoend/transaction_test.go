@@ -569,11 +569,13 @@ func TestMMCommitFlow(t *testing.T) {
 		Dtid:  "aa",
 		State: 2,
 		Participants: []*querypb.Target{{
-			Keyspace: "test1",
-			Shard:    "0",
+			Keyspace:   "test1",
+			Shard:      "0",
+			TabletType: topodatapb.TabletType_MASTER,
 		}, {
-			Keyspace: "test2",
-			Shard:    "1",
+			Keyspace:   "test2",
+			Shard:      "1",
+			TabletType: topodatapb.TabletType_MASTER,
 		}},
 	}
 	if !reflect.DeepEqual(info, wantInfo) {
@@ -637,11 +639,13 @@ func TestMMRollbackFlow(t *testing.T) {
 		Dtid:  "aa",
 		State: 3,
 		Participants: []*querypb.Target{{
-			Keyspace: "test1",
-			Shard:    "0",
+			Keyspace:   "test1",
+			Shard:      "0",
+			TabletType: topodatapb.TabletType_MASTER,
 		}, {
-			Keyspace: "test2",
-			Shard:    "1",
+			Keyspace:   "test2",
+			Shard:      "1",
+			TabletType: topodatapb.TabletType_MASTER,
 		}},
 	}
 	if !reflect.DeepEqual(info, wantInfo) {

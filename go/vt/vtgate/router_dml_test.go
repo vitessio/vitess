@@ -632,7 +632,7 @@ func TestInsertFail(t *testing.T) {
 
 	sbclookup.MustFailServer = 1
 	_, err = routerExec(router, "insert into music(user_id, id) values (1, 2)", nil)
-	want = "execInsertSharded: lookup.Create: shard, host: TestUnsharded.0.master"
+	want = "execInsertSharded: lookup.Create: target: TestUnsharded.0.master"
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
 		t.Errorf("routerExec: %v, want prefix %v", err, want)
 	}
@@ -657,7 +657,7 @@ func TestInsertFail(t *testing.T) {
 
 	sbc.MustFailServer = 1
 	_, err = routerExec(router, "insert into user(id, v, name) values (1, 2, 'myname')", nil)
-	want = "execInsertSharded: shard, host: TestRouter.-20.master"
+	want = "execInsertSharded: target: TestRouter.-20.master"
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
 		t.Errorf("routerExec: %v, want prefix %v", err, want)
 	}
