@@ -737,9 +737,6 @@ func (e *ScatterConnError) VtErrorCode() vtrpcpb.ErrorCode {
 }
 
 func (stc *ScatterConn) aggregateErrors(errors []error) error {
-	if len(errors) == 0 {
-		return nil
-	}
 	allRetryableError := true
 	for _, e := range errors {
 		connError, ok := e.(*gateway.ShardError)

@@ -19,6 +19,7 @@ import (
 	"github.com/youtube/vitess/go/vt/sqlparser"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
@@ -317,8 +318,9 @@ func (tpc *TwoPC) ReadTransaction(ctx context.Context, conn *DBConn, dtid string
 	participants := make([]*querypb.Target, 0, len(qr.Rows))
 	for _, row := range qr.Rows {
 		participants = append(participants, &querypb.Target{
-			Keyspace: row[0].String(),
-			Shard:    row[1].String(),
+			Keyspace:   row[0].String(),
+			Shard:      row[1].String(),
+			TabletType: topodatapb.TabletType_MASTER,
 		})
 	}
 	result.Participants = participants
