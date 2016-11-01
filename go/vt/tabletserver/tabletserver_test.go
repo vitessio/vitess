@@ -911,8 +911,7 @@ func TestTabletServerBeginFail(t *testing.T) {
 		t.Fatalf("StartService failed: %v", err)
 	}
 	defer tsv.StopService()
-	ctx := context.Background()
-	ctx, cancel := withTimeout(ctx, 1*time.Nanosecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Nanosecond)
 	defer cancel()
 	tsv.Begin(ctx, &target)
 	_, err = tsv.Begin(ctx, &target)
