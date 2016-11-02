@@ -173,6 +173,10 @@ docker_base_mysql56:
 	chmod -R o=g *
 	docker build -f Dockerfile.percona -t vitess/base:mysql56 .
 
+docker_base_mariadb:
+	chmod -R o=g *
+	docker build -f Dockerfile.mariadb -t vitess/base:mariadb .
+
 docker_base_percona:
 	chmod -R o=g *
 	docker build -f Dockerfile.percona -t vitess/base:percona .
@@ -180,10 +184,6 @@ docker_base_percona:
 docker_base_percona57:
 	chmod -R o=g *
 	docker build -f Dockerfile.percona57 -t vitess/base:percona57 .
-
-docker_base_mariadb:
-	chmod -R o=g *
-	docker build -f Dockerfile.mariadb -t vitess/base:mariadb .
 
 docker_lite: docker_base
 	cd docker/lite && ./build.sh
