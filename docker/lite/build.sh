@@ -35,7 +35,8 @@ rm -r lite/vt/dist/selenium
 mkdir -p $lite/$vttop/go/cmd/vtctld
 mkdir -p $lite/$vttop/web
 cp -R base/$vttop/web/vtctld $lite/$vttop/web/
-cp -R base/$vttop/web/vtctld2 $lite/$vttop/web/
+mkdir $lite/$vttop/web/vtctld2
+cp -R base/$vttop/web/vtctld2/app $lite/$vttop/web/vtctld2/
 
 mkdir -p $lite/$vttop/config
 cp -R base/$vttop/config/* $lite/$vttop/config/
