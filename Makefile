@@ -161,6 +161,9 @@ docker_bootstrap_test:
 docker_bootstrap_push:
 	for i in $(DOCKER_IMAGES); do echo "image: $$i"; docker push vitess/bootstrap:$$i || exit 1; done
 
+# Note: The default base and lite images (tag "latest") use MySQL 5.7.
+# Images with other MySQL/MariaDB versions get their own tag e.g. "mariadb".
+# We never push the non-"latest" tags though and only provide them for convenience for users who want to run something else than MySQL 5.7.
 docker_base:
 	# Fix permissions before copying files, to avoid AUFS bug.
 	chmod -R o=g *
