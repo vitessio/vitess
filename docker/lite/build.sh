@@ -26,6 +26,12 @@ mkdir -p $lite/vt/bin
 
 cp -R base/vt/dist lite/vt/
 
+# Remove build and test dependencies.
+rm -r lite/vt/dist/chromedriver
+rm -r lite/vt/dist/maven
+rm -r lite/vt/dist/py-mock-1.0.1
+rm -r lite/vt/dist/selenium
+
 mkdir -p $lite/$vttop/go/cmd/vtctld
 mkdir -p $lite/$vttop/web
 cp -R base/$vttop/web/vtctld $lite/$vttop/web/
