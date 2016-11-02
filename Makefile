@@ -153,13 +153,17 @@ php_proto:
 DOCKER_IMAGES_FOR_TEST = mariadb mysql56 mysql57 percona percona57
 DOCKER_IMAGES = common $(DOCKER_IMAGES_FOR_TEST)
 docker_bootstrap:
-	for i in $(DOCKER_IMAGES); do echo "image: $$i"; docker/bootstrap/build.sh $$i || exit 1; done
+	for i in $(DOCKER_IMAGES); do echo "building bootstrap image: $$i"; docker/bootstrap/build.sh $$i || exit 1; done
 
 docker_bootstrap_test:
 	flavors='$(DOCKER_IMAGES_FOR_TEST)' && ./test.go -pull=false -parallel=4 -flavor=$${flavors// /,}
 
 docker_bootstrap_push:
-	for i in $(DOCKER_IMAGES); do echo "image: $$i"; docker push vitess/bootstrap:$$i || exit 1; done
+	for i in $(DOCKER_IMAGES); do echo "pushing boostrap image: $$i"; docker push vitess/bootstrap:$$i || exit 1; done
+
+# Use this target to update the local copy of your images with the one on Dockerhub.
+docker_bootstrap_pull:
+	for i in $(DOCKER_IMAGES); do echo "pulling bootstrap image: $$i"; docker pull vitess/bootstrap:$$i || exit 1; done
 
 # Note: The default base and lite images (tag "latest") use MySQL 5.7.
 # Images with other MySQL/MariaDB versions get their own tag e.g. "mariadb".
