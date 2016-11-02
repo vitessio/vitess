@@ -13,7 +13,7 @@ vtworker_command="$*"
 
 # Expand template variables
 sed_script=""
-for var in cell port vtworker_command; do
+for var in vitess_image cell port vtworker_command; do
   sed_script+="s,{{$var}},${!var},g;"
 done
 

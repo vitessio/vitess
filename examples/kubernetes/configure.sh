@@ -3,6 +3,13 @@
 # This script generates config.sh, which is a site-local config file that is not
 # checked into source control.
 
+# Erase any existing file since we append from here on.
+> config.sh
+
+# Custom Docker image.
+read -p "Vitess Docker image (leave empty for default) []: "
+echo "vitess_image=\"$REPLY\"" >> config.sh
+
 # Select and configure Backup Storage Implementation.
 storage=gcs
 read -p "Backup Storage (file, gcs) [gcs]: "
@@ -44,7 +51,5 @@ file)
   echo "ERROR: Unsupported backup storage implementation: $storage"
   exit 1
 esac
-
-echo "Saving config.sh..."
-echo "backup_flags=\"$backup_flags\"" > config.sh
+echo "backup_flags=\"$backup_flags\"" >> config.sh
 
