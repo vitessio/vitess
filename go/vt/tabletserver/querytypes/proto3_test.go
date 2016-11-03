@@ -267,7 +267,7 @@ func TestBindVariablesToProto3Errors(t *testing.T) {
 	}{{
 		name: "chan",
 		in:   make(chan bool),
-		out:  "key: bv: unexpected type chan bool",
+		out:  "key: bv: bindVariableToValue: unexpected type chan bool",
 	}, {
 		name: "empty []interface{}",
 		in:   []interface{}{},
@@ -295,7 +295,7 @@ func TestBindVariablesToProto3Errors(t *testing.T) {
 	}, {
 		name: "chan in []interface{}",
 		in:   []interface{}{make(chan bool)},
-		out:  "key: bv: unexpected type chan bool",
+		out:  "key: bv: bindVariableToValue: unexpected type chan bool",
 	}}
 	for _, tcase := range testcases {
 		bv := map[string]interface{}{

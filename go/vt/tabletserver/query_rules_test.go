@@ -15,6 +15,7 @@ import (
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/tabletserver/planbuilder"
 
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
@@ -356,12 +357,34 @@ var bvtestcases = []BindVarTestCase{
 	{BindVarCond{"a", true, true, QRNoOp, nil}, 1, false},
 	{BindVarCond{"a", false, true, QRNoOp, nil}, 1, true},
 
+	{BindVarCond{"a", true, true, QREqual, bvcuint64(10)}, &querypb.BindVariable{
+		Type:  querypb.Type_INT24,
+		Value: []byte{'1'},
+	}, false},
+	{BindVarCond{"a", true, true, QREqual, bvcuint64(10)}, &querypb.BindVariable{
+		Type:  querypb.Type_INT32,
+		Value: []byte{'1', '0'},
+	}, true},
+	{BindVarCond{"a", true, true, QREqual, bvcuint64(10)}, &querypb.BindVariable{
+		Type:  querypb.Type_VARCHAR,
+		Value: []byte{'1', '0'},
+	}, true},
+	{BindVarCond{"a", true, true, QREqual, bvcuint64(10)}, &querypb.BindVariable{
+		Type:  querypb.Type_VARCHAR,
+		Value: []byte{'-', '1', '0'},
+	}, false},
 	{BindVarCond{"a", true, true, QREqual, bvcuint64(10)}, int(1), false},
+	{BindVarCond{"a", true, true, QREqual, bvcuint64(10)}, int(10), true},
 	{BindVarCond{"a", true, true, QREqual, bvcuint64(10)}, int8(1), false},
 	{BindVarCond{"a", true, true, QREqual, bvcuint64(10)}, int8(10), true},
 	{BindVarCond{"a", true, true, QREqual, bvcuint64(10)}, int16(1), false},
 	{BindVarCond{"a", true, true, QREqual, bvcuint64(10)}, int32(1), false},
 	{BindVarCond{"a", true, true, QREqual, bvcuint64(10)}, int64(1), false},
+	{BindVarCond{"a", true, true, QREqual, bvcuint64(10)}, uint(10), true},
+	{BindVarCond{"a", true, true, QREqual, bvcuint64(10)}, uint8(1), false},
+	{BindVarCond{"a", true, true, QREqual, bvcuint64(10)}, uint8(10), true},
+	{BindVarCond{"a", true, true, QREqual, bvcuint64(10)}, uint16(1), false},
+	{BindVarCond{"a", true, true, QREqual, bvcuint64(10)}, uint32(1), false},
 	{BindVarCond{"a", true, true, QREqual, bvcuint64(10)}, uint64(1), false},
 	{BindVarCond{"a", true, true, QREqual, bvcuint64(10)}, int8(-1), false},
 	{BindVarCond{"a", true, true, QREqual, bvcuint64(10)}, "abc", true},
@@ -391,12 +414,33 @@ var bvtestcases = []BindVarTestCase{
 	{BindVarCond{"a", true, true, QRLessEqual, bvcuint64(10)}, int8(11), false},
 	{BindVarCond{"a", true, true, QRLessEqual, bvcuint64(10)}, int8(-1), true},
 
+	{BindVarCond{"a", true, true, QREqual, bvcint64(10)}, &querypb.BindVariable{
+		Type:  querypb.Type_INT24,
+		Value: []byte{'1'},
+	}, false},
+	{BindVarCond{"a", true, true, QREqual, bvcint64(10)}, &querypb.BindVariable{
+		Type:  querypb.Type_INT32,
+		Value: []byte{'1', '0'},
+	}, true},
+	{BindVarCond{"a", true, true, QREqual, bvcint64(10)}, &querypb.BindVariable{
+		Type:  querypb.Type_VARCHAR,
+		Value: []byte{'1', '0'},
+	}, true},
+	{BindVarCond{"a", true, true, QREqual, bvcint64(10)}, &querypb.BindVariable{
+		Type:  querypb.Type_VARCHAR,
+		Value: []byte{'-', '1', '0'},
+	}, false},
 	{BindVarCond{"a", true, true, QREqual, bvcint64(10)}, int(1), false},
 	{BindVarCond{"a", true, true, QREqual, bvcint64(10)}, int8(1), false},
 	{BindVarCond{"a", true, true, QREqual, bvcint64(10)}, int8(10), true},
 	{BindVarCond{"a", true, true, QREqual, bvcint64(10)}, int16(1), false},
 	{BindVarCond{"a", true, true, QREqual, bvcint64(10)}, int32(1), false},
 	{BindVarCond{"a", true, true, QREqual, bvcint64(10)}, int64(1), false},
+	{BindVarCond{"a", true, true, QREqual, bvcint64(10)}, uint(1), false},
+	{BindVarCond{"a", true, true, QREqual, bvcint64(10)}, uint(0xFFFFFFFFFFFFFFFF), false},
+	{BindVarCond{"a", true, true, QREqual, bvcint64(10)}, uint8(10), true},
+	{BindVarCond{"a", true, true, QREqual, bvcint64(10)}, uint16(1), false},
+	{BindVarCond{"a", true, true, QREqual, bvcint64(10)}, uint32(1), false},
 	{BindVarCond{"a", true, true, QREqual, bvcint64(10)}, uint64(1), false},
 	{BindVarCond{"a", true, true, QREqual, bvcint64(10)}, uint64(0xFFFFFFFFFFFFFFFF), false},
 	{BindVarCond{"a", true, true, QREqual, bvcint64(10)}, "abc", true},
@@ -426,6 +470,14 @@ var bvtestcases = []BindVarTestCase{
 	{BindVarCond{"a", true, true, QRLessEqual, bvcint64(10)}, int8(11), false},
 	{BindVarCond{"a", true, true, QRLessEqual, bvcint64(10)}, uint64(0xFFFFFFFFFFFFFFFF), false},
 
+	{BindVarCond{"a", true, true, QREqual, bvcstring("b")}, &querypb.BindVariable{
+		Type:  querypb.Type_VARCHAR,
+		Value: []byte{'a'},
+	}, false},
+	{BindVarCond{"a", true, true, QREqual, bvcstring("b")}, &querypb.BindVariable{
+		Type:  querypb.Type_VARCHAR,
+		Value: []byte{'b'},
+	}, true},
 	{BindVarCond{"a", true, true, QREqual, bvcstring("b")}, "a", false},
 	{BindVarCond{"a", true, true, QREqual, bvcstring("b")}, "b", true},
 	{BindVarCond{"a", true, true, QREqual, bvcstring("b")}, "c", false},
