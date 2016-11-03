@@ -247,7 +247,7 @@ var commands = []commandGroup{
 				"[-force] [-recursive] <keyspace/shard> <cell>",
 				"Removes the cell from the shard's Cells list."},
 			{"DeleteShard", commandDeleteShard,
-				"[-recursive] <keyspace/shard> ...",
+				"[-recursive] [-even_if_serving] <keyspace/shard> ...",
 				"Deletes the specified shard(s). In recursive mode, it also deletes all tablets belonging to the shard. Otherwise, there must be no tablets left in the shard."},
 		},
 	},
@@ -1468,6 +1468,7 @@ func commandRemoveShardCell(ctx context.Context, wr *wrangler.Wrangler, subFlags
 
 func commandDeleteShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	recursive := subFlags.Bool("recursive", false, "Also delete all tablets belonging to the shard.")
+	evenIfServing := subFlags.Bool("even_if_serving", false, "Remove the shard even if it is serving. Use with caution.")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -1480,7 +1481,7 @@ func commandDeleteShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 		return err
 	}
 	for _, ks := range keyspaceShards {
-		err := wr.DeleteShard(ctx, ks.Keyspace, ks.Shard, *recursive)
+		err := wr.DeleteShard(ctx, ks.Keyspace, ks.Shard, *recursive, *evenIfServing)
 		switch err {
 		case nil:
 			// keep going

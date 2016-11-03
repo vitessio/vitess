@@ -246,10 +246,12 @@ class TestKeyspace(unittest.TestCase):
     utils.run_vtctl(
         ['DeleteKeyspace', 'test_delete_keyspace'], expect_fail=True)
     # Can't delete shard if there are tablets present.
-    utils.run_vtctl(['DeleteShard', 'test_delete_keyspace/0'], expect_fail=True)
+    utils.run_vtctl(['DeleteShard', '-even_if_serving',
+                     'test_delete_keyspace/0'], expect_fail=True)
 
     # Use recursive DeleteShard to remove tablets.
-    utils.run_vtctl(['DeleteShard', '-recursive', 'test_delete_keyspace/0'])
+    utils.run_vtctl(['DeleteShard', '-even_if_serving', '-recursive',
+                     'test_delete_keyspace/0'])
     # Now non-recursive DeleteKeyspace should work.
     utils.run_vtctl(['DeleteKeyspace', 'test_delete_keyspace'])
 

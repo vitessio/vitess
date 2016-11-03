@@ -127,7 +127,7 @@ func NewFakeTablet(t *testing.T, wr *wrangler.Wrangler, cell string, uid uint32,
 	delete(tablet.PortMap, "start_http_server")
 	_, force := tablet.PortMap["force_init"]
 	delete(tablet.PortMap, "force_init")
-	if err := wr.InitTablet(context.Background(), tablet, force, true, false); err != nil {
+	if err := wr.InitTablet(context.Background(), tablet, force, true /* createShardAndKeyspace */, false /* allowUpdate */); err != nil {
 		t.Fatalf("cannot create tablet %v: %v", uid, err)
 	}
 

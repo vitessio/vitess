@@ -1397,12 +1397,13 @@ Deletes the specified shard(s). In recursive mode, it also deletes all tablets b
 
 #### Example
 
-<pre class="command-example">DeleteShard [-recursive] &lt;keyspace/shard&gt; ...</pre>
+<pre class="command-example">DeleteShard [-recursive] [-even_if_serving] &lt;keyspace/shard&gt; ...</pre>
 
 #### Flags
 
 | Name | Type | Definition |
 | :-------- | :--------- | :--------- |
+| even_if_serving | Boolean | Remove the shard even if it is serving. Use with caution. |
 | recursive | Boolean | Also delete all tablets belonging to the shard. |
 
 
@@ -2319,17 +2320,17 @@ Sends the provided action name on the specified path.
 
 ### WorkflowCreate
 
-Creates the workflow with the provided parameters. The workflow is also started, unless -nostart is specified.
+Creates the workflow with the provided parameters. The workflow is also started, unless -skip_start is specified.
 
 #### Example
 
-<pre class="command-example">WorkflowCreate [-nostart] &lt;factoryName&gt; [parameters...]</pre>
+<pre class="command-example">WorkflowCreate [-skip_start] &lt;factoryName&gt; [parameters...]</pre>
 
 #### Flags
 
 | Name | Type | Definition |
 | :-------- | :--------- | :--------- |
-| start | Boolean | If set, the workflow will also be started. |
+| skip_start | Boolean | If set, the workflow will not be started. |
 
 
 #### Arguments

@@ -843,6 +843,11 @@ primary key (name)
     # delete the original shard
     utils.run_vtctl(['DeleteShard', 'test_keyspace/80-'], auto_log=True)
 
+    # make sure we can't delete the destination shard now that it's serving
+    _, stderr = utils.run_vtctl(['DeleteShard', 'test_keyspace/80-c0'],
+                                expect_fail=True)
+    self.assertIn('is still serving, cannot delete it', stderr)
+
     # kill everything
     tablet.kill_tablets([shard_0_master, shard_0_replica, shard_0_ny_rdonly,
                          shard_2_master, shard_2_replica1, shard_2_replica2,
