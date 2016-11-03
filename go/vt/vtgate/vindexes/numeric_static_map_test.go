@@ -74,7 +74,7 @@ func TestNumericStaticMapMapBadData(t *testing.T) {
 	}
 
 	_, err = numericStaticMap.(Unique).Map(nil, []interface{}{1.1})
-	want := `NumericStaticMap.Map: unexpected type for 1.1: float64`
+	want := `NumericStaticMap.Map: getNumber: unexpected type for 1.1: float64`
 	if err == nil || err.Error() != want {
 		t.Errorf("NumericStaticMap.Map: %v, want %v", err, want)
 	}
@@ -102,7 +102,7 @@ func TestNumericStaticMapVerifyBadData(t *testing.T) {
 	}
 
 	_, err = numericStaticMap.Verify(nil, 1.1, []byte("\x00\x00\x00\x00\x00\x00\x00\x01"))
-	want := `NumericStaticMap.Verify: unexpected type for 1.1: float64`
+	want := `NumericStaticMap.Verify: getNumber: unexpected type for 1.1: float64`
 	if err == nil || err.Error() != want {
 		t.Errorf("numericStaticMap.Map: %v, want %v", err, want)
 	}

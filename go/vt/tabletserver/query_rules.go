@@ -11,9 +11,11 @@ import (
 	"regexp"
 	"strconv"
 
+	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/tabletserver/planbuilder"
 
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
@@ -755,8 +757,46 @@ func getuint64(val interface{}) (uv uint64, status int) {
 			return 0, QROutOfRange
 		}
 		return uint64(v), QROK
+	case uint:
+		return uint64(v), QROK
+	case uint8:
+		return uint64(v), QROK
+	case uint16:
+		return uint64(v), QROK
+	case uint32:
+		if v < 0 {
+			return 0, QROutOfRange
+		}
+		return uint64(v), QROK
 	case uint64:
 		return v, QROK
+	case *querypb.BindVariable:
+		if sqltypes.IsSigned(v.Type) {
+			signed, err := strconv.ParseInt(string(v.Value), 0, 64)
+			if err != nil {
+				return 0, QROutOfRange
+			}
+			if signed < 0 {
+				return 0, QROutOfRange
+			}
+			return uint64(signed), QROK
+		}
+		if sqltypes.IsUnsigned(v.Type) {
+			unsigned, err := strconv.ParseUint(string(v.Value), 0, 64)
+			if err != nil {
+				return 0, QROutOfRange
+			}
+			return uint64(unsigned), QROK
+		}
+		if sqltypes.IsText(v.Type) || sqltypes.IsBinary(v.Type) {
+			// We only want unsigned, just try to parse it.
+			unsigned, err := strconv.ParseUint(string(v.Value), 0, 64)
+			if err != nil {
+				return 0, QROutOfRange
+			}
+			return uint64(unsigned), QROK
+		}
+		return 0, QROutOfRange
 	}
 	return 0, QRMismatch
 }
@@ -774,11 +814,49 @@ func getint64(val interface{}) (iv int64, status int) {
 		return int64(v), QROK
 	case int64:
 		return int64(v), QROK
+	case uint:
+		if v > 0x7FFFFFFFFFFFFFFF { // largest int64
+			return 0, QROutOfRange
+		}
+		return int64(v), QROK
+	case uint8:
+		return int64(v), QROK
+	case uint16:
+		return int64(v), QROK
+	case uint32:
+		return int64(v), QROK
 	case uint64:
 		if v > 0x7FFFFFFFFFFFFFFF { // largest int64
 			return 0, QROutOfRange
 		}
 		return int64(v), QROK
+	case *querypb.BindVariable:
+		if sqltypes.IsSigned(v.Type) {
+			signed, err := strconv.ParseInt(string(v.Value), 0, 64)
+			if err != nil {
+				return 0, QROutOfRange
+			}
+			return int64(signed), QROK
+		}
+		if sqltypes.IsUnsigned(v.Type) {
+			unsigned, err := strconv.ParseUint(string(v.Value), 0, 64)
+			if err != nil {
+				return 0, QROutOfRange
+			}
+			if unsigned > 0x7FFFFFFFFFFFFFFF { // largest int64
+				return 0, QROutOfRange
+			}
+			return int64(unsigned), QROK
+		}
+		if sqltypes.IsText(v.Type) || sqltypes.IsBinary(v.Type) {
+			// We only want signed, just try to parse it.
+			signed, err := strconv.ParseInt(string(v.Value), 0, 64)
+			if err != nil {
+				return 0, QROutOfRange
+			}
+			return int64(signed), QROK
+		}
+		return 0, QROutOfRange
 	}
 	return 0, QRMismatch
 }
@@ -789,6 +867,11 @@ func getstring(val interface{}) (sv string, status int) {
 		return string(v), QROK
 	case string:
 		return v, QROK
+	case *querypb.BindVariable:
+		// We use the raw bytes for numbers, text and binary.
+		if sqltypes.IsIntegral(v.Type) || sqltypes.IsFloat(v.Type) || sqltypes.IsText(v.Type) || sqltypes.IsBinary(v.Type) {
+			return string(v.Value), QROK
+		}
 	}
 	return "", QRMismatch
 }
