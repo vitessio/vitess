@@ -2,7 +2,7 @@
 
 title: Vitess
 description: "Vitess is a database clustering system for horizontal scaling of MySQL."
-logo: vitess-logo-large-cropped-2.png
+logo: vitess_logomark_cropped.svg
 teaser: 400x250.gif
 locale: en_US
 url: http://vitess.io

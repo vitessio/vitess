@@ -23,7 +23,7 @@ const (
 )
 
 // RunTests performs the necessary testsuite for CallerID operations
-func RunTests(t *testing.T, im *querypb.VTGateCallerID, ef *vtrpcpb.CallerID) {
+func RunTests(t *testing.T, im *querypb.VTGateCallerID, ef *vtrpcpb.CallerID, newContext func(context.Context, *vtrpcpb.CallerID, *querypb.VTGateCallerID) context.Context) {
 	ctx := context.TODO()
 	ctxim := callerid.ImmediateCallerIDFromContext(ctx)
 	// For Contexts without immediate CallerID, ImmediateCallerIDFromContext should fail
@@ -36,7 +36,7 @@ func RunTests(t *testing.T, im *querypb.VTGateCallerID, ef *vtrpcpb.CallerID) {
 		t.Errorf("Expect nil from EffectiveCallerIDFromContext, but got %v", ctxef)
 	}
 
-	ctx = callerid.NewContext(ctx, nil, nil)
+	ctx = newContext(ctx, nil, nil)
 	ctxim = callerid.ImmediateCallerIDFromContext(ctx)
 	// For Contexts with nil immediate CallerID, ImmediateCallerIDFromContext should fail
 	if ctxim != nil {
@@ -62,7 +62,7 @@ func RunTests(t *testing.T, im *querypb.VTGateCallerID, ef *vtrpcpb.CallerID) {
 		t.Errorf("Expect empty string from GetSubcomponent(nil), but got %v", s)
 	}
 
-	ctx = callerid.NewContext(ctx, ef, im)
+	ctx = newContext(ctx, ef, im)
 	ctxim = callerid.ImmediateCallerIDFromContext(ctx)
 	// retrieved immediate CallerID should be equal to the one we put into Context
 	if !reflect.DeepEqual(ctxim, im) {

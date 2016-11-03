@@ -1682,9 +1682,13 @@ func Rand() int64 {
 	return rand.Int63()
 }
 
-// withTimeout returns a context based on whether the timeout is 0 or not.
+// withTimeout returns a context based on the specified timeout.
+// If the context is the background context or if timeout is 0, the
+// original context is returned as is.
+// TODO(sougou): cleanup code that treats background context as
+// special case.
 func withTimeout(ctx context.Context, timeout time.Duration) (context.Context, context.CancelFunc) {
-	if timeout == 0 {
+	if timeout == 0 || ctx == context.Background() {
 		return ctx, func() {}
 	}
 	return context.WithTimeout(ctx, timeout)

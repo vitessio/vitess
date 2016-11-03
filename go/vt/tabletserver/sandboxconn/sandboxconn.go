@@ -25,6 +25,7 @@ import (
 type SandboxConn struct {
 	tablet *topodatapb.Tablet
 
+	// These errors work for all functions.
 	MustFailRetry            int
 	MustFailFatal            int
 	MustFailServer           int
@@ -38,6 +39,16 @@ type SandboxConn struct {
 	MustFailPermissionDenied int
 	MustFailTransientError   int
 	MustFailUnauthenticated  int
+
+	// These errors are triggered only for specific functions.
+	// For now these are just for the 2PC functions.
+	MustFailPrepare            int
+	MustFailCommitPrepared     int
+	MustFailRollbackPrepared   int
+	MustFailCreateTransaction  int
+	MustFailStartCommit        int
+	MustFailSetRollback        int
+	MustFailResolveTransaction int
 
 	// These Count vars report how often the corresponding
 	// functions were called.
@@ -69,6 +80,9 @@ type SandboxConn struct {
 	// They're consumed as results are returned. If there are
 	// no results left, SingleRowResult is returned.
 	results []*sqltypes.Result
+
+	// ReadTransactionResults is used for returning results for ReadTransaction.
+	ReadTransactionResults []*querypb.TransactionMetadata
 
 	// transaction id generator
 	TransactionID sync2.AtomicInt64
@@ -275,24 +289,52 @@ func (sbc *SandboxConn) Rollback(ctx context.Context, target *querypb.Target, tr
 // Prepare prepares the specified transaction.
 func (sbc *SandboxConn) Prepare(ctx context.Context, target *querypb.Target, transactionID int64, dtid string) (err error) {
 	sbc.PrepareCount.Add(1)
+	if sbc.MustFailPrepare > 0 {
+		sbc.MustFailPrepare--
+		return &tabletconn.ServerError{
+			Err:        "error: err",
+			ServerCode: vtrpcpb.ErrorCode_QUERY_NOT_SERVED,
+		}
+	}
 	return sbc.getError()
 }
 
 // CommitPrepared commits the prepared transaction.
 func (sbc *SandboxConn) CommitPrepared(ctx context.Context, target *querypb.Target, dtid string) (err error) {
 	sbc.CommitPreparedCount.Add(1)
+	if sbc.MustFailCommitPrepared > 0 {
+		sbc.MustFailCommitPrepared--
+		return &tabletconn.ServerError{
+			Err:        "error: err",
+			ServerCode: vtrpcpb.ErrorCode_QUERY_NOT_SERVED,
+		}
+	}
 	return sbc.getError()
 }
 
 // RollbackPrepared rolls back the prepared transaction.
 func (sbc *SandboxConn) RollbackPrepared(ctx context.Context, target *querypb.Target, dtid string, originalID int64) (err error) {
 	sbc.RollbackPreparedCount.Add(1)
+	if sbc.MustFailRollbackPrepared > 0 {
+		sbc.MustFailRollbackPrepared--
+		return &tabletconn.ServerError{
+			Err:        "error: err",
+			ServerCode: vtrpcpb.ErrorCode_QUERY_NOT_SERVED,
+		}
+	}
 	return sbc.getError()
 }
 
 // CreateTransaction creates the metadata for a 2PC transaction.
 func (sbc *SandboxConn) CreateTransaction(ctx context.Context, target *querypb.Target, dtid string, participants []*querypb.Target) (err error) {
 	sbc.CreateTransactionCount.Add(1)
+	if sbc.MustFailCreateTransaction > 0 {
+		sbc.MustFailCreateTransaction--
+		return &tabletconn.ServerError{
+			Err:        "error: err",
+			ServerCode: vtrpcpb.ErrorCode_QUERY_NOT_SERVED,
+		}
+	}
 	return sbc.getError()
 }
 
@@ -300,6 +342,13 @@ func (sbc *SandboxConn) CreateTransaction(ctx context.Context, target *querypb.T
 // decision to commit the associated 2pc transaction.
 func (sbc *SandboxConn) StartCommit(ctx context.Context, target *querypb.Target, transactionID int64, dtid string) (err error) {
 	sbc.StartCommitCount.Add(1)
+	if sbc.MustFailStartCommit > 0 {
+		sbc.MustFailStartCommit--
+		return &tabletconn.ServerError{
+			Err:        "error: err",
+			ServerCode: vtrpcpb.ErrorCode_QUERY_NOT_SERVED,
+		}
+	}
 	return sbc.getError()
 }
 
@@ -307,6 +356,13 @@ func (sbc *SandboxConn) StartCommit(ctx context.Context, target *querypb.Target,
 // If a transaction id is provided, that transaction is also rolled back.
 func (sbc *SandboxConn) SetRollback(ctx context.Context, target *querypb.Target, dtid string, transactionID int64) (err error) {
 	sbc.SetRollbackCount.Add(1)
+	if sbc.MustFailSetRollback > 0 {
+		sbc.MustFailSetRollback--
+		return &tabletconn.ServerError{
+			Err:        "error: err",
+			ServerCode: vtrpcpb.ErrorCode_QUERY_NOT_SERVED,
+		}
+	}
 	return sbc.getError()
 }
 
@@ -314,13 +370,28 @@ func (sbc *SandboxConn) SetRollback(ctx context.Context, target *querypb.Target,
 // essentially resolving it.
 func (sbc *SandboxConn) ResolveTransaction(ctx context.Context, target *querypb.Target, dtid string) (err error) {
 	sbc.ResolveTransactionCount.Add(1)
+	if sbc.MustFailResolveTransaction > 0 {
+		sbc.MustFailResolveTransaction--
+		return &tabletconn.ServerError{
+			Err:        "error: err",
+			ServerCode: vtrpcpb.ErrorCode_QUERY_NOT_SERVED,
+		}
+	}
 	return sbc.getError()
 }
 
 // ReadTransaction returns the metadata for the sepcified dtid.
 func (sbc *SandboxConn) ReadTransaction(ctx context.Context, target *querypb.Target, dtid string) (metadata *querypb.TransactionMetadata, err error) {
 	sbc.ReadTransactionCount.Add(1)
-	return nil, sbc.getError()
+	if err := sbc.getError(); err != nil {
+		return nil, err
+	}
+	if len(sbc.ReadTransactionResults) >= 1 {
+		res := sbc.ReadTransactionResults[0]
+		sbc.ReadTransactionResults = sbc.ReadTransactionResults[1:]
+		return res, nil
+	}
+	return nil, nil
 }
 
 // BeginExecute is part of the TabletConn interface.
@@ -402,7 +473,8 @@ func (sbc *SandboxConn) UpdateStream(ctx context.Context, target *querypb.Target
 }
 
 // Close does not change ExecCount
-func (sbc *SandboxConn) Close() {
+func (sbc *SandboxConn) Close(ctx context.Context) error {
+	return nil
 }
 
 // Tablet is part of the TabletConn interface.

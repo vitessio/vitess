@@ -685,16 +685,16 @@ func (conn *gRPCQueryClient) UpdateStream(ctx context.Context, target *querypb.T
 }
 
 // Close closes underlying gRPC channel.
-func (conn *gRPCQueryClient) Close() {
+func (conn *gRPCQueryClient) Close(ctx context.Context) error {
 	conn.mu.Lock()
 	defer conn.mu.Unlock()
 	if conn.cc == nil {
-		return
+		return nil
 	}
 
 	cc := conn.cc
 	conn.cc = nil
-	cc.Close()
+	return cc.Close()
 }
 
 // Tablet returns the rpc end point.

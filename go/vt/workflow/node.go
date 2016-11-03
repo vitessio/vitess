@@ -104,34 +104,44 @@ type Node struct {
 	Path            string                   `json:"path"`
 	Children        []*Node                  `json:"children"`
 	LastChanged     int64                    `json:"lastChanged"`
-	Progress        int                      `json:"progress"`
-	ProgressMessage string                   `json:"progressMsg"`
-	State           workflowpb.WorkflowState `json:"state"`
-	Display         NodeDisplay              `json:"display"`
-	Message         string                   `json:"message"`
-	Log             string                   `json:"log"`
-	Disabled        bool                     `json:"disabled"`
+	Progress        int                      `json:"progress,omitempty"`
+	ProgressMessage string                   `json:"progressMsg,omitempty"`
+	State           workflowpb.WorkflowState `json:"state,omitempty"`
+	Display         NodeDisplay              `json:"display,omitempty"`
+	Message         string                   `json:"message,omitempty"`
+	Log             string                   `json:"log,omitempty"`
+	Disabled        bool                     `json:"disabled,omitempty"`
 	Actions         []*Action                `json:"actions"`
 }
 
 // Action must match node.ts Action.
 type Action struct {
-	Name    string      `json:"name"`
-	State   ActionState `json:"state"`
-	Style   ActionStyle `json:"style"`
-	Message string      `json:"message"`
+	Name    string      `json:"name,omitempty"`
+	State   ActionState `json:"state,omitempty"`
+	Style   ActionStyle `json:"style,omitempty"`
+	Message string      `json:"message,omitempty"`
 }
 
-// Update is the data structure we send on the websocket to the clients.
+// Update is the data structure we send on the websocket or on the
+// long-polling HTTP connection to the clients.
 type Update struct {
+	// Redirect is set to the URL to go to if we are not the
+	// master.  It is only set in the initial response, and if set
+	// then no other field in this structure is set.
+	Redirect string `json:"redirect,omitempty"`
+
+	// Index is the watcher index. It is only set in the initial
+	// tree.
+	Index int `json:"index,omitempty"`
+
 	// Nodes is a list of nodes to update.
-	Nodes []*Node `json:"nodes"`
+	Nodes []*Node `json:"nodes,omitempty"`
 
 	// Deletes is a list of toplevel paths to delete.
-	Deletes []string `json:"deletes"`
+	Deletes []string `json:"deletes,omitempty"`
 
 	// FullUpdate is set to true if this is a full refresh of the data.
-	FullUpdate bool `json:"fullUpdate"`
+	FullUpdate bool `json:"fullUpdate,omitempty"`
 }
 
 // NewToplevelNode returns a UI Node matching the toplevel workflow.
@@ -259,8 +269,9 @@ func (m *NodeManager) RemoveRootNode(n *Node) {
 	m.broadcastUpdateLocked(u)
 }
 
-func (m *NodeManager) toJSON() ([]byte, error) {
+func (m *NodeManager) toJSON(index int) ([]byte, error) {
 	u := &Update{
+		Index:      index,
 		FullUpdate: true,
 	}
 	for _, n := range m.roots {
@@ -273,7 +284,7 @@ func (m *NodeManager) toJSON() ([]byte, error) {
 func (m *NodeManager) GetFullTree() ([]byte, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	return m.toJSON()
+	return m.toJSON(0)
 }
 
 // GetAndWatchFullTree returns the JSON representation of the entire Node tree,
@@ -281,16 +292,17 @@ func (m *NodeManager) GetFullTree() ([]byte, error) {
 func (m *NodeManager) GetAndWatchFullTree(notifications chan []byte) ([]byte, int, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	result, err := m.toJSON()
+
+	i := m.nextWatcherIndex
+	m.nextWatcherIndex++
+
+	result, err := m.toJSON(i)
 	if err != nil {
 		return nil, 0, err
 	}
 
-	// Register the watcher.
-	i := m.nextWatcherIndex
-	m.nextWatcherIndex++
+	// It worked, register the watcher.
 	m.watchers[i] = notifications
-
 	return result, i, nil
 }
 

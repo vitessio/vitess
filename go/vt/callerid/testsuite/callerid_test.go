@@ -3,6 +3,7 @@ package testsuite
 import (
 	"testing"
 
+	"github.com/youtube/vitess/go/vt/callerid"
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
@@ -16,5 +17,5 @@ func TestFakeCallerID(t *testing.T) {
 		Component:    FakeComponent,
 		Subcomponent: FakeSubcomponent,
 	}
-	RunTests(t, &im, &ef)
+	RunTests(t, &im, &ef, callerid.NewContext)
 }

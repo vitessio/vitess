@@ -26,6 +26,9 @@ dbconfig_flags="\
     -db-config-app-uname vt_app \
     -db-config-app-dbname vt_$keyspace \
     -db-config-app-charset utf8 \
+    -db-config-allprivs-uname vt_allprivs \
+    -db-config-allprivs-dbname vt_$keyspace \
+    -db-config-allprivs-charset utf8 \
     -db-config-dba-uname vt_dba \
     -db-config-dba-charset utf8 \
     -db-config-repl-uname vt_repl \

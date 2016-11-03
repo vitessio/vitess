@@ -345,7 +345,7 @@ func commandVtTabletExecute(ctx context.Context, wr *wrangler.Wrangler, subFlags
 	if err != nil {
 		return fmt.Errorf("cannot connect to tablet %v: %v", tabletAlias, err)
 	}
-	defer conn.Close()
+	defer conn.Close(ctx)
 
 	qr, err := conn.Execute(ctx, &querypb.Target{
 		Keyspace:   tabletInfo.Tablet.Keyspace,
@@ -383,7 +383,7 @@ func commandVtTabletBegin(ctx context.Context, wr *wrangler.Wrangler, subFlags *
 	if err != nil {
 		return fmt.Errorf("cannot connect to tablet %v: %v", tabletAlias, err)
 	}
-	defer conn.Close()
+	defer conn.Close(ctx)
 
 	transactionID, err := conn.Begin(ctx, &querypb.Target{
 		Keyspace:   tabletInfo.Tablet.Keyspace,
@@ -424,7 +424,7 @@ func commandVtTabletCommit(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 	if err != nil {
 		return fmt.Errorf("cannot connect to tablet %v: %v", tabletAlias, err)
 	}
-	defer conn.Close()
+	defer conn.Close(ctx)
 
 	return conn.Commit(ctx, &querypb.Target{
 		Keyspace:   tabletInfo.Tablet.Keyspace,
@@ -458,7 +458,7 @@ func commandVtTabletRollback(ctx context.Context, wr *wrangler.Wrangler, subFlag
 	if err != nil {
 		return fmt.Errorf("cannot connect to tablet %v: %v", tabletAlias, err)
 	}
-	defer conn.Close()
+	defer conn.Close(ctx)
 
 	return conn.Rollback(ctx, &querypb.Target{
 		Keyspace:   tabletInfo.Tablet.Keyspace,

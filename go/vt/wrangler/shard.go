@@ -114,6 +114,10 @@ func (wr *Wrangler) SetShardTabletControl(ctx context.Context, keyspace, shard s
 func (wr *Wrangler) DeleteShard(ctx context.Context, keyspace, shard string, recursive bool) error {
 	shardInfo, err := wr.ts.GetShard(ctx, keyspace, shard)
 	if err != nil {
+		if err == topo.ErrNoNode {
+			wr.Logger().Infof("Shard %v/%v doesn't seem to exist, cleaning up any potential leftover", keyspace, shard)
+			return wr.ts.DeleteShard(ctx, keyspace, shard)
+		}
 		return err
 	}
 

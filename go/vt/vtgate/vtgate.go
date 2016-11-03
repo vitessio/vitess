@@ -61,8 +61,23 @@ var (
 // VTGate is the rpc interface to vtgate. Only one instance
 // can be created. It implements vtgateservice.VTGateService
 type VTGate struct {
-	resolver     *Resolver
-	router       *Router
+	// router and resolver are top-level objects
+	// that make routing decisions.
+	router   *Router
+	resolver *Resolver
+
+	// scatterConn and txConn are mid-level objects
+	// that execute requests.
+	scatterConn *ScatterConn
+	txConn      *TxConn
+
+	// gateway is the low-level outgoing connection
+	// object to vttablet or l2vtgate.
+	gateway gateway.Gateway
+
+	// stats objects.
+	// TODO(sougou): This needs to be cleaned up. There
+	// are global vars that depend on this member var.
 	timings      *stats.MultiTimings
 	rowsReturned *stats.MultiCounters
 
@@ -94,8 +109,25 @@ func Init(ctx context.Context, hc discovery.HealthCheck, topoServer topo.Server,
 	if rpcVTGate != nil {
 		log.Fatalf("VTGate already initialized")
 	}
+
+	// vschemaCounters needs to be initialized before planner to
+	// catch the initial load stats.
+	vschemaCounters = stats.NewCounters("VtgateVSchemaCounts")
+
+	// Build objects from low to high level.
+	gw := gateway.GetCreator()(hc, topoServer, serv, cell, retryCount)
+	gateway.WaitForTablets(gw, tabletTypesToWait)
+
+	tc := NewTxConn(gw)
+	// ScatterConn depends on TxConn to perform forced rollbacks.
+	sc := NewScatterConn("VttabletCall", tc, gw)
+
 	rpcVTGate = &VTGate{
-		resolver:     NewResolver(hc, topoServer, serv, "VttabletCall", cell, retryCount, tabletTypesToWait),
+		router:       NewRouter(ctx, serv, cell, "VTGateRouter", sc),
+		resolver:     NewResolver(serv, cell, sc),
+		scatterConn:  sc,
+		txConn:       tc,
+		gateway:      gw,
 		timings:      stats.NewMultiTimings("VtgateApi", []string{"Operation", "Keyspace", "DbType"}),
 		rowsReturned: stats.NewMultiCounters("VtgateApiRowsReturned", []string{"Operation", "Keyspace", "DbType"}),
 
@@ -113,12 +145,6 @@ func Init(ctx context.Context, hc discovery.HealthCheck, topoServer topo.Server,
 		logUpdateStream:             logutil.NewThrottledLogger("UpdateStream", 5*time.Second),
 	}
 
-	// vschemaCounters needs to be initialized before planner to
-	// catch the initial load stats.
-	vschemaCounters = stats.NewCounters("VtgateVSchemaCounts")
-
-	// Resuse resolver's scatterConn.
-	rpcVTGate.router = NewRouter(ctx, serv, cell, "VTGateRouter", rpcVTGate.resolver.scatterConn)
 	normalErrors = stats.NewMultiCounters("VtgateApiErrorCounts", []string{"Operation", "Keyspace", "DbType"})
 	infoErrors = stats.NewCounters("VtgateInfoErrorCounts")
 	internalErrors = stats.NewCounters("VtgateInternalErrorCounts")
@@ -549,12 +575,12 @@ func (vtg *VTGate) Begin(ctx context.Context) (*vtgatepb.Session, error) {
 
 // Commit commits a transaction.
 func (vtg *VTGate) Commit(ctx context.Context, session *vtgatepb.Session) error {
-	return formatError(vtg.resolver.Commit(ctx, session))
+	return formatError(vtg.txConn.Commit(ctx, false, NewSafeSession(session)))
 }
 
 // Rollback rolls back a transaction.
 func (vtg *VTGate) Rollback(ctx context.Context, session *vtgatepb.Session) error {
-	return formatError(vtg.resolver.Rollback(ctx, session))
+	return formatError(vtg.txConn.Rollback(ctx, NewSafeSession(session)))
 }
 
 // isKeyspaceRangeBasedSharded returns true if a keyspace is sharded

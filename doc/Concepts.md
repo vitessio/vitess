@@ -88,11 +88,8 @@ performs.
               of restoring itself from the latest backup. After it finishes,
               it will begin replicating at the GTID position of the backup,
               and become either *replica* or *rdonly*.
-* **worker** - A *rdonly* tablet that has been reserved by a Vitess background
-             process (such as resharding). While it is a *worker* type, the
-             tablet will not be available to serve queries from Vitess clients.
-             After the background job finishes, the tablet will resume
-             replication (if necessary) and go back to being *rdonly*.
+* **drained** - A tablet that has been reserved by a Vitess background
+             process (such as rdonly tablets for resharding).
 
 <!-- TODO: Add pointer to complete list of types and explain how to update type? -->
 

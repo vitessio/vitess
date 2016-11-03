@@ -9,4 +9,4 @@ cp -R /usr/local/lib/python2.7/dist-packages /out/pkg/
 cp -R /vt/dist/py-* /out/pkg/
 
 # We also need the grpc libraries.
-cp /usr/local/lib/libgrpc.so.0 /out/lib/
+cp /usr/local/lib/libgrpc.so /out/lib/

@@ -311,7 +311,7 @@ type Server struct {
 // })
 //
 // servenv.OnTermSync(func() {
-//   mp.Shutdown()
+//   mp.Stop()
 // })
 type MasterParticipation interface {
 	// WaitForMastership makes the current process a candidate

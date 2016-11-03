@@ -44,7 +44,7 @@ func TestNodeManagerWithRoot(t *testing.T) {
 		t.Fatalf("GetAndWatchFullTree failed: %v", err)
 	}
 	defer nodeManager.CloseWatcher(index)
-	if string(result) != `{"nodes":null,"deletes":null,"fullUpdate":true}` {
+	if string(result) != `{"index":1,"fullUpdate":true}` {
 		t.Errorf("unexpected first result: %v", string(result))
 	}
 
@@ -74,7 +74,7 @@ func TestNodeManagerWithRoot(t *testing.T) {
 	if !ok ||
 		!strings.Contains(string(result), `"name":"name2"`) ||
 		!strings.Contains(string(result), `"children":[]`) || // FIXME(alainjobart) this should be true, we're not changing the children.
-		!strings.Contains(string(result), `"fullUpdate":false`) {
+		strings.Contains(string(result), `"fullUpdate":true`) {
 		t.Errorf("unexpected notification: %v %v", ok, string(result))
 	}
 

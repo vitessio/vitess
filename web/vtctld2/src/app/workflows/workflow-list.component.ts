@@ -26,6 +26,7 @@ import { MenuItem } from 'primeng/primeng';
 
 export class WorkflowListComponent implements OnDestroy, OnInit {
   title = 'Running Workflows';
+  redirect = '';
   workflows = [
     new Node('Horizontal Resharding Workflow', '/UU130429', [
       new Node('Approval', '/UU130429/1', []),
@@ -217,6 +218,7 @@ dolore magnam aliquam quaerat voluptatem.'});
 
   processUpdateJson(update: any) {
     if ('fullUpdate' in update && update.fullUpdate) {
+      this.redirect = '';
       this.workflows = [];
     }
     if ('nodes' in update && update.nodes !== null) {
@@ -226,6 +228,10 @@ dolore magnam aliquam quaerat voluptatem.'});
       for (let path of update.deletes) {
         this.deleteRootWorkflow(path);
       }
+    }
+    if ('redirect' in update && update.redirect !== '') {
+      this.redirect = update.redirect;
+      this.workflows = [];
     }
   }
 

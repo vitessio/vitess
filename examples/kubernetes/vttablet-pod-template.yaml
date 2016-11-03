@@ -11,7 +11,7 @@ metadata:
 spec:
   containers:
     - name: vttablet
-      image: vitess/lite
+      image: {{vitess_image}}
       livenessProbe:
         httpGet:
           path: /debug/vars
@@ -80,7 +80,7 @@ spec:
           -orc_discover_interval 5m
           -restore_from_backup {{backup_flags}}" vitess
     - name: mysql
-      image: vitess/lite
+      image: {{vitess_image}}
       volumeMounts:
         - name: syslog
           mountPath: /dev/log
@@ -105,6 +105,9 @@ spec:
           -db-config-app-uname vt_app
           -db-config-app-dbname vt_{{keyspace}}
           -db-config-app-charset utf8
+          -db-config-allprivs-uname vt_allprivs
+          -db-config-allprivs-dbname vt_{{keyspace}}
+          -db-config-allprivs-charset utf8
           -db-config-dba-uname vt_dba
           -db-config-dba-dbname vt_{{keyspace}}
           -db-config-dba-charset utf8

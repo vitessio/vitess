@@ -87,8 +87,8 @@ func (qrr *QueryResultReader) Fields() []*querypb.Field {
 }
 
 // Close closes the connection to the tablet.
-func (qrr *QueryResultReader) Close() {
-	qrr.conn.Close()
+func (qrr *QueryResultReader) Close(ctx context.Context) error {
+	return qrr.conn.Close(ctx)
 }
 
 // v3KeyRangeFilter is a sqltypes.ResultStream implementation that filters

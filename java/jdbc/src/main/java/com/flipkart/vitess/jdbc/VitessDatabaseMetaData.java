@@ -30,8 +30,7 @@ public abstract class VitessDatabaseMetaData implements DatabaseMetaData {
     }
 
     public String getUserName() throws SQLException {
-        throw new SQLFeatureNotSupportedException(
-            Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
+        return this.connection.getUsername();
     }
 
     public boolean isReadOnly() throws SQLException {

@@ -43,17 +43,24 @@ func (m *Manager) HandleHTTPWebSocket(pattern string) {
 		defer c.Close()
 
 		// Register the handler.
-		notifications := make(chan []byte, 10)
-		tree, i, err := m.NodeManager().GetAndWatchFullTree(notifications)
+		tree, notifications, i, err := m.getAndWatchFullTree(r.URL)
 		if err != nil {
 			log.Warningf("GetAndWatchFullTree failed: %v", err)
 			return
 		}
-		defer m.NodeManager().CloseWatcher(i)
+		if notifications != nil {
+			defer m.NodeManager().CloseWatcher(i)
+		}
 
 		// First we send the full dump
 		if err := c.WriteMessage(websocket.TextMessage, tree); err != nil {
 			log.Warningf("WriteMessage(tree) failed: %v", err)
+			return
+		}
+
+		// If we didn't get a channel back (redirect case), we're done.
+		// We will just return the redirect, and close the websocket.
+		if notifications == nil {
 			return
 		}
 

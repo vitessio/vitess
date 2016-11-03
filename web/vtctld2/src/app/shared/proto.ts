@@ -7,7 +7,7 @@ export class Proto {
   public static get VT_TABLET_TYPES(): string[] {
     return [
       'unknown', 'master', 'replica', 'rdonly', 'spare', 'experimental',
-      'backup', 'restore', 'worker'
+      'backup', 'restore', 'drained'
     ];
   }
 

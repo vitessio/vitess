@@ -14,7 +14,6 @@ import (
 	"strings"
 
 	"github.com/youtube/vitess/go/sqltypes"
-	"github.com/youtube/vitess/go/vt/discovery"
 	"github.com/youtube/vitess/go/vt/sqlannotation"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vterrors"
@@ -44,11 +43,10 @@ type Resolver struct {
 	cell        string
 }
 
-// NewResolver creates a new Resolver. All input parameters are passed through
-// for creating ScatterConn.
-func NewResolver(hc discovery.HealthCheck, topoServer topo.Server, serv topo.SrvTopoServer, statsName, cell string, retryCount int, tabletTypesToWait []topodatapb.TabletType) *Resolver {
+// NewResolver creates a new Resolver.
+func NewResolver(serv topo.SrvTopoServer, cell string, sc *ScatterConn) *Resolver {
 	return &Resolver{
-		scatterConn: NewScatterConn(hc, topoServer, serv, statsName, cell, retryCount, tabletTypesToWait),
+		scatterConn: sc,
 		toposerv:    serv,
 		cell:        cell,
 	}
@@ -359,16 +357,6 @@ func (res *Resolver) streamExecute(
 	return err
 }
 
-// Commit commits a transaction.
-func (res *Resolver) Commit(ctx context.Context, inSession *vtgatepb.Session) error {
-	return res.scatterConn.Commit(ctx, NewSafeSession(inSession))
-}
-
-// Rollback rolls back a transaction.
-func (res *Resolver) Rollback(ctx context.Context, inSession *vtgatepb.Session) error {
-	return res.scatterConn.Rollback(ctx, NewSafeSession(inSession))
-}
-
 // UpdateStream streams the events.
 // TODO(alainjobart): Implement the multi-shards merge code.
 func (res *Resolver) UpdateStream(ctx context.Context, keyspace string, shard string, keyRange *topodatapb.KeyRange, tabletType topodatapb.TabletType, timestamp int64, event *querypb.EventToken, sendReply func(*querypb.StreamEvent, int64) error) error {
@@ -407,7 +395,12 @@ func (res *Resolver) UpdateStream(ctx context.Context, keyspace string, shard st
 		position = event.Position
 		timestamp = 0
 	}
-	return res.scatterConn.UpdateStream(ctx, keyspace, shard, tabletType, timestamp, position, func(se *querypb.StreamEvent) error {
+	target := &querypb.Target{
+		Keyspace:   keyspace,
+		Shard:      shard,
+		TabletType: tabletType,
+	}
+	return res.scatterConn.UpdateStream(ctx, target, timestamp, position, func(se *querypb.StreamEvent) error {
 		var timestamp int64
 		if se.EventToken != nil {
 			timestamp = se.EventToken.Timestamp

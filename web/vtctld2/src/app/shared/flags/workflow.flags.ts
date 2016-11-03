@@ -14,6 +14,14 @@ export class NewWorkflowFlags {
     this.flags['sleep_duration'] = new SleepDurationFlag(2, 'sleep_duration');
     this.flags['sleep_duration'].positional = true;
     this.flags['sleep_duration'].namedPositional = 'duration';
+
+    // Flags for the Schema Swap workflow.
+    this.flags['schema_swap_keyspace'] = new SchemaSwapKeyspaceFlag(3, 'schema_swap_keyspace');
+    this.flags['schema_swap_keyspace'].positional = true;
+    this.flags['schema_swap_keyspace'].namedPositional = 'keyspace';
+    this.flags['schema_swap_sql'] = new SchemaSwapSQLFlag(4, 'schema_swap_sql');
+    this.flags['schema_swap_sql'].positional = true;
+    this.flags['schema_swap_sql'].namedPositional = 'sql';
   }
 }
 
@@ -24,6 +32,10 @@ export class FactoryNameFlag extends DropDownFlag {
       {
         label: 'Topology Validator',
         value: 'topovalidator',
+      },
+      {
+        label: 'Schema Swap',
+        value: 'schema_swap'
       },
       {
         label: 'Sleep',
@@ -44,6 +56,20 @@ export class SleepDurationFlag extends InputFlag {
   constructor(position: number, id: string, value= '') {
     super(position, id, 'Sleep Duration', 'Time to sleep for, in seconds.', value);
     this.setDisplayOn('factory_name', 'sleep');
+  }
+}
+
+export class SchemaSwapKeyspaceFlag extends InputFlag {
+  constructor(position: number, id: string, value= '') {
+    super(position, id, 'Keyspace', 'Name of a keyspace.', value);
+    this.setDisplayOn('factory_name', 'schema_swap');
+  }
+}
+
+export class SchemaSwapSQLFlag extends InputFlag {
+  constructor(position: number, id: string, value= '') {
+    super(position, id, 'SQL', 'SQL representing the schema change.', value);
+    this.setDisplayOn('factory_name', 'schema_swap');
   }
 }
 

@@ -75,20 +75,6 @@ class TestPythonClientBase(object):
 class TestErrors(TestPythonClientBase):
   """Test cases to verify that the Python client can handle errors correctly."""
 
-  def test_execute_integrity_errors(self):
-    """Test we raise dbexceptions.IntegrityError for Execute calls."""
-    # Special query that makes vtgateclienttest return an IntegrityError.
-    self._verify_exception_for_execute(
-        'error://integrity error',
-        dbexceptions.IntegrityError)
-
-  def test_partial_integrity_errors(self):
-    """Raise an IntegrityError when Execute returns a partial error."""
-    # Special query that makes vtgateclienttest return a partial error.
-    self._verify_exception_for_execute(
-        'partialerror://integrity error',
-        dbexceptions.IntegrityError)
-
   def _verify_exception_for_execute(self, query, exception):
     """Verify that we raise a specific exception for all Execute calls.
 
@@ -194,50 +180,50 @@ class TestErrors(TestPythonClientBase):
           shard=query):
         pass
 
-  def test_streaming_integrity_error(self):
-    """Test we raise dbexceptions.IntegrityError for StreamExecute calls."""
-    self._verify_exception_for_stream_execute(
+  def test_partial_integrity_errors(self):
+    """Raise an IntegrityError when Execute returns a partial error."""
+    # Special query that makes vtgateclienttest return a partial error.
+    self._verify_exception_for_execute(
+        'partialerror://integrity error',
+        dbexceptions.IntegrityError)
+
+  def _verify_exception_for_all_execute_methods(self, query, exception):
+    self._verify_exception_for_execute(query, exception)
+    self._verify_exception_for_stream_execute(query, exception)
+
+  def test_integrity_error(self):
+    """Test we raise dbexceptions.IntegrityError."""
+    self._verify_exception_for_all_execute_methods(
         'error://integrity error',
         dbexceptions.IntegrityError)
 
   def test_transient_error(self):
     """Test we raise dbexceptions.TransientError for Execute calls."""
     # Special query that makes vtgateclienttest return a TransientError.
-    self._verify_exception_for_execute(
-        'error://transient error',
-        dbexceptions.TransientError)
-
-  def test_streaming_transient_error(self):
-    """Test we raise dbexceptions.TransientError for StreamExecute calls."""
-    self._verify_exception_for_stream_execute(
+    self._verify_exception_for_all_execute_methods(
         'error://transient error',
         dbexceptions.TransientError)
 
   def test_throttled_error(self):
-    """Test we raise dbexceptions.ThrottledError for Execute calls."""
-    # Special query that makes vtgateclienttest return a TransientError.
-    self._verify_exception_for_execute(
-        'error://throttled error',
-        dbexceptions.ThrottledError)
-
-  def test_streaming_throttled_error(self):
-    """Test we raise dbexceptions.ThrottledError for StreamExecute calls."""
-    self._verify_exception_for_stream_execute(
+    """Test we raise dbexceptions.ThrottledError."""
+    # Special query that makes vtgateclienttest return a ThrottledError.
+    self._verify_exception_for_all_execute_methods(
         'error://throttled error',
         dbexceptions.ThrottledError)
 
   def test_query_not_served_error(self):
-    """Test we raise dbexceptions.QueryNotServed for Execute calls."""
-    # Special query that makes vtgateclienttest return a TransientError.
-    self._verify_exception_for_execute(
+    """Test we raise dbexceptions.QueryNotServed."""
+    # Special query that makes vtgateclienttest return QueryNotServed.
+    self._verify_exception_for_all_execute_methods(
         'error://query not served',
         dbexceptions.QueryNotServed)
 
-  def test_streaming_query_not_served_error(self):
-    """Test we raise dbexceptions.QueryNotServed for StreamExecute calls."""
-    self._verify_exception_for_stream_execute(
-        'error://query not served',
-        dbexceptions.QueryNotServed)
+  def test_programming_error(self):
+    """Test we raise dbexceptions.ProgrammingError."""
+    # Special query that makes vtgateclienttest return a ProgrammingError.
+    self._verify_exception_for_all_execute_methods(
+        'error://bad input',
+        dbexceptions.ProgrammingError)
 
   def test_error(self):
     """Test a regular server error raises the right exception."""

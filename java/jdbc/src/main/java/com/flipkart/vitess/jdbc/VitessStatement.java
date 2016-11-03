@@ -282,15 +282,11 @@ public class VitessStatement implements Statement {
     }
 
     public void setFetchSize(int rows) throws SQLException {
-        /* Currently not used
         checkOpen();
         if (rows < 0) {
             throw new SQLException(Constants.SQLExceptionMessages.ILLEGAL_VALUE_FOR + "fetch size");
         }
         this.fetchSize = rows;
-        */
-        throw new SQLFeatureNotSupportedException(
-            Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
     }
 
     public int getResultSetConcurrency() throws SQLException {

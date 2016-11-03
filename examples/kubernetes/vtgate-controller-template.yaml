@@ -13,7 +13,7 @@ spec:
     spec:
       containers:
         - name: vtgate
-          image: vitess/lite
+          image: {{vitess_image}}
           livenessProbe:
             httpGet:
               path: /debug/vars
