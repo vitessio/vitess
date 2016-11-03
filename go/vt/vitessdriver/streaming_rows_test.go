@@ -125,6 +125,7 @@ func TestStreamingRowsReversed(t *testing.T) {
 	c <- &packet3
 	close(c)
 	ri := newStreamingRows(&adapter{c: c, err: io.EOF}, nil)
+	defer ri.Close()
 
 	wantRow := []driver.Value{
 		int64(1),

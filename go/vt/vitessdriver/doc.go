@@ -17,8 +17,8 @@ Using this SQL driver is as simple as:
   )
 
   func main() {
-    // Connect to vtgate (v1 mode).
-    db, err := vitessdriver.Open("localhost:15991", "keyspace", "0", "master", 30*time.Second)
+    // Connect to vtgate.
+    db, err := vitessdriver.Open("localhost:15991", "keyspace", "master", 30*time.Second)
 
     // Use "db" via the Golang sql interface.
   }
@@ -38,57 +38,9 @@ features like consistent, application-transparent resharding:
 When you scale up the number of shards, vtgate becomes aware of the new shards.
 You do not have to update your application at all.
 
-Another Vitess feature is the vtgate v3 API. Once enabled, a sharded Vitess
-setup becomes a drop-in replacement for an unsharded MySQL/MariaDB setup.
-
-
-Vtgate API Versions
-
-This driver supports the vtgate API versions v1 and v3, but not v2.
-
-We recommend you use the v1 API for initial experiments and then switch to v3
-later because v3 requires an additional setup step.
-
-The API versions differ as follows:
-
-
-Vtgate API v1
-
-v1 requires each query to specify the target shard. vtgate then routes the query
-accordingly.
-
-This driver supports the v1 API at the connection level. For example, to open a
-Vitess database connection for queries targeting shard "0" in the keyspace
-"test_keyspace", call:
-
-  vitessdriver.OpenShard(vtgateAddress, "test_keyspace", "0", 30*time.Second)
-
-This mode is recommended for initial experiments or when migrating from a
-pure MySQL/MariaDB setup to an unsharded Vitess setup. For a sharded Vitess
-setup we recommend to move to the v2 or v3 API because only these APIs are
-agnostic of resharding events.
-
-
-Vtgate API v2
-
-v2 requires each query to specify the affected sharding keys ("keyspace_id").
-
-Based on the provided sharding key, vtgate then routes the query to the shard
-that currently covers that sharding key.
-
-This driver currently does not support the v2 API because it's difficult to
-enhance the Go SQL interface with the sharding key information at the
-query-level.
-Instead, it's recommended to use the v3 API.
-
-
-Vtgate API v3
-
-v3 automatically infers the sharding key (and therefore the target shard)
-from the query itself.
-
-It also maintains secondary indexes across shards and generates values for
-AUTO_INCREMENT columns.
+VTGate is capable of breaking up your query into parts, routing them to the
+appropriate shards and combining the results, thereby giving the semblance
+of a unified database.
 
 See the vtgate v3 Features doc for an overview:
 https://github.com/youtube/vitess/blob/master/doc/VTGateV3Features.md
@@ -102,7 +54,7 @@ process of simplifying the VSchema definition and the overall process for
 creating one.
 If you want to create your own VSchema, we recommend to have a
 look at the VSchema from the vtgate v3 demo:
-https://github.com/youtube/vitess/blob/master/examples/demo/schema/vschema.json
+https://github.com/youtube/vitess/blob/master/examples/demo/schema
 
 (The demo itself is interactive and can be run by executing "./run.py" in the
 "examples/demo/" directory.)
@@ -110,5 +62,29 @@ https://github.com/youtube/vitess/blob/master/examples/demo/schema/vschema.json
 The vtgate v3 design doc, which we will also update and simplify in the future,
 contains more details on the VSchema:
 https://github.com/youtube/vitess/blob/master/doc/V3VindexDesign.md
+
+
+Isolation levels
+
+The Vitess isolation model is different from the one exposed by a traditional database.
+Isolation levels are controlled by connection parameters instead of Go's IsolationLevel.
+You can perform master, replica or rdonly reads. Master reads give you read-after-write
+consitency. Replica and rdonly reads give you eventual consistency. Replica reads
+are for satisfying OLTP workloads while rdonly is for OLAP.
+
+All transactions must be sent to the master where writes are allowed.
+Replica and rdonly reads can only be performed outside of a transaction. So, there is
+no concept of a read-only transaction in Vitess.
+
+Consequently, no IsolationLevel must be specified while calling BeginContext. Doing so
+will result in an error.
+
+
+Named arguments
+
+Vitess supports positional or named arguments. However, intermixing is not allowed
+within a statement. If using named arguments, the ':' and '@' prefixes are optional.
+If they're specified, the driver will strip them off before sending the request over
+to VTGate.
 */
 package vitessdriver
