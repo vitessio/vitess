@@ -171,7 +171,8 @@ func (schemaSwap *Swap) Run(ctx context.Context, manager *workflow.Manager, work
 	schemaSwap.topoServer = topo.GetServer()
 	schemaSwap.tabletClient = tmclient.NewTabletManagerClient()
 
-	rootUINode := workflow.NewToplevelNode(workflowInfo, schemaSwap)
+	rootUINode := workflow.NewNode()
+	rootUINode.AttachToWorkflow(workflowInfo, schemaSwap)
 	rootUINode.State = workflowpb.WorkflowState_Running
 	rootUINode.Display = workflow.NodeDisplayIndeterminate
 	rootUINode.Message = fmt.Sprintf("Schema swap is executed on the keyspace %s", schemaSwap.keyspace)

@@ -50,7 +50,7 @@ func TestLongPolling(t *testing.T) {
 		workflow: tw,
 
 		Name:        "name",
-		Path:        "/uuid1",
+		PathName:    "uuid1",
 		Children:    []*Node{},
 		LastChanged: 143,
 	}
@@ -96,9 +96,8 @@ func TestLongPolling(t *testing.T) {
 	}
 
 	// Send an update, make sure we see it.
-	n.Modify(func() {
-		n.Name = "name2"
-	})
+	n.Name = "name2"
+	n.BroadcastChanges(false /* updateChildren */)
 
 	u.Path = "/workflow/poll/1"
 	resp, err = http.Get(u.String())
