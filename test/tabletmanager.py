@@ -492,11 +492,14 @@ class TestTabletManager(unittest.TestCase):
     for t in tablet_62344, tablet_62044:
       t.create_db('vt_test_keyspace')
 
-    tablet_62344.start_vttablet(wait_for_state=None)
+    # Note we only have a master and a rdonly. So we can't enable
+    # semi-sync in this case, as the rdonly slaves don't semi-sync ack.
+    tablet_62344.start_vttablet(wait_for_state=None, enable_semi_sync=False)
     tablet_62044.start_vttablet(wait_for_state=None,
                                 init_tablet_type='rdonly',
                                 init_keyspace='test_keyspace',
-                                init_shard='0')
+                                init_shard='0',
+                                enable_semi_sync=False)
 
     tablet_62344.wait_for_vttablet_state('NOT_SERVING')
     tablet_62044.wait_for_vttablet_state('NOT_SERVING')
@@ -640,6 +643,7 @@ class TestTabletManager(unittest.TestCase):
     tablet.kill_tablets([tablet_62344, tablet_62044])
 
   def test_repeated_init_shard_master(self):
+    """Test that using InitShardMaster can go back and forth between 2 hosts."""
     for t in tablet_62344, tablet_62044:
       t.create_db('vt_test_keyspace')
       t.start_vttablet(wait_for_state=None,
@@ -648,39 +652,48 @@ class TestTabletManager(unittest.TestCase):
                        init_keyspace='test_keyspace',
                        init_shard='0')
 
-    # tablets are not replicating, so they won't be healthy
+    # Tablets are not replicating, so they won't be healthy.
     for t in tablet_62344, tablet_62044:
       t.wait_for_vttablet_state('NOT_SERVING')
       self.check_healthz(t, False)
 
-    # pick one master out of the two
+    # Pick one master out of the two.
     utils.run_vtctl(['InitShardMaster', '-force', 'test_keyspace/0',
                      tablet_62344.tablet_alias])
 
-    # run health check on both, make sure they are both healthy
+    # Run health check on both, make sure they are both healthy.
+    # Also make sure the types are correct.
     for t in tablet_62344, tablet_62044:
       utils.run_vtctl(['RunHealthCheck', t.tablet_alias], auto_log=True)
       self.check_healthz(t, True)
+    utils.wait_for_tablet_type(tablet_62344.tablet_alias, 'master', timeout=0)
+    utils.wait_for_tablet_type(tablet_62044.tablet_alias, 'replica', timeout=0)
 
-    # pick the other one as master, make sure they are still healthy
+    # Pick the other one as master, make sure they are still healthy.
     utils.run_vtctl(['InitShardMaster', '-force', 'test_keyspace/0',
                      tablet_62044.tablet_alias])
 
-    # run health check on both, make sure they are both healthy
+    # Run health check on both, make sure they are both healthy.
+    # Also make sure the types are correct.
     for t in tablet_62344, tablet_62044:
       utils.run_vtctl(['RunHealthCheck', t.tablet_alias], auto_log=True)
       self.check_healthz(t, True)
+    utils.wait_for_tablet_type(tablet_62344.tablet_alias, 'replica', timeout=0)
+    utils.wait_for_tablet_type(tablet_62044.tablet_alias, 'master', timeout=0)
 
-    # and come back to the original guy
+    # Come back to the original guy.
     utils.run_vtctl(['InitShardMaster', '-force', 'test_keyspace/0',
                      tablet_62344.tablet_alias])
 
-    # run health check on both, make sure they are both healthy
+    # Run health check on both, make sure they are both healthy.
+    # Also make sure the types are correct.
     for t in tablet_62344, tablet_62044:
       utils.run_vtctl(['RunHealthCheck', t.tablet_alias], auto_log=True)
       self.check_healthz(t, True)
+    utils.wait_for_tablet_type(tablet_62344.tablet_alias, 'master', timeout=0)
+    utils.wait_for_tablet_type(tablet_62044.tablet_alias, 'replica', timeout=0)
 
-    # and done
+    # And done.
     tablet.kill_tablets([tablet_62344, tablet_62044])
 
   def test_fallback_policy(self):

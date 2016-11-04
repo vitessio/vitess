@@ -195,8 +195,8 @@ class Tablet(object):
       return self.shutdown_mysql()
     return self.mysqlctl(['teardown', '-force'])
 
-  def remove_tree(self):
-    if utils.options.keep_logs:
+  def remove_tree(self, ignore_options=False):
+    if not ignore_options and utils.options.keep_logs:
       return
     try:
       shutil.rmtree(self.tablet_dir)
@@ -324,6 +324,19 @@ class Tablet(object):
     conn, cursor = self.connect()
     try:
       cursor.execute("show variables like '%s'" % name)
+      return cursor.fetchone()
+    finally:
+      conn.close()
+
+  def check_db_status(self, name, value):
+    row = self.get_db_status(name)
+    if row[1] != value:
+      raise utils.TestError('status not correct', name, row)
+
+  def get_db_status(self, name):
+    conn, cursor = self.connect()
+    try:
+      cursor.execute("show status like '%s'" % name)
       return cursor.fetchone()
     finally:
       conn.close()

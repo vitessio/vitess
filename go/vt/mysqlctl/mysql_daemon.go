@@ -42,6 +42,7 @@ type MysqlDaemon interface {
 	SlaveStatus() (replication.Status, error)
 	SetSemiSyncEnabled(master, slave bool) error
 	SemiSyncEnabled() (master, slave bool)
+	SemiSyncSlaveStatus() (bool, error)
 
 	// reparenting related methods
 	ResetReplicationCommands() ([]string, error)
@@ -485,4 +486,10 @@ func (fmd *FakeMysqlDaemon) SetSemiSyncEnabled(master, slave bool) error {
 // SemiSyncEnabled is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) SemiSyncEnabled() (master, slave bool) {
 	return fmd.SemiSyncMasterEnabled, fmd.SemiSyncSlaveEnabled
+}
+
+// SemiSyncSlaveStatus is part of the MysqlDaemon interface.
+func (fmd *FakeMysqlDaemon) SemiSyncSlaveStatus() (bool, error) {
+	// The fake assumes the status worked.
+	return fmd.SemiSyncSlaveEnabled, nil
 }

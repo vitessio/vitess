@@ -379,3 +379,18 @@ func (mysqld *Mysqld) SemiSyncEnabled() (master, slave bool) {
 	slave = (vars["rpl_semi_sync_slave_enabled"] == "ON")
 	return master, slave
 }
+
+// SemiSyncSlaveStatus returns whether semi-sync is currently used by replication.
+func (mysqld *Mysqld) SemiSyncSlaveStatus() (bool, error) {
+	qr, err := mysqld.FetchSuperQuery(context.TODO(), "SHOW STATUS LIKE 'rpl_semi_sync_slave_status'")
+	if err != nil {
+		return false, err
+	}
+	if len(qr.Rows) != 1 {
+		return false, errors.New("no rpl_semi_sync_slave_status variable in mysql")
+	}
+	if qr.Rows[0][1].String() == "ON" {
+		return true, nil
+	}
+	return false, nil
+}

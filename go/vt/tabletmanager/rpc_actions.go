@@ -61,6 +61,11 @@ func (agent *ActionAgent) ChangeType(ctx context.Context, tabletType topodatapb.
 		return err
 	}
 
+	// Let's see if we need to fix semi-sync acking.
+	if err := agent.fixSemiSyncAndReplication(agent.Tablet().Type); err != nil {
+		return fmt.Errorf("fixSemiSyncAndReplication failed, may not ack correctly: %v", err)
+	}
+
 	// and re-run health check
 	agent.runHealthCheckLocked()
 	return nil

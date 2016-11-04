@@ -272,19 +272,19 @@ func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTabl
 		}
 	}
 
-	// update stream needs to be started or stopped too
+	// UpdateStream needs to be started or stopped too.
 	if topo.IsRunningUpdateStream(newTablet.Type) && runUpdateStream {
 		agent.UpdateStream.Enable()
 	} else {
 		agent.UpdateStream.Disable()
 	}
 
-	// upate the stats to our current type
+	// Update the stats to our current type.
 	if agent.exportStats {
 		agent.statsTabletType.Set(topoproto.TabletTypeLString(newTablet.Type))
 	}
 
-	// See if we need to start or stop any binlog player
+	// See if we need to start or stop any binlog player.
 	if agent.BinlogPlayerMap != nil {
 		if newTablet.Type == topodatapb.TabletType_MASTER {
 			agent.BinlogPlayerMap.RefreshMap(agent.batchCtx, newTablet, shardInfo)
