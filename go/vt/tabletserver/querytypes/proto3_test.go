@@ -314,23 +314,39 @@ func TestProto3ToBindVariables(t *testing.T) {
 		in   *querypb.BindVariable
 		out  interface{}
 	}{{
-		name: "value set",
+		name: "Int16",
 		in: &querypb.BindVariable{
 			Type:  sqltypes.Int16,
 			Value: []byte("-1"),
 		},
-		out: &querypb.BindVariable{
-			Type:  sqltypes.Int16,
-			Value: []byte("-1"),
+		out: int64(-1),
+	}, {
+		name: "Uint16",
+		in: &querypb.BindVariable{
+			Type:  sqltypes.Uint16,
+			Value: []byte("1"),
 		},
+		out: uint64(1),
+	}, {
+		name: "Float64",
+		in: &querypb.BindVariable{
+			Type:  sqltypes.Float64,
+			Value: []byte("1.5"),
+		},
+		out: float64(1.5),
+	}, {
+		name: "VarChar",
+		in: &querypb.BindVariable{
+			Type:  sqltypes.VarChar,
+			Value: []byte("aa"),
+		},
+		out: []byte("aa"),
 	}, {
 		name: "Null",
 		in: &querypb.BindVariable{
 			Type: sqltypes.Null,
 		},
-		out: &querypb.BindVariable{
-			Type: sqltypes.Null,
-		},
+		out: nil,
 	}, {
 		name: "nil",
 		in:   nil,
@@ -354,23 +370,7 @@ func TestProto3ToBindVariables(t *testing.T) {
 				},
 			},
 		},
-		out: &querypb.BindVariable{
-			Type: sqltypes.Tuple,
-			Values: []*querypb.Value{
-				{
-					Type:  sqltypes.Int64,
-					Value: []byte("1"),
-				},
-				{
-					Type:  sqltypes.VarChar,
-					Value: []byte("aa"),
-				},
-				{
-					Type:  sqltypes.Float64,
-					Value: []byte("1.5"),
-				},
-			},
-		},
+		out: []interface{}{int64(1), []byte("aa"), float64(1.5)},
 	}}
 	for _, tcase := range testcases {
 		p3 := map[string]*querypb.BindVariable{
@@ -382,6 +382,56 @@ func TestProto3ToBindVariables(t *testing.T) {
 		}
 		if !reflect.DeepEqual(bv["bv"], tcase.out) {
 			t.Errorf("Mismatch on %v: %+v, want %+v", tcase.name, bv["bv"], tcase.out)
+		}
+	}
+}
+
+func TestProto3ToBindVariablesErrors(t *testing.T) {
+	testcases := []struct {
+		name string
+		in   *querypb.BindVariable
+		out  string
+	}{{
+		name: "Int64",
+		in: &querypb.BindVariable{
+			Type:  sqltypes.Int64,
+			Value: []byte("aa"),
+		},
+		out: `strconv.ParseInt: parsing "aa": invalid syntax`,
+	}, {
+		name: "Uint64",
+		in: &querypb.BindVariable{
+			Type:  sqltypes.Uint64,
+			Value: []byte("-1"),
+		},
+		out: `strconv.ParseUint: parsing "-1": invalid syntax`,
+	}, {
+		name: "Float64",
+		in: &querypb.BindVariable{
+			Type:  sqltypes.Float64,
+			Value: []byte("aa"),
+		},
+		out: `strconv.ParseFloat: parsing "aa": invalid syntax`,
+	}, {
+		name: "Tuple",
+		in: &querypb.BindVariable{
+			Type: sqltypes.Tuple,
+			Values: []*querypb.Value{
+				{
+					Type:  sqltypes.Int64,
+					Value: []byte("aa"),
+				},
+			},
+		},
+		out: `strconv.ParseInt: parsing "aa": invalid syntax`,
+	}}
+	for _, tcase := range testcases {
+		p3 := map[string]*querypb.BindVariable{
+			"bv": tcase.in,
+		}
+		_, err := Proto3ToBindVariables(p3)
+		if err == nil || err.Error() != tcase.out {
+			t.Errorf("Error: %v, want %v", err, tcase.out)
 		}
 	}
 }
