@@ -172,7 +172,7 @@ func TestAPI(t *testing.T) {
 		]`},
 		{"GET", "tablet_statuses/?keyspace=ks1&cell=all&type=all&metric=lag", "", `[
 		{
-		  "Data":[[-1,400],[-1,300],[200,-1],[100,-1]],  
+		  "Data":[[-1,400],[-1,300],[200,-1],[100,-1]],
 		  "Aliases":[[null,{"cell":"cell2","uid":400}],[null,{"cell":"cell2","uid":300}],[{"cell":"cell1","uid":200},null],[{"cell":"cell1","uid":100},null]],
 		  "KeyspaceLabel":{"Name":"ks1","Rowspan":4},
 		  "CellAndTypeLabels":[
