@@ -96,8 +96,10 @@ export class Node {
       if (changes.actions !== null) {
         for (let actionData of changes.actions) {
           let message = actionData.message ? actionData.message : '';
-          if ('name' in actionData && 'state' in actionData && 'style' in actionData) {
-            this.actions.push(new Action(actionData.name, actionData.state, actionData.style, message));
+          let state = actionData.state ? actionData.state : ActionState.ENABLED;
+          let style = actionData.style ? actionData.style : ActionStyle.NORMAL;
+          if ('name' in actionData) {
+            this.actions.push(new Action(actionData.name, state, style, message));
           }
         }
       }
