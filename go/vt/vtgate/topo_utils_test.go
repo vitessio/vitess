@@ -160,8 +160,13 @@ func TestBoundShardQueriesToScatterBatchRequest(t *testing.T) {
 					"ks1:0": {
 						Queries: []querytypes.BoundQuery{
 							{
-								Sql:           "q1",
-								BindVariables: map[string]interface{}{"q1var": int64(1)},
+								Sql: "q1",
+								BindVariables: map[string]interface{}{
+									"q1var": &querypb.BindVariable{
+										Type:  sqltypes.Int64,
+										Value: []byte("1"),
+									},
+								},
 							},
 						},
 						Keyspace:      "ks1",
@@ -171,11 +176,21 @@ func TestBoundShardQueriesToScatterBatchRequest(t *testing.T) {
 					"ks1:1": {
 						Queries: []querytypes.BoundQuery{
 							{
-								Sql:           "q1",
-								BindVariables: map[string]interface{}{"q1var": int64(1)},
+								Sql: "q1",
+								BindVariables: map[string]interface{}{
+									"q1var": &querypb.BindVariable{
+										Type:  sqltypes.Int64,
+										Value: []byte("1"),
+									},
+								},
 							}, {
-								Sql:           "q2",
-								BindVariables: map[string]interface{}{"q2var": int64(2)},
+								Sql: "q2",
+								BindVariables: map[string]interface{}{
+									"q2var": &querypb.BindVariable{
+										Type:  sqltypes.Int64,
+										Value: []byte("2"),
+									},
+								},
 							},
 						},
 						Keyspace:      "ks1",
@@ -185,8 +200,13 @@ func TestBoundShardQueriesToScatterBatchRequest(t *testing.T) {
 					"ks2:1": {
 						Queries: []querytypes.BoundQuery{
 							{
-								Sql:           "q3",
-								BindVariables: map[string]interface{}{"q3var": int64(3)},
+								Sql: "q3",
+								BindVariables: map[string]interface{}{
+									"q3var": &querypb.BindVariable{
+										Type:  sqltypes.Int64,
+										Value: []byte("3"),
+									},
+								},
 							},
 						},
 						Keyspace:      "ks2",
@@ -218,8 +238,13 @@ func TestBoundShardQueriesToScatterBatchRequest(t *testing.T) {
 					"ks1:0": {
 						Queries: []querytypes.BoundQuery{
 							{
-								Sql:           "q1",
-								BindVariables: map[string]interface{}{"q1var": int64(1)},
+								Sql: "q1",
+								BindVariables: map[string]interface{}{
+									"q1var": &querypb.BindVariable{
+										Type:  sqltypes.Int64,
+										Value: []byte("1"),
+									},
+								},
 							},
 						},
 						Keyspace:      "ks1",
