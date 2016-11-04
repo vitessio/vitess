@@ -116,10 +116,7 @@ func (axp *TxPool) Close() {
 // or in prepared state.
 func (axp *TxPool) RollbackNonBusy(ctx context.Context) {
 	for _, v := range axp.activePool.GetOutdated(time.Duration(0), "for transition") {
-		conn := v.(*TxConnection)
-		log.Warningf("rolling back transaction for transition: %s", conn.Format(nil))
-		axp.queryServiceStats.InternalErrors.Add("StrayTransactions", 1)
-		axp.LocalConclude(ctx, conn)
+		axp.LocalConclude(ctx, v.(*TxConnection))
 	}
 }
 
