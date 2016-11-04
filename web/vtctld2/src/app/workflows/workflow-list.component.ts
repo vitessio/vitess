@@ -256,7 +256,7 @@ dolore magnam aliquam quaerat voluptatem.'});
 
       // Need to update the target now.
       target.update(workflowData);
-      if (workflowData.children !== null) {
+      if ('children' in workflowData && workflowData.children !== null) {
         target.children = [];
         for (let childData of workflowData.children) {
           let child = this.recursiveWorkflowBuilder(childData);
