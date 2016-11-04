@@ -42,12 +42,11 @@ VTGate is capable of breaking up your query into parts, routing them to the
 appropriate shards and combining the results, thereby giving the semblance
 of a unified database.
 
-See the vtgate v3 Features doc for an overview:
+The driver uses the V3 API which doesn't require you to specify routing
+information. You just send the query as if Vitess was a regular database.
+VTGate analyzes the query and uses additional metadata called VSchema
+to perform the necessary routing. See the vtgate v3 Features doc for an overview:
 https://github.com/youtube/vitess/blob/master/doc/VTGateV3Features.md
-
-To enable vtgate v3, you need to create a VSchema. A VSchema defines for vtgate
-the properties of your Vitess setup (e.g. what is the sharding key, which
-cross-shard indexes should be maintained, what are the AUTO_INCREMENT columns).
 
 As of 12/2015, the VSchema creation is not documented yet as we are in the
 process of simplifying the VSchema definition and the overall process for
@@ -69,7 +68,7 @@ Isolation levels
 The Vitess isolation model is different from the one exposed by a traditional database.
 Isolation levels are controlled by connection parameters instead of Go's IsolationLevel.
 You can perform master, replica or rdonly reads. Master reads give you read-after-write
-consitency. Replica and rdonly reads give you eventual consistency. Replica reads
+consistency. Replica and rdonly reads give you eventual consistency. Replica reads
 are for satisfying OLTP workloads while rdonly is for OLAP.
 
 All transactions must be sent to the master where writes are allowed.

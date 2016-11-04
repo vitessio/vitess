@@ -264,6 +264,7 @@ func (c *conn) Query(query string, args []driver.Value) (driver.Rows, error) {
 	if c.Streaming {
 		stream, err := c.vtgateConn.StreamExecute(ctx, query, bindVars, c.tabletTypeProto, nil)
 		if err != nil {
+			cancel()
 			return nil, err
 		}
 		return newStreamingRows(stream, cancel), nil
