@@ -309,10 +309,7 @@ func (f *FakeQueryService) ReadTransaction(ctx context.Context, target *querypb.
 const ExecuteQuery = "executeQuery"
 
 var ExecuteBindVars = map[string]interface{}{
-	"bind1": &querypb.BindVariable{
-		Type:  querypb.Type_INT64,
-		Value: []byte("1114444"),
-	},
+	"bind1": int64(1114444),
 }
 
 const ExecuteTransactionID int64 = 678
@@ -377,10 +374,7 @@ func (f *FakeQueryService) Execute(ctx context.Context, target *querypb.Target, 
 const StreamExecuteQuery = "streamExecuteQuery"
 
 var StreamExecuteBindVars = map[string]interface{}{
-	"bind1": &querypb.BindVariable{
-		Type:  querypb.Type_INT64,
-		Value: []byte("93848000"),
-	},
+	"bind1": int64(93848000),
 }
 
 var StreamExecuteQueryResult1 = sqltypes.Result{
@@ -449,19 +443,13 @@ var ExecuteBatchQueries = []querytypes.BoundQuery{
 	{
 		Sql: "executeBatchQueries1",
 		BindVariables: map[string]interface{}{
-			"bind1": &querypb.BindVariable{
-				Type:  querypb.Type_INT64,
-				Value: []byte("43"),
-			},
+			"bind1": int64(43),
 		},
 	},
 	{
 		Sql: "executeBatchQueries2",
 		BindVariables: map[string]interface{}{
-			"bind2": &querypb.BindVariable{
-				Type:  querypb.Type_INT64,
-				Value: []byte("72"),
-			},
+			"bind2": int64(72),
 		},
 	},
 }
@@ -542,10 +530,7 @@ func (f *FakeQueryService) ExecuteBatch(ctx context.Context, target *querypb.Tar
 var SplitQueryBoundQuery = querytypes.BoundQuery{
 	Sql: "splitQuery",
 	BindVariables: map[string]interface{}{
-		"bind1": &querypb.BindVariable{
-			Type:  querypb.Type_INT64,
-			Value: []byte("43"),
-		},
+		"bind1": int64(43),
 	},
 }
 
@@ -556,14 +541,8 @@ var SplitQueryQuerySplitList = []querytypes.QuerySplit{
 	{
 		Sql: "splitQuery",
 		BindVariables: map[string]interface{}{
-			"bind1": &querypb.BindVariable{
-				Type:  querypb.Type_INT64,
-				Value: []byte("43"),
-			},
-			"keyspace_id": &querypb.BindVariable{
-				Type:  querypb.Type_INT64,
-				Value: []byte("3333"),
-			},
+			"bind1":       int64(43),
+			"keyspace_id": int64(3333),
 		},
 		RowCount: 4456,
 	},
@@ -577,10 +556,7 @@ const SplitQueryV2SplitCount = 372
 var SplitQueryV2BoundQuery = querytypes.BoundQuery{
 	Sql: "splitQuery",
 	BindVariables: map[string]interface{}{
-		"bind1": &querypb.BindVariable{
-			Type:  querypb.Type_INT64,
-			Value: []byte("43"),
-		},
+		"bind1": int64(43),
 	},
 }
 
@@ -591,14 +567,8 @@ var SplitQueryQueryV2SplitList = []querytypes.QuerySplit{
 	{
 		Sql: "splitQuery",
 		BindVariables: map[string]interface{}{
-			"bind1": &querypb.BindVariable{
-				Type:  querypb.Type_INT64,
-				Value: []byte("43"),
-			},
-			"keyspace_id": &querypb.BindVariable{
-				Type:  querypb.Type_INT64,
-				Value: []byte("3333"),
-			},
+			"bind1":       int64(43),
+			"keyspace_id": int64(3333),
 		},
 		RowCount: 4456,
 	},

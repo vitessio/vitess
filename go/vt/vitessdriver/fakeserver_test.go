@@ -264,10 +264,7 @@ var execMap = map[string]struct {
 		execQuery: &queryExecute{
 			SQL: "request1",
 			BindVariables: map[string]interface{}{
-				"v1": &querypb.BindVariable{
-					Type:  querypb.Type_INT64,
-					Value: []byte("0"),
-				},
+				"v1": int64(0),
 			},
 			TabletType: topodatapb.TabletType_RDONLY,
 			Session:    nil,
@@ -279,10 +276,7 @@ var execMap = map[string]struct {
 		execQuery: &queryExecute{
 			SQL: "txRequest",
 			BindVariables: map[string]interface{}{
-				"v1": &querypb.BindVariable{
-					Type:  querypb.Type_INT64,
-					Value: []byte("0"),
-				},
+				"v1": int64(0),
 			},
 			TabletType: topodatapb.TabletType_MASTER,
 			Session:    session1,
@@ -306,10 +300,7 @@ var execSpecificShardMap = map[string]struct {
 			queryExecute: queryExecute{
 				SQL: "request1SpecificShard",
 				BindVariables: map[string]interface{}{
-					"v1": &querypb.BindVariable{
-						Type:  querypb.Type_INT64,
-						Value: []byte("0"),
-					},
+					"v1": int64(0),
 				},
 				TabletType: topodatapb.TabletType_RDONLY,
 				Session:    nil,
@@ -325,10 +316,7 @@ var execSpecificShardMap = map[string]struct {
 			queryExecute: queryExecute{
 				SQL: "txRequestSpecificShard",
 				BindVariables: map[string]interface{}{
-					"v1": &querypb.BindVariable{
-						Type:  querypb.Type_INT64,
-						Value: []byte("0"),
-					},
+					"v1": int64(0),
 				},
 				TabletType: topodatapb.TabletType_MASTER,
 				Session:    session1,

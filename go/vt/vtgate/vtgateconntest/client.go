@@ -1964,10 +1964,7 @@ var execMap = map[string]struct {
 		execQuery: &queryExecute{
 			SQL: "request1",
 			BindVariables: map[string]interface{}{
-				"bind1": &querypb.BindVariable{
-					Type:  querypb.Type_INT64,
-					Value: []byte("0"),
-				},
+				"bind1": int64(0),
 			},
 			Keyspace:   "connection_ks",
 			TabletType: topodatapb.TabletType_RDONLY,
@@ -1976,10 +1973,7 @@ var execMap = map[string]struct {
 		shardQuery: &queryExecuteShards{
 			SQL: "request1",
 			BindVariables: map[string]interface{}{
-				"bind1": &querypb.BindVariable{
-					Type:  querypb.Type_INT64,
-					Value: []byte("0"),
-				},
+				"bind1": int64(0),
 			},
 			Keyspace:   "ks",
 			Shards:     []string{"1", "2"},
@@ -1989,10 +1983,7 @@ var execMap = map[string]struct {
 		keyspaceIDQuery: &queryExecuteKeyspaceIds{
 			SQL: "request1",
 			BindVariables: map[string]interface{}{
-				"bind1": &querypb.BindVariable{
-					Type:  querypb.Type_INT64,
-					Value: []byte("0"),
-				},
+				"bind1": int64(0),
 			},
 			Keyspace: "ks",
 			KeyspaceIds: [][]byte{
@@ -2004,10 +1995,7 @@ var execMap = map[string]struct {
 		keyRangeQuery: &queryExecuteKeyRanges{
 			SQL: "request1",
 			BindVariables: map[string]interface{}{
-				"bind1": &querypb.BindVariable{
-					Type:  querypb.Type_INT64,
-					Value: []byte("0"),
-				},
+				"bind1": int64(0),
 			},
 			Keyspace: "ks",
 			KeyRanges: []*topodatapb.KeyRange{
@@ -2022,10 +2010,7 @@ var execMap = map[string]struct {
 		entityIdsQuery: &queryExecuteEntityIds{
 			SQL: "request1",
 			BindVariables: map[string]interface{}{
-				"bind1": &querypb.BindVariable{
-					Type:  querypb.Type_INT64,
-					Value: []byte("0"),
-				},
+				"bind1": int64(0),
 			},
 			Keyspace:         "ks",
 			EntityColumnName: "column",
@@ -2227,10 +2212,7 @@ var execMap = map[string]struct {
 		execQuery: &queryExecute{
 			SQL: "txRequest",
 			BindVariables: map[string]interface{}{
-				"bind1": &querypb.BindVariable{
-					Type:  querypb.Type_INT64,
-					Value: []byte("0"),
-				},
+				"bind1": int64(0),
 			},
 			Keyspace:   "connection_ks",
 			TabletType: topodatapb.TabletType_MASTER,
@@ -2239,10 +2221,7 @@ var execMap = map[string]struct {
 		shardQuery: &queryExecuteShards{
 			SQL: "txRequest",
 			BindVariables: map[string]interface{}{
-				"bind1": &querypb.BindVariable{
-					Type:  querypb.Type_INT64,
-					Value: []byte("0"),
-				},
+				"bind1": int64(0),
 			},
 			TabletType: topodatapb.TabletType_MASTER,
 			Keyspace:   "",
@@ -2252,10 +2231,7 @@ var execMap = map[string]struct {
 		keyspaceIDQuery: &queryExecuteKeyspaceIds{
 			SQL: "txRequest",
 			BindVariables: map[string]interface{}{
-				"bind1": &querypb.BindVariable{
-					Type:  querypb.Type_INT64,
-					Value: []byte("0"),
-				},
+				"bind1": int64(0),
 			},
 			Keyspace: "ks",
 			KeyspaceIds: [][]byte{
@@ -2267,10 +2243,7 @@ var execMap = map[string]struct {
 		keyRangeQuery: &queryExecuteKeyRanges{
 			SQL: "txRequest",
 			BindVariables: map[string]interface{}{
-				"bind1": &querypb.BindVariable{
-					Type:  querypb.Type_INT64,
-					Value: []byte("0"),
-				},
+				"bind1": int64(0),
 			},
 			Keyspace: "ks",
 			KeyRanges: []*topodatapb.KeyRange{
@@ -2285,10 +2258,7 @@ var execMap = map[string]struct {
 		entityIdsQuery: &queryExecuteEntityIds{
 			SQL: "txRequest",
 			BindVariables: map[string]interface{}{
-				"bind1": &querypb.BindVariable{
-					Type:  querypb.Type_INT64,
-					Value: []byte("0"),
-				},
+				"bind1": int64(0),
 			},
 			Keyspace:         "ks",
 			EntityColumnName: "column",
@@ -2425,10 +2395,7 @@ var splitQueryRequest = &querySplitQuery{
 	Keyspace: "ks",
 	SQL:      "in for SplitQuery",
 	BindVariables: map[string]interface{}{
-		"bind1": &querypb.BindVariable{
-			Type:  querypb.Type_INT64,
-			Value: []byte("43"),
-		},
+		"bind1": int64(43),
 	},
 	SplitColumn: "split_column",
 	SplitCount:  13,
@@ -2438,10 +2405,7 @@ var splitQueryV2Request = &querySplitQueryV2{
 	Keyspace: "ks2",
 	SQL:      "in for SplitQueryV2",
 	BindVariables: map[string]interface{}{
-		"bind2": &querypb.BindVariable{
-			Type:  querypb.Type_INT64,
-			Value: []byte("43"),
-		},
+		"bind2": int64(43),
 	},
 	SplitColumns:        []string{"split_column1", "split_column2"},
 	SplitCount:          145,
