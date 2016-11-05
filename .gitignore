@@ -39,7 +39,7 @@ third_party/mysql
 .idea
 
 ## vitess.io preview site
-preview-vitess.io/
+/preview-vitess.io/
 
 # test.go output files
 _test/
