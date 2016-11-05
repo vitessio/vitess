@@ -69,7 +69,8 @@ func (sw *SleepWorkflow) Run(ctx context.Context, manager *Manager, wi *topo.Wor
 	sw.mu.Lock()
 	sw.manager = manager
 	sw.wi = wi
-	sw.node = NewToplevelNode(wi, sw)
+	sw.node = NewNode()
+	sw.node.AttachToWorkflow(wi, sw)
 	sw.node.State = workflowpb.WorkflowState_Running
 	sw.node.Display = NodeDisplayDeterminate
 	sw.node.Message = "This workflow is a test workflow that just sleeps for the provided amount of time."
@@ -109,9 +110,8 @@ func (sw *SleepWorkflow) Run(ctx context.Context, manager *Manager, wi *topo.Wor
 				sw.mu.Lock()
 				sw.data.Slept++
 				// UI update every second.
-				sw.node.Modify(func() {
-					sw.uiUpdateLocked()
-				})
+				sw.uiUpdateLocked()
+				sw.node.BroadcastChanges(false /* updateChildren */)
 				// Checkpoint every 5 seconds.
 				if sw.data.Slept%5 == 0 {
 					if err := sw.checkpointLocked(ctx); err != nil {
@@ -152,9 +152,8 @@ func (sw *SleepWorkflow) Action(ctx context.Context, path, name string) error {
 	}
 
 	// UI update and Checkpoint.
-	sw.node.Modify(func() {
-		sw.uiUpdateLocked()
-	})
+	sw.uiUpdateLocked()
+	sw.node.BroadcastChanges(false /* updateChildren */)
 	return sw.checkpointLocked(ctx)
 }
 

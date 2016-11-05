@@ -96,7 +96,8 @@ func (w *Workflow) AddFixer(name, message string, fixer Fixer, actions []string)
 // Run is part of the workflow.Workflow interface.
 func (w *Workflow) Run(ctx context.Context, manager *workflow.Manager, wi *topo.WorkflowInfo) error {
 	// Create a UI Node.
-	node := workflow.NewToplevelNode(wi, w)
+	node := workflow.NewNode()
+	node.AttachToWorkflow(wi, w)
 	node.State = workflowpb.WorkflowState_Running
 	node.Display = workflow.NodeDisplayDeterminate
 	node.Message = "Validates the Topology and proposes fixes for known issues."
@@ -109,9 +110,8 @@ func (w *Workflow) Run(ctx context.Context, manager *workflow.Manager, wi *topo.
 	// Run all the validators. They may add fixers.
 	for name, v := range validators {
 		w.logger.Infof("Running validator: %v", name)
-		node.Modify(func() {
-			w.uiUpdate(node)
-		})
+		w.uiUpdate(node)
+		node.BroadcastChanges(false /* updateChildren */)
 		err := v.Audit(ctx, manager.TopoServer(), w)
 		if err != nil {
 			w.logger.Errorf("Validator %v failed: %v", name, err)
@@ -122,23 +122,24 @@ func (w *Workflow) Run(ctx context.Context, manager *workflow.Manager, wi *topo.
 	}
 
 	// Now for each Fixer, add a sub node.
-	node.Modify(func() {
-		if len(w.fixers) == 0 {
-			w.logger.Errorf("No problem found")
+	if len(w.fixers) == 0 {
+		w.logger.Errorf("No problem found")
+	}
+	for i, f := range w.fixers {
+		f.node = workflow.NewNode()
+		node.Children = append(node.Children, f.node)
+		f.node.PathName = fmt.Sprintf("%v", i)
+		f.node.Name = f.name
+		f.node.Message = f.message
+		f.node.Display = workflow.NodeDisplayIndeterminate
+		for _, action := range f.actions {
+			f.node.Actions = append(f.node.Actions, &workflow.Action{
+				Name: action,
+			})
 		}
-		for i, f := range w.fixers {
-			f.node, _ = node.AddChild(fmt.Sprintf("%v", i))
-			f.node.Name = f.name
-			f.node.Message = f.message
-			f.node.Display = workflow.NodeDisplayIndeterminate
-			for _, action := range f.actions {
-				f.node.Actions = append(f.node.Actions, &workflow.Action{
-					Name: action,
-				})
-			}
-		}
-		w.uiUpdate(node)
-	})
+	}
+	w.uiUpdate(node)
+	node.BroadcastChanges(true /* updateChildren */)
 
 	// And wait for the workflow to be terminated.
 	select {
@@ -172,22 +173,21 @@ func (w *Workflow) Action(ctx context.Context, path, name string) error {
 		return fmt.Errorf("invalid action index %v, expected 0 <= index < %v", i, len(w.fixers))
 	}
 	f := w.fixers[i]
-	if f.node.Actions == nil {
+	if len(f.node.Actions) == 0 {
 		// Action was already run.
 		return nil
 	}
 	err = f.fixer.Action(ctx, name)
-	f.node.Modify(func() {
-		if err != nil {
-			f.node.Log = fmt.Sprintf("action %v failed: %v", name, err)
-		} else {
-			f.node.Log = fmt.Sprintf("action %v successful", name)
-		}
-		f.node.Actions = nil
-		f.node.State = workflowpb.WorkflowState_Done
-		f.node.Message = "Addressed(" + name + "): " + f.node.Message
-		f.node.Display = workflow.NodeDisplayNone
-	})
+	if err != nil {
+		f.node.Log = fmt.Sprintf("action %v failed: %v", name, err)
+	} else {
+		f.node.Log = fmt.Sprintf("action %v successful", name)
+	}
+	f.node.Actions = f.node.Actions[:0]
+	f.node.State = workflowpb.WorkflowState_Done
+	f.node.Message = "Addressed(" + name + "): " + f.node.Message
+	f.node.Display = workflow.NodeDisplayNone
+	f.node.BroadcastChanges(false /* updateChildren */)
 	return nil
 }
 

@@ -103,13 +103,17 @@ type Node struct {
 	// workflow is the workflow which owns this node.
 	workflow Workflow
 
-	// insideModify is a marker set by the Modify method.
-	// It is checked by methods that need to be called inside Modify.
-	insideModify bool
-
 	// Next are all the attributes that are exported to node.ts.
+	// Note that even though Path is publicly accessible it should be
+	// changed only by Node and NodeManager, otherwise things can break.
+	// It's public only to be exportable to json. Similarly PathName (which
+	// is the last component of path) on top-level node should be populated
+	// only by NodeManager. For non-top-level children it can be changed
+	// at any time, Path will be adjusted correspondingly when the parent
+	// node's BroadcastChanges() is called.
 
 	Name            string                   `json:"name"`
+	PathName        string                   `json:"pathName"`
 	Path            string                   `json:"path"`
 	Children        []*Node                  `json:"children,omitempty"`
 	LastChanged     int64                    `json:"lastChanged"`
@@ -153,61 +157,71 @@ type Update struct {
 	FullUpdate bool `json:"fullUpdate,omitempty"`
 }
 
-// NewToplevelNode returns a UI Node matching the toplevel workflow.
-func NewToplevelNode(wi *topo.WorkflowInfo, w Workflow) *Node {
+// NewNode is a helper function to create new UI Node struct.
+func NewNode() *Node {
 	return &Node{
-		workflow: w,
-
-		Name:        wi.Name,
-		Path:        "/" + wi.Uuid,
-		Children:    []*Node{},
-		LastChanged: time.Now().Unix(),
+		Children: []*Node{},
+		Actions:  []*Action{},
 	}
 }
 
-// Modify executes the makeChanges function while the node is locked.
-// FIXME(alainjobart) if the Children change, we need to notify the
-// watchers by sending the new children.
-func (n *Node) Modify(makeChanges func()) {
+// AttachToWorkflow attaches the UI Node to the workflow and populates node's
+// path appropriately.
+func (n *Node) AttachToWorkflow(wi *topo.WorkflowInfo, w Workflow) {
+	n.workflow = w
+	n.Name = wi.Name
+	n.PathName = wi.Uuid
+	n.Path = "/" + n.PathName
+}
+
+// BroadcastChanges sends the new contents of the node to the watchers.
+func (n *Node) BroadcastChanges(updateChildren bool) error {
 	n.nodeManager.mu.Lock()
 	defer n.nodeManager.mu.Unlock()
-	n.insideModify = true
-	makeChanges()
-	n.insideModify = false
-	n.LastChanged = time.Now().Unix()
-	n.broadcastLocked()
+	return n.nodeManager.updateNodeAndBroadcastLocked(n, updateChildren)
 }
 
-// broadcastLocked sends the new value of the node to the watchers.
-// Has to be called with the manager lock.
-func (n *Node) broadcastLocked() {
-	u := &Update{
-		Nodes: []*Node{n},
-	}
-	n.nodeManager.broadcastUpdateLocked(u)
-}
+// deepCopyFrom copies contents of otherNode into this node. Contents of Actions
+// is copied into new Action objects, so that changes in otherNode are not
+// immediately visible in this node. When copyChildren is false the contents of
+// Children in this node is preserved fully even if it doesn't match the contents
+// of otherNode. When copyChildren is true then contents of Children is copied
+// into new Node objects similar to contents of Actions.
+// Method returns error if children in otherNode have non-unique values of
+// PathName, i.e. it's impossible to create unique values of Path for them.
+func (n *Node) deepCopyFrom(otherNode *Node, copyChildren bool) error {
+	oldChildren := n.Children
+	*n = *otherNode
+	n.Children = oldChildren
 
-// AddChild is a helper method to add a child to the current Node.
-// It must be called within Modify's makeChanges method.
-func (n *Node) AddChild(relativePath string) (*Node, error) {
-	if !n.insideModify {
-		return nil, fmt.Errorf("AddChild must be called within Modify")
+	n.Actions = []*Action{}
+	for _, otherAction := range otherNode.Actions {
+		action := &Action{}
+		*action = *otherAction
+		n.Actions = append(n.Actions, action)
 	}
-	fullPath := path.Join(n.Path, relativePath)
 
-	for _, child := range n.Children {
-		if child.Path == fullPath {
-			return nil, fmt.Errorf("node %v already has a child name %v", n.Path, relativePath)
+	if !copyChildren {
+		return nil
+	}
+	n.Children = []*Node{}
+	childNamesSet := make(map[string]bool)
+	for _, otherChild := range otherNode.Children {
+		if _, ok := childNamesSet[otherChild.PathName]; ok {
+			return fmt.Errorf("node %v already has a child name %v", n.Path, otherChild.PathName)
 		}
-	}
+		childNamesSet[otherChild.PathName] = true
 
-	child := &Node{
-		nodeManager: n.nodeManager,
-		workflow:    n.workflow,
-		Path:        fullPath,
+		// Populate a few values in case the otherChild is newly created by user.
+		otherChild.nodeManager = n.nodeManager
+		otherChild.workflow = n.workflow
+		otherChild.Path = path.Join(n.Path, otherChild.PathName)
+
+		child := NewNode()
+		child.deepCopyFrom(otherChild, true /* copyChildren */)
+		n.Children = append(n.Children, child)
 	}
-	n.Children = append(n.Children, child)
-	return child, nil
+	return nil
 }
 
 // ActionParameters describe an action initiated by the user.
@@ -247,21 +261,18 @@ func NewNodeManager() *NodeManager {
 // AddRootNode adds a toplevel Node to the NodeManager,
 // and broadcasts the Node to the listeners.
 func (m *NodeManager) AddRootNode(n *Node) error {
-	if strings.Contains(n.Path[1:], "/") {
-		return fmt.Errorf("node %v is not a root node", n.Path)
-	}
-
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if _, ok := m.roots[n.Path]; ok {
-		return fmt.Errorf("toplevel node %v already exists", n.Name)
+	if _, ok := m.roots[n.PathName]; ok {
+		return fmt.Errorf("toplevel node %v (with name %v) already exists", n.Path, n.Name)
 	}
+	n.Path = "/" + n.PathName
 	n.nodeManager = m
-	m.roots[n.Path] = n
-	n.broadcastLocked()
 
-	return nil
+	savedNode := NewNode()
+	m.roots[n.PathName] = savedNode
+	return m.updateNodeAndBroadcastLocked(n, true /* updateChildren */)
 }
 
 // RemoveRootNode removes a toplevel Node from the NodeManager,
@@ -270,7 +281,7 @@ func (m *NodeManager) RemoveRootNode(n *Node) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	delete(m.roots, n.Path)
+	delete(m.roots, n.PathName)
 
 	u := &Update{
 		Deletes: []string{n.Path},
@@ -338,6 +349,37 @@ func (m *NodeManager) broadcastUpdateLocked(u *Update) {
 	}
 }
 
+// updateNodeAndBroadcastLocked updates the contents of the Node saved inside node manager that
+// corresponds to the provided user node, and then broadcasts the contents to all watchers.
+// If updateChildren is false then contents of the node's children (as well as the list of
+// children) is not updated and not included into the broadcast.
+// Has to be called with the lock.
+func (m *NodeManager) updateNodeAndBroadcastLocked(userNode *Node, updateChildren bool) error {
+	savedNode, err := m.getNodeByPathLocked(userNode.Path)
+	if err != nil {
+		return err
+	}
+	userNode.LastChanged = time.Now().Unix()
+	if err := savedNode.deepCopyFrom(userNode, updateChildren); err != nil {
+		return err
+	}
+
+	savedChildren := savedNode.Children
+	if !updateChildren {
+		// Note that since we are under mutex it's okay to temporarily change
+		// Children right here in-place.
+		savedNode.Children = nil
+	}
+
+	u := &Update{
+		Nodes: []*Node{savedNode},
+	}
+	m.broadcastUpdateLocked(u)
+
+	savedNode.Children = savedChildren
+	return nil
+}
+
 // CloseWatcher unregisters the watcher from this Manager.
 func (m *NodeManager) CloseWatcher(i int) {
 	m.mu.Lock()
@@ -358,7 +400,10 @@ func (m *NodeManager) Action(ctx context.Context, ap *ActionParameters) error {
 func (m *NodeManager) getNodeByPath(nodePath string) (*Node, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	return m.getNodeByPathLocked(nodePath)
+}
 
+func (m *NodeManager) getNodeByPathLocked(nodePath string) (*Node, error) {
 	// Find the starting node. Path is something like:
 	// /XXXX-XXXX-XXX
 	// /XXXX-XXXX-XXX/child1
@@ -366,24 +411,24 @@ func (m *NodeManager) getNodeByPath(nodePath string) (*Node, error) {
 	// So parts[0] will always be empty, and parts[1] will always
 	// be the UUID.
 	parts := strings.Split(nodePath, "/")
-	n, ok := m.roots["/"+parts[1]]
+	n, ok := m.roots[parts[1]]
 	if !ok {
-		return nil, fmt.Errorf("no root node named /%v", parts[1])
+		return nil, fmt.Errorf("no root node with path /%v", parts[1])
 	}
 
 	// Find the subnode if needed.
 	for i := 1; i < len(parts)-1; i++ {
-		subPath := "/" + path.Join(parts[1:i+2]...)
+		childPathName := parts[i+1]
 		found := false
 		for _, sn := range n.Children {
-			if sn.Path == subPath {
+			if sn.PathName == childPathName {
 				found = true
 				n = sn
 				break
 			}
 		}
 		if !found {
-			return nil, fmt.Errorf("node %v has no children named %v", n.Path, subPath)
+			return nil, fmt.Errorf("node %v has no children named %v", n.Path, childPathName)
 		}
 	}
 

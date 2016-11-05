@@ -50,7 +50,7 @@ func TestWebSocket(t *testing.T) {
 		workflow: tw,
 
 		Name:        "name",
-		Path:        "/uuid1",
+		PathName:    "uuid1",
 		Children:    []*Node{},
 		LastChanged: 143,
 	}
@@ -87,9 +87,8 @@ func TestWebSocket(t *testing.T) {
 	}
 
 	// Send an update, make sure we see it.
-	n.Modify(func() {
-		n.Name = "name2"
-	})
+	n.Name = "name2"
+	n.BroadcastChanges(false /* updateChildren */)
 	_, tree, err = c.ReadMessage()
 	if err != nil {
 		t.Fatalf("WebSocket update read failed: %v", err)
