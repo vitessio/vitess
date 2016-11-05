@@ -170,6 +170,9 @@ func initAPI(ctx context.Context, ts topo.Server, actions *ActionRepository, rea
 			}
 			// Get the keyspace record.
 			k, err := ts.GetKeyspace(ctx, keyspace)
+			if err != nil {
+				return nil, err
+			}
 			// Pass the embedded proto directly or jsonpb will panic.
 			return k.Keyspace, err
 			// Perform an action on a keyspace.
@@ -220,6 +223,9 @@ func initAPI(ctx context.Context, ts topo.Server, actions *ActionRepository, rea
 
 		// Get the shard record.
 		si, err := ts.GetShard(ctx, keyspace, shard)
+		if err != nil {
+			return nil, err
+		}
 		// Pass the embedded proto directly or jsonpb will panic.
 		return si.Shard, err
 	})
@@ -336,6 +342,9 @@ func initAPI(ctx context.Context, ts topo.Server, actions *ActionRepository, rea
 
 		// Get the tablet record.
 		t, err := ts.GetTablet(ctx, tabletAlias)
+		if err != nil {
+			return nil, err
+		}
 		// Pass the embedded proto directly or jsonpb will panic.
 		return t.Tablet, err
 	})
