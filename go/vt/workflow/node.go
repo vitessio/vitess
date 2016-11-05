@@ -27,47 +27,56 @@ import (
 type NodeDisplay int
 
 const (
+	// NodeDisplayUnknown is an unknown value and should never be set.
+	NodeDisplayUnknown NodeDisplay = 0
+
 	// NodeDisplayIndeterminate is a progress bar that doesn't have
 	// a current value, but just shows movement.
-	NodeDisplayIndeterminate NodeDisplay = 0
+	NodeDisplayIndeterminate NodeDisplay = 1
 
 	// NodeDisplayDeterminate is a progress bar driven by the
 	// Progress field.
-	NodeDisplayDeterminate NodeDisplay = 1
+	NodeDisplayDeterminate NodeDisplay = 2
 
 	// NodeDisplayNone shows no progress bar or status.
-	NodeDisplayNone NodeDisplay = 2
+	NodeDisplayNone NodeDisplay = 3
 )
 
 // ActionState constants need to match node.ts.ActionState.
 type ActionState int
 
 const (
+	// ActionStateUnknown is an unknown value and should never be set.
+	ActionStateUnknown ActionState = 0
+
 	// ActionStateEnabled is for when the action is enabled.
-	ActionStateEnabled ActionState = 0
+	ActionStateEnabled ActionState = 1
 
 	// ActionStateDisabled is for when the action is disabled.
-	ActionStateDisabled ActionState = 1
+	ActionStateDisabled ActionState = 2
 )
 
 // ActionStyle constants need to match node.ts.ActionStyle.
 type ActionStyle int
 
 const (
+	// ActionStyleUnknown is an unknown value and should never be set.
+	ActionStyleUnknown ActionStyle = 0
+
 	// ActionStyleNormal will just trigger the action.
-	ActionStyleNormal ActionStyle = 0
+	ActionStyleNormal ActionStyle = 1
 
 	// ActionStyleWarning will display a warning dialog to confirm
 	// action with Action.Message.
-	ActionStyleWarning ActionStyle = 1
+	ActionStyleWarning ActionStyle = 2
 
 	// ActionStyleWaiting highlights to the user that the process
 	// is waiting on the execution of the action.
-	ActionStyleWaiting ActionStyle = 2
+	ActionStyleWaiting ActionStyle = 3
 
 	// ActionStyleTriggered is a state where the button is greyed
 	// out and cannot be pressed.
-	ActionStyleTriggered ActionStyle = 3
+	ActionStyleTriggered ActionStyle = 4
 )
 
 // Node is the UI representation of a Workflow toplevel object, or of
@@ -102,24 +111,24 @@ type Node struct {
 
 	Name            string                   `json:"name"`
 	Path            string                   `json:"path"`
-	Children        []*Node                  `json:"children"`
+	Children        []*Node                  `json:"children,omitempty"`
 	LastChanged     int64                    `json:"lastChanged"`
-	Progress        int                      `json:"progress,omitempty"`
-	ProgressMessage string                   `json:"progressMsg,omitempty"`
-	State           workflowpb.WorkflowState `json:"state,omitempty"`
+	Progress        int                      `json:"progress"`
+	ProgressMessage string                   `json:"progressMsg"`
+	State           workflowpb.WorkflowState `json:"state"`
 	Display         NodeDisplay              `json:"display,omitempty"`
-	Message         string                   `json:"message,omitempty"`
-	Log             string                   `json:"log,omitempty"`
-	Disabled        bool                     `json:"disabled,omitempty"`
+	Message         string                   `json:"message"`
+	Log             string                   `json:"log"`
+	Disabled        bool                     `json:"disabled"`
 	Actions         []*Action                `json:"actions"`
 }
 
 // Action must match node.ts Action.
 type Action struct {
-	Name    string      `json:"name,omitempty"`
+	Name    string      `json:"name"`
 	State   ActionState `json:"state,omitempty"`
 	Style   ActionStyle `json:"style,omitempty"`
-	Message string      `json:"message,omitempty"`
+	Message string      `json:"message"`
 }
 
 // Update is the data structure we send on the websocket or on the

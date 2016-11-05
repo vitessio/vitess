@@ -73,7 +73,7 @@ func TestNodeManagerWithRoot(t *testing.T) {
 	result, ok = <-notifications
 	if !ok ||
 		!strings.Contains(string(result), `"name":"name2"`) ||
-		!strings.Contains(string(result), `"children":[]`) || // FIXME(alainjobart) this should be true, we're not changing the children.
+		strings.Contains(string(result), `"children":[]`) ||
 		strings.Contains(string(result), `"fullUpdate":true`) {
 		t.Errorf("unexpected notification: %v %v", ok, string(result))
 	}
