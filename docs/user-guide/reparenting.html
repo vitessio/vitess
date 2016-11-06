@@ -122,6 +122,7 @@
               </ul>
             </li>
             <li><a href="/user-guide/vitess-replication.html">Vitess and Replication</a></li>
+            <li><a href="/user-guide/topology-service.html">Topology Service</a></li>
             <li><a href="/user-guide/transport-security-model.html">Transport Security Model</a></li>
             <li style="padding-bottom: 0"><a href="/user-guide/launching.html">Launching</a>
               <ul style="display: block">
@@ -214,6 +215,7 @@
               </ul>
             </li>
             <li><a href="/user-guide/vitess-replication.html">Vitess and Replication</a></li>
+            <li><a href="/user-guide/topology-service.html">Topology Service</a></li>
             <li><a href="/user-guide/transport-security-model.html">Transport Security Model</a></li>
             <li style="padding-bottom: 0"><a href="/user-guide/launching.html">Launching</a>
               <ul style="display: block">
@@ -376,14 +378,14 @@ a reparent to a new master when the current master is unavailable.
 The command assumes that data cannot be retrieved from the current
 master because it is dead or not working properly.</p>
 
-<p>As such, this command does not rely on the current master at all
+<p>As such, this command does not rely on the current master at all 
 to replicate data to the new master. Instead, it makes sure that
 the master-elect is the most advanced in replication within all
 of the available slaves.</p>
 
 <p><strong>Important:</strong> Before calling this command, you must first identify
 the slave with the most advanced replication position as that slave
-must be designated as the new master. You can use the
+must be designated as the new master. You can use the 
 <code><a href="/reference/vtctl.html#shardreplicationpositions">vtctl ShardReplicationPositions</a></code>
 command to determine the current replication positions of a shard&#39;s slaves.</p>
 

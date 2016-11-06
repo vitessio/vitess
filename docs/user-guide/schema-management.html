@@ -122,6 +122,7 @@
               </ul>
             </li>
             <li><a href="/user-guide/vitess-replication.html">Vitess and Replication</a></li>
+            <li><a href="/user-guide/topology-service.html">Topology Service</a></li>
             <li><a href="/user-guide/transport-security-model.html">Transport Security Model</a></li>
             <li style="padding-bottom: 0"><a href="/user-guide/launching.html">Launching</a>
               <ul style="display: block">
@@ -214,6 +215,7 @@
               </ul>
             </li>
             <li><a href="/user-guide/vitess-replication.html">Vitess and Replication</a></li>
+            <li><a href="/user-guide/topology-service.html">Topology Service</a></li>
             <li><a href="/user-guide/transport-security-model.html">Transport Security Model</a></li>
             <li style="padding-bottom: 0"><a href="/user-guide/launching.html">Launching</a>
               <ul style="display: block">
@@ -286,7 +288,7 @@ uniquely identifies the tablet. The <code>&lt;tablet alias&gt;</code>
 argument value has the format <code>&lt;cell name&gt;-&lt;uid&gt;</code>.</p>
 
 <p><strong>Note:</strong> You can use the
-<code><a href="/reference/vtctl.html#listalltablets">vtctl ListAllTablets</a></code>
+<code><a href="/reference/vtctl.html#listalltablets">vtctl ListAllTablets</a></code> 
 command to retrieve a list of tablets in a cell and their unique IDs.</p>
 
 <p>The following example retrieves the schema for the tablet with the
@@ -299,7 +301,7 @@ unique ID <code>test-000000100</code>:</p>
 <code><a href="/reference/vtctl.html#validateschemashard">ValidateSchemaShard</a></code>
 command confirms that for a given keyspace, all of the slave tablets
 in a specified shard have the same schema as the master tablet in that
-shard. When you call <code>ValidateSchemaShard</code>, you specify both
+shard. When you call <code>ValidateSchemaShard</code>, you specify both 
 the keyspace and the shard that you are validating.</p>
 
 <p>The following command confirms that the master and slave tablets in

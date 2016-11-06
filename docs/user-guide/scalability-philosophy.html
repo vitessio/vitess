@@ -122,6 +122,7 @@
               </ul>
             </li>
             <li><a href="/user-guide/vitess-replication.html">Vitess and Replication</a></li>
+            <li><a href="/user-guide/topology-service.html">Topology Service</a></li>
             <li><a href="/user-guide/transport-security-model.html">Transport Security Model</a></li>
             <li style="padding-bottom: 0"><a href="/user-guide/launching.html">Launching</a>
               <ul style="display: block">
@@ -214,6 +215,7 @@
               </ul>
             </li>
             <li><a href="/user-guide/vitess-replication.html">Vitess and Replication</a></li>
+            <li><a href="/user-guide/topology-service.html">Topology Service</a></li>
             <li><a href="/user-guide/transport-security-model.html">Transport Security Model</a></li>
             <li style="padding-bottom: 0"><a href="/user-guide/launching.html">Launching</a>
               <ul style="display: block">
@@ -278,7 +280,7 @@ on which Vitess now runs in YouTube).
 If you&#39;re more familiar with alternatives like Mesos, Swarm, Nomad, or DC/OS,
 we&#39;d welcome your contribution of sample configs for Vitess.</p>
 
-<p>These orchestration systems typically use <a href="https://en.wikipedia.org/wiki/Software_container">containers</a>
+<p>These orchestration systems typically use <a href="https://en.wikipedia.org/wiki/Software_container">containers</a> 
 to isolate small instances so they can be efficiently packed onto machines
 without contention on ports, paths, or compute resources.
 Then an automated scheduler does the job of shuffling instances around for
@@ -407,7 +409,7 @@ available and consistent data store.</p>
 cluster to be setup to run smoothly. Vitess can be customized to utilize any
 lock server, and by default it supports zookeeper and etcd. We call this
 component
-<a href="http://vitess.io/doc/TopologyService">Topology Service</a>.</p>
+<a href="/user-guide/topology-service.html">Topology Service</a>.</p>
 
 <p>As Vitess is meant to run in multiple data centers / regions (called cells
 below), it relies on two different lock servers:</p>

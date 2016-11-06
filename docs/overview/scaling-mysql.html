@@ -122,6 +122,7 @@
               </ul>
             </li>
             <li><a href="/user-guide/vitess-replication.html">Vitess and Replication</a></li>
+            <li><a href="/user-guide/topology-service.html">Topology Service</a></li>
             <li><a href="/user-guide/transport-security-model.html">Transport Security Model</a></li>
             <li style="padding-bottom: 0"><a href="/user-guide/launching.html">Launching</a>
               <ul style="display: block">
@@ -214,6 +215,7 @@
               </ul>
             </li>
             <li><a href="/user-guide/vitess-replication.html">Vitess and Replication</a></li>
+            <li><a href="/user-guide/topology-service.html">Topology Service</a></li>
             <li><a href="/user-guide/transport-security-model.html">Transport Security Model</a></li>
             <li style="padding-bottom: 0"><a href="/user-guide/launching.html">Launching</a>
               <ul style="display: block">
@@ -268,7 +270,7 @@
 
 <p>Vitess sits between your application and your MySQL database. It looks at incoming queries and routes them properly. So, instead of sending a query directly from your application to your database, you send it through Vitess, which understands your database topology and constantly monitors the health of individual database instances.</p>
 
-<p>While Vitess is designed to manage large, multi-instance databases, it offers features that simplify database setup and management at all stages of your product&#39;s lifecycle.</p>
+<p>While Vitess is designed to manage large, multi-instance databases, it offers features that simplify database setup and management at all stages of your product&#39;s lifecycle. </p>
 
 <p>Starting out, our first step is getting a simple, reliable, durable database cluster in place with a master instance and a couple of replicas. In Vitess terminology, that&#39;s a single-shard, single-keyspace database. Once that building block is in place, we can focus on replicating it to scale up.</p>
 
@@ -292,7 +294,7 @@
 
 <h3 id="keep-routing-logic-out-of-your-application">Keep routing logic out of your application</h3>
 
-<p>A core principle underlying Vitess&#39; design is that your database and data management practices should always be ready to support your application&#39;s growth. So, you might not yet have an immediate need to store data in multiple data centers, shard your database, or even do regular backups. But when those needs arise, you want to be sure that you&#39;ll have an easy path to achieve them. Note that you can run Vitess in a Kubernetes cluster or on local hardware.</p>
+<p>A core principle underlying Vitess&#39; design is that your database and data management practices should always be ready to support your application&#39;s growth. So, you might not yet have an immediate need to store data in multiple data centers, shard your database, or even do regular backups. But when those needs arise, you want to be sure that you&#39;ll have an easy path to achieve them. Note that you can run Vitess in a Kubernetes cluster or on local hardware. </p>
 
 <p>With that in mind, you want to have a plan that allows your database to grow without complicating your application code. For example, if you reshard your database, your application code shouldn&#39;t need to change to identify the target shards for a particular query.</p>
 
@@ -430,7 +432,7 @@
 
 <h3 id="query-log-analysis">Query log analysis</h3>
 
-<p>Database query logs can help you to monitor and improve your application&#39;s performance.</p>
+<p>Database query logs can help you to monitor and improve your application&#39;s performance. </p>
 
 <p>To that end, each vttablet instance provides runtime stats, which can be accessed through the tablet’s web page, for the queries the tablet is running. These stats make it easy to detect slow queries, which are usually hampered by a missing or mismatched table index. Reviewing these queries regularly helps maintain the overall health of your large database installation.</p>
 

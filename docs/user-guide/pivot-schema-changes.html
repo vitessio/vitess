@@ -122,6 +122,7 @@
               </ul>
             </li>
             <li><a href="/user-guide/vitess-replication.html">Vitess and Replication</a></li>
+            <li><a href="/user-guide/topology-service.html">Topology Service</a></li>
             <li><a href="/user-guide/transport-security-model.html">Transport Security Model</a></li>
             <li style="padding-bottom: 0"><a href="/user-guide/launching.html">Launching</a>
               <ul style="display: block">
@@ -214,6 +215,7 @@
               </ul>
             </li>
             <li><a href="/user-guide/vitess-replication.html">Vitess and Replication</a></li>
+            <li><a href="/user-guide/topology-service.html">Topology Service</a></li>
             <li><a href="/user-guide/transport-security-model.html">Transport Security Model</a></li>
             <li style="padding-bottom: 0"><a href="/user-guide/launching.html">Launching</a>
               <ul style="display: block">
@@ -496,7 +498,7 @@ Creating test_keyspace.shard-0 pods in cell test...
 Creating pod <span class="k">for</span> tablet <span class="nb">test</span>-0000000103...
 pod <span class="s2">&quot;vttablet-103&quot;</span> created
 </code></pre></div>
-<p>The restore from backup will take several seconds. While a tablet is restoring, Vitess tracks its state as <code class="prettyprint">restore</code>:</p>
+<p>The restore from backup will take several seconds. While a tablet is restoring, Vitess tracks its state as <code class="prettyprint">restore</code>: </p>
 <div class="highlight"><pre><code class="language-sh" data-lang="sh">vitess/examples/kubernetes<span class="nv">$ </span>./kvtctl.sh ListAllTablets <span class="nb">test</span>
 Starting port forwarding to vtctld...
 ...

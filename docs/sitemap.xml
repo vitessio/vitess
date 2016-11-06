@@ -1,150 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.sitemaps.org/schemas/sitemap/0.9 http://www.sitemaps.org/schemas/sitemap/0.9/sitemap.xsd" xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
-    <loc>http://vitess.io/doc/vtctlReference/</loc>
-    <lastmod>2015-01-01T00:00:00+00:00</lastmod>
-  </url>
-  <url>
-    <loc>http://vitess.io/doc/VitessTransportSecurityModel/</loc>
-    <lastmod>2015-01-01T00:00:00+00:00</lastmod>
-  </url>
-  <url>
-    <loc>http://vitess.io/doc/VitessReplication/</loc>
-    <lastmod>2015-01-01T00:00:00+00:00</lastmod>
-  </url>
-  <url>
-    <loc>http://vitess.io/doc/VitessOverview/</loc>
-    <lastmod>2015-01-01T00:00:00+00:00</lastmod>
-  </url>
-  <url>
-    <loc>http://vitess.io/doc/VitessApi/</loc>
-    <lastmod>2015-01-01T00:00:00+00:00</lastmod>
-  </url>
-  <url>
-    <loc>http://vitess.io/doc/Vision/</loc>
-    <lastmod>2015-01-01T00:00:00+00:00</lastmod>
-  </url>
-  <url>
-    <loc>http://vitess.io/doc/VTGateV3Features/</loc>
-    <lastmod>2015-01-01T00:00:00+00:00</lastmod>
-  </url>
-  <url>
-    <loc>http://vitess.io/doc/V3VindexDesign/</loc>
-    <lastmod>2015-01-01T00:00:00+00:00</lastmod>
-  </url>
-  <url>
-    <loc>http://vitess.io/doc/V3HighLevelDesign/</loc>
-    <lastmod>2015-01-01T00:00:00+00:00</lastmod>
-  </url>
-  <url>
-    <loc>http://vitess.io/doc/UserGuideIntroduction/</loc>
-    <lastmod>2015-01-01T00:00:00+00:00</lastmod>
-  </url>
-  <url>
-    <loc>http://vitess.io/doc/Upgrading/</loc>
-    <lastmod>2015-01-01T00:00:00+00:00</lastmod>
-  </url>
-  <url>
-    <loc>http://vitess.io/doc/TwoPhaseCommit/</loc>
-    <lastmod>2015-01-01T00:00:00+00:00</lastmod>
-  </url>
-  <url>
-    <loc>http://vitess.io/doc/Troubleshooting/</loc>
-    <lastmod>2015-01-01T00:00:00+00:00</lastmod>
-  </url>
-  <url>
-    <loc>http://vitess.io/doc/TopologyService/</loc>
-    <lastmod>2015-01-01T00:00:00+00:00</lastmod>
-  </url>
-  <url>
-    <loc>http://vitess.io/doc/TestingOnARamDisk/</loc>
-    <lastmod>2015-01-01T00:00:00+00:00</lastmod>
-  </url>
-  <url>
-    <loc>http://vitess.io/doc/ShardingKubernetes/</loc>
-    <lastmod>2015-01-01T00:00:00+00:00</lastmod>
-  </url>
-  <url>
-    <loc>http://vitess.io/doc/Sharding/</loc>
-    <lastmod>2015-01-01T00:00:00+00:00</lastmod>
-  </url>
-  <url>
-    <loc>http://vitess.io/doc/ServerConfiguration/</loc>
-    <lastmod>2015-01-01T00:00:00+00:00</lastmod>
-  </url>
-  <url>
-    <loc>http://vitess.io/doc/SchemaManagement/</loc>
-    <lastmod>2015-01-01T00:00:00+00:00</lastmod>
-  </url>
-  <url>
-    <loc>http://vitess.io/doc/ScalingMySQL/</loc>
-    <lastmod>2015-01-01T00:00:00+00:00</lastmod>
-  </url>
-  <url>
-    <loc>http://vitess.io/doc/ScalabilityPhilosophy/</loc>
-    <lastmod>2015-01-01T00:00:00+00:00</lastmod>
-  </url>
-  <url>
-    <loc>http://vitess.io/doc/ReplicationStreamTiming/</loc>
-    <lastmod>2015-01-01T00:00:00+00:00</lastmod>
-  </url>
-  <url>
-    <loc>http://vitess.io/doc/Reparenting/</loc>
-    <lastmod>2015-01-01T00:00:00+00:00</lastmod>
-  </url>
-  <url>
-    <loc>http://vitess.io/doc/ProductionPlanning/</loc>
-    <lastmod>2015-01-01T00:00:00+00:00</lastmod>
-  </url>
-  <url>
-    <loc>http://vitess.io/doc/Production/</loc>
-    <lastmod>2015-01-01T00:00:00+00:00</lastmod>
-  </url>
-  <url>
-    <loc>http://vitess.io/doc/PivotSchemaChanges/</loc>
-    <lastmod>2015-01-01T00:00:00+00:00</lastmod>
-  </url>
-  <url>
-    <loc>http://vitess.io/doc/Monitoring/</loc>
-    <lastmod>2015-01-01T00:00:00+00:00</lastmod>
-  </url>
-  <url>
-    <loc>http://vitess.io/doc/LifeOfAQuery/</loc>
-    <lastmod>2015-01-01T00:00:00+00:00</lastmod>
-  </url>
-  <url>
-    <loc>http://vitess.io/doc/LaunchingVitess/</loc>
-    <lastmod>2015-01-01T00:00:00+00:00</lastmod>
-  </url>
-  <url>
-    <loc>http://vitess.io/doc/HorizontalReshardingGuide/</loc>
-    <lastmod>2015-01-01T00:00:00+00:00</lastmod>
-  </url>
-  <url>
-    <loc>http://vitess.io/doc/GettingStartedKubernetes/</loc>
-    <lastmod>2015-01-01T00:00:00+00:00</lastmod>
-  </url>
-  <url>
-    <loc>http://vitess.io/doc/GettingStarted/</loc>
-    <lastmod>2015-01-01T00:00:00+00:00</lastmod>
-  </url>
-  <url>
-    <loc>http://vitess.io/doc/DockerBuild/</loc>
-    <lastmod>2015-01-01T00:00:00+00:00</lastmod>
-  </url>
-  <url>
-    <loc>http://vitess.io/doc/Concepts/</loc>
-    <lastmod>2015-01-01T00:00:00+00:00</lastmod>
-  </url>
-  <url>
-    <loc>http://vitess.io/doc/ClientLibraries/</loc>
-    <lastmod>2015-01-01T00:00:00+00:00</lastmod>
-  </url>
-  <url>
-    <loc>http://vitess.io/doc/BackupAndRestore/</loc>
-    <lastmod>2015-01-01T00:00:00+00:00</lastmod>
-  </url>
-  <url>
     <loc>http://vitess.io/user-guide/backup-and-restore.html</loc>
   </url>
   <url>
@@ -161,9 +17,6 @@
   </url>
   <url>
     <loc>http://vitess.io/overview/</loc>
-  </url>
-  <url>
-    <loc>http://vitess.io/doc/</loc>
   </url>
   <url>
     <loc>http://vitess.io/about/</loc>
@@ -218,6 +71,9 @@
   </url>
   <url>
     <loc>http://vitess.io/user-guide/sharding.html</loc>
+  </url>
+  <url>
+    <loc>http://vitess.io/user-guide/topology-service.html</loc>
   </url>
   <url>
     <loc>http://vitess.io/user-guide/transport-security-model.html</loc>

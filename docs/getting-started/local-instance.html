@@ -122,6 +122,7 @@
               </ul>
             </li>
             <li><a href="/user-guide/vitess-replication.html">Vitess and Replication</a></li>
+            <li><a href="/user-guide/topology-service.html">Topology Service</a></li>
             <li><a href="/user-guide/transport-security-model.html">Transport Security Model</a></li>
             <li style="padding-bottom: 0"><a href="/user-guide/launching.html">Launching</a>
               <ul style="display: block">
@@ -214,6 +215,7 @@
               </ul>
             </li>
             <li><a href="/user-guide/vitess-replication.html">Vitess and Replication</a></li>
+            <li><a href="/user-guide/topology-service.html">Topology Service</a></li>
             <li><a href="/user-guide/transport-security-model.html">Transport Security Model</a></li>
             <li style="padding-bottom: 0"><a href="/user-guide/launching.html">Launching</a>
               <ul style="display: block">
@@ -341,7 +343,7 @@ possible to use another lock server, but plugins currently exist only
 for ZooKeeper and etcd.</p>
 
 <ul>
-<li>ZooKeeper 3.3.5 is included by default.</li>
+<li>ZooKeeper 3.3.5 is included by default. </li>
 <li><a href="https://github.com/coreos/etcd/releases">Install etcd v2.0+</a>.
 If you use etcd, remember to include the <code class="prettyprint">etcd</code> command
 on your path.</li>
@@ -378,14 +380,14 @@ Java Runtime, such as OpenJDK.</p>
 
 <ol>
 <li><p><a href="http://brew.sh/">Install Homebrew</a>. If your /usr/local directory is not empty and you never used Homebrew before,
-it will be
-<a href="https://github.com/Homebrew/homebrew/blob/master/share/doc/homebrew/El_Capitan_and_Homebrew.md">mandatory</a>
+it will be 
+<a href="https://github.com/Homebrew/homebrew/blob/master/share/doc/homebrew/El_Capitan_and_Homebrew.md">mandatory</a> 
 to run the following command:</p>
 <div class="highlight"><pre><code class="language-sh" data-lang="sh">sudo chown -R <span class="k">$(</span>whoami<span class="k">)</span>:admin /usr/local
 </code></pre></div></li>
 <li><p>On OS X, MySQL 5.6 has to be used, MariaDB doesn&#39;t work for some reason yet. It should be installed from Homebrew
 (install steps are below).</p></li>
-<li><p>If Xcode is installed (with Console tools, which should be bundled automatically since the 7.1 version), all
+<li><p>If Xcode is installed (with Console tools, which should be bundled automatically since the 7.1 version), all 
 the dev dependencies should be satisfied in this step. If no Xcode is present, it is necessery to install pkg-config.</p>
 <div class="highlight"><pre><code class="language-sh" data-lang="sh">brew install pkg-config
 </code></pre></div></li>
@@ -421,7 +423,7 @@ commands in your ~/.profile or ~/.bashrc or ~/.zshrc:</p>
 with the current LAN IP address of the computer (preferably IPv4) and the current hostname, which you get by
 typing the &#39;hostname&#39; command in the terminal.</p>
 
-<p>It is also a good idea to put the following line to <a href="https://golang.org/doc/go1.5#net">force the Go DNS resolver</a>
+<p>It is also a good idea to put the following line to <a href="https://golang.org/doc/go1.5#net">force the Go DNS resolver</a> 
 in your ~/.profile or ~/.bashrc or ~/.zshrc:</p>
 <div class="highlight"><pre><code class="language-text" data-lang="text">export GODEBUG=netdns=go
 </code></pre></div></li>

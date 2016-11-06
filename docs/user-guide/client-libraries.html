@@ -122,6 +122,7 @@
               </ul>
             </li>
             <li><a href="/user-guide/vitess-replication.html">Vitess and Replication</a></li>
+            <li><a href="/user-guide/topology-service.html">Topology Service</a></li>
             <li><a href="/user-guide/transport-security-model.html">Transport Security Model</a></li>
             <li style="padding-bottom: 0"><a href="/user-guide/launching.html">Launching</a>
               <ul style="display: block">
@@ -214,6 +215,7 @@
               </ul>
             </li>
             <li><a href="/user-guide/vitess-replication.html">Vitess and Replication</a></li>
+            <li><a href="/user-guide/topology-service.html">Topology Service</a></li>
             <li><a href="/user-guide/transport-security-model.html">Transport Security Model</a></li>
             <li style="padding-bottom: 0"><a href="/user-guide/launching.html">Launching</a>
               <ul style="display: block">
@@ -263,7 +265,7 @@ application to more easily talk to your storage system to query data.</p>
 <p>Vitess&#39; service is exposed through a
 <a href="https://developers.google.com/protocol-buffers/docs/proto3">proto3</a>
 service definition. Vitess supports <a href="http://www.grpc.io/">gRPC</a>,
-and you can use the
+and you can use the 
 <a href="https://developers.google.com/protocol-buffers/docs/proto?hl=en#generating">proto compiler</a>
 to generate stubs that can call the API in any language that the
 gRPC framework supports.</p>
@@ -282,7 +284,7 @@ API methods, which support the following types of functions:
 <li>Transactions (begin, commit, rollback)</li>
 <li>Queries targeted to a specific shards or groups of shards</li>
 <li>Queries targeted based on sharding key values</li>
-<li>Queries that monitor sharding configurations</li>
+<li>Queries that monitor sharding configurations<br></li>
 <li>MapReduce operations</li>
 </ul></li>
 <li>Libraries expose an identical set of well-documented error codes.</li>
