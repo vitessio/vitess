@@ -34,6 +34,9 @@ fi
 # Change to docs/ directory.
 pushd $website_dir >/dev/null
 
+# Restore README.md because it gets deleted by Jekyll.
+git checkout README.md
+
 # pre-commit checks
 set +e
 list=$(find . -name '*.html' ! -path '*/vendor/*' ! -path '*/web/*' | xargs grep -lE '^\s*([\-\*]|\d\.) ')
