@@ -3,6 +3,7 @@
 ## Updates
 
 Some changes have been made to the system since the last time the doc was written. This is the list:
+
 * More flexibility has been added for using table names:
   * Allow applications to specify a keyspace at connection time. If so, an unqualified reference to a table is assumed to belong to the connection’s keyspace.
   * Support constructs like `keyspace.table`, which will force VSchema to only look inside that keyspace for that table.
