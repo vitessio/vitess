@@ -1,0 +1,894 @@
+<!DOCTYPE html>
+<html lang="en" itemscope itemtype="https://schema.org/WebPage">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Vitess / Running Vitess on Kubernetes</title>
+
+        <!-- Webfont -->
+    <link href='http://fonts.googleapis.com/css?family=Roboto:400,100,100italic,300,300italic,400italic,500,500italic,700,700italic,900,900italic' rel='stylesheet' type='text/css'>
+    
+    <!--<link rel="shortcut icon" type="image/png" href="/favicon.png">-->
+
+    <!-- Bootstrap -->
+    <link href="/libs/bootstrap/css/bootstrap.min.css" rel="stylesheet">
+
+    <!-- HTML5 shim and Respond.js for IE8 support of HTML5 elements and media queries -->
+    <!-- WARNING: Respond.js doesn't work if you view the page via file:// -->
+    <!--[if lt IE 9]>
+      <script src="https://oss.maxcdn.com/html5shiv/3.7.2/html5shiv.min.js"></script>
+      <script src="https://oss.maxcdn.com/respond/1.4.2/respond.min.js"></script>
+    <![endif]-->
+
+    <!-- Styles -->
+    <link rel="stylesheet" type="text/css" href="/css/site.css" />
+    <!-- Font Awesome icons -->
+    <link href="/libs/font-awesome-4.4.0/css/font-awesome.min.css"
+          rel="stylesheet"
+          type="text/css">
+    
+    <!-- jQuery (necessary for Bootstrap's JavaScript plugins) -->
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.2/jquery.min.js"></script>
+    <!-- Include all compiled plugins (below), or include individual files as needed -->
+    <script src="/libs/bootstrap/js/bootstrap.min.js"></script>
+
+
+    <!-- metadata -->
+    <meta name="og:title" content="Vitess / Running Vitess on Kubernetes"/>
+    <meta name="og:image" content="/images/vitess_logomark_cropped.svg"/>
+    <meta name="og:description" content="Vitess is a database clustering system for horizontal scaling of MySQL."/>
+
+    <link rel="icon" href="/images/vitess_icon.png" type="image/png">
+
+    
+    <script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+  ga('create', 'UA-60219601-1', 'auto');
+  ga('send', 'pageview');
+</script>
+
+    
+  </head>
+  <body class="docs" id="top_of_page">
+
+    <span id="toc-depth" data-toc-depth="h2,h3"></span>
+
+
+    <nav id="common-nav" class="navbar navbar-fixed-top inverse">
+  <div class="container">
+    <!-- Brand and toggle get grouped for better mobile display -->
+    <div class="navbar-header">
+      <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#navbar-collapse-1">
+        <span class="sr-only">Toggle navigation</span>
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+      </button>
+      <a class="navbar-brand" href="/">
+        <img class="logo" src="/images/vitess_logomark_cropped.svg" alt="Vitess">
+      </a>
+    </div>
+
+    <!-- Collect the nav links, forms, and other content for toggling -->
+    <div class="collapse navbar-collapse" id="navbar-collapse-1">
+      <ul class="nav navbar-nav navbar-right" id="standard-menu-links">
+        <li><a href="/overview/">Overview</a></li>
+        <li><a href="/user-guide/introduction.html">Guides</a></li>
+        <li><a href="/reference/vitess-api.html">Reference</a></li>
+        <li><a href="http://blog.vitess.io">Blog</a></li>
+        <li><a href="https://github.com/youtube/vitess"><i class="fa fa-github"></i> GitHub</a></li>
+        <!-- Hide link to blog unless we have actual posts -->
+        <!-- <li><a href="/blog/" title="">Blog</a></li> -->
+      </ul>
+      <ul class="nav nav-stacked mobile-left-nav-menu" id="collapsed-left-menu">
+                <li class="submenu">
+          <h4 class="arrow-r no-top-margin">Overview</h4>
+          <ul style="display: none">
+            <li><a href="/overview/">What is Vitess</a></li>
+            <li><a href="/overview/scaling-mysql.html">Scaling MySQL with Vitess</a></li>
+            <li><a href="/overview/concepts.html">Key Concepts</a></li>
+          </ul>
+        </li>
+        <li class="submenu">
+          <h4 class="arrow-r">Getting Started</h4>
+          <ul style="display: none">
+            <li style="padding-bottom: 0"><a href="/getting-started/">Run Vitess on Kubernetes</a>
+              <ul style="display: block">
+                <li style="padding-bottom: 0"><a href="/getting-started/docker-build.html">Custom Docker Build</a></li>
+              </ul>
+            </li>
+            <li><a href="/getting-started/local-instance.html">Run Vitess Locally</a></li>
+          </ul>
+        </li>
+        <li class="submenu">
+          <h4 class="arrow-r">User Guide</h4>
+          <ul style="display: none">
+            <li><a href="/user-guide/introduction.html">Introduction</a>
+            <li><a href="/user-guide/client-libraries.html">Client Libraries</a>
+            <li><a href="/user-guide/backup-and-restore.html">Backing Up Data</a>
+            <li><a href="/user-guide/reparenting.html">Reparenting</a></li>
+            <li style="padding-bottom: 0"><a href="/user-guide/schema-management.html">Schema Management</a></li>
+              <ul style="display: block">
+                <li style="padding-bottom: 0"><a href="/user-guide/pivot-schema-changes.html">Pivot Schema Changes (Tutorial)</a></li>
+              </ul>
+            <li style="padding-bottom: 0"><a href="/user-guide/sharding.html">Sharding</a>
+              <ul style="display: block">
+                <li><a href="/user-guide/horizontal-sharding.html">Horizontal Sharding (Codelab)</a></li>
+                <li style="padding-bottom: 0"><a href="/user-guide/sharding-kubernetes.html">Sharding in Kubernetes (Codelab)</a></li>
+              </ul>
+            </li>
+            <li><a href="/user-guide/vitess-replication.html">Vitess and Replication</a></li>
+            <li><a href="/user-guide/transport-security-model.html">Transport Security Model</a></li>
+            <li style="padding-bottom: 0"><a href="/user-guide/launching.html">Launching</a>
+              <ul style="display: block">
+                <li><a href="/user-guide/scalability-philosophy.html">Scalability Philosophy</a></li>
+                <li><a href="/user-guide/production-planning.html">Production Planning</a></li>
+                <li><a href="/user-guide/server-configuration.html">Server Configuration</a></li>
+                <li style="padding-bottom: 0"><a href="/user-guide/troubleshooting.html">Troubleshooting</a></li>
+              </ul>
+            </li>
+            <li><a href="/user-guide/upgrading.html">Upgrading</a></li>
+          </ul>
+        </li>
+        <li class="submenu">
+          <h4 class="arrow-r">Reference Guides</h4>
+          <ul style="display: none">
+            <li><a href="/reference/vitess-api.html">Vitess API</a>
+            <li><a href="/reference/vtctl.html">vtctl Commands</a>
+          </ul>
+        </li>
+        <li class="submenu">
+          <h4 class="arrow-r">Other Resources</h4>
+          <ul style="display: none">
+            <li><a href="/resources/presentations.html">Presentations</a>
+            <li><a href="http://blog.vitess.io/">Blog</a>
+          </ul>
+        </li>
+
+        <div>
+          <form method="get" action="/search/">
+            <input id="search-form" name="q" type="text" placeholder="Search">
+          </form>
+        </div>
+
+        <li><a href="https://github.com/youtube/vitess" id="collapsed-left-menu-repo-link"><i class="fa fa-github"></i> GitHub</a></li>
+      </ul>
+    </div><!-- /.navbar-collapse -->
+  </div><!-- /.container-fluid -->
+</nav>
+
+    
+<div id="masthead">
+  <div class="container">
+    <div class="row">
+      <div class="col-md-9">
+        <h1>Running Vitess on Kubernetes</h1>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<div class="container">
+    <div class="row scroll-margin" id="toc-content-row">
+    <div class="col-md-2" id="leftCol">
+      <ul class="nav nav-stacked mobile-left-nav-menu" id="sidebar">
+                <li class="submenu">
+          <h4 class="arrow-r no-top-margin">Overview</h4>
+          <ul style="display: none">
+            <li><a href="/overview/">What is Vitess</a></li>
+            <li><a href="/overview/scaling-mysql.html">Scaling MySQL with Vitess</a></li>
+            <li><a href="/overview/concepts.html">Key Concepts</a></li>
+          </ul>
+        </li>
+        <li class="submenu">
+          <h4 class="arrow-r">Getting Started</h4>
+          <ul style="display: none">
+            <li style="padding-bottom: 0"><a href="/getting-started/">Run Vitess on Kubernetes</a>
+              <ul style="display: block">
+                <li style="padding-bottom: 0"><a href="/getting-started/docker-build.html">Custom Docker Build</a></li>
+              </ul>
+            </li>
+            <li><a href="/getting-started/local-instance.html">Run Vitess Locally</a></li>
+          </ul>
+        </li>
+        <li class="submenu">
+          <h4 class="arrow-r">User Guide</h4>
+          <ul style="display: none">
+            <li><a href="/user-guide/introduction.html">Introduction</a>
+            <li><a href="/user-guide/client-libraries.html">Client Libraries</a>
+            <li><a href="/user-guide/backup-and-restore.html">Backing Up Data</a>
+            <li><a href="/user-guide/reparenting.html">Reparenting</a></li>
+            <li style="padding-bottom: 0"><a href="/user-guide/schema-management.html">Schema Management</a></li>
+              <ul style="display: block">
+                <li style="padding-bottom: 0"><a href="/user-guide/pivot-schema-changes.html">Pivot Schema Changes (Tutorial)</a></li>
+              </ul>
+            <li style="padding-bottom: 0"><a href="/user-guide/sharding.html">Sharding</a>
+              <ul style="display: block">
+                <li><a href="/user-guide/horizontal-sharding.html">Horizontal Sharding (Codelab)</a></li>
+                <li style="padding-bottom: 0"><a href="/user-guide/sharding-kubernetes.html">Sharding in Kubernetes (Codelab)</a></li>
+              </ul>
+            </li>
+            <li><a href="/user-guide/vitess-replication.html">Vitess and Replication</a></li>
+            <li><a href="/user-guide/transport-security-model.html">Transport Security Model</a></li>
+            <li style="padding-bottom: 0"><a href="/user-guide/launching.html">Launching</a>
+              <ul style="display: block">
+                <li><a href="/user-guide/scalability-philosophy.html">Scalability Philosophy</a></li>
+                <li><a href="/user-guide/production-planning.html">Production Planning</a></li>
+                <li><a href="/user-guide/server-configuration.html">Server Configuration</a></li>
+                <li style="padding-bottom: 0"><a href="/user-guide/troubleshooting.html">Troubleshooting</a></li>
+              </ul>
+            </li>
+            <li><a href="/user-guide/upgrading.html">Upgrading</a></li>
+          </ul>
+        </li>
+        <li class="submenu">
+          <h4 class="arrow-r">Reference Guides</h4>
+          <ul style="display: none">
+            <li><a href="/reference/vitess-api.html">Vitess API</a>
+            <li><a href="/reference/vtctl.html">vtctl Commands</a>
+          </ul>
+        </li>
+        <li class="submenu">
+          <h4 class="arrow-r">Other Resources</h4>
+          <ul style="display: none">
+            <li><a href="/resources/presentations.html">Presentations</a>
+            <li><a href="http://blog.vitess.io/">Blog</a>
+          </ul>
+        </li>
+
+        <div>
+          <form method="get" action="/search/">
+            <input id="search-form" name="q" type="text" placeholder="Search">
+          </form>
+        </div>
+
+      </ul>
+    </div>
+    <div class="col-md-3" id="rightCol">
+      <div class="nav nav-stacked" id="tocSidebar">
+        <div id="toc"></div>
+      </div>
+    </div>
+    <div class="col-md-7" id="centerCol">
+      <div id="centerTextCol">
+        <p>This page explains how to run Vitess on <a href="http://kubernetes.io">Kubernetes</a>.
+It also gives the steps to start a Kubernetes cluster with
+<a href="https://cloud.google.com/container-engine/">Google Container Engine</a>.</p>
+
+<p>If you already have Kubernetes v1.0+ running in one of the other
+<a href="http://kubernetes.io/docs/getting-started-guides/">supported platforms</a>,
+you can skip the <code class="prettyprint">gcloud</code> steps.
+The <code class="prettyprint">kubectl</code> steps will apply to any Kubernetes cluster.</p>
+
+<h2 id="prerequisites">Prerequisites</h2>
+
+<p>To complete the exercise in this guide, you must locally install Go 1.7+,
+Vitess&#39; <code class="prettyprint">vtctlclient</code> tool, and Google Cloud SDK. The
+following sections explain how to set these up in your environment.</p>
+
+<h3 id="install-go-1-7">Install Go 1.7+</h3>
+
+<p>You need to install <a href="http://golang.org/doc/install">Go 1.7+</a> to build the
+<code class="prettyprint">vtctlclient</code> tool, which issues commands to Vitess.</p>
+
+<p>After installing Go, make sure your <code class="prettyprint">GOPATH</code> environment
+variable is set to the root of your workspace. The most common setting
+is <code class="prettyprint">GOPATH=$HOME/go</code>, and the value should identify a
+directory to which your non-root user has write access.</p>
+
+<p>In addition, make sure that <code class="prettyprint">$GOPATH/bin</code> is included in
+your <code class="prettyprint">$PATH</code>. More information about setting up a Go
+workspace can be found at
+<a href="http://golang.org/doc/code.html#Organization">How to Write Go Code</a>.</p>
+
+<h3 id="build-and-install-vtctlclient">Build and install vtctlclient</h3>
+
+<p>The <code class="prettyprint">vtctlclient</code> tool issues commands to Vitess.</p>
+<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span class="nv">$ </span>go get github.com/youtube/vitess/go/cmd/vtctlclient
+</code></pre></div>
+<p>This command downloads and builds the Vitess source code at:</p>
+<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span class="nv">$GOPATH</span>/src/github.com/youtube/vitess/
+</code></pre></div>
+<p>It also copies the built <code class="prettyprint">vtctlclient</code> binary into <code class="prettyprint">$GOPATH/bin</code>.</p>
+
+<h3 id="set-up-google-compute-engine-container-engine-and-cloud-tools">Set up Google Compute Engine, Container Engine, and Cloud tools</h3>
+
+<p><strong>Note:</strong> If you are running Kubernetes elsewhere, skip to
+<a href="#locate-kubectl">Locate kubectl</a>.</p>
+
+<p>To run Vitess on Kubernetes using Google Compute Engine (GCE),
+you must have a GCE account with billing enabled. The instructions
+below explain how to enable billing and how to associate a billing
+account with a project in the Google Developers Console.</p>
+
+<ol>
+<li><p>Log in to the Google Developers Console to <a href="https://console.developers.google.com/billing">enable billing</a>.</p>
+
+<ol>
+<li> Click the <strong>Billing</strong> pane if you are not there already.</li>
+<li> Click <strong>New billing account</strong>.</li>
+<li> Assign a name to the billing account -- e.g. &quot;Vitess on
+Kubernetes.&quot; Then click <strong>Continue</strong>. You can sign up
+for the <a href="https://cloud.google.com/free-trial/">free trial</a>
+to avoid any charges.</li>
+</ol></li>
+<li><p>Create a project in the Google Developers Console that uses
+your billing account:</p>
+
+<ol>
+<li> At the top of the Google Developers Console, click the <strong>Projects</strong> dropdown.</li>
+<li> Click the Create a Project... link.</li>
+<li> Assign a name to your project. Then click the <strong>Create</strong> button.
+Your project should be created and associated with your
+billing account. (If you have multiple billing accounts,
+confirm that the project is associated with the correct account.)</li>
+<li> After creating your project, click <strong>API Manager</strong> in the left menu.</li>
+<li> Find <strong>Google Compute Engine</strong> and <strong>Google Container Engine API</strong>.
+(Both should be listed under &quot;Google Cloud APIs&quot;.)
+For each, click on it, then click the <strong>&quot;Enable API&quot;</strong> button.</li>
+</ol></li>
+<li><p>Follow the <a href="https://cloud.google.com/sdk/#Quick_Start">Google Cloud SDK quickstart instructions</a> to set up
+and test the Google Cloud SDK. You will also set your default project
+ID while completing the quickstart.</p>
+
+<p><strong>Note:</strong> If you skip the quickstart guide because you&#39;ve previously set up
+the Google Cloud SDK, just make sure to set a default project ID by running
+the following command. Replace <code class="prettyprint">PROJECT</code> with the project ID assigned to
+your <a href="https://console.developers.google.com/">Google Developers Console</a>
+project. You can <a href="https://cloud.google.com/compute/docs/projects#projectids">find the ID</a>
+by navigating to the <strong>Overview</strong> page for the project in the Console.</p>
+<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span class="nv">$ </span>gcloud config <span class="nb">set </span>project PROJECT
+</code></pre></div></li>
+<li><p>Install or update the <code class="prettyprint">kubectl</code> tool:</p>
+<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span class="nv">$ </span>gcloud components update kubectl
+</code></pre></div></li>
+</ol>
+
+<h3 id="locate-kubectl">Locate kubectl</h3>
+
+<p>Check if <code class="prettyprint">kubectl</code> is on your <code class="prettyprint">PATH</code>:</p>
+<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span class="nv">$ </span>which kubectl
+<span class="c">### example output:</span>
+<span class="c"># ~/google-cloud-sdk/bin/kubectl</span>
+</code></pre></div>
+<p>If <code class="prettyprint">kubectl</code> isn&#39;t on your <code class="prettyprint">PATH</code>, you can tell our scripts where
+to find it by setting the <code class="prettyprint">KUBECTL</code> environment variable:</p>
+<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span class="nv">$ </span><span class="nb">export </span><span class="nv">KUBECTL</span><span class="o">=</span>/example/path/to/google-cloud-sdk/bin/kubectl
+</code></pre></div>
+<h2 id="start-a-container-engine-cluster">Start a Container Engine cluster</h2>
+
+<p><strong>Note:</strong> If you are running Kubernetes elsewhere, skip to
+<a href="#start-a-vitess-cluster">Start a Vitess cluster</a>.</p>
+
+<ol>
+<li><p>Set the <a href="https://cloud.google.com/compute/docs/zones#overview">zone</a>
+that your installation will use:</p>
+<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span class="nv">$ </span>gcloud config <span class="nb">set </span>compute/zone us-central1-b
+</code></pre></div></li>
+<li><p>Create a Container Engine cluster:</p>
+<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span class="nv">$ </span>gcloud container clusters create example --machine-type n1-standard-4 --num-nodes <span class="m">5</span> --scopes storage-rw
+<span class="c">### example output:</span>
+<span class="c"># Creating cluster example...done.</span>
+<span class="c"># Created [https://container.googleapis.com/v1/projects/vitess/zones/us-central1-b/clusters/example].</span>
+<span class="c"># kubeconfig entry generated for example.</span>
+</code></pre></div>
+<p><strong>Note:</strong> The <code class="prettyprint">--scopes storage-rw</code> argument is necessary to allow
+<a href="http://vitess.io/user-guide/backup-and-restore.html">built-in backup/restore</a>
+to access <a href="https://cloud.google.com/storage/">Google Cloud Storage</a>.</p></li>
+<li><p>Create a Cloud Storage bucket:</p>
+
+<p>To use the Cloud Storage plugin for built-in backups, first create a
+<a href="https://cloud.google.com/storage/docs/concepts-techniques#concepts">bucket</a>
+for Vitess backup data. See the
+<a href="https://cloud.google.com/storage/docs/bucket-naming">bucket naming guidelines</a>
+if you&#39;re new to Cloud Storage.</p>
+<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span class="nv">$ </span>gsutil mb gs://my-backup-bucket
+</code></pre></div></li>
+</ol>
+
+<h2 id="start-a-vitess-cluster">Start a Vitess cluster</h2>
+
+<ol>
+<li><p><strong>Navigate to your local Vitess source code</strong></p>
+
+<p>This directory would have been created when you installed
+<code class="prettyprint">vtctlclient</code>:</p>
+<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span class="nv">$ </span><span class="nb">cd</span> <span class="nv">$GOPATH</span>/src/github.com/youtube/vitess/examples/kubernetes
+</code></pre></div></li>
+<li><p><strong>Configure site-local settings</strong></p>
+
+<p>Run the <code class="prettyprint">configure.sh</code> script to generate a <code class="prettyprint">config.sh</code> file, which will be
+used to customize your cluster settings.</p>
+
+<p>Currently, we have out-of-the-box support for storing
+<a href="http://vitess.io/user-guide/backup-and-restore.html">backups</a> in
+<a href="https://cloud.google.com/storage/">Google Cloud Storage</a>. If you&#39;re using
+GCS, fill in the fields requested by the configure script, including the
+name of the bucket you created above.</p>
+<div class="highlight"><pre><code class="language-sh" data-lang="sh">vitess/examples/kubernetes<span class="nv">$ </span>./configure.sh
+<span class="c">### example output:</span>
+<span class="c"># Backup Storage (file, gcs) [gcs]:</span>
+<span class="c"># Google Developers Console Project [my-project]:</span>
+<span class="c"># Google Cloud Storage bucket for Vitess backups: my-backup-bucket</span>
+<span class="c"># Saving config.sh...</span>
+</code></pre></div>
+<p>For other platforms, you&#39;ll need to choose the <code class="prettyprint">file</code> backup storage plugin,
+and mount a read-write network volume into the <code class="prettyprint">vttablet</code> and <code class="prettyprint">vtctld</code> pods.
+For example, you can mount any storage service accessible through NFS into a
+<a href="http://kubernetes.io/v1.1/docs/user-guide/volumes.html#nfs">Kubernetes volume</a>.
+Then provide the mount path to the configure script here.</p>
+
+<p>Direct support for other cloud blob stores like Amazon S3 can be added by
+implementing the Vitess <a href="https://github.com/youtube/vitess/blob/master/go/vt/mysqlctl/backupstorage/interface.go">BackupStorage plugin interface</a>.
+Let us know on the <a href="https://groups.google.com/forum/#!forum/vitess">discussion forum</a>
+if you have any specific plugin requests.</p></li>
+<li><p><strong>Start an etcd cluster</strong></p>
+
+<p>The Vitess <a href="http://vitess.io/overview/concepts.html#topology-service">topology service</a>
+stores coordination data for all the servers in a Vitess cluster.
+It can store this data in one of several consistent storage systems.
+In this example, we&#39;ll use <a href="https://github.com/coreos/etcd">etcd</a>.
+Note that we need our own etcd clusters, separate from the one used by
+Kubernetes itself.</p>
+<div class="highlight"><pre><code class="language-sh" data-lang="sh">vitess/examples/kubernetes<span class="nv">$ </span>./etcd-up.sh
+<span class="c">### example output:</span>
+<span class="c"># Creating etcd service for global cell...</span>
+<span class="c"># service &quot;etcd-global&quot; created</span>
+<span class="c"># service &quot;etcd-global-srv&quot; created</span>
+<span class="c"># Creating etcd replicationcontroller for global cell...</span>
+<span class="c"># replicationcontroller &quot;etcd-global&quot; created</span>
+<span class="c"># ...</span>
+</code></pre></div>
+<p>This command creates two clusters. One is for the
+<a href="http://vitess.io/doc/TopologyService/#global-vs-local">global cell</a>,
+and the other is for a
+<a href="http://vitess.io/overview/concepts.html#cell-data-center">local cell</a>
+called <em>test</em>. You can check the status of the
+<a href="http://kubernetes.io/v1.1/docs/user-guide/pods.html">pods</a>
+in the cluster by running:</p>
+<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span class="nv">$ </span>kubectl get pods
+<span class="c">### example output:</span>
+<span class="c"># NAME                READY     STATUS    RESTARTS   AGE</span>
+<span class="c"># etcd-global-8oxzm   1/1       Running   0          1m</span>
+<span class="c"># etcd-global-hcxl6   1/1       Running   0          1m</span>
+<span class="c"># etcd-global-xupzu   1/1       Running   0          1m</span>
+<span class="c"># etcd-test-e2y6o     1/1       Running   0          1m</span>
+<span class="c"># etcd-test-m6wse     1/1       Running   0          1m</span>
+<span class="c"># etcd-test-qajdj     1/1       Running   0          1m</span>
+</code></pre></div>
+<p>It may take a while for each Kubernetes node to download the
+Docker images the first time it needs them. While the images
+are downloading, the pod status will be Pending.</p>
+
+<p><strong>Note:</strong> In this example, each script that has a name ending in
+<code class="prettyprint">-up.sh</code> also has a corresponding <code class="prettyprint">-down.sh</code>
+script, which can be used to stop certain components of the
+Vitess cluster without bringing down the whole cluster. For
+example, to tear down the <code class="prettyprint">etcd</code> deployment, run:</p>
+<div class="highlight"><pre><code class="language-sh" data-lang="sh">vitess/examples/kubernetes<span class="nv">$ </span>./etcd-down.sh
+</code></pre></div></li>
+<li><p><strong>Start vtctld</strong></p>
+
+<p>The <code class="prettyprint">vtctld</code> server provides a web interface to inspect the state of the
+Vitess cluster. It also accepts RPC commands from <code class="prettyprint">vtctlclient</code> to modify
+the cluster.</p>
+<div class="highlight"><pre><code class="language-sh" data-lang="sh">vitess/examples/kubernetes<span class="nv">$ </span>./vtctld-up.sh
+<span class="c">### example output:</span>
+<span class="c"># Creating vtctld ClusterIP service...</span>
+<span class="c"># service &quot;vtctld&quot; created</span>
+<span class="c"># Creating vtctld replicationcontroller...</span>
+<span class="c"># replicationcontroller &quot;vtctld&quot; create createdd</span>
+</code></pre></div></li>
+<li><p><strong>Access vtctld web UI</strong></p>
+
+<p>To access vtctld from outside Kubernetes, use <a href="http://kubernetes.io/v1.1/docs/user-guide/kubectl/kubectl_proxy.html">kubectl proxy</a>
+to create an authenticated tunnel on your workstation:</p>
+
+<p><strong>Note:</strong> The proxy command runs in the foreground,
+so you may want to run it in a separate terminal.</p>
+<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span class="nv">$ </span>kubectl proxy --port<span class="o">=</span>8001
+<span class="c">### example output:</span>
+<span class="c"># Starting to serve on localhost:8001</span>
+</code></pre></div>
+<p>You can then load the vtctld web UI on <code class="prettyprint">localhost</code>:</p>
+
+<p><a href="http://localhost:8001/api/v1/proxy/namespaces/default/services/vtctld:web/">http://localhost:8001/api/v1/proxy/namespaces/default/services/vtctld:web/</a></p>
+
+<p>You can also use this proxy to access the <a href="http://kubernetes.io/v1.1/docs/user-guide/ui.html">Kubernetes Dashboard</a>,
+where you can monitor nodes, pods, and services:</p>
+
+<p><a href="http://localhost:8001/ui">http://localhost:8001/ui</a></p></li>
+<li><p><strong>Use vtctlclient to send commands to vtctld</strong></p>
+
+<p>You can now run <code class="prettyprint">vtctlclient</code> locally to issue commands
+to the <code class="prettyprint">vtctld</code> service on your Kubernetes cluster.</p>
+
+<p>To enable RPC access into the Kubernetes cluster, we&#39;ll again use
+<code class="prettyprint">kubectl</code> to set up an authenticated tunnel. Unlike the HTTP proxy
+we used for the web UI, this time we need raw <a href="http://kubernetes.io/v1.1/docs/user-guide/kubectl/kubectl_port-forward.html">port forwarding</a>
+for vtctld&#39;s <a href="http://grpc.io">gRPC</a> port.</p>
+
+<p>Since the tunnel needs to target a particular vtctld pod name,
+we&#39;ve provided the <code class="prettyprint">kvtctl.sh</code> script, which uses <code class="prettyprint">kubectl</code> to
+discover the pod name and set up the tunnel before running <code class="prettyprint">vtctlclient</code>.</p>
+
+<p>Now, running <code class="prettyprint">kvtctl.sh help</code> will test your connection to
+<code class="prettyprint">vtctld</code> and also list the <code class="prettyprint">vtctlclient</code>
+commands that you can use to administer the Vitess cluster.</p>
+<div class="highlight"><pre><code class="language-sh" data-lang="sh">vitess/examples/kubernetes<span class="nv">$ </span>./kvtctl.sh <span class="nb">help</span>
+<span class="c">### example output:</span>
+<span class="c"># Available commands:</span>
+<span class="c">#</span>
+<span class="c"># Tablets:</span>
+<span class="c">#   InitTablet ...</span>
+<span class="c"># ...</span>
+</code></pre></div>
+<p>You can also use the <code class="prettyprint">help</code> command to get more details about each command:</p>
+<div class="highlight"><pre><code class="language-sh" data-lang="sh">vitess/examples/kubernetes<span class="nv">$ </span>./kvtctl.sh <span class="nb">help </span>ListAllTablets
+</code></pre></div>
+<p>See the <a href="http://vitess.io/reference/vtctl.html">vtctl reference</a> for a
+web-formatted version of the <code class="prettyprint">vtctl help</code> output.</p></li>
+<li><p><strong>Start vttablets</strong></p>
+
+<p>A Vitess <a href="http://vitess.io/overview/concepts.html#tablet">tablet</a> is the
+unit of scaling for the database. A tablet consists of the
+<code class="prettyprint">vttablet</code> and <code class="prettyprint">mysqld</code> processes, running on the same
+host. We enforce this coupling in Kubernetes by putting the respective
+containers for vttablet and mysqld inside a single
+<a href="http://kubernetes.io/v1.1/docs/user-guide/pods.html">pod</a>.</p>
+
+<p>Run the following script to launch the vttablet pods, which also include
+mysqld:</p>
+<div class="highlight"><pre><code class="language-sh" data-lang="sh">vitess/examples/kubernetes<span class="nv">$ </span>./vttablet-up.sh
+<span class="c">### example output:</span>
+<span class="c"># Creating test_keyspace.shard-0 pods in cell test...</span>
+<span class="c"># Creating pod for tablet test-0000000100...</span>
+<span class="c"># pod &quot;vttablet-100&quot; created</span>
+<span class="c"># Creating pod for tablet test-0000000101...</span>
+<span class="c"># pod &quot;vttablet-101&quot; created</span>
+<span class="c"># Creating pod for tablet test-0000000102...</span>
+<span class="c"># pod &quot;vttablet-102&quot; created</span>
+<span class="c"># Creating pod for tablet test-0000000103...</span>
+<span class="c"># pod &quot;vttablet-103&quot; created</span>
+<span class="c"># Creating pod for tablet test-0000000104...</span>
+<span class="c"># pod &quot;vttablet-104&quot; created</span>
+</code></pre></div>
+<p>In the vtctld web UI, you should soon see a
+<a href="http://vitess.io/overview/concepts.html#keyspace">keyspace</a> named <code class="prettyprint">test_keyspace</code>
+with a single <a href="http://vitess.io/overview/concepts.html#shard">shard</a> named <code class="prettyprint">0</code>.
+Click on the shard name to see the list of tablets. When all 5 tablets
+show up on the shard status page, you&#39;re ready to continue. Note that it&#39;s
+normal for the tablets to be unhealthy at this point, since you haven&#39;t
+initialized the databases on them yet.</p>
+
+<p>It can take some time for the tablets to come up for the first time if a pod
+was scheduled on a node that hasn&#39;t downloaded the <a href="https://hub.docker.com/u/vitess/">Vitess Docker image</a> yet. You can also check the status of the
+tablets from the command line using <code class="prettyprint">kvtctl.sh</code>:</p>
+<div class="highlight"><pre><code class="language-sh" data-lang="sh">vitess/examples/kubernetes<span class="nv">$ </span>./kvtctl.sh ListAllTablets <span class="nb">test</span>
+<span class="c">### example output:</span>
+<span class="c"># test-0000000100 test_keyspace 0 spare 10.64.1.6:15002 10.64.1.6:3306 []</span>
+<span class="c"># test-0000000101 test_keyspace 0 spare 10.64.2.5:15002 10.64.2.5:3306 []</span>
+<span class="c"># test-0000000102 test_keyspace 0 spare 10.64.0.7:15002 10.64.0.7:3306 []</span>
+<span class="c"># test-0000000103 test_keyspace 0 spare 10.64.1.7:15002 10.64.1.7:3306 []</span>
+<span class="c"># test-0000000104 test_keyspace 0 spare 10.64.2.6:15002 10.64.2.6:3306 []</span>
+</code></pre></div></li>
+<li><p><strong>Initialize MySQL databases</strong></p>
+
+<p>Once all the tablets show up, you&#39;re ready to initialize the underlying
+MySQL databases.</p>
+
+<p><strong>Note:</strong> Many <code class="prettyprint">vtctlclient</code> commands produce no output on success.</p>
+
+<p>First, designate one of the tablets to be the initial master. Vitess will
+automatically connect the other slaves&#39; mysqld instances so that they start
+replicating from the master&#39;s mysqld. This is also when the default database
+is created. Since our keyspace is named <code class="prettyprint">test_keyspace</code>, the MySQL database
+will be named <code class="prettyprint">vt_test_keyspace</code>.</p>
+<div class="highlight"><pre><code class="language-sh" data-lang="sh">vitess/examples/kubernetes<span class="nv">$ </span>./kvtctl.sh InitShardMaster -force test_keyspace/0 <span class="nb">test</span>-0000000100
+<span class="c">### example output:</span>
+<span class="c"># master-elect tablet test-0000000100 is not the shard master, proceeding anyway as -force was used</span>
+<span class="c"># master-elect tablet test-0000000100 is not a master in the shard, proceeding anyway as -force was used</span>
+</code></pre></div>
+<p><strong>Note:</strong> Since this is the first time the shard has been started, the
+tablets are not already doing any replication, and there is no existing
+master. The <code class="prettyprint">InitShardMaster</code> command above uses the <code class="prettyprint">-force</code> flag to bypass
+the usual sanity checks that would apply if this wasn&#39;t a brand new shard.</p>
+
+<p>After the tablets finish updating, you should see one <strong>master</strong>, and
+several <strong>replica</strong> and <strong>rdonly</strong> tablets:</p>
+<div class="highlight"><pre><code class="language-sh" data-lang="sh">vitess/examples/kubernetes<span class="nv">$ </span>./kvtctl.sh ListAllTablets <span class="nb">test</span>
+<span class="c">### example output:</span>
+<span class="c"># test-0000000100 test_keyspace 0 master 10.64.1.6:15002 10.64.1.6:3306 []</span>
+<span class="c"># test-0000000101 test_keyspace 0 replica 10.64.2.5:15002 10.64.2.5:3306 []</span>
+<span class="c"># test-0000000102 test_keyspace 0 replica 10.64.0.7:15002 10.64.0.7:3306 []</span>
+<span class="c"># test-0000000103 test_keyspace 0 rdonly 10.64.1.7:15002 10.64.1.7:3306 []</span>
+<span class="c"># test-0000000104 test_keyspace 0 rdonly 10.64.2.6:15002 10.64.2.6:3306 []</span>
+</code></pre></div>
+<p>The <strong>replica</strong> tablets are used for serving live web traffic, while the
+<strong>rdonly</strong> tablets are used for offline processing, such as batch jobs and backups.
+The amount of each <a href="http://vitess.io/overview/concepts.html#tablet">tablet type</a>
+that you launch can be configured in the <code class="prettyprint">vttablet-up.sh</code> script.</p></li>
+<li><p><strong>Create a table</strong></p>
+
+<p>The <code class="prettyprint">vtctlclient</code> tool can be used to apply the database schema
+across all tablets in a keyspace. The following command creates
+the table defined in the <code class="prettyprint">create_test_table.sql</code> file:</p>
+<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span class="c"># Make sure to run this from the examples/kubernetes dir, so it finds the file.</span>
+vitess/examples/kubernetes<span class="nv">$ </span>./kvtctl.sh ApplySchema -sql <span class="s2">&quot;$(cat create_test_table.sql)&quot;</span> test_keyspace
+</code></pre></div>
+<p>The SQL to create the table is shown below:</p>
+<div class="highlight"><pre><code class="language-sql" data-lang="sql"><span class="k">CREATE</span> <span class="k">TABLE</span> <span class="n">messages</span> <span class="p">(</span>
+  <span class="n">page</span> <span class="nb">BIGINT</span><span class="p">(</span><span class="mi">20</span><span class="p">)</span> <span class="n">UNSIGNED</span><span class="p">,</span>
+  <span class="n">time_created_ns</span> <span class="nb">BIGINT</span><span class="p">(</span><span class="mi">20</span><span class="p">)</span> <span class="n">UNSIGNED</span><span class="p">,</span>
+  <span class="n">message</span> <span class="nb">VARCHAR</span><span class="p">(</span><span class="mi">10000</span><span class="p">),</span>
+  <span class="k">PRIMARY</span> <span class="k">KEY</span> <span class="p">(</span><span class="n">page</span><span class="p">,</span> <span class="n">time_created_ns</span><span class="p">)</span>
+<span class="p">)</span> <span class="n">ENGINE</span><span class="o">=</span><span class="n">InnoDB</span>
+</code></pre></div>
+<p>You can run this command to confirm that the schema was created
+properly on a given tablet, where <code class="prettyprint">test-0000000100</code>
+is a tablet alias as shown by the <code class="prettyprint">ListAllTablets</code> command:</p>
+<div class="highlight"><pre><code class="language-sh" data-lang="sh">vitess/examples/kubernetes<span class="nv">$ </span>./kvtctl.sh GetSchema <span class="nb">test</span>-0000000100
+<span class="c">### example output:</span>
+<span class="c"># {</span>
+<span class="c">#   &quot;DatabaseSchema&quot;: &quot;CREATE DATABASE `` /*!40100 DEFAULT CHARACTER SET utf8 */&quot;,</span>
+<span class="c">#   &quot;TableDefinitions&quot;: [</span>
+<span class="c">#     {</span>
+<span class="c">#       &quot;Name&quot;: &quot;messages&quot;,</span>
+<span class="c">#       &quot;Schema&quot;: &quot;CREATE TABLE `messages` (\n  `page` bigint(20) unsigned NOT NULL DEFAULT &#39;0&#39;,\n  `time_created_ns` bigint(20) unsigned NOT NULL DEFAULT &#39;0&#39;,\n  `message` varchar(10000) DEFAULT NULL,\n  PRIMARY KEY (`page`,`time_created_ns`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8&quot;,</span>
+<span class="c">#       &quot;Columns&quot;: [</span>
+<span class="c">#         &quot;page&quot;,</span>
+<span class="c">#         &quot;time_created_ns&quot;,</span>
+<span class="c">#         &quot;message&quot;</span>
+<span class="c">#       ],</span>
+<span class="c"># ...</span>
+</code></pre></div></li>
+<li><p><strong>Take a backup</strong></p>
+
+<p>Now that the initial schema is applied, it&#39;s a good time to take the first
+<a href="http://vitess.io/user-guide/backup-and-restore.html">backup</a>. This backup
+will be used to automatically restore any additional replicas that you run,
+before they connect themselves to the master and catch up on replication.
+If an existing tablet goes down and comes back up without its data, it will
+also automatically restore from the latest backup and then resume replication.</p>
+
+<p>Select one of the <strong>rdonly</strong> tablets and tell it to take a backup. We use a
+<strong>rdonly</strong> tablet instead of a <strong>replica</strong> because the tablet will pause
+replication and stop serving during data copy to create a consistent snapshot.</p>
+<div class="highlight"><pre><code class="language-sh" data-lang="sh">vitess/examples/kubernetes<span class="nv">$ </span>./kvtctl.sh Backup <span class="nb">test</span>-0000000104
+</code></pre></div>
+<p>After the backup completes, you can list available backups for the shard:</p>
+<div class="highlight"><pre><code class="language-sh" data-lang="sh">vitess/examples/kubernetes<span class="nv">$ </span>./kvtctl.sh ListBackups test_keyspace/0
+<span class="c">### example output:</span>
+<span class="c"># 2015-10-21.042940.test-0000000104</span>
+</code></pre></div></li>
+<li><p><strong>Initialize Vitess Routing Schema</strong></p>
+
+<p>In the examples, we are just using a single database with no specific
+configuration. So we just need to make that (empty) configuration visible
+for serving. This is done by running the following command:</p>
+<div class="highlight"><pre><code class="language-sh" data-lang="sh">vitess/examples/kubernetes<span class="nv">$ </span>./kvtctl.sh RebuildVSchemaGraph
+</code></pre></div>
+<p>(As it works, this command will not display any output.)</p></li>
+<li><p><strong>Start vtgate</strong></p>
+
+<p>Vitess uses <a href="http://vitess.io/overview/#vtgate">vtgate</a> to route each client
+query to the correct <code class="prettyprint">vttablet</code>. In Kubernetes, a <code class="prettyprint">vtgate</code> service
+distributes connections to a pool of <code class="prettyprint">vtgate</code> pods. The pods are curated by
+a <a href="http://kubernetes.io/v1.1/docs/user-guide/replication-controller.html">replication controller</a>.</p>
+<div class="highlight"><pre><code class="language-sh" data-lang="sh">vitess/examples/kubernetes<span class="nv">$ </span>./vtgate-up.sh
+<span class="c">### example output:</span>
+<span class="c"># Creating vtgate service in cell test...</span>
+<span class="c"># service &quot;vtgate-test&quot; created</span>
+<span class="c"># Creating vtgate replicationcontroller in cell test...</span>
+<span class="c"># replicationcontroller &quot;vtgate-test&quot; created</span>
+</code></pre></div></li>
+</ol>
+
+<h2 id="test-your-cluster-with-a-client-app">Test your cluster with a client app</h2>
+
+<p>The GuestBook app in the example is ported from the
+<a href="https://github.com/kubernetes/kubernetes/tree/master/examples/guestbook-go">Kubernetes GuestBook example</a>.
+The server-side code has been rewritten in Python to use Vitess as the storage
+engine. The client-side code (HTML/JavaScript) has been modified to support
+multiple Guestbook pages, which will be useful to demonstrate Vitess sharding in
+a later guide.</p>
+<div class="highlight"><pre><code class="language-sh" data-lang="sh">vitess/examples/kubernetes<span class="nv">$ </span>./guestbook-up.sh
+<span class="c">### example output:</span>
+<span class="c"># Creating guestbook service...</span>
+<span class="c"># services &quot;guestbook&quot; created</span>
+<span class="c"># Creating guestbook replicationcontroller...</span>
+<span class="c"># replicationcontroller &quot;guestbook&quot; created</span>
+</code></pre></div>
+<p>As with the <code class="prettyprint">vtctld</code> service, by default the GuestBook app is not accessible
+from outside Kubernetes. In this case, since this is a user-facing frontend,
+we set <code class="prettyprint">type: LoadBalancer</code> in the GuestBook service definition,
+which tells Kubernetes to create a public
+<a href="http://kubernetes.io/v1.1/docs/user-guide/services.html#type-loadbalancer">load balancer</a>
+using the API for whatever platform your Kubernetes cluster is in.</p>
+
+<p>You also need to <a href="http://kubernetes.io/v1.1/docs/user-guide/services-firewalls.html">allow access through your platform&#39;s firewall</a>.</p>
+<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span class="c"># For example, to open port 80 in the GCE firewall:</span>
+<span class="nv">$ </span>gcloud compute firewall-rules create guestbook --allow tcp:80
+</code></pre></div>
+<p><strong>Note:</strong> For simplicity, the firewall rule above opens the port on <strong>all</strong>
+GCE instances in your project. In a production system, you would likely
+limit it to specific instances.</p>
+
+<p>Then, get the external IP of the load balancer for the GuestBook service:</p>
+<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span class="nv">$ </span>kubectl get service guestbook
+<span class="c">### example output:</span>
+<span class="c"># NAME        CLUSTER-IP      EXTERNAL-IP     PORT(S)   AGE</span>
+<span class="c"># guestbook   10.67.242.247   3.4.5.6         80/TCP    1m</span>
+</code></pre></div>
+<p>If the <code class="prettyprint">EXTERNAL-IP</code> is still empty, give it a few minutes to create
+the external load balancer and check again.</p>
+
+<p>Once the pods are running, the GuestBook app should be accessible
+from the load balancer&#39;s external IP. In the example above, it would be at
+<code class="prettyprint">http://3.4.5.6</code>.</p>
+
+<p>You can see Vitess&#39; replication capabilities by opening the app in
+multiple browser windows, with the same Guestbook page number.
+Each new entry is committed to the master database.
+In the meantime, JavaScript on the page continuously polls
+the app server to retrieve a list of GuestBook entries. The app serves
+read-only requests by querying Vitess in &#39;replica&#39; mode, confirming
+that replication is working.</p>
+
+<p>You can also inspect the data stored by the app:</p>
+<div class="highlight"><pre><code class="language-sh" data-lang="sh">vitess/examples/kubernetes<span class="nv">$ </span>./kvtctl.sh ExecuteFetchAsDba <span class="nb">test</span>-0000000100 <span class="s2">&quot;SELECT * FROM messages&quot;</span>
+<span class="c">### example output:</span>
+<span class="c"># +------+---------------------+---------+</span>
+<span class="c"># | page |   time_created_ns   | message |</span>
+<span class="c"># +------+---------------------+---------+</span>
+<span class="c"># |   42 | 1460771336286560000 | Hello   |</span>
+<span class="c"># +------+---------------------+---------+</span>
+</code></pre></div>
+<p>The <a href="https://github.com/youtube/vitess/tree/master/examples/kubernetes/guestbook">GuestBook source code</a>
+provides more detail about how the app server interacts with Vitess.</p>
+
+<h2 id="try-vitess-resharding">Try Vitess resharding</h2>
+
+<p>Now that you have a full Vitess stack running, you may want to go on to the
+<a href="http://vitess.io/user-guide/sharding-kubernetes.html">Sharding in Kubernetes</a>
+guide to try out
+<a href="http://vitess.io/user-guide/sharding.html#resharding">dynamic resharding</a>.</p>
+
+<p>If so, you can skip the tear-down since the sharding guide picks up right here.
+If not, continue to the clean-up steps below.</p>
+
+<h2 id="tear-down-and-clean-up">Tear down and clean up</h2>
+
+<p>Before stopping the Container Engine cluster, you should tear down the Vitess
+services. Kubernetes will then take care of cleaning up any entities it created
+for those services, like external load balancers.</p>
+<div class="highlight"><pre><code class="language-sh" data-lang="sh">vitess/examples/kubernetes<span class="nv">$ </span>./guestbook-down.sh
+vitess/examples/kubernetes<span class="nv">$ </span>./vtgate-down.sh
+vitess/examples/kubernetes<span class="nv">$ </span>./vttablet-down.sh
+vitess/examples/kubernetes<span class="nv">$ </span>./vtctld-down.sh
+vitess/examples/kubernetes<span class="nv">$ </span>./etcd-down.sh
+</code></pre></div>
+<p>Then tear down the Container Engine cluster itself, which will stop the virtual
+machines running on Compute Engine:</p>
+<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span class="nv">$ </span>gcloud container clusters delete example
+</code></pre></div>
+<p>It&#39;s also a good idea to remove any firewall rules you created, unless you plan
+to use them again soon:</p>
+<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span class="nv">$ </span>gcloud compute firewall-rules delete guestbook
+</code></pre></div>
+<h2 id="troubleshooting">Troubleshooting</h2>
+
+<h3 id="server-logs">Server logs</h3>
+
+<p>If a pod enters the <code class="prettyprint">Running</code> state, but the server
+doesn&#39;t respond as expected, use the <code class="prettyprint">kubectl logs</code>
+command to check the pod output:</p>
+<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span class="c"># show logs for container &#39;vttablet&#39; within pod &#39;vttablet-100&#39;</span>
+<span class="nv">$ </span>kubectl logs vttablet-100 vttablet
+
+<span class="c"># show logs for container &#39;mysql&#39; within pod &#39;vttablet-100&#39;</span>
+<span class="c"># Note that this is NOT MySQL error log.</span>
+<span class="nv">$ </span>kubectl logs vttablet-100 mysql
+</code></pre></div>
+<p>Post the logs somewhere and send a link to the <a href="https://groups.google.com/forum/#!forum/vitess">Vitess
+mailing list</a>
+to get more help.</p>
+
+<h3 id="shell-access">Shell access</h3>
+
+<p>If you want to poke around inside a container, you can use <code class="prettyprint">kubectl exec</code> to run
+a shell.</p>
+
+<p>For example, to launch a shell inside the <code class="prettyprint">vttablet</code> container of the
+<code class="prettyprint">vttablet-100</code> pod:</p>
+<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span class="nv">$ </span>kubectl <span class="nb">exec </span>vttablet-100 -c vttablet -t -i -- bash -il
+root@vttablet-100:/# ls /vt/vtdataroot/vt_0000000100
+<span class="c">### example output:</span>
+<span class="c"># bin-logs   innodb                  my.cnf      relay-logs</span>
+<span class="c"># data       memcache.sock764383635  mysql.pid   slow-query.log</span>
+<span class="c"># error.log  multi-master.info       mysql.sock  tmp</span>
+</code></pre></div>
+<h3 id="root-certificates">Root certificates</h3>
+
+<p>If you see in the logs a message like this:</p>
+<div class="highlight"><pre><code class="language-text" data-lang="text">x509: failed to load system roots and no roots provided
+</code></pre></div>
+<p>It usually means that your Kubernetes nodes are running a host OS
+that puts root certificates in a different place than our configuration
+expects by default (for example, Fedora). See the comments in the
+<a href="https://github.com/youtube/vitess/blob/master/examples/kubernetes/etcd-controller-template.yaml">etcd controller template</a>
+for examples of how to set the right location for your host OS.
+You&#39;ll also need to adjust the same certificate path settings in the
+<code class="prettyprint">vtctld</code> and <code class="prettyprint">vttablet</code> templates.</p>
+
+<h3 id="status-pages-for-vttablets">Status pages for vttablets</h3>
+
+<p>Each <code class="prettyprint">vttablet</code> serves a set of HTML status pages on its primary port.
+The <code class="prettyprint">vtctld</code> interface provides a <strong>STATUS</strong> link for each tablet.</p>
+
+<p>If you access the vtctld web UI through the kubectl proxy as described above,
+it will automatically link to the vttablets through that same proxy,
+giving you access from outside the cluster.</p>
+
+<p>You can also use the proxy to go directly to a tablet. For example,
+to see the status page for the tablet with ID <code class="prettyprint">100</code>, you could navigate to:</p>
+
+<p><a href="http://localhost:8001/api/v1/proxy/namespaces/default/pods/vttablet-100:15002/debug/status">http://localhost:8001/api/v1/proxy/namespaces/default/pods/vttablet-100:15002/debug/status</a></p>
+
+<h3 id="direct-connection-to-mysqld">Direct connection to mysqld</h3>
+
+<p>Since the <code class="prettyprint">mysqld</code> within the <code class="prettyprint">vttablet</code> pod is only meant to be accessed
+via vttablet, our default bootstrap settings only allow connections from
+localhost.</p>
+
+<p>If you want to check or manipulate the underlying mysqld, you can issue
+simple queries or commands through <code class="prettyprint">vtctlclient</code> like this:</p>
+<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span class="c"># Send a query to tablet 100 in cell &#39;test&#39;.</span>
+vitess/examples/kubernetes<span class="nv">$ </span>./kvtctl.sh ExecuteFetchAsDba <span class="nb">test</span>-0000000100 <span class="s2">&quot;SELECT VERSION()&quot;</span>
+<span class="c">### example output:</span>
+<span class="c"># +------------+</span>
+<span class="c"># | VERSION()  |</span>
+<span class="c"># +------------+</span>
+<span class="c"># | 5.7.13-log |</span>
+<span class="c"># +------------+</span>
+</code></pre></div>
+<p>If you need a truly direct connection to mysqld, you can <a href="#shell-access">launch a shell</a> inside the mysql container, and then connect with the <code class="prettyprint">mysql</code>
+command-line client:</p>
+<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span class="nv">$ </span>kubectl <span class="nb">exec </span>vttablet-100 -c mysql -t -i -- bash -il
+root@vttablet-100:/# <span class="nb">export </span><span class="nv">TERM</span><span class="o">=</span>ansi
+root@vttablet-100:/# mysql -S /vt/vtdataroot/vt_0000000100/mysql.sock -u vt_dba
+</code></pre></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+    <div class="page-spacer"></div>
+    <footer role="contentinfo" id="site-footer">
+  <nav role="navigation" class="menu bottom-menu">
+    
+    <a href="https://groups.google.com/forum/#!forum/vitess" target="_blank">Contact: vitess@googlegroups.com</a>&nbsp;&nbsp;<b>·</b>&nbsp;&nbsp;
+    <a href="https://groups.google.com/forum/#!forum/vitess-announce" target="_blank">Announcements</a>&nbsp;&nbsp;<b>·</b>&nbsp;&nbsp;
+    &#169; 2016 <a href="/">Vitess</a> powered by <a href="https://developers.google.com/open-source/">Google Inc</a>
+  </nav>
+</footer>
+
+
+        <!-- jQuery (necessary for Bootstrap's JavaScript plugins) -->
+<!--    <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.2/jquery.min.js"></script>   -->
+    <!-- Include all compiled plugins (below), or include individual files as needed -->
+<!--
+    <script src="/libs/bootstrap/js/bootstrap.min.js"></script>
+-->
+    <!-- Include the common site javascript -->
+    <script src="/js/common.js" type="text/javascript" charset="utf-8"></script>
+
+
+  </body>
+</html>
