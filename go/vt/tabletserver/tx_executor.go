@@ -7,9 +7,9 @@ package tabletserver
 import (
 	"time"
 
-	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
+	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/trace"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"

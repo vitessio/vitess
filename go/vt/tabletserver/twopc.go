@@ -64,9 +64,9 @@ const (
   primary key(dtid, id)
 	) engine=InnoDB`
 
-	sqlReadAllRedo = "select t.dtid, t.state, s.id, s.statement from `%s`.redo_log_transaction t " +
-		"join `%s`.redo_log_statement s on t.dtid = s.dtid " +
-		"where t.state = 'Prepared' order by t.dtid, s.id"
+	sqlReadAllRedo = `select t.dtid, t.state, s.id, s.statement from ` + "`%s`" + `.redo_log_transaction t
+  join ` + "`%s`" + `.redo_log_statement s on t.dtid = s.dtid
+	where t.state = 'Prepared' order by t.dtid, s.id`
 )
 
 // TwoPC performs 2PC metadata management (MM) functions.
