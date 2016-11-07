@@ -5,12 +5,13 @@
 package vtgate
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"strconv"
 	"strings"
 	"sync"
+
+	"golang.org/x/net/context"
 
 	log "github.com/golang/glog"
 
