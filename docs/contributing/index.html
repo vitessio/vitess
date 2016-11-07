@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Vitess / Reparenting</title>
+    <title>Vitess / Contributing to Vitess</title>
 
         <!-- Webfont -->
     <link href='http://fonts.googleapis.com/css?family=Roboto:400,100,100italic,300,300italic,400italic,500,500italic,700,700italic,900,900italic' rel='stylesheet' type='text/css'>
@@ -35,7 +35,7 @@
 
 
     <!-- metadata -->
-    <meta name="og:title" content="Vitess / Reparenting"/>
+    <meta name="og:title" content="Vitess / Contributing to Vitess"/>
     <meta name="og:image" content="/images/vitess_logomark_cropped.svg"/>
     <meta name="og:description" content="Vitess is a database clustering system for horizontal scaling of MySQL."/>
 
@@ -175,7 +175,7 @@
   <div class="container">
     <div class="row">
       <div class="col-md-9">
-        <h1>Reparenting</h1>
+        <h1>Contributing to Vitess</h1>
       </div>
     </div>
   </div>
@@ -274,215 +274,94 @@
     </div>
     <div class="col-md-7" id="centerCol">
       <div id="centerTextCol">
-        <p><strong>Reparenting</strong> is the process of changing a shard&#39;s master tablet
-from one host to another or changing a slave tablet to have a
-different master. Reparenting can be initiated manually
-or it can occur automatically in response to particular database
-conditions. As examples, you might reparent a shard or tablet during
-a maintenance exercise or automatically trigger reparenting when
-a master tablet dies.</p>
+        <h1 id="contributing-to-vitess">Contributing to Vitess</h1>
 
-<p>This document explains the types of reparenting that Vitess supports:</p>
+<p>You want to contribute to Vitess? That&#39;s awesome!</p>
 
-<ul>
-<li><em><a href="#active-reparenting">Active reparenting</a></em> occurs when the Vitess
-toolchain manages the entire reparenting process.</li>
-<li><em><a href="#external-reparenting">External reparenting</a></em> occurs when another tool
-handles the reparenting process, and the Vitess toolchain just updates its
-topology server, replication graph, and serving graph to accurately reflect
-master-slave relationships.</li>
-</ul>
+<p>In the past we have reviewed and accepted many external contributions. Examples are the Java JDBC driver, the PHP PDO driver or vtgate v3 improvements.</p>
 
-<p><strong>Note:</strong> The <code>InitShardMaster</code> command defines the initial
-parenting relationships within a shard. That command makes the specified
-tablet the master and makes the other tablets in the shard slaves that
-replicate from that master.</p>
+<p>We&#39;re looking forward to any contribution! Before you start larger contributions, make sure to reach out first and discuss your plans with us.</p>
 
-<h2 id="mysql-requirements">MySQL requirements</h2>
+<p>This page describes for new contributors how to make yourself familiar with Vitess and the programming language Go.</p>
 
-<p>Vitess supports <a href="https://dev.mysql.com/doc/refman/5.6/en/replication-gtids-howto.html">MySQL 5.6</a>, <a href="https://dev.mysql.com/doc/refman/5.7/en/replication-gtids-howto.html">MySQL 5.7</a> and <a href="https://mariadb.com/kb/en/mariadb/global-transaction-id/">MariaDB 10.0</a> implementations.</p>
+<h2 id="learning-go">Learning Go</h2>
 
-<h3 id="gtids">GTIDs</h3>
+<p>Vitess was one of the early adaptors of <a href="https://golang.org/">Google&#39;s programming language Go</a>.</p>
 
-<p>Vitess requires the use of global transaction identifiers
-(<a href="https://dev.mysql.com/doc/refman/5.6/en/replication-gtids-concepts.html">GTIDs</a>) for its operations:</p>
+<p>We love it for its simplicity (e.g. compared to C++ or Java) and performance (e.g. compared to Python).</p>
 
-<ul>
-<li>During active reparenting, Vitess uses GTIDs to initialize the
-replication process and then depends on the GTID stream to be
-correct when reparenting. (During external reparenting, Vitess
-assumes the external tool manages the replication process.)</li>
-<li>During resharding, Vitess uses GTIDs for
-<a href="/user-guide/sharding.html#filtered-replication">filtered replication</a>,
-the process by which source tablet data is transferred to the proper
-destination tablets.</li>
-</ul>
+<p>Contributing to our server code will require you to learn Go. We recommend to read the following resources.</p>
 
-<h3 id="semisynchronous-replication">Semisynchronous replication</h3>
+<h3 id="go-tour">Go Tour</h3>
 
-<p>Vitess does not depend on
-<a href="https://dev.mysql.com/doc/refman/5.6/en/replication-semisync.html">semisynchronous replication</a> but does work if it is implemented.
-Larger Vitess deployments typically do implement semisynchronous replication.</p>
+<p><a href="https://tour.golang.org/">https://tour.golang.org/</a></p>
 
-<h2 id="active-reparenting">Active Reparenting</h2>
+<p>The Go tour is a browser based tutorial which explains the different concepts of the programming language.
+It&#39;s interactive i.e. you can change and run all examples on the right side.
+The later steps also have specific exercises which you&#39;re supposed to implement yourself.
+It&#39;s a lot of fun and demonstrates how simple it is to write Go code.</p>
 
-<p>You can use the following <code><a href="/reference/vtctl.html">vtctl</a></code>
-commands to perform reparenting operations:</p>
+<h3 id="go-readability">Go Readability</h3>
+
+<p>Internally at Google, code reviews are subject to an additional &quot;readability&quot; review.</p>
+
+<p>A readability reviewer ensures that the reviewee is writing idiomatic code and following the programming language&#39;s style guide.</p>
+
+<p>While there&#39;s no Go style guide, there is a set of recommendations in the Go community which add up to an implicit style guide.
+To make sure you&#39;re writing idiomatic Go code, please read the following documents:</p>
 
 <ul>
-<li><code><a href="#plannedreparentshard:-planned-reparenting">PlannedReparentShard</a></code></li>
-<li><code><a href="#emergencyreparentshard:-emergency-reparenting">EmergencyReparentShard</a></code></li>
-</ul>
-
-<p>Both commands lock the shard for write operations. The two commands
-cannot run in parallel, nor can either command run in parallel with the
-<code><a href="/reference/vtctl.html#initshardmaster">InitShardMaster</a></code>
-command.</p>
-
-<p>The two commands are both dependent on the global topology server being
-available, and they both insert rows in the topology server&#39;s
-<code>_vt.reparent_journal</code> table. As such, you can review
-your database&#39;s reparenting history by inspecting that table.</p>
-
-<h3 id="plannedreparentshard-planned-reparenting">PlannedReparentShard: Planned reparenting</h3>
-
-<p>The <code>PlannedReparentShard</code> command reparents a healthy master
-tablet to a new master. The current and new master must both be up and
-running.</p>
-
-<p>This command performs the following actions:</p>
-
-<ol>
-<li>Puts the current master tablet in read-only mode.</li>
-<li>Shuts down the current master&#39;s query service, which is the part of
-the system that handles user SQL queries. At this point, Vitess does
-not handle any user SQL queries until the new master is configured
-and can be used a few seconds later.</li>
-<li>Retrieves the current master&#39;s replication position.</li>
-<li>Instructs the master-elect tablet to wait for replication data and
-then begin functioning as the new master after that data is fully
-transferred.</li>
-<li>Ensures replication is functioning properly via the following steps:
-
-<ol>
-<li> On the master-elect tablet, insert an entry in a test table
-and then update the global <code>Shard</code> object&#39;s
-<code>MasterAlias</code> record.</li>
-<li> In parallel on each slave, including the old master, set the new
-master and wait for the test entry to replicate to the slave tablet.
-(Slave tablets that had not been replicating before the command was
-called are left in their current state and do not start replication
-after the reparenting process.)</li>
-<li> Start replication on the old master tablet so it catches up to the
-new master.</li>
-</ol></li>
-</ol>
-
-<p>In this scenario, the old master&#39;s tablet type transitions to
-<code>spare</code>. If health checking is enabled on the old master,
-it will likely rejoin the cluster as a replica on the next health
-check. To enable health checking, set the
-<code>target_tablet_type</code> parameter when starting a tablet.
-That parameter indicates what type of tablet that tablet tries to be
-when healthy. When it is not healthy, the tablet type changes to
-<code>spare</code>.</p>
-
-<h3 id="emergencyreparentshard-emergency-reparenting">EmergencyReparentShard: Emergency reparenting</h3>
-
-<p>The <code>EmergencyReparentShard</code> command is used to force
-a reparent to a new master when the current master is unavailable.
-The command assumes that data cannot be retrieved from the current
-master because it is dead or not working properly.</p>
-
-<p>As such, this command does not rely on the current master at all 
-to replicate data to the new master. Instead, it makes sure that
-the master-elect is the most advanced in replication within all
-of the available slaves.</p>
-
-<p><strong>Important:</strong> Before calling this command, you must first identify
-the slave with the most advanced replication position as that slave
-must be designated as the new master. You can use the 
-<code><a href="/reference/vtctl.html#shardreplicationpositions">vtctl ShardReplicationPositions</a></code>
-command to determine the current replication positions of a shard&#39;s slaves.</p>
-
-<p>This command performs the following actions:</p>
-
-<ol>
-<li>Determines the current replication position on all of the slave
-tablets and confirms that the master-elect tablet has the most
-advanced replication position.</li>
-<li>Promotes the master-elect tablet to be the new master. In addition to
-changing its tablet type to <code>master</code>, the master-elect
-performs any other changes that might be required for its new state.</li>
-<li>Ensures replication is functioning properly via the following steps:
-
-<ol>
-<li> On the master-elect tablet, Vitess inserts an entry in a test table
-and then updates the <code>MasterAlias</code> record of the global
-<code>Shard</code> object.</li>
-<li> In parallel on each slave, excluding the old master, Vitess sets the
-master and waits for the test entry to replicate to the slave tablet.
-(Slave tablets that had not been replicating before the command was
-called are left in their current state and do not start replication
-after the reparenting process.)</li>
-</ol></li>
-</ol>
-
-<h2 id="external-reparenting">External Reparenting</h2>
-
-<p>External reparenting occurs when another tool handles the process
-of changing a shard&#39;s master tablet. After that occurs, the tool
-needs to call the
-<code><a href="/reference/vtctl.html#tabletexternallyreparented">vtctl TabletExternallyReparented</a></code>
-command to ensure that the topology server, replication graph, and serving
-graph are updated accordingly.</p>
-
-<p>That command performs the following operations:</p>
-
-<ol>
-<li>Locks the shard in the global topology server.</li>
-<li>Reads the <code>Shard</code> object from the global topology server.</li>
-<li>Reads all of the tablets in the replication graph for the shard.
-Vitess does allow partial reads in this step, which means that Vitess
-will proceed even if a data center is down as long as the data center
-containing the new master is available.</li>
-<li>Ensures that the new master&#39;s state is updated correctly and that the
-new master is not a MySQL slave of another server. It runs the MySQL
-<code>show slave status</code> command, ultimately aiming to confirm
-that the MySQL <code>reset slave</code> command already executed on
-the tablet.</li>
-<li>Updates, for each slave, the topology server record and replication
-graph to reflect the new master. If the old master does not return
-successfully in this step, Vitess changes its tablet type to
-<code>spare</code> to ensure that it does not interfere with ongoing
-operations.</li>
-<li>Updates the <code>Shard</code> object to specify the new master.</li>
-</ol>
-
-<p>The <code>TabletExternallyReparented</code> command fails in the following
-cases:</p>
+<li>Go Readablity slides: <a href="https://talks.golang.org/2014/readability.slide">https://talks.golang.org/2014/readability.slide</a>
 
 <ul>
-<li>The global topology server is not available for locking and
-modification. In that case, the operation fails completely.</li>
+<li>Talk about Go readability with many specific examples.</li>
+</ul></li>
+<li>&quot;Effective Go&quot;: <a href="https://golang.org/doc/effective_go.html">https://golang.org/doc/effective_go.html</a>
+
+<ul>
+<li>Recommendations for writing good Go code.</li>
+</ul></li>
+<li>Go Code Review Comments: <a href="https://github.com/golang/go/wiki/CodeReviewComments">https://github.com/golang/go/wiki/CodeReviewComments</a> 
+
+<ul>
+<li>The closest thing to a style guide.</li>
+</ul></li>
 </ul>
 
-<p>Active reparenting might be a dangerous practice in any system
-that depends on external reparents. You can disable active reparents
-by starting <code>vtctld</code> with the
-<code>--disable_active_reparents</code> flag set to <code>true</code>.
-(You cannot set the flag after <code>vtctld</code> is started.)</p>
+<h3 id="other-resources">Other Resources</h3>
 
-<h2 id="fixing-replication">Fixing Replication</h2>
+<p>If you&#39;re unsure about Go&#39;s behavior or syntax, we recommend to look it up in the specification: <a href="https://golang.org/ref/spec">https://golang.org/ref/spec</a>
+It is well written and easy to understand.</p>
 
-<p>A tablet can be orphaned after a reparenting if it is unavailable
-when the reparent operation is running but then recovers later on.
-In that case, you can manually reset the tablet&#39;s master to the
-current shard master using the
-<code><a href="/reference/vtctl.html#reparenttablet">vtctl ReparentTablet</a></code>
-command. You can then restart replication on the tablet if it was stopped
-by calling the <code><a href="/reference/vtctl.html#startslave">vtctl StartSlave</a></code>
-command.</p>
+<h3 id="appreciating-go">Appreciating Go</h3>
+
+<p>After using Go for several weeks, we hope that you&#39;ll start to love Go as much as we do. </p>
+
+<p>In our opinion, the song &quot;Write in Go&quot; from ScaleAbility, a Google acapella band, perfectly captures what&#39;s so special about Go. Watch it and enjoy that you learnt Go: <a href="http://www.youtube.com/watch?v=LJvEIjRBSDA">www.youtube.com/watch?v=LJvEIjRBSDA</a></p>
+
+<h2 id="learning-vitess">Learning Vitess</h2>
+
+<p>Before diving into the Vitess codebase, make yourself familiar with the system and run it yourself:</p>
+
+<ul>
+<li><p>Read the <a href="/overview/">What is Vitess</a> page, in particular the architecture section.</p></li>
+<li><p>Read the <a href="/overview/concepts.html">Vitess concepts</a> and the <a href="/user-guide/sharding.html">Sharding</a> page.</p>
+
+<ul>
+<li>After reading, try to answer the following question (click expand to see the answer):
+<details> 
+<summary>
+Let&#39;s assume a keyspace with 256 range-based shards: What is the name of the first, the second and the last shard?
+</summary>
+-01, 01-02, ff-
+</details></li>
+</ul></li>
+<li><p>Go through the <a href="/getting-started/">Vitess Kubernetes tutorial</a>.</p>
+
+<ul>
+<li>While going through the tutorial, look back at the <a href="/overview/#architecture">architecture</a> and match the processes you start in Kubernetes with the boxes in the diagram.</li>
+</ul></li>
+</ul>
 
       </div>
     </div>

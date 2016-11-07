@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Vitess / Reparenting</title>
+    <title>Vitess / GitHub Workflow</title>
 
         <!-- Webfont -->
     <link href='http://fonts.googleapis.com/css?family=Roboto:400,100,100italic,300,300italic,400italic,500,500italic,700,700italic,900,900italic' rel='stylesheet' type='text/css'>
@@ -35,7 +35,7 @@
 
 
     <!-- metadata -->
-    <meta name="og:title" content="Vitess / Reparenting"/>
+    <meta name="og:title" content="Vitess / GitHub Workflow"/>
     <meta name="og:image" content="/images/vitess_logomark_cropped.svg"/>
     <meta name="og:description" content="Vitess is a database clustering system for horizontal scaling of MySQL."/>
 
@@ -175,7 +175,7 @@
   <div class="container">
     <div class="row">
       <div class="col-md-9">
-        <h1>Reparenting</h1>
+        <h1>GitHub Workflow</h1>
       </div>
     </div>
   </div>
@@ -274,215 +274,102 @@
     </div>
     <div class="col-md-7" id="centerCol">
       <div id="centerTextCol">
-        <p><strong>Reparenting</strong> is the process of changing a shard&#39;s master tablet
-from one host to another or changing a slave tablet to have a
-different master. Reparenting can be initiated manually
-or it can occur automatically in response to particular database
-conditions. As examples, you might reparent a shard or tablet during
-a maintenance exercise or automatically trigger reparenting when
-a master tablet dies.</p>
+        <h1 id="github-workflow">GitHub Workflow</h1>
 
-<p>This document explains the types of reparenting that Vitess supports:</p>
+<p>If you are new to Git and GitHub, we recommend to read this page. Otherwise, you may skip it.</p>
 
-<ul>
-<li><em><a href="#active-reparenting">Active reparenting</a></em> occurs when the Vitess
-toolchain manages the entire reparenting process.</li>
-<li><em><a href="#external-reparenting">External reparenting</a></em> occurs when another tool
-handles the reparenting process, and the Vitess toolchain just updates its
-topology server, replication graph, and serving graph to accurately reflect
-master-slave relationships.</li>
-</ul>
+<p>Our GitHub workflow is a so called triangular workflow:</p>
 
-<p><strong>Note:</strong> The <code>InitShardMaster</code> command defines the initial
-parenting relationships within a shard. That command makes the specified
-tablet the master and makes the other tablets in the shard slaves that
-replicate from that master.</p>
+<p><img src="https://cloud.githubusercontent.com/assets/1319791/8943755/5dcdcae4-354a-11e5-9f82-915914fad4f7.png" alt="visualization of the GitHub triangular workflow" style="width: 100%;"/></p>
 
-<h2 id="mysql-requirements">MySQL requirements</h2>
+<p><em>Image Source:</em> <a href="https://github.com/blog/2042-git-2-5-including-multiple-worktrees-and-triangular-workflows">https://github.com/blog/2042-git-2-5-including-multiple-worktrees-and-triangular-workflows</a></p>
 
-<p>Vitess supports <a href="https://dev.mysql.com/doc/refman/5.6/en/replication-gtids-howto.html">MySQL 5.6</a>, <a href="https://dev.mysql.com/doc/refman/5.7/en/replication-gtids-howto.html">MySQL 5.7</a> and <a href="https://mariadb.com/kb/en/mariadb/global-transaction-id/">MariaDB 10.0</a> implementations.</p>
+<p>You develop and commit your changes in a clone of our upstream repository
+(<code class="prettyprint">local</code>). Then you push your changes to your forked repository (<code class="prettyprint">origin</code>) and
+send us a pull request. Eventually, we will merge your pull request back into
+the <code class="prettyprint">upstream</code> repository.</p>
 
-<h3 id="gtids">GTIDs</h3>
+<h2 id="remotes">Remotes</h2>
 
-<p>Vitess requires the use of global transaction identifiers
-(<a href="https://dev.mysql.com/doc/refman/5.6/en/replication-gtids-concepts.html">GTIDs</a>) for its operations:</p>
+<p>Since you should have cloned the repository from your fork, the <code class="prettyprint">origin</code> remote
+should look like this:</p>
+<div class="highlight"><pre><code class="language-text" data-lang="text">$ git remote -v
+origin  git@github.com:&lt;yourname&gt;/vitess.git (fetch)
+origin  git@github.com:&lt;yourname&gt;/vitess.git (push)
+</code></pre></div>
+<p>To help you keep your fork in sync with the main repo, add an <code class="prettyprint">upstream</code> remote:</p>
+<div class="highlight"><pre><code class="language-text" data-lang="text">$ git remote add upstream git@github.com:youtube/vitess.git
+$ git remote -v
+origin  git@github.com:&lt;yourname&gt;/vitess.git (fetch)
+origin  git@github.com:&lt;yourname&gt;/vitess.git (push)
+upstream        git@github.com:youtube/vitess.git (fetch)
+upstream        git@github.com:youtube/vitess.git (push)
+</code></pre></div>
+<p>Now to sync your local <code class="prettyprint">master</code> branch, do this:</p>
+<div class="highlight"><pre><code class="language-text" data-lang="text">$ git checkout master
+(master) $ git pull upstream master
+</code></pre></div>
+<p>Note: In the example output above we prefixed the prompt with <code class="prettyprint">(master)</code> to
+stress the fact that the command must be run from the branch <code class="prettyprint">master</code>.</p>
 
-<ul>
-<li>During active reparenting, Vitess uses GTIDs to initialize the
-replication process and then depends on the GTID stream to be
-correct when reparenting. (During external reparenting, Vitess
-assumes the external tool manages the replication process.)</li>
-<li>During resharding, Vitess uses GTIDs for
-<a href="/user-guide/sharding.html#filtered-replication">filtered replication</a>,
-the process by which source tablet data is transferred to the proper
-destination tablets.</li>
-</ul>
+<p>You can omit the <code class="prettyprint">upstream master</code> from the <code class="prettyprint">git pull</code> command when you let your
+<code class="prettyprint">master</code> branch always track the main <code class="prettyprint">youtube/vitess</code> repository. To achieve
+this, run this command once:</p>
+<div class="highlight"><pre><code class="language-text" data-lang="text">(master) $ git branch --set-upstream-to=upstream/master
+</code></pre></div>
+<p>Now the following command syncs your local <code class="prettyprint">master</code> branch as well:</p>
+<div class="highlight"><pre><code class="language-text" data-lang="text">(master) $ git pull
+</code></pre></div>
+<h2 id="topic-branches">Topic Branches</h2>
 
-<h3 id="semisynchronous-replication">Semisynchronous replication</h3>
+<p>Before you start working on changes, create a topic branch:</p>
+<div class="highlight"><pre><code class="language-text" data-lang="text">$ git checkout master
+(master) $ git pull
+(master) $ git checkout -b new-feature
+(new-feature) $ # You are now in the new-feature branch.
+</code></pre></div>
+<p>Try to commit small pieces along the way as you finish them, with an explanation
+of the changes in the commit message. As you work in a package, you can run just
+the unit tests for that package by running <code class="prettyprint">go test</code> from within that package.</p>
 
-<p>Vitess does not depend on
-<a href="https://dev.mysql.com/doc/refman/5.6/en/replication-semisync.html">semisynchronous replication</a> but does work if it is implemented.
-Larger Vitess deployments typically do implement semisynchronous replication.</p>
+<p>When you&#39;re ready to test the whole system, run the full test suite with <code class="prettyprint">make
+test</code> from the root of the Git tree.
+If you haven&#39;t installed all dependencies for <code class="prettyprint">make test</code>, you can rely on the Travis CI test results as well.
+These results will be linked on your pull request.</p>
 
-<h2 id="active-reparenting">Active Reparenting</h2>
+<h2 id="sending-pull-requests">Sending Pull Requests</h2>
 
-<p>You can use the following <code><a href="/reference/vtctl.html">vtctl</a></code>
-commands to perform reparenting operations:</p>
+<p>Push your branch to the repository (and set it to track with <code class="prettyprint">-u</code>):</p>
+<div class="highlight"><pre><code class="language-text" data-lang="text">(new-feature) $ git push -u origin new-feature
+</code></pre></div>
+<p>You can omit <code class="prettyprint">origin</code> and <code class="prettyprint">-u new-feature</code> parameters from the <code class="prettyprint">git push</code>
+command with the following two Git configuration changes:</p>
+<div class="highlight"><pre><code class="language-text" data-lang="text">$ git config remote.pushdefault origin
+$ git config push.default current
+</code></pre></div>
+<p>The first setting saves you from typing <code class="prettyprint">origin</code> every time. And with the second
+setting, Git assumes that the remote branch on the GitHub side will have the
+same name as your local branch.</p>
 
-<ul>
-<li><code><a href="#plannedreparentshard:-planned-reparenting">PlannedReparentShard</a></code></li>
-<li><code><a href="#emergencyreparentshard:-emergency-reparenting">EmergencyReparentShard</a></code></li>
-</ul>
+<p>After this change, you can run <code class="prettyprint">git push</code> without arguments:</p>
+<div class="highlight"><pre><code class="language-text" data-lang="text">(new-feature) $ git push
+</code></pre></div>
+<p>Then go to the <a href="https://github.com/youtube/vitess">repository page</a> and it
+should prompt you to create a Pull Request from a branch you recently pushed.
+You can also <a href="https://github.com/youtube/vitess/compare">choose a branch manually</a>.</p>
 
-<p>Both commands lock the shard for write operations. The two commands
-cannot run in parallel, nor can either command run in parallel with the
-<code><a href="/reference/vtctl.html#initshardmaster">InitShardMaster</a></code>
-command.</p>
+<h2 id="addressing-changes">Addressing Changes</h2>
 
-<p>The two commands are both dependent on the global topology server being
-available, and they both insert rows in the topology server&#39;s
-<code>_vt.reparent_journal</code> table. As such, you can review
-your database&#39;s reparenting history by inspecting that table.</p>
+<p>If you need to make changes in response to the reviewer&#39;s comments, just make
+another commit on your branch and then push it again:</p>
+<div class="highlight"><pre><code class="language-text" data-lang="text">$ git checkout new-feature
+(new-feature) $ git commit
+(new-feature) $ git push
+</code></pre></div>
+<p>That is because a pull request always mirrors all commits from your topic branch which are not in the master branch.</p>
 
-<h3 id="plannedreparentshard-planned-reparenting">PlannedReparentShard: Planned reparenting</h3>
-
-<p>The <code>PlannedReparentShard</code> command reparents a healthy master
-tablet to a new master. The current and new master must both be up and
-running.</p>
-
-<p>This command performs the following actions:</p>
-
-<ol>
-<li>Puts the current master tablet in read-only mode.</li>
-<li>Shuts down the current master&#39;s query service, which is the part of
-the system that handles user SQL queries. At this point, Vitess does
-not handle any user SQL queries until the new master is configured
-and can be used a few seconds later.</li>
-<li>Retrieves the current master&#39;s replication position.</li>
-<li>Instructs the master-elect tablet to wait for replication data and
-then begin functioning as the new master after that data is fully
-transferred.</li>
-<li>Ensures replication is functioning properly via the following steps:
-
-<ol>
-<li> On the master-elect tablet, insert an entry in a test table
-and then update the global <code>Shard</code> object&#39;s
-<code>MasterAlias</code> record.</li>
-<li> In parallel on each slave, including the old master, set the new
-master and wait for the test entry to replicate to the slave tablet.
-(Slave tablets that had not been replicating before the command was
-called are left in their current state and do not start replication
-after the reparenting process.)</li>
-<li> Start replication on the old master tablet so it catches up to the
-new master.</li>
-</ol></li>
-</ol>
-
-<p>In this scenario, the old master&#39;s tablet type transitions to
-<code>spare</code>. If health checking is enabled on the old master,
-it will likely rejoin the cluster as a replica on the next health
-check. To enable health checking, set the
-<code>target_tablet_type</code> parameter when starting a tablet.
-That parameter indicates what type of tablet that tablet tries to be
-when healthy. When it is not healthy, the tablet type changes to
-<code>spare</code>.</p>
-
-<h3 id="emergencyreparentshard-emergency-reparenting">EmergencyReparentShard: Emergency reparenting</h3>
-
-<p>The <code>EmergencyReparentShard</code> command is used to force
-a reparent to a new master when the current master is unavailable.
-The command assumes that data cannot be retrieved from the current
-master because it is dead or not working properly.</p>
-
-<p>As such, this command does not rely on the current master at all 
-to replicate data to the new master. Instead, it makes sure that
-the master-elect is the most advanced in replication within all
-of the available slaves.</p>
-
-<p><strong>Important:</strong> Before calling this command, you must first identify
-the slave with the most advanced replication position as that slave
-must be designated as the new master. You can use the 
-<code><a href="/reference/vtctl.html#shardreplicationpositions">vtctl ShardReplicationPositions</a></code>
-command to determine the current replication positions of a shard&#39;s slaves.</p>
-
-<p>This command performs the following actions:</p>
-
-<ol>
-<li>Determines the current replication position on all of the slave
-tablets and confirms that the master-elect tablet has the most
-advanced replication position.</li>
-<li>Promotes the master-elect tablet to be the new master. In addition to
-changing its tablet type to <code>master</code>, the master-elect
-performs any other changes that might be required for its new state.</li>
-<li>Ensures replication is functioning properly via the following steps:
-
-<ol>
-<li> On the master-elect tablet, Vitess inserts an entry in a test table
-and then updates the <code>MasterAlias</code> record of the global
-<code>Shard</code> object.</li>
-<li> In parallel on each slave, excluding the old master, Vitess sets the
-master and waits for the test entry to replicate to the slave tablet.
-(Slave tablets that had not been replicating before the command was
-called are left in their current state and do not start replication
-after the reparenting process.)</li>
-</ol></li>
-</ol>
-
-<h2 id="external-reparenting">External Reparenting</h2>
-
-<p>External reparenting occurs when another tool handles the process
-of changing a shard&#39;s master tablet. After that occurs, the tool
-needs to call the
-<code><a href="/reference/vtctl.html#tabletexternallyreparented">vtctl TabletExternallyReparented</a></code>
-command to ensure that the topology server, replication graph, and serving
-graph are updated accordingly.</p>
-
-<p>That command performs the following operations:</p>
-
-<ol>
-<li>Locks the shard in the global topology server.</li>
-<li>Reads the <code>Shard</code> object from the global topology server.</li>
-<li>Reads all of the tablets in the replication graph for the shard.
-Vitess does allow partial reads in this step, which means that Vitess
-will proceed even if a data center is down as long as the data center
-containing the new master is available.</li>
-<li>Ensures that the new master&#39;s state is updated correctly and that the
-new master is not a MySQL slave of another server. It runs the MySQL
-<code>show slave status</code> command, ultimately aiming to confirm
-that the MySQL <code>reset slave</code> command already executed on
-the tablet.</li>
-<li>Updates, for each slave, the topology server record and replication
-graph to reflect the new master. If the old master does not return
-successfully in this step, Vitess changes its tablet type to
-<code>spare</code> to ensure that it does not interfere with ongoing
-operations.</li>
-<li>Updates the <code>Shard</code> object to specify the new master.</li>
-</ol>
-
-<p>The <code>TabletExternallyReparented</code> command fails in the following
-cases:</p>
-
-<ul>
-<li>The global topology server is not available for locking and
-modification. In that case, the operation fails completely.</li>
-</ul>
-
-<p>Active reparenting might be a dangerous practice in any system
-that depends on external reparents. You can disable active reparents
-by starting <code>vtctld</code> with the
-<code>--disable_active_reparents</code> flag set to <code>true</code>.
-(You cannot set the flag after <code>vtctld</code> is started.)</p>
-
-<h2 id="fixing-replication">Fixing Replication</h2>
-
-<p>A tablet can be orphaned after a reparenting if it is unavailable
-when the reparent operation is running but then recovers later on.
-In that case, you can manually reset the tablet&#39;s master to the
-current shard master using the
-<code><a href="/reference/vtctl.html#reparenttablet">vtctl ReparentTablet</a></code>
-command. You can then restart replication on the tablet if it was stopped
-by calling the <code><a href="/reference/vtctl.html#startslave">vtctl StartSlave</a></code>
-command.</p>
+<p>After you merge, close the issue (if it wasn&#39;t automatically closed) and delete
+the topic branch.</p>
 
       </div>
     </div>
