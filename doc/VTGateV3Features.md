@@ -16,7 +16,7 @@ With V3, the app does not need to specify any routing info. It just sends the qu
 * V3 can aspire to satisfy the full SQL syntax. This means that it will be able to perform cross-shard joins, aggregations and sorting.
 * Easier migration: an application that was written to use a single database can be trivially changed to use Vitess, and then the database can be scaled from underneath without changing much of the app.
 
-The [V3 design](http://vitess.io/doc/V3VindexDesign/) is quite elaborate. If necessary, it will allow you to plug in custom indexes and sharding schemes. However, it comes equipped with some pre-cooked recipes that satisfy the immediate needs of the real-world:
+The [V3 design](https://github.com/youtube/vitess/blob/master/doc/V3VindexDesign.md) is quite elaborate. If necessary, it will allow you to plug in custom indexes and sharding schemes. However, it comes equipped with some pre-cooked recipes that satisfy the immediate needs of the real-world:
 
 ## Sharding schemes
 

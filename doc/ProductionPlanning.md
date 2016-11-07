@@ -44,7 +44,7 @@ You may have to add a few more app class machines to absorb any additional CPU a
 
 The Lock Service should be running, and both the global and local instances
 should be up. See the
-[Topology Service](https://github.com/youtube/vitess/blob/master/doc/TopologyService.md)
+[Topology Service](/user-guide/topology-service.html)
 document for more information.
 
 Each lock service implementation supports a couple configuration command line
