@@ -413,7 +413,10 @@ func (tsv *TabletServer) serveNewType() (err error) {
 	if tsv.target.TabletType == topodatapb.TabletType_MASTER {
 		err = tsv.qe.PrepareFromRedo()
 		if err != nil {
-			// TODO(sougou): raise alarms.
+			// If this operation fails, we choose to raise an alert and
+			// continue anyway. Serving traffic is considered more important
+			// than blocking everything for the sake of a few transactions.
+			tsv.qe.queryServiceStats.InternalErrors.Add("TwopcResurrection", 1)
 			log.Errorf("Could not prepare transactions: %v", err)
 		}
 	} else {

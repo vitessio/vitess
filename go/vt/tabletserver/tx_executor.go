@@ -7,6 +7,7 @@ package tabletserver
 import (
 	"time"
 
+	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/trace"
@@ -17,6 +18,7 @@ import (
 
 // TxExecutor is used for executing a transactional request.
 type TxExecutor struct {
+	// TODO(sougou): Parameterize this.
 	ctx      context.Context
 	logStats *LogStats
 	qe       *QueryEngine
@@ -68,12 +70,13 @@ func (txe *TxExecutor) Prepare(transactionID int64, dtid string) error {
 
 // CommitPrepared commits a prepared transaction. If the operation
 // fails, an error counter is incremented and the transaction is
-// marked as defunct in the redo log. If the marking fails, a
-// different error counter is incremented indicating a more
-// severe condition.
+// marked as failed in the redo log.
 func (txe *TxExecutor) CommitPrepared(dtid string) error {
 	defer txe.qe.queryServiceStats.QueryStats.Record("COMMIT_PREPARED", time.Now())
-	conn := txe.qe.preparedPool.Get(dtid)
+	conn, err := txe.qe.preparedPool.FetchForCommit(dtid)
+	if err != nil {
+		return NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "cannot commit dtid %s, state: %v", dtid, err)
+	}
 	if conn == nil {
 		return nil
 	}
@@ -81,17 +84,45 @@ func (txe *TxExecutor) CommitPrepared(dtid string) error {
 	// even if the original context expires.
 	ctx := trace.CopySpan(context.Background(), txe.ctx)
 	defer txe.qe.txPool.LocalConclude(ctx, conn)
-	err := txe.qe.twoPC.DeleteRedo(ctx, conn, dtid)
+	err = txe.qe.twoPC.DeleteRedo(ctx, conn, dtid)
 	if err != nil {
-		// TODO(sougou): raise alarms & mark as defunct.
+		txe.markFailed(ctx, dtid)
 		return err
 	}
 	err = txe.qe.txPool.LocalCommit(ctx, conn)
 	if err != nil {
-		// TODO(sougou): raise alarms & mark as defunct.
+		txe.markFailed(ctx, dtid)
 		return err
 	}
+	txe.qe.preparedPool.Forget(dtid)
 	return nil
+}
+
+// markFailed does the necessary work to mark a CommitPrepared
+// as failed. It marks the dtid as failed in the prepared pool,
+// increments the InternalErros counter, and also changes the
+// state of the transaction in the redo log as failed. If the
+// state change does not succeed, it just logs the event.
+// The function uses the passed in context that has no timeout
+// instead of TxExecutor's context.
+func (txe *TxExecutor) markFailed(ctx context.Context, dtid string) {
+	txe.qe.queryServiceStats.InternalErrors.Add("TwopcCommit", 1)
+	txe.qe.preparedPool.SetFailed(dtid)
+	conn, err := txe.qe.txPool.LocalBegin(ctx)
+	if err != nil {
+		log.Errorf("markFailed: Begin failed for dtid %s: %v", dtid, err)
+		return
+	}
+	defer txe.qe.txPool.LocalConclude(ctx, conn)
+
+	if err = txe.qe.twoPC.UpdateRedo(ctx, conn, dtid, "Failed"); err != nil {
+		log.Errorf("markFailed: UpdateRedo failed for dtid %s: %v", dtid, err)
+		return
+	}
+
+	if err = txe.qe.txPool.LocalCommit(ctx, conn); err != nil {
+		log.Errorf("markFailed: Commit failed for dtid %s: %v", dtid, err)
+	}
 }
 
 // RollbackPrepared rolls back a prepared transaction. This function handles
@@ -128,7 +159,7 @@ func (txe *TxExecutor) RollbackPrepared(dtid string, originalID int64) error {
 	err = txe.qe.txPool.LocalCommit(txe.ctx, conn)
 
 returnConn:
-	if preparedConn := txe.qe.preparedPool.Get(dtid); preparedConn != nil {
+	if preparedConn := txe.qe.preparedPool.FetchForRollback(dtid); preparedConn != nil {
 		txe.qe.txPool.LocalConclude(txe.ctx, preparedConn)
 	}
 	if originalID != 0 {

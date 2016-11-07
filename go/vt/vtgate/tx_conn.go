@@ -193,8 +193,6 @@ func (txc *TxConn) resumeCommit(ctx context.Context, target *querypb.Target, tra
 }
 
 func (txc *TxConn) generateDTID(mmShard *vtgatepb.Session_ShardSession) string {
-	// TODO(sougou): Change query_engine to start off transaction id counting
-	// above the highest number used by dtids. This will prevent collisions.
 	return fmt.Sprintf("%s:%s:0:%d", mmShard.Target.Keyspace, mmShard.Target.Shard, mmShard.TransactionId)
 }
 

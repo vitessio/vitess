@@ -80,7 +80,7 @@ func NewQueryServiceStats(statsPrefix string, enablePublishStats bool) *QuerySer
 		InfoErrors: stats.NewCounters(infoErrorsName, "Retry", "Fatal", "DupKey"),
 		ErrorStats: stats.NewCounters(errorStatsName, "Fail", "TxPoolFull", "NotInTx", "Deadlock"),
 		InternalErrors: stats.NewCounters(internalErrorsName, "Task",
-			"Mismatch", "StrayTransactions", "Invalidation", "Panic", "HungQuery", "Schema"),
+			"StrayTransactions", "Panic", "HungQuery", "Schema", "TwopcCommit", "TwopcResurrection"),
 		UserTableQueryCount: stats.NewMultiCounters(
 			userTableQueryCountName, []string{"TableName", "CallerID", "Type"}),
 		UserTableQueryTimesNs: stats.NewMultiCounters(

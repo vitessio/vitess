@@ -150,10 +150,17 @@ func TestTxExecutorCommitRedoFail(t *testing.T) {
 		t.Error(err)
 	}
 	defer txe.RollbackPrepared("bb", 0)
+	db.AddQuery("update `_vt`.redo_log_transaction set state = 'Failed' where dtid = 'bb'", &sqltypes.Result{})
 	err = txe.CommitPrepared("bb")
 	want := "is not supported"
 	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("Prepare err: %v, must contain %s", err, want)
+		t.Errorf("txe.CommitPrepared err: %v, must contain %s", err, want)
+	}
+	// A retry should fail differently.
+	err = txe.CommitPrepared("bb")
+	want = "cannot commit dtid bb, state: failed"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("txe.CommitPrepared err: %v, must contain %s", err, want)
 	}
 }
 

@@ -12,7 +12,7 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 )
 
-func TestReadPrepared(t *testing.T) {
+func TestReadAllRedo(t *testing.T) {
 	// Reuse code from tx_executor_test.
 	_, tsv, db := newTestTxExecutor()
 	defer tsv.StopService()
@@ -25,68 +25,83 @@ func TestReadPrepared(t *testing.T) {
 	}
 	defer conn.Recycle()
 
-	db.AddQuery(tpc.readPrepared, &sqltypes.Result{})
-	got, err := tpc.ReadPrepared(ctx, conn)
+	db.AddQuery(tpc.readAllRedo, &sqltypes.Result{})
+	prepared, failed, err := tpc.ReadAllRedo(ctx, conn)
 	if err != nil {
 		t.Fatal(err)
 	}
 	want := map[string][]string{}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("ReadPrepared: %#v, want %#v", got, want)
+	if !reflect.DeepEqual(prepared, want) {
+		t.Errorf("ReadAllRedo: %#v, want %#v", prepared, want)
+	}
+	if len(failed) != 0 {
+		t.Errorf("ReadAllRedo (failed): %v, must be empty", failed)
 	}
 
-	db.AddQuery(tpc.readPrepared, &sqltypes.Result{
+	db.AddQuery(tpc.readAllRedo, &sqltypes.Result{
 		Rows: [][]sqltypes.Value{{
 			sqltypes.MakeString([]byte("dtid0")),
+			sqltypes.MakeString([]byte("Prepared")),
 			sqltypes.MakeString([]byte("")),
 			sqltypes.MakeString([]byte("stmt01")),
 		}},
 	})
-	got, err = tpc.ReadPrepared(ctx, conn)
+	prepared, failed, err = tpc.ReadAllRedo(ctx, conn)
 	if err != nil {
 		t.Fatal(err)
 	}
 	want = map[string][]string{"dtid0": {"stmt01"}}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("ReadPrepared: %#v, want %#v", got, want)
+	if !reflect.DeepEqual(prepared, want) {
+		t.Errorf("ReadAllRedo: %#v, want %#v", prepared, want)
+	}
+	if len(failed) != 0 {
+		t.Errorf("ReadAllRedo (failed): %v, must be empty", failed)
 	}
 
-	db.AddQuery(tpc.readPrepared, &sqltypes.Result{
+	db.AddQuery(tpc.readAllRedo, &sqltypes.Result{
 		Rows: [][]sqltypes.Value{{
 			sqltypes.MakeString([]byte("dtid0")),
+			sqltypes.MakeString([]byte("Prepared")),
 			sqltypes.MakeString([]byte("")),
 			sqltypes.MakeString([]byte("stmt01")),
 		}, {
 			sqltypes.MakeString([]byte("dtid0")),
+			sqltypes.MakeString([]byte("Prepared")),
 			sqltypes.MakeString([]byte("")),
 			sqltypes.MakeString([]byte("stmt02")),
 		}},
 	})
-	got, err = tpc.ReadPrepared(ctx, conn)
+	prepared, failed, err = tpc.ReadAllRedo(ctx, conn)
 	if err != nil {
 		t.Fatal(err)
 	}
 	want = map[string][]string{"dtid0": {"stmt01", "stmt02"}}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("ReadPrepared: %#v, want %#v", got, want)
+	if !reflect.DeepEqual(prepared, want) {
+		t.Errorf("ReadAllRedo: %#v, want %#v", prepared, want)
+	}
+	if len(failed) != 0 {
+		t.Errorf("ReadAllRedo (failed): %v, must be empty", failed)
 	}
 
-	db.AddQuery(tpc.readPrepared, &sqltypes.Result{
+	db.AddQuery(tpc.readAllRedo, &sqltypes.Result{
 		Rows: [][]sqltypes.Value{{
 			sqltypes.MakeString([]byte("dtid0")),
+			sqltypes.MakeString([]byte("Prepared")),
 			sqltypes.MakeString([]byte("")),
 			sqltypes.MakeString([]byte("stmt01")),
 		}, {
 			sqltypes.MakeString([]byte("dtid0")),
+			sqltypes.MakeString([]byte("Prepared")),
 			sqltypes.MakeString([]byte("")),
 			sqltypes.MakeString([]byte("stmt02")),
 		}, {
 			sqltypes.MakeString([]byte("dtid1")),
+			sqltypes.MakeString([]byte("Prepared")),
 			sqltypes.MakeString([]byte("")),
 			sqltypes.MakeString([]byte("stmt11")),
 		}},
 	})
-	got, err = tpc.ReadPrepared(ctx, conn)
+	prepared, failed, err = tpc.ReadAllRedo(ctx, conn)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -94,7 +109,59 @@ func TestReadPrepared(t *testing.T) {
 		"dtid0": {"stmt01", "stmt02"},
 		"dtid1": {"stmt11"},
 	}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("ReadPrepared: %#v, want %#v", got, want)
+	if !reflect.DeepEqual(prepared, want) {
+		t.Errorf("ReadAllRedo: %#v, want %#v", prepared, want)
+	}
+	if len(failed) != 0 {
+		t.Errorf("ReadAllRedo (failed): %v, must be empty", failed)
+	}
+
+	db.AddQuery(tpc.readAllRedo, &sqltypes.Result{
+		Rows: [][]sqltypes.Value{{
+			sqltypes.MakeString([]byte("dtid0")),
+			sqltypes.MakeString([]byte("Prepared")),
+			sqltypes.MakeString([]byte("")),
+			sqltypes.MakeString([]byte("stmt01")),
+		}, {
+			sqltypes.MakeString([]byte("dtid0")),
+			sqltypes.MakeString([]byte("Prepared")),
+			sqltypes.MakeString([]byte("")),
+			sqltypes.MakeString([]byte("stmt02")),
+		}, {
+			sqltypes.MakeString([]byte("dtid1")),
+			sqltypes.MakeString([]byte("Failed")),
+			sqltypes.MakeString([]byte("")),
+			sqltypes.MakeString([]byte("stmt11")),
+		}, {
+			sqltypes.MakeString([]byte("dtid2")),
+			sqltypes.MakeString([]byte("Failed")),
+			sqltypes.MakeString([]byte("")),
+			sqltypes.MakeString([]byte("stmt21")),
+		}, {
+			sqltypes.MakeString([]byte("dtid2")),
+			sqltypes.MakeString([]byte("Failed")),
+			sqltypes.MakeString([]byte("")),
+			sqltypes.MakeString([]byte("stmt22")),
+		}, {
+			sqltypes.MakeString([]byte("dtid3")),
+			sqltypes.MakeString([]byte("Prepared")),
+			sqltypes.MakeString([]byte("")),
+			sqltypes.MakeString([]byte("stmt31")),
+		}},
+	})
+	prepared, failed, err = tpc.ReadAllRedo(ctx, conn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want = map[string][]string{
+		"dtid0": {"stmt01", "stmt02"},
+		"dtid3": {"stmt31"},
+	}
+	if !reflect.DeepEqual(prepared, want) {
+		t.Errorf("ReadAllRedo: %#v, want %#v", prepared, want)
+	}
+	wantFailed := []string{"dtid1", "dtid2"}
+	if !reflect.DeepEqual(failed, wantFailed) {
+		t.Errorf("ReadAllRedo failed): %#v, want %#v", failed, wantFailed)
 	}
 }
