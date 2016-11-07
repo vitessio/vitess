@@ -7,10 +7,16 @@
     <loc>http://vitess.io/user-guide/client-libraries.html</loc>
   </url>
   <url>
+    <loc>http://vitess.io/contributing/code-reviews.html</loc>
+  </url>
+  <url>
     <loc>http://vitess.io/overview/concepts.html</loc>
   </url>
   <url>
     <loc>http://vitess.io/getting-started/docker-build.html</loc>
+  </url>
+  <url>
+    <loc>http://vitess.io/contributing/github-workflow.html</loc>
   </url>
   <url>
     <loc>http://vitess.io/user-guide/horizontal-sharding.html</loc>
@@ -32,6 +38,9 @@
   </url>
   <url>
     <loc>http://vitess.io/getting-started/</loc>
+  </url>
+  <url>
+    <loc>http://vitess.io/contributing/</loc>
   </url>
   <url>
     <loc>http://vitess.io/user-guide/introduction.html</loc>
