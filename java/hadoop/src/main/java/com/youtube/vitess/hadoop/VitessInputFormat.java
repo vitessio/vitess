@@ -1,6 +1,7 @@
 package com.youtube.vitess.hadoop;
 
 import static com.google.common.base.Preconditions.checkNotNull;
+import static com.youtube.vitess.proto.Query.SplitQueryRequest.Algorithm;
 
 import com.google.common.collect.Lists;
 import com.google.common.net.HostAndPort;
@@ -24,6 +25,7 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.sql.SQLException;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.List;
 import java.util.Random;
 
@@ -51,8 +53,15 @@ public class VitessInputFormat extends InputFormat<NullWritable, RowWritable> {
           new InetSocketAddress(hostAndPort.getHostText(), hostAndPort.getPort()));
 
       try (VTGateBlockingConn vtgate = new VTGateBlockingConn(rpcClient)) {
-        splitResult = vtgate.splitQuery(Context.getDefault(), conf.getKeyspace(),
-            conf.getInputQuery(), null, conf.getSplitColumn(), conf.getSplits());
+        splitResult = vtgate.splitQuery(
+            Context.getDefault(),
+            conf.getKeyspace(),
+            conf.getInputQuery(),
+            null /* bind vars */,
+            conf.getSplitColumns(),
+            conf.getSplitCount(),
+            conf.getNumRowsPerQueryPart(),
+            conf.getAlgorithm());
       }
     } catch (ClassNotFoundException | InstantiationException | IllegalAccessException | SQLException
         | IOException e) {
@@ -79,15 +88,25 @@ public class VitessInputFormat extends InputFormat<NullWritable, RowWritable> {
   /**
    * Sets the necessary configurations for Vitess table input source
    */
-  public static void setInput(Job job, String hosts, String keyspace, String query,
-      String splitColumn, int splits, Class<? extends RpcClientFactory> rpcFactoryClass) {
+  public static void setInput(
+      Job job,
+      String hosts,
+      String keyspace,
+      String query,
+      Collection<String> splitColumns,
+      int splitCount,
+      int numRowsPerQueryPart,
+      Algorithm algorithm,
+      Class<? extends RpcClientFactory> rpcFactoryClass) {
     job.setInputFormatClass(VitessInputFormat.class);
     VitessConf vtConf = new VitessConf(job.getConfiguration());
     vtConf.setHosts(checkNotNull(hosts));
     vtConf.setKeyspace(checkNotNull(keyspace));
     vtConf.setInputQuery(checkNotNull(query));
-    vtConf.setSplitColumn(checkNotNull(splitColumn));
-    vtConf.setSplits(splits);
+    vtConf.setSplitColumns(checkNotNull(splitColumns));
+    vtConf.setSplitCount(splitCount);
+    vtConf.setNumRowsPerQueryPart(numRowsPerQueryPart);
+    vtConf.setAlgorithm(checkNotNull(algorithm));
     vtConf.setRpcFactoryClass(checkNotNull(rpcFactoryClass));
   }
 }

@@ -293,22 +293,58 @@ func commandVtGateSplitQuery(ctx context.Context, wr *wrangler.Wrangler, subFlag
 	server := subFlags.String("server", "", "VtGate server to connect to")
 	bindVariables := newBindvars(subFlags)
 	connectTimeout := subFlags.Duration("connect_timeout", 30*time.Second, "Connection timeout for vtgate client")
-	splitColumn := subFlags.String("split_column", "", "force the use of this column to split the query")
-	splitCount := subFlags.Int("split_count", 16, "number of splits to generate")
+	splitColumnsStr := subFlags.String(
+		"split_columns",
+		"",
+		"A comma-separated list of the split columns to use to split the query."+
+			" If this is empty the table's primary key columns will be used.")
+	splitCount := subFlags.Int64("split_count", 0, "number of splits to generate.")
+	numRowsPerQueryPart := subFlags.Int64(
+		"num_rows_per_query_part", 0, "The number of rows to return in each query part.")
+	algorithmStr := subFlags.String("algorithm", "EQUAL_SPLITS", "The algorithm to"+
+		" use for splitting the query. Either 'FULL_SCAN' or 'EQUAL_SPLITS'")
 	keyspace := subFlags.String("keyspace", "", "keyspace to send query to")
+
 	if err := subFlags.Parse(args); err != nil {
 		return err
+	}
+	if (*splitCount == 0 && *numRowsPerQueryPart == 0) ||
+		(*splitCount != 0 && *numRowsPerQueryPart != 0) {
+		return fmt.Errorf("Exactly one of split_count or num_rows_per_query_part"+
+			"must be nonzero. Got: split_count:%v, num_rows_per_query_part:%v",
+			*splitCount, *numRowsPerQueryPart)
+	}
+	splitColumns := []string{}
+	if *splitColumnsStr != "" {
+		splitColumns = strings.Split(*splitColumnsStr, ",")
+	}
+	var algorithm querypb.SplitQueryRequest_Algorithm
+	switch *algorithmStr {
+	case "FULL_SCAN":
+		algorithm = querypb.SplitQueryRequest_FULL_SCAN
+	case "EQUAL_SPLITS":
+		algorithm = querypb.SplitQueryRequest_EQUAL_SPLITS
+	default:
+		return fmt.Errorf("Unknown split-query algorithm: %v", algorithmStr)
 	}
 	if subFlags.NArg() != 1 {
 		return fmt.Errorf("the <sql> argument is required for the VtGateSplitQuery command")
 	}
-
 	vtgateConn, err := vtgateconn.Dial(ctx, *server, *connectTimeout, "")
 	if err != nil {
 		return fmt.Errorf("error connecting to vtgate '%v': %v", *server, err)
 	}
 	defer vtgateConn.Close()
-	r, err := vtgateConn.SplitQuery(ctx, *keyspace, subFlags.Arg(0), *bindVariables, *splitColumn, int64(*splitCount))
+	r, err := vtgateConn.SplitQuery(
+		ctx,
+		*keyspace,
+		subFlags.Arg(0),
+		*bindVariables,
+		splitColumns,
+		int64(*splitCount),
+		int64(*numRowsPerQueryPart),
+		algorithm,
+	)
 	if err != nil {
 		return fmt.Errorf("SplitQuery failed: %v", err)
 	}

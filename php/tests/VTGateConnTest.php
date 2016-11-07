@@ -390,13 +390,13 @@ class VTGateConnTest extends \PHPUnit_Framework_TestCase
             'uint_from_string' => new UnsignedInt('678')
         );
 
-        $splits = $conn->splitQuery($ctx, self::$KEYSPACE, self::$ECHO_QUERY, $input_bind_vars, 'split_column', 123);
+        $splits = $conn->splitQuery($ctx, self::$KEYSPACE, self::$ECHO_QUERY, $input_bind_vars, array('split_columns'), 123, 456, Proto\Query\SplitQueryRequest\Algorithm::FULL_SCAN);
         $actual = $splits[0];
         $bound_query = $actual->getQuery();
 
         $this->assertEquals(self::$KEYSPACE, $actual->getKeyRangePart()
             ->getKeyspace());
-        $this->assertEquals(self::$ECHO_QUERY . ':split_column:123', $bound_query->getSql());
+        $this->assertEquals(self::$ECHO_QUERY . ':[split_columns]:123:456:FULL_SCAN', $bound_query->getSql());
 
         // The map of bind vars is implemented as a repeated field, and the order of
         // the entries is arbitrary. First load them into a map.

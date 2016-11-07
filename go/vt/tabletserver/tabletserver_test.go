@@ -1387,49 +1387,6 @@ func TestTabletServerSplitQuery(t *testing.T) {
 			},
 		},
 	})
-	db.AddQuery("SELECT pk FROM test_table LIMIT 0", &sqltypes.Result{
-		Fields: []*querypb.Field{
-			{Name: "pk", Type: sqltypes.Int32},
-		},
-		RowsAffected: 1,
-		Rows: [][]sqltypes.Value{
-			{
-				sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
-			},
-		},
-	})
-	testUtils := newTestUtils()
-	config := testUtils.newQueryServiceConfig()
-	tsv := NewTabletServer(config)
-	dbconfigs := testUtils.newDBConfigs(db)
-	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
-	err := tsv.StartService(target, dbconfigs, testUtils.newMysqld(&dbconfigs))
-	if err != nil {
-		t.Fatalf("StartService failed: %v", err)
-	}
-	defer tsv.StopService()
-	ctx := context.Background()
-	sql := "select * from test_table where count > :count"
-	if _, err := tsv.SplitQuery(ctx, &target, sql, nil, "", 10); err != nil {
-		t.Fatalf("TabletServer.SplitQuery should success: %v, but get error: %v", sql, err)
-	}
-}
-
-// TODO(erez): Rename to TestTabletServerSplitQuery once migration to SplitQuery is done.
-func TestTabletServerSplitQueryV2(t *testing.T) {
-	db := setUpTabletServerTest()
-	db.AddQuery("SELECT MIN(pk), MAX(pk) FROM test_table", &sqltypes.Result{
-		Fields: []*querypb.Field{
-			{Name: "pk", Type: sqltypes.Int32},
-		},
-		RowsAffected: 1,
-		Rows: [][]sqltypes.Value{
-			{
-				sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
-				sqltypes.MakeTrusted(sqltypes.Int32, []byte("100")),
-			},
-		},
-	})
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServer(config)
@@ -1442,7 +1399,7 @@ func TestTabletServerSplitQueryV2(t *testing.T) {
 	defer tsv.StopService()
 	ctx := context.Background()
 	sql := "select * from test_table where count > :count"
-	splits, err := tsv.SplitQueryV2(
+	splits, err := tsv.SplitQuery(
 		ctx,
 		&querypb.Target{TabletType: topodatapb.TabletType_RDONLY},
 		sql,
@@ -1461,50 +1418,6 @@ func TestTabletServerSplitQueryV2(t *testing.T) {
 
 func TestTabletServerSplitQueryInvalidQuery(t *testing.T) {
 	db := setUpTabletServerTest()
-	db.AddQuery("SELECT MIN(pk), MAX(pk) FROM test_table", &sqltypes.Result{
-		Fields: []*querypb.Field{
-			{Name: "pk", Type: sqltypes.Int32},
-		},
-		RowsAffected: 1,
-		Rows: [][]sqltypes.Value{
-			{
-				sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
-				sqltypes.MakeTrusted(sqltypes.Int32, []byte("100")),
-			},
-		},
-	})
-	db.AddQuery("SELECT pk FROM test_table LIMIT 0", &sqltypes.Result{
-		Fields: []*querypb.Field{
-			{Name: "pk", Type: sqltypes.Int32},
-		},
-		RowsAffected: 1,
-		Rows: [][]sqltypes.Value{
-			{
-				sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
-			},
-		},
-	})
-	testUtils := newTestUtils()
-	config := testUtils.newQueryServiceConfig()
-	tsv := NewTabletServer(config)
-	dbconfigs := testUtils.newDBConfigs(db)
-	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
-	err := tsv.StartService(target, dbconfigs, testUtils.newMysqld(&dbconfigs))
-	if err != nil {
-		t.Fatalf("StartService failed: %v", err)
-	}
-	defer tsv.StopService()
-	ctx := context.Background()
-	// add limit clause to make SplitQuery fail
-	if _, err := tsv.SplitQuery(ctx, nil, "select * from test_table where count > :count limit 1000", nil, "", 10); err == nil {
-		t.Fatalf("TabletServer.SplitQuery should fail")
-	}
-}
-
-// TODO(erez): Rename to TestTabletServerSplitQueryInvalidQuery once migration to SplitQuery
-// is done.
-func TestTabletServerSplitQueryV2InvalidQuery(t *testing.T) {
-	db := setUpTabletServerTest()
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServer(config)
@@ -1518,7 +1431,7 @@ func TestTabletServerSplitQueryV2InvalidQuery(t *testing.T) {
 	ctx := context.Background()
 	// SplitQuery should not support SQLs with a LIMIT clause:
 	sql := "select * from test_table where count > :count limit 10"
-	_, err = tsv.SplitQueryV2(
+	_, err = tsv.SplitQuery(
 		ctx,
 		&querypb.Target{TabletType: topodatapb.TabletType_RDONLY},
 		sql,
@@ -1532,55 +1445,7 @@ func TestTabletServerSplitQueryV2InvalidQuery(t *testing.T) {
 	}
 }
 
-func TestTabletServerSplitQueryInvalidMinMax(t *testing.T) {
-	// Tests that split query returns an error when the query is invalid.
-	db := setUpTabletServerTest()
-	testUtils := newTestUtils()
-	pkMinMaxQuery := "SELECT MIN(pk), MAX(pk) FROM test_table"
-	pkMinMaxQueryResp := &sqltypes.Result{
-		Fields: []*querypb.Field{
-			{Name: "pk", Type: sqltypes.Int32},
-		},
-		RowsAffected: 1,
-		Rows: [][]sqltypes.Value{
-			// this make SplitQueryFail
-			{
-				sqltypes.MakeString([]byte("invalid")),
-				sqltypes.MakeString([]byte("invalid")),
-			},
-		},
-	}
-	db.AddQuery("SELECT pk FROM test_table LIMIT 0", &sqltypes.Result{
-		Fields: []*querypb.Field{
-			{Name: "pk", Type: sqltypes.Int32},
-		},
-		RowsAffected: 1,
-		Rows: [][]sqltypes.Value{
-			{
-				sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
-			},
-		},
-	})
-	db.AddQuery(pkMinMaxQuery, pkMinMaxQueryResp)
-
-	config := testUtils.newQueryServiceConfig()
-	tsv := NewTabletServer(config)
-	dbconfigs := testUtils.newDBConfigs(db)
-	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
-	err := tsv.StartService(target, dbconfigs, testUtils.newMysqld(&dbconfigs))
-	if err != nil {
-		t.Fatalf("StartService failed: %v", err)
-	}
-	defer tsv.StopService()
-	ctx := context.Background()
-	if _, err := tsv.SplitQuery(ctx, nil, "select * from test_table where count > :count", nil, "", 10); err == nil {
-		t.Fatalf("TabletServer.SplitQuery should fail")
-	}
-}
-
-// TODO(erez): Rename to TestTabletServerSplitQueryInvalidParams once migration to SplitQuery
-// is done.
-func TestTabletServerSplitQueryV2InvalidParams(t *testing.T) {
+func TestTabletServerSplitQueryInvalidParams(t *testing.T) {
 	// Tests that SplitQuery returns an error when both numRowsPerQueryPart and splitCount are given.
 	db := setUpTabletServerTest()
 	testUtils := newTestUtils()
@@ -1595,7 +1460,7 @@ func TestTabletServerSplitQueryV2InvalidParams(t *testing.T) {
 	defer tsv.StopService()
 	ctx := context.Background()
 	sql := "select * from test_table where count > :count"
-	_, err = tsv.SplitQueryV2(
+	_, err = tsv.SplitQuery(
 		ctx,
 		&querypb.Target{TabletType: topodatapb.TabletType_RDONLY},
 		sql,

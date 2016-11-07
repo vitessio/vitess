@@ -314,9 +314,7 @@ func (q *query) SplitQuery(ctx context.Context, request *querypb.SplitQueryReque
 		return nil, vterrors.ToGRPCError(err)
 	}
 	splits := []querytypes.QuerySplit{}
-	splits, err = queryservice.CallCorrectSplitQuery(
-		q.server,
-		request.UseSplitQueryV2,
+	splits, err = q.server.SplitQuery(
 		ctx,
 		request.Target,
 		bq.Sql,

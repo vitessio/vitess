@@ -1,5 +1,8 @@
 package com.youtube.vitess.hadoop;
 
+import static com.youtube.vitess.proto.Query.SplitQueryRequest.Algorithm;
+
+import com.google.common.collect.ImmutableList;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 
@@ -60,8 +63,16 @@ public class MapReduceIT extends HadoopTestCase {
     job.setJobName("table");
     job.setJarByClass(VitessInputFormat.class);
     job.setMapperClass(TableMapper.class);
-    VitessInputFormat.setInput(job, "localhost:" + testEnv.getPort(), testEnv.getKeyspace(),
-        "select id, name, age from vtgate_test", "", 4, TestUtil.getRpcClientFactory().getClass());
+    VitessInputFormat.setInput(
+        job,
+        "localhost:" + testEnv.getPort(),
+        testEnv.getKeyspace(),
+        "select id, name, age from vtgate_test",
+        ImmutableList.<String>of(),
+        4 /* splitCount */,
+        0 /* numRowsPerQueryPart */,
+        Algorithm.EQUAL_SPLITS,
+        TestUtil.getRpcClientFactory().getClass());
     job.setOutputKeyClass(NullWritable.class);
     job.setOutputValueClass(RowWritable.class);
     job.setOutputFormatClass(TextOutputFormat.class);
@@ -120,8 +131,16 @@ public class MapReduceIT extends HadoopTestCase {
     job.setJobName("table");
     job.setJarByClass(VitessInputFormat.class);
     job.setMapperClass(TableMapper.class);
-    VitessInputFormat.setInput(job, "localhost:" + testEnv.getPort(), testEnv.getKeyspace(),
-        "select id, name, age from vtgate_test", "", 1, TestUtil.getRpcClientFactory().getClass());
+    VitessInputFormat.setInput(
+        job,
+        "localhost:" + testEnv.getPort(),
+        testEnv.getKeyspace(),
+        "select id, name, age from vtgate_test",
+        ImmutableList.<String>of(),
+        1 /* splitCount */,
+        0 /* numRowsPerQueryPart */,
+        Algorithm.EQUAL_SPLITS,
+        TestUtil.getRpcClientFactory().getClass());
 
     job.setMapOutputKeyClass(IntWritable.class);
     job.setMapOutputValueClass(RowWritable.class);

@@ -403,30 +403,7 @@ func (conn *vtgateConn) Rollback(ctx context.Context, session interface{}) error
 	return vterrors.FromGRPCError(err)
 }
 
-func (conn *vtgateConn) SplitQuery(ctx context.Context, keyspace string, query string, bindVars map[string]interface{}, splitColumn string, splitCount int64) ([]*vtgatepb.SplitQueryResponse_Part, error) {
-	q, err := querytypes.BoundQueryToProto3(query, bindVars)
-	if err != nil {
-		return nil, err
-	}
-
-	request := &vtgatepb.SplitQueryRequest{
-		CallerId:            callerid.EffectiveCallerIDFromContext(ctx),
-		Keyspace:            keyspace,
-		Query:               q,
-		SplitColumn:         []string{splitColumn},
-		SplitCount:          splitCount,
-		NumRowsPerQueryPart: 0,
-		Algorithm:           querypb.SplitQueryRequest_EQUAL_SPLITS,
-		UseSplitQueryV2:     false,
-	}
-	response, err := conn.c.SplitQuery(ctx, request)
-	if err != nil {
-		return nil, vterrors.FromGRPCError(err)
-	}
-	return response.Splits, nil
-}
-
-func (conn *vtgateConn) SplitQueryV2(
+func (conn *vtgateConn) SplitQuery(
 	ctx context.Context,
 	keyspace string,
 	query string,
@@ -448,7 +425,6 @@ func (conn *vtgateConn) SplitQueryV2(
 		SplitCount:          splitCount,
 		NumRowsPerQueryPart: numRowsPerQueryPart,
 		Algorithm:           algorithm,
-		UseSplitQueryV2:     true,
 	}
 	response, err := conn.c.SplitQuery(ctx, request)
 	if err != nil {

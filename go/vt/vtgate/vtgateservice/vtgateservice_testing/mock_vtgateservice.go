@@ -181,26 +181,15 @@ func (_mr *_MockVTGateServiceRecorder) Rollback(arg0, arg1 interface{}) *gomock.
 	return _mr.mock.ctrl.RecordCall(_mr.mock, "Rollback", arg0, arg1)
 }
 
-func (_m *MockVTGateService) SplitQuery(ctx context.Context, keyspace string, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int64) ([]*vtgate.SplitQueryResponse_Part, error) {
-	ret := _m.ctrl.Call(_m, "SplitQuery", ctx, keyspace, sql, bindVariables, splitColumn, splitCount)
+func (_m *MockVTGateService) SplitQuery(ctx context.Context, keyspace string, sql string, bindVariables map[string]interface{}, splitColumns []string, splitCount int64, numRowsPerQueryPart int64, algorithm query.SplitQueryRequest_Algorithm) ([]*vtgate.SplitQueryResponse_Part, error) {
+	ret := _m.ctrl.Call(_m, "SplitQuery", ctx, keyspace, sql, bindVariables, splitColumns, splitCount, numRowsPerQueryPart, algorithm)
 	ret0, _ := ret[0].([]*vtgate.SplitQueryResponse_Part)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-func (_mr *_MockVTGateServiceRecorder) SplitQuery(arg0, arg1, arg2, arg3, arg4, arg5 interface{}) *gomock.Call {
-	return _mr.mock.ctrl.RecordCall(_mr.mock, "SplitQuery", arg0, arg1, arg2, arg3, arg4, arg5)
-}
-
-func (_m *MockVTGateService) SplitQueryV2(ctx context.Context, keyspace string, sql string, bindVariables map[string]interface{}, splitColumns []string, splitCount int64, numRowsPerQueryPart int64, algorithm query.SplitQueryRequest_Algorithm) ([]*vtgate.SplitQueryResponse_Part, error) {
-	ret := _m.ctrl.Call(_m, "SplitQueryV2", ctx, keyspace, sql, bindVariables, splitColumns, splitCount, numRowsPerQueryPart, algorithm)
-	ret0, _ := ret[0].([]*vtgate.SplitQueryResponse_Part)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-func (_mr *_MockVTGateServiceRecorder) SplitQueryV2(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7 interface{}) *gomock.Call {
-	return _mr.mock.ctrl.RecordCall(_mr.mock, "SplitQueryV2", arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7)
+func (_mr *_MockVTGateServiceRecorder) SplitQuery(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7 interface{}) *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "SplitQuery", arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7)
 }
 
 func (_m *MockVTGateService) GetSrvKeyspace(ctx context.Context, keyspace string) (*topodata.SrvKeyspace, error) {

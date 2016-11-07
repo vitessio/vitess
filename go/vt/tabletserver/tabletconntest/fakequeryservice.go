@@ -527,6 +527,10 @@ func (f *FakeQueryService) ExecuteBatch(ctx context.Context, target *querypb.Tar
 	return ExecuteBatchQueryResultList, nil
 }
 
+var SplitQuerySplitColumns = []string{"nice_column_to_split"}
+
+const SplitQuerySplitCount = 372
+
 var SplitQueryBoundQuery = querytypes.BoundQuery{
 	Sql: "splitQuery",
 	BindVariables: map[string]interface{}{
@@ -534,36 +538,10 @@ var SplitQueryBoundQuery = querytypes.BoundQuery{
 	},
 }
 
-const SplitQuerySplitColumn = "nice_column_to_split"
-const SplitQuerySplitCount = 372
+const SplitQueryNumRowsPerQueryPart = 123
+const SplitQueryAlgorithm = querypb.SplitQueryRequest_FULL_SCAN
 
 var SplitQueryQuerySplitList = []querytypes.QuerySplit{
-	{
-		Sql: "splitQuery",
-		BindVariables: map[string]interface{}{
-			"bind1":       int64(43),
-			"keyspace_id": int64(3333),
-		},
-		RowCount: 4456,
-	},
-}
-
-// TODO(erez): Rename to SplitQuery after migration to SplitQuery V2 is done.
-var SplitQueryV2SplitColumns = []string{"nice_column_to_split"}
-
-const SplitQueryV2SplitCount = 372
-
-var SplitQueryV2BoundQuery = querytypes.BoundQuery{
-	Sql: "splitQuery",
-	BindVariables: map[string]interface{}{
-		"bind1": int64(43),
-	},
-}
-
-const SplitQueryV2NumRowsPerQueryPart = 123
-const SplitQueryV2Algorithm = querypb.SplitQueryRequest_FULL_SCAN
-
-var SplitQueryQueryV2SplitList = []querytypes.QuerySplit{
 	{
 		Sql: "splitQuery",
 		BindVariables: map[string]interface{}{
@@ -597,32 +575,7 @@ func (f *FakeQueryService) BeginExecuteBatch(ctx context.Context, target *queryp
 }
 
 // SplitQuery is part of the queryservice.QueryService interface
-func (f *FakeQueryService) SplitQuery(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int64) ([]querytypes.QuerySplit, error) {
-	if f.HasError {
-		return nil, f.TabletError
-	}
-	if f.Panics {
-		panic(fmt.Errorf("test-triggered panic"))
-	}
-	f.checkTargetCallerID(ctx, "SplitQuery", target)
-	if !reflect.DeepEqual(querytypes.BoundQuery{
-		Sql:           sql,
-		BindVariables: bindVariables,
-	}, SplitQueryBoundQuery) {
-		f.t.Errorf("invalid SplitQuery.SplitQueryRequest.Query: got %v expected %v", querytypes.QueryAsString(sql, bindVariables), SplitQueryBoundQuery)
-	}
-	if splitColumn != SplitQuerySplitColumn {
-		f.t.Errorf("invalid SplitQuery.SplitColumn: got %v expected %v", splitColumn, SplitQuerySplitColumn)
-	}
-	if splitCount != SplitQuerySplitCount {
-		f.t.Errorf("invalid SplitQuery.SplitCount: got %v expected %v", splitCount, SplitQuerySplitCount)
-	}
-	return SplitQueryQuerySplitList, nil
-}
-
-// SplitQueryV2 is part of the queryservice.QueryService interface
-// TODO(erez): Rename to SplitQuery after migration to SplitQuery V2 is done.
-func (f *FakeQueryService) SplitQueryV2(
+func (f *FakeQueryService) SplitQuery(
 	ctx context.Context,
 	target *querypb.Target,
 	sql string,
@@ -639,31 +592,31 @@ func (f *FakeQueryService) SplitQueryV2(
 	if f.Panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
-	f.checkTargetCallerID(ctx, "SplitQueryV2", target)
+	f.checkTargetCallerID(ctx, "SplitQuery", target)
 	if !reflect.DeepEqual(querytypes.BoundQuery{
 		Sql:           sql,
 		BindVariables: bindVariables,
-	}, SplitQueryV2BoundQuery) {
+	}, SplitQueryBoundQuery) {
 		f.t.Errorf("invalid SplitQuery.SplitQueryRequest.Query: got %v expected %v",
-			querytypes.QueryAsString(sql, bindVariables), SplitQueryV2BoundQuery)
+			querytypes.QueryAsString(sql, bindVariables), SplitQueryBoundQuery)
 	}
-	if !reflect.DeepEqual(splitColumns, SplitQueryV2SplitColumns) {
+	if !reflect.DeepEqual(splitColumns, SplitQuerySplitColumns) {
 		f.t.Errorf("invalid SplitQuery.SplitColumn: got %v expected %v",
-			splitColumns, SplitQueryV2SplitColumns)
+			splitColumns, SplitQuerySplitColumns)
 	}
-	if splitCount != SplitQueryV2SplitCount {
+	if splitCount != SplitQuerySplitCount {
 		f.t.Errorf("invalid SplitQuery.SplitCount: got %v expected %v",
-			splitCount, SplitQueryV2SplitCount)
+			splitCount, SplitQuerySplitCount)
 	}
-	if numRowsPerQueryPart != SplitQueryV2NumRowsPerQueryPart {
+	if numRowsPerQueryPart != SplitQueryNumRowsPerQueryPart {
 		f.t.Errorf("invalid SplitQuery.numRowsPerQueryPart: got %v expected %v",
-			numRowsPerQueryPart, SplitQueryV2NumRowsPerQueryPart)
+			numRowsPerQueryPart, SplitQueryNumRowsPerQueryPart)
 	}
-	if algorithm != SplitQueryV2Algorithm {
+	if algorithm != SplitQueryAlgorithm {
 		f.t.Errorf("invalid SplitQuery.algorithm: got %v expected %v",
-			algorithm, SplitQueryV2Algorithm)
+			algorithm, SplitQueryAlgorithm)
 	}
-	return SplitQueryQueryV2SplitList, nil
+	return SplitQueryQuerySplitList, nil
 }
 
 var TestStreamHealthStreamHealthResponse = &querypb.StreamHealthResponse{

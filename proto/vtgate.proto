@@ -607,16 +607,6 @@ message SplitQueryRequest {
   //    This algorithm supports multiple split_column's of any type,
   //    but is slower than EQUAL_SPLITS.
   query.SplitQueryRequest.Algorithm algorithm = 7;
-
-  // Whether to use the new split-query code
-  // that supports multiple split-columns and
-  // the FULL_SCAN algorithm.
-  // This is a temporary field which aids
-  // in the migration of SplitQuery to the new
-  // code.
-  // TODO(erez): Remove this field after the migration
-  // to the SplitQuery version 2.
-  bool use_split_query_v2 = 8;
 }
 
 // SplitQueryResponse is the returned value from SplitQuery.

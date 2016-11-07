@@ -462,145 +462,12 @@ func (stc *ScatterConn) UpdateStream(ctx context.Context, target *querypb.Target
 	}
 }
 
-// SplitQueryKeyRange scatters a SplitQuery request to all shards. For a set of
-// splits received from a shard, it construct a KeyRange queries by
-// appending that shard's keyrange to the splits. Aggregates all splits across
-// all shards in no specific order and returns.
-func (stc *ScatterConn) SplitQueryKeyRange(ctx context.Context, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int64, keyRangeByShard map[string]*topodatapb.KeyRange, keyspace string) ([]*vtgatepb.SplitQueryResponse_Part, error) {
-	tabletType := topodatapb.TabletType_RDONLY
-
-	// mu protects allSplits
-	var mu sync.Mutex
-	var allSplits []*vtgatepb.SplitQueryResponse_Part
-
-	actionFunc := func(target *querypb.Target) error {
-		// Get all splits from this shard
-		query := querytypes.BoundQuery{
-			Sql:           sql,
-			BindVariables: bindVariables,
-		}
-		queries, err := stc.gateway.SplitQuery(ctx, target, query, splitColumn, splitCount)
-		if err != nil {
-			return err
-		}
-		// Append the keyrange for this shard to all the splits received,
-		// if keyrange is nil for the shard (e.g. for single-sharded keyspaces during resharding),
-		// append empty keyrange to represent the entire keyspace.
-		keyranges := []*topodatapb.KeyRange{{Start: []byte{}, End: []byte{}}}
-		if keyRangeByShard[target.Shard] != nil {
-			keyranges = []*topodatapb.KeyRange{keyRangeByShard[target.Shard]}
-		}
-		splits := make([]*vtgatepb.SplitQueryResponse_Part, len(queries))
-		for i, query := range queries {
-			q, err := querytypes.BindVariablesToProto3(query.BindVariables)
-			if err != nil {
-				return err
-			}
-			splits[i] = &vtgatepb.SplitQueryResponse_Part{
-				Query: &querypb.BoundQuery{
-					Sql:           query.Sql,
-					BindVariables: q,
-				},
-				KeyRangePart: &vtgatepb.SplitQueryResponse_KeyRangePart{
-					Keyspace:  keyspace,
-					KeyRanges: keyranges,
-				},
-				Size: query.RowCount,
-			}
-		}
-
-		// aggregate splits
-		mu.Lock()
-		defer mu.Unlock()
-		allSplits = append(allSplits, splits...)
-		return nil
-	}
-
-	shards := []string{}
-	for shard := range keyRangeByShard {
-		shards = append(shards, shard)
-	}
-	allErrors := stc.multiGo(ctx, "SplitQuery", keyspace, shards, tabletType, actionFunc)
-	if allErrors.HasErrors() {
-		return nil, allErrors.AggrError(stc.aggregateErrors)
-	}
-	// We shuffle the query-parts here. External frameworks like MapReduce may
-	// "deal" these jobs to workers in the order they are in the list. Without
-	// shuffling workers can be very unevenly distributed among
-	// the shards they query. E.g. all workers will first query the first shard,
-	// then most of them to the second shard, etc, which results with uneven
-	// load balancing among shards.
-	shuffleQueryParts(allSplits)
-	return allSplits, nil
-}
-
-// SplitQueryCustomSharding scatters a SplitQuery request to all
-// shards. For a set of splits received from a shard, it construct a
-// KeyRange queries by appending that shard's name to the
-// splits. Aggregates all splits across all shards in no specific
-// order and returns.
-func (stc *ScatterConn) SplitQueryCustomSharding(ctx context.Context, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int64, shards []string, keyspace string) ([]*vtgatepb.SplitQueryResponse_Part, error) {
-	tabletType := topodatapb.TabletType_RDONLY
-
-	// mu protects allSplits
-	var mu sync.Mutex
-	var allSplits []*vtgatepb.SplitQueryResponse_Part
-
-	actionFunc := func(target *querypb.Target) error {
-		// Get all splits from this shard
-		query := querytypes.BoundQuery{
-			Sql:           sql,
-			BindVariables: bindVariables,
-		}
-		queries, err := stc.gateway.SplitQuery(ctx, target, query, splitColumn, splitCount)
-		if err != nil {
-			return err
-		}
-		// Use the shards list for all the splits received
-		shards := []string{target.Shard}
-		splits := make([]*vtgatepb.SplitQueryResponse_Part, len(queries))
-		for i, query := range queries {
-			q, err := querytypes.BindVariablesToProto3(query.BindVariables)
-			if err != nil {
-				return err
-			}
-			splits[i] = &vtgatepb.SplitQueryResponse_Part{
-				Query: &querypb.BoundQuery{
-					Sql:           query.Sql,
-					BindVariables: q,
-				},
-				ShardPart: &vtgatepb.SplitQueryResponse_ShardPart{
-					Keyspace: keyspace,
-					Shards:   shards,
-				},
-				Size: query.RowCount,
-			}
-		}
-
-		// aggregate splits
-		mu.Lock()
-		defer mu.Unlock()
-		allSplits = append(allSplits, splits...)
-		return nil
-	}
-	allErrors := stc.multiGo(ctx, "SplitQuery", keyspace, shards, tabletType, actionFunc)
-	if allErrors.HasErrors() {
-		return nil, allErrors.AggrError(stc.aggregateErrors)
-	}
-	// See the comment for the analogues line in SplitQueryKeyRange for
-	// the motivation for shuffling.
-	shuffleQueryParts(allSplits)
-	return allSplits, nil
-}
-
-// SplitQueryV2 scatters a SplitQueryV2 request to the shards whose names are given in 'shards'.
+// SplitQuery scatters a SplitQuery request to the shards whose names are given in 'shards'.
 // For every set of querytypes.QuerySplit's received from a shard, it applies the given
 // 'querySplitToPartFunc' function to convert each querytypes.QuerySplit into a
 // 'SplitQueryResponse_Part' message. Finally, it aggregates the obtained
 // SplitQueryResponse_Parts across all shards and returns the resulting slice.
-// TODO(erez): Remove 'scatterConn.SplitQuery' and rename this method to SplitQuery once
-// the migration to SplitQuery V2 is done.
-func (stc *ScatterConn) SplitQueryV2(
+func (stc *ScatterConn) SplitQuery(
 	ctx context.Context,
 	sql string,
 	bindVariables map[string]interface{},
@@ -631,7 +498,7 @@ func (stc *ScatterConn) SplitQueryV2(
 				Sql:           sql,
 				BindVariables: bindVariables,
 			}
-			querySplits, err := stc.gateway.SplitQueryV2(
+			querySplits, err := stc.gateway.SplitQuery(
 				ctx,
 				target,
 				query,

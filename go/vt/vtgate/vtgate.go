@@ -604,44 +604,11 @@ func (vtg *VTGate) isKeyspaceRangeBasedSharded(keyspace string, srvKeyspace *top
 	return false
 }
 
-// SplitQuery splits a query into sub queries by appending keyranges and
-// primary key range clauses. Rows corresponding to the sub queries
-// are guaranteed to be non-overlapping and will add up to the rows of
-// original query. Number of sub queries will be a multiple of N that is
-// greater than or equal to SplitQueryRequest.SplitCount, where N is the
-// number of shards.
-func (vtg *VTGate) SplitQuery(ctx context.Context, keyspace string, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int64) ([]*vtgatepb.SplitQueryResponse_Part, error) {
-	keyspace, srvKeyspace, shards, err := getKeyspaceShards(ctx, vtg.resolver.toposerv, vtg.resolver.cell, keyspace, topodatapb.TabletType_RDONLY)
-	if err != nil {
-		return nil, err
-	}
-	perShardSplitCount := int64(math.Ceil(float64(splitCount) / float64(len(shards))))
-	if vtg.isKeyspaceRangeBasedSharded(keyspace, srvKeyspace) {
-		// we are using range-based sharding, so the result
-		// will be a list of Splits with KeyRange clauses
-		keyRangeByShard := make(map[string]*topodatapb.KeyRange)
-		for _, shard := range shards {
-			keyRangeByShard[shard.Name] = shard.KeyRange
-		}
-		return vtg.resolver.scatterConn.SplitQueryKeyRange(ctx, sql, bindVariables, splitColumn, perShardSplitCount, keyRangeByShard, keyspace)
-	}
-
-	// we are using custome sharding (or no sharding), so the
-	// result will be a list of Splits with Shard clauses.
-	shardNames := make([]string, len(shards))
-	for i, shard := range shards {
-		shardNames[i] = shard.Name
-	}
-	return vtg.resolver.scatterConn.SplitQueryCustomSharding(ctx, sql, bindVariables, splitColumn, perShardSplitCount, shardNames, keyspace)
-}
-
-// SplitQueryV2 implements the SplitQuery RPC. This is the new version that
+// SplitQuery implements the SplitQuery RPC. This is the new version that
 // supports multiple split-columns and multiple splitting algorithms.
 // See the documentation of SplitQueryRequest in "proto/vtgate.proto" for more
 // information.
-// TODO(erez): Remove 'SplitQuery' and rename this method to 'SplitQuery' once the migration
-// to SplitQuery-V2 is done.
-func (vtg *VTGate) SplitQueryV2(
+func (vtg *VTGate) SplitQuery(
 	ctx context.Context,
 	keyspace string,
 	sql string,
@@ -684,7 +651,7 @@ func (vtg *VTGate) SplitQueryV2(
 	for _, shardRef := range shardRefs {
 		shardNames = append(shardNames, shardRef.Name)
 	}
-	return vtg.resolver.scatterConn.SplitQueryV2(
+	return vtg.resolver.scatterConn.SplitQuery(
 		ctx,
 		sql,
 		bindVariables,
@@ -697,7 +664,7 @@ func (vtg *VTGate) SplitQueryV2(
 		keyspace)
 }
 
-// getQuerySplitToKeyRangePartFunc returns a function to use with scatterConn.SplitQueryV2
+// getQuerySplitToKeyRangePartFunc returns a function to use with scatterConn.SplitQuery
 // that converts the given QuerySplit to a SplitQueryResponse_Part message whose KeyRangePart field
 // is set.
 func getQuerySplitToKeyRangePartFunc(
@@ -732,7 +699,7 @@ func getQuerySplitToKeyRangePartFunc(
 	}
 }
 
-// getQuerySplitToShardPartFunc returns a function to use with scatterConn.SplitQueryV2
+// getQuerySplitToShardPartFunc returns a function to use with scatterConn.SplitQuery
 // that converts the given QuerySplit to a SplitQueryResponse_Part message whose ShardPart field
 // is set.
 func getQuerySplitToShardPartFunc(keyspace string) func(

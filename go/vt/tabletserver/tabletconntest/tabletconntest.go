@@ -661,7 +661,15 @@ func testSplitQuery(t *testing.T, conn tabletconn.TabletConn, f *FakeQueryServic
 	t.Log("testSplitQuery")
 	ctx := context.Background()
 	ctx = callerid.NewContext(ctx, TestCallerID, TestVTGateCallerID)
-	qsl, err := conn.SplitQuery(ctx, TestTarget, SplitQueryBoundQuery, SplitQuerySplitColumn, SplitQuerySplitCount)
+	qsl, err := conn.SplitQuery(
+		ctx,
+		TestTarget,
+		SplitQueryBoundQuery,
+		SplitQuerySplitColumns,
+		SplitQuerySplitCount,
+		SplitQueryNumRowsPerQueryPart,
+		SplitQueryAlgorithm,
+	)
 	if err != nil {
 		t.Fatalf("SplitQuery failed: %v", err)
 	}
@@ -670,33 +678,19 @@ func testSplitQuery(t *testing.T, conn tabletconn.TabletConn, f *FakeQueryServic
 	}
 }
 
-// TODO(erez): Rename to SplitQuery after migration to SplitQuery V2 is done.
-func testSplitQueryV2(t *testing.T, conn tabletconn.TabletConn, f *FakeQueryService) {
-	t.Log("testSplitQueryV2")
-	ctx := context.Background()
-	ctx = callerid.NewContext(ctx, TestCallerID, TestVTGateCallerID)
-	qsl, err := conn.SplitQueryV2(
-		ctx,
-		TestTarget,
-		SplitQueryV2BoundQuery,
-		SplitQueryV2SplitColumns,
-		SplitQueryV2SplitCount,
-		SplitQueryV2NumRowsPerQueryPart,
-		SplitQueryV2Algorithm,
-	)
-	if err != nil {
-		t.Fatalf("SplitQuery failed: %v", err)
-	}
-	if !reflect.DeepEqual(qsl, SplitQueryQueryV2SplitList) {
-		t.Errorf("Unexpected result from SplitQuery: got %v wanted %v", qsl, SplitQueryQuerySplitList)
-	}
-}
-
 func testSplitQueryError(t *testing.T, conn tabletconn.TabletConn, f *FakeQueryService) {
 	t.Log("testSplitQueryError")
 	f.HasError = true
 	testErrorHelper(t, f, "SplitQuery", func(ctx context.Context) error {
-		_, err := conn.SplitQuery(ctx, TestTarget, SplitQueryBoundQuery, SplitQuerySplitColumn, SplitQuerySplitCount)
+		_, err := conn.SplitQuery(
+			ctx,
+			TestTarget,
+			SplitQueryBoundQuery,
+			SplitQuerySplitColumns,
+			SplitQuerySplitCount,
+			SplitQueryNumRowsPerQueryPart,
+			SplitQueryAlgorithm,
+		)
 		return err
 	})
 	f.HasError = false
@@ -705,7 +699,15 @@ func testSplitQueryError(t *testing.T, conn tabletconn.TabletConn, f *FakeQueryS
 func testSplitQueryPanics(t *testing.T, conn tabletconn.TabletConn, f *FakeQueryService) {
 	t.Log("testSplitQueryPanics")
 	testPanicHelper(t, f, "SplitQuery", func(ctx context.Context) error {
-		_, err := conn.SplitQuery(ctx, TestTarget, SplitQueryBoundQuery, SplitQuerySplitColumn, SplitQuerySplitCount)
+		_, err := conn.SplitQuery(
+			ctx,
+			TestTarget,
+			SplitQueryBoundQuery,
+			SplitQuerySplitColumns,
+			SplitQuerySplitCount,
+			SplitQueryNumRowsPerQueryPart,
+			SplitQueryAlgorithm,
+		)
 		return err
 	})
 }
@@ -878,7 +880,6 @@ func TestSuite(t *testing.T, protocol string, tablet *topodatapb.Tablet, fake *F
 		testExecuteBatch,
 		testBeginExecuteBatch,
 		testSplitQuery,
-		testSplitQueryV2,
 		testUpdateStream,
 
 		// error test cases

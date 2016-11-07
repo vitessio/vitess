@@ -124,12 +124,7 @@ type TabletConn interface {
 
 	// SplitQuery splits a query into equally sized smaller queries by
 	// appending primary key range clauses to the original query
-	SplitQuery(ctx context.Context, target *querypb.Target, query querytypes.BoundQuery, splitColumn string, splitCount int64) ([]querytypes.QuerySplit, error)
-
-	// SplitQuery splits a query into equally sized smaller queries by
-	// appending primary key range clauses to the original query
-	// TODO(erez): Remove SplitQuery and rename this to SplitQueryV2 once migration is done.
-	SplitQueryV2(
+	SplitQuery(
 		ctx context.Context,
 		target *querypb.Target,
 		query querytypes.BoundQuery,

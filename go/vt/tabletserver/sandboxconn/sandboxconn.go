@@ -417,28 +417,8 @@ func (sbc *SandboxConn) BeginExecuteBatch(ctx context.Context, target *querypb.T
 // SandboxSQRowCount is the default number of fake splits returned.
 var SandboxSQRowCount = int64(10)
 
-// SplitQuery creates splits from the original query by appending the
-// split index as a comment to the SQL. RowCount is always SandboxSQRowCount
-func (sbc *SandboxConn) SplitQuery(ctx context.Context, target *querypb.Target, query querytypes.BoundQuery, splitColumn string, splitCount int64) ([]querytypes.QuerySplit, error) {
-	err := sbc.getError()
-	if err != nil {
-		return nil, err
-	}
-	splits := []querytypes.QuerySplit{}
-	for i := 0; i < int(splitCount); i++ {
-		split := querytypes.QuerySplit{
-			Sql:           fmt.Sprintf("%s /*split %v */", query.Sql, i),
-			BindVariables: query.BindVariables,
-			RowCount:      SandboxSQRowCount,
-		}
-		splits = append(splits, split)
-	}
-	return splits, nil
-}
-
-// SplitQueryV2 returns a single QuerySplit whose 'sql' field describes the received arguments.
-// TODO(erez): Rename to SplitQuery after the migration to SplitQuery V2 is done.
-func (sbc *SandboxConn) SplitQueryV2(
+// SplitQuery returns a single QuerySplit whose 'sql' field describes the received arguments.
+func (sbc *SandboxConn) SplitQuery(
 	ctx context.Context,
 	target *querypb.Target,
 	query querytypes.BoundQuery,

@@ -426,7 +426,7 @@ func testEchoTransactionExecute(t *testing.T, conn *vtgateconn.VTGateConn) {
 }
 
 func testEchoSplitQuery(t *testing.T, conn *vtgateconn.VTGateConn) {
-	q, err := querytypes.BoundQueryToProto3(echoPrefix+query+":split_column:123", bindVars)
+	q, err := querytypes.BoundQueryToProto3(echoPrefix+query+":[split_column1,split_column2]:123:1000:FULL_SCAN", bindVars)
 	if err != nil {
 		t.Fatalf("BoundQueryToProto3 error: %v", err)
 	}
@@ -434,7 +434,7 @@ func testEchoSplitQuery(t *testing.T, conn *vtgateconn.VTGateConn) {
 		Query:        q,
 		KeyRangePart: &vtgatepb.SplitQueryResponse_KeyRangePart{Keyspace: keyspace},
 	}
-	got, err := conn.SplitQuery(context.Background(), keyspace, echoPrefix+query, bindVars, "split_column", 123)
+	got, err := conn.SplitQuery(context.Background(), keyspace, echoPrefix+query, bindVars, []string{"split_column1,split_column2"}, 123, 1000, querypb.SplitQueryRequest_FULL_SCAN)
 	if err != nil {
 		t.Fatalf("SplitQuery error: %v", err)
 	}

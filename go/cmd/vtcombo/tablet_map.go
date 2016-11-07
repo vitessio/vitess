@@ -460,17 +460,7 @@ func (itc *internalTabletConn) Tablet() *topodatapb.Tablet {
 }
 
 // SplitQuery is part of tabletconn.TabletConn
-func (itc *internalTabletConn) SplitQuery(ctx context.Context, target *querypb.Target, query querytypes.BoundQuery, splitColumn string, splitCount int64) ([]querytypes.QuerySplit, error) {
-	splits, err := itc.tablet.qsc.QueryService().SplitQuery(ctx, target, query.Sql, query.BindVariables, splitColumn, splitCount)
-	if err != nil {
-		return nil, tabletconn.TabletErrorFromGRPC(vterrors.ToGRPCError(err))
-	}
-	return splits, nil
-}
-
-// SplitQueryV2 is part of tabletconn.TabletConn
-// TODO(erez): Rename to SplitQuery once the migration to SplitQuery V2 is done.
-func (itc *internalTabletConn) SplitQueryV2(
+func (itc *internalTabletConn) SplitQuery(
 	ctx context.Context,
 	target *querypb.Target,
 	query querytypes.BoundQuery,
@@ -479,7 +469,7 @@ func (itc *internalTabletConn) SplitQueryV2(
 	numRowsPerQueryPart int64,
 	algorithm querypb.SplitQueryRequest_Algorithm) ([]querytypes.QuerySplit, error) {
 
-	splits, err := itc.tablet.qsc.QueryService().SplitQueryV2(
+	splits, err := itc.tablet.qsc.QueryService().SplitQuery(
 		ctx,
 		target,
 		query.Sql,

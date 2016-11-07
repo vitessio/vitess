@@ -286,20 +286,7 @@ func (dg *discoveryGateway) BeginExecuteBatch(ctx context.Context, target *query
 }
 
 // SplitQuery splits a query into sub-queries for the specified keyspace, shard, and tablet type.
-func (dg *discoveryGateway) SplitQuery(ctx context.Context, target *querypb.Target, query querytypes.BoundQuery, splitColumn string, splitCount int64) (queries []querytypes.QuerySplit, err error) {
-	err = dg.withRetry(ctx, target, func(conn tabletconn.TabletConn, target *querypb.Target) error {
-		var innerErr error
-		startTime := time.Now()
-		queries, innerErr = conn.SplitQuery(ctx, target, query, splitColumn, splitCount)
-		dg.updateStats(target, startTime, innerErr)
-		return innerErr
-	}, false, false)
-	return
-}
-
-// SplitQuery splits a query into sub-queries for the specified keyspace, shard, and tablet type.
-// TODO(erez): Rename to SplitQuery after migration to SplitQuery V2.
-func (dg *discoveryGateway) SplitQueryV2(
+func (dg *discoveryGateway) SplitQuery(
 	ctx context.Context,
 	target *querypb.Target,
 	query querytypes.BoundQuery,
@@ -311,7 +298,7 @@ func (dg *discoveryGateway) SplitQueryV2(
 	err = dg.withRetry(ctx, target, func(conn tabletconn.TabletConn, target *querypb.Target) error {
 		var innerErr error
 		startTime := time.Now()
-		queries, innerErr = conn.SplitQueryV2(ctx, target, query, splitColumns, splitCount, numRowsPerQueryPart, algorithm)
+		queries, innerErr = conn.SplitQuery(ctx, target, query, splitColumns, splitCount, numRowsPerQueryPart, algorithm)
 		dg.updateStats(target, startTime, innerErr)
 		return innerErr
 	}, false, false)

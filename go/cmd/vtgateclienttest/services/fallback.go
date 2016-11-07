@@ -83,12 +83,7 @@ func (c fallbackClient) Rollback(ctx context.Context, session *vtgatepb.Session)
 	return c.fallback.Rollback(ctx, session)
 }
 
-func (c fallbackClient) SplitQuery(ctx context.Context, keyspace string, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int64) ([]*vtgatepb.SplitQueryResponse_Part, error) {
-	return c.fallback.SplitQuery(ctx, sql, keyspace, bindVariables, splitColumn, splitCount)
-}
-
-// TODO(erez): Rename after migration to SplitQuery V2 is done.
-func (c fallbackClient) SplitQueryV2(
+func (c fallbackClient) SplitQuery(
 	ctx context.Context,
 	keyspace string,
 	sql string,
@@ -98,7 +93,7 @@ func (c fallbackClient) SplitQueryV2(
 	numRowsPerQueryPart int64,
 	algorithm querypb.SplitQueryRequest_Algorithm,
 ) ([]*vtgatepb.SplitQueryResponse_Part, error) {
-	return c.fallback.SplitQueryV2(
+	return c.fallback.SplitQuery(
 		ctx, sql, keyspace, bindVariables, splitColumns, splitCount, numRowsPerQueryPart, algorithm)
 }
 
