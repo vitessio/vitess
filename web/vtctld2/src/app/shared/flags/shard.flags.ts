@@ -134,7 +134,7 @@ export class TabletSelectFlag extends DropDownFlag {
     super(position, id, 'Select a tablet', ' Required. A Tablet Alias to make the master.', value);
     let options = [{label: '', value: ''}];
     tablets.forEach(tablet => {
-      options.push({label: tablet.ref, value: tablet.ref});
+      options.push({label: tablet.label, value: tablet.alias});
     });
     this.setOptions(options);
   }

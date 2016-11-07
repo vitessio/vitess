@@ -516,4 +516,24 @@ func initAPI(ctx context.Context, ts topo.Server, actions *ActionRepository, rea
 		return schemamanager.Run(ctx,
 			schemamanager.NewUIController(req.SQL, req.Keyspace, w), executor)
 	})
+
+	// Features
+	handleAPI("features", func(w http.ResponseWriter, r *http.Request) error {
+		if err := acl.CheckAccessHTTP(r, acl.ADMIN); err != nil {
+			http.Error(w, "403 Forbidden", http.StatusForbidden)
+			return nil
+		}
+
+		resp := make(map[string]interface{})
+		resp["showStatus"] = *enableRealtimeStats
+		resp["showWorkflows"] = *workflowManagerInit
+		resp["activeReparents"] = !*vtctl.DisableActiveReparents
+		data, err := json.MarshalIndent(resp, "", "  ")
+		if err != nil {
+			return fmt.Errorf("json error: %v", err)
+		}
+		w.Header().Set("Content-Type", jsonContentType)
+		w.Write(data)
+		return nil
+	})
 }

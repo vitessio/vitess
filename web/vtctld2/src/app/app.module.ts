@@ -32,6 +32,7 @@ import { TabletComponent } from './dashboard/tablet.component';
 import { TabletPopupComponent } from './status/tablet-popup.component';
 import { WorkflowListComponent } from './workflows/workflow-list.component';
 
+import { FeaturesService } from './api/features.service';
 import { KeyspaceService } from './api/keyspace.service';
 import { ShardService } from './api/shard.service';
 import { TabletService } from './api/tablet.service';
@@ -81,6 +82,7 @@ import { VtctlService } from './api/vtctl.service';
   ],
   providers: [
     APP_ROUTER_PROVIDERS,
+    FeaturesService,
     KeyspaceService,
     ShardService,
     TabletService,
