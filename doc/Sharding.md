@@ -14,6 +14,7 @@ shards, each shard contains records for approximately half of the
 application's users. Similarly, each user's information is stored
 in only one shard.
 
+Note that sharding is orthogonal to (MySQL) replication.
 A Vitess shard typically contains one MySQL master and many MySQL
 slaves. The master handles write operations, while slaves handle
 read-only traffic, batch processing operations, and other tasks.
@@ -26,7 +27,7 @@ Vitess supports the following types of sharding operations:
 
 * **Horizontal sharding:** Splitting or merging shards in a sharded keyspace
 * **Vertical sharding:** Moving tables from an unsharded keyspace to
-    a different keyspace.
+  a different keyspace.
 
 With these features, you can start with a single keyspace that contains
 all of your data (in multiple tables). As your database grows, you can

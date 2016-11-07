@@ -149,6 +149,14 @@
             <li><a href="http://blog.vitess.io/">Blog</a>
           </ul>
         </li>
+        <li class="submenu">
+          <h4 class="arrow-r">Contributing</h4>
+          <ul style="display: none">
+            <li><a href="/contributing/">Contributing to Vitess</a>
+            <li><a href="/contributing/github-workflow.html">GitHub Workflow</a>
+            <li><a href="/contributing/code-reviews.html">Code Reviews</a>
+          </ul>
+        </li>
 
         <div>
           <form method="get" action="/search/">
@@ -242,6 +250,14 @@
             <li><a href="http://blog.vitess.io/">Blog</a>
           </ul>
         </li>
+        <li class="submenu">
+          <h4 class="arrow-r">Contributing</h4>
+          <ul style="display: none">
+            <li><a href="/contributing/">Contributing to Vitess</a>
+            <li><a href="/contributing/github-workflow.html">GitHub Workflow</a>
+            <li><a href="/contributing/code-reviews.html">Code Reviews</a>
+          </ul>
+        </li>
 
         <div>
           <form method="get" action="/search/">
@@ -274,7 +290,8 @@ shards, each shard contains records for approximately half of the
 application&#39;s users. Similarly, each user&#39;s information is stored
 in only one shard.</p>
 
-<p>A Vitess shard typically contains one MySQL master and many MySQL
+<p>Note that sharding is orthogonal to (MySQL) replication.
+A Vitess shard typically contains one MySQL master and many MySQL
 slaves. The master handles write operations, while slaves handle
 read-only traffic, batch processing operations, and other tasks.
 Each MySQL instance within the shard should have the same data,
