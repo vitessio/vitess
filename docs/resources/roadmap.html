@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Vitess / Key Concepts</title>
+    <title>Vitess / Vitess Roadmap</title>
 
         <!-- Webfont -->
     <link href='http://fonts.googleapis.com/css?family=Roboto:400,100,100italic,300,300italic,400italic,500,500italic,700,700italic,900,900italic' rel='stylesheet' type='text/css'>
@@ -35,7 +35,7 @@
 
 
     <!-- metadata -->
-    <meta name="og:title" content="Vitess / Key Concepts"/>
+    <meta name="og:title" content="Vitess / Vitess Roadmap"/>
     <meta name="og:image" content="/images/vitess_logomark_cropped.svg"/>
     <meta name="og:description" content="Vitess is a database clustering system for horizontal scaling of MySQL."/>
 
@@ -176,7 +176,7 @@
   <div class="container">
     <div class="row">
       <div class="col-md-9">
-        <h1>Key Concepts</h1>
+        <h1>Vitess Roadmap</h1>
       </div>
     </div>
   </div>
@@ -276,222 +276,111 @@
     </div>
     <div class="col-md-7" id="centerCol">
       <div id="centerTextCol">
-        <p>This document defines common Vitess concepts and terminology.</p>
+        <p>Vitess is an active open source project.  Here is a list of recent and upcoming
+features the team is focused on: Check with us on
+our <a href="https://groups.google.com/forum/#!forum/vitess">forums</a> for more
+information.</p>
 
-<h2 id="keyspace">Keyspace</h2>
+<h2 id="vitess-before-2-0-ga">Vitess before 2.0 GA</h2>
 
-<p>A <em>keyspace</em> is a logical database. In the unsharded case, it maps directly
-to a MySQL database name, but it can also map to multiple MySQL databases.</p>
+<p>Vitess has been used internally by YouTube for a few years now, but the first
+public versions lacked polish and documentation. Version 1.0 was mostly an
+internal release.</p>
 
-<p>Reading data from a keyspace is like reading from a MySQL database. However,
-depending on the consistency requirements of the read operation, Vitess
-might fetch the data from a master database or from a replica. By routing
-each query to the appropriate database, Vitess allows your code to be
-structured as if it were reading from a single MySQL database.</p>
+<h2 id="vitess-2-0-ga">Vitess 2.0 GA</h2>
 
-<p>When a database is
-<a href="http://en.wikipedia.org/wiki/Shard_(database_architecture)">sharded</a>,
-a keyspace maps to multiple MySQL databases. In that case, a single query sent
-to Vitess will be routed to one or more shards, depending on where the requested
-data resides.</p>
+<p><a href="https://github.com/youtube/vitess/releases/tag/v2.0.0">Vitess 2.0 GA</a> was
+created on July 11, 2016. It was the first major public release.</p>
 
-<h2 id="keyspace-id">Keyspace ID</h2>
-
-<p>The <em>keyspace ID</em> is the value that is used to decide on which shard a given
-record lives. <a href="http://vitess.io/user-guide/sharding.html#range-based-sharding">Range-based Sharding</a>
-refers to creating shards that each cover a particular range of keyspace IDs.</p>
-
-<p>Often, the keyspace ID is computed as the hash of some column in your data,
-such as the user ID. This would result in randomly spreading users across
-the range-based shards.
-Using this technique means you can split a given shard by replacing it with two
-or more new shards that combine to cover the original range of keyspace IDs,
-without having to move any records in other shards.</p>
-
-<p>Previously, our resharding process required each table to store this value as a
-<code class="prettyprint">keyspace_id</code> column because it was computed by the application. However, this
-column is no longer necessary when you allow VTGate to compute the keyspace ID
-for you, for example by using a <code class="prettyprint">hash</code> vindex.</p>
-
-<h2 id="shard">Shard</h2>
-
-<p>A <em>shard</em> is a division within a keyspace. A shard typically contains one MySQL
-master and many MySQL slaves.</p>
-
-<p>Each MySQL instance within a shard has the same data (excepting some replication
-lag). The slaves can serve read-only traffic (with eventual consistency guarantees),
-execute long-running data analysis tools, or perform administrative tasks
-(backup, restore, diff, etc.).</p>
-
-<p>A keyspace that does not use sharding effectively has one shard.
-Vitess names the shard <code class="prettyprint">0</code> by convention. When sharded, a keyspace has <code class="prettyprint">N</code>
-shards with non-overlapping data.</p>
-
-<h3 id="resharding">Resharding</h3>
-
-<p>Vitess supports <a href="http://vitess.io/user-guide/sharding.html#resharding">dynamic resharding</a>,
-in which the number of shards is changed on a live cluster. This can be either
-splitting one or more shards into smaller pieces, or merging neighboring shards
-into bigger pieces.</p>
-
-<p>During dynamic resharding, the data in the source shards is copied into the
-destination shards, allowed to catch up on replication, and then compared
-against the original to ensure data integrity. Then the live serving
-infrastructure is shifted to the destination shards, and the source shards are
-deleted.</p>
-
-<h2 id="tablet">Tablet</h2>
-
-<p>A <em>tablet</em> is a combination of a <code class="prettyprint">mysqld</code> process and a corresponding <code class="prettyprint">vttablet</code>
-process, usually running on the same machine.</p>
-
-<p>Each tablet is assigned a <em>tablet type</em>, which specifies what role it currently
-performs.</p>
-
-<h3 id="tablet-types">Tablet Types</h3>
+<p>It contains all the core features of the Vitess product:</p>
 
 <ul>
-<li><strong>master</strong> - A <em>replica</em> tablet that happens to currently be the MySQL master
-         for its shard.</li>
-<li><strong>replica</strong> - A MySQL slave that is eligible to be promoted to <em>master</em>.
-          Conventionally, these are reserved for serving live, user-facing
-          requests (like from the website&#39;s frontend).</li>
-<li><strong>rdonly</strong> - A MySQL slave that cannot be promoted to <em>master</em>.
-         Conventionally, these are used for background processing jobs,
-         such as taking backups, dumping data to other systems, heavy
-         analytical queries, MapReduce, and resharding.</li>
-<li><strong>backup</strong> - A tablet that has stopped replication at a consistent snapshot,
-         so it can upload a new backup for its shard. After it finishes,
-         it will resume replication and return to its previous type.</li>
-<li><strong>restore</strong> - A tablet that has started up with no data, and is in the process
-          of restoring itself from the latest backup. After it finishes,
-          it will begin replicating at the GTID position of the backup,
-          and become either <em>replica</em> or <em>rdonly</em>.</li>
-<li><strong>drained</strong> - A tablet that has been reserved by a Vitess background
-         process (such as rdonly tablets for resharding).</li>
-</ul>
-
-<!-- TODO: Add pointer to complete list of types and explain how to update type? -->
-
-<h2 id="keyspace-graph">Keyspace Graph</h2>
-
-<p>The <em>keyspace graph</em> allows Vitess to decide which set of shards to use for a
-given keyspace, cell, and tablet type.</p>
-
-<h3 id="partitions">Partitions</h3>
-
-<p>During horizontal resharding (splitting or merging shards), there can be shards
-with overlapping key ranges. For example, the source shard of a split may serve
-<code class="prettyprint">c0-d0</code> while its destination shards serve <code class="prettyprint">c0-c8</code> and <code class="prettyprint">c8-d0</code> respectively.</p>
-
-<p>Since these shards need to exist simultaneously during the migration,
-the keyspace graph maintains a list (called a <em>partitioning</em> or just a <em>partition</em>)
-of shards whose ranges cover all possible keyspace ID values, while being
-non-overlapping and contiguous. Shards can be moved in and out of this list to
-determine whether they are active.</p>
-
-<p>The keyspace graph stores a separate partitioning for each <code class="prettyprint">(cell, tablet type)</code> pair.
-This allows migrations to proceed in phases: first migrate <em>rdonly</em> and
-<em>replica</em> requests, one cell at a time, and finally migrate <em>master</em> requests.</p>
-
-<h3 id="served-from">Served From</h3>
-
-<p>During vertical resharding (moving tables out from one keyspace to form a new
-keyspace), there can be multiple keyspaces that contain the same table.</p>
-
-<p>Since these multiple copies of the table need to exist simultaneously during
-the migration, the keyspace graph supports keyspace redirects, called
-<code class="prettyprint">ServedFrom</code> records. That enables a migration flow like this:</p>
-
-<ol>
-<li> Create <code class="prettyprint">new_keyspace</code> and set its <code class="prettyprint">ServedFrom</code> to point to <code class="prettyprint">old_keyspace</code>.</li>
-<li> Update the app to look for the tables to be moved in <code class="prettyprint">new_keyspace</code>.
-Vitess will automatically redirect these requests to <code class="prettyprint">old_keyspace</code>.</li>
-<li> Perform a vertical split clone to copy data to the new keyspace and start
-filtered replication.</li>
-<li> Remove the <code class="prettyprint">ServedFrom</code> redirect to begin actually serving from <code class="prettyprint">new_keyspace</code>.</li>
-<li> Drop the now unused copies of the tables from <code class="prettyprint">old_keyspace</code>.</li>
-</ol>
-
-<p>There can be a different <code class="prettyprint">ServedFrom</code> record for each <code class="prettyprint">(cell, tablet type)</code> pair.
-This allows migrations to proceed in phases: first migrate <em>rdonly</em> and
-<em>replica</em> requests, one cell at a time, and finally migrate <em>master</em> requests.</p>
-
-<h2 id="replication-graph">Replication Graph</h2>
-
-<p>The <em>replication graph</em> identifies the relationships between master
-databases and their respective replicas. During a master failover,
-the replication graph enables Vitess to point all existing replicas
-to a newly designated master database so that replication can continue.</p>
-
-<h2 id="topology-service">Topology Service</h2>
-
-<p>The <em><a href="/user-guide/topology-service.html">Topology Service</a></em>
-is a set of backend processes running on different servers.
-Those servers store topology data and provide a distributed locking service.</p>
-
-<p>Vitess uses a plug-in system to support various backends for storing topology
-data, which are assumed to provide a distributed, consistent key-value store.
-By default, our <a href="http://vitess.io/getting-started/local-instance.html">local example</a>
-uses the ZooKeeper plugin, and the <a href="http://vitess.io/getting-started/">Kubernetes example</a>
-uses etcd.</p>
-
-<p>The topology service exists for several reasons:</p>
+<li><p>Advanced data access:</p>
 
 <ul>
-<li>It enables tablets to coordinate among themselves as a cluster.</li>
-<li>It enables Vitess to discover tablets, so it knows where to route queries.</li>
-<li>It stores Vitess configuration provided by the database administrator that is
-needed by many different servers in the cluster, and that must persist between
-server restarts.</li>
+<li>Automatic query routing to actively serving instances.</li>
+<li>Scalability through sharding, with transparent access to sharded data,
+without need for proprietary API.</li>
+<li>Map-Reduce support for data warehousing queries.</li>
+<li>Limit the negative impact of bad queries.</li>
+</ul></li>
+<li><p>Advanced manageability features:</p>
+
+<ul>
+<li>Orchestrator integration, auto-reparent on master failure.</li>
+<li>Out-of-the-box support for Kubernetes</li>
+<li>No-downtime dynamic resharding.</li>
+<li>Expose data for advanced monitoring and bad query detection.</li>
+</ul></li>
 </ul>
 
-<p>A Vitess cluster has one global topology service, and a local topology service
-in each cell. Since <em>cluster</em> is an overloaded term, and one Vitess cluster is
-distinguished from another by the fact that each has its own global topology
-service, we refer to each Vitess cluster as a <strong>toposphere</strong>.</p>
+<h2 id="vitess-2-1">Vitess 2.1</h2>
 
-<h3 id="global-topology">Global Topology</h3>
+<p>Vitess 2.1 is actively being worked on. Apart from the multiple small changes
+we&#39;ve been making to address a number of small issues, we are adding the
+following core features:</p>
 
-<p>The global topology stores Vitess-wide data that does not change frequently.
-Specifically, it contains data about keyspaces and shards as well as the
-master tablet alias for each shard.</p>
+<ul>
+<li><p>Support for distributed transactions, using 2 phase commit.</p></li>
+<li><p>Resharding workflow improvements, to increase manageability of the process.</p></li>
+<li><p>Online schema swap, to apply complex schema changes without any downtime.</p></li>
+<li><p>New dynamic UI (vtctld), rewritten from scratch in angular2.</p></li>
+<li><p>Update Stream functionality, for applications to subscribe to a change stream
+(for cache invalidation, for instance).</p></li>
+<li><p>Improved Map-Reduce support, for tables with non-uniform distributions.</p></li>
+<li><p>Increase large installation scalability with two-layer vtgate pools (l2vtgate,
+applicable to 100+ shard installations).</p></li>
+<li><p>Better Kubernetes support (Helm support, better scripts, ...).</p></li>
+</ul>
 
-<p>The global topology is used for some operations, including reparenting and
-resharding. By design, the global topology server is not used a lot.</p>
+<p>Our plan is to cut a 2.1.0-alpha.1 release very soon, and to update the
+documentation shortly thereafter.</p>
 
-<p>In order to survive any single cell going down, the global topology service
-should have nodes in multiple cells, with enough to maintain quorum in the
-event of a cell failure.</p>
+<h2 id="vitess-moving-forward">Vitess Moving Forward</h2>
 
-<h3 id="local-topology">Local Topology</h3>
+<p>The following list contains areas where we want to focus next, after the current
+set of changes. Let us know if one of these areas is of particular interest to
+your application!</p>
 
-<p>Each local topology contains information related to its own cell.
-Specifically, it contains data about tablets in the cell, the keyspace graph
-for that cell, and the replication graph for that cell.</p>
+<h3 id="data-access">Data Access</h3>
 
-<p>The local topology service must be available for Vitess to discover tablets
-and adjust routing as tablets come and go. However, no calls to the topology
-service are made in the critical path of serving a query at steady state.
-That means queries are still served during temporary unavailability of topology.</p>
+<ul>
+<li><p>Additional support for cross-shard constructs (IN clause, ordering and
+filtering, ...).</p></li>
+<li><p>ExecuteBatch improvements (to increase performance of bulk imports for
+instance).</p></li>
+<li><p>Multi-value inserts (across shards or not).</p></li>
+</ul>
 
-<h2 id="cell-data-center">Cell (Data Center)</h2>
+<h3 id="manageability">Manageability</h3>
 
-<p>A <em>cell</em> is a group of servers and network infrastructure collocated in an area,
-and isolated from failures in other cells. It is typically either a full data
-center or a subset of a data center, sometimes called a <em>zone</em> or <em>availability zone</em>.
-Vitess gracefully handles cell-level failures, such as when a cell is cut off the network.</p>
+<ul>
+<li><p>Better support for MySQL DDL constructs.</p></li>
+<li><p>Support for MySQL 8.0.</p></li>
+<li><p>Additional Kubernetes integration.</p></li>
+<li><p>Include resharding workflows in the control panel UI (vtctld).</p></li>
+<li><p>Out-of-the-box integration with Promotheus for monitoring.</p></li>
+</ul>
 
-<p>Each cell in a Vitess implementation has a <a href="#topology-service">local topology service</a>,
-which is hosted in that cell. The topology service contains most of the
-information about the Vitess tablets in its cell.
-This enables a cell to be taken down and rebuilt as a unit.</p>
+<h3 id="scaling">Scaling</h3>
 
-<p>Vitess limits cross-cell traffic for both data and metadata.
-While it may be useful to also have the ability to route read traffic to
-individual cells, Vitess currently serves reads only from the local cell.
-Writes will go cross-cell when necessary, to wherever the master for that shard
-resides.</p>
+<ul>
+<li>Better resource utilization / less CPU usage.</li>
+</ul>
+
+<h2 id="future-work">Future Work</h2>
+
+<p>We are considering integration/implementation of the following technologies in
+our roadmap.  For specific features, reach out to us to discuss opportunities to
+collaborate or prioritize some of the work:</p>
+
+<ul>
+<li><p>Integration with Mesos and DC/OS.</p></li>
+<li><p>Integration with Docker Swarm.</p></li>
+<li><p>Improved support for row-based replication (for Update Stream for instance).</p></li>
+<li><p>Better integration with Apache Spark (native instead of relying on Hadoop
+InputSource).</p></li>
+</ul>
 
       </div>
     </div>
