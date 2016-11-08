@@ -47,7 +47,7 @@ func TestLongPolling(t *testing.T) {
 	// Add a node, make sure we get the update with the next poll
 	tw := &testWorkflow{}
 	n := &Node{
-		workflow: tw,
+		Listener: tw,
 
 		Name:        "name",
 		PathName:    "uuid1",

@@ -172,7 +172,7 @@ func (schemaSwap *Swap) Run(ctx context.Context, manager *workflow.Manager, work
 	schemaSwap.tabletClient = tmclient.NewTabletManagerClient()
 
 	rootUINode := workflow.NewNode()
-	rootUINode.AttachToWorkflow(workflowInfo, schemaSwap)
+	rootUINode.PopulateFromWorkflow(workflowInfo)
 	rootUINode.State = workflowpb.WorkflowState_Running
 	rootUINode.Display = workflow.NodeDisplayIndeterminate
 	rootUINode.Message = fmt.Sprintf("Schema swap is executed on the keyspace %s", schemaSwap.keyspace)
@@ -183,11 +183,6 @@ func (schemaSwap *Swap) Run(ctx context.Context, manager *workflow.Manager, work
 
 	schemaSwap.rootUINode = rootUINode
 	return schemaSwap.executeSwap()
-}
-
-// Action is a part of workflow.Workflow interface. It implements UI actions with the workflow.
-func (*Swap) Action(ctx context.Context, path, name string) error {
-	return fmt.Errorf("Cannot execute action '%s', '%s' on schema swap", path, name)
 }
 
 // Run is the main entry point of the schema swap process. It drives the process from start

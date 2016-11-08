@@ -29,9 +29,6 @@ type Workflow interface {
 	// state (and it can checkpoint that new value by saving it
 	// into the manager's topo Server).
 	Run(ctx context.Context, manager *Manager, wi *topo.WorkflowInfo) error
-
-	// Action is called when the user requests an action on a node.
-	Action(ctx context.Context, path, name string) error
 }
 
 // Factory can create the initial version of a Workflow, or

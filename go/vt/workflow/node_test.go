@@ -50,7 +50,7 @@ func TestNodeManagerWithRoot(t *testing.T) {
 
 	// Add a root level node, make sure we get notified.
 	n := &Node{
-		workflow: tw,
+		Listener: tw,
 
 		Name:        "name",
 		PathName:    "uuid1",

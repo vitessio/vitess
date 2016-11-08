@@ -10,8 +10,6 @@ package topovalidator
 
 import (
 	"fmt"
-	"strconv"
-	"strings"
 
 	log "github.com/golang/glog"
 	"golang.org/x/net/context"
@@ -97,7 +95,7 @@ func (w *Workflow) AddFixer(name, message string, fixer Fixer, actions []string)
 func (w *Workflow) Run(ctx context.Context, manager *workflow.Manager, wi *topo.WorkflowInfo) error {
 	// Create a UI Node.
 	node := workflow.NewNode()
-	node.AttachToWorkflow(wi, w)
+	node.PopulateFromWorkflow(wi)
 	node.State = workflowpb.WorkflowState_Running
 	node.Display = workflow.NodeDisplayDeterminate
 	node.Message = "Validates the Topology and proposes fixes for known issues."
@@ -137,6 +135,7 @@ func (w *Workflow) Run(ctx context.Context, manager *workflow.Manager, wi *topo.
 				Name: action,
 			})
 		}
+		f.node.Listener = f
 	}
 	w.uiUpdate(node)
 	node.BroadcastChanges(true /* updateChildren */)
@@ -157,27 +156,13 @@ func (w *Workflow) uiUpdate(node *workflow.Node) {
 	node.Log = w.logger.String()
 }
 
-// Action is part of the workflow.Workflow interface.
-func (w *Workflow) Action(ctx context.Context, path, name string) error {
-	// path will be of the form /<uuid>/<index>
-	parts := strings.Split(path, "/")
-	if len(parts) != 3 {
-		return fmt.Errorf("invalid action path: %v", path)
-	}
-
-	i, err := strconv.Atoi(parts[2])
-	if err != nil {
-		return fmt.Errorf("invalid action index %v: %v", parts[2], err)
-	}
-	if i < 0 || i >= len(w.fixers) {
-		return fmt.Errorf("invalid action index %v, expected 0 <= index < %v", i, len(w.fixers))
-	}
-	f := w.fixers[i]
+// Action is part of the workflow.ActionListener interface.
+func (f *workflowFixer) Action(ctx context.Context, path, name string) error {
 	if len(f.node.Actions) == 0 {
 		// Action was already run.
 		return nil
 	}
-	err = f.fixer.Action(ctx, name)
+	err := f.fixer.Action(ctx, name)
 	if err != nil {
 		f.node.Log = fmt.Sprintf("action %v failed: %v", name, err)
 	} else {
