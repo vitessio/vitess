@@ -79,6 +79,14 @@ const (
 	ActionStyleTriggered ActionStyle = 4
 )
 
+// ActionListener is an interface for receiving notifications about actions triggered
+// from workflow UI.
+type ActionListener interface {
+	// Action is called when the user requests an action on a node.
+	// 'path' is the node's Path value and 'name' is the invoked action's name.
+	Action(ctx context.Context, path, name string) error
+}
+
 // Node is the UI representation of a Workflow toplevel object, or of
 // a Workflow task. It is just meant to be a tree, and the various
 // Workflow implementations can expose a tree of Nodes that represent
@@ -100,8 +108,8 @@ type Node struct {
 	// Any change to this node must take the Manager's lock.
 	nodeManager *NodeManager
 
-	// workflow is the workflow which owns this node.
-	workflow Workflow
+	// Listener will be notified about actions invoked on this node.
+	Listener ActionListener `json:"-"`
 
 	// Next are all the attributes that are exported to node.ts.
 	// Note that even though Path is publicly accessible it should be
@@ -165,10 +173,8 @@ func NewNode() *Node {
 	}
 }
 
-// AttachToWorkflow attaches the UI Node to the workflow and populates node's
-// path appropriately.
-func (n *Node) AttachToWorkflow(wi *topo.WorkflowInfo, w Workflow) {
-	n.workflow = w
+// PopulateFromWorkflow populates node's path and name from the workflow information.
+func (n *Node) PopulateFromWorkflow(wi *topo.WorkflowInfo) {
 	n.Name = wi.Name
 	n.PathName = wi.Uuid
 	n.Path = "/" + n.PathName
@@ -214,7 +220,6 @@ func (n *Node) deepCopyFrom(otherNode *Node, copyChildren bool) error {
 
 		// Populate a few values in case the otherChild is newly created by user.
 		otherChild.nodeManager = n.nodeManager
-		otherChild.workflow = n.workflow
 		otherChild.Path = path.Join(n.Path, otherChild.PathName)
 
 		child := NewNode()
@@ -394,7 +399,10 @@ func (m *NodeManager) Action(ctx context.Context, ap *ActionParameters) error {
 	if err != nil {
 		return err
 	}
-	return n.workflow.Action(ctx, ap.Path, ap.Name)
+	if n.Listener == nil {
+		return fmt.Errorf("Action %v is invoked on a node without listener (node path is %v)", ap.Name, ap.Path)
+	}
+	return n.Listener.Action(ctx, ap.Path, ap.Name)
 }
 
 func (m *NodeManager) getNodeByPath(nodePath string) (*Node, error) {

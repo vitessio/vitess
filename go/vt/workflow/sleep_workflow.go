@@ -70,7 +70,8 @@ func (sw *SleepWorkflow) Run(ctx context.Context, manager *Manager, wi *topo.Wor
 	sw.manager = manager
 	sw.wi = wi
 	sw.node = NewNode()
-	sw.node.AttachToWorkflow(wi, sw)
+	sw.node.PopulateFromWorkflow(wi)
+	sw.node.Listener = sw
 	sw.node.State = workflowpb.WorkflowState_Running
 	sw.node.Display = NodeDisplayDeterminate
 	sw.node.Message = "This workflow is a test workflow that just sleeps for the provided amount of time."
@@ -127,7 +128,7 @@ func (sw *SleepWorkflow) Run(ctx context.Context, manager *Manager, wi *topo.Wor
 	return nil
 }
 
-// Action is part of the workflow.Workflow interface.
+// Action is part of the workflow.ActionListener interface.
 func (sw *SleepWorkflow) Action(ctx context.Context, path, name string) error {
 	sw.mu.Lock()
 	defer sw.mu.Unlock()

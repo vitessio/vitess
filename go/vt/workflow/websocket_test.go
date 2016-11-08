@@ -47,7 +47,7 @@ func TestWebSocket(t *testing.T) {
 	// Add a node, make sure we get the update.
 	tw := &testWorkflow{}
 	n := &Node{
-		workflow: tw,
+		Listener: tw,
 
 		Name:        "name",
 		PathName:    "uuid1",
