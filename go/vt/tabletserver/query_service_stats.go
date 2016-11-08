@@ -73,14 +73,13 @@ func NewQueryServiceStats(statsPrefix string, enablePublishStats bool) *QuerySer
 	resultBuckets := []int64{0, 1, 5, 10, 50, 100, 500, 1000, 5000, 10000}
 	queryStats := stats.NewTimings(queryStatsName)
 	return &QueryServiceStats{
-		MySQLStats: stats.NewTimings(mysqlStatsName),
-		QueryStats: queryStats,
-		WaitStats:  stats.NewTimings(waitStatsName),
-		KillStats:  stats.NewCounters(killStatsName, "Transactions", "Queries"),
-		InfoErrors: stats.NewCounters(infoErrorsName, "Retry", "Fatal", "DupKey"),
-		ErrorStats: stats.NewCounters(errorStatsName, "Fail", "TxPoolFull", "NotInTx", "Deadlock"),
-		InternalErrors: stats.NewCounters(internalErrorsName, "Task",
-			"Mismatch", "StrayTransactions", "Invalidation", "Panic", "HungQuery", "Schema"),
+		MySQLStats:     stats.NewTimings(mysqlStatsName),
+		QueryStats:     queryStats,
+		WaitStats:      stats.NewTimings(waitStatsName),
+		KillStats:      stats.NewCounters(killStatsName, "Transactions", "Queries"),
+		InfoErrors:     stats.NewCounters(infoErrorsName, "Retry", "Fatal", "DupKey"),
+		ErrorStats:     stats.NewCounters(errorStatsName, "Fail", "TxPoolFull", "NotInTx", "Deadlock"),
+		InternalErrors: stats.NewCounters(internalErrorsName, "Task", "StrayTransactions", "Panic", "HungQuery", "Schema", "TwopcCommit", "TwopcResurrection"),
 		UserTableQueryCount: stats.NewMultiCounters(
 			userTableQueryCountName, []string{"TableName", "CallerID", "Type"}),
 		UserTableQueryTimesNs: stats.NewMultiCounters(

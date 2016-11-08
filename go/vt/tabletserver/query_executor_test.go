@@ -1175,6 +1175,7 @@ func getQueryExecutorSupportedQueries() map[string]*sqltypes.Result {
 		sqlTurnoffBinlog:                                     {},
 		fmt.Sprintf(sqlCreateSidecarDB, "_vt"):               {},
 		fmt.Sprintf(sqlCreateTableRedoLogTransaction, "_vt"): {},
+		fmt.Sprintf(sqlAlterTableRedoLogTransaction, "_vt"):  {},
 		fmt.Sprintf(sqlCreateTableRedoLogStatement, "_vt"):   {},
 		fmt.Sprintf(sqlCreateTableTransaction, "_vt"):        {},
 		fmt.Sprintf(sqlCreateTableParticipant, "_vt"):        {},
@@ -1390,5 +1391,6 @@ func getQueryExecutorSupportedQueries() map[string]*sqltypes.Result {
 				},
 			},
 		},
+		fmt.Sprintf(sqlReadAllRedo, "_vt", "_vt"): {},
 	}
 }

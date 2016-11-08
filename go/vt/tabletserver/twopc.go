@@ -36,6 +36,11 @@ const (
   index state_time_idx(state, time_created)
 	) engine=InnoDB`
 
+	// Due to possible legacy issues, do not modify the create
+	// tablet statement. Alter it instead.
+	sqlAlterTableRedoLogTransaction = `alter table ` + "`%s`" + `.redo_log_transaction
+	modify state enum('Prepared', 'Failed')`
+
 	sqlCreateTableRedoLogStatement = `create table if not exists ` + "`%s`" + `.redo_log_statement(
   dtid varbinary(512),
   id bigint,
@@ -58,15 +63,20 @@ const (
 	shard varchar(256),
   primary key(dtid, id)
 	) engine=InnoDB`
+
+	sqlReadAllRedo = `select t.dtid, t.state, s.id, s.statement from ` + "`%s`" + `.redo_log_transaction t
+  join ` + "`%s`" + `.redo_log_statement s on t.dtid = s.dtid
+	where t.state = 'Prepared' order by t.dtid, s.id`
 )
 
 // TwoPC performs 2PC metadata management (MM) functions.
 type TwoPC struct {
 	insertRedoTx   *sqlparser.ParsedQuery
 	insertRedoStmt *sqlparser.ParsedQuery
+	updateRedoTx   *sqlparser.ParsedQuery
 	deleteRedoTx   *sqlparser.ParsedQuery
 	deleteRedoStmt *sqlparser.ParsedQuery
-	readPrepared   string
+	readAllRedo    string
 
 	insertTransaction  *sqlparser.ParsedQuery
 	insertParticipants *sqlparser.ParsedQuery
@@ -94,6 +104,7 @@ func (tpc *TwoPC) Open(sidecarDBName string, dbaparams *sqldb.ConnParams) {
 		sqlTurnoffBinlog,
 		fmt.Sprintf(sqlCreateSidecarDB, sidecarDBName),
 		fmt.Sprintf(sqlCreateTableRedoLogTransaction, sidecarDBName),
+		fmt.Sprintf(sqlAlterTableRedoLogTransaction, sidecarDBName),
 		fmt.Sprintf(sqlCreateTableRedoLogStatement, sidecarDBName),
 		fmt.Sprintf(sqlCreateTableTransaction, sidecarDBName),
 		fmt.Sprintf(sqlCreateTableParticipant, sidecarDBName),
@@ -109,17 +120,16 @@ func (tpc *TwoPC) Open(sidecarDBName string, dbaparams *sqldb.ConnParams) {
 	tpc.insertRedoStmt = buildParsedQuery(
 		"insert into `%s`.redo_log_statement(dtid, id, statement) values %a",
 		sidecarDBName, ":vals")
+	tpc.updateRedoTx = buildParsedQuery(
+		"update `%s`.redo_log_transaction set state = %a where dtid = %a",
+		sidecarDBName, ":state", ":dtid")
 	tpc.deleteRedoTx = buildParsedQuery(
 		"delete from `%s`.redo_log_transaction where dtid = %a",
 		sidecarDBName, ":dtid")
 	tpc.deleteRedoStmt = buildParsedQuery(
 		"delete from `%s`.redo_log_statement where dtid = %a",
 		sidecarDBName, ":dtid")
-	tpc.readPrepared = fmt.Sprintf(
-		"select s.dtid, s.id, s.statement from `%s`.redo_log_transaction t "+
-			"join `%s`.redo_log_statement s on t.dtid = s.dtid "+
-			"where t.state = 'Prepared' order by s.dtid, s.id",
-		sidecarDBName, sidecarDBName)
+	tpc.readAllRedo = fmt.Sprintf(sqlReadAllRedo, sidecarDBName, sidecarDBName)
 
 	tpc.insertTransaction = buildParsedQuery(
 		"insert into `%s`.transaction(dtid, state, time_created, time_updated) values (%a, 'Prepare', %a, %a)",
@@ -180,6 +190,16 @@ func (tpc *TwoPC) SaveRedo(ctx context.Context, conn *TxConnection, dtid string,
 	return err
 }
 
+// UpdateRedo changes the state of the redo log for the dtid.
+func (tpc *TwoPC) UpdateRedo(ctx context.Context, conn *TxConnection, dtid, state string) error {
+	bindVars := map[string]interface{}{
+		"dtid":  sqltypes.MakeTrusted(sqltypes.VarBinary, []byte(dtid)),
+		"state": sqltypes.MakeTrusted(sqltypes.VarBinary, []byte(state)),
+	}
+	_, err := tpc.exec(ctx, conn, tpc.updateRedoTx, bindVars)
+	return err
+}
+
 // DeleteRedo deletes the redo log for the dtid.
 func (tpc *TwoPC) DeleteRedo(ctx context.Context, conn *TxConnection, dtid string) error {
 	bindVars := map[string]interface{}{
@@ -193,32 +213,38 @@ func (tpc *TwoPC) DeleteRedo(ctx context.Context, conn *TxConnection, dtid strin
 	return err
 }
 
-// ReadPrepared returns all the prepared transactions from the redo logs.
-func (tpc *TwoPC) ReadPrepared(ctx context.Context, conn *DBConn) (map[string][]string, error) {
-	qr, err := conn.Exec(ctx, tpc.readPrepared, 10000, false)
+// ReadAllRedo returns all the prepared transactions from the redo logs.
+func (tpc *TwoPC) ReadAllRedo(ctx context.Context, conn *DBConn) (prepared map[string][]string, failed []string, err error) {
+	qr, err := conn.Exec(ctx, tpc.readAllRedo, 10000, false)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	transactions := make(map[string][]string)
-	var stmts []string
-	var dtid string
-	for i, row := range qr.Rows {
-		curdtid := row[0].String()
-		if i == 0 {
-			dtid = curdtid
-		}
-		if dtid == curdtid {
-			stmts = append(stmts, row[2].String())
+
+	// Do this as two loops for better readability.
+	// Load prepared transactions.
+	prepared = make(map[string][]string)
+	for _, row := range qr.Rows {
+		if row[1].String() != "Prepared" {
 			continue
 		}
-		transactions[dtid] = stmts
-		dtid = curdtid
-		stmts = []string{row[2].String()}
+		dtid := row[0].String()
+		prepared[dtid] = append(prepared[dtid], row[3].String())
 	}
-	if stmts != nil {
-		transactions[dtid] = stmts
+
+	// Load failed transactions.
+	lastdtid := ""
+	for _, row := range qr.Rows {
+		if row[1].String() != "Failed" {
+			continue
+		}
+		dtid := row[0].String()
+		if dtid == lastdtid {
+			continue
+		}
+		failed = append(failed, dtid)
+		lastdtid = dtid
 	}
-	return transactions, nil
+	return prepared, failed, nil
 }
 
 // CreateTransaction saves the metadata of a 2pc transaction as Prepared.

@@ -692,16 +692,17 @@ func TestTabletServerReplicaToMaster(t *testing.T) {
 	tsv.SetServingType(topodatapb.TabletType_REPLICA, true, nil)
 	tpc := tsv.qe.twoPC
 
-	db.AddQuery(tpc.readPrepared, &sqltypes.Result{})
+	db.AddQuery(tpc.readAllRedo, &sqltypes.Result{})
 	tsv.SetServingType(topodatapb.TabletType_MASTER, true, nil)
 	if len(tsv.qe.preparedPool.conns) != 0 {
 		t.Errorf("len(tsv.qe.preparedPool.conns): %d, want 0", len(tsv.qe.preparedPool.conns))
 	}
 	tsv.SetServingType(topodatapb.TabletType_REPLICA, true, nil)
 
-	db.AddQuery(tpc.readPrepared, &sqltypes.Result{
+	db.AddQuery(tpc.readAllRedo, &sqltypes.Result{
 		Rows: [][]sqltypes.Value{{
 			sqltypes.MakeString([]byte("dtid0")),
+			sqltypes.MakeString([]byte("Prepared")),
 			sqltypes.MakeString([]byte("")),
 			sqltypes.MakeString([]byte("update test_table set name = 2 where pk in (1) /* _stream test_table (pk ) (1 ); */")),
 		}},
@@ -718,15 +719,22 @@ func TestTabletServerReplicaToMaster(t *testing.T) {
 	tsv.SetServingType(topodatapb.TabletType_REPLICA, true, nil)
 
 	// Ensure we continue past errors.
-	db.AddQuery(tpc.readPrepared, &sqltypes.Result{
+	db.AddQuery(tpc.readAllRedo, &sqltypes.Result{
 		Rows: [][]sqltypes.Value{{
 			sqltypes.MakeString([]byte("bogus")),
+			sqltypes.MakeString([]byte("Prepared")),
 			sqltypes.MakeString([]byte("")),
 			sqltypes.MakeString([]byte("bogus")),
 		}, {
 			sqltypes.MakeString([]byte("dtid0")),
+			sqltypes.MakeString([]byte("Prepared")),
 			sqltypes.MakeString([]byte("")),
 			sqltypes.MakeString([]byte("update test_table set name = 2 where pk in (1) /* _stream test_table (pk ) (1 ); */")),
+		}, {
+			sqltypes.MakeString([]byte("dtid1")),
+			sqltypes.MakeString([]byte("Failed")),
+			sqltypes.MakeString([]byte("")),
+			sqltypes.MakeString([]byte("unused")),
 		}},
 	})
 	tsv.SetServingType(topodatapb.TabletType_MASTER, true, nil)
@@ -737,6 +745,10 @@ func TestTabletServerReplicaToMaster(t *testing.T) {
 	want = []string{"update test_table set name = 2 where pk in (1) /* _stream test_table (pk ) (1 ); */"}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("Prepared queries: %v, want %v", got, want)
+	}
+	wantFailed := map[string]error{"dtid1": errPrepFailed}
+	if !reflect.DeepEqual(tsv.qe.preparedPool.reserved, wantFailed) {
+		t.Errorf("Failed dtids: %v, want %v", tsv.qe.preparedPool.reserved, wantFailed)
 	}
 	tsv.SetServingType(topodatapb.TabletType_REPLICA, true, nil)
 }
@@ -1671,6 +1683,7 @@ func getSupportedQueries() map[string]*sqltypes.Result {
 		sqlTurnoffBinlog:                                     {},
 		fmt.Sprintf(sqlCreateSidecarDB, "_vt"):               {},
 		fmt.Sprintf(sqlCreateTableRedoLogTransaction, "_vt"): {},
+		fmt.Sprintf(sqlAlterTableRedoLogTransaction, "_vt"):  {},
 		fmt.Sprintf(sqlCreateTableRedoLogStatement, "_vt"):   {},
 		fmt.Sprintf(sqlCreateTableTransaction, "_vt"):        {},
 		fmt.Sprintf(sqlCreateTableParticipant, "_vt"):        {},
@@ -1787,6 +1800,7 @@ func getSupportedQueries() map[string]*sqltypes.Result {
 				},
 			},
 		},
+		fmt.Sprintf(sqlReadAllRedo, "_vt", "_vt"): {},
 	}
 }
 

@@ -248,8 +248,12 @@ func (qe *QueryEngine) IsMySQLReachable() bool {
 }
 
 // PrepareFromRedo replays and prepares the transactions
-// from the redo log. This is called when a tablet becomes
+// from the redo log. It also loads previously failed transactions
+// into the reserved list. This is called when a tablet becomes
 // a master.
+// TODO(sougou): Make this function set the lastId for tx pool to be
+// greater than all those used by dtids. This will prevent dtid
+// collisions.
 func (qe *QueryEngine) PrepareFromRedo() error {
 	ctx := context.Background()
 	var allErr concurrency.AllErrorRecorder
@@ -258,13 +262,13 @@ func (qe *QueryEngine) PrepareFromRedo() error {
 		return err
 	}
 	defer readConn.Recycle()
-	transactions, err := qe.twoPC.ReadPrepared(ctx, readConn)
+	prepared, failed, err := qe.twoPC.ReadAllRedo(ctx, readConn)
 	if err != nil {
 		return err
 	}
 
 outer:
-	for dtid, tx := range transactions {
+	for dtid, tx := range prepared {
 		conn, err := qe.txPool.LocalBegin(ctx)
 		if err != nil {
 			allErr.RecordError(err)
@@ -287,6 +291,9 @@ outer:
 			continue
 		}
 	}
+	for _, dtid := range failed {
+		qe.preparedPool.SetFailed(dtid)
+	}
 	return allErr.Error()
 }
 
@@ -301,7 +308,7 @@ func (qe *QueryEngine) RollbackTransactions() {
 	// this function. In case of any such change, this will
 	// have to be revisited.
 	qe.txPool.RollbackNonBusy(ctx)
-	for _, c := range qe.preparedPool.GetAll() {
+	for _, c := range qe.preparedPool.FetchAll() {
 		qe.txPool.LocalConclude(ctx, c)
 	}
 
