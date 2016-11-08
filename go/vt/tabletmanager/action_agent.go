@@ -25,6 +25,7 @@ import (
 	"encoding/hex"
 	"flag"
 	"fmt"
+	"math/rand"
 	"net"
 	"os"
 	"path"
@@ -647,4 +648,34 @@ func (agent *ActionAgent) checkTabletMysqlPort(ctx context.Context, tablet *topo
 
 	// update worked, return the new record
 	return newTablet
+}
+
+// withRetry will exponentially back off and retry a function upon
+// failure, until the context is Done(), or the function returned with
+// no error. We use this at startup with a context timeout set to the
+// value of the init_timeout flag, so we can try to modify the
+// topology over a longer period instead of dying right away.
+func (agent *ActionAgent) withRetry(ctx context.Context, description string, work func() error) error {
+	backoff := 1 * time.Second
+	for {
+		err := work()
+		if err == nil || err == context.Canceled || err == context.DeadlineExceeded {
+			return err
+		}
+
+		log.Warningf("%v failed (%v), backing off %v before retrying", description, err, backoff)
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(backoff):
+			// Exponential backoff with 1.3 as a factor,
+			// and randomized down by at most 20
+			// percent. The generated time series looks
+			// good.  Also note rand.Seed is called at
+			// init() time in binlog_players.go.
+			f := float64(backoff) * 1.3
+			f -= f * 0.2 * rand.Float64()
+			backoff = time.Duration(f)
+		}
+	}
 }

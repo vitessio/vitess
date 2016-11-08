@@ -64,14 +64,19 @@ func (agent *ActionAgent) InitTablet(port, gRPCPort int32) error {
 		return fmt.Errorf("cannot validate shard name %v: %v", *initShard, err)
 	}
 
-	// create a context for this whole operation
+	// Create a context for this whole operation.  Note we will
+	// retry some actions upon failure up to this context expires.
 	ctx, cancel := context.WithTimeout(agent.batchCtx, *initTimeout)
 	defer cancel()
 
-	// read the shard, create it if necessary
-	log.Infof("Reading shard record %v/%v", *initKeyspace, shard)
-	si, err := agent.TopoServer.GetOrCreateShard(ctx, *initKeyspace, shard)
-	if err != nil {
+	// Read the shard, create it if necessary.
+	log.Infof("Reading/creating keyspace and shard records for %v/%v", *initKeyspace, shard)
+	var si *topo.ShardInfo
+	if err := agent.withRetry(ctx, "creating keyspace and shard", func() error {
+		var err error
+		si, err = agent.TopoServer.GetOrCreateShard(ctx, *initKeyspace, shard)
+		return err
+	}); err != nil {
 		return fmt.Errorf("InitTablet cannot GetOrCreateShard shard: %v", err)
 	}
 	if si.MasterAlias != nil && topoproto.TabletAliasEqual(si.MasterAlias, agent.TabletAlias) {
@@ -98,15 +103,17 @@ func (agent *ActionAgent) InitTablet(port, gRPCPort int32) error {
 
 	// See if we need to add the tablet's cell to the shard's cell list.
 	if !si.HasCell(agent.TabletAlias.Cell) {
-		si, err = agent.TopoServer.UpdateShardFields(ctx, *initKeyspace, shard, func(si *topo.ShardInfo) error {
-			if si.HasCell(agent.TabletAlias.Cell) {
-				// Someone else already did it.
-				return topo.ErrNoUpdateNeeded
-			}
-			si.Cells = append(si.Cells, agent.TabletAlias.Cell)
-			return nil
-		})
-		if err != nil {
+		if err := agent.withRetry(ctx, "updating Cells list in Shard if necessary", func() error {
+			si, err = agent.TopoServer.UpdateShardFields(ctx, *initKeyspace, shard, func(si *topo.ShardInfo) error {
+				if si.HasCell(agent.TabletAlias.Cell) {
+					// Someone else already did it.
+					return topo.ErrNoUpdateNeeded
+				}
+				si.Cells = append(si.Cells, agent.TabletAlias.Cell)
+				return nil
+			})
+			return err
+		}); err != nil {
 			return fmt.Errorf("couldn't add tablet's cell to shard record: %v", err)
 		}
 	}
