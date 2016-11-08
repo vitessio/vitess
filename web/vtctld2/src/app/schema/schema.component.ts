@@ -102,28 +102,40 @@ export class SchemaComponent implements OnInit {
 
       if (!vSchemaResp.Error) {
         vSchemaResp = JSON.parse(vSchemaResp.Output);
-        let vSchemas = Object.keys(vSchemaResp.vindexes).map(vname => {
-          let vtype = vSchemaResp.vindexes[vname].type;
-          let vparams = vSchemaResp.vindexes[vname].params ? vSchemaResp.vindexes[vname].params : '';
-          let vowner = vSchemaResp.vindexes[vname].owner ? vSchemaResp.vindexes[vname].owner : '';
-          return {name: vname, type: vtype, params: vparams, owner: vowner};
-        });
-        this.vSchemas = vSchemas;
+        if ('vindexes' in vSchemaResp) {
+          let vSchemas = Object.keys(vSchemaResp.vindexes).map(vname => {
+            let vtype = vSchemaResp.vindexes[vname].type;
+            let vparams = vSchemaResp.vindexes[vname].params ? vSchemaResp.vindexes[vname].params : '';
+            let vowner = vSchemaResp.vindexes[vname].owner ? vSchemaResp.vindexes[vname].owner : '';
+            return {name: vname, type: vtype, params: vparams, owner: vowner};
+          });
+          this.vSchemas = vSchemas;
+        } else {
+          this.vSchemas = [];
+        }
       }
 
       if (!schemaResp.Error) {
         schemaResp = JSON.parse(schemaResp.Output);
-        if (!vSchemaResp.Error) {
-          let vindexes = this.createVindexMap(vSchemaResp.tables);
-          this.schemas = schemaResp.table_definitions.map(table => {
-            return this.parseColumns(table, vindexes);
-          });
+        if ('tables' in schemaResp) {
+          if (!vSchemaResp.Error && 'tables' in vSchemaResp) {
+            let vindexes = this.createVindexMap(vSchemaResp.tables);
+            this.schemas = schemaResp.table_definitions.map(table => {
+              return this.parseColumns(table, vindexes);
+            });
+          } else {
+            this.schemas = schemaResp.table_definitions.map(table => {
+              return this.parseColumns(table);
+            });
+          }
         } else {
-          this.schemas = schemaResp.table_definitions.map(table => {
-            return this.parseColumns(table);
-          });
+          this.schemas = [];
         }
       }
+
+      // We just reloaded the data, clear the selected value.
+      this.selectedSchema = undefined;
+      this.selectedVSchema = undefined;
     });
   }
 
