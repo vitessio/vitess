@@ -36,7 +36,7 @@ spec:
     spec:
       containers:
         - name: vtctld
-          image: {{.image | default $0.image}}
+          image: {{.image | default $0.image | quote}}
           livenessProbe:
             httpGet:
               path: /debug/vars

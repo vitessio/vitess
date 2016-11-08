@@ -6,6 +6,8 @@
 {{ with $cell.vtctld }}{{ include "vtctld" (tuple $ $cell .) }}{{ end }}
 ---
 {{ with $cell.vtgate }}{{ include "vtgate" (tuple $ $cell .) }}{{ end }}
+---
+{{ with $cell.orchestrator }}{{ include "orchestrator" (tuple $ $cell .) }}{{ end }}
 
 # Tablets for keyspaces
 {{ range $keyspace := $cell.keyspaces }}

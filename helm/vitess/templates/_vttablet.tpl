@@ -23,7 +23,7 @@ metadata:
 spec:
   containers:
     - name: vttablet
-      image: {{.image | default $0.image}}
+      image: {{.image | default $0.image | quote}}
       livenessProbe:
         httpGet:
           path: /debug/vars
@@ -92,7 +92,7 @@ spec:
           END_OF_COMMAND
           )" vitess
     - name: mysql
-      image: {{.image | default $0.image}}
+      image: {{.image | default $0.image | quote}}
       volumeMounts:
         - name: syslog
           mountPath: /dev/log

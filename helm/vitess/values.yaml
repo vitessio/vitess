@@ -17,6 +17,9 @@ topology:
     - name: "global"
       etcd:
         replicas: 3
+      orchestrator:
+        # NOTE: Our config currently only supports 1 orchestrator replica.
+        replicas: 1
     - name: "test"
       etcd:
         replicas: 3
@@ -50,6 +53,18 @@ etcd:
   resources:
     limits:
       memory: "128Mi"
+      cpu: "100m"
+
+# Default values for orchestrator resources defined in 'topology'.
+orchestrator:
+  image: "vitess/orchestrator:latest"
+  resources:
+    limits:
+      memory: "512Mi"
+      cpu: "100m"
+  mysqlResources:
+    limits:
+      memory: "512Mi"
       cpu: "100m"
 
 # Default values for vtctld resources defined in 'topology'.
