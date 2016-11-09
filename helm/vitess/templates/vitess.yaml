@@ -1,0 +1,28 @@
+# Create requested resources in each cell.
+{{ range $cell := $.Values.topology.cells }}
+---
+{{ with $cell.etcd }}{{ include "etcd" (tuple $ $cell .) }}{{ end }}
+---
+{{ with $cell.vtctld }}{{ include "vtctld" (tuple $ $cell .) }}{{ end }}
+---
+{{ with $cell.vtgate }}{{ include "vtgate" (tuple $ $cell .) }}{{ end }}
+---
+{{ with $cell.orchestrator }}{{ include "orchestrator" (tuple $ $cell .) }}{{ end }}
+
+# Tablets for keyspaces
+{{ range $keyspace := $cell.keyspaces }}
+{{ range $shard := $keyspace.shards }}
+{{ range $tablet := $shard.tablets }}
+
+# This inner-most loop is a hack because we don't yet use StatefulSet:
+{{ range $index := until (atoi (print $tablet.vttablet.replicas)) }}
+---
+{{ with $tablet.vttablet }}{{ include "vttablet" (tuple $ $cell $keyspace $shard $tablet $index .) }}{{ end }}
+{{ end }}
+
+{{ end }}
+{{ end }}
+{{ end }}
+
+{{ end }}
+
