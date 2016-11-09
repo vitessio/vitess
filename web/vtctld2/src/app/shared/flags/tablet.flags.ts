@@ -26,6 +26,16 @@ export class RefreshTabletFlags {
   }
 }
 
+export class IgnoreHealthCheckFlags {
+  flags= {};
+  constructor(tabletAlias) {
+    this.flags['tablet_alias'] = new TabletAlias(0, 'tablet_alias', tabletAlias);
+    this.flags['tablet_alias']['positional'] = true;
+    this.flags['ignore_regexp'] = new IgnoreRegexpFlag(1, 'ignore_regexp', '');
+    this.flags['ignore_regexp']['positional'] = true;
+  }
+}
+
 // Individual flags for vtctl actions.
 export class AllowMasterFlag extends CheckBoxFlag {
   constructor(position: number, id: string, value= false) {
@@ -38,3 +48,10 @@ export class TabletAlias extends InputFlag {
     super(position, id, '', '', value, false);
   }
 }
+
+export class IgnoreRegexpFlag extends InputFlag {
+  constructor(position: number, id: string, value= '', show= true) {
+    super(position, id, 'Ignore Regexp', 'The regexp to use to ignore health errors.', value, show);
+  }
+}
+

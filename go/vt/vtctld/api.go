@@ -31,7 +31,8 @@ import (
 )
 
 var (
-	localCell = flag.String("cell", "", "cell to use")
+	localCell        = flag.String("cell", "", "cell to use")
+	showTopologyCRUD = flag.Bool("vtctld_show_topology_crud", true, "Controls the display of the CRUD topology actions in the vtctld UI.")
 )
 
 // This file implements a REST-style API for the vtctld web interface.
@@ -525,9 +526,10 @@ func initAPI(ctx context.Context, ts topo.Server, actions *ActionRepository, rea
 		}
 
 		resp := make(map[string]interface{})
-		resp["showStatus"] = *enableRealtimeStats
-		resp["showWorkflows"] = *workflowManagerInit
 		resp["activeReparents"] = !*vtctl.DisableActiveReparents
+		resp["showStatus"] = *enableRealtimeStats
+		resp["showTopologyCRUD"] = *showTopologyCRUD
+		resp["showWorkflows"] = *workflowManagerInit
 		data, err := json.MarshalIndent(resp, "", "  ")
 		if err != nil {
 			return fmt.Errorf("json error: %v", err)

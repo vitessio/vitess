@@ -8,16 +8,18 @@ import { Observable } from 'rxjs/Observable';
 // is displayed, and can then be used anywhere.
 @Injectable()
 export class FeaturesService {
-  showStatus = false;
-  showWorkflows = false;
   activeReparents = false;
+  showStatus = false;
+  showTopologyCRUD = false;
+  showWorkflows = false;
 
   private featuresUrl = '../api/features';
   constructor(private http: Http) {
     this.getFeatures().subscribe(update => {
-      this.showStatus = update.showStatus;
-      this.showWorkflows = update.showWorkflows;
       this.activeReparents = update.activeReparents;
+      this.showStatus = update.showStatus;
+      this.showTopologyCRUD = update.showTopologyCRUD;
+      this.showWorkflows = update.showWorkflows;
     });
   }
 

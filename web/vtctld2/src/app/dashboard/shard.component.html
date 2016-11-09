@@ -12,7 +12,13 @@
           <p-menu #rowMenu popup="popup" [model]="tabletActions"></p-menu>
         </template>
       </p-column>
-      <p-column field="type" header="Type" sortable="true"></p-column>
+      <p-column field="type" header="Type" sortable="custom" (sortFunction)="sortByType($event)">
+        <template let-tab="rowData">
+          <span *ngIf="tab.type === 'master'"><strong>master</strong></span>
+          <span *ngIf="tab.type === 'replica' || tab.type === 'rdonly'"><em>{{tab.type}}</em></span>
+          <span *ngIf="tab.type !== 'master' && tab.type !== 'replica' && tab.type !== 'rdonly'">{{tab.type}}</span>
+        </template>
+      </p-column>
       <p-column field="cell" header="Cell" sortable="true"></p-column>
       <p-column field="uid" header="UID" sortable="true"></p-column>
       <p-column field="hostname" header="Host"></p-column>
