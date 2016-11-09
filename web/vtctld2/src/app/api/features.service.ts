@@ -12,6 +12,7 @@ export class FeaturesService {
   showStatus = false;
   showTopologyCRUD = false;
   showWorkflows = false;
+  workflows = [];
 
   private featuresUrl = '../api/features';
   constructor(private http: Http) {
@@ -20,6 +21,7 @@ export class FeaturesService {
       this.showStatus = update.showStatus;
       this.showTopologyCRUD = update.showTopologyCRUD;
       this.showWorkflows = update.showWorkflows;
+      this.workflows = update.workflows;
     });
   }
 
