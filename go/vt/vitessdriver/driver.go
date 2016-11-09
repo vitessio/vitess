@@ -12,11 +12,11 @@ import (
 	"fmt"
 	"time"
 
-	log "github.com/golang/glog"
+	"golang.org/x/net/context"
+
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateconn"
-	"golang.org/x/net/context"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
@@ -30,23 +30,10 @@ func init() {
 // It opens a database connection to vtgate running at "address".
 //
 // Note that this is the vtgate v3 mode and requires a loaded VSchema.
-func Open(address, tabletType string, timeout time.Duration) (*sql.DB, error) {
-	return OpenShard(address, "" /* keyspace */, "" /* shard */, tabletType, timeout)
-}
-
-// OpenShard connects to vtgate running at "address".
-//
-// Unlike Open(), all queries will target a specific shard in a given keyspace
-// ("fallback" mode to vtgate v1).
-//
-// This mode is recommended when you want to try out Vitess initially because it
-// does not require defining a VSchema. Just replace the MySQL/MariaDB driver
-// invocation in your application with the Vitess driver.
-func OpenShard(address, keyspace, shard, tabletType string, timeout time.Duration) (*sql.DB, error) {
+func Open(address, keyspace, tabletType string, timeout time.Duration) (*sql.DB, error) {
 	c := newDefaultConfiguration()
 	c.Address = address
 	c.Keyspace = keyspace
-	c.Shard = shard
 	c.TabletType = tabletType
 	c.Timeout = timeout
 	return OpenWithConfiguration(c)
@@ -56,22 +43,13 @@ func OpenShard(address, keyspace, shard, tabletType string, timeout time.Duratio
 // the results.
 //
 // The streaming mode is recommended for large results.
-func OpenForStreaming(address, tabletType string, timeout time.Duration) (*sql.DB, error) {
-	return OpenShardForStreaming(address, "" /* keyspace */, "" /* shard */, tabletType, timeout)
-}
-
-// OpenShardForStreaming is the same as OpenShard() but uses streaming RPCs to
-// retrieve the results.
-//
-// The streaming mode is recommended for large results.
-func OpenShardForStreaming(address, keyspace, shard, tabletType string, timeout time.Duration) (*sql.DB, error) {
+func OpenForStreaming(address, keyspace, tabletType string, timeout time.Duration) (*sql.DB, error) {
 	c := newDefaultConfiguration()
 	c.Address = address
 	c.Keyspace = keyspace
-	c.Shard = shard
 	c.TabletType = tabletType
-	c.Timeout = timeout
 	c.Streaming = true
+	c.Timeout = timeout
 	return OpenWithConfiguration(c)
 }
 
@@ -111,18 +89,11 @@ func (d drv) Open(name string) (driver.Conn, error) {
 	if err != nil {
 		return nil, err
 	}
-	if c.Keyspace == "" && c.Shard != "" {
-		return nil, fmt.Errorf("the shard parameter requires a keyspace parameter. shard: %v", c.Shard)
-	}
-	if c.useExecuteShards() {
-		log.Infof("Sending queries only to keyspace/shard: %v/%v", c.Keyspace, c.Shard)
-	}
 	c.tabletTypeProto, err = topoproto.ParseTabletType(c.TabletType)
 	if err != nil {
 		return nil, err
 	}
-	err = c.dial()
-	if err != nil {
+	if err = c.dial(); err != nil {
 		return nil, err
 	}
 	return c, nil
@@ -143,22 +114,8 @@ type Configuration struct {
 	// Format: hostname:port
 	Address string
 
-	// Keyspace of a specific keyspace to target.
-	//
-	// If Shard is also specified, vtgate v1 will be used instead
-	// of v3 (ExecuteShards and StreamExecuteShards), and all
-	// requests will be sent only to that particular shard.  This
-	// functionality is meant for initial migrations from
-	// MySQL/MariaDB to Vitess.
-	//
-	// If Shard is not specified, we will use the v3 API (Execute
-	// and StreamExecute calls), and specify this Keyspace as the
-	// default keyspace value.
+	// Keyspace specifies the default keyspace.
 	Keyspace string
-
-	// Shard of a specific keyspace and shard to target. See
-	// Keyspace comment, this will disable vtgate v3.
-	Shard string
 
 	// TabletType is the type of tablet you want to access and affects the
 	// freshness of read data.
@@ -176,6 +133,7 @@ type Configuration struct {
 	Streaming bool
 
 	// Timeout after which a pending query will be aborted.
+	// TODO(sougou): deprecate once we switch to go1.8.
 	Timeout time.Duration
 }
 
@@ -204,7 +162,6 @@ func (c *Configuration) setDefaults() {
 	if c.TabletType == "" {
 		c.TabletType = "master"
 	}
-	// c.Streaming = false is enforced by Go's zero value.
 }
 
 type conn struct {
@@ -225,12 +182,12 @@ func (c *conn) dial() error {
 	return err
 }
 
-func (c *conn) useExecuteShards() bool {
-	return c.Keyspace != "" && c.Shard != ""
-}
-
 func (c *conn) Prepare(query string) (driver.Stmt, error) {
 	return &stmt{c: c, query: query}, nil
+}
+
+func (c *conn) PrepareContext(ctx context.Context, query string) (driver.Stmt, error) {
+	return c.Prepare(query)
 }
 
 func (c *conn) Close() error {
@@ -239,11 +196,12 @@ func (c *conn) Close() error {
 }
 
 func (c *conn) Begin() (driver.Tx, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), c.Timeout)
+	defer cancel()
+
 	if c.Streaming {
 		return nil, errors.New("transaction not allowed for streaming connection")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), c.Timeout)
-	defer cancel()
 	tx, err := c.vtgateConn.Begin(ctx)
 	if err != nil {
 		return nil, err
@@ -253,27 +211,81 @@ func (c *conn) Begin() (driver.Tx, error) {
 }
 
 func (c *conn) Commit() error {
+	ctx, cancel := context.WithTimeout(context.Background(), c.Timeout)
+	defer cancel()
+	return c.CommitContext(ctx)
+}
+
+func (c *conn) CommitContext(ctx context.Context) error {
 	if c.tx == nil {
 		return errors.New("commit: not in transaction")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), c.Timeout)
 	defer func() {
-		cancel()
 		c.tx = nil
 	}()
 	return c.tx.Commit(ctx)
 }
 
 func (c *conn) Rollback() error {
+	ctx, cancel := context.WithTimeout(context.Background(), c.Timeout)
+	defer cancel()
+	return c.RollbackContext(ctx)
+}
+
+func (c *conn) RollbackContext(ctx context.Context) error {
 	if c.tx == nil {
 		return nil
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), c.Timeout)
 	defer func() {
-		cancel()
 		c.tx = nil
 	}()
 	return c.tx.Rollback(ctx)
+}
+
+func (c *conn) Exec(query string, args []driver.Value) (driver.Result, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), c.Timeout)
+	defer cancel()
+
+	if c.Streaming {
+		return nil, errors.New("Exec not allowed for streaming connections")
+	}
+
+	qr, err := c.exec(ctx, query, bindVarsFromValues(args))
+	if err != nil {
+		return nil, err
+	}
+	return result{int64(qr.InsertID), int64(qr.RowsAffected)}, nil
+}
+
+func (c *conn) Query(query string, args []driver.Value) (driver.Rows, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), c.Timeout)
+	bindVars := bindVarsFromValues(args)
+
+	if c.Streaming {
+		stream, err := c.vtgateConn.StreamExecute(ctx, query, bindVars, c.tabletTypeProto, nil)
+		if err != nil {
+			cancel()
+			return nil, err
+		}
+		return newStreamingRows(stream, cancel), nil
+	}
+	// Do not cancel in case of a streaming query.
+	// It will be called when streamingRows is closed later.
+	defer cancel()
+
+	qr, err := c.exec(ctx, query, bindVars)
+	if err != nil {
+		return nil, err
+	}
+	return newRows(qr), nil
+}
+
+func (c *conn) exec(ctx context.Context, query string, bindVars map[string]interface{}) (*sqltypes.Result, error) {
+	if c.tx != nil {
+		return c.tx.Execute(ctx, query, bindVars, c.tabletTypeProto, nil)
+	}
+	// Non-transactional case.
+	return c.vtgateConn.Execute(ctx, query, bindVars, c.tabletTypeProto, nil)
 }
 
 type stmt struct {
@@ -291,65 +303,14 @@ func (s *stmt) NumInput() int {
 }
 
 func (s *stmt) Exec(args []driver.Value) (driver.Result, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), s.c.Timeout)
-	defer cancel()
-
-	if s.c.Streaming {
-		return nil, errors.New("Exec not allowed for streaming connections")
-	}
-
-	qr, err := s.executeVitess(ctx, args)
-	if err != nil {
-		return nil, err
-	}
-	return result{int64(qr.InsertID), int64(qr.RowsAffected)}, nil
+	return s.c.Exec(s.query, args)
 }
 
 func (s *stmt) Query(args []driver.Value) (driver.Rows, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), s.c.Timeout)
-
-	if s.c.Streaming {
-		var stream sqltypes.ResultStream
-		var err error
-		if s.c.useExecuteShards() {
-			stream, err = s.c.vtgateConn.StreamExecuteShards(ctx, s.query, s.c.Keyspace, []string{s.c.Shard}, makeBindVars(args), s.c.tabletTypeProto, nil)
-		} else {
-			stream, err = s.c.vtgateConn.StreamExecute(ctx, s.query, makeBindVars(args), s.c.tabletTypeProto, nil)
-		}
-		if err != nil {
-			return nil, err
-		}
-		return newStreamingRows(stream, cancel), nil
-	}
-	// Do not cancel in case of a streaming query. It will do it itself.
-	defer cancel()
-
-	qr, err := s.executeVitess(ctx, args)
-	if err != nil {
-		return nil, err
-	}
-	return newRows(qr), nil
+	return s.c.Query(s.query, args)
 }
 
-func (s *stmt) executeVitess(ctx context.Context, args []driver.Value) (*sqltypes.Result, error) {
-	if s.c.tx != nil {
-		if s.c.useExecuteShards() {
-			return s.c.tx.ExecuteShards(ctx, s.query, s.c.Keyspace, []string{s.c.Shard}, makeBindVars(args), s.c.tabletTypeProto, nil)
-		}
-		return s.c.tx.Execute(ctx, s.query, makeBindVars(args), s.c.tabletTypeProto, nil)
-	}
-
-	// Non-transactional case.
-	if s.c.useExecuteShards() {
-		return s.c.vtgateConn.ExecuteShards(ctx, s.query, s.c.Keyspace, []string{s.c.Shard}, makeBindVars(args), s.c.tabletTypeProto, nil)
-	}
-	return s.c.vtgateConn.Execute(ctx, s.query, makeBindVars(args), s.c.tabletTypeProto, nil)
-}
-
-func makeBindVars(args []driver.Value) map[string]interface{} {
-	if len(args) == 0 {
-		return map[string]interface{}{}
-	}
+func bindVarsFromValues(args []driver.Value) map[string]interface{} {
 	bv := make(map[string]interface{}, len(args))
 	for i, v := range args {
 		bv[fmt.Sprintf("v%d", i+1)] = v

@@ -34,8 +34,11 @@ func newStreamingRows(stream sqltypes.ResultStream, cancel context.CancelFunc) d
 }
 
 func (ri *streamingRows) Columns() []string {
-	ri.checkFields()
 	if ri.failed != nil {
+		return nil
+	}
+	if err := ri.checkFields(); err != nil {
+		_ = ri.setErr(err)
 		return nil
 	}
 	cols := make([]string, 0, len(ri.fields))
@@ -46,19 +49,27 @@ func (ri *streamingRows) Columns() []string {
 }
 
 func (ri *streamingRows) Close() error {
+	if ri.cancel != nil {
+		ri.cancel()
+	}
 	return nil
 }
 
 func (ri *streamingRows) Next(dest []driver.Value) error {
-	ri.checkFields()
 	if ri.failed != nil {
 		return ri.failed
 	}
-	for ri.qr == nil || ri.index == len(ri.qr.Rows) {
-		ri.fetchNext()
-		if ri.failed != nil {
-			return ri.failed
+	if err := ri.checkFields(); err != nil {
+		return ri.setErr(err)
+	}
+	// If no results were fetched or rows exhausted,
+	// loop until we get a non-zero number of rows.
+	for ri.qr == nil || ri.index >= len(ri.qr.Rows) {
+		qr, err := ri.stream.Recv()
+		if err != nil {
+			return ri.setErr(err)
 		}
+		ri.qr = qr
 		ri.index = 0
 	}
 	populateRow(dest, ri.qr.Rows[ri.index])
@@ -67,38 +78,23 @@ func (ri *streamingRows) Next(dest []driver.Value) error {
 }
 
 // checkFields fetches the first packet from the channel, which
-// should contain the field info. It sets ri.failed if it fails.
-func (ri *streamingRows) checkFields() {
-	if ri.failed != nil {
-		return
-	}
+// should contain the field info.
+func (ri *streamingRows) checkFields() error {
 	if ri.fields != nil {
-		return
+		return nil
 	}
 	qr, err := ri.stream.Recv()
 	if err != nil {
-		ri.setErr(err)
-		return
+		return err
 	}
 	ri.fields = qr.Fields
 	if ri.fields == nil {
-		ri.failed = errors.New("first packet did not return fields")
+		return errors.New("first packet did not return fields")
 	}
+	return nil
 }
 
-// fetchNext fetches the next packet from the channel.
-func (ri *streamingRows) fetchNext() {
-	qr, err := ri.stream.Recv()
-	if err != nil {
-		ri.setErr(err)
-		return
-	}
-	ri.qr = qr
-}
-
-func (ri *streamingRows) setErr(err error) {
+func (ri *streamingRows) setErr(err error) error {
 	ri.failed = err
-	if ri.cancel != nil {
-		ri.cancel()
-	}
+	return err
 }

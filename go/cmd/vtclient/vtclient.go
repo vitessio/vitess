@@ -34,7 +34,6 @@ in the form of :v1, :v2, etc.
 	streaming     = flag.Bool("streaming", false, "use a streaming query")
 	bindVariables = newBindvars("bind_variables", "bind variables as a json list")
 	keyspace      = flag.String("keyspace", "", "Keyspace of a specific keyspace/shard to target. If shard is also specified, disables v3. Otherwise it's the default keyspace to use.")
-	shard         = flag.String("shard", "", "Shard of a specific keyspace/shard to target. Disables vtgate v3. Requires keyspace.")
 	jsonOutput    = flag.Bool("json", false, "Output JSON instead of human-readable table")
 )
 
@@ -110,7 +109,6 @@ func main() {
 		Protocol:   *vtgateconn.VtgateProtocol,
 		Address:    *server,
 		Keyspace:   *keyspace,
-		Shard:      *shard,
 		TabletType: *tabletType,
 		Timeout:    *timeout,
 		Streaming:  *streaming,

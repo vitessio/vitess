@@ -625,7 +625,7 @@ class VtGate(object):
     """Returns the vars for this process."""
     return get_vars(self.port)
 
-  def vtclient(self, sql, keyspace=None, shard=None, tablet_type='master',
+  def vtclient(self, sql, keyspace=None, tablet_type='master',
                bindvars=None, streaming=False,
                verbose=False, raise_on_error=True, json_output=False):
     """Uses the vtclient binary to send a query to vtgate."""
@@ -638,8 +638,6 @@ class VtGate(object):
       args.append('-json')
     if keyspace:
       args.extend(['-keyspace', keyspace])
-    if shard:
-      args.extend(['-shard', shard])
     if bindvars:
       args.extend(['-bind_variables', json.dumps(bindvars)])
     if streaming:
