@@ -21,7 +21,7 @@ As a reviewer you can approve a pull request through two ways:
 ## Merging a Pull Request
 
 Pull requests can be merged after they were approved and the Travis tests have passed.
-External contributions will be merged a team member.
+External contributions will be merged by a team member.
 Internal team members can merge their **own** pull requests.
 
 ## What reviewers should look for
