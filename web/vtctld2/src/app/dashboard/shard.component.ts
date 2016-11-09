@@ -7,7 +7,7 @@ import { DialogContent } from '../shared/dialog/dialog-content';
 import { DialogSettings } from '../shared/dialog/dialog-settings';
 import { DeleteShardFlags, InitShardMasterFlags, ValidateShardFlags, TabExtRepFlags,
          PlanRepShardFlags, EmergencyRepShardFlags, ShardReplicationPosFlags, ValidateVerShardFlags } from '../shared/flags/shard.flags';
-import { DeleteTabletFlags, PingTabletFlags, RefreshTabletFlags } from '../shared/flags/tablet.flags';
+import { DeleteTabletFlags, IgnoreHealthCheckFlags, PingTabletFlags, RefreshTabletFlags } from '../shared/flags/tablet.flags';
 import { FeaturesService } from '../api/features.service';
 import { KeyspaceService } from '../api/keyspace.service';
 import { TabletService } from '../api/tablet.service';
@@ -65,6 +65,7 @@ export class ShardComponent implements OnInit, OnDestroy {
     });
   }
 
+  // getActions returns the actions on a shard.
   getActions() {
     let result: MenuItem[] = [
       {label: 'Status', items: [
@@ -73,11 +74,15 @@ export class ShardComponent implements OnInit, OnDestroy {
         {label: 'Shard Replication Positions', command: (event) => {this.openShardReplicationPosDialog(); }},
       ]},
       {label: 'Change', items: [
-        {label: 'Delete', command: (event) => {this.openDeleteShardDialog(); }},
         {label: 'Externally Reparent', command: (event) => {this.openTabExtRepDialog(); }},
       ]},
     ];
+    if (this.featuresService.showTopologyCRUD) {
+      // Push a new individual item into the 'Change' section.
+      result[1].items.push({label: 'Delete Shard', command: (event) => {this.openDeleteShardDialog(); }});
+    }
     if (this.featuresService.activeReparents) {
+      // Push an entire new section.
       result.push(
         {label: 'Reparent', items: [
           {label: 'Initialize Shard Master', command: (event) => {this.openInitShardMasterDialog(); }},
@@ -89,6 +94,7 @@ export class ShardComponent implements OnInit, OnDestroy {
     return result;
   }
 
+  // getTabletActions returns the actions on a tablet.
   getTabletActions() {
     let result: MenuItem[] = [
       {label: 'Status', items: [
@@ -97,15 +103,19 @@ export class ShardComponent implements OnInit, OnDestroy {
         {label: 'Run Health Check', command: (event) => {this.openRunHealthCheckDialog(); }},
       ]},
       {label: 'Change', items: [
-        {label: 'Set ReadOnly', command: (event) => {this.openSetReadOnlyDialog(); }},
-        {label: 'Set ReadWrite', command: (event) => {this.openSetReadWriteDialog(); }},
+        {label: 'Ignore Health Error', command: (event) => {this.openIgnoreHealthErrorDialog(); }},
         {label: 'Start Slave', command: (event) => {this.openStartSlaveDialog(); }},
         {label: 'Stop Slave', command: (event) => {this.openStopSlaveDialog(); }},
-        {label: 'Ignore Health Error', command: (event) => {this.openIgnoreHealthErrorDialog(); }},
-        {label: 'Delete', command: (event) => {this.openDeleteTabletDialog(); }},
+        {label: 'Delete Tablet', command: (event) => {this.openDeleteTabletDialog(); }},
       ]},
     ];
     if (this.featuresService.activeReparents) {
+      // Add a couple new items to the 'Change' section.
+      result[1].items.push(
+        {label: 'Set ReadOnly', command: (event) => {this.openSetReadOnlyDialog(); }},
+        {label: 'Set ReadWrite', command: (event) => {this.openSetReadWriteDialog(); }},
+      );
+      // Add an entire section.
       result.push(
         {label: 'Reparent', items: [
           {label: 'Demote Master', command: (event) => {this.openDemoteMasterDialog(); }},
@@ -122,6 +132,38 @@ export class ShardComponent implements OnInit, OnDestroy {
 
   getUrl(tablet) {
     return `http://${tablet.hostname}:${tablet.port_map.vt}`;
+  }
+
+  // typeIndex returns a sortable string for a tablet type.
+  // We make master first, then replica, then rdonly, then
+  // any other type alphabetically ordered.
+  typeIndex(t) {
+    if (t === 'master') {
+      return '0master';
+    }
+    if (t === 'replica') {
+      return '1replica';
+    }
+    if (t === 'rdonly') {
+      return '2rdonly';
+    }
+    return t;
+  }
+
+  // sortByType sorts the tablets by type, using typeIndex.
+  sortByType(event) {
+    let t = this;
+    this.tablets.sort(function(t1, t2) {
+      let s1 = t.typeIndex(t1.type);
+      let s2 = t.typeIndex(t2.type);
+      if (s1 < s2) {
+        return -1 * event.order;
+      }
+      if (s1 > s2) {
+        return 1 * event.order;
+      }
+      return 0;
+    });
   }
 
   ngOnDestroy() {
@@ -165,7 +207,7 @@ export class ShardComponent implements OnInit, OnDestroy {
   }
 
   openDeleteShardDialog() {
-    this.dialogSettings = new DialogSettings('Delete', `Delete Shard ${this.keyspaceName}/${this.shardName}`,
+    this.dialogSettings = new DialogSettings('Delete Shard', `Delete Shard ${this.keyspaceName}/${this.shardName}`,
                                              `Are you sure you want to delete ${this.keyspaceName}/${this.shardName}?`,
                                              'There was a problem deleting shard {{shard_ref}}:');
     this.dialogSettings.setMessage('Deleted {{shard_ref}}');
@@ -176,7 +218,7 @@ export class ShardComponent implements OnInit, OnDestroy {
   }
 
   openValidateShardDialog() {
-    this.dialogSettings = new DialogSettings('Validate', `Validate Shard ${this.keyspaceName}/${this.shardName}`, '',
+    this.dialogSettings = new DialogSettings('Validate Shard', `Validate Shard ${this.keyspaceName}/${this.shardName}`, '',
                                              'There was a problem validating shard {{shard_ref}}:');
     this.dialogSettings.setMessage('Validated {{shard_ref}}');
     let flags = new ValidateShardFlags(this.keyspaceName, this.shardName).flags;
@@ -185,7 +227,8 @@ export class ShardComponent implements OnInit, OnDestroy {
   }
 
   openInitShardMasterDialog() {
-    this.dialogSettings = new DialogSettings('Initialize', `Initialize Shard ${this.keyspaceName}/${this.shardName} Master`, '',
+    this.dialogSettings = new DialogSettings('Initialize Shard Master', `Initialize Shard ${this.keyspaceName}/${this.shardName} Master`,
+                                             'This will reset the replication on all hosts and make the designated tablet the master.',
                                              'There was a problem initializing a shard master for {{shard_ref}}:');
     this.dialogSettings.setMessage('Initialized shard master for {{shard_ref}}');
     this.dialogSettings.onCloseFunction = this.refreshShardView.bind(this);
@@ -196,7 +239,9 @@ export class ShardComponent implements OnInit, OnDestroy {
 
   openTabExtRepDialog() {
     this.dialogSettings = new DialogSettings('TabletExternallyReparented',
-                                             `Run Tablet Externally Reparented in Shard ${this.keyspaceName}/${this.shardName}`, '',
+                                             `Run Tablet Externally Reparented in Shard ${this.keyspaceName}/${this.shardName}`,
+                                             'The chosen tablet will be considered the shard master' +
+                                             ' (but Vitess won\'t change the replication setup).',
                                              `There was a problem running TabletExternallyReparented:`);
     this.dialogSettings.setMessage('Ran TabletExternallyReparented');
     this.dialogSettings.onCloseFunction = this.refreshShardView.bind(this);
@@ -206,7 +251,8 @@ export class ShardComponent implements OnInit, OnDestroy {
   }
 
   openPlanRepShardDialog() {
-    this.dialogSettings = new DialogSettings('Reparent', `Planned Reparent in Shard ${this.keyspaceName}/${this.shardName}`, '',
+    this.dialogSettings = new DialogSettings('Reparent', `Planned Reparent in Shard ${this.keyspaceName}/${this.shardName}`,
+                                             'Failover to a new master. Assumes the old master is still healthy and reachable.',
                                              'There was a problem reparenting shard {{shard_ref}}:');
     this.dialogSettings.setMessage('Reparented {{shard_ref}}');
     this.dialogSettings.onCloseFunction = this.refreshShardView.bind(this);
@@ -216,7 +262,8 @@ export class ShardComponent implements OnInit, OnDestroy {
   }
 
   openEmergencyRepShardDialog() {
-    this.dialogSettings = new DialogSettings('Reparent', `Emergency Reparent in Shard ${this.keyspaceName}/${this.shardName}`, '',
+    this.dialogSettings = new DialogSettings('Reparent', `Emergency Reparent in Shard ${this.keyspaceName}/${this.shardName}`,
+                                             'Failover to a new master. Assumes the old master is not reachable.',
                                              'There was a problem with emergency reparenting shard {{shard_ref}}:');
     this.dialogSettings.setMessage('Initialized shard master for {{shard_ref}}');
     this.dialogSettings.onCloseFunction = this.refreshShardView.bind(this);
@@ -226,7 +273,8 @@ export class ShardComponent implements OnInit, OnDestroy {
   }
 
   openValidateVerShardDialog() {
-    this.dialogSettings = new DialogSettings('Validate', `Validate Shard ${this.keyspaceName}/${this.shardName} Versions`, '',
+    this.dialogSettings = new DialogSettings('Validate Shard', `Validate Shard ${this.keyspaceName}/${this.shardName} Versions`,
+                                             `Creates a report of software versions for ${this.keyspaceName}/${this.shardName}.`,
                                              'There was a problem validating shard {{shard_ref}} versions:');
     this.dialogSettings.setMessage(`Validated {{shard_ref}}'s versions`);
     let flags = new ValidateVerShardFlags(this.keyspaceName, this.shardName).flags;
@@ -235,7 +283,8 @@ export class ShardComponent implements OnInit, OnDestroy {
   }
 
   openShardReplicationPosDialog() {
-    this.dialogSettings = new DialogSettings('Get', `Get ${this.keyspaceName}/${this.shardName} Replication Positions`, '',
+    this.dialogSettings = new DialogSettings('Get', `Get ${this.keyspaceName}/${this.shardName} Replication Positions`,
+                                             'Displays the replication position for all tablets in a shard.',
                                              'There was a problem getting replication positions for shard {{shard_ref}}:');
     this.dialogSettings.setMessage('Fetched Replication Positions for {{shard_ref}}');
     let flags = new ShardReplicationPosFlags(this.keyspaceName, this.shardName).flags;
@@ -244,8 +293,9 @@ export class ShardComponent implements OnInit, OnDestroy {
   }
 
   openDeleteTabletDialog() {
-    this.dialogSettings = new DialogSettings('Delete', `Delete ${this.selectedTablet.label}`,
-                                             `Are you sure you want to delete ${this.selectedTablet.label}?`,
+    this.dialogSettings = new DialogSettings('Delete Tablet', `Delete ${this.selectedTablet.label}`,
+                                             `Are you sure you want to delete ${this.selectedTablet.label}?` +
+                                             ` It will be removed from the topology (but vttablet and MySQL won't be touched).`,
                                              `There was a problem deleting ${this.selectedTablet.label}:`);
     this.dialogSettings.setMessage(`Deleted ${this.selectedTablet.label}`);
     this.dialogSettings.onCloseFunction = this.refreshShardView.bind(this);
@@ -255,7 +305,9 @@ export class ShardComponent implements OnInit, OnDestroy {
   }
 
   openRefreshTabletDialog() {
-    this.dialogSettings = new DialogSettings('Refresh', `Refresh ${this.selectedTablet.label}`, '',
+    this.dialogSettings = new DialogSettings('Refresh', `Refresh ${this.selectedTablet.label}`,
+                                             `Makes ${this.selectedTablet.label} re-read its topology record` +
+                                             ` and adjust its internal state to match.`,
                                              `There was a problem refreshing ${this.selectedTablet.label}:`);
     this.dialogSettings.setMessage(`Refreshed ${this.selectedTablet.label}`);
     let flags = new RefreshTabletFlags(this.selectedTablet.alias).flags;
@@ -264,7 +316,8 @@ export class ShardComponent implements OnInit, OnDestroy {
   }
 
   openPingTabletDialog() {
-    this.dialogSettings = new DialogSettings('Ping', `Ping ${this.selectedTablet.label}`, '',
+    this.dialogSettings = new DialogSettings('Ping', `Ping ${this.selectedTablet.label}`,
+                                             `See if tablet ${this.selectedTablet.label} is reachable via RPC.`,
                                              `There was a problem pinging ${this.selectedTablet.label}:`);
     this.dialogSettings.setMessage(`Pinged ${this.selectedTablet.label}`);
     let flags = new PingTabletFlags(this.selectedTablet.alias).flags;
@@ -273,7 +326,8 @@ export class ShardComponent implements OnInit, OnDestroy {
   }
 
   openSetReadOnlyDialog() {
-    this.dialogSettings = new DialogSettings('Set', `Set ${this.selectedTablet.label} to Read-Only`, '',
+    this.dialogSettings = new DialogSettings('Set Read-Only', `Set ${this.selectedTablet.label} to Read-Only`,
+                                             'Can be used on a master to disable writing. Use with caution.',
                                              `There was a problem setting ${this.selectedTablet.label} to Read-Only:`);
     this.dialogSettings.setMessage(`Set ${this.selectedTablet.label} to Read-Only`);
     let flags = new PingTabletFlags(this.selectedTablet.alias).flags;
@@ -282,7 +336,8 @@ export class ShardComponent implements OnInit, OnDestroy {
   }
 
   openSetReadWriteDialog() {
-    this.dialogSettings = new DialogSettings('Set', `Set ${this.selectedTablet.label} to Read-Write`, '',
+    this.dialogSettings = new DialogSettings('Set Read-Write', `Set ${this.selectedTablet.label} to Read-Write`,
+                                             'Can be used on a master to re-enable writing. Use with caution.',
                                              `There was a problem setting ${this.selectedTablet.label} to Read-Write:`);
     this.dialogSettings.setMessage(`Set ${this.selectedTablet.label} to Read-Write`);
     let flags = new PingTabletFlags(this.selectedTablet.alias).flags;
@@ -291,7 +346,8 @@ export class ShardComponent implements OnInit, OnDestroy {
   }
 
   openStartSlaveDialog() {
-    this.dialogSettings = new DialogSettings('Start', `Start Slave on ${this.selectedTablet.label}`, '',
+    this.dialogSettings = new DialogSettings('Start', `Start Slave on ${this.selectedTablet.label}`,
+                                             `Restart replication on slave ${this.selectedTablet.label}.`,
                                              `There was a problem starting slave on ${this.selectedTablet.label}:`);
     this.dialogSettings.setMessage(`Started Slave on ${this.selectedTablet.label}`);
     let flags = new PingTabletFlags(this.selectedTablet.alias).flags;
@@ -300,7 +356,8 @@ export class ShardComponent implements OnInit, OnDestroy {
   }
 
   openStopSlaveDialog() {
-    this.dialogSettings = new DialogSettings('Stop', `Stop Slave on ${this.selectedTablet.label}`, '',
+    this.dialogSettings = new DialogSettings('Stop', `Stop Slave on ${this.selectedTablet.label}`,
+                                             `Stop replication on slave ${this.selectedTablet.label}. May render the tablet unhealthy.`,
                                              `There was a problem stopping slave on ${this.selectedTablet.label}:`);
     this.dialogSettings.setMessage(`Stopped Slave on ${this.selectedTablet.label}`);
     let flags = new PingTabletFlags(this.selectedTablet.alias).flags;
@@ -309,7 +366,8 @@ export class ShardComponent implements OnInit, OnDestroy {
   }
 
   openRunHealthCheckDialog() {
-    this.dialogSettings = new DialogSettings('Run', `Run Health Check on ${this.selectedTablet.label}`, '',
+    this.dialogSettings = new DialogSettings('Health Check', `Run Health Check on ${this.selectedTablet.label}`,
+                                             `Asks tablet ${this.selectedTablet.label} to run its health check.`,
                                              `There was a problem running Health Check on ${this.selectedTablet.label}:`);
     this.dialogSettings.setMessage(`Ran Health Check on ${this.selectedTablet.label}`);
     let flags = new PingTabletFlags(this.selectedTablet.alias).flags;
@@ -318,16 +376,21 @@ export class ShardComponent implements OnInit, OnDestroy {
   }
 
   openIgnoreHealthErrorDialog() {
-    this.dialogSettings = new DialogSettings('Ignore', `Ignore Health Check for ${this.selectedTablet.label}`, '',
+    this.dialogSettings = new DialogSettings('Ignore', `Ignore Health Check for ${this.selectedTablet.label}`,
+                                             `Make ${this.selectedTablet.label} ignore certain health errors that match a pattern.` +
+                                             ` Vitess may then use that tablet even if it appears unhealthy.`,
                                              `There was a problem ignoring the Health Check for ${this.selectedTablet.label}:`);
     this.dialogSettings.setMessage(`Ignored ${this.selectedTablet.label}`);
-    let flags = new PingTabletFlags(this.selectedTablet.alias).flags;
+    let flags = new IgnoreHealthCheckFlags(this.selectedTablet.alias).flags;
     this.dialogContent = new DialogContent('tablet_alias', flags, {}, undefined, 'IgnoreHealthError');
     this.dialogSettings.toggleModal();
   }
 
   openDemoteMasterDialog() {
-    this.dialogSettings = new DialogSettings('Demote', `Demote ${this.selectedTablet.label}`, '',
+    this.dialogSettings = new DialogSettings('Demote', `Demote ${this.selectedTablet.label}`,
+                                             `Makes a master tablet read-only, waits for all transactions to finish, ` +
+                                             `and return its replication position. Does not change the type, nor reparent slaves.` +
+                                             ` Use with caution.`,
                                              `There was a problem demoting ${this.selectedTablet.label}:`);
     this.dialogSettings.setMessage(`Demoted ${this.selectedTablet.label}`);
     this.dialogSettings.onCloseFunction = this.refreshShardView.bind(this);
@@ -337,7 +400,9 @@ export class ShardComponent implements OnInit, OnDestroy {
   }
 
   openReparentTabletDialog() {
-    this.dialogSettings = new DialogSettings('Reparent', `Reparent ${this.selectedTablet.label}`, '',
+    this.dialogSettings = new DialogSettings('Reparent', `Reparent ${this.selectedTablet.label}`,
+                                             `Re-connect the replication for ${this.selectedTablet.label} to the current master.` +
+                                             ` Use if ${this.selectedTablet.label} was not reachable during the previous reparent.`,
                                              `There was a problem reparenting ${this.selectedTablet.label}:`);
     this.dialogSettings.setMessage(`Reparented ${this.selectedTablet.label}`);
     this.dialogSettings.onCloseFunction = this.refreshShardView.bind(this);

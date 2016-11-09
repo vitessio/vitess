@@ -110,7 +110,7 @@ export class ForceFlag extends CheckBoxFlag {
 
 export class KeyspaceNameFlag extends InputFlag {
   constructor(position: number, id: string, value= '', show= true) {
-    super(position, id, 'Keyspace Name', 'Required. The name of a database that contains one or more tables.', value, show);
+    super(position, id, 'Keyspace Name', 'The name of a database that contains one or more tables.', value, show);
   }
 }
 

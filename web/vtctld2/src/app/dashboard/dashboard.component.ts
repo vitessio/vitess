@@ -6,6 +6,7 @@ import { Observable } from 'rxjs/Observable';
 import { DeleteKeyspaceFlags, EditKeyspaceFlags, NewKeyspaceFlags, ValidateAllFlags } from '../shared/flags/keyspace.flags';
 import { DialogContent } from '../shared/dialog/dialog-content';
 import { DialogSettings } from '../shared/dialog/dialog-settings';
+import { FeaturesService } from '../api/features.service';
 import { Keyspace } from '../api/keyspace';
 import { KeyspaceService } from '../api/keyspace.service';
 import { VtctlService } from '../api/vtctl.service';
@@ -29,9 +30,10 @@ export class DashboardComponent implements OnInit {
   private keyspaceActions: MenuItem[];
 
   constructor(
-              private keyspaceService: KeyspaceService,
-              private router: Router,
-              private vtctlService: VtctlService) {}
+    private featuresService: FeaturesService,
+    private keyspaceService: KeyspaceService,
+    private router: Router,
+    private vtctlService: VtctlService) {}
 
   ngOnInit() {
     this.getKeyspaces();
