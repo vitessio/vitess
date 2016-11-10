@@ -10,6 +10,7 @@ package topovalidator
 
 import (
 	"fmt"
+	"sync"
 
 	log "github.com/golang/glog"
 	"golang.org/x/net/context"
@@ -68,6 +69,12 @@ type Workflow struct {
 
 	// logger is the logger we export UI logs from.
 	logger *logutil.MemoryLogger
+
+	// rootUINode is the root node representing the workflow in the UI.
+	rootUINode *workflow.Node
+
+	// wg is a wait group that will be used to wait for all fixers to be done.
+	wg sync.WaitGroup
 }
 
 // workflowFixer contains all the information about a fixer.
@@ -77,6 +84,7 @@ type workflowFixer struct {
 	fixer   Fixer
 	actions []string
 	node    *workflow.Node
+	wg      *sync.WaitGroup
 }
 
 // AddFixer adds a Fixer to the Workflow. It will end up displaying a
@@ -88,28 +96,21 @@ func (w *Workflow) AddFixer(name, message string, fixer Fixer, actions []string)
 		message: message,
 		fixer:   fixer,
 		actions: actions,
+		wg:      &w.wg,
 	})
 }
 
 // Run is part of the workflow.Workflow interface.
 func (w *Workflow) Run(ctx context.Context, manager *workflow.Manager, wi *topo.WorkflowInfo) error {
-	// Create a UI Node.
-	node := workflow.NewNode()
-	node.PopulateFromWorkflow(wi)
-	node.State = workflowpb.WorkflowState_Running
-	node.Display = workflow.NodeDisplayDeterminate
-	node.Message = "Validates the Topology and proposes fixes for known issues."
-	w.uiUpdate(node)
-	if err := manager.NodeManager().AddRootNode(node); err != nil {
-		return err
-	}
-	defer manager.NodeManager().RemoveRootNode(node)
+	w.uiUpdate()
+	w.rootUINode.Display = workflow.NodeDisplayDeterminate
+	w.rootUINode.BroadcastChanges(false /* updateChildren */)
 
 	// Run all the validators. They may add fixers.
 	for name, v := range validators {
 		w.logger.Infof("Running validator: %v", name)
-		w.uiUpdate(node)
-		node.BroadcastChanges(false /* updateChildren */)
+		w.uiUpdate()
+		w.rootUINode.BroadcastChanges(false /* updateChildren */)
 		err := v.Audit(ctx, manager.TopoServer(), w)
 		if err != nil {
 			w.logger.Errorf("Validator %v failed: %v", name, err)
@@ -124,8 +125,9 @@ func (w *Workflow) Run(ctx context.Context, manager *workflow.Manager, wi *topo.
 		w.logger.Errorf("No problem found")
 	}
 	for i, f := range w.fixers {
+		w.wg.Add(1)
 		f.node = workflow.NewNode()
-		node.Children = append(node.Children, f.node)
+		w.rootUINode.Children = append(w.rootUINode.Children, f.node)
 		f.node.PathName = fmt.Sprintf("%v", i)
 		f.node.Name = f.name
 		f.node.Message = f.message
@@ -137,23 +139,30 @@ func (w *Workflow) Run(ctx context.Context, manager *workflow.Manager, wi *topo.
 		}
 		f.node.Listener = f
 	}
-	w.uiUpdate(node)
-	node.BroadcastChanges(true /* updateChildren */)
+	w.uiUpdate()
+	w.rootUINode.BroadcastChanges(true /* updateChildren */)
 
-	// And wait for the workflow to be terminated.
+	// And wait for the workflow to be done.
+	fixersChan := make(chan struct{})
+	go func(wg *sync.WaitGroup) {
+		wg.Wait()
+		close(fixersChan)
+	}(&w.wg)
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
+	case <-fixersChan:
+		return nil
 	}
 }
 
 // uiUpdate updates the computed parts of the Node, based on the
-// current state.  Needs to be called from inside node.Modify.
-func (w *Workflow) uiUpdate(node *workflow.Node) {
+// current state.
+func (w *Workflow) uiUpdate() {
 	c := len(validators)
-	node.Progress = 100 * w.runCount / c
-	node.ProgressMessage = fmt.Sprintf("%v/%v", w.runCount, c)
-	node.Log = w.logger.String()
+	w.rootUINode.Progress = 100 * w.runCount / c
+	w.rootUINode.ProgressMessage = fmt.Sprintf("%v/%v", w.runCount, c)
+	w.rootUINode.Log = w.logger.String()
 }
 
 // Action is part of the workflow.ActionListener interface.
@@ -173,6 +182,7 @@ func (f *workflowFixer) Action(ctx context.Context, path, name string) error {
 	f.node.Message = "Addressed(" + name + "): " + f.node.Message
 	f.node.Display = workflow.NodeDisplayNone
 	f.node.BroadcastChanges(false /* updateChildren */)
+	f.wg.Done()
 	return nil
 }
 
@@ -191,8 +201,11 @@ func (f *WorkflowFactory) Init(w *workflowpb.Workflow, args []string) error {
 }
 
 // Instantiate is part of the workflow.Factory interface.
-func (f *WorkflowFactory) Instantiate(w *workflowpb.Workflow) (workflow.Workflow, error) {
+func (f *WorkflowFactory) Instantiate(w *workflowpb.Workflow, rootNode *workflow.Node) (workflow.Workflow, error) {
+	rootNode.Message = "Validates the Topology and proposes fixes for known issues."
+
 	return &Workflow{
-		logger: logutil.NewMemoryLogger(),
+		logger:     logutil.NewMemoryLogger(),
+		rootUINode: rootNode,
 	}, nil
 }

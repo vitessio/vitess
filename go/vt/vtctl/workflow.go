@@ -45,6 +45,11 @@ func init() {
 			"<uuid>",
 			"Stops the workflow."})
 		addCommand(workflowsGroupName, command{
+			"WorkflowDelete",
+			commandWorkflowDelete,
+			"<uuid>",
+			"Deletes the finished or not started workflow."})
+		addCommand(workflowsGroupName, command{
 			"WorkflowWait",
 			commandWorkflowWait,
 			"<uuid>",
@@ -117,6 +122,21 @@ func commandWorkflowStop(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 	}
 	uuid := subFlags.Arg(0)
 	return WorkflowManager.Stop(ctx, uuid)
+}
+
+func commandWorkflowDelete(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	if WorkflowManager == nil {
+		return fmt.Errorf("no workflow.Manager registered")
+	}
+
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+	if subFlags.NArg() != 1 {
+		return fmt.Errorf("the <uuid> argument is required for the WorkflowDelete command")
+	}
+	uuid := subFlags.Arg(0)
+	return WorkflowManager.Delete(ctx, uuid)
 }
 
 func commandWorkflowWait(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {

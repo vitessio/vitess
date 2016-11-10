@@ -42,8 +42,9 @@ type Factory interface {
 	Init(w *workflowpb.Workflow, args []string) error
 
 	// Instantiate loads a workflow from the proto representation
-	// into an in-memory Workflow object.
-	Instantiate(w *workflowpb.Workflow) (Workflow, error)
+	// into an in-memory Workflow object. rootNode is the root UI node
+	// representing the workflow.
+	Instantiate(w *workflowpb.Workflow, rootNode *Node) (Workflow, error)
 }
 
 // Manager is the main Workflow manager object.
@@ -77,6 +78,9 @@ type runningWorkflow struct {
 	// wi is the WorkflowInfo used to store the Workflow in the
 	// topo server.
 	wi *topo.WorkflowInfo
+
+	// rootNode is the root UI node corresponding to this workflow.
+	rootNode *Node
 
 	// cancel is the method associated with the context that runs
 	// the workflow.
@@ -178,34 +182,17 @@ func (m *Manager) loadAndStartJobsLocked() {
 			log.Errorf("Failed to load workflow %v, will not start it: %v", uuid, err)
 			continue
 		}
-		if wi.State != workflowpb.WorkflowState_Running {
-			continue
-		}
 
-		// Ask the factory to create the running workflow.
-		factory, ok := factories[wi.FactoryName]
-		if !ok {
-			log.Errorf("Saved workflow %v is using factory name %v but no such factory registered, will not start it", uuid, wi.FactoryName)
-			continue
-		}
-		w, err := factory.Instantiate(wi.Workflow)
+		rw, err := m.instantiateWorkflow(wi.Workflow)
 		if err != nil {
 			log.Errorf("Failed to instantiate workflow %v from factory %v, will not start it: %v", uuid, wi.FactoryName, err)
 			continue
 		}
+		rw.wi = wi
 
-		// Create a context to run it, and save the runningWorkflow.
-		ctx, cancel := context.WithCancel(m.ctx)
-		rw := &runningWorkflow{
-			wi:       wi,
-			cancel:   cancel,
-			workflow: w,
-			done:     make(chan struct{}),
+		if rw.wi.State == workflowpb.WorkflowState_Running {
+			m.runWorkflow(rw)
 		}
-		m.workflows[uuid] = rw
-
-		// And run it in the background.
-		go m.runWorkflow(ctx, uuid, rw)
 	}
 }
 
@@ -235,15 +222,51 @@ func (m *Manager) Create(ctx context.Context, factoryName string, args []string)
 	if err := factory.Init(w, args); err != nil {
 		return "", err
 	}
+	rw, err := m.instantiateWorkflow(w)
+	if err != nil {
+		return "", err
+	}
 
 	// Now save the workflow in the topo server.
-	_, err := m.ts.CreateWorkflow(ctx, w)
+	rw.wi, err = m.ts.CreateWorkflow(ctx, w)
 	if err != nil {
 		return "", err
 	}
 
 	// And we're done.
+	log.Infof("Created workflow %s (%s, %s)", w.Uuid, factoryName, w.Name)
 	return w.Uuid, nil
+}
+
+func (m *Manager) instantiateWorkflow(w *workflowpb.Workflow) (*runningWorkflow, error) {
+	rw := &runningWorkflow{
+		wi: &topo.WorkflowInfo{
+			Workflow: w,
+		},
+		rootNode: NewNode(),
+		done:     make(chan struct{}),
+	}
+	rw.rootNode.Name = w.Name
+	rw.rootNode.PathName = w.Uuid
+	rw.rootNode.Path = "/" + rw.rootNode.PathName
+	rw.rootNode.State = w.State
+
+	factory, ok := factories[w.FactoryName]
+	if !ok {
+		return nil, fmt.Errorf("no factory named %v is registered", w.FactoryName)
+	}
+	var err error
+	rw.workflow, err = factory.Instantiate(w, rw.rootNode)
+	if err != nil {
+		return nil, err
+	}
+
+	m.workflows[w.Uuid] = rw
+	if err := m.nodeManager.AddRootNode(rw.rootNode); err != nil {
+		return nil, err
+	}
+
+	return rw, nil
 }
 
 // Start will start a Workflow. It will load it in memory, update its
@@ -257,55 +280,40 @@ func (m *Manager) Start(ctx context.Context, uuid string) error {
 		return fmt.Errorf("manager not running")
 	}
 
-	// Make sure it is not running already.
-	if _, ok := m.workflows[uuid]; ok {
-		return fmt.Errorf("workflow %v is already running", uuid)
+	rw, ok := m.workflows[uuid]
+	if !ok {
+		return fmt.Errorf("Cannot find workflow %v in the workflow list", uuid)
 	}
 
-	// Load it from the topo server, make sure it has the right state.
-	wi, err := m.ts.GetWorkflow(ctx, uuid)
-	if err != nil {
-		return err
-	}
-	if wi.State != workflowpb.WorkflowState_NotStarted {
-		return fmt.Errorf("workflow with uuid %v is in state %v", uuid, wi.State)
-	}
-	factory, ok := factories[wi.FactoryName]
-	if !ok {
-		return fmt.Errorf("workflow %v is using factory name %v but no such factory registered", uuid, wi.FactoryName)
+	if rw.wi.State != workflowpb.WorkflowState_NotStarted {
+		return fmt.Errorf("workflow with uuid %v is in state %v", uuid, rw.wi.State)
 	}
 
 	// Change its state in the topo server. Note we do that first,
 	// so if the running part fails, we will retry next time.
-	wi.State = workflowpb.WorkflowState_Running
-	wi.StartTime = time.Now().Unix()
-	if err := m.ts.SaveWorkflow(ctx, wi); err != nil {
+	rw.wi.State = workflowpb.WorkflowState_Running
+	rw.wi.StartTime = time.Now().Unix()
+	if err := m.ts.SaveWorkflow(ctx, rw.wi); err != nil {
 		return err
 	}
 
-	// Ask the factory to create the running workflow.
-	w, err := factory.Instantiate(wi.Workflow)
-	if err != nil {
-		return err
-	}
+	rw.rootNode.State = workflowpb.WorkflowState_Running
+	rw.rootNode.BroadcastChanges(false /* updateChildren */)
 
-	// Create a context to run it, and save the runningWorkflow.
-	ctx, cancel := context.WithCancel(m.ctx)
-	rw := &runningWorkflow{
-		wi:       wi,
-		cancel:   cancel,
-		workflow: w,
-		done:     make(chan struct{}),
-	}
-	m.workflows[uuid] = rw
-
-	// And run it in the background.
-	go m.runWorkflow(ctx, uuid, rw)
-
+	m.runWorkflow(rw)
 	return nil
 }
 
-func (m *Manager) runWorkflow(ctx context.Context, uuid string, rw *runningWorkflow) {
+func (m *Manager) runWorkflow(rw *runningWorkflow) {
+	// Create a context to run it.
+	var ctx context.Context
+	ctx, rw.cancel = context.WithCancel(m.ctx)
+
+	// And run it in the background.
+	go m.executeWorkflowRun(ctx, rw)
+}
+
+func (m *Manager) executeWorkflowRun(ctx context.Context, rw *runningWorkflow) {
 	defer close(rw.done)
 
 	// Run will block until one of three things happen:
@@ -344,9 +352,7 @@ func (m *Manager) runWorkflow(ctx context.Context, uuid string, rw *runningWorkf
 	}
 
 	// We are not shutting down, but this workflow is done, or
-	// canceled. In any case, delete it from the running
-	// workflows, and change its topo Server state.
-	delete(m.workflows, uuid)
+	// canceled. In any case, change its topo Server state.
 	rw.wi.State = workflowpb.WorkflowState_Done
 	if err != nil {
 		rw.wi.Error = err.Error()
@@ -355,6 +361,9 @@ func (m *Manager) runWorkflow(ctx context.Context, uuid string, rw *runningWorkf
 	if err := m.ts.SaveWorkflow(m.ctx, rw.wi); err != nil {
 		log.Errorf("Could not save workflow %v after completion: %v", rw.wi, err)
 	}
+
+	rw.rootNode.State = workflowpb.WorkflowState_Done
+	rw.rootNode.BroadcastChanges(false /* updateChildren */)
 }
 
 // Stop stops the running workflow. It will cancel its context and
@@ -378,6 +387,26 @@ func (m *Manager) Stop(ctx context.Context, uuid string) error {
 	case <-ctx.Done():
 		return ctx.Err()
 	}
+	return nil
+}
+
+// Delete deletes the finished or not started workflow.
+func (m *Manager) Delete(ctx context.Context, uuid string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	rw, ok := m.workflows[uuid]
+	if !ok {
+		return fmt.Errorf("No workflow with uuid %v", uuid)
+	}
+	if rw.wi.State == workflowpb.WorkflowState_Running {
+		return fmt.Errorf("Cannot delete running workflow")
+	}
+	if err := m.ts.DeleteWorkflow(m.ctx, rw.wi); err != nil {
+		log.Errorf("Could not delete workflow %v: %v", rw.wi, err)
+	}
+	m.nodeManager.RemoveRootNode(rw.rootNode)
+	delete(m.workflows, uuid)
 	return nil
 }
 

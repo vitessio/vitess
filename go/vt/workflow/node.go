@@ -11,8 +11,6 @@ import (
 	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
-	"github.com/youtube/vitess/go/vt/topo"
-
 	workflowpb "github.com/youtube/vitess/go/vt/proto/workflow"
 )
 
@@ -171,13 +169,6 @@ func NewNode() *Node {
 		Children: []*Node{},
 		Actions:  []*Action{},
 	}
-}
-
-// PopulateFromWorkflow populates node's path and name from the workflow information.
-func (n *Node) PopulateFromWorkflow(wi *topo.WorkflowInfo) {
-	n.Name = wi.Name
-	n.PathName = wi.Uuid
-	n.Path = "/" + n.PathName
 }
 
 // BroadcastChanges sends the new contents of the node to the watchers.
