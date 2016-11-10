@@ -27,10 +27,10 @@ func TestOrderedColumns(t *testing.T) {
 }
 
 func TestUint64FromKeyspaceId(t *testing.T) {
-	table := map[string]string{
-		"10":       "0x1000000000000000",
-		"fe":       "0xfe00000000000000",
-		"1234cafe": "0x1234cafe00000000",
+	table := map[string]uint64{
+		"10":       0x1000000000000000,
+		"fe":       0xfe00000000000000,
+		"1234cafe": 0x1234cafe00000000,
 	}
 	for input, want := range table {
 		keyspaceID, err := hex.DecodeString(input)

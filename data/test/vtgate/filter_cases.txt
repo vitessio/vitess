@@ -132,16 +132,16 @@
 }
 
 # Single table equality route with unsigned value
-"select id from user where name = 0xFFFFFFFFFFFFFFFF"
+"select id from user where name = 18446744073709551615"
 {
-  "Original": "select id from user where name = 0xFFFFFFFFFFFFFFFF",
+  "Original": "select id from user where name = 18446744073709551615",
   "Instructions": {
     "Opcode": "SelectEqual",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
-    "Query": "select id from user where name = 0xFFFFFFFFFFFFFFFF",
+    "Query": "select id from user where name = 18446744073709551615",
     "FieldQuery": "select id from user where 1 != 1",
     "Vindex": "name_user_map",
     "Values": 18446744073709551615

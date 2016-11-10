@@ -34,6 +34,9 @@ func TestValid(t *testing.T) {
 		input:  "select 1 from t -- aa",
 		output: "select 1 from t",
 	}, {
+		input:  "select 1 --aa\nfrom t",
+		output: "select 1 from t",
+	}, {
 		input: "select /* simplest */ 1 from t",
 	}, {
 		input: "select /* keyword col */ `By` from t",
@@ -352,9 +355,12 @@ func TestValid(t *testing.T) {
 	}, {
 		input: "select /* octal */ 010 from t",
 	}, {
-		input: "select /* hex */ 0xf0 from t",
+		input:  "select /* hex */ x'f0A1' from t",
+		output: "select /* hex */ X'f0A1' from t",
 	}, {
-		input: "select /* hex caps */ 0xF0 from t",
+		input: "select /* hex caps */ X'F0a1' from t",
+	}, {
+		input: "select /* 0x */ 0xf0 from t",
 	}, {
 		input: "select /* float */ 0.1 from t",
 	}, {
@@ -672,8 +678,14 @@ func TestErrors(t *testing.T) {
 		input:  "select : from t",
 		output: "syntax error at position 9 near ':'",
 	}, {
-		input:  "select 078 from t",
-		output: "syntax error at position 11 near '078'",
+		input:  "select 0xH from t",
+		output: "syntax error at position 10 near '0x'",
+	}, {
+		input:  "select x'78 from t",
+		output: "syntax error at position 12 near '78'",
+	}, {
+		input:  "select x'777' from t",
+		output: "syntax error at position 14 near '777'",
 	}, {
 		input:  "select `1a` from t",
 		output: "syntax error at position 9 near '1'",

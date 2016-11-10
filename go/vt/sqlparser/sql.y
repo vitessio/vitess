@@ -78,7 +78,7 @@ func forceEOF(yylex interface{}) {
 %left <empty> JOIN STRAIGHT_JOIN LEFT RIGHT INNER OUTER CROSS NATURAL USE FORCE
 %left <empty> ON
 %token <empty> '(' ',' ')'
-%token <bytes> ID STRING NUMBER VALUE_ARG LIST_ARG COMMENT
+%token <bytes> ID HEX STRING NUMBER VALUE_ARG LIST_ARG COMMENT
 %token <empty> NULL TRUE FALSE
 
 // Precedence dictated by mysql. But the vitess grammar is simplified.
@@ -912,6 +912,10 @@ value:
   STRING
   {
     $$ = StrVal($1)
+  }
+| HEX
+  {
+    $$ = HexVal($1)
   }
 | NUMBER
   {
