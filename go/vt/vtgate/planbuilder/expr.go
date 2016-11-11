@@ -145,13 +145,10 @@ func hasSubquery(node sqlparser.SQLNode) bool {
 // exprIsValue returns true if the expression can be treated as a value
 // for the current route. External references are treated as value.
 func exprIsValue(expr sqlparser.ValExpr, rb *route) bool {
-	switch node := expr.(type) {
-	case *sqlparser.ColName:
+	if node, ok := expr.(*sqlparser.ColName); ok {
 		return node.Metadata.(sym).Route() != rb
-	case sqlparser.ValArg, sqlparser.StrVal, sqlparser.NumVal:
-		return true
 	}
-	return false
+	return sqlparser.IsValue(expr)
 }
 
 func valEqual(a, b interface{}) bool {
@@ -165,13 +162,36 @@ func valEqual(a, b interface{}) bool {
 			return bytes.Equal([]byte(a), []byte(b))
 		}
 	case sqlparser.StrVal:
-		if b, ok := b.(sqlparser.StrVal); ok {
+		switch b := b.(type) {
+		case sqlparser.StrVal:
 			return bytes.Equal([]byte(a), []byte(b))
+		case sqlparser.HexVal:
+			return hexEqual(b, a)
 		}
+	case sqlparser.HexVal:
+		return hexEqual(a, b)
 	case sqlparser.NumVal:
 		if b, ok := b.(sqlparser.NumVal); ok {
 			return bytes.Equal([]byte(a), []byte(b))
 		}
+	}
+	return false
+}
+
+func hexEqual(a sqlparser.HexVal, b interface{}) bool {
+	v, err := a.Decode()
+	if err != nil {
+		return false
+	}
+	switch b := b.(type) {
+	case sqlparser.StrVal:
+		return bytes.Equal(v, []byte(b))
+	case sqlparser.HexVal:
+		v2, err := b.Decode()
+		if err != nil {
+			return false
+		}
+		return bytes.Equal(v, v2)
 	}
 	return false
 }
@@ -183,6 +203,8 @@ func valConvert(node sqlparser.ValExpr) (interface{}, error) {
 		return string(node), nil
 	case sqlparser.StrVal:
 		return []byte(node), nil
+	case sqlparser.HexVal:
+		return node.Decode()
 	case sqlparser.NumVal:
 		val := string(node)
 		signed, err := strconv.ParseInt(val, 0, 64)

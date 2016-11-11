@@ -285,7 +285,7 @@ func (tkn *Tokenizer) Lex(lval *yySymType) int {
 		typ, val = tkn.Scan()
 	}
 	switch typ {
-	case ID, STRING, NUMBER, VALUE_ARG, LIST_ARG, COMMENT:
+	case ID, STRING, HEX, NUMBER, VALUE_ARG, LIST_ARG, COMMENT:
 		lval.bytes = val
 	}
 	tkn.lastToken = val
@@ -316,7 +316,14 @@ func (tkn *Tokenizer) Scan() (int, []byte) {
 	tkn.skipBlank()
 	switch ch := tkn.lastChar; {
 	case isLetter(ch):
-		return tkn.scanIdentifier()
+		tkn.next()
+		if ch == 'X' || ch == 'x' {
+			if tkn.lastChar == '\'' {
+				tkn.next()
+				return tkn.scanHex()
+			}
+		}
+		return tkn.scanIdentifier(byte(ch))
 	case isDigit(ch):
 		return tkn.scanNumber(false)
 	case ch == ':':
@@ -410,11 +417,12 @@ func (tkn *Tokenizer) skipBlank() {
 	}
 }
 
-func (tkn *Tokenizer) scanIdentifier() (int, []byte) {
+func (tkn *Tokenizer) scanIdentifier(firstByte byte) (int, []byte) {
 	buffer := &bytes.Buffer{}
-	buffer.WriteByte(byte(tkn.lastChar))
-	for tkn.next(); isLetter(tkn.lastChar) || isDigit(tkn.lastChar); tkn.next() {
+	buffer.WriteByte(firstByte)
+	for isLetter(tkn.lastChar) || isDigit(tkn.lastChar) {
 		buffer.WriteByte(byte(tkn.lastChar))
+		tkn.next()
 	}
 	lowered := bytes.ToLower(buffer.Bytes())
 	loweredStr := string(lowered)
@@ -426,6 +434,19 @@ func (tkn *Tokenizer) scanIdentifier() (int, []byte) {
 		return ID, lowered
 	}
 	return ID, buffer.Bytes()
+}
+
+func (tkn *Tokenizer) scanHex() (int, []byte) {
+	buffer := &bytes.Buffer{}
+	tkn.scanMantissa(16, buffer)
+	if tkn.lastChar != '\'' {
+		return LEX_ERROR, buffer.Bytes()
+	}
+	tkn.next()
+	if buffer.Len()%2 != 0 {
+		return LEX_ERROR, buffer.Bytes()
+	}
+	return HEX, buffer.Bytes()
 }
 
 func (tkn *Tokenizer) scanLiteralIdentifier() (int, []byte) {
@@ -478,37 +499,18 @@ func (tkn *Tokenizer) scanNumber(seenDecimalPoint bool) (int, []byte) {
 		goto exponent
 	}
 
+	// 0x construct.
 	if tkn.lastChar == '0' {
-		// int or float
 		tkn.consumeNext(buffer)
 		if tkn.lastChar == 'x' || tkn.lastChar == 'X' {
-			// hexadecimal int
 			tkn.consumeNext(buffer)
 			tkn.scanMantissa(16, buffer)
-		} else {
-			// octal int or float
-			seenDecimalDigit := false
-			tkn.scanMantissa(8, buffer)
-			if tkn.lastChar == '8' || tkn.lastChar == '9' {
-				// illegal octal int or float
-				seenDecimalDigit = true
-				tkn.scanMantissa(10, buffer)
-			}
-			if tkn.lastChar == '.' || tkn.lastChar == 'e' || tkn.lastChar == 'E' {
-				goto fraction
-			}
-			// octal int
-			if seenDecimalDigit {
-				return LEX_ERROR, buffer.Bytes()
-			}
+			goto exit
 		}
-		goto exit
 	}
 
-	// decimal int or float
 	tkn.scanMantissa(10, buffer)
 
-fraction:
 	if tkn.lastChar == '.' {
 		tkn.consumeNext(buffer)
 		tkn.scanMantissa(10, buffer)
@@ -524,6 +526,11 @@ exponent:
 	}
 
 exit:
+	// A letter cannot immediately follow a number.
+	if isLetter(tkn.lastChar) {
+		return LEX_ERROR, buffer.Bytes()
+	}
+
 	return NUMBER, buffer.Bytes()
 }
 

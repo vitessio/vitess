@@ -32,7 +32,7 @@ func IsColName(node ValExpr) bool {
 // NULL is not considered to be a value.
 func IsValue(node ValExpr) bool {
 	switch node.(type) {
-	case StrVal, NumVal, ValArg:
+	case StrVal, HexVal, NumVal, ValArg:
 		return true
 	}
 	return false
@@ -87,6 +87,12 @@ func AsInterface(node ValExpr) (interface{}, error) {
 		return string(node), nil
 	case StrVal:
 		return sqltypes.MakeString(node), nil
+	case HexVal:
+		v, err := node.Decode()
+		if err != nil {
+			return nil, err
+		}
+		return sqltypes.MakeString(v), nil
 	case NumVal:
 		n, err := sqltypes.BuildIntegral(string(node))
 		if err != nil {

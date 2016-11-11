@@ -105,7 +105,7 @@ func (sq *sourceTabletServer) StreamExecute(ctx context.Context, target *querypb
 
 	// we test for a keyspace_id where clause, except for v3
 	if !sq.v3 {
-		if hasKeyspace := strings.Contains(sql, "WHERE `keyspace_id` < 0x4000000000000000"); hasKeyspace != true {
+		if hasKeyspace := strings.Contains(sql, "WHERE `keyspace_id` < 4611686018427387904"); hasKeyspace != true {
 			sq.t.Errorf("Sql query on source should contain a keyspace_id WHERE clause; query received: %v", sql)
 		}
 	}

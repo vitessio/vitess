@@ -5,6 +5,7 @@
 package sqlparser
 
 import (
+	"encoding/hex"
 	"errors"
 	"strings"
 
@@ -147,7 +148,7 @@ func (node *Select) Format(buf *TrackedBuffer) {
 		node.Limit, node.Lock)
 }
 
-// WalkSubtree walks the nodes of the subtree
+// WalkSubtree walks the nodes of the subtree.
 func (node *Select) WalkSubtree(visit Visit) error {
 	if node == nil {
 		return nil
@@ -229,7 +230,7 @@ func (node *Union) Format(buf *TrackedBuffer) {
 	buf.Myprintf("%v %s %v", node.Left, node.Type, node.Right)
 }
 
-// WalkSubtree walks the nodes of the subtree
+// WalkSubtree walks the nodes of the subtree.
 func (node *Union) WalkSubtree(visit Visit) error {
 	if node == nil {
 		return nil
@@ -258,7 +259,7 @@ func (node *Insert) Format(buf *TrackedBuffer) {
 		node.Table, node.Columns, node.Rows, node.OnDup)
 }
 
-// WalkSubtree walks the nodes of the subtree
+// WalkSubtree walks the nodes of the subtree.
 func (node *Insert) WalkSubtree(visit Visit) error {
 	if node == nil {
 		return nil
@@ -300,7 +301,7 @@ func (node *Update) Format(buf *TrackedBuffer) {
 		node.Exprs, node.Where, node.OrderBy, node.Limit)
 }
 
-// WalkSubtree walks the nodes of the subtree
+// WalkSubtree walks the nodes of the subtree.
 func (node *Update) WalkSubtree(visit Visit) error {
 	if node == nil {
 		return nil
@@ -332,7 +333,7 @@ func (node *Delete) Format(buf *TrackedBuffer) {
 		node.Table, node.Where, node.OrderBy, node.Limit)
 }
 
-// WalkSubtree walks the nodes of the subtree
+// WalkSubtree walks the nodes of the subtree.
 func (node *Delete) WalkSubtree(visit Visit) error {
 	if node == nil {
 		return nil
@@ -358,7 +359,7 @@ func (node *Set) Format(buf *TrackedBuffer) {
 	buf.Myprintf("set %v%v", node.Comments, node.Exprs)
 }
 
-// WalkSubtree walks the nodes of the subtree
+// WalkSubtree walks the nodes of the subtree.
 func (node *Set) WalkSubtree(visit Visit) error {
 	if node == nil {
 		return nil
@@ -406,7 +407,7 @@ func (node *DDL) Format(buf *TrackedBuffer) {
 	}
 }
 
-// WalkSubtree walks the nodes of the subtree
+// WalkSubtree walks the nodes of the subtree.
 func (node *DDL) WalkSubtree(visit Visit) error {
 	if node == nil {
 		return nil
@@ -428,7 +429,7 @@ func (node *Other) Format(buf *TrackedBuffer) {
 	buf.WriteString("other")
 }
 
-// WalkSubtree walks the nodes of the subtree
+// WalkSubtree walks the nodes of the subtree.
 func (node *Other) WalkSubtree(visit Visit) error {
 	return nil
 }
@@ -443,7 +444,7 @@ func (node Comments) Format(buf *TrackedBuffer) {
 	}
 }
 
-// WalkSubtree walks the nodes of the subtree
+// WalkSubtree walks the nodes of the subtree.
 func (node Comments) WalkSubtree(visit Visit) error {
 	return nil
 }
@@ -460,7 +461,7 @@ func (node SelectExprs) Format(buf *TrackedBuffer) {
 	}
 }
 
-// WalkSubtree walks the nodes of the subtree
+// WalkSubtree walks the nodes of the subtree.
 func (node SelectExprs) WalkSubtree(visit Visit) error {
 	for _, n := range node {
 		if err := Walk(visit, n); err != nil {
@@ -493,7 +494,7 @@ func (node *StarExpr) Format(buf *TrackedBuffer) {
 	buf.Myprintf("*")
 }
 
-// WalkSubtree walks the nodes of the subtree
+// WalkSubtree walks the nodes of the subtree.
 func (node *StarExpr) WalkSubtree(visit Visit) error {
 	if node == nil {
 		return nil
@@ -518,7 +519,7 @@ func (node *NonStarExpr) Format(buf *TrackedBuffer) {
 	}
 }
 
-// WalkSubtree walks the nodes of the subtree
+// WalkSubtree walks the nodes of the subtree.
 func (node *NonStarExpr) WalkSubtree(visit Visit) error {
 	if node == nil {
 		return nil
@@ -538,7 +539,7 @@ func (node Nextval) Format(buf *TrackedBuffer) {
 	buf.Myprintf("next value")
 }
 
-// WalkSubtree walks the nodes of the subtree
+// WalkSubtree walks the nodes of the subtree.
 func (node Nextval) WalkSubtree(visit Visit) error {
 	return nil
 }
@@ -559,7 +560,7 @@ func (node Columns) Format(buf *TrackedBuffer) {
 	buf.WriteString(")")
 }
 
-// WalkSubtree walks the nodes of the subtree
+// WalkSubtree walks the nodes of the subtree.
 func (node Columns) WalkSubtree(visit Visit) error {
 	for _, n := range node {
 		if err := Walk(visit, n); err != nil {
@@ -581,7 +582,7 @@ func (node TableExprs) Format(buf *TrackedBuffer) {
 	}
 }
 
-// WalkSubtree walks the nodes of the subtree
+// WalkSubtree walks the nodes of the subtree.
 func (node TableExprs) WalkSubtree(visit Visit) error {
 	for _, n := range node {
 		if err := Walk(visit, n); err != nil {
@@ -622,7 +623,7 @@ func (node *AliasedTableExpr) Format(buf *TrackedBuffer) {
 	}
 }
 
-// WalkSubtree walks the nodes of the subtree
+// WalkSubtree walks the nodes of the subtree.
 func (node *AliasedTableExpr) WalkSubtree(visit Visit) error {
 	if node == nil {
 		return nil
@@ -664,7 +665,7 @@ func (node *TableName) Format(buf *TrackedBuffer) {
 	buf.Myprintf("%v", node.Name)
 }
 
-// WalkSubtree walks the nodes of the subtree
+// WalkSubtree walks the nodes of the subtree.
 func (node *TableName) WalkSubtree(visit Visit) error {
 	if node == nil {
 		return nil
@@ -691,7 +692,7 @@ func (node *ParenTableExpr) Format(buf *TrackedBuffer) {
 	buf.Myprintf("(%v)", node.Exprs)
 }
 
-// WalkSubtree walks the nodes of the subtree
+// WalkSubtree walks the nodes of the subtree.
 func (node *ParenTableExpr) WalkSubtree(visit Visit) error {
 	if node == nil {
 		return nil
@@ -729,7 +730,7 @@ func (node *JoinTableExpr) Format(buf *TrackedBuffer) {
 	}
 }
 
-// WalkSubtree walks the nodes of the subtree
+// WalkSubtree walks the nodes of the subtree.
 func (node *JoinTableExpr) WalkSubtree(visit Visit) error {
 	if node == nil {
 		return nil
@@ -766,7 +767,7 @@ func (node *IndexHints) Format(buf *TrackedBuffer) {
 	buf.Myprintf(")")
 }
 
-// WalkSubtree walks the nodes of the subtree
+// WalkSubtree walks the nodes of the subtree.
 func (node *IndexHints) WalkSubtree(visit Visit) error {
 	if node == nil {
 		return nil
@@ -808,7 +809,7 @@ func (node *Where) Format(buf *TrackedBuffer) {
 	buf.Myprintf(" %s %v", node.Type, node.Expr)
 }
 
-// WalkSubtree walks the nodes of the subtree
+// WalkSubtree walks the nodes of the subtree.
 func (node *Where) WalkSubtree(visit Visit) error {
 	if node == nil {
 		return nil
@@ -834,6 +835,7 @@ func (*RangeCond) iExpr()      {}
 func (*IsExpr) iExpr()         {}
 func (*ExistsExpr) iExpr()     {}
 func (StrVal) iExpr()          {}
+func (HexVal) iExpr()          {}
 func (NumVal) iExpr()          {}
 func (ValArg) iExpr()          {}
 func (*NullVal) iExpr()        {}
@@ -874,7 +876,7 @@ func (node *AndExpr) Format(buf *TrackedBuffer) {
 	buf.Myprintf("%v and %v", node.Left, node.Right)
 }
 
-// WalkSubtree walks the nodes of the subtree
+// WalkSubtree walks the nodes of the subtree.
 func (node *AndExpr) WalkSubtree(visit Visit) error {
 	if node == nil {
 		return nil
@@ -896,7 +898,7 @@ func (node *OrExpr) Format(buf *TrackedBuffer) {
 	buf.Myprintf("%v or %v", node.Left, node.Right)
 }
 
-// WalkSubtree walks the nodes of the subtree
+// WalkSubtree walks the nodes of the subtree.
 func (node *OrExpr) WalkSubtree(visit Visit) error {
 	if node == nil {
 		return nil
@@ -918,7 +920,7 @@ func (node *NotExpr) Format(buf *TrackedBuffer) {
 	buf.Myprintf("not %v", node.Expr)
 }
 
-// WalkSubtree walks the nodes of the subtree
+// WalkSubtree walks the nodes of the subtree.
 func (node *NotExpr) WalkSubtree(visit Visit) error {
 	if node == nil {
 		return nil
@@ -939,7 +941,7 @@ func (node *ParenBoolExpr) Format(buf *TrackedBuffer) {
 	buf.Myprintf("(%v)", node.Expr)
 }
 
-// WalkSubtree walks the nodes of the subtree
+// WalkSubtree walks the nodes of the subtree.
 func (node *ParenBoolExpr) WalkSubtree(visit Visit) error {
 	if node == nil {
 		return nil
@@ -978,7 +980,7 @@ func (node *ComparisonExpr) Format(buf *TrackedBuffer) {
 	buf.Myprintf("%v %s %v", node.Left, node.Operator, node.Right)
 }
 
-// WalkSubtree walks the nodes of the subtree
+// WalkSubtree walks the nodes of the subtree.
 func (node *ComparisonExpr) WalkSubtree(visit Visit) error {
 	if node == nil {
 		return nil
@@ -1008,7 +1010,7 @@ func (node *RangeCond) Format(buf *TrackedBuffer) {
 	buf.Myprintf("%v %s %v and %v", node.Left, node.Operator, node.From, node.To)
 }
 
-// WalkSubtree walks the nodes of the subtree
+// WalkSubtree walks the nodes of the subtree.
 func (node *RangeCond) WalkSubtree(visit Visit) error {
 	if node == nil {
 		return nil
@@ -1042,7 +1044,7 @@ func (node *IsExpr) Format(buf *TrackedBuffer) {
 	buf.Myprintf("%v %s", node.Expr, node.Operator)
 }
 
-// WalkSubtree walks the nodes of the subtree
+// WalkSubtree walks the nodes of the subtree.
 func (node *IsExpr) WalkSubtree(visit Visit) error {
 	if node == nil {
 		return nil
@@ -1063,7 +1065,7 @@ func (node *ExistsExpr) Format(buf *TrackedBuffer) {
 	buf.Myprintf("exists %v", node.Subquery)
 }
 
-// WalkSubtree walks the nodes of the subtree
+// WalkSubtree walks the nodes of the subtree.
 func (node *ExistsExpr) WalkSubtree(visit Visit) error {
 	if node == nil {
 		return nil
@@ -1081,6 +1083,7 @@ type ValExpr interface {
 }
 
 func (StrVal) iValExpr()        {}
+func (HexVal) iValExpr()        {}
 func (NumVal) iValExpr()        {}
 func (ValArg) iValExpr()        {}
 func (*NullVal) iValExpr()      {}
@@ -1103,9 +1106,32 @@ func (node StrVal) Format(buf *TrackedBuffer) {
 	s.EncodeSQL(buf)
 }
 
-// WalkSubtree walks the nodes of the subtree
+// WalkSubtree walks the nodes of the subtree.
 func (node StrVal) WalkSubtree(visit Visit) error {
 	return nil
+}
+
+// HexVal represents a hexadecimal string.
+type HexVal []byte
+
+// Format formats the node.
+func (node HexVal) Format(buf *TrackedBuffer) {
+	buf.Myprintf("X'%s'", []byte(node))
+}
+
+// WalkSubtree walks the nodes of the subtree.
+func (node HexVal) WalkSubtree(visit Visit) error {
+	return nil
+}
+
+// Decode decodes the hexval into bytes.
+func (node HexVal) Decode() ([]byte, error) {
+	dst := make([]byte, hex.DecodedLen(len([]byte(node))))
+	_, err := hex.Decode(dst, []byte(node))
+	if err != nil {
+		return nil, err
+	}
+	return dst, err
 }
 
 // NumVal represents a number.
@@ -1116,7 +1142,7 @@ func (node NumVal) Format(buf *TrackedBuffer) {
 	buf.Myprintf("%s", []byte(node))
 }
 
-// WalkSubtree walks the nodes of the subtree
+// WalkSubtree walks the nodes of the subtree.
 func (node NumVal) WalkSubtree(visit Visit) error {
 	return nil
 }
@@ -1129,7 +1155,7 @@ func (node ValArg) Format(buf *TrackedBuffer) {
 	buf.WriteArg(string(node))
 }
 
-// WalkSubtree walks the nodes of the subtree
+// WalkSubtree walks the nodes of the subtree.
 func (node ValArg) WalkSubtree(visit Visit) error {
 	return nil
 }
@@ -1142,7 +1168,7 @@ func (node *NullVal) Format(buf *TrackedBuffer) {
 	buf.Myprintf("null")
 }
 
-// WalkSubtree walks the nodes of the subtree
+// WalkSubtree walks the nodes of the subtree.
 func (node *NullVal) WalkSubtree(visit Visit) error {
 	return nil
 }
@@ -1159,7 +1185,7 @@ func (node BoolVal) Format(buf *TrackedBuffer) {
 	}
 }
 
-// WalkSubtree walks the nodes of the subtree
+// WalkSubtree walks the nodes of the subtree.
 func (node BoolVal) WalkSubtree(visit Visit) error {
 	return nil
 }
@@ -1183,7 +1209,7 @@ func (node *ColName) Format(buf *TrackedBuffer) {
 	buf.Myprintf("%v", node.Name)
 }
 
-// WalkSubtree walks the nodes of the subtree
+// WalkSubtree walks the nodes of the subtree.
 func (node *ColName) WalkSubtree(visit Visit) error {
 	if node == nil {
 		return nil
@@ -1214,7 +1240,7 @@ func (node ValTuple) Format(buf *TrackedBuffer) {
 	buf.Myprintf("(%v)", ValExprs(node))
 }
 
-// WalkSubtree walks the nodes of the subtree
+// WalkSubtree walks the nodes of the subtree.
 func (node ValTuple) WalkSubtree(visit Visit) error {
 	return Walk(visit, ValExprs(node))
 }
@@ -1232,7 +1258,7 @@ func (node ValExprs) Format(buf *TrackedBuffer) {
 	}
 }
 
-// WalkSubtree walks the nodes of the subtree
+// WalkSubtree walks the nodes of the subtree.
 func (node ValExprs) WalkSubtree(visit Visit) error {
 	for _, n := range node {
 		if err := Walk(visit, n); err != nil {
@@ -1252,7 +1278,7 @@ func (node *Subquery) Format(buf *TrackedBuffer) {
 	buf.Myprintf("(%v)", node.Select)
 }
 
-// WalkSubtree walks the nodes of the subtree
+// WalkSubtree walks the nodes of the subtree.
 func (node *Subquery) WalkSubtree(visit Visit) error {
 	if node == nil {
 		return nil
@@ -1271,7 +1297,7 @@ func (node ListArg) Format(buf *TrackedBuffer) {
 	buf.WriteArg(string(node))
 }
 
-// WalkSubtree walks the nodes of the subtree
+// WalkSubtree walks the nodes of the subtree.
 func (node ListArg) WalkSubtree(visit Visit) error {
 	return nil
 }
@@ -1301,7 +1327,7 @@ func (node *BinaryExpr) Format(buf *TrackedBuffer) {
 	buf.Myprintf("%v %s %v", node.Left, node.Operator, node.Right)
 }
 
-// WalkSubtree walks the nodes of the subtree
+// WalkSubtree walks the nodes of the subtree.
 func (node *BinaryExpr) WalkSubtree(visit Visit) error {
 	if node == nil {
 		return nil
@@ -1335,7 +1361,7 @@ func (node *UnaryExpr) Format(buf *TrackedBuffer) {
 	buf.Myprintf("%c%v", node.Operator, node.Expr)
 }
 
-// WalkSubtree walks the nodes of the subtree
+// WalkSubtree walks the nodes of the subtree.
 func (node *UnaryExpr) WalkSubtree(visit Visit) error {
 	if node == nil {
 		return nil
@@ -1357,7 +1383,7 @@ func (node *IntervalExpr) Format(buf *TrackedBuffer) {
 	buf.Myprintf("interval %v %v", node.Expr, node.Unit)
 }
 
-// WalkSubtree walks the nodes of the subtree
+// WalkSubtree walks the nodes of the subtree.
 func (node *IntervalExpr) WalkSubtree(visit Visit) error {
 	if node == nil {
 		return nil
@@ -1388,7 +1414,7 @@ func (node *FuncExpr) Format(buf *TrackedBuffer) {
 	buf.Myprintf("%s(%s%v)", node.Name, distinct, node.Exprs)
 }
 
-// WalkSubtree walks the nodes of the subtree
+// WalkSubtree walks the nodes of the subtree.
 func (node *FuncExpr) WalkSubtree(visit Visit) error {
 	if node == nil {
 		return nil
@@ -1446,7 +1472,7 @@ func (node *CaseExpr) Format(buf *TrackedBuffer) {
 	buf.Myprintf("end")
 }
 
-// WalkSubtree walks the nodes of the subtree
+// WalkSubtree walks the nodes of the subtree.
 func (node *CaseExpr) WalkSubtree(visit Visit) error {
 	if node == nil {
 		return nil
@@ -1476,7 +1502,7 @@ func (node *When) Format(buf *TrackedBuffer) {
 	buf.Myprintf("when %v then %v", node.Cond, node.Val)
 }
 
-// WalkSubtree walks the nodes of the subtree
+// WalkSubtree walks the nodes of the subtree.
 func (node *When) WalkSubtree(visit Visit) error {
 	if node == nil {
 		return nil
@@ -1500,7 +1526,7 @@ func (node GroupBy) Format(buf *TrackedBuffer) {
 	}
 }
 
-// WalkSubtree walks the nodes of the subtree
+// WalkSubtree walks the nodes of the subtree.
 func (node GroupBy) WalkSubtree(visit Visit) error {
 	for _, n := range node {
 		if err := Walk(visit, n); err != nil {
@@ -1522,7 +1548,7 @@ func (node OrderBy) Format(buf *TrackedBuffer) {
 	}
 }
 
-// WalkSubtree walks the nodes of the subtree
+// WalkSubtree walks the nodes of the subtree.
 func (node OrderBy) WalkSubtree(visit Visit) error {
 	for _, n := range node {
 		if err := Walk(visit, n); err != nil {
@@ -1549,7 +1575,7 @@ func (node *Order) Format(buf *TrackedBuffer) {
 	buf.Myprintf("%v %s", node.Expr, node.Direction)
 }
 
-// WalkSubtree walks the nodes of the subtree
+// WalkSubtree walks the nodes of the subtree.
 func (node *Order) WalkSubtree(visit Visit) error {
 	if node == nil {
 		return nil
@@ -1577,7 +1603,7 @@ func (node *Limit) Format(buf *TrackedBuffer) {
 	buf.Myprintf("%v", node.Rowcount)
 }
 
-// WalkSubtree walks the nodes of the subtree
+// WalkSubtree walks the nodes of the subtree.
 func (node *Limit) WalkSubtree(visit Visit) error {
 	if node == nil {
 		return nil
@@ -1601,7 +1627,7 @@ func (node Values) Format(buf *TrackedBuffer) {
 	}
 }
 
-// WalkSubtree walks the nodes of the subtree
+// WalkSubtree walks the nodes of the subtree.
 func (node Values) WalkSubtree(visit Visit) error {
 	for _, n := range node {
 		if err := Walk(visit, n); err != nil {
@@ -1632,7 +1658,7 @@ func (node UpdateExprs) Format(buf *TrackedBuffer) {
 	}
 }
 
-// WalkSubtree walks the nodes of the subtree
+// WalkSubtree walks the nodes of the subtree.
 func (node UpdateExprs) WalkSubtree(visit Visit) error {
 	for _, n := range node {
 		if err := Walk(visit, n); err != nil {
@@ -1653,7 +1679,7 @@ func (node *UpdateExpr) Format(buf *TrackedBuffer) {
 	buf.Myprintf("%v = %v", node.Name, node.Expr)
 }
 
-// WalkSubtree walks the nodes of the subtree
+// WalkSubtree walks the nodes of the subtree.
 func (node *UpdateExpr) WalkSubtree(visit Visit) error {
 	if node == nil {
 		return nil
@@ -1676,7 +1702,7 @@ func (node OnDup) Format(buf *TrackedBuffer) {
 	buf.Myprintf(" on duplicate key update %v", UpdateExprs(node))
 }
 
-// WalkSubtree walks the nodes of the subtree
+// WalkSubtree walks the nodes of the subtree.
 func (node OnDup) WalkSubtree(visit Visit) error {
 	return Walk(visit, UpdateExprs(node))
 }
@@ -1699,7 +1725,7 @@ func (node ColIdent) Format(buf *TrackedBuffer) {
 	buf.Myprintf("%s", node.Original())
 }
 
-// WalkSubtree walks the nodes of the subtree
+// WalkSubtree walks the nodes of the subtree.
 func (node ColIdent) WalkSubtree(visit Visit) error {
 	return nil
 }
@@ -1744,7 +1770,7 @@ func (node TableIdent) Format(buf *TrackedBuffer) {
 	buf.Myprintf("%s", name)
 }
 
-// WalkSubtree walks the nodes of the subtree
+// WalkSubtree walks the nodes of the subtree.
 func (node TableIdent) WalkSubtree(visit Visit) error {
 	return nil
 }
