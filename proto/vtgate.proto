@@ -607,6 +607,11 @@ message SplitQueryRequest {
   //    This algorithm supports multiple split_column's of any type,
   //    but is slower than EQUAL_SPLITS.
   query.SplitQueryRequest.Algorithm algorithm = 7;
+  // TODO(erez): This field is no longer used by the server code.
+  // Remove this field after this new server code is released to prod.
+  // We must keep it for now, so that clients can still send it to the old
+  // server code currently in production.
+  bool use_split_query_v2 = 8;
 }
 
 // SplitQueryResponse is the returned value from SplitQuery.
