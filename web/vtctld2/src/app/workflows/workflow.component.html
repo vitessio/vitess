@@ -24,7 +24,7 @@
             <span class="vt-workflow-action">
               <button md-raised-button *ngIf="workflow.isNotStarted()" (click)="startClicked($event); false">Start</button>
               <button md-raised-button *ngIf="workflow.isRunning()" (click)="stopClicked($event); false">Stop</button>
-              <button md-raised-button *ngIf="workflow.isDone()" (click)="deleteClicked($event); false">Delete</button>
+              <button md-raised-button *ngIf="!workflow.isRunning()" (click)="deleteClicked($event); false">Delete</button>
             </span>
           </div>
         </header>

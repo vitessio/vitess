@@ -156,12 +156,18 @@ func (*SwapWorkflowFactory) Init(workflowProto *workflowpb.Workflow, args []stri
 
 // Instantiate is a part of workflow.Factory interface. It instantiates workflow.Workflow object from
 // workflowpb.Workflow protobuf object.
-func (*SwapWorkflowFactory) Instantiate(workflowProto *workflowpb.Workflow) (workflow.Workflow, error) {
+func (*SwapWorkflowFactory) Instantiate(workflowProto *workflowpb.Workflow, rootNode *workflow.Node) (workflow.Workflow, error) {
 	data := &swapWorkflowData{}
 	if err := json.Unmarshal(workflowProto.Data, data); err != nil {
 		return nil, err
 	}
-	return &Swap{keyspace: data.Keyspace, sql: data.SQL}, nil
+	rootNode.Message = fmt.Sprintf("Schema swap is executed on the keyspace %s", data.Keyspace)
+
+	return &Swap{
+		keyspace:   data.Keyspace,
+		sql:        data.SQL,
+		rootUINode: rootNode,
+	}, nil
 }
 
 // Run is a part of workflow.Workflow interface. This is the main entrance point of the schema swap workflow.
@@ -171,17 +177,9 @@ func (schemaSwap *Swap) Run(ctx context.Context, manager *workflow.Manager, work
 	schemaSwap.topoServer = topo.GetServer()
 	schemaSwap.tabletClient = tmclient.NewTabletManagerClient()
 
-	rootUINode := workflow.NewNode()
-	rootUINode.PopulateFromWorkflow(workflowInfo)
-	rootUINode.State = workflowpb.WorkflowState_Running
-	rootUINode.Display = workflow.NodeDisplayIndeterminate
-	rootUINode.Message = fmt.Sprintf("Schema swap is executed on the keyspace %s", schemaSwap.keyspace)
-	if err := manager.NodeManager().AddRootNode(rootUINode); err != nil {
-		return err
-	}
-	defer manager.NodeManager().RemoveRootNode(rootUINode)
+	schemaSwap.rootUINode.Display = workflow.NodeDisplayIndeterminate
+	schemaSwap.rootUINode.BroadcastChanges(false /* updateChildren */)
 
-	schemaSwap.rootUINode = rootUINode
 	return schemaSwap.executeSwap()
 }
 

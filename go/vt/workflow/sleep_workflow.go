@@ -69,12 +69,9 @@ func (sw *SleepWorkflow) Run(ctx context.Context, manager *Manager, wi *topo.Wor
 	sw.mu.Lock()
 	sw.manager = manager
 	sw.wi = wi
-	sw.node = NewNode()
-	sw.node.PopulateFromWorkflow(wi)
+
 	sw.node.Listener = sw
-	sw.node.State = workflowpb.WorkflowState_Running
 	sw.node.Display = NodeDisplayDeterminate
-	sw.node.Message = "This workflow is a test workflow that just sleeps for the provided amount of time."
 	sw.node.Actions = []*Action{
 		{
 			Name:  pauseAction,
@@ -88,10 +85,7 @@ func (sw *SleepWorkflow) Run(ctx context.Context, manager *Manager, wi *topo.Wor
 		},
 	}
 	sw.uiUpdateLocked()
-	if err := manager.NodeManager().AddRootNode(sw.node); err != nil {
-		return err
-	}
-	defer manager.NodeManager().RemoveRootNode(sw.node)
+	sw.node.BroadcastChanges(false /* updateChildren */)
 	sw.mu.Unlock()
 
 	for {
@@ -221,13 +215,16 @@ func (f *SleepWorkflowFactory) Init(w *workflowpb.Workflow, args []string) error
 }
 
 // Instantiate is part of the workflow.Factory interface.
-func (f *SleepWorkflowFactory) Instantiate(w *workflowpb.Workflow) (Workflow, error) {
+func (f *SleepWorkflowFactory) Instantiate(w *workflowpb.Workflow, rootNode *Node) (Workflow, error) {
+	rootNode.Message = "This workflow is a test workflow that just sleeps for the provided amount of time."
+
 	data := &SleepWorkflowData{}
 	if err := json.Unmarshal(w.Data, data); err != nil {
 		return nil, err
 	}
 	return &SleepWorkflow{
 		data:   data,
+		node:   rootNode,
 		logger: logutil.NewMemoryLogger(),
 	}, nil
 }
