@@ -11,8 +11,6 @@ import { DialogSettings } from '../shared/dialog/dialog-settings';
 import { PrepareResponse } from '../shared/prepare-response';
 import { NewWorkflowFlags } from '../shared/flags/workflow.flags';
 
-import { MenuItem } from 'primeng/primeng';
-
 @Component({
   selector: 'vt-tasks',
   templateUrl: './workflow-list.component.html',
@@ -25,7 +23,7 @@ import { MenuItem } from 'primeng/primeng';
 })
 
 export class WorkflowListComponent implements OnDestroy, OnInit {
-  title = 'Running Workflows';
+  title = 'Workflows';
   redirect = '';
   workflows = [
     new Node('Horizontal Resharding Workflow', '/UU130429', [
@@ -60,8 +58,6 @@ export class WorkflowListComponent implements OnDestroy, OnInit {
   ];
   dialogSettings: DialogSettings;
   dialogContent: DialogContent;
-  private actions: MenuItem[];
-  private running = true;
 
   constructor(private workflowService: WorkflowService) {}
 
@@ -71,7 +67,6 @@ export class WorkflowListComponent implements OnDestroy, OnInit {
     });
     this.dialogContent = new DialogContent();
     this.dialogSettings = new DialogSettings();
-    this.actions = [{label: 'Toggle Running / Non-running Workflows', command: (event) => {this.toggleRunning(); }}];
 
     // Resharding Workflow Example
     this.updateWorkFlow('/UU130429', {
@@ -397,16 +392,6 @@ dolore magnam aliquam quaerat voluptatem.'});
 
   canDeactivate(): Observable<boolean> | boolean {
     return !this.dialogSettings.pending;
-  }
-
-  toggleRunning() {
-    if (this.running) {
-      this.running = false;
-      this.title = 'Stopped Workflows';
-    } else {
-      this.running = true;
-      this.title = 'Running Workflows';
-    }
   }
 }
 

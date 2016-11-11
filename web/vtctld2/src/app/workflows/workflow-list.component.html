@@ -1,6 +1,4 @@
 <div *ngIf="redirect === ''" class="vt-toolbar vt-padding">
-  <md-icon class="vt-menu" (click)="menu.toggle($event)">menu</md-icon>
-  <p-menu #menu popup="popup" [model]="actions"></p-menu>
   <h1 class="vt-title">{{title}}</h1>
 </div>
 <div *ngIf="redirect !== ''" class="vt-toolbar vt-padding">
