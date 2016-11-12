@@ -124,8 +124,8 @@ func TestTxConnCommit2PC(t *testing.T) {
 	if c := sbc1.CommitPreparedCount.Get(); c != 1 {
 		t.Errorf("sbc1.CommitPreparedCount: %d, want 1", c)
 	}
-	if c := sbc0.ResolveTransactionCount.Get(); c != 1 {
-		t.Errorf("sbc0.ResolveTransactionCount: %d, want 1", c)
+	if c := sbc0.ConcludeTransactionCount.Get(); c != 1 {
+		t.Errorf("sbc0.ConcludeTransactionCount: %d, want 1", c)
 	}
 }
 
@@ -172,8 +172,8 @@ func TestTxConnCommit2PCCreateTransactionFail(t *testing.T) {
 	if c := sbc1.CommitPreparedCount.Get(); c != 0 {
 		t.Errorf("sbc1.CommitPreparedCount: %d, want 0", c)
 	}
-	if c := sbc0.ResolveTransactionCount.Get(); c != 0 {
-		t.Errorf("sbc0.ResolveTransactionCount: %d, want 0", c)
+	if c := sbc0.ConcludeTransactionCount.Get(); c != 0 {
+		t.Errorf("sbc0.ConcludeTransactionCount: %d, want 0", c)
 	}
 }
 
@@ -202,8 +202,8 @@ func TestTxConnCommit2PCPrepareFail(t *testing.T) {
 	if c := sbc1.CommitPreparedCount.Get(); c != 0 {
 		t.Errorf("sbc1.CommitPreparedCount: %d, want 0", c)
 	}
-	if c := sbc0.ResolveTransactionCount.Get(); c != 0 {
-		t.Errorf("sbc0.ResolveTransactionCount: %d, want 0", c)
+	if c := sbc0.ConcludeTransactionCount.Get(); c != 0 {
+		t.Errorf("sbc0.ConcludeTransactionCount: %d, want 0", c)
 	}
 }
 
@@ -232,8 +232,8 @@ func TestTxConnCommit2PCStartCommitFail(t *testing.T) {
 	if c := sbc1.CommitPreparedCount.Get(); c != 0 {
 		t.Errorf("sbc1.CommitPreparedCount: %d, want 0", c)
 	}
-	if c := sbc0.ResolveTransactionCount.Get(); c != 0 {
-		t.Errorf("sbc0.ResolveTransactionCount: %d, want 0", c)
+	if c := sbc0.ConcludeTransactionCount.Get(); c != 0 {
+		t.Errorf("sbc0.ConcludeTransactionCount: %d, want 0", c)
 	}
 }
 
@@ -262,19 +262,19 @@ func TestTxConnCommit2PCCommitPreparedFail(t *testing.T) {
 	if c := sbc1.CommitPreparedCount.Get(); c != 1 {
 		t.Errorf("sbc1.CommitPreparedCount: %d, want 1", c)
 	}
-	if c := sbc0.ResolveTransactionCount.Get(); c != 0 {
-		t.Errorf("sbc0.ResolveTransactionCount: %d, want 0", c)
+	if c := sbc0.ConcludeTransactionCount.Get(); c != 0 {
+		t.Errorf("sbc0.ConcludeTransactionCount: %d, want 0", c)
 	}
 }
 
-func TestTxConnCommit2PCResolveTransactionFail(t *testing.T) {
-	sc, sbc0, sbc1 := newTestTxConnEnv("TestTxConnCommit2PCResolveTransactionFail")
+func TestTxConnCommit2PCConcludeTransactionFail(t *testing.T) {
+	sc, sbc0, sbc1 := newTestTxConnEnv("TestTxConnCommit2PCConcludeTransactionFail")
 
 	session := NewSafeSession(&vtgatepb.Session{InTransaction: true})
-	sc.Execute(context.Background(), "query1", nil, "TestTxConnCommit2PCResolveTransactionFail", []string{"0"}, topodatapb.TabletType_MASTER, session, false, nil)
-	sc.Execute(context.Background(), "query1", nil, "TestTxConnCommit2PCResolveTransactionFail", []string{"0", "1"}, topodatapb.TabletType_MASTER, session, false, nil)
+	sc.Execute(context.Background(), "query1", nil, "TestTxConnCommit2PCConcludeTransactionFail", []string{"0"}, topodatapb.TabletType_MASTER, session, false, nil)
+	sc.Execute(context.Background(), "query1", nil, "TestTxConnCommit2PCConcludeTransactionFail", []string{"0", "1"}, topodatapb.TabletType_MASTER, session, false, nil)
 
-	sbc0.MustFailResolveTransaction = 1
+	sbc0.MustFailConcludeTransaction = 1
 	err := sc.txConn.Commit(context.Background(), true, session)
 	want := "error: err"
 	if err == nil || !strings.Contains(err.Error(), want) {
@@ -292,8 +292,8 @@ func TestTxConnCommit2PCResolveTransactionFail(t *testing.T) {
 	if c := sbc1.CommitPreparedCount.Get(); c != 1 {
 		t.Errorf("sbc1.CommitPreparedCount: %d, want 1", c)
 	}
-	if c := sbc0.ResolveTransactionCount.Get(); c != 1 {
-		t.Errorf("sbc0.ResolveTransactionCount: %d, want 1", c)
+	if c := sbc0.ConcludeTransactionCount.Get(); c != 1 {
+		t.Errorf("sbc0.ConcludeTransactionCount: %d, want 1", c)
 	}
 }
 
@@ -344,8 +344,8 @@ func TestTxConnResumeOnPrepare(t *testing.T) {
 	if c := sbc1.CommitPreparedCount.Get(); c != 0 {
 		t.Errorf("sbc1.CommitPreparedCount: %d, want 0", c)
 	}
-	if c := sbc0.ResolveTransactionCount.Get(); c != 1 {
-		t.Errorf("sbc0.ResolveTransactionCount: %d, want 1", c)
+	if c := sbc0.ConcludeTransactionCount.Get(); c != 1 {
+		t.Errorf("sbc0.ConcludeTransactionCount: %d, want 1", c)
 	}
 }
 
@@ -374,8 +374,8 @@ func TestTxConnResumeOnRollback(t *testing.T) {
 	if c := sbc1.CommitPreparedCount.Get(); c != 0 {
 		t.Errorf("sbc1.CommitPreparedCount: %d, want 0", c)
 	}
-	if c := sbc0.ResolveTransactionCount.Get(); c != 1 {
-		t.Errorf("sbc0.ResolveTransactionCount: %d, want 1", c)
+	if c := sbc0.ConcludeTransactionCount.Get(); c != 1 {
+		t.Errorf("sbc0.ConcludeTransactionCount: %d, want 1", c)
 	}
 }
 
@@ -404,8 +404,8 @@ func TestTxConnResumeOnCommit(t *testing.T) {
 	if c := sbc1.CommitPreparedCount.Get(); c != 1 {
 		t.Errorf("sbc1.CommitPreparedCount: %d, want 1", c)
 	}
-	if c := sbc0.ResolveTransactionCount.Get(); c != 1 {
-		t.Errorf("sbc0.ResolveTransactionCount: %d, want 1", c)
+	if c := sbc0.ConcludeTransactionCount.Get(); c != 1 {
+		t.Errorf("sbc0.ConcludeTransactionCount: %d, want 1", c)
 	}
 }
 
@@ -479,8 +479,8 @@ func TestTxConnResumeSetRollbackFail(t *testing.T) {
 	if c := sbc1.CommitPreparedCount.Get(); c != 0 {
 		t.Errorf("sbc1.CommitPreparedCount: %d, want 0", c)
 	}
-	if c := sbc0.ResolveTransactionCount.Get(); c != 0 {
-		t.Errorf("sbc0.ResolveTransactionCount: %d, want 0", c)
+	if c := sbc0.ConcludeTransactionCount.Get(); c != 0 {
+		t.Errorf("sbc0.ConcludeTransactionCount: %d, want 0", c)
 	}
 }
 
@@ -512,8 +512,8 @@ func TestTxConnResumeRollbackPreparedFail(t *testing.T) {
 	if c := sbc1.CommitPreparedCount.Get(); c != 0 {
 		t.Errorf("sbc1.CommitPreparedCount: %d, want 0", c)
 	}
-	if c := sbc0.ResolveTransactionCount.Get(); c != 0 {
-		t.Errorf("sbc0.ResolveTransactionCount: %d, want 0", c)
+	if c := sbc0.ConcludeTransactionCount.Get(); c != 0 {
+		t.Errorf("sbc0.ConcludeTransactionCount: %d, want 0", c)
 	}
 }
 
@@ -545,12 +545,12 @@ func TestTxConnResumeCommitPreparedFail(t *testing.T) {
 	if c := sbc1.CommitPreparedCount.Get(); c != 1 {
 		t.Errorf("sbc1.CommitPreparedCount: %d, want 1", c)
 	}
-	if c := sbc0.ResolveTransactionCount.Get(); c != 0 {
-		t.Errorf("sbc0.ResolveTransactionCount: %d, want 0", c)
+	if c := sbc0.ConcludeTransactionCount.Get(); c != 0 {
+		t.Errorf("sbc0.ConcludeTransactionCount: %d, want 0", c)
 	}
 }
 
-func TestTxConnResumeResolveTransactionFail(t *testing.T) {
+func TestTxConnResumeConcludeTransactionFail(t *testing.T) {
 	sc, sbc0, sbc1 := newTestTxConnEnv("TestTxConn")
 
 	dtid := "TestTxConn:0:0:1234"
@@ -563,7 +563,7 @@ func TestTxConnResumeResolveTransactionFail(t *testing.T) {
 			TabletType: topodatapb.TabletType_MASTER,
 		}},
 	}}
-	sbc0.MustFailResolveTransaction = 1
+	sbc0.MustFailConcludeTransaction = 1
 	err := sc.txConn.Resume(context.Background(), dtid)
 	want := "error: err"
 	if err == nil || !strings.Contains(err.Error(), want) {
@@ -578,8 +578,8 @@ func TestTxConnResumeResolveTransactionFail(t *testing.T) {
 	if c := sbc1.CommitPreparedCount.Get(); c != 1 {
 		t.Errorf("sbc1.CommitPreparedCount: %d, want 1", c)
 	}
-	if c := sbc0.ResolveTransactionCount.Get(); c != 1 {
-		t.Errorf("sbc0.ResolveTransactionCount: %d, want 1", c)
+	if c := sbc0.ConcludeTransactionCount.Get(); c != 1 {
+		t.Errorf("sbc0.ConcludeTransactionCount: %d, want 1", c)
 	}
 }
 

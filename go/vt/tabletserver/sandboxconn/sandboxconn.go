@@ -42,29 +42,29 @@ type SandboxConn struct {
 
 	// These errors are triggered only for specific functions.
 	// For now these are just for the 2PC functions.
-	MustFailPrepare            int
-	MustFailCommitPrepared     int
-	MustFailRollbackPrepared   int
-	MustFailCreateTransaction  int
-	MustFailStartCommit        int
-	MustFailSetRollback        int
-	MustFailResolveTransaction int
+	MustFailPrepare             int
+	MustFailCommitPrepared      int
+	MustFailRollbackPrepared    int
+	MustFailCreateTransaction   int
+	MustFailStartCommit         int
+	MustFailSetRollback         int
+	MustFailConcludeTransaction int
 
 	// These Count vars report how often the corresponding
 	// functions were called.
-	ExecCount               sync2.AtomicInt64
-	BeginCount              sync2.AtomicInt64
-	CommitCount             sync2.AtomicInt64
-	RollbackCount           sync2.AtomicInt64
-	AsTransactionCount      sync2.AtomicInt64
-	PrepareCount            sync2.AtomicInt64
-	CommitPreparedCount     sync2.AtomicInt64
-	RollbackPreparedCount   sync2.AtomicInt64
-	CreateTransactionCount  sync2.AtomicInt64
-	StartCommitCount        sync2.AtomicInt64
-	SetRollbackCount        sync2.AtomicInt64
-	ResolveTransactionCount sync2.AtomicInt64
-	ReadTransactionCount    sync2.AtomicInt64
+	ExecCount                sync2.AtomicInt64
+	BeginCount               sync2.AtomicInt64
+	CommitCount              sync2.AtomicInt64
+	RollbackCount            sync2.AtomicInt64
+	AsTransactionCount       sync2.AtomicInt64
+	PrepareCount             sync2.AtomicInt64
+	CommitPreparedCount      sync2.AtomicInt64
+	RollbackPreparedCount    sync2.AtomicInt64
+	CreateTransactionCount   sync2.AtomicInt64
+	StartCommitCount         sync2.AtomicInt64
+	SetRollbackCount         sync2.AtomicInt64
+	ConcludeTransactionCount sync2.AtomicInt64
+	ReadTransactionCount     sync2.AtomicInt64
 
 	// Queries stores the non-batch requests received.
 	Queries []querytypes.BoundQuery
@@ -366,12 +366,12 @@ func (sbc *SandboxConn) SetRollback(ctx context.Context, target *querypb.Target,
 	return sbc.getError()
 }
 
-// ResolveTransaction deletes the 2pc transaction metadata
+// ConcludeTransaction deletes the 2pc transaction metadata
 // essentially resolving it.
-func (sbc *SandboxConn) ResolveTransaction(ctx context.Context, target *querypb.Target, dtid string) (err error) {
-	sbc.ResolveTransactionCount.Add(1)
-	if sbc.MustFailResolveTransaction > 0 {
-		sbc.MustFailResolveTransaction--
+func (sbc *SandboxConn) ConcludeTransaction(ctx context.Context, target *querypb.Target, dtid string) (err error) {
+	sbc.ConcludeTransactionCount.Add(1)
+	if sbc.MustFailConcludeTransaction > 0 {
+		sbc.MustFailConcludeTransaction--
 		return &tabletconn.ServerError{
 			Err:        "error: err",
 			ServerCode: vtrpcpb.ErrorCode_QUERY_NOT_SERVED,

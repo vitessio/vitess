@@ -786,12 +786,12 @@ func (tsv *TabletServer) SetRollback(ctx context.Context, target *querypb.Target
 	)
 }
 
-// ResolveTransaction deletes the 2pc transaction metadata
+// ConcludeTransaction deletes the 2pc transaction metadata
 // essentially resolving it.
-func (tsv *TabletServer) ResolveTransaction(ctx context.Context, target *querypb.Target, dtid string) (err error) {
+func (tsv *TabletServer) ConcludeTransaction(ctx context.Context, target *querypb.Target, dtid string) (err error) {
 	return tsv.execRequest(
 		ctx, tsv.QueryTimeout.Get(),
-		"ResolveTransaction", "resolve_transaction", nil,
+		"ConcludeTransaction", "resolve_transaction", nil,
 		target, true, true,
 		func(ctx context.Context, logStats *LogStats) error {
 			txe := &TxExecutor{
@@ -799,7 +799,7 @@ func (tsv *TabletServer) ResolveTransaction(ctx context.Context, target *querypb
 				logStats: logStats,
 				qe:       tsv.qe,
 			}
-			return txe.ResolveTransaction(dtid)
+			return txe.ConcludeTransaction(dtid)
 		},
 	)
 }

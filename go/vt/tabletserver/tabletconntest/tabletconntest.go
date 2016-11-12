@@ -325,29 +325,29 @@ func testSetRollbackPanics(t *testing.T, conn tabletconn.TabletConn, f *FakeQuer
 	})
 }
 
-func testResolveTransaction(t *testing.T, conn tabletconn.TabletConn, f *FakeQueryService) {
-	t.Log("testResolveTransaction")
+func testConcludeTransaction(t *testing.T, conn tabletconn.TabletConn, f *FakeQueryService) {
+	t.Log("testConcludeTransaction")
 	ctx := context.Background()
 	ctx = callerid.NewContext(ctx, TestCallerID, TestVTGateCallerID)
-	err := conn.ResolveTransaction(ctx, TestTarget, Dtid)
+	err := conn.ConcludeTransaction(ctx, TestTarget, Dtid)
 	if err != nil {
-		t.Fatalf("ResolveTransaction failed: %v", err)
+		t.Fatalf("ConcludeTransaction failed: %v", err)
 	}
 }
 
-func testResolveTransactionError(t *testing.T, conn tabletconn.TabletConn, f *FakeQueryService) {
-	t.Log("testResolveTransactionError")
+func testConcludeTransactionError(t *testing.T, conn tabletconn.TabletConn, f *FakeQueryService) {
+	t.Log("testConcludeTransactionError")
 	f.HasError = true
-	testErrorHelper(t, f, "ResolveTransaction", func(ctx context.Context) error {
-		return conn.ResolveTransaction(ctx, TestTarget, Dtid)
+	testErrorHelper(t, f, "ConcludeTransaction", func(ctx context.Context) error {
+		return conn.ConcludeTransaction(ctx, TestTarget, Dtid)
 	})
 	f.HasError = false
 }
 
-func testResolveTransactionPanics(t *testing.T, conn tabletconn.TabletConn, f *FakeQueryService) {
-	t.Log("testResolveTransactionPanics")
-	testPanicHelper(t, f, "ResolveTransaction", func(ctx context.Context) error {
-		return conn.ResolveTransaction(ctx, TestTarget, Dtid)
+func testConcludeTransactionPanics(t *testing.T, conn tabletconn.TabletConn, f *FakeQueryService) {
+	t.Log("testConcludeTransactionPanics")
+	testPanicHelper(t, f, "ConcludeTransaction", func(ctx context.Context) error {
+		return conn.ConcludeTransaction(ctx, TestTarget, Dtid)
 	})
 }
 
@@ -872,7 +872,7 @@ func TestSuite(t *testing.T, protocol string, tablet *topodatapb.Tablet, fake *F
 		testCreateTransaction,
 		testStartCommit,
 		testSetRollback,
-		testResolveTransaction,
+		testConcludeTransaction,
 		testReadTransaction,
 		testExecute,
 		testBeginExecute,
@@ -892,7 +892,7 @@ func TestSuite(t *testing.T, protocol string, tablet *topodatapb.Tablet, fake *F
 		testCreateTransactionError,
 		testStartCommitError,
 		testSetRollbackError,
-		testResolveTransactionError,
+		testConcludeTransactionError,
 		testReadTransactionError,
 		testExecuteError,
 		testBeginExecuteErrorInBegin,
@@ -914,7 +914,7 @@ func TestSuite(t *testing.T, protocol string, tablet *topodatapb.Tablet, fake *F
 		testCreateTransactionPanics,
 		testStartCommitPanics,
 		testSetRollbackPanics,
-		testResolveTransactionPanics,
+		testConcludeTransactionPanics,
 		testReadTransactionPanics,
 		testExecutePanics,
 		testBeginExecutePanics,

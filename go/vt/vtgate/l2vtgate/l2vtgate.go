@@ -143,9 +143,9 @@ func (l *L2VTGate) SetRollback(ctx context.Context, target *querypb.Target, dtid
 	return l.gateway.SetRollback(ctx, target, dtid, transactionID)
 }
 
-// ResolveTransaction is part of the queryservice.QueryService interface
-func (l *L2VTGate) ResolveTransaction(ctx context.Context, target *querypb.Target, dtid string) (err error) {
-	return l.gateway.ResolveTransaction(ctx, target, dtid)
+// ConcludeTransaction is part of the queryservice.QueryService interface
+func (l *L2VTGate) ConcludeTransaction(ctx context.Context, target *querypb.Target, dtid string) (err error) {
+	return l.gateway.ConcludeTransaction(ctx, target, dtid)
 }
 
 // ReadTransaction is part of the queryservice.QueryService interface

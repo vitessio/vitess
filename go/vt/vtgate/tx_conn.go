@@ -110,7 +110,7 @@ func (txc *TxConn) commit2PC(ctx context.Context, session *SafeSession) error {
 		return err
 	}
 
-	return txc.gateway.ResolveTransaction(ctx, mmShard.Target, dtid)
+	return txc.gateway.ConcludeTransaction(ctx, mmShard.Target, dtid)
 }
 
 // Rollback rolls back the current transaction. There are no retries on this operation.
@@ -180,7 +180,7 @@ func (txc *TxConn) resumeRollback(ctx context.Context, target *querypb.Target, t
 	if err != nil {
 		return err
 	}
-	return txc.gateway.ResolveTransaction(ctx, target, transaction.Dtid)
+	return txc.gateway.ConcludeTransaction(ctx, target, transaction.Dtid)
 }
 
 func (txc *TxConn) resumeCommit(ctx context.Context, target *querypb.Target, transaction *querypb.TransactionMetadata) error {
@@ -190,7 +190,7 @@ func (txc *TxConn) resumeCommit(ctx context.Context, target *querypb.Target, tra
 	if err != nil {
 		return err
 	}
-	return txc.gateway.ResolveTransaction(ctx, target, transaction.Dtid)
+	return txc.gateway.ConcludeTransaction(ctx, target, transaction.Dtid)
 }
 
 func (txc *TxConn) generateDTID(mmShard *vtgatepb.Session_ShardSession) string {

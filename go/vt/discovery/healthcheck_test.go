@@ -513,8 +513,8 @@ func (fc *fakeConn) SetRollback(ctx context.Context, target *querypb.Target, dti
 	return fmt.Errorf("not implemented")
 }
 
-// ResolveTransaction implements tabletconn.TabletConn.
-func (fc *fakeConn) ResolveTransaction(ctx context.Context, target *querypb.Target, dtid string) (err error) {
+// ConcludeTransaction implements tabletconn.TabletConn.
+func (fc *fakeConn) ConcludeTransaction(ctx context.Context, target *querypb.Target, dtid string) (err error) {
 	return fmt.Errorf("not implemented")
 }
 

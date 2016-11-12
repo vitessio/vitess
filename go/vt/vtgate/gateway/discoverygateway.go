@@ -237,11 +237,11 @@ func (dg *discoveryGateway) SetRollback(ctx context.Context, target *querypb.Tar
 	}, true, false)
 }
 
-// ResolveTransaction rolls back the current transaction for the specified keyspace, shard, and tablet type.
-func (dg *discoveryGateway) ResolveTransaction(ctx context.Context, target *querypb.Target, dtid string) (err error) {
+// ConcludeTransaction rolls back the current transaction for the specified keyspace, shard, and tablet type.
+func (dg *discoveryGateway) ConcludeTransaction(ctx context.Context, target *querypb.Target, dtid string) (err error) {
 	return dg.withRetry(ctx, target, func(conn tabletconn.TabletConn, target *querypb.Target) error {
 		startTime := time.Now()
-		innerErr := conn.ResolveTransaction(ctx, target, dtid)
+		innerErr := conn.ConcludeTransaction(ctx, target, dtid)
 		dg.updateStats(target, startTime, innerErr)
 		return innerErr
 	}, true, false)

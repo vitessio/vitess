@@ -896,7 +896,7 @@ func TestTabletServerReadTransaction(t *testing.T) {
 	}
 }
 
-func TestTabletServerResolveTransaction(t *testing.T) {
+func TestTabletServerConcludeTransaction(t *testing.T) {
 	_, tsv, db := newTestTxExecutor()
 	defer tsv.StopService()
 	ctx := context.Background()
@@ -904,7 +904,7 @@ func TestTabletServerResolveTransaction(t *testing.T) {
 
 	db.AddQuery("delete from `_vt`.transaction where dtid = 'aa'", &sqltypes.Result{})
 	db.AddQuery("delete from `_vt`.participant where dtid = 'aa'", &sqltypes.Result{})
-	err := tsv.ResolveTransaction(ctx, &target, "aa")
+	err := tsv.ConcludeTransaction(ctx, &target, "aa")
 	if err != nil {
 		t.Error(err)
 	}

@@ -420,16 +420,16 @@ message SetRollbackRequest {
 // SetRollbackResponse is the returned value from SetRollback
 message SetRollbackResponse {}
 
-// ResolveTransactionRequest is the payload to ResolveTransaction
-message ResolveTransactionRequest {
+// ConcludeTransactionRequest is the payload to ConcludeTransaction
+message ConcludeTransactionRequest {
   vtrpc.CallerID effective_caller_id = 1;
   VTGateCallerID immediate_caller_id = 2;
   Target target = 3;
   string dtid = 4;
 }
 
-// ResolveTransactionResponse is the returned value from ResolveTransaction
-message ResolveTransactionResponse {}
+// ConcludeTransactionResponse is the returned value from ConcludeTransaction
+message ConcludeTransactionResponse {}
 
 // ReadTransactionRequest is the payload to ReadTransaction
 message ReadTransactionRequest {

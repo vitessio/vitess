@@ -48,9 +48,9 @@ type QueryService interface {
 	// If a transaction id is provided, that transaction is also rolled back.
 	SetRollback(ctx context.Context, target *querypb.Target, dtid string, transactionID int64) (err error)
 
-	// ResolveTransaction deletes the 2pc transaction metadata
+	// ConcludeTransaction deletes the 2pc transaction metadata
 	// essentially resolving it.
-	ResolveTransaction(ctx context.Context, target *querypb.Target, dtid string) (err error)
+	ConcludeTransaction(ctx context.Context, target *querypb.Target, dtid string) (err error)
 
 	// ReadTransaction returns the metadata for the sepcified dtid.
 	ReadTransaction(ctx context.Context, target *querypb.Target, dtid string) (metadata *querypb.TransactionMetadata, err error)

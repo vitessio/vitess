@@ -64,8 +64,8 @@ func (e *ErrorQueryService) SetRollback(ctx context.Context, target *querypb.Tar
 	return fmt.Errorf("ErrorQueryService does not implement any method")
 }
 
-// ResolveTransaction is part of QueryService interface
-func (e *ErrorQueryService) ResolveTransaction(ctx context.Context, target *querypb.Target, dtid string) (err error) {
+// ConcludeTransaction is part of QueryService interface
+func (e *ErrorQueryService) ConcludeTransaction(ctx context.Context, target *querypb.Target, dtid string) (err error) {
 	return fmt.Errorf("ErrorQueryService does not implement any method")
 }
 

@@ -179,8 +179,8 @@ func (ftc *fakeTabletConn) SetRollback(ctx context.Context, target *querypb.Targ
 	return fmt.Errorf("not implemented in this test")
 }
 
-// ResolveTransaction is part of the TabletConn interface
-func (ftc *fakeTabletConn) ResolveTransaction(ctx context.Context, target *querypb.Target, dtid string) (err error) {
+// ConcludeTransaction is part of the TabletConn interface
+func (ftc *fakeTabletConn) ConcludeTransaction(ctx context.Context, target *querypb.Target, dtid string) (err error) {
 	return fmt.Errorf("not implemented in this test")
 }
 

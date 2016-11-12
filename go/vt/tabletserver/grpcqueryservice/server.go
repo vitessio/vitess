@@ -214,18 +214,18 @@ func (q *query) SetRollback(ctx context.Context, request *querypb.SetRollbackReq
 	return &querypb.SetRollbackResponse{}, nil
 }
 
-// ResolveTransaction is part of the queryservice.QueryServer interface
-func (q *query) ResolveTransaction(ctx context.Context, request *querypb.ResolveTransactionRequest) (response *querypb.ResolveTransactionResponse, err error) {
+// ConcludeTransaction is part of the queryservice.QueryServer interface
+func (q *query) ConcludeTransaction(ctx context.Context, request *querypb.ConcludeTransactionRequest) (response *querypb.ConcludeTransactionResponse, err error) {
 	defer q.server.HandlePanic(&err)
 	ctx = callerid.NewContext(callinfo.GRPCCallInfo(ctx),
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-	if err := q.server.ResolveTransaction(ctx, request.Target, request.Dtid); err != nil {
+	if err := q.server.ConcludeTransaction(ctx, request.Target, request.Dtid); err != nil {
 		return nil, vterrors.ToGRPCError(err)
 	}
 
-	return &querypb.ResolveTransactionResponse{}, nil
+	return &querypb.ConcludeTransactionResponse{}, nil
 }
 
 // ReadTransaction is part of the queryservice.QueryServer interface
