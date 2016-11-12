@@ -151,6 +151,14 @@ func (f *fakeVTGateService) Rollback(ctx context.Context, session *vtgatepb.Sess
 	return nil
 }
 
+// ResolveTransaction is part of the VTGateService interface
+func (f *fakeVTGateService) ResolveTransaction(ctx context.Context, dtid string) error {
+	if dtid != dtid2 {
+		return errors.New("ResolveTransaction: dtid mismatch")
+	}
+	return nil
+}
+
 // SplitQuery is part of the VTGateService interface
 func (f *fakeVTGateService) SplitQuery(
 	ctx context.Context,
@@ -287,3 +295,5 @@ var session2 = &vtgatepb.Session{
 		},
 	},
 }
+
+var dtid2 = "aa"

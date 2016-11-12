@@ -41,6 +41,7 @@ type VTGateService interface {
 	Begin(ctx context.Context) (*vtgatepb.Session, error)
 	Commit(ctx context.Context, twopc bool, session *vtgatepb.Session) error
 	Rollback(ctx context.Context, session *vtgatepb.Session) error
+	ResolveTransaction(ctx context.Context, dtid string) error
 
 	// Map Reduce support
 

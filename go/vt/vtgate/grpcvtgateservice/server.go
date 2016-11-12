@@ -361,6 +361,18 @@ func (vtg *VTGate) Rollback(ctx context.Context, request *vtgatepb.RollbackReque
 	return nil, vterrors.ToGRPCError(vtgErr)
 }
 
+// ResolveTransaction is the RPC version of vtgateservice.VTGateService method
+func (vtg *VTGate) ResolveTransaction(ctx context.Context, request *vtgatepb.ResolveTransactionRequest) (response *vtgatepb.ResolveTransactionResponse, err error) {
+	defer vtg.server.HandlePanic(&err)
+	ctx = withCallerIDContext(ctx, request.CallerId)
+	vtgErr := vtg.server.ResolveTransaction(ctx, request.Dtid)
+	response = &vtgatepb.ResolveTransactionResponse{}
+	if vtgErr == nil {
+		return response, nil
+	}
+	return nil, vterrors.ToGRPCError(vtgErr)
+}
+
 // SplitQuery is the RPC version of vtgateservice.VTGateService method
 func (vtg *VTGate) SplitQuery(ctx context.Context, request *vtgatepb.SplitQueryRequest) (response *vtgatepb.SplitQueryResponse, err error) {
 

@@ -91,7 +91,7 @@ func (txc *TxConn) commit2PC(ctx context.Context, session *SafeSession) error {
 	if err != nil {
 		// TODO(sougou): Perform a more fine-grained cleanup
 		// including unprepared transactions.
-		if resumeErr := txc.Resume(ctx, dtid); resumeErr != nil {
+		if resumeErr := txc.Resolve(ctx, dtid); resumeErr != nil {
 			log.Warningf("Rollback failed after Prepare failure: %v", resumeErr)
 		}
 		// Return the original error even if the previous operation fails.
@@ -135,8 +135,8 @@ func (txc *TxConn) RollbackIfNeeded(ctx context.Context, err error, session *Saf
 	}
 }
 
-// Resume resumes the specified 2PC transaction.
-func (txc *TxConn) Resume(ctx context.Context, dtid string) error {
+// Resolve resolves the specified 2PC transaction.
+func (txc *TxConn) Resolve(ctx context.Context, dtid string) error {
 	mmShard, err := txc.dtidToShardSession(dtid)
 	if err != nil {
 		return err

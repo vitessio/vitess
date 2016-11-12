@@ -522,6 +522,20 @@ message RollbackRequest {
 message RollbackResponse {
 }
 
+// ResolveTransactionRequest is the payload to ResolveTransaction.
+message ResolveTransactionRequest {
+  // caller_id identifies the caller. This is the effective caller ID,
+  // set by the application to further identify the caller.
+  vtrpc.CallerID caller_id = 1;
+
+  // dtid is the dtid of the transaction to be resolved.
+  string dtid = 2;
+}
+
+// ResolveTransactionResponse is the returned value from Rollback.
+message ResolveTransactionResponse {
+}
+
 // SplitQueryRequest is the payload to SplitQuery.
 //
 // SplitQuery takes a "SELECT" query and generates a list of queries called

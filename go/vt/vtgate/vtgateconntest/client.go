@@ -628,6 +628,21 @@ func (f *fakeVTGateService) Rollback(ctx context.Context, inSession *vtgatepb.Se
 	return nil
 }
 
+// ResolveTransaction is part of the VTGateService interface
+func (f *fakeVTGateService) ResolveTransaction(ctx context.Context, dtid string) error {
+	if f.hasError {
+		return errTestVtGateError
+	}
+	if f.panics {
+		panic(fmt.Errorf("test forced panic"))
+	}
+	f.checkCallerID(ctx, "ResolveTransaction")
+	if dtid != dtid2 {
+		return errors.New("ResolveTransaction: dtid mismatch")
+	}
+	return nil
+}
+
 // querySplitQuery contains all the fields we use to test SplitQuery
 type querySplitQuery struct {
 	Keyspace            string
@@ -802,6 +817,7 @@ func TestSuite(t *testing.T, impl vtgateconn.Impl, fakeServer vtgateservice.VTGa
 	testStreamExecuteKeyRanges(t, conn)
 	testStreamExecuteKeyspaceIds(t, conn)
 	testTxPass(t, conn)
+	testResolveTransaction(t, conn)
 	testTxFail(t, conn)
 	testSplitQuery(t, conn)
 	testGetSrvKeyspace(t, conn)
@@ -812,6 +828,7 @@ func TestSuite(t *testing.T, impl vtgateconn.Impl, fakeServer vtgateservice.VTGa
 	testBeginPanic(t, conn)
 	testCommitPanic(t, conn, fs)
 	testRollbackPanic(t, conn, fs)
+	testResolveTransactionPanic(t, conn, fs)
 	testExecutePanic(t, conn)
 	testExecuteShardsPanic(t, conn)
 	testExecuteKeyspaceIdsPanic(t, conn)
@@ -843,6 +860,7 @@ func TestErrorSuite(t *testing.T, fakeServer vtgateservice.VTGateService) {
 	testBeginError(t, conn)
 	testCommitError(t, conn, fs)
 	testRollbackError(t, conn, fs)
+	testResolveTransactionError(t, conn, fs)
 	testExecuteError(t, conn, fs)
 	testExecuteShardsError(t, conn, fs)
 	testExecuteKeyspaceIdsError(t, conn, fs)
@@ -1559,6 +1577,12 @@ func testTxPass(t *testing.T, conn *vtgateconn.VTGateConn) {
 	}
 }
 
+func testResolveTransaction(t *testing.T, conn *vtgateconn.VTGateConn) {
+	if err := conn.ResolveTransaction(newContext(), dtid2); err != nil {
+		t.Error(err)
+	}
+}
+
 func testBeginError(t *testing.T, conn *vtgateconn.VTGateConn) {
 	ctx := newContext()
 	_, err := conn.Begin(ctx)
@@ -1593,6 +1617,11 @@ func testRollbackError(t *testing.T, conn *vtgateconn.VTGateConn, fake *fakeVTGa
 	verifyError(t, err, "Rollback")
 }
 
+func testResolveTransactionError(t *testing.T, conn *vtgateconn.VTGateConn, fake *fakeVTGateService) {
+	err := conn.ResolveTransaction(newContext(), "")
+	verifyError(t, err, "ResolveTransaction")
+}
+
 func testBeginPanic(t *testing.T, conn *vtgateconn.VTGateConn) {
 	ctx := newContext()
 	_, err := conn.Begin(ctx)
@@ -1624,6 +1653,11 @@ func testRollbackPanic(t *testing.T, conn *vtgateconn.VTGateConn, fake *fakeVTGa
 		t.Error(err)
 	}
 	err = tx.Rollback(ctx)
+	expectPanic(t, err)
+}
+
+func testResolveTransactionPanic(t *testing.T, conn *vtgateconn.VTGateConn, fake *fakeVTGateService) {
+	err := conn.ResolveTransaction(newContext(), "")
 	expectPanic(t, err)
 }
 
@@ -2321,6 +2355,8 @@ var session2 = &vtgatepb.Session{
 		},
 	},
 }
+
+var dtid2 = "aa"
 
 var splitQueryRequest = &querySplitQuery{
 	Keyspace: "ks2",

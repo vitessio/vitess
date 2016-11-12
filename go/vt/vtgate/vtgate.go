@@ -583,6 +583,11 @@ func (vtg *VTGate) Rollback(ctx context.Context, session *vtgatepb.Session) erro
 	return formatError(vtg.txConn.Rollback(ctx, NewSafeSession(session)))
 }
 
+// ResolveTransaction resolves the specified 2PC transaction.
+func (vtg *VTGate) ResolveTransaction(ctx context.Context, dtid string) error {
+	return formatError(vtg.txConn.Resolve(ctx, dtid))
+}
+
 // isKeyspaceRangeBasedSharded returns true if a keyspace is sharded
 // by range.  This is true when there is a ShardingColumnType defined
 // in the SrvKeyspace (that is using the range-based sharding with the

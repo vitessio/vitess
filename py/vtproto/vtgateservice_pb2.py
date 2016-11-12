@@ -20,7 +20,7 @@ DESCRIPTOR = _descriptor.FileDescriptor(
   name='vtgateservice.proto',
   package='vtgateservice',
   syntax='proto3',
-  serialized_pb=_b('\n\x13vtgateservice.proto\x12\rvtgateservice\x1a\x0cvtgate.proto2\xa7\x0b\n\x06Vitess\x12<\n\x07\x45xecute\x12\x16.vtgate.ExecuteRequest\x1a\x17.vtgate.ExecuteResponse\"\x00\x12N\n\rExecuteShards\x12\x1c.vtgate.ExecuteShardsRequest\x1a\x1d.vtgate.ExecuteShardsResponse\"\x00\x12]\n\x12\x45xecuteKeyspaceIds\x12!.vtgate.ExecuteKeyspaceIdsRequest\x1a\".vtgate.ExecuteKeyspaceIdsResponse\"\x00\x12W\n\x10\x45xecuteKeyRanges\x12\x1f.vtgate.ExecuteKeyRangesRequest\x1a .vtgate.ExecuteKeyRangesResponse\"\x00\x12W\n\x10\x45xecuteEntityIds\x12\x1f.vtgate.ExecuteEntityIdsRequest\x1a .vtgate.ExecuteEntityIdsResponse\"\x00\x12]\n\x12\x45xecuteBatchShards\x12!.vtgate.ExecuteBatchShardsRequest\x1a\".vtgate.ExecuteBatchShardsResponse\"\x00\x12l\n\x17\x45xecuteBatchKeyspaceIds\x12&.vtgate.ExecuteBatchKeyspaceIdsRequest\x1a\'.vtgate.ExecuteBatchKeyspaceIdsResponse\"\x00\x12P\n\rStreamExecute\x12\x1c.vtgate.StreamExecuteRequest\x1a\x1d.vtgate.StreamExecuteResponse\"\x00\x30\x01\x12\x62\n\x13StreamExecuteShards\x12\".vtgate.StreamExecuteShardsRequest\x1a#.vtgate.StreamExecuteShardsResponse\"\x00\x30\x01\x12q\n\x18StreamExecuteKeyspaceIds\x12\'.vtgate.StreamExecuteKeyspaceIdsRequest\x1a(.vtgate.StreamExecuteKeyspaceIdsResponse\"\x00\x30\x01\x12k\n\x16StreamExecuteKeyRanges\x12%.vtgate.StreamExecuteKeyRangesRequest\x1a&.vtgate.StreamExecuteKeyRangesResponse\"\x00\x30\x01\x12\x36\n\x05\x42\x65gin\x12\x14.vtgate.BeginRequest\x1a\x15.vtgate.BeginResponse\"\x00\x12\x39\n\x06\x43ommit\x12\x15.vtgate.CommitRequest\x1a\x16.vtgate.CommitResponse\"\x00\x12?\n\x08Rollback\x12\x17.vtgate.RollbackRequest\x1a\x18.vtgate.RollbackResponse\"\x00\x12\x45\n\nSplitQuery\x12\x19.vtgate.SplitQueryRequest\x1a\x1a.vtgate.SplitQueryResponse\"\x00\x12Q\n\x0eGetSrvKeyspace\x12\x1d.vtgate.GetSrvKeyspaceRequest\x1a\x1e.vtgate.GetSrvKeyspaceResponse\"\x00\x12M\n\x0cUpdateStream\x12\x1b.vtgate.UpdateStreamRequest\x1a\x1c.vtgate.UpdateStreamResponse\"\x00\x30\x01\x42\x1f\n\x1d\x63om.youtube.vitess.proto.grpcb\x06proto3')
+  serialized_pb=_b('\n\x13vtgateservice.proto\x12\rvtgateservice\x1a\x0cvtgate.proto2\x86\x0c\n\x06Vitess\x12<\n\x07\x45xecute\x12\x16.vtgate.ExecuteRequest\x1a\x17.vtgate.ExecuteResponse\"\x00\x12N\n\rExecuteShards\x12\x1c.vtgate.ExecuteShardsRequest\x1a\x1d.vtgate.ExecuteShardsResponse\"\x00\x12]\n\x12\x45xecuteKeyspaceIds\x12!.vtgate.ExecuteKeyspaceIdsRequest\x1a\".vtgate.ExecuteKeyspaceIdsResponse\"\x00\x12W\n\x10\x45xecuteKeyRanges\x12\x1f.vtgate.ExecuteKeyRangesRequest\x1a .vtgate.ExecuteKeyRangesResponse\"\x00\x12W\n\x10\x45xecuteEntityIds\x12\x1f.vtgate.ExecuteEntityIdsRequest\x1a .vtgate.ExecuteEntityIdsResponse\"\x00\x12]\n\x12\x45xecuteBatchShards\x12!.vtgate.ExecuteBatchShardsRequest\x1a\".vtgate.ExecuteBatchShardsResponse\"\x00\x12l\n\x17\x45xecuteBatchKeyspaceIds\x12&.vtgate.ExecuteBatchKeyspaceIdsRequest\x1a\'.vtgate.ExecuteBatchKeyspaceIdsResponse\"\x00\x12P\n\rStreamExecute\x12\x1c.vtgate.StreamExecuteRequest\x1a\x1d.vtgate.StreamExecuteResponse\"\x00\x30\x01\x12\x62\n\x13StreamExecuteShards\x12\".vtgate.StreamExecuteShardsRequest\x1a#.vtgate.StreamExecuteShardsResponse\"\x00\x30\x01\x12q\n\x18StreamExecuteKeyspaceIds\x12\'.vtgate.StreamExecuteKeyspaceIdsRequest\x1a(.vtgate.StreamExecuteKeyspaceIdsResponse\"\x00\x30\x01\x12k\n\x16StreamExecuteKeyRanges\x12%.vtgate.StreamExecuteKeyRangesRequest\x1a&.vtgate.StreamExecuteKeyRangesResponse\"\x00\x30\x01\x12\x36\n\x05\x42\x65gin\x12\x14.vtgate.BeginRequest\x1a\x15.vtgate.BeginResponse\"\x00\x12\x39\n\x06\x43ommit\x12\x15.vtgate.CommitRequest\x1a\x16.vtgate.CommitResponse\"\x00\x12?\n\x08Rollback\x12\x17.vtgate.RollbackRequest\x1a\x18.vtgate.RollbackResponse\"\x00\x12]\n\x12ResolveTransaction\x12!.vtgate.ResolveTransactionRequest\x1a\".vtgate.ResolveTransactionResponse\"\x00\x12\x45\n\nSplitQuery\x12\x19.vtgate.SplitQueryRequest\x1a\x1a.vtgate.SplitQueryResponse\"\x00\x12Q\n\x0eGetSrvKeyspace\x12\x1d.vtgate.GetSrvKeyspaceRequest\x1a\x1e.vtgate.GetSrvKeyspaceResponse\"\x00\x12M\n\x0cUpdateStream\x12\x1b.vtgate.UpdateStreamRequest\x1a\x1c.vtgate.UpdateStreamResponse\"\x00\x30\x01\x42\x1f\n\x1d\x63om.youtube.vitess.proto.grpcb\x06proto3')
   ,
   dependencies=[vtgate__pb2.DESCRIPTOR,])
 _sym_db.RegisterFileDescriptor(DESCRIPTOR)
@@ -118,6 +118,11 @@ class VitessStub(object):
         '/vtgateservice.Vitess/Rollback',
         request_serializer=vtgate__pb2.RollbackRequest.SerializeToString,
         response_deserializer=vtgate__pb2.RollbackResponse.FromString,
+        )
+    self.ResolveTransaction = channel.unary_unary(
+        '/vtgateservice.Vitess/ResolveTransaction',
+        request_serializer=vtgate__pb2.ResolveTransactionRequest.SerializeToString,
+        response_deserializer=vtgate__pb2.ResolveTransactionResponse.FromString,
         )
     self.SplitQuery = channel.unary_unary(
         '/vtgateservice.Vitess/SplitQuery',
@@ -261,6 +266,14 @@ class VitessServicer(object):
     context.set_details('Method not implemented!')
     raise NotImplementedError('Method not implemented!')
 
+  def ResolveTransaction(self, request, context):
+    """ResolveTransaction resolves a transaction.
+    API group: Transactions
+    """
+    context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+    context.set_details('Method not implemented!')
+    raise NotImplementedError('Method not implemented!')
+
   def SplitQuery(self, request, context):
     """Split a query into non-overlapping sub queries
     API group: Map Reduce
@@ -364,6 +377,11 @@ def add_VitessServicer_to_server(servicer, server):
           request_deserializer=vtgate__pb2.RollbackRequest.FromString,
           response_serializer=vtgate__pb2.RollbackResponse.SerializeToString,
       ),
+      'ResolveTransaction': grpc.unary_unary_rpc_method_handler(
+          servicer.ResolveTransaction,
+          request_deserializer=vtgate__pb2.ResolveTransactionRequest.FromString,
+          response_serializer=vtgate__pb2.ResolveTransactionResponse.SerializeToString,
+      ),
       'SplitQuery': grpc.unary_unary_rpc_method_handler(
           servicer.SplitQuery,
           request_deserializer=vtgate__pb2.SplitQueryRequest.FromString,
@@ -464,6 +482,11 @@ class BetaVitessServicer(object):
     context.code(beta_interfaces.StatusCode.UNIMPLEMENTED)
   def Rollback(self, request, context):
     """Rollback a transaction.
+    API group: Transactions
+    """
+    context.code(beta_interfaces.StatusCode.UNIMPLEMENTED)
+  def ResolveTransaction(self, request, context):
+    """ResolveTransaction resolves a transaction.
     API group: Transactions
     """
     context.code(beta_interfaces.StatusCode.UNIMPLEMENTED)
@@ -582,6 +605,12 @@ class BetaVitessStub(object):
     """
     raise NotImplementedError()
   Rollback.future = None
+  def ResolveTransaction(self, request, timeout, metadata=None, with_call=False, protocol_options=None):
+    """ResolveTransaction resolves a transaction.
+    API group: Transactions
+    """
+    raise NotImplementedError()
+  ResolveTransaction.future = None
   def SplitQuery(self, request, timeout, metadata=None, with_call=False, protocol_options=None):
     """Split a query into non-overlapping sub queries
     API group: Map Reduce
@@ -619,6 +648,7 @@ def beta_create_Vitess_server(servicer, pool=None, pool_size=None, default_timeo
     ('vtgateservice.Vitess', 'ExecuteKeyspaceIds'): vtgate__pb2.ExecuteKeyspaceIdsRequest.FromString,
     ('vtgateservice.Vitess', 'ExecuteShards'): vtgate__pb2.ExecuteShardsRequest.FromString,
     ('vtgateservice.Vitess', 'GetSrvKeyspace'): vtgate__pb2.GetSrvKeyspaceRequest.FromString,
+    ('vtgateservice.Vitess', 'ResolveTransaction'): vtgate__pb2.ResolveTransactionRequest.FromString,
     ('vtgateservice.Vitess', 'Rollback'): vtgate__pb2.RollbackRequest.FromString,
     ('vtgateservice.Vitess', 'SplitQuery'): vtgate__pb2.SplitQueryRequest.FromString,
     ('vtgateservice.Vitess', 'StreamExecute'): vtgate__pb2.StreamExecuteRequest.FromString,
@@ -638,6 +668,7 @@ def beta_create_Vitess_server(servicer, pool=None, pool_size=None, default_timeo
     ('vtgateservice.Vitess', 'ExecuteKeyspaceIds'): vtgate__pb2.ExecuteKeyspaceIdsResponse.SerializeToString,
     ('vtgateservice.Vitess', 'ExecuteShards'): vtgate__pb2.ExecuteShardsResponse.SerializeToString,
     ('vtgateservice.Vitess', 'GetSrvKeyspace'): vtgate__pb2.GetSrvKeyspaceResponse.SerializeToString,
+    ('vtgateservice.Vitess', 'ResolveTransaction'): vtgate__pb2.ResolveTransactionResponse.SerializeToString,
     ('vtgateservice.Vitess', 'Rollback'): vtgate__pb2.RollbackResponse.SerializeToString,
     ('vtgateservice.Vitess', 'SplitQuery'): vtgate__pb2.SplitQueryResponse.SerializeToString,
     ('vtgateservice.Vitess', 'StreamExecute'): vtgate__pb2.StreamExecuteResponse.SerializeToString,
@@ -657,6 +688,7 @@ def beta_create_Vitess_server(servicer, pool=None, pool_size=None, default_timeo
     ('vtgateservice.Vitess', 'ExecuteKeyspaceIds'): face_utilities.unary_unary_inline(servicer.ExecuteKeyspaceIds),
     ('vtgateservice.Vitess', 'ExecuteShards'): face_utilities.unary_unary_inline(servicer.ExecuteShards),
     ('vtgateservice.Vitess', 'GetSrvKeyspace'): face_utilities.unary_unary_inline(servicer.GetSrvKeyspace),
+    ('vtgateservice.Vitess', 'ResolveTransaction'): face_utilities.unary_unary_inline(servicer.ResolveTransaction),
     ('vtgateservice.Vitess', 'Rollback'): face_utilities.unary_unary_inline(servicer.Rollback),
     ('vtgateservice.Vitess', 'SplitQuery'): face_utilities.unary_unary_inline(servicer.SplitQuery),
     ('vtgateservice.Vitess', 'StreamExecute'): face_utilities.unary_stream_inline(servicer.StreamExecute),
@@ -681,6 +713,7 @@ def beta_create_Vitess_stub(channel, host=None, metadata_transformer=None, pool=
     ('vtgateservice.Vitess', 'ExecuteKeyspaceIds'): vtgate__pb2.ExecuteKeyspaceIdsRequest.SerializeToString,
     ('vtgateservice.Vitess', 'ExecuteShards'): vtgate__pb2.ExecuteShardsRequest.SerializeToString,
     ('vtgateservice.Vitess', 'GetSrvKeyspace'): vtgate__pb2.GetSrvKeyspaceRequest.SerializeToString,
+    ('vtgateservice.Vitess', 'ResolveTransaction'): vtgate__pb2.ResolveTransactionRequest.SerializeToString,
     ('vtgateservice.Vitess', 'Rollback'): vtgate__pb2.RollbackRequest.SerializeToString,
     ('vtgateservice.Vitess', 'SplitQuery'): vtgate__pb2.SplitQueryRequest.SerializeToString,
     ('vtgateservice.Vitess', 'StreamExecute'): vtgate__pb2.StreamExecuteRequest.SerializeToString,
@@ -700,6 +733,7 @@ def beta_create_Vitess_stub(channel, host=None, metadata_transformer=None, pool=
     ('vtgateservice.Vitess', 'ExecuteKeyspaceIds'): vtgate__pb2.ExecuteKeyspaceIdsResponse.FromString,
     ('vtgateservice.Vitess', 'ExecuteShards'): vtgate__pb2.ExecuteShardsResponse.FromString,
     ('vtgateservice.Vitess', 'GetSrvKeyspace'): vtgate__pb2.GetSrvKeyspaceResponse.FromString,
+    ('vtgateservice.Vitess', 'ResolveTransaction'): vtgate__pb2.ResolveTransactionResponse.FromString,
     ('vtgateservice.Vitess', 'Rollback'): vtgate__pb2.RollbackResponse.FromString,
     ('vtgateservice.Vitess', 'SplitQuery'): vtgate__pb2.SplitQueryResponse.FromString,
     ('vtgateservice.Vitess', 'StreamExecute'): vtgate__pb2.StreamExecuteResponse.FromString,
@@ -719,6 +753,7 @@ def beta_create_Vitess_stub(channel, host=None, metadata_transformer=None, pool=
     'ExecuteKeyspaceIds': cardinality.Cardinality.UNARY_UNARY,
     'ExecuteShards': cardinality.Cardinality.UNARY_UNARY,
     'GetSrvKeyspace': cardinality.Cardinality.UNARY_UNARY,
+    'ResolveTransaction': cardinality.Cardinality.UNARY_UNARY,
     'Rollback': cardinality.Cardinality.UNARY_UNARY,
     'SplitQuery': cardinality.Cardinality.UNARY_UNARY,
     'StreamExecute': cardinality.Cardinality.UNARY_STREAM,

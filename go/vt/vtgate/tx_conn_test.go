@@ -318,7 +318,7 @@ func TestTxConnRollback(t *testing.T) {
 	}
 }
 
-func TestTxConnResumeOnPrepare(t *testing.T) {
+func TestTxConnResolveOnPrepare(t *testing.T) {
 	sc, sbc0, sbc1 := newTestTxConnEnv("TestTxConn")
 
 	dtid := "TestTxConn:0:0:1234"
@@ -331,7 +331,7 @@ func TestTxConnResumeOnPrepare(t *testing.T) {
 			TabletType: topodatapb.TabletType_MASTER,
 		}},
 	}}
-	err := sc.txConn.Resume(context.Background(), dtid)
+	err := sc.txConn.Resolve(context.Background(), dtid)
 	if err != nil {
 		t.Error(err)
 	}
@@ -349,7 +349,7 @@ func TestTxConnResumeOnPrepare(t *testing.T) {
 	}
 }
 
-func TestTxConnResumeOnRollback(t *testing.T) {
+func TestTxConnResolveOnRollback(t *testing.T) {
 	sc, sbc0, sbc1 := newTestTxConnEnv("TestTxConn")
 
 	dtid := "TestTxConn:0:0:1234"
@@ -362,7 +362,7 @@ func TestTxConnResumeOnRollback(t *testing.T) {
 			TabletType: topodatapb.TabletType_MASTER,
 		}},
 	}}
-	if err := sc.txConn.Resume(context.Background(), dtid); err != nil {
+	if err := sc.txConn.Resolve(context.Background(), dtid); err != nil {
 		t.Error(err)
 	}
 	if c := sbc0.SetRollbackCount.Get(); c != 0 {
@@ -379,7 +379,7 @@ func TestTxConnResumeOnRollback(t *testing.T) {
 	}
 }
 
-func TestTxConnResumeOnCommit(t *testing.T) {
+func TestTxConnResolveOnCommit(t *testing.T) {
 	sc, sbc0, sbc1 := newTestTxConnEnv("TestTxConn")
 
 	dtid := "TestTxConn:0:0:1234"
@@ -392,7 +392,7 @@ func TestTxConnResumeOnCommit(t *testing.T) {
 			TabletType: topodatapb.TabletType_MASTER,
 		}},
 	}}
-	if err := sc.txConn.Resume(context.Background(), dtid); err != nil {
+	if err := sc.txConn.Resolve(context.Background(), dtid); err != nil {
 		t.Error(err)
 	}
 	if c := sbc0.SetRollbackCount.Get(); c != 0 {
@@ -409,29 +409,29 @@ func TestTxConnResumeOnCommit(t *testing.T) {
 	}
 }
 
-func TestTxConnResumeInvalidDTID(t *testing.T) {
+func TestTxConnResolveInvalidDTID(t *testing.T) {
 	sc, _, _ := newTestTxConnEnv("TestTxConn")
 
-	err := sc.txConn.Resume(context.Background(), "abcd")
+	err := sc.txConn.Resolve(context.Background(), "abcd")
 	want := "invalid parts in dtid: abcd"
 	if err == nil || err.Error() != want {
-		t.Errorf("Resume: %v, want %s", err, want)
+		t.Errorf("Resolve: %v, want %s", err, want)
 	}
 }
 
-func TestTxConnResumeReadTransactionFail(t *testing.T) {
+func TestTxConnResolveReadTransactionFail(t *testing.T) {
 	sc, sbc0, _ := newTestTxConnEnv("TestTxConn")
 
 	dtid := "TestTxConn:0:0:1234"
 	sbc0.MustFailServer = 1
-	err := sc.txConn.Resume(context.Background(), dtid)
+	err := sc.txConn.Resolve(context.Background(), dtid)
 	want := "error: err"
 	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("Resume: %v, want %s", err, want)
+		t.Errorf("Resolve: %v, want %s", err, want)
 	}
 }
 
-func TestTxConnResumeInternalError(t *testing.T) {
+func TestTxConnResolveInternalError(t *testing.T) {
 	sc, sbc0, _ := newTestTxConnEnv("TestTxConn")
 
 	dtid := "TestTxConn:0:0:1234"
@@ -444,14 +444,14 @@ func TestTxConnResumeInternalError(t *testing.T) {
 			TabletType: topodatapb.TabletType_MASTER,
 		}},
 	}}
-	err := sc.txConn.Resume(context.Background(), dtid)
+	err := sc.txConn.Resolve(context.Background(), dtid)
 	want := "invalid state: UNKNOWN"
 	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("Resume: %v, want %s", err, want)
+		t.Errorf("Resolve: %v, want %s", err, want)
 	}
 }
 
-func TestTxConnResumeSetRollbackFail(t *testing.T) {
+func TestTxConnResolveSetRollbackFail(t *testing.T) {
 	sc, sbc0, sbc1 := newTestTxConnEnv("TestTxConn")
 
 	dtid := "TestTxConn:0:0:1234"
@@ -465,10 +465,10 @@ func TestTxConnResumeSetRollbackFail(t *testing.T) {
 		}},
 	}}
 	sbc0.MustFailSetRollback = 1
-	err := sc.txConn.Resume(context.Background(), dtid)
+	err := sc.txConn.Resolve(context.Background(), dtid)
 	want := "error: err"
 	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("Resume: %v, want %s", err, want)
+		t.Errorf("Resolve: %v, want %s", err, want)
 	}
 	if c := sbc0.SetRollbackCount.Get(); c != 1 {
 		t.Errorf("sbc0.SetRollbackCount: %d, want 1", c)
@@ -484,7 +484,7 @@ func TestTxConnResumeSetRollbackFail(t *testing.T) {
 	}
 }
 
-func TestTxConnResumeRollbackPreparedFail(t *testing.T) {
+func TestTxConnResolveRollbackPreparedFail(t *testing.T) {
 	sc, sbc0, sbc1 := newTestTxConnEnv("TestTxConn")
 
 	dtid := "TestTxConn:0:0:1234"
@@ -498,10 +498,10 @@ func TestTxConnResumeRollbackPreparedFail(t *testing.T) {
 		}},
 	}}
 	sbc1.MustFailRollbackPrepared = 1
-	err := sc.txConn.Resume(context.Background(), dtid)
+	err := sc.txConn.Resolve(context.Background(), dtid)
 	want := "error: err"
 	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("Resume: %v, want %s", err, want)
+		t.Errorf("Resolve: %v, want %s", err, want)
 	}
 	if c := sbc0.SetRollbackCount.Get(); c != 0 {
 		t.Errorf("sbc0.SetRollbackCount: %d, want 0", c)
@@ -517,7 +517,7 @@ func TestTxConnResumeRollbackPreparedFail(t *testing.T) {
 	}
 }
 
-func TestTxConnResumeCommitPreparedFail(t *testing.T) {
+func TestTxConnResolveCommitPreparedFail(t *testing.T) {
 	sc, sbc0, sbc1 := newTestTxConnEnv("TestTxConn")
 
 	dtid := "TestTxConn:0:0:1234"
@@ -531,10 +531,10 @@ func TestTxConnResumeCommitPreparedFail(t *testing.T) {
 		}},
 	}}
 	sbc1.MustFailCommitPrepared = 1
-	err := sc.txConn.Resume(context.Background(), dtid)
+	err := sc.txConn.Resolve(context.Background(), dtid)
 	want := "error: err"
 	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("Resume: %v, want %s", err, want)
+		t.Errorf("Resolve: %v, want %s", err, want)
 	}
 	if c := sbc0.SetRollbackCount.Get(); c != 0 {
 		t.Errorf("sbc0.SetRollbackCount: %d, want 0", c)
@@ -550,7 +550,7 @@ func TestTxConnResumeCommitPreparedFail(t *testing.T) {
 	}
 }
 
-func TestTxConnResumeConcludeTransactionFail(t *testing.T) {
+func TestTxConnResolveConcludeTransactionFail(t *testing.T) {
 	sc, sbc0, sbc1 := newTestTxConnEnv("TestTxConn")
 
 	dtid := "TestTxConn:0:0:1234"
@@ -564,10 +564,10 @@ func TestTxConnResumeConcludeTransactionFail(t *testing.T) {
 		}},
 	}}
 	sbc0.MustFailConcludeTransaction = 1
-	err := sc.txConn.Resume(context.Background(), dtid)
+	err := sc.txConn.Resolve(context.Background(), dtid)
 	want := "error: err"
 	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("Resume: %v, want %s", err, want)
+		t.Errorf("Resolve: %v, want %s", err, want)
 	}
 	if c := sbc0.SetRollbackCount.Get(); c != 0 {
 		t.Errorf("sbc0.SetRollbackCount: %d, want 0", c)

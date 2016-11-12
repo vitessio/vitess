@@ -88,6 +88,10 @@ func (c *terminalClient) Rollback(ctx context.Context, session *vtgatepb.Session
 	return errTerminal
 }
 
+func (c *terminalClient) ResolveTransaction(ctx context.Context, dtid string) error {
+	return errTerminal
+}
+
 func (c *terminalClient) SplitQuery(
 	ctx context.Context,
 	keyspace string,

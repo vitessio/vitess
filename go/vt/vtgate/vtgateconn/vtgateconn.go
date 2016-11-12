@@ -111,6 +111,11 @@ func (conn *VTGateConn) StreamExecuteKeyspaceIds(ctx context.Context, query stri
 	return conn.impl.StreamExecuteKeyspaceIds(ctx, query, keyspace, keyspaceIds, bindVars, tabletType, options)
 }
 
+// ResolveTransaction resolves the 2pc transaction.
+func (conn *VTGateConn) ResolveTransaction(ctx context.Context, dtid string) error {
+	return conn.impl.ResolveTransaction(ctx, dtid)
+}
+
 // Begin starts a transaction and returns a VTGateTX.
 func (conn *VTGateConn) Begin(ctx context.Context) (*VTGateTx, error) {
 	session, err := conn.impl.Begin(ctx)
@@ -311,6 +316,8 @@ type Impl interface {
 	Commit(ctx context.Context, session interface{}) error
 	// Rollback rolls back the current transaction.
 	Rollback(ctx context.Context, session interface{}) error
+	// ResolveTransaction resolves the specified 2pc transaction.
+	ResolveTransaction(ctx context.Context, dtid string) error
 
 	// SplitQuery splits a query into smaller queries. It is mostly used by batch job frameworks
 	// such as MapReduce. See the documentation for the vtgate.SplitQueryRequest protocol buffer

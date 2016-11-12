@@ -83,6 +83,10 @@ func (c fallbackClient) Rollback(ctx context.Context, session *vtgatepb.Session)
 	return c.fallback.Rollback(ctx, session)
 }
 
+func (c fallbackClient) ResolveTransaction(ctx context.Context, dtid string) error {
+	return c.fallback.ResolveTransaction(ctx, dtid)
+}
+
 func (c fallbackClient) SplitQuery(
 	ctx context.Context,
 	keyspace string,
