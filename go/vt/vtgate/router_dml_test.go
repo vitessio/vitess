@@ -414,7 +414,7 @@ func TestInsertGenerator(t *testing.T) {
 		t.Errorf("sbc.Queries: %+v, want %+v\n", sbc.Queries, wantQueries)
 	}
 	wantQueries = []querytypes.BoundQuery{{
-		Sql:           "select next value from `user_seq`",
+		Sql:           "select next 1 values from `user_seq`",
 		BindVariables: map[string]interface{}{},
 	}, {
 		Sql: "insert into name_user_map(name, user_id) values (:name, :user_id)",
@@ -489,7 +489,7 @@ func TestInsertLookupOwnedGenerator(t *testing.T) {
 		t.Errorf("sbc.Queries:\n%+v, want\n%+v\n", sbc.Queries, wantQueries)
 	}
 	wantQueries = []querytypes.BoundQuery{{
-		Sql:           "select next value from `user_seq`",
+		Sql:           "select next 1 values from `user_seq`",
 		BindVariables: map[string]interface{}{},
 	}, {
 		Sql: "insert into music_user_map(music_id, user_id) values (:music_id, :user_id)",
@@ -800,7 +800,7 @@ func TestMultiInsertGenerator(t *testing.T) {
 		t.Errorf("sbc.Queries: %+v, want %+v\n", sbc.Queries, wantQueries)
 	}
 	wantQueries = []querytypes.BoundQuery{{
-		Sql:           "select next value from `user_seq`",
+		Sql:           "select next 1 values from `user_seq`",
 		BindVariables: map[string]interface{}{},
 	}, {
 		Sql: "insert into name_user_map(name, user_id) values (:name, :user_id)",
@@ -809,7 +809,7 @@ func TestMultiInsertGenerator(t *testing.T) {
 			"user_id": int64(1),
 		},
 	}, {
-		Sql:           "select next value from `user_seq`",
+		Sql:           "select next 1 values from `user_seq`",
 		BindVariables: map[string]interface{}{},
 	}, {
 		Sql: "insert into name_user_map(name, user_id) values (:name, :user_id)",

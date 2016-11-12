@@ -214,7 +214,7 @@ func pushSelectRoutes(selectExprs sqlparser.SelectExprs, bldr builder) ([]*colsy
 		case sqlparser.Nextval:
 			// For now, this is only supported as an implicit feature
 			// for auto_inc in inserts.
-			return nil, errors.New("unsupported: NEXT VALUE construct")
+			return nil, errors.New("unsupported: NEXT VALUES construct")
 		}
 	}
 	return colsyms, nil

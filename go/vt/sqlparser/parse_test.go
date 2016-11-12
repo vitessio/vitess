@@ -88,9 +88,14 @@ func TestValid(t *testing.T) {
 		input: "select /* a.* */ a.* from t",
 	}, {
 		input:  "select next value for t",
-		output: "select next value from t",
+		output: "select next 1 values from t",
 	}, {
-		input: "select next value from t",
+		input:  "select next value from t",
+		output: "select next 1 values from t",
+	}, {
+		input: "select next 10 values from t",
+	}, {
+		input: "select next :a values from t",
 	}, {
 		input: "select /* `By`.* */ `By`.* from t",
 	}, {
@@ -644,7 +649,7 @@ func TestCaseSensitivity(t *testing.T) {
 		output: "select /* lock in SHARE MODE */ 1 from t lock in share mode",
 	}, {
 		input:  "select next VALUE from t",
-		output: "select next value from t",
+		output: "select next 1 values from t",
 	}, {
 		input: "select /* use */ 1 from t1 use index (A) where b = 1",
 	}}
@@ -754,7 +759,10 @@ func TestErrors(t *testing.T) {
 		output: "syntax error at position 34 near 'on'",
 	}, {
 		input:  "select next id from a",
-		output: "expecting value after next at position 23",
+		output: "expecting value after next at position 15 near 'id'",
+	}, {
+		input:  "select next 1+1 values from a",
+		output: "syntax error at position 15",
 	}}
 	for _, tcase := range invalidSQL {
 		if tcase.output == "" {

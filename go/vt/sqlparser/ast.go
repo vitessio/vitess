@@ -532,16 +532,18 @@ func (node *NonStarExpr) WalkSubtree(visit Visit) error {
 }
 
 // Nextval defines the NEXT VALUE expression.
-type Nextval struct{}
+type Nextval struct {
+	Expr ValExpr
+}
 
 // Format formats the node.
 func (node Nextval) Format(buf *TrackedBuffer) {
-	buf.Myprintf("next value")
+	buf.Myprintf("next %v values", node.Expr)
 }
 
 // WalkSubtree walks the nodes of the subtree.
 func (node Nextval) WalkSubtree(visit Visit) error {
-	return nil
+	return Walk(visit, node.Expr)
 }
 
 // Columns represents an insert column list.

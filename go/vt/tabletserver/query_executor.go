@@ -315,12 +315,20 @@ func (qre *QueryExecutor) execDDL() (*sqltypes.Result, error) {
 }
 
 func (qre *QueryExecutor) execNextval() (*sqltypes.Result, error) {
+	inc, err := resolveNumber(qre.plan.PKValues[0], qre.bindVars)
+	if err != nil {
+		return nil, err
+	}
+	if inc < 1 {
+		return nil, fmt.Errorf("invalid increment for sequence %s: %d", qre.plan.TableName, inc)
+	}
+
 	t := qre.plan.TableInfo
 	t.Seq.Lock()
 	defer t.Seq.Unlock()
-	if t.NextVal >= t.LastVal {
+	if t.NextVal == 0 || t.NextVal+inc > t.LastVal {
 		_, err := qre.execAsTransaction(func(conn *TxConnection) (*sqltypes.Result, error) {
-			query := fmt.Sprintf("select next_id, cache, increment from `%s` where id = 0 for update", qre.plan.TableName)
+			query := fmt.Sprintf("select next_id, cache from `%s` where id = 0 for update", qre.plan.TableName)
 			qr, err := qre.execSQL(conn, query, false)
 			if err != nil {
 				return nil, err
@@ -332,6 +340,10 @@ func (qre *QueryExecutor) execNextval() (*sqltypes.Result, error) {
 			if err != nil {
 				return nil, fmt.Errorf("error loading sequence %s: %v", qre.plan.TableName, err)
 			}
+			// Initialize NextVal if it wasn't already.
+			if t.NextVal == 0 {
+				t.NextVal = nextID
+			}
 			cache, err := qr.Rows[0][1].ParseInt64()
 			if err != nil {
 				return nil, fmt.Errorf("error loading sequence %s: %v", qre.plan.TableName, err)
@@ -339,22 +351,16 @@ func (qre *QueryExecutor) execNextval() (*sqltypes.Result, error) {
 			if cache < 1 {
 				return nil, fmt.Errorf("invalid cache value for sequence %s: %d", qre.plan.TableName, cache)
 			}
-			inc, err := qr.Rows[0][2].ParseInt64()
-			if err != nil {
-				return nil, fmt.Errorf("error loading sequence %s: %v", qre.plan.TableName, err)
+			newLast := nextID + cache
+			for newLast <= t.NextVal+inc {
+				newLast += cache
 			}
-			if inc < 1 {
-				return nil, fmt.Errorf("invalid increment for sequence %s: %d", qre.plan.TableName, inc)
-			}
-			newLast := nextID + cache*inc
 			query = fmt.Sprintf("update `%s` set next_id = %d where id = 0", qre.plan.TableName, newLast)
 			conn.RecordQuery(query)
 			_, err = qre.execSQL(conn, query, false)
 			if err != nil {
 				return nil, err
 			}
-			t.NextVal = nextID
-			t.Increment = inc
 			t.LastVal = newLast
 			return nil, nil
 		})
@@ -363,7 +369,7 @@ func (qre *QueryExecutor) execNextval() (*sqltypes.Result, error) {
 		}
 	}
 	ret := t.NextVal
-	t.NextVal += t.Increment
+	t.NextVal += inc
 	return &sqltypes.Result{
 		Fields: sequenceFields,
 		Rows: [][]sqltypes.Value{{
