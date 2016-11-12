@@ -80,7 +80,7 @@ func (c *terminalClient) Begin(ctx context.Context) (*vtgatepb.Session, error) {
 	return nil, errTerminal
 }
 
-func (c *terminalClient) Commit(ctx context.Context, session *vtgatepb.Session) error {
+func (c *terminalClient) Commit(ctx context.Context, twopc bool, session *vtgatepb.Session) error {
 	return errTerminal
 }
 

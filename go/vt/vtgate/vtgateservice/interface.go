@@ -39,7 +39,7 @@ type VTGateService interface {
 	// Transaction management
 
 	Begin(ctx context.Context) (*vtgatepb.Session, error)
-	Commit(ctx context.Context, session *vtgatepb.Session) error
+	Commit(ctx context.Context, twopc bool, session *vtgatepb.Session) error
 	Rollback(ctx context.Context, session *vtgatepb.Session) error
 
 	// Map Reduce support

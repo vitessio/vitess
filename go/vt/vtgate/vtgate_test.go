@@ -100,7 +100,7 @@ func TestVTGateExecute(t *testing.T) {
 		t.Errorf("want \n%+v, got \n%+v", wantSession, session)
 	}
 
-	rpcVTGate.Commit(context.Background(), session)
+	rpcVTGate.Commit(context.Background(), false, session)
 	if commitCount := sbc.CommitCount.Get(); commitCount != 1 {
 		t.Errorf("want 1, got %d", commitCount)
 	}
@@ -205,7 +205,7 @@ func TestVTGateExecuteShards(t *testing.T) {
 		t.Errorf("want \n%+v, got \n%+v", wantSession, session)
 	}
 
-	rpcVTGate.Commit(context.Background(), session)
+	rpcVTGate.Commit(context.Background(), false, session)
 	if commitCount := sbc.CommitCount.Get(); commitCount != 1 {
 		t.Errorf("want 1, got %d", commitCount)
 	}
@@ -284,7 +284,7 @@ func TestVTGateExecuteKeyspaceIds(t *testing.T) {
 	if !reflect.DeepEqual(wantSession, session) {
 		t.Errorf("want \n%+v, got \n%+v", wantSession, session)
 	}
-	rpcVTGate.Commit(context.Background(), session)
+	rpcVTGate.Commit(context.Background(), false, session)
 	if commitCount := sbc1.CommitCount.Get(); commitCount != 1 {
 		t.Errorf("want 1, got %d", commitCount)
 	}
@@ -367,7 +367,7 @@ func TestVTGateExecuteKeyRanges(t *testing.T) {
 	if !reflect.DeepEqual(wantSession, session) {
 		t.Errorf("want \n%+v, got \n%+v", wantSession, session)
 	}
-	rpcVTGate.Commit(context.Background(), session)
+	rpcVTGate.Commit(context.Background(), false, session)
 	if commitCount := sbc1.CommitCount.Get(); commitCount != 1 {
 		t.Errorf("want 1, got %v", commitCount)
 	}
@@ -460,7 +460,7 @@ func TestVTGateExecuteEntityIds(t *testing.T) {
 	if !reflect.DeepEqual(wantSession, session) {
 		t.Errorf("want \n%+v, got \n%+v", wantSession, session)
 	}
-	rpcVTGate.Commit(context.Background(), session)
+	rpcVTGate.Commit(context.Background(), false, session)
 	if commitCount := sbc1.CommitCount.Get(); commitCount != 1 {
 		t.Errorf("want 1, got %d", commitCount)
 	}
@@ -1698,7 +1698,7 @@ func testErrorPropagation(t *testing.T, sbcs []*sandboxconn.SandboxConn, before 
 			TransactionId: 1,
 		}},
 	}
-	err = rpcVTGate.Commit(context.Background(), session)
+	err = rpcVTGate.Commit(context.Background(), false, session)
 	if err == nil {
 		t.Errorf("error %v not propagated for Commit", expected)
 	} else {

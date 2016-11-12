@@ -599,7 +599,7 @@ func (f *fakeVTGateService) Begin(ctx context.Context) (*vtgatepb.Session, error
 }
 
 // Commit is part of the VTGateService interface
-func (f *fakeVTGateService) Commit(ctx context.Context, inSession *vtgatepb.Session) error {
+func (f *fakeVTGateService) Commit(ctx context.Context, twopc bool, inSession *vtgatepb.Session) error {
 	f.checkCallerID(ctx, "Commit")
 	if f.hasError {
 		return errTestVtGateError

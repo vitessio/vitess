@@ -75,8 +75,8 @@ func (c fallbackClient) Begin(ctx context.Context) (*vtgatepb.Session, error) {
 	return c.fallback.Begin(ctx)
 }
 
-func (c fallbackClient) Commit(ctx context.Context, session *vtgatepb.Session) error {
-	return c.fallback.Commit(ctx, session)
+func (c fallbackClient) Commit(ctx context.Context, twopc bool, session *vtgatepb.Session) error {
+	return c.fallback.Commit(ctx, twopc, session)
 }
 
 func (c fallbackClient) Rollback(ctx context.Context, session *vtgatepb.Session) error {

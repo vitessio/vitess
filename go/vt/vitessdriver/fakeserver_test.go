@@ -136,7 +136,7 @@ func (f *fakeVTGateService) Begin(ctx context.Context) (*vtgatepb.Session, error
 }
 
 // Commit is part of the VTGateService interface
-func (f *fakeVTGateService) Commit(ctx context.Context, session *vtgatepb.Session) error {
+func (f *fakeVTGateService) Commit(ctx context.Context, twopc bool, session *vtgatepb.Session) error {
 	if !reflect.DeepEqual(session, session2) {
 		return errors.New("commit: session mismatch")
 	}

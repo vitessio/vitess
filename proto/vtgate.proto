@@ -498,6 +498,10 @@ message CommitRequest {
 
   // session carries the current transaction data to commit.
   Session session = 2;
+
+  // atomic specifies if the commit should go through the
+  // 2PC workflow to ensure atomicity.
+  bool atomic = 3;
 }
 
 // CommitResponse is the returned value from Commit.

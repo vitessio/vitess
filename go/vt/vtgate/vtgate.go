@@ -574,8 +574,8 @@ func (vtg *VTGate) Begin(ctx context.Context) (*vtgatepb.Session, error) {
 }
 
 // Commit commits a transaction.
-func (vtg *VTGate) Commit(ctx context.Context, session *vtgatepb.Session) error {
-	return formatError(vtg.txConn.Commit(ctx, false, NewSafeSession(session)))
+func (vtg *VTGate) Commit(ctx context.Context, twopc bool, session *vtgatepb.Session) error {
+	return formatError(vtg.txConn.Commit(ctx, twopc, NewSafeSession(session)))
 }
 
 // Rollback rolls back a transaction.

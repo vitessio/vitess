@@ -341,7 +341,7 @@ func (vtg *VTGate) Begin(ctx context.Context, request *vtgatepb.BeginRequest) (r
 func (vtg *VTGate) Commit(ctx context.Context, request *vtgatepb.CommitRequest) (response *vtgatepb.CommitResponse, err error) {
 	defer vtg.server.HandlePanic(&err)
 	ctx = withCallerIDContext(ctx, request.CallerId)
-	vtgErr := vtg.server.Commit(ctx, request.Session)
+	vtgErr := vtg.server.Commit(ctx, request.Atomic, request.Session)
 	response = &vtgatepb.CommitResponse{}
 	if vtgErr == nil {
 		return response, nil
