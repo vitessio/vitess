@@ -83,6 +83,7 @@ export class WorkflowComponent implements OnInit {
     this.dialogSettings = new DialogSettings('Start', `Start ${this.workflow.name}`,
                                              `Are you sure you want to start ${this.workflow.name}?`,
                                              `There was a problem starting ${this.workflow.name}:`);
+    this.dialogSettings.setMessage('Workflow started.');
     let flags = new WorkflowFlags(this.workflow.getId()).flags;
     this.dialogContent = new DialogContent('workflow_uuid', flags, {}, undefined, 'WorkflowStart');
     this.dialogSettings.toggleModal();
@@ -93,6 +94,7 @@ export class WorkflowComponent implements OnInit {
     this.dialogSettings = new DialogSettings('Stop', `Stop ${this.workflow.name}`,
                                              `Are you sure you want to stop ${this.workflow.name}?`,
                                              `There was a problem stopping ${this.workflow.name}:`);
+    this.dialogSettings.setMessage('Workflow stopped.');
     let flags = new WorkflowFlags(this.workflow.getId()).flags;
     this.dialogContent = new DialogContent('workflow_uuid', flags, {}, undefined, 'WorkflowStop');
     this.dialogSettings.toggleModal();
@@ -103,6 +105,7 @@ export class WorkflowComponent implements OnInit {
     this.dialogSettings = new DialogSettings('Delete', `Delete ${this.workflow.name}`,
                                              `Are you sure you want to delete ${this.workflow.name}?`,
                                              `There was a problem deleting ${this.workflow.name}:`);
+    this.dialogSettings.setMessage('Workflow deleted.');
     let flags = new WorkflowFlags(this.workflow.getId()).flags;
     this.dialogContent = new DialogContent('workflow_uuid', flags, {}, undefined, 'WorkflowDelete');
     this.dialogSettings.toggleModal();

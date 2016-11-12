@@ -23,7 +23,7 @@ import (
 )
 
 const (
-	topoValidatorFactoryName = "topovalidator"
+	topoValidatorFactoryName = "topo_validator"
 )
 
 var (
@@ -194,7 +194,7 @@ type WorkflowFactory struct{}
 func (f *WorkflowFactory) Init(w *workflowpb.Workflow, args []string) error {
 	// No parameters to parse.
 	if len(args) > 0 {
-		return fmt.Errorf("topovalidator doesn't take any parameter")
+		return fmt.Errorf("%v doesn't take any parameter", topoValidatorFactoryName)
 	}
 	w.Name = "Topology Validator"
 	return nil

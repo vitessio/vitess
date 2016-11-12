@@ -5,6 +5,7 @@ import { Observable } from 'rxjs/Observable';
 import { Node, Action, Display, State, ActionState, ActionStyle } from './node';
 import { WorkflowComponent } from './workflow.component';
 import { Accordion, AccordionTab, Header } from 'primeng/primeng';
+import { FeaturesService } from '../api/features.service';
 import { WorkflowService } from '../api/workflow.service';
 import { DialogContent } from '../shared/dialog/dialog-content';
 import { DialogSettings } from '../shared/dialog/dialog-settings';
@@ -59,7 +60,9 @@ export class WorkflowListComponent implements OnDestroy, OnInit {
   dialogSettings: DialogSettings;
   dialogContent: DialogContent;
 
-  constructor(private workflowService: WorkflowService) {}
+  constructor(
+    private featuresService: FeaturesService,
+    private workflowService: WorkflowService) {}
 
   ngOnInit() {
     this.workflowService.updates().subscribe(update => {
@@ -367,13 +370,13 @@ dolore magnam aliquam quaerat voluptatem.'});
   openNewDialog() {
     this.dialogSettings = new DialogSettings('Create', 'Create a new Workflow', '', 'There was a problem creating {{factory_name}}:');
     this.dialogSettings.setMessage('Created {{factory_name}}');
-    let flags = new NewWorkflowFlags().flags;
+    let flags = new NewWorkflowFlags(this.featuresService.workflows).flags;
     this.dialogContent = new DialogContent('factory_name', flags, {'factory_name': true}, this.prepareNew.bind(this), 'WorkflowCreate');
     this.dialogSettings.toggleModal();
   }
 
   prepareNew(flags) {
-    let newFlags = new NewWorkflowFlags().flags;
+    let newFlags = new NewWorkflowFlags(this.featuresService.workflows).flags;
     for (let key of Object.keys(flags)) {
       newFlags[key].value = flags[key].value;
     }

@@ -2,12 +2,12 @@ import { CheckBoxFlag, DropDownFlag, InputFlag } from './flag';
 
 export class NewWorkflowFlags {
   flags= {};
-  constructor() {
+  constructor(workflows) {
     // General flags.
     this.flags['skip_start'] = new SkipStartFlag(0, 'skip_start');
     this.flags['skip_start'].positional = true;
     this.flags['skip_start'].namedPositional = 'skip_start';
-    this.flags['factory_name'] = new FactoryNameFlag(1, 'factory_name');
+    this.flags['factory_name'] = new FactoryNameFlag(1, 'factory_name', workflows);
     this.flags['factory_name'].positional = true;
 
     // Flags for the Sleep workflow.
@@ -26,23 +26,29 @@ export class NewWorkflowFlags {
 }
 
 export class FactoryNameFlag extends DropDownFlag {
-  constructor(position: number, id: string, value= 'topovalidator') {
-    super(position, id, 'Factory Name', 'Specifies the type of workflow to create.', value);
-    let options = [
-      {
-        label: 'Topology Validator',
-        value: 'topovalidator',
-      },
-      {
+  constructor(position: number, id: string, workflows) {
+    super(position, id, 'Factory Name', 'Specifies the type of workflow to create.', '');
+    let options = [];
+    if (workflows.schema_swap) {
+      options.push({
         label: 'Schema Swap',
         value: 'schema_swap'
-      },
-      {
+      });
+    }
+    if (workflows.sleep) {
+      options.push({
         label: 'Sleep',
         value: 'sleep'
-      },
-    ];
+      });
+    }
+    if (workflows.topo_validator) {
+      options.push({
+        label: 'Topology Validator',
+        value: 'topo_validator',
+      });
+    }
     this.setOptions(options);
+    this.value = options[0].value;
   }
 }
 

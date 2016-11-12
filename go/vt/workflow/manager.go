@@ -500,3 +500,23 @@ func Register(factoryName string, factory Factory) {
 	}
 	factories[factoryName] = factory
 }
+
+// Unregister removes a factory object.
+// Typically called from a flag to remove dangerous workflows.
+func Unregister(name string) {
+	if _, ok := factories[name]; !ok {
+		log.Warningf("workflow %v doesn't exist, cannot remove it", name)
+	} else {
+		delete(factories, name)
+	}
+}
+
+// AvailableFactories returns a map with the names of the available
+// factories as keys and 'true' as value.
+func AvailableFactories() map[string]bool {
+	result := make(map[string]bool)
+	for n := range factories {
+		result[n] = true
+	}
+	return result
+}
