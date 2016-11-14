@@ -791,7 +791,7 @@ func (tsv *TabletServer) SetRollback(ctx context.Context, target *querypb.Target
 func (tsv *TabletServer) ConcludeTransaction(ctx context.Context, target *querypb.Target, dtid string) (err error) {
 	return tsv.execRequest(
 		ctx, tsv.QueryTimeout.Get(),
-		"ConcludeTransaction", "resolve_transaction", nil,
+		"ConcludeTransaction", "conclude_transaction", nil,
 		target, true, true,
 		func(ctx context.Context, logStats *LogStats) error {
 			txe := &TxExecutor{
