@@ -100,6 +100,27 @@ vttablet:
       cpu: "500m"
   extraMyCnf: "/vt/config/mycnf/master_mysql56.cnf"
 
+  # Currently supported pod controller types:
+  #
+  # StatefulSet
+  #   Use StatefulSet to manage vttablet pods.
+  #
+  #   This is the recommended way to run vttablets, but some Kubernetes
+  #   clusters may not have StatefulSet enabled yet during the feature's
+  #   alpha/beta phase.
+  #
+  #   NOTE: The "uidBase" setting in the topology map is ignored when using
+  #     StatefulSet. Instead, the tablet UID is generated based on a hash
+  #     of the cell name and stateful pod name. This takes advantage of the
+  #     unique, stable identity provided by StatefulSet to ensure that
+  #     tablet UIDs have the same properties.
+  #
+  # None
+  #   Create naked vttablet pods without any controller.
+  #
+  #   NOTE: This is a temporary hack for when StatefulSet is unavailable.
+  controllerType: None
+
 # Uncomment one of the following lines to configure the location
 # of the root certificates file on your host OS.
 # We need this so we can import it into the container OS.
