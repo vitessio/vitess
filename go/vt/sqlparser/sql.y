@@ -106,6 +106,9 @@ func forceEOF(yylex interface{}) {
 %token <empty> TABLE INDEX VIEW TO IGNORE IF UNIQUE USING
 %token <empty> SHOW DESCRIBE EXPLAIN
 
+// Functions
+%token <empty> CURRENT_TIMESTAMP DATABASE
+
 // MySQL reserved words that are unused by this grammar will map to this token.
 %token <empty> UNUSED
 
@@ -144,6 +147,7 @@ func forceEOF(yylex interface{}) {
 %type <valExpr> value_expression_opt else_expression_opt
 %type <valExprs> group_by_opt
 %type <boolExpr> having_opt
+%type <str> keyword_func
 %type <orderBy> order_by_opt order_list
 %type <order> order
 %type <str> asc_desc_opt
@@ -841,13 +845,31 @@ value_expression:
   {
     $$ = &FuncExpr{Name: string($1), Distinct: true, Exprs: $4}
   }
-| IF openb select_expression_list closeb
+| keyword_func openb closeb
   {
-    $$ = &FuncExpr{Name: "if", Exprs: $3}
+    $$ = &FuncExpr{Name: $1}
+  }
+| keyword_func openb select_expression_list closeb
+  {
+    $$ = &FuncExpr{Name: $1, Exprs: $3}
   }
 | case_expression
   {
     $$ = $1
+  }
+
+keyword_func:
+  IF
+  {
+    $$ = "if"
+  }
+| CURRENT_TIMESTAMP
+  {
+    $$ = "current_timestamp"
+  }
+| DATABASE
+  {
+    $$ = "database"
   }
 
 case_expression:
