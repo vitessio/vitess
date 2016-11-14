@@ -183,6 +183,7 @@ type ExecPlan struct {
 
 	// PlanDMLPK: where clause values.
 	// PlanInsertPK: values clause.
+	// PlanNextVal: increment.
 	PKValues []interface{} `json:",omitempty"`
 
 	// For update: set clause if pk is changing.

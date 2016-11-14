@@ -273,6 +273,51 @@ func TestCodexResolveListArg(t *testing.T) {
 	testUtils.checkEqual(t, []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Int64, []byte("10"))}, result)
 }
 
+func TestResolveNumber(t *testing.T) {
+	testcases := []struct {
+		v      interface{}
+		bv     map[string]interface{}
+		out    int64
+		outErr string
+	}{{
+		v: ":a",
+		bv: map[string]interface{}{
+			"a": 10,
+		},
+		out: int64(10),
+	}, {
+		v: "::a",
+		bv: map[string]interface{}{
+			"a": []interface{}{10},
+		},
+		outErr: "error: unexpected type []interface {}: [10]",
+	}, {
+		v:      ":a",
+		outErr: "error: missing bind var a",
+	}, {
+		v:      make(chan int),
+		outErr: "error: unexpected type chan int",
+	}, {
+		v:   int64(1),
+		out: int64(1),
+	}, {
+		v:      1.2,
+		outErr: "error: strconv.ParseInt",
+	}}
+	for _, tc := range testcases {
+		got, err := resolveNumber(tc.v, tc.bv)
+		if err != nil {
+			if !strings.Contains(err.Error(), tc.outErr) {
+				t.Errorf("resolveNumber(%#v, %v): %v, must contain %s", tc.v, tc.bv, err, tc.outErr)
+			}
+			continue
+		}
+		if got != tc.out {
+			t.Errorf("resolveNumber(%#v, %v): %d, want %d", tc.v, tc.bv, got, tc.out)
+		}
+	}
+}
+
 func TestCodexBuildSecondaryList(t *testing.T) {
 	pk1 := "pk1"
 	pk2 := "pk2"

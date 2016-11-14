@@ -130,7 +130,7 @@ func forceEOF(yylex interface{}) {
 %type <boolExpr> boolean_expression condition
 %type <str> compare
 %type <insRows> row_list
-%type <valExpr> value value_expression
+%type <valExpr> value value_expression num_val
 %type <str> is_suffix
 %type <colTuple> col_tuple
 %type <valExprs> value_expression_list
@@ -193,13 +193,9 @@ select_statement:
   {
     $$ = &Select{Comments: Comments($2), Distinct: $3, Hints: $4, SelectExprs: $5, From: $7, Where: NewWhere(WhereStr, $8), GroupBy: GroupBy($9), Having: NewWhere(HavingStr, $10), OrderBy: $11, Limit: $12, Lock: $13}
   }
-| SELECT comment_opt NEXT sql_id for_from table_name
+| SELECT comment_opt NEXT num_val for_from table_name
   {
-    if $4.Lowered() != "value" {
-      yylex.Error("expecting value after next")
-      return 1
-    }
-    $$ = &Select{Comments: Comments($2), SelectExprs: SelectExprs{Nextval{}}, From: TableExprs{&AliasedTableExpr{Expr: $6}}}
+    $$ = &Select{Comments: Comments($2), SelectExprs: SelectExprs{Nextval{Expr: $4}}, From: TableExprs{&AliasedTableExpr{Expr: $6}}}
   }
 | select_statement union_op select_statement %prec UNION
   {
@@ -928,6 +924,25 @@ value:
 | NULL
   {
     $$ = &NullVal{}
+  }
+
+num_val:
+  sql_id
+  {
+    // TODO(sougou): Deprecate this construct.
+    if $1.Lowered() != "value" {
+      yylex.Error("expecting value after next")
+      return 1
+    }
+    $$ = NumVal("1")
+  }
+| NUMBER VALUES
+  {
+    $$ = NumVal($1)
+  }
+| VALUE_ARG VALUES
+  {
+    $$ = ValArg($1)
   }
 
 group_by_opt:

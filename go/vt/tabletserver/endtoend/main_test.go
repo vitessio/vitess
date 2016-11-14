@@ -104,7 +104,7 @@ create table vitess_misc(id int, b bit(8), d date, dt datetime, t time, primary 
 create table vitess_unsupported(id int, pt point, primary key(id));
 
 create table vitess_seq(id int, next_id bigint, cache bigint, increment bigint, primary key(id)) comment 'vitess_sequence';
-insert into vitess_seq values(0, 1, 3, 2);
+insert into vitess_seq(id, next_id, cache) values(0, 1, 3);
 
 create table vitess_acl_no_access(key1 bigint, key2 bigint, primary key(key1));
 create table vitess_acl_read_only(key1 bigint, key2 bigint, primary key(key1));

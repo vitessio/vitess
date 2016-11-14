@@ -150,6 +150,26 @@ func resolveValue(col *schema.TableColumn, value interface{}, bindVars map[strin
 	return result, nil
 }
 
+// resolveNumber extracts a number from a bind variable or sql value.
+func resolveNumber(value interface{}, bindVars map[string]interface{}) (int64, error) {
+	var err error
+	if v, ok := value.(string); ok {
+		value, _, err = sqlparser.FetchBindVar(v, bindVars)
+		if err != nil {
+			return 0, NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "%v", err)
+		}
+	}
+	v, err := sqltypes.BuildValue(value)
+	if err != nil {
+		return 0, NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "%v", err)
+	}
+	ret, err := v.ParseInt64()
+	if err != nil {
+		return 0, NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "%v", err)
+	}
+	return ret, nil
+}
+
 func validateRow(tableInfo *TableInfo, columnNumbers []int, row []sqltypes.Value) error {
 	if len(row) != len(columnNumbers) {
 		return NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "data inconsistency %d vs %d", len(row), len(columnNumbers))
