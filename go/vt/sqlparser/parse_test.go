@@ -303,9 +303,15 @@ func TestValid(t *testing.T) {
 	}, {
 		input: "select /* function with many params */ 1 from t where a = b(c, d)",
 	}, {
+		input: "select /* function with distinct */ count(distinct a) from t",
+	}, {
 		input: "select /* if as func */ 1 from t where a = if(b)",
 	}, {
-		input: "select /* function with distinct */ count(distinct a) from t",
+		input: "select /* current_timestamp as func */ current_timestamp() from t",
+	}, {
+		input: "select /* database as func no param */ database() from t",
+	}, {
+		input: "select /* database as func 1 param */ database(1) from t",
 	}, {
 		input: "select /* a */ a from t",
 	}, {
