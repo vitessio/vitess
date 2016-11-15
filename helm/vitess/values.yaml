@@ -88,8 +88,6 @@ vtgate:
 # Default values for vttablet resources defined in 'topology'.
 vttablet:
   image: "vitess/lite:latest"
-  dataVolume:
-    emptyDir: {}
   resources:
     limits:
       memory: "1Gi"
@@ -120,6 +118,31 @@ vttablet:
   #
   #   NOTE: This is a temporary hack for when StatefulSet is unavailable.
   controllerType: None
+
+  # Currently supported data volume types:
+  #
+  # EmptyDir
+  #   Tablets use local storage for MySQL data. When a pod is recreated after
+  #   being deleted (or if its Node died), it must first restore from backup.
+  #
+  # PersistentVolume
+  #   NOTE: This only works if controllerType is "StatefulSet".
+  #
+  #   Tablets use PersistentVolume for MySQL data. These volumes survive pod
+  #   deletion and recreation, so most pod rescheduling events don't trigger
+  #   a fresh restore. The underlying storage used depends on your Kubernetes
+  #   cluster and your "storage-class" setting, but usually it is some kind of
+  #   network volume like EBS or PD.
+  dataVolumeType: EmptyDir
+
+  # The following are only used if dataVolumeType is "PersistentVolume".
+  dataVolumeClaimAnnotations:
+    volume.alpha.kubernetes.io/storage-class: anything
+  dataVolumeClaimSpec:
+    accessModes: ["ReadWriteOnce"]
+    resources:
+      requests:
+        storage: "10Gi"
 
 # Uncomment one of the following lines to configure the location
 # of the root certificates file on your host OS.

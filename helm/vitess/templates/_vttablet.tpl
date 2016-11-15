@@ -124,8 +124,10 @@ containers:
 volumes:
   - name: syslog
     hostPath: {path: /dev/log}
+{{ if eq (.dataVolumeType | default $0.dataVolumeType) "EmptyDir" }}
   - name: vtdataroot
-{{ toYaml (.dataVolume | default $0.dataVolume) | indent 4 }}
+    emptyDir: {}
+{{ end }}
   - name: certs
     hostPath: { path: {{$.Values.certsPath | quote}} }
 {{- end -}}
@@ -203,6 +205,15 @@ spec:
         ]'
     spec:
 {{ include "vttablet-pod-spec" (tuple $ $cell $keyspace $shard $tablet $uid .) | indent 6 }}
+{{ if eq (.dataVolumeType | default $0.dataVolumeType) "PersistentVolume" }}
+  volumeClaimTemplates:
+    - metadata:
+        name: vtdataroot
+        annotations:
+{{ toYaml (.dataVolumeClaimAnnotations | default $0.dataVolumeClaimAnnotations) | indent 10 }}
+      spec:
+{{ toYaml (.dataVolumeClaimSpec | default $0.dataVolumeClaimSpec) | indent 8 }}
+{{ end }}
 {{- end -}}
 {{- end -}}
 
