@@ -123,7 +123,7 @@ func forceEOF(yylex interface{}) {
 %type <selectExprs> select_expression_list
 %type <selectExpr> select_expression
 %type <expr> expression
-%type <tableExprs> table_references
+%type <tableExprs> from_opt table_references
 %type <tableExpr> table_reference table_factor join_table
 %type <str> inner_join outer_join natural_join
 %type <tableName> table_name
@@ -193,9 +193,9 @@ command:
 | other_statement
 
 select_statement:
-  SELECT comment_opt distinct_opt straight_join_opt select_expression_list FROM table_references where_expression_opt group_by_opt having_opt order_by_opt limit_opt lock_opt
+  SELECT comment_opt distinct_opt straight_join_opt select_expression_list from_opt where_expression_opt group_by_opt having_opt order_by_opt limit_opt lock_opt
   {
-    $$ = &Select{Comments: Comments($2), Distinct: $3, Hints: $4, SelectExprs: $5, From: $7, Where: NewWhere(WhereStr, $8), GroupBy: GroupBy($9), Having: NewWhere(HavingStr, $10), OrderBy: $11, Limit: $12, Lock: $13}
+    $$ = &Select{Comments: Comments($2), Distinct: $3, Hints: $4, SelectExprs: $5, From: $6, Where: NewWhere(WhereStr, $7), GroupBy: GroupBy($8), Having: NewWhere(HavingStr, $9), OrderBy: $10, Limit: $11, Lock: $12}
   }
 | SELECT comment_opt NEXT num_val for_from table_name
   {
@@ -413,6 +413,15 @@ as_ci_opt:
     $$ = $1
   }
 | AS sql_id
+  {
+    $$ = $2
+  }
+
+from_opt:
+  {
+    $$ = TableExprs{&AliasedTableExpr{Expr:&TableName{Name: "dual"}}}
+  }
+| FROM table_references
   {
     $$ = $2
   }
