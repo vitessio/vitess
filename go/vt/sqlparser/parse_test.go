@@ -11,6 +11,9 @@ func TestValid(t *testing.T) {
 		input  string
 		output string
 	}{{
+		input:  "select 1",
+		output: "select 1 from dual",
+	}, {
 		input: "select 1 from t",
 	}, {
 		input: "select .1 from t",
