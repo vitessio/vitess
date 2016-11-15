@@ -381,22 +381,22 @@ func (conn *gRPCQueryClient) SetRollback(ctx context.Context, target *querypb.Ta
 	return nil
 }
 
-// ResolveTransaction deletes the 2pc transaction metadata
+// ConcludeTransaction deletes the 2pc transaction metadata
 // essentially resolving it.
-func (conn *gRPCQueryClient) ResolveTransaction(ctx context.Context, target *querypb.Target, dtid string) error {
+func (conn *gRPCQueryClient) ConcludeTransaction(ctx context.Context, target *querypb.Target, dtid string) error {
 	conn.mu.RLock()
 	defer conn.mu.RUnlock()
 	if conn.cc == nil {
 		return tabletconn.ConnClosed
 	}
 
-	req := &querypb.ResolveTransactionRequest{
+	req := &querypb.ConcludeTransactionRequest{
 		Target:            target,
 		EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
 		ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
 		Dtid:              dtid,
 	}
-	_, err := conn.c.ResolveTransaction(ctx, req)
+	_, err := conn.c.ConcludeTransaction(ctx, req)
 	if err != nil {
 		return tabletconn.TabletErrorFromGRPC(err)
 	}

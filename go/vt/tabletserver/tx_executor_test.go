@@ -271,13 +271,13 @@ func TestExecutorSetRollback(t *testing.T) {
 	}
 }
 
-func TestExecutorResolveTransaction(t *testing.T) {
+func TestExecutorConcludeTransaction(t *testing.T) {
 	txe, tsv, db := newTestTxExecutor()
 	defer tsv.StopService()
 
 	db.AddQuery("delete from `_vt`.transaction where dtid = 'aa'", &sqltypes.Result{})
 	db.AddQuery("delete from `_vt`.participant where dtid = 'aa'", &sqltypes.Result{})
-	err := txe.ResolveTransaction("aa")
+	err := txe.ConcludeTransaction("aa")
 	if err != nil {
 		t.Error(err)
 	}

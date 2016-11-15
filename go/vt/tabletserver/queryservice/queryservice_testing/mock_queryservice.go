@@ -123,14 +123,14 @@ func (_mr *_MockQueryServiceRecorder) SetRollback(arg0, arg1, arg2, arg3 interfa
 	return _mr.mock.ctrl.RecordCall(_mr.mock, "SetRollback", arg0, arg1, arg2, arg3)
 }
 
-func (_m *MockQueryService) ResolveTransaction(ctx context.Context, target *query.Target, dtid string) error {
-	ret := _m.ctrl.Call(_m, "ResolveTransaction", ctx, target, dtid)
+func (_m *MockQueryService) ConcludeTransaction(ctx context.Context, target *query.Target, dtid string) error {
+	ret := _m.ctrl.Call(_m, "ConcludeTransaction", ctx, target, dtid)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-func (_mr *_MockQueryServiceRecorder) ResolveTransaction(arg0, arg1, arg2 interface{}) *gomock.Call {
-	return _mr.mock.ctrl.RecordCall(_mr.mock, "ResolveTransaction", arg0, arg1, arg2)
+func (_mr *_MockQueryServiceRecorder) ConcludeTransaction(arg0, arg1, arg2 interface{}) *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "ConcludeTransaction", arg0, arg1, arg2)
 }
 
 func (_m *MockQueryService) ReadTransaction(ctx context.Context, target *query.Target, dtid string) (*query.TransactionMetadata, error) {

@@ -334,6 +334,11 @@ func (conn *FakeVTGateConn) Rollback(ctx context.Context, session interface{}) e
 	return nil
 }
 
+// ResolveTransaction please see vtgateconn.Impl.ResolveTransaction
+func (conn *FakeVTGateConn) ResolveTransaction(ctx context.Context, dtid string) error {
+	return nil
+}
+
 // SplitQuery please see vtgateconn.Impl.SplitQuery
 func (conn *FakeVTGateConn) SplitQuery(
 	ctx context.Context,

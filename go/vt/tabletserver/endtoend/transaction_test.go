@@ -582,7 +582,7 @@ func TestMMCommitFlow(t *testing.T) {
 		t.Errorf("ReadTransaction: %#v, want %#v", info, wantInfo)
 	}
 
-	err = client.ResolveTransaction("aa")
+	err = client.ConcludeTransaction("aa")
 	if err != nil {
 		t.Error(err)
 	}
@@ -652,7 +652,7 @@ func TestMMRollbackFlow(t *testing.T) {
 		t.Errorf("ReadTransaction: %#v, want %#v", info, wantInfo)
 	}
 
-	err = client.ResolveTransaction("aa")
+	err = client.ConcludeTransaction("aa")
 	if err != nil {
 		t.Error(err)
 	}

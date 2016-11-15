@@ -403,6 +403,15 @@ func (conn *vtgateConn) Rollback(ctx context.Context, session interface{}) error
 	return vterrors.FromGRPCError(err)
 }
 
+func (conn *vtgateConn) ResolveTransaction(ctx context.Context, dtid string) error {
+	request := &vtgatepb.ResolveTransactionRequest{
+		CallerId: callerid.EffectiveCallerIDFromContext(ctx),
+		Dtid:     dtid,
+	}
+	_, err := conn.c.ResolveTransaction(ctx, request)
+	return vterrors.FromGRPCError(err)
+}
+
 func (conn *vtgateConn) SplitQuery(
 	ctx context.Context,
 	keyspace string,

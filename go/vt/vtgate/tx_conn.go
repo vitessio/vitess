@@ -91,7 +91,7 @@ func (txc *TxConn) commit2PC(ctx context.Context, session *SafeSession) error {
 	if err != nil {
 		// TODO(sougou): Perform a more fine-grained cleanup
 		// including unprepared transactions.
-		if resumeErr := txc.Resume(ctx, dtid); resumeErr != nil {
+		if resumeErr := txc.Resolve(ctx, dtid); resumeErr != nil {
 			log.Warningf("Rollback failed after Prepare failure: %v", resumeErr)
 		}
 		// Return the original error even if the previous operation fails.
@@ -110,7 +110,7 @@ func (txc *TxConn) commit2PC(ctx context.Context, session *SafeSession) error {
 		return err
 	}
 
-	return txc.gateway.ResolveTransaction(ctx, mmShard.Target, dtid)
+	return txc.gateway.ConcludeTransaction(ctx, mmShard.Target, dtid)
 }
 
 // Rollback rolls back the current transaction. There are no retries on this operation.
@@ -135,8 +135,8 @@ func (txc *TxConn) RollbackIfNeeded(ctx context.Context, err error, session *Saf
 	}
 }
 
-// Resume resumes the specified 2PC transaction.
-func (txc *TxConn) Resume(ctx context.Context, dtid string) error {
+// Resolve resolves the specified 2PC transaction.
+func (txc *TxConn) Resolve(ctx context.Context, dtid string) error {
 	mmShard, err := txc.dtidToShardSession(dtid)
 	if err != nil {
 		return err
@@ -180,7 +180,7 @@ func (txc *TxConn) resumeRollback(ctx context.Context, target *querypb.Target, t
 	if err != nil {
 		return err
 	}
-	return txc.gateway.ResolveTransaction(ctx, target, transaction.Dtid)
+	return txc.gateway.ConcludeTransaction(ctx, target, transaction.Dtid)
 }
 
 func (txc *TxConn) resumeCommit(ctx context.Context, target *querypb.Target, transaction *querypb.TransactionMetadata) error {
@@ -190,7 +190,7 @@ func (txc *TxConn) resumeCommit(ctx context.Context, target *querypb.Target, tra
 	if err != nil {
 		return err
 	}
-	return txc.gateway.ResolveTransaction(ctx, target, transaction.Dtid)
+	return txc.gateway.ConcludeTransaction(ctx, target, transaction.Dtid)
 }
 
 func (txc *TxConn) generateDTID(mmShard *vtgatepb.Session_ShardSession) string {

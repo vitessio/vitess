@@ -113,7 +113,7 @@ type TabletConn interface {
 	CreateTransaction(ctx context.Context, target *querypb.Target, dtid string, participants []*querypb.Target) error
 	StartCommit(ctx context.Context, target *querypb.Target, transactionID int64, dtid string) error
 	SetRollback(ctx context.Context, target *querypb.Target, dtid string, transactionID int64) error
-	ResolveTransaction(ctx context.Context, target *querypb.Target, dtid string) error
+	ConcludeTransaction(ctx context.Context, target *querypb.Target, dtid string) error
 	ReadTransaction(ctx context.Context, target *querypb.Target, dtid string) (metadata *querypb.TransactionMetadata, err error)
 
 	// Combo RPC calls: they execute both a Begin and another call.

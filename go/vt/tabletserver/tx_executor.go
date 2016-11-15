@@ -233,9 +233,9 @@ func (txe *TxExecutor) SetRollback(dtid string, transactionID int64) error {
 	return nil
 }
 
-// ResolveTransaction deletes the 2pc transaction metadata
+// ConcludeTransaction deletes the 2pc transaction metadata
 // essentially resolving it.
-func (txe *TxExecutor) ResolveTransaction(dtid string) error {
+func (txe *TxExecutor) ConcludeTransaction(dtid string) error {
 	defer txe.qe.queryServiceStats.QueryStats.Record("RESOLVE", time.Now())
 
 	conn, err := txe.qe.txPool.LocalBegin(txe.ctx)

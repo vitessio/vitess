@@ -49,8 +49,8 @@ service Query {
   // SetRollback marks the 2pc transaction for rollback.
   rpc SetRollback(query.SetRollbackRequest) returns (query.SetRollbackResponse) {};
 
-  // ResolveTransaction marks the 2pc transaction as resolved.
-  rpc ResolveTransaction(query.ResolveTransactionRequest) returns (query.ResolveTransactionResponse) {};
+  // ConcludeTransaction marks the 2pc transaction as resolved.
+  rpc ConcludeTransaction(query.ConcludeTransactionRequest) returns (query.ConcludeTransactionResponse) {};
 
   // ReadTransaction returns the 2pc transaction info.
   rpc ReadTransaction(query.ReadTransactionRequest) returns (query.ReadTransactionResponse) {};

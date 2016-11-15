@@ -574,13 +574,18 @@ func (vtg *VTGate) Begin(ctx context.Context) (*vtgatepb.Session, error) {
 }
 
 // Commit commits a transaction.
-func (vtg *VTGate) Commit(ctx context.Context, session *vtgatepb.Session) error {
-	return formatError(vtg.txConn.Commit(ctx, false, NewSafeSession(session)))
+func (vtg *VTGate) Commit(ctx context.Context, twopc bool, session *vtgatepb.Session) error {
+	return formatError(vtg.txConn.Commit(ctx, twopc, NewSafeSession(session)))
 }
 
 // Rollback rolls back a transaction.
 func (vtg *VTGate) Rollback(ctx context.Context, session *vtgatepb.Session) error {
 	return formatError(vtg.txConn.Rollback(ctx, NewSafeSession(session)))
+}
+
+// ResolveTransaction resolves the specified 2PC transaction.
+func (vtg *VTGate) ResolveTransaction(ctx context.Context, dtid string) error {
+	return formatError(vtg.txConn.Resolve(ctx, dtid))
 }
 
 // isKeyspaceRangeBasedSharded returns true if a keyspace is sharded

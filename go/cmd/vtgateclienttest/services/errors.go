@@ -245,14 +245,14 @@ func (c *errorClient) Begin(ctx context.Context) (*vtgatepb.Session, error) {
 	return c.fallbackClient.Begin(ctx)
 }
 
-func (c *errorClient) Commit(ctx context.Context, session *vtgatepb.Session) error {
+func (c *errorClient) Commit(ctx context.Context, twopc bool, session *vtgatepb.Session) error {
 	// The client sends the error request through the callerid, as there are no other parameters
 	cid := callerid.EffectiveCallerIDFromContext(ctx)
 	request := callerid.GetPrincipal(cid)
 	if err := requestToError(request); err != nil {
 		return err
 	}
-	return c.fallbackClient.Commit(ctx, session)
+	return c.fallbackClient.Commit(ctx, twopc, session)
 }
 
 func (c *errorClient) Rollback(ctx context.Context, session *vtgatepb.Session) error {
