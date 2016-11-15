@@ -18,9 +18,7 @@ import org.powermock.api.mockito.PowerMockito;
 import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.modules.junit4.PowerMockRunner;
 
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.sql.Statement;
+import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -576,5 +574,72 @@ import java.util.List;
         } catch (SQLException e) {
             Assert.fail("Test failed " + e.getMessage());
         }
+    }
+
+    @Test public void testAddBatch() throws SQLException {
+        VitessConnection mockConn = PowerMockito.mock(VitessConnection.class);
+        VitessStatement statement = new VitessStatement(mockConn);
+        statement.addBatch(sqlInsert);
+        Assert.assertEquals(sqlInsert, statement.getBatchedArgs().get(0));
+    }
+
+    @Test public void testClearBatch() throws SQLException {
+        VitessConnection mockConn = PowerMockito.mock(VitessConnection.class);
+        VitessStatement statement = new VitessStatement(mockConn);
+        statement.addBatch(sqlInsert);
+        statement.clearBatch();
+        Assert.assertTrue(statement.getBatchedArgs().isEmpty());
+    }
+
+    @Test public void testExecuteBatch() throws SQLException {
+        VitessConnection mockConn = PowerMockito.mock(VitessConnection.class);
+        VitessStatement statement = new VitessStatement(mockConn);
+        int[] updateCounts = statement.executeBatch();
+        Assert.assertEquals(0, updateCounts.length);
+
+        VTGateConn mockVtGateConn = PowerMockito.mock(VTGateConn.class);
+        PowerMockito.when(mockConn.getVtGateConn()).thenReturn(mockVtGateConn);
+        PowerMockito.when(mockConn.getTabletType()).thenReturn(Topodata.TabletType.MASTER);
+        PowerMockito.when(mockConn.getAutoCommit()).thenReturn(true);
+
+        SQLFuture mockSqlFutureCursor = PowerMockito.mock(SQLFuture.class);
+        PowerMockito.when(mockVtGateConn
+            .execute(Matchers.any(Context.class), Matchers.anyString(), Matchers.anyMap(),
+                Matchers.any(Topodata.TabletType.class))).thenReturn(mockSqlFutureCursor);
+
+        Cursor mockCursor = PowerMockito.mock(Cursor.class);
+        PowerMockito.when(mockSqlFutureCursor.checkedGet()).thenReturn(mockCursor);
+        int expectedAffectedRows = 10;
+        PowerMockito.when(mockCursor.getRowsAffected())
+            .thenReturn(Long.valueOf(expectedAffectedRows));
+
+        statement.addBatch(sqlUpdate);
+        updateCounts = statement.executeBatch();
+        Assert.assertEquals(1, updateCounts.length);
+        Assert.assertEquals(expectedAffectedRows, updateCounts[0]);
+
+        PowerMockito.when(mockSqlFutureCursor.checkedGet()).thenThrow(SQLRecoverableException.class);
+        statement.addBatch(sqlUpdate);
+        try {
+            statement.executeBatch();
+            Assert.fail("Should have thrown Exception");
+        } catch (BatchUpdateException ex) {
+            //Query executed before exception will only be returned as this is not in transaction error
+            Assert.assertEquals(0, ex.getUpdateCounts().length);
+        }
+
+        PowerMockito.when(mockVtGateConn
+            .execute(Matchers.any(Context.class), Matchers.anyString(), Matchers.anyMap(),
+                Matchers.any(Topodata.TabletType.class))).thenThrow(SQLException.class);
+        statement.addBatch(sqlUpdate);
+        statement.addBatch(sqlUpdate);
+        try {
+            statement.executeBatch();
+            Assert.fail("Should have thrown Exception");
+        } catch (BatchUpdateException ex) {
+            //Query executed for all the queries
+            Assert.assertEquals(2, ex.getUpdateCounts().length);
+        }
+
     }
 }

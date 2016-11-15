@@ -20,18 +20,9 @@ import org.powermock.modules.junit4.PowerMockRunner;
 
 import java.lang.reflect.Field;
 import java.math.BigDecimal;
+import java.sql.*;
 import java.sql.Date;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.sql.Statement;
-import java.sql.Time;
-import java.sql.Timestamp;
-import java.sql.Types;
-import java.util.ArrayList;
-import java.util.Calendar;
-import java.util.List;
-import java.util.Map;
-import java.util.TimeZone;
+import java.util.*;
 
 
 /**
@@ -605,4 +596,84 @@ import java.util.TimeZone;
             Assert.fail("Test failed " + e.getMessage());
         }
     }
+
+    @Test public void testAddBatch() throws SQLException {
+        VitessConnection mockConn = PowerMockito.mock(VitessConnection.class);
+        VitessPreparedStatement statement = new VitessPreparedStatement(mockConn, sqlInsert);
+        try {
+            statement.addBatch(this.sqlInsert);
+            Assert.fail("Should have thrown Exception");
+        } catch (SQLException ex) {
+            Assert.assertEquals(Constants.SQLExceptionMessages.METHOD_NOT_ALLOWED, ex.getMessage());
+        }
+        statement.setString(1, "hi");
+        statement.addBatch();
+        Assert.assertEquals("hi", ((Map)statement.getBatchedArgs().get(0)).get("v1"));
+    }
+
+    @Test public void testClearBatch() throws SQLException {
+        VitessConnection mockConn = PowerMockito.mock(VitessConnection.class);
+        VitessPreparedStatement statement = new VitessPreparedStatement(mockConn, sqlInsert);
+        statement.setString(1, "hi");
+        statement.addBatch();
+        statement.clearBatch();
+        Assert.assertTrue(statement.getBatchedArgs().isEmpty());
+    }
+
+    @Test public void testExecuteBatch() throws SQLException {
+        VitessConnection mockConn = PowerMockito.mock(VitessConnection.class);
+        VitessPreparedStatement statement = new VitessPreparedStatement(mockConn, sqlInsert);
+        int[] updateCounts = statement.executeBatch();
+        Assert.assertEquals(0, updateCounts.length);
+
+        VTGateConn mockVtGateConn = PowerMockito.mock(VTGateConn.class);
+        PowerMockito.when(mockConn.getVtGateConn()).thenReturn(mockVtGateConn);
+        PowerMockito.when(mockConn.getTabletType()).thenReturn(Topodata.TabletType.MASTER);
+        PowerMockito.when(mockConn.getAutoCommit()).thenReturn(true);
+
+        SQLFuture mockSqlFutureCursor = PowerMockito.mock(SQLFuture.class);
+        PowerMockito.when(mockVtGateConn
+            .execute(Matchers.any(Context.class), Matchers.anyString(), Matchers.anyMap(),
+                Matchers.any(Topodata.TabletType.class))).thenReturn(mockSqlFutureCursor);
+
+        Cursor mockCursor = PowerMockito.mock(Cursor.class);
+        PowerMockito.when(mockSqlFutureCursor.checkedGet()).thenReturn(mockCursor);
+        int expectedAffectedRows = 10;
+        PowerMockito.when(mockCursor.getRowsAffected())
+            .thenReturn(Long.valueOf(expectedAffectedRows));
+
+        statement.setString(1, "hi");
+        statement.addBatch();
+        updateCounts = statement.executeBatch();
+        Assert.assertEquals(1, updateCounts.length);
+        Assert.assertEquals(expectedAffectedRows, updateCounts[0]);
+
+        PowerMockito.when(mockSqlFutureCursor.checkedGet()).thenThrow(SQLRecoverableException.class);
+        statement.setString(1, "hi");
+        statement.addBatch();
+        try {
+            statement.executeBatch();
+            Assert.fail("Should have thrown Exception");
+        } catch (BatchUpdateException ex) {
+            //Query executed before exception will only be returned as this is not in transaction error
+            Assert.assertEquals(0, ex.getUpdateCounts().length);
+        }
+
+        PowerMockito.when(mockVtGateConn
+            .execute(Matchers.any(Context.class), Matchers.anyString(), Matchers.anyMap(),
+                Matchers.any(Topodata.TabletType.class))).thenThrow(SQLException.class);
+        statement.setString(1, "hi");
+        statement.addBatch();
+        statement.setString(1, "bye");
+        statement.addBatch();
+        try {
+            statement.executeBatch();
+            Assert.fail("Should have thrown Exception");
+        } catch (BatchUpdateException ex) {
+            //Query executed for all the queries
+            Assert.assertEquals(2, ex.getUpdateCounts().length);
+        }
+
+    }
+
 }
