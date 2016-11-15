@@ -182,6 +182,23 @@ for which there is a separate API.
 
 *On-the-fly map-reducers can be built to address the more complex needs in the future.*
 
+## Special Queries
+
+MySQL supports a number of tables that are not storing data, but rather expose
+meta-data about the database. For instance, the information_schema database.
+
+The V3 API is meant to resemble a single database instance (using the Execute
+API calls). But it can be backed by multiple keyspaces and each can have multiple
+shards. In the long term, we want to behave as if all keyspaces and tables are
+in one single instance: each keyspace would be shown as a database, each table
+in a sharded keyspace would only be shown once (and not once per shard).
+
+*We do not support these queries just yet.*
+
+For administrators who want to target individual shards, it is possible to use
+the V1 API (with the ExecuteShards API). A deeper knowledge of the existing
+shards is then required, but administrators have that knowledge.
+
 ## VSchema
 
 The above features require metadata like configuration of sharding key and
