@@ -1,0 +1,15 @@
+{{- $cell := (index .Values.topology.cells 1).name -}}
+{{- $proxyURL := printf "http://localhost:8001/api/v1/proxy/namespaces/%s" .Release.Namespace -}}
+
+Release name: {{.Release.Name}}
+
+To access administrative web pages, start a proxy with:
+  kubectl proxy --port=8001
+
+Then use the following URLs:
+
+Kubernetes dashboard: http://localhost:8001/ui
+
+vtctld: {{$proxyURL}}/services/vtctld:web/
+vtgate: {{$proxyURL}}/services/vtgate-{{$cell}}:web/
+
