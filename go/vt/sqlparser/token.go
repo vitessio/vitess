@@ -172,7 +172,7 @@ var keywords = map[string]int{
 	"middleint":           UNUSED,
 	"minute_microsecond":  UNUSED,
 	"minute_second":       UNUSED,
-	"mod":                 UNUSED,
+	"mod":                 MOD,
 	"modifies":            UNUSED,
 	"natural":             NATURAL,
 	"next":                NEXT,

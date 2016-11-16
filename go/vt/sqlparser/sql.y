@@ -107,7 +107,7 @@ func forceEOF(yylex interface{}) {
 %token <empty> SHOW DESCRIBE EXPLAIN
 
 // Functions
-%token <empty> CURRENT_TIMESTAMP DATABASE
+%token <empty> CURRENT_TIMESTAMP DATABASE MOD
 
 // MySQL reserved words that are unused by this grammar will map to this token.
 %token <empty> UNUSED
@@ -879,6 +879,10 @@ keyword_func:
 | DATABASE
   {
     $$ = "database"
+  }
+| MOD
+  {
+    $$ = "mod"
   }
 
 case_expression:
