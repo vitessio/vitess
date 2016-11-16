@@ -23,6 +23,7 @@ import (
 	"github.com/youtube/vitess/go/cgzip"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/concurrency"
+	"github.com/youtube/vitess/go/vt/hook"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/mysqlctl/backupstorage"
 	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
@@ -280,7 +281,7 @@ func backup(ctx context.Context, mysqld MysqlDaemon, logger logutil.Logger, bh b
 	}
 
 	// Backup everything, capture the error.
-	backupErr := backupFiles(mysqld, logger, bh, replicationPosition, backupConcurrency)
+	backupErr := backupFiles(mysqld, logger, bh, replicationPosition, backupConcurrency, hookExtraEnv)
 	usable := backupErr == nil
 
 	// Try to restart mysqld
@@ -322,7 +323,7 @@ func backup(ctx context.Context, mysqld MysqlDaemon, logger logutil.Logger, bh b
 }
 
 // backupFiles finds the list of files to backup, and creates the backup.
-func backupFiles(mysqld MysqlDaemon, logger logutil.Logger, bh backupstorage.BackupHandle, replicationPosition replication.Position, backupConcurrency int) (err error) {
+func backupFiles(mysqld MysqlDaemon, logger logutil.Logger, bh backupstorage.BackupHandle, replicationPosition replication.Position, backupConcurrency int, hookExtraEnv map[string]string) (err error) {
 	// Get the files to backup.
 	fes, err := findFilesTobackup(mysqld.Cnf())
 	if err != nil {
@@ -349,7 +350,7 @@ func backupFiles(mysqld MysqlDaemon, logger logutil.Logger, bh backupstorage.Bac
 
 			// Backup the individual file.
 			name := fmt.Sprintf("%v", i)
-			rec.RecordError(backupFile(mysqld, logger, bh, &fes[i], name))
+			rec.RecordError(backupFile(mysqld, logger, bh, &fes[i], name, hookExtraEnv))
 		}(i)
 	}
 
@@ -386,7 +387,7 @@ func backupFiles(mysqld MysqlDaemon, logger logutil.Logger, bh backupstorage.Bac
 }
 
 // backupFile backs up an individual file.
-func backupFile(mysqld MysqlDaemon, logger logutil.Logger, bh backupstorage.BackupHandle, fe *FileEntry, name string) (err error) {
+func backupFile(mysqld MysqlDaemon, logger logutil.Logger, bh backupstorage.BackupHandle, fe *FileEntry, name string, hookExtraEnv map[string]string) (err error) {
 	// Open the source file for reading.
 	var source *os.File
 	source, err = fe.open(mysqld.Cnf(), true)
@@ -416,8 +417,25 @@ func backupFile(mysqld MysqlDaemon, logger logutil.Logger, bh backupstorage.Back
 	hasher := newHasher()
 	tee := io.MultiWriter(dst, hasher)
 
+	// Create the external write filter, if any.
+	h := hook.NewHook("backup_filter", []string{"-operation", "write"})
+	h.ExtraEnv = hookExtraEnv
+	hwc, hclose, status, err := h.ExecuteAsWriteFilter(tee)
+	var filterOrTee io.Writer
+	if err != nil {
+		if status == hook.HOOK_DOES_NOT_EXIST || status == hook.HOOK_VTROOT_ERROR {
+			logger.Infof("no 'backup_filter' hook configured")
+			filterOrTee = tee
+			hwc = nil
+		} else {
+			return fmt.Errorf("'backup_filter' hook returned error: %v", err)
+		}
+	} else {
+		filterOrTee = hwc
+	}
+
 	// Create the gzip compression filter
-	gzip, err := cgzip.NewWriterLevel(tee, cgzip.Z_BEST_SPEED)
+	gzip, err := cgzip.NewWriterLevel(filterOrTee, cgzip.Z_BEST_SPEED)
 	if err != nil {
 		return fmt.Errorf("cannot create gziper: %v", err)
 	}
@@ -428,15 +446,31 @@ func backupFile(mysqld MysqlDaemon, logger logutil.Logger, bh backupstorage.Back
 		return fmt.Errorf("cannot copy data: %v", err)
 	}
 
-	// Close gzip to flush it, after that the hash is good.
+	// Close gzip to flush it, after that all data is sent to filterOrTee.
 	if err = gzip.Close(); err != nil {
 		return fmt.Errorf("cannot close gzip: %v", err)
 	}
 
-	// Flush the buffer to finish writing, save the hash.
+	// Close the hook filter if necessary.
+	if hwc != nil {
+		if err := hwc.Close(); err != nil {
+			return fmt.Errorf("cannot close hook filter: %v", err)
+		}
+		stderr, err := hclose()
+		if stderr != "" {
+			logger.Infof("'backup_filter' hook returned stderr: %v", stderr)
+		}
+		if err != nil {
+			return fmt.Errorf("'backup_filter' returned error: %v", err)
+		}
+	}
+
+	// Flush the buffer to finish writing on destination.
 	if err = dst.Flush(); err != nil {
 		return fmt.Errorf("cannot flush dst: %v", err)
 	}
+
+	// Save the hash.
 	fe.Hash = hasher.HashString()
 	return nil
 }
@@ -480,7 +514,7 @@ func checkNoDB(ctx context.Context, mysqld MysqlDaemon, dbName string) (bool, er
 
 // restoreFiles will copy all the files from the BackupStorage to the
 // right place.
-func restoreFiles(cnf *Mycnf, bh backupstorage.BackupHandle, fes []FileEntry, restoreConcurrency int) error {
+func restoreFiles(cnf *Mycnf, bh backupstorage.BackupHandle, fes []FileEntry, restoreConcurrency int, hookExtraEnv map[string]string) error {
 	sema := sync2.NewSemaphore(restoreConcurrency, 0)
 	rec := concurrency.AllErrorRecorder{}
 	wg := sync.WaitGroup{}
@@ -499,7 +533,7 @@ func restoreFiles(cnf *Mycnf, bh backupstorage.BackupHandle, fes []FileEntry, re
 
 			// And restore the file.
 			name := fmt.Sprintf("%v", i)
-			rec.RecordError(restoreFile(cnf, bh, &fes[i], name))
+			rec.RecordError(restoreFile(cnf, bh, &fes[i], name, hookExtraEnv))
 		}(i)
 	}
 	wg.Wait()
@@ -507,7 +541,7 @@ func restoreFiles(cnf *Mycnf, bh backupstorage.BackupHandle, fes []FileEntry, re
 }
 
 // restoreFile restores an individual file.
-func restoreFile(cnf *Mycnf, bh backupstorage.BackupHandle, fe *FileEntry, name string) (err error) {
+func restoreFile(cnf *Mycnf, bh backupstorage.BackupHandle, fe *FileEntry, name string, hookExtraEnv map[string]string) (err error) {
 	// Open the source file for reading.
 	var source io.ReadCloser
 	source, err = bh.ReadFile(name)
@@ -542,8 +576,25 @@ func restoreFile(cnf *Mycnf, bh backupstorage.BackupHandle, fe *FileEntry, name 
 	// and into the gunziper.
 	tee := io.TeeReader(source, hasher)
 
+	// Create the external read filter, if any.
+	h := hook.NewHook("backup_filter", []string{"-operation", "read"})
+	h.ExtraEnv = hookExtraEnv
+	hr, hclose, status, err := h.ExecuteAsReadFilter(tee)
+	var filterOrTee io.Reader
+	if err != nil {
+		if status == hook.HOOK_DOES_NOT_EXIST || status == hook.HOOK_VTROOT_ERROR {
+			log.Infof("no 'backup_filter' hook configured")
+			filterOrTee = tee
+			hr = nil
+		} else {
+			return fmt.Errorf("'backup_filter' hook returned error: %v", err)
+		}
+	} else {
+		filterOrTee = hr
+	}
+
 	// Create the uncompresser.
-	gz, err := cgzip.NewReader(tee)
+	gz, err := cgzip.NewReader(filterOrTee)
 	if err != nil {
 		return err
 	}
@@ -561,6 +612,17 @@ func restoreFile(cnf *Mycnf, bh backupstorage.BackupHandle, fe *FileEntry, name 
 	// Copy the data. Will also write to the hasher.
 	if _, err = io.Copy(dst, gz); err != nil {
 		return err
+	}
+
+	// Close the Filter.
+	if hr != nil {
+		stderr, err := hclose()
+		if stderr != "" {
+			log.Infof("'backup_filter' hook returned stderr: %v", stderr)
+		}
+		if err != nil {
+			return fmt.Errorf("'backup_filter' returned error: %v", err)
+		}
 	}
 
 	// Check the hash.
@@ -683,7 +745,7 @@ func Restore(
 		// There is at least one attempted backup, but none could be read.
 		// This implies there is data we ought to have, so it's not safe to start
 		// up empty.
-		return replication.Position{}, errors.New("Backup(s) found but none could be read. Unsafe to start up empty. Restart to retry restore.")
+		return replication.Position{}, errors.New("backup(s) found but none could be read, unsafe to start up empty, restart to retry restore")
 	}
 
 	if !deleteBeforeRestore {
@@ -719,7 +781,7 @@ func Restore(
 	}
 
 	logger.Infof("Restore: copying all files")
-	if err := restoreFiles(mysqld.Cnf(), bh, bm.FileEntries, restoreConcurrency); err != nil {
+	if err := restoreFiles(mysqld.Cnf(), bh, bm.FileEntries, restoreConcurrency, hookExtraEnv); err != nil {
 		return replication.Position{}, err
 	}
 
