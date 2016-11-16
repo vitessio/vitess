@@ -3,6 +3,7 @@ package schemaswap
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -35,6 +36,8 @@ var (
 		"number of simultaneous compression/checksum jobs to run for seed backup during schema swap")
 	reparentTimeout = flag.Duration("schema_swap_reparent_timeout", 30*time.Second,
 		"timeout to wait for slaves when doing reparent during schema swap")
+
+	errOnlyMasterLeft = errors.New("Only master is left to swap schema")
 )
 
 const (
@@ -82,6 +85,19 @@ type shardSchemaSwap struct {
 	parent *Swap
 	// shardName is the name of the shard this struct operates on.
 	shardName string
+
+	// The following is a set of UI nodes representing this shard.
+
+	shardUINode       *workflow.Node
+	applySchemaUINode *workflow.Node
+	backupUINode      *workflow.Node
+	propagateUINode   *workflow.Node
+	reparentUINode    *workflow.Node
+
+	// numTabletsTotal is the total number of tablets in the shard.
+	numTabletsTotal int
+	// numTabletsSwapped is number of tablets that have schema swapped already.
+	numTabletsSwapped int
 
 	// tabletHealthCheck watches after the healthiness of all tablets in the shard.
 	tabletHealthCheck discovery.HealthCheck
@@ -177,10 +193,11 @@ func (schemaSwap *Swap) Run(ctx context.Context, manager *workflow.Manager, work
 	schemaSwap.topoServer = topo.GetServer()
 	schemaSwap.tabletClient = tmclient.NewTabletManagerClient()
 
-	schemaSwap.rootUINode.Display = workflow.NodeDisplayIndeterminate
-	schemaSwap.rootUINode.BroadcastChanges(false /* updateChildren */)
-
-	return schemaSwap.executeSwap()
+	err := schemaSwap.executeSwap()
+	if err != nil {
+		schemaSwap.setUIMessage(fmt.Sprintf("Error: %v", err))
+	}
+	return err
 }
 
 // Run is the main entry point of the schema swap process. It drives the process from start
@@ -189,9 +206,11 @@ func (schemaSwap *Swap) Run(ctx context.Context, manager *workflow.Manager, work
 // input argument is the SQL statements that comprise the schema change that needs to be
 // pushed using the schema swap process.
 func (schemaSwap *Swap) executeSwap() error {
+	schemaSwap.setUIMessage("Initializing schema swap")
 	if err := schemaSwap.createShardObjects(); err != nil {
 		return err
 	}
+	schemaSwap.rootUINode.BroadcastChanges(true /* updateChildren */)
 	if err := schemaSwap.initializeSwap(); err != nil {
 		return err
 	}
@@ -206,35 +225,67 @@ func (schemaSwap *Swap) executeSwap() error {
 	if errHealthWatchers != nil {
 		return errHealthWatchers
 	}
+	schemaSwap.setUIMessage("Applying schema change on seed tablets")
 	err := schemaSwap.runOnAllShards(
 		func(shard *shardSchemaSwap) error {
-			return shard.applySeedSchemaChange()
+			shard.setShardInProgress(true)
+			err := shard.applySeedSchemaChange()
+			shard.setShardInProgress(false)
+			return err
 		})
 	if err != nil {
 		return err
 	}
+	schemaSwap.setUIMessage("Taking seed backups")
 	err = schemaSwap.runOnAllShards(
 		func(shard *shardSchemaSwap) error {
-			return shard.takeSeedBackup()
+			shard.setShardInProgress(true)
+			err := shard.takeSeedBackup()
+			shard.setShardInProgress(false)
+			return err
 		})
 	if err != nil {
 		return err
 	}
+	schemaSwap.setUIMessage("Propagating backups to non-master tablets")
 	err = schemaSwap.runOnAllShards(
 		func(shard *shardSchemaSwap) error {
-			return shard.propagateToNonMasterTablets()
+			shard.setShardInProgress(true)
+			err := shard.propagateToAllTablets(false /* withMasterReparent */)
+			shard.setShardInProgress(false)
+			return err
 		})
 	if err != nil {
 		return err
 	}
+	schemaSwap.setUIMessage("Propagating backups to master tablets")
 	err = schemaSwap.runOnAllShards(
 		func(shard *shardSchemaSwap) error {
-			return shard.propagateToMaster()
+			shard.setShardInProgress(true)
+			err := shard.propagateToAllTablets(true /* withMasterReparent */)
+			shard.setShardInProgress(false)
+			return err
 		})
 	if err != nil {
 		return err
 	}
-	return schemaSwap.finalizeSwap()
+	schemaSwap.setUIMessage("Finalizing schema swap")
+	err = schemaSwap.finalizeSwap()
+	if err != nil {
+		return err
+	}
+	for _, shard := range schemaSwap.allShards {
+		shard.shardUINode.State = workflowpb.WorkflowState_Done
+	}
+	schemaSwap.rootUINode.BroadcastChanges(true /* updateChildren */)
+	schemaSwap.setUIMessage("Schema swap is finished")
+	return nil
+}
+
+// setUIMessage updates message on the schema swap's root UI node and broadcasts changes.
+func (schemaSwap *Swap) setUIMessage(message string) {
+	schemaSwap.rootUINode.Message = message
+	schemaSwap.rootUINode.BroadcastChanges(false /* updateChildren */)
 }
 
 // runOnAllShards is a helper method that executes the passed function for all shards in parallel.
@@ -265,6 +316,34 @@ func (schemaSwap *Swap) createShardObjects() error {
 		shardSwap := &shardSchemaSwap{
 			parent:    schemaSwap,
 			shardName: shardInfo.ShardName(),
+			shardUINode: &workflow.Node{
+				Name:     fmt.Sprintf("Shard %v", shardInfo.ShardName()),
+				PathName: shardInfo.ShardName(),
+				State:    workflowpb.WorkflowState_Running,
+			},
+			applySchemaUINode: &workflow.Node{
+				Name:     "Apply schema on seed tablet",
+				PathName: "apply_schema",
+			},
+			backupUINode: &workflow.Node{
+				Name:     "Take seed backup",
+				PathName: "backup",
+			},
+			propagateUINode: &workflow.Node{
+				Name:     "Propagate backup",
+				PathName: "propagate",
+			},
+			reparentUINode: &workflow.Node{
+				Name:     "Reparent from old master",
+				PathName: "reparent",
+			},
+		}
+		schemaSwap.rootUINode.Children = append(schemaSwap.rootUINode.Children, shardSwap.shardUINode)
+		shardSwap.shardUINode.Children = []*workflow.Node{
+			shardSwap.applySchemaUINode,
+			shardSwap.backupUINode,
+			shardSwap.propagateUINode,
+			shardSwap.reparentUINode,
 		}
 		schemaSwap.allShards = append(schemaSwap.allShards, shardSwap)
 	}
@@ -348,6 +427,36 @@ func (schemaSwap *Swap) finalizeSwap() error {
 			return shard.writeFinishedSwap()
 		})
 	return err
+}
+
+// setShardInProgress changes the way shard looks in the UI. Either it's "in progress" (has
+// animated progress bar) or not (has empty look without progress bar).
+func (shardSwap *shardSchemaSwap) setShardInProgress(value bool) {
+	if value {
+		shardSwap.shardUINode.Display = workflow.NodeDisplayIndeterminate
+	} else {
+		shardSwap.shardUINode.Display = workflow.NodeDisplayNone
+	}
+	shardSwap.shardUINode.BroadcastChanges(false /* updateChildren */)
+}
+
+// markStepInProgress marks one step of the shard schema swap workflow as running.
+func (shardSwap *shardSchemaSwap) markStepInProgress(uiNode *workflow.Node) {
+	uiNode.Message = ""
+	uiNode.State = workflowpb.WorkflowState_Running
+	uiNode.Display = workflow.NodeDisplayIndeterminate
+	uiNode.BroadcastChanges(false /* updateChildren */)
+}
+
+// markStepDone marks one step of the shard schema swap workflow as finished successfully
+// or with an error.
+func (shardSwap *shardSchemaSwap) markStepDone(uiNode *workflow.Node, err error) {
+	if err != nil {
+		uiNode.Message = fmt.Sprintf("Error: %v", err)
+	}
+	uiNode.State = workflowpb.WorkflowState_Done
+	uiNode.Display = workflow.NodeDisplayNone
+	uiNode.BroadcastChanges(false /* updateChildren */)
 }
 
 // getMasterTablet returns the tablet that is currently master on the shard.
@@ -658,27 +767,41 @@ func (shardSwap *shardSchemaSwap) isSwapApplied(tablet *topodatapb.Tablet) (bool
 }
 
 // findNextTabletToSwap searches for the next tablet where we need to apply the schema swap. The
-// tablets are processed in the order described on tabletSortIndex() function above. If
-// it hits any error while searching for the tablet it returns it to the caller. If the
+// tablets are processed in the order described in tabletSortIndex() function above. If
+// it hits any error while searching for the tablet it returns the error to the caller. If the
 // only tablet that's left without schema swap applied is the master then the function
-// returns nil as the tablet and nil as the error.
+// returns the master tablet and errOnlyMasterLeft as the error. When all tablets have schema
+// swap applied the function returns nil as the tablet. The function also makes sure that
+// values of numTabletsTotal and numTabletsSwapped correctly represent current state of the
+// shard (it's convenient to do this in this function because it iterates over all tablets in
+// the shard).
 func (shardSwap *shardSchemaSwap) findNextTabletToSwap() (*topodatapb.Tablet, error) {
 	tabletList := shardSwap.getTabletList()
 	sort.Sort(orderTabletsForSwap(tabletList))
+
+	shardSwap.numTabletsTotal = len(tabletList)
+	var numTabletsSwapped int
 	for _, tabletStats := range tabletList {
-		if tabletStats.Tablet.Type == topodatapb.TabletType_MASTER {
-			// Only master is left.
-			return nil, nil
-		}
 		swapApplied, err := shardSwap.isSwapApplied(tabletStats.Tablet)
 		if err != nil {
 			return nil, err
 		}
-		if !swapApplied {
+		if swapApplied {
+			numTabletsSwapped++
+		} else {
+			if numTabletsSwapped > shardSwap.numTabletsSwapped {
+				// We save the calculated value only if it's bigger than the number
+				// we actually swapped, because we might not have seen all the tablets
+				// that have the schema swapped at this point.
+				shardSwap.numTabletsSwapped = numTabletsSwapped
+			}
+			if tabletStats.Tablet.Type == topodatapb.TabletType_MASTER {
+				return tabletStats.Tablet, errOnlyMasterLeft
+			}
 			return tabletStats.Tablet, nil
 		}
 	}
-	return nil, fmt.Errorf("Something is wrong! Cannot find master on shard %v", shardSwap.shardName)
+	return nil, nil
 }
 
 // applySeedSchemaChange chooses a healthy tablet as a schema swap seed and applies the schema change
@@ -686,7 +809,10 @@ func (shardSwap *shardSchemaSwap) findNextTabletToSwap() (*topodatapb.Tablet, er
 // RDONLY tablets the REPLICA one is chosen. If there are any non-MASTER tablets indicating that the
 // schema swap was already applied on them, then the method assumes that it's the seed tablet from the
 // already started process and doesn't try to apply the schema change on any other tablet.
-func (shardSwap *shardSchemaSwap) applySeedSchemaChange() error {
+func (shardSwap *shardSchemaSwap) applySeedSchemaChange() (err error) {
+	shardSwap.markStepInProgress(shardSwap.applySchemaUINode)
+	defer shardSwap.markStepDone(shardSwap.applySchemaUINode, err)
+
 	tabletList := shardSwap.getTabletList()
 	sort.Sort(orderTabletsForSwap(tabletList))
 	for _, tabletStats := range tabletList {
@@ -704,7 +830,7 @@ func (shardSwap *shardSchemaSwap) applySeedSchemaChange() error {
 	}
 	// Draining the tablet for it to not be used for execution of user queries.
 	savedSeedType := seedTablet.Type
-	err := shardSwap.parent.tabletClient.ChangeType(shardSwap.parent.ctx, seedTablet, topodatapb.TabletType_DRAINED)
+	err = shardSwap.parent.tabletClient.ChangeType(shardSwap.parent.ctx, seedTablet, topodatapb.TabletType_DRAINED)
 	if err != nil {
 		return err
 	}
@@ -768,7 +894,10 @@ func (shardSwap *shardSchemaSwap) applySeedSchemaChange() error {
 // takeSeedBackup takes backup on the seed tablet. The method assumes that the seed tablet is any tablet that
 // has info that schema swap was already applied on it. This way the function can be re-used if the seed backup
 // is lost somewhere half way through the schema swap process.
-func (shardSwap *shardSchemaSwap) takeSeedBackup() error {
+func (shardSwap *shardSchemaSwap) takeSeedBackup() (err error) {
+	shardSwap.markStepInProgress(shardSwap.backupUINode)
+	defer shardSwap.markStepDone(shardSwap.backupUINode, err)
+
 	tabletList := shardSwap.getTabletList()
 	sort.Sort(orderTabletsForSwap(tabletList))
 	var seedTablet *topodatapb.Tablet
@@ -874,18 +1003,54 @@ func (shardSwap *shardSchemaSwap) waitForTabletToBeHealthy(tablet *topodatapb.Ta
 	return nil
 }
 
+// updatePropagationProgressUI updates the progress bar in the workflow UI to reflect appropriate
+// percentage in line with how many tablets have schema swapped already.
+func (shardSwap *shardSchemaSwap) updatePropagationProgressUI() {
+	shardSwap.propagateUINode.ProgressMessage = fmt.Sprintf("%v/%v", shardSwap.numTabletsSwapped, shardSwap.numTabletsTotal)
+	if shardSwap.numTabletsTotal == 0 {
+		shardSwap.propagateUINode.Progress = 0
+	} else {
+		shardSwap.propagateUINode.Progress = shardSwap.numTabletsSwapped * 100 / shardSwap.numTabletsTotal
+	}
+	shardSwap.propagateUINode.BroadcastChanges(false /* updateChildren */)
+}
+
 // propagateToNonMasterTablets propagates the schema change to all non-master tablets
 // in the shard. When it returns nil it means that only master can remain left with the
 // old schema, everything else is verified to have schema swap applied.
-func (shardSwap *shardSchemaSwap) propagateToNonMasterTablets() error {
+func (shardSwap *shardSchemaSwap) propagateToAllTablets(withMasterReparent bool) error {
+	shardSwap.propagateUINode.Message = ""
+	shardSwap.propagateUINode.State = workflowpb.WorkflowState_Running
+	shardSwap.propagateUINode.Display = workflow.NodeDisplayDeterminate
+
 	for {
+		shardSwap.updatePropagationProgressUI()
 		tablet, err := shardSwap.findNextTabletToSwap()
+		// Update UI immediately after finding next tablet because the total number of tablets or
+		// the number of tablets with swapped schema can change in it.
+		shardSwap.updatePropagationProgressUI()
+		if err == errOnlyMasterLeft {
+			if withMasterReparent {
+				err = shardSwap.reparentFromMaster(tablet)
+				if err != nil {
+					shardSwap.propagateUINode.State = workflowpb.WorkflowState_Done
+					shardSwap.propagateUINode.Message = fmt.Sprintf("Error: %v", err)
+					shardSwap.propagateUINode.BroadcastChanges(false /* updateChildren */)
+					return err
+				}
+			} else {
+				return nil
+			}
+		}
 		if err == nil {
 			if tablet == nil {
+				shardSwap.propagateUINode.State = workflowpb.WorkflowState_Done
+				shardSwap.propagateUINode.BroadcastChanges(false /* updateChildren */)
 				return nil
 			}
 			err = shardSwap.swapOnTablet(tablet)
 			if err == nil {
+				shardSwap.numTabletsSwapped++
 				log.Infof("Schema is successfully swapped on tablet %v.", tablet.Alias)
 				continue
 			}
@@ -894,27 +1059,30 @@ func (shardSwap *shardSchemaSwap) propagateToNonMasterTablets() error {
 			log.Infof("Error searching for next tablet to swap schema on: %v.", err)
 		}
 
-		log.Infof("Sleeping for %v seconds.", *delayBetweenErrors)
+		msg := fmt.Sprintf("Sleeping for %v seconds.", *delayBetweenErrors)
+		log.Infof(msg)
+		shardSwap.propagateUINode.Message = msg
+		shardSwap.propagateUINode.BroadcastChanges(false /* updateChildren */)
 		select {
 		case <-shardSwap.parent.ctx.Done():
+			shardSwap.propagateUINode.State = workflowpb.WorkflowState_Done
+			shardSwap.propagateUINode.Message = fmt.Sprintf("Error: %v", shardSwap.parent.ctx.Err())
+			shardSwap.propagateUINode.BroadcastChanges(false /* updateChildren */)
 			return shardSwap.parent.ctx.Err()
 		case <-time.After(*delayBetweenErrors):
 			// Waiting is done going to the next loop.
 		}
+		shardSwap.propagateUINode.Message = ""
+		shardSwap.propagateUINode.BroadcastChanges(false /* updateChildren */)
 	}
 }
 
 // propagateToMaster propagates the schema change to the master. If the master already has
 // the schema change applied then the method does nothing.
-func (shardSwap *shardSchemaSwap) propagateToMaster() error {
-	masterTablet, err := shardSwap.getMasterTablet()
-	if err != nil {
-		return err
-	}
-	swapApplied, err := shardSwap.isSwapApplied(masterTablet)
-	if swapApplied {
-		return nil
-	}
+func (shardSwap *shardSchemaSwap) reparentFromMaster(masterTablet *topodatapb.Tablet) (err error) {
+	shardSwap.markStepInProgress(shardSwap.reparentUINode)
+	defer shardSwap.markStepDone(shardSwap.reparentUINode, err)
+
 	wr := wrangler.New(logutil.NewConsoleLogger(), shardSwap.parent.topoServer, shardSwap.parent.tabletClient)
 	err = wr.PlannedReparentShard(
 		shardSwap.parent.ctx,
@@ -926,5 +1094,5 @@ func (shardSwap *shardSchemaSwap) propagateToMaster() error {
 	if err != nil {
 		return err
 	}
-	return shardSwap.swapOnTablet(masterTablet)
+	return nil
 }
