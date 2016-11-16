@@ -31,7 +31,7 @@ Vitess supports the following types of sharding operations:
 
 With these features, you can start with a single keyspace that contains
 all of your data (in multiple tables). As your database grows, you can
-move tables to different keyspaces and shard some or all of those keyspaces
+move tables to different keyspaces (vertical sharding) and shard some or all of those keyspaces (horizontal sharding)
 without any real downtime for your application.
 
 ## Range-based Sharding
