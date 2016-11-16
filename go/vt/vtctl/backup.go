@@ -54,7 +54,7 @@ func commandListBackups(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 		return err
 	}
 	defer bs.Close()
-	bhs, err := bs.ListBackups(bucket)
+	bhs, err := bs.ListBackups(ctx, bucket)
 	if err != nil {
 		return err
 	}
@@ -84,7 +84,7 @@ func commandRemoveBackup(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 		return err
 	}
 	defer bs.Close()
-	return bs.RemoveBackup(bucket, name)
+	return bs.RemoveBackup(ctx, bucket, name)
 }
 
 func commandRestoreFromBackup(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -92,7 +92,7 @@ func commandRestoreFromBackup(ctx context.Context, wr *wrangler.Wrangler, subFla
 		return err
 	}
 	if subFlags.NArg() != 1 {
-		return fmt.Errorf("The RestoreFromBackup command requires the <tablet alias> argument.")
+		return fmt.Errorf("the RestoreFromBackup command requires the <tablet alias> argument")
 	}
 
 	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
