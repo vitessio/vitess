@@ -334,65 +334,23 @@ func backupFiles(mysqld MysqlDaemon, logger logutil.Logger, bh backupstorage.Bac
 	sema := sync2.NewSemaphore(backupConcurrency, 0)
 	rec := concurrency.AllErrorRecorder{}
 	wg := sync.WaitGroup{}
-	for i, fe := range fes {
+	for i := range fes {
 		wg.Add(1)
-		go func(i int, fe FileEntry) {
+		go func(i int) {
 			defer wg.Done()
 
-			// wait until we are ready to go, skip if we already
-			// encountered an error
+			// Wait until we are ready to go, skip if we already
+			// encountered an error.
 			sema.Acquire()
 			defer sema.Release()
 			if rec.HasErrors() {
 				return
 			}
 
-			// open the source file for reading
-			source, err := fe.open(mysqld.Cnf(), true)
-			if err != nil {
-				rec.RecordError(err)
-				return
-			}
-			defer source.Close()
-
-			// open the destination file for writing, and a buffer
+			// Backup the individual file.
 			name := fmt.Sprintf("%v", i)
-			wc, err := bh.AddFile(name)
-			if err != nil {
-				rec.RecordError(fmt.Errorf("cannot add file: %v", err))
-				return
-			}
-			defer func() { rec.RecordError(wc.Close()) }()
-			dst := bufio.NewWriterSize(wc, 2*1024*1024)
-
-			// create the hasher and the tee on top
-			hasher := newHasher()
-			tee := io.MultiWriter(dst, hasher)
-
-			// create the gzip compression filter
-			gzip, err := cgzip.NewWriterLevel(tee, cgzip.Z_BEST_SPEED)
-			if err != nil {
-				rec.RecordError(fmt.Errorf("cannot create gziper: %v", err))
-				return
-			}
-
-			// copy from the source file to gzip to tee to output file and hasher
-			_, err = io.Copy(gzip, source)
-			if err != nil {
-				rec.RecordError(fmt.Errorf("cannot copy data: %v", err))
-				return
-			}
-
-			// close gzip to flush it, after that the hash is good
-			if err = gzip.Close(); err != nil {
-				rec.RecordError(fmt.Errorf("cannot close gzip: %v", err))
-				return
-			}
-
-			// flush the buffer to finish writing, save the hash
-			rec.RecordError(dst.Flush())
-			fes[i].Hash = hasher.HashString()
-		}(i, fe)
+			rec.RecordError(backupFile(mysqld, logger, bh, &fes[i], name))
+		}(i)
 	}
 
 	wg.Wait()
@@ -424,6 +382,62 @@ func backupFiles(mysqld MysqlDaemon, logger logutil.Logger, bh backupstorage.Bac
 		return fmt.Errorf("cannot write %v: %v", backupManifest, err)
 	}
 
+	return nil
+}
+
+// backupFile backs up an individual file.
+func backupFile(mysqld MysqlDaemon, logger logutil.Logger, bh backupstorage.BackupHandle, fe *FileEntry, name string) (err error) {
+	// Open the source file for reading.
+	var source *os.File
+	source, err = fe.open(mysqld.Cnf(), true)
+	if err != nil {
+		return err
+	}
+	defer source.Close()
+
+	// Open the destination file for writing, and a buffer.
+	wc, err := bh.AddFile(name)
+	if err != nil {
+		return fmt.Errorf("cannot add file: %v", err)
+	}
+	defer func() {
+		if rerr := wc.Close(); rerr != nil {
+			if err != nil {
+				// We already have an error, just log this one.
+				logger.Errorf("failed to close file %v: %v", name, rerr)
+			} else {
+				err = rerr
+			}
+		}
+	}()
+	dst := bufio.NewWriterSize(wc, 2*1024*1024)
+
+	// Create the hasher and the tee on top.
+	hasher := newHasher()
+	tee := io.MultiWriter(dst, hasher)
+
+	// Create the gzip compression filter
+	gzip, err := cgzip.NewWriterLevel(tee, cgzip.Z_BEST_SPEED)
+	if err != nil {
+		return fmt.Errorf("cannot create gziper: %v", err)
+	}
+
+	// Copy from the source file to gzip to tee to output file and hasher.
+	_, err = io.Copy(gzip, source)
+	if err != nil {
+		return fmt.Errorf("cannot copy data: %v", err)
+	}
+
+	// Close gzip to flush it, after that the hash is good.
+	if err = gzip.Close(); err != nil {
+		return fmt.Errorf("cannot close gzip: %v", err)
+	}
+
+	// Flush the buffer to finish writing, save the hash.
+	if err = dst.Flush(); err != nil {
+		return fmt.Errorf("cannot flush dst: %v", err)
+	}
+	fe.Hash = hasher.HashString()
 	return nil
 }
 
@@ -465,78 +479,98 @@ func checkNoDB(ctx context.Context, mysqld MysqlDaemon, dbName string) (bool, er
 }
 
 // restoreFiles will copy all the files from the BackupStorage to the
-// right place
+// right place.
 func restoreFiles(cnf *Mycnf, bh backupstorage.BackupHandle, fes []FileEntry, restoreConcurrency int) error {
 	sema := sync2.NewSemaphore(restoreConcurrency, 0)
 	rec := concurrency.AllErrorRecorder{}
 	wg := sync.WaitGroup{}
-	for i, fe := range fes {
+	for i := range fes {
 		wg.Add(1)
-		go func(i int, fe FileEntry) {
+		go func(i int) {
 			defer wg.Done()
 
-			// wait until we are ready to go, skip if we already
-			// encountered an error
+			// Wait until we are ready to go, skip if we already
+			// encountered an error.
 			sema.Acquire()
 			defer sema.Release()
 			if rec.HasErrors() {
 				return
 			}
 
-			// open the source file for reading
+			// And restore the file.
 			name := fmt.Sprintf("%v", i)
-			source, err := bh.ReadFile(name)
-			if err != nil {
-				rec.RecordError(err)
-				return
-			}
-			defer source.Close()
-
-			// open the destination file for writing
-			dstFile, err := fe.open(cnf, false)
-			if err != nil {
-				rec.RecordError(err)
-				return
-			}
-			defer func() { rec.RecordError(dstFile.Close()) }()
-
-			// create a buffering output
-			dst := bufio.NewWriterSize(dstFile, 2*1024*1024)
-
-			// create hash to write the compressed data to
-			hasher := newHasher()
-
-			// create a Tee: we split the input into the hasher
-			// and into the gunziper
-			tee := io.TeeReader(source, hasher)
-
-			// create the uncompresser
-			gz, err := cgzip.NewReader(tee)
-			if err != nil {
-				rec.RecordError(err)
-				return
-			}
-			defer func() { rec.RecordError(gz.Close()) }()
-
-			// copy the data. Will also write to the hasher
-			if _, err = io.Copy(dst, gz); err != nil {
-				rec.RecordError(err)
-				return
-			}
-
-			// check the hash
-			hash := hasher.HashString()
-			if hash != fe.Hash {
-				rec.RecordError(fmt.Errorf("hash mismatch for %v, got %v expected %v", fe.Name, hash, fe.Hash))
-				return
-			}
-
-			// flush the buffer
-			rec.RecordError(dst.Flush())
-		}(i, fe)
+			rec.RecordError(restoreFile(cnf, bh, &fes[i], name))
+		}(i)
 	}
 	wg.Wait()
 	return rec.Error()
+}
+
+// restoreFile restores an individual file.
+func restoreFile(cnf *Mycnf, bh backupstorage.BackupHandle, fe *FileEntry, name string) (err error) {
+	// Open the source file for reading.
+	var source io.ReadCloser
+	source, err = bh.ReadFile(name)
+	if err != nil {
+		return err
+	}
+	defer source.Close()
+
+	// Open the destination file for writing.
+	dstFile, err := fe.open(cnf, false)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if cerr := dstFile.Close(); cerr != nil {
+			if err != nil {
+				// We already have an error, just log this one.
+				log.Errorf("failed to close file %v: %v", name, cerr)
+			} else {
+				err = cerr
+			}
+		}
+	}()
+
+	// Create a buffering output.
+	dst := bufio.NewWriterSize(dstFile, 2*1024*1024)
+
+	// Create hash to write the compressed data to.
+	hasher := newHasher()
+
+	// Create a Tee: we split the input into the hasher
+	// and into the gunziper.
+	tee := io.TeeReader(source, hasher)
+
+	// Create the uncompresser.
+	gz, err := cgzip.NewReader(tee)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if cerr := gz.Close(); cerr != nil {
+			if err != nil {
+				// We already have an error, just log this one.
+				log.Errorf("failed to close gunziper %v: %v", name, cerr)
+			} else {
+				err = cerr
+			}
+		}
+	}()
+
+	// Copy the data. Will also write to the hasher.
+	if _, err = io.Copy(dst, gz); err != nil {
+		return err
+	}
+
+	// Check the hash.
+	hash := hasher.HashString()
+	if hash != fe.Hash {
+		return fmt.Errorf("hash mismatch for %v, got %v expected %v", fe.Name, hash, fe.Hash)
+	}
+
+	// Flush the buffer.
+	return dst.Flush()
 }
 
 // removeExistingFiles will delete existing files in the data dir to prevent
