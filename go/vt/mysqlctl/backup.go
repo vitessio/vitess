@@ -186,8 +186,7 @@ func findFilesTobackup(cnf *Mycnf) ([]FileEntry, error) {
 // - shuts down Mysqld during the backup
 // - remember if we were replicating, restore the exact same state
 func Backup(ctx context.Context, mysqld MysqlDaemon, logger logutil.Logger, dir, name string, backupConcurrency int, hookExtraEnv map[string]string) error {
-
-	// start the backup with the BackupStorage
+	// Start the backup with the BackupStorage.
 	bs, err := backupstorage.GetBackupStorage()
 	if err != nil {
 		return err
@@ -198,25 +197,39 @@ func Backup(ctx context.Context, mysqld MysqlDaemon, logger logutil.Logger, dir,
 		return fmt.Errorf("StartBackup failed: %v", err)
 	}
 
-	if err = backup(ctx, mysqld, logger, bh, backupConcurrency, hookExtraEnv); err != nil {
-		if abortErr := bh.AbortBackup(); abortErr != nil {
-			logger.Errorf("failed to abort backup: %v", abortErr)
+	// Take the backup, and either AbortBackup or EndBackup.
+	usable, err := backup(ctx, mysqld, logger, bh, backupConcurrency, hookExtraEnv)
+	var finishErr error
+	if usable {
+		finishErr = bh.EndBackup()
+	} else {
+		finishErr = bh.AbortBackup()
+	}
+	if err != nil {
+		if finishErr != nil {
+			// We have a backup error, and we also failed
+			// to finish the backup: just log the backup
+			// finish error, return the backup error.
+			logger.Errorf("failed to finish backup: %v", finishErr)
 		}
 		return err
 	}
-	return bh.EndBackup()
+
+	// The backup worked, so just return the finish error, if any.
+	return finishErr
 }
 
-func backup(ctx context.Context, mysqld MysqlDaemon, logger logutil.Logger, bh backupstorage.BackupHandle, backupConcurrency int, hookExtraEnv map[string]string) error {
-
-	// save initial state so we can restore
+// backup returns a boolean that indicates if the backup is useable,
+// and an overall error.
+func backup(ctx context.Context, mysqld MysqlDaemon, logger logutil.Logger, bh backupstorage.BackupHandle, backupConcurrency int, hookExtraEnv map[string]string) (bool, error) {
+	// Save initial state so we can restore.
 	slaveStartRequired := false
 	sourceIsMaster := false
 	readOnly := true
 	var replicationPosition replication.Position
 	semiSyncMaster, semiSyncSlave := mysqld.SemiSyncEnabled()
 
-	// see if we need to restart replication after backup
+	// See if we need to restart replication after backup.
 	logger.Infof("getting current replication status")
 	slaveStatus, err := mysqld.SlaveStatus()
 	switch err {
@@ -226,13 +239,13 @@ func backup(ctx context.Context, mysqld MysqlDaemon, logger logutil.Logger, bh b
 		// keep going if we're the master, might be a degenerate case
 		sourceIsMaster = true
 	default:
-		return fmt.Errorf("can't get slave status: %v", err)
+		return false, fmt.Errorf("can't get slave status: %v", err)
 	}
 
 	// get the read-only flag
 	readOnly, err = mysqld.IsReadOnly()
 	if err != nil {
-		return fmt.Errorf("can't get read-only status: %v", err)
+		return false, fmt.Errorf("can't get read-only status: %v", err)
 	}
 
 	// get the replication position
@@ -240,21 +253,21 @@ func backup(ctx context.Context, mysqld MysqlDaemon, logger logutil.Logger, bh b
 		if !readOnly {
 			logger.Infof("turning master read-only before backup")
 			if err = mysqld.SetReadOnly(true); err != nil {
-				return fmt.Errorf("can't set read-only status: %v", err)
+				return false, fmt.Errorf("can't set read-only status: %v", err)
 			}
 		}
 		replicationPosition, err = mysqld.MasterPosition()
 		if err != nil {
-			return fmt.Errorf("can't get master position: %v", err)
+			return false, fmt.Errorf("can't get master position: %v", err)
 		}
 	} else {
 		if err = StopSlave(mysqld, hookExtraEnv); err != nil {
-			return fmt.Errorf("can't stop slave: %v", err)
+			return false, fmt.Errorf("can't stop slave: %v", err)
 		}
 		var slaveStatus replication.Status
 		slaveStatus, err = mysqld.SlaveStatus()
 		if err != nil {
-			return fmt.Errorf("can't get slave status: %v", err)
+			return false, fmt.Errorf("can't get slave status: %v", err)
 		}
 		replicationPosition = slaveStatus.Position
 	}
@@ -263,25 +276,17 @@ func backup(ctx context.Context, mysqld MysqlDaemon, logger logutil.Logger, bh b
 	// shutdown mysqld
 	err = mysqld.Shutdown(ctx, true)
 	if err != nil {
-		return fmt.Errorf("can't shutdown mysqld: %v", err)
+		return false, fmt.Errorf("can't shutdown mysqld: %v", err)
 	}
 
-	// get the files to backup
-	fes, err := findFilesTobackup(mysqld.Cnf())
-	if err != nil {
-		return fmt.Errorf("can't find files to backup: %v", err)
-	}
-	logger.Infof("found %v files to backup", len(fes))
-
-	// backup everything
-	if err := backupFiles(mysqld, logger, bh, fes, replicationPosition, backupConcurrency); err != nil {
-		return fmt.Errorf("can't backup files: %v", err)
-	}
+	// Backup everything, capture the error.
+	backupErr := backupFiles(mysqld, logger, bh, replicationPosition, backupConcurrency)
+	usable := backupErr == nil
 
 	// Try to restart mysqld
 	err = mysqld.Start(ctx)
 	if err != nil {
-		return fmt.Errorf("can't restart mysqld: %v", err)
+		return usable, fmt.Errorf("can't restart mysqld: %v", err)
 	}
 
 	// Restore original mysqld state that we saved above.
@@ -292,31 +297,40 @@ func backup(ctx context.Context, mysqld MysqlDaemon, logger logutil.Logger, bh b
 			semiSyncMaster, semiSyncSlave)
 		err := mysqld.SetSemiSyncEnabled(semiSyncMaster, semiSyncSlave)
 		if err != nil {
-			return err
+			return usable, err
 		}
 	}
 	if slaveStartRequired {
 		logger.Infof("restarting mysql replication")
 		if err := StartSlave(mysqld, hookExtraEnv); err != nil {
-			return fmt.Errorf("cannot restart slave: %v", err)
+			return usable, fmt.Errorf("cannot restart slave: %v", err)
 		}
 
 		// this should be quick, but we might as well just wait
 		if err := WaitForSlaveStart(mysqld, slaveStartDeadline); err != nil {
-			return fmt.Errorf("slave is not restarting: %v", err)
+			return usable, fmt.Errorf("slave is not restarting: %v", err)
 		}
 	}
 
 	// And set read-only mode
 	logger.Infof("resetting mysqld read-only to %v", readOnly)
 	if err := mysqld.SetReadOnly(readOnly); err != nil {
-		return err
+		return usable, err
 	}
 
-	return nil
+	return usable, backupErr
 }
 
-func backupFiles(mysqld MysqlDaemon, logger logutil.Logger, bh backupstorage.BackupHandle, fes []FileEntry, replicationPosition replication.Position, backupConcurrency int) (err error) {
+// backupFiles finds the list of files to backup, and creates the backup.
+func backupFiles(mysqld MysqlDaemon, logger logutil.Logger, bh backupstorage.BackupHandle, replicationPosition replication.Position, backupConcurrency int) (err error) {
+	// Get the files to backup.
+	fes, err := findFilesTobackup(mysqld.Cnf())
+	if err != nil {
+		return fmt.Errorf("can't find files to backup: %v", err)
+	}
+	logger.Infof("found %v files to backup", len(fes))
+
+	// Backup with the provided concurrency.
 	sema := sync2.NewSemaphore(backupConcurrency, 0)
 	rec := concurrency.AllErrorRecorder{}
 	wg := sync.WaitGroup{}
