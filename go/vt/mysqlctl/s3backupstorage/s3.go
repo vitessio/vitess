@@ -19,6 +19,8 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
+	"golang.org/x/net/context"
+
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/mysqlctl/backupstorage"
 )
@@ -37,6 +39,7 @@ var (
 	delimiter = "/"
 )
 
+// S3BackupHandle implements the backupstorage.BackupHandle interface.
 type S3BackupHandle struct {
 	client    *s3.S3
 	bs        *S3BackupStorage
@@ -47,15 +50,18 @@ type S3BackupHandle struct {
 	waitGroup sync.WaitGroup
 }
 
+// Directory is part of the backupstorage.BackupHandle interface.
 func (bh *S3BackupHandle) Directory() string {
 	return bh.dir
 }
 
+// Name is part of the backupstorage.BackupHandle interface.
 func (bh *S3BackupHandle) Name() string {
 	return bh.name
 }
 
-func (bh *S3BackupHandle) AddFile(filename string) (io.WriteCloser, error) {
+// AddFile is part of the backupstorage.BackupHandle interface.
+func (bh *S3BackupHandle) AddFile(ctx context.Context, filename string) (io.WriteCloser, error) {
 	if bh.readOnly {
 		return nil, fmt.Errorf("AddFile cannot be called on read-only backup")
 	}
@@ -81,7 +87,8 @@ func (bh *S3BackupHandle) AddFile(filename string) (io.WriteCloser, error) {
 	return writer, nil
 }
 
-func (bh *S3BackupHandle) EndBackup() error {
+// EndBackup is part of the backupstorage.BackupHandle interface.
+func (bh *S3BackupHandle) EndBackup(ctx context.Context) error {
 	if bh.readOnly {
 		return fmt.Errorf("EndBackup cannot be called on read-only backup")
 	}
@@ -89,14 +96,16 @@ func (bh *S3BackupHandle) EndBackup() error {
 	return bh.errors.Error()
 }
 
-func (bh *S3BackupHandle) AbortBackup() error {
+// AbortBackup is part of the backupstorage.BackupHandle interface.
+func (bh *S3BackupHandle) AbortBackup(ctx context.Context) error {
 	if bh.readOnly {
 		return fmt.Errorf("AbortBackup cannot be called on read-only backup")
 	}
-	return bh.bs.RemoveBackup(bh.dir, bh.name)
+	return bh.bs.RemoveBackup(ctx, bh.dir, bh.name)
 }
 
-func (bh *S3BackupHandle) ReadFile(filename string) (io.ReadCloser, error) {
+// ReadFile is part of the backupstorage.BackupHandle interface.
+func (bh *S3BackupHandle) ReadFile(ctx context.Context, filename string) (io.ReadCloser, error) {
 	if !bh.readOnly {
 		return nil, fmt.Errorf("ReadFile cannot be called on read-write backup")
 	}
@@ -113,12 +122,14 @@ func (bh *S3BackupHandle) ReadFile(filename string) (io.ReadCloser, error) {
 
 var _ backupstorage.BackupHandle = (*S3BackupHandle)(nil)
 
+// S3BackupStorage implements the backupstorage.BackupStorage interface.
 type S3BackupStorage struct {
 	_client *s3.S3
 	mu      sync.Mutex
 }
 
-func (bs *S3BackupStorage) ListBackups(dir string) ([]backupstorage.BackupHandle, error) {
+// ListBackups is part of the backupstorage.BackupStorage interface.
+func (bs *S3BackupStorage) ListBackups(ctx context.Context, dir string) ([]backupstorage.BackupHandle, error) {
 	c, err := bs.client()
 	if err != nil {
 		return nil, err
@@ -165,7 +176,8 @@ func (bs *S3BackupStorage) ListBackups(dir string) ([]backupstorage.BackupHandle
 	return result, nil
 }
 
-func (bs *S3BackupStorage) StartBackup(dir, name string) (backupstorage.BackupHandle, error) {
+// StartBackup is part of the backupstorage.BackupStorage interface.
+func (bs *S3BackupStorage) StartBackup(ctx context.Context, dir, name string) (backupstorage.BackupHandle, error) {
 	c, err := bs.client()
 	if err != nil {
 		return nil, err
@@ -180,7 +192,8 @@ func (bs *S3BackupStorage) StartBackup(dir, name string) (backupstorage.BackupHa
 	}, nil
 }
 
-func (bs *S3BackupStorage) RemoveBackup(dir, name string) error {
+// RemoveBackup is part of the backupstorage.BackupStorage interface.
+func (bs *S3BackupStorage) RemoveBackup(ctx context.Context, dir, name string) error {
 	c, err := bs.client()
 	if err != nil {
 		return err
@@ -231,6 +244,7 @@ func (bs *S3BackupStorage) RemoveBackup(dir, name string) error {
 	return nil
 }
 
+// Close is part of the backupstorage.BackupStorage interface.
 func (bs *S3BackupStorage) Close() error {
 	bs.mu.Lock()
 	defer bs.mu.Unlock()
