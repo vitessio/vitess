@@ -107,6 +107,7 @@ public class VitessResultSetMetaData implements ResultSetMetaData {
         switch (vitessTypeValue) {
             case Query.Type.BIT_VALUE:
                 return "BIT";
+
             case Query.Type.DECIMAL_VALUE:
                 return "DECIMAL";
 
@@ -188,7 +189,6 @@ public class VitessResultSetMetaData implements ResultSetMetaData {
 
             case Query.Type.SET_VALUE:
                 return "SET";
-
 
             case Query.Type.TUPLE_VALUE:
                 return "TUPLE";

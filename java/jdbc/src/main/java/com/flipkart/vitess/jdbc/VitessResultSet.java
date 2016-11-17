@@ -208,7 +208,7 @@ public class VitessResultSet implements ResultSet {
             return false;
         }
 
-        //Mysql 5.0 and higher have a BIT Data Type, need to check for this as well.
+        // Mysql 5.0 and higher have a BIT Data Type, need to check for this as well.
         Query.Field field = this.fields.get(columnIndex - 1);
 
         if (field.getType() == Query.Type.BIT) {
