@@ -16,6 +16,8 @@ import (
 
 	log "github.com/golang/glog"
 	minio "github.com/minio/minio-go"
+	"golang.org/x/net/context"
+
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/mysqlctl/backupstorage"
 )
@@ -55,7 +57,7 @@ func (bh *CephBackupHandle) Name() string {
 }
 
 // AddFile implements BackupHandle.
-func (bh *CephBackupHandle) AddFile(filename string) (io.WriteCloser, error) {
+func (bh *CephBackupHandle) AddFile(ctx context.Context, filename string) (io.WriteCloser, error) {
 	if bh.readOnly {
 		return nil, fmt.Errorf("AddFile cannot be called on read-only backup")
 	}
@@ -83,7 +85,7 @@ func (bh *CephBackupHandle) AddFile(filename string) (io.WriteCloser, error) {
 }
 
 // EndBackup implements BackupHandle.
-func (bh *CephBackupHandle) EndBackup() error {
+func (bh *CephBackupHandle) EndBackup(ctx context.Context) error {
 	if bh.readOnly {
 		return fmt.Errorf("EndBackup cannot be called on read-only backup")
 	}
@@ -93,15 +95,15 @@ func (bh *CephBackupHandle) EndBackup() error {
 }
 
 // AbortBackup implements BackupHandle.
-func (bh *CephBackupHandle) AbortBackup() error {
+func (bh *CephBackupHandle) AbortBackup(ctx context.Context) error {
 	if bh.readOnly {
 		return fmt.Errorf("AbortBackup cannot be called on read-only backup")
 	}
-	return bh.bs.RemoveBackup(bh.dir, bh.name)
+	return bh.bs.RemoveBackup(ctx, bh.dir, bh.name)
 }
 
 // ReadFile implements BackupHandle.
-func (bh *CephBackupHandle) ReadFile(filename string) (io.ReadCloser, error) {
+func (bh *CephBackupHandle) ReadFile(ctx context.Context, filename string) (io.ReadCloser, error) {
 	if !bh.readOnly {
 		return nil, fmt.Errorf("ReadFile cannot be called on read-write backup")
 	}
@@ -121,7 +123,7 @@ type CephBackupStorage struct {
 }
 
 // ListBackups implements BackupStorage.
-func (bs *CephBackupStorage) ListBackups(dir string) ([]backupstorage.BackupHandle, error) {
+func (bs *CephBackupStorage) ListBackups(ctx context.Context, dir string) ([]backupstorage.BackupHandle, error) {
 	c, err := bs.client()
 	if err != nil {
 		return nil, err
@@ -164,7 +166,7 @@ func (bs *CephBackupStorage) ListBackups(dir string) ([]backupstorage.BackupHand
 }
 
 // StartBackup implements BackupStorage.
-func (bs *CephBackupStorage) StartBackup(dir, name string) (backupstorage.BackupHandle, error) {
+func (bs *CephBackupStorage) StartBackup(ctx context.Context, dir, name string) (backupstorage.BackupHandle, error) {
 	c, err := bs.client()
 	if err != nil {
 		return nil, err
@@ -192,7 +194,7 @@ func (bs *CephBackupStorage) StartBackup(dir, name string) (backupstorage.Backup
 }
 
 // RemoveBackup implements BackupStorage.
-func (bs *CephBackupStorage) RemoveBackup(dir, name string) error {
+func (bs *CephBackupStorage) RemoveBackup(ctx context.Context, dir, name string) error {
 	c, err := bs.client()
 	if err != nil {
 		return err

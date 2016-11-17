@@ -204,7 +204,7 @@ func Backup(ctx context.Context, mysqld MysqlDaemon, logger logutil.Logger, dir,
 		return err
 	}
 	defer bs.Close()
-	bh, err := bs.StartBackup(dir, name)
+	bh, err := bs.StartBackup(ctx, dir, name)
 	if err != nil {
 		return fmt.Errorf("StartBackup failed: %v", err)
 	}
@@ -213,10 +213,10 @@ func Backup(ctx context.Context, mysqld MysqlDaemon, logger logutil.Logger, dir,
 	usable, err := backup(ctx, mysqld, logger, bh, backupConcurrency, hookExtraEnv)
 	var finishErr error
 	if usable {
-		finishErr = bh.EndBackup()
+		finishErr = bh.EndBackup(ctx)
 	} else {
 		logger.Errorf("backup is not usable, aborting it: %v", err)
-		finishErr = bh.AbortBackup()
+		finishErr = bh.AbortBackup(ctx)
 	}
 	if err != nil {
 		if finishErr != nil {
@@ -293,7 +293,7 @@ func backup(ctx context.Context, mysqld MysqlDaemon, logger logutil.Logger, bh b
 	}
 
 	// Backup everything, capture the error.
-	backupErr := backupFiles(mysqld, logger, bh, replicationPosition, backupConcurrency, hookExtraEnv)
+	backupErr := backupFiles(ctx, mysqld, logger, bh, replicationPosition, backupConcurrency, hookExtraEnv)
 	usable := backupErr == nil
 
 	// Try to restart mysqld
@@ -335,7 +335,7 @@ func backup(ctx context.Context, mysqld MysqlDaemon, logger logutil.Logger, bh b
 }
 
 // backupFiles finds the list of files to backup, and creates the backup.
-func backupFiles(mysqld MysqlDaemon, logger logutil.Logger, bh backupstorage.BackupHandle, replicationPosition replication.Position, backupConcurrency int, hookExtraEnv map[string]string) (err error) {
+func backupFiles(ctx context.Context, mysqld MysqlDaemon, logger logutil.Logger, bh backupstorage.BackupHandle, replicationPosition replication.Position, backupConcurrency int, hookExtraEnv map[string]string) (err error) {
 	// Get the files to backup.
 	fes, err := findFilesTobackup(mysqld.Cnf())
 	if err != nil {
@@ -362,7 +362,7 @@ func backupFiles(mysqld MysqlDaemon, logger logutil.Logger, bh backupstorage.Bac
 
 			// Backup the individual file.
 			name := fmt.Sprintf("%v", i)
-			rec.RecordError(backupFile(mysqld, logger, bh, &fes[i], name, hookExtraEnv))
+			rec.RecordError(backupFile(ctx, mysqld, logger, bh, &fes[i], name, hookExtraEnv))
 		}(i)
 	}
 
@@ -372,7 +372,7 @@ func backupFiles(mysqld MysqlDaemon, logger logutil.Logger, bh backupstorage.Bac
 	}
 
 	// open the MANIFEST
-	wc, err := bh.AddFile(backupManifest)
+	wc, err := bh.AddFile(ctx, backupManifest)
 	if err != nil {
 		return fmt.Errorf("cannot add %v to backup: %v", backupManifest, err)
 	}
@@ -400,7 +400,7 @@ func backupFiles(mysqld MysqlDaemon, logger logutil.Logger, bh backupstorage.Bac
 }
 
 // backupFile backs up an individual file.
-func backupFile(mysqld MysqlDaemon, logger logutil.Logger, bh backupstorage.BackupHandle, fe *FileEntry, name string, hookExtraEnv map[string]string) (err error) {
+func backupFile(ctx context.Context, mysqld MysqlDaemon, logger logutil.Logger, bh backupstorage.BackupHandle, fe *FileEntry, name string, hookExtraEnv map[string]string) (err error) {
 	// Open the source file for reading.
 	var source *os.File
 	source, err = fe.open(mysqld.Cnf(), true)
@@ -410,7 +410,7 @@ func backupFile(mysqld MysqlDaemon, logger logutil.Logger, bh backupstorage.Back
 	defer source.Close()
 
 	// Open the destination file for writing, and a buffer.
-	wc, err := bh.AddFile(name)
+	wc, err := bh.AddFile(ctx, name)
 	if err != nil {
 		return fmt.Errorf("cannot add file: %v", err)
 	}
@@ -526,7 +526,7 @@ func checkNoDB(ctx context.Context, mysqld MysqlDaemon, dbName string) (bool, er
 
 // restoreFiles will copy all the files from the BackupStorage to the
 // right place.
-func restoreFiles(cnf *Mycnf, bh backupstorage.BackupHandle, fes []FileEntry, filter string, restoreConcurrency int, hookExtraEnv map[string]string) error {
+func restoreFiles(ctx context.Context, cnf *Mycnf, bh backupstorage.BackupHandle, fes []FileEntry, filter string, restoreConcurrency int, hookExtraEnv map[string]string) error {
 	sema := sync2.NewSemaphore(restoreConcurrency, 0)
 	rec := concurrency.AllErrorRecorder{}
 	wg := sync.WaitGroup{}
@@ -545,7 +545,7 @@ func restoreFiles(cnf *Mycnf, bh backupstorage.BackupHandle, fes []FileEntry, fi
 
 			// And restore the file.
 			name := fmt.Sprintf("%v", i)
-			rec.RecordError(restoreFile(cnf, bh, &fes[i], filter, name, hookExtraEnv))
+			rec.RecordError(restoreFile(ctx, cnf, bh, &fes[i], filter, name, hookExtraEnv))
 		}(i)
 	}
 	wg.Wait()
@@ -553,10 +553,10 @@ func restoreFiles(cnf *Mycnf, bh backupstorage.BackupHandle, fes []FileEntry, fi
 }
 
 // restoreFile restores an individual file.
-func restoreFile(cnf *Mycnf, bh backupstorage.BackupHandle, fe *FileEntry, filter string, name string, hookExtraEnv map[string]string) (err error) {
+func restoreFile(ctx context.Context, cnf *Mycnf, bh backupstorage.BackupHandle, fe *FileEntry, filter string, name string, hookExtraEnv map[string]string) (err error) {
 	// Open the source file for reading.
 	var source io.ReadCloser
-	source, err = bh.ReadFile(name)
+	source, err = bh.ReadFile(ctx, name)
 	if err != nil {
 		return err
 	}
@@ -717,7 +717,7 @@ func Restore(
 	}
 	defer bs.Close()
 
-	bhs, err := bs.ListBackups(dir)
+	bhs, err := bs.ListBackups(ctx, dir)
 	if err != nil {
 		return replication.Position{}, fmt.Errorf("ListBackups failed: %v", err)
 	}
@@ -736,7 +736,7 @@ func Restore(
 	var toRestore int
 	for toRestore = len(bhs) - 1; toRestore >= 0; toRestore-- {
 		bh = bhs[toRestore]
-		rc, err := bh.ReadFile(backupManifest)
+		rc, err := bh.ReadFile(ctx, backupManifest)
 		if err != nil {
 			log.Warningf("Possibly incomplete backup %v in directory %v on BackupStorage: can't read MANIFEST: %v)", bh.Name(), dir, err)
 			continue
@@ -792,7 +792,7 @@ func Restore(
 	}
 
 	logger.Infof("Restore: copying all files")
-	if err := restoreFiles(mysqld.Cnf(), bh, bm.FileEntries, bm.Filter, restoreConcurrency, hookExtraEnv); err != nil {
+	if err := restoreFiles(ctx, mysqld.Cnf(), bh, bm.FileEntries, bm.Filter, restoreConcurrency, hookExtraEnv); err != nil {
 		return replication.Position{}, err
 	}
 
