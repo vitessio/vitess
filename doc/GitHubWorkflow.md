@@ -123,5 +123,7 @@ $ git checkout new-feature
 
 That is because a pull request always mirrors all commits from your topic branch which are not in the master branch.
 
-After you merge, close the issue (if it wasn't automatically closed) and delete
-the topic branch.
+Once your pull request is merged:
+
+*  close the GitHub issue (if it wasn't automatically closed)
+*  delete your local topic branch (`git branch -d new-feature`)
