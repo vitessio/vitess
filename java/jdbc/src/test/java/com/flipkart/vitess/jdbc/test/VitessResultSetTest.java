@@ -132,7 +132,7 @@ public class VitessResultSetTest {
         VARBINARY(22, 10262), HELLO TDS TEAM
         CHAR(23, 6167), N
         BINARY(24, 10264), HELLO TDS TEAM
-        BIT(25, 2073), 1
+        BIT(25, 2073), 0
         ENUM(26, 2074), val123
         SET(27, 2075), val123
         TUPLE(28, 28),
@@ -184,12 +184,12 @@ public class VitessResultSetTest {
                 .addLengths("HELLO TDS TEAM".length()).addLengths("HELLO TDS TEAM".length())
                 .addLengths("HELLO TDS TEAM".length()).addLengths("HELLO TDS TEAM".length())
                 .addLengths("N".length()).addLengths("HELLO TDS TEAM".length())
-                .addLengths("1".length()).addLengths("val123".length()).addLengths(-1).setValues(
+                .addLengths("0".length()).addLengths("val123".length()).addLengths(-1).setValues(
                     ByteString.copyFromUtf8(
                         "-5050-2300023000-100100-100100-1000100024.52100.432016-02-06 " +
                             "14:15:162016-02-0612:34:562016-02-06 14:15:1620161234.56789HELLO TDS TEAMHELLO TDS "
                             +
-                            "TEAMHELLO TDS TEAMHELLO TDS TEAMNHELLO TDS TEAM1val123"))).build());
+                            "TEAMHELLO TDS TEAMHELLO TDS TEAMNHELLO TDS TEAM0val123"))).build());
     }
 
 
@@ -238,16 +238,21 @@ public class VitessResultSetTest {
         Assert.assertEquals("HELLO TDS TEAM", vitessResultSet.getString(22));
         Assert.assertEquals("N", vitessResultSet.getString(23));
         Assert.assertEquals("HELLO TDS TEAM", vitessResultSet.getString(24));
-        Assert.assertEquals("1", vitessResultSet.getString(25));
+        Assert.assertEquals("0", vitessResultSet.getString(25));
         Assert.assertEquals("val123", vitessResultSet.getString(26));
         Assert.assertEquals(null, vitessResultSet.getString(27));
     }
 
     @Test public void testgetBoolean() throws SQLException {
         Cursor cursor = getCursorWithRows();
+        Cursor cursorWithRowsAsNull = getCursorWithRowsAsNull();
         VitessResultSet vitessResultSet = new VitessResultSet(cursor);
         vitessResultSet.next();
         Assert.assertEquals(true, vitessResultSet.getBoolean(25));
+        Assert.assertEquals(false, vitessResultSet.getBoolean(1));
+        vitessResultSet = new VitessResultSet(cursorWithRowsAsNull);
+        vitessResultSet.next();
+        Assert.assertEquals(false, vitessResultSet.getBoolean(25));
         Assert.assertEquals(false, vitessResultSet.getBoolean(1));
     }
 
