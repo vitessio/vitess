@@ -19,6 +19,10 @@ case $key in
     OPERATION="$2"
     shift # past argument
     ;;
+  -filter)
+    FILTER="$2"
+    shift # past argument
+    ;;
   *)
     echo "unknown command line parameter:" $key 1>&2
     exit 1
@@ -26,6 +30,14 @@ case $key in
 esac
 shift # past argument or value
 done
+
+# For test purposes, if the filter is set to error, we abort.
+# Otherwise, we just ignore the parameter. Real scripts may use this
+# parameter to set encryption parameters, for instance.
+if [ "$FILTER" == "error" ]; then
+  echo "triggered error" 1>&2
+  exit 1
+fi
 
 if [ "$OPERATION" == "write" ]; then
   echo "header"
