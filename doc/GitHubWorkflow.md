@@ -8,10 +8,11 @@ Our GitHub workflow is a so called triangular workflow:
 
 *Image Source:* https://github.com/blog/2042-git-2-5-including-multiple-worktrees-and-triangular-workflows
 
-You develop and commit your changes in a clone of our upstream repository
-(`local`). Then you push your changes to your forked repository (`origin`) and
-send us a pull request. Eventually, we will merge your pull request back into
-the `upstream` repository.
+The Vitess code is hosted on GitHub (https://github.com/youtube/vitess).
+This repository is called *upstream*.
+You develop and commit your changes in a clone of our upstream repository (shown as *local* in the image above).
+Then you push your changes to your forked repository (*origin*) and send us a pull request.
+Eventually, we will merge your pull request back into the *upstream* repository.
 
 ## Remotes
 
