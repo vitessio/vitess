@@ -72,10 +72,6 @@ func TestGRPCDiscovery(t *testing.T) {
 
 	// run the test suite.
 	TestSuite(t, "discovery-grpc", dg, service)
-
-	// run it again with vtgate combining Begin and Execute
-	flag.Set("tablet_grpc_combine_begin_execute", "true")
-	TestSuite(t, "discovery-grpc-combo", dg, service)
 }
 
 // TestL2VTGateDiscovery tests the l2vtgate gateway with a gRPC
