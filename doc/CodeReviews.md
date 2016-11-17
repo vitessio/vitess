@@ -2,9 +2,9 @@
 
 Every GitHub pull request must go through a code review and get approved before it will be merged into the master branch.
 
-## What authors and reviewers should look for
+## What to look for in a Review
 
-Here are a few general questions both authors and reviewers need to answer.
+Both authors and reviewers need to answer these general questions:
 
 *   Does this change match an existing design / bug?
 *   Is there proper unit test coverage for this change? All changes should
@@ -17,6 +17,31 @@ Here are a few general questions both authors and reviewers need to answer.
     happy?
 *   Does this match our current patterns? Example include RPC patterns,
     Retries / Waits / Timeouts patterns using Context, ...
+
+Additionally, we recommend every author to look over your own reviews just before committing them and check if you are following the recommendations below.
+We usually check these kinds of things while skimming through `git diff --cached` just before committing.
+
+*   Scan the diffs as if you're the reviewer.
+    *   Look for files that shouldn't be checked in (temporary/generated files).
+    *   Googlers only: Remove Google confidential info (e.g. internal URLs).
+    *   Look for temporary code/comments you added while debugging.
+        *   Example: fmt.Println("AAAAAAAAAAAAAAAAAA")
+    *   Look for inconsistencies in indentation.
+        *   Use 2 spaces in everything except Go.
+        *   In Go, just use goimports.
+*   Commit message format:
+    *   ```
+        <component>: This is a short description of the change.
+
+        If necessary, more sentences follow e.g. to explain the intent of the change, how it fits into the bigger picture or which implications it has (e.g. other parts in the system have to be adapted.)
+
+        Sometimes this message can also contain more material for reference e.g. benchmark numbers to justify why the change was implemented in this way.
+        ```
+*   Comments
+    *   `// Prefer complete sentences when possible.`
+    *   Leave a space after the comment marker `//`.
+
+During the review make sure you address all comments. Click Done (reviewable.io) or reply with "Done." (GitHub Review) to mark comments as addressed. There should be 0 unresolved discussions when it's ready to merge.
 
 ## Assigning a Pull Request
 
