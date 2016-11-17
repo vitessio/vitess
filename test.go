@@ -61,9 +61,12 @@ For example:
   go run test.go test1 test2 -- --topo-server-flavor=etcd
 `
 
+// List of flavors for which a bootstrap Docker image is available.
+const flavors = "mariadb,mysql56,mysql57,percona,percona57"
+
 // Flags
 var (
-	flavor   = flag.String("flavor", "mariadb,mysql56,mysql57,percona,percona57", "comma-separated bootstrap flavor(s) to run against (when using Docker mode)")
+	flavor   = flag.String("flavor", "mysql57", "comma-separated bootstrap flavor(s) to run against (when using Docker mode). Available flavors: all,"+flavors)
 	runCount = flag.Int("runs", 1, "run each test this many times")
 	retryMax = flag.Int("retry", 3, "max number of retries, to detect flaky tests")
 	logPass  = flag.Bool("log-pass", false, "log test output even if it passes")
@@ -224,8 +227,13 @@ func main() {
 	flag.Parse()
 
 	// Sanity checks.
-	if *docker && *flavor == "" {
-		log.Fatalf("Must provide at least one -flavor when using -docker mode.")
+	if *docker {
+		if *flavor == "all" {
+			*flavor = flavors
+		}
+		if *flavor == "" {
+			log.Fatalf("Must provide at least one -flavor when using -docker mode. Available flavors: all,%v", flavors)
+		}
 	}
 	if *parallel < 1 {
 		log.Fatalf("Invalid -parallel value: %v", *parallel)
