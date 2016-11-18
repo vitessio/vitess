@@ -327,18 +327,18 @@ class TestBackup(unittest.TestCase):
 
     self._restore_old_master_test(_restore_in_place)
 
-  def test_backup_filter(self):
-    """Use a filter, tests we backup and restore properly."""
+  def test_backup_transform(self):
+    """Use a transform, tests we backup and restore properly."""
     # Insert data on master, make sure slave gets it.
     tablet_master.mquery('vt_test_keyspace', self._create_vt_insert_test)
     self._insert_data(tablet_master, 1)
     self._check_data(tablet_replica1, 1, 'replica1 tablet getting data')
 
-    # Restart the replica with the filter parameter.
+    # Restart the replica with the transform parameter.
     tablet_replica1.kill_vttablet()
     tablet_replica1.start_vttablet(supports_backups=True,
-                                   extra_args=['-backup_storage_filter',
-                                               'enabled'])
+                                   extra_args=['-backup_storage_hook',
+                                               'test_backup_transform'])
 
     # Take a backup, it should work.
     utils.run_vtctl(['Backup', tablet_replica1.tablet_alias], auto_log=True)
@@ -346,8 +346,8 @@ class TestBackup(unittest.TestCase):
     # Insert more data on the master.
     self._insert_data(tablet_master, 2)
 
-    # Make sure we have the Filter in the MANIFEST, and that every file
-    # starts with 'header'.
+    # Make sure we have the TransformHook in the MANIFEST, and that
+    # every file starts with 'header'.
     backups = self._list_backups()
     self.assertEqual(len(backups), 1, 'invalid backups: %s' % backups)
     location = os.path.join(environment.tmproot, 'backupstorage',
@@ -355,7 +355,7 @@ class TestBackup(unittest.TestCase):
     with open(os.path.join(location, 'MANIFEST')) as fd:
       contents = fd.read()
     manifest = json.loads(contents)
-    self.assertEqual(manifest['Filter'], 'enabled')
+    self.assertEqual(manifest['TransformHook'], 'test_backup_transform')
     for i in xrange(len(manifest['FileEntries'])):
       name = os.path.join(location, '%d' % i)
       with open(name) as fd:
@@ -363,20 +363,20 @@ class TestBackup(unittest.TestCase):
         self.assertEqual(line, 'header\n', 'wrong file contents for %s' % name)
 
     # Then start replica2 from backup, make sure that works.
-    # Note we don't need to pass in the backup_storage_filter parameter,
+    # Note we don't need to pass in the backup_storage_transform parameter,
     # as it is read from the MANIFEST.
     self._restore(tablet_replica2)
 
     # Check the new slave has all the data.
     self._check_data(tablet_replica2, 2, 'replica2 tablet getting data')
 
-  def test_backup_filter_error(self):
-    """Use a filter, force an error, make sure the backup fails."""
-    # Restart the replica with the filter parameter.
+  def test_backup_transform_error(self):
+    """Use a transform, force an error, make sure the backup fails."""
+    # Restart the replica with the transform parameter.
     tablet_replica1.kill_vttablet()
     tablet_replica1.start_vttablet(supports_backups=True,
-                                   extra_args=['-backup_storage_filter',
-                                               'error'])
+                                   extra_args=['-backup_storage_hook',
+                                               'test_backup_error'])
 
     # This will fail, make sure we get the right error.
     _, err = utils.run_vtctl(['Backup', tablet_replica1.tablet_alias],

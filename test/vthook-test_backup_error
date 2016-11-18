@@ -1,0 +1,10 @@
+#!/bin/bash
+
+# Copyright 2012, Google Inc. All rights reserved.
+# Use of this source code is governed by a BSD-style license that can
+# be found in the LICENSE file.
+
+# This script is a sample hook to test the backup transform.
+# It is hard coded to just echo an error, and 'exit 1'.
+echo "triggered error" 1>&2
+exit 1

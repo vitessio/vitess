@@ -4,40 +4,27 @@
 # Use of this source code is governed by a BSD-style license that can
 # be found in the LICENSE file.
 
-# This script is a sample hook to test the backup filter.
+# This script is a sample hook to test the backup transform.
 # Upon write, it adds a header line with the single word 'header'.
 # Upon read, it removes the header, and checks it's 'header'.
 # In any case, it then copies the data, by execing 'cat'.
 # Any error is displayed to stderr, and triggers an 'exit 1'.
 
-while [[ $# -gt 1 ]]
-do
-key="$1"
+while [[ $# -gt 1 ]]; do
+  key="$1"
 
-case $key in
-  -operation)
-    OPERATION="$2"
-    shift # past argument
-    ;;
-  -filter)
-    FILTER="$2"
-    shift # past argument
-    ;;
-  *)
-    echo "unknown command line parameter:" $key 1>&2
-    exit 1
-    ;;
-esac
-shift # past argument or value
+  case $key in
+    -operation)
+      OPERATION="$2"
+      shift # past argument
+      ;;
+    *)
+      echo "unknown command line parameter:" $key 1>&2
+      exit 1
+      ;;
+  esac
+  shift # past argument or value
 done
-
-# For test purposes, if the filter is set to error, we abort.
-# Otherwise, we just ignore the parameter. Real scripts may use this
-# parameter to set encryption parameters, for instance.
-if [ "$FILTER" == "error" ]; then
-  echo "triggered error" 1>&2
-  exit 1
-fi
 
 if [ "$OPERATION" == "write" ]; then
   echo "header"

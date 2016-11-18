@@ -70,7 +70,7 @@ type BackupStorage interface {
 	// The returned backup is read-write
 	// (AddFile/EndBackup/AbortBackup can all be called, not
 	// ReadFile). The provided context is only valid for that
-	// function, and should not be remembered by the implementation.
+	// function, and should not be stored by the implementation.
 	StartBackup(ctx context.Context, dir, name string) (BackupHandle, error)
 
 	// RemoveBackup removes all the data associated with a backup.

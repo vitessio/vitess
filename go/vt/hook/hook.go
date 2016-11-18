@@ -59,6 +59,10 @@ const (
 	HOOK_GENERIC_ERROR = -6
 )
 
+// WaitFunc is a return type for the Pipe methods.
+// It returns the process stderr and an error, if any.
+type WaitFunc func() (string, error)
+
 // NewHook returns a Hook object with the provided name and params.
 func NewHook(name string, params []string) *Hook {
 	return &Hook{Name: name, Parameters: params}
@@ -73,7 +77,7 @@ func NewSimpleHook(name string) *Hook {
 func (hook *Hook) findHook() (*exec.Cmd, int, error) {
 	// Check the hook path.
 	if strings.Contains(hook.Name, "/") {
-		return nil, HOOK_INVALID_NAME, fmt.Errorf("hooks cannot contains '/'\n")
+		return nil, HOOK_INVALID_NAME, fmt.Errorf("hooks cannot contains '/'")
 	}
 
 	// Find our root.
@@ -142,7 +146,7 @@ func (hook *Hook) Execute() (result *HookResult) {
 }
 
 // ExecuteOptional executes an optional hook, logs if it doesn't
-// exits, and returns a printable error.
+// exist, and returns a printable error.
 func (hook *Hook) ExecuteOptional() error {
 	hr := hook.Execute()
 	switch hr.ExitStatus {
@@ -158,13 +162,13 @@ func (hook *Hook) ExecuteOptional() error {
 	return nil
 }
 
-// ExecuteAsWriteFilter will execute the hook as a filter, directing output
-// to the provided writer. It will return:
+// ExecuteAsWritePipe will execute the hook as in a Unix pipe,
+// directing output to the provided writer. It will return:
 // - an io.WriteCloser to write data to.
-// - a wait() method to call to wait for the process to exit, that
-// returns stderr and the Wait() error.
+// - a WaitFunc method to call to wait for the process to exit,
+// that returns stderr and the cmd.Wait() error.
 // - an error code and an error if anything fails.
-func (hook *Hook) ExecuteAsWriteFilter(w io.Writer) (io.WriteCloser, func() (string, error), int, error) {
+func (hook *Hook) ExecuteAsWritePipe(out io.Writer) (io.WriteCloser, WaitFunc, int, error) {
 	// Find the hook.
 	cmd, status, err := hook.findHook()
 	if err != nil {
@@ -172,11 +176,11 @@ func (hook *Hook) ExecuteAsWriteFilter(w io.Writer) (io.WriteCloser, func() (str
 	}
 
 	// Configure the process's stdin, stdout, and stderr.
-	wc, err := cmd.StdinPipe()
+	in, err := cmd.StdinPipe()
 	if err != nil {
 		return nil, nil, HOOK_GENERIC_ERROR, fmt.Errorf("Failed to configure stdin: %v", err)
 	}
-	cmd.Stdout = w
+	cmd.Stdout = out
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 
@@ -191,19 +195,19 @@ func (hook *Hook) ExecuteAsWriteFilter(w io.Writer) (io.WriteCloser, func() (str
 	}
 
 	// And return
-	return wc, func() (string, error) {
+	return in, func() (string, error) {
 		err := cmd.Wait()
 		return stderr.String(), err
 	}, HOOK_SUCCESS, nil
 }
 
-// ExecuteAsReadFilter will execute the hook as a filter, reading from
-// the provided reader. It will return:
+// ExecuteAsReadPipe will execute the hook as in a Unix pipe, reading
+// from the provided reader. It will return:
 // - an io.Reader to read piped data from.
-// - a wait() method to call to wait for the process to exit, that
+// - a WaitFunc method to call to wait for the process to exit, that
 // returns stderr and the Wait() error.
 // - an error code and an error if anything fails.
-func (hook *Hook) ExecuteAsReadFilter(r io.Reader) (io.Reader, func() (string, error), int, error) {
+func (hook *Hook) ExecuteAsReadPipe(in io.Reader) (io.Reader, WaitFunc, int, error) {
 	// Find the hook.
 	cmd, status, err := hook.findHook()
 	if err != nil {
@@ -211,11 +215,11 @@ func (hook *Hook) ExecuteAsReadFilter(r io.Reader) (io.Reader, func() (string, e
 	}
 
 	// Configure the process's stdin, stdout, and stderr.
-	result, err := cmd.StdoutPipe()
+	out, err := cmd.StdoutPipe()
 	if err != nil {
 		return nil, nil, HOOK_GENERIC_ERROR, fmt.Errorf("Failed to configure stdout: %v", err)
 	}
-	cmd.Stdin = r
+	cmd.Stdin = in
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 
@@ -230,7 +234,7 @@ func (hook *Hook) ExecuteAsReadFilter(r io.Reader) (io.Reader, func() (string, e
 	}
 
 	// And return
-	return result, func() (string, error) {
+	return out, func() (string, error) {
 		err := cmd.Wait()
 		return stderr.String(), err
 	}, HOOK_SUCCESS, nil

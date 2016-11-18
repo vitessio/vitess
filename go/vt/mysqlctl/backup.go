@@ -54,12 +54,12 @@ var (
 	// ErrExistingDB is returned when there's already an active DB.
 	ErrExistingDB = errors.New("skipping restore due to existing database")
 
-	// backupStorageFilter contains the filter name to pass to the
-	// filter hook. If not set, we will not call the hook. It is
+	// backupStorageHook contains the hook name to use to process
+	// backup files. If not set, we will not process the files. It is
 	// only used at backup time. Then it is put in the manifest,
 	// and when decoding a backup, it is read from the manifest,
-	// and sent to the filter hook again.
-	backupStorageFilter = flag.String("backup_storage_filter", "", "if set, the backup_filter hook is used for processing backup files, with this parameter as 'filter'.")
+	// and used as the transform hook name again.
+	backupStorageHook = flag.String("backup_storage_hook", "", "if set, we send the contents of the backup files through this hook.")
 )
 
 // FileEntry is one file to backup
@@ -111,8 +111,9 @@ func (fe *FileEntry) open(cnf *Mycnf, readOnly bool) (*os.File, error) {
 	return fd, nil
 }
 
-// BackupManifest represents the backup. It lists all the files,
-// the Position that the backup was taken at, and the filter used, if any.
+// BackupManifest represents the backup. It lists all the files, the
+// Position that the backup was taken at, and the transform hook used,
+// if any.
 type BackupManifest struct {
 	// FileEntries contains all the files in the backup
 	FileEntries []FileEntry
@@ -120,8 +121,8 @@ type BackupManifest struct {
 	// Position is the position at which the backup was taken
 	Position replication.Position
 
-	// Filter that was used on the files, if any.
-	Filter string
+	// TransformHook that was used on the files, if any.
+	TransformHook string
 }
 
 // isDbDir returns true if the given directory contains a DB
@@ -161,7 +162,7 @@ func addDirectory(fes []FileEntry, base string, baseDir string, subDir string) (
 	return fes, nil
 }
 
-func findFilesTobackup(cnf *Mycnf) ([]FileEntry, error) {
+func findFilesToBackup(cnf *Mycnf) ([]FileEntry, error) {
 	var err error
 	var result []FileEntry
 
@@ -232,7 +233,7 @@ func Backup(ctx context.Context, mysqld MysqlDaemon, logger logutil.Logger, dir,
 	return finishErr
 }
 
-// backup returns a boolean that indicates if the backup is useable,
+// backup returns a boolean that indicates if the backup is usable,
 // and an overall error.
 func backup(ctx context.Context, mysqld MysqlDaemon, logger logutil.Logger, bh backupstorage.BackupHandle, backupConcurrency int, hookExtraEnv map[string]string) (bool, error) {
 	// Save initial state so we can restore.
@@ -337,7 +338,7 @@ func backup(ctx context.Context, mysqld MysqlDaemon, logger logutil.Logger, bh b
 // backupFiles finds the list of files to backup, and creates the backup.
 func backupFiles(ctx context.Context, mysqld MysqlDaemon, logger logutil.Logger, bh backupstorage.BackupHandle, replicationPosition replication.Position, backupConcurrency int, hookExtraEnv map[string]string) (err error) {
 	// Get the files to backup.
-	fes, err := findFilesTobackup(mysqld.Cnf())
+	fes, err := findFilesToBackup(mysqld.Cnf())
 	if err != nil {
 		return fmt.Errorf("can't find files to backup: %v", err)
 	}
@@ -384,9 +385,9 @@ func backupFiles(ctx context.Context, mysqld MysqlDaemon, logger logutil.Logger,
 
 	// JSON-encode and write the MANIFEST
 	bm := &BackupManifest{
-		FileEntries: fes,
-		Position:    replicationPosition,
-		Filter:      *backupStorageFilter,
+		FileEntries:   fes,
+		Position:      replicationPosition,
+		TransformHook: *backupStorageHook,
 	}
 	data, err := json.MarshalIndent(bm, "", "  ")
 	if err != nil {
@@ -428,52 +429,50 @@ func backupFile(ctx context.Context, mysqld MysqlDaemon, logger logutil.Logger, 
 
 	// Create the hasher and the tee on top.
 	hasher := newHasher()
-	tee := io.MultiWriter(dst, hasher)
+	writer := io.MultiWriter(dst, hasher)
 
-	// Create the external write filter, if any.
-	var filterOrTee io.Writer
-	var hwc io.WriteCloser
-	var hclose func() (string, error)
-	if *backupStorageFilter != "" {
-		h := hook.NewHook("backup_filter", []string{"-filter", *backupStorageFilter, "-operation", "write"})
+	// Create the external write pipe, if any.
+	var pipe io.WriteCloser
+	var wait hook.WaitFunc
+	if *backupStorageHook != "" {
+		h := hook.NewHook(*backupStorageHook, []string{"-operation", "write"})
 		h.ExtraEnv = hookExtraEnv
-		hwc, hclose, _, err = h.ExecuteAsWriteFilter(tee)
+		pipe, wait, _, err = h.ExecuteAsWritePipe(writer)
 		if err != nil {
-			return fmt.Errorf("'backup_filter' hook returned error: %v", err)
+			return fmt.Errorf("'%v' hook returned error: %v", *backupStorageHook, err)
 		}
-		filterOrTee = hwc
-	} else {
-		filterOrTee = tee
+		writer = pipe
 	}
 
-	// Create the gzip compression filter
-	gzip, err := cgzip.NewWriterLevel(filterOrTee, cgzip.Z_BEST_SPEED)
+	// Create the gzip compression pipe
+	gzip, err := cgzip.NewWriterLevel(writer, cgzip.Z_BEST_SPEED)
 	if err != nil {
 		return fmt.Errorf("cannot create gziper: %v", err)
 	}
 
-	// Copy from the source file to gzip to tee to output file and hasher.
+	// Copy from the source file to gzip (and on to optional pipe,
+	// to tee, to output file and hasher).
 	_, err = io.Copy(gzip, source)
 	if err != nil {
 		return fmt.Errorf("cannot copy data: %v", err)
 	}
 
-	// Close gzip to flush it, after that all data is sent to filterOrTee.
+	// Close gzip to flush it, after that all data is sent to writer.
 	if err = gzip.Close(); err != nil {
 		return fmt.Errorf("cannot close gzip: %v", err)
 	}
 
-	// Close the hook filter if necessary.
-	if hwc != nil {
-		if err := hwc.Close(); err != nil {
-			return fmt.Errorf("cannot close hook filter: %v", err)
+	// Close the hook pipe if necessary.
+	if pipe != nil {
+		if err := pipe.Close(); err != nil {
+			return fmt.Errorf("cannot close hook pipe: %v", err)
 		}
-		stderr, err := hclose()
+		stderr, err := wait()
 		if stderr != "" {
-			logger.Infof("'backup_filter' hook returned stderr: %v", stderr)
+			logger.Infof("'%v' hook returned stderr: %v", *backupStorageHook, stderr)
 		}
 		if err != nil {
-			return fmt.Errorf("'backup_filter' returned error: %v", err)
+			return fmt.Errorf("'%v' returned error: %v", *backupStorageHook, err)
 		}
 	}
 
@@ -526,7 +525,7 @@ func checkNoDB(ctx context.Context, mysqld MysqlDaemon, dbName string) (bool, er
 
 // restoreFiles will copy all the files from the BackupStorage to the
 // right place.
-func restoreFiles(ctx context.Context, cnf *Mycnf, bh backupstorage.BackupHandle, fes []FileEntry, filter string, restoreConcurrency int, hookExtraEnv map[string]string) error {
+func restoreFiles(ctx context.Context, cnf *Mycnf, bh backupstorage.BackupHandle, fes []FileEntry, transformHook string, restoreConcurrency int, hookExtraEnv map[string]string) error {
 	sema := sync2.NewSemaphore(restoreConcurrency, 0)
 	rec := concurrency.AllErrorRecorder{}
 	wg := sync.WaitGroup{}
@@ -545,7 +544,7 @@ func restoreFiles(ctx context.Context, cnf *Mycnf, bh backupstorage.BackupHandle
 
 			// And restore the file.
 			name := fmt.Sprintf("%v", i)
-			rec.RecordError(restoreFile(ctx, cnf, bh, &fes[i], filter, name, hookExtraEnv))
+			rec.RecordError(restoreFile(ctx, cnf, bh, &fes[i], transformHook, name, hookExtraEnv))
 		}(i)
 	}
 	wg.Wait()
@@ -553,7 +552,7 @@ func restoreFiles(ctx context.Context, cnf *Mycnf, bh backupstorage.BackupHandle
 }
 
 // restoreFile restores an individual file.
-func restoreFile(ctx context.Context, cnf *Mycnf, bh backupstorage.BackupHandle, fe *FileEntry, filter string, name string, hookExtraEnv map[string]string) (err error) {
+func restoreFile(ctx context.Context, cnf *Mycnf, bh backupstorage.BackupHandle, fe *FileEntry, transformHook string, name string, hookExtraEnv map[string]string) (err error) {
 	// Open the source file for reading.
 	var source io.ReadCloser
 	source, err = bh.ReadFile(ctx, name)
@@ -586,26 +585,21 @@ func restoreFile(ctx context.Context, cnf *Mycnf, bh backupstorage.BackupHandle,
 
 	// Create a Tee: we split the input into the hasher
 	// and into the gunziper.
-	tee := io.TeeReader(source, hasher)
+	reader := io.TeeReader(source, hasher)
 
-	// Create the external read filter, if any.
-	var filterOrTee io.Reader
-	var hr io.Reader
-	var hclose func() (string, error)
-	if filter != "" {
-		h := hook.NewHook("backup_filter", []string{"-filter", filter, "-operation", "read"})
+	// Create the external read pipe, if any.
+	var wait hook.WaitFunc
+	if transformHook != "" {
+		h := hook.NewHook(transformHook, []string{"-operation", "read"})
 		h.ExtraEnv = hookExtraEnv
-		hr, hclose, _, err = h.ExecuteAsReadFilter(tee)
+		reader, wait, _, err = h.ExecuteAsReadPipe(reader)
 		if err != nil {
-			return fmt.Errorf("'backup_filter' hook returned error: %v", err)
+			return fmt.Errorf("'%v' hook returned error: %v", transformHook, err)
 		}
-		filterOrTee = hr
-	} else {
-		filterOrTee = tee
 	}
 
 	// Create the uncompresser.
-	gz, err := cgzip.NewReader(filterOrTee)
+	gz, err := cgzip.NewReader(reader)
 	if err != nil {
 		return err
 	}
@@ -625,14 +619,14 @@ func restoreFile(ctx context.Context, cnf *Mycnf, bh backupstorage.BackupHandle,
 		return err
 	}
 
-	// Close the Filter.
-	if hr != nil {
-		stderr, err := hclose()
+	// Close the Pipe.
+	if wait != nil {
+		stderr, err := wait()
 		if stderr != "" {
-			log.Infof("'backup_filter' hook returned stderr: %v", stderr)
+			log.Infof("'%v' hook returned stderr: %v", transformHook, stderr)
 		}
 		if err != nil {
-			return fmt.Errorf("'backup_filter' returned error: %v", err)
+			return fmt.Errorf("'%v' returned error: %v", transformHook, err)
 		}
 	}
 
@@ -792,7 +786,7 @@ func Restore(
 	}
 
 	logger.Infof("Restore: copying all files")
-	if err := restoreFiles(ctx, mysqld.Cnf(), bh, bm.FileEntries, bm.Filter, restoreConcurrency, hookExtraEnv); err != nil {
+	if err := restoreFiles(ctx, mysqld.Cnf(), bh, bm.FileEntries, bm.TransformHook, restoreConcurrency, hookExtraEnv); err != nil {
 		return replication.Position{}, err
 	}
 
