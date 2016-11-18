@@ -85,6 +85,7 @@ func main() {
 	flag.Set("log_dir", "$VTDATAROOT/tmp")
 
 	// create zk client config file
+	os.MkdirAll(path.Join(os.Getenv("VTDATAROOT"), "vt_0000000001/tmp"), 0777)
 	config := path.Join(os.Getenv("VTDATAROOT"), "vt_0000000001/tmp/test-zk-client-conf.json")
 	cellmap := make(map[string]string)
 	for _, cell := range tpb.Cells {
