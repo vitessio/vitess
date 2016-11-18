@@ -26,6 +26,8 @@ import vtgate_gateway_flavor.discoverygateway
 
 from selenium import webdriver
 
+from vttest import mysql_flavor
+
 
 # sanity check the environment
 if os.environ['USER'] == 'root':
@@ -204,6 +206,10 @@ def setup_protocol_flavor(flavor):
     exit(1)
 
   logging.debug('Using protocols flavor \'%s\'', flavor)
+
+
+def reset_mysql_flavor():
+  mysql_flavor.set_mysql_flavor(None)
 
 
 def create_webdriver():

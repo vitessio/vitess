@@ -64,11 +64,8 @@ class TestVtctldWeb(unittest.TestCase):
 
     port = environment.reserve_ports(1)
     vttest_environment.base_port = port
-    os.environ['VTTOP'] = environment.vttop
 
-    # Importing late in order to guarantee that VTTOP is defined
-    from vttest import mysql_flavor  # pylint: disable=g-import-not-at-top
-    mysql_flavor.set_mysql_flavor(None)
+    environment.reset_mysql_flavor()
 
     cls.db = local_database.LocalDatabase(
         topology,
