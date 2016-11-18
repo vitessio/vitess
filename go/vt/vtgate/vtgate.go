@@ -788,13 +788,19 @@ func logError(err error, query map[string]interface{}, logger *logutil.Throttled
 	logMethod := logger.Errorf
 	if !isErrorCausedByVTGate(err) {
 		infoErrors.Add("NonVtgateErrors", 1)
+		// Log non-vtgate errors (e.g. a query failed on vttablet because a failover
+		// is in progress) on INFO only because vttablet already logs them as ERROR.
 		logMethod = logger.Infof
 	}
 	logMethod("%v, query: %+v", err, query)
 }
 
-// Returns true if a given error is caused entirely due to VTGate, and not any of
-// the components that it depends on.
+// Returns true if a given error is caused entirely due to VTGate, and not any
+// of the components that it depends on.
+// If the error is an aggregation of multiple errors e.g. in case of a scatter
+// query, the function returns true if *any* error is caused by vtgate.
+// Consequently, the function returns false if *all* errors are caused by
+// vttablet (actual errors) or the client (e.g. context canceled).
 func isErrorCausedByVTGate(err error) bool {
 	var errQueue []error
 	errQueue = append(errQueue, err)
@@ -809,19 +815,23 @@ func isErrorCausedByVTGate(err error) bool {
 		case *gateway.ShardError:
 			errQueue = append(errQueue, e.Err)
 		case tabletconn.OperationalError:
-			// this is a failure to communicate with vttablet
+			// Communication with vttablet failed i.e. the error is caused by vtgate.
+			// (For actual vttablet errors, see the next case "ServerError".)
 			return true
 		case *tabletconn.ServerError:
-			break
+			// The query failed on vttablet and it returned this error.
+			// Ignore it and check the next error in the queue.
 		default:
+			if e == context.Canceled {
+				// Caused by the client and not vtgate.
+				// Ignore it and check the next error in the queue.
+				continue
+			}
+
 			// Return true if even a single error within
 			// the error queue was caused by VTGate. If
 			// we're not certain what caused the error, we
 			// default to assuming that VTGate was at fault.
-			if e == context.Canceled {
-				// caused by the client, not vtgate, keep going
-				break
-			}
 			return true
 		}
 	}
