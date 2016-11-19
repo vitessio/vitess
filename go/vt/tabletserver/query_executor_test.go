@@ -1148,6 +1148,8 @@ const (
 	enableStrict               = 1 << iota
 	enableStrictTableAcl
 	smallTxPool
+	noTwopc
+	shortTwopcAge
 )
 
 // newTestQueryExecutor uses a package level variable testTabletServer defined in tabletserver_test.go
@@ -1176,6 +1178,17 @@ func newTestTabletServer(ctx context.Context, flags executorFlags, db *fakesqldb
 	} else {
 		config.StrictTableAcl = false
 	}
+	if flags&noTwopc > 0 {
+		config.TwoPCEnable = false
+	} else {
+		config.TwoPCEnable = true
+	}
+	config.TwoPCCoordinatorAddress = "fake"
+	if flags&shortTwopcAge > 0 {
+		config.TwoPCAbandonAge = 0.5
+	} else {
+		config.TwoPCAbandonAge = 10
+	}
 	tsv := NewTabletServer(config)
 	testUtils := newTestUtils()
 	dbconfigs := testUtils.newDBConfigs(db)
@@ -1202,6 +1215,7 @@ func newTestQueryExecutor(ctx context.Context, tsv *TabletServer, sql string, tx
 		plan:          tsv.qe.schemaInfo.GetPlan(ctx, logStats, sql),
 		logStats:      logStats,
 		qe:            tsv.qe,
+		te:            tsv.te,
 	}
 }
 
@@ -1224,7 +1238,7 @@ func initQueryExecutorTestDB(db *fakesqldb.DB) {
 }
 
 func fetchRecordedQueries(qre *QueryExecutor) []string {
-	conn, err := qre.qe.txPool.Get(qre.transactionID, "for query")
+	conn, err := qre.te.txPool.Get(qre.transactionID, "for query")
 	if err != nil {
 		panic(err)
 	}

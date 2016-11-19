@@ -16,7 +16,7 @@ func TestReadAllRedo(t *testing.T) {
 	// Reuse code from tx_executor_test.
 	_, tsv, db := newTestTxExecutor()
 	defer tsv.StopService()
-	tpc := tsv.qe.twoPC
+	tpc := tsv.te.twoPC
 	ctx := context.Background()
 
 	conn, err := tsv.qe.connPool.Get(ctx)
@@ -26,7 +26,7 @@ func TestReadAllRedo(t *testing.T) {
 	defer conn.Recycle()
 
 	db.AddQuery(tpc.readAllRedo, &sqltypes.Result{})
-	prepared, failed, err := tpc.ReadAllRedo(ctx, conn)
+	prepared, failed, err := tpc.ReadAllRedo(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -46,7 +46,7 @@ func TestReadAllRedo(t *testing.T) {
 			sqltypes.MakeString([]byte("stmt01")),
 		}},
 	})
-	prepared, failed, err = tpc.ReadAllRedo(ctx, conn)
+	prepared, failed, err = tpc.ReadAllRedo(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -71,7 +71,7 @@ func TestReadAllRedo(t *testing.T) {
 			sqltypes.MakeString([]byte("stmt02")),
 		}},
 	})
-	prepared, failed, err = tpc.ReadAllRedo(ctx, conn)
+	prepared, failed, err = tpc.ReadAllRedo(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -101,7 +101,7 @@ func TestReadAllRedo(t *testing.T) {
 			sqltypes.MakeString([]byte("stmt11")),
 		}},
 	})
-	prepared, failed, err = tpc.ReadAllRedo(ctx, conn)
+	prepared, failed, err = tpc.ReadAllRedo(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -149,7 +149,7 @@ func TestReadAllRedo(t *testing.T) {
 			sqltypes.MakeString([]byte("stmt31")),
 		}},
 	})
-	prepared, failed, err = tpc.ReadAllRedo(ctx, conn)
+	prepared, failed, err = tpc.ReadAllRedo(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}

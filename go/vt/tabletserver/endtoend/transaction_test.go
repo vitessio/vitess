@@ -657,3 +657,56 @@ func TestMMRollbackFlow(t *testing.T) {
 		t.Error(err)
 	}
 }
+
+func TestWatchdog(t *testing.T) {
+	client := framework.NewClient()
+
+	query := "insert into vitess_test (intval, floatval, charval, binval) " +
+		"values(4, null, null, null)"
+	err := client.Begin()
+	if err != nil {
+		t.Error(err)
+	}
+	_, err = client.Execute(query, nil)
+	if err != nil {
+		t.Error(err)
+	}
+
+	start := time.Now()
+	err = client.CreateTransaction("aa", []*querypb.Target{{
+		Keyspace: "test1",
+		Shard:    "0",
+	}, {
+		Keyspace: "test2",
+		Shard:    "1",
+	}})
+	if err != nil {
+		t.Error(err)
+	}
+
+	// The watchdog should kick in after 1 second.
+	dtid := <-framework.ResolveChan
+	if dtid != "aa" {
+		t.Errorf("dtid: %s, want aa", dtid)
+	}
+	diff := time.Now().Sub(start)
+	if diff < 1*time.Second {
+		t.Errorf("diff: %v, want greater than 1s", diff)
+	}
+
+	err = client.SetRollback("aa", 0)
+	if err != nil {
+		t.Error(err)
+	}
+	err = client.ConcludeTransaction("aa")
+	if err != nil {
+		t.Error(err)
+	}
+
+	// Make sure the watchdog doesn't kick in any more.
+	select {
+	case dtid = <-framework.ResolveChan:
+		t.Errorf("Unexpected message: %s", dtid)
+	case <-time.After(2 * time.Second):
+	}
+}

@@ -13,7 +13,6 @@ import (
 
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/sync2"
-	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/dbconnpool"
 	"github.com/youtube/vitess/go/vt/logutil"
@@ -48,11 +47,8 @@ type QueryEngine struct {
 	streamConnPool *ConnPool
 
 	// Services
-	txPool       *TxPool
-	preparedPool *TxPreparedPool
 	consolidator *sync2.Consolidator
 	streamQList  *QueryList
-	twoPC        *TwoPC
 
 	// Vars
 	strictMode       sync2.AtomicInt64
@@ -95,9 +91,11 @@ func getOrPanic(ctx context.Context, pool *ConnPool) *DBConn {
 // NewQueryEngine creates a new QueryEngine.
 // This is a singleton class.
 // You must call this only once.
-func NewQueryEngine(checker MySQLChecker, config Config) *QueryEngine {
-	qe := &QueryEngine{config: config}
-	qe.queryServiceStats = NewQueryServiceStats(config.StatsPrefix, config.EnablePublishStats)
+func NewQueryEngine(checker MySQLChecker, config Config, queryServiceStats *QueryServiceStats) *QueryEngine {
+	qe := &QueryEngine{
+		config:            config,
+		queryServiceStats: queryServiceStats,
+	}
 	qe.schemaInfo = NewSchemaInfo(
 		config.StatsPrefix,
 		checker,
@@ -131,29 +129,6 @@ func NewQueryEngine(checker MySQLChecker, config Config) *QueryEngine {
 		checker,
 	)
 
-	qe.txPool = NewTxPool(
-		config.PoolNamePrefix+"TransactionPool",
-		config.StatsPrefix,
-		config.TransactionCap,
-		time.Duration(config.TransactionTimeout*1e9),
-		time.Duration(config.IdleTimeout*1e9),
-		config.EnablePublishStats,
-		qe.queryServiceStats,
-		checker,
-	)
-
-	// Set the prepared pool capacity to something lower than
-	// tx pool capacity. Those spare connections are needed to
-	// perform metadata state change operations. Without this,
-	// the system can deadlock if all connections get moved to
-	// the TxPreparedPool.
-	prepCap := config.TransactionCap - 2
-	if prepCap < 0 {
-		// A capacity of 0 means that Prepare will always fail.
-		prepCap = 0
-	}
-	qe.preparedPool = NewTxPreparedPool(prepCap)
-	qe.twoPC = NewTwoPC()
 	qe.consolidator = sync2.NewConsolidator()
 	http.Handle(config.DebugURLPrefix+"/consolidations", qe.consolidator)
 	qe.streamQList = NewQueryList()
@@ -209,14 +184,6 @@ func NewQueryEngine(checker MySQLChecker, config Config) *QueryEngine {
 // Open must be called before sending requests to QueryEngine.
 func (qe *QueryEngine) Open(dbconfigs dbconfigs.DBConfigs) {
 	qe.dbconfigs = dbconfigs
-	appParams := dbconfigs.App
-	// Create dba params based on App connection params
-	// and Dba credentials.
-	dbaParams := dbconfigs.App
-	if dbconfigs.Dba.Uname != "" {
-		dbaParams.Uname = dbconfigs.Dba.Uname
-		dbaParams.Pass = dbconfigs.Dba.Pass
-	}
 
 	strictMode := false
 	if qe.strictMode.Get() != 0 {
@@ -224,13 +191,11 @@ func (qe *QueryEngine) Open(dbconfigs dbconfigs.DBConfigs) {
 	}
 
 	start := time.Now()
-	qe.schemaInfo.Open(&dbaParams, strictMode)
+	qe.schemaInfo.Open(&qe.dbconfigs.Dba, strictMode)
 	log.Infof("Time taken to load the schema: %v", time.Now().Sub(start))
 
-	qe.connPool.Open(&appParams, &dbaParams)
-	qe.streamConnPool.Open(&appParams, &dbaParams)
-	qe.txPool.Open(&appParams, &dbaParams)
-	qe.twoPC.Open(qe.dbconfigs.SidecarDBName, &dbaParams)
+	qe.connPool.Open(&qe.dbconfigs.App, &qe.dbconfigs.Dba)
+	qe.streamConnPool.Open(&qe.dbconfigs.App, &qe.dbconfigs.Dba)
 }
 
 // IsMySQLReachable returns true if we can connect to MySQL.
@@ -247,89 +212,11 @@ func (qe *QueryEngine) IsMySQLReachable() bool {
 	return true
 }
 
-// PrepareFromRedo replays and prepares the transactions
-// from the redo log. It also loads previously failed transactions
-// into the reserved list. This is called when a tablet becomes
-// a master.
-// TODO(sougou): Make this function set the lastId for tx pool to be
-// greater than all those used by dtids. This will prevent dtid
-// collisions.
-func (qe *QueryEngine) PrepareFromRedo() error {
-	ctx := context.Background()
-	var allErr concurrency.AllErrorRecorder
-	readConn, err := qe.connPool.Get(ctx)
-	if err != nil {
-		return err
-	}
-	defer readConn.Recycle()
-	prepared, failed, err := qe.twoPC.ReadAllRedo(ctx, readConn)
-	if err != nil {
-		return err
-	}
-
-outer:
-	for dtid, tx := range prepared {
-		conn, err := qe.txPool.LocalBegin(ctx)
-		if err != nil {
-			allErr.RecordError(err)
-			continue
-		}
-		for _, stmt := range tx {
-			conn.RecordQuery(stmt)
-			_, err := conn.Exec(ctx, stmt, 1, false)
-			if err != nil {
-				allErr.RecordError(err)
-				qe.txPool.LocalConclude(ctx, conn)
-				continue outer
-			}
-		}
-		// We should not use the external Prepare because
-		// we don't want to write again to the redo log.
-		err = qe.preparedPool.Put(conn, dtid)
-		if err != nil {
-			allErr.RecordError(err)
-			continue
-		}
-	}
-	for _, dtid := range failed {
-		qe.preparedPool.SetFailed(dtid)
-	}
-	return allErr.Error()
-}
-
-// RollbackTransactions rolls back all open transactions
-// including the prepared ones.
-// This is used for transitioning from a master to a non-master
-// serving type.
-func (qe *QueryEngine) RollbackTransactions() {
-	ctx := context.Background()
-	// The order of rollbacks is currently not material because
-	// we don't allow new statements or commits during
-	// this function. In case of any such change, this will
-	// have to be revisited.
-	qe.txPool.RollbackNonBusy(ctx)
-	for _, c := range qe.preparedPool.FetchAll() {
-		qe.txPool.LocalConclude(ctx, c)
-	}
-
-	// If there are stray transactions, we must wait.
-	qe.WaitForTxEmpty()
-}
-
-// WaitForTxEmpty must be called before calling Close.
-// Before calling WaitForTxEmpty, you must ensure that there
-// will be no more calls to Begin.
-func (qe *QueryEngine) WaitForTxEmpty() {
-	qe.txPool.WaitForEmpty()
-}
-
 // Close must be called to shut down QueryEngine.
 // You must ensure that no more queries will be sent
 // before calling Close.
 func (qe *QueryEngine) Close() {
 	// Close in reverse order of Open.
-	qe.twoPC.Close()
-	qe.txPool.Close()
 	qe.streamConnPool.Close()
 	qe.connPool.Close()
 	qe.schemaInfo.Close()
