@@ -8,7 +8,7 @@ set -e
 script_root=`dirname "${BASH_SOURCE}"`
 source $script_root/env.sh
 
-VITESS_NAME=${VITESS_NAME=-'default'}
+VITESS_NAME=${VITESS_NAME:-'default'}
 CELLS=${CELLS:-'test'}
 cells=`echo $CELLS | tr ',' ' '`
 
