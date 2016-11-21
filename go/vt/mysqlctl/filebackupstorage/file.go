@@ -14,6 +14,8 @@ import (
 	"os"
 	"path"
 
+	"golang.org/x/net/context"
+
 	"github.com/youtube/vitess/go/vt/mysqlctl/backupstorage"
 )
 
@@ -42,7 +44,7 @@ func (fbh *FileBackupHandle) Name() string {
 }
 
 // AddFile is part of the BackupHandle interface
-func (fbh *FileBackupHandle) AddFile(filename string) (io.WriteCloser, error) {
+func (fbh *FileBackupHandle) AddFile(ctx context.Context, filename string) (io.WriteCloser, error) {
 	if fbh.readOnly {
 		return nil, fmt.Errorf("AddFile cannot be called on read-only backup")
 	}
@@ -51,7 +53,7 @@ func (fbh *FileBackupHandle) AddFile(filename string) (io.WriteCloser, error) {
 }
 
 // EndBackup is part of the BackupHandle interface
-func (fbh *FileBackupHandle) EndBackup() error {
+func (fbh *FileBackupHandle) EndBackup(ctx context.Context) error {
 	if fbh.readOnly {
 		return fmt.Errorf("EndBackup cannot be called on read-only backup")
 	}
@@ -59,15 +61,15 @@ func (fbh *FileBackupHandle) EndBackup() error {
 }
 
 // AbortBackup is part of the BackupHandle interface
-func (fbh *FileBackupHandle) AbortBackup() error {
+func (fbh *FileBackupHandle) AbortBackup(ctx context.Context) error {
 	if fbh.readOnly {
 		return fmt.Errorf("AbortBackup cannot be called on read-only backup")
 	}
-	return fbh.fbs.RemoveBackup(fbh.dir, fbh.name)
+	return fbh.fbs.RemoveBackup(ctx, fbh.dir, fbh.name)
 }
 
 // ReadFile is part of the BackupHandle interface
-func (fbh *FileBackupHandle) ReadFile(filename string) (io.ReadCloser, error) {
+func (fbh *FileBackupHandle) ReadFile(ctx context.Context, filename string) (io.ReadCloser, error) {
 	if !fbh.readOnly {
 		return nil, fmt.Errorf("ReadFile cannot be called on read-write backup")
 	}
@@ -79,7 +81,7 @@ func (fbh *FileBackupHandle) ReadFile(filename string) (io.ReadCloser, error) {
 type FileBackupStorage struct{}
 
 // ListBackups is part of the BackupStorage interface
-func (fbs *FileBackupStorage) ListBackups(dir string) ([]backupstorage.BackupHandle, error) {
+func (fbs *FileBackupStorage) ListBackups(ctx context.Context, dir string) ([]backupstorage.BackupHandle, error) {
 	// ReadDir already sorts the results
 	p := path.Join(*FileBackupStorageRoot, dir)
 	fi, err := ioutil.ReadDir(p)
@@ -109,7 +111,7 @@ func (fbs *FileBackupStorage) ListBackups(dir string) ([]backupstorage.BackupHan
 }
 
 // StartBackup is part of the BackupStorage interface
-func (fbs *FileBackupStorage) StartBackup(dir, name string) (backupstorage.BackupHandle, error) {
+func (fbs *FileBackupStorage) StartBackup(ctx context.Context, dir, name string) (backupstorage.BackupHandle, error) {
 	// Make sure the directory exists.
 	p := path.Join(*FileBackupStorageRoot, dir)
 	if err := os.MkdirAll(p, os.ModePerm); err != nil {
@@ -131,7 +133,7 @@ func (fbs *FileBackupStorage) StartBackup(dir, name string) (backupstorage.Backu
 }
 
 // RemoveBackup is part of the BackupStorage interface
-func (fbs *FileBackupStorage) RemoveBackup(dir, name string) error {
+func (fbs *FileBackupStorage) RemoveBackup(ctx context.Context, dir, name string) error {
 	p := path.Join(*FileBackupStorageRoot, dir, name)
 	return os.RemoveAll(p)
 }
