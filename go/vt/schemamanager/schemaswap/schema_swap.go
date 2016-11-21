@@ -17,6 +17,7 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/discovery"
+	"github.com/youtube/vitess/go/vt/hook"
 	"github.com/youtube/vitess/go/vt/logutil"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	workflowpb "github.com/youtube/vitess/go/vt/proto/workflow"
@@ -1229,16 +1230,29 @@ func (shardSwap *shardSchemaSwap) reparentFromMaster(masterTablet *topodatapb.Ta
 	defer shardSwap.markStepDone(shardSwap.reparentUINode, &err)
 
 	shardSwap.addShardLog(fmt.Sprintf("Reparenting away from master %v", masterTablet.Alias))
-	wr := wrangler.New(logutil.NewConsoleLogger(), shardSwap.parent.topoServer, shardSwap.parent.tabletClient)
-	err = wr.PlannedReparentShard(
-		shardSwap.parent.ctx,
-		shardSwap.parent.keyspace,
-		shardSwap.shardName,
-		nil,                /* masterElectTabletAlias */
-		masterTablet.Alias, /* avoidMasterAlias */
-		*reparentTimeout)
-	if err != nil {
-		return err
+	if *vtctl.DisableActiveReparents {
+		hk := &hook.Hook{
+			Name: "reparent_away",
+		}
+		hookResult, err := shardSwap.parent.tabletClient.ExecuteHook(shardSwap.parent.ctx, masterTablet, hk)
+		if err != nil {
+			return err
+		}
+		if hookResult.ExitStatus != hook.HOOK_SUCCESS {
+			return fmt.Errorf("Error executing 'reparent_away' hook: %v", hookResult.String())
+		}
+	} else {
+		wr := wrangler.New(logutil.NewConsoleLogger(), shardSwap.parent.topoServer, shardSwap.parent.tabletClient)
+		err = wr.PlannedReparentShard(
+			shardSwap.parent.ctx,
+			shardSwap.parent.keyspace,
+			shardSwap.shardName,
+			nil,                /* masterElectTabletAlias */
+			masterTablet.Alias, /* avoidMasterAlias */
+			*reparentTimeout)
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
