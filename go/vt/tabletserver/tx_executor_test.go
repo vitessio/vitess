@@ -453,7 +453,7 @@ func TestNoTwopc(t *testing.T) {
 func newTestTxExecutor() (txe *TxExecutor, tsv *TabletServer, db *fakesqldb.DB) {
 	db = setUpQueryExecutorTest()
 	ctx := context.Background()
-	logStats := newLogStats("TestTxExecutor", ctx)
+	logStats := NewLogStats("TestTxExecutor", ctx)
 	tsv = newTestTabletServer(ctx, smallTxPool, db)
 	db.AddQueryPattern("insert into `_vt`\\.redo_log_transaction\\(dtid, state, time_created\\) values \\('aa', 'Prepared',.*", &sqltypes.Result{})
 	db.AddQueryPattern("insert into `_vt`\\.redo_log_statement.*", &sqltypes.Result{})
@@ -471,7 +471,7 @@ func newTestTxExecutor() (txe *TxExecutor, tsv *TabletServer, db *fakesqldb.DB) 
 func newShortAgeExecutor() (txe *TxExecutor, tsv *TabletServer, db *fakesqldb.DB) {
 	db = setUpQueryExecutorTest()
 	ctx := context.Background()
-	logStats := newLogStats("TestTxExecutor", ctx)
+	logStats := NewLogStats("TestTxExecutor", ctx)
 	tsv = newTestTabletServer(ctx, smallTxPool|shortTwopcAge, db)
 	db.AddQueryPattern("insert into `_vt`\\.redo_log_transaction\\(dtid, state, time_created\\) values \\('aa', 'Prepared',.*", &sqltypes.Result{})
 	db.AddQueryPattern("insert into `_vt`\\.redo_log_statement.*", &sqltypes.Result{})
@@ -489,7 +489,7 @@ func newShortAgeExecutor() (txe *TxExecutor, tsv *TabletServer, db *fakesqldb.DB
 func newNoTwopcExecutor() (txe *TxExecutor, tsv *TabletServer, db *fakesqldb.DB) {
 	db = setUpQueryExecutorTest()
 	ctx := context.Background()
-	logStats := newLogStats("TestTxExecutor", ctx)
+	logStats := NewLogStats("TestTxExecutor", ctx)
 	tsv = newTestTabletServer(ctx, noTwopc, db)
 	return &TxExecutor{
 		ctx:      ctx,
