@@ -7,7 +7,6 @@ set -e
 script_root=`dirname "${BASH_SOURCE}"`
 source $script_root/env.sh
 
-CELLS=${CELLS:-'test'}
 cells=`echo $CELLS | tr ',' ' '`
 
 for cell in $cells; do

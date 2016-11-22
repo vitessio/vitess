@@ -10,7 +10,6 @@ source $script_root/env.sh
 VTGATE_REPLICAS=${VTGATE_REPLICAS:-3}
 VTDATAROOT_VOLUME=${VTDATAROOT_VOLUME:-''}
 VTGATE_TEMPLATE=${VTGATE_TEMPLATE:-'vtgate-controller-template.yaml'}
-CELLS=${CELLS:-'test'}
 
 vtdataroot_volume='emptyDir: {}'
 if [ -n "$VTDATAROOT_VOLUME" ]; then

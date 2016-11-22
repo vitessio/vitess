@@ -8,7 +8,6 @@ set -e
 script_root=`dirname "${BASH_SOURCE}"`
 source $script_root/env.sh
 
-CELLS=${CELLS:-'test'}
 cells=`echo $CELLS | tr ',' ' '`
 
 # Delete replication controllers
