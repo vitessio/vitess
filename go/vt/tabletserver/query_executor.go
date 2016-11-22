@@ -33,6 +33,7 @@ type QueryExecutor struct {
 	ctx           context.Context
 	logStats      *LogStats
 	qe            *QueryEngine
+	te            *TxEngine
 }
 
 var sequenceFields = []*querypb.Field{
@@ -84,7 +85,7 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 
 	if qre.transactionID != 0 {
 		// Need upfront connection for DMLs and transactions
-		conn, err := qre.qe.txPool.Get(qre.transactionID, "for query")
+		conn, err := qre.te.txPool.Get(qre.transactionID, "for query")
 		if err != nil {
 			return nil, err
 		}
@@ -190,21 +191,21 @@ func (qre *QueryExecutor) execDmlAutoCommit() (reply *sqltypes.Result, err error
 }
 
 func (qre *QueryExecutor) execAsTransaction(f func(conn *TxConnection) (*sqltypes.Result, error)) (reply *sqltypes.Result, err error) {
-	conn, err := qre.qe.txPool.LocalBegin(qre.ctx)
+	conn, err := qre.te.txPool.LocalBegin(qre.ctx)
 	if err != nil {
 		return nil, err
 	}
-	defer qre.qe.txPool.LocalConclude(qre.ctx, conn)
+	defer qre.te.txPool.LocalConclude(qre.ctx, conn)
 	qre.logStats.AddRewrittenSQL("begin", time.Now())
 
 	reply, err = f(conn)
 
 	if err != nil {
-		qre.qe.txPool.LocalConclude(qre.ctx, conn)
+		qre.te.txPool.LocalConclude(qre.ctx, conn)
 		qre.logStats.AddRewrittenSQL("rollback", time.Now())
 		return nil, err
 	}
-	err = qre.qe.txPool.LocalCommit(qre.ctx, conn)
+	err = qre.te.txPool.LocalCommit(qre.ctx, conn)
 	if err != nil {
 		return nil, err
 	}
@@ -294,11 +295,11 @@ func (qre *QueryExecutor) execDDL() (*sqltypes.Result, error) {
 		return nil, NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "DDL is not understood")
 	}
 
-	conn, err := qre.qe.txPool.LocalBegin(qre.ctx)
+	conn, err := qre.te.txPool.LocalBegin(qre.ctx)
 	if err != nil {
 		return nil, err
 	}
-	defer qre.qe.txPool.LocalCommit(qre.ctx, conn)
+	defer qre.te.txPool.LocalCommit(qre.ctx, conn)
 
 	result, err := qre.execSQL(conn, qre.query, false)
 	if err != nil {

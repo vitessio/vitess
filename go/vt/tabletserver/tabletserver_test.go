@@ -624,8 +624,8 @@ func TestTabletServerStopWithPrepare(t *testing.T) {
 		t.Fatal("ch should not fire")
 	case <-time.After(10 * time.Millisecond):
 	}
-	if len(tsv.qe.preparedPool.conns) != 1 {
-		t.Errorf("len(tsv.qe.preparedPool.conns): %d, want 1", len(tsv.qe.preparedPool.conns))
+	if len(tsv.te.preparedPool.conns) != 1 {
+		t.Errorf("len(tsv.te.preparedPool.conns): %d, want 1", len(tsv.te.preparedPool.conns))
 	}
 
 	// RollbackPrepared will allow StopService to complete.
@@ -634,8 +634,8 @@ func TestTabletServerStopWithPrepare(t *testing.T) {
 		t.Error(err)
 	}
 	<-ch
-	if len(tsv.qe.preparedPool.conns) != 0 {
-		t.Errorf("len(tsv.qe.preparedPool.conns): %d, want 0", len(tsv.qe.preparedPool.conns))
+	if len(tsv.te.preparedPool.conns) != 0 {
+		t.Errorf("len(tsv.te.preparedPool.conns): %d, want 0", len(tsv.te.preparedPool.conns))
 	}
 }
 
@@ -659,7 +659,7 @@ func TestTabletServerMasterToReplica(t *testing.T) {
 		t.Error(err)
 	}
 	// This makes txid2 busy
-	conn2, err := tsv.qe.txPool.Get(txid2, "for query")
+	conn2, err := tsv.te.txPool.Get(txid2, "for query")
 	if err != nil {
 		t.Error(err)
 	}
@@ -676,12 +676,12 @@ func TestTabletServerMasterToReplica(t *testing.T) {
 		t.Fatal("ch should not fire")
 	case <-time.After(10 * time.Millisecond):
 	}
-	if tsv.qe.txPool.activePool.Size() != 1 {
-		t.Errorf("len(tsv.qe.txPool.activePool.Size()): %d, want 1", len(tsv.qe.preparedPool.conns))
+	if tsv.te.txPool.activePool.Size() != 1 {
+		t.Errorf("len(tsv.te.txPool.activePool.Size()): %d, want 1", len(tsv.te.preparedPool.conns))
 	}
 
 	// Concluding conn2 will allow the transition to go through.
-	tsv.qe.txPool.LocalConclude(ctx, conn2)
+	tsv.te.txPool.LocalConclude(ctx, conn2)
 	<-ch
 }
 
@@ -690,12 +690,12 @@ func TestTabletServerReplicaToMaster(t *testing.T) {
 	_, tsv, db := newTestTxExecutor()
 	defer tsv.StopService()
 	tsv.SetServingType(topodatapb.TabletType_REPLICA, true, nil)
-	tpc := tsv.qe.twoPC
+	tpc := tsv.te.twoPC
 
 	db.AddQuery(tpc.readAllRedo, &sqltypes.Result{})
 	tsv.SetServingType(topodatapb.TabletType_MASTER, true, nil)
-	if len(tsv.qe.preparedPool.conns) != 0 {
-		t.Errorf("len(tsv.qe.preparedPool.conns): %d, want 0", len(tsv.qe.preparedPool.conns))
+	if len(tsv.te.preparedPool.conns) != 0 {
+		t.Errorf("len(tsv.te.preparedPool.conns): %d, want 0", len(tsv.te.preparedPool.conns))
 	}
 	tsv.SetServingType(topodatapb.TabletType_REPLICA, true, nil)
 
@@ -708,10 +708,10 @@ func TestTabletServerReplicaToMaster(t *testing.T) {
 		}},
 	})
 	tsv.SetServingType(topodatapb.TabletType_MASTER, true, nil)
-	if len(tsv.qe.preparedPool.conns) != 1 {
-		t.Errorf("len(tsv.qe.preparedPool.conns): %d, want 1", len(tsv.qe.preparedPool.conns))
+	if len(tsv.te.preparedPool.conns) != 1 {
+		t.Errorf("len(tsv.te.preparedPool.conns): %d, want 1", len(tsv.te.preparedPool.conns))
 	}
-	got := tsv.qe.preparedPool.conns["dtid0"].Queries
+	got := tsv.te.preparedPool.conns["dtid0"].Queries
 	want := []string{"update test_table set name = 2 where pk in (1) /* _stream test_table (pk ) (1 ); */"}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("Prepared queries: %v, want %v", got, want)
@@ -738,17 +738,17 @@ func TestTabletServerReplicaToMaster(t *testing.T) {
 		}},
 	})
 	tsv.SetServingType(topodatapb.TabletType_MASTER, true, nil)
-	if len(tsv.qe.preparedPool.conns) != 1 {
-		t.Errorf("len(tsv.qe.preparedPool.conns): %d, want 1", len(tsv.qe.preparedPool.conns))
+	if len(tsv.te.preparedPool.conns) != 1 {
+		t.Errorf("len(tsv.te.preparedPool.conns): %d, want 1", len(tsv.te.preparedPool.conns))
 	}
-	got = tsv.qe.preparedPool.conns["dtid0"].Queries
+	got = tsv.te.preparedPool.conns["dtid0"].Queries
 	want = []string{"update test_table set name = 2 where pk in (1) /* _stream test_table (pk ) (1 ); */"}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("Prepared queries: %v, want %v", got, want)
 	}
 	wantFailed := map[string]error{"dtid1": errPrepFailed}
-	if !reflect.DeepEqual(tsv.qe.preparedPool.reserved, wantFailed) {
-		t.Errorf("Failed dtids: %v, want %v", tsv.qe.preparedPool.reserved, wantFailed)
+	if !reflect.DeepEqual(tsv.te.preparedPool.reserved, wantFailed) {
+		t.Errorf("Failed dtids: %v, want %v", tsv.te.preparedPool.reserved, wantFailed)
 	}
 	tsv.SetServingType(topodatapb.TabletType_REPLICA, true, nil)
 }
@@ -1382,7 +1382,7 @@ func TestExecuteBatchNestedTransaction(t *testing.T) {
 	}, false, 0, nil); err == nil {
 		t.Fatalf("TabletServer.Execute should fail because of nested transaction")
 	}
-	tsv.qe.txPool.SetTimeout(10)
+	tsv.te.txPool.SetTimeout(10)
 }
 
 func TestTabletServerSplitQuery(t *testing.T) {
@@ -1613,16 +1613,16 @@ func TestConfigChanges(t *testing.T) {
 	if val := tsv.TxPoolSize(); val != newSize {
 		t.Errorf("TxPoolSize: %d, want %d", val, newSize)
 	}
-	if val := int(tsv.qe.txPool.pool.Capacity()); val != newSize {
-		t.Errorf("tsv.qe.txPool.pool.Capacity: %d, want %d", val, newSize)
+	if val := int(tsv.te.txPool.pool.Capacity()); val != newSize {
+		t.Errorf("tsv.te.txPool.pool.Capacity: %d, want %d", val, newSize)
 	}
 
 	tsv.SetTxTimeout(newDuration)
 	if val := tsv.TxTimeout(); val != newDuration {
 		t.Errorf("tsv.TxTimeout: %v, want %v", val, newDuration)
 	}
-	if val := tsv.qe.txPool.Timeout(); val != newDuration {
-		t.Errorf("tsv.qe.txPool.Timeout: %v, want %v", val, newDuration)
+	if val := tsv.te.txPool.Timeout(); val != newDuration {
+		t.Errorf("tsv.te.txPool.Timeout: %v, want %v", val, newDuration)
 	}
 
 	tsv.SetQueryCacheCap(newSize)

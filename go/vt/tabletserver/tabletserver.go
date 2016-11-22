@@ -13,6 +13,7 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
+
 	"github.com/golang/protobuf/proto"
 	"github.com/youtube/vitess/go/acl"
 	"github.com/youtube/vitess/go/history"
@@ -110,6 +111,7 @@ type TabletServer struct {
 	// The following variables should only be accessed within
 	// the context of a startRequest-endRequest.
 	qe               *QueryEngine
+	te               *TxEngine
 	updateStreamList *binlog.StreamList
 
 	// checkMySQLThrottler is used to throttle the number of
@@ -132,6 +134,9 @@ type TabletServer struct {
 	// eventTokenMutex protects the current EventToken
 	eventTokenMutex sync.RWMutex
 	eventToken      *querypb.EventToken
+
+	// Stats
+	queryServiceStats *QueryServiceStats
 }
 
 // RegisterFunction is a callback type to be called when we
@@ -160,7 +165,9 @@ func NewTabletServer(config Config) *TabletServer {
 		streamHealthMap:     make(map[int]chan<- *querypb.StreamHealthResponse),
 		history:             history.New(10),
 	}
-	tsv.qe = NewQueryEngine(tsv, config)
+	tsv.queryServiceStats = NewQueryServiceStats(config.StatsPrefix, config.EnablePublishStats)
+	tsv.qe = NewQueryEngine(tsv, config, tsv.queryServiceStats)
+	tsv.te = NewTxEngine(tsv, config, tsv.queryServiceStats)
 	tsv.updateStreamList = &binlog.StreamList{}
 	if config.EnablePublishStats {
 		stats.Publish(config.StatsPrefix+"TabletState", stats.IntFunc(func() int64 {
@@ -269,6 +276,13 @@ func (tsv *TabletServer) InitDBConfig(target querypb.Target, dbconfigs dbconfigs
 	}
 	tsv.target = target
 	tsv.dbconfigs = dbconfigs
+	// Massage Dba so that it inherits the
+	// App values but keeps the credentials.
+	tsv.dbconfigs.Dba = dbconfigs.App
+	if n, p := dbconfigs.Dba.Uname, dbconfigs.Dba.Pass; n != "" {
+		tsv.dbconfigs.Dba.Uname = n
+		tsv.dbconfigs.Dba.Pass = p
+	}
 	tsv.mysqld = mysqld
 	return nil
 }
@@ -379,6 +393,7 @@ func (tsv *TabletServer) fullStart() (err error) {
 	defer func() {
 		if x := recover(); x != nil {
 			log.Errorf("Could not start tabletserver: %v", x)
+			tsv.te.Close(true)
 			tsv.qe.Close()
 			tsv.updateStreamList.Stop()
 			tsv.stopReplicationStreamer()
@@ -394,6 +409,10 @@ func (tsv *TabletServer) fullStart() (err error) {
 	c.Close()
 
 	tsv.qe.Open(tsv.dbconfigs)
+	if err := tsv.te.Init(tsv.dbconfigs); err != nil {
+		// TODO(sougou): change to normal error handling.
+		panic(err)
+	}
 	tsv.updateStreamList.Init()
 	return tsv.serveNewType()
 }
@@ -402,6 +421,7 @@ func (tsv *TabletServer) serveNewType() (err error) {
 	defer func() {
 		if x := recover(); x != nil {
 			log.Errorf("Could not start tabletserver: %v", x)
+			tsv.te.Close(true)
 			tsv.qe.Close()
 			tsv.updateStreamList.Stop()
 			tsv.stopReplicationStreamer()
@@ -410,21 +430,15 @@ func (tsv *TabletServer) serveNewType() (err error) {
 		}
 	}()
 	if tsv.target.TabletType == topodatapb.TabletType_MASTER {
-		err = tsv.qe.PrepareFromRedo()
-		if err != nil {
-			// If this operation fails, we choose to raise an alert and
-			// continue anyway. Serving traffic is considered more important
-			// than blocking everything for the sake of a few transactions.
-			tsv.qe.queryServiceStats.InternalErrors.Add("TwopcResurrection", 1)
-			log.Errorf("Could not prepare transactions: %v", err)
-		}
+		tsv.te.Open(tsv.dbconfigs)
 	} else {
 		// Wait for in-flight transactional requests to complete
 		// before rolling back everything. In this state new
 		// transactional requests are not allowed. So, we can
 		// be sure that the tx pool won't change after the wait.
 		tsv.txRequests.Wait()
-		tsv.qe.RollbackTransactions()
+		tsv.te.Close(true)
+		// TODO(sougou): Shouldn't this be stopped if the tablet becomes master?
 		tsv.startReplicationStreamer()
 	}
 	tsv.transition(StateServing)
@@ -454,7 +468,7 @@ func (tsv *TabletServer) StopService() {
 	tsv.mu.Unlock()
 
 	log.Infof("Executing graceful transition to NotServing")
-	tsv.waitForShutdown()
+	tsv.te.Close(false)
 
 	defer func() {
 		tsv.transition(StateNotConnected)
@@ -470,7 +484,7 @@ func (tsv *TabletServer) waitForShutdown() {
 	// will be allowed. They will enable the conclusion of outstanding
 	// transactions.
 	tsv.txRequests.Wait()
-	tsv.qe.WaitForTxEmpty()
+	tsv.te.Close(false)
 	tsv.qe.streamQList.TerminateAll()
 	tsv.updateStreamList.Stop()
 	tsv.stopReplicationStreamer()
@@ -646,7 +660,7 @@ func (tsv *TabletServer) Begin(ctx context.Context, target *querypb.Target) (tra
 		target, true, false,
 		func(ctx context.Context, logStats *LogStats) error {
 			defer tsv.qe.queryServiceStats.QueryStats.Record("BEGIN", time.Now())
-			transactionID, err = tsv.qe.txPool.Begin(ctx)
+			transactionID, err = tsv.te.txPool.Begin(ctx)
 			logStats.TransactionID = transactionID
 			return err
 		},
@@ -663,7 +677,7 @@ func (tsv *TabletServer) Commit(ctx context.Context, target *querypb.Target, tra
 		func(ctx context.Context, logStats *LogStats) error {
 			defer tsv.qe.queryServiceStats.QueryStats.Record("COMMIT", time.Now())
 			logStats.TransactionID = transactionID
-			return tsv.qe.txPool.Commit(ctx, transactionID)
+			return tsv.te.txPool.Commit(ctx, transactionID)
 		},
 	)
 }
@@ -677,7 +691,7 @@ func (tsv *TabletServer) Rollback(ctx context.Context, target *querypb.Target, t
 		func(ctx context.Context, logStats *LogStats) error {
 			defer tsv.qe.queryServiceStats.QueryStats.Record("ROLLBACK", time.Now())
 			logStats.TransactionID = transactionID
-			return tsv.qe.txPool.Rollback(ctx, transactionID)
+			return tsv.te.txPool.Rollback(ctx, transactionID)
 		},
 	)
 }
@@ -692,7 +706,7 @@ func (tsv *TabletServer) Prepare(ctx context.Context, target *querypb.Target, tr
 			txe := &TxExecutor{
 				ctx:      ctx,
 				logStats: logStats,
-				qe:       tsv.qe,
+				te:       tsv.te,
 			}
 			return txe.Prepare(transactionID, dtid)
 		},
@@ -709,7 +723,7 @@ func (tsv *TabletServer) CommitPrepared(ctx context.Context, target *querypb.Tar
 			txe := &TxExecutor{
 				ctx:      ctx,
 				logStats: logStats,
-				qe:       tsv.qe,
+				te:       tsv.te,
 			}
 			return txe.CommitPrepared(dtid)
 		},
@@ -726,7 +740,7 @@ func (tsv *TabletServer) RollbackPrepared(ctx context.Context, target *querypb.T
 			txe := &TxExecutor{
 				ctx:      ctx,
 				logStats: logStats,
-				qe:       tsv.qe,
+				te:       tsv.te,
 			}
 			return txe.RollbackPrepared(dtid, originalID)
 		},
@@ -743,7 +757,7 @@ func (tsv *TabletServer) CreateTransaction(ctx context.Context, target *querypb.
 			txe := &TxExecutor{
 				ctx:      ctx,
 				logStats: logStats,
-				qe:       tsv.qe,
+				te:       tsv.te,
 			}
 			return txe.CreateTransaction(dtid, participants)
 		},
@@ -761,7 +775,7 @@ func (tsv *TabletServer) StartCommit(ctx context.Context, target *querypb.Target
 			txe := &TxExecutor{
 				ctx:      ctx,
 				logStats: logStats,
-				qe:       tsv.qe,
+				te:       tsv.te,
 			}
 			return txe.StartCommit(transactionID, dtid)
 		},
@@ -779,7 +793,7 @@ func (tsv *TabletServer) SetRollback(ctx context.Context, target *querypb.Target
 			txe := &TxExecutor{
 				ctx:      ctx,
 				logStats: logStats,
-				qe:       tsv.qe,
+				te:       tsv.te,
 			}
 			return txe.SetRollback(dtid, transactionID)
 		},
@@ -797,7 +811,7 @@ func (tsv *TabletServer) ConcludeTransaction(ctx context.Context, target *queryp
 			txe := &TxExecutor{
 				ctx:      ctx,
 				logStats: logStats,
-				qe:       tsv.qe,
+				te:       tsv.te,
 			}
 			return txe.ConcludeTransaction(dtid)
 		},
@@ -809,12 +823,12 @@ func (tsv *TabletServer) ReadTransaction(ctx context.Context, target *querypb.Ta
 	err = tsv.execRequest(
 		ctx, tsv.QueryTimeout.Get(),
 		"ReadTransaction", "read_transaction", nil,
-		target, false, true,
+		target, true, true,
 		func(ctx context.Context, logStats *LogStats) error {
 			txe := &TxExecutor{
 				ctx:      ctx,
 				logStats: logStats,
-				qe:       tsv.qe,
+				te:       tsv.te,
 			}
 			metadata, err = txe.ReadTransaction(dtid)
 			return err
@@ -844,6 +858,7 @@ func (tsv *TabletServer) Execute(ctx context.Context, target *querypb.Target, sq
 				ctx:           ctx,
 				logStats:      logStats,
 				qe:            tsv.qe,
+				te:            tsv.te,
 			}
 			extras := tsv.computeExtras(options)
 			result, err = qre.Execute()
@@ -926,6 +941,7 @@ func (tsv *TabletServer) StreamExecute(ctx context.Context, target *querypb.Targ
 				ctx:      ctx,
 				logStats: logStats,
 				qe:       tsv.qe,
+				te:       tsv.te,
 			}
 			excludeFieldNames := false
 			if options != nil && options.ExcludeFieldNames {
@@ -1564,22 +1580,22 @@ func (tsv *TabletServer) StreamPoolSize() int {
 
 // SetTxPoolSize changes the tx pool size to the specified value.
 func (tsv *TabletServer) SetTxPoolSize(val int) {
-	tsv.qe.txPool.pool.SetCapacity(val)
+	tsv.te.txPool.pool.SetCapacity(val)
 }
 
 // TxPoolSize returns the tx pool size.
 func (tsv *TabletServer) TxPoolSize() int {
-	return int(tsv.qe.txPool.pool.Capacity())
+	return int(tsv.te.txPool.pool.Capacity())
 }
 
 // SetTxTimeout changes the transaction timeout to the specified value.
 func (tsv *TabletServer) SetTxTimeout(val time.Duration) {
-	tsv.qe.txPool.SetTimeout(val)
+	tsv.te.txPool.SetTimeout(val)
 }
 
 // TxTimeout returns the transaction timeout.
 func (tsv *TabletServer) TxTimeout() time.Duration {
-	return tsv.qe.txPool.Timeout()
+	return tsv.te.txPool.Timeout()
 }
 
 // SetQueryCacheCap changes the pool size to the specified value.
