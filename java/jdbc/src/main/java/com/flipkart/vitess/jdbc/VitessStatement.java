@@ -72,7 +72,7 @@ public class VitessStatement implements Statement {
         checkSQLNullOrEmpty(sql);
         closeOpenResultSetAndResetCount();
 
-        if (this instanceof VitessPreparedStatement) { //PreparedStatement cannot call this method
+        if (this instanceof VitessPreparedStatement) { // PreparedStatement cannot call this method
             throw new SQLException(Constants.SQLExceptionMessages.METHOD_NOT_ALLOWED);
         }
 
@@ -385,7 +385,7 @@ public class VitessStatement implements Statement {
         checkSQLNullOrEmpty(sql);
         closeOpenResultSetAndResetCount();
 
-        if (this instanceof VitessPreparedStatement) { //PreparedStatement cannot call this method
+        if (this instanceof VitessPreparedStatement) { // PreparedStatement cannot call this method
             throw new SQLException(Constants.SQLExceptionMessages.METHOD_NOT_ALLOWED);
         }
 
@@ -462,7 +462,7 @@ public class VitessStatement implements Statement {
         checkSQLNullOrEmpty(sql);
         closeOpenResultSetAndResetCount();
 
-        if (this instanceof VitessPreparedStatement) { //PreparedStatement cannot call this method
+        if (this instanceof VitessPreparedStatement) { // PreparedStatement cannot call this method
             throw new SQLException(Constants.SQLExceptionMessages.METHOD_NOT_ALLOWED);
         }
 
@@ -494,7 +494,7 @@ public class VitessStatement implements Statement {
     public void addBatch(String sql) throws SQLException {
         checkOpen();
         checkSQLNullOrEmpty(sql);
-        if (this instanceof VitessPreparedStatement) { //PreparedStatement cannot call this method
+        if (this instanceof VitessPreparedStatement) { // PreparedStatement cannot call this method
             throw new SQLException(Constants.SQLExceptionMessages.METHOD_NOT_ALLOWED);
         }
         this.batchedArgs.add(sql);
