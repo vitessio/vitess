@@ -14,7 +14,6 @@ script_root=`dirname "${BASH_SOURCE}"`
 source $script_root/env.sh
 
 replicas=${ETCD_REPLICAS:-3}
-VITESS_NAME=${VITESS_NAME:-'default'}
 CELLS=${CELLS:-'test'}
 cells=`echo $CELLS | tr ',' ' '`
 

@@ -11,7 +11,6 @@ VTGATE_REPLICAS=${VTGATE_REPLICAS:-3}
 VTDATAROOT_VOLUME=${VTDATAROOT_VOLUME:-''}
 VTGATE_TEMPLATE=${VTGATE_TEMPLATE:-'vtgate-controller-template.yaml'}
 CELLS=${CELLS:-'test'}
-VITESS_NAME=${VITESS_NAME:-'default'}
 
 vtdataroot_volume='emptyDir: {}'
 if [ -n "$VTDATAROOT_VOLUME" ]; then
