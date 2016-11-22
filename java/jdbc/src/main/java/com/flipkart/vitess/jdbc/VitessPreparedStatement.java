@@ -422,7 +422,7 @@ public class VitessPreparedStatement extends VitessStatement implements Prepared
                         updateCounts[commandIndex] = this.executeUpdate();
                     } catch (SQLException ex) {
                         updateCounts[commandIndex] = Statement.EXECUTE_FAILED;
-                        this.checkErrorAndReturn(ex, commandIndex);
+                        this.throwIfTransactionRolledback(ex, commandIndex);
                         sqlEx = ex;
                     }
                 }

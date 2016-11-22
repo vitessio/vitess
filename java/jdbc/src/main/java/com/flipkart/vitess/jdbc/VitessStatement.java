@@ -544,7 +544,7 @@ public class VitessStatement implements Statement {
                         updateCounts[commandIndex] = this.executeUpdate(sql);
                     } catch (SQLException ex) {
                         updateCounts[commandIndex] = Statement.EXECUTE_FAILED;
-                        this.checkErrorAndReturn(ex, commandIndex);
+                        this.throwIfTransactionRolledback(ex, commandIndex);
                         sqlEx = ex;
                     }
                 }
@@ -627,7 +627,7 @@ public class VitessStatement implements Statement {
      * @param commandIndex The index of the query where the Exception occurred
      * @throws BatchUpdateException
      */
-    protected void checkErrorAndReturn(SQLException ex, int commandIndex)
+    protected void throwIfTransactionRolledback(SQLException ex, int commandIndex)
         throws BatchUpdateException {
         if (ex instanceof SQLDataException || ex instanceof SQLRecoverableException) {
             int[] newUpdateCounts = new int[commandIndex];
