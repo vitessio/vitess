@@ -615,7 +615,7 @@ public class VitessStatement implements Statement {
      * @return an unmodifiable List of batched args
      */
     public List getBatchedArgs() {
-        return this.batchedArgs == null ? null : Collections.unmodifiableList(this.batchedArgs);
+        return Collections.unmodifiableList(this.batchedArgs);
     }
 
     /**

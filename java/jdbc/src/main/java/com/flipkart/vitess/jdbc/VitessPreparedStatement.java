@@ -47,6 +47,12 @@ import java.util.logging.Logger;
 
 /**
  * Created by harshit.gangal on 25/01/16.
+ *
+ * This class expected for an sql query and a given set of parameters
+ * the DB Call can be made once with any of the following method
+ * execute, executeQuery, executeUpdate and executeBatch.
+ * After the call, the parameters will be reset
+ * and a new set of parameters needs to be provided before calling any of the above method.
  */
 public class VitessPreparedStatement extends VitessStatement implements PreparedStatement {
 
@@ -819,6 +825,6 @@ public class VitessPreparedStatement extends VitessStatement implements Prepared
      * @return an unmodifiable List of batched args
      */
     @Override public List getBatchedArgs() {
-        return this.batchedArgs == null ? null : Collections.unmodifiableList(this.batchedArgs);
+        return Collections.unmodifiableList(this.batchedArgs);
     }
 }
