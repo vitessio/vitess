@@ -407,9 +407,8 @@ public class VitessPreparedStatement extends VitessStatement implements Prepared
         SQLException sqlEx = null;
         try {
             int numCommands = this.batchedArgs.size();
+            updateCounts = new int[numCommands];
             if (numCommands > 0) {
-                updateCounts = new int[numCommands];
-
                 for (int i = 0; i < numCommands; i++) {
                     updateCounts[i] = Statement.EXECUTE_FAILED;
                 }
@@ -432,7 +431,7 @@ public class VitessPreparedStatement extends VitessStatement implements Prepared
                         sqlEx.getErrorCode(), updateCounts);
                 }
             }
-            return (updateCounts != null) ? updateCounts : new int[0];
+            return updateCounts;
         } finally {
             this.clearBatch();
         }
