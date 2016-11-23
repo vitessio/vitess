@@ -312,6 +312,8 @@ func TestValid(t *testing.T) {
 	}, {
 		input: "select /* current_timestamp as func */ current_timestamp() from t",
 	}, {
+		input: "select /* mod as func */ a from tab where b MOD 2 = 0",
+	}, {
 		input: "select /* mod as func */ a from tab where mod(b, 2) = 0",
 	}, {
 		input: "select /* database as func no param */ database() from t",

@@ -809,6 +809,10 @@ value_expression:
   {
     $$ = &BinaryExpr{Left: $1, Operator: ShiftRightStr, Right: $3}
   }
+| value_expression MOD value_expression
+  {
+    $$ = &BinaryExpr{Left: $1, Operator: "MOD", Right: $3}
+  }
 | '+'  value_expression %prec UNARY
   {
     if num, ok := $2.(NumVal); ok {
