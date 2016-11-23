@@ -333,8 +333,9 @@ applicable to 100+ shard installations).</p></li>
 <li><p>Better Kubernetes support (Helm support, better scripts, ...).</p></li>
 </ul>
 
-<p>Our plan is to cut a 2.1.0-alpha.1 release very soon, and to update the
-documentation shortly thereafter.</p>
+<p>We already cut the
+<a href="https://github.com/youtube/vitess/releases/tag/v2.1.0-alpha.1">2.1.0-alpha.1 release</a>,
+and we are finalizing the last details at the moment.</p>
 
 <h2 id="vitess-moving-forward">Vitess Moving Forward</h2>
 
@@ -359,6 +360,8 @@ instance).</p></li>
 <li><p>Support for MySQL 8.0.</p></li>
 <li><p>Additional Kubernetes integration.</p></li>
 <li><p>Include resharding workflows in the control panel UI (vtctld).</p></li>
+<li><p>Support vertical splits to an existing keyspace, so any table can be moved
+around to any keyspace. Only for unsharded keyspaces, at first.</p></li>
 <li><p>Out-of-the-box integration with Promotheus for monitoring.</p></li>
 </ul>
 
