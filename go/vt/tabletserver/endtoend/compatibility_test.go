@@ -20,8 +20,7 @@ var point12 = "\x00\x00\x00\x00\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\xf0?
 func TestCharaterSet(t *testing.T) {
 	qr, err := framework.NewClient().Execute("select * from vitess_test where intval=1", nil)
 	if err != nil {
-		t.Error(err)
-		return
+		t.Fatal(err)
 	}
 	want := sqltypes.Result{
 		Fields: []*querypb.Field{
@@ -76,13 +75,11 @@ func TestInts(t *testing.T) {
 		},
 	)
 	if err != nil {
-		t.Error(err)
-		return
+		t.Fatal(err)
 	}
 	qr, err := client.Execute("select * from vitess_ints where tiny = -128", nil)
 	if err != nil {
-		t.Error(err)
-		return
+		t.Fatal(err)
 	}
 	want := sqltypes.Result{
 		Fields: []*querypb.Field{
@@ -146,8 +143,7 @@ func TestInts(t *testing.T) {
 	// that a Uint64 is produced in spite of the stray binary flag.
 	qr, err = client.Execute("select max(bigu) from vitess_ints", nil)
 	if err != nil {
-		t.Error(err)
-		return
+		t.Fatal(err)
 	}
 	want = sqltypes.Result{
 		Fields: []*querypb.Field{
@@ -183,13 +179,11 @@ func TestFractionals(t *testing.T) {
 		},
 	)
 	if err != nil {
-		t.Error(err)
-		return
+		t.Fatal(err)
 	}
 	qr, err := client.Execute("select * from vitess_fracts where id = 1", nil)
 	if err != nil {
-		t.Error(err)
-		return
+		t.Fatal(err)
 	}
 	want := sqltypes.Result{
 		Fields: []*querypb.Field{
@@ -247,13 +241,11 @@ func TestStrings(t *testing.T) {
 		},
 	)
 	if err != nil {
-		t.Error(err)
-		return
+		t.Fatal(err)
 	}
 	qr, err := client.Execute("select * from vitess_strings where vb = 'a'", nil)
 	if err != nil {
-		t.Error(err)
-		return
+		t.Fatal(err)
 	}
 	want := sqltypes.Result{
 		Fields: []*querypb.Field{
@@ -325,13 +317,11 @@ func TestMiscTypes(t *testing.T) {
 		},
 	)
 	if err != nil {
-		t.Error(err)
-		return
+		t.Fatal(err)
 	}
 	qr, err := client.Execute("select * from vitess_misc where id = 1", nil)
 	if err != nil {
-		t.Error(err)
-		return
+		t.Fatal(err)
 	}
 	fmt.Printf("val: %q\n", qr.Rows[0][5].String())
 	want := sqltypes.Result{
@@ -377,8 +367,7 @@ func TestNull(t *testing.T) {
 	client := framework.NewClient()
 	qr, err := client.Execute("select null from dual", nil)
 	if err != nil {
-		t.Error(err)
-		return
+		t.Fatal(err)
 	}
 	want := sqltypes.Result{
 		Fields: []*querypb.Field{
@@ -421,8 +410,7 @@ func TestTypeLimits(t *testing.T) {
 	} {
 		_, err := client.Execute(query, nil)
 		if err != nil {
-			t.Error(err)
-			return
+			t.Fatal(err)
 		}
 	}
 
@@ -500,20 +488,17 @@ func TestJSONType(t *testing.T) {
 		if strings.Contains(err.Error(), "syntax") {
 			return
 		}
-		t.Error(err)
-		return
+		t.Fatal(err)
 	}
 	defer client.Execute("drop table vitess_json", nil)
 
 	if _, err := client.Execute(`insert into vitess_json values(1, '{"foo": "bar"}')`, nil); err != nil {
-		t.Error(err)
-		return
+		t.Fatal(err)
 	}
 
 	qr, err := client.Execute("select id, val from vitess_json", nil)
 	if err != nil {
-		t.Error(err)
-		return
+		t.Fatal(err)
 	}
 	want := sqltypes.Result{
 		Fields: []*querypb.Field{
