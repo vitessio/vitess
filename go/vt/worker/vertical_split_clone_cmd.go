@@ -121,7 +121,9 @@ func commandVerticalSplitClone(wi *Instance, wr *wrangler.Wrangler, subFlags *fl
 	if err != nil {
 		return nil, err
 	}
-	var tableArray []string
+	// The tableArray has zero elements when table flag is empty, which is an
+	// error case captured in function newVerticalSplitCloneWorker.
+	tableArray := []string{}
 	if *tables != "" {
 		tableArray = strings.Split(*tables, ",")
 	}
