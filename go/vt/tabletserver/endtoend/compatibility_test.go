@@ -5,6 +5,7 @@
 package endtoend
 
 import (
+	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -13,6 +14,8 @@ import (
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	"github.com/youtube/vitess/go/vt/tabletserver/endtoend/framework"
 )
+
+var point12 = "\x00\x00\x00\x00\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\xf0?\x00\x00\x00\x00\x00\x00\x00@"
 
 func TestCharaterSet(t *testing.T) {
 	qr, err := framework.NewClient().Execute("select * from vitess_test where intval=1", nil)
@@ -312,7 +315,7 @@ func TestMiscTypes(t *testing.T) {
 	defer client.Execute("delete from vitess_misc", nil)
 
 	_, err := client.Execute(
-		"insert into vitess_misc values(:id, :b, :d, :dt, :t)",
+		"insert into vitess_misc values(:id, :b, :d, :dt, :t, point(1, 2))",
 		map[string]interface{}{
 			"id": 1,
 			"b":  "\x01",
@@ -330,6 +333,7 @@ func TestMiscTypes(t *testing.T) {
 		t.Error(err)
 		return
 	}
+	fmt.Printf("val: %q\n", qr.Rows[0][5].String())
 	want := sqltypes.Result{
 		Fields: []*querypb.Field{
 			{
@@ -347,6 +351,9 @@ func TestMiscTypes(t *testing.T) {
 			}, {
 				Name: "t",
 				Type: sqltypes.Time,
+			}, {
+				Name: "g",
+				Type: sqltypes.Geometry,
 			},
 		},
 		RowsAffected: 1,
@@ -357,6 +364,7 @@ func TestMiscTypes(t *testing.T) {
 				sqltypes.MakeTrusted(sqltypes.Date, []byte("2012-01-01")),
 				sqltypes.MakeTrusted(sqltypes.Datetime, []byte("2012-01-01 15:45:45")),
 				sqltypes.MakeTrusted(sqltypes.Time, []byte("15:45:45")),
+				sqltypes.MakeTrusted(sqltypes.Geometry, []byte(point12)),
 			},
 		},
 	}
@@ -481,5 +489,51 @@ func TestTypeLimits(t *testing.T) {
 	_, err := client.Execute("insert into vitess_strings(vb) values('12345678901234567')", nil)
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
 		t.Errorf("Error: %v, want %s", err, want)
+	}
+}
+
+func TestJSONType(t *testing.T) {
+	// JSON is supported only after mysql57.
+	client := framework.NewClient()
+	if _, err := client.Execute("create table vitess_json(id int, val json, primary key(id))", nil); err != nil {
+		// If it's a syntax error, MySQL is an older version. Skip this test.
+		if strings.Contains(err.Error(), "syntax") {
+			return
+		}
+		t.Error(err)
+		return
+	}
+	defer client.Execute("drop table vitess_json", nil)
+
+	if _, err := client.Execute(`insert into vitess_json values(1, '{"foo": "bar"}')`, nil); err != nil {
+		t.Error(err)
+		return
+	}
+
+	qr, err := client.Execute("select id, val from vitess_json", nil)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	want := sqltypes.Result{
+		Fields: []*querypb.Field{
+			{
+				Name: "id",
+				Type: sqltypes.Int32,
+			}, {
+				Name: "val",
+				Type: sqltypes.TypeJSON,
+			},
+		},
+		RowsAffected: 1,
+		Rows: [][]sqltypes.Value{
+			{
+				sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
+				sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte("{\"foo\": \"bar\"}")),
+			},
+		},
+	}
+	if !reflect.DeepEqual(*qr, want) {
+		t.Errorf("Execute: \n%#v, want \n%#v", *qr, want)
 	}
 }
