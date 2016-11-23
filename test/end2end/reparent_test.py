@@ -116,7 +116,8 @@ class ReparentTest(base_end2end_test.BaseEnd2EndTest):
             logging.info('Reparent took %f seconds', duration)
             break
         except (IndexError, KeyError, vtctl_helper.VtctlClientError) as e:
-          logging.info(e)
+          logging.info(
+              'While waiting for reparent, got the following error: %s', e)
       else:
         self.fail('Timed out waiting for reparent on %s/%s' % (
             keyspace, shard_name))

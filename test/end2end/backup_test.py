@@ -21,7 +21,7 @@ class BackupTest(base_end2end_test.BaseEnd2EndTest):
 
   _WAIT_FOR_HEALTHY_DEADLINE = 600  # seconds
   _WAIT_FOR_SCHEMA_VALIDATION_DEADLINE = 120  # seconds
-  _WAIT_FOR_TYPE_RETRIES = 90
+  _WAIT_FOR_TYPE_DEADLINE = 120  # seconds
 
   @classmethod
   def setUpClass(cls):
@@ -86,32 +86,47 @@ class BackupTest(base_end2end_test.BaseEnd2EndTest):
       tablets: List of tablet names to be restored
       num_shards: Number of shards for the specific keyspace (int)
     """
-    # First call restart alloc on all tablets being restored
+    # First call restart on all tablets being restored
     for tablet in tablets:
       self.env.restart_mysql_task(tablet, 'mysql', is_alloc=True)
 
     # Wait for the tablets to be unhealthy
-    for tablet_name in tablets:
-      logging.info('Waiting for tablet %s to be unhealthy', tablet_name)
-      for _ in xrange(self._WAIT_FOR_TYPE_RETRIES):
+    start_time = time.time()
+    unhealthy_tablets = []
+    while time.time() - start_time < self._WAIT_FOR_TYPE_DEADLINE:
+      if len(unhealthy_tablets) == len(tablets):
+        break
+      for tablet_name in tablets:
+        if tablet_name in unhealthy_tablets:
+          continue
+        logging.info('Waiting for tablet %s to be unhealthy', tablet_name)
         if not self.env.is_tablet_healthy(tablet_name):
+          unhealthy_tablets.append(tablet_name)
           logging.info('Tablet %s is now unhealthy', tablet_name)
-          break
-        time.sleep(1)
-      else:
-        logging.info('Timed out, tablet %s is not unhealthy', tablet_name)
+      time.sleep(1)
+    else:
+      logging.info('Timed out, some tablets did not become unhealthy: %s',
+                   ' '.join([x for x in tablets if x not in unhealthy_tablets]))
 
     # Wait for the tablet to be healthy according to vttablet health
-    for tablet_name in tablets:
-      logging.info('Waiting for tablet %s to be healthy', tablet_name)
-      for _ in xrange(self._WAIT_FOR_TYPE_RETRIES):
+    start_time = time.time()
+    healthy_tablets = []
+    while time.time() - start_time < self._WAIT_FOR_TYPE_DEADLINE:
+      if len(healthy_tablets) == len(tablets):
+        break
+      for tablet_name in tablets:
+        if tablet_name in healthy_tablets:
+          continue
+        logging.info('Waiting for tablet %s to be healthy', tablet_name)
         if self.env.is_tablet_healthy(tablet_name):
+          healthy_tablets.append(tablet_name)
           logging.info('Tablet %s is now healthy', tablet_name)
-          break
-        time.sleep(1)
-      else:
-        logging.info('Timed out, tablet %s is still unhealthy', tablet_name)
+      time.sleep(1)
+    else:
+      logging.info('Timed out, some tablets are still unhealthy: %s',
+                   ' '.join([x for x in tablets if x not in healthy_tablets]))
 
+    for tablet_name in tablets:
       logging.info('Waiting for tablet %s to enter serving state', tablet_name)
       self.env.poll_for_varz(
           tablet_name, ['TabletStateName'], 'TabletStateName == SERVING',
@@ -135,8 +150,8 @@ class BackupTest(base_end2end_test.BaseEnd2EndTest):
           tablets = self.env.get_tablet_types_for_shard(
               keyspace, sharding_utils.get_shard_name(shard, num_shards))
           available_tablets = [x for x in tablets if x[1] == 'replica']
-          self.assertNotEqual(len(available_tablets), 0,
-                              'No available tablets found to backup!')
+          self.assertTrue(
+              len(available_tablets), 'No available tablets found to backup!')
           tablet_to_backup_name = random.choice(available_tablets)[0]
           backup_tablets.append(tablet_to_backup_name)
 

@@ -28,16 +28,16 @@ class BaseEnvironment(object):
       **kwargs: kwargs parameterizing the environment.
 
     Raises:
-      VitessEnvironmentError: Raised if unsupported
+      VitessEnvironmentError: Raised if unsupported.
     """
     raise VitessEnvironmentError(
-        'Create unsupported in this environment')
+        'create unsupported in this environment')
 
   def use_named(self, instance_name):
     """Populate this instance based on a pre-existing environment.
 
     Args:
-      instance_name: Name of the existing environment instance (string)
+      instance_name: Name of the existing environment instance (string).
     """
     self.master_capable_tablets = {}
     for keyspace, num_shards in zip(self.keyspaces, self.num_shards):
@@ -59,7 +59,7 @@ class BaseEnvironment(object):
       VitessEnvironmentError: Raised if unsupported
     """
     raise VitessEnvironmentError(
-        'Destroy unsupported in this environment')
+        'destroy unsupported in this environment')
 
   def create_table(self, table_name, schema=None, validate_deadline_s=60):
     schema = schema or (
@@ -80,33 +80,33 @@ class BaseEnvironment(object):
     """Gets a connection to a vtgate in a particular cell.
 
     Args:
-      cell: cell to obtain a vtgate connection from (string)
+      cell: cell to obtain a vtgate connection from (string).
 
     Returns:
       A vtgate connection.
 
     Raises:
-      VitessEnvironmentError: Raised if unsupported
+      VitessEnvironmentError: Raised if unsupported.
     """
     raise VitessEnvironmentError(
-        'Get VTGate Conn unsupported in this environment')
+        'get_vtgate_conn unsupported in this environment')
 
   def restart_mysql_task(self, tablet_name, task_name, is_alloc=False):
     """Restart a job within the mysql alloc or the whole alloc itself.
 
     Args:
       tablet_name: tablet associated with the mysql instance (string).
-      task_name: Name of specific task (droid, vttablet, mysql, etc.)
-      is_alloc: True to restart entire alloc
+      task_name: Name of specific task (droid, vttablet, mysql, etc.).
+      is_alloc: True to restart entire alloc.
 
     Returns:
-      return restart return val
+      return restart return val.
 
     Raises:
-      VitessEnvironmentError: Raised if unsupported
+      VitessEnvironmentError: Raised if unsupported.
     """
     raise VitessEnvironmentError(
-        'Restart MySQL task unsupported in this environment')
+        'restart_mysql_task unsupported in this environment')
 
   def restart_vtgate(self, cell=None, task_num=None):
     """Restarts a vtgate task.
@@ -119,13 +119,13 @@ class BaseEnvironment(object):
       task_num: which vtgate task to restart (int).
 
     Returns:
-      return val for restart
+      return val for restart.
 
     Raises:
-      VitessEnvironmentError: Raised if unsupported
+      VitessEnvironmentError: Raised if unsupported.
     """
     raise VitessEnvironmentError(
-        'Restart vtgate unsupported in this environment')
+        'restart_vtgate unsupported in this environment')
 
   def wait_for_good_failover_status(
       self, keyspace, shard_name, failover_completion_timeout_s=60):
@@ -137,27 +137,27 @@ class BaseEnvironment(object):
     status is 'OFF'.
 
     Args:
-      keyspace: Name of the keyspace to reparent (string)
-      shard_name: name of the shard to verify (e.g. '-80') (string)
-      failover_completion_timeout_s: Failover completion timeout (int)
+      keyspace: Name of the keyspace to reparent (string).
+      shard_name: name of the shard to verify (e.g. '-80') (string).
+      failover_completion_timeout_s: Failover completion timeout (int).
 
     Raises:
-      VitessEnvironmentError: Raised if unsupported
+      VitessEnvironmentError: Raised if unsupported.
     """
     raise VitessEnvironmentError(
-        'Wait for good failover status unsupported in this environment')
+        'wait_for_good_failover_status unsupported in this environment')
 
   def wait_for_healthy_tablets(self, deadline_s=300):
     """Wait until all tablets report healthy status.
 
     Args:
-      deadline_s: Deadline timeout (seconds) (int)
+      deadline_s: Deadline timeout (seconds) (int).
 
     Raises:
-      VitessEnvironmentError: Raised if unsupported
+      VitessEnvironmentError: Raised if unsupported.
     """
     raise VitessEnvironmentError(
-        'Wait for healthy tablets unsupported in this environment')
+        'wait_for_healthy_tablets unsupported in this environment')
 
   def is_tablet_healthy(self, tablet_name):
     vttablet_stream_health = json.loads(self.vtctl_helper.execute_vtctl_command(
@@ -176,7 +176,7 @@ class BaseEnvironment(object):
       cross_cell: Whether the desired reparent is to another cell (bool).
 
     Returns:
-      Tuple of cell, task num, tablet uid (string, int, string)
+      Tuple of cell, task num, tablet uid (string, int, string).
     """
     num_tasks = self.keyspace_alias_to_num_instances_dict[keyspace]['replica']
     current_master = self.get_current_master_name(keyspace, shard_name)
@@ -200,30 +200,30 @@ class BaseEnvironment(object):
     """Gets a tablet's 0 based task number.
 
     Args:
-      tablet_name: Name of the tablet (string)
+      tablet_name: Name of the tablet (string).
 
     Returns:
       0 based task number (int).
 
     Raises:
-      VitessEnvironmentError: Raised if unsupported
+      VitessEnvironmentError: Raised if unsupported.
     """
     raise VitessEnvironmentError(
-        'Get tablet task number unsupported in this environment')
+        'get_tablet_task_number unsupported in this environment')
 
   def external_reparent(self, keyspace, shard_name, new_master_name):
     """Perform a reparent through external means (Orchestrator, etc.).
 
     Args:
-      keyspace: name of the keyspace to reparent (string)
-      shard_name: shard name (string)
-      new_master_name: tablet name of the tablet to become master (string)
+      keyspace: name of the keyspace to reparent (string).
+      shard_name: shard name (string).
+      new_master_name: tablet name of the tablet to become master (string).
 
     Raises:
-      VitessEnvironmentError: Raised if unsupported
+      VitessEnvironmentError: Raised if unsupported.
     """
     raise VitessEnvironmentError(
-        'External reparent unsupported in this environment')
+        'external_reparent unsupported in this environment')
 
   def internal_reparent_available(self):
     """Checks if the environment can do a vtctl reparent."""
@@ -243,10 +243,10 @@ class BaseEnvironment(object):
     """Performs an internal reparent through vtctl.
 
     Args:
-      keyspace: name of the keyspace to reparent (string)
-      shard_name: string representation of the shard to reparent (e.g. '-80')
-      new_master_name: Name of the new master tablet (string)
-      emergency: True to perform an emergency reparent (bool)
+      keyspace: name of the keyspace to reparent (string).
+      shard_name: string representation of the shard to reparent (e.g. '-80').
+      new_master_name: Name of the new master tablet (string).
+      emergency: True to perform an emergency reparent (bool).
     """
     reparent_type = (
         'EmergencyReparentShard' if emergency else 'PlannedReparentShard')
@@ -261,10 +261,10 @@ class BaseEnvironment(object):
     that all shards share the same master.
 
     Args:
-      keyspace: name of the keyspace to get the master cell for (string)
+      keyspace: name of the keyspace to get the master cell for (string).
 
     Returns:
-      master cell name (string)
+      master cell name (string).
     """
     num_shards = self.num_shards[self.keyspaces.index(keyspace)]
     first_shard_name = sharding_utils.get_shard_name(0, num_shards)
@@ -276,11 +276,11 @@ class BaseEnvironment(object):
     """Obtains current master's tablet name (cell-uid).
 
     Args:
-      keyspace: name of the keyspace to get information on the master
-      shard_name: string representation of the shard in question (e.g. '-80')
+      keyspace: name of the keyspace to get information on the master.
+      shard_name: string representation of the shard in question (e.g. '-80').
 
     Returns:
-      master tablet name (cell-uid) (string)
+      master tablet name (cell-uid) (string).
     """
     shard_info = json.loads(self.vtctl_helper.execute_vtctl_command(
         ['GetShard', '{0}/{1}'.format(keyspace, shard_name)]))
@@ -292,14 +292,14 @@ class BaseEnvironment(object):
     """Get a random tablet name.
 
     Args:
-      keyspace: name of the keyspace to get information on the master
-      shard_name: shard to select tablet from (None for random) (string)
-      cell: cell to select tablet from (None for random) (string)
-      tablet_type: type of tablet to select (None for random) (string)
-      task_number: a specific task number (None for random) (int)
+      keyspace: name of the keyspace to get information on the master.
+      shard_name: shard to select tablet from (None for random) (string).
+      cell: cell to select tablet from (None for random) (string).
+      tablet_type: type of tablet to select (None for random) (string).
+      task_number: a specific task number (None for random) (int).
 
     Returns:
-      random tablet name (cell-uid) (string)
+      random tablet name (cell-uid) (string).
     """
     keyspace = keyspace or random.choice(self.keyspaces)
     shard_name = shard_name or (
@@ -319,10 +319,10 @@ class BaseEnvironment(object):
     """Get the cell of a tablet.
 
     Args:
-      tablet_name: Name of the tablet, including cell prefix. (string)
+      tablet_name: Name of the tablet, including cell prefix (string).
 
     Returns:
-      Tablet's cell. (string)
+      Tablet's cell (string).
     """
     return tablet_name.split('-')[0]
 
@@ -330,10 +330,10 @@ class BaseEnvironment(object):
     """Get the uid of a tablet.
 
     Args:
-      tablet_name: Name of the tablet, including cell prefix. (string)
+      tablet_name: Name of the tablet, including cell prefix (string).
 
     Returns:
-      Tablet's uid. (int)
+      Tablet's uid (int).
     """
     return int(tablet_name.split('-')[-1])
 
@@ -341,10 +341,10 @@ class BaseEnvironment(object):
     """Get the keyspace of a tablet.
 
     Args:
-      tablet_name: Name of the tablet, including cell prefix. (string)
+      tablet_name: Name of the tablet, including cell prefix (string).
 
     Returns:
-      Tablet's keyspace. (string)
+      Tablet's keyspace (string).
     """
     return json.loads(self.vtctl_helper.execute_vtctl_command(
         ['GetTablet', tablet_name]))['keyspace']
@@ -353,10 +353,10 @@ class BaseEnvironment(object):
     """Get the shard of a tablet.
 
     Args:
-      tablet_name: Name of the tablet, including cell prefix. (string)
+      tablet_name: Name of the tablet, including cell prefix (string).
 
     Returns:
-      Tablet's shard. (string)
+      Tablet's shard (string).
     """
     return json.loads(self.vtctl_helper.execute_vtctl_command(
         ['GetTablet', tablet_name]))['shard']
@@ -365,10 +365,10 @@ class BaseEnvironment(object):
     """Get the current type of the tablet as reported via vtctl.
 
     Args:
-      tablet_name: Name of the tablet, including cell prefix. (string)
+      tablet_name: Name of the tablet, including cell prefix (string).
 
     Returns:
-      Current tablet type (e.g. spare, replica, rdonly). (string)
+      Current tablet type (e.g. spare, replica, rdonly) (string).
     """
     return json.loads(self.vtctl_helper.execute_vtctl_command(
         ['GetTablet', tablet_name]))['type']
@@ -377,10 +377,10 @@ class BaseEnvironment(object):
     """Get the ip and port of the tablet as reported via vtctl.
 
     Args:
-      tablet_name: Name of the tablet, including cell prefix. (string)
+      tablet_name: Name of the tablet, including cell prefix (string).
 
     Returns:
-      ip:port (string)
+      ip:port (string).
     """
     tablet_info = json.loads(self.vtctl_helper.execute_vtctl_command(
         ['GetTablet', tablet_name]))
@@ -390,11 +390,11 @@ class BaseEnvironment(object):
     """Get the types for all tablets in a shard.
 
     Args:
-      keyspace: Name of keyspace to get tablet information on. (string)
-      shard_name: single shard to obtain tablet types from (string)
+      keyspace: Name of keyspace to get tablet information on (string).
+      shard_name: single shard to obtain tablet types from (string).
 
     Returns:
-      List of pairs of tablet's name and type
+      List of pairs of tablet's name and type.
     """
     tablet_info = []
     raw_tablets = self.vtctl_helper.execute_vtctl_command(
@@ -411,11 +411,11 @@ class BaseEnvironment(object):
     """Get the types for all tablets in a keyspace.
 
     Args:
-      keyspace: Name of keyspace to get tablet information on. (string)
-      num_shards: number of shards in the keyspace. (int)
+      keyspace: Name of keyspace to get tablet information on (string).
+      num_shards: number of shards in the keyspace (int).
 
     Returns:
-      List of pairs of tablet's name and type
+      List of pairs of tablet's name and type.
     """
     tablet_info = []
     for shard_name in sharding_utils.get_shard_names(num_shards):
@@ -426,13 +426,13 @@ class BaseEnvironment(object):
     """Wait until all tablets report healthy status.
 
     Args:
-      tablet_name: Name of tablet to backup. (string)
+      tablet_name: Name of tablet to backup (string).
 
     Raises:
-      VitessEnvironmentError: Raised if unsupported
+      VitessEnvironmentError: Raised if unsupported.
     """
     raise VitessEnvironmentError(
-        'Backup unsupported in this environment')
+        'backup unsupported in this environment')
 
   def drain_tablet(self, tablet_name, duration_s=600):
     """Add a drain from a tablet.
@@ -442,10 +442,10 @@ class BaseEnvironment(object):
       duration_s: how long to have the drain exist for, in seconds (int).
 
     Raises:
-      VitessEnvironmentError: Raised if unsupported
+      VitessEnvironmentError: Raised if unsupported.
     """
     raise VitessEnvironmentError(
-        'drain unsupported in this environment')
+        'drain_tablet unsupported in this environment')
 
   def is_tablet_drained(self, tablet_name):
     """Checks whether a tablet is drained.
@@ -454,10 +454,10 @@ class BaseEnvironment(object):
       tablet_name: vttablet to drain (string).
 
     Raises:
-      VitessEnvironmentError: Raised if unsupported
+      VitessEnvironmentError: Raised if unsupported.
     """
     raise VitessEnvironmentError(
-        'is tablet drained unsupported in this environment')
+        'is_tablet_drained unsupported in this environment')
 
   def undrain_tablet(self, tablet_name):
     """Remove a drain from a tablet.
@@ -466,10 +466,10 @@ class BaseEnvironment(object):
       tablet_name: vttablet name to undrain (string).
 
     Raises:
-      VitessEnvironmentError: Raised if unsupported
+      VitessEnvironmentError: Raised if unsupported.
     """
     raise VitessEnvironmentError(
-        'undrain unsupported in this environment')
+        'undrain_tablet unsupported in this environment')
 
   def is_tablet_undrained(self, tablet_name):
     """Checks whether a tablet is undrained.
@@ -478,10 +478,10 @@ class BaseEnvironment(object):
       tablet_name: vttablet to undrain (string).
 
     Raises:
-      VitessEnvironmentError: Raised if unsupported
+      VitessEnvironmentError: Raised if unsupported.
     """
     raise VitessEnvironmentError(
-        'is tablet undrained unsupported in this environment')
+        'is_tablet_undrained unsupported in this environment')
 
   def poll_for_varz(self, tablet_name, varz, condition_msg, timeout=60.0,
                     condition_fn=None, converter=str):
@@ -489,25 +489,25 @@ class BaseEnvironment(object):
 
     Args:
       tablet_name: the name of the process that we're trying to poll vars from.
-      varz: name of the vars to fetch from varz
+      varz: name of the vars to fetch from varz.
       condition_msg: string describing the conditions that we're polling for,
         used for error messaging.
       timeout: number of seconds that we should attempt to poll for.
       condition_fn: a function that takes the var as input, and returns a truthy
         value if it matches the success conditions.
-      converter: function to convert varz value
+      converter: function to convert varz value.
 
     Raises:
-      TestError: if the varz conditions aren't met within the given timeout
+      TestError: if the varz conditions aren't met within the given timeout.
 
     Returns:
-      dict of requested varz
+      dict of requested varz.
 
     Raises:
-      VitessEnvironmentError: Raised if unsupported
+      VitessEnvironmentError: Raised if unsupported.
     """
     raise VitessEnvironmentError(
-        'Polling for varz unsupported in this environment')
+        'poll_for_varz unsupported in this environment')
 
   def truncate_usertable(self, keyspace, shard, table=None):
     tablename = table or self.tablename
