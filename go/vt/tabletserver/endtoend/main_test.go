@@ -100,7 +100,7 @@ create table vitess_big(id int, string1 varchar(128), string2 varchar(100), stri
 create table vitess_ints(tiny tinyint, tinyu tinyint unsigned, small smallint, smallu smallint unsigned, medium mediumint, mediumu mediumint unsigned, normal int, normalu int unsigned, big bigint, bigu bigint unsigned, y year, primary key(tiny));
 create table vitess_fracts(id int, deci decimal(5,2), num numeric(5,2), f float, d double, primary key(id));
 create table vitess_strings(vb varbinary(16), c char(16), vc varchar(16), b binary(4), tb tinyblob, bl blob, ttx tinytext, tx text, en enum('a','b'), s set('a','b'), primary key(vb));
-create table vitess_misc(id int, b bit(8), d date, dt datetime, t time, primary key(id));
+create table vitess_misc(id int, b bit(8), d date, dt datetime, t time, g geometry, primary key(id));
 create table vitess_unsupported(id int, pt point, primary key(id));
 
 create table vitess_seq(id int, next_id bigint, cache bigint, increment bigint, primary key(id)) comment 'vitess_sequence';
@@ -145,7 +145,7 @@ var tableACLConfig = `{
     },
     {
       "name": "vitess",
-      "table_names_or_prefixes": ["vitess_a", "vitess_b", "vitess_c", "dual", "vitess_d", "vitess_temp", "vitess_e", "vitess_f", "vitess_mixed_case", "upsert_test", "vitess_strings", "vitess_fracts", "vitess_ints", "vitess_misc", "vitess_big", "vitess_view"],
+      "table_names_or_prefixes": ["vitess_a", "vitess_b", "vitess_c", "dual", "vitess_d", "vitess_temp", "vitess_e", "vitess_f", "vitess_mixed_case", "upsert_test", "vitess_strings", "vitess_fracts", "vitess_ints", "vitess_misc", "vitess_big", "vitess_view", "vitess_json"],
       "readers": ["dev"],
       "writers": ["dev"],
       "admins": ["dev"]
