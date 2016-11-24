@@ -18,6 +18,7 @@ import org.powermock.api.mockito.PowerMockito;
 import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.modules.junit4.PowerMockRunner;
 
+import java.lang.reflect.Field;
 import java.sql.BatchUpdateException;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -584,7 +585,16 @@ import java.util.List;
         VitessConnection mockConn = PowerMockito.mock(VitessConnection.class);
         VitessStatement statement = new VitessStatement(mockConn);
         statement.addBatch(sqlInsert);
-        Assert.assertEquals(sqlInsert, statement.getBatchedArgs().get(0));
+        try {
+            Field privateStringField = VitessStatement.class.getDeclaredField("batchedArgs");
+            privateStringField.setAccessible(true);
+            Assert
+                .assertEquals(sqlInsert, ((List<String>) privateStringField.get(statement)).get(0));
+        } catch (NoSuchFieldException e) {
+            Assert.fail("Private Field should exists: batchedArgs");
+        } catch (IllegalAccessException e) {
+            Assert.fail("Private Field should be accessible: batchedArgs");
+        }
     }
 
     @Test public void testClearBatch() throws SQLException {
@@ -592,7 +602,15 @@ import java.util.List;
         VitessStatement statement = new VitessStatement(mockConn);
         statement.addBatch(sqlInsert);
         statement.clearBatch();
-        Assert.assertTrue(statement.getBatchedArgs().isEmpty());
+        try {
+            Field privateStringField = VitessStatement.class.getDeclaredField("batchedArgs");
+            privateStringField.setAccessible(true);
+            Assert.assertTrue(((List<String>) privateStringField.get(statement)).isEmpty());
+        } catch (NoSuchFieldException e) {
+            Assert.fail("Private Field should exists: batchedArgs");
+        } catch (IllegalAccessException e) {
+            Assert.fail("Private Field should be accessible: batchedArgs");
+        }
     }
 
     @Test public void testExecuteBatch() throws SQLException {

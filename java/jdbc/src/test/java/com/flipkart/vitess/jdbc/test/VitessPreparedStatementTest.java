@@ -20,9 +20,20 @@ import org.powermock.modules.junit4.PowerMockRunner;
 
 import java.lang.reflect.Field;
 import java.math.BigDecimal;
-import java.sql.*;
+import java.sql.BatchUpdateException;
 import java.sql.Date;
-import java.util.*;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.SQLRecoverableException;
+import java.sql.Statement;
+import java.sql.Time;
+import java.sql.Timestamp;
+import java.sql.Types;
+import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.List;
+import java.util.Map;
+import java.util.TimeZone;
 
 
 /**
@@ -608,7 +619,17 @@ import java.util.*;
         }
         statement.setString(1, "hi");
         statement.addBatch();
-        Assert.assertEquals("hi", ((Map)statement.getBatchedArgs().get(0)).get("v1"));
+        try {
+            Field privateStringField =
+                VitessPreparedStatement.class.getDeclaredField("batchedArgs");
+            privateStringField.setAccessible(true);
+            Assert.assertEquals("hi",
+                (((List<Map<String, Object>>) privateStringField.get(statement)).get(0)).get("v1"));
+        } catch (NoSuchFieldException e) {
+            Assert.fail("Private Field should exists: batchedArgs");
+        } catch (IllegalAccessException e) {
+            Assert.fail("Private Field should be accessible: batchedArgs");
+        }
     }
 
     @Test public void testClearBatch() throws SQLException {
@@ -617,7 +638,17 @@ import java.util.*;
         statement.setString(1, "hi");
         statement.addBatch();
         statement.clearBatch();
-        Assert.assertTrue(statement.getBatchedArgs().isEmpty());
+        try {
+            Field privateStringField =
+                VitessPreparedStatement.class.getDeclaredField("batchedArgs");
+            privateStringField.setAccessible(true);
+            Assert.assertTrue(
+                ((List<Map<String, Object>>) privateStringField.get(statement)).isEmpty());
+        } catch (NoSuchFieldException e) {
+            Assert.fail("Private Field should exists: batchedArgs");
+        } catch (IllegalAccessException e) {
+            Assert.fail("Private Field should be accessible: batchedArgs");
+        }
     }
 
     @Test public void testExecuteBatch() throws SQLException {
