@@ -131,19 +131,30 @@ func (cnf *Mycnf) fillMycnfTemplate(tmplSrc string) (string, error) {
 
 // RandomizeMysqlServerID generates a random MySQL server_id.
 //
-// The value assigned to ServerID will be in the range [100, 2^32).
-// It avoids 0 because that's reserved for mysqlbinlog dumps.
-// It also avoids 1-99 because low numbers are used for fake slave connections.
-// See NewSlaveConnection() in slave_connection.go for more on that.
+// The value assigned to ServerID will be in the range [100, 2^31):
+// - It avoids 0 because that's reserved for mysqlbinlog dumps.
+// - It also avoids 1-99 because low numbers are used for fake slave
+// connections.  See NewSlaveConnection() in slave_connection.go for
+// more on that.
+// - It avoids the 2^31 - 2^32-1 range, as there seems to be some
+// confusion there. The main MySQL documentation at:
+// http://dev.mysql.com/doc/refman/5.7/en/replication-options.html
+// implies serverID is a full 32 bits number. The semi-sync log line
+// at startup '[Note] Start semi-sync binlog_dump to slave ...'
+// interprets the server_id as signed 32-bit (shows negative numbers
+// for that range).
+// Such an ID may also be responsible for a mysqld crash in semi-sync code,
+// although we haven't been able to verify that yet. The issue for that is:
+// https://github.com/youtube/vitess/issues/2280
 func (cnf *Mycnf) RandomizeMysqlServerID() error {
 	// rand.Int(_, max) returns a value in the range [0, max).
-	bigN, err := rand.Int(rand.Reader, big.NewInt(1<<32-100))
+	bigN, err := rand.Int(rand.Reader, big.NewInt(1<<31-100))
 	if err != nil {
 		return err
 	}
 	n := bigN.Uint64()
-	// n is in the range [0, 2^32 - 100).
-	// Add back 100 to put it in the range [100, 2^32).
+	// n is in the range [0, 2^31 - 100).
+	// Add back 100 to put it in the range [100, 2^31).
 	cnf.ServerID = uint32(n + 100)
 	return nil
 }

@@ -195,11 +195,18 @@ func (agent *ActionAgent) finalizeTabletExternallyReparented(ctx context.Context
 	// write it back. Now we use an update loop pattern to do that instead.
 	event.DispatchUpdate(ev, "updating global shard record")
 	log.Infof("finalizeTabletExternallyReparented: updating global shard record if needed")
-	_, err = agent.TopoServer.UpdateShardFields(ctx, tablet.Keyspace, tablet.Shard, func(si *topo.ShardInfo) error {
-		if topoproto.TabletAliasEqual(si.MasterAlias, tablet.Alias) {
+	_, err = agent.TopoServer.UpdateShardFields(ctx, tablet.Keyspace, tablet.Shard, func(currentSi *topo.ShardInfo) error {
+		if topoproto.TabletAliasEqual(currentSi.MasterAlias, tablet.Alias) {
 			return topo.ErrNoUpdateNeeded
 		}
-		si.MasterAlias = tablet.Alias
+		if !topoproto.TabletAliasEqual(currentSi.MasterAlias, oldMasterAlias) {
+			log.Warningf("old master alias (%v) not found in the global Shard record i.e. it has changed in the meantime."+
+				" We're not overwriting the value with the new master (%v) because the current value is probably newer."+
+				" (initial Shard record = %#v, current Shard record = %#v)",
+				oldMasterAlias, tablet.Alias, si, currentSi)
+			return topo.ErrNoUpdateNeeded
+		}
+		currentSi.MasterAlias = tablet.Alias
 		return nil
 	})
 	if err != nil {

@@ -270,11 +270,11 @@ func (lg *l2VTGateGateway) SetRollback(ctx context.Context, target *querypb.Targ
 	}, true, false)
 }
 
-// ResolveTransaction rolls back the current transaction for the specified keyspace, shard, and tablet type.
-func (lg *l2VTGateGateway) ResolveTransaction(ctx context.Context, target *querypb.Target, dtid string) (err error) {
+// ConcludeTransaction rolls back the current transaction for the specified keyspace, shard, and tablet type.
+func (lg *l2VTGateGateway) ConcludeTransaction(ctx context.Context, target *querypb.Target, dtid string) (err error) {
 	return lg.withRetry(ctx, target, func(conn *l2VTGateConn) error {
 		startTime := time.Now()
-		innerErr := conn.conn.ResolveTransaction(ctx, target, dtid)
+		innerErr := conn.conn.ConcludeTransaction(ctx, target, dtid)
 		lg.updateStats(conn, target.TabletType, startTime, innerErr)
 		return innerErr
 	}, true, false)

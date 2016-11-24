@@ -208,6 +208,13 @@ public class VitessResultSet implements ResultSet {
             return false;
         }
 
+        // Mysql 5.0 and higher have a BIT Data Type, need to check for this as well.
+        Query.Field field = this.fields.get(columnIndex - 1);
+
+        if (field.getType() == Query.Type.BIT) {
+            return byteArrayToBoolean(columnIndex);
+        }
+
         boolString = this.getString(columnIndex);
         try {
             bool = Integer.valueOf(boolString);
@@ -1372,6 +1379,28 @@ public class VitessResultSet implements ResultSet {
     public <T> T getObject(String columnLabel, Class<T> type) throws SQLException {
         throw new SQLFeatureNotSupportedException(
             Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
+    }
+
+    private boolean byteArrayToBoolean(int columnIndex) throws SQLException {
+        Object value = this.row.getObject(columnIndex);
+
+        if (value == null) {
+            return false;
+        }
+
+        if (((byte[]) value).length == 0) {
+            return false;
+        }
+
+        byte boolVal = ((byte[]) value)[0];
+
+        if (boolVal == (byte) '1') {
+            return true;
+        } else if (boolVal == (byte) '0') {
+            return false;
+        }
+
+        return (boolVal == -1 || boolVal > 0);
     }
 
 }

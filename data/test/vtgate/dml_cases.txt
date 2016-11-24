@@ -218,7 +218,7 @@
         "Name": "main",
         "Sharded": false
       },
-      "Query": "select next value from `seq`",
+      "Query": "select next 1 values from `seq`",
       "Value": [1]
     }
   }
@@ -247,7 +247,7 @@
         "Name": "main",
         "Sharded": false
       },
-      "Query": "select next value from `seq`",
+      "Query": "select next 1 values from `seq`",
       "Value": [null]
     }
   }
@@ -276,7 +276,7 @@
         "Name": "main",
         "Sharded": false
       },
-      "Query": "select next value from `seq`",
+      "Query": "select next 1 values from `seq`",
       "Value": [1]
     }
   }
@@ -303,7 +303,7 @@
         "Name": "main",
         "Sharded": false
       },
-      "Query": "select next value from `seq`",
+      "Query": "select next 1 values from `seq`",
       "Value": [null]
     }
   }
@@ -355,7 +355,7 @@
         "Name": "main",
         "Sharded": false
       },
-      "Query": "select next value from `seq`",
+      "Query": "select next 1 values from `seq`",
       "Value": [1,2]
     }
   }

@@ -296,13 +296,14 @@ class Tablet(object):
     self.drop_db(name)
     self.mquery('', 'create database %s' % name)
 
-  def clean_dbs(self):
+  def clean_dbs(self, include_vt=False):
     logging.debug('mysql(%s): removing all databases', self.tablet_uid)
     rows = self.mquery('', 'show databases')
     for row in rows:
       dbname = row[0]
-      if dbname in ['information_schema', 'performance_schema', 'mysql', 'sys',
-                    '_vt']:
+      if dbname in ['information_schema', 'performance_schema', 'mysql', 'sys']:
+        continue
+      if dbname == '_vt' and not include_vt:
         continue
       self.drop_db(dbname)
 

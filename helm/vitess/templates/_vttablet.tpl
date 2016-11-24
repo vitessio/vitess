@@ -1,148 +1,249 @@
-{{- define "vttablet" -}}
+# vttablet pod spec (template for both StatefulSet and naked pod)
+{{- define "vttablet-pod-spec" -}}
 {{- $ := index . 0 -}}
 {{- $cell := index . 1 -}}
 {{- $keyspace := index . 2 -}}
 {{- $shard := index . 3 -}}
 {{- $tablet := index . 4 -}}
-{{- $index := index . 5 -}}
+{{- $uid := index . 5 -}}
 {{- with index . 6 -}}
 {{- $0 := $.Values.vttablet -}}
-{{- $uid := add $tablet.uidBase $index -}}
-{{- $alias := printf "%s-%d" $cell.name $uid -}}
+containers:
+  - name: vttablet
+    image: {{.image | default $0.image | quote}}
+    livenessProbe:
+      httpGet:
+        path: /debug/vars
+        port: 15002
+      initialDelaySeconds: 60
+      timeoutSeconds: 10
+    volumeMounts:
+      - name: syslog
+        mountPath: /dev/log
+      - name: vtdataroot
+        mountPath: /vt/vtdataroot
+      - name: certs
+        readOnly: true
+        # Mount root certs from the host OS into the location
+        # expected for our container OS (Debian):
+        mountPath: /etc/ssl/certs/ca-certificates.crt
+    resources:
+{{ toYaml (.resources | default $0.resources) | indent 6 }}
+    ports:
+      - name: web
+        containerPort: 15002
+      - name: grpc
+        containerPort: 16002
+    securityContext:
+      runAsUser: 999
+    command:
+      - bash
+      - "-c"
+      - |
+        set -ex
+        eval exec /vt/bin/vttablet $(cat <<END_OF_COMMAND
+          -topo_implementation "etcd"
+          -etcd_global_addrs "http://etcd-global:4001"
+          -log_dir "$VTDATAROOT/tmp"
+          -alsologtostderr
+          -port 15002
+          -grpc_port 16002
+          -service_map "grpc-queryservice,grpc-tabletmanager,grpc-updatestream"
+          -tablet-path "{{$cell.name}}-{{$uid}}"
+{{ if eq (.controllerType | default $0.controllerType) "None" }}
+          -tablet_hostname "$(hostname -i)"
+{{ end }}
+          -init_keyspace {{$keyspace.name | quote}}
+          -init_shard {{$shard.name | quote}}
+          -init_tablet_type {{$tablet.type | quote}}
+          -health_check_interval "5s"
+          -mysqlctl_socket "$VTDATAROOT/mysqlctl.sock"
+          -db-config-app-uname "vt_app"
+          -db-config-app-dbname "vt_{{$keyspace.name}}"
+          -db-config-app-charset "utf8"
+          -db-config-dba-uname "vt_dba"
+          -db-config-dba-dbname "vt_{{$keyspace.name}}"
+          -db-config-dba-charset "utf8"
+          -db-config-repl-uname "vt_repl"
+          -db-config-repl-dbname "vt_{{$keyspace.name}}"
+          -db-config-repl-charset "utf8"
+          -db-config-filtered-uname "vt_filtered"
+          -db-config-filtered-dbname "vt_{{$keyspace.name}}"
+          -db-config-filtered-charset "utf8"
+          -enable_semi_sync
+          -enable_replication_reporter
+          -orc_api_url "http://orchestrator/api"
+          -orc_discover_interval "5m"
+          -restore_from_backup
+{{ include "format-flags-all" (tuple $.Values.backupFlags $0.extraFlags .extraFlags) | indent 10 }}
+        END_OF_COMMAND
+        )
+  - name: mysql
+    image: {{.image | default $0.image | quote}}
+    volumeMounts:
+      - name: syslog
+        mountPath: /dev/log
+      - name: vtdataroot
+        mountPath: /vt/vtdataroot
+    resources:
+{{ toYaml (.mysqlResources | default $0.mysqlResources) | indent 6 }}
+    securityContext:
+      runAsUser: 999
+    command:
+      - bash
+      - "-c"
+      - |
+        set -ex
+        eval exec /vt/bin/mysqlctld $(cat <<END_OF_COMMAND
+          -log_dir "$VTDATAROOT/tmp"
+          -alsologtostderr
+          -tablet_uid "{{$uid}}"
+          -socket_file "$VTDATAROOT/mysqlctl.sock"
+          -db-config-app-uname "vt_app"
+          -db-config-app-dbname "vt_{{$keyspace.name}}"
+          -db-config-app-charset "utf8"
+          -db-config-allprivs-uname "vt_allprivs"
+          -db-config-allprivs-dbname "vt_{{$keyspace.name}}"
+          -db-config-allprivs-charset "utf8"
+          -db-config-dba-uname "vt_dba"
+          -db-config-dba-dbname "vt_{{$keyspace.name}}"
+          -db-config-dba-charset "utf8"
+          -db-config-repl-uname "vt_repl"
+          -db-config-repl-dbname "vt_{{$keyspace.name}}"
+          -db-config-repl-charset "utf8"
+          -db-config-filtered-uname "vt_filtered"
+          -db-config-filtered-dbname "vt_{{$keyspace.name}}"
+          -db-config-filtered-charset "utf8"
+          -init_db_sql_file "$VTROOT/config/init_db.sql"
+{{ include "format-flags-all" (tuple $0.mysqlctlExtraFlags .mysqlctlExtraFlags) | indent 10 }}
+        END_OF_COMMAND
+        )
+    env:
+      - name: EXTRA_MY_CNF
+        value: {{.extraMyCnf | default $0.extraMyCnf | quote}}
+volumes:
+  - name: syslog
+    hostPath: {path: /dev/log}
+{{ if eq (.dataVolumeType | default $0.dataVolumeType) "EmptyDir" }}
+  - name: vtdataroot
+    emptyDir: {}
+{{ end }}
+  - name: certs
+    hostPath: { path: {{$.Values.certsPath | quote}} }
+{{- end -}}
+{{- end -}}
+
+# init-container to compute tablet UID.
+# This converts the unique identity assigned by StatefulSet (pod name)
+# into a 31-bit unsigned integer for use as a Vitess tablet UID.
+{{- define "init-tablet-uid" -}}
+{{- $image := index . 0 -}}
+{{- $cell := index . 1 -}}
+{
+  "name": "init-tablet-uid",
+  "image": {{$image | quote}},
+  "securityContext": {"runAsUser": 999},
+  "command": ["bash", "-c", "
+    set -ex\n
+    # Split pod name (via hostname) into prefix and ordinal index.\n
+    [[ `hostname` =~ ^(.+)-([0-9]+)$ ]] || exit 1\n
+    pod_prefix=${BASH_REMATCH[1]}\n
+    pod_index=${BASH_REMATCH[2]}\n
+    # Prepend cell name since tablet UIDs must be globally unique.\n
+    uid_name={{$cell.name | replace "_" "-" | lower}}-$pod_prefix\n
+    # Take MD5 hash of cellname-podprefix.\n
+    uid_hash=$(echo -n $uid_name | md5sum | awk \"{print \\$1}\")\n
+    # Take first 24 bits of hash, convert to decimal.\n
+    # Shift left 2 decimal digits, add in index.\n
+    tablet_uid=$((16#${uid_hash:0:6} * 100 + $pod_index))\n
+    # Save UID for other containers to read.\n
+    mkdir -p $VTDATAROOT/init\n
+    echo $tablet_uid > $VTDATAROOT/init/tablet-uid\n
+  "],
+  "volumeMounts": [
+    {
+      "name": "vtdataroot",
+      "mountPath": "/vt/vtdataroot"
+    }
+  ]
+}
+{{- end -}}
+
+# vttablet StatefulSet
+{{- define "vttablet-stateful-set" -}}
+{{- $ := index . 0 -}}
+{{- $cell := index . 1 -}}
+{{- $keyspace := index . 2 -}}
+{{- $shard := index . 3 -}}
+{{- $tablet := index . 4 -}}
+{{- with $tablet.vttablet -}}
+{{- $0 := $.Values.vttablet -}}
+{{- $keyspaceClean := $keyspace.name | replace "_" "-" -}}
+{{- $setName := printf "%s-%s-%s" $keyspaceClean $shard.name $tablet.type | lower -}}
+{{- $uid := "$(cat $VTDATAROOT/init/tablet-uid)" }}
+# vttablet StatefulSet
+apiVersion: apps/v1alpha1
+kind: PetSet
+metadata:
+  name: {{$setName | quote}}
+spec:
+  serviceName: vttablet
+  replicas: {{.replicas | default $0.replicas}}
+  template:
+    metadata:
+      labels:
+        app: vitess
+        component: vttablet
+        keyspace: {{$keyspace.name | quote}}
+        shard: {{$shard.name | quote}}
+        type: {{$tablet.type | quote}}
+      annotations:
+        pod.alpha.kubernetes.io/initialized: "true"
+        pod.beta.kubernetes.io/init-containers: '[
+{{ include "init-vtdataroot" (.image | default $0.image) | indent 10 }},
+{{ include "init-tablet-uid" (tuple (.image | default $0.image) $cell) | indent 10 }}
+        ]'
+    spec:
+{{ include "vttablet-pod-spec" (tuple $ $cell $keyspace $shard $tablet $uid .) | indent 6 }}
+{{ if eq (.dataVolumeType | default $0.dataVolumeType) "PersistentVolume" }}
+  volumeClaimTemplates:
+    - metadata:
+        name: vtdataroot
+        annotations:
+{{ toYaml (.dataVolumeClaimAnnotations | default $0.dataVolumeClaimAnnotations) | indent 10 }}
+      spec:
+{{ toYaml (.dataVolumeClaimSpec | default $0.dataVolumeClaimSpec) | indent 8 }}
+{{ end }}
+{{- end -}}
+{{- end -}}
+
+# vttablet naked pod (not using StatefulSet)
+{{- define "vttablet-pod" -}}
+{{- $ := index . 0 -}}
+{{- $cell := index . 1 -}}
+{{- $keyspace := index . 2 -}}
+{{- $shard := index . 3 -}}
+{{- $tablet := index . 4 -}}
+{{- $uid := index . 5 -}}
+{{- with $tablet.vttablet -}}
+{{- $0 := $.Values.vttablet -}}
 # vttablet
 kind: Pod
 apiVersion: v1
 metadata:
   name: "vttablet-{{$uid}}"
   labels:
+    app: vitess
     component: vttablet
     keyspace: {{$keyspace.name | quote}}
     shard: {{$shard.name | quote}}
-    tablet: {{$alias | quote}}
-    app: vitess
+    type: {{$tablet.type | quote}}
+  annotations:
+    pod.beta.kubernetes.io/init-containers: '[
+{{ include "init-vtdataroot" (.image | default $0.image) | indent 6 }}
+    ]'
 spec:
-  containers:
-    - name: vttablet
-      image: {{.image | default $0.image | quote}}
-      livenessProbe:
-        httpGet:
-          path: /debug/vars
-          port: 15002
-        initialDelaySeconds: 60
-        timeoutSeconds: 10
-      volumeMounts:
-        - name: syslog
-          mountPath: /dev/log
-        - name: vtdataroot
-          mountPath: /vt/vtdataroot
-        - name: certs
-          readOnly: true
-          # Mount root certs from the host OS into the location
-          # expected for our container OS (Debian):
-          mountPath: /etc/ssl/certs/ca-certificates.crt
-      resources:
-{{ toYaml (.resources | default $0.resources) | indent 8 }}
-      ports:
-        - name: web
-          containerPort: 15002
-        - name: grpc
-          containerPort: 16002
-      command:
-        - bash
-        - "-c"
-        - |
-          set -ex
-          mkdir -p $VTDATAROOT/tmp
-          chown -R vitess /vt
-
-          exec su -p -c "$(tr '\n' ' ' <<END_OF_COMMAND
-            exec /vt/bin/vttablet
-              -topo_implementation "etcd"
-              -etcd_global_addrs "http://etcd-global:4001"
-              -log_dir "$VTDATAROOT/tmp"
-              -alsologtostderr
-              -port 15002
-              -grpc_port 16002
-              -service_map "grpc-queryservice,grpc-tabletmanager,grpc-updatestream"
-              -tablet-path {{$alias | quote}}
-              -tablet_hostname "$(hostname -i)"
-              -init_keyspace {{$keyspace.name | quote}}
-              -init_shard {{$shard.name | quote}}
-              -init_tablet_type {{$tablet.type | quote}}
-              -health_check_interval "5s"
-              -mysqlctl_socket "$VTDATAROOT/mysqlctl.sock"
-              -db-config-app-uname "vt_app"
-              -db-config-app-dbname "vt_{{$keyspace.name}}"
-              -db-config-app-charset "utf8"
-              -db-config-dba-uname "vt_dba"
-              -db-config-dba-dbname "vt_{{$keyspace.name}}"
-              -db-config-dba-charset "utf8"
-              -db-config-repl-uname "vt_repl"
-              -db-config-repl-dbname "vt_{{$keyspace.name}}"
-              -db-config-repl-charset "utf8"
-              -db-config-filtered-uname "vt_filtered"
-              -db-config-filtered-dbname "vt_{{$keyspace.name}}"
-              -db-config-filtered-charset "utf8"
-              -enable_semi_sync
-              -enable_replication_reporter
-              -orc_api_url "http://orchestrator/api"
-              -orc_discover_interval "5m"
-              -restore_from_backup
-{{ include "format-flags-all" (tuple $.Values.backupFlags $0.extraFlags .extraFlags) | indent 14 }}
-          END_OF_COMMAND
-          )" vitess
-    - name: mysql
-      image: {{.image | default $0.image | quote}}
-      volumeMounts:
-        - name: syslog
-          mountPath: /dev/log
-        - name: vtdataroot
-          mountPath: /vt/vtdataroot
-      resources:
-{{ toYaml (.mysqlResources | default $0.mysqlResources) | indent 8 }}
-      command:
-        - sh
-        - "-c"
-        - |
-          set -ex
-          mkdir -p $VTDATAROOT/tmp
-          chown -R vitess /vt
-
-          exec su -p -c "$(tr '\n' ' ' <<END_OF_COMMAND
-            exec /vt/bin/mysqlctld
-              -log_dir "$VTDATAROOT/tmp"
-              -alsologtostderr
-              -tablet_uid {{$uid}}
-              -socket_file "$VTDATAROOT/mysqlctl.sock"
-              -db-config-app-uname "vt_app"
-              -db-config-app-dbname "vt_{{$keyspace.name}}"
-              -db-config-app-charset "utf8"
-              -db-config-allprivs-uname "vt_allprivs"
-              -db-config-allprivs-dbname "vt_{{$keyspace.name}}"
-              -db-config-allprivs-charset "utf8"
-              -db-config-dba-uname "vt_dba"
-              -db-config-dba-dbname "vt_{{$keyspace.name}}"
-              -db-config-dba-charset "utf8"
-              -db-config-repl-uname "vt_repl"
-              -db-config-repl-dbname "vt_{{$keyspace.name}}"
-              -db-config-repl-charset "utf8"
-              -db-config-filtered-uname "vt_filtered"
-              -db-config-filtered-dbname "vt_{{$keyspace.name}}"
-              -db-config-filtered-charset "utf8"
-              -init_db_sql_file "$VTROOT/config/init_db.sql"
-{{ include "format-flags-all" (tuple $0.mysqlctlExtraFlags .mysqlctlExtraFlags) | indent 14 }}
-          END_OF_COMMAND
-          )" vitess
-      env:
-        - name: EXTRA_MY_CNF
-          value: {{.extraMyCnf | default $0.extraMyCnf | quote}}
-  volumes:
-    - name: syslog
-      hostPath: {path: /dev/log}
-    - name: vtdataroot
-{{ toYaml (.dataVolume | default $0.dataVolume) | indent 6 }}
-    - name: certs
-      hostPath: { path: {{$.Values.certsPath | quote}} }
+{{ include "vttablet-pod-spec" (tuple $ $cell $keyspace $shard $tablet $uid .) | indent 2 }}
 {{- end -}}
 {{- end -}}
 

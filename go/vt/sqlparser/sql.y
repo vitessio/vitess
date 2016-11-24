@@ -106,6 +106,9 @@ func forceEOF(yylex interface{}) {
 %token <empty> TABLE INDEX VIEW TO IGNORE IF UNIQUE USING
 %token <empty> SHOW DESCRIBE EXPLAIN
 
+// Functions
+%token <empty> CURRENT_TIMESTAMP DATABASE MOD
+
 // MySQL reserved words that are unused by this grammar will map to this token.
 %token <empty> UNUSED
 
@@ -120,7 +123,7 @@ func forceEOF(yylex interface{}) {
 %type <selectExprs> select_expression_list
 %type <selectExpr> select_expression
 %type <expr> expression
-%type <tableExprs> table_references
+%type <tableExprs> from_opt table_references
 %type <tableExpr> table_reference table_factor join_table
 %type <str> inner_join outer_join natural_join
 %type <tableName> table_name
@@ -130,7 +133,7 @@ func forceEOF(yylex interface{}) {
 %type <boolExpr> boolean_expression condition
 %type <str> compare
 %type <insRows> row_list
-%type <valExpr> value value_expression
+%type <valExpr> value value_expression num_val
 %type <str> is_suffix
 %type <colTuple> col_tuple
 %type <valExprs> value_expression_list
@@ -144,6 +147,7 @@ func forceEOF(yylex interface{}) {
 %type <valExpr> value_expression_opt else_expression_opt
 %type <valExprs> group_by_opt
 %type <boolExpr> having_opt
+%type <str> keyword_func
 %type <orderBy> order_by_opt order_list
 %type <order> order
 %type <str> asc_desc_opt
@@ -189,17 +193,13 @@ command:
 | other_statement
 
 select_statement:
-  SELECT comment_opt distinct_opt straight_join_opt select_expression_list FROM table_references where_expression_opt group_by_opt having_opt order_by_opt limit_opt lock_opt
+  SELECT comment_opt distinct_opt straight_join_opt select_expression_list from_opt where_expression_opt group_by_opt having_opt order_by_opt limit_opt lock_opt
   {
-    $$ = &Select{Comments: Comments($2), Distinct: $3, Hints: $4, SelectExprs: $5, From: $7, Where: NewWhere(WhereStr, $8), GroupBy: GroupBy($9), Having: NewWhere(HavingStr, $10), OrderBy: $11, Limit: $12, Lock: $13}
+    $$ = &Select{Comments: Comments($2), Distinct: $3, Hints: $4, SelectExprs: $5, From: $6, Where: NewWhere(WhereStr, $7), GroupBy: GroupBy($8), Having: NewWhere(HavingStr, $9), OrderBy: $10, Limit: $11, Lock: $12}
   }
-| SELECT comment_opt NEXT sql_id for_from table_name
+| SELECT comment_opt NEXT num_val for_from table_name
   {
-    if $4.Lowered() != "value" {
-      yylex.Error("expecting value after next")
-      return 1
-    }
-    $$ = &Select{Comments: Comments($2), SelectExprs: SelectExprs{Nextval{}}, From: TableExprs{&AliasedTableExpr{Expr: $6}}}
+    $$ = &Select{Comments: Comments($2), SelectExprs: SelectExprs{Nextval{Expr: $4}}, From: TableExprs{&AliasedTableExpr{Expr: $6}}}
   }
 | select_statement union_op select_statement %prec UNION
   {
@@ -413,6 +413,15 @@ as_ci_opt:
     $$ = $1
   }
 | AS sql_id
+  {
+    $$ = $2
+  }
+
+from_opt:
+  {
+    $$ = TableExprs{&AliasedTableExpr{Expr:&TableName{Name: "dual"}}}
+  }
+| FROM table_references
   {
     $$ = $2
   }
@@ -800,6 +809,10 @@ value_expression:
   {
     $$ = &BinaryExpr{Left: $1, Operator: ShiftRightStr, Right: $3}
   }
+| value_expression MOD value_expression
+  {
+    $$ = &BinaryExpr{Left: $1, Operator: "MOD", Right: $3}
+  }
 | '+'  value_expression %prec UNARY
   {
     if num, ok := $2.(NumVal); ok {
@@ -845,13 +858,35 @@ value_expression:
   {
     $$ = &FuncExpr{Name: string($1), Distinct: true, Exprs: $4}
   }
-| IF openb select_expression_list closeb
+| keyword_func openb closeb
   {
-    $$ = &FuncExpr{Name: "if", Exprs: $3}
+    $$ = &FuncExpr{Name: $1}
+  }
+| keyword_func openb select_expression_list closeb
+  {
+    $$ = &FuncExpr{Name: $1, Exprs: $3}
   }
 | case_expression
   {
     $$ = $1
+  }
+
+keyword_func:
+  IF
+  {
+    $$ = "if"
+  }
+| CURRENT_TIMESTAMP
+  {
+    $$ = "current_timestamp"
+  }
+| DATABASE
+  {
+    $$ = "database"
+  }
+| MOD
+  {
+    $$ = "mod"
   }
 
 case_expression:
@@ -928,6 +963,25 @@ value:
 | NULL
   {
     $$ = &NullVal{}
+  }
+
+num_val:
+  sql_id
+  {
+    // TODO(sougou): Deprecate this construct.
+    if $1.Lowered() != "value" {
+      yylex.Error("expecting value after next")
+      return 1
+    }
+    $$ = NumVal("1")
+  }
+| NUMBER VALUES
+  {
+    $$ = NumVal($1)
+  }
+| VALUE_ARG VALUES
+  {
+    $$ = ValArg($1)
   }
 
 group_by_opt:

@@ -200,7 +200,7 @@
 
 # nextval not supported yet
 "select next value from user"
-"unsupported: NEXT VALUE construct"
+"unsupported: NEXT VALUES construct"
 
 # complex expression in parenthesis with limit not supported yet
 "select * from user where (id = 4 AND name ='abc') limit 5"

@@ -3,7 +3,6 @@
 
 import logging
 import os
-from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions
 from selenium.webdriver.support.wait import WebDriverWait
@@ -13,7 +12,6 @@ import unittest
 from vtproto import vttest_pb2
 from vttest import environment as vttest_environment
 from vttest import local_database
-from vttest import mysql_flavor
 
 import environment
 import utils
@@ -62,29 +60,12 @@ class TestVtctldWeb(unittest.TestCase):
     keyspace2.replica_count = 2
     keyspace2.rdonly_count = 1
 
-    if os.environ.get('CI') == 'true' and os.environ.get('TRAVIS') == 'true':
-      username = os.environ['SAUCE_USERNAME']
-      access_key = os.environ['SAUCE_ACCESS_KEY']
-      capabilities = {}
-      capabilities['tunnel-identifier'] = os.environ['TRAVIS_JOB_NUMBER']
-      capabilities['build'] = os.environ['TRAVIS_BUILD_NUMBER']
-      capabilities['platform'] = 'Linux'
-      capabilities['browserName'] = 'chrome'
-      hub_url = '%s:%s@localhost:4445' % (username, access_key)
-      cls.driver = webdriver.Remote(
-          desired_capabilities=capabilities,
-          command_executor='http://%s/wd/hub' % hub_url)
-    else:
-      os.environ['webdriver.chrome.driver'] = os.path.join(
-          environment.vtroot, 'dist')
-      # Only testing against Chrome for now
-      cls.driver = webdriver.Chrome()
-      cls.driver.set_window_position(0, 0)
-      cls.driver.set_window_size(1920, 1280)
+    cls.driver = environment.create_webdriver()
 
     port = environment.reserve_ports(1)
     vttest_environment.base_port = port
-    mysql_flavor.set_mysql_flavor(None)
+
+    environment.reset_mysql_flavor()
 
     cls.db = local_database.LocalDatabase(
         topology,

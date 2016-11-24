@@ -27,6 +27,10 @@ type TxPreparedPool struct {
 
 // NewTxPreparedPool creates a new TxPreparedPool.
 func NewTxPreparedPool(capacity int) *TxPreparedPool {
+	if capacity < 0 {
+		// If capacity is 0 all prepares will fail.
+		capacity = 0
+	}
 	return &TxPreparedPool{
 		conns:    make(map[string]*TxConnection, capacity),
 		reserved: make(map[string]error),

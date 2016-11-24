@@ -9,6 +9,8 @@ import (
 	"io/ioutil"
 	"os"
 	"testing"
+
+	"golang.org/x/net/context"
 )
 
 // This file tests the file BackupStorage engine.
@@ -37,10 +39,11 @@ func cleanupFileBackupStorage(fbs *FileBackupStorage) {
 func TestListBackups(t *testing.T) {
 	fbs := setupFileBackupStorage(t)
 	defer cleanupFileBackupStorage(fbs)
+	ctx := context.Background()
 
 	// verify we have no entry now
 	dir := "keyspace/shard"
-	bhs, err := fbs.ListBackups(dir)
+	bhs, err := fbs.ListBackups(ctx, dir)
 	if err != nil {
 		t.Fatalf("ListBackups on empty fbs failed: %v", err)
 	}
@@ -50,16 +53,16 @@ func TestListBackups(t *testing.T) {
 
 	// add one empty backup
 	firstBackup := "cell-0001-2015-01-14-10-00-00"
-	bh, err := fbs.StartBackup(dir, firstBackup)
+	bh, err := fbs.StartBackup(ctx, dir, firstBackup)
 	if err != nil {
 		t.Fatalf("fbs.StartBackup failed: %v", err)
 	}
-	if err := bh.EndBackup(); err != nil {
+	if err := bh.EndBackup(ctx); err != nil {
 		t.Fatalf("bh.EndBackup failed: %v", err)
 	}
 
 	// verify we have one entry now
-	bhs, err = fbs.ListBackups(dir)
+	bhs, err = fbs.ListBackups(ctx, dir)
 	if err != nil {
 		t.Fatalf("ListBackups on empty fbs failed: %v", err)
 	}
@@ -71,16 +74,16 @@ func TestListBackups(t *testing.T) {
 
 	// add another one, with earlier date
 	secondBackup := "cell-0001-2015-01-12-10-00-00"
-	bh, err = fbs.StartBackup(dir, secondBackup)
+	bh, err = fbs.StartBackup(ctx, dir, secondBackup)
 	if err != nil {
 		t.Fatalf("fbs.StartBackup failed: %v", err)
 	}
-	if err := bh.EndBackup(); err != nil {
+	if err := bh.EndBackup(ctx); err != nil {
 		t.Fatalf("bh.EndBackup failed: %v", err)
 	}
 
 	// verify we have two sorted entries now
-	bhs, err = fbs.ListBackups(dir)
+	bhs, err = fbs.ListBackups(ctx, dir)
 	if err != nil {
 		t.Fatalf("ListBackups on empty fbs failed: %v", err)
 	}
@@ -93,10 +96,10 @@ func TestListBackups(t *testing.T) {
 	}
 
 	// remove a backup, back to one
-	if err := fbs.RemoveBackup(dir, secondBackup); err != nil {
+	if err := fbs.RemoveBackup(ctx, dir, secondBackup); err != nil {
 		t.Fatalf("RemoveBackup failed: %v", err)
 	}
-	bhs, err = fbs.ListBackups(dir)
+	bhs, err = fbs.ListBackups(ctx, dir)
 	if err != nil {
 		t.Fatalf("ListBackups after deletion failed: %v", err)
 	}
@@ -107,14 +110,14 @@ func TestListBackups(t *testing.T) {
 	}
 
 	// add a backup but abort it, should stay at one
-	bh, err = fbs.StartBackup(dir, secondBackup)
+	bh, err = fbs.StartBackup(ctx, dir, secondBackup)
 	if err != nil {
 		t.Fatalf("fbs.StartBackup failed: %v", err)
 	}
-	if err := bh.AbortBackup(); err != nil {
+	if err := bh.AbortBackup(ctx); err != nil {
 		t.Fatalf("bh.AbortBackup failed: %v", err)
 	}
-	bhs, err = fbs.ListBackups(dir)
+	bhs, err = fbs.ListBackups(ctx, dir)
 	if err != nil {
 		t.Fatalf("ListBackups after abort failed: %v", err)
 	}
@@ -125,13 +128,13 @@ func TestListBackups(t *testing.T) {
 	}
 
 	// check we cannot chaneg a backup we listed
-	if _, err := bhs[0].AddFile("test"); err == nil {
+	if _, err := bhs[0].AddFile(ctx, "test"); err == nil {
 		t.Fatalf("was able to AddFile to read-only backup")
 	}
-	if err := bhs[0].EndBackup(); err == nil {
+	if err := bhs[0].EndBackup(ctx); err == nil {
 		t.Fatalf("was able to EndBackup a read-only backup")
 	}
-	if err := bhs[0].AbortBackup(); err == nil {
+	if err := bhs[0].AbortBackup(ctx); err == nil {
 		t.Fatalf("was able to AbortBackup a read-only backup")
 	}
 }
@@ -139,6 +142,7 @@ func TestListBackups(t *testing.T) {
 func TestFileContents(t *testing.T) {
 	fbs := setupFileBackupStorage(t)
 	defer cleanupFileBackupStorage(fbs)
+	ctx := context.Background()
 
 	dir := "keyspace/shard"
 	name := "cell-0001-2015-01-14-10-00-00"
@@ -146,11 +150,11 @@ func TestFileContents(t *testing.T) {
 	contents1 := "contents of the first file"
 
 	// start a backup, add a file
-	bh, err := fbs.StartBackup(dir, name)
+	bh, err := fbs.StartBackup(ctx, dir, name)
 	if err != nil {
 		t.Fatalf("fbs.StartBackup failed: %v", err)
 	}
-	wc, err := bh.AddFile(filename1)
+	wc, err := bh.AddFile(ctx, filename1)
 	if err != nil {
 		t.Fatalf("bh.AddFile failed: %v", err)
 	}
@@ -162,21 +166,21 @@ func TestFileContents(t *testing.T) {
 	}
 
 	// test we can't read back on read-write backup
-	if _, err := bh.ReadFile(filename1); err == nil {
+	if _, err := bh.ReadFile(ctx, filename1); err == nil {
 		t.Fatalf("was able to ReadFile to read-write backup")
 	}
 
 	// and close
-	if err := bh.EndBackup(); err != nil {
+	if err := bh.EndBackup(ctx); err != nil {
 		t.Fatalf("bh.EndBackup failed: %v", err)
 	}
 
 	// re-read the file
-	bhs, err := fbs.ListBackups(dir)
+	bhs, err := fbs.ListBackups(ctx, dir)
 	if err != nil || len(bhs) != 1 {
 		t.Fatalf("ListBackups after abort returned wrong return: %v %v", err, bhs)
 	}
-	rc, err := bhs[0].ReadFile(filename1)
+	rc, err := bhs[0].ReadFile(ctx, filename1)
 	if err != nil {
 		t.Fatalf("bhs[0].ReadFile failed: %v", err)
 	}

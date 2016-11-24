@@ -70,6 +70,9 @@ func pushGroupBy(groupBy sqlparser.GroupBy, bldr builder) error {
 // are readjusted on push-down to match the numbers of the individual
 // queries.
 func pushOrderBy(orderBy sqlparser.OrderBy, bldr builder) error {
+	s := bldr.Symtab().SetState(symtabOrderBy)
+	defer bldr.Symtab().SetState(s)
+
 	if orderBy == nil {
 		return nil
 	}

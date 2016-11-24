@@ -154,8 +154,8 @@ public final class MysqlDefs {
         vitesstoMySqlType.put(Query.Type.UINT24, Types.INTEGER);
         vitesstoMySqlType.put(Query.Type.INT32, Types.INTEGER);
         vitesstoMySqlType.put(Query.Type.UINT32, Types.INTEGER);
-        vitesstoMySqlType.put(Query.Type.INT64, FIELD_TYPE_LONGLONG);
-        vitesstoMySqlType.put(Query.Type.UINT64, FIELD_TYPE_LONGLONG);
+        vitesstoMySqlType.put(Query.Type.INT64, Types.BIGINT);
+        vitesstoMySqlType.put(Query.Type.UINT64, Types.BIGINT);
         vitesstoMySqlType.put(Query.Type.FLOAT32, Types.FLOAT);
         vitesstoMySqlType.put(Query.Type.FLOAT64, Types.DOUBLE);
         vitesstoMySqlType.put(Query.Type.TIMESTAMP, Types.TIMESTAMP);
@@ -173,6 +173,7 @@ public final class MysqlDefs {
         vitesstoMySqlType.put(Query.Type.BIT, Types.BIT);
         vitesstoMySqlType.put(Query.Type.ENUM, Types.CHAR);
         vitesstoMySqlType.put(Query.Type.SET, Types.CHAR);
+        vitesstoMySqlType.put(Query.Type.TUPLE, Types.OTHER);
     }
 
     static {
@@ -235,7 +236,7 @@ public final class MysqlDefs {
                 break;
 
             case MysqlDefs.FIELD_TYPE_LONGLONG:
-                jdbcType = MysqlDefs.FIELD_TYPE_LONGLONG;
+                jdbcType = Types.BIGINT;
 
                 break;
 

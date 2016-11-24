@@ -136,7 +136,7 @@ func (f *fakeVTGateService) Begin(ctx context.Context) (*vtgatepb.Session, error
 }
 
 // Commit is part of the VTGateService interface
-func (f *fakeVTGateService) Commit(ctx context.Context, session *vtgatepb.Session) error {
+func (f *fakeVTGateService) Commit(ctx context.Context, twopc bool, session *vtgatepb.Session) error {
 	if !reflect.DeepEqual(session, session2) {
 		return errors.New("commit: session mismatch")
 	}
@@ -147,6 +147,14 @@ func (f *fakeVTGateService) Commit(ctx context.Context, session *vtgatepb.Sessio
 func (f *fakeVTGateService) Rollback(ctx context.Context, session *vtgatepb.Session) error {
 	if !reflect.DeepEqual(session, session2) {
 		return errors.New("rollback: session mismatch")
+	}
+	return nil
+}
+
+// ResolveTransaction is part of the VTGateService interface
+func (f *fakeVTGateService) ResolveTransaction(ctx context.Context, dtid string) error {
+	if dtid != dtid2 {
+		return errors.New("ResolveTransaction: dtid mismatch")
 	}
 	return nil
 }
@@ -287,3 +295,5 @@ var session2 = &vtgatepb.Session{
 		},
 	},
 }
+
+var dtid2 = "aa"

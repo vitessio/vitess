@@ -33,6 +33,10 @@ spec:
       labels:
         component: vtctld
         app: vitess
+      annotations:
+        pod.beta.kubernetes.io/init-containers: '[
+{{ include "init-vtdataroot" (.image | default $0.image) | indent 10 }}
+        ]'
     spec:
       containers:
         - name: vtctld
@@ -55,31 +59,29 @@ spec:
               mountPath: /etc/ssl/certs/ca-certificates.crt
           resources:
 {{ toYaml (.resources | default $0.resources) | indent 12 }}
+          securityContext:
+            runAsUser: 999
           command:
             - bash
             - "-c"
             - |
               set -ex
-              mkdir -p $VTDATAROOT/tmp
-              chown -R vitess /vt
-
-              exec su -p -c "$(tr '\n' ' ' <<END_OF_COMMAND
-                exec /vt/bin/vtctld
-                  -cell {{$cell.name | quote}}
-                  -web_dir "$VTTOP/web/vtctld"
-                  -web_dir2 "$VTTOP/web/vtctld2/app"
-                  -workflow_manager_init
-                  -workflow_manager_use_election
-                  -log_dir "$VTDATAROOT/tmp"
-                  -alsologtostderr
-                  -port 15000
-                  -grpc_port 15999
-                  -service_map "grpc-vtctl"
-                  -topo_implementation "etcd"
-                  -etcd_global_addrs "http://etcd-global:4001"
-{{ include "format-flags-all" (tuple $.Values.backupFlags $0.extraFlags .extraFlags) | indent 18 }}
+              eval exec /vt/bin/vtctld $(cat <<END_OF_COMMAND
+                -cell={{$cell.name | quote}}
+                -web_dir="$VTTOP/web/vtctld"
+                -web_dir2="$VTTOP/web/vtctld2/app"
+                -workflow_manager_init
+                -workflow_manager_use_election
+                -log_dir="$VTDATAROOT/tmp"
+                -alsologtostderr
+                -port=15000
+                -grpc_port=15999
+                -service_map="grpc-vtctl"
+                -topo_implementation="etcd"
+                -etcd_global_addrs="http://etcd-global:4001"
+{{ include "format-flags-all" (tuple $.Values.backupFlags $0.extraFlags .extraFlags) | indent 16 }}
               END_OF_COMMAND
-              )" vitess
+              )
       volumes:
         - name: syslog
           hostPath: {path: /dev/log}

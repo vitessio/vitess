@@ -36,6 +36,10 @@ spec:
         component: vtgate
         cell: {{$cell.name}}
         app: vitess
+      annotations:
+        pod.beta.kubernetes.io/init-containers: '[
+{{ include "init-vtdataroot" (.image | default $0.image) | indent 10 }}
+        ]'
     spec:
       containers:
         - name: vtgate
@@ -53,30 +57,28 @@ spec:
               mountPath: /vt/vtdataroot
           resources:
 {{ toYaml (.resources | default $0.resources) | indent 12 }}
+          securityContext:
+            runAsUser: 999
           command:
             - bash
             - "-c"
             - |
               set -ex
-              mkdir -p $VTDATAROOT/tmp &&
-              chown -R vitess /vt &&
-
-              exec su -p -c "$(tr '\n' ' ' <<END_OF_COMMAND
-                exec /vt/bin/vtgate
-                  -topo_implementation "etcd"
-                  -etcd_global_addrs "http://etcd-global:4001"
-                  -log_dir "$VTDATAROOT/tmp"
-                  -alsologtostderr
-                  -port 15001
-                  -grpc_port 15991
-                  -service_map "grpc-vtgateservice"
-                  -cells_to_watch {{$cell.name | quote}}
-                  -tablet_types_to_wait "MASTER,REPLICA"
-                  -gateway_implementation "discoverygateway"
-                  -cell {{$cell.name | quote}}
-{{ include "format-flags-all" (tuple $0.extraFlags .extraFlags) | indent 18 }}
+              eval exec /vt/bin/vtgate $(cat <<END_OF_COMMAND
+                -topo_implementation="etcd"
+                -etcd_global_addrs="http://etcd-global:4001"
+                -log_dir="$VTDATAROOT/tmp"
+                -alsologtostderr
+                -port=15001
+                -grpc_port=15991
+                -service_map="grpc-vtgateservice"
+                -cells_to_watch={{$cell.name | quote}}
+                -tablet_types_to_wait="MASTER,REPLICA"
+                -gateway_implementation="discoverygateway"
+                -cell={{$cell.name | quote}}
+{{ include "format-flags-all" (tuple $0.extraFlags .extraFlags) | indent 16 }}
               END_OF_COMMAND
-              )" vitess
+              )
       volumes:
         - name: syslog
           hostPath: {path: /dev/log}

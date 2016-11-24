@@ -417,9 +417,9 @@ func (itc *internalTabletConn) SetRollback(ctx context.Context, target *querypb.
 	return tabletconn.TabletErrorFromGRPC(vterrors.ToGRPCError(err))
 }
 
-// ResolveTransaction is part of tabletconn.TabletConn
-func (itc *internalTabletConn) ResolveTransaction(ctx context.Context, target *querypb.Target, dtid string) error {
-	err := itc.tablet.qsc.QueryService().ResolveTransaction(ctx, target, dtid)
+// ConcludeTransaction is part of tabletconn.TabletConn
+func (itc *internalTabletConn) ConcludeTransaction(ctx context.Context, target *querypb.Target, dtid string) error {
+	err := itc.tablet.qsc.QueryService().ConcludeTransaction(ctx, target, dtid)
 	return tabletconn.TabletErrorFromGRPC(vterrors.ToGRPCError(err))
 }
 

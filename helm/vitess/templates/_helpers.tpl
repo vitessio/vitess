@@ -14,3 +14,23 @@
 {{- range . }}{{template "format-flags" .}}{{end -}}
 {{- end -}}
 
+# Common init-container to set up vtdataroot volume.
+{{- define "init-vtdataroot" -}}
+{{- $image := . -}}
+{
+  "name": "init-vtdataroot",
+  "image": {{$image | quote}},
+  "command": ["bash", "-c", "
+    set -ex;
+    mkdir -p $VTDATAROOT/tmp;
+    chown vitess:vitess $VTDATAROOT $VTDATAROOT/tmp;
+  "],
+  "volumeMounts": [
+    {
+      "name": "vtdataroot",
+      "mountPath": "/vt/vtdataroot"
+    }
+  ]
+}
+{{- end -}}
+

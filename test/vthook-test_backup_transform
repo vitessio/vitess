@@ -1,0 +1,44 @@
+#!/bin/bash
+
+# Copyright 2012, Google Inc. All rights reserved.
+# Use of this source code is governed by a BSD-style license that can
+# be found in the LICENSE file.
+
+# This script is a sample hook to test the backup transform.
+# Upon write, it adds a header line with the single word 'header'.
+# Upon read, it removes the header, and checks it's 'header'.
+# In any case, it then copies the data, by execing 'cat'.
+# Any error is displayed to stderr, and triggers an 'exit 1'.
+
+while [[ $# -gt 1 ]]; do
+  key="$1"
+
+  case $key in
+    -operation)
+      OPERATION="$2"
+      shift # past argument
+      ;;
+    *)
+      echo "unknown command line parameter:" $key 1>&2
+      exit 1
+      ;;
+  esac
+  shift # past argument or value
+done
+
+if [ "$OPERATION" == "write" ]; then
+  echo "header"
+  echo "normal write" 1>&2
+elif [ "$OPERATION" == "read" ]; then
+  read header
+  if [ "$header" != "header" ]; then
+    echo "invalid header:" $header 1>&2
+    exit 1
+  fi
+  echo "normal read" 1>&2
+else
+  echo "invalid operation:" $OPERATION 1>&2
+  exit 1
+fi
+  
+exec cat

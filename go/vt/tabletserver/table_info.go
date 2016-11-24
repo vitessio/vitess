@@ -23,10 +23,9 @@ type TableInfo struct {
 
 	// Seq must be locked before accessing the sequence vars.
 	// If CurVal==LastVal, we have to cache new values.
-	Seq       sync.Mutex
-	NextVal   int64
-	Increment int64
-	LastVal   int64
+	Seq     sync.Mutex
+	NextVal int64
+	LastVal int64
 }
 
 // NewTableInfo creates a new TableInfo.

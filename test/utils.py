@@ -547,7 +547,6 @@ class VtGate(object):
         '-log_dir', environment.vtlogroot,
         '-srv_topo_cache_ttl', cache_ttl,
         '-tablet_protocol', protocols_flavor().tabletconn_protocol(),
-        '-tablet_grpc_combine_begin_execute',
     ]
     if l2vtgates:
       args.extend([
@@ -741,7 +740,6 @@ class L2VtGate(object):
         '-healthcheck_conn_timeout', healthcheck_conn_timeout,
         '-tablet_protocol', protocols_flavor().tabletconn_protocol(),
         '-gateway_implementation', vtgate_gateway_flavor().flavor(),
-        '-tablet_grpc_combine_begin_execute',
     ]
     args.extend(vtgate_gateway_flavor().flags(cell=cell, tablets=tablets))
     if tablet_types_to_wait:

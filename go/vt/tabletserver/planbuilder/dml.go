@@ -140,11 +140,16 @@ func analyzeSelect(sel *sqlparser.Select, getTable TableGetter) (plan *ExecPlan,
 	}
 
 	// Check if it's a NEXT VALUE statement.
-	if _, ok := sel.SelectExprs[0].(sqlparser.Nextval); ok {
+	if nextVal, ok := sel.SelectExprs[0].(sqlparser.Nextval); ok {
 		if tableInfo.Type != schema.Sequence {
 			return nil, fmt.Errorf("%s is not a sequence", tableName)
 		}
 		plan.PlanID = PlanNextval
+		v, err := sqlparser.AsInterface(nextVal.Expr)
+		if err != nil {
+			return nil, err
+		}
+		plan.PKValues = []interface{}{v}
 		plan.FieldQuery = nil
 		plan.FullQuery = nil
 	}

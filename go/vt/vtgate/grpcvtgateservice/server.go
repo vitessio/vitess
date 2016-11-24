@@ -341,7 +341,7 @@ func (vtg *VTGate) Begin(ctx context.Context, request *vtgatepb.BeginRequest) (r
 func (vtg *VTGate) Commit(ctx context.Context, request *vtgatepb.CommitRequest) (response *vtgatepb.CommitResponse, err error) {
 	defer vtg.server.HandlePanic(&err)
 	ctx = withCallerIDContext(ctx, request.CallerId)
-	vtgErr := vtg.server.Commit(ctx, request.Session)
+	vtgErr := vtg.server.Commit(ctx, request.Atomic, request.Session)
 	response = &vtgatepb.CommitResponse{}
 	if vtgErr == nil {
 		return response, nil
@@ -355,6 +355,18 @@ func (vtg *VTGate) Rollback(ctx context.Context, request *vtgatepb.RollbackReque
 	ctx = withCallerIDContext(ctx, request.CallerId)
 	vtgErr := vtg.server.Rollback(ctx, request.Session)
 	response = &vtgatepb.RollbackResponse{}
+	if vtgErr == nil {
+		return response, nil
+	}
+	return nil, vterrors.ToGRPCError(vtgErr)
+}
+
+// ResolveTransaction is the RPC version of vtgateservice.VTGateService method
+func (vtg *VTGate) ResolveTransaction(ctx context.Context, request *vtgatepb.ResolveTransactionRequest) (response *vtgatepb.ResolveTransactionResponse, err error) {
+	defer vtg.server.HandlePanic(&err)
+	ctx = withCallerIDContext(ctx, request.CallerId)
+	vtgErr := vtg.server.ResolveTransaction(ctx, request.Dtid)
+	response = &vtgatepb.ResolveTransactionResponse{}
 	if vtgErr == nil {
 		return response, nil
 	}

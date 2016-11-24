@@ -1,3 +1,24 @@
+# Create global resources.
+---
+# Headless service for vttablets.
+# This is only required when using StatefulSet, but it doesn't hurt otherwise.
+apiVersion: v1
+kind: Service
+metadata:
+  name: vttablet
+  labels:
+    app: vitess
+spec:
+  ports:
+    - port: 15002
+      name: web
+    - port: 16002
+      name: grpc
+  clusterIP: None
+  selector:
+    app: vitess
+    component: vttablet
+
 # Create requested resources in each cell.
 {{ range $cell := $.Values.topology.cells }}
 ---
@@ -13,16 +34,25 @@
 {{ range $keyspace := $cell.keyspaces }}
 {{ range $shard := $keyspace.shards }}
 {{ range $tablet := $shard.tablets }}
+{{ with $tablet.vttablet }}
+{{- $0 := $.Values.vttablet -}}
 
-# This inner-most loop is a hack because we don't yet use StatefulSet:
-{{ range $index := until (atoi (print $tablet.vttablet.replicas)) }}
+{{- $controllerType := .controllerType | default $0.controllerType -}}
+{{ if eq $controllerType "StatefulSet" }}
 ---
-{{ with $tablet.vttablet }}{{ include "vttablet" (tuple $ $cell $keyspace $shard $tablet $index .) }}{{ end }}
-{{ end }}
+{{ include "vttablet-stateful-set" (tuple $ $cell $keyspace $shard $tablet) }}
+{{ else if eq $controllerType "None" }}
+{{ range $index := until (atoi (print $tablet.vttablet.replicas)) }}
+{{- $uid := add $tablet.uidBase $index -}}
+---
+{{ include "vttablet-pod" (tuple $ $cell $keyspace $shard $tablet $uid) }}
+{{ end }} # range $index
+{{ end }} # if eq $controllerType
 
-{{ end }}
-{{ end }}
-{{ end }}
+{{ end }} # with $tablet.vttablet
+{{ end }} # range $tablet
+{{ end }} # range $shard
+{{ end }} # range $keyspace
 
-{{ end }}
+{{ end }} # range $cell
 

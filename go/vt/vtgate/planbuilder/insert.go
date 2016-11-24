@@ -81,7 +81,7 @@ func buildInsertPlan(ins *sqlparser.Insert, vschema VSchema) (*engine.Route, err
 		route.Generate = &engine.Generate{
 			Opcode:   engine.SelectUnsharded,
 			Keyspace: route.Table.AutoIncrement.Sequence.Keyspace,
-			Query:    fmt.Sprintf("select next value from `%s`", route.Table.AutoIncrement.Sequence.Name),
+			Query:    fmt.Sprintf("select next 1 values from `%s`", route.Table.AutoIncrement.Sequence.Name),
 			Value:    autoIncValues,
 		}
 	}

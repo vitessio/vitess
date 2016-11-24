@@ -11,6 +11,9 @@ func TestValid(t *testing.T) {
 		input  string
 		output string
 	}{{
+		input:  "select 1",
+		output: "select 1 from dual",
+	}, {
 		input: "select 1 from t",
 	}, {
 		input: "select .1 from t",
@@ -88,9 +91,14 @@ func TestValid(t *testing.T) {
 		input: "select /* a.* */ a.* from t",
 	}, {
 		input:  "select next value for t",
-		output: "select next value from t",
+		output: "select next 1 values from t",
 	}, {
-		input: "select next value from t",
+		input:  "select next value from t",
+		output: "select next 1 values from t",
+	}, {
+		input: "select next 10 values from t",
+	}, {
+		input: "select next :a values from t",
 	}, {
 		input: "select /* `By`.* */ `By`.* from t",
 	}, {
@@ -298,9 +306,19 @@ func TestValid(t *testing.T) {
 	}, {
 		input: "select /* function with many params */ 1 from t where a = b(c, d)",
 	}, {
+		input: "select /* function with distinct */ count(distinct a) from t",
+	}, {
 		input: "select /* if as func */ 1 from t where a = if(b)",
 	}, {
-		input: "select /* function with distinct */ count(distinct a) from t",
+		input: "select /* current_timestamp as func */ current_timestamp() from t",
+	}, {
+		input: "select /* mod as func */ a from tab where b MOD 2 = 0",
+	}, {
+		input: "select /* mod as func */ a from tab where mod(b, 2) = 0",
+	}, {
+		input: "select /* database as func no param */ database() from t",
+	}, {
+		input: "select /* database as func 1 param */ database(1) from t",
 	}, {
 		input: "select /* a */ a from t",
 	}, {
@@ -644,7 +662,7 @@ func TestCaseSensitivity(t *testing.T) {
 		output: "select /* lock in SHARE MODE */ 1 from t lock in share mode",
 	}, {
 		input:  "select next VALUE from t",
-		output: "select next value from t",
+		output: "select next 1 values from t",
 	}, {
 		input: "select /* use */ 1 from t1 use index (A) where b = 1",
 	}}
@@ -754,7 +772,10 @@ func TestErrors(t *testing.T) {
 		output: "syntax error at position 34 near 'on'",
 	}, {
 		input:  "select next id from a",
-		output: "expecting value after next at position 23",
+		output: "expecting value after next at position 15 near 'id'",
+	}, {
+		input:  "select next 1+1 values from a",
+		output: "syntax error at position 15",
 	}}
 	for _, tcase := range invalidSQL {
 		if tcase.output == "" {

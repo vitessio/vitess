@@ -268,17 +268,17 @@ func (f *FakeQueryService) SetRollback(ctx context.Context, target *querypb.Targ
 	return nil
 }
 
-// ResolveTransaction is part of the queryservice.QueryService interface
-func (f *FakeQueryService) ResolveTransaction(ctx context.Context, target *querypb.Target, dtid string) (err error) {
+// ConcludeTransaction is part of the queryservice.QueryService interface
+func (f *FakeQueryService) ConcludeTransaction(ctx context.Context, target *querypb.Target, dtid string) (err error) {
 	if f.HasError {
 		return f.TabletError
 	}
 	if f.Panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
-	f.checkTargetCallerID(ctx, "ResolveTransaction", target)
+	f.checkTargetCallerID(ctx, "ConcludeTransaction", target)
 	if dtid != Dtid {
-		f.t.Errorf("ResolveTransaction: invalid dtid: got %s expected %s", dtid, Dtid)
+		f.t.Errorf("ConcludeTransaction: invalid dtid: got %s expected %s", dtid, Dtid)
 	}
 	return nil
 }

@@ -8,7 +8,6 @@ script_root=`dirname "${BASH_SOURCE}"`
 source $script_root/env.sh
 
 # Create the pods for shard-0
-CELLS=${CELLS:-'test'}
 keyspace='test_keyspace'
 SHARDS=${SHARDS:-'0'}
 TABLETS_PER_SHARD=${TABLETS_PER_SHARD:-5}
@@ -18,7 +17,6 @@ UID_BASE=${UID_BASE:-100}
 VTTABLET_TEMPLATE=${VTTABLET_TEMPLATE:-'vttablet-pod-template.yaml'}
 VTDATAROOT_VOLUME=${VTDATAROOT_VOLUME:-''}
 RDONLY_COUNT=${RDONLY_COUNT:-2}
-VITESS_NAME=${VITESS_NAME:-'default'}
 
 vtdataroot_volume='emptyDir: {}'
 if [ -n "$VTDATAROOT_VOLUME" ]; then

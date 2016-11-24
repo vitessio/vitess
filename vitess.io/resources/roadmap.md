@@ -75,8 +75,9 @@ following core features:
   
 * Better Kubernetes support (Helm support, better scripts, ...).
 
-Our plan is to cut a 2.1.0-alpha.1 release very soon, and to update the
-documentation shortly thereafter.
+We already cut the
+[2.1.0-alpha.1 release](https://github.com/youtube/vitess/releases/tag/v2.1.0-alpha.1),
+and we are finalizing the last details at the moment.
 
 ## Vitess Moving Forward
 
@@ -103,6 +104,9 @@ your application!
 * Additional Kubernetes integration.
 
 * Include resharding workflows in the control panel UI (vtctld).
+
+* Support vertical splits to an existing keyspace, so any table can be moved
+  around to any keyspace. Only for unsharded keyspaces, at first.
 
 * Out-of-the-box integration with Promotheus for monitoring.
 
