@@ -1100,7 +1100,7 @@ func (tsv *TabletServer) execRequest(
 	target *querypb.Target, isTx, allowOnShutdown bool,
 	exec func(ctx context.Context, logStats *LogStats) error,
 ) (err error) {
-	logStats := newLogStats(requestName, ctx)
+	logStats := NewLogStats(requestName, ctx)
 	logStats.OriginalSQL = sql
 	logStats.BindVariables = bindVariables
 	defer tsv.handleError(sql, bindVariables, &err, logStats)

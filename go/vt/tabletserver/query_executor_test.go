@@ -1206,7 +1206,7 @@ func newTransaction(tsv *TabletServer) int64 {
 }
 
 func newTestQueryExecutor(ctx context.Context, tsv *TabletServer, sql string, txID int64) *QueryExecutor {
-	logStats := newLogStats("TestQueryExecutor", ctx)
+	logStats := NewLogStats("TestQueryExecutor", ctx)
 	return &QueryExecutor{
 		ctx:           ctx,
 		query:         sql,

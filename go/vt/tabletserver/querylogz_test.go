@@ -32,7 +32,7 @@ func TestQuerylogzHandlerInvalidLogStats(t *testing.T) {
 
 func TestQuerylogzHandler(t *testing.T) {
 	req, _ := http.NewRequest("GET", "/querylogz?timeout=10&limit=1", nil)
-	logStats := newLogStats("Execute", context.Background())
+	logStats := NewLogStats("Execute", context.Background())
 	logStats.PlanType = planbuilder.PlanPassSelect.String()
 	logStats.OriginalSQL = "select name from test_table limit 1000"
 	logStats.RowsAffected = 1000

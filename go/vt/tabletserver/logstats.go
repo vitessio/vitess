@@ -50,7 +50,9 @@ type LogStats struct {
 	Error                *TabletError
 }
 
-func newLogStats(methodName string, ctx context.Context) *LogStats {
+// NewLogStats constructs a new LogStats with supplied Method and ctx field values, and the StartTime field set to
+// the present time.
+func NewLogStats(methodName string, ctx context.Context) *LogStats {
 	return &LogStats{
 		Method:    methodName,
 		StartTime: time.Now(),
