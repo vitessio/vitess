@@ -75,21 +75,28 @@ create_vt_user_seq = '''create table vt_user_seq (
   id int,
   next_id bigint,
   cache bigint,
-  increment bigint,
   primary key(id)
 ) comment 'vitess_sequence' Engine=InnoDB'''
 
-init_vt_user_seq = 'insert into vt_user_seq values(0, 1, 2, 1)'
+init_vt_user_seq = 'insert into vt_user_seq values(0, 1, 2)'
 
 create_vt_music_seq = '''create table vt_music_seq (
   id int,
   next_id bigint,
   cache bigint,
-  increment bigint,
   primary key(id)
 ) comment 'vitess_sequence' Engine=InnoDB'''
 
-init_vt_music_seq = 'insert into vt_music_seq values(0, 1, 2, 1)'
+init_vt_music_seq = 'insert into vt_music_seq values(0, 1, 2)'
+
+create_vt_main_seq = '''create table vt_main_seq (
+  id int,
+  next_id bigint,
+  cache bigint,
+  primary key(id)
+) comment 'vitess_sequence' Engine=InnoDB'''
+
+init_vt_main_seq = 'insert into vt_main_seq values(0, 1, 2)'
 
 create_name_user2_map = '''create table name_user2_map (
 name varchar(64),
@@ -101,6 +108,12 @@ create_music_user_map = '''create table music_user_map (
 music_id bigint,
 user_id bigint,
 primary key (music_id)
+) Engine=InnoDB'''
+
+create_main = '''create table main (
+id bigint,
+val varchar(128),
+primary key(id)
 ) Engine=InnoDB'''
 
 vschema = {
@@ -228,8 +241,17 @@ vschema = {
         "vt_music_seq": {
           "type": "sequence"
         },
+        "vt_main_seq": {
+          "type": "sequence"
+        },
         "music_user_map": {},
-        "name_user2_map": {}
+        "name_user2_map": {},
+        "main": {
+          "auto_increment": {
+            "column": "id",
+            "sequence": "vt_main_seq"
+          }
+        }
       }
     }''',
 }
@@ -266,8 +288,10 @@ def setUpModule():
         ddls=[
             create_vt_user_seq,
             create_vt_music_seq,
+            create_vt_main_seq,
             create_music_user_map,
             create_name_user2_map,
+            create_main,
             ],
         )
     shard_0_master = keyspace_env.tablet_map['user.-80.master']
@@ -830,6 +854,35 @@ class TestVTGateFunctions(unittest.TestCase):
     result = shard_0_master.mquery(
         'vt_user', 'select music_id, user_id, artist from vt_music_extra')
     self.assertEqual(result, ((1L, 1L, 'test 1'),))
+
+  def test_main_seq(self):
+    # music is for testing owned lookup index
+    vtgate_conn = get_connection()
+
+    # Initialize the sequence.
+    # TODO(sougou): Use DDL when ready.
+    vtgate_conn.begin()
+    self.execute_on_master(vtgate_conn, init_vt_main_seq, {})
+    vtgate_conn.commit()
+
+    count = 4
+    for x in xrange(count):
+      i = x+1
+      vtgate_conn.begin()
+      result = self.execute_on_master(
+          vtgate_conn,
+          'insert into main (val) values (:val)',
+          {'val': 'test %s' % i})
+      self.assertEqual(result, ([], 1L, i, []))
+      vtgate_conn.commit()
+
+    result = self.execute_on_master(
+        vtgate_conn, 'select id, val from main where id = 4', {})
+    self.assertEqual(
+        result,
+        ([(4, 'test 4')], 1, 0,
+         [('id', self.int_type),
+          ('val', self.string_type)]))
 
   def test_joins(self):
     vtgate_conn = get_connection()

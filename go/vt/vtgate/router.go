@@ -97,13 +97,15 @@ func (rtr *Router) ExecuteRoute(vcursor *requestContext, route *engine.Route, jo
 		return rtr.execDeleteEqual(vcursor, route)
 	case engine.InsertSharded:
 		return rtr.execInsertSharded(vcursor, route)
+	case engine.InsertUnsharded:
+		return rtr.execInsertUnsharded(vcursor, route)
 	}
 
 	var err error
 	var params *scatterParams
 	switch route.Opcode {
 	case engine.SelectUnsharded, engine.UpdateUnsharded,
-		engine.DeleteUnsharded, engine.InsertUnsharded:
+		engine.DeleteUnsharded:
 		params, err = rtr.paramsUnsharded(vcursor, route)
 	case engine.SelectEqual, engine.SelectEqualUnique:
 		params, err = rtr.paramsSelectEqual(vcursor, route)
@@ -323,19 +325,47 @@ func (rtr *Router) execDeleteEqual(vcursor *requestContext, route *engine.Route)
 		vcursor.options)
 }
 
+func (rtr *Router) execInsertUnsharded(vcursor *requestContext, route *engine.Route) (*sqltypes.Result, error) {
+	insertid, err := rtr.handleGenerate(vcursor, route.Generate)
+	if err != nil {
+		return nil, fmt.Errorf("execInsertUnsharded: %v", err)
+	}
+	params, err := rtr.paramsUnsharded(vcursor, route)
+	if err != nil {
+		return nil, fmt.Errorf("execInsertUnsharded: %v", err)
+	}
+	result, err := rtr.scatterConn.ExecuteMulti(
+		vcursor.ctx,
+		route.Query+vcursor.comments,
+		params.ks,
+		params.shardVars,
+		vcursor.tabletType,
+		NewSafeSession(vcursor.session),
+		vcursor.notInTransaction,
+		vcursor.options,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("execInsertUnsharded: %v", err)
+	}
+	if insertid != 0 {
+		if result.InsertID != 0 {
+			return nil, fmt.Errorf("sequence and db generated a value each for insert")
+		}
+		result.InsertID = uint64(insertid)
+	}
+	return result, nil
+}
+
 func (rtr *Router) execInsertSharded(vcursor *requestContext, route *engine.Route) (*sqltypes.Result, error) {
 	var firstKsid []byte
-	var firstAutoGenInsertID int64
 	inputs := route.Values.([]interface{})
-	for rowNum, input := range inputs {
-		insertid, err := rtr.handleGenerate(vcursor, route.Generate, rowNum)
-		if firstAutoGenInsertID == 0 && insertid != 0 {
-			firstAutoGenInsertID = insertid
-		}
-		if err != nil {
-			return nil, fmt.Errorf("execInsertSharded: %v", err)
-		}
 
+	insertid, err := rtr.handleGenerate(vcursor, route.Generate)
+	if err != nil {
+		return nil, fmt.Errorf("execInsertSharded: %v", err)
+	}
+
+	for rowNum, input := range inputs {
 		keys, err := rtr.resolveKeys(input.([]interface{}), vcursor.bindVars)
 		if err != nil {
 			return nil, fmt.Errorf("execInsertSharded: %v", err)
@@ -376,11 +406,11 @@ func (rtr *Router) execInsertSharded(vcursor *requestContext, route *engine.Rout
 	if err != nil {
 		return nil, fmt.Errorf("execInsertSharded: %v", err)
 	}
-	if firstAutoGenInsertID != 0 {
+	if insertid != 0 {
 		if result.InsertID != 0 {
 			return nil, fmt.Errorf("sequence and db generated a value each for insert")
 		}
-		result.InsertID = uint64(firstAutoGenInsertID)
+		result.InsertID = uint64(insertid)
 	}
 	return result, nil
 }
@@ -530,53 +560,69 @@ func (rtr *Router) deleteVindexEntries(vcursor *requestContext, route *engine.Ro
 	return nil
 }
 
-func (rtr *Router) handleGenerate(vcursor *requestContext, gen *engine.Generate, rowNum int) (insertid int64, err error) {
+func (rtr *Router) handleGenerate(vcursor *requestContext, gen *engine.Generate) (insertid int64, err error) {
 	if gen == nil {
 		return 0, nil
 	}
-	val := gen.Value.([]interface{})[rowNum]
-	if v, ok := val.(string); ok {
-		val, ok = vcursor.bindVars[v[1:]]
-		if !ok {
-			return 0, fmt.Errorf("handleGenerate: could not find bind var %s", v)
+	count := 0
+	resolved := make([]interface{}, len(gen.Value.([]interface{})))
+	for i, val := range gen.Value.([]interface{}) {
+		if v, ok := val.(string); ok {
+			val, ok = vcursor.bindVars[v[1:]]
+			if !ok {
+				return 0, fmt.Errorf("handleGenerate: could not find bind var %s", v)
+			}
+		}
+		if val == nil {
+			count++
+		} else if v, ok := val.(*querypb.BindVariable); ok && v.Type == sqltypes.Null {
+			count++
+		} else {
+			resolved[i] = val
 		}
 	}
-	if val != nil {
-		vcursor.bindVars[engine.SeqVarName+strconv.Itoa(rowNum)] = val
-		return 0, nil
+	if count != 0 {
+		// TODO(sougou): This is similar to paramsUnsharded.
+		ks, _, allShards, err := getKeyspaceShards(vcursor.ctx, rtr.serv, rtr.cell, gen.Keyspace.Name, vcursor.tabletType)
+		if err != nil {
+			return 0, fmt.Errorf("handleGenerate: %v", err)
+		}
+		if len(allShards) != 1 {
+			return 0, fmt.Errorf("unsharded keyspace %s has multiple shards", ks)
+		}
+		params := newScatterParams(ks, map[string]interface{}{"n": int64(count)}, []string{allShards[0].Name})
+		// We nil out the transaction context for this particular call.
+		// TODO(sougou): Use ExecuteShard instead.
+		qr, err := rtr.scatterConn.ExecuteMulti(
+			vcursor.ctx,
+			gen.Query,
+			params.ks,
+			params.shardVars,
+			vcursor.tabletType,
+			NewSafeSession(nil),
+			false,
+			vcursor.options,
+		)
+		if err != nil {
+			return 0, err
+		}
+		// If no rows are returned, it's an internal error, and the code
+		// must panic, which will caught and reported.
+		insertid, err = qr.Rows[0][0].ParseInt64()
+		if err != nil {
+			return 0, err
+		}
 	}
-	// TODO(sougou): This is similar to paramsUnsharded.
-	ks, _, allShards, err := getKeyspaceShards(vcursor.ctx, rtr.serv, rtr.cell, gen.Keyspace.Name, vcursor.tabletType)
-	if err != nil {
-		return 0, fmt.Errorf("handleGenerate: %v", err)
+	cur := insertid
+	for i, v := range resolved {
+		if v != nil {
+			vcursor.bindVars[engine.SeqVarName+strconv.Itoa(i)] = v
+		} else {
+			vcursor.bindVars[engine.SeqVarName+strconv.Itoa(i)] = cur
+			cur++
+		}
 	}
-	if len(allShards) != 1 {
-		return 0, fmt.Errorf("unsharded keyspace %s has multiple shards", ks)
-	}
-	params := newScatterParams(ks, nil, []string{allShards[0].Name})
-	// We nil out the transaction context for this particular call.
-	// TODO(sougou): Use ExecuteShard instead.
-	qr, err := rtr.scatterConn.ExecuteMulti(
-		vcursor.ctx,
-		gen.Query,
-		params.ks,
-		params.shardVars,
-		vcursor.tabletType,
-		NewSafeSession(nil),
-		false,
-		vcursor.options,
-	)
-	if err != nil {
-		return 0, err
-	}
-	// If no rows are returned, it's an internal error, and the code
-	// must panic, which will caught and reported.
-	num, err := qr.Rows[0][0].ParseInt64()
-	if err != nil {
-		return 0, err
-	}
-	vcursor.bindVars[engine.SeqVarName+strconv.Itoa(rowNum)] = num
-	return num, nil
+	return insertid, nil
 }
 
 func (rtr *Router) handlePrimary(vcursor *requestContext, vindexKey interface{}, colVindex *vindexes.ColumnVindex, bv map[string]interface{}, rowNum int) (ksid []byte, err error) {

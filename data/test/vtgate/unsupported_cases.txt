@@ -190,13 +190,45 @@
 "update music set id = 1 where id = 1"
 "unsupported: DML cannot change vindex column"
 
-# insert from select
+# unsharded insert from union
+"insert into main1 select 1 from dual union select 1 from dual"
+"unsupported: union in insert"
+
+# unsharded insert with complex select
+"insert into main1 select col from user limit 1"
+"unsupported: limits with scatter"
+
+# unsharded insert with complex join"
+"insert into main1 select u.col from user u join user u1"
+"unsupported: complex join in insert"
+
+# unsharded insert with mismatched keyspaces"
+"insert into main1 select col from user where id=1"
+"unsupported: cross-shard select in insert"
+
+# unsharded insert, unqualified names and auto-inc combined
+"insert into main2 select col from main1"
+"unsupported: auto-inc and select in insert"
+
+# unsharded inssert subquery in insert value
+"insert into main1 values((select 1 from dual), 1)"
+"unsupported: subquery in insert values"
+
+# unsharded insert, no col list with auto-inc
+"insert into main2 values(1,1)"
+"column list required for tables with auto-inc columns"
+
+# unsharded insert, col list doesn't match values
+"insert into main2(id, val) values(1)"
+"column list doesn't match values"
+
+# sharded insert from select
 "insert into user(id) select 1 from dual"
 "unsupported: insert into select"
 
-# insert with subquery as value
-"insert into user(id) values (select 1 from dual)"
-"unsupported: subqueries in insert"
+# sharded insert subquery in insert value
+"insert into user(id, val) values((select 1), 1)"
+"unsupported: subquery in insert values"
 
 # nextval not supported yet
 "select next value from user"

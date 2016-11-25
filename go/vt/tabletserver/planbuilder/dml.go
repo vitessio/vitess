@@ -357,10 +357,7 @@ func getInsertPKValues(pkColumnNumbers []int, rowList sqlparser.Values, tableInf
 		}
 		values := make([]interface{}, len(rowList))
 		for j := 0; j < len(rowList); j++ {
-			if _, ok := rowList[j].(*sqlparser.Subquery); ok {
-				return nil, errors.New("row subquery not supported for inserts")
-			}
-			row := rowList[j].(sqlparser.ValTuple)
+			row := rowList[j]
 			if columnNumber >= len(row) {
 				return nil, errors.New("column count doesn't match value count")
 			}
