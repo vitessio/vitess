@@ -82,6 +82,12 @@
     "main": {
       "tables": {
         "main1": {},
+        "main2": {
+          "auto_increment": {
+            "column": "id",
+            "sequence": "seq"
+          }
+        },
         "seq": {
           "type": "sequence"
         }

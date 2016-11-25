@@ -53,7 +53,7 @@ func forceEOF(yylex interface{}) {
   colTuple    ColTuple
   valExprs    ValExprs
   values      Values
-  rowTuple    RowTuple
+  valTuple    ValTuple
   subquery    *Subquery
   caseExpr    *CaseExpr
   whens       []*When
@@ -138,7 +138,7 @@ func forceEOF(yylex interface{}) {
 %type <colTuple> col_tuple
 %type <valExprs> value_expression_list
 %type <values> tuple_list
-%type <rowTuple> row_tuple
+%type <valTuple> row_tuple
 %type <subquery> subquery
 %type <colName> column_name
 %type <caseExpr> case_expression
@@ -769,6 +769,10 @@ value_expression:
   {
     $$ = $1
   }
+| subquery
+  {
+    $$ = $1
+  }
 | value_expression '&' value_expression
   {
     $$ = &BinaryExpr{Left: $1, Operator: BitAndStr, Right: $3}
@@ -1126,10 +1130,6 @@ row_tuple:
   openb value_expression_list closeb
   {
     $$ = ValTuple($2)
-  }
-| subquery
-  {
-    $$ = $1
   }
 
 update_list:

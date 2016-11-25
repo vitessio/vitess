@@ -776,6 +776,9 @@ func TestErrors(t *testing.T) {
 	}, {
 		input:  "select next 1+1 values from a",
 		output: "syntax error at position 15",
+	}, {
+		input:  "insert into a values (select * from b)",
+		output: "syntax error at position 29 near 'select'",
 	}}
 	for _, tcase := range invalidSQL {
 		if tcase.output == "" {

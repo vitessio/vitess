@@ -172,7 +172,7 @@
   }
 }
 
-# insert unsharded
+# simple insert unsharded
 "insert into main1 values(1, 2)"
 {
   "Original": "insert into main1 values(1, 2)",
@@ -184,6 +184,104 @@
     },
     "Query": "insert into main1 values (1, 2)",
     "Table": "main1"
+  }
+}
+
+# insert unsharded with select
+"insert into main1 select id from main2"
+{
+  "Original": "insert into main1 select id from main2",
+  "Instructions": {
+    "Opcode": "InsertUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "insert into main1 select id from main2",
+    "Table": "main1"
+  }
+}
+
+# insert unsharded, invalid value for auto-inc
+"insert into main2(id, val) values(1.0, 'aa')"
+"could not convert val: 1.0, pos: 0: strconv.ParseUint: parsing "1.0": invalid syntax"
+
+# insert unsharded, column present
+"insert into main2(id, val) values(1, 'aa')"
+{
+  "Original": "insert into main2(id, val) values(1, 'aa')",
+  "Instructions": {
+    "Opcode": "InsertUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "insert into main2(id, val) values (:__seq0, 'aa')",
+    "Table": "main2",
+    "Generate": {
+      "Opcode": "SelectUnsharded",
+      "Keyspace": {
+        "Name": "main",
+        "Sharded": false
+      },
+      "Query": "select next :n values from `seq`",
+      "Value": [
+        1
+      ]
+    }
+  }
+}
+
+# insert unsharded, column absent
+"insert into main2(val) values('aa')"
+{
+  "Original": "insert into main2(val) values('aa')",
+  "Instructions": {
+    "Opcode": "InsertUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "insert into main2(val, id) values ('aa', :__seq0)",
+    "Table": "main2",
+    "Generate": {
+      "Opcode": "SelectUnsharded",
+      "Keyspace": {
+        "Name": "main",
+        "Sharded": false
+      },
+      "Query": "select next :n values from `seq`",
+      "Value": [
+        null
+      ]
+    }
+  }
+}
+
+# insert unsharded, multi-val
+"insert into main2(id, val) values(1, 'aa'), (null, 'bb')"
+{
+  "Original": "insert into main2(id, val) values(1, 'aa'), (null, 'bb')",
+  "Instructions": {
+    "Opcode": "InsertUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "insert into main2(id, val) values (:__seq0, 'aa'), (:__seq1, 'bb')",
+    "Table": "main2",
+    "Generate": {
+      "Opcode": "SelectUnsharded",
+      "Keyspace": {
+        "Name": "main",
+        "Sharded": false
+      },
+      "Query": "select next :n values from `seq`",
+      "Value": [
+        1,
+        null
+      ]
+    }
   }
 }
 
@@ -218,7 +316,7 @@
         "Name": "main",
         "Sharded": false
       },
-      "Query": "select next 1 values from `seq`",
+      "Query": "select next :n values from `seq`",
       "Value": [1]
     }
   }
@@ -247,7 +345,7 @@
         "Name": "main",
         "Sharded": false
       },
-      "Query": "select next 1 values from `seq`",
+      "Query": "select next :n values from `seq`",
       "Value": [null]
     }
   }
@@ -276,7 +374,7 @@
         "Name": "main",
         "Sharded": false
       },
-      "Query": "select next 1 values from `seq`",
+      "Query": "select next :n values from `seq`",
       "Value": [1]
     }
   }
@@ -303,7 +401,7 @@
         "Name": "main",
         "Sharded": false
       },
-      "Query": "select next 1 values from `seq`",
+      "Query": "select next :n values from `seq`",
       "Value": [null]
     }
   }
@@ -355,7 +453,7 @@
         "Name": "main",
         "Sharded": false
       },
-      "Query": "select next 1 values from `seq`",
+      "Query": "select next :n values from `seq`",
       "Value": [1,2]
     }
   }

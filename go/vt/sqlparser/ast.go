@@ -1618,7 +1618,7 @@ func (node *Limit) WalkSubtree(visit Visit) error {
 }
 
 // Values represents a VALUES clause.
-type Values []RowTuple
+type Values []ValTuple
 
 // Format formats the node.
 func (node Values) Format(buf *TrackedBuffer) {
@@ -1638,15 +1638,6 @@ func (node Values) WalkSubtree(visit Visit) error {
 	}
 	return nil
 }
-
-// RowTuple represents a row of values. It can be ValTuple, Subquery.
-type RowTuple interface {
-	iRowTuple()
-	ValExpr
-}
-
-func (ValTuple) iRowTuple()  {}
-func (*Subquery) iRowTuple() {}
 
 // UpdateExprs represents a list of update expressions.
 type UpdateExprs []*UpdateExpr
