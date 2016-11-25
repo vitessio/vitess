@@ -88,18 +88,22 @@ func forceEOF(yylex interface{}) {
 %left <empty> OR
 %left <empty> AND
 %right <empty> NOT
-%left <empty> BETWEEN CASE WHEN THEN ELSE
+%left <empty> BETWEEN CASE WHEN THEN ELSE END
 %left <empty> '=' '<' '>' LE GE NE NULL_SAFE_EQUAL IS LIKE REGEXP IN
 %left <empty> '|'
 %left <empty> '&'
 %left <empty> SHIFT_LEFT SHIFT_RIGHT
 %left <empty> '+' '-'
-%left <empty> '*' '/' '%'
+%left <empty> '*' '/' '%' MOD
 %left <empty> '^'
 %right <empty> '~' UNARY
 %right <empty> INTERVAL
 %nonassoc <empty> '.'
-%left <empty> END
+
+// There is no need to define precedence for the JSON
+// operators because the syntax is restricted enough that
+// they don't cause conflicts.
+%token <empty> JSON_EXTRACT_OP JSON_UNQUOTE_EXTRACT_OP
 
 // DDL Tokens
 %token <empty> CREATE ALTER DROP RENAME ANALYZE
@@ -107,7 +111,7 @@ func forceEOF(yylex interface{}) {
 %token <empty> SHOW DESCRIBE EXPLAIN
 
 // Functions
-%token <empty> CURRENT_TIMESTAMP DATABASE MOD
+%token <empty> CURRENT_TIMESTAMP DATABASE
 
 // MySQL reserved words that are unused by this grammar will map to this token.
 %token <empty> UNUSED
@@ -805,6 +809,10 @@ value_expression:
   {
     $$ = &BinaryExpr{Left: $1, Operator: ModStr, Right: $3}
   }
+| value_expression MOD value_expression
+  {
+    $$ = &BinaryExpr{Left: $1, Operator: ModStr, Right: $3}
+  }
 | value_expression SHIFT_LEFT value_expression
   {
     $$ = &BinaryExpr{Left: $1, Operator: ShiftLeftStr, Right: $3}
@@ -813,9 +821,13 @@ value_expression:
   {
     $$ = &BinaryExpr{Left: $1, Operator: ShiftRightStr, Right: $3}
   }
-| value_expression MOD value_expression
+| column_name JSON_EXTRACT_OP value
   {
-    $$ = &BinaryExpr{Left: $1, Operator: "MOD", Right: $3}
+    $$ = &BinaryExpr{Left: $1, Operator: JSONExtractOp, Right: $3}
+  }
+| column_name JSON_UNQUOTE_EXTRACT_OP value
+  {
+    $$ = &BinaryExpr{Left: $1, Operator: JSONUnquoteExtractOp, Right: $3}
   }
 | '+'  value_expression %prec UNARY
   {

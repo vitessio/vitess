@@ -287,6 +287,9 @@ func TestValid(t *testing.T) {
 	}, {
 		input: "select /* % */ 1 from t where a = b % c",
 	}, {
+		input:  "select /* MOD */ 1 from t where a = b MOD c",
+		output: "select /* MOD */ 1 from t where a = b % c",
+	}, {
 		input: "select /* << */ 1 from t where a = b << c",
 	}, {
 		input: "select /* >> */ 1 from t where a = b >> c",
@@ -300,6 +303,10 @@ func TestValid(t *testing.T) {
 	}, {
 		input: "select /* u~ */ 1 from t where a = ~b",
 	}, {
+		input: "select /* -> */ a.b -> 'ab' from t",
+	}, {
+		input: "select /* -> */ a.b ->> 'ab' from t",
+	}, {
 		input: "select /* empty function */ 1 from t where a = b()",
 	}, {
 		input: "select /* function with 1 param */ 1 from t where a = b(c)",
@@ -311,8 +318,6 @@ func TestValid(t *testing.T) {
 		input: "select /* if as func */ 1 from t where a = if(b)",
 	}, {
 		input: "select /* current_timestamp as func */ current_timestamp() from t",
-	}, {
-		input: "select /* mod as func */ a from tab where b MOD 2 = 0",
 	}, {
 		input: "select /* mod as func */ a from tab where mod(b, 2) = 0",
 	}, {

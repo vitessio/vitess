@@ -962,19 +962,21 @@ type ComparisonExpr struct {
 
 // ComparisonExpr.Operator
 const (
-	EqualStr         = "="
-	LessThanStr      = "<"
-	GreaterThanStr   = ">"
-	LessEqualStr     = "<="
-	GreaterEqualStr  = ">="
-	NotEqualStr      = "!="
-	NullSafeEqualStr = "<=>"
-	InStr            = "in"
-	NotInStr         = "not in"
-	LikeStr          = "like"
-	NotLikeStr       = "not like"
-	RegexpStr        = "regexp"
-	NotRegexpStr     = "not regexp"
+	EqualStr             = "="
+	LessThanStr          = "<"
+	GreaterThanStr       = ">"
+	LessEqualStr         = "<="
+	GreaterEqualStr      = ">="
+	NotEqualStr          = "!="
+	NullSafeEqualStr     = "<=>"
+	InStr                = "in"
+	NotInStr             = "not in"
+	LikeStr              = "like"
+	NotLikeStr           = "not like"
+	RegexpStr            = "regexp"
+	NotRegexpStr         = "not regexp"
+	JSONExtractOp        = "->"
+	JSONUnquoteExtractOp = "->>"
 )
 
 // Format formats the node.
