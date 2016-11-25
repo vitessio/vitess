@@ -357,9 +357,17 @@ func (tkn *Tokenizer) Scan() (int, []byte) {
 				return int(ch), nil
 			}
 		case '-':
-			if tkn.lastChar == '-' {
+			switch tkn.lastChar {
+			case '-':
 				tkn.next()
 				return tkn.scanCommentType1("--")
+			case '>':
+				tkn.next()
+				if tkn.lastChar == '>' {
+					tkn.next()
+					return JSON_UNQUOTE_EXTRACT_OP, nil
+				}
+				return JSON_EXTRACT_OP, nil
 			}
 			return int(ch), nil
 		case '<':
