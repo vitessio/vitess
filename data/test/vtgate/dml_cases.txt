@@ -22,32 +22,32 @@
 }
 
 # update unsharded
-"update main1 set val = 1"
+"update unsharded set val = 1"
 {
-  "Original": "update main1 set val = 1",
+  "Original": "update unsharded set val = 1",
   "Instructions": {
     "Opcode": "UpdateUnsharded",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
-    "Query": "update main1 set val = 1",
-    "Table": "main1"
+    "Query": "update unsharded set val = 1",
+    "Table": "unsharded"
   }
 }
 
 # delete unsharded
-"delete from main1"
+"delete from unsharded"
 {
-  "Original": "delete from main1",
+  "Original": "delete from unsharded",
   "Instructions": {
     "Opcode": "DeleteUnsharded",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
-    "Query": "delete from main1",
-    "Table": "main1"
+    "Query": "delete from unsharded",
+    "Table": "unsharded"
   }
 }
 
@@ -173,51 +173,51 @@
 }
 
 # simple insert unsharded
-"insert into main1 values(1, 2)"
+"insert into unsharded values(1, 2)"
 {
-  "Original": "insert into main1 values(1, 2)",
+  "Original": "insert into unsharded values(1, 2)",
   "Instructions": {
     "Opcode": "InsertUnsharded",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
-    "Query": "insert into main1 values (1, 2)",
-    "Table": "main1"
+    "Query": "insert into unsharded values (1, 2)",
+    "Table": "unsharded"
   }
 }
 
 # insert unsharded with select
-"insert into main1 select id from main2"
+"insert into unsharded select id from unsharded_auto"
 {
-  "Original": "insert into main1 select id from main2",
+  "Original": "insert into unsharded select id from unsharded_auto",
   "Instructions": {
     "Opcode": "InsertUnsharded",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
-    "Query": "insert into main1 select id from main2",
-    "Table": "main1"
+    "Query": "insert into unsharded select id from unsharded_auto",
+    "Table": "unsharded"
   }
 }
 
 # insert unsharded, invalid value for auto-inc
-"insert into main2(id, val) values(1.0, 'aa')"
+"insert into unsharded_auto(id, val) values(1.0, 'aa')"
 "could not convert val: 1.0, pos: 0: strconv.ParseUint: parsing "1.0": invalid syntax"
 
 # insert unsharded, column present
-"insert into main2(id, val) values(1, 'aa')"
+"insert into unsharded_auto(id, val) values(1, 'aa')"
 {
-  "Original": "insert into main2(id, val) values(1, 'aa')",
+  "Original": "insert into unsharded_auto(id, val) values(1, 'aa')",
   "Instructions": {
     "Opcode": "InsertUnsharded",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
-    "Query": "insert into main2(id, val) values (:__seq0, 'aa')",
-    "Table": "main2",
+    "Query": "insert into unsharded_auto(id, val) values (:__seq0, 'aa')",
+    "Table": "unsharded_auto",
     "Generate": {
       "Opcode": "SelectUnsharded",
       "Keyspace": {
@@ -233,17 +233,17 @@
 }
 
 # insert unsharded, column absent
-"insert into main2(val) values('aa')"
+"insert into unsharded_auto(val) values('aa')"
 {
-  "Original": "insert into main2(val) values('aa')",
+  "Original": "insert into unsharded_auto(val) values('aa')",
   "Instructions": {
     "Opcode": "InsertUnsharded",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
-    "Query": "insert into main2(val, id) values ('aa', :__seq0)",
-    "Table": "main2",
+    "Query": "insert into unsharded_auto(val, id) values ('aa', :__seq0)",
+    "Table": "unsharded_auto",
     "Generate": {
       "Opcode": "SelectUnsharded",
       "Keyspace": {
@@ -259,17 +259,17 @@
 }
 
 # insert unsharded, multi-val
-"insert into main2(id, val) values(1, 'aa'), (null, 'bb')"
+"insert into unsharded_auto(id, val) values(1, 'aa'), (null, 'bb')"
 {
-  "Original": "insert into main2(id, val) values(1, 'aa'), (null, 'bb')",
+  "Original": "insert into unsharded_auto(id, val) values(1, 'aa'), (null, 'bb')",
   "Instructions": {
     "Opcode": "InsertUnsharded",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
-    "Query": "insert into main2(id, val) values (:__seq0, 'aa'), (:__seq1, 'bb')",
-    "Table": "main2",
+    "Query": "insert into unsharded_auto(id, val) values (:__seq0, 'aa'), (:__seq1, 'bb')",
+    "Table": "unsharded_auto",
     "Generate": {
       "Opcode": "SelectUnsharded",
       "Keyspace": {

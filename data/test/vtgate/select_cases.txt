@@ -168,17 +168,17 @@
 }
 
 # Aggregate on unsharded
-"select count(*), col from main1"
+"select count(*), col from unsharded"
 {
-  "Original": "select count(*), col from main1",
+  "Original": "select count(*), col from unsharded",
   "Instructions": {
     "Opcode": "SelectUnsharded",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
-    "Query": "select count(*), col from main1",
-    "FieldQuery": "select count(*), col from main1 where 1 != 1"
+    "Query": "select count(*), col from unsharded",
+    "FieldQuery": "select count(*), col from unsharded where 1 != 1"
   }
 }
 
@@ -305,9 +305,9 @@
 }
 
 # Field query should work for joins select bind vars
-"select user.id, (select user.id+outm.m+main1.m from main1) from user join main1 outm"
+"select user.id, (select user.id+outm.m+unsharded.m from unsharded) from user join unsharded outm"
 {
-  "Original": "select user.id, (select user.id+outm.m+main1.m from main1) from user join main1 outm",
+  "Original": "select user.id, (select user.id+outm.m+unsharded.m from unsharded) from user join unsharded outm",
   "Instructions": {
     "Opcode": "Join",
     "Left": {
@@ -325,8 +325,8 @@
         "Name": "main",
         "Sharded": false
       },
-      "Query": "select (select :user_id + outm.m + main1.m from main1) from main1 as outm",
-      "FieldQuery": "select (select :user_id + outm.m + main1.m from main1 where 1 != 1) from main1 as outm where 1 != 1",
+      "Query": "select (select :user_id + outm.m + unsharded.m from unsharded) from unsharded as outm",
+      "FieldQuery": "select (select :user_id + outm.m + unsharded.m from unsharded where 1 != 1) from unsharded as outm where 1 != 1",
       "JoinVars": {
         "user_id": {}
       }

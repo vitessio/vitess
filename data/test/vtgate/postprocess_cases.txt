@@ -1,15 +1,15 @@
 # Group by unsharded
-"select col1, col2 from main1 group by col2"
+"select col1, col2 from unsharded group by col2"
 {
-  "Original": "select col1, col2 from main1 group by col2",
+  "Original": "select col1, col2 from unsharded group by col2",
   "Instructions": {
     "Opcode": "SelectUnsharded",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
-    "Query": "select col1, col2 from main1 group by col2",
-    "FieldQuery": "select col1, col2 from main1 where 1 != 1"
+    "Query": "select col1, col2 from unsharded group by col2",
+    "FieldQuery": "select col1, col2 from unsharded where 1 != 1"
   }
 }
 

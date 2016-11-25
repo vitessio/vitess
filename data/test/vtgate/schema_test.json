@@ -81,8 +81,8 @@
     },
     "main": {
       "tables": {
-        "main1": {},
-        "main2": {
+        "unsharded": {},
+        "unsharded_auto": {
           "auto_increment": {
             "column": "id",
             "sequence": "seq"
