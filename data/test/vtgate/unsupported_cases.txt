@@ -35,7 +35,7 @@
 "unsupported: complex join in subqueries"
 
 # subquery keyspace different from outer query
-"select * from user where id in (select m from main1)"
+"select * from user where id in (select m from unsharded)"
 "unsupported: subquery keyspace different from outer query"
 
 # scatter subquery
@@ -139,11 +139,11 @@
 "unsupported: limits with scatter"
 
 # subqueries in update
-"update user set col = (select id from main1)"
+"update user set col = (select id from unsharded)"
 "unsupported: subqueries in DML"
 
 # subqueries in delete
-"delete from user where col = (select id from main1)"
+"delete from user where col = (select id from unsharded)"
 "unsupported: subqueries in DML"
 
 # update with no where clause
@@ -191,35 +191,35 @@
 "unsupported: DML cannot change vindex column"
 
 # unsharded insert from union
-"insert into main1 select 1 from dual union select 1 from dual"
+"insert into unsharded select 1 from dual union select 1 from dual"
 "unsupported: union in insert"
 
 # unsharded insert with complex select
-"insert into main1 select col from user limit 1"
+"insert into unsharded select col from user limit 1"
 "unsupported: limits with scatter"
 
 # unsharded insert with complex join"
-"insert into main1 select u.col from user u join user u1"
+"insert into unsharded select u.col from user u join user u1"
 "unsupported: complex join in insert"
 
 # unsharded insert with mismatched keyspaces"
-"insert into main1 select col from user where id=1"
-"unsupported: cross-shard select in insert"
+"insert into unsharded select col from user where id=1"
+"unsupported: cross-keyspace select in insert"
 
 # unsharded insert, unqualified names and auto-inc combined
-"insert into main2 select col from main1"
+"insert into unsharded_auto select col from unsharded"
 "unsupported: auto-inc and select in insert"
 
 # unsharded inssert subquery in insert value
-"insert into main1 values((select 1 from dual), 1)"
+"insert into unsharded values((select 1 from dual), 1)"
 "unsupported: subquery in insert values"
 
 # unsharded insert, no col list with auto-inc
-"insert into main2 values(1,1)"
+"insert into unsharded_auto values(1,1)"
 "column list required for tables with auto-inc columns"
 
 # unsharded insert, col list doesn't match values
-"insert into main2(id, val) values(1)"
+"insert into unsharded_auto(id, val) values(1)"
 "column list doesn't match values"
 
 # sharded insert from select

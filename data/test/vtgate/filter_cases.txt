@@ -470,9 +470,9 @@
 }
 
 # Unsharded route
-"select main1.id from user join main1 where main1.id = user.id"
+"select unsharded.id from user join unsharded where unsharded.id = user.id"
 {
-  "Original": "select main1.id from user join main1 where main1.id = user.id",
+  "Original": "select unsharded.id from user join unsharded where unsharded.id = user.id",
   "Instructions": {
     "Opcode": "Join",
     "Left": {
@@ -490,8 +490,8 @@
         "Name": "main",
         "Sharded": false
       },
-      "Query": "select main1.id from main1 where main1.id = :user_id",
-      "FieldQuery": "select main1.id from main1 where 1 != 1",
+      "Query": "select unsharded.id from unsharded where unsharded.id = :user_id",
+      "FieldQuery": "select unsharded.id from unsharded where 1 != 1",
       "JoinVars": {
         "user_id": {}
       }

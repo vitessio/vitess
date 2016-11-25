@@ -28,7 +28,7 @@ func buildInsertPlan(ins *sqlparser.Insert, vschema VSchema) (*engine.Route, err
 }
 
 func buildInsertUnshardedPlan(ins *sqlparser.Insert, table *vindexes.Table, vschema VSchema) (*engine.Route, error) {
-	rt := &engine.Route{
+	eRoute := &engine.Route{
 		Opcode:   engine.InsertUnsharded,
 		Table:    table,
 		Keyspace: table.Keyspace,
@@ -42,18 +42,18 @@ func buildInsertUnshardedPlan(ins *sqlparser.Insert, table *vindexes.Table, vsch
 		if err != nil {
 			return nil, err
 		}
-		rb, ok := bldr.(*route)
+		innerRoute, ok := bldr.(*route)
 		if !ok {
 			return nil, errors.New("unsupported: complex join in insert")
 		}
-		if rb.ERoute.Keyspace.Name != rt.Keyspace.Name {
-			return nil, errors.New("unsupported: cross-shard select in insert")
+		if innerRoute.ERoute.Keyspace.Name != eRoute.Keyspace.Name {
+			return nil, errors.New("unsupported: cross-keyspace select in insert")
 		}
-		if rt.Table.AutoIncrement != nil {
+		if eRoute.Table.AutoIncrement != nil {
 			return nil, errors.New("unsupported: auto-inc and select in insert")
 		}
-		rt.Query = generateQuery(ins)
-		return rt, nil
+		eRoute.Query = generateQuery(ins)
+		return eRoute, nil
 	case sqlparser.Values:
 		values = rows
 		if hasSubquery(values) {
@@ -62,9 +62,9 @@ func buildInsertUnshardedPlan(ins *sqlparser.Insert, table *vindexes.Table, vsch
 	default:
 		panic("unexpected construct in insert")
 	}
-	if rt.Table.AutoIncrement == nil {
-		rt.Query = generateQuery(ins)
-		return rt, nil
+	if eRoute.Table.AutoIncrement == nil {
+		eRoute.Query = generateQuery(ins)
+		return eRoute, nil
 	}
 	if len(ins.Columns) == 0 {
 		return nil, errors.New("column list required for tables with auto-inc columns")
@@ -76,26 +76,26 @@ func buildInsertUnshardedPlan(ins *sqlparser.Insert, table *vindexes.Table, vsch
 	}
 	autoIncValues := make([]interface{}, 0, len(values))
 	for rowNum := range values {
-		autoIncVal, err := handleAutoinc(ins, rt.Table.AutoIncrement, rowNum)
+		autoIncVal, err := handleAutoinc(ins, eRoute.Table.AutoIncrement, rowNum)
 		if err != nil {
 			return nil, err
 		}
 		autoIncValues = append(autoIncValues, autoIncVal)
 	}
-	if rt.Table.AutoIncrement != nil {
-		rt.Generate = &engine.Generate{
+	if eRoute.Table.AutoIncrement != nil {
+		eRoute.Generate = &engine.Generate{
 			Opcode:   engine.SelectUnsharded,
-			Keyspace: rt.Table.AutoIncrement.Sequence.Keyspace,
-			Query:    fmt.Sprintf("select next :n values from `%s`", rt.Table.AutoIncrement.Sequence.Name),
+			Keyspace: eRoute.Table.AutoIncrement.Sequence.Keyspace,
+			Query:    fmt.Sprintf("select next :n values from `%s`", eRoute.Table.AutoIncrement.Sequence.Name),
 			Value:    autoIncValues,
 		}
 	}
-	rt.Query = generateQuery(ins)
-	return rt, nil
+	eRoute.Query = generateQuery(ins)
+	return eRoute, nil
 }
 
 func buildInsertShardedPlan(ins *sqlparser.Insert, table *vindexes.Table) (*engine.Route, error) {
-	rt := &engine.Route{
+	eRoute := &engine.Route{
 		Opcode:   engine.InsertSharded,
 		Table:    table,
 		Keyspace: table.Keyspace,
@@ -120,7 +120,7 @@ func buildInsertShardedPlan(ins *sqlparser.Insert, table *vindexes.Table) (*engi
 			return nil, errors.New("column list doesn't match values")
 		}
 	}
-	colVindexes := rt.Table.ColumnVindexes
+	colVindexes := eRoute.Table.ColumnVindexes
 	routeValues := make([]interface{}, 0, len(values))
 	autoIncValues := make([]interface{}, 0, len(values))
 	for rowNum := range values {
@@ -133,8 +133,8 @@ func buildInsertShardedPlan(ins *sqlparser.Insert, table *vindexes.Table) (*engi
 			}
 			rowValue = append(rowValue, value)
 		}
-		if rt.Table.AutoIncrement != nil {
-			autoIncVal, value, err := handleShardedAutoinc(ins, rt.Table.AutoIncrement, rowValue, rowNum)
+		if eRoute.Table.AutoIncrement != nil {
+			autoIncVal, value, err := handleShardedAutoinc(ins, eRoute.Table.AutoIncrement, rowValue, rowNum)
 			if err != nil {
 				return nil, err
 			}
@@ -143,17 +143,17 @@ func buildInsertShardedPlan(ins *sqlparser.Insert, table *vindexes.Table) (*engi
 		}
 		routeValues = append(routeValues, rowValue)
 	}
-	if rt.Table.AutoIncrement != nil {
-		rt.Generate = &engine.Generate{
+	if eRoute.Table.AutoIncrement != nil {
+		eRoute.Generate = &engine.Generate{
 			Opcode:   engine.SelectUnsharded,
-			Keyspace: rt.Table.AutoIncrement.Sequence.Keyspace,
-			Query:    fmt.Sprintf("select next :n values from `%s`", rt.Table.AutoIncrement.Sequence.Name),
+			Keyspace: eRoute.Table.AutoIncrement.Sequence.Keyspace,
+			Query:    fmt.Sprintf("select next :n values from `%s`", eRoute.Table.AutoIncrement.Sequence.Name),
 			Value:    autoIncValues,
 		}
 	}
-	rt.Values = routeValues
-	rt.Query = generateQuery(ins)
-	return rt, nil
+	eRoute.Values = routeValues
+	eRoute.Query = generateQuery(ins)
+	return eRoute, nil
 }
 
 // handleVindexCol substitutes the insert value with a bind var name and returns
