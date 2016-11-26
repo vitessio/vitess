@@ -1594,6 +1594,10 @@ const (
 
 // Format formats the node.
 func (node *Order) Format(buf *TrackedBuffer) {
+	if node, ok := node.Expr.(*NullVal); ok {
+		buf.Myprintf("%v", node)
+		return
+	}
 	buf.Myprintf("%v %s", node.Expr, node.Direction)
 }
 
