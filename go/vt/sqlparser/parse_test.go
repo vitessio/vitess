@@ -398,6 +398,8 @@ func TestValid(t *testing.T) {
 	}, {
 		input: "select /* order by desc */ 1 from t order by a desc",
 	}, {
+		input: "select /* order by null */ 1 from t order by null",
+	}, {
 		input: "select /* limit a */ 1 from t limit a",
 	}, {
 		input: "select /* limit a,b */ 1 from t limit a, b",
