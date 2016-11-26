@@ -224,6 +224,15 @@
   "FullQuery": "insert into a(eid, id) values (1 + 1, 2)"
 }
 
+# complex
+"insert into a (eid, id) values (0x04, 2)"
+{
+  "PlanID": "PASS_DML",
+  "Reason": "COMPLEX_EXPR",
+  "TableName": "a",
+  "FullQuery": "insert into a(eid, id) values (0x04, 2)"
+}
+
 # no index
 "insert into c (eid, id) values (1, 2)"
 {

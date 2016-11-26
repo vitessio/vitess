@@ -376,6 +376,21 @@
 "the quick brown fox"
 "syntax error at position 4 near 'the'"
 
+# Hex number is not treated as a simple value
+"select * from user where id = 0x04"
+{
+  "Original": "select * from user where id = 0x04",
+  "Instructions": {
+    "Opcode": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select * from user where id = 0x04",
+    "FieldQuery": "select * from user where 1 != 1"
+  }
+}
+
 # Sharding Key Condition in Parenthesis
 "select * from user where name ='abc' AND (id = 4) limit 5"
 {
@@ -393,6 +408,7 @@
   }
 }
 
+# Multiple parenthesized expressions
 "select * from user where (id = 4) AND (name ='abc') limit 5"
 {
   "Original": "select * from user where (id = 4) AND (name ='abc') limit 5",

@@ -836,6 +836,7 @@ func (*ComparisonExpr) iExpr() {}
 func (*RangeCond) iExpr()      {}
 func (*IsExpr) iExpr()         {}
 func (*ExistsExpr) iExpr()     {}
+func (HexNum) iExpr()          {}
 func (StrVal) iExpr()          {}
 func (HexVal) iExpr()          {}
 func (NumVal) iExpr()          {}
@@ -1086,6 +1087,7 @@ type ValExpr interface {
 	Expr
 }
 
+func (HexNum) iValExpr()        {}
 func (StrVal) iValExpr()        {}
 func (HexVal) iValExpr()        {}
 func (NumVal) iValExpr()        {}
@@ -1100,6 +1102,22 @@ func (*UnaryExpr) iValExpr()    {}
 func (*IntervalExpr) iValExpr() {}
 func (*FuncExpr) iValExpr()     {}
 func (*CaseExpr) iValExpr()     {}
+
+// HexNum represents a 0x... value. It cannot
+// be treated as a simple value because it can
+// be interpreted differently depending on the
+// context.
+type HexNum []byte
+
+// Format formats the node.
+func (node HexNum) Format(buf *TrackedBuffer) {
+	buf.Myprintf("%s", []byte(node))
+}
+
+// WalkSubtree walks the nodes of the subtree.
+func (node HexNum) WalkSubtree(visit Visit) error {
+	return nil
+}
 
 // StrVal represents a string value.
 type StrVal []byte
