@@ -5,11 +5,11 @@
 package tabletserver
 
 import (
-	"context"
 	"sync"
 	"time"
 
 	log "github.com/golang/glog"
+	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/timer"
 	"github.com/youtube/vitess/go/vt/concurrency"
@@ -20,6 +20,7 @@ import (
 // TxEngine handles transactions.
 type TxEngine struct {
 	isOpen, twopcEnabled bool
+	shutdownGracePeriod  time.Duration
 	coordinatorAddress   string
 	abandonAge           time.Duration
 	ticks                *timer.Timer
@@ -33,7 +34,9 @@ type TxEngine struct {
 
 // NewTxEngine creates a new TxEngine.
 func NewTxEngine(checker MySQLChecker, config Config, queryServiceStats *QueryServiceStats) *TxEngine {
-	te := &TxEngine{}
+	te := &TxEngine{
+		shutdownGracePeriod: time.Duration(config.TxShutDownGracePeriod * 1e9),
+	}
 	te.txPool = NewTxPool(
 		config.PoolNamePrefix+"TransactionPool",
 		config.StatsPrefix,
@@ -114,7 +117,9 @@ func (te *TxEngine) Open(dbconfigs dbconfigs.DBConfigs) {
 // Close closes the TxEngine. If the immediate flag is on,
 // then all current transactions are immediately rolled back.
 // Otherwise, the function waits for all current transactions
-// to conclude.
+// to conclude. If a shutdown grace period was specified,
+// the transactions are rolled back if they're not resolved
+// by that time.
 func (te *TxEngine) Close(immediate bool) {
 	if !te.isOpen {
 		return
@@ -122,10 +127,44 @@ func (te *TxEngine) Close(immediate bool) {
 	// Shut down functions are idempotent.
 	// No need to check if 2pc is enabled.
 	te.stopWatchdog()
-	if immediate {
-		te.rollbackTransactions()
-	}
+
+	poolEmpty := make(chan bool)
+	rollbackDone := make(chan bool)
+	// This goroutine decides if transactions have to be
+	// forced to rollback, and if so, when. Once done,
+	// the function closes rollbackDone, which can be
+	// verified to make sure it won't kick in later.
+	go func() {
+		defer close(rollbackDone)
+		if immediate {
+			// Immediately rollback everything and return.
+			log.Info("Immediate shutdown: rolling back now.")
+			te.rollbackTransactions()
+			return
+		}
+		if te.shutdownGracePeriod <= 0 {
+			// No grace period was specified. Never rollback.
+			log.Info("No grace period specified: performing normal wait.")
+			return
+		}
+		tmr := time.NewTimer(te.shutdownGracePeriod)
+		defer tmr.Stop()
+		select {
+		case <-tmr.C:
+			// The grace period has passed. Rollback, but don't touch the 2pc transactions.
+			log.Info("Grace period exceeded: rolling back non-2pc transactions now.")
+			te.txPool.RollbackNonBusy(context.Background())
+		case <-poolEmpty:
+			// The pool cleared before the timer kicked in. Just return.
+			log.Info("Transactions completed before grace period: shutting down.")
+		}
+	}()
 	te.txPool.WaitForEmpty()
+	// If the goroutine is still running, signal that it can exit.
+	close(poolEmpty)
+	// Make sure the goroutine has returned.
+	<-rollbackDone
+
 	te.txPool.Close()
 	te.twoPC.Close()
 	te.isOpen = false
