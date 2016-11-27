@@ -27,6 +27,21 @@ func FromVtRPCError(rpcErr *vtrpcpb.RPCError) error {
 	}
 }
 
+// FromVtRPCErrors recovers VitessErrors from an array of *vtrpcpb.RPCError.
+func FromVtRPCErrors(rpcErr []*vtrpcpb.RPCError) []error {
+	if rpcErr == nil {
+		return nil
+	}
+	vitessErrors := make([]error, 0, len(rpcErr))
+	for _, err := range rpcErr {
+		vitessErrors = append(vitessErrors, &VitessError{
+			Code: err.Code,
+			err:  errors.New(err.Message),
+		})
+	}
+	return vitessErrors
+}
+
 // VtRPCErrorFromVtError converts from a VtError to a vtrpcpb.RPCError.
 func VtRPCErrorFromVtError(err error) *vtrpcpb.RPCError {
 	if err == nil {

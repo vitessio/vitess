@@ -52,6 +52,15 @@ func (c *terminalClient) ExecuteEntityIds(ctx context.Context, sql string, bindV
 	return nil, errTerminal
 }
 
+func (c *terminalClient) ExecuteBatch(ctx context.Context, sql []string, bindVariables []map[string]interface{}, keyspace string, tabletType topodatapb.TabletType, session *vtgatepb.Session, notInTransaction bool, options *querypb.ExecuteOptions) ([]sqltypes.Result, []error) {
+	if len(sql) == 1 {
+		if sql[0] == "quit://" {
+			log.Fatal("Received quit:// query. Going down.")
+		}
+	}
+	return nil, []error{errTerminal}
+}
+
 func (c *terminalClient) ExecuteBatchShards(ctx context.Context, queries []*vtgatepb.BoundShardQuery, tabletType topodatapb.TabletType, asTransaction bool, session *vtgatepb.Session, options *querypb.ExecuteOptions) ([]sqltypes.Result, error) {
 	return nil, errTerminal
 }

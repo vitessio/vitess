@@ -47,6 +47,10 @@ func (c fallbackClient) ExecuteEntityIds(ctx context.Context, sql string, bindVa
 	return c.fallback.ExecuteEntityIds(ctx, sql, bindVariables, keyspace, entityColumnName, entityKeyspaceIDs, tabletType, session, notInTransaction, options)
 }
 
+func (c fallbackClient) ExecuteBatch(ctx context.Context, sql []string, bindVariables []map[string]interface{}, keyspace string, tabletType topodatapb.TabletType, session *vtgatepb.Session, notInTransaction bool, options *querypb.ExecuteOptions) ([]sqltypes.Result, []error) {
+	return c.fallback.ExecuteBatch(ctx, sql, bindVariables, keyspace, tabletType, session, notInTransaction, options)
+}
+
 func (c fallbackClient) ExecuteBatchShards(ctx context.Context, queries []*vtgatepb.BoundShardQuery, tabletType topodatapb.TabletType, asTransaction bool, session *vtgatepb.Session, options *querypb.ExecuteOptions) ([]sqltypes.Result, error) {
 	return c.fallback.ExecuteBatchShards(ctx, queries, tabletType, asTransaction, session, options)
 }

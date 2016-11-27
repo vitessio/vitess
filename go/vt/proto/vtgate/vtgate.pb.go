@@ -21,6 +21,8 @@ It has these top-level messages:
 	ExecuteEntityIdsRequest
 	ExecuteEntityIdsResponse
 	BoundShardQuery
+	ExecuteBatchRequest
+	ExecuteBatchResponse
 	ExecuteBatchShardsRequest
 	ExecuteBatchShardsResponse
 	BoundKeyspaceIdQuery
@@ -598,6 +600,97 @@ func (m *ExecuteEntityIdsResponse) GetSession() *Session {
 }
 
 func (m *ExecuteEntityIdsResponse) GetResult() *query.QueryResult {
+	if m != nil {
+		return m.Result
+	}
+	return nil
+}
+
+// ExecuteBatchRequest is the payload to ExecuteBatch.
+type ExecuteBatchRequest struct {
+	// caller_id identifies the caller. This is the effective caller ID,
+	// set by the application to further identify the caller.
+	CallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=caller_id,json=callerId" json:"caller_id,omitempty"`
+	// session carries the current transaction data. It is returned by Begin.
+	// Do not fill it in if outside of a transaction.
+	Session *Session `protobuf:"bytes,2,opt,name=session" json:"session,omitempty"`
+	// query is the query and bind variables to execute.
+	Query []*query.BoundQuery `protobuf:"bytes,3,opt,name=query" json:"query,omitempty"`
+	// tablet_type is the type of tablets that this query is targeted to.
+	TabletType topodata.TabletType `protobuf:"varint,4,opt,name=tablet_type,json=tabletType,enum=topodata.TabletType" json:"tablet_type,omitempty"`
+	// not_in_transaction is deprecated and should not be used.
+	NotInTransaction bool `protobuf:"varint,5,opt,name=not_in_transaction,json=notInTransaction" json:"not_in_transaction,omitempty"`
+	// keyspace to target the query to.
+	Keyspace string `protobuf:"bytes,6,opt,name=keyspace" json:"keyspace,omitempty"`
+	// options
+	Options *query.ExecuteOptions `protobuf:"bytes,7,opt,name=options" json:"options,omitempty"`
+}
+
+func (m *ExecuteBatchRequest) Reset()                    { *m = ExecuteBatchRequest{} }
+func (m *ExecuteBatchRequest) String() string            { return proto.CompactTextString(m) }
+func (*ExecuteBatchRequest) ProtoMessage()               {}
+func (*ExecuteBatchRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{1} }
+
+func (m *ExecuteBatchRequest) GetCallerId() *vtrpc.CallerID {
+	if m != nil {
+		return m.CallerId
+	}
+	return nil
+}
+
+func (m *ExecuteBatchRequest) GetSession() *Session {
+	if m != nil {
+		return m.Session
+	}
+	return nil
+}
+
+func (m *ExecuteBatchRequest) GetQueries() []*query.BoundQuery {
+	if m != nil {
+		return m.Query
+	}
+	return nil
+}
+
+func (m *ExecuteBatchRequest) GetOptions() *query.ExecuteOptions {
+	if m != nil {
+		return m.Options
+	}
+	return nil
+}
+
+// ExecuteResponse is the returned value from Execute.
+type ExecuteBatchResponse struct {
+	// error contains an application level error if necessary. Note the
+	// session may have changed, even when an error is returned (for
+	// instance if a database integrity error happened).
+	Error []*vtrpc.RPCError `protobuf:"bytes,1,opt,name=error" json:"error,omitempty"`
+	// session is the updated session information (only returned inside a transaction).
+	Session *Session `protobuf:"bytes,2,opt,name=session" json:"session,omitempty"`
+	// result contains the query result, only set if error is unset.
+	Result []*query.QueryResult `protobuf:"bytes,3,opt,name=result" json:"result,omitempty"`
+}
+
+func (m *ExecuteBatchResponse) Reset()                    { *m = ExecuteBatchResponse{} }
+func (m *ExecuteBatchResponse) String() string            { return proto.CompactTextString(m) }
+func (*ExecuteBatchResponse) ProtoMessage()               {}
+func (*ExecuteBatchResponse) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{2} }
+
+func (m *ExecuteBatchResponse) GetError() []*vtrpc.RPCError {
+	if m != nil {
+		return m.Error
+	}
+	return nil
+}
+
+func (m *ExecuteBatchResponse) GetSession() *Session {
+	if m != nil {
+		return m.Session
+	}
+	return nil
+}
+
+func (m *ExecuteBatchResponse) GetResults() []*query.QueryResult {
 	if m != nil {
 		return m.Result
 	}

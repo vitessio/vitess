@@ -61,6 +61,11 @@ type VitessClient interface {
 	// ExecuteEntityIds executes the query based on the specified external id to keyspace id map.
 	// API group: Range-based Sharding
 	ExecuteEntityIds(ctx context.Context, in *vtgate.ExecuteEntityIdsRequest, opts ...grpc.CallOption) (*vtgate.ExecuteEntityIdsResponse, error)
+	// ExecuteBatch tries to route the list of queries on the right shards.
+	// It depends on the query and bind variables to provide enough
+	// information in conjonction with the vindexes to route the query.
+	// API group: v3 API
+	ExecuteBatch(ctx context.Context, in *vtgate.ExecuteBatchRequest, opts ...grpc.CallOption) (*vtgate.ExecuteBatchResponse, error)
 	// ExecuteBatchShards executes the list of queries on the specified shards.
 	// API group: Custom Sharding
 	ExecuteBatchShards(ctx context.Context, in *vtgate.ExecuteBatchShardsRequest, opts ...grpc.CallOption) (*vtgate.ExecuteBatchShardsResponse, error)
@@ -161,6 +166,15 @@ func (c *vitessClient) ExecuteKeyRanges(ctx context.Context, in *vtgate.ExecuteK
 func (c *vitessClient) ExecuteEntityIds(ctx context.Context, in *vtgate.ExecuteEntityIdsRequest, opts ...grpc.CallOption) (*vtgate.ExecuteEntityIdsResponse, error) {
 	out := new(vtgate.ExecuteEntityIdsResponse)
 	err := grpc.Invoke(ctx, "/vtgateservice.Vitess/ExecuteEntityIds", in, out, c.cc, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vitessClient) ExecuteBatch(ctx context.Context, in *vtgate.ExecuteBatchRequest, opts ...grpc.CallOption) (*vtgate.ExecuteBatchResponse, error) {
+	out := new(vtgate.ExecuteBatchResponse)
+	err := grpc.Invoke(ctx, "/vtgateservice.Vitess/ExecuteBatch", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
 	}
