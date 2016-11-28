@@ -9,6 +9,7 @@ import (
 	"fmt"
 
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
 )
 
@@ -26,10 +27,11 @@ type Route struct {
 	Table      *vindexes.Table
 	Subquery   string
 	Generate   *Generate
+	Rows       *sqlparser.Values
 }
 
 // Execute performs a non-streaming exec.
-func (rt *Route) Execute(vcursor VCursor, joinvars map[string]interface{}, wantields bool) (*sqltypes.Result, error) {
+func (rt *Route) Execute(vcursor VCursor, joinvars map[string]interface{}, wantfields bool) (*sqltypes.Result, error) {
 	return vcursor.ExecuteRoute(rt, joinvars)
 }
 

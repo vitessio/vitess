@@ -254,9 +254,10 @@ type Insert struct {
 
 // Format formats the node.
 func (node *Insert) Format(buf *TrackedBuffer) {
-	buf.Myprintf("insert %v%sinto %v%v %v%v",
+	const ValuesStr = "values :#rowvalues"
+	buf.Myprintf("insert %v%sinto %v%v %s%v",
 		node.Comments, node.Ignore,
-		node.Table, node.Columns, node.Rows, node.OnDup)
+		node.Table, node.Columns, ValuesStr, node.OnDup)
 }
 
 // WalkSubtree walks the nodes of the subtree.

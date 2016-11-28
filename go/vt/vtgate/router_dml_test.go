@@ -738,7 +738,7 @@ func TestInsertFail(t *testing.T) {
 func TestMultiInsertSharded(t *testing.T) {
 	router, sbc1, sbc2, sbclookup := createRouterEnv()
 
-	_, err := routerExec(router, "insert into user(id, v, name) values (1, 1, 'myname1'),(1, 2, 'myname2')", nil)
+	_, err := routerExec(router, "insert into user(id, v, name) values (1, 1, 'myname1'),(2, 2, 'myname2')", nil)
 	if err != nil {
 		t.Error(err)
 	}
@@ -748,9 +748,9 @@ func TestMultiInsertSharded(t *testing.T) {
 			"_Id0":   int64(1),
 			"_name0": []byte("myname1"),
 			"__seq0": int64(1),
-			"_Id1":   int64(1),
+			"_Id1":   int64(2),
 			"_name1": []byte("myname2"),
-			"__seq1": int64(1),
+			"__seq1": int64(2),
 		},
 	}}
 	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
@@ -769,7 +769,7 @@ func TestMultiInsertSharded(t *testing.T) {
 		Sql: "insert into name_user_map(name, user_id) values (:name, :user_id)",
 		BindVariables: map[string]interface{}{
 			"name":    []byte("myname2"),
-			"user_id": int64(1),
+			"user_id": int64(2),
 		},
 	}}
 	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
@@ -778,7 +778,7 @@ func TestMultiInsertSharded(t *testing.T) {
 
 	sbc1.Queries = nil
 	sbclookup.Queries = nil
-	_, err = routerExec(router, "insert into user(id, v, name) values (3, 3, 'myname3'),(3, 4, 'myname4')", nil)
+	_, err = routerExec(router, "insert into user(id, v, name) values (3, 3, 'myname3'),(4, 4, 'myname4')", nil)
 	if err != nil {
 		t.Error(err)
 	}
@@ -788,8 +788,8 @@ func TestMultiInsertSharded(t *testing.T) {
 			"_Id0":   int64(3),
 			"__seq0": int64(3),
 			"_name0": []byte("myname3"),
-			"_Id1":   int64(3),
-			"__seq1": int64(3),
+			"_Id1":   int64(4),
+			"__seq1": int64(4),
 			"_name1": []byte("myname4"),
 		},
 	}}
@@ -809,7 +809,7 @@ func TestMultiInsertSharded(t *testing.T) {
 		Sql: "insert into name_user_map(name, user_id) values (:name, :user_id)",
 		BindVariables: map[string]interface{}{
 			"name":    []byte("myname4"),
-			"user_id": int64(3),
+			"user_id": int64(4),
 		},
 	}}
 	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {

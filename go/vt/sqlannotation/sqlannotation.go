@@ -40,18 +40,22 @@ func AnnotateIfDML(sql string, keyspaceIDs [][]byte) string {
 		return sql
 	}
 	if len(keyspaceIDs) == 1 {
-		return AddKeyspaceID(sql, keyspaceIDs[0], "")
+		return AddKeyspaceIDs(sql, keyspaceIDs, "")
 	}
 	filteredReplicationUnfriendlyStatementsCount.Add(1)
 	return sql + filteredReplicationUnfriendlyAnnotation
 }
 
-// AddKeyspaceID returns a copy of 'sql' annotated
+// AddKeyspaceIDs returns a copy of 'sql' annotated
 // with the given keyspace id. It also appends the
 // additional trailingComments, if any.
-func AddKeyspaceID(sql string, keyspaceID []byte, trailingComments string) string {
+func AddKeyspaceIDs(sql string, keyspaceID [][]byte, trailingComments string) string {
+	ksidStr := make([]string, len(keyspaceID))
+	for ksid := range keyspaceID {
+		ksidStr[ksid] = hex.EncodeToString(keyspaceID[ksid])
+	}
 	return fmt.Sprintf("%s /* vtgate:: keyspace_id:%s */%s",
-		sql, hex.EncodeToString(keyspaceID), trailingComments)
+		sql, strings.Join(ksidStr, ","), trailingComments)
 }
 
 // IsDML returns true if 'querySQL' is an INSERT, UPDATE or DELETE statement.

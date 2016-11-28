@@ -85,7 +85,9 @@ func (rtr *Router) StreamExecute(ctx context.Context, sql string, bindVars map[s
 // ExecuteRoute executes the route query for all route opcodes.
 func (rtr *Router) ExecuteRoute(vcursor *requestContext, route *engine.Route, joinvars map[string]interface{}) (*sqltypes.Result, error) {
 	saved := copyBindVars(vcursor.bindVars)
-	defer func() { vcursor.bindVars = saved }()
+	defer func() {
+		vcursor.bindVars = saved
+	}()
 	for k, v := range joinvars {
 		vcursor.bindVars[k] = v
 	}
@@ -143,7 +145,9 @@ func copyBindVars(bindVars map[string]interface{}) map[string]interface{} {
 // GetRouteFields fetches the field info for the route.
 func (rtr *Router) GetRouteFields(vcursor *requestContext, route *engine.Route, joinvars map[string]interface{}) (*sqltypes.Result, error) {
 	saved := copyBindVars(vcursor.bindVars)
-	defer func() { vcursor.bindVars = saved }()
+	defer func() {
+		vcursor.bindVars = saved
+	}()
 	for k := range joinvars {
 		vcursor.bindVars[k] = nil
 	}
@@ -168,7 +172,9 @@ func (rtr *Router) GetRouteFields(vcursor *requestContext, route *engine.Route, 
 // StreamExecuteRoute performs a streaming route. Only selects are allowed.
 func (rtr *Router) StreamExecuteRoute(vcursor *requestContext, route *engine.Route, joinvars map[string]interface{}, sendReply func(*sqltypes.Result) error) error {
 	saved := copyBindVars(vcursor.bindVars)
-	defer func() { vcursor.bindVars = saved }()
+	defer func() {
+		vcursor.bindVars = saved
+	}()
 	for k, v := range joinvars {
 		vcursor.bindVars[k] = v
 	}
@@ -271,6 +277,7 @@ func (rtr *Router) paramsSelectScatter(vcursor *requestContext, route *engine.Ro
 
 func (rtr *Router) execUpdateEqual(vcursor *requestContext, route *engine.Route) (*sqltypes.Result, error) {
 	keys, err := rtr.resolveKeys([]interface{}{route.Values}, vcursor.bindVars)
+	keyspaceIds := [][]byte{}
 	if err != nil {
 		return nil, fmt.Errorf("execUpdateEqual: %v", err)
 	}
@@ -281,7 +288,8 @@ func (rtr *Router) execUpdateEqual(vcursor *requestContext, route *engine.Route)
 	if len(ksid) == 0 {
 		return &sqltypes.Result{}, nil
 	}
-	rewritten := sqlannotation.AddKeyspaceID(route.Query, ksid, vcursor.comments)
+	keyspaceIds = append(keyspaceIds, ksid)
+	rewritten := sqlannotation.AddKeyspaceIDs(route.Query, keyspaceIds, vcursor.comments)
 	return rtr.scatterConn.Execute(
 		vcursor.ctx,
 		rewritten,
@@ -296,6 +304,7 @@ func (rtr *Router) execUpdateEqual(vcursor *requestContext, route *engine.Route)
 
 func (rtr *Router) execDeleteEqual(vcursor *requestContext, route *engine.Route) (*sqltypes.Result, error) {
 	keys, err := rtr.resolveKeys([]interface{}{route.Values}, vcursor.bindVars)
+	keyspaceIds := [][]byte{}
 	if err != nil {
 		return nil, fmt.Errorf("execDeleteEqual: %v", err)
 	}
@@ -312,7 +321,8 @@ func (rtr *Router) execDeleteEqual(vcursor *requestContext, route *engine.Route)
 			return nil, fmt.Errorf("execDeleteEqual: %v", err)
 		}
 	}
-	rewritten := sqlannotation.AddKeyspaceID(route.Query, ksid, vcursor.comments)
+	keyspaceIds = append(keyspaceIds, ksid)
+	rewritten := sqlannotation.AddKeyspaceIDs(route.Query, keyspaceIds, vcursor.comments)
 	return rtr.scatterConn.Execute(
 		vcursor.ctx,
 		rewritten,
@@ -357,62 +367,98 @@ func (rtr *Router) execInsertUnsharded(vcursor *requestContext, route *engine.Ro
 }
 
 func (rtr *Router) execInsertSharded(vcursor *requestContext, route *engine.Route) (*sqltypes.Result, error) {
-	var firstKsid []byte
-	inputs := route.Values.([]interface{})
 
 	insertid, err := rtr.handleGenerate(vcursor, route.Generate)
 	if err != nil {
 		return nil, fmt.Errorf("execInsertSharded: %v", err)
 	}
 
-	for rowNum, input := range inputs {
-		keys, err := rtr.resolveKeys(input.([]interface{}), vcursor.bindVars)
+	keyspace, routing, shardKsidMap, err := rtr.getInsertShardedRoute(vcursor, route)
+	if err != nil {
+		return nil, fmt.Errorf("paramsSelectEqual: %v", err)
+	}
+	//spew.Dump((*route.Rows)[1])
+	//for _, value := range *route.Rows {
+	//	spew.Dump(value)
+	//}
+	//Query ReWriting
+	var aggrResult sqltypes.Result
+	for shard := range routing {
+		rewritten := sqlannotation.AddKeyspaceIDs(route.Query, shardKsidMap[shard], vcursor.comments)
+		vcursor.bindVars["#rowvalues"] = routing[shard]
+
+		result, err := rtr.scatterConn.Execute(
+			vcursor.ctx,
+			rewritten,
+			vcursor.bindVars,
+			keyspace,
+			[]string{shard},
+			vcursor.tabletType,
+			NewSafeSession(vcursor.session),
+			vcursor.notInTransaction,
+			vcursor.options)
 		if err != nil {
 			return nil, fmt.Errorf("execInsertSharded: %v", err)
 		}
+
+		if insertid != 0 {
+			if result.InsertID != 0 {
+				return nil, fmt.Errorf("sequence and db generated a value each for insert")
+			}
+			aggrResult.InsertID = uint64(insertid)
+		}
+		//Aggregate the Results here from the ResultSet coming from different shards.
+		//aggrResult.Rows = append(aggrResult.Rows,result.Rows)
+		aggrResult.Fields = result.Fields
+		aggrResult.RowsAffected += aggrResult.RowsAffected
+
+	}
+
+	return &aggrResult, nil
+}
+
+func (rtr *Router) getInsertShardedRoute(vcursor *requestContext, route *engine.Route) (keyspace string, routing routingMap, valuesKSIDMap map[string][][]byte, err error) {
+
+	keyspaceIDs := [][]byte{}
+	routing = make(routingMap)
+	valuesKeyspaceIDMap := make(map[string][][]byte)
+	keyspace, _, allShards, err := getKeyspaceShards(vcursor.ctx, rtr.serv, rtr.cell, route.Keyspace.Name, vcursor.tabletType)
+	if err != nil {
+		return "", nil, nil, fmt.Errorf("execInsertSharded: %v", err)
+	}
+
+	inputs := route.Values.([]interface{})
+	for rowNum, input := range inputs {
+		keys, err := rtr.resolveKeys(input.([]interface{}), vcursor.bindVars)
+		if err != nil {
+			return "", nil, nil, fmt.Errorf("execInsertSharded: %v", err)
+		}
 		for colNum := 0; colNum < len(keys); colNum++ {
-			if rowNum == 0 && colNum == 0 {
-				ksid, err := rtr.handlePrimary(vcursor, keys[0], route.Table.ColumnVindexes[0], vcursor.bindVars, rowNum)
+			if colNum == 0 {
+				ksid, err := rtr.handlePrimary(vcursor, keys[colNum], route.Table.ColumnVindexes[colNum], vcursor.bindVars, rowNum)
 				if err != nil {
-					return nil, fmt.Errorf("execInsertSharded: %v", err)
+					return "", nil, nil, fmt.Errorf("execInsertSharded: %v", err)
 				}
-				firstKsid = ksid
+				keyspaceIDs = append(keyspaceIDs, ksid)
 			} else {
-				err := rtr.handleNonPrimary(vcursor, keys[colNum], route.Table.ColumnVindexes[colNum], vcursor.bindVars, firstKsid, rowNum)
+				err := rtr.handleNonPrimary(vcursor, keys[colNum], route.Table.ColumnVindexes[colNum], vcursor.bindVars, keyspaceIDs[rowNum], rowNum)
 				if err != nil {
-					return nil, fmt.Errorf("execInsertSharded: %v", err)
+					return "", nil, nil, fmt.Errorf("execInsertSharded: %v", err)
 				}
 			}
 		}
-	}
-
-	ks, shard, err := rtr.getRouting(vcursor.ctx, route.Keyspace.Name, vcursor.tabletType, firstKsid)
-	if err != nil {
-		return nil, fmt.Errorf("execInsertSharded: %v", err)
-	}
-
-	rewritten := sqlannotation.AddKeyspaceID(route.Query, firstKsid, vcursor.comments)
-	result, err := rtr.scatterConn.Execute(
-		vcursor.ctx,
-		rewritten,
-		vcursor.bindVars,
-		ks,
-		[]string{shard},
-		vcursor.tabletType,
-		NewSafeSession(vcursor.session),
-		vcursor.notInTransaction,
-		vcursor.options)
-
-	if err != nil {
-		return nil, fmt.Errorf("execInsertSharded: %v", err)
-	}
-	if insertid != 0 {
-		if result.InsertID != 0 {
-			return nil, fmt.Errorf("sequence and db generated a value each for insert")
+		shard, err := getShardForKeyspaceID(allShards, keyspaceIDs[rowNum])
+		//fmt.Println("Shard:"+shard)
+		//routing.Add(shard,keyspaceIDs[rowNum])
+		routing.Add(shard, rowNum)
+		if err != nil {
+			return "", nil, nil, fmt.Errorf("execInsertSharded: %v", err)
 		}
-		result.InsertID = uint64(insertid)
+		valuesKeyspaceIDMap[shard] = append(valuesKeyspaceIDMap[shard], keyspaceIDs[rowNum])
 	}
-	return result, nil
+	//fmt.Println("RoutingMap")
+	//spew.Dump(routing)
+	return keyspace, routing, valuesKeyspaceIDMap, nil
 }
 
 // resloveList returns a list of values, typically for an IN clause. If the input
