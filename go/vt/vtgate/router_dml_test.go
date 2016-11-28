@@ -1,7 +1,7 @@
-// Copyright 2014, Google Inc. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
+//// Copyright 2014, Google Inc. All rights reserved.
+//// Use of this source code is governed by a BSD-style
+//// license that can be found in the LICENSE file.
+//
 package vtgate
 
 import (
@@ -299,7 +299,7 @@ func TestInsertSharded(t *testing.T) {
 		t.Error(err)
 	}
 	wantQueries := []querytypes.BoundQuery{{
-		Sql: "insert into user(id, v, name) values (:_Id0, 2, :_name0) /* vtgate:: keyspace_id:166b40b44aba4bd6 */",
+		Sql: "insert into user(id, v, name) values :#rowvalues /* vtgate:: keyspace_id:166b40b44aba4bd6 */",
 		BindVariables: map[string]interface{}{
 			"_Id0":   int64(1),
 			"_name0": []byte("myname"),
@@ -313,7 +313,7 @@ func TestInsertSharded(t *testing.T) {
 		t.Errorf("sbc2.Queries: %+v, want nil\n", sbc2.Queries)
 	}
 	wantQueries = []querytypes.BoundQuery{{
-		Sql: "insert into name_user_map(name, user_id) values (:name, :user_id)",
+		Sql: "insert into name_user_map(name, user_id) values :#rowvalues",
 		BindVariables: map[string]interface{}{
 			"name":    []byte("myname"),
 			"user_id": int64(1),
@@ -330,7 +330,7 @@ func TestInsertSharded(t *testing.T) {
 		t.Error(err)
 	}
 	wantQueries = []querytypes.BoundQuery{{
-		Sql: "insert into user(id, v, name) values (:_Id0, 2, :_name0) /* vtgate:: keyspace_id:4eb190c9a2fa169c */",
+		Sql: "insert into user(id, v, name) values :#rowvalues /* vtgate:: keyspace_id:4eb190c9a2fa169c */",
 		BindVariables: map[string]interface{}{
 			"_Id0":   int64(3),
 			"__seq0": int64(3),
@@ -344,7 +344,7 @@ func TestInsertSharded(t *testing.T) {
 		t.Errorf("sbc1.Queries: %+v, want nil\n", sbc1.Queries)
 	}
 	wantQueries = []querytypes.BoundQuery{{
-		Sql: "insert into name_user_map(name, user_id) values (:name, :user_id)",
+		Sql: "insert into name_user_map(name, user_id) values :#rowvalues",
 		BindVariables: map[string]interface{}{
 			"name":    []byte("myname2"),
 			"user_id": int64(3),
@@ -363,7 +363,7 @@ func TestInsertComments(t *testing.T) {
 		t.Error(err)
 	}
 	wantQueries := []querytypes.BoundQuery{{
-		Sql: "insert into user(id, v, name) values (:_Id0, 2, :_name0) /* vtgate:: keyspace_id:166b40b44aba4bd6 */ /* trailing */",
+		Sql: "insert into user(id, v, name) values :#rowvalues /* vtgate:: keyspace_id:166b40b44aba4bd6 */ /* trailing */",
 		BindVariables: map[string]interface{}{
 			"_Id0":   int64(1),
 			"_name0": []byte("myname"),
@@ -377,7 +377,7 @@ func TestInsertComments(t *testing.T) {
 		t.Errorf("sbc2.Queries: %+v, want nil\n", sbc2.Queries)
 	}
 	wantQueries = []querytypes.BoundQuery{{
-		Sql: "insert into name_user_map(name, user_id) values (:name, :user_id)",
+		Sql: "insert into name_user_map(name, user_id) values :#rowvalues",
 		BindVariables: map[string]interface{}{
 			"name":    []byte("myname"),
 			"user_id": int64(1),
@@ -403,7 +403,7 @@ func TestInsertGeneratorSharded(t *testing.T) {
 		t.Error(err)
 	}
 	wantQueries := []querytypes.BoundQuery{{
-		Sql: "insert into user(v, name, Id) values (2, :_name0, :_Id0) /* vtgate:: keyspace_id:166b40b44aba4bd6 */",
+		Sql: "insert into user(v, name, Id) values :#rowvalues /* vtgate:: keyspace_id:166b40b44aba4bd6 */",
 		BindVariables: map[string]interface{}{
 			"_Id0":   int64(1),
 			"__seq0": int64(1),
@@ -417,7 +417,7 @@ func TestInsertGeneratorSharded(t *testing.T) {
 		Sql:           "select next :n values from `user_seq`",
 		BindVariables: map[string]interface{}{"n": int64(1)},
 	}, {
-		Sql: "insert into name_user_map(name, user_id) values (:name, :user_id)",
+		Sql: "insert into name_user_map(name, user_id) values :#rowvalues",
 		BindVariables: map[string]interface{}{
 			"name":    []byte("myname"),
 			"user_id": int64(1),
@@ -443,7 +443,7 @@ func TestInsertGeneratorUnsharded(t *testing.T) {
 		Sql:           "select next :n values from `user_seq`",
 		BindVariables: map[string]interface{}{"n": int64(1)},
 	}, {
-		Sql: "insert into main1(id, name) values (:__seq0, 'myname')",
+		Sql: "insert into main1(id, name) values :#rowvalues",
 		BindVariables: map[string]interface{}{
 			"__seq0": int64(1),
 		},
@@ -466,7 +466,7 @@ func TestInsertLookupOwned(t *testing.T) {
 		t.Error(err)
 	}
 	wantQueries := []querytypes.BoundQuery{{
-		Sql: "insert into music(user_id, id) values (:_user_id0, :_id0) /* vtgate:: keyspace_id:06e7ea22ce92708f */",
+		Sql: "insert into music(user_id, id) values :#rowvalues /* vtgate:: keyspace_id:06e7ea22ce92708f */",
 		BindVariables: map[string]interface{}{
 			"_user_id0": int64(2),
 			"_id0":      int64(3),
@@ -477,7 +477,7 @@ func TestInsertLookupOwned(t *testing.T) {
 		t.Errorf("sbc.Queries:\n%+v, want\n%+v\n", sbc.Queries, wantQueries)
 	}
 	wantQueries = []querytypes.BoundQuery{{
-		Sql: "insert into music_user_map(music_id, user_id) values (:music_id, :user_id)",
+		Sql: "insert into music_user_map(music_id, user_id) values :#rowvalues",
 		BindVariables: map[string]interface{}{
 			"music_id": int64(3),
 			"user_id":  int64(2),
@@ -503,7 +503,7 @@ func TestInsertLookupOwnedGenerator(t *testing.T) {
 		t.Error(err)
 	}
 	wantQueries := []querytypes.BoundQuery{{
-		Sql: "insert into music(user_id, id) values (:_user_id0, :_id0) /* vtgate:: keyspace_id:06e7ea22ce92708f */",
+		Sql: "insert into music(user_id, id) values :#rowvalues /* vtgate:: keyspace_id:06e7ea22ce92708f */",
 		BindVariables: map[string]interface{}{
 			"_user_id0": int64(2),
 			"_id0":      int64(4),
@@ -517,7 +517,7 @@ func TestInsertLookupOwnedGenerator(t *testing.T) {
 		Sql:           "select next :n values from `user_seq`",
 		BindVariables: map[string]interface{}{"n": int64(1)},
 	}, {
-		Sql: "insert into music_user_map(music_id, user_id) values (:music_id, :user_id)",
+		Sql: "insert into music_user_map(music_id, user_id) values :#rowvalues",
 		BindVariables: map[string]interface{}{
 			"music_id": int64(4),
 			"user_id":  int64(2),
@@ -887,7 +887,7 @@ func TestMultiInsertGeneratorSparse(t *testing.T) {
 		t.Error(err)
 	}
 	wantQueries := []querytypes.BoundQuery{{
-		Sql: "insert into music(id, user_id, name) values (:_id0, :_user_id0, 'myname1'), (:_id1, :_user_id1, 'myname2'), (:_id2, :_user_id2, 'myname3') /* vtgate:: keyspace_id:06e7ea22ce92708f */",
+		Sql: "insert into music(id, user_id, name) values :#rowvalues /* vtgate:: keyspace_id:06e7ea22ce92708f */",
 		BindVariables: map[string]interface{}{
 			"u":         int64(2),
 			"_id0":      int64(1),
@@ -908,19 +908,19 @@ func TestMultiInsertGeneratorSparse(t *testing.T) {
 		Sql:           "select next :n values from `user_seq`",
 		BindVariables: map[string]interface{}{"n": int64(2)},
 	}, {
-		Sql: "insert into music_user_map(music_id, user_id) values (:music_id, :user_id)",
+		Sql: "insert into music_user_map(music_id, user_id) values :#rowvalues",
 		BindVariables: map[string]interface{}{
 			"user_id":  int64(2),
 			"music_id": int64(1),
 		},
 	}, {
-		Sql: "insert into music_user_map(music_id, user_id) values (:music_id, :user_id)",
+		Sql: "insert into music_user_map(music_id, user_id) values :#rowvalues",
 		BindVariables: map[string]interface{}{
 			"user_id":  int64(2),
 			"music_id": int64(2),
 		},
 	}, {
-		Sql: "insert into music_user_map(music_id, user_id) values (:music_id, :user_id)",
+		Sql: "insert into music_user_map(music_id, user_id) values :#rowvalues",
 		BindVariables: map[string]interface{}{
 			"user_id":  int64(2),
 			"music_id": int64(2),

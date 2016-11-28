@@ -385,7 +385,6 @@ func (rtr *Router) execInsertSharded(vcursor *requestContext, route *engine.Rout
 	var aggrResult sqltypes.Result
 	for shard := range routing {
 		rewritten := sqlannotation.AddKeyspaceIDs(route.Query, shardKsidMap[shard], vcursor.comments)
-		vcursor.bindVars["#rowvalues"] = routing[shard]
 
 		result, err := rtr.scatterConn.Execute(
 			vcursor.ctx,

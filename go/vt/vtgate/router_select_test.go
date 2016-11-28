@@ -71,7 +71,7 @@ func TestUnsharded(t *testing.T) {
 		t.Error(err)
 	}
 	wantQueries = []querytypes.BoundQuery{{
-		Sql:           "insert into music_user_map values (1)",
+		Sql:           "insert into music_user_map values :#rowvalues",
 		BindVariables: map[string]interface{}{},
 	}}
 	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
@@ -128,7 +128,7 @@ func TestUnshardedComments(t *testing.T) {
 		t.Error(err)
 	}
 	wantQueries = []querytypes.BoundQuery{{
-		Sql:           "insert into music_user_map values (1) /* trailing */",
+		Sql:           "insert into music_user_map values :#rowvalues /* trailing */",
 		BindVariables: map[string]interface{}{},
 	}}
 	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
