@@ -1488,7 +1488,7 @@ func TestTabletServerSplitQueryInvalidParams(t *testing.T) {
 
 func TestHandleExecUnknownError(t *testing.T) {
 	ctx := context.Background()
-	logStats := NewLogStats("TestHandleExecError", ctx)
+	logStats := NewLogStats(ctx, "TestHandleExecError")
 	var err error
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
@@ -1499,7 +1499,7 @@ func TestHandleExecUnknownError(t *testing.T) {
 
 func TestHandleExecTabletError(t *testing.T) {
 	ctx := context.Background()
-	logStats := NewLogStats("TestHandleExecError", ctx)
+	logStats := NewLogStats(ctx, "TestHandleExecError")
 	var err error
 	defer func() {
 		want := "fatal: tablet error"
@@ -1516,7 +1516,7 @@ func TestHandleExecTabletError(t *testing.T) {
 
 func TestTerseErrorsNonSQLError(t *testing.T) {
 	ctx := context.Background()
-	logStats := NewLogStats("TestHandleExecError", ctx)
+	logStats := NewLogStats(ctx, "TestHandleExecError")
 	var err error
 	defer func() {
 		want := "fatal: tablet error"
@@ -1534,7 +1534,7 @@ func TestTerseErrorsNonSQLError(t *testing.T) {
 
 func TestTerseErrorsBindVars(t *testing.T) {
 	ctx := context.Background()
-	logStats := NewLogStats("TestHandleExecError", ctx)
+	logStats := NewLogStats(ctx, "TestHandleExecError")
 	var err error
 	defer func() {
 		want := "error: (errno 10) (sqlstate HY000) during query: select * from test_table"
@@ -1557,7 +1557,7 @@ func TestTerseErrorsBindVars(t *testing.T) {
 
 func TestTerseErrorsNoBindVars(t *testing.T) {
 	ctx := context.Background()
-	logStats := NewLogStats("TestHandleExecError", ctx)
+	logStats := NewLogStats(ctx, "TestHandleExecError")
 	var err error
 	defer func() {
 		want := "error: msg"

@@ -13,11 +13,14 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
+	"golang.org/x/net/context"
+
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/streamlog"
 	"github.com/youtube/vitess/go/vt/callerid"
 	"github.com/youtube/vitess/go/vt/callinfo"
-	"golang.org/x/net/context"
+
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
 // StatsLogger is the main stream logger object
@@ -32,7 +35,9 @@ const (
 
 // LogStats records the stats for a single query
 type LogStats struct {
+	ctx                  context.Context
 	Method               string
+	Target               *querypb.Target
 	PlanType             string
 	OriginalSQL          string
 	BindVariables        map[string]interface{}
@@ -46,17 +51,16 @@ type LogStats struct {
 	QuerySources         byte
 	Rows                 [][]sqltypes.Value
 	TransactionID        int64
-	ctx                  context.Context
 	Error                *TabletError
 }
 
-// NewLogStats constructs a new LogStats with supplied Method and ctx field values, and the StartTime field set to
-// the present time.
-func NewLogStats(methodName string, ctx context.Context) *LogStats {
+// NewLogStats constructs a new LogStats with supplied Method and ctx
+// field values, and the StartTime field set to the present time.
+func NewLogStats(ctx context.Context, methodName string) *LogStats {
 	return &LogStats{
+		ctx:       ctx,
 		Method:    methodName,
 		StartTime: time.Now(),
-		ctx:       ctx,
 	}
 }
 
@@ -64,6 +68,11 @@ func NewLogStats(methodName string, ctx context.Context) *LogStats {
 func (stats *LogStats) Send() {
 	stats.EndTime = time.Now()
 	StatsLogger.Send(stats)
+}
+
+// Context returns the context used by LogStats.
+func (stats *LogStats) Context() context.Context {
+	return stats.ctx
 }
 
 // ImmediateCaller returns the immediate caller stored in LogStats.ctx
