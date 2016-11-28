@@ -327,6 +327,19 @@ class TestBackup(unittest.TestCase):
 
     self._restore_old_master_test(_restore_in_place)
 
+  def test_terminated_restore(self):
+    def _terminated_restore(t):
+      for e in utils.vtctld_connection.execute_vtctl_command(
+          ['RestoreFromBackup', t.tablet_alias]):
+        logging.info('%s', e.value)
+        if 'shutdown mysqld' in e.value:
+          break
+      logging.info('waiting for restore to finish')
+      t.wait_for_vttablet_type('replica')
+
+    utils.Vtctld().start()
+    self._restore_old_master_test(_terminated_restore)
+
   def test_backup_transform(self):
     """Use a transform, tests we backup and restore properly."""
     # Insert data on master, make sure slave gets it.

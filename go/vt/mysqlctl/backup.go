@@ -789,8 +789,11 @@ func Restore(
 		}
 	}
 
+	// Starting from here we won't be able to recover if we get stopped by a cancelled
+	// context. Thus we use the background context to get through to the finish.
+
 	logger.Infof("Restore: shutdown mysqld")
-	err = mysqld.Shutdown(ctx, true)
+	err = mysqld.Shutdown(context.Background(), true)
 	if err != nil {
 		return replication.Position{}, err
 	}
@@ -801,13 +804,13 @@ func Restore(
 	}
 
 	logger.Infof("Restore: reinit config file")
-	err = mysqld.ReinitConfig(ctx)
+	err = mysqld.ReinitConfig(context.Background())
 	if err != nil {
 		return replication.Position{}, err
 	}
 
 	logger.Infof("Restore: copying all files")
-	if err := restoreFiles(ctx, mysqld.Cnf(), bh, bm.FileEntries, bm.TransformHook, !bm.SkipCompress, restoreConcurrency, hookExtraEnv); err != nil {
+	if err := restoreFiles(context.Background(), mysqld.Cnf(), bh, bm.FileEntries, bm.TransformHook, !bm.SkipCompress, restoreConcurrency, hookExtraEnv); err != nil {
 		return replication.Position{}, err
 	}
 
@@ -819,7 +822,7 @@ func Restore(
 	// without password, we are passing --skip-networking to greatly reduce the set
 	// of those who can connect.
 	logger.Infof("Restore: starting mysqld for mysql_upgrade")
-	err = mysqld.Start(ctx, "--skip-grant-tables", "--skip-networking")
+	err = mysqld.Start(context.Background(), "--skip-grant-tables", "--skip-networking")
 	if err != nil {
 		return replication.Position{}, err
 	}
@@ -840,11 +843,11 @@ func Restore(
 	// The MySQL manual recommends restarting mysqld after running mysql_upgrade,
 	// so that any changes made to system tables take effect.
 	logger.Infof("Restore: restarting mysqld after mysql_upgrade")
-	err = mysqld.Shutdown(ctx, true)
+	err = mysqld.Shutdown(context.Background(), true)
 	if err != nil {
 		return replication.Position{}, err
 	}
-	err = mysqld.Start(ctx)
+	err = mysqld.Start(context.Background())
 	if err != nil {
 		return replication.Position{}, err
 	}
