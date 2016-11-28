@@ -307,7 +307,7 @@ func TestSchemaInfoGetPlanPanicDuetoEmptyQuery(t *testing.T) {
 	defer schemaInfo.Close()
 
 	ctx := context.Background()
-	logStats := NewLogStats("GetPlanStats", ctx)
+	logStats := NewLogStats(ctx, "GetPlanStats")
 	defer handleAndVerifyTabletError(
 		t,
 		"schema info GetPlan should fail because of empty query",
@@ -350,7 +350,7 @@ func TestSchemaInfoQueryCache(t *testing.T) {
 	defer schemaInfo.Close()
 
 	ctx := context.Background()
-	logStats := NewLogStats("GetPlanStats", ctx)
+	logStats := NewLogStats(ctx, "GetPlanStats")
 	schemaInfo.SetQueryCacheCap(1)
 	firstPlan := schemaInfo.GetPlan(ctx, logStats, firstQuery)
 	if firstPlan == nil {
@@ -471,7 +471,7 @@ func TestSchemaInfoStatsURL(t *testing.T) {
 	defer schemaInfo.Close()
 	// warm up cache
 	ctx := context.Background()
-	logStats := NewLogStats("GetPlanStats", ctx)
+	logStats := NewLogStats(ctx, "GetPlanStats")
 	schemaInfo.GetPlan(ctx, logStats, query)
 
 	request, _ := http.NewRequest("GET", schemaInfo.endpoints[debugQueryPlansKey], nil)

@@ -1,7 +1,6 @@
 package sysloglogger
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"log/syslog"
@@ -9,6 +8,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/vt/tabletserver"
 )
@@ -32,7 +33,7 @@ func (fw *fakeWriter) Close() error          { return nil }
 
 // mockLogStats generates a dummy tabletserver.LogStats message for testing.
 func mockLogStats(originalSQL string) *tabletserver.LogStats {
-	logstats := tabletserver.NewLogStats("Execute", context.Background())
+	logstats := tabletserver.NewLogStats(context.Background(), "Execute")
 	logstats.StartTime = time.Time{}
 	logstats.PlanType = "PASS_SELECT"
 	logstats.OriginalSQL = originalSQL
