@@ -52,7 +52,7 @@ const legacySplitCloneHTML2 = `
   <h1>Split Clone Action</h1>
     <form action="/Clones/LegacySplitClone" method="post">
       <LABEL for="excludeTables">Exclude Tables: </LABEL>
-        <INPUT type="text" id="excludeTables" name="excludeTables" value="moving.*"></BR>
+        <INPUT type="text" id="excludeTables" name="excludeTables" value="/ignored/"></BR>
       <LABEL for="strategy">Strategy: </LABEL>
         <INPUT type="text" id="strategy" name="strategy" value=""></BR>
       <LABEL for="sourceReaderCount">Source Reader Count: </LABEL>
@@ -84,7 +84,7 @@ var legacySplitCloneTemplate = mustParseTemplate("splitClone", legacySplitCloneH
 var legacySplitCloneTemplate2 = mustParseTemplate("splitClone2", legacySplitCloneHTML2)
 
 func commandLegacySplitClone(wi *Instance, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (Worker, error) {
-	excludeTables := subFlags.String("exclude_tables", "", "comma separated list of tables to exclude")
+	excludeTables := subFlags.String("exclude_tables", "", "comma separated list of tables to exclude. Each is either an exact match, or a regular expression of the form /regexp/")
 	strategy := subFlags.String("strategy", "", "which strategy to use for restore, use 'vtworker LegacySplitClone --strategy=-help k/s' for more info")
 	sourceReaderCount := subFlags.Int("source_reader_count", defaultSourceReaderCount, "number of concurrent streaming queries to use on the source")
 	destinationPackCount := subFlags.Int("destination_pack_count", defaultDestinationPackCount, "number of packets to pack in one destination insert")
