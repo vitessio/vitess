@@ -52,3 +52,18 @@ func VtRPCErrorFromVtError(err error) *vtrpcpb.RPCError {
 		Message: err.Error(),
 	}
 }
+
+// VtRPCErrorFromVtErrors converts from an array of VtError to an array of vtrpcpb.RPCError.
+func VtRPCErrorFromVtErrors(errs []error) []*vtrpcpb.RPCError {
+	if errs == nil {
+		return nil
+	}
+	rpcErrors := make([]*vtrpcpb.RPCError, len(errs))
+	for errNum, err := range errs {
+		rpcErrors[errNum] = &vtrpcpb.RPCError{
+			Code:    RecoverVtErrorCode(err),
+			Message: err.Error(),
+		}
+	}
+	return rpcErrors
+}

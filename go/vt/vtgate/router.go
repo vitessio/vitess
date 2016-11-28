@@ -84,7 +84,23 @@ func (rtr *Router) StreamExecute(ctx context.Context, sql string, bindVars map[s
 
 // ExecuteBatch routes a non-streaming queries.
 func (rtr *Router) ExecuteBatch(ctx context.Context, sql []string, bindVars []map[string]interface{}, keyspace string, tabletType topodatapb.TabletType, session *vtgatepb.Session, notInTransaction bool, options *querypb.ExecuteOptions) ([]sqltypes.Result, []error) {
-	return nil, []error{fmt.Errorf("Not yet implemented")}
+	if bindVars == nil {
+		bindVars = make([]map[string]interface{}, len(sql))
+	}
+	results := make([]sqltypes.Result, len(sql))
+	errs := make([]error, len(sql))
+	for sqlNum, query := range sql {
+		vcursor := newRequestContext(ctx, query, bindVars[sqlNum], keyspace, tabletType, session, notInTransaction, options, rtr)
+		plan, err := rtr.planner.GetPlan(query, keyspace)
+		if err != nil {
+			errs[sqlNum] = err
+			continue
+		}
+		result, err := plan.Instructions.Execute(vcursor, make(map[string]interface{}), true)
+		results[sqlNum] = *result
+		errs[sqlNum] = err
+	}
+	return results, errs
 }
 
 // ExecuteRoute executes the route query for all route opcodes.
