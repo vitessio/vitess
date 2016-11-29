@@ -55,7 +55,7 @@ const splitCloneHTML2 = `
       <LABEL for="offline">Do Offline Copy: (exact copy at a specific GTID, required before shard migration, source and destination tablets will be put out of serving during copy)</LABEL>
         <INPUT type="checkbox" id="offline" name="offline" value="true"{{if .DefaultOnline}} checked{{end}}></BR>
       <LABEL for="excludeTables">Exclude Tables: </LABEL>
-        <INPUT type="text" id="excludeTables" name="excludeTables" value="moving.*"></BR>
+        <INPUT type="text" id="excludeTables" name="excludeTables" value="/ignored/"></BR>
       <LABEL for="strategy">Strategy: </LABEL>
         <INPUT type="text" id="strategy" name="strategy" value=""></BR>
       <LABEL for="chunkCount">Chunk Count: </LABEL>
@@ -99,7 +99,7 @@ var splitCloneTemplate2 = mustParseTemplate("splitClone2", splitCloneHTML2)
 func commandSplitClone(wi *Instance, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (Worker, error) {
 	online := subFlags.Bool("online", defaultOnline, "do online copy (optional approximate copy, source and destination tablets will not be put out of serving, minimizes downtime during offline copy)")
 	offline := subFlags.Bool("offline", defaultOffline, "do offline copy (exact copy at a specific GTID, required before shard migration, source and destination tablets will be put out of serving during copy)")
-	excludeTables := subFlags.String("exclude_tables", "", "comma separated list of tables to exclude")
+	excludeTables := subFlags.String("exclude_tables", "", "comma separated list of tables to exclude. Each is either an exact match, or a regular expression of the form /regexp/")
 	strategy := subFlags.String("strategy", "", "which strategy to use for restore, use 'vtworker SplitClone --strategy=-help k/s' for more info")
 	chunkCount := subFlags.Int("chunk_count", defaultChunkCount, "number of chunks per table")
 	minRowsPerChunk := subFlags.Int("min_rows_per_chunk", defaultMinRowsPerChunk, "minimum number of rows per chunk (may reduce --chunk_count)")

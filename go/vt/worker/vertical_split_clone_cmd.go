@@ -50,7 +50,7 @@ const verticalSplitCloneHTML2 = `
   <h1>Vertical Split Clone Action</h1>
     <form action="/Clones/VerticalSplitClone" method="post">
       <LABEL for="tables">Tables: </LABEL>
-        <INPUT type="text" id="tables" name="tables" value="moving.*"></BR>
+        <INPUT type="text" id="tables" name="tables" value="/moving/"></BR>
       <LABEL for="online">Do Online Copy: (optional approximate copy, source and destination tablets will not be put out of serving, minimizes downtime during offline copy)</LABEL>
         <INPUT type="checkbox" id="online" name="online" value="true"{{if .DefaultOnline}} checked{{end}}></BR>
       <LABEL for="offline">Do Offline Copy: (exact copy at a specific GTID, required before shard migration, source and destination tablets will be put out of serving during copy)</LABEL>
@@ -97,7 +97,7 @@ var verticalSplitCloneTemplate2 = mustParseTemplate("verticalSplitClone2", verti
 func commandVerticalSplitClone(wi *Instance, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (Worker, error) {
 	online := subFlags.Bool("online", defaultOnline, "do online copy (optional approximate copy, source and destination tablets will not be put out of serving, minimizes downtime during offline copy)")
 	offline := subFlags.Bool("offline", defaultOffline, "do offline copy (exact copy at a specific GTID, required before shard migration, source and destination tablets will be put out of serving during copy)")
-	tables := subFlags.String("tables", "", "comma separated list of tables to replicate (used for vertical split)")
+	tables := subFlags.String("tables", "", "comma separated list of tables to replicate (used for vertical split). Each is either an exact match, or a regular expression of the form /regexp/")
 	strategy := subFlags.String("strategy", "", "which strategy to use for restore, use 'vtworker VerticalSplitClone --strategy=-help k/s' for more info")
 	chunkCount := subFlags.Int("chunk_count", defaultChunkCount, "number of chunks per table")
 	minRowsPerChunk := subFlags.Int("min_rows_per_chunk", defaultMinRowsPerChunk, "minimum number of rows per chunk (may reduce --chunk_count)")
