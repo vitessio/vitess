@@ -63,8 +63,11 @@ func (agent *ActionAgent) restoreDataLocked(ctx context.Context, logger logutil.
 	pos, err := mysqlctl.Restore(ctx, agent.MysqlDaemon, dir, *restoreConcurrency, agent.hookExtraEnv(), localMetadata, logger, deleteBeforeRestore, topoproto.TabletDbName(tablet))
 	switch err {
 	case nil:
+		// Starting from here we won't be able to recover if we get stopped by a cancelled
+		// context. Thus we use the background context to get through to the finish.
+
 		// Reconnect to master.
-		if err := agent.startReplication(ctx, pos, originalType); err != nil {
+		if err := agent.startReplication(context.Background(), pos, originalType); err != nil {
 			return err
 		}
 	case mysqlctl.ErrNoBackup:
@@ -79,7 +82,7 @@ func (agent *ActionAgent) restoreDataLocked(ctx context.Context, logger logutil.
 	}
 
 	// Change type back to original type if we're ok to serve.
-	if _, err := agent.TopoServer.UpdateTabletFields(ctx, tablet.Alias, func(tablet *topodatapb.Tablet) error {
+	if _, err := agent.TopoServer.UpdateTabletFields(context.Background(), tablet.Alias, func(tablet *topodatapb.Tablet) error {
 		tablet.Type = originalType
 		return nil
 	}); err != nil {
@@ -87,7 +90,7 @@ func (agent *ActionAgent) restoreDataLocked(ctx context.Context, logger logutil.
 	}
 
 	// let's update our internal state (start query service and other things)
-	if err := agent.refreshTablet(ctx, "after restore from backup"); err != nil {
+	if err := agent.refreshTablet(context.Background(), "after restore from backup"); err != nil {
 		return fmt.Errorf("failed to update state after backup: %v", err)
 	}
 
