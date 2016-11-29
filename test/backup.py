@@ -335,7 +335,7 @@ class TestBackup(unittest.TestCase):
         if 'shutdown mysqld' in e.value:
           break
       logging.info('waiting for restore to finish')
-      t.wait_for_vttablet_type('replica')
+      utils.wait_for_tablet_type(t.tablet_alias, 'replica', timeout=30)
 
     utils.Vtctld().start()
     self._restore_old_master_test(_terminated_restore)

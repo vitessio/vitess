@@ -563,11 +563,11 @@ class Tablet(object):
 
     return self.proc
 
-  def _wait_for_vttablet_var(self, var_name, expected, timeout=60.0, port=None):
+  def wait_for_vttablet_state(self, expected, timeout=60.0, port=None):
     expr = re.compile('^' + expected + '$')
     while True:
       v = utils.get_vars(port or self.port)
-      last_seen_value = '?'
+      last_seen_state = '?'
       if v is None:
         if self.proc.poll() is not None:
           raise utils.TestError(
@@ -576,31 +576,23 @@ class Tablet(object):
             '  vttablet %s not answering at /debug/vars, waiting...',
             self.tablet_alias)
       else:
-        if var_name not in v:
+        if 'TabletStateName' not in v:
           logging.debug(
-              '  vttablet %s is not exporting %s, waiting...',
-              self.tablet_alias, var_name)
+              '  vttablet %s not exporting TabletStateName, waiting...',
+              self.tablet_alias)
         else:
-          s = v[var_name]
-          last_seen_value = s
+          s = v['TabletStateName']
+          last_seen_state = s
           if expr.match(s):
             break
           else:
             logging.debug(
-                '  vttablet %s has var %s set to %s != %s', self.tablet_alias,
-                var_name, s, expected)
+                '  vttablet %s in state %s != %s', self.tablet_alias, s,
+                expected)
       timeout = utils.wait_step(
-          'waiting for %s var %s to be set to %s (last seen value: %s)' %
-          (self.tablet_alias, var_name, expected, last_seen_value),
+          'waiting for %s state %s (last seen state: %s)' %
+          (self.tablet_alias, expected, last_seen_state),
           timeout, sleep_time=0.1)
-
-  def wait_for_vttablet_state(self, expected, timeout=60.0, port=None):
-    return self._wait_for_vttablet_var('TabletStateName', expected,
-                                       timeout=timeout, port=port)
-
-  def wait_for_vttablet_type(self, expected, timeout=60.0, port=None):
-    return self._wait_for_vttablet_var('TabletType', expected,
-                                       timeout=timeout, port=port)
 
   def wait_for_mysqlctl_socket(self, timeout=60.0):
     mysql_sock = os.path.join(self.tablet_dir, 'mysql.sock')
