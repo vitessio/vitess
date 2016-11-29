@@ -35,7 +35,7 @@ Lists all tablets in an awk-friendly way.
 
 #### Errors
 
-* The <code>&lt;cell name&gt;</code> argument is required for the <code>&lt;ListAllTablets&gt;</code> command. This error occurs if the command is not called with exactly one argument.
+* the <code>&lt;cell name&gt;</code> argument is required for the <code>&lt;ListAllTablets&gt;</code> command This error occurs if the command is not called with exactly one argument.
 
 
 ### ListTablets
@@ -52,7 +52,7 @@ Lists specified tablets in an awk-friendly way.
 
 #### Errors
 
-* The <code>&lt;tablet alias&gt;</code> argument is required for the <code>&lt;ListTablets&gt;</code> command. This error occurs if the command is not called with at least one argument.
+* the <code>&lt;tablet alias&gt;</code> argument is required for the <code>&lt;ListTablets&gt;</code> command This error occurs if the command is not called with at least one argument.
 
 
 ### PruneActionLogs
@@ -138,7 +138,7 @@ Creates the specified keyspace.
 
 #### Errors
 
-* The <code>&lt;keyspace name&gt;</code> argument is required for the <code>&lt;CreateKeyspace&gt;</code> command. This error occurs if the command is not called with exactly one argument.
+* the <code>&lt;keyspace name&gt;</code> argument is required for the <code>&lt;CreateKeyspace&gt;</code> command This error occurs if the command is not called with exactly one argument.
 
 
 ### DeleteKeyspace
@@ -162,7 +162,7 @@ Deletes the specified keyspace. In recursive mode, it also recursively deletes a
 
 #### Errors
 
-* Must specify the <code>&lt;keyspace&gt;</code> argument for <code>&lt;DeleteKeyspace&gt;</code>. This error occurs if the command is not called with exactly one argument.
+* must specify the <code>&lt;keyspace&gt;</code> argument for <code>&lt;DeleteKeyspace&gt;</code> This error occurs if the command is not called with exactly one argument.
 
 
 ### FindAllShardsInKeyspace
@@ -179,7 +179,7 @@ Displays all of the shards in the specified keyspace.
 
 #### Errors
 
-* The <code>&lt;keyspace&gt;</code> argument is required for the <code>&lt;FindAllShardsInKeyspace&gt;</code> command. This error occurs if the command is not called with exactly one argument.
+* the <code>&lt;keyspace&gt;</code> argument is required for the <code>&lt;FindAllShardsInKeyspace&gt;</code> command This error occurs if the command is not called with exactly one argument.
 
 
 ### GetKeyspace
@@ -196,7 +196,7 @@ Outputs a JSON structure that contains information about the Keyspace.
 
 #### Errors
 
-* The <code>&lt;keyspace&gt;</code> argument is required for the <code>&lt;GetKeyspace&gt;</code> command. This error occurs if the command is not called with exactly one argument.
+* the <code>&lt;keyspace&gt;</code> argument is required for the <code>&lt;GetKeyspace&gt;</code> command This error occurs if the command is not called with exactly one argument.
 
 
 ### GetKeyspaces
@@ -237,14 +237,14 @@ Makes the &lt;destination keyspace/shard&gt; serve the given type. This command 
     * <code>schema_apply</code> &ndash; A slaved copy of data that had been serving query traffic but that is now applying a schema change. Following the change, the tablet will revert to its serving type.
     * <code>snapshot_source</code> &ndash; A slaved copy of data where mysqld is <b>not</b> running and where Vitess is serving data files to clone slaves. Use this command to enter this mode: <pre>vtctl Snapshot -server-mode ...</pre> Use this command to exit this mode: <pre>vtctl SnapshotSourceEnd ...</pre>
     * <code>spare</code> &ndash; A slaved copy of data that is ready but not serving query traffic. The data could be a potential master tablet.
-    * <code>drained</code> &ndash; A tablet that is reserved for a background process. For example, a tablet used by a vtworker process, where the tablet is likely lagging in replication.
+    * <code>worker</code> &ndash; A tablet that is in use by a vtworker process. The tablet is likely lagging in replication.
 
 
 
 
 #### Errors
 
-* The <code>&lt;destination keyspace/shard&gt;</code> and <code>&lt;served tablet type&gt;</code> arguments are both required for the <code>&lt;MigrateServedFrom&gt;</code> command. This error occurs if the command is not called with exactly 2 arguments.
+* the <code>&lt;destination keyspace/shard&gt;</code> and <code>&lt;served tablet type&gt;</code> arguments are both required for the <code>&lt;MigrateServedFrom&gt;</code> command This error occurs if the command is not called with exactly 2 arguments.
 
 
 ### MigrateServedTypes
@@ -287,8 +287,8 @@ Migrates a serving type from the source shard to the shards that it replicates t
 
 #### Errors
 
-* The <code>&lt;source keyspace/shard&gt;</code> and <code>&lt;served tablet type&gt;</code> arguments are both required for the <code>&lt;MigrateServedTypes&gt;</code> command. This error occurs if the command is not called with exactly 2 arguments.
-* The <code>&lt;skip-refresh-state&gt;</code> flag can only be specified for non-master migrations.
+* the <code>&lt;source keyspace/shard&gt;</code> and <code>&lt;served tablet type&gt;</code> arguments are both required for the <code>&lt;MigrateServedTypes&gt;</code> command This error occurs if the command is not called with exactly 2 arguments.
+* the <code>&lt;skip-refresh-state&gt;</code> flag can only be specified for non-master migrations
 
 
 ### RebuildKeyspaceGraph
@@ -312,7 +312,7 @@ Rebuilds the serving data for the keyspace. This command may trigger an update t
 
 #### Errors
 
-* The <code>&lt;keyspace&gt;</code> argument must be used to specify at least one keyspace when calling the <code>&lt;RebuildKeyspaceGraph&gt;</code> command. This error occurs if the command is not called with at least one argument.
+* the <code>&lt;keyspace&gt;</code> argument must be used to specify at least one keyspace when calling the <code>&lt;RebuildKeyspaceGraph&gt;</code> command This error occurs if the command is not called with at least one argument.
 
 
 ### RemoveKeyspaceCell
@@ -338,7 +338,7 @@ Removes the cell from the Cells list for all shards in the keyspace.
 
 #### Errors
 
-* The <code>&lt;keyspace&gt;</code> and <code>&lt;cell&gt;</code> arguments are required for the <code>&lt;RemoveKeyspaceCell&gt;</code> command. This error occurs if the command is not called with exactly 2 arguments.
+* the <code>&lt;keyspace&gt;</code> and <code>&lt;cell&gt;</code> arguments are required for the <code>&lt;RemoveKeyspaceCell&gt;</code> command This error occurs if the command is not called with exactly 2 arguments.
 
 
 ### SetKeyspaceServedFrom
@@ -380,7 +380,7 @@ Changes the ServedFromMap manually. This command is intended for emergency fixes
 
 #### Errors
 
-* The <code>&lt;keyspace name&gt;</code> and <code>&lt;tablet type&gt;</code> arguments are required for the <code>&lt;SetKeyspaceServedFrom&gt;</code> command. This error occurs if the command is not called with exactly 2 arguments.
+* the <code>&lt;keyspace name&gt;</code> and <code>&lt;tablet type&gt;</code> arguments are required for the <code>&lt;SetKeyspaceServedFrom&gt;</code> command This error occurs if the command is not called with exactly 2 arguments.
 
 
 ### SetKeyspaceShardingInfo
@@ -406,8 +406,8 @@ Updates the sharding information for a keyspace.
 
 #### Errors
 
-* The <code>&lt;keyspace name&gt;</code> argument is required for the <code>&lt;SetKeyspaceShardingInfo&gt;</code> command. The <code>&lt;column name&gt;</code> and <code>&lt;column type&gt;</code> arguments are both optional. This error occurs if the command is not called with between 1 and 3 arguments.
-* Both <code>&lt;column name&gt;</code> and <code>&lt;column type&gt;</code> must be set, or both must be unset.
+* the <code>&lt;keyspace name&gt;</code> argument is required for the <code>&lt;SetKeyspaceShardingInfo&gt;</code> command. The <code>&lt;column name&gt;</code> and <code>&lt;column type&gt;</code> arguments are both optional This error occurs if the command is not called with between 1 and 3 arguments.
+* both <code>&lt;column name&gt;</code> and <code>&lt;column type&gt;</code> must be set, or both must be unset
 
 
 ### ValidateKeyspace
@@ -431,7 +431,7 @@ Validates that all nodes reachable from the specified keyspace are consistent.
 
 #### Errors
 
-* The <code>&lt;keyspace name&gt;</code> argument is required for the <code>&lt;ValidateKeyspace&gt;</code> command. This error occurs if the command is not called with exactly one argument.
+* the <code>&lt;keyspace name&gt;</code> argument is required for the <code>&lt;ValidateKeyspace&gt;</code> command This error occurs if the command is not called with exactly one argument.
 
 
 ### WaitForDrain
@@ -474,7 +474,7 @@ Blocks until no new queries were observed on all tablets with the given tablet t
 
 #### Errors
 
-* The <code>&lt;keyspace/shard&gt;</code> and <code>&lt;tablet type&gt;</code> arguments are both required for the <code>&lt;WaitForDrain&gt;</code> command. This error occurs if the command is not called with exactly 2 arguments.
+* the <code>&lt;keyspace/shard&gt;</code> and <code>&lt;tablet type&gt;</code> arguments are both required for the <code>&lt;WaitForDrain&gt;</code> command This error occurs if the command is not called with exactly 2 arguments.
 
 
 ## Queries
@@ -605,11 +605,11 @@ Executes the SplitQuery computation for the given SQL query with the provided bo
 
 | Name | Type | Definition |
 | :-------- | :--------- | :--------- |
+| algorithm | string | The algorithm to |
 | connect_timeout | Duration | Connection timeout for vtgate client |
 | keyspace | string | keyspace to send query to |
 | server | string | VtGate server to connect to |
-| split_column | string | force the use of this column to split the query |
-| split_count | Int | number of splits to generate |
+| split_count | Int64 | number of splits to generate. |
 
 
 #### Arguments
@@ -622,6 +622,8 @@ Executes the SplitQuery computation for the given SQL query with the provided bo
 #### Errors
 
 * the <code>&lt;sql&gt;</code> argument is required for the <code>&lt;VtGateSplitQuery&gt;</code> command This error occurs if the command is not called with exactly one argument.
+* Exactly one of <code>&lt;split_count&gt;</code> or num_rows_per_query_part
+* Unknown split-query <code>&lt;algorithm&gt;</code>: %v
 * error connecting to vtgate '%v': %v
 * SplitQuery failed: %v
 
@@ -823,7 +825,7 @@ Outputs a JSON structure that contains information about the ShardReplication.
 
 #### Errors
 
-* The <code>&lt;cell&gt;</code> and <code>&lt;keyspace/shard&gt;</code> arguments are required for the <code>&lt;GetShardReplication&gt;</code> command. This error occurs if the command is not called with exactly 2 arguments.
+* the <code>&lt;cell&gt;</code> and <code>&lt;keyspace/shard&gt;</code> arguments are required for the <code>&lt;GetShardReplication&gt;</code> command This error occurs if the command is not called with exactly 2 arguments.
 
 
 ## Resharding Throttler
@@ -1011,7 +1013,7 @@ Applies the schema change to the specified keyspace on every master, running in 
 
 #### Errors
 
-* The <code>&lt;keyspace&gt;</code> argument is required for the command<code>&lt;ApplySchema&gt;</code> command. This error occurs if the command is not called with exactly one argument.
+* the <code>&lt;keyspace&gt;</code> argument is required for the command<code>&lt;ApplySchema&gt;</code> command This error occurs if the command is not called with exactly one argument.
 
 
 ### ApplyVSchema
@@ -1038,8 +1040,8 @@ Applies the VTGate routing schema to the provided keyspace. Shows the result aft
 
 #### Errors
 
-* The <code>&lt;keyspace&gt;</code> argument is required for the <code>&lt;ApplyVSchema&gt;</code> command. This error occurs if the command is not called with exactly one argument.
-* Either the <code>&lt;vschema&gt;</code> or <code>&lt;vschema&gt;</code>File flag must be specified when calling the <code>&lt;ApplyVSchema&gt;</code> command.
+* the <code>&lt;keyspace&gt;</code> argument is required for the <code>&lt;ApplyVSchema&gt;</code> command This error occurs if the command is not called with exactly one argument.
+* rither the <code>&lt;vschema&gt;</code> or <code>&lt;vschema&gt;</code>File flag must be specified when calling the <code>&lt;ApplyVSchema&gt;</code> command
 
 
 ### CopySchemaShard
@@ -1054,9 +1056,9 @@ Copies the schema from a source shard's master (or a specific tablet) to a desti
 
 | Name | Type | Definition |
 | :-------- | :--------- | :--------- |
-| exclude_tables | string | Specifies a comma-separated list of regular expressions for which tables to exclude |
+| exclude_tables | string | Specifies a comma-separated list of tables to exclude. Each is either an exact match, or a regular expression of the form /regexp/ |
 | include-views | Boolean | Includes views in the output |
-| tables | string | Specifies a comma-separated list of regular expressions for which tables  gather schema information for |
+| tables | string | Specifies a comma-separated list of tables to copy. Each is either an exact match, or a regular expression of the form /regexp/ |
 | wait_slave_timeout | Duration | The amount of time to wait for slaves to receive the schema change via replication. |
 
 
@@ -1067,7 +1069,7 @@ Copies the schema from a source shard's master (or a specific tablet) to a desti
 
 #### Errors
 
-* The <code>&lt;source keyspace/shard&gt;</code> and <code>&lt;destination keyspace/shard&gt;</code> arguments are both required for the <code>&lt;CopySchemaShard&gt;</code> command. Instead of the <code>&lt;source keyspace/shard&gt;</code> argument, you can also specify <code>&lt;tablet alias&gt;</code> which refers to a specific tablet of the shard in the source keyspace. This error occurs if the command is not called with exactly 2 arguments.
+* the <code>&lt;source keyspace/shard&gt;</code> and <code>&lt;destination keyspace/shard&gt;</code> arguments are both required for the <code>&lt;CopySchemaShard&gt;</code> command. Instead of the <code>&lt;source keyspace/shard&gt;</code> argument, you can also specify <code>&lt;tablet alias&gt;</code> which refers to a specific tablet of the shard in the source keyspace This error occurs if the command is not called with exactly 2 arguments.
 
 
 ### GetPermissions
@@ -1084,7 +1086,7 @@ Displays the permissions for a tablet.
 
 #### Errors
 
-* The <code>&lt;tablet alias&gt;</code> argument is required for the <code>&lt;GetPermissions&gt;</code> command. This error occurs if the command is not called with exactly one argument.
+* the <code>&lt;tablet alias&gt;</code> argument is required for the <code>&lt;GetPermissions&gt;</code> command This error occurs if the command is not called with exactly one argument.
 
 
 ### GetSchema
@@ -1099,10 +1101,10 @@ Displays the full schema for a tablet, or just the schema for the specified tabl
 
 | Name | Type | Definition |
 | :-------- | :--------- | :--------- |
-| exclude_tables | string | Specifies a comma-separated list of regular expressions for tables to exclude |
+| exclude_tables | string | Specifies a comma-separated list of tables to exclude. Each is either an exact match, or a regular expression of the form /regexp/ |
 | include-views | Boolean | Includes views in the output |
 | table_names_only | Boolean | Only displays table names that match |
-| tables | string | Specifies a comma-separated list of regular expressions for which tables should gather information |
+| tables | string | Specifies a comma-separated list of tables for which we should gather information. Each is either an exact match, or a regular expression of the form /regexp/ |
 
 
 #### Arguments
@@ -1111,7 +1113,7 @@ Displays the full schema for a tablet, or just the schema for the specified tabl
 
 #### Errors
 
-* The <code>&lt;tablet alias&gt;</code> argument is required for the <code>&lt;GetSchema&gt;</code> command. This error occurs if the command is not called with exactly one argument.
+* the <code>&lt;tablet alias&gt;</code> argument is required for the <code>&lt;GetSchema&gt;</code> command This error occurs if the command is not called with exactly one argument.
 
 
 ### GetVSchema
@@ -1128,7 +1130,7 @@ Displays the VTGate routing schema.
 
 #### Errors
 
-* The <code>&lt;keyspace&gt;</code> argument is required for the <code>&lt;GetVSchema&gt;</code> command. This error occurs if the command is not called with exactly one argument.
+* the <code>&lt;keyspace&gt;</code> argument is required for the <code>&lt;GetVSchema&gt;</code> command This error occurs if the command is not called with exactly one argument.
 
 
 ### RebuildVSchemaGraph
@@ -1148,7 +1150,7 @@ Rebuilds the cell-specific SrvVSchema from the global VSchema objects in the pro
 
 #### Errors
 
-* <code>&lt;RebuildVSchemaGraph&gt;</code> doesn't take any arguments. This error occurs if the command is not called with exactly 0 arguments.
+* <code>&lt;RebuildVSchemaGraph&gt;</code> doesn't take any arguments This error occurs if the command is not called with exactly 0 arguments.
 
 
 ### ReloadSchema
@@ -1165,7 +1167,7 @@ Reloads the schema on a remote tablet.
 
 #### Errors
 
-* The <code>&lt;tablet alias&gt;</code> argument is required for the <code>&lt;ReloadSchema&gt;</code> command. This error occurs if the command is not called with exactly one argument.
+* the <code>&lt;tablet alias&gt;</code> argument is required for the <code>&lt;ReloadSchema&gt;</code> command This error occurs if the command is not called with exactly one argument.
 
 
 ### ValidatePermissionsKeyspace
@@ -1182,7 +1184,7 @@ Validates that the master permissions from shard 0 match those of all of the oth
 
 #### Errors
 
-* The <code>&lt;keyspace name&gt;</code> argument is required for the <code>&lt;ValidatePermissionsKeyspace&gt;</code> command. This error occurs if the command is not called with exactly one argument.
+* the <code>&lt;keyspace name&gt;</code> argument is required for the <code>&lt;ValidatePermissionsKeyspace&gt;</code> command This error occurs if the command is not called with exactly one argument.
 
 
 ### ValidatePermissionsShard
@@ -1199,7 +1201,7 @@ Validates that the master permissions match all the slaves.
 
 #### Errors
 
-* The <code>&lt;keyspace/shard&gt;</code> argument is required for the <code>&lt;ValidatePermissionsShard&gt;</code> command. This error occurs if the command is not called with exactly one argument.
+* the <code>&lt;keyspace/shard&gt;</code> argument is required for the <code>&lt;ValidatePermissionsShard&gt;</code> command This error occurs if the command is not called with exactly one argument.
 
 
 ### ValidateSchemaKeyspace
@@ -1214,7 +1216,7 @@ Validates that the master schema from shard 0 matches the schema on all of the o
 
 | Name | Type | Definition |
 | :-------- | :--------- | :--------- |
-| exclude_tables | string | Specifies a comma-separated list of regular expressions for tables to exclude |
+| exclude_tables | string | Specifies a comma-separated list of tables to exclude. Each is either an exact match, or a regular expression of the form /regexp/ |
 | include-views | Boolean | Includes views in the validation |
 
 
@@ -1224,7 +1226,7 @@ Validates that the master schema from shard 0 matches the schema on all of the o
 
 #### Errors
 
-* The <code>&lt;keyspace name&gt;</code> argument is required for the <code>&lt;ValidateSchemaKeyspace&gt;</code> command. This error occurs if the command is not called with exactly one argument.
+* the <code>&lt;keyspace name&gt;</code> argument is required for the <code>&lt;ValidateSchemaKeyspace&gt;</code> command This error occurs if the command is not called with exactly one argument.
 
 
 ### ValidateSchemaShard
@@ -1239,7 +1241,7 @@ Validates that the master schema matches all of the slaves.
 
 | Name | Type | Definition |
 | :-------- | :--------- | :--------- |
-| exclude_tables | string | Specifies a comma-separated list of regular expressions for tables to exclude |
+| exclude_tables | string | Specifies a comma-separated list of tables to exclude. Each is either an exact match, or a regular expression of the form /regexp/ |
 | include-views | Boolean | Includes views in the validation |
 
 
@@ -1249,7 +1251,7 @@ Validates that the master schema matches all of the slaves.
 
 #### Errors
 
-* The <code>&lt;keyspace/shard&gt;</code> argument is required for the <code>&lt;ValidateSchemaShard&gt;</code> command. This error occurs if the command is not called with exactly one argument.
+* the <code>&lt;keyspace/shard&gt;</code> argument is required for the <code>&lt;ValidateSchemaShard&gt;</code> command This error occurs if the command is not called with exactly one argument.
 
 
 ### ValidateVersionKeyspace
@@ -1266,7 +1268,7 @@ Validates that the master version from shard 0 matches all of the other tablets 
 
 #### Errors
 
-* The <code>&lt;keyspace name&gt;</code> argument is required for the <code>&lt;ValidateVersionKeyspace&gt;</code> command. This error occurs if the command is not called with exactly one argument.
+* the <code>&lt;keyspace name&gt;</code> argument is required for the <code>&lt;ValidateVersionKeyspace&gt;</code> command This error occurs if the command is not called with exactly one argument.
 
 
 ### ValidateVersionShard
@@ -1283,7 +1285,7 @@ Validates that the master version matches all of the slaves.
 
 #### Errors
 
-* The <code>&lt;keyspace/shard&gt;</code> argument is requird for the <code>&lt;ValidateVersionShard&gt;</code> command. This error occurs if the command is not called with exactly one argument.
+* the <code>&lt;keyspace/shard&gt;</code> argument is required for the <code>&lt;ValidateVersionShard&gt;</code> command This error occurs if the command is not called with exactly one argument.
 
 
 ## Serving Graph
@@ -1307,7 +1309,7 @@ Outputs a JSON structure that contains information about the SrvKeyspace.
 
 #### Errors
 
-* The <code>&lt;cell&gt;</code> and <code>&lt;keyspace&gt;</code> arguments are required for the <code>&lt;GetSrvKeyspace&gt;</code> command. This error occurs if the command is not called with exactly 2 arguments.
+* the <code>&lt;cell&gt;</code> and <code>&lt;keyspace&gt;</code> arguments are required for the <code>&lt;GetSrvKeyspace&gt;</code> command This error occurs if the command is not called with exactly 2 arguments.
 
 
 ### GetSrvKeyspaceNames
@@ -1324,7 +1326,7 @@ Outputs a list of keyspace names.
 
 #### Errors
 
-* The <code>&lt;cell&gt;</code> argument is required for the <code>&lt;GetSrvKeyspaceNames&gt;</code> command. This error occurs if the command is not called with exactly one argument.
+* the <code>&lt;cell&gt;</code> argument is required for the <code>&lt;GetSrvKeyspaceNames&gt;</code> command This error occurs if the command is not called with exactly one argument.
 
 
 ### GetSrvVSchema
@@ -1341,7 +1343,7 @@ Outputs a JSON structure that contains information about the SrvVSchema.
 
 #### Errors
 
-* The <code>&lt;cell&gt;</code> argument is required for the <code>&lt;GetSrvVSchema&gt;</code> command. This error occurs if the command is not called with exactly one argument.
+* the <code>&lt;cell&gt;</code> argument is required for the <code>&lt;GetSrvVSchema&gt;</code> command This error occurs if the command is not called with exactly one argument.
 
 
 ## Shards
@@ -1388,7 +1390,7 @@ Creates the specified shard.
 
 #### Errors
 
-* The <code>&lt;keyspace/shard&gt;</code> argument is required for the <code>&lt;CreateShard&gt;</code> command. This error occurs if the command is not called with exactly one argument.
+* the <code>&lt;keyspace/shard&gt;</code> argument is required for the <code>&lt;CreateShard&gt;</code> command This error occurs if the command is not called with exactly one argument.
 
 
 ### DeleteShard
@@ -1413,7 +1415,7 @@ Deletes the specified shard(s). In recursive mode, it also deletes all tablets b
 
 #### Errors
 
-* The <code>&lt;keyspace/shard&gt;</code> argument must be used to identify at least one keyspace and shard when calling the <code>&lt;DeleteShard&gt;</code> command. This error occurs if the command is not called with at least one argument.
+* the <code>&lt;keyspace/shard&gt;</code> argument must be used to identify at least one keyspace and shard when calling the <code>&lt;DeleteShard&gt;</code> command This error occurs if the command is not called with at least one argument.
 
 
 ### EmergencyReparentShard
@@ -1453,7 +1455,7 @@ Outputs a JSON structure that contains information about the Shard.
 
 #### Errors
 
-* The <code>&lt;keyspace/shard&gt;</code> argument is required for the <code>&lt;GetShard&gt;</code> command. This error occurs if the command is not called with exactly one argument.
+* the <code>&lt;keyspace/shard&gt;</code> argument is required for the <code>&lt;GetShard&gt;</code> command This error occurs if the command is not called with exactly one argument.
 
 
 ### InitShardMaster
@@ -1509,7 +1511,7 @@ Lists all tablets in the specified shard.
 
 #### Errors
 
-* The <code>&lt;keyspace/shard&gt;</code> argument is required for the <code>&lt;ListShardTablets&gt;</code> command. This error occurs if the command is not called with exactly one argument.
+* the <code>&lt;keyspace/shard&gt;</code> argument is required for the <code>&lt;ListShardTablets&gt;</code> command This error occurs if the command is not called with exactly one argument.
 
 
 ### PlannedReparentShard
@@ -1576,7 +1578,7 @@ Removes the cell from the shard's Cells list.
 
 #### Errors
 
-* The <code>&lt;keyspace/shard&gt;</code> and <code>&lt;cell&gt;</code> arguments are required for the <code>&lt;RemoveShardCell&gt;</code> command. This error occurs if the command is not called with exactly 2 arguments.
+* the <code>&lt;keyspace/shard&gt;</code> and <code>&lt;cell&gt;</code> arguments are required for the <code>&lt;RemoveShardCell&gt;</code> command This error occurs if the command is not called with exactly 2 arguments.
 
 
 ### SetShardServedTypes
@@ -1617,7 +1619,7 @@ Add or remove served type to/from a shard. This is meant as an emergency functio
 
 #### Errors
 
-* The <code>&lt;keyspace/shard&gt;</code> and <code>&lt;served tablet type&gt;</code> arguments are both required for the <code>&lt;SetShardServedTypes&gt;</code> command. This error occurs if the command is not called with exactly 2 arguments.
+* the <code>&lt;keyspace/shard&gt;</code> and <code>&lt;served tablet type&gt;</code> arguments are both required for the <code>&lt;SetShardServedTypes&gt;</code> command This error occurs if the command is not called with exactly 2 arguments.
 
 
 ### SetShardTabletControl
@@ -1635,7 +1637,7 @@ Sets the TabletControl record for a shard and type. Only use this for an emergen
 | cells | string | Specifies a comma-separated list of cells to update |
 | disable_query_service | Boolean | Disables query service on the provided nodes |
 | remove | Boolean | Removes cells for vertical splits. This flag requires the *tables* flag to also be set. |
-| tables | string | Specifies a comma-separated list of tables to replicate (used for vertical split) |
+| tables | string | Specifies a comma-separated list of tables to replicate (used for vertical split). Each is either an exact match, or a regular expression of the form /regexp/ |
 
 
 #### Arguments
@@ -1660,7 +1662,7 @@ Sets the TabletControl record for a shard and type. Only use this for an emergen
 
 #### Errors
 
-* The <code>&lt;keyspace/shard&gt;</code> and <code>&lt;tablet type&gt;</code> arguments are both required for the <code>&lt;SetShardTabletControl&gt;</code> command. This error occurs if the command is not called with exactly 2 arguments.
+* the <code>&lt;keyspace/shard&gt;</code> and <code>&lt;tablet type&gt;</code> arguments are both required for the <code>&lt;SetShardTabletControl&gt;</code> command This error occurs if the command is not called with exactly 2 arguments.
 
 
 ### ShardReplicationFix
@@ -1678,7 +1680,7 @@ Walks through a ShardReplication object and fixes the first error that it encoun
 
 #### Errors
 
-* The <code>&lt;cell&gt;</code> and <code>&lt;keyspace/shard&gt;</code> arguments are required for the ShardReplicationRemove command. This error occurs if the command is not called with exactly 2 arguments.
+* the <code>&lt;cell&gt;</code> and <code>&lt;keyspace/shard&gt;</code> arguments are required for the ShardReplicationRemove command This error occurs if the command is not called with exactly 2 arguments.
 
 
 ### ShardReplicationPositions
@@ -1695,7 +1697,7 @@ Shows the replication status of each slave machine in the shard graph. In this c
 
 #### Errors
 
-* The <code>&lt;keyspace/shard&gt;</code> argument is required for the <code>&lt;ShardReplicationPositions&gt;</code> command. This error occurs if the command is not called with exactly one argument.
+* the <code>&lt;keyspace/shard&gt;</code> argument is required for the <code>&lt;ShardReplicationPositions&gt;</code> command This error occurs if the command is not called with exactly one argument.
 
 
 ### SourceShardAdd
@@ -1711,7 +1713,7 @@ Adds the SourceShard record with the provided index. This is meant as an emergen
 | Name | Type | Definition |
 | :-------- | :--------- | :--------- |
 | key_range | string | Identifies the key range to use for the SourceShard |
-| tables | string | Specifies a comma-separated list of tables to replicate (used for vertical split) |
+| tables | string | Specifies a comma-separated list of tables to replicate (used for vertical split). Each is either an exact match, or a regular expression of the form /regexp/ |
 
 
 #### Arguments
@@ -1722,7 +1724,7 @@ Adds the SourceShard record with the provided index. This is meant as an emergen
 
 #### Errors
 
-* The <code>&lt;keyspace/shard&gt;</code>, <code>&lt;uid&gt;</code>, and <code>&lt;source keyspace/shard&gt;</code> arguments are all required for the <code>&lt;SourceShardAdd&gt;</code> command. This error occurs if the command is not called with exactly 3 arguments.
+* the <code>&lt;keyspace/shard&gt;</code>, <code>&lt;uid&gt;</code>, and <code>&lt;source keyspace/shard&gt;</code> arguments are all required for the <code>&lt;SourceShardAdd&gt;</code> command This error occurs if the command is not called with exactly 3 arguments.
 
 
 ### SourceShardDelete
@@ -1740,7 +1742,7 @@ Deletes the SourceShard record with the provided index. This is meant as an emer
 
 #### Errors
 
-* The <code>&lt;keyspace/shard&gt;</code> and <code>&lt;uid&gt;</code> arguments are both required for the <code>&lt;SourceShardDelete&gt;</code> command. This error occurs if the command is not called with at least 2 arguments.
+* the <code>&lt;keyspace/shard&gt;</code> and <code>&lt;uid&gt;</code> arguments are both required for the <code>&lt;SourceShardDelete&gt;</code> command This error occurs if the command is not called with at least 2 arguments.
 
 
 ### TabletExternallyReparented
@@ -1757,7 +1759,7 @@ Changes metadata in the topology server to acknowledge a shard master change per
 
 #### Errors
 
-* The <code>&lt;tablet alias&gt;</code> argument is required for the <code>&lt;TabletExternallyReparented&gt;</code> command. This error occurs if the command is not called with exactly one argument.
+* the <code>&lt;tablet alias&gt;</code> argument is required for the <code>&lt;TabletExternallyReparented&gt;</code> command This error occurs if the command is not called with exactly one argument.
 
 
 ### ValidateShard
@@ -1781,7 +1783,7 @@ Validates that all nodes that are reachable from this shard are consistent.
 
 #### Errors
 
-* The <code>&lt;keyspace/shard&gt;</code> argument is required for the <code>&lt;ValidateShard&gt;</code> command. This error occurs if the command is not called with exactly one argument.
+* the <code>&lt;keyspace/shard&gt;</code> argument is required for the <code>&lt;ValidateShard&gt;</code> command This error occurs if the command is not called with exactly one argument.
 
 
 ### WaitForFilteredReplication
@@ -1798,7 +1800,7 @@ Blocks until the specified shard has caught up with the filtered replication of 
 
 #### Errors
 
-* The <code>&lt;keyspace/shard&gt;</code> argument is required for the <code>&lt;WaitForFilteredReplication&gt;</code> command. This error occurs if the command is not called with exactly one argument.
+* the <code>&lt;keyspace/shard&gt;</code> argument is required for the <code>&lt;WaitForFilteredReplication&gt;</code> command This error occurs if the command is not called with exactly one argument.
 * shard %v/%v has no source shard
 * shard %v/%v has no master
 * failed to run explicit healthcheck on tablet: %v err: %v
@@ -1817,7 +1819,6 @@ Blocks until the specified shard has caught up with the filtered replication of 
 * [Backup](#backup)
 * [ChangeSlaveType](#changeslavetype)
 * [DeleteTablet](#deletetablet)
-* [DemoteMaster](#demotemaster)
 * [ExecuteFetchAsDba](#executefetchasdba)
 * [ExecuteHook](#executehook)
 * [GetTablet](#gettablet)
@@ -1857,7 +1858,7 @@ Stops mysqld and uses the BackupStorage service to store a new backup. This func
 
 #### Errors
 
-* The <code>&lt;Backup&gt;</code> command requires the <code>&lt;tablet alias&gt;</code> argument. This error occurs if the command is not called with exactly one argument.
+* the <code>&lt;Backup&gt;</code> command requires the <code>&lt;tablet alias&gt;</code> argument This error occurs if the command is not called with exactly one argument.
 
 
 ### ChangeSlaveType
@@ -1897,7 +1898,7 @@ Changes the db type for the specified tablet, if possible. This command is used 
 
 #### Errors
 
-* The <code>&lt;tablet alias&gt;</code> and <code>&lt;db type&gt;</code> arguments are required for the <code>&lt;ChangeSlaveType&gt;</code> command. This error occurs if the command is not called with exactly 2 arguments.
+* the <code>&lt;tablet alias&gt;</code> and <code>&lt;db type&gt;</code> arguments are required for the <code>&lt;ChangeSlaveType&gt;</code> command This error occurs if the command is not called with exactly 2 arguments.
 * failed reading tablet %v: %v
 * invalid type transition %v: %v -&gt;</code> %v
 
@@ -1923,20 +1924,7 @@ Deletes tablet(s) from the topology.
 
 #### Errors
 
-* The <code>&lt;tablet alias&gt;</code> argument must be used to specify at least one tablet when calling the <code>&lt;DeleteTablet&gt;</code> command. This error occurs if the command is not called with at least one argument.
-
-
-### DemoteMaster
-
-Demotes a master tablet.
-
-#### Example
-
-<pre class="command-example">DemoteMaster &lt;tablet alias&gt;</pre>
-
-#### Errors
-
-* action <code>&lt;DemoteMaster&gt;</code> requires <code>&lt;tablet alias&gt;</code> This error occurs if the command is not called with exactly one argument.
+* the <code>&lt;tablet alias&gt;</code> argument must be used to specify at least one tablet when calling the <code>&lt;DeleteTablet&gt;</code> command This error occurs if the command is not called with at least one argument.
 
 
 ### ExecuteFetchAsDba
@@ -1964,7 +1952,7 @@ Runs the given SQL command as a DBA on the remote tablet.
 
 #### Errors
 
-* The <code>&lt;tablet alias&gt;</code> and <code>&lt;sql command&gt;</code> arguments are required for the <code>&lt;ExecuteFetchAsDba&gt;</code> command. This error occurs if the command is not called with exactly 2 arguments.
+* the <code>&lt;tablet alias&gt;</code> and <code>&lt;sql command&gt;</code> arguments are required for the <code>&lt;ExecuteFetchAsDba&gt;</code> command This error occurs if the command is not called with exactly 2 arguments.
 
 
 ### ExecuteHook
@@ -1983,7 +1971,7 @@ Runs the specified hook on the given tablet. A hook is a script that resides in 
 
 #### Errors
 
-* The <code>&lt;tablet alias&gt;</code> and <code>&lt;hook name&gt;</code> arguments are required for the <code>&lt;ExecuteHook&gt;</code> command. This error occurs if the command is not called with at least 2 arguments.
+* the <code>&lt;tablet alias&gt;</code> and <code>&lt;hook name&gt;</code> arguments are required for the <code>&lt;ExecuteHook&gt;</code> command This error occurs if the command is not called with at least 2 arguments.
 
 
 ### GetTablet
@@ -2000,7 +1988,7 @@ Outputs a JSON structure that contains information about the Tablet.
 
 #### Errors
 
-* The <code>&lt;tablet alias&gt;</code> argument is required for the <code>&lt;GetTablet&gt;</code> command. This error occurs if the command is not called with exactly one argument.
+* the <code>&lt;tablet alias&gt;</code> argument is required for the <code>&lt;GetTablet&gt;</code> command This error occurs if the command is not called with exactly one argument.
 
 
 ### IgnoreHealthError
@@ -2018,7 +2006,7 @@ Sets the regexp for health check errors to ignore on the specified tablet. The p
 
 #### Errors
 
-* The <code>&lt;tablet alias&gt;</code> and <code>&lt;ignore regexp&gt;</code> arguments are required for the <code>&lt;IgnoreHealthError&gt;</code> command. This error occurs if the command is not called with exactly 2 arguments.
+* the <code>&lt;tablet alias&gt;</code> and <code>&lt;ignore regexp&gt;</code> arguments are required for the <code>&lt;IgnoreHealthError&gt;</code> command This error occurs if the command is not called with exactly 2 arguments.
 
 
 ### InitTablet
@@ -2068,7 +2056,7 @@ Initializes a tablet in the topology.<br><br>
 
 #### Errors
 
-* The <code>&lt;tablet alias&gt;</code> and <code>&lt;tablet type&gt;</code> arguments are both required for the <code>&lt;InitTablet&gt;</code> command. This error occurs if the command is not called with exactly 2 arguments.
+* the <code>&lt;tablet alias&gt;</code> and <code>&lt;tablet type&gt;</code> arguments are both required for the <code>&lt;InitTablet&gt;</code> command This error occurs if the command is not called with exactly 2 arguments.
 
 
 ### Ping
@@ -2085,7 +2073,7 @@ Checks that the specified tablet is awake and responding to RPCs. This command c
 
 #### Errors
 
-* The <code>&lt;tablet alias&gt;</code> argument is required for the <code>&lt;Ping&gt;</code> command. This error occurs if the command is not called with exactly one argument.
+* the <code>&lt;tablet alias&gt;</code> argument is required for the <code>&lt;Ping&gt;</code> command This error occurs if the command is not called with exactly one argument.
 
 
 ### RefreshState
@@ -2102,7 +2090,7 @@ Reloads the tablet record on the specified tablet.
 
 #### Errors
 
-* The <code>&lt;tablet alias&gt;</code> argument is required for the <code>&lt;RefreshState&gt;</code> command. This error occurs if the command is not called with exactly one argument.
+* the <code>&lt;tablet alias&gt;</code> argument is required for the <code>&lt;RefreshState&gt;</code> command This error occurs if the command is not called with exactly one argument.
 
 
 ### RefreshStateByShard
@@ -2126,7 +2114,7 @@ Runs 'RefreshState' on all tablets in the given shard.
 
 #### Errors
 
-* The <code>&lt;keyspace/shard&gt;</code> argument is required for the <code>&lt;RefreshStateByShard&gt;</code> command. This error occurs if the command is not called with exactly one argument.
+* the <code>&lt;keyspace/shard&gt;</code> argument is required for the <code>&lt;RefreshStateByShard&gt;</code> command This error occurs if the command is not called with exactly one argument.
 
 
 ### ReparentTablet
@@ -2152,7 +2140,7 @@ Stops mysqld and restores the data from the latest backup.
 
 #### Errors
 
-* The <code>&lt;RestoreFromBackup&gt;</code> command requires the <code>&lt;tablet alias&gt;</code> argument. This error occurs if the command is not called with exactly one argument.
+* the <code>&lt;RestoreFromBackup&gt;</code> command requires the <code>&lt;tablet alias&gt;</code> argument This error occurs if the command is not called with exactly one argument.
 
 
 ### RunHealthCheck
@@ -2169,7 +2157,7 @@ Runs a health check on a remote tablet.
 
 #### Errors
 
-* The <code>&lt;tablet alias&gt;</code> argument is required for the <code>&lt;RunHealthCheck&gt;</code> command. This error occurs if the command is not called with exactly one argument.
+* the <code>&lt;tablet alias&gt;</code> argument is required for the <code>&lt;RunHealthCheck&gt;</code> command This error occurs if the command is not called with exactly one argument.
 
 
 ### SetReadOnly
@@ -2186,7 +2174,7 @@ Sets the tablet as read-only.
 
 #### Errors
 
-* The <code>&lt;tablet alias&gt;</code> argument is required for the <code>&lt;SetReadOnly&gt;</code> command. This error occurs if the command is not called with exactly one argument.
+* the <code>&lt;tablet alias&gt;</code> argument is required for the <code>&lt;SetReadOnly&gt;</code> command This error occurs if the command is not called with exactly one argument.
 * failed reading tablet %v: %v
 
 
@@ -2204,7 +2192,7 @@ Sets the tablet as read-write.
 
 #### Errors
 
-* The <code>&lt;tablet alias&gt;</code> argument is required for the <code>&lt;SetReadWrite&gt;</code> command. This error occurs if the command is not called with exactly one argument.
+* the <code>&lt;tablet alias&gt;</code> argument is required for the <code>&lt;SetReadWrite&gt;</code> command This error occurs if the command is not called with exactly one argument.
 * failed reading tablet %v: %v
 
 
@@ -2223,7 +2211,7 @@ Blocks the action queue on the specified tablet for the specified amount of time
 
 #### Errors
 
-* The <code>&lt;tablet alias&gt;</code> and <code>&lt;duration&gt;</code> arguments are required for the <code>&lt;Sleep&gt;</code> command. This error occurs if the command is not called with exactly 2 arguments.
+* the <code>&lt;tablet alias&gt;</code> and <code>&lt;duration&gt;</code> arguments are required for the <code>&lt;Sleep&gt;</code> command This error occurs if the command is not called with exactly 2 arguments.
 
 
 ### StartSlave
@@ -2287,7 +2275,7 @@ Updates the IP address and port numbers of a tablet.
 
 #### Errors
 
-* The <code>&lt;tablet alias&gt;</code> argument is required for the <code>&lt;UpdateTabletAddrs&gt;</code> command. This error occurs if the command is not called with exactly one argument.
+* the <code>&lt;tablet alias&gt;</code> argument is required for the <code>&lt;UpdateTabletAddrs&gt;</code> command This error occurs if the command is not called with exactly one argument.
 * malformed address: %v
 
 
@@ -2295,6 +2283,7 @@ Updates the IP address and port numbers of a tablet.
 
 * [WorkflowAction](#workflowaction)
 * [WorkflowCreate](#workflowcreate)
+* [WorkflowDelete](#workflowdelete)
 * [WorkflowStart](#workflowstart)
 * [WorkflowStop](#workflowstop)
 * [WorkflowTree](#workflowtree)
@@ -2340,6 +2329,20 @@ Creates the workflow with the provided parameters. The workflow is also started,
 #### Errors
 
 * the <code>&lt;factoryName&gt;</code> argument is required for the <code>&lt;WorkflowCreate&gt;</code> command This error occurs if the command is not called with at least one argument.
+* no workflow.Manager registered
+
+
+### WorkflowDelete
+
+Deletes the finished or not started workflow.
+
+#### Example
+
+<pre class="command-example">WorkflowDelete &lt;uuid&gt;</pre>
+
+#### Errors
+
+* the <code>&lt;uuid&gt;</code> argument is required for the <code>&lt;WorkflowDelete&gt;</code> command This error occurs if the command is not called with exactly one argument.
 * no workflow.Manager registered
 
 

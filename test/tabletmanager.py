@@ -137,9 +137,6 @@ class TestTabletManager(unittest.TestCase):
     utils.run_vtctl(['SetReadWrite', tablet_62344.tablet_alias])
     utils.check_db_read_write(62344)
 
-    utils.run_vtctl(['DemoteMaster', tablet_62344.tablet_alias])
-    utils.wait_db_read_only(62344)
-
     utils.validate_topology()
     utils.run_vtctl(['ValidateKeyspace', 'test_keyspace'])
     # not pinging tablets, as it enables replication checks, and they
