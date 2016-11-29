@@ -118,7 +118,6 @@ export class ShardComponent implements OnInit, OnDestroy {
       // Add an entire section.
       result.push(
         {label: 'Reparent', items: [
-          {label: 'Demote Master', command: (event) => {this.openDemoteMasterDialog(); }},
           {label: 'Reparent Tablet', command: (event) => {this.openReparentTabletDialog(); }},
         ]}
       );
@@ -383,19 +382,6 @@ export class ShardComponent implements OnInit, OnDestroy {
     this.dialogSettings.setMessage(`Ignored ${this.selectedTablet.label}`);
     let flags = new IgnoreHealthCheckFlags(this.selectedTablet.alias).flags;
     this.dialogContent = new DialogContent('tablet_alias', flags, {}, undefined, 'IgnoreHealthError');
-    this.dialogSettings.toggleModal();
-  }
-
-  openDemoteMasterDialog() {
-    this.dialogSettings = new DialogSettings('Demote', `Demote ${this.selectedTablet.label}`,
-                                             `Makes a master tablet read-only, waits for all transactions to finish, ` +
-                                             `and return its replication position. Does not change the type, nor reparent slaves.` +
-                                             ` Use with caution.`,
-                                             `There was a problem demoting ${this.selectedTablet.label}:`);
-    this.dialogSettings.setMessage(`Demoted ${this.selectedTablet.label}`);
-    this.dialogSettings.onCloseFunction = this.refreshShardView.bind(this);
-    let flags = new PingTabletFlags(this.selectedTablet.alias).flags;
-    this.dialogContent = new DialogContent('tablet_alias', flags, {}, undefined, 'DemoteMaster');
     this.dialogSettings.toggleModal();
   }
 

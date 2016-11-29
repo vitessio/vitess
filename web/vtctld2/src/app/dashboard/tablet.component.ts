@@ -155,16 +155,6 @@ export class TabletComponent implements OnInit, OnDestroy {
     this.dialogSettings.toggleModal();
   }
 
-  openDemoteMasterDialog() {
-    this.dialogSettings = new DialogSettings('Demote', `Demote ${this.tablet.label}`, '',
-                                             `There was a problem demoting ${this.tablet.label}:`);
-    this.dialogSettings.setMessage(`Demoted ${this.tablet.label}`);
-    this.dialogSettings.onCloseFunction = this.refreshTabletView.bind(this);
-    let flags = new PingTabletFlags(this.tablet.ref).flags;
-    this.dialogContent = new DialogContent('tablet_alias', flags, {}, undefined, 'DemoteMaster');
-    this.dialogSettings.toggleModal();
-  }
-
   openReparentTabletDialog() {
     this.dialogSettings = new DialogSettings('Reparent', `Reparent ${this.tablet.label}`, '',
                                              `There was a problem reparenting ${this.tablet.label}:`);
