@@ -16,9 +16,13 @@ import (
 	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
 	"golang.org/x/net/context"
 
+	"strings"
+
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	vtgatepb "github.com/youtube/vitess/go/vt/proto/vtgate"
+	"github.com/youtube/vitess/go/vt/sqlparser"
+	planbuilder "github.com/youtube/vitess/go/vt/vtgate/planbuilder"
 )
 
 // Router is the layer to route queries to the correct shards
@@ -377,18 +381,33 @@ func (rtr *Router) execInsertSharded(vcursor *requestContext, route *engine.Rout
 	if err != nil {
 		return nil, fmt.Errorf("paramsSelectEqual: %v", err)
 	}
+	//fmt.Println("Query:"+route.Query)
+	//fmt.Println("RouteDS BEGIN:")
+	//spew.Dump(route)
+	//fmt.Println("RouteDS END:")
 	//spew.Dump((*route.Rows)[1])
-	//for _, value := range *route.Rows {
-	//	spew.Dump(value)
+	//for row,_ := range *route.Rows {
+	//	fmt.Println(row)
 	//}
+
+	//fmt.Println("Routing Info")
+	//spew.Dump(routing)
 	//Query ReWriting
 	var aggrResult sqltypes.Result
 	for shard := range routing {
-		rewritten := sqlannotation.AddKeyspaceIDs(route.Query, shardKsidMap[shard], vcursor.comments)
+
+		rewritten, err := rtr.rewriteQuery(route, routing, shard)
+		if err != nil {
+			return nil, fmt.Errorf("Error While Rewriting Query: %v", err)
+		}
+		route.Query = strings.Replace(route.Query, ":#rowvalues", rewritten, -1)
+		rewrittenQuery := sqlannotation.AddKeyspaceIDs(route.Query, shardKsidMap[shard], vcursor.comments)
+		fmt.Println("Rewritten Query:" + rewrittenQuery)
+		route.Query = rewrittenQuery
 
 		result, err := rtr.scatterConn.Execute(
 			vcursor.ctx,
-			rewritten,
+			rewrittenQuery,
 			vcursor.bindVars,
 			keyspace,
 			[]string{shard},
@@ -414,6 +433,25 @@ func (rtr *Router) execInsertSharded(vcursor *requestContext, route *engine.Rout
 	}
 
 	return &aggrResult, nil
+}
+
+func (rtr *Router) rewriteQuery(route *engine.Route, routing routingMap, shard string) (Query string, err error) {
+	var ValuesStr string
+	for _, rowVal := range *route.Rows {
+		ValuesStr += "("
+		for col := range rowVal {
+			val, err := planbuilder.ValConvert(rowVal[col])
+			if err != nil {
+				return val.(string), fmt.Errorf("could not convert val: %s, pos: %d: %v", sqlparser.String(rowVal[col]), col, err)
+			}
+			ValuesStr += fmt.Sprintf("%v, ", val)
+		}
+		ValuesStr = strings.TrimRight(ValuesStr, ", ")
+		ValuesStr += "), "
+	}
+	ValuesStr = strings.TrimRight(ValuesStr, ", ")
+	Query = ValuesStr
+	return Query, nil
 }
 
 func (rtr *Router) getInsertShardedRoute(vcursor *requestContext, route *engine.Route) (keyspace string, routing routingMap, valuesKSIDMap map[string][][]byte, err error) {

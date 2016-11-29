@@ -479,7 +479,7 @@ func (rb *route) procureValues(bldr builder, jt *jointab, val interface{}) (inte
 	case sqlparser.ListArg:
 		return string(val), nil
 	case sqlparser.ValExpr:
-		return valConvert(val)
+		return ValConvert(val)
 	}
 	panic("unrecognized symbol")
 }

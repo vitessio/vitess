@@ -161,7 +161,7 @@ func buildInsertShardedPlan(ins *sqlparser.Insert, table *vindexes.Table) (*engi
 // handleVindexCol substitutes the insert value with a bind var name and returns
 // the converted value, which will be used at the time of insert to validate the vindex value.
 func handleVindexCol(colVindex *vindexes.ColumnVindex, rowNum int, row sqlparser.ValTuple, pos int) (interface{}, error) {
-	val, err := valConvert(row[pos])
+	val, err := ValConvert(row[pos])
 	if err != nil {
 		return val, fmt.Errorf("could not convert val: %s, pos: %d: %v", sqlparser.String(row[pos]), pos, err)
 	}
@@ -189,7 +189,7 @@ func handleShardedAutoinc(ins *sqlparser.Insert, autoinc *vindexes.AutoIncrement
 // This works for columns with no vindexes.
 func handleAutoinc(ins *sqlparser.Insert, autoinc *vindexes.AutoIncrement, rowNum int) (interface{}, error) {
 	row, pos := findOrInsertPos(ins, autoinc.Column, rowNum)
-	val, err := valConvert(row[pos])
+	val, err := ValConvert(row[pos])
 	if err != nil {
 		return nil, fmt.Errorf("could not convert val: %s, pos: %d: %v", sqlparser.String(row[pos]), pos, err)
 	}
