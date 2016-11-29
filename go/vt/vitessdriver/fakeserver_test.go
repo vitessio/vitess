@@ -76,7 +76,7 @@ func (f *fakeVTGateService) ExecuteBatch(ctx context.Context, sql []string, bind
 	if len(sql) == 1 {
 		execCase, ok := execMap[sql[0]]
 		if !ok {
-			return nil, fmt.Errorf("no match for: %s", sql)
+			return nil, []error{fmt.Errorf("no match for: %s", sql)}
 		}
 		if bindVariables == nil {
 			bindVariables = make([]map[string]interface{}, 1)
@@ -95,7 +95,7 @@ func (f *fakeVTGateService) ExecuteBatch(ctx context.Context, sql []string, bind
 		if execCase.session != nil {
 			*session = *execCase.session
 		}
-		return []sqltypes.Result{execCase.result}, nil
+		return []sqltypes.Result{*execCase.result}, nil
 	}
 	return nil, nil
 }
