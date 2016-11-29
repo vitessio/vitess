@@ -428,7 +428,7 @@ public class VitessPreparedStatement extends VitessStatement implements Prepared
                     updateCounts[commandIndex] = this.executeUpdate();
                 } catch (SQLException ex) {
                     updateCounts[commandIndex] = Statement.EXECUTE_FAILED;
-                    /* If this method returns an BatchUpdateException,
+                    /* If this method returns a BatchUpdateException,
                      * then further processing of the queries in this batch is stopped and
                      * the exception is returned to the caller.
                      */

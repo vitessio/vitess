@@ -29,8 +29,8 @@ import java.util.logging.Logger;
  *
  * This class expects an sql query to be provided when a call to DB is made by the method:
  * execute(sql), executeQuery(sql), executeUpdate(sql).
- * Only, In case of executeBatch() the sql is not required as before calling the method,
- * All the queries to be executed must be added via addBatch(sql) method.
+ * When executeBatch() is called, the sql is not required;
+ * instead all the queries to be executed must be added via the addBatch(sql) method.
  * In all the cases, once a method is called,
  * no reference of the query/queries provided is/are kept.
  */
@@ -557,7 +557,7 @@ public class VitessStatement implements Statement {
                     updateCounts[commandIndex] = this.executeUpdate(sql);
                 } catch (SQLException ex) {
                     updateCounts[commandIndex] = Statement.EXECUTE_FAILED;
-                    /* If this method returns an BatchUpdateException,
+                    /* If this method returns a BatchUpdateException,
                      * then further processing of the queries in this batch is stopped and
                      * the exception is returned to the caller.
                      */
