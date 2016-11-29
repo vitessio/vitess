@@ -105,7 +105,7 @@ PROTOC_EXISTS := $(shell type -p $(PROTOC_DIR)/protoc)
 ifeq (,$(PROTOC_EXISTS))
   PROTOC_BINARY := $(shell which protoc)
   ifeq (,$(PROTOC_BINARY))
-    $(error "Cannot find protoc binary. Did you execute 'source dev.env'?")
+    $(error "Cannot find protoc binary. Did bootstrap.sh succeed, and did you execute 'source dev.env'?")
   endif
   PROTOC_DIR := $(dir $(PROTOC_BINARY))
 endif
