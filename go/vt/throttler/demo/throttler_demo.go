@@ -267,6 +267,11 @@ func (c *client) stop() {
 // It gets called by the healthCheck instance every time a tablet broadcasts
 // a health update.
 func (c *client) StatsUpdate(ts *discovery.TabletStats) {
+	// Ignore unless REPLICA or RDONLY.
+	if ts.Target.TabletType != topodatapb.TabletType_REPLICA && ts.Target.TabletType != topodatapb.TabletType_RDONLY {
+		return
+	}
+
 	c.throttler.RecordReplicationLag(time.Now(), ts)
 }
 
