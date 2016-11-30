@@ -52,9 +52,6 @@
     <loc>http://vitess.io/getting-started/local-instance.html</loc>
   </url>
   <url>
-    <loc>http://vitess.io/user-guide/pivot-schema-changes.html</loc>
-  </url>
-  <url>
     <loc>http://vitess.io/resources/presentations.html</loc>
   </url>
   <url>
@@ -74,6 +71,9 @@
   </url>
   <url>
     <loc>http://vitess.io/user-guide/schema-management.html</loc>
+  </url>
+  <url>
+    <loc>http://vitess.io/user-guide/schema-swap.html</loc>
   </url>
   <url>
     <loc>http://vitess.io/user-guide/server-configuration.html</loc>
