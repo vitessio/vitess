@@ -60,6 +60,7 @@ func TestHealthCheck(t *testing.T) {
 		TabletExternallyReparentedTimestamp: 10,
 		RealtimeStats:                       &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
 	}
+	tablet.Type = topodatapb.TabletType_MASTER
 	want = &TabletStats{
 		Key:     "a,vt:1",
 		Tablet:  tablet,
@@ -102,6 +103,7 @@ func TestHealthCheck(t *testing.T) {
 	}
 	input <- shr
 	t.Logf(`input <- {{Keyspace: "k", Shard: "s", TabletType: REPLICA}, Serving: true, TabletExternallyReparentedTimestamp: 0, {SecondsBehindMaster: 1, CpuUsage: 0.5}}`)
+	tablet.Type = topodatapb.TabletType_REPLICA
 	want = &TabletStats{
 		Key:     "a,vt:1",
 		Tablet:  tablet,
@@ -234,6 +236,7 @@ func TestHealthCheckCloseWaitsForGoRoutines(t *testing.T) {
 		TabletExternallyReparentedTimestamp: 10,
 		RealtimeStats:                       &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
 	}
+	tablet.Type = topodatapb.TabletType_MASTER
 	want = &TabletStats{
 		Key:     "a,vt:1",
 		Tablet:  tablet,
@@ -329,6 +332,7 @@ func TestHealthCheckTimeout(t *testing.T) {
 		TabletExternallyReparentedTimestamp: 10,
 		RealtimeStats:                       &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
 	}
+	tablet.Type = topodatapb.TabletType_MASTER
 	want = &TabletStats{
 		Key:     "a,vt:1",
 		Tablet:  tablet,
@@ -367,6 +371,7 @@ func TestHealthCheckTimeout(t *testing.T) {
 
 func TestTemplate(t *testing.T) {
 	tablet := topo.NewTablet(0, "cell", "a")
+	tablet.Type = topodatapb.TabletType_MASTER
 	ts := []*TabletStats{
 		{
 			Key:     "a",

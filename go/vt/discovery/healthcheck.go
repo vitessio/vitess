@@ -466,6 +466,7 @@ func (hcc *healthCheckConn) update(shr *querypb.StreamHealthResponse, serving bo
 	defer hcc.mu.Unlock()
 	hcc.lastResponseTimestamp = time.Now()
 	hcc.tabletStats.Target = shr.Target
+	hcc.tabletStats.Tablet.Type = shr.Target.TabletType
 	hcc.tabletStats.Serving = serving
 	hcc.tabletStats.TabletExternallyReparentedTimestamp = shr.TabletExternallyReparentedTimestamp
 	hcc.tabletStats.Stats = shr.RealtimeStats
