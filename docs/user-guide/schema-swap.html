@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Vitess / Contributing to Vitess</title>
+    <title>Vitess / Schema Swap</title>
 
         <!-- Webfont -->
     <link href='http://fonts.googleapis.com/css?family=Roboto:400,100,100italic,300,300italic,400italic,500,500italic,700,700italic,900,900italic' rel='stylesheet' type='text/css'>
@@ -35,7 +35,7 @@
 
 
     <!-- metadata -->
-    <meta name="og:title" content="Vitess / Contributing to Vitess"/>
+    <meta name="og:title" content="Vitess / Schema Swap"/>
     <meta name="og:image" content="/images/vitess_logomark_cropped.svg"/>
     <meta name="og:description" content="Vitess is a database clustering system for horizontal scaling of MySQL."/>
 
@@ -176,7 +176,7 @@
   <div class="container">
     <div class="row">
       <div class="col-md-9">
-        <h1>Contributing to Vitess</h1>
+        <h1>Schema Swap</h1>
       </div>
     </div>
   </div>
@@ -276,95 +276,91 @@
     </div>
     <div class="col-md-7" id="centerCol">
       <div id="centerTextCol">
-        <h1 id="contributing-to-vitess">Contributing to Vitess</h1>
+        <h1 id="schema-swap-a-tutorial">Schema Swap: A Tutorial</h1>
 
-<p>You want to contribute to Vitess? That&#39;s awesome!</p>
+<p>This page describes how to apply long-running schema changes in Vitess/MySQL
+without disrupting ongoing operations. Examples for long-running changes on
+large databases are <code class="prettyprint">ALTER TABLE</code> (for example to add a column), <code class="prettyprint">OPTIMIZE
+TABLE</code> or large-scale data changes (e.g. populating a column or clearing out
+values).</p>
 
-<p>In the past we have reviewed and accepted many external contributions. Examples are the Java JDBC driver, the PHP PDO driver or vtgate v3 improvements.</p>
+<p>If a schema change is not long-running, please use the simpler <a href="/user-guide/schema-management.html">vtctl
+ApplySchema</a> instead.</p>
 
-<p>We&#39;re looking forward to any contribution! Before you start larger contributions, make sure to reach out first and discuss your plans with us.</p>
+<h2 id="overview">Overview</h2>
 
-<p>This page describes for new contributors how to make yourself familiar with Vitess and the programming language Go.</p>
+<p>One solution to realize such long-running schema changes is to use a temporary
+table and keep it in sync with triggers as <a href="http://code.openark.org/blog/mysql/online-alter-table-now-available-in-openark-kit">originally proposed by
+Shlomi</a>
+and further refined by others (<a href="https://www.percona.com/doc/percona-toolkit/2.2/pt-online-schema-change.html">Percona&#39;s
+pt-online-schema-change</a>,
+<a href="https://github.com/square/shift">Square&#39;s Shift</a>).</p>
 
-<h2 id="learning-go">Learning Go</h2>
+<p>Here we describe an alternative solution which uses a combination of MySQL&#39;s
+statement based replication and backups to apply the changes to all tablets.
+Since the long-running schema changes are applied to an offline tablet, ongoing
+operations are not affected. We called this process <strong>schema swap</strong> due to the
+way it&#39;s done, and therefore we refer to it by this name throughout the
+document.</p>
 
-<p>Vitess was one of the early adaptors of <a href="https://golang.org/">Google&#39;s programming language Go</a>.</p>
+<p>This tutorial outlines the necessary steps for a schema swap and is based on the
+<a href="http://vitess.io/getting-started/">Vitess Kubernetes Getting Started Guide</a>.</p>
 
-<p>We love it for its simplicity (e.g. compared to C++ or Java) and performance (e.g. compared to Python).</p>
+<p><strong>At the high level, a schema swap comprises the following phases:</strong></p>
 
-<p>Contributing to our server code will require you to learn Go. We recommend to read the following resources.</p>
+<ol>
+<li> Apply the schema changes to an offline tablet.</li>
+<li> Let the tablet catch up and then create a backup of it.</li>
+<li> Restore all remaining tablets (excluding the master) from the backup.</li>
+<li> Failover the master to a replica tablet which has the new schema. Restore
+the old master from the backup.</li>
+<li> At this point, all tablets have the new schema and you can start using it.</li>
+</ol>
 
-<h3 id="go-tour">Go Tour</h3>
+<p><strong>You may be wondering: Why does this work?</strong></p>
 
-<p><a href="https://tour.golang.org/">https://tour.golang.org/</a></p>
+<p>The key here is that the new schema is backward compatible with respect to
+statements sent by the app. The replication stream remains backward compatible
+as well because we use statement based replication. As a consequence, the new
+schema must not be used until it has been changed on all tablets. If the schema
+would have been used e.g. when an insert uses a new column, replication would
+break on tablets which have the old schema. Swapping schema on all tablets first
+ensures this doesn&#39;t happen.</p>
 
-<p>The Go tour is a browser based tutorial which explains the different concepts of the programming language.
-It&#39;s interactive i.e. you can change and run all examples on the right side.
-The later steps also have specific exercises which you&#39;re supposed to implement yourself.
-It&#39;s a lot of fun and demonstrates how simple it is to write Go code.</p>
+<p>Also note that the changes are applied to only one tablet and then all other
+tablets are restored from the backup. This is more efficient than applying the
+long-running changes on every single tablet.</p>
 
-<h3 id="go-readability">Go Readability</h3>
+<p>Now let&#39;s carry out an actual schema swap based on our Guestbook example schema.
+We&#39;ll add a column to it.</p>
 
-<p>Internally at Google, code reviews are subject to an additional &quot;readability&quot; review.</p>
+<h2 id="prerequisites">Prerequisites</h2>
 
-<p>A readability reviewer ensures that the reviewee is writing idiomatic code and following the programming language&#39;s style guide.</p>
+<p>We assume that you have followed the <a href="http://vitess.io/getting-started/">Vitess Kubernetes Getting Started
+Guide</a> up to and including the step &quot;9.
+Create a table&quot;.</p>
 
-<p>While there&#39;s no Go style guide, there is a set of recommendations in the Go community which add up to an implicit style guide.
-To make sure you&#39;re writing idiomatic Go code, please read the following documents:</p>
+<h2 id="schema-swap-steps">Schema Swap Steps</h2>
 
-<ul>
-<li>Go Readablity slides: <a href="https://talks.golang.org/2014/readability.slide">https://talks.golang.org/2014/readability.slide</a>
+<ol>
+<li> Got to the Workflows section of vtctld UI (it will be at
+<a href="http://localhost:8001/api/v1/proxy/namespaces/default/services/vtctld:web/app2/workflows">http://localhost:8001/api/v1/proxy/namespaces/default/services/vtctld:web/app2/workflows</a>
+if you followed the Getting Started Guide as is) and press the &quot;+&quot; button in
+the bottom right corner. You will be presented with &quot;Create a new Workflow&quot;
+dialog.</li>
+<li> In the &quot;Factory Name&quot; list select &quot;Schema Swap&quot;.</li>
+<li> In the field &quot;Keyspace&quot; enter &quot;test_keyspace&quot; (without quotes).</li>
+<li> In the field &quot;SQL&quot; enter the statement representing the schema change you
+want to execute. As an example we want to execute statement &quot;ALTER TABLE
+messages ADD views BIGINT(20) UNSIGNED NULL&quot;.</li>
+<li> Click &quot;Create&quot; button at the bottom of the dialog.</li>
+</ol>
 
-<ul>
-<li>Talk about Go readability with many specific examples.</li>
-</ul></li>
-<li>&quot;Effective Go&quot;: <a href="https://golang.org/doc/effective_go.html">https://golang.org/doc/effective_go.html</a>
-
-<ul>
-<li>Recommendations for writing good Go code.</li>
-</ul></li>
-<li>Go Code Review Comments: <a href="https://github.com/golang/go/wiki/CodeReviewComments">https://github.com/golang/go/wiki/CodeReviewComments</a> 
-
-<ul>
-<li>The closest thing to a style guide.</li>
-</ul></li>
-</ul>
-
-<h3 id="other-resources">Other Resources</h3>
-
-<p>If you&#39;re unsure about Go&#39;s behavior or syntax, we recommend to look it up in the specification: <a href="https://golang.org/ref/spec">https://golang.org/ref/spec</a>
-It is well written and easy to understand.</p>
-
-<h3 id="appreciating-go">Appreciating Go</h3>
-
-<p>After using Go for several weeks, we hope that you&#39;ll start to love Go as much as we do. </p>
-
-<p>In our opinion, the song &quot;Write in Go&quot; from ScaleAbility, a Google acapella band, perfectly captures what&#39;s so special about Go. Watch it and enjoy that you learnt Go: <a href="http://www.youtube.com/watch?v=LJvEIjRBSDA">www.youtube.com/watch?v=LJvEIjRBSDA</a></p>
-
-<h2 id="learning-vitess">Learning Vitess</h2>
-
-<p>Before diving into the Vitess codebase, make yourself familiar with the system and run it yourself:</p>
-
-<ul>
-<li><p>Read the <a href="/overview/">What is Vitess</a> page, in particular the architecture section.</p></li>
-<li><p>Read the <a href="/overview/concepts.html">Vitess concepts</a> and the <a href="/user-guide/sharding.html">Sharding</a> page.</p>
-
-<ul>
-<li>We also recommend to look at our <a href="/resources/presentations.html">latest presentations</a>. They contain many illustrations which help understanding how Vitess works in detail.</li>
-<li>After studying the pages, try to answer the following question (click expand to see the answer):
-<details> 
-<summary>
-Let&#39;s assume a keyspace with 256 range-based shards: What is the name of the first, the second and the last shard?
-</summary>
--01, 01-02, ff-
-</details></li>
-</ul></li>
-<li><p>Go through the <a href="/getting-started/">Vitess Kubernetes tutorial</a>.</p>
-
-<ul>
-<li>While going through the tutorial, look back at the <a href="/overview/#architecture">architecture</a> and match the processes you start in Kubernetes with the boxes in the diagram.</li>
-</ul></li>
-</ul>
+<p>From this point on all you need to do is watch how the schema swap process is
+progressing. Try expanding the displayed nodes in vtctld UI and look at the logs
+of all the actions that process is doing. Once the UI shows &quot;Schema swap is
+finished&quot; you can start using the new schema, it will be propagated to all
+tablets.</p>
 
       </div>
     </div>
