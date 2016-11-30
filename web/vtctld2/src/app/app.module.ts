@@ -16,7 +16,6 @@ import { MdToolbarModule } from '@angular2-material/toolbar/toolbar';
 
 import { AccordionModule, DataTableModule, DialogModule, DropdownModule, MenuModule, SharedModule } from 'primeng/primeng';
 
-import { AddButtonComponent } from './shared/add-button.component';
 import { APP_ROUTER_PROVIDERS, routing } from './app.routes';
 import { AppComponent } from './app.component';
 import { BreadcrumbsComponent } from './shared/breadcrumbs.component';
@@ -65,7 +64,6 @@ import { VtctlService } from './api/vtctl.service';
     AccordionModule,
   ],
   declarations: [
-    AddButtonComponent,
     AppComponent,
     BreadcrumbsComponent,
     DashboardComponent,

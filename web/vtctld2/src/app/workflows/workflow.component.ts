@@ -1,12 +1,12 @@
-import { Component, OnInit, Input } from '@angular/core';
+import { Component, Input } from '@angular/core';
 import { Node, ActionStyle } from './node';
 import { Accordion, AccordionTab, Header } from 'primeng/primeng';
-
-import { WorkflowService } from '../api/workflow.service';
 
 import { DialogContent } from '../shared/dialog/dialog-content';
 import { DialogSettings } from '../shared/dialog/dialog-settings';
 import { WorkflowFlags } from '../shared/flags/workflow.flags';
+
+import { WorkflowListComponent } from './workflow-list.component';
 
 @Component({
   selector: 'vt-workflow',
@@ -15,16 +15,9 @@ import { WorkflowFlags } from '../shared/flags/workflow.flags';
   directives: [Accordion, AccordionTab, Header],
 })
 
-export class WorkflowComponent implements OnInit {
+export class WorkflowComponent {
   @Input() workflow: Node;
-  @Input() workflowService: WorkflowService;
-  dialogSettings: DialogSettings;
-  dialogContent: DialogContent;
-
-  ngOnInit() {
-    this.dialogContent = new DialogContent();
-    this.dialogSettings = new DialogSettings();
-  }
+  @Input() workflowListComponent: WorkflowListComponent;
 
   getChildrenIds() {
     return Object.keys(this.workflow.children);
@@ -66,7 +59,7 @@ export class WorkflowComponent implements OnInit {
   }
 
   actionClicked(name) {
-    this.workflowService.sendAction(this.workflow.path, name);
+    this.workflowListComponent.sendAction(this.workflow.path, name);
   }
 
   // For the next three methods, we want to do two things with the event:
@@ -80,34 +73,34 @@ export class WorkflowComponent implements OnInit {
   //   (click)="startClicked($event); false".
   startClicked(event) {
     event.stopPropagation();
-    this.dialogSettings = new DialogSettings('Start', `Start ${this.workflow.name}`,
+    this.workflowListComponent.dialogSettings = new DialogSettings('Start', `Start ${this.workflow.name}`,
                                              `Are you sure you want to start ${this.workflow.name}?`,
                                              `There was a problem starting ${this.workflow.name}:`);
-    this.dialogSettings.setMessage('Workflow started.');
+    this.workflowListComponent.dialogSettings.setMessage('Workflow started.');
     let flags = new WorkflowFlags(this.workflow.getId()).flags;
-    this.dialogContent = new DialogContent('workflow_uuid', flags, {}, undefined, 'WorkflowStart');
-    this.dialogSettings.toggleModal();
+    this.workflowListComponent.dialogContent = new DialogContent('workflow_uuid', flags, {}, undefined, 'WorkflowStart');
+    this.workflowListComponent.dialogSettings.toggleModal();
   }
 
   stopClicked(event) {
     event.stopPropagation();
-    this.dialogSettings = new DialogSettings('Stop', `Stop ${this.workflow.name}`,
+    this.workflowListComponent.dialogSettings = new DialogSettings('Stop', `Stop ${this.workflow.name}`,
                                              `Are you sure you want to stop ${this.workflow.name}?`,
                                              `There was a problem stopping ${this.workflow.name}:`);
-    this.dialogSettings.setMessage('Workflow stopped.');
+    this.workflowListComponent.dialogSettings.setMessage('Workflow stopped.');
     let flags = new WorkflowFlags(this.workflow.getId()).flags;
-    this.dialogContent = new DialogContent('workflow_uuid', flags, {}, undefined, 'WorkflowStop');
-    this.dialogSettings.toggleModal();
+    this.workflowListComponent.dialogContent = new DialogContent('workflow_uuid', flags, {}, undefined, 'WorkflowStop');
+    this.workflowListComponent.dialogSettings.toggleModal();
   }
 
   deleteClicked(event) {
     event.stopPropagation();
-    this.dialogSettings = new DialogSettings('Delete', `Delete ${this.workflow.name}`,
+    this.workflowListComponent.dialogSettings = new DialogSettings('Delete', `Delete ${this.workflow.name}`,
                                              `Are you sure you want to delete ${this.workflow.name}?`,
                                              `There was a problem deleting ${this.workflow.name}:`);
-    this.dialogSettings.setMessage('Workflow deleted.');
+    this.workflowListComponent.dialogSettings.setMessage('Workflow deleted.');
     let flags = new WorkflowFlags(this.workflow.getId()).flags;
-    this.dialogContent = new DialogContent('workflow_uuid', flags, {}, undefined, 'WorkflowDelete');
-    this.dialogSettings.toggleModal();
+    this.workflowListComponent.dialogContent = new DialogContent('workflow_uuid', flags, {}, undefined, 'WorkflowDelete');
+    this.workflowListComponent.dialogSettings.toggleModal();
   }
 }
