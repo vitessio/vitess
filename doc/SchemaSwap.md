@@ -1,4 +1,4 @@
-# Schema Swaps: A Tutorial
+# Schema Swap: A Tutorial
 
 This page describes how to apply long-running schema changes in Vitess/MySQL
 without disrupting ongoing operations. Examples for long-running changes on
