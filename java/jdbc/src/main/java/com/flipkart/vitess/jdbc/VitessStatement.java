@@ -624,7 +624,7 @@ public class VitessStatement implements Statement {
     }
 
     /**
-     * This method throws an exception when a SQLException occurs because of the transaction
+     * This method throws an exception when an SQLException occurs because of the transaction
      * which no longer exists. Hence a commit decision cannot be made.
      * So, irrespective of earlier queries being success, they do not make sense as
      * they have been rolled back.
