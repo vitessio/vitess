@@ -4,9 +4,14 @@
 @import url("https://ajax.googleapis.com/ajax/libs/jqueryui/1.10.3/themes/smoothness/jquery-ui.css");
 
 // Colors
+// We're using the Material "Indigo" palette: https://material.google.com/style/color.html#color-color-palette
+// Indigo 500
 $primaryBrandColor: #3F51B5;
+// Indigo 800
 $darkerBrandColor: #283593;
-$lighterBrandColor: #E1F5FE;
+// Indigo 50
+$lighterBrandColor: #E8EAF6;
+// Purple 800
 $accentColor: #6A1B9A;
 
 // This ensures that icons on the home page use 100% opacity
