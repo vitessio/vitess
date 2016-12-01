@@ -718,6 +718,7 @@ func TestTabletServerReplicaToMaster(t *testing.T) {
 	}
 	tsv.SetServingType(topodatapb.TabletType_REPLICA, true, nil)
 
+	tsv.te.txPool.lastID.Set(1)
 	// Ensure we continue past errors.
 	db.AddQuery(tpc.readAllRedo, &sqltypes.Result{
 		Rows: [][]sqltypes.Value{{
@@ -726,12 +727,12 @@ func TestTabletServerReplicaToMaster(t *testing.T) {
 			sqltypes.MakeString([]byte("")),
 			sqltypes.MakeString([]byte("bogus")),
 		}, {
-			sqltypes.MakeString([]byte("dtid0")),
+			sqltypes.MakeString([]byte("a:b:10")),
 			sqltypes.MakeString([]byte("Prepared")),
 			sqltypes.MakeString([]byte("")),
 			sqltypes.MakeString([]byte("update test_table set name = 2 where pk in (1) /* _stream test_table (pk ) (1 ); */")),
 		}, {
-			sqltypes.MakeString([]byte("dtid1")),
+			sqltypes.MakeString([]byte("a:b:20")),
 			sqltypes.MakeString([]byte("Failed")),
 			sqltypes.MakeString([]byte("")),
 			sqltypes.MakeString([]byte("unused")),
@@ -741,14 +742,18 @@ func TestTabletServerReplicaToMaster(t *testing.T) {
 	if len(tsv.te.preparedPool.conns) != 1 {
 		t.Errorf("len(tsv.te.preparedPool.conns): %d, want 1", len(tsv.te.preparedPool.conns))
 	}
-	got = tsv.te.preparedPool.conns["dtid0"].Queries
+	got = tsv.te.preparedPool.conns["a:b:10"].Queries
 	want = []string{"update test_table set name = 2 where pk in (1) /* _stream test_table (pk ) (1 ); */"}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("Prepared queries: %v, want %v", got, want)
 	}
-	wantFailed := map[string]error{"dtid1": errPrepFailed}
+	wantFailed := map[string]error{"a:b:20": errPrepFailed}
 	if !reflect.DeepEqual(tsv.te.preparedPool.reserved, wantFailed) {
 		t.Errorf("Failed dtids: %v, want %v", tsv.te.preparedPool.reserved, wantFailed)
+	}
+	// Verify last id got adjusted.
+	if v := tsv.te.txPool.lastID.Get(); v != 20 {
+		t.Errorf("tsv.te.txPool.lastID.Get(): %d, want 20", v)
 	}
 	tsv.SetServingType(topodatapb.TabletType_REPLICA, true, nil)
 }
