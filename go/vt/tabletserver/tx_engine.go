@@ -14,6 +14,7 @@ import (
 	"github.com/youtube/vitess/go/timer"
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
+	"github.com/youtube/vitess/go/vt/dtids"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateconn"
 )
 
@@ -171,11 +172,9 @@ func (te *TxEngine) Close(immediate bool) {
 }
 
 // prepareFromRedo replays and prepares the transactions
-// from the redo log. It also loads previously failed transactions
-// into the reserved list.
-// TODO(sougou): Make this function set the lastId for tx pool to be
-// greater than all those used by dtids. This will prevent dtid
-// collisions.
+// from the redo log, loads previously failed transactions
+// into the reserved list, and adjusts the txPool LastID
+// to ensure there are no future collisions.
 func (te *TxEngine) prepareFromRedo() error {
 	ctx := context.Background()
 	var allErr concurrency.AllErrorRecorder
@@ -184,8 +183,16 @@ func (te *TxEngine) prepareFromRedo() error {
 		return err
 	}
 
+	maxid := int64(0)
 outer:
 	for dtid, tx := range prepared {
+		txid, err := dtids.TransactionID(dtid)
+		if err != nil {
+			log.Errorf("Error extracting transaction ID from ditd: %v", err)
+		}
+		if txid > maxid {
+			maxid = txid
+		}
 		conn, err := te.txPool.LocalBegin(ctx)
 		if err != nil {
 			allErr.RecordError(err)
@@ -209,8 +216,16 @@ outer:
 		}
 	}
 	for _, dtid := range failed {
+		txid, err := dtids.TransactionID(dtid)
+		if err != nil {
+			log.Errorf("Error extracting transaction ID from ditd: %v", err)
+		}
+		if txid > maxid {
+			maxid = txid
+		}
 		te.preparedPool.SetFailed(dtid)
 	}
+	te.txPool.AdjustLastID(maxid)
 	log.Infof("Prepared %d transactions, and registered %d failures.", len(prepared), len(failed))
 	return allErr.Error()
 }

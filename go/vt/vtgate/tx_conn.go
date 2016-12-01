@@ -7,8 +7,6 @@ package vtgate
 import (
 	"errors"
 	"fmt"
-	"strconv"
-	"strings"
 	"sync"
 
 	"golang.org/x/net/context"
@@ -16,11 +14,11 @@ import (
 	log "github.com/golang/glog"
 
 	"github.com/youtube/vitess/go/vt/concurrency"
+	"github.com/youtube/vitess/go/vt/dtids"
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vtgate/gateway"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	vtgatepb "github.com/youtube/vitess/go/vt/proto/vtgate"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
@@ -77,7 +75,7 @@ func (txc *TxConn) commit2PC(ctx context.Context, session *SafeSession) error {
 		participants = append(participants, s.Target)
 	}
 	mmShard := session.ShardSessions[0]
-	dtid := txc.generateDTID(mmShard)
+	dtid := dtids.New(mmShard)
 	err := txc.gateway.CreateTransaction(ctx, mmShard.Target, dtid, participants)
 	if err != nil {
 		// Normal rollback is safe because nothing was prepared yet.
@@ -137,7 +135,7 @@ func (txc *TxConn) RollbackIfNeeded(ctx context.Context, err error, session *Saf
 
 // Resolve resolves the specified 2PC transaction.
 func (txc *TxConn) Resolve(ctx context.Context, dtid string) error {
-	mmShard, err := txc.dtidToShardSession(dtid)
+	mmShard, err := dtids.ShardSession(dtid)
 	if err != nil {
 		return err
 	}
@@ -191,30 +189,6 @@ func (txc *TxConn) resumeCommit(ctx context.Context, target *querypb.Target, tra
 		return err
 	}
 	return txc.gateway.ConcludeTransaction(ctx, target, transaction.Dtid)
-}
-
-func (txc *TxConn) generateDTID(mmShard *vtgatepb.Session_ShardSession) string {
-	return fmt.Sprintf("%s:%s:0:%d", mmShard.Target.Keyspace, mmShard.Target.Shard, mmShard.TransactionId)
-}
-
-func (txc *TxConn) dtidToShardSession(dtid string) (*vtgatepb.Session_ShardSession, error) {
-	splits := strings.Split(dtid, ":")
-	if len(splits) != 4 {
-		return nil, vterrors.FromError(vtrpcpb.ErrorCode_BAD_INPUT, fmt.Errorf("invalid parts in dtid: %s", dtid))
-	}
-	target := &querypb.Target{
-		Keyspace:   splits[0],
-		Shard:      splits[1],
-		TabletType: topodatapb.TabletType_MASTER,
-	}
-	txid, err := strconv.ParseInt(splits[3], 10, 0)
-	if err != nil {
-		return nil, vterrors.FromError(vtrpcpb.ErrorCode_BAD_INPUT, fmt.Errorf("invalid transaction id in dtid: %s", dtid))
-	}
-	return &vtgatepb.Session_ShardSession{
-		Target:        target,
-		TransactionId: txid,
-	}, nil
 }
 
 // runSessions executes the action for all shardSessions in parallel and returns a consolildated error.
