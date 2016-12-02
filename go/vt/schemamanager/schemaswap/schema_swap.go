@@ -221,6 +221,7 @@ func (schemaSwap *Swap) Run(ctx context.Context, manager *workflow.Manager, work
 		// user to retry.
 		select {
 		case <-schemaSwap.ctx.Done():
+			schemaSwap.setUIMessage(fmt.Sprintf("Error: %v", err))
 			return err
 		default:
 		}
@@ -244,7 +245,6 @@ func (schemaSwap *Swap) Run(ctx context.Context, manager *workflow.Manager, work
 			continue
 		case <-schemaSwap.ctx.Done():
 			schemaSwap.closeRetryChannel()
-			schemaSwap.setUIMessage("Schema swap is stopped")
 			return schemaSwap.ctx.Err()
 		}
 	}
@@ -695,6 +695,23 @@ func (shardSwap *shardSchemaSwap) startHealthWatchers() error {
 		}
 	}
 	shardSwap.tabletHealthCheck.WaitForInitialStatsUpdates()
+
+	// Wait for all health connections to be either established or get broken.
+waitHealthChecks:
+	for {
+		tabletList := shardSwap.getTabletList()
+		for _, tabletStats := range tabletList {
+			if tabletStats.Stats == nil && tabletStats.LastError == nil {
+				select {
+				case <-shardSwap.parent.ctx.Done():
+					return shardSwap.parent.ctx.Err()
+				case <-time.After(100 * time.Millisecond):
+				}
+				continue waitHealthChecks
+			}
+		}
+		break waitHealthChecks
+	}
 	return nil
 }
 
@@ -705,6 +722,7 @@ func (shardSwap *shardSchemaSwap) stopHealthWatchers() {
 	for _, watcher := range shardSwap.tabletWatchers {
 		watcher.Stop()
 	}
+	shardSwap.tabletWatchers = nil
 	err := shardSwap.tabletHealthCheck.Close()
 	if err != nil {
 		log.Errorf("Error closing health checking: %v", err)
@@ -802,6 +820,17 @@ func (array orderTabletsForSwap) Swap(i, j int) {
 	array[i], array[j] = array[j], array[i]
 }
 
+// getTabletTypeFromStats returns the tablet type saved in the TabletStats object. If there is Target
+// data in the TabletStats object then the function returns TabletType from it because it will be more
+// up-to-date. But if that's not available then it returns Tablet.Type which will contain data read
+// from the topology during initialization of health watchers.
+func getTabletTypeFromStats(tabletStats *discovery.TabletStats) topodatapb.TabletType {
+	if tabletStats.Target == nil || tabletStats.Target.TabletType == topodatapb.TabletType_UNKNOWN {
+		return tabletStats.Tablet.Type
+	}
+	return tabletStats.Target.TabletType
+}
+
 // tabletSortIndex returns a number representing the order in which schema swap will
 // be propagated to the tablet. The last should be the master, then tablets doing
 // backup/restore to not interrupt that process, then unhealthy tablets (so that we
@@ -810,14 +839,15 @@ func (array orderTabletsForSwap) Swap(i, j int) {
 // non-replica and non-master types. The sorting order within each of those 5 buckets
 // doesn't matter.
 func tabletSortIndex(tabletStats *discovery.TabletStats) int {
+	tabletType := getTabletTypeFromStats(tabletStats)
 	switch {
-	case tabletStats.Tablet.Type == topodatapb.TabletType_MASTER:
+	case tabletType == topodatapb.TabletType_MASTER:
 		return 5
-	case tabletStats.Tablet.Type == topodatapb.TabletType_BACKUP || tabletStats.Tablet.Type == topodatapb.TabletType_RESTORE:
+	case tabletType == topodatapb.TabletType_BACKUP || tabletType == topodatapb.TabletType_RESTORE:
 		return 4
-	case tabletStats.Stats == nil || tabletStats.Stats.HealthError != "":
+	case tabletStats.LastError != nil || tabletStats.Stats == nil || tabletStats.Stats.HealthError != "":
 		return 3
-	case tabletStats.Tablet.Type == topodatapb.TabletType_REPLICA:
+	case tabletType == topodatapb.TabletType_REPLICA:
 		return 2
 	default:
 		return 1
@@ -885,6 +915,10 @@ func (shardSwap *shardSchemaSwap) findNextTabletToSwap() (*topodatapb.Tablet, er
 	shardSwap.numTabletsTotal = len(tabletList)
 	var numTabletsSwapped int
 	for _, tabletStats := range tabletList {
+		tabletType := getTabletTypeFromStats(&tabletStats)
+		if tabletType == topodatapb.TabletType_BACKUP || tabletType == topodatapb.TabletType_RESTORE {
+			return nil, fmt.Errorf("tablet %v still has type %v", tabletStats.Tablet.Alias, tabletType)
+		}
 		swapApplied, err := shardSwap.isSwapApplied(tabletStats.Tablet)
 		if err != nil {
 			return nil, err
@@ -898,7 +932,7 @@ func (shardSwap *shardSchemaSwap) findNextTabletToSwap() (*topodatapb.Tablet, er
 				// that have the schema swapped at this point.
 				shardSwap.numTabletsSwapped = numTabletsSwapped
 			}
-			if tabletStats.Tablet.Type == topodatapb.TabletType_MASTER {
+			if tabletType == topodatapb.TabletType_MASTER {
 				return tabletStats.Tablet, errOnlyMasterLeft
 			}
 			return tabletStats.Tablet, nil
@@ -943,18 +977,18 @@ func (shardSwap *shardSchemaSwap) applySeedSchemaChange() (err error) {
 		if err != nil {
 			return err
 		}
-		if swapApplied && tabletStats.Tablet.Type != topodatapb.TabletType_MASTER {
+		if swapApplied && getTabletTypeFromStats(&tabletStats) != topodatapb.TabletType_MASTER {
 			return nil
 		}
 	}
 	seedTablet := tabletList[0].Tablet
-	if seedTablet.Type == topodatapb.TabletType_MASTER {
+	seedTabletType := getTabletTypeFromStats(&tabletList[0])
+	if seedTabletType == topodatapb.TabletType_MASTER {
 		return fmt.Errorf("the only candidate for a schema swap seed is the master %v, aborting", seedTablet)
 	}
 	shardSwap.addShardLog(fmt.Sprintf("Applying schema change on the seed tablet %v", seedTablet.Alias))
 
 	// Draining the tablet for it to not be used for execution of user queries.
-	savedSeedType := seedTablet.Type
 	err = shardSwap.parent.tabletClient.ChangeType(shardSwap.parent.ctx, seedTablet, topodatapb.TabletType_DRAINED)
 	if err != nil {
 		return err
@@ -982,7 +1016,7 @@ func (shardSwap *shardSchemaSwap) applySeedSchemaChange() (err error) {
 		true, /* disableBinlogs */
 		true /* reloadSchema */)
 	if err != nil {
-		if undrainErr := shardSwap.undrainSeedTablet(seedTablet, savedSeedType); undrainErr != nil {
+		if undrainErr := shardSwap.undrainSeedTablet(seedTablet, seedTabletType); undrainErr != nil {
 			// We won't return error of undraining because we already have error of SQL execution.
 			log.Errorf("Got error undraining seed tablet: %v", undrainErr)
 		}
@@ -1000,14 +1034,14 @@ func (shardSwap *shardSchemaSwap) applySeedSchemaChange() (err error) {
 		true, /* disableBinlogs */
 		false /* reloadSchema */)
 	if err != nil {
-		if undrainErr := shardSwap.undrainSeedTablet(seedTablet, savedSeedType); undrainErr != nil {
+		if undrainErr := shardSwap.undrainSeedTablet(seedTablet, seedTabletType); undrainErr != nil {
 			// We won't return error of undraining because we already have error of SQL execution.
 			log.Errorf("Got error undraining seed tablet: %v", undrainErr)
 		}
 		return err
 	}
 
-	if err = shardSwap.undrainSeedTablet(seedTablet, savedSeedType); err != nil {
+	if err = shardSwap.undrainSeedTablet(seedTablet, seedTabletType); err != nil {
 		return err
 	}
 
@@ -1031,7 +1065,7 @@ func (shardSwap *shardSchemaSwap) takeSeedBackup() (err error) {
 			if err != nil {
 				return err
 			}
-			if swapApplied && tabletStats.Tablet.Type != topodatapb.TabletType_MASTER {
+			if swapApplied && getTabletTypeFromStats(&tabletStats) != topodatapb.TabletType_MASTER {
 				seedTablet = tabletStats.Tablet
 				break
 			}
@@ -1211,7 +1245,7 @@ func (shardSwap *shardSchemaSwap) propagateToAllTablets(withMasterReparent bool)
 			shardSwap.addPropagationLog(fmt.Sprintf("Error searching for next tablet to swap schema on: %v.", err))
 		}
 
-		shardSwap.addPropagationLog(fmt.Sprintf("Sleeping for %v seconds.", *delayBetweenErrors))
+		shardSwap.addPropagationLog(fmt.Sprintf("Sleeping for %v.", *delayBetweenErrors))
 		select {
 		case <-shardSwap.parent.ctx.Done():
 			return shardSwap.parent.ctx.Err()

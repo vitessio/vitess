@@ -1223,7 +1223,7 @@ class Vtctld(object):
     if protocols_flavor().vtctl_client_protocol() == 'grpc':
       self.grpc_port = environment.reserve_ports(1)
 
-  def start(self, enable_schema_change_dir=False):
+  def start(self, enable_schema_change_dir=False, extra_flags=None):
     # Note the vtctld2 web dir is set to 'dist', which is populated
     # when a toplevel 'make build_web' is run. This is meant to test
     # the development version of the UI. The real checked-in app is in
@@ -1243,7 +1243,10 @@ class Vtctld(object):
         '-vtgate_protocol', protocols_flavor().vtgate_protocol(),
         '-workflow_manager_init',
         '-workflow_manager_use_election',
+        '-schema_swap_delay_between_errors', '1s',
     ] + environment.topo_server().flags()
+    if extra_flags:
+      args += extra_flags
     # TODO(b/26388813): Remove the next two lines once vtctl WaitForDrain is
     #                   integrated in the vtctl MigrateServed* commands.
     args.extend(['--wait_for_drain_sleep_rdonly', '0s'])
