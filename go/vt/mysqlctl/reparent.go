@@ -19,33 +19,23 @@ import (
 	"golang.org/x/net/context"
 )
 
-const (
-	// replicationPositionSize is the maximum size of the
-	// replication_position column in the _vt.reparent_journal
-	// table. A row has a maximum size of 65535 bytes. So we want
-	// to stay under that. Note we also specify the character set
-	// and collation of the replication_position column, as we
-	// know we only use latin1 characters.
-	replicationPositionSize = 64000
-)
-
 // CreateReparentJournal returns the commands to execute to create
 // the _vt.reparent_journal table. It is safe to run these commands
 // even if the table already exists.
 //
 // If the table was created by Vitess version 2.0, the following command
 // may need to be run:
-// ALTER TABLE _vt.reparent_journal MODIFY COLUMN replication_position VARCHAR(64000) CHARACTER SET latin1 COLLATE latin1_bin;
+// ALTER TABLE _vt.reparent_journal MODIFY COLUMN replication_position VARBINARY(64000);
 func CreateReparentJournal() []string {
 	return []string{
 		"CREATE DATABASE IF NOT EXISTS _vt",
 		fmt.Sprintf(`CREATE TABLE IF NOT EXISTS _vt.reparent_journal (
   time_created_ns BIGINT UNSIGNED NOT NULL,
-  action_name VARCHAR(250) NOT NULL,
-  master_alias VARCHAR(32) NOT NULL,
-  replication_position VARCHAR(%v) DEFAULT NULL,
+  action_name VARBINARY(250) NOT NULL,
+  master_alias VARBINARY(32) NOT NULL,
+  replication_position VARBINARY(%v) DEFAULT NULL,
   PRIMARY KEY (time_created_ns))
-ENGINE=InnoDB CHARACTER SET latin1 COLLATE latin1_bin`, replicationPositionSize)}
+ENGINE=InnoDB`, replication.MaximumPositionSize)}
 }
 
 // PopulateReparentJournal returns the SQL command to use to populate
@@ -53,8 +43,8 @@ ENGINE=InnoDB CHARACTER SET latin1 COLLATE latin1_bin`, replicationPositionSize)
 // value used.
 func PopulateReparentJournal(timeCreatedNS int64, actionName, masterAlias string, pos replication.Position) string {
 	posStr := replication.EncodePosition(pos)
-	if len(posStr) > replicationPositionSize {
-		posStr = posStr[:replicationPositionSize]
+	if len(posStr) > replication.MaximumPositionSize {
+		posStr = posStr[:replication.MaximumPositionSize]
 	}
 	return fmt.Sprintf("INSERT INTO _vt.reparent_journal "+
 		"(time_created_ns, action_name, master_alias, replication_position) "+
