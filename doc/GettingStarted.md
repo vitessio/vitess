@@ -88,6 +88,16 @@ In addition, Vitess requires the software and libraries listed below.
     offers an option to install that version. You can also download the source
     directly from [mariadb.org](https://downloads.mariadb.org/mariadb/).
 
+    If you are using Ubuntu 14.04 with MySQL 5.6, the default install may be
+    missing a file too, `/usr/share/mysql/my-default.cnf`. It would show as an
+    error like `Could not find my-default.cnf`. If you run into this, just add
+    it with the following contents:
+
+    ```ini
+[mysqld]
+sql_mode=NO_ENGINE_SUBSTITUTION,STRICT_TRANS_TABLES
+```
+
 3.  Select a lock service from the options listed below. It is technically
     possible to use another lock server, but plugins currently exist only
     for ZooKeeper and etcd.
