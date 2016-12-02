@@ -355,7 +355,15 @@ and MySQL 5.6.27.</p>
 <p>If you are installing MariaDB, note that you must install version 10.0 or
 higher. If you are using <code class="prettyprint">apt-get</code>, confirm that your repository
 offers an option to install that version. You can also download the source
-directly from <a href="https://downloads.mariadb.org/mariadb/">mariadb.org</a>.</p></li>
+directly from <a href="https://downloads.mariadb.org/mariadb/">mariadb.org</a>.</p>
+
+<p>If you are using Ubuntu 14.04 with MySQL 5.6, the default install may be
+missing a file too, <code class="prettyprint">/usr/share/mysql/my-default.cnf</code>. It would show as an
+error like <code class="prettyprint">Could not find my-default.cnf</code>. If you run into this, just add
+it with the following contents:</p>
+<div class="highlight"><pre><code class="language-ini" data-lang="ini"><span class="k">[mysqld]</span>
+<span class="na">sql_mode</span><span class="o">=</span><span class="s">NO_ENGINE_SUBSTITUTION,STRICT_TRANS_TABLES</span>
+</code></pre></div></li>
 <li><p>Select a lock service from the options listed below. It is technically
 possible to use another lock server, but plugins currently exist only
 for ZooKeeper and etcd.</p>
