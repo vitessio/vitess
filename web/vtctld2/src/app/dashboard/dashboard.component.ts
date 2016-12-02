@@ -22,11 +22,12 @@ import { MenuItem } from 'primeng/primeng';
 
 export class DashboardComponent implements OnInit {
   keyspaces = [];
-  keyspacesReady = false;
+  inFlightQueries = 0;
   selectedKeyspace: Keyspace;
   dialogSettings: DialogSettings;
   dialogContent: DialogContent;
   private actions: MenuItem[];
+  private actionsCrud: MenuItem[];
   private keyspaceActions: MenuItem[];
 
   constructor(
@@ -39,19 +40,50 @@ export class DashboardComponent implements OnInit {
     this.getKeyspaces();
     this.dialogContent = new DialogContent();
     this.dialogSettings = new DialogSettings();
-    this.actions = [{label: 'Validate', command: (event) => {this.openValidateDialog(); }}];
-    this.keyspaceActions = [{label: 'Edit', command: (event) => {this.openEditDialog(); }},
-      {label: 'Delete', command: (event) => {this.openDeleteDialog(); }},
+    this.actions = [
+      {label: 'Validate', command: (event) => {this.openValidateDialog(); }},
+    ];
+    this.actionsCrud = [
+      {label: 'Status', items: [
+        {label: 'Validate', command: (event) => {this.openValidateDialog(); }},
+      ]},
+      {label: 'Change', items: [
+        {label: 'New', command: (event) => {this.openNewDialog(); }},
+      ]},
+    ];
+    this.keyspaceActions = [
+      {label: 'Change', items: [
+        {label: 'Edit', command: (event) => {this.openEditDialog(); }},
+        {label: 'Delete', command: (event) => {this.openDeleteDialog(); }},
+      ]},
     ];
   }
 
   getKeyspaces() {
+    if (this.inFlightQueries > 0) {
+      // There is already a query in flight, we don't want to have
+      // more than one at a time, it would mess up our data
+      // structures.
+      return;
+    }
     this.keyspaces = [];
+    this.inFlightQueries++;
     this.keyspaceService.getKeyspaces().subscribe(keyspaceStream => {
+      this.inFlightQueries++;
       keyspaceStream.subscribe(keyspace => {
           this.keyspaces.push(keyspace);
           this.keyspaces.sort(this.cmp);
+      }, () => {
+        console.log('Error getting keyspace');
+        this.inFlightQueries--;
+      }, () => {
+        this.inFlightQueries--;
       });
+    }, () => {
+      console.log('Error getting keyspaces');
+      this.inFlightQueries--;
+    }, () => {
+      this.inFlightQueries--;
     });
   }
 

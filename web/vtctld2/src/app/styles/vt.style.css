@@ -99,6 +99,13 @@ p-menu {
   float: left;
 }
 
+.vt-toolbar .vt-right-menu {
+  padding-top: 19px;
+  position: fixed;
+  right: 25px;
+  top: 19px;
+}
+
 .vt-card-toolbar {
   display: inline-block;
   width: 100%;
