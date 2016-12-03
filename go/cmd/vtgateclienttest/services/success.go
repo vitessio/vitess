@@ -26,9 +26,10 @@ func newSuccessClient(fallback vtgateservice.VTGateService) *successClient {
 	}
 }
 
-func (c *successClient) Begin(ctx context.Context) (*vtgatepb.Session, error) {
+func (c *successClient) Begin(ctx context.Context, singledb bool) (*vtgatepb.Session, error) {
 	return &vtgatepb.Session{
 		InTransaction: true,
+		SingleDb:      singledb,
 	}, nil
 }
 

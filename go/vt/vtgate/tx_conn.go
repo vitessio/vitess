@@ -122,17 +122,6 @@ func (txc *TxConn) Rollback(ctx context.Context, session *SafeSession) error {
 	})
 }
 
-// RollbackIfNeeded rolls back the current transaction if the error implies that the
-// transaction can never be completed.
-func (txc *TxConn) RollbackIfNeeded(ctx context.Context, err error, session *SafeSession) {
-	if session.InTransaction() {
-		ec := vterrors.RecoverVtErrorCode(err)
-		if ec == vtrpcpb.ErrorCode_RESOURCE_EXHAUSTED || ec == vtrpcpb.ErrorCode_NOT_IN_TX {
-			txc.Rollback(ctx, session)
-		}
-	}
-}
-
 // Resolve resolves the specified 2PC transaction.
 func (txc *TxConn) Resolve(ctx context.Context, dtid string) error {
 	mmShard, err := dtids.ShardSession(dtid)

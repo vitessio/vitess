@@ -7,6 +7,7 @@ package vtgate
 import (
 	"fmt"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/youtube/vitess/go/sqltypes"
@@ -398,6 +399,44 @@ func TestScatterConnQueryNotInTransaction(t *testing.T) {
 	}
 	if commitCount := sbc1.CommitCount.Get(); commitCount != 0 {
 		t.Errorf("want 0, got %d", commitCount)
+	}
+}
+
+func TestScatterConnSingleDB(t *testing.T) {
+	createSandbox("TestScatterConnSingleDB")
+	hc := discovery.NewFakeHealthCheck()
+
+	hc.Reset()
+	sc := newTestScatterConn(hc, new(sandboxTopo), "aa")
+	hc.AddTestTablet("aa", "0", 1, "TestScatterConnSingleDB", "0", topodatapb.TabletType_MASTER, true, 1, nil)
+	hc.AddTestTablet("aa", "1", 1, "TestScatterConnSingleDB", "1", topodatapb.TabletType_MASTER, true, 1, nil)
+	session := NewSafeSession(&vtgatepb.Session{InTransaction: true, SingleDb: true})
+	_, err := sc.Execute(context.Background(), "query1", nil, "TestScatterConnSingleDB", []string{"0"}, topodatapb.TabletType_MASTER, session, false, nil)
+	if err != nil {
+		t.Error(err)
+	}
+	_, err = sc.Execute(context.Background(), "query1", nil, "TestScatterConnSingleDB", []string{"1"}, topodatapb.TabletType_MASTER, session, false, nil)
+	want := "multi-db transaction attempted"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("Multi DB exec: %v, must contain %s", err, want)
+	}
+
+	session = NewSafeSession(&vtgatepb.Session{InTransaction: true, SingleDb: true})
+	queries := []*vtgatepb.BoundShardQuery{{
+		Query: &querypb.BoundQuery{
+			Sql:           "query",
+			BindVariables: nil,
+		},
+		Keyspace: "TestScatterConnSingleDB",
+		Shards:   []string{"0", "1"},
+	}}
+	scatterRequest, err := boundShardQueriesToScatterBatchRequest(queries)
+	if err != nil {
+		t.Error(err)
+	}
+	_, err = sc.ExecuteBatch(context.Background(), scatterRequest, topodatapb.TabletType_MASTER, false, session, nil)
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("Multi DB exec: %v, must contain %s", err, want)
 	}
 }
 

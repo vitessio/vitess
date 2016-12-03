@@ -76,7 +76,7 @@ func (c *terminalClient) StreamExecuteKeyRanges(ctx context.Context, sql string,
 	return errTerminal
 }
 
-func (c *terminalClient) Begin(ctx context.Context) (*vtgatepb.Session, error) {
+func (c *terminalClient) Begin(ctx context.Context, singledb bool) (*vtgatepb.Session, error) {
 	return nil, errTerminal
 }
 
