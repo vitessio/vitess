@@ -2,6 +2,7 @@
 import json
 import logging
 import re
+import time
 import unittest
 import urllib2
 
@@ -142,10 +143,11 @@ class TestSchemaSwap(unittest.TestCase):
       t.mquery('_vt', "DELETE FROM shard_metadata where name in ("
                       "'LastStartedSchemaSwap','LastFinishedSchemaSwap',"
                       "'CurrentSchemaSwapSQL');"
-                      "DELET FROM local_metadata "
+                      "DELETE FROM local_metadata "
                       "where name = 'LastAppliedSchemaSwap';")
 
     self._vtctld_url = 'http://localhost:%d' % utils.vtctld.port
+    self._wait_for_functional_vtctld()
     self._start_vtctld_long_poll()
 
   def _start_swap(self, sql):
@@ -187,6 +189,18 @@ class TestSchemaSwap(unittest.TestCase):
     poll_update = self._fetch_json_from_vtctld('api/workflow/create')
     self._poll_id = poll_update['index']
     return poll_update
+
+  def _wait_for_functional_vtctld(self):
+    """Wait until vtctld is fully up and is able to respond to polls."""
+    while True:
+      try:
+        poll_update = self._fetch_json_from_vtctld('api/workflow/create')
+        if poll_update.get('index') is None:
+          time.sleep(0.1)
+          continue
+        break
+      except urllib2.HTTPError:
+        pass
 
   def _send_retry_vtctld_action(self, swap_uuid):
     """Emulate click of the Retry button on the schema swap."""
@@ -427,13 +441,7 @@ class TestSchemaSwap(unittest.TestCase):
     new_vtctld = utils.Vtctld()
     new_vtctld.port = vtctld_port
     new_vtctld.start(extra_flags=extra_flags)
-    # Wait until vtctld is fully up and is able to respond to http requests.
-    while True:
-      try:
-        self._poll_vtctld()
-        break
-      except urllib2.HTTPError:
-        pass
+    self._wait_for_functional_vtctld()
 
   def test_reparent_error(self):
     """Schema swap interrupted by an error during reparent."""
