@@ -1020,6 +1020,31 @@ class TestVTGateFunctions(unittest.TestCase):
     finally:
       vtgate_conn.rollback()
 
+  def test_transaction_modes(self):
+    vtgate_conn = get_connection()
+    cursor = vtgate_conn.cursor(
+        tablet_type='master', keyspace=None, writable=True, single_db=True)
+    cursor.begin()
+    try:
+      cursor.execute('update vt_user set name = \'test\' where id = 100', {})
+      with self.assertRaisesRegexp(
+          dbexceptions.ProgrammingError, '.*multi-db transaction attempted.*'):
+        cursor.execute('update main set val = \'test\' where id = 100', {})
+    finally:
+      cursor.rollback()
+
+    cursor = vtgate_conn.cursor(
+        tablet_type='master', keyspace=None, writable=True, twopc=True)
+    cursor.begin()
+    try:
+      cursor.execute('update vt_user set name = \'test\' where id = 100', {})
+      cursor.execute('update main set val = \'test\' where id = 100', {})
+      with self.assertRaisesRegexp(
+          dbexceptions.ProgrammingError, '.*2pc transaction disallowed.*'):
+        cursor.commit()
+    finally:
+      cursor.rollback()
+
   def test_vtclient(self):
     """This test uses vtclient to send and receive various queries.
     """

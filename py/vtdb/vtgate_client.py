@@ -124,7 +124,7 @@ class VTGateClient(object):
     cursorclass = kwargs.pop('cursorclass', None) or vtgate_cursor.VTGateCursor
     return cursorclass(self, *pargs, **kwargs)
 
-  def begin(self, effective_caller_id=None):
+  def begin(self, effective_caller_id=None, single_db=False):
     """Starts a transaction.
 
     FIXME(alainjobart): instead of storing the Session as member variable,
@@ -132,6 +132,7 @@ class VTGateClient(object):
 
     Args:
       effective_caller_id: CallerID Object.
+      single_db: True if single db transaction is needed.
 
     Raises:
       dbexceptions.TimeoutError: for connection timeout.
@@ -146,10 +147,13 @@ class VTGateClient(object):
     """
     raise NotImplementedError('Child class needs to implement this')
 
-  def commit(self):
+  def commit(self, twopc=False):
     """Commits the current transaction.
 
     FIXME(alainjobart): should take the session in.
+
+    Args:
+      twopc: perform 2-phase commit.
 
     Raises:
       dbexceptions.TimeoutError: for connection timeout.

@@ -185,6 +185,13 @@ func TestVTGateCommit(t *testing.T) {
 	}
 }
 
+func TestVTGateRollbackNil(t *testing.T) {
+	err := rpcVTGate.Rollback(context.Background(), nil)
+	if err != nil {
+		t.Error(err)
+	}
+}
+
 func TestVTGateExecute(t *testing.T) {
 	createSandbox(KsTestUnsharded)
 	hcVTGateTest.Reset()

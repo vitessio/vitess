@@ -91,6 +91,9 @@ func (session *SafeSession) MustRollback() bool {
 
 // Reset clears the session
 func (session *SafeSession) Reset() {
+	if session == nil || session.Session == nil {
+		return
+	}
 	session.mu.Lock()
 	defer session.mu.Unlock()
 	session.Session.InTransaction = false

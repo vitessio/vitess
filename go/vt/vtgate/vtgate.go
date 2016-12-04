@@ -591,6 +591,8 @@ func (vtg *VTGate) Begin(ctx context.Context, singledb bool) (*vtgatepb.Session,
 // Commit commits a transaction.
 func (vtg *VTGate) Commit(ctx context.Context, twopc bool, session *vtgatepb.Session) error {
 	if twopc && vtg.transactionMode != TxTwoPC {
+		// Rollback the transaction to prevent future deadlocks.
+		vtg.txConn.Rollback(ctx, NewSafeSession(session))
 		return vterrors.FromError(vtrpcpb.ErrorCode_BAD_INPUT, errors.New("2pc transaction disallowed"))
 	}
 	return formatError(vtg.txConn.Commit(ctx, twopc, NewSafeSession(session)))

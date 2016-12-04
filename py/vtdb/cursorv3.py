@@ -7,8 +7,8 @@ from vtdb import base_cursor
 
 class Cursor(base_cursor.BaseListCursor):
 
-  def __init__(self, connection, tablet_type):
-    super(Cursor, self).__init__()
+  def __init__(self, connection, tablet_type, single_db=False, twopc=False):
+    super(Cursor, self).__init__(single_db=single_db, twopc=twopc)
     self._conn = connection
     self.tablet_type = tablet_type
 
