@@ -28,6 +28,9 @@ type Route struct {
 	Subquery   string
 	Generate   *Generate
 	Rows       *sqlparser.Values
+	Prefix     string
+	Mid        string
+	Suffix     string
 }
 
 // Execute performs a non-streaming exec.
@@ -66,6 +69,9 @@ func (rt *Route) MarshalJSON() ([]byte, error) {
 		Table      string              `json:",omitempty"`
 		Subquery   string              `json:",omitempty"`
 		Generate   *Generate           `json:",omitempty"`
+		Prefix     string              `json:",omitempty"`
+		Mid        string              `json:",omitempty"`
+		Suffix     string              `json:",omitempty"`
 	}{
 		Opcode:     rt.Opcode,
 		Keyspace:   rt.Keyspace,
@@ -77,6 +83,9 @@ func (rt *Route) MarshalJSON() ([]byte, error) {
 		Table:      tname,
 		Subquery:   rt.Subquery,
 		Generate:   rt.Generate,
+		Prefix:     rt.Prefix,
+		Mid:        rt.Mid,
+		Suffix:     rt.Suffix,
 	}
 	return json.Marshal(marshalRoute)
 }

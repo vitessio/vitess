@@ -4,7 +4,9 @@
 
 package sqltypes
 
-import querypb "github.com/youtube/vitess/go/vt/proto/query"
+import (
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
+)
 
 // Result represents a query result.
 type Result struct {
@@ -116,4 +118,44 @@ func (result *Result) StripFieldNames() *Result {
 		newFieldsArray[i].Type = f.Type
 	}
 	return &r
+}
+
+// MergeResultRows will be extended to appropriately merge the Results
+// for now only simple merging is being done. Only the Rows of the
+// two results are being merged.
+func (result *Result) MergeResultRows(lastResult *Result) {
+	if result.Rows != nil {
+		rows := make([][]Value, len(lastResult.Rows)+len(result.Rows))
+		count := 0
+		for i, r := range result.Rows {
+			rows[i] = make([]Value, len(r))
+			totalLen := 0
+			for _, c := range r {
+				totalLen += len(c.val)
+			}
+			arena := make([]byte, 0, totalLen)
+			for j, c := range r {
+				start := len(arena)
+				arena = append(arena, c.val...)
+				rows[i][j] = MakeTrusted(c.typ, arena[start:start+len(c.val)])
+			}
+			count++
+		}
+		for i, r := range lastResult.Rows {
+			rows[count+i] = make([]Value, len(r))
+			totalLen := 0
+			for _, c := range r {
+				totalLen += len(c.val)
+			}
+			arena := make([]byte, 0, totalLen)
+			for j, c := range r {
+				start := len(arena)
+				arena = append(arena, c.val...)
+				rows[count+i][j] = MakeTrusted(c.typ, arena[start:start+len(c.val)])
+			}
+		}
+		result.Rows = rows
+	} else {
+		result.Rows = lastResult.Rows
+	}
 }

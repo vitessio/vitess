@@ -381,30 +381,17 @@ func (rtr *Router) execInsertSharded(vcursor *requestContext, route *engine.Rout
 	if err != nil {
 		return nil, fmt.Errorf("paramsSelectEqual: %v", err)
 	}
-	//fmt.Println("Query:"+route.Query)
-	//fmt.Println("RouteDS BEGIN:")
-	//spew.Dump(route)
-	//fmt.Println("RouteDS END:")
-	//spew.Dump((*route.Rows)[1])
-	//for row,_ := range *route.Rows {
-	//	fmt.Println(row)
-	//}
 
-	//fmt.Println("Routing Info")
-	//spew.Dump(routing)
 	//Query ReWriting
 	var aggrResult sqltypes.Result
 	for shard := range routing {
-
+		route.Query = route.Prefix + route.Mid + route.Suffix
 		rewritten, err := rtr.rewriteQuery(route, routing, shard)
 		if err != nil {
 			return nil, fmt.Errorf("Error While Rewriting Query: %v", err)
 		}
-		route.Query = strings.Replace(route.Query, ":#rowvalues", rewritten, -1)
-		rewrittenQuery := sqlannotation.AddKeyspaceIDs(route.Query, shardKsidMap[shard], vcursor.comments)
-		fmt.Println("Rewritten Query:" + rewrittenQuery)
-		route.Query = rewrittenQuery
-
+		rewrittenQuery := sqlannotation.AddKeyspaceIDs(rewritten, shardKsidMap[shard], vcursor.comments)
+		//fmt.Println("Rewritten Query:"+ rewrittenQuery)
 		result, err := rtr.scatterConn.Execute(
 			vcursor.ctx,
 			rewrittenQuery,
@@ -426,38 +413,53 @@ func (rtr *Router) execInsertSharded(vcursor *requestContext, route *engine.Rout
 			aggrResult.InsertID = uint64(insertid)
 		}
 		//Aggregate the Results here from the ResultSet coming from different shards.
-		//aggrResult.Rows = append(aggrResult.Rows,result.Rows)
+		aggrResult.MergeResultRows(result)
 		aggrResult.Fields = result.Fields
-		aggrResult.RowsAffected += aggrResult.RowsAffected
+		aggrResult.RowsAffected += result.RowsAffected
 
 	}
 
 	return &aggrResult, nil
 }
 
-func (rtr *Router) rewriteQuery(route *engine.Route, routing routingMap, shard string) (Query string, err error) {
-	var ValuesStr string
-	for _, rowVal := range *route.Rows {
-		ValuesStr += "("
-		for col := range rowVal {
-			val, err := planbuilder.ValConvert(rowVal[col])
-			if err != nil {
-				return val.(string), fmt.Errorf("could not convert val: %s, pos: %d: %v", sqlparser.String(rowVal[col]), col, err)
-			}
-			ValuesStr += fmt.Sprintf("%v, ", val)
+func contains(intSlice []int, searchInt int) bool {
+	for _, value := range intSlice {
+		if value == searchInt {
+			return true
 		}
-		ValuesStr = strings.TrimRight(ValuesStr, ", ")
-		ValuesStr += "), "
+	}
+	return false
+}
+
+func (rtr *Router) rewriteQuery(route *engine.Route, routing map[string][]int, shard string) (Query string, err error) {
+	var ValuesStr string
+	//fmt.Println("routing shard")
+	//spew.Dump(routing[shard])
+	for rowNum, rowVal := range *route.Rows {
+		if contains(routing[shard], rowNum) {
+			ValuesStr += "("
+			for col := range rowVal {
+				val, err := planbuilder.ValConvert(rowVal[col])
+				if err != nil {
+					return val.(string), fmt.Errorf("could not convert val: %s, pos: %d: %v", sqlparser.String(rowVal[col]), col, err)
+				}
+				//spew.Dump(val)
+				ValuesStr += fmt.Sprintf("%v, ", val)
+			}
+			ValuesStr = strings.TrimRight(ValuesStr, ", ")
+			ValuesStr += "), "
+		}
 	}
 	ValuesStr = strings.TrimRight(ValuesStr, ", ")
-	Query = ValuesStr
+	Query = route.Query
+	Query = strings.Replace(Query, ":#rowvalues", ValuesStr, -1)
 	return Query, nil
 }
 
-func (rtr *Router) getInsertShardedRoute(vcursor *requestContext, route *engine.Route) (keyspace string, routing routingMap, valuesKSIDMap map[string][][]byte, err error) {
+func (rtr *Router) getInsertShardedRoute(vcursor *requestContext, route *engine.Route) (keyspace string, routing map[string][]int, valuesKSIDMap map[string][][]byte, err error) {
 
 	keyspaceIDs := [][]byte{}
-	routing = make(routingMap)
+	routing = make(map[string][]int)
 	valuesKeyspaceIDMap := make(map[string][][]byte)
 	keyspace, _, allShards, err := getKeyspaceShards(vcursor.ctx, rtr.serv, rtr.cell, route.Keyspace.Name, vcursor.tabletType)
 	if err != nil {
@@ -485,20 +487,18 @@ func (rtr *Router) getInsertShardedRoute(vcursor *requestContext, route *engine.
 			}
 		}
 		shard, err := getShardForKeyspaceID(allShards, keyspaceIDs[rowNum])
-		//fmt.Println("Shard:"+shard)
-		//routing.Add(shard,keyspaceIDs[rowNum])
-		routing.Add(shard, rowNum)
+		//routing.Add(shard, rowNum)
+		routing[shard] = append(routing[shard], rowNum)
 		if err != nil {
 			return "", nil, nil, fmt.Errorf("execInsertSharded: %v", err)
 		}
 		valuesKeyspaceIDMap[shard] = append(valuesKeyspaceIDMap[shard], keyspaceIDs[rowNum])
 	}
-	//fmt.Println("RoutingMap")
-	//spew.Dump(routing)
+
 	return keyspace, routing, valuesKeyspaceIDMap, nil
 }
 
-// resloveList returns a list of values, typically for an IN clause. If the input
+// resolveList returns a list of values, typically for an IN clause. If the input
 // is a bind var name, it uses the list provided in the bind var. If the input is
 // already a list, it returns just that.
 func (rtr *Router) resolveList(val interface{}, bindVars map[string]interface{}) (vals []interface{}, err error) {
