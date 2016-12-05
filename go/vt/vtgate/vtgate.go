@@ -42,7 +42,7 @@ import (
 
 // Transaction modes. The value specifies what's allowed.
 const (
-	TxSinlge = iota
+	TxSingle = iota
 	TxMulti
 	TxTwoPC
 )
@@ -579,7 +579,7 @@ func (vtg *VTGate) StreamExecuteShards(ctx context.Context, sql string, bindVari
 
 // Begin begins a transaction. It has to be concluded by a Commit or Rollback.
 func (vtg *VTGate) Begin(ctx context.Context, singledb bool) (*vtgatepb.Session, error) {
-	if !singledb && vtg.transactionMode == TxSinlge {
+	if !singledb && vtg.transactionMode == TxSingle {
 		return nil, vterrors.FromError(vtrpcpb.ErrorCode_BAD_INPUT, errors.New("multi-db transaction disallowed"))
 	}
 	return &vtgatepb.Session{

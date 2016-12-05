@@ -77,7 +77,7 @@ func main() {
 	switch *transactionMode {
 	case "single":
 		log.Infof("Transaction mode: '%s'", *transactionMode)
-		txMode = vtgate.TxSinlge
+		txMode = vtgate.TxSingle
 	case "multi":
 		log.Infof("Transaction mode: '%s'", *transactionMode)
 	case "twopc":

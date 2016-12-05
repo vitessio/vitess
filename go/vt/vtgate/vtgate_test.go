@@ -57,7 +57,7 @@ func TestVTGateBegin(t *testing.T) {
 		rpcVTGate.transactionMode = save
 	}()
 
-	rpcVTGate.transactionMode = TxSinlge
+	rpcVTGate.transactionMode = TxSingle
 	got, err := rpcVTGate.Begin(context.Background(), true)
 	if err != nil {
 		t.Error(err)
@@ -135,7 +135,7 @@ func TestVTGateCommit(t *testing.T) {
 		InTransaction: true,
 	}
 
-	rpcVTGate.transactionMode = TxSinlge
+	rpcVTGate.transactionMode = TxSingle
 	err := rpcVTGate.Commit(context.Background(), true, session)
 	wantErr := "2pc transaction disallowed"
 	if err == nil || err.Error() != wantErr {
