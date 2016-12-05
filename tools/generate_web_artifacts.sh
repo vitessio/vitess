@@ -16,3 +16,4 @@ if [[ -d $vtctld2_dir/app ]]; then
 fi
 cd $vtctld2_dir && ng build -prod --output-path app/
 rm -rf $vtctld2_dir/app/assets
+cp -f $vtctld2_dir/src/favicon.ico $vtctld2_dir/app/
