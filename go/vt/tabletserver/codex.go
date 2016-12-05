@@ -12,6 +12,7 @@ import (
 	"github.com/youtube/vitess/go/vt/schema"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
@@ -96,19 +97,42 @@ func resolveListArg(col *schema.TableColumn, key string, bindVars map[string]int
 	if err != nil {
 		return nil, NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "%v", err)
 	}
-	list := val.([]interface{})
-	resolved := make([]sqltypes.Value, len(list))
-	for i, v := range list {
-		sqlval, err := sqltypes.BuildConverted(col.Type, v)
-		if err != nil {
-			return nil, NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "%v", err)
+
+	switch list := val.(type) {
+	case []interface{}:
+		resolved := make([]sqltypes.Value, len(list))
+		for i, v := range list {
+			sqlval, err := sqltypes.BuildConverted(col.Type, v)
+			if err != nil {
+				return nil, NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "%v", err)
+			}
+			if err = validateValue(col, sqlval); err != nil {
+				return nil, err
+			}
+			resolved[i] = sqlval
 		}
-		if err = validateValue(col, sqlval); err != nil {
-			return nil, err
+		return resolved, nil
+	case *querypb.BindVariable:
+		if list.Type != querypb.Type_TUPLE {
+			return nil, NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "expecting list for bind var %s: %v", key, list)
 		}
-		resolved[i] = sqlval
+		resolved := make([]sqltypes.Value, len(list.Values))
+		for i, v := range list.Values {
+			// We can use MakeTrusted as BuildConverted will check the value.
+			sqlval := sqltypes.MakeTrusted(v.Type, v.Value)
+			sqlval, err := sqltypes.BuildConverted(col.Type, sqlval)
+			if err != nil {
+				return nil, NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "%v", err)
+			}
+			if err = validateValue(col, sqlval); err != nil {
+				return nil, err
+			}
+			resolved[i] = sqlval
+		}
+		return resolved, nil
+	default:
+		return nil, NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "unknown type for bind variable %v", key)
 	}
-	return resolved, nil
 }
 
 // buildSecondaryList is used for handling ON DUPLICATE DMLs, or those that change the PK.
