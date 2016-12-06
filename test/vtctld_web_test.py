@@ -431,8 +431,14 @@ class TestVtctldWeb(unittest.TestCase):
     dashboard_content = self.driver.find_element_by_tag_name('vt-dashboard')
     dialog = dashboard_content.find_element_by_tag_name('vt-dialog')
     # Create Keyspace Dialog command responds to name.
-    add_button = dashboard_content.find_element_by_class_name('add-button')
-    add_button.click()
+    dashboard_menu = dashboard_content.find_element_by_class_name('vt-menu')
+    dashboard_menu.click()
+    new_keyspace_option = [
+        x for x in
+        dashboard_content.find_elements_by_class_name('ui-menuitem-text')
+        if x.text == 'New'][0]
+    new_keyspace_option.click()
+
     input_fields = [md_input.find_element_by_tag_name('input') for md_input in
                     dialog.find_elements_by_tag_name('md-input')]
     keyspace_name_field = input_fields[0]
@@ -482,7 +488,7 @@ class TestVtctldWeb(unittest.TestCase):
     test_keyspace3.find_element_by_class_name('vt-menu').click()
     options = test_keyspace3.find_elements_by_tag_name('li')
 
-    delete = options[1]
+    delete = options[2]
     delete.click()
 
     delete = dialog.find_element_by_id('vt-action')
