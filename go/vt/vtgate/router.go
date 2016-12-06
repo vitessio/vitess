@@ -433,18 +433,24 @@ func contains(intSlice []int, searchInt int) bool {
 
 func (rtr *Router) rewriteQuery(route *engine.Route, routing map[string][]int, shard string) (Query string, err error) {
 	var ValuesStr string
-	//fmt.Println("routing shard")
+	//fmt.Println("Route Rows")
 	//spew.Dump(routing[shard])
 	for rowNum, rowVal := range *route.Rows {
 		if contains(routing[shard], rowNum) {
 			ValuesStr += "("
 			for col := range rowVal {
-				val, err := planbuilder.ValConvert(rowVal[col])
-				if err != nil {
-					return val.(string), fmt.Errorf("could not convert val: %s, pos: %d: %v", sqlparser.String(rowVal[col]), col, err)
+				var val interface{}
+				switch node := (rowVal[col]).(type) {
+				case sqlparser.StrVal:
+					val = string(node)
+					ValuesStr += fmt.Sprintf("'%v', ", val)
+				default:
+					val, err := planbuilder.ValConvert(node)
+					if err != nil {
+						return val.(string), fmt.Errorf("could not convert val: %s, pos: %d: %v", sqlparser.String(rowVal[col]), col, err)
+					}
+					ValuesStr += fmt.Sprintf("%v, ", val)
 				}
-				//spew.Dump(val)
-				ValuesStr += fmt.Sprintf("%v, ", val)
 			}
 			ValuesStr = strings.TrimRight(ValuesStr, ", ")
 			ValuesStr += "), "
