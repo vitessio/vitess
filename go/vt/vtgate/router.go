@@ -418,24 +418,39 @@ func (rtr *Router) execInsertSharded(vcursor *requestContext, route *engine.Rout
 // resloveList returns a list of values, typically for an IN clause. If the input
 // is a bind var name, it uses the list provided in the bind var. If the input is
 // already a list, it returns just that.
-func (rtr *Router) resolveList(val interface{}, bindVars map[string]interface{}) (vals []interface{}, err error) {
+func (rtr *Router) resolveList(val interface{}, bindVars map[string]interface{}) ([]interface{}, error) {
 	switch v := val.(type) {
 	case []interface{}:
-		vals = v
+		return v, nil
 	case string:
 		// It can only be a list bind var.
 		list, ok := bindVars[v[2:]]
 		if !ok {
 			return nil, fmt.Errorf("could not find bind var %s", v)
 		}
-		vals, ok = list.([]interface{})
-		if !ok {
+
+		// Lists can be an []interface{}, or a *querypb.BindVariable
+		// with type TUPLE.
+		switch l := list.(type) {
+		case []interface{}:
+			return l, nil
+		case *querypb.BindVariable:
+			if l.Type != querypb.Type_TUPLE {
+				return nil, fmt.Errorf("expecting list for bind var %s: %v", v, list)
+			}
+			result := make([]interface{}, len(l.Values))
+			for i, val := range l.Values {
+				// We can use MakeTrusted as the lower
+				// layers will verify the value if needed.
+				result[i] = sqltypes.MakeTrusted(val.Type, val.Value)
+			}
+			return result, nil
+		default:
 			return nil, fmt.Errorf("expecting list for bind var %s: %v", v, list)
 		}
 	default:
 		panic("unexpected")
 	}
-	return vals, nil
 }
 
 // resolveKeys takes a list as input that may have values or bind var names.
