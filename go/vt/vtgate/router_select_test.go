@@ -461,6 +461,7 @@ func TestSelectEqualFail(t *testing.T) {
 func TestSelectIN(t *testing.T) {
 	router, sbc1, sbc2, sbclookup := createRouterEnv()
 
+	// Constant in IN is just a number, not a bind variable.
 	_, err := routerExec(router, "select id from user where id in (1)", nil)
 	if err != nil {
 		t.Error(err)
@@ -478,6 +479,8 @@ func TestSelectIN(t *testing.T) {
 		t.Errorf("sbc2.Queries: %+v, want nil\n", sbc2.Queries)
 	}
 
+	// Constant in IN is just a couple numbers, not bind variables.
+	// They result in two different queries on two shards.
 	sbc1.Queries = nil
 	sbc2.Queries = nil
 	_, err = routerExec(router, "select id from user where id in (1, 3)", nil)
@@ -503,6 +506,8 @@ func TestSelectIN(t *testing.T) {
 		t.Errorf("sbc2.Queries: %+v, want %+v\n", sbc2.Queries, wantQueries)
 	}
 
+	// In is a bind variable list, that will end up on two shards.
+	// This is using an []interface{} for the bind variable list.
 	sbc1.Queries = nil
 	sbc2.Queries = nil
 	_, err = routerExec(router, "select id from user where id in ::vals", map[string]interface{}{
@@ -532,6 +537,78 @@ func TestSelectIN(t *testing.T) {
 		t.Errorf("sbc2.Queries: %+v, want %+v\n", sbc2.Queries, wantQueries)
 	}
 
+	// In is a bind variable list, that will end up on two shards.
+	// We use a BindVariable with TUPLE type.
+	sbc1.Queries = nil
+	sbc2.Queries = nil
+	_, err = routerExec(router, "select id from user where id in ::vals", map[string]interface{}{
+		"vals": &querypb.BindVariable{
+			Type: querypb.Type_TUPLE,
+			Values: []*querypb.Value{
+				{
+					Type:  querypb.Type_INT64,
+					Value: []byte{'1'},
+				},
+				{
+					Type:  querypb.Type_INT64,
+					Value: []byte{'3'},
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Error(err)
+	}
+	wantQueries = []querytypes.BoundQuery{{
+		Sql: "select id from user where id in ::__vals",
+		BindVariables: map[string]interface{}{
+			"__vals": []interface{}{
+				sqltypes.MakeTrusted(querypb.Type_INT64, []byte{'1'}),
+			},
+			"vals": &querypb.BindVariable{
+				Type: querypb.Type_TUPLE,
+				Values: []*querypb.Value{
+					{
+						Type:  querypb.Type_INT64,
+						Value: []byte{'1'},
+					},
+					{
+						Type:  querypb.Type_INT64,
+						Value: []byte{'3'},
+					},
+				},
+			},
+		},
+	}}
+	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
+		t.Errorf("sbc1.Queries: \n%+v, want \n%+v\n", sbc1.Queries, wantQueries)
+	}
+	wantQueries = []querytypes.BoundQuery{{
+		Sql: "select id from user where id in ::__vals",
+		BindVariables: map[string]interface{}{
+			"__vals": []interface{}{
+				sqltypes.MakeTrusted(querypb.Type_INT64, []byte{'3'}),
+			},
+			"vals": &querypb.BindVariable{
+				Type: querypb.Type_TUPLE,
+				Values: []*querypb.Value{
+					{
+						Type:  querypb.Type_INT64,
+						Value: []byte{'1'},
+					},
+					{
+						Type:  querypb.Type_INT64,
+						Value: []byte{'3'},
+					},
+				},
+			},
+		},
+	}}
+	if !reflect.DeepEqual(sbc2.Queries, wantQueries) {
+		t.Errorf("sbc2.Queries: %+v, want %+v\n", sbc2.Queries, wantQueries)
+	}
+
+	// Convert a non-list bind variable.
 	sbc1.Queries = nil
 	sbc2.Queries = nil
 	_, err = routerExec(router, "select id from user where name = 'foo'", nil)

@@ -24,7 +24,7 @@ export class KeyspaceComponent implements OnInit, OnDestroy {
 
   private routeSub: any;
   keyspaceName: string;
-  shardsReady = false;
+  inFlightQueries = 0;
   keyspace = {};
   dialogSettings: DialogSettings;
   dialogContent: DialogContent;
@@ -39,11 +39,18 @@ export class KeyspaceComponent implements OnInit, OnDestroy {
     this.dialogContent = new DialogContent();
     this.dialogSettings = new DialogSettings();
     this.actions = [
-      {label: 'Validate', command: (event) => {this.openValidateKeyspaceDialog(); }},
-      {label: 'Validate Schema', command: (event) => {this.openValidateSchemaDialog(); }},
-      {label: 'Validate Version', command: (event) => {this.openValidateVersionDialog(); }},
-      {label: 'Rebuild Keyspace Graph', command: (event) => {this.openRebuildKeyspaceGraphDialog(); }},
-      {label: 'Remove Keyspace Cell', command: (event) => {this.openRemoveKeyspaceCellDialog(); }},
+      {label: 'Status', items: [
+        {label: 'Validate', command: (event) => {this.openValidateKeyspaceDialog(); }},
+        {label: 'Validate Schema', command: (event) => {this.openValidateSchemaDialog(); }},
+        {label: 'Validate Version', command: (event) => {this.openValidateVersionDialog(); }},
+      ]},
+      {label: 'Rebuild', items: [
+        {label: 'Rebuild Keyspace Graph', command: (event) => {this.openRebuildKeyspaceGraphDialog(); }},
+      ]},
+      {label: 'Change', items: [
+        {label: 'Remove Keyspace Cell', command: (event) => {this.openRemoveKeyspaceCellDialog(); }},
+        {label: 'New Shard', command: (event) => {this.openNewShardDialog(); }},
+      ]},
     ];
 
     this.routeSub = this.route.queryParams.subscribe(params => {
@@ -60,10 +67,28 @@ export class KeyspaceComponent implements OnInit, OnDestroy {
   }
 
   getKeyspace(keyspaceName: string) {
+    if (this.inFlightQueries > 0) {
+      // There is already a query in flight, we don't want to have
+      // more than one at a time, it would mess up our data
+      // structures.
+      return;
+    }
+    this.inFlightQueries++;
     this.keyspaceService.getKeyspace(keyspaceName).subscribe(keyspaceStream => {
+      this.inFlightQueries++;
       keyspaceStream.subscribe(keyspace => {
           this.keyspace = keyspace;
+      }, () => {
+        console.log('Error getting keyspace');
+        this.inFlightQueries--;
+      }, () => {
+        this.inFlightQueries--;
       });
+    }, () => {
+      console.log('Error getting keyspaces');
+      this.inFlightQueries--;
+    }, () => {
+      this.inFlightQueries--;
     });
   }
 

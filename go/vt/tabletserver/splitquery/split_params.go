@@ -163,6 +163,11 @@ func newSplitParams(
 	var splitColumns []*schema.TableColumn
 	if len(splitColumnNames) == 0 {
 		splitColumns = getPrimaryKeyColumns(tableSchema)
+		if len(splitColumns) == 0 {
+			return nil, fmt.Errorf("no split columns where given and the queried table has"+
+				" no primary key columns (is the table a view? Running SplitQuery on a view"+
+				" is not supported). query: %v", sql)
+		}
 	} else {
 		splitColumns, err = findSplitColumnsInSchema(splitColumnNames, tableSchema)
 		if err != nil {

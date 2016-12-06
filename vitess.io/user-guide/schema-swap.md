@@ -1,6 +1,6 @@
 ---
 layout: doc
-title: "Pivot Schema Changes"
+title: "Schema Swap"
 description:
 modified:
 excerpt:
@@ -13,4 +13,4 @@ toc: true
 share: false
 ---
 
-{% include doc/PivotSchemaChanges.md %}
+{% include doc/SchemaSwap.md %}

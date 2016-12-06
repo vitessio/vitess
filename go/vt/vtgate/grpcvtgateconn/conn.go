@@ -374,9 +374,10 @@ func (conn *vtgateConn) StreamExecuteKeyspaceIds(ctx context.Context, query stri
 	}, nil
 }
 
-func (conn *vtgateConn) Begin(ctx context.Context) (interface{}, error) {
+func (conn *vtgateConn) Begin(ctx context.Context, singledb bool) (interface{}, error) {
 	request := &vtgatepb.BeginRequest{
 		CallerId: callerid.EffectiveCallerIDFromContext(ctx),
+		SingleDb: singledb,
 	}
 	response, err := conn.c.Begin(ctx, request)
 	if err != nil {
@@ -385,10 +386,11 @@ func (conn *vtgateConn) Begin(ctx context.Context) (interface{}, error) {
 	return response.Session, nil
 }
 
-func (conn *vtgateConn) Commit(ctx context.Context, session interface{}) error {
+func (conn *vtgateConn) Commit(ctx context.Context, session interface{}, twopc bool) error {
 	request := &vtgatepb.CommitRequest{
 		CallerId: callerid.EffectiveCallerIDFromContext(ctx),
 		Session:  session.(*vtgatepb.Session),
+		Atomic:   twopc,
 	}
 	_, err := conn.c.Commit(ctx, request)
 	return vterrors.FromGRPCError(err)

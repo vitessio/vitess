@@ -41,11 +41,12 @@ func init() {
 
 // Run logs queries to syslog, if the "log_queries" flag is set to true when starting vttablet.
 func run() {
+	log.Info("Logging queries to syslog")
 	defer writer.Close()
 
 	// ch will only be non-nil in a unit test context, when a mock has been populated
 	if ch == nil {
-		ch := tabletserver.StatsLogger.Subscribe("gwslog")
+		ch = tabletserver.StatsLogger.Subscribe("gwslog")
 		defer tabletserver.StatsLogger.Unsubscribe(ch)
 	}
 

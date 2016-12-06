@@ -111,6 +111,16 @@ func (axp *TxPool) Close() {
 	axp.pool.Close()
 }
 
+// AdjustLastID adjusts the last transaction id to be at least
+// as large as the input value. This will ensure that there are
+// no dtid collisions with future transactions.
+func (axp *TxPool) AdjustLastID(id int64) {
+	if current := axp.lastID.Get(); current < id {
+		log.Infof("Adjusting transaction id to: %d", id)
+		axp.lastID.Set(id)
+	}
+}
+
 // RollbackNonBusy rolls back all transactions that are not in use.
 // Transactions can be in use for situations like executing statements
 // or in prepared state.

@@ -60,6 +60,10 @@ class Tablet(object):
           'uname': 'vt_app',
           'charset': 'utf8'
       },
+      'allprivs': {
+          'uname': 'vt_allprivs',
+          'charset': 'utf8'
+      },
       'dba': {
           'uname': 'vt_dba',
           'charset': 'utf8'
@@ -250,6 +254,7 @@ class Tablet(object):
     try:
       return cursor.fetchall()
     finally:
+      cursor.close()
       conn.close()
 
   def assert_table_count(self, dbname, table, n, where=''):

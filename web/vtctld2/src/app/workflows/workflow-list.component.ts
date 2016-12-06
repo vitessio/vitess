@@ -396,5 +396,13 @@ dolore magnam aliquam quaerat voluptatem.'});
   canDeactivate(): Observable<boolean> | boolean {
     return !this.dialogSettings.pending;
   }
+
+  isMaster(): boolean {
+    return this.redirect === '';
+  }
+
+  sendAction(path: string, name: string) {
+    this.workflowService.sendAction(path, name);
+  }
 }
 

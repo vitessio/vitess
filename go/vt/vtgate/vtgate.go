@@ -7,6 +7,7 @@
 package vtgate
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"net/http"
@@ -39,6 +40,13 @@ import (
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
+// Transaction modes. The value specifies what's allowed.
+const (
+	TxSingle = iota
+	TxMulti
+	TxTwoPC
+)
+
 var (
 	rpcVTGate *VTGate
 
@@ -61,6 +69,8 @@ var (
 // VTGate is the rpc interface to vtgate. Only one instance
 // can be created. It implements vtgateservice.VTGateService
 type VTGate struct {
+	transactionMode int
+
 	// router and resolver are top-level objects
 	// that make routing decisions.
 	router   *Router
@@ -105,7 +115,7 @@ var RegisterVTGates []RegisterVTGate
 var vtgateOnce sync.Once
 
 // Init initializes VTGate server.
-func Init(ctx context.Context, hc discovery.HealthCheck, topoServer topo.Server, serv topo.SrvTopoServer, cell string, retryCount int, tabletTypesToWait []topodatapb.TabletType) *VTGate {
+func Init(ctx context.Context, hc discovery.HealthCheck, topoServer topo.Server, serv topo.SrvTopoServer, cell string, retryCount int, tabletTypesToWait []topodatapb.TabletType, transactionMode int) *VTGate {
 	if rpcVTGate != nil {
 		log.Fatalf("VTGate already initialized")
 	}
@@ -123,13 +133,14 @@ func Init(ctx context.Context, hc discovery.HealthCheck, topoServer topo.Server,
 	sc := NewScatterConn("VttabletCall", tc, gw)
 
 	rpcVTGate = &VTGate{
-		router:       NewRouter(ctx, serv, cell, "VTGateRouter", sc),
-		resolver:     NewResolver(serv, cell, sc),
-		scatterConn:  sc,
-		txConn:       tc,
-		gateway:      gw,
-		timings:      stats.NewMultiTimings("VtgateApi", []string{"Operation", "Keyspace", "DbType"}),
-		rowsReturned: stats.NewMultiCounters("VtgateApiRowsReturned", []string{"Operation", "Keyspace", "DbType"}),
+		transactionMode: transactionMode,
+		router:          NewRouter(ctx, serv, cell, "VTGateRouter", sc),
+		resolver:        NewResolver(serv, cell, sc),
+		scatterConn:     sc,
+		txConn:          tc,
+		gateway:         gw,
+		timings:         stats.NewMultiTimings("VtgateApi", []string{"Operation", "Keyspace", "DbType"}),
+		rowsReturned:    stats.NewMultiCounters("VtgateApiRowsReturned", []string{"Operation", "Keyspace", "DbType"}),
 
 		logExecute:                  logutil.NewThrottledLogger("Execute", 5*time.Second),
 		logExecuteShards:            logutil.NewThrottledLogger("ExecuteShards", 5*time.Second),
@@ -567,14 +578,23 @@ func (vtg *VTGate) StreamExecuteShards(ctx context.Context, sql string, bindVari
 }
 
 // Begin begins a transaction. It has to be concluded by a Commit or Rollback.
-func (vtg *VTGate) Begin(ctx context.Context) (*vtgatepb.Session, error) {
+func (vtg *VTGate) Begin(ctx context.Context, singledb bool) (*vtgatepb.Session, error) {
+	if !singledb && vtg.transactionMode == TxSingle {
+		return nil, vterrors.FromError(vtrpcpb.ErrorCode_BAD_INPUT, errors.New("multi-db transaction disallowed"))
+	}
 	return &vtgatepb.Session{
 		InTransaction: true,
+		SingleDb:      singledb,
 	}, nil
 }
 
 // Commit commits a transaction.
 func (vtg *VTGate) Commit(ctx context.Context, twopc bool, session *vtgatepb.Session) error {
+	if twopc && vtg.transactionMode != TxTwoPC {
+		// Rollback the transaction to prevent future deadlocks.
+		vtg.txConn.Rollback(ctx, NewSafeSession(session))
+		return vterrors.FromError(vtrpcpb.ErrorCode_BAD_INPUT, errors.New("2pc transaction disallowed"))
+	}
 	return formatError(vtg.txConn.Commit(ctx, twopc, NewSafeSession(session)))
 }
 

@@ -131,7 +131,7 @@ func (f *fakeVTGateService) StreamExecuteKeyRanges(ctx context.Context, sql stri
 }
 
 // Begin is part of the VTGateService interface
-func (f *fakeVTGateService) Begin(ctx context.Context) (*vtgatepb.Session, error) {
+func (f *fakeVTGateService) Begin(ctx context.Context, singledb bool) (*vtgatepb.Session, error) {
 	return session1, nil
 }
 
