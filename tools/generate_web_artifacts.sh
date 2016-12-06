@@ -16,3 +16,6 @@ if [[ -d $vtctld2_dir/app ]]; then
 fi
 cd $vtctld2_dir && ng build -prod --output-path app/
 rm -rf $vtctld2_dir/app/assets
+cp -f $vtctld2_dir/src/plotly-latest.min.js $vtctld2_dir/app/
+cp -f $vtctld2_dir/src/primeui-ng-all.min.css $vtctld2_dir/app/
+cp -f $vtctld2_dir/src/font-awesome.min.css $vtctld2_dir/app/
