@@ -76,8 +76,8 @@ func IsDML(sql string) bool {
 func ExtractKeySpaceIDS(sql string) (keyspaceIDs [][]byte, err error) {
 	keyspaceIDString, hasKeySpaceID := extractStringBetween(sql, "/* vtgate:: keyspace_id:", " ")
 	hasUnfriendlyAnnotation := (strings.Index(sql, filteredReplicationUnfriendlyAnnotation) != -1)
-	ksidStr :=  strings.Split(keyspaceIDString,",")
-	keyspaceIDs = make([][]byte,len(ksidStr))
+	ksidStr := strings.Split(keyspaceIDString, ",")
+	keyspaceIDs = make([][]byte, len(ksidStr))
 	if hasKeySpaceID {
 		if hasUnfriendlyAnnotation {
 			keyspaceIDs = nil
@@ -86,7 +86,7 @@ func ExtractKeySpaceIDS(sql string) (keyspaceIDs [][]byte, err error) {
 				Message: fmt.Sprintf("Conflicting annotations in statement '%v'", sql),
 			}
 		} else {
-			for row,ksid := range ksidStr {
+			for row, ksid := range ksidStr {
 				err = nil
 				keyspaceIDs[row], err = hex.DecodeString(ksid)
 				if err != nil {
@@ -115,7 +115,7 @@ func ExtractKeySpaceIDS(sql string) (keyspaceIDs [][]byte, err error) {
 			}
 		}
 	}
-	return 
+	return
 }
 
 // Extracts the string from source contained between the leftmost instance of
