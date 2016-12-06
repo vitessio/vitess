@@ -67,53 +67,55 @@ func IsDML(sql string) bool {
 		strings.EqualFold(word, "delete")
 }
 
-// ExtractKeySpaceID parses the annotation of the given statement and tries
+// ExtractKeySpaceIDS parses the annotation of the given statement and tries
 // to extract the keyspace id.
 // If a keyspace-id comment exists 'keyspaceID' is set to the parsed keyspace id
 // and err is set to nil; otherwise, if a filtered-replication-unfriendly comment exists
 // or some other parsing error occured, keyspaceID is set to nil and err is set to a non-nil
 // error value.
-func ExtractKeySpaceID(sql string) (keyspaceID []byte, err error) {
+func ExtractKeySpaceIDS(sql string) (keyspaceIDs [][]byte, err error) {
 	keyspaceIDString, hasKeySpaceID := extractStringBetween(sql, "/* vtgate:: keyspace_id:", " ")
 	hasUnfriendlyAnnotation := (strings.Index(sql, filteredReplicationUnfriendlyAnnotation) != -1)
-	err = nil
+	ksidStr :=  strings.Split(keyspaceIDString,",")
+	keyspaceIDs = make([][]byte,len(ksidStr))
 	if hasKeySpaceID {
 		if hasUnfriendlyAnnotation {
-			keyspaceID = nil
+			keyspaceIDs = nil
 			err = &ExtractKeySpaceIDError{
 				Kind:    ExtractKeySpaceIDParseError,
 				Message: fmt.Sprintf("Conflicting annotations in statement '%v'", sql),
 			}
-			return
-		}
-		keyspaceID, err = hex.DecodeString(keyspaceIDString)
-		if err != nil {
-			keyspaceID = nil
-			err = &ExtractKeySpaceIDError{
-				Kind: ExtractKeySpaceIDParseError,
-				Message: fmt.Sprintf(
-					"Error parsing keyspace id value in statement: %v (%v)", sql, err),
+		} else {
+			for row,ksid := range ksidStr {
+				err = nil
+				keyspaceIDs[row], err = hex.DecodeString(ksid)
+				if err != nil {
+					keyspaceIDs[row] = nil
+					err = &ExtractKeySpaceIDError{
+						Kind: ExtractKeySpaceIDParseError,
+						Message: fmt.Sprintf(
+							"Error parsing keyspace id value in statement: %v (%v)", sql, err),
+					}
+				}
 			}
 		}
-		return
-	}
-
-	if hasUnfriendlyAnnotation {
-		err = &ExtractKeySpaceIDError{
-			Kind:    ExtractKeySpaceIDReplicationUnfriendlyError,
-			Message: fmt.Sprintf("Statement: %v", sql),
+	} else {
+		if hasUnfriendlyAnnotation {
+			err = &ExtractKeySpaceIDError{
+				Kind:    ExtractKeySpaceIDReplicationUnfriendlyError,
+				Message: fmt.Sprintf("Statement: %v", sql),
+			}
+			keyspaceIDs = nil
+		} else {
+			// No annotations.
+			keyspaceIDs = nil
+			err = &ExtractKeySpaceIDError{
+				Kind:    ExtractKeySpaceIDParseError,
+				Message: fmt.Sprintf("No annotation found in '%v'", sql),
+			}
 		}
-		keyspaceID = nil
-		return
 	}
-
-	// No annotations.
-	keyspaceID = nil
-	err = &ExtractKeySpaceIDError{
-		Kind:    ExtractKeySpaceIDParseError,
-		Message: fmt.Sprintf("No annotation found in '%v'", sql),
-	}
-	return
+	return 
 }
 
 // Extracts the string from source contained between the leftmost instance of

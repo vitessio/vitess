@@ -29,7 +29,7 @@ func KeyRangeFilterFunc(keyrange *topodatapb.KeyRange, sendReply sendTransaction
 				log.Warningf("Not forwarding DDL: %s", statement.Sql)
 				continue
 			case binlogdatapb.BinlogTransaction_Statement_BL_DML:
-				keyspaceID, err := sqlannotation.ExtractKeySpaceID(string(statement.Sql))
+				keyspaceID, err := sqlannotation.ExtractKeySpaceIDS(string(statement.Sql))
 				if err != nil {
 					if handleExtractKeySpaceIDError(err) {
 						continue
@@ -39,7 +39,7 @@ func KeyRangeFilterFunc(keyrange *topodatapb.KeyRange, sendReply sendTransaction
 						continue
 					}
 				}
-				if !key.KeyRangeContains(keyrange, keyspaceID) {
+				if !key.KeyRangeContains(keyrange, keyspaceID[0]) {
 					// Skip keyspace ids that don't belong to the destination shard.
 					continue
 				}
