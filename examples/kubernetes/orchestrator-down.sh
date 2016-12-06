@@ -13,3 +13,5 @@ $KUBECTL delete replicationcontroller orchestrator --namespace=$VITESS_NAME
 echo "Deleting orchestrator service..."
 $KUBECTL delete service orchestrator --namespace=$VITESS_NAME
 
+echo "Deleting orchestrator configmap..."
+$KUBECTL delete --namespace=$VITESS_NAME configmap orchestrator-conf
