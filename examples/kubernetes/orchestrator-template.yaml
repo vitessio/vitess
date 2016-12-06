@@ -54,6 +54,3 @@ spec:
         - name: config
           configMap:
             name: orchestrator-conf
-            items:
-            - key: orchestrator.conf.json
-              path: orchestrator.conf.json
