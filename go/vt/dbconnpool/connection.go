@@ -139,7 +139,7 @@ func (dbc *DBConnection) VerifyMode() error {
 // NewDBConnection returns a new DBConnection based on the ConnParams
 // and will use the provided stats to collect timing.
 func NewDBConnection(info *sqldb.ConnParams, mysqlStats *stats.Timings) (*DBConnection, error) {
-	params, err := dbconfigs.MysqlParams(info)
+	params, err := dbconfigs.WithCredentials(info)
 	if err != nil {
 		return nil, err
 	}

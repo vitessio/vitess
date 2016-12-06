@@ -17,6 +17,7 @@ import (
 	"sync"
 
 	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/sqldb"
 )
 
 var (
@@ -93,6 +94,22 @@ func (fcs *FileCredentialsServer) GetUserAndPassword(user string) (string, strin
 		return "", "", ErrUnknownUser
 	}
 	return user, passwd[0], nil
+}
+
+// WithCredentials returns a copy of the provided ConnParams that we can use
+// to connect, after going through the CredentialsServer.
+func WithCredentials(cp *sqldb.ConnParams) (sqldb.ConnParams, error) {
+	result := *cp
+	user, passwd, err := GetCredentialsServer().GetUserAndPassword(cp.Uname)
+	switch err {
+	case nil:
+		result.Uname = user
+		result.Pass = passwd
+	case ErrUnknownUser:
+		// we just use what we have, and will fail later anyway
+		err = nil
+	}
+	return result, err
 }
 
 func init() {

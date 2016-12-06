@@ -221,7 +221,7 @@ func (mysqld *Mysqld) SetMasterCommands(masterHost string, masterPort int) ([]st
 	if err != nil {
 		return nil, fmt.Errorf("SetMasterCommands needs flavor: %v", err)
 	}
-	params, err := dbconfigs.MysqlParams(mysqld.replParams)
+	params, err := dbconfigs.WithCredentials(&mysqld.dbcfgs.Repl)
 	if err != nil {
 		return nil, err
 	}

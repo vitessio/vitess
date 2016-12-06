@@ -9,15 +9,27 @@ import (
 	"regexp"
 	"strings"
 
+	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
-	log "github.com/golang/glog"
-
+	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
+
 	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
 )
 
 var autoIncr = regexp.MustCompile(" AUTO_INCREMENT=\\d+")
+
+// executeSchemaCommands executes some SQL commands, using the mysql
+// command line tool. It uses the dba connection parameters, with credentials.
+func (mysqld *Mysqld) executeSchemaCommands(sql string) error {
+	params, err := dbconfigs.WithCredentials(&mysqld.dbcfgs.Dba)
+	if err != nil {
+		return err
+	}
+
+	return mysqld.executeMysqlScript(&params, strings.NewReader(sql))
+}
 
 // GetSchema returns the schema for database for tables listed in
 // tables. If tables is empty, return the schema for all tables.
@@ -230,7 +242,7 @@ func (mysqld *Mysqld) PreflightSchemaChange(dbName string, changes []string) ([]
 			initialCopySQL += s + ";\n"
 		}
 	}
-	if err = mysqld.executeMysqlCommands(mysqld.dba, initialCopySQL); err != nil {
+	if err = mysqld.executeSchemaCommands(initialCopySQL); err != nil {
 		return nil, err
 	}
 
@@ -245,7 +257,7 @@ func (mysqld *Mysqld) PreflightSchemaChange(dbName string, changes []string) ([]
 		sql := "SET sql_log_bin = 0;\n"
 		sql += "USE _vt_preflight;\n"
 		sql += change
-		if err = mysqld.executeMysqlCommands(mysqld.dba, sql); err != nil {
+		if err = mysqld.executeSchemaCommands(sql); err != nil {
 			return nil, err
 		}
 
@@ -261,7 +273,7 @@ func (mysqld *Mysqld) PreflightSchemaChange(dbName string, changes []string) ([]
 	// and clean up the extra database
 	dropSQL := "SET sql_log_bin = 0;\n"
 	dropSQL += "DROP DATABASE _vt_preflight;\n"
-	if err = mysqld.executeMysqlCommands(mysqld.dba, dropSQL); err != nil {
+	if err = mysqld.executeSchemaCommands(dropSQL); err != nil {
 		return nil, err
 	}
 
@@ -313,7 +325,7 @@ func (mysqld *Mysqld) ApplySchemaChange(dbName string, change *tmutils.SchemaCha
 
 	// execute the schema change using an external mysql process
 	// (to benefit from the extra commands in mysql cli)
-	if err = mysqld.executeMysqlCommands(mysqld.dba, sql); err != nil {
+	if err = mysqld.executeSchemaCommands(sql); err != nil {
 		return nil, err
 	}
 

@@ -55,6 +55,12 @@ class Tablet(object):
   default_uid = 62344
   seq = 0
   tablets_running = 0
+  default_db_dba_config = {
+    'dba': {
+        'uname': 'vt_dba',
+        'charset': 'utf8'
+    },
+  }
   default_db_config = {
       'app': {
           'uname': 'vt_app',
@@ -146,7 +152,7 @@ class Tablet(object):
     if with_ports:
       args.extend(['-port', str(self.port),
                    '-mysql_port', str(self.mysql_port)])
-    self._add_dbconfigs(args)
+    self._add_dbconfigs(self.default_db_dba_config, args)
     if verbose:
       args.append('-alsologtostderr')
     args.extend(cmd)
@@ -171,7 +177,7 @@ class Tablet(object):
         '-tablet_uid', str(self.tablet_uid),
         '-mysql_port', str(self.mysql_port),
         '-socket_file', os.path.join(self.tablet_dir, 'mysqlctl.sock')]
-    self._add_dbconfigs(args)
+    self._add_dbconfigs(self.default_db_dba_config, args)
     if verbose:
       args.append('-alsologtostderr')
     args.extend(cmd)
@@ -510,7 +516,7 @@ class Tablet(object):
     args.extend(['-port', '%s' % (port or self.port),
                  '-log_dir', environment.vtlogroot])
 
-    self._add_dbconfigs(args, repl_extra_flags)
+    self._add_dbconfigs(self.default_db_config, args, repl_extra_flags)
 
     if filecustomrules:
       args.extend(['-filecustomrules', filecustomrules])
@@ -613,14 +619,17 @@ class Tablet(object):
       timeout = utils.wait_step('waiting for socket files: %s' % str(wait_for),
                                 timeout, sleep_time=2.0)
 
-  def _add_dbconfigs(self, args, repl_extra_flags=None):
+  def _add_dbconfigs(self, cfg, args, repl_extra_flags=None):
     if repl_extra_flags is None:
       repl_extra_flags = {}
-    config = dict(self.default_db_config)
+    config = dict(cfg)
     if self.keyspace:
-      config['app']['dbname'] = self.dbname
-      config['repl']['dbname'] = self.dbname
-    config['repl'].update(repl_extra_flags)
+      if 'app' in config:
+        config['app']['dbname'] = self.dbname
+      if 'repl' in config:
+        config['repl']['dbname'] = self.dbname
+    if 'repl' in config:
+      config['repl'].update(repl_extra_flags)
     for key1 in config:
       for key2 in config[key1]:
         args.extend(['-db-config-' + key1 + '-' + key2, config[key1][key2]])
