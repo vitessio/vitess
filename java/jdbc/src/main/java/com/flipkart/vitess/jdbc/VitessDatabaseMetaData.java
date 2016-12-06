@@ -527,7 +527,7 @@ public abstract class VitessDatabaseMetaData implements DatabaseMetaData {
     }
 
     public boolean supportsBatchUpdates() throws SQLException {
-        return false;
+        return true;
     }
 
     public boolean supportsSavepoints() throws SQLException {

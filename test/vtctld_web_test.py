@@ -433,10 +433,10 @@ class TestVtctldWeb(unittest.TestCase):
     # Create Keyspace Dialog command responds to name.
     dashboard_menu = dashboard_content.find_element_by_class_name('vt-menu')
     dashboard_menu.click()
+    dashboard_menu_options = (
+        dashboard_content.find_elements_by_class_name('ui-menuitem-text'))
     new_keyspace_option = [
-        x for x in
-        dashboard_content.find_elements_by_class_name('ui-menuitem-text')
-        if x.text == 'New'][0]
+        x for x in dashboard_menu_options if x.text == 'New'][0]
     new_keyspace_option.click()
 
     input_fields = [md_input.find_element_by_tag_name('input') for md_input in
@@ -488,7 +488,7 @@ class TestVtctldWeb(unittest.TestCase):
     test_keyspace3.find_element_by_class_name('vt-menu').click()
     options = test_keyspace3.find_elements_by_tag_name('li')
 
-    delete = options[2]
+    delete = [x for x in options if x.text == 'Delete'][0]
     delete.click()
 
     delete = dialog.find_element_by_id('vt-action')
