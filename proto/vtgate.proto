@@ -21,6 +21,10 @@ message Session {
     int64 transaction_id = 2;
   }
   repeated ShardSession shard_sessions = 2;
+
+  // single_db specifies if the transaction should be restricted
+  // to a single database.
+  bool single_db = 3;
 }
 
 // ExecuteRequest is the payload to Execute.
@@ -482,6 +486,10 @@ message BeginRequest {
   // caller_id identifies the caller. This is the effective caller ID,
   // set by the application to further identify the caller.
   vtrpc.CallerID caller_id = 1;
+
+  // single_db specifies if the transaction should be restricted
+  // to a single database.
+  bool single_db = 2;
 }
 
 // BeginResponse is the returned value from Begin.

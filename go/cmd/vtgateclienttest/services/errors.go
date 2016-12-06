@@ -235,14 +235,14 @@ func (c *errorClient) StreamExecuteKeyRanges(ctx context.Context, sql string, bi
 	return c.fallbackClient.StreamExecuteKeyRanges(ctx, sql, bindVariables, keyspace, keyRanges, tabletType, options, sendReply)
 }
 
-func (c *errorClient) Begin(ctx context.Context) (*vtgatepb.Session, error) {
+func (c *errorClient) Begin(ctx context.Context, singledb bool) (*vtgatepb.Session, error) {
 	// The client sends the error request through the callerid, as there are no other parameters
 	cid := callerid.EffectiveCallerIDFromContext(ctx)
 	request := callerid.GetPrincipal(cid)
 	if err := requestToError(request); err != nil {
 		return nil, err
 	}
-	return c.fallbackClient.Begin(ctx)
+	return c.fallbackClient.Begin(ctx, singledb)
 }
 
 func (c *errorClient) Commit(ctx context.Context, twopc bool, session *vtgatepb.Session) error {

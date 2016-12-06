@@ -71,8 +71,8 @@ func (c fallbackClient) StreamExecuteKeyRanges(ctx context.Context, sql string, 
 	return c.fallback.StreamExecuteKeyRanges(ctx, sql, bindVariables, keyspace, keyRanges, tabletType, options, sendReply)
 }
 
-func (c fallbackClient) Begin(ctx context.Context) (*vtgatepb.Session, error) {
-	return c.fallback.Begin(ctx)
+func (c fallbackClient) Begin(ctx context.Context, singledb bool) (*vtgatepb.Session, error) {
+	return c.fallback.Begin(ctx, singledb)
 }
 
 func (c fallbackClient) Commit(ctx context.Context, twopc bool, session *vtgatepb.Session) error {

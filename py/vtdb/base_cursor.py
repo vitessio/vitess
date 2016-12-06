@@ -84,10 +84,12 @@ class BaseListCursor(BasePEP0249Cursor):
   """
   arraysize = 1
 
-  def __init__(self):
+  def __init__(self, single_db=False, twopc=False):
     super(BaseListCursor, self).__init__()
     self._clear_list_state()
     self.effective_caller_id = None
+    self.single_db = single_db
+    self.twopc = twopc
 
   def _clear_list_state(self):
     self._clear_common_state()
@@ -101,10 +103,12 @@ class BaseListCursor(BasePEP0249Cursor):
     self.effective_caller_id = effective_caller_id
 
   def begin(self):
-    return self.connection.begin(self.effective_caller_id)
+    return self.connection.begin(
+        effective_caller_id=self.effective_caller_id,
+        single_db=self.single_db)
 
   def commit(self):
-    return self.connection.commit()
+    return self.connection.commit(self.twopc)
 
   def rollback(self):
     return self.connection.rollback()
@@ -116,7 +120,6 @@ class BaseListCursor(BasePEP0249Cursor):
   def _handle_transaction_sql(self, sql):
     sql_check = sql.strip().lower()
     if sql_check == 'begin':
-      self.set_effective_caller_id(self.effective_caller_id)
       self.begin()
       return True
     elif sql_check == 'commit':

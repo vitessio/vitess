@@ -113,24 +113,13 @@ func (txc *TxConn) commit2PC(ctx context.Context, session *SafeSession) error {
 
 // Rollback rolls back the current transaction. There are no retries on this operation.
 func (txc *TxConn) Rollback(ctx context.Context, session *SafeSession) error {
-	if session == nil {
+	if !session.InTransaction() {
 		return nil
 	}
 	defer session.Reset()
 	return txc.runSessions(session.ShardSessions, func(s *vtgatepb.Session_ShardSession) error {
 		return txc.gateway.Rollback(ctx, s.Target, s.TransactionId)
 	})
-}
-
-// RollbackIfNeeded rolls back the current transaction if the error implies that the
-// transaction can never be completed.
-func (txc *TxConn) RollbackIfNeeded(ctx context.Context, err error, session *SafeSession) {
-	if session.InTransaction() {
-		ec := vterrors.RecoverVtErrorCode(err)
-		if ec == vtrpcpb.ErrorCode_RESOURCE_EXHAUSTED || ec == vtrpcpb.ErrorCode_NOT_IN_TX {
-			txc.Rollback(ctx, session)
-		}
-	}
 }
 
 // Resolve resolves the specified 2PC transaction.

@@ -315,14 +315,15 @@ func (conn *FakeVTGateConn) StreamExecuteKeyspaceIds(ctx context.Context, query 
 }
 
 // Begin please see vtgateconn.Impl.Begin
-func (conn *FakeVTGateConn) Begin(ctx context.Context) (interface{}, error) {
+func (conn *FakeVTGateConn) Begin(ctx context.Context, singledb bool) (interface{}, error) {
 	return &vtgatepb.Session{
 		InTransaction: true,
+		SingleDb:      singledb,
 	}, nil
 }
 
 // Commit please see vtgateconn.Impl.Commit
-func (conn *FakeVTGateConn) Commit(ctx context.Context, session interface{}) error {
+func (conn *FakeVTGateConn) Commit(ctx context.Context, session interface{}, twopc bool) error {
 	if session == nil {
 		return errors.New("commit: not in transaction")
 	}

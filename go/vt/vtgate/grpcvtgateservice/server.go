@@ -328,7 +328,7 @@ func (vtg *VTGate) StreamExecuteKeyRanges(request *vtgatepb.StreamExecuteKeyRang
 func (vtg *VTGate) Begin(ctx context.Context, request *vtgatepb.BeginRequest) (response *vtgatepb.BeginResponse, err error) {
 	defer vtg.server.HandlePanic(&err)
 	ctx = withCallerIDContext(ctx, request.CallerId)
-	session, vtgErr := vtg.server.Begin(ctx)
+	session, vtgErr := vtg.server.Begin(ctx, request.SingleDb)
 	if vtgErr == nil {
 		return &vtgatepb.BeginResponse{
 			Session: session,
