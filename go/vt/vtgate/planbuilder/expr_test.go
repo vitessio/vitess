@@ -101,12 +101,12 @@ func TestValConvert(t *testing.T) {
 		out: "::aa is not a value",
 	}}
 	for _, tc := range testcases {
-		out, err := valConvert(tc.in)
+		out, err := ValConvert(tc.in)
 		if err != nil {
 			out = err.Error()
 		}
 		if !reflect.DeepEqual(out, tc.out) {
-			t.Errorf("valConvert(%#v): %#v, want %#v", tc.in, out, tc.out)
+			t.Errorf("ValConvert(%#v): %#v, want %#v", tc.in, out, tc.out)
 		}
 	}
 }

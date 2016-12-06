@@ -318,7 +318,9 @@
       },
       "Query": "select next :n values from `seq`",
       "Value": [1]
-    }
+    },
+    "Prefix": "insert into user(id, Name, Costly) ",
+    "Mid": "values :#rowvalues"
   }
 }
 
@@ -347,7 +349,9 @@
       },
       "Query": "select next :n values from `seq`",
       "Value": [null]
-    }
+    },
+    "Prefix": "insert into user(nonid, Id, Name, Costly) ",
+    "Mid": "values :#rowvalues"
   }
 }
 
@@ -376,7 +380,9 @@
       },
       "Query": "select next :n values from `seq`",
       "Value": [1]
-    }
+    },
+    "Prefix": "insert into user(nonid, name, id, Costly) ",
+    "Mid": "values :#rowvalues"
   }
 }
 
@@ -403,7 +409,9 @@
       },
       "Query": "select next :n values from `seq`",
       "Value": [null]
-    }
+    },
+    "Prefix": "insert into user_extra(nonid, user_id, extra_id) ",
+    "Mid": "values :#rowvalues"
   }
 }
 
@@ -455,6 +463,8 @@
       },
       "Query": "select next :n values from `seq`",
       "Value": [1,2]
-    }
+    },
+    "Prefix": "insert into user(id, Name, Costly) ",
+    "Mid": "values :#rowvalues"
   }
 }
