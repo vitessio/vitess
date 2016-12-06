@@ -12,6 +12,10 @@ sed_script=""
 for var in service_type; do
   sed_script+="s,{{$var}},${!var},g;"
 done
+
+# Create configmap from orchestrator docker config file
+$KUBECTL create --namespace=$VITESS_NAME configmap orchestrator-conf --from-file="../../docker/orchestrator/orchestrator.conf.json"
+
 cat orchestrator-template.yaml | sed -e "$sed_script" | $KUBECTL create --namespace=$VITESS_NAME -f -
 
 echo
