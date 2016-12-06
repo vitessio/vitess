@@ -61,7 +61,7 @@ func (rtr *Router) Execute(ctx context.Context, sql string, bindVars map[string]
 	if bindVars == nil {
 		bindVars = make(map[string]interface{})
 	}
-	vcursor := newRequestContext(ctx, sql, bindVars, keyspace, tabletType, session, notInTransaction, options, rtr)
+	vcursor := newQueryExecutor(ctx, sql, bindVars, keyspace, tabletType, session, notInTransaction, options, rtr)
 	plan, err := rtr.planner.GetPlan(sql, keyspace)
 	if err != nil {
 		return nil, err
@@ -74,7 +74,7 @@ func (rtr *Router) StreamExecute(ctx context.Context, sql string, bindVars map[s
 	if bindVars == nil {
 		bindVars = make(map[string]interface{})
 	}
-	vcursor := newRequestContext(ctx, sql, bindVars, keyspace, tabletType, nil, false, options, rtr)
+	vcursor := newQueryExecutor(ctx, sql, bindVars, keyspace, tabletType, nil, false, options, rtr)
 	plan, err := rtr.planner.GetPlan(sql, keyspace)
 	if err != nil {
 		return err
@@ -90,7 +90,7 @@ func (rtr *Router) ExecuteBatch(ctx context.Context, sql []string, bindVars []ma
 	results := make([]sqltypes.Result, len(sql))
 	errs := make([]error, len(sql))
 	for sqlNum, query := range sql {
-		vcursor := newRequestContext(ctx, query, bindVars[sqlNum], keyspace, tabletType, session, notInTransaction, options, rtr)
+		vcursor := newQueryExecutor(ctx, query, bindVars[sqlNum], keyspace, tabletType, session, notInTransaction, options, rtr)
 		plan, err := rtr.planner.GetPlan(query, keyspace)
 		if err != nil {
 			errs[sqlNum] = err
@@ -104,7 +104,7 @@ func (rtr *Router) ExecuteBatch(ctx context.Context, sql []string, bindVars []ma
 }
 
 // ExecuteRoute executes the route query for all route opcodes.
-func (rtr *Router) ExecuteRoute(vcursor *requestContext, route *engine.Route, joinvars map[string]interface{}) (*sqltypes.Result, error) {
+func (rtr *Router) ExecuteRoute(vcursor *queryExecutor, route *engine.Route, joinvars map[string]interface{}) (*sqltypes.Result, error) {
 	saved := copyBindVars(vcursor.bindVars)
 	defer func() { vcursor.bindVars = saved }()
 	for k, v := range joinvars {
@@ -160,7 +160,7 @@ func copyBindVars(bindVars map[string]interface{}) map[string]interface{} {
 }
 
 // GetRouteFields fetches the field info for the route.
-func (rtr *Router) GetRouteFields(vcursor *requestContext, route *engine.Route, joinvars map[string]interface{}) (*sqltypes.Result, error) {
+func (rtr *Router) GetRouteFields(vcursor *queryExecutor, route *engine.Route, joinvars map[string]interface{}) (*sqltypes.Result, error) {
 	saved := copyBindVars(vcursor.bindVars)
 	defer func() { vcursor.bindVars = saved }()
 	for k := range joinvars {
@@ -185,7 +185,7 @@ func (rtr *Router) GetRouteFields(vcursor *requestContext, route *engine.Route, 
 }
 
 // StreamExecuteRoute performs a streaming route. Only selects are allowed.
-func (rtr *Router) StreamExecuteRoute(vcursor *requestContext, route *engine.Route, joinvars map[string]interface{}, sendReply func(*sqltypes.Result) error) error {
+func (rtr *Router) StreamExecuteRoute(vcursor *queryExecutor, route *engine.Route, joinvars map[string]interface{}, sendReply func(*sqltypes.Result) error) error {
 	saved := copyBindVars(vcursor.bindVars)
 	defer func() { vcursor.bindVars = saved }()
 	for k, v := range joinvars {
@@ -234,7 +234,7 @@ func (rtr *Router) IsKeyspaceRangeBasedSharded(keyspace string) bool {
 	return ks.Keyspace.Sharded
 }
 
-func (rtr *Router) paramsUnsharded(vcursor *requestContext, route *engine.Route) (*scatterParams, error) {
+func (rtr *Router) paramsUnsharded(vcursor *queryExecutor, route *engine.Route) (*scatterParams, error) {
 	ks, _, allShards, err := getKeyspaceShards(vcursor.ctx, rtr.serv, rtr.cell, route.Keyspace.Name, vcursor.tabletType)
 	if err != nil {
 		return nil, fmt.Errorf("paramsUnsharded: %v", err)
@@ -245,7 +245,7 @@ func (rtr *Router) paramsUnsharded(vcursor *requestContext, route *engine.Route)
 	return newScatterParams(ks, vcursor.bindVars, []string{allShards[0].Name}), nil
 }
 
-func (rtr *Router) paramsSelectEqual(vcursor *requestContext, route *engine.Route) (*scatterParams, error) {
+func (rtr *Router) paramsSelectEqual(vcursor *queryExecutor, route *engine.Route) (*scatterParams, error) {
 	keys, err := rtr.resolveKeys([]interface{}{route.Values}, vcursor.bindVars)
 	if err != nil {
 		return nil, fmt.Errorf("paramsSelectEqual: %v", err)
@@ -257,7 +257,7 @@ func (rtr *Router) paramsSelectEqual(vcursor *requestContext, route *engine.Rout
 	return newScatterParams(ks, vcursor.bindVars, routing.Shards()), nil
 }
 
-func (rtr *Router) paramsSelectIN(vcursor *requestContext, route *engine.Route) (*scatterParams, error) {
+func (rtr *Router) paramsSelectIN(vcursor *queryExecutor, route *engine.Route) (*scatterParams, error) {
 	vals, err := rtr.resolveList(route.Values, vcursor.bindVars)
 	if err != nil {
 		return nil, fmt.Errorf("paramsSelectIN: %v", err)
@@ -276,7 +276,7 @@ func (rtr *Router) paramsSelectIN(vcursor *requestContext, route *engine.Route) 
 	}, nil
 }
 
-func (rtr *Router) paramsSelectScatter(vcursor *requestContext, route *engine.Route) (*scatterParams, error) {
+func (rtr *Router) paramsSelectScatter(vcursor *queryExecutor, route *engine.Route) (*scatterParams, error) {
 	ks, _, allShards, err := getKeyspaceShards(vcursor.ctx, rtr.serv, rtr.cell, route.Keyspace.Name, vcursor.tabletType)
 	if err != nil {
 		return nil, fmt.Errorf("paramsSelectScatter: %v", err)
@@ -288,7 +288,7 @@ func (rtr *Router) paramsSelectScatter(vcursor *requestContext, route *engine.Ro
 	return newScatterParams(ks, vcursor.bindVars, shards), nil
 }
 
-func (rtr *Router) execUpdateEqual(vcursor *requestContext, route *engine.Route) (*sqltypes.Result, error) {
+func (rtr *Router) execUpdateEqual(vcursor *queryExecutor, route *engine.Route) (*sqltypes.Result, error) {
 	keys, err := rtr.resolveKeys([]interface{}{route.Values}, vcursor.bindVars)
 	if err != nil {
 		return nil, fmt.Errorf("execUpdateEqual: %v", err)
@@ -313,7 +313,7 @@ func (rtr *Router) execUpdateEqual(vcursor *requestContext, route *engine.Route)
 		vcursor.options)
 }
 
-func (rtr *Router) execDeleteEqual(vcursor *requestContext, route *engine.Route) (*sqltypes.Result, error) {
+func (rtr *Router) execDeleteEqual(vcursor *queryExecutor, route *engine.Route) (*sqltypes.Result, error) {
 	keys, err := rtr.resolveKeys([]interface{}{route.Values}, vcursor.bindVars)
 	if err != nil {
 		return nil, fmt.Errorf("execDeleteEqual: %v", err)
@@ -344,7 +344,7 @@ func (rtr *Router) execDeleteEqual(vcursor *requestContext, route *engine.Route)
 		vcursor.options)
 }
 
-func (rtr *Router) execInsertSharded(vcursor *requestContext, route *engine.Route) (*sqltypes.Result, error) {
+func (rtr *Router) execInsertSharded(vcursor *queryExecutor, route *engine.Route) (*sqltypes.Result, error) {
 	var firstKsid []byte
 	var firstAutoGenInsertID int64
 	inputs := route.Values.([]interface{})
@@ -445,7 +445,7 @@ func (rtr *Router) resolveKeys(vals []interface{}, bindVars map[string]interface
 	return keys, nil
 }
 
-func (rtr *Router) resolveShards(vcursor *requestContext, vindexKeys []interface{}, route *engine.Route) (newKeyspace string, routing routingMap, err error) {
+func (rtr *Router) resolveShards(vcursor *queryExecutor, vindexKeys []interface{}, route *engine.Route) (newKeyspace string, routing routingMap, err error) {
 	newKeyspace, _, allShards, err := getKeyspaceShards(vcursor.ctx, rtr.serv, rtr.cell, route.Keyspace.Name, vcursor.tabletType)
 	if err != nil {
 		return "", nil, err
@@ -487,7 +487,7 @@ func (rtr *Router) resolveShards(vcursor *requestContext, vindexKeys []interface
 	return newKeyspace, routing, nil
 }
 
-func (rtr *Router) resolveSingleShard(vcursor *requestContext, vindexKey interface{}, route *engine.Route) (newKeyspace, shard string, ksid []byte, err error) {
+func (rtr *Router) resolveSingleShard(vcursor *queryExecutor, vindexKey interface{}, route *engine.Route) (newKeyspace, shard string, ksid []byte, err error) {
 	newKeyspace, _, allShards, err := getKeyspaceShards(vcursor.ctx, rtr.serv, rtr.cell, route.Keyspace.Name, vcursor.tabletType)
 	if err != nil {
 		return "", "", nil, err
@@ -508,7 +508,7 @@ func (rtr *Router) resolveSingleShard(vcursor *requestContext, vindexKey interfa
 	return newKeyspace, shard, ksid, nil
 }
 
-func (rtr *Router) deleteVindexEntries(vcursor *requestContext, route *engine.Route, ks, shard string, ksid []byte) error {
+func (rtr *Router) deleteVindexEntries(vcursor *queryExecutor, route *engine.Route, ks, shard string, ksid []byte) error {
 	result, err := rtr.scatterConn.Execute(
 		vcursor.ctx,
 		route.Subquery,
@@ -551,7 +551,7 @@ func (rtr *Router) deleteVindexEntries(vcursor *requestContext, route *engine.Ro
 	return nil
 }
 
-func (rtr *Router) handleGenerate(vcursor *requestContext, gen *engine.Generate, rowNum int) (insertid int64, err error) {
+func (rtr *Router) handleGenerate(vcursor *queryExecutor, gen *engine.Generate, rowNum int) (insertid int64, err error) {
 	if gen == nil {
 		return 0, nil
 	}
@@ -600,7 +600,7 @@ func (rtr *Router) handleGenerate(vcursor *requestContext, gen *engine.Generate,
 	return num, nil
 }
 
-func (rtr *Router) handlePrimary(vcursor *requestContext, vindexKey interface{}, colVindex *vindexes.ColumnVindex, bv map[string]interface{}, rowNum int) (ksid []byte, err error) {
+func (rtr *Router) handlePrimary(vcursor *queryExecutor, vindexKey interface{}, colVindex *vindexes.ColumnVindex, bv map[string]interface{}, rowNum int) (ksid []byte, err error) {
 	if vindexKey == nil {
 		return nil, fmt.Errorf("value must be supplied for column %v", colVindex.Column)
 	}
@@ -617,7 +617,7 @@ func (rtr *Router) handlePrimary(vcursor *requestContext, vindexKey interface{},
 	return ksid, nil
 }
 
-func (rtr *Router) handleNonPrimary(vcursor *requestContext, vindexKey interface{}, colVindex *vindexes.ColumnVindex, bv map[string]interface{}, ksid []byte, rowNum int) error {
+func (rtr *Router) handleNonPrimary(vcursor *queryExecutor, vindexKey interface{}, colVindex *vindexes.ColumnVindex, bv map[string]interface{}, ksid []byte, rowNum int) error {
 	if colVindex.Owned {
 		if vindexKey == nil {
 			return fmt.Errorf("value must be supplied for column %v", colVindex.Column)
