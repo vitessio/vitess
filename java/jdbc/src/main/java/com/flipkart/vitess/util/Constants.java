@@ -100,6 +100,24 @@ public class Constants {
         public static final String USERNAME = "userName";
         public static final String EXECUTE_TYPE = "executeType";
         public static final String TWOPC_ENABLED = "twopcEnabled";
+        
+	public static final String USE_SSL = "useSSL";
+        
+	public static final String KEYSTORE = "keyStore";
+        public static final String KEYSTORE_PASSWORD = "keyStorePassword";
+        public static final String KEY_ALIAS = "keyAlias";
+        public static final String KEY_PASSWORD = "keyPassword";
+        public static final String TRUSTSTORE = "trustStore";
+        public static final String TRUSTSTORE_PASSWORD = "trustStorePassword";
+        public static final String TRUSTSTORE_ALIAS = "trustAlias";
+
+        public static final String KEYSTORE_FULL = "javax.net.ssl.keyStore";
+        public static final String KEYSTORE_PASSWORD_FULL = "javax.net.ssl.keyStorePassword";
+        public static final String KEY_ALIAS_FULL = "javax.net.ssl.keyAlias";
+        public static final String KEY_PASSWORD_FULL = "javax.net.ssl.keyPassword";
+        public static final String TRUSTSTORE_FULL = "javax.net.ssl.trustStore";
+        public static final String TRUSTSTORE_PASSWORD_FULL = "javax.net.ssl.trustStorePassword";
+        public static final String TRUSTSTORE_ALIAS_FULL = "javax.net.ssl.trustAlias";
     }
 
 
