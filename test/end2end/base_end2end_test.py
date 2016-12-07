@@ -58,7 +58,7 @@ class BaseEnd2EndTest(unittest.TestCase):
 
 
 def main():
-  import utils
+  import utils  # pylint: disable=g-import-not-at-top
   parser = optparse.OptionParser(usage='usage: %prog [options] [test_names]')
   parser.add_option('-e', '--environment_type', help='Environment type',
                     default=None)
