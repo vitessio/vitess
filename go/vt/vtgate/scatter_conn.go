@@ -15,7 +15,6 @@ import (
 
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/stats"
-	"github.com/youtube/vitess/go/vt/binlog/eventtoken"
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
@@ -131,7 +130,7 @@ func (stc *ScatterConn) Execute(
 
 			mu.Lock()
 			defer mu.Unlock()
-			appendResult(qr, innerqr)
+			qr.AppendResult(qr, innerqr)
 			return transactionID, nil
 		})
 
@@ -187,7 +186,7 @@ func (stc *ScatterConn) ExecuteMulti(
 
 			mu.Lock()
 			defer mu.Unlock()
-			appendResult(qr, innerqr)
+			qr.AppendResult(qr, innerqr)
 			return transactionID, nil
 		})
 
@@ -245,7 +244,7 @@ func (stc *ScatterConn) ExecuteEntityIds(
 
 			mu.Lock()
 			defer mu.Unlock()
-			appendResult(qr, innerqr)
+			qr.AppendResult(qr, innerqr)
 			return transactionID, nil
 		})
 	if allErrors.HasErrors() {
@@ -324,7 +323,7 @@ func (stc *ScatterConn) ExecuteBatch(
 			resMutex.Lock()
 			defer resMutex.Unlock()
 			for i, result := range innerqrs {
-				appendResult(&results[req.ResultIndexes[i]], &result)
+				results[req.ResultIndexes[i]].AppendResult(&results[req.ResultIndexes[i]], &result)
 			}
 		}(req)
 	}
@@ -765,45 +764,6 @@ func getShards(shardVars map[string]map[string]interface{}) []string {
 		shards = append(shards, k)
 	}
 	return shards
-}
-
-func appendResult(qr, innerqr *sqltypes.Result) {
-	if innerqr.RowsAffected == 0 && len(innerqr.Fields) == 0 {
-		return
-	}
-	if qr.Fields == nil {
-		qr.Fields = innerqr.Fields
-	}
-	qr.RowsAffected += innerqr.RowsAffected
-	if innerqr.InsertID != 0 {
-		qr.InsertID = innerqr.InsertID
-	}
-	if len(qr.Rows) == 0 {
-		// we haven't gotten any result yet, just save the new extras.
-		qr.Extras = innerqr.Extras
-	} else {
-		// Merge the EventTokens / Fresher flags within Extras.
-		if innerqr.Extras == nil {
-			// We didn't get any from innerq. Have to clear any
-			// we'd have gotten already.
-			if qr.Extras != nil {
-				qr.Extras.EventToken = nil
-				qr.Extras.Fresher = false
-			}
-		} else {
-			// We may have gotten an EventToken from
-			// innerqr.  If we also got one earlier, merge
-			// it. If we didn't get one earlier, we
-			// discard the new one.
-			if qr.Extras != nil {
-				// Note if any of the two is nil, we get nil.
-				qr.Extras.EventToken = eventtoken.Minimum(qr.Extras.EventToken, innerqr.Extras.EventToken)
-
-				qr.Extras.Fresher = qr.Extras.Fresher && innerqr.Extras.Fresher
-			}
-		}
-	}
-	qr.Rows = append(qr.Rows, innerqr.Rows...)
 }
 
 func unique(in []string) map[string]struct{} {

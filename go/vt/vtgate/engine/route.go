@@ -29,7 +29,7 @@ type Route struct {
 	Generate   *Generate
 	Rows       *sqlparser.Values
 	Prefix     string
-	Mid        string
+	Mid        []string
 	Suffix     string
 }
 
@@ -70,7 +70,7 @@ func (rt *Route) MarshalJSON() ([]byte, error) {
 		Subquery   string              `json:",omitempty"`
 		Generate   *Generate           `json:",omitempty"`
 		Prefix     string              `json:",omitempty"`
-		Mid        string              `json:",omitempty"`
+		Mid        []string            `json:",omitempty"`
 		Suffix     string              `json:",omitempty"`
 	}{
 		Opcode:     rt.Opcode,

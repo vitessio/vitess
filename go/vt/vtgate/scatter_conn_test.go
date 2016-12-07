@@ -67,7 +67,7 @@ func TestScatterConnStreamExecute(t *testing.T) {
 	testScatterConnGeneric(t, "TestScatterConnStreamExecute", func(sc *ScatterConn, shards []string) (*sqltypes.Result, error) {
 		qr := new(sqltypes.Result)
 		err := sc.StreamExecute(context.Background(), "query", nil, "TestScatterConnStreamExecute", shards, topodatapb.TabletType_REPLICA, nil, func(r *sqltypes.Result) error {
-			appendResult(qr, r)
+			qr.AppendResult(qr, r)
 			return nil
 		})
 		return qr, err
@@ -82,7 +82,7 @@ func TestScatterConnStreamExecuteMulti(t *testing.T) {
 			shardVars[shard] = nil
 		}
 		err := sc.StreamExecuteMulti(context.Background(), "query", "TestScatterConnStreamExecuteMulti", shardVars, topodatapb.TabletType_REPLICA, nil, func(r *sqltypes.Result) error {
-			appendResult(qr, r)
+			qr.AppendResult(qr, r)
 			return nil
 		})
 		return qr, err
@@ -418,8 +418,8 @@ func TestAppendResult(t *testing.T) {
 		},
 	}
 	// test one empty result
-	appendResult(qr, innerqr1)
-	appendResult(qr, innerqr2)
+	qr.AppendResult(qr, innerqr1)
+	qr.AppendResult(qr, innerqr2)
 	if len(qr.Fields) != 1 {
 		t.Errorf("want 1, got %v", len(qr.Fields))
 	}
@@ -434,8 +434,8 @@ func TestAppendResult(t *testing.T) {
 	}
 	// test two valid results
 	qr = new(sqltypes.Result)
-	appendResult(qr, innerqr2)
-	appendResult(qr, innerqr2)
+	qr.AppendResult(qr, innerqr2)
+	qr.AppendResult(qr, innerqr2)
 	if len(qr.Fields) != 1 {
 		t.Errorf("want 1, got %v", len(qr.Fields))
 	}

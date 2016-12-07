@@ -5,6 +5,7 @@
 package sqltypes
 
 import (
+	"github.com/youtube/vitess/go/vt/binlog/eventtoken"
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
@@ -120,42 +121,44 @@ func (result *Result) StripFieldNames() *Result {
 	return &r
 }
 
-// MergeResultRows will be extended to appropriately merge the Results
-// for now only simple merging is being done. Only the Rows of the
-// two results are being merged.
-func (result *Result) MergeResultRows(lastResult *Result) {
-	if result.Rows != nil {
-		rows := make([][]Value, len(lastResult.Rows)+len(result.Rows))
-		count := 0
-		for i, r := range result.Rows {
-			rows[i] = make([]Value, len(r))
-			totalLen := 0
-			for _, c := range r {
-				totalLen += len(c.val)
-			}
-			arena := make([]byte, 0, totalLen)
-			for j, c := range r {
-				start := len(arena)
-				arena = append(arena, c.val...)
-				rows[i][j] = MakeTrusted(c.typ, arena[start:start+len(c.val)])
-			}
-			count++
-		}
-		for i, r := range lastResult.Rows {
-			rows[count+i] = make([]Value, len(r))
-			totalLen := 0
-			for _, c := range r {
-				totalLen += len(c.val)
-			}
-			arena := make([]byte, 0, totalLen)
-			for j, c := range r {
-				start := len(arena)
-				arena = append(arena, c.val...)
-				rows[count+i][j] = MakeTrusted(c.typ, arena[start:start+len(c.val)])
-			}
-		}
-		result.Rows = rows
-	} else {
-		result.Rows = lastResult.Rows
+// AppendResult will combine the Results Objects of one result
+// to another result.Note currently it doesn't handle cases like
+// if two results have different fields.We will enhance this function.
+func (result *Result) AppendResult(qr, innerqr *Result) {
+	if innerqr.RowsAffected == 0 && len(innerqr.Fields) == 0 {
+		return
 	}
+	if qr.Fields == nil {
+		qr.Fields = innerqr.Fields
+	}
+	qr.RowsAffected += innerqr.RowsAffected
+	if innerqr.InsertID != 0 {
+		qr.InsertID = innerqr.InsertID
+	}
+	if len(qr.Rows) == 0 {
+		// we haven't gotten any result yet, just save the new extras.
+		qr.Extras = innerqr.Extras
+	} else {
+		// Merge the EventTokens / Fresher flags within Extras.
+		if innerqr.Extras == nil {
+			// We didn't get any from innerq. Have to clear any
+			// we'd have gotten already.
+			if qr.Extras != nil {
+				qr.Extras.EventToken = nil
+				qr.Extras.Fresher = false
+			}
+		} else {
+			// We may have gotten an EventToken from
+			// innerqr.  If we also got one earlier, merge
+			// it. If we didn't get one earlier, we
+			// discard the new one.
+			if qr.Extras != nil {
+				// Note if any of the two is nil, we get nil.
+				qr.Extras.EventToken = eventtoken.Minimum(qr.Extras.EventToken, innerqr.Extras.EventToken)
+
+				qr.Extras.Fresher = qr.Extras.Fresher && innerqr.Extras.Fresher
+			}
+		}
+	}
+	qr.Rows = append(qr.Rows, innerqr.Rows...)
 }

@@ -319,8 +319,8 @@
       "Query": "select next :n values from `seq`",
       "Value": [1]
     },
-    "Prefix": "insert into user(id, Name, Costly) ",
-    "Mid": "values :#rowvalues"
+    "Prefix": "insert into user(id, Name, Costly) values ",
+    "Mid":["(:_Id0, :_Name0, :_Costly0)"]
   }
 }
 
@@ -350,8 +350,8 @@
       "Query": "select next :n values from `seq`",
       "Value": [null]
     },
-    "Prefix": "insert into user(nonid, Id, Name, Costly) ",
-    "Mid": "values :#rowvalues"
+    "Prefix": "insert into user(nonid, Id, Name, Costly) values ",
+    "Mid": ["(2, :_Id0, :_Name0, :_Costly0)"]
   }
 }
 
@@ -381,8 +381,8 @@
       "Query": "select next :n values from `seq`",
       "Value": [1]
     },
-    "Prefix": "insert into user(nonid, name, id, Costly) ",
-    "Mid": "values :#rowvalues"
+    "Prefix": "insert into user(nonid, name, id, Costly) values ",
+    "Mid": ["(2, :_Name0, :_Id0, :_Costly0)"]
   }
 }
 
@@ -410,8 +410,8 @@
       "Query": "select next :n values from `seq`",
       "Value": [null]
     },
-    "Prefix": "insert into user_extra(nonid, user_id, extra_id) ",
-    "Mid": "values :#rowvalues"
+    "Prefix": "insert into user_extra(nonid, user_id, extra_id) values ",
+    "Mid": ["(2, :_user_id0, :__seq0)"]
   }
 }
 
@@ -464,7 +464,7 @@
       "Query": "select next :n values from `seq`",
       "Value": [1,2]
     },
-    "Prefix": "insert into user(id, Name, Costly) ",
-    "Mid": "values :#rowvalues"
+    "Prefix": "insert into user(id, Name, Costly) values ",
+    "Mid": ["(:_Id0, :_Name0, :_Costly0)","(:_Id1, :_Name1, :_Costly1)"]
   }
 }

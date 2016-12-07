@@ -21,8 +21,6 @@ import (
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	vtgatepb "github.com/youtube/vitess/go/vt/proto/vtgate"
-	"github.com/youtube/vitess/go/vt/sqlparser"
-	planbuilder "github.com/youtube/vitess/go/vt/vtgate/planbuilder"
 )
 
 // Router is the layer to route queries to the correct shards
@@ -373,9 +371,9 @@ func (rtr *Router) execInsertSharded(vcursor *requestContext, route *engine.Rout
 	if err != nil {
 		return nil, fmt.Errorf("execInsertSharded: %v", err)
 	}
-	var aggrResult sqltypes.Result
+	qr := new(sqltypes.Result)
 	for shard := range routing {
-		route.Query = route.Prefix + route.Mid + route.Suffix
+		route.Query = route.Prefix + route.Mid[0] + route.Suffix
 		rewritten, err := rtr.rewriteMultiRowQuery(route, routing, shard)
 		if err != nil {
 			return nil, fmt.Errorf("execInsertSharded: Error While Rewriting Query: %v", err)
@@ -398,53 +396,22 @@ func (rtr *Router) execInsertSharded(vcursor *requestContext, route *engine.Rout
 			if result.InsertID != 0 {
 				return nil, fmt.Errorf("sequence and db generated a value each for insert")
 			}
-			aggrResult.InsertID = uint64(insertid)
+			qr.InsertID = uint64(insertid)
 		}
-		// Aggregate the Results here from the ResultSet coming from different shards.
-		aggrResult.MergeResultRows(result)
-		aggrResult.Fields = result.Fields
-		aggrResult.RowsAffected += result.RowsAffected
+		qr.AppendResult(qr, result)
 
 	}
 
-	return &aggrResult, nil
-}
-
-func contains(intSlice []int, searchInt int) bool {
-	for _, value := range intSlice {
-		if value == searchInt {
-			return true
-		}
-	}
-	return false
+	return qr, nil
 }
 
 func (rtr *Router) rewriteMultiRowQuery(route *engine.Route, routing map[string][]int, shard string) (Query string, err error) {
 	var ValuesStr string
-	for rowNum, rowVal := range *route.Rows {
-		if contains(routing[shard], rowNum) {
-			ValuesStr += "("
-			for col := range rowVal {
-				var val interface{}
-				switch node := (rowVal[col]).(type) {
-				case sqlparser.StrVal:
-					val = string(node)
-					ValuesStr += fmt.Sprintf("'%v', ", val)
-				default:
-					val, err := planbuilder.ValConvert(node)
-					if err != nil {
-						return val.(string), fmt.Errorf("rewriteMultiRowQuery: could not convert val: %s, pos: %d: %v", sqlparser.String(rowVal[col]), col, err)
-					}
-					ValuesStr += fmt.Sprintf("%v, ", val)
-				}
-			}
-			ValuesStr = strings.TrimRight(ValuesStr, ", ")
-			ValuesStr += "), "
-		}
+	for _, rowVal := range routing[shard] {
+		ValuesStr += route.Mid[rowVal] + ", "
 	}
 	ValuesStr = strings.TrimRight(ValuesStr, ", ")
-	Query = route.Query
-	Query = strings.Replace(Query, ":#rowvalues", ValuesStr, -1)
+	Query = route.Prefix + ValuesStr + route.Suffix
 	return Query, nil
 }
 

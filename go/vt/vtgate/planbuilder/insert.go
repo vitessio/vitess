@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"strconv"
 
+	"strings"
+
 	"github.com/youtube/vitess/go/cistring"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vtgate/engine"
@@ -159,14 +161,15 @@ func buildInsertShardedPlan(ins *sqlparser.Insert, table *vindexes.Table) (*engi
 }
 
 func generateInsertShardedQuery(node *sqlparser.Insert, eRoute *engine.Route) {
-	const rowValuesStr = "values :#rowvalues"
 	prefixBuf := sqlparser.NewTrackedBuffer(dmlFormatter)
 	suffixBuf := sqlparser.NewTrackedBuffer(dmlFormatter)
-	prefixBuf.Myprintf("insert %v%sinto %v%v ",
+	midBuf := sqlparser.NewTrackedBuffer(dmlFormatter)
+	prefixBuf.Myprintf("insert %v%sinto %v%v values ",
 		node.Comments, node.Ignore,
 		node.Table, node.Columns)
 	eRoute.Prefix = prefixBuf.String()
-	eRoute.Mid = rowValuesStr
+	midBuf.Myprintf("%v", node.Rows)
+	eRoute.Mid = strings.Split(strings.Replace(strings.TrimLeft(midBuf.String(), "values "), "), (", ")#(", -1), "#")
 	suffixBuf.Myprintf("%v", node.OnDup)
 	eRoute.Suffix = suffixBuf.String()
 }
