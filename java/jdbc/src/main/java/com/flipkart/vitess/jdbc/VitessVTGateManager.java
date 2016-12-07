@@ -40,13 +40,13 @@ public class VitessVTGateManager {
          */
         public VTGateConnections(VitessJDBCUrl vitessJDBCUrl) {
             for (VitessJDBCUrl.HostInfo hostInfo : vitessJDBCUrl.getHostInfos()) {
-                String identifier = getIdentifer(hostInfo.getHostname(), hostInfo.getPort(),
+                String identifier = getIdentifier(hostInfo.getHostname(), hostInfo.getPort(),
                     vitessJDBCUrl.getUsername());
                 synchronized (VitessVTGateManager.class) {
                     if (!vtGateConnHashMap.containsKey(identifier)) {
                         updateVtGateConnHashMap(identifier, hostInfo.getHostname(),
                             hostInfo.getPort(), vitessJDBCUrl.getUsername(),
-                            vitessJDBCUrl.getKeyspace());
+                            vitessJDBCUrl.getKeyspace(), vitessJDBCUrl.isSsl());
                     }
                 }
                 vtGateIdentifiers.add(identifier);
@@ -68,23 +68,8 @@ public class VitessVTGateManager {
 
     }
 
-    private static String getIdentifer(String hostname, int port, String userIdentifer) {
+    private static String getIdentifier(String hostname, int port, String userIdentifer) {
         return (hostname + port + userIdentifer);
-    }
-
-    /**
-     * Create vtGateConn object with given identifier.
-     *
-     * @param hostname
-     * @param port
-     * @param username
-     * @return
-     */
-    private static VTGateConn getVtGateConn(String hostname, int port, String username) {
-        Context context = CommonUtils.createContext(username, Constants.CONNECTION_TIMEOUT);
-        InetSocketAddress inetSocketAddress = new InetSocketAddress(hostname, port);
-        RpcClient client = new GrpcClientFactory().create(context, inetSocketAddress);
-        return (new VTGateConn(client));
     }
 
     /**
@@ -97,7 +82,10 @@ public class VitessVTGateManager {
      * @return
      */
     private static VTGateConn getVtGateConn(String hostname, int port, String username,
-        String keyspace) {
+        String keyspace, boolean ssl) {
+
+        // TODO: Construct RcpClient differently if ssl == true
+
         Context context = CommonUtils.createContext(username, Constants.CONNECTION_TIMEOUT);
         InetSocketAddress inetSocketAddress = new InetSocketAddress(hostname, port);
         RpcClient client = new GrpcClientFactory().create(context, inetSocketAddress);
@@ -118,8 +106,8 @@ public class VitessVTGateManager {
      * @param keyspace
      */
     private static void updateVtGateConnHashMap(String identifier, String hostname, int port,
-        String username, String keyspace) {
-        vtGateConnHashMap.put(identifier, getVtGateConn(hostname, port, username, keyspace));
+        String username, String keyspace, boolean ssl) {
+        vtGateConnHashMap.put(identifier, getVtGateConn(hostname, port, username, keyspace, ssl));
     }
 
     public static void close() throws SQLException {

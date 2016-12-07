@@ -5,6 +5,7 @@ import com.youtube.vitess.proto.Topodata;
 import org.junit.Assert;
 import org.junit.Test;
 
+import java.sql.SQLException;
 import java.util.Properties;
 
 /**
@@ -147,5 +148,23 @@ public class VitessJDBCUrlTest {
         Assert.assertEquals("catalog", vitessJDBCUrl.getCatalog());
         Assert.assertEquals("val1", info.getProperty("prop1"));
         Assert.assertEquals("val2", info.getProperty("prop2"));
+    }
+
+    @Test public void testSSLParamSet() throws SQLException {
+        Properties info = new Properties();
+        VitessJDBCUrl vitessJDBCUrl = new VitessJDBCUrl(
+                "jdbc:vitess://hostname:15991/keyspace?useSSL=true",
+                info
+        );
+        Assert.assertTrue(vitessJDBCUrl.isSsl());
+    }
+
+    @Test public void testSSLParamUnset() throws SQLException {
+        Properties info = new Properties();
+        VitessJDBCUrl vitessJDBCUrl = new VitessJDBCUrl(
+                "jdbc:vitess://hostname:15991/keyspace",
+                info
+        );
+        Assert.assertFalse(vitessJDBCUrl.isSsl());
     }
 }

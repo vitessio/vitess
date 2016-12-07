@@ -26,6 +26,7 @@ public class VitessJDBCUrl {
     private final String keyspace;
     private String catalog;
     private final String executeType;
+    private final boolean ssl;
 
 
     /*
@@ -50,7 +51,13 @@ public class VitessJDBCUrl {
     }
 
     /**
-     * Create VitessJDBC url object for given urls and properties.
+     * <p>Create VitessJDBC url object for given urls and properties.</p>
+     *
+     * <p>To indicate that SSL should be used, URL's follow the MySQL convention of including the
+     * property <code>useSSL=true</code>.  To use a keystore and truststore other than the JRE
+     * default, you must either set system properties when launching the JVM process, or
+     * set environment variables
+     * (see: https://dev.mysql.com/doc/connector-j/5.1/en/connector-j-reference-using-ssl.html).</p>
      *
      * @param url
      * @param info
@@ -102,8 +109,8 @@ public class VitessJDBCUrl {
         }
 
         this.tabletType = getTabletType(tabletType);
-
         this.executeType = info.getProperty(Constants.Property.EXECUTE_TYPE);
+        this.ssl = "true".equals(info.getProperty(Constants.Property.USE_SSL));
         this.url = url;
     }
 
@@ -145,6 +152,10 @@ public class VitessJDBCUrl {
             }
         }
         return Constants.DEFAULT_EXECUTE_TYPE;
+    }
+
+    public boolean isSsl() {
+        return ssl;
     }
 
     /**
