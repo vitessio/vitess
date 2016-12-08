@@ -45,8 +45,7 @@ public class VitessVTGateManager {
                 synchronized (VitessVTGateManager.class) {
                     if (!vtGateConnHashMap.containsKey(identifier)) {
                         updateVtGateConnHashMap(identifier, hostInfo.getHostname(),
-                            hostInfo.getPort(), vitessJDBCUrl.getUsername(),
-                            vitessJDBCUrl.getKeyspace(), vitessJDBCUrl.isUseSSL());
+                            hostInfo.getPort(), vitessJDBCUrl);
                     }
                 }
                 vtGateIdentifiers.add(identifier);
@@ -73,18 +72,33 @@ public class VitessVTGateManager {
     }
 
     /**
+     * Create VTGateConne and update vtGateConnHashMap.
+     *
+     * @param identifier
+     * @param hostname
+     * @param port
+     * @param jdbcUrl
+     */
+    private static void updateVtGateConnHashMap(String identifier, String hostname, int port,
+                                                VitessJDBCUrl jdbcUrl) {
+        vtGateConnHashMap.put(identifier, getVtGateConn(hostname, port, jdbcUrl));
+    }
+
+    /**
      * Create vtGateConn object with given identifier.
      *
      * @param hostname
      * @param port
-     * @param username
-     * @param keyspace
+     * @param jdbcUrl
      * @return
      */
-    private static VTGateConn getVtGateConn(String hostname, int port, String username,
-        String keyspace, boolean ssl) {
-
-        // TODO: Construct RcpClient differently if ssl == true
+    private static VTGateConn getVtGateConn(String hostname, int port, VitessJDBCUrl jdbcUrl) {
+        final String username = jdbcUrl.getUsername();
+        final String keyspace = jdbcUrl.getKeyspace();
+        if (jdbcUrl.isUseSSL()) {
+            // TODO: Check SSL-related optional parameters, and fall back to JVM startup properties or environment variables if any are missing
+            // TODO: Call newly-created "GrpcClientFactory.createSecure(...)" method instead of the plain ".create(...)"
+        }
 
         Context context = CommonUtils.createContext(username, Constants.CONNECTION_TIMEOUT);
         InetSocketAddress inetSocketAddress = new InetSocketAddress(hostname, port);
@@ -93,21 +107,6 @@ public class VitessVTGateManager {
             return (new VTGateConn(client));
         }
         return (new VTGateConn(client, keyspace));
-    }
-
-
-    /**
-     * Create VTGateConne and update vtGateConnHashMap.
-     *
-     * @param identifier
-     * @param hostname
-     * @param port
-     * @param username
-     * @param keyspace
-     */
-    private static void updateVtGateConnHashMap(String identifier, String hostname, int port,
-        String username, String keyspace, boolean ssl) {
-        vtGateConnHashMap.put(identifier, getVtGateConn(hostname, port, username, keyspace, ssl));
     }
 
     public static void close() throws SQLException {
