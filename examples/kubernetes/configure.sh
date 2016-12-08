@@ -10,6 +10,10 @@
 read -p "Vitess Docker image (leave empty for default) []: "
 echo "vitess_image=\"$REPLY\"" >> config.sh
 
+# Custom keyspace.
+read -p "Vitess Keyspace Name (leave empty for default) []: "
+echo "keyspace=\"$REPLY\"" >> config.sh
+
 # Select and configure Backup Storage Implementation.
 storage=gcs
 read -p "Backup Storage (file, gcs) [gcs]: "
