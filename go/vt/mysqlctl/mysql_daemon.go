@@ -29,11 +29,11 @@ type MysqlDaemon interface {
 	TabletDir() string
 
 	// methods related to mysql running or not
-	Start(ctx context.Context, mysqldArgs ...string) error
+	Start(ctx context.Context, waitAsRoot bool, mysqldArgs ...string) error
 	Shutdown(ctx context.Context, waitForMysqld bool) error
 	RunMysqlUpgrade() error
 	ReinitConfig(ctx context.Context) error
-	Wait(ctx context.Context) error
+	Wait(ctx context.Context, asRoot bool) error
 
 	// GetMysqlPort returns the current port mysql is listening on.
 	GetMysqlPort() (int32, error)
@@ -232,7 +232,7 @@ func (fmd *FakeMysqlDaemon) TabletDir() string {
 }
 
 // Start is part of the MysqlDaemon interface
-func (fmd *FakeMysqlDaemon) Start(ctx context.Context, mysqldArgs ...string) error {
+func (fmd *FakeMysqlDaemon) Start(ctx context.Context, waitAsRoot bool, mysqldArgs ...string) error {
 	if fmd.Running {
 		return fmt.Errorf("fake mysql daemon already running")
 	}
@@ -260,7 +260,7 @@ func (fmd *FakeMysqlDaemon) ReinitConfig(ctx context.Context) error {
 }
 
 // Wait is part of the MysqlDaemon interface.
-func (fmd *FakeMysqlDaemon) Wait(ctx context.Context) error {
+func (fmd *FakeMysqlDaemon) Wait(ctx context.Context, asRoot bool) error {
 	return nil
 }
 

@@ -140,7 +140,7 @@ func (mysqld *Mysqld) RunMysqlUpgrade() error {
 		return client.RunMysqlUpgrade(context.TODO())
 	}
 
-	// find mysql_upgrade. If not there, we do nothing.
+	// Find mysql_upgrade. If not there, we do nothing.
 	dir, err := vtenv.VtMysqlRoot()
 	if err != nil {
 		log.Warningf("VT_MYSQL_ROOT not set, skipping mysql_upgrade step: %v", err)
@@ -152,13 +152,28 @@ func (mysqld *Mysqld) RunMysqlUpgrade() error {
 		return nil
 	}
 
+	// Since we started mysql with --skip-grant-tables, we should
+	// be able to run mysql_upgrade without any valid user or
+	// password. However, mysql_upgrade executes a 'flush
+	// privileges' right in the middle, and then subsequent
+	// commands fail if we don't use valid credentials. So let's
+	// use dba credentials.
+	params, err := dbconfigs.WithCredentials(&mysqld.dbcfgs.Dba)
+	if err != nil {
+		return err
+	}
+	cnf, err := mysqld.defaultsExtraFile(&params)
+	if err != nil {
+		return err
+	}
+	defer os.Remove(cnf)
+
 	// Run the program, if it fails, we fail.  Note in this
 	// moment, mysqld is running with no grant tables on the local
 	// socket only, so this doesn't need any user or password.
 	args := []string{
 		// --defaults-file=* must be the first arg.
-		"--defaults-file=" + mysqld.config.path,
-		"--socket", mysqld.config.SocketFile,
+		"--defaults-file=" + cnf,
 		"--force", // Don't complain if it's already been upgraded.
 	}
 	cmd := exec.Command(name, args...)
@@ -168,10 +183,11 @@ func (mysqld *Mysqld) RunMysqlUpgrade() error {
 	return err
 }
 
-// Start will start the mysql daemon, either by running the 'mysqld_start'
-// hook, or by running mysqld_safe in the background.
-// If a mysqlctld address is provided in a flag, Start will run remotely.
-func (mysqld *Mysqld) Start(ctx context.Context, mysqldArgs ...string) error {
+// Start will start the mysql daemon, either by running the
+// 'mysqld_start' hook, or by running mysqld_safe in the background.
+// If a mysqlctld address is provided in a flag, Start will run
+// remotely.  waitAsRoot is sent as is to the Wait call.
+func (mysqld *Mysqld) Start(ctx context.Context, waitAsRoot bool, mysqldArgs ...string) error {
 	// Execute as remote action on mysqlctld if requested.
 	if *socketFile != "" {
 		log.Infof("executing Mysqld.Start() remotely via mysqlctld server: %v", *socketFile)
@@ -260,12 +276,28 @@ func (mysqld *Mysqld) Start(ctx context.Context, mysqldArgs ...string) error {
 		return fmt.Errorf("mysqld_start hook failed: %v", hr.String())
 	}
 
-	return mysqld.Wait(ctx)
+	return mysqld.Wait(ctx, waitAsRoot)
 }
 
 // Wait returns nil when mysqld is up and accepting connections.
-func (mysqld *Mysqld) Wait(ctx context.Context) error {
+func (mysqld *Mysqld) Wait(ctx context.Context, asRoot bool) error {
 	log.Infof("Waiting for mysqld socket file (%v) to be ready...", mysqld.config.SocketFile)
+
+	var params sqldb.ConnParams
+	if asRoot {
+		params = sqldb.ConnParams{
+			Uname:      "root",
+			Charset:    "utf8",
+			UnixSocket: mysqld.config.SocketFile,
+		}
+	} else {
+		var err error
+		params, err = dbconfigs.WithCredentials(&mysqld.dbcfgs.Dba)
+		if err != nil {
+			return err
+		}
+	}
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -276,12 +308,7 @@ func (mysqld *Mysqld) Wait(ctx context.Context) error {
 		_, statErr := os.Stat(mysqld.config.SocketFile)
 		if statErr == nil {
 			// Make sure the socket file isn't stale.
-			// Use a user that exists even before we apply the init_db_sql_file.
-			conn, connErr := mysql.Connect(sqldb.ConnParams{
-				Uname:      "root",
-				Charset:    "utf8",
-				UnixSocket: mysqld.config.SocketFile,
-			})
+			conn, connErr := mysql.Connect(params)
 			if connErr == nil {
 				conn.Close()
 				return nil
@@ -463,7 +490,7 @@ func (mysqld *Mysqld) Init(ctx context.Context, initDBSQLFile string) error {
 	}
 
 	// Start mysqld.
-	if err = mysqld.Start(ctx); err != nil {
+	if err = mysqld.Start(ctx, true /* waitAsRoot */); err != nil {
 		log.Errorf("failed starting mysqld (check %v for more info): %v", mysqld.config.ErrorLogPath, err)
 		return err
 	}
@@ -474,7 +501,7 @@ func (mysqld *Mysqld) Init(ctx context.Context, initDBSQLFile string) error {
 		return fmt.Errorf("can't open init_db_sql_file (%v): %v", initDBSQLFile, err)
 	}
 	defer sqlFile.Close()
-	if err := mysqld.executeMysqlScript(&sqldb.ConnParams{Uname: "root", Pass: ""}, sqlFile); err != nil {
+	if err := mysqld.executeMysqlScript(&sqldb.ConnParams{Uname: "root"}, sqlFile); err != nil {
 		return fmt.Errorf("can't run init_db_sql_file (%v): %v", initDBSQLFile, err)
 	}
 
