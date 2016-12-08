@@ -46,7 +46,7 @@ public class VitessVTGateManager {
                     if (!vtGateConnHashMap.containsKey(identifier)) {
                         updateVtGateConnHashMap(identifier, hostInfo.getHostname(),
                             hostInfo.getPort(), vitessJDBCUrl.getUsername(),
-                            vitessJDBCUrl.getKeyspace(), vitessJDBCUrl.isSsl());
+                            vitessJDBCUrl.getKeyspace(), vitessJDBCUrl.isUseSSL());
                     }
                 }
                 vtGateIdentifiers.add(identifier);

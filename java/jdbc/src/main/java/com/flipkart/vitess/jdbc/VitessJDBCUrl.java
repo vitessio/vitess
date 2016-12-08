@@ -26,7 +26,13 @@ public class VitessJDBCUrl {
     private final String keyspace;
     private String catalog;
     private final String executeType;
-    private final boolean ssl;
+
+    private final boolean useSSL;
+    private final String keyStore;
+    private final String keyStorePassword;
+    private final String keyPassword;
+    private final String trustStore;
+    private final String trustStorePassword;
 
 
     /*
@@ -53,11 +59,50 @@ public class VitessJDBCUrl {
     /**
      * <p>Create VitessJDBC url object for given urls and properties.</p>
      *
-     * <p>To indicate that SSL should be used, URL's follow the MySQL convention of including the
-     * property <code>useSSL=true</code>.  To use a keystore and truststore other than the JRE
-     * default, you must either set system properties when launching the JVM process, or
-     * set environment variables
-     * (see: https://dev.mysql.com/doc/connector-j/5.1/en/connector-j-reference-using-ssl.html).</p>
+     * <p>To indicate that SSL should be used, URL's follow the MySQL and MariaDB convention of including
+     * the property <code>useSSL=true</code>.  To use a keystore and truststore other than the JRE
+     * default, you can add the following URL properties:</p>
+     *
+     * <p>
+     *     <ul>
+     *         <li><code>keyStore</code>=path_to_keystore_file</li>
+     *         <li><code>keyStorePassword</code>=password (if set)</li>
+     *         <li><code>keyPassword</code>=password (only needed if the private key password differs from
+     *                  the keyStore password)</li>
+     *         <li><code>trustStore</code>=path_to_truststore_file</li>
+     *         <li><code>trustStorePassword</code>=password (if set)</li>
+     *     </ul>
+     * </p>
+     *
+     * <p>If <code>useSSL=true</code>, and any of these additional properties are not set on the JDBC URL,
+     * then the driver will first look to see if these properties where set at JVM startup time:</p>
+     *
+     * <p>
+     *     <ul>
+     *         <li><code>-Djavax.net.useSSL.keyStore</code></li>
+     *         <li><code>-Djavax.net.useSSL.keyStorePassword</code></li>
+     *         <li><code>-Djavax.net.useSSL.keyPassword</code></li>
+     *         <li><code>-Djavax.net.useSSL.trustStore</code></li>
+     *         <li><code>-Djavax.net.useSSL.trustStorePassword</code></li>
+     *     </ul>
+     * </p>
+     *
+     * <p>If <code>userSSL=true</code>, and any of the additional properites are not set on the JDBC URL
+     * or in JVM startup properties, then the driver will finally look to environment variables:</p>
+     *
+     * <p>
+     *     <ul>
+     *         <li><code>System.setProperty("java.net.useSSL.keyStore", "...");</code></li>
+     *         <li><code>System.setProperty("java.net.useSSL.keyStorePassword", "...");</code></li>
+     *         <li><code>System.setProperty("java.net.useSSL.keyPassword", "...");</code></li>
+     *         <li><code>System.setProperty("java.net.useSSL.trustStore", "...");</code></li>
+     *         <li><code>System.setProperty("java.net.useSSL.trustStorePassword", "...");</code></li>
+     *     </ul>
+     * </p>
+     *
+     * <p>See:</p>
+     * <p>https://mariadb.com/kb/en/mariadb/about-mariadb-connector-j/#tls-ssl</p>
+     * <p>https://dev.mysql.com/doc/connector-j/5.1/en/connector-j-reference-using-ssl.html</p>
      *
      * @param url
      * @param info
@@ -110,7 +155,15 @@ public class VitessJDBCUrl {
 
         this.tabletType = getTabletType(tabletType);
         this.executeType = info.getProperty(Constants.Property.EXECUTE_TYPE);
-        this.ssl = "true".equals(info.getProperty(Constants.Property.USE_SSL));
+
+        String ssl = caseInsensitiveKeyLookup(info, Constants.Property.USE_SSL);
+        this.useSSL = "true".equalsIgnoreCase(caseInsensitiveKeyLookup(info, Constants.Property.USE_SSL));
+        this.keyStore = caseInsensitiveKeyLookup(info, Constants.Property.KEYSTORE);
+        this.keyStorePassword = caseInsensitiveKeyLookup(info, Constants.Property.KEYSTORE_PASSWORD);
+        this.keyPassword = caseInsensitiveKeyLookup(info, Constants.Property.KEY_PASSWORD);
+        this.trustStore = caseInsensitiveKeyLookup(info, Constants.Property.TRUSTSTORE);
+        this.trustStorePassword = caseInsensitiveKeyLookup(info, Constants.Property.TRUSTSTORE_PASSWORD);
+
         this.url = url;
     }
 
@@ -154,8 +207,28 @@ public class VitessJDBCUrl {
         return Constants.DEFAULT_EXECUTE_TYPE;
     }
 
-    public boolean isSsl() {
-        return ssl;
+    public boolean isUseSSL() {
+        return useSSL;
+    }
+
+    public String getKeyStore() {
+        return keyStore;
+    }
+
+    public String getKeyStorePassword() {
+        return keyStorePassword;
+    }
+
+    public String getKeyPassword() {
+        return keyPassword;
+    }
+
+    public String getTrustStore() {
+        return trustStore;
+    }
+
+    public String getTrustStorePassword() {
+        return trustStorePassword;
     }
 
     /**
@@ -256,6 +329,28 @@ public class VitessJDBCUrl {
             default:
                 return Topodata.TabletType.UNRECOGNIZED;
         }
+    }
+
+    /**
+     * Retrieves the value (if any) for a given key from a <code>Properties</code> object, regardless of the
+     * capitalization used in the actual key.  Used by the constructor for parsing SSL-related optional parameters,
+     * so that both the names and values of those parameters can be case-insensitive.
+     *
+     * @param properties
+     * @param key
+     * @return The first value found with a key that is a case-insensitive match for <code>key</code>, or <code>null</code> if there is no value found.
+     */
+    private static String caseInsensitiveKeyLookup(final Properties properties, final String key) {
+        if (properties == null || key == null) return null;
+        for (final Object uncastKeyBuffer : properties.keySet()) {
+            if (uncastKeyBuffer instanceof String) {
+                final String keyBuffer = (String) uncastKeyBuffer;
+                if (key != null && key.equalsIgnoreCase(keyBuffer)) {
+                    return properties.getProperty(keyBuffer);
+                }
+            }
+        }
+        return null;
     }
 
 }

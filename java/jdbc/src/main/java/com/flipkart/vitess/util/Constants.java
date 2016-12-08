@@ -99,6 +99,11 @@ public class Constants {
         public static final String USERNAME = "userName";
         public static final String EXECUTE_TYPE = "executeType";
         public static final String USE_SSL = "useSSL";
+        public static final String KEYSTORE = "keyStore";
+        public static final String KEYSTORE_PASSWORD = "keyStorePassword";
+        public static final String KEY_PASSWORD = "keyPassword";
+        public static final String TRUSTSTORE = "trustStore";
+        public static final String TRUSTSTORE_PASSWORD = "trustStorePassword";
     }
 
 
