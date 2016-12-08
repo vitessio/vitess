@@ -81,7 +81,13 @@
     },
     "main": {
       "tables": {
-        "main1": {},
+        "unsharded": {},
+        "unsharded_auto": {
+          "auto_increment": {
+            "column": "id",
+            "sequence": "seq"
+          }
+        },
         "seq": {
           "type": "sequence"
         }

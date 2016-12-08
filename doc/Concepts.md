@@ -144,7 +144,7 @@ to a newly designated master database so that replication can continue.
 
 ## Topology Service
 
-The *[Topology Service](https://github.com/youtube/vitess/blob/master/doc/TopologyService.md)*
+The *[Topology Service](/user-guide/topology-service.html)*
 is a set of backend processes running on different servers.
 Those servers store topology data and provide a distributed locking service.
 

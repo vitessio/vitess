@@ -15,6 +15,7 @@ var splitParamsTestCases = []struct {
 	SplitColumnNames    []sqlparser.ColIdent
 	NumRowsPerQueryPart int64
 	SplitCount          int64
+	Schema              map[string]*schema.Table
 
 	ExpectedErrorRegex  *regexp.Regexp
 	ExpectedSplitParams SplitParams
@@ -24,6 +25,7 @@ var splitParamsTestCases = []struct {
 		BindVariables:    map[string]interface{}{"foo": "123"},
 		SplitColumnNames: []sqlparser.ColIdent{sqlparser.NewColIdent("id")},
 		SplitCount:       100,
+		Schema:           getTestSchema(),
 
 		ExpectedSplitParams: SplitParams{
 			splitCount:          100,
@@ -37,6 +39,7 @@ var splitParamsTestCases = []struct {
 		BindVariables:       map[string]interface{}{"foo": "123"},
 		SplitColumnNames:    []sqlparser.ColIdent{sqlparser.NewColIdent("id")},
 		NumRowsPerQueryPart: 100,
+		Schema:              getTestSchema(),
 
 		ExpectedSplitParams: SplitParams{
 			splitCount:          10,
@@ -49,6 +52,7 @@ var splitParamsTestCases = []struct {
 		SQL:                 "select user_id from test_table",
 		BindVariables:       map[string]interface{}{"foo": "123"},
 		NumRowsPerQueryPart: 100,
+		Schema:              getTestSchema(),
 
 		ExpectedSplitParams: SplitParams{
 			splitCount:          10,
@@ -66,6 +70,7 @@ var splitParamsTestCases = []struct {
 		BindVariables:       map[string]interface{}{"foo": "123"},
 		SplitColumnNames:    []sqlparser.ColIdent{sqlparser.NewColIdent("id")},
 		NumRowsPerQueryPart: 100,
+		Schema:              getTestSchema(),
 
 		ExpectedErrorRegex: regexp.MustCompile("failed parsing query: 'not a valid query'"),
 	},
@@ -74,6 +79,7 @@ var splitParamsTestCases = []struct {
 		BindVariables:       map[string]interface{}{"foo": "123"},
 		SplitColumnNames:    []sqlparser.ColIdent{sqlparser.NewColIdent("id")},
 		NumRowsPerQueryPart: 100,
+		Schema:              getTestSchema(),
 
 		ExpectedErrorRegex: regexp.MustCompile("not a select statement"),
 	},
@@ -82,6 +88,7 @@ var splitParamsTestCases = []struct {
 		BindVariables:       map[string]interface{}{"foo": "123"},
 		SplitColumnNames:    []sqlparser.ColIdent{sqlparser.NewColIdent("id")},
 		NumRowsPerQueryPart: 100,
+		Schema:              getTestSchema(),
 
 		ExpectedErrorRegex: regexp.MustCompile("unsupported FROM clause"),
 	},
@@ -90,6 +97,7 @@ var splitParamsTestCases = []struct {
 		BindVariables:       map[string]interface{}{"foo": "123"},
 		SplitColumnNames:    []sqlparser.ColIdent{sqlparser.NewColIdent("id")},
 		NumRowsPerQueryPart: 100,
+		Schema:              getTestSchema(),
 
 		ExpectedErrorRegex: regexp.MustCompile("unsupported query"),
 	},
@@ -98,6 +106,7 @@ var splitParamsTestCases = []struct {
 		BindVariables:       map[string]interface{}{"foo": "123"},
 		SplitColumnNames:    []sqlparser.ColIdent{sqlparser.NewColIdent("id")},
 		NumRowsPerQueryPart: 100,
+		Schema:              getTestSchema(),
 
 		ExpectedErrorRegex: regexp.MustCompile("unsupported query"),
 	},
@@ -106,6 +115,7 @@ var splitParamsTestCases = []struct {
 		BindVariables:       map[string]interface{}{"foo": "123"},
 		SplitColumnNames:    []sqlparser.ColIdent{sqlparser.NewColIdent("id")},
 		NumRowsPerQueryPart: 100,
+		Schema:              getTestSchema(),
 
 		ExpectedErrorRegex: regexp.MustCompile("unsupported query"),
 	},
@@ -114,6 +124,7 @@ var splitParamsTestCases = []struct {
 		BindVariables:       map[string]interface{}{"foo": "123"},
 		SplitColumnNames:    []sqlparser.ColIdent{sqlparser.NewColIdent("id")},
 		NumRowsPerQueryPart: 100,
+		Schema:              getTestSchema(),
 
 		ExpectedErrorRegex: regexp.MustCompile("unsupported query"),
 	},
@@ -122,6 +133,7 @@ var splitParamsTestCases = []struct {
 		BindVariables:       map[string]interface{}{"foo": "123"},
 		SplitColumnNames:    []sqlparser.ColIdent{sqlparser.NewColIdent("id")},
 		NumRowsPerQueryPart: 100,
+		Schema:              getTestSchema(),
 
 		ExpectedErrorRegex: regexp.MustCompile("unsupported query"),
 	},
@@ -130,6 +142,7 @@ var splitParamsTestCases = []struct {
 		BindVariables:       map[string]interface{}{"foo": "123"},
 		SplitColumnNames:    []sqlparser.ColIdent{sqlparser.NewColIdent("id")},
 		NumRowsPerQueryPart: 100,
+		Schema:              getTestSchema(),
 
 		ExpectedErrorRegex: regexp.MustCompile("unsupported FROM clause"),
 	},
@@ -138,6 +151,7 @@ var splitParamsTestCases = []struct {
 		BindVariables:       map[string]interface{}{"foo": "123"},
 		SplitColumnNames:    []sqlparser.ColIdent{sqlparser.NewColIdent("id")},
 		NumRowsPerQueryPart: 100,
+		Schema:              getTestSchema(),
 
 		ExpectedErrorRegex: regexp.MustCompile("can't find table in schema"),
 	},
@@ -146,15 +160,34 @@ var splitParamsTestCases = []struct {
 		BindVariables:       map[string]interface{}{"foo": "123"},
 		SplitColumnNames:    []sqlparser.ColIdent{sqlparser.NewColIdent("missing_column")},
 		NumRowsPerQueryPart: 100,
-		ExpectedErrorRegex:  regexp.MustCompile("can't find split column"),
+		Schema:              getTestSchema(),
+
+		ExpectedErrorRegex: regexp.MustCompile("can't find split column"),
 	},
 	{ // Test NewSplitParamsGivenNumRowsPerQueryPart; split columns not a prefix of an index.
 		SQL:                 "select * from test_table",
 		BindVariables:       map[string]interface{}{"foo": "123"},
 		SplitColumnNames:    []sqlparser.ColIdent{sqlparser.NewColIdent("float32_col")},
 		NumRowsPerQueryPart: 100,
+		Schema:              getTestSchema(),
+
 		ExpectedErrorRegex: regexp.MustCompile(
 			"split-columns must be a prefix of the columns composing an index"),
+	},
+	{ // Test NewSplitParamsGivenNumRowsPerQueryPart; no split columns and no primary keys.
+		SQL:                 "select id from test_table",
+		BindVariables:       map[string]interface{}{"foo": "123"},
+		SplitColumnNames:    []sqlparser.ColIdent{},
+		NumRowsPerQueryPart: 100,
+		Schema: func() map[string]*schema.Table {
+			// Returns the testSchema without the primary key columns.
+			result := getTestSchema()
+			result["test_table"].PKColumns = []int{}
+			return result
+		}(),
+
+		ExpectedErrorRegex: regexp.MustCompile(
+			"no split columns where given and the queried table has no primary key columns"),
 	},
 }
 
@@ -168,14 +201,14 @@ func TestSplitParams(t *testing.T) {
 				testCase.BindVariables,
 				testCase.SplitColumnNames,
 				testCase.NumRowsPerQueryPart,
-				testSchema)
+				testCase.Schema)
 		} else {
 			splitParams, err = NewSplitParamsGivenSplitCount(
 				testCase.SQL,
 				testCase.BindVariables,
 				testCase.SplitColumnNames,
 				testCase.SplitCount,
-				testSchema)
+				testCase.Schema)
 		}
 		if testCase.ExpectedErrorRegex != nil {
 			if !testCase.ExpectedErrorRegex.MatchString(err.Error()) {

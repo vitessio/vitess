@@ -26,17 +26,18 @@ func newSuccessClient(fallback vtgateservice.VTGateService) *successClient {
 	}
 }
 
-func (c *successClient) Begin(ctx context.Context) (*vtgatepb.Session, error) {
+func (c *successClient) Begin(ctx context.Context, singledb bool) (*vtgatepb.Session, error) {
 	return &vtgatepb.Session{
 		InTransaction: true,
+		SingleDb:      singledb,
 	}, nil
 }
 
-func (c *successClient) Commit(ctx context.Context, session *vtgatepb.Session) error {
+func (c *successClient) Commit(ctx context.Context, twopc bool, session *vtgatepb.Session) error {
 	if session != nil && session.InTransaction {
 		return nil
 	}
-	return c.fallback.Commit(ctx, session)
+	return c.fallback.Commit(ctx, twopc, session)
 }
 
 func (c *successClient) Rollback(ctx context.Context, session *vtgatepb.Session) error {

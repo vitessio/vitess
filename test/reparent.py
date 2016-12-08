@@ -67,7 +67,7 @@ class TestReparent(unittest.TestCase):
     for t in [tablet_62344, tablet_62044, tablet_41983, tablet_31981]:
       t.reset_replication()
       t.set_semi_sync_enabled(master=False)
-      t.clean_dbs()
+      t.clean_dbs(include_vt=True)
     super(TestReparent, self).tearDown()
 
   _create_vt_insert_test = '''create table vt_insert_test (
@@ -558,8 +558,8 @@ class TestReparent(unittest.TestCase):
     self.assertTrue(
         health['tablet_externally_reparented_timestamp'] >= int(base_time))
 
-  # See if a missing slave can be safely reparented after the fact.
   def test_reparent_with_down_slave(self, shard_id='0'):
+    """See if a missing slave can be safely reparented after the fact."""
     utils.run_vtctl(['CreateKeyspace', 'test_keyspace'])
 
     # create the database so vttablets start, as they are serving
@@ -621,6 +621,134 @@ class TestReparent(unittest.TestCase):
     tablet.kill_tablets([tablet_62344, tablet_62044, tablet_41983,
                          tablet_31981])
 
+  def test_change_type_semi_sync(self):
+    utils.run_vtctl(['CreateKeyspace', 'test_keyspace'])
+
+    # Create new names for tablets, so this test is less confusing.
+    master = tablet_62344
+    replica = tablet_62044
+    rdonly1 = tablet_41983
+    rdonly2 = tablet_31981
+
+    # create the database so vttablets start, as they are serving
+    for t in [master, replica, rdonly1, rdonly2]:
+      t.create_db('vt_test_keyspace')
+
+    # Start up a soon-to-be master, one replica and two rdonly.
+    master.init_tablet('replica', 'test_keyspace', '0', start=True,
+                       wait_for_start=False)
+    replica.init_tablet('replica', 'test_keyspace', '0', start=True,
+                        wait_for_start=False)
+    rdonly1.init_tablet('rdonly', 'test_keyspace', '0', start=True,
+                        wait_for_start=False)
+    rdonly2.init_tablet('rdonly', 'test_keyspace', '0', start=True,
+                        wait_for_start=False)
+    for t in [master, replica, rdonly1, rdonly2]:
+      t.wait_for_vttablet_state('NOT_SERVING')
+
+    # Force the slaves to reparent assuming that all the datasets are
+    # identical.
+    utils.run_vtctl(['InitShardMaster', '-force', 'test_keyspace/0',
+                     master.tablet_alias], auto_log=True)
+    utils.validate_topology(ping_tablets=True)
+    self._check_master_tablet(master)
+
+    # Stop replication on rdonly1, to make sure when we make it
+    # replica it doesn't start again.
+    # Note we do a similar test for replica -> rdonly below.
+    utils.run_vtctl(['StopSlave', rdonly1.tablet_alias])
+
+    # Check semi-sync on slaves.
+    # The flag is only an indication of the value to use next time
+    # we turn replication on, so also check the status.
+    # rdonly1 is not replicating, so its status is off.
+    replica.check_db_var('rpl_semi_sync_slave_enabled', 'ON')
+    rdonly1.check_db_var('rpl_semi_sync_slave_enabled', 'OFF')
+    rdonly2.check_db_var('rpl_semi_sync_slave_enabled', 'OFF')
+    replica.check_db_status('rpl_semi_sync_slave_status', 'ON')
+    rdonly1.check_db_status('rpl_semi_sync_slave_status', 'OFF')
+    rdonly2.check_db_status('rpl_semi_sync_slave_status', 'OFF')
+
+    # Change replica to rdonly while replicating, should turn off semi-sync,
+    # and restart replication.
+    utils.run_vtctl(['ChangeSlaveType', replica.tablet_alias, 'rdonly'],
+                    auto_log=True)
+    replica.check_db_var('rpl_semi_sync_slave_enabled', 'OFF')
+    replica.check_db_status('rpl_semi_sync_slave_status', 'OFF')
+
+    # Change rdonly1 to replica, should turn on semi-sync, and not start rep.
+    utils.run_vtctl(['ChangeSlaveType', rdonly1.tablet_alias, 'replica'],
+                    auto_log=True)
+    rdonly1.check_db_var('rpl_semi_sync_slave_enabled', 'ON')
+    rdonly1.check_db_status('rpl_semi_sync_slave_status', 'OFF')
+    slave_io_running = 10
+    slave_sql_running = 11
+    s = rdonly1.mquery('', 'show slave status')
+    self.assertEqual(s[0][slave_io_running], 'No')
+    self.assertEqual(s[0][slave_sql_running], 'No')
+
+    # Now change from replica back to rdonly, make sure replication is
+    # still not enabled.
+    utils.run_vtctl(['ChangeSlaveType', rdonly1.tablet_alias, 'rdonly'],
+                    auto_log=True)
+    rdonly1.check_db_var('rpl_semi_sync_slave_enabled', 'OFF')
+    rdonly1.check_db_status('rpl_semi_sync_slave_status', 'OFF')
+    s = rdonly1.mquery('', 'show slave status')
+    self.assertEqual(s[0][slave_io_running], 'No')
+    self.assertEqual(s[0][slave_sql_running], 'No')
+
+    # Change rdonly2 to replica, should turn on semi-sync, and restart rep.
+    utils.run_vtctl(['ChangeSlaveType', rdonly2.tablet_alias, 'replica'],
+                    auto_log=True)
+    rdonly2.check_db_var('rpl_semi_sync_slave_enabled', 'ON')
+    rdonly2.check_db_status('rpl_semi_sync_slave_status', 'ON')
+
+    # Clean up.
+    tablet.kill_tablets([master, replica, rdonly1, rdonly2])
+
+  def test_reparent_doesnt_hang_if_master_fails(self):
+    """Makes sure a failed master populate doesn't hang."""
+    utils.run_vtctl(['CreateKeyspace', 'test_keyspace'])
+
+    # create the database so vttablets start, as they are serving
+    tablet_62344.create_db('vt_test_keyspace')
+    tablet_62044.create_db('vt_test_keyspace')
+    tablet_41983.create_db('vt_test_keyspace')
+    tablet_31981.create_db('vt_test_keyspace')
+
+    # Start up vttablet
+    for t in [tablet_62344, tablet_62044, tablet_31981, tablet_41983]:
+      t.init_tablet('replica', 'test_keyspace', '0', start=True,
+                    wait_for_start=False)
+
+    # wait for all tablets to start
+    for t in [tablet_62344, tablet_62044, tablet_31981, tablet_41983]:
+      t.wait_for_vttablet_state('NOT_SERVING')
+
+    # Force the slaves to reparent. Will create the _vt.reparent_journal table.
+    utils.run_vtctl(['InitShardMaster', '-force', 'test_keyspace/0',
+                     tablet_62344.tablet_alias])
+    utils.validate_topology(ping_tablets=True)
+
+    # Change the schema of the _vt.reparent_journal table, so that
+    # inserts into it will fail. That will make the master fail.
+    tablet_62344.mquery('_vt', 'ALTER TABLE reparent_journal'
+                        ' DROP COLUMN replication_position')
+
+    # Perform a planned reparent operation, the master will fail the
+    # insert.  The slaves should then abort right away. If this fails,
+    # the test will timeout.
+    _, stderr = utils.run_vtctl(['-wait-time', '3600s',
+                                 'PlannedReparentShard',
+                                 '-keyspace_shard', 'test_keyspace/0',
+                                 '-new_master', tablet_62044.tablet_alias],
+                                expect_fail=True)
+    self.assertIn('master failed to PopulateReparentJournal, canceling slaves',
+                  stderr)
+
+    # Clean up the tablets.
+    tablet.kill_tablets([tablet_62344, tablet_62044, tablet_41983,
+                         tablet_31981])
 
 if __name__ == '__main__':
   utils.main()

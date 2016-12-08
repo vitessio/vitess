@@ -5,13 +5,12 @@ import { Observable } from 'rxjs/Observable';
 import { Node, Action, Display, State, ActionState, ActionStyle } from './node';
 import { WorkflowComponent } from './workflow.component';
 import { Accordion, AccordionTab, Header } from 'primeng/primeng';
+import { FeaturesService } from '../api/features.service';
 import { WorkflowService } from '../api/workflow.service';
 import { DialogContent } from '../shared/dialog/dialog-content';
 import { DialogSettings } from '../shared/dialog/dialog-settings';
 import { PrepareResponse } from '../shared/prepare-response';
 import { NewWorkflowFlags } from '../shared/flags/workflow.flags';
-
-import { MenuItem } from 'primeng/primeng';
 
 @Component({
   selector: 'vt-tasks',
@@ -25,7 +24,7 @@ import { MenuItem } from 'primeng/primeng';
 })
 
 export class WorkflowListComponent implements OnDestroy, OnInit {
-  title = 'Running Workflows';
+  title = 'Workflows';
   redirect = '';
   workflows = [
     new Node('Horizontal Resharding Workflow', '/UU130429', [
@@ -60,10 +59,10 @@ export class WorkflowListComponent implements OnDestroy, OnInit {
   ];
   dialogSettings: DialogSettings;
   dialogContent: DialogContent;
-  private actions: MenuItem[];
-  private running = true;
 
-  constructor(private workflowService: WorkflowService) {}
+  constructor(
+    private featuresService: FeaturesService,
+    private workflowService: WorkflowService) {}
 
   ngOnInit() {
     this.workflowService.updates().subscribe(update => {
@@ -71,7 +70,6 @@ export class WorkflowListComponent implements OnDestroy, OnInit {
     });
     this.dialogContent = new DialogContent();
     this.dialogSettings = new DialogSettings();
-    this.actions = [{label: 'Toggle Running / Non-running Workflows', command: (event) => {this.toggleRunning(); }}];
 
     // Resharding Workflow Example
     this.updateWorkFlow('/UU130429', {
@@ -256,7 +254,7 @@ dolore magnam aliquam quaerat voluptatem.'});
 
       // Need to update the target now.
       target.update(workflowData);
-      if (workflowData.children !== null) {
+      if ('children' in workflowData && workflowData.children !== null) {
         target.children = [];
         for (let childData of workflowData.children) {
           let child = this.recursiveWorkflowBuilder(childData);
@@ -372,13 +370,13 @@ dolore magnam aliquam quaerat voluptatem.'});
   openNewDialog() {
     this.dialogSettings = new DialogSettings('Create', 'Create a new Workflow', '', 'There was a problem creating {{factory_name}}:');
     this.dialogSettings.setMessage('Created {{factory_name}}');
-    let flags = new NewWorkflowFlags().flags;
+    let flags = new NewWorkflowFlags(this.featuresService.workflows).flags;
     this.dialogContent = new DialogContent('factory_name', flags, {'factory_name': true}, this.prepareNew.bind(this), 'WorkflowCreate');
     this.dialogSettings.toggleModal();
   }
 
   prepareNew(flags) {
-    let newFlags = new NewWorkflowFlags().flags;
+    let newFlags = new NewWorkflowFlags(this.featuresService.workflows).flags;
     for (let key of Object.keys(flags)) {
       newFlags[key].value = flags[key].value;
     }
@@ -399,14 +397,12 @@ dolore magnam aliquam quaerat voluptatem.'});
     return !this.dialogSettings.pending;
   }
 
-  toggleRunning() {
-    if (this.running) {
-      this.running = false;
-      this.title = 'Stopped Workflows';
-    } else {
-      this.running = true;
-      this.title = 'Running Workflows';
-    }
+  isMaster(): boolean {
+    return this.redirect === '';
+  }
+
+  sendAction(path: string, name: string) {
+    this.workflowService.sendAction(path, name);
   }
 }
 

@@ -98,9 +98,9 @@ func (client *QueryClient) SetRollback(dtid string, transactionID int64) error {
 	return client.server.SetRollback(client.ctx, &client.target, dtid, client.transactionID)
 }
 
-// ResolveTransaction issues a ResolveTransaction to TabletServer.
-func (client *QueryClient) ResolveTransaction(dtid string) error {
-	return client.server.ResolveTransaction(client.ctx, &client.target, dtid)
+// ConcludeTransaction issues a ConcludeTransaction to TabletServer.
+func (client *QueryClient) ConcludeTransaction(dtid string) error {
+	return client.server.ConcludeTransaction(client.ctx, &client.target, dtid)
 }
 
 // ReadTransaction returns the transaction metadata.

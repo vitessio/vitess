@@ -235,24 +235,24 @@ func (c *errorClient) StreamExecuteKeyRanges(ctx context.Context, sql string, bi
 	return c.fallbackClient.StreamExecuteKeyRanges(ctx, sql, bindVariables, keyspace, keyRanges, tabletType, options, sendReply)
 }
 
-func (c *errorClient) Begin(ctx context.Context) (*vtgatepb.Session, error) {
+func (c *errorClient) Begin(ctx context.Context, singledb bool) (*vtgatepb.Session, error) {
 	// The client sends the error request through the callerid, as there are no other parameters
 	cid := callerid.EffectiveCallerIDFromContext(ctx)
 	request := callerid.GetPrincipal(cid)
 	if err := requestToError(request); err != nil {
 		return nil, err
 	}
-	return c.fallbackClient.Begin(ctx)
+	return c.fallbackClient.Begin(ctx, singledb)
 }
 
-func (c *errorClient) Commit(ctx context.Context, session *vtgatepb.Session) error {
+func (c *errorClient) Commit(ctx context.Context, twopc bool, session *vtgatepb.Session) error {
 	// The client sends the error request through the callerid, as there are no other parameters
 	cid := callerid.EffectiveCallerIDFromContext(ctx)
 	request := callerid.GetPrincipal(cid)
 	if err := requestToError(request); err != nil {
 		return err
 	}
-	return c.fallbackClient.Commit(ctx, session)
+	return c.fallbackClient.Commit(ctx, twopc, session)
 }
 
 func (c *errorClient) Rollback(ctx context.Context, session *vtgatepb.Session) error {
@@ -265,15 +265,7 @@ func (c *errorClient) Rollback(ctx context.Context, session *vtgatepb.Session) e
 	return c.fallbackClient.Rollback(ctx, session)
 }
 
-func (c *errorClient) SplitQuery(ctx context.Context, keyspace string, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int64) ([]*vtgatepb.SplitQueryResponse_Part, error) {
-	if err := requestToError(sql); err != nil {
-		return nil, err
-	}
-	return c.fallbackClient.SplitQuery(ctx, sql, keyspace, bindVariables, splitColumn, splitCount)
-}
-
-// TODO(erez): Rename after migration to SplitQuery V2 is done.
-func (c *errorClient) SplitQueryV2(
+func (c *errorClient) SplitQuery(
 	ctx context.Context,
 	keyspace string,
 	sql string,
@@ -286,7 +278,7 @@ func (c *errorClient) SplitQueryV2(
 	if err := requestToError(sql); err != nil {
 		return nil, err
 	}
-	return c.fallbackClient.SplitQueryV2(
+	return c.fallbackClient.SplitQuery(
 		ctx,
 		sql,
 		keyspace,

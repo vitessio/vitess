@@ -55,9 +55,19 @@ class Tablet(object):
   default_uid = 62344
   seq = 0
   tablets_running = 0
+  default_db_dba_config = {
+    'dba': {
+        'uname': 'vt_dba',
+        'charset': 'utf8'
+    },
+  }
   default_db_config = {
       'app': {
           'uname': 'vt_app',
+          'charset': 'utf8'
+      },
+      'allprivs': {
+          'uname': 'vt_allprivs',
           'charset': 'utf8'
       },
       'dba': {
@@ -142,7 +152,7 @@ class Tablet(object):
     if with_ports:
       args.extend(['-port', str(self.port),
                    '-mysql_port', str(self.mysql_port)])
-    self._add_dbconfigs(args)
+    self._add_dbconfigs(self.default_db_dba_config, args)
     if verbose:
       args.append('-alsologtostderr')
     args.extend(cmd)
@@ -167,7 +177,7 @@ class Tablet(object):
         '-tablet_uid', str(self.tablet_uid),
         '-mysql_port', str(self.mysql_port),
         '-socket_file', os.path.join(self.tablet_dir, 'mysqlctl.sock')]
-    self._add_dbconfigs(args)
+    self._add_dbconfigs(self.default_db_dba_config, args)
     if verbose:
       args.append('-alsologtostderr')
     args.extend(cmd)
@@ -195,8 +205,8 @@ class Tablet(object):
       return self.shutdown_mysql()
     return self.mysqlctl(['teardown', '-force'])
 
-  def remove_tree(self):
-    if utils.options.keep_logs:
+  def remove_tree(self, ignore_options=False):
+    if not ignore_options and utils.options.keep_logs:
       return
     try:
       shutil.rmtree(self.tablet_dir)
@@ -250,6 +260,7 @@ class Tablet(object):
     try:
       return cursor.fetchall()
     finally:
+      cursor.close()
       conn.close()
 
   def assert_table_count(self, dbname, table, n, where=''):
@@ -296,13 +307,14 @@ class Tablet(object):
     self.drop_db(name)
     self.mquery('', 'create database %s' % name)
 
-  def clean_dbs(self):
+  def clean_dbs(self, include_vt=False):
     logging.debug('mysql(%s): removing all databases', self.tablet_uid)
     rows = self.mquery('', 'show databases')
     for row in rows:
       dbname = row[0]
-      if dbname in ['information_schema', 'performance_schema', 'mysql', 'sys',
-                    '_vt']:
+      if dbname in ['information_schema', 'performance_schema', 'mysql', 'sys']:
+        continue
+      if dbname == '_vt' and not include_vt:
         continue
       self.drop_db(dbname)
 
@@ -324,6 +336,19 @@ class Tablet(object):
     conn, cursor = self.connect()
     try:
       cursor.execute("show variables like '%s'" % name)
+      return cursor.fetchone()
+    finally:
+      conn.close()
+
+  def check_db_status(self, name, value):
+    row = self.get_db_status(name)
+    if row[1] != value:
+      raise utils.TestError('status not correct', name, row)
+
+  def get_db_status(self, name):
+    conn, cursor = self.connect()
+    try:
+      cursor.execute("show status like '%s'" % name)
       return cursor.fetchone()
     finally:
       conn.close()
@@ -491,7 +516,7 @@ class Tablet(object):
     args.extend(['-port', '%s' % (port or self.port),
                  '-log_dir', environment.vtlogroot])
 
-    self._add_dbconfigs(args, repl_extra_flags)
+    self._add_dbconfigs(self.default_db_config, args, repl_extra_flags)
 
     if filecustomrules:
       args.extend(['-filecustomrules', filecustomrules])
@@ -594,14 +619,17 @@ class Tablet(object):
       timeout = utils.wait_step('waiting for socket files: %s' % str(wait_for),
                                 timeout, sleep_time=2.0)
 
-  def _add_dbconfigs(self, args, repl_extra_flags=None):
+  def _add_dbconfigs(self, cfg, args, repl_extra_flags=None):
     if repl_extra_flags is None:
       repl_extra_flags = {}
-    config = dict(self.default_db_config)
+    config = dict(cfg)
     if self.keyspace:
-      config['app']['dbname'] = self.dbname
-      config['repl']['dbname'] = self.dbname
-    config['repl'].update(repl_extra_flags)
+      if 'app' in config:
+        config['app']['dbname'] = self.dbname
+      if 'repl' in config:
+        config['repl']['dbname'] = self.dbname
+    if 'repl' in config:
+      config['repl'].update(repl_extra_flags)
     for key1 in config:
       for key2 in config[key1]:
         args.extend(['-db-config-' + key1 + '-' + key2, config[key1][key2]])

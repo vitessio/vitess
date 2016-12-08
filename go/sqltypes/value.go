@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/youtube/vitess/go/hack"
+
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
@@ -99,6 +100,8 @@ func BuildValue(goval interface{}) (v Value, err error) {
 		v = MakeTrusted(Datetime, []byte(goval.Format("2006-01-02 15:04:05")))
 	case Value:
 		v = goval
+	case *querypb.BindVariable:
+		return ValueFromBytes(goval.Type, goval.Value)
 	default:
 		return v, fmt.Errorf("unexpected type %T: %v", goval, goval)
 	}
@@ -119,6 +122,10 @@ func BuildConverted(typ querypb.Type, goval interface{}) (v Value, err error) {
 		case Value:
 			if goval.IsQuoted() {
 				return ValueFromBytes(typ, goval.Raw())
+			}
+		case *querypb.BindVariable:
+			if IsQuoted(goval.Type) {
+				return ValueFromBytes(typ, goval.Value)
 			}
 		}
 	}

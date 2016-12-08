@@ -4,7 +4,10 @@
 
 package sqlparser
 
-import "testing"
+import (
+	"bytes"
+	"testing"
+)
 
 func TestSelect(t *testing.T) {
 	tree, err := Parse("select * from t where a = 1")
@@ -116,5 +119,32 @@ func TestColIdent(t *testing.T) {
 	}
 	if !str.EqualString("ab") {
 		t.Error("str.EqualString(ab)=false, want true")
+	}
+}
+
+func TestHexDecode(t *testing.T) {
+	testcase := []struct {
+		in, out string
+	}{{
+		in:  "313233",
+		out: "123",
+	}, {
+		in:  "ag",
+		out: "encoding/hex: invalid byte: U+0067 'g'",
+	}, {
+		in:  "777",
+		out: "encoding/hex: odd length hex string",
+	}}
+	for _, tc := range testcase {
+		out, err := HexVal(tc.in).Decode()
+		if err != nil {
+			if err.Error() != tc.out {
+				t.Errorf("Decode(%q): %v, want %s", tc.in, err, tc.out)
+			}
+			continue
+		}
+		if !bytes.Equal(out, []byte(tc.out)) {
+			t.Errorf("Decode(%q): %s, want %s", tc.in, out, tc.out)
+		}
 	}
 }

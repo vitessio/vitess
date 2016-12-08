@@ -47,10 +47,10 @@ func TestWebSocket(t *testing.T) {
 	// Add a node, make sure we get the update.
 	tw := &testWorkflow{}
 	n := &Node{
-		workflow: tw,
+		Listener: tw,
 
 		Name:        "name",
-		Path:        "/uuid1",
+		PathName:    "uuid1",
 		Children:    []*Node{},
 		LastChanged: 143,
 	}
@@ -61,7 +61,8 @@ func TestWebSocket(t *testing.T) {
 	if err != nil {
 		t.Fatalf("WebSocket first read failed: %v", err)
 	}
-	if string(tree) != `{"nodes":[{"name":"name","path":"/uuid1","children":[],"lastChanged":143,"actions":null}]}` {
+	if !strings.Contains(string(tree), `"name":"name"`) ||
+		!strings.Contains(string(tree), `"path":"/uuid1"`) {
 		t.Errorf("unexpected first result: %v", string(tree))
 	}
 
@@ -86,9 +87,8 @@ func TestWebSocket(t *testing.T) {
 	}
 
 	// Send an update, make sure we see it.
-	n.Modify(func() {
-		n.Name = "name2"
-	})
+	n.Name = "name2"
+	n.BroadcastChanges(false /* updateChildren */)
 	_, tree, err = c.ReadMessage()
 	if err != nil {
 		t.Fatalf("WebSocket update read failed: %v", err)

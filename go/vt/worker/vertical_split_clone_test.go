@@ -167,7 +167,7 @@ func TestVerticalSplitClone(t *testing.T) {
 		// code is executed. But the intent here is not to throttle the test, hence
 		// the rate limit is set very high.
 		"-max_tps", "9999",
-		"-tables", "moving.*,view1",
+		"-tables", "/moving/,view1",
 		"-source_reader_count", "10",
 		// Each chunk pipeline will process 10 rows. To spread them out across 3
 		// write queries, set the max row count per query to 4. (10 = 4+4+2)

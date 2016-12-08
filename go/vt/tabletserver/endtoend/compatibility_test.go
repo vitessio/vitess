@@ -5,6 +5,7 @@
 package endtoend
 
 import (
+	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -14,11 +15,12 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver/endtoend/framework"
 )
 
+var point12 = "\x00\x00\x00\x00\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\xf0?\x00\x00\x00\x00\x00\x00\x00@"
+
 func TestCharaterSet(t *testing.T) {
 	qr, err := framework.NewClient().Execute("select * from vitess_test where intval=1", nil)
 	if err != nil {
-		t.Error(err)
-		return
+		t.Fatal(err)
 	}
 	want := sqltypes.Result{
 		Fields: []*querypb.Field{
@@ -73,13 +75,11 @@ func TestInts(t *testing.T) {
 		},
 	)
 	if err != nil {
-		t.Error(err)
-		return
+		t.Fatal(err)
 	}
 	qr, err := client.Execute("select * from vitess_ints where tiny = -128", nil)
 	if err != nil {
-		t.Error(err)
-		return
+		t.Fatal(err)
 	}
 	want := sqltypes.Result{
 		Fields: []*querypb.Field{
@@ -143,8 +143,7 @@ func TestInts(t *testing.T) {
 	// that a Uint64 is produced in spite of the stray binary flag.
 	qr, err = client.Execute("select max(bigu) from vitess_ints", nil)
 	if err != nil {
-		t.Error(err)
-		return
+		t.Fatal(err)
 	}
 	want = sqltypes.Result{
 		Fields: []*querypb.Field{
@@ -180,13 +179,11 @@ func TestFractionals(t *testing.T) {
 		},
 	)
 	if err != nil {
-		t.Error(err)
-		return
+		t.Fatal(err)
 	}
 	qr, err := client.Execute("select * from vitess_fracts where id = 1", nil)
 	if err != nil {
-		t.Error(err)
-		return
+		t.Fatal(err)
 	}
 	want := sqltypes.Result{
 		Fields: []*querypb.Field{
@@ -244,13 +241,11 @@ func TestStrings(t *testing.T) {
 		},
 	)
 	if err != nil {
-		t.Error(err)
-		return
+		t.Fatal(err)
 	}
 	qr, err := client.Execute("select * from vitess_strings where vb = 'a'", nil)
 	if err != nil {
-		t.Error(err)
-		return
+		t.Fatal(err)
 	}
 	want := sqltypes.Result{
 		Fields: []*querypb.Field{
@@ -312,7 +307,7 @@ func TestMiscTypes(t *testing.T) {
 	defer client.Execute("delete from vitess_misc", nil)
 
 	_, err := client.Execute(
-		"insert into vitess_misc values(:id, :b, :d, :dt, :t)",
+		"insert into vitess_misc values(:id, :b, :d, :dt, :t, point(1, 2))",
 		map[string]interface{}{
 			"id": 1,
 			"b":  "\x01",
@@ -322,14 +317,13 @@ func TestMiscTypes(t *testing.T) {
 		},
 	)
 	if err != nil {
-		t.Error(err)
-		return
+		t.Fatal(err)
 	}
 	qr, err := client.Execute("select * from vitess_misc where id = 1", nil)
 	if err != nil {
-		t.Error(err)
-		return
+		t.Fatal(err)
 	}
+	fmt.Printf("val: %q\n", qr.Rows[0][5].String())
 	want := sqltypes.Result{
 		Fields: []*querypb.Field{
 			{
@@ -347,6 +341,9 @@ func TestMiscTypes(t *testing.T) {
 			}, {
 				Name: "t",
 				Type: sqltypes.Time,
+			}, {
+				Name: "g",
+				Type: sqltypes.Geometry,
 			},
 		},
 		RowsAffected: 1,
@@ -357,6 +354,7 @@ func TestMiscTypes(t *testing.T) {
 				sqltypes.MakeTrusted(sqltypes.Date, []byte("2012-01-01")),
 				sqltypes.MakeTrusted(sqltypes.Datetime, []byte("2012-01-01 15:45:45")),
 				sqltypes.MakeTrusted(sqltypes.Time, []byte("15:45:45")),
+				sqltypes.MakeTrusted(sqltypes.Geometry, []byte(point12)),
 			},
 		},
 	}
@@ -369,8 +367,7 @@ func TestNull(t *testing.T) {
 	client := framework.NewClient()
 	qr, err := client.Execute("select null from dual", nil)
 	if err != nil {
-		t.Error(err)
-		return
+		t.Fatal(err)
 	}
 	want := sqltypes.Result{
 		Fields: []*querypb.Field{
@@ -413,8 +410,7 @@ func TestTypeLimits(t *testing.T) {
 	} {
 		_, err := client.Execute(query, nil)
 		if err != nil {
-			t.Error(err)
-			return
+			t.Fatal(err)
 		}
 	}
 
@@ -481,5 +477,48 @@ func TestTypeLimits(t *testing.T) {
 	_, err := client.Execute("insert into vitess_strings(vb) values('12345678901234567')", nil)
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
 		t.Errorf("Error: %v, want %s", err, want)
+	}
+}
+
+func TestJSONType(t *testing.T) {
+	// JSON is supported only after mysql57.
+	client := framework.NewClient()
+	if _, err := client.Execute("create table vitess_json(id int, val json, primary key(id))", nil); err != nil {
+		// If it's a syntax error, MySQL is an older version. Skip this test.
+		if strings.Contains(err.Error(), "syntax") {
+			return
+		}
+		t.Fatal(err)
+	}
+	defer client.Execute("drop table vitess_json", nil)
+
+	if _, err := client.Execute(`insert into vitess_json values(1, '{"foo": "bar"}')`, nil); err != nil {
+		t.Fatal(err)
+	}
+
+	qr, err := client.Execute("select id, val from vitess_json", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := sqltypes.Result{
+		Fields: []*querypb.Field{
+			{
+				Name: "id",
+				Type: sqltypes.Int32,
+			}, {
+				Name: "val",
+				Type: sqltypes.TypeJSON,
+			},
+		},
+		RowsAffected: 1,
+		Rows: [][]sqltypes.Value{
+			{
+				sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
+				sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte("{\"foo\": \"bar\"}")),
+			},
+		},
+	}
+	if !reflect.DeepEqual(*qr, want) {
+		t.Errorf("Execute: \n%#v, want \n%#v", *qr, want)
 	}
 }

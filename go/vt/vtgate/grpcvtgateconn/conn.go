@@ -374,9 +374,10 @@ func (conn *vtgateConn) StreamExecuteKeyspaceIds(ctx context.Context, query stri
 	}, nil
 }
 
-func (conn *vtgateConn) Begin(ctx context.Context) (interface{}, error) {
+func (conn *vtgateConn) Begin(ctx context.Context, singledb bool) (interface{}, error) {
 	request := &vtgatepb.BeginRequest{
 		CallerId: callerid.EffectiveCallerIDFromContext(ctx),
+		SingleDb: singledb,
 	}
 	response, err := conn.c.Begin(ctx, request)
 	if err != nil {
@@ -385,10 +386,11 @@ func (conn *vtgateConn) Begin(ctx context.Context) (interface{}, error) {
 	return response.Session, nil
 }
 
-func (conn *vtgateConn) Commit(ctx context.Context, session interface{}) error {
+func (conn *vtgateConn) Commit(ctx context.Context, session interface{}, twopc bool) error {
 	request := &vtgatepb.CommitRequest{
 		CallerId: callerid.EffectiveCallerIDFromContext(ctx),
 		Session:  session.(*vtgatepb.Session),
+		Atomic:   twopc,
 	}
 	_, err := conn.c.Commit(ctx, request)
 	return vterrors.FromGRPCError(err)
@@ -403,30 +405,16 @@ func (conn *vtgateConn) Rollback(ctx context.Context, session interface{}) error
 	return vterrors.FromGRPCError(err)
 }
 
-func (conn *vtgateConn) SplitQuery(ctx context.Context, keyspace string, query string, bindVars map[string]interface{}, splitColumn string, splitCount int64) ([]*vtgatepb.SplitQueryResponse_Part, error) {
-	q, err := querytypes.BoundQueryToProto3(query, bindVars)
-	if err != nil {
-		return nil, err
+func (conn *vtgateConn) ResolveTransaction(ctx context.Context, dtid string) error {
+	request := &vtgatepb.ResolveTransactionRequest{
+		CallerId: callerid.EffectiveCallerIDFromContext(ctx),
+		Dtid:     dtid,
 	}
-
-	request := &vtgatepb.SplitQueryRequest{
-		CallerId:            callerid.EffectiveCallerIDFromContext(ctx),
-		Keyspace:            keyspace,
-		Query:               q,
-		SplitColumn:         []string{splitColumn},
-		SplitCount:          splitCount,
-		NumRowsPerQueryPart: 0,
-		Algorithm:           querypb.SplitQueryRequest_EQUAL_SPLITS,
-		UseSplitQueryV2:     false,
-	}
-	response, err := conn.c.SplitQuery(ctx, request)
-	if err != nil {
-		return nil, vterrors.FromGRPCError(err)
-	}
-	return response.Splits, nil
+	_, err := conn.c.ResolveTransaction(ctx, request)
+	return vterrors.FromGRPCError(err)
 }
 
-func (conn *vtgateConn) SplitQueryV2(
+func (conn *vtgateConn) SplitQuery(
 	ctx context.Context,
 	keyspace string,
 	query string,
@@ -448,7 +436,6 @@ func (conn *vtgateConn) SplitQueryV2(
 		SplitCount:          splitCount,
 		NumRowsPerQueryPart: numRowsPerQueryPart,
 		Algorithm:           algorithm,
-		UseSplitQueryV2:     true,
 	}
 	response, err := conn.c.SplitQuery(ctx, request)
 	if err != nil {

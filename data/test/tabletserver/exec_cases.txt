@@ -152,10 +152,6 @@
   "FullQuery": "insert into b.a(eid, id) values (1, :a)"
 }
 
-# insert sub-select
-"insert into a (eid, id) values (select * from b)"
-"row subquery not supported for inserts"
-
 # insert with bind value
 "insert into a (eid, id) values (1, :a)"
 {
@@ -226,6 +222,15 @@
   "Reason": "COMPLEX_EXPR",
   "TableName": "a",
   "FullQuery": "insert into a(eid, id) values (1 + 1, 2)"
+}
+
+# complex
+"insert into a (eid, id) values (0x04, 2)"
+{
+  "PlanID": "PASS_DML",
+  "Reason": "COMPLEX_EXPR",
+  "TableName": "a",
+  "FullQuery": "insert into a(eid, id) values (0x04, 2)"
 }
 
 # no index
@@ -621,11 +626,28 @@
   "Subquery":"select eid, id from a where eid = 1 and eid = 2 limit :#maxLimit for update"
 }
 
-# sequence
+# single value sequence
 "select next value from seq"
 {
   "PlanID": "NEXTVAL",
-  "TableName": "seq"
+  "TableName": "seq",
+  "PKValues":[1]
+}
+
+# sequence with number
+"select next 10 values from seq"
+{
+  "PlanID": "NEXTVAL",
+  "TableName": "seq",
+  "PKValues":[10]
+}
+
+# sequence with bindvar
+"select next :a values from seq"
+{
+  "PlanID": "NEXTVAL",
+  "TableName": "seq",
+  "PKValues":[":a"]
 }
 
 # nextval on non-sequence table

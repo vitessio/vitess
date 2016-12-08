@@ -113,7 +113,7 @@ type TabletConn interface {
 	CreateTransaction(ctx context.Context, target *querypb.Target, dtid string, participants []*querypb.Target) error
 	StartCommit(ctx context.Context, target *querypb.Target, transactionID int64, dtid string) error
 	SetRollback(ctx context.Context, target *querypb.Target, dtid string, transactionID int64) error
-	ResolveTransaction(ctx context.Context, target *querypb.Target, dtid string) error
+	ConcludeTransaction(ctx context.Context, target *querypb.Target, dtid string) error
 	ReadTransaction(ctx context.Context, target *querypb.Target, dtid string) (metadata *querypb.TransactionMetadata, err error)
 
 	// Combo RPC calls: they execute both a Begin and another call.
@@ -124,12 +124,7 @@ type TabletConn interface {
 
 	// SplitQuery splits a query into equally sized smaller queries by
 	// appending primary key range clauses to the original query
-	SplitQuery(ctx context.Context, target *querypb.Target, query querytypes.BoundQuery, splitColumn string, splitCount int64) ([]querytypes.QuerySplit, error)
-
-	// SplitQuery splits a query into equally sized smaller queries by
-	// appending primary key range clauses to the original query
-	// TODO(erez): Remove SplitQuery and rename this to SplitQueryV2 once migration is done.
-	SplitQueryV2(
+	SplitQuery(
 		ctx context.Context,
 		target *querypb.Target,
 		query querytypes.BoundQuery,

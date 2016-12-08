@@ -22,32 +22,32 @@
 }
 
 # update unsharded
-"update main1 set val = 1"
+"update unsharded set val = 1"
 {
-  "Original": "update main1 set val = 1",
+  "Original": "update unsharded set val = 1",
   "Instructions": {
     "Opcode": "UpdateUnsharded",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
-    "Query": "update main1 set val = 1",
-    "Table": "main1"
+    "Query": "update unsharded set val = 1",
+    "Table": "unsharded"
   }
 }
 
 # delete unsharded
-"delete from main1"
+"delete from unsharded"
 {
-  "Original": "delete from main1",
+  "Original": "delete from unsharded",
   "Instructions": {
     "Opcode": "DeleteUnsharded",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
-    "Query": "delete from main1",
-    "Table": "main1"
+    "Query": "delete from unsharded",
+    "Table": "unsharded"
   }
 }
 
@@ -172,18 +172,116 @@
   }
 }
 
-# insert unsharded
-"insert into main1 values(1, 2)"
+# simple insert unsharded
+"insert into unsharded values(1, 2)"
 {
-  "Original": "insert into main1 values(1, 2)",
+  "Original": "insert into unsharded values(1, 2)",
   "Instructions": {
     "Opcode": "InsertUnsharded",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
-    "Query": "insert into main1 values (1, 2)",
-    "Table": "main1"
+    "Query": "insert into unsharded values (1, 2)",
+    "Table": "unsharded"
+  }
+}
+
+# insert unsharded with select
+"insert into unsharded select id from unsharded_auto"
+{
+  "Original": "insert into unsharded select id from unsharded_auto",
+  "Instructions": {
+    "Opcode": "InsertUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "insert into unsharded select id from unsharded_auto",
+    "Table": "unsharded"
+  }
+}
+
+# insert unsharded, invalid value for auto-inc
+"insert into unsharded_auto(id, val) values(1.0, 'aa')"
+"could not convert val: 1.0, pos: 0: strconv.ParseUint: parsing "1.0": invalid syntax"
+
+# insert unsharded, column present
+"insert into unsharded_auto(id, val) values(1, 'aa')"
+{
+  "Original": "insert into unsharded_auto(id, val) values(1, 'aa')",
+  "Instructions": {
+    "Opcode": "InsertUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "insert into unsharded_auto(id, val) values (:__seq0, 'aa')",
+    "Table": "unsharded_auto",
+    "Generate": {
+      "Opcode": "SelectUnsharded",
+      "Keyspace": {
+        "Name": "main",
+        "Sharded": false
+      },
+      "Query": "select next :n values from `seq`",
+      "Value": [
+        1
+      ]
+    }
+  }
+}
+
+# insert unsharded, column absent
+"insert into unsharded_auto(val) values('aa')"
+{
+  "Original": "insert into unsharded_auto(val) values('aa')",
+  "Instructions": {
+    "Opcode": "InsertUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "insert into unsharded_auto(val, id) values ('aa', :__seq0)",
+    "Table": "unsharded_auto",
+    "Generate": {
+      "Opcode": "SelectUnsharded",
+      "Keyspace": {
+        "Name": "main",
+        "Sharded": false
+      },
+      "Query": "select next :n values from `seq`",
+      "Value": [
+        null
+      ]
+    }
+  }
+}
+
+# insert unsharded, multi-val
+"insert into unsharded_auto(id, val) values(1, 'aa'), (null, 'bb')"
+{
+  "Original": "insert into unsharded_auto(id, val) values(1, 'aa'), (null, 'bb')",
+  "Instructions": {
+    "Opcode": "InsertUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "insert into unsharded_auto(id, val) values (:__seq0, 'aa'), (:__seq1, 'bb')",
+    "Table": "unsharded_auto",
+    "Generate": {
+      "Opcode": "SelectUnsharded",
+      "Keyspace": {
+        "Name": "main",
+        "Sharded": false
+      },
+      "Query": "select next :n values from `seq`",
+      "Value": [
+        1,
+        null
+      ]
+    }
   }
 }
 
@@ -218,7 +316,7 @@
         "Name": "main",
         "Sharded": false
       },
-      "Query": "select next value from `seq`",
+      "Query": "select next :n values from `seq`",
       "Value": [1]
     }
   }
@@ -247,7 +345,7 @@
         "Name": "main",
         "Sharded": false
       },
-      "Query": "select next value from `seq`",
+      "Query": "select next :n values from `seq`",
       "Value": [null]
     }
   }
@@ -276,7 +374,7 @@
         "Name": "main",
         "Sharded": false
       },
-      "Query": "select next value from `seq`",
+      "Query": "select next :n values from `seq`",
       "Value": [1]
     }
   }
@@ -303,7 +401,7 @@
         "Name": "main",
         "Sharded": false
       },
-      "Query": "select next value from `seq`",
+      "Query": "select next :n values from `seq`",
       "Value": [null]
     }
   }
@@ -355,7 +453,7 @@
         "Name": "main",
         "Sharded": false
       },
-      "Query": "select next value from `seq`",
+      "Query": "select next :n values from `seq`",
       "Value": [1,2]
     }
   }

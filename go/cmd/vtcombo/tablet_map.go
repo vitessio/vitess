@@ -417,9 +417,9 @@ func (itc *internalTabletConn) SetRollback(ctx context.Context, target *querypb.
 	return tabletconn.TabletErrorFromGRPC(vterrors.ToGRPCError(err))
 }
 
-// ResolveTransaction is part of tabletconn.TabletConn
-func (itc *internalTabletConn) ResolveTransaction(ctx context.Context, target *querypb.Target, dtid string) error {
-	err := itc.tablet.qsc.QueryService().ResolveTransaction(ctx, target, dtid)
+// ConcludeTransaction is part of tabletconn.TabletConn
+func (itc *internalTabletConn) ConcludeTransaction(ctx context.Context, target *querypb.Target, dtid string) error {
+	err := itc.tablet.qsc.QueryService().ConcludeTransaction(ctx, target, dtid)
 	return tabletconn.TabletErrorFromGRPC(vterrors.ToGRPCError(err))
 }
 
@@ -460,17 +460,7 @@ func (itc *internalTabletConn) Tablet() *topodatapb.Tablet {
 }
 
 // SplitQuery is part of tabletconn.TabletConn
-func (itc *internalTabletConn) SplitQuery(ctx context.Context, target *querypb.Target, query querytypes.BoundQuery, splitColumn string, splitCount int64) ([]querytypes.QuerySplit, error) {
-	splits, err := itc.tablet.qsc.QueryService().SplitQuery(ctx, target, query.Sql, query.BindVariables, splitColumn, splitCount)
-	if err != nil {
-		return nil, tabletconn.TabletErrorFromGRPC(vterrors.ToGRPCError(err))
-	}
-	return splits, nil
-}
-
-// SplitQueryV2 is part of tabletconn.TabletConn
-// TODO(erez): Rename to SplitQuery once the migration to SplitQuery V2 is done.
-func (itc *internalTabletConn) SplitQueryV2(
+func (itc *internalTabletConn) SplitQuery(
 	ctx context.Context,
 	target *querypb.Target,
 	query querytypes.BoundQuery,
@@ -479,7 +469,7 @@ func (itc *internalTabletConn) SplitQueryV2(
 	numRowsPerQueryPart int64,
 	algorithm querypb.SplitQueryRequest_Algorithm) ([]querytypes.QuerySplit, error) {
 
-	splits, err := itc.tablet.qsc.QueryService().SplitQueryV2(
+	splits, err := itc.tablet.qsc.QueryService().SplitQuery(
 		ctx,
 		target,
 		query.Sql,

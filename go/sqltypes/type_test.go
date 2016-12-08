@@ -101,6 +101,12 @@ func TestTypeValues(t *testing.T) {
 	}, {
 		defined:  Tuple,
 		expected: 28,
+	}, {
+		defined:  Geometry,
+		expected: 29 | flagIsQuoted,
+	}, {
+		defined:  TypeJSON,
+		expected: 30 | flagIsQuoted,
 	}}
 	for _, tcase := range testcases {
 		if int(tcase.defined) != tcase.expected {
@@ -239,6 +245,9 @@ func TestMySQLToType(t *testing.T) {
 		intype:  16,
 		outtype: Bit,
 	}, {
+		intype:  245,
+		outtype: TypeJSON,
+	}, {
 		intype:  246,
 		outtype: Decimal,
 	}, {
@@ -279,6 +288,9 @@ func TestMySQLToType(t *testing.T) {
 		intype:  254,
 		inflags: mysqlSet,
 		outtype: Set,
+	}, {
+		intype:  255,
+		outtype: Geometry,
 	}, {
 		// Binary flag must be ignored.
 		intype:  8,

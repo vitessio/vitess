@@ -8,8 +8,7 @@ script_root=`dirname "${BASH_SOURCE}"`
 source $script_root/env.sh
 
 service_type=${VTCTLD_SERVICE_TYPE:-'ClusterIP'}
-cell='test'
-VITESS_NAME=${VITESS_NAME:-'default'}
+cell=(`echo $CELLS | tr ',' ' '`) # ref to cell will get first element
 TEST_MODE=${TEST_MODE:-'0'}
 
 test_flags=`[[ $TEST_MODE -gt 0 ]] && echo '-enable_queries' || echo ''`

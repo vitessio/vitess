@@ -64,8 +64,8 @@ func (e *ErrorQueryService) SetRollback(ctx context.Context, target *querypb.Tar
 	return fmt.Errorf("ErrorQueryService does not implement any method")
 }
 
-// ResolveTransaction is part of QueryService interface
-func (e *ErrorQueryService) ResolveTransaction(ctx context.Context, target *querypb.Target, dtid string) (err error) {
+// ConcludeTransaction is part of QueryService interface
+func (e *ErrorQueryService) ConcludeTransaction(ctx context.Context, target *querypb.Target, dtid string) (err error) {
 	return fmt.Errorf("ErrorQueryService does not implement any method")
 }
 
@@ -100,13 +100,7 @@ func (e *ErrorQueryService) BeginExecuteBatch(ctx context.Context, target *query
 }
 
 // SplitQuery is part of QueryService interface
-// TODO(erez): Remove once the migration to SplitQuery V2 is done.
-func (e *ErrorQueryService) SplitQuery(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int64) ([]querytypes.QuerySplit, error) {
-	return nil, fmt.Errorf("ErrorQueryService does not implement any method")
-}
-
-// SplitQueryV2 is part of QueryService interface
-func (e *ErrorQueryService) SplitQueryV2(
+func (e *ErrorQueryService) SplitQuery(
 	ctx context.Context,
 	target *querypb.Target,
 	sql string,

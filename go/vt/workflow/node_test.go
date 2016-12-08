@@ -49,12 +49,11 @@ func TestNodeManagerWithRoot(t *testing.T) {
 	}
 
 	// Add a root level node, make sure we get notified.
-	// Can't really use NewToplevelNode because it takes a WorkflowInfo.
 	n := &Node{
-		workflow: tw,
+		Listener: tw,
 
 		Name:        "name",
-		Path:        "/uuid1",
+		PathName:    "uuid1",
 		Children:    []*Node{},
 		LastChanged: time.Now().Unix(),
 	}
@@ -67,13 +66,12 @@ func TestNodeManagerWithRoot(t *testing.T) {
 	}
 
 	// Modify root node, make sure we get notified.
-	n.Modify(func() {
-		n.Name = "name2"
-	})
+	n.Name = "name2"
+	n.BroadcastChanges(false /* updateChildren */)
 	result, ok = <-notifications
 	if !ok ||
 		!strings.Contains(string(result), `"name":"name2"`) ||
-		!strings.Contains(string(result), `"children":[]`) || // FIXME(alainjobart) this should be true, we're not changing the children.
+		strings.Contains(string(result), `"children":[]`) ||
 		strings.Contains(string(result), `"fullUpdate":true`) {
 		t.Errorf("unexpected notification: %v %v", ok, string(result))
 	}

@@ -47,10 +47,10 @@ func TestLongPolling(t *testing.T) {
 	// Add a node, make sure we get the update with the next poll
 	tw := &testWorkflow{}
 	n := &Node{
-		workflow: tw,
+		Listener: tw,
 
 		Name:        "name",
-		Path:        "/uuid1",
+		PathName:    "uuid1",
 		Children:    []*Node{},
 		LastChanged: 143,
 	}
@@ -68,7 +68,8 @@ func TestLongPolling(t *testing.T) {
 	if err != nil {
 		t.Fatalf("/poll/1 reading failed: %v", err)
 	}
-	if string(tree) != `{"nodes":[{"name":"name","path":"/uuid1","children":[],"lastChanged":143,"actions":null}]}` {
+	if !strings.Contains(string(tree), `"name":"name"`) ||
+		!strings.Contains(string(tree), `"path":"/uuid1"`) {
 		t.Errorf("unexpected first result: %v", string(tree))
 	}
 
@@ -95,9 +96,8 @@ func TestLongPolling(t *testing.T) {
 	}
 
 	// Send an update, make sure we see it.
-	n.Modify(func() {
-		n.Name = "name2"
-	})
+	n.Name = "name2"
+	n.BroadcastChanges(false /* updateChildren */)
 
 	u.Path = "/workflow/poll/1"
 	resp, err = http.Get(u.String())

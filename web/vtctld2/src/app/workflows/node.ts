@@ -1,9 +1,11 @@
 export const enum ActionState {
+  UNKNOWN,
   ENABLED,
   DISABLED,
 }
 
 export const enum ActionStyle {
+  UNKNOWN,
   NORMAL,
   WARNING, // Display warning dialog to confirm action with message
   WAITING, // Highlight to user that the process is waiting on action.
@@ -59,6 +61,7 @@ export const enum State {
 }
 
 export const enum Display { // Only relevant if State is RUNNING.
+  UNKNOWN,
   INDETERMINATE,  // Only relevant if State is RUNNING.
   DETERMINATE,
   NONE          // Even if Display is NONE progressMsg will still be shown.
@@ -95,10 +98,7 @@ export class Node {
       this.actions = [];
       if (changes.actions !== null) {
         for (let actionData of changes.actions) {
-          let message = actionData.message ? actionData.message : '';
-          if ('name' in actionData && 'state' in actionData && 'style' in actionData) {
-            this.actions.push(new Action(actionData.name, actionData.state, actionData.style, message));
-          }
+          this.actions.push(new Action(actionData.name, actionData.state, actionData.style, actionData.message));
         }
       }
     }

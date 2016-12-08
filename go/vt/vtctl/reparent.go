@@ -18,20 +18,21 @@ import (
 )
 
 var (
-	disableActiveReparents = flag.Bool("disable_active_reparents", false, "if set, do not allow active reparents. Use this to protect a cluster using external reparents.")
+	// DisableActiveReparents is a flag to disable active
+	// reparents for safety reasons. It is used in two places:
+	// 1. in this file to skip registering the commands.
+	// 2. in vtctld so it can be exported to the UI (different
+	// package, that's why it's exported). That way we can disable
+	// menu items there, using features.
+	DisableActiveReparents = flag.Bool("disable_active_reparents", false, "if set, do not allow active reparents. Use this to protect a cluster using external reparents.")
 )
 
 func init() {
 	servenv.OnRun(func() {
-		if *disableActiveReparents {
+		if *DisableActiveReparents {
 			return
 		}
 
-		addCommand("Tablets", command{
-			"DemoteMaster",
-			commandDemoteMaster,
-			"<tablet alias>",
-			"Demotes a master tablet."})
 		addCommand("Tablets", command{
 			"ReparentTablet",
 			commandReparentTablet,
@@ -54,25 +55,6 @@ func init() {
 			"-keyspace_shard=<keyspace/shard> -new_master=<tablet alias>",
 			"Reparents the shard to the new master. Assumes the old master is dead and not responsding."})
 	})
-}
-
-func commandDemoteMaster(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	if err := subFlags.Parse(args); err != nil {
-		return err
-	}
-	if subFlags.NArg() != 1 {
-		return fmt.Errorf("action DemoteMaster requires <tablet alias>")
-	}
-	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
-	if err != nil {
-		return err
-	}
-	tabletInfo, err := wr.TopoServer().GetTablet(ctx, tabletAlias)
-	if err != nil {
-		return err
-	}
-	_, err = wr.TabletManagerClient().DemoteMaster(ctx, tabletInfo.Tablet)
-	return err
 }
 
 func commandReparentTablet(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {

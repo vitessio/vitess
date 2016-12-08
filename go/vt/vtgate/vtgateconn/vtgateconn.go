@@ -23,6 +23,31 @@ var (
 	VtgateProtocol = flag.String("vtgate_protocol", "grpc", "how to talk to vtgate")
 )
 
+// Atomicity specifies atomicity level of a transaction.
+type Atomicity int
+
+const (
+	// AtomicityMulti is the default level. It allows distributed transactions
+	// with best effort commits. Partial commits are possible.
+	AtomicityMulti = Atomicity(iota)
+	// AtomicitySingle prevents a transaction from crossing the boundary of
+	// a single database.
+	AtomicitySingle
+	// Atomicity2PC allows distributed transactions, and performs 2PC commits.
+	Atomicity2PC
+)
+
+// WithAtomicity returns a context with the atomicity level set.
+func WithAtomicity(ctx context.Context, level Atomicity) context.Context {
+	return context.WithValue(ctx, Atomicity(0), level)
+}
+
+// AtomicityFromContext returns the atomicity of the context.
+func AtomicityFromContext(ctx context.Context) Atomicity {
+	v, _ := ctx.Value(Atomicity(0)).(Atomicity)
+	return v
+}
+
 // VTGateConn is the client API object to talk to vtgate.
 // It is constructed using the Dial method.
 // It can be used concurrently across goroutines.
@@ -111,16 +136,23 @@ func (conn *VTGateConn) StreamExecuteKeyspaceIds(ctx context.Context, query stri
 	return conn.impl.StreamExecuteKeyspaceIds(ctx, query, keyspace, keyspaceIds, bindVars, tabletType, options)
 }
 
+// ResolveTransaction resolves the 2pc transaction.
+func (conn *VTGateConn) ResolveTransaction(ctx context.Context, dtid string) error {
+	return conn.impl.ResolveTransaction(ctx, dtid)
+}
+
 // Begin starts a transaction and returns a VTGateTX.
 func (conn *VTGateConn) Begin(ctx context.Context) (*VTGateTx, error) {
-	session, err := conn.impl.Begin(ctx)
+	atomicity := AtomicityFromContext(ctx)
+	session, err := conn.impl.Begin(ctx, atomicity == AtomicitySingle)
 	if err != nil {
 		return nil, err
 	}
 
 	return &VTGateTx{
-		conn:    conn,
-		session: session,
+		conn:      conn,
+		session:   session,
+		atomicity: atomicity,
 	}, nil
 }
 
@@ -130,17 +162,10 @@ func (conn *VTGateConn) Close() {
 	conn.impl = nil
 }
 
-// SplitQuery splits a query into equally sized smaller queries by
-// appending primary key range clauses to the original query
-func (conn *VTGateConn) SplitQuery(ctx context.Context, keyspace string, query string, bindVars map[string]interface{}, splitColumn string, splitCount int64) ([]*vtgatepb.SplitQueryResponse_Part, error) {
-	return conn.impl.SplitQuery(ctx, keyspace, query, bindVars, splitColumn, splitCount)
-}
-
-// SplitQueryV2 splits a query into smaller queries. It is mostly used by batch job frameworks
+// SplitQuery splits a query into smaller queries. It is mostly used by batch job frameworks
 // such as MapReduce. See the documentation for the vtgate.SplitQueryRequest protocol buffer message
 // in 'proto/vtgate.proto'.
-// TODO(erez): Rename to SplitQuery after the migration to SplitQuery V2 is done.
-func (conn *VTGateConn) SplitQueryV2(
+func (conn *VTGateConn) SplitQuery(
 	ctx context.Context,
 	keyspace string,
 	query string,
@@ -151,7 +176,7 @@ func (conn *VTGateConn) SplitQueryV2(
 	algorithm querypb.SplitQueryRequest_Algorithm,
 ) ([]*vtgatepb.SplitQueryResponse_Part, error) {
 
-	return conn.impl.SplitQueryV2(
+	return conn.impl.SplitQuery(
 		ctx, keyspace, query, bindVars, splitColumns, splitCount, numRowsPerQueryPart, algorithm)
 }
 
@@ -178,8 +203,9 @@ func (conn *VTGateConn) UpdateStream(ctx context.Context, shard string, keyRange
 // VTGateTx defines an ongoing transaction.
 // It should not be concurrently used across goroutines.
 type VTGateTx struct {
-	conn    *VTGateConn
-	session interface{}
+	conn      *VTGateConn
+	session   interface{}
+	atomicity Atomicity
 }
 
 // Execute executes a query on vtgate within the current transaction.
@@ -257,7 +283,7 @@ func (tx *VTGateTx) Commit(ctx context.Context) error {
 	if tx.session == nil {
 		return fmt.Errorf("commit: not in transaction")
 	}
-	err := tx.conn.impl.Commit(ctx, tx.session)
+	err := tx.conn.impl.Commit(ctx, tx.session, tx.atomicity == Atomicity2PC)
 	tx.session = nil
 	return err
 }
@@ -313,21 +339,18 @@ type Impl interface {
 	StreamExecuteKeyspaceIds(ctx context.Context, query string, keyspace string, keyspaceIds [][]byte, bindVars map[string]interface{}, tabletType topodatapb.TabletType, options *querypb.ExecuteOptions) (sqltypes.ResultStream, error)
 
 	// Begin starts a transaction and returns a VTGateTX.
-	Begin(ctx context.Context) (interface{}, error)
+	Begin(ctx context.Context, singledb bool) (interface{}, error)
 	// Commit commits the current transaction.
-	Commit(ctx context.Context, session interface{}) error
+	Commit(ctx context.Context, session interface{}, twopc bool) error
 	// Rollback rolls back the current transaction.
 	Rollback(ctx context.Context, session interface{}) error
-
-	// SplitQuery splits a query into equally sized smaller queries by
-	// appending primary key range clauses to the original query.
-	SplitQuery(ctx context.Context, keyspace string, query string, bindVars map[string]interface{}, splitColumn string, splitCount int64) ([]*vtgatepb.SplitQueryResponse_Part, error)
+	// ResolveTransaction resolves the specified 2pc transaction.
+	ResolveTransaction(ctx context.Context, dtid string) error
 
 	// SplitQuery splits a query into smaller queries. It is mostly used by batch job frameworks
 	// such as MapReduce. See the documentation for the vtgate.SplitQueryRequest protocol buffer
 	// message in 'proto/vtgate.proto'.
-	// TODO(erez): Rename to SplitQuery after the migration to SplitQuery V2 is done.
-	SplitQueryV2(
+	SplitQuery(
 		ctx context.Context,
 		keyspace string,
 		query string,

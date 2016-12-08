@@ -11,9 +11,6 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
-	"strconv"
-
-	"github.com/youtube/vitess/go/sqltypes"
 )
 
 // Hash defines vindex that hashes an int64 to a KeyspaceId
@@ -63,41 +60,6 @@ func (vind *Hash) Verify(_ VCursor, id interface{}, ksid []byte) (bool, error) {
 // ReverseMap returns the id from ksid.
 func (vind *Hash) ReverseMap(_ VCursor, ksid []byte) (interface{}, error) {
 	return vunhash(ksid)
-}
-
-func getNumber(v interface{}) (int64, error) {
-	if val, ok := v.([]byte); ok {
-		v = string(val)
-	}
-	if val, ok := v.(sqltypes.Value); ok {
-		v = val.String()
-	}
-
-	switch v := v.(type) {
-	case int:
-		return int64(v), nil
-	case int32:
-		return int64(v), nil
-	case int64:
-		return v, nil
-	case uint:
-		return int64(v), nil
-	case uint32:
-		return int64(v), nil
-	case uint64:
-		return int64(v), nil
-	case string:
-		signed, err := strconv.ParseInt(v, 0, 64)
-		if err == nil {
-			return signed, nil
-		}
-		unsigned, err := strconv.ParseUint(v, 0, 64)
-		if err == nil {
-			return int64(unsigned), nil
-		}
-		return 0, fmt.Errorf("getNumber: %v", err)
-	}
-	return 0, fmt.Errorf("unexpected type for %v: %T", v, v)
 }
 
 var block3DES cipher.Block

@@ -35,7 +35,7 @@
 "unsupported: complex join in subqueries"
 
 # subquery keyspace different from outer query
-"select * from user where id in (select m from main1)"
+"select * from user where id in (select m from unsharded)"
 "unsupported: subquery keyspace different from outer query"
 
 # scatter subquery
@@ -139,11 +139,11 @@
 "unsupported: limits with scatter"
 
 # subqueries in update
-"update user set col = (select id from main1)"
+"update user set col = (select id from unsharded)"
 "unsupported: subqueries in DML"
 
 # subqueries in delete
-"delete from user where col = (select id from main1)"
+"delete from user where col = (select id from unsharded)"
 "unsupported: subqueries in DML"
 
 # update with no where clause
@@ -190,17 +190,49 @@
 "update music set id = 1 where id = 1"
 "unsupported: DML cannot change vindex column"
 
-# insert from select
+# unsharded insert from union
+"insert into unsharded select 1 from dual union select 1 from dual"
+"unsupported: union in insert"
+
+# unsharded insert with complex select
+"insert into unsharded select col from user limit 1"
+"unsupported: limits with scatter"
+
+# unsharded insert with complex join"
+"insert into unsharded select u.col from user u join user u1"
+"unsupported: complex join in insert"
+
+# unsharded insert with mismatched keyspaces"
+"insert into unsharded select col from user where id=1"
+"unsupported: cross-keyspace select in insert"
+
+# unsharded insert, unqualified names and auto-inc combined
+"insert into unsharded_auto select col from unsharded"
+"unsupported: auto-inc and select in insert"
+
+# unsharded inssert subquery in insert value
+"insert into unsharded values((select 1 from dual), 1)"
+"unsupported: subquery in insert values"
+
+# unsharded insert, no col list with auto-inc
+"insert into unsharded_auto values(1,1)"
+"column list required for tables with auto-inc columns"
+
+# unsharded insert, col list doesn't match values
+"insert into unsharded_auto(id, val) values(1)"
+"column list doesn't match values"
+
+# sharded insert from select
 "insert into user(id) select 1 from dual"
 "unsupported: insert into select"
 
-# insert with subquery as value
-"insert into user(id) values (select 1 from dual)"
-"unsupported: subqueries in insert"
+# sharded insert subquery in insert value
+"insert into user(id, val) values((select 1), 1)"
+"unsupported: subquery in insert values"
 
 # nextval not supported yet
 "select next value from user"
-"unsupported: NEXT VALUE construct"
+"unsupported: NEXT VALUES construct"
 
 # complex expression in parenthesis with limit not supported yet
 "select * from user where (id = 4 AND name ='abc') limit 5"

@@ -269,8 +269,6 @@ primary key (id)
       expected[200 + i] = 'row %d' % (200 + i)
     self.assertEqual(rows, expected)
 
-    self._test_vtclient_execute_shards_fallback()
-
   def _check_shards_count_in_srv_keyspace(self, shard_count):
     ks = utils.run_vtctl_json(['GetSrvKeyspace', 'test_nj', 'test_keyspace'])
     check_types = set([topodata_pb2.MASTER, topodata_pb2.REPLICA,
@@ -284,34 +282,6 @@ primary key (id)
                      'The number of expected shard_references in GetSrvKeyspace'
                      ' was not equal %d for all expected tablet types.'
                      % shard_count)
-
-  def _test_vtclient_execute_shards_fallback(self):
-    """Test per-shard mode of Go SQL driver (through vtclient)."""
-    for shard in [0, 1]:
-      id_val = (shard + 1) * 1000  # example: 1000, 2000
-      name_val = 'row %d' % id_val
-
-      # write
-      utils.vtgate.vtclient('insert into data(id, name) values (:v1, :v2)',
-                            bindvars=[id_val, name_val],
-                            keyspace='test_keyspace', shard=str(shard))
-
-      want = {
-          u'fields': [u'id', u'name'],
-          u'rows': [[unicode(id_val), unicode(name_val)]]
-          }
-      # read non-streaming
-      out, _ = utils.vtgate.vtclient(
-          'select * from data where id = :v1', bindvars=[id_val],
-          keyspace='test_keyspace', shard=str(shard), json_output=True)
-      self.assertEqual(out, want)
-
-      # read streaming
-      out, _ = utils.vtgate.vtclient(
-          'select * from data where id = :v1', bindvars=[id_val],
-          keyspace='test_keyspace', shard=str(shard), streaming=True,
-          json_output=True)
-      self.assertEqual(out, want)
 
 
 if __name__ == '__main__':

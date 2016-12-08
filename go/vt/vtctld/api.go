@@ -24,6 +24,7 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/vtctl"
+	"github.com/youtube/vitess/go/vt/workflow"
 	"github.com/youtube/vitess/go/vt/wrangler"
 
 	logutilpb "github.com/youtube/vitess/go/vt/proto/logutil"
@@ -31,7 +32,8 @@ import (
 )
 
 var (
-	localCell = flag.String("cell", "", "cell to use")
+	localCell        = flag.String("cell", "", "cell to use")
+	showTopologyCRUD = flag.Bool("vtctld_show_topology_crud", true, "Controls the display of the CRUD topology actions in the vtctld UI.")
 )
 
 // This file implements a REST-style API for the vtctld web interface.
@@ -170,6 +172,9 @@ func initAPI(ctx context.Context, ts topo.Server, actions *ActionRepository, rea
 			}
 			// Get the keyspace record.
 			k, err := ts.GetKeyspace(ctx, keyspace)
+			if err != nil {
+				return nil, err
+			}
 			// Pass the embedded proto directly or jsonpb will panic.
 			return k.Keyspace, err
 			// Perform an action on a keyspace.
@@ -220,6 +225,9 @@ func initAPI(ctx context.Context, ts topo.Server, actions *ActionRepository, rea
 
 		// Get the shard record.
 		si, err := ts.GetShard(ctx, keyspace, shard)
+		if err != nil {
+			return nil, err
+		}
 		// Pass the embedded proto directly or jsonpb will panic.
 		return si.Shard, err
 	})
@@ -336,6 +344,9 @@ func initAPI(ctx context.Context, ts topo.Server, actions *ActionRepository, rea
 
 		// Get the tablet record.
 		t, err := ts.GetTablet(ctx, tabletAlias)
+		if err != nil {
+			return nil, err
+		}
 		// Pass the embedded proto directly or jsonpb will panic.
 		return t.Tablet, err
 	})
@@ -506,5 +517,27 @@ func initAPI(ctx context.Context, ts topo.Server, actions *ActionRepository, rea
 
 		return schemamanager.Run(ctx,
 			schemamanager.NewUIController(req.SQL, req.Keyspace, w), executor)
+	})
+
+	// Features
+	handleAPI("features", func(w http.ResponseWriter, r *http.Request) error {
+		if err := acl.CheckAccessHTTP(r, acl.ADMIN); err != nil {
+			http.Error(w, "403 Forbidden", http.StatusForbidden)
+			return nil
+		}
+
+		resp := make(map[string]interface{})
+		resp["activeReparents"] = !*vtctl.DisableActiveReparents
+		resp["showStatus"] = *enableRealtimeStats
+		resp["showTopologyCRUD"] = *showTopologyCRUD
+		resp["showWorkflows"] = *workflowManagerInit
+		resp["workflows"] = workflow.AvailableFactories()
+		data, err := json.MarshalIndent(resp, "", "  ")
+		if err != nil {
+			return fmt.Errorf("json error: %v", err)
+		}
+		w.Header().Set("Content-Type", jsonContentType)
+		w.Write(data)
+		return nil
 	})
 }

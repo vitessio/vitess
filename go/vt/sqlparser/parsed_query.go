@@ -11,6 +11,8 @@ import (
 	"fmt"
 
 	"github.com/youtube/vitess/go/sqltypes"
+
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
 type bindLocation struct {
@@ -58,23 +60,26 @@ func EncodeValue(buf *bytes.Buffer, value interface{}) error {
 	switch bindVal := value.(type) {
 	case nil:
 		buf.WriteString("null")
+	case sqltypes.Value:
+		bindVal.EncodeSQL(buf)
 	case []sqltypes.Value:
-		for i := 0; i < len(bindVal); i++ {
+		for i, bv := range bindVal {
 			if i != 0 {
 				buf.WriteString(", ")
 			}
-			if err := EncodeValue(buf, bindVal[i]); err != nil {
-				return err
-			}
+			bv.EncodeSQL(buf)
 		}
 	case [][]sqltypes.Value:
-		for i := 0; i < len(bindVal); i++ {
+		for i, bvs := range bindVal {
 			if i != 0 {
 				buf.WriteString(", ")
 			}
 			buf.WriteByte('(')
-			if err := EncodeValue(buf, bindVal[i]); err != nil {
-				return err
+			for j, bv := range bvs {
+				if j != 0 {
+					buf.WriteString(", ")
+				}
+				bv.EncodeSQL(buf)
 			}
 			buf.WriteByte(')')
 		}
@@ -92,6 +97,27 @@ func EncodeValue(buf *bytes.Buffer, value interface{}) error {
 	case TupleEqualityList:
 		if err := bindVal.Encode(buf); err != nil {
 			return err
+		}
+	case *querypb.BindVariable:
+		if bindVal.Type == querypb.Type_TUPLE {
+			buf.WriteByte('(')
+			for i, bv := range bindVal.Values {
+				if i != 0 {
+					buf.WriteString(", ")
+				}
+				v, err := sqltypes.ValueFromBytes(bv.Type, bv.Value)
+				if err != nil {
+					return err
+				}
+				v.EncodeSQL(buf)
+			}
+			buf.WriteByte(')')
+		} else {
+			v, err := sqltypes.ValueFromBytes(bindVal.Type, bindVal.Value)
+			if err != nil {
+				return err
+			}
+			v.EncodeSQL(buf)
 		}
 	default:
 		v, err := sqltypes.BuildValue(bindVal)
@@ -132,9 +158,7 @@ func (tpl *TupleEqualityList) encodeAsIN(buf *bytes.Buffer) error {
 		if i != 0 {
 			buf.WriteString(", ")
 		}
-		if err := EncodeValue(buf, r); err != nil {
-			return err
-		}
+		r[0].EncodeSQL(buf)
 	}
 	buf.WriteByte(')')
 	return nil
@@ -152,9 +176,7 @@ func (tpl *TupleEqualityList) encodeAsEquality(buf *bytes.Buffer) error {
 			}
 			buf.WriteString(c)
 			buf.WriteString(" = ")
-			if err := EncodeValue(buf, r[j]); err != nil {
-				return err
-			}
+			r[j].EncodeSQL(buf)
 		}
 		buf.WriteByte(')')
 	}
@@ -172,18 +194,40 @@ func FetchBindVar(name string, bindVariables map[string]interface{}) (val interf
 	if !ok {
 		return nil, false, fmt.Errorf("missing bind var %s", name)
 	}
-	list, gotList := supplied.([]interface{})
+
 	if isList {
-		if !gotList {
-			return nil, false, fmt.Errorf("unexpected list arg type %T for key %s", supplied, name)
+		// two ways to have a list:
+		// - []interface{}
+		// - *querypb.BindVariable with Type == querypb.Type_TUPLE
+
+		if list, gotList := supplied.([]interface{}); gotList {
+			if len(list) == 0 {
+				return nil, false, fmt.Errorf("empty list supplied for %s", name)
+			}
+			return list, true, nil
 		}
-		if len(list) == 0 {
-			return nil, false, fmt.Errorf("empty list supplied for %s", name)
+
+		if bv, gotBindVariable := supplied.(*querypb.BindVariable); gotBindVariable {
+			if bv.Type == querypb.Type_TUPLE {
+				if len(bv.Values) == 0 {
+					return nil, false, fmt.Errorf("empty list supplied for %s", name)
+				}
+				return bv, true, nil
+			}
+
+			return nil, false, fmt.Errorf("unexpected list arg type *querypb.BindVariable(%v) for key %s", bv.Type, name)
 		}
-		return list, true, nil
+
+		return nil, false, fmt.Errorf("unexpected list arg type %T for key %s", supplied, name)
 	}
-	if gotList {
+
+	// check we didn't get a list.
+	if _, gotList := supplied.([]interface{}); gotList {
 		return nil, false, fmt.Errorf("unexpected arg type %T for key %s", supplied, name)
 	}
+	if bv, gotBindVariable := supplied.(*querypb.BindVariable); gotBindVariable && bv.Type == querypb.Type_TUPLE {
+		return nil, false, fmt.Errorf("unexpected arg type *querypb.BindVariable(TUPLE) for key %s", name)
+	}
+
 	return supplied, false, nil
 }

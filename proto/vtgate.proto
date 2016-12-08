@@ -21,6 +21,10 @@ message Session {
     int64 transaction_id = 2;
   }
   repeated ShardSession shard_sessions = 2;
+
+  // single_db specifies if the transaction should be restricted
+  // to a single database.
+  bool single_db = 3;
 }
 
 // ExecuteRequest is the payload to Execute.
@@ -482,6 +486,10 @@ message BeginRequest {
   // caller_id identifies the caller. This is the effective caller ID,
   // set by the application to further identify the caller.
   vtrpc.CallerID caller_id = 1;
+
+  // single_db specifies if the transaction should be restricted
+  // to a single database.
+  bool single_db = 2;
 }
 
 // BeginResponse is the returned value from Begin.
@@ -498,6 +506,10 @@ message CommitRequest {
 
   // session carries the current transaction data to commit.
   Session session = 2;
+
+  // atomic specifies if the commit should go through the
+  // 2PC workflow to ensure atomicity.
+  bool atomic = 3;
 }
 
 // CommitResponse is the returned value from Commit.
@@ -516,6 +528,20 @@ message RollbackRequest {
 
 // RollbackResponse is the returned value from Rollback.
 message RollbackResponse {
+}
+
+// ResolveTransactionRequest is the payload to ResolveTransaction.
+message ResolveTransactionRequest {
+  // caller_id identifies the caller. This is the effective caller ID,
+  // set by the application to further identify the caller.
+  vtrpc.CallerID caller_id = 1;
+
+  // dtid is the dtid of the transaction to be resolved.
+  string dtid = 2;
+}
+
+// ResolveTransactionResponse is the returned value from Rollback.
+message ResolveTransactionResponse {
 }
 
 // SplitQueryRequest is the payload to SplitQuery.
@@ -607,15 +633,10 @@ message SplitQueryRequest {
   //    This algorithm supports multiple split_column's of any type,
   //    but is slower than EQUAL_SPLITS.
   query.SplitQueryRequest.Algorithm algorithm = 7;
-
-  // Whether to use the new split-query code
-  // that supports multiple split-columns and
-  // the FULL_SCAN algorithm.
-  // This is a temporary field which aids
-  // in the migration of SplitQuery to the new
-  // code.
-  // TODO(erez): Remove this field after the migration
-  // to the SplitQuery version 2.
+  // TODO(erez): This field is no longer used by the server code.
+  // Remove this field after this new server code is released to prod.
+  // We must keep it for now, so that clients can still send it to the old
+  // server code currently in production.
   bool use_split_query_v2 = 8;
 }
 

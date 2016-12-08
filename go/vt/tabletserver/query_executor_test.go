@@ -666,16 +666,15 @@ func TestQueryExecutorPlanOther(t *testing.T) {
 
 func TestQueryExecutorPlanNextval(t *testing.T) {
 	db := setUpQueryExecutorTest()
-	selQuery := "select next_id, cache, increment from `seq` where id = 0 for update"
+	selQuery := "select next_id, cache from `seq` where id = 0 for update"
 	db.AddQuery(selQuery, &sqltypes.Result{
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{{
 			sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")),
 			sqltypes.MakeTrusted(sqltypes.Int64, []byte("3")),
-			sqltypes.MakeTrusted(sqltypes.Int64, []byte("2")),
 		}},
 	})
-	updateQuery := "update `seq` set next_id = 7 where id = 0"
+	updateQuery := "update `seq` set next_id = 4 where id = 0"
 	db.AddQuery(updateQuery, &sqltypes.Result{})
 	ctx := context.Background()
 	tsv := newTestTabletServer(ctx, enableStrict, db)
@@ -694,6 +693,88 @@ func TestQueryExecutorPlanNextval(t *testing.T) {
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{{
 			sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")),
+		}},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("qre.Execute() =\n%#v, want:\n%#v", got, want)
+	}
+
+	// At this point, NextVal==2, LastVal==4.
+	// So, a single value gen should not cause a db access.
+	db.DeleteQuery(selQuery)
+	qre = newTestQueryExecutor(ctx, tsv, "select next 1 values from seq", 0)
+	got, err = qre.Execute()
+	if err != nil {
+		t.Fatalf("qre.Execute() = %v, want nil", err)
+	}
+	want = &sqltypes.Result{
+		Fields: []*querypb.Field{{
+			Name: "nextval",
+			Type: sqltypes.Int64,
+		}},
+		RowsAffected: 1,
+		Rows: [][]sqltypes.Value{{
+			sqltypes.MakeTrusted(sqltypes.Int64, []byte("2")),
+		}},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("qre.Execute() =\n%#v, want:\n%#v", got, want)
+	}
+
+	// NextVal==3, LastVal==4
+	// Let's try the next 2 values.
+	db.AddQuery(selQuery, &sqltypes.Result{
+		RowsAffected: 1,
+		Rows: [][]sqltypes.Value{{
+			sqltypes.MakeTrusted(sqltypes.Int64, []byte("4")),
+			sqltypes.MakeTrusted(sqltypes.Int64, []byte("3")),
+		}},
+	})
+	updateQuery = "update `seq` set next_id = 7 where id = 0"
+	db.AddQuery(updateQuery, &sqltypes.Result{})
+	qre = newTestQueryExecutor(ctx, tsv, "select next 2 values from seq", 0)
+	got, err = qre.Execute()
+	if err != nil {
+		t.Fatalf("qre.Execute() = %v, want nil", err)
+	}
+	want = &sqltypes.Result{
+		Fields: []*querypb.Field{{
+			Name: "nextval",
+			Type: sqltypes.Int64,
+		}},
+		RowsAffected: 1,
+		Rows: [][]sqltypes.Value{{
+			sqltypes.MakeTrusted(sqltypes.Int64, []byte("3")),
+		}},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("qre.Execute() =\n%#v, want:\n%#v", got, want)
+	}
+
+	// NextVal==5, LastVal==7
+	// Let's try jumping a full cache range.
+	db.AddQuery(selQuery, &sqltypes.Result{
+		RowsAffected: 1,
+		Rows: [][]sqltypes.Value{{
+			sqltypes.MakeTrusted(sqltypes.Int64, []byte("7")),
+			sqltypes.MakeTrusted(sqltypes.Int64, []byte("3")),
+		}},
+	})
+	updateQuery = "update `seq` set next_id = 13 where id = 0"
+	db.AddQuery(updateQuery, &sqltypes.Result{})
+	qre = newTestQueryExecutor(ctx, tsv, "select next 6 values from seq", 0)
+	got, err = qre.Execute()
+	if err != nil {
+		t.Fatalf("qre.Execute() = %v, want nil", err)
+	}
+	want = &sqltypes.Result{
+		Fields: []*querypb.Field{{
+			Name: "nextval",
+			Type: sqltypes.Int64,
+		}},
+		RowsAffected: 1,
+		Rows: [][]sqltypes.Value{{
+			sqltypes.MakeTrusted(sqltypes.Int64, []byte("5")),
 		}},
 	}
 	if !reflect.DeepEqual(got, want) {
@@ -792,7 +873,7 @@ func TestQueryExecutorTableAclNoPermission(t *testing.T) {
 	tsv.StopService()
 
 	// enable Config.StrictTableAcl
-	tsv = newTestTabletServer(ctx, enableStrict|enableStrictTableAcl, db)
+	tsv = newTestTabletServer(ctx, enableStrict|enableStrictTableACL, db)
 	qre = newTestQueryExecutor(ctx, tsv, query, 0)
 	defer tsv.StopService()
 	checkPlanID(t, planbuilder.PlanPassSelect, qre.plan.PlanID)
@@ -845,7 +926,7 @@ func TestQueryExecutorTableAclExemptACL(t *testing.T) {
 	}
 
 	// enable Config.StrictTableAcl
-	tsv := newTestTabletServer(ctx, enableStrict|enableStrictTableAcl, db)
+	tsv := newTestTabletServer(ctx, enableStrict|enableStrictTableACL, db)
 	qre := newTestQueryExecutor(ctx, tsv, query, 0)
 	defer tsv.StopService()
 	checkPlanID(t, planbuilder.PlanPassSelect, qre.plan.PlanID)
@@ -924,7 +1005,7 @@ func TestQueryExecutorTableAclDryRun(t *testing.T) {
 		username,
 	}, ".")
 	// enable Config.StrictTableAcl
-	tsv := newTestTabletServer(ctx, enableStrict|enableStrictTableAcl, db)
+	tsv := newTestTabletServer(ctx, enableStrict|enableStrictTableACL, db)
 	tsv.qe.enableTableAclDryRun = true
 	qre := newTestQueryExecutor(ctx, tsv, query, 0)
 	defer tsv.StopService()
@@ -1065,8 +1146,10 @@ type executorFlags int64
 const (
 	noFlags      executorFlags = 0
 	enableStrict               = 1 << iota
-	enableStrictTableAcl
+	enableStrictTableACL
 	smallTxPool
+	noTwopc
+	shortTwopcAge
 )
 
 // newTestQueryExecutor uses a package level variable testTabletServer defined in tabletserver_test.go
@@ -1090,10 +1173,21 @@ func newTestTabletServer(ctx context.Context, flags executorFlags, db *fakesqldb
 	} else {
 		config.StrictMode = false
 	}
-	if flags&enableStrictTableAcl > 0 {
+	if flags&enableStrictTableACL > 0 {
 		config.StrictTableAcl = true
 	} else {
 		config.StrictTableAcl = false
+	}
+	if flags&noTwopc > 0 {
+		config.TwoPCEnable = false
+	} else {
+		config.TwoPCEnable = true
+	}
+	config.TwoPCCoordinatorAddress = "fake"
+	if flags&shortTwopcAge > 0 {
+		config.TwoPCAbandonAge = 0.5
+	} else {
+		config.TwoPCAbandonAge = 10
 	}
 	tsv := NewTabletServer(config)
 	testUtils := newTestUtils()
@@ -1112,7 +1206,7 @@ func newTransaction(tsv *TabletServer) int64 {
 }
 
 func newTestQueryExecutor(ctx context.Context, tsv *TabletServer, sql string, txID int64) *QueryExecutor {
-	logStats := newLogStats("TestQueryExecutor", ctx)
+	logStats := NewLogStats(ctx, "TestQueryExecutor")
 	return &QueryExecutor{
 		ctx:           ctx,
 		query:         sql,
@@ -1121,6 +1215,7 @@ func newTestQueryExecutor(ctx context.Context, tsv *TabletServer, sql string, tx
 		plan:          tsv.qe.schemaInfo.GetPlan(ctx, logStats, sql),
 		logStats:      logStats,
 		qe:            tsv.qe,
+		te:            tsv.te,
 	}
 }
 
@@ -1143,7 +1238,7 @@ func initQueryExecutorTestDB(db *fakesqldb.DB) {
 }
 
 func fetchRecordedQueries(qre *QueryExecutor) []string {
-	conn, err := qre.qe.txPool.Get(qre.transactionID, "for query")
+	conn, err := qre.te.txPool.Get(qre.transactionID, "for query")
 	if err != nil {
 		panic(err)
 	}
@@ -1175,6 +1270,7 @@ func getQueryExecutorSupportedQueries() map[string]*sqltypes.Result {
 		sqlTurnoffBinlog:                                     {},
 		fmt.Sprintf(sqlCreateSidecarDB, "_vt"):               {},
 		fmt.Sprintf(sqlCreateTableRedoLogTransaction, "_vt"): {},
+		fmt.Sprintf(sqlAlterTableRedoLogTransaction, "_vt"):  {},
 		fmt.Sprintf(sqlCreateTableRedoLogStatement, "_vt"):   {},
 		fmt.Sprintf(sqlCreateTableTransaction, "_vt"):        {},
 		fmt.Sprintf(sqlCreateTableParticipant, "_vt"):        {},
@@ -1390,5 +1486,6 @@ func getQueryExecutorSupportedQueries() map[string]*sqltypes.Result {
 				},
 			},
 		},
+		fmt.Sprintf(sqlReadAllRedo, "_vt", "_vt"): {},
 	}
 }

@@ -9,9 +9,11 @@ import (
 	"fmt"
 
 	"github.com/youtube/vitess/go/sqltypes"
-	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 	"github.com/youtube/vitess/go/vt/schema"
 	"github.com/youtube/vitess/go/vt/sqlparser"
+
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 // buildValueList builds the set of PK reference rows used to drive the next query.
@@ -95,19 +97,42 @@ func resolveListArg(col *schema.TableColumn, key string, bindVars map[string]int
 	if err != nil {
 		return nil, NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "%v", err)
 	}
-	list := val.([]interface{})
-	resolved := make([]sqltypes.Value, len(list))
-	for i, v := range list {
-		sqlval, err := sqltypes.BuildConverted(col.Type, v)
-		if err != nil {
-			return nil, NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "%v", err)
+
+	switch list := val.(type) {
+	case []interface{}:
+		resolved := make([]sqltypes.Value, len(list))
+		for i, v := range list {
+			sqlval, err := sqltypes.BuildConverted(col.Type, v)
+			if err != nil {
+				return nil, NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "%v", err)
+			}
+			if err = validateValue(col, sqlval); err != nil {
+				return nil, err
+			}
+			resolved[i] = sqlval
 		}
-		if err = validateValue(col, sqlval); err != nil {
-			return nil, err
+		return resolved, nil
+	case *querypb.BindVariable:
+		if list.Type != querypb.Type_TUPLE {
+			return nil, NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "expecting list for bind var %s: %v", key, list)
 		}
-		resolved[i] = sqlval
+		resolved := make([]sqltypes.Value, len(list.Values))
+		for i, v := range list.Values {
+			// We can use MakeTrusted as BuildConverted will check the value.
+			sqlval := sqltypes.MakeTrusted(v.Type, v.Value)
+			sqlval, err := sqltypes.BuildConverted(col.Type, sqlval)
+			if err != nil {
+				return nil, NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "%v", err)
+			}
+			if err = validateValue(col, sqlval); err != nil {
+				return nil, err
+			}
+			resolved[i] = sqlval
+		}
+		return resolved, nil
+	default:
+		return nil, NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "unknown type for bind variable %v", key)
 	}
-	return resolved, nil
 }
 
 // buildSecondaryList is used for handling ON DUPLICATE DMLs, or those that change the PK.
@@ -147,6 +172,26 @@ func resolveValue(col *schema.TableColumn, value interface{}, bindVars map[strin
 		return result, err
 	}
 	return result, nil
+}
+
+// resolveNumber extracts a number from a bind variable or sql value.
+func resolveNumber(value interface{}, bindVars map[string]interface{}) (int64, error) {
+	var err error
+	if v, ok := value.(string); ok {
+		value, _, err = sqlparser.FetchBindVar(v, bindVars)
+		if err != nil {
+			return 0, NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "%v", err)
+		}
+	}
+	v, err := sqltypes.BuildValue(value)
+	if err != nil {
+		return 0, NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "%v", err)
+	}
+	ret, err := v.ParseInt64()
+	if err != nil {
+		return 0, NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "%v", err)
+	}
+	return ret, nil
 }
 
 func validateRow(tableInfo *TableInfo, columnNumbers []int, row []sqltypes.Value) error {

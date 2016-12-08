@@ -850,7 +850,7 @@ func (wr *Wrangler) DeleteKeyspace(ctx context.Context, keyspace string, recursi
 		wr.Logger().Infof("Deleting all shards (and their tablets) in keyspace %v", keyspace)
 		for _, shard := range shards {
 			wr.Logger().Infof("Recursively deleting shard %v/%v", keyspace, shard)
-			if err := wr.DeleteShard(ctx, keyspace, shard, recursive); err != nil && err != topo.ErrNoNode {
+			if err := wr.DeleteShard(ctx, keyspace, shard, true /* recursive */, true /* evenIfServing */); err != nil && err != topo.ErrNoNode {
 				// Unlike the errors below in non-recursive steps, we don't want to
 				// continue if a DeleteShard fails. If we continue and delete the
 				// keyspace, the tablet records will be orphaned, since we'll

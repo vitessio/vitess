@@ -7,6 +7,7 @@ import com.youtube.vitess.proto.Query;
 
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
+import java.sql.Types;
 import java.util.List;
 import java.util.logging.Logger;
 
@@ -99,7 +100,102 @@ public class VitessResultSetMetaData implements ResultSetMetaData {
 
     public String getColumnTypeName(int column) throws SQLException {
         Query.Field field = getField(column);
-        return field.getType().toString();
+
+        int vitessTypeValue = field.getTypeValue();
+        int jdbcType = MysqlDefs.vitesstoMySqlType.get(field.getType());
+
+        switch (vitessTypeValue) {
+            case Query.Type.BIT_VALUE:
+                return "BIT";
+
+            case Query.Type.DECIMAL_VALUE:
+                return "DECIMAL";
+
+            case Query.Type.INT8_VALUE:
+                return "TINYINT";
+            case Query.Type.UINT8_VALUE:
+                return "TINYINT UNSIGNED";
+
+            case Query.Type.INT16_VALUE:
+                return "SMALLINT";
+            case Query.Type.UINT16_VALUE:
+                return "SMALLINT UNSIGNED";
+
+            case Query.Type.INT24_VALUE:
+                return "MEDIUMINT";
+            case Query.Type.UINT24_VALUE:
+                return "MEDIUMINT UNSIGNED";
+
+            case Query.Type.INT32_VALUE:
+                return "INT";
+            case Query.Type.UINT32_VALUE:
+                return "INT UNSIGNED";
+
+            case Query.Type.INT64_VALUE:
+                return "BIGINT";
+            case Query.Type.UINT64_VALUE:
+                return "BIGINT UNSIGNED";
+
+            case Query.Type.FLOAT32_VALUE:
+                return "FLOAT";
+
+            case Query.Type.FLOAT64_VALUE:
+                return "DOUBLE";
+
+            case Query.Type.NULL_TYPE_VALUE:
+                return "NULL";
+
+            case Query.Type.TIMESTAMP_VALUE:
+                return "TIMESTAMP";
+
+            case Query.Type.DATE_VALUE:
+                return "DATE";
+
+            case Query.Type.TIME_VALUE:
+                return "TIME";
+
+            case Query.Type.DATETIME_VALUE:
+                return "DATETIME";
+
+            case Query.Type.BLOB_VALUE:
+                return "BLOB";
+
+            case Query.Type.TEXT_VALUE:
+                return "TEXT";
+
+            case Query.Type.VARCHAR_VALUE:
+                return "VARCHAR";
+
+            case Query.Type.VARBINARY_VALUE:
+                if (jdbcType == Types.VARBINARY) {
+                    return "VARBINARY";
+                }
+                return "VARCHAR";
+
+            case Query.Type.BINARY_VALUE:
+                if (jdbcType == Types.BINARY) {
+                    return "BINARY";
+                }
+                return "CHAR";
+
+            case Query.Type.CHAR_VALUE:
+                return "CHAR";
+
+            case Query.Type.ENUM_VALUE:
+                return "ENUM";
+
+            case Query.Type.YEAR_VALUE:
+                return "YEAR";
+
+            case Query.Type.SET_VALUE:
+                return "SET";
+
+            case Query.Type.TUPLE_VALUE:
+                return "TUPLE";
+
+            default:
+                return "UNKNOWN";
+        }
     }
 
     public boolean isReadOnly(int column) throws SQLException {

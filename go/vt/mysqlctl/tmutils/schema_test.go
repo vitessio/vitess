@@ -338,7 +338,7 @@ func TestFilterTables(t *testing.T) {
 					basicTable1,
 				},
 			},
-			tables:    []string{"("},
+			tables:    []string{"/(/"},
 			wantError: errors.New("cannot compile regexp ( for table: error parsing regexp: missing closing ): `(`"),
 		},
 		{
@@ -348,8 +348,67 @@ func TestFilterTables(t *testing.T) {
 					basicTable1,
 				},
 			},
-			excludeTables: []string{"("},
+			excludeTables: []string{"/(/"},
 			wantError:     errors.New("cannot compile regexp ( for excludeTable: error parsing regexp: missing closing ): `(`"),
+		},
+		{
+			desc: "table substring doesn't match without regexp (include)",
+			input: &tabletmanagerdatapb.SchemaDefinition{
+				TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+					basicTable1,
+					basicTable2,
+				},
+			},
+			tables: []string{basicTable1.Name[1:]},
+			want: &tabletmanagerdatapb.SchemaDefinition{
+				TableDefinitions: []*tabletmanagerdatapb.TableDefinition{},
+			},
+		},
+		{
+			desc: "table substring matches with regexp (include)",
+			input: &tabletmanagerdatapb.SchemaDefinition{
+				TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+					basicTable1,
+					basicTable2,
+				},
+			},
+			tables: []string{"/" + basicTable1.Name[1:] + "/"},
+			want: &tabletmanagerdatapb.SchemaDefinition{
+				TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+					basicTable1,
+				},
+			},
+		},
+		{
+			desc: "table substring doesn't match without regexp (exclude)",
+			input: &tabletmanagerdatapb.SchemaDefinition{
+				TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+					basicTable1,
+					basicTable2,
+				},
+			},
+			excludeTables: []string{basicTable1.Name[1:]},
+			want: &tabletmanagerdatapb.SchemaDefinition{
+				TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+					basicTable1,
+					basicTable2,
+				},
+			},
+		},
+		{
+			desc: "table substring matches with regexp (exclude)",
+			input: &tabletmanagerdatapb.SchemaDefinition{
+				TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+					basicTable1,
+					basicTable2,
+				},
+			},
+			excludeTables: []string{"/" + basicTable1.Name[1:] + "/"},
+			want: &tabletmanagerdatapb.SchemaDefinition{
+				TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+					basicTable2,
+				},
+			},
 		},
 	}
 

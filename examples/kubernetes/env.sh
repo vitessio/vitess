@@ -5,7 +5,13 @@
 # KUBECTL='gcloud container kubectl' for a while. Now that most of our
 # use cases just need KUBECTL=kubectl, we'll make that the default.
 KUBECTL=${KUBECTL:-kubectl}
+
+# Kuberentes namespace for Vitess and components.
 VITESS_NAME=${VITESS_NAME:-'default'}
+
+# CELLS should be a comma separated list of cells
+# the first cell listed will become local to vtctld.
+CELLS=${CELLS:-'test'}
 
 # This should match the nodePort in vtctld-service.yaml
 VTCTLD_PORT=${VTCTLD_PORT:-30001}

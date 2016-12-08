@@ -46,8 +46,8 @@ func main() {
 	defer exit.Recover()
 	defer logutil.Flush()
 
-	dbconfigFlags := dbconfigs.AppConfig | dbconfigs.AllPrivsConfig | dbconfigs.DbaConfig |
-		dbconfigs.FilteredConfig | dbconfigs.ReplConfig
+	// mysqlctld only starts and stops mysql, only needs dba.
+	dbconfigFlags := dbconfigs.DbaConfig
 	dbconfigs.RegisterFlags(dbconfigFlags)
 	flag.Parse()
 

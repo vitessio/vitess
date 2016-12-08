@@ -386,6 +386,11 @@ func (rb *route) SetLimit(limit *sqlparser.Limit) {
 	rb.Select.Limit = limit
 }
 
+// PushOrderByNull updates the comments & 'for update' sections of the route.
+func (rb *route) PushOrderByNull() {
+	rb.Select.OrderBy = sqlparser.OrderBy{&sqlparser.Order{Expr: &sqlparser.NullVal{}}}
+}
+
 // PushMisc updates the comments & 'for update' sections of the route.
 func (rb *route) PushMisc(sel *sqlparser.Select) {
 	rb.Select.Comments = sel.Comments

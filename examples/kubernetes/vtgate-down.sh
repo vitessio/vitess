@@ -4,12 +4,10 @@
 
 set -e
 
-VITESS_NAME=${VITESS_NAME:-'default'}
-CELLS=${CELLS:-'test'}
-cells=`echo $CELLS | tr ',' ' '`
-
 script_root=`dirname "${BASH_SOURCE}"`
 source $script_root/env.sh
+
+cells=`echo $CELLS | tr ',' ' '`
 
 for cell in $cells; do
   echo "Stopping vtgate replicationcontroller in cell $cell..."

@@ -547,7 +547,6 @@ class VtGate(object):
         '-log_dir', environment.vtlogroot,
         '-srv_topo_cache_ttl', cache_ttl,
         '-tablet_protocol', protocols_flavor().tabletconn_protocol(),
-        '-tablet_grpc_combine_begin_execute',
     ]
     if l2vtgates:
       args.extend([
@@ -625,7 +624,7 @@ class VtGate(object):
     """Returns the vars for this process."""
     return get_vars(self.port)
 
-  def vtclient(self, sql, keyspace=None, shard=None, tablet_type='master',
+  def vtclient(self, sql, keyspace=None, tablet_type='master',
                bindvars=None, streaming=False,
                verbose=False, raise_on_error=True, json_output=False):
     """Uses the vtclient binary to send a query to vtgate."""
@@ -638,8 +637,6 @@ class VtGate(object):
       args.append('-json')
     if keyspace:
       args.extend(['-keyspace', keyspace])
-    if shard:
-      args.extend(['-shard', shard])
     if bindvars:
       args.extend(['-bind_variables', json.dumps(bindvars)])
     if streaming:
@@ -743,7 +740,6 @@ class L2VtGate(object):
         '-healthcheck_conn_timeout', healthcheck_conn_timeout,
         '-tablet_protocol', protocols_flavor().tabletconn_protocol(),
         '-gateway_implementation', vtgate_gateway_flavor().flavor(),
-        '-tablet_grpc_combine_begin_execute',
     ]
     args.extend(vtgate_gateway_flavor().flags(cell=cell, tablets=tablets))
     if tablet_types_to_wait:
@@ -1227,7 +1223,7 @@ class Vtctld(object):
     if protocols_flavor().vtctl_client_protocol() == 'grpc':
       self.grpc_port = environment.reserve_ports(1)
 
-  def start(self, enable_schema_change_dir=False):
+  def start(self, enable_schema_change_dir=False, extra_flags=None):
     # Note the vtctld2 web dir is set to 'dist', which is populated
     # when a toplevel 'make build_web' is run. This is meant to test
     # the development version of the UI. The real checked-in app is in
@@ -1247,7 +1243,10 @@ class Vtctld(object):
         '-vtgate_protocol', protocols_flavor().vtgate_protocol(),
         '-workflow_manager_init',
         '-workflow_manager_use_election',
+        '-schema_swap_delay_between_errors', '1s',
     ] + environment.topo_server().flags()
+    if extra_flags:
+      args += extra_flags
     # TODO(b/26388813): Remove the next two lines once vtctl WaitForDrain is
     #                   integrated in the vtctl MigrateServed* commands.
     args.extend(['--wait_for_drain_sleep_rdonly', '0s'])

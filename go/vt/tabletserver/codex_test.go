@@ -130,7 +130,7 @@ func TestCodexBuildValuesList(t *testing.T) {
 		t.Fatalf("got %v, want %v", got, want)
 	}
 
-	// list arg
+	// list arg two values
 	// e.g. where pk1 = 1 and pk2 IN ::list
 	bindVars = map[string]interface{}{
 		"list": []interface{}{
@@ -146,6 +146,41 @@ func TestCodexBuildValuesList(t *testing.T) {
 	want = [][]sqltypes.Value{
 		{pk1Val, pk2Val},
 		{pk1Val, pk2Val2},
+	}
+	got, _ = buildValueList(&tableInfo, pkValues, bindVars)
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+
+	// list arg two values, using *querypb.BindVariable of type TUPLE
+	// e.g. where pk1 = 1 and pk2 IN ::list
+	bindVars = map[string]interface{}{
+		"list": &querypb.BindVariable{
+			Type: querypb.Type_TUPLE,
+			Values: []*querypb.Value{
+				{
+					Type:  querypb.Type_VARBINARY,
+					Value: []byte("abc"),
+				},
+				{
+					Type:  querypb.Type_VARBINARY,
+					Value: []byte("xyz"),
+				},
+			},
+		},
+	}
+	pkValues = []interface{}{
+		pk1Val,
+		"::list",
+	}
+	// want [[1 abc][1 xyz]]
+	want = [][]sqltypes.Value{
+		{pk1Val, pk2Val},
+		{pk1Val, pk2Val2},
+	}
+	got, err = buildValueList(&tableInfo, pkValues, bindVars)
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %v / %v, want %v", got, err, want)
 	}
 
 	// list arg one value
@@ -163,7 +198,6 @@ func TestCodexBuildValuesList(t *testing.T) {
 	want = [][]sqltypes.Value{
 		{pk1Val, pk2Val},
 	}
-
 	got, _ = buildValueList(&tableInfo, pkValues, bindVars)
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %v, want %v", got, want)
@@ -178,7 +212,6 @@ func TestCodexBuildValuesList(t *testing.T) {
 		"::list",
 	}
 	wantErr = "error: empty list supplied for list"
-
 	got, err = buildValueList(&tableInfo, pkValues, bindVars)
 	if err == nil || !strings.Contains(err.Error(), wantErr) {
 		t.Fatalf("got %v, want %v", err, wantErr)
@@ -193,7 +226,6 @@ func TestCodexBuildValuesList(t *testing.T) {
 		":list",
 	}
 	wantErr = "error: unexpected arg type []interface {} for key list"
-
 	got, err = buildValueList(&tableInfo, pkValues, bindVars)
 	if err == nil || !strings.Contains(err.Error(), wantErr) {
 		t.Fatalf("got %v, want %v", err, wantErr)
@@ -271,6 +303,51 @@ func TestCodexResolveListArg(t *testing.T) {
 		t.Fatalf("should not get an error, but got error: %v", err)
 	}
 	testUtils.checkEqual(t, []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Int64, []byte("10"))}, result)
+}
+
+func TestResolveNumber(t *testing.T) {
+	testcases := []struct {
+		v      interface{}
+		bv     map[string]interface{}
+		out    int64
+		outErr string
+	}{{
+		v: ":a",
+		bv: map[string]interface{}{
+			"a": 10,
+		},
+		out: int64(10),
+	}, {
+		v: "::a",
+		bv: map[string]interface{}{
+			"a": []interface{}{10},
+		},
+		outErr: "error: unexpected type []interface {}: [10]",
+	}, {
+		v:      ":a",
+		outErr: "error: missing bind var a",
+	}, {
+		v:      make(chan int),
+		outErr: "error: unexpected type chan int",
+	}, {
+		v:   int64(1),
+		out: int64(1),
+	}, {
+		v:      1.2,
+		outErr: "error: strconv.ParseInt",
+	}}
+	for _, tc := range testcases {
+		got, err := resolveNumber(tc.v, tc.bv)
+		if err != nil {
+			if !strings.Contains(err.Error(), tc.outErr) {
+				t.Errorf("resolveNumber(%#v, %v): %v, must contain %s", tc.v, tc.bv, err, tc.outErr)
+			}
+			continue
+		}
+		if got != tc.out {
+			t.Errorf("resolveNumber(%#v, %v): %d, want %d", tc.v, tc.bv, got, tc.out)
+		}
+	}
 }
 
 func TestCodexBuildSecondaryList(t *testing.T) {

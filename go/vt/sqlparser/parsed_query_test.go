@@ -9,6 +9,8 @@ import (
 	"testing"
 
 	"github.com/youtube/vitess/go/sqltypes"
+
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
 func TestParsedQuery(t *testing.T) {
@@ -47,6 +49,13 @@ func TestParsedQuery(t *testing.T) {
 				"id": make([]int, 1),
 			},
 			"unexpected type []int: [0]",
+		}, {
+			"simple sqltypes.Value",
+			"select * from a where id1 = :id1",
+			map[string]interface{}{
+				"id1": sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")),
+			},
+			"select * from a where id1 = 1",
 		}, {
 			"list inside bind vars",
 			"select * from a where id in (:vals)",
@@ -171,6 +180,78 @@ func TestParsedQuery(t *testing.T) {
 				},
 			},
 			"values don't match column count",
+		}, {
+			"simple *querypb.BindVariable",
+			"select * from a where id1 = :id",
+			map[string]interface{}{
+				"id": &querypb.BindVariable{
+					Type:  querypb.Type_INT64,
+					Value: []byte("123"),
+				},
+			},
+			"select * from a where id1 = 123",
+		}, {
+			"null *querypb.BindVariable",
+			"select * from a where id1 = :id",
+			map[string]interface{}{
+				"id": &querypb.BindVariable{
+					Type: querypb.Type_NULL_TYPE,
+				},
+			},
+			"select * from a where id1 = null",
+		}, {
+			"tuple *querypb.BindVariable",
+			"select * from a where id in ::vals",
+			map[string]interface{}{
+				"vals": &querypb.BindVariable{
+					Type: querypb.Type_TUPLE,
+					Values: []*querypb.Value{
+						{
+							Type:  querypb.Type_INT64,
+							Value: []byte("1"),
+						},
+						{
+							Type:  querypb.Type_VARCHAR,
+							Value: []byte("aa"),
+						},
+					},
+				},
+			},
+			"select * from a where id in (1, 'aa')",
+		}, {
+			"list bind vars 0 arguments",
+			"select * from a where id in ::vals",
+			map[string]interface{}{
+				"vals": &querypb.BindVariable{
+					Type: querypb.Type_TUPLE,
+				},
+			},
+			"empty list supplied for vals",
+		}, {
+			"non-list bind var supplied",
+			"select * from a where id in ::vals",
+			map[string]interface{}{
+				"vals": &querypb.BindVariable{
+					Type:  querypb.Type_INT64,
+					Value: []byte("1"),
+				},
+			},
+			"unexpected list arg type *querypb.BindVariable(INT64) for key vals",
+		}, {
+			"list bind var for non-list",
+			"select * from a where id = :vals",
+			map[string]interface{}{
+				"vals": &querypb.BindVariable{
+					Type: querypb.Type_TUPLE,
+					Values: []*querypb.Value{
+						{
+							Type:  querypb.Type_INT64,
+							Value: []byte("1"),
+						},
+					},
+				},
+			},
+			"unexpected arg type *querypb.BindVariable(TUPLE) for key vals",
 		},
 	}
 

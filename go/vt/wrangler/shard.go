@@ -111,7 +111,9 @@ func (wr *Wrangler) SetShardTabletControl(ctx context.Context, keyspace, shard s
 
 // DeleteShard will do all the necessary changes in the topology server
 // to entirely remove a shard.
-func (wr *Wrangler) DeleteShard(ctx context.Context, keyspace, shard string, recursive bool) error {
+func (wr *Wrangler) DeleteShard(ctx context.Context, keyspace, shard string, recursive, evenIfServing bool) error {
+	// Read the Shard object. If it's not there, try to clean up
+	// the topology anyway.
 	shardInfo, err := wr.ts.GetShard(ctx, keyspace, shard)
 	if err != nil {
 		if err == topo.ErrNoNode {
@@ -121,32 +123,87 @@ func (wr *Wrangler) DeleteShard(ctx context.Context, keyspace, shard string, rec
 		return err
 	}
 
-	tabletMap, err := wr.ts.GetTabletMapForShard(ctx, keyspace, shard)
-	if err != nil {
-		return err
-	}
-	if recursive {
-		wr.Logger().Infof("Deleting all tablets in shard %v/%v", keyspace, shard)
-		for tabletAlias := range tabletMap {
-			// We don't care about scrapping or updating the replication graph,
-			// because we're about to delete the entire replication graph.
-			wr.Logger().Infof("Deleting tablet %v", topoproto.TabletAliasString(&tabletAlias))
-			if err := wr.TopoServer().DeleteTablet(ctx, &tabletAlias); err != nil && err != topo.ErrNoNode {
-				// Unlike the errors below in non-recursive steps, we don't want to
-				// continue if a DeleteTablet fails. If we continue and delete the
-				// replication graph, the tablet record will be orphaned, since we'll
-				// no longer know it belongs to this shard.
-				//
-				// If the problem is temporary, or resolved externally, re-running
-				// DeleteShard will skip over tablets that were already deleted.
-				return fmt.Errorf("can't delete tablet %v: %v", topoproto.TabletAliasString(&tabletAlias), err)
-			}
-		}
-	} else if len(tabletMap) > 0 {
-		return fmt.Errorf("shard %v/%v still has %v tablets; use -recursive or remove them manually", keyspace, shard, len(tabletMap))
+	// Check the Serving map for the shard, we don't want to
+	// remove a serving shard if not absolutely sure.
+	if !evenIfServing && len(shardInfo.ServedTypes) > 0 {
+		return fmt.Errorf("shard %v/%v is still serving, cannot delete it, use even_if_serving flag if needed", keyspace, shard)
 	}
 
-	// remove the replication graph and serving graph in each cell
+	// Go through all the cells.
+	for _, cell := range shardInfo.Cells {
+		var aliases []*topodatapb.TabletAlias
+
+		// Get the ShardReplication object for that cell. Try
+		// to find all tablets that may belong to our shard.
+		sri, err := wr.ts.GetShardReplication(ctx, cell, keyspace, shard)
+		switch err {
+		case topo.ErrNoNode:
+			// No ShardReplication object. It means the
+			// topo is inconsistent. Let's read all the
+			// tablets for that cell, and if we find any
+			// in our keyspace / shard, either abort or
+			// try to delete them.
+			aliases, err = wr.ts.GetTabletsByCell(ctx, cell)
+			if err != nil {
+				return fmt.Errorf("GetTabletsByCell(%v) failed: %v", cell, err)
+			}
+		case nil:
+			// We found a ShardReplication object. We
+			// trust it to have all tablet records.
+			aliases = make([]*topodatapb.TabletAlias, len(sri.Nodes))
+			for i, n := range sri.Nodes {
+				aliases[i] = n.TabletAlias
+			}
+		default:
+			return fmt.Errorf("GetShardReplication(%v, %v, %v) failed: %v", cell, keyspace, shard, err)
+		}
+
+		// Get the corresponding Tablet records. Note
+		// GetTabletMap ignores ErrNoNode, and it's good for
+		// our purpose, it means a tablet was deleted but is
+		// still referenced.
+		tabletMap, err := wr.ts.GetTabletMap(ctx, aliases)
+		if err != nil {
+			return fmt.Errorf("GetTabletMap() failed: %v", err)
+		}
+
+		// Remove the tablets that don't belong to our
+		// keyspace/shard from the map.
+		for a, ti := range tabletMap {
+			if ti.Keyspace != keyspace || ti.Shard != shard {
+				delete(tabletMap, a)
+			}
+		}
+
+		// Now see if we need to DeleteTablet, and if we can, do it.
+		if len(tabletMap) > 0 {
+			if !recursive {
+				return fmt.Errorf("shard %v/%v still has %v tablets in cell %v; use -recursive or remove them manually", keyspace, shard, len(tabletMap), cell)
+			}
+
+			wr.Logger().Infof("Deleting all tablets in shard %v/%v cell %v", keyspace, shard, cell)
+			for tabletAlias := range tabletMap {
+				// We don't care about scrapping or updating the replication graph,
+				// because we're about to delete the entire replication graph.
+				wr.Logger().Infof("Deleting tablet %v", topoproto.TabletAliasString(&tabletAlias))
+				if err := wr.TopoServer().DeleteTablet(ctx, &tabletAlias); err != nil && err != topo.ErrNoNode {
+					// We don't want to continue if a DeleteTablet fails for
+					// any good reason (other than missing tablet, in which
+					// case it's just a topology server inconsistency we can
+					// ignore). If we continue and delete the replication
+					// graph, the tablet record will be orphaned, since
+					// we'll no longer know it belongs to this shard.
+					//
+					// If the problem is temporary, or resolved externally, re-running
+					// DeleteShard will skip over tablets that were already deleted.
+					return fmt.Errorf("can't delete tablet %v: %v", topoproto.TabletAliasString(&tabletAlias), err)
+				}
+			}
+		}
+	}
+
+	// Try to remove the replication graph and serving graph in each cell,
+	// regardless of its existence.
 	for _, cell := range shardInfo.Cells {
 		if err := wr.ts.DeleteShardReplication(ctx, cell, keyspace, shard); err != nil && err != topo.ErrNoNode {
 			wr.Logger().Warningf("Cannot delete ShardReplication in cell %v for %v/%v: %v", cell, keyspace, shard, err)

@@ -15,6 +15,7 @@ import (
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/stats"
+	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/dbconnpool"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 
@@ -35,6 +36,11 @@ const (
   primary key(dtid),
   index state_time_idx(state, time_created)
 	) engine=InnoDB`
+
+	// Due to possible legacy issues, do not modify the create
+	// tablet statement. Alter it instead.
+	sqlAlterTableRedoLogTransaction = `alter table ` + "`%s`" + `.redo_log_transaction
+	modify state enum('Prepared', 'Failed')`
 
 	sqlCreateTableRedoLogStatement = `create table if not exists ` + "`%s`" + `.redo_log_statement(
   dtid varbinary(512),
@@ -58,15 +64,22 @@ const (
 	shard varchar(256),
   primary key(dtid, id)
 	) engine=InnoDB`
+
+	sqlReadAllRedo = `select t.dtid, t.state, s.id, s.statement from ` + "`%s`" + `.redo_log_transaction t
+  join ` + "`%s`" + `.redo_log_statement s on t.dtid = s.dtid
+	where t.state = 'Prepared' order by t.dtid, s.id`
 )
 
 // TwoPC performs 2PC metadata management (MM) functions.
 type TwoPC struct {
+	readPool *ConnPool
+
 	insertRedoTx   *sqlparser.ParsedQuery
 	insertRedoStmt *sqlparser.ParsedQuery
+	updateRedoTx   *sqlparser.ParsedQuery
 	deleteRedoTx   *sqlparser.ParsedQuery
 	deleteRedoStmt *sqlparser.ParsedQuery
-	readPrepared   string
+	readAllRedo    string
 
 	insertTransaction  *sqlparser.ParsedQuery
 	insertParticipants *sqlparser.ParsedQuery
@@ -75,32 +88,34 @@ type TwoPC struct {
 	deleteParticipants *sqlparser.ParsedQuery
 	readTransaction    *sqlparser.ParsedQuery
 	readParticipants   *sqlparser.ParsedQuery
+	readAbandoned      *sqlparser.ParsedQuery
 }
 
 // NewTwoPC creates a TwoPC variable.
-func NewTwoPC() *TwoPC {
-	return &TwoPC{}
+func NewTwoPC(readPool *ConnPool) *TwoPC {
+	return &TwoPC{readPool: readPool}
 }
 
-// Open starts the 2PC MM service. If the metadata database or tables
+// Init initializes TwoPC. If the metadata database or tables
 // are not present, they are created.
-func (tpc *TwoPC) Open(sidecarDBName string, dbaparams *sqldb.ConnParams) {
+func (tpc *TwoPC) Init(sidecarDBName string, dbaparams *sqldb.ConnParams) error {
 	conn, err := dbconnpool.NewDBConnection(dbaparams, stats.NewTimings(""))
 	if err != nil {
-		panic(err)
+		return err
 	}
 	defer conn.Close()
 	statements := []string{
 		sqlTurnoffBinlog,
 		fmt.Sprintf(sqlCreateSidecarDB, sidecarDBName),
 		fmt.Sprintf(sqlCreateTableRedoLogTransaction, sidecarDBName),
+		fmt.Sprintf(sqlAlterTableRedoLogTransaction, sidecarDBName),
 		fmt.Sprintf(sqlCreateTableRedoLogStatement, sidecarDBName),
 		fmt.Sprintf(sqlCreateTableTransaction, sidecarDBName),
 		fmt.Sprintf(sqlCreateTableParticipant, sidecarDBName),
 	}
 	for _, s := range statements {
 		if _, err := conn.ExecuteFetch(s, 0, false); err != nil {
-			panic(NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, err.Error()))
+			return NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, err.Error())
 		}
 	}
 	tpc.insertRedoTx = buildParsedQuery(
@@ -109,17 +124,16 @@ func (tpc *TwoPC) Open(sidecarDBName string, dbaparams *sqldb.ConnParams) {
 	tpc.insertRedoStmt = buildParsedQuery(
 		"insert into `%s`.redo_log_statement(dtid, id, statement) values %a",
 		sidecarDBName, ":vals")
+	tpc.updateRedoTx = buildParsedQuery(
+		"update `%s`.redo_log_transaction set state = %a where dtid = %a",
+		sidecarDBName, ":state", ":dtid")
 	tpc.deleteRedoTx = buildParsedQuery(
 		"delete from `%s`.redo_log_transaction where dtid = %a",
 		sidecarDBName, ":dtid")
 	tpc.deleteRedoStmt = buildParsedQuery(
 		"delete from `%s`.redo_log_statement where dtid = %a",
 		sidecarDBName, ":dtid")
-	tpc.readPrepared = fmt.Sprintf(
-		"select s.dtid, s.id, s.statement from `%s`.redo_log_transaction t "+
-			"join `%s`.redo_log_statement s on t.dtid = s.dtid "+
-			"where t.state = 'Prepared' order by s.dtid, s.id",
-		sidecarDBName, sidecarDBName)
+	tpc.readAllRedo = fmt.Sprintf(sqlReadAllRedo, sidecarDBName, sidecarDBName)
 
 	tpc.insertTransaction = buildParsedQuery(
 		"insert into `%s`.transaction(dtid, state, time_created, time_updated) values (%a, 'Prepare', %a, %a)",
@@ -142,16 +156,26 @@ func (tpc *TwoPC) Open(sidecarDBName string, dbaparams *sqldb.ConnParams) {
 	tpc.readParticipants = buildParsedQuery(
 		"select keyspace, shard from `%s`.participant where dtid = %a",
 		sidecarDBName, ":dtid")
+	tpc.readAbandoned = buildParsedQuery(
+		"select dtid, time_created from `%s`.transaction where time_created < %a",
+		sidecarDBName, ":time_created")
+	return nil
+}
+
+// Open starts the TwoPC service.
+func (tpc *TwoPC) Open(dbconfigs dbconfigs.DBConfigs) {
+	tpc.readPool.Open(&dbconfigs.App, &dbconfigs.Dba)
+}
+
+// Close closes the TwoPC service.
+func (tpc *TwoPC) Close() {
+	tpc.readPool.Close()
 }
 
 func buildParsedQuery(in string, vars ...interface{}) *sqlparser.ParsedQuery {
 	buf := sqlparser.NewTrackedBuffer(nil)
 	buf.Myprintf(in, vars...)
 	return buf.ParsedQuery()
-}
-
-// Close shuts down the 2PC MM service.
-func (tpc *TwoPC) Close() {
 }
 
 // SaveRedo saves the statements in the redo log using the supplied connection.
@@ -180,6 +204,16 @@ func (tpc *TwoPC) SaveRedo(ctx context.Context, conn *TxConnection, dtid string,
 	return err
 }
 
+// UpdateRedo changes the state of the redo log for the dtid.
+func (tpc *TwoPC) UpdateRedo(ctx context.Context, conn *TxConnection, dtid, state string) error {
+	bindVars := map[string]interface{}{
+		"dtid":  sqltypes.MakeTrusted(sqltypes.VarBinary, []byte(dtid)),
+		"state": sqltypes.MakeTrusted(sqltypes.VarBinary, []byte(state)),
+	}
+	_, err := tpc.exec(ctx, conn, tpc.updateRedoTx, bindVars)
+	return err
+}
+
 // DeleteRedo deletes the redo log for the dtid.
 func (tpc *TwoPC) DeleteRedo(ctx context.Context, conn *TxConnection, dtid string) error {
 	bindVars := map[string]interface{}{
@@ -193,32 +227,44 @@ func (tpc *TwoPC) DeleteRedo(ctx context.Context, conn *TxConnection, dtid strin
 	return err
 }
 
-// ReadPrepared returns all the prepared transactions from the redo logs.
-func (tpc *TwoPC) ReadPrepared(ctx context.Context, conn *DBConn) (map[string][]string, error) {
-	qr, err := conn.Exec(ctx, tpc.readPrepared, 10000, false)
+// ReadAllRedo returns all the prepared transactions from the redo logs.
+func (tpc *TwoPC) ReadAllRedo(ctx context.Context) (prepared map[string][]string, failed []string, err error) {
+	conn, err := tpc.readPool.Get(ctx)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	transactions := make(map[string][]string)
-	var stmts []string
-	var dtid string
-	for i, row := range qr.Rows {
-		curdtid := row[0].String()
-		if i == 0 {
-			dtid = curdtid
-		}
-		if dtid == curdtid {
-			stmts = append(stmts, row[2].String())
+	defer conn.Recycle()
+
+	qr, err := conn.Exec(ctx, tpc.readAllRedo, 10000, false)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// Do this as two loops for better readability.
+	// Load prepared transactions.
+	prepared = make(map[string][]string)
+	for _, row := range qr.Rows {
+		if row[1].String() != "Prepared" {
 			continue
 		}
-		transactions[dtid] = stmts
-		dtid = curdtid
-		stmts = []string{row[2].String()}
+		dtid := row[0].String()
+		prepared[dtid] = append(prepared[dtid], row[3].String())
 	}
-	if stmts != nil {
-		transactions[dtid] = stmts
+
+	// Load failed transactions.
+	lastdtid := ""
+	for _, row := range qr.Rows {
+		if row[1].String() != "Failed" {
+			continue
+		}
+		dtid := row[0].String()
+		if dtid == lastdtid {
+			continue
+		}
+		failed = append(failed, dtid)
+		lastdtid = dtid
 	}
-	return transactions, nil
+	return prepared, failed, nil
 }
 
 // CreateTransaction saves the metadata of a 2pc transaction as Prepared.
@@ -279,7 +325,13 @@ func (tpc *TwoPC) DeleteTransaction(ctx context.Context, conn *TxConnection, dti
 }
 
 // ReadTransaction returns the metadata for the transaction.
-func (tpc *TwoPC) ReadTransaction(ctx context.Context, conn *DBConn, dtid string) (*querypb.TransactionMetadata, error) {
+func (tpc *TwoPC) ReadTransaction(ctx context.Context, dtid string) (*querypb.TransactionMetadata, error) {
+	conn, err := tpc.readPool.Get(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Recycle()
+
 	result := &querypb.TransactionMetadata{}
 	bindVars := map[string]interface{}{
 		"dtid": dtid,
@@ -325,6 +377,33 @@ func (tpc *TwoPC) ReadTransaction(ctx context.Context, conn *DBConn, dtid string
 	}
 	result.Participants = participants
 	return result, nil
+}
+
+// ReadAbandoned returns the list of abandoned transactions
+// and their associated start time.
+func (tpc *TwoPC) ReadAbandoned(ctx context.Context, abandonTime time.Time) (map[string]time.Time, error) {
+	conn, err := tpc.readPool.Get(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Recycle()
+
+	bindVars := map[string]interface{}{
+		"time_created": int64(abandonTime.UnixNano()),
+	}
+	qr, err := tpc.read(ctx, conn, tpc.readAbandoned, bindVars)
+	if err != nil {
+		return nil, err
+	}
+	txs := make(map[string]time.Time, len(qr.Rows))
+	for _, row := range qr.Rows {
+		t, err := strconv.ParseInt(row[1].String(), 10, 64)
+		if err != nil {
+			return nil, err
+		}
+		txs[row[0].String()] = time.Unix(0, t)
+	}
+	return txs, nil
 }
 
 func (tpc *TwoPC) exec(ctx context.Context, conn *TxConnection, pq *sqlparser.ParsedQuery, bindVars map[string]interface{}) (*sqltypes.Result, error) {

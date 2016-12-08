@@ -140,6 +140,12 @@ func (jb *join) PushSelect(expr *sqlparser.NonStarExpr, rb *route) (colsym *cols
 	return colsym, len(jb.Colsyms) - 1, nil
 }
 
+// PushOrderByNull pushes misc constructs to the underlying routes.
+func (jb *join) PushOrderByNull() {
+	jb.Left.PushOrderByNull()
+	jb.Right.PushOrderByNull()
+}
+
 // PushMisc pushes misc constructs to the underlying routes.
 func (jb *join) PushMisc(sel *sqlparser.Select) {
 	jb.Left.PushMisc(sel)

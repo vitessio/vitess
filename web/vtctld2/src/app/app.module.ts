@@ -16,7 +16,6 @@ import { MdToolbarModule } from '@angular2-material/toolbar/toolbar';
 
 import { AccordionModule, DataTableModule, DialogModule, DropdownModule, MenuModule, SharedModule } from 'primeng/primeng';
 
-import { AddButtonComponent } from './shared/add-button.component';
 import { APP_ROUTER_PROVIDERS, routing } from './app.routes';
 import { AppComponent } from './app.component';
 import { BreadcrumbsComponent } from './shared/breadcrumbs.component';
@@ -32,6 +31,7 @@ import { TabletComponent } from './dashboard/tablet.component';
 import { TabletPopupComponent } from './status/tablet-popup.component';
 import { WorkflowListComponent } from './workflows/workflow-list.component';
 
+import { FeaturesService } from './api/features.service';
 import { KeyspaceService } from './api/keyspace.service';
 import { ShardService } from './api/shard.service';
 import { TabletService } from './api/tablet.service';
@@ -64,7 +64,6 @@ import { VtctlService } from './api/vtctl.service';
     AccordionModule,
   ],
   declarations: [
-    AddButtonComponent,
     AppComponent,
     BreadcrumbsComponent,
     DashboardComponent,
@@ -81,6 +80,7 @@ import { VtctlService } from './api/vtctl.service';
   ],
   providers: [
     APP_ROUTER_PROVIDERS,
+    FeaturesService,
     KeyspaceService,
     ShardService,
     TabletService,

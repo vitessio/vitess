@@ -46,13 +46,13 @@ func expectBlpCheckpointCreationQueries(f *FakePoolConnection) {
 	f.addExpectedQuery("CREATE DATABASE IF NOT EXISTS _vt", nil)
 	f.addExpectedQuery("CREATE TABLE IF NOT EXISTS _vt.blp_checkpoint (\n"+
 		"  source_shard_uid INT(10) UNSIGNED NOT NULL,\n"+
-		"  pos VARCHAR(250) DEFAULT NULL,\n"+
+		"  pos VARBINARY(64000) DEFAULT NULL,\n"+
 		"  max_tps BIGINT(20) NOT NULL,\n"+
 		"  max_replication_lag BIGINT(20) NOT NULL,\n"+
 		"  time_updated BIGINT(20) UNSIGNED NOT NULL,\n"+
 		"  transaction_timestamp BIGINT(20) UNSIGNED NOT NULL,\n"+
-		"  flags VARCHAR(250) DEFAULT NULL,\n"+
-		"  PRIMARY KEY (source_shard_uid)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8", nil)
+		"  flags VARBINARY(250) DEFAULT NULL,\n"+
+		"  PRIMARY KEY (source_shard_uid)\n) ENGINE=InnoDB", nil)
 	f.addExpectedQuery("INSERT INTO _vt.blp_checkpoint (source_shard_uid, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, flags) VALUES (0, 'MariaDB/12-34-5678', *", nil)
 }
 

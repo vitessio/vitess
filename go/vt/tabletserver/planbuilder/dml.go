@@ -140,11 +140,16 @@ func analyzeSelect(sel *sqlparser.Select, getTable TableGetter) (plan *ExecPlan,
 	}
 
 	// Check if it's a NEXT VALUE statement.
-	if _, ok := sel.SelectExprs[0].(sqlparser.Nextval); ok {
+	if nextVal, ok := sel.SelectExprs[0].(sqlparser.Nextval); ok {
 		if tableInfo.Type != schema.Sequence {
 			return nil, fmt.Errorf("%s is not a sequence", tableName)
 		}
 		plan.PlanID = PlanNextval
+		v, err := sqlparser.AsInterface(nextVal.Expr)
+		if err != nil {
+			return nil, err
+		}
+		plan.PKValues = []interface{}{v}
 		plan.FieldQuery = nil
 		plan.FullQuery = nil
 	}
@@ -352,10 +357,7 @@ func getInsertPKValues(pkColumnNumbers []int, rowList sqlparser.Values, tableInf
 		}
 		values := make([]interface{}, len(rowList))
 		for j := 0; j < len(rowList); j++ {
-			if _, ok := rowList[j].(*sqlparser.Subquery); ok {
-				return nil, errors.New("row subquery not supported for inserts")
-			}
-			row := rowList[j].(sqlparser.ValTuple)
+			row := rowList[j]
 			if columnNumber >= len(row) {
 				return nil, errors.New("column count doesn't match value count")
 			}

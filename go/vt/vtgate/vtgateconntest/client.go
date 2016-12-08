@@ -585,7 +585,7 @@ func (f *fakeVTGateService) StreamExecuteKeyRanges(ctx context.Context, sql stri
 }
 
 // Begin is part of the VTGateService interface
-func (f *fakeVTGateService) Begin(ctx context.Context) (*vtgatepb.Session, error) {
+func (f *fakeVTGateService) Begin(ctx context.Context, singledb bool) (*vtgatepb.Session, error) {
 	f.checkCallerID(ctx, "Begin")
 	switch {
 	case f.forceBeginSuccess:
@@ -599,7 +599,7 @@ func (f *fakeVTGateService) Begin(ctx context.Context) (*vtgatepb.Session, error
 }
 
 // Commit is part of the VTGateService interface
-func (f *fakeVTGateService) Commit(ctx context.Context, inSession *vtgatepb.Session) error {
+func (f *fakeVTGateService) Commit(ctx context.Context, twopc bool, inSession *vtgatepb.Session) error {
 	f.checkCallerID(ctx, "Commit")
 	if f.hasError {
 		return errTestVtGateError
@@ -628,40 +628,23 @@ func (f *fakeVTGateService) Rollback(ctx context.Context, inSession *vtgatepb.Se
 	return nil
 }
 
-// querySplitQuery contains all the fields we use to test SplitQuery
-type querySplitQuery struct {
-	Keyspace      string
-	SQL           string
-	BindVariables map[string]interface{}
-	SplitColumn   string
-	SplitCount    int64
-}
-
-// SplitQuery is part of the VTGateService interface
-func (f *fakeVTGateService) SplitQuery(ctx context.Context, keyspace string, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int64) ([]*vtgatepb.SplitQueryResponse_Part, error) {
+// ResolveTransaction is part of the VTGateService interface
+func (f *fakeVTGateService) ResolveTransaction(ctx context.Context, dtid string) error {
 	if f.hasError {
-		return nil, errTestVtGateError
+		return errTestVtGateError
 	}
 	if f.panics {
 		panic(fmt.Errorf("test forced panic"))
 	}
-	f.checkCallerID(ctx, "SplitQuery")
-	query := &querySplitQuery{
-		Keyspace:      keyspace,
-		SQL:           sql,
-		BindVariables: bindVariables,
-		SplitColumn:   splitColumn,
-		SplitCount:    splitCount,
+	f.checkCallerID(ctx, "ResolveTransaction")
+	if dtid != dtid2 {
+		return errors.New("ResolveTransaction: dtid mismatch")
 	}
-	if !reflect.DeepEqual(query, splitQueryRequest) {
-		f.t.Errorf("SplitQuery has wrong input: got %#v wanted %#v", query, splitQueryRequest)
-	}
-	return splitQueryResult, nil
+	return nil
 }
 
-// querySplitQueryV2 contains all the fields we use to test SplitQuery
-// TODO(erez): Rename to querySplitQuery after the migration to SplitQuery is done.
-type querySplitQueryV2 struct {
+// querySplitQuery contains all the fields we use to test SplitQuery
+type querySplitQuery struct {
 	Keyspace            string
 	SQL                 string
 	BindVariables       map[string]interface{}
@@ -671,9 +654,8 @@ type querySplitQueryV2 struct {
 	Algorithm           querypb.SplitQueryRequest_Algorithm
 }
 
-// SplitQueryV2 is part of the VTGateService interface
-// TODO(erez): Rename to SplitQuery after the migration to SplitQuery is done.
-func (f *fakeVTGateService) SplitQueryV2(
+// SplitQuery is part of the VTGateService interface
+func (f *fakeVTGateService) SplitQuery(
 	ctx context.Context,
 	keyspace string,
 	sql string,
@@ -688,8 +670,8 @@ func (f *fakeVTGateService) SplitQueryV2(
 	if f.panics {
 		panic(fmt.Errorf("test forced panic"))
 	}
-	f.checkCallerID(ctx, "SplitQueryV2")
-	query := &querySplitQueryV2{
+	f.checkCallerID(ctx, "SplitQuery")
+	query := &querySplitQuery{
 		Keyspace:            keyspace,
 		SQL:                 sql,
 		BindVariables:       bindVariables,
@@ -698,7 +680,7 @@ func (f *fakeVTGateService) SplitQueryV2(
 		NumRowsPerQueryPart: numRowsPerQueryPart,
 		Algorithm:           algorithm,
 	}
-	if !reflect.DeepEqual(query, splitQueryV2Request) {
+	if !reflect.DeepEqual(query, splitQueryRequest) {
 		f.t.Errorf("SplitQuery has wrong input: got %#v wanted %#v", query, splitQueryRequest)
 	}
 	return splitQueryResult, nil
@@ -835,9 +817,9 @@ func TestSuite(t *testing.T, impl vtgateconn.Impl, fakeServer vtgateservice.VTGa
 	testStreamExecuteKeyRanges(t, conn)
 	testStreamExecuteKeyspaceIds(t, conn)
 	testTxPass(t, conn)
+	testResolveTransaction(t, conn)
 	testTxFail(t, conn)
 	testSplitQuery(t, conn)
-	testSplitQueryV2(t, conn)
 	testGetSrvKeyspace(t, conn)
 	testUpdateStream(t, conn)
 
@@ -846,6 +828,7 @@ func TestSuite(t *testing.T, impl vtgateconn.Impl, fakeServer vtgateservice.VTGa
 	testBeginPanic(t, conn)
 	testCommitPanic(t, conn, fs)
 	testRollbackPanic(t, conn, fs)
+	testResolveTransactionPanic(t, conn, fs)
 	testExecutePanic(t, conn)
 	testExecuteShardsPanic(t, conn)
 	testExecuteKeyspaceIdsPanic(t, conn)
@@ -858,7 +841,6 @@ func TestSuite(t *testing.T, impl vtgateconn.Impl, fakeServer vtgateservice.VTGa
 	testStreamExecuteKeyRangesPanic(t, conn)
 	testStreamExecuteKeyspaceIdsPanic(t, conn)
 	testSplitQueryPanic(t, conn)
-	testSplitQueryV2Panic(t, conn)
 	testGetSrvKeyspacePanic(t, conn)
 	testUpdateStreamPanic(t, conn)
 	fs.panics = false
@@ -878,6 +860,7 @@ func TestErrorSuite(t *testing.T, fakeServer vtgateservice.VTGateService) {
 	testBeginError(t, conn)
 	testCommitError(t, conn, fs)
 	testRollbackError(t, conn, fs)
+	testResolveTransactionError(t, conn, fs)
 	testExecuteError(t, conn, fs)
 	testExecuteShardsError(t, conn, fs)
 	testExecuteKeyspaceIdsError(t, conn, fs)
@@ -890,7 +873,6 @@ func TestErrorSuite(t *testing.T, fakeServer vtgateservice.VTGateService) {
 	testStreamExecuteKeyRangesError(t, conn, fs)
 	testStreamExecuteKeyspaceIdsError(t, conn, fs)
 	testSplitQueryError(t, conn)
-	testSplitQueryV2Error(t, conn)
 	testGetSrvKeyspaceError(t, conn)
 	testUpdateStreamError(t, conn, fs)
 	fs.hasError = false
@@ -1595,6 +1577,12 @@ func testTxPass(t *testing.T, conn *vtgateconn.VTGateConn) {
 	}
 }
 
+func testResolveTransaction(t *testing.T, conn *vtgateconn.VTGateConn) {
+	if err := conn.ResolveTransaction(newContext(), dtid2); err != nil {
+		t.Error(err)
+	}
+}
+
 func testBeginError(t *testing.T, conn *vtgateconn.VTGateConn) {
 	ctx := newContext()
 	_, err := conn.Begin(ctx)
@@ -1629,6 +1617,11 @@ func testRollbackError(t *testing.T, conn *vtgateconn.VTGateConn, fake *fakeVTGa
 	verifyError(t, err, "Rollback")
 }
 
+func testResolveTransactionError(t *testing.T, conn *vtgateconn.VTGateConn, fake *fakeVTGateService) {
+	err := conn.ResolveTransaction(newContext(), "")
+	verifyError(t, err, "ResolveTransaction")
+}
+
 func testBeginPanic(t *testing.T, conn *vtgateconn.VTGateConn) {
 	ctx := newContext()
 	_, err := conn.Begin(ctx)
@@ -1660,6 +1653,11 @@ func testRollbackPanic(t *testing.T, conn *vtgateconn.VTGateConn, fake *fakeVTGa
 		t.Error(err)
 	}
 	err = tx.Rollback(ctx)
+	expectPanic(t, err)
+}
+
+func testResolveTransactionPanic(t *testing.T, conn *vtgateconn.VTGateConn, fake *fakeVTGateService) {
+	err := conn.ResolveTransaction(newContext(), "")
 	expectPanic(t, err)
 }
 
@@ -1741,32 +1739,14 @@ func testTxFail(t *testing.T, conn *vtgateconn.VTGateConn) {
 
 func testSplitQuery(t *testing.T, conn *vtgateconn.VTGateConn) {
 	ctx := newContext()
-	qsl, err := conn.SplitQuery(ctx, splitQueryRequest.Keyspace, splitQueryRequest.SQL, splitQueryRequest.BindVariables, splitQueryRequest.SplitColumn, splitQueryRequest.SplitCount)
-	if err != nil {
-		t.Fatalf("SplitQuery failed: %v", err)
-	}
-	if len(qsl) == 1 && len(qsl[0].Query.BindVariables) == 1 {
-		bv := qsl[0].Query.BindVariables["bind1"]
-		if len(bv.Values) == 0 {
-			bv.Values = nil
-		}
-	}
-	if !reflect.DeepEqual(qsl, splitQueryResult) {
-		t.Errorf("SplitQuery returned wrong result: got %#v wanted %#v", qsl, splitQueryResult)
-	}
-}
-
-// TODO(erez): Rename to testSplitQuery after migration to SplitQuery V2 is done.
-func testSplitQueryV2(t *testing.T, conn *vtgateconn.VTGateConn) {
-	ctx := newContext()
-	qsl, err := conn.SplitQueryV2(ctx,
-		splitQueryV2Request.Keyspace,
-		splitQueryV2Request.SQL,
-		splitQueryV2Request.BindVariables,
-		splitQueryV2Request.SplitColumns,
-		splitQueryV2Request.SplitCount,
-		splitQueryV2Request.NumRowsPerQueryPart,
-		splitQueryV2Request.Algorithm,
+	qsl, err := conn.SplitQuery(ctx,
+		splitQueryRequest.Keyspace,
+		splitQueryRequest.SQL,
+		splitQueryRequest.BindVariables,
+		splitQueryRequest.SplitColumns,
+		splitQueryRequest.SplitCount,
+		splitQueryRequest.NumRowsPerQueryPart,
+		splitQueryRequest.Algorithm,
 	)
 	if err != nil {
 		t.Fatalf("SplitQuery failed: %v", err)
@@ -1784,43 +1764,28 @@ func testSplitQueryV2(t *testing.T, conn *vtgateconn.VTGateConn) {
 
 func testSplitQueryError(t *testing.T, conn *vtgateconn.VTGateConn) {
 	ctx := newContext()
-	_, err := conn.SplitQuery(ctx, splitQueryRequest.Keyspace, splitQueryRequest.SQL, splitQueryRequest.BindVariables, splitQueryRequest.SplitColumn, splitQueryRequest.SplitCount)
-	verifyError(t, err, "SplitQuery")
-}
-
-// TODO(erez): Rename to testSplitQueryError after migration to SplitQuery V2 is done.
-func testSplitQueryV2Error(t *testing.T, conn *vtgateconn.VTGateConn) {
-	ctx := newContext()
-	_, err := conn.SplitQueryV2(ctx,
-		splitQueryV2Request.Keyspace,
-		splitQueryV2Request.SQL,
-		splitQueryV2Request.BindVariables,
-		splitQueryV2Request.SplitColumns,
-		splitQueryV2Request.SplitCount,
-		splitQueryV2Request.NumRowsPerQueryPart,
-		splitQueryV2Request.Algorithm,
+	_, err := conn.SplitQuery(ctx,
+		splitQueryRequest.Keyspace,
+		splitQueryRequest.SQL,
+		splitQueryRequest.BindVariables,
+		splitQueryRequest.SplitColumns,
+		splitQueryRequest.SplitCount,
+		splitQueryRequest.NumRowsPerQueryPart,
+		splitQueryRequest.Algorithm,
 	)
 	verifyError(t, err, "SplitQuery")
 }
 
 func testSplitQueryPanic(t *testing.T, conn *vtgateconn.VTGateConn) {
 	ctx := newContext()
-	_, err := conn.SplitQuery(ctx, splitQueryRequest.Keyspace, splitQueryRequest.SQL, splitQueryRequest.BindVariables, splitQueryRequest.SplitColumn, splitQueryRequest.SplitCount)
-
-	expectPanic(t, err)
-}
-
-// TODO(erez): Rename to testSplitQueryPanic after migration to SplitQuery V2 is done.
-func testSplitQueryV2Panic(t *testing.T, conn *vtgateconn.VTGateConn) {
-	ctx := newContext()
-	_, err := conn.SplitQueryV2(ctx,
-		splitQueryV2Request.Keyspace,
-		splitQueryV2Request.SQL,
-		splitQueryV2Request.BindVariables,
-		splitQueryV2Request.SplitColumns,
-		splitQueryV2Request.SplitCount,
-		splitQueryV2Request.NumRowsPerQueryPart,
-		splitQueryV2Request.Algorithm,
+	_, err := conn.SplitQuery(ctx,
+		splitQueryRequest.Keyspace,
+		splitQueryRequest.SQL,
+		splitQueryRequest.BindVariables,
+		splitQueryRequest.SplitColumns,
+		splitQueryRequest.SplitCount,
+		splitQueryRequest.NumRowsPerQueryPart,
+		splitQueryRequest.Algorithm,
 	)
 	expectPanic(t, err)
 }
@@ -2391,19 +2356,11 @@ var session2 = &vtgatepb.Session{
 	},
 }
 
-var splitQueryRequest = &querySplitQuery{
-	Keyspace: "ks",
-	SQL:      "in for SplitQuery",
-	BindVariables: map[string]interface{}{
-		"bind1": int64(43),
-	},
-	SplitColumn: "split_column",
-	SplitCount:  13,
-}
+var dtid2 = "aa"
 
-var splitQueryV2Request = &querySplitQueryV2{
+var splitQueryRequest = &querySplitQuery{
 	Keyspace: "ks2",
-	SQL:      "in for SplitQueryV2",
+	SQL:      "in for SplitQuery",
 	BindVariables: map[string]interface{}{
 		"bind2": int64(43),
 	},

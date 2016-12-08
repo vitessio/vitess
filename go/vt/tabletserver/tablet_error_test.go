@@ -134,9 +134,9 @@ func TestTabletErrorRecordStats(t *testing.T) {
 	}
 
 	tabletErr = NewTabletErrorSQL(vtrpcpb.ErrorCode_INTERNAL_ERROR, sqldb.NewSQLError(2000, "HY000", "test"))
-	fatalCounterBefore := queryServiceStats.InfoErrors.Counts()["Fatal"]
+	fatalCounterBefore := queryServiceStats.ErrorStats.Counts()["Fatal"]
 	tabletErr.RecordStats(queryServiceStats)
-	fatalCounterAfter := queryServiceStats.InfoErrors.Counts()["Fatal"]
+	fatalCounterAfter := queryServiceStats.ErrorStats.Counts()["Fatal"]
 	if fatalCounterAfter-fatalCounterBefore != 1 {
 		t.Fatalf("tablet error with error code INTERNAL_ERROR should increase Fatal error count by 1")
 	}

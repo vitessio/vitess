@@ -39,7 +39,7 @@ var _ grpc.ClientConn
 
 // This is a compile-time assertion to ensure that this generated file
 // is compatible with the grpc package it is being compiled against.
-const _ = grpc.SupportPackageIsVersion3
+const _ = grpc.SupportPackageIsVersion4
 
 // Client API for Vtctl service
 
@@ -129,7 +129,7 @@ var _Vtctl_serviceDesc = grpc.ServiceDesc{
 			ServerStreams: true,
 		},
 	},
-	Metadata: fileDescriptor0,
+	Metadata: "vtctlservice.proto",
 }
 
 func init() { proto.RegisterFile("vtctlservice.proto", fileDescriptor0) }

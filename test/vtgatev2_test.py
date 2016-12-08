@@ -83,11 +83,10 @@ CREATE_VT_SEQ = '''create table vt_seq (
   id int,
   next_id bigint,
   cache bigint,
-  increment bigint,
   primary key(id)
 ) comment 'vitess_sequence' Engine=InnoDB'''
 
-INIT_VT_SEQ = 'insert into vt_seq values(0, 1, 2, 2)'
+INIT_VT_SEQ = 'insert into vt_seq values(0, 1, 2)'
 
 
 create_tables = [
@@ -784,7 +783,7 @@ class TestCoreVTGateFunctions(BaseTestCase):
       want = 1
       for _ in xrange(10):
         result, _, _, _ = vtgate_conn._execute(
-            'select next value for vt_seq', {},
+            'select next :n values for vt_seq', {'n': 2},
             tablet_type=tablet_type, keyspace_name=KEYSPACE_NAME,
             keyspace_ids=[pack_kid(0)])
         self.assertEqual(result[0][0], want)

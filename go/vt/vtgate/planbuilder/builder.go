@@ -50,6 +50,10 @@ type builder interface {
 	// column. The function must return a colsym for the expression
 	// and the column number of the result.
 	PushSelect(expr *sqlparser.NonStarExpr, rb *route) (colsym *colsym, colnum int, err error)
+	// PushOrderByNull pushes the special case ORDER By NULL to
+	// all routes. It's safe to push down this clause because it's
+	// just on optimization hint.
+	PushOrderByNull()
 	// PushMisc pushes miscelleaneous constructs to all the routes.
 	// This should not propagate to subqueries.
 	PushMisc(sel *sqlparser.Select)

@@ -270,11 +270,11 @@ func (lg *l2VTGateGateway) SetRollback(ctx context.Context, target *querypb.Targ
 	}, true, false)
 }
 
-// ResolveTransaction rolls back the current transaction for the specified keyspace, shard, and tablet type.
-func (lg *l2VTGateGateway) ResolveTransaction(ctx context.Context, target *querypb.Target, dtid string) (err error) {
+// ConcludeTransaction rolls back the current transaction for the specified keyspace, shard, and tablet type.
+func (lg *l2VTGateGateway) ConcludeTransaction(ctx context.Context, target *querypb.Target, dtid string) (err error) {
 	return lg.withRetry(ctx, target, func(conn *l2VTGateConn) error {
 		startTime := time.Now()
-		innerErr := conn.conn.ResolveTransaction(ctx, target, dtid)
+		innerErr := conn.conn.ConcludeTransaction(ctx, target, dtid)
 		lg.updateStats(conn, target.TabletType, startTime, innerErr)
 		return innerErr
 	}, true, false)
@@ -318,21 +318,7 @@ func (lg *l2VTGateGateway) BeginExecuteBatch(ctx context.Context, target *queryp
 	return qrs, transactionID, err
 }
 
-// SplitQuery splits a query into sub-queries for the specified keyspace, shard, and tablet type.
-func (lg *l2VTGateGateway) SplitQuery(ctx context.Context, target *querypb.Target, query querytypes.BoundQuery, splitColumn string, splitCount int64) (queries []querytypes.QuerySplit, err error) {
-	err = lg.withRetry(ctx, target, func(conn *l2VTGateConn) error {
-		var innerErr error
-		startTime := time.Now()
-		queries, innerErr = conn.conn.SplitQuery(ctx, target, query, splitColumn, splitCount)
-		lg.updateStats(conn, target.TabletType, startTime, innerErr)
-		return innerErr
-	}, false, false)
-	return
-}
-
-// SplitQueryV2 splits a query into sub-queries for the specified keyspace, shard, and tablet type.
-// TODO(erez): Rename to SplitQuery after migration to SplitQuery V2.
-func (lg *l2VTGateGateway) SplitQueryV2(
+func (lg *l2VTGateGateway) SplitQuery(
 	ctx context.Context,
 	target *querypb.Target,
 	query querytypes.BoundQuery,
@@ -344,7 +330,7 @@ func (lg *l2VTGateGateway) SplitQueryV2(
 	err = lg.withRetry(ctx, target, func(conn *l2VTGateConn) error {
 		var innerErr error
 		startTime := time.Now()
-		queries, innerErr = conn.conn.SplitQueryV2(ctx, target, query, splitColumns, splitCount, numRowsPerQueryPart, algorithm)
+		queries, innerErr = conn.conn.SplitQuery(ctx, target, query, splitColumns, splitCount, numRowsPerQueryPart, algorithm)
 		lg.updateStats(conn, target.TabletType, startTime, innerErr)
 		return innerErr
 	}, false, false)

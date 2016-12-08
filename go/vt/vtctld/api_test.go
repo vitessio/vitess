@@ -107,6 +107,7 @@ func TestAPI(t *testing.T) {
 				"sharding_column_name": "shardcol",
 				"sharding_column_type": 0
 			}`},
+		{"GET", "keyspaces/nonexistent", "", "404 page not found"},
 		{"POST", "keyspaces/ks1?action=TestKeyspaceAction", "", `{
 				"Name": "TestKeyspaceAction",
 				"Parameters": "ks1",
@@ -120,6 +121,7 @@ func TestAPI(t *testing.T) {
 				"key_range": {"end":"gA=="},
 				"cells": ["cell1", "cell2"]
 			}`},
+		{"GET", "shards/ks1/-DEAD", "", "404 page not found"},
 		{"POST", "shards/ks1/-80?action=TestShardAction", "", `{
 				"Name": "TestShardAction",
 				"Parameters": "ks1/-80",
@@ -149,6 +151,7 @@ func TestAPI(t *testing.T) {
 				"type": 2,
 				"db_name_override": ""
 			}`},
+		{"GET", "tablets/nonexistent-999", "", "404 page not found"},
 		{"POST", "tablets/cell1-100?action=TestTabletAction", "", `{
 				"Name": "TestTabletAction",
 				"Parameters": "cell1-0000000100",
@@ -169,7 +172,7 @@ func TestAPI(t *testing.T) {
 		]`},
 		{"GET", "tablet_statuses/?keyspace=ks1&cell=all&type=all&metric=lag", "", `[
 		{
-		  "Data":[[-1,400],[-1,300],[200,-1],[100,-1]],  
+		  "Data":[[-1,400],[-1,300],[200,-1],[100,-1]],
 		  "Aliases":[[null,{"cell":"cell2","uid":400}],[null,{"cell":"cell2","uid":300}],[{"cell":"cell1","uid":200},null],[{"cell":"cell1","uid":100},null]],
 		  "KeyspaceLabel":{"Name":"ks1","Rowspan":4},
 		  "CellAndTypeLabels":[

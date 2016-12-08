@@ -6,6 +6,7 @@ package worker
 
 import (
 	"bytes"
+	"encoding/binary"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -165,11 +166,13 @@ func orderedColumnsHelper(td *tabletmanagerdatapb.TableDefinition, includePrimar
 	return result
 }
 
-// uint64FromKeyspaceID returns a 64 bits hex number as a string
-// (in the form of 0x0123456789abcdef) from the provided keyspaceId
-func uint64FromKeyspaceID(keyspaceID []byte) string {
-	hex := hex.EncodeToString(keyspaceID)
-	return "0x" + hex + strings.Repeat("0", 16-len(hex))
+// uint64FromKeyspaceID returns the 64 bit number representation
+// of the keyspaceID.
+func uint64FromKeyspaceID(keyspaceID []byte) uint64 {
+	// Copy into 8 bytes because keyspaceID could be shorter.
+	bits := make([]byte, 8)
+	copy(bits, keyspaceID)
+	return binary.BigEndian.Uint64(bits)
 }
 
 // TableScan returns a QueryResultReader that gets all the rows from a

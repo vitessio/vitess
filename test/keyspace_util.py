@@ -21,7 +21,9 @@ class TestEnv(object):
     self.tablet_map = {}
 
   def launch(
-      self, keyspace, shards=None, replica_count=1, rdonly_count=0, ddls=None):
+      self, keyspace, shards=None,
+      replica_count=1, rdonly_count=0, ddls=None,
+      twopc_coordinator_address=None):
     """Launch test environment."""
 
     if replica_count < 1:
@@ -57,11 +59,14 @@ class TestEnv(object):
 
     # Start tablets.
     for shard in shards:
-      self._start_tablet(keyspace, shard, 'master', None)
+      self._start_tablet(
+          keyspace, shard, 'master', None, twopc_coordinator_address)
       for i in xrange(replica_count):
-        self._start_tablet(keyspace, shard, 'replica', i)
+        self._start_tablet(
+            keyspace, shard, 'replica', i, twopc_coordinator_address)
       for i in xrange(rdonly_count):
-        self._start_tablet(keyspace, shard, 'rdonly', i)
+        self._start_tablet(
+            keyspace, shard, 'rdonly', i, twopc_coordinator_address)
 
     for t in self.tablets:
       t.wait_for_vttablet_state('NOT_SERVING')
@@ -110,7 +115,8 @@ class TestEnv(object):
     t = self.tablet_map[key]
     t.init_tablet(init_tablet_type, keyspace, shard, tablet_index=tablet_index)
 
-  def _start_tablet(self, keyspace, shard, tablet_type, index):
+  def _start_tablet(
+      self, keyspace, shard, tablet_type, index, twopc_coordinator_address):
     """Start a tablet."""
     init_tablet_type = tablet_type
     if tablet_type == 'master':
@@ -120,7 +126,14 @@ class TestEnv(object):
       key = '%s.%s.%s.%s' % (keyspace, shard, tablet_type, index)
     t = self.tablet_map[key]
     t.create_db('vt_' + keyspace)
+    extra_args = ['-queryserver-config-schema-reload-time', '1']
+    if twopc_coordinator_address:
+      extra_args.extend([
+          '-twopc_enable',
+          '-twopc_coordinator_address', twopc_coordinator_address,
+          '-twopc_abandon_age', '3600',
+      ])
     return t.start_vttablet(
         wait_for_state=None, init_tablet_type=init_tablet_type,
         init_keyspace=keyspace, init_shard=shard,
-        extra_args=['-queryserver-config-schema-reload-time', '1'])
+        extra_args=extra_args)

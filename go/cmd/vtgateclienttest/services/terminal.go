@@ -76,11 +76,11 @@ func (c *terminalClient) StreamExecuteKeyRanges(ctx context.Context, sql string,
 	return errTerminal
 }
 
-func (c *terminalClient) Begin(ctx context.Context) (*vtgatepb.Session, error) {
+func (c *terminalClient) Begin(ctx context.Context, singledb bool) (*vtgatepb.Session, error) {
 	return nil, errTerminal
 }
 
-func (c *terminalClient) Commit(ctx context.Context, session *vtgatepb.Session) error {
+func (c *terminalClient) Commit(ctx context.Context, twopc bool, session *vtgatepb.Session) error {
 	return errTerminal
 }
 
@@ -88,12 +88,11 @@ func (c *terminalClient) Rollback(ctx context.Context, session *vtgatepb.Session
 	return errTerminal
 }
 
-func (c *terminalClient) SplitQuery(ctx context.Context, keyspace string, sql string, bindVariables map[string]interface{}, splitColumn string, splitCount int64) ([]*vtgatepb.SplitQueryResponse_Part, error) {
-	return nil, errTerminal
+func (c *terminalClient) ResolveTransaction(ctx context.Context, dtid string) error {
+	return errTerminal
 }
 
-// TODO(erez): Rename after migration to SplitQuery V2 is done.
-func (c *terminalClient) SplitQueryV2(
+func (c *terminalClient) SplitQuery(
 	ctx context.Context,
 	keyspace string,
 	sql string,

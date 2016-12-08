@@ -50,7 +50,7 @@ const verticalSplitCloneHTML2 = `
   <h1>Vertical Split Clone Action</h1>
     <form action="/Clones/VerticalSplitClone" method="post">
       <LABEL for="tables">Tables: </LABEL>
-        <INPUT type="text" id="tables" name="tables" value="moving.*"></BR>
+        <INPUT type="text" id="tables" name="tables" value="/moving/"></BR>
       <LABEL for="online">Do Online Copy: (optional approximate copy, source and destination tablets will not be put out of serving, minimizes downtime during offline copy)</LABEL>
         <INPUT type="checkbox" id="online" name="online" value="true"{{if .DefaultOnline}} checked{{end}}></BR>
       <LABEL for="offline">Do Offline Copy: (exact copy at a specific GTID, required before shard migration, source and destination tablets will be put out of serving during copy)</LABEL>
@@ -67,8 +67,6 @@ const verticalSplitCloneHTML2 = `
         <INPUT type="text" id="writeQueryMaxRows" name="writeQueryMaxRows" value="{{.DefaultWriteQueryMaxRows}}"></BR>
       <LABEL for="writeQueryMaxSize">Maximum Size (in bytes) per Write Query: </LABEL>
         <INPUT type="text" id="writeQueryMaxSize" name="writeQueryMaxSize" value="{{.DefaultWriteQueryMaxSize}}"></BR>
-      <LABEL for="writeQueryMaxRowsDelete">Maximum Number of Rows per DELETE FROM Write Query: </LABEL>
-        <INPUT type="text" id="writeQueryMaxRowsDelete" name="writeQueryMaxRowsDelete" value="{{.DefaultWriteQueryMaxRowsDelete}}"></BR>
       <LABEL for="destinationWriterCount">Destination Writer Count: </LABEL>
         <INPUT type="text" id="destinationWriterCount" name="destinationWriterCount" value="{{.DefaultDestinationWriterCount}}"></BR>
       <LABEL for="minHealthyRdonlyTablets">Minimum Number of required healthy RDONLY tablets: </LABEL>
@@ -97,14 +95,13 @@ var verticalSplitCloneTemplate2 = mustParseTemplate("verticalSplitClone2", verti
 func commandVerticalSplitClone(wi *Instance, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (Worker, error) {
 	online := subFlags.Bool("online", defaultOnline, "do online copy (optional approximate copy, source and destination tablets will not be put out of serving, minimizes downtime during offline copy)")
 	offline := subFlags.Bool("offline", defaultOffline, "do offline copy (exact copy at a specific GTID, required before shard migration, source and destination tablets will be put out of serving during copy)")
-	tables := subFlags.String("tables", "", "comma separated list of tables to replicate (used for vertical split)")
+	tables := subFlags.String("tables", "", "comma separated list of tables to replicate (used for vertical split). Each is either an exact match, or a regular expression of the form /regexp/")
 	strategy := subFlags.String("strategy", "", "which strategy to use for restore, use 'vtworker VerticalSplitClone --strategy=-help k/s' for more info")
 	chunkCount := subFlags.Int("chunk_count", defaultChunkCount, "number of chunks per table")
 	minRowsPerChunk := subFlags.Int("min_rows_per_chunk", defaultMinRowsPerChunk, "minimum number of rows per chunk (may reduce --chunk_count)")
 	sourceReaderCount := subFlags.Int("source_reader_count", defaultSourceReaderCount, "number of concurrent streaming queries to use on the source")
 	writeQueryMaxRows := subFlags.Int("write_query_max_rows", defaultWriteQueryMaxRows, "maximum number of rows per write query")
 	writeQueryMaxSize := subFlags.Int("write_query_max_size", defaultWriteQueryMaxSize, "maximum size (in bytes) per write query")
-	writeQueryMaxRowsDelete := subFlags.Int("write_query_max_rows_delete", defaultWriteQueryMaxRows, "maximum number of rows per DELETE FROM write query")
 	destinationWriterCount := subFlags.Int("destination_writer_count", defaultDestinationWriterCount, "number of concurrent RPCs to execute on the destination")
 	minHealthyRdonlyTablets := subFlags.Int("min_healthy_rdonly_tablets", defaultMinHealthyRdonlyTablets, "minimum number of healthy RDONLY tablets before taking out one")
 	maxTPS := subFlags.Int64("max_tps", defaultMaxTPS, "if non-zero, limit copy to maximum number of (write) transactions/second on the destination (unlimited by default)")
@@ -121,11 +118,13 @@ func commandVerticalSplitClone(wi *Instance, wr *wrangler.Wrangler, subFlags *fl
 	if err != nil {
 		return nil, err
 	}
-	var tableArray []string
+	// The tableArray has zero elements when table flag is empty, which is an
+	// error case captured in function newVerticalSplitCloneWorker.
+	tableArray := []string{}
 	if *tables != "" {
 		tableArray = strings.Split(*tables, ",")
 	}
-	worker, err := newVerticalSplitCloneWorker(wr, wi.cell, keyspace, shard, *online, *offline, tableArray, *strategy, *chunkCount, *minRowsPerChunk, *sourceReaderCount, *writeQueryMaxRows, *writeQueryMaxSize, *writeQueryMaxRowsDelete, *destinationWriterCount, *minHealthyRdonlyTablets, *maxTPS, *maxReplicationLag)
+	worker, err := newVerticalSplitCloneWorker(wr, wi.cell, keyspace, shard, *online, *offline, tableArray, *strategy, *chunkCount, *minRowsPerChunk, *sourceReaderCount, *writeQueryMaxRows, *writeQueryMaxSize, *destinationWriterCount, *minHealthyRdonlyTablets, *maxTPS, *maxReplicationLag)
 	if err != nil {
 		return nil, fmt.Errorf("cannot create worker: %v", err)
 	}
@@ -205,7 +204,6 @@ func interactiveVerticalSplitClone(ctx context.Context, wi *Instance, wr *wrangl
 		result["DefaultSourceReaderCount"] = fmt.Sprintf("%v", defaultSourceReaderCount)
 		result["DefaultWriteQueryMaxRows"] = fmt.Sprintf("%v", defaultWriteQueryMaxRows)
 		result["DefaultWriteQueryMaxSize"] = fmt.Sprintf("%v", defaultWriteQueryMaxSize)
-		result["DefaultWriteQueryMaxRowsDelete"] = fmt.Sprintf("%v", defaultWriteQueryMaxRows)
 		result["DefaultDestinationWriterCount"] = fmt.Sprintf("%v", defaultDestinationWriterCount)
 		result["DefaultMinHealthyRdonlyTablets"] = fmt.Sprintf("%v", defaultMinHealthyRdonlyTablets)
 		result["DefaultMaxTPS"] = fmt.Sprintf("%v", defaultMaxTPS)
@@ -245,11 +243,6 @@ func interactiveVerticalSplitClone(ctx context.Context, wi *Instance, wr *wrangl
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("cannot parse writeQueryMaxSize: %s", err)
 	}
-	writeQueryMaxRowsDeleteStr := r.FormValue("writeQueryMaxRowsDelete")
-	writeQueryMaxRowsDelete, err := strconv.ParseInt(writeQueryMaxRowsDeleteStr, 0, 64)
-	if err != nil {
-		return nil, nil, nil, fmt.Errorf("cannot parse writeQueryMaxRowsDelete: %s", err)
-	}
 	destinationWriterCountStr := r.FormValue("destinationWriterCount")
 	destinationWriterCount, err := strconv.ParseInt(destinationWriterCountStr, 0, 64)
 	if err != nil {
@@ -272,7 +265,7 @@ func interactiveVerticalSplitClone(ctx context.Context, wi *Instance, wr *wrangl
 	}
 
 	// start the clone job
-	wrk, err := newVerticalSplitCloneWorker(wr, wi.cell, keyspace, "0", online, offline, tableArray, strategy, int(chunkCount), int(minRowsPerChunk), int(sourceReaderCount), int(writeQueryMaxRows), int(writeQueryMaxSize), int(writeQueryMaxRowsDelete), int(destinationWriterCount), int(minHealthyRdonlyTablets), maxTPS, maxReplicationLag)
+	wrk, err := newVerticalSplitCloneWorker(wr, wi.cell, keyspace, "0", online, offline, tableArray, strategy, int(chunkCount), int(minRowsPerChunk), int(sourceReaderCount), int(writeQueryMaxRows), int(writeQueryMaxSize), int(destinationWriterCount), int(minHealthyRdonlyTablets), maxTPS, maxReplicationLag)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("cannot create worker: %v", err)
 	}

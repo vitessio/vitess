@@ -179,8 +179,8 @@ func (ftc *fakeTabletConn) SetRollback(ctx context.Context, target *querypb.Targ
 	return fmt.Errorf("not implemented in this test")
 }
 
-// ResolveTransaction is part of the TabletConn interface
-func (ftc *fakeTabletConn) ResolveTransaction(ctx context.Context, target *querypb.Target, dtid string) (err error) {
+// ConcludeTransaction is part of the TabletConn interface
+func (ftc *fakeTabletConn) ConcludeTransaction(ctx context.Context, target *querypb.Target, dtid string) (err error) {
 	return fmt.Errorf("not implemented in this test")
 }
 
@@ -200,12 +200,7 @@ func (ftc *fakeTabletConn) BeginExecuteBatch(ctx context.Context, target *queryp
 }
 
 // SplitQuery is part of the TabletConn interface
-func (ftc *fakeTabletConn) SplitQuery(ctx context.Context, target *querypb.Target, query querytypes.BoundQuery, splitColumn string, splitCount int64) ([]querytypes.QuerySplit, error) {
-	return nil, fmt.Errorf("not implemented in this test")
-}
-
-// SplitQuery is part of the TabletConn interface
-func (ftc *fakeTabletConn) SplitQueryV2(
+func (ftc *fakeTabletConn) SplitQuery(
 	ctx context.Context,
 	target *querypb.Target,
 	query querytypes.BoundQuery,
@@ -817,7 +812,7 @@ func TestBinlogPlayerMapVerticalSplit(t *testing.T) {
 				Shard:    "0",
 				Tables: []string{
 					"table1",
-					"funtables_*",
+					"/funtables_/",
 				},
 			},
 		}

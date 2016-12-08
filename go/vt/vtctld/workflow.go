@@ -7,6 +7,7 @@ import (
 	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
+	"github.com/youtube/vitess/go/flagutil"
 	"github.com/youtube/vitess/go/vt/schemamanager/schemaswap"
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -18,16 +19,27 @@ import (
 var (
 	workflowManagerInit        = flag.Bool("workflow_manager_init", false, "Initialize the workflow manager in this vtctld instance.")
 	workflowManagerUseElection = flag.Bool("workflow_manager_use_election", false, "if specified, will use a topology server-based master election to ensure only one workflow manager is active at a time.")
+	workflowManagerDisable     flagutil.StringListValue
 )
+
+func init() {
+	flag.Var(&workflowManagerDisable, "workflow_manager_disable", "comma separated list of workflow types to disable")
+}
 
 func initWorkflowManager(ts topo.Server) {
 	if *workflowManagerInit {
-		// Register the Topo Validators
+		// Register the Topo Validators, and the workflow.
 		topovalidator.RegisterKeyspaceValidator()
 		topovalidator.RegisterShardValidator()
 		topovalidator.Register()
 
+		// Register the Schema Swap workflow.
 		schemaswap.RegisterWorkflowFactory()
+
+		// Unregister the blacklisted workflows.
+		for _, name := range workflowManagerDisable {
+			workflow.Unregister(name)
+		}
 
 		// Create the WorkflowManager.
 		vtctl.WorkflowManager = workflow.NewManager(ts)

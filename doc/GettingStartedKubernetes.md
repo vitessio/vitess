@@ -218,7 +218,7 @@ $ export KUBECTL=/example/path/to/google-cloud-sdk/bin/kubectl
     ```
 
     This command creates two clusters. One is for the
-    [global cell](http://vitess.io/doc/TopologyService/#global-vs-local),
+    [global cell](/user-guide/topology-service.html#global-vs-local),
     and the other is for a
     [local cell](http://vitess.io/overview/concepts.html#cell-data-center)
     called *test*. You can check the status of the

@@ -69,10 +69,10 @@ var keywords = map[string]int{
 	"cross":               CROSS,
 	"current_date":        UNUSED,
 	"current_time":        UNUSED,
-	"current_timestamp":   UNUSED,
+	"current_timestamp":   CURRENT_TIMESTAMP,
 	"current_user":        UNUSED,
 	"cursor":              UNUSED,
-	"database":            UNUSED,
+	"database":            DATABASE,
 	"databases":           UNUSED,
 	"day_hour":            UNUSED,
 	"day_microsecond":     UNUSED,
@@ -172,7 +172,7 @@ var keywords = map[string]int{
 	"middleint":           UNUSED,
 	"minute_microsecond":  UNUSED,
 	"minute_second":       UNUSED,
-	"mod":                 UNUSED,
+	"mod":                 MOD,
 	"modifies":            UNUSED,
 	"natural":             NATURAL,
 	"next":                NEXT,
@@ -285,7 +285,7 @@ func (tkn *Tokenizer) Lex(lval *yySymType) int {
 		typ, val = tkn.Scan()
 	}
 	switch typ {
-	case ID, STRING, NUMBER, VALUE_ARG, LIST_ARG, COMMENT:
+	case ID, STRING, HEX, NUMBER, HEXNUM, VALUE_ARG, LIST_ARG, COMMENT:
 		lval.bytes = val
 	}
 	tkn.lastToken = val
@@ -316,7 +316,14 @@ func (tkn *Tokenizer) Scan() (int, []byte) {
 	tkn.skipBlank()
 	switch ch := tkn.lastChar; {
 	case isLetter(ch):
-		return tkn.scanIdentifier()
+		tkn.next()
+		if ch == 'X' || ch == 'x' {
+			if tkn.lastChar == '\'' {
+				tkn.next()
+				return tkn.scanHex()
+			}
+		}
+		return tkn.scanIdentifier(byte(ch))
 	case isDigit(ch):
 		return tkn.scanNumber(false)
 	case ch == ':':
@@ -350,9 +357,17 @@ func (tkn *Tokenizer) Scan() (int, []byte) {
 				return int(ch), nil
 			}
 		case '-':
-			if tkn.lastChar == '-' {
+			switch tkn.lastChar {
+			case '-':
 				tkn.next()
 				return tkn.scanCommentType1("--")
+			case '>':
+				tkn.next()
+				if tkn.lastChar == '>' {
+					tkn.next()
+					return JSON_UNQUOTE_EXTRACT_OP, nil
+				}
+				return JSON_EXTRACT_OP, nil
 			}
 			return int(ch), nil
 		case '<':
@@ -410,11 +425,12 @@ func (tkn *Tokenizer) skipBlank() {
 	}
 }
 
-func (tkn *Tokenizer) scanIdentifier() (int, []byte) {
+func (tkn *Tokenizer) scanIdentifier(firstByte byte) (int, []byte) {
 	buffer := &bytes.Buffer{}
-	buffer.WriteByte(byte(tkn.lastChar))
-	for tkn.next(); isLetter(tkn.lastChar) || isDigit(tkn.lastChar); tkn.next() {
+	buffer.WriteByte(firstByte)
+	for isLetter(tkn.lastChar) || isDigit(tkn.lastChar) {
 		buffer.WriteByte(byte(tkn.lastChar))
+		tkn.next()
 	}
 	lowered := bytes.ToLower(buffer.Bytes())
 	loweredStr := string(lowered)
@@ -426,6 +442,19 @@ func (tkn *Tokenizer) scanIdentifier() (int, []byte) {
 		return ID, lowered
 	}
 	return ID, buffer.Bytes()
+}
+
+func (tkn *Tokenizer) scanHex() (int, []byte) {
+	buffer := &bytes.Buffer{}
+	tkn.scanMantissa(16, buffer)
+	if tkn.lastChar != '\'' {
+		return LEX_ERROR, buffer.Bytes()
+	}
+	tkn.next()
+	if buffer.Len()%2 != 0 {
+		return LEX_ERROR, buffer.Bytes()
+	}
+	return HEX, buffer.Bytes()
 }
 
 func (tkn *Tokenizer) scanLiteralIdentifier() (int, []byte) {
@@ -471,6 +500,7 @@ func (tkn *Tokenizer) scanMantissa(base int, buffer *bytes.Buffer) {
 }
 
 func (tkn *Tokenizer) scanNumber(seenDecimalPoint bool) (int, []byte) {
+	token := NUMBER
 	buffer := &bytes.Buffer{}
 	if seenDecimalPoint {
 		buffer.WriteByte('.')
@@ -478,37 +508,19 @@ func (tkn *Tokenizer) scanNumber(seenDecimalPoint bool) (int, []byte) {
 		goto exponent
 	}
 
+	// 0x construct.
 	if tkn.lastChar == '0' {
-		// int or float
 		tkn.consumeNext(buffer)
 		if tkn.lastChar == 'x' || tkn.lastChar == 'X' {
-			// hexadecimal int
+			token = HEXNUM
 			tkn.consumeNext(buffer)
 			tkn.scanMantissa(16, buffer)
-		} else {
-			// octal int or float
-			seenDecimalDigit := false
-			tkn.scanMantissa(8, buffer)
-			if tkn.lastChar == '8' || tkn.lastChar == '9' {
-				// illegal octal int or float
-				seenDecimalDigit = true
-				tkn.scanMantissa(10, buffer)
-			}
-			if tkn.lastChar == '.' || tkn.lastChar == 'e' || tkn.lastChar == 'E' {
-				goto fraction
-			}
-			// octal int
-			if seenDecimalDigit {
-				return LEX_ERROR, buffer.Bytes()
-			}
+			goto exit
 		}
-		goto exit
 	}
 
-	// decimal int or float
 	tkn.scanMantissa(10, buffer)
 
-fraction:
 	if tkn.lastChar == '.' {
 		tkn.consumeNext(buffer)
 		tkn.scanMantissa(10, buffer)
@@ -524,7 +536,12 @@ exponent:
 	}
 
 exit:
-	return NUMBER, buffer.Bytes()
+	// A letter cannot immediately follow a number.
+	if isLetter(tkn.lastChar) {
+		return LEX_ERROR, buffer.Bytes()
+	}
+
+	return token, buffer.Bytes()
 }
 
 func (tkn *Tokenizer) scanString(delim uint16, typ int) (int, []byte) {

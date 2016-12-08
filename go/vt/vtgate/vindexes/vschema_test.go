@@ -620,6 +620,18 @@ func TestSequence(t *testing.T) {
 							Sequence: "seq",
 						},
 					},
+					"t2": {
+						ColumnVindexes: []*vschemapb.ColumnVindex{
+							{
+								Column: "c1",
+								Name:   "stfu1",
+							},
+						},
+						AutoIncrement: &vschemapb.AutoIncrement{
+							Column:   "c2",
+							Sequence: "unsharded.seq",
+						},
+					},
 				},
 			},
 		},
@@ -664,10 +676,36 @@ func TestSequence(t *testing.T) {
 	t1.Ordered = []*ColumnVindex{
 		t1.ColumnVindexes[0],
 	}
+	t2 := &Table{
+		Name:     "t2",
+		Keyspace: kss,
+		ColumnVindexes: []*ColumnVindex{
+			{
+				Column: cistring.New("c1"),
+				Type:   "stfu",
+				Name:   "stfu1",
+				Vindex: &stFU{
+					name: "stfu1",
+					Params: map[string]string{
+						"stfu1": "1",
+					},
+				},
+			},
+		},
+		AutoIncrement: &AutoIncrement{
+			Column:          cistring.New("c2"),
+			Sequence:        seq,
+			ColumnVindexNum: -1,
+		},
+	}
+	t2.Ordered = []*ColumnVindex{
+		t2.ColumnVindexes[0],
+	}
 	want := &VSchema{
 		tables: map[string]*Table{
 			"seq": seq,
 			"t1":  t1,
+			"t2":  t2,
 		},
 		Keyspaces: map[string]*KeyspaceSchema{
 			"unsharded": {
@@ -680,6 +718,7 @@ func TestSequence(t *testing.T) {
 				Keyspace: kss,
 				Tables: map[string]*Table{
 					"t1": t1,
+					"t2": t2,
 				},
 			},
 		},
@@ -719,7 +758,41 @@ func TestBadSequence(t *testing.T) {
 		},
 	}
 	_, err := BuildVSchema(&bad)
-	want := "sequence seq not found for table t1"
+	want := "cannot resolve sequence seq: table seq not found"
+	if err == nil || err.Error() != want {
+		t.Errorf("BuildVSchema: %v, want %v", err, want)
+	}
+}
+
+func TestBadSequenceName(t *testing.T) {
+	bad := vschemapb.SrvVSchema{
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			"sharded": {
+				Sharded: true,
+				Vindexes: map[string]*vschemapb.Vindex{
+					"stfu1": {
+						Type: "stfu",
+					},
+				},
+				Tables: map[string]*vschemapb.Table{
+					"t1": {
+						ColumnVindexes: []*vschemapb.ColumnVindex{
+							{
+								Column: "c1",
+								Name:   "stfu1",
+							},
+						},
+						AutoIncrement: &vschemapb.AutoIncrement{
+							Column:   "c1",
+							Sequence: "a.b.seq",
+						},
+					},
+				},
+			},
+		},
+	}
+	_, err := BuildVSchema(&bad)
+	want := "cannot resolve sequence a.b.seq: table a.b.seq not found"
 	if err == nil || err.Error() != want {
 		t.Errorf("BuildVSchema: %v, want %v", err, want)
 	}
