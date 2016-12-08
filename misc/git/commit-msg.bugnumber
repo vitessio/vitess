@@ -1,0 +1,65 @@
+#!/bin/bash
+
+# This script is run during "git commit" after the commit message was entered.
+#
+# If it does not find a BUG=<bug number> line in this commit or previous new
+# commits from this branch, it prompts the user to add one.
+# <bug number> refers to a Google internal bug number. Therefore, the script
+# prompts only users who have @google.com in their Git configured email.
+
+bug_marker="BUG="
+
+# Return early if a bug marker is already present:
+# a) Check current commit message.
+msg_file="$1"
+if grep -qE "^${bug_marker}[0-9]{8,}$|\bb\/[0-9]{8,}\b" "$msg_file"; then
+  exit 0
+fi
+# b) Check other commits in the branch as well.
+if [[ -n "$(git log --no-merges -E --grep="^${bug_marker}[0-9]{8,}$|\bb\/[0-9]{8,}\b" master..)" ]]; then
+  exit 0
+fi
+
+# No bug number found. Ask user to input a bug number.
+
+# git doesn't give us access to user input, so let's steal it.
+exec < /dev/tty
+if [[ $? -ne 0 ]]; then
+  # non-interactive shell (e.g. called from Eclipse). Give up here.
+  exit 0
+fi
+
+git_email=$(git config --get user.email)
+if [[ "$git_email" != *@google.com ]]; then
+  # This script applies only to internal developers.
+  exit 0
+fi
+
+echo "No ${bug_marker}<bug number> marker was found in this or previous commits in this branch."
+echo
+echo "As an internal developer, please always try to add a bug number to your commits."
+echo
+while [[ -z "$bug" ]]; do
+  read -r -p 'You can enter a bug number now: [press enter to skip] '
+  if [[ -z "$REPLY" ]]; then
+    bug="skipped"
+    break
+  fi
+  # Example: 28221285
+  if [[ "$REPLY" =~ ^[0-9]{8,}$ ]]; then
+    bug="$REPLY"
+    break
+  fi
+
+  echo "You entered an invalid bug number: $REPLY"
+  echo
+  echo "Please try again. Do not enter anything to skip this step."
+done
+if [[ "$bug" == "skipped" ]]; then
+  exit 0
+fi
+
+# Add the bug number to the commit message.
+bug_marker_line="${bug_marker}$bug"
+echo >> "$msg_file"
+echo "$bug_marker_line" >> "$msg_file"
