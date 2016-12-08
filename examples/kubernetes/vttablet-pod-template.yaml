@@ -55,7 +55,7 @@ spec:
           done
 
           su -p -s /bin/bash -c "mysql -u vt_dba -S $mysql_socket
-          -e 'CREATE DATABASE IF NOT EXISTS {{db_name}}'" vitess
+          -e 'CREATE DATABASE IF NOT EXISTS vt_{{keyspace}}'" vitess
 
           su -p -s /bin/bash -c "/vt/bin/vttablet
           -topo_implementation etcd
