@@ -279,3 +279,19 @@ func (txe *TxExecutor) ReadTransaction(dtid string) (*querypb.TransactionMetadat
 	}
 	return txe.te.twoPC.ReadTransaction(txe.ctx, dtid)
 }
+
+// ReadTwopcInflight returns info about all in-flight 2pc transactions.
+func (txe *TxExecutor) ReadTwopcInflight() (distributed []*DistributedTx, prepared, failed []*PreparedTx, err error) {
+	if !txe.te.twopcEnabled {
+		return nil, nil, nil, NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "2pc is not enabled")
+	}
+	prepared, failed, err = txe.te.twoPC.ReadAllRedo(txe.ctx)
+	if err != nil {
+		return nil, nil, nil, NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "Could not read redo: %v", err)
+	}
+	distributed, err = txe.te.twoPC.ReadAllTransactions(txe.ctx)
+	if err != nil {
+		return nil, nil, nil, NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "Could not read redo: %v", err)
+	}
+	return distributed, prepared, failed, nil
+}

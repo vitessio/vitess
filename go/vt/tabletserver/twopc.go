@@ -65,9 +65,15 @@ const (
   primary key(dtid, id)
 	) engine=InnoDB`
 
-	sqlReadAllRedo = `select t.dtid, t.state, s.id, s.statement from ` + "`%s`" + `.redo_log_transaction t
+	sqlReadAllRedo = `select t.dtid, t.state, t.time_created, s.statement
+	from ` + "`%s`" + `.redo_log_transaction t
   join ` + "`%s`" + `.redo_log_statement s on t.dtid = s.dtid
-	where t.state = 'Prepared' order by t.dtid, s.id`
+	order by t.dtid, s.id`
+
+	sqlReadAllTransactions = `select t.dtid, t.state, t.time_created, p.keyspace, p.shard
+	from ` + "`%s`" + `.transaction t
+  join ` + "`%s`" + `.participant p on t.dtid = p.dtid
+	order by t.dtid, p.id`
 )
 
 // TwoPC performs 2PC metadata management (MM) functions.
@@ -81,14 +87,15 @@ type TwoPC struct {
 	deleteRedoStmt *sqlparser.ParsedQuery
 	readAllRedo    string
 
-	insertTransaction  *sqlparser.ParsedQuery
-	insertParticipants *sqlparser.ParsedQuery
-	transition         *sqlparser.ParsedQuery
-	deleteTransaction  *sqlparser.ParsedQuery
-	deleteParticipants *sqlparser.ParsedQuery
-	readTransaction    *sqlparser.ParsedQuery
-	readParticipants   *sqlparser.ParsedQuery
-	readAbandoned      *sqlparser.ParsedQuery
+	insertTransaction   *sqlparser.ParsedQuery
+	insertParticipants  *sqlparser.ParsedQuery
+	transition          *sqlparser.ParsedQuery
+	deleteTransaction   *sqlparser.ParsedQuery
+	deleteParticipants  *sqlparser.ParsedQuery
+	readTransaction     *sqlparser.ParsedQuery
+	readParticipants    *sqlparser.ParsedQuery
+	readAbandoned       *sqlparser.ParsedQuery
+	readAllTransactions string
 }
 
 // NewTwoPC creates a TwoPC variable.
@@ -159,6 +166,7 @@ func (tpc *TwoPC) Init(sidecarDBName string, dbaparams *sqldb.ConnParams) error 
 	tpc.readAbandoned = buildParsedQuery(
 		"select dtid, time_created from `%s`.transaction where time_created < %a",
 		sidecarDBName, ":time_created")
+	tpc.readAllTransactions = fmt.Sprintf(sqlReadAllTransactions, sidecarDBName, sidecarDBName)
 	return nil
 }
 
@@ -227,8 +235,15 @@ func (tpc *TwoPC) DeleteRedo(ctx context.Context, conn *TxConnection, dtid strin
 	return err
 }
 
+// PreparedTx represents a displayable version of a prepared transaction.
+type PreparedTx struct {
+	Dtid    string
+	Queries []string
+	Time    time.Time
+}
+
 // ReadAllRedo returns all the prepared transactions from the redo logs.
-func (tpc *TwoPC) ReadAllRedo(ctx context.Context) (prepared map[string][]string, failed []string, err error) {
+func (tpc *TwoPC) ReadAllRedo(ctx context.Context) (prepared, failed []*PreparedTx, err error) {
 	conn, err := tpc.readPool.Get(ctx)
 	if err != nil {
 		return nil, nil, err
@@ -240,29 +255,24 @@ func (tpc *TwoPC) ReadAllRedo(ctx context.Context) (prepared map[string][]string
 		return nil, nil, err
 	}
 
-	// Do this as two loops for better readability.
-	// Load prepared transactions.
-	prepared = make(map[string][]string)
+	var curTx *PreparedTx
 	for _, row := range qr.Rows {
-		if row[1].String() != "Prepared" {
-			continue
-		}
 		dtid := row[0].String()
-		prepared[dtid] = append(prepared[dtid], row[3].String())
-	}
-
-	// Load failed transactions.
-	lastdtid := ""
-	for _, row := range qr.Rows {
-		if row[1].String() != "Failed" {
-			continue
+		if curTx == nil || dtid != curTx.Dtid {
+			// Initialize the new element.
+			v, _ := strconv.ParseInt(row[2].String(), 10, 64)
+			curTx = &PreparedTx{
+				Dtid: dtid,
+				Time: time.Unix(0, v),
+			}
+			switch row[1].String() {
+			case "Prepared":
+				prepared = append(prepared, curTx)
+			default:
+				failed = append(failed, curTx)
+			}
 		}
-		dtid := row[0].String()
-		if dtid == lastdtid {
-			continue
-		}
-		failed = append(failed, dtid)
-		lastdtid = dtid
+		curTx.Queries = append(curTx.Queries, row[3].String())
 	}
 	return prepared, failed, nil
 }
@@ -404,6 +414,50 @@ func (tpc *TwoPC) ReadAbandoned(ctx context.Context, abandonTime time.Time) (map
 		txs[row[0].String()] = time.Unix(0, t)
 	}
 	return txs, nil
+}
+
+// DistributedTx is similar to querypb.TransactionMetadata, but
+// is display friendly.
+type DistributedTx struct {
+	Dtid         string
+	State        string
+	Created      time.Time
+	Participants []querypb.Target
+}
+
+// ReadAllTransactions returns info about all distributed transactions.
+func (tpc *TwoPC) ReadAllTransactions(ctx context.Context) ([]*DistributedTx, error) {
+	conn, err := tpc.readPool.Get(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Recycle()
+
+	qr, err := conn.Exec(ctx, tpc.readAllTransactions, 10000, false)
+	if err != nil {
+		return nil, err
+	}
+
+	var curTx *DistributedTx
+	var distributed []*DistributedTx
+	for _, row := range qr.Rows {
+		dtid := row[0].String()
+		if curTx == nil || dtid != curTx.Dtid {
+			// Initialize the new element.
+			v, _ := strconv.ParseInt(row[2].String(), 10, 64)
+			curTx = &DistributedTx{
+				Dtid:    dtid,
+				State:   row[1].String(),
+				Created: time.Unix(0, v),
+			}
+			distributed = append(distributed, curTx)
+		}
+		curTx.Participants = append(curTx.Participants, querypb.Target{
+			Keyspace: row[3].String(),
+			Shard:    row[4].String(),
+		})
+	}
+	return distributed, nil
 }
 
 func (tpc *TwoPC) exec(ctx context.Context, conn *TxConnection, pq *sqlparser.ParsedQuery, bindVars map[string]interface{}) (*sqltypes.Result, error) {

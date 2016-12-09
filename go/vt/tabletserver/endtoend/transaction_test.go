@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/vt/tabletserver/endtoend/framework"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
@@ -709,4 +710,74 @@ func TestWatchdog(t *testing.T) {
 		t.Errorf("Unexpected message: %s", dtid)
 	case <-time.After(2 * time.Second):
 	}
+}
+
+func TestManualTwopcz(t *testing.T) {
+	// This is a manual test. Uncomment the Skip to perform this test.
+	// The test will print the twopcz URL. Navigate to that location
+	// and perform all the operations allowed. They should all succeed
+	// and cause the transactions to be resolved.
+	t.Skip()
+	client := framework.NewClient()
+	defer client.Execute("delete from vitess_test where intval=4", nil)
+	conn, err := mysql.Connect(connParams)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	defer conn.Close()
+
+	// Successful prepare.
+	err = client.Begin()
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	_, err = client.Execute("insert into vitess_test (intval, floatval, charval, binval) values(4, null, null, null)", nil)
+	_, err = client.Execute("insert into vitess_test (intval, floatval, charval, binval) values(5, null, null, null)", nil)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	err = client.Prepare("dtidsuccess")
+	defer client.RollbackPrepared("dtidsuccess", 0)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	// Failed transaction.
+	err = client.Begin()
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	_, err = client.Execute("insert into vitess_test (intval, floatval, charval, binval) values(6, null, null, null)", nil)
+	_, err = client.Execute("insert into vitess_test (intval, floatval, charval, binval) values(7, null, null, null)", nil)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	err = client.Prepare("dtidfail")
+	defer client.RollbackPrepared("dtidfail", 0)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	conn.ExecuteFetch("update _vt.redo_log_transaction set state = 'Failed' where dtid = 'dtidfail'", 10, false)
+	conn.ExecuteFetch("commit", 10, false)
+
+	// Distributed transaction.
+	err = client.CreateTransaction("distributed", []*querypb.Target{{
+		Keyspace: "k1",
+		Shard:    "s1",
+	}, {
+		Keyspace: "k2",
+		Shard:    "s2",
+	}})
+	defer client.ConcludeTransaction("distributed")
+
+	fmt.Printf("%s/twopcz\n", framework.ServerAddress)
+	fmt.Print("Sleeping for 30 seconds\n")
+	time.Sleep(30 * time.Second)
 }

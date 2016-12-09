@@ -365,6 +365,37 @@ func TestExecutorReadTransaction(t *testing.T) {
 	}
 }
 
+func TestExecutorReadAllTransactions(t *testing.T) {
+	txe, tsv, db := newTestTxExecutor()
+	defer tsv.StopService()
+
+	db.AddQuery(txe.te.twoPC.readAllTransactions, &sqltypes.Result{
+		Rows: [][]sqltypes.Value{{
+			sqltypes.MakeString([]byte("dtid0")),
+			sqltypes.MakeString([]byte("Prepared")),
+			sqltypes.MakeString([]byte("1")),
+			sqltypes.MakeString([]byte("ks01")),
+			sqltypes.MakeString([]byte("shard01")),
+		}},
+	})
+	got, _, _, err := txe.ReadTwopcInflight()
+	if err != nil {
+		t.Error(err)
+	}
+	want := []*DistributedTx{{
+		Dtid:    "dtid0",
+		State:   "Prepared",
+		Created: time.Unix(0, 1),
+		Participants: []querypb.Target{{
+			Keyspace: "ks01",
+			Shard:    "shard01",
+		}},
+	}}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("ReadAllTransactions: %v, want %v", got, want)
+	}
+}
+
 // These vars and types are used only for TestExecutorResolveTransaction
 var dtidCh = make(chan string)
 
@@ -437,6 +468,12 @@ func TestNoTwopc(t *testing.T) {
 		desc: "ReadTransaction",
 		fun: func() error {
 			_, err := txe.ReadTransaction("aa")
+			return err
+		},
+	}, {
+		desc: "ReadAllTransactions",
+		fun: func() error {
+			_, _, _, err := txe.ReadTwopcInflight()
 			return err
 		},
 	}}
