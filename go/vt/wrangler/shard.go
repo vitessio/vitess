@@ -83,10 +83,10 @@ func (wr *Wrangler) SetShardServedTypes(ctx context.Context, keyspace, shard str
 //   the TabletControl record for the cells
 //
 // This takes the keyspace lock as to not interfere with resharding operations.
-func (wr *Wrangler) SetShardTabletControl(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, cells []string, remove, disableQueryService bool, tables []string) (err error) {
+func (wr *Wrangler) SetShardTabletControl(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, cells []string, remove, disableQueryService bool, blacklistedTables []string) (err error) {
 	// check input
-	if disableQueryService && len(tables) > 0 {
-		return fmt.Errorf("SetShardTabletControl cannot have both DisableQueryService set and tables set")
+	if disableQueryService && len(blacklistedTables) > 0 {
+		return fmt.Errorf("SetShardTabletControl cannot have both DisableQueryService and BlacklistedTables set")
 	}
 
 	// lock the keyspace
@@ -98,13 +98,13 @@ func (wr *Wrangler) SetShardTabletControl(ctx context.Context, keyspace, shard s
 
 	// update the shard
 	_, err = wr.ts.UpdateShardFields(ctx, keyspace, shard, func(si *topo.ShardInfo) error {
-		if len(tables) == 0 && !remove {
+		if len(blacklistedTables) == 0 && !remove {
 			// we are setting the DisableQueryService flag only
 			return si.UpdateDisableQueryService(ctx, tabletType, cells, disableQueryService)
 		}
 
 		// we are setting / removing the blacklisted tables only
-		return si.UpdateSourceBlacklistedTables(ctx, tabletType, cells, remove, tables)
+		return si.UpdateSourceBlacklistedTables(ctx, tabletType, cells, remove, blacklistedTables)
 	})
 	return err
 }
