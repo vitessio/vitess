@@ -479,11 +479,10 @@ class TestEcho(TestPythonClientBase):
       'bytes': '\x01\x02\x03',
       'bool': True,
   }
-  bind_variables_echo = 'map[bool:1 bytes:[1 2 3] float:2.1 int:123]'
-  bind_variables_p3_echo = ('map[bool:type:INT64 value:"1"  '
-                            'bytes:type:VARBINARY value:"\\001\\002\\003"  '
-                            'float:type:FLOAT64 value:"2.1"  '
-                            'int:type:INT64 value:"123" ]')
+  bind_variables_echo = ('map[bool:type:INT64 value:"1"  '
+                         'bytes:type:VARBINARY value:"\\001\\002\\003"  '
+                         'float:type:FLOAT64 value:"2.1"  '
+                         'int:type:INT64 value:"123" ]')
 
   caller_id = vtgate_client.CallerID(
       principal='test_principal',
@@ -619,7 +618,7 @@ class TestEcho(TestPythonClientBase):
         'query': self.echo_prefix+self.query_echo,
         'keyspace': self.keyspace,
         'shards': self.shards_echo,
-        'bindVars': self.bind_variables_p3_echo,
+        'bindVars': self.bind_variables_echo,
         'tabletType': self.tablet_type_echo,
         'asTransaction': 'true',
     })
@@ -642,7 +641,7 @@ class TestEcho(TestPythonClientBase):
         'query': self.echo_prefix+self.query_echo,
         'keyspace': self.keyspace,
         'keyspaceIds': self.keyspace_ids_echo,
-        'bindVars': self.bind_variables_p3_echo,
+        'bindVars': self.bind_variables_echo,
         'tabletType': self.tablet_type_echo,
         'asTransaction': 'true',
     })
