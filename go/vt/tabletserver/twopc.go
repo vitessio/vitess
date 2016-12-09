@@ -80,12 +80,13 @@ const (
 type TwoPC struct {
 	readPool *ConnPool
 
-	insertRedoTx   *sqlparser.ParsedQuery
-	insertRedoStmt *sqlparser.ParsedQuery
-	updateRedoTx   *sqlparser.ParsedQuery
-	deleteRedoTx   *sqlparser.ParsedQuery
-	deleteRedoStmt *sqlparser.ParsedQuery
-	readAllRedo    string
+	insertRedoTx        *sqlparser.ParsedQuery
+	insertRedoStmt      *sqlparser.ParsedQuery
+	updateRedoTx        *sqlparser.ParsedQuery
+	deleteRedoTx        *sqlparser.ParsedQuery
+	deleteRedoStmt      *sqlparser.ParsedQuery
+	readAllRedo         string
+	countUnresolvedRedo *sqlparser.ParsedQuery
 
 	insertTransaction   *sqlparser.ParsedQuery
 	insertParticipants  *sqlparser.ParsedQuery
@@ -141,6 +142,9 @@ func (tpc *TwoPC) Init(sidecarDBName string, dbaparams *sqldb.ConnParams) error 
 		"delete from `%s`.redo_log_statement where dtid = %a",
 		sidecarDBName, ":dtid")
 	tpc.readAllRedo = fmt.Sprintf(sqlReadAllRedo, sidecarDBName, sidecarDBName)
+	tpc.countUnresolvedRedo = buildParsedQuery(
+		"select count(*) from `%s`.redo_log_transaction where time_created < %a",
+		sidecarDBName, ":time_created")
 
 	tpc.insertTransaction = buildParsedQuery(
 		"insert into `%s`.transaction(dtid, state, time_created, time_updated) values (%a, 'Prepare', %a, %a)",
@@ -275,6 +279,28 @@ func (tpc *TwoPC) ReadAllRedo(ctx context.Context) (prepared, failed []*Prepared
 		curTx.Queries = append(curTx.Queries, row[3].String())
 	}
 	return prepared, failed, nil
+}
+
+// CountUnresolvedRedo returns the number of prepared transactions that are still unresolved.
+func (tpc *TwoPC) CountUnresolvedRedo(ctx context.Context, unresolvedTime time.Time) (int64, error) {
+	conn, err := tpc.readPool.Get(ctx)
+	if err != nil {
+		return 0, err
+	}
+	defer conn.Recycle()
+
+	bindVars := map[string]interface{}{
+		"time_created": int64(unresolvedTime.UnixNano()),
+	}
+	qr, err := tpc.read(ctx, conn, tpc.countUnresolvedRedo, bindVars)
+	if err != nil {
+		return 0, err
+	}
+	if len(qr.Rows) < 1 {
+		return 0, nil
+	}
+	v, _ := strconv.ParseInt(qr.Rows[0][0].String(), 10, 64)
+	return v, nil
 }
 
 // CreateTransaction saves the metadata of a 2pc transaction as Prepared.

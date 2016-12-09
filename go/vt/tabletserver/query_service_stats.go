@@ -26,6 +26,8 @@ type QueryServiceStats struct {
 	ErrorStats *stats.Counters
 	// InternalErros shows number of errors from internal components.
 	InternalErrors *stats.Counters
+	// Unresolved tracks unresolved items. For now it's just Prepares.
+	Unresolved *stats.Counters
 	// UserTableQueryCount shows number of queries received for each CallerID/table combination.
 	UserTableQueryCount *stats.MultiCounters
 	// UserTableQueryTimesNs shows total latency for each CallerID/table combination.
@@ -50,6 +52,7 @@ func NewQueryServiceStats(statsPrefix string, enablePublishStats bool) *QuerySer
 	infoErrorsName := ""
 	errorStatsName := ""
 	internalErrorsName := ""
+	unresolvedName := ""
 	resultStatsName := ""
 	userTableQueryCountName := ""
 	userTableQueryTimesNsName := ""
@@ -64,6 +67,7 @@ func NewQueryServiceStats(statsPrefix string, enablePublishStats bool) *QuerySer
 		infoErrorsName = statsPrefix + "InfoErrors"
 		errorStatsName = statsPrefix + "Errors"
 		internalErrorsName = statsPrefix + "InternalErrors"
+		unresolvedName = statsPrefix + "Unresolved"
 		resultStatsName = statsPrefix + "Results"
 		userTableQueryCountName = statsPrefix + "UserTableQueryCount"
 		userTableQueryTimesNsName = statsPrefix + "UserTableQueryTimesNs"
@@ -80,6 +84,7 @@ func NewQueryServiceStats(statsPrefix string, enablePublishStats bool) *QuerySer
 		InfoErrors:     stats.NewCounters(infoErrorsName, "Retry", "DupKey"),
 		ErrorStats:     stats.NewCounters(errorStatsName, "Fail", "TxPoolFull", "NotInTx", "Deadlock", "Fatal"),
 		InternalErrors: stats.NewCounters(internalErrorsName, "Task", "StrayTransactions", "Panic", "HungQuery", "Schema", "TwopcCommit", "TwopcResurrection", "WatchdogFail"),
+		Unresolved:     stats.NewCounters(unresolvedName, "Prepares"),
 		UserTableQueryCount: stats.NewMultiCounters(
 			userTableQueryCountName, []string{"TableName", "CallerID", "Type"}),
 		UserTableQueryTimesNs: stats.NewMultiCounters(

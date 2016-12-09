@@ -712,6 +712,37 @@ func TestWatchdog(t *testing.T) {
 	}
 }
 
+func TestUnresolvedTracking(t *testing.T) {
+	// This is a long running test. Enable only for testing the watchdog.
+	t.Skip()
+	client := framework.NewClient()
+	defer client.Execute("delete from vitess_test where intval=4", nil)
+
+	query := "insert into vitess_test (intval, floatval, charval, binval) " +
+		"values(4, null, null, null)"
+	err := client.Begin()
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	_, err = client.Execute(query, nil)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	err = client.Prepare("aa")
+	defer client.RollbackPrepared("aa", 0)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	time.Sleep(10 * time.Second)
+	vars := framework.DebugVars()
+	if val := framework.FetchInt(vars, "Unresolved/Prepares"); val != 1 {
+		t.Errorf("Unresolved: %d, want 1", val)
+	}
+}
+
 func TestManualTwopcz(t *testing.T) {
 	// This is a manual test. Uncomment the Skip to perform this test.
 	// The test will print the twopcz URL. Navigate to that location
