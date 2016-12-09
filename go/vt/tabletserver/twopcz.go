@@ -5,6 +5,7 @@
 package tabletserver
 
 import (
+	"encoding/json"
 	"fmt"
 	"html/template"
 	"net/http"
@@ -124,9 +125,7 @@ func twopczHandler(txe *TxExecutor, w http.ResponseWriter, r *http.Request) {
 	dtid := r.FormValue("dtid")
 	action := r.FormValue("Action")
 	switch action {
-	case "Discard":
-		err = txe.RollbackPrepared(dtid, 0)
-	case "Rollback":
+	case "Discard", "Rollback":
 		err = txe.RollbackPrepared(dtid, 0)
 	case "Commit":
 		err = txe.CommitPrepared(dtid)
@@ -137,8 +136,9 @@ func twopczHandler(txe *TxExecutor, w http.ResponseWriter, r *http.Request) {
 	if action != "" {
 		if err != nil {
 			msg = err.Error()
+			msg = fmt.Sprintf("%s(%s): %v", r.FormValue("Action"), dtid, err)
 		} else {
-			msg = fmt.Sprintf("%s(%s) completed", r.FormValue("Action"), dtid)
+			msg = fmt.Sprintf("%s(%s): completed.", r.FormValue("Action"), dtid)
 		}
 	}
 	distributed, prepared, failed, err := txe.ReadTwopcInflight()
@@ -148,9 +148,21 @@ func twopczHandler(txe *TxExecutor, w http.ResponseWriter, r *http.Request) {
 	}
 	format := r.FormValue("format")
 	if format == "json" {
-		// TODO(sougou): output json.
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte("{}"))
+		js, err := json.Marshal(struct {
+			Distributed      []*DistributedTx
+			Prepared, Failed []*PreparedTx
+		}{
+			Distributed: distributed,
+			Prepared:    prepared,
+			Failed:      failed,
+		})
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(js)
 		return
 	}
 
