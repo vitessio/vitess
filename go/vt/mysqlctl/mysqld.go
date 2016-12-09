@@ -279,7 +279,9 @@ func (mysqld *Mysqld) Start(ctx context.Context, waitAsRoot bool, mysqldArgs ...
 	return mysqld.Wait(ctx, waitAsRoot)
 }
 
-// Wait returns nil when mysqld is up and accepting connections.
+// Wait returns nil when mysqld is up and accepting connections.  If
+// asRoot is set, we will use the root user with no password for the
+// test connection. Otherwise we will use the dba user, with full credentials.
 func (mysqld *Mysqld) Wait(ctx context.Context, asRoot bool) error {
 	log.Infof("Waiting for mysqld socket file (%v) to be ready...", mysqld.config.SocketFile)
 

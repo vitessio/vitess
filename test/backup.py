@@ -32,7 +32,7 @@ def setUpModule():
 
     # Create a new init_db.sql file that sets up passwords for all users.
     # Then we use a db-credentials-file with the passwords.
-    new_init_db = environment.tmproot+'/init_db_with_passwords.sql'
+    new_init_db = environment.tmproot + '/init_db_with_passwords.sql'
     with open(environment.vttop + '/config/init_db.sql') as fd:
       init_db = fd.read()
     with open(new_init_db, 'w') as fd:
@@ -191,14 +191,12 @@ class TestBackup(unittest.TestCase):
 
   def _reset_tablet_dir(self, t):
     """Stop mysql, delete everything including tablet dir, restart mysql."""
-    utils.wait_procs([t.teardown_mysql(extra_args=['-db-credentials-file',
-                                                   db_credentials_file])])
+    extra_args = ['-db-credentials-file', db_credentials_file]
+    utils.wait_procs([t.teardown_mysql(extra_args=extra_args)])
     # Specify ignore_options because we want to delete the tree even
     # if the test's -k / --keep-logs was specified on the command line.
     t.remove_tree(ignore_options=True)
-    proc = t.init_mysql(init_db=new_init_db,
-                        extra_args=['-db-credentials-file',
-                                    db_credentials_file])
+    proc = t.init_mysql(init_db=new_init_db, extra_args=extra_args)
     if use_mysqlctld:
       t.wait_for_mysqlctl_socket()
     else:
