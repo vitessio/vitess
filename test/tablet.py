@@ -56,10 +56,10 @@ class Tablet(object):
   seq = 0
   tablets_running = 0
   default_db_dba_config = {
-    'dba': {
-        'uname': 'vt_dba',
-        'charset': 'utf8'
-    },
+      'dba': {
+          'uname': 'vt_dba',
+          'charset': 'utf8'
+      },
   }
   default_db_config = {
       'app': {
@@ -82,20 +82,6 @@ class Tablet(object):
           'uname': 'vt_repl',
           'charset': 'utf8'
       }
-  }
-
-  # this will eventually be coming from the proto3
-  tablet_type_value = {
-      'UNKNOWN': 0,
-      'MASTER': 1,
-      'REPLICA': 2,
-      'RDONLY': 3,
-      'BATCH': 3,
-      'SPARE': 4,
-      'EXPERIMENTAL': 5,
-      'BACKUP': 6,
-      'RESTORE': 7,
-      'DRAINED': 8,
   }
 
   def __init__(self, tablet_uid=None, port=None, mysql_port=None, cell=None,
@@ -427,6 +413,7 @@ class Tablet(object):
       init_tablet_type=None, init_keyspace=None,
       init_shard=None, init_db_name_override=None,
       supports_backups=True, grace_period='1s', enable_semi_sync=True):
+    # pylint: disable=g-doc-args
     """Starts a vttablet process, and returns it.
 
     The process is also saved in self.proc, so it's easy to kill as well.
@@ -434,6 +421,8 @@ class Tablet(object):
     Returns:
       the process that was started.
     """
+    # pylint: enable=g-doc-args
+
     args = environment.binary_args('vttablet')
     # Use 'localhost' as hostname because Travis CI worker hostnames
     # are too long for MySQL replication.
@@ -620,6 +609,7 @@ class Tablet(object):
                                 timeout, sleep_time=2.0)
 
   def _add_dbconfigs(self, cfg, args, repl_extra_flags=None):
+    """Helper method to generate and add --db-config-* flags to 'args'."""
     if repl_extra_flags is None:
       repl_extra_flags = {}
     config = dict(cfg)
