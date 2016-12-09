@@ -89,7 +89,7 @@ func main() {
 		}
 		mysqld.OnTerm(onTermFunc)
 
-		if err := mysqld.Start(ctx, false /* waitAsRoot */); err != nil {
+		if err := mysqld.Start(ctx); err != nil {
 			log.Errorf("failed to start mysqld: %v", err)
 			exit.Return(1)
 		}

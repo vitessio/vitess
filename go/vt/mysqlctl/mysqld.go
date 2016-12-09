@@ -186,8 +186,14 @@ func (mysqld *Mysqld) RunMysqlUpgrade() error {
 // Start will start the mysql daemon, either by running the
 // 'mysqld_start' hook, or by running mysqld_safe in the background.
 // If a mysqlctld address is provided in a flag, Start will run
-// remotely.  waitAsRoot is sent as is to the Wait call.
-func (mysqld *Mysqld) Start(ctx context.Context, waitAsRoot bool, mysqldArgs ...string) error {
+// remotely.  When waiting for mysqld to start, we will use
+// the dba user.
+func (mysqld *Mysqld) Start(ctx context.Context, mysqldArgs ...string) error {
+	return mysqld.start(ctx, false /* waitAsRoot */, mysqldArgs...)
+}
+
+// start is the internal version of Start, where waitAsRoot can be specified.
+func (mysqld *Mysqld) start(ctx context.Context, waitAsRoot bool, mysqldArgs ...string) error {
 	// Execute as remote action on mysqlctld if requested.
 	if *socketFile != "" {
 		log.Infof("executing Mysqld.Start() remotely via mysqlctld server: %v", *socketFile)
@@ -492,7 +498,7 @@ func (mysqld *Mysqld) Init(ctx context.Context, initDBSQLFile string) error {
 	}
 
 	// Start mysqld.
-	if err = mysqld.Start(ctx, true /* waitAsRoot */); err != nil {
+	if err = mysqld.start(ctx, true /* waitAsRoot */); err != nil {
 		log.Errorf("failed starting mysqld (check %v for more info): %v", mysqld.config.ErrorLogPath, err)
 		return err
 	}

@@ -108,7 +108,7 @@ func startCmd(subFlags *flag.FlagSet, args []string) error {
 
 	ctx, cancel := context.WithTimeout(context.Background(), *waitTime)
 	defer cancel()
-	if err := mysqld.Start(ctx, false /* waitAsRoot */, mysqldArgs...); err != nil {
+	if err := mysqld.Start(ctx, mysqldArgs...); err != nil {
 		return fmt.Errorf("failed start mysql: %v", err)
 	}
 	return nil

@@ -309,7 +309,7 @@ func backup(ctx context.Context, mysqld MysqlDaemon, logger logutil.Logger, bh b
 	usable := backupErr == nil
 
 	// Try to restart mysqld
-	err = mysqld.Start(ctx, false /* waitAsRoot */)
+	err = mysqld.Start(ctx)
 	if err != nil {
 		return usable, fmt.Errorf("can't restart mysqld: %v", err)
 	}
@@ -822,7 +822,8 @@ func Restore(
 	// without password, we are passing --skip-networking to greatly reduce the set
 	// of those who can connect.
 	logger.Infof("Restore: starting mysqld for mysql_upgrade")
-	err = mysqld.Start(context.Background(), true /* waitAsRoot */, "--skip-grant-tables", "--skip-networking")
+	// Note Start will use dba user for waiting, this is fine, it will be allowed.
+	err = mysqld.Start(context.Background(), "--skip-grant-tables", "--skip-networking")
 	if err != nil {
 		return replication.Position{}, err
 	}
@@ -847,7 +848,7 @@ func Restore(
 	if err != nil {
 		return replication.Position{}, err
 	}
-	err = mysqld.Start(context.Background(), false /* waitAsRoot */)
+	err = mysqld.Start(context.Background())
 	if err != nil {
 		return replication.Position{}, err
 	}
