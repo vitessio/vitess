@@ -252,6 +252,17 @@ func (te *TxEngine) startWatchdog() {
 	te.ticks.Start(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), te.abandonAge/4)
 		defer cancel()
+
+		// Raise alerts on prepares that have been unresolved for too long.
+		// Use 5x abandonAge to give opportunity for watchdog to resolve these.
+		count, err := te.twoPC.CountUnresolvedRedo(ctx, time.Now().Add(-te.abandonAge*5))
+		if err != nil {
+			te.queryServiceStats.InternalErrors.Add("WatchdogFail", 1)
+			log.Errorf("Error reading unresolved prepares: '%v': %v", te.coordinatorAddress, err)
+		}
+		te.queryServiceStats.Unresolved.Set("Prepares", count)
+
+		// Resolve lingering distributed transactions.
 		txs, err := te.twoPC.ReadAbandoned(ctx, time.Now().Add(-te.abandonAge))
 		if err != nil {
 			te.queryServiceStats.InternalErrors.Add("WatchdogFail", 1)
