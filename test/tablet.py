@@ -84,20 +84,6 @@ class Tablet(object):
       }
   }
 
-  # this will eventually be coming from the proto3
-  tablet_type_value = {
-      'UNKNOWN': 0,
-      'MASTER': 1,
-      'REPLICA': 2,
-      'RDONLY': 3,
-      'BATCH': 3,
-      'SPARE': 4,
-      'EXPERIMENTAL': 5,
-      'BACKUP': 6,
-      'RESTORE': 7,
-      'DRAINED': 8,
-  }
-
   def __init__(self, tablet_uid=None, port=None, mysql_port=None, cell=None,
                use_mysqlctld=False):
     self.tablet_uid = tablet_uid or (Tablet.default_uid + Tablet.seq)
