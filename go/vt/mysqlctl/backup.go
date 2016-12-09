@@ -513,7 +513,7 @@ func backupFile(ctx context.Context, mysqld MysqlDaemon, logger logutil.Logger, 
 // Returns non-nil error if one occurs while trying to perform the check.
 func checkNoDB(ctx context.Context, mysqld MysqlDaemon, dbName string) (bool, error) {
 	// Wait for mysqld to be ready, in case it was launched in parallel with us.
-	if err := mysqld.Wait(ctx, false /* asRoot */); err != nil {
+	if err := mysqld.Wait(ctx); err != nil {
 		return false, err
 	}
 
