@@ -209,6 +209,7 @@ func (tsv *TabletServer) Register() {
 	tsv.registerQueryzHandler()
 	tsv.registerSchemazHandler()
 	tsv.registerStreamQueryzHandlers()
+	tsv.registerTwopczHandler()
 }
 
 // RegisterQueryRuleSource registers ruleSource for setting query rules.
@@ -1556,6 +1557,18 @@ func (tsv *TabletServer) registerStreamQueryzHandlers() {
 func (tsv *TabletServer) registerSchemazHandler() {
 	http.HandleFunc("/schemaz", func(w http.ResponseWriter, r *http.Request) {
 		schemazHandler(tsv.qe.schemaInfo.GetSchema(), w, r)
+	})
+}
+
+func (tsv *TabletServer) registerTwopczHandler() {
+	http.HandleFunc("/twopcz", func(w http.ResponseWriter, r *http.Request) {
+		ctx := context.Background()
+		txe := &TxExecutor{
+			ctx:      ctx,
+			logStats: NewLogStats(ctx, "twopcz"),
+			te:       tsv.te,
+		}
+		twopczHandler(txe, w, r)
 	})
 }
 
