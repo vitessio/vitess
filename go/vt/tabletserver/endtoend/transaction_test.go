@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/youtube/vitess/go/mysql"
+	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/tabletserver/endtoend/framework"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
@@ -555,7 +556,7 @@ func TestMMCommitFlow(t *testing.T) {
 	}
 
 	err = client.SetRollback("aa", 0)
-	want = "error: could not transition to Rollback: aa"
+	want = "error: could not transition to ROLLBACK: aa"
 	if err == nil || err.Error() != want {
 		t.Errorf("Error: %v, must contain %s", err, want)
 	}
@@ -565,7 +566,6 @@ func TestMMCommitFlow(t *testing.T) {
 		t.Error(err)
 	}
 	info.TimeCreated = 0
-	info.TimeUpdated = 0
 	wantInfo := &querypb.TransactionMetadata{
 		Dtid:  "aa",
 		State: 2,
@@ -635,7 +635,6 @@ func TestMMRollbackFlow(t *testing.T) {
 		t.Error(err)
 	}
 	info.TimeCreated = 0
-	info.TimeUpdated = 0
 	wantInfo := &querypb.TransactionMetadata{
 		Dtid:  "aa",
 		State: 3,
@@ -795,7 +794,7 @@ func TestManualTwopcz(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	conn.ExecuteFetch("update _vt.redo_log_transaction set state = 'Failed' where dtid = 'dtidfail'", 10, false)
+	conn.ExecuteFetch(fmt.Sprintf("update _vt.redo_state set state = %d where dtid = 'dtidfail'", tabletserver.RedoStateFailed), 10, false)
 	conn.ExecuteFetch("commit", 10, false)
 
 	// Distributed transaction.

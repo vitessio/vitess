@@ -628,6 +628,5 @@ message TransactionMetadata {
   string dtid = 1;
   TransactionState state = 2;
   int64 time_created = 3;
-  int64 time_updated = 4;
   repeated Target participants = 5;
 }

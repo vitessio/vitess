@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/json"
 	"reflect"
+	"strconv"
 	"testing"
 	"time"
 
@@ -45,7 +46,7 @@ func TestReadAllRedo(t *testing.T) {
 	db.AddQuery(tpc.readAllRedo, &sqltypes.Result{
 		Rows: [][]sqltypes.Value{{
 			sqltypes.MakeString([]byte("dtid0")),
-			sqltypes.MakeString([]byte("Prepared")),
+			sqltypes.MakeString([]byte(strconv.Itoa(RedoStatePrepared))),
 			sqltypes.MakeString([]byte("1")),
 			sqltypes.MakeString([]byte("stmt01")),
 		}},
@@ -69,12 +70,12 @@ func TestReadAllRedo(t *testing.T) {
 	db.AddQuery(tpc.readAllRedo, &sqltypes.Result{
 		Rows: [][]sqltypes.Value{{
 			sqltypes.MakeString([]byte("dtid0")),
-			sqltypes.MakeString([]byte("Prepared")),
+			sqltypes.MakeString([]byte(strconv.Itoa(RedoStatePrepared))),
 			sqltypes.MakeString([]byte("1")),
 			sqltypes.MakeString([]byte("stmt01")),
 		}, {
 			sqltypes.MakeString([]byte("dtid0")),
-			sqltypes.MakeString([]byte("Prepared")),
+			sqltypes.MakeString([]byte(strconv.Itoa(RedoStatePrepared))),
 			sqltypes.MakeString([]byte("1")),
 			sqltypes.MakeString([]byte("stmt02")),
 		}},
@@ -98,17 +99,17 @@ func TestReadAllRedo(t *testing.T) {
 	db.AddQuery(tpc.readAllRedo, &sqltypes.Result{
 		Rows: [][]sqltypes.Value{{
 			sqltypes.MakeString([]byte("dtid0")),
-			sqltypes.MakeString([]byte("Prepared")),
+			sqltypes.MakeString([]byte(strconv.Itoa(RedoStatePrepared))),
 			sqltypes.MakeString([]byte("1")),
 			sqltypes.MakeString([]byte("stmt01")),
 		}, {
 			sqltypes.MakeString([]byte("dtid0")),
-			sqltypes.MakeString([]byte("Prepared")),
+			sqltypes.MakeString([]byte(strconv.Itoa(RedoStatePrepared))),
 			sqltypes.MakeString([]byte("1")),
 			sqltypes.MakeString([]byte("stmt02")),
 		}, {
 			sqltypes.MakeString([]byte("dtid1")),
-			sqltypes.MakeString([]byte("Prepared")),
+			sqltypes.MakeString([]byte(strconv.Itoa(RedoStatePrepared))),
 			sqltypes.MakeString([]byte("1")),
 			sqltypes.MakeString([]byte("stmt11")),
 		}},
@@ -136,12 +137,12 @@ func TestReadAllRedo(t *testing.T) {
 	db.AddQuery(tpc.readAllRedo, &sqltypes.Result{
 		Rows: [][]sqltypes.Value{{
 			sqltypes.MakeString([]byte("dtid0")),
-			sqltypes.MakeString([]byte("Prepared")),
+			sqltypes.MakeString([]byte(strconv.Itoa(RedoStatePrepared))),
 			sqltypes.MakeString([]byte("1")),
 			sqltypes.MakeString([]byte("stmt01")),
 		}, {
 			sqltypes.MakeString([]byte("dtid0")),
-			sqltypes.MakeString([]byte("Prepared")),
+			sqltypes.MakeString([]byte(strconv.Itoa(RedoStatePrepared))),
 			sqltypes.MakeString([]byte("1")),
 			sqltypes.MakeString([]byte("stmt02")),
 		}, {
@@ -161,7 +162,7 @@ func TestReadAllRedo(t *testing.T) {
 			sqltypes.MakeString([]byte("stmt22")),
 		}, {
 			sqltypes.MakeString([]byte("dtid3")),
-			sqltypes.MakeString([]byte("Prepared")),
+			sqltypes.MakeString([]byte(strconv.Itoa(RedoStatePrepared))),
 			sqltypes.MakeString([]byte("1")),
 			sqltypes.MakeString([]byte("stmt31")),
 		}},
@@ -221,7 +222,7 @@ func TestReadAllTransactions(t *testing.T) {
 	db.AddQuery(tpc.readAllTransactions, &sqltypes.Result{
 		Rows: [][]sqltypes.Value{{
 			sqltypes.MakeString([]byte("dtid0")),
-			sqltypes.MakeString([]byte("Prepared")),
+			sqltypes.MakeString([]byte(strconv.Itoa(RedoStatePrepared))),
 			sqltypes.MakeString([]byte("1")),
 			sqltypes.MakeString([]byte("ks01")),
 			sqltypes.MakeString([]byte("shard01")),
@@ -233,7 +234,7 @@ func TestReadAllTransactions(t *testing.T) {
 	}
 	want = []*DistributedTx{{
 		Dtid:    "dtid0",
-		State:   "Prepared",
+		State:   "PREPARE",
 		Created: time.Unix(0, 1),
 		Participants: []querypb.Target{{
 			Keyspace: "ks01",
@@ -247,13 +248,13 @@ func TestReadAllTransactions(t *testing.T) {
 	db.AddQuery(tpc.readAllTransactions, &sqltypes.Result{
 		Rows: [][]sqltypes.Value{{
 			sqltypes.MakeString([]byte("dtid0")),
-			sqltypes.MakeString([]byte("Prepared")),
+			sqltypes.MakeString([]byte(strconv.Itoa(RedoStatePrepared))),
 			sqltypes.MakeString([]byte("1")),
 			sqltypes.MakeString([]byte("ks01")),
 			sqltypes.MakeString([]byte("shard01")),
 		}, {
 			sqltypes.MakeString([]byte("dtid0")),
-			sqltypes.MakeString([]byte("Prepared")),
+			sqltypes.MakeString([]byte(strconv.Itoa(RedoStatePrepared))),
 			sqltypes.MakeString([]byte("1")),
 			sqltypes.MakeString([]byte("ks02")),
 			sqltypes.MakeString([]byte("shard02")),
@@ -265,7 +266,7 @@ func TestReadAllTransactions(t *testing.T) {
 	}
 	want = []*DistributedTx{{
 		Dtid:    "dtid0",
-		State:   "Prepared",
+		State:   "PREPARE",
 		Created: time.Unix(0, 1),
 		Participants: []querypb.Target{{
 			Keyspace: "ks01",
@@ -282,19 +283,19 @@ func TestReadAllTransactions(t *testing.T) {
 	db.AddQuery(tpc.readAllTransactions, &sqltypes.Result{
 		Rows: [][]sqltypes.Value{{
 			sqltypes.MakeString([]byte("dtid0")),
-			sqltypes.MakeString([]byte("Prepared")),
+			sqltypes.MakeString([]byte(strconv.Itoa(RedoStatePrepared))),
 			sqltypes.MakeString([]byte("1")),
 			sqltypes.MakeString([]byte("ks01")),
 			sqltypes.MakeString([]byte("shard01")),
 		}, {
 			sqltypes.MakeString([]byte("dtid0")),
-			sqltypes.MakeString([]byte("Prepared")),
+			sqltypes.MakeString([]byte(strconv.Itoa(RedoStatePrepared))),
 			sqltypes.MakeString([]byte("1")),
 			sqltypes.MakeString([]byte("ks02")),
 			sqltypes.MakeString([]byte("shard02")),
 		}, {
 			sqltypes.MakeString([]byte("dtid1")),
-			sqltypes.MakeString([]byte("Prepared")),
+			sqltypes.MakeString([]byte(strconv.Itoa(RedoStatePrepared))),
 			sqltypes.MakeString([]byte("1")),
 			sqltypes.MakeString([]byte("ks11")),
 			sqltypes.MakeString([]byte("shard11")),
@@ -306,7 +307,7 @@ func TestReadAllTransactions(t *testing.T) {
 	}
 	want = []*DistributedTx{{
 		Dtid:    "dtid0",
-		State:   "Prepared",
+		State:   "PREPARE",
 		Created: time.Unix(0, 1),
 		Participants: []querypb.Target{{
 			Keyspace: "ks01",
@@ -317,7 +318,7 @@ func TestReadAllTransactions(t *testing.T) {
 		}},
 	}, {
 		Dtid:    "dtid1",
-		State:   "Prepared",
+		State:   "PREPARE",
 		Created: time.Unix(0, 1),
 		Participants: []querypb.Target{{
 			Keyspace: "ks11",
