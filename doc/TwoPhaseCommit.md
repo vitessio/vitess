@@ -156,32 +156,29 @@ The current RecordQuery functionality is mainly for troubleshooting and diagnost
 
 ### Schema
 
-The tables will be in the _vt database.
+The tables will be in the \_vt database. All time stamps are represented as unix nanoseconds.
 
-The redo_log_transaction table needs to support the following use cases:
+The redo_state table needs to support the following use cases:
 
 * Prepare: Create row.
-* Recover: Fetch all unresolved transactions: full table scan.
-* Resolve: Transition state for a DTID: update where dtid = :dtid and state = ‘Prepared’.
+* Recover & repair tool: Fetch all transactions: full table scan.
+* Resolve: Transition state for a DTID: update where dtid = :dtid and state = :prepared.
 * Watchdog: Count unresolved transactions that are older than X: select where time_created < X.
 * Delete a resolved transaction: delete where dtid = :dtid.
 
 ```
-create table redo_log_transaction(
+create table redo_state(
   dtid varbinary(1024),
-  state enum('Prepared', 'Failed'),
-  resolution enum ('Committed', 'RolledBack'),  // Unused.
+  state bigint, // state can be 0: Failed, 1: Prepared.
   time_created bigint,
-  primary key(dtid),
-  index state_time_idx(state, time_created) // Unused.
+  primary key(dtid)
 )
 ```
-* time_created is the unix timestamp
 
-The redo_log_statement table is a detail of redo_log_transaction table. It needs the ability to read the statements of a dtid in the correct order (by id), and the ability to delete all statements for a given dtid:
+The redo_statement table is a detail of redo_log_transaction table. It needs the ability to read the statements of a dtid in the correct order (by id), and the ability to delete all statements for a given dtid:
 
 ```
-create table redo_log_statement(
+create table redo_statement(
   dtid varbinary(1024),
   id bigint,
   statement mediumblob,
@@ -193,14 +190,12 @@ create table redo_log_statement(
 
 This function will take a DTID and a VTID as input.
 
-* Get the tx conn for use. This will protect the transaction from being killed, and also from more statements being executed against it.
-    * If not found, verify that it was already prepared. If so, return success.
-* Create the Prepare metadata using a separate transaction by inserting the row into redo_log. If this step fails, the main transaction is also rolled back and an error is returned. We should not allow all connections of the tx pool to be used for prepare because it can cause the system to deadlock. To satisfy this, if the max number of prepared connections exceeds half the tx pool capacity, an error will be returned.
-* Move the conn to a separate (Prepared) pool. Such transactions can only be resolved by CommitPrepared or RollbackPrepared.
+* Get the tx conn for use, and move it to the prepared pool. If the prepared pool is full, rollback the transaction and return an error.
+* Save the metadata into the redo logs as a separate transaction. If this step fails, the main transaction is also rolled back and an error is returned.
 
 If VTTablet is asked to shut down or change state from master, the code that waits for tx pool must internally rollback the prepared transactions and return them to the tx pool. Note that the rollback must happen only after the currently pending (non-prepared) transactions are resolved. If a pending transaction is waiting on a lock held by a prepared transaction, it will eventually timeout and get rolled back.
 
-Conversely, if a VTTablet is transitioned to become a master, it will recreate the unresolved transactions from redo_log. If the replays fail, we’ll raise an alert and start the query service anyway.
+Eventually, a different VTTablet will be transitioned to become the master. At that point, it will recreate the unresolved transactions from redo logs. If the replays fail, we’ll raise an alert and start the query service anyway.
 
 Typically, a replay is not expected to fail because vttablet does not allow writes to the database until the replays are done. Also, no external agent should be allowed to perform writes to MySQL, which is a loosely enforced Vitess requirement. Other vitess processes do write to MySQL directly, but they’re not the kind that interfere with the normal flow of transactions.
 
@@ -211,8 +206,10 @@ VTTablet always brackets DMLs with BEGIN-COMMIT. This will ensure that no autoco
 ### CommitPrepared
 
 * Extract the transaction from the Prepare pool.
-    * If not found, verify that it was resolved as Committed in redo_log. If so, return success.
+  * If transaction is in the failed pool, return an error.
+  * If not found, return success (it was already resolved).
 * As part of the current transaction (VTID), transition the state in redo_log to Committed and commit it.
+  * On failure, move it to the failed pool. Subsequent commits will permanently fail.
 * Return the conn to the tx pool.
 
 ### RollbackPrepared
@@ -236,7 +233,8 @@ Deleting the metadata early will not cause data corruption; It will just cause f
 
 ## Metadata Manager API
 
-The MM functionality is provided by VTTablet. This could be implemented as a separate service, but designating one of the participants to act as the manager gives us some optimization opportunities. The supported functions are CreateTransaction, StartCommit, SetRollback, and ResolveTransaction.
+The MM functionality is provided by VTTablet. This could be implemented as a separate service, but designating one of the 
+participants to act as the manager gives us some optimization opportunities. The supported functions are CreateTransaction, StartCommit, SetRollback, and ResolveTransaction.
 
 ### Schema
 
