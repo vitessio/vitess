@@ -725,15 +725,3 @@ func (rtr *Router) handleNonPrimary(vcursor *requestContext, vindexKey interface
 	bv["_"+colVindex.Column.Original()+strconv.Itoa(rowNum)] = vindexKey
 	return nil
 }
-
-func (rtr *Router) getRouting(ctx context.Context, keyspace string, tabletType topodatapb.TabletType, ksid []byte) (newKeyspace, shard string, err error) {
-	newKeyspace, _, allShards, err := getKeyspaceShards(ctx, rtr.serv, rtr.cell, keyspace, tabletType)
-	if err != nil {
-		return "", "", err
-	}
-	shard, err = getShardForKeyspaceID(allShards, ksid)
-	if err != nil {
-		return "", "", err
-	}
-	return newKeyspace, shard, nil
-}

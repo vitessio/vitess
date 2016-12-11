@@ -200,8 +200,6 @@ func (stc *ScatterConn) ExecuteMulti(
 
 // ExecuteMultiShard is like ExecuteMulti,
 // but each shard gets its own Sql Queries and BindVariables.
-// If len(shards) is not equal to
-// len(bindVars), the function panics.
 func (stc *ScatterConn) ExecuteMultiShard(
 	ctx context.Context,
 	keyspace string,
