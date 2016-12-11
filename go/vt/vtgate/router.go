@@ -21,6 +21,7 @@ import (
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	vtgatepb "github.com/youtube/vitess/go/vt/proto/vtgate"
+	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 )
 
 // Router is the layer to route queries to the correct shards
@@ -371,38 +372,44 @@ func (rtr *Router) execInsertSharded(vcursor *requestContext, route *engine.Rout
 	if err != nil {
 		return nil, fmt.Errorf("execInsertSharded: %v", err)
 	}
-	qr := new(sqltypes.Result)
+
+	shardQueries := make(map[string]querytypes.BoundQuery,len(routing))
+
 	for shard := range routing {
-		route.Query = route.Prefix + route.Mid[0] + route.Suffix
 		rewritten, err := rtr.rewriteMultiRowQuery(route, routing, shard)
 		if err != nil {
 			return nil, fmt.Errorf("execInsertSharded: Error While Rewriting Query: %v", err)
 		}
 		rewrittenQuery := sqlannotation.AddKeyspaceIDs(rewritten, shardKsidMap[shard], vcursor.comments)
-		result, err := rtr.scatterConn.Execute(
-			vcursor.ctx,
-			rewrittenQuery,
-			vcursor.bindVars,
-			keyspace,
-			[]string{shard},
-			vcursor.tabletType,
-			NewSafeSession(vcursor.session),
-			vcursor.notInTransaction,
-			vcursor.options)
-		if err != nil {
-			return nil, fmt.Errorf("execInsertSharded: %v", err)
+		route.Query = rewrittenQuery
+		query := querytypes.BoundQuery{
+			Sql:           rewrittenQuery,
+			BindVariables: vcursor.bindVars,
 		}
-		if insertid != 0 {
-			if result.InsertID != 0 {
-				return nil, fmt.Errorf("sequence and db generated a value each for insert")
-			}
-			qr.InsertID = uint64(insertid)
-		}
-		qr.AppendResult(qr, result)
-
+		shardQueries[shard] = query
 	}
 
-	return qr, nil
+	result, err := rtr.scatterConn.ExecuteMultiShard(
+		vcursor.ctx,
+		keyspace,
+		shardQueries,
+		vcursor.tabletType,
+		NewSafeSession(vcursor.session),
+		vcursor.notInTransaction,
+		vcursor.options)
+
+	if err != nil {
+		return nil, fmt.Errorf("execInsertSharded: %v", err)
+	}
+
+	if insertid != 0 {
+		if result.InsertID != 0 {
+			return nil, fmt.Errorf("sequence and db generated a value each for insert")
+		}
+		result.InsertID = uint64(insertid)
+	}
+
+	return result, nil
 }
 
 func (rtr *Router) rewriteMultiRowQuery(route *engine.Route, routing map[string][]int, shard string) (Query string, err error) {

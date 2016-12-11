@@ -196,8 +196,8 @@ func hexEqual(a sqlparser.HexVal, b interface{}) bool {
 	return false
 }
 
-// ValConvert converts an AST value to the Value field in the route.
-func ValConvert(node sqlparser.ValExpr) (interface{}, error) {
+// valConvert converts an AST value to the Value field in the route.
+func valConvert(node sqlparser.ValExpr) (interface{}, error) {
 	switch node := node.(type) {
 	case sqlparser.ValArg:
 		return string(node), nil

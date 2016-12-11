@@ -198,6 +198,67 @@ func (stc *ScatterConn) ExecuteMulti(
 	return qr, nil
 }
 
+// ExecuteMultiShard is like ExecuteMulti,
+// but each shard gets its own Sql Queries and BindVariables.
+// If len(shards) is not equal to
+// len(bindVars), the function panics.
+func (stc *ScatterConn) ExecuteMultiShard(
+ctx context.Context,
+keyspace string,
+shardQueries map[string]querytypes.BoundQuery,
+tabletType topodatapb.TabletType,
+session *SafeSession,
+notInTransaction bool,
+options *querypb.ExecuteOptions,
+) (*sqltypes.Result, error) {
+
+	// mu protects qr
+	var mu sync.Mutex
+	qr := new(sqltypes.Result)
+
+	shards := make([]string, 0, len(shardQueries))
+	for k := range shardQueries {
+		shards = append(shards, k)
+	}
+
+	allErrors := stc.multiGoTransaction(
+		ctx,
+		"Execute",
+		keyspace,
+		shards,
+		tabletType,
+		session,
+		notInTransaction,
+		func(target *querypb.Target, shouldBegin bool, transactionID int64) (int64, error) {
+			var innerqr *sqltypes.Result
+			if shouldBegin {
+				var err error
+				innerqr, transactionID, err = stc.gateway.BeginExecute(ctx, target, shardQueries[target.Shard].Sql, shardQueries[target.Shard].BindVariables, options)
+				if err != nil {
+					return transactionID, err
+				}
+			} else {
+				var err error
+				innerqr, err = stc.gateway.Execute(ctx, target, shardQueries[target.Shard].Sql, shardQueries[target.Shard].BindVariables, transactionID, options)
+				if err != nil {
+					return transactionID, err
+				}
+			}
+
+			mu.Lock()
+			defer mu.Unlock()
+			qr.AppendResult(qr, innerqr)
+			return transactionID, nil
+		})
+
+	if allErrors.HasErrors() {
+		err := allErrors.AggrError(stc.aggregateErrors)
+		stc.txConn.RollbackIfNeeded(ctx, err, session)
+		return nil, err
+	}
+	return qr, nil
+}
+
 // ExecuteEntityIds executes queries that are shard specific.
 func (stc *ScatterConn) ExecuteEntityIds(
 	ctx context.Context,

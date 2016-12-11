@@ -101,7 +101,7 @@ func TestValConvert(t *testing.T) {
 		out: "::aa is not a value",
 	}}
 	for _, tc := range testcases {
-		out, err := ValConvert(tc.in)
+		out, err := valConvert(tc.in)
 		if err != nil {
 			out = err.Error()
 		}

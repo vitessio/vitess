@@ -161,7 +161,7 @@ func getMatch(node sqlparser.BoolExpr, col cistring.CIString) interface{} {
 		if !sqlparser.IsValue(comparison.Right) {
 			continue
 		}
-		val, err := ValConvert(comparison.Right)
+		val, err := valConvert(comparison.Right)
 		if err != nil {
 			continue
 		}
