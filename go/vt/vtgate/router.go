@@ -373,7 +373,7 @@ func (rtr *Router) execInsertSharded(vcursor *requestContext, route *engine.Rout
 		return nil, fmt.Errorf("execInsertSharded: %v", err)
 	}
 
-	shardQueries := make(map[string]querytypes.BoundQuery,len(routing))
+	shardQueries := make(map[string]querytypes.BoundQuery, len(routing))
 
 	for shard := range routing {
 		rewritten, err := rtr.rewriteMultiRowQuery(route, routing, shard)

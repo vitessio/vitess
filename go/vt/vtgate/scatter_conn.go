@@ -203,13 +203,13 @@ func (stc *ScatterConn) ExecuteMulti(
 // If len(shards) is not equal to
 // len(bindVars), the function panics.
 func (stc *ScatterConn) ExecuteMultiShard(
-ctx context.Context,
-keyspace string,
-shardQueries map[string]querytypes.BoundQuery,
-tabletType topodatapb.TabletType,
-session *SafeSession,
-notInTransaction bool,
-options *querypb.ExecuteOptions,
+	ctx context.Context,
+	keyspace string,
+	shardQueries map[string]querytypes.BoundQuery,
+	tabletType topodatapb.TabletType,
+	session *SafeSession,
+	notInTransaction bool,
+	options *querypb.ExecuteOptions,
 ) (*sqltypes.Result, error) {
 
 	// mu protects qr
