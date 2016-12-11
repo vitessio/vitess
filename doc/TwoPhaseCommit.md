@@ -161,14 +161,14 @@ The tables will be in the \_vt database. All time stamps are represented as unix
 The redo_state table needs to support the following use cases:
 
 * Prepare: Create row.
-* Recover & repair tool: Fetch all transactions: full table scan.
+* Recover & repair tool: Fetch all transactions: full joined table scan.
 * Resolve: Transition state for a DTID: update where dtid = :dtid and state = :prepared.
 * Watchdog: Count unresolved transactions that are older than X: select where time_created < X.
 * Delete a resolved transaction: delete where dtid = :dtid.
 
 ```
 create table redo_state(
-  dtid varbinary(1024),
+  dtid varbinary(512),
   state bigint, // state can be 0: Failed, 1: Prepared.
   time_created bigint,
   primary key(dtid)
@@ -179,7 +179,7 @@ The redo_statement table is a detail of redo_log_transaction table. It needs the
 
 ```
 create table redo_statement(
-  dtid varbinary(1024),
+  dtid varbinary(512),
   id bigint,
   statement mediumblob,
   primary key(dtid, id)
@@ -214,105 +214,76 @@ VTTablet always brackets DMLs with BEGIN-COMMIT. This will ensure that no autoco
 
 ### RollbackPrepared
 
-* Extract the transaction from the Prepare pool.
-    * If not found, verify that it was resolved as Rolledback in redo_log. If so, return success.
-* Transition the state in redo_log to Rolledback using a separate transaction.
-* Rollback the transaction and return the conn to the tx pool.
-
-Resolved transactions will be deleted by the purge process. The purge has to be delayed so that the Prepare API can handle duplicate requests.
-
-### The purge process
-
-Although unlikely, it’s possible that there are race conditions. For example, if a coordinator takes too long to resolve a transaction, a watchdog could kick in and ask another coordinator to take over, while the original coordinator is still working. It’s also possible that a coordinator may retry a timed out command.
-
-If this happened, it’s possible that a VTTablet may receive duplicate commit or rollback messages. In order to gracefully handle these dups, the metadata must outlive the transaction. So, the rows in redo_log are not immediately deleted when a transaction is resolved.
-
-Instead, a separate purge process deletes them after a reasonable period of time. This grace period should be much greater than the FetchAbandoned (explained later) timeout.
-
-Deleting the metadata early will not cause data corruption; It will just cause false positives. In reality, if timeouts are configured well, there should actually be no dup requests. If we find that this is indeed the case in production, we can change the ResolveTransaction function to immediately delete the metadata, and get rid of the purge process. Then we can go one step further: Treat commands for missing transactions as no-op because they’re likely dup requests.
+* Delete the redo log entries for the dtid in a separate transaction.
+* Extract the transaction from the Prepare pool, rollback and return the conn to the tx pool.
 
 ## Metadata Manager API
 
 The MM functionality is provided by VTTablet. This could be implemented as a separate service, but designating one of the 
-participants to act as the manager gives us some optimization opportunities. The supported functions are CreateTransaction, StartCommit, SetRollback, and ResolveTransaction.
+participants to act as the manager gives us some optimization opportunities. The supported functions are CreateTransaction, StartCommit, SetRollback, and ConcludeTransaction.
 
 ### Schema
 
-The transaction metadata table will need to fulfil the following use cases:
+The transaction metadata will consist of two tables. It will need to fulfil the following use cases:
 
 * CreateTransaction: Create row.
-* Transition state: update where dtid = :dtid and state = :expected_state.
-* Find abandoned transactions: select where time_updated < X. We plan to delete resolved transactions immediately. So, there’s no need to build an index for this query.
-* Pick up a transaction for resolution: update where dtid = :dtid set time_updated = :time_updated.
-* Delete a resolved transaction: delete where dtid = :dtid and state != ‘Prepare’.
+* Transition state: update where dtid = :dtid and state = :prepare.
+* Resolve flow: select td_state & td_participant where dtid = :dtid.
+* Watchdog: full joined table scan where time_created < X.
+* Delete a resolved transaction: delete where dtid = :dtid.
 
 ```
-create table transaction(
-  dtid varbinary(1024),
-  state enum('Prepare', 'Commit', 'Rollback'),
+create table dt_state(
+  dtid varbinary(512),
+  state bigint, // state PREPARE, COMMIT, ROLLBACK as defined in the protobuf for TransactionMetadata.
   time_created bigint,
-  time_updated bigint,
-  participants mediumblob,
-  primary key(dtid),
+  primary key(dtid)
 )
 ```
 
-* time_created will be used to escalate lingering transactions.
-* time_updated is changed every time a watchdog picks up an abandoned transaction. If multiple watchdogs race at resolving a transaction, only the one that successfully updates this field will win. This is a form of master election process.
-* participants will be a proto3 representation of the participant list as defined below.
-
 ```
-message Participant {
-  string keyspace = 1;
-  string shard = 2;
-}
-
-message Participants {
-  repeated Participant participants = 1;
-}
+create table dt_participant(
+  dtid varbinary(512),
+  id bigint,
+  keyspace varchar(256),
+  shard varchar(256),
+  primary key (dtid, id)
+)
 ```
 
 ### CreateTransaction
 
-This statement creates a row in transaction. The initial state will be Prepare. A successful create begins the 2PC process. This will be followed by VTGate issuing prepares to the rest of the participants.
+This statement creates a row in transaction. The initial state will be PREPARE. A successful create begins the 2PC process. This will be followed by VTGate issuing prepares to the rest of the participants.
 
 ### StartCommit
 
 This function can only be called for a transaction that’s not been abandoned. A watchdog that initiates a recovery will never make a decision to commit. This means that we can assume that the participant’s transaction (VTID) is still alive.
 
-The function will issue a DML that will transition the state from Prepare to Commit as part of the participant’s transaction (VTID). If not successful, it returns an error, which will be treated as failure to Prepare, and will cause VTGate to rollback the rest of the transactions.
+The function will issue a DML that will transition the state from PREPARE to COMMIT as part of the participant’s transaction (VTID). If not successful, it returns an error, which will be treated as failure to prepare, and will cause VTGate to rollback the rest of the transactions.
 
 If successful, a commit is issued, which will also finalize the decision to commit the rest of the transactions.
 
 ### SetRollback
 
-SetRollback transitions the state from Prepare to Rollback using an independent transaction. When this function is called, the MM’s transaction (VTID) may still be alive. So, we infer the transaction id from the dtid and perform a best effort rollback. If the transaction is not found, it’s a no-op.
+SetRollback transitions the state from PREPARE to ROLLBACK using an independent transaction. When this function is called, the MM’s transaction (VTID) may still be alive. So, we infer the transaction id from the dtid and perform a best effort rollback. If the transaction is not found, it’s a no-op.
 
-### ResolveTransaction
+### ConcludeTransaction
 
-This function just deletes the row. For safety, an additional where clause will make sure that this function succeeds only if the state is Commit or Rollback.
+This function just deletes the row.
 
 ### ReadTransaction
 
 This function returns the transaction info given the dtid.
 
-### FetchAbandoned
+### ReadTwopcInflight
 
-This function returns the list of abandoned transactions. This is based on a timeout, which should be greater than the time a VTGate is expected to complete a 2PC transaction.
-
-### GrabTransaction
-
-This function takes the time_updated from a previous fetch as input and performs a CAS update of time_updated to the current time. The caller is expected to initiate the resolve workflow only if GrabTransaction succeeds.
-
-This behavior allows for multiple watchdogs to race with each other, because only one of them will be able to grab an abandoned transaction at any given time.
+This function returns all transaction metadata including the info in the redo logs.
 
 ## Coordinator
 
 VTGate is already responsible for BEC, aka Commit(Atomic=false), it can naturally be extended to act as the coordinator for 2PC. It needs to support Commit(Atomic=true), and ResolveTransaction.
 
-If there are operational errors (like timeout) during the operations below, everything is retryable except StartCommit and SetRollback. If these two fail, we have to delegate to the ResolveTransaction workflow because the next action will depend on whether the underlying operation succeeded or not.
-
-Unexpected state errors like ‘Transaction is already committed’ are more serious, and will likely not be resolved with retries. Alerts must be raised by incrementing the InternalErrors counter.
+If there are operational errors before the commit decision, the transaction is rolled back. If the rollback fails, or if a failure happens after the commit decision, we give up. The watchdog will later pick it up and try to resolve it.
 
 ### Commit(Atomic=true)
 
@@ -331,10 +302,6 @@ Any non-operational failure before StartCommit will trigger the rollback workflo
 * RollbackPrepared on all participants for which Prepare was sent
 * Rollback on all other participants
 * ResolveTransaction on the MM
-
-Generally, operational failures can be retried. So, in such cases, VTGate must perform the necessary retries before concluding failure. Even if there is a connection loss between VTGate and VTTablet, the state of the transaction will be preserved by VTTablet. So, a retry can still potentially succeed.
-
-But errors like "not_in_tx" are not retryable because a prepare will never succeed if a transaction was previously rolled back.
 
 ### ResolveTransaction
 
@@ -358,15 +325,13 @@ Rollback workflow:
 
 ## Watchdogs
 
-The stateless VTGates are considered ephemeral and can fail at any time, which means that transactions could be abandoned in the middle of a distributed commit. To mitigate this, a set of watchdog processes need to be polling the databases for distributed transactions that are lingering. If any such transaction is found, one of the processes has to re-initiate the workflow of getting it resolved.
+The stateless VTGates are considered ephemeral and can fail at any time, which means that transactions could be abandoned in the middle of a distributed commit. To mitigate this, every master vttablet will poll its td_state table for distributed transactions that are lingering. If any such transaction is found, it invokes VTGate with that dtid for a Resolve to be retried.
 
-For fault tolerance, a cluster of watchdogs (recommend 3) will run per master database. They’ll poll the database by calling FetchAbandoned. This interval must be randomized and should be shorter than the timeout passed to FetchAbandoned.
-
-For every transaction returned by FetchAbandoned, the watchdog performs a GrabTransaction. If successful, it calls the coordinator’s ResolveTransaction workflow. GrabTransaction guarantees that only one watchdog can grab a transaction at any given time. In some sort, this is a simple master election process. In the next phase, the Watchdogs can be enhanced to use the more formal vitess master election process so that only one of them acts at any given time.
+_This is not a clean design because it introduces a backward dependency from VTTablet to VTGate. However, it saves us the need to create yet another server that will add to the overall complexity of the deployment. It was decided that this is a worthy trade-off._
 
 ## Client API
 
-The client API change will just be an additional flag to the Commit call, where the app can set Atomic to true or false.
+The client API change will  be an additional flag to the Commit call, where the app can set Atomic to true or false.
 
 ## Production support
 
@@ -380,8 +345,8 @@ VTTablet
 
 * The Transactions hierarchy will be extended to report CommitPrepared and RollbackPrepared stats, which includes histograms. Since Prepare is an intermediate step, it will not be rolled up in this variable.
 * For Prepare, two new variables will be created:
-    * Prepare histogram will report prepare timings.
-    * PrepareStatements histogram will report the number of statements for each Prepare.
+  * Prepare histogram will report prepare timings.
+  * PrepareStatements histogram will report the number of statements for each Prepare.
 * New histogram variables will be exported for all the new MM functions.
 * LingeringCount is a gauge that reports if a transaction has been unresolved for too long. This most likely means that it’s repeatedly failing. So, an alert should be raised. This applies to prepared transactions also.
 * Any unexpected errors during a 2PC will increment a counter for InternalErrors, which should already be set to raise an alert.
@@ -391,17 +356,13 @@ VTGate
 * TwoPCTransactions will report Commit, Rollback, ResolveCommit and ResolveRollback stats. The Resolve subvars are for the ResolveTransaction function.
 * TwoPCParticipants will report the transaction count and the ParticipantCount. This is a way to track the average number of participants per 2PC transaction.
 
-Watchdog
-
-* Grabbed will report the count and delay of abandoned transactions that were grabbed by each watchdog.
-
 ### Tooling
 
 For vttablet, a new URL, /twopcz, will display unresolved twopc transactions and transactions that are in the Prepare state. It will also provide buttons to force the following actions:
 
-* Change the state of a 2PC transaction
-* Delete the metadata of a 2PC transaction
-* Force a commit or rollback of a prepared transaction
+* Discard a Prepare that failed to commit.
+* Force a commit or rollback of a prepared transaction.
+* Resolve a distributed transaction.
 
 ### Configuration
 
