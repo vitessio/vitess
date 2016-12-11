@@ -30,9 +30,11 @@ public class VitessJDBCUrl {
     private final boolean useSSL;
     private final String keyStore;
     private final String keyStorePassword;
+    private final String keyAlias;
     private final String keyPassword;
     private final String trustStore;
     private final String trustStorePassword;
+    private final String trustAlias;
 
 
     /*
@@ -75,28 +77,15 @@ public class VitessJDBCUrl {
      * </p>
      *
      * <p>If <code>useSSL=true</code>, and any of these additional properties are not set on the JDBC URL,
-     * then the driver will first look to see if these properties where set at JVM startup time:</p>
+     * then the driver will look to see if these corresponding property was set at JVM startup time:</p>
      *
      * <p>
      *     <ul>
-     *         <li><code>-Djavax.net.useSSL.keyStore</code></li>
-     *         <li><code>-Djavax.net.useSSL.keyStorePassword</code></li>
-     *         <li><code>-Djavax.net.useSSL.keyPassword</code></li>
-     *         <li><code>-Djavax.net.useSSL.trustStore</code></li>
-     *         <li><code>-Djavax.net.useSSL.trustStorePassword</code></li>
-     *     </ul>
-     * </p>
-     *
-     * <p>If <code>userSSL=true</code>, and any of the additional properites are not set on the JDBC URL
-     * or in JVM startup properties, then the driver will finally look to environment variables:</p>
-     *
-     * <p>
-     *     <ul>
-     *         <li><code>System.setProperty("java.net.useSSL.keyStore", "...");</code></li>
-     *         <li><code>System.setProperty("java.net.useSSL.keyStorePassword", "...");</code></li>
-     *         <li><code>System.setProperty("java.net.useSSL.keyPassword", "...");</code></li>
-     *         <li><code>System.setProperty("java.net.useSSL.trustStore", "...");</code></li>
-     *         <li><code>System.setProperty("java.net.useSSL.trustStorePassword", "...");</code></li>
+     *         <li><code>-Djavax.net.ssl.keyStore</code></li>
+     *         <li><code>-Djavax.net.ssl.keyStorePassword</code></li>
+     *         <li><code>-Djavax.net.ssl.keyPassword</code></li>
+     *         <li><code>-Djavax.net.ssl.trustStore</code></li>
+     *         <li><code>-Djavax.net.ssl.trustStorePassword</code></li>
      *     </ul>
      * </p>
      *
@@ -160,9 +149,11 @@ public class VitessJDBCUrl {
         this.useSSL = "true".equalsIgnoreCase(caseInsensitiveKeyLookup(info, Constants.Property.USE_SSL));
         this.keyStore = caseInsensitiveKeyLookup(info, Constants.Property.KEYSTORE);
         this.keyStorePassword = caseInsensitiveKeyLookup(info, Constants.Property.KEYSTORE_PASSWORD);
+        this.keyAlias = caseInsensitiveKeyLookup(info, Constants.Property.KEY_ALIAS);
         this.keyPassword = caseInsensitiveKeyLookup(info, Constants.Property.KEY_PASSWORD);
         this.trustStore = caseInsensitiveKeyLookup(info, Constants.Property.TRUSTSTORE);
         this.trustStorePassword = caseInsensitiveKeyLookup(info, Constants.Property.TRUSTSTORE_PASSWORD);
+        this.trustAlias = caseInsensitiveKeyLookup(info, Constants.Property.TRUSTSTORE_ALIAS);
 
         this.url = url;
     }
@@ -219,6 +210,10 @@ public class VitessJDBCUrl {
         return keyStorePassword;
     }
 
+    public String getKeyAlias() {
+        return keyAlias;
+    }
+
     public String getKeyPassword() {
         return keyPassword;
     }
@@ -229,6 +224,10 @@ public class VitessJDBCUrl {
 
     public String getTrustStorePassword() {
         return trustStorePassword;
+    }
+
+    public String getTrustAlias() {
+        return trustAlias;
     }
 
     /**

@@ -153,15 +153,17 @@ public class VitessJDBCUrlTest {
     @Test public void testSSLParamSet() throws SQLException {
         Properties info = new Properties();
         VitessJDBCUrl vitessJDBCUrl = new VitessJDBCUrl(
-                "jdbc:vitess://hostname:15991/keyspace?useSSL=true&keyStore=/tmp/keystore.jks&keyStorePassword=abc123&keyPassword=def456&trustStore=/tmp/truststore.jks&trustStorePassword=ghi789",
+                "jdbc:vitess://hostname:15991/keyspace?useSSL=true&keyStore=/tmp/keystore.jks&keyStorePassword=abc123&keyAlias=privateKey&keyPassword=def456&trustStore=/tmp/truststore.jks&trustAlias=issuingCA&trustStorePassword=ghi789",
                 info
         );
         Assert.assertTrue(vitessJDBCUrl.isUseSSL());
         Assert.assertEquals("/tmp/keystore.jks", vitessJDBCUrl.getKeyStore());
         Assert.assertEquals("abc123", vitessJDBCUrl.getKeyStorePassword());
+        Assert.assertEquals("privateKey", vitessJDBCUrl.getKeyAlias());
         Assert.assertEquals("def456", vitessJDBCUrl.getKeyPassword());
         Assert.assertEquals("/tmp/truststore.jks", vitessJDBCUrl.getTrustStore());
         Assert.assertEquals("ghi789", vitessJDBCUrl.getTrustStorePassword());
+        Assert.assertEquals("issuingCA", vitessJDBCUrl.getTrustAlias());
     }
 
     /**
@@ -176,15 +178,17 @@ public class VitessJDBCUrlTest {
     @Test public void testSSLParamCaseInsensitiveSet() throws SQLException {
         Properties info = new Properties();
         VitessJDBCUrl vitessJDBCUrl = new VitessJDBCUrl(
-                "jdbc:vitess://hostname:15991/keyspace?UsEssL=tRuE&keYstOre=/tmp/keystore.jks&kEysTorEpaSsWord=abc123&kEypAssWord=def456&TRUSTSTORE=/tmp/truststore.jks&truststorepassword=ghi789",
+                "jdbc:vitess://hostname:15991/keyspace?UsEssL=tRuE&keYstOre=/tmp/keystore.jks&kEysTorEpaSsWord=abc123&KeYAliaS=privateKey&kEypAssWord=def456&TRUSTSTORE=/tmp/truststore.jks&trUStaLiAs=issuingCA&truststorepassword=ghi789",
                 info
         );
         Assert.assertTrue(vitessJDBCUrl.isUseSSL());
         Assert.assertEquals("/tmp/keystore.jks", vitessJDBCUrl.getKeyStore());
         Assert.assertEquals("abc123", vitessJDBCUrl.getKeyStorePassword());
+        Assert.assertEquals("privateKey", vitessJDBCUrl.getKeyAlias());
         Assert.assertEquals("def456", vitessJDBCUrl.getKeyPassword());
         Assert.assertEquals("/tmp/truststore.jks", vitessJDBCUrl.getTrustStore());
         Assert.assertEquals("ghi789", vitessJDBCUrl.getTrustStorePassword());
+        Assert.assertEquals("issuingCA", vitessJDBCUrl.getTrustAlias());
     }
 
     @Test public void testSSLParamUnset() throws SQLException {
@@ -196,8 +200,10 @@ public class VitessJDBCUrlTest {
         Assert.assertFalse(vitessJDBCUrl.isUseSSL());
         Assert.assertNull(vitessJDBCUrl.getKeyStore());
         Assert.assertNull(vitessJDBCUrl.getKeyStorePassword());
+        Assert.assertNull(vitessJDBCUrl.getKeyAlias());
         Assert.assertNull(vitessJDBCUrl.getKeyPassword());
         Assert.assertNull(vitessJDBCUrl.getTrustStore());
         Assert.assertNull(vitessJDBCUrl.getTrustStorePassword());
+        Assert.assertNull(vitessJDBCUrl.getTrustAlias());
     }
 }

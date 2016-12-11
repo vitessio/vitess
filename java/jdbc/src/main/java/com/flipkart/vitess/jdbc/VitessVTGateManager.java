@@ -95,14 +95,38 @@ public class VitessVTGateManager {
     private static VTGateConn getVtGateConn(String hostname, int port, VitessJDBCUrl jdbcUrl) {
         final String username = jdbcUrl.getUsername();
         final String keyspace = jdbcUrl.getKeyspace();
+        final Context context = CommonUtils.createContext(username, Constants.CONNECTION_TIMEOUT);
+        final InetSocketAddress inetSocketAddress = new InetSocketAddress(hostname, port);
+        RpcClient client;
         if (jdbcUrl.isUseSSL()) {
-            // TODO: Check SSL-related optional parameters, and fall back to JVM startup properties or environment variables if any are missing
-            // TODO: Call newly-created "GrpcClientFactory.createSecure(...)" method instead of the plain ".create(...)"
-        }
+            final String keyStorePath = jdbcUrl.getKeyStore() != null
+                    ? jdbcUrl.getKeyStore() : System.getProperty(Constants.Property.KEYSTORE_FULL);
+            final String keyStorePassword = jdbcUrl.getKeyStorePassword() != null
+                    ? jdbcUrl.getKeyStorePassword() : System.getProperty(Constants.Property.KEY_PASSWORD_FULL);
+            final String keyAlias = jdbcUrl.getKeyAlias() != null
+                    ? jdbcUrl.getKeyAlias() : System.getProperty(Constants.Property.KEY_ALIAS_FULL);
+            final String keyPassword = jdbcUrl.getKeyPassword() != null
+                    ? jdbcUrl.getKeyPassword() : System.getProperty(Constants.Property.KEY_PASSWORD_FULL);
+            final String trustStorePath = jdbcUrl.getTrustStore() != null
+                    ? jdbcUrl.getTrustStore() : System.getProperty(Constants.Property.TRUSTSTORE_FULL);
+            final String trustStorePassword = jdbcUrl.getTrustStorePassword() != null
+                    ? jdbcUrl.getTrustStorePassword() : System.getProperty(Constants.Property.TRUSTSTORE_PASSWORD_FULL);
+            final String trustAlias = jdbcUrl.getTrustAlias() != null
+                    ? jdbcUrl.getTrustAlias() : System.getProperty(Constants.Property.TRUSTSTORE_ALIAS_FULL);
 
-        Context context = CommonUtils.createContext(username, Constants.CONNECTION_TIMEOUT);
-        InetSocketAddress inetSocketAddress = new InetSocketAddress(hostname, port);
-        RpcClient client = new GrpcClientFactory().create(context, inetSocketAddress);
+            final GrpcClientFactory.TlsOptions tlsOptions = new GrpcClientFactory.TlsOptions()
+                    .keyStorePath(keyStorePath)
+                    .keyStorePassword(keyStorePassword)
+                    .keyAlias(keyAlias)
+                    .keyPassword(keyPassword)
+                    .trustStorePath(trustStorePath)
+                    .trustStorePassword(trustStorePassword)
+                    .trustAlias(trustAlias);
+
+            client = new GrpcClientFactory().createTls(context, inetSocketAddress, tlsOptions);
+        } else {
+            client = new GrpcClientFactory().create(context, inetSocketAddress);
+        }
         if (null == keyspace) {
             return (new VTGateConn(client));
         }
