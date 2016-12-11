@@ -1,4 +1,4 @@
-# 2PC in Vitess
+# Design doc: 2PC in Vitess
 
 # Objective
 
