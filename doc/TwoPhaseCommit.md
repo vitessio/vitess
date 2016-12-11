@@ -228,7 +228,7 @@ The transaction metadata will consist of two tables. It will need to fulfil the 
 
 * CreateTransaction: Create row.
 * Transition state: update where dtid = :dtid and state = :prepare.
-* Resolve flow: select td_state & td_participant where dtid = :dtid.
+* Resolve flow: select dt_state & dt_participant where dtid = :dtid.
 * Watchdog: full joined table scan where time_created < X.
 * Delete a resolved transaction: delete where dtid = :dtid.
 
@@ -325,7 +325,7 @@ Rollback workflow:
 
 ## Watchdogs
 
-The stateless VTGates are considered ephemeral and can fail at any time, which means that transactions could be abandoned in the middle of a distributed commit. To mitigate this, every master vttablet will poll its td_state table for distributed transactions that are lingering. If any such transaction is found, it invokes VTGate with that dtid for a Resolve to be retried.
+The stateless VTGates are considered ephemeral and can fail at any time, which means that transactions could be abandoned in the middle of a distributed commit. To mitigate this, every master vttablet will poll its dt_state table for distributed transactions that are lingering. If any such transaction is found, it invokes VTGate with that dtid for a Resolve to be retried.
 
 _This is not a clean design because it introduces a backward dependency from VTTablet to VTGate. However, it saves us the need to create yet another server that will add to the overall complexity of the deployment. It was decided that this is a worthy trade-off._
 
