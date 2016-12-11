@@ -364,23 +364,6 @@ For vttablet, a new URL, /twopcz, will display unresolved twopc transactions and
 * Force a commit or rollback of a prepared transaction.
 * Resolve a distributed transaction.
 
-### Configuration
-
-VTTablet
-
-* transaction_purge_age: Any resolved transactions that are older than this value will be purged. This value can be around 10-30 minutes.
-* lingering_alert_age: If a transaction is unresolved for longer than this amount, the Lingering counter is incremented.
-
-VTGate
-
-* max_2pc_participants: Limit the number of participants to this number. This will prevent pathologically distributed transactions.
-* twopc_retry_count: Number of retries on failed operations, typically those that timed out.
-
-Watchdog
-
-* polling_interval: The effective value should be around the same order as abandon_age of VTTablet. The actual value should be a fraction of abaondon_age, something like 0.1.
-* abandon_age: Age of a transaction that is considered to be abandoned. This should be around 15-30 seconds.
-
 # Data guarantees
 
 Although the above workflows are foolproof, they do rely on the data guarantees provided by the underlying systems and the fact that prepared transactions can get killed only together with vttablet. Of these, one failure mode has to be visited: It’s possible that there’s data loss when a master goes down and a new replica gets elected as the new master. This loss is highly mitigated with semi-sync turned on, but it’s still possible. In such situations, we have to describe how 2PC will behave.
@@ -403,17 +386,15 @@ This situation will raise a 2PC Lingering transaction alert. The operator can fo
 
 Scenario: Network partition happened after metadata was created. VTGate performs a StartCommit, succeeds in a few commits and crashes. Now, some transactions are in the prepared state. After the recovery, the metadata of the 2PC transaction is also in the Prepared state.
 
-The watchdog will grab this transaction and invoke a ResolveTransaction. The VTGate will then make a decision to rollback, because all it sees is a 2PC in Prepare state. But when it tries to actually rollback, it will receive an ‘unexpected state’ error. This will result in an internal error, which will raise an alert.
-
-The operator can force the 2PC transaction as resolved.
+The watchdog will grab this transaction and invoke a ResolveTransaction. The VTGate will then make a decision to rollback, because all it sees is a 2PC in Prepare state. It will attempt to rollback all participants, while some might have already committed. A failure like this will be undetectable.
 
 ## Prepared transaction gets killed
 
 It is possible for an external agent to kill the connection of a prepared transaction. If this happened, MySQL will roll it back. If the system is serving live traffic, it may make forward progress in such a way that the transaction may not be replayable, or may replay with different outcome.
 
-This is a very unlikely occurrence. But if something like this happen, then an alert will be raised when the coordinator finds that the transaction is missing.
+This is a very unlikely occurrence. But if something like this happen, then an alert will be raised when the coordinator finds that the transaction is missing. That transaction will be marked as Failed until an operator resolves it.
 
-But if there’s a failover after this, the transaction will be resurrected over future transaction possibly with incorrect changes. A failure like this will be undetectable.
+But if there’s a failover before the transaction is marked as failed, it will be resurrected over future transaction possibly with incorrect changes. A failure like this will be undetectable.
 
 # Testing Plan
 
@@ -424,10 +405,6 @@ Some important failure scenarios that must be tested are:
 * Correct shutdown of vttablet when it has prepared transactions.
 * Resurrection of prepared transactions when a vttablet becomes a master.
 * A reparent of a VTTablet that has prepared transactions. This is effectively tested by the previous two steps, but it will be nice as an integration test. It will be even nicer if we could go a step further and see if VTGate can still complete a transaction if a reparent happened in the middle of a commit.
-* VTGate retrying operations on operational errors.
-* VTGate’s behavior when it encounters an unexpected state.
-* Two watchdogs racing to grab a transaction. Only one should succeed.
-* Two VTGates racing to make different decisions. Only one should succeed.
 
 # Innovation
 
