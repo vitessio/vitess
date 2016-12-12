@@ -1491,6 +1491,40 @@ func TestTabletServerSplitQueryInvalidParams(t *testing.T) {
 	}
 }
 
+// Tests that using Equal Splits on a string column returns an error.
+func TestTabletServerSplitQueryEqualSplitsOnStringColumn(t *testing.T) {
+	db := setUpTabletServerTest()
+	testUtils := newTestUtils()
+	config := testUtils.newQueryServiceConfig()
+	tsv := NewTabletServer(config)
+	dbconfigs := testUtils.newDBConfigs(db)
+	target := querypb.Target{TabletType: topodatapb.TabletType_RDONLY}
+	err := tsv.StartService(target, dbconfigs, testUtils.newMysqld(&dbconfigs))
+	if err != nil {
+		t.Fatalf("StartService failed: %v", err)
+	}
+	defer tsv.StopService()
+	ctx := context.Background()
+	sql := "select * from test_table"
+	_, err = tsv.SplitQuery(
+		ctx,
+		&querypb.Target{TabletType: topodatapb.TabletType_RDONLY},
+		sql,
+		nil, /* bindVariables */
+		// EQUAL_SPLITS should not work on a string column.
+		[]string{"name_string"}, /* splitColumns */
+		10, /* splitCount */
+		0,  /* numRowsPerQueryPart */
+		querypb.SplitQueryRequest_EQUAL_SPLITS)
+	want :=
+		"error: splitquery: using the EQUAL_SPLITS algorithm in SplitQuery" +
+			" requires having a numeric (integral or float) split-column." +
+			" Got type: {Name: 'name_string', Type: VARCHAR}"
+	if err.Error() != want {
+		t.Fatalf("got: %v, want: %v", err, want)
+	}
+}
+
 func TestHandleExecUnknownError(t *testing.T) {
 	ctx := context.Background()
 	logStats := NewLogStats(ctx, "TestHandleExecError")
@@ -1498,7 +1532,7 @@ func TestHandleExecUnknownError(t *testing.T) {
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServer(config)
-	defer tsv.handleError("select * from test_table", nil, &err, logStats)
+	defer tsv.handlePanicAndSendLogStats("select * from test_table", nil, &err, logStats)
 	panic("unknown exec error")
 }
 
@@ -1515,7 +1549,7 @@ func TestHandleExecTabletError(t *testing.T) {
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServer(config)
-	defer tsv.handleError("select * from test_table", nil, &err, logStats)
+	defer tsv.handlePanicAndSendLogStats("select * from test_table", nil, &err, logStats)
 	panic(NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "tablet error"))
 }
 
@@ -1533,7 +1567,7 @@ func TestTerseErrorsNonSQLError(t *testing.T) {
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServer(config)
 	tsv.config.TerseErrors = true
-	defer tsv.handleError("select * from test_table", nil, &err, logStats)
+	defer tsv.handlePanicAndSendLogStats("select * from test_table", nil, &err, logStats)
 	panic(NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "tablet error"))
 }
 
@@ -1551,7 +1585,11 @@ func TestTerseErrorsBindVars(t *testing.T) {
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServer(config)
 	tsv.config.TerseErrors = true
-	defer tsv.handleError("select * from test_table", map[string]interface{}{"a": 1}, &err, logStats)
+	defer tsv.handlePanicAndSendLogStats(
+		"select * from test_table",
+		map[string]interface{}{"a": 1},
+		&err,
+		logStats)
 	panic(&TabletError{
 		ErrorCode: vtrpcpb.ErrorCode_DEADLINE_EXCEEDED,
 		Message:   "msg",
@@ -1574,7 +1612,7 @@ func TestTerseErrorsNoBindVars(t *testing.T) {
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServer(config)
 	tsv.config.TerseErrors = true
-	defer tsv.handleError("select * from test_table", nil, &err, logStats)
+	defer tsv.handlePanicAndSendLogStats("select * from test_table", nil, &err, logStats)
 	panic(&TabletError{
 		ErrorCode: vtrpcpb.ErrorCode_DEADLINE_EXCEEDED,
 		Message:   "msg",
@@ -1712,10 +1750,34 @@ func getSupportedQueries() map[string]*sqltypes.Result {
 			},
 		},
 		"select * from test_table where 1 != 1": {
-			Fields: getTestTableFields(),
+			Fields: []*querypb.Field{{
+				Name: "pk",
+				Type: sqltypes.Int32,
+			}, {
+				Name: "name",
+				Type: sqltypes.Int32,
+			}, {
+				Name: "addr",
+				Type: sqltypes.Int32,
+			}, {
+				Name: "name_string",
+				Type: sqltypes.VarChar,
+			}},
 		},
 		"select * from `test_table` where 1 != 1": {
-			Fields: getTestTableFields(),
+			Fields: []*querypb.Field{{
+				Name: "pk",
+				Type: sqltypes.Int32,
+			}, {
+				Name: "name",
+				Type: sqltypes.Int32,
+			}, {
+				Name: "addr",
+				Type: sqltypes.Int32,
+			}, {
+				Name: "name_string",
+				Type: sqltypes.VarChar,
+			}},
 		},
 		baseShowTables: {
 			RowsAffected: 1,
@@ -1734,7 +1796,7 @@ func getSupportedQueries() map[string]*sqltypes.Result {
 			},
 		},
 		"describe `test_table`": {
-			RowsAffected: 3,
+			RowsAffected: 4,
 			Rows: [][]sqltypes.Value{
 				{
 					sqltypes.MakeString([]byte("pk")),
@@ -1760,11 +1822,19 @@ func getSupportedQueries() map[string]*sqltypes.Result {
 					sqltypes.MakeString([]byte("1")),
 					sqltypes.MakeString([]byte{}),
 				},
+				{
+					sqltypes.MakeString([]byte("name_string")), /* Field */
+					sqltypes.MakeString([]byte("varchar(10)")), /* Type */
+					sqltypes.MakeString([]byte{}),              /* NULL */
+					sqltypes.MakeString([]byte{}),              /* Key */
+					sqltypes.MakeString([]byte("foo")),         /* Default Value */
+					sqltypes.MakeString([]byte{}),              /* Extra */
+				},
 			},
 		},
 		// for SplitQuery because it needs a primary key column
 		"show index from `test_table`": {
-			RowsAffected: 2,
+			RowsAffected: 3,
 			Rows: [][]sqltypes.Value{
 				{
 					sqltypes.MakeString([]byte{}),
@@ -1783,6 +1853,15 @@ func getSupportedQueries() map[string]*sqltypes.Result {
 					sqltypes.MakeString([]byte("name")),
 					sqltypes.MakeString([]byte{}),
 					sqltypes.MakeString([]byte("300")),
+				},
+				{
+					sqltypes.MakeString([]byte{}),
+					sqltypes.MakeString([]byte{}),
+					sqltypes.MakeString([]byte("name_string_INDEX")),
+					sqltypes.MakeString([]byte{}),
+					sqltypes.MakeString([]byte("name_string")),
+					sqltypes.MakeString([]byte{}),
+					sqltypes.MakeString([]byte("100")),
 				},
 			},
 		},
