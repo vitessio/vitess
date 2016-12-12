@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"time"
 
+	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/hack"
@@ -275,16 +276,24 @@ func (tpc *TwoPC) ReadAllRedo(ctx context.Context) (prepared, failed []*Prepared
 		dtid := row[0].String()
 		if curTx == nil || dtid != curTx.Dtid {
 			// Initialize the new element.
+			// A failure in time parsing will show up as a very old time,
+			// which is harmless.
 			tm, _ := strconv.ParseInt(row[2].String(), 10, 64)
 			curTx = &PreparedTx{
 				Dtid: dtid,
 				Time: time.Unix(0, tm),
 			}
-			st, _ := strconv.ParseInt(row[1].String(), 10, 64)
+			st, err := strconv.ParseInt(row[1].String(), 10, 64)
+			if err != nil {
+				log.Errorf("Error parsing state for dtid %s: %v.", dtid, err)
+			}
 			switch st {
 			case RedoStatePrepared:
 				prepared = append(prepared, curTx)
 			default:
+				if st != RedoStateFailed {
+					log.Errorf("Unexpected state for dtid %s: %d. Treating it as a failure.", dtid, st)
+				}
 				failed = append(failed, curTx)
 			}
 		}
@@ -394,8 +403,16 @@ func (tpc *TwoPC) ReadTransaction(ctx context.Context, dtid string) (*querypb.Tr
 		return result, nil
 	}
 	result.Dtid = qr.Rows[0][0].String()
-	st, _ := qr.Rows[0][1].ParseInt64()
+	st, err := qr.Rows[0][1].ParseInt64()
+	if err != nil {
+		return nil, fmt.Errorf("Error parsing state for dtid %s: %v", dtid, err)
+	}
 	result.State = querypb.TransactionState(st)
+	if result.State < querypb.TransactionState_PREPARE || result.State > querypb.TransactionState_ROLLBACK {
+		return nil, fmt.Errorf("Unexpected state for dtid %s: %v", dtid, result.State)
+	}
+	// A failure in time parsing will show up as a very old time,
+	// which is harmless.
 	tm, _ := qr.Rows[0][2].ParseInt64()
 	result.TimeCreated = tm
 
@@ -470,8 +487,19 @@ func (tpc *TwoPC) ReadAllTransactions(ctx context.Context) ([]*DistributedTx, er
 		dtid := row[0].String()
 		if curTx == nil || dtid != curTx.Dtid {
 			// Initialize the new element.
+			// A failure in time parsing will show up as a very old time,
+			// which is harmless.
 			tm, _ := strconv.ParseInt(row[2].String(), 10, 64)
-			st, _ := strconv.ParseInt(row[1].String(), 10, 64)
+			st, err := strconv.ParseInt(row[1].String(), 10, 64)
+			// Just log on error and continue. The state will show up as UNKNOWN
+			// on the display.
+			if err != nil {
+				log.Errorf("Error parsing state for dtid %s: %v.", dtid, err)
+			}
+			protostate := querypb.TransactionState(st)
+			if protostate < querypb.TransactionState_UNKNOWN || protostate > querypb.TransactionState_ROLLBACK {
+				log.Errorf("Unexpected state for dtid %s: %v.", dtid, protostate)
+			}
 			curTx = &DistributedTx{
 				Dtid:    dtid,
 				State:   querypb.TransactionState(st).String(),
