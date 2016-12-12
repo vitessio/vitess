@@ -107,10 +107,10 @@ func main() {
 	}
 	os.Setenv("ZK_CLIENT_CONFIG", config)
 
-	// register topo server
+	// Create topo server. We use a 'zookeeper' implementation based on
+	// a memory map.
 	zkconn := fakezk.NewConn()
-	topo.RegisterServer("fakezk", zktopo.NewServer(zkconn))
-	ts = topo.GetServerByName("fakezk")
+	ts = topo.Server{Impl: zktopo.NewServer(zkconn)}
 
 	servenv.Init()
 	tabletserver.Init()
@@ -154,7 +154,7 @@ func main() {
 	servenv.OnClose(func() {
 		// We will still use the topo server during lameduck period
 		// to update our state, so closing it in OnClose()
-		topo.CloseServers()
+		ts.Close()
 	})
 	servenv.RunDefault()
 }

@@ -16,7 +16,7 @@ import (
 
 func TestMemoryTopo(t *testing.T) {
 	factory := func() topo.Impl {
-		return memorytopo.NewMemoryTopo([]string{"global", "test"})
+		return memorytopo.NewMemoryTopo([]string{topo.GlobalCell, "test"})
 	}
 
 	t.Log("=== checkDirectory")

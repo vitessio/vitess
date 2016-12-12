@@ -22,8 +22,8 @@ func main() {
 	servenv.Init()
 	defer servenv.Close()
 
-	ts = topo.GetServer()
-	defer topo.CloseServers()
+	ts = topo.Open()
+	defer ts.Close()
 
 	// Init the vtctld core
 	vtctld.InitVtctld(ts)

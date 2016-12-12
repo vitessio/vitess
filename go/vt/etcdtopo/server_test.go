@@ -25,7 +25,7 @@ func newTestServer(t *testing.T, cells []string) *Server {
 	}
 
 	// In tests, use cell name as the address.
-	globalAddrs = flagutil.StringListValue([]string{"global"})
+	globalAddrs = flagutil.StringListValue([]string{topo.GlobalCell})
 	c := s.getGlobal()
 
 	// Add local cell "addresses" to the global cell.

@@ -15,7 +15,7 @@ import (
 	"github.com/youtube/vitess/go/zk"
 )
 
-// Server is the zookeeper topo.Server implementation.
+// Server is the zookeeper topo.Impl implementation.
 type Server struct {
 	zconn zk.Conn
 }
@@ -30,16 +30,16 @@ func (zkts *Server) GetZConn() zk.Conn {
 	return zkts.zconn
 }
 
-// NewServer can be used to create a custom Server
-// (for tests for instance) but it cannot change the globally
-// registered one.
+// NewServer can be used to create a custom Server, for tests for instance.
 func NewServer(zconn zk.Conn) topo.Impl {
 	return &Server{zconn: zconn}
 }
 
 func init() {
-	zconn := zk.NewMetaConn()
-	topo.RegisterServer("zookeeper", &Server{zconn: zconn})
+	topo.RegisterFactory("zookeeper", func(serverAddr, root string) (topo.Impl, error) {
+		zconn := zk.NewMetaConn()
+		return NewServer(zconn), nil
+	})
 }
 
 //
@@ -115,5 +115,3 @@ func (zkts *Server) PruneActionLogs(zkActionLogPath string, keepCount int) (prun
 	}
 	return prunedCount, nil
 }
-
-var _ topo.Impl = (*Server)(nil) // compile-time interface check
