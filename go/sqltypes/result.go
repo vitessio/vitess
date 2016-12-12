@@ -124,41 +124,41 @@ func (result *Result) StripFieldNames() *Result {
 // AppendResult will combine the Results Objects of one result
 // to another result.Note currently it doesn't handle cases like
 // if two results have different fields.We will enhance this function.
-func (result *Result) AppendResult(qr, innerqr *Result) {
-	if innerqr.RowsAffected == 0 && len(innerqr.Fields) == 0 {
+func (result *Result) AppendResult(src *Result) {
+	if src.RowsAffected == 0 && len(src.Fields) == 0 {
 		return
 	}
-	if qr.Fields == nil {
-		qr.Fields = innerqr.Fields
+	if result.Fields == nil {
+		result.Fields = src.Fields
 	}
-	qr.RowsAffected += innerqr.RowsAffected
-	if innerqr.InsertID != 0 {
-		qr.InsertID = innerqr.InsertID
+	result.RowsAffected += src.RowsAffected
+	if src.InsertID != 0 {
+		result.InsertID = src.InsertID
 	}
-	if len(qr.Rows) == 0 {
+	if len(result.Rows) == 0 {
 		// we haven't gotten any result yet, just save the new extras.
-		qr.Extras = innerqr.Extras
+		result.Extras = src.Extras
 	} else {
 		// Merge the EventTokens / Fresher flags within Extras.
-		if innerqr.Extras == nil {
+		if src.Extras == nil {
 			// We didn't get any from innerq. Have to clear any
 			// we'd have gotten already.
-			if qr.Extras != nil {
-				qr.Extras.EventToken = nil
-				qr.Extras.Fresher = false
+			if result.Extras != nil {
+				result.Extras.EventToken = nil
+				result.Extras.Fresher = false
 			}
 		} else {
 			// We may have gotten an EventToken from
 			// innerqr.  If we also got one earlier, merge
 			// it. If we didn't get one earlier, we
 			// discard the new one.
-			if qr.Extras != nil {
+			if result.Extras != nil {
 				// Note if any of the two is nil, we get nil.
-				qr.Extras.EventToken = eventtoken.Minimum(qr.Extras.EventToken, innerqr.Extras.EventToken)
+				result.Extras.EventToken = eventtoken.Minimum(result.Extras.EventToken, src.Extras.EventToken)
 
-				qr.Extras.Fresher = qr.Extras.Fresher && innerqr.Extras.Fresher
+				result.Extras.Fresher = result.Extras.Fresher && src.Extras.Fresher
 			}
 		}
 	}
-	qr.Rows = append(qr.Rows, innerqr.Rows...)
+	result.Rows = append(result.Rows, src.Rows...)
 }

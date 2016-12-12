@@ -133,63 +133,13 @@ func (stc *ScatterConn) Execute(
 
 			mu.Lock()
 			defer mu.Unlock()
-			qr.AppendResult(qr, innerqr)
+			qr.AppendResult(innerqr)
 			return transactionID, nil
 		})
 	return qr, err
 }
 
-// ExecuteMulti is like Execute,
-// but each shard gets its own bindVars. If len(shards) is not equal to
-// len(bindVars), the function panics.
-func (stc *ScatterConn) ExecuteMulti(
-	ctx context.Context,
-	query string,
-	keyspace string,
-	shardVars map[string]map[string]interface{},
-	tabletType topodatapb.TabletType,
-	session *SafeSession,
-	notInTransaction bool,
-	options *querypb.ExecuteOptions,
-) (*sqltypes.Result, error) {
-
-	// mu protects qr
-	var mu sync.Mutex
-	qr := new(sqltypes.Result)
-
-	err := stc.multiGoTransaction(
-		ctx,
-		"Execute",
-		keyspace,
-		getShards(shardVars),
-		tabletType,
-		session,
-		notInTransaction,
-		func(target *querypb.Target, shouldBegin bool, transactionID int64) (int64, error) {
-			var innerqr *sqltypes.Result
-			if shouldBegin {
-				var err error
-				innerqr, transactionID, err = stc.gateway.BeginExecute(ctx, target, query, shardVars[target.Shard], options)
-				if err != nil {
-					return transactionID, err
-				}
-			} else {
-				var err error
-				innerqr, err = stc.gateway.Execute(ctx, target, query, shardVars[target.Shard], transactionID, options)
-				if err != nil {
-					return transactionID, err
-				}
-			}
-
-			mu.Lock()
-			defer mu.Unlock()
-			qr.AppendResult(qr, innerqr)
-			return transactionID, nil
-		})
-	return qr, err
-}
-
-// ExecuteMultiShard is like ExecuteMulti,
+// ExecuteMultiShard is like Execute,
 // but each shard gets its own Sql Queries and BindVariables.
 func (stc *ScatterConn) ExecuteMultiShard(
 	ctx context.Context,
@@ -236,7 +186,7 @@ func (stc *ScatterConn) ExecuteMultiShard(
 
 			mu.Lock()
 			defer mu.Unlock()
-			qr.AppendResult(qr, innerqr)
+			qr.AppendResult(innerqr)
 			return transactionID, nil
 		})
 	return qr, err
@@ -288,7 +238,7 @@ func (stc *ScatterConn) ExecuteEntityIds(
 
 			mu.Lock()
 			defer mu.Unlock()
-			qr.AppendResult(qr, innerqr)
+			qr.AppendResult(innerqr)
 			return transactionID, nil
 		})
 	return qr, err
@@ -364,7 +314,7 @@ func (stc *ScatterConn) ExecuteBatch(
 			resMutex.Lock()
 			defer resMutex.Unlock()
 			for i, result := range innerqrs {
-				results[req.ResultIndexes[i]].AppendResult(&results[req.ResultIndexes[i]], &result)
+				results[req.ResultIndexes[i]].AppendResult(&result)
 			}
 		}(req)
 	}

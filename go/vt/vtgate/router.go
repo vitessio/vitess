@@ -123,11 +123,12 @@ func (rtr *Router) ExecuteRoute(vcursor *requestContext, route *engine.Route, jo
 	if err != nil {
 		return nil, err
 	}
-	return rtr.scatterConn.ExecuteMulti(
+
+	shardQueries := rtr.getShardQueries(vcursor, route.Query+vcursor.comments, params)
+	return rtr.scatterConn.ExecuteMultiShard(
 		vcursor.ctx,
-		route.Query+vcursor.comments,
 		params.ks,
-		params.shardVars,
+		shardQueries,
 		vcursor.tabletType,
 		NewSafeSession(vcursor.session),
 		vcursor.notInTransaction,
@@ -274,7 +275,6 @@ func (rtr *Router) paramsSelectScatter(vcursor *requestContext, route *engine.Ro
 
 func (rtr *Router) execUpdateEqual(vcursor *requestContext, route *engine.Route) (*sqltypes.Result, error) {
 	keys, err := rtr.resolveKeys([]interface{}{route.Values}, vcursor.bindVars)
-	keyspaceIds := [][]byte{}
 	if err != nil {
 		return nil, fmt.Errorf("execUpdateEqual: %v", err)
 	}
@@ -285,8 +285,7 @@ func (rtr *Router) execUpdateEqual(vcursor *requestContext, route *engine.Route)
 	if len(ksid) == 0 {
 		return &sqltypes.Result{}, nil
 	}
-	keyspaceIds = append(keyspaceIds, ksid)
-	rewritten := sqlannotation.AddKeyspaceIDs(route.Query, keyspaceIds, vcursor.comments)
+	rewritten := sqlannotation.AddKeyspaceIDs(route.Query, [][]byte{ksid}, vcursor.comments)
 	return rtr.scatterConn.Execute(
 		vcursor.ctx,
 		rewritten,
@@ -301,7 +300,6 @@ func (rtr *Router) execUpdateEqual(vcursor *requestContext, route *engine.Route)
 
 func (rtr *Router) execDeleteEqual(vcursor *requestContext, route *engine.Route) (*sqltypes.Result, error) {
 	keys, err := rtr.resolveKeys([]interface{}{route.Values}, vcursor.bindVars)
-	keyspaceIds := [][]byte{}
 	if err != nil {
 		return nil, fmt.Errorf("execDeleteEqual: %v", err)
 	}
@@ -318,8 +316,7 @@ func (rtr *Router) execDeleteEqual(vcursor *requestContext, route *engine.Route)
 			return nil, fmt.Errorf("execDeleteEqual: %v", err)
 		}
 	}
-	keyspaceIds = append(keyspaceIds, ksid)
-	rewritten := sqlannotation.AddKeyspaceIDs(route.Query, keyspaceIds, vcursor.comments)
+	rewritten := sqlannotation.AddKeyspaceIDs(route.Query, [][]byte{ksid}, vcursor.comments)
 	return rtr.scatterConn.Execute(
 		vcursor.ctx,
 		rewritten,
@@ -341,11 +338,12 @@ func (rtr *Router) execInsertUnsharded(vcursor *requestContext, route *engine.Ro
 	if err != nil {
 		return nil, fmt.Errorf("execInsertUnsharded: %v", err)
 	}
-	result, err := rtr.scatterConn.ExecuteMulti(
+
+	shardQueries := rtr.getShardQueries(vcursor, route.Query+vcursor.comments, params)
+	result, err := rtr.scatterConn.ExecuteMultiShard(
 		vcursor.ctx,
-		route.Query+vcursor.comments,
 		params.ks,
-		params.shardVars,
+		shardQueries,
 		vcursor.tabletType,
 		NewSafeSession(vcursor.session),
 		vcursor.notInTransaction,
@@ -640,11 +638,11 @@ func (rtr *Router) handleGenerate(vcursor *requestContext, gen *engine.Generate)
 		params := newScatterParams(ks, map[string]interface{}{"n": int64(count)}, []string{allShards[0].Name})
 		// We nil out the transaction context for this particular call.
 		// TODO(sougou): Use ExecuteShard instead.
-		qr, err := rtr.scatterConn.ExecuteMulti(
+		shardQueries := rtr.getShardQueries(vcursor, gen.Query, params)
+		qr, err := rtr.scatterConn.ExecuteMultiShard(
 			vcursor.ctx,
-			gen.Query,
 			params.ks,
-			params.shardVars,
+			shardQueries,
 			vcursor.tabletType,
 			NewSafeSession(nil),
 			false,
@@ -724,4 +722,17 @@ func (rtr *Router) handleNonPrimary(vcursor *requestContext, vindexKey interface
 	}
 	bv["_"+colVindex.Column.Original()+strconv.Itoa(rowNum)] = vindexKey
 	return nil
+}
+
+func (rtr *Router) getShardQueries(vcursor *requestContext, query string, params *scatterParams) map[string]querytypes.BoundQuery {
+
+	shardQueries := make(map[string]querytypes.BoundQuery, len(params.shardVars))
+	for shard, shardVars := range params.shardVars {
+		query := querytypes.BoundQuery{
+			Sql:           query,
+			BindVariables: shardVars,
+		}
+		shardQueries[shard] = query
+	}
+	return shardQueries
 }

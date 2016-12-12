@@ -112,7 +112,6 @@ func buildInsertShardedPlan(ins *sqlparser.Insert, table *vindexes.Table) (*engi
 		if hasSubquery(values) {
 			return nil, errors.New("unsupported: subquery in insert values")
 		}
-		eRoute.Rows = &values
 	default:
 		panic("unexpected construct in insert")
 	}

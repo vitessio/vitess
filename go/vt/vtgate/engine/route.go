@@ -9,7 +9,6 @@ import (
 	"fmt"
 
 	"github.com/youtube/vitess/go/sqltypes"
-	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
 )
 
@@ -27,7 +26,6 @@ type Route struct {
 	Table      *vindexes.Table
 	Subquery   string
 	Generate   *Generate
-	Rows       *sqlparser.Values
 	Prefix     string
 	Mid        []string
 	Suffix     string

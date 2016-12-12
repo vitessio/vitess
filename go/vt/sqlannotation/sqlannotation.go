@@ -18,6 +18,8 @@ import (
 	"strings"
 	"unicode"
 
+	"bytes"
+
 	"github.com/youtube/vitess/go/stats"
 )
 
@@ -49,13 +51,14 @@ func AnnotateIfDML(sql string, keyspaceIDs [][]byte) string {
 // AddKeyspaceIDs returns a copy of 'sql' annotated
 // with the given keyspace id. It also appends the
 // additional trailingComments, if any.
-func AddKeyspaceIDs(sql string, keyspaceID [][]byte, trailingComments string) string {
-	ksidStr := make([]string, len(keyspaceID))
-	for ksid := range keyspaceID {
-		ksidStr[ksid] = hex.EncodeToString(keyspaceID[ksid])
+func AddKeyspaceIDs(sql string, keyspaceIDs [][]byte, trailingComments string) string {
+	encodedIDs := make([][]byte, len(keyspaceIDs))
+	for i, src := range keyspaceIDs {
+		encodedIDs[i] = make([]byte, hex.EncodedLen(len(src)))
+		hex.Encode(encodedIDs[i], src)
 	}
 	return fmt.Sprintf("%s /* vtgate:: keyspace_id:%s */%s",
-		sql, strings.Join(ksidStr, ","), trailingComments)
+		sql, bytes.Join(encodedIDs, []byte(",")), trailingComments)
 }
 
 // IsDML returns true if 'querySQL' is an INSERT, UPDATE or DELETE statement.
