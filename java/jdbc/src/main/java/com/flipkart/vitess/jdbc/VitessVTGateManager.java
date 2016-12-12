@@ -72,7 +72,7 @@ public class VitessVTGateManager {
     }
 
     /**
-     * Create VTGateConne and update vtGateConnHashMap.
+     * Create VTGateConn and update vtGateConnHashMap.
      *
      * @param identifier
      * @param hostname
@@ -102,7 +102,7 @@ public class VitessVTGateManager {
             final String keyStorePath = jdbcUrl.getKeyStore() != null
                     ? jdbcUrl.getKeyStore() : System.getProperty(Constants.Property.KEYSTORE_FULL);
             final String keyStorePassword = jdbcUrl.getKeyStorePassword() != null
-                    ? jdbcUrl.getKeyStorePassword() : System.getProperty(Constants.Property.KEY_PASSWORD_FULL);
+                    ? jdbcUrl.getKeyStorePassword() : System.getProperty(Constants.Property.KEYSTORE_PASSWORD_FULL);
             final String keyAlias = jdbcUrl.getKeyAlias() != null
                     ? jdbcUrl.getKeyAlias() : System.getProperty(Constants.Property.KEY_ALIAS_FULL);
             final String keyPassword = jdbcUrl.getKeyPassword() != null

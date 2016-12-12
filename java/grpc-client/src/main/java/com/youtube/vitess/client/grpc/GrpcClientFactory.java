@@ -13,9 +13,14 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.net.InetSocketAddress;
-import java.security.*;
-import java.security.cert.*;
+import java.security.KeyStore;
+import java.security.KeyStoreException;
+import java.security.NoSuchAlgorithmException;
+import java.security.PrivateKey;
+import java.security.UnrecoverableEntryException;
 import java.security.cert.Certificate;
+import java.security.cert.CertificateException;
+import java.security.cert.X509Certificate;
 import java.util.Arrays;
 import java.util.Enumeration;
 
@@ -60,8 +65,8 @@ public class GrpcClientFactory implements RpcClientFactory {
               .keyManager(privateKeyWrapper.getPrivateKey(), privateKeyWrapper.getPassword(), privateKeyWrapper.getCertificateChain())
               .trustManager(trustCertCollection)
               .build();
-    } catch (KeyStoreException | CertificateException | NoSuchAlgorithmException | UnrecoverableEntryException
-            | IOException ex) {
+    } catch (NullPointerException | KeyStoreException | CertificateException | NoSuchAlgorithmException
+            | UnrecoverableEntryException | IOException ex) {
       throw new RuntimeException(ex);
     }
 
@@ -82,7 +87,7 @@ public class GrpcClientFactory implements RpcClientFactory {
    */
   private KeyStore loadKeyStore(final File keyStoreFile, String keyStorePassword)
           throws KeyStoreException, IOException, CertificateException, NoSuchAlgorithmException {
-    final KeyStore keyStore = KeyStore.getInstance("JKS");
+    final KeyStore keyStore = KeyStore.getInstance(Constants.KEYSTORE_TYPE);
     final char[] password = keyStorePassword == null ? null : keyStorePassword.toCharArray();
     try (final FileInputStream fis = new FileInputStream(keyStoreFile)) {
       keyStore.load(fis, password);
@@ -179,7 +184,7 @@ public class GrpcClientFactory implements RpcClientFactory {
       return this;
     }
 
-    public TlsOptions keyPassword(String keyStorePassword) {
+    public TlsOptions keyPassword(String keyPassword) {
       this.keyPassword = keyPassword;
       return this;
     }

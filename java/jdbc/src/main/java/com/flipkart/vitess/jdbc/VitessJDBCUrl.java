@@ -62,7 +62,7 @@ public class VitessJDBCUrl {
      * <p>Create VitessJDBC url object for given urls and properties.</p>
      *
      * <p>To indicate that SSL should be used, URL's follow the MySQL and MariaDB convention of including
-     * the property <code>useSSL=true</code>.  To use a keystore and truststore other than the JRE
+     * the property <code>useSSL=true</code>.  To use a keyStore and trustStore other than the JRE
      * default, you can add the following URL properties:</p>
      *
      * <p>
@@ -145,7 +145,6 @@ public class VitessJDBCUrl {
         this.tabletType = getTabletType(tabletType);
         this.executeType = info.getProperty(Constants.Property.EXECUTE_TYPE);
 
-        String ssl = caseInsensitiveKeyLookup(info, Constants.Property.USE_SSL);
         this.useSSL = "true".equalsIgnoreCase(caseInsensitiveKeyLookup(info, Constants.Property.USE_SSL));
         this.keyStore = caseInsensitiveKeyLookup(info, Constants.Property.KEYSTORE);
         this.keyStorePassword = caseInsensitiveKeyLookup(info, Constants.Property.KEYSTORE_PASSWORD);
@@ -344,7 +343,7 @@ public class VitessJDBCUrl {
         for (final Object uncastKeyBuffer : properties.keySet()) {
             if (uncastKeyBuffer instanceof String) {
                 final String keyBuffer = (String) uncastKeyBuffer;
-                if (key != null && key.equalsIgnoreCase(keyBuffer)) {
+                if (key.equalsIgnoreCase(keyBuffer)) {
                     return properties.getProperty(keyBuffer);
                 }
             }
