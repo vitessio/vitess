@@ -366,25 +366,9 @@ func (rtr *Router) execInsertSharded(vcursor *requestContext, route *engine.Rout
 	if err != nil {
 		return nil, fmt.Errorf("execInsertSharded: %v", err)
 	}
-	keyspace, routing, shardKsidMap, err := rtr.getInsertShardedRoute(vcursor, route)
+	keyspace, shardQueries, err := rtr.getInsertShardedRoute(vcursor, route)
 	if err != nil {
 		return nil, fmt.Errorf("execInsertSharded: %v", err)
-	}
-
-	shardQueries := make(map[string]querytypes.BoundQuery, len(routing))
-
-	for shard := range routing {
-		rewritten, err := rtr.rewriteMultiRowQuery(route, routing, shard)
-		if err != nil {
-			return nil, fmt.Errorf("execInsertSharded: Error While Rewriting Query: %v", err)
-		}
-		rewrittenQuery := sqlannotation.AddKeyspaceIDs(rewritten, shardKsidMap[shard], vcursor.comments)
-		route.Query = rewrittenQuery
-		query := querytypes.BoundQuery{
-			Sql:           rewrittenQuery,
-			BindVariables: vcursor.bindVars,
-		}
-		shardQueries[shard] = query
 	}
 
 	result, err := rtr.scatterConn.ExecuteMultiShard(
@@ -420,44 +404,59 @@ func (rtr *Router) rewriteMultiRowQuery(route *engine.Route, routing map[string]
 	return Query, nil
 }
 
-func (rtr *Router) getInsertShardedRoute(vcursor *requestContext, route *engine.Route) (keyspace string, routing map[string][]int, valuesKSIDMap map[string][][]byte, err error) {
+func (rtr *Router) getInsertShardedRoute(vcursor *requestContext, route *engine.Route) (keyspace string, shardQueries map[string]querytypes.BoundQuery, err error) {
 	keyspaceIDs := [][]byte{}
-	routing = make(map[string][]int)
+	routing := make(map[string][]int)
 	shardKeyspaceIDMap := make(map[string][][]byte)
 	keyspace, _, allShards, err := getKeyspaceShards(vcursor.ctx, rtr.serv, rtr.cell, route.Keyspace.Name, vcursor.tabletType)
 	if err != nil {
-		return "", nil, nil, fmt.Errorf("getInsertShardedRoute: %v", err)
+		return "", nil, fmt.Errorf("getInsertShardedRoute: %v", err)
 	}
 
 	inputs := route.Values.([]interface{})
 	for rowNum, input := range inputs {
 		keys, err := rtr.resolveKeys(input.([]interface{}), vcursor.bindVars)
 		if err != nil {
-			return "", nil, nil, fmt.Errorf("getInsertShardedRoute: %v", err)
+			return "", nil, fmt.Errorf("getInsertShardedRoute: %v", err)
 		}
 		for colNum := 0; colNum < len(keys); colNum++ {
 			if colNum == 0 {
 				ksid, err := rtr.handlePrimary(vcursor, keys[colNum], route.Table.ColumnVindexes[colNum], vcursor.bindVars, rowNum)
 				if err != nil {
-					return "", nil, nil, fmt.Errorf("getInsertShardedRoute: %v", err)
+					return "", nil, fmt.Errorf("getInsertShardedRoute: %v", err)
 				}
 				keyspaceIDs = append(keyspaceIDs, ksid)
 			} else {
 				err := rtr.handleNonPrimary(vcursor, keys[colNum], route.Table.ColumnVindexes[colNum], vcursor.bindVars, keyspaceIDs[rowNum], rowNum)
 				if err != nil {
-					return "", nil, nil, fmt.Errorf("getInsertShardedRoute: %v", err)
+					return "", nil, fmt.Errorf("getInsertShardedRoute: %v", err)
 				}
 			}
 		}
 		shard, err := getShardForKeyspaceID(allShards, keyspaceIDs[rowNum])
 		routing[shard] = append(routing[shard], rowNum)
 		if err != nil {
-			return "", nil, nil, fmt.Errorf("getInsertShardedRoute: %v", err)
+			return "", nil, fmt.Errorf("getInsertShardedRoute: %v", err)
 		}
 		shardKeyspaceIDMap[shard] = append(shardKeyspaceIDMap[shard], keyspaceIDs[rowNum])
 	}
 
-	return keyspace, routing, shardKeyspaceIDMap, nil
+	shardQueries = make(map[string]querytypes.BoundQuery, len(routing))
+	for shard := range routing {
+		rewritten, err := rtr.rewriteMultiRowQuery(route, routing, shard)
+		if err != nil {
+			return "", nil, fmt.Errorf("getInsertShardedRoute: Error While Rewriting Query: %v", err)
+		}
+		rewrittenQuery := sqlannotation.AddKeyspaceIDs(rewritten, shardKeyspaceIDMap[shard], vcursor.comments)
+		route.Query = rewrittenQuery
+		query := querytypes.BoundQuery{
+			Sql:           rewrittenQuery,
+			BindVariables: vcursor.bindVars,
+		}
+		shardQueries[shard] = query
+	}
+
+	return keyspace, shardQueries, nil
 }
 
 // resolveList returns a list of values, typically for an IN clause. If the input
