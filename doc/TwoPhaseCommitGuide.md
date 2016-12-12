@@ -16,7 +16,7 @@ As part of the 2pc feature, the VTGate API has been extended to support three le
 2. **Multi database**: In this mode, a transaction will be allowed to beyond one database, but the commit will be best effort.
 3. **2PC**: This is the same as Multi-database, but the commit will be atomic.
 
-At the gRPC layer, you a single-database transaction request is made at the time of invoking `Begin`. The `BeginRequest` message now contains a `single_db` flag. If this is set, then any transaction that causes statements to go beyond one database will be failed.
+At the gRPC layer, a single-database transaction request is made at the time of invoking `Begin`. The `BeginRequest` message now contains a `single_db` flag. If this is set, then any transaction that causes statements to go beyond one database will be failed.
 
 The 2PC request is made at the time of `Commit`. For this, the `CommitRequest` message provides an `atomic` flag. If set, then the the 2PC mechanism is triggered.
 
@@ -43,3 +43,15 @@ For Python, the `begin` function of the cursor now has an optional `single_db` f
 ## VTGate
 
 * **transaction_mode**: This value should be set to `twopc`. The default value is `multi`, which will explicitly disallow 2pc requests. If set to `single`, only single db transactions will be allowed.
+
+# Operational instructions
+
+TODO: Tuning twopc_abandon_age
+
+TODO: Increase idle connection timeout for MySQL
+
+TODO: Explain failure modes
+
+## Alerts (TODO)
+
+## Repairs (TODO)
