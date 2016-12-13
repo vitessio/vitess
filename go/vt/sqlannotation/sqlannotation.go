@@ -142,6 +142,23 @@ func extractStringBetween(source string, leftDelim string, rightDelim string) (m
 	return
 }
 
+// ExtractTrailingComments extracts the string from source which is present after the
+// leftmost instance of 'leftDelim' and the next instance of 'rightDelim'.
+func ExtractTrailingComments(source string, leftDelim string, rightDelim string) (trailingComm string) {
+	leftDelimStart := strings.Index(source, leftDelim)
+	if leftDelimStart == -1 {
+		trailingComm = ""
+		return
+	}
+	matchStart := leftDelimStart + len(leftDelim)
+	matchEnd := strings.Index(source[matchStart:], rightDelim)
+	if matchEnd != -1 {
+		trailingComm = source[matchStart+matchEnd+len(rightDelim):]
+		return
+	}
+	return
+}
+
 // ExtractKeySpaceIDError is the error type returned
 // from ExtractKeySpaceID
 // Kind is a numeric code for the error (see constants below)

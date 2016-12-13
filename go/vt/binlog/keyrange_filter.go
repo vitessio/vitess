@@ -9,8 +9,13 @@ import (
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/sqlannotation"
 
+	"encoding/hex"
+	"errors"
+	"fmt"
+
 	binlogdatapb "github.com/youtube/vitess/go/vt/proto/binlogdata"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	"github.com/youtube/vitess/go/vt/sqlparser"
 )
 
 // KeyRangeFilterFunc returns a function that calls sendReply only if statements
@@ -20,7 +25,7 @@ import (
 func KeyRangeFilterFunc(keyrange *topodatapb.KeyRange, sendReply sendTransactionFunc) sendTransactionFunc {
 	return func(reply *binlogdatapb.BinlogTransaction) error {
 		matched := false
-		filtered := make([]*binlogdatapb.BinlogTransaction_Statement, 0, len(reply.Statements))
+		filtered := []*binlogdatapb.BinlogTransaction_Statement{}
 		for _, statement := range reply.Statements {
 			switch statement.Category {
 			case binlogdatapb.BinlogTransaction_Statement_BL_SET:
@@ -29,7 +34,7 @@ func KeyRangeFilterFunc(keyrange *topodatapb.KeyRange, sendReply sendTransaction
 				log.Warningf("Not forwarding DDL: %s", statement.Sql)
 				continue
 			case binlogdatapb.BinlogTransaction_Statement_BL_DML:
-				keyspaceID, err := sqlannotation.ExtractKeySpaceIDS(string(statement.Sql))
+				keyspaceIDS, err := sqlannotation.ExtractKeySpaceIDS(string(statement.Sql))
 				if err != nil {
 					if handleExtractKeySpaceIDError(err) {
 						continue
@@ -39,12 +44,32 @@ func KeyRangeFilterFunc(keyrange *topodatapb.KeyRange, sendReply sendTransaction
 						continue
 					}
 				}
-				if !key.KeyRangeContains(keyrange, keyspaceID[0]) {
-					// Skip keyspace ids that don't belong to the destination shard.
-					continue
+				if len(keyspaceIDS) == 1 {
+					if !key.KeyRangeContains(keyrange, keyspaceIDS[0]) {
+						// Skip keyspace ids that don't belong to the destination shard.
+						continue
+					}
+					filtered = append(filtered, statement)
+					matched = true
+				} else {
+					multipleQueries, err := splitMultiValueInsertQuery(string(statement.Sql), keyspaceIDS)
+					if err != nil {
+						continue
+					}
+					for rowNum, query := range multipleQueries {
+						if !key.KeyRangeContains(keyrange, keyspaceIDS[rowNum]) {
+							// Skip keyspace ids that don't belong to the destination shard.
+							continue
+						}
+						splitStatement := &binlogdatapb.BinlogTransaction_Statement{
+							Category: statement.Category,
+							Charset:  statement.Charset,
+							Sql:      []byte(query),
+						}
+						filtered = append(filtered, splitStatement)
+					}
+					matched = true
 				}
-				filtered = append(filtered, statement)
-				matched = true
 			case binlogdatapb.BinlogTransaction_Statement_BL_UNRECOGNIZED:
 				updateStreamErrors.Add("KeyRangeStream", 1)
 				log.Errorf("Error parsing keyspace id: %s", statement.Sql)
@@ -57,6 +82,51 @@ func KeyRangeFilterFunc(keyrange *topodatapb.KeyRange, sendReply sendTransaction
 			reply.Statements = nil
 		}
 		return sendReply(reply)
+	}
+}
+
+func splitMultiValueInsertQuery(sql string, keyspaceIDs [][]byte) (queries []string, err error) {
+	statement, err := sqlparser.Parse(sql)
+	if err != nil {
+		return nil, err
+	}
+
+	switch statement := statement.(type) {
+	case *sqlparser.Insert:
+		trailingComments := sqlannotation.ExtractTrailingComments(sql, "/* vtgate:: keyspace_id:", "*/")
+		queries, err := generateSingleInsertQueries(statement, keyspaceIDs, trailingComments)
+		if err != nil {
+			return nil, err
+		}
+		return queries, nil
+	default:
+		return nil, errors.New("unsupported construct ")
+	}
+}
+
+func generateSingleInsertQueries(ins *sqlparser.Insert, keyspaceIDs [][]byte, trailingComments string) (queries []string, err error) {
+	var values sqlparser.Values
+	switch rows := ins.Rows.(type) {
+	case *sqlparser.Select, *sqlparser.Union:
+		return nil, errors.New("unsupported: insert into select")
+	case sqlparser.Values:
+		values = rows
+		if len(values) != len(keyspaceIDs) {
+			return nil, fmt.Errorf("length of values tuples %v doesn't match with length of keyspaceids %v", len(values), len(keyspaceIDs))
+		}
+		queryBuf := sqlparser.NewTrackedBuffer(nil)
+		queries := make([]string, len(values))
+		for rowNum, val := range values {
+			queryBuf.Myprintf("insert %v%sinto %v%v values%v%v /* vtgate:: keyspace_id:%s */%s",
+				ins.Comments, ins.Ignore,
+				ins.Table, ins.Columns, val, ins.OnDup, hex.EncodeToString(keyspaceIDs[rowNum]), trailingComments)
+			queries[rowNum] = queryBuf.String()
+			queryBuf.Truncate(0)
+		}
+		return queries, nil
+
+	default:
+		return nil, errors.New("unexpected construct in insert")
 	}
 }
 
