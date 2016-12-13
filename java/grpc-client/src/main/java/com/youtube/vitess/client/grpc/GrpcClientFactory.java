@@ -8,6 +8,7 @@ import io.grpc.netty.GrpcSslContexts;
 import io.grpc.netty.NegotiationType;
 import io.grpc.netty.NettyChannelBuilder;
 import io.netty.handler.ssl.SslContext;
+import io.netty.handler.ssl.SslContextBuilder;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -51,22 +52,31 @@ public class GrpcClientFactory implements RpcClientFactory {
   public RpcClient createTls(Context ctx, InetSocketAddress address, TlsOptions tlsOptions) {
     SslContext sslContext;
     try {
-      final KeyStore keyStore = loadKeyStore(tlsOptions.getKeyStore(), tlsOptions.getKeyStorePassword());
-      final PrivateKeyWrapper privateKeyWrapper = tlsOptions.getKeyAlias() == null
-              ? loadPrivateKeyEntry(keyStore, tlsOptions.getKeyStorePassword(), tlsOptions.getKeyPassword())
-              : loadPrivateKeyEntryForAlias(keyStore, tlsOptions.getKeyAlias(), tlsOptions.getKeyStorePassword(), tlsOptions.getKeyPassword());
+      SslContextBuilder sslContextBuilder = GrpcSslContexts.forClient();
 
+      // trustManager should always be set
       final KeyStore trustStore = loadKeyStore(tlsOptions.getTrustStore(), tlsOptions.getTrustStorePassword());
       final X509Certificate[] trustCertCollection = {
               (X509Certificate) trustStore.getCertificate(tlsOptions.getTrustAlias())
       };
+      sslContextBuilder.trustManager(trustCertCollection);
 
-      sslContext = GrpcSslContexts.forClient()
-              .keyManager(privateKeyWrapper.getPrivateKey(), privateKeyWrapper.getPassword(), privateKeyWrapper.getCertificateChain())
-              .trustManager(trustCertCollection)
-              .build();
-    } catch (NullPointerException | KeyStoreException | CertificateException | NoSuchAlgorithmException
-            | UnrecoverableEntryException | IOException ex) {
+      // keyManager should only be set if a keyStore is specified (meaning that client authentication is enabled
+      final KeyStore keyStore = loadKeyStore(tlsOptions.getKeyStore(), tlsOptions.getKeyStorePassword());
+      if (keyStore != null) {
+        final PrivateKeyWrapper privateKeyWrapper = tlsOptions.getKeyAlias() == null
+                ? loadPrivateKeyEntry(keyStore, tlsOptions.getKeyStorePassword(), tlsOptions.getKeyPassword())
+                : loadPrivateKeyEntryForAlias(keyStore, tlsOptions.getKeyAlias(), tlsOptions.getKeyStorePassword(), tlsOptions.getKeyPassword());
+        sslContextBuilder.keyManager(
+                privateKeyWrapper.getPrivateKey(),
+                privateKeyWrapper.getPassword(),
+                privateKeyWrapper.getCertificateChain()
+        );
+      }
+
+      sslContext = sslContextBuilder.build();
+    } catch (NullPointerException | KeyStoreException | NoSuchAlgorithmException | UnrecoverableEntryException
+            | IOException ex) {
       throw new RuntimeException(ex);
     }
 
@@ -85,14 +95,17 @@ public class GrpcClientFactory implements RpcClientFactory {
    * @throws CertificateException
    * @throws NoSuchAlgorithmException
    */
-  private KeyStore loadKeyStore(final File keyStoreFile, String keyStorePassword)
-          throws KeyStoreException, IOException, CertificateException, NoSuchAlgorithmException {
-    final KeyStore keyStore = KeyStore.getInstance(Constants.KEYSTORE_TYPE);
-    final char[] password = keyStorePassword == null ? null : keyStorePassword.toCharArray();
-    try (final FileInputStream fis = new FileInputStream(keyStoreFile)) {
-      keyStore.load(fis, password);
+  private KeyStore loadKeyStore(final File keyStoreFile, String keyStorePassword) {
+    try {
+      final KeyStore keyStore = KeyStore.getInstance(Constants.KEYSTORE_TYPE);
+      final char[] password = keyStorePassword == null ? null : keyStorePassword.toCharArray();
+      try (final FileInputStream fis = new FileInputStream(keyStoreFile)) {
+        keyStore.load(fis, password);
+      }
+      return keyStore;
+    } catch (KeyStoreException | CertificateException | NoSuchAlgorithmException | IOException e) {
+      return null;
     }
-    return keyStore;
   }
 
   /**
