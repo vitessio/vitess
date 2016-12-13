@@ -15,28 +15,45 @@ import java.io.StringWriter;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.nio.file.Paths;
-import java.util.Arrays;
 
 /**
  * This tests GrpcClient with a mock vtgate server (go/cmd/vtgateclienttest), over an SSL connection.
  *
  * The SSL setup is adapted from "test/encrypted_transport.py"
+ *
+ * TODO: Create separate tests for SSL with client auth
  */
 @RunWith(JUnit4.class)
 public class GrpcClientTlsTest extends RpcClientTest {
 
-    private static File certDirectory;
     private static Process vtgateclienttest;
     private static int port;
+    private static File certDirectory;
+
+    private static String caConfig;
+    private static String caKey;
+    private static String caCert;
+    private static String caCertDer;
+    private static String trustStore;
+
+    private static String config;
+    private static String key;
+    private static String req;
+    private static String cert;
 
     @BeforeClass
     public static void setUpBeforeClass() throws Exception {
         certDirectory = Files.createTempDir();
         System.out.println("Using cert directory: " + certDirectory.getCanonicalPath());
 
+        caConfig = certDirectory.getCanonicalPath() + File.separatorChar + "ca.config";
+        caKey = certDirectory.getCanonicalPath() + File.separatorChar + "ca-key.pem";
+        caCert = certDirectory.getCanonicalPath() + File.separatorChar + "ca-cert.pem";
+        caCertDer = certDirectory.getCanonicalPath() + File.separatorChar + "ca-cert.der";
+        trustStore = certDirectory.getCanonicalPath() + File.separatorChar + "trustStore.jks";
+
         createCA();
-        createSignedCert("ca", "03", "vtgate-server", "vtgate server CA");
-        createSignedCert("ca", "04", "vtgate-client", "vtgate client CA");
+        createSignedCert("ca", "01", "vtgate-server", "vtgate server");
 
         startVtgate();
         createClientConnection();
@@ -55,49 +72,27 @@ public class GrpcClientTlsTest extends RpcClientTest {
     private static void createCA() throws Exception {
         java.nio.file.Files.copy(
                 GrpcClientTlsTest.class.getResourceAsStream("/ca.config"),
-                Paths.get(certDirectory.toString() + File.separatorChar + "ca.config")
+                Paths.get(caConfig)
         );
 
-        final Process createKey = new ProcessBuilder(
-                // certDirectory.getCanonicalPath() + File.separatorChar + "ca-key.pem")
-                Arrays.asList(
-                        "openssl",
-                        "genrsa",
-                        "-out",
-                        certDirectory.getCanonicalPath() + File.separatorChar + "ca-key.pem")
-        ).start();
-        createKey.waitFor();
+        final String createKey = String.format("openssl genrsa -out %s", caKey);
+        new ProcessBuilder(createKey.split(" ")).start().waitFor();
 
-        final Process createCert = new ProcessBuilder(
-                // openssl req -new -x509 -nodes -days 3600 -batch -config ca.config -key ca-key.pem -out ca-cert.pem
-                Arrays.asList(
-                        "openssl",
-                        "req",
-                        "-new",
-                        "-x509",
-                        "-nodes",
-                        "-days",
-                        "3600",
-                        "-batch",
-                        "-config",
-                        certDirectory.getCanonicalPath() + File.separatorChar + "ca.config",
-                        "-key",
-                        certDirectory.getCanonicalPath() + File.separatorChar + "ca-key.pem",
-                        "-out",
-                        certDirectory.getCanonicalPath() + File.separatorChar + "ca-cert.pem")
-        ).start();
-        createCert.waitFor();
+        final String createCert = String.format("openssl req -new -x509 -nodes -days 3600 -batch -config %s -key %s -out %s", caConfig, caKey, caCert);
+        new ProcessBuilder(createCert.split(" ")).start().waitFor();
 
-        // TODO: Create JKS trustStore
+        final String convertCaCert = String.format("openssl x509 -outform der -in %s -out %s", caCert, caCertDer);
+        new ProcessBuilder(convertCaCert.split(" ")).start().waitFor();
+
+        final String createTrustStore = String.format("keytool -import -alias caCert -keystore %s -file %s -storepass passwd -trustcacerts -noprompt", trustStore, caCertDer);
+        new ProcessBuilder(createTrustStore.split(" ")).start().waitFor();
     }
 
     private static void createSignedCert(final String ca, final String serial, final String name, final String commonName) throws Exception {
-        final String config = certDirectory.getCanonicalPath() + File.separatorChar + name + ".config";
-        final String key = certDirectory.getCanonicalPath() + File.separatorChar + name + "-key.pem";
-        final String req = certDirectory.getCanonicalPath() + File.separatorChar + name + "-req.pem";
-        final String cert = certDirectory.getCanonicalPath() + File.separatorChar + name + "-cert.pem";
-        final String caCert = certDirectory.getCanonicalPath() + File.separatorChar + ca + "-cert.pem";
-        final String caKey = certDirectory.getCanonicalPath() + File.separatorChar + ca + "-key.pem";
+        config = certDirectory.getCanonicalPath() + File.separatorChar + name + ".config";
+        key = certDirectory.getCanonicalPath() + File.separatorChar + name + "-key.pem";
+        req = certDirectory.getCanonicalPath() + File.separatorChar + name + "-req.pem";
+        cert = certDirectory.getCanonicalPath() + File.separatorChar + name + "-cert.pem";
 
         final StringWriter writer = new StringWriter();
         IOUtils.copy(GrpcClientTlsTest.class.getResourceAsStream("/cert-template.config"), writer, "UTF-8");
@@ -105,58 +100,14 @@ public class GrpcClientTlsTest extends RpcClientTest {
         content.replaceAll("%s", commonName);
         java.nio.file.Files.write(Paths.get(config), content.getBytes("UTF-8"));
 
-        final Process createKeyAndCSR = new ProcessBuilder(
-                // openssl req -newkey rsa:2048 -days 3600 -nodes -batch -config cert-template.config -keyout vtgate-client-key.pem -out vtgate-client-req.pem
-                Arrays.asList(
-                        "openssl",
-                        "req",
-                        "-newkey",
-                        "rsa:2048",
-                        "-days",
-                        "3600",
-                        "-nodes",
-                        "-batch",
-                        "-config",
-                        config,
-                        "-keyout",
-                        key,
-                        "-out",
-                        req)
-        ).start();
-        createKeyAndCSR.waitFor();
+        final String createKeyAndCSR = String.format("openssl req -newkey rsa:2048 -days 3600 -nodes -batch -config %s -keyout %s -out %s", config, key, req);
+        new ProcessBuilder(createKeyAndCSR.split(" ")).start().waitFor();
 
-        final Process askHarshit = new ProcessBuilder(
-                // openssl rsa -in vtgate-client-key.pem -out vtgate-client-key.pem
-                Arrays.asList(
-                        "openssl",
-                        "rsa",
-                        "-in",
-                        key,
-                        "-out",
-                        key)
-        ).start();
-        askHarshit.waitFor();
+        final String askHarshit = String.format("openssl rsa -in %s -out %s", key, key);
+        new ProcessBuilder(askHarshit.split(" ")).start().waitFor();
 
-        final Process signKey = new ProcessBuilder(
-                // openssl x509 -req -in vtgate-client-req.pem -days 3600 -CA ca-cert.pem -CAkey ca-key.pem -set_serial 04 -out vtgate-client-cert.pem
-                Arrays.asList(
-                        "openssl",
-                        "x509",
-                        "-req",
-                        "-in",
-                        req,
-                        "-days",
-                        "3600",
-                        "-CA",
-                        caCert,
-                        "-CAkey",
-                        caKey,
-                        "-set_serial",
-                        serial,
-                        "-out",
-                        cert)
-        ).start();
-        signKey.waitFor();
+        final String signKey = String.format("openssl x509 -req -in %s -days 3600 -CA %s -CAkey %s -set_serial %s -out %s", req, caCert, caKey, serial, cert);
+        new ProcessBuilder(signKey.split(" ")).start().waitFor();
     }
 
     private static void startVtgate() throws Exception {
@@ -169,35 +120,28 @@ public class GrpcClientTlsTest extends RpcClientTest {
         port = socket.getLocalPort();
         socket.close();
 
-        vtgateclienttest =
-                new ProcessBuilder(
-                        Arrays.asList(
-                                vtRoot + "/bin/vtgateclienttest",
-
-// TODO: Uncomment the following lines once the corresponding client-side changes are added to "createClientConnection"
-//                                "-grpc_cert",
-//                                certDirectory.getCanonicalPath() + File.separatorChar + "vtgate-server-cert.pem",
-//                                "-grpc_key",
-//                                certDirectory.getCanonicalPath() + File.separatorChar + "vtgate-server-key.pem",
-//                                "-grpc_ca",
-//                                certDirectory.getCanonicalPath() + File.separatorChar + "ca-cert.pem",
-
-                                "-logtostderr",
-                                "-grpc_port",
-                                Integer.toString(port),
-                                "-service_map",
-                                "grpc-vtgateservice"))
-                        .start();
+//        "-grpc_ca",
+//        certDirectory.getCanonicalPath() + File.separatorChar + "ca-cert.pem",
+        final String vtgate = String.format("%s -grpc_cert %s -grpc_key %s -logtostderr -grpc_port %s -service_map grpc-vtgateservice",
+                vtRoot + "/bin/vtgateclienttest",
+                certDirectory.getCanonicalPath() + File.separatorChar + "vtgate-server-cert.pem",
+                certDirectory.getCanonicalPath() + File.separatorChar + "vtgate-server-key.pem",
+                Integer.toString(port));
+        vtgateclienttest = new ProcessBuilder(vtgate.split(" ")).start();
     }
 
-    private static void createClientConnection() {
-        // TODO: Write code to build a JKS keyStore and trustStore from the PEM files that have been created
-        // TODO: Swap the "create(...)" call below with "createTls(...)"
-        client =
-                new GrpcClientFactory()
-                        .create(
+    private static void createClientConnection() throws Exception {
+        final GrpcClientFactory.TlsOptions tlsOptions = new GrpcClientFactory.TlsOptions()
+                .trustStorePath(certDirectory.getCanonicalPath() + File.separatorChar + "cacerts.jks")
+                .trustStorePassword("passwd")
+                .trustAlias("caCert");
+
+        client = new GrpcClientFactory()
+                        .createTls(
                                 Context.getDefault().withDeadlineAfter(Duration.millis(5000)),
-                                new InetSocketAddress("localhost", port));
+                                new InetSocketAddress("localhost", port),
+                                tlsOptions
+                        );
     }
 
 }
