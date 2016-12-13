@@ -64,7 +64,8 @@ func Errorf(msg string, args ...interface{}) error {
 	return stackError{fmt.Errorf(msg, args...), stack}
 }
 
-// Taken from runtime/debug.go
+// Stack is taken from runtime/debug.go
+// calldepth is the number of (bottommost) frames to skip.
 func Stack(calldepth int) []byte {
 	return stack(calldepth)
 }
