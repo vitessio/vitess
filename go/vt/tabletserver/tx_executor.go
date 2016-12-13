@@ -121,7 +121,7 @@ func (txe *TxExecutor) markFailed(ctx context.Context, dtid string) {
 	}
 	defer txe.te.txPool.LocalConclude(ctx, conn)
 
-	if err = txe.te.twoPC.UpdateRedo(ctx, conn, dtid, "Failed"); err != nil {
+	if err = txe.te.twoPC.UpdateRedo(ctx, conn, dtid, RedoStateFailed); err != nil {
 		log.Errorf("markFailed: UpdateRedo failed for dtid %s: %v", dtid, err)
 		return
 	}
@@ -212,7 +212,7 @@ func (txe *TxExecutor) StartCommit(transactionID int64, dtid string) error {
 	}
 	defer txe.te.txPool.LocalConclude(txe.ctx, conn)
 
-	err = txe.te.twoPC.Transition(txe.ctx, conn, dtid, "Commit")
+	err = txe.te.twoPC.Transition(txe.ctx, conn, dtid, querypb.TransactionState_COMMIT)
 	if err != nil {
 		return err
 	}
@@ -238,7 +238,7 @@ func (txe *TxExecutor) SetRollback(dtid string, transactionID int64) error {
 	}
 	defer txe.te.txPool.LocalConclude(txe.ctx, conn)
 
-	err = txe.te.twoPC.Transition(txe.ctx, conn, dtid, "Rollback")
+	err = txe.te.twoPC.Transition(txe.ctx, conn, dtid, querypb.TransactionState_ROLLBACK)
 	if err != nil {
 		return err
 	}

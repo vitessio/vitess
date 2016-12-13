@@ -287,7 +287,6 @@ var Metadata = &querypb.TransactionMetadata{
 	Dtid:         "aa",
 	State:        querypb.TransactionState_PREPARE,
 	TimeCreated:  1,
-	TimeUpdated:  2,
 	Participants: Participants,
 }
 

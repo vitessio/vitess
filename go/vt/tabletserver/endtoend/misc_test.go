@@ -260,10 +260,10 @@ func TestSidecarTables(t *testing.T) {
 	}
 	defer conn.Close()
 	for _, table := range []string{
-		"redo_log_transaction",
-		"redo_log_statement",
-		"transaction",
-		"participant",
+		"redo_state",
+		"redo_statement",
+		"dt_state",
+		"dt_participant",
 	} {
 		_, err = conn.ExecuteFetch(fmt.Sprintf("describe _vt.%s", table), 10, false)
 		if err != nil {

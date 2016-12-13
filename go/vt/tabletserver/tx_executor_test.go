@@ -6,7 +6,9 @@ package tabletserver
 
 import (
 	"errors"
+	"fmt"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -148,13 +150,13 @@ func TestTxExecutorCommitRedoFail(t *testing.T) {
 	defer tsv.StopService()
 	txid := newTxForPrep(tsv)
 	// Allow all additions to redo logs to succeed
-	db.AddQueryPattern("insert into `_vt`\\.redo_log_transaction.*", &sqltypes.Result{})
+	db.AddQueryPattern("insert into `_vt`\\.redo_state.*", &sqltypes.Result{})
 	err := txe.Prepare(txid, "bb")
 	if err != nil {
 		t.Error(err)
 	}
 	defer txe.RollbackPrepared("bb", 0)
-	db.AddQuery("update `_vt`.redo_log_transaction set state = 'Failed' where dtid = 'bb'", &sqltypes.Result{})
+	db.AddQuery("update `_vt`.redo_state set state = 'Failed' where dtid = 'bb'", &sqltypes.Result{})
 	err = txe.CommitPrepared("bb")
 	want := "is not supported"
 	if err == nil || !strings.Contains(err.Error(), want) {
@@ -206,7 +208,7 @@ func TestTxExecutorRollbackRedoFail(t *testing.T) {
 	defer tsv.StopService()
 	txid := newTxForPrep(tsv)
 	// Allow all additions to redo logs to succeed
-	db.AddQueryPattern("insert into `_vt`\\.redo_log_transaction.*", &sqltypes.Result{})
+	db.AddQueryPattern("insert into `_vt`\\.redo_state.*", &sqltypes.Result{})
 	err := txe.Prepare(txid, "bb")
 	if err != nil {
 		t.Error(err)
@@ -222,8 +224,8 @@ func TestExecutorCreateTransaction(t *testing.T) {
 	txe, tsv, db := newTestTxExecutor()
 	defer tsv.StopService()
 
-	db.AddQueryPattern("insert into `_vt`\\.transaction\\(dtid, state, time_created, time_updated\\) values \\('aa', 'Prepare',.*", &sqltypes.Result{})
-	db.AddQueryPattern("insert into `_vt`\\.participant\\(dtid, id, keyspace, shard\\) values \\('aa', 1,.*", &sqltypes.Result{})
+	db.AddQueryPattern(fmt.Sprintf("insert into `_vt`\\.dt_state\\(dtid, state, time_created\\) values \\('aa', %d,.*", int(querypb.TransactionState_PREPARE)), &sqltypes.Result{})
+	db.AddQueryPattern("insert into `_vt`\\.dt_participant\\(dtid, id, keyspace, shard\\) values \\('aa', 1,.*", &sqltypes.Result{})
 	err := txe.CreateTransaction("aa", []*querypb.Target{{
 		Keyspace: "t1",
 		Shard:    "0",
@@ -237,7 +239,7 @@ func TestExecutorStartCommit(t *testing.T) {
 	txe, tsv, db := newTestTxExecutor()
 	defer tsv.StopService()
 
-	commitTransition := "update `_vt`.transaction set state = 'Commit' where dtid = 'aa' and state = 'Prepare'"
+	commitTransition := fmt.Sprintf("update `_vt`.dt_state set state = %d where dtid = 'aa' and state = %d", int(querypb.TransactionState_COMMIT), int(querypb.TransactionState_PREPARE))
 	db.AddQuery(commitTransition, &sqltypes.Result{RowsAffected: 1})
 	txid := newTxForPrep(tsv)
 	err := txe.StartCommit(txid, "aa")
@@ -248,7 +250,7 @@ func TestExecutorStartCommit(t *testing.T) {
 	db.AddQuery(commitTransition, &sqltypes.Result{})
 	txid = newTxForPrep(tsv)
 	err = txe.StartCommit(txid, "aa")
-	want := "error: could not transition to Commit: aa"
+	want := "error: could not transition to COMMIT: aa"
 	if err == nil || err.Error() != want {
 		t.Errorf("Prepare err: %v, want %s", err, want)
 	}
@@ -258,7 +260,7 @@ func TestExecutorSetRollback(t *testing.T) {
 	txe, tsv, db := newTestTxExecutor()
 	defer tsv.StopService()
 
-	rollbackTransition := "update `_vt`.transaction set state = 'Rollback' where dtid = 'aa' and state = 'Prepare'"
+	rollbackTransition := fmt.Sprintf("update `_vt`.dt_state set state = %d where dtid = 'aa' and state = %d", int(querypb.TransactionState_ROLLBACK), int(querypb.TransactionState_PREPARE))
 	db.AddQuery(rollbackTransition, &sqltypes.Result{RowsAffected: 1})
 	txid := newTxForPrep(tsv)
 	err := txe.SetRollback("aa", txid)
@@ -269,7 +271,7 @@ func TestExecutorSetRollback(t *testing.T) {
 	db.AddQuery(rollbackTransition, &sqltypes.Result{})
 	txid = newTxForPrep(tsv)
 	err = txe.SetRollback("aa", txid)
-	want := "error: could not transition to Rollback: aa"
+	want := "error: could not transition to ROLLBACK: aa"
 	if err == nil || err.Error() != want {
 		t.Errorf("Prepare err: %v, want %s", err, want)
 	}
@@ -279,8 +281,8 @@ func TestExecutorConcludeTransaction(t *testing.T) {
 	txe, tsv, db := newTestTxExecutor()
 	defer tsv.StopService()
 
-	db.AddQuery("delete from `_vt`.transaction where dtid = 'aa'", &sqltypes.Result{})
-	db.AddQuery("delete from `_vt`.participant where dtid = 'aa'", &sqltypes.Result{})
+	db.AddQuery("delete from `_vt`.dt_state where dtid = 'aa'", &sqltypes.Result{})
+	db.AddQuery("delete from `_vt`.dt_participant where dtid = 'aa'", &sqltypes.Result{})
 	err := txe.ConcludeTransaction("aa")
 	if err != nil {
 		t.Error(err)
@@ -291,7 +293,7 @@ func TestExecutorReadTransaction(t *testing.T) {
 	txe, tsv, db := newTestTxExecutor()
 	defer tsv.StopService()
 
-	db.AddQuery("select dtid, state, time_created, time_updated from `_vt`.transaction where dtid = 'aa'", &sqltypes.Result{})
+	db.AddQuery("select dtid, state, time_created from `_vt`.dt_state where dtid = 'aa'", &sqltypes.Result{})
 	got, err := txe.ReadTransaction("aa")
 	if err != nil {
 		t.Error(err)
@@ -304,13 +306,12 @@ func TestExecutorReadTransaction(t *testing.T) {
 	txResult := &sqltypes.Result{
 		Rows: [][]sqltypes.Value{{
 			sqltypes.MakeString([]byte("aa")),
-			sqltypes.MakeString([]byte("Prepare")),
+			sqltypes.MakeString([]byte(strconv.Itoa(int(querypb.TransactionState_PREPARE)))),
 			sqltypes.MakeString([]byte("1")),
-			sqltypes.MakeString([]byte("2")),
 		}},
 	}
-	db.AddQuery("select dtid, state, time_created, time_updated from `_vt`.transaction where dtid = 'aa'", txResult)
-	db.AddQuery("select keyspace, shard from `_vt`.participant where dtid = 'aa'", &sqltypes.Result{
+	db.AddQuery("select dtid, state, time_created from `_vt`.dt_state where dtid = 'aa'", txResult)
+	db.AddQuery("select keyspace, shard from `_vt`.dt_participant where dtid = 'aa'", &sqltypes.Result{
 		Rows: [][]sqltypes.Value{{
 			sqltypes.MakeString([]byte("test1")),
 			sqltypes.MakeString([]byte("0")),
@@ -327,7 +328,6 @@ func TestExecutorReadTransaction(t *testing.T) {
 		Dtid:        "aa",
 		State:       querypb.TransactionState_PREPARE,
 		TimeCreated: 1,
-		TimeUpdated: 2,
 		Participants: []*querypb.Target{{
 			Keyspace:   "test1",
 			Shard:      "0",
@@ -342,8 +342,8 @@ func TestExecutorReadTransaction(t *testing.T) {
 		t.Errorf("ReadTransaction: %v, want %v", got, want)
 	}
 
-	txResult.Rows[0][1] = sqltypes.MakeString([]byte("Commit"))
-	db.AddQuery("select dtid, state, time_created, time_updated from `_vt`.transaction where dtid = 'aa'", txResult)
+	txResult.Rows[0][1] = sqltypes.MakeString([]byte(strconv.Itoa(int(querypb.TransactionState_COMMIT))))
+	db.AddQuery("select dtid, state, time_created from `_vt`.dt_state where dtid = 'aa'", txResult)
 	want.State = querypb.TransactionState_COMMIT
 	got, err = txe.ReadTransaction("aa")
 	if err != nil {
@@ -353,8 +353,8 @@ func TestExecutorReadTransaction(t *testing.T) {
 		t.Errorf("ReadTransaction: %v, want %v", got, want)
 	}
 
-	txResult.Rows[0][1] = sqltypes.MakeString([]byte("Rollback"))
-	db.AddQuery("select dtid, state, time_created, time_updated from `_vt`.transaction where dtid = 'aa'", txResult)
+	txResult.Rows[0][1] = sqltypes.MakeString([]byte(strconv.Itoa(int(querypb.TransactionState_ROLLBACK))))
+	db.AddQuery("select dtid, state, time_created from `_vt`.dt_state where dtid = 'aa'", txResult)
 	want.State = querypb.TransactionState_ROLLBACK
 	got, err = txe.ReadTransaction("aa")
 	if err != nil {
@@ -372,7 +372,7 @@ func TestExecutorReadAllTransactions(t *testing.T) {
 	db.AddQuery(txe.te.twoPC.readAllTransactions, &sqltypes.Result{
 		Rows: [][]sqltypes.Value{{
 			sqltypes.MakeString([]byte("dtid0")),
-			sqltypes.MakeString([]byte("Prepared")),
+			sqltypes.MakeString([]byte(strconv.Itoa(int(querypb.TransactionState_PREPARE)))),
 			sqltypes.MakeString([]byte("1")),
 			sqltypes.MakeString([]byte("ks01")),
 			sqltypes.MakeString([]byte("shard01")),
@@ -384,7 +384,7 @@ func TestExecutorReadAllTransactions(t *testing.T) {
 	}
 	want := []*DistributedTx{{
 		Dtid:    "dtid0",
-		State:   "Prepared",
+		State:   "PREPARE",
 		Created: time.Unix(0, 1),
 		Participants: []querypb.Target{{
 			Keyspace: "ks01",
@@ -392,7 +392,7 @@ func TestExecutorReadAllTransactions(t *testing.T) {
 		}},
 	}}
 	if !reflect.DeepEqual(got, want) {
-		t.Errorf("ReadAllTransactions: %v, want %v", got, want)
+		t.Errorf("ReadAllTransactions:\n%s, want\n%s", jsonStr(got), jsonStr(want))
 	}
 }
 
@@ -423,7 +423,7 @@ func TestExecutorResolveTransaction(t *testing.T) {
 	defer tsv.StopService()
 	want := "aa"
 	db.AddQueryPattern(
-		"select dtid, time_created from `_vt`\\.transaction where time_created.*",
+		"select dtid, time_created from `_vt`\\.dt_state where time_created.*",
 		&sqltypes.Result{
 			Rows: [][]sqltypes.Value{{
 				sqltypes.MakeString([]byte(want)),
@@ -492,10 +492,10 @@ func newTestTxExecutor() (txe *TxExecutor, tsv *TabletServer, db *fakesqldb.DB) 
 	ctx := context.Background()
 	logStats := NewLogStats(ctx, "TestTxExecutor")
 	tsv = newTestTabletServer(ctx, smallTxPool, db)
-	db.AddQueryPattern("insert into `_vt`\\.redo_log_transaction\\(dtid, state, time_created\\) values \\('aa', 'Prepared',.*", &sqltypes.Result{})
-	db.AddQueryPattern("insert into `_vt`\\.redo_log_statement.*", &sqltypes.Result{})
-	db.AddQuery("delete from `_vt`.redo_log_transaction where dtid = 'aa'", &sqltypes.Result{})
-	db.AddQuery("delete from `_vt`.redo_log_statement where dtid = 'aa'", &sqltypes.Result{})
+	db.AddQueryPattern("insert into `_vt`\\.redo_state\\(dtid, state, time_created\\) values \\('aa', 1,.*", &sqltypes.Result{})
+	db.AddQueryPattern("insert into `_vt`\\.redo_statement.*", &sqltypes.Result{})
+	db.AddQuery("delete from `_vt`.redo_state where dtid = 'aa'", &sqltypes.Result{})
+	db.AddQuery("delete from `_vt`.redo_statement where dtid = 'aa'", &sqltypes.Result{})
 	db.AddQuery("update test_table set name = 2 where pk in (1) /* _stream test_table (pk ) (1 ); */", &sqltypes.Result{})
 	return &TxExecutor{
 		ctx:      ctx,
@@ -510,10 +510,10 @@ func newShortAgeExecutor() (txe *TxExecutor, tsv *TabletServer, db *fakesqldb.DB
 	ctx := context.Background()
 	logStats := NewLogStats(ctx, "TestTxExecutor")
 	tsv = newTestTabletServer(ctx, smallTxPool|shortTwopcAge, db)
-	db.AddQueryPattern("insert into `_vt`\\.redo_log_transaction\\(dtid, state, time_created\\) values \\('aa', 'Prepared',.*", &sqltypes.Result{})
-	db.AddQueryPattern("insert into `_vt`\\.redo_log_statement.*", &sqltypes.Result{})
-	db.AddQuery("delete from `_vt`.redo_log_transaction where dtid = 'aa'", &sqltypes.Result{})
-	db.AddQuery("delete from `_vt`.redo_log_statement where dtid = 'aa'", &sqltypes.Result{})
+	db.AddQueryPattern("insert into `_vt`\\.redo_state\\(dtid, state, time_created\\) values \\('aa', 1,.*", &sqltypes.Result{})
+	db.AddQueryPattern("insert into `_vt`\\.redo_statement.*", &sqltypes.Result{})
+	db.AddQuery("delete from `_vt`.redo_state where dtid = 'aa'", &sqltypes.Result{})
+	db.AddQuery("delete from `_vt`.redo_statement where dtid = 'aa'", &sqltypes.Result{})
 	db.AddQuery("update test_table set name = 2 where pk in (1) /* _stream test_table (pk ) (1 ); */", &sqltypes.Result{})
 	return &TxExecutor{
 		ctx:      ctx,
