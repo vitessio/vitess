@@ -200,10 +200,10 @@ func (vtg *VTGate) ExecuteEntityIds(ctx context.Context, request *vtgatepb.Execu
 func (vtg *VTGate) ExecuteBatch(ctx context.Context, request *vtgatepb.ExecuteBatchRequest) (response *vtgatepb.ExecuteBatchResponse, err error) {
 	defer vtg.server.HandlePanic(&err)
 	ctx = withCallerIDContext(ctx, request.CallerId)
-	results := make([]sqltypes.QueryResponse, len(request.QueryList))
-	sqlQueries := make([]string, len(request.QueryList))
-	bindVars := make([]map[string]interface{}, len(request.QueryList))
-	for queryNum, query := range request.QueryList {
+	results := make([]sqltypes.QueryResponse, len(request.Queries))
+	sqlQueries := make([]string, len(request.Queries))
+	bindVars := make([]map[string]interface{}, len(request.Queries))
+	for queryNum, query := range request.Queries {
 		bv, err := querytypes.Proto3ToBindVariables(query.BindVariables)
 		if err != nil {
 			return nil, vterrors.ToGRPCError(err)
@@ -213,9 +213,9 @@ func (vtg *VTGate) ExecuteBatch(ctx context.Context, request *vtgatepb.ExecuteBa
 	}
 	results, err = vtg.server.ExecuteBatch(ctx, sqlQueries, bindVars, request.Keyspace, request.TabletType, request.AsTransaction, request.Session, request.Options)
 	return &vtgatepb.ExecuteBatchResponse{
-		QueryResponseList: sqltypes.QueryResponsesToProto3(results),
-		Session:           request.Session,
-		Error:             vterrors.VtRPCErrorFromVtError(err),
+		Results: sqltypes.QueryResponsesToProto3(results),
+		Session: request.Session,
+		Error:   vterrors.VtRPCErrorFromVtError(err),
 	}, nil
 }
 

@@ -263,7 +263,7 @@ message ExecuteBatchRequest {
   Session session = 2;
 
   // query is the query and bind variables to execute.
-  repeated query.BoundQuery query = 3;
+  repeated query.BoundQuery queries = 3;
 
   // tablet_type is the type of tablets that this query is targeted to.
   topodata.TabletType tablet_type = 4;

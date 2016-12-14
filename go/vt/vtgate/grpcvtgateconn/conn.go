@@ -210,7 +210,7 @@ func (conn *vtgateConn) ExecuteBatch(ctx context.Context, queryList []string, bi
 	request := &vtgatepb.ExecuteBatchRequest{
 		CallerId:      callerid.EffectiveCallerIDFromContext(ctx),
 		Session:       s,
-		QueryList:     q,
+		Queries:       q,
 		Keyspace:      keyspace,
 		TabletType:    tabletType,
 		AsTransaction: asTransaction,
@@ -223,7 +223,7 @@ func (conn *vtgateConn) ExecuteBatch(ctx context.Context, queryList []string, bi
 	if response.Error != nil {
 		return nil, response.Session, vterrors.FromVtRPCError(response.Error)
 	}
-	return sqltypes.Proto3ToQueryReponses(response.QueryResponseList), response.Session, nil
+	return sqltypes.Proto3ToQueryReponses(response.Results), response.Session, nil
 }
 
 func (conn *vtgateConn) ExecuteBatchShards(ctx context.Context, queries []*vtgatepb.BoundShardQuery, tabletType topodatapb.TabletType, asTransaction bool, session interface{}, options *querypb.ExecuteOptions) ([]sqltypes.Result, interface{}, error) {
