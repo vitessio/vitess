@@ -82,9 +82,9 @@ class VTGateCursor(base_cursor.BaseListCursor, VTGateCursorMixin):
     # here for completion.
     if write_query:
       if not self.is_writable():
-        raise dbexceptions.DatabaseError('DML on a non-writable cursor', sql)
+        raise dbexceptions.ProgrammingError('DML on a non-writable cursor', sql)
       if entity_keyspace_id_map:
-        raise dbexceptions.DatabaseError(
+        raise dbexceptions.ProgrammingError(
             'entity_keyspace_id_map is not allowed for write queries')
     # FIXME(alainjobart): the entity_keyspace_id_map should be in the
     # cursor, same as keyspace_ids, shards, keyranges, to avoid this hack.
