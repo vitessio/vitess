@@ -483,26 +483,28 @@ class BaseEnvironment(object):
     raise VitessEnvironmentError(
         'is_tablet_undrained unsupported in this environment')
 
-  def poll_for_varz(self, tablet_name, varz, timeout=60.0,
-                    condition_fn=None, converter=str, condition_msg=None):
+  def poll_for_varz(self, tablet_name, varz, condition_msg, timeout=60.0,
+                    condition_fn=None, converter=str):
     """Polls for varz to exist, or match specific conditions, within a timeout.
 
     Args:
       tablet_name: the name of the process that we're trying to poll vars from.
       varz: name of the vars to fetch from varz.
+      condition_msg: string describing the conditions that we're polling for,
+        used for error messaging.
       timeout: number of seconds that we should attempt to poll for.
       condition_fn: a function that takes the var as input, and returns a truthy
         value if it matches the success conditions.
       converter: function to convert varz value.
-      condition_msg: string describing the conditions that we're polling for,
-        used for error messaging.
+
+    Raises:
+      TestError: if the varz conditions aren't met within the given timeout.
 
     Returns:
       dict of requested varz.
 
     Raises:
-      VitessEnvironmentError: Raised if unsupported or if the varz conditions
-        aren't met within the given timeout.
+      VitessEnvironmentError: Raised if unsupported.
     """
     raise VitessEnvironmentError(
         'poll_for_varz unsupported in this environment')
@@ -512,19 +514,4 @@ class BaseEnvironment(object):
     master_tablet = self.get_current_master_name(keyspace, shard)
     self.vtctl_helper.execute_vtctl_command(
         ['ExecuteFetchAsDba', master_tablet, 'truncate %s' % tablename])
-
-  def get_tablet_query_total_count(self, tablet_name):
-    """Gets the total query count of a specified tablet.
-
-    Args:
-      tablet_name: Name of the tablet to get query count from (string).
-
-    Returns:
-      Query total count (int).
-
-    Raises:
-      VitessEnvironmentError: Raised if unsupported.
-    """
-    raise VitessEnvironmentError(
-        'get_tablet_query_total_count unsupported in this environment')
 

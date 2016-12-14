@@ -19,6 +19,10 @@ def tearDownModule():
 
 class BackupTest(base_end2end_test.BaseEnd2EndTest):
 
+  _WAIT_FOR_HEALTHY_DEADLINE = 600  # seconds
+  _WAIT_FOR_SCHEMA_VALIDATION_DEADLINE = 120  # seconds
+  _WAIT_FOR_TYPE_DEADLINE = 120  # seconds
+
   @classmethod
   def setUpClass(cls):
     super(BackupTest, cls).setUpClass()
@@ -37,7 +41,9 @@ class BackupTest(base_end2end_test.BaseEnd2EndTest):
     self.table_name = 'vt_insert_test'
 
     self.env.delete_table(self.table_name)
-    self.env.create_table(self.table_name, validate_deadline_s=120)
+    self.env.create_table(
+        self.table_name,
+        validate_deadline_s=self._WAIT_FOR_SCHEMA_VALIDATION_DEADLINE)
 
     for keyspace, num_shards in zip(self.env.keyspaces, self.env.num_shards):
       for shard_name in sharding_utils.get_shard_names(num_shards):
@@ -87,7 +93,7 @@ class BackupTest(base_end2end_test.BaseEnd2EndTest):
     # Wait for the tablets to be unhealthy
     start_time = time.time()
     unhealthy_tablets = []
-    while time.time() - start_time < 120:
+    while time.time() - start_time < self._WAIT_FOR_TYPE_DEADLINE:
       if len(unhealthy_tablets) == len(tablets):
         break
       for tablet_name in tablets:
@@ -105,7 +111,7 @@ class BackupTest(base_end2end_test.BaseEnd2EndTest):
     # Wait for the tablet to be healthy according to vttablet health
     start_time = time.time()
     healthy_tablets = []
-    while time.time() - start_time < 600:
+    while time.time() - start_time < self._WAIT_FOR_TYPE_DEADLINE:
       if len(healthy_tablets) == len(tablets):
         break
       for tablet_name in tablets:
@@ -123,9 +129,9 @@ class BackupTest(base_end2end_test.BaseEnd2EndTest):
     for tablet_name in tablets:
       logging.info('Waiting for tablet %s to enter serving state', tablet_name)
       self.env.poll_for_varz(
-          tablet_name, ['TabletStateName'], timeout=300.0,
-          condition_fn=lambda v: v['TabletStateName'] == 'SERVING',
-          condition_msg='TabletStateName == Serving')
+          tablet_name, ['TabletStateName'], 'TabletStateName == SERVING',
+          timeout=300.0,
+          condition_fn=lambda v: v['TabletStateName'] == 'SERVING')
       logging.info('Done')
       count = json.loads(self.env.vtctl_helper.execute_vtctl_command(
           ['ExecuteFetchAsDba', '-json', tablet_name,

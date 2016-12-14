@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/vt/env"
 )
 
@@ -18,10 +19,13 @@ var MycnfPath = "/tmp/my.cnf"
 
 func TestMycnf(t *testing.T) {
 	os.Setenv("MYSQL_FLAVOR", "MariaDB")
+	var dbaConfig, allprivsConfig, appConfig, replConfig sqldb.ConnParams
 	cnf := NewMycnf(11111, 6802)
 	// Assigning ServerID to be different from tablet UID to make sure that there are no
 	// assumptions in the code that those IDs are the same.
 	cnf.ServerID = 22222
+	tablet0 := NewMysqld(cnf, &dbaConfig, &allprivsConfig, &appConfig, &replConfig, true /* enablePublishStats */)
+	defer tablet0.Close()
 	root, err := env.VtRoot()
 	if err != nil {
 		t.Errorf("err: %v", err)
@@ -31,7 +35,7 @@ func TestMycnf(t *testing.T) {
 		path.Join(root, "src/github.com/youtube/vitess/config/mycnf/replica.cnf"),
 		path.Join(root, "src/github.com/youtube/vitess/config/mycnf/master.cnf"),
 	}
-	data, err := cnf.makeMycnf(cnfTemplatePaths)
+	data, err := tablet0.config.makeMycnf(cnfTemplatePaths)
 	if err != nil {
 		t.Errorf("err: %v", err)
 	} else {

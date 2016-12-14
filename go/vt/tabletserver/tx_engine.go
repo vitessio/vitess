@@ -185,8 +185,8 @@ func (te *TxEngine) prepareFromRedo() error {
 
 	maxid := int64(0)
 outer:
-	for _, tx := range prepared {
-		txid, err := dtids.TransactionID(tx.Dtid)
+	for dtid, tx := range prepared {
+		txid, err := dtids.TransactionID(dtid)
 		if err != nil {
 			log.Errorf("Error extracting transaction ID from ditd: %v", err)
 		}
@@ -198,7 +198,7 @@ outer:
 			allErr.RecordError(err)
 			continue
 		}
-		for _, stmt := range tx.Queries {
+		for _, stmt := range tx {
 			conn.RecordQuery(stmt)
 			_, err := conn.Exec(ctx, stmt, 1, false)
 			if err != nil {
@@ -209,21 +209,21 @@ outer:
 		}
 		// We should not use the external Prepare because
 		// we don't want to write again to the redo log.
-		err = te.preparedPool.Put(conn, tx.Dtid)
+		err = te.preparedPool.Put(conn, dtid)
 		if err != nil {
 			allErr.RecordError(err)
 			continue
 		}
 	}
-	for _, tx := range failed {
-		txid, err := dtids.TransactionID(tx.Dtid)
+	for _, dtid := range failed {
+		txid, err := dtids.TransactionID(dtid)
 		if err != nil {
 			log.Errorf("Error extracting transaction ID from ditd: %v", err)
 		}
 		if txid > maxid {
 			maxid = txid
 		}
-		te.preparedPool.SetFailed(tx.Dtid)
+		te.preparedPool.SetFailed(dtid)
 	}
 	te.txPool.AdjustLastID(maxid)
 	log.Infof("Prepared %d transactions, and registered %d failures.", len(prepared), len(failed))
@@ -252,20 +252,9 @@ func (te *TxEngine) startWatchdog() {
 	te.ticks.Start(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), te.abandonAge/4)
 		defer cancel()
-
-		// Raise alerts on prepares that have been unresolved for too long.
-		// Use 5x abandonAge to give opportunity for watchdog to resolve these.
-		count, err := te.twoPC.CountUnresolvedRedo(ctx, time.Now().Add(-te.abandonAge*5))
-		if err != nil {
-			te.queryServiceStats.InternalErrors.Add("WatchdogFail", 1)
-			log.Errorf("Error reading unresolved prepares: '%v': %v", te.coordinatorAddress, err)
-		}
-		te.queryServiceStats.Unresolved.Set("Prepares", count)
-
-		// Resolve lingering distributed transactions.
 		txs, err := te.twoPC.ReadAbandoned(ctx, time.Now().Add(-te.abandonAge))
 		if err != nil {
-			te.queryServiceStats.InternalErrors.Add("WatchdogFail", 1)
+			// TODO(sougou): increment error counter.
 			log.Errorf("Error reading transactions for 2pc watchdog: %v", err)
 			return
 		}
@@ -275,8 +264,8 @@ func (te *TxEngine) startWatchdog() {
 
 		coordConn, err := vtgateconn.Dial(ctx, te.coordinatorAddress, te.abandonAge/4, "")
 		if err != nil {
-			te.queryServiceStats.InternalErrors.Add("WatchdogFail", 1)
-			log.Errorf("Error connecting to coordinator '%v': %v", te.coordinatorAddress, err)
+			// TODO(sougou): increment error counter.
+			log.Errorf("error connecting to coordinator '%v': %v", te.coordinatorAddress, err)
 			return
 		}
 		defer coordConn.Close()
@@ -287,7 +276,7 @@ func (te *TxEngine) startWatchdog() {
 			go func(dtid string) {
 				defer wg.Done()
 				if err := coordConn.ResolveTransaction(ctx, dtid); err != nil {
-					te.queryServiceStats.InternalErrors.Add("WatchdogFail", 1)
+					// TODO(sougou): increment error counter.
 					log.Errorf("Error notifying for dtid %s: %v", dtid, err)
 				}
 			}(tx)

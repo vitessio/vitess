@@ -22,16 +22,15 @@ fi
 script_root=`dirname "${BASH_SOURCE}"`
 source $script_root/env.sh
 
-dbconfig_dba_flags="\
-    -db-config-dba-uname vt_dba \
-    -db-config-dba-charset utf8"
-dbconfig_flags="$dbconfig_dba_flags \
+dbconfig_flags="\
     -db-config-app-uname vt_app \
     -db-config-app-dbname vt_$keyspace \
     -db-config-app-charset utf8 \
     -db-config-allprivs-uname vt_allprivs \
     -db-config-allprivs-dbname vt_$keyspace \
     -db-config-allprivs-charset utf8 \
+    -db-config-dba-uname vt_dba \
+    -db-config-dba-charset utf8 \
     -db-config-repl-uname vt_repl \
     -db-config-repl-dbname vt_$keyspace \
     -db-config-repl-charset utf8 \
@@ -75,8 +74,7 @@ for uid_index in $uids; do
   fi
   $VTROOT/bin/mysqlctl \
     -log_dir $VTDATAROOT/tmp \
-    -tablet_uid $uid \
-    $dbconfig_dba_flags \
+    -tablet_uid $uid $dbconfig_flags \
     -mysql_port $mysql_port \
     $action &
 done

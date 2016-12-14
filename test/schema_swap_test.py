@@ -26,14 +26,17 @@ all_shard_1_tablets = [shard_1_master, shard_1_replica, shard_1_rdonly]
 # all tablets
 all_tablets = all_shard_0_tablets + all_shard_1_tablets
 
+setup_procs = []
+
 
 def setUpModule():
   try:
     environment.topo_server().setup()
 
-    for t in all_tablets:
-      t.init_mysql()
+    global setup_procs
+    setup_procs = [t.init_mysql() for t in all_tablets]
     utils.Vtctld().start()
+
     for t in all_tablets:
       t.wait_for_mysqlctl_socket()
   except:
@@ -46,8 +49,9 @@ def tearDownModule():
   if utils.options.skip_teardown:
     return
 
-  teardown_procs = [t.teardown_mysql() for t in all_tablets]
-  utils.wait_procs(teardown_procs, raise_on_error=False)
+  for proc in setup_procs:
+    utils.kill_sub_process(proc, soft=True)
+  utils.wait_procs(setup_procs, raise_on_error=False)
 
   environment.topo_server().teardown()
   utils.kill_sub_processes()

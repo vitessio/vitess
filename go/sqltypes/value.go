@@ -123,10 +123,6 @@ func BuildConverted(typ querypb.Type, goval interface{}) (v Value, err error) {
 			if goval.IsQuoted() {
 				return ValueFromBytes(typ, goval.Raw())
 			}
-		case *querypb.BindVariable:
-			if IsQuoted(goval.Type) {
-				return ValueFromBytes(typ, goval.Value)
-			}
 		}
 	}
 	return BuildValue(goval)

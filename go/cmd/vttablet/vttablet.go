@@ -27,7 +27,7 @@ import (
 
 var (
 	enforceTableACLConfig = flag.Bool("enforce-tableacl-config", false, "if this flag is true, vttablet will fail to start if a valid tableacl config does not exist")
-	tableACLConfig        = flag.String("table-acl-config", "", "path to table access checker config file")
+	tableAclConfig        = flag.String("table-acl-config", "", "path to table access checker config file")
 	tabletPath            = flag.String("tablet-path", "", "tablet alias")
 
 	agent *tabletmanager.ActionAgent
@@ -40,9 +40,9 @@ func init() {
 func main() {
 	defer exit.Recover()
 
-	dbconfigFlags := dbconfigs.AppConfig | dbconfigs.AllPrivsConfig | dbconfigs.DbaConfig |
+	flags := dbconfigs.AppConfig | dbconfigs.AllPrivsConfig | dbconfigs.DbaConfig |
 		dbconfigs.FilteredConfig | dbconfigs.ReplConfig
-	dbconfigs.RegisterFlags(dbconfigFlags)
+	dbconfigs.RegisterFlags(flags)
 	mysqlctl.RegisterFlags()
 	flag.Parse()
 	tabletserver.Init()
@@ -70,7 +70,7 @@ func main() {
 		exit.Return(1)
 	}
 
-	dbcfgs, err := dbconfigs.Init(mycnf.SocketFile, dbconfigFlags)
+	dbcfgs, err := dbconfigs.Init(mycnf.SocketFile, flags)
 	if err != nil {
 		log.Warning(err)
 	}
@@ -87,16 +87,16 @@ func main() {
 		qsc.StopService()
 	})
 
-	if *tableACLConfig != "" {
+	if *tableAclConfig != "" {
 		// To override default simpleacl, other ACL plugins must set themselves to be default ACL factory
 		tableacl.Register("simpleacl", &simpleacl.Factory{})
 	} else if *enforceTableACLConfig {
 		log.Error("table acl config has to be specified with table-acl-config flag because enforce-tableacl-config is set.")
 		exit.Return(1)
 	}
-	// tabletacl.Init loads ACL from file if *tableACLConfig is not empty
+	// tabletacl.Init loads ACL from file if *tableAclConfig is not empty
 	err = tableacl.Init(
-		*tableACLConfig,
+		*tableAclConfig,
 		func() {
 			qsc.ClearQueryPlanCache()
 		},
@@ -112,7 +112,7 @@ func main() {
 	// Create mysqld and register the health reporter (needs to be done
 	// before initializing the agent, so the initial health check
 	// done by the agent has the right reporter)
-	mysqld := mysqlctl.NewMysqld(mycnf, dbcfgs, dbconfigFlags, true /* enablePublishStats */)
+	mysqld := mysqlctl.NewMysqld(mycnf, &dbcfgs.Dba, &dbcfgs.AllPrivs, &dbcfgs.App, &dbcfgs.Repl, true /* enablePublishStats */)
 	servenv.OnClose(mysqld.Close)
 
 	// Depends on both query and updateStream.
@@ -120,7 +120,7 @@ func main() {
 	if servenv.GRPCPort != nil {
 		gRPCPort = int32(*servenv.GRPCPort)
 	}
-	agent, err = tabletmanager.NewActionAgent(context.Background(), mysqld, qsc, tabletAlias, *dbcfgs, mycnf, int32(*servenv.Port), gRPCPort)
+	agent, err = tabletmanager.NewActionAgent(context.Background(), mysqld, qsc, tabletAlias, dbcfgs, mycnf, int32(*servenv.Port), gRPCPort)
 	if err != nil {
 		log.Error(err)
 		exit.Return(1)

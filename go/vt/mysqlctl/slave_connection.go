@@ -62,7 +62,7 @@ func (mysqld *Mysqld) NewSlaveConnection() (*SlaveConnection, error) {
 
 // connectForReplication create a MySQL connection ready to use for replication.
 func (mysqld *Mysqld) connectForReplication() (sqldb.Conn, error) {
-	params, err := dbconfigs.WithCredentials(&mysqld.dbcfgs.Dba)
+	params, err := dbconfigs.MysqlParams(mysqld.dba)
 	if err != nil {
 		return nil, err
 	}

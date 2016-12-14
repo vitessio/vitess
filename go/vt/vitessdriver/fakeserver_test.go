@@ -205,10 +205,7 @@ var execMap = map[string]struct {
 		execQuery: &queryExecute{
 			SQL: "request",
 			BindVariables: map[string]interface{}{
-				"v1": &querypb.BindVariable{
-					Type:  querypb.Type_INT64,
-					Value: []byte("0"),
-				},
+				"v1": int64(0),
 			},
 			TabletType: topodatapb.TabletType_RDONLY,
 			Session:    nil,
@@ -220,10 +217,7 @@ var execMap = map[string]struct {
 		execQuery: &queryExecute{
 			SQL: "txRequest",
 			BindVariables: map[string]interface{}{
-				"v1": &querypb.BindVariable{
-					Type:  querypb.Type_INT64,
-					Value: []byte("0"),
-				},
+				"v1": int64(0),
 			},
 			TabletType: topodatapb.TabletType_MASTER,
 			Session:    session1,
@@ -235,10 +229,7 @@ var execMap = map[string]struct {
 		execQuery: &queryExecute{
 			SQL: "requestKeyspace",
 			BindVariables: map[string]interface{}{
-				"v1": &querypb.BindVariable{
-					Type:  querypb.Type_INT64,
-					Value: []byte("0"),
-				},
+				"v1": int64(0),
 			},
 			Keyspace:   "ks",
 			TabletType: topodatapb.TabletType_RDONLY,
@@ -251,10 +242,7 @@ var execMap = map[string]struct {
 		execQuery: &queryExecute{
 			SQL: "txRequestKeyspace",
 			BindVariables: map[string]interface{}{
-				"v1": &querypb.BindVariable{
-					Type:  querypb.Type_INT64,
-					Value: []byte("0"),
-				},
+				"v1": int64(0),
 			},
 			Keyspace:   "ks",
 			TabletType: topodatapb.TabletType_MASTER,

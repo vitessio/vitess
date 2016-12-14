@@ -217,34 +217,33 @@ class K8sEnvironment(base_environment.BaseEnvironment):
       self, keyspace, shard_name, failover_completion_timeout_s=60):
     return 0
 
-  def poll_for_varz(self, tablet_name, varz, timeout=60.0,
-                    condition_fn=None, converter=str, condition_msg=None):
+  def poll_for_varz(self, tablet_name, varz, condition_msg, timeout=60.0,
+                    condition_fn=None, converter=str):
     """Polls for varz to exist, or match specific conditions, within a timeout.
 
     Args:
       tablet_name: the name of the process that we're trying to poll vars from.
       varz: name of the vars to fetch from varz
+      condition_msg: string describing the conditions that we're polling for,
+        used for error messaging.
       timeout: number of seconds that we should attempt to poll for.
       condition_fn: a function that takes the var as input, and returns a truthy
         value if it matches the success conditions.
       converter: function to convert varz value
-      condition_msg: string describing the conditions that we're polling for,
-        used for error messaging.
 
     Raises:
       VitessEnvironmentError: Raised if the varz conditions aren't met within
-        the given timeout.
+        the given timeout
 
     Returns:
-      dict of requested varz.
+      dict of requested varz
     """
     start_time = time.time()
     while True:
       if (time.time() - start_time) >= timeout:
-        timeout_error_msg = 'Timed out polling for varz.'
-        if condition_fn and condition_msg:
-          timeout_error_msg += ' Condition "%s" not met.' % condition_msg
-        raise base_environment.VitessEnvironmentError(timeout_error_msg)
+        raise base_environment.VitessEnvironmentError(
+            'Timed out polling for varz; condition "%s" not met' % (
+                condition_msg))
       hostname = self.get_tablet_ip_port(tablet_name)
       tablet_pod = 'vttablet-%s' % self.get_tablet_uid(tablet_name)
       host_varz = subprocess.check_output([
@@ -304,8 +303,3 @@ class K8sEnvironment(base_environment.BaseEnvironment):
 
   def is_tablet_undrained(self, tablet_name):
     return not self.is_tablet_drained(tablet_name)
-
-  def get_tablet_query_total_count(self, tablet_name):
-    return self.poll_for_varz(
-        tablet_name, ['Queries'])['Queries']['TotalCount']
-
