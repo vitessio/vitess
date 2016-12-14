@@ -2,33 +2,33 @@
 
 # Overview
 
-Vitess 2PC allows you to perform atomic distributed commits. The feature is implemented using traditional MySQL transactions, and hence inherits the same guarantees.
+Vitess 2PC allows you to perform atomic distributed commits. The feature is implemented using traditional MySQL transactions, and hence inherits the same guarantees. With this addition, Vitess can be configured to support the following three levels of atomicty:
 
-The 2PC API itself is fairly simple: The Commit request accepts an additional `Atomic` flag. If it's set, then the 2PC mechanism is triggered. Without the flag, then a Commit is treated as best effort, which may result in partial commits if there are system failures during the operation. Additional extensions have been added to the API, which will be explained below.
-
-2PC commits are more expensive than best effort because the system has to save away the statements before starting the commit process, and also clean them up after a successful commit. The application can make the trade-off call based on when it believes a 2PC commit is warranted. For single-database transactions, there is no additional overhead; 2PC commits and best effort commits are the same cost.
-
-# gRPC changes
-
-As part of the 2pc feature, the VTGate API has been extended to support three levels of Atomicity:
-
-1. **Single database**: In this mode, a transaction that goes beyond one database will not be allowed.
-2. **Multi database**: In this mode, a transaction will be allowed to beyond one database, but the commit will be best effort.
+1. **Single database**: At this level, only single database transactions are allowed. Any transaction that tries to go beyond a single database will be failed.
+2. **Multi database**: A transaction can span multiple databases, but the commit will be best effort. Partial commits are possible.
 3. **2PC**: This is the same as Multi-database, but the commit will be atomic.
 
-At the gRPC layer, a single-database transaction request is made at the time of invoking `Begin`. The `BeginRequest` message now contains a `single_db` flag. If this is set, then any transaction that causes statements to go beyond one database will be failed.
+2PC commits are more expensive than multi-database because the system has to save away the statements before starting the commit process, and also clean them up after a successful commit. This is the reason why it's a separate option instead of being always on. The full details of the 2PC implementation are explained in the [Design document](/user-guide/twopc-phase-commit-design.html)
 
-The 2PC request is made at the time of `Commit`. For this, the `CommitRequest` message provides an `atomic` flag. If set, then the the 2PC mechanism is triggered.
+# Configuring VTGate
 
-If both flags are off, then it's the legacy multi-db transaction.
+The atomicity policy is controlled by the `transaction_mode` flag. The default value is `multi`, and will set it in multi-database mode. This is the same as the previous legacy behavior.
 
-## Go changes
+To enforce single-database transactions, the VTGates can be started by specifying `transaction_mode=single`.
+
+To enable 2PC, the VTGates need to be started with `transaction_mode=twopc`. The VTTablets will require a few more flags, which will be explained below.
+
+The VTGate `transaction_mode` flag decides what to allow. The application can independently request a specific atomicity for each transaction. The request will be honored by VTGate only if it does not exceed what is allowed by the `transaction_mode`. For example, `transacion_mode=single` will only allow single-db transactions. On the other hand, `transaction_mode=twopc` will allow all three levels of atomicity.
+
+The way to request atomicity from the application is driver-specific.
+
+## Go driver
 
 For the Go driver, you request the atomicity by adding it to the context using the `WithAtomicity` function. For more details, please refer to the respective GoDocs.
 
-## Python changes
+## Python driver
 
-For Python, the `begin` function of the cursor now has an optional `single_db` flag, and the `commit` function has an optional `twopc` flag.
+For Python, the `begin` function of the cursor has an optional `single_db` flag. If the flag is `True`, then the request is for a single-db transaction. If `False` (or unspecified), then the following `commit` call's `twopc` flag decides if the commit is 2PC or Best Effort (`multi`).
 
 ## Java & PHP (TODO)
 
