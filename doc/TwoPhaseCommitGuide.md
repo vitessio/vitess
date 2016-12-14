@@ -51,8 +51,8 @@ The VTGate RPC API extends the `Begin` and `Commit` functions to specify atomici
 The following flags need to be set to enable 2PC support in VTTablet:
 
 * **twopc_enable**: This flag needs to be turned on.
-* **twopc_coordinator_address**: This should specify the address (or VIP) of the VTGate that VTTablte will use to resolve abandoned transactions.
-* **twopc_abandon_age**: This is the time in seconds that specifies how long to wait before asking a VTGate to resolve an abaondoned transaction.
+* **twopc_coordinator_address**: This should specify the address (or VIP) of the VTGate that VTTablet will use to resolve abandoned transactions.
+* **twopc_abandon_age**: This is the time in seconds that specifies how long to wait before asking a VTGate to resolve an abandoned transaction.
 
 With the above flags specified, every master VTTablet also turns into a watchdog. If any 2PC transaction is left lingering for longer than `twopc_abandon_age` seconds, then VTTablet invokes VTGate and requests it to resolve it. Typically, the `abandon_age` needs to be substantially longer than the time it takes for a typical 2PC commit to complete (10s of seconds).
 
