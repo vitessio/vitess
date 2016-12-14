@@ -53,7 +53,8 @@ public class GrpcClientTlsTest extends RpcClientTest {
         trustStore = certDirectory.getCanonicalPath() + File.separatorChar + "trustStore.jks";
 
         createCA();
-        createSignedCert("ca", "01", "vtgate-server", "vtgate server");
+//        createSignedCert("ca", "01", "vtgate-server", "vtgate server");
+        createSignedCert("ca", "01", "vtgate-server", "localhost");
 
         startVtgate();
         createClientConnection();
@@ -84,7 +85,7 @@ public class GrpcClientTlsTest extends RpcClientTest {
         final String convertCaCert = String.format("openssl x509 -outform der -in %s -out %s", caCert, caCertDer);
         new ProcessBuilder(convertCaCert.split(" ")).start().waitFor();
 
-        final String createTrustStore = String.format("keytool -import -alias caCert -keystore %s -file %s -storepass passwd -trustcacerts -noprompt", trustStore, caCertDer);
+        final String createTrustStore = String.format("keytool -import -alias cacert -keystore %s -file %s -storepass passwd -trustcacerts -noprompt", trustStore, caCertDer);
         new ProcessBuilder(createTrustStore.split(" ")).start().waitFor();
     }
 
@@ -132,9 +133,9 @@ public class GrpcClientTlsTest extends RpcClientTest {
 
     private static void createClientConnection() throws Exception {
         final GrpcClientFactory.TlsOptions tlsOptions = new GrpcClientFactory.TlsOptions()
-                .trustStorePath(certDirectory.getCanonicalPath() + File.separatorChar + "cacerts.jks")
+                .trustStorePath(trustStore)
                 .trustStorePassword("passwd")
-                .trustAlias("caCert");
+                .trustAlias("cacert");
 
         client = new GrpcClientFactory()
                         .createTls(

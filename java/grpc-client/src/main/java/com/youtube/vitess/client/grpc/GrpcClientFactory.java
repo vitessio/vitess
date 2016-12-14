@@ -103,7 +103,8 @@ public class GrpcClientFactory implements RpcClientFactory {
         keyStore.load(fis, password);
       }
       return keyStore;
-    } catch (KeyStoreException | CertificateException | NoSuchAlgorithmException | IOException e) {
+    } catch (NullPointerException | KeyStoreException | CertificateException | NoSuchAlgorithmException
+            | IOException e) {
       return null;
     }
   }
