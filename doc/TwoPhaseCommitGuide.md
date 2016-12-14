@@ -8,7 +8,7 @@ Vitess 2PC allows you to perform atomic distributed commits. The feature is impl
 2. **Multi database**: A transaction can span multiple databases, but the commit will be best effort. Partial commits are possible.
 3. **2PC**: This is the same as Multi-database, but the commit will be atomic.
 
-2PC commits are more expensive than multi-database because the system has to save away the statements before starting the commit process, and also clean them up after a successful commit. This is the reason why it's a separate option instead of being always on. The full details of the 2PC implementation are explained in the [Design document](/user-guide/twopc-phase-commit-design.html)
+2PC commits are more expensive than multi-database because the system has to save away the statements before starting the commit process, and also clean them up after a successful commit. This is the reason why it's a separate option instead of being always on.
 
 ## Isolation
 
