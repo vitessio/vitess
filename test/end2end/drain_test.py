@@ -145,15 +145,13 @@ class DrainTest(base_end2end_test.BaseEnd2EndTest):
                          starting_index=self.num_inserts * attempt)
         num_rows1 = self.get_row_count(tablet_to_drain)
         self.assertEquals(num_rows0, num_rows1)
-        query_count0 = self.env.poll_for_varz(
-            tablet_to_drain, ['Queries'], ' ')['Queries']['TotalCount']
+        query_count0 = self.env.get_tablet_query_total_count(tablet_to_drain)
         self.read_rows(
             keyspace, self.num_inserts, self.num_inserts * (attempt + 1),
             self.env.get_tablet_cell(tablet_to_drain))
         self.env.undrain_tablet(tablet_to_drain)
         self.wait_for_undrained_tablet(tablet_to_drain)
-        query_count1 = self.env.poll_for_varz(
-            tablet_to_drain, ['Queries'], ' ')['Queries']['TotalCount']
+        query_count1 = self.env.get_tablet_query_total_count(tablet_to_drain)
         logging.info('%s total query count before/after reads: %d/%d',
                      tablet_to_drain, query_count0, query_count1)
         self.assertEquals(query_count0, query_count1)

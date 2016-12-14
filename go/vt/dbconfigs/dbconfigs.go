@@ -88,33 +88,21 @@ func RegisterFlags(flags DBConfigFlag) DBConfigFlag {
 // initConnParams may overwrite the socket file,
 // and refresh the password to check that works.
 func initConnParams(cp *sqldb.ConnParams, socketFile string) error {
+	// Always try to connect with the socket if provided.
 	if socketFile != "" {
 		cp.UnixSocket = socketFile
 	}
-	_, err := MysqlParams(cp)
-	return err
-}
 
-// MysqlParams returns a copy of our ConnParams that we can use
-// to connect, after going through the CredentialsServer.
-func MysqlParams(cp *sqldb.ConnParams) (sqldb.ConnParams, error) {
-	result := *cp
-	user, passwd, err := GetCredentialsServer().GetUserAndPassword(cp.Uname)
-	switch err {
-	case nil:
-		result.Uname = user
-		result.Pass = passwd
-	case ErrUnknownUser:
-		// we just use what we have, and will fail later anyway
-		err = nil
-	}
-	return result, err
+	// See if the CredentialsServer is working. We do not use the
+	// result for anything, this is just a check.
+	_, err := WithCredentials(cp)
+	return err
 }
 
 // DBConfigs is all we need for a smart tablet server:
 // - App access with db name for serving app queries
-// - AllPrivs access for administrative actions (like schema changes) that should
-//   be done without SUPER privilege
+// - AllPrivs access for administrative actions (like schema changes)
+//   that should be done without SUPER privilege
 // - Dba access for any dba-type operation (db creation, replication, ...)
 // - Filtered access for filtered replication
 // - Replication access to change master
@@ -153,34 +141,34 @@ func (dbcfgs *DBConfigs) IsZero() bool {
 	return dbcfgs.App.Uname == ""
 }
 
-// Init will initialize app, dba, filterec and repl configs
-func Init(socketFile string, flags DBConfigFlag) (DBConfigs, error) {
+// Init will initialize app, allprivs, dba, filtered and repl configs.
+func Init(socketFile string, flags DBConfigFlag) (*DBConfigs, error) {
 	if flags == EmptyConfig {
 		panic("No DB config is provided.")
 	}
 	if AppConfig&flags != 0 {
 		if err := initConnParams(&dbConfigs.App, socketFile); err != nil {
-			return DBConfigs{}, fmt.Errorf("app dbconfig cannot be initialized: %v", err)
+			return nil, fmt.Errorf("app dbconfig cannot be initialized: %v", err)
 		}
 	}
 	if AllPrivsConfig&flags != 0 {
 		if err := initConnParams(&dbConfigs.AllPrivs, socketFile); err != nil {
-			return DBConfigs{}, fmt.Errorf("allprivs dbconfig cannot be initialized: %v", err)
+			return nil, fmt.Errorf("allprivs dbconfig cannot be initialized: %v", err)
 		}
 	}
 	if DbaConfig&flags != 0 {
 		if err := initConnParams(&dbConfigs.Dba, socketFile); err != nil {
-			return DBConfigs{}, fmt.Errorf("dba dbconfig cannot be initialized: %v", err)
+			return nil, fmt.Errorf("dba dbconfig cannot be initialized: %v", err)
 		}
 	}
 	if FilteredConfig&flags != 0 {
 		if err := initConnParams(&dbConfigs.Filtered, socketFile); err != nil {
-			return DBConfigs{}, fmt.Errorf("filtered dbconfig cannot be initialized: %v", err)
+			return nil, fmt.Errorf("filtered dbconfig cannot be initialized: %v", err)
 		}
 	}
 	if ReplConfig&flags != 0 {
 		if err := initConnParams(&dbConfigs.Repl, socketFile); err != nil {
-			return DBConfigs{}, fmt.Errorf("repl dbconfig cannot be initialized: %v", err)
+			return nil, fmt.Errorf("repl dbconfig cannot be initialized: %v", err)
 		}
 	}
 	// the Dba connection is not linked to a specific database
@@ -193,5 +181,5 @@ func Init(socketFile string, flags DBConfigFlag) (DBConfigs, error) {
 	toLog := dbConfigs
 	toLog.Redact()
 	log.Infof("DBConfigs: %v\n", toLog.String())
-	return dbConfigs, nil
+	return &dbConfigs, nil
 }

@@ -205,10 +205,12 @@ else
     rm -r mock-1.0.1
 fi
 
-# create pre-commit hooks
-echo "creating git pre-commit hooks"
+# Create the Git hooks.
+echo "creating git hooks"
 mkdir -p $VTTOP/.git/hooks
 ln -sf $VTTOP/misc/git/pre-commit $VTTOP/.git/hooks/pre-commit
+ln -sf $VTTOP/misc/git/prepare-commit-msg.bugnumber $VTTOP/.git/hooks/prepare-commit-msg
+ln -sf $VTTOP/misc/git/commit-msg.bugnumber $VTTOP/.git/hooks/commit-msg
 
 # Download chromedriver
 echo "Installing selenium and chromedriver"

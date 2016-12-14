@@ -82,27 +82,30 @@ func (zkcr *ZkCustomRule) refreshWatch() error {
 // this function will also call TabletServer.SetQueryRules to propagate rule changes to query service
 func (zkcr *ZkCustomRule) refreshData(qsc tabletserver.Controller, nodeRemoval bool) error {
 	data, stat, err := zkcr.zconn.Get(zkcr.path)
+	if err != nil {
+		log.Warningf("Error encountered when trying to get data and watch from Zk: %v", err)
+		return err
+	}
+
+	qrs := tabletserver.NewQueryRules()
+	if !nodeRemoval {
+		if err = qrs.UnmarshalJSON([]byte(data)); err != nil {
+			log.Warningf("Error unmarshaling query rules %v, original data '%s'", err, data)
+			return nil
+		}
+	}
+
 	zkcr.mu.Lock()
 	defer zkcr.mu.Unlock()
-	if err == nil {
-		qrs := tabletserver.NewQueryRules()
-		if !nodeRemoval {
-			err = qrs.UnmarshalJSON([]byte(data))
-			if err != nil {
-				log.Warningf("Error unmarshaling query rules %v, original data '%s'", err, data)
-				return nil
-			}
-		}
-		zkcr.currentRuleSetVersion = stat.Mzxid
-		if !reflect.DeepEqual(zkcr.currentRuleSet, qrs) {
-			zkcr.currentRuleSet = qrs.Copy()
-			qsc.SetQueryRules(ZkCustomRuleSource, qrs.Copy())
-			log.Infof("Custom rule version %v fetched from Zookeeper and applied to vttablet", zkcr.currentRuleSetVersion)
-		}
-		return nil
+
+	zkcr.currentRuleSetVersion = stat.Mzxid
+	if !reflect.DeepEqual(zkcr.currentRuleSet, qrs) {
+		zkcr.currentRuleSet = qrs.Copy()
+		qsc.SetQueryRules(ZkCustomRuleSource, qrs.Copy())
+		log.Infof("Custom rule version %v fetched from Zookeeper and applied to vttablet", zkcr.currentRuleSetVersion)
 	}
-	log.Warningf("Error encountered when trying to get data and watch from Zk: %v", err)
-	return err
+
+	return nil
 }
 
 const sleepDuringZkFailure time.Duration = 30

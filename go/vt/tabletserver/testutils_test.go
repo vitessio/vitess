@@ -76,18 +76,16 @@ func (util *testUtils) checkTabletError(t *testing.T, err interface{}, tabletErr
 	}
 }
 
-func (util *testUtils) newMysqld(dbconfigs *dbconfigs.DBConfigs) mysqlctl.MysqlDaemon {
+func (util *testUtils) newMysqld(dbcfgs *dbconfigs.DBConfigs) mysqlctl.MysqlDaemon {
 	cnf := mysqlctl.NewMycnf(11111, 6802)
 	// Assigning ServerID to be different from tablet UID to make sure that there are no
 	// assumptions in the code that those IDs are the same.
 	cnf.ServerID = 22222
 	return mysqlctl.NewMysqld(
 		cnf,
-		&dbconfigs.Dba,
-		&dbconfigs.AllPrivs,
-		&dbconfigs.App,
-		&dbconfigs.Repl,
-		false, /* enablePublishStats */
+		dbcfgs,
+		dbconfigs.AppConfig, // These tests only use the app pool.
+		false,               /* enablePublishStats */
 	)
 }
 

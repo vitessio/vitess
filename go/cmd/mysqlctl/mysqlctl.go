@@ -35,8 +35,9 @@ var (
 )
 
 const (
-	dbconfigFlags = dbconfigs.AppConfig | dbconfigs.AllPrivsConfig | dbconfigs.DbaConfig |
-		dbconfigs.FilteredConfig | dbconfigs.ReplConfig
+	// dbconfigFlags is only set to DbaConfig, as mysqlctl only
+	// starts and stops mysqld, and that is only done with the dba user.
+	dbconfigFlags = dbconfigs.DbaConfig
 )
 
 func initCmd(subFlags *flag.FlagSet, args []string) error {
@@ -136,7 +137,7 @@ func teardownCmd(subFlags *flag.FlagSet, args []string) error {
 func positionCmd(subFlags *flag.FlagSet, args []string) error {
 	subFlags.Parse(args)
 	if len(args) < 3 {
-		return fmt.Errorf("Not enough arguments for position operation.")
+		return fmt.Errorf("not enough arguments for position operation")
 	}
 
 	pos1, err := replication.DecodePosition(args[1])

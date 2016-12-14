@@ -228,25 +228,7 @@ func Proto3ToBindVariables(bv map[string]*querypb.BindVariable) (map[string]inte
 		if v == nil {
 			continue
 		}
-		if v.Type == sqltypes.Tuple {
-			list := make([]interface{}, len(v.Values))
-			for i, lv := range v.Values {
-				v, err := sqltypes.ValueFromBytes(lv.Type, lv.Value)
-				if err != nil {
-					return nil, err
-				}
-				// TODO(sougou): Change this to just v.
-				list[i] = v.ToNative()
-			}
-			result[k] = list
-		} else {
-			v, err := sqltypes.ValueFromBytes(v.Type, v.Value)
-			if err != nil {
-				return nil, err
-			}
-			// TODO(sougou): Change this to just v.
-			result[k] = v.ToNative()
-		}
+		result[k] = v
 	}
 	return result, nil
 }
