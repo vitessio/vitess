@@ -53,11 +53,11 @@ func AtomicityFromContext(ctx context.Context) vtgateconn.Atomicity {
 	return vtgateconn.AtomicityFromContext(ctx)
 }
 
-func (c *conn) BeginContext(ctx context.Context) (driver.Tx, error) {
+func (c *conn) BeginTx(ctx context.Context, opts driver.TxOptions) (driver.Tx, error) {
 	if c.Streaming {
 		return nil, errors.New("transaction not allowed for streaming connection")
 	}
-	if _, ok := driver.IsolationFromContext(ctx); ok {
+	if opts.Isolation != driver.IsolationLevel(0) || opts.ReadOnly {
 		return nil, errIsolationUnsupported
 	}
 	tx, err := c.vtgateConn.Begin(ctx)
