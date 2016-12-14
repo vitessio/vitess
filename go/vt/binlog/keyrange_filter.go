@@ -12,6 +12,8 @@ import (
 	"errors"
 	"fmt"
 
+	"strings"
+
 	binlogdatapb "github.com/youtube/vitess/go/vt/proto/binlogdata"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	"github.com/youtube/vitess/go/vt/sqlparser"
@@ -51,22 +53,16 @@ func KeyRangeFilterFunc(keyrange *topodatapb.KeyRange, sendReply sendTransaction
 					filtered = append(filtered, statement)
 					matched = true
 				} else {
-					multipleQueries, err := splitMultiValueInsertQuery(string(statement.Sql), keyspaceIDS)
-					if err != nil {
+					query, err := getValidRangeQuery(string(statement.Sql), keyspaceIDS, keyrange)
+					if err != nil || query == "" {
 						continue
 					}
-					for rowNum, query := range multipleQueries {
-						if !key.KeyRangeContains(keyrange, keyspaceIDS[rowNum]) {
-							// Skip keyspace ids that don't belong to the destination shard.
-							continue
-						}
-						splitStatement := &binlogdatapb.BinlogTransaction_Statement{
-							Category: statement.Category,
-							Charset:  statement.Charset,
-							Sql:      []byte(query),
-						}
-						filtered = append(filtered, splitStatement)
+					splitStatement := &binlogdatapb.BinlogTransaction_Statement{
+						Category: statement.Category,
+						Charset:  statement.Charset,
+						Sql:      []byte(query),
 					}
+					filtered = append(filtered, splitStatement)
 					matched = true
 				}
 			case binlogdatapb.BinlogTransaction_Statement_BL_UNRECOGNIZED:
@@ -84,48 +80,56 @@ func KeyRangeFilterFunc(keyrange *topodatapb.KeyRange, sendReply sendTransaction
 	}
 }
 
-func splitMultiValueInsertQuery(sql string, keyspaceIDs [][]byte) (queries []string, err error) {
+func getValidRangeQuery(sql string, keyspaceIDs [][]byte, keyrange *topodatapb.KeyRange) (query string, err error) {
 	statement, err := sqlparser.Parse(sql)
 	_, trailingComments := sqlparser.SplitTrailingComments(sql)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
 	switch statement := statement.(type) {
 	case *sqlparser.Insert:
-		queries, err := generateSingleInsertQueries(statement, keyspaceIDs, trailingComments)
+		query, err := generateSingleInsertQuery(statement, keyspaceIDs, trailingComments, keyrange)
 		if err != nil {
-			return nil, err
+			return "", err
 		}
-		return queries, nil
+		return query, nil
 	default:
-		return nil, errors.New("unsupported construct ")
+		return "", errors.New("unsupported construct ")
 	}
 }
 
-func generateSingleInsertQueries(ins *sqlparser.Insert, keyspaceIDs [][]byte, trailingComments string) (queries []string, err error) {
+func generateSingleInsertQuery(ins *sqlparser.Insert, keyspaceIDs [][]byte, trailingComments string, keyrange *topodatapb.KeyRange) (query string, err error) {
 	var values sqlparser.Values
 	switch rows := ins.Rows.(type) {
 	case *sqlparser.Select, *sqlparser.Union:
-		return nil, errors.New("unsupported: insert into select")
+		return "", errors.New("unsupported: insert into select")
 	case sqlparser.Values:
 		values = rows
 		if len(values) != len(keyspaceIDs) {
-			return nil, fmt.Errorf("length of values tuples %v doesn't match with length of keyspaceids %v", len(values), len(keyspaceIDs))
+			return "", fmt.Errorf("length of values tuples %v doesn't match with length of keyspaceids %v", len(values), len(keyspaceIDs))
 		}
 		queryBuf := sqlparser.NewTrackedBuffer(nil)
-		queries := make([]string, len(values))
+		valueBuf := sqlparser.NewTrackedBuffer(nil)
+		queries := []string{}
 		for rowNum, val := range values {
-			queryBuf.Myprintf("insert %v%sinto %v%v values%v%v%s",
-				ins.Comments, ins.Ignore,
-				ins.Table, ins.Columns, val, ins.OnDup, trailingComments)
-			queries[rowNum] = queryBuf.String()
-			queryBuf.Truncate(0)
+			if key.KeyRangeContains(keyrange, keyspaceIDs[rowNum]) {
+				valueBuf.Myprintf("%v", val)
+				queries = append(queries, valueBuf.String())
+				valueBuf.Truncate(0)
+			}
 		}
-		return queries, nil
+		if len(queries) > 0 {
+			queryBuf.Myprintf("insert %v%sinto %v%v values%s%v%s",
+				ins.Comments, ins.Ignore,
+				ins.Table, ins.Columns, strings.Join(queries, ","), ins.OnDup, trailingComments)
+			query := queryBuf.String()
+			return query, nil
+		}
+		return "", nil
 
 	default:
-		return nil, errors.New("unexpected construct in insert")
+		return "", errors.New("unexpected construct in insert")
 	}
 }
 
