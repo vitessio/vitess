@@ -130,7 +130,7 @@ func TestCodexBuildValuesList(t *testing.T) {
 		t.Fatalf("got %v, want %v", got, want)
 	}
 
-	// list arg
+	// list arg two values
 	// e.g. where pk1 = 1 and pk2 IN ::list
 	bindVars = map[string]interface{}{
 		"list": []interface{}{
@@ -146,6 +146,41 @@ func TestCodexBuildValuesList(t *testing.T) {
 	want = [][]sqltypes.Value{
 		{pk1Val, pk2Val},
 		{pk1Val, pk2Val2},
+	}
+	got, _ = buildValueList(&tableInfo, pkValues, bindVars)
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+
+	// list arg two values, using *querypb.BindVariable of type TUPLE
+	// e.g. where pk1 = 1 and pk2 IN ::list
+	bindVars = map[string]interface{}{
+		"list": &querypb.BindVariable{
+			Type: querypb.Type_TUPLE,
+			Values: []*querypb.Value{
+				{
+					Type:  querypb.Type_VARBINARY,
+					Value: []byte("abc"),
+				},
+				{
+					Type:  querypb.Type_VARBINARY,
+					Value: []byte("xyz"),
+				},
+			},
+		},
+	}
+	pkValues = []interface{}{
+		pk1Val,
+		"::list",
+	}
+	// want [[1 abc][1 xyz]]
+	want = [][]sqltypes.Value{
+		{pk1Val, pk2Val},
+		{pk1Val, pk2Val2},
+	}
+	got, err = buildValueList(&tableInfo, pkValues, bindVars)
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %v / %v, want %v", got, err, want)
 	}
 
 	// list arg one value
@@ -163,7 +198,6 @@ func TestCodexBuildValuesList(t *testing.T) {
 	want = [][]sqltypes.Value{
 		{pk1Val, pk2Val},
 	}
-
 	got, _ = buildValueList(&tableInfo, pkValues, bindVars)
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %v, want %v", got, want)
@@ -178,7 +212,6 @@ func TestCodexBuildValuesList(t *testing.T) {
 		"::list",
 	}
 	wantErr = "error: empty list supplied for list"
-
 	got, err = buildValueList(&tableInfo, pkValues, bindVars)
 	if err == nil || !strings.Contains(err.Error(), wantErr) {
 		t.Fatalf("got %v, want %v", err, wantErr)
@@ -193,7 +226,6 @@ func TestCodexBuildValuesList(t *testing.T) {
 		":list",
 	}
 	wantErr = "error: unexpected arg type []interface {} for key list"
-
 	got, err = buildValueList(&tableInfo, pkValues, bindVars)
 	if err == nil || !strings.Contains(err.Error(), wantErr) {
 		t.Fatalf("got %v, want %v", err, wantErr)

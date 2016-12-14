@@ -134,6 +134,13 @@ func TestBuildConverted(t *testing.T) {
 		typ: Int64,
 		val: testVal(Float32, "123"),
 		out: testVal(Float32, "123"),
+	}, {
+		typ: Int64,
+		val: &querypb.BindVariable{
+			Type:  querypb.Type_VARCHAR,
+			Value: []byte("123"),
+		},
+		out: testVal(Int64, "123"),
 	}}
 	for _, tcase := range testcases {
 		v, err := BuildConverted(tcase.typ, tcase.val)

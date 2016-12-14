@@ -50,21 +50,28 @@ func (tds TableDefinitions) Swap(i, j int) {
 	tds[i], tds[j] = tds[j], tds[i]
 }
 
-// FilterTables returns a copy which includes only
-// whitelisted tables (tables), no blacklisted tables (excludeTables) and optionally views (includeViews).
+// FilterTables returns a copy which includes only whitelisted tables
+// (tables), no blacklisted tables (excludeTables) and optionally
+// views (includeViews).
 func FilterTables(sd *tabletmanagerdatapb.SchemaDefinition, tables, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error) {
 	copy := *sd
 	copy.TableDefinitions = make([]*tabletmanagerdatapb.TableDefinition, 0, len(sd.TableDefinitions))
 
-	// build a list of regexp to match table names against
+	// Build a list of regexp to match table names against.
+	// We only use regexps if the name starts and ends with '/'.
+	// Otherwise the entry in the arrays is nil, and we use the original
+	// table name.
 	var tableRegexps []*regexp.Regexp
 	if len(tables) > 0 {
 		tableRegexps = make([]*regexp.Regexp, len(tables))
 		for i, table := range tables {
-			var err error
-			tableRegexps[i], err = regexp.Compile(table)
-			if err != nil {
-				return nil, fmt.Errorf("cannot compile regexp %v for table: %v", table, err)
+			if len(table) > 2 && strings.HasPrefix(table, "/") && strings.HasSuffix(table, "/") {
+				table = table[1 : len(table)-1]
+				var err error
+				tableRegexps[i], err = regexp.Compile(table)
+				if err != nil {
+					return nil, fmt.Errorf("cannot compile regexp %v for table: %v", table, err)
+				}
 			}
 		}
 	}
@@ -72,22 +79,34 @@ func FilterTables(sd *tabletmanagerdatapb.SchemaDefinition, tables, excludeTable
 	if len(excludeTables) > 0 {
 		excludeTableRegexps = make([]*regexp.Regexp, len(excludeTables))
 		for i, table := range excludeTables {
-			var err error
-			excludeTableRegexps[i], err = regexp.Compile(table)
-			if err != nil {
-				return nil, fmt.Errorf("cannot compile regexp %v for excludeTable: %v", table, err)
+			if len(table) > 2 && strings.HasPrefix(table, "/") && strings.HasSuffix(table, "/") {
+				table = table[1 : len(table)-1]
+				var err error
+				excludeTableRegexps[i], err = regexp.Compile(table)
+				if err != nil {
+					return nil, fmt.Errorf("cannot compile regexp %v for excludeTable: %v", table, err)
+				}
 			}
 		}
 	}
 
 	for _, table := range sd.TableDefinitions {
-		// check it's a table we want
-		if tableRegexps != nil {
+		// Check it's a table we want.
+		if len(tables) > 0 {
 			foundMatch := false
-			for _, tableRegexp := range tableRegexps {
-				if tableRegexp.MatchString(table.Name) {
-					foundMatch = true
-					break
+			for i, tableRegexp := range tableRegexps {
+				if tableRegexp == nil {
+					// Not a regexp, just compare in a
+					// case insensitive way.
+					if strings.EqualFold(tables[i], table.Name) {
+						foundMatch = true
+						break
+					}
+				} else {
+					if tableRegexp.MatchString(table.Name) {
+						foundMatch = true
+						break
+					}
 				}
 			}
 			if !foundMatch {
@@ -95,10 +114,19 @@ func FilterTables(sd *tabletmanagerdatapb.SchemaDefinition, tables, excludeTable
 			}
 		}
 		excluded := false
-		for _, tableRegexp := range excludeTableRegexps {
-			if tableRegexp.MatchString(table.Name) {
-				excluded = true
-				break
+		for i, tableRegexp := range excludeTableRegexps {
+			if tableRegexp == nil {
+				// Not a regexp, just compare in a
+				// case insensitive way.
+				if strings.EqualFold(excludeTables[i], table.Name) {
+					excluded = true
+					break
+				}
+			} else {
+				if tableRegexp.MatchString(table.Name) {
+					excluded = true
+					break
+				}
 			}
 		}
 		if excluded {

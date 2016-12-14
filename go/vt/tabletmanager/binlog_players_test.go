@@ -812,7 +812,7 @@ func TestBinlogPlayerMapVerticalSplit(t *testing.T) {
 				Shard:    "0",
 				Tables: []string{
 					"table1",
-					"funtables_*",
+					"/funtables_/",
 				},
 			},
 		}

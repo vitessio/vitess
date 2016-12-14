@@ -53,9 +53,9 @@ func main() {
 	defer exit.Recover()
 
 	// flag parsing
-	flags := dbconfigs.AppConfig | dbconfigs.AllPrivsConfig | dbconfigs.DbaConfig |
+	dbconfigFlags := dbconfigs.AppConfig | dbconfigs.AllPrivsConfig | dbconfigs.DbaConfig |
 		dbconfigs.FilteredConfig | dbconfigs.ReplConfig
-	dbconfigs.RegisterFlags(flags)
+	dbconfigs.RegisterFlags(dbconfigFlags)
 	mysqlctl.RegisterFlags()
 	flag.Parse()
 	if len(flag.Args()) > 0 {
@@ -121,15 +121,15 @@ func main() {
 		log.Errorf("mycnf read failed: %v", err)
 		exit.Return(1)
 	}
-	dbcfgs, err := dbconfigs.Init(mycnf.SocketFile, flags)
+	dbcfgs, err := dbconfigs.Init(mycnf.SocketFile, dbconfigFlags)
 	if err != nil {
 		log.Warning(err)
 	}
-	mysqld := mysqlctl.NewMysqld(mycnf, &dbcfgs.Dba, &dbcfgs.AllPrivs, &dbcfgs.App, &dbcfgs.Repl, true /* enablePublishStats */)
+	mysqld := mysqlctl.NewMysqld(mycnf, dbcfgs, dbconfigFlags, true /* enablePublishStats */)
 	servenv.OnClose(mysqld.Close)
 
 	// tablets configuration and init
-	if err := initTabletMap(ts, tpb, mysqld, dbcfgs, *schemaDir, mycnf); err != nil {
+	if err := initTabletMap(ts, tpb, mysqld, *dbcfgs, *schemaDir, mycnf); err != nil {
 		log.Errorf("initTabletMapProto failed: %v", err)
 		exit.Return(1)
 	}
@@ -142,7 +142,7 @@ func main() {
 		topodatapb.TabletType_REPLICA,
 		topodatapb.TabletType_RDONLY,
 	}
-	vtgate.Init(context.Background(), healthCheck, ts, resilientSrvTopoServer, tpb.Cells[0], 2 /*retryCount*/, tabletTypesToWait)
+	vtgate.Init(context.Background(), healthCheck, ts, resilientSrvTopoServer, tpb.Cells[0], 2 /*retryCount*/, tabletTypesToWait, vtgate.TxMulti)
 
 	// vtctld configuration and init
 	vtctld.InitVtctld(ts)

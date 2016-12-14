@@ -55,9 +55,19 @@ class Tablet(object):
   default_uid = 62344
   seq = 0
   tablets_running = 0
+  default_db_dba_config = {
+      'dba': {
+          'uname': 'vt_dba',
+          'charset': 'utf8'
+      },
+  }
   default_db_config = {
       'app': {
           'uname': 'vt_app',
+          'charset': 'utf8'
+      },
+      'allprivs': {
+          'uname': 'vt_allprivs',
           'charset': 'utf8'
       },
       'dba': {
@@ -74,27 +84,14 @@ class Tablet(object):
       }
   }
 
-  # this will eventually be coming from the proto3
-  tablet_type_value = {
-      'UNKNOWN': 0,
-      'MASTER': 1,
-      'REPLICA': 2,
-      'RDONLY': 3,
-      'BATCH': 3,
-      'SPARE': 4,
-      'EXPERIMENTAL': 5,
-      'BACKUP': 6,
-      'RESTORE': 7,
-      'DRAINED': 8,
-  }
-
   def __init__(self, tablet_uid=None, port=None, mysql_port=None, cell=None,
-               use_mysqlctld=False):
+               use_mysqlctld=False, vt_dba_passwd=None):
     self.tablet_uid = tablet_uid or (Tablet.default_uid + Tablet.seq)
     self.port = port or (environment.reserve_ports(1))
     self.mysql_port = mysql_port or (environment.reserve_ports(1))
     self.grpc_port = environment.reserve_ports(1)
     self.use_mysqlctld = use_mysqlctld
+    self.vt_dba_passwd = vt_dba_passwd
     Tablet.seq += 1
 
     if cell:
@@ -102,6 +99,9 @@ class Tablet(object):
     else:
       self.cell = tablet_cell_map.get(tablet_uid, 'nj')
     self.proc = None
+
+    # filled in during init_mysql
+    self.mysqlctld_process = None
 
     # filled in during init_tablet
     self.keyspace = None
@@ -118,7 +118,8 @@ class Tablet(object):
     return 'tablet: uid: %d web: http://localhost:%d/ rpc port: %d' % (
         self.tablet_uid, self.port, self.grpc_port)
 
-  def mysqlctl(self, cmd, extra_my_cnf=None, with_ports=False, verbose=False):
+  def mysqlctl(self, cmd, extra_my_cnf=None, with_ports=False, verbose=False,
+               extra_args=None):
     """Runs a mysqlctl command.
 
     Args:
@@ -126,6 +127,7 @@ class Tablet(object):
       extra_my_cnf: list of extra mycnf files to use
       with_ports: if set, sends the tablet and mysql ports to mysqlctl.
       verbose: passed to mysqlctld.
+      extra_args: passed to mysqlctl.
     Returns:
       the result of run_bg.
     """
@@ -142,19 +144,22 @@ class Tablet(object):
     if with_ports:
       args.extend(['-port', str(self.port),
                    '-mysql_port', str(self.mysql_port)])
-    self._add_dbconfigs(args)
+    self._add_dbconfigs(self.default_db_dba_config, args)
     if verbose:
       args.append('-alsologtostderr')
+    if extra_args:
+      args.extend(extra_args)
     args.extend(cmd)
     return utils.run_bg(args, extra_env=extra_env)
 
-  def mysqlctld(self, cmd, extra_my_cnf=None, verbose=False):
+  def mysqlctld(self, cmd, extra_my_cnf=None, verbose=False, extra_args=None):
     """Runs a mysqlctld command.
 
     Args:
       cmd: the command to run.
       extra_my_cnf: list of extra mycnf files to use
       verbose: passed to mysqlctld.
+      extra_args: passed to mysqlctld.
     Returns:
       the result of run_bg.
     """
@@ -167,33 +172,55 @@ class Tablet(object):
         '-tablet_uid', str(self.tablet_uid),
         '-mysql_port', str(self.mysql_port),
         '-socket_file', os.path.join(self.tablet_dir, 'mysqlctl.sock')]
-    self._add_dbconfigs(args)
+    self._add_dbconfigs(self.default_db_dba_config, args)
     if verbose:
       args.append('-alsologtostderr')
+    if extra_args:
+      args.extend(extra_args)
     args.extend(cmd)
     return utils.run_bg(args, extra_env=extra_env)
 
-  def init_mysql(self, extra_my_cnf=None):
+  def init_mysql(self, extra_my_cnf=None, init_db=None, extra_args=None):
+    """Init the mysql tablet directory, starts mysqld.
+
+    Either runs 'mysqlctl init', or starts a mysqlctld process.
+
+    Args:
+      extra_my_cnf: to pass to mysqlctl.
+      init_db: if set, use this init_db script instead of the default.
+      extra_args: passed to mysqlctld / mysqlctl.
+
+    Returns:
+      The forked process.
+    """
+    if not init_db:
+      init_db = environment.vttop + '/config/init_db.sql'
+
     if self.use_mysqlctld:
-      return self.mysqlctld(
-          ['-init_db_sql_file', environment.vttop + '/config/init_db.sql'],
-          extra_my_cnf=extra_my_cnf)
+      self.mysqlctld_process = self.mysqlctld(['-init_db_sql_file', init_db],
+                                              extra_my_cnf=extra_my_cnf,
+                                              extra_args=extra_args)
+      return self.mysqlctld_process
     else:
-      return self.mysqlctl(
-          ['init', '-init_db_sql_file',
-           environment.vttop + '/config/init_db.sql'],
-          extra_my_cnf=extra_my_cnf, with_ports=True)
+      return self.mysqlctl(['init', '-init_db_sql_file', init_db],
+                           extra_my_cnf=extra_my_cnf, with_ports=True,
+                           extra_args=extra_args)
 
   def start_mysql(self):
     return self.mysqlctl(['start'], with_ports=True)
 
-  def shutdown_mysql(self):
-    return self.mysqlctl(['shutdown'], with_ports=True)
+  def shutdown_mysql(self, extra_args=None):
+    return self.mysqlctl(['shutdown'], with_ports=True, extra_args=extra_args)
 
-  def teardown_mysql(self):
+  def teardown_mysql(self, extra_args=None):
+    if self.use_mysqlctld and self.mysqlctld_process:
+      # if we use mysqlctld, we just terminate it gracefully, so it kills
+      # its mysqld. And we return it, so we can wait for it.
+      utils.kill_sub_process(self.mysqlctld_process, soft=True)
+      return self.mysqlctld_process
     if utils.options.keep_logs:
-      return self.shutdown_mysql()
-    return self.mysqlctl(['teardown', '-force'])
+      return self.shutdown_mysql(extra_args=extra_args)
+    return self.mysqlctl(['teardown', '-force'], extra_args=extra_args)
 
   def remove_tree(self, ignore_options=False):
     if not ignore_options and utils.options.keep_logs:
@@ -205,19 +232,17 @@ class Tablet(object):
         print >> sys.stderr, e, self.tablet_dir
 
   def mysql_connection_parameters(self, dbname, user='vt_dba'):
-    return dict(user=user,
-                unix_socket=self.tablet_dir + '/mysql.sock',
-                db=dbname)
+    result = dict(user=user,
+                  unix_socket=self.tablet_dir + '/mysql.sock',
+                  db=dbname)
+    if user == 'vt_dba' and self.vt_dba_passwd:
+      result['passwd'] = self.vt_dba_passwd
+    return result
 
   def connect(self, dbname='', user='vt_dba', **params):
     params.update(self.mysql_connection_parameters(dbname, user))
     conn = MySQLdb.Connect(**params)
     return conn, conn.cursor()
-
-  def connect_dict(self, dbname='', user='vt_dba', **params):
-    params.update(self.mysql_connection_parameters(dbname, user))
-    conn = MySQLdb.Connect(**params)
-    return conn, MySQLdb.cursors.DictCursor(conn)
 
   # Query the MySQL instance directly
   def mquery(self, dbname, query, write=False, user='vt_dba', conn_params=None):
@@ -250,6 +275,7 @@ class Tablet(object):
     try:
       return cursor.fetchall()
     finally:
+      cursor.close()
       conn.close()
 
   def assert_table_count(self, dbname, table, n, where=''):
@@ -416,6 +442,7 @@ class Tablet(object):
       init_tablet_type=None, init_keyspace=None,
       init_shard=None, init_db_name_override=None,
       supports_backups=True, grace_period='1s', enable_semi_sync=True):
+    # pylint: disable=g-doc-args
     """Starts a vttablet process, and returns it.
 
     The process is also saved in self.proc, so it's easy to kill as well.
@@ -423,6 +450,8 @@ class Tablet(object):
     Returns:
       the process that was started.
     """
+    # pylint: enable=g-doc-args
+
     args = environment.binary_args('vttablet')
     # Use 'localhost' as hostname because Travis CI worker hostnames
     # are too long for MySQL replication.
@@ -499,13 +528,23 @@ class Tablet(object):
     if supports_backups:
       args.extend(['-restore_from_backup'] + get_backup_storage_flags())
 
+      # When vttablet restores from backup, and if not using
+      # mysqlctld, it will re-generate the .cnf file.  So we need to
+      # have EXTRA_MY_CNF set properly.
+      if not self.use_mysqlctld:
+        all_extra_my_cnf = get_all_extra_my_cnf(None)
+        if all_extra_my_cnf:
+          if not extra_env:
+            extra_env = {}
+          extra_env['EXTRA_MY_CNF'] = ':'.join(all_extra_my_cnf)
+
     if extra_args:
       args.extend(extra_args)
 
     args.extend(['-port', '%s' % (port or self.port),
                  '-log_dir', environment.vtlogroot])
 
-    self._add_dbconfigs(args, repl_extra_flags)
+    self._add_dbconfigs(self.default_db_config, args, repl_extra_flags)
 
     if filecustomrules:
       args.extend(['-filecustomrules', filecustomrules])
@@ -529,8 +568,6 @@ class Tablet(object):
       args.extend(['-serving_state_grace_period', grace_period])
     if security_policy:
       args.extend(['-security_policy', security_policy])
-    if extra_args:
-      args.extend(extra_args)
 
     args.extend(['-enable-autocommit'])
     stderr_fd = open(
@@ -608,14 +645,18 @@ class Tablet(object):
       timeout = utils.wait_step('waiting for socket files: %s' % str(wait_for),
                                 timeout, sleep_time=2.0)
 
-  def _add_dbconfigs(self, args, repl_extra_flags=None):
+  def _add_dbconfigs(self, cfg, args, repl_extra_flags=None):
+    """Helper method to generate and add --db-config-* flags to 'args'."""
     if repl_extra_flags is None:
       repl_extra_flags = {}
-    config = dict(self.default_db_config)
+    config = dict(cfg)
     if self.keyspace:
-      config['app']['dbname'] = self.dbname
-      config['repl']['dbname'] = self.dbname
-    config['repl'].update(repl_extra_flags)
+      if 'app' in config:
+        config['app']['dbname'] = self.dbname
+      if 'repl' in config:
+        config['repl']['dbname'] = self.dbname
+    if 'repl' in config:
+      config['repl'].update(repl_extra_flags)
     for key1 in config:
       for key2 in config[key1]:
         args.extend(['-db-config-' + key1 + '-' + key2, config[key1][key2]])

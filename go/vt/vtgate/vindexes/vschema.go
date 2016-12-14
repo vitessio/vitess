@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"sort"
+	"strings"
 
 	"github.com/youtube/vitess/go/cistring"
 	vschemapb "github.com/youtube/vitess/go/vt/proto/vschema"
@@ -214,10 +215,9 @@ func resolveAutoIncrement(source *vschemapb.SrvVSchema, vschema *VSchema) error 
 				continue
 			}
 			t.AutoIncrement = &AutoIncrement{Column: cistring.New(table.AutoIncrement.Column), ColumnVindexNum: -1}
-			seq := vschema.tables[table.AutoIncrement.Sequence]
-			// TODO(sougou): improve this search.
-			if seq == nil {
-				return fmt.Errorf("sequence %s not found for table %s", table.AutoIncrement.Sequence, tname)
+			seq, err := vschema.findQualified(table.AutoIncrement.Sequence)
+			if err != nil {
+				return fmt.Errorf("cannot resolve sequence %s: %v", table.AutoIncrement.Sequence, err)
 			}
 			t.AutoIncrement.Sequence = seq
 			for i, cv := range t.ColumnVindexes {
@@ -229,6 +229,18 @@ func resolveAutoIncrement(source *vschemapb.SrvVSchema, vschema *VSchema) error 
 		}
 	}
 	return nil
+}
+
+// findQualified finds a table t or k.t.
+func (vschema *VSchema) findQualified(name string) (*Table, error) {
+	splits := strings.Split(name, ".")
+	switch len(splits) {
+	case 1:
+		return vschema.Find("", splits[0])
+	case 2:
+		return vschema.Find(splits[0], splits[1])
+	}
+	return nil, fmt.Errorf("table %s not found", name)
 }
 
 // Find returns a pointer to the Table. If a keyspace is specified, only tables

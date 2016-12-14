@@ -154,10 +154,9 @@ func (stc *ScatterConn) ExecuteMultiShard(
 	// mu protects qr
 	var mu sync.Mutex
 	qr := new(sqltypes.Result)
-
 	shards := make([]string, 0, len(shardQueries))
-	for k := range shardQueries {
-		shards = append(shards, k)
+	for shard := range shardQueries {
+		shards = append(shards, shard)
 	}
 
 	err := stc.multiGoTransaction(

@@ -321,7 +321,7 @@ func TestTxConnRollback(t *testing.T) {
 func TestTxConnResolveOnPrepare(t *testing.T) {
 	sc, sbc0, sbc1 := newTestTxConnEnv("TestTxConn")
 
-	dtid := "TestTxConn:0:0:1234"
+	dtid := "TestTxConn:0:1234"
 	sbc0.ReadTransactionResults = []*querypb.TransactionMetadata{{
 		Dtid:  dtid,
 		State: querypb.TransactionState_PREPARE,
@@ -352,7 +352,7 @@ func TestTxConnResolveOnPrepare(t *testing.T) {
 func TestTxConnResolveOnRollback(t *testing.T) {
 	sc, sbc0, sbc1 := newTestTxConnEnv("TestTxConn")
 
-	dtid := "TestTxConn:0:0:1234"
+	dtid := "TestTxConn:0:1234"
 	sbc0.ReadTransactionResults = []*querypb.TransactionMetadata{{
 		Dtid:  dtid,
 		State: querypb.TransactionState_ROLLBACK,
@@ -382,7 +382,7 @@ func TestTxConnResolveOnRollback(t *testing.T) {
 func TestTxConnResolveOnCommit(t *testing.T) {
 	sc, sbc0, sbc1 := newTestTxConnEnv("TestTxConn")
 
-	dtid := "TestTxConn:0:0:1234"
+	dtid := "TestTxConn:0:1234"
 	sbc0.ReadTransactionResults = []*querypb.TransactionMetadata{{
 		Dtid:  dtid,
 		State: querypb.TransactionState_COMMIT,
@@ -422,7 +422,7 @@ func TestTxConnResolveInvalidDTID(t *testing.T) {
 func TestTxConnResolveReadTransactionFail(t *testing.T) {
 	sc, sbc0, _ := newTestTxConnEnv("TestTxConn")
 
-	dtid := "TestTxConn:0:0:1234"
+	dtid := "TestTxConn:0:1234"
 	sbc0.MustFailServer = 1
 	err := sc.txConn.Resolve(context.Background(), dtid)
 	want := "error: err"
@@ -434,7 +434,7 @@ func TestTxConnResolveReadTransactionFail(t *testing.T) {
 func TestTxConnResolveInternalError(t *testing.T) {
 	sc, sbc0, _ := newTestTxConnEnv("TestTxConn")
 
-	dtid := "TestTxConn:0:0:1234"
+	dtid := "TestTxConn:0:1234"
 	sbc0.ReadTransactionResults = []*querypb.TransactionMetadata{{
 		Dtid:  dtid,
 		State: querypb.TransactionState_UNKNOWN,
@@ -454,7 +454,7 @@ func TestTxConnResolveInternalError(t *testing.T) {
 func TestTxConnResolveSetRollbackFail(t *testing.T) {
 	sc, sbc0, sbc1 := newTestTxConnEnv("TestTxConn")
 
-	dtid := "TestTxConn:0:0:1234"
+	dtid := "TestTxConn:0:1234"
 	sbc0.ReadTransactionResults = []*querypb.TransactionMetadata{{
 		Dtid:  dtid,
 		State: querypb.TransactionState_PREPARE,
@@ -487,7 +487,7 @@ func TestTxConnResolveSetRollbackFail(t *testing.T) {
 func TestTxConnResolveRollbackPreparedFail(t *testing.T) {
 	sc, sbc0, sbc1 := newTestTxConnEnv("TestTxConn")
 
-	dtid := "TestTxConn:0:0:1234"
+	dtid := "TestTxConn:0:1234"
 	sbc0.ReadTransactionResults = []*querypb.TransactionMetadata{{
 		Dtid:  dtid,
 		State: querypb.TransactionState_ROLLBACK,
@@ -520,7 +520,7 @@ func TestTxConnResolveRollbackPreparedFail(t *testing.T) {
 func TestTxConnResolveCommitPreparedFail(t *testing.T) {
 	sc, sbc0, sbc1 := newTestTxConnEnv("TestTxConn")
 
-	dtid := "TestTxConn:0:0:1234"
+	dtid := "TestTxConn:0:1234"
 	sbc0.ReadTransactionResults = []*querypb.TransactionMetadata{{
 		Dtid:  dtid,
 		State: querypb.TransactionState_COMMIT,
@@ -553,7 +553,7 @@ func TestTxConnResolveCommitPreparedFail(t *testing.T) {
 func TestTxConnResolveConcludeTransactionFail(t *testing.T) {
 	sc, sbc0, sbc1 := newTestTxConnEnv("TestTxConn")
 
-	dtid := "TestTxConn:0:0:1234"
+	dtid := "TestTxConn:0:1234"
 	sbc0.ReadTransactionResults = []*querypb.TransactionMetadata{{
 		Dtid:  dtid,
 		State: querypb.TransactionState_COMMIT,
@@ -665,40 +665,6 @@ func TestTxConnMultiGoTargets(t *testing.T) {
 	})
 	if err != nil {
 		t.Error(err)
-	}
-}
-
-func TestDTID(t *testing.T) {
-	in := &vtgatepb.Session_ShardSession{
-		Target: &querypb.Target{
-			Keyspace:   "aa",
-			Shard:      "0",
-			TabletType: topodatapb.TabletType_MASTER,
-		},
-		TransactionId: 1,
-	}
-	txc := &TxConn{}
-	dtid := txc.generateDTID(in)
-	want := "aa:0:0:1"
-	if dtid != want {
-		t.Errorf("generateDTID: %s, want %s", dtid, want)
-	}
-	out, err := txc.dtidToShardSession(dtid)
-	if err != nil {
-		t.Error(err)
-	}
-	if !reflect.DeepEqual(in, out) {
-		t.Errorf("dtidToShardSession: %+v, want %+v", out, in)
-	}
-	_, err = txc.dtidToShardSession("badParts")
-	want = "invalid parts in dtid: badParts"
-	if err == nil || err.Error() != want {
-		t.Errorf("dtidToShardSession(\"badParts\"): %v, want %s", err, want)
-	}
-	_, err = txc.dtidToShardSession("a:b:0:badid")
-	want = "invalid transaction id in dtid: a:b:0:badid"
-	if err == nil || err.Error() != want {
-		t.Errorf("dtidToShardSession(\"a:b:0:badid\"): %v, want %s", err, want)
 	}
 }
 

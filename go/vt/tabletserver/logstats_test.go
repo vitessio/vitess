@@ -19,7 +19,7 @@ import (
 )
 
 func TestLogStats(t *testing.T) {
-	logStats := NewLogStats("test", context.Background())
+	logStats := NewLogStats(context.Background(), "test")
 	logStats.AddRewrittenSQL("sql1", time.Now())
 
 	if !strings.Contains(logStats.RewrittenSQL(), "sql1") {
@@ -41,7 +41,7 @@ func TestLogStats(t *testing.T) {
 }
 
 func TestLogStatsFormatBindVariables(t *testing.T) {
-	logStats := NewLogStats("test", context.Background())
+	logStats := NewLogStats(context.Background(), "test")
 	logStats.BindVariables = make(map[string]interface{})
 	logStats.BindVariables["key_1"] = "val_1"
 	logStats.BindVariables["key_2"] = 789
@@ -71,7 +71,7 @@ func TestLogStatsFormatBindVariables(t *testing.T) {
 }
 
 func TestLogStatsFormatQuerySources(t *testing.T) {
-	logStats := NewLogStats("test", context.Background())
+	logStats := NewLogStats(context.Background(), "test")
 	if logStats.FmtQuerySources() != "none" {
 		t.Fatalf("should return none since log stats does not have any query source, but got: %s", logStats.FmtQuerySources())
 	}
@@ -93,14 +93,14 @@ func TestLogStatsContextHTML(t *testing.T) {
 		html: html,
 	}
 	ctx := callinfo.NewContext(context.Background(), callInfo)
-	logStats := NewLogStats("test", ctx)
+	logStats := NewLogStats(ctx, "test")
 	if string(logStats.ContextHTML()) != html {
 		t.Fatalf("expect to get html: %s, but got: %s", html, string(logStats.ContextHTML()))
 	}
 }
 
 func TestLogStatsErrorStr(t *testing.T) {
-	logStats := NewLogStats("test", context.Background())
+	logStats := NewLogStats(context.Background(), "test")
 	if logStats.ErrorStr() != "" {
 		t.Fatalf("should not get error in stats, but got: %s", logStats.ErrorStr())
 	}
@@ -115,7 +115,7 @@ func TestLogStatsErrorStr(t *testing.T) {
 }
 
 func TestLogStatsRemoteAddrUsername(t *testing.T) {
-	logStats := NewLogStats("test", context.Background())
+	logStats := NewLogStats(context.Background(), "test")
 	addr, user := logStats.RemoteAddrUsername()
 	if addr != "" {
 		t.Fatalf("remote addr should be empty")
@@ -131,7 +131,7 @@ func TestLogStatsRemoteAddrUsername(t *testing.T) {
 		username:   username,
 	}
 	ctx := callinfo.NewContext(context.Background(), callInfo)
-	logStats = NewLogStats("test", ctx)
+	logStats = NewLogStats(ctx, "test")
 	addr, user = logStats.RemoteAddrUsername()
 	if addr != remoteAddr {
 		t.Fatalf("expected to get remote addr: %s, but got: %s", remoteAddr, addr)

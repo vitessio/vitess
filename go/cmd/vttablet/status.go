@@ -65,6 +65,7 @@ var (
       <a href="/debug/consolidations">Consolidations</a></br>
       <a href="/querylogz">Current&nbsp;Query&nbsp;Log</a></br>
       <a href="/txlogz">Current&nbsp;Transaction&nbsp;Log</a></br>
+      <a href="/twopcz">In-flight&nbsp;2PC&nbsp;Transactions</a></br>
     </td>
     <td width="25%" border="">
       <a href="/healthz">Health Check</a></br>

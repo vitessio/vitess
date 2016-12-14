@@ -290,7 +290,7 @@ class Proto3Connection(object):
     lastrowid = query_result.insert_id
     return results, rowcount, lastrowid, fields
 
-  def begin_request(self, effective_caller_id):
+  def begin_request(self, effective_caller_id, single_db):
     """Builds a vtgate_pb2.BeginRequest object.
 
     Also remembers the effective caller id for next call to
@@ -298,25 +298,31 @@ class Proto3Connection(object):
 
     Args:
       effective_caller_id: optional vtgate_client.CallerID.
+      single_db: True if single db transaction is needed.
 
     Returns:
       A vtgate_pb2.BeginRequest object.
     """
     request = vtgate_pb2.BeginRequest()
+    request.single_db = single_db
     self._add_caller_id(request, effective_caller_id)
     self._effective_caller_id = effective_caller_id
     return request
 
-  def commit_request(self):
+  def commit_request(self, twopc):
     """Builds a vtgate_pb2.CommitRequest object.
 
     Uses the effective_caller_id saved from begin_request().
     It will also clear the saved effective_caller_id.
 
+    Args:
+      twopc: perform 2-phase commit.
+
     Returns:
       A vtgate_pb2.CommitRequest object.
     """
     request = vtgate_pb2.CommitRequest()
+    request.atomic = twopc
     self._add_caller_id(request, self._effective_caller_id)
     self._add_session(request)
     self._effective_caller_id = None

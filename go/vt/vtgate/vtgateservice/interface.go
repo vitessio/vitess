@@ -38,7 +38,7 @@ type VTGateService interface {
 
 	// Transaction management
 
-	Begin(ctx context.Context) (*vtgatepb.Session, error)
+	Begin(ctx context.Context, singledb bool) (*vtgatepb.Session, error)
 	Commit(ctx context.Context, twopc bool, session *vtgatepb.Session) error
 	Rollback(ctx context.Context, session *vtgatepb.Session) error
 	ResolveTransaction(ctx context.Context, dtid string) error

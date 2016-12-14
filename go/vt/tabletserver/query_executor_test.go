@@ -873,7 +873,7 @@ func TestQueryExecutorTableAclNoPermission(t *testing.T) {
 	tsv.StopService()
 
 	// enable Config.StrictTableAcl
-	tsv = newTestTabletServer(ctx, enableStrict|enableStrictTableAcl, db)
+	tsv = newTestTabletServer(ctx, enableStrict|enableStrictTableACL, db)
 	qre = newTestQueryExecutor(ctx, tsv, query, 0)
 	defer tsv.StopService()
 	checkPlanID(t, planbuilder.PlanPassSelect, qre.plan.PlanID)
@@ -926,7 +926,7 @@ func TestQueryExecutorTableAclExemptACL(t *testing.T) {
 	}
 
 	// enable Config.StrictTableAcl
-	tsv := newTestTabletServer(ctx, enableStrict|enableStrictTableAcl, db)
+	tsv := newTestTabletServer(ctx, enableStrict|enableStrictTableACL, db)
 	qre := newTestQueryExecutor(ctx, tsv, query, 0)
 	defer tsv.StopService()
 	checkPlanID(t, planbuilder.PlanPassSelect, qre.plan.PlanID)
@@ -1005,7 +1005,7 @@ func TestQueryExecutorTableAclDryRun(t *testing.T) {
 		username,
 	}, ".")
 	// enable Config.StrictTableAcl
-	tsv := newTestTabletServer(ctx, enableStrict|enableStrictTableAcl, db)
+	tsv := newTestTabletServer(ctx, enableStrict|enableStrictTableACL, db)
 	tsv.qe.enableTableAclDryRun = true
 	qre := newTestQueryExecutor(ctx, tsv, query, 0)
 	defer tsv.StopService()
@@ -1146,7 +1146,7 @@ type executorFlags int64
 const (
 	noFlags      executorFlags = 0
 	enableStrict               = 1 << iota
-	enableStrictTableAcl
+	enableStrictTableACL
 	smallTxPool
 	noTwopc
 	shortTwopcAge
@@ -1173,7 +1173,7 @@ func newTestTabletServer(ctx context.Context, flags executorFlags, db *fakesqldb
 	} else {
 		config.StrictMode = false
 	}
-	if flags&enableStrictTableAcl > 0 {
+	if flags&enableStrictTableACL > 0 {
 		config.StrictTableAcl = true
 	} else {
 		config.StrictTableAcl = false
@@ -1206,7 +1206,7 @@ func newTransaction(tsv *TabletServer) int64 {
 }
 
 func newTestQueryExecutor(ctx context.Context, tsv *TabletServer, sql string, txID int64) *QueryExecutor {
-	logStats := NewLogStats("TestQueryExecutor", ctx)
+	logStats := NewLogStats(ctx, "TestQueryExecutor")
 	return &QueryExecutor{
 		ctx:           ctx,
 		query:         sql,
@@ -1267,13 +1267,16 @@ func checkPlanID(
 func getQueryExecutorSupportedQueries() map[string]*sqltypes.Result {
 	return map[string]*sqltypes.Result{
 		// queries for twopc
-		sqlTurnoffBinlog:                                     {},
-		fmt.Sprintf(sqlCreateSidecarDB, "_vt"):               {},
-		fmt.Sprintf(sqlCreateTableRedoLogTransaction, "_vt"): {},
-		fmt.Sprintf(sqlAlterTableRedoLogTransaction, "_vt"):  {},
-		fmt.Sprintf(sqlCreateTableRedoLogStatement, "_vt"):   {},
-		fmt.Sprintf(sqlCreateTableTransaction, "_vt"):        {},
-		fmt.Sprintf(sqlCreateTableParticipant, "_vt"):        {},
+		sqlTurnoffBinlog:                                {},
+		fmt.Sprintf(sqlCreateSidecarDB, "_vt"):          {},
+		fmt.Sprintf(sqlDropLegacy1, "_vt"):              {},
+		fmt.Sprintf(sqlDropLegacy2, "_vt"):              {},
+		fmt.Sprintf(sqlDropLegacy3, "_vt"):              {},
+		fmt.Sprintf(sqlDropLegacy4, "_vt"):              {},
+		fmt.Sprintf(sqlCreateTableRedoState, "_vt"):     {},
+		fmt.Sprintf(sqlCreateTableRedoStatement, "_vt"): {},
+		fmt.Sprintf(sqlCreateTableDTState, "_vt"):       {},
+		fmt.Sprintf(sqlCreateTableDTParticipant, "_vt"): {},
 		// queries for schema info
 		"select unix_timestamp()": {
 			RowsAffected: 1,

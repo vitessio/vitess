@@ -64,11 +64,10 @@ var (
 
 	bindVars = map[string]interface{}{
 		"int":   123,
-		"float": 2.0,
+		"float": 2.1,
 		"bytes": []byte{1, 2, 3},
 	}
-	bindVarsEcho = "map[bytes:[1 2 3] float:2 int:123]"
-	bindVarsP3   = map[string]*querypb.BindVariable{
+	bindVarsP3 = map[string]*querypb.BindVariable{
 		"int": {
 			Type:  querypb.Type_INT64,
 			Value: []byte{'1', '2', '3'},
@@ -126,7 +125,7 @@ func testEchoExecute(t *testing.T, conn *vtgateconn.VTGateConn) {
 	checkEcho(t, "Execute", qr, err, map[string]string{
 		"callerId":   callerIDEcho,
 		"query":      echoPrefix + query,
-		"bindVars":   bindVarsEcho,
+		"bindVars":   bindVarsP3Echo,
 		"keyspace":   connectionKeyspace,
 		"tabletType": tabletTypeEcho,
 		"options":    optionsEcho,
@@ -139,7 +138,7 @@ func testEchoExecute(t *testing.T, conn *vtgateconn.VTGateConn) {
 		"query":      echoPrefix + query,
 		"keyspace":   keyspace,
 		"shards":     shardsEcho,
-		"bindVars":   bindVarsEcho,
+		"bindVars":   bindVarsP3Echo,
 		"tabletType": tabletTypeEcho,
 		"options":    optionsEcho,
 		"extras":     extrasEcho,
@@ -151,7 +150,7 @@ func testEchoExecute(t *testing.T, conn *vtgateconn.VTGateConn) {
 		"query":       echoPrefix + query,
 		"keyspace":    keyspace,
 		"keyspaceIds": keyspaceIDsEcho,
-		"bindVars":    bindVarsEcho,
+		"bindVars":    bindVarsP3Echo,
 		"tabletType":  tabletTypeEcho,
 		"options":     optionsEcho,
 		"extras":      extrasEcho,
@@ -163,7 +162,7 @@ func testEchoExecute(t *testing.T, conn *vtgateconn.VTGateConn) {
 		"query":      echoPrefix + query,
 		"keyspace":   keyspace,
 		"keyRanges":  keyRangesEcho,
-		"bindVars":   bindVarsEcho,
+		"bindVars":   bindVarsP3Echo,
 		"tabletType": tabletTypeEcho,
 		"options":    optionsEcho,
 		"extras":     extrasEcho,
@@ -176,7 +175,7 @@ func testEchoExecute(t *testing.T, conn *vtgateconn.VTGateConn) {
 		"keyspace":         keyspace,
 		"entityColumnName": "column1",
 		"entityIds":        entityKeyspaceIDsEcho,
-		"bindVars":         bindVarsEcho,
+		"bindVars":         bindVarsP3Echo,
 		"tabletType":       tabletTypeEcho,
 		"options":          optionsEcho,
 		"extras":           extrasEcho,
@@ -242,7 +241,7 @@ func testEchoStreamExecute(t *testing.T, conn *vtgateconn.VTGateConn) {
 	checkEcho(t, "StreamExecute", qr, err, map[string]string{
 		"callerId":   callerIDEcho,
 		"query":      echoPrefix + query,
-		"bindVars":   bindVarsEcho,
+		"bindVars":   bindVarsP3Echo,
 		"keyspace":   connectionKeyspace,
 		"tabletType": tabletTypeEcho,
 		"options":    optionsEcho,
@@ -258,7 +257,7 @@ func testEchoStreamExecute(t *testing.T, conn *vtgateconn.VTGateConn) {
 		"query":      echoPrefix + query,
 		"keyspace":   keyspace,
 		"shards":     shardsEcho,
-		"bindVars":   bindVarsEcho,
+		"bindVars":   bindVarsP3Echo,
 		"tabletType": tabletTypeEcho,
 		"options":    optionsEcho,
 	})
@@ -273,7 +272,7 @@ func testEchoStreamExecute(t *testing.T, conn *vtgateconn.VTGateConn) {
 		"query":       echoPrefix + query,
 		"keyspace":    keyspace,
 		"keyspaceIds": keyspaceIDsEcho,
-		"bindVars":    bindVarsEcho,
+		"bindVars":    bindVarsP3Echo,
 		"tabletType":  tabletTypeEcho,
 		"options":     optionsEcho,
 	})
@@ -288,7 +287,7 @@ func testEchoStreamExecute(t *testing.T, conn *vtgateconn.VTGateConn) {
 		"query":      echoPrefix + query,
 		"keyspace":   keyspace,
 		"keyRanges":  keyRangesEcho,
-		"bindVars":   bindVarsEcho,
+		"bindVars":   bindVarsP3Echo,
 		"tabletType": tabletTypeEcho,
 		"options":    optionsEcho,
 	})
@@ -309,7 +308,7 @@ func testEchoTransactionExecute(t *testing.T, conn *vtgateconn.VTGateConn) {
 	checkEcho(t, "Execute", qr, err, map[string]string{
 		"callerId":         callerIDEcho,
 		"query":            echoPrefix + query,
-		"bindVars":         bindVarsEcho,
+		"bindVars":         bindVarsP3Echo,
 		"keyspace":         connectionKeyspace,
 		"tabletType":       tabletTypeEcho,
 		"session":          sessionEcho,
@@ -323,7 +322,7 @@ func testEchoTransactionExecute(t *testing.T, conn *vtgateconn.VTGateConn) {
 		"query":            echoPrefix + query,
 		"keyspace":         keyspace,
 		"shards":           shardsEcho,
-		"bindVars":         bindVarsEcho,
+		"bindVars":         bindVarsP3Echo,
 		"tabletType":       tabletTypeEcho,
 		"session":          sessionEcho,
 		"notInTransaction": "false",
@@ -336,7 +335,7 @@ func testEchoTransactionExecute(t *testing.T, conn *vtgateconn.VTGateConn) {
 		"query":            echoPrefix + query,
 		"keyspace":         keyspace,
 		"keyspaceIds":      keyspaceIDsEcho,
-		"bindVars":         bindVarsEcho,
+		"bindVars":         bindVarsP3Echo,
 		"tabletType":       tabletTypeEcho,
 		"session":          sessionEcho,
 		"notInTransaction": "false",
@@ -349,7 +348,7 @@ func testEchoTransactionExecute(t *testing.T, conn *vtgateconn.VTGateConn) {
 		"query":            echoPrefix + query,
 		"keyspace":         keyspace,
 		"keyRanges":        keyRangesEcho,
-		"bindVars":         bindVarsEcho,
+		"bindVars":         bindVarsP3Echo,
 		"tabletType":       tabletTypeEcho,
 		"session":          sessionEcho,
 		"notInTransaction": "false",
@@ -363,7 +362,7 @@ func testEchoTransactionExecute(t *testing.T, conn *vtgateconn.VTGateConn) {
 		"keyspace":         keyspace,
 		"entityColumnName": "column1",
 		"entityIds":        entityKeyspaceIDsEcho,
-		"bindVars":         bindVarsEcho,
+		"bindVars":         bindVarsP3Echo,
 		"tabletType":       tabletTypeEcho,
 		"session":          sessionEcho,
 		"notInTransaction": "false",

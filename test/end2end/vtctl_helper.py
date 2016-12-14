@@ -5,10 +5,7 @@ executed.  This should help reduce flakiness in the sandbox.
 """
 
 import logging
-import os
-import re
 import subprocess
-import tempfile
 import time
 
 from vtctl import vtctl_client
@@ -62,7 +59,8 @@ class VtctlHelper(object):
         if expect_fail:
           logging.info('Expected vtctl error, got: %s', e.message or e.output)
           raise VtctlClientError('Caught an expected vtctl error')
-        logging.info('Vtctl error: %s', e.message or e.output)
+        logging.info('Vtctl error (vtctl %s): %s',
+                     ' '.join(args), e.message or e.output)
       time.sleep(5)
     raise VtctlClientError('Timed out on vtctl_client execute_vtctl_command')
 
