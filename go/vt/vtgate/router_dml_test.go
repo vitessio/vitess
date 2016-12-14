@@ -798,7 +798,7 @@ func TestMultiInsertSharded(t *testing.T) {
 		t.Error(err)
 	}
 	wantQueries := []querytypes.BoundQuery{{
-		Sql: "insert into user(id, v, name) values (:_Id0, 1, :_name0), (:_Id1, 2, :_name1) /* vtgate:: keyspace_id:166b40b44aba4bd6,06e7ea22ce92708f */",
+		Sql: "insert into user(id, v, name) values (:_Id0, 1, :_name0),(:_Id1, 2, :_name1) /* vtgate:: keyspace_id:166b40b44aba4bd6,06e7ea22ce92708f */",
 		BindVariables: map[string]interface{}{
 			"_Id0":   int64(1),
 			"__seq0": int64(1),
@@ -843,12 +843,12 @@ func TestMultiInsertGenerator(t *testing.T) {
 		RowsAffected: 1,
 		InsertID:     1,
 	}})
-	result, err := routerExec(router, "insert into music(user_id, name) values (:u, 'myname1'), (:u, 'myname2')", map[string]interface{}{"u": int64(2)})
+	result, err := routerExec(router, "insert into music(user_id, name) values (:u, 'myname1'),(:u, 'myname2')", map[string]interface{}{"u": int64(2)})
 	if err != nil {
 		t.Error(err)
 	}
 	wantQueries := []querytypes.BoundQuery{{
-		Sql: "insert into music(user_id, name, id) values (:_user_id0, 'myname1', :_id0), (:_user_id1, 'myname2', :_id1) /* vtgate:: keyspace_id:06e7ea22ce92708f,06e7ea22ce92708f */",
+		Sql: "insert into music(user_id, name, id) values (:_user_id0, 'myname1', :_id0),(:_user_id1, 'myname2', :_id1) /* vtgate:: keyspace_id:06e7ea22ce92708f,06e7ea22ce92708f */",
 		BindVariables: map[string]interface{}{
 			"u":         int64(2),
 			"_id0":      int64(1),
@@ -898,12 +898,12 @@ func TestMultiInsertGeneratorSparse(t *testing.T) {
 		RowsAffected: 1,
 		InsertID:     1,
 	}})
-	result, err := routerExec(router, "insert into music(id, user_id, name) values (NULL, :u, 'myname1'), (2, :u, 'myname2'), (NULL, :u, 'myname3')", map[string]interface{}{"u": int64(2)})
+	result, err := routerExec(router, "insert into music(id, user_id, name) values (NULL, :u, 'myname1'),(2, :u, 'myname2'), (NULL, :u, 'myname3')", map[string]interface{}{"u": int64(2)})
 	if err != nil {
 		t.Error(err)
 	}
 	wantQueries := []querytypes.BoundQuery{{
-		Sql: "insert into music(id, user_id, name) values (:_id0, :_user_id0, 'myname1'), (:_id1, :_user_id1, 'myname2'), (:_id2, :_user_id2, 'myname3') /* vtgate:: keyspace_id:06e7ea22ce92708f,06e7ea22ce92708f,06e7ea22ce92708f */",
+		Sql: "insert into music(id, user_id, name) values (:_id0, :_user_id0, 'myname1'),(:_id1, :_user_id1, 'myname2'),(:_id2, :_user_id2, 'myname3') /* vtgate:: keyspace_id:06e7ea22ce92708f,06e7ea22ce92708f,06e7ea22ce92708f */",
 		BindVariables: map[string]interface{}{
 			"u":         int64(2),
 			"_id0":      int64(1),

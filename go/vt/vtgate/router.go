@@ -394,19 +394,9 @@ func (rtr *Router) execInsertSharded(vcursor *requestContext, route *engine.Rout
 	return result, nil
 }
 
-func (rtr *Router) rewriteMultiRowQuery(route *engine.Route, routing map[string][]int, shard string) (Query string, err error) {
-	var ValuesStr string
-	for _, rowVal := range routing[shard] {
-		ValuesStr += route.Mid[rowVal] + ", "
-	}
-	ValuesStr = strings.TrimRight(ValuesStr, ", ")
-	Query = route.Prefix + ValuesStr + route.Suffix
-	return Query, nil
-}
-
 func (rtr *Router) getInsertShardedRoute(vcursor *requestContext, route *engine.Route) (keyspace string, shardQueries map[string]querytypes.BoundQuery, err error) {
 	keyspaceIDs := [][]byte{}
-	routing := make(map[string][]int)
+	routing := make(map[string][]string)
 	shardKeyspaceIDMap := make(map[string][][]byte)
 	keyspace, _, allShards, err := getKeyspaceShards(vcursor.ctx, rtr.serv, rtr.cell, route.Keyspace.Name, vcursor.tabletType)
 	if err != nil {
@@ -434,7 +424,7 @@ func (rtr *Router) getInsertShardedRoute(vcursor *requestContext, route *engine.
 			}
 		}
 		shard, err := getShardForKeyspaceID(allShards, keyspaceIDs[rowNum])
-		routing[shard] = append(routing[shard], rowNum)
+		routing[shard] = append(routing[shard], route.Mid[rowNum])
 		if err != nil {
 			return "", nil, fmt.Errorf("getInsertShardedRoute: %v", err)
 		}
@@ -443,7 +433,7 @@ func (rtr *Router) getInsertShardedRoute(vcursor *requestContext, route *engine.
 
 	shardQueries = make(map[string]querytypes.BoundQuery, len(routing))
 	for shard := range routing {
-		rewritten, err := rtr.rewriteMultiRowQuery(route, routing, shard)
+		rewritten := route.Prefix + strings.Join(routing[shard], ",") + route.Suffix
 		if err != nil {
 			return "", nil, fmt.Errorf("getInsertShardedRoute: Error While Rewriting Query: %v", err)
 		}
