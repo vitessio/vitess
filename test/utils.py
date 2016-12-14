@@ -547,6 +547,7 @@ class VtGate(object):
         '-log_dir', environment.vtlogroot,
         '-srv_topo_cache_ttl', cache_ttl,
         '-tablet_protocol', protocols_flavor().tabletconn_protocol(),
+        '-stderrthreshold', get_log_level(),
     ]
     if l2vtgates:
       args.extend([
