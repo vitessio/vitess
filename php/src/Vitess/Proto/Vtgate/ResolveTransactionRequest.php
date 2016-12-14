@@ -4,13 +4,13 @@
 
 namespace Vitess\Proto\Vtgate {
 
-  class BeginRequest extends \DrSlump\Protobuf\Message {
+  class ResolveTransactionRequest extends \DrSlump\Protobuf\Message {
 
     /**  @var \Vitess\Proto\Vtrpc\CallerID */
     public $caller_id = null;
     
-    /**  @var boolean */
-    public $single_db = null;
+    /**  @var string */
+    public $dtid = null;
     
 
     /** @var \Closure[] */
@@ -18,7 +18,7 @@ namespace Vitess\Proto\Vtgate {
 
     public static function descriptor()
     {
-      $descriptor = new \DrSlump\Protobuf\Descriptor(__CLASS__, 'vtgate.BeginRequest');
+      $descriptor = new \DrSlump\Protobuf\Descriptor(__CLASS__, 'vtgate.ResolveTransactionRequest');
 
       // OPTIONAL MESSAGE caller_id = 1
       $f = new \DrSlump\Protobuf\Field();
@@ -29,11 +29,11 @@ namespace Vitess\Proto\Vtgate {
       $f->reference = '\Vitess\Proto\Vtrpc\CallerID';
       $descriptor->addField($f);
 
-      // OPTIONAL BOOL single_db = 2
+      // OPTIONAL STRING dtid = 2
       $f = new \DrSlump\Protobuf\Field();
       $f->number    = 2;
-      $f->name      = "single_db";
-      $f->type      = \DrSlump\Protobuf::TYPE_BOOL;
+      $f->name      = "dtid";
+      $f->type      = \DrSlump\Protobuf::TYPE_STRING;
       $f->rule      = \DrSlump\Protobuf::RULE_OPTIONAL;
       $descriptor->addField($f);
 
@@ -56,7 +56,7 @@ namespace Vitess\Proto\Vtgate {
     /**
      * Clear <caller_id> value
      *
-     * @return \Vitess\Proto\Vtgate\BeginRequest
+     * @return \Vitess\Proto\Vtgate\ResolveTransactionRequest
      */
     public function clearCallerId(){
       return $this->_clear(1);
@@ -75,46 +75,46 @@ namespace Vitess\Proto\Vtgate {
      * Set <caller_id> value
      *
      * @param \Vitess\Proto\Vtrpc\CallerID $value
-     * @return \Vitess\Proto\Vtgate\BeginRequest
+     * @return \Vitess\Proto\Vtgate\ResolveTransactionRequest
      */
     public function setCallerId(\Vitess\Proto\Vtrpc\CallerID $value){
       return $this->_set(1, $value);
     }
     
     /**
-     * Check if <single_db> has a value
+     * Check if <dtid> has a value
      *
      * @return boolean
      */
-    public function hasSingleDb(){
+    public function hasDtid(){
       return $this->_has(2);
     }
     
     /**
-     * Clear <single_db> value
+     * Clear <dtid> value
      *
-     * @return \Vitess\Proto\Vtgate\BeginRequest
+     * @return \Vitess\Proto\Vtgate\ResolveTransactionRequest
      */
-    public function clearSingleDb(){
+    public function clearDtid(){
       return $this->_clear(2);
     }
     
     /**
-     * Get <single_db> value
+     * Get <dtid> value
      *
-     * @return boolean
+     * @return string
      */
-    public function getSingleDb(){
+    public function getDtid(){
       return $this->_get(2);
     }
     
     /**
-     * Set <single_db> value
+     * Set <dtid> value
      *
-     * @param boolean $value
-     * @return \Vitess\Proto\Vtgate\BeginRequest
+     * @param string $value
+     * @return \Vitess\Proto\Vtgate\ResolveTransactionRequest
      */
-    public function setSingleDb( $value){
+    public function setDtid( $value){
       return $this->_set(2, $value);
     }
   }

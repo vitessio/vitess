@@ -34,5 +34,7 @@ namespace Vitess\Proto\Query {
     const ENUM = 2074;
     const SET = 2075;
     const TUPLE = 28;
+    const GEOMETRY = 2077;
+    const JSON = 2078;
   }
 }
