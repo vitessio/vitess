@@ -240,7 +240,7 @@ func (conn *FakeVTGateConn) ExecuteEntityIds(ctx context.Context, query string, 
 }
 
 // ExecuteBatch please see vtgateconn.Impl.ExecuteBatch
-func (conn *FakeVTGateConn) ExecuteBatch(ctx context.Context, sql []string, bindVars []map[string]interface{}, keyspace string, tabletType topodatapb.TabletType, session interface{}, options *querypb.ExecuteOptions) ([]sqltypes.Result, interface{}, []error) {
+func (conn *FakeVTGateConn) ExecuteBatch(ctx context.Context, sqlList []string, bindVarsList []map[string]interface{}, keyspace string, tabletType topodatapb.TabletType, asTransaction bool, session interface{}, options *querypb.ExecuteOptions) ([]sqltypes.QueryResponse, interface{}, error) {
 	panic("not implemented")
 }
 

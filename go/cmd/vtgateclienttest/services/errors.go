@@ -183,16 +183,16 @@ func (c *errorClient) ExecuteEntityIds(ctx context.Context, sql string, bindVari
 	return c.fallbackClient.ExecuteEntityIds(ctx, sql, bindVariables, keyspace, entityColumnName, entityKeyspaceIDs, tabletType, session, notInTransaction, options)
 }
 
-func (c *errorClient) ExecuteBatch(ctx context.Context, sql []string, bindVariables []map[string]interface{}, keyspace string, tabletType topodatapb.TabletType, session *vtgatepb.Session, notInTransaction bool, options *querypb.ExecuteOptions) ([]sqltypes.Result, []error) {
-	if len(sql) == 1 {
-		if err := requestToPartialError(sql[0], session); err != nil {
-			return nil, []error{err}
+func (c *errorClient) ExecuteBatch(ctx context.Context, sqlList []string, bindVariablesList []map[string]interface{}, keyspace string, tabletType topodatapb.TabletType, asTransaction bool, session *vtgatepb.Session, options *querypb.ExecuteOptions) ([]sqltypes.QueryResponse, error) {
+	if len(sqlList) == 1 {
+		if err := requestToPartialError(sqlList[0], session); err != nil {
+			return nil, err
 		}
-		if err := requestToError(sql[0]); err != nil {
-			return nil, []error{err}
+		if err := requestToError(sqlList[0]); err != nil {
+			return nil, err
 		}
 	}
-	return c.fallbackClient.ExecuteBatch(ctx, sql, bindVariables, keyspace, tabletType, session, notInTransaction, options)
+	return c.fallbackClient.ExecuteBatch(ctx, sqlList, bindVariablesList, keyspace, tabletType, asTransaction, session, options)
 }
 
 func (c *errorClient) ExecuteBatchShards(ctx context.Context, queries []*vtgatepb.BoundShardQuery, tabletType topodatapb.TabletType, asTransaction bool, session *vtgatepb.Session, options *querypb.ExecuteOptions) ([]sqltypes.Result, error) {

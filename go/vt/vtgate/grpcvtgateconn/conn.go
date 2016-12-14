@@ -198,31 +198,32 @@ func (conn *vtgateConn) ExecuteEntityIds(ctx context.Context, query string, keys
 	return sqltypes.Proto3ToResult(response.Result), response.Session, nil
 }
 
-func (conn *vtgateConn) ExecuteBatch(ctx context.Context, query []string, bindVars []map[string]interface{}, keyspace string, tabletType topodatapb.TabletType, session interface{}, options *querypb.ExecuteOptions) ([]sqltypes.Result, interface{}, []error) {
+func (conn *vtgateConn) ExecuteBatch(ctx context.Context, queryList []string, bindVarsList []map[string]interface{}, keyspace string, tabletType topodatapb.TabletType, asTransaction bool, session interface{}, options *querypb.ExecuteOptions) ([]sqltypes.QueryResponse, interface{}, error) {
 	var s *vtgatepb.Session
 	if session != nil {
 		s = session.(*vtgatepb.Session)
 	}
-	q, err := querytypes.BoundQueriesToProto3(query, bindVars)
+	q, err := querytypes.BoundQueriesToProto3(queryList, bindVarsList)
 	if err != nil {
-		return nil, session, []error{err}
+		return nil, session, err
 	}
 	request := &vtgatepb.ExecuteBatchRequest{
-		CallerId:   callerid.EffectiveCallerIDFromContext(ctx),
-		Session:    s,
-		Query:      q,
-		Keyspace:   keyspace,
-		TabletType: tabletType,
-		Options:    options,
+		CallerId:      callerid.EffectiveCallerIDFromContext(ctx),
+		Session:       s,
+		QueryList:     q,
+		Keyspace:      keyspace,
+		TabletType:    tabletType,
+		AsTransaction: asTransaction,
+		Options:       options,
 	}
 	response, err := conn.c.ExecuteBatch(ctx, request)
 	if err != nil {
-		return nil, session, []error{vterrors.FromGRPCError(err)}
+		return nil, session, vterrors.FromGRPCError(err)
 	}
 	if response.Error != nil {
-		return nil, response.Session, vterrors.FromVtRPCErrors(response.Error)
+		return nil, response.Session, vterrors.FromVtRPCError(response.Error)
 	}
-	return sqltypes.Proto3ToResults(response.Result), response.Session, nil
+	return sqltypes.Proto3ToQueryReponses(response.QueryResponseList), response.Session, nil
 }
 
 func (conn *vtgateConn) ExecuteBatchShards(ctx context.Context, queries []*vtgatepb.BoundShardQuery, tabletType topodatapb.TabletType, asTransaction bool, session interface{}, options *querypb.ExecuteOptions) ([]sqltypes.Result, interface{}, error) {

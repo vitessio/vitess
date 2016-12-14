@@ -268,8 +268,11 @@ message ExecuteBatchRequest {
   // tablet_type is the type of tablets that this query is targeted to.
   topodata.TabletType tablet_type = 4;
 
-  // not_in_transaction is deprecated and should not be used.
-  bool not_in_transaction = 5;
+  // as_transaction will execute the queries in this batch in a single transaction per shard,
+  // created for this purpose.
+  // (this can be seen as adding a 'begin' before and 'commit' after the queries).
+  // Only makes sense if tablet_type is master. If set, the Session is ignored.
+  bool as_transaction = 5;
 
   // keyspace to target the query to.
   string keyspace = 6;
@@ -278,18 +281,29 @@ message ExecuteBatchRequest {
   query.ExecuteOptions options = 7;
 }
 
+// QueryResponse represents a query response
+// in the form of result or error but not both.
+// This is used in a list for ExecuteBatchResponse.
+message QueryResponse {
+  // error contains an query level error, only set if result is unset.
+  vtrpc.RPCError error = 1;
+
+  // result contains the query result, only set if error is unset.
+  query.QueryResult result = 2;
+}
+
 // ExecuteBatchResponse is the returned value from ExecuteBatch.
 message ExecuteBatchResponse {
   // error contains an application level error if necessary. Note the
   // session may have changed, even when an error is returned (for
   // instance if a database integrity error happened).
-  repeated vtrpc.RPCError error = 1;
+  vtrpc.RPCError error = 1;
 
   // session is the updated session information (only returned inside a transaction).
   Session session = 2;
 
-  // result contains the query result, only set if error is unset.
-  repeated query.QueryResult result = 3;
+  // results contains the query results, only set if application level error is unset.
+  repeated QueryResponse results = 3;
 }
 
 // BoundShardQuery represents a single query request for the

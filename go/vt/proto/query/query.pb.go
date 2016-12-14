@@ -24,6 +24,7 @@ It has these top-level messages:
 	ExecuteRequest
 	ExecuteResponse
 	ExecuteBatchRequest
+	QueryResponse
 	ExecuteBatchResponse
 	StreamExecuteRequest
 	StreamExecuteResponse
@@ -578,6 +579,31 @@ func (m *QueryResult) GetRows() []*Row {
 func (m *QueryResult) GetExtras() *ResultExtras {
 	if m != nil {
 		return m.Extras
+	}
+	return nil
+}
+
+// QueryResponse is returned by ExecuteBatch.
+type QueryResponse struct {
+	QueryResult *QueryResult `protobuf:"bytes,1,opt,name=result" json:"result,omitempty"`
+	QueryError  error        `protobuf:"bytes,2,opt,name=error" json:"error,omitempty"`
+}
+
+func (m *QueryResponse) Reset()                    { *m = QueryResponse{} }
+func (m *QueryResponse) String() string            { return proto.CompactTextString(m) }
+func (*QueryResponse) ProtoMessage()               {}
+func (*QueryResponse) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{10} }
+
+func (m *QueryResponse) GetQueryResult() *QueryResult {
+	if m != nil {
+		return m.QueryResult
+	}
+	return nil
+}
+
+func (m *QueryResponse) GetQueryError() error {
+	if m != nil {
+		return m.QueryError
 	}
 	return nil
 }
@@ -1759,6 +1785,7 @@ func init() {
 	proto.RegisterType((*ExecuteRequest)(nil), "query.ExecuteRequest")
 	proto.RegisterType((*ExecuteResponse)(nil), "query.ExecuteResponse")
 	proto.RegisterType((*ExecuteBatchRequest)(nil), "query.ExecuteBatchRequest")
+	proto.RegisterType((*QueryResponse)(nil), "query.QueryResponse")
 	proto.RegisterType((*ExecuteBatchResponse)(nil), "query.ExecuteBatchResponse")
 	proto.RegisterType((*StreamExecuteRequest)(nil), "query.StreamExecuteRequest")
 	proto.RegisterType((*StreamExecuteResponse)(nil), "query.StreamExecuteResponse")

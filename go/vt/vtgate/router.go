@@ -83,24 +83,26 @@ func (rtr *Router) StreamExecute(ctx context.Context, sql string, bindVars map[s
 }
 
 // ExecuteBatch routes a non-streaming queries.
-func (rtr *Router) ExecuteBatch(ctx context.Context, sql []string, bindVars []map[string]interface{}, keyspace string, tabletType topodatapb.TabletType, session *vtgatepb.Session, notInTransaction bool, options *querypb.ExecuteOptions) ([]sqltypes.Result, []error) {
-	if bindVars == nil {
-		bindVars = make([]map[string]interface{}, len(sql))
+func (rtr *Router) ExecuteBatch(ctx context.Context, sqlList []string, bindVarsList []map[string]interface{}, keyspace string, tabletType topodatapb.TabletType, asTransaction bool, session *vtgatepb.Session, options *querypb.ExecuteOptions) ([]sqltypes.QueryResponse, error) {
+	if bindVarsList == nil {
+		bindVarsList = make([]map[string]interface{}, len(sqlList))
 	}
-	results := make([]sqltypes.Result, len(sql))
-	errs := make([]error, len(sql))
-	for sqlNum, query := range sql {
-		vcursor := newQueryExecutor(ctx, query, bindVars[sqlNum], keyspace, tabletType, session, notInTransaction, options, rtr)
+	queryResponseList := make([]sqltypes.QueryResponse, len(sqlList))
+	for sqlNum, query := range sqlList {
+		var queryResponse sqltypes.QueryResponse
+		//Using same QueryExecutor -> marking notInTransaction as false and not using asTransaction flag
+		vcursor := newQueryExecutor(ctx, query, bindVarsList[sqlNum], keyspace, tabletType, session, false, options, rtr)
 		plan, err := rtr.planner.GetPlan(query, keyspace)
 		if err != nil {
-			errs[sqlNum] = err
-			continue
+			queryResponse.QueryError = err
+		} else {
+			result, err := plan.Instructions.Execute(vcursor, make(map[string]interface{}), true)
+			queryResponse.QueryResult = result
+			queryResponse.QueryError = err
 		}
-		result, err := plan.Instructions.Execute(vcursor, make(map[string]interface{}), true)
-		results[sqlNum] = *result
-		errs[sqlNum] = err
+		queryResponseList = append(queryResponseList, queryResponse)
 	}
-	return results, errs
+	return queryResponseList, nil
 }
 
 // ExecuteRoute executes the route query for all route opcodes.
