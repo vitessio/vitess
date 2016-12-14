@@ -66,7 +66,7 @@ func generateQuery(statement sqlparser.Statement) string {
 func isIndexChanging(setClauses sqlparser.UpdateExprs, colVindexes []*vindexes.ColumnVindex) bool {
 	for _, assignment := range setClauses {
 		for _, vcol := range colVindexes {
-			if vcol.Column.Equal(cistring.CIString(assignment.Name)) {
+			if vcol.Column.Equal(cistring.CIString(assignment.Name.ColString)) {
 				return true
 			}
 		}
@@ -172,5 +172,5 @@ func getMatch(node sqlparser.BoolExpr, col cistring.CIString) interface{} {
 
 func nameMatch(node sqlparser.ValExpr, col cistring.CIString) bool {
 	colname, ok := node.(*sqlparser.ColName)
-	return ok && colname.Name.Equal(sqlparser.ColIdent(col))
+	return ok && colname.Name.Equal(sqlparser.ColIdent{ColString:col})
 }

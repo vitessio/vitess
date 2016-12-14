@@ -1726,20 +1726,41 @@ func (node OnDup) WalkSubtree(visit Visit) error {
 
 // ColIdent is a case insensitive SQL identifier. It will be escaped with
 // backquotes if it matches a keyword.
-type ColIdent cistring.CIString
+type ColIdent struct {
+	ColString                cistring.CIString
+	ContainsSpecialCharacter bool
+}
 
 // NewColIdent makes a new ColIdent.
 func NewColIdent(str string) ColIdent {
-	return ColIdent(cistring.New(str))
+	return NewColIdentMaybeWithSpecialChar(str, false)
+}
+
+func NewColIdentMaybeWithSpecialChar(str string, special bool) ColIdent {
+	return ColIdent{cistring.New(str), special}
 }
 
 // Format formats the node.
 func (node ColIdent) Format(buf *TrackedBuffer) {
-	if _, ok := keywords[node.Lowered()]; ok {
+	if keywordOrSpecialCharacter(node) {
 		buf.Myprintf("`%s`", node.Original())
 		return
 	}
+
 	buf.Myprintf("%s", node.Original())
+}
+
+
+func keywordOrSpecialCharacter(node ColIdent) bool {
+	if node.ContainsSpecialCharacter {
+		return true
+	}
+
+	if _, ok := keywords[node.Lowered()]; ok {
+		return true
+	}
+
+	return false
 }
 
 // WalkSubtree walks the nodes of the subtree.
@@ -1749,28 +1770,28 @@ func (node ColIdent) WalkSubtree(visit Visit) error {
 
 // Original returns the case-preserved column name.
 func (node ColIdent) Original() string {
-	return cistring.CIString(node).Original()
+	return cistring.CIString(node.ColString).Original()
 }
 
 func (node ColIdent) String() string {
-	return cistring.CIString(node).String()
+	return cistring.CIString(node.ColString).String()
 }
 
 // Lowered returns a lower-cased column name.
 // This function should generally be used only for optimizing
 // comparisons.
 func (node ColIdent) Lowered() string {
-	return cistring.CIString(node).Lowered()
+	return cistring.CIString(node.ColString).Lowered()
 }
 
 // Equal performs a case-insensitive compare.
 func (node ColIdent) Equal(in ColIdent) bool {
-	return cistring.CIString(node).Equal(cistring.CIString(in))
+	return cistring.CIString(node.ColString).Equal(cistring.CIString(in.ColString))
 }
 
 // EqualString performs a case-insensitive compare with str.
 func (node ColIdent) EqualString(str string) bool {
-	return cistring.CIString(node).EqualString(str)
+	return cistring.CIString(node.ColString).EqualString(str)
 }
 
 // TableIdent is a case sensitive SQL identifier. It will be escaped with

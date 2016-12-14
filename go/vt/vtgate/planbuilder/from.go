@@ -99,12 +99,12 @@ func processAliasedTable(tableExpr *sqlparser.AliasedTableExpr, vschema VSchema)
 			// Check if a colvindex of the same name already exists.
 			// Dups are not allowed in subqueries in this situation.
 			for _, colVindex := range table.ColumnVindexes {
-				if colVindex.Column.Equal(cistring.CIString(colsyms.Alias)) {
+				if colVindex.Column.Equal(cistring.CIString(colsyms.Alias.ColString)) {
 					return nil, fmt.Errorf("duplicate column aliases: %v", colsyms.Alias)
 				}
 			}
 			table.ColumnVindexes = append(table.ColumnVindexes, &vindexes.ColumnVindex{
-				Column: cistring.CIString(colsyms.Alias),
+				Column: cistring.CIString(colsyms.Alias.ColString),
 				Vindex: colsyms.Vindex,
 			})
 		}

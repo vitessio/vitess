@@ -78,7 +78,7 @@ func forceEOF(yylex interface{}) {
 %left <empty> JOIN STRAIGHT_JOIN LEFT RIGHT INNER OUTER CROSS NATURAL USE FORCE
 %left <empty> ON
 %token <empty> '(' ',' ')'
-%token <bytes> ID HEX STRING NUMBER HEXNUM VALUE_ARG LIST_ARG COMMENT
+%token <bytes> ID ID_SPECIAL HEX STRING NUMBER HEXNUM VALUE_ARG LIST_ARG COMMENT
 %token <empty> NULL TRUE FALSE
 
 // Precedence dictated by mysql. But the vitess grammar is simplified.
@@ -165,7 +165,7 @@ func forceEOF(yylex interface{}) {
 %type <str> ignore_opt
 %type <byt> exists_opt
 %type <empty> not_exists_opt non_rename_operation to_opt constraint_opt using_opt
-%type <colIdent> sql_id as_ci_opt
+%type <colIdent> sql_id as_ci_opt sql_id_special
 %type <tableIdent> table_id as_opt_id
 %type <empty> as_opt
 %type <empty> force_eof
@@ -417,6 +417,10 @@ as_ci_opt:
     $$ = $1
   }
 | AS sql_id
+  {
+    $$ = $2
+  }
+| AS sql_id_special
   {
     $$ = $2
   }
@@ -1216,6 +1220,12 @@ sql_id:
   ID
   {
     $$ = NewColIdent(string($1))
+  }
+
+sql_id_special:
+  ID_SPECIAL
+  {
+    $$ = NewColIdentMaybeWithSpecialChar(string($1), true)
   }
 
 table_id:
