@@ -98,14 +98,14 @@ public class GrpcClientTlsTest extends RpcClientTest {
         final StringWriter writer = new StringWriter();
         IOUtils.copy(GrpcClientTlsTest.class.getResourceAsStream("/cert-template.config"), writer, "UTF-8");
         final String content = writer.toString();
-        content.replaceAll("%s", commonName);
+//        content.replaceAll("%s", commonName);
         java.nio.file.Files.write(Paths.get(config), content.getBytes("UTF-8"));
 
         final String createKeyAndCSR = String.format("openssl req -newkey rsa:2048 -days 3600 -nodes -batch -config %s -keyout %s -out %s", config, key, req);
         new ProcessBuilder(createKeyAndCSR.split(" ")).start().waitFor();
 
-        final String askHarshit = String.format("openssl rsa -in %s -out %s", key, key);
-        new ProcessBuilder(askHarshit.split(" ")).start().waitFor();
+//        final String askHarshit = String.format("openssl rsa -in %s -out %s", key, key);
+//        new ProcessBuilder(askHarshit.split(" ")).start().waitFor();
 
         final String signKey = String.format("openssl x509 -req -in %s -days 3600 -CA %s -CAkey %s -set_serial %s -out %s", req, caCert, caKey, serial, cert);
         new ProcessBuilder(signKey.split(" ")).start().waitFor();
