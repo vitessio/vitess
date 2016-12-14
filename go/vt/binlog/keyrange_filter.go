@@ -9,7 +9,6 @@ import (
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/sqlannotation"
 
-	"encoding/hex"
 	"errors"
 	"fmt"
 
@@ -87,13 +86,13 @@ func KeyRangeFilterFunc(keyrange *topodatapb.KeyRange, sendReply sendTransaction
 
 func splitMultiValueInsertQuery(sql string, keyspaceIDs [][]byte) (queries []string, err error) {
 	statement, err := sqlparser.Parse(sql)
+	_, trailingComments := sqlparser.SplitTrailingComments(sql)
 	if err != nil {
 		return nil, err
 	}
 
 	switch statement := statement.(type) {
 	case *sqlparser.Insert:
-		trailingComments := sqlannotation.ExtractTrailingComments(sql, "/* vtgate:: keyspace_id:", "*/")
 		queries, err := generateSingleInsertQueries(statement, keyspaceIDs, trailingComments)
 		if err != nil {
 			return nil, err
@@ -117,9 +116,9 @@ func generateSingleInsertQueries(ins *sqlparser.Insert, keyspaceIDs [][]byte, tr
 		queryBuf := sqlparser.NewTrackedBuffer(nil)
 		queries := make([]string, len(values))
 		for rowNum, val := range values {
-			queryBuf.Myprintf("insert %v%sinto %v%v values%v%v /* vtgate:: keyspace_id:%s */%s",
+			queryBuf.Myprintf("insert %v%sinto %v%v values%v%v%s",
 				ins.Comments, ins.Ignore,
-				ins.Table, ins.Columns, val, ins.OnDup, hex.EncodeToString(keyspaceIDs[rowNum]), trailingComments)
+				ins.Table, ins.Columns, val, ins.OnDup, trailingComments)
 			queries[rowNum] = queryBuf.String()
 			queryBuf.Truncate(0)
 		}

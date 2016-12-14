@@ -19,6 +19,7 @@ import (
 	"unicode"
 
 	"github.com/youtube/vitess/go/stats"
+	"github.com/youtube/vitess/go/vt/sqlparser"
 )
 
 const (
@@ -74,7 +75,8 @@ func IsDML(sql string) bool {
 // or some other parsing error occured, keyspaceID is set to nil and err is set to a non-nil
 // error value.
 func ExtractKeySpaceIDS(sql string) (keyspaceIDs [][]byte, err error) {
-	keyspaceIDString, hasKeySpaceID := extractStringBetween(sql, "/* vtgate:: keyspace_id:", " ")
+	_, comments := sqlparser.SplitTrailingComments(sql)
+	keyspaceIDString, hasKeySpaceID := extractStringBetween(comments, "/* vtgate:: keyspace_id:", " ")
 	hasUnfriendlyAnnotation := (strings.Index(sql, filteredReplicationUnfriendlyAnnotation) != -1)
 	ksidStr := strings.Split(keyspaceIDString, ",")
 	keyspaceIDs = make([][]byte, len(ksidStr))
@@ -139,23 +141,6 @@ func extractStringBetween(source string, leftDelim string, rightDelim string) (m
 		return
 	}
 	match = source[matchStart:]
-	return
-}
-
-// ExtractTrailingComments extracts the string from source which is present after the
-// leftmost instance of 'leftDelim' and the next instance of 'rightDelim'.
-func ExtractTrailingComments(source string, leftDelim string, rightDelim string) (trailingComm string) {
-	leftDelimStart := strings.Index(source, leftDelim)
-	if leftDelimStart == -1 {
-		trailingComm = ""
-		return
-	}
-	matchStart := leftDelimStart + len(leftDelim)
-	matchEnd := strings.Index(source[matchStart:], rightDelim)
-	if matchEnd != -1 {
-		trailingComm = source[matchStart+matchEnd+len(rightDelim):]
-		return
-	}
 	return
 }
 
