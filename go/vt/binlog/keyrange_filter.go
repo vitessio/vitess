@@ -12,8 +12,6 @@ import (
 	"errors"
 	"fmt"
 
-	"strings"
-
 	binlogdatapb "github.com/youtube/vitess/go/vt/proto/binlogdata"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	"github.com/youtube/vitess/go/vt/sqlparser"
@@ -110,23 +108,20 @@ func generateSingleInsertQuery(ins *sqlparser.Insert, keyspaceIDs [][]byte, trai
 			return "", fmt.Errorf("length of values tuples %v doesn't match with length of keyspaceids %v", len(values), len(keyspaceIDs))
 		}
 		queryBuf := sqlparser.NewTrackedBuffer(nil)
-		valueBuf := sqlparser.NewTrackedBuffer(nil)
-		queries := []string{}
+		queryBuf.Myprintf("insert %v%sinto %v%v values", ins.Comments, ins.Ignore, ins.Table, ins.Columns)
+		prefix := ""
 		for rowNum, val := range values {
 			if key.KeyRangeContains(keyrange, keyspaceIDs[rowNum]) {
-				valueBuf.Myprintf("%v", val)
-				queries = append(queries, valueBuf.String())
-				valueBuf.Truncate(0)
+				queryBuf.Myprintf("%s%v", prefix, val)
+				prefix = ", "
 			}
 		}
-		if len(queries) > 0 {
-			queryBuf.Myprintf("insert %v%sinto %v%v values%s%v%s",
-				ins.Comments, ins.Ignore,
-				ins.Table, ins.Columns, strings.Join(queries, ","), ins.OnDup, trailingComments)
-			query := queryBuf.String()
-			return query, nil
+		if prefix == "" {
+			return "", nil
 		}
-		return "", nil
+		queryBuf.Myprintf("%v%s", ins.OnDup, trailingComments)
+		query := queryBuf.String()
+		return query, nil
 
 	default:
 		return "", errors.New("unexpected construct in insert")
