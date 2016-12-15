@@ -300,17 +300,11 @@ message ExecuteBatchRequest {
   bool as_transaction = 5;
   int64 transaction_id = 6;
   ExecuteOptions options = 7;
-  bool execute_all = 8;
 }
 
 // ExecuteBatchResponse is the returned value from ExecuteBatch
-//
-// In ExecuteBatchRequest if execute_all is set
-// then instead of grpc error, the error will be set in queryError.
-// Otherwise, an grpc error will be thrown back to the callee.
 message ExecuteBatchResponse {
   repeated QueryResult results = 1;
-  repeated vtrpc.RPCError queryError = 2;
 }
 
 // StreamExecuteRequest is the payload to StreamExecute
