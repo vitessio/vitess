@@ -9,7 +9,7 @@ import numpy
 
 import logging
 
-import base_end2end_test
+import base_cluster_test
 import vtctl_helper
 
 from vtproto import topodata_pb2
@@ -20,7 +20,7 @@ def tearDownModule():
   pass
 
 
-class ReparentTest(base_end2end_test.BaseEnd2EndTest):
+class ReparentTest(base_cluster_test.BaseClusterTest):
 
   @classmethod
   def setUpClass(cls):
@@ -281,5 +281,5 @@ class ReparentTest(base_end2end_test.BaseEnd2EndTest):
 
 
 if __name__ == '__main__':
-  base_end2end_test.main()
+  base_cluster_test.main()
 

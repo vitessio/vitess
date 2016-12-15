@@ -1,4 +1,4 @@
-"""Base class for all end2end tests."""
+"""Base class for all cluster tests."""
 
 import logging
 import optparse
@@ -8,7 +8,7 @@ import sys
 _options = None
 
 
-class BaseEnd2EndTest(unittest.TestCase):
+class BaseClusterTest(unittest.TestCase):
 
   @classmethod
   def setUpClass(cls):

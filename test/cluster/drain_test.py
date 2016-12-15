@@ -7,7 +7,7 @@ import random
 import time
 
 import logging
-import base_end2end_test
+import base_cluster_test
 from vtdb import keyrange
 from vttest import sharding_utils
 
@@ -16,7 +16,7 @@ def tearDownModule():
   pass
 
 
-class DrainTest(base_end2end_test.BaseEnd2EndTest):
+class DrainTest(base_cluster_test.BaseClusterTest):
 
   @classmethod
   def setUpClass(cls):
@@ -158,5 +158,5 @@ class DrainTest(base_end2end_test.BaseEnd2EndTest):
 
 
 if __name__ == '__main__':
-  base_end2end_test.main()
+  base_cluster_test.main()
 

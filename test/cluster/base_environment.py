@@ -1,4 +1,4 @@
-"""Base environment for full end2end tests.
+"""Base environment for full cluster tests.
 
 Contains functions that all environments should implement along with functions
 common to all environments.
