@@ -10,14 +10,14 @@ import logging
 
 from vtdb import keyrange
 from vttest import sharding_utils
-import base_end2end_test
+import base_cluster_test
 
 
 def tearDownModule():
   pass
 
 
-class BackupTest(base_end2end_test.BaseEnd2EndTest):
+class BackupTest(base_cluster_test.BaseClusterTest):
 
   @classmethod
   def setUpClass(cls):
@@ -154,5 +154,5 @@ class BackupTest(base_end2end_test.BaseEnd2EndTest):
 
 
 if __name__ == '__main__':
-  base_end2end_test.main()
+  base_cluster_test.main()
 
