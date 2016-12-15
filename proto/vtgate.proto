@@ -266,10 +266,10 @@ message ExecuteBatchRequest {
   // Do not fill it in if outside of a transaction.
   Session session = 2;
 
-  // query is the query and bind variables to execute.
+  // queries is a list of query and bind variables to execute.
   repeated query.BoundQuery queries = 3;
 
-  // tablet_type is the type of tablets that this query is targeted to.
+  // tablet_type is the type of tablets that these queries is targeted to.
   topodata.TabletType tablet_type = 4;
 
   // as_transaction will execute the queries in this batch in a single transaction per shard,
@@ -278,7 +278,7 @@ message ExecuteBatchRequest {
   // Only makes sense if tablet_type is master. If set, the Session is ignored.
   bool as_transaction = 5;
 
-  // keyspace to target the query to.
+  // keyspace to target the queries to.
   string keyspace = 6;
 
   // options

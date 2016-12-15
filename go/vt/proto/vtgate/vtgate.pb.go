@@ -618,16 +618,16 @@ type ExecuteBatchRequest struct {
 	// session carries the current transaction data. It is returned by Begin.
 	// Do not fill it in if outside of a transaction.
 	Session *Session `protobuf:"bytes,2,opt,name=session" json:"session,omitempty"`
-	// query is the query and bind variables to execute.
+	// queries is a list of query and bind variables to execute.
 	Queries []*query.BoundQuery `protobuf:"bytes,3,rep,name=queries" json:"queries,omitempty"`
-	// tablet_type is the type of tablets that this query is targeted to.
+	// tablet_type is the type of tablets that these queries is targeted to.
 	TabletType topodata.TabletType `protobuf:"varint,4,opt,name=tablet_type,json=tabletType,enum=topodata.TabletType" json:"tablet_type,omitempty"`
 	// as_transaction will execute the queries in this batch in a single transaction per shard,
 	// created for this purpose.
 	// (this can be seen as adding a 'begin' before and 'commit' after the queries).
 	// Only makes sense if tablet_type is master. If set, the Session is ignored.
 	AsTransaction bool `protobuf:"varint,5,opt,name=as_transaction,json=asTransaction" json:"as_transaction,omitempty"`
-	// keyspace to target the query to.
+	// keyspace to target the queries to.
 	Keyspace string `protobuf:"bytes,6,opt,name=keyspace" json:"keyspace,omitempty"`
 	// options
 	Options *query.ExecuteOptions `protobuf:"bytes,7,opt,name=options" json:"options,omitempty"`
