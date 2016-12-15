@@ -124,7 +124,11 @@ public class VTGateBlockingConn implements Closeable {
   }
 
   public VTGateBlockingTx begin(Context ctx) throws SQLException {
-    return new VTGateBlockingTx(conn.begin(ctx).checkedGet());
+    return begin(ctx, false);
+  }
+
+  public VTGateBlockingTx begin(Context ctx, boolean singleDB) throws SQLException {
+    return new VTGateBlockingTx(conn.begin(ctx, singleDB).checkedGet());
   }
 
   public List<SplitQueryResponse.Part> splitQuery(
