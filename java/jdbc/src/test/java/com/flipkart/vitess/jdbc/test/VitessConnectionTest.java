@@ -123,7 +123,8 @@ public class VitessConnectionTest {
         VTGateTx mockVtGateTx = PowerMockito.mock(VTGateTx.class);
         vitessConnection.setVtGateTx(mockVtGateTx);
         SQLFuture<Void> v = new SQLFuture<>(Futures.<Void>immediateFuture(null));
-        PowerMockito.when(mockVtGateTx.commit(Matchers.any(Context.class))).thenReturn(v);
+        PowerMockito.when(mockVtGateTx.commit(Matchers.any(Context.class), Matchers.anyBoolean()))
+            .thenReturn(v);
         vitessConnection.commit();
         Assert.assertEquals(null, vitessConnection.getVtGateTx());
     }
@@ -133,7 +134,7 @@ public class VitessConnectionTest {
         vitessConnection.setAutoCommit(false);
         VTGateTx mockVtGateTx = PowerMockito.mock(VTGateTx.class);
         vitessConnection.setVtGateTx(mockVtGateTx);
-        PowerMockito.when(mockVtGateTx.commit(Matchers.any(Context.class)))
+        PowerMockito.when(mockVtGateTx.commit(Matchers.any(Context.class), Matchers.anyBoolean()))
             .thenThrow(new SQLException());
         try {
             vitessConnection.commit();
@@ -148,7 +149,8 @@ public class VitessConnectionTest {
         VTGateTx mockVtGateTx = PowerMockito.mock(VTGateTx.class);
         vitessConnection.setVtGateTx(mockVtGateTx);
         SQLFuture<Void> v = new SQLFuture<>(Futures.<Void>immediateFuture(null));
-        PowerMockito.when(mockVtGateTx.commit(Matchers.any(Context.class))).thenReturn(v);
+        PowerMockito.when(mockVtGateTx.commit(Matchers.any(Context.class), Matchers.anyBoolean()))
+            .thenReturn(v);
         vitessConnection.commit();
         Assert.assertEquals(null, vitessConnection.getVtGateTx());
     }

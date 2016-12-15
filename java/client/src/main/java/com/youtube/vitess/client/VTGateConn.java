@@ -311,7 +311,11 @@ public final class VTGateConn implements Closeable {
   }
 
   public SQLFuture<VTGateTx> begin(Context ctx) throws SQLException {
-    BeginRequest.Builder requestBuilder = BeginRequest.newBuilder();
+    return begin(ctx, false);
+  }
+
+  public SQLFuture<VTGateTx> begin(Context ctx, boolean singleDB) throws SQLException {
+    BeginRequest.Builder requestBuilder = BeginRequest.newBuilder().setSingleDb(singleDB);
     if (ctx.getCallerId() != null) {
       requestBuilder.setCallerId(ctx.getCallerId());
     }

@@ -8,8 +8,30 @@ import com.youtube.vitess.client.VTGateConn;
 import com.youtube.vitess.client.VTGateTx;
 import com.youtube.vitess.proto.Topodata;
 
-import java.sql.*;
-import java.util.*;
+import java.sql.Array;
+import java.sql.Blob;
+import java.sql.CallableStatement;
+import java.sql.ClientInfoStatus;
+import java.sql.Clob;
+import java.sql.Connection;
+import java.sql.DatabaseMetaData;
+import java.sql.NClob;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLClientInfoException;
+import java.sql.SQLException;
+import java.sql.SQLFeatureNotSupportedException;
+import java.sql.SQLWarning;
+import java.sql.SQLXML;
+import java.sql.Savepoint;
+import java.sql.Statement;
+import java.sql.Struct;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Properties;
+import java.util.Set;
 import java.util.concurrent.Executor;
 import java.util.logging.Logger;
 
@@ -131,7 +153,7 @@ public class VitessConnection implements Connection {
         try {
             if (isInTransaction()) {
                 Context context = createContext(Constants.CONNECTION_TIMEOUT);
-                this.vtGateTx.commit(context).checkedGet();
+                this.vtGateTx.commit(context, this.vitessJDBCUrl.isTwopcEnabled()).checkedGet();
             }
         } finally {
             this.vtGateTx = null;
