@@ -4,7 +4,7 @@
 
 namespace Vitess\Proto\Query {
 
-  class ResolveTransactionRequest extends \DrSlump\Protobuf\Message {
+  class ConcludeTransactionRequest extends \DrSlump\Protobuf\Message {
 
     /**  @var \Vitess\Proto\Vtrpc\CallerID */
     public $effective_caller_id = null;
@@ -24,7 +24,7 @@ namespace Vitess\Proto\Query {
 
     public static function descriptor()
     {
-      $descriptor = new \DrSlump\Protobuf\Descriptor(__CLASS__, 'query.ResolveTransactionRequest');
+      $descriptor = new \DrSlump\Protobuf\Descriptor(__CLASS__, 'query.ConcludeTransactionRequest');
 
       // OPTIONAL MESSAGE effective_caller_id = 1
       $f = new \DrSlump\Protobuf\Field();
@@ -80,7 +80,7 @@ namespace Vitess\Proto\Query {
     /**
      * Clear <effective_caller_id> value
      *
-     * @return \Vitess\Proto\Query\ResolveTransactionRequest
+     * @return \Vitess\Proto\Query\ConcludeTransactionRequest
      */
     public function clearEffectiveCallerId(){
       return $this->_clear(1);
@@ -99,7 +99,7 @@ namespace Vitess\Proto\Query {
      * Set <effective_caller_id> value
      *
      * @param \Vitess\Proto\Vtrpc\CallerID $value
-     * @return \Vitess\Proto\Query\ResolveTransactionRequest
+     * @return \Vitess\Proto\Query\ConcludeTransactionRequest
      */
     public function setEffectiveCallerId(\Vitess\Proto\Vtrpc\CallerID $value){
       return $this->_set(1, $value);
@@ -117,7 +117,7 @@ namespace Vitess\Proto\Query {
     /**
      * Clear <immediate_caller_id> value
      *
-     * @return \Vitess\Proto\Query\ResolveTransactionRequest
+     * @return \Vitess\Proto\Query\ConcludeTransactionRequest
      */
     public function clearImmediateCallerId(){
       return $this->_clear(2);
@@ -136,7 +136,7 @@ namespace Vitess\Proto\Query {
      * Set <immediate_caller_id> value
      *
      * @param \Vitess\Proto\Query\VTGateCallerID $value
-     * @return \Vitess\Proto\Query\ResolveTransactionRequest
+     * @return \Vitess\Proto\Query\ConcludeTransactionRequest
      */
     public function setImmediateCallerId(\Vitess\Proto\Query\VTGateCallerID $value){
       return $this->_set(2, $value);
@@ -154,7 +154,7 @@ namespace Vitess\Proto\Query {
     /**
      * Clear <target> value
      *
-     * @return \Vitess\Proto\Query\ResolveTransactionRequest
+     * @return \Vitess\Proto\Query\ConcludeTransactionRequest
      */
     public function clearTarget(){
       return $this->_clear(3);
@@ -173,7 +173,7 @@ namespace Vitess\Proto\Query {
      * Set <target> value
      *
      * @param \Vitess\Proto\Query\Target $value
-     * @return \Vitess\Proto\Query\ResolveTransactionRequest
+     * @return \Vitess\Proto\Query\ConcludeTransactionRequest
      */
     public function setTarget(\Vitess\Proto\Query\Target $value){
       return $this->_set(3, $value);
@@ -191,7 +191,7 @@ namespace Vitess\Proto\Query {
     /**
      * Clear <dtid> value
      *
-     * @return \Vitess\Proto\Query\ResolveTransactionRequest
+     * @return \Vitess\Proto\Query\ConcludeTransactionRequest
      */
     public function clearDtid(){
       return $this->_clear(4);
@@ -210,7 +210,7 @@ namespace Vitess\Proto\Query {
      * Set <dtid> value
      *
      * @param string $value
-     * @return \Vitess\Proto\Query\ResolveTransactionRequest
+     * @return \Vitess\Proto\Query\ConcludeTransactionRequest
      */
     public function setDtid( $value){
       return $this->_set(4, $value);

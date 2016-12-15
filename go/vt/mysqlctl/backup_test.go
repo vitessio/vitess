@@ -57,12 +57,12 @@ func TestFindFilesToBackup(t *testing.T) {
 		DataDir:               dataDir,
 	}
 
-	result, err := findFilesTobackup(cnf)
+	result, err := findFilesToBackup(cnf)
 	if err != nil {
-		t.Fatalf("findFilesTobackup failed: %v", err)
+		t.Fatalf("findFilesToBackup failed: %v", err)
 	}
 	sort.Sort(forTest(result))
-	t.Logf("findFilesTobackup returned: %v", result)
+	t.Logf("findFilesToBackup returned: %v", result)
 	expected := []FileEntry{
 		{
 			Base: "Data",

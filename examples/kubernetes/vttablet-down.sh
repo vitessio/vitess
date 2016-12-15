@@ -14,12 +14,10 @@ trap stop_vtctld_forward EXIT
 VTCTLD_ADDR="localhost:$vtctld_forward_port"
 
 # Delete the pods for all shards
-CELLS=${CELLS:-'test'}
 keyspace='test_keyspace'
 SHARDS=${SHARDS:-'0'}
 TABLETS_PER_SHARD=${TABLETS_PER_SHARD:-5}
 UID_BASE=${UID_BASE:-100}
-VITESS_NAME=${VITESS_NAME:-'default'}
 
 num_shards=`echo $SHARDS | tr "," " " | wc -w`
 uid_base=$UID_BASE

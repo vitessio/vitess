@@ -90,17 +90,17 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient,
     cursorclass = kwargs.pop('cursorclass', None) or vtgate_cursor.VTGateCursor
     return cursorclass(self, *pargs, **kwargs)
 
-  def begin(self, effective_caller_id=None):
+  def begin(self, effective_caller_id=None, single_db=False):
     try:
-      request = self.begin_request(effective_caller_id)
+      request = self.begin_request(effective_caller_id, single_db)
       response = self.stub.Begin(request, self.timeout)
       self.update_session(response)
     except (grpc.RpcError, vtgate_utils.VitessError) as e:
       raise _convert_exception(e, 'Begin')
 
-  def commit(self):
+  def commit(self, twopc=False):
     try:
-      request = self.commit_request()
+      request = self.commit_request(twopc)
       self.stub.Commit(request, self.timeout)
     except (grpc.RpcError, vtgate_utils.VitessError) as e:
       raise _convert_exception(e, 'Commit')

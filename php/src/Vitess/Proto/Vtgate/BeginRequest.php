@@ -9,6 +9,9 @@ namespace Vitess\Proto\Vtgate {
     /**  @var \Vitess\Proto\Vtrpc\CallerID */
     public $caller_id = null;
     
+    /**  @var boolean */
+    public $single_db = null;
+    
 
     /** @var \Closure[] */
     protected static $__extensions = array();
@@ -24,6 +27,14 @@ namespace Vitess\Proto\Vtgate {
       $f->type      = \DrSlump\Protobuf::TYPE_MESSAGE;
       $f->rule      = \DrSlump\Protobuf::RULE_OPTIONAL;
       $f->reference = '\Vitess\Proto\Vtrpc\CallerID';
+      $descriptor->addField($f);
+
+      // OPTIONAL BOOL single_db = 2
+      $f = new \DrSlump\Protobuf\Field();
+      $f->number    = 2;
+      $f->name      = "single_db";
+      $f->type      = \DrSlump\Protobuf::TYPE_BOOL;
+      $f->rule      = \DrSlump\Protobuf::RULE_OPTIONAL;
       $descriptor->addField($f);
 
       foreach (self::$__extensions as $cb) {
@@ -68,6 +79,43 @@ namespace Vitess\Proto\Vtgate {
      */
     public function setCallerId(\Vitess\Proto\Vtrpc\CallerID $value){
       return $this->_set(1, $value);
+    }
+    
+    /**
+     * Check if <single_db> has a value
+     *
+     * @return boolean
+     */
+    public function hasSingleDb(){
+      return $this->_has(2);
+    }
+    
+    /**
+     * Clear <single_db> value
+     *
+     * @return \Vitess\Proto\Vtgate\BeginRequest
+     */
+    public function clearSingleDb(){
+      return $this->_clear(2);
+    }
+    
+    /**
+     * Get <single_db> value
+     *
+     * @return boolean
+     */
+    public function getSingleDb(){
+      return $this->_get(2);
+    }
+    
+    /**
+     * Set <single_db> value
+     *
+     * @param boolean $value
+     * @return \Vitess\Proto\Vtgate\BeginRequest
+     */
+    public function setSingleDb( $value){
+      return $this->_set(2, $value);
     }
   }
 }

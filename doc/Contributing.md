@@ -60,7 +60,9 @@ Before diving into the Vitess codebase, make yourself familiar with the system a
 
 * Read the [Vitess concepts](/overview/concepts.html) and the [Sharding](/user-guide/sharding.html) page.
 
-  * After reading, try to answer the following question (click expand to see the answer):
+  * We also recommend to look at our [latest presentations](/resources/presentations.html). They contain many illustrations which help understanding how Vitess works in detail.
+
+  * After studying the pages, try to answer the following question (click expand to see the answer):
     <details> 
       <summary>
         Let's assume a keyspace with 256 range-based shards: What is the name of the first, the second and the last shard?

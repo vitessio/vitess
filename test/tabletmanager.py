@@ -137,9 +137,6 @@ class TestTabletManager(unittest.TestCase):
     utils.run_vtctl(['SetReadWrite', tablet_62344.tablet_alias])
     utils.check_db_read_write(62344)
 
-    utils.run_vtctl(['DemoteMaster', tablet_62344.tablet_alias])
-    utils.wait_db_read_only(62344)
-
     utils.validate_topology()
     utils.run_vtctl(['ValidateKeyspace', 'test_keyspace'])
     # not pinging tablets, as it enables replication checks, and they
@@ -217,12 +214,7 @@ class TestTabletManager(unittest.TestCase):
                               params)
     self.assertEqual(hr['ExitStatus'], expected_status)
     if isinstance(expected_stdout, basestring):
-      if expected_stdout[-1:] == '%':
-        self.assertEqual(
-            hr['Stdout'][:len(expected_stdout)-1],
-            expected_stdout[:len(expected_stdout)-1])
-      else:
-        self.assertEqual(hr['Stdout'], expected_stdout)
+      self.assertEqual(hr['Stdout'], expected_stdout)
     else:
       found = False
       for exp in expected_stdout:
@@ -233,7 +225,12 @@ class TestTabletManager(unittest.TestCase):
         self.assertFail(
             'cannot find expected %s in %s' %
             (str(expected_stdout), hr['Stdout']))
-    self.assertEqual(hr['Stderr'], expected_stderr)
+    if expected_stderr[-1:] == '%':
+      self.assertEqual(
+          hr['Stderr'][:len(expected_stderr)-1],
+          expected_stderr[:len(expected_stderr)-1])
+    else:
+      self.assertEqual(hr['Stderr'], expected_stderr)
 
   def test_hook(self):
     utils.run_vtctl(['CreateKeyspace', 'test_keyspace'])
@@ -267,8 +264,8 @@ class TestTabletManager(unittest.TestCase):
 
     # test hook that is not present
     self._run_hook(['not_here.sh'], -1,
-                   'Skipping missing hook: /%',  # cannot go further, local path
-                   '')
+                   '',
+                   'missing hook /%')  # cannot go further, local path
 
     # test hook with invalid name
     _, err = utils.run_vtctl(['--alsologtostderr', 'ExecuteHook',

@@ -1,15 +1,15 @@
 # Group by unsharded
-"select col1, col2 from main1 group by col2"
+"select col1, col2 from unsharded group by col2"
 {
-  "Original": "select col1, col2 from main1 group by col2",
+  "Original": "select col1, col2 from unsharded group by col2",
   "Instructions": {
     "Opcode": "SelectUnsharded",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
-    "Query": "select col1, col2 from main1 group by col2",
-    "FieldQuery": "select col1, col2 from main1 where 1 != 1"
+    "Query": "select col1, col2 from unsharded group by col2",
+    "FieldQuery": "select col1, col2 from unsharded where 1 != 1"
   }
 }
 
@@ -208,6 +208,21 @@
   }
 }
 
+# ORDER BY NULL
+"select col from user order by null"
+{
+  "Original": "select col from user order by null",
+  "Instructions": {
+    "Opcode": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select col from user order by null",
+    "FieldQuery": "select col from user where 1 != 1"
+  }
+}
+
 # ORDER BY for join
 "select user.col1 as a, user.col2, music.col3 from user join music on user.id = music.id where user.id = 1 order by a asc, user.col2 desc, music.col3 asc"
 {
@@ -232,6 +247,48 @@
         "Sharded": true
       },
       "Query": "select music.col3 from music where music.id = :user_id order by music.col3 asc",
+      "FieldQuery": "select music.col3 from music where 1 != 1",
+      "Vindex": "music_user_map",
+      "Values": ":user_id",
+      "JoinVars": {
+        "user_id": {}
+      }
+    },
+    "Cols": [
+      -1,
+      -2,
+      1
+    ],
+    "Vars": {
+      "user_id": 2
+    }
+  }
+}
+
+# ORDER BY NULL for join
+"select user.col1 as a, user.col2, music.col3 from user join music on user.id = music.id where user.id = 1 order by null"
+{
+  "Original": "select user.col1 as a, user.col2, music.col3 from user join music on user.id = music.id where user.id = 1 order by null",
+  "Instructions": {
+    "Opcode": "Join",
+    "Left": {
+      "Opcode": "SelectEqualUnique",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select user.col1 as a, user.col2, user.id from user where user.id = 1 order by null",
+      "FieldQuery": "select user.col1 as a, user.col2, user.id from user where 1 != 1",
+      "Vindex": "user_index",
+      "Values": 1
+    },
+    "Right": {
+      "Opcode": "SelectEqualUnique",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select music.col3 from music where music.id = :user_id order by null",
       "FieldQuery": "select music.col3 from music where 1 != 1",
       "Vindex": "music_user_map",
       "Values": ":user_id",

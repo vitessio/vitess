@@ -47,8 +47,9 @@ COMMAND ARGUMENT DEFINITIONS
              for backup purposes
   -- batch: A slaved copy of data for OLAP load patterns (typically for
             MapReduce jobs)
-  -- worker: A tablet that is in use by a vtworker process. The tablet is likely
-             lagging in replication.
+  -- drained: A tablet that is reserved for a background process. For example,
+              a tablet used by a vtworker process, where the tablet is likely
+              lagging in replication.
   -- experimental: A slaved copy of data that is ready but not serving query
                    traffic. The value indicates a special characteristic of
                    the tablet that indicates the tablet should not be
@@ -224,7 +225,10 @@ var commands = []commandGroup{
 				"Add or remove served type to/from a shard. This is meant as an emergency function. It does not rebuild any serving graph i.e. does not run 'RebuildKeyspaceGraph'."},
 			{"SetShardTabletControl", commandSetShardTabletControl,
 				"[--cells=c1,c2,...] [--blacklisted_tables=t1,t2,...] [--remove] [--disable_query_service] <keyspace/shard> <tablet type>",
-				"Sets the TabletControl record for a shard and type. Only use this for an emergency fix or after a finished vertical split. The *MigrateServedFrom* and *MigrateServedType* commands set this field appropriately already. Always specify the blacklisted_tables flag for vertical splits, but never for horizontal splits."},
+				"Sets the TabletControl record for a shard and type. Only use this for an emergency fix or after a finished vertical split. The *MigrateServedFrom* and *MigrateServedType* commands set this field appropriately already. Always specify the blacklisted_tables flag for vertical splits, but never for horizontal splits.\n" +
+					"To set the DisableQueryServiceFlag, keep 'blacklisted_tables' empty, and set 'disable_query_service' to true or false. Useful to fix horizontal splits gone wrong.\n" +
+					"To change the blacklisted tables list, specify the 'blacklisted_tables' parameter with the new list. Useful to fix tables that are being blocked after a vertical split.\n" +
+					"To just remove the ShardTabletControl entirely, use the 'remove' flag, useful after a vertical split is finished to remove serving restrictions."},
 			{"SourceShardDelete", commandSourceShardDelete,
 				"<keyspace/shard> <uid>",
 				"Deletes the SourceShard record with the provided index. This is meant as an emergency cleanup function. It does not call RefreshState for the shard master."},
@@ -605,7 +609,7 @@ func commandInitTablet(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 	}
 
 	if subFlags.NArg() != 2 {
-		return fmt.Errorf("The <tablet alias> and <tablet type> arguments are both required for the InitTablet command.")
+		return fmt.Errorf("the <tablet alias> and <tablet type> arguments are both required for the InitTablet command")
 	}
 	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
 	if err != nil {
@@ -645,7 +649,7 @@ func commandGetTablet(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag
 		return err
 	}
 	if subFlags.NArg() != 1 {
-		return fmt.Errorf("The <tablet alias> argument is required for the GetTablet command.")
+		return fmt.Errorf("the <tablet alias> argument is required for the GetTablet command")
 	}
 
 	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
@@ -670,7 +674,7 @@ func commandUpdateTabletAddrs(ctx context.Context, wr *wrangler.Wrangler, subFla
 	}
 
 	if subFlags.NArg() != 1 {
-		return fmt.Errorf("The <tablet alias> argument is required for the UpdateTabletAddrs command.")
+		return fmt.Errorf("the <tablet alias> argument is required for the UpdateTabletAddrs command")
 	}
 	if *ipAddr != "" && net.ParseIP(*ipAddr) == nil {
 		return fmt.Errorf("malformed address: %v", *ipAddr)
@@ -712,7 +716,7 @@ func commandDeleteTablet(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 		return err
 	}
 	if subFlags.NArg() == 0 {
-		return fmt.Errorf("The <tablet alias> argument must be used to specify at least one tablet when calling the DeleteTablet command.")
+		return fmt.Errorf("the <tablet alias> argument must be used to specify at least one tablet when calling the DeleteTablet command")
 	}
 
 	tabletAliases, err := tabletParamsToTabletAliases(subFlags.Args())
@@ -732,7 +736,7 @@ func commandSetReadOnly(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 		return err
 	}
 	if subFlags.NArg() != 1 {
-		return fmt.Errorf("The <tablet alias> argument is required for the SetReadOnly command.")
+		return fmt.Errorf("the <tablet alias> argument is required for the SetReadOnly command")
 	}
 
 	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
@@ -751,7 +755,7 @@ func commandSetReadWrite(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 		return err
 	}
 	if subFlags.NArg() != 1 {
-		return fmt.Errorf("The <tablet alias> argument is required for the SetReadWrite command.")
+		return fmt.Errorf("the <tablet alias> argument is required for the SetReadWrite command")
 	}
 
 	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
@@ -810,7 +814,7 @@ func commandChangeSlaveType(ctx context.Context, wr *wrangler.Wrangler, subFlags
 		return err
 	}
 	if subFlags.NArg() != 2 {
-		return fmt.Errorf("The <tablet alias> and <db type> arguments are required for the ChangeSlaveType command.")
+		return fmt.Errorf("the <tablet alias> and <db type> arguments are required for the ChangeSlaveType command")
 	}
 
 	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
@@ -842,7 +846,7 @@ func commandPing(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Flag
 		return err
 	}
 	if subFlags.NArg() != 1 {
-		return fmt.Errorf("The <tablet alias> argument is required for the Ping command.")
+		return fmt.Errorf("the <tablet alias> argument is required for the Ping command")
 	}
 	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
 	if err != nil {
@@ -860,7 +864,7 @@ func commandRefreshState(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 		return err
 	}
 	if subFlags.NArg() != 1 {
-		return fmt.Errorf("The <tablet alias> argument is required for the RefreshState command.")
+		return fmt.Errorf("the <tablet alias> argument is required for the RefreshState command")
 	}
 	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
 	if err != nil {
@@ -879,7 +883,7 @@ func commandRefreshStateByShard(ctx context.Context, wr *wrangler.Wrangler, subF
 		return err
 	}
 	if subFlags.NArg() != 1 {
-		return fmt.Errorf("The <keyspace/shard> argument is required for the RefreshStateByShard command.")
+		return fmt.Errorf("the <keyspace/shard> argument is required for the RefreshStateByShard command")
 	}
 
 	keyspace, shard, err := topoproto.ParseKeyspaceShard(subFlags.Arg(0))
@@ -903,7 +907,7 @@ func commandRunHealthCheck(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 		return err
 	}
 	if subFlags.NArg() != 1 {
-		return fmt.Errorf("The <tablet alias> argument is required for the RunHealthCheck command.")
+		return fmt.Errorf("the <tablet alias> argument is required for the RunHealthCheck command")
 	}
 	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
 	if err != nil {
@@ -921,7 +925,7 @@ func commandIgnoreHealthError(ctx context.Context, wr *wrangler.Wrangler, subFla
 		return err
 	}
 	if subFlags.NArg() != 2 {
-		return fmt.Errorf("The <tablet alias> and <ignore regexp> arguments are required for the IgnoreHealthError command.")
+		return fmt.Errorf("the <tablet alias> and <ignore regexp> arguments are required for the IgnoreHealthError command")
 	}
 	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
 	if err != nil {
@@ -946,7 +950,7 @@ func commandWaitForDrain(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 		return err
 	}
 	if subFlags.NArg() != 2 {
-		return fmt.Errorf("The <keyspace/shard> and <tablet type> arguments are both required for the WaitForDrain command.")
+		return fmt.Errorf("the <keyspace/shard> and <tablet type> arguments are both required for the WaitForDrain command")
 	}
 	if *timeout != 0 {
 		var cancel context.CancelFunc
@@ -972,7 +976,7 @@ func commandSleep(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fla
 		return err
 	}
 	if subFlags.NArg() != 2 {
-		return fmt.Errorf("The <tablet alias> and <duration> arguments are required for the Sleep command.")
+		return fmt.Errorf("the <tablet alias> and <duration> arguments are required for the Sleep command")
 	}
 	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
 	if err != nil {
@@ -995,7 +999,7 @@ func commandBackup(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fl
 		return err
 	}
 	if subFlags.NArg() != 1 {
-		return fmt.Errorf("The Backup command requires the <tablet alias> argument.")
+		return fmt.Errorf("the Backup command requires the <tablet alias> argument")
 	}
 
 	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
@@ -1033,7 +1037,7 @@ func commandExecuteFetchAsDba(ctx context.Context, wr *wrangler.Wrangler, subFla
 		return err
 	}
 	if subFlags.NArg() != 2 {
-		return fmt.Errorf("The <tablet alias> and <sql command> arguments are required for the ExecuteFetchAsDba command.")
+		return fmt.Errorf("the <tablet alias> and <sql command> arguments are required for the ExecuteFetchAsDba command")
 	}
 
 	alias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
@@ -1058,7 +1062,7 @@ func commandExecuteHook(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 		return err
 	}
 	if subFlags.NArg() < 2 {
-		return fmt.Errorf("The <tablet alias> and <hook name> arguments are required for the ExecuteHook command.")
+		return fmt.Errorf("the <tablet alias> and <hook name> arguments are required for the ExecuteHook command")
 	}
 
 	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
@@ -1080,7 +1084,7 @@ func commandCreateShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 		return err
 	}
 	if subFlags.NArg() != 1 {
-		return fmt.Errorf("The <keyspace/shard> argument is required for the CreateShard command.")
+		return fmt.Errorf("the <keyspace/shard> argument is required for the CreateShard command")
 	}
 
 	keyspace, shard, err := topoproto.ParseKeyspaceShard(subFlags.Arg(0))
@@ -1106,7 +1110,7 @@ func commandGetShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.
 		return err
 	}
 	if subFlags.NArg() != 1 {
-		return fmt.Errorf("The <keyspace/shard> argument is required for the GetShard command.")
+		return fmt.Errorf("the <keyspace/shard> argument is required for the GetShard command")
 	}
 
 	keyspace, shard, err := topoproto.ParseKeyspaceShard(subFlags.Arg(0))
@@ -1125,7 +1129,7 @@ func commandTabletExternallyReparented(ctx context.Context, wr *wrangler.Wrangle
 		return err
 	}
 	if subFlags.NArg() != 1 {
-		return fmt.Errorf("The <tablet alias> argument is required for the TabletExternallyReparented command.")
+		return fmt.Errorf("the <tablet alias> argument is required for the TabletExternallyReparented command")
 	}
 
 	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
@@ -1145,7 +1149,7 @@ func commandValidateShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *
 		return err
 	}
 	if subFlags.NArg() != 1 {
-		return fmt.Errorf("The <keyspace/shard> argument is required for the ValidateShard command.")
+		return fmt.Errorf("the <keyspace/shard> argument is required for the ValidateShard command")
 	}
 
 	keyspace, shard, err := topoproto.ParseKeyspaceShard(subFlags.Arg(0))
@@ -1160,7 +1164,7 @@ func commandShardReplicationPositions(ctx context.Context, wr *wrangler.Wrangler
 		return err
 	}
 	if subFlags.NArg() != 1 {
-		return fmt.Errorf("The <keyspace/shard> argument is required for the ShardReplicationPositions command.")
+		return fmt.Errorf("the <keyspace/shard> argument is required for the ShardReplicationPositions command")
 	}
 	keyspace, shard, err := topoproto.ParseKeyspaceShard(subFlags.Arg(0))
 	if err != nil {
@@ -1192,7 +1196,7 @@ func commandListShardTablets(ctx context.Context, wr *wrangler.Wrangler, subFlag
 		return err
 	}
 	if subFlags.NArg() != 1 {
-		return fmt.Errorf("The <keyspace/shard> argument is required for the ListShardTablets command.")
+		return fmt.Errorf("the <keyspace/shard> argument is required for the ListShardTablets command")
 	}
 	keyspace, shard, err := topoproto.ParseKeyspaceShard(subFlags.Arg(0))
 	if err != nil {
@@ -1208,7 +1212,7 @@ func commandSetShardServedTypes(ctx context.Context, wr *wrangler.Wrangler, subF
 		return err
 	}
 	if subFlags.NArg() != 2 {
-		return fmt.Errorf("The <keyspace/shard> and <served tablet type> arguments are both required for the SetShardServedTypes command.")
+		return fmt.Errorf("the <keyspace/shard> and <served tablet type> arguments are both required for the SetShardServedTypes command")
 	}
 	keyspace, shard, err := topoproto.ParseKeyspaceShard(subFlags.Arg(0))
 	if err != nil {
@@ -1229,14 +1233,14 @@ func commandSetShardServedTypes(ctx context.Context, wr *wrangler.Wrangler, subF
 
 func commandSetShardTabletControl(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	cellsStr := subFlags.String("cells", "", "Specifies a comma-separated list of cells to update")
-	tablesStr := subFlags.String("tables", "", "Specifies a comma-separated list of tables to replicate (used for vertical split)")
-	remove := subFlags.Bool("remove", false, "Removes cells for vertical splits. This flag requires the *tables* flag to also be set.")
-	disableQueryService := subFlags.Bool("disable_query_service", false, "Disables query service on the provided nodes")
+	blacklistedTablesStr := subFlags.String("blacklisted_tables", "", "Specifies a comma-separated list of tables to blacklist (used for vertical split). Each is either an exact match, or a regular expression of the form '/regexp/'.")
+	remove := subFlags.Bool("remove", false, "Removes cells for vertical splits.")
+	disableQueryService := subFlags.Bool("disable_query_service", false, "Disables query service on the provided nodes. This flag requires 'blacklisted_tables' and 'remove' to be unset, otherwise it's ignored.")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
 	if subFlags.NArg() != 2 {
-		return fmt.Errorf("The <keyspace/shard> and <tablet type> arguments are both required for the SetShardTabletControl command.")
+		return fmt.Errorf("the <keyspace/shard> and <tablet type> arguments are both required for the SetShardTabletControl command")
 	}
 	keyspace, shard, err := topoproto.ParseKeyspaceShard(subFlags.Arg(0))
 	if err != nil {
@@ -1246,16 +1250,16 @@ func commandSetShardTabletControl(ctx context.Context, wr *wrangler.Wrangler, su
 	if err != nil {
 		return err
 	}
-	var tables []string
-	if *tablesStr != "" {
-		tables = strings.Split(*tablesStr, ",")
+	var blacklistedTables []string
+	if *blacklistedTablesStr != "" {
+		blacklistedTables = strings.Split(*blacklistedTablesStr, ",")
 	}
 	var cells []string
 	if *cellsStr != "" {
 		cells = strings.Split(*cellsStr, ",")
 	}
 
-	return wr.SetShardTabletControl(ctx, keyspace, shard, tabletType, cells, *remove, *disableQueryService, tables)
+	return wr.SetShardTabletControl(ctx, keyspace, shard, tabletType, cells, *remove, *disableQueryService, blacklistedTables)
 }
 
 func commandSourceShardDelete(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -1264,7 +1268,7 @@ func commandSourceShardDelete(ctx context.Context, wr *wrangler.Wrangler, subFla
 	}
 
 	if subFlags.NArg() < 2 {
-		return fmt.Errorf("The <keyspace/shard> and <uid> arguments are both required for the SourceShardDelete command.")
+		return fmt.Errorf("the <keyspace/shard> and <uid> arguments are both required for the SourceShardDelete command")
 	}
 	keyspace, shard, err := topoproto.ParseKeyspaceShard(subFlags.Arg(0))
 	if err != nil {
@@ -1279,12 +1283,12 @@ func commandSourceShardDelete(ctx context.Context, wr *wrangler.Wrangler, subFla
 
 func commandSourceShardAdd(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	keyRange := subFlags.String("key_range", "", "Identifies the key range to use for the SourceShard")
-	tablesStr := subFlags.String("tables", "", "Specifies a comma-separated list of tables to replicate (used for vertical split)")
+	tablesStr := subFlags.String("tables", "", "Specifies a comma-separated list of tables to replicate (used for vertical split). Each is either an exact match, or a regular expression of the form /regexp/")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
 	if subFlags.NArg() != 3 {
-		return fmt.Errorf("The <keyspace/shard>, <uid>, and <source keyspace/shard> arguments are all required for the SourceShardAdd command.")
+		return fmt.Errorf("the <keyspace/shard>, <uid>, and <source keyspace/shard> arguments are all required for the SourceShardAdd command")
 	}
 	keyspace, shard, err := topoproto.ParseKeyspaceShard(subFlags.Arg(0))
 	if err != nil {
@@ -1316,7 +1320,7 @@ func commandShardReplicationAdd(ctx context.Context, wr *wrangler.Wrangler, subF
 		return err
 	}
 	if subFlags.NArg() != 2 {
-		return fmt.Errorf("The <keyspace/shard> and <tablet alias> arguments are required for the ShardReplicationAdd command.")
+		return fmt.Errorf("the <keyspace/shard> and <tablet alias> arguments are required for the ShardReplicationAdd command")
 	}
 
 	keyspace, shard, err := topoproto.ParseKeyspaceShard(subFlags.Arg(0))
@@ -1335,7 +1339,7 @@ func commandShardReplicationRemove(ctx context.Context, wr *wrangler.Wrangler, s
 		return err
 	}
 	if subFlags.NArg() != 2 {
-		return fmt.Errorf("The <keyspace/shard> and <tablet alias> arguments are required for the ShardReplicationRemove command.")
+		return fmt.Errorf("the <keyspace/shard> and <tablet alias> arguments are required for the ShardReplicationRemove command")
 	}
 
 	keyspace, shard, err := topoproto.ParseKeyspaceShard(subFlags.Arg(0))
@@ -1354,7 +1358,7 @@ func commandShardReplicationFix(ctx context.Context, wr *wrangler.Wrangler, subF
 		return err
 	}
 	if subFlags.NArg() != 2 {
-		return fmt.Errorf("The <cell> and <keyspace/shard> arguments are required for the ShardReplicationRemove command.")
+		return fmt.Errorf("the <cell> and <keyspace/shard> arguments are required for the ShardReplicationRemove command")
 	}
 
 	cell := subFlags.Arg(0)
@@ -1375,7 +1379,7 @@ func commandWaitForFilteredReplication(ctx context.Context, wr *wrangler.Wrangle
 		return err
 	}
 	if subFlags.NArg() != 1 {
-		return fmt.Errorf("The <keyspace/shard> argument is required for the WaitForFilteredReplication command.")
+		return fmt.Errorf("the <keyspace/shard> argument is required for the WaitForFilteredReplication command")
 	}
 	keyspace, shard, err := topoproto.ParseKeyspaceShard(subFlags.Arg(0))
 	if err != nil {
@@ -1456,7 +1460,7 @@ func commandRemoveShardCell(ctx context.Context, wr *wrangler.Wrangler, subFlags
 		return err
 	}
 	if subFlags.NArg() != 2 {
-		return fmt.Errorf("The <keyspace/shard> and <cell> arguments are required for the RemoveShardCell command.")
+		return fmt.Errorf("the <keyspace/shard> and <cell> arguments are required for the RemoveShardCell command")
 	}
 
 	keyspace, shard, err := topoproto.ParseKeyspaceShard(subFlags.Arg(0))
@@ -1473,7 +1477,7 @@ func commandDeleteShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 		return err
 	}
 	if subFlags.NArg() == 0 {
-		return fmt.Errorf("The <keyspace/shard> argument must be used to identify at least one keyspace and shard when calling the DeleteShard command.")
+		return fmt.Errorf("the <keyspace/shard> argument must be used to identify at least one keyspace and shard when calling the DeleteShard command")
 	}
 
 	keyspaceShards, err := shardParamsToKeyspaceShards(ctx, wr, subFlags.Args())
@@ -1504,7 +1508,7 @@ func commandCreateKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 		return err
 	}
 	if subFlags.NArg() != 1 {
-		return fmt.Errorf("The <keyspace name> argument is required for the CreateKeyspace command.")
+		return fmt.Errorf("the <keyspace name> argument is required for the CreateKeyspace command")
 	}
 
 	keyspace := subFlags.Arg(0)
@@ -1542,7 +1546,7 @@ func commandDeleteKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 		return err
 	}
 	if subFlags.NArg() != 1 {
-		return fmt.Errorf("Must specify the <keyspace> argument for DeleteKeyspace.")
+		return fmt.Errorf("must specify the <keyspace> argument for DeleteKeyspace")
 	}
 
 	return wr.DeleteKeyspace(ctx, subFlags.Arg(0), *recursive)
@@ -1555,7 +1559,7 @@ func commandRemoveKeyspaceCell(ctx context.Context, wr *wrangler.Wrangler, subFl
 		return err
 	}
 	if subFlags.NArg() != 2 {
-		return fmt.Errorf("The <keyspace> and <cell> arguments are required for the RemoveKeyspaceCell command.")
+		return fmt.Errorf("the <keyspace> and <cell> arguments are required for the RemoveKeyspaceCell command")
 	}
 
 	return wr.RemoveKeyspaceCell(ctx, subFlags.Arg(0), subFlags.Arg(1), *force, *recursive)
@@ -1566,7 +1570,7 @@ func commandGetKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 		return err
 	}
 	if subFlags.NArg() != 1 {
-		return fmt.Errorf("The <keyspace> argument is required for the GetKeyspace command.")
+		return fmt.Errorf("the <keyspace> argument is required for the GetKeyspace command")
 	}
 
 	keyspace := subFlags.Arg(0)
@@ -1592,7 +1596,7 @@ func commandSetKeyspaceShardingInfo(ctx context.Context, wr *wrangler.Wrangler, 
 		return err
 	}
 	if subFlags.NArg() > 3 || subFlags.NArg() < 1 {
-		return fmt.Errorf("The <keyspace name> argument is required for the SetKeyspaceShardingInfo command. The <column name> and <column type> arguments are both optional.")
+		return fmt.Errorf("the <keyspace name> argument is required for the SetKeyspaceShardingInfo command. The <column name> and <column type> arguments are both optional")
 	}
 
 	keyspace := subFlags.Arg(0)
@@ -1612,7 +1616,7 @@ func commandSetKeyspaceShardingInfo(ctx context.Context, wr *wrangler.Wrangler, 
 	keyspaceIDTypeSet := (kit != topodatapb.KeyspaceIdType_UNSET)
 	columnNameSet := (columnName != "")
 	if (keyspaceIDTypeSet && !columnNameSet) || (!keyspaceIDTypeSet && columnNameSet) {
-		return fmt.Errorf("Both <column name> and <column type> must be set, or both must be unset.")
+		return fmt.Errorf("both <column name> and <column type> must be set, or both must be unset")
 	}
 
 	return wr.SetKeyspaceShardingInfo(ctx, keyspace, columnName, kit, *force)
@@ -1626,7 +1630,7 @@ func commandSetKeyspaceServedFrom(ctx context.Context, wr *wrangler.Wrangler, su
 		return err
 	}
 	if subFlags.NArg() != 2 {
-		return fmt.Errorf("The <keyspace name> and <tablet type> arguments are required for the SetKeyspaceServedFrom command.")
+		return fmt.Errorf("the <keyspace name> and <tablet type> arguments are required for the SetKeyspaceServedFrom command")
 	}
 	keyspace := subFlags.Arg(0)
 	servedType, err := parseTabletType(subFlags.Arg(1), []topodatapb.TabletType{topodatapb.TabletType_MASTER, topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY})
@@ -1647,7 +1651,7 @@ func commandRebuildKeyspaceGraph(ctx context.Context, wr *wrangler.Wrangler, sub
 		return err
 	}
 	if subFlags.NArg() == 0 {
-		return fmt.Errorf("The <keyspace> argument must be used to specify at least one keyspace when calling the RebuildKeyspaceGraph command.")
+		return fmt.Errorf("the <keyspace> argument must be used to specify at least one keyspace when calling the RebuildKeyspaceGraph command")
 	}
 
 	var cellArray []string
@@ -1673,7 +1677,7 @@ func commandValidateKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlag
 		return err
 	}
 	if subFlags.NArg() != 1 {
-		return fmt.Errorf("The <keyspace name> argument is required for the ValidateKeyspace command.")
+		return fmt.Errorf("the <keyspace name> argument is required for the ValidateKeyspace command")
 	}
 
 	keyspace := subFlags.Arg(0)
@@ -1689,7 +1693,7 @@ func commandMigrateServedTypes(ctx context.Context, wr *wrangler.Wrangler, subFl
 		return err
 	}
 	if subFlags.NArg() != 2 {
-		return fmt.Errorf("The <source keyspace/shard> and <served tablet type> arguments are both required for the MigrateServedTypes command.")
+		return fmt.Errorf("the <source keyspace/shard> and <served tablet type> arguments are both required for the MigrateServedTypes command")
 	}
 
 	keyspace, shard, err := topoproto.ParseKeyspaceShard(subFlags.Arg(0))
@@ -1701,7 +1705,7 @@ func commandMigrateServedTypes(ctx context.Context, wr *wrangler.Wrangler, subFl
 		return err
 	}
 	if servedType == topodatapb.TabletType_MASTER && *skipReFreshState {
-		return fmt.Errorf("The skip-refresh-state flag can only be specified for non-master migrations.")
+		return fmt.Errorf("the skip-refresh-state flag can only be specified for non-master migrations")
 	}
 	var cells []string
 	if *cellsStr != "" {
@@ -1718,7 +1722,7 @@ func commandMigrateServedFrom(ctx context.Context, wr *wrangler.Wrangler, subFla
 		return err
 	}
 	if subFlags.NArg() != 2 {
-		return fmt.Errorf("The <destination keyspace/shard> and <served tablet type> arguments are both required for the MigrateServedFrom command.")
+		return fmt.Errorf("the <destination keyspace/shard> and <served tablet type> arguments are both required for the MigrateServedFrom command")
 	}
 
 	keyspace, shard, err := topoproto.ParseKeyspaceShard(subFlags.Arg(0))
@@ -1741,7 +1745,7 @@ func commandFindAllShardsInKeyspace(ctx context.Context, wr *wrangler.Wrangler, 
 		return err
 	}
 	if subFlags.NArg() != 1 {
-		return fmt.Errorf("The <keyspace> argument is required for the FindAllShardsInKeyspace command.")
+		return fmt.Errorf("the <keyspace> argument is required for the FindAllShardsInKeyspace command")
 	}
 
 	keyspace := subFlags.Arg(0)
@@ -1769,7 +1773,7 @@ func commandListAllTablets(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 		return err
 	}
 	if subFlags.NArg() != 1 {
-		return fmt.Errorf("The <cell name> argument is required for the ListAllTablets command.")
+		return fmt.Errorf("the <cell name> argument is required for the ListAllTablets command")
 	}
 
 	cell := subFlags.Arg(0)
@@ -1781,7 +1785,7 @@ func commandListTablets(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 		return err
 	}
 	if subFlags.NArg() == 0 {
-		return fmt.Errorf("The <tablet alias> argument is required for the ListTablets command.")
+		return fmt.Errorf("the <tablet alias> argument is required for the ListTablets command")
 	}
 
 	paths := subFlags.Args()
@@ -1797,15 +1801,15 @@ func commandListTablets(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 }
 
 func commandGetSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	tables := subFlags.String("tables", "", "Specifies a comma-separated list of regular expressions for which tables should gather information")
-	excludeTables := subFlags.String("exclude_tables", "", "Specifies a comma-separated list of regular expressions for tables to exclude")
+	tables := subFlags.String("tables", "", "Specifies a comma-separated list of tables for which we should gather information. Each is either an exact match, or a regular expression of the form /regexp/")
+	excludeTables := subFlags.String("exclude_tables", "", "Specifies a comma-separated list of tables to exclude. Each is either an exact match, or a regular expression of the form /regexp/")
 	includeViews := subFlags.Bool("include-views", false, "Includes views in the output")
 	tableNamesOnly := subFlags.Bool("table_names_only", false, "Only displays table names that match")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
 	if subFlags.NArg() != 1 {
-		return fmt.Errorf("The <tablet alias> argument is required for the GetSchema command.")
+		return fmt.Errorf("the <tablet alias> argument is required for the GetSchema command")
 	}
 	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
 	if err != nil {
@@ -1838,7 +1842,7 @@ func commandReloadSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 		return err
 	}
 	if subFlags.NArg() != 1 {
-		return fmt.Errorf("The <tablet alias> argument is required for the ReloadSchema command.")
+		return fmt.Errorf("the <tablet alias> argument is required for the ReloadSchema command")
 	}
 	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
 	if err != nil {
@@ -1848,13 +1852,13 @@ func commandReloadSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 }
 
 func commandValidateSchemaShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	excludeTables := subFlags.String("exclude_tables", "", "Specifies a comma-separated list of regular expressions for tables to exclude")
+	excludeTables := subFlags.String("exclude_tables", "", "Specifies a comma-separated list of tables to exclude. Each is either an exact match, or a regular expression of the form /regexp/")
 	includeViews := subFlags.Bool("include-views", false, "Includes views in the validation")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
 	if subFlags.NArg() != 1 {
-		return fmt.Errorf("The <keyspace/shard> argument is required for the ValidateSchemaShard command.")
+		return fmt.Errorf("the <keyspace/shard> argument is required for the ValidateSchemaShard command")
 	}
 
 	keyspace, shard, err := topoproto.ParseKeyspaceShard(subFlags.Arg(0))
@@ -1869,13 +1873,13 @@ func commandValidateSchemaShard(ctx context.Context, wr *wrangler.Wrangler, subF
 }
 
 func commandValidateSchemaKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	excludeTables := subFlags.String("exclude_tables", "", "Specifies a comma-separated list of regular expressions for tables to exclude")
+	excludeTables := subFlags.String("exclude_tables", "", "Specifies a comma-separated list of tables to exclude. Each is either an exact match, or a regular expression of the form /regexp/")
 	includeViews := subFlags.Bool("include-views", false, "Includes views in the validation")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
 	if subFlags.NArg() != 1 {
-		return fmt.Errorf("The <keyspace name> argument is required for the ValidateSchemaKeyspace command.")
+		return fmt.Errorf("the <keyspace name> argument is required for the ValidateSchemaKeyspace command")
 	}
 
 	keyspace := subFlags.Arg(0)
@@ -1895,7 +1899,7 @@ func commandApplySchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 		return err
 	}
 	if subFlags.NArg() != 1 {
-		return fmt.Errorf("The <keyspace> argument is required for the commandApplySchema command.")
+		return fmt.Errorf("the <keyspace> argument is required for the commandApplySchema command")
 	}
 
 	keyspace := subFlags.Arg(0)
@@ -1916,8 +1920,8 @@ func commandApplySchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 }
 
 func commandCopySchemaShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	tables := subFlags.String("tables", "", "Specifies a comma-separated list of regular expressions for which tables  gather schema information for")
-	excludeTables := subFlags.String("exclude_tables", "", "Specifies a comma-separated list of regular expressions for which tables to exclude")
+	tables := subFlags.String("tables", "", "Specifies a comma-separated list of tables to copy. Each is either an exact match, or a regular expression of the form /regexp/")
+	excludeTables := subFlags.String("exclude_tables", "", "Specifies a comma-separated list of tables to exclude. Each is either an exact match, or a regular expression of the form /regexp/")
 	includeViews := subFlags.Bool("include-views", true, "Includes views in the output")
 	waitSlaveTimeout := subFlags.Duration("wait_slave_timeout", 10*time.Second, "The amount of time to wait for slaves to receive the schema change via replication.")
 	if err := subFlags.Parse(args); err != nil {
@@ -1925,7 +1929,7 @@ func commandCopySchemaShard(ctx context.Context, wr *wrangler.Wrangler, subFlags
 	}
 
 	if subFlags.NArg() != 2 {
-		return fmt.Errorf("The <source keyspace/shard> and <destination keyspace/shard> arguments are both required for the CopySchemaShard command. Instead of the <source keyspace/shard> argument, you can also specify <tablet alias> which refers to a specific tablet of the shard in the source keyspace.")
+		return fmt.Errorf("the <source keyspace/shard> and <destination keyspace/shard> arguments are both required for the CopySchemaShard command. Instead of the <source keyspace/shard> argument, you can also specify <tablet alias> which refers to a specific tablet of the shard in the source keyspace")
 	}
 	var tableArray []string
 	if *tables != "" {
@@ -1956,7 +1960,7 @@ func commandValidateVersionShard(ctx context.Context, wr *wrangler.Wrangler, sub
 		return err
 	}
 	if subFlags.NArg() != 1 {
-		return fmt.Errorf("The <keyspace/shard> argument is requird for the ValidateVersionShard command.")
+		return fmt.Errorf("the <keyspace/shard> argument is required for the ValidateVersionShard command")
 	}
 
 	keyspace, shard, err := topoproto.ParseKeyspaceShard(subFlags.Arg(0))
@@ -1971,7 +1975,7 @@ func commandValidateVersionKeyspace(ctx context.Context, wr *wrangler.Wrangler, 
 		return err
 	}
 	if subFlags.NArg() != 1 {
-		return fmt.Errorf("The <keyspace name> argument is required for the ValidateVersionKeyspace command.")
+		return fmt.Errorf("the <keyspace name> argument is required for the ValidateVersionKeyspace command")
 	}
 
 	keyspace := subFlags.Arg(0)
@@ -1983,7 +1987,7 @@ func commandGetPermissions(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 		return err
 	}
 	if subFlags.NArg() != 1 {
-		return fmt.Errorf("The <tablet alias> argument is required for the GetPermissions command.")
+		return fmt.Errorf("the <tablet alias> argument is required for the GetPermissions command")
 	}
 	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
 	if err != nil {
@@ -2001,7 +2005,7 @@ func commandValidatePermissionsShard(ctx context.Context, wr *wrangler.Wrangler,
 		return err
 	}
 	if subFlags.NArg() != 1 {
-		return fmt.Errorf("The <keyspace/shard> argument is required for the ValidatePermissionsShard command.")
+		return fmt.Errorf("the <keyspace/shard> argument is required for the ValidatePermissionsShard command")
 	}
 
 	keyspace, shard, err := topoproto.ParseKeyspaceShard(subFlags.Arg(0))
@@ -2016,7 +2020,7 @@ func commandValidatePermissionsKeyspace(ctx context.Context, wr *wrangler.Wrangl
 		return err
 	}
 	if subFlags.NArg() != 1 {
-		return fmt.Errorf("The <keyspace name> argument is required for the ValidatePermissionsKeyspace command.")
+		return fmt.Errorf("the <keyspace name> argument is required for the ValidatePermissionsKeyspace command")
 	}
 
 	keyspace := subFlags.Arg(0)
@@ -2028,7 +2032,7 @@ func commandGetVSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 		return err
 	}
 	if subFlags.NArg() != 1 {
-		return fmt.Errorf("The <keyspace> argument is required for the GetVSchema command.")
+		return fmt.Errorf("the <keyspace> argument is required for the GetVSchema command")
 	}
 	keyspace := subFlags.Arg(0)
 	schema, err := wr.TopoServer().GetVSchema(ctx, keyspace)
@@ -2052,7 +2056,7 @@ func commandRebuildVSchemaGraph(ctx context.Context, wr *wrangler.Wrangler, subF
 		return err
 	}
 	if subFlags.NArg() != 0 {
-		return fmt.Errorf("RebuildVSchemaGraph doesn't take any arguments.")
+		return fmt.Errorf("RebuildVSchemaGraph doesn't take any arguments")
 	}
 
 	return topotools.RebuildVSchema(ctx, wr.Logger(), wr.TopoServer(), cells)
@@ -2069,10 +2073,10 @@ func commandApplyVSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 		return err
 	}
 	if subFlags.NArg() != 1 {
-		return fmt.Errorf("The <keyspace> argument is required for the ApplyVSchema command.")
+		return fmt.Errorf("the <keyspace> argument is required for the ApplyVSchema command")
 	}
 	if (*vschema == "") == (*vschemaFile == "") {
-		return fmt.Errorf("Either the vschema or vschemaFile flag must be specified when calling the ApplyVSchema command.")
+		return fmt.Errorf("either the vschema or vschemaFile flag must be specified when calling the ApplyVSchema command")
 	}
 	var schema []byte
 	if *vschemaFile != "" {
@@ -2113,7 +2117,7 @@ func commandGetSrvKeyspaceNames(ctx context.Context, wr *wrangler.Wrangler, subF
 		return err
 	}
 	if subFlags.NArg() != 1 {
-		return fmt.Errorf("The <cell> argument is required for the GetSrvKeyspaceNames command.")
+		return fmt.Errorf("the <cell> argument is required for the GetSrvKeyspaceNames command")
 	}
 
 	srvKeyspaceNames, err := wr.TopoServer().GetSrvKeyspaceNames(ctx, subFlags.Arg(0))
@@ -2131,7 +2135,7 @@ func commandGetSrvKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 		return err
 	}
 	if subFlags.NArg() != 2 {
-		return fmt.Errorf("The <cell> and <keyspace> arguments are required for the GetSrvKeyspace command.")
+		return fmt.Errorf("the <cell> and <keyspace> arguments are required for the GetSrvKeyspace command")
 	}
 
 	srvKeyspace, err := wr.TopoServer().GetSrvKeyspace(ctx, subFlags.Arg(0), subFlags.Arg(1))
@@ -2146,7 +2150,7 @@ func commandGetSrvVSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *
 		return err
 	}
 	if subFlags.NArg() != 1 {
-		return fmt.Errorf("The <cell> argument is required for the GetSrvVSchema command.")
+		return fmt.Errorf("the <cell> argument is required for the GetSrvVSchema command")
 	}
 
 	srvVSchema, err := wr.TopoServer().GetSrvVSchema(ctx, subFlags.Arg(0))
@@ -2161,7 +2165,7 @@ func commandGetShardReplication(ctx context.Context, wr *wrangler.Wrangler, subF
 		return err
 	}
 	if subFlags.NArg() != 2 {
-		return fmt.Errorf("The <cell> and <keyspace/shard> arguments are required for the GetShardReplication command.")
+		return fmt.Errorf("the <cell> and <keyspace/shard> arguments are required for the GetShardReplication command")
 	}
 
 	keyspace, shard, err := topoproto.ParseKeyspaceShard(subFlags.Arg(1))
@@ -2186,7 +2190,7 @@ func commandHelp(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Flag
 	case 1:
 		RunCommand(ctx, wr, []string{subFlags.Arg(0), "--help"})
 	default:
-		return fmt.Errorf("When calling the Help command, either specify a single argument that identifies the name of the command to get help with or do not specify any additional arguments.")
+		return fmt.Errorf("when calling the Help command, either specify a single argument that identifies the name of the command to get help with or do not specify any additional arguments")
 	}
 
 	return nil
@@ -2269,7 +2273,7 @@ func RunCommand(ctx context.Context, wr *wrangler.Wrangler, args []string) error
 	if len(args) == 0 {
 		wr.Logger().Printf("No command specified. Please see the list below:\n\n")
 		PrintAllCommands(wr.Logger())
-		return fmt.Errorf("No command was specified.")
+		return fmt.Errorf("no command was specified")
 	}
 
 	action := args[0]

@@ -10,6 +10,8 @@ import (
 	"flag"
 	"fmt"
 	"io"
+
+	"golang.org/x/net/context"
 )
 
 var (
@@ -33,21 +35,25 @@ type BackupHandle interface {
 	// characters and hyphens.
 	// It should be thread safe, it is possible to call AddFile in
 	// multiple go routines once a backup has been started.
-	AddFile(filename string) (io.WriteCloser, error)
+	// The context is valid for the duration of the writes, until the
+	// WriteCloser is closed.
+	AddFile(ctx context.Context, filename string) (io.WriteCloser, error)
 
 	// EndBackup stops and closes a backup. The contents should be kept.
 	// Only works for read-write backups (created by StartBackup).
-	EndBackup() error
+	EndBackup(ctx context.Context) error
 
 	// AbortBackup stops a backup, and removes the contents that
 	// have been copied already. It is called if an error occurs
 	// while the backup is being taken, and the backup cannot be finished.
 	// Only works for read-write backups (created by StartBackup).
-	AbortBackup() error
+	AbortBackup(ctx context.Context) error
 
 	// ReadFile starts reading a file from a backup.
 	// Only works for read-only backups (created by ListBackups).
-	ReadFile(filename string) (io.ReadCloser, error)
+	// The context is valid for the duration of the reads, until the
+	// ReadCloser is closed.
+	ReadFile(ctx context.Context, filename string) (io.ReadCloser, error)
 }
 
 // BackupStorage is the interface to the storage system
@@ -57,22 +63,23 @@ type BackupStorage interface {
 	// AddFile/EndBackup/AbortBackup cannot).
 	// The backups are string-sorted by Name(), ascending (ends up
 	// being the oldest backup first).
-	ListBackups(dir string) ([]BackupHandle, error)
+	ListBackups(ctx context.Context, dir string) ([]BackupHandle, error)
 
 	// StartBackup creates a new backup with the given name.  If a
 	// backup with the same name already exists, it's an error.
 	// The returned backup is read-write
-	// (AddFile/EndBackup/AbortBackup cann all be called, not
-	// ReadFile)
-	StartBackup(dir, name string) (BackupHandle, error)
+	// (AddFile/EndBackup/AbortBackup can all be called, not
+	// ReadFile). The provided context is only valid for that
+	// function, and should not be stored by the implementation.
+	StartBackup(ctx context.Context, dir, name string) (BackupHandle, error)
 
 	// RemoveBackup removes all the data associated with a backup.
 	// It will not appear in ListBackups after RemoveBackup succeeds.
-	RemoveBackup(dir, name string) error
+	RemoveBackup(ctx context.Context, dir, name string) error
 
-	// Close frees resources associated with an active backup session,
-	// such as closing connections. Implementations of BackupStorage must support
-	// being reused after Close() is called.
+	// Close frees resources associated with an active backup
+	// session, such as closing connections. Implementations of
+	// BackupStorage must support being reused after Close() is called.
 	Close() error
 }
 

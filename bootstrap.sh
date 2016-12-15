@@ -135,6 +135,8 @@ ln -snf $VTTOP/data $VTROOT/data
 ln -snf $VTTOP/py $VTROOT/py-vtdb
 ln -snf $VTTOP/go/zk/zkctl/zksrv.sh $VTROOT/bin/zksrv.sh
 ln -snf $VTTOP/test/vthook-test.sh $VTROOT/vthook/test.sh
+ln -snf $VTTOP/test/vthook-test_backup_error $VTROOT/vthook/test_backup_error
+ln -snf $VTTOP/test/vthook-test_backup_transform $VTROOT/vthook/test_backup_transform
 
 # find mysql and prepare to use libmysqlclient
 if [ -z "$MYSQL_FLAVOR" ]; then
@@ -203,10 +205,12 @@ else
     rm -r mock-1.0.1
 fi
 
-# create pre-commit hooks
-echo "creating git pre-commit hooks"
+# Create the Git hooks.
+echo "creating git hooks"
 mkdir -p $VTTOP/.git/hooks
 ln -sf $VTTOP/misc/git/pre-commit $VTTOP/.git/hooks/pre-commit
+ln -sf $VTTOP/misc/git/prepare-commit-msg.bugnumber $VTTOP/.git/hooks/prepare-commit-msg
+ln -sf $VTTOP/misc/git/commit-msg.bugnumber $VTTOP/.git/hooks/commit-msg
 
 # Download chromedriver
 echo "Installing selenium and chromedriver"
@@ -215,7 +219,7 @@ mkdir -p $selenium_dist
 virtualenv $selenium_dist
 $selenium_dist/bin/pip install selenium
 mkdir -p $VTROOT/dist/chromedriver
-curl -sL http://chromedriver.storage.googleapis.com/2.24/chromedriver_linux64.zip > chromedriver_linux64.zip
+curl -sL http://chromedriver.storage.googleapis.com/2.25/chromedriver_linux64.zip > chromedriver_linux64.zip
 unzip -o -q chromedriver_linux64.zip -d $VTROOT/dist/chromedriver
 rm chromedriver_linux64.zip
 

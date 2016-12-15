@@ -160,7 +160,7 @@ func (te *TabletError) RecordStats(queryServiceStats *QueryServiceStats) {
 	case vtrpcpb.ErrorCode_QUERY_NOT_SERVED:
 		queryServiceStats.InfoErrors.Add("Retry", 1)
 	case vtrpcpb.ErrorCode_INTERNAL_ERROR:
-		queryServiceStats.InfoErrors.Add("Fatal", 1)
+		queryServiceStats.ErrorStats.Add("Fatal", 1)
 	case vtrpcpb.ErrorCode_RESOURCE_EXHAUSTED:
 		queryServiceStats.ErrorStats.Add("TxPoolFull", 1)
 	case vtrpcpb.ErrorCode_NOT_IN_TX:

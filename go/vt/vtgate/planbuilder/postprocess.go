@@ -73,8 +73,15 @@ func pushOrderBy(orderBy sqlparser.OrderBy, bldr builder) error {
 	s := bldr.Symtab().SetState(symtabOrderBy)
 	defer bldr.Symtab().SetState(s)
 
-	if orderBy == nil {
+	switch len(orderBy) {
+	case 0:
 		return nil
+	case 1:
+		// Special handling for ORDER BY NULL. Push it everywhere.
+		if _, ok := orderBy[0].Expr.(*sqlparser.NullVal); ok {
+			bldr.PushOrderByNull()
+			return nil
+		}
 	}
 	routeNumber := 0
 	for _, order := range orderBy {

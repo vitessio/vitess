@@ -1525,7 +1525,7 @@ func TestNocacheCases(t *testing.T) {
 			Cases: []framework.Testable{
 				framework.TestQuery("begin"),
 				&framework.TestCase{
-					Query: "insert into vitess_misc values(:id, :b, :d, :dt, :t)",
+					Query: "insert into vitess_misc values(:id, :b, :d, :dt, :t, point(1, 2))",
 					BindVars: map[string]interface{}{
 						"t":  "15:45:45",
 						"dt": "2012-01-01 15:45:45",
@@ -1534,14 +1534,14 @@ func TestNocacheCases(t *testing.T) {
 						"d":  "2012-01-01",
 					},
 					Rewritten: []string{
-						"insert into vitess_misc values (1, '\x01', '2012-01-01', '2012-01-01 15:45:45', '15:45:45') /* _stream vitess_misc (id ) (1 )",
+						"insert into vitess_misc values (1, '\x01', '2012-01-01', '2012-01-01 15:45:45', '15:45:45', point(1, 2)) /* _stream vitess_misc (id ) (1 )",
 					},
 				},
 				framework.TestQuery("commit"),
 				&framework.TestCase{
 					Query: "select * from vitess_misc where id = 1",
 					Result: [][]string{
-						{"1", "\x01", "2012-01-01", "2012-01-01 15:45:45", "15:45:45"},
+						{"1", "\x01", "2012-01-01", "2012-01-01 15:45:45", "15:45:45", point12},
 					},
 					Rewritten: []string{
 						"select * from vitess_misc where 1 != 1",
@@ -1551,7 +1551,7 @@ func TestNocacheCases(t *testing.T) {
 				&framework.TestCase{
 					Query: "select * from vitess_misc where id = 1",
 					Result: [][]string{
-						{"1", "\x01", "2012-01-01", "2012-01-01 15:45:45", "15:45:45"},
+						{"1", "\x01", "2012-01-01", "2012-01-01 15:45:45", "15:45:45", point12},
 					},
 					Rewritten: []string{
 						"select * from vitess_misc where id = 1 limit 10001",
@@ -1559,10 +1559,11 @@ func TestNocacheCases(t *testing.T) {
 				},
 				framework.TestQuery("begin"),
 				&framework.TestCase{
-					Query: "insert into vitess_misc select 2, b, d, dt, t from vitess_misc",
+					// Skip geometry test. The binary representation is non-trivial to represent as go string.
+					Query: "insert into vitess_misc(id, b, d, dt, t) select 2, b, d, dt, t from vitess_misc",
 					Rewritten: []string{
 						"select 2, b, d, dt, t from vitess_misc limit 10001",
-						"insert into vitess_misc values (2, '\x01', '2012-01-01', '2012-01-01 15:45:45', '15:45:45') /* _stream vitess_misc (id ) (2 )",
+						"insert into vitess_misc(id, b, d, dt, t) values (2, '\x01', '2012-01-01', '2012-01-01 15:45:45', '15:45:45') /* _stream vitess_misc (id ) (2 )",
 					},
 				},
 				framework.TestQuery("commit"),

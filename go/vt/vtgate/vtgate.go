@@ -7,6 +7,7 @@
 package vtgate
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"net/http"
@@ -39,6 +40,13 @@ import (
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
+// Transaction modes. The value specifies what's allowed.
+const (
+	TxSingle = iota
+	TxMulti
+	TxTwoPC
+)
+
 var (
 	rpcVTGate *VTGate
 
@@ -61,6 +69,8 @@ var (
 // VTGate is the rpc interface to vtgate. Only one instance
 // can be created. It implements vtgateservice.VTGateService
 type VTGate struct {
+	transactionMode int
+
 	// router and resolver are top-level objects
 	// that make routing decisions.
 	router   *Router
@@ -105,7 +115,7 @@ var RegisterVTGates []RegisterVTGate
 var vtgateOnce sync.Once
 
 // Init initializes VTGate server.
-func Init(ctx context.Context, hc discovery.HealthCheck, topoServer topo.Server, serv topo.SrvTopoServer, cell string, retryCount int, tabletTypesToWait []topodatapb.TabletType) *VTGate {
+func Init(ctx context.Context, hc discovery.HealthCheck, topoServer topo.Server, serv topo.SrvTopoServer, cell string, retryCount int, tabletTypesToWait []topodatapb.TabletType, transactionMode int) *VTGate {
 	if rpcVTGate != nil {
 		log.Fatalf("VTGate already initialized")
 	}
@@ -123,13 +133,14 @@ func Init(ctx context.Context, hc discovery.HealthCheck, topoServer topo.Server,
 	sc := NewScatterConn("VttabletCall", tc, gw)
 
 	rpcVTGate = &VTGate{
-		router:       NewRouter(ctx, serv, cell, "VTGateRouter", sc),
-		resolver:     NewResolver(serv, cell, sc),
-		scatterConn:  sc,
-		txConn:       tc,
-		gateway:      gw,
-		timings:      stats.NewMultiTimings("VtgateApi", []string{"Operation", "Keyspace", "DbType"}),
-		rowsReturned: stats.NewMultiCounters("VtgateApiRowsReturned", []string{"Operation", "Keyspace", "DbType"}),
+		transactionMode: transactionMode,
+		router:          NewRouter(ctx, serv, cell, "VTGateRouter", sc),
+		resolver:        NewResolver(serv, cell, sc),
+		scatterConn:     sc,
+		txConn:          tc,
+		gateway:         gw,
+		timings:         stats.NewMultiTimings("VtgateApi", []string{"Operation", "Keyspace", "DbType"}),
+		rowsReturned:    stats.NewMultiCounters("VtgateApiRowsReturned", []string{"Operation", "Keyspace", "DbType"}),
 
 		logExecute:                  logutil.NewThrottledLogger("Execute", 5*time.Second),
 		logExecuteShards:            logutil.NewThrottledLogger("ExecuteShards", 5*time.Second),
@@ -623,14 +634,23 @@ func (vtg *VTGate) StreamExecuteShards(ctx context.Context, sql string, bindVari
 }
 
 // Begin begins a transaction. It has to be concluded by a Commit or Rollback.
-func (vtg *VTGate) Begin(ctx context.Context) (*vtgatepb.Session, error) {
+func (vtg *VTGate) Begin(ctx context.Context, singledb bool) (*vtgatepb.Session, error) {
+	if !singledb && vtg.transactionMode == TxSingle {
+		return nil, vterrors.FromError(vtrpcpb.ErrorCode_BAD_INPUT, errors.New("multi-db transaction disallowed"))
+	}
 	return &vtgatepb.Session{
 		InTransaction: true,
+		SingleDb:      singledb,
 	}, nil
 }
 
 // Commit commits a transaction.
 func (vtg *VTGate) Commit(ctx context.Context, twopc bool, session *vtgatepb.Session) error {
+	if twopc && vtg.transactionMode != TxTwoPC {
+		// Rollback the transaction to prevent future deadlocks.
+		vtg.txConn.Rollback(ctx, NewSafeSession(session))
+		return vterrors.FromError(vtrpcpb.ErrorCode_BAD_INPUT, errors.New("2pc transaction disallowed"))
+	}
 	return formatError(vtg.txConn.Commit(ctx, twopc, NewSafeSession(session)))
 }
 
@@ -844,13 +864,19 @@ func logError(err error, query map[string]interface{}, logger *logutil.Throttled
 	logMethod := logger.Errorf
 	if !isErrorCausedByVTGate(err) {
 		infoErrors.Add("NonVtgateErrors", 1)
+		// Log non-vtgate errors (e.g. a query failed on vttablet because a failover
+		// is in progress) on INFO only because vttablet already logs them as ERROR.
 		logMethod = logger.Infof
 	}
 	logMethod("%v, query: %+v", err, query)
 }
 
-// Returns true if a given error is caused entirely due to VTGate, and not any of
-// the components that it depends on.
+// Returns true if a given error is caused entirely due to VTGate, and not any
+// of the components that it depends on.
+// If the error is an aggregation of multiple errors e.g. in case of a scatter
+// query, the function returns true if *any* error is caused by vtgate.
+// Consequently, the function returns false if *all* errors are caused by
+// vttablet (actual errors) or the client (e.g. context canceled).
 func isErrorCausedByVTGate(err error) bool {
 	var errQueue []error
 	errQueue = append(errQueue, err)
@@ -865,19 +891,23 @@ func isErrorCausedByVTGate(err error) bool {
 		case *gateway.ShardError:
 			errQueue = append(errQueue, e.Err)
 		case tabletconn.OperationalError:
-			// this is a failure to communicate with vttablet
+			// Communication with vttablet failed i.e. the error is caused by vtgate.
+			// (For actual vttablet errors, see the next case "ServerError".)
 			return true
 		case *tabletconn.ServerError:
-			break
+			// The query failed on vttablet and it returned this error.
+			// Ignore it and check the next error in the queue.
 		default:
+			if e == context.Canceled {
+				// Caused by the client and not vtgate.
+				// Ignore it and check the next error in the queue.
+				continue
+			}
+
 			// Return true if even a single error within
 			// the error queue was caused by VTGate. If
 			// we're not certain what caused the error, we
 			// default to assuming that VTGate was at fault.
-			if e == context.Canceled {
-				// caused by the client, not vtgate, keep going
-				break
-			}
 			return true
 		}
 	}

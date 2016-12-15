@@ -7,8 +7,6 @@ set -e
 script_root=`dirname "${BASH_SOURCE}"`
 source $script_root/env.sh
 
-VITESS_NAME=${VITESS_NAME:-'default'}
-
 echo "Stopping vtctld replicationcontroller..."
 $KUBECTL delete replicationcontroller vtctld --namespace=$VITESS_NAME
 

@@ -21,15 +21,14 @@ row based.
 * The statements executed on the master result in updated rows. The new full
   values for these rows are copied to the master logs.
 * The slaves change their records for the rows they receive. The update is by
-  primary key, and contains the new values for each column, so it’s very fast.
+  primary key, and contains the new values for each column, so usually it’s very
+  fast.
 * Each updated row contains the entire row, not just the columns that were
-  updated. (this is inefficient if only one column out of a large number has
-  changed, but it’s more efficient on the slave to just swap out the row with
-  the new one).
+  updated (unless the flag --binlog\_row\_image=minimal is used).
 * The replication stream is harder to read, as it contains almost binary data,
   that don’t easily map to the original statements.
 * There is a configurable limit on how many rows can be affected by one
-  statement, so the master logs are not flooded.
+  binlog event, so the master logs are not flooded.
 * The format of the logs depends on the master schema: each row has a list of
   values, one value for each column. So if the master schema is different from
   the slave schema, updates will misbehave (exception being if slave has extra
@@ -37,20 +36,20 @@ row based.
 * It is possible to revert to statement based replication for some commands to
   avoid these drawbacks (for instance for DELETE statements that affect a large
   number of rows).
-* Schema changes revert to statement based replication.
+* Schema changes always use statement based replication.
 * If comments are added to a statement, they are stripped from the
-  replication stream (as only rows are transmitted). There is a debug flag to
-  add the original statement to each row update, but it is costly in terms of
-  binlog size, and very verbose.
+  replication stream (as only rows are transmitted). There is a flag
+  --binlog\_rows\_query\_log\_events to add the original statement to each row
+  update, but it is costly in terms of binlog size.
 
 For the longest time, MySQL replication has been single-threaded: only one
 statement is applied by the slaves at a time. Since the master applies more
 statements in parallel, replication can fall behind on the slaves fairly easily,
-under higher load. Even though the situation has improved (group commit), the
-slave replication speed is still a limiting factor for a lot of
+under higher load. Even though the situation has improved (parallel slave
+apply), the slave replication speed is still a limiting factor for a lot of
 applications. Since row based replication achieves higher update rates on the
-slaves, it has been the only viable option for most performance sensitive
-applications.
+slaves in most cases, it has been the only viable option for most performance
+sensitive applications.
 
 Schema changes however are not easy to achieve with row based
 replication. Adding columns can be done offline, but removing or changing
@@ -64,10 +63,10 @@ slaves can be fast), by rewriting Update statements.
 
 Then, with statement based replication, it becomes easier to perform offline
 advanced schema changes, or large data updates. Vitess’s solution is called
-pivot.
+schema swap.
 
 We plan to also support row based replication in the future, and adapt our tools
-to provide the same features when possible.
+to provide the same features when possible. See Appendix for our plan.
 
 ## Rewriting Update Statements
 
@@ -97,23 +96,22 @@ Also, Vitess adds comments to the rewritten statements that identify the primary
 key affected by that statement. This allows us to produce an Update Stream (see
 section below).
 
-## Vitess Pivot Schema Changes
+## Vitess Schema Swap
 
 Within YouTube, we also use a combination of statement based replication and
 backups to apply long-running schema changes without disrupting ongoing
-operations. See the [pivot tutorial](/user-guide/pivot-schema-changes.html)
+operations. See the [schema swap tutorial](/user-guide/schema-swap.html)
 for a detailed example.
 
-This operation, internally dubbed as **pivot**, works as follows:
+This operation, which is called **schema swap**, works as follows:
 
 * Pick a slave, take it out of service. It is not used by clients any more.
-* Stop replication on the slave.
 * Apply whatever schema or large data change is needed, on the slave.
 * Take a backup of that slave.
 * On all the other slaves, one at a time, take them out of service, restore the
   backup, catch up on replication, put them back into service.
 * When all slaves are done, reparent to a slave that has applied the change.
-* The old master can then be restored from a backup again, and put back into
+* The old master can then be restored from a backup too, and put back into
   service.
 
 With this process, the only guarantee we need is for the change (schema or data)
@@ -121,13 +119,13 @@ to be backward compatible: the clients won’t know if they talk to a server
 that has applied the change yet or not. This is usually fairly easy to deal
 with:
 
-* When adding a column, clients cannot use it until the pivot is done.
+* When adding a column, clients cannot use it until the schema swap is done.
 * When removing a column, all clients must stop referring to it before the
-  pivot begins.
+  schema swap begins.
 * A column rename is still tricky: the best way to do it is to add a new column
-  with the new name in one pivot, then change the client to populate both (and
-  possibly backfill the values), then change the client again to use the new
-  column only, then use another pivot to remove the original column.
+  with the new name in one schema swap, then change the client to populate both
+  (and backfill the values), then change the client again to use the new
+  column only, then use another schema swap to remove the original column.
 * A whole bunch of operations are really easy to perform though: index changes,
   optimize table, …
 
@@ -139,10 +137,6 @@ practice of online schema change, which also must run on all hosts.
 Since Vitess’s backup / restore and reparent processes
 are very reliable (they need to be reliable on their own, independently of this
 process!), this does not add much more complexity to a running system.
-
-However, the pivot operations are fairly involved, and may take a long time, so
-they need to be resilient and automated. We are in the process of streamlining
-them, with the goal of making them completely automated.
 
 ## Update Stream
 
@@ -171,7 +165,8 @@ then the following will happen:
 *   The master will only accept writes if it has at least one slave connected
     and sending semi-sync ACK. It will never fall back to asynchronous
     (not requiring ACKs) because of timeouts while waiting for ACK, nor because
-    of having zero slaves connected.
+    of having zero slaves connected (although it will fall back to asynchronous
+    in case of shutdown, abrupt or graceful).
 
     This is important to prevent split brain (or alternate futures) in case of a
     network partition. If we can verify all slaves have stopped replicating,
@@ -181,7 +176,9 @@ then the following will happen:
 *   Slaves of *replica* type will send semi-sync ACK. Slaves of *rdonly* type will
     **not** send ACK. This is because rdonly slaves are not eligible to be
     promoted to master, so we want to avoid the case where a rdonly slave is the
-    single best candidate for election at the time of master failure.
+    single best candidate for election at the time of master failure (though
+    a split brain is possible when all rdonly slaves have transactions that
+    none of replica slaves have).
 
 These behaviors combine to give you the property that, in case of master
 failure, there is at least one other *replica* type slave that has every
@@ -203,3 +200,65 @@ up-to-date results. Semi-sync guarantees that at least one slave has the
 transaction in its relay log, but it has not necessarily been applied yet.
 The only way to guarantee a fully up-to-date read is to send the request to the
 master.
+
+## Appendix: Adding support for RBR in Vitess
+
+This part describe the extend of the work required to add support for Row-Based
+Replication to Vitess.
+
+The main two places where we depend on SBR at the moment are Filtered
+Replication (used during resharding), and Update Stream.
+
+For query serving and reparenting, Vitess does not depend on SBR vs RBR, and can
+work as is now.
+
+Schema Swap (see description earlier) does not depend on RBR. However, the way
+it works, it may cause imcompatible schemas between master and slaves, when the
+change is not as simple as adding a column at the end of a table, or creating a
+new table. So it is not recommended in most cases.
+
+### Filtered Replication
+
+The purpose of Filtered Replication is to filter the SQL statements during
+horizontal or vertical resharding. To achieve this, when we commit any statement
+on a master, we also add a comment that describes the affected table, and the
+value of the affected sharding key. That way, to see if a statement needs to be
+applied, we just read the comment:
+
+* For vertical splits, we extract the table name. We then see if that table is
+  being moved.
+
+* For horizontal splits, we extract the value of the sharding key, and see if it
+  is in range for the destination.
+
+When using RBR the comments are gone. Instead, we just get the table name, the
+primary key of the modified row, and a binary description of the modified other
+columns for that row. The table name is perfectly enough for vertical splits to
+work. However, we don't have the sharding key for horizontal splits. Our current
+thinking is as follows:
+
+* If the sharding key can be computed from the primary key columns (using a
+  simple vindex), then we can get it back from the provided data.
+  
+* If not, we can still provide valuable workarounds:
+
+  * for INSERT statements, all the columns are specified, so we can compute the
+    sharding key.
+ 
+  * for DELETE and UPDATE statements, we can just apply them all to all
+    destination shards. If the data is not present, no harm will be done. If the
+    data is there, then it will be updated correctly.
+
+### Update Stream
+
+The Update Stream feature provides a stream of the primary keys of the rows that
+are changing, along with an Event Token to describe the timing of the changes.
+
+The current feature reads the comments left by the Query Service on the master
+for each DML, and forwards them. Since the only thing we're interested in is the
+Primary Key, we could just as well extract the values from a RBR statement. This
+would not be a lot of work at all.
+
+Additionally, RBR statements contain the entire row that is changing. We could
+also add this as optional fields to the UpdateStream response, and then provide
+a full stream, containing both Primary Key and data.

@@ -172,7 +172,7 @@ var keywords = map[string]int{
 	"middleint":           UNUSED,
 	"minute_microsecond":  UNUSED,
 	"minute_second":       UNUSED,
-	"mod":                 UNUSED,
+	"mod":                 MOD,
 	"modifies":            UNUSED,
 	"natural":             NATURAL,
 	"next":                NEXT,
@@ -285,7 +285,7 @@ func (tkn *Tokenizer) Lex(lval *yySymType) int {
 		typ, val = tkn.Scan()
 	}
 	switch typ {
-	case ID, STRING, HEX, NUMBER, VALUE_ARG, LIST_ARG, COMMENT:
+	case ID, STRING, HEX, NUMBER, HEXNUM, VALUE_ARG, LIST_ARG, COMMENT:
 		lval.bytes = val
 	}
 	tkn.lastToken = val
@@ -357,9 +357,17 @@ func (tkn *Tokenizer) Scan() (int, []byte) {
 				return int(ch), nil
 			}
 		case '-':
-			if tkn.lastChar == '-' {
+			switch tkn.lastChar {
+			case '-':
 				tkn.next()
 				return tkn.scanCommentType1("--")
+			case '>':
+				tkn.next()
+				if tkn.lastChar == '>' {
+					tkn.next()
+					return JSON_UNQUOTE_EXTRACT_OP, nil
+				}
+				return JSON_EXTRACT_OP, nil
 			}
 			return int(ch), nil
 		case '<':
@@ -492,6 +500,7 @@ func (tkn *Tokenizer) scanMantissa(base int, buffer *bytes.Buffer) {
 }
 
 func (tkn *Tokenizer) scanNumber(seenDecimalPoint bool) (int, []byte) {
+	token := NUMBER
 	buffer := &bytes.Buffer{}
 	if seenDecimalPoint {
 		buffer.WriteByte('.')
@@ -503,6 +512,7 @@ func (tkn *Tokenizer) scanNumber(seenDecimalPoint bool) (int, []byte) {
 	if tkn.lastChar == '0' {
 		tkn.consumeNext(buffer)
 		if tkn.lastChar == 'x' || tkn.lastChar == 'X' {
+			token = HEXNUM
 			tkn.consumeNext(buffer)
 			tkn.scanMantissa(16, buffer)
 			goto exit
@@ -531,7 +541,7 @@ exit:
 		return LEX_ERROR, buffer.Bytes()
 	}
 
-	return NUMBER, buffer.Bytes()
+	return token, buffer.Bytes()
 }
 
 func (tkn *Tokenizer) scanString(delim uint16, typ int) (int, []byte) {

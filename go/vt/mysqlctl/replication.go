@@ -15,9 +15,9 @@ import (
 	"strings"
 	"time"
 
+	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
-	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/netutil"
 	"github.com/youtube/vitess/go/sqldb"
@@ -221,7 +221,7 @@ func (mysqld *Mysqld) SetMasterCommands(masterHost string, masterPort int) ([]st
 	if err != nil {
 		return nil, fmt.Errorf("SetMasterCommands needs flavor: %v", err)
 	}
-	params, err := dbconfigs.MysqlParams(mysqld.replParams)
+	params, err := dbconfigs.WithCredentials(&mysqld.dbcfgs.Repl)
 	if err != nil {
 		return nil, err
 	}

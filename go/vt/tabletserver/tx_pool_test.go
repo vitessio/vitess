@@ -175,26 +175,6 @@ func TestTxPoolBeginAfterConnPoolClosed(t *testing.T) {
 	}
 }
 
-func TestTxPoolBeginWithShortDeadline(t *testing.T) {
-	db := fakesqldb.Register()
-	txPool := newTxPool(false)
-	appParams := sqldb.ConnParams{Engine: db.Name}
-	dbaParams := sqldb.ConnParams{Engine: db.Name}
-	txPool.Open(&appParams, &dbaParams)
-	// set pool capacity to 1
-	txPool.pool.SetCapacity(1)
-	defer txPool.Close()
-
-	// A timeout < 10ms should always fail.
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Millisecond)
-	defer cancel()
-	_, err := txPool.Begin(ctx)
-	want := "tx_pool_full: Transaction pool connection limit exceeded"
-	if err == nil || err.Error() != want {
-		t.Errorf("Begin: %v, want %s", err, want)
-	}
-}
-
 func TestTxPoolBeginWithPoolConnectionError(t *testing.T) {
 	db := fakesqldb.Register()
 	db.EnableConnFail()

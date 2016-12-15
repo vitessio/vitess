@@ -94,6 +94,12 @@ namespace Vitess\Proto\Vtgateservice {
       return $this->_simpleRequest('/vtgateservice.Vitess/Rollback', $argument, '\Vitess\Proto\Vtgate\RollbackResponse::deserialize', $metadata, $options);
     }
     /**
+     * @param Vitess\Proto\Vtgate\ResolveTransactionRequest $input
+     */
+    public function ResolveTransaction(\Vitess\Proto\Vtgate\ResolveTransactionRequest $argument, $metadata = array(), $options = array()) {
+      return $this->_simpleRequest('/vtgateservice.Vitess/ResolveTransaction', $argument, '\Vitess\Proto\Vtgate\ResolveTransactionResponse::deserialize', $metadata, $options);
+    }
+    /**
      * @param Vitess\Proto\Vtgate\SplitQueryRequest $input
      */
     public function SplitQuery(\Vitess\Proto\Vtgate\SplitQueryRequest $argument, $metadata = array(), $options = array()) {

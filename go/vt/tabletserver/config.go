@@ -31,6 +31,7 @@ func init() {
 	flag.IntVar(&qsConfig.StreamPoolSize, "queryserver-config-stream-pool-size", DefaultQsConfig.StreamPoolSize, "query server stream pool size, stream pool is used by stream queries: queries that return results to client in a streaming fashion")
 	flag.IntVar(&qsConfig.TransactionCap, "queryserver-config-transaction-cap", DefaultQsConfig.TransactionCap, "query server transaction cap is the maximum number of transactions allowed to happen at any given point of a time for a single vttablet. E.g. by setting transaction cap to 100, there are at most 100 transactions will be processed by a vttablet and the 101th transaction will be blocked (and fail if it cannot get connection within specified timeout)")
 	flag.Float64Var(&qsConfig.TransactionTimeout, "queryserver-config-transaction-timeout", DefaultQsConfig.TransactionTimeout, "query server transaction timeout (in seconds), a transaction will be killed if it takes longer than this value")
+	flag.Float64Var(&qsConfig.TxShutDownGracePeriod, "transaction_shutdown_grace_period", DefaultQsConfig.TxShutDownGracePeriod, "how long to wait (in seconds) for transactions to complete during graceful shutdown.")
 	flag.IntVar(&qsConfig.MaxResultSize, "queryserver-config-max-result-size", DefaultQsConfig.MaxResultSize, "query server max result size, maximum number of rows allowed to return from vttablet for non-streaming queries.")
 	flag.IntVar(&qsConfig.MaxDMLRows, "queryserver-config-max-dml-rows", DefaultQsConfig.MaxDMLRows, "query server max dml rows per statement, maximum number of rows allowed to return at a time for an upadte or delete with either 1) an equality where clauses on primary keys, or 2) a subselect statement. For update and delete statements in above two categories, vttablet will split the original query into multiple small queries based on this configuration value. ")
 	flag.IntVar(&qsConfig.StreamBufferSize, "queryserver-config-stream-buffer-size", DefaultQsConfig.StreamBufferSize, "query server stream buffer size, the maximum number of bytes sent from vttablet for each stream call.")
@@ -50,6 +51,9 @@ func init() {
 	flag.StringVar(&qsConfig.DebugURLPrefix, "debug-url-prefix", DefaultQsConfig.DebugURLPrefix, "debug url prefix, vttablet will report various system debug pages and this config controls the prefix of these debug urls")
 	flag.StringVar(&qsConfig.PoolNamePrefix, "pool-name-prefix", DefaultQsConfig.PoolNamePrefix, "pool name prefix, vttablet has several pools and each of them has a name. This config specifies the prefix of these pool names")
 	flag.BoolVar(&qsConfig.EnableAutoCommit, "enable-autocommit", DefaultQsConfig.EnableAutoCommit, "if the flag is on, a DML outsides a transaction will be auto committed.")
+	flag.BoolVar(&qsConfig.TwoPCEnable, "twopc_enable", DefaultQsConfig.TwoPCEnable, "if the flag is on, 2pc is enabled. Other 2pc flags must be supplied.")
+	flag.StringVar(&qsConfig.TwoPCCoordinatorAddress, "twopc_coordinator_address", DefaultQsConfig.TwoPCCoordinatorAddress, "address of the (VTGate) process(es) that will be used to notify of abandoned transactions.")
+	flag.Float64Var(&qsConfig.TwoPCAbandonAge, "twopc_abandon_age", DefaultQsConfig.TwoPCAbandonAge, "time in seconds. Any unresolved transaction older than this time will be sent to the coordinator to be resolved.")
 }
 
 // Init must be called after flag.Parse, and before doing any other operations.
@@ -60,28 +64,32 @@ func Init() {
 
 // Config contains all the configuration for query service
 type Config struct {
-	PoolSize             int
-	StreamPoolSize       int
-	TransactionCap       int
-	TransactionTimeout   float64
-	MaxResultSize        int
-	MaxDMLRows           int
-	StreamBufferSize     int
-	QueryCacheSize       int
-	SchemaReloadTime     float64
-	QueryTimeout         float64
-	TxPoolTimeout        float64
-	IdleTimeout          float64
-	StrictMode           bool
-	StrictTableAcl       bool
-	TerseErrors          bool
-	EnablePublishStats   bool
-	EnableAutoCommit     bool
-	EnableTableAclDryRun bool
-	StatsPrefix          string
-	DebugURLPrefix       string
-	PoolNamePrefix       string
-	TableAclExemptACL    string
+	PoolSize                int
+	StreamPoolSize          int
+	TransactionCap          int
+	TransactionTimeout      float64
+	TxShutDownGracePeriod   float64
+	MaxResultSize           int
+	MaxDMLRows              int
+	StreamBufferSize        int
+	QueryCacheSize          int
+	SchemaReloadTime        float64
+	QueryTimeout            float64
+	TxPoolTimeout           float64
+	IdleTimeout             float64
+	StrictMode              bool
+	StrictTableAcl          bool
+	TerseErrors             bool
+	EnablePublishStats      bool
+	EnableAutoCommit        bool
+	EnableTableAclDryRun    bool
+	StatsPrefix             string
+	DebugURLPrefix          string
+	PoolNamePrefix          string
+	TableAclExemptACL       string
+	TwoPCEnable             bool
+	TwoPCCoordinatorAddress string
+	TwoPCAbandonAge         float64
 }
 
 // DefaultQsConfig is the default value for the query service config.
@@ -92,28 +100,32 @@ type Config struct {
 // great (the overhead makes the final packets on the wire about twice
 // bigger than this).
 var DefaultQsConfig = Config{
-	PoolSize:             16,
-	StreamPoolSize:       200,
-	TransactionCap:       20,
-	TransactionTimeout:   30,
-	MaxResultSize:        10000,
-	MaxDMLRows:           500,
-	QueryCacheSize:       5000,
-	SchemaReloadTime:     30 * 60,
-	QueryTimeout:         30,
-	TxPoolTimeout:        1,
-	IdleTimeout:          30 * 60,
-	StreamBufferSize:     32 * 1024,
-	StrictMode:           true,
-	StrictTableAcl:       false,
-	TerseErrors:          false,
-	EnablePublishStats:   true,
-	EnableAutoCommit:     false,
-	EnableTableAclDryRun: false,
-	StatsPrefix:          "",
-	DebugURLPrefix:       "/debug",
-	PoolNamePrefix:       "",
-	TableAclExemptACL:    "",
+	PoolSize:                16,
+	StreamPoolSize:          200,
+	TransactionCap:          20,
+	TransactionTimeout:      30,
+	TxShutDownGracePeriod:   0,
+	MaxResultSize:           10000,
+	MaxDMLRows:              500,
+	QueryCacheSize:          5000,
+	SchemaReloadTime:        30 * 60,
+	QueryTimeout:            30,
+	TxPoolTimeout:           1,
+	IdleTimeout:             30 * 60,
+	StreamBufferSize:        32 * 1024,
+	StrictMode:              true,
+	StrictTableAcl:          false,
+	TerseErrors:             false,
+	EnablePublishStats:      true,
+	EnableAutoCommit:        false,
+	EnableTableAclDryRun:    false,
+	StatsPrefix:             "",
+	DebugURLPrefix:          "/debug",
+	PoolNamePrefix:          "",
+	TableAclExemptACL:       "",
+	TwoPCEnable:             false,
+	TwoPCCoordinatorAddress: "",
+	TwoPCAbandonAge:         0,
 }
 
 var qsConfig Config

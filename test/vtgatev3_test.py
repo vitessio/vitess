@@ -71,25 +71,38 @@ info varchar(128),
 primary key (name)
 ) Engine=InnoDB'''
 
+create_twopc_user = '''create table twopc_user (
+user_id bigint,
+val varchar(128),
+primary key (user_id)
+) Engine=InnoDB'''
+
 create_vt_user_seq = '''create table vt_user_seq (
   id int,
   next_id bigint,
   cache bigint,
-  increment bigint,
   primary key(id)
 ) comment 'vitess_sequence' Engine=InnoDB'''
 
-init_vt_user_seq = 'insert into vt_user_seq values(0, 1, 2, 1)'
+init_vt_user_seq = 'insert into vt_user_seq values(0, 1, 2)'
 
 create_vt_music_seq = '''create table vt_music_seq (
   id int,
   next_id bigint,
   cache bigint,
-  increment bigint,
   primary key(id)
 ) comment 'vitess_sequence' Engine=InnoDB'''
 
-init_vt_music_seq = 'insert into vt_music_seq values(0, 1, 2, 1)'
+init_vt_music_seq = 'insert into vt_music_seq values(0, 1, 2)'
+
+create_vt_main_seq = '''create table vt_main_seq (
+  id int,
+  next_id bigint,
+  cache bigint,
+  primary key(id)
+) comment 'vitess_sequence' Engine=InnoDB'''
+
+init_vt_main_seq = 'insert into vt_main_seq values(0, 1, 2)'
 
 create_name_user2_map = '''create table name_user2_map (
 name varchar(64),
@@ -101,6 +114,18 @@ create_music_user_map = '''create table music_user_map (
 music_id bigint,
 user_id bigint,
 primary key (music_id)
+) Engine=InnoDB'''
+
+create_main = '''create table main (
+id bigint,
+val varchar(128),
+primary key(id)
+) Engine=InnoDB'''
+
+create_twopc_lookup = '''create table twopc_lookup (
+id bigint,
+val varchar(128),
+primary key (id)
 ) Engine=InnoDB'''
 
 vschema = {
@@ -216,6 +241,14 @@ vschema = {
               "name": "unicode_hash"
             }
           ]
+        },
+        "twopc_user": {
+          "column_vindexes": [
+            {
+              "column": "user_id",
+              "name": "user_index"
+            }
+          ]
         }
       }
     }''',
@@ -228,8 +261,18 @@ vschema = {
         "vt_music_seq": {
           "type": "sequence"
         },
+        "vt_main_seq": {
+          "type": "sequence"
+        },
         "music_user_map": {},
-        "name_user2_map": {}
+        "name_user2_map": {},
+        "main": {
+          "auto_increment": {
+            "column": "id",
+            "sequence": "vt_main_seq"
+          }
+        },
+        "twopc_lookup": {}
       }
     }''',
 }
@@ -258,17 +301,23 @@ def setUpModule():
             create_join_user,
             create_join_user_extra,
             create_join_name_info,
+            create_twopc_user,
             ],
         rdonly_count=1,  # to test SplitQuery
+        twopc_coordinator_address='localhost:15028',  # enables 2pc
         )
     keyspace_env.launch(
         'lookup',
         ddls=[
             create_vt_user_seq,
             create_vt_music_seq,
+            create_vt_main_seq,
             create_music_user_map,
             create_name_user2_map,
+            create_main,
+            create_twopc_lookup,
             ],
+        twopc_coordinator_address='localhost:15028',  # enables 2pc
         )
     shard_0_master = keyspace_env.tablet_map['user.-80.master']
     shard_1_master = keyspace_env.tablet_map['user.80-.master']
@@ -276,7 +325,8 @@ def setUpModule():
 
     utils.apply_vschema(vschema)
     utils.VtGate().start(
-        tablets=[shard_0_master, shard_1_master, lookup_master])
+        tablets=[shard_0_master, shard_1_master, lookup_master],
+        extra_args=['-transaction_mode', 'twopc'])
     utils.vtgate.wait_for_endpoints('user.-80.master', 1)
     utils.vtgate.wait_for_endpoints('user.80-.master', 1)
     utils.vtgate.wait_for_endpoints('lookup.0.master', 1)
@@ -831,6 +881,35 @@ class TestVTGateFunctions(unittest.TestCase):
         'vt_user', 'select music_id, user_id, artist from vt_music_extra')
     self.assertEqual(result, ((1L, 1L, 'test 1'),))
 
+  def test_main_seq(self):
+    # music is for testing owned lookup index
+    vtgate_conn = get_connection()
+
+    # Initialize the sequence.
+    # TODO(sougou): Use DDL when ready.
+    vtgate_conn.begin()
+    self.execute_on_master(vtgate_conn, init_vt_main_seq, {})
+    vtgate_conn.commit()
+
+    count = 4
+    for x in xrange(count):
+      i = x+1
+      vtgate_conn.begin()
+      result = self.execute_on_master(
+          vtgate_conn,
+          'insert into main (val) values (:val)',
+          {'val': 'test %s' % i})
+      self.assertEqual(result, ([], 1L, i, []))
+      vtgate_conn.commit()
+
+    result = self.execute_on_master(
+        vtgate_conn, 'select id, val from main where id = 4', {})
+    self.assertEqual(
+        result,
+        ([(4, 'test 4')], 1, 0,
+         [('id', self.int_type),
+          ('val', self.string_type)]))
+
   def test_joins(self):
     vtgate_conn = get_connection()
     vtgate_conn.begin()
@@ -966,6 +1045,42 @@ class TestVTGateFunctions(unittest.TestCase):
             {'email': 'test 10'})
     finally:
       vtgate_conn.rollback()
+
+  def test_transaction_modes(self):
+    vtgate_conn = get_connection()
+    cursor = vtgate_conn.cursor(
+        tablet_type='master', keyspace=None, writable=True, single_db=True)
+    cursor.begin()
+    cursor.execute(
+        'insert into twopc_user (user_id, val)  values(1, \'val\')', {})
+    with self.assertRaisesRegexp(
+        dbexceptions.DatabaseError, '.*multi-db transaction attempted.*'):
+      cursor.execute(
+          'insert into twopc_lookup (id, val)  values(1, \'val\')', {})
+
+    cursor = vtgate_conn.cursor(
+        tablet_type='master', keyspace=None, writable=True, twopc=True)
+    cursor.begin()
+    cursor.execute(
+        'insert into twopc_user (user_id, val)  values(1, \'val\')', {})
+    cursor.execute(
+        'insert into twopc_lookup (id, val)  values(1, \'val\')', {})
+    cursor.commit()
+
+    cursor.execute('select user_id, val from twopc_user where user_id = 1', {})
+    self.assertEqual(cursor.fetchall(), [(1, 'val')])
+    cursor.execute('select id, val from twopc_lookup where id = 1', {})
+    self.assertEqual(cursor.fetchall(), [(1, 'val')])
+
+    cursor.begin()
+    cursor.execute('delete from twopc_user where user_id = 1', {})
+    cursor.execute('delete from twopc_lookup where id = 1', {})
+    cursor.commit()
+
+    cursor.execute('select user_id, val from twopc_user where user_id = 1', {})
+    self.assertEqual(cursor.fetchall(), [])
+    cursor.execute('select id, val from twopc_lookup where id = 1', {})
+    self.assertEqual(cursor.fetchall(), [])
 
   def test_vtclient(self):
     """This test uses vtclient to send and receive various queries.

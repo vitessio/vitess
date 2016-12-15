@@ -632,7 +632,7 @@ func (f *fakeVTGateService) StreamExecuteKeyRanges(ctx context.Context, sql stri
 }
 
 // Begin is part of the VTGateService interface
-func (f *fakeVTGateService) Begin(ctx context.Context) (*vtgatepb.Session, error) {
+func (f *fakeVTGateService) Begin(ctx context.Context, singledb bool) (*vtgatepb.Session, error) {
 	f.checkCallerID(ctx, "Begin")
 	switch {
 	case f.forceBeginSuccess:
@@ -641,6 +641,10 @@ func (f *fakeVTGateService) Begin(ctx context.Context) (*vtgatepb.Session, error
 	case f.panics:
 		panic(fmt.Errorf("test forced panic"))
 	default:
+	}
+	if singledb {
+		// Communicate this as an error.
+		return nil, errors.New("single db")
 	}
 	return session1, nil
 }
@@ -653,6 +657,10 @@ func (f *fakeVTGateService) Commit(ctx context.Context, twopc bool, inSession *v
 	}
 	if f.panics {
 		panic(fmt.Errorf("test forced panic"))
+	}
+	if twopc {
+		// Communicate this as an error.
+		return errors.New("twopc")
 	}
 	if !reflect.DeepEqual(inSession, session2) {
 		return errors.New("commit: session mismatch")
@@ -852,6 +860,8 @@ func TestSuite(t *testing.T, impl vtgateconn.Impl, fakeServer vtgateservice.VTGa
 
 	fs := fakeServer.(*fakeVTGateService)
 
+	testBegin(t, conn)
+	testCommit(t, conn)
 	testExecute(t, conn)
 	testExecuteShards(t, conn)
 	testExecuteKeyspaceIds(t, conn)
@@ -959,6 +969,28 @@ func verifyErrorString(t *testing.T, err error, method string) {
 
 	if !strings.Contains(err.Error(), expectedErrMatch) {
 		t.Errorf("Unexpected error from %s: got %v, wanted err containing: %v", method, err, errTestVtGateError.Error())
+	}
+}
+
+func testBegin(t *testing.T, conn *vtgateconn.VTGateConn) {
+	ctx := vtgateconn.WithAtomicity(newContext(), vtgateconn.AtomicitySingle)
+	_, err := conn.Begin(ctx)
+	want := "single db"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("Begin(singldb): %v, want %v", err, want)
+	}
+}
+
+func testCommit(t *testing.T, conn *vtgateconn.VTGateConn) {
+	ctx := vtgateconn.WithAtomicity(newContext(), vtgateconn.Atomicity2PC)
+	tx, err := conn.Begin(ctx)
+	if err != nil {
+		t.Error(err)
+	}
+	err = tx.Commit(ctx)
+	want := "twopc"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("Commit(twopc): %v, want %v", err, want)
 	}
 }
 
@@ -1976,7 +2008,10 @@ var execMap = map[string]struct {
 		execQuery: &queryExecute{
 			SQL: "request1",
 			BindVariables: map[string]interface{}{
-				"bind1": int64(0),
+				"bind1": &querypb.BindVariable{
+					Type:  querypb.Type_INT64,
+					Value: []byte("0"),
+				},
 			},
 			Keyspace:   "connection_ks",
 			TabletType: topodatapb.TabletType_RDONLY,
@@ -1985,7 +2020,10 @@ var execMap = map[string]struct {
 		shardQuery: &queryExecuteShards{
 			SQL: "request1",
 			BindVariables: map[string]interface{}{
-				"bind1": int64(0),
+				"bind1": &querypb.BindVariable{
+					Type:  querypb.Type_INT64,
+					Value: []byte("0"),
+				},
 			},
 			Keyspace:   "ks",
 			Shards:     []string{"1", "2"},
@@ -1995,7 +2033,10 @@ var execMap = map[string]struct {
 		keyspaceIDQuery: &queryExecuteKeyspaceIds{
 			SQL: "request1",
 			BindVariables: map[string]interface{}{
-				"bind1": int64(0),
+				"bind1": &querypb.BindVariable{
+					Type:  querypb.Type_INT64,
+					Value: []byte("0"),
+				},
 			},
 			Keyspace: "ks",
 			KeyspaceIds: [][]byte{
@@ -2007,7 +2048,10 @@ var execMap = map[string]struct {
 		keyRangeQuery: &queryExecuteKeyRanges{
 			SQL: "request1",
 			BindVariables: map[string]interface{}{
-				"bind1": int64(0),
+				"bind1": &querypb.BindVariable{
+					Type:  querypb.Type_INT64,
+					Value: []byte("0"),
+				},
 			},
 			Keyspace: "ks",
 			KeyRanges: []*topodatapb.KeyRange{
@@ -2022,7 +2066,10 @@ var execMap = map[string]struct {
 		entityIdsQuery: &queryExecuteEntityIds{
 			SQL: "request1",
 			BindVariables: map[string]interface{}{
-				"bind1": int64(0),
+				"bind1": &querypb.BindVariable{
+					Type:  querypb.Type_INT64,
+					Value: []byte("0"),
+				},
 			},
 			Keyspace:         "ks",
 			EntityColumnName: "column",
@@ -2224,7 +2271,10 @@ var execMap = map[string]struct {
 		execQuery: &queryExecute{
 			SQL: "txRequest",
 			BindVariables: map[string]interface{}{
-				"bind1": int64(0),
+				"bind1": &querypb.BindVariable{
+					Type:  querypb.Type_INT64,
+					Value: []byte("0"),
+				},
 			},
 			Keyspace:   "connection_ks",
 			TabletType: topodatapb.TabletType_MASTER,
@@ -2233,7 +2283,10 @@ var execMap = map[string]struct {
 		shardQuery: &queryExecuteShards{
 			SQL: "txRequest",
 			BindVariables: map[string]interface{}{
-				"bind1": int64(0),
+				"bind1": &querypb.BindVariable{
+					Type:  querypb.Type_INT64,
+					Value: []byte("0"),
+				},
 			},
 			TabletType: topodatapb.TabletType_MASTER,
 			Keyspace:   "",
@@ -2243,7 +2296,10 @@ var execMap = map[string]struct {
 		keyspaceIDQuery: &queryExecuteKeyspaceIds{
 			SQL: "txRequest",
 			BindVariables: map[string]interface{}{
-				"bind1": int64(0),
+				"bind1": &querypb.BindVariable{
+					Type:  querypb.Type_INT64,
+					Value: []byte("0"),
+				},
 			},
 			Keyspace: "ks",
 			KeyspaceIds: [][]byte{
@@ -2255,7 +2311,10 @@ var execMap = map[string]struct {
 		keyRangeQuery: &queryExecuteKeyRanges{
 			SQL: "txRequest",
 			BindVariables: map[string]interface{}{
-				"bind1": int64(0),
+				"bind1": &querypb.BindVariable{
+					Type:  querypb.Type_INT64,
+					Value: []byte("0"),
+				},
 			},
 			Keyspace: "ks",
 			KeyRanges: []*topodatapb.KeyRange{
@@ -2270,7 +2329,10 @@ var execMap = map[string]struct {
 		entityIdsQuery: &queryExecuteEntityIds{
 			SQL: "txRequest",
 			BindVariables: map[string]interface{}{
-				"bind1": int64(0),
+				"bind1": &querypb.BindVariable{
+					Type:  querypb.Type_INT64,
+					Value: []byte("0"),
+				},
 			},
 			Keyspace:         "ks",
 			EntityColumnName: "column",
@@ -2409,7 +2471,10 @@ var splitQueryRequest = &querySplitQuery{
 	Keyspace: "ks2",
 	SQL:      "in for SplitQuery",
 	BindVariables: map[string]interface{}{
-		"bind2": int64(43),
+		"bind2": &querypb.BindVariable{
+			Type:  querypb.Type_INT64,
+			Value: []byte("43"),
+		},
 	},
 	SplitColumns:        []string{"split_column1", "split_column2"},
 	SplitCount:          145,

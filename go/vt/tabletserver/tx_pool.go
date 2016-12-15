@@ -111,6 +111,16 @@ func (axp *TxPool) Close() {
 	axp.pool.Close()
 }
 
+// AdjustLastID adjusts the last transaction id to be at least
+// as large as the input value. This will ensure that there are
+// no dtid collisions with future transactions.
+func (axp *TxPool) AdjustLastID(id int64) {
+	if current := axp.lastID.Get(); current < id {
+		log.Infof("Adjusting transaction id to: %d", id)
+		axp.lastID.Set(id)
+	}
+}
+
 // RollbackNonBusy rolls back all transactions that are not in use.
 // Transactions can be in use for situations like executing statements
 // or in prepared state.
@@ -139,13 +149,7 @@ func (axp *TxPool) WaitForEmpty() {
 // Begin begins a transaction, and returns the associated transaction id.
 // Subsequent statements can access the connection through the transaction id.
 func (axp *TxPool) Begin(ctx context.Context) (int64, error) {
-	poolCtx := ctx
-	if deadline, ok := ctx.Deadline(); ok {
-		var cancel func()
-		poolCtx, cancel = context.WithDeadline(ctx, deadline.Add(-10*time.Millisecond))
-		defer cancel()
-	}
-	conn, err := axp.pool.Get(poolCtx)
+	conn, err := axp.pool.Get(ctx)
 	if err != nil {
 		switch err {
 		case ErrConnPoolClosed:

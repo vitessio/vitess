@@ -74,7 +74,7 @@ func (stc *ScatterConn) startAction(name string, target *querypb.Target) (time.T
 	return startTime, statsKey
 }
 
-func (stc *ScatterConn) endAction(startTime time.Time, allErrors *concurrency.AllErrorRecorder, statsKey []string, err *error) {
+func (stc *ScatterConn) endAction(startTime time.Time, allErrors *concurrency.AllErrorRecorder, statsKey []string, err *error, session *SafeSession) {
 	if *err != nil {
 		allErrors.RecordError(*err)
 		// Don't increment the error counter for duplicate
@@ -83,6 +83,9 @@ func (stc *ScatterConn) endAction(startTime time.Time, allErrors *concurrency.Al
 		ec := vterrors.RecoverVtErrorCode(*err)
 		if ec != vtrpcpb.ErrorCode_INTEGRITY_ERROR && ec != vtrpcpb.ErrorCode_BAD_INPUT {
 			stc.tabletCallErrorCount.Add(statsKey, 1)
+		}
+		if ec == vtrpcpb.ErrorCode_RESOURCE_EXHAUSTED || ec == vtrpcpb.ErrorCode_NOT_IN_TX {
+			session.SetRollback()
 		}
 	}
 	stc.timings.Record(statsKey, startTime)
@@ -105,7 +108,7 @@ func (stc *ScatterConn) Execute(
 	var mu sync.Mutex
 	qr := new(sqltypes.Result)
 
-	allErrors := stc.multiGoTransaction(
+	err := stc.multiGoTransaction(
 		ctx,
 		"Execute",
 		keyspace,
@@ -134,13 +137,7 @@ func (stc *ScatterConn) Execute(
 			appendResult(qr, innerqr)
 			return transactionID, nil
 		})
-
-	if allErrors.HasErrors() {
-		err := allErrors.AggrError(stc.aggregateErrors)
-		stc.txConn.RollbackIfNeeded(ctx, err, session)
-		return nil, err
-	}
-	return qr, nil
+	return qr, err
 }
 
 // ExecuteMulti is like Execute,
@@ -161,7 +158,7 @@ func (stc *ScatterConn) ExecuteMulti(
 	var mu sync.Mutex
 	qr := new(sqltypes.Result)
 
-	allErrors := stc.multiGoTransaction(
+	err := stc.multiGoTransaction(
 		ctx,
 		"Execute",
 		keyspace,
@@ -190,13 +187,7 @@ func (stc *ScatterConn) ExecuteMulti(
 			appendResult(qr, innerqr)
 			return transactionID, nil
 		})
-
-	if allErrors.HasErrors() {
-		err := allErrors.AggrError(stc.aggregateErrors)
-		stc.txConn.RollbackIfNeeded(ctx, err, session)
-		return nil, err
-	}
-	return qr, nil
+	return qr, err
 }
 
 // ExecuteEntityIds executes queries that are shard specific.
@@ -216,7 +207,7 @@ func (stc *ScatterConn) ExecuteEntityIds(
 	var mu sync.Mutex
 	qr := new(sqltypes.Result)
 
-	allErrors := stc.multiGoTransaction(
+	err := stc.multiGoTransaction(
 		ctx,
 		"ExecuteEntityIds",
 		keyspace,
@@ -248,12 +239,7 @@ func (stc *ScatterConn) ExecuteEntityIds(
 			appendResult(qr, innerqr)
 			return transactionID, nil
 		})
-	if allErrors.HasErrors() {
-		err := allErrors.AggrError(stc.aggregateErrors)
-		stc.txConn.RollbackIfNeeded(ctx, err, session)
-		return nil, err
-	}
-	return qr, nil
+	return qr, err
 }
 
 // scatterBatchRequest needs to be built to perform a scatter batch query.
@@ -299,17 +285,19 @@ func (stc *ScatterConn) ExecuteBatch(
 
 			var err error
 			startTime, statsKey := stc.startAction("ExecuteBatch", target)
-			defer stc.endAction(startTime, allErrors, statsKey, &err)
+			defer stc.endAction(startTime, allErrors, statsKey, &err, session)
 
 			shouldBegin, transactionID := transactionInfo(target, session, false)
 			var innerqrs []sqltypes.Result
 			if shouldBegin {
 				innerqrs, transactionID, err = stc.gateway.BeginExecuteBatch(ctx, target, req.Queries, asTransaction, options)
 				if transactionID != 0 {
-					session.Append(&vtgatepb.Session_ShardSession{
+					if appendErr := session.Append(&vtgatepb.Session_ShardSession{
 						Target:        target,
 						TransactionId: transactionID,
-					})
+					}); appendErr != nil {
+						err = appendErr
+					}
 				}
 				if err != nil {
 					return
@@ -329,12 +317,12 @@ func (stc *ScatterConn) ExecuteBatch(
 		}(req)
 	}
 	wg.Wait()
-	// If we want to rollback, we have to do it before closing results
-	// so that the session is updated to be not InTransaction.
+
+	if session.MustRollback() {
+		stc.txConn.Rollback(ctx, session)
+	}
 	if allErrors.HasErrors() {
-		err := allErrors.AggrError(stc.aggregateErrors)
-		stc.txConn.RollbackIfNeeded(ctx, err, session)
-		return nil, err
+		return nil, allErrors.AggrError(stc.aggregateErrors)
 	}
 	return results, nil
 }
@@ -644,7 +632,7 @@ func (stc *ScatterConn) multiGo(
 			TabletType: tabletType,
 		}
 		startTime, statsKey := stc.startAction(name, target)
-		defer stc.endAction(startTime, allErrors, statsKey, &err)
+		defer stc.endAction(startTime, allErrors, statsKey, &err, nil)
 		err = action(target)
 	}
 
@@ -683,13 +671,13 @@ func (stc *ScatterConn) multiGoTransaction(
 	session *SafeSession,
 	notInTransaction bool,
 	action shardActionTransactionFunc,
-) (allErrors *concurrency.AllErrorRecorder) {
-	allErrors = new(concurrency.AllErrorRecorder)
+) error {
 	shardMap := unique(shards)
 	if len(shardMap) == 0 {
-		return allErrors
+		return nil
 	}
 
+	allErrors := new(concurrency.AllErrorRecorder)
 	oneShard := func(shard string) {
 		var err error
 		target := &querypb.Target{
@@ -698,27 +686,29 @@ func (stc *ScatterConn) multiGoTransaction(
 			TabletType: tabletType,
 		}
 		startTime, statsKey := stc.startAction(name, target)
-		defer stc.endAction(startTime, allErrors, statsKey, &err)
+		defer stc.endAction(startTime, allErrors, statsKey, &err, session)
 
 		shouldBegin, transactionID := transactionInfo(target, session, notInTransaction)
 		transactionID, err = action(target, shouldBegin, transactionID)
 		if shouldBegin && transactionID != 0 {
-			session.Append(&vtgatepb.Session_ShardSession{
+			if appendErr := session.Append(&vtgatepb.Session_ShardSession{
 				Target:        target,
 				TransactionId: transactionID,
-			})
-		}
-	}
-
-	if len(shardMap) == 1 {
-		// only one shard, do it synchronously.
-		for shard := range shardMap {
-			oneShard(shard)
-			return allErrors
+			}); appendErr != nil {
+				err = appendErr
+			}
 		}
 	}
 
 	var wg sync.WaitGroup
+	if len(shardMap) == 1 {
+		// only one shard, do it synchronously.
+		for shard := range shardMap {
+			oneShard(shard)
+			goto end
+		}
+	}
+
 	for shard := range shardMap {
 		wg.Add(1)
 		go func(shard string) {
@@ -727,7 +717,15 @@ func (stc *ScatterConn) multiGoTransaction(
 		}(shard)
 	}
 	wg.Wait()
-	return allErrors
+
+end:
+	if session.MustRollback() {
+		stc.txConn.Rollback(ctx, session)
+	}
+	if allErrors.HasErrors() {
+		return allErrors.AggrError(stc.aggregateErrors)
+	}
+	return nil
 }
 
 // transactionInfo looks at the current session, and returns:

@@ -8,10 +8,11 @@ Our GitHub workflow is a so called triangular workflow:
 
 *Image Source:* https://github.com/blog/2042-git-2-5-including-multiple-worktrees-and-triangular-workflows
 
-You develop and commit your changes in a clone of our upstream repository
-(`local`). Then you push your changes to your forked repository (`origin`) and
-send us a pull request. Eventually, we will merge your pull request back into
-the `upstream` repository.
+The Vitess code is hosted on GitHub (https://github.com/youtube/vitess).
+This repository is called *upstream*.
+You develop and commit your changes in a clone of our upstream repository (shown as *local* in the image above).
+Then you push your changes to your forked repository (*origin*) and send us a pull request.
+Eventually, we will merge your pull request back into the *upstream* repository.
 
 ## Remotes
 
@@ -71,7 +72,10 @@ $ git checkout master
 ```
 
 Try to commit small pieces along the way as you finish them, with an explanation
-of the changes in the commit message. As you work in a package, you can run just
+of the changes in the commit message.
+Please see the [Code Review page](/contributing/code-reviews.html) for more guidance.
+
+As you work in a package, you can run just
 the unit tests for that package by running `go test` from within that package.
 
 When you're ready to test the whole system, run the full test suite with `make
@@ -123,5 +127,7 @@ $ git checkout new-feature
 
 That is because a pull request always mirrors all commits from your topic branch which are not in the master branch.
 
-After you merge, close the issue (if it wasn't automatically closed) and delete
-the topic branch.
+Once your pull request is merged:
+
+*  close the GitHub issue (if it wasn't automatically closed)
+*  delete your local topic branch (`git branch -d new-feature`)

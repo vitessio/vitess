@@ -149,6 +149,12 @@ enum Type {
   // be sent as a bind var.
   // Properties: 28, None.
   TUPLE = 28;
+  // GEOMETRY specifies a GEOMETRY type.
+  // Properties: 29, IsQuoted.
+  GEOMETRY = 2077;
+  // JSON specified a JSON type.
+  // Properties: 30, IsQuoted.
+  JSON = 2078;
 }
 
 // Value represents a typed value.
@@ -622,6 +628,5 @@ message TransactionMetadata {
   string dtid = 1;
   TransactionState state = 2;
   int64 time_created = 3;
-  int64 time_updated = 4;
-  repeated Target participants = 5;
+  repeated Target participants = 4;
 }

@@ -29,13 +29,15 @@ export class ShardComponent implements OnInit, OnDestroy {
   shardName: string;
   keyspace = {};
   tablets = [];
-  tabletsReady = false;
-  // Bound to the table of tablets and must start with none selected.
+  inFlightQueries = 0;
+  noTablets = false;
+  // selectedTablet is populated when we click on an Actions menu.
   selectedTablet = undefined;
   dialogSettings: DialogSettings;
   dialogContent: DialogContent;
   private actions: MenuItem[];
-  private tabletActions: MenuItem[];
+  private tabletActionsMaster: MenuItem[];
+  private tabletActionsSlave: MenuItem[];
 
   constructor(
     private route: ActivatedRoute,
@@ -50,10 +52,7 @@ export class ShardComponent implements OnInit, OnDestroy {
   ngOnInit() {
     this.dialogContent = new DialogContent();
     this.dialogSettings = new DialogSettings();
-
-    this.actions = this.getActions();
-    this.tabletActions = this.getTabletActions();
-
+    this.refreshMenus();
     this.routeSub = this.route.queryParams.subscribe(params => {
       let keyspaceName = params['keyspace'];
       let shardName = params['shard'];
@@ -63,6 +62,12 @@ export class ShardComponent implements OnInit, OnDestroy {
         this.getKeyspace(this.keyspaceName);
       }
     });
+  }
+
+  refreshMenus() {
+    this.actions = this.getActions();
+    this.tabletActionsMaster = this.getTabletActions(true);
+    this.tabletActionsSlave = this.getTabletActions(false);
   }
 
   // getActions returns the actions on a shard.
@@ -95,7 +100,7 @@ export class ShardComponent implements OnInit, OnDestroy {
   }
 
   // getTabletActions returns the actions on a tablet.
-  getTabletActions() {
+  getTabletActions(isMaster: boolean) {
     let result: MenuItem[] = [
       {label: 'Status', items: [
         {label: 'Ping', command: (event) => {this.openPingTabletDialog(); }},
@@ -104,24 +109,32 @@ export class ShardComponent implements OnInit, OnDestroy {
       ]},
       {label: 'Change', items: [
         {label: 'Ignore Health Error', command: (event) => {this.openIgnoreHealthErrorDialog(); }},
-        {label: 'Start Slave', command: (event) => {this.openStartSlaveDialog(); }},
-        {label: 'Stop Slave', command: (event) => {this.openStopSlaveDialog(); }},
         {label: 'Delete Tablet', command: (event) => {this.openDeleteTabletDialog(); }},
       ]},
     ];
-    if (this.featuresService.activeReparents) {
-      // Add a couple new items to the 'Change' section.
+    if (!isMaster) {
+      // Add replication-related methods to the 'Change' section for slaves.
       result[1].items.push(
-        {label: 'Set ReadOnly', command: (event) => {this.openSetReadOnlyDialog(); }},
-        {label: 'Set ReadWrite', command: (event) => {this.openSetReadWriteDialog(); }},
+        {label: 'Start Slave', command: (event) => {this.openStartSlaveDialog(); }},
+        {label: 'Stop Slave', command: (event) => {this.openStopSlaveDialog(); }},
       );
-      // Add an entire section.
-      result.push(
-        {label: 'Reparent', items: [
-          {label: 'Demote Master', command: (event) => {this.openDemoteMasterDialog(); }},
-          {label: 'Reparent Tablet', command: (event) => {this.openReparentTabletDialog(); }},
-        ]}
-      );
+    }
+    if (this.featuresService.activeReparents) {
+      // Add a couple new items to the 'Change' section for master.
+      if (isMaster) {
+        result[1].items.push(
+          {label: 'Set ReadOnly', command: (event) => {this.openSetReadOnlyDialog(); }},
+          {label: 'Set ReadWrite', command: (event) => {this.openSetReadWriteDialog(); }},
+        );
+      }
+      // Add an entire section for Reparent for slaves.
+      if (!isMaster) {
+        result.push(
+          {label: 'Reparent', items: [
+            {label: 'Reparent Tablet', command: (event) => {this.openReparentTabletDialog(); }},
+          ]}
+        );
+      }
     }
     return result;
   }
@@ -150,10 +163,14 @@ export class ShardComponent implements OnInit, OnDestroy {
     return t;
   }
 
-  // sortByType sorts the tablets by type, using typeIndex.
+  // sortByType sorts the tablets by the following sort orders:
+  // 1. Type, using typeIndex.
+  // 2. Cell
+  // 3. UID.
   sortByType(event) {
     let t = this;
     this.tablets.sort(function(t1, t2) {
+      // Primary sort order: type.
       let s1 = t.typeIndex(t1.type);
       let s2 = t.typeIndex(t2.type);
       if (s1 < s2) {
@@ -162,6 +179,75 @@ export class ShardComponent implements OnInit, OnDestroy {
       if (s1 > s2) {
         return 1 * event.order;
       }
+
+      // Secondary sort order: cell.
+      if (t1.cell < t2.cell) {
+        return -1 * event.order;
+      }
+      if (t1.cell > t2.cell) {
+        return 1 * event.order;
+      }
+
+      // Tertiary sort order: UID.
+      if (t1.uid < t2.uid) {
+        return -1 * event.order;
+      }
+      if (t1.uid > t2.uid) {
+        return 1 * event.order;
+      }
+
+      return 0;
+    });
+  }
+
+  // sortByCell sorts the tablets by the following sort orders:
+  // 1. Cell
+  // 2. Type, using typeIndex. Not using event.order.
+  // 3. UID. Not using event.order.
+  //
+  // Note we keep the order within a cell the same, whether it's ascending
+  // or descending sort.
+  // So the final order will be something like this, for ascending:
+  //   cell1  master
+  //   cell1  replica1.1
+  //   cell1  replica1.2
+  //   cell2  replica2.1
+  //   cell2  replica2.2
+  // or this for descending:
+  //   cell2  replica2.1
+  //   cell2  replica2.2
+  //   cell1  master
+  //   cell1  replica1.1
+  //   cell1  replica1.2
+  sortByCell(event) {
+    let t = this;
+    this.tablets.sort(function(t1, t2) {
+      // Primary sort order: cell.
+      if (t1.cell < t2.cell) {
+        return -1 * event.order;
+      }
+      if (t1.cell > t2.cell) {
+        return 1 * event.order;
+      }
+
+      // Secondary sort order: type. Not using event.order.
+      let s1 = t.typeIndex(t1.type);
+      let s2 = t.typeIndex(t2.type);
+      if (s1 < s2) {
+        return -1;
+      }
+      if (s1 > s2) {
+        return 1;
+      }
+
+      // Tertiary sort order: UID. Not using event.order.
+      if (t1.uid < t2.uid) {
+        return -1;
+      }
+      if (t1.uid > t2.uid) {
+        return 1;
+      }
+
       return 0;
     });
   }
@@ -170,29 +256,21 @@ export class ShardComponent implements OnInit, OnDestroy {
     this.routeSub.unsubscribe();
   }
 
-  getTabletList(keyspaceName: string, shardName: string) {
-    this.tablets = [];
-    this.tabletsReady = true;
-    let shardRef = `${keyspaceName}/${shardName}`;
-    this.tabletService.getTabletList(shardRef).subscribe((tabletList) => {
-      for (let tablet of tabletList){
-        this.getTablet(`${tablet.cell}-${tablet.uid}`);
-      }
-    });
-  }
-
-  getTablet(tabletRef: string) {
-    this.tabletService.getTablet(tabletRef).subscribe((tablet) => {
-      this.tablets.push(tablet);
-    });
-  }
-
+  // getKeyspace is called on init or refresh to fetch the keyspace.
+  // It triggers getTabletList if the shard exists in the keyspace.
   getKeyspace(keyspaceName: string) {
+    if (this.inFlightQueries > 0) {
+      // There is already a query in flight, we don't want to have
+      // more than one at a time, it would mess up our data
+      // structures.
+      return;
+    }
+    this.inFlightQueries++;
     this.keyspaceService.getKeyspace(keyspaceName).subscribe(keyspaceStream => {
+      this.inFlightQueries++;
       keyspaceStream.subscribe(keyspace => {
         // Refresh the menus, at this point we read the features map.
-        this.actions = this.getActions();
-        this.tabletActions = this.getTabletActions();
+        this.refreshMenus();
 
         this.keyspace = keyspace;
         // Test to see if shard is in keyspace
@@ -202,7 +280,59 @@ export class ShardComponent implements OnInit, OnDestroy {
             return;
           }
         }
+      }, () => {
+        console.log('Error getting keyspace');
+        this.inFlightQueries--;
+      }, () => {
+        this.inFlightQueries--;
       });
+    }, () => {
+      console.log('Error getting keyspaces');
+      this.inFlightQueries--;
+    }, () => {
+      this.inFlightQueries--;
+    });
+  }
+
+  // getTabletList is called after getting the keyspace.
+  // It will trigger getTablet for each tablet in the shard.
+  getTabletList(keyspaceName: string, shardName: string) {
+    this.tablets = [];
+    this.noTablets = false;
+    let shardRef = `${keyspaceName}/${shardName}`;
+    this.inFlightQueries++;
+    this.tabletService.getTabletList(shardRef).subscribe((tabletList) => {
+      if (tabletList.length === 0) {
+        this.noTablets = true;
+        return;
+      }
+      for (let tablet of tabletList){
+        this.getTablet(`${tablet.cell}-${tablet.uid}`);
+      }
+    }, () => {
+      console.log('Error getting tablet list');
+      this.inFlightQueries--;
+    }, () => {
+      this.inFlightQueries--;
+    });
+  }
+
+  // getTablet is triggered for each tablet in the shard.
+  // After adding each tablet, we sort the list, so the initial display
+  // has master first, then replica, then rdonly, then the rest.
+  getTablet(tabletRef: string) {
+    this.inFlightQueries++;
+    this.tabletService.getTablet(tabletRef).subscribe((tablet) => {
+      this.tablets.push(tablet);
+    }, () => {
+      console.log('Error getting tablet');
+      this.inFlightQueries--;
+    }, () => {
+      this.inFlightQueries--;
+      if (this.inFlightQueries === 0) {
+        // We just got the last tablet, we can now sort them.
+        this.sortByType({'order': 1});
+      }
     });
   }
 
@@ -386,19 +516,6 @@ export class ShardComponent implements OnInit, OnDestroy {
     this.dialogSettings.toggleModal();
   }
 
-  openDemoteMasterDialog() {
-    this.dialogSettings = new DialogSettings('Demote', `Demote ${this.selectedTablet.label}`,
-                                             `Makes a master tablet read-only, waits for all transactions to finish, ` +
-                                             `and return its replication position. Does not change the type, nor reparent slaves.` +
-                                             ` Use with caution.`,
-                                             `There was a problem demoting ${this.selectedTablet.label}:`);
-    this.dialogSettings.setMessage(`Demoted ${this.selectedTablet.label}`);
-    this.dialogSettings.onCloseFunction = this.refreshShardView.bind(this);
-    let flags = new PingTabletFlags(this.selectedTablet.alias).flags;
-    this.dialogContent = new DialogContent('tablet_alias', flags, {}, undefined, 'DemoteMaster');
-    this.dialogSettings.toggleModal();
-  }
-
   openReparentTabletDialog() {
     this.dialogSettings = new DialogSettings('Reparent', `Reparent ${this.selectedTablet.label}`,
                                              `Re-connect the replication for ${this.selectedTablet.label} to the current master.` +
@@ -413,8 +530,7 @@ export class ShardComponent implements OnInit, OnDestroy {
 
   refreshShardView() {
     this.getKeyspace(this.keyspaceName);
-    this.actions = this.getActions();
-    this.tabletActions = this.getTabletActions();
+    this.refreshMenus();
   }
 
   navigateToKeyspace(dialogContent: DialogContent) {

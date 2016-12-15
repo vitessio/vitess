@@ -287,6 +287,9 @@ func TestValid(t *testing.T) {
 	}, {
 		input: "select /* % */ 1 from t where a = b % c",
 	}, {
+		input:  "select /* MOD */ 1 from t where a = b MOD c",
+		output: "select /* MOD */ 1 from t where a = b % c",
+	}, {
 		input: "select /* << */ 1 from t where a = b << c",
 	}, {
 		input: "select /* >> */ 1 from t where a = b >> c",
@@ -300,6 +303,10 @@ func TestValid(t *testing.T) {
 	}, {
 		input: "select /* u~ */ 1 from t where a = ~b",
 	}, {
+		input: "select /* -> */ a.b -> 'ab' from t",
+	}, {
+		input: "select /* -> */ a.b ->> 'ab' from t",
+	}, {
 		input: "select /* empty function */ 1 from t where a = b()",
 	}, {
 		input: "select /* function with 1 param */ 1 from t where a = b(c)",
@@ -311,6 +318,8 @@ func TestValid(t *testing.T) {
 		input: "select /* if as func */ 1 from t where a = if(b)",
 	}, {
 		input: "select /* current_timestamp as func */ current_timestamp() from t",
+	}, {
+		input: "select /* mod as func */ a from tab where mod(b, 2) = 0",
 	}, {
 		input: "select /* database as func no param */ database() from t",
 	}, {
@@ -388,6 +397,8 @@ func TestValid(t *testing.T) {
 		input: "select /* order by asc */ 1 from t order by a asc",
 	}, {
 		input: "select /* order by desc */ 1 from t order by a desc",
+	}, {
+		input: "select /* order by null */ 1 from t order by null",
 	}, {
 		input: "select /* limit a */ 1 from t limit a",
 	}, {
@@ -772,6 +783,9 @@ func TestErrors(t *testing.T) {
 	}, {
 		input:  "select next 1+1 values from a",
 		output: "syntax error at position 15",
+	}, {
+		input:  "insert into a values (select * from b)",
+		output: "syntax error at position 29 near 'select'",
 	}}
 	for _, tcase := range invalidSQL {
 		if tcase.output == "" {

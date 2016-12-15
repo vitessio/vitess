@@ -53,7 +53,7 @@ func forceEOF(yylex interface{}) {
   colTuple    ColTuple
   valExprs    ValExprs
   values      Values
-  rowTuple    RowTuple
+  valTuple    ValTuple
   subquery    *Subquery
   caseExpr    *CaseExpr
   whens       []*When
@@ -78,7 +78,7 @@ func forceEOF(yylex interface{}) {
 %left <empty> JOIN STRAIGHT_JOIN LEFT RIGHT INNER OUTER CROSS NATURAL USE FORCE
 %left <empty> ON
 %token <empty> '(' ',' ')'
-%token <bytes> ID HEX STRING NUMBER VALUE_ARG LIST_ARG COMMENT
+%token <bytes> ID HEX STRING NUMBER HEXNUM VALUE_ARG LIST_ARG COMMENT
 %token <empty> NULL TRUE FALSE
 
 // Precedence dictated by mysql. But the vitess grammar is simplified.
@@ -88,18 +88,22 @@ func forceEOF(yylex interface{}) {
 %left <empty> OR
 %left <empty> AND
 %right <empty> NOT
-%left <empty> BETWEEN CASE WHEN THEN ELSE
+%left <empty> BETWEEN CASE WHEN THEN ELSE END
 %left <empty> '=' '<' '>' LE GE NE NULL_SAFE_EQUAL IS LIKE REGEXP IN
 %left <empty> '|'
 %left <empty> '&'
 %left <empty> SHIFT_LEFT SHIFT_RIGHT
 %left <empty> '+' '-'
-%left <empty> '*' '/' '%'
+%left <empty> '*' '/' '%' MOD
 %left <empty> '^'
 %right <empty> '~' UNARY
 %right <empty> INTERVAL
 %nonassoc <empty> '.'
-%left <empty> END
+
+// There is no need to define precedence for the JSON
+// operators because the syntax is restricted enough that
+// they don't cause conflicts.
+%token <empty> JSON_EXTRACT_OP JSON_UNQUOTE_EXTRACT_OP
 
 // DDL Tokens
 %token <empty> CREATE ALTER DROP RENAME ANALYZE
@@ -138,7 +142,7 @@ func forceEOF(yylex interface{}) {
 %type <colTuple> col_tuple
 %type <valExprs> value_expression_list
 %type <values> tuple_list
-%type <rowTuple> row_tuple
+%type <valTuple> row_tuple
 %type <subquery> subquery
 %type <colName> column_name
 %type <caseExpr> case_expression
@@ -769,6 +773,10 @@ value_expression:
   {
     $$ = $1
   }
+| subquery
+  {
+    $$ = $1
+  }
 | value_expression '&' value_expression
   {
     $$ = &BinaryExpr{Left: $1, Operator: BitAndStr, Right: $3}
@@ -801,6 +809,10 @@ value_expression:
   {
     $$ = &BinaryExpr{Left: $1, Operator: ModStr, Right: $3}
   }
+| value_expression MOD value_expression
+  {
+    $$ = &BinaryExpr{Left: $1, Operator: ModStr, Right: $3}
+  }
 | value_expression SHIFT_LEFT value_expression
   {
     $$ = &BinaryExpr{Left: $1, Operator: ShiftLeftStr, Right: $3}
@@ -808,6 +820,14 @@ value_expression:
 | value_expression SHIFT_RIGHT value_expression
   {
     $$ = &BinaryExpr{Left: $1, Operator: ShiftRightStr, Right: $3}
+  }
+| column_name JSON_EXTRACT_OP value
+  {
+    $$ = &BinaryExpr{Left: $1, Operator: JSONExtractOp, Right: $3}
+  }
+| column_name JSON_UNQUOTE_EXTRACT_OP value
+  {
+    $$ = &BinaryExpr{Left: $1, Operator: JSONUnquoteExtractOp, Right: $3}
   }
 | '+'  value_expression %prec UNARY
   {
@@ -880,6 +900,10 @@ keyword_func:
   {
     $$ = "database"
   }
+| MOD
+  {
+    $$ = "mod"
+  }
 
 case_expression:
   CASE value_expression_opt when_expression_list else_expression_opt END
@@ -947,6 +971,10 @@ value:
 | NUMBER
   {
     $$ = NumVal($1)
+  }
+| HEXNUM
+  {
+    $$ = HexNum($1)
   }
 | VALUE_ARG
   {
@@ -1118,10 +1146,6 @@ row_tuple:
   openb value_expression_list closeb
   {
     $$ = ValTuple($2)
-  }
-| subquery
-  {
-    $$ = $1
   }
 
 update_list:

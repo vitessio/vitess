@@ -36,10 +36,10 @@
 
     <!-- metadata -->
     <meta name="og:title" content="Vitess / vtctl Reference"/>
-    <meta name="og:image" content="/images/vitess_logomark_cropped.svg"/>
+    <meta name="og:image" content="/images/vitess_logo_with_border.svg"/>
     <meta name="og:description" content="Vitess is a database clustering system for horizontal scaling of MySQL."/>
 
-    <link rel="icon" href="/images/vitess_icon.png" type="image/png">
+    <link rel="icon" href="/images/vitess_logo_icon_size.png" type="image/png">
 
     
     <script>
@@ -69,7 +69,7 @@
         <span class="icon-bar"></span>
       </button>
       <a class="navbar-brand" href="/">
-        <img class="logo" src="/images/vitess_logomark_cropped.svg" alt="Vitess">
+        <img class="logo" src="/images/vitess_logo_with_border.svg" alt="Vitess">
       </a>
     </div>
 
@@ -113,7 +113,7 @@
             <li><a href="/user-guide/reparenting.html">Reparenting</a></li>
             <li style="padding-bottom: 0"><a href="/user-guide/schema-management.html">Schema Management</a></li>
               <ul style="display: block">
-                <li style="padding-bottom: 0"><a href="/user-guide/pivot-schema-changes.html">Pivot Schema Changes (Tutorial)</a></li>
+                <li style="padding-bottom: 0"><a href="/user-guide/schema-swap.html">Schema Swap (Tutorial)</a></li>
               </ul>
             <li style="padding-bottom: 0"><a href="/user-guide/sharding.html">Sharding</a>
               <ul style="display: block">
@@ -215,7 +215,7 @@
             <li><a href="/user-guide/reparenting.html">Reparenting</a></li>
             <li style="padding-bottom: 0"><a href="/user-guide/schema-management.html">Schema Management</a></li>
               <ul style="display: block">
-                <li style="padding-bottom: 0"><a href="/user-guide/pivot-schema-changes.html">Pivot Schema Changes (Tutorial)</a></li>
+                <li style="padding-bottom: 0"><a href="/user-guide/schema-swap.html">Schema Swap (Tutorial)</a></li>
               </ul>
             <li style="padding-bottom: 0"><a href="/user-guide/sharding.html">Sharding</a>
               <ul style="display: block">
@@ -319,7 +319,7 @@
 <h4 id="errors">Errors</h4>
 
 <ul>
-<li>The <code>&lt;cell name&gt;</code> argument is required for the <code>&lt;ListAllTablets&gt;</code> command. This error occurs if the command is not called with exactly one argument.</li>
+<li>the <code>&lt;cell name&gt;</code> argument is required for the <code>&lt;ListAllTablets&gt;</code> command This error occurs if the command is not called with exactly one argument.</li>
 </ul>
 
 <h3 id="listtablets">ListTablets</h3>
@@ -339,7 +339,7 @@
 <h4 id="errors">Errors</h4>
 
 <ul>
-<li>The <code>&lt;tablet alias&gt;</code> argument is required for the <code>&lt;ListTablets&gt;</code> command. This error occurs if the command is not called with at least one argument.</li>
+<li>the <code>&lt;tablet alias&gt;</code> argument is required for the <code>&lt;ListTablets&gt;</code> command This error occurs if the command is not called with at least one argument.</li>
 </ul>
 
 <h3 id="pruneactionlogs">PruneActionLogs</h3>
@@ -470,7 +470,7 @@
 <h4 id="errors">Errors</h4>
 
 <ul>
-<li>The <code>&lt;keyspace name&gt;</code> argument is required for the <code>&lt;CreateKeyspace&gt;</code> command. This error occurs if the command is not called with exactly one argument.</li>
+<li>the <code>&lt;keyspace name&gt;</code> argument is required for the <code>&lt;CreateKeyspace&gt;</code> command This error occurs if the command is not called with exactly one argument.</li>
 </ul>
 
 <h3 id="deletekeyspace">DeleteKeyspace</h3>
@@ -506,7 +506,7 @@
 <h4 id="errors">Errors</h4>
 
 <ul>
-<li>Must specify the <code>&lt;keyspace&gt;</code> argument for <code>&lt;DeleteKeyspace&gt;</code>. This error occurs if the command is not called with exactly one argument.</li>
+<li>must specify the <code>&lt;keyspace&gt;</code> argument for <code>&lt;DeleteKeyspace&gt;</code> This error occurs if the command is not called with exactly one argument.</li>
 </ul>
 
 <h3 id="findallshardsinkeyspace">FindAllShardsInKeyspace</h3>
@@ -526,7 +526,7 @@
 <h4 id="errors">Errors</h4>
 
 <ul>
-<li>The <code>&lt;keyspace&gt;</code> argument is required for the <code>&lt;FindAllShardsInKeyspace&gt;</code> command. This error occurs if the command is not called with exactly one argument.</li>
+<li>the <code>&lt;keyspace&gt;</code> argument is required for the <code>&lt;FindAllShardsInKeyspace&gt;</code> command This error occurs if the command is not called with exactly one argument.</li>
 </ul>
 
 <h3 id="getkeyspace">GetKeyspace</h3>
@@ -546,7 +546,7 @@
 <h4 id="errors">Errors</h4>
 
 <ul>
-<li>The <code>&lt;keyspace&gt;</code> argument is required for the <code>&lt;GetKeyspace&gt;</code> command. This error occurs if the command is not called with exactly one argument.</li>
+<li>the <code>&lt;keyspace&gt;</code> argument is required for the <code>&lt;GetKeyspace&gt;</code> command This error occurs if the command is not called with exactly one argument.</li>
 </ul>
 
 <h3 id="getkeyspaces">GetKeyspaces</h3>
@@ -596,6 +596,7 @@
 <ul>
 <li><code>backup</code> &ndash; A slaved copy of data that is offline to queries other than for backup purposes</li>
 <li><code>batch</code> &ndash; A slaved copy of data for OLAP load patterns (typically for MapReduce jobs)</li>
+<li><code>drained</code> &ndash; A tablet that is reserved for a background process. For example, a tablet used by a vtworker process, where the tablet is likely lagging in replication.</li>
 <li><code>experimental</code> &ndash; A slaved copy of data that is ready but not serving query traffic. The value indicates a special characteristic of the tablet that indicates the tablet should not be considered a potential master. Vitess also does not worry about lag for experimental tablets when reparenting.</li>
 <li><code>master</code> &ndash; A primary copy of data</li>
 <li><code>rdonly</code> &ndash; A slaved copy of data for OLAP load patterns</li>
@@ -604,14 +605,13 @@
 <li><code>schema_apply</code> &ndash; A slaved copy of data that had been serving query traffic but that is now applying a schema change. Following the change, the tablet will revert to its serving type.</li>
 <li><code>snapshot_source</code> &ndash; A slaved copy of data where mysqld is <b>not</b> running and where Vitess is serving data files to clone slaves. Use this command to enter this mode: <pre>vtctl Snapshot -server-mode ...</pre> Use this command to exit this mode: <pre>vtctl SnapshotSourceEnd ...</pre></li>
 <li><code>spare</code> &ndash; A slaved copy of data that is ready but not serving query traffic. The data could be a potential master tablet.</li>
-<li><code>drained</code> &ndash; A tablet that is reserved for a background process. For example, a tablet used by a vtworker process, where the tablet is likely lagging in replication.</li>
 </ul></li>
 </ul>
 
 <h4 id="errors">Errors</h4>
 
 <ul>
-<li>The <code>&lt;destination keyspace/shard&gt;</code> and <code>&lt;served tablet type&gt;</code> arguments are both required for the <code>&lt;MigrateServedFrom&gt;</code> command. This error occurs if the command is not called with exactly 2 arguments.</li>
+<li>the <code>&lt;destination keyspace/shard&gt;</code> and <code>&lt;served tablet type&gt;</code> arguments are both required for the <code>&lt;MigrateServedFrom&gt;</code> command This error occurs if the command is not called with exactly 2 arguments.</li>
 </ul>
 
 <h3 id="migrateservedtypes">MigrateServedTypes</h3>
@@ -662,6 +662,7 @@
 <ul>
 <li><code>backup</code> &ndash; A slaved copy of data that is offline to queries other than for backup purposes</li>
 <li><code>batch</code> &ndash; A slaved copy of data for OLAP load patterns (typically for MapReduce jobs)</li>
+<li><code>drained</code> &ndash; A tablet that is reserved for a background process. For example, a tablet used by a vtworker process, where the tablet is likely lagging in replication.</li>
 <li><code>experimental</code> &ndash; A slaved copy of data that is ready but not serving query traffic. The value indicates a special characteristic of the tablet that indicates the tablet should not be considered a potential master. Vitess also does not worry about lag for experimental tablets when reparenting.</li>
 <li><code>master</code> &ndash; A primary copy of data</li>
 <li><code>rdonly</code> &ndash; A slaved copy of data for OLAP load patterns</li>
@@ -670,15 +671,14 @@
 <li><code>schema_apply</code> &ndash; A slaved copy of data that had been serving query traffic but that is now applying a schema change. Following the change, the tablet will revert to its serving type.</li>
 <li><code>snapshot_source</code> &ndash; A slaved copy of data where mysqld is <b>not</b> running and where Vitess is serving data files to clone slaves. Use this command to enter this mode: <pre>vtctl Snapshot -server-mode ...</pre> Use this command to exit this mode: <pre>vtctl SnapshotSourceEnd ...</pre></li>
 <li><code>spare</code> &ndash; A slaved copy of data that is ready but not serving query traffic. The data could be a potential master tablet.</li>
-<li><code>worker</code> &ndash; A tablet that is in use by a vtworker process. The tablet is likely lagging in replication.</li>
 </ul></li>
 </ul>
 
 <h4 id="errors">Errors</h4>
 
 <ul>
-<li>The <code>&lt;source keyspace/shard&gt;</code> and <code>&lt;served tablet type&gt;</code> arguments are both required for the <code>&lt;MigrateServedTypes&gt;</code> command. This error occurs if the command is not called with exactly 2 arguments.</li>
-<li>The <code>&lt;skip-refresh-state&gt;</code> flag can only be specified for non-master migrations.</li>
+<li>the <code>&lt;source keyspace/shard&gt;</code> and <code>&lt;served tablet type&gt;</code> arguments are both required for the <code>&lt;MigrateServedTypes&gt;</code> command This error occurs if the command is not called with exactly 2 arguments.</li>
+<li>the <code>&lt;skip-refresh-state&gt;</code> flag can only be specified for non-master migrations</li>
 </ul>
 
 <h3 id="rebuildkeyspacegraph">RebuildKeyspaceGraph</h3>
@@ -714,7 +714,7 @@
 <h4 id="errors">Errors</h4>
 
 <ul>
-<li>The <code>&lt;keyspace&gt;</code> argument must be used to specify at least one keyspace when calling the <code>&lt;RebuildKeyspaceGraph&gt;</code> command. This error occurs if the command is not called with at least one argument.</li>
+<li>the <code>&lt;keyspace&gt;</code> argument must be used to specify at least one keyspace when calling the <code>&lt;RebuildKeyspaceGraph&gt;</code> command This error occurs if the command is not called with at least one argument.</li>
 </ul>
 
 <h3 id="removekeyspacecell">RemoveKeyspaceCell</h3>
@@ -756,7 +756,7 @@
 <h4 id="errors">Errors</h4>
 
 <ul>
-<li>The <code>&lt;keyspace&gt;</code> and <code>&lt;cell&gt;</code> arguments are required for the <code>&lt;RemoveKeyspaceCell&gt;</code> command. This error occurs if the command is not called with exactly 2 arguments.</li>
+<li>the <code>&lt;keyspace&gt;</code> and <code>&lt;cell&gt;</code> arguments are required for the <code>&lt;RemoveKeyspaceCell&gt;</code> command This error occurs if the command is not called with exactly 2 arguments.</li>
 </ul>
 
 <h3 id="setkeyspaceservedfrom">SetKeyspaceServedFrom</h3>
@@ -802,6 +802,7 @@
 <ul>
 <li><code>backup</code> &ndash; A slaved copy of data that is offline to queries other than for backup purposes</li>
 <li><code>batch</code> &ndash; A slaved copy of data for OLAP load patterns (typically for MapReduce jobs)</li>
+<li><code>drained</code> &ndash; A tablet that is reserved for a background process. For example, a tablet used by a vtworker process, where the tablet is likely lagging in replication.</li>
 <li><code>experimental</code> &ndash; A slaved copy of data that is ready but not serving query traffic. The value indicates a special characteristic of the tablet that indicates the tablet should not be considered a potential master. Vitess also does not worry about lag for experimental tablets when reparenting.</li>
 <li><code>master</code> &ndash; A primary copy of data</li>
 <li><code>rdonly</code> &ndash; A slaved copy of data for OLAP load patterns</li>
@@ -810,14 +811,13 @@
 <li><code>schema_apply</code> &ndash; A slaved copy of data that had been serving query traffic but that is now applying a schema change. Following the change, the tablet will revert to its serving type.</li>
 <li><code>snapshot_source</code> &ndash; A slaved copy of data where mysqld is <b>not</b> running and where Vitess is serving data files to clone slaves. Use this command to enter this mode: <pre>vtctl Snapshot -server-mode ...</pre> Use this command to exit this mode: <pre>vtctl SnapshotSourceEnd ...</pre></li>
 <li><code>spare</code> &ndash; A slaved copy of data that is ready but not serving query traffic. The data could be a potential master tablet.</li>
-<li><code>worker</code> &ndash; A tablet that is in use by a vtworker process. The tablet is likely lagging in replication.</li>
 </ul></li>
 </ul>
 
 <h4 id="errors">Errors</h4>
 
 <ul>
-<li>The <code>&lt;keyspace name&gt;</code> and <code>&lt;tablet type&gt;</code> arguments are required for the <code>&lt;SetKeyspaceServedFrom&gt;</code> command. This error occurs if the command is not called with exactly 2 arguments.</li>
+<li>the <code>&lt;keyspace name&gt;</code> and <code>&lt;tablet type&gt;</code> arguments are required for the <code>&lt;SetKeyspaceServedFrom&gt;</code> command This error occurs if the command is not called with exactly 2 arguments.</li>
 </ul>
 
 <h3 id="setkeyspaceshardinginfo">SetKeyspaceShardingInfo</h3>
@@ -855,8 +855,8 @@
 <h4 id="errors">Errors</h4>
 
 <ul>
-<li>The <code>&lt;keyspace name&gt;</code> argument is required for the <code>&lt;SetKeyspaceShardingInfo&gt;</code> command. The <code>&lt;column name&gt;</code> and <code>&lt;column type&gt;</code> arguments are both optional. This error occurs if the command is not called with between 1 and 3 arguments.</li>
-<li>Both <code>&lt;column name&gt;</code> and <code>&lt;column type&gt;</code> must be set, or both must be unset.</li>
+<li>the <code>&lt;keyspace name&gt;</code> argument is required for the <code>&lt;SetKeyspaceShardingInfo&gt;</code> command. The <code>&lt;column name&gt;</code> and <code>&lt;column type&gt;</code> arguments are both optional This error occurs if the command is not called with between 1 and 3 arguments.</li>
+<li>both <code>&lt;column name&gt;</code> and <code>&lt;column type&gt;</code> must be set, or both must be unset</li>
 </ul>
 
 <h3 id="validatekeyspace">ValidateKeyspace</h3>
@@ -892,7 +892,7 @@
 <h4 id="errors">Errors</h4>
 
 <ul>
-<li>The <code>&lt;keyspace name&gt;</code> argument is required for the <code>&lt;ValidateKeyspace&gt;</code> command. This error occurs if the command is not called with exactly one argument.</li>
+<li>the <code>&lt;keyspace name&gt;</code> argument is required for the <code>&lt;ValidateKeyspace&gt;</code> command This error occurs if the command is not called with exactly one argument.</li>
 </ul>
 
 <h3 id="waitfordrain">WaitForDrain</h3>
@@ -943,6 +943,7 @@
 <ul>
 <li><code>backup</code> &ndash; A slaved copy of data that is offline to queries other than for backup purposes</li>
 <li><code>batch</code> &ndash; A slaved copy of data for OLAP load patterns (typically for MapReduce jobs)</li>
+<li><code>drained</code> &ndash; A tablet that is reserved for a background process. For example, a tablet used by a vtworker process, where the tablet is likely lagging in replication.</li>
 <li><code>experimental</code> &ndash; A slaved copy of data that is ready but not serving query traffic. The value indicates a special characteristic of the tablet that indicates the tablet should not be considered a potential master. Vitess also does not worry about lag for experimental tablets when reparenting.</li>
 <li><code>master</code> &ndash; A primary copy of data</li>
 <li><code>rdonly</code> &ndash; A slaved copy of data for OLAP load patterns</li>
@@ -951,14 +952,13 @@
 <li><code>schema_apply</code> &ndash; A slaved copy of data that had been serving query traffic but that is now applying a schema change. Following the change, the tablet will revert to its serving type.</li>
 <li><code>snapshot_source</code> &ndash; A slaved copy of data where mysqld is <b>not</b> running and where Vitess is serving data files to clone slaves. Use this command to enter this mode: <pre>vtctl Snapshot -server-mode ...</pre> Use this command to exit this mode: <pre>vtctl SnapshotSourceEnd ...</pre></li>
 <li><code>spare</code> &ndash; A slaved copy of data that is ready but not serving query traffic. The data could be a potential master tablet.</li>
-<li><code>worker</code> &ndash; A tablet that is in use by a vtworker process. The tablet is likely lagging in replication.</li>
 </ul></li>
 </ul>
 
 <h4 id="errors">Errors</h4>
 
 <ul>
-<li>The <code>&lt;keyspace/shard&gt;</code> and <code>&lt;tablet type&gt;</code> arguments are both required for the <code>&lt;WaitForDrain&gt;</code> command. This error occurs if the command is not called with exactly 2 arguments.</li>
+<li>the <code>&lt;keyspace/shard&gt;</code> and <code>&lt;tablet type&gt;</code> arguments are both required for the <code>&lt;WaitForDrain&gt;</code> command This error occurs if the command is not called with exactly 2 arguments.</li>
 </ul>
 
 <h2 id="queries">Queries</h2>
@@ -1201,6 +1201,11 @@
 </tr>
 </thead><tbody>
 <tr>
+<td style="text-align: left">algorithm</td>
+<td style="text-align: left">string</td>
+<td style="text-align: left">The algorithm to</td>
+</tr>
+<tr>
 <td style="text-align: left">connect_timeout</td>
 <td style="text-align: left">Duration</td>
 <td style="text-align: left">Connection timeout for vtgate client</td>
@@ -1216,14 +1221,9 @@
 <td style="text-align: left">VtGate server to connect to</td>
 </tr>
 <tr>
-<td style="text-align: left">split_column</td>
-<td style="text-align: left">string</td>
-<td style="text-align: left">force the use of this column to split the query</td>
-</tr>
-<tr>
 <td style="text-align: left">split_count</td>
-<td style="text-align: left">Int</td>
-<td style="text-align: left">number of splits to generate</td>
+<td style="text-align: left">Int64</td>
+<td style="text-align: left">number of splits to generate.</td>
 </tr>
 </tbody></table>
 
@@ -1240,6 +1240,8 @@
 
 <ul>
 <li>the <code>&lt;sql&gt;</code> argument is required for the <code>&lt;VtGateSplitQuery&gt;</code> command This error occurs if the command is not called with exactly one argument.</li>
+<li>Exactly one of <code>&lt;split_count&gt;</code> or num_rows_per_query_part</li>
+<li>Unknown split-query <code>&lt;algorithm&gt;</code>: %v</li>
 <li>error connecting to vtgate &#39;%v&#39;: %v</li>
 <li>SplitQuery failed: %v</li>
 </ul>
@@ -1546,7 +1548,7 @@
 <h4 id="errors">Errors</h4>
 
 <ul>
-<li>The <code>&lt;cell&gt;</code> and <code>&lt;keyspace/shard&gt;</code> arguments are required for the <code>&lt;GetShardReplication&gt;</code> command. This error occurs if the command is not called with exactly 2 arguments.</li>
+<li>the <code>&lt;cell&gt;</code> and <code>&lt;keyspace/shard&gt;</code> arguments are required for the <code>&lt;GetShardReplication&gt;</code> command This error occurs if the command is not called with exactly 2 arguments.</li>
 </ul>
 
 <h2 id="resharding-throttler">Resharding Throttler</h2>
@@ -1826,7 +1828,7 @@
 <h4 id="errors">Errors</h4>
 
 <ul>
-<li>The <code>&lt;keyspace&gt;</code> argument is required for the command<code>&lt;ApplySchema&gt;</code> command. This error occurs if the command is not called with exactly one argument.</li>
+<li>the <code>&lt;keyspace&gt;</code> argument is required for the command<code>&lt;ApplySchema&gt;</code> command This error occurs if the command is not called with exactly one argument.</li>
 </ul>
 
 <h3 id="applyvschema">ApplyVSchema</h3>
@@ -1877,8 +1879,8 @@
 <h4 id="errors">Errors</h4>
 
 <ul>
-<li>The <code>&lt;keyspace&gt;</code> argument is required for the <code>&lt;ApplyVSchema&gt;</code> command. This error occurs if the command is not called with exactly one argument.</li>
-<li>Either the <code>&lt;vschema&gt;</code> or <code>&lt;vschema&gt;</code>File flag must be specified when calling the <code>&lt;ApplyVSchema&gt;</code> command.</li>
+<li>the <code>&lt;keyspace&gt;</code> argument is required for the <code>&lt;ApplyVSchema&gt;</code> command This error occurs if the command is not called with exactly one argument.</li>
+<li>either the <code>&lt;vschema&gt;</code> or <code>&lt;vschema&gt;</code>File flag must be specified when calling the <code>&lt;ApplyVSchema&gt;</code> command</li>
 </ul>
 
 <h3 id="copyschemashard">CopySchemaShard</h3>
@@ -1901,7 +1903,7 @@
 <tr>
 <td style="text-align: left">exclude_tables</td>
 <td style="text-align: left">string</td>
-<td style="text-align: left">Specifies a comma-separated list of regular expressions for which tables to exclude</td>
+<td style="text-align: left">Specifies a comma-separated list of tables to exclude. Each is either an exact match, or a regular expression of the form /regexp/</td>
 </tr>
 <tr>
 <td style="text-align: left">include-views</td>
@@ -1911,7 +1913,7 @@
 <tr>
 <td style="text-align: left">tables</td>
 <td style="text-align: left">string</td>
-<td style="text-align: left">Specifies a comma-separated list of regular expressions for which tables  gather schema information for</td>
+<td style="text-align: left">Specifies a comma-separated list of tables to copy. Each is either an exact match, or a regular expression of the form /regexp/</td>
 </tr>
 <tr>
 <td style="text-align: left">wait_slave_timeout</td>
@@ -1930,7 +1932,7 @@
 <h4 id="errors">Errors</h4>
 
 <ul>
-<li>The <code>&lt;source keyspace/shard&gt;</code> and <code>&lt;destination keyspace/shard&gt;</code> arguments are both required for the <code>&lt;CopySchemaShard&gt;</code> command. Instead of the <code>&lt;source keyspace/shard&gt;</code> argument, you can also specify <code>&lt;tablet alias&gt;</code> which refers to a specific tablet of the shard in the source keyspace. This error occurs if the command is not called with exactly 2 arguments.</li>
+<li>the <code>&lt;source keyspace/shard&gt;</code> and <code>&lt;destination keyspace/shard&gt;</code> arguments are both required for the <code>&lt;CopySchemaShard&gt;</code> command. Instead of the <code>&lt;source keyspace/shard&gt;</code> argument, you can also specify <code>&lt;tablet alias&gt;</code> which refers to a specific tablet of the shard in the source keyspace This error occurs if the command is not called with exactly 2 arguments.</li>
 </ul>
 
 <h3 id="getpermissions">GetPermissions</h3>
@@ -1950,7 +1952,7 @@
 <h4 id="errors">Errors</h4>
 
 <ul>
-<li>The <code>&lt;tablet alias&gt;</code> argument is required for the <code>&lt;GetPermissions&gt;</code> command. This error occurs if the command is not called with exactly one argument.</li>
+<li>the <code>&lt;tablet alias&gt;</code> argument is required for the <code>&lt;GetPermissions&gt;</code> command This error occurs if the command is not called with exactly one argument.</li>
 </ul>
 
 <h3 id="getschema">GetSchema</h3>
@@ -1973,7 +1975,7 @@
 <tr>
 <td style="text-align: left">exclude_tables</td>
 <td style="text-align: left">string</td>
-<td style="text-align: left">Specifies a comma-separated list of regular expressions for tables to exclude</td>
+<td style="text-align: left">Specifies a comma-separated list of tables to exclude. Each is either an exact match, or a regular expression of the form /regexp/</td>
 </tr>
 <tr>
 <td style="text-align: left">include-views</td>
@@ -1988,7 +1990,7 @@
 <tr>
 <td style="text-align: left">tables</td>
 <td style="text-align: left">string</td>
-<td style="text-align: left">Specifies a comma-separated list of regular expressions for which tables should gather information</td>
+<td style="text-align: left">Specifies a comma-separated list of tables for which we should gather information. Each is either an exact match, or a regular expression of the form /regexp/</td>
 </tr>
 </tbody></table>
 
@@ -2001,7 +2003,7 @@
 <h4 id="errors">Errors</h4>
 
 <ul>
-<li>The <code>&lt;tablet alias&gt;</code> argument is required for the <code>&lt;GetSchema&gt;</code> command. This error occurs if the command is not called with exactly one argument.</li>
+<li>the <code>&lt;tablet alias&gt;</code> argument is required for the <code>&lt;GetSchema&gt;</code> command This error occurs if the command is not called with exactly one argument.</li>
 </ul>
 
 <h3 id="getvschema">GetVSchema</h3>
@@ -2021,7 +2023,7 @@
 <h4 id="errors">Errors</h4>
 
 <ul>
-<li>The <code>&lt;keyspace&gt;</code> argument is required for the <code>&lt;GetVSchema&gt;</code> command. This error occurs if the command is not called with exactly one argument.</li>
+<li>the <code>&lt;keyspace&gt;</code> argument is required for the <code>&lt;GetVSchema&gt;</code> command This error occurs if the command is not called with exactly one argument.</li>
 </ul>
 
 <h3 id="rebuildvschemagraph">RebuildVSchemaGraph</h3>
@@ -2051,7 +2053,7 @@
 <h4 id="errors">Errors</h4>
 
 <ul>
-<li><code>&lt;RebuildVSchemaGraph&gt;</code> doesn&#39;t take any arguments. This error occurs if the command is not called with exactly 0 arguments.</li>
+<li><code>&lt;RebuildVSchemaGraph&gt;</code> doesn&#39;t take any arguments This error occurs if the command is not called with exactly 0 arguments.</li>
 </ul>
 
 <h3 id="reloadschema">ReloadSchema</h3>
@@ -2071,7 +2073,7 @@
 <h4 id="errors">Errors</h4>
 
 <ul>
-<li>The <code>&lt;tablet alias&gt;</code> argument is required for the <code>&lt;ReloadSchema&gt;</code> command. This error occurs if the command is not called with exactly one argument.</li>
+<li>the <code>&lt;tablet alias&gt;</code> argument is required for the <code>&lt;ReloadSchema&gt;</code> command This error occurs if the command is not called with exactly one argument.</li>
 </ul>
 
 <h3 id="validatepermissionskeyspace">ValidatePermissionsKeyspace</h3>
@@ -2091,7 +2093,7 @@
 <h4 id="errors">Errors</h4>
 
 <ul>
-<li>The <code>&lt;keyspace name&gt;</code> argument is required for the <code>&lt;ValidatePermissionsKeyspace&gt;</code> command. This error occurs if the command is not called with exactly one argument.</li>
+<li>the <code>&lt;keyspace name&gt;</code> argument is required for the <code>&lt;ValidatePermissionsKeyspace&gt;</code> command This error occurs if the command is not called with exactly one argument.</li>
 </ul>
 
 <h3 id="validatepermissionsshard">ValidatePermissionsShard</h3>
@@ -2111,7 +2113,7 @@
 <h4 id="errors">Errors</h4>
 
 <ul>
-<li>The <code>&lt;keyspace/shard&gt;</code> argument is required for the <code>&lt;ValidatePermissionsShard&gt;</code> command. This error occurs if the command is not called with exactly one argument.</li>
+<li>the <code>&lt;keyspace/shard&gt;</code> argument is required for the <code>&lt;ValidatePermissionsShard&gt;</code> command This error occurs if the command is not called with exactly one argument.</li>
 </ul>
 
 <h3 id="validateschemakeyspace">ValidateSchemaKeyspace</h3>
@@ -2134,7 +2136,7 @@
 <tr>
 <td style="text-align: left">exclude_tables</td>
 <td style="text-align: left">string</td>
-<td style="text-align: left">Specifies a comma-separated list of regular expressions for tables to exclude</td>
+<td style="text-align: left">Specifies a comma-separated list of tables to exclude. Each is either an exact match, or a regular expression of the form /regexp/</td>
 </tr>
 <tr>
 <td style="text-align: left">include-views</td>
@@ -2152,7 +2154,7 @@
 <h4 id="errors">Errors</h4>
 
 <ul>
-<li>The <code>&lt;keyspace name&gt;</code> argument is required for the <code>&lt;ValidateSchemaKeyspace&gt;</code> command. This error occurs if the command is not called with exactly one argument.</li>
+<li>the <code>&lt;keyspace name&gt;</code> argument is required for the <code>&lt;ValidateSchemaKeyspace&gt;</code> command This error occurs if the command is not called with exactly one argument.</li>
 </ul>
 
 <h3 id="validateschemashard">ValidateSchemaShard</h3>
@@ -2175,7 +2177,7 @@
 <tr>
 <td style="text-align: left">exclude_tables</td>
 <td style="text-align: left">string</td>
-<td style="text-align: left">Specifies a comma-separated list of regular expressions for tables to exclude</td>
+<td style="text-align: left">Specifies a comma-separated list of tables to exclude. Each is either an exact match, or a regular expression of the form /regexp/</td>
 </tr>
 <tr>
 <td style="text-align: left">include-views</td>
@@ -2193,7 +2195,7 @@
 <h4 id="errors">Errors</h4>
 
 <ul>
-<li>The <code>&lt;keyspace/shard&gt;</code> argument is required for the <code>&lt;ValidateSchemaShard&gt;</code> command. This error occurs if the command is not called with exactly one argument.</li>
+<li>the <code>&lt;keyspace/shard&gt;</code> argument is required for the <code>&lt;ValidateSchemaShard&gt;</code> command This error occurs if the command is not called with exactly one argument.</li>
 </ul>
 
 <h3 id="validateversionkeyspace">ValidateVersionKeyspace</h3>
@@ -2213,7 +2215,7 @@
 <h4 id="errors">Errors</h4>
 
 <ul>
-<li>The <code>&lt;keyspace name&gt;</code> argument is required for the <code>&lt;ValidateVersionKeyspace&gt;</code> command. This error occurs if the command is not called with exactly one argument.</li>
+<li>the <code>&lt;keyspace name&gt;</code> argument is required for the <code>&lt;ValidateVersionKeyspace&gt;</code> command This error occurs if the command is not called with exactly one argument.</li>
 </ul>
 
 <h3 id="validateversionshard">ValidateVersionShard</h3>
@@ -2233,7 +2235,7 @@
 <h4 id="errors">Errors</h4>
 
 <ul>
-<li>The <code>&lt;keyspace/shard&gt;</code> argument is requird for the <code>&lt;ValidateVersionShard&gt;</code> command. This error occurs if the command is not called with exactly one argument.</li>
+<li>the <code>&lt;keyspace/shard&gt;</code> argument is required for the <code>&lt;ValidateVersionShard&gt;</code> command This error occurs if the command is not called with exactly one argument.</li>
 </ul>
 
 <h2 id="serving-graph">Serving Graph</h2>
@@ -2262,7 +2264,7 @@
 <h4 id="errors">Errors</h4>
 
 <ul>
-<li>The <code>&lt;cell&gt;</code> and <code>&lt;keyspace&gt;</code> arguments are required for the <code>&lt;GetSrvKeyspace&gt;</code> command. This error occurs if the command is not called with exactly 2 arguments.</li>
+<li>the <code>&lt;cell&gt;</code> and <code>&lt;keyspace&gt;</code> arguments are required for the <code>&lt;GetSrvKeyspace&gt;</code> command This error occurs if the command is not called with exactly 2 arguments.</li>
 </ul>
 
 <h3 id="getsrvkeyspacenames">GetSrvKeyspaceNames</h3>
@@ -2282,7 +2284,7 @@
 <h4 id="errors">Errors</h4>
 
 <ul>
-<li>The <code>&lt;cell&gt;</code> argument is required for the <code>&lt;GetSrvKeyspaceNames&gt;</code> command. This error occurs if the command is not called with exactly one argument.</li>
+<li>the <code>&lt;cell&gt;</code> argument is required for the <code>&lt;GetSrvKeyspaceNames&gt;</code> command This error occurs if the command is not called with exactly one argument.</li>
 </ul>
 
 <h3 id="getsrvvschema">GetSrvVSchema</h3>
@@ -2302,7 +2304,7 @@
 <h4 id="errors">Errors</h4>
 
 <ul>
-<li>The <code>&lt;cell&gt;</code> argument is required for the <code>&lt;GetSrvVSchema&gt;</code> command. This error occurs if the command is not called with exactly one argument.</li>
+<li>the <code>&lt;cell&gt;</code> argument is required for the <code>&lt;GetSrvVSchema&gt;</code> command This error occurs if the command is not called with exactly one argument.</li>
 </ul>
 
 <h2 id="shards">Shards</h2>
@@ -2367,7 +2369,7 @@
 <h4 id="errors">Errors</h4>
 
 <ul>
-<li>The <code>&lt;keyspace/shard&gt;</code> argument is required for the <code>&lt;CreateShard&gt;</code> command. This error occurs if the command is not called with exactly one argument.</li>
+<li>the <code>&lt;keyspace/shard&gt;</code> argument is required for the <code>&lt;CreateShard&gt;</code> command This error occurs if the command is not called with exactly one argument.</li>
 </ul>
 
 <h3 id="deleteshard">DeleteShard</h3>
@@ -2408,7 +2410,7 @@
 <h4 id="errors">Errors</h4>
 
 <ul>
-<li>The <code>&lt;keyspace/shard&gt;</code> argument must be used to identify at least one keyspace and shard when calling the <code>&lt;DeleteShard&gt;</code> command. This error occurs if the command is not called with at least one argument.</li>
+<li>the <code>&lt;keyspace/shard&gt;</code> argument must be used to identify at least one keyspace and shard when calling the <code>&lt;DeleteShard&gt;</code> command This error occurs if the command is not called with at least one argument.</li>
 </ul>
 
 <h3 id="emergencyreparentshard">EmergencyReparentShard</h3>
@@ -2469,7 +2471,7 @@
 <h4 id="errors">Errors</h4>
 
 <ul>
-<li>The <code>&lt;keyspace/shard&gt;</code> argument is required for the <code>&lt;GetShard&gt;</code> command. This error occurs if the command is not called with exactly one argument.</li>
+<li>the <code>&lt;keyspace/shard&gt;</code> argument is required for the <code>&lt;GetShard&gt;</code> command This error occurs if the command is not called with exactly one argument.</li>
 </ul>
 
 <h3 id="initshardmaster">InitShardMaster</h3>
@@ -2545,7 +2547,7 @@
 <h4 id="errors">Errors</h4>
 
 <ul>
-<li>The <code>&lt;keyspace/shard&gt;</code> argument is required for the <code>&lt;ListShardTablets&gt;</code> command. This error occurs if the command is not called with exactly one argument.</li>
+<li>the <code>&lt;keyspace/shard&gt;</code> argument is required for the <code>&lt;ListShardTablets&gt;</code> command This error occurs if the command is not called with exactly one argument.</li>
 </ul>
 
 <h3 id="plannedreparentshard">PlannedReparentShard</h3>
@@ -2653,7 +2655,7 @@
 <h4 id="errors">Errors</h4>
 
 <ul>
-<li>The <code>&lt;keyspace/shard&gt;</code> and <code>&lt;cell&gt;</code> arguments are required for the <code>&lt;RemoveShardCell&gt;</code> command. This error occurs if the command is not called with exactly 2 arguments.</li>
+<li>the <code>&lt;keyspace/shard&gt;</code> and <code>&lt;cell&gt;</code> arguments are required for the <code>&lt;RemoveShardCell&gt;</code> command This error occurs if the command is not called with exactly 2 arguments.</li>
 </ul>
 
 <h3 id="setshardservedtypes">SetShardServedTypes</h3>
@@ -2694,6 +2696,7 @@
 <ul>
 <li><code>backup</code> &ndash; A slaved copy of data that is offline to queries other than for backup purposes</li>
 <li><code>batch</code> &ndash; A slaved copy of data for OLAP load patterns (typically for MapReduce jobs)</li>
+<li><code>drained</code> &ndash; A tablet that is reserved for a background process. For example, a tablet used by a vtworker process, where the tablet is likely lagging in replication.</li>
 <li><code>experimental</code> &ndash; A slaved copy of data that is ready but not serving query traffic. The value indicates a special characteristic of the tablet that indicates the tablet should not be considered a potential master. Vitess also does not worry about lag for experimental tablets when reparenting.</li>
 <li><code>master</code> &ndash; A primary copy of data</li>
 <li><code>rdonly</code> &ndash; A slaved copy of data for OLAP load patterns</li>
@@ -2702,14 +2705,13 @@
 <li><code>schema_apply</code> &ndash; A slaved copy of data that had been serving query traffic but that is now applying a schema change. Following the change, the tablet will revert to its serving type.</li>
 <li><code>snapshot_source</code> &ndash; A slaved copy of data where mysqld is <b>not</b> running and where Vitess is serving data files to clone slaves. Use this command to enter this mode: <pre>vtctl Snapshot -server-mode ...</pre> Use this command to exit this mode: <pre>vtctl SnapshotSourceEnd ...</pre></li>
 <li><code>spare</code> &ndash; A slaved copy of data that is ready but not serving query traffic. The data could be a potential master tablet.</li>
-<li><code>worker</code> &ndash; A tablet that is in use by a vtworker process. The tablet is likely lagging in replication.</li>
 </ul></li>
 </ul>
 
 <h4 id="errors">Errors</h4>
 
 <ul>
-<li>The <code>&lt;keyspace/shard&gt;</code> and <code>&lt;served tablet type&gt;</code> arguments are both required for the <code>&lt;SetShardServedTypes&gt;</code> command. This error occurs if the command is not called with exactly 2 arguments.</li>
+<li>the <code>&lt;keyspace/shard&gt;</code> and <code>&lt;served tablet type&gt;</code> arguments are both required for the <code>&lt;SetShardServedTypes&gt;</code> command This error occurs if the command is not called with exactly 2 arguments.</li>
 </ul>
 
 <h3 id="setshardtabletcontrol">SetShardTabletControl</h3>
@@ -2747,7 +2749,7 @@
 <tr>
 <td style="text-align: left">tables</td>
 <td style="text-align: left">string</td>
-<td style="text-align: left">Specifies a comma-separated list of tables to replicate (used for vertical split)</td>
+<td style="text-align: left">Specifies a comma-separated list of tables to replicate (used for vertical split). Each is either an exact match, or a regular expression of the form /regexp/</td>
 </tr>
 </tbody></table>
 
@@ -2760,6 +2762,7 @@
 <ul>
 <li><code>backup</code> &ndash; A slaved copy of data that is offline to queries other than for backup purposes</li>
 <li><code>batch</code> &ndash; A slaved copy of data for OLAP load patterns (typically for MapReduce jobs)</li>
+<li><code>drained</code> &ndash; A tablet that is reserved for a background process. For example, a tablet used by a vtworker process, where the tablet is likely lagging in replication.</li>
 <li><code>experimental</code> &ndash; A slaved copy of data that is ready but not serving query traffic. The value indicates a special characteristic of the tablet that indicates the tablet should not be considered a potential master. Vitess also does not worry about lag for experimental tablets when reparenting.</li>
 <li><code>master</code> &ndash; A primary copy of data</li>
 <li><code>rdonly</code> &ndash; A slaved copy of data for OLAP load patterns</li>
@@ -2768,14 +2771,13 @@
 <li><code>schema_apply</code> &ndash; A slaved copy of data that had been serving query traffic but that is now applying a schema change. Following the change, the tablet will revert to its serving type.</li>
 <li><code>snapshot_source</code> &ndash; A slaved copy of data where mysqld is <b>not</b> running and where Vitess is serving data files to clone slaves. Use this command to enter this mode: <pre>vtctl Snapshot -server-mode ...</pre> Use this command to exit this mode: <pre>vtctl SnapshotSourceEnd ...</pre></li>
 <li><code>spare</code> &ndash; A slaved copy of data that is ready but not serving query traffic. The data could be a potential master tablet.</li>
-<li><code>worker</code> &ndash; A tablet that is in use by a vtworker process. The tablet is likely lagging in replication.</li>
 </ul></li>
 </ul>
 
 <h4 id="errors">Errors</h4>
 
 <ul>
-<li>The <code>&lt;keyspace/shard&gt;</code> and <code>&lt;tablet type&gt;</code> arguments are both required for the <code>&lt;SetShardTabletControl&gt;</code> command. This error occurs if the command is not called with exactly 2 arguments.</li>
+<li>the <code>&lt;keyspace/shard&gt;</code> and <code>&lt;tablet type&gt;</code> arguments are both required for the <code>&lt;SetShardTabletControl&gt;</code> command This error occurs if the command is not called with exactly 2 arguments.</li>
 </ul>
 
 <h3 id="shardreplicationfix">ShardReplicationFix</h3>
@@ -2796,7 +2798,7 @@
 <h4 id="errors">Errors</h4>
 
 <ul>
-<li>The <code>&lt;cell&gt;</code> and <code>&lt;keyspace/shard&gt;</code> arguments are required for the ShardReplicationRemove command. This error occurs if the command is not called with exactly 2 arguments.</li>
+<li>the <code>&lt;cell&gt;</code> and <code>&lt;keyspace/shard&gt;</code> arguments are required for the ShardReplicationRemove command This error occurs if the command is not called with exactly 2 arguments.</li>
 </ul>
 
 <h3 id="shardreplicationpositions">ShardReplicationPositions</h3>
@@ -2816,7 +2818,7 @@
 <h4 id="errors">Errors</h4>
 
 <ul>
-<li>The <code>&lt;keyspace/shard&gt;</code> argument is required for the <code>&lt;ShardReplicationPositions&gt;</code> command. This error occurs if the command is not called with exactly one argument.</li>
+<li>the <code>&lt;keyspace/shard&gt;</code> argument is required for the <code>&lt;ShardReplicationPositions&gt;</code> command This error occurs if the command is not called with exactly one argument.</li>
 </ul>
 
 <h3 id="sourceshardadd">SourceShardAdd</h3>
@@ -2844,7 +2846,7 @@
 <tr>
 <td style="text-align: left">tables</td>
 <td style="text-align: left">string</td>
-<td style="text-align: left">Specifies a comma-separated list of tables to replicate (used for vertical split)</td>
+<td style="text-align: left">Specifies a comma-separated list of tables to replicate (used for vertical split). Each is either an exact match, or a regular expression of the form /regexp/</td>
 </tr>
 </tbody></table>
 
@@ -2859,7 +2861,7 @@
 <h4 id="errors">Errors</h4>
 
 <ul>
-<li>The <code>&lt;keyspace/shard&gt;</code>, <code>&lt;uid&gt;</code>, and <code>&lt;source keyspace/shard&gt;</code> arguments are all required for the <code>&lt;SourceShardAdd&gt;</code> command. This error occurs if the command is not called with exactly 3 arguments.</li>
+<li>the <code>&lt;keyspace/shard&gt;</code>, <code>&lt;uid&gt;</code>, and <code>&lt;source keyspace/shard&gt;</code> arguments are all required for the <code>&lt;SourceShardAdd&gt;</code> command This error occurs if the command is not called with exactly 3 arguments.</li>
 </ul>
 
 <h3 id="sourcesharddelete">SourceShardDelete</h3>
@@ -2880,7 +2882,7 @@
 <h4 id="errors">Errors</h4>
 
 <ul>
-<li>The <code>&lt;keyspace/shard&gt;</code> and <code>&lt;uid&gt;</code> arguments are both required for the <code>&lt;SourceShardDelete&gt;</code> command. This error occurs if the command is not called with at least 2 arguments.</li>
+<li>the <code>&lt;keyspace/shard&gt;</code> and <code>&lt;uid&gt;</code> arguments are both required for the <code>&lt;SourceShardDelete&gt;</code> command This error occurs if the command is not called with at least 2 arguments.</li>
 </ul>
 
 <h3 id="tabletexternallyreparented">TabletExternallyReparented</h3>
@@ -2900,7 +2902,7 @@
 <h4 id="errors">Errors</h4>
 
 <ul>
-<li>The <code>&lt;tablet alias&gt;</code> argument is required for the <code>&lt;TabletExternallyReparented&gt;</code> command. This error occurs if the command is not called with exactly one argument.</li>
+<li>the <code>&lt;tablet alias&gt;</code> argument is required for the <code>&lt;TabletExternallyReparented&gt;</code> command This error occurs if the command is not called with exactly one argument.</li>
 </ul>
 
 <h3 id="validateshard">ValidateShard</h3>
@@ -2936,7 +2938,7 @@
 <h4 id="errors">Errors</h4>
 
 <ul>
-<li>The <code>&lt;keyspace/shard&gt;</code> argument is required for the <code>&lt;ValidateShard&gt;</code> command. This error occurs if the command is not called with exactly one argument.</li>
+<li>the <code>&lt;keyspace/shard&gt;</code> argument is required for the <code>&lt;ValidateShard&gt;</code> command This error occurs if the command is not called with exactly one argument.</li>
 </ul>
 
 <h3 id="waitforfilteredreplication">WaitForFilteredReplication</h3>
@@ -2956,7 +2958,7 @@
 <h4 id="errors">Errors</h4>
 
 <ul>
-<li>The <code>&lt;keyspace/shard&gt;</code> argument is required for the <code>&lt;WaitForFilteredReplication&gt;</code> command. This error occurs if the command is not called with exactly one argument.</li>
+<li>the <code>&lt;keyspace/shard&gt;</code> argument is required for the <code>&lt;WaitForFilteredReplication&gt;</code> command This error occurs if the command is not called with exactly one argument.</li>
 <li>shard %v/%v has no source shard</li>
 <li>shard %v/%v has no master</li>
 <li>failed to run explicit healthcheck on tablet: %v err: %v</li>
@@ -2976,7 +2978,6 @@
 <li><a href="#backup">Backup</a></li>
 <li><a href="#changeslavetype">ChangeSlaveType</a></li>
 <li><a href="#deletetablet">DeleteTablet</a></li>
-<li><a href="#demotemaster">DemoteMaster</a></li>
 <li><a href="#executefetchasdba">ExecuteFetchAsDba</a></li>
 <li><a href="#executehook">ExecuteHook</a></li>
 <li><a href="#gettablet">GetTablet</a></li>
@@ -3029,7 +3030,7 @@
 <h4 id="errors">Errors</h4>
 
 <ul>
-<li>The <code>&lt;Backup&gt;</code> command requires the <code>&lt;tablet alias&gt;</code> argument. This error occurs if the command is not called with exactly one argument.</li>
+<li>the <code>&lt;Backup&gt;</code> command requires the <code>&lt;tablet alias&gt;</code> argument This error occurs if the command is not called with exactly one argument.</li>
 </ul>
 
 <h3 id="changeslavetype">ChangeSlaveType</h3>
@@ -3065,6 +3066,7 @@
 <ul>
 <li><code>backup</code> &ndash; A slaved copy of data that is offline to queries other than for backup purposes</li>
 <li><code>batch</code> &ndash; A slaved copy of data for OLAP load patterns (typically for MapReduce jobs)</li>
+<li><code>drained</code> &ndash; A tablet that is reserved for a background process. For example, a tablet used by a vtworker process, where the tablet is likely lagging in replication.</li>
 <li><code>experimental</code> &ndash; A slaved copy of data that is ready but not serving query traffic. The value indicates a special characteristic of the tablet that indicates the tablet should not be considered a potential master. Vitess also does not worry about lag for experimental tablets when reparenting.</li>
 <li><code>master</code> &ndash; A primary copy of data</li>
 <li><code>rdonly</code> &ndash; A slaved copy of data for OLAP load patterns</li>
@@ -3073,14 +3075,13 @@
 <li><code>schema_apply</code> &ndash; A slaved copy of data that had been serving query traffic but that is now applying a schema change. Following the change, the tablet will revert to its serving type.</li>
 <li><code>snapshot_source</code> &ndash; A slaved copy of data where mysqld is <b>not</b> running and where Vitess is serving data files to clone slaves. Use this command to enter this mode: <pre>vtctl Snapshot -server-mode ...</pre> Use this command to exit this mode: <pre>vtctl SnapshotSourceEnd ...</pre></li>
 <li><code>spare</code> &ndash; A slaved copy of data that is ready but not serving query traffic. The data could be a potential master tablet.</li>
-<li><code>worker</code> &ndash; A tablet that is in use by a vtworker process. The tablet is likely lagging in replication.</li>
 </ul></li>
 </ul>
 
 <h4 id="errors">Errors</h4>
 
 <ul>
-<li>The <code>&lt;tablet alias&gt;</code> and <code>&lt;db type&gt;</code> arguments are required for the <code>&lt;ChangeSlaveType&gt;</code> command. This error occurs if the command is not called with exactly 2 arguments.</li>
+<li>the <code>&lt;tablet alias&gt;</code> and <code>&lt;db type&gt;</code> arguments are required for the <code>&lt;ChangeSlaveType&gt;</code> command This error occurs if the command is not called with exactly 2 arguments.</li>
 <li>failed reading tablet %v: %v</li>
 <li>invalid type transition %v: %v -&gt;</code> %v</li>
 </ul>
@@ -3118,21 +3119,7 @@
 <h4 id="errors">Errors</h4>
 
 <ul>
-<li>The <code>&lt;tablet alias&gt;</code> argument must be used to specify at least one tablet when calling the <code>&lt;DeleteTablet&gt;</code> command. This error occurs if the command is not called with at least one argument.</li>
-</ul>
-
-<h3 id="demotemaster">DemoteMaster</h3>
-
-<p>Demotes a master tablet.</p>
-
-<h4 id="example">Example</h4>
-
-<pre class="command-example">DemoteMaster &lt;tablet alias&gt;</pre>
-
-<h4 id="errors">Errors</h4>
-
-<ul>
-<li>action <code>&lt;DemoteMaster&gt;</code> requires <code>&lt;tablet alias&gt;</code> This error occurs if the command is not called with exactly one argument.</li>
+<li>the <code>&lt;tablet alias&gt;</code> argument must be used to specify at least one tablet when calling the <code>&lt;DeleteTablet&gt;</code> command This error occurs if the command is not called with at least one argument.</li>
 </ul>
 
 <h3 id="executefetchasdba">ExecuteFetchAsDba</h3>
@@ -3184,7 +3171,7 @@
 <h4 id="errors">Errors</h4>
 
 <ul>
-<li>The <code>&lt;tablet alias&gt;</code> and <code>&lt;sql command&gt;</code> arguments are required for the <code>&lt;ExecuteFetchAsDba&gt;</code> command. This error occurs if the command is not called with exactly 2 arguments.</li>
+<li>the <code>&lt;tablet alias&gt;</code> and <code>&lt;sql command&gt;</code> arguments are required for the <code>&lt;ExecuteFetchAsDba&gt;</code> command This error occurs if the command is not called with exactly 2 arguments.</li>
 </ul>
 
 <h3 id="executehook">ExecuteHook</h3>
@@ -3206,7 +3193,7 @@
 <h4 id="errors">Errors</h4>
 
 <ul>
-<li>The <code>&lt;tablet alias&gt;</code> and <code>&lt;hook name&gt;</code> arguments are required for the <code>&lt;ExecuteHook&gt;</code> command. This error occurs if the command is not called with at least 2 arguments.</li>
+<li>the <code>&lt;tablet alias&gt;</code> and <code>&lt;hook name&gt;</code> arguments are required for the <code>&lt;ExecuteHook&gt;</code> command This error occurs if the command is not called with at least 2 arguments.</li>
 </ul>
 
 <h3 id="gettablet">GetTablet</h3>
@@ -3226,7 +3213,7 @@
 <h4 id="errors">Errors</h4>
 
 <ul>
-<li>The <code>&lt;tablet alias&gt;</code> argument is required for the <code>&lt;GetTablet&gt;</code> command. This error occurs if the command is not called with exactly one argument.</li>
+<li>the <code>&lt;tablet alias&gt;</code> argument is required for the <code>&lt;GetTablet&gt;</code> command This error occurs if the command is not called with exactly one argument.</li>
 </ul>
 
 <h3 id="ignorehealtherror">IgnoreHealthError</h3>
@@ -3247,7 +3234,7 @@
 <h4 id="errors">Errors</h4>
 
 <ul>
-<li>The <code>&lt;tablet alias&gt;</code> and <code>&lt;ignore regexp&gt;</code> arguments are required for the <code>&lt;IgnoreHealthError&gt;</code> command. This error occurs if the command is not called with exactly 2 arguments.</li>
+<li>the <code>&lt;tablet alias&gt;</code> and <code>&lt;ignore regexp&gt;</code> arguments are required for the <code>&lt;IgnoreHealthError&gt;</code> command This error occurs if the command is not called with exactly 2 arguments.</li>
 </ul>
 
 <h3 id="inittablet">InitTablet</h3>
@@ -3333,6 +3320,7 @@
 <ul>
 <li><code>backup</code> &ndash; A slaved copy of data that is offline to queries other than for backup purposes</li>
 <li><code>batch</code> &ndash; A slaved copy of data for OLAP load patterns (typically for MapReduce jobs)</li>
+<li><code>drained</code> &ndash; A tablet that is reserved for a background process. For example, a tablet used by a vtworker process, where the tablet is likely lagging in replication.</li>
 <li><code>experimental</code> &ndash; A slaved copy of data that is ready but not serving query traffic. The value indicates a special characteristic of the tablet that indicates the tablet should not be considered a potential master. Vitess also does not worry about lag for experimental tablets when reparenting.</li>
 <li><code>master</code> &ndash; A primary copy of data</li>
 <li><code>rdonly</code> &ndash; A slaved copy of data for OLAP load patterns</li>
@@ -3341,14 +3329,13 @@
 <li><code>schema_apply</code> &ndash; A slaved copy of data that had been serving query traffic but that is now applying a schema change. Following the change, the tablet will revert to its serving type.</li>
 <li><code>snapshot_source</code> &ndash; A slaved copy of data where mysqld is <b>not</b> running and where Vitess is serving data files to clone slaves. Use this command to enter this mode: <pre>vtctl Snapshot -server-mode ...</pre> Use this command to exit this mode: <pre>vtctl SnapshotSourceEnd ...</pre></li>
 <li><code>spare</code> &ndash; A slaved copy of data that is ready but not serving query traffic. The data could be a potential master tablet.</li>
-<li><code>worker</code> &ndash; A tablet that is in use by a vtworker process. The tablet is likely lagging in replication.</li>
 </ul></li>
 </ul>
 
 <h4 id="errors">Errors</h4>
 
 <ul>
-<li>The <code>&lt;tablet alias&gt;</code> and <code>&lt;tablet type&gt;</code> arguments are both required for the <code>&lt;InitTablet&gt;</code> command. This error occurs if the command is not called with exactly 2 arguments.</li>
+<li>the <code>&lt;tablet alias&gt;</code> and <code>&lt;tablet type&gt;</code> arguments are both required for the <code>&lt;InitTablet&gt;</code> command This error occurs if the command is not called with exactly 2 arguments.</li>
 </ul>
 
 <h3 id="ping">Ping</h3>
@@ -3368,7 +3355,7 @@
 <h4 id="errors">Errors</h4>
 
 <ul>
-<li>The <code>&lt;tablet alias&gt;</code> argument is required for the <code>&lt;Ping&gt;</code> command. This error occurs if the command is not called with exactly one argument.</li>
+<li>the <code>&lt;tablet alias&gt;</code> argument is required for the <code>&lt;Ping&gt;</code> command This error occurs if the command is not called with exactly one argument.</li>
 </ul>
 
 <h3 id="refreshstate">RefreshState</h3>
@@ -3388,7 +3375,7 @@
 <h4 id="errors">Errors</h4>
 
 <ul>
-<li>The <code>&lt;tablet alias&gt;</code> argument is required for the <code>&lt;RefreshState&gt;</code> command. This error occurs if the command is not called with exactly one argument.</li>
+<li>the <code>&lt;tablet alias&gt;</code> argument is required for the <code>&lt;RefreshState&gt;</code> command This error occurs if the command is not called with exactly one argument.</li>
 </ul>
 
 <h3 id="refreshstatebyshard">RefreshStateByShard</h3>
@@ -3424,7 +3411,7 @@
 <h4 id="errors">Errors</h4>
 
 <ul>
-<li>The <code>&lt;keyspace/shard&gt;</code> argument is required for the <code>&lt;RefreshStateByShard&gt;</code> command. This error occurs if the command is not called with exactly one argument.</li>
+<li>the <code>&lt;keyspace/shard&gt;</code> argument is required for the <code>&lt;RefreshStateByShard&gt;</code> command This error occurs if the command is not called with exactly one argument.</li>
 </ul>
 
 <h3 id="reparenttablet">ReparentTablet</h3>
@@ -3452,7 +3439,7 @@
 <h4 id="errors">Errors</h4>
 
 <ul>
-<li>The <code>&lt;RestoreFromBackup&gt;</code> command requires the <code>&lt;tablet alias&gt;</code> argument. This error occurs if the command is not called with exactly one argument.</li>
+<li>the <code>&lt;RestoreFromBackup&gt;</code> command requires the <code>&lt;tablet alias&gt;</code> argument This error occurs if the command is not called with exactly one argument.</li>
 </ul>
 
 <h3 id="runhealthcheck">RunHealthCheck</h3>
@@ -3472,7 +3459,7 @@
 <h4 id="errors">Errors</h4>
 
 <ul>
-<li>The <code>&lt;tablet alias&gt;</code> argument is required for the <code>&lt;RunHealthCheck&gt;</code> command. This error occurs if the command is not called with exactly one argument.</li>
+<li>the <code>&lt;tablet alias&gt;</code> argument is required for the <code>&lt;RunHealthCheck&gt;</code> command This error occurs if the command is not called with exactly one argument.</li>
 </ul>
 
 <h3 id="setreadonly">SetReadOnly</h3>
@@ -3492,7 +3479,7 @@
 <h4 id="errors">Errors</h4>
 
 <ul>
-<li>The <code>&lt;tablet alias&gt;</code> argument is required for the <code>&lt;SetReadOnly&gt;</code> command. This error occurs if the command is not called with exactly one argument.</li>
+<li>the <code>&lt;tablet alias&gt;</code> argument is required for the <code>&lt;SetReadOnly&gt;</code> command This error occurs if the command is not called with exactly one argument.</li>
 <li>failed reading tablet %v: %v</li>
 </ul>
 
@@ -3513,7 +3500,7 @@
 <h4 id="errors">Errors</h4>
 
 <ul>
-<li>The <code>&lt;tablet alias&gt;</code> argument is required for the <code>&lt;SetReadWrite&gt;</code> command. This error occurs if the command is not called with exactly one argument.</li>
+<li>the <code>&lt;tablet alias&gt;</code> argument is required for the <code>&lt;SetReadWrite&gt;</code> command This error occurs if the command is not called with exactly one argument.</li>
 <li>failed reading tablet %v: %v</li>
 </ul>
 
@@ -3535,7 +3522,7 @@
 <h4 id="errors">Errors</h4>
 
 <ul>
-<li>The <code>&lt;tablet alias&gt;</code> and <code>&lt;duration&gt;</code> arguments are required for the <code>&lt;Sleep&gt;</code> command. This error occurs if the command is not called with exactly 2 arguments.</li>
+<li>the <code>&lt;tablet alias&gt;</code> and <code>&lt;duration&gt;</code> arguments are required for the <code>&lt;Sleep&gt;</code> command This error occurs if the command is not called with exactly 2 arguments.</li>
 </ul>
 
 <h3 id="startslave">StartSlave</h3>
@@ -3633,7 +3620,7 @@
 <h4 id="errors">Errors</h4>
 
 <ul>
-<li>The <code>&lt;tablet alias&gt;</code> argument is required for the <code>&lt;UpdateTabletAddrs&gt;</code> command. This error occurs if the command is not called with exactly one argument.</li>
+<li>the <code>&lt;tablet alias&gt;</code> argument is required for the <code>&lt;UpdateTabletAddrs&gt;</code> command This error occurs if the command is not called with exactly one argument.</li>
 <li>malformed address: %v</li>
 </ul>
 
@@ -3642,6 +3629,7 @@
 <ul>
 <li><a href="#workflowaction">WorkflowAction</a></li>
 <li><a href="#workflowcreate">WorkflowCreate</a></li>
+<li><a href="#workflowdelete">WorkflowDelete</a></li>
 <li><a href="#workflowstart">WorkflowStart</a></li>
 <li><a href="#workflowstop">WorkflowStop</a></li>
 <li><a href="#workflowtree">WorkflowTree</a></li>
@@ -3703,6 +3691,21 @@
 
 <ul>
 <li>the <code>&lt;factoryName&gt;</code> argument is required for the <code>&lt;WorkflowCreate&gt;</code> command This error occurs if the command is not called with at least one argument.</li>
+<li>no workflow.Manager registered</li>
+</ul>
+
+<h3 id="workflowdelete">WorkflowDelete</h3>
+
+<p>Deletes the finished or not started workflow.</p>
+
+<h4 id="example">Example</h4>
+
+<pre class="command-example">WorkflowDelete &lt;uuid&gt;</pre>
+
+<h4 id="errors">Errors</h4>
+
+<ul>
+<li>the <code>&lt;uuid&gt;</code> argument is required for the <code>&lt;WorkflowDelete&gt;</code> command This error occurs if the command is not called with exactly one argument.</li>
 <li>no workflow.Manager registered</li>
 </ul>
 

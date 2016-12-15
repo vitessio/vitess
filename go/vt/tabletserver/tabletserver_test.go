@@ -624,8 +624,8 @@ func TestTabletServerStopWithPrepare(t *testing.T) {
 		t.Fatal("ch should not fire")
 	case <-time.After(10 * time.Millisecond):
 	}
-	if len(tsv.qe.preparedPool.conns) != 1 {
-		t.Errorf("len(tsv.qe.preparedPool.conns): %d, want 1", len(tsv.qe.preparedPool.conns))
+	if len(tsv.te.preparedPool.conns) != 1 {
+		t.Errorf("len(tsv.te.preparedPool.conns): %d, want 1", len(tsv.te.preparedPool.conns))
 	}
 
 	// RollbackPrepared will allow StopService to complete.
@@ -634,8 +634,8 @@ func TestTabletServerStopWithPrepare(t *testing.T) {
 		t.Error(err)
 	}
 	<-ch
-	if len(tsv.qe.preparedPool.conns) != 0 {
-		t.Errorf("len(tsv.qe.preparedPool.conns): %d, want 0", len(tsv.qe.preparedPool.conns))
+	if len(tsv.te.preparedPool.conns) != 0 {
+		t.Errorf("len(tsv.te.preparedPool.conns): %d, want 0", len(tsv.te.preparedPool.conns))
 	}
 }
 
@@ -659,7 +659,7 @@ func TestTabletServerMasterToReplica(t *testing.T) {
 		t.Error(err)
 	}
 	// This makes txid2 busy
-	conn2, err := tsv.qe.txPool.Get(txid2, "for query")
+	conn2, err := tsv.te.txPool.Get(txid2, "for query")
 	if err != nil {
 		t.Error(err)
 	}
@@ -676,12 +676,12 @@ func TestTabletServerMasterToReplica(t *testing.T) {
 		t.Fatal("ch should not fire")
 	case <-time.After(10 * time.Millisecond):
 	}
-	if tsv.qe.txPool.activePool.Size() != 1 {
-		t.Errorf("len(tsv.qe.txPool.activePool.Size()): %d, want 1", len(tsv.qe.preparedPool.conns))
+	if tsv.te.txPool.activePool.Size() != 1 {
+		t.Errorf("len(tsv.te.txPool.activePool.Size()): %d, want 1", len(tsv.te.preparedPool.conns))
 	}
 
 	// Concluding conn2 will allow the transition to go through.
-	tsv.qe.txPool.LocalConclude(ctx, conn2)
+	tsv.te.txPool.LocalConclude(ctx, conn2)
 	<-ch
 }
 
@@ -690,65 +690,70 @@ func TestTabletServerReplicaToMaster(t *testing.T) {
 	_, tsv, db := newTestTxExecutor()
 	defer tsv.StopService()
 	tsv.SetServingType(topodatapb.TabletType_REPLICA, true, nil)
-	tpc := tsv.qe.twoPC
+	tpc := tsv.te.twoPC
 
 	db.AddQuery(tpc.readAllRedo, &sqltypes.Result{})
 	tsv.SetServingType(topodatapb.TabletType_MASTER, true, nil)
-	if len(tsv.qe.preparedPool.conns) != 0 {
-		t.Errorf("len(tsv.qe.preparedPool.conns): %d, want 0", len(tsv.qe.preparedPool.conns))
+	if len(tsv.te.preparedPool.conns) != 0 {
+		t.Errorf("len(tsv.te.preparedPool.conns): %d, want 0", len(tsv.te.preparedPool.conns))
 	}
 	tsv.SetServingType(topodatapb.TabletType_REPLICA, true, nil)
 
 	db.AddQuery(tpc.readAllRedo, &sqltypes.Result{
 		Rows: [][]sqltypes.Value{{
 			sqltypes.MakeString([]byte("dtid0")),
-			sqltypes.MakeString([]byte("Prepared")),
+			sqltypes.MakeString([]byte(strconv.Itoa(RedoStatePrepared))),
 			sqltypes.MakeString([]byte("")),
 			sqltypes.MakeString([]byte("update test_table set name = 2 where pk in (1) /* _stream test_table (pk ) (1 ); */")),
 		}},
 	})
 	tsv.SetServingType(topodatapb.TabletType_MASTER, true, nil)
-	if len(tsv.qe.preparedPool.conns) != 1 {
-		t.Errorf("len(tsv.qe.preparedPool.conns): %d, want 1", len(tsv.qe.preparedPool.conns))
+	if len(tsv.te.preparedPool.conns) != 1 {
+		t.Errorf("len(tsv.te.preparedPool.conns): %d, want 1", len(tsv.te.preparedPool.conns))
 	}
-	got := tsv.qe.preparedPool.conns["dtid0"].Queries
+	got := tsv.te.preparedPool.conns["dtid0"].Queries
 	want := []string{"update test_table set name = 2 where pk in (1) /* _stream test_table (pk ) (1 ); */"}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("Prepared queries: %v, want %v", got, want)
 	}
 	tsv.SetServingType(topodatapb.TabletType_REPLICA, true, nil)
 
+	tsv.te.txPool.lastID.Set(1)
 	// Ensure we continue past errors.
 	db.AddQuery(tpc.readAllRedo, &sqltypes.Result{
 		Rows: [][]sqltypes.Value{{
 			sqltypes.MakeString([]byte("bogus")),
-			sqltypes.MakeString([]byte("Prepared")),
+			sqltypes.MakeString([]byte(strconv.Itoa(RedoStatePrepared))),
 			sqltypes.MakeString([]byte("")),
 			sqltypes.MakeString([]byte("bogus")),
 		}, {
-			sqltypes.MakeString([]byte("dtid0")),
-			sqltypes.MakeString([]byte("Prepared")),
+			sqltypes.MakeString([]byte("a:b:10")),
+			sqltypes.MakeString([]byte(strconv.Itoa(RedoStatePrepared))),
 			sqltypes.MakeString([]byte("")),
 			sqltypes.MakeString([]byte("update test_table set name = 2 where pk in (1) /* _stream test_table (pk ) (1 ); */")),
 		}, {
-			sqltypes.MakeString([]byte("dtid1")),
-			sqltypes.MakeString([]byte("Failed")),
+			sqltypes.MakeString([]byte("a:b:20")),
+			sqltypes.MakeString([]byte(strconv.Itoa(RedoStateFailed))),
 			sqltypes.MakeString([]byte("")),
 			sqltypes.MakeString([]byte("unused")),
 		}},
 	})
 	tsv.SetServingType(topodatapb.TabletType_MASTER, true, nil)
-	if len(tsv.qe.preparedPool.conns) != 1 {
-		t.Errorf("len(tsv.qe.preparedPool.conns): %d, want 1", len(tsv.qe.preparedPool.conns))
+	if len(tsv.te.preparedPool.conns) != 1 {
+		t.Errorf("len(tsv.te.preparedPool.conns): %d, want 1", len(tsv.te.preparedPool.conns))
 	}
-	got = tsv.qe.preparedPool.conns["dtid0"].Queries
+	got = tsv.te.preparedPool.conns["a:b:10"].Queries
 	want = []string{"update test_table set name = 2 where pk in (1) /* _stream test_table (pk ) (1 ); */"}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("Prepared queries: %v, want %v", got, want)
 	}
-	wantFailed := map[string]error{"dtid1": errPrepFailed}
-	if !reflect.DeepEqual(tsv.qe.preparedPool.reserved, wantFailed) {
-		t.Errorf("Failed dtids: %v, want %v", tsv.qe.preparedPool.reserved, wantFailed)
+	wantFailed := map[string]error{"a:b:20": errPrepFailed}
+	if !reflect.DeepEqual(tsv.te.preparedPool.reserved, wantFailed) {
+		t.Errorf("Failed dtids: %v, want %v", tsv.te.preparedPool.reserved, wantFailed)
+	}
+	// Verify last id got adjusted.
+	if v := tsv.te.txPool.lastID.Get(); v != 20 {
+		t.Errorf("tsv.te.txPool.lastID.Get(): %d, want 20", v)
 	}
 	tsv.SetServingType(topodatapb.TabletType_REPLICA, true, nil)
 }
@@ -759,8 +764,8 @@ func TestTabletServerCreateTransaction(t *testing.T) {
 	ctx := context.Background()
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
 
-	db.AddQueryPattern("insert into `_vt`\\.transaction\\(dtid, state, time_created, time_updated\\) values \\('aa', 'Prepare',.*", &sqltypes.Result{})
-	db.AddQueryPattern("insert into `_vt`\\.participant\\(dtid, id, keyspace, shard\\) values \\('aa', 1,.*", &sqltypes.Result{})
+	db.AddQueryPattern(fmt.Sprintf("insert into `_vt`\\.dt_state\\(dtid, state, time_created\\) values \\('aa', %d,.*", int(querypb.TransactionState_PREPARE)), &sqltypes.Result{})
+	db.AddQueryPattern("insert into `_vt`\\.dt_participant\\(dtid, id, keyspace, shard\\) values \\('aa', 1,.*", &sqltypes.Result{})
 	err := tsv.CreateTransaction(ctx, &target, "aa", []*querypb.Target{{
 		Keyspace: "t1",
 		Shard:    "0",
@@ -776,7 +781,7 @@ func TestTabletServerStartCommit(t *testing.T) {
 	ctx := context.Background()
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
 
-	commitTransition := "update `_vt`.transaction set state = 'Commit' where dtid = 'aa' and state = 'Prepare'"
+	commitTransition := fmt.Sprintf("update `_vt`.dt_state set state = %d where dtid = 'aa' and state = %d", int(querypb.TransactionState_COMMIT), int(querypb.TransactionState_PREPARE))
 	db.AddQuery(commitTransition, &sqltypes.Result{RowsAffected: 1})
 	txid := newTxForPrep(tsv)
 	err := tsv.StartCommit(ctx, &target, txid, "aa")
@@ -787,7 +792,7 @@ func TestTabletServerStartCommit(t *testing.T) {
 	db.AddQuery(commitTransition, &sqltypes.Result{})
 	txid = newTxForPrep(tsv)
 	err = tsv.StartCommit(ctx, &target, txid, "aa")
-	want := "error: could not transition to Commit: aa"
+	want := "error: could not transition to COMMIT: aa"
 	if err == nil || err.Error() != want {
 		t.Errorf("Prepare err: %v, want %s", err, want)
 	}
@@ -799,7 +804,7 @@ func TestTabletserverSetRollback(t *testing.T) {
 	ctx := context.Background()
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
 
-	rollbackTransition := "update `_vt`.transaction set state = 'Rollback' where dtid = 'aa' and state = 'Prepare'"
+	rollbackTransition := fmt.Sprintf("update `_vt`.dt_state set state = %d where dtid = 'aa' and state = %d", int(querypb.TransactionState_ROLLBACK), int(querypb.TransactionState_PREPARE))
 	db.AddQuery(rollbackTransition, &sqltypes.Result{RowsAffected: 1})
 	txid := newTxForPrep(tsv)
 	err := tsv.SetRollback(ctx, &target, "aa", txid)
@@ -810,7 +815,7 @@ func TestTabletserverSetRollback(t *testing.T) {
 	db.AddQuery(rollbackTransition, &sqltypes.Result{})
 	txid = newTxForPrep(tsv)
 	err = tsv.SetRollback(ctx, &target, "aa", txid)
-	want := "error: could not transition to Rollback: aa"
+	want := "error: could not transition to ROLLBACK: aa"
 	if err == nil || err.Error() != want {
 		t.Errorf("Prepare err: %v, want %s", err, want)
 	}
@@ -822,7 +827,7 @@ func TestTabletServerReadTransaction(t *testing.T) {
 	ctx := context.Background()
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
 
-	db.AddQuery("select dtid, state, time_created, time_updated from `_vt`.transaction where dtid = 'aa'", &sqltypes.Result{})
+	db.AddQuery("select dtid, state, time_created from `_vt`.dt_state where dtid = 'aa'", &sqltypes.Result{})
 	got, err := tsv.ReadTransaction(ctx, &target, "aa")
 	if err != nil {
 		t.Error(err)
@@ -835,13 +840,12 @@ func TestTabletServerReadTransaction(t *testing.T) {
 	txResult := &sqltypes.Result{
 		Rows: [][]sqltypes.Value{{
 			sqltypes.MakeString([]byte("aa")),
-			sqltypes.MakeString([]byte("Prepare")),
+			sqltypes.MakeString([]byte(strconv.Itoa(int(querypb.TransactionState_PREPARE)))),
 			sqltypes.MakeString([]byte("1")),
-			sqltypes.MakeString([]byte("2")),
 		}},
 	}
-	db.AddQuery("select dtid, state, time_created, time_updated from `_vt`.transaction where dtid = 'aa'", txResult)
-	db.AddQuery("select keyspace, shard from `_vt`.participant where dtid = 'aa'", &sqltypes.Result{
+	db.AddQuery("select dtid, state, time_created from `_vt`.dt_state where dtid = 'aa'", txResult)
+	db.AddQuery("select keyspace, shard from `_vt`.dt_participant where dtid = 'aa'", &sqltypes.Result{
 		Rows: [][]sqltypes.Value{{
 			sqltypes.MakeString([]byte("test1")),
 			sqltypes.MakeString([]byte("0")),
@@ -858,7 +862,6 @@ func TestTabletServerReadTransaction(t *testing.T) {
 		Dtid:        "aa",
 		State:       querypb.TransactionState_PREPARE,
 		TimeCreated: 1,
-		TimeUpdated: 2,
 		Participants: []*querypb.Target{{
 			Keyspace:   "test1",
 			Shard:      "0",
@@ -873,8 +876,8 @@ func TestTabletServerReadTransaction(t *testing.T) {
 		t.Errorf("ReadTransaction: %v, want %v", got, want)
 	}
 
-	txResult.Rows[0][1] = sqltypes.MakeString([]byte("Commit"))
-	db.AddQuery("select dtid, state, time_created, time_updated from `_vt`.transaction where dtid = 'aa'", txResult)
+	txResult.Rows[0][1] = sqltypes.MakeString([]byte(strconv.Itoa(int(querypb.TransactionState_COMMIT))))
+	db.AddQuery("select dtid, state, time_created from `_vt`.dt_state where dtid = 'aa'", txResult)
 	want.State = querypb.TransactionState_COMMIT
 	got, err = tsv.ReadTransaction(ctx, &target, "aa")
 	if err != nil {
@@ -884,8 +887,8 @@ func TestTabletServerReadTransaction(t *testing.T) {
 		t.Errorf("ReadTransaction: %v, want %v", got, want)
 	}
 
-	txResult.Rows[0][1] = sqltypes.MakeString([]byte("Rollback"))
-	db.AddQuery("select dtid, state, time_created, time_updated from `_vt`.transaction where dtid = 'aa'", txResult)
+	txResult.Rows[0][1] = sqltypes.MakeString([]byte(strconv.Itoa(int(querypb.TransactionState_ROLLBACK))))
+	db.AddQuery("select dtid, state, time_created from `_vt`.dt_state where dtid = 'aa'", txResult)
 	want.State = querypb.TransactionState_ROLLBACK
 	got, err = tsv.ReadTransaction(ctx, &target, "aa")
 	if err != nil {
@@ -902,8 +905,8 @@ func TestTabletServerConcludeTransaction(t *testing.T) {
 	ctx := context.Background()
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
 
-	db.AddQuery("delete from `_vt`.transaction where dtid = 'aa'", &sqltypes.Result{})
-	db.AddQuery("delete from `_vt`.participant where dtid = 'aa'", &sqltypes.Result{})
+	db.AddQuery("delete from `_vt`.dt_state where dtid = 'aa'", &sqltypes.Result{})
+	db.AddQuery("delete from `_vt`.dt_participant where dtid = 'aa'", &sqltypes.Result{})
 	err := tsv.ConcludeTransaction(ctx, &target, "aa")
 	if err != nil {
 		t.Error(err)
@@ -1382,7 +1385,7 @@ func TestExecuteBatchNestedTransaction(t *testing.T) {
 	}, false, 0, nil); err == nil {
 		t.Fatalf("TabletServer.Execute should fail because of nested transaction")
 	}
-	tsv.qe.txPool.SetTimeout(10)
+	tsv.te.txPool.SetTimeout(10)
 }
 
 func TestTabletServerSplitQuery(t *testing.T) {
@@ -1486,20 +1489,54 @@ func TestTabletServerSplitQueryInvalidParams(t *testing.T) {
 	}
 }
 
+// Tests that using Equal Splits on a string column returns an error.
+func TestTabletServerSplitQueryEqualSplitsOnStringColumn(t *testing.T) {
+	db := setUpTabletServerTest()
+	testUtils := newTestUtils()
+	config := testUtils.newQueryServiceConfig()
+	tsv := NewTabletServer(config)
+	dbconfigs := testUtils.newDBConfigs(db)
+	target := querypb.Target{TabletType: topodatapb.TabletType_RDONLY}
+	err := tsv.StartService(target, dbconfigs, testUtils.newMysqld(&dbconfigs))
+	if err != nil {
+		t.Fatalf("StartService failed: %v", err)
+	}
+	defer tsv.StopService()
+	ctx := context.Background()
+	sql := "select * from test_table"
+	_, err = tsv.SplitQuery(
+		ctx,
+		&querypb.Target{TabletType: topodatapb.TabletType_RDONLY},
+		sql,
+		nil, /* bindVariables */
+		// EQUAL_SPLITS should not work on a string column.
+		[]string{"name_string"}, /* splitColumns */
+		10, /* splitCount */
+		0,  /* numRowsPerQueryPart */
+		querypb.SplitQueryRequest_EQUAL_SPLITS)
+	want :=
+		"error: splitquery: using the EQUAL_SPLITS algorithm in SplitQuery" +
+			" requires having a numeric (integral or float) split-column." +
+			" Got type: {Name: 'name_string', Type: VARCHAR}"
+	if err.Error() != want {
+		t.Fatalf("got: %v, want: %v", err, want)
+	}
+}
+
 func TestHandleExecUnknownError(t *testing.T) {
 	ctx := context.Background()
-	logStats := newLogStats("TestHandleExecError", ctx)
+	logStats := NewLogStats(ctx, "TestHandleExecError")
 	var err error
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServer(config)
-	defer tsv.handleError("select * from test_table", nil, &err, logStats)
+	defer tsv.handlePanicAndSendLogStats("select * from test_table", nil, &err, logStats)
 	panic("unknown exec error")
 }
 
 func TestHandleExecTabletError(t *testing.T) {
 	ctx := context.Background()
-	logStats := newLogStats("TestHandleExecError", ctx)
+	logStats := NewLogStats(ctx, "TestHandleExecError")
 	var err error
 	defer func() {
 		want := "fatal: tablet error"
@@ -1510,13 +1547,13 @@ func TestHandleExecTabletError(t *testing.T) {
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServer(config)
-	defer tsv.handleError("select * from test_table", nil, &err, logStats)
+	defer tsv.handlePanicAndSendLogStats("select * from test_table", nil, &err, logStats)
 	panic(NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "tablet error"))
 }
 
 func TestTerseErrorsNonSQLError(t *testing.T) {
 	ctx := context.Background()
-	logStats := newLogStats("TestHandleExecError", ctx)
+	logStats := NewLogStats(ctx, "TestHandleExecError")
 	var err error
 	defer func() {
 		want := "fatal: tablet error"
@@ -1528,13 +1565,13 @@ func TestTerseErrorsNonSQLError(t *testing.T) {
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServer(config)
 	tsv.config.TerseErrors = true
-	defer tsv.handleError("select * from test_table", nil, &err, logStats)
+	defer tsv.handlePanicAndSendLogStats("select * from test_table", nil, &err, logStats)
 	panic(NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "tablet error"))
 }
 
 func TestTerseErrorsBindVars(t *testing.T) {
 	ctx := context.Background()
-	logStats := newLogStats("TestHandleExecError", ctx)
+	logStats := NewLogStats(ctx, "TestHandleExecError")
 	var err error
 	defer func() {
 		want := "error: (errno 10) (sqlstate HY000) during query: select * from test_table"
@@ -1546,7 +1583,11 @@ func TestTerseErrorsBindVars(t *testing.T) {
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServer(config)
 	tsv.config.TerseErrors = true
-	defer tsv.handleError("select * from test_table", map[string]interface{}{"a": 1}, &err, logStats)
+	defer tsv.handlePanicAndSendLogStats(
+		"select * from test_table",
+		map[string]interface{}{"a": 1},
+		&err,
+		logStats)
 	panic(&TabletError{
 		ErrorCode: vtrpcpb.ErrorCode_DEADLINE_EXCEEDED,
 		Message:   "msg",
@@ -1557,7 +1598,7 @@ func TestTerseErrorsBindVars(t *testing.T) {
 
 func TestTerseErrorsNoBindVars(t *testing.T) {
 	ctx := context.Background()
-	logStats := newLogStats("TestHandleExecError", ctx)
+	logStats := NewLogStats(ctx, "TestHandleExecError")
 	var err error
 	defer func() {
 		want := "error: msg"
@@ -1569,7 +1610,7 @@ func TestTerseErrorsNoBindVars(t *testing.T) {
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServer(config)
 	tsv.config.TerseErrors = true
-	defer tsv.handleError("select * from test_table", nil, &err, logStats)
+	defer tsv.handlePanicAndSendLogStats("select * from test_table", nil, &err, logStats)
 	panic(&TabletError{
 		ErrorCode: vtrpcpb.ErrorCode_DEADLINE_EXCEEDED,
 		Message:   "msg",
@@ -1613,16 +1654,16 @@ func TestConfigChanges(t *testing.T) {
 	if val := tsv.TxPoolSize(); val != newSize {
 		t.Errorf("TxPoolSize: %d, want %d", val, newSize)
 	}
-	if val := int(tsv.qe.txPool.pool.Capacity()); val != newSize {
-		t.Errorf("tsv.qe.txPool.pool.Capacity: %d, want %d", val, newSize)
+	if val := int(tsv.te.txPool.pool.Capacity()); val != newSize {
+		t.Errorf("tsv.te.txPool.pool.Capacity: %d, want %d", val, newSize)
 	}
 
 	tsv.SetTxTimeout(newDuration)
 	if val := tsv.TxTimeout(); val != newDuration {
 		t.Errorf("tsv.TxTimeout: %v, want %v", val, newDuration)
 	}
-	if val := tsv.qe.txPool.Timeout(); val != newDuration {
-		t.Errorf("tsv.qe.txPool.Timeout: %v, want %v", val, newDuration)
+	if val := tsv.te.txPool.Timeout(); val != newDuration {
+		t.Errorf("tsv.te.txPool.Timeout: %v, want %v", val, newDuration)
 	}
 
 	tsv.SetQueryCacheCap(newSize)
@@ -1680,13 +1721,16 @@ func checkTabletServerState(t *testing.T, tsv *TabletServer, expectState int64) 
 func getSupportedQueries() map[string]*sqltypes.Result {
 	return map[string]*sqltypes.Result{
 		// queries for twopc
-		sqlTurnoffBinlog:                                     {},
-		fmt.Sprintf(sqlCreateSidecarDB, "_vt"):               {},
-		fmt.Sprintf(sqlCreateTableRedoLogTransaction, "_vt"): {},
-		fmt.Sprintf(sqlAlterTableRedoLogTransaction, "_vt"):  {},
-		fmt.Sprintf(sqlCreateTableRedoLogStatement, "_vt"):   {},
-		fmt.Sprintf(sqlCreateTableTransaction, "_vt"):        {},
-		fmt.Sprintf(sqlCreateTableParticipant, "_vt"):        {},
+		sqlTurnoffBinlog:                                {},
+		fmt.Sprintf(sqlCreateSidecarDB, "_vt"):          {},
+		fmt.Sprintf(sqlDropLegacy1, "_vt"):              {},
+		fmt.Sprintf(sqlDropLegacy2, "_vt"):              {},
+		fmt.Sprintf(sqlDropLegacy3, "_vt"):              {},
+		fmt.Sprintf(sqlDropLegacy4, "_vt"):              {},
+		fmt.Sprintf(sqlCreateTableRedoState, "_vt"):     {},
+		fmt.Sprintf(sqlCreateTableRedoStatement, "_vt"): {},
+		fmt.Sprintf(sqlCreateTableDTState, "_vt"):       {},
+		fmt.Sprintf(sqlCreateTableDTParticipant, "_vt"): {},
 		// queries for schema info
 		"select unix_timestamp()": {
 			RowsAffected: 1,
@@ -1707,10 +1751,34 @@ func getSupportedQueries() map[string]*sqltypes.Result {
 			},
 		},
 		"select * from test_table where 1 != 1": {
-			Fields: getTestTableFields(),
+			Fields: []*querypb.Field{{
+				Name: "pk",
+				Type: sqltypes.Int32,
+			}, {
+				Name: "name",
+				Type: sqltypes.Int32,
+			}, {
+				Name: "addr",
+				Type: sqltypes.Int32,
+			}, {
+				Name: "name_string",
+				Type: sqltypes.VarChar,
+			}},
 		},
 		"select * from `test_table` where 1 != 1": {
-			Fields: getTestTableFields(),
+			Fields: []*querypb.Field{{
+				Name: "pk",
+				Type: sqltypes.Int32,
+			}, {
+				Name: "name",
+				Type: sqltypes.Int32,
+			}, {
+				Name: "addr",
+				Type: sqltypes.Int32,
+			}, {
+				Name: "name_string",
+				Type: sqltypes.VarChar,
+			}},
 		},
 		baseShowTables: {
 			RowsAffected: 1,
@@ -1729,7 +1797,7 @@ func getSupportedQueries() map[string]*sqltypes.Result {
 			},
 		},
 		"describe `test_table`": {
-			RowsAffected: 3,
+			RowsAffected: 4,
 			Rows: [][]sqltypes.Value{
 				{
 					sqltypes.MakeString([]byte("pk")),
@@ -1755,11 +1823,19 @@ func getSupportedQueries() map[string]*sqltypes.Result {
 					sqltypes.MakeString([]byte("1")),
 					sqltypes.MakeString([]byte{}),
 				},
+				{
+					sqltypes.MakeString([]byte("name_string")), /* Field */
+					sqltypes.MakeString([]byte("varchar(10)")), /* Type */
+					sqltypes.MakeString([]byte{}),              /* NULL */
+					sqltypes.MakeString([]byte{}),              /* Key */
+					sqltypes.MakeString([]byte("foo")),         /* Default Value */
+					sqltypes.MakeString([]byte{}),              /* Extra */
+				},
 			},
 		},
 		// for SplitQuery because it needs a primary key column
 		"show index from `test_table`": {
-			RowsAffected: 2,
+			RowsAffected: 3,
 			Rows: [][]sqltypes.Value{
 				{
 					sqltypes.MakeString([]byte{}),
@@ -1778,6 +1854,15 @@ func getSupportedQueries() map[string]*sqltypes.Result {
 					sqltypes.MakeString([]byte("name")),
 					sqltypes.MakeString([]byte{}),
 					sqltypes.MakeString([]byte("300")),
+				},
+				{
+					sqltypes.MakeString([]byte{}),
+					sqltypes.MakeString([]byte{}),
+					sqltypes.MakeString([]byte("name_string_INDEX")),
+					sqltypes.MakeString([]byte{}),
+					sqltypes.MakeString([]byte("name_string")),
+					sqltypes.MakeString([]byte{}),
+					sqltypes.MakeString([]byte("100")),
 				},
 			},
 		},

@@ -67,7 +67,7 @@ class TestReparent(unittest.TestCase):
     for t in [tablet_62344, tablet_62044, tablet_41983, tablet_31981]:
       t.reset_replication()
       t.set_semi_sync_enabled(master=False)
-      t.clean_dbs()
+      t.clean_dbs(include_vt=True)
     super(TestReparent, self).tearDown()
 
   _create_vt_insert_test = '''create table vt_insert_test (
@@ -558,8 +558,8 @@ class TestReparent(unittest.TestCase):
     self.assertTrue(
         health['tablet_externally_reparented_timestamp'] >= int(base_time))
 
-  # See if a missing slave can be safely reparented after the fact.
   def test_reparent_with_down_slave(self, shard_id='0'):
+    """See if a missing slave can be safely reparented after the fact."""
     utils.run_vtctl(['CreateKeyspace', 'test_keyspace'])
 
     # create the database so vttablets start, as they are serving
@@ -706,6 +706,49 @@ class TestReparent(unittest.TestCase):
     # Clean up.
     tablet.kill_tablets([master, replica, rdonly1, rdonly2])
 
+  def test_reparent_doesnt_hang_if_master_fails(self):
+    """Makes sure a failed master populate doesn't hang."""
+    utils.run_vtctl(['CreateKeyspace', 'test_keyspace'])
+
+    # create the database so vttablets start, as they are serving
+    tablet_62344.create_db('vt_test_keyspace')
+    tablet_62044.create_db('vt_test_keyspace')
+    tablet_41983.create_db('vt_test_keyspace')
+    tablet_31981.create_db('vt_test_keyspace')
+
+    # Start up vttablet
+    for t in [tablet_62344, tablet_62044, tablet_31981, tablet_41983]:
+      t.init_tablet('replica', 'test_keyspace', '0', start=True,
+                    wait_for_start=False)
+
+    # wait for all tablets to start
+    for t in [tablet_62344, tablet_62044, tablet_31981, tablet_41983]:
+      t.wait_for_vttablet_state('NOT_SERVING')
+
+    # Force the slaves to reparent. Will create the _vt.reparent_journal table.
+    utils.run_vtctl(['InitShardMaster', '-force', 'test_keyspace/0',
+                     tablet_62344.tablet_alias])
+    utils.validate_topology(ping_tablets=True)
+
+    # Change the schema of the _vt.reparent_journal table, so that
+    # inserts into it will fail. That will make the master fail.
+    tablet_62344.mquery('_vt', 'ALTER TABLE reparent_journal'
+                        ' DROP COLUMN replication_position')
+
+    # Perform a planned reparent operation, the master will fail the
+    # insert.  The slaves should then abort right away. If this fails,
+    # the test will timeout.
+    _, stderr = utils.run_vtctl(['-wait-time', '3600s',
+                                 'PlannedReparentShard',
+                                 '-keyspace_shard', 'test_keyspace/0',
+                                 '-new_master', tablet_62044.tablet_alias],
+                                expect_fail=True)
+    self.assertIn('master failed to PopulateReparentJournal, canceling slaves',
+                  stderr)
+
+    # Clean up the tablets.
+    tablet.kill_tablets([tablet_62344, tablet_62044, tablet_41983,
+                         tablet_31981])
 
 if __name__ == '__main__':
   utils.main()

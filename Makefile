@@ -30,6 +30,7 @@ endif
 build_web:
 	echo $$(date): Building web artifacts
 	cd web/vtctld2 && ng build -prod
+	cp -f web/vtctld2/src/{favicon.ico,plotly-latest.min.js,primeui-ng-all.min.css,font-awesome.min.css} web/vtctld2/dist/
 
 build:
 ifndef NOBANNER
@@ -105,7 +106,7 @@ PROTOC_EXISTS := $(shell type -p $(PROTOC_DIR)/protoc)
 ifeq (,$(PROTOC_EXISTS))
   PROTOC_BINARY := $(shell which protoc)
   ifeq (,$(PROTOC_BINARY))
-    $(error "Cannot find protoc binary. Did you execute 'source dev.env'?")
+    $(error "Cannot find protoc binary. Did bootstrap.sh succeed, and did you execute 'source dev.env'?")
   endif
   PROTOC_DIR := $(dir $(PROTOC_BINARY))
 endif

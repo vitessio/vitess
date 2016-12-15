@@ -241,6 +241,9 @@ func (wr *Wrangler) CopySchemaShardFromShard(ctx context.Context, tables, exclud
 	if err != nil {
 		return err
 	}
+	if sourceShardInfo.MasterAlias == nil {
+		return fmt.Errorf("no master in shard record %v/%v. Consider to run 'vtctl InitShardMaster' in case of a new shard or to reparent the shard to fix the topology data", sourceKeyspace, sourceShard)
+	}
 
 	return wr.CopySchemaShard(ctx, sourceShardInfo.MasterAlias, tables, excludeTables, includeViews, destKeyspace, destShard, waitSlaveTimeout)
 }
@@ -253,6 +256,10 @@ func (wr *Wrangler) CopySchemaShard(ctx context.Context, sourceTabletAlias *topo
 	destShardInfo, err := wr.ts.GetShard(ctx, destKeyspace, destShard)
 	if err != nil {
 		return err
+	}
+
+	if destShardInfo.MasterAlias == nil {
+		return fmt.Errorf("no master in shard record %v/%v. Consider to run 'vtctl InitShardMaster' in case of a new shard or to reparent the shard to fix the topology data", destKeyspace, destShard)
 	}
 
 	err = wr.copyShardMetadata(ctx, sourceTabletAlias, destShardInfo.MasterAlias)

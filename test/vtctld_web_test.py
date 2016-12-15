@@ -3,7 +3,6 @@
 
 import logging
 import os
-from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions
 from selenium.webdriver.support.wait import WebDriverWait
@@ -13,7 +12,6 @@ import unittest
 from vtproto import vttest_pb2
 from vttest import environment as vttest_environment
 from vttest import local_database
-from vttest import mysql_flavor
 
 import environment
 import utils
@@ -62,29 +60,12 @@ class TestVtctldWeb(unittest.TestCase):
     keyspace2.replica_count = 2
     keyspace2.rdonly_count = 1
 
-    if os.environ.get('CI') == 'true' and os.environ.get('TRAVIS') == 'true':
-      username = os.environ['SAUCE_USERNAME']
-      access_key = os.environ['SAUCE_ACCESS_KEY']
-      capabilities = {}
-      capabilities['tunnel-identifier'] = os.environ['TRAVIS_JOB_NUMBER']
-      capabilities['build'] = os.environ['TRAVIS_BUILD_NUMBER']
-      capabilities['platform'] = 'Linux'
-      capabilities['browserName'] = 'chrome'
-      hub_url = '%s:%s@localhost:4445' % (username, access_key)
-      cls.driver = webdriver.Remote(
-          desired_capabilities=capabilities,
-          command_executor='http://%s/wd/hub' % hub_url)
-    else:
-      os.environ['webdriver.chrome.driver'] = os.path.join(
-          environment.vtroot, 'dist')
-      # Only testing against Chrome for now
-      cls.driver = webdriver.Chrome()
-      cls.driver.set_window_position(0, 0)
-      cls.driver.set_window_size(1920, 1280)
+    cls.driver = environment.create_webdriver()
 
     port = environment.reserve_ports(1)
     vttest_environment.base_port = port
-    mysql_flavor.set_mysql_flavor(None)
+
+    environment.reset_mysql_flavor()
 
     cls.db = local_database.LocalDatabase(
         topology,
@@ -450,8 +431,14 @@ class TestVtctldWeb(unittest.TestCase):
     dashboard_content = self.driver.find_element_by_tag_name('vt-dashboard')
     dialog = dashboard_content.find_element_by_tag_name('vt-dialog')
     # Create Keyspace Dialog command responds to name.
-    add_button = dashboard_content.find_element_by_class_name('add-button')
-    add_button.click()
+    dashboard_menu = dashboard_content.find_element_by_class_name('vt-menu')
+    dashboard_menu.click()
+    dashboard_menu_options = (
+        dashboard_content.find_elements_by_class_name('ui-menuitem-text'))
+    new_keyspace_option = [
+        x for x in dashboard_menu_options if x.text == 'New'][0]
+    new_keyspace_option.click()
+
     input_fields = [md_input.find_element_by_tag_name('input') for md_input in
                     dialog.find_elements_by_tag_name('md-input')]
     keyspace_name_field = input_fields[0]
@@ -501,7 +488,7 @@ class TestVtctldWeb(unittest.TestCase):
     test_keyspace3.find_element_by_class_name('vt-menu').click()
     options = test_keyspace3.find_elements_by_tag_name('li')
 
-    delete = options[1]
+    delete = [x for x in options if x.text == 'Delete'][0]
     delete.click()
 
     delete = dialog.find_element_by_id('vt-action')

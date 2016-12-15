@@ -330,7 +330,7 @@ index by_msg (msg)
 
     # check we can or cannot access the tables
     for table in ['moving1', 'moving2']:
-      if expected and 'moving.*' in expected:
+      if expected and '/moving/' in expected:
         # table is blacklisted, should get the error
         _, stderr = utils.run_vtctl(['VtTabletExecute', '-json',
                                      t.tablet_alias,
@@ -385,14 +385,14 @@ index by_msg (msg)
         'unexpected errors for VtgateApiErrorCounts inside %s' % str(v))
 
   def test_vertical_split(self):
-    utils.run_vtctl(['CopySchemaShard', '--tables', 'moving.*,view1',
+    utils.run_vtctl(['CopySchemaShard', '--tables', '/moving/,view1',
                      source_rdonly1.tablet_alias, 'destination_keyspace/0'],
                     auto_log=True)
 
     utils.run_vtworker(['--cell', 'test_nj',
                         '--command_display_interval', '10ms',
                         'VerticalSplitClone',
-                        '--tables', 'moving.*,view1',
+                        '--tables', '/moving/,view1',
                         '--chunk_count', '10',
                         '--min_rows_per_chunk', '1',
                         '--min_healthy_rdonly_tablets', '1',
@@ -436,7 +436,7 @@ index by_msg (msg)
 
     # get status for destination master tablet, make sure we have it all
     self.check_running_binlog_player(destination_master, 700, 300,
-                                     extra_text='moving.*')
+                                     extra_text='moving')
 
     # check query service is off on destination master, as filtered
     # replication is enabled. Even health check should not interfere.
@@ -499,8 +499,8 @@ index by_msg (msg)
                              'ServedFrom(replica): source_keyspace\n')
     self._check_blacklisted_tables(source_master, None)
     self._check_blacklisted_tables(source_replica, None)
-    self._check_blacklisted_tables(source_rdonly1, ['moving.*', 'view1'])
-    self._check_blacklisted_tables(source_rdonly2, ['moving.*', 'view1'])
+    self._check_blacklisted_tables(source_rdonly1, ['/moving/', 'view1'])
+    self._check_blacklisted_tables(source_rdonly2, ['/moving/', 'view1'])
     self._check_client_conn_redirection(
         'destination_keyspace',
         ['master', 'replica'], ['moving1', 'moving2'])
@@ -510,9 +510,9 @@ index by_msg (msg)
                     auto_log=True)
     self._check_srv_keyspace('ServedFrom(master): source_keyspace\n')
     self._check_blacklisted_tables(source_master, None)
-    self._check_blacklisted_tables(source_replica, ['moving.*', 'view1'])
-    self._check_blacklisted_tables(source_rdonly1, ['moving.*', 'view1'])
-    self._check_blacklisted_tables(source_rdonly2, ['moving.*', 'view1'])
+    self._check_blacklisted_tables(source_replica, ['/moving/', 'view1'])
+    self._check_blacklisted_tables(source_rdonly1, ['/moving/', 'view1'])
+    self._check_blacklisted_tables(source_rdonly2, ['/moving/', 'view1'])
     self._check_client_conn_redirection(
         'destination_keyspace',
         ['master'], ['moving1', 'moving2'])
@@ -524,15 +524,15 @@ index by_msg (msg)
                              'ServedFrom(replica): source_keyspace\n')
     self._check_blacklisted_tables(source_master, None)
     self._check_blacklisted_tables(source_replica, None)
-    self._check_blacklisted_tables(source_rdonly1, ['moving.*', 'view1'])
-    self._check_blacklisted_tables(source_rdonly2, ['moving.*', 'view1'])
+    self._check_blacklisted_tables(source_rdonly1, ['/moving/', 'view1'])
+    self._check_blacklisted_tables(source_rdonly2, ['/moving/', 'view1'])
     utils.run_vtctl(['MigrateServedFrom', 'destination_keyspace/0', 'replica'],
                     auto_log=True)
     self._check_srv_keyspace('ServedFrom(master): source_keyspace\n')
     self._check_blacklisted_tables(source_master, None)
-    self._check_blacklisted_tables(source_replica, ['moving.*', 'view1'])
-    self._check_blacklisted_tables(source_rdonly1, ['moving.*', 'view1'])
-    self._check_blacklisted_tables(source_rdonly2, ['moving.*', 'view1'])
+    self._check_blacklisted_tables(source_replica, ['/moving/', 'view1'])
+    self._check_blacklisted_tables(source_rdonly1, ['/moving/', 'view1'])
+    self._check_blacklisted_tables(source_rdonly2, ['/moving/', 'view1'])
     self._check_client_conn_redirection(
         'destination_keyspace',
         ['master'], ['moving1', 'moving2'])
@@ -541,10 +541,10 @@ index by_msg (msg)
     utils.run_vtctl(['MigrateServedFrom', 'destination_keyspace/0', 'master'],
                     auto_log=True)
     self._check_srv_keyspace('')
-    self._check_blacklisted_tables(source_master, ['moving.*', 'view1'])
-    self._check_blacklisted_tables(source_replica, ['moving.*', 'view1'])
-    self._check_blacklisted_tables(source_rdonly1, ['moving.*', 'view1'])
-    self._check_blacklisted_tables(source_rdonly2, ['moving.*', 'view1'])
+    self._check_blacklisted_tables(source_master, ['/moving/', 'view1'])
+    self._check_blacklisted_tables(source_replica, ['/moving/', 'view1'])
+    self._check_blacklisted_tables(source_rdonly1, ['/moving/', 'view1'])
+    self._check_blacklisted_tables(source_rdonly2, ['/moving/', 'view1'])
 
     # check the binlog player is gone now
     self.check_no_binlog_player(destination_master)
@@ -585,7 +585,8 @@ index by_msg (msg)
     self._assert_tablet_controls([topodata_pb2.MASTER, topodata_pb2.REPLICA])
 
     # re-add rdonly:
-    utils.run_vtctl(['SetShardTabletControl', '--tables=moving.*,view1',
+    utils.run_vtctl(['SetShardTabletControl',
+                     '--blacklisted_tables=/moving/,view1',
                      'source_keyspace/0', 'rdonly'], auto_log=True)
     self._assert_tablet_controls([topodata_pb2.MASTER, topodata_pb2.REPLICA,
                                   topodata_pb2.RDONLY])
@@ -607,7 +608,7 @@ index by_msg (msg)
     expected_dbtypes_set = set(expected_dbtypes)
     for tc in shard_json['tablet_controls']:
       self.assertIn(tc['tablet_type'], expected_dbtypes_set)
-      self.assertEqual(['moving.*', 'view1'], tc['blacklisted_tables'])
+      self.assertEqual(['/moving/', 'view1'], tc['blacklisted_tables'])
       expected_dbtypes_set.remove(tc['tablet_type'])
     self.assertEqual(0, len(expected_dbtypes_set),
                      'Not all expected db types were blacklisted')

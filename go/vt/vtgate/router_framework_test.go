@@ -150,7 +150,13 @@ var unshardedVSchema = `
 			"type": "sequence"
 		},
 		"music_user_map": {},
-		"name_user_map": {}
+		"name_user_map": {},
+		"main1": {
+			"auto_increment": {
+				"column": "id",
+				"sequence": "user_seq"
+			}
+		}
 	}
 }
 `

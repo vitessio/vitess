@@ -152,10 +152,6 @@
   "FullQuery": "insert into b.a(eid, id) values (1, :a)"
 }
 
-# insert sub-select
-"insert into a (eid, id) values (select * from b)"
-"row subquery not supported for inserts"
-
 # insert with bind value
 "insert into a (eid, id) values (1, :a)"
 {
@@ -226,6 +222,15 @@
   "Reason": "COMPLEX_EXPR",
   "TableName": "a",
   "FullQuery": "insert into a(eid, id) values (1 + 1, 2)"
+}
+
+# complex
+"insert into a (eid, id) values (0x04, 2)"
+{
+  "PlanID": "PASS_DML",
+  "Reason": "COMPLEX_EXPR",
+  "TableName": "a",
+  "FullQuery": "insert into a(eid, id) values (0x04, 2)"
 }
 
 # no index

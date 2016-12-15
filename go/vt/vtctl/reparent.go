@@ -34,11 +34,6 @@ func init() {
 		}
 
 		addCommand("Tablets", command{
-			"DemoteMaster",
-			commandDemoteMaster,
-			"<tablet alias>",
-			"Demotes a master tablet."})
-		addCommand("Tablets", command{
 			"ReparentTablet",
 			commandReparentTablet,
 			"<tablet alias>",
@@ -60,25 +55,6 @@ func init() {
 			"-keyspace_shard=<keyspace/shard> -new_master=<tablet alias>",
 			"Reparents the shard to the new master. Assumes the old master is dead and not responsding."})
 	})
-}
-
-func commandDemoteMaster(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	if err := subFlags.Parse(args); err != nil {
-		return err
-	}
-	if subFlags.NArg() != 1 {
-		return fmt.Errorf("action DemoteMaster requires <tablet alias>")
-	}
-	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
-	if err != nil {
-		return err
-	}
-	tabletInfo, err := wr.TopoServer().GetTablet(ctx, tabletAlias)
-	if err != nil {
-		return err
-	}
-	_, err = wr.TabletManagerClient().DemoteMaster(ctx, tabletInfo.Tablet)
-	return err
 }
 
 func commandReparentTablet(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {

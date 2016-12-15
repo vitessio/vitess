@@ -20,6 +20,7 @@ import (
 	"google.golang.org/api/iterator"
 	"google.golang.org/api/option"
 
+	"github.com/youtube/vitess/go/trace"
 	"github.com/youtube/vitess/go/vt/mysqlctl/backupstorage"
 )
 
@@ -53,16 +54,16 @@ func (bh *GCSBackupHandle) Name() string {
 }
 
 // AddFile implements BackupHandle.
-func (bh *GCSBackupHandle) AddFile(filename string) (io.WriteCloser, error) {
+func (bh *GCSBackupHandle) AddFile(ctx context.Context, filename string) (io.WriteCloser, error) {
 	if bh.readOnly {
 		return nil, fmt.Errorf("AddFile cannot be called on read-only backup")
 	}
 	object := objName(bh.dir, bh.name, filename)
-	return bh.client.Bucket(*bucket).Object(object).NewWriter(context.TODO()), nil
+	return bh.client.Bucket(*bucket).Object(object).NewWriter(ctx), nil
 }
 
 // EndBackup implements BackupHandle.
-func (bh *GCSBackupHandle) EndBackup() error {
+func (bh *GCSBackupHandle) EndBackup(ctx context.Context) error {
 	if bh.readOnly {
 		return fmt.Errorf("EndBackup cannot be called on read-only backup")
 	}
@@ -70,20 +71,20 @@ func (bh *GCSBackupHandle) EndBackup() error {
 }
 
 // AbortBackup implements BackupHandle.
-func (bh *GCSBackupHandle) AbortBackup() error {
+func (bh *GCSBackupHandle) AbortBackup(ctx context.Context) error {
 	if bh.readOnly {
 		return fmt.Errorf("AbortBackup cannot be called on read-only backup")
 	}
-	return bh.bs.RemoveBackup(bh.dir, bh.name)
+	return bh.bs.RemoveBackup(ctx, bh.dir, bh.name)
 }
 
 // ReadFile implements BackupHandle.
-func (bh *GCSBackupHandle) ReadFile(filename string) (io.ReadCloser, error) {
+func (bh *GCSBackupHandle) ReadFile(ctx context.Context, filename string) (io.ReadCloser, error) {
 	if !bh.readOnly {
 		return nil, fmt.Errorf("ReadFile cannot be called on read-write backup")
 	}
 	object := objName(bh.dir, bh.name, filename)
-	return bh.client.Bucket(*bucket).Object(object).NewReader(context.TODO())
+	return bh.client.Bucket(*bucket).Object(object).NewReader(ctx)
 }
 
 // GCSBackupStorage implements BackupStorage for Google Cloud Storage.
@@ -96,8 +97,8 @@ type GCSBackupStorage struct {
 }
 
 // ListBackups implements BackupStorage.
-func (bs *GCSBackupStorage) ListBackups(dir string) ([]backupstorage.BackupHandle, error) {
-	c, err := bs.client()
+func (bs *GCSBackupStorage) ListBackups(ctx context.Context, dir string) ([]backupstorage.BackupHandle, error) {
+	c, err := bs.client(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -110,7 +111,7 @@ func (bs *GCSBackupStorage) ListBackups(dir string) ([]backupstorage.BackupHandl
 		Prefix:    searchPrefix,
 	}
 
-	it := c.Bucket(*bucket).Objects(context.TODO(), query)
+	it := c.Bucket(*bucket).Objects(ctx, query)
 	for {
 		obj, err := it.Next()
 		if err == iterator.Done {
@@ -145,8 +146,8 @@ func (bs *GCSBackupStorage) ListBackups(dir string) ([]backupstorage.BackupHandl
 }
 
 // StartBackup implements BackupStorage.
-func (bs *GCSBackupStorage) StartBackup(dir, name string) (backupstorage.BackupHandle, error) {
-	c, err := bs.client()
+func (bs *GCSBackupStorage) StartBackup(ctx context.Context, dir, name string) (backupstorage.BackupHandle, error) {
+	c, err := bs.client(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -161,8 +162,8 @@ func (bs *GCSBackupStorage) StartBackup(dir, name string) (backupstorage.BackupH
 }
 
 // RemoveBackup implements BackupStorage.
-func (bs *GCSBackupStorage) RemoveBackup(dir, name string) error {
-	c, err := bs.client()
+func (bs *GCSBackupStorage) RemoveBackup(ctx context.Context, dir, name string) error {
+	c, err := bs.client(ctx)
 	if err != nil {
 		return err
 	}
@@ -172,7 +173,7 @@ func (bs *GCSBackupStorage) RemoveBackup(dir, name string) error {
 		Prefix: objName(dir, name, "" /* include trailing slash */),
 	}
 	// Delete all the found objects.
-	it := c.Bucket(*bucket).Objects(context.TODO(), query)
+	it := c.Bucket(*bucket).Objects(ctx, query)
 	for {
 		obj, err := it.Next()
 		if err == iterator.Done {
@@ -181,7 +182,7 @@ func (bs *GCSBackupStorage) RemoveBackup(dir, name string) error {
 		if err != nil {
 			return err
 		}
-		if err := c.Bucket(*bucket).Object(obj.Name).Delete(context.TODO()); err != nil {
+		if err := c.Bucket(*bucket).Object(obj.Name).Delete(ctx); err != nil {
 			return fmt.Errorf("unable to delete %q from bucket %q: %v", obj.Name, *bucket, err)
 		}
 	}
@@ -194,8 +195,9 @@ func (bs *GCSBackupStorage) Close() error {
 	defer bs.mu.Unlock()
 
 	if bs._client != nil {
-		// If client.Close() fails, we still clear bs._client, so we know to create
-		// a new client the next time one is needed.
+		// If client.Close() fails, we still clear bs._client,
+		// so we know to create a new client the next time one
+		// is needed.
 		client := bs._client
 		bs._client = nil
 		if err := client.Close(); err != nil {
@@ -207,13 +209,15 @@ func (bs *GCSBackupStorage) Close() error {
 
 // client returns the GCS Storage client instance.
 // If there isn't one yet, it tries to create one.
-func (bs *GCSBackupStorage) client() (*storage.Client, error) {
+func (bs *GCSBackupStorage) client(ctx context.Context) (*storage.Client, error) {
 	bs.mu.Lock()
 	defer bs.mu.Unlock()
 
 	if bs._client == nil {
-		// FIXME(alainjobart) add context.Context to BackupStorage API.
-		ctx := context.TODO()
+		// The context needs to be valid for longer than just
+		// the creation context, so we create a new one, but
+		// keep the span information.
+		ctx = trace.CopySpan(context.Background(), ctx)
 		authClient, err := google.DefaultClient(ctx)
 		if err != nil {
 			return nil, err
