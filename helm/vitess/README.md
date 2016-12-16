@@ -17,7 +17,16 @@ Upgrading a release of this chart may or may not delete all your data.**
 ## Installing the Chart
 
 ```console
-vitess/helm$ helm install ./vitess
+helm/vitess$ helm install .
+```
+
+## Cleaning up
+
+After deleting an installation of the chart, the PersistentVolumeClaims remain.
+If you don't intend to use them again, you should delete them:
+
+```shell
+kubectl delete pvc -l app=vitess
 ```
 
 ## Configuration
