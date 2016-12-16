@@ -105,7 +105,7 @@ vttablet:
   #
   #   This is the recommended way to run vttablets, but some Kubernetes
   #   clusters may not have StatefulSet enabled yet during the feature's
-  #   alpha/beta phase.
+  #   beta phase.
   #
   #   NOTE: The "uidBase" setting in the topology map is ignored when using
   #     StatefulSet. Instead, the tablet UID is generated based on a hash
