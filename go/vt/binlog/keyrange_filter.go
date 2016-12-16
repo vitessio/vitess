@@ -52,21 +52,21 @@ func KeyRangeFilterFunc(keyrange *topodatapb.KeyRange, sendReply sendTransaction
 					matched = true
 					continue
 				}
-					query, err := getValidRangeQuery(string(statement.Sql), keyspaceIDS, keyrange)
-					if err != nil {
-						log.Errorf("Error parsing statement (%s). Got %v", string(statement.Sql),err)
-						continue
-					}
-					if query == "" {
-						continue
-					}
-					splitStatement := &binlogdatapb.BinlogTransaction_Statement{
-						Category: statement.Category,
-						Charset:  statement.Charset,
-						Sql:      []byte(query),
-					}
-					filtered = append(filtered, splitStatement)
-					matched = true
+				query, err := getValidRangeQuery(string(statement.Sql), keyspaceIDS, keyrange)
+				if err != nil {
+					log.Errorf("Error parsing statement (%s). Got %v", string(statement.Sql), err)
+					continue
+				}
+				if query == "" {
+					continue
+				}
+				splitStatement := &binlogdatapb.BinlogTransaction_Statement{
+					Category: statement.Category,
+					Charset:  statement.Charset,
+					Sql:      []byte(query),
+				}
+				filtered = append(filtered, splitStatement)
+				matched = true
 			case binlogdatapb.BinlogTransaction_Statement_BL_UNRECOGNIZED:
 				updateStreamErrors.Add("KeyRangeStream", 1)
 				log.Errorf("Error parsing keyspace id: %s", statement.Sql)
