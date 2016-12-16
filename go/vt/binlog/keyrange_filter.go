@@ -24,7 +24,7 @@ import (
 func KeyRangeFilterFunc(keyrange *topodatapb.KeyRange, sendReply sendTransactionFunc) sendTransactionFunc {
 	return func(reply *binlogdatapb.BinlogTransaction) error {
 		matched := false
-		filtered := []*binlogdatapb.BinlogTransaction_Statement{}
+		filtered := make([]*binlogdatapb.BinlogTransaction_Statement, 0, len(reply.Statements))
 		for _, statement := range reply.Statements {
 			switch statement.Category {
 			case binlogdatapb.BinlogTransaction_Statement_BL_SET:
@@ -33,7 +33,7 @@ func KeyRangeFilterFunc(keyrange *topodatapb.KeyRange, sendReply sendTransaction
 				log.Warningf("Not forwarding DDL: %s", statement.Sql)
 				continue
 			case binlogdatapb.BinlogTransaction_Statement_BL_DML:
-				keyspaceIDS, err := sqlannotation.ExtractKeySpaceIDS(string(statement.Sql))
+				keyspaceIDS, err := sqlannotation.ExtractKeyspaceIDS(string(statement.Sql))
 				if err != nil {
 					if handleExtractKeySpaceIDError(err) {
 						continue
@@ -50,9 +50,14 @@ func KeyRangeFilterFunc(keyrange *topodatapb.KeyRange, sendReply sendTransaction
 					}
 					filtered = append(filtered, statement)
 					matched = true
-				} else {
+					continue
+				}
 					query, err := getValidRangeQuery(string(statement.Sql), keyspaceIDS, keyrange)
-					if err != nil || query == "" {
+					if err != nil {
+						log.Errorf("Error parsing statement (%s). Got %v", string(statement.Sql),err)
+						continue
+					}
+					if query == "" {
 						continue
 					}
 					splitStatement := &binlogdatapb.BinlogTransaction_Statement{
@@ -62,7 +67,6 @@ func KeyRangeFilterFunc(keyrange *topodatapb.KeyRange, sendReply sendTransaction
 					}
 					filtered = append(filtered, splitStatement)
 					matched = true
-				}
 			case binlogdatapb.BinlogTransaction_Statement_BL_UNRECOGNIZED:
 				updateStreamErrors.Add("KeyRangeStream", 1)
 				log.Errorf("Error parsing keyspace id: %s", statement.Sql)
@@ -98,30 +102,26 @@ func getValidRangeQuery(sql string, keyspaceIDs [][]byte, keyrange *topodatapb.K
 }
 
 func generateSingleInsertQuery(ins *sqlparser.Insert, keyspaceIDs [][]byte, trailingComments string, keyrange *topodatapb.KeyRange) (query string, err error) {
-	var values sqlparser.Values
 	switch rows := ins.Rows.(type) {
 	case *sqlparser.Select, *sqlparser.Union:
 		return "", errors.New("unsupported: insert into select")
 	case sqlparser.Values:
-		values = rows
-		if len(values) != len(keyspaceIDs) {
+		values := sqlparser.Values{}
+		if len(rows) != len(keyspaceIDs) {
 			return "", fmt.Errorf("length of values tuples %v doesn't match with length of keyspaceids %v", len(values), len(keyspaceIDs))
 		}
 		queryBuf := sqlparser.NewTrackedBuffer(nil)
-		queryBuf.Myprintf("insert %v%sinto %v%v values", ins.Comments, ins.Ignore, ins.Table, ins.Columns)
-		prefix := ""
-		for rowNum, val := range values {
+		for rowNum, val := range rows {
 			if key.KeyRangeContains(keyrange, keyspaceIDs[rowNum]) {
-				queryBuf.Myprintf("%s%v", prefix, val)
-				prefix = ", "
+				values = append(values, val)
 			}
 		}
-		if prefix == "" {
+		if len(values) == 0 {
 			return "", nil
 		}
-		queryBuf.Myprintf("%v%s", ins.OnDup, trailingComments)
-		query := queryBuf.String()
-		return query, nil
+		ins.Rows = values
+		ins.Format(queryBuf)
+		return queryBuf.String() + trailingComments, nil
 
 	default:
 		return "", errors.New("unexpected construct in insert")

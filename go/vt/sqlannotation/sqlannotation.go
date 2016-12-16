@@ -68,19 +68,19 @@ func IsDML(sql string) bool {
 		strings.EqualFold(word, "delete")
 }
 
-// ExtractKeySpaceIDS parses the annotation of the given statement and tries
+// ExtractKeyspaceIDS parses the annotation of the given statement and tries
 // to extract the keyspace id.
 // If a keyspace-id comment exists 'keyspaceID' is set to the parsed keyspace id
 // and err is set to nil; otherwise, if a filtered-replication-unfriendly comment exists
 // or some other parsing error occured, keyspaceID is set to nil and err is set to a non-nil
 // error value.
-func ExtractKeySpaceIDS(sql string) (keyspaceIDs [][]byte, err error) {
+func ExtractKeyspaceIDS(sql string) (keyspaceIDs [][]byte, err error) {
 	_, comments := sqlparser.SplitTrailingComments(sql)
-	keyspaceIDString, hasKeySpaceID := extractStringBetween(comments, "/* vtgate:: keyspace_id:", " ")
+	keyspaceIDString, hasKeyspaceID := extractStringBetween(comments, "/* vtgate:: keyspace_id:", " ")
 	hasUnfriendlyAnnotation := (strings.Index(sql, filteredReplicationUnfriendlyAnnotation) != -1)
-	ksidStr := strings.Split(keyspaceIDString, ",")
-	keyspaceIDs = make([][]byte, len(ksidStr))
-	if hasKeySpaceID {
+	if hasKeyspaceID {
+		ksidStr := strings.Split(keyspaceIDString, ",")
+		keyspaceIDs = make([][]byte, len(ksidStr))
 		if hasUnfriendlyAnnotation {
 			keyspaceIDs = nil
 			err = &ExtractKeySpaceIDError{

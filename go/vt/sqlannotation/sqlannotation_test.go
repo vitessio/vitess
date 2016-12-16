@@ -6,7 +6,7 @@ import (
 )
 
 func TestExtractKeyspaceIDKeyspaceID(t *testing.T) {
-	keyspaceIDS, err := ExtractKeySpaceIDS("DML /* vtgate:: keyspace_id:25AF,25BF */")
+	keyspaceIDS, err := ExtractKeyspaceIDS("DML /* vtgate:: keyspace_id:25AF,25BF */")
 	if err != nil {
 		t.Errorf("want nil, got: %v", err)
 	}
@@ -20,7 +20,7 @@ func TestExtractKeyspaceIDKeyspaceID(t *testing.T) {
 }
 
 func TestExtractKeyspaceIDUnfriendly(t *testing.T) {
-	_, err := ExtractKeySpaceIDS("DML /* vtgate:: filtered_replication_unfriendly */")
+	_, err := ExtractKeyspaceIDS("DML /* vtgate:: filtered_replication_unfriendly */")
 	extErr, ok := err.(*ExtractKeySpaceIDError)
 	if !ok {
 		t.Fatalf("want a type *ExtractKeySpaceIDError, got: %v", err)
@@ -39,7 +39,7 @@ func TestExtractKeyspaceIDParseError(t *testing.T) {
 }
 
 func verifyParseError(t *testing.T, sql string) {
-	_, err := ExtractKeySpaceIDS(sql)
+	_, err := ExtractKeyspaceIDS(sql)
 	extErr, ok := err.(*ExtractKeySpaceIDError)
 	if !ok {
 		t.Fatalf("want a type *ExtractKeySpaceIDError, got: %v", err)
@@ -73,25 +73,25 @@ func TestIsDML(t *testing.T) {
 
 func BenchmarkExtractKeyspaceIDKeyspaceID(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		ExtractKeySpaceIDS("DML /* vtgate:: keyspace_id:25AF */")
+		ExtractKeyspaceIDS("DML /* vtgate:: keyspace_id:25AF */")
 	}
 }
 
 func BenchmarkNativeExtractKeyspaceIDKeyspaceID(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		ExtractKeySpaceIDS("DML /* vtgate:: keyspace_id:25AF */")
+		ExtractKeyspaceIDS("DML /* vtgate:: keyspace_id:25AF */")
 	}
 }
 
 func BenchmarkExtractKeySpaceIDReplicationUnfriendly(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		ExtractKeySpaceIDS("DML /* vtgate:: filtered_replication_unfriendly */")
+		ExtractKeyspaceIDS("DML /* vtgate:: filtered_replication_unfriendly */")
 	}
 }
 
 func BenchmarkExtractKeySpaceIDNothing(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		ExtractKeySpaceIDS("DML")
+		ExtractKeyspaceIDS("DML")
 	}
 }
 
