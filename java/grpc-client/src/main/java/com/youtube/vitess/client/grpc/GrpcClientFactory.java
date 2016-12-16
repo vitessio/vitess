@@ -10,6 +10,7 @@ import io.grpc.netty.NettyChannelBuilder;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslContextBuilder;
 
+import javax.net.ssl.SSLException;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -50,34 +51,40 @@ public class GrpcClientFactory implements RpcClientFactory {
    * @return
    */
   public RpcClient createTls(Context ctx, InetSocketAddress address, TlsOptions tlsOptions) {
-    SslContext sslContext;
-    try {
-      SslContextBuilder sslContextBuilder = GrpcSslContexts.forClient();
+    final SslContextBuilder sslContextBuilder = GrpcSslContexts.forClient();
 
-      // trustManager should always be set
-      final KeyStore trustStore = loadKeyStore(tlsOptions.getTrustStore(), tlsOptions.getTrustStorePassword());
-      final X509Certificate[] trustCertCollection = {
-              (X509Certificate) trustStore.getCertificate(tlsOptions.getTrustAlias())
-      };
-      sslContextBuilder.trustManager(trustCertCollection);
+    // trustManager should always be set
+    final KeyStore trustStore = loadKeyStore(tlsOptions.getTrustStore(), tlsOptions.getTrustStorePassword());
+    if (trustStore == null) {
+      throw new RuntimeException("Could not load trustStore");
+    }
+    final X509Certificate[] trustCertCollection = tlsOptions.getTrustAlias() == null
+            ? loadCertCollection(trustStore)
+            : loadCertCollectionForAlias(trustStore, tlsOptions.getTrustAlias());
+    sslContextBuilder.trustManager(trustCertCollection);
 
-      // keyManager should only be set if a keyStore is specified (meaning that client authentication is enabled
-      final KeyStore keyStore = loadKeyStore(tlsOptions.getKeyStore(), tlsOptions.getKeyStorePassword());
-      if (keyStore != null) {
-        final PrivateKeyWrapper privateKeyWrapper = tlsOptions.getKeyAlias() == null
-                ? loadPrivateKeyEntry(keyStore, tlsOptions.getKeyStorePassword(), tlsOptions.getKeyPassword())
-                : loadPrivateKeyEntryForAlias(keyStore, tlsOptions.getKeyAlias(), tlsOptions.getKeyStorePassword(), tlsOptions.getKeyPassword());
-        sslContextBuilder.keyManager(
-                privateKeyWrapper.getPrivateKey(),
-                privateKeyWrapper.getPassword(),
-                privateKeyWrapper.getCertificateChain()
-        );
+    // keyManager should only be set if a keyStore is specified (meaning that client authentication is enabled)
+    final KeyStore keyStore = loadKeyStore(tlsOptions.getKeyStore(), tlsOptions.getKeyStorePassword());
+    if (keyStore != null) {
+      final PrivateKeyWrapper privateKeyWrapper = tlsOptions.getKeyAlias() == null
+              ? loadPrivateKeyEntry(keyStore, tlsOptions.getKeyStorePassword(), tlsOptions.getKeyPassword())
+              : loadPrivateKeyEntryForAlias(keyStore, tlsOptions.getKeyAlias(), tlsOptions.getKeyStorePassword(), tlsOptions.getKeyPassword());
+      if (privateKeyWrapper == null) {
+        throw new RuntimeException("Could not retrieve private key and certificate chain from keyStore");
       }
 
+      sslContextBuilder.keyManager(
+              privateKeyWrapper.getPrivateKey(),
+              privateKeyWrapper.getPassword(),
+              privateKeyWrapper.getCertificateChain()
+      );
+    }
+
+    final SslContext sslContext;
+    try {
       sslContext = sslContextBuilder.build();
-    } catch (NullPointerException | KeyStoreException | NoSuchAlgorithmException | UnrecoverableEntryException
-            | IOException ex) {
-      throw new RuntimeException(ex);
+    } catch (SSLException e) {
+      throw new RuntimeException(e);
     }
 
     return new GrpcClient(
@@ -96,6 +103,10 @@ public class GrpcClientFactory implements RpcClientFactory {
    * @throws NoSuchAlgorithmException
    */
   private KeyStore loadKeyStore(final File keyStoreFile, String keyStorePassword) {
+    if (keyStoreFile == null) {
+      return null;
+    }
+
     try {
       final KeyStore keyStore = KeyStore.getInstance(Constants.KEYSTORE_TYPE);
       final char[] password = keyStorePassword == null ? null : keyStorePassword.toCharArray();
@@ -103,10 +114,60 @@ public class GrpcClientFactory implements RpcClientFactory {
         keyStore.load(fis, password);
       }
       return keyStore;
-    } catch (NullPointerException | KeyStoreException | CertificateException | NoSuchAlgorithmException
-            | IOException e) {
+    } catch (KeyStoreException | CertificateException | NoSuchAlgorithmException | IOException e) {
       return null;
     }
+  }
+
+  /**
+   * TODO: Document
+   *
+   * @param keyStore
+   * @param alias
+   * @return
+   */
+  private X509Certificate[] loadCertCollectionForAlias(final KeyStore keyStore, final String alias) {
+    if (keyStore == null) {
+      return null;
+    }
+
+    try {
+      final X509Certificate[] certCollection = {
+              (X509Certificate) keyStore.getCertificate(alias)
+      };
+      return certCollection;
+    } catch (KeyStoreException | ClassCastException e) {
+      return null;
+    }
+  }
+
+  /**
+   * TODO: Document
+   *
+   * @param keyStore
+   * @return
+   */
+  private X509Certificate[] loadCertCollection(final KeyStore keyStore) {
+    if (keyStore == null) {
+      return null;
+    }
+
+    final Enumeration<String> aliases;
+    try {
+      aliases = keyStore.aliases();
+    } catch (KeyStoreException e) {
+      return null;
+    }
+
+    while (aliases.hasMoreElements()) {
+      final String alias = aliases.nextElement();
+      final X509Certificate[] certCollection = loadCertCollectionForAlias(keyStore, alias);
+      if (certCollection != null) {
+        return certCollection;
+      }
+    }
+
+    return null;
   }
 
   /**
@@ -122,10 +183,17 @@ public class GrpcClientFactory implements RpcClientFactory {
    * @throws UnrecoverableEntryException
    */
   private PrivateKeyWrapper loadPrivateKeyEntryForAlias(final KeyStore keyStore, final String alias,
-                                                  final String keyStorePassword, final String keyPassword)
-          throws KeyStoreException, NoSuchAlgorithmException, UnrecoverableEntryException {
-    if (!keyStore.entryInstanceOf(alias, KeyStore.PrivateKeyEntry.class)) {
-      // There is no private key matching this alias
+                                                  final String keyStorePassword, final String keyPassword) {
+    if (keyStore == null || alias == null) {
+      return null;
+    }
+
+    try {
+      if (!keyStore.entryInstanceOf(alias, KeyStore.PrivateKeyEntry.class)) {
+        // There is no private key matching this alias
+        return null;
+      }
+    } catch (KeyStoreException e) {
       return null;
     }
 
@@ -134,12 +202,18 @@ public class GrpcClientFactory implements RpcClientFactory {
       final char[] pass = keyPassword == null ? null : keyPassword.toCharArray();
       final KeyStore.PrivateKeyEntry entry = (KeyStore.PrivateKeyEntry) keyStore.getEntry(alias, new KeyStore.PasswordProtection(pass));
       return new PrivateKeyWrapper(entry.getPrivateKey(), keyPassword, entry.getCertificateChain());
+    } catch (KeyStoreException | NoSuchAlgorithmException e) {
+        return null;
     } catch (UnrecoverableEntryException e) {
-        // Password invalid.  Try using the keystore password, and let the UnrecoverableEntryException bubble up
-        // this time if that password doesn't work either.
-        final char[] pass = keyStorePassword == null ? null : keyStorePassword.toCharArray();
+      // The key password didn't work (or just wasn't set).  Try using the keystore password.
+      final char[] pass = keyStorePassword == null ? null : keyStorePassword.toCharArray();
+      try {
         final KeyStore.PrivateKeyEntry entry = (KeyStore.PrivateKeyEntry) keyStore.getEntry(alias, new KeyStore.PasswordProtection(pass));
         return new PrivateKeyWrapper(entry.getPrivateKey(), keyPassword, entry.getCertificateChain());
+      } catch (KeyStoreException | NoSuchAlgorithmException | UnrecoverableEntryException e1) {
+          // Neither password worked.
+          return null;
+      }
     }
   }
 
@@ -154,16 +228,23 @@ public class GrpcClientFactory implements RpcClientFactory {
    * @throws NoSuchAlgorithmException
    */
   private PrivateKeyWrapper loadPrivateKeyEntry(final KeyStore keyStore, final String keyStorePassword,
-                                                  final String keyPassword)
-          throws KeyStoreException, NoSuchAlgorithmException {
-    final Enumeration<String> aliases = keyStore.aliases();
+                                                  final String keyPassword) {
+    if (keyStore == null) {
+      return null;
+    }
+
+    final Enumeration<String> aliases;
+    try {
+      aliases = keyStore.aliases();
+    } catch (KeyStoreException e) {
+      return null;
+    }
+
     while (aliases.hasMoreElements()) {
       final String alias = aliases.nextElement();
-      try {
-        return loadPrivateKeyEntryForAlias(keyStore, alias, keyStorePassword, keyPassword);
-      } catch (UnrecoverableEntryException e) {
-          // Neither the key password nor keystore password could unlock this particular alias.  Not unexpected... just
-          // continue trying the other aliases.
+      final PrivateKeyWrapper privateKeyWrapper = loadPrivateKeyEntryForAlias(keyStore, alias, keyStorePassword, keyPassword);
+      if (privateKeyWrapper != null) {
+        return privateKeyWrapper;
       }
     }
     return null;
