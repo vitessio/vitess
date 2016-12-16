@@ -3,6 +3,27 @@
 """Sharding utils."""
 
 
+def get_shard_index(shard_name):
+  """Returns tuple of shard index, num_shards based on a shard name."""
+  if shard_name in ['0', '-']:
+    return 0, 1
+
+  shard_begin, shard_end = shard_name.split('-')
+  num_bytes_used = max(len(shard_begin), len(shard_end)) / 2
+  if shard_begin:
+    shard_begin = int(shard_begin, 16)
+  else:
+    shard_begin = 0
+  if shard_end:
+    shard_end = int(shard_end, 16)
+  else:
+    shard_end = 1 << num_bytes_used * 8
+  shard_width = shard_end - shard_begin
+  num_shards = (1 << num_bytes_used * 8) / (shard_width)
+  shard_num = shard_begin / shard_width
+  return shard_num, num_shards
+
+
 def get_shard_name(shard, num_shards):
   """Returns an appropriate shard name, as a string.
 
