@@ -15,8 +15,8 @@ if [ "$1" = "--enable-tls" ];
 then
 	echo "Enabling TLS with client authentication"
 	cert_dir=$VTDATAROOT/tls
-	rm $cert_dir/ca-trustStore.jks
-	rm $cert_dir/client-keyStore.jks
+	rm -f $cert_dir/ca-trustStore.jks
+	rm -f $cert_dir/client-keyStore.jks
 
     # Create CA trustStore
     openssl x509 -outform der -in $cert_dir/ca-cert.pem -out $cert_dir/ca-cert.der
