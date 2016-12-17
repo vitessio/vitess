@@ -1,3 +1,17 @@
+# Group by with aggregation
+"select col1, count(col2) as col2_count from unsharded group by col1 order by col2_count asc"
+{
+  "Original": "select col1, count(col2) as col2_count from unsharded group by col1 order by col2_count asc",
+  "Instructions": {
+    "Opcode": "SelectUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "select col1, count(col2) as col2_count from unsharded group by col1 order by col2_count asc",
+    "FieldQuery": "select col1, count(col2) as col2_count from unsharded where 1 != 1 group by col1"
+  }
+}
 # Group by unsharded
 "select col1, col2 from unsharded group by col2"
 {
@@ -9,7 +23,7 @@
       "Sharded": false
     },
     "Query": "select col1, col2 from unsharded group by col2",
-    "FieldQuery": "select col1, col2 from unsharded where 1 != 1"
+    "FieldQuery": "select col1, col2 from unsharded where 1 != 1 group by col2"
   }
 }
 
@@ -24,7 +38,7 @@
       "Sharded": true
     },
     "Query": "select col1, col2 from user where id = 1 group by col2",
-    "FieldQuery": "select col1, col2 from user where 1 != 1",
+    "FieldQuery": "select col1, col2 from user where 1 != 1 group by col2",
     "Vindex": "user_index",
     "Values": 1
   }
@@ -41,7 +55,7 @@
       "Sharded": true
     },
     "Query": "select col1, id from user group by id",
-    "FieldQuery": "select col1, id from user where 1 != 1"
+    "FieldQuery": "select col1, id from user where 1 != 1 group by id"
   }
 }
 
@@ -56,7 +70,7 @@
       "Sharded": true
     },
     "Query": "select id from user group by id, col",
-    "FieldQuery": "select id from user where 1 != 1"
+    "FieldQuery": "select id from user where 1 != 1 group by id, col"
   }
 }
 
