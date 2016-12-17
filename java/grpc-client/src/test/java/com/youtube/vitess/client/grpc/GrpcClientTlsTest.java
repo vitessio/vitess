@@ -91,7 +91,7 @@ public class GrpcClientTlsTest extends RpcClientTest {
         final String certConfig = certDirectory.getCanonicalPath() + File.separatorChar + "cert.config";
         if (!(new File(certConfig)).exists()) {
             java.nio.file.Files.copy(
-                    GrpcClientTlsTest.class.getResourceAsStream("/cert-template.config"),
+                    GrpcClientTlsTest.class.getResourceAsStream("/cert.config"),
                     Paths.get(certConfig)
             );
         }

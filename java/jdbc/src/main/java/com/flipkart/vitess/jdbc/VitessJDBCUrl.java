@@ -71,8 +71,12 @@ public class VitessJDBCUrl {
      *         <li><code>keyStorePassword</code>=password (if set)</li>
      *         <li><code>keyPassword</code>=password (only needed if the private key password differs from
      *                  the keyStore password)</li>
+     *         <li><code>keyAlias</code>=alias_under_which_private_key_is_stored (if not set, then the
+     *                  first valid <code>PrivateKeyEntry</code> found in the keyStore will be used)</li>
      *         <li><code>trustStore</code>=path_to_truststore_file</li>
      *         <li><code>trustStorePassword</code>=password (if set)</li>
+     *         <li><code>trustAlias</code>=alias_under_which_certificate_chain_is_stored (if not set,
+     *                  then the first valid <code>X509Certificate</code> found in the trustStore will be used)</li>
      *     </ul>
      * </p>
      *
@@ -84,8 +88,10 @@ public class VitessJDBCUrl {
      *         <li><code>-Djavax.net.ssl.keyStore</code></li>
      *         <li><code>-Djavax.net.ssl.keyStorePassword</code></li>
      *         <li><code>-Djavax.net.ssl.keyPassword</code></li>
+     *         <li><code>-Djavax.net.ssl.keyAlias</code></li>
      *         <li><code>-Djavax.net.ssl.trustStore</code></li>
      *         <li><code>-Djavax.net.ssl.trustStorePassword</code></li>
+     *         <li><code>-Djavax.net.ssl.trustStoreAlias</code></li>
      *     </ul>
      * </p>
      *
