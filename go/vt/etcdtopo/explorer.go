@@ -12,11 +12,8 @@ import (
 
 	"github.com/coreos/go-etcd/etcd"
 
+	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtctld/explorer"
-)
-
-const (
-	globalCell = "global"
 )
 
 // Explorer is an implementation of vtctld's Explorer interface for etcd.
@@ -40,7 +37,7 @@ func (ex Explorer) HandlePath(rPath string, r *http.Request) *explorer.Result {
 			result.Error = err.Error()
 			return result
 		}
-		result.Children = append([]string{globalCell}, cells...)
+		result.Children = append([]string{topo.GlobalCell}, cells...)
 		return result
 	}
 
@@ -51,7 +48,7 @@ func (ex Explorer) HandlePath(rPath string, r *http.Request) *explorer.Result {
 		result.Error = err.Error()
 		return result
 	}
-	if cell == globalCell {
+	if cell == topo.GlobalCell {
 		client = ex.ts.getGlobal()
 	} else {
 		client, err = ex.ts.getCell(cell)

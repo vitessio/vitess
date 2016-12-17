@@ -180,6 +180,7 @@ type ActionAgent struct {
 // it spawns.
 func NewActionAgent(
 	batchCtx context.Context,
+	ts topo.Server,
 	mysqld mysqlctl.MysqlDaemon,
 	queryServiceControl tabletserver.Controller,
 	tabletAlias *topodatapb.TabletAlias,
@@ -187,8 +188,6 @@ func NewActionAgent(
 	mycnf *mysqlctl.Mycnf,
 	port, gRPCPort int32,
 ) (agent *ActionAgent, err error) {
-	topoServer := topo.GetServer()
-
 	orc, err := newOrcClient()
 	if err != nil {
 		return nil, err
@@ -198,7 +197,7 @@ func NewActionAgent(
 		QueryServiceControl: queryServiceControl,
 		HealthReporter:      health.DefaultAggregator,
 		batchCtx:            batchCtx,
-		TopoServer:          topoServer,
+		TopoServer:          ts,
 		TabletAlias:         tabletAlias,
 		MysqlDaemon:         mysqld,
 		DBConfigs:           dbcfgs,
@@ -218,7 +217,7 @@ func NewActionAgent(
 	agent.statsTabletType = stats.NewString("TabletType")
 
 	// Start the binlog player services, not playing at start.
-	agent.BinlogPlayerMap = NewBinlogPlayerMap(topoServer, mysqld, func() binlogplayer.VtClient {
+	agent.BinlogPlayerMap = NewBinlogPlayerMap(ts, mysqld, func() binlogplayer.VtClient {
 		return binlogplayer.NewDbClient(&agent.DBConfigs.Filtered)
 	})
 	// Stop all binlog players upon entering lameduck.

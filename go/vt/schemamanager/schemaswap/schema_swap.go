@@ -207,7 +207,7 @@ func (*SwapWorkflowFactory) Instantiate(workflowProto *workflowpb.Workflow, root
 func (schemaSwap *Swap) Run(ctx context.Context, manager *workflow.Manager, workflowInfo *topo.WorkflowInfo) error {
 	schemaSwap.ctx = ctx
 	schemaSwap.workflowManager = manager
-	schemaSwap.topoServer = topo.GetServer()
+	schemaSwap.topoServer = manager.TopoServer()
 	schemaSwap.tabletClient = tmclient.NewTabletManagerClient()
 
 	log.Infof("Starting schema swap on keyspace %v with the following SQL: %v", schemaSwap.keyspace, schemaSwap.sql)

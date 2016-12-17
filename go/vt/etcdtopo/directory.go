@@ -3,11 +3,13 @@ package etcdtopo
 import (
 	"path"
 
+	"github.com/youtube/vitess/go/vt/topo"
+
 	"golang.org/x/net/context"
 )
 
 func (s *Server) clientForCell(cell string) (Client, error) {
-	if cell == "global" {
+	if cell == topo.GlobalCell {
 		return s.getGlobal(), nil
 	}
 	cc, err := s.getCell(cell)
@@ -35,7 +37,7 @@ func (s *Server) ListDir(ctx context.Context, cell, dirPath string) ([]string, e
 	for _, n := range resp.Node.Nodes {
 		base := path.Base(n.Key)
 		// we have to remove /vt from global listings, it is used for /vt/cells.
-		if cell == "global" && dirPath == "/" && base == "vt" {
+		if cell == topo.GlobalCell && dirPath == "/" && base == "vt" {
 			continue
 		}
 		names = append(names, base)

@@ -29,7 +29,7 @@ func (s fakeServer) GetKnownCells(ctx context.Context) ([]string, error) {
 }
 
 func newFakeTeeServer(t *testing.T) topo.Impl {
-	cells := []string{"test", "global"} // global has to be last
+	cells := []string{"test", topo.GlobalCell} // global has to be last
 
 	zconn1 := fakezk.NewConn()
 	zconn2 := fakezk.NewConn()

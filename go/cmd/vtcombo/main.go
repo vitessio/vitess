@@ -107,10 +107,10 @@ func main() {
 	}
 	os.Setenv("ZK_CLIENT_CONFIG", config)
 
-	// register topo server
+	// Create topo server. We use a 'zookeeper' implementation based on
+	// a memory map.
 	zkconn := fakezk.NewConn()
-	topo.RegisterServer("fakezk", zktopo.NewServer(zkconn))
-	ts = topo.GetServerByName("fakezk")
+	ts = topo.Server{Impl: zktopo.NewServer(zkconn)}
 
 	servenv.Init()
 	tabletserver.Init()

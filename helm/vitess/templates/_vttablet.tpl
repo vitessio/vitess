@@ -52,6 +52,8 @@ containers:
           -tablet-path "{{$cell.name}}-{{$uid}}"
 {{ if eq (.controllerType | default $0.controllerType) "None" }}
           -tablet_hostname "$(hostname -i)"
+{{ else }}
+          -tablet_hostname "$(hostname).vttablet"
 {{ end }}
           -init_keyspace {{$keyspace.name | quote}}
           -init_shard {{$shard.name | quote}}
@@ -107,7 +109,7 @@ containers:
         )
     env:
       - name: EXTRA_MY_CNF
-        value: {{.extraMyCnf | default $0.extraMyCnf | quote}}
+        value: "/vt/vtdataroot/init/report-host.cnf:{{.extraMyCnf | default $0.extraMyCnf}}"
 volumes:
   - name: syslog
     hostPath: {path: /dev/log}
@@ -146,6 +148,9 @@ volumes:
     # Save UID for other containers to read.\n
     mkdir -p $VTDATAROOT/init\n
     echo $tablet_uid > $VTDATAROOT/init/tablet-uid\n
+    # Tell MySQL what hostname to report in SHOW SLAVE HOSTS.\n
+    # Orchestrator looks there, so it should match -tablet_hostname above.\n
+    echo report-host=$(hostname).vttablet > $VTDATAROOT/init/report-host.cnf\n
   "],
   "volumeMounts": [
     {
@@ -166,11 +171,12 @@ volumes:
 {{- with $tablet.vttablet -}}
 {{- $0 := $.Values.vttablet -}}
 {{- $keyspaceClean := $keyspace.name | replace "_" "-" -}}
-{{- $setName := printf "%s-%s-%s" $keyspaceClean $shard.name $tablet.type | lower -}}
+{{- $shardClean := include "format-shard-name" $shard.name -}}
+{{- $setName := printf "%s-%s-%s" $keyspaceClean $shardClean $tablet.type | lower -}}
 {{- $uid := "$(cat $VTDATAROOT/init/tablet-uid)" }}
 # vttablet StatefulSet
-apiVersion: apps/v1alpha1
-kind: PetSet
+apiVersion: apps/v1beta1
+kind: StatefulSet
 metadata:
   name: {{$setName | quote}}
 spec:
@@ -182,7 +188,7 @@ spec:
         app: vitess
         component: vttablet
         keyspace: {{$keyspace.name | quote}}
-        shard: {{$shard.name | quote}}
+        shard: {{$shardClean | quote}}
         type: {{$tablet.type | quote}}
       annotations:
         pod.alpha.kubernetes.io/initialized: "true"

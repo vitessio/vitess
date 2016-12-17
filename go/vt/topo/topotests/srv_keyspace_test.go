@@ -41,7 +41,7 @@ func TestWatchSrvKeyspaceNoNode(t *testing.T) {
 	cell := "cell1"
 	keyspace := "ks1"
 	ctx := context.Background()
-	mt := memorytopo.NewMemoryTopo([]string{"global", cell})
+	mt := memorytopo.NewMemoryTopo([]string{topo.GlobalCell, cell})
 	ts := topo.Server{Impl: mt}
 
 	// No SrvKeyspace -> ErrNoNode
@@ -56,7 +56,7 @@ func TestWatchSrvKeyspace(t *testing.T) {
 	cell := "cell1"
 	keyspace := "ks1"
 	ctx := context.Background()
-	mt := memorytopo.NewMemoryTopo([]string{"global", cell})
+	mt := memorytopo.NewMemoryTopo([]string{topo.GlobalCell, cell})
 	ts := topo.Server{Impl: mt}
 
 	// Create initial value
@@ -178,7 +178,7 @@ func TestWatchSrvKeyspaceCancel(t *testing.T) {
 	cell := "cell1"
 	keyspace := "ks1"
 	ctx := context.Background()
-	mt := memorytopo.NewMemoryTopo([]string{"global", cell})
+	mt := memorytopo.NewMemoryTopo([]string{topo.GlobalCell, cell})
 	ts := topo.Server{Impl: mt}
 
 	// No SrvKeyspace -> ErrNoNode

@@ -46,8 +46,8 @@ func main() {
 	flag.Parse()
 	servenv.Init()
 
-	ts := topo.GetServer()
-	defer topo.CloseServers()
+	ts := topo.Open()
+	defer ts.Close()
 
 	resilientSrvTopoServer = vtgate.NewResilientSrvTopoServer(ts, "ResilientSrvTopoServer")
 

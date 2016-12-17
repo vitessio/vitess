@@ -7,8 +7,10 @@ package zktopo
 import (
 	"sort"
 
-	"github.com/youtube/vitess/go/zk"
 	"golang.org/x/net/context"
+
+	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/zk"
 )
 
 /*
@@ -23,7 +25,7 @@ func (zkts *Server) GetKnownCells(ctx context.Context) ([]string, error) {
 	}
 	cells := make([]string, 0, len(cellsWithGlobal))
 	for _, cell := range cellsWithGlobal {
-		if cell != "global" {
+		if cell != topo.GlobalCell {
 			cells = append(cells, cell)
 		}
 	}

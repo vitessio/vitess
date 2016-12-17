@@ -14,12 +14,24 @@
 {{- range . }}{{template "format-flags" .}}{{end -}}
 {{- end -}}
 
+# Format a shard name, making sure it starts and ends with [A-Za-z0-9].
+{{- define "format-shard-name" -}}
+{{- if hasPrefix "-" . -}}
+x{{.}}
+{{- else if hasSuffix "-" . -}}
+{{.}}x
+{{- else -}}
+{{.}}
+{{- end -}}
+{{- end -}}
+
 # Common init-container to set up vtdataroot volume.
 {{- define "init-vtdataroot" -}}
 {{- $image := . -}}
 {
   "name": "init-vtdataroot",
   "image": {{$image | quote}},
+  "imagePullPolicy": "IfNotPresent",
   "command": ["bash", "-c", "
     set -ex;
     mkdir -p $VTDATAROOT/tmp;

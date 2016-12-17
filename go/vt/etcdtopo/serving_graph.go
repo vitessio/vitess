@@ -7,18 +7,13 @@ package etcdtopo
 import (
 	"encoding/json"
 	"fmt"
-	"time"
 
 	"golang.org/x/net/context"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	vschemapb "github.com/youtube/vitess/go/vt/proto/vschema"
+	"github.com/youtube/vitess/go/vt/topo"
 )
-
-// WatchSleepDuration is how many seconds interval to poll for in case
-// we get an error from the Watch method. It is exported so individual
-// test and main programs can change it.
-var WatchSleepDuration = 30 * time.Second
 
 // GetSrvKeyspaceNames implements topo.Server.
 func (s *Server) GetSrvKeyspaceNames(ctx context.Context, cellName string) ([]string, error) {
@@ -29,7 +24,11 @@ func (s *Server) GetSrvKeyspaceNames(ctx context.Context, cellName string) ([]st
 
 	resp, err := cell.Get(servingDirPath, true /* sort */, false /* recursive */)
 	if err != nil {
-		return nil, convertError(err)
+		err = convertError(err)
+		if err == topo.ErrNoNode {
+			return nil, nil
+		}
+		return nil, err
 	}
 	return getNodeNames(resp)
 }

@@ -147,7 +147,7 @@ class ReparentTest(base_cluster_test.BaseClusterTest):
 
     logging.info('Restarting %s/%s, current master: %s',
                  keyspace, shard_name, original_master_name)
-    ret_val = self.env.restart_mysql_task(original_master_name, 'mysql')
+    ret_val = self.env.restart_mysql_task(original_master_name, 'mysql', True)
 
     self.assertEquals(ret_val, 0,
                       msg='restart failed (returned %d)' % ret_val)

@@ -211,6 +211,8 @@ class K8sEnvironment(base_environment.BaseEnvironment):
       except ValueError:
         pass
       time.sleep(5)
+
+    self.vtctl_helper.execute_vtctl_command(['RefreshState', tablet_name])
     return 0
 
   def wait_for_good_failover_status(
