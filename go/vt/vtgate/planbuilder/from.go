@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/youtube/vitess/go/cistring"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vtgate/engine"
 	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
@@ -99,12 +98,12 @@ func processAliasedTable(tableExpr *sqlparser.AliasedTableExpr, vschema VSchema)
 			// Check if a colvindex of the same name already exists.
 			// Dups are not allowed in subqueries in this situation.
 			for _, colVindex := range table.ColumnVindexes {
-				if colVindex.Column.Equal(cistring.CIString(colsyms.Alias)) {
+				if colVindex.Column.Equal(colsyms.Alias) {
 					return nil, fmt.Errorf("duplicate column aliases: %v", colsyms.Alias)
 				}
 			}
 			table.ColumnVindexes = append(table.ColumnVindexes, &vindexes.ColumnVindex{
-				Column: cistring.CIString(colsyms.Alias),
+				Column: colsyms.Alias,
 				Vindex: colsyms.Vindex,
 			})
 		}

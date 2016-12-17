@@ -132,7 +132,7 @@ func EncodeValue(buf *bytes.Buffer, value interface{}) error {
 // TupleEqualityList is for generating equality constraints
 // for tables that have composite primary keys.
 type TupleEqualityList struct {
-	Columns []string
+	Columns []ColIdent
 	Rows    [][]sqltypes.Value
 }
 
@@ -149,7 +149,7 @@ func (tpl *TupleEqualityList) Encode(buf *bytes.Buffer) error {
 }
 
 func (tpl *TupleEqualityList) encodeAsIN(buf *bytes.Buffer) error {
-	buf.WriteString(tpl.Columns[0])
+	buf.WriteString(tpl.Columns[0].Original())
 	buf.WriteString(" in (")
 	for i, r := range tpl.Rows {
 		if len(r) != 1 {
@@ -174,7 +174,7 @@ func (tpl *TupleEqualityList) encodeAsEquality(buf *bytes.Buffer) error {
 			if j != 0 {
 				buf.WriteString(" and ")
 			}
-			buf.WriteString(c)
+			buf.WriteString(c.Original())
 			buf.WriteString(" = ")
 			r[j].EncodeSQL(buf)
 		}

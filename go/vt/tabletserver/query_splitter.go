@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/youtube/vitess/go/cistring"
 	"github.com/youtube/vitess/go/sqltypes"
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	"github.com/youtube/vitess/go/vt/sqlparser"
@@ -25,7 +24,7 @@ type QuerySplitter struct {
 	schemaInfo    *SchemaInfo
 	sel           *sqlparser.Select
 	tableName     string
-	splitColumn   cistring.CIString
+	splitColumn   sqlparser.ColIdent
 	rowCount      int64
 }
 
@@ -51,7 +50,7 @@ func NewQuerySplitter(
 		bindVariables: bindVariables,
 		splitCount:    splitCount,
 		schemaInfo:    schemaInfo,
-		splitColumn:   cistring.New(splitColumn),
+		splitColumn:   sqlparser.NewColIdent(splitColumn),
 	}
 }
 
@@ -152,7 +151,7 @@ func (qs *QuerySplitter) getWhereClause(whereClause *sqlparser.Where, bindVars m
 		return whereClause
 	}
 	pk := &sqlparser.ColName{
-		Name: sqlparser.ColIdent(qs.splitColumn),
+		Name: qs.splitColumn,
 	}
 	if !start.IsNull() {
 		startClause = &sqlparser.ComparisonExpr{

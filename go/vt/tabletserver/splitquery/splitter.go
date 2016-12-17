@@ -135,7 +135,7 @@ func populateBoundaryBindVariables(
 func convertColumnsToValExpr(columns []*schema.TableColumn) []sqlparser.ValExpr {
 	valExprs := make([]sqlparser.ValExpr, 0, len(columns))
 	for _, column := range columns {
-		valExprs = append(valExprs, &sqlparser.ColName{Name: sqlparser.ColIdent(column.Name)})
+		valExprs = append(valExprs, &sqlparser.ColName{Name: column.Name})
 	}
 	return valExprs
 }

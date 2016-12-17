@@ -6,7 +6,10 @@ package sqlparser
 
 import (
 	"bytes"
+	"encoding/json"
+	"reflect"
 	"testing"
+	"unsafe"
 )
 
 func TestSelect(t *testing.T) {
@@ -119,6 +122,36 @@ func TestColIdent(t *testing.T) {
 	}
 	if !str.EqualString("ab") {
 		t.Error("str.EqualString(ab)=false, want true")
+	}
+	str = NewColIdent("")
+	if str.Lowered() != "" {
+		t.Errorf("Val=%s, want \"\"", str.Lowered())
+	}
+}
+
+func TestColIdentMarshal(t *testing.T) {
+	str := NewColIdent("Ab")
+	b, err := json.Marshal(str)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(b)
+	want := `"Ab"`
+	if got != want {
+		t.Errorf("json.Marshal()= %s, want %s", got, want)
+	}
+	var out ColIdent
+	err = json.Unmarshal(b, &out)
+	if !reflect.DeepEqual(out, str) {
+		t.Errorf("Unmarshal: %v, want %v", out, str)
+	}
+}
+
+func TestColIdentSize(t *testing.T) {
+	size := unsafe.Sizeof(NewColIdent(""))
+	want := 2 * unsafe.Sizeof("")
+	if size != want {
+		t.Errorf("Size of ColIdent: %d, want 32", want)
 	}
 }
 

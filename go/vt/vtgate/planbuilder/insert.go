@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/youtube/vitess/go/cistring"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vtgate/engine"
 	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
@@ -214,17 +213,17 @@ func handleAutoinc(ins *sqlparser.Insert, autoinc *vindexes.AutoIncrement, rowNu
 	return val, nil
 }
 
-func findOrInsertPos(ins *sqlparser.Insert, col cistring.CIString, rowNum int) (row sqlparser.ValTuple, pos int) {
+func findOrInsertPos(ins *sqlparser.Insert, col sqlparser.ColIdent, rowNum int) (row sqlparser.ValTuple, pos int) {
 	pos = -1
 	for i, column := range ins.Columns {
-		if col.Equal(cistring.CIString(column)) {
+		if col.Equal(column) {
 			pos = i
 			break
 		}
 	}
 	if pos == -1 {
 		pos = len(ins.Columns)
-		ins.Columns = append(ins.Columns, sqlparser.ColIdent(col))
+		ins.Columns = append(ins.Columns, col)
 	}
 	if pos >= len(ins.Rows.(sqlparser.Values)[rowNum]) {
 		ins.Rows.(sqlparser.Values)[rowNum] = append(ins.Rows.(sqlparser.Values)[rowNum], &sqlparser.NullVal{})

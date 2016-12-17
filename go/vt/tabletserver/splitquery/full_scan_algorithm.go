@@ -167,7 +167,7 @@ func convertColumnsToSelectExprs(columns []*schema.TableColumn) sqlparser.Select
 		result = append(result,
 			&sqlparser.NonStarExpr{
 				Expr: &sqlparser.ColName{
-					Name: sqlparser.ColIdent(column.Name),
+					Name: column.Name,
 				},
 			})
 	}
@@ -186,7 +186,7 @@ func buildOrderByClause(splitColumns []*schema.TableColumn) sqlparser.OrderBy {
 	for _, splitColumn := range splitColumns {
 		result = append(result,
 			&sqlparser.Order{
-				Expr:      &sqlparser.ColName{Name: sqlparser.ColIdent(splitColumn.Name)},
+				Expr:      &sqlparser.ColName{Name: splitColumn.Name},
 				Direction: sqlparser.AscScr,
 			},
 		)

@@ -10,8 +10,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/youtube/vitess/go/cistring"
 	vschemapb "github.com/youtube/vitess/go/vt/proto/vschema"
+	"github.com/youtube/vitess/go/vt/sqlparser"
 )
 
 // stFU satisfies Functional, Unique.
@@ -170,7 +170,7 @@ func TestShardedVSchemaOwned(t *testing.T) {
 		Keyspace: ks,
 		ColumnVindexes: []*ColumnVindex{
 			{
-				Column: cistring.New("c1"),
+				Column: sqlparser.NewColIdent("c1"),
 				Type:   "stfu",
 				Name:   "stfu1",
 				Vindex: &stFU{
@@ -181,7 +181,7 @@ func TestShardedVSchemaOwned(t *testing.T) {
 				},
 			},
 			{
-				Column: cistring.New("c2"),
+				Column: sqlparser.NewColIdent("c2"),
 				Type:   "stln",
 				Name:   "stln1",
 				Owned:  true,
@@ -258,14 +258,14 @@ func TestShardedVSchemaNotOwned(t *testing.T) {
 		Keyspace: ks,
 		ColumnVindexes: []*ColumnVindex{
 			{
-				Column: cistring.New("c1"),
+				Column: sqlparser.NewColIdent("c1"),
 				Type:   "stlu",
 				Name:   "stlu1",
 				Owned:  false,
 				Vindex: &stLU{name: "stlu1"},
 			},
 			{
-				Column: cistring.New("c2"),
+				Column: sqlparser.NewColIdent("c2"),
 				Type:   "stfu",
 				Name:   "stfu1",
 				Owned:  false,
@@ -657,7 +657,7 @@ func TestSequence(t *testing.T) {
 		Keyspace: kss,
 		ColumnVindexes: []*ColumnVindex{
 			{
-				Column: cistring.New("c1"),
+				Column: sqlparser.NewColIdent("c1"),
 				Type:   "stfu",
 				Name:   "stfu1",
 				Vindex: &stFU{
@@ -669,7 +669,7 @@ func TestSequence(t *testing.T) {
 			},
 		},
 		AutoIncrement: &AutoIncrement{
-			Column:   cistring.New("c1"),
+			Column:   sqlparser.NewColIdent("c1"),
 			Sequence: seq,
 		},
 	}
@@ -681,7 +681,7 @@ func TestSequence(t *testing.T) {
 		Keyspace: kss,
 		ColumnVindexes: []*ColumnVindex{
 			{
-				Column: cistring.New("c1"),
+				Column: sqlparser.NewColIdent("c1"),
 				Type:   "stfu",
 				Name:   "stfu1",
 				Vindex: &stFU{
@@ -693,7 +693,7 @@ func TestSequence(t *testing.T) {
 			},
 		},
 		AutoIncrement: &AutoIncrement{
-			Column:          cistring.New("c2"),
+			Column:          sqlparser.NewColIdent("c2"),
 			Sequence:        seq,
 			ColumnVindexNum: -1,
 		},
@@ -1048,7 +1048,7 @@ func TestVSchemaJSON(t *testing.T) {
 				"t3": {
 					Name: "n3",
 					ColumnVindexes: []*ColumnVindex{{
-						Column: cistring.New("aa"),
+						Column: sqlparser.NewColIdent("aa"),
 						Type:   "vtype",
 						Name:   "vname",
 						Owned:  true,
