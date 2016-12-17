@@ -8,7 +8,7 @@ cluster-wide locks. It also supports watches, which we will use soon.
 Concretely, the Topology Service features are implemented by a
 [Lock Server](http://en.wikipedia.org/wiki/Distributed_lock_manager), referred
 to as Topology Server in the rest of this document. We use a plug-in
-implementation and we support multiple Lock Servers (ZooKeeper, etcd, …) as
+implementation and we support multiple Lock Servers (Zookeeper, Etcd, …) as
 backends for the service.
 
 ## Requirements and Usage
@@ -197,22 +197,122 @@ SrvKeyspace records.
 
 ## Implementations
 
-The Topology Server interface is defined in our code in go/vt/topo/server.go and
-we also have a set of unit tests for it in go/vt/topo/test.
+The Topology Server interface is defined in our code in `go/vt/topo/server.go`
+and we also have a set of unit tests for it in `go/vt/topo/test`.
 
 This part describes the two implementations we have, and their specific
 behavior.
 
-### ZooKeeper
+### Zookeeper `zk2` Implementation
 
-Our ZooKeeper implementation is based on a configuration file that describes
+This is the recommended implementation when using Zookeeper. The old `zookeeper`
+implementation is deprecated, see next section.
+
+The global cell typically has around 5 servers, distributed one in each
+cell. The local cells typically have 3 or 5 servers, in different server racks /
+sub-networks for higher resilience. For our integration tests, we use a single
+ZK server that serves both global and local cells.
+
+We provide the `zk` utility for easy access to the topology data in
+Zookeeper. It can list, read and write files inside any Zoopeeker server. Just
+specify the `-server` parameter to point to the Zookeeper servers. Note the
+vtctld UI can also be used to see the contents of the topology data.
+
+To configure a Zookeeper installation, let's start with the global cell
+service. It is described by the addresses of the servers (comma separated list),
+and by the root directory to put the Vitess data in. For instance, assuming we
+want to use servers `global_server1,global_server2` in path `/vitess/global`:
+
+``` sh
+# First create the directory in the global server:
+zk -server global_server1,global_server2 touch -p /vitess/global
+
+# Then the flags to use are:
+# -topo_implementation zk2
+# -topo_global_server_address global_server1,global_server2
+# -topo_global_root /vitess/global
+```
+
+Then to add a cell whose local topology servers `cell1_server1,cell1_server2`
+will store their data under the directory `/vitess/cell1`:
+
+``` sh
+export TOPOLOGY="-topo_implementation zk2 -topo_global_server_address global_server1,global_server2 -topo_global_root /vitess/global
+
+# Reference cell1 in the global topology service:
+vtctl $TOPOLOGY AddCellInfo \
+  -server_address cell1_server1,cell1_server2 \
+  -root /vitess/cell1 \
+  cell1
+```
+
+If only one cell is used, the same Zookeeper instance can be used for both
+global and local data. A local cell record still needs to be created, just use
+the same server address, and very importantly a *different* root directory.
+
+#### Implementatin Details
+
+We use the following paths:
+
+*Global Cell*:
+
+* Election path: `/elections/<name>`
+* CellInfo path: `/cells/<cell name>/CellInfo`
+* Keyspace:`/keyspaces/<keyspace>/Keyspace`
+* Shard: `/keyspaces/<keyspace>/shards/<shard>/Shard`
+* VSchema: `/keyspaces/<keyspace>/VSchema`
+
+*Local Cell*:
+
+* Tablet: `/tablets/<cell>-<uid>/Tablet`
+* Replication Graph: `/keyspaces/<keyspace>/shards/<shard>/ShardReplication`
+* SrvKeyspace: `/keyspaces/<keyspace>/SrvKeyspace`
+* SrvVSchema: `/SvrVSchema`
+
+For locks, we create a subdirectory called `locks` under either the keyspace
+directory or the shard directory.
+
+Both locks and master election are implemented using ephemeral, sequential files
+which are stored in their respective directory.
+
+We store the proto3 binary data for each object. The `zk` utility can decode
+these files when using the `-p` option of the `cat` command:
+
+``` sh
+$ zk --server localhost:15014 cat -p /global/keyspaces/test_keyspace/shards/-80/Shard
+master_alias: <
+  cell: "test_nj"
+  uid: 62344
+>
+key_range: <
+  end: "\200"
+>
+served_types: <
+  tablet_type: MASTER
+>
+served_types: <
+  tablet_type: REPLICA
+>
+served_types: <
+  tablet_type: RDONLY
+>
+cells: "test_nj"
+```
+
+### Zookeeper (deprecated, use zk2 instead)
+
+This old `zookeeper` topology service is deprecated, and will be removed in
+Vitess version 2.2. Please use `zk2` instead, and see the `topo2topo` section
+below for migration.
+
+Our Zookeeper implementation is based on a configuration file that describes
 where the global and each local cell ZK instances are. When adding a cell, all
 processes that may access that cell should be restarted with the new
 configuration file.
 
 The global cell typically has around 5 servers, distributed one in each
 cell. The local cells typically have 3 or 5 servers, in different server racks /
-sub-networks for higher resiliency. For our integration tests, we use a single
+sub-networks for higher resilience. For our integration tests, we use a single
 ZK server that serves both global and local cells.
 
 We sometimes store both data and sub-directories in a path (for a keyspace for
@@ -235,12 +335,12 @@ recommended, for reliability reasons.
 * SrvVSchema: `/zk/<cell>/vt/vschema`
 
 We provide the 'zk' utility for easy access to the topology data in
-ZooKeeper. For instance:
+Zookeeper. For instance:
 
-```
-\# NOTE: You need to source zookeeper client config file, like so:
-\#  export ZK_CLIENT_CONFIG=/path/to/zk/client.conf
-$ zk ls /zk/global/vt/keyspaces/user
+``` sh
+# NOTE: We do not set the ZK_CLIENT_CONFIG environment variable here,
+# as the zk tool connects to a specific server. 
+$ zk -server <server address> ls /zk/global/vt/keyspaces/user
 action
 actionlog
 shards
@@ -248,9 +348,14 @@ shards
 
 ### Etcd
 
-Our etcd implementation is based on a command-line parameter that gives the
-location(s) of the global etcd server. Then we query the path `/vt/cells` and
-each file in there is named after a cell, and contains the list of etcd servers
+*Note*: we are in the process of standardizing our topology service
+implementations. We will create an etcd2 implementation soon that will use
+standard tools, different paths, and the newer version of the Etcd client
+library.
+
+Our Etcd implementation is based on a command-line parameter that gives the
+location(s) of the global Etcd server. Then we query the path `/vt/cells` and
+each file in there is named after a cell, and contains the list of Etcd servers
 for that cell.
 
 We use the `_Data` filename to store the data, JSON encoded.
@@ -267,3 +372,79 @@ We use the following paths:
 * SrvKeyspace: `/vt/ns/<keyspace>/_Data`
 * SrvVSchema: `/vt/ns/_VSchema`
 
+### Migration Between Implementations
+
+We provide the `topo2topo` binary file to migrate between one implementation
+and another of the topology service.
+
+The process to follow in that case is:
+
+* Start from a stable topology, where no resharding or reparenting is on-going.
+* Configure the new topology service so it has at least all the cells of the
+  source topology service. Make sure it is running.
+* Run the `topo2topo` program with the right flags. `-from_implementation`,
+  `-from_root`, `-from_server` describe the source (old) topology
+  service. `-to_implementation`, `-to_root`, `-to_server` describe the
+  destination (new) topology service.
+* Run `vtctl RebuildKeyspaceGraph` for each keyspace using the new topology
+  service flags.
+* Run `vtctl RebuildVSchemaGraph` using the new topology service flags.
+* Restart all `vttablet` using the new topology service flags.
+* Restart all `vtgate` using the new topology service flags.
+* Restart all `vtctld` processes using the new topology service flags.
+
+Sample commands to migrate from deprecated `zookeeper` to `zk2`
+topology would be:
+
+``` sh
+# Let's assume the zookeeper client config file is already
+# exported in $ZK_CLIENT_CONFIG, and it contains a global record
+# pointing to: global_server1,global_server2
+# an a local cell cell1 pointing to cell1_server1,cell1_server2
+#
+# The existing directories created by Vitess are:
+# /zk/global/vt/...
+# /zk/cell1/vt/...
+#
+# The new zk2 implementation can use any root, so we will use:
+# /vitess/global in the global topology service, and:
+# /vitess/cell1 in the local topology service.
+
+# Create the new topology service roots in global and local cell.
+zk -server global_server1,global_server2 touch -p /vitess/global
+zk -server cell1_server1,cell1_server2 touch -p /vitess/cell1
+
+# The new topology flags are as follows:
+export TOPOLOGY="-topo_implementation zk2 -topo_global_server_address global_server1,global_server2 -topo_global_root /vitess/global"
+
+# Reference cell1 in the global topology service:
+vtctl $TOPOLOGY AddCellInfo \
+  -server_address cell1_server1,cell1_server2 \
+  -root /vitess/cell1 \
+  cell1
+
+# Now copy the topology. Note the old zookeeper implementation doesn't need
+# any server or root parameter, as it reads ZK_CLIENT_CONFIG.
+topo2topo \
+  -from_implementation zookeeper \
+  -to_implementation zk2 \
+  -to_server global_server1,global_server2 \
+  -to_root /vitess/global \
+
+# Rebuild SvrKeyspace objects in new service, for each keyspace.
+vtctl $TOPOLOGY RebuildKeyspaceGraph keyspace1
+vtctl $TOPOLOGY RebuildKeyspaceGraph keyspace2
+
+# Rebuild SrvVSchema objects in new service.
+vtctl $TOPOLOGY RebuildVSchemaGraph
+
+# Now restart all vttablet, vtgate, vtctld processes replacing:
+# -topo_implementation zookeeper
+# With:
+# -topo_implementation zk2
+# -topo_global_server_address global_server1,global_server2
+# -topo_global_root /vitess/global
+#
+# After this, the ZK_CLIENT_CONF file and environment variables are not needed
+# any more.
+```

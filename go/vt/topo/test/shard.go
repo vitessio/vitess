@@ -33,6 +33,11 @@ func checkShard(t *testing.T, ts topo.Impl) {
 		t.Fatalf("CreateKeyspace: %v", err)
 	}
 
+	// Check GetShardNames returns [], nil for existing keyspace with no shards.
+	if names, err := ts.GetShardNames(ctx, "test_keyspace"); err != nil || len(names) != 0 {
+		t.Errorf("GetShardNames(keyspace with no shards) didn't return [] nil: %v %v", names, err)
+	}
+
 	shard := &topodatapb.Shard{
 		KeyRange: newKeyRange("b0-c0"),
 	}

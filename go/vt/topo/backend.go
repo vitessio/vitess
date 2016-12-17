@@ -1,6 +1,14 @@
 package topo
 
-import "golang.org/x/net/context"
+import (
+	"golang.org/x/net/context"
+)
+
+const (
+	// GlobalCell is the name of the global cell.  It is special
+	// as it contains the global topology, and references the other cells.
+	GlobalCell = "global"
+)
 
 // Backend defines the interface that must be implemented by topology
 // plug-ins to be used with Vitess.

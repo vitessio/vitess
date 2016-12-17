@@ -16,6 +16,11 @@ func checkSrvKeyspace(t *testing.T, ts topo.Impl) {
 	ctx := context.Background()
 	cell := getLocalCell(ctx, t, ts)
 
+	// Test GetSrvKeyspaceNames returns an empty list correctly.
+	if names, err := ts.GetSrvKeyspaceNames(ctx, cell); err != nil || len(names) != 0 {
+		t.Errorf("GetSrvKeyspace(not there): %v %v", names, err)
+	}
+
 	// test cell/keyspace entries (SrvKeyspace)
 	srvKeyspace := &topodatapb.SrvKeyspace{
 		Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{

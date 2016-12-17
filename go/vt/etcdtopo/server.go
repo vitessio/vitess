@@ -70,5 +70,7 @@ func NewServer() *Server {
 }
 
 func init() {
-	topo.RegisterServer("etcd", NewServer())
+	topo.RegisterFactory("etcd", func(serverAddr, root string) (topo.Impl, error) {
+		return NewServer(), nil
+	})
 }

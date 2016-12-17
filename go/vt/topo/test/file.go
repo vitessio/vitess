@@ -16,7 +16,7 @@ func checkFile(t *testing.T, ts topo.Impl) {
 	ctx := context.Background()
 
 	// global cell
-	checkFileInCell(t, ts, "global")
+	checkFileInCell(t, ts, topo.GlobalCell)
 
 	// local cell
 	cell := getLocalCell(ctx, t, ts)

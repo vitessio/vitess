@@ -74,11 +74,11 @@ func main() {
 
 	servenv.FireRunHooks()
 
-	topoServer := topo.GetServer()
-	defer topo.CloseServers()
+	ts := topo.Open()
+	defer ts.Close()
 
 	ctx, cancel := context.WithTimeout(context.Background(), *waitTime)
-	wr := wrangler.New(logutil.NewConsoleLogger(), topoServer, tmclient.NewTabletManagerClient())
+	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 	installSignalHandlers(cancel)
 
 	err := vtctl.RunCommand(ctx, wr, args)

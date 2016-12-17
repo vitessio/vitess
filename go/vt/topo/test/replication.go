@@ -80,9 +80,11 @@ func checkShardReplication(t *testing.T, ts topo.Impl) {
 		t.Errorf("DeleteShardReplication(again) returned: %v", err)
 	}
 
-	if err := ts.DeleteKeyspaceReplication(ctx, cell, "test_keyspace"); err != nil {
+	// Some implementations may already remove the directory if not data is in there, so we ignore topo.ErrNoNode.
+	if err := ts.DeleteKeyspaceReplication(ctx, cell, "test_keyspace"); err != nil && err != topo.ErrNoNode {
 		t.Errorf("DeleteKeyspaceReplication(existing) failed: %v", err)
 	}
+	// The second time though, it should be gone.
 	if err := ts.DeleteKeyspaceReplication(ctx, cell, "test_keyspace"); err != topo.ErrNoNode {
 		t.Errorf("DeleteKeyspaceReplication(again) returned: %v", err)
 	}
