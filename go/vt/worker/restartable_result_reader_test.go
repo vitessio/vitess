@@ -18,8 +18,8 @@ import (
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
+	"github.com/youtube/vitess/go/vt/topo/zk2topo"
 	"github.com/youtube/vitess/go/vt/wrangler"
-	"github.com/youtube/vitess/go/vt/zktopo/zktestserver"
 
 	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -180,7 +180,7 @@ func TestNewRestartableResultReader(t *testing.T) {
 	defer flag.Set("tablet_protocol", protocol)
 
 	// Create dependencies e.g. a "singleTabletProvider" instance.
-	ts := zktestserver.New(t, []string{"cell1"})
+	ts := zk2topo.NewFakeServer("cell1")
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 	alias := &topodatapb.TabletAlias{
 		Cell: "cell1",

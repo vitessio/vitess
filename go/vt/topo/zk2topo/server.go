@@ -6,6 +6,7 @@ package zk2topo
 
 import (
 	"fmt"
+	"log"
 	"path"
 	"sync"
 
@@ -47,13 +48,17 @@ type Server struct {
 	instances map[string]*instance
 }
 
-// NewFakeServer returns a Server based on FakeConn.  The global cell
+// NewFakeServer returns a topo.Server based on FakeConn.  The global cell
 // data is in the '/root' sub-directory, to make sure the root path is
-// properly used.
-func NewFakeServer() topo.Impl {
+// properly used. It will create one cell for each parameter passed in.
+// It will log.Fatal out in case of a problem.
+func NewFakeServer(cells ...string) topo.Server {
+	ctx := context.Background()
 	conn := newFakeConn()
-	conn.Create(context.Background(), "/root", nil, 0, zk.WorldACL(PermDirectory))
-	return &Server{
+	if _, err := conn.Create(ctx, "/root", nil, 0, zk.WorldACL(PermDirectory)); err != nil {
+		log.Fatalf("Create(/root) failed: %v", err)
+	}
+	zs := &Server{
 		connect: ConnectFake,
 		instances: map[string]*instance{
 			topo.GlobalCell: {
@@ -62,6 +67,17 @@ func NewFakeServer() topo.Impl {
 			},
 		},
 	}
+	ts := topo.Server{Impl: zs}
+	for _, cell := range cells {
+		// Each cell will have its own fake connection, with
+		// its own fake map, so we just use the root there.
+		if err := ts.CreateCellInfo(ctx, cell, &topodatapb.CellInfo{
+			Root: "/",
+		}); err != nil {
+			log.Fatalf("ts.CreateCellInfo(%v) failed: %v", cell, err)
+		}
+	}
+	return ts
 }
 
 // NewServer returns a Server connecting to real Zookeeper processes.

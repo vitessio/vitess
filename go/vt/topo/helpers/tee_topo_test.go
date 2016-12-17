@@ -7,7 +7,6 @@ package helpers
 import (
 	"fmt"
 	"testing"
-	"time"
 
 	zookeeper "github.com/samuel/go-zookeeper/zk"
 	"golang.org/x/net/context"
@@ -49,7 +48,6 @@ func newFakeTeeServer(t *testing.T) topo.Impl {
 }
 
 func TestTeeTopo(t *testing.T) {
-	zktopo.WatchSleepDuration = 2 * time.Millisecond
 	test.TopoServerTestSuite(t, func() topo.Impl {
 		return newFakeTeeServer(t)
 	})

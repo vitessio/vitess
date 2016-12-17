@@ -20,13 +20,18 @@ import (
 
 // SaveVSchema saves the vschema into the topo.
 func (zs *Server) SaveVSchema(ctx context.Context, keyspace string, vschema *vschemapb.Keyspace) error {
+	zkPath := path.Join(keyspacesPath, keyspace, topo.VSchemaFile)
 	data, err := proto.Marshal(vschema)
 	if err != nil {
 		return err
 	}
 
-	zkPath := path.Join(keyspacesPath, keyspace, topo.VSchemaFile)
-	_, err = zs.Update(ctx, topo.GlobalCell, zkPath, data, nil)
+	if len(data) == 0 {
+		// No vschema, remove it. So we can remove the keyspace.
+		err = zs.Delete(ctx, topo.GlobalCell, zkPath, nil)
+	} else {
+		_, err = zs.Update(ctx, topo.GlobalCell, zkPath, data, nil)
+	}
 	return err
 }
 

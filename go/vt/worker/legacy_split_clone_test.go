@@ -21,9 +21,9 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver/grpcqueryservice"
 	"github.com/youtube/vitess/go/vt/tabletserver/queryservice/fakes"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topo/zk2topo"
 	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
 	"github.com/youtube/vitess/go/vt/wrangler/testlib"
-	"github.com/youtube/vitess/go/vt/zktopo/zktestserver"
 	"golang.org/x/net/context"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
@@ -63,7 +63,7 @@ type legacySplitCloneTestCase struct {
 func (tc *legacySplitCloneTestCase) setUp(v3 bool) {
 	*useV3ReshardingMode = v3
 	db := fakesqldb.Register()
-	tc.ts = zktestserver.New(tc.t, []string{"cell1", "cell2"})
+	tc.ts = zk2topo.NewFakeServer("cell1", "cell2")
 	ctx := context.Background()
 	tc.wi = NewInstance(tc.ts, "cell1", time.Second)
 
