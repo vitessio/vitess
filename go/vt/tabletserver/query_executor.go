@@ -10,7 +10,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/youtube/vitess/go/cistring"
 	"github.com/youtube/vitess/go/hack"
 	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/sqltypes"
@@ -527,7 +526,7 @@ func (qre *QueryExecutor) execDMLPKRows(conn *TxConnection, query *sqlparser.Par
 		}
 		bsc := buildStreamComment(qre.plan.TableInfo, pkRows, secondaryList)
 		qre.bindVars["#pk"] = sqlparser.TupleEqualityList{
-			Columns: cistring.ToStrings(qre.plan.TableInfo.Indexes[0].Columns),
+			Columns: qre.plan.TableInfo.Indexes[0].Columns,
 			Rows:    pkRows,
 		}
 		r, err := qre.txFetch(conn, query, qre.bindVars, bsc, false, true)

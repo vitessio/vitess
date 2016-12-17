@@ -6,10 +6,10 @@ package sqlparser
 
 import (
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"strings"
 
-	"github.com/youtube/vitess/go/cistring"
 	"github.com/youtube/vitess/go/sqltypes"
 )
 
@@ -1726,11 +1726,19 @@ func (node OnDup) WalkSubtree(visit Visit) error {
 
 // ColIdent is a case insensitive SQL identifier. It will be escaped with
 // backquotes if it matches a keyword.
-type ColIdent cistring.CIString
+type ColIdent struct {
+	// This artifact prevents this struct from being compared
+	// with itself. It consumes no space as long as it's not the
+	// last field in the struct.
+	_            [0]struct{ _ []byte }
+	val, lowered string
+}
 
 // NewColIdent makes a new ColIdent.
 func NewColIdent(str string) ColIdent {
-	return ColIdent(cistring.New(str))
+	return ColIdent{
+		val: str,
+	}
 }
 
 // Format formats the node.
@@ -1749,28 +1757,50 @@ func (node ColIdent) WalkSubtree(visit Visit) error {
 
 // Original returns the case-preserved column name.
 func (node ColIdent) Original() string {
-	return cistring.CIString(node).Original()
+	return node.val
 }
 
 func (node ColIdent) String() string {
-	return cistring.CIString(node).String()
+	return node.val
 }
 
 // Lowered returns a lower-cased column name.
 // This function should generally be used only for optimizing
 // comparisons.
 func (node ColIdent) Lowered() string {
-	return cistring.CIString(node).Lowered()
+	if node.val == "" {
+		return ""
+	}
+	if node.lowered == "" {
+		node.lowered = strings.ToLower(node.val)
+	}
+	return node.lowered
 }
 
 // Equal performs a case-insensitive compare.
 func (node ColIdent) Equal(in ColIdent) bool {
-	return cistring.CIString(node).Equal(cistring.CIString(in))
+	return node.Lowered() == in.Lowered()
 }
 
 // EqualString performs a case-insensitive compare with str.
 func (node ColIdent) EqualString(str string) bool {
-	return cistring.CIString(node).EqualString(str)
+	return node.Lowered() == strings.ToLower(str)
+}
+
+// MarshalJSON marshals into JSON.
+func (node ColIdent) MarshalJSON() ([]byte, error) {
+	return json.Marshal(node.val)
+}
+
+// UnmarshalJSON unmarshals from JSON.
+func (node *ColIdent) UnmarshalJSON(b []byte) error {
+	var result string
+	err := json.Unmarshal(b, &result)
+	if err != nil {
+		return err
+	}
+	node.val = result
+	return nil
 }
 
 // TableIdent is a case sensitive SQL identifier. It will be escaped with
