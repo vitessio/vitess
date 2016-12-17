@@ -14,6 +14,7 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	"github.com/youtube/vitess/go/vt/schema"
+	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
 	"golang.org/x/net/context"
 )
@@ -127,7 +128,7 @@ func TestTableInfoSequence(t *testing.T) {
 	}
 	want := &TableInfo{
 		Table: &schema.Table{
-			Name: "test_table",
+			Name: sqlparser.NewTableIdent("test_table"),
 			Type: schema.Sequence,
 		},
 	}

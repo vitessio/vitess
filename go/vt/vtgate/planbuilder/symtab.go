@@ -205,10 +205,13 @@ func (st *symtab) searchColsyms(col *sqlparser.ColName) (rb *route, err error) {
 }
 
 func (st *symtab) searchTables(col *sqlparser.ColName, autoResolve bool) *route {
-	qualifier := sqlparser.TableIdent(sqlparser.String(col.Qualifier))
-	if qualifier == "" && autoResolve && len(st.tables) == 1 {
+	qualifier := sqlparser.NewTableIdent(sqlparser.String(col.Qualifier))
+	if qualifier.IsEmpty() && autoResolve && len(st.tables) == 1 {
 		qualifier = st.tables[0].Alias
 	}
+	// TODO(sougou): this search should ideally match the search
+	// style provided by VSchema, where the default keyspace must be
+	// used if one is not provided.
 	alias := st.findTable(qualifier)
 	if alias == nil {
 		return nil

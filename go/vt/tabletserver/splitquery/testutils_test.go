@@ -8,12 +8,13 @@ import (
 
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/schema"
+	"github.com/youtube/vitess/go/vt/sqlparser"
 )
 
 // getSchema returns a fake schema object that can be given to SplitParams
 func getTestSchema() map[string]*schema.Table {
 	table := schema.Table{
-		Name: "test_table",
+		Name: sqlparser.NewTableIdent("test_table"),
 	}
 	zero, _ := sqltypes.BuildValue(0)
 	table.AddColumn("id", sqltypes.Int64, zero, "")
@@ -48,7 +49,7 @@ func getTestSchema() map[string]*schema.Table {
 	result["test_table"] = &table
 
 	tableNoPK := schema.Table{
-		Name: "test_table_no_pk",
+		Name: sqlparser.NewTableIdent("test_table_no_pk"),
 	}
 	tableNoPK.AddColumn("id", sqltypes.Int64, zero, "")
 	tableNoPK.PKColumns = []int{}

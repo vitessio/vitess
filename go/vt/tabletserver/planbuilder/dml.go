@@ -20,7 +20,7 @@ func analyzeUpdate(upd *sqlparser.Update, getTable TableGetter) (plan *ExecPlan,
 	}
 
 	tableName := sqlparser.GetTableName(upd.Table)
-	if tableName == "" {
+	if tableName.IsEmpty() {
 		plan.Reason = ReasonTable
 		return plan, nil
 	}
@@ -64,7 +64,7 @@ func analyzeDelete(del *sqlparser.Delete, getTable TableGetter) (plan *ExecPlan,
 	}
 
 	tableName := sqlparser.GetTableName(del.Table)
-	if tableName == "" {
+	if tableName.IsEmpty() {
 		plan.Reason = ReasonTable
 		return plan, nil
 	}
@@ -131,7 +131,7 @@ func analyzeSelect(sel *sqlparser.Select, getTable TableGetter) (plan *ExecPlan,
 	}
 
 	tableName := analyzeFrom(sel.From)
-	if tableName == "" {
+	if tableName.IsEmpty() {
 		return plan, nil
 	}
 	tableInfo, err := plan.setTableInfo(tableName, getTable)
@@ -156,13 +156,13 @@ func analyzeSelect(sel *sqlparser.Select, getTable TableGetter) (plan *ExecPlan,
 	return plan, nil
 }
 
-func analyzeFrom(tableExprs sqlparser.TableExprs) string {
+func analyzeFrom(tableExprs sqlparser.TableExprs) sqlparser.TableIdent {
 	if len(tableExprs) > 1 {
-		return ""
+		return sqlparser.NewTableIdent("")
 	}
 	node, ok := tableExprs[0].(*sqlparser.AliasedTableExpr)
 	if !ok {
-		return ""
+		return sqlparser.NewTableIdent("")
 	}
 	return sqlparser.GetTableName(node.Expr)
 }
@@ -244,7 +244,7 @@ func analyzeInsert(ins *sqlparser.Insert, getTable TableGetter) (plan *ExecPlan,
 		FullQuery: GenerateFullQuery(ins),
 	}
 	tableName := sqlparser.GetTableName(ins.Table)
-	if tableName == "" {
+	if tableName.IsEmpty() {
 		plan.Reason = ReasonTable
 		return plan, nil
 	}

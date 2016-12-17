@@ -102,7 +102,7 @@ func TestUnshardedVSchema(t *testing.T) {
 		Name: "unsharded",
 	}
 	t1 := &Table{
-		Name:     "t1",
+		Name:     sqlparser.NewTableIdent("t1"),
 		Keyspace: ks,
 	}
 	want := &VSchema{
@@ -166,7 +166,7 @@ func TestShardedVSchemaOwned(t *testing.T) {
 		Sharded: true,
 	}
 	t1 := &Table{
-		Name:     "t1",
+		Name:     sqlparser.NewTableIdent("t1"),
 		Keyspace: ks,
 		ColumnVindexes: []*ColumnVindex{
 			{
@@ -254,7 +254,7 @@ func TestShardedVSchemaNotOwned(t *testing.T) {
 		Sharded: true,
 	}
 	t1 := &Table{
-		Name:     "t1",
+		Name:     sqlparser.NewTableIdent("t1"),
 		Keyspace: ks,
 		ColumnVindexes: []*ColumnVindex{
 			{
@@ -405,12 +405,12 @@ func TestBuildVSchemaDupSeq(t *testing.T) {
 	}
 	got, _ := BuildVSchema(&good)
 	t1a := &Table{
-		Name:       "t1",
+		Name:       sqlparser.NewTableIdent("t1"),
 		Keyspace:   ksa,
 		IsSequence: true,
 	}
 	t1b := &Table{
-		Name:       "t1",
+		Name:       sqlparser.NewTableIdent("t1"),
 		Keyspace:   ksb,
 		IsSequence: true,
 	}
@@ -460,14 +460,14 @@ func TestBuildVSchemaDupTable(t *testing.T) {
 		Name: "ksa",
 	}
 	t1a := &Table{
-		Name:     "t1",
+		Name:     sqlparser.NewTableIdent("t1"),
 		Keyspace: ksa,
 	}
 	ksb := &Keyspace{
 		Name: "ksb",
 	}
 	t1b := &Table{
-		Name:     "t1",
+		Name:     sqlparser.NewTableIdent("t1"),
 		Keyspace: ksb,
 	}
 	want := &VSchema{
@@ -648,12 +648,12 @@ func TestSequence(t *testing.T) {
 		Sharded: true,
 	}
 	seq := &Table{
-		Name:       "seq",
+		Name:       sqlparser.NewTableIdent("seq"),
 		Keyspace:   ksu,
 		IsSequence: true,
 	}
 	t1 := &Table{
-		Name:     "t1",
+		Name:     sqlparser.NewTableIdent("t1"),
 		Keyspace: kss,
 		ColumnVindexes: []*ColumnVindex{
 			{
@@ -677,7 +677,7 @@ func TestSequence(t *testing.T) {
 		t1.ColumnVindexes[0],
 	}
 	t2 := &Table{
-		Name:     "t2",
+		Name:     sqlparser.NewTableIdent("t2"),
 		Keyspace: kss,
 		ColumnVindexes: []*ColumnVindex{
 			{
@@ -855,7 +855,7 @@ func TestFind(t *testing.T) {
 		return
 	}
 	ta := &Table{
-		Name: "ta",
+		Name: sqlparser.NewTableIdent("ta"),
 		Keyspace: &Keyspace{
 			Name: "ksa",
 		},
@@ -868,7 +868,7 @@ func TestFind(t *testing.T) {
 		t.Errorf("Find(\"t1a\"): %+v, want %+v", got, ta)
 	}
 	none := &Table{
-		Name: "none",
+		Name: sqlparser.NewTableIdent("none"),
 		Keyspace: &Keyspace{
 			Name: "ksa",
 		},
@@ -909,11 +909,11 @@ func TestBuildKeyspaceSchema(t *testing.T) {
 		Name: "ks",
 	}
 	t1 := &Table{
-		Name:     "t1",
+		Name:     sqlparser.NewTableIdent("t1"),
 		Keyspace: ks,
 	}
 	t2 := &Table{
-		Name:     "t2",
+		Name:     sqlparser.NewTableIdent("t2"),
 		Keyspace: ks,
 	}
 	want := &KeyspaceSchema{
@@ -1031,11 +1031,11 @@ func TestVSchemaJSON(t *testing.T) {
 			},
 			Tables: map[string]*Table{
 				"t1": {
-					Name: "n1",
+					Name: sqlparser.NewTableIdent("n1"),
 				},
 				"t2": {
 					IsSequence: true,
-					Name:       "n2",
+					Name:       sqlparser.NewTableIdent("n2"),
 				},
 			},
 		},
@@ -1046,7 +1046,7 @@ func TestVSchemaJSON(t *testing.T) {
 			},
 			Tables: map[string]*Table{
 				"t3": {
-					Name: "n3",
+					Name: sqlparser.NewTableIdent("n3"),
 					ColumnVindexes: []*ColumnVindex{{
 						Column: sqlparser.NewColIdent("aa"),
 						Type:   "vtype",
@@ -1115,7 +1115,7 @@ func TestFindSingleKeyspace(t *testing.T) {
 	}
 	vschema, _ := BuildVSchema(&input)
 	none := &Table{
-		Name: "none",
+		Name: sqlparser.NewTableIdent("none"),
 		Keyspace: &Keyspace{
 			Name: "ksa",
 		},

@@ -488,7 +488,7 @@ type StarExpr struct {
 
 // Format formats the node.
 func (node *StarExpr) Format(buf *TrackedBuffer) {
-	if node.TableName != "" {
+	if !node.TableName.IsEmpty() {
 		buf.Myprintf("%v.", node.TableName)
 	}
 	buf.Myprintf("*")
@@ -616,7 +616,7 @@ type AliasedTableExpr struct {
 // Format formats the node.
 func (node *AliasedTableExpr) Format(buf *TrackedBuffer) {
 	buf.Myprintf("%v", node.Expr)
-	if node.As != "" {
+	if !node.As.IsEmpty() {
 		buf.Myprintf(" as %v", node.As)
 	}
 	if node.Hints != nil {
@@ -661,7 +661,7 @@ func (node *TableName) Format(buf *TrackedBuffer) {
 	if node == nil {
 		return
 	}
-	if node.Qualifier != "" {
+	if !node.Qualifier.IsEmpty() {
 		buf.Myprintf("%v.", node.Qualifier)
 	}
 	buf.Myprintf("%v", node.Name)
@@ -681,7 +681,7 @@ func (node *TableName) WalkSubtree(visit Visit) error {
 
 // IsEmpty returns true if TableName is nil or empty.
 func (node *TableName) IsEmpty() bool {
-	return node == nil || (node.Qualifier == "" && node.Name == "")
+	return node == nil || (node.Qualifier.IsEmpty() && node.Name.IsEmpty())
 }
 
 // ParenTableExpr represents a parenthesized list of TableExpr.
@@ -1419,7 +1419,7 @@ func (node *IntervalExpr) WalkSubtree(visit Visit) error {
 
 // FuncExpr represents a function call.
 type FuncExpr struct {
-	Name     string
+	Name     ColIdent
 	Distinct bool
 	Exprs    SelectExprs
 }
@@ -1433,7 +1433,7 @@ func (node *FuncExpr) Format(buf *TrackedBuffer) {
 	// Function names should not be back-quoted even
 	// if they match a reserved word. So, print the
 	// name as is.
-	buf.Myprintf("%s(%s%v)", node.Name, distinct, node.Exprs)
+	buf.Myprintf("%s(%s%v)", node.Name.String(), distinct, node.Exprs)
 }
 
 // WalkSubtree walks the nodes of the subtree.
@@ -1469,7 +1469,7 @@ var Aggregates = map[string]bool{
 
 // IsAggregate returns true if the function is an aggregate.
 func (node *FuncExpr) IsAggregate() bool {
-	return Aggregates[strings.ToLower(node.Name)]
+	return Aggregates[node.Name.Lowered()]
 }
 
 // CaseExpr represents a CASE expression.
@@ -1725,7 +1725,7 @@ func (node OnDup) WalkSubtree(visit Visit) error {
 }
 
 // ColIdent is a case insensitive SQL identifier. It will be escaped with
-// backquotes if it matches a keyword.
+// backquotes if necessary.
 type ColIdent struct {
 	// This artifact prevents this struct from being compared
 	// with itself. It consumes no space as long as it's not the
@@ -1760,6 +1760,10 @@ func (node ColIdent) Original() string {
 	return node.val
 }
 
+// String returns the unescaped column name. It must
+// not be used for SQL generation. Use sqlparser.String
+// instead. The Stringer conformance is for usage
+// in templates.
 func (node ColIdent) String() string {
 	return node.val
 }
@@ -1804,20 +1808,55 @@ func (node *ColIdent) UnmarshalJSON(b []byte) error {
 }
 
 // TableIdent is a case sensitive SQL identifier. It will be escaped with
-// backquotes if it matches a keyword.
-type TableIdent string
+// backquotes if necessary.
+type TableIdent struct {
+	v string
+}
+
+// NewTableIdent creates a new TableIdent.
+func NewTableIdent(str string) TableIdent {
+	return TableIdent{v: str}
+}
 
 // Format formats the node.
 func (node TableIdent) Format(buf *TrackedBuffer) {
-	name := string(node)
-	if _, ok := keywords[strings.ToLower(name)]; ok {
-		buf.Myprintf("`%s`", name)
+	if _, ok := keywords[strings.ToLower(node.v)]; ok {
+		buf.Myprintf("`%s`", node.v)
 		return
 	}
-	buf.Myprintf("%s", name)
+	buf.Myprintf("%s", node.v)
 }
 
 // WalkSubtree walks the nodes of the subtree.
 func (node TableIdent) WalkSubtree(visit Visit) error {
+	return nil
+}
+
+// IsEmpty returns true if TabIdent is empty.
+func (node TableIdent) IsEmpty() bool {
+	return node.v == ""
+}
+
+// String returns the unescaped table name. It must
+// not be used for SQL generation. Use sqlparser.String
+// instead. The Stringer conformance is for usage
+// in templates.
+func (node TableIdent) String() string {
+	return node.v
+}
+
+// MarshalJSON marshals into JSON.
+func (node TableIdent) MarshalJSON() ([]byte, error) {
+	return json.Marshal(node.v)
+}
+
+// UnmarshalJSON unmarshals from JSON.
+func (node *TableIdent) UnmarshalJSON(b []byte) error {
+	var result string
+	err := json.Unmarshal(b, &result)
+	if err != nil {
+		return err
+	}
+	node.v = result
 	return nil
 }

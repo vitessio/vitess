@@ -16,6 +16,7 @@ import (
 	"testing"
 
 	"github.com/youtube/vitess/go/testfiles"
+	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
 )
 
@@ -119,9 +120,19 @@ func loadSchema(t *testing.T, filename string) *vindexes.VSchema {
 	return vschema
 }
 
+type vschemaWrapper struct {
+	v *vindexes.VSchema
+}
+
+func (vw *vschemaWrapper) Find(ks, tab sqlparser.TableIdent) (*vindexes.Table, error) {
+	return vw.v.Find(ks.String(), tab.String())
+}
+
 func testFile(t *testing.T, filename string, vschema *vindexes.VSchema) {
 	for tcase := range iterateExecFile(filename) {
-		plan, err := Build(tcase.input, vschema)
+		plan, err := Build(tcase.input, &vschemaWrapper{
+			v: vschema,
+		})
 		var out string
 		if err != nil {
 			out = err.Error()

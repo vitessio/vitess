@@ -9,8 +9,8 @@ import "github.com/youtube/vitess/go/vt/sqlparser"
 // DDLPlan provides a plan for DDLs.
 type DDLPlan struct {
 	Action    string
-	TableName string
-	NewName   string
+	TableName sqlparser.TableIdent
+	NewName   sqlparser.TableIdent
 }
 
 // DDLParse parses a DDL and produces a DDLPlan.
@@ -25,17 +25,17 @@ func DDLParse(sql string) (plan *DDLPlan) {
 	}
 	return &DDLPlan{
 		Action:    stmt.Action,
-		TableName: string(stmt.Table),
-		NewName:   string(stmt.NewName),
+		TableName: stmt.Table,
+		NewName:   stmt.NewName,
 	}
 }
 
 func analyzeDDL(ddl *sqlparser.DDL, getTable TableGetter) *ExecPlan {
 	// TODO(sougou): Add support for sequences.
 	plan := &ExecPlan{PlanID: PlanDDL}
-	tableName := string(ddl.Table)
+	tableName := ddl.Table
 	// Skip TableName if table is empty (create statements) or not found in schema
-	if tableName != "" {
+	if !tableName.IsEmpty() {
 		tableInfo, ok := getTable(tableName)
 		if ok {
 			plan.TableName = tableInfo.Name

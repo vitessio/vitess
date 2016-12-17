@@ -24,13 +24,13 @@ type VSchema struct {
 
 // Table represents a table in VSchema.
 type Table struct {
-	IsSequence     bool            `json:"is_sequence,omitempty"`
-	Name           string          `json:"name"`
-	Keyspace       *Keyspace       `json:"-"`
-	ColumnVindexes []*ColumnVindex `json:"column_vindexes,omitempty"`
-	Ordered        []*ColumnVindex `json:"ordered,omitempty"`
-	Owned          []*ColumnVindex `json:"owned,omitempty"`
-	AutoIncrement  *AutoIncrement  `json:"auto_increment,omitempty"`
+	IsSequence     bool                 `json:"is_sequence,omitempty"`
+	Name           sqlparser.TableIdent `json:"name"`
+	Keyspace       *Keyspace            `json:"-"`
+	ColumnVindexes []*ColumnVindex      `json:"column_vindexes,omitempty"`
+	Ordered        []*ColumnVindex      `json:"ordered,omitempty"`
+	Owned          []*ColumnVindex      `json:"owned,omitempty"`
+	AutoIncrement  *AutoIncrement       `json:"auto_increment,omitempty"`
 }
 
 // Keyspace contains the keyspcae info for each Table.
@@ -154,7 +154,7 @@ func buildTables(source *vschemapb.SrvVSchema, vschema *VSchema) error {
 		}
 		for tname, table := range ks.Tables {
 			t := &Table{
-				Name:     tname,
+				Name:     sqlparser.NewTableIdent(tname),
 				Keyspace: keyspace,
 			}
 			if _, ok := vschema.tables[tname]; ok {
@@ -265,7 +265,7 @@ func (vschema *VSchema) Find(keyspace, tablename string) (table *Table, err erro
 				if ks.Keyspace.Sharded {
 					return nil, fmt.Errorf("table %s not found", tablename)
 				}
-				return &Table{Name: tablename, Keyspace: ks.Keyspace}, nil
+				return &Table{Name: sqlparser.NewTableIdent(tablename), Keyspace: ks.Keyspace}, nil
 			}
 		}
 		return table, nil
@@ -279,7 +279,7 @@ func (vschema *VSchema) Find(keyspace, tablename string) (table *Table, err erro
 		if ks.Keyspace.Sharded {
 			return nil, fmt.Errorf("table %s not found", tablename)
 		}
-		return &Table{Name: tablename, Keyspace: ks.Keyspace}, nil
+		return &Table{Name: sqlparser.NewTableIdent(tablename), Keyspace: ks.Keyspace}, nil
 	}
 	return table, nil
 }

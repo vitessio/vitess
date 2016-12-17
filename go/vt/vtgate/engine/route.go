@@ -51,7 +51,7 @@ func (rt *Route) GetFields(vcursor VCursor, joinvars map[string]interface{}) (*s
 func (rt *Route) MarshalJSON() ([]byte, error) {
 	var tname, vindexName string
 	if rt.Table != nil {
-		tname = rt.Table.Name
+		tname = rt.Table.Name.String()
 	}
 	if rt.Vindex != nil {
 		vindexName = rt.Vindex.String()

@@ -14,12 +14,12 @@ import (
 
 // GetTableName returns the table name from the SimpleTableExpr
 // only if it's a simple expression. Otherwise, it returns "".
-func GetTableName(node SimpleTableExpr) string {
-	if n, ok := node.(*TableName); ok && n.Qualifier == "" {
-		return string(n.Name)
+func GetTableName(node SimpleTableExpr) TableIdent {
+	if n, ok := node.(*TableName); ok && n.Qualifier.IsEmpty() {
+		return n.Name
 	}
 	// sub-select or '.' expression
-	return ""
+	return NewTableIdent("")
 }
 
 // IsColName returns true if the ValExpr is a *ColName.

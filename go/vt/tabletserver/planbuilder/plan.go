@@ -163,8 +163,8 @@ func (rt ReasonType) MarshalJSON() ([]byte, error) {
 // nil if no value was specified
 type ExecPlan struct {
 	PlanID    PlanType
-	Reason    ReasonType `json:",omitempty"`
-	TableName string     `json:",omitempty"`
+	Reason    ReasonType           `json:",omitempty"`
+	TableName sqlparser.TableIdent `json:",omitempty"`
 
 	// FieldQuery is used to fetch field info
 	FieldQuery *sqlparser.ParsedQuery `json:",omitempty"`
@@ -193,7 +193,7 @@ type ExecPlan struct {
 	SubqueryPKColumns []int `json:",omitempty"`
 }
 
-func (plan *ExecPlan) setTableInfo(tableName string, getTable TableGetter) (*schema.Table, error) {
+func (plan *ExecPlan) setTableInfo(tableName sqlparser.TableIdent, getTable TableGetter) (*schema.Table, error) {
 	tableInfo, ok := getTable(tableName)
 	if !ok {
 		return nil, fmt.Errorf("table %s not found in schema", tableName)
@@ -203,7 +203,7 @@ func (plan *ExecPlan) setTableInfo(tableName string, getTable TableGetter) (*sch
 }
 
 // TableGetter returns a schema.Table given the table name.
-type TableGetter func(tableName string) (*schema.Table, bool)
+type TableGetter func(tableName sqlparser.TableIdent) (*schema.Table, bool)
 
 // GetExecPlan generates a ExecPlan given a sql query and a TableGetter.
 func GetExecPlan(sql string, getTable TableGetter) (plan *ExecPlan, err error) {
@@ -253,7 +253,7 @@ func GetStreamExecPlan(sql string, getTable TableGetter) (plan *ExecPlan, err er
 		if stmt.Lock != "" {
 			return nil, errors.New("select with lock not allowed for streaming")
 		}
-		if tableName := analyzeFrom(stmt.From); tableName != "" {
+		if tableName := analyzeFrom(stmt.From); !tableName.IsEmpty() {
 			plan.setTableInfo(tableName, getTable)
 		}
 	case *sqlparser.Union:

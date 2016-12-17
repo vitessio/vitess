@@ -16,7 +16,7 @@ import (
 
 func getSchemaInfo() *SchemaInfo {
 	table := &schema.Table{
-		Name: "test_table",
+		Name: sqlparser.NewTableIdent("test_table"),
 	}
 	zero, _ := sqltypes.BuildValue(0)
 	table.AddColumn("id", sqltypes.Int64, zero, "")
@@ -33,7 +33,7 @@ func getSchemaInfo() *SchemaInfo {
 	tables["test_table"] = &TableInfo{Table: table}
 
 	tableNoPK := &schema.Table{
-		Name: "test_table_no_pk",
+		Name: sqlparser.NewTableIdent("test_table_no_pk"),
 	}
 	tableNoPK.AddColumn("id", sqltypes.Int64, zero, "")
 	tableNoPK.PKColumns = []int{}
