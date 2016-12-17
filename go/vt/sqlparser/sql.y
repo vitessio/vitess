@@ -151,7 +151,7 @@ func forceEOF(yylex interface{}) {
 %type <valExpr> value_expression_opt else_expression_opt
 %type <valExprs> group_by_opt
 %type <boolExpr> having_opt
-%type <str> keyword_func
+%type <colIdent> keyword_func
 %type <orderBy> order_by_opt order_list
 %type <order> order
 %type <str> asc_desc_opt
@@ -256,7 +256,7 @@ create_statement:
   }
 | CREATE VIEW sql_id force_eof
   {
-    $$ = &DDL{Action: CreateStr, NewName: TableIdent($3.Lowered())}
+    $$ = &DDL{Action: CreateStr, NewName: NewTableIdent($3.Lowered())}
   }
 
 alter_statement:
@@ -271,7 +271,7 @@ alter_statement:
   }
 | ALTER VIEW sql_id force_eof
   {
-    $$ = &DDL{Action: AlterStr, Table: TableIdent($3.Lowered()), NewName: TableIdent($3.Lowered())}
+    $$ = &DDL{Action: AlterStr, Table: NewTableIdent($3.Lowered()), NewName: NewTableIdent($3.Lowered())}
   }
 
 rename_statement:
@@ -300,7 +300,7 @@ drop_statement:
         if $3 != 0 {
           exists = true
         }
-    $$ = &DDL{Action: DropStr, Table: TableIdent($4.Lowered()), IfExists: exists}
+    $$ = &DDL{Action: DropStr, Table: NewTableIdent($4.Lowered()), IfExists: exists}
   }
 
 analyze_statement:
@@ -423,7 +423,7 @@ as_ci_opt:
 
 from_opt:
   {
-    $$ = TableExprs{&AliasedTableExpr{Expr:&TableName{Name: "dual"}}}
+    $$ = TableExprs{&AliasedTableExpr{Expr:&TableName{Name: NewTableIdent("dual")}}}
   }
 | FROM table_references
   {
@@ -490,7 +490,7 @@ as_opt:
 
 as_opt_id:
   {
-    $$ = ""
+    $$ = NewTableIdent("")
   }
 | table_id
   {
@@ -862,17 +862,17 @@ value_expression:
     // will be non-trivial because of grammar conflicts.
     $$ = &IntervalExpr{Expr: $2, Unit: $3}
   }
-| table_id openb closeb
+| sql_id openb closeb
   {
-    $$ = &FuncExpr{Name: string($1)}
+    $$ = &FuncExpr{Name: $1}
   }
-| table_id openb select_expression_list closeb
+| sql_id openb select_expression_list closeb
   {
-    $$ = &FuncExpr{Name: string($1), Exprs: $3}
+    $$ = &FuncExpr{Name: $1, Exprs: $3}
   }
-| table_id openb DISTINCT select_expression_list closeb
+| sql_id openb DISTINCT select_expression_list closeb
   {
-    $$ = &FuncExpr{Name: string($1), Distinct: true, Exprs: $4}
+    $$ = &FuncExpr{Name: $1, Distinct: true, Exprs: $4}
   }
 | keyword_func openb closeb
   {
@@ -890,19 +890,19 @@ value_expression:
 keyword_func:
   IF
   {
-    $$ = "if"
+    $$ = NewColIdent("if")
   }
 | CURRENT_TIMESTAMP
   {
-    $$ = "current_timestamp"
+    $$ = NewColIdent("current_timestamp")
   }
 | DATABASE
   {
-    $$ = "database"
+    $$ = NewColIdent("database")
   }
 | MOD
   {
-    $$ = "mod"
+    $$ = NewColIdent("mod")
   }
 
 case_expression:
@@ -1221,7 +1221,7 @@ sql_id:
 table_id:
   ID
   {
-    $$ = TableIdent($1)
+    $$ = NewTableIdent(string($1))
   }
 
 openb:

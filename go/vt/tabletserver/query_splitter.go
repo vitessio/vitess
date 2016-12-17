@@ -23,7 +23,7 @@ type QuerySplitter struct {
 	splitCount    int64
 	schemaInfo    *SchemaInfo
 	sel           *sqlparser.Select
-	tableName     string
+	tableName     sqlparser.TableIdent
 	splitColumn   sqlparser.ColIdent
 	rowCount      int64
 }
@@ -78,10 +78,10 @@ func (qs *QuerySplitter) validateQuery() error {
 		return fmt.Errorf("unsupported query")
 	}
 	qs.tableName = sqlparser.GetTableName(node.Expr)
-	if qs.tableName == "" {
+	if qs.tableName.IsEmpty() {
 		return fmt.Errorf("not a simple table expression")
 	}
-	tableInfo, ok := qs.schemaInfo.tables[qs.tableName]
+	tableInfo, ok := qs.schemaInfo.tables[qs.tableName.String()]
 	if !ok {
 		return fmt.Errorf("can't find table in schema")
 	}

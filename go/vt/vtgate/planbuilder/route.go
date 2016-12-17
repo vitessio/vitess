@@ -352,7 +352,7 @@ func (rb *route) PushStar(expr *sqlparser.StarExpr) *colsym {
 	// If someone uses 'select *' and then uses table.col
 	// in the HAVING clause, then things won't match. But
 	// such cases are easy to correct in the application.
-	if expr.TableName == "" {
+	if expr.TableName.IsEmpty() {
 		colsym.Alias = sqlparser.NewColIdent(sqlparser.String(expr))
 	} else {
 		colsym.QualifiedName = sqlparser.NewColIdent(sqlparser.String(expr))
@@ -543,7 +543,7 @@ func (rb *route) SupplyCol(ref colref) int {
 	}
 	ts := ref.Meta.(*tabsym)
 	rb.Colsyms = append(rb.Colsyms, &colsym{
-		Alias:      sqlparser.NewColIdent(string(ts.Alias) + "." + ref.Name),
+		Alias:      sqlparser.NewColIdent(sqlparser.String(ts.Alias) + "." + ref.Name),
 		Underlying: ref,
 	})
 	rb.Select.SelectExprs = append(

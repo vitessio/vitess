@@ -39,7 +39,7 @@ type TableColumn struct {
 
 // Table contains info about a table.
 type Table struct {
-	Name      string
+	Name      sqlparser.TableIdent
 	Columns   []TableColumn
 	Indexes   []*Index
 	PKColumns []int
@@ -56,7 +56,7 @@ type Table struct {
 // NewTable creates a new Table.
 func NewTable(name string) *Table {
 	return &Table{
-		Name: name,
+		Name: sqlparser.NewTableIdent(name),
 	}
 }
 

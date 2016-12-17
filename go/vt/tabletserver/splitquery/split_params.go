@@ -118,7 +118,7 @@ func NewSplitParamsGivenSplitCount(
 }
 
 // GetSplitTableName returns the name of the table to split.
-func (sp *SplitParams) GetSplitTableName() string {
+func (sp *SplitParams) GetSplitTableName() sqlparser.TableIdent {
 	return sp.splitTableSchema.Name
 }
 
@@ -150,11 +150,11 @@ func newSplitParams(
 		return nil, fmt.Errorf("unsupported FROM clause in query: %v", sql)
 	}
 	tableName := sqlparser.GetTableName(aliasedTableExpr.Expr)
-	if tableName == "" {
+	if tableName.IsEmpty() {
 		return nil, fmt.Errorf("unsupported FROM clause in query"+
 			" (must be a simple table expression): %v", sql)
 	}
-	tableSchema, ok := schemaMap[tableName]
+	tableSchema, ok := schemaMap[tableName.String()]
 	if tableSchema == nil {
 		return nil, fmt.Errorf("can't find table in schema")
 	}

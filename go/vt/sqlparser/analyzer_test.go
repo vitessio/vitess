@@ -33,7 +33,7 @@ func TestGetTableName(t *testing.T) {
 			continue
 		}
 		out := GetTableName(tree.(*Select).From[0].(*AliasedTableExpr).Expr)
-		if out != tc.out {
+		if out.String() != tc.out {
 			t.Errorf("GetTableName('%s'): %s, want %s", tc.in, out, tc.out)
 		}
 	}

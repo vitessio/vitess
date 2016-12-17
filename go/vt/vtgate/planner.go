@@ -21,6 +21,7 @@ import (
 
 	"github.com/youtube/vitess/go/acl"
 	"github.com/youtube/vitess/go/cache"
+	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtgate/engine"
 	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
@@ -287,7 +288,7 @@ func (plr *Planner) GetPlan(sql, keyspace string) (*engine.Plan, error) {
 	}
 	plan, err := planbuilder.Build(sql, &wrappedVSchema{
 		vschema:  plr.VSchema(),
-		keyspace: keyspace,
+		keyspace: sqlparser.NewTableIdent(keyspace),
 	})
 	if err != nil {
 		return nil, err
@@ -346,12 +347,12 @@ func (plr *Planner) VSchemaStats() *VSchemaStats {
 
 type wrappedVSchema struct {
 	vschema  *vindexes.VSchema
-	keyspace string
+	keyspace sqlparser.TableIdent
 }
 
-func (vs *wrappedVSchema) Find(keyspace, tablename string) (table *vindexes.Table, err error) {
-	if keyspace == "" {
+func (vs *wrappedVSchema) Find(keyspace, tablename sqlparser.TableIdent) (table *vindexes.Table, err error) {
+	if keyspace.IsEmpty() {
 		keyspace = vs.keyspace
 	}
-	return vs.vschema.Find(keyspace, tablename)
+	return vs.vschema.Find(keyspace.String(), tablename.String())
 }

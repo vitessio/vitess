@@ -61,9 +61,9 @@ func processAliasedTable(tableExpr *sqlparser.AliasedTableExpr, vschema VSchema)
 		if err != nil {
 			return nil, err
 		}
-		alias := sqlparser.TableIdent(sqlparser.String(expr))
+		alias := sqlparser.NewTableIdent(sqlparser.String(expr))
 		astName := expr.Name
-		if tableExpr.As != "" {
+		if !tableExpr.As.IsEmpty() {
 			alias = tableExpr.As
 			astName = alias
 		}
@@ -125,7 +125,7 @@ func processAliasedTable(tableExpr *sqlparser.AliasedTableExpr, vschema VSchema)
 // It also returns the associated vschema info (*Table) so that
 // it can be used to create the symbol table entry.
 func getTablePlan(tableName *sqlparser.TableName, vschema VSchema) (*engine.Route, *vindexes.Table, error) {
-	table, err := vschema.Find(string(tableName.Qualifier), string(tableName.Name))
+	table, err := vschema.Find(tableName.Qualifier, tableName.Name)
 	if err != nil {
 		return nil, nil, err
 	}

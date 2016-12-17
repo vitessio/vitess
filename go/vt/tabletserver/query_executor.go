@@ -42,13 +42,13 @@ var sequenceFields = []*querypb.Field{
 	},
 }
 
-func addUserTableQueryStats(queryServiceStats *QueryServiceStats, ctx context.Context, tableName string, queryType string, duration int64) {
+func addUserTableQueryStats(queryServiceStats *QueryServiceStats, ctx context.Context, tableName sqlparser.TableIdent, queryType string, duration int64) {
 	username := callerid.GetPrincipal(callerid.EffectiveCallerIDFromContext(ctx))
 	if username == "" {
 		username = callerid.GetUsername(callerid.ImmediateCallerIDFromContext(ctx))
 	}
-	queryServiceStats.UserTableQueryCount.Add([]string{tableName, username, queryType}, 1)
-	queryServiceStats.UserTableQueryTimesNs.Add([]string{tableName, username, queryType}, int64(duration))
+	queryServiceStats.UserTableQueryCount.Add([]string{tableName.String(), username, queryType}, 1)
+	queryServiceStats.UserTableQueryTimesNs.Add([]string{tableName.String(), username, queryType}, int64(duration))
 }
 
 // Execute performs a non-streaming query execution.
@@ -256,7 +256,7 @@ func (qre *QueryExecutor) checkPermissions() error {
 	}
 
 	// empty table name, do not need a table ACL check.
-	if qre.plan.TableName == "" {
+	if qre.plan.TableName.IsEmpty() {
 		return nil
 	}
 
@@ -264,7 +264,7 @@ func (qre *QueryExecutor) checkPermissions() error {
 		return NewTabletError(vtrpcpb.ErrorCode_PERMISSION_DENIED, "table acl error: nil acl")
 	}
 	tableACLStatsKey := []string{
-		qre.plan.TableName,
+		qre.plan.TableName.String(),
 		qre.plan.Authorized.GroupName,
 		qre.plan.PlanID.String(),
 		callerID.Username,
@@ -304,11 +304,11 @@ func (qre *QueryExecutor) execDDL() (*sqltypes.Result, error) {
 	if err != nil {
 		return nil, err
 	}
-	if ddlPlan.TableName != "" && ddlPlan.TableName != ddlPlan.NewName {
+	if !ddlPlan.TableName.IsEmpty() && ddlPlan.TableName != ddlPlan.NewName {
 		// It's a drop or rename.
 		qre.qe.schemaInfo.DropTable(ddlPlan.TableName)
 	}
-	if ddlPlan.NewName != "" {
+	if !ddlPlan.NewName.IsEmpty() {
 		if err := qre.qe.schemaInfo.CreateOrUpdateTable(qre.ctx, ddlPlan.NewName); err != nil {
 			return nil, err
 		}

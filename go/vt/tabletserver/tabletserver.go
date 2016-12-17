@@ -1361,7 +1361,7 @@ func getSchemaForSplitQuery(schemaInfo *SchemaInfo) map[string]*schema.Table {
 	result := make(map[string]*schema.Table, len(tableList))
 	for _, table := range tableList {
 		// TODO(erez): Panic if table.Name is already in 'result'.
-		result[table.Name] = table
+		result[table.Name.String()] = table
 	}
 	return result
 }

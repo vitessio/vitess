@@ -90,17 +90,17 @@ func TestWhere(t *testing.T) {
 }
 
 func TestIsAggregate(t *testing.T) {
-	f := FuncExpr{Name: "avg"}
+	f := FuncExpr{Name: NewColIdent("avg")}
 	if !f.IsAggregate() {
 		t.Error("IsAggregate: false, want true")
 	}
 
-	f = FuncExpr{Name: "Avg"}
+	f = FuncExpr{Name: NewColIdent("Avg")}
 	if !f.IsAggregate() {
 		t.Error("IsAggregate: false, want true")
 	}
 
-	f = FuncExpr{Name: "foo"}
+	f = FuncExpr{Name: NewColIdent("foo")}
 	if f.IsAggregate() {
 		t.Error("IsAggregate: true, want false")
 	}
@@ -152,6 +152,24 @@ func TestColIdentSize(t *testing.T) {
 	want := 2 * unsafe.Sizeof("")
 	if size != want {
 		t.Errorf("Size of ColIdent: %d, want 32", want)
+	}
+}
+
+func TestTableIdentMarshal(t *testing.T) {
+	str := NewTableIdent("Ab")
+	b, err := json.Marshal(str)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(b)
+	want := `"Ab"`
+	if got != want {
+		t.Errorf("json.Marshal()= %s, want %s", got, want)
+	}
+	var out TableIdent
+	err = json.Unmarshal(b, &out)
+	if !reflect.DeepEqual(out, str) {
+		t.Errorf("Unmarshal: %v, want %v", out, str)
 	}
 }
 
