@@ -88,7 +88,7 @@ func (qs *QuerySplitter) validateQuery() error {
 	if len(tableInfo.PKColumns) == 0 {
 		return fmt.Errorf("no primary keys")
 	}
-	if qs.splitColumn.Original() != "" {
+	if !qs.splitColumn.IsEmpty() {
 		for _, index := range tableInfo.Indexes {
 			for _, column := range index.Columns {
 				if qs.splitColumn.Equal(column) {

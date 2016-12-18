@@ -5,6 +5,7 @@
 package sqlparser
 
 import (
+	"bytes"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -77,6 +78,14 @@ func String(node SQLNode) string {
 	buf := NewTrackedBuffer(nil)
 	buf.Myprintf("%v", node)
 	return buf.String()
+}
+
+// Append appends the SQLNode to the buffer.
+func Append(buf *bytes.Buffer, node SQLNode) {
+	tbuf := &TrackedBuffer{
+		Buffer: buf,
+	}
+	node.Format(tbuf)
 }
 
 // GenerateParsedQuery returns a ParsedQuery of the ast.
@@ -1753,6 +1762,11 @@ func (node ColIdent) Format(buf *TrackedBuffer) {
 // WalkSubtree walks the nodes of the subtree.
 func (node ColIdent) WalkSubtree(visit Visit) error {
 	return nil
+}
+
+// IsEmpty returns true if the name is empty.
+func (node ColIdent) IsEmpty() bool {
+	return node.val == ""
 }
 
 // Original returns the case-preserved column name.

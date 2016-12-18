@@ -62,7 +62,7 @@ var testSchema = getTestSchema()
 
 func getTestSchemaColumn(tableName, columnName string) *schema.TableColumn {
 	tableSchema := testSchema[tableName]
-	columnIndex := tableSchema.FindColumn(columnName)
+	columnIndex := tableSchema.FindColumn(sqlparser.NewColIdent(columnName))
 	if columnIndex < 0 {
 		panic(fmt.Sprintf(
 			"Can't find columnName: %v (tableName: %v) in test schema.", columnName, tableName))

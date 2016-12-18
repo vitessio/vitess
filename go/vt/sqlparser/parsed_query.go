@@ -149,7 +149,7 @@ func (tpl *TupleEqualityList) Encode(buf *bytes.Buffer) error {
 }
 
 func (tpl *TupleEqualityList) encodeAsIN(buf *bytes.Buffer) error {
-	buf.WriteString(tpl.Columns[0].Original())
+	Append(buf, tpl.Columns[0])
 	buf.WriteString(" in (")
 	for i, r := range tpl.Rows {
 		if len(r) != 1 {
@@ -174,7 +174,7 @@ func (tpl *TupleEqualityList) encodeAsEquality(buf *bytes.Buffer) error {
 			if j != 0 {
 				buf.WriteString(" and ")
 			}
-			buf.WriteString(c.Original())
+			Append(buf, c)
 			buf.WriteString(" = ")
 			r[j].EncodeSQL(buf)
 		}

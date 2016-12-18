@@ -79,10 +79,9 @@ func (ta *Table) AddColumn(name string, columnType querypb.Type, defval sqltypes
 
 // FindColumn finds a column in the table. It returns the index if found.
 // Otherwise, it returns -1.
-func (ta *Table) FindColumn(name string) int {
-	ciName := sqlparser.NewColIdent(name)
+func (ta *Table) FindColumn(name sqlparser.ColIdent) int {
 	for i, col := range ta.Columns {
-		if col.Name.Equal(ciName) {
+		if col.Name.Equal(name) {
 			return i
 		}
 	}
@@ -115,6 +114,11 @@ func (ta *Table) SetMysqlStats(tr, dl, il, df, mdl sqltypes.Value) {
 	ta.MaxDataLength.Set(v)
 }
 
+// HasPrimary returns true if TableInfo has a primary key.
+func (ta *Table) HasPrimary() bool {
+	return len(ta.Indexes) != 0 && ta.Indexes[0].Name.Lowered() == "primary"
+}
+
 // Index contains info about a table index.
 type Index struct {
 	Name sqlparser.ColIdent
@@ -144,10 +148,9 @@ func (idx *Index) AddColumn(name string, cardinality uint64) {
 
 // FindColumn finds a column in the index. It returns the index if found.
 // Otherwise, it returns -1.
-func (idx *Index) FindColumn(name string) int {
-	ciName := sqlparser.NewColIdent(name)
+func (idx *Index) FindColumn(name sqlparser.ColIdent) int {
 	for i, colName := range idx.Columns {
-		if colName.Equal(ciName) {
+		if colName.Equal(name) {
 			return i
 		}
 	}
@@ -156,10 +159,9 @@ func (idx *Index) FindColumn(name string) int {
 
 // FindDataColumn finds a data column in the index. It returns the index if found.
 // Otherwise, it returns -1.
-func (idx *Index) FindDataColumn(name string) int {
-	ciName := sqlparser.NewColIdent(name)
+func (idx *Index) FindDataColumn(name sqlparser.ColIdent) int {
 	for i, colName := range idx.DataColumns {
-		if colName.Equal(ciName) {
+		if colName.Equal(name) {
 			return i
 		}
 	}

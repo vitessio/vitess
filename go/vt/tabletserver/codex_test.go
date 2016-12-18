@@ -398,10 +398,10 @@ func TestCodexBuildStreamComment(t *testing.T) {
 	pk2SecVal, _ := sqltypes.BuildValue("xyz")
 	secondaryPKValues := []interface{}{nil, pk2SecVal}
 	secondaryList, _ := buildSecondaryList(&tableInfo, pkList, secondaryPKValues, bindVars)
-	want := []byte(" /* _stream Table (pk1 pk2 ) (1 'YWJj' ) (1 'eHl6' ); */")
+	want := []byte(" /* _stream `Table` (pk1 pk2 ) (1 'YWJj' ) (1 'eHl6' ); */")
 	got := buildStreamComment(&tableInfo, pkList, secondaryList)
 	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("case 1 failed, got %v, want %v", got, want)
+		t.Fatalf("case 1 failed, got\n%s, want\n%s", got, want)
 	}
 }
 
@@ -446,8 +446,7 @@ func TestCodexUnicoded(t *testing.T) {
 	testUtils.checkEqual(t, "tes", out)
 }
 
-func createTableInfo(
-	name string, colNames []string, colTypes []querypb.Type, pKeys []string) TableInfo {
+func createTableInfo(name string, colNames []string, colTypes []querypb.Type, pKeys []string) TableInfo {
 	table := schema.NewTable(name)
 	for i, colName := range colNames {
 		colType := colTypes[i]

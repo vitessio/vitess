@@ -24,12 +24,10 @@ type TrackedBuffer struct {
 
 // NewTrackedBuffer creates a new TrackedBuffer.
 func NewTrackedBuffer(nodeFormatter func(buf *TrackedBuffer, node SQLNode)) *TrackedBuffer {
-	buf := &TrackedBuffer{
-		Buffer:        bytes.NewBuffer(make([]byte, 0, 128)),
-		bindLocations: make([]bindLocation, 0, 4),
+	return &TrackedBuffer{
+		Buffer:        new(bytes.Buffer),
 		nodeFormatter: nodeFormatter,
 	}
-	return buf
 }
 
 // Myprintf mimics fmt.Fprintf(buf, ...), but limited to Node(%v),
