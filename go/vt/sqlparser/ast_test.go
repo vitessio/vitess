@@ -12,6 +12,27 @@ import (
 	"unsafe"
 )
 
+func TestAppend(t *testing.T) {
+	query := "select * from t where a = 1"
+	tree, err := Parse(query)
+	if err != nil {
+		t.Error(err)
+	}
+	var b bytes.Buffer
+	Append(&b, tree)
+	got := b.String()
+	want := query
+	if got != want {
+		t.Errorf("Append: %s, want %s", got, want)
+	}
+	Append(&b, tree)
+	got = b.String()
+	want = query + query
+	if got != want {
+		t.Errorf("Append: %s, want %s", got, want)
+	}
+}
+
 func TestSelect(t *testing.T) {
 	tree, err := Parse("select * from t where a = 1")
 	if err != nil {

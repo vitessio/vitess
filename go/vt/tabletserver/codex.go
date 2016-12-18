@@ -5,9 +5,6 @@
 package tabletserver
 
 import (
-	"bytes"
-	"fmt"
-
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/schema"
 	"github.com/youtube/vitess/go/vt/sqlparser"
@@ -224,12 +221,11 @@ func validateValue(col *schema.TableColumn, value sqltypes.Value) error {
 }
 
 func buildStreamComment(tableInfo *TableInfo, pkValueList [][]sqltypes.Value, secondaryList [][]sqltypes.Value) []byte {
-	buf := bytes.NewBuffer(make([]byte, 0, 256))
-	fmt.Fprintf(buf, " /* _stream %s (", tableInfo.Name)
+	buf := sqlparser.NewTrackedBuffer(nil)
+	buf.Myprintf(" /* _stream %v (", tableInfo.Name)
 	// We assume the first index exists, and is the pk
 	for _, pkName := range tableInfo.Indexes[0].Columns {
-		buf.WriteString(pkName.Original())
-		buf.WriteString(" ")
+		buf.Myprintf("%v ", pkName)
 	}
 	buf.WriteString(")")
 	buildPKValueList(buf, tableInfo, pkValueList)
@@ -238,7 +234,7 @@ func buildStreamComment(tableInfo *TableInfo, pkValueList [][]sqltypes.Value, se
 	return buf.Bytes()
 }
 
-func buildPKValueList(buf *bytes.Buffer, tableInfo *TableInfo, pkValueList [][]sqltypes.Value) {
+func buildPKValueList(buf *sqlparser.TrackedBuffer, tableInfo *TableInfo, pkValueList [][]sqltypes.Value) {
 	for _, pkValues := range pkValueList {
 		buf.WriteString(" (")
 		for _, pkValue := range pkValues {

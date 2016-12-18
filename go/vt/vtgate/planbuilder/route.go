@@ -319,7 +319,7 @@ func (rb *route) PushSelect(expr *sqlparser.NonStarExpr, _ *route) (colsym *cols
 	if col, ok := expr.Expr.(*sqlparser.ColName); ok {
 		// If no alias was specified, then the base name
 		// of the column becomes the alias.
-		if colsym.Alias.Original() == "" {
+		if colsym.Alias.IsEmpty() {
 			colsym.Alias = col.Name
 		}
 		// We should always allow other parts of the query to reference

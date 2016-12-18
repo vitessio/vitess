@@ -5,8 +5,6 @@
 package planbuilder
 
 import (
-	"fmt"
-
 	"github.com/youtube/vitess/go/vt/schema"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 )
@@ -123,12 +121,12 @@ func GenerateSubquery(columns []sqlparser.ColIdent, table *sqlparser.AliasedTabl
 	if limit == nil {
 		limit = execLimit
 	}
-	fmt.Fprintf(buf, "select ")
-	i := 0
-	for i = 0; i < len(columns)-1; i++ {
-		fmt.Fprintf(buf, "%s, ", columns[i].Original())
+	buf.WriteString("select ")
+	prefix := ""
+	for _, c := range columns {
+		buf.Myprintf("%s%v", prefix, c)
+		prefix = ", "
 	}
-	fmt.Fprintf(buf, "%s", columns[i].Original())
 	buf.Myprintf(" from %v%v%v%v", table, where, order, limit)
 	if forUpdate {
 		buf.Myprintf(sqlparser.ForUpdateStr)

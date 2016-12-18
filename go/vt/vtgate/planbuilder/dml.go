@@ -5,9 +5,7 @@
 package planbuilder
 
 import (
-	"bytes"
 	"errors"
-	"fmt"
 
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vtgate/engine"
@@ -108,17 +106,14 @@ func generateDeleteSubquery(del *sqlparser.Delete, table *vindexes.Table) string
 	if len(table.Owned) == 0 {
 		return ""
 	}
-	buf := bytes.NewBuffer(nil)
+	buf := sqlparser.NewTrackedBuffer(nil)
 	buf.WriteString("select ")
 	prefix := ""
 	for _, cv := range table.Owned {
-		buf.WriteString(prefix)
-		buf.WriteString(cv.Column.Original())
+		buf.Myprintf("%s%v", prefix, cv.Column)
 		prefix = ", "
 	}
-	fmt.Fprintf(buf, " from %s", table.Name)
-	buf.WriteString(sqlparser.String(del.Where))
-	buf.WriteString(" for update")
+	buf.Myprintf(" from %v%v for update", table.Name, del.Where)
 	return buf.String()
 }
 

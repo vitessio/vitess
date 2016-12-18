@@ -199,7 +199,7 @@ func findSplitColumnsInSchema(
 ) ([]*schema.TableColumn, error) {
 	result := make([]*schema.TableColumn, 0, len(splitColumnNames))
 	for _, splitColumnName := range splitColumnNames {
-		i := tableSchema.FindColumn(splitColumnName.Original())
+		i := tableSchema.FindColumn(splitColumnName)
 		if i == -1 {
 			return nil, fmt.Errorf("can't find split column: %v", splitColumnName)
 		}
