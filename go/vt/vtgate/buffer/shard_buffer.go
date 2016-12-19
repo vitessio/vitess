@@ -57,13 +57,13 @@ func newShardBuffer(keyspace, shard string, bufferSizeSema *sync2.Semaphore) *sh
 	}
 }
 
-// waitForFailoverEnd creates a new entry in the queue for a request which
+// bufferRequest creates a new entry in the queue for a request which
 // should be buffered.
 // It returns *entry which can be used as input for shardBuffer.cancel(). This
 // is useful for canceled RPCs (e.g. due to deadline exceeded) which want to
 // give up their spot in the buffer. It also holds the "bufferCancel" function.
 // If buffering fails e.g. due to a full buffer, an error is returned.
-func (sb *shardBuffer) waitForFailoverEnd(ctx context.Context) (*entry, error) {
+func (sb *shardBuffer) bufferRequest(ctx context.Context) (*entry, error) {
 	sb.mu.Lock()
 	defer sb.mu.Unlock()
 

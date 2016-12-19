@@ -132,7 +132,7 @@ func (b *Buffer) WaitForFailoverEnd(ctx context.Context, keyspace, shard string,
 		// Failover already in progress.
 		// Queue ourselves while we hold the lock. (This is necessary to serialize
 		// this thread and the possible stop of the buffering.)
-		entry, err := sb.waitForFailoverEnd(ctx)
+		entry, err := sb.bufferRequest(ctx)
 		b.mu.RUnlock()
 		if err != nil {
 			return nil, err
@@ -176,7 +176,7 @@ func (b *Buffer) startBufferingAndWait(ctx context.Context, keyspace, shard, key
 		log.Infof("Starting buffering for shard: %s (window: %v, size: %v, max failover duration: %v) (A failover was detected by this seen error: %v.)", key, *window, *size, *maxFailoverDuration, err)
 	}
 
-	entry, err := sb.waitForFailoverEnd(ctx)
+	entry, err := sb.bufferRequest(ctx)
 	b.mu.Unlock()
 	if err != nil {
 		return nil, err
