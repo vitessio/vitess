@@ -126,6 +126,12 @@ func (b *Buffer) WaitForFailoverEnd(ctx context.Context, keyspace, shard string,
 		return nil, nil
 	}
 
+	// If an err is given, it must be related to a failover.
+	// We never buffer requests with other errors.
+	if err != nil && !causedByFailover(err) {
+		return nil, nil
+	}
+
 	// Check if a failover is already in progress.
 	b.mu.RLock()
 	if sb, ok := b.failovers[key]; ok {
@@ -144,9 +150,6 @@ func (b *Buffer) WaitForFailoverEnd(ctx context.Context, keyspace, shard string,
 	// No failover in progress. Try to detect a new one.
 	if err == nil {
 		// No error given i.e. we cannot detect a failover.
-		return nil, nil
-	}
-	if !causedByFailover(err) {
 		return nil, nil
 	}
 
