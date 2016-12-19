@@ -385,14 +385,8 @@ func (dg *discoveryGateway) withRetry(ctx context.Context, target *querypb.Targe
 		// b) no transaction was created yet.
 		if !inTransaction && target.TabletType == topodatapb.TabletType_MASTER {
 			// The next call blocks if we should buffer during a failover.
-			if retryDone, bufferErr := dg.buffer.WaitForFailoverEnd(ctx, target.Keyspace, target.Shard, err); bufferErr == nil {
-				// Request may have been buffered.
-				if retryDone != nil {
-					// We're going to retry this request as part of a buffer drain.
-					// Notify the buffer after we retried.
-					defer retryDone()
-				}
-			} else {
+			retryDone, bufferErr := dg.buffer.WaitForFailoverEnd(ctx, target.Keyspace, target.Shard, err)
+			if bufferErr != nil {
 				// Buffering failed e.g. buffer is already full. Do not retry.
 				err = vterrors.WithSuffix(
 					vterrors.WithPrefix(
@@ -400,6 +394,13 @@ func (dg *discoveryGateway) withRetry(ctx context.Context, target *querypb.Targe
 						bufferErr),
 					fmt.Sprintf(" original err (type=%T): %v", err, err))
 				break
+			}
+
+			// Request may have been buffered.
+			if retryDone != nil {
+				// We're going to retry this request as part of a buffer drain.
+				// Notify the buffer after we retried.
+				defer retryDone()
 			}
 		}
 
