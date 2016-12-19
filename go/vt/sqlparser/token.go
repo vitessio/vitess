@@ -459,17 +459,32 @@ func (tkn *Tokenizer) scanHex() (int, []byte) {
 
 func (tkn *Tokenizer) scanLiteralIdentifier() (int, []byte) {
 	buffer := &bytes.Buffer{}
-	buffer.WriteByte(byte(tkn.lastChar))
-	if !isLetter(tkn.lastChar) {
+	backTickSeen := false
+	for {
+		if backTickSeen {
+			if tkn.lastChar != '`' {
+				break
+			}
+			backTickSeen = false
+			buffer.WriteByte('`')
+			tkn.next()
+			continue
+		}
+		// The previous char was not a backtick.
+		switch tkn.lastChar {
+		case '`':
+			backTickSeen = true
+		case eofChar:
+			// Premature EOF.
+			return LEX_ERROR, buffer.Bytes()
+		default:
+			buffer.WriteByte(byte(tkn.lastChar))
+		}
+		tkn.next()
+	}
+	if buffer.Len() == 0 {
 		return LEX_ERROR, buffer.Bytes()
 	}
-	for tkn.next(); isLetter(tkn.lastChar) || isDigit(tkn.lastChar); tkn.next() {
-		buffer.WriteByte(byte(tkn.lastChar))
-	}
-	if tkn.lastChar != '`' {
-		return LEX_ERROR, buffer.Bytes()
-	}
-	tkn.next()
 	return ID, buffer.Bytes()
 }
 

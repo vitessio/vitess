@@ -181,7 +181,7 @@ func handleVindexCol(colVindex *vindexes.ColumnVindex, rowNum int, row sqlparser
 	if err != nil {
 		return val, fmt.Errorf("could not convert val: %s, pos: %d: %v", sqlparser.String(row[pos]), pos, err)
 	}
-	row[pos] = sqlparser.ValArg([]byte(":_" + colVindex.Column.Original() + strconv.Itoa(rowNum)))
+	row[pos] = sqlparser.ValArg([]byte(":_" + colVindex.Column.CompliantName() + strconv.Itoa(rowNum)))
 	return val, nil
 }
 

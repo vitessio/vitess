@@ -710,7 +710,7 @@ func (rtr *Router) handlePrimary(vcursor *queryExecutor, vindexKey interface{}, 
 	if len(ksid) == 0 {
 		return nil, fmt.Errorf("could not map %v to a keyspace id", vindexKey)
 	}
-	bv["_"+colVindex.Column.Original()+strconv.Itoa(rowNum)] = vindexKey
+	bv["_"+colVindex.Column.CompliantName()+strconv.Itoa(rowNum)] = vindexKey
 	return ksid, nil
 }
 
@@ -747,7 +747,7 @@ func (rtr *Router) handleNonPrimary(vcursor *queryExecutor, vindexKey interface{
 			}
 		}
 	}
-	bv["_"+colVindex.Column.Original()+strconv.Itoa(rowNum)] = vindexKey
+	bv["_"+colVindex.Column.CompliantName()+strconv.Itoa(rowNum)] = vindexKey
 	return nil
 }
 

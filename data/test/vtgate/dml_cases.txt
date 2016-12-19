@@ -415,6 +415,30 @@
   }
 }
 
+# insert for non-compliant names
+"insert into `weird``name`(`a``b*c`, `b*c`) values(1, 2)"
+{
+  "Original": "insert into `weird``name`(`a``b*c`, `b*c`) values(1, 2)",
+  "Instructions": {
+    "Opcode": "InsertSharded",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "insert into `weird``name`(`a``b*c`, `b*c`) values (:_a_b_c0, 2)",
+    "Values": [
+      [
+        1
+      ]
+    ],
+    "Table": "weird`name",
+    "Prefix": "insert into `weird``name`(`a``b*c`, `b*c`) values ",
+    "Mid": [
+      "(:_a_b_c0, 2)"
+    ]
+  }
+}
+
 # insert for non-vindex autoinc, invalid value
 "insert into user_extra(nonid, extra_id) values (2, 1.1)"
 "could not convert val: 1.1, pos: 1: strconv.ParseUint: parsing "1.1": invalid syntax"

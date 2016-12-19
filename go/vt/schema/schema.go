@@ -116,7 +116,7 @@ func (ta *Table) SetMysqlStats(tr, dl, il, df, mdl sqltypes.Value) {
 
 // HasPrimary returns true if TableInfo has a primary key.
 func (ta *Table) HasPrimary() bool {
-	return len(ta.Indexes) != 0 && ta.Indexes[0].Name.Lowered() == "primary"
+	return len(ta.Indexes) != 0 && ta.Indexes[0].Name.EqualString("primary")
 }
 
 // Index contains info about a table index.

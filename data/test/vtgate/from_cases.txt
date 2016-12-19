@@ -826,6 +826,25 @@
   }
 }
 
+# col refs should be case-insensitive
+"select user.col from user join user_extra on user.ID = user_extra.User_Id"
+{
+  "Original": "select user.col from user join user_extra on user.ID = user_extra.User_Id",
+  "Instructions": {
+    "Opcode": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select user.col from user join user_extra on user.ID = user_extra.User_Id",
+    "FieldQuery": "select user.col from user join user_extra where 1 != 1"
+  }
+}
+
+# table names should be case-sensitive
+"select unsharded.id from unsharded where Unsharded.val = 1"
+"symbol Unsharded.val not found"
+
 # implicit table reference for sharded keyspace
 "select user.foo.col from user.foo"
 "table foo not found"
