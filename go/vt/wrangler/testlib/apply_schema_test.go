@@ -14,9 +14,9 @@ import (
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
+	"github.com/youtube/vitess/go/vt/topo/zk2topo"
 	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
 	"github.com/youtube/vitess/go/vt/wrangler"
-	"github.com/youtube/vitess/go/vt/zktopo/zktestserver"
 
 	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -27,9 +27,9 @@ import (
 // Only if the flag is specified, potentially long running schema changes are
 // allowed.
 func TestApplySchema_AllowLongUnavailability(t *testing.T) {
-	cells := []string{"cell1"}
+	cell := "cell1"
 	db := fakesqldb.Register()
-	ts := zktestserver.New(t, cells)
+	ts := zk2topo.NewFakeServer(cell)
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 	vp := NewVtctlPipe(t, ts)
 	defer vp.Close()
@@ -70,9 +70,9 @@ func TestApplySchema_AllowLongUnavailability(t *testing.T) {
 		},
 	}
 
-	tShard1 := NewFakeTablet(t, wr, cells[0], 0,
+	tShard1 := NewFakeTablet(t, wr, cell, 0,
 		topodatapb.TabletType_MASTER, db, TabletKeyspaceShard(t, "ks", "-80"))
-	tShard2 := NewFakeTablet(t, wr, cells[0], 1,
+	tShard2 := NewFakeTablet(t, wr, cell, 1,
 		topodatapb.TabletType_MASTER, db, TabletKeyspaceShard(t, "ks", "80-"))
 	for _, ft := range []*FakeTablet{tShard1, tShard2} {
 		ft.StartActionLoop(t, wr)

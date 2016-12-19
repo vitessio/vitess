@@ -10,17 +10,14 @@
 package main
 
 import (
-	"encoding/json"
 	"flag"
-	"os"
-	"path"
 	"strings"
 	"time"
 
-	"golang.org/x/net/context"
-
 	log "github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
+	"golang.org/x/net/context"
+
 	"github.com/youtube/vitess/go/exit"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/discovery"
@@ -28,10 +25,9 @@ import (
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topo/zk2topo"
 	"github.com/youtube/vitess/go/vt/vtctld"
 	"github.com/youtube/vitess/go/vt/vtgate"
-	"github.com/youtube/vitess/go/vt/zktopo"
-	"github.com/youtube/vitess/go/zk/fakezk"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	vttestpb "github.com/youtube/vitess/go/vt/proto/vttest"
@@ -84,34 +80,9 @@ func main() {
 	flag.Set("enable_realtime_stats", "true")
 	flag.Set("log_dir", "$VTDATAROOT/tmp")
 
-	// create zk client config file
-	os.MkdirAll(path.Join(os.Getenv("VTDATAROOT"), "vt_0000000001/tmp"), 0777)
-	config := path.Join(os.Getenv("VTDATAROOT"), "vt_0000000001/tmp/test-zk-client-conf.json")
-	cellmap := make(map[string]string)
-	for _, cell := range tpb.Cells {
-		cellmap[cell] = "localhost"
-	}
-	b, err := json.Marshal(cellmap)
-	if err != nil {
-		log.Errorf("failed to marshal json: %v", err)
-	}
-
-	f, err := os.Create(config)
-	if err != nil {
-		log.Errorf("failed to create zk config file: %v", err)
-	}
-	defer f.Close()
-	_, err = f.WriteString(string(b[:]))
-	if err != nil {
-		log.Errorf("failed to write to zk config file: %v", err)
-	}
-	os.Setenv("ZK_CLIENT_CONFIG", config)
-
-	// Create topo server. We use a 'zookeeper' implementation based on
-	// a memory map.
-	zkconn := fakezk.NewConn()
-	ts = topo.Server{Impl: zktopo.NewServer(zkconn)}
-
+	// Create topo server. We use a 'zk2' implementation, based on
+	// a memory map per cell.
+	ts = zk2topo.NewFakeServer(tpb.Cells...)
 	servenv.Init()
 	tabletserver.Init()
 
@@ -146,7 +117,7 @@ func main() {
 
 	// vtctld configuration and init
 	vtctld.InitVtctld(ts)
-	vtctld.HandleExplorer("zk", zktopo.NewZkExplorer(zkconn))
+	vtctld.HandleExplorer("zk2", vtctld.NewBackendExplorer(ts.Impl))
 
 	servenv.OnTerm(func() {
 		// FIXME(alainjobart): stop vtgate
@@ -155,7 +126,6 @@ func main() {
 		// We will still use the topo server during lameduck period
 		// to update our state, so closing it in OnClose()
 		ts.Close()
-		os.Remove(config)
 	})
 	servenv.RunDefault()
 }

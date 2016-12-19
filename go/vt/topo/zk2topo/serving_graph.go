@@ -57,9 +57,6 @@ func (zs *Server) GetSrvKeyspace(ctx context.Context, cell, keyspace string) (*t
 	if err != nil {
 		return nil, err
 	}
-	if len(data) == 0 {
-		return nil, topo.ErrNoNode
-	}
 	srvKeyspace := &topodatapb.SrvKeyspace{}
 	if err := proto.Unmarshal(data, srvKeyspace); err != nil {
 		return nil, fmt.Errorf("SrvKeyspace unmarshal failed: %v %v", data, err)
@@ -84,9 +81,6 @@ func (zs *Server) GetSrvVSchema(ctx context.Context, cell string) (*vschemapb.Sr
 	data, _, err := zs.Get(ctx, cell, zkPath)
 	if err != nil {
 		return nil, err
-	}
-	if len(data) == 0 {
-		return nil, topo.ErrNoNode
 	}
 	srvVSchema := &vschemapb.SrvVSchema{}
 	if err := proto.Unmarshal(data, srvVSchema); err != nil {

@@ -7,21 +7,21 @@ import (
 	"testing"
 
 	"github.com/youtube/vitess/go/vt/logutil"
-	"github.com/youtube/vitess/go/vt/zktopo"
-	"github.com/youtube/vitess/go/vt/zktopo/zktestserver"
+	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topo/zk2topo"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // This file contains tests for the keyspace.go file.  Note we use a
-// zktestserver, because memorytopo doesn't support all topo server
+// zk2topo, because memorytopo doesn't support all topo server
 // methods yet.
 
 func TestKeyspace(t *testing.T) {
 	cell := "cell1"
 	keyspace := "ks1"
 	ctx := context.Background()
-	ts := zktestserver.New(t, []string{cell})
+	ts := zk2topo.NewFakeServer(cell)
 
 	// Create a Keyspace
 	if err := ts.CreateKeyspace(ctx, keyspace, &topodatapb.Keyspace{}); err != nil {
@@ -29,8 +29,8 @@ func TestKeyspace(t *testing.T) {
 	}
 
 	// Hack the zookeeper backend to create an error for GetKeyspace.
-	zconn := ts.Impl.(*zktestserver.TestServer).Impl.(*zktopo.Server).GetZConn()
-	if _, err := zconn.Set(path.Join(zktopo.GlobalKeyspacesPath, keyspace), []byte{}, -1); err != nil {
+	// 'a' is not a valid proto-encoded value.
+	if _, err := ts.Impl.Update(ctx, topo.GlobalCell, path.Join("/keyspaces", keyspace, "Keyspace"), []byte{'a'}, nil); err != nil {
 		t.Fatalf("failed to hack the keyspace: %v", err)
 	}
 

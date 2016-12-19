@@ -31,10 +31,8 @@ func (zs *Server) UpdateShardReplicationFields(ctx context.Context, cell, keyspa
 			// Empty node, version is nil
 		case nil:
 			// Use any data we got.
-			if len(data) > 0 {
-				if err = proto.Unmarshal(data, sr); err != nil {
-					return fmt.Errorf("bad ShardReplication data %v", err)
-				}
+			if err = proto.Unmarshal(data, sr); err != nil {
+				return fmt.Errorf("bad ShardReplication data %v", err)
 			}
 		default:
 			return err
