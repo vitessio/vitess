@@ -78,42 +78,36 @@ func ExtractKeyspaceIDS(sql string) (keyspaceIDs [][]byte, err error) {
 	_, comments := sqlparser.SplitTrailingComments(sql)
 	keyspaceIDString, hasKeyspaceID := extractStringBetween(comments, "/* vtgate:: keyspace_id:", " ")
 	hasUnfriendlyAnnotation := (strings.Index(sql, filteredReplicationUnfriendlyAnnotation) != -1)
-	if hasKeyspaceID {
-		ksidStr := strings.Split(keyspaceIDString, ",")
-		keyspaceIDs = make([][]byte, len(ksidStr))
+	if !hasKeyspaceID {
 		if hasUnfriendlyAnnotation {
-			keyspaceIDs = nil
-			err = &ExtractKeySpaceIDError{
-				Kind:    ExtractKeySpaceIDParseError,
-				Message: fmt.Sprintf("Conflicting annotations in statement '%v'", sql),
-			}
-		} else {
-			for row, ksid := range ksidStr {
-				err = nil
-				keyspaceIDs[row], err = hex.DecodeString(ksid)
-				if err != nil {
-					keyspaceIDs[row] = nil
-					err = &ExtractKeySpaceIDError{
-						Kind: ExtractKeySpaceIDParseError,
-						Message: fmt.Sprintf(
-							"Error parsing keyspace id value in statement: %v (%v)", sql, err),
-					}
-				}
-			}
-		}
-	} else {
-		if hasUnfriendlyAnnotation {
-			err = &ExtractKeySpaceIDError{
+			return nil, &ExtractKeySpaceIDError{
 				Kind:    ExtractKeySpaceIDReplicationUnfriendlyError,
 				Message: fmt.Sprintf("Statement: %v", sql),
 			}
-			keyspaceIDs = nil
-		} else {
-			// No annotations.
-			keyspaceIDs = nil
+		}
+		// No annotations.
+		return nil, &ExtractKeySpaceIDError{
+			Kind:    ExtractKeySpaceIDParseError,
+			Message: fmt.Sprintf("No annotation found in '%v'", sql),
+		}
+	}
+	if hasUnfriendlyAnnotation {
+		return nil, &ExtractKeySpaceIDError{
+			Kind:    ExtractKeySpaceIDParseError,
+			Message: fmt.Sprintf("Conflicting annotations in statement '%v'", sql),
+		}
+	}
+	ksidStr := strings.Split(keyspaceIDString, ",")
+	keyspaceIDs = make([][]byte, len(ksidStr))
+	for row, ksid := range ksidStr {
+		err = nil
+		keyspaceIDs[row], err = hex.DecodeString(ksid)
+		if err != nil {
+			keyspaceIDs[row] = nil
 			err = &ExtractKeySpaceIDError{
-				Kind:    ExtractKeySpaceIDParseError,
-				Message: fmt.Sprintf("No annotation found in '%v'", sql),
+				Kind: ExtractKeySpaceIDParseError,
+				Message: fmt.Sprintf(
+					"Error parsing keyspace id value in statement: %v (%v)", sql, err),
 			}
 		}
 	}

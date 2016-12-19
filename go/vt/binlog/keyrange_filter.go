@@ -106,7 +106,7 @@ func generateSingleInsertQuery(ins *sqlparser.Insert, keyspaceIDs [][]byte, trai
 	case *sqlparser.Select, *sqlparser.Union:
 		return "", errors.New("unsupported: insert into select")
 	case sqlparser.Values:
-		values := sqlparser.Values{}
+		var values sqlparser.Values
 		if len(rows) != len(keyspaceIDs) {
 			return "", fmt.Errorf("length of values tuples %v doesn't match with length of keyspaceids %v", len(values), len(keyspaceIDs))
 		}
@@ -121,7 +121,8 @@ func generateSingleInsertQuery(ins *sqlparser.Insert, keyspaceIDs [][]byte, trai
 		}
 		ins.Rows = values
 		ins.Format(queryBuf)
-		return queryBuf.String() + trailingComments, nil
+		queryBuf.WriteString(trailingComments)
+		return queryBuf.String(), nil
 
 	default:
 		return "", errors.New("unexpected construct in insert")
