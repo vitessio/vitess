@@ -36,7 +36,7 @@ type route struct {
 	ERoute *engine.Route
 }
 
-func newRoute(from sqlparser.TableExprs, eroute *engine.Route, table *vindexes.Table, vschema VSchema, alias, astName sqlparser.TableIdent) *route {
+func newRoute(from sqlparser.TableExprs, eroute *engine.Route, table *vindexes.Table, vschema VSchema, alias *sqlparser.TableName, astName sqlparser.TableIdent) *route {
 	// We have some circular pointer references here:
 	// The route points to the symtab idicating
 	// the symtab that should be used to resolve symbols
@@ -325,7 +325,10 @@ func (rb *route) PushSelect(expr *sqlparser.NonStarExpr, _ *route) (colsym *cols
 		// We should always allow other parts of the query to reference
 		// the fully qualified name of the column.
 		if tab, ok := col.Metadata.(*tabsym); ok {
-			colsym.QualifiedName = sqlparser.NewColIdent(sqlparser.String(tab.Alias) + "." + col.Name.Original())
+			colsym.QualifiedName = &sqlparser.ColName{
+				Qualifier: tab.Alias,
+				Name:      col.Name,
+			}
 		}
 		colsym.Vindex = rb.Symtab().Vindex(col, rb, true)
 		colsym.Underlying = newColref(col)
@@ -353,9 +356,14 @@ func (rb *route) PushStar(expr *sqlparser.StarExpr) *colsym {
 	// in the HAVING clause, then things won't match. But
 	// such cases are easy to correct in the application.
 	if expr.TableName.IsEmpty() {
-		colsym.Alias = sqlparser.NewColIdent(sqlparser.String(expr))
+		colsym.Alias = sqlparser.NewColIdent("*")
 	} else {
-		colsym.QualifiedName = sqlparser.NewColIdent(sqlparser.String(expr))
+		colsym.QualifiedName = &sqlparser.ColName{
+			Qualifier: &sqlparser.TableName{
+				Name: expr.TableName,
+			},
+			Name: sqlparser.NewColIdent("*"),
+		}
 	}
 	rb.Select.SelectExprs = append(rb.Select.SelectExprs, expr)
 	rb.Colsyms = append(rb.Colsyms, colsym)
@@ -542,8 +550,13 @@ func (rb *route) SupplyCol(ref colref) int {
 		}
 	}
 	ts := ref.Meta.(*tabsym)
+	colname := ref.Name()
 	rb.Colsyms = append(rb.Colsyms, &colsym{
-		Alias:      sqlparser.NewColIdent(sqlparser.String(ts.Alias) + "." + ref.Name),
+		Alias: colname,
+		QualifiedName: &sqlparser.ColName{
+			Qualifier: ts.Alias,
+			Name:      colname,
+		},
 		Underlying: ref,
 	})
 	rb.Select.SelectExprs = append(
@@ -552,7 +565,7 @@ func (rb *route) SupplyCol(ref colref) int {
 			Expr: &sqlparser.ColName{
 				Metadata:  ref.Meta,
 				Qualifier: &sqlparser.TableName{Name: ts.ASTName},
-				Name:      sqlparser.NewColIdent(ref.Name),
+				Name:      colname,
 			},
 		},
 	)

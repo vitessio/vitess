@@ -201,7 +201,7 @@ const (
 func buildPrevBindVariableNames(splitColumns []*schema.TableColumn) []string {
 	result := make([]string, 0, len(splitColumns))
 	for _, splitColumn := range splitColumns {
-		result = append(result, prevBindVariablePrefix+splitColumn.Name.Lowered())
+		result = append(result, prevBindVariablePrefix+splitColumn.Name.CompliantName())
 	}
 	return result
 }

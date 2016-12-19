@@ -42,17 +42,23 @@ func TestValid(t *testing.T) {
 	}, {
 		input: "select /* simplest */ 1 from t",
 	}, {
-		input: "select /* keyword col */ `By` from t",
-	}, {
 		input: "select /* double star **/ 1 from t",
 	}, {
 		input: "select /* double */ /* comment */ 1 from t",
 	}, {
-		input:  "select /* back-quote */ 1 from `t`",
-		output: "select /* back-quote */ 1 from t",
+		input: "select /* back-quote keyword */ `By` from t",
 	}, {
-		input:  "select /* back-quote keyword */ 1 from `By`",
-		output: "select /* back-quote keyword */ 1 from `By`",
+		input: "select /* back-quote num */ `2a` from t",
+	}, {
+		input: "select /* back-quote . */ `a.b` from t",
+	}, {
+		input: "select /* back-quote back-quote */ `a``b` from t",
+	}, {
+		input:  "select /* back-quote unnecessary */ 1 from `t`",
+		output: "select /* back-quote unnecessary */ 1 from t",
+	}, {
+		input:  "select /* back-quote idnum */ 1 from `a1`",
+		output: "select /* back-quote idnum */ 1 from a1",
 	}, {
 		input: "select /* @ */ @@a from b",
 	}, {
@@ -711,15 +717,6 @@ func TestErrors(t *testing.T) {
 	}, {
 		input:  "select x'777' from t",
 		output: "syntax error at position 14 near '777'",
-	}, {
-		input:  "select `1a` from t",
-		output: "syntax error at position 9 near '1'",
-	}, {
-		input:  "select `:table` from t",
-		output: "syntax error at position 9 near ':'",
-	}, {
-		input:  "select `table:` from t",
-		output: "syntax error at position 14 near 'table'",
 	}, {
 		input:  "select 'aa\\",
 		output: "syntax error at position 12 near 'aa'",

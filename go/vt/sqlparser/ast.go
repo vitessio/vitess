@@ -523,7 +523,7 @@ type NonStarExpr struct {
 // Format formats the node.
 func (node *NonStarExpr) Format(buf *TrackedBuffer) {
 	buf.Myprintf("%v", node.Expr)
-	if node.As.Original() != "" {
+	if !node.As.IsEmpty() {
 		buf.Myprintf(" as %v", node.As)
 	}
 }
@@ -691,6 +691,20 @@ func (node *TableName) WalkSubtree(visit Visit) error {
 // IsEmpty returns true if TableName is nil or empty.
 func (node *TableName) IsEmpty() bool {
 	return node == nil || (node.Qualifier.IsEmpty() && node.Name.IsEmpty())
+}
+
+// Equal returns true if the table names match.
+func (node *TableName) Equal(t *TableName) bool {
+	if node.IsEmpty() {
+		if t.IsEmpty() {
+			return true
+		}
+		return false
+	}
+	if t.IsEmpty() {
+		return false
+	}
+	return node.Name == t.Name && node.Qualifier == t.Qualifier
 }
 
 // ParenTableExpr represents a parenthesized list of TableExpr.
@@ -1252,6 +1266,15 @@ func (node *ColName) WalkSubtree(visit Visit) error {
 	)
 }
 
+// Equal returns true if the column names match.
+func (node *ColName) Equal(c *ColName) bool {
+	// Failsafe: ColName should not be empty.
+	if node == nil || c == nil {
+		return false
+	}
+	return node.Name.Equal(c.Name) && node.Qualifier.Equal(c.Qualifier)
+}
+
 // ColTuple represents a list of column values.
 // It can be ValTuple, Subquery, ListArg.
 type ColTuple interface {
@@ -1752,11 +1775,7 @@ func NewColIdent(str string) ColIdent {
 
 // Format formats the node.
 func (node ColIdent) Format(buf *TrackedBuffer) {
-	if _, ok := keywords[node.Lowered()]; ok {
-		buf.Myprintf("`%s`", node.Original())
-		return
-	}
-	buf.Myprintf("%s", node.Original())
+	formatID(buf, node.val, node.Lowered())
 }
 
 // WalkSubtree walks the nodes of the subtree.
@@ -1769,17 +1788,18 @@ func (node ColIdent) IsEmpty() bool {
 	return node.val == ""
 }
 
-// Original returns the case-preserved column name.
-func (node ColIdent) Original() string {
-	return node.val
-}
-
 // String returns the unescaped column name. It must
 // not be used for SQL generation. Use sqlparser.String
 // instead. The Stringer conformance is for usage
 // in templates.
 func (node ColIdent) String() string {
 	return node.val
+}
+
+// CompliantName returns a compliant id name
+// that can be used for a bind var.
+func (node ColIdent) CompliantName() string {
+	return compliantName(node.val)
 }
 
 // Lowered returns a lower-cased column name.
@@ -1834,11 +1854,7 @@ func NewTableIdent(str string) TableIdent {
 
 // Format formats the node.
 func (node TableIdent) Format(buf *TrackedBuffer) {
-	if _, ok := keywords[strings.ToLower(node.v)]; ok {
-		buf.Myprintf("`%s`", node.v)
-		return
-	}
-	buf.Myprintf("%s", node.v)
+	formatID(buf, node.v, strings.ToLower(node.v))
 }
 
 // WalkSubtree walks the nodes of the subtree.
@@ -1859,6 +1875,12 @@ func (node TableIdent) String() string {
 	return node.v
 }
 
+// CompliantName returns a compliant id name
+// that can be used for a bind var.
+func (node TableIdent) CompliantName() string {
+	return compliantName(node.v)
+}
+
 // MarshalJSON marshals into JSON.
 func (node TableIdent) MarshalJSON() ([]byte, error) {
 	return json.Marshal(node.v)
@@ -1873,4 +1895,46 @@ func (node *TableIdent) UnmarshalJSON(b []byte) error {
 	}
 	node.v = result
 	return nil
+}
+
+func formatID(buf *TrackedBuffer, original, lowered string) {
+	for i, c := range original {
+		if i == 0 && isDigit(uint16(c)) {
+			goto mustEscape
+		}
+		if !isLetter(uint16(c)) && !isDigit(uint16(c)) {
+			goto mustEscape
+		}
+	}
+	if _, ok := keywords[lowered]; ok {
+		goto mustEscape
+	}
+	buf.Myprintf("%s", original)
+	return
+
+mustEscape:
+	buf.WriteByte('`')
+	for _, c := range original {
+		buf.WriteRune(c)
+		if c == '`' {
+			buf.WriteByte('`')
+		}
+	}
+	buf.WriteByte('`')
+}
+
+func compliantName(in string) string {
+	var buf bytes.Buffer
+	for i, c := range in {
+		if i == 0 && isDigit(uint16(c)) {
+			buf.WriteByte('_')
+			continue
+		}
+		if !isLetter(uint16(c)) && !isDigit(uint16(c)) {
+			buf.WriteByte('_')
+			continue
+		}
+		buf.WriteRune(c)
+	}
+	return buf.String()
 }

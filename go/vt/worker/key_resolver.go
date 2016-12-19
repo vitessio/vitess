@@ -107,7 +107,7 @@ func newV3ResolverFromTableDefinition(keyspaceSchema *vindexes.KeyspaceSchema, t
 	}
 
 	// Find the sharding key column index.
-	columnIndex, ok := tmutils.TableDefinitionGetColumn(td, colVindex.Column.Original())
+	columnIndex, ok := tmutils.TableDefinitionGetColumn(td, colVindex.Column.String())
 	if !ok {
 		return nil, fmt.Errorf("table %v has a Vindex on unknown column %v", td.Name, colVindex.Column)
 	}

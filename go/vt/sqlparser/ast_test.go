@@ -127,13 +127,72 @@ func TestIsAggregate(t *testing.T) {
 	}
 }
 
+func TestColNameEqual(t *testing.T) {
+	var c1, c2 *ColName
+	if c1.Equal(c2) {
+		t.Error("nil columns equal, want unequal")
+	}
+	c1 = &ColName{
+		Name: NewColIdent("aa"),
+	}
+	c2 = &ColName{
+		Name: NewColIdent("bb"),
+	}
+	if c1.Equal(c2) {
+		t.Error("columns equal, want unequal")
+	}
+	c2.Name = NewColIdent("aa")
+	if !c1.Equal(c2) {
+		t.Error("columns unequal, want equal")
+	}
+}
+
+func TestTableNameEqual(t *testing.T) {
+	var t1, t2 *TableName
+	if !t1.Equal(t2) {
+		t.Error("nil tables unequal, want equal")
+	}
+	t2 = &TableName{}
+	if !t1.Equal(t2) {
+		t.Error("nil and empty table unequal, want equal")
+	}
+	if !t2.Equal(t1) {
+		t.Error("empty and nil table unequal, want equal")
+	}
+	t1 = &TableName{}
+	if !t1.Equal(t2) {
+		t.Error("empty and empty table unequal, want equal")
+	}
+	t2 = &TableName{
+		Qualifier: NewTableIdent("aa"),
+		Name:      NewTableIdent("bb"),
+	}
+	if t1.Equal(t2) {
+		t.Error("empty and non-empty table equal, want unequal")
+	}
+	if t2.Equal(t1) {
+		t.Error("non-empty and empty table equal, want unequal")
+	}
+	t1 = &TableName{
+		Qualifier: NewTableIdent("bb"),
+		Name:      NewTableIdent("bb"),
+	}
+	if t1.Equal(t2) {
+		t.Error("non-empty and non-empty table equal, want unequal")
+	}
+	t1.Qualifier = NewTableIdent("aa")
+	if !t1.Equal(t2) {
+		t.Error("tables are unequal, want equal")
+	}
+}
+
 func TestColIdent(t *testing.T) {
 	str := NewColIdent("Ab")
 	if str.String() != "Ab" {
-		t.Errorf("String=%s, want Ab", str.Original())
+		t.Errorf("String=%s, want Ab", str.String())
 	}
-	if str.Original() != "Ab" {
-		t.Errorf("Val=%s, want Ab", str.Original())
+	if str.String() != "Ab" {
+		t.Errorf("Val=%s, want Ab", str.String())
 	}
 	if str.Lowered() != "ab" {
 		t.Errorf("Val=%s, want ab", str.Lowered())
@@ -217,6 +276,34 @@ func TestHexDecode(t *testing.T) {
 		}
 		if !bytes.Equal(out, []byte(tc.out)) {
 			t.Errorf("Decode(%q): %s, want %s", tc.in, out, tc.out)
+		}
+	}
+}
+
+func TestCompliantName(t *testing.T) {
+	testcases := []struct {
+		in, out string
+	}{{
+		in:  "aa",
+		out: "aa",
+	}, {
+		in:  "1a",
+		out: "_a",
+	}, {
+		in:  "a1",
+		out: "a1",
+	}, {
+		in:  "a.b",
+		out: "a_b",
+	}}
+	for _, tc := range testcases {
+		out := NewColIdent(tc.in).CompliantName()
+		if out != tc.out {
+			t.Errorf("ColIdent(%s).CompliantNamt: %s, want %s", tc.in, out, tc.out)
+		}
+		out = NewTableIdent(tc.in).CompliantName()
+		if out != tc.out {
+			t.Errorf("TableIdent(%s).CompliantNamt: %s, want %s", tc.in, out, tc.out)
 		}
 	}
 }

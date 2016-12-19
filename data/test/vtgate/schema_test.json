@@ -76,6 +76,14 @@
               "name": "music_user_map"
             }
           ]
+        },
+        "weird`name": {
+          "column_vindexes": [
+            {
+              "column": "a`b*c",
+              "name": "user_index"
+            }
+          ]
         }
       }
     },

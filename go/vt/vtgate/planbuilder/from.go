@@ -61,11 +61,11 @@ func processAliasedTable(tableExpr *sqlparser.AliasedTableExpr, vschema VSchema)
 		if err != nil {
 			return nil, err
 		}
-		alias := sqlparser.NewTableIdent(sqlparser.String(expr))
+		alias := expr
 		astName := expr.Name
 		if !tableExpr.As.IsEmpty() {
-			alias = tableExpr.As
-			astName = alias
+			alias = &sqlparser.TableName{Name: tableExpr.As}
+			astName = tableExpr.As
 		}
 		return newRoute(
 			sqlparser.TableExprs([]sqlparser.TableExpr{tableExpr}),
@@ -112,7 +112,7 @@ func processAliasedTable(tableExpr *sqlparser.AliasedTableExpr, vschema VSchema)
 			subroute.ERoute,
 			table,
 			vschema,
-			tableExpr.As,
+			&sqlparser.TableName{Name: tableExpr.As},
 			tableExpr.As,
 		)
 		subroute.Redirect = rtb
