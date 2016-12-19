@@ -105,15 +105,20 @@ func (b *Buffer) dryRunEnabled(keyspaceShard string) bool {
 	return b.shardsDryRun[keyspaceShard]
 }
 
+// RetryDoneFunc will be returned for each buffered request and must be called
+// after the buffered request was retried.
+// Without this signal, the buffer would not know how many buffered requests are
+// currently retried.
+type RetryDoneFunc context.CancelFunc
+
 // WaitForFailoverEnd blocks until a pending buffering due to a failover for
 // keyspace/shard is over.
 // If there is no ongoing failover, "err" is checked. If it's caused by a
 // failover, buffering may be started.
 // It returns an error if buffering failed (e.g. buffer full).
-// If it does not return an error, it may return a channel which must be closed
-// by the caller (vtgate) after the request was retried. Without this signal,
-// the buffer would not know how many buffered requests are currently retried.
-func (b *Buffer) WaitForFailoverEnd(ctx context.Context, keyspace, shard string, err error) (chan struct{}, error) {
+// If it does not return an error, it may return a RetryDoneFunc which must be
+// called after the request was retried.
+func (b *Buffer) WaitForFailoverEnd(ctx context.Context, keyspace, shard string, err error) (RetryDoneFunc, error) {
 	key := topoproto.KeyspaceShardString(keyspace, shard)
 
 	if !b.bufferingEnabled(key) && !b.dryRunEnabled(key) {
@@ -132,7 +137,7 @@ func (b *Buffer) WaitForFailoverEnd(ctx context.Context, keyspace, shard string,
 		if err != nil {
 			return nil, err
 		}
-		return entry.retryDone, wait(ctx, entry)
+		return entry.bufferCancel, wait(ctx, entry)
 	}
 	b.mu.RUnlock()
 
@@ -149,7 +154,7 @@ func (b *Buffer) WaitForFailoverEnd(ctx context.Context, keyspace, shard string,
 	return b.startBufferingAndWait(ctx, keyspace, shard, key, err)
 }
 
-func (b *Buffer) startBufferingAndWait(ctx context.Context, keyspace, shard, key string, err error) (chan struct{}, error) {
+func (b *Buffer) startBufferingAndWait(ctx context.Context, keyspace, shard, key string, err error) (RetryDoneFunc, error) {
 	// Check if buffering is allowed.
 	if !b.bufferingEnabled(key) {
 		// TODO(mberlin): Still track the failover duration for dry-run shards and log the first seen error.
@@ -176,7 +181,7 @@ func (b *Buffer) startBufferingAndWait(ctx context.Context, keyspace, shard, key
 	if err != nil {
 		return nil, err
 	}
-	return entry.retryDone, wait(ctx, entry)
+	return entry.bufferCancel, wait(ctx, entry)
 }
 
 // wait blocks while the request is buffered during the failover.

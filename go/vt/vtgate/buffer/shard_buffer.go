@@ -33,9 +33,12 @@ type entry struct {
 	// done will be closed by shardBuffer when the failover is over and the
 	// request can be retried.
 	done chan struct{}
-	// retryDone must be closed by vtgate after it retried the request.
-	// (This is necessary to track how many drained requests are in flight.)
-	retryDone chan struct{}
+
+	// bufferCtx wraps the request ctx and is used to track the retry of a
+	// request during the drain phase. Once the retry is done, the caller
+	// must cancel this context (by calling bufferCancel).
+	bufferCtx    context.Context
+	bufferCancel func()
 }
 
 func newShardBuffer(keyspace, shard string, bufferSizeSema *sync2.Semaphore) *shardBuffer {
@@ -58,7 +61,7 @@ func newShardBuffer(keyspace, shard string, bufferSizeSema *sync2.Semaphore) *sh
 // should be buffered.
 // It returns *entry which can be used as input for shardBuffer.cancel(). This
 // is useful for canceled RPCs (e.g. due to deadline exceeded) which want to
-// give up their spot in the buffer. entry also holds the "retryDone" channel.
+// give up their spot in the buffer. It also holds the "bufferCancel" function.
 // If buffering fails e.g. due to a full buffer, an error is returned.
 func (sb *shardBuffer) waitForFailoverEnd(ctx context.Context) (*entry, error) {
 	sb.mu.Lock()
@@ -71,9 +74,9 @@ func (sb *shardBuffer) waitForFailoverEnd(ctx context.Context) (*entry, error) {
 	// TODO(mberlin): Kill the oldest entry if full.
 
 	e := &entry{
-		done:      make(chan struct{}),
-		retryDone: make(chan struct{}),
+		done: make(chan struct{}),
 	}
+	e.bufferCtx, e.bufferCancel = context.WithCancel(ctx)
 	sb.queue = append(sb.queue, e)
 	requestsInFlightMax.Add(sb.statsKey, 1)
 	return e, nil
@@ -88,7 +91,7 @@ func (sb *shardBuffer) drain() {
 	// TODO(mberlin): Parallelize the drain by pumping the data through a channel.
 	for _, e := range sb.queue {
 		close(e.done)
-		<-e.retryDone
+		<-e.bufferCtx.Done()
 		sb.bufferSizeSema.Release()
 	}
 }

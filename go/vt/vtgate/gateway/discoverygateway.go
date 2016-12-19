@@ -390,9 +390,7 @@ func (dg *discoveryGateway) withRetry(ctx context.Context, target *querypb.Targe
 				if retryDone != nil {
 					// We're going to retry this request as part of a buffer drain.
 					// Notify the buffer after we retried.
-					defer func() {
-						close(retryDone)
-					}()
+					defer retryDone()
 				}
 			} else {
 				// Buffering failed e.g. buffer is already full. Do not retry.
