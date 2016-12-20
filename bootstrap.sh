@@ -54,6 +54,24 @@ else
   touch $zk_dist/.build_finished
 fi
 
+# Download and install etcd, link etcd binary into our root.
+etcd_version=v3.1.0-rc.1
+etcd_dist=$VTROOT/dist/etcd
+etcd_version_file=$etcd_dist/version
+if [[ -f $etcd_version_file && "$(cat $etcd_version_file)" == "$etcd_version" ]]; then
+  echo "skipping etcd install. remove $etcd_version_file to force re-install."
+else
+  rm -rf $etcd_dist
+  mkdir -p $etcd_dist
+  download_url=https://github.com/coreos/etcd/releases/download
+  (cd $etcd_dist && \
+    wget ${download_url}/${etcd_version}/etcd-${etcd_version}-linux-amd64.tar.gz && \
+    tar xzf etcd-${etcd_version}-linux-amd64.tar.gz)
+  [ $? -eq 0 ] || fail "etcd download failed"
+  echo "$etcd_version" > $etcd_version_file
+fi
+ln -snf $etcd_dist/etcd-${etcd_version}-linux-amd64/etcd $VTROOT/bin/etcd
+
 # install gRPC C++ base, so we can install the python adapters.
 # this also installs protobufs
 grpc_dist=$VTROOT/dist/grpc
