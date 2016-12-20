@@ -14,10 +14,6 @@
 "explain select * from user"
 "unsupported construct"
 
-# ',' operator for joins
-"select * from user, user_extra"
-"unsupported: ',' join operator"
-
 # union operations in subqueries (FROM)
 "select * from (select * from user union select * from user_extra) as t"
 "unsupported: union operator in subqueries"
@@ -96,6 +92,10 @@
 
 # group by and joins
 "select user.id from user join user_extra group by id"
+"unsupported: complex join and group by"
+
+# group by and ',' joins
+"select user.id from user, user_extra group by id"
 "unsupported: complex join and group by"
 
 # Group by references outer query

@@ -19,7 +19,15 @@ import (
 // with all the routes identified.
 func processTableExprs(tableExprs sqlparser.TableExprs, vschema VSchema) (builder, error) {
 	if len(tableExprs) != 1 {
-		return nil, errors.New("unsupported: ',' join operator")
+		lplan, err := processTableExpr(tableExprs[0], vschema)
+		if err != nil {
+			return nil, err
+		}
+		rplan, err := processTableExprs(tableExprs[1:], vschema)
+		if err != nil {
+			return nil, err
+		}
+		return lplan.Join(rplan, nil)
 	}
 	return processTableExpr(tableExprs[0], vschema)
 }

@@ -113,6 +113,12 @@ func (rb *route) Join(rhs builder, ajoin *sqlparser.JoinTableExpr) (builder, err
 		return rb.merge(rRoute, ajoin)
 	}
 
+	// Both route are sharded routes. For ',' joins (ajoin==nil), don't
+	// analyze mergeability.
+	if ajoin == nil {
+		return newJoin(rb, rRoute, nil)
+	}
+
 	// Both route are sharded routes. Analyze join condition for merging.
 	for _, filter := range splitAndExpression(nil, ajoin.On) {
 		if rb.isSameRoute(rRoute, filter) {
@@ -137,16 +143,24 @@ func (rb *route) SetRHS() {
 
 // merge merges the two routes. The ON clause is also analyzed to
 // see if the primitive can be improved. The operation can fail if
-// the expression contains a non-pushable subquery.
+// the expression contains a non-pushable subquery. ajoin can be nil
+// if the join is on a ',' operator.
 func (rb *route) merge(rhs *route, ajoin *sqlparser.JoinTableExpr) (builder, error) {
-	rb.Select.From = sqlparser.TableExprs{ajoin}
-	if ajoin.Join == sqlparser.LeftJoinStr {
-		rhs.Symtab().SetRHS()
+	if ajoin == nil {
+		rb.Select.From = append(rb.Select.From, rhs.Select.From...)
+	} else {
+		rb.Select.From = sqlparser.TableExprs{ajoin}
+		if ajoin.Join == sqlparser.LeftJoinStr {
+			rhs.Symtab().SetRHS()
+		}
 	}
 	err := rb.Symtab().Merge(rhs.Symtab())
 	rhs.Redirect = rb
 	if err != nil {
 		return nil, err
+	}
+	if ajoin == nil {
+		return rb, nil
 	}
 	for _, filter := range splitAndExpression(nil, ajoin.On) {
 		// If VTGate evolves, this section should be rewritten
