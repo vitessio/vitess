@@ -165,8 +165,8 @@ func forceEOF(yylex interface{}) {
 %type <str> ignore_opt
 %type <byt> exists_opt
 %type <empty> not_exists_opt non_rename_operation to_opt constraint_opt using_opt
-%type <colIdent> sql_id as_ci_opt
-%type <tableIdent> table_id as_opt_id
+%type <colIdent> sql_id col_alias as_ci_opt
+%type <tableIdent> table_id table_alias as_opt_id
 %type <empty> as_opt
 %type <empty> force_eof
 
@@ -412,13 +412,20 @@ as_ci_opt:
   {
     $$ = ColIdent{}
   }
-| sql_id
+| col_alias
   {
     $$ = $1
   }
-| AS sql_id
+| AS col_alias
   {
     $$ = $2
+  }
+
+col_alias:
+  sql_id
+| STRING
+  {
+    $$ = NewColIdent(string($1))
   }
 
 from_opt:
@@ -492,13 +499,20 @@ as_opt_id:
   {
     $$ = NewTableIdent("")
   }
-| table_id
+| table_alias
   {
     $$ = $1
   }
-| AS table_id
+| AS table_alias
   {
     $$ = $2
+  }
+
+table_alias:
+  table_id
+| STRING
+  {
+    $$ = NewTableIdent(string($1))
   }
 
 inner_join:

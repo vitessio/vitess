@@ -94,6 +94,12 @@ func TestValid(t *testing.T) {
 	}, {
 		input: "select /* keyword column alias */ a as `By` from t",
 	}, {
+		input:  "select /* column alias as string */ a as \"b\" from t",
+		output: "select /* column alias as string */ a as b from t",
+	}, {
+		input:  "select /* column alias as string without as */ a \"b\" from t",
+		output: "select /* column alias as string without as */ a as b from t",
+	}, {
 		input: "select /* a.* */ a.* from t",
 	}, {
 		input:  "select next value for t",
@@ -142,6 +148,12 @@ func TestValid(t *testing.T) {
 		output: "select /* table alias */ 1 from t as t1",
 	}, {
 		input: "select /* table alias with as */ 1 from t as t1",
+	}, {
+		input:  "select /* string table alias */ 1 from t as 't1'",
+		output: "select /* string table alias */ 1 from t as t1",
+	}, {
+		input:  "select /* string table alias without as */ 1 from t 't1'",
+		output: "select /* string table alias without as */ 1 from t as t1",
 	}, {
 		input: "select /* keyword table alias */ 1 from t as `By`",
 	}, {
