@@ -395,7 +395,11 @@ select_expression:
   }
 | table_id '.' '*'
   {
-    $$ = &StarExpr{TableName: $1}
+    $$ = &StarExpr{TableName: &TableName{Name: $1}}
+  }
+| table_id '.' table_id '.' '*'
+  {
+    $$ = &StarExpr{TableName: &TableName{Qualifier: $1, Name: $3}}
   }
 
 expression:
