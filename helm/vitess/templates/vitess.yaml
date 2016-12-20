@@ -8,6 +8,8 @@ metadata:
   name: vttablet
   labels:
     app: vitess
+  annotations:
+    service.alpha.kubernetes.io/tolerate-unready-endpoints: "true"
 spec:
   ports:
     - port: 15002
