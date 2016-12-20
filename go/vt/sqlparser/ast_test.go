@@ -295,6 +295,9 @@ func TestCompliantName(t *testing.T) {
 	}, {
 		in:  "a.b",
 		out: "a_b",
+	}, {
+		in:  ".ab",
+		out: "_ab",
 	}}
 	for _, tc := range testcases {
 		out := NewColIdent(tc.in).CompliantName()
@@ -304,6 +307,24 @@ func TestCompliantName(t *testing.T) {
 		out = NewTableIdent(tc.in).CompliantName()
 		if out != tc.out {
 			t.Errorf("TableIdent(%s).CompliantNamt: %s, want %s", tc.in, out, tc.out)
+		}
+	}
+}
+
+func TestEscape(t *testing.T) {
+	testcases := []struct {
+		in, out string
+	}{{
+		in:  "aa",
+		out: "`aa`",
+	}, {
+		in:  "a`a",
+		out: "`a``a`",
+	}}
+	for _, tc := range testcases {
+		out := Backtick(tc.in)
+		if out != tc.out {
+			t.Errorf("Escape(%s): %s, want %s", tc.in, out, tc.out)
 		}
 	}
 }

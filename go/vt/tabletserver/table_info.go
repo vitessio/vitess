@@ -43,17 +43,18 @@ func NewTableInfo(conn *DBConn, tableName string, tableType string, comment stri
 
 func loadTableInfo(conn *DBConn, tableName string) (ti *TableInfo, err error) {
 	ti = &TableInfo{Table: schema.NewTable(tableName)}
-	if err = ti.fetchColumns(conn); err != nil {
+	sqlTableName := sqlparser.String(ti.Name)
+	if err = ti.fetchColumns(conn, sqlTableName); err != nil {
 		return nil, err
 	}
-	if err = ti.fetchIndexes(conn); err != nil {
+	if err = ti.fetchIndexes(conn, sqlTableName); err != nil {
 		return nil, err
 	}
 	return ti, nil
 }
 
-func (ti *TableInfo) fetchColumns(conn *DBConn) error {
-	qr, err := conn.Exec(context.Background(), fmt.Sprintf("select * from `%s` where 1 != 1", ti.Name), 10000, true)
+func (ti *TableInfo) fetchColumns(conn *DBConn, sqlTableName string) error {
+	qr, err := conn.Exec(context.Background(), fmt.Sprintf("select * from %s where 1 != 1", sqlTableName), 10000, true)
 	if err != nil {
 		return err
 	}
@@ -61,7 +62,7 @@ func (ti *TableInfo) fetchColumns(conn *DBConn) error {
 	for _, field := range qr.Fields {
 		fieldTypes[field.Name] = field.Type
 	}
-	columns, err := conn.Exec(context.Background(), fmt.Sprintf("describe `%s`", ti.Name), 10000, false)
+	columns, err := conn.Exec(context.Background(), fmt.Sprintf("describe %s", sqlTableName), 10000, false)
 	if err != nil {
 		return err
 	}
@@ -98,8 +99,8 @@ func (ti *TableInfo) SetPK(colnames []string) error {
 	return nil
 }
 
-func (ti *TableInfo) fetchIndexes(conn *DBConn) error {
-	indexes, err := conn.Exec(context.Background(), fmt.Sprintf("show index from `%s`", ti.Name), 10000, false)
+func (ti *TableInfo) fetchIndexes(conn *DBConn, sqlTableName string) error {
+	indexes, err := conn.Exec(context.Background(), fmt.Sprintf("show index from %s", sqlTableName), 10000, false)
 	if err != nil {
 		return err
 	}

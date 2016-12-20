@@ -128,7 +128,7 @@ func TestSchemaInfoOpenFailedDueToTableInfoErr(t *testing.T) {
 			createTestTableBaseShowTable("test_table"),
 		},
 	})
-	db.AddQuery("select * from `test_table` where 1 != 1", &sqltypes.Result{
+	db.AddQuery("select * from test_table where 1 != 1", &sqltypes.Result{
 		// this will cause NewTableInfo error
 		RowsAffected: math.MaxUint64,
 	})
@@ -180,17 +180,17 @@ func TestSchemaInfoReload(t *testing.T) {
 		},
 	})
 
-	db.AddQuery("select * from `test_table_04` where 1 != 1", &sqltypes.Result{
+	db.AddQuery("select * from test_table_04 where 1 != 1", &sqltypes.Result{
 		Fields: []*querypb.Field{{
 			Name: "pk",
 			Type: sqltypes.Int32,
 		}},
 	})
-	db.AddQuery("describe `test_table_04`", &sqltypes.Result{
+	db.AddQuery("describe test_table_04", &sqltypes.Result{
 		RowsAffected: 1,
 		Rows:         [][]sqltypes.Value{createTestTableDescribe("pk")},
 	})
-	db.AddQuery("show index from `test_table_04`", &sqltypes.Result{
+	db.AddQuery("show index from test_table_04", &sqltypes.Result{
 		RowsAffected: 1,
 		Rows:         [][]sqltypes.Value{createTestTableShowIndex("pk")},
 	})
@@ -408,19 +408,19 @@ func TestUpdatedMysqlStats(t *testing.T) {
 			createTestTableBaseShowTable(tableName.String()),
 		},
 	})
-	q = fmt.Sprintf("select * from `%s` where 1 != 1", tableName)
+	q = fmt.Sprintf("select * from %s where 1 != 1", tableName)
 	db.AddQuery(q, &sqltypes.Result{
 		Fields: []*querypb.Field{{
 			Name: "pk",
 			Type: sqltypes.Int32,
 		}},
 	})
-	q = fmt.Sprintf("describe `%s`", tableName)
+	q = fmt.Sprintf("describe %s", tableName)
 	db.AddQuery(q, &sqltypes.Result{
 		RowsAffected: 1,
 		Rows:         [][]sqltypes.Value{createTestTableDescribe("pk")},
 	})
-	q = fmt.Sprintf("show index from `%s`", tableName)
+	q = fmt.Sprintf("show index from %s", tableName)
 	db.AddQuery(q, &sqltypes.Result{
 		RowsAffected: 1,
 		Rows:         [][]sqltypes.Value{createTestTableShowIndex("pk")},
@@ -614,13 +614,13 @@ func getSchemaInfoTestSupportedQueries() map[string]*sqltypes.Result {
 				},
 			},
 		},
-		"select * from `test_table_01` where 1 != 1": {
+		"select * from test_table_01 where 1 != 1": {
 			Fields: []*querypb.Field{{
 				Name: "pk",
 				Type: sqltypes.Int32,
 			}},
 		},
-		"describe `test_table_01`": {
+		"describe test_table_01": {
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
 				{
@@ -633,13 +633,13 @@ func getSchemaInfoTestSupportedQueries() map[string]*sqltypes.Result {
 				},
 			},
 		},
-		"select * from `test_table_02` where 1 != 1": {
+		"select * from test_table_02 where 1 != 1": {
 			Fields: []*querypb.Field{{
 				Name: "pk",
 				Type: sqltypes.Int32,
 			}},
 		},
-		"describe `test_table_02`": {
+		"describe test_table_02": {
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
 				{
@@ -652,13 +652,13 @@ func getSchemaInfoTestSupportedQueries() map[string]*sqltypes.Result {
 				},
 			},
 		},
-		"select * from `test_table_03` where 1 != 1": {
+		"select * from test_table_03 where 1 != 1": {
 			Fields: []*querypb.Field{{
 				Name: "pk",
 				Type: sqltypes.Int32,
 			}},
 		},
-		"describe `test_table_03`": {
+		"describe test_table_03": {
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
 				{
@@ -672,7 +672,7 @@ func getSchemaInfoTestSupportedQueries() map[string]*sqltypes.Result {
 			},
 		},
 		// for SplitQuery because it needs a primary key column
-		"show index from `test_table_01`": {
+		"show index from test_table_01": {
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
 				{
@@ -686,7 +686,7 @@ func getSchemaInfoTestSupportedQueries() map[string]*sqltypes.Result {
 				},
 			},
 		},
-		"show index from `test_table_02`": {
+		"show index from test_table_02": {
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
 				{
@@ -700,7 +700,7 @@ func getSchemaInfoTestSupportedQueries() map[string]*sqltypes.Result {
 				},
 			},
 		},
-		"show index from `test_table_03`": {
+		"show index from test_table_03": {
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
 				{

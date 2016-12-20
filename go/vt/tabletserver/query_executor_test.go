@@ -666,7 +666,7 @@ func TestQueryExecutorPlanOther(t *testing.T) {
 
 func TestQueryExecutorPlanNextval(t *testing.T) {
 	db := setUpQueryExecutorTest()
-	selQuery := "select next_id, cache from `seq` where id = 0 for update"
+	selQuery := "select next_id, cache from seq where id = 0 for update"
 	db.AddQuery(selQuery, &sqltypes.Result{
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{{
@@ -674,7 +674,7 @@ func TestQueryExecutorPlanNextval(t *testing.T) {
 			sqltypes.MakeTrusted(sqltypes.Int64, []byte("3")),
 		}},
 	})
-	updateQuery := "update `seq` set next_id = 4 where id = 0"
+	updateQuery := "update seq set next_id = 4 where id = 0"
 	db.AddQuery(updateQuery, &sqltypes.Result{})
 	ctx := context.Background()
 	tsv := newTestTabletServer(ctx, enableStrict, db)
@@ -730,7 +730,7 @@ func TestQueryExecutorPlanNextval(t *testing.T) {
 			sqltypes.MakeTrusted(sqltypes.Int64, []byte("3")),
 		}},
 	})
-	updateQuery = "update `seq` set next_id = 7 where id = 0"
+	updateQuery = "update seq set next_id = 7 where id = 0"
 	db.AddQuery(updateQuery, &sqltypes.Result{})
 	qre = newTestQueryExecutor(ctx, tsv, "select next 2 values from seq", 0)
 	got, err = qre.Execute()
@@ -760,7 +760,7 @@ func TestQueryExecutorPlanNextval(t *testing.T) {
 			sqltypes.MakeTrusted(sqltypes.Int64, []byte("3")),
 		}},
 	})
-	updateQuery = "update `seq` set next_id = 13 where id = 0"
+	updateQuery = "update seq set next_id = 13 where id = 0"
 	db.AddQuery(updateQuery, &sqltypes.Result{})
 	qre = newTestQueryExecutor(ctx, tsv, "select next 6 values from seq", 0)
 	got, err = qre.Execute()
@@ -1267,16 +1267,16 @@ func checkPlanID(
 func getQueryExecutorSupportedQueries() map[string]*sqltypes.Result {
 	return map[string]*sqltypes.Result{
 		// queries for twopc
-		sqlTurnoffBinlog:                                {},
-		fmt.Sprintf(sqlCreateSidecarDB, "_vt"):          {},
-		fmt.Sprintf(sqlDropLegacy1, "_vt"):              {},
-		fmt.Sprintf(sqlDropLegacy2, "_vt"):              {},
-		fmt.Sprintf(sqlDropLegacy3, "_vt"):              {},
-		fmt.Sprintf(sqlDropLegacy4, "_vt"):              {},
-		fmt.Sprintf(sqlCreateTableRedoState, "_vt"):     {},
-		fmt.Sprintf(sqlCreateTableRedoStatement, "_vt"): {},
-		fmt.Sprintf(sqlCreateTableDTState, "_vt"):       {},
-		fmt.Sprintf(sqlCreateTableDTParticipant, "_vt"): {},
+		sqlTurnoffBinlog:                                  {},
+		fmt.Sprintf(sqlCreateSidecarDB, "`_vt`"):          {},
+		fmt.Sprintf(sqlDropLegacy1, "`_vt`"):              {},
+		fmt.Sprintf(sqlDropLegacy2, "`_vt`"):              {},
+		fmt.Sprintf(sqlDropLegacy3, "`_vt`"):              {},
+		fmt.Sprintf(sqlDropLegacy4, "`_vt`"):              {},
+		fmt.Sprintf(sqlCreateTableRedoState, "`_vt`"):     {},
+		fmt.Sprintf(sqlCreateTableRedoStatement, "`_vt`"): {},
+		fmt.Sprintf(sqlCreateTableDTState, "`_vt`"):       {},
+		fmt.Sprintf(sqlCreateTableDTParticipant, "`_vt`"): {},
 		// queries for schema info
 		"select unix_timestamp()": {
 			RowsAffected: 1,
@@ -1323,7 +1323,7 @@ func getQueryExecutorSupportedQueries() map[string]*sqltypes.Result {
 				},
 			},
 		},
-		"select * from `test_table` where 1 != 1": {
+		"select * from test_table where 1 != 1": {
 			Fields: []*querypb.Field{{
 				Name: "pk",
 				Type: sqltypes.Int32,
@@ -1335,7 +1335,7 @@ func getQueryExecutorSupportedQueries() map[string]*sqltypes.Result {
 				Type: sqltypes.Int32,
 			}},
 		},
-		"describe `test_table`": {
+		"describe test_table": {
 			RowsAffected: 3,
 			Rows: [][]sqltypes.Value{
 				{
@@ -1365,7 +1365,7 @@ func getQueryExecutorSupportedQueries() map[string]*sqltypes.Result {
 			},
 		},
 		// for SplitQuery because it needs a primary key column
-		"show index from `test_table`": {
+		"show index from test_table": {
 			RowsAffected: 2,
 			Rows: [][]sqltypes.Value{
 				{
@@ -1407,7 +1407,7 @@ func getQueryExecutorSupportedQueries() map[string]*sqltypes.Result {
 			},
 		},
 		"rollback": {},
-		"select * from `seq` where 1 != 1": {
+		"select * from seq where 1 != 1": {
 			Fields: []*querypb.Field{{
 				Name: "id",
 				Type: sqltypes.Int32,
@@ -1422,7 +1422,7 @@ func getQueryExecutorSupportedQueries() map[string]*sqltypes.Result {
 				Type: sqltypes.Int64,
 			}},
 		},
-		"describe `seq`": {
+		"describe seq": {
 			RowsAffected: 4,
 			Rows: [][]sqltypes.Value{
 				{
@@ -1459,7 +1459,7 @@ func getQueryExecutorSupportedQueries() map[string]*sqltypes.Result {
 				},
 			},
 		},
-		"show index from `seq`": {
+		"show index from seq": {
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
 				{
@@ -1489,6 +1489,6 @@ func getQueryExecutorSupportedQueries() map[string]*sqltypes.Result {
 				},
 			},
 		},
-		fmt.Sprintf(sqlReadAllRedo, "_vt", "_vt"): {},
+		fmt.Sprintf(sqlReadAllRedo, "`_vt`", "`_vt`"): {},
 	}
 }
