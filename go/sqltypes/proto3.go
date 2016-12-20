@@ -5,10 +5,7 @@
 package sqltypes
 
 import querypb "github.com/youtube/vitess/go/vt/proto/query"
-import (
-	vtgatepb "github.com/youtube/vitess/go/vt/proto/vtgate"
-	"github.com/youtube/vitess/go/vt/vterrors"
-)
+import "github.com/youtube/vitess/go/vt/vterrors"
 
 // This file contains the proto3 conversion functions for the structures
 // defined here.
@@ -131,11 +128,11 @@ func Proto3ToResults(qr []*querypb.QueryResult) []Result {
 }
 
 // QueryResponsesToProto3 converts []QueryResponse to proto3.
-func QueryResponsesToProto3(qr []QueryResponse) []*vtgatepb.QueryResponse {
+func QueryResponsesToProto3(qr []QueryResponse) []*querypb.ResultWithError {
 	if len(qr) == 0 {
 		return nil
 	}
-	result := make([]*vtgatepb.QueryResponse, len(qr))
+	result := make([]*querypb.ResultWithError, len(qr))
 	for i, q := range qr {
 		result[i].Result = ResultToProto3(q.QueryResult)
 		result[i].Error = vterrors.VtRPCErrorFromVtError(q.QueryError)
@@ -144,7 +141,7 @@ func QueryResponsesToProto3(qr []QueryResponse) []*vtgatepb.QueryResponse {
 }
 
 // Proto3ToQueryReponses converts proto3 queryResponse to []QueryResponse.
-func Proto3ToQueryReponses(qr []*vtgatepb.QueryResponse) []QueryResponse {
+func Proto3ToQueryReponses(qr []*querypb.ResultWithError) []QueryResponse {
 	if len(qr) == 0 {
 		return nil
 	}

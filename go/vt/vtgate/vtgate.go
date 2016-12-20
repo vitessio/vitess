@@ -355,34 +355,6 @@ func (vtg *VTGate) ExecuteEntityIds(ctx context.Context, sql string, bindVariabl
 
 // ExecuteBatch executes a non-streaming queries by routing based on the values in the query.
 func (vtg *VTGate) ExecuteBatch(ctx context.Context, sqlList []string, bindVariablesList []map[string]interface{}, keyspace string, tabletType topodatapb.TabletType, asTransaction bool, session *vtgatepb.Session, options *querypb.ExecuteOptions) ([]sqltypes.QueryResponse, error) {
-	/*startTime := time.Now()
-	ltt := topoproto.TabletTypeLString(tabletType)
-	statsKey := []string{"ExecuteBatch", "Any", ltt}
-	defer vtg.timings.Record(statsKey, startTime)
-
-	qr, err := vtg.router.ExecuteBatch(ctx, sqlList, bindVariablesList, keyspace, tabletType, asTransaction, session, options)
-	var errs []error
-	for row, sqlQuery := range sqlList {
-		if err == nil {
-			vtg.rowsReturned.Add(statsKey, int64(len(qr[row].Rows)))
-			return qr, nil
-		}
-		query := map[string]interface{}{
-			"Sql":              sqlQuery,
-			"Keyspace":         keyspace,
-			"TabletType":       ltt,
-			"Session":          session,
-			"AsTransaction":    asTransaction,
-			"Options":          options,
-		}
-		if bindVariables != nil {
-			query["BindVariables"] = bindVariables[row]
-		}
-		errs = append(errs, handleExecuteError(err[row], statsKey, query, vtg.logExecute))
-	}
-
-	return nil, errs*/
-
 	startTime := time.Now()
 	ltt := topoproto.TabletTypeLString(tabletType)
 	statsKey := []string{"ExecuteBatch", "Any", ltt}

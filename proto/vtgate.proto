@@ -285,16 +285,6 @@ message ExecuteBatchRequest {
   query.ExecuteOptions options = 7;
 }
 
-// QueryResponse represents a query response
-// in the form of result or error but not both.
-// This is used in a list for ExecuteBatchResponse.
-message QueryResponse {
-  // error contains an query level error, only set if result is unset.
-  vtrpc.RPCError error = 1;
-
-  // result contains the query result, only set if error is unset.
-  query.QueryResult result = 2;
-}
 
 // ExecuteBatchResponse is the returned value from ExecuteBatch.
 message ExecuteBatchResponse {
@@ -307,7 +297,7 @@ message ExecuteBatchResponse {
   Session session = 2;
 
   // results contains the query results, only set if application level error is unset.
-  repeated QueryResponse results = 3;
+  repeated query.ResultWithError results = 3;
 }
 
 // BoundShardQuery represents a single query request for the
