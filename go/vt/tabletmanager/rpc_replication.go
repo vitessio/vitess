@@ -544,9 +544,11 @@ func (agent *ActionAgent) PromoteSlave(ctx context.Context) (string, error) {
 	}
 
 	// Set the server read-write
+	startTime := time.Now()
 	if err := agent.MysqlDaemon.SetReadOnly(false); err != nil {
 		return "", err
 	}
+	agent.setLastReparentedTime(startTime)
 
 	if _, err := topotools.ChangeType(ctx, agent.TopoServer, agent.TabletAlias, topodatapb.TabletType_MASTER); err != nil {
 		return "", err
