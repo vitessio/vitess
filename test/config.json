@@ -365,6 +365,15 @@
 				"webdriver"
 			]
 		},
+		"vtgate_buffer": {
+			"File": "vtgate_buffer.py",
+			"Args": [],
+			"Command": [],
+			"Manual": false,
+			"Shard": 1,
+			"RetryMax": 0,
+			"Tags": []
+		},
 		"vtgate_utils": {
 			"File": "vtgate_utils_test.py",
 			"Args": [],
