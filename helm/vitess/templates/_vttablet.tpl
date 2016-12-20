@@ -8,6 +8,7 @@
 {{- $uid := index . 5 -}}
 {{- with index . 6 -}}
 {{- $0 := $.Values.vttablet -}}
+{{- $controllerType := .controllerType | default $0.controllerType -}}
 containers:
   - name: vttablet
     image: {{.image | default $0.image | quote}}
@@ -50,7 +51,7 @@ containers:
           -grpc_port 16002
           -service_map "grpc-queryservice,grpc-tabletmanager,grpc-updatestream"
           -tablet-path "{{$cell.name}}-{{$uid}}"
-{{ if eq (.controllerType | default $0.controllerType) "None" }}
+{{ if eq $controllerType "None" }}
           -tablet_hostname "$(hostname -i)"
 {{ else }}
           -tablet_hostname "$(hostname).vttablet"
@@ -109,7 +110,11 @@ containers:
         )
     env:
       - name: EXTRA_MY_CNF
+{{ if eq $controllerType "None" }}
+        value: {{.extraMyCnf | default $0.extraMyCnf | quote}}
+{{ else }}
         value: "/vt/vtdataroot/init/report-host.cnf:{{.extraMyCnf | default $0.extraMyCnf}}"
+{{ end }}
 volumes:
   - name: syslog
     hostPath: {path: /dev/log}
