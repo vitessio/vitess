@@ -153,7 +153,26 @@ func buildInsertShardedPlan(ins *sqlparser.Insert, table *vindexes.Table) (*engi
 	}
 	eRoute.Values = routeValues
 	eRoute.Query = generateQuery(ins)
+	generateInsertShardedQuery(ins, eRoute, values)
 	return eRoute, nil
+}
+
+func generateInsertShardedQuery(node *sqlparser.Insert, eRoute *engine.Route, valueTuples sqlparser.Values) {
+	prefixBuf := sqlparser.NewTrackedBuffer(dmlFormatter)
+	midBuf := sqlparser.NewTrackedBuffer(dmlFormatter)
+	suffixBuf := sqlparser.NewTrackedBuffer(dmlFormatter)
+	eRoute.Mid = make([]string, len(valueTuples))
+	prefixBuf.Myprintf("insert %v%sinto %v%v values ",
+		node.Comments, node.Ignore,
+		node.Table, node.Columns)
+	eRoute.Prefix = prefixBuf.String()
+	for rowNum, val := range valueTuples {
+		midBuf.Myprintf("%v", val)
+		eRoute.Mid[rowNum] = midBuf.String()
+		midBuf.Truncate(0)
+	}
+	suffixBuf.Myprintf("%v", node.OnDup)
+	eRoute.Suffix = suffixBuf.String()
 }
 
 // handleVindexCol substitutes the insert value with a bind var name and returns

@@ -2,6 +2,7 @@ package sqlannotation
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -98,5 +99,23 @@ func BenchmarkExtractKeySpaceIDNothing(b *testing.B) {
 func BenchmarkIsDML(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		IsDML("UPDATE ultimatequestion set answer=42 where question = 'What do you get if you multiply six by nine?'")
+	}
+}
+
+func TestAddKeyspaceIDs(t *testing.T) {
+	ksid1 := []byte{0x37}
+	ksid2 := []byte{0x29}
+	ksids := make([][]byte, 0)
+	ksids = append(ksids, ksid1)
+	ksids = append(ksids, ksid2)
+
+	sql := AddKeyspaceIDs("DML", [][]byte{ksid1}, "trailing_comments")
+	if !strings.EqualFold(sql, "DML /* vtgate:: keyspace_id:37 */trailing_comments") {
+		t.Errorf("want: %s, got: %s", "DML /* vtgate:: keyspace_id:37 */trailing_comments", sql)
+	}
+
+	sql = AddKeyspaceIDs("DML", ksids, "trailing_comments")
+	if !strings.EqualFold(sql, "DML /* vtgate:: keyspace_id:37,29 */trailing_comments") {
+		t.Errorf("want: %s, got: %s", "DML /* vtgate:: keyspace_id:37,29 */trailing_comments", sql)
 	}
 }

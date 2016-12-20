@@ -26,10 +26,13 @@ type Route struct {
 	Table      *vindexes.Table
 	Subquery   string
 	Generate   *Generate
+	Prefix     string
+	Mid        []string
+	Suffix     string
 }
 
 // Execute performs a non-streaming exec.
-func (rt *Route) Execute(vcursor VCursor, joinvars map[string]interface{}, wantields bool) (*sqltypes.Result, error) {
+func (rt *Route) Execute(vcursor VCursor, joinvars map[string]interface{}, wantfields bool) (*sqltypes.Result, error) {
 	return vcursor.ExecuteRoute(rt, joinvars)
 }
 
@@ -64,6 +67,9 @@ func (rt *Route) MarshalJSON() ([]byte, error) {
 		Table      string              `json:",omitempty"`
 		Subquery   string              `json:",omitempty"`
 		Generate   *Generate           `json:",omitempty"`
+		Prefix     string              `json:",omitempty"`
+		Mid        []string            `json:",omitempty"`
+		Suffix     string              `json:",omitempty"`
 	}{
 		Opcode:     rt.Opcode,
 		Keyspace:   rt.Keyspace,
@@ -75,6 +81,9 @@ func (rt *Route) MarshalJSON() ([]byte, error) {
 		Table:      tname,
 		Subquery:   rt.Subquery,
 		Generate:   rt.Generate,
+		Prefix:     rt.Prefix,
+		Mid:        rt.Mid,
+		Suffix:     rt.Suffix,
 	}
 	return json.Marshal(marshalRoute)
 }

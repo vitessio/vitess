@@ -45,7 +45,7 @@ func (pln *Plan) Size() int {
 // Primitive is the interface that needs to be satisfied by
 // all primitives of a plan.
 type Primitive interface {
-	Execute(vcursor VCursor, joinvars map[string]interface{}, wantields bool) (*sqltypes.Result, error)
+	Execute(vcursor VCursor, joinvars map[string]interface{}, wantfields bool) (*sqltypes.Result, error)
 	StreamExecute(vcursor VCursor, joinvars map[string]interface{}, wantields bool, sendReply func(*sqltypes.Result) error) error
 	GetFields(vcursor VCursor, joinvars map[string]interface{}) (*sqltypes.Result, error)
 }

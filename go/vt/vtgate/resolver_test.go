@@ -119,7 +119,7 @@ func TestResolverStreamExecuteKeyspaceIds(t *testing.T) {
 			topodatapb.TabletType_MASTER,
 			nil,
 			func(r *sqltypes.Result) error {
-				appendResult(qr, r)
+				qr.AppendResult(r)
 				return nil
 			})
 		return qr, err
@@ -134,7 +134,7 @@ func TestResolverStreamExecuteKeyspaceIds(t *testing.T) {
 			topodatapb.TabletType_MASTER,
 			nil,
 			func(r *sqltypes.Result) error {
-				appendResult(qr, r)
+				qr.AppendResult(r)
 				return nil
 			})
 		return qr, err
@@ -154,7 +154,7 @@ func TestResolverStreamExecuteKeyRanges(t *testing.T) {
 			topodatapb.TabletType_MASTER,
 			nil,
 			func(r *sqltypes.Result) error {
-				appendResult(qr, r)
+				qr.AppendResult(r)
 				return nil
 			})
 		return qr, err
@@ -170,7 +170,7 @@ func TestResolverStreamExecuteKeyRanges(t *testing.T) {
 			topodatapb.TabletType_MASTER,
 			nil,
 			func(r *sqltypes.Result) error {
-				appendResult(qr, r)
+				qr.AppendResult(r)
 				return nil
 			})
 		return qr, err
