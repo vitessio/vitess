@@ -152,7 +152,7 @@ func (qs *QuerySplitter) getWhereClause(whereClause *sqlparser.Where, bindVars m
 		return whereClause
 	}
 	pk := &sqlparser.ColName{
-		Name: sqlparser.ColIdent(qs.splitColumn),
+		Name: sqlparser.ColIdent{ColString:qs.splitColumn},
 	}
 	if !start.IsNull() {
 		startClause = &sqlparser.ComparisonExpr{

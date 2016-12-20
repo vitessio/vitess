@@ -294,7 +294,7 @@ func (t *tabsym) Symtab() *symtab {
 // FindVindex returns the vindex if one was found for the column.
 func (t *tabsym) FindVindex(name sqlparser.ColIdent) vindexes.Vindex {
 	for _, colVindex := range t.ColumnVindexes {
-		if colVindex.Column.Equal(cistring.CIString(name)) {
+		if colVindex.Column.Equal(cistring.CIString(name.ColString)) {
 			return colVindex.Vindex
 		}
 	}

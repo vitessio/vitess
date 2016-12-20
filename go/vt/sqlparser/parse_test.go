@@ -564,6 +564,8 @@ func TestValid(t *testing.T) {
 	}, {
 		input:  "explain foobar",
 		output: "other",
+	}, {
+		input: "select bar as `foo.bar` from t",
 	}}
 	for _, tcase := range validSQL {
 		if tcase.output == "" {
@@ -719,7 +721,7 @@ func TestErrors(t *testing.T) {
 		output: "syntax error at position 9 near ':'",
 	}, {
 		input:  "select `table:` from t",
-		output: "syntax error at position 14 near 'table'",
+		output: "syntax error at position 16 near 'table:'",
 	}, {
 		input:  "select 'aa\\",
 		output: "syntax error at position 12 near 'aa'",
