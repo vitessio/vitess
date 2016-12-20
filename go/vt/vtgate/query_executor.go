@@ -16,7 +16,7 @@ import (
 	vtgatepb "github.com/youtube/vitess/go/vt/proto/vtgate"
 )
 
-type requestContext struct {
+type queryExecutor struct {
 	ctx              context.Context
 	sql, comments    string
 	bindVars         map[string]interface{}
@@ -28,9 +28,9 @@ type requestContext struct {
 	router           *Router
 }
 
-func newRequestContext(ctx context.Context, sql string, bindVars map[string]interface{}, keyspace string, tabletType topodatapb.TabletType, session *vtgatepb.Session, notInTransaction bool, options *querypb.ExecuteOptions, router *Router) *requestContext {
+func newQueryExecutor(ctx context.Context, sql string, bindVars map[string]interface{}, keyspace string, tabletType topodatapb.TabletType, session *vtgatepb.Session, notInTransaction bool, options *querypb.ExecuteOptions, router *Router) *queryExecutor {
 	query, comments := sqlparser.SplitTrailingComments(sql)
-	return &requestContext{
+	return &queryExecutor{
 		ctx:              ctx,
 		sql:              query,
 		comments:         comments,
@@ -44,20 +44,20 @@ func newRequestContext(ctx context.Context, sql string, bindVars map[string]inte
 	}
 }
 
-func (vc *requestContext) Execute(query string, bindvars map[string]interface{}) (*sqltypes.Result, error) {
+func (vc *queryExecutor) Execute(query string, bindvars map[string]interface{}) (*sqltypes.Result, error) {
 	// We have to use an empty keyspace here, becasue vindexes that call back can reference
 	// any table.
 	return vc.router.Execute(vc.ctx, query, bindvars, "", vc.tabletType, vc.session, false, vc.options)
 }
 
-func (vc *requestContext) ExecuteRoute(route *engine.Route, joinvars map[string]interface{}) (*sqltypes.Result, error) {
+func (vc *queryExecutor) ExecuteRoute(route *engine.Route, joinvars map[string]interface{}) (*sqltypes.Result, error) {
 	return vc.router.ExecuteRoute(vc, route, joinvars)
 }
 
-func (vc *requestContext) StreamExecuteRoute(route *engine.Route, joinvars map[string]interface{}, sendReply func(*sqltypes.Result) error) error {
+func (vc *queryExecutor) StreamExecuteRoute(route *engine.Route, joinvars map[string]interface{}, sendReply func(*sqltypes.Result) error) error {
 	return vc.router.StreamExecuteRoute(vc, route, joinvars, sendReply)
 }
 
-func (vc *requestContext) GetRouteFields(route *engine.Route, joinvars map[string]interface{}) (*sqltypes.Result, error) {
+func (vc *queryExecutor) GetRouteFields(route *engine.Route, joinvars map[string]interface{}) (*sqltypes.Result, error) {
 	return vc.router.GetRouteFields(vc, route, joinvars)
 }

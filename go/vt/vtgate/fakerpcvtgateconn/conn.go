@@ -239,6 +239,11 @@ func (conn *FakeVTGateConn) ExecuteEntityIds(ctx context.Context, query string, 
 	panic("not implemented")
 }
 
+// ExecuteBatch please see vtgateconn.Impl.ExecuteBatch
+func (conn *FakeVTGateConn) ExecuteBatch(ctx context.Context, sqlList []string, bindVarsList []map[string]interface{}, keyspace string, tabletType topodatapb.TabletType, asTransaction bool, session interface{}, options *querypb.ExecuteOptions) ([]sqltypes.QueryResponse, interface{}, error) {
+	panic("not implemented")
+}
+
 // ExecuteBatchShards please see vtgateconn.Impl.ExecuteBatchShards
 func (conn *FakeVTGateConn) ExecuteBatchShards(ctx context.Context, queries []*vtgatepb.BoundShardQuery, tabletType topodatapb.TabletType, asTransaction bool, session interface{}, options *querypb.ExecuteOptions) ([]sqltypes.Result, interface{}, error) {
 	panic("not implemented")

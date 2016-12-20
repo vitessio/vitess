@@ -107,6 +107,53 @@ func (f *fakeVTGateService) Execute(ctx context.Context, sql string, bindVariabl
 	return execCase.result, nil
 }
 
+// queryExecuteBatch contains all the fields we use to test ExecuteBatch
+type queryExecuteBatch struct {
+	SQLList           []string
+	BindVariablesList []map[string]interface{}
+	Keyspace          string
+	TabletType        topodatapb.TabletType
+	Session           *vtgatepb.Session
+	AsTransaction     bool
+}
+
+// ExecuteBatch is part of the VTGateService interface
+func (f *fakeVTGateService) ExecuteBatch(ctx context.Context, sqlList []string, bindVariablesList []map[string]interface{}, keyspace string, tabletType topodatapb.TabletType, asTransaction bool, session *vtgatepb.Session, options *querypb.ExecuteOptions) ([]sqltypes.QueryResponse, error) {
+	if f.hasError {
+		return nil, errTestVtGateError
+	}
+	if f.panics {
+		panic(fmt.Errorf("test forced panic"))
+	}
+	f.checkCallerID(ctx, "ExecuteBatch")
+	if !proto.Equal(options, testExecuteOptions) {
+		f.t.Errorf("wrong Execute options, got %+v, want %+v", options, testExecuteOptions)
+	}
+	execCase, ok := execMap[sqlList[0]]
+	if !ok {
+		return nil, fmt.Errorf("no match for: %s", sqlList)
+	}
+	query := &queryExecuteBatch{
+		SQLList:           sqlList,
+		BindVariablesList: bindVariablesList,
+		Keyspace:          keyspace,
+		TabletType:        tabletType,
+		Session:           session,
+		AsTransaction:     asTransaction,
+	}
+	if !reflect.DeepEqual(query, execCase.execQuery) {
+		f.t.Errorf("Execute: %+v, want %+v", query, execCase.execQuery)
+		return nil, nil
+	}
+	if execCase.outSession != nil {
+		*session = *execCase.outSession
+	}
+	return []sqltypes.QueryResponse{{
+		QueryResult: execCase.result,
+		QueryError:  nil,
+	}}, nil
+}
+
 // queryExecuteShards contains all the fields we use to test ExecuteShards
 type queryExecuteShards struct {
 	SQL              string

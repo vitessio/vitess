@@ -256,6 +256,50 @@ message ExecuteEntityIdsResponse {
   query.QueryResult result = 3;
 }
 
+// ExecuteBatchRequest is the payload to ExecuteBatch.
+message ExecuteBatchRequest {
+  // caller_id identifies the caller. This is the effective caller ID,
+  // set by the application to further identify the caller.
+  vtrpc.CallerID caller_id = 1;
+
+  // session carries the current transaction data. It is returned by Begin.
+  // Do not fill it in if outside of a transaction.
+  Session session = 2;
+
+  // queries is a list of query and bind variables to execute.
+  repeated query.BoundQuery queries = 3;
+
+  // tablet_type is the type of tablets that these queries is targeted to.
+  topodata.TabletType tablet_type = 4;
+
+  // as_transaction will execute the queries in this batch in a single transaction per shard,
+  // created for this purpose.
+  // (this can be seen as adding a 'begin' before and 'commit' after the queries).
+  // Only makes sense if tablet_type is master. If set, the Session is ignored.
+  bool as_transaction = 5;
+
+  // keyspace to target the queries to.
+  string keyspace = 6;
+
+  // options
+  query.ExecuteOptions options = 7;
+}
+
+
+// ExecuteBatchResponse is the returned value from ExecuteBatch.
+message ExecuteBatchResponse {
+  // error contains an application level error if necessary. Note the
+  // session may have changed, even when an error is returned (for
+  // instance if a database integrity error happened).
+  vtrpc.RPCError error = 1;
+
+  // session is the updated session information (only returned inside a transaction).
+  Session session = 2;
+
+  // results contains the query results, only set if application level error is unset.
+  repeated query.ResultWithError results = 3;
+}
+
 // BoundShardQuery represents a single query request for the
 // specified list of shards. This is used in a list for
 // ExecuteBatchShardsRequest.
