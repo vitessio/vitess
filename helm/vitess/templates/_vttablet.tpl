@@ -140,7 +140,8 @@ volumes:
   "command": ["bash", "-c", "
     set -ex\n
     # Split pod name (via hostname) into prefix and ordinal index.\n
-    [[ `hostname` =~ ^(.+)-([0-9]+)$ ]] || exit 1\n
+    hostname=$(hostname -s)\n
+    [[ $hostname =~ ^(.+)-([0-9]+)$ ]] || exit 1\n
     pod_prefix=${BASH_REMATCH[1]}\n
     pod_index=${BASH_REMATCH[2]}\n
     # Prepend cell name since tablet UIDs must be globally unique.\n
@@ -155,7 +156,7 @@ volumes:
     echo $tablet_uid > $VTDATAROOT/init/tablet-uid\n
     # Tell MySQL what hostname to report in SHOW SLAVE HOSTS.\n
     # Orchestrator looks there, so it should match -tablet_hostname above.\n
-    echo report-host=$(hostname).vttablet > $VTDATAROOT/init/report-host.cnf\n
+    echo report-host=$hostname.vttablet > $VTDATAROOT/init/report-host.cnf\n
   "],
   "volumeMounts": [
     {
