@@ -492,7 +492,7 @@ func (Nextval) iSelectExpr()      {}
 
 // StarExpr defines a '*' or 'table.*' expression.
 type StarExpr struct {
-	TableName TableIdent
+	TableName *TableName
 }
 
 // Format formats the node.

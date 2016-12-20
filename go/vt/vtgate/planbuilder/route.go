@@ -359,10 +359,8 @@ func (rb *route) PushStar(expr *sqlparser.StarExpr) *colsym {
 		colsym.Alias = sqlparser.NewColIdent("*")
 	} else {
 		colsym.QualifiedName = &sqlparser.ColName{
-			Qualifier: &sqlparser.TableName{
-				Name: expr.TableName,
-			},
-			Name: sqlparser.NewColIdent("*"),
+			Qualifier: expr.TableName,
+			Name:      sqlparser.NewColIdent("*"),
 		}
 	}
 	rb.Select.SelectExprs = append(rb.Select.SelectExprs, expr)

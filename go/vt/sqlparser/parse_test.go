@@ -87,6 +87,10 @@ func TestValid(t *testing.T) {
 	}, {
 		input: "select /* * */ * from t",
 	}, {
+		input: "select /* a.* */ a.* from t",
+	}, {
+		input: "select /* a.b.* */ a.b.* from t",
+	}, {
 		input:  "select /* column alias */ a b from t",
 		output: "select /* column alias */ a as b from t",
 	}, {

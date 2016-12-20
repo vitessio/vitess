@@ -6,6 +6,7 @@ package planbuilder
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vtgate/engine"
@@ -207,6 +208,14 @@ func pushSelectRoutes(selectExprs sqlparser.SelectExprs, bldr builder) ([]*colsy
 			rb, ok := bldr.(*route)
 			if !ok {
 				return nil, errors.New("unsupported: '*' expression in complex join")
+			}
+			// Validate keyspace reference if any.
+			if !node.TableName.IsEmpty() {
+				if qual := node.TableName.Qualifier; !qual.IsEmpty() {
+					if qual.String() != rb.ERoute.Keyspace.Name {
+						return nil, fmt.Errorf("cannot resolve %s to keyspace %s", sqlparser.String(node), rb.ERoute.Keyspace.Name)
+					}
+				}
 			}
 			// We can push without validating the reference because
 			// MySQL will fail if it's invalid.
