@@ -20,8 +20,8 @@ spec:
     app: vitess
 ---
 # Orchestrator replication controller
-apiVersion: v1
-kind: ReplicationController
+apiVersion: extensions/v1beta1
+kind: Deployment
 metadata:
   name: orchestrator
 spec:
