@@ -2,21 +2,26 @@ package sqlannotation
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 )
 
 func TestExtractKeyspaceIDKeyspaceID(t *testing.T) {
-	keyspaceID, err := ExtractKeySpaceID("DML /* vtgate:: keyspace_id:25AF */")
+	keyspaceIDS, err := ExtractKeyspaceIDS("DML /* vtgate:: keyspace_id:25AF,25BF */")
 	if err != nil {
 		t.Errorf("want nil, got: %v", err)
 	}
-	if !reflect.DeepEqual(keyspaceID, []byte{0x25, 0xAF}) {
-		t.Errorf("want: %v, got: %v", []byte{0x25, 0xAF}, keyspaceID)
+	if !reflect.DeepEqual(keyspaceIDS[0], []byte{0x25, 0xAF}) {
+		t.Errorf("want: %v, got: %v", []byte{0x25, 0xAF}, keyspaceIDS[0])
+	}
+
+	if !reflect.DeepEqual(keyspaceIDS[1], []byte{0x25, 0xBF}) {
+		t.Errorf("want: %v, got: %v", []byte{0x25, 0xBF}, keyspaceIDS[1])
 	}
 }
 
 func TestExtractKeyspaceIDUnfriendly(t *testing.T) {
-	_, err := ExtractKeySpaceID("DML /* vtgate:: filtered_replication_unfriendly */")
+	_, err := ExtractKeyspaceIDS("DML /* vtgate:: filtered_replication_unfriendly */")
 	extErr, ok := err.(*ExtractKeySpaceIDError)
 	if !ok {
 		t.Fatalf("want a type *ExtractKeySpaceIDError, got: %v", err)
@@ -35,7 +40,7 @@ func TestExtractKeyspaceIDParseError(t *testing.T) {
 }
 
 func verifyParseError(t *testing.T, sql string) {
-	_, err := ExtractKeySpaceID(sql)
+	_, err := ExtractKeyspaceIDS(sql)
 	extErr, ok := err.(*ExtractKeySpaceIDError)
 	if !ok {
 		t.Fatalf("want a type *ExtractKeySpaceIDError, got: %v", err)
@@ -69,30 +74,48 @@ func TestIsDML(t *testing.T) {
 
 func BenchmarkExtractKeyspaceIDKeyspaceID(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		ExtractKeySpaceID("DML /* vtgate:: keyspace_id:25AF */")
+		ExtractKeyspaceIDS("DML /* vtgate:: keyspace_id:25AF */")
 	}
 }
 
 func BenchmarkNativeExtractKeyspaceIDKeyspaceID(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		ExtractKeySpaceID("DML /* vtgate:: keyspace_id:25AF */")
+		ExtractKeyspaceIDS("DML /* vtgate:: keyspace_id:25AF */")
 	}
 }
 
 func BenchmarkExtractKeySpaceIDReplicationUnfriendly(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		ExtractKeySpaceID("DML /* vtgate:: filtered_replication_unfriendly */")
+		ExtractKeyspaceIDS("DML /* vtgate:: filtered_replication_unfriendly */")
 	}
 }
 
 func BenchmarkExtractKeySpaceIDNothing(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		ExtractKeySpaceID("DML")
+		ExtractKeyspaceIDS("DML")
 	}
 }
 
 func BenchmarkIsDML(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		IsDML("UPDATE ultimatequestion set answer=42 where question = 'What do you get if you multiply six by nine?'")
+	}
+}
+
+func TestAddKeyspaceIDs(t *testing.T) {
+	ksid1 := []byte{0x37}
+	ksid2 := []byte{0x29}
+	ksids := make([][]byte, 0)
+	ksids = append(ksids, ksid1)
+	ksids = append(ksids, ksid2)
+
+	sql := AddKeyspaceIDs("DML", [][]byte{ksid1}, "trailing_comments")
+	if !strings.EqualFold(sql, "DML /* vtgate:: keyspace_id:37 */trailing_comments") {
+		t.Errorf("want: %s, got: %s", "DML /* vtgate:: keyspace_id:37 */trailing_comments", sql)
+	}
+
+	sql = AddKeyspaceIDs("DML", ksids, "trailing_comments")
+	if !strings.EqualFold(sql, "DML /* vtgate:: keyspace_id:37,29 */trailing_comments") {
+		t.Errorf("want: %s, got: %s", "DML /* vtgate:: keyspace_id:37,29 */trailing_comments", sql)
 	}
 }

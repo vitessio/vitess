@@ -106,7 +106,7 @@ func TestValConvert(t *testing.T) {
 			out = err.Error()
 		}
 		if !reflect.DeepEqual(out, tc.out) {
-			t.Errorf("valConvert(%#v): %#v, want %#v", tc.in, out, tc.out)
+			t.Errorf("ValConvert(%#v): %#v, want %#v", tc.in, out, tc.out)
 		}
 	}
 }
