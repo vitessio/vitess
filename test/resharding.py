@@ -280,13 +280,16 @@ primary key (name)
     if multi_shard_split:
       mids = [10000001, 10000002, 10000003]
       msg_ids = ['msg-id10000001', 'msg-id10000002', 'msg-id10000003']
-      keyspace_ids = [0x9000000000000000, 0xD000000000000000, 0xE000000000000000]
-      self._insert_multi_value(shard_1_master, 'resharding1', mids, msg_ids, keyspace_ids)
+      keyspace_ids = [0x9000000000000000, 0xD000000000000000,
+                      0xE000000000000000]
+      self._insert_multi_value(shard_1_master, 'resharding1', mids,
+                               msg_ids, keyspace_ids)
     else:
       mids = [10000004, 10000005]
       msg_ids = ['msg-id10000004', 'msg-id10000005']
       keyspace_ids = [0xD000000000000000, 0xE000000000000000]
-      self._insert_multi_value(shard_1_master, 'resharding1', mids, msg_ids, keyspace_ids)
+      self._insert_multi_value(shard_1_master, 'resharding1', mids,
+                               msg_ids, keyspace_ids)
 
   def _check_multi_row_insert_values(self, multi_shard_split):
     if multi_shard_split:
