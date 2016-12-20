@@ -224,7 +224,7 @@
         "Name": "main",
         "Sharded": false
       },
-      "Query": "select next :n values from `seq`",
+      "Query": "select next :n values from seq",
       "Value": [
         1
       ]
@@ -250,7 +250,7 @@
         "Name": "main",
         "Sharded": false
       },
-      "Query": "select next :n values from `seq`",
+      "Query": "select next :n values from seq",
       "Value": [
         null
       ]
@@ -276,7 +276,7 @@
         "Name": "main",
         "Sharded": false
       },
-      "Query": "select next :n values from `seq`",
+      "Query": "select next :n values from seq",
       "Value": [
         1,
         null
@@ -316,7 +316,7 @@
         "Name": "main",
         "Sharded": false
       },
-      "Query": "select next :n values from `seq`",
+      "Query": "select next :n values from seq",
       "Value": [1]
     },
     "Prefix": "insert into user(id, Name, Costly) values ",
@@ -347,7 +347,7 @@
         "Name": "main",
         "Sharded": false
       },
-      "Query": "select next :n values from `seq`",
+      "Query": "select next :n values from seq",
       "Value": [null]
     },
     "Prefix": "insert into user(nonid, Id, Name, Costly) values ",
@@ -378,7 +378,7 @@
         "Name": "main",
         "Sharded": false
       },
-      "Query": "select next :n values from `seq`",
+      "Query": "select next :n values from seq",
       "Value": [1]
     },
     "Prefix": "insert into user(nonid, name, id, Costly) values ",
@@ -407,7 +407,7 @@
         "Name": "main",
         "Sharded": false
       },
-      "Query": "select next :n values from `seq`",
+      "Query": "select next :n values from seq",
       "Value": [null]
     },
     "Prefix": "insert into user_extra(nonid, user_id, extra_id) values ",
@@ -485,7 +485,7 @@
         "Name": "main",
         "Sharded": false
       },
-      "Query": "select next :n values from `seq`",
+      "Query": "select next :n values from seq",
       "Value": [1,2]
     },
     "Prefix": "insert into user(id, Name, Costly) values ",

@@ -1897,13 +1897,26 @@ func (node *TableIdent) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Backtick produces a backticked literal given an input string.
+func Backtick(in string) string {
+	var buf bytes.Buffer
+	buf.WriteByte('`')
+	for _, c := range in {
+		buf.WriteRune(c)
+		if c == '`' {
+			buf.WriteByte('`')
+		}
+	}
+	buf.WriteByte('`')
+	return buf.String()
+}
+
 func formatID(buf *TrackedBuffer, original, lowered string) {
 	for i, c := range original {
-		if i == 0 && isDigit(uint16(c)) {
-			goto mustEscape
-		}
-		if !isLetter(uint16(c)) && !isDigit(uint16(c)) {
-			goto mustEscape
+		if !isLetter(uint16(c)) {
+			if i == 0 || !isDigit(uint16(c)) {
+				goto mustEscape
+			}
 		}
 	}
 	if _, ok := keywords[lowered]; ok {
@@ -1926,13 +1939,11 @@ mustEscape:
 func compliantName(in string) string {
 	var buf bytes.Buffer
 	for i, c := range in {
-		if i == 0 && isDigit(uint16(c)) {
-			buf.WriteByte('_')
-			continue
-		}
-		if !isLetter(uint16(c)) && !isDigit(uint16(c)) {
-			buf.WriteByte('_')
-			continue
+		if !isLetter(uint16(c)) {
+			if i == 0 || !isDigit(uint16(c)) {
+				buf.WriteByte('_')
+				continue
+			}
 		}
 		buf.WriteRune(c)
 	}

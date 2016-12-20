@@ -27,25 +27,25 @@ import (
 
 const (
 	sqlTurnoffBinlog   = "set @@session.sql_log_bin = 0"
-	sqlCreateSidecarDB = "create database if not exists `%s`"
+	sqlCreateSidecarDB = "create database if not exists %s"
 
-	sqlDropLegacy1 = "drop table if exists `%s`.redo_log_transaction"
-	sqlDropLegacy2 = "drop table if exists `%s`.redo_log_statement"
-	sqlDropLegacy3 = "drop table if exists `%s`.transaction"
-	sqlDropLegacy4 = "drop table if exists `%s`.participant"
+	sqlDropLegacy1 = "drop table if exists %s.redo_log_transaction"
+	sqlDropLegacy2 = "drop table if exists %s.redo_log_statement"
+	sqlDropLegacy3 = "drop table if exists %s.transaction"
+	sqlDropLegacy4 = "drop table if exists %s.participant"
 
 	// RedoStateFailed represents the Failed state for redo_state.
 	RedoStateFailed = 0
 	// RedoStatePrepared represents the Prepared state for redo_state.
 	RedoStatePrepared       = 1
-	sqlCreateTableRedoState = `create table if not exists ` + "`%s`" + `.redo_state(
+	sqlCreateTableRedoState = `create table if not exists %s.redo_state(
   dtid varbinary(512),
   state bigint,
   time_created bigint,
   primary key(dtid)
 	) engine=InnoDB`
 
-	sqlCreateTableRedoStatement = `create table if not exists ` + "`%s`" + `.redo_statement(
+	sqlCreateTableRedoStatement = `create table if not exists %s.redo_statement(
   dtid varbinary(512),
   id bigint,
   statement mediumblob,
@@ -58,14 +58,14 @@ const (
 	DTStateCommit = querypb.TransactionState_COMMIT
 	// DTStateRollback represents the ROLLBACK state for dt_state.
 	DTStateRollback       = querypb.TransactionState_ROLLBACK
-	sqlCreateTableDTState = `create table if not exists ` + "`%s`" + `.dt_state(
+	sqlCreateTableDTState = `create table if not exists %s.dt_state(
   dtid varbinary(512),
   state bigint,
   time_created bigint,
   primary key(dtid)
 	) engine=InnoDB`
 
-	sqlCreateTableDTParticipant = `create table if not exists ` + "`%s`" + `.dt_participant(
+	sqlCreateTableDTParticipant = `create table if not exists %s.dt_participant(
   dtid varbinary(512),
 	id bigint,
 	keyspace varchar(256),
@@ -74,13 +74,13 @@ const (
 	) engine=InnoDB`
 
 	sqlReadAllRedo = `select t.dtid, t.state, t.time_created, s.statement
-	from ` + "`%s`" + `.redo_state t
-  join ` + "`%s`" + `.redo_statement s on t.dtid = s.dtid
+	from %s.redo_state t
+  join %s.redo_statement s on t.dtid = s.dtid
 	order by t.dtid, s.id`
 
 	sqlReadAllTransactions = `select t.dtid, t.state, t.time_created, p.keyspace, p.shard
-	from ` + "`%s`" + `.dt_state t
-  join ` + "`%s`" + `.dt_participant p on t.dtid = p.dtid
+	from %s.dt_state t
+  join %s.dt_participant p on t.dtid = p.dtid
 	order by t.dtid, p.id`
 )
 
@@ -115,6 +115,7 @@ func NewTwoPC(readPool *ConnPool) *TwoPC {
 // Init initializes TwoPC. If the metadata database or tables
 // are not present, they are created.
 func (tpc *TwoPC) Init(sidecarDBName string, dbaparams *sqldb.ConnParams) error {
+	dbname := sqlparser.Backtick(sidecarDBName)
 	conn, err := dbconnpool.NewDBConnection(dbaparams, stats.NewTimings(""))
 	if err != nil {
 		return err
@@ -122,15 +123,15 @@ func (tpc *TwoPC) Init(sidecarDBName string, dbaparams *sqldb.ConnParams) error 
 	defer conn.Close()
 	statements := []string{
 		sqlTurnoffBinlog,
-		fmt.Sprintf(sqlCreateSidecarDB, sidecarDBName),
-		fmt.Sprintf(sqlDropLegacy1, sidecarDBName),
-		fmt.Sprintf(sqlDropLegacy2, sidecarDBName),
-		fmt.Sprintf(sqlDropLegacy3, sidecarDBName),
-		fmt.Sprintf(sqlDropLegacy4, sidecarDBName),
-		fmt.Sprintf(sqlCreateTableRedoState, sidecarDBName),
-		fmt.Sprintf(sqlCreateTableRedoStatement, sidecarDBName),
-		fmt.Sprintf(sqlCreateTableDTState, sidecarDBName),
-		fmt.Sprintf(sqlCreateTableDTParticipant, sidecarDBName),
+		fmt.Sprintf(sqlCreateSidecarDB, dbname),
+		fmt.Sprintf(sqlDropLegacy1, dbname),
+		fmt.Sprintf(sqlDropLegacy2, dbname),
+		fmt.Sprintf(sqlDropLegacy3, dbname),
+		fmt.Sprintf(sqlDropLegacy4, dbname),
+		fmt.Sprintf(sqlCreateTableRedoState, dbname),
+		fmt.Sprintf(sqlCreateTableRedoStatement, dbname),
+		fmt.Sprintf(sqlCreateTableDTState, dbname),
+		fmt.Sprintf(sqlCreateTableDTParticipant, dbname),
 	}
 	for _, s := range statements {
 		if _, err := conn.ExecuteFetch(s, 0, false); err != nil {
@@ -138,50 +139,50 @@ func (tpc *TwoPC) Init(sidecarDBName string, dbaparams *sqldb.ConnParams) error 
 		}
 	}
 	tpc.insertRedoTx = buildParsedQuery(
-		"insert into `%s`.redo_state(dtid, state, time_created) values (%a, %a, %a)",
-		sidecarDBName, ":dtid", ":state", ":time_created")
+		"insert into %s.redo_state(dtid, state, time_created) values (%a, %a, %a)",
+		dbname, ":dtid", ":state", ":time_created")
 	tpc.insertRedoStmt = buildParsedQuery(
-		"insert into `%s`.redo_statement(dtid, id, statement) values %a",
-		sidecarDBName, ":vals")
+		"insert into %s.redo_statement(dtid, id, statement) values %a",
+		dbname, ":vals")
 	tpc.updateRedoTx = buildParsedQuery(
-		"update `%s`.redo_state set state = %a where dtid = %a",
-		sidecarDBName, ":state", ":dtid")
+		"update %s.redo_state set state = %a where dtid = %a",
+		dbname, ":state", ":dtid")
 	tpc.deleteRedoTx = buildParsedQuery(
-		"delete from `%s`.redo_state where dtid = %a",
-		sidecarDBName, ":dtid")
+		"delete from %s.redo_state where dtid = %a",
+		dbname, ":dtid")
 	tpc.deleteRedoStmt = buildParsedQuery(
-		"delete from `%s`.redo_statement where dtid = %a",
-		sidecarDBName, ":dtid")
-	tpc.readAllRedo = fmt.Sprintf(sqlReadAllRedo, sidecarDBName, sidecarDBName)
+		"delete from %s.redo_statement where dtid = %a",
+		dbname, ":dtid")
+	tpc.readAllRedo = fmt.Sprintf(sqlReadAllRedo, dbname, dbname)
 	tpc.countUnresolvedRedo = buildParsedQuery(
-		"select count(*) from `%s`.redo_state where time_created < %a",
-		sidecarDBName, ":time_created")
+		"select count(*) from %s.redo_state where time_created < %a",
+		dbname, ":time_created")
 
 	tpc.insertTransaction = buildParsedQuery(
-		"insert into `%s`.dt_state(dtid, state, time_created) values (%a, %a, %a)",
-		sidecarDBName, ":dtid", ":state", ":cur_time")
+		"insert into %s.dt_state(dtid, state, time_created) values (%a, %a, %a)",
+		dbname, ":dtid", ":state", ":cur_time")
 	tpc.insertParticipants = buildParsedQuery(
-		"insert into `%s`.dt_participant(dtid, id, keyspace, shard) values %a",
-		sidecarDBName, ":vals")
+		"insert into %s.dt_participant(dtid, id, keyspace, shard) values %a",
+		dbname, ":vals")
 	tpc.transition = buildParsedQuery(
-		"update `%s`.dt_state set state = %a where dtid = %a and state = %a",
-		sidecarDBName, ":state", ":dtid", ":prepare")
+		"update %s.dt_state set state = %a where dtid = %a and state = %a",
+		dbname, ":state", ":dtid", ":prepare")
 	tpc.deleteTransaction = buildParsedQuery(
-		"delete from `%s`.dt_state where dtid = %a",
-		sidecarDBName, ":dtid")
+		"delete from %s.dt_state where dtid = %a",
+		dbname, ":dtid")
 	tpc.deleteParticipants = buildParsedQuery(
-		"delete from `%s`.dt_participant where dtid = %a",
-		sidecarDBName, ":dtid")
+		"delete from %s.dt_participant where dtid = %a",
+		dbname, ":dtid")
 	tpc.readTransaction = buildParsedQuery(
-		"select dtid, state, time_created from `%s`.dt_state where dtid = %a",
-		sidecarDBName, ":dtid")
+		"select dtid, state, time_created from %s.dt_state where dtid = %a",
+		dbname, ":dtid")
 	tpc.readParticipants = buildParsedQuery(
-		"select keyspace, shard from `%s`.dt_participant where dtid = %a",
-		sidecarDBName, ":dtid")
+		"select keyspace, shard from %s.dt_participant where dtid = %a",
+		dbname, ":dtid")
 	tpc.readAbandoned = buildParsedQuery(
-		"select dtid, time_created from `%s`.dt_state where time_created < %a",
-		sidecarDBName, ":time_created")
-	tpc.readAllTransactions = fmt.Sprintf(sqlReadAllTransactions, sidecarDBName, sidecarDBName)
+		"select dtid, time_created from %s.dt_state where time_created < %a",
+		dbname, ":time_created")
+	tpc.readAllTransactions = fmt.Sprintf(sqlReadAllTransactions, dbname, dbname)
 	return nil
 }
 

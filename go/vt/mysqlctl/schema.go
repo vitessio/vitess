@@ -14,6 +14,7 @@ import (
 
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
+	"github.com/youtube/vitess/go/vt/sqlparser"
 
 	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
 )
@@ -36,16 +37,17 @@ func (mysqld *Mysqld) executeSchemaCommands(sql string) error {
 func (mysqld *Mysqld) GetSchema(dbName string, tables, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error) {
 	ctx := context.TODO()
 	sd := &tabletmanagerdatapb.SchemaDefinition{}
+	backtickDBName := sqlparser.Backtick(dbName)
 
 	// get the database creation command
-	qr, fetchErr := mysqld.FetchSuperQuery(ctx, fmt.Sprintf("SHOW CREATE DATABASE IF NOT EXISTS `%s`", dbName))
+	qr, fetchErr := mysqld.FetchSuperQuery(ctx, fmt.Sprintf("SHOW CREATE DATABASE IF NOT EXISTS %s", backtickDBName))
 	if fetchErr != nil {
 		return nil, fetchErr
 	}
 	if len(qr.Rows) == 0 {
 		return nil, fmt.Errorf("empty create database statement for %v", dbName)
 	}
-	sd.DatabaseSchema = strings.Replace(qr.Rows[0][1].String(), "`"+dbName+"`", "`{{.DatabaseName}}`", 1)
+	sd.DatabaseSchema = strings.Replace(qr.Rows[0][1].String(), backtickDBName, "{{.DatabaseName}}", 1)
 
 	// get the list of tables we're interested in
 	sql := "SELECT table_name, table_type, data_length, table_rows FROM information_schema.tables WHERE table_schema = '" + dbName + "'"
@@ -84,7 +86,7 @@ func (mysqld *Mysqld) GetSchema(dbName string, tables, excludeTables []string, i
 			}
 		}
 
-		qr, fetchErr := mysqld.FetchSuperQuery(ctx, fmt.Sprintf("SHOW CREATE TABLE `%s`.`%s`", dbName, tableName))
+		qr, fetchErr := mysqld.FetchSuperQuery(ctx, fmt.Sprintf("SHOW CREATE TABLE %s.%s", backtickDBName, sqlparser.Backtick(tableName)))
 		if fetchErr != nil {
 			return nil, fetchErr
 		}
@@ -100,7 +102,7 @@ func (mysqld *Mysqld) GetSchema(dbName string, tables, excludeTables []string, i
 		if tableType == tmutils.TableView {
 			// Views will have the dbname in there, replace it
 			// with {{.DatabaseName}}
-			norm = strings.Replace(norm, "`"+dbName+"`", "`{{.DatabaseName}}`", -1)
+			norm = strings.Replace(norm, backtickDBName, "{{.DatabaseName}}", -1)
 		}
 
 		td := &tabletmanagerdatapb.TableDefinition{}
@@ -150,7 +152,7 @@ func (mysqld *Mysqld) GetColumns(dbName, table string) ([]string, error) {
 		return nil, err
 	}
 	defer conn.Recycle()
-	qr, err := conn.ExecuteFetch(fmt.Sprintf("SELECT * FROM `%s`.`%s` WHERE 1=0", dbName, table), 0, true)
+	qr, err := conn.ExecuteFetch(fmt.Sprintf("SELECT * FROM %s.%s WHERE 1=0", sqlparser.Backtick(dbName), sqlparser.Backtick(table)), 0, true)
 	if err != nil {
 		return nil, err
 	}
@@ -169,7 +171,7 @@ func (mysqld *Mysqld) GetPrimaryKeyColumns(dbName, table string) ([]string, erro
 		return nil, err
 	}
 	defer conn.Recycle()
-	qr, err := conn.ExecuteFetch(fmt.Sprintf("SHOW INDEX FROM `%v`.`%v`", dbName, table), 100, true)
+	qr, err := conn.ExecuteFetch(fmt.Sprintf("SHOW INDEX FROM %s.%s", sqlparser.Backtick(dbName), sqlparser.Backtick(table)), 100, true)
 	if err != nil {
 		return nil, err
 	}
@@ -238,7 +240,7 @@ func (mysqld *Mysqld) PreflightSchemaChange(dbName string, changes []string) ([]
 		if td.Type == tmutils.TableView {
 			// Views will have {{.DatabaseName}} in there, replace
 			// it with _vt_preflight
-			s := strings.Replace(td.Schema, "`{{.DatabaseName}}`", "`_vt_preflight`", -1)
+			s := strings.Replace(td.Schema, "{{.DatabaseName}}", "`_vt_preflight`", -1)
 			initialCopySQL += s + ";\n"
 		}
 	}
@@ -321,7 +323,7 @@ func (mysqld *Mysqld) ApplySchemaChange(dbName string, change *tmutils.SchemaCha
 	}
 
 	// add a 'use XXX' in front of the SQL
-	sql = fmt.Sprintf("USE `%s`;\n%s", dbName, sql)
+	sql = fmt.Sprintf("USE %s;\n%s", sqlparser.Backtick(dbName), sql)
 
 	// execute the schema change using an external mysql process
 	// (to benefit from the extra commands in mysql cli)

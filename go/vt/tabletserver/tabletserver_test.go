@@ -1721,16 +1721,16 @@ func checkTabletServerState(t *testing.T, tsv *TabletServer, expectState int64) 
 func getSupportedQueries() map[string]*sqltypes.Result {
 	return map[string]*sqltypes.Result{
 		// queries for twopc
-		sqlTurnoffBinlog:                                {},
-		fmt.Sprintf(sqlCreateSidecarDB, "_vt"):          {},
-		fmt.Sprintf(sqlDropLegacy1, "_vt"):              {},
-		fmt.Sprintf(sqlDropLegacy2, "_vt"):              {},
-		fmt.Sprintf(sqlDropLegacy3, "_vt"):              {},
-		fmt.Sprintf(sqlDropLegacy4, "_vt"):              {},
-		fmt.Sprintf(sqlCreateTableRedoState, "_vt"):     {},
-		fmt.Sprintf(sqlCreateTableRedoStatement, "_vt"): {},
-		fmt.Sprintf(sqlCreateTableDTState, "_vt"):       {},
-		fmt.Sprintf(sqlCreateTableDTParticipant, "_vt"): {},
+		sqlTurnoffBinlog:                                  {},
+		fmt.Sprintf(sqlCreateSidecarDB, "`_vt`"):          {},
+		fmt.Sprintf(sqlDropLegacy1, "`_vt`"):              {},
+		fmt.Sprintf(sqlDropLegacy2, "`_vt`"):              {},
+		fmt.Sprintf(sqlDropLegacy3, "`_vt`"):              {},
+		fmt.Sprintf(sqlDropLegacy4, "`_vt`"):              {},
+		fmt.Sprintf(sqlCreateTableRedoState, "`_vt`"):     {},
+		fmt.Sprintf(sqlCreateTableRedoStatement, "`_vt`"): {},
+		fmt.Sprintf(sqlCreateTableDTState, "`_vt`"):       {},
+		fmt.Sprintf(sqlCreateTableDTParticipant, "`_vt`"): {},
 		// queries for schema info
 		"select unix_timestamp()": {
 			RowsAffected: 1,
@@ -1765,21 +1765,6 @@ func getSupportedQueries() map[string]*sqltypes.Result {
 				Type: sqltypes.VarChar,
 			}},
 		},
-		"select * from `test_table` where 1 != 1": {
-			Fields: []*querypb.Field{{
-				Name: "pk",
-				Type: sqltypes.Int32,
-			}, {
-				Name: "name",
-				Type: sqltypes.Int32,
-			}, {
-				Name: "addr",
-				Type: sqltypes.Int32,
-			}, {
-				Name: "name_string",
-				Type: sqltypes.VarChar,
-			}},
-		},
 		baseShowTables: {
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
@@ -1796,7 +1781,7 @@ func getSupportedQueries() map[string]*sqltypes.Result {
 				},
 			},
 		},
-		"describe `test_table`": {
+		"describe test_table": {
 			RowsAffected: 4,
 			Rows: [][]sqltypes.Value{
 				{
@@ -1834,7 +1819,7 @@ func getSupportedQueries() map[string]*sqltypes.Result {
 			},
 		},
 		// for SplitQuery because it needs a primary key column
-		"show index from `test_table`": {
+		"show index from test_table": {
 			RowsAffected: 3,
 			Rows: [][]sqltypes.Value{
 				{
@@ -1885,7 +1870,7 @@ func getSupportedQueries() map[string]*sqltypes.Result {
 				},
 			},
 		},
-		fmt.Sprintf(sqlReadAllRedo, "_vt", "_vt"): {},
+		fmt.Sprintf(sqlReadAllRedo, "`_vt`", "`_vt`"): {},
 	}
 }
 

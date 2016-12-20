@@ -414,7 +414,7 @@ func TestInsertGeneratorSharded(t *testing.T) {
 		t.Errorf("sbc.Queries: %+v, want %+v\n", sbc.Queries, wantQueries)
 	}
 	wantQueries = []querytypes.BoundQuery{{
-		Sql:           "select next :n values from `user_seq`",
+		Sql:           "select next :n values from user_seq",
 		BindVariables: map[string]interface{}{"n": int64(1)},
 	}, {
 		Sql: "insert into name_user_map(name, user_id) values (:name, :user_id)",
@@ -440,7 +440,7 @@ func TestInsertGeneratorUnsharded(t *testing.T) {
 		t.Error(err)
 	}
 	wantQueries := []querytypes.BoundQuery{{
-		Sql:           "select next :n values from `user_seq`",
+		Sql:           "select next :n values from user_seq",
 		BindVariables: map[string]interface{}{"n": int64(1)},
 	}, {
 		Sql: "insert into main1(id, name) values (:__seq0, 'myname')",
@@ -514,7 +514,7 @@ func TestInsertLookupOwnedGenerator(t *testing.T) {
 		t.Errorf("sbc.Queries:\n%+v, want\n%+v\n", sbc.Queries, wantQueries)
 	}
 	wantQueries = []querytypes.BoundQuery{{
-		Sql:           "select next :n values from `user_seq`",
+		Sql:           "select next :n values from user_seq",
 		BindVariables: map[string]interface{}{"n": int64(1)},
 	}, {
 		Sql: "insert into music_user_map(music_id, user_id) values (:music_id, :user_id)",
@@ -863,7 +863,7 @@ func TestMultiInsertGenerator(t *testing.T) {
 		t.Errorf("sbc.Queries:\n%+v, want\n%+v\n", sbc.Queries, wantQueries)
 	}
 	wantQueries = []querytypes.BoundQuery{{
-		Sql:           "select next :n values from `user_seq`",
+		Sql:           "select next :n values from user_seq",
 		BindVariables: map[string]interface{}{"n": int64(2)},
 	}, {
 		Sql: "insert into music_user_map(music_id, user_id) values (:music_id, :user_id)",
@@ -921,7 +921,7 @@ func TestMultiInsertGeneratorSparse(t *testing.T) {
 		t.Errorf("sbc.Queries:\n%+v, want\n%+v\n", sbc.Queries, wantQueries)
 	}
 	wantQueries = []querytypes.BoundQuery{{
-		Sql:           "select next :n values from `user_seq`",
+		Sql:           "select next :n values from user_seq",
 		BindVariables: map[string]interface{}{"n": int64(2)},
 	}, {
 		Sql: "insert into music_user_map(music_id, user_id) values (:music_id, :user_id)",
