@@ -236,7 +236,6 @@ primary key (name)
     self._insert_value(shard_1_master, 'resharding1', 3, 'msg3',
                        0xD000000000000000)
 
-
   def _check_startup_values(self):
     # check first value is in the right shard
     self._check_value(shard_2_master, 'resharding1', 2, 'msg2',
@@ -278,52 +277,57 @@ primary key (name)
                          'msg-range2-%d' % i, 0xE000000000000000 + base + i)
 
   def _insert_multiValueInserts(self, multi_shard_split):
-    if (multi_shard_split):
-      midList = [10000001,10000002,10000003]
-      msgList = ["msg-id10000001","msg-id10000002","msg-id10000003"]
-      keyspace_idList = [0x9000000000000000,0xD000000000000000,0xE000000000000000]
-      self._insert_multi_value(shard_1_master,'resharding1',midList,msgList,keyspace_idList)
+    if multi_shard_split:
+      mids = [10000001, 10000002, 10000003]
+      msg_ids = ['msg-id10000001', 'msg-id10000002', 'msg-id10000003']
+      keyspace_ids = [0x9000000000000000, 0xD000000000000000, 0xE000000000000000]
+      self._insert_multi_value(shard_1_master, 'resharding1', mids, msg_ids, keyspace_ids)
     else:
-      midList = [10000004,10000005]
-      msgList = ["msg-id10000004","msg-id10000005"]
-      keyspace_idList = [0xD000000000000000,0xE000000000000000]
-      self._insert_multi_value(shard_1_master,'resharding1',midList,msgList,keyspace_idList)
+      mids = [10000004, 10000005]
+      msg_ids = ['msg-id10000004', 'msg-id10000005']
+      keyspace_ids = [0xD000000000000000, 0xE000000000000000]
+      self._insert_multi_value(shard_1_master, 'resharding1', mids, msg_ids, keyspace_ids)
 
   def _check_multiRowInsert_values(self, multi_shard_split):
-    if (multi_shard_split):
-      self._check_value(shard_2_master, 'resharding1', 10000001, 'msg-id10000001',
-                          0x9000000000000000)
-      self._check_value(shard_3_master, 'resharding1', 10000001, 'msg-id10000001',
-                        0x9000000000000000, should_be_here=False)
-      self._check_value(shard_2_replica1, 'resharding1', 10000001, 'msg-id10000001',
-                        0x9000000000000000)
-      self._check_value(shard_2_replica2, 'resharding1', 10000001, 'msg-id10000001',
-                        0x9000000000000000)
-      self._check_value(shard_3_master, 'resharding1', 10000002, 'msg-id10000002',
-                        0xD000000000000000)
-      self._check_value(shard_2_master, 'resharding1', 10000002, 'msg-id10000002',
-                        0xD000000000000000,should_be_here=False)
-      self._check_value(shard_3_replica, 'resharding1', 10000002, 'msg-id10000002',
-                        0xD000000000000000)
-      self._check_value(shard_3_master, 'resharding1', 10000003, 'msg-id10000003',
-                        0xE000000000000000)
-      self._check_value(shard_2_master, 'resharding1', 10000003, 'msg-id10000003',
-                        0xE000000000000000, should_be_here=False)
-      self._check_value(shard_3_replica, 'resharding1', 10000003, 'msg-id10000003',
-                        0xE000000000000000)
+    if multi_shard_split:
+      self._check_value(shard_2_master, 'resharding1', 10000001,
+                        'msg-id10000001', 0x9000000000000000)
+      self._check_value(shard_3_master, 'resharding1', 10000001,
+                        'msg-id10000001', 0x9000000000000000,
+                        should_be_here=False)
+      self._check_value(shard_2_replica1, 'resharding1', 10000001,
+                        'msg-id10000001', 0x9000000000000000)
+      self._check_value(shard_2_replica2, 'resharding1', 10000001,
+                        'msg-id10000001', 0x9000000000000000)
+      self._check_value(shard_3_master, 'resharding1', 10000002,
+                        'msg-id10000002', 0xD000000000000000)
+      self._check_value(shard_2_master, 'resharding1', 10000002,
+                        'msg-id10000002', 0xD000000000000000,
+                        should_be_here=False)
+      self._check_value(shard_3_replica, 'resharding1', 10000002,
+                        'msg-id10000002', 0xD000000000000000)
+      self._check_value(shard_3_master, 'resharding1', 10000003,
+                        'msg-id10000003', 0xE000000000000000)
+      self._check_value(shard_2_master, 'resharding1', 10000003,
+                        'msg-id10000003', 0xE000000000000000,
+                        should_be_here=False)
+      self._check_value(shard_3_replica, 'resharding1', 10000003,
+                        'msg-id10000003', 0xE000000000000000)
     else:
-      self._check_value(shard_3_master, 'resharding1', 10000004, 'msg-id10000004',
-                        0xD000000000000000)
-      self._check_value(shard_2_master, 'resharding1', 10000004, 'msg-id10000004',
-                        0xD000000000000000,should_be_here=False)
-      self._check_value(shard_3_replica, 'resharding1', 10000004, 'msg-id10000004',
-                        0xD000000000000000)
-      self._check_value(shard_3_master, 'resharding1', 10000005, 'msg-id10000005',
-                        0xE000000000000000)
-      self._check_value(shard_2_master, 'resharding1', 10000005, 'msg-id10000005',
-                        0xE000000000000000,should_be_here=False)
-      self._check_value(shard_3_replica, 'resharding1', 10000005, 'msg-id10000005',
-                        0xE000000000000000)
+      self._check_value(shard_3_master, 'resharding1', 10000004,
+                        'msg-id10000004', 0xD000000000000000)
+      self._check_value(shard_2_master, 'resharding1', 10000004,
+                        'msg-id10000004', 0xD000000000000000,
+                        should_be_here=False)
+      self._check_value(shard_3_replica, 'resharding1', 10000004,
+                        'msg-id10000004', 0xD000000000000000)
+      self._check_value(shard_3_master, 'resharding1', 10000005,
+                        'msg-id10000005', 0xE000000000000000)
+      self._check_value(shard_2_master, 'resharding1', 10000005,
+                        'msg-id10000005', 0xE000000000000000,
+                        should_be_here=False)
+      self._check_value(shard_3_replica, 'resharding1', 10000005,
+                        'msg-id10000005', 0xE000000000000000)
 
   # _check_lots returns how many of the values we have, in percents.
   def _check_lots(self, count, base=0):
