@@ -15,10 +15,10 @@ import (
 	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
 	"github.com/youtube/vitess/go/vt/tabletserver/grpcqueryservice"
 	"github.com/youtube/vitess/go/vt/tabletserver/queryservice/fakes"
+	"github.com/youtube/vitess/go/vt/topo/zk2topo"
 	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
 	"github.com/youtube/vitess/go/vt/wrangler"
 	"github.com/youtube/vitess/go/vt/wrangler/testlib"
-	"github.com/youtube/vitess/go/vt/zktopo/zktestserver"
 	"golang.org/x/net/context"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
@@ -159,7 +159,7 @@ func (sq *sourceTabletServer) StreamExecute(ctx context.Context, target *querypb
 func testSplitDiff(t *testing.T, v3 bool) {
 	*useV3ReshardingMode = v3
 	db := fakesqldb.Register()
-	ts := zktestserver.New(t, []string{"cell1", "cell2"})
+	ts := zk2topo.NewFakeServer("cell1", "cell2")
 	ctx := context.Background()
 	wi := NewInstance(ts, "cell1", time.Second)
 

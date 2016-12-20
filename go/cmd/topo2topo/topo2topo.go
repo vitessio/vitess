@@ -6,7 +6,6 @@ package main
 
 import (
 	"flag"
-	"os"
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/exit"
@@ -16,13 +15,20 @@ import (
 	"golang.org/x/net/context"
 )
 
-var fromTopo = flag.String("from", "", "topology to copy data from")
-var toTopo = flag.String("to", "", "topology to copy data to")
+var (
+	fromImplementation = flag.String("from_implementation", "", "topology implementation to copy data from")
+	fromServerAddress  = flag.String("from_server", "", "topology server address to copy data from")
+	fromRoot           = flag.String("from_root", "", "topology server root to copy data from")
 
-var doKeyspaces = flag.Bool("do-keyspaces", false, "copies the keyspace information")
-var doShards = flag.Bool("do-shards", false, "copies the shard information")
-var doShardReplications = flag.Bool("do-shard-replications", false, "copies the shard replication information")
-var doTablets = flag.Bool("do-tablets", false, "copies the tablet information")
+	toImplementation = flag.String("to_implementation", "", "topology implementation to copy data to")
+	toServerAddress  = flag.String("to_server", "", "topology server address to copy data to")
+	toRoot           = flag.String("to_root", "", "topology server root to copy data to")
+
+	doKeyspaces         = flag.Bool("do-keyspaces", false, "copies the keyspace information")
+	doShards            = flag.Bool("do-shards", false, "copies the shard information")
+	doShardReplications = flag.Bool("do-shard-replications", false, "copies the shard replication information")
+	doTablets           = flag.Bool("do-tablets", false, "copies the tablet information")
+)
 
 func main() {
 	defer exit.RecoverAll()
@@ -32,17 +38,19 @@ func main() {
 	args := flag.Args()
 	if len(args) != 0 {
 		flag.Usage()
-		os.Exit(1)
+		log.Fatalf("topo2topo doesn't take any parameter.")
 	}
 
-	if *fromTopo == "" || *toTopo == "" {
-		log.Errorf("Need both from and to topo")
-		exit.Return(1)
+	fromTS, err := topo.OpenServer(*fromImplementation, *fromServerAddress, *fromRoot)
+	if err != nil {
+		log.Fatalf("Cannot open 'from' topo %v: %v", *fromImplementation, err)
+	}
+	toTS, err := topo.OpenServer(*toImplementation, *toServerAddress, *toRoot)
+	if err != nil {
+		log.Fatalf("Cannot open 'to' topo %v: %v", *toImplementation, err)
 	}
 
 	ctx := context.Background()
-	fromTS := topo.GetServerByName(*fromTopo)
-	toTS := topo.GetServerByName(*toTopo)
 
 	if *doKeyspaces {
 		helpers.CopyKeyspaces(ctx, fromTS.Impl, toTS.Impl)

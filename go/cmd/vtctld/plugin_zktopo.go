@@ -8,7 +8,6 @@ package main
 
 import (
 	"github.com/youtube/vitess/go/vt/servenv"
-	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtctld"
 	"github.com/youtube/vitess/go/vt/zktopo"
 )
@@ -16,7 +15,7 @@ import (
 func init() {
 	// Wait until flags are parsed, so we can check which topo server is in use.
 	servenv.OnRun(func() {
-		if zkServer, ok := topo.GetServer().Impl.(*zktopo.Server); ok {
+		if zkServer, ok := ts.Impl.(*zktopo.Server); ok {
 			vtctld.HandleExplorer("zk", zktopo.NewZkExplorer(zkServer.GetZConn()))
 		}
 	})

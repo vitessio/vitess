@@ -101,16 +101,23 @@ before_script:
   - source dev.env
   # Travis only tests. Run only on the first shard.
   # Part of "before_script" because in "script" the job would not fail immediately if a command fails.
-  # Webdriver tests are only on the last shard for non PRs. Start Sauce Connect only on this shard.
   - |
     if [[ $TEST_MATRIX = *"-shard 0"* ]]; then
       travis/check_make_proto.sh
-    elif [[ $TEST_MATRIX = *"-shard 4"* && $TRAVIS_PULL_REQUEST = "false" ]]; then
+    fi
+  # Webdriver tests are only on the last shard for non PRs. Start Sauce Connect only on this shard.
+  - |
+    if [[ $TEST_MATRIX = *"-shard 4"* && $TRAVIS_PULL_REQUEST = "false" ]]; then
       tools/sauce_connect_setup.sh
     fi
 script:
   # Log GOMAXPROCS (should be 2 as of 07/2015).
   - go run travis/log_gomaxprocs.go
+  # Shard 0: Run unit tests and post coverage to coveralls.io (will show up on pull request).
+  - |
+    if [[ $TEST_MATRIX = *"-shard 0"* ]]; then
+      go run test.go $TEST_FLAGS goveralls
+    fi
   - |
     if [[ $TRAVIS_PULL_REQUEST = "false" ]]; then
       go run test.go $TEST_FLAGS $TEST_MATRIX

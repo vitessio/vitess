@@ -120,7 +120,8 @@ func main() {
 	if servenv.GRPCPort != nil {
 		gRPCPort = int32(*servenv.GRPCPort)
 	}
-	agent, err = tabletmanager.NewActionAgent(context.Background(), mysqld, qsc, tabletAlias, *dbcfgs, mycnf, int32(*servenv.Port), gRPCPort)
+	ts := topo.Open()
+	agent, err = tabletmanager.NewActionAgent(context.Background(), ts, mysqld, qsc, tabletAlias, *dbcfgs, mycnf, int32(*servenv.Port), gRPCPort)
 	if err != nil {
 		log.Error(err)
 		exit.Return(1)
@@ -129,7 +130,7 @@ func main() {
 	servenv.OnClose(func() {
 		// We will still use the topo server during lameduck period
 		// to update our state, so closing it in OnClose()
-		topo.CloseServers()
+		ts.Close()
 	})
 	servenv.RunDefault()
 }

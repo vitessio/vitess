@@ -41,6 +41,9 @@ spec:
               port: 3000
             initialDelaySeconds: 300
             timeoutSeconds: 30
+          volumeMounts:
+            - mountPath: /orc/conf
+              name: config
           resources:
 {{ toYaml (.resources | default $0.resources) | indent 12 }}
         - name: mysql
@@ -48,6 +51,19 @@ spec:
           resources:
 {{ toYaml (.mysqlResources | default $0.mysqlResources) | indent 12 }}
           command: ["mysqld"]
+      volumes:
+        - name: config
+          configMap:
+            name: orchestrator
+---
+# Orchestrator ConfigMap
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: orchestrator
+data:
+  orchestrator.conf.json: |
+{{ $.Files.Get "orchestrator.conf.json" | indent 4 }}
 {{- end -}}
 {{- end -}}
 

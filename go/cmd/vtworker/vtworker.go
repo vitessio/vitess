@@ -58,8 +58,8 @@ func main() {
 	servenv.Init()
 	defer servenv.Close()
 
-	ts := topo.GetServer()
-	defer topo.CloseServers()
+	ts := topo.Open()
+	defer ts.Close()
 
 	wi = worker.NewInstance(ts, *cell, *commandDisplayInterval)
 	wi.InstallSignalHandlers()
