@@ -163,7 +163,7 @@ func TestPlannedReparentNoMaster(t *testing.T) {
 	if err == nil {
 		t.Fatalf("PlannedReparentShard succeeded: %v", err)
 	}
-	if !strings.Contains(err.Error(), "is not in the shard") {
+	if !strings.Contains(err.Error(), "the shard has no master") {
 		t.Fatalf("PlannedReparentShard failed with the wrong error: %v", err)
 	}
 }
