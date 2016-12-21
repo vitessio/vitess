@@ -65,7 +65,7 @@ Create a table".
 1.  Got to the Workflows section of vtctld UI (it will be at
     http://localhost:8001/api/v1/proxy/namespaces/default/services/vtctld:web/app2/workflows
     if you followed the Getting Started Guide as is) and press the "+" button in
-    the bottom right corner. You will be presented with "Create a new Workflow"
+    the top right corner. You will be presented with "Create a new Workflow"
     dialog.
 1.  In the "Factory Name" list select "Schema Swap".
 1.  In the field "Keyspace" enter "test_keyspace" (without quotes).
@@ -73,6 +73,12 @@ Create a table".
     want to execute. As an example we want to execute statement "ALTER TABLE
     messages ADD views BIGINT(20) UNSIGNED NULL".
 1.  Click "Create" button at the bottom of the dialog.
+
+Another way to start the schema swap is to execute vtctlclient command:
+
+``` sh
+vitess/examples/local$ ./lvtctl.sh WorkflowCreate schema_swap -keyspace=test_keyspace -sql='SQL statement'
+```
 
 From this point on all you need to do is watch how the schema swap process is
 progressing. Try expanding the displayed nodes in vtctld UI and look at the logs

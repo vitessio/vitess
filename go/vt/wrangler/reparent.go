@@ -364,6 +364,9 @@ func (wr *Wrangler) plannedReparentShardLocked(ctx context.Context, ev *events.R
 	if topoproto.TabletAliasEqual(shardInfo.MasterAlias, masterElectTabletAlias) {
 		return fmt.Errorf("master-elect tablet %v is already the master", topoproto.TabletAliasString(masterElectTabletAlias))
 	}
+	if topoproto.TabletAliasIsZero(shardInfo.MasterAlias) {
+		return fmt.Errorf("the shard has no master, use EmergencyReparentShard")
+	}
 	oldMasterTabletInfo, ok := tabletMap[*shardInfo.MasterAlias]
 	if !ok {
 		return fmt.Errorf("old master tablet %v is not in the shard", topoproto.TabletAliasString(shardInfo.MasterAlias))
