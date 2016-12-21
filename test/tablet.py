@@ -520,7 +520,8 @@ class Tablet(object):
       self.keyspace = init_keyspace
       self.shard = init_shard
       # tablet_index is required for the update_addr call below.
-      self.tablet_index = tablet_index
+      if self.tablet_index is None:
+        self.tablet_index = tablet_index
       args.extend(['-init_keyspace', init_keyspace,
                    '-init_shard', init_shard])
       if init_db_name_override:
