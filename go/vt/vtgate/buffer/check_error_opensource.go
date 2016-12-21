@@ -19,7 +19,9 @@ func causedByFailover(err error) bool {
 		if vtErr.VtErrorCode() == vtrpcpb.ErrorCode_QUERY_NOT_SERVED {
 			if strings.Contains(err.Error(), "retry: operation not allowed in state NOT_SERVING") ||
 				strings.Contains(err.Error(), "retry: operation not allowed in state SHUTTING_DOWN") ||
-				strings.Contains(err.Error(), "retry: The MariaDB server is running with the --read-only option so it cannot execute this statement (errno 1290) (sqlstate HY000)") {
+				strings.Contains(err.Error(), "retry: The MariaDB server is running with the --read-only option so it cannot execute this statement (errno 1290) (sqlstate HY000)") ||
+				// Match 1290 if -queryserver-config-terse-errors explicitly hid the error message (which it does to avoid logging the original query including any PII).
+				strings.Contains(err.Error(), "retry: (errno 1290) (sqlstate HY000) during query:") {
 				return true
 			}
 		}
