@@ -76,7 +76,7 @@ func newShardBuffer(keyspace, shard string, bufferSizeSema *sync2.Semaphore) *sh
 		shard:          shard,
 		bufferSizeSema: bufferSizeSema,
 		statsKey:       []string{keyspace, shard},
-		logTooRecent:   logutil.NewThrottledLogger("FailoverTooRecent", 5*time.Second),
+		logTooRecent:   logutil.NewThrottledLogger(fmt.Sprintf("FailoverTooRecent-%v", topoproto.KeyspaceShardString(keyspace, shard)), 5*time.Second),
 		state:          stateIdle,
 	}
 }
