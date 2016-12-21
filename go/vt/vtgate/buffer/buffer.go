@@ -1,3 +1,13 @@
+// Package buffer provides a buffer for MASTER traffic during failovers.
+//
+// Instead of returning an error to the application (when the vttablet master
+// becomes unavailable), the buffer will automatically retry buffered requests
+// after the end of the failover was detected.
+//
+// Buffering (stalling) requests will increase the number of requests in flight
+// within vtgate and at upstream layers. Therefore, it is important to limit
+// the size of the buffer and the buffering duration (window) per request.
+// See the file flags.go for the available configuration and its defaults.
 package buffer
 
 import (
