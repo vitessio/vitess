@@ -8,8 +8,8 @@ import "github.com/youtube/vitess/go/stats"
 var (
 	// requestsInFlightMax has the maximum value of buffered requests in flight
 	// of the last failover.
-	requestsInFlightMax = stats.NewMultiCounters("BufferRequestsInFlightMax", []string{"Keyspace", "Shard"})
+	requestsInFlightMax = stats.NewMultiCounters("BufferRequestsInFlightMax", []string{"Keyspace", "ShardName"})
 	// failoverDurationMs tracks for how long vtgate buffered requests during the
 	// last failover.
-	failoverDurationMs = stats.NewMultiCounters("BufferFailoverDurationMs", []string{"Keyspace", "Shard"})
+	failoverDurationMs = stats.NewMultiCounters("BufferFailoverDurationMs", []string{"Keyspace", "ShardName"})
 )
