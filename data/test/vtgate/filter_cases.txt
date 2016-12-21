@@ -685,6 +685,10 @@
   }
 }
 
+# unresolved symbol in inner subquery.
+"select id from user where id = :a and user.col in (select user_extra.col from user_extra where user_extra.user_id = :a and foo.id = 1)"
+"symbol foo.id not found"
+
 # outer and inner subquery route by same outermost column value
 "select id2 from user uu where id in (select id from user where id = uu.id and user.col in (select user_extra.col from user_extra where user_extra.user_id = uu.id))"
 {
