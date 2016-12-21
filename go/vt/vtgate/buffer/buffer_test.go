@@ -141,7 +141,7 @@ func waitForRequestsInFlight(b *Buffer, count int) error {
 	start := time.Now()
 	sb := b.getOrCreateBuffer(keyspace, shard)
 	for {
-		got, want := len(sb.queue), count
+		got, want := sb.sizeForTesting(), count
 		if got == want {
 			return nil
 		}
@@ -158,7 +158,7 @@ func waitForState(b *Buffer, want bufferState) error {
 	sb := b.getOrCreateBuffer(keyspace, shard)
 	start := time.Now()
 	for {
-		got := sb.state
+		got := sb.stateForTesting()
 		if got == want {
 			return nil
 		}

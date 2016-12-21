@@ -273,3 +273,19 @@ func (sb *shardBuffer) drain() {
 	sb.state = stateIdle
 	sb.queue = nil
 }
+
+// sizeForTesting is used by the unit test only to find out the current number
+// of buffered requests.
+// TODO(mberlin): Remove this if we add a more general statistics reporting.
+func (sb *shardBuffer) sizeForTesting() int {
+	sb.mu.RLock()
+	defer sb.mu.RUnlock()
+	return len(sb.queue)
+}
+
+// stateForTesting is used by unit tests only to probe the current state.
+func (sb *shardBuffer) stateForTesting() bufferState {
+	sb.mu.RLock()
+	defer sb.mu.RUnlock()
+	return sb.state
+}
