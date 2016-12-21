@@ -561,23 +561,14 @@ func (rb *route) SupplyCol(ref colref) int {
 			return i
 		}
 	}
-	ts := ref.Meta.(*tabsym)
-	colname := ref.Name()
-	rb.Colsyms = append(rb.Colsyms, &colsym{
-		Alias: colname,
-		QualifiedName: &sqlparser.ColName{
-			Qualifier: ts.Alias,
-			Name:      colname,
-		},
-		Underlying: ref,
-	})
+	rb.Colsyms = append(rb.Colsyms, &colsym{Underlying: ref})
 	rb.Select.SelectExprs = append(
 		rb.Select.SelectExprs,
 		&sqlparser.NonStarExpr{
 			Expr: &sqlparser.ColName{
 				Metadata:  ref.Meta,
-				Qualifier: &sqlparser.TableName{Name: ts.ASTName},
-				Name:      colname,
+				Qualifier: &sqlparser.TableName{Name: ref.Meta.(*tabsym).ASTName},
+				Name:      ref.Name(),
 			},
 		},
 	)

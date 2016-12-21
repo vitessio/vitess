@@ -11,12 +11,6 @@ import (
 	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
 )
 
-// These values dictate the state of the symtab.
-const (
-	symtabNormal = iota
-	symtabOrderBy
-)
-
 // symtab contains the symbols for a SELECT statement.
 // In the case of a subquery, the symtab points to the
 // symtab of the outer query. The symtab evolves over time,
@@ -52,7 +46,6 @@ const (
 // keep track of every symtab created, and recursively chase them
 // down every time a subquery merges with an outer query.
 type symtab struct {
-	state   int
 	tables  []*tabsym
 	Colsyms []*colsym
 	Externs []*sqlparser.ColName
@@ -66,12 +59,6 @@ func newSymtab(vschema VSchema) *symtab {
 	return &symtab{
 		VSchema: vschema,
 	}
-}
-
-// SetState updates the state and returns the previous state.
-func (st *symtab) SetState(state int) int {
-	state, st.state = st.state, state
-	return state
 }
 
 // AddAlias adds a table alias to symtab.
@@ -146,21 +133,24 @@ func (st *symtab) Find(col *sqlparser.ColName, autoResolve bool) (rb *route, isL
 		return m.Route(), m.Symtab() == st, nil
 	}
 	if len(st.Colsyms) != 0 {
-		rb, err = st.searchColsyms(col)
-		switch {
-		case err != nil:
-			return nil, false, err
-		case rb != nil:
-			return rb, true, nil
-		case st.state == symtabNormal:
-			goto checkOuter
+		if col.Qualifier.IsEmpty() {
+			rb, err = st.searchColsyms(col)
+			switch {
+			case err != nil:
+				return nil, false, err
+			case rb != nil:
+				return rb, true, nil
+			}
 		}
+		if rb = st.searchTables(col, autoResolve); rb != nil {
+			return rb, true, nil
+		}
+		return nil, false, fmt.Errorf("symbol %s not found", sqlparser.String(col))
 	}
+
 	if rb = st.searchTables(col, autoResolve); rb != nil {
 		return rb, true, nil
 	}
-
-checkOuter:
 	if st.Outer == nil {
 		return nil, false, fmt.Errorf("symbol %s not found", sqlparser.String(col))
 	}
@@ -173,14 +163,9 @@ checkOuter:
 }
 
 func (st *symtab) searchColsyms(col *sqlparser.ColName) (rb *route, err error) {
-	name := sqlparser.String(col)
 	var cursym *colsym
 	for _, colsym := range st.Colsyms {
-		if colsym.Alias.EqualString("*") {
-			col.Metadata = colsym
-			return colsym.Route(), nil
-		}
-		if colsym.Alias.EqualString(name) {
+		if colsym.Alias.Equal(col.Name) {
 			if cursym != nil {
 				return nil, fmt.Errorf("ambiguous symbol reference: %v", sqlparser.String(col))
 			}
@@ -191,28 +176,21 @@ func (st *symtab) searchColsyms(col *sqlparser.ColName) (rb *route, err error) {
 	if cursym != nil {
 		return cursym.Route(), nil
 	}
-	starname := &sqlparser.ColName{
-		Name:      sqlparser.NewColIdent("*"),
-		Qualifier: col.Qualifier,
-	}
-	for _, colsym := range st.Colsyms {
-		if colsym.QualifiedName.Equal(col) || colsym.QualifiedName.Equal(starname) {
-			col.Metadata = colsym
-			return colsym.Route(), nil
-		}
-	}
 	return nil, nil
 }
 
 func (st *symtab) searchTables(col *sqlparser.ColName, autoResolve bool) *route {
-	qualifier := col.Qualifier
-	if qualifier.IsEmpty() && autoResolve && len(st.tables) == 1 {
-		qualifier = st.tables[0].Alias
+	if col.Qualifier.IsEmpty() {
+		if autoResolve && len(st.tables) == 1 {
+			col.Metadata = st.tables[0]
+			return st.tables[0].Route()
+		}
+		return nil
 	}
 	// TODO(sougou): this search should ideally match the search
 	// style provided by VSchema, where the default keyspace must be
 	// used if one is not provided.
-	alias := st.findTable(qualifier)
+	alias := st.findTable(col.Qualifier)
 	if alias == nil {
 		return nil
 	}
