@@ -543,7 +543,7 @@ public abstract class VitessDatabaseMetaData implements DatabaseMetaData {
     }
 
     public boolean supportsGetGeneratedKeys() throws SQLException {
-        return false;
+        return true;
     }
 
     public boolean supportsResultSetHoldability(int holdability) throws SQLException {
