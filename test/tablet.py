@@ -439,8 +439,10 @@ class Tablet(object):
       lameduck_period=None, security_policy=None,
       full_mycnf_args=False,
       extra_args=None, extra_env=None, include_mysql_port=True,
-      init_tablet_type=None, init_keyspace=None,
-      init_shard=None, init_db_name_override=None,
+      init_tablet_type=None, init_keyspace=None, init_shard=None,
+      # TODO(mberlin): Assign the index automatically and remove this parameter.
+      tablet_index=None,
+      init_db_name_override=None,
       supports_backups=True, grace_period='1s', enable_semi_sync=True):
     # pylint: disable=g-doc-args
     """Starts a vttablet process, and returns it.
@@ -517,6 +519,8 @@ class Tablet(object):
     if init_keyspace:
       self.keyspace = init_keyspace
       self.shard = init_shard
+      # tablet_index is required for the update_addr call below.
+      self.tablet_index = tablet_index
       args.extend(['-init_keyspace', init_keyspace,
                    '-init_shard', init_shard])
       if init_db_name_override:

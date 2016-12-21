@@ -164,10 +164,12 @@ class TestBuffer(unittest.TestCase):
         t.create_db(db_name)
       self.master.start_vttablet(wait_for_state=None,
                                  init_tablet_type='replica',
-                                 init_keyspace=KEYSPACE, init_shard=SHARD)
+                                 init_keyspace=KEYSPACE, init_shard=SHARD,
+                                 tablet_index=0)
       self.replica.start_vttablet(wait_for_state=None,
                                   init_tablet_type='replica',
-                                  init_keyspace=KEYSPACE, init_shard=SHARD)
+                                  init_keyspace=KEYSPACE, init_shard=SHARD,
+                                  tablet_index=1)
       for t in self.all_tablets:
         t.wait_for_vttablet_state('NOT_SERVING')
 
