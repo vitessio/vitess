@@ -184,7 +184,8 @@ class TestBuffer(unittest.TestCase):
           # Long timeout in case failover is slow.
           '-vtgate_buffer_window', '10m',
           '-vtgate_buffer_max_failover_duration', '10m',
-          '-vtgate_buffer_min_time_between_failovers', '20m'])
+          '-vtgate_buffer_min_time_between_failovers', '20m'],
+                           tablets=self.all_tablets)
 
       # Insert two rows for the later threads (critical read, update).
       with utils.vtgate.write_transaction(keyspace=KEYSPACE, shards=[SHARD],
