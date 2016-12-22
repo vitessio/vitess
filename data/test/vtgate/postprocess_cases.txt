@@ -448,8 +448,8 @@
 "symbol e.col not found"
 
 # Order by, invalid column number
-"select col from user order by 1.1"
-"error parsing order by clause: 1.1"
+"select col from user order by 18446744073709551616"
+"error parsing order by clause: 18446744073709551616"
 
 # Order by, out of range column number
 "select col from user order by 2"

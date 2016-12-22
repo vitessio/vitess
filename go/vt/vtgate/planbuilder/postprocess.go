@@ -88,7 +88,7 @@ func pushOrderBy(orderBy sqlparser.OrderBy, bldr builder) error {
 			if err != nil {
 				return err
 			}
-		case sqlparser.NumVal:
+		case sqlparser.IntVal:
 			num, err := strconv.ParseInt(string(node), 0, 64)
 			if err != nil {
 				return fmt.Errorf("error parsing order by clause: %s", string(node))
@@ -102,7 +102,7 @@ func pushOrderBy(orderBy sqlparser.OrderBy, bldr builder) error {
 			for num, s := range rb.Colsyms {
 				if s == colsym {
 					pushOrder = &sqlparser.Order{
-						Expr:      sqlparser.NumVal(strconv.AppendInt(nil, int64(num+1), 10)),
+						Expr:      sqlparser.IntVal(strconv.AppendInt(nil, int64(num+1), 10)),
 						Direction: order.Direction,
 					}
 				}

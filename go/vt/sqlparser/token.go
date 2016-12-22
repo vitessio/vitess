@@ -285,7 +285,7 @@ func (tkn *Tokenizer) Lex(lval *yySymType) int {
 		typ, val = tkn.Scan()
 	}
 	switch typ {
-	case ID, STRING, HEX, NUMBER, HEXNUM, VALUE_ARG, LIST_ARG, COMMENT:
+	case ID, STRING, HEX, INTEGRAL, FLOAT, HEXNUM, VALUE_ARG, LIST_ARG, COMMENT:
 		lval.bytes = val
 	}
 	tkn.lastToken = val
@@ -515,9 +515,10 @@ func (tkn *Tokenizer) scanMantissa(base int, buffer *bytes.Buffer) {
 }
 
 func (tkn *Tokenizer) scanNumber(seenDecimalPoint bool) (int, []byte) {
-	token := NUMBER
+	token := INTEGRAL
 	buffer := &bytes.Buffer{}
 	if seenDecimalPoint {
+		token = FLOAT
 		buffer.WriteByte('.')
 		tkn.scanMantissa(10, buffer)
 		goto exponent
@@ -537,12 +538,14 @@ func (tkn *Tokenizer) scanNumber(seenDecimalPoint bool) (int, []byte) {
 	tkn.scanMantissa(10, buffer)
 
 	if tkn.lastChar == '.' {
+		token = FLOAT
 		tkn.consumeNext(buffer)
 		tkn.scanMantissa(10, buffer)
 	}
 
 exponent:
 	if tkn.lastChar == 'e' || tkn.lastChar == 'E' {
+		token = FLOAT
 		tkn.consumeNext(buffer)
 		if tkn.lastChar == '+' || tkn.lastChar == '-' {
 			tkn.consumeNext(buffer)

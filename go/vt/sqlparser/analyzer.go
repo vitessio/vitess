@@ -28,11 +28,11 @@ func IsColName(node ValExpr) bool {
 	return ok
 }
 
-// IsValue returns true if the ValExpr is a string, number or value arg.
+// IsValue returns true if the ValExpr is a string, integral or value arg.
 // NULL is not considered to be a value.
 func IsValue(node ValExpr) bool {
 	switch node.(type) {
-	case StrVal, HexVal, NumVal, ValArg:
+	case StrVal, HexVal, IntVal, ValArg:
 		return true
 	}
 	return false
@@ -67,7 +67,7 @@ func IsSimpleTuple(node ValExpr) bool {
 
 // AsInterface converts the ValExpr to an interface. It converts
 // ValTuple to []interface{}, ValArg to string, StrVal to sqltypes.String,
-// NumVal to sqltypes.Numeric, NullVal to nil.
+// IntVal to sqltypes.Numeric, NullVal to nil.
 // Otherwise, it returns an error.
 func AsInterface(node ValExpr) (interface{}, error) {
 	switch node := node.(type) {
@@ -93,7 +93,7 @@ func AsInterface(node ValExpr) (interface{}, error) {
 			return nil, err
 		}
 		return sqltypes.MakeString(v), nil
-	case NumVal:
+	case IntVal:
 		n, err := sqltypes.BuildIntegral(string(node))
 		if err != nil {
 			return nil, fmt.Errorf("type mismatch: %s", err)

@@ -170,8 +170,8 @@ func valEqual(a, b interface{}) bool {
 		}
 	case sqlparser.HexVal:
 		return hexEqual(a, b)
-	case sqlparser.NumVal:
-		if b, ok := b.(sqlparser.NumVal); ok {
+	case sqlparser.IntVal:
+		if b, ok := b.(sqlparser.IntVal); ok {
 			return bytes.Equal([]byte(a), []byte(b))
 		}
 	}
@@ -205,7 +205,7 @@ func valConvert(node sqlparser.ValExpr) (interface{}, error) {
 		return []byte(node), nil
 	case sqlparser.HexVal:
 		return node.Decode()
-	case sqlparser.NumVal:
+	case sqlparser.IntVal:
 		val := string(node)
 		signed, err := strconv.ParseInt(val, 0, 64)
 		if err == nil {
