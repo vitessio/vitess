@@ -41,8 +41,8 @@ spec:
     cell: {{$cell.name | quote}}
     app: vitess
 ---
-apiVersion: v1
-kind: ReplicationController
+apiVersion: extensions/v1beta1
+kind: ReplicaSet
 metadata:
   name: "etcd-{{$cell.name}}"
 spec:
