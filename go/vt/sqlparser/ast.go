@@ -862,7 +862,8 @@ func (*ExistsExpr) iExpr()     {}
 func (HexNum) iExpr()          {}
 func (StrVal) iExpr()          {}
 func (HexVal) iExpr()          {}
-func (NumVal) iExpr()          {}
+func (IntVal) iExpr()          {}
+func (FloatVal) iExpr()        {}
 func (ValArg) iExpr()          {}
 func (*NullVal) iExpr()        {}
 func (BoolVal) iExpr()         {}
@@ -1113,7 +1114,8 @@ type ValExpr interface {
 func (HexNum) iValExpr()        {}
 func (StrVal) iValExpr()        {}
 func (HexVal) iValExpr()        {}
-func (NumVal) iValExpr()        {}
+func (IntVal) iValExpr()        {}
+func (FloatVal) iValExpr()      {}
 func (ValArg) iValExpr()        {}
 func (*NullVal) iValExpr()      {}
 func (*ColName) iValExpr()      {}
@@ -1179,16 +1181,29 @@ func (node HexVal) Decode() ([]byte, error) {
 	return dst, err
 }
 
-// NumVal represents a number.
-type NumVal []byte
+// IntVal represents an integral number.
+type IntVal []byte
 
 // Format formats the node.
-func (node NumVal) Format(buf *TrackedBuffer) {
+func (node IntVal) Format(buf *TrackedBuffer) {
 	buf.Myprintf("%s", []byte(node))
 }
 
 // WalkSubtree walks the nodes of the subtree.
-func (node NumVal) WalkSubtree(visit Visit) error {
+func (node IntVal) WalkSubtree(visit Visit) error {
+	return nil
+}
+
+// FloatVal represents a floating point number.
+type FloatVal []byte
+
+// Format formats the node.
+func (node FloatVal) Format(buf *TrackedBuffer) {
+	buf.Myprintf("%s", []byte(node))
+}
+
+// WalkSubtree walks the nodes of the subtree.
+func (node FloatVal) WalkSubtree(visit Visit) error {
 	return nil
 }
 

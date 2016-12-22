@@ -57,14 +57,14 @@ func TestValEqual(t *testing.T) {
 		in2: sqlparser.HexVal("313"),
 	}, {
 		in1: sqlparser.HexVal("3132"),
-		in2: sqlparser.NumVal("313"),
+		in2: sqlparser.IntVal("313"),
 	}, {
-		in1: sqlparser.NumVal("313"),
-		in2: sqlparser.NumVal("313"),
+		in1: sqlparser.IntVal("313"),
+		in2: sqlparser.IntVal("313"),
 		out: true,
 	}, {
-		in1: sqlparser.NumVal("313"),
-		in2: sqlparser.NumVal("314"),
+		in1: sqlparser.IntVal("313"),
+		in2: sqlparser.IntVal("314"),
 	}}
 	for _, tc := range testcases {
 		out := valEqual(tc.in1, tc.in2)
@@ -88,13 +88,13 @@ func TestValConvert(t *testing.T) {
 		in:  sqlparser.HexVal("3131"),
 		out: []byte("11"),
 	}, {
-		in:  sqlparser.NumVal("3131"),
+		in:  sqlparser.IntVal("3131"),
 		out: int64(3131),
 	}, {
-		in:  sqlparser.NumVal("18446744073709551615"),
+		in:  sqlparser.IntVal("18446744073709551615"),
 		out: uint64(18446744073709551615),
 	}, {
-		in:  sqlparser.NumVal("aa"),
+		in:  sqlparser.IntVal("aa"),
 		out: "strconv.ParseUint: parsing \"aa\": invalid syntax",
 	}, {
 		in:  sqlparser.ListArg("::aa"),

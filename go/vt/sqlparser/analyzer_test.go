@@ -68,7 +68,7 @@ func TestIsValue(t *testing.T) {
 		in:  HexVal(""),
 		out: true,
 	}, {
-		in:  NumVal(""),
+		in:  IntVal(""),
 		out: true,
 	}, {
 		in:  ValArg(""),
@@ -151,11 +151,14 @@ func TestAsInterface(t *testing.T) {
 		in:  HexVal("313"),
 		out: errors.New("encoding/hex: odd length hex string"),
 	}, {
-		in:  NumVal("313"),
+		in:  IntVal("313"),
 		out: sqltypes.MakeTrusted(sqltypes.Int64, []byte("313")),
 	}, {
-		in:  NumVal("1.2"),
-		out: errors.New("type mismatch: strconv.ParseUint: parsing \"1.2\": invalid syntax"),
+		in:  IntVal("18446744073709551616"),
+		out: errors.New("type mismatch: strconv.ParseUint: parsing \"18446744073709551616\": value out of range"),
+	}, {
+		in:  FloatVal("1.2"),
+		out: errors.New("unexpected node [49 46 50]"),
 	}, {
 		in:  &NullVal{},
 		out: nil,
