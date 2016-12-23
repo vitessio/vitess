@@ -6,6 +6,7 @@ package testlib
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/youtube/vitess/go/vt/logutil"
@@ -144,4 +145,25 @@ func TestPlannedReparentShard(t *testing.T) {
 
 	checkSemiSyncEnabled(t, true, true, newMaster)
 	checkSemiSyncEnabled(t, false, true, goodSlave1, goodSlave2, oldMaster)
+}
+
+func TestPlannedReparentNoMaster(t *testing.T) {
+	db := fakesqldb.Register()
+	ts := zk2topo.NewFakeServer("cell1", "cell2")
+	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
+	vp := NewVtctlPipe(t, ts)
+	defer vp.Close()
+
+	// Create a few replicas.
+	replica1 := NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_REPLICA, db)
+	NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_REPLICA, db)
+	NewFakeTablet(t, wr, "cell1", 2, topodatapb.TabletType_REPLICA, db)
+
+	err := vp.Run([]string{"PlannedReparentShard", "-wait_slave_timeout", "10s", "-keyspace_shard", replica1.Tablet.Keyspace + "/" + replica1.Tablet.Shard, "-new_master", topoproto.TabletAliasString(replica1.Tablet.Alias)})
+	if err == nil {
+		t.Fatalf("PlannedReparentShard succeeded: %v", err)
+	}
+	if !strings.Contains(err.Error(), "the shard has no master") {
+		t.Fatalf("PlannedReparentShard failed with the wrong error: %v", err)
+	}
 }

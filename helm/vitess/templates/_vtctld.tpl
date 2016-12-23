@@ -22,8 +22,8 @@ spec:
     app: vitess
   type: {{.serviceType | default $0.serviceType}}
 ---
-kind: ReplicationController
-apiVersion: v1
+apiVersion: extensions/v1beta1
+kind: Deployment
 metadata:
   name: vtctld
 spec:

@@ -100,7 +100,11 @@ public class VTGateBlockingTx {
   }
 
   public void commit(Context ctx) throws SQLException {
-    tx.commit(ctx).checkedGet();
+    commit(ctx, false);
+  }
+
+  public void commit(Context ctx, boolean atomic) throws SQLException {
+    tx.commit(ctx, atomic).checkedGet();
   }
 
   public void rollback(Context ctx) throws SQLException {

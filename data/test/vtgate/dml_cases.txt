@@ -69,9 +69,9 @@
 }
 
 # update by primary keyspace id, stray where clause
-"update user set val = 1 where  id = id2 and id = 1"
+"update user set val = 1 where id = id2 and id = 1"
 {
-  "Original": "update user set val = 1 where  id = id2 and id = 1",
+  "Original": "update user set val = 1 where id = id2 and id = 1",
   "Instructions": {
     "Opcode": "UpdateEqual",
     "Keyspace": {
@@ -86,9 +86,9 @@
 }
 
 # update by primary keyspace id, stray where clause with conversion error
-"update user set val = 1 where  id = 1.1 and id = 1"
+"update user set val = 1 where id = 1.1 and id = 1"
 {
-  "Original": "update user set val = 1 where  id = 1.1 and id = 1",
+  "Original": "update user set val = 1 where id = 1.1 and id = 1",
   "Instructions": {
     "Opcode": "UpdateEqual",
     "Keyspace": {

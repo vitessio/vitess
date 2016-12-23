@@ -194,6 +194,13 @@ strengthened slightly to preventing loss of any transactions that were ever
 **committed** on the original master, eliminating so-called
 [phantom reads](http://bugs.mysql.com/bug.php?id=62174).
 
+On the other hand these behaviors also give a requirement that each shard must
+have at least 2 tablets with type *replica* (with addition of the master that
+can be demoted to type *replica* this gives a minimum of 3 tablets with initial
+type *replica*). This will allow for the master to have a semi-sync acker when
+one of the *replica* tablets is down for any reason (for a version update,
+machine reboot, schema swap or anything else).
+
 With regard to replication lag, note that this does **not** guarantee there is
 always at least one *replica* type slave from which queries will always return
 up-to-date results. Semi-sync guarantees that at least one slave has the

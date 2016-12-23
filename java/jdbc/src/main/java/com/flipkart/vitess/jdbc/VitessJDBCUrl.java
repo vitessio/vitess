@@ -26,6 +26,7 @@ public class VitessJDBCUrl {
     private final String keyspace;
     private String catalog;
     private final String executeType;
+    private final boolean twopcEnabled;
 
 
     /*
@@ -105,6 +106,8 @@ public class VitessJDBCUrl {
 
         this.executeType = info.getProperty(Constants.Property.EXECUTE_TYPE);
         this.url = url;
+        this.twopcEnabled =
+            "true".equalsIgnoreCase(info.getProperty(Constants.Property.TWOPC_ENABLED));
     }
 
     public String getUsername() {
@@ -247,4 +250,7 @@ public class VitessJDBCUrl {
         }
     }
 
+    public boolean isTwopcEnabled() {
+        return twopcEnabled;
+    }
 }
