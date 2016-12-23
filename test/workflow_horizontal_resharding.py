@@ -39,20 +39,17 @@ class TestWorkflowHorizontalResharding(worker.TestBaseSplitClone):
     vtworker_endpoint = 'localhost:' + str(worker_rpc_port)
 
     self._error = None
-    source_shard_list = '0'
-    dest_shard_list = '-80,80-'
+    # source_shard_list = '0'
+    # dest_shard_list = '-80,80-'
 
     # uncomment this can test the workflow UI
-    # utils.pause('Now is a good time to look at vtctld UI at:
-    # localhost:%s' % (utils.vtctld.port))
+    # utils.pause('Now is a good time to look at vtctld UI at: localhost:%s' % (utils.vtctld.port))
 
     vtctl_res = utils.run_vtctl(
         [
             'WorkflowCreate', 'horizontal_resharding',
             '-keyspace=test_keyspace',
-            '-source_shard_list=%s' % source_shard_list,
-            '-destination_shard_list=%s' % dest_shard_list,
-            '-vtworker_server_address=%s' % vtworker_endpoint
+            '-vtworkers=%s' % vtworker_endpoint
         ],
         auto_log=True)
     hw_uuid = re.match(r'^uuid: (.*)$', vtctl_res[0]).group(1)

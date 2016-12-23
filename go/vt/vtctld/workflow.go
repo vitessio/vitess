@@ -13,7 +13,7 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtctl"
 	"github.com/youtube/vitess/go/vt/workflow"
-	"github.com/youtube/vitess/go/vt/workflow/horizontalreshard"
+	"github.com/youtube/vitess/go/vt/workflow/resharding"
 	"github.com/youtube/vitess/go/vt/workflow/topovalidator"
 )
 
@@ -37,8 +37,8 @@ func initWorkflowManager(ts topo.Server) {
 		// Register the Schema Swap workflow.
 		schemaswap.RegisterWorkflowFactory()
 
-		// Register the Horizontal Resharding workflow
-		horizontalreshard.Register()
+		// Register the Horizontal Resharding workflow.
+		resharding.Register()
 		// Unregister the blacklisted workflows.
 		for _, name := range workflowManagerDisable {
 			workflow.Unregister(name)

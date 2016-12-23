@@ -73,7 +73,7 @@ func commandWorkflowCreate(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 		return fmt.Errorf("no workflow.Manager registered")
 	}
 
-	skipStart := subFlags.Bool("skip_start", false, "If set, the workflow will not be started.")
+	skipStart := subFlags.Bool("skip_start", true, "If set, the workflow will not be started.")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}

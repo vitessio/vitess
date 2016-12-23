@@ -27,15 +27,9 @@ export class NewWorkflowFlags {
     this.flags['horizontal_resharding_keyspace'] = new HorizontalReshardKeyspaceFlag(5, 'horizontal_resharding_keyspace');
     this.flags['horizontal_resharding_keyspace'].positional = true;
     this.flags['horizontal_resharding_keyspace'].namedPositional = 'keyspace';
-    this.flags['horizontal_resharding_sources'] = new HorizontalReshardSourceFlag(6, 'horizontal_resharding_sources');
-    this.flags['horizontal_resharding_sources'].positional = true;
-    this.flags['horizontal_resharding_sources'].namedPositional = 'source_shard_list';
-    this.flags['horizontal_resharding_destinations'] = new HorizontalReshardDestinationFlag(7, 'horizontal_resharding_destinations');
-    this.flags['horizontal_resharding_destinations'].positional = true;
-    this.flags['horizontal_resharding_destinations'].namedPositional = 'destination_shard_list';
-    this.flags['horizontal_resharding_vtworker'] = new HorizontalReshardVTWorkerFlag(8, 'horizontal_resharding_vtworker');
-    this.flags['horizontal_resharding_vtworker'].positional = true
-    this.flags['horizontal_resharding_vtworker'].namedPositional = 'vtworker_server_address'
+    this.flags['horizontal_resharding_vtworkers'] = new HorizontalReshardVTWorkerFlag(8, 'horizontal_resharding_vtworkers');
+    this.flags['horizontal_resharding_vtworkers'].positional = true
+    this.flags['horizontal_resharding_vtworkers'].namedPositional = 'vtworkers'
   }
 }
 
@@ -107,23 +101,9 @@ export class HorizontalReshardKeyspaceFlag extends InputFlag {
   }
 }
 
-export class HorizontalReshardDestinationFlag extends InputFlag {
-  constructor(position: number, id: string, value= '') {
-    super(position, id, 'Destination Shards', 'List of destination shards.', value);
-    this.setDisplayOn('factory_name', 'horizontal_resharding');
-  }
-} 
-
-export class HorizontalReshardSourceFlag extends InputFlag {
-  constructor(position: number, id: string, value= '') {
-    super(position, id, 'Source Shards', 'List of source shards.', value);
-    this.setDisplayOn('factory_name', 'horizontal_resharding');
-  }
-} 
-
 export class HorizontalReshardVTWorkerFlag extends InputFlag {
   constructor(position: number, id: string, value= '') {
-    super(position, id, 'VTWorker Server', 'server address of vtworker.', value);
+    super(position, id, 'VTWorkers', 'List of vtworkers.', value);
     this.setDisplayOn('factory_name', 'horizontal_resharding');
   }
 } 
