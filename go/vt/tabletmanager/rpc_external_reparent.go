@@ -71,13 +71,7 @@ func (agent *ActionAgent) TabletExternallyReparented(ctx context.Context, extern
 		return nil
 	}
 
-	// Remember when we were first told we're the master.
-	// If another tablet claims to be master and offers a more recent time,
-	// that tablet will be trusted over us.
-	agent.mutex.Lock()
-	agent._tabletExternallyReparentedTime = startTime
-	agent._replicationDelay = 0
-	agent.mutex.Unlock()
+	agent.setLastReparentedTime(startTime)
 
 	// Create a reusable Reparent event with available info.
 	ev := &events.Reparent{
@@ -215,4 +209,15 @@ func (agent *ActionAgent) finalizeTabletExternallyReparented(ctx context.Context
 
 	event.DispatchUpdate(ev, "finished")
 	return nil
+}
+
+// setLastReparentedTime remembers when we were first told we're the master.
+// If another tablet claims to be master and offers a more recent time,
+// that tablet will be trusted over us.
+func (agent *ActionAgent) setLastReparentedTime(t time.Time) {
+	agent.mutex.Lock()
+	defer agent.mutex.Unlock()
+
+	agent._tabletExternallyReparentedTime = t
+	agent._replicationDelay = 0
 }

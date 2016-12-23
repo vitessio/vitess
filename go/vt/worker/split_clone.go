@@ -1158,6 +1158,7 @@ func (scw *SplitCloneWorker) createKeyResolver(td *tabletmanagerdatapb.TableDefi
 
 // StatsUpdate receives replication lag updates for each destination master
 // and forwards them to the respective throttler instance.
+// It also forwards any update to the TabletStatsCache to keep it up to date.
 // It is part of the discovery.HealthCheckStatsListener interface.
 func (scw *SplitCloneWorker) StatsUpdate(ts *discovery.TabletStats) {
 	scw.tsc.StatsUpdate(ts)
