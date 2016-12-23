@@ -157,7 +157,7 @@ func (qs *QuerySplitter) getWhereClause(whereClause *sqlparser.Where, bindVars m
 		startClause = &sqlparser.ComparisonExpr{
 			Operator: sqlparser.GreaterEqualStr,
 			Left:     pk,
-			Right:    sqlparser.ValArg([]byte(":" + startBindVarName)),
+			Right:    sqlparser.NewValArg([]byte(":" + startBindVarName)),
 		}
 		bindVars[startBindVarName] = start.ToNative()
 	}
@@ -166,7 +166,7 @@ func (qs *QuerySplitter) getWhereClause(whereClause *sqlparser.Where, bindVars m
 		endClause = &sqlparser.ComparisonExpr{
 			Operator: sqlparser.LessThanStr,
 			Left:     pk,
-			Right:    sqlparser.ValArg([]byte(":" + endBindVarName)),
+			Right:    sqlparser.NewValArg([]byte(":" + endBindVarName)),
 		}
 		bindVars[endBindVarName] = end.ToNative()
 	}

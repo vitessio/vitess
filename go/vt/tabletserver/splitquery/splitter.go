@@ -143,7 +143,7 @@ func convertColumnsToValExpr(columns []*schema.TableColumn) []sqlparser.ValExpr 
 func convertBindVariableNamesToValExpr(bindVariableNames []string) []sqlparser.ValExpr {
 	valExprs := make([]sqlparser.ValExpr, 0, len(bindVariableNames))
 	for _, bindVariableName := range bindVariableNames {
-		valExprs = append(valExprs, sqlparser.ValArg([]byte(":"+bindVariableName)))
+		valExprs = append(valExprs, sqlparser.NewValArg([]byte([]byte(":"+bindVariableName))))
 	}
 	return valExprs
 }

@@ -859,12 +859,7 @@ func (*ComparisonExpr) iExpr() {}
 func (*RangeCond) iExpr()      {}
 func (*IsExpr) iExpr()         {}
 func (*ExistsExpr) iExpr()     {}
-func (HexNum) iExpr()          {}
-func (StrVal) iExpr()          {}
-func (HexVal) iExpr()          {}
-func (IntVal) iExpr()          {}
-func (FloatVal) iExpr()        {}
-func (ValArg) iExpr()          {}
+func (*SQLVal) iExpr()         {}
 func (*NullVal) iExpr()        {}
 func (BoolVal) iExpr()         {}
 func (*ColName) iExpr()        {}
@@ -1111,12 +1106,7 @@ type ValExpr interface {
 	Expr
 }
 
-func (HexNum) iValExpr()        {}
-func (StrVal) iValExpr()        {}
-func (HexVal) iValExpr()        {}
-func (IntVal) iValExpr()        {}
-func (FloatVal) iValExpr()      {}
-func (ValArg) iValExpr()        {}
+func (*SQLVal) iValExpr()       {}
 func (*NullVal) iValExpr()      {}
 func (*ColName) iValExpr()      {}
 func (ValTuple) iValExpr()      {}
@@ -1128,96 +1118,89 @@ func (*IntervalExpr) iValExpr() {}
 func (*FuncExpr) iValExpr()     {}
 func (*CaseExpr) iValExpr()     {}
 
+// ValType specifies the type for SQLVal.
+type ValType int
+
+// These are the possible Valtype values.
 // HexNum represents a 0x... value. It cannot
 // be treated as a simple value because it can
 // be interpreted differently depending on the
 // context.
-type HexNum []byte
+const (
+	StrVal = ValType(iota)
+	IntVal
+	FloatVal
+	HexNum
+	HexVal
+	ValArg
+)
+
+// SQLVal represents a single value.
+type SQLVal struct {
+	Type ValType
+	Val  []byte
+}
+
+// NewStrVal builds a new StrVal.
+func NewStrVal(in []byte) *SQLVal {
+	return &SQLVal{Type: StrVal, Val: in}
+}
+
+// NewIntVal builds a new IntVal.
+func NewIntVal(in []byte) *SQLVal {
+	return &SQLVal{Type: IntVal, Val: in}
+}
+
+// NewFloatVal builds a new FloatVal.
+func NewFloatVal(in []byte) *SQLVal {
+	return &SQLVal{Type: FloatVal, Val: in}
+}
+
+// NewHexNum builds a new HexNum.
+func NewHexNum(in []byte) *SQLVal {
+	return &SQLVal{Type: HexNum, Val: in}
+}
+
+// NewHexVal builds a new HexVal.
+func NewHexVal(in []byte) *SQLVal {
+	return &SQLVal{Type: HexVal, Val: in}
+}
+
+// NewValArg builds a new ValArg.
+func NewValArg(in []byte) *SQLVal {
+	return &SQLVal{Type: ValArg, Val: in}
+}
 
 // Format formats the node.
-func (node HexNum) Format(buf *TrackedBuffer) {
-	buf.Myprintf("%s", []byte(node))
+func (node *SQLVal) Format(buf *TrackedBuffer) {
+	switch node.Type {
+	case StrVal:
+		s := sqltypes.MakeString([]byte(node.Val))
+		s.EncodeSQL(buf)
+	case IntVal, FloatVal, HexNum:
+		buf.Myprintf("%s", []byte(node.Val))
+	case HexVal:
+		buf.Myprintf("X'%s'", []byte(node.Val))
+	case ValArg:
+		buf.WriteArg(string(node.Val))
+	default:
+		panic("unexpected")
+	}
 }
 
 // WalkSubtree walks the nodes of the subtree.
-func (node HexNum) WalkSubtree(visit Visit) error {
+func (node *SQLVal) WalkSubtree(visit Visit) error {
 	return nil
 }
 
-// StrVal represents a string value.
-type StrVal []byte
-
-// Format formats the node.
-func (node StrVal) Format(buf *TrackedBuffer) {
-	s := sqltypes.MakeString([]byte(node))
-	s.EncodeSQL(buf)
-}
-
-// WalkSubtree walks the nodes of the subtree.
-func (node StrVal) WalkSubtree(visit Visit) error {
-	return nil
-}
-
-// HexVal represents a hexadecimal string.
-type HexVal []byte
-
-// Format formats the node.
-func (node HexVal) Format(buf *TrackedBuffer) {
-	buf.Myprintf("X'%s'", []byte(node))
-}
-
-// WalkSubtree walks the nodes of the subtree.
-func (node HexVal) WalkSubtree(visit Visit) error {
-	return nil
-}
-
-// Decode decodes the hexval into bytes.
-func (node HexVal) Decode() ([]byte, error) {
-	dst := make([]byte, hex.DecodedLen(len([]byte(node))))
-	_, err := hex.Decode(dst, []byte(node))
+// HexDecode decodes the hexval into bytes.
+func (node *SQLVal) HexDecode() ([]byte, error) {
+	dst := make([]byte, hex.DecodedLen(len([]byte(node.Val))))
+	_, err := hex.Decode(dst, []byte(node.Val))
 	if err != nil {
 		return nil, err
 	}
 	return dst, err
-}
-
-// IntVal represents an integral number.
-type IntVal []byte
-
-// Format formats the node.
-func (node IntVal) Format(buf *TrackedBuffer) {
-	buf.Myprintf("%s", []byte(node))
-}
-
-// WalkSubtree walks the nodes of the subtree.
-func (node IntVal) WalkSubtree(visit Visit) error {
-	return nil
-}
-
-// FloatVal represents a floating point number.
-type FloatVal []byte
-
-// Format formats the node.
-func (node FloatVal) Format(buf *TrackedBuffer) {
-	buf.Myprintf("%s", []byte(node))
-}
-
-// WalkSubtree walks the nodes of the subtree.
-func (node FloatVal) WalkSubtree(visit Visit) error {
-	return nil
-}
-
-// ValArg represents a named bind var argument.
-type ValArg []byte
-
-// Format formats the node.
-func (node ValArg) Format(buf *TrackedBuffer) {
-	buf.WriteArg(string(node))
-}
-
-// WalkSubtree walks the nodes of the subtree.
-func (node ValArg) WalkSubtree(visit Visit) error {
-	return nil
 }
 
 // NullVal represents a NULL value.

@@ -81,17 +81,16 @@ func pushOrderBy(orderBy sqlparser.OrderBy, bldr builder) error {
 		// we have to build a new node.
 		pushOrder := order
 		var rb *route
-		switch node := order.Expr.(type) {
-		case *sqlparser.ColName:
+		if node, ok := order.Expr.(*sqlparser.ColName); ok {
 			var err error
 			rb, _, err = bldr.Symtab().Find(node, true)
 			if err != nil {
 				return err
 			}
-		case sqlparser.IntVal:
-			num, err := strconv.ParseInt(string(node), 0, 64)
+		} else if node, ok := order.Expr.(*sqlparser.SQLVal); ok && node.Type == sqlparser.IntVal {
+			num, err := strconv.ParseInt(string(node.Val), 0, 64)
 			if err != nil {
-				return fmt.Errorf("error parsing order by clause: %s", string(node))
+				return fmt.Errorf("error parsing order by clause: %s", sqlparser.String(node))
 			}
 			if num < 1 || num > int64(len(bldr.Symtab().Colsyms)) {
 				return errors.New("order by column number out of range")
@@ -102,7 +101,7 @@ func pushOrderBy(orderBy sqlparser.OrderBy, bldr builder) error {
 			for num, s := range rb.Colsyms {
 				if s == colsym {
 					pushOrder = &sqlparser.Order{
-						Expr:      sqlparser.IntVal(strconv.AppendInt(nil, int64(num+1), 10)),
+						Expr:      sqlparser.NewIntVal(strconv.AppendInt(nil, int64(num+1), 10)),
 						Direction: order.Direction,
 					}
 				}
@@ -110,7 +109,7 @@ func pushOrderBy(orderBy sqlparser.OrderBy, bldr builder) error {
 			if pushOrder == order {
 				panic("unexpected: column not found for order by")
 			}
-		default:
+		} else {
 			return errors.New("unsupported: complex expression in order by")
 		}
 		if rb.Order() < routeNumber {

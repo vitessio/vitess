@@ -181,7 +181,7 @@ func handleVindexCol(colVindex *vindexes.ColumnVindex, rowNum int, row sqlparser
 	if err != nil {
 		return val, fmt.Errorf("could not convert val: %s, pos: %d: %v", sqlparser.String(row[pos]), pos, err)
 	}
-	row[pos] = sqlparser.ValArg([]byte(":_" + colVindex.Column.CompliantName() + strconv.Itoa(rowNum)))
+	row[pos] = sqlparser.NewValArg([]byte(":_" + colVindex.Column.CompliantName() + strconv.Itoa(rowNum)))
 	return val, nil
 }
 
@@ -209,7 +209,7 @@ func handleAutoinc(ins *sqlparser.Insert, autoinc *vindexes.AutoIncrement, rowNu
 	if err != nil {
 		return nil, fmt.Errorf("could not convert val: %s, pos: %d: %v", sqlparser.String(row[pos]), pos, err)
 	}
-	row[pos] = sqlparser.ValArg([]byte(":" + engine.SeqVarName + strconv.Itoa(rowNum)))
+	row[pos] = sqlparser.NewValArg([]byte(":" + engine.SeqVarName + strconv.Itoa(rowNum)))
 	return val, nil
 }
 

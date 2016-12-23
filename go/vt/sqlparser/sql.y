@@ -849,7 +849,7 @@ value_expression:
   }
 | '+'  value_expression %prec UNARY
   {
-    if num, ok := $2.(IntVal); ok {
+    if num, ok := $2.(*SQLVal); ok && num.Type == IntVal {
       $$ = num
     } else {
       $$ = &UnaryExpr{Operator: UPlusStr, Expr: $2}
@@ -857,12 +857,13 @@ value_expression:
   }
 | '-'  value_expression %prec UNARY
   {
-    if num, ok := $2.(IntVal); ok {
+    if num, ok := $2.(*SQLVal); ok && num.Type == IntVal {
       // Handle double negative
-      if num[0] == '-' {
-        $$ = num[1:]
+      if num.Val[0] == '-' {
+        num.Val = num.Val[1:]
+        $$ = num
       } else {
-        $$ = append(IntVal("-"), num...)
+        $$ = NewIntVal(append([]byte("-"), num.Val...))
       }
     } else {
       $$ = &UnaryExpr{Operator: UMinusStr, Expr: $2}
@@ -980,27 +981,27 @@ column_name:
 value:
   STRING
   {
-    $$ = StrVal($1)
+    $$ = NewStrVal($1)
   }
 | HEX
   {
-    $$ = HexVal($1)
+    $$ = NewHexVal($1)
   }
 | INTEGRAL
   {
-    $$ = IntVal($1)
+    $$ = NewIntVal($1)
   }
 | FLOAT
   {
-    $$ = FloatVal($1)
+    $$ = NewFloatVal($1)
   }
 | HEXNUM
   {
-    $$ = HexNum($1)
+    $$ = NewHexNum($1)
   }
 | VALUE_ARG
   {
-    $$ = ValArg($1)
+    $$ = NewValArg($1)
   }
 | NULL
   {
@@ -1015,15 +1016,15 @@ num_val:
       yylex.Error("expecting value after next")
       return 1
     }
-    $$ = IntVal("1")
+    $$ = NewIntVal([]byte("1"))
   }
 | INTEGRAL VALUES
   {
-    $$ = IntVal($1)
+    $$ = NewIntVal($1)
   }
 | VALUE_ARG VALUES
   {
-    $$ = ValArg($1)
+    $$ = NewValArg($1)
   }
 
 group_by_opt:

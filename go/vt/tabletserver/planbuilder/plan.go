@@ -17,7 +17,7 @@ import (
 var (
 	// ErrTooComplex indicates given sql query is too complex.
 	ErrTooComplex = errors.New("Complex")
-	execLimit     = &sqlparser.Limit{Rowcount: sqlparser.ValArg(":#maxLimit")}
+	execLimit     = &sqlparser.Limit{Rowcount: sqlparser.NewValArg([]byte(":#maxLimit"))}
 )
 
 // PlanType indicates a query plan type.

@@ -444,7 +444,7 @@ func (rb *route) Wireup(bldr builder, jt *jointab) error {
 			if len(node.SelectExprs) == 0 {
 				node.SelectExprs = sqlparser.SelectExprs([]sqlparser.SelectExpr{
 					&sqlparser.NonStarExpr{
-						Expr: sqlparser.IntVal([]byte{'1'}),
+						Expr: sqlparser.NewIntVal([]byte{'1'}),
 					},
 				})
 			}

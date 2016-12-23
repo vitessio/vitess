@@ -47,7 +47,7 @@ func TestIsColName(t *testing.T) {
 		in:  &ColName{},
 		out: true,
 	}, {
-		in: HexVal(""),
+		in: newHexVal(""),
 	}}
 	for _, tc := range testcases {
 		out := IsColName(tc.in)
@@ -62,16 +62,16 @@ func TestIsValue(t *testing.T) {
 		in  ValExpr
 		out bool
 	}{{
-		in:  StrVal(""),
+		in:  newStrVal(""),
 		out: true,
 	}, {
-		in:  HexVal(""),
+		in:  newHexVal(""),
 		out: true,
 	}, {
-		in:  IntVal(""),
+		in:  newIntVal(""),
 		out: true,
 	}, {
-		in:  ValArg(""),
+		in:  newValArg(""),
 		out: true,
 	}, {
 		in: &NullVal{},
@@ -92,7 +92,7 @@ func TestIsNull(t *testing.T) {
 		in:  &NullVal{},
 		out: true,
 	}, {
-		in: StrVal(""),
+		in: newStrVal(""),
 	}}
 	for _, tc := range testcases {
 		out := IsNull(tc.in)
@@ -107,7 +107,7 @@ func TestIsSimpleTuple(t *testing.T) {
 		in  ValExpr
 		out bool
 	}{{
-		in:  ValTuple{StrVal("")},
+		in:  ValTuple{newStrVal("")},
 		out: true,
 	}, {
 		in: ValTuple{&ColName{}},
@@ -130,41 +130,41 @@ func TestAsInterface(t *testing.T) {
 		in  ValExpr
 		out interface{}
 	}{{
-		in:  ValTuple{StrVal("aa")},
+		in:  ValTuple{newStrVal("aa")},
 		out: []interface{}{sqltypes.MakeString([]byte("aa"))},
 	}, {
 		in:  ValTuple{&ColName{}},
-		out: errors.New("unexpected node &{<nil>  <nil>}"),
+		out: errors.New("unexpected node ''"),
 	}, {
-		in:  ValArg(":aa"),
+		in:  newValArg(":aa"),
 		out: ":aa",
 	}, {
 		in:  ListArg("::aa"),
 		out: "::aa",
 	}, {
-		in:  StrVal("aa"),
+		in:  newStrVal("aa"),
 		out: sqltypes.MakeString([]byte("aa")),
 	}, {
-		in:  HexVal("3131"),
+		in:  newHexVal("3131"),
 		out: sqltypes.MakeString([]byte("11")),
 	}, {
-		in:  HexVal("313"),
+		in:  newHexVal("313"),
 		out: errors.New("encoding/hex: odd length hex string"),
 	}, {
-		in:  IntVal("313"),
+		in:  newIntVal("313"),
 		out: sqltypes.MakeTrusted(sqltypes.Int64, []byte("313")),
 	}, {
-		in:  IntVal("18446744073709551616"),
+		in:  newIntVal("18446744073709551616"),
 		out: errors.New("type mismatch: strconv.ParseUint: parsing \"18446744073709551616\": value out of range"),
 	}, {
-		in:  FloatVal("1.2"),
-		out: errors.New("unexpected node [49 46 50]"),
+		in:  newFloatVal("1.2"),
+		out: errors.New("unexpected node '1.2'"),
 	}, {
 		in:  &NullVal{},
 		out: nil,
 	}, {
 		in:  &ColName{},
-		out: errors.New("unexpected node &{<nil>  <nil>}"),
+		out: errors.New("unexpected node ''"),
 	}}
 	for _, tc := range testcases {
 		out, err := AsInterface(tc.in)
@@ -196,4 +196,24 @@ func TestStringIn(t *testing.T) {
 			t.Errorf("StringIn(%v,%v): %#v, want %#v", tc.in1, tc.in2, out, tc.out)
 		}
 	}
+}
+
+func newStrVal(in string) *SQLVal {
+	return NewStrVal([]byte(in))
+}
+
+func newIntVal(in string) *SQLVal {
+	return NewIntVal([]byte(in))
+}
+
+func newFloatVal(in string) *SQLVal {
+	return NewFloatVal([]byte(in))
+}
+
+func newHexVal(in string) *SQLVal {
+	return NewHexVal([]byte(in))
+}
+
+func newValArg(in string) *SQLVal {
+	return NewValArg([]byte(in))
 }

@@ -157,37 +157,44 @@ func valEqual(a, b interface{}) bool {
 		if b, ok := b.(*sqlparser.ColName); ok {
 			return newColref(a) == newColref(b)
 		}
-	case sqlparser.ValArg:
-		if b, ok := b.(sqlparser.ValArg); ok {
-			return bytes.Equal([]byte(a), []byte(b))
+	case *sqlparser.SQLVal:
+		b, ok := b.(*sqlparser.SQLVal)
+		if !ok {
+			return false
 		}
-	case sqlparser.StrVal:
-		switch b := b.(type) {
+		switch a.Type {
+		case sqlparser.ValArg:
+			if b.Type == sqlparser.ValArg {
+				return bytes.Equal([]byte(a.Val), []byte(b.Val))
+			}
 		case sqlparser.StrVal:
-			return bytes.Equal([]byte(a), []byte(b))
+			switch b.Type {
+			case sqlparser.StrVal:
+				return bytes.Equal([]byte(a.Val), []byte(b.Val))
+			case sqlparser.HexVal:
+				return hexEqual(b, a)
+			}
 		case sqlparser.HexVal:
-			return hexEqual(b, a)
-		}
-	case sqlparser.HexVal:
-		return hexEqual(a, b)
-	case sqlparser.IntVal:
-		if b, ok := b.(sqlparser.IntVal); ok {
-			return bytes.Equal([]byte(a), []byte(b))
+			return hexEqual(a, b)
+		case sqlparser.IntVal:
+			if b.Type == (sqlparser.IntVal) {
+				return bytes.Equal([]byte(a.Val), []byte(b.Val))
+			}
 		}
 	}
 	return false
 }
 
-func hexEqual(a sqlparser.HexVal, b interface{}) bool {
-	v, err := a.Decode()
+func hexEqual(a, b *sqlparser.SQLVal) bool {
+	v, err := a.HexDecode()
 	if err != nil {
 		return false
 	}
-	switch b := b.(type) {
+	switch b.Type {
 	case sqlparser.StrVal:
-		return bytes.Equal(v, []byte(b))
+		return bytes.Equal(v, b.Val)
 	case sqlparser.HexVal:
-		v2, err := b.Decode()
+		v2, err := b.HexDecode()
 		if err != nil {
 			return false
 		}
@@ -199,23 +206,26 @@ func hexEqual(a sqlparser.HexVal, b interface{}) bool {
 // valConvert converts an AST value to the Value field in the route.
 func valConvert(node sqlparser.ValExpr) (interface{}, error) {
 	switch node := node.(type) {
-	case sqlparser.ValArg:
-		return string(node), nil
-	case sqlparser.StrVal:
-		return []byte(node), nil
-	case sqlparser.HexVal:
-		return node.Decode()
-	case sqlparser.IntVal:
-		val := string(node)
-		signed, err := strconv.ParseInt(val, 0, 64)
-		if err == nil {
-			return signed, nil
+	case *sqlparser.SQLVal:
+		switch node.Type {
+		case sqlparser.ValArg:
+			return string(node.Val), nil
+		case sqlparser.StrVal:
+			return []byte(node.Val), nil
+		case sqlparser.HexVal:
+			return node.HexDecode()
+		case sqlparser.IntVal:
+			val := string(node.Val)
+			signed, err := strconv.ParseInt(val, 0, 64)
+			if err == nil {
+				return signed, nil
+			}
+			unsigned, err := strconv.ParseUint(val, 0, 64)
+			if err == nil {
+				return unsigned, nil
+			}
+			return nil, err
 		}
-		unsigned, err := strconv.ParseUint(val, 0, 64)
-		if err == nil {
-			return unsigned, nil
-		}
-		return nil, err
 	case *sqlparser.NullVal:
 		return nil, nil
 	}

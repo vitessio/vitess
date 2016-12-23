@@ -176,8 +176,8 @@ func convertColumnsToSelectExprs(columns []*schema.TableColumn) sqlparser.Select
 
 func buildLimitClause(offset, rowcount int64) *sqlparser.Limit {
 	return &sqlparser.Limit{
-		Offset:   sqlparser.IntVal(fmt.Sprintf("%d", offset)),
-		Rowcount: sqlparser.IntVal(fmt.Sprintf("%d", rowcount)),
+		Offset:   sqlparser.NewIntVal([]byte(fmt.Sprintf("%d", offset))),
+		Rowcount: sqlparser.NewIntVal([]byte(fmt.Sprintf("%d", rowcount))),
 	}
 }
 
