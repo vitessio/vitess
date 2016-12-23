@@ -31,7 +31,11 @@ func IsColName(node ValExpr) bool {
 // IsValue returns true if the ValExpr is a string, integral or value arg.
 // NULL is not considered to be a value.
 func IsValue(node ValExpr) bool {
-	switch node.(type) {
+	v, ok := node.(*SQLVal)
+	if !ok {
+		return false
+	}
+	switch v.Type {
 	case StrVal, HexVal, IntVal, ValArg:
 		return true
 	}
@@ -81,28 +85,31 @@ func AsInterface(node ValExpr) (interface{}, error) {
 			vals = append(vals, v)
 		}
 		return vals, nil
-	case ValArg:
-		return string(node), nil
+	case *SQLVal:
+		switch node.Type {
+		case ValArg:
+			return string(node.Val), nil
+		case StrVal:
+			return sqltypes.MakeString(node.Val), nil
+		case HexVal:
+			v, err := node.HexDecode()
+			if err != nil {
+				return nil, err
+			}
+			return sqltypes.MakeString(v), nil
+		case IntVal:
+			n, err := sqltypes.BuildIntegral(string(node.Val))
+			if err != nil {
+				return nil, fmt.Errorf("type mismatch: %s", err)
+			}
+			return n, nil
+		}
 	case ListArg:
 		return string(node), nil
-	case StrVal:
-		return sqltypes.MakeString(node), nil
-	case HexVal:
-		v, err := node.Decode()
-		if err != nil {
-			return nil, err
-		}
-		return sqltypes.MakeString(v), nil
-	case IntVal:
-		n, err := sqltypes.BuildIntegral(string(node))
-		if err != nil {
-			return nil, fmt.Errorf("type mismatch: %s", err)
-		}
-		return n, nil
 	case *NullVal:
 		return nil, nil
 	}
-	return nil, fmt.Errorf("unexpected node %v", node)
+	return nil, fmt.Errorf("unexpected node '%v'", String(node))
 }
 
 // StringIn is a convenience function that returns

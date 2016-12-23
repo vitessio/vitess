@@ -33,8 +33,10 @@ func getBindvars(node sqlparser.SQLNode) map[string]struct{} {
 	bindvars := make(map[string]struct{})
 	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 		switch node := node.(type) {
-		case sqlparser.ValArg:
-			bindvars[string(node[1:])] = struct{}{}
+		case *sqlparser.SQLVal:
+			if node.Type == sqlparser.ValArg {
+				bindvars[string(node.Val[1:])] = struct{}{}
+			}
 		case sqlparser.ListArg:
 			bindvars[string(node[2:])] = struct{}{}
 		}
