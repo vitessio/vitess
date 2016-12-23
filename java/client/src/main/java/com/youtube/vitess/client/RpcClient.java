@@ -3,6 +3,7 @@ package com.youtube.vitess.client;
 import com.google.common.util.concurrent.ListenableFuture;
 
 import com.youtube.vitess.proto.Query.QueryResult;
+import com.youtube.vitess.proto.Vtgate;
 import com.youtube.vitess.proto.Vtgate.BeginRequest;
 import com.youtube.vitess.proto.Vtgate.BeginResponse;
 import com.youtube.vitess.proto.Vtgate.CommitRequest;
@@ -88,6 +89,16 @@ public interface RpcClient extends Closeable {
    */
   ListenableFuture<ExecuteEntityIdsResponse> executeEntityIds(
       Context ctx, ExecuteEntityIdsRequest request) throws SQLException;
+
+  /**
+   * Sends a list of queries using the VTGate V3 API.
+   *
+   * <p>See the
+   * <a href="https://github.com/youtube/vitess/blob/master/proto/vtgateservice.proto">proto</a>
+   * definition for canonical documentation on this VTGate API.
+   */
+  ListenableFuture<Vtgate.ExecuteBatchResponse> executeBatch(Context ctx, Vtgate.ExecuteBatchRequest request)
+      throws SQLException;
 
   /**
    * Sends a list of queries to a set of shards.
