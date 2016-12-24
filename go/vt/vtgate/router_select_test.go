@@ -730,7 +730,7 @@ func TestSelectScatter(t *testing.T) {
 		sbc := hc.AddTestTablet(cell, shard, 1, "TestRouter", shard, topodatapb.TabletType_MASTER, true, 1, nil)
 		conns = append(conns, sbc)
 	}
-	router := NewRouter(context.Background(), serv, cell, "", scatterConn)
+	router := NewRouter(context.Background(), serv, cell, "", scatterConn, false)
 
 	_, err := routerExec(router, "select id from user", nil)
 	if err != nil {
@@ -762,7 +762,7 @@ func TestStreamSelectScatter(t *testing.T) {
 		sbc := hc.AddTestTablet(cell, shard, 1, "TestRouter", shard, topodatapb.TabletType_MASTER, true, 1, nil)
 		conns = append(conns, sbc)
 	}
-	router := NewRouter(context.Background(), serv, cell, "", scatterConn)
+	router := NewRouter(context.Background(), serv, cell, "", scatterConn, false)
 
 	sql := "select id from user"
 	result, err := routerStream(router, sql)
@@ -804,7 +804,7 @@ func TestSelectScatterFail(t *testing.T) {
 	}
 	serv := new(sandboxTopo)
 	scatterConn := newTestScatterConn(hc, serv, cell)
-	router := NewRouter(context.Background(), serv, cell, "", scatterConn)
+	router := NewRouter(context.Background(), serv, cell, "", scatterConn, false)
 
 	_, err := routerExec(router, "select id from user", nil)
 	want := "paramsSelectScatter: keyspace TestRouter fetch error: topo error GetSrvKeyspace"

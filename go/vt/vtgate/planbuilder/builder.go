@@ -81,22 +81,31 @@ type VSchema interface {
 // Build builds a plan for a query based on the specified vschema.
 // It's the main entry point for this package.
 func Build(query string, vschema VSchema) (*engine.Plan, error) {
-	statement, err := sqlparser.Parse(query)
+	stmt, err := sqlparser.Parse(query)
 	if err != nil {
 		return nil, err
 	}
+	return BuildFromStmt(query, stmt, vschema)
+}
+
+// BuildFromStmt builds a plan based on the AST provided.
+// TODO(sougou): The query input is trusted as the source
+// of the AST. Maybe this function just returns instructions
+// and engine.Plan can be built by the caller.
+func BuildFromStmt(query string, stmt sqlparser.Statement, vschema VSchema) (*engine.Plan, error) {
+	var err error
 	plan := &engine.Plan{
 		Original: query,
 	}
-	switch statement := statement.(type) {
+	switch stmt := stmt.(type) {
 	case *sqlparser.Select:
-		plan.Instructions, err = buildSelectPlan(statement, vschema)
+		plan.Instructions, err = buildSelectPlan(stmt, vschema)
 	case *sqlparser.Insert:
-		plan.Instructions, err = buildInsertPlan(statement, vschema)
+		plan.Instructions, err = buildInsertPlan(stmt, vschema)
 	case *sqlparser.Update:
-		plan.Instructions, err = buildUpdatePlan(statement, vschema)
+		plan.Instructions, err = buildUpdatePlan(stmt, vschema)
 	case *sqlparser.Delete:
-		plan.Instructions, err = buildDeletePlan(statement, vschema)
+		plan.Instructions, err = buildDeletePlan(stmt, vschema)
 	case *sqlparser.Union, *sqlparser.Set, *sqlparser.DDL, *sqlparser.Other:
 		return nil, errors.New("unsupported construct")
 	default:

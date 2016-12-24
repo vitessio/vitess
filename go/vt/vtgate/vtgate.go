@@ -8,6 +8,7 @@ package vtgate
 
 import (
 	"errors"
+	"flag"
 	"fmt"
 	"math"
 	"net/http"
@@ -40,12 +41,34 @@ import (
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
+var (
+	transactionMode  = flag.String("transaction_mode", "multi", "single: disallow multi-db transactions, multi: allow multi-db transactions with best effort commit, twopc: allow multi-db transactions with 2pc commit")
+	normalizeQueries = flag.Bool("normalize_queries", false, "Turning this flag on will cause vtgate to rewrite queries with bind vars. This is beneficial if the app doesn't itself send normalized queries.")
+)
+
 // Transaction modes. The value specifies what's allowed.
 const (
 	TxSingle = iota
 	TxMulti
 	TxTwoPC
 )
+
+func getTxMode() int {
+	txMode := TxMulti
+	switch *transactionMode {
+	case "single":
+		log.Infof("Transaction mode: '%s'", *transactionMode)
+		txMode = TxSingle
+	case "multi":
+		log.Infof("Transaction mode: '%s'", *transactionMode)
+	case "twopc":
+		log.Infof("Transaction mode: '%s'", *transactionMode)
+		txMode = TxTwoPC
+	default:
+		log.Warningf("Unrecognized transactionMode '%s'. Continuing with default 'multi'", *transactionMode)
+	}
+	return txMode
+}
 
 var (
 	rpcVTGate *VTGate
@@ -115,7 +138,7 @@ var RegisterVTGates []RegisterVTGate
 var vtgateOnce sync.Once
 
 // Init initializes VTGate server.
-func Init(ctx context.Context, hc discovery.HealthCheck, topoServer topo.Server, serv topo.SrvTopoServer, cell string, retryCount int, tabletTypesToWait []topodatapb.TabletType, transactionMode int) *VTGate {
+func Init(ctx context.Context, hc discovery.HealthCheck, topoServer topo.Server, serv topo.SrvTopoServer, cell string, retryCount int, tabletTypesToWait []topodatapb.TabletType) *VTGate {
 	if rpcVTGate != nil {
 		log.Fatalf("VTGate already initialized")
 	}
@@ -133,8 +156,8 @@ func Init(ctx context.Context, hc discovery.HealthCheck, topoServer topo.Server,
 	sc := NewScatterConn("VttabletCall", tc, gw)
 
 	rpcVTGate = &VTGate{
-		transactionMode: transactionMode,
-		router:          NewRouter(ctx, serv, cell, "VTGateRouter", sc),
+		transactionMode: getTxMode(),
+		router:          NewRouter(ctx, serv, cell, "VTGateRouter", sc, *normalizeQueries),
 		resolver:        NewResolver(serv, cell, sc),
 		scatterConn:     sc,
 		txConn:          tc,

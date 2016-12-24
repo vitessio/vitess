@@ -33,13 +33,16 @@ func Normalize(stmt Statement, bindVars map[string]interface{}, prefix string) {
 			// Check if there's a bindvar for that value already.
 			var key string
 			if bval.Type == sqltypes.VarBinary {
+				// Prefixing strings with "'" ensures that a string
+				// and number that have the same representation don't
+				// collide.
 				key = "'" + string(node.Val)
 			} else {
 				key = string(node.Val)
 			}
 			bvname, ok := vals[key]
 			if !ok {
-				// If there' no such bindvar, make a new one.
+				// If there's no such bindvar, make a new one.
 				bvname, counter = newName(prefix, counter, reserved)
 				vals[key] = bvname
 				bindVars[bvname] = bval
@@ -54,7 +57,7 @@ func Normalize(stmt Statement, bindVars map[string]interface{}, prefix string) {
 				return true, nil
 			}
 			// It's either IN or NOT IN.
-			vals, ok := node.Right.(ValTuple)
+			tupleVals, ok := node.Right.(ValTuple)
 			if !ok {
 				return true, nil
 			}
@@ -63,7 +66,7 @@ func Normalize(stmt Statement, bindVars map[string]interface{}, prefix string) {
 			bvals := &querypb.BindVariable{
 				Type: sqltypes.Tuple,
 			}
-			for _, val := range vals {
+			for _, val := range tupleVals {
 				bval := sqlToBindvar(val)
 				if bval == nil {
 					return true, nil
