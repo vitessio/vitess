@@ -31,7 +31,6 @@ var (
 	healthCheckRetryDelay  = flag.Duration("healthcheck_retry_delay", 2*time.Millisecond, "health check retry delay")
 	healthCheckTimeout     = flag.Duration("healthcheck_timeout", time.Minute, "the health check timeout period")
 	tabletTypesToWait      = flag.String("tablet_types_to_wait", "", "wait till connected for specified tablet types during Gateway initialization")
-	transactionMode        = flag.String("transaction_mode", "multi", "single: disallow multi-db transactions, multi: allow multi-db transactions with best effort commit, twopc: allow multi-db transactions with 2pc commit")
 )
 
 var resilientSrvTopoServer *vtgate.ResilientSrvTopoServer
@@ -73,21 +72,7 @@ func main() {
 		}
 	}
 
-	txMode := vtgate.TxMulti
-	switch *transactionMode {
-	case "single":
-		log.Infof("Transaction mode: '%s'", *transactionMode)
-		txMode = vtgate.TxSingle
-	case "multi":
-		log.Infof("Transaction mode: '%s'", *transactionMode)
-	case "twopc":
-		log.Infof("Transaction mode: '%s'", *transactionMode)
-		txMode = vtgate.TxTwoPC
-	default:
-		log.Warningf("Unrecognized transactionMode '%s'. Continuing with default 'multi'", *transactionMode)
-	}
-
-	vtg := vtgate.Init(context.Background(), healthCheck, ts, resilientSrvTopoServer, *cell, *retryCount, tabletTypes, txMode)
+	vtg := vtgate.Init(context.Background(), healthCheck, ts, resilientSrvTopoServer, *cell, *retryCount, tabletTypes)
 
 	servenv.OnRun(func() {
 		addStatusParts(vtg)

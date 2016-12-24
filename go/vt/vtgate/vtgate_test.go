@@ -48,7 +48,8 @@ func init() {
 }
 `
 	hcVTGateTest = discovery.NewFakeHealthCheck()
-	Init(context.Background(), hcVTGateTest, topo.Server{}, new(sandboxTopo), "aa", 10, nil, TxMulti)
+	*transactionMode = "multi"
+	Init(context.Background(), hcVTGateTest, topo.Server{}, new(sandboxTopo), "aa", 10, nil)
 }
 
 func TestVTGateBegin(t *testing.T) {

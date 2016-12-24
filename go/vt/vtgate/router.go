@@ -50,11 +50,11 @@ func newScatterParams(ks string, bv map[string]interface{}, shards []string) *sc
 }
 
 // NewRouter creates a new Router.
-func NewRouter(ctx context.Context, serv topo.SrvTopoServer, cell, statsName string, scatterConn *ScatterConn) *Router {
+func NewRouter(ctx context.Context, serv topo.SrvTopoServer, cell, statsName string, scatterConn *ScatterConn, normalize bool) *Router {
 	return &Router{
 		serv:        serv,
 		cell:        cell,
-		planner:     NewPlanner(ctx, serv, cell, 5000),
+		planner:     NewPlanner(ctx, serv, cell, 5000, normalize),
 		scatterConn: scatterConn,
 	}
 }
@@ -65,7 +65,7 @@ func (rtr *Router) Execute(ctx context.Context, sql string, bindVars map[string]
 		bindVars = make(map[string]interface{})
 	}
 	vcursor := newQueryExecutor(ctx, sql, bindVars, keyspace, tabletType, session, notInTransaction, options, rtr)
-	plan, err := rtr.planner.GetPlan(sql, keyspace)
+	plan, err := rtr.planner.GetPlan(sql, keyspace, bindVars)
 	if err != nil {
 		return nil, err
 	}
@@ -78,7 +78,7 @@ func (rtr *Router) StreamExecute(ctx context.Context, sql string, bindVars map[s
 		bindVars = make(map[string]interface{})
 	}
 	vcursor := newQueryExecutor(ctx, sql, bindVars, keyspace, tabletType, nil, false, options, rtr)
-	plan, err := rtr.planner.GetPlan(sql, keyspace)
+	plan, err := rtr.planner.GetPlan(sql, keyspace, bindVars)
 	if err != nil {
 		return err
 	}
@@ -95,7 +95,7 @@ func (rtr *Router) ExecuteBatch(ctx context.Context, sqlList []string, bindVarsL
 		var queryResponse sqltypes.QueryResponse
 		//Using same QueryExecutor -> marking notInTransaction as false and not using asTransaction flag
 		vcursor := newQueryExecutor(ctx, query, bindVarsList[sqlNum], keyspace, tabletType, session, false, options, rtr)
-		plan, err := rtr.planner.GetPlan(query, keyspace)
+		plan, err := rtr.planner.GetPlan(query, keyspace, bindVarsList[sqlNum])
 		if err != nil {
 			queryResponse.QueryError = err
 		} else {
@@ -461,7 +461,6 @@ func (rtr *Router) getInsertShardedRoute(vcursor *queryExecutor, route *engine.R
 			return "", nil, fmt.Errorf("getInsertShardedRoute: Error While Rewriting Query: %v", err)
 		}
 		rewrittenQuery := sqlannotation.AddKeyspaceIDs(rewritten, shardKeyspaceIDMap[shard], vcursor.comments)
-		route.Query = rewrittenQuery
 		query := querytypes.BoundQuery{
 			Sql:           rewrittenQuery,
 			BindVariables: vcursor.bindVars,

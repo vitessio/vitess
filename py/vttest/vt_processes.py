@@ -138,6 +138,7 @@ class VtcomboProcess(VtProcess):
         '-proto_topo', text_format.MessageToString(topology, as_one_line=True),
         '-mycnf_server_id', '1',
         '-mycnf_socket_file', mysql_db.unix_socket(),
+        '-normalize_queries',
     ] + self.QUERYSERVER_PARAMETERS + environment.extra_vtcombo_parameters()
     if schema_dir:
       self.extraparams.extend(['-schema_dir', schema_dir])

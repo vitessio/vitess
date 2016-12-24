@@ -37,6 +37,7 @@ type Planner struct {
 	cell         string
 	mu           sync.Mutex
 	vschema      *vindexes.VSchema
+	normalize    bool
 	plans        *cache.LRUCache
 	vschemaStats *VSchemaStats
 }
@@ -141,11 +142,12 @@ var plannerOnce sync.Once
 
 // NewPlanner creates a new planner for VTGate.
 // It will watch the vschema in the topology until the ctx is closed.
-func NewPlanner(ctx context.Context, serv topo.SrvTopoServer, cell string, cacheSize int) *Planner {
+func NewPlanner(ctx context.Context, serv topo.SrvTopoServer, cell string, cacheSize int, normalize bool) *Planner {
 	plr := &Planner{
-		serv:  serv,
-		cell:  cell,
-		plans: cache.NewLRUCache(int64(cacheSize)),
+		serv:      serv,
+		cell:      cell,
+		plans:     cache.NewLRUCache(int64(cacheSize)),
+		normalize: normalize,
 	}
 	plr.WatchSrvVSchema(ctx, cell)
 	plannerOnce.Do(func() {
@@ -275,7 +277,7 @@ func (plr *Planner) VSchema() *vindexes.VSchema {
 
 // GetPlan computes the plan for the given query. If one is in
 // the cache, it reuses it.
-func (plr *Planner) GetPlan(sql, keyspace string) (*engine.Plan, error) {
+func (plr *Planner) GetPlan(sql, keyspace string, bindvars map[string]interface{}) (*engine.Plan, error) {
 	if plr.VSchema() == nil {
 		return nil, errors.New("vschema not initialized")
 	}
@@ -286,14 +288,39 @@ func (plr *Planner) GetPlan(sql, keyspace string) (*engine.Plan, error) {
 	if result, ok := plr.plans.Get(key); ok {
 		return result.(*engine.Plan), nil
 	}
-	plan, err := planbuilder.Build(sql, &wrappedVSchema{
+	if !plr.normalize {
+		plan, err := planbuilder.Build(sql, &wrappedVSchema{
+			vschema:  plr.VSchema(),
+			keyspace: sqlparser.NewTableIdent(keyspace),
+		})
+		if err != nil {
+			return nil, err
+		}
+		plr.plans.Set(key, plan)
+		return plan, nil
+	}
+	// Normalize and retry.
+	stmt, err := sqlparser.Parse(sql)
+	if err != nil {
+		return nil, err
+	}
+	sqlparser.Normalize(stmt, bindvars, "vtg")
+	normalized := sqlparser.String(stmt)
+	normkey := normalized
+	if keyspace != "" {
+		normkey = keyspace + ":" + normalized
+	}
+	if result, ok := plr.plans.Get(normkey); ok {
+		return result.(*engine.Plan), nil
+	}
+	plan, err := planbuilder.BuildFromStmt(normalized, stmt, &wrappedVSchema{
 		vschema:  plr.VSchema(),
 		keyspace: sqlparser.NewTableIdent(keyspace),
 	})
 	if err != nil {
 		return nil, err
 	}
-	plr.plans.Set(sql, plan)
+	plr.plans.Set(normkey, plan)
 	return plan, nil
 }
 
