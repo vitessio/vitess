@@ -15,7 +15,7 @@ import (
 
 // buildSelectPlan is the new function to build a Select plan.
 func buildSelectPlan(sel *sqlparser.Select, vschema VSchema) (primitive engine.Primitive, err error) {
-	bindvars := getBindvars(sel)
+	bindvars := sqlparser.GetBindvars(sel)
 	builder, err := processSelect(sel, vschema, nil)
 	if err != nil {
 		return nil, err
@@ -26,23 +26,6 @@ func buildSelectPlan(sel *sqlparser.Select, vschema VSchema) (primitive engine.P
 		return nil, err
 	}
 	return builder.Primitive(), nil
-}
-
-// getBindvars returns a map of the bind vars referenced in the statement.
-func getBindvars(node sqlparser.SQLNode) map[string]struct{} {
-	bindvars := make(map[string]struct{})
-	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
-		switch node := node.(type) {
-		case *sqlparser.SQLVal:
-			if node.Type == sqlparser.ValArg {
-				bindvars[string(node.Val[1:])] = struct{}{}
-			}
-		case sqlparser.ListArg:
-			bindvars[string(node[2:])] = struct{}{}
-		}
-		return true, nil
-	}, node)
-	return bindvars
 }
 
 // processSelect builds a primitive tree for the given query or subquery.
