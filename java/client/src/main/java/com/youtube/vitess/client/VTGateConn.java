@@ -209,6 +209,7 @@ public final class VTGateConn implements Closeable {
         @Nullable List<Map<String, ?>> bindVarsList, TabletType tabletType) throws SQLException {
         return executeBatch(ctx, queryList, bindVarsList, tabletType, false);
     }
+
     public SQLFuture<List<CursorWithError>> executeBatch(Context ctx, List<String> queryList,
         @Nullable List<Map<String, ?>> bindVarsList, TabletType tabletType,
         boolean asTransaction) throws SQLException {

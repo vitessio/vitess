@@ -219,7 +219,7 @@ public class VTGateTx {
 
         Vtgate.ExecuteBatchRequest.Builder requestBuilder =
             Vtgate.ExecuteBatchRequest.newBuilder().addAllQueries(checkNotNull(queries))
-                .setKeyspace(keyspace).setTabletType(checkNotNull(tabletType));
+                .setKeyspace(keyspace).setTabletType(checkNotNull(tabletType)).setSession(session);
         if (ctx.getCallerId() != null) {
             requestBuilder.setCallerId(ctx.getCallerId());
         }
