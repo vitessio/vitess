@@ -376,6 +376,10 @@ public class VitessStatement implements Statement {
         String[][] data = null;
 
         if (this.generatedId > 0) {
+            // This is as per Mysql JDBC Driver.
+            // As the actual count of generated value is not known,
+            // only the rows affected is known, so using firstInsertId all the auto_inc values
+            // are generated. As per Vitess Config, the increment value is 1 and not changeable.
             data = new String[(int) this.resultCount][1];
             for (int i = 0; i < this.resultCount; ++i) {
                 data[i][0] = String.valueOf(this.generatedId + i);
