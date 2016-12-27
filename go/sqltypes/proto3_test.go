@@ -8,7 +8,11 @@ import (
 	"reflect"
 	"testing"
 
+	"errors"
+
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	"github.com/youtube/vitess/go/vt/proto/vtrpc"
+	"github.com/youtube/vitess/go/vt/vterrors"
 )
 
 func TestResult(t *testing.T) {
@@ -238,6 +242,9 @@ func TestQueryReponses(t *testing.T) {
 				},
 			},
 			QueryError: nil,
+		}, {
+			QueryResult: nil,
+			QueryError:  vterrors.FromError(vtrpc.ErrorCode_DEADLINE_EXCEEDED, errors.New("deadline exceeded")),
 		},
 	}
 
@@ -278,6 +285,12 @@ func TestQueryReponses(t *testing.T) {
 					},
 				},
 			},
+		}, {
+			Error: &vtrpc.RPCError{
+				Code:    vtrpc.ErrorCode_DEADLINE_EXCEEDED,
+				Message: "deadline exceeded",
+			},
+			Result: nil,
 		},
 	}
 	p3converted := QueryResponsesToProto3(queryResponses)
