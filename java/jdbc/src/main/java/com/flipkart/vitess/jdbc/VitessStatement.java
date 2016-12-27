@@ -26,7 +26,7 @@ import java.util.logging.Logger;
 
 /**
  * Created by harshit.gangal on 19/01/16.
- *
+ * <p>
  * This class expects an sql query to be provided when a call to DB is made by the method:
  * execute(sql), executeQuery(sql), executeUpdate(sql).
  * When executeBatch() is called, the sql is not required;
@@ -50,7 +50,9 @@ public class VitessStatement implements Statement {
     protected int resultSetType;
     protected boolean retrieveGeneratedKeys = false;
     protected long generatedId = -1;
-    /** Holds batched commands */
+    /**
+     * Holds batched commands
+     */
     private List<String> batchedArgs;
 
 
@@ -374,8 +376,10 @@ public class VitessStatement implements Statement {
         String[][] data = null;
 
         if (this.generatedId > 0) {
-            data = new String[1][1];
-            data[0][0] = String.valueOf(this.generatedId);
+            data = new String[(int) this.resultCount][1];
+            for (int i = 0; i < this.resultCount; ++i) {
+                data[i][0] = String.valueOf(this.generatedId + i);
+            }
         }
 
         return new VitessResultSet(columnNames, columnTypes, data);
@@ -529,13 +533,14 @@ public class VitessStatement implements Statement {
      * Submits a batch of commands to the database for execution and
      * if all commands execute successfully, returns an array of update counts.
      * The array returned is according to the order in which they were added to the batch.
-     * <P>
+     * <p>
      * If one of the commands in a batch update fails to execute properly,
      * this method throws a <code>BatchUpdateException</code>, and a JDBC
      * driver may or may not continue to process the remaining commands in
      * the batch. If the driver continues processing after a failure,
      * the array returned by the method <code>BatchUpdateException.getUpdateCounts</code>
      * will contain as many elements as there are commands in the batch.
+     *
      * @return int[] of results corresponding to each command
      * @throws SQLException
      */
@@ -629,7 +634,8 @@ public class VitessStatement implements Statement {
      * So, irrespective of earlier queries being success, they do not make sense as
      * they have been rolled back.
      * Therefore, it throws a BatchUpdateException with the new Update Count Array.
-     * @param ex An SqlException
+     *
+     * @param ex           An SqlException
      * @param commandIndex The index of the query where the Exception occurred
      * @throws BatchUpdateException
      */

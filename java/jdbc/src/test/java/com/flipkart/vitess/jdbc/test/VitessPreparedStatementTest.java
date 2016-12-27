@@ -586,9 +586,10 @@ import java.util.TimeZone;
 
         try {
 
-            long expectedGeneratedId = 121;
-            int expectedAffectedRows = 1;
-            PowerMockito.when(mockCursor.getInsertId()).thenReturn(expectedGeneratedId);
+            long expectedFirstGeneratedId = 121;
+            long[] expectedGeneratedIds = {121, 122};
+            int expectedAffectedRows = 2;
+            PowerMockito.when(mockCursor.getInsertId()).thenReturn(expectedFirstGeneratedId);
             PowerMockito.when(mockCursor.getRowsAffected())
                 .thenReturn(Long.valueOf(expectedAffectedRows));
 
@@ -599,9 +600,11 @@ import java.util.TimeZone;
             Assert.assertEquals(expectedAffectedRows, updateCount);
 
             ResultSet rs = preparedStatement.getGeneratedKeys();
-            rs.next();
-            long generatedId = rs.getLong(1);
-            Assert.assertEquals(expectedGeneratedId, generatedId);
+            int i = 0;
+            while (rs.next()) {
+                long generatedId = rs.getLong(1);
+                Assert.assertEquals(expectedGeneratedIds[i++], generatedId);
+            }
 
         } catch (SQLException e) {
             Assert.fail("Test failed " + e.getMessage());
@@ -679,7 +682,8 @@ import java.util.TimeZone;
         Assert.assertEquals(1, updateCounts.length);
         Assert.assertEquals(expectedAffectedRows, updateCounts[0]);
 
-        PowerMockito.when(mockSqlFutureCursor.checkedGet()).thenThrow(SQLRecoverableException.class);
+        PowerMockito.when(mockSqlFutureCursor.checkedGet())
+            .thenThrow(SQLRecoverableException.class);
         statement.setString(1, "hi");
         statement.addBatch();
         try {

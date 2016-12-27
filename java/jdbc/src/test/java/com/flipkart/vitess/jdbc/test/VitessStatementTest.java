@@ -541,9 +541,10 @@ import java.util.List;
         VitessStatement statement = new VitessStatement(mockConn);
         try {
 
-            long expectedGeneratedId = 121;
-            int expectedAffectedRows = 1;
-            PowerMockito.when(mockCursor.getInsertId()).thenReturn(expectedGeneratedId);
+            long expectedFirstGeneratedId = 121;
+            long[] expectedGeneratedIds = {121, 122, 123, 124, 125};
+            int expectedAffectedRows = 5;
+            PowerMockito.when(mockCursor.getInsertId()).thenReturn(expectedFirstGeneratedId);
             PowerMockito.when(mockCursor.getRowsAffected())
                 .thenReturn(Long.valueOf(expectedAffectedRows));
 
@@ -552,9 +553,11 @@ import java.util.List;
             Assert.assertEquals(expectedAffectedRows, updateCount);
 
             ResultSet rs = statement.getGeneratedKeys();
-            rs.next();
-            long generatedId = rs.getLong(1);
-            Assert.assertEquals(expectedGeneratedId, generatedId);
+            int i = 0;
+            while (rs.next()) {
+                long generatedId = rs.getLong(1);
+                Assert.assertEquals(expectedGeneratedIds[i++], generatedId);
+            }
 
             //Fetching Generated Keys without notifying the driver
             statement.executeUpdate(sqlInsert);
@@ -568,8 +571,8 @@ import java.util.List;
             }
 
             //Fetching Generated Keys on update query
-            expectedGeneratedId = 0;
-            PowerMockito.when(mockCursor.getInsertId()).thenReturn(expectedGeneratedId);
+            expectedFirstGeneratedId = 0;
+            PowerMockito.when(mockCursor.getInsertId()).thenReturn(expectedFirstGeneratedId);
             updateCount = statement.executeUpdate(sqlUpdate, Statement.RETURN_GENERATED_KEYS);
             Assert.assertEquals(expectedAffectedRows, updateCount);
 
@@ -640,7 +643,8 @@ import java.util.List;
         Assert.assertEquals(1, updateCounts.length);
         Assert.assertEquals(expectedAffectedRows, updateCounts[0]);
 
-        PowerMockito.when(mockSqlFutureCursor.checkedGet()).thenThrow(SQLRecoverableException.class);
+        PowerMockito.when(mockSqlFutureCursor.checkedGet())
+            .thenThrow(SQLRecoverableException.class);
         statement.addBatch(sqlUpdate);
         try {
             statement.executeBatch();
