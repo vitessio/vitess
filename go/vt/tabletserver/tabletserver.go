@@ -23,7 +23,6 @@ import (
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/tb"
 	"github.com/youtube/vitess/go/vt/binlog"
-	"github.com/youtube/vitess/go/vt/binlog/eventtoken"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/dbconnpool"
 	"github.com/youtube/vitess/go/vt/logutil"
@@ -37,7 +36,6 @@ import (
 	"github.com/youtube/vitess/go/vt/utils"
 	"golang.org/x/net/context"
 
-	binlogdatapb "github.com/youtube/vitess/go/vt/proto/binlogdata"
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
@@ -112,6 +110,7 @@ type TabletServer struct {
 	// the context of a startRequest-endRequest.
 	qe               *QueryEngine
 	te               *TxEngine
+	watcher          *ReplicationWatcher
 	updateStreamList *binlog.StreamList
 
 	// checkMySQLThrottler is used to throttle the number of
@@ -127,13 +126,6 @@ type TabletServer struct {
 	// history records changes in state for display on the status page.
 	// It has its own internal mutex.
 	history *history.History
-
-	// UpdateStream helpers.
-	updateStreamCancel context.CancelFunc
-
-	// eventTokenMutex protects the current EventToken
-	eventTokenMutex sync.RWMutex
-	eventToken      *querypb.EventToken
 
 	// Stats
 	queryServiceStats *QueryServiceStats
@@ -168,6 +160,7 @@ func NewTabletServer(config Config) *TabletServer {
 	tsv.queryServiceStats = NewQueryServiceStats(config.StatsPrefix, config.EnablePublishStats)
 	tsv.qe = NewQueryEngine(tsv, config, tsv.queryServiceStats)
 	tsv.te = NewTxEngine(tsv, config, tsv.queryServiceStats)
+	tsv.watcher = NewReplicationWatcher(config, tsv.qe)
 	tsv.updateStreamList = &binlog.StreamList{}
 	if config.EnablePublishStats {
 		stats.Publish(config.StatsPrefix+"TabletState", stats.IntFunc(func() int64 {
@@ -179,22 +172,6 @@ func NewTabletServer(config Config) *TabletServer {
 		stats.Publish(config.StatsPrefix+"QueryTimeout", stats.DurationFunc(tsv.QueryTimeout.Get))
 		stats.Publish(config.StatsPrefix+"BeginTimeout", stats.DurationFunc(tsv.BeginTimeout.Get))
 		stats.Publish(config.StatsPrefix+"TabletStateName", stats.StringFunc(tsv.GetState))
-		stats.Publish(config.StatsPrefix+"EventTokenPosition", stats.StringFunc(func() string {
-			tsv.eventTokenMutex.RLock()
-			defer tsv.eventTokenMutex.RUnlock()
-			if tsv.eventToken != nil {
-				return tsv.eventToken.Position
-			}
-			return ""
-		}))
-		stats.Publish(config.StatsPrefix+"EventTokenTimestamp", stats.IntFunc(func() int64 {
-			tsv.eventTokenMutex.RLock()
-			defer tsv.eventTokenMutex.RUnlock()
-			if tsv.eventToken != nil {
-				return tsv.eventToken.Timestamp
-			}
-			return 0
-		}))
 	}
 	return tsv
 }
@@ -397,7 +374,7 @@ func (tsv *TabletServer) fullStart() (err error) {
 			tsv.te.Close(true)
 			tsv.qe.Close()
 			tsv.updateStreamList.Stop()
-			tsv.stopReplicationStreamer()
+			tsv.watcher.Close()
 			tsv.transition(StateNotConnected)
 			err = x.(error)
 		}
@@ -425,12 +402,13 @@ func (tsv *TabletServer) serveNewType() (err error) {
 			tsv.te.Close(true)
 			tsv.qe.Close()
 			tsv.updateStreamList.Stop()
-			tsv.stopReplicationStreamer()
+			tsv.watcher.Close()
 			tsv.transition(StateNotConnected)
 			err = x.(error)
 		}
 	}()
 	if tsv.target.TabletType == topodatapb.TabletType_MASTER {
+		tsv.watcher.Close()
 		tsv.te.Open(tsv.dbconfigs)
 	} else {
 		// Wait for in-flight transactional requests to complete
@@ -439,8 +417,10 @@ func (tsv *TabletServer) serveNewType() (err error) {
 		// be sure that the tx pool won't change after the wait.
 		tsv.txRequests.Wait()
 		tsv.te.Close(true)
-		// TODO(sougou): Shouldn't this be stopped if the tablet becomes master?
-		tsv.startReplicationStreamer()
+		if err := tsv.watcher.Open(tsv.dbconfigs, tsv.mysqld); err != nil {
+			// TODO(sougou): change to normal error handling.
+			panic(err)
+		}
 	}
 	tsv.transition(StateServing)
 	return nil
@@ -488,7 +468,7 @@ func (tsv *TabletServer) waitForShutdown() {
 	tsv.te.Close(false)
 	tsv.qe.streamQList.TerminateAll()
 	tsv.updateStreamList.Stop()
-	tsv.stopReplicationStreamer()
+	tsv.watcher.Close()
 	tsv.requests.Wait()
 }
 
@@ -595,62 +575,6 @@ func (tsv *TabletServer) QueryService() queryservice.QueryService {
 // TabletServer's QueryEngine.
 func (tsv *TabletServer) QueryServiceStats() *QueryServiceStats {
 	return tsv.qe.queryServiceStats
-}
-
-func (tsv *TabletServer) startReplicationStreamer() {
-	if !*watchReplicationStream {
-		return
-	}
-	ctx, cancel := context.WithCancel(context.Background())
-
-	tsv.updateStreamCancel = cancel
-	go tsv.replicationStreamer(ctx)
-}
-
-func (tsv *TabletServer) stopReplicationStreamer() {
-	if tsv.updateStreamCancel != nil {
-		tsv.updateStreamCancel()
-		tsv.updateStreamCancel = nil
-	}
-}
-
-// replicationStreamer is the background thread that reads the
-// replication stream. It will run in a loop. If it errors out, it
-// will wait for 5 seconds before restarting.
-func (tsv *TabletServer) replicationStreamer(ctx context.Context) {
-	for {
-		log.Infof("Starting a binlog Streamer from current replication position to monitor binlogs")
-		streamer := binlog.NewStreamer(tsv.dbconfigs.App.DbName, tsv.mysqld, nil /*clientCharset*/, replication.Position{}, 0 /*timestamp*/, func(trans *binlogdatapb.BinlogTransaction) error {
-			// Save the event token.
-			tsv.eventTokenMutex.Lock()
-			tsv.eventToken = trans.EventToken
-			tsv.eventTokenMutex.Unlock()
-
-			// If it's a DDL, trigger a schema reload.
-			isDDL := false
-			for _, statement := range trans.Statements {
-				if statement.Category == binlogdatapb.BinlogTransaction_Statement_BL_DDL {
-					isDDL = true
-				}
-			}
-			if isDDL {
-				err := tsv.ReloadSchema(ctx)
-				log.Infof("Streamer triggered a schema reload, with result: %v", err)
-			}
-
-			return nil
-		})
-
-		if err := streamer.Stream(ctx); err != nil {
-			log.Infof("Streamer stopped: %v", err)
-		}
-
-		select {
-		case <-ctx.Done():
-			return
-		case <-time.After(5 * time.Second):
-		}
-	}
 }
 
 // Begin starts a new transaction. This is allowed only if the state is StateServing.
@@ -861,7 +785,7 @@ func (tsv *TabletServer) Execute(ctx context.Context, target *querypb.Target, sq
 				qe:            tsv.qe,
 				te:            tsv.te,
 			}
-			extras := tsv.computeExtras(options)
+			extras := tsv.watcher.ComputeExtras(options)
 			result, err = qre.Execute()
 			if err != nil {
 				return err
@@ -874,52 +798,6 @@ func (tsv *TabletServer) Execute(ctx context.Context, target *querypb.Target, sq
 		},
 	)
 	return result, err
-}
-
-// computeExtras returns the ResultExtras to include with the result.
-func (tsv *TabletServer) computeExtras(options *querypb.ExecuteOptions) *querypb.ResultExtras {
-	if options == nil {
-		// No options passed in.
-		return nil
-	}
-
-	if !options.IncludeEventToken && options.CompareEventToken == nil {
-		// The flags that make extras exist are not there.
-		return nil
-	}
-
-	// Grab the current EventToken.
-	tsv.eventTokenMutex.RLock()
-	et := tsv.eventToken
-	tsv.eventTokenMutex.RUnlock()
-	if et == nil {
-		return nil
-	}
-
-	var extras *querypb.ResultExtras
-
-	// See if we need to fill in EventToken.
-	if options.IncludeEventToken {
-		extras = &querypb.ResultExtras{
-			EventToken: et,
-		}
-	}
-
-	// See if we need to compare.
-	if options.CompareEventToken != nil {
-		if eventtoken.Fresher(et, options.CompareEventToken) >= 0 {
-			// For a query, we are fresher if greater or equal
-			// to the provided compare_event_token.
-			if extras == nil {
-				extras = &querypb.ResultExtras{
-					Fresher: true,
-				}
-			} else {
-				extras.Fresher = true
-			}
-		}
-	}
-	return extras
 }
 
 // StreamExecute executes the query and streams the result.

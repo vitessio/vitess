@@ -21,9 +21,8 @@ import (
 )
 
 var (
-	queryLogHandler        = flag.String("query-log-stream-handler", "/debug/querylog", "URL handler for streaming queries log")
-	txLogHandler           = flag.String("transaction-log-stream-handler", "/debug/txlog", "URL handler for streaming transactions log")
-	watchReplicationStream = flag.Bool("watch_replication_stream", false, "When enabled, vttablet will stream the MySQL replication stream from the local server, and use it to support the include_event_token ExecuteOptions.")
+	queryLogHandler = flag.String("query-log-stream-handler", "/debug/querylog", "URL handler for streaming queries log")
+	txLogHandler    = flag.String("transaction-log-stream-handler", "/debug/txlog", "URL handler for streaming transactions log")
 )
 
 func init() {
@@ -50,6 +49,7 @@ func init() {
 	flag.StringVar(&qsConfig.StatsPrefix, "stats-prefix", DefaultQsConfig.StatsPrefix, "prefix for variable names exported via expvar")
 	flag.StringVar(&qsConfig.DebugURLPrefix, "debug-url-prefix", DefaultQsConfig.DebugURLPrefix, "debug url prefix, vttablet will report various system debug pages and this config controls the prefix of these debug urls")
 	flag.StringVar(&qsConfig.PoolNamePrefix, "pool-name-prefix", DefaultQsConfig.PoolNamePrefix, "pool name prefix, vttablet has several pools and each of them has a name. This config specifies the prefix of these pool names")
+	flag.BoolVar(&qsConfig.WatchReplication, "watch_replication_stream", false, "When enabled, vttablet will stream the MySQL replication stream from the local server, and use it to support the include_event_token ExecuteOptions.")
 	flag.BoolVar(&qsConfig.EnableAutoCommit, "enable-autocommit", DefaultQsConfig.EnableAutoCommit, "if the flag is on, a DML outsides a transaction will be auto committed.")
 	flag.BoolVar(&qsConfig.TwoPCEnable, "twopc_enable", DefaultQsConfig.TwoPCEnable, "if the flag is on, 2pc is enabled. Other 2pc flags must be supplied.")
 	flag.StringVar(&qsConfig.TwoPCCoordinatorAddress, "twopc_coordinator_address", DefaultQsConfig.TwoPCCoordinatorAddress, "address of the (VTGate) process(es) that will be used to notify of abandoned transactions.")
@@ -87,6 +87,7 @@ type Config struct {
 	DebugURLPrefix          string
 	PoolNamePrefix          string
 	TableAclExemptACL       string
+	WatchReplication        bool
 	TwoPCEnable             bool
 	TwoPCCoordinatorAddress string
 	TwoPCAbandonAge         float64
@@ -123,6 +124,7 @@ var DefaultQsConfig = Config{
 	DebugURLPrefix:          "/debug",
 	PoolNamePrefix:          "",
 	TableAclExemptACL:       "",
+	WatchReplication:        false,
 	TwoPCEnable:             false,
 	TwoPCCoordinatorAddress: "",
 	TwoPCAbandonAge:         0,
