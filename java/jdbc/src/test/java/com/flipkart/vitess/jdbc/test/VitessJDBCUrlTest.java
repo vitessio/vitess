@@ -150,6 +150,19 @@ public class VitessJDBCUrlTest {
         Assert.assertEquals("val2", info.getProperty("prop2"));
     }
 
+    @Test public void testTwoPCEnabledURL() throws Exception {
+        VitessJDBCUrl vitessJDBCUrl =
+            new VitessJDBCUrl("jdbc:vitess://host:15991?twopcEnabled=true", null);
+        Assert.assertTrue(vitessJDBCUrl.isTwopcEnabled());
+
+        vitessJDBCUrl = new VitessJDBCUrl("jdbc:vitess://host:15991?twopcEnabled=false", null);
+        Assert.assertFalse(vitessJDBCUrl.isTwopcEnabled());
+
+        vitessJDBCUrl = new VitessJDBCUrl("jdbc:vitess://host:15991", null);
+        Assert.assertFalse(vitessJDBCUrl.isTwopcEnabled());
+
+    }
+
     @Test public void testSSLParamSet() throws SQLException {
         Properties info = new Properties();
         VitessJDBCUrl vitessJDBCUrl = new VitessJDBCUrl(

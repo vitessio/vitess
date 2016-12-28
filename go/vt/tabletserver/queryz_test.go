@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/tabletserver/planbuilder"
 )
 
@@ -23,7 +24,7 @@ func TestQueryzHandler(t *testing.T) {
 
 	plan1 := &ExecPlan{
 		ExecPlan: &planbuilder.ExecPlan{
-			TableName: "test_table",
+			TableName: sqlparser.NewTableIdent("test_table"),
 			PlanID:    planbuilder.PlanPassSelect,
 			Reason:    planbuilder.ReasonTable,
 		},
@@ -33,7 +34,7 @@ func TestQueryzHandler(t *testing.T) {
 
 	plan2 := &ExecPlan{
 		ExecPlan: &planbuilder.ExecPlan{
-			TableName: "test_table",
+			TableName: sqlparser.NewTableIdent("test_table"),
 			PlanID:    planbuilder.PlanDDL,
 			Reason:    planbuilder.ReasonDefault,
 		},
@@ -43,7 +44,7 @@ func TestQueryzHandler(t *testing.T) {
 
 	plan3 := &ExecPlan{
 		ExecPlan: &planbuilder.ExecPlan{
-			TableName: "",
+			TableName: sqlparser.NewTableIdent(""),
 			PlanID:    planbuilder.PlanOther,
 			Reason:    planbuilder.ReasonDefault,
 		},

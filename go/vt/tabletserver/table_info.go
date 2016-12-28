@@ -13,6 +13,7 @@ import (
 	log "github.com/golang/glog"
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	"github.com/youtube/vitess/go/vt/schema"
+	"github.com/youtube/vitess/go/vt/sqlparser"
 	"golang.org/x/net/context"
 )
 
@@ -42,17 +43,18 @@ func NewTableInfo(conn *DBConn, tableName string, tableType string, comment stri
 
 func loadTableInfo(conn *DBConn, tableName string) (ti *TableInfo, err error) {
 	ti = &TableInfo{Table: schema.NewTable(tableName)}
-	if err = ti.fetchColumns(conn); err != nil {
+	sqlTableName := sqlparser.String(ti.Name)
+	if err = ti.fetchColumns(conn, sqlTableName); err != nil {
 		return nil, err
 	}
-	if err = ti.fetchIndexes(conn); err != nil {
+	if err = ti.fetchIndexes(conn, sqlTableName); err != nil {
 		return nil, err
 	}
 	return ti, nil
 }
 
-func (ti *TableInfo) fetchColumns(conn *DBConn) error {
-	qr, err := conn.Exec(context.Background(), fmt.Sprintf("select * from `%s` where 1 != 1", ti.Name), 10000, true)
+func (ti *TableInfo) fetchColumns(conn *DBConn, sqlTableName string) error {
+	qr, err := conn.Exec(context.Background(), fmt.Sprintf("select * from %s where 1 != 1", sqlTableName), 10000, true)
 	if err != nil {
 		return err
 	}
@@ -60,7 +62,7 @@ func (ti *TableInfo) fetchColumns(conn *DBConn) error {
 	for _, field := range qr.Fields {
 		fieldTypes[field.Name] = field.Type
 	}
-	columns, err := conn.Exec(context.Background(), fmt.Sprintf("describe `%s`", ti.Name), 10000, false)
+	columns, err := conn.Exec(context.Background(), fmt.Sprintf("describe %s", sqlTableName), 10000, false)
 	if err != nil {
 		return err
 	}
@@ -81,7 +83,7 @@ func (ti *TableInfo) SetPK(colnames []string) error {
 	pkIndex := schema.NewIndex("PRIMARY")
 	colnums := make([]int, len(colnames))
 	for i, colname := range colnames {
-		colnums[i] = ti.FindColumn(colname)
+		colnums[i] = ti.FindColumn(sqlparser.NewColIdent(colname))
 		if colnums[i] == -1 {
 			return fmt.Errorf("column %s not found", colname)
 		}
@@ -90,19 +92,15 @@ func (ti *TableInfo) SetPK(colnames []string) error {
 	for _, col := range ti.Columns {
 		pkIndex.DataColumns = append(pkIndex.DataColumns, col.Name)
 	}
-	if len(ti.Indexes) == 0 {
-		ti.Indexes = make([]*schema.Index, 1)
-	} else if ti.Indexes[0].Name.Lowered() != "primary" {
-		ti.Indexes = append(ti.Indexes, nil)
-		copy(ti.Indexes[1:], ti.Indexes[:len(ti.Indexes)-1])
-	} // else we replace the currunt primary key
+	ti.Indexes = append(ti.Indexes, nil)
+	copy(ti.Indexes[1:], ti.Indexes[:len(ti.Indexes)-1])
 	ti.Indexes[0] = pkIndex
 	ti.PKColumns = colnums
 	return nil
 }
 
-func (ti *TableInfo) fetchIndexes(conn *DBConn) error {
-	indexes, err := conn.Exec(context.Background(), fmt.Sprintf("show index from `%s`", ti.Name), 10000, false)
+func (ti *TableInfo) fetchIndexes(conn *DBConn, sqlTableName string) error {
+	indexes, err := conn.Exec(context.Background(), fmt.Sprintf("show index from %s", sqlTableName), 10000, false)
 	if err != nil {
 		return err
 	}
@@ -123,16 +121,13 @@ func (ti *TableInfo) fetchIndexes(conn *DBConn) error {
 		}
 		currentIndex.AddColumn(row[4].String(), cardinality)
 	}
-	if len(ti.Indexes) == 0 {
+	if !ti.HasPrimary() {
 		return nil
 	}
 	pkIndex := ti.Indexes[0]
-	if pkIndex.Name.Lowered() != "primary" {
-		return nil
-	}
 	ti.PKColumns = make([]int, len(pkIndex.Columns))
 	for i, pkCol := range pkIndex.Columns {
-		ti.PKColumns[i] = ti.FindColumn(pkCol.Original())
+		ti.PKColumns[i] = ti.FindColumn(pkCol)
 	}
 	// Primary key contains all table columns
 	for _, col := range ti.Columns {
@@ -146,7 +141,7 @@ func (ti *TableInfo) fetchIndexes(conn *DBConn) error {
 		for _, c := range pkIndex.Columns {
 			// pk columns may already be part of the index. So,
 			// check before adding.
-			if ti.Indexes[i].FindDataColumn(c.Original()) != -1 {
+			if ti.Indexes[i].FindDataColumn(c) != -1 {
 				continue
 			}
 			ti.Indexes[i].DataColumns = append(ti.Indexes[i].DataColumns, c)

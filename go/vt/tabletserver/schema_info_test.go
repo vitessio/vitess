@@ -17,6 +17,7 @@ import (
 
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
@@ -127,7 +128,7 @@ func TestSchemaInfoOpenFailedDueToTableInfoErr(t *testing.T) {
 			createTestTableBaseShowTable("test_table"),
 		},
 	})
-	db.AddQuery("select * from `test_table` where 1 != 1", &sqltypes.Result{
+	db.AddQuery("select * from test_table where 1 != 1", &sqltypes.Result{
 		// this will cause NewTableInfo error
 		RowsAffected: math.MaxUint64,
 	})
@@ -153,7 +154,7 @@ func TestSchemaInfoReload(t *testing.T) {
 	schemaInfo.Open(&dbaParams, true)
 	defer schemaInfo.Close()
 	// this new table does not exist
-	newTable := "test_table_04"
+	newTable := sqlparser.NewTableIdent("test_table_04")
 	tableInfo := schemaInfo.GetTable(newTable)
 	if tableInfo != nil {
 		t.Fatalf("table: %s exists; expecting nil", newTable)
@@ -167,7 +168,7 @@ func TestSchemaInfoReload(t *testing.T) {
 		// make this query fail during reload
 		RowsAffected: math.MaxUint64,
 		Rows: [][]sqltypes.Value{
-			createTestTableBaseShowTable(newTable),
+			createTestTableBaseShowTable(newTable.String()),
 		},
 	})
 
@@ -175,21 +176,21 @@ func TestSchemaInfoReload(t *testing.T) {
 	db.AddQuery(createOrDropTableQuery, &sqltypes.Result{
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
-			createTestTableBaseShowTable(newTable),
+			createTestTableBaseShowTable(newTable.String()),
 		},
 	})
 
-	db.AddQuery("select * from `test_table_04` where 1 != 1", &sqltypes.Result{
+	db.AddQuery("select * from test_table_04 where 1 != 1", &sqltypes.Result{
 		Fields: []*querypb.Field{{
 			Name: "pk",
 			Type: sqltypes.Int32,
 		}},
 	})
-	db.AddQuery("describe `test_table_04`", &sqltypes.Result{
+	db.AddQuery("describe test_table_04", &sqltypes.Result{
 		RowsAffected: 1,
 		Rows:         [][]sqltypes.Value{createTestTableDescribe("pk")},
 	})
-	db.AddQuery("show index from `test_table_04`", &sqltypes.Result{
+	db.AddQuery("show index from test_table_04", &sqltypes.Result{
 		RowsAffected: 1,
 		Rows:         [][]sqltypes.Value{createTestTableShowIndex("pk")},
 	})
@@ -204,7 +205,7 @@ func TestSchemaInfoReload(t *testing.T) {
 	db.AddQuery(baseShowTables, &sqltypes.Result{
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
-			createTestTableBaseShowTable(newTable),
+			createTestTableBaseShowTable(newTable.String()),
 		},
 	})
 	tableInfo = schemaInfo.GetTable(newTable)
@@ -239,7 +240,7 @@ func TestSchemaInfoCreateOrUpdateTableFailedDuetoExecErr(t *testing.T) {
 	defer schemaInfo.Close()
 	originalSchemaErrorCount := schemaInfo.queryServiceStats.InternalErrors.Counts()["Schema"]
 	// should silently fail: no errors returned, but increment a counter
-	schemaInfo.CreateOrUpdateTable(context.Background(), "test_table")
+	schemaInfo.CreateOrUpdateTable(context.Background(), sqlparser.NewTableIdent("test_table"))
 
 	newSchemaErrorCount := schemaInfo.queryServiceStats.InternalErrors.Counts()["Schema"]
 	schemaErrorDiff := newSchemaErrorCount - originalSchemaErrorCount
@@ -264,7 +265,7 @@ func TestSchemaInfoCreateOrUpdateTable(t *testing.T) {
 	schemaInfo := newTestSchemaInfo(10, 1*time.Second, 1*time.Second, false)
 	dbaParams := sqldb.ConnParams{Engine: db.Name}
 	schemaInfo.Open(&dbaParams, false)
-	schemaInfo.CreateOrUpdateTable(context.Background(), "test_table_01")
+	schemaInfo.CreateOrUpdateTable(context.Background(), sqlparser.NewTableIdent("test_table_01"))
 	schemaInfo.Close()
 }
 
@@ -273,12 +274,12 @@ func TestSchemaInfoDropTable(t *testing.T) {
 	for query, result := range getSchemaInfoTestSupportedQueries() {
 		db.AddQuery(query, result)
 	}
-	existingTable := "test_table_01"
+	existingTable := sqlparser.NewTableIdent("test_table_01")
 	createOrDropTableQuery := fmt.Sprintf("%s and table_name = '%s'", baseShowTables, existingTable)
 	db.AddQuery(createOrDropTableQuery, &sqltypes.Result{
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
-			createTestTableBaseShowTable(existingTable),
+			createTestTableBaseShowTable(existingTable.String()),
 		},
 	})
 	schemaInfo := newTestSchemaInfo(10, 1*time.Second, 1*time.Second, false)
@@ -392,11 +393,11 @@ func TestUpdatedMysqlStats(t *testing.T) {
 	schemaInfo.Open(&dbaParams, true)
 	defer schemaInfo.Close()
 	// Add new table
-	tableName := "mysql_stats_test_table"
+	tableName := sqlparser.NewTableIdent("mysql_stats_test_table")
 	db.AddQuery(baseShowTables, &sqltypes.Result{
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
-			createTestTableBaseShowTable(tableName),
+			createTestTableBaseShowTable(tableName.String()),
 		},
 	})
 	// Add queries necessary for CreateOrUpdateTable() and NewTableInfo()
@@ -404,22 +405,22 @@ func TestUpdatedMysqlStats(t *testing.T) {
 	db.AddQuery(q, &sqltypes.Result{
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
-			createTestTableBaseShowTable(tableName),
+			createTestTableBaseShowTable(tableName.String()),
 		},
 	})
-	q = fmt.Sprintf("select * from `%s` where 1 != 1", tableName)
+	q = fmt.Sprintf("select * from %s where 1 != 1", tableName)
 	db.AddQuery(q, &sqltypes.Result{
 		Fields: []*querypb.Field{{
 			Name: "pk",
 			Type: sqltypes.Int32,
 		}},
 	})
-	q = fmt.Sprintf("describe `%s`", tableName)
+	q = fmt.Sprintf("describe %s", tableName)
 	db.AddQuery(q, &sqltypes.Result{
 		RowsAffected: 1,
 		Rows:         [][]sqltypes.Value{createTestTableDescribe("pk")},
 	})
-	q = fmt.Sprintf("show index from `%s`", tableName)
+	q = fmt.Sprintf("show index from %s", tableName)
 	db.AddQuery(q, &sqltypes.Result{
 		RowsAffected: 1,
 		Rows:         [][]sqltypes.Value{createTestTableShowIndex("pk")},
@@ -441,7 +442,7 @@ func TestUpdatedMysqlStats(t *testing.T) {
 	db.AddQuery(baseShowTables, &sqltypes.Result{
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
-			createTestTableUpdatedStats(tableName),
+			createTestTableUpdatedStats(tableName.String()),
 		},
 	})
 	if err := schemaInfo.Reload(ctx); err != nil {
@@ -613,13 +614,13 @@ func getSchemaInfoTestSupportedQueries() map[string]*sqltypes.Result {
 				},
 			},
 		},
-		"select * from `test_table_01` where 1 != 1": {
+		"select * from test_table_01 where 1 != 1": {
 			Fields: []*querypb.Field{{
 				Name: "pk",
 				Type: sqltypes.Int32,
 			}},
 		},
-		"describe `test_table_01`": {
+		"describe test_table_01": {
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
 				{
@@ -632,13 +633,13 @@ func getSchemaInfoTestSupportedQueries() map[string]*sqltypes.Result {
 				},
 			},
 		},
-		"select * from `test_table_02` where 1 != 1": {
+		"select * from test_table_02 where 1 != 1": {
 			Fields: []*querypb.Field{{
 				Name: "pk",
 				Type: sqltypes.Int32,
 			}},
 		},
-		"describe `test_table_02`": {
+		"describe test_table_02": {
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
 				{
@@ -651,13 +652,13 @@ func getSchemaInfoTestSupportedQueries() map[string]*sqltypes.Result {
 				},
 			},
 		},
-		"select * from `test_table_03` where 1 != 1": {
+		"select * from test_table_03 where 1 != 1": {
 			Fields: []*querypb.Field{{
 				Name: "pk",
 				Type: sqltypes.Int32,
 			}},
 		},
-		"describe `test_table_03`": {
+		"describe test_table_03": {
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
 				{
@@ -671,7 +672,7 @@ func getSchemaInfoTestSupportedQueries() map[string]*sqltypes.Result {
 			},
 		},
 		// for SplitQuery because it needs a primary key column
-		"show index from `test_table_01`": {
+		"show index from test_table_01": {
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
 				{
@@ -685,7 +686,7 @@ func getSchemaInfoTestSupportedQueries() map[string]*sqltypes.Result {
 				},
 			},
 		},
-		"show index from `test_table_02`": {
+		"show index from test_table_02": {
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
 				{
@@ -699,7 +700,7 @@ func getSchemaInfoTestSupportedQueries() map[string]*sqltypes.Result {
 				},
 			},
 		},
-		"show index from `test_table_03`": {
+		"show index from test_table_03": {
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
 				{

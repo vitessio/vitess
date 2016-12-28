@@ -281,6 +281,7 @@
 <p>Commands are listed in the following groups:</p>
 
 <ul>
+<li><a href="#cells">Cells</a></li>
 <li><a href="#generic">Generic</a></li>
 <li><a href="#keyspaces">Keyspaces</a></li>
 <li><a href="#queries">Queries</a></li>
@@ -291,6 +292,99 @@
 <li><a href="#shards">Shards</a></li>
 <li><a href="#tablets">Tablets</a></li>
 <li><a href="#workflows">Workflows</a></li>
+</ul>
+
+<h2 id="cells">Cells</h2>
+
+<ul>
+<li><a href="#addcellinfo">AddCellInfo</a></li>
+<li><a href="#deletecellinfo">DeleteCellInfo</a></li>
+<li><a href="#getcellinfo">GetCellInfo</a></li>
+<li><a href="#getcellinfonames">GetCellInfoNames</a></li>
+</ul>
+
+<h3 id="addcellinfo">AddCellInfo</h3>
+
+<p>Registers a local topology service in a new cell by creating the CellInfo with the provided parameters. The address will be used to connect to the topology service, and we&#39;ll put Vitess data starting at the provided root.</p>
+
+<h4 id="example">Example</h4>
+
+<pre class="command-example">AddCellInfo [-server_address &lt;addr&gt;] [-root &lt;root&gt;] &lt;cell&gt;</pre>
+
+<h4 id="flags">Flags</h4>
+
+<table><thead>
+<tr>
+<th style="text-align: left">Name</th>
+<th style="text-align: left">Type</th>
+<th style="text-align: left">Definition</th>
+</tr>
+</thead><tbody>
+<tr>
+<td style="text-align: left">root</td>
+<td style="text-align: left">string</td>
+<td style="text-align: left">The root path the topology server is using for that cell.</td>
+</tr>
+<tr>
+<td style="text-align: left">server_address</td>
+<td style="text-align: left">string</td>
+<td style="text-align: left">The address the topology server is using for that cell.</td>
+</tr>
+</tbody></table>
+
+<h4 id="arguments">Arguments</h4>
+
+<ul>
+<li><code>&lt;addr&gt;</code> &ndash; Required.</li>
+<li><code>&lt;cell&gt;</code> &ndash; Required. A cell is a location for a service. Generally, a cell resides in only one cluster. In Vitess, the terms &quot;cell&quot; and &quot;data center&quot; are interchangeable. The argument value is a string that does not contain whitespace.</li>
+</ul>
+
+<h4 id="errors">Errors</h4>
+
+<ul>
+<li>the <code>&lt;cell&gt;</code> argument is required for the <code>&lt;AddCellInfo&gt;</code> command This error occurs if the command is not called with exactly one argument.</li>
+</ul>
+
+<h3 id="deletecellinfo">DeleteCellInfo</h3>
+
+<p>Deletes the CellInfo for the provided cell. The cell cannot be referenced by any Shard record.</p>
+
+<h4 id="example">Example</h4>
+
+<pre class="command-example">DeleteCellInfo &lt;cell&gt;</pre>
+
+<h4 id="errors">Errors</h4>
+
+<ul>
+<li>the <code>&lt;cell&gt;</code> argument is required for the <code>&lt;DeleteCellInfo&gt;</code> command This error occurs if the command is not called with exactly one argument.</li>
+</ul>
+
+<h3 id="getcellinfo">GetCellInfo</h3>
+
+<p>Prints a JSON representation of the CellInfo for a cell.</p>
+
+<h4 id="example">Example</h4>
+
+<pre class="command-example">GetCellInfo &lt;cell&gt;</pre>
+
+<h4 id="errors">Errors</h4>
+
+<ul>
+<li>the <code>&lt;cell&gt;</code> argument is required for the <code>&lt;GetCellInfo&gt;</code> command This error occurs if the command is not called with exactly one argument.</li>
+</ul>
+
+<h3 id="getcellinfonames">GetCellInfoNames</h3>
+
+<p>Lists all the cells for which we have a CellInfo object, meaning we have a local topology service registered.</p>
+
+<h4 id="example">Example</h4>
+
+<pre class="command-example">GetCellInfoNames </pre>
+
+<h4 id="errors">Errors</h4>
+
+<ul>
+<li><code>&lt;GetCellInfoNames&gt;</code> command takes no parameter This error occurs if the command is not called with exactly 0 arguments.</li>
 </ul>
 
 <h2 id="generic">Generic</h2>
@@ -2716,7 +2810,7 @@
 
 <h3 id="setshardtabletcontrol">SetShardTabletControl</h3>
 
-<p>Sets the TabletControl record for a shard and type. Only use this for an emergency fix or after a finished vertical split. The <em>MigrateServedFrom</em> and <em>MigrateServedType</em> commands set this field appropriately already. Always specify the blacklisted_tables flag for vertical splits, but never for horizontal splits.</p>
+<p>Sets the TabletControl record for a shard and type. Only use this for an emergency fix or after a finished vertical split. The <em>MigrateServedFrom</em> and <em>MigrateServedType</em> commands set this field appropriately already. Always specify the blacklisted_tables flag for vertical splits, but never for horizontal splits.<br><br>To set the DisableQueryServiceFlag, keep &#39;blacklisted_tables&#39; empty, and set &#39;disable_query_service&#39; to true or false. Useful to fix horizontal splits gone wrong.<br><br>To change the blacklisted tables list, specify the &#39;blacklisted_tables&#39; parameter with the new list. Useful to fix tables that are being blocked after a vertical split.<br><br>To just remove the ShardTabletControl entirely, use the &#39;remove&#39; flag, useful after a vertical split is finished to remove serving restrictions.</p>
 
 <h4 id="example">Example</h4>
 
@@ -2732,6 +2826,11 @@
 </tr>
 </thead><tbody>
 <tr>
+<td style="text-align: left">blacklisted_tables</td>
+<td style="text-align: left">string</td>
+<td style="text-align: left">Specifies a comma-separated list of tables to blacklist (used for vertical split). Each is either an exact match, or a regular expression of the form &#39;/regexp/&#39;.</td>
+</tr>
+<tr>
 <td style="text-align: left">cells</td>
 <td style="text-align: left">string</td>
 <td style="text-align: left">Specifies a comma-separated list of cells to update</td>
@@ -2739,17 +2838,12 @@
 <tr>
 <td style="text-align: left">disable_query_service</td>
 <td style="text-align: left">Boolean</td>
-<td style="text-align: left">Disables query service on the provided nodes</td>
+<td style="text-align: left">Disables query service on the provided nodes. This flag requires &#39;blacklisted_tables&#39; and &#39;remove&#39; to be unset, otherwise it&#39;s ignored.</td>
 </tr>
 <tr>
 <td style="text-align: left">remove</td>
 <td style="text-align: left">Boolean</td>
-<td style="text-align: left">Removes cells for vertical splits. This flag requires the <em>tables</em> flag to also be set.</td>
-</tr>
-<tr>
-<td style="text-align: left">tables</td>
-<td style="text-align: left">string</td>
-<td style="text-align: left">Specifies a comma-separated list of tables to replicate (used for vertical split). Each is either an exact match, or a regular expression of the form /regexp/</td>
+<td style="text-align: left">Removes cells for vertical splits.</td>
 </tr>
 </tbody></table>
 

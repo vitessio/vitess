@@ -7,7 +7,7 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"github.com/youtube/vitess/go/vt/logutil"
-	"github.com/youtube/vitess/go/vt/zktopo/zktestserver"
+	"github.com/youtube/vitess/go/vt/topo/zk2topo"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	vschemapb "github.com/youtube/vitess/go/vt/proto/vschema"
@@ -20,7 +20,7 @@ func TestRebuildVSchema(t *testing.T) {
 
 	// Set up topology.
 	cells := []string{"cell1", "cell2"}
-	ts := zktestserver.New(t, cells)
+	ts := zk2topo.NewFakeServer(cells...)
 
 	// Rebuild with no keyspace / no vschema
 	if err := RebuildVSchema(ctx, logger, ts, cells); err != nil {
@@ -123,7 +123,10 @@ func TestRebuildVSchema(t *testing.T) {
 		}
 	}
 
-	// delete a keyspace, checks vschema entry in map goes
+	// Delete a keyspace, checks vschema entry in map goes away.
+	if err := ts.SaveVSchema(ctx, "ks2", &vschemapb.Keyspace{}); err != nil {
+		t.Fatalf("SaveVSchema(ks1) failed: %v", err)
+	}
 	if err := ts.DeleteKeyspace(ctx, "ks2"); err != nil {
 		t.Fatalf("DeleteKeyspace failed: %v", err)
 	}

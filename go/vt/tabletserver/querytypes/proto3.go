@@ -25,6 +25,22 @@ func BoundQueryToProto3(sql string, bindVars map[string]interface{}) (*querypb.B
 	}, nil
 }
 
+// BoundQueriesToProto3 converts internal types to proto3 BoundQuery
+func BoundQueriesToProto3(sql []string, bindVars []map[string]interface{}) ([]*querypb.BoundQuery, error) {
+	boundQueries := make([]*querypb.BoundQuery, len(sql))
+	if bindVars == nil {
+		bindVars = make([]map[string]interface{}, len(sql))
+	}
+	for index, query := range sql {
+		boundQuery, err := BoundQueryToProto3(query, bindVars[index])
+		if err != nil {
+			return nil, err
+		}
+		boundQueries[index] = boundQuery
+	}
+	return boundQueries, nil
+}
+
 // BindVariablesToProto3 converts internal type to proto3 BindVariable array
 func BindVariablesToProto3(bindVars map[string]interface{}) (map[string]*querypb.BindVariable, error) {
 	if len(bindVars) == 0 {
@@ -228,25 +244,7 @@ func Proto3ToBindVariables(bv map[string]*querypb.BindVariable) (map[string]inte
 		if v == nil {
 			continue
 		}
-		if v.Type == sqltypes.Tuple {
-			list := make([]interface{}, len(v.Values))
-			for i, lv := range v.Values {
-				v, err := sqltypes.ValueFromBytes(lv.Type, lv.Value)
-				if err != nil {
-					return nil, err
-				}
-				// TODO(sougou): Change this to just v.
-				list[i] = v.ToNative()
-			}
-			result[k] = list
-		} else {
-			v, err := sqltypes.ValueFromBytes(v.Type, v.Value)
-			if err != nil {
-				return nil, err
-			}
-			// TODO(sougou): Change this to just v.
-			result[k] = v.ToNative()
-		}
+		result[k] = v
 	}
 	return result, nil
 }

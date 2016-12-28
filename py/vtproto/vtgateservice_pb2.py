@@ -20,7 +20,7 @@ DESCRIPTOR = _descriptor.FileDescriptor(
   name='vtgateservice.proto',
   package='vtgateservice',
   syntax='proto3',
-  serialized_pb=_b('\n\x13vtgateservice.proto\x12\rvtgateservice\x1a\x0cvtgate.proto2\x86\x0c\n\x06Vitess\x12<\n\x07\x45xecute\x12\x16.vtgate.ExecuteRequest\x1a\x17.vtgate.ExecuteResponse\"\x00\x12N\n\rExecuteShards\x12\x1c.vtgate.ExecuteShardsRequest\x1a\x1d.vtgate.ExecuteShardsResponse\"\x00\x12]\n\x12\x45xecuteKeyspaceIds\x12!.vtgate.ExecuteKeyspaceIdsRequest\x1a\".vtgate.ExecuteKeyspaceIdsResponse\"\x00\x12W\n\x10\x45xecuteKeyRanges\x12\x1f.vtgate.ExecuteKeyRangesRequest\x1a .vtgate.ExecuteKeyRangesResponse\"\x00\x12W\n\x10\x45xecuteEntityIds\x12\x1f.vtgate.ExecuteEntityIdsRequest\x1a .vtgate.ExecuteEntityIdsResponse\"\x00\x12]\n\x12\x45xecuteBatchShards\x12!.vtgate.ExecuteBatchShardsRequest\x1a\".vtgate.ExecuteBatchShardsResponse\"\x00\x12l\n\x17\x45xecuteBatchKeyspaceIds\x12&.vtgate.ExecuteBatchKeyspaceIdsRequest\x1a\'.vtgate.ExecuteBatchKeyspaceIdsResponse\"\x00\x12P\n\rStreamExecute\x12\x1c.vtgate.StreamExecuteRequest\x1a\x1d.vtgate.StreamExecuteResponse\"\x00\x30\x01\x12\x62\n\x13StreamExecuteShards\x12\".vtgate.StreamExecuteShardsRequest\x1a#.vtgate.StreamExecuteShardsResponse\"\x00\x30\x01\x12q\n\x18StreamExecuteKeyspaceIds\x12\'.vtgate.StreamExecuteKeyspaceIdsRequest\x1a(.vtgate.StreamExecuteKeyspaceIdsResponse\"\x00\x30\x01\x12k\n\x16StreamExecuteKeyRanges\x12%.vtgate.StreamExecuteKeyRangesRequest\x1a&.vtgate.StreamExecuteKeyRangesResponse\"\x00\x30\x01\x12\x36\n\x05\x42\x65gin\x12\x14.vtgate.BeginRequest\x1a\x15.vtgate.BeginResponse\"\x00\x12\x39\n\x06\x43ommit\x12\x15.vtgate.CommitRequest\x1a\x16.vtgate.CommitResponse\"\x00\x12?\n\x08Rollback\x12\x17.vtgate.RollbackRequest\x1a\x18.vtgate.RollbackResponse\"\x00\x12]\n\x12ResolveTransaction\x12!.vtgate.ResolveTransactionRequest\x1a\".vtgate.ResolveTransactionResponse\"\x00\x12\x45\n\nSplitQuery\x12\x19.vtgate.SplitQueryRequest\x1a\x1a.vtgate.SplitQueryResponse\"\x00\x12Q\n\x0eGetSrvKeyspace\x12\x1d.vtgate.GetSrvKeyspaceRequest\x1a\x1e.vtgate.GetSrvKeyspaceResponse\"\x00\x12M\n\x0cUpdateStream\x12\x1b.vtgate.UpdateStreamRequest\x1a\x1c.vtgate.UpdateStreamResponse\"\x00\x30\x01\x42\x1f\n\x1d\x63om.youtube.vitess.proto.grpcb\x06proto3')
+  serialized_pb=_b('\n\x13vtgateservice.proto\x12\rvtgateservice\x1a\x0cvtgate.proto2\xd3\x0c\n\x06Vitess\x12<\n\x07\x45xecute\x12\x16.vtgate.ExecuteRequest\x1a\x17.vtgate.ExecuteResponse\"\x00\x12N\n\rExecuteShards\x12\x1c.vtgate.ExecuteShardsRequest\x1a\x1d.vtgate.ExecuteShardsResponse\"\x00\x12]\n\x12\x45xecuteKeyspaceIds\x12!.vtgate.ExecuteKeyspaceIdsRequest\x1a\".vtgate.ExecuteKeyspaceIdsResponse\"\x00\x12W\n\x10\x45xecuteKeyRanges\x12\x1f.vtgate.ExecuteKeyRangesRequest\x1a .vtgate.ExecuteKeyRangesResponse\"\x00\x12W\n\x10\x45xecuteEntityIds\x12\x1f.vtgate.ExecuteEntityIdsRequest\x1a .vtgate.ExecuteEntityIdsResponse\"\x00\x12K\n\x0c\x45xecuteBatch\x12\x1b.vtgate.ExecuteBatchRequest\x1a\x1c.vtgate.ExecuteBatchResponse\"\x00\x12]\n\x12\x45xecuteBatchShards\x12!.vtgate.ExecuteBatchShardsRequest\x1a\".vtgate.ExecuteBatchShardsResponse\"\x00\x12l\n\x17\x45xecuteBatchKeyspaceIds\x12&.vtgate.ExecuteBatchKeyspaceIdsRequest\x1a\'.vtgate.ExecuteBatchKeyspaceIdsResponse\"\x00\x12P\n\rStreamExecute\x12\x1c.vtgate.StreamExecuteRequest\x1a\x1d.vtgate.StreamExecuteResponse\"\x00\x30\x01\x12\x62\n\x13StreamExecuteShards\x12\".vtgate.StreamExecuteShardsRequest\x1a#.vtgate.StreamExecuteShardsResponse\"\x00\x30\x01\x12q\n\x18StreamExecuteKeyspaceIds\x12\'.vtgate.StreamExecuteKeyspaceIdsRequest\x1a(.vtgate.StreamExecuteKeyspaceIdsResponse\"\x00\x30\x01\x12k\n\x16StreamExecuteKeyRanges\x12%.vtgate.StreamExecuteKeyRangesRequest\x1a&.vtgate.StreamExecuteKeyRangesResponse\"\x00\x30\x01\x12\x36\n\x05\x42\x65gin\x12\x14.vtgate.BeginRequest\x1a\x15.vtgate.BeginResponse\"\x00\x12\x39\n\x06\x43ommit\x12\x15.vtgate.CommitRequest\x1a\x16.vtgate.CommitResponse\"\x00\x12?\n\x08Rollback\x12\x17.vtgate.RollbackRequest\x1a\x18.vtgate.RollbackResponse\"\x00\x12]\n\x12ResolveTransaction\x12!.vtgate.ResolveTransactionRequest\x1a\".vtgate.ResolveTransactionResponse\"\x00\x12\x45\n\nSplitQuery\x12\x19.vtgate.SplitQueryRequest\x1a\x1a.vtgate.SplitQueryResponse\"\x00\x12Q\n\x0eGetSrvKeyspace\x12\x1d.vtgate.GetSrvKeyspaceRequest\x1a\x1e.vtgate.GetSrvKeyspaceResponse\"\x00\x12M\n\x0cUpdateStream\x12\x1b.vtgate.UpdateStreamRequest\x1a\x1c.vtgate.UpdateStreamResponse\"\x00\x30\x01\x42\x1f\n\x1d\x63om.youtube.vitess.proto.grpcb\x06proto3')
   ,
   dependencies=[vtgate__pb2.DESCRIPTOR,])
 _sym_db.RegisterFileDescriptor(DESCRIPTOR)
@@ -73,6 +73,11 @@ class VitessStub(object):
         '/vtgateservice.Vitess/ExecuteEntityIds',
         request_serializer=vtgate__pb2.ExecuteEntityIdsRequest.SerializeToString,
         response_deserializer=vtgate__pb2.ExecuteEntityIdsResponse.FromString,
+        )
+    self.ExecuteBatch = channel.unary_unary(
+        '/vtgateservice.Vitess/ExecuteBatch',
+        request_serializer=vtgate__pb2.ExecuteBatchRequest.SerializeToString,
+        response_deserializer=vtgate__pb2.ExecuteBatchResponse.FromString,
         )
     self.ExecuteBatchShards = channel.unary_unary(
         '/vtgateservice.Vitess/ExecuteBatchShards',
@@ -183,6 +188,16 @@ class VitessServicer(object):
   def ExecuteEntityIds(self, request, context):
     """ExecuteEntityIds executes the query based on the specified external id to keyspace id map.
     API group: Range-based Sharding
+    """
+    context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+    context.set_details('Method not implemented!')
+    raise NotImplementedError('Method not implemented!')
+
+  def ExecuteBatch(self, request, context):
+    """ExecuteBatch tries to route the list of queries on the right shards.
+    It depends on the query and bind variables to provide enough
+    information in conjonction with the vindexes to route the query.
+    API group: v3 API
     """
     context.set_code(grpc.StatusCode.UNIMPLEMENTED)
     context.set_details('Method not implemented!')
@@ -332,6 +347,11 @@ def add_VitessServicer_to_server(servicer, server):
           request_deserializer=vtgate__pb2.ExecuteEntityIdsRequest.FromString,
           response_serializer=vtgate__pb2.ExecuteEntityIdsResponse.SerializeToString,
       ),
+      'ExecuteBatch': grpc.unary_unary_rpc_method_handler(
+          servicer.ExecuteBatch,
+          request_deserializer=vtgate__pb2.ExecuteBatchRequest.FromString,
+          response_serializer=vtgate__pb2.ExecuteBatchResponse.SerializeToString,
+      ),
       'ExecuteBatchShards': grpc.unary_unary_rpc_method_handler(
           servicer.ExecuteBatchShards,
           request_deserializer=vtgate__pb2.ExecuteBatchShardsRequest.FromString,
@@ -432,6 +452,13 @@ class BetaVitessServicer(object):
   def ExecuteEntityIds(self, request, context):
     """ExecuteEntityIds executes the query based on the specified external id to keyspace id map.
     API group: Range-based Sharding
+    """
+    context.code(beta_interfaces.StatusCode.UNIMPLEMENTED)
+  def ExecuteBatch(self, request, context):
+    """ExecuteBatch tries to route the list of queries on the right shards.
+    It depends on the query and bind variables to provide enough
+    information in conjonction with the vindexes to route the query.
+    API group: v3 API
     """
     context.code(beta_interfaces.StatusCode.UNIMPLEMENTED)
   def ExecuteBatchShards(self, request, context):
@@ -549,6 +576,14 @@ class BetaVitessStub(object):
     """
     raise NotImplementedError()
   ExecuteEntityIds.future = None
+  def ExecuteBatch(self, request, timeout, metadata=None, with_call=False, protocol_options=None):
+    """ExecuteBatch tries to route the list of queries on the right shards.
+    It depends on the query and bind variables to provide enough
+    information in conjonction with the vindexes to route the query.
+    API group: v3 API
+    """
+    raise NotImplementedError()
+  ExecuteBatch.future = None
   def ExecuteBatchShards(self, request, timeout, metadata=None, with_call=False, protocol_options=None):
     """ExecuteBatchShards executes the list of queries on the specified shards.
     API group: Custom Sharding
@@ -641,6 +676,7 @@ def beta_create_Vitess_server(servicer, pool=None, pool_size=None, default_timeo
     ('vtgateservice.Vitess', 'Begin'): vtgate__pb2.BeginRequest.FromString,
     ('vtgateservice.Vitess', 'Commit'): vtgate__pb2.CommitRequest.FromString,
     ('vtgateservice.Vitess', 'Execute'): vtgate__pb2.ExecuteRequest.FromString,
+    ('vtgateservice.Vitess', 'ExecuteBatch'): vtgate__pb2.ExecuteBatchRequest.FromString,
     ('vtgateservice.Vitess', 'ExecuteBatchKeyspaceIds'): vtgate__pb2.ExecuteBatchKeyspaceIdsRequest.FromString,
     ('vtgateservice.Vitess', 'ExecuteBatchShards'): vtgate__pb2.ExecuteBatchShardsRequest.FromString,
     ('vtgateservice.Vitess', 'ExecuteEntityIds'): vtgate__pb2.ExecuteEntityIdsRequest.FromString,
@@ -661,6 +697,7 @@ def beta_create_Vitess_server(servicer, pool=None, pool_size=None, default_timeo
     ('vtgateservice.Vitess', 'Begin'): vtgate__pb2.BeginResponse.SerializeToString,
     ('vtgateservice.Vitess', 'Commit'): vtgate__pb2.CommitResponse.SerializeToString,
     ('vtgateservice.Vitess', 'Execute'): vtgate__pb2.ExecuteResponse.SerializeToString,
+    ('vtgateservice.Vitess', 'ExecuteBatch'): vtgate__pb2.ExecuteBatchResponse.SerializeToString,
     ('vtgateservice.Vitess', 'ExecuteBatchKeyspaceIds'): vtgate__pb2.ExecuteBatchKeyspaceIdsResponse.SerializeToString,
     ('vtgateservice.Vitess', 'ExecuteBatchShards'): vtgate__pb2.ExecuteBatchShardsResponse.SerializeToString,
     ('vtgateservice.Vitess', 'ExecuteEntityIds'): vtgate__pb2.ExecuteEntityIdsResponse.SerializeToString,
@@ -681,6 +718,7 @@ def beta_create_Vitess_server(servicer, pool=None, pool_size=None, default_timeo
     ('vtgateservice.Vitess', 'Begin'): face_utilities.unary_unary_inline(servicer.Begin),
     ('vtgateservice.Vitess', 'Commit'): face_utilities.unary_unary_inline(servicer.Commit),
     ('vtgateservice.Vitess', 'Execute'): face_utilities.unary_unary_inline(servicer.Execute),
+    ('vtgateservice.Vitess', 'ExecuteBatch'): face_utilities.unary_unary_inline(servicer.ExecuteBatch),
     ('vtgateservice.Vitess', 'ExecuteBatchKeyspaceIds'): face_utilities.unary_unary_inline(servicer.ExecuteBatchKeyspaceIds),
     ('vtgateservice.Vitess', 'ExecuteBatchShards'): face_utilities.unary_unary_inline(servicer.ExecuteBatchShards),
     ('vtgateservice.Vitess', 'ExecuteEntityIds'): face_utilities.unary_unary_inline(servicer.ExecuteEntityIds),
@@ -706,6 +744,7 @@ def beta_create_Vitess_stub(channel, host=None, metadata_transformer=None, pool=
     ('vtgateservice.Vitess', 'Begin'): vtgate__pb2.BeginRequest.SerializeToString,
     ('vtgateservice.Vitess', 'Commit'): vtgate__pb2.CommitRequest.SerializeToString,
     ('vtgateservice.Vitess', 'Execute'): vtgate__pb2.ExecuteRequest.SerializeToString,
+    ('vtgateservice.Vitess', 'ExecuteBatch'): vtgate__pb2.ExecuteBatchRequest.SerializeToString,
     ('vtgateservice.Vitess', 'ExecuteBatchKeyspaceIds'): vtgate__pb2.ExecuteBatchKeyspaceIdsRequest.SerializeToString,
     ('vtgateservice.Vitess', 'ExecuteBatchShards'): vtgate__pb2.ExecuteBatchShardsRequest.SerializeToString,
     ('vtgateservice.Vitess', 'ExecuteEntityIds'): vtgate__pb2.ExecuteEntityIdsRequest.SerializeToString,
@@ -726,6 +765,7 @@ def beta_create_Vitess_stub(channel, host=None, metadata_transformer=None, pool=
     ('vtgateservice.Vitess', 'Begin'): vtgate__pb2.BeginResponse.FromString,
     ('vtgateservice.Vitess', 'Commit'): vtgate__pb2.CommitResponse.FromString,
     ('vtgateservice.Vitess', 'Execute'): vtgate__pb2.ExecuteResponse.FromString,
+    ('vtgateservice.Vitess', 'ExecuteBatch'): vtgate__pb2.ExecuteBatchResponse.FromString,
     ('vtgateservice.Vitess', 'ExecuteBatchKeyspaceIds'): vtgate__pb2.ExecuteBatchKeyspaceIdsResponse.FromString,
     ('vtgateservice.Vitess', 'ExecuteBatchShards'): vtgate__pb2.ExecuteBatchShardsResponse.FromString,
     ('vtgateservice.Vitess', 'ExecuteEntityIds'): vtgate__pb2.ExecuteEntityIdsResponse.FromString,
@@ -746,6 +786,7 @@ def beta_create_Vitess_stub(channel, host=None, metadata_transformer=None, pool=
     'Begin': cardinality.Cardinality.UNARY_UNARY,
     'Commit': cardinality.Cardinality.UNARY_UNARY,
     'Execute': cardinality.Cardinality.UNARY_UNARY,
+    'ExecuteBatch': cardinality.Cardinality.UNARY_UNARY,
     'ExecuteBatchKeyspaceIds': cardinality.Cardinality.UNARY_UNARY,
     'ExecuteBatchShards': cardinality.Cardinality.UNARY_UNARY,
     'ExecuteEntityIds': cardinality.Cardinality.UNARY_UNARY,

@@ -585,7 +585,8 @@ index by_msg (msg)
     self._assert_tablet_controls([topodata_pb2.MASTER, topodata_pb2.REPLICA])
 
     # re-add rdonly:
-    utils.run_vtctl(['SetShardTabletControl', '--tables=/moving/,view1',
+    utils.run_vtctl(['SetShardTabletControl',
+                     '--blacklisted_tables=/moving/,view1',
                      'source_keyspace/0', 'rdonly'], auto_log=True)
     self._assert_tablet_controls([topodata_pb2.MASTER, topodata_pb2.REPLICA,
                                   topodata_pb2.RDONLY])

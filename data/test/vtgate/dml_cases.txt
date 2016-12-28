@@ -69,9 +69,9 @@
 }
 
 # update by primary keyspace id, stray where clause
-"update user set val = 1 where  id = id2 and id = 1"
+"update user set val = 1 where id = id2 and id = 1"
 {
-  "Original": "update user set val = 1 where  id = id2 and id = 1",
+  "Original": "update user set val = 1 where id = id2 and id = 1",
   "Instructions": {
     "Opcode": "UpdateEqual",
     "Keyspace": {
@@ -86,16 +86,16 @@
 }
 
 # update by primary keyspace id, stray where clause with conversion error
-"update user set val = 1 where  id = 1.1 and id = 1"
+"update user set val = 1 where id = 18446744073709551616 and id = 1"
 {
-  "Original": "update user set val = 1 where  id = 1.1 and id = 1",
+  "Original": "update user set val = 1 where id = 18446744073709551616 and id = 1",
   "Instructions": {
     "Opcode": "UpdateEqual",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
-    "Query": "update user set val = 1 where id = 1.1 and id = 1",
+    "Query": "update user set val = 1 where id = 18446744073709551616 and id = 1",
     "Vindex": "user_index",
     "Values": 1,
     "Table": "user"
@@ -203,8 +203,8 @@
 }
 
 # insert unsharded, invalid value for auto-inc
-"insert into unsharded_auto(id, val) values(1.0, 'aa')"
-"could not convert val: 1.0, pos: 0: strconv.ParseUint: parsing "1.0": invalid syntax"
+"insert into unsharded_auto(id, val) values(18446744073709551616, 'aa')"
+"could not convert val: 18446744073709551616, pos: 0: strconv.ParseUint: parsing "18446744073709551616": value out of range"
 
 # insert unsharded, column present
 "insert into unsharded_auto(id, val) values(1, 'aa')"
@@ -224,7 +224,7 @@
         "Name": "main",
         "Sharded": false
       },
-      "Query": "select next :n values from `seq`",
+      "Query": "select next :n values from seq",
       "Value": [
         1
       ]
@@ -250,7 +250,7 @@
         "Name": "main",
         "Sharded": false
       },
-      "Query": "select next :n values from `seq`",
+      "Query": "select next :n values from seq",
       "Value": [
         null
       ]
@@ -276,7 +276,7 @@
         "Name": "main",
         "Sharded": false
       },
-      "Query": "select next :n values from `seq`",
+      "Query": "select next :n values from seq",
       "Value": [
         1,
         null
@@ -316,9 +316,11 @@
         "Name": "main",
         "Sharded": false
       },
-      "Query": "select next :n values from `seq`",
+      "Query": "select next :n values from seq",
       "Value": [1]
-    }
+    },
+    "Prefix": "insert into user(id, Name, Costly) values ",
+    "Mid":["(:_Id0, :_Name0, :_Costly0)"]
   }
 }
 
@@ -345,9 +347,11 @@
         "Name": "main",
         "Sharded": false
       },
-      "Query": "select next :n values from `seq`",
+      "Query": "select next :n values from seq",
       "Value": [null]
-    }
+    },
+    "Prefix": "insert into user(nonid, Id, Name, Costly) values ",
+    "Mid": ["(2, :_Id0, :_Name0, :_Costly0)"]
   }
 }
 
@@ -374,9 +378,11 @@
         "Name": "main",
         "Sharded": false
       },
-      "Query": "select next :n values from `seq`",
+      "Query": "select next :n values from seq",
       "Value": [1]
-    }
+    },
+    "Prefix": "insert into user(nonid, name, id, Costly) values ",
+    "Mid": ["(2, :_Name0, :_Id0, :_Costly0)"]
   }
 }
 
@@ -401,26 +407,52 @@
         "Name": "main",
         "Sharded": false
       },
-      "Query": "select next :n values from `seq`",
+      "Query": "select next :n values from seq",
       "Value": [null]
-    }
+    },
+    "Prefix": "insert into user_extra(nonid, user_id, extra_id) values ",
+    "Mid": ["(2, :_user_id0, :__seq0)"]
+  }
+}
+
+# insert for non-compliant names
+"insert into `weird``name`(`a``b*c`, `b*c`) values(1, 2)"
+{
+  "Original": "insert into `weird``name`(`a``b*c`, `b*c`) values(1, 2)",
+  "Instructions": {
+    "Opcode": "InsertSharded",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "insert into `weird``name`(`a``b*c`, `b*c`) values (:_a_b_c0, 2)",
+    "Values": [
+      [
+        1
+      ]
+    ],
+    "Table": "weird`name",
+    "Prefix": "insert into `weird``name`(`a``b*c`, `b*c`) values ",
+    "Mid": [
+      "(:_a_b_c0, 2)"
+    ]
   }
 }
 
 # insert for non-vindex autoinc, invalid value
-"insert into user_extra(nonid, extra_id) values (2, 1.1)"
-"could not convert val: 1.1, pos: 1: strconv.ParseUint: parsing "1.1": invalid syntax"
+"insert into user_extra(nonid, extra_id) values (2, 18446744073709551616)"
+"could not convert val: 18446744073709551616, pos: 1: strconv.ParseUint: parsing "18446744073709551616": value out of range"
 
 # insert invalid index value
-"insert into music_extra(music_id, user_id) values(1, 1.1)"
-"could not convert val: 1.1, pos: 1: strconv.ParseUint: parsing "1.1": invalid syntax"
+"insert into music_extra(music_id, user_id) values(1, 18446744073709551616)"
+"could not convert val: 18446744073709551616, pos: 1: strconv.ParseUint: parsing "18446744073709551616": value out of range"
 
 # insert invalid index value
 "insert into music_extra(music_id, user_id) values(1, id)"
 "could not convert val: id, pos: 1: id is not a value"
 
 # insert invalid table
-"insert into noexist(music_id, user_id) values(1, 1.1)"
+"insert into noexist(music_id, user_id) values(1, 18446744073709551616)"
 "table noexist not found"
 
 # insert with multiple rows
@@ -453,8 +485,10 @@
         "Name": "main",
         "Sharded": false
       },
-      "Query": "select next :n values from `seq`",
+      "Query": "select next :n values from seq",
       "Value": [1,2]
-    }
+    },
+    "Prefix": "insert into user(id, Name, Costly) values ",
+    "Mid": ["(:_Id0, :_Name0, :_Costly0)","(:_Id1, :_Name1, :_Costly1)"]
   }
 }

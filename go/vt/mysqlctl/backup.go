@@ -822,6 +822,7 @@ func Restore(
 	// without password, we are passing --skip-networking to greatly reduce the set
 	// of those who can connect.
 	logger.Infof("Restore: starting mysqld for mysql_upgrade")
+	// Note Start will use dba user for waiting, this is fine, it will be allowed.
 	err = mysqld.Start(context.Background(), "--skip-grant-tables", "--skip-networking")
 	if err != nil {
 		return replication.Position{}, err

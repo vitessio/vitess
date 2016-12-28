@@ -296,7 +296,40 @@
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 3,
+			"Shard": 1,
+			"RetryMax": 0,
+			"Tags": [
+				"site_test"
+			]
+		},
+		"tabletmanager_zookeeper": {
+			"File": "tabletmanager.py",
+			"Args": ["--topo-server-flavor=zookeeper"],
+			"Command": [],
+			"Manual": false,
+			"Shard": 1,
+			"RetryMax": 0,
+			"Tags": [
+				"site_test"
+			]
+		},
+		"tabletmanager_etcd": {
+			"File": "tabletmanager.py",
+			"Args": ["--topo-server-flavor=etcd"],
+			"Command": [],
+			"Manual": false,
+			"Shard": 1,
+			"RetryMax": 0,
+			"Tags": [
+				"site_test"
+			]
+		},
+		"tabletmanager_etcd2": {
+			"File": "tabletmanager.py",
+			"Args": ["--topo-server-flavor=etcd2"],
+			"Command": [],
+			"Manual": false,
+			"Shard": 1,
 			"RetryMax": 0,
 			"Tags": [
 				"site_test"
@@ -364,6 +397,15 @@
 			"Tags": [
 				"webdriver"
 			]
+		},
+		"vtgate_buffer": {
+			"File": "vtgate_buffer.py",
+			"Args": [],
+			"Command": [],
+			"Manual": false,
+			"Shard": 1,
+			"RetryMax": 0,
+			"Tags": []
 		},
 		"vtgate_utils": {
 			"File": "vtgate_utils_test.py",

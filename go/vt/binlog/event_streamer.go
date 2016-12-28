@@ -189,7 +189,7 @@ func parsePkTuple(tokenizer *sqlparser.Tokenizer, insertid int64, fields []*quer
 		case '-':
 			hasNegatives[index] = true
 			typ2, val2 := tokenizer.Scan()
-			if typ2 != sqlparser.NUMBER {
+			if typ2 != sqlparser.INTEGRAL {
 				return nil, insertid, fmt.Errorf("expecting number after '-'")
 			}
 			fullVal := append([]byte{'-'}, val2...)
@@ -207,7 +207,7 @@ func parsePkTuple(tokenizer *sqlparser.Tokenizer, insertid int64, fields []*quer
 
 			result.Lengths = append(result.Lengths, int64(len(fullVal)))
 			result.Values = append(result.Values, fullVal...)
-		case sqlparser.NUMBER:
+		case sqlparser.INTEGRAL:
 			unsigned, err := strconv.ParseUint(string(val), 0, 64)
 			if err != nil {
 				return nil, insertid, err

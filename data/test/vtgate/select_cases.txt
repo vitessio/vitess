@@ -43,6 +43,40 @@
   }
 }
 
+# qualified '*' expression for simple route
+"select user.* from user"
+{
+  "Original": "select user.* from user",
+  "Instructions": {
+    "Opcode": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select user.* from user",
+    "FieldQuery": "select user.* from user where 1 != 1"
+  }
+}
+
+# fully qualified '*' expression for simple route
+"select user.user.* from user"
+{
+  "Original": "select user.user.* from user",
+  "Instructions": {
+    "Opcode": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select user.* from user",
+    "FieldQuery": "select user.* from user where 1 != 1"
+  }
+}
+
+# invalid keyspace for '*' expression for simple route
+"select a.user.* from user"
+"cannot resolve a.user.* to keyspace user"
+
 # RHS route referenced
 "select user_extra.id from user join user_extra"
 {

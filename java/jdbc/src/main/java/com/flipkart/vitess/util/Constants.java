@@ -98,6 +98,7 @@ public class Constants {
         public static final String KEYSPACE = "KEYSPACE";
         public static final String USERNAME = "userName";
         public static final String EXECUTE_TYPE = "executeType";
+        public static final String TWOPC_ENABLED = "twopcEnabled";
 
         public static final String USE_SSL = "useSSL";
 

@@ -10,7 +10,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/youtube/vitess/go/cistring"
 	"github.com/youtube/vitess/go/hack"
 	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/sqltypes"
@@ -43,13 +42,13 @@ var sequenceFields = []*querypb.Field{
 	},
 }
 
-func addUserTableQueryStats(queryServiceStats *QueryServiceStats, ctx context.Context, tableName string, queryType string, duration int64) {
+func addUserTableQueryStats(queryServiceStats *QueryServiceStats, ctx context.Context, tableName sqlparser.TableIdent, queryType string, duration int64) {
 	username := callerid.GetPrincipal(callerid.EffectiveCallerIDFromContext(ctx))
 	if username == "" {
 		username = callerid.GetUsername(callerid.ImmediateCallerIDFromContext(ctx))
 	}
-	queryServiceStats.UserTableQueryCount.Add([]string{tableName, username, queryType}, 1)
-	queryServiceStats.UserTableQueryTimesNs.Add([]string{tableName, username, queryType}, int64(duration))
+	queryServiceStats.UserTableQueryCount.Add([]string{tableName.String(), username, queryType}, 1)
+	queryServiceStats.UserTableQueryTimesNs.Add([]string{tableName.String(), username, queryType}, int64(duration))
 }
 
 // Execute performs a non-streaming query execution.
@@ -257,7 +256,7 @@ func (qre *QueryExecutor) checkPermissions() error {
 	}
 
 	// empty table name, do not need a table ACL check.
-	if qre.plan.TableName == "" {
+	if qre.plan.TableName.IsEmpty() {
 		return nil
 	}
 
@@ -265,7 +264,7 @@ func (qre *QueryExecutor) checkPermissions() error {
 		return NewTabletError(vtrpcpb.ErrorCode_PERMISSION_DENIED, "table acl error: nil acl")
 	}
 	tableACLStatsKey := []string{
-		qre.plan.TableName,
+		qre.plan.TableName.String(),
 		qre.plan.Authorized.GroupName,
 		qre.plan.PlanID.String(),
 		callerID.Username,
@@ -305,11 +304,11 @@ func (qre *QueryExecutor) execDDL() (*sqltypes.Result, error) {
 	if err != nil {
 		return nil, err
 	}
-	if ddlPlan.TableName != "" && ddlPlan.TableName != ddlPlan.NewName {
+	if !ddlPlan.TableName.IsEmpty() && ddlPlan.TableName != ddlPlan.NewName {
 		// It's a drop or rename.
 		qre.qe.schemaInfo.DropTable(ddlPlan.TableName)
 	}
-	if ddlPlan.NewName != "" {
+	if !ddlPlan.NewName.IsEmpty() {
 		if err := qre.qe.schemaInfo.CreateOrUpdateTable(qre.ctx, ddlPlan.NewName); err != nil {
 			return nil, err
 		}
@@ -331,7 +330,7 @@ func (qre *QueryExecutor) execNextval() (*sqltypes.Result, error) {
 	defer t.Seq.Unlock()
 	if t.NextVal == 0 || t.NextVal+inc > t.LastVal {
 		_, err := qre.execAsTransaction(func(conn *TxConnection) (*sqltypes.Result, error) {
-			query := fmt.Sprintf("select next_id, cache from `%s` where id = 0 for update", qre.plan.TableName)
+			query := fmt.Sprintf("select next_id, cache from %s where id = 0 for update", sqlparser.String(qre.plan.TableName))
 			qr, err := qre.execSQL(conn, query, false)
 			if err != nil {
 				return nil, err
@@ -358,7 +357,7 @@ func (qre *QueryExecutor) execNextval() (*sqltypes.Result, error) {
 			for newLast <= t.NextVal+inc {
 				newLast += cache
 			}
-			query = fmt.Sprintf("update `%s` set next_id = %d where id = 0", qre.plan.TableName, newLast)
+			query = fmt.Sprintf("update %s set next_id = %d where id = 0", sqlparser.String(qre.plan.TableName), newLast)
 			conn.RecordQuery(query)
 			_, err = qre.execSQL(conn, query, false)
 			if err != nil {
@@ -527,7 +526,7 @@ func (qre *QueryExecutor) execDMLPKRows(conn *TxConnection, query *sqlparser.Par
 		}
 		bsc := buildStreamComment(qre.plan.TableInfo, pkRows, secondaryList)
 		qre.bindVars["#pk"] = sqlparser.TupleEqualityList{
-			Columns: cistring.ToStrings(qre.plan.TableInfo.Indexes[0].Columns),
+			Columns: qre.plan.TableInfo.Indexes[0].Columns,
 			Rows:    pkRows,
 		}
 		r, err := qre.txFetch(conn, query, qre.bindVars, bsc, false, true)

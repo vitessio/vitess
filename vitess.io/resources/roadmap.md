@@ -63,7 +63,9 @@ following core features:
 
 * Online schema swap, to apply complex schema changes without any downtime.
 
-* New dynamic UI (vtctld), rewritten from scratch in angular2.
+* New dynamic UI (vtctld), rewritten from scratch in Angular 2. We will still
+  have the old UI in Vitess 2.1 as a fallback, but it will be removed in Vitess
+  2.2.
 
 * Update Stream functionality, for applications to subscribe to a change stream
   (for cache invalidation, for instance).
@@ -75,9 +77,21 @@ following core features:
   
 * Better Kubernetes support (Helm support, better scripts, ...).
 
-We already cut the
+* New implementations of the topology services for Zookeeper (`zk2`) and etcd
+  (`etcd2`).  In Vitess 2.1 they will become the recommended implementations and
+  the old `zookeeper` and `etcd` will be deprecated. In Vitess 2.2 only the new
+  `zk2` and `etcd2` implementations will remain, so please migrate after upgrade
+  to Vitess 2.1.
+  
+* Initial version of the Master Buffering feature. It allows for buffering
+  master traffic while a failover is in progress, and trade downtime with
+  extra latency.
+
+We already cut
+the
 [2.1.0-alpha.1 release](https://github.com/youtube/vitess/releases/tag/v2.1.0-alpha.1),
-and we are finalizing the last details at the moment.
+and we are finalizing the last details at the moment. Release ETA is around
+beginning of 2017.
 
 ## Vitess Moving Forward
 

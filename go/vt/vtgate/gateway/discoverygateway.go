@@ -23,6 +23,7 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vterrors"
+	"github.com/youtube/vitess/go/vt/vtgate/buffer"
 	"github.com/youtube/vitess/go/vt/vtgate/masterbuffer"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
@@ -58,24 +59,33 @@ type discoveryGateway struct {
 	// We create one per cell.
 	tabletsWatchers []*discovery.TopologyWatcher
 
-	// mu protects all fields below.
+	// mu protects the fields of this group.
 	mu sync.RWMutex
 	// statusAggregators is a map indexed by the key
 	// keyspace/shard/tablet_type.
 	statusAggregators map[string]*TabletStatusAggregator
+
+	// buffer, if enabled, buffers requests during a detected MASTER failover.
+	buffer *buffer.Buffer
 }
 
 func createDiscoveryGateway(hc discovery.HealthCheck, topoServer topo.Server, serv topo.SrvTopoServer, cell string, retryCount int) Gateway {
 	dg := &discoveryGateway{
 		hc:                hc,
-		tsc:               discovery.NewTabletStatsCache(hc, cell),
+		tsc:               discovery.NewTabletStatsCacheDoNotSetListener(cell),
 		topoServer:        topoServer,
 		srvTopoServer:     serv,
 		localCell:         cell,
 		retryCount:        retryCount,
 		tabletsWatchers:   make([]*discovery.TopologyWatcher, 0, 1),
 		statusAggregators: make(map[string]*TabletStatusAggregator),
+		buffer:            buffer.New(),
 	}
+
+	// Set listener which will update TabletStatsCache and MasterBuffer.
+	// We set sendDownEvents=true because it's required by TabletStatsCache.
+	hc.SetListener(dg, true /* sendDownEvents */)
+
 	log.Infof("loading tablets for cells: %v", *cellsToWatch)
 	for _, c := range strings.Split(*cellsToWatch, ",") {
 		if c == "" {
@@ -94,6 +104,16 @@ func createDiscoveryGateway(hc discovery.HealthCheck, topoServer topo.Server, se
 		dg.tabletsWatchers = append(dg.tabletsWatchers, ctw)
 	}
 	return dg
+}
+
+// StatsUpdate forwards HealthCheck updates to TabletStatsCache and MasterBuffer.
+// It is part of the discovery.HealthCheckStatsListener interface.
+func (dg *discoveryGateway) StatsUpdate(ts *discovery.TabletStats) {
+	dg.tsc.StatsUpdate(ts)
+
+	if ts.Target.TabletType == topodatapb.TabletType_MASTER {
+		dg.buffer.StatsUpdate(ts)
+	}
 }
 
 // WaitForTablets is part of the gateway.Gateway interface.
@@ -358,6 +378,32 @@ func (dg *discoveryGateway) withRetry(ctx context.Context, target *querypb.Targe
 	invalidTablets := make(map[string]bool)
 
 	for i := 0; i < dg.retryCount+1; i++ {
+		// Check if we should buffer MASTER queries which failed due to an ongoing
+		// failover.
+		// Note: We only buffer "!inTransaction" queries i.e.
+		// a) no transaction is necessary (e.g. critical reads) or
+		// b) no transaction was created yet.
+		if !inTransaction && target.TabletType == topodatapb.TabletType_MASTER {
+			// The next call blocks if we should buffer during a failover.
+			retryDone, bufferErr := dg.buffer.WaitForFailoverEnd(ctx, target.Keyspace, target.Shard, err)
+			if bufferErr != nil {
+				// Buffering failed e.g. buffer is already full. Do not retry.
+				err = vterrors.WithSuffix(
+					vterrors.WithPrefix(
+						"failed to automatically buffer and retry failed request during failover: ",
+						bufferErr),
+					fmt.Sprintf(" original err (type=%T): %v", err, err))
+				break
+			}
+
+			// Request may have been buffered.
+			if retryDone != nil {
+				// We're going to retry this request as part of a buffer drain.
+				// Notify the buffer after we retried.
+				defer retryDone()
+			}
+		}
+
 		tablets := dg.tsc.GetHealthyTabletStats(target.Keyspace, target.Shard, target.TabletType)
 		if len(tablets) == 0 {
 			// fail fast if there is no tablet

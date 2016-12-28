@@ -15,7 +15,6 @@ import (
 
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/stats"
-	"github.com/youtube/vitess/go/vt/binlog/eventtoken"
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
@@ -134,20 +133,18 @@ func (stc *ScatterConn) Execute(
 
 			mu.Lock()
 			defer mu.Unlock()
-			appendResult(qr, innerqr)
+			qr.AppendResult(innerqr)
 			return transactionID, nil
 		})
 	return qr, err
 }
 
-// ExecuteMulti is like Execute,
-// but each shard gets its own bindVars. If len(shards) is not equal to
-// len(bindVars), the function panics.
-func (stc *ScatterConn) ExecuteMulti(
+// ExecuteMultiShard is like Execute,
+// but each shard gets its own Sql Queries and BindVariables.
+func (stc *ScatterConn) ExecuteMultiShard(
 	ctx context.Context,
-	query string,
 	keyspace string,
-	shardVars map[string]map[string]interface{},
+	shardQueries map[string]querytypes.BoundQuery,
 	tabletType topodatapb.TabletType,
 	session *SafeSession,
 	notInTransaction bool,
@@ -157,12 +154,16 @@ func (stc *ScatterConn) ExecuteMulti(
 	// mu protects qr
 	var mu sync.Mutex
 	qr := new(sqltypes.Result)
+	shards := make([]string, 0, len(shardQueries))
+	for shard := range shardQueries {
+		shards = append(shards, shard)
+	}
 
 	err := stc.multiGoTransaction(
 		ctx,
 		"Execute",
 		keyspace,
-		getShards(shardVars),
+		shards,
 		tabletType,
 		session,
 		notInTransaction,
@@ -170,13 +171,13 @@ func (stc *ScatterConn) ExecuteMulti(
 			var innerqr *sqltypes.Result
 			if shouldBegin {
 				var err error
-				innerqr, transactionID, err = stc.gateway.BeginExecute(ctx, target, query, shardVars[target.Shard], options)
+				innerqr, transactionID, err = stc.gateway.BeginExecute(ctx, target, shardQueries[target.Shard].Sql, shardQueries[target.Shard].BindVariables, options)
 				if err != nil {
 					return transactionID, err
 				}
 			} else {
 				var err error
-				innerqr, err = stc.gateway.Execute(ctx, target, query, shardVars[target.Shard], transactionID, options)
+				innerqr, err = stc.gateway.Execute(ctx, target, shardQueries[target.Shard].Sql, shardQueries[target.Shard].BindVariables, transactionID, options)
 				if err != nil {
 					return transactionID, err
 				}
@@ -184,7 +185,7 @@ func (stc *ScatterConn) ExecuteMulti(
 
 			mu.Lock()
 			defer mu.Unlock()
-			appendResult(qr, innerqr)
+			qr.AppendResult(innerqr)
 			return transactionID, nil
 		})
 	return qr, err
@@ -236,14 +237,14 @@ func (stc *ScatterConn) ExecuteEntityIds(
 
 			mu.Lock()
 			defer mu.Unlock()
-			appendResult(qr, innerqr)
+			qr.AppendResult(innerqr)
 			return transactionID, nil
 		})
 	return qr, err
 }
 
 // scatterBatchRequest needs to be built to perform a scatter batch query.
-// A VTGate batch request will get translated into a differnt set of batches
+// A VTGate batch request will get translated into a different set of batches
 // for each keyspace:shard, and those results will map to different positions in the
 // results list. The length specifies the total length of the final results
 // list. In each request variable, the resultIndexes specifies the position
@@ -312,7 +313,7 @@ func (stc *ScatterConn) ExecuteBatch(
 			resMutex.Lock()
 			defer resMutex.Unlock()
 			for i, result := range innerqrs {
-				appendResult(&results[req.ResultIndexes[i]], &result)
+				results[req.ResultIndexes[i]].AppendResult(&result)
 			}
 		}(req)
 	}
@@ -763,45 +764,6 @@ func getShards(shardVars map[string]map[string]interface{}) []string {
 		shards = append(shards, k)
 	}
 	return shards
-}
-
-func appendResult(qr, innerqr *sqltypes.Result) {
-	if innerqr.RowsAffected == 0 && len(innerqr.Fields) == 0 {
-		return
-	}
-	if qr.Fields == nil {
-		qr.Fields = innerqr.Fields
-	}
-	qr.RowsAffected += innerqr.RowsAffected
-	if innerqr.InsertID != 0 {
-		qr.InsertID = innerqr.InsertID
-	}
-	if len(qr.Rows) == 0 {
-		// we haven't gotten any result yet, just save the new extras.
-		qr.Extras = innerqr.Extras
-	} else {
-		// Merge the EventTokens / Fresher flags within Extras.
-		if innerqr.Extras == nil {
-			// We didn't get any from innerq. Have to clear any
-			// we'd have gotten already.
-			if qr.Extras != nil {
-				qr.Extras.EventToken = nil
-				qr.Extras.Fresher = false
-			}
-		} else {
-			// We may have gotten an EventToken from
-			// innerqr.  If we also got one earlier, merge
-			// it. If we didn't get one earlier, we
-			// discard the new one.
-			if qr.Extras != nil {
-				// Note if any of the two is nil, we get nil.
-				qr.Extras.EventToken = eventtoken.Minimum(qr.Extras.EventToken, innerqr.Extras.EventToken)
-
-				qr.Extras.Fresher = qr.Extras.Fresher && innerqr.Extras.Fresher
-			}
-		}
-	}
-	qr.Rows = append(qr.Rows, innerqr.Rows...)
 }
 
 func unique(in []string) map[string]struct{} {

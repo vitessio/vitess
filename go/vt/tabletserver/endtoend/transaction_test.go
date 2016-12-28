@@ -11,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/youtube/vitess/go/mysql"
+	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/tabletserver/endtoend/framework"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
@@ -554,7 +556,7 @@ func TestMMCommitFlow(t *testing.T) {
 	}
 
 	err = client.SetRollback("aa", 0)
-	want = "error: could not transition to Rollback: aa"
+	want = "error: could not transition to ROLLBACK: aa"
 	if err == nil || err.Error() != want {
 		t.Errorf("Error: %v, must contain %s", err, want)
 	}
@@ -564,7 +566,6 @@ func TestMMCommitFlow(t *testing.T) {
 		t.Error(err)
 	}
 	info.TimeCreated = 0
-	info.TimeUpdated = 0
 	wantInfo := &querypb.TransactionMetadata{
 		Dtid:  "aa",
 		State: 2,
@@ -634,7 +635,6 @@ func TestMMRollbackFlow(t *testing.T) {
 		t.Error(err)
 	}
 	info.TimeCreated = 0
-	info.TimeUpdated = 0
 	wantInfo := &querypb.TransactionMetadata{
 		Dtid:  "aa",
 		State: 3,
@@ -709,4 +709,105 @@ func TestWatchdog(t *testing.T) {
 		t.Errorf("Unexpected message: %s", dtid)
 	case <-time.After(2 * time.Second):
 	}
+}
+
+func TestUnresolvedTracking(t *testing.T) {
+	// This is a long running test. Enable only for testing the watchdog.
+	t.Skip()
+	client := framework.NewClient()
+	defer client.Execute("delete from vitess_test where intval=4", nil)
+
+	query := "insert into vitess_test (intval, floatval, charval, binval) " +
+		"values(4, null, null, null)"
+	err := client.Begin()
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	_, err = client.Execute(query, nil)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	err = client.Prepare("aa")
+	defer client.RollbackPrepared("aa", 0)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	time.Sleep(10 * time.Second)
+	vars := framework.DebugVars()
+	if val := framework.FetchInt(vars, "Unresolved/Prepares"); val != 1 {
+		t.Errorf("Unresolved: %d, want 1", val)
+	}
+}
+
+func TestManualTwopcz(t *testing.T) {
+	// This is a manual test. Uncomment the Skip to perform this test.
+	// The test will print the twopcz URL. Navigate to that location
+	// and perform all the operations allowed. They should all succeed
+	// and cause the transactions to be resolved.
+	t.Skip()
+	client := framework.NewClient()
+	defer client.Execute("delete from vitess_test where intval=4", nil)
+	conn, err := mysql.Connect(connParams)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	defer conn.Close()
+
+	// Successful prepare.
+	err = client.Begin()
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	_, err = client.Execute("insert into vitess_test (intval, floatval, charval, binval) values(4, null, null, null)", nil)
+	_, err = client.Execute("insert into vitess_test (intval, floatval, charval, binval) values(5, null, null, null)", nil)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	err = client.Prepare("dtidsuccess")
+	defer client.RollbackPrepared("dtidsuccess", 0)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	// Failed transaction.
+	err = client.Begin()
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	_, err = client.Execute("insert into vitess_test (intval, floatval, charval, binval) values(6, null, null, null)", nil)
+	_, err = client.Execute("insert into vitess_test (intval, floatval, charval, binval) values(7, null, null, null)", nil)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	err = client.Prepare("dtidfail")
+	defer client.RollbackPrepared("dtidfail", 0)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	conn.ExecuteFetch(fmt.Sprintf("update _vt.redo_state set state = %d where dtid = 'dtidfail'", tabletserver.RedoStateFailed), 10, false)
+	conn.ExecuteFetch("commit", 10, false)
+
+	// Distributed transaction.
+	err = client.CreateTransaction("distributed", []*querypb.Target{{
+		Keyspace: "k1",
+		Shard:    "s1",
+	}, {
+		Keyspace: "k2",
+		Shard:    "s2",
+	}})
+	defer client.ConcludeTransaction("distributed")
+
+	fmt.Printf("%s/twopcz\n", framework.ServerAddress)
+	fmt.Print("Sleeping for 30 seconds\n")
+	time.Sleep(30 * time.Second)
 }

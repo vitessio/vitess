@@ -73,6 +73,66 @@
   }
 }
 
+# ',' join
+"select music.col from user, music"
+{
+  "Original": "select music.col from user, music",
+  "Instructions": {
+    "Opcode": "Join",
+    "Left": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select 1 from user",
+      "FieldQuery": "select 1 from user where 1 != 1"
+    },
+    "Right": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select music.col from music",
+      "FieldQuery": "select music.col from music where 1 != 1"
+    },
+    "Cols": [
+      1
+    ]
+  }
+}
+
+# ',' join unsharded
+"select u1.a, u2.a from unsharded u1, unsharded u2"
+{
+  "Original": "select u1.a, u2.a from unsharded u1, unsharded u2",
+  "Instructions": {
+    "Opcode": "SelectUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "select u1.a, u2.a from unsharded as u1, unsharded as u2",
+    "FieldQuery": "select u1.a, u2.a from unsharded as u1, unsharded as u2 where 1 != 1"
+  }
+}
+
+# ',' 3-way join unsharded
+"select u1.a, u2.a from unsharded u1, unsharded u2, unsharded u3"
+{
+  "Original": "select u1.a, u2.a from unsharded u1, unsharded u2, unsharded u3",
+  "Instructions": {
+    "Opcode": "SelectUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "select u1.a, u2.a from unsharded as u1, unsharded as u2, unsharded as u3",
+    "FieldQuery": "select u1.a, u2.a from unsharded as u1, unsharded as u2, unsharded as u3 where 1 != 1"
+  }
+}
+
 # Left join, single chunk
 "select m1.col from unsharded as m1 left join unsharded as m2 on m1.a=m2.b"
 {
@@ -825,6 +885,33 @@
     "FieldQuery": "select foo.col from foo where 1 != 1"
   }
 }
+
+# col refs should be case-insensitive
+"select user.col from user join user_extra on user.ID = user_extra.User_Id"
+{
+  "Original": "select user.col from user join user_extra on user.ID = user_extra.User_Id",
+  "Instructions": {
+    "Opcode": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select user.col from user join user_extra on user.ID = user_extra.User_Id",
+    "FieldQuery": "select user.col from user join user_extra where 1 != 1"
+  }
+}
+
+# verify ',' vs JOIN precedence
+"select u1.a from unsharded u1, unsharded u2 join unsharded u3 on u1.a = u2.a"
+"symbol u1.a not found"
+
+# first expression fails for ',' join (code coverage: ensure error is returned)
+"select user.foo.col from user.foo, user"
+"table foo not found"
+
+# table names should be case-sensitive
+"select unsharded.id from unsharded where Unsharded.val = 1"
+"symbol Unsharded.val not found"
 
 # implicit table reference for sharded keyspace
 "select user.foo.col from user.foo"

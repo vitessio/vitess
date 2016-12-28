@@ -14,6 +14,7 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	"github.com/youtube/vitess/go/vt/schema"
+	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
 	"golang.org/x/net/context"
 )
@@ -25,7 +26,7 @@ func TestTableInfoFailBecauseUnableToRetrieveTableIndex(t *testing.T) {
 	for query, result := range getTestTableInfoQueries() {
 		db.AddQuery(query, result)
 	}
-	db.AddRejectedQuery("show index from `test_table`", errRejected)
+	db.AddRejectedQuery("show index from test_table", errRejected)
 	_, err := newTestTableInfo("USER_TABLE", "test table", db)
 	if err == nil {
 		t.Fatalf("table info creation should fail because it is unable to get test_table index")
@@ -58,7 +59,7 @@ func TestTableInfoSetPKColumn(t *testing.T) {
 	for query, result := range getTestTableInfoQueries() {
 		db.AddQuery(query, result)
 	}
-	db.AddQuery("show index from `test_table`", &sqltypes.Result{
+	db.AddQuery("show index from test_table", &sqltypes.Result{
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			{
@@ -93,7 +94,7 @@ func TestTableInfoInvalidCardinalityInIndex(t *testing.T) {
 	for query, result := range getTestTableInfoQueries() {
 		db.AddQuery(query, result)
 	}
-	db.AddQuery("show index from `test_table`", &sqltypes.Result{
+	db.AddQuery("show index from test_table", &sqltypes.Result{
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			{
@@ -127,7 +128,7 @@ func TestTableInfoSequence(t *testing.T) {
 	}
 	want := &TableInfo{
 		Table: &schema.Table{
-			Name: "test_table",
+			Name: sqlparser.NewTableIdent("test_table"),
 			Type: schema.Sequence,
 		},
 	}
@@ -163,7 +164,7 @@ func newTestTableInfo(tableType string, comment string, db *fakesqldb.DB) (*Tabl
 
 func getTestTableInfoQueries() map[string]*sqltypes.Result {
 	return map[string]*sqltypes.Result{
-		"select * from `test_table` where 1 != 1": {
+		"select * from test_table where 1 != 1": {
 			Fields: []*querypb.Field{{
 				Name: "pk",
 				Type: sqltypes.Int32,
@@ -175,7 +176,7 @@ func getTestTableInfoQueries() map[string]*sqltypes.Result {
 				Type: sqltypes.Int32,
 			}},
 		},
-		"describe `test_table`": {
+		"describe test_table": {
 			RowsAffected: 3,
 			Rows: [][]sqltypes.Value{
 				{
@@ -204,7 +205,7 @@ func getTestTableInfoQueries() map[string]*sqltypes.Result {
 				},
 			},
 		},
-		"show index from `test_table`": {
+		"show index from test_table": {
 			RowsAffected: 3,
 			Rows: [][]sqltypes.Value{
 				{

@@ -27,7 +27,7 @@ type WorkflowInfo struct {
 // GetWorkflowNames returns the names of the existing
 // workflows. They are sorted by uuid.
 func (ts Server) GetWorkflowNames(ctx context.Context) ([]string, error) {
-	entries, err := ts.ListDir(ctx, "global", workflowPath)
+	entries, err := ts.ListDir(ctx, GlobalCell, workflowPath)
 	switch err {
 	case ErrNoNode:
 		return nil, nil
@@ -49,7 +49,7 @@ func (ts Server) CreateWorkflow(ctx context.Context, w *workflowpb.Workflow) (*W
 
 	// Save it.
 	filePath := pathForWorkflow(w.Uuid)
-	version, err := ts.Create(ctx, "global", filePath, contents)
+	version, err := ts.Create(ctx, GlobalCell, filePath, contents)
 	if err != nil {
 		return nil, err
 	}
@@ -63,7 +63,7 @@ func (ts Server) CreateWorkflow(ctx context.Context, w *workflowpb.Workflow) (*W
 func (ts Server) GetWorkflow(ctx context.Context, uuid string) (*WorkflowInfo, error) {
 	// Read the file.
 	filePath := pathForWorkflow(uuid)
-	contents, version, err := ts.Get(ctx, "global", filePath)
+	contents, version, err := ts.Get(ctx, GlobalCell, filePath)
 	if err != nil {
 		return nil, err
 	}
@@ -91,7 +91,7 @@ func (ts Server) SaveWorkflow(ctx context.Context, wi *WorkflowInfo) error {
 
 	// Save it.
 	filePath := pathForWorkflow(wi.Uuid)
-	version, err := ts.Update(ctx, "global", filePath, contents, wi.version)
+	version, err := ts.Update(ctx, GlobalCell, filePath, contents, wi.version)
 	if err != nil {
 		return err
 	}
@@ -105,5 +105,5 @@ func (ts Server) SaveWorkflow(ctx context.Context, wi *WorkflowInfo) error {
 // WorkflowInfo object should not be used any more.
 func (ts Server) DeleteWorkflow(ctx context.Context, wi *WorkflowInfo) error {
 	filePath := pathForWorkflow(wi.Uuid)
-	return ts.Delete(ctx, "global", filePath, wi.version)
+	return ts.Delete(ctx, GlobalCell, filePath, wi.version)
 }

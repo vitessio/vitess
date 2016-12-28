@@ -167,7 +167,7 @@ func convertColumnsToSelectExprs(columns []*schema.TableColumn) sqlparser.Select
 		result = append(result,
 			&sqlparser.NonStarExpr{
 				Expr: &sqlparser.ColName{
-					Name: sqlparser.ColIdent(column.Name),
+					Name: column.Name,
 				},
 			})
 	}
@@ -176,8 +176,8 @@ func convertColumnsToSelectExprs(columns []*schema.TableColumn) sqlparser.Select
 
 func buildLimitClause(offset, rowcount int64) *sqlparser.Limit {
 	return &sqlparser.Limit{
-		Offset:   sqlparser.NumVal(fmt.Sprintf("%d", offset)),
-		Rowcount: sqlparser.NumVal(fmt.Sprintf("%d", rowcount)),
+		Offset:   sqlparser.NewIntVal([]byte(fmt.Sprintf("%d", offset))),
+		Rowcount: sqlparser.NewIntVal([]byte(fmt.Sprintf("%d", rowcount))),
 	}
 }
 
@@ -186,7 +186,7 @@ func buildOrderByClause(splitColumns []*schema.TableColumn) sqlparser.OrderBy {
 	for _, splitColumn := range splitColumns {
 		result = append(result,
 			&sqlparser.Order{
-				Expr:      &sqlparser.ColName{Name: sqlparser.ColIdent(splitColumn.Name)},
+				Expr:      &sqlparser.ColName{Name: splitColumn.Name},
 				Direction: sqlparser.AscScr,
 			},
 		)
@@ -201,7 +201,7 @@ const (
 func buildPrevBindVariableNames(splitColumns []*schema.TableColumn) []string {
 	result := make([]string, 0, len(splitColumns))
 	for _, splitColumn := range splitColumns {
-		result = append(result, prevBindVariablePrefix+splitColumn.Name.Lowered())
+		result = append(result, prevBindVariablePrefix+splitColumn.Name.CompliantName())
 	}
 	return result
 }

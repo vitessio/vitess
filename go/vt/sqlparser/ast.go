@@ -5,11 +5,12 @@
 package sqlparser
 
 import (
+	"bytes"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"strings"
 
-	"github.com/youtube/vitess/go/cistring"
 	"github.com/youtube/vitess/go/sqltypes"
 )
 
@@ -77,6 +78,14 @@ func String(node SQLNode) string {
 	buf := NewTrackedBuffer(nil)
 	buf.Myprintf("%v", node)
 	return buf.String()
+}
+
+// Append appends the SQLNode to the buffer.
+func Append(buf *bytes.Buffer, node SQLNode) {
+	tbuf := &TrackedBuffer{
+		Buffer: buf,
+	}
+	node.Format(tbuf)
 }
 
 // GenerateParsedQuery returns a ParsedQuery of the ast.
@@ -483,12 +492,12 @@ func (Nextval) iSelectExpr()      {}
 
 // StarExpr defines a '*' or 'table.*' expression.
 type StarExpr struct {
-	TableName TableIdent
+	TableName *TableName
 }
 
 // Format formats the node.
 func (node *StarExpr) Format(buf *TrackedBuffer) {
-	if node.TableName != "" {
+	if !node.TableName.IsEmpty() {
 		buf.Myprintf("%v.", node.TableName)
 	}
 	buf.Myprintf("*")
@@ -514,7 +523,7 @@ type NonStarExpr struct {
 // Format formats the node.
 func (node *NonStarExpr) Format(buf *TrackedBuffer) {
 	buf.Myprintf("%v", node.Expr)
-	if node.As.Original() != "" {
+	if !node.As.IsEmpty() {
 		buf.Myprintf(" as %v", node.As)
 	}
 }
@@ -616,7 +625,7 @@ type AliasedTableExpr struct {
 // Format formats the node.
 func (node *AliasedTableExpr) Format(buf *TrackedBuffer) {
 	buf.Myprintf("%v", node.Expr)
-	if node.As != "" {
+	if !node.As.IsEmpty() {
 		buf.Myprintf(" as %v", node.As)
 	}
 	if node.Hints != nil {
@@ -661,7 +670,7 @@ func (node *TableName) Format(buf *TrackedBuffer) {
 	if node == nil {
 		return
 	}
-	if node.Qualifier != "" {
+	if !node.Qualifier.IsEmpty() {
 		buf.Myprintf("%v.", node.Qualifier)
 	}
 	buf.Myprintf("%v", node.Name)
@@ -681,7 +690,21 @@ func (node *TableName) WalkSubtree(visit Visit) error {
 
 // IsEmpty returns true if TableName is nil or empty.
 func (node *TableName) IsEmpty() bool {
-	return node == nil || (node.Qualifier == "" && node.Name == "")
+	return node == nil || (node.Qualifier.IsEmpty() && node.Name.IsEmpty())
+}
+
+// Equal returns true if the table names match.
+func (node *TableName) Equal(t *TableName) bool {
+	if node.IsEmpty() {
+		if t.IsEmpty() {
+			return true
+		}
+		return false
+	}
+	if t.IsEmpty() {
+		return false
+	}
+	return node.Name == t.Name && node.Qualifier == t.Qualifier
 }
 
 // ParenTableExpr represents a parenthesized list of TableExpr.
@@ -836,11 +859,7 @@ func (*ComparisonExpr) iExpr() {}
 func (*RangeCond) iExpr()      {}
 func (*IsExpr) iExpr()         {}
 func (*ExistsExpr) iExpr()     {}
-func (HexNum) iExpr()          {}
-func (StrVal) iExpr()          {}
-func (HexVal) iExpr()          {}
-func (NumVal) iExpr()          {}
-func (ValArg) iExpr()          {}
+func (*SQLVal) iExpr()         {}
 func (*NullVal) iExpr()        {}
 func (BoolVal) iExpr()         {}
 func (*ColName) iExpr()        {}
@@ -1087,11 +1106,7 @@ type ValExpr interface {
 	Expr
 }
 
-func (HexNum) iValExpr()        {}
-func (StrVal) iValExpr()        {}
-func (HexVal) iValExpr()        {}
-func (NumVal) iValExpr()        {}
-func (ValArg) iValExpr()        {}
+func (*SQLVal) iValExpr()       {}
 func (*NullVal) iValExpr()      {}
 func (*ColName) iValExpr()      {}
 func (ValTuple) iValExpr()      {}
@@ -1103,83 +1118,89 @@ func (*IntervalExpr) iValExpr() {}
 func (*FuncExpr) iValExpr()     {}
 func (*CaseExpr) iValExpr()     {}
 
+// ValType specifies the type for SQLVal.
+type ValType int
+
+// These are the possible Valtype values.
 // HexNum represents a 0x... value. It cannot
 // be treated as a simple value because it can
 // be interpreted differently depending on the
 // context.
-type HexNum []byte
+const (
+	StrVal = ValType(iota)
+	IntVal
+	FloatVal
+	HexNum
+	HexVal
+	ValArg
+)
+
+// SQLVal represents a single value.
+type SQLVal struct {
+	Type ValType
+	Val  []byte
+}
+
+// NewStrVal builds a new StrVal.
+func NewStrVal(in []byte) *SQLVal {
+	return &SQLVal{Type: StrVal, Val: in}
+}
+
+// NewIntVal builds a new IntVal.
+func NewIntVal(in []byte) *SQLVal {
+	return &SQLVal{Type: IntVal, Val: in}
+}
+
+// NewFloatVal builds a new FloatVal.
+func NewFloatVal(in []byte) *SQLVal {
+	return &SQLVal{Type: FloatVal, Val: in}
+}
+
+// NewHexNum builds a new HexNum.
+func NewHexNum(in []byte) *SQLVal {
+	return &SQLVal{Type: HexNum, Val: in}
+}
+
+// NewHexVal builds a new HexVal.
+func NewHexVal(in []byte) *SQLVal {
+	return &SQLVal{Type: HexVal, Val: in}
+}
+
+// NewValArg builds a new ValArg.
+func NewValArg(in []byte) *SQLVal {
+	return &SQLVal{Type: ValArg, Val: in}
+}
 
 // Format formats the node.
-func (node HexNum) Format(buf *TrackedBuffer) {
-	buf.Myprintf("%s", []byte(node))
+func (node *SQLVal) Format(buf *TrackedBuffer) {
+	switch node.Type {
+	case StrVal:
+		s := sqltypes.MakeString([]byte(node.Val))
+		s.EncodeSQL(buf)
+	case IntVal, FloatVal, HexNum:
+		buf.Myprintf("%s", []byte(node.Val))
+	case HexVal:
+		buf.Myprintf("X'%s'", []byte(node.Val))
+	case ValArg:
+		buf.WriteArg(string(node.Val))
+	default:
+		panic("unexpected")
+	}
 }
 
 // WalkSubtree walks the nodes of the subtree.
-func (node HexNum) WalkSubtree(visit Visit) error {
+func (node *SQLVal) WalkSubtree(visit Visit) error {
 	return nil
 }
 
-// StrVal represents a string value.
-type StrVal []byte
-
-// Format formats the node.
-func (node StrVal) Format(buf *TrackedBuffer) {
-	s := sqltypes.MakeString([]byte(node))
-	s.EncodeSQL(buf)
-}
-
-// WalkSubtree walks the nodes of the subtree.
-func (node StrVal) WalkSubtree(visit Visit) error {
-	return nil
-}
-
-// HexVal represents a hexadecimal string.
-type HexVal []byte
-
-// Format formats the node.
-func (node HexVal) Format(buf *TrackedBuffer) {
-	buf.Myprintf("X'%s'", []byte(node))
-}
-
-// WalkSubtree walks the nodes of the subtree.
-func (node HexVal) WalkSubtree(visit Visit) error {
-	return nil
-}
-
-// Decode decodes the hexval into bytes.
-func (node HexVal) Decode() ([]byte, error) {
-	dst := make([]byte, hex.DecodedLen(len([]byte(node))))
-	_, err := hex.Decode(dst, []byte(node))
+// HexDecode decodes the hexval into bytes.
+func (node *SQLVal) HexDecode() ([]byte, error) {
+	dst := make([]byte, hex.DecodedLen(len([]byte(node.Val))))
+	_, err := hex.Decode(dst, []byte(node.Val))
 	if err != nil {
 		return nil, err
 	}
 	return dst, err
-}
-
-// NumVal represents a number.
-type NumVal []byte
-
-// Format formats the node.
-func (node NumVal) Format(buf *TrackedBuffer) {
-	buf.Myprintf("%s", []byte(node))
-}
-
-// WalkSubtree walks the nodes of the subtree.
-func (node NumVal) WalkSubtree(visit Visit) error {
-	return nil
-}
-
-// ValArg represents a named bind var argument.
-type ValArg []byte
-
-// Format formats the node.
-func (node ValArg) Format(buf *TrackedBuffer) {
-	buf.WriteArg(string(node))
-}
-
-// WalkSubtree walks the nodes of the subtree.
-func (node ValArg) WalkSubtree(visit Visit) error {
-	return nil
 }
 
 // NullVal represents a NULL value.
@@ -1241,6 +1262,15 @@ func (node *ColName) WalkSubtree(visit Visit) error {
 		node.Name,
 		node.Qualifier,
 	)
+}
+
+// Equal returns true if the column names match.
+func (node *ColName) Equal(c *ColName) bool {
+	// Failsafe: ColName should not be empty.
+	if node == nil || c == nil {
+		return false
+	}
+	return node.Name.Equal(c.Name) && node.Qualifier.Equal(c.Qualifier)
 }
 
 // ColTuple represents a list of column values.
@@ -1419,7 +1449,7 @@ func (node *IntervalExpr) WalkSubtree(visit Visit) error {
 
 // FuncExpr represents a function call.
 type FuncExpr struct {
-	Name     string
+	Name     ColIdent
 	Distinct bool
 	Exprs    SelectExprs
 }
@@ -1433,7 +1463,7 @@ func (node *FuncExpr) Format(buf *TrackedBuffer) {
 	// Function names should not be back-quoted even
 	// if they match a reserved word. So, print the
 	// name as is.
-	buf.Myprintf("%s(%s%v)", node.Name, distinct, node.Exprs)
+	buf.Myprintf("%s(%s%v)", node.Name.String(), distinct, node.Exprs)
 }
 
 // WalkSubtree walks the nodes of the subtree.
@@ -1469,7 +1499,7 @@ var Aggregates = map[string]bool{
 
 // IsAggregate returns true if the function is an aggregate.
 func (node *FuncExpr) IsAggregate() bool {
-	return Aggregates[strings.ToLower(node.Name)]
+	return Aggregates[node.Name.Lowered()]
 }
 
 // CaseExpr represents a CASE expression.
@@ -1725,21 +1755,25 @@ func (node OnDup) WalkSubtree(visit Visit) error {
 }
 
 // ColIdent is a case insensitive SQL identifier. It will be escaped with
-// backquotes if it matches a keyword.
-type ColIdent cistring.CIString
+// backquotes if necessary.
+type ColIdent struct {
+	// This artifact prevents this struct from being compared
+	// with itself. It consumes no space as long as it's not the
+	// last field in the struct.
+	_            [0]struct{ _ []byte }
+	val, lowered string
+}
 
 // NewColIdent makes a new ColIdent.
 func NewColIdent(str string) ColIdent {
-	return ColIdent(cistring.New(str))
+	return ColIdent{
+		val: str,
+	}
 }
 
 // Format formats the node.
 func (node ColIdent) Format(buf *TrackedBuffer) {
-	if _, ok := keywords[node.Lowered()]; ok {
-		buf.Myprintf("`%s`", node.Original())
-		return
-	}
-	buf.Myprintf("%s", node.Original())
+	formatID(buf, node.val, node.Lowered())
 }
 
 // WalkSubtree walks the nodes of the subtree.
@@ -1747,47 +1781,169 @@ func (node ColIdent) WalkSubtree(visit Visit) error {
 	return nil
 }
 
-// Original returns the case-preserved column name.
-func (node ColIdent) Original() string {
-	return cistring.CIString(node).Original()
+// IsEmpty returns true if the name is empty.
+func (node ColIdent) IsEmpty() bool {
+	return node.val == ""
 }
 
+// String returns the unescaped column name. It must
+// not be used for SQL generation. Use sqlparser.String
+// instead. The Stringer conformance is for usage
+// in templates.
 func (node ColIdent) String() string {
-	return cistring.CIString(node).String()
+	return node.val
+}
+
+// CompliantName returns a compliant id name
+// that can be used for a bind var.
+func (node ColIdent) CompliantName() string {
+	return compliantName(node.val)
 }
 
 // Lowered returns a lower-cased column name.
 // This function should generally be used only for optimizing
 // comparisons.
 func (node ColIdent) Lowered() string {
-	return cistring.CIString(node).Lowered()
+	if node.val == "" {
+		return ""
+	}
+	if node.lowered == "" {
+		node.lowered = strings.ToLower(node.val)
+	}
+	return node.lowered
 }
 
 // Equal performs a case-insensitive compare.
 func (node ColIdent) Equal(in ColIdent) bool {
-	return cistring.CIString(node).Equal(cistring.CIString(in))
+	return node.Lowered() == in.Lowered()
 }
 
 // EqualString performs a case-insensitive compare with str.
 func (node ColIdent) EqualString(str string) bool {
-	return cistring.CIString(node).EqualString(str)
+	return node.Lowered() == strings.ToLower(str)
+}
+
+// MarshalJSON marshals into JSON.
+func (node ColIdent) MarshalJSON() ([]byte, error) {
+	return json.Marshal(node.val)
+}
+
+// UnmarshalJSON unmarshals from JSON.
+func (node *ColIdent) UnmarshalJSON(b []byte) error {
+	var result string
+	err := json.Unmarshal(b, &result)
+	if err != nil {
+		return err
+	}
+	node.val = result
+	return nil
 }
 
 // TableIdent is a case sensitive SQL identifier. It will be escaped with
-// backquotes if it matches a keyword.
-type TableIdent string
+// backquotes if necessary.
+type TableIdent struct {
+	v string
+}
+
+// NewTableIdent creates a new TableIdent.
+func NewTableIdent(str string) TableIdent {
+	return TableIdent{v: str}
+}
 
 // Format formats the node.
 func (node TableIdent) Format(buf *TrackedBuffer) {
-	name := string(node)
-	if _, ok := keywords[strings.ToLower(name)]; ok {
-		buf.Myprintf("`%s`", name)
-		return
-	}
-	buf.Myprintf("%s", name)
+	formatID(buf, node.v, strings.ToLower(node.v))
 }
 
 // WalkSubtree walks the nodes of the subtree.
 func (node TableIdent) WalkSubtree(visit Visit) error {
 	return nil
+}
+
+// IsEmpty returns true if TabIdent is empty.
+func (node TableIdent) IsEmpty() bool {
+	return node.v == ""
+}
+
+// String returns the unescaped table name. It must
+// not be used for SQL generation. Use sqlparser.String
+// instead. The Stringer conformance is for usage
+// in templates.
+func (node TableIdent) String() string {
+	return node.v
+}
+
+// CompliantName returns a compliant id name
+// that can be used for a bind var.
+func (node TableIdent) CompliantName() string {
+	return compliantName(node.v)
+}
+
+// MarshalJSON marshals into JSON.
+func (node TableIdent) MarshalJSON() ([]byte, error) {
+	return json.Marshal(node.v)
+}
+
+// UnmarshalJSON unmarshals from JSON.
+func (node *TableIdent) UnmarshalJSON(b []byte) error {
+	var result string
+	err := json.Unmarshal(b, &result)
+	if err != nil {
+		return err
+	}
+	node.v = result
+	return nil
+}
+
+// Backtick produces a backticked literal given an input string.
+func Backtick(in string) string {
+	var buf bytes.Buffer
+	buf.WriteByte('`')
+	for _, c := range in {
+		buf.WriteRune(c)
+		if c == '`' {
+			buf.WriteByte('`')
+		}
+	}
+	buf.WriteByte('`')
+	return buf.String()
+}
+
+func formatID(buf *TrackedBuffer, original, lowered string) {
+	for i, c := range original {
+		if !isLetter(uint16(c)) {
+			if i == 0 || !isDigit(uint16(c)) {
+				goto mustEscape
+			}
+		}
+	}
+	if _, ok := keywords[lowered]; ok {
+		goto mustEscape
+	}
+	buf.Myprintf("%s", original)
+	return
+
+mustEscape:
+	buf.WriteByte('`')
+	for _, c := range original {
+		buf.WriteRune(c)
+		if c == '`' {
+			buf.WriteByte('`')
+		}
+	}
+	buf.WriteByte('`')
+}
+
+func compliantName(in string) string {
+	var buf bytes.Buffer
+	for i, c := range in {
+		if !isLetter(uint16(c)) {
+			if i == 0 || !isDigit(uint16(c)) {
+				buf.WriteByte('_')
+				continue
+			}
+		}
+		buf.WriteRune(c)
+	}
+	return buf.String()
 }

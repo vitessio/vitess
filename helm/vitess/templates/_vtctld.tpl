@@ -22,8 +22,8 @@ spec:
     app: vitess
   type: {{.serviceType | default $0.serviceType}}
 ---
-kind: ReplicationController
-apiVersion: v1
+apiVersion: extensions/v1beta1
+kind: Deployment
 metadata:
   name: vtctld
 spec:
@@ -35,7 +35,28 @@ spec:
         app: vitess
       annotations:
         pod.beta.kubernetes.io/init-containers: '[
-{{ include "init-vtdataroot" (.image | default $0.image) | indent 10 }}
+{{ include "init-vtdataroot" (.image | default $0.image) | indent 10 }},
+          {
+            "name": "init-vtctld",
+            "image": {{.image | default $0.image | quote}},
+            "imagePullPolicy": "IfNotPresent",
+            "command": ["bash", "-c", "
+              set -ex\n
+              rm -rf /vt/web/*\n
+              cp -R $VTTOP/web/* /vt/web/\n
+              cp /mnt/config/config.js /vt/web/vtctld/\n
+            "],
+            "volumeMounts": [
+              {
+                "name": "config",
+                "mountPath": "/mnt/config"
+              },
+              {
+                "name": "web",
+                "mountPath": "/vt/web"
+              }
+            ]
+          }
         ]'
     spec:
       containers:
@@ -52,6 +73,8 @@ spec:
               mountPath: /dev/log
             - name: vtdataroot
               mountPath: /vt/vtdataroot
+            - name: web
+              mountPath: /vt/web
             - name: certs
               readOnly: true
               # Mount root certs from the host OS into the location
@@ -68,8 +91,8 @@ spec:
               set -ex
               eval exec /vt/bin/vtctld $(cat <<END_OF_COMMAND
                 -cell={{$cell.name | quote}}
-                -web_dir="$VTTOP/web/vtctld"
-                -web_dir2="$VTTOP/web/vtctld2/app"
+                -web_dir="/vt/web/vtctld"
+                -web_dir2="/vt/web/vtctld2/app"
                 -workflow_manager_init
                 -workflow_manager_use_election
                 -log_dir="$VTDATAROOT/tmp"
@@ -89,6 +112,20 @@ spec:
           emptyDir: {}
         - name: certs
           hostPath: { path: {{$.Values.certsPath | quote}} }
+        - name: web
+          emptyDir: {}
+        - name: config
+          configMap:
+            name: vtctld
+---
+# vtctld ConfigMap
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vtctld
+data:
+  config.js: |
+{{ $.Files.Get "vtctld-config.js" | indent 4 }}
 {{- end -}}
 {{- end -}}
 

@@ -168,7 +168,7 @@ func buildMinMaxQuery(splitParams *SplitParams) string {
 	// is a simple table expression, so this type-assertion should succeed.
 	tableName := sqlparser.GetTableName(
 		splitParams.selectAST.From[0].(*sqlparser.AliasedTableExpr).Expr)
-	if tableName == "" {
+	if tableName.IsEmpty() {
 		panic(fmt.Sprintf("Can't get tableName from query %v", splitParams.sql))
 	}
 	return fmt.Sprintf("select min(%v), max(%v) from %v",

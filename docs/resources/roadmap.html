@@ -324,18 +324,30 @@ following core features:</p>
 <li><p>Support for distributed transactions, using 2 phase commit.</p></li>
 <li><p>Resharding workflow improvements, to increase manageability of the process.</p></li>
 <li><p>Online schema swap, to apply complex schema changes without any downtime.</p></li>
-<li><p>New dynamic UI (vtctld), rewritten from scratch in angular2.</p></li>
+<li><p>New dynamic UI (vtctld), rewritten from scratch in Angular 2. We will still
+have the old UI in Vitess 2.1 as a fallback, but it will be removed in Vitess
+2.2.</p></li>
 <li><p>Update Stream functionality, for applications to subscribe to a change stream
 (for cache invalidation, for instance).</p></li>
 <li><p>Improved Map-Reduce support, for tables with non-uniform distributions.</p></li>
 <li><p>Increase large installation scalability with two-layer vtgate pools (l2vtgate,
 applicable to 100+ shard installations).</p></li>
 <li><p>Better Kubernetes support (Helm support, better scripts, ...).</p></li>
+<li><p>New implementations of the topology services for Zookeeper (<code class="prettyprint">zk2</code>) and etcd
+(<code class="prettyprint">etcd2</code>).  In Vitess 2.1 they will become the recommended implementations and
+the old <code class="prettyprint">zookeeper</code> and <code class="prettyprint">etcd</code> will be deprecated. In Vitess 2.2 only the new
+<code class="prettyprint">zk2</code> and <code class="prettyprint">etcd2</code> implementations will remain, so please migrate after upgrade
+to Vitess 2.1.</p></li>
+<li><p>Initial version of the Master Buffering feature. It allows for buffering
+master traffic while a failover is in progress, and trade downtime with
+extra latency.</p></li>
 </ul>
 
-<p>We already cut the
+<p>We already cut
+the
 <a href="https://github.com/youtube/vitess/releases/tag/v2.1.0-alpha.1">2.1.0-alpha.1 release</a>,
-and we are finalizing the last details at the moment.</p>
+and we are finalizing the last details at the moment. Release ETA is around
+beginning of 2017.</p>
 
 <h2 id="vitess-moving-forward">Vitess Moving Forward</h2>
 

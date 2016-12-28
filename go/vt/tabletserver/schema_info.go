@@ -25,6 +25,7 @@ import (
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 	"github.com/youtube/vitess/go/vt/schema"
+	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/tableacl"
 	"github.com/youtube/vitess/go/vt/tabletserver/planbuilder"
 	"golang.org/x/net/context"
@@ -329,10 +330,10 @@ func (si *SchemaInfo) ClearQueryPlanCache() {
 }
 
 // CreateOrUpdateTable must be called if a DDL was applied to that table.
-func (si *SchemaInfo) CreateOrUpdateTable(ctx context.Context, tableName string) error {
+func (si *SchemaInfo) CreateOrUpdateTable(ctx context.Context, tableName sqlparser.TableIdent) error {
 	si.actionMutex.Lock()
 	defer si.actionMutex.Unlock()
-	return si.createOrUpdateTableLocked(ctx, tableName)
+	return si.createOrUpdateTableLocked(ctx, tableName.String())
 }
 
 // createOrUpdateTableLocked must only be called while holding actionMutex.
@@ -386,14 +387,14 @@ func (si *SchemaInfo) createOrUpdateTableLocked(ctx context.Context, tableName s
 }
 
 // DropTable must be called if a table was dropped.
-func (si *SchemaInfo) DropTable(tableName string) {
+func (si *SchemaInfo) DropTable(tableName sqlparser.TableIdent) {
 	si.actionMutex.Lock()
 	defer si.actionMutex.Unlock()
 
 	si.mu.Lock()
 	defer si.mu.Unlock()
 
-	delete(si.tables, tableName)
+	delete(si.tables, tableName.String())
 	si.queries.Clear()
 	log.Infof("Table %s forgotten", tableName)
 }
@@ -423,8 +424,8 @@ func (si *SchemaInfo) GetPlan(ctx context.Context, logStats *LogStats, sql strin
 	}
 
 	var tableInfo *TableInfo
-	GetTable := func(tableName string) (table *schema.Table, ok bool) {
-		tableInfo, ok = si.tables[tableName]
+	GetTable := func(tableName sqlparser.TableIdent) (table *schema.Table, ok bool) {
+		tableInfo, ok = si.tables[tableName.String()]
 		if !ok {
 			return nil, false
 		}
@@ -435,8 +436,8 @@ func (si *SchemaInfo) GetPlan(ctx context.Context, logStats *LogStats, sql strin
 		panic(PrefixTabletError(vtrpcpb.ErrorCode_UNKNOWN_ERROR, err, ""))
 	}
 	plan := &ExecPlan{ExecPlan: splan, TableInfo: tableInfo}
-	plan.Rules = si.queryRuleSources.filterByPlan(sql, plan.PlanID, plan.TableName)
-	plan.Authorized = tableacl.Authorized(plan.TableName, plan.PlanID.MinRole())
+	plan.Rules = si.queryRuleSources.filterByPlan(sql, plan.PlanID, plan.TableName.String())
+	plan.Authorized = tableacl.Authorized(plan.TableName.String(), plan.PlanID.MinRole())
 	if plan.PlanID.IsSelect() {
 		if plan.FieldQuery == nil {
 			log.Warningf("Cannot cache field info: %s", sql)
@@ -463,10 +464,10 @@ func (si *SchemaInfo) GetPlan(ctx context.Context, logStats *LogStats, sql strin
 // and doesn't enforce a limit. It just returns the parsed query.
 func (si *SchemaInfo) GetStreamPlan(sql string) *ExecPlan {
 	var tableInfo *TableInfo
-	GetTable := func(tableName string) (table *schema.Table, ok bool) {
+	GetTable := func(tableName sqlparser.TableIdent) (table *schema.Table, ok bool) {
 		si.mu.Lock()
 		defer si.mu.Unlock()
-		tableInfo, ok = si.tables[tableName]
+		tableInfo, ok = si.tables[tableName.String()]
 		if !ok {
 			return nil, false
 		}
@@ -477,16 +478,16 @@ func (si *SchemaInfo) GetStreamPlan(sql string) *ExecPlan {
 		panic(PrefixTabletError(vtrpcpb.ErrorCode_UNKNOWN_ERROR, err, ""))
 	}
 	plan := &ExecPlan{ExecPlan: splan, TableInfo: tableInfo}
-	plan.Rules = si.queryRuleSources.filterByPlan(sql, plan.PlanID, plan.TableName)
-	plan.Authorized = tableacl.Authorized(plan.TableName, plan.PlanID.MinRole())
+	plan.Rules = si.queryRuleSources.filterByPlan(sql, plan.PlanID, plan.TableName.String())
+	plan.Authorized = tableacl.Authorized(plan.TableName.String(), plan.PlanID.MinRole())
 	return plan
 }
 
 // GetTable returns the TableInfo for a table.
-func (si *SchemaInfo) GetTable(tableName string) *TableInfo {
+func (si *SchemaInfo) GetTable(tableName sqlparser.TableIdent) *TableInfo {
 	si.mu.Lock()
 	defer si.mu.Unlock()
-	return si.tables[tableName]
+	return si.tables[tableName.String()]
 }
 
 // GetSchema returns a copy of the schema.
@@ -636,12 +637,12 @@ func (si *SchemaInfo) getQueryStats(f queryStatsFunc) map[string]int64 {
 	for _, v := range keys {
 		if plan := si.peekQuery(v); plan != nil {
 			table := plan.TableName
-			if table == "" {
-				table = "Join"
+			if table.IsEmpty() {
+				table = sqlparser.NewTableIdent("Join")
 			}
 			planType := plan.PlanID.String()
 			data := f(plan)
-			qstats[table+"."+planType] += data
+			qstats[table.String()+"."+planType] += data
 		}
 	}
 	return qstats
@@ -701,7 +702,7 @@ func (si *SchemaInfo) handleHTTPQueryStats(response http.ResponseWriter, request
 		if plan := si.peekQuery(v); plan != nil {
 			var pqstats perQueryStats
 			pqstats.Query = unicoded(v)
-			pqstats.Table = plan.TableName
+			pqstats.Table = plan.TableName.String()
 			pqstats.Plan = plan.PlanID
 			pqstats.QueryCount, pqstats.Time, pqstats.MysqlTime, pqstats.RowCount, pqstats.ErrorCount = plan.Stats()
 			qstats = append(qstats, pqstats)

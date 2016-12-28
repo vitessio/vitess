@@ -20,13 +20,14 @@ import (
 
 	"github.com/youtube/vitess/go/testfiles"
 	"github.com/youtube/vitess/go/vt/schema"
+	"github.com/youtube/vitess/go/vt/sqlparser"
 )
 
 func TestPlan(t *testing.T) {
 	testSchema := loadSchema("schema_test.json")
 	for tcase := range iterateExecFile("exec_cases.txt") {
-		plan, err := GetExecPlan(tcase.input, func(name string) (*schema.Table, bool) {
-			r, ok := testSchema[name]
+		plan, err := GetExecPlan(tcase.input, func(name sqlparser.TableIdent) (*schema.Table, bool) {
+			r, ok := testSchema[name.String()]
 			return r, ok
 		})
 		var out string
@@ -62,8 +63,8 @@ func TestCustom(t *testing.T) {
 		if len(files) == 0 {
 			t.Fatalf("No test files for %s", schemFile)
 		}
-		getter := func(name string) (*schema.Table, bool) {
-			r, ok := schem[name]
+		getter := func(name sqlparser.TableIdent) (*schema.Table, bool) {
+			r, ok := schem[name.String()]
 			return r, ok
 		}
 		for _, file := range files {
@@ -91,8 +92,8 @@ func TestCustom(t *testing.T) {
 func TestStreamPlan(t *testing.T) {
 	testSchema := loadSchema("schema_test.json")
 	for tcase := range iterateExecFile("stream_cases.txt") {
-		plan, err := GetStreamExecPlan(tcase.input, func(name string) (*schema.Table, bool) {
-			r, ok := testSchema[name]
+		plan, err := GetStreamExecPlan(tcase.input, func(name sqlparser.TableIdent) (*schema.Table, bool) {
+			r, ok := testSchema[name.String()]
 			return r, ok
 		})
 		var out string
@@ -121,8 +122,8 @@ func TestDDLPlan(t *testing.T) {
 			panic(fmt.Sprintf("Error marshalling %v", plan))
 		}
 		matchString(t, tcase.lineno, expected["Action"], plan.Action)
-		matchString(t, tcase.lineno, expected["TableName"], plan.TableName)
-		matchString(t, tcase.lineno, expected["NewName"], plan.NewName)
+		matchString(t, tcase.lineno, expected["TableName"], plan.TableName.String())
+		matchString(t, tcase.lineno, expected["NewName"], plan.NewName.String())
 	}
 }
 
@@ -146,7 +147,7 @@ func loadSchema(name string) map[string]*schema.Table {
 	}
 	s := make(map[string]*schema.Table)
 	for _, t := range tables {
-		s[t.Name] = t
+		s[t.Name.String()] = t
 	}
 	return s
 }

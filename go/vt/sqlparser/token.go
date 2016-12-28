@@ -285,7 +285,7 @@ func (tkn *Tokenizer) Lex(lval *yySymType) int {
 		typ, val = tkn.Scan()
 	}
 	switch typ {
-	case ID, STRING, HEX, NUMBER, HEXNUM, VALUE_ARG, LIST_ARG, COMMENT:
+	case ID, STRING, HEX, INTEGRAL, FLOAT, HEXNUM, VALUE_ARG, LIST_ARG, COMMENT:
 		lval.bytes = val
 	}
 	tkn.lastToken = val
@@ -459,17 +459,32 @@ func (tkn *Tokenizer) scanHex() (int, []byte) {
 
 func (tkn *Tokenizer) scanLiteralIdentifier() (int, []byte) {
 	buffer := &bytes.Buffer{}
-	buffer.WriteByte(byte(tkn.lastChar))
-	if !isLetter(tkn.lastChar) {
+	backTickSeen := false
+	for {
+		if backTickSeen {
+			if tkn.lastChar != '`' {
+				break
+			}
+			backTickSeen = false
+			buffer.WriteByte('`')
+			tkn.next()
+			continue
+		}
+		// The previous char was not a backtick.
+		switch tkn.lastChar {
+		case '`':
+			backTickSeen = true
+		case eofChar:
+			// Premature EOF.
+			return LEX_ERROR, buffer.Bytes()
+		default:
+			buffer.WriteByte(byte(tkn.lastChar))
+		}
+		tkn.next()
+	}
+	if buffer.Len() == 0 {
 		return LEX_ERROR, buffer.Bytes()
 	}
-	for tkn.next(); isLetter(tkn.lastChar) || isDigit(tkn.lastChar); tkn.next() {
-		buffer.WriteByte(byte(tkn.lastChar))
-	}
-	if tkn.lastChar != '`' {
-		return LEX_ERROR, buffer.Bytes()
-	}
-	tkn.next()
 	return ID, buffer.Bytes()
 }
 
@@ -500,9 +515,10 @@ func (tkn *Tokenizer) scanMantissa(base int, buffer *bytes.Buffer) {
 }
 
 func (tkn *Tokenizer) scanNumber(seenDecimalPoint bool) (int, []byte) {
-	token := NUMBER
+	token := INTEGRAL
 	buffer := &bytes.Buffer{}
 	if seenDecimalPoint {
+		token = FLOAT
 		buffer.WriteByte('.')
 		tkn.scanMantissa(10, buffer)
 		goto exponent
@@ -522,12 +538,14 @@ func (tkn *Tokenizer) scanNumber(seenDecimalPoint bool) (int, []byte) {
 	tkn.scanMantissa(10, buffer)
 
 	if tkn.lastChar == '.' {
+		token = FLOAT
 		tkn.consumeNext(buffer)
 		tkn.scanMantissa(10, buffer)
 	}
 
 exponent:
 	if tkn.lastChar == 'e' || tkn.lastChar == 'E' {
+		token = FLOAT
 		tkn.consumeNext(buffer)
 		if tkn.lastChar == '+' || tkn.lastChar == '-' {
 			tkn.consumeNext(buffer)

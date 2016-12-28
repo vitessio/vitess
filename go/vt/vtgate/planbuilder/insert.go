@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/youtube/vitess/go/cistring"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vtgate/engine"
 	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
@@ -17,7 +16,7 @@ import (
 
 // buildInsertPlan builds the route for an INSERT statement.
 func buildInsertPlan(ins *sqlparser.Insert, vschema VSchema) (*engine.Route, error) {
-	table, err := vschema.Find(string(ins.Table.Qualifier), string(ins.Table.Name))
+	table, err := vschema.Find(ins.Table.Qualifier, ins.Table.Name)
 	if err != nil {
 		return nil, err
 	}
@@ -86,7 +85,7 @@ func buildInsertUnshardedPlan(ins *sqlparser.Insert, table *vindexes.Table, vsch
 		eRoute.Generate = &engine.Generate{
 			Opcode:   engine.SelectUnsharded,
 			Keyspace: eRoute.Table.AutoIncrement.Sequence.Keyspace,
-			Query:    fmt.Sprintf("select next :n values from `%s`", eRoute.Table.AutoIncrement.Sequence.Name),
+			Query:    fmt.Sprintf("select next :n values from %s", sqlparser.String(eRoute.Table.AutoIncrement.Sequence.Name)),
 			Value:    autoIncValues,
 		}
 	}
@@ -147,13 +146,32 @@ func buildInsertShardedPlan(ins *sqlparser.Insert, table *vindexes.Table) (*engi
 		eRoute.Generate = &engine.Generate{
 			Opcode:   engine.SelectUnsharded,
 			Keyspace: eRoute.Table.AutoIncrement.Sequence.Keyspace,
-			Query:    fmt.Sprintf("select next :n values from `%s`", eRoute.Table.AutoIncrement.Sequence.Name),
+			Query:    fmt.Sprintf("select next :n values from %s", sqlparser.String(eRoute.Table.AutoIncrement.Sequence.Name)),
 			Value:    autoIncValues,
 		}
 	}
 	eRoute.Values = routeValues
 	eRoute.Query = generateQuery(ins)
+	generateInsertShardedQuery(ins, eRoute, values)
 	return eRoute, nil
+}
+
+func generateInsertShardedQuery(node *sqlparser.Insert, eRoute *engine.Route, valueTuples sqlparser.Values) {
+	prefixBuf := sqlparser.NewTrackedBuffer(dmlFormatter)
+	midBuf := sqlparser.NewTrackedBuffer(dmlFormatter)
+	suffixBuf := sqlparser.NewTrackedBuffer(dmlFormatter)
+	eRoute.Mid = make([]string, len(valueTuples))
+	prefixBuf.Myprintf("insert %v%sinto %v%v values ",
+		node.Comments, node.Ignore,
+		node.Table, node.Columns)
+	eRoute.Prefix = prefixBuf.String()
+	for rowNum, val := range valueTuples {
+		midBuf.Myprintf("%v", val)
+		eRoute.Mid[rowNum] = midBuf.String()
+		midBuf.Truncate(0)
+	}
+	suffixBuf.Myprintf("%v", node.OnDup)
+	eRoute.Suffix = suffixBuf.String()
 }
 
 // handleVindexCol substitutes the insert value with a bind var name and returns
@@ -163,7 +181,7 @@ func handleVindexCol(colVindex *vindexes.ColumnVindex, rowNum int, row sqlparser
 	if err != nil {
 		return val, fmt.Errorf("could not convert val: %s, pos: %d: %v", sqlparser.String(row[pos]), pos, err)
 	}
-	row[pos] = sqlparser.ValArg([]byte(":_" + colVindex.Column.Original() + strconv.Itoa(rowNum)))
+	row[pos] = sqlparser.NewValArg([]byte(":_" + colVindex.Column.CompliantName() + strconv.Itoa(rowNum)))
 	return val, nil
 }
 
@@ -191,21 +209,21 @@ func handleAutoinc(ins *sqlparser.Insert, autoinc *vindexes.AutoIncrement, rowNu
 	if err != nil {
 		return nil, fmt.Errorf("could not convert val: %s, pos: %d: %v", sqlparser.String(row[pos]), pos, err)
 	}
-	row[pos] = sqlparser.ValArg([]byte(":" + engine.SeqVarName + strconv.Itoa(rowNum)))
+	row[pos] = sqlparser.NewValArg([]byte(":" + engine.SeqVarName + strconv.Itoa(rowNum)))
 	return val, nil
 }
 
-func findOrInsertPos(ins *sqlparser.Insert, col cistring.CIString, rowNum int) (row sqlparser.ValTuple, pos int) {
+func findOrInsertPos(ins *sqlparser.Insert, col sqlparser.ColIdent, rowNum int) (row sqlparser.ValTuple, pos int) {
 	pos = -1
 	for i, column := range ins.Columns {
-		if col.Equal(cistring.CIString(column)) {
+		if col.Equal(column) {
 			pos = i
 			break
 		}
 	}
 	if pos == -1 {
 		pos = len(ins.Columns)
-		ins.Columns = append(ins.Columns, sqlparser.ColIdent(col))
+		ins.Columns = append(ins.Columns, col)
 	}
 	if pos >= len(ins.Rows.(sqlparser.Values)[rowNum]) {
 		ins.Rows.(sqlparser.Values)[rowNum] = append(ins.Rows.(sqlparser.Values)[rowNum], &sqlparser.NullVal{})

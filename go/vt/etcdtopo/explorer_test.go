@@ -14,6 +14,7 @@ import (
 	"golang.org/x/net/context"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	"github.com/youtube/vitess/go/vt/topo"
 )
 
 func toJSON(t *testing.T, value interface{}) string {
@@ -67,7 +68,7 @@ func TestHandlePathInvalid(t *testing.T) {
 func TestHandlePathRoot(t *testing.T) {
 	input := "/"
 	cells := []string{"cell1", "cell2", "cell3"}
-	want := []string{"global", "cell1", "cell2", "cell3"}
+	want := []string{topo.GlobalCell, "cell1", "cell2", "cell3"}
 
 	ts := newTestServer(t, cells)
 	ex := NewExplorer(ts)

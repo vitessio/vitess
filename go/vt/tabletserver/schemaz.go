@@ -73,7 +73,7 @@ func schemazHandler(tables []*schema.Table, w http.ResponseWriter, r *http.Reque
 	sorter := schemazSorter{
 		rows: tables,
 		less: func(row1, row2 *schema.Table) bool {
-			return row1.Name > row2.Name
+			return row1.Name.String() > row2.Name.String()
 		},
 	}
 	sort.Sort(&sorter)

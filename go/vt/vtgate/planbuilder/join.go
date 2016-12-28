@@ -27,7 +27,8 @@ type join struct {
 	ejoin   *engine.Join
 }
 
-// newJoin makes a new joinBuilder using the two nodes.
+// newJoin makes a new joinBuilder using the two nodes. ajoin can be nil
+// if the join is on a ',' operator.
 func newJoin(lhs, rhs builder, ajoin *sqlparser.JoinTableExpr) (*join, error) {
 	// This function converts ON clauses to WHERE clauses. The WHERE clause
 	// scope can see all tables, whereas the ON clause can only see the
@@ -42,7 +43,7 @@ func newJoin(lhs, rhs builder, ajoin *sqlparser.JoinTableExpr) (*join, error) {
 	rhs.SetSymtab(lhs.Symtab())
 	rhs.SetOrder(lhs.Order())
 	opcode := engine.NormalJoin
-	if ajoin.Join == sqlparser.LeftJoinStr {
+	if ajoin != nil && ajoin.Join == sqlparser.LeftJoinStr {
 		opcode = engine.LeftJoin
 	}
 	jb := &join{
@@ -57,6 +58,9 @@ func newJoin(lhs, rhs builder, ajoin *sqlparser.JoinTableExpr) (*join, error) {
 			Right:  rhs.Primitive(),
 			Vars:   make(map[string]int),
 		},
+	}
+	if ajoin == nil {
+		return jb, nil
 	}
 	if opcode == engine.LeftJoin {
 		err := pushFilter(ajoin.On, rhs, sqlparser.WhereStr)

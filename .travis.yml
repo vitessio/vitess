@@ -34,6 +34,7 @@ cache:
     # Cache downloaded and extracted MariaDB 10.0 packages.
     - $MYSQL_ROOT
     # Cache bootstrapped dependencies (e.g. protobuf and gRPC).
+    - $HOME/gopath/dist/etcd
     - $HOME/gopath/dist/grpc/.build_finished
     - $HOME/gopath/dist/grpc/usr/local
     - $HOME/gopath/dist/py-mock-1.0.1/.build_finished
@@ -44,7 +45,8 @@ cache:
     - $HOME/.m2
     - $HOME/.phpenv
 before_cache:
-  # Travis CI caching doesn't work with this symlink. Just delete it.
+  # Travis CI caching doesn't work with these symlinks. Just delete them.
+  - rm $HOME/gopath/bin/etcd
   - rm $HOME/gopath/bin/zksrv.sh
   # Delete these files because they keep changing (having the latest timestamp
   # of an update) and trigger a lengthy update of the cache (~25 seconds).
@@ -101,16 +103,23 @@ before_script:
   - source dev.env
   # Travis only tests. Run only on the first shard.
   # Part of "before_script" because in "script" the job would not fail immediately if a command fails.
-  # Webdriver tests are only on the last shard for non PRs. Start Sauce Connect only on this shard.
   - |
     if [[ $TEST_MATRIX = *"-shard 0"* ]]; then
       travis/check_make_proto.sh
-    elif [[ $TEST_MATRIX = *"-shard 4"* && $TRAVIS_PULL_REQUEST = "false" ]]; then
+    fi
+  # Webdriver tests are only on the last shard for non PRs. Start Sauce Connect only on this shard.
+  - |
+    if [[ $TEST_MATRIX = *"-shard 4"* && $TRAVIS_PULL_REQUEST = "false" ]]; then
       tools/sauce_connect_setup.sh
     fi
 script:
   # Log GOMAXPROCS (should be 2 as of 07/2015).
   - go run travis/log_gomaxprocs.go
+  # Shard 0: Run unit tests and post coverage to coveralls.io (will show up on pull request).
+  - |
+    if [[ $TEST_MATRIX = *"-shard 0"* ]]; then
+      go run test.go $TEST_FLAGS goveralls
+    fi
   - |
     if [[ $TRAVIS_PULL_REQUEST = "false" ]]; then
       go run test.go $TEST_FLAGS $TEST_MATRIX

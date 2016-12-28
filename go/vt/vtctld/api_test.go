@@ -11,8 +11,8 @@ import (
 
 	"golang.org/x/net/context"
 
+	"github.com/youtube/vitess/go/vt/topo/zk2topo"
 	"github.com/youtube/vitess/go/vt/wrangler"
-	"github.com/youtube/vitess/go/vt/zktopo/zktestserver"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
@@ -26,7 +26,7 @@ func compactJSON(in []byte) string {
 func TestAPI(t *testing.T) {
 	ctx := context.Background()
 	cells := []string{"cell1", "cell2"}
-	ts := zktestserver.New(t, cells)
+	ts := zk2topo.NewFakeServer(cells...)
 	actionRepo := NewActionRepository(ts)
 	server := httptest.NewServer(nil)
 	defer server.Close()

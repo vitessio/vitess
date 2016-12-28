@@ -115,14 +115,14 @@ func (w *Workflow) Run(ctx context.Context, manager *workflow.Manager, wi *topo.
 		if err != nil {
 			w.logger.Errorf("Validator %v failed: %v", name, err)
 		} else {
-			w.logger.Errorf("Validator %v successfully finished", name)
+			w.logger.Infof("Validator %v successfully finished", name)
 		}
 		w.runCount++
 	}
 
 	// Now for each Fixer, add a sub node.
 	if len(w.fixers) == 0 {
-		w.logger.Errorf("No problem found")
+		w.logger.Infof("No problem found")
 	}
 	for i, f := range w.fixers {
 		w.wg.Add(1)

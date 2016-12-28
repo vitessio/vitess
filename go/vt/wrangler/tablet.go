@@ -79,8 +79,9 @@ func (wr *Wrangler) InitTablet(ctx context.Context, tablet *topodatapb.Tablet, a
 		if err := wr.ts.UpdateTablet(ctx, oldTablet); err != nil {
 			return fmt.Errorf("failed updating tablet %v: %v", topoproto.TabletAliasString(tablet.Alias), err)
 		}
+		return nil
 	}
-	return nil
+	return err
 }
 
 // DeleteTablet removes a tablet from a shard.

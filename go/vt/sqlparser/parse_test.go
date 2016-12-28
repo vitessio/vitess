@@ -42,17 +42,23 @@ func TestValid(t *testing.T) {
 	}, {
 		input: "select /* simplest */ 1 from t",
 	}, {
-		input: "select /* keyword col */ `By` from t",
-	}, {
 		input: "select /* double star **/ 1 from t",
 	}, {
 		input: "select /* double */ /* comment */ 1 from t",
 	}, {
-		input:  "select /* back-quote */ 1 from `t`",
-		output: "select /* back-quote */ 1 from t",
+		input: "select /* back-quote keyword */ `By` from t",
 	}, {
-		input:  "select /* back-quote keyword */ 1 from `By`",
-		output: "select /* back-quote keyword */ 1 from `By`",
+		input: "select /* back-quote num */ `2a` from t",
+	}, {
+		input: "select /* back-quote . */ `a.b` from t",
+	}, {
+		input: "select /* back-quote back-quote */ `a``b` from t",
+	}, {
+		input:  "select /* back-quote unnecessary */ 1 from `t`",
+		output: "select /* back-quote unnecessary */ 1 from t",
+	}, {
+		input:  "select /* back-quote idnum */ 1 from `a1`",
+		output: "select /* back-quote idnum */ 1 from a1",
 	}, {
 		input: "select /* @ */ @@a from b",
 	}, {
@@ -81,12 +87,22 @@ func TestValid(t *testing.T) {
 	}, {
 		input: "select /* * */ * from t",
 	}, {
+		input: "select /* a.* */ a.* from t",
+	}, {
+		input: "select /* a.b.* */ a.b.* from t",
+	}, {
 		input:  "select /* column alias */ a b from t",
 		output: "select /* column alias */ a as b from t",
 	}, {
 		input: "select /* column alias with as */ a as b from t",
 	}, {
 		input: "select /* keyword column alias */ a as `By` from t",
+	}, {
+		input:  "select /* column alias as string */ a as \"b\" from t",
+		output: "select /* column alias as string */ a as b from t",
+	}, {
+		input:  "select /* column alias as string without as */ a \"b\" from t",
+		output: "select /* column alias as string without as */ a as b from t",
 	}, {
 		input: "select /* a.* */ a.* from t",
 	}, {
@@ -136,6 +152,12 @@ func TestValid(t *testing.T) {
 		output: "select /* table alias */ 1 from t as t1",
 	}, {
 		input: "select /* table alias with as */ 1 from t as t1",
+	}, {
+		input:  "select /* string table alias */ 1 from t as 't1'",
+		output: "select /* string table alias */ 1 from t as t1",
+	}, {
+		input:  "select /* string table alias without as */ 1 from t 't1'",
+		output: "select /* string table alias without as */ 1 from t as t1",
 	}, {
 		input: "select /* keyword table alias */ 1 from t as `By`",
 	}, {
@@ -711,15 +733,6 @@ func TestErrors(t *testing.T) {
 	}, {
 		input:  "select x'777' from t",
 		output: "syntax error at position 14 near '777'",
-	}, {
-		input:  "select `1a` from t",
-		output: "syntax error at position 9 near '1'",
-	}, {
-		input:  "select `:table` from t",
-		output: "syntax error at position 9 near ':'",
-	}, {
-		input:  "select `table:` from t",
-		output: "syntax error at position 14 near 'table'",
 	}, {
 		input:  "select 'aa\\",
 		output: "syntax error at position 12 near 'aa'",

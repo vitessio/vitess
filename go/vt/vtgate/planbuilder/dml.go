@@ -5,11 +5,8 @@
 package planbuilder
 
 import (
-	"bytes"
 	"errors"
-	"fmt"
 
-	"github.com/youtube/vitess/go/cistring"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vtgate/engine"
 	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
@@ -31,7 +28,7 @@ func buildUpdatePlan(upd *sqlparser.Update, vschema VSchema) (*engine.Route, err
 		Query: generateQuery(upd),
 	}
 	var err error
-	route.Table, err = vschema.Find(string(upd.Table.Qualifier), string(upd.Table.Name))
+	route.Table, err = vschema.Find(upd.Table.Qualifier, upd.Table.Name)
 	if err != nil {
 		return nil, err
 	}
@@ -66,7 +63,7 @@ func generateQuery(statement sqlparser.Statement) string {
 func isIndexChanging(setClauses sqlparser.UpdateExprs, colVindexes []*vindexes.ColumnVindex) bool {
 	for _, assignment := range setClauses {
 		for _, vcol := range colVindexes {
-			if vcol.Column.Equal(cistring.CIString(assignment.Name)) {
+			if vcol.Column.Equal(assignment.Name) {
 				return true
 			}
 		}
@@ -80,7 +77,7 @@ func buildDeletePlan(del *sqlparser.Delete, vschema VSchema) (*engine.Route, err
 		Query: generateQuery(del),
 	}
 	var err error
-	route.Table, err = vschema.Find(string(del.Table.Qualifier), string(del.Table.Name))
+	route.Table, err = vschema.Find(del.Table.Qualifier, del.Table.Name)
 	if err != nil {
 		return nil, err
 	}
@@ -109,17 +106,14 @@ func generateDeleteSubquery(del *sqlparser.Delete, table *vindexes.Table) string
 	if len(table.Owned) == 0 {
 		return ""
 	}
-	buf := bytes.NewBuffer(nil)
+	buf := sqlparser.NewTrackedBuffer(nil)
 	buf.WriteString("select ")
 	prefix := ""
 	for _, cv := range table.Owned {
-		buf.WriteString(prefix)
-		buf.WriteString(cv.Column.Original())
+		buf.Myprintf("%s%v", prefix, cv.Column)
 		prefix = ", "
 	}
-	fmt.Fprintf(buf, " from %s", table.Name)
-	buf.WriteString(sqlparser.String(del.Where))
-	buf.WriteString(" for update")
+	buf.Myprintf(" from %v%v for update", table.Name, del.Where)
 	return buf.String()
 }
 
@@ -145,7 +139,7 @@ func getDMLRouting(where *sqlparser.Where, route *engine.Route) error {
 // getMatch returns the matched value if there is an equality
 // constraint on the specified column that can be used to
 // decide on a route.
-func getMatch(node sqlparser.BoolExpr, col cistring.CIString) interface{} {
+func getMatch(node sqlparser.BoolExpr, col sqlparser.ColIdent) interface{} {
 	filters := splitAndExpression(nil, node)
 	for _, filter := range filters {
 		comparison, ok := filter.(*sqlparser.ComparisonExpr)
@@ -170,7 +164,7 @@ func getMatch(node sqlparser.BoolExpr, col cistring.CIString) interface{} {
 	return nil
 }
 
-func nameMatch(node sqlparser.ValExpr, col cistring.CIString) bool {
+func nameMatch(node sqlparser.ValExpr, col sqlparser.ColIdent) bool {
 	colname, ok := node.(*sqlparser.ColName)
-	return ok && colname.Name.Equal(sqlparser.ColIdent(col))
+	return ok && colname.Name.Equal(col)
 }

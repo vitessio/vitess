@@ -26,10 +26,16 @@ func TestKeyRangeFilterPass(t *testing.T) {
 				Sql:      []byte("set1"),
 			}, {
 				Category: binlogdatapb.BinlogTransaction_Statement_BL_DML,
-				Sql:      []byte("dml1 /* vtgate:: keyspace_id:20 */"),
+				Sql:      []byte("insert into tbl(col1, col2) values(1, a) /* vtgate:: keyspace_id:02 */"),
 			}, {
 				Category: binlogdatapb.BinlogTransaction_Statement_BL_DML,
-				Sql:      []byte("dml2 /* vtgate:: keyspace_id:02 */"),
+				Sql:      []byte("insert into tbl(col1, col2, col3) values(1, 2, 3),(4, 5, 6) /* vtgate:: keyspace_id:01,02 *//*trailing_comments */"),
+			}, {
+				Category: binlogdatapb.BinlogTransaction_Statement_BL_DML,
+				Sql:      []byte("insert into tbl(col1, col2, col3) values(1, 2, 3),(4, 5, 6) /* vtgate:: keyspace_id:01,20 *//*trailing_comments */"),
+			}, {
+				Category: binlogdatapb.BinlogTransaction_Statement_BL_DML,
+				Sql:      []byte("insert into tbl(col1, col2, col3) values(1, 2, 3),(4, 5, 6) /* vtgate:: keyspace_id:10,20 *//*trailing_comments */"),
 			},
 		},
 		EventToken: &querypb.EventToken{
@@ -42,7 +48,7 @@ func TestKeyRangeFilterPass(t *testing.T) {
 		return nil
 	})
 	f(&input)
-	want := `statement: <6, "set1"> statement: <4, "dml2 /* vtgate:: keyspace_id:02 */"> position: "MariaDB/0-41983-1" `
+	want := `statement: <6, "set1"> statement: <4, "insert into tbl(col1, col2) values(1, a) /* vtgate:: keyspace_id:02 */"> statement: <4, "insert into tbl(col1, col2, col3) values (1, 2, 3), (4, 5, 6) /* vtgate:: keyspace_id:01,02 *//*trailing_comments */"> statement: <4, "insert into tbl(col1, col2, col3) values (1, 2, 3) /* vtgate:: keyspace_id:01,20 *//*trailing_comments */"> position: "MariaDB/0-41983-1" `
 	if want != got {
 		t.Errorf("want %s, got %s", want, got)
 	}

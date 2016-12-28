@@ -14,12 +14,12 @@ import (
 
 // GetTableName returns the table name from the SimpleTableExpr
 // only if it's a simple expression. Otherwise, it returns "".
-func GetTableName(node SimpleTableExpr) string {
-	if n, ok := node.(*TableName); ok && n.Qualifier == "" {
-		return string(n.Name)
+func GetTableName(node SimpleTableExpr) TableIdent {
+	if n, ok := node.(*TableName); ok && n.Qualifier.IsEmpty() {
+		return n.Name
 	}
 	// sub-select or '.' expression
-	return ""
+	return NewTableIdent("")
 }
 
 // IsColName returns true if the ValExpr is a *ColName.
@@ -28,11 +28,15 @@ func IsColName(node ValExpr) bool {
 	return ok
 }
 
-// IsValue returns true if the ValExpr is a string, number or value arg.
+// IsValue returns true if the ValExpr is a string, integral or value arg.
 // NULL is not considered to be a value.
 func IsValue(node ValExpr) bool {
-	switch node.(type) {
-	case StrVal, HexVal, NumVal, ValArg:
+	v, ok := node.(*SQLVal)
+	if !ok {
+		return false
+	}
+	switch v.Type {
+	case StrVal, HexVal, IntVal, ValArg:
 		return true
 	}
 	return false
@@ -67,7 +71,7 @@ func IsSimpleTuple(node ValExpr) bool {
 
 // AsInterface converts the ValExpr to an interface. It converts
 // ValTuple to []interface{}, ValArg to string, StrVal to sqltypes.String,
-// NumVal to sqltypes.Numeric, NullVal to nil.
+// IntVal to sqltypes.Numeric, NullVal to nil.
 // Otherwise, it returns an error.
 func AsInterface(node ValExpr) (interface{}, error) {
 	switch node := node.(type) {
@@ -81,28 +85,31 @@ func AsInterface(node ValExpr) (interface{}, error) {
 			vals = append(vals, v)
 		}
 		return vals, nil
-	case ValArg:
-		return string(node), nil
+	case *SQLVal:
+		switch node.Type {
+		case ValArg:
+			return string(node.Val), nil
+		case StrVal:
+			return sqltypes.MakeString(node.Val), nil
+		case HexVal:
+			v, err := node.HexDecode()
+			if err != nil {
+				return nil, err
+			}
+			return sqltypes.MakeString(v), nil
+		case IntVal:
+			n, err := sqltypes.BuildIntegral(string(node.Val))
+			if err != nil {
+				return nil, fmt.Errorf("type mismatch: %s", err)
+			}
+			return n, nil
+		}
 	case ListArg:
 		return string(node), nil
-	case StrVal:
-		return sqltypes.MakeString(node), nil
-	case HexVal:
-		v, err := node.Decode()
-		if err != nil {
-			return nil, err
-		}
-		return sqltypes.MakeString(v), nil
-	case NumVal:
-		n, err := sqltypes.BuildIntegral(string(node))
-		if err != nil {
-			return nil, fmt.Errorf("type mismatch: %s", err)
-		}
-		return n, nil
 	case *NullVal:
 		return nil, nil
 	}
-	return nil, fmt.Errorf("unexpected node %v", node)
+	return nil, fmt.Errorf("unexpected node '%v'", String(node))
 }
 
 // StringIn is a convenience function that returns

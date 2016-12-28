@@ -34,6 +34,12 @@ service Vitess {
   // API group: Range-based Sharding
   rpc ExecuteEntityIds(vtgate.ExecuteEntityIdsRequest) returns (vtgate.ExecuteEntityIdsResponse) {};
 
+  // ExecuteBatch tries to route the list of queries on the right shards.
+  // It depends on the query and bind variables to provide enough
+  // information in conjonction with the vindexes to route the query.
+  // API group: v3 API
+  rpc ExecuteBatch(vtgate.ExecuteBatchRequest) returns (vtgate.ExecuteBatchResponse) {};
+
   // ExecuteBatchShards executes the list of queries on the specified shards.
   // API group: Custom Sharding
   rpc ExecuteBatchShards(vtgate.ExecuteBatchShardsRequest) returns (vtgate.ExecuteBatchShardsResponse) {};

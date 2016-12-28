@@ -9,8 +9,12 @@ import (
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/sqlannotation"
 
+	"errors"
+	"fmt"
+
 	binlogdatapb "github.com/youtube/vitess/go/vt/proto/binlogdata"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	"github.com/youtube/vitess/go/vt/sqlparser"
 )
 
 // KeyRangeFilterFunc returns a function that calls sendReply only if statements
@@ -29,7 +33,7 @@ func KeyRangeFilterFunc(keyrange *topodatapb.KeyRange, sendReply sendTransaction
 				log.Warningf("Not forwarding DDL: %s", statement.Sql)
 				continue
 			case binlogdatapb.BinlogTransaction_Statement_BL_DML:
-				keyspaceID, err := sqlannotation.ExtractKeySpaceID(string(statement.Sql))
+				keyspaceIDS, err := sqlannotation.ExtractKeyspaceIDS(string(statement.Sql))
 				if err != nil {
 					if handleExtractKeySpaceIDError(err) {
 						continue
@@ -39,11 +43,29 @@ func KeyRangeFilterFunc(keyrange *topodatapb.KeyRange, sendReply sendTransaction
 						continue
 					}
 				}
-				if !key.KeyRangeContains(keyrange, keyspaceID) {
-					// Skip keyspace ids that don't belong to the destination shard.
+				if len(keyspaceIDS) == 1 {
+					if !key.KeyRangeContains(keyrange, keyspaceIDS[0]) {
+						// Skip keyspace ids that don't belong to the destination shard.
+						continue
+					}
+					filtered = append(filtered, statement)
+					matched = true
 					continue
 				}
-				filtered = append(filtered, statement)
+				query, err := getValidRangeQuery(string(statement.Sql), keyspaceIDS, keyrange)
+				if err != nil {
+					log.Errorf("Error parsing statement (%s). Got %v", string(statement.Sql), err)
+					continue
+				}
+				if query == "" {
+					continue
+				}
+				splitStatement := &binlogdatapb.BinlogTransaction_Statement{
+					Category: statement.Category,
+					Charset:  statement.Charset,
+					Sql:      []byte(query),
+				}
+				filtered = append(filtered, splitStatement)
 				matched = true
 			case binlogdatapb.BinlogTransaction_Statement_BL_UNRECOGNIZED:
 				updateStreamErrors.Add("KeyRangeStream", 1)
@@ -57,6 +79,53 @@ func KeyRangeFilterFunc(keyrange *topodatapb.KeyRange, sendReply sendTransaction
 			reply.Statements = nil
 		}
 		return sendReply(reply)
+	}
+}
+
+func getValidRangeQuery(sql string, keyspaceIDs [][]byte, keyrange *topodatapb.KeyRange) (query string, err error) {
+	statement, err := sqlparser.Parse(sql)
+	_, trailingComments := sqlparser.SplitTrailingComments(sql)
+	if err != nil {
+		return "", err
+	}
+
+	switch statement := statement.(type) {
+	case *sqlparser.Insert:
+		query, err := generateSingleInsertQuery(statement, keyspaceIDs, trailingComments, keyrange)
+		if err != nil {
+			return "", err
+		}
+		return query, nil
+	default:
+		return "", errors.New("unsupported construct ")
+	}
+}
+
+func generateSingleInsertQuery(ins *sqlparser.Insert, keyspaceIDs [][]byte, trailingComments string, keyrange *topodatapb.KeyRange) (query string, err error) {
+	switch rows := ins.Rows.(type) {
+	case *sqlparser.Select, *sqlparser.Union:
+		return "", errors.New("unsupported: insert into select")
+	case sqlparser.Values:
+		var values sqlparser.Values
+		if len(rows) != len(keyspaceIDs) {
+			return "", fmt.Errorf("length of values tuples %v doesn't match with length of keyspaceids %v", len(values), len(keyspaceIDs))
+		}
+		queryBuf := sqlparser.NewTrackedBuffer(nil)
+		for rowNum, val := range rows {
+			if key.KeyRangeContains(keyrange, keyspaceIDs[rowNum]) {
+				values = append(values, val)
+			}
+		}
+		if len(values) == 0 {
+			return "", nil
+		}
+		ins.Rows = values
+		ins.Format(queryBuf)
+		queryBuf.WriteString(trailingComments)
+		return queryBuf.String(), nil
+
+	default:
+		return "", errors.New("unexpected construct in insert")
 	}
 }
 

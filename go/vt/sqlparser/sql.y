@@ -78,7 +78,7 @@ func forceEOF(yylex interface{}) {
 %left <empty> JOIN STRAIGHT_JOIN LEFT RIGHT INNER OUTER CROSS NATURAL USE FORCE
 %left <empty> ON
 %token <empty> '(' ',' ')'
-%token <bytes> ID HEX STRING NUMBER HEXNUM VALUE_ARG LIST_ARG COMMENT
+%token <bytes> ID HEX STRING INTEGRAL FLOAT HEXNUM VALUE_ARG LIST_ARG COMMENT
 %token <empty> NULL TRUE FALSE
 
 // Precedence dictated by mysql. But the vitess grammar is simplified.
@@ -151,7 +151,7 @@ func forceEOF(yylex interface{}) {
 %type <valExpr> value_expression_opt else_expression_opt
 %type <valExprs> group_by_opt
 %type <boolExpr> having_opt
-%type <str> keyword_func
+%type <colIdent> keyword_func
 %type <orderBy> order_by_opt order_list
 %type <order> order
 %type <str> asc_desc_opt
@@ -165,8 +165,8 @@ func forceEOF(yylex interface{}) {
 %type <str> ignore_opt
 %type <byt> exists_opt
 %type <empty> not_exists_opt non_rename_operation to_opt constraint_opt using_opt
-%type <colIdent> sql_id as_ci_opt
-%type <tableIdent> table_id as_opt_id
+%type <colIdent> sql_id col_alias as_ci_opt
+%type <tableIdent> table_id table_alias as_opt_id
 %type <empty> as_opt
 %type <empty> force_eof
 
@@ -256,7 +256,7 @@ create_statement:
   }
 | CREATE VIEW sql_id force_eof
   {
-    $$ = &DDL{Action: CreateStr, NewName: TableIdent($3.Lowered())}
+    $$ = &DDL{Action: CreateStr, NewName: NewTableIdent($3.Lowered())}
   }
 
 alter_statement:
@@ -271,7 +271,7 @@ alter_statement:
   }
 | ALTER VIEW sql_id force_eof
   {
-    $$ = &DDL{Action: AlterStr, Table: TableIdent($3.Lowered()), NewName: TableIdent($3.Lowered())}
+    $$ = &DDL{Action: AlterStr, Table: NewTableIdent($3.Lowered()), NewName: NewTableIdent($3.Lowered())}
   }
 
 rename_statement:
@@ -300,7 +300,7 @@ drop_statement:
         if $3 != 0 {
           exists = true
         }
-    $$ = &DDL{Action: DropStr, Table: TableIdent($4.Lowered()), IfExists: exists}
+    $$ = &DDL{Action: DropStr, Table: NewTableIdent($4.Lowered()), IfExists: exists}
   }
 
 analyze_statement:
@@ -395,7 +395,11 @@ select_expression:
   }
 | table_id '.' '*'
   {
-    $$ = &StarExpr{TableName: $1}
+    $$ = &StarExpr{TableName: &TableName{Name: $1}}
+  }
+| table_id '.' table_id '.' '*'
+  {
+    $$ = &StarExpr{TableName: &TableName{Qualifier: $1, Name: $3}}
   }
 
 expression:
@@ -412,18 +416,25 @@ as_ci_opt:
   {
     $$ = ColIdent{}
   }
-| sql_id
+| col_alias
   {
     $$ = $1
   }
-| AS sql_id
+| AS col_alias
   {
     $$ = $2
   }
 
+col_alias:
+  sql_id
+| STRING
+  {
+    $$ = NewColIdent(string($1))
+  }
+
 from_opt:
   {
-    $$ = TableExprs{&AliasedTableExpr{Expr:&TableName{Name: "dual"}}}
+    $$ = TableExprs{&AliasedTableExpr{Expr:&TableName{Name: NewTableIdent("dual")}}}
   }
 | FROM table_references
   {
@@ -490,15 +501,22 @@ as_opt:
 
 as_opt_id:
   {
-    $$ = ""
+    $$ = NewTableIdent("")
   }
-| table_id
+| table_alias
   {
     $$ = $1
   }
-| AS table_id
+| AS table_alias
   {
     $$ = $2
+  }
+
+table_alias:
+  table_id
+| STRING
+  {
+    $$ = NewTableIdent(string($1))
   }
 
 inner_join:
@@ -831,7 +849,7 @@ value_expression:
   }
 | '+'  value_expression %prec UNARY
   {
-    if num, ok := $2.(NumVal); ok {
+    if num, ok := $2.(*SQLVal); ok && num.Type == IntVal {
       $$ = num
     } else {
       $$ = &UnaryExpr{Operator: UPlusStr, Expr: $2}
@@ -839,12 +857,13 @@ value_expression:
   }
 | '-'  value_expression %prec UNARY
   {
-    if num, ok := $2.(NumVal); ok {
+    if num, ok := $2.(*SQLVal); ok && num.Type == IntVal {
       // Handle double negative
-      if num[0] == '-' {
-        $$ = num[1:]
+      if num.Val[0] == '-' {
+        num.Val = num.Val[1:]
+        $$ = num
       } else {
-        $$ = append(NumVal("-"), num...)
+        $$ = NewIntVal(append([]byte("-"), num.Val...))
       }
     } else {
       $$ = &UnaryExpr{Operator: UMinusStr, Expr: $2}
@@ -862,17 +881,17 @@ value_expression:
     // will be non-trivial because of grammar conflicts.
     $$ = &IntervalExpr{Expr: $2, Unit: $3}
   }
-| table_id openb closeb
+| sql_id openb closeb
   {
-    $$ = &FuncExpr{Name: string($1)}
+    $$ = &FuncExpr{Name: $1}
   }
-| table_id openb select_expression_list closeb
+| sql_id openb select_expression_list closeb
   {
-    $$ = &FuncExpr{Name: string($1), Exprs: $3}
+    $$ = &FuncExpr{Name: $1, Exprs: $3}
   }
-| table_id openb DISTINCT select_expression_list closeb
+| sql_id openb DISTINCT select_expression_list closeb
   {
-    $$ = &FuncExpr{Name: string($1), Distinct: true, Exprs: $4}
+    $$ = &FuncExpr{Name: $1, Distinct: true, Exprs: $4}
   }
 | keyword_func openb closeb
   {
@@ -890,19 +909,19 @@ value_expression:
 keyword_func:
   IF
   {
-    $$ = "if"
+    $$ = NewColIdent("if")
   }
 | CURRENT_TIMESTAMP
   {
-    $$ = "current_timestamp"
+    $$ = NewColIdent("current_timestamp")
   }
 | DATABASE
   {
-    $$ = "database"
+    $$ = NewColIdent("database")
   }
 | MOD
   {
-    $$ = "mod"
+    $$ = NewColIdent("mod")
   }
 
 case_expression:
@@ -962,23 +981,27 @@ column_name:
 value:
   STRING
   {
-    $$ = StrVal($1)
+    $$ = NewStrVal($1)
   }
 | HEX
   {
-    $$ = HexVal($1)
+    $$ = NewHexVal($1)
   }
-| NUMBER
+| INTEGRAL
   {
-    $$ = NumVal($1)
+    $$ = NewIntVal($1)
+  }
+| FLOAT
+  {
+    $$ = NewFloatVal($1)
   }
 | HEXNUM
   {
-    $$ = HexNum($1)
+    $$ = NewHexNum($1)
   }
 | VALUE_ARG
   {
-    $$ = ValArg($1)
+    $$ = NewValArg($1)
   }
 | NULL
   {
@@ -993,15 +1016,15 @@ num_val:
       yylex.Error("expecting value after next")
       return 1
     }
-    $$ = NumVal("1")
+    $$ = NewIntVal([]byte("1"))
   }
-| NUMBER VALUES
+| INTEGRAL VALUES
   {
-    $$ = NumVal($1)
+    $$ = NewIntVal($1)
   }
 | VALUE_ARG VALUES
   {
-    $$ = ValArg($1)
+    $$ = NewValArg($1)
   }
 
 group_by_opt:
@@ -1221,7 +1244,7 @@ sql_id:
 table_id:
   ID
   {
-    $$ = TableIdent($1)
+    $$ = NewTableIdent(string($1))
   }
 
 openb:

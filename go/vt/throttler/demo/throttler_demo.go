@@ -19,10 +19,10 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver/grpcqueryservice"
 	"github.com/youtube/vitess/go/vt/tabletserver/queryservice/fakes"
 	"github.com/youtube/vitess/go/vt/throttler"
+	"github.com/youtube/vitess/go/vt/topo/zk2topo"
 	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
 	"github.com/youtube/vitess/go/vt/wrangler"
 	"github.com/youtube/vitess/go/vt/wrangler/testlib"
-	"github.com/youtube/vitess/go/vt/zktopo/zktestserver"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -94,7 +94,7 @@ type replica struct {
 
 func newReplica(lagUpdateInterval, degrationInterval, degrationDuration time.Duration) *replica {
 	t := &testing.T{}
-	ts := zktestserver.New(t, []string{"cell1"})
+	ts := zk2topo.NewFakeServer("cell1")
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 	db := fakesqldb.Register()
 	fakeTablet := testlib.NewFakeTablet(t, wr, "cell1", 0,

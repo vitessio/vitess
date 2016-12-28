@@ -282,3 +282,18 @@ message SrvKeyspace {
   // OBSOLETE int32 split_shard_count = 5;
   reserved 5;
 }
+
+// CellInfo contains information about a cell. CellInfo objects are
+// stored in the global topology server, and describe how to reach
+// local topology servers.
+message CellInfo {
+  // ServerAddress contains the address of the server for the cell.
+  // The syntax of this field is topology implementation specific.
+  // For instance, for Zookeeper, it is a comma-separated list of
+  // server addresses.
+  string server_address = 1;
+
+  // Root is the path to store data in. It is only used when talking
+  // to server_address.
+  string root = 2;
+}

@@ -429,7 +429,7 @@ func TestTypeLimits(t *testing.T) {
 	}, {
 		query: "insert into vitess_ints(tiny) values(1.2)",
 		bv:    nil,
-		out:   "error: type mismatch",
+		out:   "error: DML too complex",
 	}, {
 		query: "insert into vitess_ints(tiny) values(:fl)",
 		bv:    map[string]interface{}{"fl": 1.2},

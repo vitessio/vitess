@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/youtube/vitess/go/cistring"
 	"github.com/youtube/vitess/go/sqltypes"
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	"github.com/youtube/vitess/go/vt/sqlparser"
@@ -24,8 +23,8 @@ type QuerySplitter struct {
 	splitCount    int64
 	schemaInfo    *SchemaInfo
 	sel           *sqlparser.Select
-	tableName     string
-	splitColumn   cistring.CIString
+	tableName     sqlparser.TableIdent
+	splitColumn   sqlparser.ColIdent
 	rowCount      int64
 }
 
@@ -51,7 +50,7 @@ func NewQuerySplitter(
 		bindVariables: bindVariables,
 		splitCount:    splitCount,
 		schemaInfo:    schemaInfo,
-		splitColumn:   cistring.New(splitColumn),
+		splitColumn:   sqlparser.NewColIdent(splitColumn),
 	}
 }
 
@@ -79,17 +78,17 @@ func (qs *QuerySplitter) validateQuery() error {
 		return fmt.Errorf("unsupported query")
 	}
 	qs.tableName = sqlparser.GetTableName(node.Expr)
-	if qs.tableName == "" {
+	if qs.tableName.IsEmpty() {
 		return fmt.Errorf("not a simple table expression")
 	}
-	tableInfo, ok := qs.schemaInfo.tables[qs.tableName]
+	tableInfo, ok := qs.schemaInfo.tables[qs.tableName.String()]
 	if !ok {
 		return fmt.Errorf("can't find table in schema")
 	}
 	if len(tableInfo.PKColumns) == 0 {
 		return fmt.Errorf("no primary keys")
 	}
-	if qs.splitColumn.Original() != "" {
+	if !qs.splitColumn.IsEmpty() {
 		for _, index := range tableInfo.Indexes {
 			for _, column := range index.Columns {
 				if qs.splitColumn.Equal(column) {
@@ -152,13 +151,13 @@ func (qs *QuerySplitter) getWhereClause(whereClause *sqlparser.Where, bindVars m
 		return whereClause
 	}
 	pk := &sqlparser.ColName{
-		Name: sqlparser.ColIdent(qs.splitColumn),
+		Name: qs.splitColumn,
 	}
 	if !start.IsNull() {
 		startClause = &sqlparser.ComparisonExpr{
 			Operator: sqlparser.GreaterEqualStr,
 			Left:     pk,
-			Right:    sqlparser.ValArg([]byte(":" + startBindVarName)),
+			Right:    sqlparser.NewValArg([]byte(":" + startBindVarName)),
 		}
 		bindVars[startBindVarName] = start.ToNative()
 	}
@@ -167,7 +166,7 @@ func (qs *QuerySplitter) getWhereClause(whereClause *sqlparser.Where, bindVars m
 		endClause = &sqlparser.ComparisonExpr{
 			Operator: sqlparser.LessThanStr,
 			Left:     pk,
-			Right:    sqlparser.ValArg([]byte(":" + endBindVarName)),
+			Right:    sqlparser.NewValArg([]byte(":" + endBindVarName)),
 		}
 		bindVars[endBindVarName] = end.ToNative()
 	}

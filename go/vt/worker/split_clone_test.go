@@ -23,9 +23,9 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver/queryservice/fakes"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
+	"github.com/youtube/vitess/go/vt/topo/zk2topo"
 	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
 	"github.com/youtube/vitess/go/vt/wrangler/testlib"
-	"github.com/youtube/vitess/go/vt/zktopo/zktestserver"
 	"golang.org/x/net/context"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
@@ -88,7 +88,7 @@ func (tc *splitCloneTestCase) setUp(v3 bool) {
 func (tc *splitCloneTestCase) setUpWithConcurreny(v3 bool, concurrency, writeQueryMaxRows, rowsCount int) {
 	*useV3ReshardingMode = v3
 	db := fakesqldb.Register()
-	tc.ts = zktestserver.New(tc.t, []string{"cell1", "cell2"})
+	tc.ts = zk2topo.NewFakeServer("cell1", "cell2")
 	ctx := context.Background()
 	tc.wi = NewInstance(tc.ts, "cell1", time.Second)
 
@@ -819,22 +819,17 @@ func TestSplitCloneV2_Offline_Reconciliation(t *testing.T) {
 	tc.leftMasterFakeDb.addExpectedQuery("UPDATE `vt_ks`.`table1` SET `msg`='Text for 102',`keyspace_id`=2305843009213693952 WHERE `id`=102", nil)
 	tc.rightMasterFakeDb.addExpectedQuery("UPDATE `vt_ks`.`table1` SET `msg`='Text for 101',`keyspace_id`=6917529027641081856 WHERE `id`=101", nil)
 	tc.rightMasterFakeDb.addExpectedQuery("UPDATE `vt_ks`.`table1` SET `msg`='Text for 103',`keyspace_id`=6917529027641081856 WHERE `id`=103", nil)
-	// Delete statements. (First 3 rows on each shard.)
-	tc.leftMasterFakeDb.addExpectedQuery("DELETE FROM `vt_ks`.`table1` WHERE (`id`=190) OR (`id`=192) OR (`id`=194)", nil)
-	tc.rightMasterFakeDb.addExpectedQuery("DELETE FROM `vt_ks`.`table1` WHERE (`id`=191) OR (`id`=193) OR (`id`=195)", nil)
 	// Insert statements. (All are combined in one.)
 	tc.leftMasterFakeDb.addExpectedQuery("INSERT INTO `vt_ks`.`table1` (`id`, `msg`, `keyspace_id`) VALUES (96,'Text for 96',2305843009213693952),(98,'Text for 98',2305843009213693952)", nil)
 	tc.rightMasterFakeDb.addExpectedQuery("INSERT INTO `vt_ks`.`table1` (`id`, `msg`, `keyspace_id`) VALUES (97,'Text for 97',6917529027641081856),(99,'Text for 99',6917529027641081856)", nil)
-	// Delete statements (after flush).
-	tc.leftMasterFakeDb.addExpectedQuery("DELETE FROM `vt_ks`.`table1` WHERE (`id`=196) OR (`id`=198)", nil)
-	tc.rightMasterFakeDb.addExpectedQuery("DELETE FROM `vt_ks`.`table1` WHERE (`id`=197) OR (`id`=199)", nil)
+	// Delete statements. (All are combined in one.)
+	tc.leftMasterFakeDb.addExpectedQuery("DELETE FROM `vt_ks`.`table1` WHERE (`id`=190) OR (`id`=192) OR (`id`=194) OR (`id`=196) OR (`id`=198)", nil)
+	tc.rightMasterFakeDb.addExpectedQuery("DELETE FROM `vt_ks`.`table1` WHERE (`id`=191) OR (`id`=193) OR (`id`=195) OR (`id`=197) OR (`id`=199)", nil)
 	expectBlpCheckpointCreationQueries(tc.leftMasterFakeDb)
 	expectBlpCheckpointCreationQueries(tc.rightMasterFakeDb)
 
 	// Run the vtworker command.
-	args := []string{"SplitClone", "--write_query_max_rows_delete", "3"}
-	args = append(args, tc.defaultWorkerArgs[1:]...)
-	if err := runCommand(t, tc.wi, tc.wi.wr, args); err != nil {
+	if err := runCommand(t, tc.wi, tc.wi.wr, tc.defaultWorkerArgs); err != nil {
 		t.Fatal(err)
 	}
 

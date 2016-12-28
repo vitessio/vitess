@@ -33,6 +33,7 @@
     "@angular2-material/toolbar": "2.0.0-alpha.7-2",
     "@vaadin/angular2-polymer": "^1.0.0-beta2",
     "core-js": "^2.4.0",
+    "font-awesome": "^4.7.0",
     "primeng": "1.0.0-beta.13",
     "primeui": "4.1.15",
     "reflect-metadata": "0.1.3",

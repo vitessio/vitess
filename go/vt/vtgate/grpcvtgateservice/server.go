@@ -196,6 +196,29 @@ func (vtg *VTGate) ExecuteEntityIds(ctx context.Context, request *vtgatepb.Execu
 	}, nil
 }
 
+// ExecuteBatch is the RPC version of vtgateservice.VTGateService method
+func (vtg *VTGate) ExecuteBatch(ctx context.Context, request *vtgatepb.ExecuteBatchRequest) (response *vtgatepb.ExecuteBatchResponse, err error) {
+	defer vtg.server.HandlePanic(&err)
+	ctx = withCallerIDContext(ctx, request.CallerId)
+	results := make([]sqltypes.QueryResponse, len(request.Queries))
+	sqlQueries := make([]string, len(request.Queries))
+	bindVars := make([]map[string]interface{}, len(request.Queries))
+	for queryNum, query := range request.Queries {
+		bv, err := querytypes.Proto3ToBindVariables(query.BindVariables)
+		if err != nil {
+			return nil, vterrors.ToGRPCError(err)
+		}
+		sqlQueries[queryNum] = query.Sql
+		bindVars[queryNum] = bv
+	}
+	results, err = vtg.server.ExecuteBatch(ctx, sqlQueries, bindVars, request.Keyspace, request.TabletType, request.AsTransaction, request.Session, request.Options)
+	return &vtgatepb.ExecuteBatchResponse{
+		Results: sqltypes.QueryResponsesToProto3(results),
+		Session: request.Session,
+		Error:   vterrors.VtRPCErrorFromVtError(err),
+	}, nil
+}
+
 // ExecuteBatchShards is the RPC version of vtgateservice.VTGateService method
 func (vtg *VTGate) ExecuteBatchShards(ctx context.Context, request *vtgatepb.ExecuteBatchShardsRequest) (response *vtgatepb.ExecuteBatchShardsResponse, err error) {
 	defer vtg.server.HandlePanic(&err)

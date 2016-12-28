@@ -40,7 +40,7 @@ func (dc *DBClient) handleError(err error) {
 
 // Connect connects to a db server
 func (dc *DBClient) Connect() error {
-	params, err := dbconfigs.MysqlParams(dc.dbConfig)
+	params, err := dbconfigs.WithCredentials(dc.dbConfig)
 	if err != nil {
 		return err
 	}

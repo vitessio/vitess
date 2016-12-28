@@ -26,6 +26,7 @@ public class VitessJDBCUrl {
     private final String keyspace;
     private String catalog;
     private final String executeType;
+    private final boolean twopcEnabled;
 
     private final boolean useSSL;
     private final String keyStore;
@@ -150,6 +151,9 @@ public class VitessJDBCUrl {
 
         this.tabletType = getTabletType(tabletType);
         this.executeType = info.getProperty(Constants.Property.EXECUTE_TYPE);
+        this.url = url;
+        this.twopcEnabled =
+                "true".equalsIgnoreCase(info.getProperty(Constants.Property.TWOPC_ENABLED));
 
         this.useSSL = "true".equalsIgnoreCase(caseInsensitiveKeyLookup(info, Constants.Property.USE_SSL));
         this.keyStore = caseInsensitiveKeyLookup(info, Constants.Property.KEYSTORE);
@@ -160,7 +164,6 @@ public class VitessJDBCUrl {
         this.trustStorePassword = caseInsensitiveKeyLookup(info, Constants.Property.TRUSTSTORE_PASSWORD);
         this.trustAlias = caseInsensitiveKeyLookup(info, Constants.Property.TRUSTSTORE_ALIAS);
 
-        this.url = url;
     }
 
     public String getUsername() {
@@ -333,6 +336,10 @@ public class VitessJDBCUrl {
             default:
                 return Topodata.TabletType.UNRECOGNIZED;
         }
+    }
+
+    public boolean isTwopcEnabled() {
+        return twopcEnabled;
     }
 
     /**

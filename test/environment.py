@@ -12,7 +12,9 @@ import protocols_flavor
 # --topo-server-flavor flag.
 # pylint: disable=unused-import
 import topo_flavor.zookeeper
+import topo_flavor.zk2
 import topo_flavor.etcd
+import topo_flavor.etcd2
 
 # This imports topo_server into this module, so clients can write
 # environment.topo_server().
@@ -233,4 +235,3 @@ def create_webdriver():
     driver.set_window_position(0, 0)
     driver.set_window_size(1280, 1024)
   return driver
-

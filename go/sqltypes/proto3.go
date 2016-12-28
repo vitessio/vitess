@@ -5,6 +5,7 @@
 package sqltypes
 
 import querypb "github.com/youtube/vitess/go/vt/proto/query"
+import "github.com/youtube/vitess/go/vt/vterrors"
 
 // This file contains the proto3 conversion functions for the structures
 // defined here.
@@ -122,6 +123,32 @@ func Proto3ToResults(qr []*querypb.QueryResult) []Result {
 	result := make([]Result, len(qr))
 	for i, q := range qr {
 		result[i] = *Proto3ToResult(q)
+	}
+	return result
+}
+
+// QueryResponsesToProto3 converts []QueryResponse to proto3.
+func QueryResponsesToProto3(qr []QueryResponse) []*querypb.ResultWithError {
+	if len(qr) == 0 {
+		return nil
+	}
+	result := make([]*querypb.ResultWithError, len(qr))
+	for i, q := range qr {
+		result[i].Result = ResultToProto3(q.QueryResult)
+		result[i].Error = vterrors.VtRPCErrorFromVtError(q.QueryError)
+	}
+	return result
+}
+
+// Proto3ToQueryReponses converts proto3 queryResponse to []QueryResponse.
+func Proto3ToQueryReponses(qr []*querypb.ResultWithError) []QueryResponse {
+	if len(qr) == 0 {
+		return nil
+	}
+	result := make([]QueryResponse, len(qr))
+	for i, q := range qr {
+		result[i].QueryResult = Proto3ToResult(q.Result)
+		result[i].QueryError = vterrors.FromVtRPCError(q.Error)
 	}
 	return result
 }

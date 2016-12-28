@@ -246,9 +246,14 @@ public class VTGateTx {
     return call;
   }
 
-  public synchronized SQLFuture<Void> commit(Context ctx) throws SQLException {
+    public synchronized SQLFuture<Void> commit(Context ctx) throws SQLException {
+        return commit(ctx, false);
+    }
+
+  public synchronized SQLFuture<Void> commit(Context ctx, boolean atomic) throws SQLException {
     checkCallIsAllowed("commit");
-    CommitRequest.Builder requestBuilder = CommitRequest.newBuilder().setSession(session);
+    CommitRequest.Builder requestBuilder = CommitRequest.newBuilder().setSession(session)
+                                                        .setAtomic(atomic);
     if (ctx.getCallerId() != null) {
       requestBuilder.setCallerId(ctx.getCallerId());
     }

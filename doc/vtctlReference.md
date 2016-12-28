@@ -2,6 +2,7 @@ This reference guide explains the commands that the <b>vtctl</b> tool supports. 
 
 Commands are listed in the following groups:
 
+* [Cells](#cells)
 * [Generic](#generic)
 * [Keyspaces](#keyspaces)
 * [Queries](#queries)
@@ -12,6 +13,78 @@ Commands are listed in the following groups:
 * [Shards](#shards)
 * [Tablets](#tablets)
 * [Workflows](#workflows)
+
+
+## Cells
+
+* [AddCellInfo](#addcellinfo)
+* [DeleteCellInfo](#deletecellinfo)
+* [GetCellInfo](#getcellinfo)
+* [GetCellInfoNames](#getcellinfonames)
+
+### AddCellInfo
+
+Registers a local topology service in a new cell by creating the CellInfo with the provided parameters. The address will be used to connect to the topology service, and we'll put Vitess data starting at the provided root.
+
+#### Example
+
+<pre class="command-example">AddCellInfo [-server_address &lt;addr&gt;] [-root &lt;root&gt;] &lt;cell&gt;</pre>
+
+#### Flags
+
+| Name | Type | Definition |
+| :-------- | :--------- | :--------- |
+| root | string | The root path the topology server is using for that cell. |
+| server_address | string | The address the topology server is using for that cell. |
+
+
+#### Arguments
+
+* <code>&lt;addr&gt;</code> &ndash; Required.
+* <code>&lt;cell&gt;</code> &ndash; Required. A cell is a location for a service. Generally, a cell resides in only one cluster. In Vitess, the terms "cell" and "data center" are interchangeable. The argument value is a string that does not contain whitespace.
+
+#### Errors
+
+* the <code>&lt;cell&gt;</code> argument is required for the <code>&lt;AddCellInfo&gt;</code> command This error occurs if the command is not called with exactly one argument.
+
+
+### DeleteCellInfo
+
+Deletes the CellInfo for the provided cell. The cell cannot be referenced by any Shard record.
+
+#### Example
+
+<pre class="command-example">DeleteCellInfo &lt;cell&gt;</pre>
+
+#### Errors
+
+* the <code>&lt;cell&gt;</code> argument is required for the <code>&lt;DeleteCellInfo&gt;</code> command This error occurs if the command is not called with exactly one argument.
+
+
+### GetCellInfo
+
+Prints a JSON representation of the CellInfo for a cell.
+
+#### Example
+
+<pre class="command-example">GetCellInfo &lt;cell&gt;</pre>
+
+#### Errors
+
+* the <code>&lt;cell&gt;</code> argument is required for the <code>&lt;GetCellInfo&gt;</code> command This error occurs if the command is not called with exactly one argument.
+
+
+### GetCellInfoNames
+
+Lists all the cells for which we have a CellInfo object, meaning we have a local topology service registered.
+
+#### Example
+
+<pre class="command-example">GetCellInfoNames </pre>
+
+#### Errors
+
+* <code>&lt;GetCellInfoNames&gt;</code> command takes no parameter This error occurs if the command is not called with exactly 0 arguments.
 
 
 ## Generic
@@ -1624,7 +1697,7 @@ Add or remove served type to/from a shard. This is meant as an emergency functio
 
 ### SetShardTabletControl
 
-Sets the TabletControl record for a shard and type. Only use this for an emergency fix or after a finished vertical split. The *MigrateServedFrom* and *MigrateServedType* commands set this field appropriately already. Always specify the blacklisted_tables flag for vertical splits, but never for horizontal splits.
+Sets the TabletControl record for a shard and type. Only use this for an emergency fix or after a finished vertical split. The *MigrateServedFrom* and *MigrateServedType* commands set this field appropriately already. Always specify the blacklisted_tables flag for vertical splits, but never for horizontal splits.<br><br>To set the DisableQueryServiceFlag, keep 'blacklisted_tables' empty, and set 'disable_query_service' to true or false. Useful to fix horizontal splits gone wrong.<br><br>To change the blacklisted tables list, specify the 'blacklisted_tables' parameter with the new list. Useful to fix tables that are being blocked after a vertical split.<br><br>To just remove the ShardTabletControl entirely, use the 'remove' flag, useful after a vertical split is finished to remove serving restrictions.
 
 #### Example
 
@@ -1634,10 +1707,10 @@ Sets the TabletControl record for a shard and type. Only use this for an emergen
 
 | Name | Type | Definition |
 | :-------- | :--------- | :--------- |
+| blacklisted_tables | string | Specifies a comma-separated list of tables to blacklist (used for vertical split). Each is either an exact match, or a regular expression of the form '/regexp/'. |
 | cells | string | Specifies a comma-separated list of cells to update |
-| disable_query_service | Boolean | Disables query service on the provided nodes |
-| remove | Boolean | Removes cells for vertical splits. This flag requires the *tables* flag to also be set. |
-| tables | string | Specifies a comma-separated list of tables to replicate (used for vertical split). Each is either an exact match, or a regular expression of the form /regexp/ |
+| disable_query_service | Boolean | Disables query service on the provided nodes. This flag requires 'blacklisted_tables' and 'remove' to be unset, otherwise it's ignored. |
+| remove | Boolean | Removes cells for vertical splits. |
 
 
 #### Arguments

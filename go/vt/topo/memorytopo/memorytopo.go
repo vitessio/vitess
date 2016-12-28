@@ -374,7 +374,7 @@ func (mt *MemoryTopo) GetKnownCells(ctx context.Context) ([]string, error) {
 
 	var result []string
 	for c := range mt.cells.children {
-		if c != "global" {
+		if c != topo.GlobalCell {
 			result = append(result, c)
 		}
 	}

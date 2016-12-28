@@ -31,7 +31,7 @@ class ZkTopoServer(server.TopoServer):
     self.zk_port_base = reserve_ports(3)
     self.hostname = utils.hostname
     self.zk_ports = ':'.join(str(self.zk_port_base + i) for i in range(3))
-    self.zk_client_port = self.zk_port_base + 2
+    self.addr = 'localhost:%d' % (self.zk_port_base + 2)
     self.ports_assigned = True
 
   def setup(self, add_bad_host=False):
@@ -44,21 +44,24 @@ class ZkTopoServer(server.TopoServer):
         'init'])
     config = tmproot + '/test-zk-client-conf.json'
     with open(config, 'w') as f:
-      ca_server = 'localhost:%d' % (self.zk_client_port)
+      ca_server = self.addr
       if add_bad_host:
         ca_server += ',does.not.exists:1234'
       zk_cell_mapping = {
-          'test_nj': 'localhost:%d' % (self.zk_client_port),
-          'test_ny': 'localhost:%d' % (self.zk_client_port),
+          'test_nj': self.addr,
+          'test_ny': self.addr,
           'test_ca': ca_server,
-          'global': 'localhost:%d' % (self.zk_client_port),
+          'global': self.addr,
       }
       json.dump(zk_cell_mapping, f)
     os.environ['ZK_CLIENT_CONFIG'] = config
     logging.debug('Using ZK_CLIENT_CONFIG=%s', str(config))
-    run(binary_args('zk') + ['touch', '-p', '/zk/test_nj/vt'])
-    run(binary_args('zk') + ['touch', '-p', '/zk/test_ny/vt'])
-    run(binary_args('zk') + ['touch', '-p', '/zk/test_ca/vt'])
+    run(binary_args('zk') + ['-server', self.addr,
+                             'touch', '-p', '/zk/test_nj/vt'])
+    run(binary_args('zk') + ['-server', self.addr,
+                             'touch', '-p', '/zk/test_ny/vt'])
+    run(binary_args('zk') + ['-server', self.addr,
+                             'touch', '-p', '/zk/test_ca/vt'])
 
   def teardown(self):
     from environment import run, binary_args, vtlogroot  # pylint: disable=g-import-not-at-top,g-multiple-import
@@ -77,14 +80,12 @@ class ZkTopoServer(server.TopoServer):
   def wipe(self):
     from environment import run, binary_args  # pylint: disable=g-import-not-at-top,g-multiple-import
 
-    # Work around safety check on recursive delete.
-    run(binary_args('zk') + ['rm', '-rf', '/zk/test_nj/vt/*'])
-    run(binary_args('zk') + ['rm', '-rf', '/zk/test_ny/vt/*'])
-    run(binary_args('zk') + ['rm', '-rf', '/zk/global/vt/*'])
-
-    run(binary_args('zk') + ['rm', '-f', '/zk/test_nj/vt'])
-    run(binary_args('zk') + ['rm', '-f', '/zk/test_ny/vt'])
-    run(binary_args('zk') + ['rm', '-f', '/zk/global/vt'])
+    run(binary_args('zk') + ['-server', self.addr,
+                             'rm', '-rf', '/zk/test_nj/vt/*'])
+    run(binary_args('zk') + ['-server', self.addr,
+                             'rm', '-rf', '/zk/test_ny/vt/*'])
+    run(binary_args('zk') + ['-server', self.addr,
+                             'rm', '-rf', '/zk/global/vt/*'])
 
   def update_addr(self, cell, keyspace, shard, tablet_index, port):
     pass
