@@ -325,6 +325,10 @@
 <td>Commit a transaction.</td>
 </tr>
 <tr>
+<td><code><a href="#resolvetransaction">ResolveTransaction</a></code></td>
+<td>ResolveTransaction resolves a transaction.</td>
+</tr>
+<tr>
 <td><code><a href="#rollback">Rollback</a></code></td>
 <td>Rollback a transaction.</td>
 </tr>
@@ -832,6 +836,10 @@
 <td style="text-align: left"><code>caller_id</code> <br><a href="#vtrpc.callerid">vtrpc.CallerID</a></td>
 <td style="text-align: left">CallerID is passed along RPCs to identify the originating client for a request. It is not meant to be secure, but only informational.  The client can put whatever info they want in these fields, and they will be trusted by the servers. The fields will just be used for logging purposes, and to easily find a client. VtGate propagates it to VtTablet, and VtTablet may use this information for monitoring purposes, to display on dashboards, or for blacklisting purposes.</td>
 </tr>
+<tr>
+<td style="text-align: left"><code>single_db</code> <br>bool</td>
+<td style="text-align: left">single_db specifies if the transaction should be restricted to a single database.</td>
+</tr>
 </tbody></table>
 
 <h4 id="response">Response</h4>
@@ -876,11 +884,55 @@
 <td style="text-align: left"><code>session</code> <br><a href="#session">Session</a></td>
 <td style="text-align: left">Session objects are session cookies and are invalidated on use. Query results will contain updated session values. Their content should be opaque to the user.</td>
 </tr>
+<tr>
+<td style="text-align: left"><code>atomic</code> <br>bool</td>
+<td style="text-align: left">atomic specifies if the commit should go through the 2PC workflow to ensure atomicity.</td>
+</tr>
 </tbody></table>
 
 <h4 id="response">Response</h4>
 
 <p>CommitResponse is the returned value from Commit.</p>
+
+<h5 id="properties">Properties</h5>
+
+<table><thead>
+<tr>
+<th style="text-align: left">Name</th>
+<th style="text-align: left">Description</th>
+</tr>
+</thead><tbody>
+</tbody></table>
+
+<h3 id="resolvetransaction">ResolveTransaction</h3>
+
+<p>ResolveTransaction resolves a transaction.</p>
+
+<h4 id="request">Request</h4>
+
+<p>ResolveTransactionRequest is the payload to ResolveTransaction.</p>
+
+<h5 id="parameters">Parameters</h5>
+
+<table><thead>
+<tr>
+<th style="text-align: left">Name</th>
+<th style="text-align: left">Description</th>
+</tr>
+</thead><tbody>
+<tr>
+<td style="text-align: left"><code>caller_id</code> <br><a href="#vtrpc.callerid">vtrpc.CallerID</a></td>
+<td style="text-align: left">CallerID is passed along RPCs to identify the originating client for a request. It is not meant to be secure, but only informational.  The client can put whatever info they want in these fields, and they will be trusted by the servers. The fields will just be used for logging purposes, and to easily find a client. VtGate propagates it to VtTablet, and VtTablet may use this information for monitoring purposes, to display on dashboards, or for blacklisting purposes.</td>
+</tr>
+<tr>
+<td style="text-align: left"><code>dtid</code> <br>string</td>
+<td style="text-align: left">dtid is the dtid of the transaction to be resolved.</td>
+</tr>
+</tbody></table>
+
+<h4 id="response">Response</h4>
+
+<p>ResolveTransactionResponse is the returned value from Rollback.</p>
 
 <h5 id="properties">Properties</h5>
 
@@ -1186,7 +1238,7 @@
 </tr>
 <tr>
 <td style="text-align: left"><code>use_split_query_v2</code> <br>bool</td>
-<td style="text-align: left">Whether to use the new split-query code that supports multiple split-columns and the FULL_SCAN algorithm. This is a temporary field which aids in the migration of SplitQuery to the new code. to the SplitQuery version 2.</td>
+<td style="text-align: left">Remove this field after this new server code is released to prod. We must keep it for now, so that clients can still send it to the old server code currently in production.</td>
 </tr>
 </tbody></table>
 
@@ -1608,6 +1660,16 @@
 <td style="text-align: left"><code>28</code></td>
 <td style="text-align: left">TUPLE specifies a a tuple. This cannot be returned in a QueryResult, but it can be sent as a bind var. Properties: 28, None.</td>
 </tr>
+<tr>
+<td style="text-align: left"><code>GEOMETRY</code></td>
+<td style="text-align: left"><code>2077</code></td>
+<td style="text-align: left">GEOMETRY specifies a GEOMETRY type. Properties: 29, IsQuoted.</td>
+</tr>
+<tr>
+<td style="text-align: left"><code>JSON</code></td>
+<td style="text-align: left"><code>2078</code></td>
+<td style="text-align: left">JSON specified a JSON type. Properties: 30, IsQuoted.</td>
+</tr>
 </tbody></table>
 
 <h3 id="topodata-keyspaceidtype">topodata.KeyspaceIdType</h3>
@@ -1697,7 +1759,7 @@
 <tr>
 <td style="text-align: left"><code>DRAINED</code></td>
 <td style="text-align: left"><code>8</code></td>
-<td style="text-align: left">DRAINED is the type a server goes into when a process needs a separate tablet set aside for a specific action. For example, a vtworker process may set a tablet to drained to perform an offline action. It is a serving type (as the vtworker processes may need queries to run). In this state, this tablet is dedicated to the background process that uses it.</td>
+<td style="text-align: left">DRAINED is the type a server goes into when used by Vitess tools to perform an offline action. It is a serving type (as the tools processes may need to run queries), but it&#39;s not used to route queries from Vitess users. In this state, this tablet is dedicated to the process that uses it.</td>
 </tr>
 </tbody></table>
 
@@ -1853,6 +1915,10 @@
 <td style="text-align: left"><code>shard_sessions</code> <br>list &lt;<a href="#session.shardsession">ShardSession</a>&gt;</td>
 <td style="text-align: left"></td>
 </tr>
+<tr>
+<td style="text-align: left"><code>single_db</code> <br>bool</td>
+<td style="text-align: left">single_db specifies if the transaction should be restricted to a single database.</td>
+</tr>
 </tbody></table>
 
 <h4 id="messages">Messages</h4>
@@ -1967,6 +2033,14 @@
 <td style="text-align: left"><code>exclude_field_names</code> <br>bool</td>
 <td style="text-align: left">If set, the resulting Field array won’t have a Name, just a Type. This is an optimization for high-QPS queries where the client knows what it&#39;s getting.</td>
 </tr>
+<tr>
+<td style="text-align: left"><code>include_event_token</code> <br>bool</td>
+<td style="text-align: left">If set, we will try to include an EventToken with the responses.</td>
+</tr>
+<tr>
+<td style="text-align: left"><code>compare_event_token</code> <br><a href="#query.eventtoken">EventToken</a></td>
+<td style="text-align: left">EventToken is a structure that describes a point in time in a replication stream on one shard. The most recent known replication position can be retrieved from vttablet when executing a query. It is also sent with the replication streams from the binlog service.</td>
+</tr>
 </tbody></table>
 
 <h3 id="query-field">query.Field</h3>
@@ -2018,6 +2092,54 @@
 <tr>
 <td style="text-align: left"><code>rows</code> <br>list &lt;<a href="#query.row">Row</a>&gt;</td>
 <td style="text-align: left">Row is a database row.</td>
+</tr>
+<tr>
+<td style="text-align: left"><code>extras</code> <br><a href="#query.resultextras">ResultExtras</a></td>
+<td style="text-align: left">ResultExtras contains optional out-of-band information. Usually the extras are requested by adding ExecuteOptions flags.</td>
+</tr>
+</tbody></table>
+
+<h3 id="query-resultextras">query.ResultExtras</h3>
+
+<p>ResultExtras contains optional out-of-band information. Usually the extras are requested by adding ExecuteOptions flags.</p>
+
+<h4 id="properties">Properties</h4>
+
+<table><thead>
+<tr>
+<th style="text-align: left">Name</th>
+<th style="text-align: left">Description</th>
+</tr>
+</thead><tbody>
+<tr>
+<td style="text-align: left"><code>event_token</code> <br><a href="#query.eventtoken">EventToken</a></td>
+<td style="text-align: left">EventToken is a structure that describes a point in time in a replication stream on one shard. The most recent known replication position can be retrieved from vttablet when executing a query. It is also sent with the replication streams from the binlog service.</td>
+</tr>
+<tr>
+<td style="text-align: left"><code>fresher</code> <br>bool</td>
+<td style="text-align: left">If set, it means the data returned with this result is fresher than the compare_token passed in the ExecuteOptions.</td>
+</tr>
+</tbody></table>
+
+<h3 id="query-resultwitherror">query.ResultWithError</h3>
+
+<p>ResultWithError represents a query response in the form of result or error but not both.</p>
+
+<h4 id="properties">Properties</h4>
+
+<table><thead>
+<tr>
+<th style="text-align: left">Name</th>
+<th style="text-align: left">Description</th>
+</tr>
+</thead><tbody>
+<tr>
+<td style="text-align: left"><code>error</code> <br><a href="#vtrpc.rpcerror">vtrpc.RPCError</a></td>
+<td style="text-align: left">RPCError is an application-level error structure returned by VtTablet (and passed along by VtGate if appropriate). We use this so the clients don&#39;t have to parse the error messages, but instead can depend on the value of the code.</td>
+</tr>
+<tr>
+<td style="text-align: left"><code>result</code> <br><a href="#query.queryresult">query.QueryResult</a></td>
+<td style="text-align: left">QueryResult is returned by Execute and ExecuteStream.  As returned by Execute, len(fields) is always equal to len(row) (for each row in rows).  As returned by StreamExecute, the first QueryResult has the fields set, and subsequent QueryResult have rows set. And as Execute, len(QueryResult[0].fields) is always equal to len(row) (for each row in rows for each QueryResult in QueryResult[1:]).</td>
 </tr>
 </tbody></table>
 

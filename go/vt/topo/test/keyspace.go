@@ -36,6 +36,9 @@ func checkKeyspace(t *testing.T, ts topo.Impl) {
 	if err := ts.DeleteKeyspace(ctx, "test_keyspace"); err != nil {
 		t.Errorf("DeleteKeyspace: %v", err)
 	}
+	if err := ts.DeleteKeyspace(ctx, "test_keyspace"); err != topo.ErrNoNode {
+		t.Errorf("DeleteKeyspace(again): %v", err)
+	}
 	if err := ts.CreateKeyspace(ctx, "test_keyspace", &topodatapb.Keyspace{}); err != nil {
 		t.Errorf("CreateKeyspace: %v", err)
 	}

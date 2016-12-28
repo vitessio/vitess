@@ -34,6 +34,7 @@ cache:
     # Cache downloaded and extracted MariaDB 10.0 packages.
     - $MYSQL_ROOT
     # Cache bootstrapped dependencies (e.g. protobuf and gRPC).
+    - $HOME/gopath/dist/etcd
     - $HOME/gopath/dist/grpc/.build_finished
     - $HOME/gopath/dist/grpc/usr/local
     - $HOME/gopath/dist/py-mock-1.0.1/.build_finished
@@ -44,7 +45,8 @@ cache:
     - $HOME/.m2
     - $HOME/.phpenv
 before_cache:
-  # Travis CI caching doesn't work with this symlink. Just delete it.
+  # Travis CI caching doesn't work with these symlinks. Just delete them.
+  - rm $HOME/gopath/bin/etcd
   - rm $HOME/gopath/bin/zksrv.sh
   # Delete these files because they keep changing (having the latest timestamp
   # of an update) and trigger a lengthy update of the cache (~25 seconds).
