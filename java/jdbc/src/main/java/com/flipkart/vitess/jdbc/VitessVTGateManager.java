@@ -6,6 +6,7 @@ import com.youtube.vitess.client.Context;
 import com.youtube.vitess.client.RpcClient;
 import com.youtube.vitess.client.VTGateConn;
 import com.youtube.vitess.client.grpc.GrpcClientFactory;
+import com.youtube.vitess.client.grpc.tls.TlsOptions;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -114,7 +115,7 @@ public class VitessVTGateManager {
             final String trustAlias = jdbcUrl.getTrustAlias() != null
                     ? jdbcUrl.getTrustAlias() : System.getProperty(Constants.Property.TRUSTSTORE_ALIAS_FULL);
 
-            final GrpcClientFactory.TlsOptions tlsOptions = new GrpcClientFactory.TlsOptions()
+            final TlsOptions tlsOptions = new TlsOptions()
                     .keyStorePath(keyStorePath)
                     .keyStorePassword(keyStorePassword)
                     .keyAlias(keyAlias)

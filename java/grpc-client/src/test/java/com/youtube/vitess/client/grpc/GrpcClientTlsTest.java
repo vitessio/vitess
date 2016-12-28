@@ -3,6 +3,7 @@ package com.youtube.vitess.client.grpc;
 import com.google.common.io.Files;
 import com.youtube.vitess.client.Context;
 import com.youtube.vitess.client.RpcClientTest;
+import com.youtube.vitess.client.grpc.tls.TlsOptions;
 import org.joda.time.Duration;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
@@ -129,7 +130,7 @@ public class GrpcClientTlsTest extends RpcClientTest {
     }
 
     private static void createClientConnection() throws Exception {
-        final GrpcClientFactory.TlsOptions tlsOptions = new GrpcClientFactory.TlsOptions()
+        final TlsOptions tlsOptions = new TlsOptions()
                 .trustStorePath(trustStore)
                 .trustStorePassword("passwd")
                 .trustAlias("cacert");

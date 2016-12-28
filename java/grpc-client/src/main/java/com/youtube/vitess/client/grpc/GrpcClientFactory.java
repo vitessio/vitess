@@ -4,6 +4,7 @@ import com.youtube.vitess.client.Context;
 import com.youtube.vitess.client.RpcClient;
 import com.youtube.vitess.client.RpcClientFactory;
 
+import com.youtube.vitess.client.grpc.tls.TlsOptions;
 import io.grpc.netty.GrpcSslContexts;
 import io.grpc.netty.NegotiationType;
 import io.grpc.netty.NettyChannelBuilder;
@@ -30,10 +31,11 @@ import java.util.Enumeration;
  * GrpcClientFactory creates RpcClients with the gRPC implementation.
  */
 public class GrpcClientFactory implements RpcClientFactory {
+
   /**
-   * TODO: Document
+   * Factory method to construct a gRPC client connection with no transport-layer security.
    *
-   * @param ctx
+   * @param ctx TODO: This parameter is not actually used, but probably SHOULD be so that timeout duration and caller ID settings aren't discarded
    * @param address
    * @return
    */
@@ -44,12 +46,17 @@ public class GrpcClientFactory implements RpcClientFactory {
   }
 
   /**
-   * TODO: Document
+   * <p>Factory method to construct a gRPC client connection with transport-layer security.</p>
    *
-   * @param ctx
+   * <p>Within the <code>tlsOptions</code> parameter value, the <code>trustStore</code> field should
+   * always be populated.  All other fields are optional.</p>
+   *
+   * @param ctx TODO: This parameter is not actually used, but probably SHOULD be so that timeout duration and caller ID settings aren't discarded
    * @param address
+   * @param tlsOptions
    * @return
    */
+  @Override
   public RpcClient createTls(Context ctx, InetSocketAddress address, TlsOptions tlsOptions) {
     final SslContextBuilder sslContextBuilder = GrpcSslContexts.forClient();
 
@@ -92,7 +99,9 @@ public class GrpcClientFactory implements RpcClientFactory {
   }
 
   /**
-   * TODO: Document
+   * <p>Opens a JKS keystore file from the filesystem.</p>
+   *
+   * <p>Returns <code>null</code> if the file is inaccessible for any reason, or if the password fails to unlock it.</p>
    *
    * @param keyStoreFile
    * @param keyStorePassword
@@ -120,7 +129,11 @@ public class GrpcClientFactory implements RpcClientFactory {
   }
 
   /**
-   * TODO: Document
+   * <p>Loads an X509 certificate from a keystore using a given alias, and returns it as a one-element
+   * array so that it can be passed to {@link SslContextBuilder#trustManager(File)}.</p>
+   *
+   * <p>Returns <code>null</code> if there is any problem accessing the keystore, or if the alias does
+   * not match an X509 certificate.</p>
    *
    * @param keyStore
    * @param alias
@@ -132,17 +145,20 @@ public class GrpcClientFactory implements RpcClientFactory {
     }
 
     try {
-      final X509Certificate[] certCollection = {
+      return new X509Certificate[] {
               (X509Certificate) keyStore.getCertificate(alias)
       };
-      return certCollection;
     } catch (KeyStoreException | ClassCastException e) {
       return null;
     }
   }
 
   /**
-   * TODO: Document
+   * <p>Loads the first valid X509 certificate found in the keystore, and returns it as a one-element
+   * array so that it can be passed to {@link SslContextBuilder#trustManager(File)}.</p>
+   *
+   * <p>Returns <code>null</code> if there is any problem accessing the keystore, or if no X509 certificates
+   * are found at all.</p>
    *
    * @param keyStore
    * @return
@@ -171,7 +187,17 @@ public class GrpcClientFactory implements RpcClientFactory {
   }
 
   /**
-   * TODO: Document
+   * <p>Loads from a keystore the private key entry matching a given alias, and returns it parsed and
+   * ready to be passed to {@link SslContextBuilder#keyManager(PrivateKey, String, X509Certificate...)}.</p>
+   *
+   * <p>To access the private key, this method will first try using the <code>keyPassword</code> parameter
+   * value (this parameter can be set to <code>null</code> to explicitly indicate that there is no password).
+   * If that fails, then this method will then try using the <code>keyStorePassword</code> parameter value
+   * as the key value too.</p>
+   *
+   * <p>Returns null if there is any problem accessing the keystore, if neither <code>keyPassword</code>
+   * or <code>keyStorePassword</code> can unlock the private key, or if no private key entry matches
+   * <code>alias</code>.</p>
    *
    * @param keyStore
    * @param alias
@@ -218,7 +244,17 @@ public class GrpcClientFactory implements RpcClientFactory {
   }
 
   /**
-   * TODO: Document
+   * <p>Loads from a keystore the first valid private key entry found, and returns it parsed and ready to be
+   * passed to {@link SslContextBuilder#keyManager(PrivateKey, String, X509Certificate...)}.</p>
+   *
+   * <p>To access the private key, this method will first try using the <code>keyPassword</code> parameter
+   * value (this parameter can be set to <code>null</code> to explicitly indicate that there is no password).
+   * If that fails, then this method will then try using the <code>keyStorePassword</code> parameter value
+   * as the key value too.</p>
+   *
+   * <p>Returns null if there is any problem accessing the keystore, if neither <code>keyPassword</code>
+   * or <code>keyStorePassword</code> can unlock the private key, or if no private key entry matches
+   * <code>alias</code>.</p>
    *
    * @param keyStore
    * @param keyStorePassword
@@ -251,87 +287,10 @@ public class GrpcClientFactory implements RpcClientFactory {
   }
 
   /**
-   * TODO: Document
-   */
-  public static class TlsOptions {
-    private File keyStore;
-    private String keyStorePassword;
-    private String keyAlias;
-    private String keyPassword;
-    private File trustStore;
-    private String trustStorePassword;
-    private String trustAlias;
-
-    public TlsOptions keyStorePath(String keyStorePath) {
-      if (keyStorePath != null) {
-        this.keyStore = new File(keyStorePath);
-      }
-      return this;
-    }
-
-    public TlsOptions keyStorePassword(String keyStorePassword) {
-      this.keyStorePassword = keyStorePassword;
-      return this;
-    }
-
-    public TlsOptions keyAlias(String keyAlias) {
-      this.keyAlias = keyAlias;
-      return this;
-    }
-
-    public TlsOptions keyPassword(String keyPassword) {
-      this.keyPassword = keyPassword;
-      return this;
-    }
-
-    public TlsOptions trustStorePath(String trustStorePath) {
-      if (trustStorePath != null) {
-        this.trustStore = new File(trustStorePath);
-      }
-      return this;
-    }
-
-    public TlsOptions trustStorePassword(String trustStorePassword) {
-      this.trustStorePassword = trustStorePassword;
-      return this;
-    }
-
-    public TlsOptions trustAlias(String trustAlias) {
-      this.trustAlias = trustAlias;
-      return this;
-    }
-
-    public File getKeyStore() {
-      return keyStore;
-    }
-
-    public String getKeyStorePassword() {
-      return keyStorePassword;
-    }
-
-    public String getKeyAlias() {
-      return keyAlias;
-    }
-
-    public String getKeyPassword() {
-      return keyPassword;
-    }
-
-    public File getTrustStore() {
-      return trustStore;
-    }
-
-    public String getTrustStorePassword() {
-      return trustStorePassword;
-    }
-
-    public String getTrustAlias() {
-      return trustAlias;
-    }
-  }
-
-  /**
-   * TODO: Document
+   * A container for the values returned by {@link this#loadPrivateKeyEntry(KeyStore, String, String)} and
+   * {@link this#loadPrivateKeyEntryForAlias(KeyStore, String, String, String)}, and passed in turn
+   * to {@link SslContextBuilder#keyManager(PrivateKey, String, X509Certificate...)}.  Helpful since Java
+   * methods cannot return multiple values.
    */
   private class PrivateKeyWrapper {
     private PrivateKey privateKey;

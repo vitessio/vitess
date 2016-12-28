@@ -2,6 +2,7 @@ package com.youtube.vitess.client.grpc;
 
 import com.google.common.io.Files;
 import com.youtube.vitess.client.Context;
+import com.youtube.vitess.client.grpc.tls.TlsOptions;
 import org.joda.time.Duration;
 import org.junit.BeforeClass;
 
@@ -64,16 +65,16 @@ public class GrpcClientTlsClientAuthTest extends GrpcClientTlsTest {
         final String cert = certDirectory.getCanonicalPath() + File.separatorChar + "server-cert.pem";
         final String key = certDirectory.getCanonicalPath() + File.separatorChar + "server-key.pem";
 
-        final String vtgate = String.format("%s -grpc_cert %s -grpc_key %s -grpc_ca %s -logtostderr -grpc_port %s -service_map grpc-vtgateservice",
+        final String vtgateCommand = String.format("%s -grpc_cert %s -grpc_key %s -grpc_ca %s -logtostderr -grpc_port %s -service_map grpc-vtgateservice",
                 vtRoot + "/bin/vtgateclienttest", cert, key, caCert, Integer.toString(port));
-        System.out.println(vtgate);
-        vtgateclienttest = new ProcessBuilder(vtgate.split(" ")).start();
+        System.out.println(vtgateCommand);
+        vtgateclienttest = new ProcessBuilder(vtgateCommand.split(" ")).start();
     }
 
     private static void createClientConnection() throws Exception {
         final String keyStore = certDirectory.getCanonicalPath() + File.separatorChar + "client-keyStore.jks";
 
-        final GrpcClientFactory.TlsOptions tlsOptions = new GrpcClientFactory.TlsOptions()
+        final TlsOptions tlsOptions = new TlsOptions()
                 .keyStorePath(keyStore)
                 .keyStorePassword("passwd")
                 .keyAlias("cert")
