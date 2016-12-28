@@ -498,7 +498,6 @@ func (vtg *VTGate) StreamExecute(ctx context.Context, sql string, bindVariables 
 		})
 
 	if err != nil {
-		normalErrors.Add(statsKey, 1)
 		query := map[string]interface{}{
 			"Sql":           sql,
 			"BindVariables": bindVariables,
@@ -506,9 +505,9 @@ func (vtg *VTGate) StreamExecute(ctx context.Context, sql string, bindVariables 
 			"TabletType":    ltt,
 			"Options":       options,
 		}
-		logError(err, query, vtg.logStreamExecute)
+		return handleExecuteError(err, statsKey, query, vtg.logStreamExecute)
 	}
-	return formatError(err)
+	return nil
 }
 
 // StreamExecuteKeyspaceIds executes a streaming query on the specified KeyspaceIds.
@@ -537,7 +536,6 @@ func (vtg *VTGate) StreamExecuteKeyspaceIds(ctx context.Context, sql string, bin
 		})
 
 	if err != nil {
-		normalErrors.Add(statsKey, 1)
 		query := map[string]interface{}{
 			"Sql":           sql,
 			"BindVariables": bindVariables,
@@ -546,9 +544,9 @@ func (vtg *VTGate) StreamExecuteKeyspaceIds(ctx context.Context, sql string, bin
 			"TabletType":    ltt,
 			"Options":       options,
 		}
-		logError(err, query, vtg.logStreamExecuteKeyspaceIds)
+		return handleExecuteError(err, statsKey, query, vtg.logStreamExecuteKeyspaceIds)
 	}
-	return formatError(err)
+	return nil
 }
 
 // StreamExecuteKeyRanges executes a streaming query on the specified KeyRanges.
@@ -577,7 +575,6 @@ func (vtg *VTGate) StreamExecuteKeyRanges(ctx context.Context, sql string, bindV
 		})
 
 	if err != nil {
-		normalErrors.Add(statsKey, 1)
 		query := map[string]interface{}{
 			"Sql":           sql,
 			"BindVariables": bindVariables,
@@ -586,9 +583,9 @@ func (vtg *VTGate) StreamExecuteKeyRanges(ctx context.Context, sql string, bindV
 			"TabletType":    ltt,
 			"Options":       options,
 		}
-		logError(err, query, vtg.logStreamExecuteKeyRanges)
+		return handleExecuteError(err, statsKey, query, vtg.logStreamExecuteKeyRanges)
 	}
-	return formatError(err)
+	return nil
 }
 
 // StreamExecuteShards executes a streaming query on the specified shards.
@@ -614,7 +611,6 @@ func (vtg *VTGate) StreamExecuteShards(ctx context.Context, sql string, bindVari
 		})
 
 	if err != nil {
-		normalErrors.Add(statsKey, 1)
 		query := map[string]interface{}{
 			"Sql":           sql,
 			"BindVariables": bindVariables,
@@ -623,9 +619,9 @@ func (vtg *VTGate) StreamExecuteShards(ctx context.Context, sql string, bindVari
 			"TabletType":    ltt,
 			"Options":       options,
 		}
-		logError(err, query, vtg.logStreamExecuteShards)
+		return handleExecuteError(err, statsKey, query, vtg.logStreamExecuteShards)
 	}
-	return formatError(err)
+	return nil
 }
 
 // Begin begins a transaction. It has to be concluded by a Commit or Rollback.
