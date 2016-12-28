@@ -36,12 +36,12 @@ func NewBackendExplorer(backend topo.Impl) *BackendExplorer {
 }
 
 // HandlePath is part of the Explorer interface
-func (ex *BackendExplorer) HandlePath(zkPath string, r *http.Request) *explorer.Result {
+func (ex *BackendExplorer) HandlePath(nodePath string, r *http.Request) *explorer.Result {
 	ctx := context.Background()
 	result := &explorer.Result{}
 
 	// Handle toplevel display: global, then one line per cell.
-	if zkPath == "/" {
+	if nodePath == "/" {
 		cells, err := ex.backend.GetKnownCells(ctx)
 		if err != nil {
 			result.Error = err.Error()
@@ -53,13 +53,13 @@ func (ex *BackendExplorer) HandlePath(zkPath string, r *http.Request) *explorer.
 	}
 
 	// Now find the cell.
-	parts := strings.Split(zkPath, "/")
+	parts := strings.Split(nodePath, "/")
 	if parts[0] != "" || len(parts) < 2 {
-		result.Error = "Invalid path: " + zkPath
+		result.Error = "Invalid path: " + nodePath
 		return result
 	}
 	cell := parts[1]
-	relativePath := zkPath[len(cell)+1:]
+	relativePath := nodePath[len(cell)+1:]
 
 	// Get the file contents, if any.
 	data, _, err := ex.backend.Get(ctx, cell, relativePath)

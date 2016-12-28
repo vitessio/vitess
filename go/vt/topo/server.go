@@ -64,7 +64,7 @@ var (
 // Impl is the interface used to talk to a persistent
 // backend storage server and locking service.
 //
-// Zookeeper is a good example of this, and zktopo contains the
+// Zookeeper is a good example of this, and go/vt/topo/zk2topo contains the
 // implementation for this using zookeeper.
 //
 // Inside Google, we use Chubby.

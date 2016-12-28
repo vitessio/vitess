@@ -20,6 +20,13 @@ type Server struct {
 	zconn zk.Conn
 }
 
+// newServer creates a Server.
+func newServer() *Server {
+	return &Server{
+		zconn: zk.NewMetaConn(),
+	}
+}
+
 // Close is part of topo.Server interface.
 func (zkts *Server) Close() {
 	zkts.zconn.Close()
@@ -28,18 +35,6 @@ func (zkts *Server) Close() {
 // GetZConn returns the zookeeper connection for this Server.
 func (zkts *Server) GetZConn() zk.Conn {
 	return zkts.zconn
-}
-
-// NewServer can be used to create a custom Server, for tests for instance.
-func NewServer(zconn zk.Conn) topo.Impl {
-	return &Server{zconn: zconn}
-}
-
-func init() {
-	topo.RegisterFactory("zookeeper", func(serverAddr, root string) (topo.Impl, error) {
-		zconn := zk.NewMetaConn()
-		return NewServer(zconn), nil
-	})
 }
 
 //
@@ -114,4 +109,10 @@ func (zkts *Server) PruneActionLogs(zkActionLogPath string, keepCount int) (prun
 		prunedCount++
 	}
 	return prunedCount, nil
+}
+
+func init() {
+	topo.RegisterFactory("zookeeper", func(serverAddr, root string) (topo.Impl, error) {
+		return newServer(), nil
+	})
 }

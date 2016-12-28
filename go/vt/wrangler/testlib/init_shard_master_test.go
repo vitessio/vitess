@@ -10,16 +10,17 @@ import (
 	"testing"
 	"time"
 
+	"golang.org/x/net/context"
+
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topo/memorytopo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
-	"github.com/youtube/vitess/go/vt/topo/zk2topo"
 	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
 	"github.com/youtube/vitess/go/vt/wrangler"
-	"golang.org/x/net/context"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
@@ -29,7 +30,7 @@ import (
 func TestInitMasterShard(t *testing.T) {
 	ctx := context.Background()
 	db := fakesqldb.Register()
-	ts := zk2topo.NewFakeServer("cell1", "cell2")
+	ts := memorytopo.NewServer("cell1", "cell2")
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 	vp := NewVtctlPipe(t, ts)
 	defer vp.Close()
@@ -131,7 +132,7 @@ func TestInitMasterShard(t *testing.T) {
 func TestInitMasterShardChecks(t *testing.T) {
 	ctx := context.Background()
 	db := fakesqldb.Register()
-	ts := zk2topo.NewFakeServer("cell1", "cell2")
+	ts := memorytopo.NewServer("cell1", "cell2")
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 
 	master := NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_MASTER, db)
@@ -169,7 +170,7 @@ func TestInitMasterShardChecks(t *testing.T) {
 func TestInitMasterShardOneSlaveFails(t *testing.T) {
 	ctx := context.Background()
 	db := fakesqldb.Register()
-	ts := zk2topo.NewFakeServer("cell1", "cell2")
+	ts := memorytopo.NewServer("cell1", "cell2")
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 
 	// Create a master, a couple slaves

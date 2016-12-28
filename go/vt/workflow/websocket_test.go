@@ -9,13 +9,12 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
-	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/memorytopo"
 )
 
 func TestWebSocket(t *testing.T) {
-	ts := memorytopo.NewMemoryTopo([]string{"cell1"})
-	m := NewManager(topo.Server{Impl: ts})
+	ts := memorytopo.NewServer("cell1")
+	m := NewManager(ts)
 
 	// Register the manager to a web handler, start a web server.
 	m.HandleHTTPWebSocket("/workflow")

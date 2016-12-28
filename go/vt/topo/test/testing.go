@@ -1,7 +1,8 @@
 // Package test contains utilities to test topo.Impl
 // implementations. If you are testing your implementation, you will
 // want to call TopoServerTestSuite in your test method. For an
-// example, look at the tests in github.com/youtube/vitess/go/vt/zktopo.
+// example, look at the tests in
+// github.com/youtube/vitess/go/vt/topo/memorytopo.
 package test
 
 import (

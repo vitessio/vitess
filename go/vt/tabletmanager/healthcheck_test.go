@@ -14,6 +14,8 @@ import (
 	"testing"
 	"time"
 
+	"golang.org/x/net/context"
+
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/binlog/binlogplayer"
 	"github.com/youtube/vitess/go/vt/health"
@@ -21,8 +23,7 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletservermock"
 	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/topo/zk2topo"
-	"golang.org/x/net/context"
+	"github.com/youtube/vitess/go/vt/topo/memorytopo"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
@@ -115,7 +116,7 @@ func (fhc *fakeHealthCheck) HTMLName() template.HTML {
 }
 
 func createTestAgent(ctx context.Context, t *testing.T, preStart func(*ActionAgent)) (*ActionAgent, chan<- *binlogplayer.VtClientMock) {
-	ts := zk2topo.NewFakeServer("cell1")
+	ts := memorytopo.NewServer("cell1")
 
 	if err := ts.CreateKeyspace(ctx, "test_keyspace", &topodatapb.Keyspace{}); err != nil {
 		t.Fatalf("CreateKeyspace failed: %v", err)

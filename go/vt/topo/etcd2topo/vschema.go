@@ -4,11 +4,12 @@ import (
 	"fmt"
 	"path"
 
+	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 
-	"github.com/golang/protobuf/proto"
-	vschemapb "github.com/youtube/vitess/go/vt/proto/vschema"
 	"github.com/youtube/vitess/go/vt/topo"
+
+	vschemapb "github.com/youtube/vitess/go/vt/proto/vschema"
 )
 
 /*

@@ -9,8 +9,9 @@ import (
 	"path"
 
 	"github.com/golang/protobuf/proto"
-	"github.com/youtube/vitess/go/vt/topo"
 	"golang.org/x/net/context"
+
+	"github.com/youtube/vitess/go/vt/topo"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )

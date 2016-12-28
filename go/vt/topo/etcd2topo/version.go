@@ -25,5 +25,3 @@ func VersionFromInt(version int64) topo.Version {
 	}
 	return EtcdVersion(version)
 }
-
-var _ topo.Version = (EtcdVersion)(0) // compile-time interface check
