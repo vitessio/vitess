@@ -129,6 +129,7 @@
                 <li><a href="/user-guide/scalability-philosophy.html">Scalability Philosophy</a></li>
                 <li><a href="/user-guide/production-planning.html">Production Planning</a></li>
                 <li><a href="/user-guide/server-configuration.html">Server Configuration</a></li>
+                <li><a href="/user-guide/twopc.html">2PC Guide</a></li>
                 <li style="padding-bottom: 0"><a href="/user-guide/troubleshooting.html">Troubleshooting</a></li>
               </ul>
             </li>
@@ -231,6 +232,7 @@
                 <li><a href="/user-guide/scalability-philosophy.html">Scalability Philosophy</a></li>
                 <li><a href="/user-guide/production-planning.html">Production Planning</a></li>
                 <li><a href="/user-guide/server-configuration.html">Server Configuration</a></li>
+                <li><a href="/user-guide/twopc.html">2PC Guide</a></li>
                 <li style="padding-bottom: 0"><a href="/user-guide/troubleshooting.html">Troubleshooting</a></li>
               </ul>
             </li>
@@ -814,6 +816,8 @@ needs to point at each cell instance.</li>
 <li><strong>discovery_low_replication_lag</strong>: when replication lags of all VTTablet in a particular shard and tablet type are less than or equal the flag (in seconds), VTGate does not filter them by replication lag and uses all to balance traffic.</li>
 <li><strong>degraded_threshold (30s)</strong>: a tablet will publish itself as degraded if replication lag exceeds this threshold. This will cause VTGates to choose more up-to-date servers over this one. If all servers are degraded, VTGate resorts to serving from all of them.</li>
 <li><strong>unhealthy_threshold (2h)</strong>: a tablet will publish itself as unhealthy if replication lag exceeds this threshold.</li>
+<li><strong>transaction_mode (multi)</strong>: <code class="prettyprint">single</code>: disallow multi-db transactions, <code class="prettyprint">multi</code>: allow multi-db transactions with best effort commit, <code class="prettyprint">twopc</code>: allow multi-db transactions with 2pc commit.</li>
+<li><strong>normalize_queries (false)</strong>: Turning this flag on will cause vtgate to rewrite queries with bind vars. This is beneficial if the app doesn&#39;t itself send normalized queries.</li>
 </ul>
 
 <h3 id="monitoring">Monitoring</h3>
