@@ -511,6 +511,8 @@ Load-balancer in front of vtgate to scale up (not covered by Vitess). Stateless,
 * **discovery_low_replication_lag**: when replication lags of all VTTablet in a particular shard and tablet type are less than or equal the flag (in seconds), VTGate does not filter them by replication lag and uses all to balance traffic.
 * **degraded_threshold (30s)**: a tablet will publish itself as degraded if replication lag exceeds this threshold. This will cause VTGates to choose more up-to-date servers over this one. If all servers are degraded, VTGate resorts to serving from all of them.
 * **unhealthy_threshold (2h)**: a tablet will publish itself as unhealthy if replication lag exceeds this threshold.
+* **transaction_mode (multi)**: `single`: disallow multi-db transactions, `multi`: allow multi-db transactions with best effort commit, `twopc`: allow multi-db transactions with 2pc commit.
+* **normalize_queries (false)**: Turning this flag on will cause vtgate to rewrite queries with bind vars. This is beneficial if the app doesn't itself send normalized queries.
 
 ### Monitoring
 
