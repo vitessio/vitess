@@ -34,6 +34,10 @@ var (
 	// GoVtZktopoPort is used by the go/vt/zktopo package.
 	// Takes three ports.
 	GoVtZktopoPort = GoVtTabletserverCustomruleZkcustomrulePort + 3
+
+	// GoVtEtcdtopoPort is used by the go/vt/etcdtopo package.
+	// Takes two ports.
+	GoVtEtcdtopoPort = GoVtZktopoPort + 3
 )
 
 //
