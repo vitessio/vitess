@@ -52,12 +52,6 @@ func (s *Server) UpdateShard(ctx context.Context, keyspace, shard string, value 
 	return int64(resp.Node.ModifiedIndex), nil
 }
 
-// ValidateShard implements topo.Server.
-func (s *Server) ValidateShard(ctx context.Context, keyspace, shard string) error {
-	_, _, err := s.GetShard(ctx, keyspace, shard)
-	return err
-}
-
 // GetShard implements topo.Server.
 func (s *Server) GetShard(ctx context.Context, keyspace, shard string) (*topodatapb.Shard, int64, error) {
 	resp, err := s.getGlobal().Get(shardFilePath(keyspace, shard), false /* sort */, false /* recursive */)

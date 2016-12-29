@@ -43,11 +43,6 @@ func (s *Server) UpdateShard(ctx context.Context, keyspace, shard string, value 
 	return int64(version.(EtcdVersion)), nil
 }
 
-// ValidateShard implements topo.Server.
-func (s *Server) ValidateShard(ctx context.Context, keyspace, shard string) error {
-	return nil
-}
-
 // GetShard implements topo.Server.
 func (s *Server) GetShard(ctx context.Context, keyspace, shard string) (*topodatapb.Shard, int64, error) {
 	shardPath := path.Join(keyspacesPath, keyspace, shardsPath, shard, topo.ShardFile)

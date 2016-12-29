@@ -133,9 +133,6 @@ type Impl interface {
 	// Do not use directly, but instead use topo.UpdateShardFields.
 	UpdateShard(ctx context.Context, keyspace, shard string, value *topodatapb.Shard, existingVersion int64) (newVersion int64, err error)
 
-	// ValidateShard performs routine checks on the shard.
-	ValidateShard(ctx context.Context, keyspace, shard string) error
-
 	// GetShard reads a shard and returns it, along with its version.
 	// Can return ErrNoNode
 	GetShard(ctx context.Context, keyspace, shard string) (*topodatapb.Shard, int64, error)
