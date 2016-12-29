@@ -14,7 +14,6 @@ import (
 	"testing"
 	"time"
 
-	log "github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 
@@ -119,7 +118,7 @@ func TestEtcdTopo(t *testing.T) {
 		}
 		data, err := proto.Marshal(ci)
 		if err != nil {
-			log.Fatalf("cannot proto.Marshal CellInfo: %v", err)
+			t.Fatalf("cannot proto.Marshal CellInfo: %v", err)
 		}
 		nodePath := path.Join(s.global.root, cellsPath, cell, topo.CellInfoFile)
 		if _, err := s.global.cli.Put(ctx, nodePath, string(data)); err != nil {

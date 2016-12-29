@@ -9,21 +9,19 @@ import (
 
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/topo/zk2topo"
+	"github.com/youtube/vitess/go/vt/topo/memorytopo"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
-// This file contains tests for the replication.go file.  Note we use a
-// zk2topo, because memorytopo doesn't support all topo server
-// methods yet.
+// This file contains tests for the replication.go file.
 
 func TestFixShardReplication(t *testing.T) {
 	cell := "cell1"
 	keyspace := "ks1"
 	shard := "shard1"
 	ctx := context.Background()
-	ts := zk2topo.NewFakeServer(cell)
+	ts := topo.Server{Impl: memorytopo.New(cell)}
 
 	// Create a tablet.
 	alias := &topodatapb.TabletAlias{

@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"path"
 
-	"golang.org/x/net/context"
-
 	"github.com/coreos/etcd/clientv3"
 	"github.com/coreos/etcd/mvcc/mvccpb"
+	"golang.org/x/net/context"
+
 	"github.com/youtube/vitess/go/vt/topo"
 )
 

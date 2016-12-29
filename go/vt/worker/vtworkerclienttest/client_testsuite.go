@@ -24,9 +24,8 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/vt/logutil"
-	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
-	"github.com/youtube/vitess/go/vt/topo/zk2topo"
+	"github.com/youtube/vitess/go/vt/topo/memorytopo"
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/worker"
 	"github.com/youtube/vitess/go/vt/worker/vtworkerclient"
@@ -34,6 +33,8 @@ import (
 	// Import the gRPC client implementation for tablet manager because the real
 	// vtworker implementation requires it.
 	_ "github.com/youtube/vitess/go/vt/tabletmanager/grpctmclient"
+
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 func init() {
@@ -44,7 +45,7 @@ func init() {
 
 // CreateWorkerInstance returns a properly configured vtworker instance.
 func CreateWorkerInstance(t *testing.T) *worker.Instance {
-	ts := zk2topo.NewFakeServer("cell1", "cell2")
+	ts := memorytopo.NewServer("cell1", "cell2")
 	return worker.NewInstance(ts, "cell1", 1*time.Second)
 }
 

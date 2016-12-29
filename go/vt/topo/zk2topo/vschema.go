@@ -11,8 +11,9 @@ import (
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 
-	vschemapb "github.com/youtube/vitess/go/vt/proto/vschema"
 	"github.com/youtube/vitess/go/vt/topo"
+
+	vschemapb "github.com/youtube/vitess/go/vt/proto/vschema"
 )
 
 // This file contains the vschema management code for zktopo.Server.

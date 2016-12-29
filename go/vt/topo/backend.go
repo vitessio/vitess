@@ -14,7 +14,7 @@ const (
 // plug-ins to be used with Vitess.
 //
 // Zookeeper is a good example of an implementation, as defined in
-// go/vt/zktopo.
+// go/vt/topo/zk2topo.
 //
 // This API is very generic, and key/value store oriented.
 // We use regular paths for object names, and we can list all

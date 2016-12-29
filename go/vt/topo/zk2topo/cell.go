@@ -5,8 +5,9 @@
 package zk2topo
 
 import (
-	"github.com/youtube/vitess/go/vt/topo"
 	"golang.org/x/net/context"
+
+	"github.com/youtube/vitess/go/vt/topo"
 )
 
 // This file contains the cell management methods of zktopo.Server.

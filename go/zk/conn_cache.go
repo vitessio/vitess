@@ -85,7 +85,7 @@ func (cc *ConnCache) ConnForPath(zkPath string) (cn Conn, err error) {
 
 	zkAddr, err := ZkPathToZkAddr(zkPath)
 	if err != nil {
-		return nil, zookeeper.ErrInvalidPath
+		return nil, zookeeper.ErrNoNode
 	}
 
 	cc.setState(zcell, connecting)

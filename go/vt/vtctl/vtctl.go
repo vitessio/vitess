@@ -447,8 +447,8 @@ func listTabletsByShard(ctx context.Context, wr *wrangler.Wrangler, keyspace, sh
 	return dumpTablets(ctx, wr, tabletAliases)
 }
 
-func dumpAllTablets(ctx context.Context, wr *wrangler.Wrangler, zkVtPath string) error {
-	tablets, err := topotools.GetAllTablets(ctx, wr.TopoServer(), zkVtPath)
+func dumpAllTablets(ctx context.Context, wr *wrangler.Wrangler, cell string) error {
+	tablets, err := topotools.GetAllTablets(ctx, wr.TopoServer(), cell)
 	if err != nil {
 		return err
 	}

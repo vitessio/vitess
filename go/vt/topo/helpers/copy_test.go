@@ -5,34 +5,19 @@
 package helpers
 
 import (
-	"os"
 	"testing"
 
-	log "github.com/golang/glog"
-	zookeeper "github.com/samuel/go-zookeeper/zk"
 	"golang.org/x/net/context"
 
-	"github.com/youtube/vitess/go/testfiles"
 	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/zktopo"
-	"github.com/youtube/vitess/go/zk"
-	"github.com/youtube/vitess/go/zk/fakezk"
+	"github.com/youtube/vitess/go/vt/topo/memorytopo"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 func createSetup(ctx context.Context, t *testing.T) (topo.Impl, topo.Impl) {
-	fromConn := fakezk.NewConn()
-	fromTS := zktopo.NewServer(fromConn)
-
-	toConn := fakezk.NewConn()
-	toTS := zktopo.NewServer(toConn)
-
-	for _, zkPath := range []string{"/zk/test_cell/vt", "/zk/global/vt"} {
-		if _, err := zk.CreateRecursive(fromConn, zkPath, nil, 0, zookeeper.WorldACL(zookeeper.PermAll)); err != nil {
-			t.Fatalf("cannot init fromTS: %v", err)
-		}
-	}
+	fromTS := memorytopo.New("test_cell")
+	toTS := memorytopo.New("test_cell")
 
 	// create a keyspace and a couple tablets
 	if err := fromTS.CreateKeyspace(ctx, "test_keyspace", &topodatapb.Keyspace{}); err != nil {
@@ -83,13 +68,6 @@ func createSetup(ctx context.Context, t *testing.T) (topo.Impl, topo.Impl) {
 	}); err != nil {
 		t.Fatalf("cannot create slave tablet: %v", err)
 	}
-
-	os.Setenv("ZK_CLIENT_CONFIG", testfiles.Locate("topo_helpers_test_zk_client.json"))
-	cells, err := fromTS.GetKnownCells(ctx)
-	if err != nil {
-		t.Fatalf("fromTS.GetKnownCells: %v", err)
-	}
-	log.Infof("Cells: %v", cells)
 
 	return fromTS, toTS
 }
