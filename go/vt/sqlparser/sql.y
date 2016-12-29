@@ -78,7 +78,7 @@ func forceEOF(yylex interface{}) {
 %left <empty> JOIN STRAIGHT_JOIN LEFT RIGHT INNER OUTER CROSS NATURAL USE FORCE
 %left <empty> ON
 %token <empty> '(' ',' ')'
-%token <bytes> ID HEX STRING NUMBER HEXNUM VALUE_ARG LIST_ARG COMMENT
+%token <bytes> ID HEX STRING INTEGRAL FLOAT HEXNUM VALUE_ARG LIST_ARG COMMENT
 %token <empty> NULL TRUE FALSE
 
 // Precedence dictated by mysql. But the vitess grammar is simplified.
@@ -849,7 +849,7 @@ value_expression:
   }
 | '+'  value_expression %prec UNARY
   {
-    if num, ok := $2.(NumVal); ok {
+    if num, ok := $2.(*SQLVal); ok && num.Type == IntVal {
       $$ = num
     } else {
       $$ = &UnaryExpr{Operator: UPlusStr, Expr: $2}
@@ -857,12 +857,13 @@ value_expression:
   }
 | '-'  value_expression %prec UNARY
   {
-    if num, ok := $2.(NumVal); ok {
+    if num, ok := $2.(*SQLVal); ok && num.Type == IntVal {
       // Handle double negative
-      if num[0] == '-' {
-        $$ = num[1:]
+      if num.Val[0] == '-' {
+        num.Val = num.Val[1:]
+        $$ = num
       } else {
-        $$ = append(NumVal("-"), num...)
+        $$ = NewIntVal(append([]byte("-"), num.Val...))
       }
     } else {
       $$ = &UnaryExpr{Operator: UMinusStr, Expr: $2}
@@ -980,23 +981,27 @@ column_name:
 value:
   STRING
   {
-    $$ = StrVal($1)
+    $$ = NewStrVal($1)
   }
 | HEX
   {
-    $$ = HexVal($1)
+    $$ = NewHexVal($1)
   }
-| NUMBER
+| INTEGRAL
   {
-    $$ = NumVal($1)
+    $$ = NewIntVal($1)
+  }
+| FLOAT
+  {
+    $$ = NewFloatVal($1)
   }
 | HEXNUM
   {
-    $$ = HexNum($1)
+    $$ = NewHexNum($1)
   }
 | VALUE_ARG
   {
-    $$ = ValArg($1)
+    $$ = NewValArg($1)
   }
 | NULL
   {
@@ -1011,15 +1016,15 @@ num_val:
       yylex.Error("expecting value after next")
       return 1
     }
-    $$ = NumVal("1")
+    $$ = NewIntVal([]byte("1"))
   }
-| NUMBER VALUES
+| INTEGRAL VALUES
   {
-    $$ = NumVal($1)
+    $$ = NewIntVal($1)
   }
 | VALUE_ARG VALUES
   {
-    $$ = ValArg($1)
+    $$ = NewValArg($1)
   }
 
 group_by_opt:

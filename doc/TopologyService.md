@@ -8,7 +8,7 @@ cluster-wide locks. It also supports watches, which we will use soon.
 Concretely, the Topology Service features are implemented by a
 [Lock Server](http://en.wikipedia.org/wiki/Distributed_lock_manager), referred
 to as Topology Server in the rest of this document. We use a plug-in
-implementation and we support multiple Lock Servers (Zookeeper, Etcd, …) as
+implementation and we support multiple Lock Servers (Zookeeper, etcd, …) as
 backends for the service.
 
 ## Requirements and Usage
@@ -203,7 +203,11 @@ and we also have a set of unit tests for it in `go/vt/topo/test`.
 This part describes the two implementations we have, and their specific
 behavior.
 
-### Zookeeper `zk2` Implementation
+If starting from scratch, please use the `zk2` or the `etcd2` implementations,
+as we are deprecating the old `zookeeper` and `etcd` implementations. See the
+migration section below if you want to migrate.
+
+### Zookeeper `zk2` Implementation (new version of `zookeeper`)
 
 This is the recommended implementation when using Zookeeper. The old `zookeeper`
 implementation is deprecated, see next section.
@@ -227,7 +231,7 @@ want to use servers `global_server1,global_server2` in path `/vitess/global`:
 # First create the directory in the global server:
 zk -server global_server1,global_server2 touch -p /vitess/global
 
-# Then the flags to use are:
+# Set the following flags to let Vitess use this global server:
 # -topo_implementation zk2
 # -topo_global_server_address global_server1,global_server2
 # -topo_global_root /vitess/global
@@ -237,7 +241,7 @@ Then to add a cell whose local topology servers `cell1_server1,cell1_server2`
 will store their data under the directory `/vitess/cell1`:
 
 ``` sh
-export TOPOLOGY="-topo_implementation zk2 -topo_global_server_address global_server1,global_server2 -topo_global_root /vitess/global
+TOPOLOGY="-topo_implementation zk2 -topo_global_server_address global_server1,global_server2 -topo_global_root /vitess/global"
 
 # Reference cell1 in the global topology service:
 vtctl $TOPOLOGY AddCellInfo \
@@ -250,7 +254,7 @@ If only one cell is used, the same Zookeeper instance can be used for both
 global and local data. A local cell record still needs to be created, just use
 the same server address, and very importantly a *different* root directory.
 
-#### Implementatin Details
+#### Implementation Details
 
 We use the following paths:
 
@@ -299,7 +303,7 @@ served_types: <
 cells: "test_nj"
 ```
 
-### Zookeeper (deprecated, use zk2 instead)
+### Old Zookeeper `zookeeper` Implementaion (deprecated, use `zk2` instead)
 
 This old `zookeeper` topology service is deprecated, and will be removed in
 Vitess version 2.2. Please use `zk2` instead, and see the `topo2topo` section
@@ -346,17 +350,90 @@ actionlog
 shards
 ```
 
-### Etcd
+### etcd `etcd2` Implementation (new version of `etcd`)
 
-*Note*: we are in the process of standardizing our topology service
-implementations. We will create an etcd2 implementation soon that will use
-standard tools, different paths, and the newer version of the Etcd client
-library.
+This topology service plugin is meant to use etcd clusters as storage backend
+for the topology data. This topology service supports version 3 and up of the
+etcd server.
 
-Our Etcd implementation is based on a command-line parameter that gives the
-location(s) of the global Etcd server. Then we query the path `/vt/cells` and
-each file in there is named after a cell, and contains the list of Etcd servers
-for that cell.
+This implementation is named `etcd2` because it supersedes our previous
+implementation `etcd`. Note that the storage format has been changed with the
+`etcd2` implementation, i.e. existing data created by the previous `etcd`
+implementation must be migrated manually (See migration section below).
+
+To configure an `etcd2` installation, let's start with the global cell
+service. It is described by the addresses of the servers (comma separated list),
+and by the root directory to put the Vitess data in. For instance, assuming we
+want to use servers `http://global_server1,http://global_server2` in path
+`/vitess/global`:
+
+``` sh
+# Set the following flags to let Vitess use this global server,
+# and simplify the example below:
+# -topo_implementation etcd2
+# -topo_global_server_address http://global_server1,http://global_server2
+# -topo_global_root /vitess/global
+TOPOLOGY="-topo_implementation etcd2 -topo_global_server_address http://global_server1,http://global_server2 -topo_global_root /vitess/global
+```
+
+Then to add a cell whose local topology servers
+`http://cell1_server1,http://cell1_server2` will store their data under the
+directory `/vitess/cell1`:
+
+``` sh
+# Reference cell1 in the global topology service:
+# (the TOPOLOGY variable is defined in the previous section)
+vtctl $TOPOLOGY AddCellInfo \
+  -server_address http://cell1_server1,http://cell1_server2 \
+  -root /vitess/cell1 \
+  cell1
+```
+
+If only one cell is used, the same etcd instances can be used for both
+global and local data. A local cell record still needs to be created, just use
+the same server address and, very importantly, a *different* root directory.
+
+#### Implementation Details
+
+We use the following paths:
+
+*Global Cell*:
+
+* Election path: `/elections/<name>`
+* CellInfo path: `/cells/<cell name>/CellInfo`
+* Keyspace:`/keyspaces/<keyspace>/Keyspace`
+* Shard: `/keyspaces/<keyspace>/shards/<shard>/Shard`
+* VSchema: `/keyspaces/<keyspace>/VSchema`
+
+*Local Cell*:
+
+* Tablet: `/tablets/<cell>-<uid>/Tablet`
+* Replication Graph: `/keyspaces/<keyspace>/shards/<shard>/ShardReplication`
+* SrvKeyspace: `/keyspaces/<keyspace>/SrvKeyspace`
+* SrvVSchema: `/SvrVSchema`
+
+For locks, we use a subdirectory named `locks` in the directory to lock, and an
+ephemeral file in that subdirectory (it is associated with a lease, whose TTL
+can be set with the `-topo_etcd_lease_duration` flag, defaults to 30
+seconds). the ephemeral file with the lowest ModRevision has the lock, the
+others wait for files with older ModRevisions to disappear.
+
+Master elections also use a subdirectory, named after the election Name, and use
+a similar method as the locks, with ephemeral files.
+
+We store the proto3 binary data for each object, base64-encoded (as it seems the
+data stored doesn't work well when containing non-ascii characters).
+
+### Old etcd `etcd` Implementaion (deprecated, use `etcd2` instead)
+
+This old `etcd` topology service is deprecated, and will be removed in
+Vitess version 2.2. Please use `etcd2` instead, and see the `topo2topo` section
+below for migration.
+
+Our etcd implementation is based on a command-line parameter that gives the
+location(s) of the global etcd server. Then we query the path `/vt/cells` and
+each file in there is named after a cell, and contains the list of etcd servers
+for that cell. Each cell server files are stored in `/vt/`.
 
 We use the `_Data` filename to store the data, JSON encoded.
 
@@ -389,9 +466,14 @@ The process to follow in that case is:
 * Run `vtctl RebuildKeyspaceGraph` for each keyspace using the new topology
   service flags.
 * Run `vtctl RebuildVSchemaGraph` using the new topology service flags.
-* Restart all `vttablet` using the new topology service flags.
-* Restart all `vtgate` using the new topology service flags.
-* Restart all `vtctld` processes using the new topology service flags.
+* Restart all `vtgate` using the new topology service flags. They will see the
+  same keyspaces / shards / tablets / vschema as before, as the topology was
+  copied over.
+* Restart all `vttablet` using the new topology service flags. They may use the
+  same ports or not, but they will update the new topology when they start up,
+  and be visible from vtgate.
+* Restart all `vtctld` processes using the new topology service flags. So that
+  the UI also shows the new data.
 
 Sample commands to migrate from deprecated `zookeeper` to `zk2`
 topology would be:
@@ -414,8 +496,8 @@ topology would be:
 zk -server global_server1,global_server2 touch -p /vitess/global
 zk -server cell1_server1,cell1_server2 touch -p /vitess/cell1
 
-# The new topology flags are as follows:
-export TOPOLOGY="-topo_implementation zk2 -topo_global_server_address global_server1,global_server2 -topo_global_root /vitess/global"
+# Store the flags in a shell variable to simplify the example below.
+TOPOLOGY="-topo_implementation zk2 -topo_global_server_address global_server1,global_server2 -topo_global_root /vitess/global"
 
 # Reference cell1 in the global topology service:
 vtctl $TOPOLOGY AddCellInfo \
@@ -438,7 +520,7 @@ vtctl $TOPOLOGY RebuildKeyspaceGraph keyspace2
 # Rebuild SrvVSchema objects in new service.
 vtctl $TOPOLOGY RebuildVSchemaGraph
 
-# Now restart all vttablet, vtgate, vtctld processes replacing:
+# Now restart all vtgate, vttablet, vtctld processes replacing:
 # -topo_implementation zookeeper
 # With:
 # -topo_implementation zk2

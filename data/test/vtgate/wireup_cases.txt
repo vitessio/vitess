@@ -448,13 +448,13 @@
 }
 
 # Invalid value in IN clause
-"select id from user where id in (1.1, 1)"
-"strconv.ParseUint: parsing "1.1": invalid syntax"
+"select id from user where id in (18446744073709551616, 1)"
+"strconv.ParseUint: parsing "18446744073709551616": value out of range"
 
 # Invalid value in IN clause from LHS of join
-"select u1.id from user u1 join user u2 where u1.id = 1.1"
-"strconv.ParseUint: parsing "1.1": invalid syntax"
+"select u1.id from user u1 join user u2 where u1.id = 18446744073709551616"
+"strconv.ParseUint: parsing "18446744073709551616": value out of range"
 
 # Invalid value in IN clause from RHS of join
-"select u1.id from user u1 join user u2 where u2.id = 1.1"
-"strconv.ParseUint: parsing "1.1": invalid syntax"
+"select u1.id from user u1 join user u2 where u2.id = 18446744073709551616"
+"strconv.ParseUint: parsing "18446744073709551616": value out of range"

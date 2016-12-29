@@ -5,58 +5,66 @@
 package zkcustomrule
 
 import (
+	"context"
 	"reflect"
 	"testing"
 	"time"
 
-	zookeeper "github.com/samuel/go-zookeeper/zk"
+	"github.com/samuel/go-zookeeper/zk"
 
 	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletservermock"
-	"github.com/youtube/vitess/go/zk"
-	"github.com/youtube/vitess/go/zk/fakezk"
+	"github.com/youtube/vitess/go/vt/topo/zk2topo"
+	"github.com/youtube/vitess/go/zk/zkctl"
 )
 
-var customRule1 = `[
-				{
-					"Name": "r1",
-					"Description": "disallow bindvar 'asdfg'",
-					"BindVarConds":[{
-						"Name": "asdfg",
-						"OnAbsent": false,
-						"Operator": ""
-					}]
-				}
-			]`
+var customRule1 = `
+[
+  {
+    "Name": "r1",
+    "Description": "disallow bindvar 'asdfg'",
+    "BindVarConds":[{
+      "Name": "asdfg",
+      "OnAbsent": false,
+      "Operator": ""
+    }]
+  }
+]`
 
-var customRule2 = `[
-                                {
-					"Name": "r2",
-					"Description": "disallow insert on table test",
-					"TableNames" : ["test"],
-					"Query" : "(insert)|(INSERT)"
-				}
-			]`
-var conn zk.Conn
-
-func setUpFakeZk(t *testing.T) {
-	conn = fakezk.NewConn()
-	conn.Create("/zk", nil, 0, zookeeper.WorldACL(zookeeper.PermAll))
-	conn.Create("/zk/fake", nil, 0, zookeeper.WorldACL(zookeeper.PermAll))
-	conn.Create("/zk/fake/customrules", nil, 0, zookeeper.WorldACL(zookeeper.PermAll))
-	conn.Create("/zk/fake/customrules/testrules", []byte("customrule1"), 0, zookeeper.WorldACL(zookeeper.PermAll))
-	conn.Set("/zk/fake/customrules/testrules", []byte(customRule1), -1)
-}
+var customRule2 = `
+[
+  {
+    "Name": "r2",
+    "Description": "disallow insert on table test",
+    "TableNames" : ["test"],
+    "Query" : "(insert)|(INSERT)"
+  }
+]`
 
 func TestZkCustomRule(t *testing.T) {
+	// Start a real single ZK daemon, and close it after all tests are done.
+	zkd, serverAddr := zkctl.StartLocalZk(2)
+	defer zkd.Teardown()
+
+	// Create fake file.
+	serverPath := "/zk/fake/customrules/testrules"
+	ctx := context.Background()
+	conn := zk2topo.Connect(serverAddr)
+	defer conn.Close()
+	if _, err := zk2topo.CreateRecursive(ctx, conn, serverPath, []byte(customRule1), 0, zk.WorldACL(zk2topo.PermFile), 3); err != nil {
+		t.Fatalf("CreateRecursive failed: %v", err)
+	}
+
+	// Start a mock tabletserver.
 	tqsc := tabletservermock.NewController()
 
-	setUpFakeZk(t)
-	zkcr := NewZkCustomRule(conn)
-	err := zkcr.Open(tqsc, "/zk/fake/customrules/testrules")
+	// Setup the ZkCustomRule
+	zkcr := NewZkCustomRule(serverAddr, serverPath)
+	err := zkcr.Start(tqsc)
 	if err != nil {
-		t.Fatalf("Cannot open zookeeper custom rule service, err=%v", err)
+		t.Fatalf("Cannot start zookeeper custom rule service: %v", err)
 	}
+	defer zkcr.Stop()
 
 	var qrs *tabletserver.QueryRules
 	// Test if we can successfully fetch the original rule (test GetRules)
@@ -70,7 +78,7 @@ func TestZkCustomRule(t *testing.T) {
 	}
 
 	// Test updating rules
-	conn.Set("/zk/fake/customrules/testrules", []byte(customRule2), -1)
+	conn.Set(ctx, serverPath, []byte(customRule2), -1)
 	<-time.After(time.Second) //Wait for the polling thread to respond
 	qrs, _, err = zkcr.GetRules()
 	if err != nil {
@@ -86,7 +94,7 @@ func TestZkCustomRule(t *testing.T) {
 	}
 
 	// Test rule path removal
-	conn.Delete("/zk/fake/customrules/testrules", -1)
+	conn.Delete(ctx, serverPath, -1)
 	<-time.After(time.Second)
 	qrs, _, err = zkcr.GetRules()
 	if err != nil {
@@ -97,8 +105,7 @@ func TestZkCustomRule(t *testing.T) {
 	}
 
 	// Test rule path revival
-	conn.Create("/zk/fake/customrules/testrules", []byte("customrule2"), 0, zookeeper.WorldACL(zookeeper.PermAll))
-	conn.Set("/zk/fake/customrules/testrules", []byte(customRule2), -1)
+	conn.Create(ctx, serverPath, []byte("customrule2"), 0, zk.WorldACL(zk2topo.PermFile))
 	<-time.After(time.Second) //Wait for the polling thread to respond
 	qrs, _, err = zkcr.GetRules()
 	if err != nil {
@@ -108,6 +115,4 @@ func TestZkCustomRule(t *testing.T) {
 	if qr == nil {
 		t.Fatalf("Expect custom rule r2 to be found, but got nothing, qrs=%v", qrs)
 	}
-
-	zkcr.Close()
 }

@@ -71,7 +71,7 @@ func (zs *Server) lockForAction(ctx context.Context, locksDir, contents string) 
 			return "", errToReturn
 		}
 
-		log.Warningf("------ Most likely blocking locks: %v\n%v", childPath, data)
+		log.Warningf("------ Most likely blocking lock: %v\n%v", childPath, string(data))
 		return "", errToReturn
 	}
 

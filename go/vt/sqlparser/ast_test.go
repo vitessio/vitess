@@ -267,7 +267,7 @@ func TestHexDecode(t *testing.T) {
 		out: "encoding/hex: odd length hex string",
 	}}
 	for _, tc := range testcase {
-		out, err := HexVal(tc.in).Decode()
+		out, err := newHexVal(tc.in).HexDecode()
 		if err != nil {
 			if err.Error() != tc.out {
 				t.Errorf("Decode(%q): %v, want %s", tc.in, err, tc.out)

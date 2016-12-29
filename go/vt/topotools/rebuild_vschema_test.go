@@ -7,7 +7,7 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"github.com/youtube/vitess/go/vt/logutil"
-	"github.com/youtube/vitess/go/vt/topo/zk2topo"
+	"github.com/youtube/vitess/go/vt/topo/memorytopo"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	vschemapb "github.com/youtube/vitess/go/vt/proto/vschema"
@@ -20,7 +20,7 @@ func TestRebuildVSchema(t *testing.T) {
 
 	// Set up topology.
 	cells := []string{"cell1", "cell2"}
-	ts := zk2topo.NewFakeServer(cells...)
+	ts := memorytopo.NewServer(cells...)
 
 	// Rebuild with no keyspace / no vschema
 	if err := RebuildVSchema(ctx, logger, ts, cells); err != nil {

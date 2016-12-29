@@ -17,7 +17,7 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconntest"
 	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/topo/zk2topo"
+	"github.com/youtube/vitess/go/vt/topo/memorytopo"
 	"github.com/youtube/vitess/go/vt/vtgate/gateway"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
@@ -41,7 +41,7 @@ func CreateFakeServers(t *testing.T) (*tabletconntest.FakeQueryService, topo.Ser
 	}
 
 	// The topo server has a single SrvKeyspace
-	ts := zk2topo.NewFakeServer(cell)
+	ts := memorytopo.NewServer(cell)
 	if err := ts.UpdateSrvKeyspace(context.Background(), cell, tabletconntest.TestTarget.Keyspace, &topodatapb.SrvKeyspace{
 		Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
 			{

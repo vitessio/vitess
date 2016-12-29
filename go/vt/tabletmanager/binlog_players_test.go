@@ -23,7 +23,7 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/topo/zk2topo"
+	"github.com/youtube/vitess/go/vt/topo/memorytopo"
 
 	binlogdatapb "github.com/youtube/vitess/go/vt/proto/binlogdata"
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
@@ -352,7 +352,7 @@ var mockedThrottlerSettings = &sqltypes.Result{
 }
 
 func TestBinlogPlayerMapHorizontalSplit(t *testing.T) {
-	ts := zk2topo.NewFakeServer("cell1")
+	ts := memorytopo.NewServer("cell1")
 	ctx := context.Background()
 
 	// create the keyspace, a full set of covering shards,
@@ -538,7 +538,7 @@ func TestBinlogPlayerMapHorizontalSplit(t *testing.T) {
 }
 
 func TestBinlogPlayerMapHorizontalSplitStopStartUntil(t *testing.T) {
-	ts := zk2topo.NewFakeServer("cell1")
+	ts := memorytopo.NewServer("cell1")
 	ctx := context.Background()
 
 	// create the keyspace, a full set of covering shards,
@@ -732,7 +732,7 @@ func TestBinlogPlayerMapHorizontalSplitStopStartUntil(t *testing.T) {
 }
 
 func TestBinlogPlayerMapVerticalSplit(t *testing.T) {
-	ts := zk2topo.NewFakeServer("cell1")
+	ts := memorytopo.NewServer("cell1")
 	ctx := context.Background()
 
 	// create the keyspaces, with one shard each

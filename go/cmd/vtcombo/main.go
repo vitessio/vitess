@@ -25,7 +25,7 @@ import (
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/topo/zk2topo"
+	"github.com/youtube/vitess/go/vt/topo/memorytopo"
 	"github.com/youtube/vitess/go/vt/vtctld"
 	"github.com/youtube/vitess/go/vt/vtgate"
 
@@ -80,9 +80,8 @@ func main() {
 	flag.Set("enable_realtime_stats", "true")
 	flag.Set("log_dir", "$VTDATAROOT/tmp")
 
-	// Create topo server. We use a 'zk2' implementation, based on
-	// a memory map per cell.
-	ts = zk2topo.NewFakeServer(tpb.Cells...)
+	// Create topo server. We use a 'memorytopo' implementation.
+	ts = memorytopo.NewServer(tpb.Cells...)
 	servenv.Init()
 	tabletserver.Init()
 
@@ -113,11 +112,11 @@ func main() {
 		topodatapb.TabletType_REPLICA,
 		topodatapb.TabletType_RDONLY,
 	}
-	vtgate.Init(context.Background(), healthCheck, ts, resilientSrvTopoServer, tpb.Cells[0], 2 /*retryCount*/, tabletTypesToWait, vtgate.TxMulti)
+	vtgate.Init(context.Background(), healthCheck, ts, resilientSrvTopoServer, tpb.Cells[0], 2 /*retryCount*/, tabletTypesToWait)
 
 	// vtctld configuration and init
 	vtctld.InitVtctld(ts)
-	vtctld.HandleExplorer("zk2", vtctld.NewBackendExplorer(ts.Impl))
+	vtctld.HandleExplorer("memorytopo", vtctld.NewBackendExplorer(ts.Impl))
 
 	servenv.OnTerm(func() {
 		// FIXME(alainjobart): stop vtgate

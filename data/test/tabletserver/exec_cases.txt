@@ -366,8 +366,8 @@
 }
 
 # type mismatch
-"update b set eid=1.2"
-"type mismatch: strconv.ParseUint: parsing "1.2": invalid syntax"
+"update b set eid=18446744073709551616"
+"type mismatch: strconv.ParseUint: parsing "18446744073709551616": value out of range"
 
 # complex pk change
 "update b set eid=foo()"

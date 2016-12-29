@@ -44,19 +44,19 @@ func checkTablet(t *testing.T, ts topo.Impl) {
 		KeyRange: newKeyRange("-10"),
 	}
 	if err := ts.CreateTablet(ctx, tablet); err != nil {
-		t.Errorf("CreateTablet: %v", err)
+		t.Fatalf("CreateTablet: %v", err)
 	}
 	if err := ts.CreateTablet(ctx, tablet); err != topo.ErrNodeExists {
-		t.Errorf("CreateTablet(again): %v", err)
+		t.Fatalf("CreateTablet(again): %v", err)
 	}
 
 	if _, _, err := ts.GetTablet(ctx, &topodatapb.TabletAlias{Cell: cell, Uid: 666}); err != topo.ErrNoNode {
-		t.Errorf("GetTablet(666): %v", err)
+		t.Fatalf("GetTablet(666): %v", err)
 	}
 
 	nt, nv, err := ts.GetTablet(ctx, tablet.Alias)
 	if err != nil {
-		t.Errorf("GetTablet %v: %v", tablet.Alias, err)
+		t.Fatalf("GetTablet %v: %v", tablet.Alias, err)
 	}
 	if eq, err := tabletEqual(nt, tablet); err != nil {
 		t.Errorf("cannot compare tablets: %v", err)
@@ -70,7 +70,7 @@ func checkTablet(t *testing.T, ts topo.Impl) {
 
 	inCell, err := ts.GetTabletsByCell(ctx, cell)
 	if err != nil {
-		t.Errorf("GetTabletsByCell: %v", err)
+		t.Fatalf("GetTabletsByCell: %v", err)
 	}
 	if len(inCell) != 1 || *inCell[0] != *tablet.Alias {
 		t.Errorf("GetTabletsByCell: want [%v], got %v", tablet.Alias, inCell)
@@ -83,7 +83,7 @@ func checkTablet(t *testing.T, ts topo.Impl) {
 
 	nt, nv, err = ts.GetTablet(ctx, tablet.Alias)
 	if err != nil {
-		t.Errorf("GetTablet %v: %v", tablet.Alias, err)
+		t.Fatalf("GetTablet %v: %v", tablet.Alias, err)
 	}
 	if want := "remotehost"; nt.Hostname != want {
 		t.Errorf("nt.Hostname: want %v, got %v", want, nt.Hostname)
@@ -97,7 +97,7 @@ func checkTablet(t *testing.T, ts topo.Impl) {
 
 	nt, nv, err = ts.GetTablet(ctx, tablet.Alias)
 	if err != nil {
-		t.Errorf("GetTablet %v: %v", tablet.Alias, err)
+		t.Fatalf("GetTablet %v: %v", tablet.Alias, err)
 	}
 	if want := "remotehost2"; nt.Hostname != want {
 		t.Errorf("nt.Hostname: want %v, got %v", want, nt.Hostname)
@@ -109,14 +109,14 @@ func checkTablet(t *testing.T, ts topo.Impl) {
 		return nil
 	})
 	if err != nil {
-		t.Errorf("UpdateTabletFields: %v", err)
+		t.Fatalf("UpdateTabletFields: %v", err)
 	}
 	if got, want := updatedTablet.Hostname, "anotherhost"; got != want {
 		t.Errorf("updatedTablet.Hostname = %q, want %q", got, want)
 	}
 	nt, nv, err = ts.GetTablet(ctx, tablet.Alias)
 	if err != nil {
-		t.Errorf("GetTablet %v: %v", tablet.Alias, err)
+		t.Fatalf("GetTablet %v: %v", tablet.Alias, err)
 	}
 	if got, want := nt.Hostname, "anotherhost"; got != want {
 		t.Errorf("nt.Hostname = %q, want %q", got, want)
@@ -129,7 +129,7 @@ func checkTablet(t *testing.T, ts topo.Impl) {
 		t.Errorf("UpdateTabletFields: %v", err)
 	}
 	if nnt, nnv, nnerr := ts.GetTablet(ctx, tablet.Alias); nnv != nv {
-		t.Errorf("GetTablet %v: %v %v %v", tablet.Alias, nnt, nnv, nnerr)
+		t.Fatalf("GetTablet %v: %v %v %v", tablet.Alias, nnt, nnv, nnerr)
 	}
 
 	if want := "anotherhost"; nt.Hostname != want {

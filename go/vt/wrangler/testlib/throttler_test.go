@@ -14,7 +14,7 @@ import (
 
 	"github.com/youtube/vitess/go/vt/throttler"
 	"github.com/youtube/vitess/go/vt/throttler/grpcthrottlerserver"
-	"github.com/youtube/vitess/go/vt/topo/zk2topo"
+	"github.com/youtube/vitess/go/vt/topo/memorytopo"
 
 	// The test uses the gRPC throttler client and server implementations.
 	_ "github.com/youtube/vitess/go/vt/throttler/grpcthrottlerclient"
@@ -34,7 +34,7 @@ func TestVtctlThrottlerCommands(t *testing.T) {
 
 	addr := fmt.Sprintf("localhost:%v", listener.Addr().(*net.TCPAddr).Port)
 
-	ts := zk2topo.NewFakeServer("cell1", "cell2")
+	ts := memorytopo.NewServer("cell1", "cell2")
 	vp := NewVtctlPipe(t, ts)
 	defer vp.Close()
 

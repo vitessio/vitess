@@ -14,7 +14,7 @@ import (
 	"golang.org/x/net/context"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
-	"github.com/youtube/vitess/go/vt/topo/zk2topo"
+	"github.com/youtube/vitess/go/vt/topo/memorytopo"
 )
 
 // TestCreateShard tests a few cases for topo.CreateShard
@@ -22,7 +22,7 @@ func TestCreateShard(t *testing.T) {
 	ctx := context.Background()
 
 	// Set up topology.
-	ts := zk2topo.NewFakeServer("test_cell")
+	ts := memorytopo.NewServer("test_cell")
 
 	keyspace := "test_keyspace"
 	shard := "0"
@@ -49,7 +49,7 @@ func TestCreateShardCustomSharding(t *testing.T) {
 	ctx := context.Background()
 
 	// Set up topology.
-	ts := zk2topo.NewFakeServer("test_cell")
+	ts := memorytopo.NewServer("test_cell")
 
 	// create keyspace
 	keyspace := "test_keyspace"
@@ -91,7 +91,7 @@ func TestGetOrCreateShard(t *testing.T) {
 	ctx := context.Background()
 
 	// Set up topology.
-	ts := zk2topo.NewFakeServer("test_cell")
+	ts := memorytopo.NewServer("test_cell")
 
 	// and do massive parallel GetOrCreateShard
 	keyspace := "test_keyspace"

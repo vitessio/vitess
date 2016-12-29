@@ -8,7 +8,6 @@ import (
 
 	"golang.org/x/net/context"
 
-	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/memorytopo"
 
 	workflowpb "github.com/youtube/vitess/go/vt/proto/workflow"
@@ -45,7 +44,7 @@ func startManager(t *testing.T, m *Manager) (*sync.WaitGroup, context.CancelFunc
 
 // TestManagerSimpleRun starts and stops a job within a Manager.
 func TestManagerSimpleRun(t *testing.T) {
-	ts := topo.Server{Impl: memorytopo.NewMemoryTopo([]string{"cell1"})}
+	ts := memorytopo.NewServer("cell1")
 	m := NewManager(ts)
 
 	// Run the manager in the background.
@@ -74,7 +73,7 @@ func TestManagerSimpleRun(t *testing.T) {
 // TestManagerRestart starts a job within a manager, stops the
 // manager, restarts a manager, and stops the job.
 func TestManagerRestart(t *testing.T) {
-	ts := topo.Server{Impl: memorytopo.NewMemoryTopo([]string{"cell1"})}
+	ts := memorytopo.NewServer("cell1")
 	m := NewManager(ts)
 
 	// Run the manager in the background.
