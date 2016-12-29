@@ -264,85 +264,12 @@ type Impl interface {
 	//
 	// Can return ErrNoNode
 	GetVSchema(ctx context.Context, keyspace string) (*vschemapb.Keyspace, error)
-
-	//
-	// Master election methods. This is meant to have a small
-	// number of processes elect a master within a group. The
-	// backend storage for this can either be the global topo
-	// server, or a resilient quorum of individual cells, to
-	// reduce the load / dependency on the global topo server.
-	//
-
-	// NewMasterParticipation creates a MasterParticipation
-	// object, used to become the Master in an election for the
-	// provided group name.  Id is the name of the local process,
-	// passing in the hostname:port of the current process as id
-	// is the common usage. Id must be unique for each process
-	// calling this, for a given name. Calling this function does
-	// not make the current process a candidate for the election.
-	NewMasterParticipation(name, id string) (MasterParticipation, error)
 }
 
 // Server is a wrapper type that can have extra methods.
 // Outside modules should just use the Server object.
 type Server struct {
 	Impl
-}
-
-// MasterParticipation is the object returned by NewMasterParticipation.
-// Sample usage:
-//
-// mp := server.NewMasterParticipation("vtctld", "hostname:8080")
-// job := NewJob()
-// go func() {
-//   for {
-//     ctx, err := mp.WaitForMastership()
-//     switch err {
-//     case nil:
-//       job.RunUntilContextDone(ctx)
-//     case topo.ErrInterrupted:
-//       return
-//     default:
-//       log.Errorf("Got error while waiting for master, will retry in 5s: %v", err)
-//       time.Sleep(5 * time.Second)
-//     }
-//   }
-// }()
-//
-// http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-//   if job.Running() {
-//     job.WriteStatus(w, r)
-//   } else {
-//     http.Redirect(w, r, mp.GetCurrentMasterID(context.Background()), http.StatusFound)
-//   }
-// })
-//
-// servenv.OnTermSync(func() {
-//   mp.Stop()
-// })
-type MasterParticipation interface {
-	// WaitForMastership makes the current process a candidate
-	// for election, and waits until this process is the master.
-	// After we become the master, we may lose mastership. In that case,
-	// the returned context will be canceled. If Stop was called,
-	// WaitForMastership will return nil, ErrInterrupted.
-	WaitForMastership() (context.Context, error)
-
-	// Stop is called when we don't want to participate in the
-	// master election any more. Typically, that is when the
-	// hosting process is terminating.  We will relinquish
-	// mastership at that point, if we had it. Stop should
-	// not return until everything has been done.
-	// The MasterParticipation object should be discarded
-	// after Stop has been called. Any call to WaitForMastership
-	// after Stop() will return nil, ErrInterrupted.
-	// If WaitForMastership() was running, it will return
-	// nil, ErrInterrupted as soon as possible.
-	Stop()
-
-	// GetCurrentMasterID returns the current master id.
-	// This may not work after Stop has been called.
-	GetCurrentMasterID(ctx context.Context) (string, error)
 }
 
 // SrvTopoServer is a subset of the Server API that only contains the serving
