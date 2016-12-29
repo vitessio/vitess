@@ -219,7 +219,7 @@ public class Proto {
     return builder.build();
   }
 
-  public static List<CursorWithError> fromQueryResponsestoCursorList(List<Query.ResultWithError> resultWithErrorList) {
+  public static List<CursorWithError> fromQueryResponsesToCursorList(List<Query.ResultWithError> resultWithErrorList) {
     ImmutableList.Builder<CursorWithError> builder = new ImmutableList.Builder<CursorWithError>();
     for (Query.ResultWithError resultWithError : resultWithErrorList) {
       builder.add(new CursorWithError(resultWithError));

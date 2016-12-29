@@ -217,7 +217,7 @@ public final class VTGateConn implements Closeable {
 
         if (null != bindVarsList && bindVarsList.size() != queryList.size()) {
             throw new SQLDataException(
-                "Number of SQL Query list does not match the bind variables list");
+                "Size of SQL Query list does not match the bind variables list");
         }
 
         for (int i = 0; i < queryList.size(); ++i) {
@@ -239,7 +239,7 @@ public final class VTGateConn implements Closeable {
                         Vtgate.ExecuteBatchResponse response) throws Exception {
                         Proto.checkError(response.getError());
                         return Futures.immediateFuture(
-                            Proto.fromQueryResponsestoCursorList(response.getResultsList()));
+                            Proto.fromQueryResponsesToCursorList(response.getResultsList()));
                     }
                 }));
     }
