@@ -313,7 +313,7 @@ type Server struct {
 //   if job.Running() {
 //     job.WriteStatus(w, r)
 //   } else {
-//     http.Redirect(w, r, mp.GetCurrentMasterID(), http.StatusFound)
+//     http.Redirect(w, r, mp.GetCurrentMasterID(context.Background()), http.StatusFound)
 //   }
 // })
 //
@@ -342,7 +342,7 @@ type MasterParticipation interface {
 
 	// GetCurrentMasterID returns the current master id.
 	// This may not work after Stop has been called.
-	GetCurrentMasterID() (string, error)
+	GetCurrentMasterID(ctx context.Context) (string, error)
 }
 
 // SrvTopoServer is a subset of the Server API that only contains the serving
