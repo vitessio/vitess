@@ -90,12 +90,17 @@ func (rtr *Router) ExecuteBatch(ctx context.Context, sqlList []string, bindVarsL
 	if bindVarsList == nil {
 		bindVarsList = make([]map[string]interface{}, len(sqlList))
 	}
-	queryResponseList := make([]sqltypes.QueryResponse, len(sqlList))
+	queryResponseList := make([]sqltypes.QueryResponse, 0, len(sqlList))
 	for sqlNum, query := range sqlList {
 		var queryResponse sqltypes.QueryResponse
+
+		bindVars := bindVarsList[sqlNum]
+		if bindVars == nil {
+			bindVars = make(map[string]interface{})
+		}
 		//Using same QueryExecutor -> marking notInTransaction as false and not using asTransaction flag
-		vcursor := newQueryExecutor(ctx, query, bindVarsList[sqlNum], keyspace, tabletType, session, false, options, rtr)
-		plan, err := rtr.planner.GetPlan(query, keyspace, bindVarsList[sqlNum])
+		vcursor := newQueryExecutor(ctx, query, bindVars, keyspace, tabletType, session, false, options, rtr)
+		plan, err := rtr.planner.GetPlan(query, keyspace, bindVars)
 		if err != nil {
 			queryResponse.QueryError = err
 		} else {

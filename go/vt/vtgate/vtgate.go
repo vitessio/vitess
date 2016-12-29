@@ -386,7 +386,9 @@ func (vtg *VTGate) ExecuteBatch(ctx context.Context, sqlList []string, bindVaria
 	qr, err := vtg.router.ExecuteBatch(ctx, sqlList, bindVariablesList, keyspace, tabletType, asTransaction, session, options)
 	if err == nil {
 		for _, queryResponse := range qr {
-			vtg.rowsReturned.Add(statsKey, int64(len(queryResponse.QueryResult.Rows)))
+			if queryResponse.QueryResult != nil {
+				vtg.rowsReturned.Add(statsKey, int64(len(queryResponse.QueryResult.Rows)))
+			}
 		}
 		return qr, nil
 	}
