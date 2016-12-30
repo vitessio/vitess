@@ -82,7 +82,8 @@ func runWorkflowManagerElection(ts topo.Server) {
 		// Set up a redirect host so when we are not the
 		// master, we can redirect traffic properly.
 		vtctl.WorkflowManager.SetRedirectFunc(func() (string, error) {
-			return mp.GetCurrentMasterID()
+			ctx := context.Background()
+			return mp.GetCurrentMasterID(ctx)
 		})
 
 		go func() {

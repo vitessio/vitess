@@ -96,7 +96,7 @@ func (mp *mtMasterParticipation) Stop() {
 }
 
 // GetCurrentMasterID is part of the topo.MasterParticipation interface
-func (mp *mtMasterParticipation) GetCurrentMasterID() (string, error) {
+func (mp *mtMasterParticipation) GetCurrentMasterID(ctx context.Context) (string, error) {
 	electionPath := path.Join(electionsPath, mp.name)
 
 	mp.mt.mu.Lock()
