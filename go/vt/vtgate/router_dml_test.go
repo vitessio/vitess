@@ -551,7 +551,7 @@ func TestInsertLookupUnowned(t *testing.T) {
 		t.Errorf("sbc.Queries: %+v, want %+v\n", sbc.Queries, wantQueries)
 	}
 	wantQueries = []querytypes.BoundQuery{{
-		Sql: "select music_id from music_user_map where music_id in (:music_id0) and user_id in (:user_id0)",
+		Sql: "select music_id from music_user_map where ((music_id = :music_id0 and user_id = :user_id0))",
 		BindVariables: map[string]interface{}{
 			"music_id0": int64(3),
 			"user_id0":  int64(2),
@@ -668,11 +668,11 @@ func TestInsertFail(t *testing.T) {
 		t.Errorf("routerExec: %v, want prefix %v", err, want)
 	}
 
-	//_, err = routerExec(router, "insert into music_extra(user_id, music_id) values (1, null)", nil)
-	//want = "execInsertSharded: getInsertShardedRoute: value must be supplied for column music_id"
-	//if err == nil || err.Error() != want {
-	//	t.Errorf("routerExec: %v, want %v", err, want)
-	//}
+	_, err = routerExec(router, "insert into music_extra(user_id, music_id) values (1, null)", nil)
+	want = "execInsertSharded: getInsertShardedRoute: value must be supplied for column music_id"
+	if err == nil || err.Error() != want {
+		t.Errorf("routerExec: %v, want %v", err, want)
+	}
 
 	_, err = routerExec(router, "insert into music_extra_reversed(music_id, user_id) values (1, 'aa')", nil)
 	want = `execInsertSharded: getInsertShardedRoute: hash.Verify: parseString: strconv.ParseUint: parsing "aa": invalid syntax`

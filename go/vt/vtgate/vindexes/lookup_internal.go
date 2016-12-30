@@ -92,25 +92,26 @@ func (lkp *lookup) MapNonUniqueLookup(vcursor VCursor, ids []interface{}) ([][][
 
 // Verify returns true if ids maps to ksids.
 func (lkp *lookup) Verify(vcursor VCursor, ids []interface{}, ksids [][]byte) (bool, error) {
-	var fromColBuff bytes.Buffer
-	var toColBuff bytes.Buffer
+	var colBuff bytes.Buffer
 	var err error
 	if len(ids) != len(ksids) {
 		return false, fmt.Errorf("lookup.Verify:length of ids %v doesn't match length of ksids %v", len(ids), len(ksids))
 	}
 	val := make([]interface{}, len(ksids))
 	bindVars := make(map[string]interface{}, 2*len(ids))
-	fromColBuff.WriteString("(")
-	toColBuff.WriteString("(")
+	colBuff.WriteString("(")
 	for rowNum, keyspaceID := range ksids {
 		fromStr := lkp.From + strconv.Itoa(rowNum)
 		toStr := lkp.To + strconv.Itoa(rowNum)
-		fromColBuff.WriteString(":")
-		fromColBuff.WriteString(fromStr)
-		fromColBuff.WriteString(",")
-		toColBuff.WriteString(":")
-		toColBuff.WriteString(toStr)
-		toColBuff.WriteString(",")
+		colBuff.WriteString("(")
+		colBuff.WriteString(lkp.From)
+		colBuff.WriteString("=:")
+		colBuff.WriteString(fromStr)
+		colBuff.WriteString(" and ")
+		colBuff.WriteString(lkp.To)
+		colBuff.WriteString("=:")
+		colBuff.WriteString(toStr)
+		colBuff.WriteString(")or")
 		if lkp.isHashedIndex {
 			val[rowNum], err = vunhash(keyspaceID)
 			if err != nil {
@@ -122,7 +123,7 @@ func (lkp *lookup) Verify(vcursor VCursor, ids []interface{}, ksids [][]byte) (b
 		bindVars[fromStr] = ids[rowNum]
 		bindVars[toStr] = val[rowNum]
 	}
-	lkp.ver = fmt.Sprintf("select %s from %s where %s in %s and %s in %s", lkp.From, lkp.Table, lkp.From, strings.Trim(fromColBuff.String(), ",")+")", lkp.To, strings.Trim(toColBuff.String(), ",")+")")
+	lkp.ver = fmt.Sprintf("select %s from %s where %s", lkp.From, lkp.Table, strings.Trim(colBuff.String(),"or")+")")
 	result, err := vcursor.Execute(lkp.ver, bindVars)
 	if err != nil {
 		return false, fmt.Errorf("lookup.Verify: %v", err)
