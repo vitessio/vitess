@@ -10,13 +10,13 @@ import (
 	"os"
 	"os/exec"
 	"path"
-	"strconv"
 	"testing"
 	"time"
 
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 
+	"github.com/youtube/vitess/go/testfiles"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/test"
 
@@ -31,15 +31,8 @@ func startEtcd(t *testing.T) (*exec.Cmd, string, string) {
 		t.Fatalf("cannot create tempdir: %v", err)
 	}
 
-	// Find two ports to listen to. Same logic as the end-to-end tests.
-	env := os.Getenv("VTPORTSTART")
-	if env == "" {
-		env = "6700"
-	}
-	port, err := strconv.Atoi(env)
-	if err != nil {
-		t.Fatalf("cannot parse VTPORTSTART: %v", err)
-	}
+	// Get our two ports to listen to.
+	port := testfiles.GoVtTopoEtcd2topoPort
 	name := "vitess_unit_test"
 	clientAddr := fmt.Sprintf("http://localhost:%v", port)
 	peerAddr := fmt.Sprintf("http://localhost:%v", port+1)

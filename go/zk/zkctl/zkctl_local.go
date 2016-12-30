@@ -2,8 +2,6 @@ package zkctl
 
 import (
 	"fmt"
-	"os"
-	"strconv"
 
 	log "github.com/golang/glog"
 
@@ -12,20 +10,9 @@ import (
 
 // StartLocalZk is a helper method to create a local ZK process.  Used
 // in tests, mostly. It will log.Fatal out if there is an error.  Each
-// call should use different serverID, so tests don't interfere with
-// eachother.
-func StartLocalZk(id int) (*Zkd, string) {
-	// Get the starting port.
-	env := os.Getenv("VTPORTSTART")
-	if env == "" {
-		env = "6700"
-	}
-	portStart, err := strconv.Atoi(env)
-	if err != nil {
-		log.Fatalf("cannot parse VTPORTSTART: %v", err)
-	}
-	port := portStart + (id-1)*3
-
+// call should use different serverID / ports, so tests don't
+// interfere with eachother. Use the testfiles package to achieve this.
+func StartLocalZk(id, port int) (*Zkd, string) {
 	// Build the config parameters.
 	hostname := netutil.FullyQualifiedHostnameOrPanic()
 	zkCfg := fmt.Sprintf("%v@%v:%v:%v:%v", id, hostname, port, port+1, port+2)
