@@ -123,7 +123,7 @@ func (lkp *lookup) Verify(vcursor VCursor, ids []interface{}, ksids [][]byte) (b
 		bindVars[fromStr] = ids[rowNum]
 		bindVars[toStr] = val[rowNum]
 	}
-	lkp.ver = fmt.Sprintf("select %s from %s where %s", lkp.From, lkp.Table, strings.Trim(colBuff.String(),"or")+")")
+	lkp.ver = fmt.Sprintf("select %s from %s where %s", lkp.From, lkp.Table, strings.Trim(colBuff.String(), "or")+")")
 	result, err := vcursor.Execute(lkp.ver, bindVars)
 	if err != nil {
 		return false, fmt.Errorf("lookup.Verify: %v", err)
