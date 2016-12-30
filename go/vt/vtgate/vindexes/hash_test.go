@@ -44,7 +44,7 @@ func TestHashMap(t *testing.T) {
 }
 
 func TestHashVerify(t *testing.T) {
-	success, err := hash.Verify(nil, 1, []byte("\x16k@\xb4J\xbaK\xd6"))
+	success, err := hash.Verify(nil, []interface{}{1}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6")})
 	if err != nil {
 		t.Error(err)
 	}
@@ -54,11 +54,11 @@ func TestHashVerify(t *testing.T) {
 }
 
 func TestHashReverseMap(t *testing.T) {
-	got, err := hash.(Reversible).ReverseMap(nil, []byte("\x16k@\xb4J\xbaK\xd6"))
+	got, err := hash.(Reversible).ReverseMap(nil, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6")})
 	if err != nil {
 		t.Error(err)
 	}
-	if got.(int64) != 1 {
+	if got[0].(int64) != 1 {
 		t.Errorf("ReverseMap(): %+v, want 1", got)
 	}
 }

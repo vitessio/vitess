@@ -11,13 +11,13 @@ var lookupUnique Vindex
 var lookupNonUnique Vindex
 
 func init() {
-	lunique, err := CreateVindex("lookup_unique", "lookupUnique", map[string]string{"table": "t", "from": "fromc", "to": "toc"})
+	lkpunique, err := CreateVindex("lookup_unique", "lookupUnique", map[string]string{"table": "t", "from": "fromc", "to": "toc"})
 	if err != nil {
 		panic(err)
 	}
-	lnonunique, err := CreateVindex("lookup", "lookupNonUnique", map[string]string{"table": "t", "from": "fromc", "to": "toc"})
-	lookupUnique = lunique
-	lookupNonUnique = lnonunique
+	lkpnonunique, err := CreateVindex("lookup", "lookupNonUnique", map[string]string{"table": "t", "from": "fromc", "to": "toc"})
+	lookupUnique = lkpunique
+	lookupNonUnique = lkpnonunique
 }
 
 func TestLookupUniqueCost(t *testing.T) {
@@ -34,7 +34,7 @@ func TestLookupNonUniqueCost(t *testing.T) {
 
 func TestLookupUniqueVerify(t *testing.T) {
 	vc := &vcursor{numRows: 1}
-	success, err := lookupUnique.Verify(vc, 1, []byte("test"))
+	success, err := lookupUnique.Verify(vc, []interface{}{1}, [][]byte{[]byte("test")})
 	if err != nil {
 		t.Error(err)
 	}
@@ -45,15 +45,15 @@ func TestLookupUniqueVerify(t *testing.T) {
 
 func TestLookupUniqueCreate(t *testing.T) {
 	vc := &vcursor{}
-	err := lookupUnique.(Lookup).Create(vc, 1, []byte("test"))
+	err := lookupUnique.(Lookup).Create(vc, []interface{}{1}, [][]byte{[]byte("test")})
 	if err != nil {
 		t.Error(err)
 	}
 	wantQuery := &querytypes.BoundQuery{
-		Sql: "insert into t(fromc, toc) values(:fromc, :toc)",
+		Sql: "insert into t(fromc,toc) values(:fromc0,:toc0)",
 		BindVariables: map[string]interface{}{
-			"fromc": 1,
-			"toc":   []byte("test"),
+			"fromc0": 1,
+			"toc0":   []byte("test"),
 		},
 	}
 	if !reflect.DeepEqual(vc.bq, wantQuery) {

@@ -5,7 +5,6 @@
 package vtgate
 
 import (
-	"encoding/hex"
 	"fmt"
 	"strconv"
 
@@ -432,25 +431,29 @@ func (rtr *Router) getInsertShardedRoute(vcursor *queryExecutor, route *engine.R
 	}
 
 	inputs := route.Values.([]interface{})
-	for rowNum, input := range inputs {
+	allKeys := make([][]interface{}, len(inputs[0].([]interface{})))
+	for _, input := range inputs {
 		keys, err := rtr.resolveKeys(input.([]interface{}), vcursor.bindVars)
 		if err != nil {
 			return "", nil, fmt.Errorf("getInsertShardedRoute: %v", err)
 		}
 		for colNum := 0; colNum < len(keys); colNum++ {
-			if colNum == 0 {
-				ksid, err := rtr.handlePrimary(vcursor, keys[colNum], route.Table.ColumnVindexes[colNum], vcursor.bindVars, rowNum)
-				if err != nil {
-					return "", nil, fmt.Errorf("getInsertShardedRoute: %v", err)
-				}
-				keyspaceIDs = append(keyspaceIDs, ksid)
-			} else {
-				err := rtr.handleNonPrimary(vcursor, keys[colNum], route.Table.ColumnVindexes[colNum], vcursor.bindVars, keyspaceIDs[rowNum], rowNum)
-				if err != nil {
-					return "", nil, fmt.Errorf("getInsertShardedRoute: %v", err)
-				}
-			}
+			allKeys[colNum] = append(allKeys[colNum], keys[colNum])
 		}
+	}
+
+	keyspaceIDs, err = rtr.handlePrimary(vcursor, allKeys[0], route.Table.ColumnVindexes[0], vcursor.bindVars, allShards)
+	if err != nil {
+		return "", nil, fmt.Errorf("getInsertShardedRoute: %v", err)
+	}
+
+	for colNum := 1; colNum < len(allKeys); colNum++ {
+		err := rtr.handleNonPrimary(vcursor, allKeys[colNum], route.Table.ColumnVindexes[colNum], vcursor.bindVars, keyspaceIDs)
+		if err != nil {
+			return "", nil, fmt.Errorf("getInsertShardedRoute: %v", err)
+		}
+	}
+	for rowNum := range keyspaceIDs {
 		shard, err := getShardForKeyspaceID(allShards, keyspaceIDs[rowNum])
 		routing[shard] = append(routing[shard], route.Mid[rowNum])
 		if err != nil {
@@ -701,57 +704,86 @@ func (rtr *Router) handleGenerate(vcursor *queryExecutor, gen *engine.Generate) 
 	return insertid, nil
 }
 
-func (rtr *Router) handlePrimary(vcursor *queryExecutor, vindexKey interface{}, colVindex *vindexes.ColumnVindex, bv map[string]interface{}, rowNum int) (ksid []byte, err error) {
-	if vindexKey == nil {
+func (rtr *Router) handlePrimary(vcursor *queryExecutor, vindexKeys []interface{}, colVindex *vindexes.ColumnVindex, bv map[string]interface{}, allShards []*topodatapb.ShardReference) (keyspaceIDs [][]byte, err error) {
+	if vindexKeys == nil {
 		return nil, fmt.Errorf("value must be supplied for column %v", colVindex.Column)
 	}
+	for _, vindexkey := range vindexKeys {
+		if vindexkey == nil {
+			return nil, fmt.Errorf("value must be supplied for column %v", colVindex.Column)
+		}
+	}
 	mapper := colVindex.Vindex.(vindexes.Unique)
-	ksids, err := mapper.Map(vcursor, []interface{}{vindexKey})
+	keyspaceIDs, err = mapper.Map(vcursor, vindexKeys)
 	if err != nil {
 		return nil, err
 	}
-	ksid = ksids[0]
-	if len(ksid) == 0 {
-		return nil, fmt.Errorf("could not map %v to a keyspace id", vindexKey)
+	if len(keyspaceIDs) != len(vindexKeys) {
+		return nil, fmt.Errorf("could not map %v to a keyspaceids", vindexKeys)
 	}
-	bv["_"+colVindex.Column.CompliantName()+strconv.Itoa(rowNum)] = vindexKey
-	return ksid, nil
+	for rowNum, vindexKey := range vindexKeys {
+		if len(keyspaceIDs[rowNum]) == 0 {
+			return nil, fmt.Errorf("could not map %v to a keyspace id", vindexKey)
+		}
+		bv["_"+colVindex.Column.CompliantName()+strconv.Itoa(rowNum)] = vindexKey
+	}
+	return keyspaceIDs, nil
 }
 
-func (rtr *Router) handleNonPrimary(vcursor *queryExecutor, vindexKey interface{}, colVindex *vindexes.ColumnVindex, bv map[string]interface{}, ksid []byte, rowNum int) error {
+func (rtr *Router) handleNonPrimary(vcursor *queryExecutor, vindexKeys []interface{}, colVindex *vindexes.ColumnVindex, bv map[string]interface{}, ksids [][]byte) error {
 	if colVindex.Owned {
-		if vindexKey == nil {
+		if vindexKeys == nil {
 			return fmt.Errorf("value must be supplied for column %v", colVindex.Column)
 		}
-		err := colVindex.Vindex.(vindexes.Lookup).Create(vcursor, vindexKey, ksid)
+		for rowNum, vindexKey := range vindexKeys {
+			if vindexKey == nil {
+				return fmt.Errorf("value must be supplied for column %v", colVindex.Column)
+			}
+			bv["_"+colVindex.Column.CompliantName()+strconv.Itoa(rowNum)] = vindexKey
+		}
+		err := colVindex.Vindex.(vindexes.Lookup).Create(vcursor, vindexKeys, ksids)
 		if err != nil {
 			return err
 		}
 	} else {
-		if vindexKey == nil {
+		var reverseKsids [][]byte
+		var verifyKsids [][]byte
+		for rowNum, vindexKey := range vindexKeys {
+			if vindexKey == nil {
+				reverseKsids = append(reverseKsids, ksids[rowNum])
+			} else {
+				verifyKsids = append(verifyKsids, ksids[rowNum])
+			}
+			bv["_"+colVindex.Column.CompliantName()+strconv.Itoa(rowNum)] = vindexKey
+		}
+		var err error
+		if reverseKsids != nil {
 			reversible, ok := colVindex.Vindex.(vindexes.Reversible)
 			if !ok {
 				return fmt.Errorf("value must be supplied for column %v", colVindex.Column)
 			}
-			var err error
-			vindexKey, err = reversible.ReverseMap(vcursor, ksid)
+			vindexKeys, err = reversible.ReverseMap(vcursor, reverseKsids)
 			if err != nil {
 				return err
 			}
-			if vindexKey == nil {
+			if vindexKeys == nil {
 				return fmt.Errorf("could not compute value for column %v", colVindex.Column)
 			}
-		} else {
-			ok, err := colVindex.Vindex.Verify(vcursor, vindexKey, ksid)
+			for rowNum, vindexKey := range vindexKeys {
+				bv["_"+colVindex.Column.CompliantName()+strconv.Itoa(rowNum)] = vindexKey
+			}
+		}
+
+		if verifyKsids != nil {
+			ok, err := colVindex.Vindex.Verify(vcursor, vindexKeys, verifyKsids)
 			if err != nil {
 				return err
 			}
 			if !ok {
-				return fmt.Errorf("value %v for column %v does not map to keyspace id %v", vindexKey, colVindex.Column, hex.EncodeToString(ksid))
+				return fmt.Errorf("values %v for column %v does not map to keyspaceids", vindexKeys, colVindex.Column)
 			}
 		}
 	}
-	bv["_"+colVindex.Column.CompliantName()+strconv.Itoa(rowNum)] = vindexKey
 	return nil
 }
 

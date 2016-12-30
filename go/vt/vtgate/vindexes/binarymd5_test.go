@@ -40,7 +40,7 @@ func TestBinaryMD5(t *testing.T) {
 		if out != tcase.out {
 			t.Errorf("Map(%#v): %#v, want %#v", tcase.in, out, tcase.out)
 		}
-		ok, err := binVindex.Verify(nil, []byte(tcase.in), []byte(tcase.out))
+		ok, err := binVindex.Verify(nil, []interface{}{[]byte(tcase.in)}, [][]byte{[]byte(tcase.out)})
 		if err != nil {
 			t.Error(err)
 		}

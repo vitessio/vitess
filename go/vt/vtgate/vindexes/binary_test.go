@@ -1,8 +1,8 @@
 package vindexes
 
 import (
-	"testing"
 	"bytes"
+	"testing"
 )
 
 var binOnlyVindex Vindex
@@ -39,7 +39,7 @@ func TestBinary(t *testing.T) {
 		if bytes.Compare(tcase.in, out) != 0 {
 			t.Errorf("Map(%#v): %#v, want %#v", tcase.in, out, tcase.out)
 		}
-		ok, err := binOnlyVindex.Verify(nil, tcase.in, tcase.out)
+		ok, err := binOnlyVindex.Verify(nil, []interface{}{tcase.in}, [][]byte{tcase.out})
 		if err != nil {
 			t.Error(err)
 		}
@@ -50,11 +50,11 @@ func TestBinary(t *testing.T) {
 }
 
 func TestBinaryReverseMap(t *testing.T) {
-	got, err := binOnlyVindex.(Reversible).ReverseMap(nil, []byte("\x00\x00\x00\x00\x00\x00\x00\x01"))
+	got, err := binOnlyVindex.(Reversible).ReverseMap(nil, [][]byte{[]byte("\x00\x00\x00\x00\x00\x00\x00\x01")})
 	if err != nil {
 		t.Error(err)
 	}
-	if bytes.Compare(got.([]byte), []byte("\x00\x00\x00\x00\x00\x00\x00\x01")) != 0 {
+	if bytes.Compare(got[0].([]byte), []byte("\x00\x00\x00\x00\x00\x00\x00\x01")) != 0 {
 		t.Errorf("ReverseMap(): %+v, want %+v", got, []byte("\x00\x00\x00\x00\x00\x00\x00\x01"))
 	}
 }

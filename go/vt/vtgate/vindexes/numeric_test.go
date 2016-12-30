@@ -62,7 +62,7 @@ func TestNumericMapBadData(t *testing.T) {
 }
 
 func TestNumericVerify(t *testing.T) {
-	success, err := numeric.Verify(nil, 1, []byte("\x00\x00\x00\x00\x00\x00\x00\x01"))
+	success, err := numeric.Verify(nil, []interface{}{1}, [][]byte{[]byte("\x00\x00\x00\x00\x00\x00\x00\x01")})
 	if err != nil {
 		t.Error(err)
 	}
@@ -72,7 +72,7 @@ func TestNumericVerify(t *testing.T) {
 }
 
 func TestNumericVerifyBadData(t *testing.T) {
-	_, err := numeric.Verify(nil, 1.1, []byte("\x00\x00\x00\x00\x00\x00\x00\x01"))
+	_, err := numeric.Verify(nil, []interface{}{1.1}, [][]byte{[]byte("\x00\x00\x00\x00\x00\x00\x00\x01")})
 	want := `Numeric.Verify: getNumber: unexpected type for 1.1: float64`
 	if err == nil || err.Error() != want {
 		t.Errorf("numeric.Map: %v, want %v", err, want)
@@ -80,18 +80,18 @@ func TestNumericVerifyBadData(t *testing.T) {
 }
 
 func TestNumericReverseMap(t *testing.T) {
-	got, err := numeric.(Reversible).ReverseMap(nil, []byte("\x00\x00\x00\x00\x00\x00\x00\x01"))
+	got, err := numeric.(Reversible).ReverseMap(nil, [][]byte{[]byte("\x00\x00\x00\x00\x00\x00\x00\x01")})
 	if err != nil {
 		t.Error(err)
 	}
-	if got.(uint64) != 1 {
+	if got[0].(uint64) != 1 {
 		t.Errorf("ReverseMap(): %+v, want 1", got)
 	}
 }
 
 func TestNumericReverseMapBadData(t *testing.T) {
-	_, err := numeric.(Reversible).ReverseMap(nil, []byte("aa"))
-	want := `Numeric.ReverseMap: length of keyspace is not 8: 2`
+	_, err := numeric.(Reversible).ReverseMap(nil, [][]byte{[]byte("aa")})
+	want := `Numeric.ReverseMap: length of keyspaceId is not 8: 2`
 	if err == nil || err.Error() != want {
 		t.Errorf("numeric.Map: %v, want %v", err, want)
 	}
