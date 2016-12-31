@@ -2,9 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package vtgate
-
-import "github.com/youtube/vitess/go/vt/vtgate/engine"
+package engine
 
 type routingMap map[string][]interface{}
 
@@ -27,7 +25,7 @@ func (rtm routingMap) ShardVars(bv map[string]interface{}) map[string]map[string
 		for k, v := range bv {
 			newbv[k] = v
 		}
-		newbv[engine.ListVarName] = vals
+		newbv[ListVarName] = vals
 		shardVars[shard] = newbv
 	}
 	return shardVars
