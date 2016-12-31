@@ -64,6 +64,13 @@ func TestBinary(t *testing.T) {
 			{
 				Name: "binval",
 				Type: sqltypes.VarBinary,
+				Table: "vitess_test",
+				OrgTable: "vitess_test",
+				Database: "vttest",
+				OrgName: "binval",
+				ColumnLength: 256,
+				Charset: 63,
+				Flags: 128,
 			},
 		},
 		RowsAffected: 1,
@@ -74,7 +81,7 @@ func TestBinary(t *testing.T) {
 		},
 	}
 	if !reflect.DeepEqual(*qr, want) {
-		t.Errorf("Execute: \n%#v, want \n%#v", *qr, want)
+		t.Errorf("Execute: \n%#v, want \n%#v", prettyPrint(*qr), prettyPrint(want))
 	}
 
 	// Test with bindvars.
@@ -92,7 +99,7 @@ func TestBinary(t *testing.T) {
 		return
 	}
 	if !reflect.DeepEqual(*qr, want) {
-		t.Errorf("Execute: \n%#v, want \n%#v", *qr, want)
+		t.Errorf("Execute: \n%#v, want \n%#v", prettyPrint(*qr), prettyPrint(want))
 	}
 }
 
@@ -315,6 +322,9 @@ func TestBindInSelect(t *testing.T) {
 		Fields: []*querypb.Field{{
 			Name: "1",
 			Type: sqltypes.Int64,
+			ColumnLength: 1,
+			Charset: 63,
+			Flags: 32897,
 		}},
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
@@ -324,7 +334,7 @@ func TestBindInSelect(t *testing.T) {
 		},
 	}
 	if !reflect.DeepEqual(qr, want) {
-		t.Errorf("Execute: \n%#v, want \n%#v", qr, want)
+		t.Errorf("Execute: \n%#v, want \n%#v", prettyPrint(*qr), prettyPrint(*want))
 	}
 
 	// String bind var.
@@ -340,6 +350,10 @@ func TestBindInSelect(t *testing.T) {
 		Fields: []*querypb.Field{{
 			Name: "abcd",
 			Type: sqltypes.VarChar,
+			ColumnLength: 12,
+			Charset: 33,
+			Decimals: 31,
+			Flags: 1,
 		}},
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
@@ -349,7 +363,7 @@ func TestBindInSelect(t *testing.T) {
 		},
 	}
 	if !reflect.DeepEqual(qr, want) {
-		t.Errorf("Execute: \n%#v, want \n%#v", qr, want)
+		t.Errorf("Execute: \n%#v, want \n%#v", prettyPrint(*qr), prettyPrint(*want))
 	}
 
 	// Binary bind var.
@@ -365,6 +379,10 @@ func TestBindInSelect(t *testing.T) {
 		Fields: []*querypb.Field{{
 			Name: "",
 			Type: sqltypes.VarChar,
+			ColumnLength: 6,
+			Charset: 33,
+			Decimals: 31,
+			Flags: 1,
 		}},
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
@@ -374,7 +392,7 @@ func TestBindInSelect(t *testing.T) {
 		},
 	}
 	if !reflect.DeepEqual(qr, want) {
-		t.Errorf("Execute: \n%#v, want \n%#v", qr, want)
+		t.Errorf("Execute: \n%#v, want \n%#v", prettyPrint(*qr), prettyPrint(*want))
 	}
 }
 

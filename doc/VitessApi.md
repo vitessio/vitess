@@ -808,10 +808,20 @@ ExecuteOptions is passed around for all Execute calls.
 #### Properties
 
 | Name |Description |
-| :-------- | :-------- 
-| <code>exclude_field_names</code> <br>bool| If set, the resulting Field array won’t have a Name, just a Type. This is an optimization for high-QPS queries where the client knows what it's getting. |
+| :-------- | :--------
 | <code>include_event_token</code> <br>bool| If set, we will try to include an EventToken with the responses. |
 | <code>compare_event_token</code> <br>[EventToken](#query.eventtoken)| EventToken is a structure that describes a point in time in a replication stream on one shard. The most recent known replication position can be retrieved from vttablet when executing a query. It is also sent with the replication streams from the binlog service. |
+| <code>included_fields</code> <br>[IncludedFields](#query.includedfields) | The IncludedFields allows you to specify which Field metadata returned by a query. This is an optimization for high-QPS queries where the client knows what it's getting. |
+
+### query.IncludedFields
+
+IncludedFields allows you to specify which Field metadata returned by a query. This is an optimization for high-QPS queries where the client knows what it's getting.
+
+| Name |Value |Description |
+| :-------- | :-------- | :--------
+| <code>TYPE_AND_NAME</code> | <code>0</code> |  |
+| <code>TYPE_ONLY</code> | <code>1</code> |  |
+| <code>ALL</code> | <code>2</code> |  |
 
 ### query.Field
 

@@ -117,25 +117,35 @@ func (client *QueryClient) SetServingType(tabletType topodatapb.TabletType) erro
 
 // Execute executes a query.
 func (client *QueryClient) Execute(query string, bindvars map[string]interface{}) (*sqltypes.Result, error) {
+	return client.ExecuteWithOptions(query, bindvars, &querypb.ExecuteOptions{IncludedFields:querypb.ExecuteOptions_ALL})
+}
+
+// Execute executes a query.
+func (client *QueryClient) ExecuteWithOptions(query string, bindvars map[string]interface{}, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
 	return client.server.Execute(
 		client.ctx,
 		&client.target,
 		query,
 		bindvars,
 		client.transactionID,
-		nil,
+		options,
 	)
 }
 
 // StreamExecute executes a query & returns the results.
 func (client *QueryClient) StreamExecute(query string, bindvars map[string]interface{}) (*sqltypes.Result, error) {
+	return client.StreamExecuteWithOptions(query, bindvars, &querypb.ExecuteOptions{IncludedFields:querypb.ExecuteOptions_ALL})
+}
+
+// StreamExecute executes a query & returns the results.
+func (client *QueryClient) StreamExecuteWithOptions(query string, bindvars map[string]interface{}, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
 	result := &sqltypes.Result{}
 	err := client.server.StreamExecute(
 		client.ctx,
 		&client.target,
 		query,
 		bindvars,
-		nil,
+		options,
 		func(res *sqltypes.Result) error {
 			if result.Fields == nil {
 				result.Fields = res.Fields
@@ -158,7 +168,7 @@ func (client *QueryClient) Stream(query string, bindvars map[string]interface{},
 		&client.target,
 		query,
 		bindvars,
-		nil,
+		&querypb.ExecuteOptions{IncludedFields:querypb.ExecuteOptions_ALL},
 		sendFunc,
 	)
 }
@@ -171,6 +181,6 @@ func (client *QueryClient) ExecuteBatch(queries []querytypes.BoundQuery, asTrans
 		queries,
 		asTransaction,
 		client.transactionID,
-		nil,
+		&querypb.ExecuteOptions{IncludedFields:querypb.ExecuteOptions_ALL},
 	)
 }

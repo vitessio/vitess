@@ -1171,7 +1171,7 @@ class TestVTGateFunctions(unittest.TestCase):
     # test using exclude_field_names works.
     qr = utils.vtgate.execute(
         'select user_id, email from vt_user_extra where user_id = :user_id',
-        bindvars={'user_id': 11}, execute_options='exclude_field_names:true ')
+        bindvars={'user_id': 11}, execute_options='included_fields:TYPE_ONLY ')
     logging.debug('Original row: %s', str(qr))
     self.assertNotIn('name', qr['fields'][0])
     self.assertEqual(len(qr['rows']), 1)

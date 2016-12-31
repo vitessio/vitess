@@ -17,10 +17,10 @@ import (
 )
 
 // singlePk presents a table with a primary key that is a single integer column.
-var singlePk = []*querypb.Field{{"id", sqltypes.Int32}, {"msg", sqltypes.Char}}
+var singlePk = []*querypb.Field{{Name:"id", Type:sqltypes.Int32}, {Name:"msg", Type:sqltypes.Char}}
 
 // multiPk presents a table with a primary key with multiple (two) integer columns.
-var multiPk = []*querypb.Field{{"id", sqltypes.Int32}, {"sub_id", sqltypes.Int32}, {"msg", sqltypes.Char}}
+var multiPk = []*querypb.Field{{Name:"id", Type:sqltypes.Int32}, {Name:"sub_id", Type:sqltypes.Int32}, {Name:"msg", Type:sqltypes.Char}}
 
 // fakeResultReader returns generated Result structs.
 // It implements the ResultReader interface.

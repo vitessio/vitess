@@ -103,12 +103,21 @@ func MakeRowTrusted(fields []*querypb.Field, row *querypb.Row) []Value {
 	return sqlRow
 }
 
-// StripFieldNames will return a new Result that has the same Rows,
-// but the Field objects will have their Name emptied.  Note we don't
+// Normalizes the passed Execution Options, returning our default value if options happens to be nil
+func IncludeFieldsOrDefault(options *querypb.ExecuteOptions) querypb.ExecuteOptions_IncludedFields {
+	if options == nil {
+		return querypb.ExecuteOptions_TYPE_AND_NAME
+	}
+
+	return options.IncludedFields
+}
+
+// StripMetadata will return a new Result that has the same Rows,
+// but the Field objects will have their non-critical metadata emptied.  Note we don't
 // proto.Copy each Field for performance reasons, but we only copy the
 // individual fields.
-func (result *Result) StripFieldNames() *Result {
-	if len(result.Fields) == 0 {
+func (result *Result) StripMetadata(incl querypb.ExecuteOptions_IncludedFields) *Result {
+	if incl == querypb.ExecuteOptions_ALL || len(result.Fields) == 0 {
 		return result
 	}
 	r := *result
@@ -117,6 +126,9 @@ func (result *Result) StripFieldNames() *Result {
 	for i, f := range result.Fields {
 		r.Fields[i] = &newFieldsArray[i]
 		newFieldsArray[i].Type = f.Type
+		if incl == querypb.ExecuteOptions_TYPE_AND_NAME {
+			newFieldsArray[i].Name = f.Name
+		}
 	}
 	return &r
 }

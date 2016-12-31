@@ -27,15 +27,43 @@ func TestCharaterSet(t *testing.T) {
 			{
 				Name: "intval",
 				Type: sqltypes.Int32,
+				Table: "vitess_test",
+				OrgTable: "vitess_test",
+				Database: "vttest",
+				OrgName: "intval",
+				ColumnLength: 11,
+				Charset: 63,
+				Flags: 49155,
 			}, {
 				Name: "floatval",
 				Type: sqltypes.Float32,
+				Table: "vitess_test",
+				OrgTable: "vitess_test",
+				Database: "vttest",
+				OrgName: "floatval",
+				ColumnLength: 12,
+				Charset: 63,
+				Decimals: 31,
+				Flags: 32768,
 			}, {
 				Name: "charval",
 				Type: sqltypes.VarChar,
+				Table: "vitess_test",
+				OrgTable: "vitess_test",
+				Database: "vttest",
+				OrgName: "charval",
+				ColumnLength: 768,
+				Charset: 33,
 			}, {
 				Name: "binval",
 				Type: sqltypes.VarBinary,
+				Table: "vitess_test",
+				OrgTable: "vitess_test",
+				Database: "vttest",
+				OrgName: "binval",
+				ColumnLength: 256,
+				Charset: 63,
+				Flags: 128,
 			},
 		},
 		RowsAffected: 1,
@@ -49,7 +77,7 @@ func TestCharaterSet(t *testing.T) {
 		},
 	}
 	if !reflect.DeepEqual(*qr, want) {
-		t.Errorf("Execute: \n%#v, want \n%#v", *qr, want)
+		t.Errorf("Execute: \n%#v, want \n%#v", prettyPrint(*qr), prettyPrint(want))
 	}
 }
 
@@ -86,36 +114,113 @@ func TestInts(t *testing.T) {
 			{
 				Name: "tiny",
 				Type: sqltypes.Int8,
+				Table: "vitess_ints",
+				OrgTable: "vitess_ints",
+				Database: "vttest",
+				OrgName: "tiny",
+				ColumnLength: 4,
+				Charset: 63,
+				Flags: 49155,
 			}, {
 				Name: "tinyu",
 				Type: sqltypes.Uint8,
+				Table: "vitess_ints",
+				OrgTable: "vitess_ints",
+				Database: "vttest",
+				OrgName: "tinyu",
+				ColumnLength: 3,
+				Charset: 63,
+				Flags: 32800,
 			}, {
 				Name: "small",
 				Type: sqltypes.Int16,
+				Table: "vitess_ints",
+				OrgTable: "vitess_ints",
+				Database: "vttest",
+				OrgName: "small",
+				ColumnLength: 6,
+				Charset: 63,
+				Flags: 32768,
 			}, {
 				Name: "smallu",
 				Type: sqltypes.Uint16,
+				Table: "vitess_ints",
+				OrgTable: "vitess_ints",
+				Database: "vttest",
+				OrgName: "smallu",
+				ColumnLength: 5,
+				Charset: 63,
+				Flags: 32800,
 			}, {
 				Name: "medium",
 				Type: sqltypes.Int24,
+				Table: "vitess_ints",
+				OrgTable: "vitess_ints",
+				Database: "vttest",
+				OrgName: "medium",
+				ColumnLength: 9,
+				Charset: 63,
+				Flags: 32768,
 			}, {
 				Name: "mediumu",
 				Type: sqltypes.Uint24,
+				Table: "vitess_ints",
+				OrgTable: "vitess_ints",
+				Database: "vttest",
+				OrgName: "mediumu",
+				ColumnLength: 8,
+				Charset: 63,
+				Flags: 32800,
 			}, {
 				Name: "normal",
 				Type: sqltypes.Int32,
+				Table: "vitess_ints",
+				OrgTable: "vitess_ints",
+				Database: "vttest",
+				OrgName: "normal",
+				ColumnLength: 11,
+				Charset: 63,
+				Flags: 32768,
 			}, {
 				Name: "normalu",
 				Type: sqltypes.Uint32,
+				Table: "vitess_ints",
+				OrgTable: "vitess_ints",
+				Database: "vttest",
+				OrgName: "normalu",
+				ColumnLength: 10,
+				Charset: 63,
+				Flags: 32800,
 			}, {
 				Name: "big",
 				Type: sqltypes.Int64,
+				Table: "vitess_ints",
+				OrgTable: "vitess_ints",
+				Database: "vttest",
+				OrgName: "big",
+				ColumnLength: 20,
+				Charset: 63,
+				Flags: 32768,
 			}, {
 				Name: "bigu",
 				Type: sqltypes.Uint64,
+				Table: "vitess_ints",
+				OrgTable: "vitess_ints",
+				Database: "vttest",
+				OrgName: "bigu",
+				ColumnLength: 20,
+				Charset: 63,
+				Flags: 32800,
 			}, {
 				Name: "y",
 				Type: sqltypes.Year,
+				Table: "vitess_ints",
+				OrgTable: "vitess_ints",
+				Database: "vttest",
+				OrgName: "y",
+				ColumnLength: 4,
+				Charset: 63,
+				Flags: 32864,
 			},
 		},
 		RowsAffected: 1,
@@ -136,7 +241,7 @@ func TestInts(t *testing.T) {
 		},
 	}
 	if !reflect.DeepEqual(*qr, want) {
-		t.Errorf("Execute: \n%#v, want \n%#v", *qr, want)
+		t.Errorf("Execute: \n%#v, want \n%#v", prettyPrint(*qr), prettyPrint(want))
 	}
 	// This test was added because the following query causes mysql to
 	// return flags with both binary and unsigned set. The test ensures
@@ -150,6 +255,9 @@ func TestInts(t *testing.T) {
 			{
 				Name: "max(bigu)",
 				Type: sqltypes.Uint64,
+				ColumnLength: 20,
+				Charset: 63,
+				Flags: 32928,
 			},
 		},
 		RowsAffected: 1,
@@ -160,7 +268,7 @@ func TestInts(t *testing.T) {
 		},
 	}
 	if !reflect.DeepEqual(*qr, want) {
-		t.Errorf("Execute: \n%#v, want \n%#v", *qr, want)
+		t.Errorf("Execute: \n%#v, want \n%#v", prettyPrint(*qr), prettyPrint(want))
 	}
 }
 
@@ -190,18 +298,57 @@ func TestFractionals(t *testing.T) {
 			{
 				Name: "id",
 				Type: sqltypes.Int32,
+				Table: "vitess_fracts",
+				OrgTable: "vitess_fracts",
+				Database: "vttest",
+				OrgName: "id",
+				ColumnLength: 11,
+				Charset: 63,
+				Flags: 49155,
 			}, {
 				Name: "deci",
 				Type: sqltypes.Decimal,
+				Table: "vitess_fracts",
+				OrgTable: "vitess_fracts",
+				Database: "vttest",
+				OrgName: "deci",
+				ColumnLength: 7,
+				Charset: 63,
+				Decimals: 2,
+				Flags: 32768,
 			}, {
 				Name: "num",
 				Type: sqltypes.Decimal,
+				Table: "vitess_fracts",
+				OrgTable: "vitess_fracts",
+				Database: "vttest",
+				OrgName: "num",
+				ColumnLength: 7,
+				Charset: 63,
+				Decimals: 2,
+				Flags: 32768,
 			}, {
 				Name: "f",
 				Type: sqltypes.Float32,
+				Table: "vitess_fracts",
+				OrgTable: "vitess_fracts",
+				Database: "vttest",
+				OrgName: "f",
+				ColumnLength: 12,
+				Charset: 63,
+				Decimals: 31,
+				Flags: 32768,
 			}, {
 				Name: "d",
 				Type: sqltypes.Float64,
+				Table: "vitess_fracts",
+				OrgTable: "vitess_fracts",
+				Database: "vttest",
+				OrgName: "d",
+				ColumnLength: 22,
+				Charset: 63,
+				Decimals: 31,
+				Flags: 32768,
 			},
 		},
 		RowsAffected: 1,
@@ -216,7 +363,7 @@ func TestFractionals(t *testing.T) {
 		},
 	}
 	if !reflect.DeepEqual(*qr, want) {
-		t.Errorf("Execute: \n%#v, want \n%#v", *qr, want)
+		t.Errorf("Execute: \n%#v, want \n%#v", prettyPrint(*qr), prettyPrint(want))
 	}
 }
 
@@ -252,33 +399,101 @@ func TestStrings(t *testing.T) {
 			{
 				Name: "vb",
 				Type: sqltypes.VarBinary,
+				Table: "vitess_strings",
+				OrgTable: "vitess_strings",
+				Database: "vttest",
+				OrgName: "vb",
+				ColumnLength: 16,
+				Charset: 63,
+				Flags: 16515,
 			}, {
 				Name: "c",
 				Type: sqltypes.Char,
+				Table: "vitess_strings",
+				OrgTable: "vitess_strings",
+				Database: "vttest",
+				OrgName: "c",
+				ColumnLength: 48,
+				Charset: 33,
 			}, {
 				Name: "vc",
 				Type: sqltypes.VarChar,
+				Table: "vitess_strings",
+				OrgTable: "vitess_strings",
+				Database: "vttest",
+				OrgName: "vc",
+				ColumnLength: 48,
+				Charset: 33,
 			}, {
 				Name: "b",
 				Type: sqltypes.Binary,
+				Table: "vitess_strings",
+				OrgTable: "vitess_strings",
+				Database: "vttest",
+				OrgName: "b",
+				ColumnLength: 4,
+				Charset: 63,
+				Flags: 128,
 			}, {
 				Name: "tb",
 				Type: sqltypes.Blob,
+				Table: "vitess_strings",
+				OrgTable: "vitess_strings",
+				Database: "vttest",
+				OrgName: "tb",
+				ColumnLength: 255,
+				Charset: 63,
+				Flags: 144,
 			}, {
 				Name: "bl",
 				Type: sqltypes.Blob,
+				Table: "vitess_strings",
+				OrgTable: "vitess_strings",
+				Database: "vttest",
+				OrgName: "bl",
+				ColumnLength: 65535,
+				Charset: 63,
+				Flags: 144,
 			}, {
 				Name: "ttx",
 				Type: sqltypes.Text,
+				Table: "vitess_strings",
+				OrgTable: "vitess_strings",
+				Database: "vttest",
+				OrgName: "ttx",
+				ColumnLength: 765,
+				Charset: 33,
+				Flags: 16,
 			}, {
 				Name: "tx",
 				Type: sqltypes.Text,
+				Table: "vitess_strings",
+				OrgTable: "vitess_strings",
+				Database: "vttest",
+				OrgName: "tx",
+				ColumnLength: 196605,
+				Charset: 33,
+				Flags: 16,
 			}, {
 				Name: "en",
 				Type: sqltypes.Enum,
+				Table: "vitess_strings",
+				OrgTable: "vitess_strings",
+				Database: "vttest",
+				OrgName: "en",
+				ColumnLength: 3,
+				Charset: 33,
+				Flags: 256,
 			}, {
 				Name: "s",
 				Type: sqltypes.Set,
+				Table: "vitess_strings",
+				OrgTable: "vitess_strings",
+				Database: "vttest",
+				OrgName: "s",
+				ColumnLength: 9,
+				Charset: 33,
+				Flags: 2048,
 			},
 		},
 		RowsAffected: 1,
@@ -298,7 +513,7 @@ func TestStrings(t *testing.T) {
 		},
 	}
 	if !reflect.DeepEqual(*qr, want) {
-		t.Errorf("Execute: \n%#v, want \n%#v", *qr, want)
+		t.Errorf("Execute: \n%#v, want \n%#v", prettyPrint(*qr), prettyPrint(want))
 	}
 }
 
@@ -329,21 +544,63 @@ func TestMiscTypes(t *testing.T) {
 			{
 				Name: "id",
 				Type: sqltypes.Int32,
+				Table: "vitess_misc",
+				OrgTable: "vitess_misc",
+				Database: "vttest",
+				OrgName: "id",
+				ColumnLength: 11,
+				Charset: 63,
+				Flags: 49155,
 			}, {
 				Name: "b",
 				Type: sqltypes.Bit,
+				Table: "vitess_misc",
+				OrgTable: "vitess_misc",
+				Database: "vttest",
+				OrgName: "b",
+				ColumnLength: 8,
+				Charset: 63,
+				Flags: 32,
 			}, {
 				Name: "d",
 				Type: sqltypes.Date,
+				Table: "vitess_misc",
+				OrgTable: "vitess_misc",
+				Database: "vttest",
+				OrgName: "d",
+				ColumnLength: 10,
+				Charset: 63,
+				Flags: 128,
 			}, {
 				Name: "dt",
 				Type: sqltypes.Datetime,
+				Table: "vitess_misc",
+				OrgTable: "vitess_misc",
+				Database: "vttest",
+				OrgName: "dt",
+				ColumnLength: 19,
+				Charset: 63,
+				Flags: 128,
 			}, {
 				Name: "t",
 				Type: sqltypes.Time,
+				Table: "vitess_misc",
+				OrgTable: "vitess_misc",
+				Database: "vttest",
+				OrgName: "t",
+				ColumnLength: 10,
+				Charset: 63,
+				Flags: 128,
 			}, {
 				Name: "g",
 				Type: sqltypes.Geometry,
+				Table: "vitess_misc",
+				OrgTable: "vitess_misc",
+				Database: "vttest",
+				OrgName: "g",
+				ColumnLength: 4294967295,
+				Charset: 63,
+				Flags: 144,
 			},
 		},
 		RowsAffected: 1,
@@ -359,7 +616,7 @@ func TestMiscTypes(t *testing.T) {
 		},
 	}
 	if !reflect.DeepEqual(*qr, want) {
-		t.Errorf("Execute: \n%#v, want \n%#v", *qr, want)
+		t.Errorf("Execute: \n%#v, want \n%#v", prettyPrint(*qr), prettyPrint(want))
 	}
 }
 
@@ -374,6 +631,8 @@ func TestNull(t *testing.T) {
 			{
 				Name: "NULL",
 				Type: sqltypes.Null,
+				Charset: 63,
+				Flags: 32896,
 			},
 		},
 		RowsAffected: 1,
@@ -384,7 +643,7 @@ func TestNull(t *testing.T) {
 		},
 	}
 	if !reflect.DeepEqual(*qr, want) {
-		t.Errorf("Execute: \n%#v, want \n%#v", *qr, want)
+		t.Errorf("Execute: \n%#v, want \n%#v", prettyPrint(*qr), prettyPrint(want))
 	}
 }
 
@@ -483,7 +742,7 @@ func TestTypeLimits(t *testing.T) {
 func TestJSONType(t *testing.T) {
 	// JSON is supported only after mysql57.
 	client := framework.NewClient()
-	if _, err := client.Execute("create table vitess_json(id int, val json, primary key(id))", nil); err != nil {
+	if _, err := client.Execute("create table vitess_json(id int default 1, val json, primary key(id))", nil); err != nil {
 		// If it's a syntax error, MySQL is an older version. Skip this test.
 		if strings.Contains(err.Error(), "syntax") {
 			return
@@ -505,9 +764,23 @@ func TestJSONType(t *testing.T) {
 			{
 				Name: "id",
 				Type: sqltypes.Int32,
+				Table: "vitess_json",
+				OrgTable: "vitess_json",
+				Database: "vttest",
+				OrgName: "id",
+				ColumnLength: 11,
+				Charset: 63,
+				Flags: 49155,
 			}, {
 				Name: "val",
 				Type: sqltypes.TypeJSON,
+				Table: "vitess_json",
+				OrgTable: "vitess_json",
+				Database: "vttest",
+				OrgName: "val",
+				ColumnLength: 4294967295,
+				Charset: 63,
+				Flags: 144,
 			},
 		},
 		RowsAffected: 1,
@@ -519,6 +792,7 @@ func TestJSONType(t *testing.T) {
 		},
 	}
 	if !reflect.DeepEqual(*qr, want) {
-		t.Errorf("Execute: \n%#v, want \n%#v", *qr, want)
+		t.Errorf("Execute: \n%v, want \n%v", prettyPrint(*qr), prettyPrint(want))
 	}
+
 }

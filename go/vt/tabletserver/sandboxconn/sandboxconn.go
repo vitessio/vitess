@@ -474,8 +474,8 @@ func (sbc *SandboxConn) getNextResult() *sqltypes.Result {
 // SingleRowResult is returned when there is no pre-stored result.
 var SingleRowResult = &sqltypes.Result{
 	Fields: []*querypb.Field{
-		{"id", sqltypes.Int32},
-		{"value", sqltypes.VarChar},
+		{Name:"id", Type:sqltypes.Int32},
+		{Name:"value", Type:sqltypes.VarChar},
 	},
 	RowsAffected: 1,
 	InsertID:     0,
