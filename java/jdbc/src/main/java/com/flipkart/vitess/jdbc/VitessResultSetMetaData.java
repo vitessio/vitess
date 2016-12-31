@@ -1,8 +1,6 @@
 package com.flipkart.vitess.jdbc;
 
 import com.flipkart.vitess.util.Constants;
-import com.flipkart.vitess.util.MysqlDefs;
-import com.google.common.collect.ImmutableList;
 import com.youtube.vitess.proto.Query;
 
 import java.sql.ResultSetMetaData;
@@ -19,10 +17,12 @@ public class VitessResultSetMetaData implements ResultSetMetaData {
 
     /* Get actual class name to be printed on */
     private static Logger logger = Logger.getLogger(VitessResultSetMetaData.class.getName());
-    private List<Query.Field> fields;
+    private final VitessConnection connection;
+    private List<FieldWithMetadata> fields;
 
-    public VitessResultSetMetaData(List<Query.Field> fields) {
-        this.fields = ImmutableList.copyOf(fields);
+    public VitessResultSetMetaData(VitessConnection connection, List<FieldWithMetadata> fields) throws SQLException {
+        this.connection = connection;
+        this.fields = fields;
     }
 
     public int getColumnCount() throws SQLException {
@@ -30,15 +30,52 @@ public class VitessResultSetMetaData implements ResultSetMetaData {
     }
 
     public boolean isAutoIncrement(int column) throws SQLException {
-        return false;
+        return getField(column).isAutoIncrement();
     }
 
     public boolean isCaseSensitive(int column) throws SQLException {
-        return true;
+        FieldWithMetadata field = getField(column);
+        switch (field.getJavaType()) {
+            case Types.BIT:
+            case Types.TINYINT:
+            case Types.SMALLINT:
+            case Types.INTEGER:
+            case Types.BIGINT:
+            case Types.FLOAT:
+            case Types.REAL:
+            case Types.DOUBLE:
+            case Types.DATE:
+            case Types.DECIMAL:
+            case Types.NUMERIC:
+            case Types.TIME:
+            case Types.TIMESTAMP:
+                return false;
+
+            case Types.CHAR:
+            case Types.VARCHAR:
+            case Types.LONGVARCHAR:
+                if (field.isBinary() || !connection.isIncludeAllFields()) {
+                    return true;
+                }
+
+                try {
+                    String collationName = field.getCollation();
+                    return collationName != null && !collationName.endsWith("_ci");
+                } catch (SQLException e) {
+                    if (e.getCause() instanceof ArrayIndexOutOfBoundsException) {
+                        return false;
+                    } else {
+                        throw e;
+                    }
+                }
+
+            default:
+                return true;
+        }
     }
 
     public boolean isSearchable(int column) throws SQLException {
-        return false;
+        return true;
     }
 
     public boolean isCurrency(int column) throws SQLException {
@@ -46,63 +83,97 @@ public class VitessResultSetMetaData implements ResultSetMetaData {
     }
 
     public int isNullable(int column) throws SQLException {
-        return 0;
+        return getField(column).isNotNull() ? 0 : 2;
     }
 
     public boolean isSigned(int column) throws SQLException {
-        return false;
+        return getField(column).isSigned();
     }
 
     public int getColumnDisplaySize(int column) throws SQLException {
-        return 0;
+        if (!connection.isIncludeAllFields()) {
+            return 0;
+        }
+        FieldWithMetadata field = getField(column);
+        return field.getColumnLength() / field.getMaxBytesPerCharacter();
     }
 
     public String getColumnLabel(int column) throws SQLException {
-        Query.Field field = getField(column);
-        return field.getName();
+        return getField(column).getName();
     }
 
     public String getColumnName(int column) throws SQLException {
-        Query.Field field = getField(column);
-        return field.getName();
+        return getField(column).getName();
     }
 
     public String getSchemaName(int column) throws SQLException {
-        return null;
+        return getField(column).getDatabase();
     }
 
     public int getPrecision(int column) throws SQLException {
-        return 0;
+        if (!connection.isIncludeAllFields()) {
+            return 0;
+        }
+
+        FieldWithMetadata field = getField(column);
+        if (isDecimalType(field.getJavaType(), field.getVitessTypeValue())) {
+            return field.getColumnLength() + field.getPrecisionAdjustFactor();
+        }
+
+        switch (field.getJavaType()) {
+            case Types.VARBINARY:
+            case Types.LONGVARBINARY:
+                return field.getColumnLength();
+            default:
+                return field.getColumnLength() / field.getMaxBytesPerCharacter();
+        }
+    }
+
+    private static boolean isDecimalType(int javaType, int vitessType) {
+        switch (javaType) {
+            case Types.BIT:
+            case Types.TINYINT:
+            case Types.INTEGER:
+            case Types.BIGINT:
+            case Types.FLOAT:
+            case Types.REAL:
+            case Types.DOUBLE:
+            case Types.NUMERIC:
+            case Types.DECIMAL:
+                return true;
+            case Types.SMALLINT:
+                return vitessType != Query.Type.YEAR_VALUE;
+            default:
+                return false;
+        }
     }
 
     public int getScale(int column) throws SQLException {
+        FieldWithMetadata field = getField(column);
+        if (isDecimalType(field.getJavaType(), field.getVitessTypeValue())) {
+            return getField(column).getDecimals();
+        }
+
         return 0;
     }
 
     public String getTableName(int column) throws SQLException {
-        return null;
+        return getField(column).getTable();
     }
 
     public String getCatalogName(int column) throws SQLException {
-        return null;
+        return getField(column).getDatabase();
     }
 
     public int getColumnType(int column) throws SQLException {
-        Query.Field field = getField(column);
-        if (MysqlDefs.vitesstoMySqlType.containsKey(field.getType())) {
-            return MysqlDefs.vitesstoMySqlType.get(field.getType());
-        } else if (field.getType().equals(Query.Type.TUPLE)) {
-            throw new SQLException(Constants.SQLExceptionMessages.INVALID_COLUMN_TYPE);
-        } else {
-            throw new SQLException(Constants.SQLExceptionMessages.UNKNOWN_COLUMN_TYPE);
-        }
+        return getField(column).getJavaType();
     }
 
     public String getColumnTypeName(int column) throws SQLException {
-        Query.Field field = getField(column);
+        FieldWithMetadata field = getField(column);
 
-        int vitessTypeValue = field.getTypeValue();
-        int jdbcType = MysqlDefs.vitesstoMySqlType.get(field.getType());
+        int vitessTypeValue = field.getVitessTypeValue();
+        int javaType = field.getJavaType();
 
         switch (vitessTypeValue) {
             case Query.Type.BIT_VALUE:
@@ -167,13 +238,13 @@ public class VitessResultSetMetaData implements ResultSetMetaData {
                 return "VARCHAR";
 
             case Query.Type.VARBINARY_VALUE:
-                if (jdbcType == Types.VARBINARY) {
+                if (javaType == Types.VARBINARY) {
                     return "VARBINARY";
                 }
                 return "VARCHAR";
 
             case Query.Type.BINARY_VALUE:
-                if (jdbcType == Types.BINARY) {
+                if (javaType == Types.BINARY) {
                     return "BINARY";
                 }
                 return "CHAR";
@@ -199,7 +270,7 @@ public class VitessResultSetMetaData implements ResultSetMetaData {
     }
 
     public boolean isReadOnly(int column) throws SQLException {
-        return false;
+        return getField(column).isReadOnly();
     }
 
     public boolean isWritable(int column) throws SQLException {
@@ -207,11 +278,15 @@ public class VitessResultSetMetaData implements ResultSetMetaData {
     }
 
     public boolean isDefinitelyWritable(int column) throws SQLException {
-        return !isReadOnly(column);
+        return isWritable(column);
     }
 
     public String getColumnClassName(int column) throws SQLException {
-        return null;
+        if (!connection.isIncludeAllFields()) {
+            return null;
+        }
+        FieldWithMetadata field = getField(column);
+        return getClassNameForJavaType(field.getJavaType(), field.getVitessTypeValue(), field.isUnsigned(), field.isBinary() || field.isBlob(), field.isOpaqueBinary(), connection.getYearIsDateType());
     }
 
     public <T> T unwrap(Class<T> iface) throws SQLException {
@@ -222,12 +297,86 @@ public class VitessResultSetMetaData implements ResultSetMetaData {
         return false;
     }
 
-    protected Query.Field getField(int columnIndex) throws SQLException {
+    private FieldWithMetadata getField(int columnIndex) throws SQLException {
         if (columnIndex >= 1 && columnIndex <= this.fields.size()) {
             return fields.get(columnIndex - 1);
         } else {
             throw new SQLException(
                 Constants.SQLExceptionMessages.INVALID_COLUMN_INDEX + ": " + columnIndex);
+        }
+    }
+
+    private String getClassNameForJavaType(int javaType, int vitessType, boolean isUnsigned, boolean isBinaryOrBlob, boolean isOpaqueBinary,
+                                          boolean treatYearAsDate) {
+        switch (javaType) {
+            case Types.BIT:
+            case Types.BOOLEAN:
+                return "java.lang.Boolean";
+
+            case Types.TINYINT:
+                if (isUnsigned) {
+                    return "java.lang.Integer";
+                }
+                return "java.lang.Integer";
+
+            case Types.SMALLINT:
+                if (isUnsigned) {
+                    return "java.lang.Integer";
+                }
+                return "java.lang.Integer";
+
+            case Types.INTEGER:
+                if (!isUnsigned || vitessType == Query.Type.UINT24_VALUE) {
+                    return "java.lang.Integer";
+                }
+                return "java.lang.Long";
+
+            case Types.BIGINT:
+                if (!isUnsigned) {
+                    return "java.lang.Long";
+                }
+                return "java.math.BigInteger";
+
+            case Types.DECIMAL:
+            case Types.NUMERIC:
+                return "java.math.BigDecimal";
+
+            case Types.REAL:
+                return "java.lang.Float";
+
+            case Types.FLOAT:
+            case Types.DOUBLE:
+                return "java.lang.Double";
+
+            case Types.CHAR:
+            case Types.VARCHAR:
+            case Types.LONGVARCHAR:
+                if (!isOpaqueBinary) {
+                    return "java.lang.String";
+                }
+
+                return "[B";
+
+            case Types.BINARY:
+            case Types.VARBINARY:
+            case Types.LONGVARBINARY:
+                if (isBinaryOrBlob) {
+                    return "[B";
+                } else {
+                    return "java.lang.String";
+                }
+
+            case Types.DATE:
+                return treatYearAsDate ? "java.sql.Date" : "java.lang.Short";
+
+            case Types.TIME:
+                return "java.sql.Time";
+
+            case Types.TIMESTAMP:
+                return "java.sql.Timestamp";
+
+            default:
+                return "java.lang.Object";
         }
     }
 }

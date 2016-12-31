@@ -2,7 +2,12 @@ package com.flipkart.vitess.jdbc;
 
 import com.flipkart.vitess.util.Constants;
 
-import java.sql.*;
+import java.sql.Connection;
+import java.sql.Driver;
+import java.sql.DriverManager;
+import java.sql.DriverPropertyInfo;
+import java.sql.SQLException;
+import java.sql.SQLFeatureNotSupportedException;
 import java.util.Properties;
 import java.util.logging.Logger;
 
@@ -24,6 +29,7 @@ public class VitessDriver implements Driver {
         }
     }
 
+    @Override
     public Connection connect(String url, Properties info) throws SQLException {
         return acceptsURL(url) ? new VitessConnection(url, info) : null;
     }
@@ -39,6 +45,7 @@ public class VitessDriver implements Driver {
      * <p/>
      * TODO: Write a better regex
      */
+    @Override
     public boolean acceptsURL(String url) throws SQLException {
         return null != url && url.startsWith(Constants.URL_PREFIX);
     }
@@ -49,12 +56,13 @@ public class VitessDriver implements Driver {
      * @return DriverPropertyInfo Array Object
      * @throws SQLException
      */
+    @Override
     public DriverPropertyInfo[] getPropertyInfo(String url, Properties info) throws SQLException {
         if (null == info) {
             info = new Properties();
         }
 
-        DriverPropertyInfo[] dpi = new DriverPropertyInfo[7];
+        DriverPropertyInfo[] dpi = ConnectionProperties.exposeAsDriverPropertyInfo(info, 5);
         if (acceptsURL(url)) {
             VitessJDBCUrl vitessJDBCUrl = new VitessJDBCUrl(url, info);
 
@@ -73,26 +81,14 @@ public class VitessDriver implements Driver {
             dpi[2].required = true;
             dpi[2].description = Constants.VITESS_KEYSPACE;
 
-            dpi[3] = new DriverPropertyInfo(Constants.Property.TABLET_TYPE,
-                vitessJDBCUrl.getTabletType().toString());
+            dpi[3] = new DriverPropertyInfo(Constants.Property.DBNAME, vitessJDBCUrl.getCatalog());
             dpi[3].required = false;
-            dpi[3].description = Constants.VITESS_TABLET_TYPE;
+            dpi[3].description = Constants.VITESS_DB_NAME;
 
-            dpi[4] = new DriverPropertyInfo(Constants.Property.EXECUTE_TYPE,
-                vitessJDBCUrl.getExecuteType().toString());
-            dpi[4].required = false;
-            dpi[4].description = Constants.EXECUTE_TYPE_DESC;
-
-            dpi[5] = new DriverPropertyInfo(Constants.Property.DBNAME, vitessJDBCUrl.getCatalog());
-            dpi[5].required = true;
-            dpi[5].description = Constants.VITESS_DB_NAME;
-
-            dpi[6] =
+            dpi[4] =
                 new DriverPropertyInfo(Constants.Property.USERNAME, vitessJDBCUrl.getUsername());
-            dpi[6].required = false;
-            dpi[6].description = Constants.USERNAME_DESC;
-
-
+            dpi[4].required = false;
+            dpi[4].description = Constants.USERNAME_DESC;
         } else {
             throw new SQLException(Constants.SQLExceptionMessages.INVALID_CONN_URL + " : " + url);
         }
@@ -100,18 +96,22 @@ public class VitessDriver implements Driver {
         return dpi;
     }
 
+    @Override
     public int getMajorVersion() {
         return Constants.DRIVER_MAJOR_VERSION;
     }
 
+    @Override
     public int getMinorVersion() {
         return Constants.DRIVER_MINOR_VERSION;
     }
 
+    @Override
     public boolean jdbcCompliant() {
         return Constants.JDBC_COMPLIANT;
     }
 
+    @Override
     public Logger getParentLogger() throws SQLFeatureNotSupportedException {
         throw new SQLFeatureNotSupportedException(
             Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);

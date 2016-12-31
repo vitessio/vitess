@@ -5,6 +5,7 @@ import com.google.common.collect.ImmutableMap;
 import com.google.protobuf.ByteString;
 import com.youtube.vitess.client.cursor.Cursor;
 import com.youtube.vitess.client.cursor.Row;
+import com.youtube.vitess.proto.Query;
 import com.youtube.vitess.proto.Query.Field;
 import com.youtube.vitess.proto.Topodata.KeyRange;
 import com.youtube.vitess.proto.Topodata.KeyspaceIdType;
@@ -14,6 +15,12 @@ import com.youtube.vitess.proto.Topodata.SrvKeyspace.KeyspacePartition;
 import com.youtube.vitess.proto.Topodata.TabletType;
 import com.youtube.vitess.proto.Vtgate.SplitQueryResponse;
 import com.youtube.vitess.proto.Vtrpc.CallerID;
+
+import org.joda.time.Duration;
+import org.junit.Assert;
+import org.junit.Before;
+import org.junit.Test;
+
 import java.nio.charset.StandardCharsets;
 import java.sql.SQLDataException;
 import java.sql.SQLException;
@@ -28,10 +35,6 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import org.joda.time.Duration;
-import org.junit.Assert;
-import org.junit.Before;
-import org.junit.Test;
 
 /**
  * RpcClientTest tests a given implementation of RpcClient against a mock vtgate server
@@ -90,6 +93,7 @@ public abstract class RpcClientTest {
 
   private static final TabletType TABLET_TYPE = TabletType.REPLICA;
   private static final String TABLET_TYPE_ECHO = TABLET_TYPE.toString();
+  private static final Query.ExecuteOptions.IncludedFields ALL_FIELDS = Query.ExecuteOptions.IncludedFields.ALL;
 
   private static final Map<String, Object> BIND_VARS = new ImmutableMap.Builder<String, Object>()
       .put("int", 123).put("float", 2.5).put("bytes", new byte[] {1, 2, 3}).build();
@@ -136,7 +140,7 @@ public abstract class RpcClientTest {
   public void testEchoExecute() throws Exception {
     Map<String, String> echo;
 
-    echo = getEcho(conn.execute(ctx, ECHO_PREFIX + QUERY, BIND_VARS, TABLET_TYPE));
+    echo = getEcho(conn.execute(ctx, ECHO_PREFIX + QUERY, BIND_VARS, TABLET_TYPE, ALL_FIELDS));
     Assert.assertEquals(CALLER_ID_ECHO, echo.get("callerId"));
     Assert.assertEquals(ECHO_PREFIX + QUERY, echo.get("query"));
     Assert.assertEquals(KEYSPACE, echo.get("keyspace"));
@@ -144,7 +148,7 @@ public abstract class RpcClientTest {
     Assert.assertEquals(TABLET_TYPE_ECHO, echo.get("tabletType"));
 
     echo = getEcho(
-        conn.executeShards(ctx, ECHO_PREFIX + QUERY, KEYSPACE, SHARDS, BIND_VARS, TABLET_TYPE));
+        conn.executeShards(ctx, ECHO_PREFIX + QUERY, KEYSPACE, SHARDS, BIND_VARS, TABLET_TYPE, ALL_FIELDS));
     Assert.assertEquals(CALLER_ID_ECHO, echo.get("callerId"));
     Assert.assertEquals(ECHO_PREFIX + QUERY, echo.get("query"));
     Assert.assertEquals(KEYSPACE, echo.get("keyspace"));
@@ -153,7 +157,7 @@ public abstract class RpcClientTest {
     Assert.assertEquals(TABLET_TYPE_ECHO, echo.get("tabletType"));
 
     echo = getEcho(conn.executeKeyspaceIds(ctx, ECHO_PREFIX + QUERY, KEYSPACE, KEYSPACE_IDS,
-        BIND_VARS, TABLET_TYPE));
+        BIND_VARS, TABLET_TYPE, ALL_FIELDS));
     Assert.assertEquals(CALLER_ID_ECHO, echo.get("callerId"));
     Assert.assertEquals(ECHO_PREFIX + QUERY, echo.get("query"));
     Assert.assertEquals(KEYSPACE, echo.get("keyspace"));
@@ -162,7 +166,7 @@ public abstract class RpcClientTest {
     Assert.assertEquals(TABLET_TYPE_ECHO, echo.get("tabletType"));
 
     echo = getEcho(conn.executeKeyRanges(ctx, ECHO_PREFIX + QUERY, KEYSPACE, KEY_RANGES, BIND_VARS,
-        TABLET_TYPE));
+        TABLET_TYPE, ALL_FIELDS));
     Assert.assertEquals(CALLER_ID_ECHO, echo.get("callerId"));
     Assert.assertEquals(ECHO_PREFIX + QUERY, echo.get("query"));
     Assert.assertEquals(KEYSPACE, echo.get("keyspace"));
@@ -171,7 +175,7 @@ public abstract class RpcClientTest {
     Assert.assertEquals(TABLET_TYPE_ECHO, echo.get("tabletType"));
 
     echo = getEcho(conn.executeEntityIds(ctx, ECHO_PREFIX + QUERY, KEYSPACE, "column1",
-        ENTITY_KEYSPACE_IDS, BIND_VARS, TABLET_TYPE));
+        ENTITY_KEYSPACE_IDS, BIND_VARS, TABLET_TYPE, ALL_FIELDS));
     Assert.assertEquals(CALLER_ID_ECHO, echo.get("callerId"));
     Assert.assertEquals(ECHO_PREFIX + QUERY, echo.get("query"));
     Assert.assertEquals(KEYSPACE, echo.get("keyspace"));
@@ -182,7 +186,7 @@ public abstract class RpcClientTest {
 
     echo = getEcho(conn.executeBatchShards(ctx,
         Arrays.asList(Proto.bindShardQuery(KEYSPACE, SHARDS, ECHO_PREFIX + QUERY, BIND_VARS)),
-        TABLET_TYPE, true).get(0));
+        TABLET_TYPE, true, ALL_FIELDS).get(0));
     Assert.assertEquals(CALLER_ID_ECHO, echo.get("callerId"));
     Assert.assertEquals(ECHO_PREFIX + QUERY, echo.get("query"));
     Assert.assertEquals(KEYSPACE, echo.get("keyspace"));
@@ -194,7 +198,7 @@ public abstract class RpcClientTest {
     echo = getEcho(conn.executeBatchKeyspaceIds(ctx,
         Arrays.asList(
             Proto.bindKeyspaceIdQuery(KEYSPACE, KEYSPACE_IDS, ECHO_PREFIX + QUERY, BIND_VARS)),
-        TABLET_TYPE, true).get(0));
+        TABLET_TYPE, true, ALL_FIELDS).get(0));
     Assert.assertEquals(CALLER_ID_ECHO, echo.get("callerId"));
     Assert.assertEquals(ECHO_PREFIX + QUERY, echo.get("query"));
     Assert.assertEquals(KEYSPACE, echo.get("keyspace"));
@@ -208,7 +212,7 @@ public abstract class RpcClientTest {
   public void testEchoStreamExecute() throws Exception {
     Map<String, String> echo;
 
-    echo = getEcho(conn.streamExecute(ctx, ECHO_PREFIX + QUERY, BIND_VARS, TABLET_TYPE));
+    echo = getEcho(conn.streamExecute(ctx, ECHO_PREFIX + QUERY, BIND_VARS, TABLET_TYPE, ALL_FIELDS));
     Assert.assertEquals(CALLER_ID_ECHO, echo.get("callerId"));
     Assert.assertEquals(ECHO_PREFIX + QUERY, echo.get("query"));
     Assert.assertEquals(KEYSPACE, echo.get("keyspace"));
@@ -216,7 +220,7 @@ public abstract class RpcClientTest {
     Assert.assertEquals(TABLET_TYPE_ECHO, echo.get("tabletType"));
 
     echo = getEcho(conn.streamExecuteShards(ctx, ECHO_PREFIX + QUERY, KEYSPACE, SHARDS, BIND_VARS,
-        TABLET_TYPE));
+        TABLET_TYPE, ALL_FIELDS));
     Assert.assertEquals(CALLER_ID_ECHO, echo.get("callerId"));
     Assert.assertEquals(ECHO_PREFIX + QUERY, echo.get("query"));
     Assert.assertEquals(KEYSPACE, echo.get("keyspace"));
@@ -225,7 +229,7 @@ public abstract class RpcClientTest {
     Assert.assertEquals(TABLET_TYPE_ECHO, echo.get("tabletType"));
 
     echo = getEcho(conn.streamExecuteKeyspaceIds(ctx, ECHO_PREFIX + QUERY, KEYSPACE, KEYSPACE_IDS,
-        BIND_VARS, TABLET_TYPE));
+        BIND_VARS, TABLET_TYPE, ALL_FIELDS));
     Assert.assertEquals(CALLER_ID_ECHO, echo.get("callerId"));
     Assert.assertEquals(ECHO_PREFIX + QUERY, echo.get("query"));
     Assert.assertEquals(KEYSPACE, echo.get("keyspace"));
@@ -234,7 +238,7 @@ public abstract class RpcClientTest {
     Assert.assertEquals(TABLET_TYPE_ECHO, echo.get("tabletType"));
 
     echo = getEcho(conn.streamExecuteKeyRanges(ctx, ECHO_PREFIX + QUERY, KEYSPACE, KEY_RANGES,
-        BIND_VARS, TABLET_TYPE));
+        BIND_VARS, TABLET_TYPE, ALL_FIELDS));
     Assert.assertEquals(CALLER_ID_ECHO, echo.get("callerId"));
     Assert.assertEquals(ECHO_PREFIX + QUERY, echo.get("query"));
     Assert.assertEquals(KEYSPACE, echo.get("keyspace"));
@@ -249,7 +253,7 @@ public abstract class RpcClientTest {
 
     VTGateBlockingTx tx = conn.begin(ctx);
 
-    echo = getEcho(tx.execute(ctx, ECHO_PREFIX + QUERY, BIND_VARS, TABLET_TYPE));
+    echo = getEcho(tx.execute(ctx, ECHO_PREFIX + QUERY, BIND_VARS, TABLET_TYPE, ALL_FIELDS));
     Assert.assertEquals(CALLER_ID_ECHO, echo.get("callerId"));
     Assert.assertEquals(ECHO_PREFIX + QUERY, echo.get("query"));
     Assert.assertEquals(KEYSPACE, echo.get("keyspace"));
@@ -259,7 +263,7 @@ public abstract class RpcClientTest {
     Assert.assertEquals("false", echo.get("notInTransaction"));
 
     echo = getEcho(
-        tx.executeShards(ctx, ECHO_PREFIX + QUERY, KEYSPACE, SHARDS, BIND_VARS, TABLET_TYPE));
+        tx.executeShards(ctx, ECHO_PREFIX + QUERY, KEYSPACE, SHARDS, BIND_VARS, TABLET_TYPE, ALL_FIELDS));
     Assert.assertEquals(CALLER_ID_ECHO, echo.get("callerId"));
     Assert.assertEquals(ECHO_PREFIX + QUERY, echo.get("query"));
     Assert.assertEquals(KEYSPACE, echo.get("keyspace"));
@@ -270,7 +274,7 @@ public abstract class RpcClientTest {
     Assert.assertEquals("false", echo.get("notInTransaction"));
 
     echo = getEcho(tx.executeKeyspaceIds(ctx, ECHO_PREFIX + QUERY, KEYSPACE, KEYSPACE_IDS,
-        BIND_VARS, TABLET_TYPE));
+        BIND_VARS, TABLET_TYPE, ALL_FIELDS));
     Assert.assertEquals(CALLER_ID_ECHO, echo.get("callerId"));
     Assert.assertEquals(ECHO_PREFIX + QUERY, echo.get("query"));
     Assert.assertEquals(KEYSPACE, echo.get("keyspace"));
@@ -281,7 +285,7 @@ public abstract class RpcClientTest {
     Assert.assertEquals("false", echo.get("notInTransaction"));
 
     echo = getEcho(tx.executeKeyRanges(ctx, ECHO_PREFIX + QUERY, KEYSPACE, KEY_RANGES, BIND_VARS,
-        TABLET_TYPE));
+        TABLET_TYPE, ALL_FIELDS));
     Assert.assertEquals(CALLER_ID_ECHO, echo.get("callerId"));
     Assert.assertEquals(ECHO_PREFIX + QUERY, echo.get("query"));
     Assert.assertEquals(KEYSPACE, echo.get("keyspace"));
@@ -292,7 +296,7 @@ public abstract class RpcClientTest {
     Assert.assertEquals("false", echo.get("notInTransaction"));
 
     echo = getEcho(tx.executeEntityIds(ctx, ECHO_PREFIX + QUERY, KEYSPACE, "column1",
-        ENTITY_KEYSPACE_IDS, BIND_VARS, TABLET_TYPE));
+        ENTITY_KEYSPACE_IDS, BIND_VARS, TABLET_TYPE, ALL_FIELDS));
     Assert.assertEquals(CALLER_ID_ECHO, echo.get("callerId"));
     Assert.assertEquals(ECHO_PREFIX + QUERY, echo.get("query"));
     Assert.assertEquals(KEYSPACE, echo.get("keyspace"));
@@ -308,7 +312,7 @@ public abstract class RpcClientTest {
 
     echo = getEcho(tx.executeBatchShards(ctx,
         Arrays.asList(Proto.bindShardQuery(KEYSPACE, SHARDS, ECHO_PREFIX + QUERY, BIND_VARS)),
-        TABLET_TYPE).get(0));
+        TABLET_TYPE, ALL_FIELDS).get(0));
     Assert.assertEquals(CALLER_ID_ECHO, echo.get("callerId"));
     Assert.assertEquals(ECHO_PREFIX + QUERY, echo.get("query"));
     Assert.assertEquals(KEYSPACE, echo.get("keyspace"));
@@ -321,7 +325,7 @@ public abstract class RpcClientTest {
     echo = getEcho(tx.executeBatchKeyspaceIds(ctx,
         Arrays.asList(
             Proto.bindKeyspaceIdQuery(KEYSPACE, KEYSPACE_IDS, ECHO_PREFIX + QUERY, BIND_VARS)),
-        TABLET_TYPE).get(0));
+        TABLET_TYPE, ALL_FIELDS).get(0));
     Assert.assertEquals(CALLER_ID_ECHO, echo.get("callerId"));
     Assert.assertEquals(ECHO_PREFIX + QUERY, echo.get("query"));
     Assert.assertEquals(KEYSPACE, echo.get("keyspace"));
@@ -480,32 +484,32 @@ public abstract class RpcClientTest {
     checkExecuteErrors(new Executable() {
       @Override
       void execute(String query) throws Exception {
-        conn.execute(ctx, query, BIND_VARS, TABLET_TYPE);
+        conn.execute(ctx, query, BIND_VARS, TABLET_TYPE, ALL_FIELDS);
       }
     });
     checkExecuteErrors(new Executable() {
       @Override
       void execute(String query) throws Exception {
-        conn.executeShards(ctx, query, KEYSPACE, SHARDS, BIND_VARS, TABLET_TYPE);
+        conn.executeShards(ctx, query, KEYSPACE, SHARDS, BIND_VARS, TABLET_TYPE, ALL_FIELDS);
       }
     });
     checkExecuteErrors(new Executable() {
       @Override
       void execute(String query) throws Exception {
-        conn.executeKeyspaceIds(ctx, query, KEYSPACE, KEYSPACE_IDS, BIND_VARS, TABLET_TYPE);
+        conn.executeKeyspaceIds(ctx, query, KEYSPACE, KEYSPACE_IDS, BIND_VARS, TABLET_TYPE, ALL_FIELDS);
       }
     });
     checkExecuteErrors(new Executable() {
       @Override
       void execute(String query) throws Exception {
-        conn.executeKeyRanges(ctx, query, KEYSPACE, KEY_RANGES, BIND_VARS, TABLET_TYPE);
+        conn.executeKeyRanges(ctx, query, KEYSPACE, KEY_RANGES, BIND_VARS, TABLET_TYPE, ALL_FIELDS);
       }
     });
     checkExecuteErrors(new Executable() {
       @Override
       void execute(String query) throws Exception {
         conn.executeEntityIds(ctx, query, KEYSPACE, "column1", ENTITY_KEYSPACE_IDS, BIND_VARS,
-            TABLET_TYPE);
+            TABLET_TYPE, ALL_FIELDS);
       }
     });
     checkExecuteErrors(new Executable() {
@@ -513,7 +517,7 @@ public abstract class RpcClientTest {
       void execute(String query) throws Exception {
         conn.executeBatchShards(ctx,
             Arrays.asList(Proto.bindShardQuery(KEYSPACE, SHARDS, query, BIND_VARS)), TABLET_TYPE,
-            true);
+            true, ALL_FIELDS);
       }
     });
     checkExecuteErrors(new Executable() {
@@ -521,7 +525,7 @@ public abstract class RpcClientTest {
       void execute(String query) throws Exception {
         conn.executeBatchKeyspaceIds(ctx,
             Arrays.asList(Proto.bindKeyspaceIdQuery(KEYSPACE, KEYSPACE_IDS, query, BIND_VARS)),
-            TABLET_TYPE, true);
+            TABLET_TYPE, true, ALL_FIELDS);
       }
     });
   }
@@ -531,26 +535,26 @@ public abstract class RpcClientTest {
     checkStreamExecuteErrors(new Executable() {
       @Override
       void execute(String query) throws Exception {
-        conn.streamExecute(ctx, query, BIND_VARS, TABLET_TYPE).next();
+        conn.streamExecute(ctx, query, BIND_VARS, TABLET_TYPE, ALL_FIELDS).next();
       }
     });
     checkStreamExecuteErrors(new Executable() {
       @Override
       void execute(String query) throws Exception {
-        conn.streamExecuteShards(ctx, query, KEYSPACE, SHARDS, BIND_VARS, TABLET_TYPE).next();
+        conn.streamExecuteShards(ctx, query, KEYSPACE, SHARDS, BIND_VARS, TABLET_TYPE, ALL_FIELDS).next();
       }
     });
     checkStreamExecuteErrors(new Executable() {
       @Override
       void execute(String query) throws Exception {
-        conn.streamExecuteKeyspaceIds(ctx, query, KEYSPACE, KEYSPACE_IDS, BIND_VARS, TABLET_TYPE)
+        conn.streamExecuteKeyspaceIds(ctx, query, KEYSPACE, KEYSPACE_IDS, BIND_VARS, TABLET_TYPE, ALL_FIELDS)
             .next();
       }
     });
     checkStreamExecuteErrors(new Executable() {
       @Override
       void execute(String query) throws Exception {
-        conn.streamExecuteKeyRanges(ctx, query, KEYSPACE, KEY_RANGES, BIND_VARS, TABLET_TYPE)
+        conn.streamExecuteKeyRanges(ctx, query, KEYSPACE, KEY_RANGES, BIND_VARS, TABLET_TYPE, ALL_FIELDS)
             .next();
       }
     });
@@ -561,39 +565,39 @@ public abstract class RpcClientTest {
     checkTransactionExecuteErrors(new TransactionExecutable() {
       @Override
       void execute(VTGateBlockingTx tx, String query) throws Exception {
-        tx.execute(ctx, query, BIND_VARS, TABLET_TYPE);
+        tx.execute(ctx, query, BIND_VARS, TABLET_TYPE, ALL_FIELDS);
       }
     });
     checkTransactionExecuteErrors(new TransactionExecutable() {
       @Override
       void execute(VTGateBlockingTx tx, String query) throws Exception {
-        tx.executeShards(ctx, query, KEYSPACE, SHARDS, BIND_VARS, TABLET_TYPE);
+        tx.executeShards(ctx, query, KEYSPACE, SHARDS, BIND_VARS, TABLET_TYPE, ALL_FIELDS);
       }
     });
     checkTransactionExecuteErrors(new TransactionExecutable() {
       @Override
       void execute(VTGateBlockingTx tx, String query) throws Exception {
-        tx.executeKeyspaceIds(ctx, query, KEYSPACE, KEYSPACE_IDS, BIND_VARS, TABLET_TYPE);
+        tx.executeKeyspaceIds(ctx, query, KEYSPACE, KEYSPACE_IDS, BIND_VARS, TABLET_TYPE, ALL_FIELDS);
       }
     });
     checkTransactionExecuteErrors(new TransactionExecutable() {
       @Override
       void execute(VTGateBlockingTx tx, String query) throws Exception {
-        tx.executeKeyRanges(ctx, query, KEYSPACE, KEY_RANGES, BIND_VARS, TABLET_TYPE);
+        tx.executeKeyRanges(ctx, query, KEYSPACE, KEY_RANGES, BIND_VARS, TABLET_TYPE, ALL_FIELDS);
       }
     });
     checkTransactionExecuteErrors(new TransactionExecutable() {
       @Override
       void execute(VTGateBlockingTx tx, String query) throws Exception {
         tx.executeEntityIds(ctx, query, KEYSPACE, "column1", ENTITY_KEYSPACE_IDS, BIND_VARS,
-            TABLET_TYPE);
+            TABLET_TYPE, ALL_FIELDS);
       }
     });
     checkTransactionExecuteErrors(new TransactionExecutable() {
       @Override
       void execute(VTGateBlockingTx tx, String query) throws Exception {
         tx.executeBatchShards(ctx,
-            Arrays.asList(Proto.bindShardQuery(KEYSPACE, SHARDS, query, BIND_VARS)), TABLET_TYPE);
+            Arrays.asList(Proto.bindShardQuery(KEYSPACE, SHARDS, query, BIND_VARS)), TABLET_TYPE, ALL_FIELDS);
       }
     });
     checkTransactionExecuteErrors(new TransactionExecutable() {
@@ -601,7 +605,7 @@ public abstract class RpcClientTest {
       void execute(VTGateBlockingTx tx, String query) throws Exception {
         tx.executeBatchKeyspaceIds(ctx,
             Arrays.asList(Proto.bindKeyspaceIdQuery(KEYSPACE, KEYSPACE_IDS, query, BIND_VARS)),
-            TABLET_TYPE);
+            TABLET_TYPE, ALL_FIELDS);
       }
     });
   }

@@ -4,11 +4,10 @@ import com.youtube.vitess.proto.Query;
 import com.youtube.vitess.proto.Query.Field;
 import com.youtube.vitess.proto.Query.QueryResult;
 
+import javax.annotation.concurrent.NotThreadSafe;
 import java.sql.SQLException;
 import java.util.Iterator;
 import java.util.List;
-
-import javax.annotation.concurrent.NotThreadSafe;
 
 /**
  * A {@link Cursor} that serves records from a single {@link QueryResult} object.
