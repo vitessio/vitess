@@ -16,22 +16,20 @@ import (
 )
 
 type queryExecutor struct {
-	ctx              context.Context
-	tabletType       topodatapb.TabletType
-	session          *vtgatepb.Session
-	notInTransaction bool
-	options          *querypb.ExecuteOptions
-	router           *Router
+	ctx        context.Context
+	tabletType topodatapb.TabletType
+	session    *vtgatepb.Session
+	options    *querypb.ExecuteOptions
+	router     *Router
 }
 
-func newQueryExecutor(ctx context.Context, tabletType topodatapb.TabletType, session *vtgatepb.Session, notInTransaction bool, options *querypb.ExecuteOptions, router *Router) *queryExecutor {
+func newQueryExecutor(ctx context.Context, tabletType topodatapb.TabletType, session *vtgatepb.Session, options *querypb.ExecuteOptions, router *Router) *queryExecutor {
 	return &queryExecutor{
-		ctx:              ctx,
-		tabletType:       tabletType,
-		session:          session,
-		notInTransaction: notInTransaction,
-		options:          options,
-		router:           router,
+		ctx:        ctx,
+		tabletType: tabletType,
+		session:    session,
+		options:    options,
+		router:     router,
 	}
 }
 
@@ -43,8 +41,8 @@ func (vc *queryExecutor) Execute(query string, bindvars map[string]interface{}) 
 }
 
 // ExecuteMultiShard method call from engine call to vtgate.
-func (vc *queryExecutor) ExecuteMultiShard(keyspace string, shardQueries map[string]querytypes.BoundQuery) (*sqltypes.Result, error) {
-	return vc.router.scatterConn.ExecuteMultiShard(vc.ctx, keyspace, shardQueries, vc.tabletType, NewSafeSession(vc.session), vc.notInTransaction, vc.options)
+func (vc *queryExecutor) ExecuteMultiShard(keyspace string, shardQueries map[string]querytypes.BoundQuery, notInTransaction bool) (*sqltypes.Result, error) {
+	return vc.router.scatterConn.ExecuteMultiShard(vc.ctx, keyspace, shardQueries, vc.tabletType, NewSafeSession(vc.session), notInTransaction, vc.options)
 }
 
 // StreamExecuteMulti method call from engine call to vtgate.
@@ -58,8 +56,8 @@ func (vc *queryExecutor) GetAnyShard(keyspace string) (ks, shard string, err err
 }
 
 // ScatterConnExecute method call from engine call to vtgate.
-func (vc *queryExecutor) ScatterConnExecute(query string, bindVars map[string]interface{}, keyspace string, shards []string) (*sqltypes.Result, error) {
-	return vc.router.scatterConn.Execute(vc.ctx, query, bindVars, keyspace, shards, vc.tabletType, vc.session, vc.notInTransaction, vc.options)
+func (vc *queryExecutor) ScatterConnExecute(query string, bindVars map[string]interface{}, keyspace string, shards []string, notInTransaction bool) (*sqltypes.Result, error) {
+	return vc.router.scatterConn.Execute(vc.ctx, query, bindVars, keyspace, shards, vc.tabletType, vc.session, notInTransaction, vc.options)
 }
 
 // GetKeyspaceShards method call from engine call to vtgate.
@@ -70,4 +68,8 @@ func (vc *queryExecutor) GetKeyspaceShards(keyspace string) (string, *topodatapb
 // GetShardForKeyspaceID method call from engine call to vtgate.
 func (vc *queryExecutor) GetShardForKeyspaceID(allShards []*topodatapb.ShardReference, keyspaceID []byte) (string, error) {
 	return getShardForKeyspaceID(allShards, keyspaceID)
+}
+
+func (vc *queryExecutor) ExecuteShard(keyspace string, shardQueries map[string]querytypes.BoundQuery) (*sqltypes.Result, error) {
+	return vc.router.scatterConn.ExecuteMultiShard(vc.ctx, keyspace, shardQueries, vc.tabletType, NewSafeSession(nil), false, vc.options)
 }
