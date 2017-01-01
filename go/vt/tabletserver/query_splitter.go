@@ -81,8 +81,8 @@ func (qs *QuerySplitter) validateQuery() error {
 	if qs.tableName.IsEmpty() {
 		return fmt.Errorf("not a simple table expression")
 	}
-	tableInfo, ok := qs.schemaInfo.tables[qs.tableName.String()]
-	if !ok {
+	tableInfo := qs.schemaInfo.GetTable(qs.tableName)
+	if tableInfo == nil {
 		return fmt.Errorf("can't find table in schema")
 	}
 	if len(tableInfo.PKColumns) == 0 {

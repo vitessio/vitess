@@ -140,6 +140,29 @@ func TestTableInfoSequence(t *testing.T) {
 	}
 }
 
+func TestTableInfoMessage(t *testing.T) {
+	db := fakesqldb.Register()
+	for query, result := range getTestTableInfoQueries() {
+		db.AddQuery(query, result)
+	}
+	tableInfo, err := newTestTableInfo("USER_TABLE", "vitess_message", db)
+	if err != nil {
+		t.Fatalf("failed to create a test table info")
+	}
+	want := &TableInfo{
+		Table: &schema.Table{
+			Name: sqlparser.NewTableIdent("test_table"),
+			Type: schema.Message,
+		},
+	}
+	tableInfo.Columns = nil
+	tableInfo.Indexes = nil
+	tableInfo.PKColumns = nil
+	if !reflect.DeepEqual(tableInfo, want) {
+		t.Errorf("TableInfo:\n%#v, want\n%#v", tableInfo, want)
+	}
+}
+
 func newTestTableInfo(tableType string, comment string, db *fakesqldb.DB) (*TableInfo, error) {
 	ctx := context.Background()
 	appParams := sqldb.ConnParams{Engine: db.Name}

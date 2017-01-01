@@ -35,8 +35,12 @@ func NewTableInfo(conn *DBConn, tableName string, tableType string, comment stri
 	if err != nil {
 		return nil, err
 	}
-	if strings.Contains(comment, "vitess_sequence") {
+	switch {
+	case strings.Contains(comment, "vitess_sequence"):
 		ti.Type = schema.Sequence
+	case strings.Contains(comment, "vitess_message"):
+		// TODO(sougou): Validate schema integrity.
+		ti.Type = schema.Message
 	}
 	return ti, nil
 }

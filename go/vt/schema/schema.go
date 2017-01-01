@@ -20,6 +20,7 @@ import (
 const (
 	NoType = iota
 	Sequence
+	Message
 )
 
 // TypeNames allows to fetch a the type name for a table.
@@ -27,6 +28,7 @@ const (
 var TypeNames = []string{
 	"none",
 	"sequence",
+	"message",
 }
 
 // TableColumn contains info about a table's column.
