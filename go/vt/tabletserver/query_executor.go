@@ -309,7 +309,7 @@ func (qre *QueryExecutor) execDDL() (*sqltypes.Result, error) {
 		qre.qe.schemaInfo.DropTable(ddlPlan.TableName)
 	}
 	if !ddlPlan.NewName.IsEmpty() {
-		if err := qre.qe.schemaInfo.CreateOrUpdateTable(qre.ctx, ddlPlan.NewName); err != nil {
+		if err := qre.qe.schemaInfo.CreateOrUpdateTable(qre.ctx, ddlPlan.NewName.String()); err != nil {
 			return nil, err
 		}
 	}

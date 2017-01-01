@@ -376,12 +376,7 @@ func (tsv *TabletServer) fullStart() (err error) {
 	defer func() {
 		if x := recover(); x != nil {
 			log.Errorf("Could not start tabletserver: %v.\nStack trace:\n%s", x, tb.Stack(4))
-			tsv.te.Close(true)
-			tsv.qe.Close()
-			tsv.updateStreamList.Stop()
-			tsv.watcher.Close()
-			tsv.txThrottler.Close()
-			tsv.transition(StateNotConnected)
+			tsv.closeAll()
 			err = x.(error)
 		}
 	}()
@@ -405,12 +400,7 @@ func (tsv *TabletServer) serveNewType() (err error) {
 	defer func() {
 		if x := recover(); x != nil {
 			log.Errorf("Could not start tabletserver: %v.\nStack trace:\n%s", x, tb.Stack(4))
-			tsv.te.Close(true)
-			tsv.qe.Close()
-			tsv.updateStreamList.Stop()
-			tsv.watcher.Close()
-			tsv.txThrottler.Close()
-			tsv.transition(StateNotConnected)
+			tsv.closeAll()
 			err = x.(error)
 		}
 	}()
@@ -461,6 +451,8 @@ func (tsv *TabletServer) StopService() {
 
 	log.Infof("Executing graceful transition to NotServing")
 	tsv.te.Close(false)
+	tsv.watcher.Close()
+	tsv.updateStreamList.Stop()
 
 	defer func() {
 		tsv.transition(StateNotConnected)
@@ -484,6 +476,17 @@ func (tsv *TabletServer) waitForShutdown() {
 	tsv.watcher.Close()
 	tsv.requests.Wait()
 	tsv.txThrottler.Close()
+}
+
+// closeAll is called if TabletServer fails to start.
+// It forcibly shuts down everything.
+func (tsv *TabletServer) closeAll() {
+	tsv.te.Close(true)
+	tsv.watcher.Close()
+	tsv.updateStreamList.Stop()
+	tsv.qe.Close()
+	tsv.txThrottler.Close()
+	tsv.transition(StateNotConnected)
 }
 
 func (tsv *TabletServer) setTimeBomb() chan struct{} {
@@ -571,12 +574,23 @@ func (tsv *TabletServer) isMySQLReachable() bool {
 
 // ReloadSchema reloads the schema.
 func (tsv *TabletServer) ReloadSchema(ctx context.Context) error {
-	defer logError(tsv.qe.queryServiceStats)
+	// We have to prevent tabletserver from shutting down while it's
+	// reloading schema.
+	if err := tsv.startRequest(&tsv.target, false, false); err != nil {
+		return err
+	}
+	defer func() {
+		logError(tsv.qe.queryServiceStats)
+		tsv.endRequest(false)
+	}()
 	return tsv.qe.schemaInfo.Reload(ctx)
 }
 
 // ClearQueryPlanCache clears internal query plan cache
 func (tsv *TabletServer) ClearQueryPlanCache() {
+	// We should ideally bracket this with start & endErequest,
+	// but query plan cache clearing is safe to call even if the
+	// tabletserver is down.
 	tsv.qe.schemaInfo.ClearQueryPlanCache()
 }
 
@@ -952,7 +966,7 @@ func (tsv *TabletServer) SplitQuery(
 			); err != nil {
 				return err
 			}
-			schema := getSchemaForSplitQuery(tsv.qe.schemaInfo)
+			schema := tsv.qe.schemaInfo.GetSchema()
 			splitParams, err := createSplitParams(
 				sql, bindVariables, ciSplitColumns, splitCount, numRowsPerQueryPart, schema)
 			if err != nil {
@@ -1239,20 +1253,6 @@ func (se *splitQuerySQLExecuter) SQLExecute(
 		nil,  /* buildStreamComment */
 		true, /* wantfields */
 	)
-}
-
-// getSchemaForSplitQuery converts the given schemaInfo object into
-// the datastructure needed by the splitquery package: a map from a table name
-// to its corresponding schame.Table object.
-func getSchemaForSplitQuery(schemaInfo *SchemaInfo) map[string]*schema.Table {
-	// Get a snapshot of the schema.
-	tableList := schemaInfo.GetSchema()
-	result := make(map[string]*schema.Table, len(tableList))
-	for _, table := range tableList {
-		// TODO(erez): Panic if table.Name is already in 'result'.
-		result[table.Name.String()] = table
-	}
-	return result
 }
 
 func createSplitQueryAlgorithmObject(

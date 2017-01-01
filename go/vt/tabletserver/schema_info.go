@@ -87,17 +87,17 @@ func (ep *ExecPlan) Stats() (queryCount int64, duration, mysqlTime time.Duration
 	return
 }
 
+type notifier func(map[string]*schema.Table)
+
 // SchemaInfo stores the schema info and performs operations that
 // keep itself up-to-date.
 type SchemaInfo struct {
+	isOpen bool
+
 	mu         sync.Mutex
 	tables     map[string]*TableInfo
 	lastChange int64
 	reloadTime time.Duration
-
-	// actionMutex serializes all calls to state-altering methods:
-	// Open, Close, Reload, DropTable, CreateOrUpdateTable.
-	actionMutex sync.Mutex
 
 	// The following vars are either read-only or have
 	// their own synchronization.
@@ -107,6 +107,10 @@ type SchemaInfo struct {
 	endpoints         map[string]string
 	queryRuleSources  *QueryRuleInfo
 	queryServiceStats *QueryServiceStats
+
+	// Notification vars for broadcasting schema changes.
+	notifyMutex sync.Mutex
+	notifiers   map[string]notifier
 }
 
 // NewSchemaInfo creates a new SchemaInfo.
@@ -152,11 +156,15 @@ func NewSchemaInfo(
 	return si
 }
 
-// Open initializes the current SchemaInfo for service by loading the necessary info from the specified database.
+// Open initializes the SchemaInfo.
+// The state transition is Open->Operations->Close.
+// Synchronization between the above operations is
+// the responsibility of the caller.
+// Close is idempotent.
 func (si *SchemaInfo) Open(dbaParams *sqldb.ConnParams, strictMode bool) {
-	si.actionMutex.Lock()
-	defer si.actionMutex.Unlock()
-
+	if si.isOpen {
+		return
+	}
 	ctx := context.Background()
 	si.connPool.Open(dbaParams, dbaParams)
 	// Get time first because it needs a connection from the pool.
@@ -213,42 +221,28 @@ func (si *SchemaInfo) Open(dbaParams *sqldb.ConnParams, strictMode bool) {
 	if len(tableData.Rows) != 0 && len(tables) == 1 { // len(tables) is always at least 1 because of the "dual" table
 		panic(NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "could not get schema for any tables"))
 	}
-	func() {
-		si.mu.Lock()
-		defer si.mu.Unlock()
-		si.tables = tables
-		si.lastChange = curTime
-	}()
-	// Clear is not really needed. Doing it for good measure.
-	si.queries.Clear()
+	si.tables = tables
+	si.lastChange = curTime
 	si.ticks.Start(func() {
 		if err := si.Reload(ctx); err != nil {
 			log.Errorf("periodic schema reload failed: %v", err)
 		}
 	})
+	si.notifiers = make(map[string]notifier)
+	si.isOpen = true
 }
 
 // Close shuts down SchemaInfo. It can be re-opened after Close.
 func (si *SchemaInfo) Close() {
-	// Make sure there are no reloads going on, as they depend on SchemaInfo
-	// staying open during the reload.
-	si.actionMutex.Lock()
-	defer si.actionMutex.Unlock()
-
+	if !si.isOpen {
+		return
+	}
 	si.ticks.Stop()
 	si.connPool.Close()
 	si.queries.Clear()
-
-	si.mu.Lock()
-	defer si.mu.Unlock()
 	si.tables = nil
-}
-
-// IsClosed returns true if the SchemaInfo is closed.
-func (si *SchemaInfo) IsClosed() bool {
-	si.mu.Lock()
-	defer si.mu.Unlock()
-	return si.tables == nil
+	si.notifiers = nil
+	si.isOpen = false
 }
 
 // Reload reloads the schema info from the db.
@@ -256,16 +250,6 @@ func (si *SchemaInfo) IsClosed() bool {
 // This is a no-op if the SchemaInfo is closed.
 func (si *SchemaInfo) Reload(ctx context.Context) error {
 	defer logError(si.queryServiceStats)
-
-	// Reload() gets called both from the ticker, and from external RPCs.
-	// We don't want them to race over writing data that was read concurrently.
-	si.actionMutex.Lock()
-	defer si.actionMutex.Unlock()
-
-	if si.IsClosed() {
-		return nil
-	}
-
 	// Get time first because it needs a connection from the pool.
 	curTime := si.mysqlTime(ctx)
 
@@ -284,6 +268,7 @@ func (si *SchemaInfo) Reload(ctx context.Context) error {
 	// but we return success only if all tables succeed.
 	// The following section requires us to hold mu.
 	rec := concurrency.AllErrorRecorder{}
+	schemaChanged := false
 	si.mu.Lock()
 	defer si.mu.Unlock()
 	for _, row := range tableData.Rows {
@@ -291,12 +276,13 @@ func (si *SchemaInfo) Reload(ctx context.Context) error {
 		createTime, _ := row[2].ParseInt64()
 		// Check if we know about the table or it has been recreated.
 		if _, ok := si.tables[tableName]; !ok || createTime >= si.lastChange {
+			schemaChanged = true
 			func() {
 				// Unlock so CreateOrUpdateTable can lock.
 				si.mu.Unlock()
 				defer si.mu.Lock()
 				log.Infof("Reloading schema for table: %s", tableName)
-				rec.RecordError(si.createOrUpdateTableLocked(ctx, tableName))
+				rec.RecordError(si.CreateOrUpdateTable(ctx, tableName))
 			}()
 			continue
 		}
@@ -304,6 +290,9 @@ func (si *SchemaInfo) Reload(ctx context.Context) error {
 		si.tables[tableName].SetMysqlStats(row[4], row[5], row[6], row[7], row[8])
 	}
 	si.lastChange = curTime
+	if schemaChanged {
+		si.broadcast()
+	}
 	return rec.Error()
 }
 
@@ -330,14 +319,7 @@ func (si *SchemaInfo) ClearQueryPlanCache() {
 }
 
 // CreateOrUpdateTable must be called if a DDL was applied to that table.
-func (si *SchemaInfo) CreateOrUpdateTable(ctx context.Context, tableName sqlparser.TableIdent) error {
-	si.actionMutex.Lock()
-	defer si.actionMutex.Unlock()
-	return si.createOrUpdateTableLocked(ctx, tableName.String())
-}
-
-// createOrUpdateTableLocked must only be called while holding actionMutex.
-func (si *SchemaInfo) createOrUpdateTableLocked(ctx context.Context, tableName string) error {
+func (si *SchemaInfo) CreateOrUpdateTable(ctx context.Context, tableName string) error {
 	conn := getOrPanic(ctx, si.connPool)
 	defer conn.Recycle()
 	tableData, err := conn.Exec(ctx, fmt.Sprintf("%s and table_name = '%s'", baseShowTables, tableName), 1, false)
@@ -376,27 +358,47 @@ func (si *SchemaInfo) createOrUpdateTableLocked(ctx context.Context, tableName s
 		log.Infof("Updating table %s", tableName)
 	}
 	si.tables[tableName] = tableInfo
-
-	switch tableInfo.Type {
-	case schema.NoType:
-		log.Infof("Initialized table: %s", tableName)
-	case schema.Sequence:
-		log.Infof("Initialized sequence: %s", tableName)
-	}
+	log.Infof("Initialized table: %s, type: %s", tableName, schema.TypeNames[tableInfo.Type])
+	si.broadcast()
 	return nil
 }
 
 // DropTable must be called if a table was dropped.
 func (si *SchemaInfo) DropTable(tableName sqlparser.TableIdent) {
-	si.actionMutex.Lock()
-	defer si.actionMutex.Unlock()
-
 	si.mu.Lock()
 	defer si.mu.Unlock()
 
 	delete(si.tables, tableName.String())
 	si.queries.Clear()
 	log.Infof("Table %s forgotten", tableName)
+	si.broadcast()
+}
+
+// RegisterNotifier registers the function for schema change notification.
+func (si *SchemaInfo) RegisterNotifier(name string, f notifier) {
+	si.notifyMutex.Lock()
+	defer si.notifyMutex.Unlock()
+	si.notifiers[name] = f
+}
+
+// UnregisterNotifier unregisters the notifier function.
+func (si *SchemaInfo) UnregisterNotifier(name string) {
+	si.notifyMutex.Lock()
+	defer si.notifyMutex.Unlock()
+	delete(si.notifiers, name)
+}
+
+// broadcast must be called while holding a lock on si.mu.
+func (si *SchemaInfo) broadcast() {
+	schema := make(map[string]*schema.Table, len(si.tables))
+	for k, v := range si.tables {
+		schema[k] = v.Table
+	}
+	si.notifyMutex.Lock()
+	defer si.notifyMutex.Unlock()
+	for _, f := range si.notifiers {
+		f(schema)
+	}
 }
 
 // GetPlan returns the ExecPlan that for the query. Plans are cached in a cache.LRUCache.
@@ -491,12 +493,12 @@ func (si *SchemaInfo) GetTable(tableName sqlparser.TableIdent) *TableInfo {
 }
 
 // GetSchema returns a copy of the schema.
-func (si *SchemaInfo) GetSchema() []*schema.Table {
+func (si *SchemaInfo) GetSchema() map[string]*schema.Table {
 	si.mu.Lock()
 	defer si.mu.Unlock()
-	tables := make([]*schema.Table, 0, len(si.tables))
-	for _, v := range si.tables {
-		tables = append(tables, v.Table)
+	tables := make(map[string]*schema.Table, len(si.tables))
+	for k, v := range si.tables {
+		tables[k] = v.Table
 	}
 	return tables
 }
@@ -717,8 +719,7 @@ func (si *SchemaInfo) handleHTTPQueryStats(response http.ResponseWriter, request
 
 func (si *SchemaInfo) handleHTTPSchema(response http.ResponseWriter, request *http.Request) {
 	response.Header().Set("Content-Type", "application/json; charset=utf-8")
-	tables := si.GetSchema()
-	b, err := json.MarshalIndent(tables, "", " ")
+	b, err := json.MarshalIndent(si.GetSchema(), "", " ")
 	if err != nil {
 		response.Write([]byte(err.Error()))
 		return

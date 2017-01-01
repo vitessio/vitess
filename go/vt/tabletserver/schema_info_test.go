@@ -16,6 +16,7 @@ import (
 
 	"github.com/youtube/vitess/go/mysqlconn/fakesqldb"
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/vt/schema"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
@@ -244,7 +245,7 @@ func TestSchemaInfoCreateOrUpdateTableFailedDuetoExecErr(t *testing.T) {
 	defer schemaInfo.Close()
 	originalSchemaErrorCount := schemaInfo.queryServiceStats.InternalErrors.Counts()["Schema"]
 	// should silently fail: no errors returned, but increment a counter
-	schemaInfo.CreateOrUpdateTable(context.Background(), sqlparser.NewTableIdent("test_table"))
+	schemaInfo.CreateOrUpdateTable(context.Background(), "test_table")
 
 	newSchemaErrorCount := schemaInfo.queryServiceStats.InternalErrors.Counts()["Schema"]
 	schemaErrorDiff := newSchemaErrorCount - originalSchemaErrorCount
@@ -270,7 +271,15 @@ func TestSchemaInfoCreateOrUpdateTable(t *testing.T) {
 	})
 	schemaInfo := newTestSchemaInfo(10, 1*time.Second, 1*time.Second, false)
 	schemaInfo.Open(dbaParams, false)
-	schemaInfo.CreateOrUpdateTable(context.Background(), sqlparser.NewTableIdent("test_table_01"))
+	found := false
+	schemaInfo.RegisterNotifier("test", func(schema map[string]*schema.Table) {
+		_, found = schema["test_table_01"]
+	})
+	schemaInfo.CreateOrUpdateTable(context.Background(), "test_table_01")
+	if !found {
+		t.Error("Notifier: want true, got false")
+	}
+	schemaInfo.UnregisterNotifier("test")
 	schemaInfo.Close()
 }
 
@@ -295,7 +304,14 @@ func TestSchemaInfoDropTable(t *testing.T) {
 	if tableInfo == nil {
 		t.Fatalf("table: %s should exist", existingTable)
 	}
+	found := false
+	schemaInfo.RegisterNotifier("test", func(schema map[string]*schema.Table) {
+		_, found = schema["test_table_01"]
+	})
 	schemaInfo.DropTable(existingTable)
+	if found {
+		t.Error("Notifier: want false, got true")
+	}
 	tableInfo = schemaInfo.GetTable(existingTable)
 	if tableInfo != nil {
 		t.Fatalf("table: %s should not exist", existingTable)
