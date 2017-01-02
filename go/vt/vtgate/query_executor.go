@@ -57,7 +57,7 @@ func (vc *queryExecutor) GetAnyShard(keyspace string) (ks, shard string, err err
 
 // ScatterConnExecute method call from engine call to vtgate.
 func (vc *queryExecutor) ScatterConnExecute(query string, bindVars map[string]interface{}, keyspace string, shards []string, notInTransaction bool) (*sqltypes.Result, error) {
-	return vc.router.scatterConn.Execute(vc.ctx, query, bindVars, keyspace, shards, vc.tabletType, vc.session, notInTransaction, vc.options)
+	return vc.router.scatterConn.Execute(vc.ctx, query, bindVars, keyspace, shards, vc.tabletType, NewSafeSession(vc.session), notInTransaction, vc.options)
 }
 
 // GetKeyspaceShards method call from engine call to vtgate.

@@ -39,7 +39,7 @@ func (rtr *Router) Execute(ctx context.Context, sql string, bindVars map[string]
 	if bindVars == nil {
 		bindVars = make(map[string]interface{})
 	}
-	vcursor := newQueryExecutor(ctx, tabletType, session, notInTransaction, options, rtr)
+	vcursor := newQueryExecutor(ctx, tabletType, session, options, rtr)
 	queryConstruct := queryinfo.NewQueryConstruct(sql, keyspace, bindVars, notInTransaction)
 	plan, err := rtr.planner.GetPlan(sql, keyspace, bindVars)
 	if err != nil {
@@ -53,7 +53,7 @@ func (rtr *Router) StreamExecute(ctx context.Context, sql string, bindVars map[s
 	if bindVars == nil {
 		bindVars = make(map[string]interface{})
 	}
-	vcursor := newQueryExecutor(ctx, tabletType, nil, false, options, rtr)
+	vcursor := newQueryExecutor(ctx, tabletType, nil, options, rtr)
 	queryConstruct := queryinfo.NewQueryConstruct(sql, keyspace, bindVars, false)
 	plan, err := rtr.planner.GetPlan(sql, keyspace, bindVars)
 	if err != nil {
@@ -76,7 +76,7 @@ func (rtr *Router) ExecuteBatch(ctx context.Context, sqlList []string, bindVarsL
 			bindVars = make(map[string]interface{})
 		}
 		//Using same QueryExecutor -> marking notInTransaction as false and not using asTransaction flag
-		vcursor := newQueryExecutor(ctx, tabletType, session, false, options, rtr)
+		vcursor := newQueryExecutor(ctx, tabletType, session, options, rtr)
 		queryConstruct := queryinfo.NewQueryConstruct(query, keyspace, bindVars, false)
 		plan, err := rtr.planner.GetPlan(query, keyspace, bindVars)
 		if err != nil {

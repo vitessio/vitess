@@ -29,6 +29,7 @@ type VCursor interface {
 	GetKeyspaceShards(keyspace string) (string, *topodatapb.SrvKeyspace, []*topodatapb.ShardReference, error)
 	GetShardForKeyspaceID(allShards []*topodatapb.ShardReference, keyspaceID []byte) (string, error)
 	ExecuteShard(keyspace string, shardQueries map[string]querytypes.BoundQuery) (*sqltypes.Result, error)
+	Execute(query string, bindvars map[string]interface{}) (*sqltypes.Result, error)
 }
 
 // Plan represents the execution strategy for a given query.
