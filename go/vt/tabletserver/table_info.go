@@ -39,7 +39,9 @@ func NewTableInfo(conn *DBConn, tableName string, tableType string, comment stri
 	case strings.Contains(comment, "vitess_sequence"):
 		ti.Type = schema.Sequence
 	case strings.Contains(comment, "vitess_message"):
-		// TODO(sougou): Validate schema integrity.
+		if err := ti.validateMessage(); err != nil {
+			return nil, err
+		}
 		ti.Type = schema.Message
 	}
 	return ti, nil
@@ -149,6 +151,24 @@ func (ti *TableInfo) fetchIndexes(conn *DBConn, sqlTableName string) error {
 				continue
 			}
 			ti.Indexes[i].DataColumns = append(ti.Indexes[i].DataColumns, c)
+		}
+	}
+	return nil
+}
+
+func (ti *TableInfo) validateMessage() error {
+	findCols := []string{
+		"time_scheduled",
+		"id",
+		"time_next",
+		"epoch",
+		"time_created",
+		"time_acked",
+		"message",
+	}
+	for _, col := range findCols {
+		if ti.FindColumn(sqlparser.NewColIdent(col)) == -1 {
+			return fmt.Errorf("%s missing from message table: %s", col, ti.Name.String())
 		}
 	}
 	return nil

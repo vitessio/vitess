@@ -42,6 +42,8 @@ const (
 	debugQueryRulesKey = "query_rules"
 )
 
+//_______________________________________________
+
 // ExecPlan wraps the planbuilder's exec plan to enforce additional rules
 // and track stats.
 type ExecPlan struct {
@@ -86,6 +88,8 @@ func (ep *ExecPlan) Stats() (queryCount int64, duration, mysqlTime time.Duration
 	ep.mu.Unlock()
 	return
 }
+
+//_______________________________________________
 
 type notifier func(map[string]*schema.Table)
 

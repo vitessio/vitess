@@ -109,7 +109,7 @@ func AsInterface(node ValExpr) (interface{}, error) {
 	case *NullVal:
 		return nil, nil
 	}
-	return nil, fmt.Errorf("unexpected node '%v'", String(node))
+	return nil, fmt.Errorf("expression is too complex '%v'", String(node))
 }
 
 // StringIn is a convenience function that returns

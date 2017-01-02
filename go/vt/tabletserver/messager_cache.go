@@ -24,12 +24,10 @@ var (
 
 // MessageRow represents a message row.
 type MessageRow struct {
-	TimeRequested int64
-	ID            sqltypes.Value
-	TimeScheduled int64
-	Epoch         int64
-	TimeCreated   int64
-	Message       sqltypes.Value
+	ID       sqltypes.Value
+	TimeNext int64
+	Epoch    int64
+	Message  sqltypes.Value
 
 	// id is the string representation of id
 	id string
@@ -45,7 +43,7 @@ func (mh messageHeap) Less(i, j int) bool {
 	// Lower epoch is more important.
 	// If epochs match, newer messages are more important.
 	return mh[i].Epoch < mh[j].Epoch ||
-		(mh[i].Epoch == mh[j].Epoch && mh[i].TimeScheduled > mh[j].TimeScheduled)
+		(mh[i].Epoch == mh[j].Epoch && mh[i].TimeNext > mh[j].TimeNext)
 }
 
 func (mh messageHeap) Swap(i, j int) {

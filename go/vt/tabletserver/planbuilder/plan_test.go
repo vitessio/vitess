@@ -42,8 +42,14 @@ func TestPlan(t *testing.T) {
 		}
 		if out != tcase.output {
 			t.Errorf("Line:%v\n%s\n%s", tcase.lineno, tcase.output, out)
+			if err != nil {
+				out = fmt.Sprintf("\"%s\"", out)
+			} else {
+				bout, _ := json.MarshalIndent(plan, "", "  ")
+				out = string(bout)
+			}
+			fmt.Printf("\"%s\"\n%s\n\n", tcase.input, out)
 		}
-		//fmt.Printf("%s\n%s\n\n", tcase.input, out)
 	}
 }
 
