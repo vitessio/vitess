@@ -12,37 +12,37 @@ import (
 func TestMessagerCacheOrder(t *testing.T) {
 	mc := NewMessagerCache(10)
 	if err := mc.Add(&MessageRow{
-		TimeScheduled: 1,
-		Epoch:         0,
-		id:            "row01",
+		TimeNext: 1,
+		Epoch:    0,
+		id:       "row01",
 	}); err != nil {
 		t.Fatal(err)
 	}
 	if err := mc.Add(&MessageRow{
-		TimeScheduled: 2,
-		Epoch:         0,
-		id:            "row02",
+		TimeNext: 2,
+		Epoch:    0,
+		id:       "row02",
 	}); err != nil {
 		t.Fatal(err)
 	}
 	if err := mc.Add(&MessageRow{
-		TimeScheduled: 2,
-		Epoch:         1,
-		id:            "row12",
+		TimeNext: 2,
+		Epoch:    1,
+		id:       "row12",
 	}); err != nil {
 		t.Fatal(err)
 	}
 	if err := mc.Add(&MessageRow{
-		TimeScheduled: 1,
-		Epoch:         1,
-		id:            "row11",
+		TimeNext: 1,
+		Epoch:    1,
+		id:       "row11",
 	}); err != nil {
 		t.Fatal(err)
 	}
 	if err := mc.Add(&MessageRow{
-		TimeScheduled: 3,
-		Epoch:         0,
-		id:            "row03",
+		TimeNext: 3,
+		Epoch:    0,
+		id:       "row03",
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -69,33 +69,33 @@ func TestMessagerCacheOrder(t *testing.T) {
 func TestMessagerCacheDupKey(t *testing.T) {
 	mc := NewMessagerCache(10)
 	if err := mc.Add(&MessageRow{
-		TimeScheduled: 1,
-		Epoch:         0,
-		id:            "row01",
+		TimeNext: 1,
+		Epoch:    0,
+		id:       "row01",
 	}); err != nil {
 		t.Fatal(err)
 	}
 	want := "duplicate key"
 	if err := mc.Add(&MessageRow{
-		TimeScheduled: 1,
-		Epoch:         0,
-		id:            "row01",
+		TimeNext: 1,
+		Epoch:    0,
+		id:       "row01",
 	}); err == nil || err.Error() != want {
 		t.Errorf("Add(dup): %v, want %s", err, want)
 	}
 	_ = mc.Pop()
 	if err := mc.Add(&MessageRow{
-		TimeScheduled: 1,
-		Epoch:         0,
-		id:            "row01",
+		TimeNext: 1,
+		Epoch:    0,
+		id:       "row01",
 	}); err == nil || err.Error() != want {
 		t.Errorf("Add(dup): %v, want %s", err, want)
 	}
 	mc.Discard("row01")
 	if err := mc.Add(&MessageRow{
-		TimeScheduled: 1,
-		Epoch:         0,
-		id:            "row01",
+		TimeNext: 1,
+		Epoch:    0,
+		id:       "row01",
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -104,24 +104,24 @@ func TestMessagerCacheDupKey(t *testing.T) {
 func TestMessagerCacheFull(t *testing.T) {
 	mc := NewMessagerCache(2)
 	if err := mc.Add(&MessageRow{
-		TimeScheduled: 1,
-		Epoch:         0,
-		id:            "row01",
+		TimeNext: 1,
+		Epoch:    0,
+		id:       "row01",
 	}); err != nil {
 		t.Fatal(err)
 	}
 	if err := mc.Add(&MessageRow{
-		TimeScheduled: 2,
-		Epoch:         0,
-		id:            "row02",
+		TimeNext: 2,
+		Epoch:    0,
+		id:       "row02",
 	}); err != nil {
 		t.Fatal(err)
 	}
 	want := "queue is full"
 	if err := mc.Add(&MessageRow{
-		TimeScheduled: 2,
-		Epoch:         1,
-		id:            "row12",
+		TimeNext: 2,
+		Epoch:    1,
+		id:       "row12",
 	}); err == nil || err.Error() != want {
 		t.Errorf("Add(full): %v, want %s", err, want)
 	}

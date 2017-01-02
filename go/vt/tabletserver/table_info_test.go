@@ -142,12 +142,12 @@ func TestTableInfoSequence(t *testing.T) {
 
 func TestTableInfoMessage(t *testing.T) {
 	db := fakesqldb.Register()
-	for query, result := range getTestTableInfoQueries() {
+	for query, result := range getMessageTableInfoQueries() {
 		db.AddQuery(query, result)
 	}
 	tableInfo, err := newTestTableInfo("USER_TABLE", "vitess_message", db)
 	if err != nil {
-		t.Fatalf("failed to create a test table info")
+		t.Fatal(err)
 	}
 	want := &TableInfo{
 		Table: &schema.Table{
@@ -160,6 +160,15 @@ func TestTableInfoMessage(t *testing.T) {
 	tableInfo.PKColumns = nil
 	if !reflect.DeepEqual(tableInfo, want) {
 		t.Errorf("TableInfo:\n%#v, want\n%#v", tableInfo, want)
+	}
+
+	for query, result := range getTestTableInfoQueries() {
+		db.AddQuery(query, result)
+	}
+	_, err = newTestTableInfo("USER_TABLE", "vitess_message", db)
+	wanterr := "time_scheduled missing from message table: test_table"
+	if err == nil || err.Error() != wanterr {
+		t.Errorf("newTestTableInfo: %v, want %s", err, wanterr)
 	}
 }
 
@@ -255,6 +264,119 @@ func getTestTableInfoQueries() map[string]*sqltypes.Result {
 					sqltypes.MakeString([]byte("INDEX")),
 					sqltypes.MakeString([]byte{}),
 					sqltypes.MakeString([]byte("name")),
+					sqltypes.MakeString([]byte{}),
+					sqltypes.MakeString([]byte("300")),
+				},
+			},
+		},
+	}
+}
+
+func getMessageTableInfoQueries() map[string]*sqltypes.Result {
+	return map[string]*sqltypes.Result{
+		"select * from test_table where 1 != 1": {
+			Fields: []*querypb.Field{{
+				Name: "time_scheduled",
+				Type: sqltypes.Int64,
+			}, {
+				Name: "id",
+				Type: sqltypes.Int64,
+			}, {
+				Name: "time_next",
+				Type: sqltypes.Int64,
+			}, {
+				Name: "epoch",
+				Type: sqltypes.Int64,
+			}, {
+				Name: "time_created",
+				Type: sqltypes.Int64,
+			}, {
+				Name: "time_acked",
+				Type: sqltypes.Int64,
+			}, {
+				Name: "message",
+				Type: sqltypes.Int64,
+			}},
+		},
+		"describe test_table": {
+			RowsAffected: 2,
+			Rows: [][]sqltypes.Value{
+				{
+					sqltypes.MakeString([]byte("time_scheduled")),
+					sqltypes.MakeString([]byte("bigint(20)")),
+					sqltypes.MakeString([]byte{}),
+					sqltypes.MakeString([]byte{}),
+					sqltypes.MakeString([]byte("0")),
+					sqltypes.MakeString([]byte{}),
+				},
+				{
+					sqltypes.MakeString([]byte("id")),
+					sqltypes.MakeString([]byte("bigint(20)")),
+					sqltypes.MakeString([]byte{}),
+					sqltypes.MakeString([]byte{}),
+					sqltypes.MakeString([]byte("0")),
+					sqltypes.MakeString([]byte{}),
+				},
+				{
+					sqltypes.MakeString([]byte("time_next")),
+					sqltypes.MakeString([]byte("bigint(20)")),
+					sqltypes.MakeString([]byte{}),
+					sqltypes.MakeString([]byte{}),
+					sqltypes.MakeString([]byte("0")),
+					sqltypes.MakeString([]byte{}),
+				},
+				{
+					sqltypes.MakeString([]byte("epoch")),
+					sqltypes.MakeString([]byte("bigint(20)")),
+					sqltypes.MakeString([]byte{}),
+					sqltypes.MakeString([]byte{}),
+					sqltypes.MakeString([]byte("0")),
+					sqltypes.MakeString([]byte{}),
+				},
+				{
+					sqltypes.MakeString([]byte("time_created")),
+					sqltypes.MakeString([]byte("bigint(20)")),
+					sqltypes.MakeString([]byte{}),
+					sqltypes.MakeString([]byte{}),
+					sqltypes.MakeString([]byte("0")),
+					sqltypes.MakeString([]byte{}),
+				},
+				{
+					sqltypes.MakeString([]byte("time_acked")),
+					sqltypes.MakeString([]byte("bigint(20)")),
+					sqltypes.MakeString([]byte{}),
+					sqltypes.MakeString([]byte{}),
+					sqltypes.MakeString([]byte("0")),
+					sqltypes.MakeString([]byte{}),
+				},
+				{
+					sqltypes.MakeString([]byte("message")),
+					sqltypes.MakeString([]byte("bigint(20)")),
+					sqltypes.MakeString([]byte{}),
+					sqltypes.MakeString([]byte{}),
+					sqltypes.MakeString([]byte("0")),
+					sqltypes.MakeString([]byte{}),
+				},
+			},
+		},
+		"show index from test_table": {
+			RowsAffected: 2,
+			Rows: [][]sqltypes.Value{
+				{
+					sqltypes.MakeString([]byte{}),
+					sqltypes.MakeString([]byte{}),
+					sqltypes.MakeString([]byte("PRIMARY")),
+					sqltypes.MakeString([]byte{}),
+					sqltypes.MakeString([]byte("time_scheduled")),
+					sqltypes.MakeString([]byte{}),
+					sqltypes.MakeString([]byte("300")),
+				},
+				{
+					sqltypes.MakeString([]byte{}),
+					sqltypes.MakeString([]byte{}),
+					sqltypes.MakeString([]byte("PRIMARY")),
+					sqltypes.MakeString([]byte{}),
+					sqltypes.MakeString([]byte("id")),
 					sqltypes.MakeString([]byte{}),
 					sqltypes.MakeString([]byte("300")),
 				},

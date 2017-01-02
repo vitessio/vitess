@@ -97,6 +97,8 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 			return qre.txFetch(conn, qre.plan.FullQuery, qre.bindVars, nil, false, true)
 		case planbuilder.PlanInsertPK:
 			return qre.execInsertPK(conn)
+		case planbuilder.PlanInsertMessage:
+			return qre.execInsertMessage(conn)
 		case planbuilder.PlanInsertSubquery:
 			return qre.execInsertSubquery(conn)
 		case planbuilder.PlanDMLPK:
@@ -174,6 +176,8 @@ func (qre *QueryExecutor) execDmlAutoCommit() (reply *sqltypes.Result, err error
 			reply, err = qre.txFetch(conn, qre.plan.FullQuery, qre.bindVars, nil, false, true)
 		case planbuilder.PlanInsertPK:
 			reply, err = qre.execInsertPK(conn)
+		case planbuilder.PlanInsertMessage:
+			return qre.execInsertMessage(conn)
 		case planbuilder.PlanInsertSubquery:
 			reply, err = qre.execInsertSubquery(conn)
 		case planbuilder.PlanDMLPK:
@@ -416,6 +420,15 @@ func (qre *QueryExecutor) execSelect() (*sqltypes.Result, error) {
 }
 
 func (qre *QueryExecutor) execInsertPK(conn *TxConnection) (*sqltypes.Result, error) {
+	pkRows, err := buildValueList(qre.plan.TableInfo, qre.plan.PKValues, qre.bindVars)
+	if err != nil {
+		return nil, err
+	}
+	return qre.execInsertPKRows(conn, pkRows)
+}
+
+func (qre *QueryExecutor) execInsertMessage(conn *TxConnection) (*sqltypes.Result, error) {
+	qre.bindVars["#time_now"] = time.Now().UnixNano()
 	pkRows, err := buildValueList(qre.plan.TableInfo, qre.plan.PKValues, qre.bindVars)
 	if err != nil {
 		return nil, err

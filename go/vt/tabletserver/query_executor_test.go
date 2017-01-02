@@ -158,6 +158,38 @@ func TestQueryExecutorPlanInsertPk(t *testing.T) {
 	}
 }
 
+func TestQueryExecutorPlanInsertMessage(t *testing.T) {
+	db := setUpQueryExecutorTest()
+	db.AddQueryPattern("insert into msg\\(time_scheduled, id, message, time_next, time_created, epoch\\) values \\(1, 2, 3, 1,.*", &sqltypes.Result{})
+	want := &sqltypes.Result{
+		Rows: make([][]sqltypes.Value, 0),
+	}
+	query := "insert into msg(time_scheduled, id, message) values(1, 2, 3)"
+	ctx := context.Background()
+	tsv := newTestTabletServer(ctx, enableStrict, db)
+	qre := newTestQueryExecutor(ctx, tsv, query, 0)
+	defer tsv.StopService()
+	checkPlanID(t, planbuilder.PlanInsertMessage, qre.plan.PlanID)
+	got, err := qre.Execute()
+	if err != nil {
+		t.Fatalf("qre.Execute() = %v, want nil", err)
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got: %v, want: %v", got, want)
+	}
+
+	txid := newTransaction(tsv)
+	qre = newTestQueryExecutor(ctx, tsv, query, txid)
+	defer testCommitHelper(t, tsv, qre)
+	got, err = qre.Execute()
+	if err != nil {
+		t.Fatalf("qre.Execute() = %v, want nil", err)
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got: %v, want: %v", got, want)
+	}
+}
+
 func TestQueryExecutorPlanInsertSubQueryAutoCommmit(t *testing.T) {
 	db := setUpQueryExecutorTest()
 	query := "insert into test_table(pk) select pk from test_table where pk = 1 limit 1000"
@@ -1321,6 +1353,17 @@ func getQueryExecutorSupportedQueries() map[string]*sqltypes.Result {
 					sqltypes.MakeTrusted(sqltypes.Int32, []byte("4")),
 					sqltypes.MakeTrusted(sqltypes.Int32, []byte("5")),
 				},
+				{
+					sqltypes.MakeString([]byte("msg")),
+					sqltypes.MakeString([]byte("USER TABLE")),
+					sqltypes.MakeTrusted(sqltypes.Int32, []byte("1427325875")),
+					sqltypes.MakeString([]byte("vitess_message")),
+					sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
+					sqltypes.MakeTrusted(sqltypes.Int32, []byte("2")),
+					sqltypes.MakeTrusted(sqltypes.Int32, []byte("3")),
+					sqltypes.MakeTrusted(sqltypes.Int32, []byte("4")),
+					sqltypes.MakeTrusted(sqltypes.Int32, []byte("5")),
+				},
 			},
 		},
 		"select * from test_table where 1 != 1": {
@@ -1480,7 +1523,131 @@ func getQueryExecutorSupportedQueries() map[string]*sqltypes.Result {
 					sqltypes.MakeString([]byte("seq")),
 					sqltypes.MakeString([]byte("USER TABLE")),
 					sqltypes.MakeTrusted(sqltypes.Int32, []byte("1427325875")),
-					sqltypes.MakeString([]byte("")),
+					sqltypes.MakeString([]byte("vitess_sequence")),
+					sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
+					sqltypes.MakeTrusted(sqltypes.Int32, []byte("2")),
+					sqltypes.MakeTrusted(sqltypes.Int32, []byte("3")),
+					sqltypes.MakeTrusted(sqltypes.Int32, []byte("4")),
+					sqltypes.MakeTrusted(sqltypes.Int32, []byte("5")),
+				},
+			},
+		},
+		"select * from msg where 1 != 1": {
+			Fields: []*querypb.Field{{
+				Name: "time_scheduled",
+				Type: sqltypes.Int32,
+			}, {
+				Name: "id",
+				Type: sqltypes.Int64,
+			}, {
+				Name: "time_next",
+				Type: sqltypes.Int64,
+			}, {
+				Name: "epoch",
+				Type: sqltypes.Int64,
+			}, {
+				Name: "time_created",
+				Type: sqltypes.Int64,
+			}, {
+				Name: "time_acked",
+				Type: sqltypes.Int64,
+			}, {
+				Name: "message",
+				Type: sqltypes.Int64,
+			}},
+		},
+		"describe msg": {
+			RowsAffected: 4,
+			Rows: [][]sqltypes.Value{
+				{
+					sqltypes.MakeString([]byte("time_scheduled")),
+					sqltypes.MakeString([]byte("int")),
+					sqltypes.MakeString([]byte{}),
+					sqltypes.MakeString([]byte{}),
+					sqltypes.MakeString([]byte("1")),
+					sqltypes.MakeString([]byte{}),
+				},
+				{
+					sqltypes.MakeString([]byte("id")),
+					sqltypes.MakeString([]byte("bigint")),
+					sqltypes.MakeString([]byte{}),
+					sqltypes.MakeString([]byte{}),
+					sqltypes.MakeString([]byte("1")),
+					sqltypes.MakeString([]byte{}),
+				},
+				{
+					sqltypes.MakeString([]byte("time_next")),
+					sqltypes.MakeString([]byte("bigint")),
+					sqltypes.MakeString([]byte{}),
+					sqltypes.MakeString([]byte{}),
+					sqltypes.MakeString([]byte("1")),
+					sqltypes.MakeString([]byte{}),
+				},
+				{
+					sqltypes.MakeString([]byte("epoch")),
+					sqltypes.MakeString([]byte("bigint")),
+					sqltypes.MakeString([]byte{}),
+					sqltypes.MakeString([]byte{}),
+					sqltypes.MakeString([]byte("1")),
+					sqltypes.MakeString([]byte{}),
+				},
+				{
+					sqltypes.MakeString([]byte("time_created")),
+					sqltypes.MakeString([]byte("bigint")),
+					sqltypes.MakeString([]byte{}),
+					sqltypes.MakeString([]byte{}),
+					sqltypes.MakeString([]byte("1")),
+					sqltypes.MakeString([]byte{}),
+				},
+				{
+					sqltypes.MakeString([]byte("time_acked")),
+					sqltypes.MakeString([]byte("bigint")),
+					sqltypes.MakeString([]byte{}),
+					sqltypes.MakeString([]byte{}),
+					sqltypes.MakeString([]byte("1")),
+					sqltypes.MakeString([]byte{}),
+				},
+				{
+					sqltypes.MakeString([]byte("message")),
+					sqltypes.MakeString([]byte("bigint")),
+					sqltypes.MakeString([]byte{}),
+					sqltypes.MakeString([]byte{}),
+					sqltypes.MakeString([]byte("1")),
+					sqltypes.MakeString([]byte{}),
+				},
+			},
+		},
+		"show index from msg": {
+			RowsAffected: 1,
+			Rows: [][]sqltypes.Value{
+				{
+					sqltypes.MakeString([]byte{}),
+					sqltypes.MakeString([]byte{}),
+					sqltypes.MakeString([]byte("PRIMARY")),
+					sqltypes.MakeString([]byte{}),
+					sqltypes.MakeString([]byte("time_scheduled")),
+					sqltypes.MakeString([]byte{}),
+					sqltypes.MakeString([]byte("300")),
+				},
+				{
+					sqltypes.MakeString([]byte{}),
+					sqltypes.MakeString([]byte{}),
+					sqltypes.MakeString([]byte("PRIMARY")),
+					sqltypes.MakeString([]byte{}),
+					sqltypes.MakeString([]byte("id")),
+					sqltypes.MakeString([]byte{}),
+					sqltypes.MakeString([]byte("300")),
+				},
+			},
+		},
+		baseShowTables + " and table_name = 'msg'": {
+			RowsAffected: 1,
+			Rows: [][]sqltypes.Value{
+				{
+					sqltypes.MakeString([]byte("msg")),
+					sqltypes.MakeString([]byte("USER TABLE")),
+					sqltypes.MakeTrusted(sqltypes.Int32, []byte("1427325875")),
+					sqltypes.MakeString([]byte("vitess_message")),
 					sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
 					sqltypes.MakeTrusted(sqltypes.Int32, []byte("2")),
 					sqltypes.MakeTrusted(sqltypes.Int32, []byte("3")),

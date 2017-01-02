@@ -34,6 +34,7 @@ func (me *MessagerEngine) Open() error {
 		return nil
 	}
 	me.qe.schemaInfo.RegisterNotifier("messages", me.schemaChanged)
+	me.schemaChanged(me.qe.schemaInfo.GetSchema())
 	me.isOpen = true
 	return nil
 }
