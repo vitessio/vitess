@@ -495,6 +495,24 @@
 			"revisionTime": "2016-11-28T00:20:07Z"
 		},
 		{
+			"checksumSHA1": "FXiaccMs+1NvIHh8W44lQJeGqms=",
+			"path": "github.com/hashicorp/consul/api",
+			"revision": "dc2a54a77b3b053e77298d4ce587bdf0bd0bcd1c",
+			"revisionTime": "2016-12-21T13:20:54Z"
+		},
+		{
+			"checksumSHA1": "Uzyon2091lmwacNsl1hCytjhHtg=",
+			"path": "github.com/hashicorp/go-cleanhttp",
+			"revision": "ad28ea4487f05916463e2423a55166280e8254b5",
+			"revisionTime": "2016-04-07T17:41:26Z"
+		},
+		{
+			"checksumSHA1": "E3Xcanc9ouQwL+CZGOUyA/+giLg=",
+			"path": "github.com/hashicorp/serf/coordinate",
+			"revision": "d3a67ab21bc8a4643fa53a3633f2d951dd50c6ca",
+			"revisionTime": "2016-12-07T01:17:43Z"
+		},
+		{
 			"checksumSHA1": "fe0NspvyJjx6DhmTjIpO0zmR+kg=",
 			"path": "github.com/influxdb/influxdb/client",
 			"revision": "afde71eb1740fd763ab9450e1f700ba0e53c36d0",
