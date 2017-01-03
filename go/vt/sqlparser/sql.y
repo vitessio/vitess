@@ -49,6 +49,7 @@ func forceEOF(yylex interface{}) {
   indexHints  *IndexHints
   expr        Expr
   boolExpr    BoolExpr
+  boolVal     BoolVal
   valExpr     ValExpr
   colTuple    ColTuple
   valExprs    ValExprs
@@ -135,6 +136,7 @@ func forceEOF(yylex interface{}) {
 %type <colIdents> index_list
 %type <boolExpr> where_expression_opt
 %type <boolExpr> boolean_expression condition
+%type <boolVal> boolean_value
 %type <str> compare
 %type <insRows> row_list
 %type <valExpr> value value_expression num_val
@@ -638,7 +640,7 @@ boolean_expression:
     $$ = &IsExpr{Operator: $3, Expr: $1}
   }
 
-condition:
+boolean_value:
   TRUE
   {
     $$ = BoolVal(true)
@@ -646,6 +648,16 @@ condition:
 | FALSE
   {
     $$ = BoolVal(false)
+  }
+
+condition:
+  boolean_value
+  {
+    $$ = $1
+  }
+| value_expression compare boolean_value
+  {
+    $$ = &ComparisonExpr{Left: $1, Operator: $2, Right: $3}
   }
 | value_expression compare value_expression
   {

@@ -1117,6 +1117,7 @@ func (*UnaryExpr) iValExpr()    {}
 func (*IntervalExpr) iValExpr() {}
 func (*FuncExpr) iValExpr()     {}
 func (*CaseExpr) iValExpr()     {}
+func (BoolVal) iValExpr()	{}
 
 // ValType specifies the type for SQLVal.
 type ValType int
