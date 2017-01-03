@@ -151,6 +151,11 @@ func (jn *Join) GetFields(vcursor VCursor, queryConstruct *queryinfo.QueryConstr
 	return result, nil
 }
 
+// ExecuteBatch performs a non-streaming exec of list of queries.
+func (jn *Join) ExecuteBatch(vcursor VCursor, queryBatchConstruct *queryinfo.QueryBatchConstruct, joinvars map[string]interface{}, wantfields bool) ([]sqltypes.QueryResponse, error) {
+	panic("Join:ExecuteBatch::call not expected")
+}
+
 func joinFields(lfields, rfields []*querypb.Field, cols []int) []*querypb.Field {
 	fields := make([]*querypb.Field, len(cols))
 	for i, index := range cols {

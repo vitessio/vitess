@@ -58,4 +58,5 @@ type Primitive interface {
 	Execute(vcursor VCursor, queryConstruct *queryinfo.QueryConstruct, joinvars map[string]interface{}, wantfields bool) (*sqltypes.Result, error)
 	StreamExecute(vcursor VCursor, queryConstruct *queryinfo.QueryConstruct, joinvars map[string]interface{}, wantields bool, sendReply func(*sqltypes.Result) error) error
 	GetFields(vcursor VCursor, queryConstruct *queryinfo.QueryConstruct, joinvars map[string]interface{}) (*sqltypes.Result, error)
+	ExecuteBatch(vcursor VCursor, queryBatchConstruct *queryinfo.QueryBatchConstruct, joinvars map[string]interface{}, wantfields bool) ([]sqltypes.QueryResponse, error)
 }

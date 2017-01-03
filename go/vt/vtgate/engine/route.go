@@ -332,6 +332,11 @@ func (route *Route) GetFields(vcursor VCursor, queryConstruct *queryinfo.QueryCo
 	return vcursor.ScatterConnExecute(route.FieldQuery, queryConstruct.BindVars, ks, []string{shard}, queryConstruct.NotInTransaction)
 }
 
+// ExecuteBatch performs a non-streaming exec of list of queries.
+func (route *Route) ExecuteBatch(vcursor VCursor, queryBatchConstruct *queryinfo.QueryBatchConstruct, joinvars map[string]interface{}, wantfields bool) ([]sqltypes.QueryResponse, error) {
+	panic("Route:ExecuteBatch::call not expected")
+}
+
 func copyBindVars(bindVars map[string]interface{}) map[string]interface{} {
 	out := make(map[string]interface{})
 	for k, v := range bindVars {

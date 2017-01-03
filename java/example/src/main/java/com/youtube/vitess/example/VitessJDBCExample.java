@@ -141,10 +141,10 @@ public class VitessJDBCExample {
         for (int i = 0; i < updateCounts.length; i++) {
             switch (updateCounts[i]) {
                 case Statement.EXECUTE_FAILED:
-                    System.out.println("execution failed");
+                    System.err.println("execution failed");
                     break;
                 case Statement.SUCCESS_NO_INFO:
-                    System.out.println("execution success with no result");
+                    System.err.println("execution success with no result");
                     break;
                 default:
                     System.out.println("execution success with rows changed: " + updateCounts[i]);
