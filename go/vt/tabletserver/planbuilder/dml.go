@@ -259,10 +259,9 @@ func analyzeInsert(ins *sqlparser.Insert, getTable TableGetter) (plan *ExecPlan,
 		return plan, nil
 	}
 	switch tableInfo.Type {
-	case schema.NoType:
+	case schema.NoType, schema.Sequence:
+		// For now, allow sequence inserts.
 		return analyzeInsertNoType(ins, plan, tableInfo)
-	case schema.Sequence:
-		return nil, fmt.Errorf("insert into sequence table not allowed: %s", tableName.String())
 	case schema.Message:
 		return analyzeInsertMessage(ins, plan, tableInfo)
 	}
@@ -370,7 +369,7 @@ func analyzeInsertMessage(ins *sqlparser.Insert, plan *ExecPlan, tableInfo *sche
 		scheduleIndex = addVal(ins, col, timeNow)
 	}
 
-	// time_next should be the same is time_scheduled.
+	// time_next should be the same as time_scheduled.
 	col = sqlparser.NewColIdent("time_next")
 	num := findCol(col, ins.Columns)
 	if num != -1 {

@@ -373,10 +373,6 @@
   "PKValues": [[1, 3], [2, 4]]
 }
 
-# sequence
-"insert into seq values(1)"
-"insert into sequence table not allowed: seq"
-
 # message insert with time_scheduled specified
 "insert into msg(time_scheduled, id, message) values(1, 2, 'aa')"
 {
