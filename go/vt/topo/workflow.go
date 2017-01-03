@@ -1,21 +1,24 @@
 package topo
 
 import (
+	"path"
+
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 
 	workflowpb "github.com/youtube/vitess/go/vt/proto/workflow"
 )
 
-// This file provides the utility methods to save / retrieve workflows in the topology Backend.
+// This file provides the utility methods to save / retrieve workflows
+// in the topology Backend.
 
 const (
-	workflowPath     = "/workflows/"
+	workflowsPath    = "workflows"
 	workflowFilename = "Workflow"
 )
 
 func pathForWorkflow(uuid string) string {
-	return workflowPath + uuid + "/" + workflowFilename
+	return path.Join(workflowsPath, uuid, workflowFilename)
 }
 
 // WorkflowInfo is a meta struct that contains the version of a Workflow.
@@ -27,7 +30,7 @@ type WorkflowInfo struct {
 // GetWorkflowNames returns the names of the existing
 // workflows. They are sorted by uuid.
 func (ts Server) GetWorkflowNames(ctx context.Context) ([]string, error) {
-	entries, err := ts.ListDir(ctx, GlobalCell, workflowPath)
+	entries, err := ts.ListDir(ctx, GlobalCell, workflowsPath)
 	switch err {
 	case ErrNoNode:
 		return nil, nil

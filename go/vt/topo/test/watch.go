@@ -13,14 +13,14 @@ import (
 )
 
 // waitForInitialValue waits for the initial value of
-// /keyspaces/test_keyspace/SrvKeyspace to appear, and match the
+// keyspaces/test_keyspace/SrvKeyspace to appear, and match the
 // provided srvKeyspace.
 func waitForInitialValue(t *testing.T, ts topo.Impl, cell string, srvKeyspace *topodatapb.SrvKeyspace) (changes <-chan *topo.WatchData, cancel func()) {
 	var current *topo.WatchData
 	ctx := context.Background()
 	start := time.Now()
 	for {
-		current, changes, cancel = ts.Watch(ctx, cell, "/keyspaces/test_keyspace/SrvKeyspace")
+		current, changes, cancel = ts.Watch(ctx, cell, "keyspaces/test_keyspace/SrvKeyspace")
 		if current.Err == topo.ErrNoNode {
 			// hasn't appeared yet
 			if time.Now().Sub(start) > 10*time.Second {
@@ -53,7 +53,7 @@ func checkWatch(t *testing.T, ts topo.Impl) {
 	cell := getLocalCell(ctx, t, ts)
 
 	// start watching something that doesn't exist -> error
-	current, changes, cancel := ts.Watch(ctx, cell, "/keyspaces/test_keyspace/SrvKeyspace")
+	current, changes, cancel := ts.Watch(ctx, cell, "keyspaces/test_keyspace/SrvKeyspace")
 	if current.Err != topo.ErrNoNode {
 		t.Errorf("watch on missing node didn't return ErrNoNode: %v %v", current, changes)
 	}
