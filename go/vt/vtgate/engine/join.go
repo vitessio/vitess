@@ -10,6 +10,7 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	"github.com/youtube/vitess/go/vt/vtgate/queryinfo"
 )
 
 // Join specifies the parameters for a join primitive.
@@ -33,8 +34,8 @@ type Join struct {
 }
 
 // Execute performs a non-streaming exec.
-func (jn *Join) Execute(vcursor VCursor, joinvars map[string]interface{}, wantfields bool) (*sqltypes.Result, error) {
-	lresult, err := jn.Left.Execute(vcursor, joinvars, wantfields)
+func (jn *Join) Execute(vcursor VCursor, queryConstruct *queryinfo.QueryConstruct, joinvars map[string]interface{}, wantfields bool) (*sqltypes.Result, error) {
+	lresult, err := jn.Left.Execute(vcursor, queryConstruct, joinvars, wantfields)
 	if err != nil {
 		return nil, err
 	}
@@ -43,7 +44,7 @@ func (jn *Join) Execute(vcursor VCursor, joinvars map[string]interface{}, wantfi
 		for k := range jn.Vars {
 			joinvars[k] = nil
 		}
-		rresult, err := jn.Right.GetFields(vcursor, joinvars)
+		rresult, err := jn.Right.GetFields(vcursor, queryConstruct, joinvars)
 		if err != nil {
 			return nil, err
 		}
@@ -54,7 +55,7 @@ func (jn *Join) Execute(vcursor VCursor, joinvars map[string]interface{}, wantfi
 		for k, col := range jn.Vars {
 			joinvars[k] = lrow[col]
 		}
-		rresult, err := jn.Right.Execute(vcursor, joinvars, wantfields)
+		rresult, err := jn.Right.Execute(vcursor, queryConstruct, joinvars, wantfields)
 		if err != nil {
 			return nil, err
 		}
@@ -76,14 +77,14 @@ func (jn *Join) Execute(vcursor VCursor, joinvars map[string]interface{}, wantfi
 }
 
 // StreamExecute performs a streaming exec.
-func (jn *Join) StreamExecute(vcursor VCursor, joinvars map[string]interface{}, wantfields bool, sendReply func(*sqltypes.Result) error) error {
-	err := jn.Left.StreamExecute(vcursor, joinvars, wantfields, func(lresult *sqltypes.Result) error {
+func (jn *Join) StreamExecute(vcursor VCursor, queryConstruct *queryinfo.QueryConstruct, joinvars map[string]interface{}, wantfields bool, sendReply func(*sqltypes.Result) error) error {
+	err := jn.Left.StreamExecute(vcursor, queryConstruct, joinvars, wantfields, func(lresult *sqltypes.Result) error {
 		for _, lrow := range lresult.Rows {
 			for k, col := range jn.Vars {
 				joinvars[k] = lrow[col]
 			}
 			rowSent := false
-			err := jn.Right.StreamExecute(vcursor, joinvars, wantfields, func(rresult *sqltypes.Result) error {
+			err := jn.Right.StreamExecute(vcursor, queryConstruct, joinvars, wantfields, func(rresult *sqltypes.Result) error {
 				result := &sqltypes.Result{}
 				if wantfields {
 					wantfields = false
@@ -120,7 +121,7 @@ func (jn *Join) StreamExecute(vcursor VCursor, joinvars map[string]interface{}, 
 				joinvars[k] = nil
 			}
 			result := &sqltypes.Result{}
-			rresult, err := jn.Right.GetFields(vcursor, joinvars)
+			rresult, err := jn.Right.GetFields(vcursor, queryConstruct, joinvars)
 			if err != nil {
 				return err
 			}
@@ -133,8 +134,8 @@ func (jn *Join) StreamExecute(vcursor VCursor, joinvars map[string]interface{}, 
 }
 
 // GetFields fetches the field info.
-func (jn *Join) GetFields(vcursor VCursor, joinvars map[string]interface{}) (*sqltypes.Result, error) {
-	lresult, err := jn.Left.GetFields(vcursor, joinvars)
+func (jn *Join) GetFields(vcursor VCursor, queryConstruct *queryinfo.QueryConstruct, joinvars map[string]interface{}) (*sqltypes.Result, error) {
+	lresult, err := jn.Left.GetFields(vcursor, queryConstruct, joinvars)
 	if err != nil {
 		return nil, err
 	}
@@ -142,7 +143,7 @@ func (jn *Join) GetFields(vcursor VCursor, joinvars map[string]interface{}) (*sq
 	for k := range jn.Vars {
 		joinvars[k] = nil
 	}
-	rresult, err := jn.Right.GetFields(vcursor, joinvars)
+	rresult, err := jn.Right.GetFields(vcursor, queryConstruct, joinvars)
 	if err != nil {
 		return nil, err
 	}

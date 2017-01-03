@@ -8,56 +8,68 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/sqltypes"
-	"github.com/youtube/vitess/go/vt/sqlparser"
-	"github.com/youtube/vitess/go/vt/vtgate/engine"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	vtgatepb "github.com/youtube/vitess/go/vt/proto/vtgate"
+	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 )
 
 type queryExecutor struct {
-	ctx              context.Context
-	sql, comments    string
-	bindVars         map[string]interface{}
-	keyspace         string
-	tabletType       topodatapb.TabletType
-	session          *vtgatepb.Session
-	notInTransaction bool
-	options          *querypb.ExecuteOptions
-	router           *Router
+	ctx        context.Context
+	tabletType topodatapb.TabletType
+	session    *vtgatepb.Session
+	options    *querypb.ExecuteOptions
+	router     *Router
 }
 
-func newQueryExecutor(ctx context.Context, sql string, bindVars map[string]interface{}, keyspace string, tabletType topodatapb.TabletType, session *vtgatepb.Session, notInTransaction bool, options *querypb.ExecuteOptions, router *Router) *queryExecutor {
-	query, comments := sqlparser.SplitTrailingComments(sql)
+func newQueryExecutor(ctx context.Context, tabletType topodatapb.TabletType, session *vtgatepb.Session, options *querypb.ExecuteOptions, router *Router) *queryExecutor {
 	return &queryExecutor{
-		ctx:              ctx,
-		sql:              query,
-		comments:         comments,
-		bindVars:         bindVars,
-		keyspace:         keyspace,
-		tabletType:       tabletType,
-		session:          session,
-		notInTransaction: notInTransaction,
-		options:          options,
-		router:           router,
+		ctx:        ctx,
+		tabletType: tabletType,
+		session:    session,
+		options:    options,
+		router:     router,
 	}
 }
 
+// Execute method call from vindex call to vtgate.
 func (vc *queryExecutor) Execute(query string, bindvars map[string]interface{}) (*sqltypes.Result, error) {
 	// We have to use an empty keyspace here, becasue vindexes that call back can reference
 	// any table.
 	return vc.router.Execute(vc.ctx, query, bindvars, "", vc.tabletType, vc.session, false, vc.options)
 }
 
-func (vc *queryExecutor) ExecuteRoute(route *engine.Route, joinvars map[string]interface{}) (*sqltypes.Result, error) {
-	return vc.router.ExecuteRoute(vc, route, joinvars)
+// ExecuteMultiShard method call from engine call to vtgate.
+func (vc *queryExecutor) ExecuteMultiShard(keyspace string, shardQueries map[string]querytypes.BoundQuery, notInTransaction bool) (*sqltypes.Result, error) {
+	return vc.router.scatterConn.ExecuteMultiShard(vc.ctx, keyspace, shardQueries, vc.tabletType, NewSafeSession(vc.session), notInTransaction, vc.options)
 }
 
-func (vc *queryExecutor) StreamExecuteRoute(route *engine.Route, joinvars map[string]interface{}, sendReply func(*sqltypes.Result) error) error {
-	return vc.router.StreamExecuteRoute(vc, route, joinvars, sendReply)
+// StreamExecuteMulti method call from engine call to vtgate.
+func (vc *queryExecutor) StreamExecuteMulti(query string, keyspace string, shardVars map[string]map[string]interface{}, sendReply func(reply *sqltypes.Result) error) error {
+	return vc.router.scatterConn.StreamExecuteMulti(vc.ctx, query, keyspace, shardVars, vc.tabletType, vc.options, sendReply)
 }
 
-func (vc *queryExecutor) GetRouteFields(route *engine.Route, joinvars map[string]interface{}) (*sqltypes.Result, error) {
-	return vc.router.GetRouteFields(vc, route, joinvars)
+// GetAnyShard method call from engine call to vtgate.
+func (vc *queryExecutor) GetAnyShard(keyspace string) (ks, shard string, err error) {
+	return getAnyShard(vc.ctx, vc.router.serv, vc.router.cell, keyspace, vc.tabletType)
+}
+
+// ScatterConnExecute method call from engine call to vtgate.
+func (vc *queryExecutor) ScatterConnExecute(query string, bindVars map[string]interface{}, keyspace string, shards []string, notInTransaction bool) (*sqltypes.Result, error) {
+	return vc.router.scatterConn.Execute(vc.ctx, query, bindVars, keyspace, shards, vc.tabletType, NewSafeSession(vc.session), notInTransaction, vc.options)
+}
+
+// GetKeyspaceShards method call from engine call to vtgate.
+func (vc *queryExecutor) GetKeyspaceShards(keyspace string) (string, *topodatapb.SrvKeyspace, []*topodatapb.ShardReference, error) {
+	return getKeyspaceShards(vc.ctx, vc.router.serv, vc.router.cell, keyspace, vc.tabletType)
+}
+
+// GetShardForKeyspaceID method call from engine call to vtgate.
+func (vc *queryExecutor) GetShardForKeyspaceID(allShards []*topodatapb.ShardReference, keyspaceID []byte) (string, error) {
+	return getShardForKeyspaceID(allShards, keyspaceID)
+}
+
+func (vc *queryExecutor) ExecuteShard(keyspace string, shardQueries map[string]querytypes.BoundQuery) (*sqltypes.Result, error) {
+	return vc.router.scatterConn.ExecuteMultiShard(vc.ctx, keyspace, shardQueries, vc.tabletType, NewSafeSession(nil), false, vc.options)
 }
