@@ -93,7 +93,7 @@ func TestNocacheCases(t *testing.T) {
 				{"1", "3"},
 			},
 			Rewritten: []string{
-				"select eid, sum(id) from vitess_a where 1 != 1",
+				"select eid, sum(id) from vitess_a where 1 != 1 group by eid",
 				"select /* group by */ eid, sum(id) from vitess_a group by eid limit 10001",
 			},
 			RowsAffected: 1,
