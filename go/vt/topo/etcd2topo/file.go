@@ -18,6 +18,7 @@ func (s *Server) Create(ctx context.Context, cell, filePath string, contents []b
 	nodePath := path.Join(c.root, filePath)
 
 	// We have to do a transaction, comparing existing version with 0.
+	// This means: if the file doesn't exist, create it.
 	txnresp, err := c.cli.Txn(ctx).
 		If(clientv3.Compare(clientv3.Version(nodePath), "=", 0)).
 		Then(clientv3.OpPut(nodePath, string(contents))).
@@ -40,7 +41,8 @@ func (s *Server) Update(ctx context.Context, cell, filePath string, contents []b
 	nodePath := path.Join(c.root, filePath)
 
 	if version != nil {
-		// We have to do a transaction.
+		// We have to do a transaction. This means: if the
+		// current file revision if what we expect, save it.
 		txnresp, err := c.cli.Txn(ctx).
 			If(clientv3.Compare(clientv3.ModRevision(nodePath), "=", int64(version.(EtcdVersion)))).
 			Then(clientv3.OpPut(nodePath, string(contents))).
@@ -54,7 +56,7 @@ func (s *Server) Update(ctx context.Context, cell, filePath string, contents []b
 		return EtcdVersion(txnresp.Header.Revision), nil
 	}
 
-	// This is just a regular unconditional Put here.
+	// No version specified. We can use a simple unconditional Put.
 	resp, err := c.cli.Put(ctx, nodePath, string(contents))
 	if err != nil {
 		return nil, convertError(err)
@@ -90,8 +92,10 @@ func (s *Server) Delete(ctx context.Context, cell, filePath string, version topo
 	nodePath := path.Join(c.root, filePath)
 
 	if version != nil {
-		// We have to do a transaction.  If the transaction
-		// doesnt' succeed, we also ask for the value of the
+		// We have to do a transaction. This means: if the
+		// node revision is what we expect, delete it,
+		// otherwise get the file. If the transaction doesn't
+		// succeed, we also ask for the value of the
 		// node. That way we'll know if it failed because it
 		// didn't exist, or because the version was wrong.
 		txnresp, err := c.cli.Txn(ctx).

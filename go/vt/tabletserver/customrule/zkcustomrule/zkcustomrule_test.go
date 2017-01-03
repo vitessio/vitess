@@ -44,7 +44,7 @@ var customRule2 = `
 
 func TestZkCustomRule(t *testing.T) {
 	// Start a real single ZK daemon, and close it after all tests are done.
-	zkd, serverAddr := zkctl.StartLocalZk(testfiles.GoVtTabletserverCustomruleZkcustomruleZk, testfiles.GoVtTabletserverCustomruleZkcustomrulePort)
+	zkd, serverAddr := zkctl.StartLocalZk(testfiles.GoVtTabletserverCustomruleZkcustomruleZkID, testfiles.GoVtTabletserverCustomruleZkcustomrulePort)
 	defer zkd.Teardown()
 
 	// Create fake file.

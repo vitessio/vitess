@@ -23,7 +23,7 @@ import (
 // Run the topology test suite on zktopo.
 func TestZkTopo(t *testing.T) {
 	// Start a real single ZK daemon, and close it after all tests are done.
-	zkd, serverAddr := zkctl.StartLocalZk(testfiles.GoVtZktopoZk, testfiles.GoVtZktopoPort)
+	zkd, serverAddr := zkctl.StartLocalZk(testfiles.GoVtZktopoZkID, testfiles.GoVtZktopoPort)
 	defer zkd.Teardown()
 
 	// Create a ZK_CLIENT_CONFIG file to use.
