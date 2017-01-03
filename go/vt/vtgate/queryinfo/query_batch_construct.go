@@ -2,17 +2,17 @@ package queryinfo
 
 import "github.com/youtube/vitess/go/vt/sqlparser"
 
-// QueryConstruct contains the information about the sql and bindVars to be used by vtgate and engine.
+// QueryBatchConstruct contains the information about the sql and bindVars to be used by vtgate and engine.
 type QueryBatchConstruct struct {
-	BoundQueryList   []*queryBound
-	Keyspace         string
-	AsTransaction bool
+	BoundQueryList []*queryBound
+	Keyspace       string
+	AsTransaction  bool
 }
 
 type queryBound struct {
-	SQL 		string
-	Comments 	string
-	BindVars        map[string]interface{}
+	SQL      string
+	Comments string
+	BindVars map[string]interface{}
 }
 
 // NewQueryBatchConstruct method initializes the structure.
@@ -28,15 +28,15 @@ func NewQueryBatchConstruct(sqlList []string, keyspace string, bindVarsList []ma
 			bindVars = make(map[string]interface{})
 			bindVarsList[sqlNum] = bindVars
 		}
-		boundQueryList[sqlNum] = &queryBound {
-			SQL: sql,
+		boundQueryList[sqlNum] = &queryBound{
+			SQL:      sql,
 			Comments: comments,
 			BindVars: bindVars,
 		}
 	}
 	return &QueryBatchConstruct{
-		BoundQueryList:   boundQueryList,
-		Keyspace:         keyspace,
-		AsTransaction: asTransaction,
+		BoundQueryList: boundQueryList,
+		Keyspace:       keyspace,
+		AsTransaction:  asTransaction,
 	}
 }

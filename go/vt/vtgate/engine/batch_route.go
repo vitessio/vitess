@@ -34,11 +34,11 @@ func (batchRoute *BatchRoute) ExecuteBatch(vcursor VCursor, queryBatchConstruct 
 	// Plan for each query is then executed.
 	// AsTransaction flag is also discarded.
 	for i, plan := range batchRoute.PlanList {
-		queryConstruct := queryinfo.NewQueryConstruct(queryBatchConstruct.BoundQueryList[i].SQL, queryBatchConstruct.Keyspace,queryBatchConstruct.BoundQueryList[i].BindVars,false)
-		result, err := plan.Instructions.Execute(vcursor,queryConstruct,joinvars,wantfields)
-		queryResponses[i] = sqltypes.QueryResponse {
+		queryConstruct := queryinfo.NewQueryConstruct(queryBatchConstruct.BoundQueryList[i].SQL, queryBatchConstruct.Keyspace, queryBatchConstruct.BoundQueryList[i].BindVars, false)
+		result, err := plan.Instructions.Execute(vcursor, queryConstruct, joinvars, wantfields)
+		queryResponses[i] = sqltypes.QueryResponse{
 			QueryResult: result,
-			QueryError: err,
+			QueryError:  err,
 		}
 	}
 	return queryResponses, nil

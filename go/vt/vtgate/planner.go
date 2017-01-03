@@ -325,7 +325,7 @@ func (plr *Planner) GetPlan(sql, keyspace string, bindvars map[string]interface{
 	return plan, nil
 }
 
-// GetPlan computes the plan for the given query. If one is in
+// GetBatchPlan computes the plan for the given queries. If one is in
 // the cache, it reuses it.
 func (plr *Planner) GetBatchPlan(queryBatchConstruct *queryinfo.QueryBatchConstruct) (*engine.Plan, error) {
 	if plr.VSchema() == nil {
@@ -334,14 +334,14 @@ func (plr *Planner) GetBatchPlan(queryBatchConstruct *queryinfo.QueryBatchConstr
 	planList := make([]*engine.Plan, len(queryBatchConstruct.BoundQueryList))
 	keyspace := queryBatchConstruct.Keyspace
 	for i, queryBound := range queryBatchConstruct.BoundQueryList {
-		plan, err := plr.GetPlan(queryBound.SQL,keyspace,queryBound.BindVars)
+		plan, err := plr.GetPlan(queryBound.SQL, keyspace, queryBound.BindVars)
 		if err != nil {
 			return nil, err
 		}
 		planList[i] = plan
 	}
 	return &engine.Plan{
-		Original: "BatchPlan",
+		Original:     "BatchPlan",
 		Instructions: &engine.BatchRoute{PlanList: planList},
 	}, nil
 
