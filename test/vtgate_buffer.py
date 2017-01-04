@@ -141,44 +141,42 @@ class UpdateThread(AbstractVtgateThread):
     self.i += 1
     logging.debug('UPDATE affected %d row(s).', row_count)
 
+master = tablet.Tablet()
+replica = tablet.Tablet()
+all_tablets = [master, replica]
 
-class TestBuffer(unittest.TestCase):
 
-  def setUp(self):
-    self.master = tablet.Tablet()
-    self.replica = tablet.Tablet()
-    self.all_tablets = [self.master, self.replica]
+def setUpModule():
+  try:
+    environment.topo_server().setup()
 
-    try:
-      environment.topo_server().setup()
+    setup_procs = [t.init_mysql() for t in all_tablets]
+    utils.Vtctld().start()
+    utils.wait_procs(setup_procs)
 
-      setup_procs = [t.init_mysql() for t in self.all_tablets]
-      utils.Vtctld().start()
-      utils.wait_procs(setup_procs)
+    utils.run_vtctl(['CreateKeyspace', KEYSPACE])
 
-      utils.run_vtctl(['CreateKeyspace', KEYSPACE])
+    # Start tablets.
+    db_name = 'vt_' + KEYSPACE
+    for t in all_tablets:
+      t.create_db(db_name)
+    master.start_vttablet(wait_for_state=None,
+                          init_tablet_type='replica',
+                          init_keyspace=KEYSPACE, init_shard=SHARD,
+                          tablet_index=0)
+    replica.start_vttablet(wait_for_state=None,
+                           init_tablet_type='replica',
+                           init_keyspace=KEYSPACE, init_shard=SHARD,
+                           tablet_index=1)
+    for t in all_tablets:
+      t.wait_for_vttablet_state('NOT_SERVING')
 
-      # Start tablets.
-      db_name = 'vt_' + KEYSPACE
-      for t in self.all_tablets:
-        t.create_db(db_name)
-      self.master.start_vttablet(wait_for_state=None,
-                                 init_tablet_type='replica',
-                                 init_keyspace=KEYSPACE, init_shard=SHARD,
-                                 tablet_index=0)
-      self.replica.start_vttablet(wait_for_state=None,
-                                  init_tablet_type='replica',
-                                  init_keyspace=KEYSPACE, init_shard=SHARD,
-                                  tablet_index=1)
-      for t in self.all_tablets:
-        t.wait_for_vttablet_state('NOT_SERVING')
+    # Reparent to choose an initial master and enable replication.
+    utils.run_vtctl(['InitShardMaster', '-force', '%s/%s' % (KEYSPACE, SHARD),
+                     master.tablet_alias])
 
-      # Reparent to choose an initial master and enable replication.
-      utils.run_vtctl(['InitShardMaster', '-force', '%s/%s' % (KEYSPACE, SHARD),
-                       self.master.tablet_alias])
-
-      # Create the schema.
-      utils.run_vtctl(['ApplySchema', '-sql=' + SCHEMA, KEYSPACE])
+    # Create the schema.
+    utils.run_vtctl(['ApplySchema', '-sql=' + SCHEMA, KEYSPACE])
 
       # Start vtgate.
       utils.VtGate().start(extra_args=[
@@ -187,32 +185,35 @@ class TestBuffer(unittest.TestCase):
           '-vtgate_buffer_window', '10m',
           '-vtgate_buffer_max_failover_duration', '10m',
           '-vtgate_buffer_min_time_between_failovers', '20m'],
-                           tablets=self.all_tablets)
+                           tablets=all_tablets)
 
-      # Insert two rows for the later threads (critical read, update).
-      with utils.vtgate.write_transaction(keyspace=KEYSPACE, shards=[SHARD],
-                                          tablet_type='master') as tx:
-        tx.execute('INSERT INTO buffer (id, msg) VALUES (:id, :msg)',
-                   {'id': CRITICAL_READ_ROW_ID, 'msg': 'critical read'})
-        tx.execute('INSERT INTO buffer (id, msg) VALUES (:id, :msg)',
-                   {'id': UPDATE_ROW_ID, 'msg': 'update'})
-    except:
-      self.tearDown()
-      raise
+    # Insert two rows for the later threads (critical read, update).
+    with utils.vtgate.write_transaction(keyspace=KEYSPACE, shards=[SHARD],
+                                        tablet_type='master') as tx:
+      tx.execute('INSERT INTO buffer (id, msg) VALUES (:id, :msg)',
+                 {'id': CRITICAL_READ_ROW_ID, 'msg': 'critical read'})
+      tx.execute('INSERT INTO buffer (id, msg) VALUES (:id, :msg)',
+                 {'id': UPDATE_ROW_ID, 'msg': 'update'})
+  except:
+    tearDownModule()
+    raise
 
-  def tearDown(self):
-    utils.required_teardown()
-    if utils.options.skip_teardown:
-      return
 
-    teardown_procs = [t.teardown_mysql() for t in self.all_tablets]
-    utils.wait_procs(teardown_procs, raise_on_error=False)
+def tearDownModule():
+  utils.required_teardown()
+  if utils.options.skip_teardown:
+    return
 
-    environment.topo_server().teardown()
-    utils.kill_sub_processes()
-    utils.remove_tmp_files()
-    for t in self.all_tablets:
-      t.remove_tree()
+  teardown_procs = [t.teardown_mysql() for t in [master, replica]]
+  utils.wait_procs(teardown_procs, raise_on_error=False)
+
+  environment.topo_server().teardown()
+  utils.kill_sub_processes()
+  utils.remove_tmp_files()
+  for t in all_tablets:
+    t.remove_tree()
+
+class TestBuffer(unittest.TestCase):
 
   def test_buffer(self):
     # Start both threads.
@@ -230,7 +231,7 @@ class TestBuffer(unittest.TestCase):
     update_thread.set_notify_after_n_successful_rpcs(10)
     utils.run_vtctl(['PlannedReparentShard', '-keyspace_shard',
                      '%s/%s' % (KEYSPACE, SHARD),
-                     '-new_master', self.replica.tablet_alias])
+                     '-new_master', replica.tablet_alias])
     read_thread.wait_for_notification.get()
     update_thread.wait_for_notification.get()
 
