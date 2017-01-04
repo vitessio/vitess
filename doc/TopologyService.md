@@ -415,7 +415,7 @@ We use the following paths:
 For locks, we use a subdirectory named `locks` in the directory to lock, and an
 ephemeral file in that subdirectory (it is associated with a lease, whose TTL
 can be set with the `-topo_etcd_lease_duration` flag, defaults to 30
-seconds). the ephemeral file with the lowest ModRevision has the lock, the
+seconds). The ephemeral file with the lowest ModRevision has the lock, the
 others wait for files with older ModRevisions to disappear.
 
 Master elections also use a subdirectory, named after the election Name, and use

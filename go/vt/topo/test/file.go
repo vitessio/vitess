@@ -104,6 +104,16 @@ func checkFileInCell(t *testing.T, ts topo.Impl, cell string) {
 		}
 	}
 
+	// Try to update again with empty content, should work.
+	newVersion, err = ts.Update(ctx, cell, "/myfile", nil, newVersion)
+	if err != nil {
+		t.Fatalf("Update(empty content) should have worked but got: %v", err)
+	}
+	contents, getVersion, err = ts.Get(ctx, cell, "/myfile")
+	if err != nil || len(contents) != 0 || !reflect.DeepEqual(getVersion, newVersion) {
+		t.Errorf("Get('/myfile') expecting empty content got bad result: %v %v %v", contents, getVersion, err)
+	}
+
 	// Try to delete with wrong version, should fail.
 	if err = ts.Delete(ctx, cell, "/myfile", version); err != topo.ErrBadVersion {
 		t.Errorf("Delete('/myfile', wrong version) returned bad error: %v", err)
@@ -113,6 +123,9 @@ func checkFileInCell(t *testing.T, ts topo.Impl, cell string) {
 	if err = ts.Delete(ctx, cell, "/myfile", newVersion); err != nil {
 		t.Fatalf("Delete('/myfile') failed: %v", err)
 	}
+
+	// ListDir root: nothing.
+	checkListDir(ctx, t, ts, cell, "/", nil)
 
 	// Try to delete again, should fail.
 	if err = ts.Delete(ctx, cell, "/myfile", newVersion); err != topo.ErrNoNode {
@@ -138,8 +151,14 @@ func checkFileInCell(t *testing.T, ts topo.Impl, cell string) {
 		}
 	}
 
+	// See it in the listing now.
+	checkListDir(ctx, t, ts, cell, "/", []string{"myfile"})
+
 	// Unconditional delete.
 	if err = ts.Delete(ctx, cell, "/myfile", nil); err != nil {
 		t.Errorf("Delete('/myfile', nil) failed: %v", err)
 	}
+
+	// ListDir root: nothing.
+	checkListDir(ctx, t, ts, cell, "/", nil)
 }

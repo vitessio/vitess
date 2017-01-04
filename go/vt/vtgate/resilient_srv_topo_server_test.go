@@ -105,12 +105,12 @@ func (ft *fakeTopo) Watch(ctx context.Context, cell, filePath string) (*topo.Wat
 		return &topo.WatchData{Err: fmt.Errorf("wrong cell: %v", cell)}, nil, nil
 	}
 
-	// We only handle SrvKeyspace: /keyspaces/<keyspace>/SrvKeyspace
+	// We only handle SrvKeyspace: keyspaces/<keyspace>/SrvKeyspace
 	parts := strings.Split(filePath, "/")
-	if len(parts) != 4 || parts[0] != "" || parts[1] != "keyspaces" || parts[3] != "SrvKeyspace" {
+	if len(parts) != 3 || parts[0] != "keyspaces" || parts[2] != "SrvKeyspace" {
 		return &topo.WatchData{Err: fmt.Errorf("unknown path: %v", filePath)}, nil, nil
 	}
-	keyspace := parts[2]
+	keyspace := parts[1]
 
 	ft.watchCount++
 

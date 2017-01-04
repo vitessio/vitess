@@ -30,6 +30,9 @@ func (s *Server) newUniqueEphemeralKV(ctx context.Context, leaseID clientv3.Leas
 	for {
 		newKey := fmt.Sprintf("%v/%v", nodePath, time.Now().UnixNano())
 
+		// Only create a new file if it doesn't exist already
+		// (version = 0), to avoid two processes using the
+		// same file name.
 		txnresp, err := s.global.cli.Txn(ctx).
 			If(clientv3.Compare(clientv3.Version(newKey), "=", 0)).
 			Then(clientv3.OpPut(newKey, contents, clientv3.WithLease(leaseID))).

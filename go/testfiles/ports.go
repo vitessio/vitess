@@ -45,15 +45,15 @@ var (
 // same time, so they can't use the same Zookeeper server IDs.
 //
 var (
-	// GoVtTopoZk2topoZk is used by the go/vt/topo/zk2topo package.
-	GoVtTopoZk2topoZk = 1
+	// GoVtTopoZk2topoZkID is used by the go/vt/topo/zk2topo package.
+	GoVtTopoZk2topoZkID = 1
 
-	// GoVtTabletserverCustomruleZkcustomruleZk is used by the
+	// GoVtTabletserverCustomruleZkcustomruleZkID is used by the
 	// go/vt/tabletserver/customrule/zkcustomrule package.
-	GoVtTabletserverCustomruleZkcustomruleZk = 2
+	GoVtTabletserverCustomruleZkcustomruleZkID = 2
 
-	// GoVtZktopoZk is used by the go/vt/zktopo package.
-	GoVtZktopoZk = 3
+	// GoVtZktopoZkID is used by the go/vt/zktopo package.
+	GoVtZktopoZkID = 3
 )
 
 func getPortStart() int {

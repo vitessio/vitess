@@ -16,9 +16,10 @@ const (
 // Zookeeper is a good example of an implementation, as defined in
 // go/vt/topo/zk2topo.
 //
-// This API is very generic, and key/value store oriented.
-// We use regular paths for object names, and we can list all
-// immediate children of a path.
+// This API is very generic, and key/value store oriented.  We use
+// regular paths for object names, and we can list all immediate
+// children of a path. All paths sent through this API are relative
+// paths, from the root directory of the cell.
 //
 // FIXME(alainjobart) add all parts of the API, implement them all for
 // all our current systems, and convert the higher levels to talk to
@@ -31,6 +32,7 @@ type Backend interface {
 	// ListDir returns the entries in a directory.  The returned
 	// list should be sorted (by sort.Strings for instance).
 	// If there are no files under the provided path, returns ErrNoNode.
+	// dirPath is a path relative to the root directory of the cell.
 	ListDir(ctx context.Context, cell, dirPath string) ([]string, error)
 
 	//
@@ -40,17 +42,20 @@ type Backend interface {
 
 	// Create creates the initial version of a file.
 	// Returns ErrNodeExists if the file exists.
+	// filePath is a path relative to the root directory of the cell.
 	Create(ctx context.Context, cell, filePath string, contents []byte) (Version, error)
 
 	// Update updates the file with the provided filename with the
 	// new content.
 	// If version is nil, it is an unconditional update
 	// (which is then the same as a Create is the file doesn't exist).
+	// filePath is a path relative to the root directory of the cell.
 	// It returns the new Version of the file after update.
 	// Returns ErrBadVersion if the provided version is not current.
 	Update(ctx context.Context, cell, filePath string, contents []byte, version Version) (Version, error)
 
 	// Get returns the content and version of a file.
+	// filePath is a path relative to the root directory of the cell.
 	// Can return ErrNoNode if the file doesn't exist.
 	Get(ctx context.Context, cell, filePath string) ([]byte, Version, error)
 
@@ -61,6 +66,7 @@ type Backend interface {
 	// For instance, when deleting /keyspaces/aaa/Keyspace, and if
 	// there is no other file in /keyspaces/aaa, then aaa should not
 	// appear any more when listing /keyspaces.
+	// filePath is a path relative to the root directory of the cell.
 	//
 	// Delete will never be called on a directory.
 	// Returns ErrNodeExists if the file doesn't exist.
@@ -116,6 +122,8 @@ type Backend interface {
 	// yet). The only guarantee is that the watch data will
 	// eventually converge. Vitess doesn't explicitly depend on the data
 	// being correct quickly, as long as it eventually gets there.
+	//
+	// filePath is a path relative to the root directory of the cell.
 	Watch(ctx context.Context, cell, filePath string) (current *WatchData, changes <-chan *WatchData, cancel CancelFunc)
 
 	//
