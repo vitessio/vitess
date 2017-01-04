@@ -39,11 +39,6 @@ func (mt *MemoryTopo) UpdateShard(ctx context.Context, keyspace, shard string, v
 	return int64(version.(NodeVersion)), nil
 }
 
-// ValidateShard implements topo.Impl.ValidateShard
-func (mt *MemoryTopo) ValidateShard(ctx context.Context, keyspace, shard string) error {
-	return nil
-}
-
 // GetShard implements topo.Impl.GetShard
 func (mt *MemoryTopo) GetShard(ctx context.Context, keyspace, shard string) (*topodatapb.Shard, int64, error) {
 	shardPath := path.Join(keyspacesPath, keyspace, shardsPath, shard, topo.ShardFile)

@@ -93,7 +93,7 @@ func TestNocacheCases(t *testing.T) {
 				{"1", "3"},
 			},
 			Rewritten: []string{
-				"select eid, sum(id) from vitess_a where 1 != 1",
+				"select eid, sum(id) from vitess_a where 1 != 1 group by eid",
 				"select /* group by */ eid, sum(id) from vitess_a group by eid limit 10001",
 			},
 			RowsAffected: 1,
@@ -148,7 +148,7 @@ func TestNocacheCases(t *testing.T) {
 				{"1", "2", "1", "2"},
 			},
 			Rewritten: []string{
-				"select a.eid, a.id, b.eid, b.id from vitess_a as a join vitess_b as b where 1 != 1",
+				"select a.eid, a.id, b.eid, b.id from vitess_a as a join vitess_b as b on a.eid = b.eid and a.id = b.id where 1 != 1",
 				"select /* join */ a.eid, a.id, b.eid, b.id from vitess_a as a join vitess_b as b on a.eid = b.eid and a.id = b.id limit 10001",
 			},
 			RowsAffected: 2,
@@ -161,7 +161,7 @@ func TestNocacheCases(t *testing.T) {
 				{"1", "2", "1", "2"},
 			},
 			Rewritten: []string{
-				"select a.eid, a.id, b.eid, b.id from vitess_a as a straight_join vitess_b as b where 1 != 1",
+				"select a.eid, a.id, b.eid, b.id from vitess_a as a straight_join vitess_b as b on a.eid = b.eid and a.id = b.id where 1 != 1",
 				"select /* straight_join */ a.eid, a.id, b.eid, b.id from vitess_a as a straight_join vitess_b as b on a.eid = b.eid and a.id = b.id limit 10001",
 			},
 			RowsAffected: 2,
@@ -174,7 +174,7 @@ func TestNocacheCases(t *testing.T) {
 				{"1", "2", "1", "2"},
 			},
 			Rewritten: []string{
-				"select a.eid, a.id, b.eid, b.id from vitess_a as a join vitess_b as b where 1 != 1",
+				"select a.eid, a.id, b.eid, b.id from vitess_a as a join vitess_b as b on a.eid = b.eid and a.id = b.id where 1 != 1",
 				"select /* cross join */ a.eid, a.id, b.eid, b.id from vitess_a as a join vitess_b as b on a.eid = b.eid and a.id = b.id limit 10001",
 			},
 			RowsAffected: 2,
@@ -200,7 +200,7 @@ func TestNocacheCases(t *testing.T) {
 				{"1", "2", "1", "2"},
 			},
 			Rewritten: []string{
-				"select a.eid, a.id, b.eid, b.id from vitess_a as a left join vitess_b as b on 1 != 1 where 1 != 1",
+				"select a.eid, a.id, b.eid, b.id from vitess_a as a left join vitess_b as b on a.eid = b.eid and a.id = b.id where 1 != 1",
 				"select /* left join */ a.eid, a.id, b.eid, b.id from vitess_a as a left join vitess_b as b on a.eid = b.eid and a.id = b.id limit 10001",
 			},
 			RowsAffected: 2,
@@ -213,7 +213,7 @@ func TestNocacheCases(t *testing.T) {
 				{"1", "2", "1", "2"},
 			},
 			Rewritten: []string{
-				"select a.eid, a.id, b.eid, b.id from vitess_a as a right join vitess_b as b on 1 != 1 where 1 != 1",
+				"select a.eid, a.id, b.eid, b.id from vitess_a as a right join vitess_b as b on a.eid = b.eid and a.id = b.id where 1 != 1",
 				"select /* right join */ a.eid, a.id, b.eid, b.id from vitess_a as a right join vitess_b as b on a.eid = b.eid and a.id = b.id limit 10001",
 			},
 			RowsAffected: 2,

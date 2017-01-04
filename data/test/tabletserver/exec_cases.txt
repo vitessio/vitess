@@ -21,7 +21,7 @@
 {
   "PlanID": "PASS_SELECT",
   "TableName": "a",
-  "FieldQuery": "select * from a where 1 != 1",
+  "FieldQuery": "select * from a where 1 != 1 group by b",
   "FullQuery": "select * from a group by b limit :#maxLimit"
 }
 
@@ -75,7 +75,7 @@
 {
   "PlanID": "PASS_SELECT",
   "TableName": "",
-  "FieldQuery": "select * from a right join b on 1 != 1 where 1 != 1",
+  "FieldQuery": "select * from a right join b on c = d where 1 != 1",
   "FullQuery": "select * from a right join b on c = d limit :#maxLimit"
 }
 

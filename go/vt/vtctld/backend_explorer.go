@@ -72,20 +72,24 @@ func (ex *BackendExplorer) HandlePath(nodePath string, r *http.Request) *explore
 		} else {
 			result.Data = decoded
 		}
-	case topo.ErrNoNode:
-		// Not a file, we pass.
-	default:
-		// Something else is wrong.
-		result.Error = err.Error()
+
+		// With contents, it can't have children, so we're done.
 		return result
+	default:
+		// Something is wrong. Might not be a file.
+		result.Error = err.Error()
 	}
 
 	// Get the children, if any.
 	children, err := ex.backend.ListDir(ctx, cell, relativePath)
 	if err != nil {
-		result.Error = err.Error()
+		// It failed as a directory, let's just return what it did
+		// as a file.
 		return result
 	}
+
+	// It worked as a directory, clear any file error.
+	result.Error = ""
 	result.Children = children
 	return result
 }

@@ -45,11 +45,6 @@ func (zs *Server) UpdateShard(ctx context.Context, keyspace, shard string, value
 	return int64(version.(ZKVersion)), nil
 }
 
-// ValidateShard is part of the topo.Server interface.
-func (zs *Server) ValidateShard(ctx context.Context, keyspace, shard string) error {
-	return nil
-}
-
 // GetShard is part of the topo.Server interface.
 func (zs *Server) GetShard(ctx context.Context, keyspace, shard string) (*topodatapb.Shard, int64, error) {
 	shardPath := path.Join(keyspacesPath, keyspace, shardsPath, shard, topo.ShardFile)

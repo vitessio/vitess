@@ -519,17 +519,6 @@ func (rb *route) isLocal(col *sqlparser.ColName) bool {
 func (rb *route) generateFieldQuery(sel *sqlparser.Select, jt *jointab) string {
 	formatter := func(buf *sqlparser.TrackedBuffer, node sqlparser.SQLNode) {
 		switch node := node.(type) {
-		case *sqlparser.Select:
-			buf.Myprintf("select %v from %v where 1 != 1", node.SelectExprs, node.From)
-			return
-		case *sqlparser.JoinTableExpr:
-			if node.Join == sqlparser.LeftJoinStr || node.Join == sqlparser.RightJoinStr {
-				// ON clause is requried
-				buf.Myprintf("%v %s %v on 1 != 1", node.LeftExpr, node.Join, node.RightExpr)
-			} else {
-				buf.Myprintf("%v %s %v", node.LeftExpr, node.Join, node.RightExpr)
-			}
-			return
 		case *sqlparser.ColName:
 			if !rb.isLocal(node) {
 				_, joinVar := jt.Lookup(node)
@@ -540,11 +529,10 @@ func (rb *route) generateFieldQuery(sel *sqlparser.Select, jt *jointab) string {
 			node.Name.Format(buf)
 			return
 		}
-		node.Format(buf)
+		sqlparser.FormatImpossibleQuery(buf, node)
 	}
-	buf := sqlparser.NewTrackedBuffer(formatter)
-	formatter(buf, sel)
-	return buf.ParsedQuery().Query
+
+	return sqlparser.NewTrackedBuffer(formatter).WriteNode(sel).ParsedQuery().Query
 }
 
 // SupplyVar should be unreachable.

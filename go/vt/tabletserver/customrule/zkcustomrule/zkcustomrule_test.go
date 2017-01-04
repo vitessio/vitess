@@ -12,6 +12,7 @@ import (
 
 	"github.com/samuel/go-zookeeper/zk"
 
+	"github.com/youtube/vitess/go/testfiles"
 	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletservermock"
 	"github.com/youtube/vitess/go/vt/topo/zk2topo"
@@ -43,7 +44,7 @@ var customRule2 = `
 
 func TestZkCustomRule(t *testing.T) {
 	// Start a real single ZK daemon, and close it after all tests are done.
-	zkd, serverAddr := zkctl.StartLocalZk(2)
+	zkd, serverAddr := zkctl.StartLocalZk(testfiles.GoVtTabletserverCustomruleZkcustomruleZk, testfiles.GoVtTabletserverCustomruleZkcustomrulePort)
 	defer zkd.Teardown()
 
 	// Create fake file.

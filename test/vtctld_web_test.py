@@ -347,7 +347,7 @@ class TestVtctldWeb(unittest.TestCase):
     logging.info('Testing old keyspace overview')
 
     logging.info('Fetching main vtctld page: %s', self.vtctld_addr)
-    self.driver.get(self.vtctld_addr)
+    self.driver.get(self.vtctld_addr + '/app')
 
     keyspace_names = self._get_keyspaces()
     logging.info('Keyspaces: %s', ', '.join(keyspace_names))
@@ -379,7 +379,7 @@ class TestVtctldWeb(unittest.TestCase):
     logging.info('Testing old shard overview')
 
     logging.info('Fetching main vtctld page: %s', self.vtctld_addr)
-    self.driver.get(self.vtctld_addr)
+    self.driver.get(self.vtctld_addr + '/app')
 
     self._check_shard_overview(
         'test_keyspace', '-80', {'master': 1, 'replica': 1, 'rdonly': 2})

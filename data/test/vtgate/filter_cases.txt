@@ -176,7 +176,7 @@
       "Sharded": true
     },
     "Query": "select user_extra.id from user join user_extra on user.id = user_extra.user_id where user.id = 5",
-    "FieldQuery": "select user_extra.id from user join user_extra where 1 != 1",
+    "FieldQuery": "select user_extra.id from user join user_extra on user.id = user_extra.user_id where 1 != 1",
     "Vindex": "user_index",
     "Values": 5
   }
@@ -193,7 +193,7 @@
       "Sharded": true
     },
     "Query": "select user_extra.id from user join user_extra on user.id = user_extra.user_id where user_extra.user_id = 5",
-    "FieldQuery": "select user_extra.id from user join user_extra where 1 != 1",
+    "FieldQuery": "select user_extra.id from user join user_extra on user.id = user_extra.user_id where 1 != 1",
     "Vindex": "user_index",
     "Values": 5
   }
@@ -210,7 +210,7 @@
       "Sharded": true
     },
     "Query": "select user_extra.id from user left join user_extra on user.id = user_extra.user_id where user.id = 5",
-    "FieldQuery": "select user_extra.id from user left join user_extra on 1 != 1 where 1 != 1",
+    "FieldQuery": "select user_extra.id from user left join user_extra on user.id = user_extra.user_id where 1 != 1",
     "Vindex": "user_index",
     "Values": 5
   }
@@ -227,7 +227,7 @@
       "Sharded": true
     },
     "Query": "select user_extra.id from user left join user_extra on user.id = user_extra.user_id where user_extra.user_id = 5",
-    "FieldQuery": "select user_extra.id from user left join user_extra on 1 != 1 where 1 != 1"
+    "FieldQuery": "select user_extra.id from user left join user_extra on user.id = user_extra.user_id where 1 != 1"
   }
 }
 
@@ -715,7 +715,7 @@
       "Sharded": true
     },
     "Query": "select user_extra.Id from user join user_extra on user.iD = user_extra.User_Id where user.Id = 5",
-    "FieldQuery": "select user_extra.Id from user join user_extra where 1 != 1",
+    "FieldQuery": "select user_extra.Id from user join user_extra on user.iD = user_extra.User_Id where 1 != 1",
     "Vindex": "user_index",
     "Values": 5
   }
