@@ -79,9 +79,10 @@ func TestMessagerEngineSchemaChanged(t *testing.T) {
 		},
 	}
 	me.schemaChanged(tables)
-	want := []string{"t1"}
-	if !reflect.DeepEqual(me.msgTables, want) {
-		t.Errorf("me.msgTables: %+v, want %+v", me.msgTables, want)
+	got := extractManagerNames(me.managers)
+	want := map[string]bool{"t1": true}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("got: %+v, want %+v", got, want)
 	}
 	tables = map[string]*schema.Table{
 		"t1": {
@@ -95,9 +96,10 @@ func TestMessagerEngineSchemaChanged(t *testing.T) {
 		},
 	}
 	me.schemaChanged(tables)
-	want = []string{"t1", "t3"}
-	if !reflect.DeepEqual(me.msgTables, want) {
-		t.Errorf("me.msgTables: %+v, want %+v", me.msgTables, want)
+	got = extractManagerNames(me.managers)
+	want = map[string]bool{"t1": true, "t3": true}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("got: %+v, want %+v", got, want)
 	}
 	tables = map[string]*schema.Table{
 		"t1": {
@@ -111,9 +113,76 @@ func TestMessagerEngineSchemaChanged(t *testing.T) {
 		},
 	}
 	me.schemaChanged(tables)
+	got = extractManagerNames(me.managers)
 	// schemaChanged is only additive.
-	want = []string{"t1", "t3", "t4"}
-	if !reflect.DeepEqual(me.msgTables, want) {
-		t.Errorf("me.msgTables: %+v, want %+v", me.msgTables, want)
+	want = map[string]bool{"t1": true, "t3": true, "t4": true}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("got: %+v, want %+v", got, want)
+	}
+}
+
+func extractManagerNames(in map[string]*MessageManager) map[string]bool {
+	out := make(map[string]bool)
+	for k := range in {
+		out[k] = true
+	}
+	return out
+}
+
+func TestSubscribe(t *testing.T) {
+	db := setUpTabletServerTest()
+	testUtils := newTestUtils()
+	config := testUtils.newQueryServiceConfig()
+	config.TransactionCap = 1
+	tsv := NewTabletServer(config)
+	dbconfigs := testUtils.newDBConfigs(db)
+	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+	err := tsv.StartService(target, dbconfigs, testUtils.newMysqld(&dbconfigs))
+	if err != nil {
+		t.Fatalf("StartService failed: %v", err)
+	}
+	defer tsv.StopService()
+
+	me := NewMessagerEngine(tsv.qe)
+	if err := me.Open(); err != nil {
+		t.Fatal(err)
+	}
+	tables := map[string]*schema.Table{
+		"t1": {
+			Type: schema.Message,
+		},
+		"t2": {
+			Type: schema.Message,
+		},
+	}
+	me.schemaChanged(tables)
+	r1 := newTestReceiver()
+	r2 := newTestReceiver()
+	// Each receiver is subscribed to different managers.
+	me.Subscribe("t1", r1)
+	me.Subscribe("t2", r2)
+	row1 := &MessageRow{
+		id: "1",
+	}
+	row2 := &MessageRow{
+		id: "2",
+	}
+	me.managers["t1"].cache.Add(row1)
+	me.managers["t2"].cache.Add(row2)
+	<-r1.ch
+	<-r2.ch
+	// One receiver subscribed to multiple managers.
+	me.Unsubscribe(r1)
+	me.Subscribe("t1", r2)
+	me.managers["t2"].cache.Add(row1)
+	me.managers["t2"].cache.Add(row2)
+	<-r2.ch
+	<-r2.ch
+
+	// Error case.
+	want := "message table t3 not found"
+	err = me.Subscribe("t3", r1)
+	if err == nil || err.Error() != want {
+		t.Errorf("Subscribe: %v, want %s", err, want)
 	}
 }
