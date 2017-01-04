@@ -12,8 +12,8 @@ public class CursorWithError {
     private final Vtrpc.RPCError error;
 
     public CursorWithError(Query.ResultWithError resultWithError) {
-        if (null == resultWithError.getError() || Vtrpc.ErrorCode.SUCCESS == resultWithError
-            .getError().getCode()) {
+      if (!resultWithError.hasError() ||
+          Vtrpc.ErrorCode.SUCCESS == resultWithError.getError().getCode()) {
             this.cursor = new SimpleCursor(resultWithError.getResult());
             this.error = null;
         } else {
