@@ -25,6 +25,7 @@ import unittest
 import environment
 import tablet
 import utils
+from mysql_flavor import mysql_flavor
 
 KEYSPACE = 'ks1'
 SHARD = '0'
@@ -178,14 +179,7 @@ def setUpModule():
     # Create the schema.
     utils.run_vtctl(['ApplySchema', '-sql=' + SCHEMA, KEYSPACE])
 
-      # Start vtgate.
-      utils.VtGate().start(extra_args=[
-          '-enable_vtgate_buffer',
-          # Long timeout in case failover is slow.
-          '-vtgate_buffer_window', '10m',
-          '-vtgate_buffer_max_failover_duration', '10m',
-          '-vtgate_buffer_min_time_between_failovers', '20m'],
-                           tablets=all_tablets)
+    start_vtgate()
 
     # Insert two rows for the later threads (critical read, update).
     with utils.vtgate.write_transaction(keyspace=KEYSPACE, shards=[SHARD],
@@ -213,9 +207,27 @@ def tearDownModule():
   for t in all_tablets:
     t.remove_tree()
 
+
+def start_vtgate():
+  utils.VtGate().start(extra_args=[
+      '-enable_vtgate_buffer',
+      # Long timeout in case failover is slow.
+      '-vtgate_buffer_window', '10m',
+      '-vtgate_buffer_max_failover_duration', '10m',
+      '-vtgate_buffer_min_time_between_failovers', '20m'],
+                       tablets=all_tablets)
+
+
 class TestBuffer(unittest.TestCase):
 
-  def test_buffer(self):
+  def setUp(self):
+    utils.vtgate.kill()
+    # Restart vtgate between each test or the feature
+    # --vtgate_buffer_min_time_between_failovers
+    # will ignore subsequent failovers.
+    start_vtgate()
+
+  def _test_buffer(self, reparent_func):
     # Start both threads.
     read_thread = ReadThread(utils.vtgate)
     update_thread = UpdateThread(utils.vtgate)
@@ -230,9 +242,13 @@ class TestBuffer(unittest.TestCase):
       # Execute the failover.
       read_thread.set_notify_after_n_successful_rpcs(10)
       update_thread.set_notify_after_n_successful_rpcs(10)
-      utils.run_vtctl(['PlannedReparentShard', '-keyspace_shard',
-                       '%s/%s' % (KEYSPACE, SHARD),
-                       '-new_master', replica.tablet_alias])
+
+      reparent_func()
+
+      # Failover is done. Swap master and replica for the next test.
+      global master, replica
+      master, replica = replica, master
+
       read_thread.wait_for_notification.get()
       update_thread.wait_for_notification.get()
     except:
@@ -257,6 +273,45 @@ class TestBuffer(unittest.TestCase):
     self.assertGreater(v['BufferRequestsInFlightMax'][labels], 0)
     logging.debug('Failover was buffered for %d milliseconds.',
                   v['BufferFailoverDurationMs'][labels])
+
+  def test_buffer_planned_reparent(self):
+    def planned_reparent():
+      utils.run_vtctl(['PlannedReparentShard', '-keyspace_shard',
+                       '%s/%s' % (KEYSPACE, SHARD),
+                       '-new_master', replica.tablet_alias])
+    self._test_buffer(planned_reparent)
+
+  def test_buffer_external_reparent(self):
+    def external_reparent():
+      # Demote master.
+      master.mquery('', mysql_flavor().demote_master_commands())
+      if master.semi_sync_enabled():
+        master.set_semi_sync_enabled(master=False)
+
+      # Wait for replica to catch up to master.
+      utils.wait_for_replication_pos(master, replica)
+
+      # Promote replica to new master.
+      replica.mquery('', mysql_flavor().promote_slave_commands())
+      if replica.semi_sync_enabled():
+        replica.set_semi_sync_enabled(master=True)
+      old_master = master
+      new_master = replica
+
+      # Configure old master to use new master.
+      new_pos = mysql_flavor().master_position(new_master)
+      logging.debug('New master position: %s', str(new_pos))
+      # Use 'localhost' as hostname because Travis CI worker hostnames
+      # are too long for MySQL replication.
+      change_master_cmds = mysql_flavor().change_master_commands(
+          'localhost', new_master.mysql_port, new_pos)
+      old_master.mquery('', ['RESET SLAVE'] + change_master_cmds +
+                        ['START SLAVE'])
+
+      # Notify the new vttablet master about the reparent.
+      utils.run_vtctl(['TabletExternallyReparented', new_master.tablet_alias])
+    self._test_buffer(external_reparent)
+
 
 if __name__ == '__main__':
   utils.main()
