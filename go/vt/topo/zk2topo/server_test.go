@@ -9,6 +9,7 @@ import (
 	"github.com/samuel/go-zookeeper/zk"
 	"golang.org/x/net/context"
 
+	"github.com/youtube/vitess/go/testfiles"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/test"
 	"github.com/youtube/vitess/go/zk/zkctl"
@@ -18,7 +19,7 @@ import (
 
 func TestZk2Topo(t *testing.T) {
 	// Start a real single ZK daemon, and close it after all tests are done.
-	zkd, serverAddr := zkctl.StartLocalZk(1)
+	zkd, serverAddr := zkctl.StartLocalZk(testfiles.GoVtTopoZk2topoZk, testfiles.GoVtTopoZk2topoPort)
 	defer zkd.Teardown()
 
 	// This function will create a toplevel directory for a new test.

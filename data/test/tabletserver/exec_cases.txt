@@ -21,7 +21,7 @@
 {
   "PlanID": "PASS_SELECT",
   "TableName": "a",
-  "FieldQuery": "select * from a where 1 != 1",
+  "FieldQuery": "select * from a where 1 != 1 group by b",
   "FullQuery": "select * from a group by b limit :#maxLimit"
 }
 

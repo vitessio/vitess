@@ -92,7 +92,7 @@ func (s *Server) Watch(ctx context.Context, cellName, filePath string) (*topo.Wa
 		defer close(notifications)
 
 		for resp := range watchChannel {
-			if resp.Node == nil {
+			if resp.Action == "delete" || resp.Action == "compareAndDelete" {
 				// Node doesn't exist any more, we can
 				// stop watching. Swallow the watchError.
 				mu.Lock()

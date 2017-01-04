@@ -88,11 +88,11 @@ func (mp *etcdMasterParticipation) Stop() {
 }
 
 // GetCurrentMasterID is part of the topo.MasterParticipation interface
-func (mp *etcdMasterParticipation) GetCurrentMasterID() (string, error) {
+func (mp *etcdMasterParticipation) GetCurrentMasterID(ctx context.Context) (string, error) {
 	electionPath := path.Join(mp.s.global.root, electionsPath, mp.name)
 
 	// Get the keys in the directory, older first.
-	resp, err := mp.s.global.cli.Get(context.TODO(), electionPath+"/",
+	resp, err := mp.s.global.cli.Get(ctx, electionPath+"/",
 		clientv3.WithPrefix(),
 		clientv3.WithSort(clientv3.SortByModRevision, clientv3.SortAscend),
 		clientv3.WithLimit(1))

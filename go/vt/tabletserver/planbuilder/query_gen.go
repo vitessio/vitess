@@ -19,32 +19,13 @@ func GenerateFullQuery(statement sqlparser.Statement) *sqlparser.ParsedQuery {
 // GenerateFieldQuery generates a query to just fetch the field info
 // by adding impossible where clauses as needed.
 func GenerateFieldQuery(statement sqlparser.Statement) *sqlparser.ParsedQuery {
-	buf := sqlparser.NewTrackedBuffer(FormatImpossible)
-	buf.Myprintf("%v", statement)
+	buf := sqlparser.NewTrackedBuffer(sqlparser.FormatImpossibleQuery).WriteNode(statement)
+
 	if buf.HasBindVars() {
 		return nil
 	}
-	return buf.ParsedQuery()
-}
 
-// FormatImpossible is a callback function used by TrackedBuffer
-// to generate a modified version of the query where all selects
-// have impossible where clauses. It overrides a few node types
-// and passes the rest down to the default FormatNode.
-func FormatImpossible(buf *sqlparser.TrackedBuffer, node sqlparser.SQLNode) {
-	switch node := node.(type) {
-	case *sqlparser.Select:
-		buf.Myprintf("select %v from %v where 1 != 1", node.SelectExprs, node.From)
-	case *sqlparser.JoinTableExpr:
-		if node.Join == sqlparser.LeftJoinStr || node.Join == sqlparser.RightJoinStr {
-			// ON clause is requried
-			buf.Myprintf("%v %s %v on 1 != 1", node.LeftExpr, node.Join, node.RightExpr)
-		} else {
-			buf.Myprintf("%v %s %v", node.LeftExpr, node.Join, node.RightExpr)
-		}
-	default:
-		node.Format(buf)
-	}
+	return buf.ParsedQuery()
 }
 
 // GenerateSelectLimitQuery generates a select query with a limit clause.

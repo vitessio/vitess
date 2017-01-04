@@ -69,7 +69,7 @@ func (s *Server) getCell(cell string) (*cellClient, error) {
 	}
 
 	// Create the client.
-	client = &cellClient{Client: s.newClient(addrs), version: version}
+	client = &cellClient{Client: newEtcdClient(addrs), version: version}
 	s._cells[cell] = client
 	return client, nil
 }
@@ -101,7 +101,7 @@ func (s *Server) getGlobal() Client {
 			log.Fatal("etcdtopo: list of addresses for global cluster is empty")
 		}
 		log.Infof("etcdtopo: global address list = %v", globalAddrs)
-		s._global = s.newClient([]string(globalAddrs))
+		s._global = newEtcdClient([]string(globalAddrs))
 	})
 
 	return s._global
