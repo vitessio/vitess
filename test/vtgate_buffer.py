@@ -220,26 +220,32 @@ class TestBuffer(unittest.TestCase):
     read_thread = ReadThread(utils.vtgate)
     update_thread = UpdateThread(utils.vtgate)
 
-    # Verify they got at least 2 RPCs through.
-    read_thread.set_notify_after_n_successful_rpcs(2)
-    update_thread.set_notify_after_n_successful_rpcs(2)
-    read_thread.wait_for_notification.get()
-    update_thread.wait_for_notification.get()
+    try:
+      # Verify they got at least 2 RPCs through.
+      read_thread.set_notify_after_n_successful_rpcs(2)
+      update_thread.set_notify_after_n_successful_rpcs(2)
+      read_thread.wait_for_notification.get()
+      update_thread.wait_for_notification.get()
 
-    # Execute the failover.
-    read_thread.set_notify_after_n_successful_rpcs(10)
-    update_thread.set_notify_after_n_successful_rpcs(10)
-    utils.run_vtctl(['PlannedReparentShard', '-keyspace_shard',
-                     '%s/%s' % (KEYSPACE, SHARD),
-                     '-new_master', replica.tablet_alias])
-    read_thread.wait_for_notification.get()
-    update_thread.wait_for_notification.get()
-
-    # Stop threads.
-    read_thread.stop()
-    update_thread.stop()
-    read_thread.join()
-    update_thread.join()
+      # Execute the failover.
+      read_thread.set_notify_after_n_successful_rpcs(10)
+      update_thread.set_notify_after_n_successful_rpcs(10)
+      utils.run_vtctl(['PlannedReparentShard', '-keyspace_shard',
+                       '%s/%s' % (KEYSPACE, SHARD),
+                       '-new_master', replica.tablet_alias])
+      read_thread.wait_for_notification.get()
+      update_thread.wait_for_notification.get()
+    except:
+      # Something went wrong. Kill vtgate first to unblock any buffered requests
+      # which would further block the two threads.
+      utils.vtgate.kill()
+      raise
+    finally:
+      # Stop threads.
+      read_thread.stop()
+      update_thread.stop()
+      read_thread.join()
+      update_thread.join()
 
     # Both threads must not see any error.
     self.assertEqual(0, read_thread.errors)
