@@ -5,10 +5,17 @@
 package tabletserver
 
 import (
+	"fmt"
 	"sync"
 
 	"github.com/youtube/vitess/go/vt/schema"
 )
+
+// MessageReceiver defines the interface for the receivers.
+type MessageReceiver interface {
+	Send(name string, mr *MessageRow) error
+	Cancel()
+}
 
 // MessagerEngine is the engine for handling messages.
 type MessagerEngine struct {
@@ -17,14 +24,15 @@ type MessagerEngine struct {
 
 	qe *QueryEngine
 
-	mu        sync.Mutex
-	msgTables []string
+	mu       sync.Mutex
+	managers map[string]*MessageManager
 }
 
 // NewMessagerEngine creates a new MessagerEngine.
 func NewMessagerEngine(qe *QueryEngine) *MessagerEngine {
 	return &MessagerEngine{
-		qe: qe,
+		qe:       qe,
+		managers: make(map[string]*MessageManager),
 	}
 }
 
@@ -44,24 +52,44 @@ func (me *MessagerEngine) Close() {
 	if !me.isOpen {
 		return
 	}
+	me.isOpen = false
 	me.wg.Wait()
 	me.qe.schemaInfo.UnregisterNotifier("messages")
-	me.isOpen = false
+}
+
+// Subscribe subscribes the receiver against the message table.
+func (me *MessagerEngine) Subscribe(name string, receiver MessageReceiver) error {
+	me.mu.Lock()
+	defer me.mu.Unlock()
+	mm := me.managers[name]
+	if mm == nil {
+		return fmt.Errorf("message table %s not found", name)
+	}
+	mm.Subscribe(receiver)
+	return nil
+}
+
+// Unsubscribe unsubscribes from all message tables.
+func (me *MessagerEngine) Unsubscribe(receiver MessageReceiver) {
+	me.mu.Lock()
+	defer me.mu.Unlock()
+	for _, mm := range me.managers {
+		mm.Unsubscribe(receiver)
+	}
 }
 
 func (me *MessagerEngine) schemaChanged(tables map[string]*schema.Table) {
 	me.mu.Lock()
 	defer me.mu.Unlock()
-mainLoop:
 	for name, t := range tables {
 		if t.Type != schema.Message {
 			continue
 		}
-		for _, meName := range me.msgTables {
-			if meName == name {
-				continue mainLoop
-			}
+		if me.managers[name] != nil {
+			continue
 		}
-		me.msgTables = append(me.msgTables, name)
+		mm := NewMessageManager(name)
+		me.managers[name] = mm
+		mm.Open()
 	}
 }
