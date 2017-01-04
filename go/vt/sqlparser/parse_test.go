@@ -586,6 +586,30 @@ func TestValid(t *testing.T) {
 	}, {
 		input:  "explain foobar",
 		output: "other",
+	}, {
+		input: "select /* EQ true */ 1 from t where a = true",
+	}, {
+		input: "select /* EQ false */ 1 from t where a = false",
+	}, {
+		input: "select /* NE true */ 1 from t where a != true",
+	}, {
+		input: "select /* NE false */ 1 from t where a != false",
+	}, {
+		input: "select /* LT true */ 1 from t where a < true",
+	}, {
+		input: "select /* LT false */ 1 from t where a < false",
+	}, {
+		input: "select /* GT true */ 1 from t where a > true",
+	}, {
+		input: "select /* GT false */ 1 from t where a > false",
+	}, {
+		input: "select /* LE true */ 1 from t where a <= true",
+	}, {
+		input: "select /* LE false */ 1 from t where a <= false",
+	}, {
+		input: "select /* GE true */ 1 from t where a >= true",
+	}, {
+		input: "select /* GE false */ 1 from t where a >= false",
 	}}
 	for _, tcase := range validSQL {
 		if tcase.output == "" {
