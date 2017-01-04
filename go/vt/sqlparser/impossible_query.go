@@ -16,11 +16,10 @@ func FormatImpossibleQuery(buf *TrackedBuffer, node SQLNode) {
 			node.GroupBy.Format(buf)
 		}
 	case *JoinTableExpr:
-		if node.Join == LeftJoinStr || node.Join == RightJoinStr {
+		node.Format(buf)
+		if node.On == nil && (node.Join == LeftJoinStr || node.Join == RightJoinStr) {
 			// ON clause is requried
-			buf.Myprintf("%v %s %v on 1 != 1", node.LeftExpr, node.Join, node.RightExpr)
-		} else {
-			buf.Myprintf("%v %s %v", node.LeftExpr, node.Join, node.RightExpr)
+			buf.Myprintf(" on 1 != 1", node.LeftExpr, node.Join, node.RightExpr)
 		}
 	default:
 		node.Format(buf)
