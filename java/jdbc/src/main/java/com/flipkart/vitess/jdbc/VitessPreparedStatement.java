@@ -63,6 +63,7 @@ public class VitessPreparedStatement extends VitessStatement implements Prepared
      * Holds batched commands
      */
     private final List<Map<String, ?>> batchedArgs;
+    private VitessParameterMetaData parameterMetadata;
 
     public VitessPreparedStatement(VitessConnection vitessConnection, String sql)
         throws SQLException {
@@ -476,8 +477,107 @@ public class VitessPreparedStatement extends VitessStatement implements Prepared
     //Methods which are currently not supported
 
     public ParameterMetaData getParameterMetaData() throws SQLException {
-        throw new SQLFeatureNotSupportedException(
-            Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
+        checkOpen();
+        if (this.parameterMetadata == null) {
+            this.parameterMetadata = new VitessParameterMetaData(calculateParameterCount());
+        }
+
+        return this.parameterMetadata;
+    }
+
+    /**
+     * This function was ported from mysql-connector-java ParseInfo object and greatly simplified to just the parts
+     * for counting parameters
+     */
+    private int calculateParameterCount() throws SQLException {
+        if (sql == null) {
+            throw new SQLException(Constants.SQLExceptionMessages.ILLEGAL_VALUE_FOR + ": sql null");
+        }
+
+        char quotedIdentifierChar = '`';
+        char currentQuoteChar = 0;
+        boolean inQuotes = false;
+        boolean inQuotedId = false;
+        int statementCount = 0;
+        int statementLength = sql.length();
+        int statementStartPos = StringUtils.findStartOfStatement(sql);
+
+        for (int i = statementStartPos; i < statementLength; ++i) {
+            char c = sql.charAt(i);
+
+            if (c == '\\' && i < (statementLength - 1)) {
+                i++;
+                continue; // next character is escaped
+            }
+
+            // are we in a quoted identifier? (only valid when the id is not inside a 'string')
+            if (!inQuotes && c == quotedIdentifierChar) {
+                inQuotedId = !inQuotedId;
+            } else if (!inQuotedId) {
+                //	only respect quotes when not in a quoted identifier
+                if (inQuotes) {
+                    if (((c == '\'') || (c == '"')) && c == currentQuoteChar) {
+                        if (i < (statementLength - 1) && sql.charAt(i + 1) == currentQuoteChar) {
+                            i++;
+                            continue; // inline quote escape
+                        }
+
+                        inQuotes = !inQuotes;
+                        currentQuoteChar = 0;
+                    } else if (((c == '\'') || (c == '"')) && c == currentQuoteChar) {
+                        inQuotes = !inQuotes;
+                        currentQuoteChar = 0;
+                    }
+                } else {
+                    if (c == '#' || (c == '-' && (i + 1) < statementLength && sql.charAt(i + 1) == '-')) {
+                        // comment, run out to end of statement, or newline, whichever comes first
+                        int endOfStmt = statementLength - 1;
+
+                        for (; i < endOfStmt; i++) {
+                            c = sql.charAt(i);
+
+                            if (c == '\r' || c == '\n') {
+                                break;
+                            }
+                        }
+
+                        continue;
+                    } else if (c == '/' && (i + 1) < statementLength) {
+                        // Comment?
+                        char cNext = sql.charAt(i + 1);
+                        if (cNext == '*') {
+                            i += 2;
+
+                            for (int j = i; j < statementLength; j++) {
+                                i++;
+                                cNext = sql.charAt(j);
+
+                                if (cNext == '*' && (j + 1) < statementLength) {
+                                    if (sql.charAt(j + 1) == '/') {
+                                        i++;
+
+                                        if (i < statementLength) {
+                                            c = sql.charAt(i);
+                                        }
+
+                                        break; // comment done
+                                    }
+                                }
+                            }
+                        }
+                    } else if ((c == '\'') || (c == '"')) {
+                        inQuotes = true;
+                        currentQuoteChar = c;
+                    }
+                }
+            }
+
+            if ((c == '?') && !inQuotes && !inQuotedId) {
+                statementCount++;
+            }
+        }
+
+        return statementCount;
     }
 
     public void setNull(int parameterIndex, int sqlType, String typeName) throws SQLException {

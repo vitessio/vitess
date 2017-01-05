@@ -342,4 +342,36 @@ public class StringUtils {
                                                             's' :
                                                             'W'))))))))))));
     }
+
+    /**
+     * Finds the true start of a SQL statement, by skipping leading comments.
+     * If the query is multiple lines
+     * @param sql to parse
+     * @return position index in string
+     */
+    public static int findStartOfStatement(String sql) {
+        int statementStartPos = 0;
+
+        if (StringUtils.startsWithIgnoreCaseAndWs(sql, "/*")) {
+            statementStartPos = sql.indexOf("*/");
+
+            if (statementStartPos == -1) {
+                statementStartPos = 0;
+            } else {
+                statementStartPos += 2;
+            }
+        } else if (StringUtils.startsWithIgnoreCaseAndWs(sql, "--") || StringUtils.startsWithIgnoreCaseAndWs(sql, "#")) {
+            statementStartPos = sql.indexOf('\n');
+
+            if (statementStartPos == -1) {
+                statementStartPos = sql.indexOf('\r');
+
+                if (statementStartPos == -1) {
+                    statementStartPos = 0;
+                }
+            }
+        }
+
+        return statementStartPos;
+    }
 }

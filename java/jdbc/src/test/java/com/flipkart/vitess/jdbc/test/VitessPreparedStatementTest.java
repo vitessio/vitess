@@ -3,6 +3,7 @@ package com.flipkart.vitess.jdbc.test;
 import com.flipkart.vitess.jdbc.VitessConnection;
 import com.flipkart.vitess.jdbc.VitessPreparedStatement;
 import com.flipkart.vitess.util.Constants;
+import com.google.common.collect.ImmutableMap;
 import com.youtube.vitess.client.Context;
 import com.youtube.vitess.client.SQLFuture;
 import com.youtube.vitess.client.VTGateConn;
@@ -12,6 +13,7 @@ import com.youtube.vitess.client.cursor.CursorWithError;
 import com.youtube.vitess.proto.Query;
 import com.youtube.vitess.proto.Topodata;
 import com.youtube.vitess.proto.Vtrpc;
+
 import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -704,4 +706,30 @@ import java.util.TimeZone;
         }
     }
 
+    @Test public void testStatementCount() throws SQLException {
+        VitessConnection mockConn = PowerMockito.mock(VitessConnection.class);
+        Map<String, Integer> testCases = ImmutableMap.<String, Integer>builder()
+            .put("select * from foo where a = ?", 1)
+            .put("select * from foo where a = ? and b = ?", 2)
+            .put("select * from foo where a = ? and b = \"?\"", 1)
+            .put("select * from foo where a = ? and b = '?'", 1)
+            .put("select * from foo where a = ? and b = `?`", 1)
+            .put("select foo.*, `bar.baz?` from foo, bar where foo.a = ? and bar.b = foo.b", 1)
+            .put("select * from foo where a = ? and b = \"`?`\"", 1)
+            .put("select * from foo where a = ? --and b = ?", 1)
+            .put("select * from foo where a = ? /* and b = ? */ and c = ?", 2)
+            .put("/* leading comment? */ select * from foo where a = ? and b = ?", 2)
+            .put("select * from foo where a = ? and b = ? and c = 'test' and d = ?", 3)
+            .put("select * from foo where a = ? and b = \\`?\\`", 2) // not valid sql but validates escaping
+            .put("select * from foo where a = ? and b = \\?", 1) // not valid sql but validates escaping
+            .put("update foo set a = ?, b = ? where c = 'test' and d = ?", 3)
+            .put("insert into foo (`a`, `b`) values (?, ?), (?, ?) on /* test? */ duplicate key update a = \"?\"", 4)
+            .put("delete from foo where a = ? and b = '?'", 1)
+            .build();
+
+        for (Map.Entry<String, Integer> testCase : testCases.entrySet()) {
+            VitessPreparedStatement statement = new VitessPreparedStatement(mockConn, testCase.getKey());
+            Assert.assertEquals(testCase.getKey(), testCase.getValue().longValue(), statement.getParameterMetaData().getParameterCount());
+        }
+    }
 }
