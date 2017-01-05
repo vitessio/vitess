@@ -576,10 +576,11 @@ to the original cells. To achieve that split:
 After this split, the configuration is completely symmetrical:
 
 * a global topology service, with servers in all cells. Only contains global
-  topology data about Keyspaces, Shards and VSchema.
+  topology data about Keyspaces, Shards and VSchema. Typically has 5 servers,
+  in multiple cells.
 * a local topology service to each cell, with servers only in that cell. Only
   contains local topology data about Tablets, and roll-ups of global data for
-  efficient access.
+  efficient access. Typically has 3 servers.
 
 ## Migration Between Implementations
 
