@@ -211,7 +211,7 @@ func (vtg *VTGate) ExecuteBatch(ctx context.Context, request *vtgatepb.ExecuteBa
 		sqlQueries[queryNum] = query.Sql
 		bindVars[queryNum] = bv
 	}
-	results, err = vtg.server.ExecuteBatch(ctx, sqlQueries, bindVars, request.Keyspace, request.TabletType, request.AsTransaction, request.Session, request.Options)
+	results, err = vtg.server.ExecuteBatch(ctx, sqlQueries, bindVars, request.Keyspace, request.TabletType, request.AsTransaction, request.Session, request.Options, request.ExecParallel)
 	return &vtgatepb.ExecuteBatchResponse{
 		Results: sqltypes.QueryResponsesToProto3(results),
 		Session: request.Session,

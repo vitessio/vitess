@@ -117,6 +117,8 @@ func (stc *ScatterConn) Execute(
 		notInTransaction,
 		func(target *querypb.Target, shouldBegin bool, transactionID int64) (int64, error) {
 			var innerqr *sqltypes.Result
+			// For Testing. Will be removed in final commit.
+			fmt.Printf("\nq: %#v, sb: %#v, txID: %#v\n", query, shouldBegin, transactionID)
 			if shouldBegin {
 				var err error
 				innerqr, transactionID, err = stc.gateway.BeginExecute(ctx, target, query, bindVars, options)
@@ -169,6 +171,8 @@ func (stc *ScatterConn) ExecuteMultiShard(
 		notInTransaction,
 		func(target *querypb.Target, shouldBegin bool, transactionID int64) (int64, error) {
 			var innerqr *sqltypes.Result
+			// For Testing. Will be removed in final commit.
+			fmt.Printf("\nq: %#v, sb: %#v, txID: %#v\n", shardQueries[target.Shard].Sql, shouldBegin, transactionID)
 			if shouldBegin {
 				var err error
 				innerqr, transactionID, err = stc.gateway.BeginExecute(ctx, target, shardQueries[target.Shard].Sql, shardQueries[target.Shard].BindVariables, options)
@@ -288,17 +292,32 @@ func (stc *ScatterConn) ExecuteBatch(
 			startTime, statsKey := stc.startAction("ExecuteBatch", target)
 			defer stc.endAction(startTime, allErrors, statsKey, &err, session)
 
-			shouldBegin, transactionID := transactionInfo(target, session, false)
+			shouldBegin := false
+			transactionID := int64(0)
+
+			session.mu.Lock()
+			inTransaction := session.InTransaction()
+			session.mu.Unlock()
+			if inTransaction {
+				session.mu.Lock()
+				transactionID = session.Find(target.Keyspace, target.Shard, target.TabletType)
+				session.mu.Unlock()
+				if transactionID == 0 {
+					shouldBegin = true
+				}
+			}
 			var innerqrs []sqltypes.Result
 			if shouldBegin {
 				innerqrs, transactionID, err = stc.gateway.BeginExecuteBatch(ctx, target, req.Queries, asTransaction, options)
 				if transactionID != 0 {
+					session.mu.Lock()
 					if appendErr := session.Append(&vtgatepb.Session_ShardSession{
 						Target:        target,
 						TransactionId: transactionID,
 					}); appendErr != nil {
 						err = appendErr
 					}
+					session.mu.Unlock()
 				}
 				if err != nil {
 					return
@@ -689,7 +708,18 @@ func (stc *ScatterConn) multiGoTransaction(
 		startTime, statsKey := stc.startAction(name, target)
 		defer stc.endAction(startTime, allErrors, statsKey, &err, session)
 
-		shouldBegin, transactionID := transactionInfo(target, session, notInTransaction)
+		//shouldBegin, transactionID := transactionInfo(target, session, notInTransaction)
+
+		var shouldBegin bool
+		var transactionID int64
+
+		session.mu.Lock()
+		if session.InTransaction() {
+			transactionID = session.Find(target.Keyspace, target.Shard, target.TabletType)
+			if transactionID == 0 && !notInTransaction {
+				shouldBegin = true
+			}
+		}
 		transactionID, err = action(target, shouldBegin, transactionID)
 		if shouldBegin && transactionID != 0 {
 			if appendErr := session.Append(&vtgatepb.Session_ShardSession{
@@ -699,6 +729,8 @@ func (stc *ScatterConn) multiGoTransaction(
 				err = appendErr
 			}
 		}
+
+		session.mu.Unlock()
 	}
 
 	var wg sync.WaitGroup
@@ -727,35 +759,6 @@ end:
 		return allErrors.AggrError(stc.aggregateErrors)
 	}
 	return nil
-}
-
-// transactionInfo looks at the current session, and returns:
-// - shouldBegin: if we should call 'Begin' to get a transactionID
-// - transactionID: the transactionID to use, or 0 if not in a transaction.
-func transactionInfo(
-	target *querypb.Target,
-	session *SafeSession,
-	notInTransaction bool,
-) (shouldBegin bool, transactionID int64) {
-	if !session.InTransaction() {
-		return false, 0
-	}
-	// No need to protect ourselves from the race condition between
-	// Find and Append. The higher level functions ensure that no
-	// duplicate (target) tuples can execute
-	// this at the same time.
-	transactionID = session.Find(target.Keyspace, target.Shard, target.TabletType)
-	if transactionID != 0 {
-		return false, transactionID
-	}
-	// We are in a transaction at higher level,
-	// but client requires not to start a transaction for this query.
-	// If a transaction was started on this conn, we will use it (as above).
-	if notInTransaction {
-		return false, 0
-	}
-
-	return true, 0
 }
 
 func getShards(shardVars map[string]map[string]interface{}) []string {

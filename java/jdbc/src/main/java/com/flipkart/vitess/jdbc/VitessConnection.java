@@ -849,4 +849,8 @@ public class VitessConnection implements Connection {
     public String getUsername() {
         return this.vitessJDBCUrl.getUsername();
     }
+
+    public boolean isBatchExecParallel() {
+        return this.vitessJDBCUrl.isBatchExecParallel();
+    }
 }

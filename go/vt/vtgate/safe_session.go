@@ -35,8 +35,6 @@ func (session *SafeSession) InTransaction() bool {
 	if session == nil || session.Session == nil {
 		return false
 	}
-	session.mu.Lock()
-	defer session.mu.Unlock()
 	return session.Session.InTransaction
 }
 
@@ -45,8 +43,7 @@ func (session *SafeSession) Find(keyspace, shard string, tabletType topodatapb.T
 	if session == nil {
 		return 0
 	}
-	session.mu.Lock()
-	defer session.mu.Unlock()
+
 	for _, shardSession := range session.ShardSessions {
 		if keyspace == shardSession.Target.Keyspace && tabletType == shardSession.Target.TabletType && shard == shardSession.Target.Shard {
 			return shardSession.TransactionId
@@ -57,8 +54,6 @@ func (session *SafeSession) Find(keyspace, shard string, tabletType topodatapb.T
 
 // Append adds a new ShardSession
 func (session *SafeSession) Append(shardSession *vtgatepb.Session_ShardSession) error {
-	session.mu.Lock()
-	defer session.mu.Unlock()
 	// Always append, in order for rollback to succeed.
 	session.ShardSessions = append(session.ShardSessions, shardSession)
 	if session.SingleDb && len(session.ShardSessions) > 1 {

@@ -569,8 +569,13 @@ public class VitessStatement implements Statement {
 
             if (this.vitessConnection.getAutoCommit()) {
                 Context context = this.vitessConnection.createContext(this.queryTimeoutInMillis);
-                cursorWithErrorList =
-                    vtGateConn.executeBatch(context, batchedArgs, null, tabletType).checkedGet();
+                if(this.vitessConnection.isBatchExecParallel()) {
+                    cursorWithErrorList =
+                        vtGateConn.executeBatchParallel(context, batchedArgs, null, tabletType).checkedGet();
+                } else {
+                    cursorWithErrorList =
+                        vtGateConn.executeBatch(context, batchedArgs, null, tabletType).checkedGet();
+                }
             } else {
                 vtGateTx = this.vitessConnection.getVtGateTx();
                 if (null == vtGateTx) {
@@ -581,8 +586,14 @@ public class VitessStatement implements Statement {
                 }
 
                 Context context = this.vitessConnection.createContext(this.queryTimeoutInMillis);
-                cursorWithErrorList =
-                    vtGateTx.executeBatch(context, batchedArgs, null, tabletType).checkedGet();
+                if(this.vitessConnection.isBatchExecParallel()) {
+                    cursorWithErrorList =
+                        vtGateTx.executeBatchParallel(context, batchedArgs, null, tabletType).checkedGet();
+                }
+                else {
+                    cursorWithErrorList =
+                        vtGateTx.executeBatch(context, batchedArgs, null, tabletType).checkedGet();
+                }
             }
 
             if (null == cursorWithErrorList) {

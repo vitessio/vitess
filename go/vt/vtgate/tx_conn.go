@@ -39,7 +39,10 @@ func (txc *TxConn) Commit(ctx context.Context, twopc bool, session *SafeSession)
 	if session == nil {
 		return vterrors.FromError(vtrpcpb.ErrorCode_BAD_INPUT, errors.New("cannot commit: empty session"))
 	}
-	if !session.InTransaction() {
+	session.mu.Lock()
+	inTransaction := session.InTransaction()
+	session.mu.Unlock()
+	if !inTransaction {
 		return vterrors.FromError(vtrpcpb.ErrorCode_NOT_IN_TX, errors.New("cannot commit: not in transaction"))
 	}
 	if twopc {
@@ -113,7 +116,10 @@ func (txc *TxConn) commit2PC(ctx context.Context, session *SafeSession) error {
 
 // Rollback rolls back the current transaction. There are no retries on this operation.
 func (txc *TxConn) Rollback(ctx context.Context, session *SafeSession) error {
-	if !session.InTransaction() {
+	session.mu.Lock()
+	inTransaction := session.InTransaction()
+	session.mu.Unlock()
+	if !inTransaction {
 		return nil
 	}
 	defer session.Reset()

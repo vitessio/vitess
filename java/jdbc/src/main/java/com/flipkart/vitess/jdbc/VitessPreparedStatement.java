@@ -441,9 +441,13 @@ public class VitessPreparedStatement extends VitessStatement implements Prepared
 
             if (this.vitessConnection.getAutoCommit()) {
                 Context context = this.vitessConnection.createContext(this.queryTimeoutInMillis);
-                cursorWithErrorList =
-                    vtGateConn.executeBatch(context, batchedQueries, batchedArgs, tabletType)
-                        .checkedGet();
+                if(this.vitessConnection.isBatchExecParallel()) {
+                    cursorWithErrorList =
+                        vtGateConn.executeBatchParallel(context, batchedQueries, batchedArgs, tabletType).checkedGet();
+                } else {
+                    cursorWithErrorList =
+                        vtGateConn.executeBatch(context, batchedQueries, batchedArgs, tabletType).checkedGet();
+                }
             } else {
                 vtGateTx = this.vitessConnection.getVtGateTx();
                 if (null == vtGateTx) {
@@ -454,9 +458,15 @@ public class VitessPreparedStatement extends VitessStatement implements Prepared
                 }
 
                 Context context = this.vitessConnection.createContext(this.queryTimeoutInMillis);
-                cursorWithErrorList =
-                    vtGateTx.executeBatch(context, batchedQueries, batchedArgs, tabletType)
-                        .checkedGet();
+                if(this.vitessConnection.isBatchExecParallel()) {
+                    cursorWithErrorList =
+                        vtGateTx.executeBatchParallel(context, batchedQueries, batchedArgs, tabletType)
+                            .checkedGet();
+                } else {
+                    cursorWithErrorList =
+                        vtGateTx.executeBatch(context, batchedQueries, batchedArgs, tabletType)
+                            .checkedGet();
+                }
             }
 
             if (null == cursorWithErrorList) {

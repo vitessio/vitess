@@ -327,7 +327,7 @@ func (plr *Planner) GetPlan(sql, keyspace string, bindvars map[string]interface{
 
 // GetBatchPlan computes the plan for the given queries. If one is in
 // the cache, it reuses it.
-func (plr *Planner) GetBatchPlan(queryBatchConstruct *queryinfo.QueryBatchConstruct) (*engine.Plan, error) {
+func (plr *Planner) GetBatchPlan(queryBatchConstruct *queryinfo.QueryBatchConstruct, execParallel bool) (*engine.Plan, error) {
 	if plr.VSchema() == nil {
 		return nil, errors.New("vschema not initialized")
 	}
@@ -341,9 +341,11 @@ func (plr *Planner) GetBatchPlan(queryBatchConstruct *queryinfo.QueryBatchConstr
 		planList[i] = plan
 	}
 	return &engine.Plan{
-		Original:     "BatchPlan",
-		Instructions: &engine.BatchRoute{PlanList: planList},
-	}, nil
+		Original: "BatchPlan",
+		Instructions: &engine.BatchRoute{
+			PlanList:     planList,
+			ExecParallel: execParallel,
+		}}, nil
 
 }
 

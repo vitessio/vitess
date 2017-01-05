@@ -203,7 +203,17 @@ public class VTGateTx {
   }
 
     public SQLFuture<List<CursorWithError>> executeBatch(Context ctx, List<String> queryList,
-        @Nullable List<Map<String, ?>> bindVarsList, TabletType tabletType)
+        @Nullable List<Map<String, ?>> bindVarsList, TabletType tabletType) throws SQLException {
+        return executeBatch(ctx, queryList, bindVarsList, tabletType, false);
+    }
+
+    public SQLFuture<List<CursorWithError>> executeBatchParallel(Context ctx, List<String> queryList,
+        @Nullable List<Map<String, ?>> bindVarsList, TabletType tabletType) throws SQLException {
+        return executeBatch(ctx, queryList, bindVarsList, tabletType, true);
+    }
+
+    public SQLFuture<List<CursorWithError>> executeBatch(Context ctx, List<String> queryList,
+        @Nullable List<Map<String, ?>> bindVarsList, TabletType tabletType, boolean execParallel)
         throws SQLException {
         List<Query.BoundQuery> queries = new ArrayList<>();
 
@@ -219,7 +229,7 @@ public class VTGateTx {
 
         Vtgate.ExecuteBatchRequest.Builder requestBuilder =
             Vtgate.ExecuteBatchRequest.newBuilder().addAllQueries(checkNotNull(queries))
-                .setKeyspace(keyspace).setTabletType(checkNotNull(tabletType)).setSession(session);
+                .setKeyspace(keyspace).setTabletType(checkNotNull(tabletType)).setSession(session).setExecParallel(execParallel);
         if (ctx.getCallerId() != null) {
             requestBuilder.setCallerId(ctx.getCallerId());
         }

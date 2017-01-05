@@ -207,12 +207,23 @@ public final class VTGateConn implements Closeable {
 
     public SQLFuture<List<CursorWithError>> executeBatch(Context ctx, List<String> queryList,
         @Nullable List<Map<String, ?>> bindVarsList, TabletType tabletType) throws SQLException {
-        return executeBatch(ctx, queryList, bindVarsList, tabletType, false);
+        return executeBatch(ctx, queryList, bindVarsList, tabletType, false, false);
+    }
+
+    public SQLFuture<List<CursorWithError>> executeBatchParallel(Context ctx, List<String> queryList,
+        @Nullable List<Map<String, ?>> bindVarsList, TabletType tabletType) throws SQLException {
+        return executeBatch(ctx, queryList, bindVarsList, tabletType, false, true);
     }
 
     public SQLFuture<List<CursorWithError>> executeBatch(Context ctx, List<String> queryList,
         @Nullable List<Map<String, ?>> bindVarsList, TabletType tabletType,
         boolean asTransaction) throws SQLException {
+        return executeBatch(ctx, queryList, bindVarsList, tabletType, asTransaction, false);
+    }
+
+    public SQLFuture<List<CursorWithError>> executeBatch(Context ctx, List<String> queryList,
+        @Nullable List<Map<String, ?>> bindVarsList, TabletType tabletType,
+        boolean asTransaction, boolean execParallel) throws SQLException {
         List<Query.BoundQuery> queries = new ArrayList<>();
 
         if (null != bindVarsList && bindVarsList.size() != queryList.size()) {
@@ -228,7 +239,8 @@ public final class VTGateConn implements Closeable {
         Vtgate.ExecuteBatchRequest.Builder requestBuilder =
             Vtgate.ExecuteBatchRequest.newBuilder().addAllQueries(checkNotNull(queries))
                 .setKeyspace(keyspace).setTabletType(checkNotNull(tabletType))
-                .setAsTransaction(asTransaction);
+                .setAsTransaction(asTransaction)
+                .setExecParallel(execParallel);
         if (ctx.getCallerId() != null) {
             requestBuilder.setCallerId(ctx.getCallerId());
         }

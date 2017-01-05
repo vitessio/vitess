@@ -63,10 +63,10 @@ func (rtr *Router) StreamExecute(ctx context.Context, sql string, bindVars map[s
 }
 
 // ExecuteBatch routes a non-streaming queries.
-func (rtr *Router) ExecuteBatch(ctx context.Context, sqlList []string, bindVarsList []map[string]interface{}, keyspace string, tabletType topodatapb.TabletType, asTransaction bool, session *vtgatepb.Session, options *querypb.ExecuteOptions) ([]sqltypes.QueryResponse, error) {
+func (rtr *Router) ExecuteBatch(ctx context.Context, sqlList []string, bindVarsList []map[string]interface{}, keyspace string, tabletType topodatapb.TabletType, asTransaction bool, session *vtgatepb.Session, options *querypb.ExecuteOptions, execParallel bool) ([]sqltypes.QueryResponse, error) {
 	vcursor := newQueryExecutor(ctx, tabletType, session, options, rtr)
 	queryBatchConstruct := queryinfo.NewQueryBatchConstruct(sqlList, keyspace, bindVarsList, asTransaction)
-	plan, err := rtr.planner.GetBatchPlan(queryBatchConstruct)
+	plan, err := rtr.planner.GetBatchPlan(queryBatchConstruct, execParallel)
 	if err != nil {
 		return nil, err
 	}
