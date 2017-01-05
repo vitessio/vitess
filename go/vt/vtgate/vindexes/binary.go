@@ -22,7 +22,7 @@ func (vind *Binary) String() string {
 
 // Cost returns the cost as 1.
 func (vind *Binary) Cost() int {
-	return 0
+	return 1
 }
 
 // Verify returns true if ids maps to ksids.
@@ -60,7 +60,7 @@ func (*Binary) ReverseMap(_ VCursor, ksids [][]byte) ([]interface{}, error) {
 	var reverseIds = make([]interface{}, len(ksids))
 	for rownum, keyspaceID := range ksids {
 		if keyspaceID == nil {
-			return nil, fmt.Errorf("Binary.ReverseMap: is nil")
+			return nil, fmt.Errorf("Binary.ReverseMap: keyspaceId is nil")
 		}
 		reverseIds[rownum] = []byte(keyspaceID)
 	}

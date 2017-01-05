@@ -803,9 +803,6 @@ func (route *Route) handleNonPrimary(vcursor VCursor, vindexKeys []interface{}, 
 			if err != nil {
 				return err
 			}
-			if vindexKeys == nil {
-				return fmt.Errorf("could not compute value for column %v", colVindex.Column)
-			}
 			for rowNum, vindexKey := range vindexKeys {
 				bv["_"+colVindex.Column.CompliantName()+strconv.Itoa(rowNum)] = vindexKey
 			}
