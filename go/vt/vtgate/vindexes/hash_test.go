@@ -51,8 +51,8 @@ func TestHashMap(t *testing.T) {
 
 	//Negative Test Case
 	_, err = hash.(Unique).Map(nil, []interface{}{1.2})
-	want = "hash.Map: getNumber: unexpected type for 1.2: float64"
-	if err.Error() != want {
+	wanterr := "hash.Map: getNumber: unexpected type for 1.2: float64"
+	if err.Error() != wanterr {
 		t.Error(err)
 	}
 }
