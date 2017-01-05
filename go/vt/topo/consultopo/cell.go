@@ -59,7 +59,7 @@ func newCellClient(serverAddr, root string) (*cellClient, error) {
 func (c *cellClient) close() {
 }
 
-// cell returns a client for the given cell-local consul cluster.
+// clientForCell returns a client for the given cell-local consul cluster.
 // It caches clients for previously requested cells.
 func (s *Server) clientForCell(ctx context.Context, cell string) (*cellClient, error) {
 	// Global cell is the easy case.

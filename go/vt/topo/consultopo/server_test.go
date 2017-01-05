@@ -19,7 +19,7 @@ import (
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
-// startConsul starts an consul subprocess, and waits for it to be ready.
+// startConsul starts a consul subprocess, and waits for it to be ready.
 // Returns the exec.Cmd forked, the config file to remove after the test,
 // and the server address to RPC-connect to.
 func startConsul(t *testing.T) (*exec.Cmd, string, string) {
@@ -29,7 +29,7 @@ func startConsul(t *testing.T) (*exec.Cmd, string, string) {
 	if err != nil {
 		t.Fatalf("cannot create tempfile: %v", err)
 	}
-	configName := configFile.Name()
+	configFilename := configFile.Name()
 
 	// Create the JSON config, save it.
 	port := testfiles.GoVtTopoConsultopoPort
@@ -49,12 +49,14 @@ func startConsul(t *testing.T) (*exec.Cmd, string, string) {
 	if _, err := configFile.Write(data); err != nil {
 		t.Fatalf("cannot write config: %v", err)
 	}
-	configFile.Close()
+	if err := configFile.Close(); err != nil {
+		t.Fatalf("cannot close config: %v", err)
+	}
 
 	cmd := exec.Command("consul",
 		"agent",
 		"-dev",
-		"-config-file", configName)
+		"-config-file", configFilename)
 	err = cmd.Start()
 	if err != nil {
 		t.Fatalf("failed to start consul: %v", err)
@@ -76,13 +78,13 @@ func startConsul(t *testing.T) (*exec.Cmd, string, string) {
 		if _, _, err := kv.List("/", nil); err == nil {
 			break
 		}
-		if time.Now().Sub(start) > 10*time.Second {
+		if time.Since(start) > 10*time.Second {
 			t.Fatalf("Failed to start consul daemon in time")
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
 
-	return cmd, configName, serverAddr
+	return cmd, configFilename, serverAddr
 }
 
 func TestConsulTopo(t *testing.T) {
@@ -90,11 +92,11 @@ func TestConsulTopo(t *testing.T) {
 	*watchPollDuration = 100 * time.Millisecond
 
 	// Start a single consul in the background.
-	cmd, configName, serverAddr := startConsul(t)
+	cmd, configFilename, serverAddr := startConsul(t)
 	defer func() {
 		cmd.Process.Kill()
 		cmd.Wait()
-		os.Remove(configName)
+		os.Remove(configFilename)
 	}()
 
 	// This function will create a toplevel directory for a new test.

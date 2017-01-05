@@ -49,7 +49,7 @@ func (s *Server) Update(ctx context.Context, cell, filePath string, contents []b
 	nodePath := path.Join(c.root, filePath)
 
 	// Again, we need to get the final version back.
-	// So we have to use a transactions, as Put doesn't return the version.
+	// So we have to use a transaction, as Put doesn't return the version.
 	ops := api.KVTxnOps{
 		&api.KVTxnOp{
 			Verb:  api.KVSet,
@@ -102,7 +102,8 @@ func (s *Server) Delete(ctx context.Context, cell, filePath string, version topo
 	nodePath := path.Join(c.root, filePath)
 
 	// We need to differentiate if the node existed or not.
-	// So we cannot use a regular Delete, which doesn't tell us.
+	// So we cannot use a regular Delete, which returns success
+	// whether or not the node originally existed.
 	// Let's do a 'Get' and then a 'Delete' in a transaction:
 	// - If the node doesn't exists, the Get will fail and abort.
 	// - If the node exists, the Get will work, and the Delete will

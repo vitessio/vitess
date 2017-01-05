@@ -539,22 +539,27 @@ To then run in multiple cells, the global topology service needs to be extended
 to the extra cells, and a new local topology service for that cell needs to run
 as well.
 
-A good configuration would be to add 2 more servers in the topology service
-quorum that are running in the second cell. Use all 5 servers as the global
-topology service server addresses if applicable.
+A good configuration for the global topology service would be to add 2 more
+servers in the topology service quorum that are running in the second cell. Use
+all 5 servers as the global topology service server addresses if applicable.
 
-Then start the new local topology service in the second cell, and run `vtctl
-AddCellInfo` as was done for the first cell. Tablets and vtgates can now be
-started in the second cell, and used normally.
+Then start the new local topology service in the second cell (on new servers),
+and run `vtctl AddCellInfo` as was done for the first cell. Tablets and vtgates
+can now be started in the second cell, and used normally.
 
-To allow cross-cell master access through vtgate, use the `-cells_to_watch`
-parameter and list all cells there. This will make cross-cell topology service
-queries, from vtgate to remote topology services, so be sure to enable that.
+vtgate can be configured with a list of cells to watch for tablets using the
+`-cells_to_watch` command line parameter. It can then use all tablets in all
+cells to route traffic. Note this is necessary to access the master in another
+cell.
 
-To split up the local data in the first cell (as both global and local data were
-on the same topology service):
+After the extension to two cells, the original topo service contains both the
+global topology data, and the first cell topology data. A more symetrical
+configuration would be to split that original service into two: a global one
+that only contains the global data (spread across both cells), and a local one
+to the original cells. To achieve that split:
 
-* Start up a new local topology service in that original cell.
+* Start up a new local topology service in that original cell (3 more local
+  servers in that cell).
 * Pick a name for that cell, different from `local`.
 * Use `vtctl AddCellInfo` to configure it.
 * Make sure all vtgates can see that new local cell (again, using
@@ -563,9 +568,18 @@ on the same topology service):
   used before.
 * Use `vtctl RemoveKeyspaceCell` to remove all mentions of the `local` cell in
   all keyspaces.
-* Use `vtctl RemoveCellInfo` to remove the global configurations.
+* Use `vtctl RemoveCellInfo` to remove the global configurations for that
+  `local` cell.
 * Remove all remaining data in the global topology service that are in the old
   local server root.
+
+After this split, the configuration is completely symmetrical:
+
+* a global topology service, with servers in all cells. Only contains global
+  topology data about Keyspaces, Shards and VSchema.
+* a local topology service to each cell, with servers only in that cell. Only
+  contains local topology data about Tablets, and roll-ups of global data for
+  efficient access.
 
 ## Migration Between Implementations
 
