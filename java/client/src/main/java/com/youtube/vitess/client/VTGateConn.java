@@ -1,18 +1,18 @@
 package com.youtube.vitess.client;
 
-import static com.google.common.base.Preconditions.checkNotNull;
-
 import com.google.common.collect.Iterables;
 import com.google.common.util.concurrent.AsyncFunction;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
-
 import com.youtube.vitess.client.cursor.Cursor;
+import com.youtube.vitess.client.cursor.CursorWithError;
 import com.youtube.vitess.client.cursor.SimpleCursor;
 import com.youtube.vitess.client.cursor.StreamCursor;
+import com.youtube.vitess.proto.Query;
 import com.youtube.vitess.proto.Topodata.KeyRange;
 import com.youtube.vitess.proto.Topodata.SrvKeyspace;
 import com.youtube.vitess.proto.Topodata.TabletType;
+import com.youtube.vitess.proto.Vtgate;
 import com.youtube.vitess.proto.Vtgate.BeginRequest;
 import com.youtube.vitess.proto.Vtgate.BeginResponse;
 import com.youtube.vitess.proto.Vtgate.BoundKeyspaceIdQuery;
@@ -40,13 +40,16 @@ import com.youtube.vitess.proto.Vtgate.StreamExecuteKeyspaceIdsRequest;
 import com.youtube.vitess.proto.Vtgate.StreamExecuteRequest;
 import com.youtube.vitess.proto.Vtgate.StreamExecuteShardsRequest;
 
+import javax.annotation.Nullable;
 import java.io.Closeable;
 import java.io.IOException;
+import java.sql.SQLDataException;
 import java.sql.SQLException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
-import javax.annotation.Nullable;
+import static com.google.common.base.Preconditions.checkNotNull;
 
 /**
  * An asynchronous VTGate connection.
@@ -202,7 +205,46 @@ public final class VTGateConn implements Closeable {
             }));
   }
 
-  /**
+    public SQLFuture<List<CursorWithError>> executeBatch(Context ctx, List<String> queryList,
+        @Nullable List<Map<String, ?>> bindVarsList, TabletType tabletType) throws SQLException {
+        return executeBatch(ctx, queryList, bindVarsList, tabletType, false);
+    }
+
+    public SQLFuture<List<CursorWithError>> executeBatch(Context ctx, List<String> queryList,
+        @Nullable List<Map<String, ?>> bindVarsList, TabletType tabletType,
+        boolean asTransaction) throws SQLException {
+        List<Query.BoundQuery> queries = new ArrayList<>();
+
+        if (null != bindVarsList && bindVarsList.size() != queryList.size()) {
+            throw new SQLDataException(
+                "Size of SQL Query list does not match the bind variables list");
+        }
+
+        for (int i = 0; i < queryList.size(); ++i) {
+            queries.add(i, Proto.bindQuery(checkNotNull(queryList.get(i)),
+                bindVarsList == null ? null : bindVarsList.get(i)));
+        }
+
+        Vtgate.ExecuteBatchRequest.Builder requestBuilder =
+            Vtgate.ExecuteBatchRequest.newBuilder().addAllQueries(checkNotNull(queries))
+                .setKeyspace(keyspace).setTabletType(checkNotNull(tabletType))
+                .setAsTransaction(asTransaction);
+        if (ctx.getCallerId() != null) {
+            requestBuilder.setCallerId(ctx.getCallerId());
+        }
+        return new SQLFuture<>(Futures
+            .transformAsync(client.executeBatch(ctx, requestBuilder.build()),
+                new AsyncFunction<Vtgate.ExecuteBatchResponse, List<CursorWithError>>() {
+                    @Override public ListenableFuture<List<CursorWithError>> apply(
+                        Vtgate.ExecuteBatchResponse response) throws Exception {
+                        Proto.checkError(response.getError());
+                        return Futures.immediateFuture(
+                            Proto.fromQueryResponsesToCursorList(response.getResultsList()));
+                    }
+                }));
+    }
+
+    /**
    * Execute multiple keyspace ID queries as a batch.
    *
    * @param asTransaction If true, automatically create a transaction (per shard) that encloses all

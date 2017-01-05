@@ -1,6 +1,7 @@
 package com.youtube.vitess.client;
 
 import com.youtube.vitess.client.cursor.Cursor;
+import com.youtube.vitess.client.cursor.CursorWithError;
 import com.youtube.vitess.proto.Topodata.KeyRange;
 import com.youtube.vitess.proto.Topodata.SrvKeyspace;
 import com.youtube.vitess.proto.Topodata.TabletType;
@@ -8,9 +9,11 @@ import com.youtube.vitess.proto.Vtgate.BoundKeyspaceIdQuery;
 import com.youtube.vitess.proto.Vtgate.BoundShardQuery;
 import com.youtube.vitess.proto.Vtgate.SplitQueryResponse;
 
+import javax.annotation.Nullable;
 import java.io.Closeable;
 import java.io.IOException;
 import java.sql.SQLException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -76,6 +79,17 @@ public class VTGateBlockingConn implements Closeable {
       TabletType tabletType) throws SQLException {
     return conn.executeEntityIds(ctx, query, keyspace, entityColumnName, entityKeyspaceIds,
         bindVars, tabletType).checkedGet();
+  }
+
+  public List<CursorWithError> executeBatch(Context ctx, ArrayList<String> queryList,
+      @Nullable ArrayList<Map<String, ?>> bindVarsList, TabletType tabletType) throws SQLException {
+    return executeBatch(ctx, queryList, bindVarsList, tabletType, false);
+  }
+
+  public List<CursorWithError> executeBatch(Context ctx, ArrayList<String> queryList,
+      @Nullable ArrayList<Map<String, ?>> bindVarsList, TabletType tabletType,
+      boolean asTransaction) throws SQLException {
+    return conn.executeBatch(ctx, queryList, bindVarsList, tabletType, asTransaction).checkedGet();
   }
 
   /**

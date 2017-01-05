@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"path"
 
-	"golang.org/x/net/context"
-
 	"github.com/coreos/etcd/clientv3"
 	"github.com/coreos/etcd/mvcc/mvccpb"
+	"golang.org/x/net/context"
+
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
@@ -66,16 +66,21 @@ func (s *Server) Watch(ctx context.Context, cell, filePath string) (*topo.WatchD
 				}
 
 				for _, ev := range wresp.Events {
-					// Event type can only be PUT or DELETE.
-					if ev.Type == mvccpb.PUT {
+					switch ev.Type {
+					case mvccpb.PUT:
 						notifications <- &topo.WatchData{
 							Contents: ev.Kv.Value,
 							Version:  EtcdVersion(ev.Kv.Version),
 						}
-					} else {
+					case mvccpb.DELETE:
 						// Node is gone, send a final notice.
 						notifications <- &topo.WatchData{
 							Err: topo.ErrNoNode,
+						}
+						return
+					default:
+						notifications <- &topo.WatchData{
+							Err: fmt.Errorf("unexpected event received: %v", ev),
 						}
 						return
 					}

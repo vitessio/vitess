@@ -156,9 +156,4 @@ func checkShard(t *testing.T, ts topo.Impl) {
 	if _, err := ts.GetShardNames(ctx, "test_keyspace666"); err != topo.ErrNoNode {
 		t.Errorf("GetShardNames(666): %v", err)
 	}
-
-	// test ValidateShard
-	if err := ts.ValidateShard(ctx, "test_keyspace", "b0-c0"); err != nil {
-		t.Errorf("ValidateShard(test_keyspace, b0-c0) failed: %v", err)
-	}
 }

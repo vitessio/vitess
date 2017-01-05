@@ -6,6 +6,7 @@ import com.google.common.collect.Iterables;
 import com.google.common.primitives.UnsignedLong;
 import com.google.protobuf.ByteString;
 import com.youtube.vitess.client.cursor.Cursor;
+import com.youtube.vitess.client.cursor.CursorWithError;
 import com.youtube.vitess.client.cursor.SimpleCursor;
 import com.youtube.vitess.proto.Query;
 import com.youtube.vitess.proto.Query.BindVariable;
@@ -15,6 +16,8 @@ import com.youtube.vitess.proto.Vtgate.BoundKeyspaceIdQuery;
 import com.youtube.vitess.proto.Vtgate.BoundShardQuery;
 import com.youtube.vitess.proto.Vtgate.ExecuteEntityIdsRequest.EntityId;
 import com.youtube.vitess.proto.Vtrpc.RPCError;
+
+import javax.annotation.Nullable;
 import java.math.BigDecimal;
 import java.sql.SQLException;
 import java.sql.SQLIntegrityConstraintViolationException;
@@ -27,7 +30,6 @@ import java.sql.SQLTransientException;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import javax.annotation.Nullable;
 
 /**
  * Proto contains methods for working with Vitess protobuf messages.
@@ -213,6 +215,14 @@ public class Proto {
     ImmutableList.Builder<Cursor> builder = new ImmutableList.Builder<Cursor>();
     for (QueryResult queryResult : queryResults) {
       builder.add(new SimpleCursor(queryResult));
+    }
+    return builder.build();
+  }
+
+  public static List<CursorWithError> fromQueryResponsesToCursorList(List<Query.ResultWithError> resultWithErrorList) {
+    ImmutableList.Builder<CursorWithError> builder = new ImmutableList.Builder<CursorWithError>();
+    for (Query.ResultWithError resultWithError : resultWithErrorList) {
+      builder.add(new CursorWithError(resultWithError));
     }
     return builder.build();
   }

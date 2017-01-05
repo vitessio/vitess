@@ -134,8 +134,10 @@ func QueryResponsesToProto3(qr []QueryResponse) []*querypb.ResultWithError {
 	}
 	result := make([]*querypb.ResultWithError, len(qr))
 	for i, q := range qr {
-		result[i].Result = ResultToProto3(q.QueryResult)
-		result[i].Error = vterrors.VtRPCErrorFromVtError(q.QueryError)
+		result[i] = &querypb.ResultWithError{
+			Result: ResultToProto3(q.QueryResult),
+			Error:  vterrors.VtRPCErrorFromVtError(q.QueryError),
+		}
 	}
 	return result
 }
@@ -147,8 +149,10 @@ func Proto3ToQueryReponses(qr []*querypb.ResultWithError) []QueryResponse {
 	}
 	result := make([]QueryResponse, len(qr))
 	for i, q := range qr {
-		result[i].QueryResult = Proto3ToResult(q.Result)
-		result[i].QueryError = vterrors.FromVtRPCError(q.Error)
+		result[i] = QueryResponse{
+			QueryResult: Proto3ToResult(q.Result),
+			QueryError:  vterrors.FromVtRPCError(q.Error),
+		}
 	}
 	return result
 }

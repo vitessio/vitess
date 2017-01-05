@@ -22,9 +22,7 @@ type WatchSrvVSchemaData struct {
 // It has the same contract as Backend.Watch, but it also unpacks the
 // contents into a SrvVSchema object.
 func (ts Server) WatchSrvVSchema(ctx context.Context, cell string) (*WatchSrvVSchemaData, <-chan *WatchSrvVSchemaData, CancelFunc) {
-	filePath := "/" + SrvVSchemaFile
-
-	current, wdChannel, cancel := ts.Watch(ctx, cell, filePath)
+	current, wdChannel, cancel := ts.Watch(ctx, cell, SrvVSchemaFile)
 	if current.Err != nil {
 		return &WatchSrvVSchemaData{Err: current.Err}, nil, nil
 	}

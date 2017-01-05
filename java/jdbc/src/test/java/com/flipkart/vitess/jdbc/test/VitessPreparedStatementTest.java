@@ -8,8 +8,10 @@ import com.youtube.vitess.client.SQLFuture;
 import com.youtube.vitess.client.VTGateConn;
 import com.youtube.vitess.client.VTGateTx;
 import com.youtube.vitess.client.cursor.Cursor;
+import com.youtube.vitess.client.cursor.CursorWithError;
 import com.youtube.vitess.proto.Query;
 import com.youtube.vitess.proto.Topodata;
+import com.youtube.vitess.proto.Vtrpc;
 import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -24,7 +26,6 @@ import java.sql.BatchUpdateException;
 import java.sql.Date;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.sql.SQLRecoverableException;
 import java.sql.Statement;
 import java.sql.Time;
 import java.sql.Timestamp;
@@ -39,7 +40,8 @@ import java.util.TimeZone;
 /**
  * Created by harshit.gangal on 09/02/16.
  */
-@RunWith(PowerMockRunner.class) @PrepareForTest(VTGateConn.class) public class VitessPreparedStatementTest {
+@RunWith(PowerMockRunner.class) @PrepareForTest({VTGateConn.class,
+    Vtrpc.RPCError.class}) public class VitessPreparedStatementTest {
 
     private String sqlSelect = "select 1 from test_table";
     private String sqlShow = "show tables";
@@ -667,36 +669,27 @@ import java.util.TimeZone;
 
         SQLFuture mockSqlFutureCursor = PowerMockito.mock(SQLFuture.class);
         PowerMockito.when(mockVtGateConn
-            .execute(Matchers.any(Context.class), Matchers.anyString(), Matchers.anyMap(),
+            .executeBatch(Matchers.any(Context.class), Matchers.anyList(), Matchers.anyList(),
                 Matchers.any(Topodata.TabletType.class))).thenReturn(mockSqlFutureCursor);
 
-        Cursor mockCursor = PowerMockito.mock(Cursor.class);
-        PowerMockito.when(mockSqlFutureCursor.checkedGet()).thenReturn(mockCursor);
-        int expectedAffectedRows = 10;
-        PowerMockito.when(mockCursor.getRowsAffected())
-            .thenReturn(Long.valueOf(expectedAffectedRows));
+        List<CursorWithError> mockCursorWithErrorList = new ArrayList<>();
+        PowerMockito.when(mockSqlFutureCursor.checkedGet()).thenReturn(mockCursorWithErrorList);
+
+        CursorWithError mockCursorWithError1 = PowerMockito.mock(CursorWithError.class);
+        PowerMockito.when(mockCursorWithError1.getError()).thenReturn(null);
+        PowerMockito.when(mockCursorWithError1.getCursor())
+            .thenReturn(PowerMockito.mock(Cursor.class));
+        mockCursorWithErrorList.add(mockCursorWithError1);
 
         statement.setString(1, "hi");
         statement.addBatch();
         updateCounts = statement.executeBatch();
         Assert.assertEquals(1, updateCounts.length);
-        Assert.assertEquals(expectedAffectedRows, updateCounts[0]);
 
-        PowerMockito.when(mockSqlFutureCursor.checkedGet())
-            .thenThrow(SQLRecoverableException.class);
-        statement.setString(1, "hi");
-        statement.addBatch();
-        try {
-            statement.executeBatch();
-            Assert.fail("Should have thrown Exception");
-        } catch (BatchUpdateException ex) {
-            //Query executed before exception will only be returned as this is not in transaction error
-            Assert.assertEquals(0, ex.getUpdateCounts().length);
-        }
-
-        PowerMockito.when(mockVtGateConn
-            .execute(Matchers.any(Context.class), Matchers.anyString(), Matchers.anyMap(),
-                Matchers.any(Topodata.TabletType.class))).thenThrow(SQLException.class);
+        CursorWithError mockCursorWithError2 = PowerMockito.mock(CursorWithError.class);
+        PowerMockito.when(mockCursorWithError2.getError())
+            .thenReturn(PowerMockito.mock(Vtrpc.RPCError.class));
+        mockCursorWithErrorList.add(mockCursorWithError2);
         statement.setString(1, "hi");
         statement.addBatch();
         statement.setString(1, "bye");
@@ -705,10 +698,10 @@ import java.util.TimeZone;
             statement.executeBatch();
             Assert.fail("Should have thrown Exception");
         } catch (BatchUpdateException ex) {
-            //Query executed for all the queries
+            Assert.assertEquals(Constants.SQLExceptionMessages.QUERY_FAILED, ex.getMessage());
             Assert.assertEquals(2, ex.getUpdateCounts().length);
+            Assert.assertEquals(Statement.EXECUTE_FAILED, ex.getUpdateCounts()[1]);
         }
-
     }
 
 }

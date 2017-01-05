@@ -37,7 +37,7 @@ func (s *Server) ListDir(ctx context.Context, cell, dirPath string) ([]string, e
 	for _, n := range resp.Node.Nodes {
 		base := path.Base(n.Key)
 		// we have to remove /vt from global listings, it is used for /vt/cells.
-		if cell == topo.GlobalCell && dirPath == "/" && base == "vt" {
+		if dirPath == "/" && base == "vt" {
 			continue
 		}
 		names = append(names, base)

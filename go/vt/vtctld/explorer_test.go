@@ -4,15 +4,17 @@ import (
 	"net/http"
 	"testing"
 
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
-	"github.com/youtube/vitess/go/vt/topo/zk2topo"
 	"golang.org/x/net/context"
+
+	"github.com/youtube/vitess/go/vt/topo/memorytopo"
+
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 func TestHandleExplorerRedirect(t *testing.T) {
 	ctx := context.Background()
 
-	ts := zk2topo.NewFakeServer("cell1")
+	ts := memorytopo.NewServer("cell1")
 	if err := ts.CreateTablet(ctx, &topodatapb.Tablet{
 		Alias: &topodatapb.TabletAlias{
 			Cell: "cell1",

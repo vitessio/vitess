@@ -1,16 +1,16 @@
 package com.youtube.vitess.client;
 
-import static com.google.common.base.Preconditions.checkNotNull;
-
 import com.google.common.collect.Iterables;
 import com.google.common.util.concurrent.AsyncFunction;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
-
 import com.youtube.vitess.client.cursor.Cursor;
+import com.youtube.vitess.client.cursor.CursorWithError;
 import com.youtube.vitess.client.cursor.SimpleCursor;
+import com.youtube.vitess.proto.Query;
 import com.youtube.vitess.proto.Topodata.KeyRange;
 import com.youtube.vitess.proto.Topodata.TabletType;
+import com.youtube.vitess.proto.Vtgate;
 import com.youtube.vitess.proto.Vtgate.BoundKeyspaceIdQuery;
 import com.youtube.vitess.proto.Vtgate.BoundShardQuery;
 import com.youtube.vitess.proto.Vtgate.CommitRequest;
@@ -33,10 +33,14 @@ import com.youtube.vitess.proto.Vtgate.RollbackRequest;
 import com.youtube.vitess.proto.Vtgate.RollbackResponse;
 import com.youtube.vitess.proto.Vtgate.Session;
 
+import javax.annotation.Nullable;
 import java.sql.SQLDataException;
 import java.sql.SQLException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+
+import static com.google.common.base.Preconditions.checkNotNull;
 
 /**
  * An asynchronous VTGate transaction session.
@@ -197,6 +201,40 @@ public class VTGateTx {
     lastCall = call;
     return call;
   }
+
+    public SQLFuture<List<CursorWithError>> executeBatch(Context ctx, List<String> queryList,
+        @Nullable List<Map<String, ?>> bindVarsList, TabletType tabletType)
+        throws SQLException {
+        List<Query.BoundQuery> queries = new ArrayList<>();
+
+        if (null != bindVarsList && bindVarsList.size() != queryList.size()) {
+            throw new SQLDataException(
+                "Size of SQL Query list does not match the bind variables list");
+        }
+
+        for (int i = 0; i < queryList.size(); ++i) {
+            queries.add(i, Proto.bindQuery(checkNotNull(queryList.get(i)),
+                bindVarsList == null ? null : bindVarsList.get(i)));
+        }
+
+        Vtgate.ExecuteBatchRequest.Builder requestBuilder =
+            Vtgate.ExecuteBatchRequest.newBuilder().addAllQueries(checkNotNull(queries))
+                .setKeyspace(keyspace).setTabletType(checkNotNull(tabletType)).setSession(session);
+        if (ctx.getCallerId() != null) {
+            requestBuilder.setCallerId(ctx.getCallerId());
+        }
+        return new SQLFuture<>(Futures
+            .transformAsync(client.executeBatch(ctx, requestBuilder.build()),
+                new AsyncFunction<Vtgate.ExecuteBatchResponse, List<CursorWithError>>() {
+                    @Override public ListenableFuture<List<CursorWithError>> apply(
+                        Vtgate.ExecuteBatchResponse response) throws Exception {
+                        setSession(response.getSession());
+                        Proto.checkError(response.getError());
+                        return Futures.immediateFuture(
+                            Proto.fromQueryResponsesToCursorList(response.getResultsList()));
+                    }
+                }));
+    }
 
   public synchronized SQLFuture<List<Cursor>> executeBatchShards(Context ctx,
       Iterable<? extends BoundShardQuery> queries, TabletType tabletType) throws SQLException {

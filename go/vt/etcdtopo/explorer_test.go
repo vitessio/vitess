@@ -65,12 +65,11 @@ func TestHandlePathInvalid(t *testing.T) {
 	}
 }
 
-func TestHandlePathRoot(t *testing.T) {
+func testHandlePathRoot(t *testing.T, ts *Server) {
+	t.Log("=== testHandlePathRoot")
 	input := "/"
-	cells := []string{"cell1", "cell2", "cell3"}
 	want := []string{topo.GlobalCell, "cell1", "cell2", "cell3"}
 
-	ts := newTestServer(t, cells)
 	ex := NewExplorer(ts)
 	result := ex.HandlePath(input, nil)
 	if got := result.Children; !reflect.DeepEqual(got, want) {
@@ -78,15 +77,14 @@ func TestHandlePathRoot(t *testing.T) {
 	}
 }
 
-func TestHandlePathKeyspace(t *testing.T) {
+func testHandlePathKeyspace(t *testing.T, ts *Server) {
+	t.Log("=== testHandlePathKeyspace")
 	input := path.Join("/global", keyspaceDirPath("test_keyspace"))
-	cells := []string{"cell1", "cell2", "cell3"}
 	keyspace := &topodatapb.Keyspace{}
 	shard := &topodatapb.Shard{}
 	want := toJSON(t, keyspace)
 
 	ctx := context.Background()
-	ts := newTestServer(t, cells)
 	if err := ts.CreateKeyspace(ctx, "test_keyspace", keyspace); err != nil {
 		t.Fatalf("CreateKeyspace error: %v", err)
 	}
@@ -107,15 +105,14 @@ func TestHandlePathKeyspace(t *testing.T) {
 	}
 }
 
-func TestHandlePathShard(t *testing.T) {
+func testHandlePathShard(t *testing.T, ts *Server) {
+	t.Log("=== testHandlePathShard")
 	input := path.Join("/global", shardDirPath("test_keyspace", "-80"))
-	cells := []string{"cell1", "cell2", "cell3"}
 	keyspace := &topodatapb.Keyspace{}
 	shard := &topodatapb.Shard{}
 	want := toJSON(t, shard)
 
 	ctx := context.Background()
-	ts := newTestServer(t, cells)
 	if err := ts.CreateKeyspace(ctx, "test_keyspace", keyspace); err != nil {
 		t.Fatalf("CreateKeyspace error: %v", err)
 	}
@@ -130,9 +127,9 @@ func TestHandlePathShard(t *testing.T) {
 	}
 }
 
-func TestHandlePathTablet(t *testing.T) {
+func testHandlePathTablet(t *testing.T, ts *Server) {
+	t.Log("=== testHandlePathTablet")
 	input := path.Join("/cell1", path.Join(tabletsDirPath, "cell1-0000000123"))
-	cells := []string{"cell1", "cell2", "cell3"}
 	tablet := &topodatapb.Tablet{
 		Alias:    &topodatapb.TabletAlias{Cell: "cell1", Uid: 123},
 		Hostname: "example.com",
@@ -141,7 +138,6 @@ func TestHandlePathTablet(t *testing.T) {
 	want := toJSON(t, tablet)
 
 	ctx := context.Background()
-	ts := newTestServer(t, cells)
 	if err := ts.CreateTablet(ctx, tablet); err != nil {
 		t.Fatalf("CreateTablet error: %v", err)
 	}

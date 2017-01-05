@@ -8,7 +8,7 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/topo/zk2topo"
+	"github.com/youtube/vitess/go/vt/topo/memorytopo"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -16,7 +16,7 @@ import (
 
 func TestFindAllKeyspaceShards(t *testing.T) {
 	ctx := context.Background()
-	ts := zk2topo.NewFakeServer("cell1", "cell2")
+	ts := memorytopo.NewServer("cell1", "cell2")
 
 	// no keyspace / shards
 	ks, err := findAllKeyspaceShards(ctx, ts, "cell1")

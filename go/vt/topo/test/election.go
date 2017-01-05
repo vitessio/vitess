@@ -8,13 +8,15 @@ import (
 	"testing"
 	"time"
 
+	"golang.org/x/net/context"
+
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
 func waitForMasterID(t *testing.T, mp topo.MasterParticipation, expected string) {
 	deadline := time.Now().Add(5 * time.Second)
 	for {
-		master, err := mp.GetCurrentMasterID()
+		master, err := mp.GetCurrentMasterID(context.Background())
 		if err != nil {
 			t.Fatalf("GetCurrentMasterID failed: %v", err)
 		}

@@ -3,6 +3,7 @@
 // license that can be found in the LICENSE file.
 
 // Package testfiles locates test files within the Vitess directory tree.
+// It also handles test port allocation.
 package testfiles
 
 import (
@@ -12,6 +13,7 @@ import (
 	"path/filepath"
 )
 
+// Locate returns a file path that came from $VTROOT/data/test.
 func Locate(filename string) string {
 	vtroot := os.Getenv("VTROOT")
 	if vtroot == "" {
@@ -20,6 +22,7 @@ func Locate(filename string) string {
 	return path.Join(vtroot, "data", "test", filename)
 }
 
+// Glob returns all files matching a pattern in $VTROOT/data/test.
 func Glob(pattern string) []string {
 	vtroot := os.Getenv("VTROOT")
 	if vtroot == "" {

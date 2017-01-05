@@ -8,6 +8,7 @@ import com.youtube.vitess.client.Proto;
 import com.youtube.vitess.client.RpcClient;
 import com.youtube.vitess.client.StreamIterator;
 import com.youtube.vitess.proto.Query.QueryResult;
+import com.youtube.vitess.proto.Vtgate;
 import com.youtube.vitess.proto.Vtgate.BeginRequest;
 import com.youtube.vitess.proto.Vtgate.BeginResponse;
 import com.youtube.vitess.proto.Vtgate.CommitRequest;
@@ -45,6 +46,8 @@ import com.youtube.vitess.proto.grpc.VitessGrpc.VitessFutureStub;
 import com.youtube.vitess.proto.grpc.VitessGrpc.VitessStub;
 import io.grpc.ManagedChannel;
 import io.grpc.StatusRuntimeException;
+import org.joda.time.Duration;
+
 import java.io.IOException;
 import java.sql.SQLException;
 import java.sql.SQLIntegrityConstraintViolationException;
@@ -55,7 +58,6 @@ import java.sql.SQLSyntaxErrorException;
 import java.sql.SQLTimeoutException;
 import java.sql.SQLTransientException;
 import java.util.concurrent.TimeUnit;
-import org.joda.time.Duration;
 
 /**
  * GrpcClient is a gRPC-based implementation of Vitess Rpcclient.
@@ -109,6 +111,11 @@ public class GrpcClient implements RpcClient {
       ExecuteEntityIdsRequest request) throws SQLException {
     return Futures.catchingAsync(getFutureStub(ctx).executeEntityIds(request), Exception.class,
         new ExceptionConverter<ExecuteEntityIdsResponse>());
+  }
+
+  @Override public ListenableFuture<Vtgate.ExecuteBatchResponse> executeBatch(Context ctx,
+      Vtgate.ExecuteBatchRequest request) throws SQLException {
+    return Futures.catchingAsync(getFutureStub(ctx).executeBatch(request), Exception.class, new ExceptionConverter<Vtgate.ExecuteBatchResponse>());
   }
 
   @Override

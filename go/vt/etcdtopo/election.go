@@ -136,7 +136,7 @@ func (mp *etcdMasterParticipation) Stop() {
 }
 
 // GetCurrentMasterID is part of the topo.MasterParticipation interface
-func (mp *etcdMasterParticipation) GetCurrentMasterID() (string, error) {
+func (mp *etcdMasterParticipation) GetCurrentMasterID(ctx context.Context) (string, error) {
 	electionPath := path.Join(electionDirPath, mp.name)
 
 	resp, err := mp.s.getGlobal().Get(electionPath, false /* sort */, false /* recursive */)

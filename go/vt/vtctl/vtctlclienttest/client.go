@@ -18,17 +18,18 @@ import (
 	"testing"
 	"time"
 
+	"golang.org/x/net/context"
+
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/topo/zk2topo"
+	"github.com/youtube/vitess/go/vt/topo/memorytopo"
 	"github.com/youtube/vitess/go/vt/vtctl/vtctlclient"
-	"golang.org/x/net/context"
-
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 
 	// import the gRPC client implementation for tablet manager
 	_ "github.com/youtube/vitess/go/vt/tabletmanager/grpctmclient"
+
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 func init() {
@@ -39,7 +40,7 @@ func init() {
 
 // CreateTopoServer returns the test topo server properly configured
 func CreateTopoServer(t *testing.T) topo.Server {
-	return zk2topo.NewFakeServer("cell1", "cell2")
+	return memorytopo.NewServer("cell1")
 }
 
 // TestSuite runs the test suite on the given topo server and client

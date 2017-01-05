@@ -22,7 +22,7 @@ import (
 // Shard record references the corresponding cell in its Cells list.
 
 const (
-	cellsPath = "/cells"
+	cellsPath = "cells"
 )
 
 func pathForCellInfo(cell string) string {
