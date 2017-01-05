@@ -42,7 +42,7 @@ func (s *Server) Update(ctx context.Context, cell, filePath string, contents []b
 
 	if version != nil {
 		// We have to do a transaction. This means: if the
-		// current file revision if what we expect, save it.
+		// current file revision is what we expect, save it.
 		txnresp, err := c.cli.Txn(ctx).
 			If(clientv3.Compare(clientv3.ModRevision(nodePath), "=", int64(version.(EtcdVersion)))).
 			Then(clientv3.OpPut(nodePath, string(contents))).

@@ -83,6 +83,8 @@ following core features:
   `zk2` and `etcd2` implementations will remain, so please migrate after upgrade
   to Vitess 2.1.
   
+* Added support for [Consul](http://consul.io) topology service client.
+
 * Initial version of the Master Buffering feature. It allows for buffering
   master traffic while a failover is in progress, and trade downtime with
   extra latency.
