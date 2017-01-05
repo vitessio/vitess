@@ -116,9 +116,12 @@ func (txc *TxConn) commit2PC(ctx context.Context, session *SafeSession) error {
 
 // Rollback rolls back the current transaction. There are no retries on this operation.
 func (txc *TxConn) Rollback(ctx context.Context, session *SafeSession) error {
-	session.mu.Lock()
-	inTransaction := session.InTransaction()
-	session.mu.Unlock()
+	var inTransaction bool
+	if session != nil {
+		session.mu.Lock()
+		inTransaction = session.InTransaction()
+		session.mu.Unlock()
+	}
 	if !inTransaction {
 		return nil
 	}

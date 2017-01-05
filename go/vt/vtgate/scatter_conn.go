@@ -294,10 +294,13 @@ func (stc *ScatterConn) ExecuteBatch(
 
 			shouldBegin := false
 			transactionID := int64(0)
+			inTransaction := false
 
-			session.mu.Lock()
-			inTransaction := session.InTransaction()
-			session.mu.Unlock()
+			if session != nil {
+				session.mu.Lock()
+				inTransaction = session.InTransaction()
+				session.mu.Unlock()
+			}
 			if inTransaction {
 				session.mu.Lock()
 				transactionID = session.Find(target.Keyspace, target.Shard, target.TabletType)
@@ -710,27 +713,31 @@ func (stc *ScatterConn) multiGoTransaction(
 
 		//shouldBegin, transactionID := transactionInfo(target, session, notInTransaction)
 
-		var shouldBegin bool
-		var transactionID int64
+		shouldBegin := false
+		transactionID := int64(0)
 
-		session.mu.Lock()
-		if session.InTransaction() {
-			transactionID = session.Find(target.Keyspace, target.Shard, target.TabletType)
-			if transactionID == 0 && !notInTransaction {
-				shouldBegin = true
+		if session != nil {
+			session.mu.Lock()
+			if session.InTransaction() {
+				transactionID = session.Find(target.Keyspace, target.Shard, target.TabletType)
+				if transactionID == 0 && !notInTransaction {
+					shouldBegin = true
+				}
 			}
-		}
-		transactionID, err = action(target, shouldBegin, transactionID)
-		if shouldBegin && transactionID != 0 {
-			if appendErr := session.Append(&vtgatepb.Session_ShardSession{
-				Target:        target,
-				TransactionId: transactionID,
-			}); appendErr != nil {
-				err = appendErr
+			transactionID, err = action(target, shouldBegin, transactionID)
+			if shouldBegin && transactionID != 0 {
+				if appendErr := session.Append(&vtgatepb.Session_ShardSession{
+					Target:        target,
+					TransactionId: transactionID,
+				}); appendErr != nil {
+					err = appendErr
+				}
 			}
-		}
 
-		session.mu.Unlock()
+			session.mu.Unlock()
+		} else {
+			transactionID, err = action(target, false, 0)
+		}
 	}
 
 	var wg sync.WaitGroup
