@@ -44,7 +44,7 @@ func TestLookupHashUniqueMap(t *testing.T) {
 
 func TestLookupHashUniqueVerify(t *testing.T) {
 	vc := &vcursor{numRows: 1}
-	success, err := lhu.Verify(vc, 1, []byte("\x16k@\xb4J\xbaK\xd6"))
+	success, err := lhu.Verify(vc, []interface{}{1}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6")})
 	if err != nil {
 		t.Error(err)
 	}
@@ -55,15 +55,15 @@ func TestLookupHashUniqueVerify(t *testing.T) {
 
 func TestLookupHashUniqueCreate(t *testing.T) {
 	vc := &vcursor{}
-	err := lhu.(Lookup).Create(vc, 1, []byte("\x16k@\xb4J\xbaK\xd6"))
+	err := lhu.(Lookup).Create(vc, []interface{}{1}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6")})
 	if err != nil {
 		t.Error(err)
 	}
 	wantQuery := &querytypes.BoundQuery{
-		Sql: "insert into t(fromc, toc) values(:fromc, :toc)",
+		Sql: "insert into t(fromc,toc) values(:fromc0,:toc0)",
 		BindVariables: map[string]interface{}{
-			"fromc": 1,
-			"toc":   int64(1),
+			"fromc0": 1,
+			"toc0":   int64(1),
 		},
 	}
 	if !reflect.DeepEqual(vc.bq, wantQuery) {

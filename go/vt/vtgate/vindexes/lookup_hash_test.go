@@ -56,25 +56,43 @@ func (vc *vcursor) Execute(query string, bindvars map[string]interface{}) (*sqlt
 	panic("unexpected")
 }
 
-var lhm Vindex
+var lookuphash Vindex
+var lookuphashunique Vindex
 
 func init() {
-	h, err := CreateVindex("lookup_hash", "nn", map[string]string{"table": "t", "from": "fromc", "to": "toc"})
+	lh, err := CreateVindex("lookup_hash", "lookup_hash", map[string]string{"table": "t", "from": "fromc", "to": "toc"})
 	if err != nil {
 		panic(err)
 	}
-	lhm = h
+	lu, err := CreateVindex("lookup_hash_unique", "lookup_hash_unique", map[string]string{"table": "t", "from": "fromc", "to": "toc"})
+	if err != nil {
+		panic(err)
+	}
+	lookuphash = lh
+	lookuphashunique = lu
 }
 
 func TestLookupHashCost(t *testing.T) {
-	if lhm.Cost() != 20 {
-		t.Errorf("Cost(): %d, want 20", lhm.Cost())
+	if lookuphash.Cost() != 20 {
+		t.Errorf("Cost(): %d, want 20", lookuphash.Cost())
+	}
+	if lookuphashunique.Cost() != 10 {
+		t.Errorf("Cost(): %d, want 10", lookuphashunique.Cost())
+	}
+}
+
+func TestLookupHashString(t *testing.T) {
+	if strings.Compare("lookup_hash", lookuphash.String()) != 0 {
+		t.Errorf("String(): %s, want lookup_hash", lookuphash.String())
+	}
+	if strings.Compare("lookup_hash_unique", lookuphashunique.String()) != 0 {
+		t.Errorf("String(): %s, want lookup_hash_unique", lookuphashunique.String())
 	}
 }
 
 func TestLookupHashMap(t *testing.T) {
 	vc := &vcursor{numRows: 2}
-	got, err := lhm.(NonUnique).Map(vc, []interface{}{1, int32(2)})
+	got, err := lookuphash.(NonUnique).Map(vc, []interface{}{1, int32(2)})
 	if err != nil {
 		t.Error(err)
 	}
@@ -92,7 +110,7 @@ func TestLookupHashMap(t *testing.T) {
 
 func TestLookupHashVerify(t *testing.T) {
 	vc := &vcursor{numRows: 1}
-	success, err := lhm.Verify(vc, 1, []byte("\x16k@\xb4J\xbaK\xd6"))
+	success, err := lookuphash.Verify(vc, []interface{}{1}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6")})
 	if err != nil {
 		t.Error(err)
 	}
@@ -103,15 +121,15 @@ func TestLookupHashVerify(t *testing.T) {
 
 func TestLookupHashCreate(t *testing.T) {
 	vc := &vcursor{}
-	err := lhm.(Lookup).Create(vc, 1, []byte("\x16k@\xb4J\xbaK\xd6"))
+	err := lookuphash.(Lookup).Create(vc, []interface{}{1}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6")})
 	if err != nil {
 		t.Error(err)
 	}
 	wantQuery := &querytypes.BoundQuery{
-		Sql: "insert into t(fromc, toc) values(:fromc, :toc)",
+		Sql: "insert into t(fromc,toc) values(:fromc0,:toc0)",
 		BindVariables: map[string]interface{}{
-			"fromc": 1,
-			"toc":   int64(1),
+			"fromc0": 1,
+			"toc0":   int64(1),
 		},
 	}
 	if !reflect.DeepEqual(vc.bq, wantQuery) {
@@ -120,7 +138,7 @@ func TestLookupHashCreate(t *testing.T) {
 }
 
 func TestLookupHashReverse(t *testing.T) {
-	_, ok := lhm.(Reversible)
+	_, ok := lookuphash.(Reversible)
 	if ok {
 		t.Errorf("lhm.(Reversible): true, want false")
 	}
@@ -128,7 +146,7 @@ func TestLookupHashReverse(t *testing.T) {
 
 func TestLookupHashDelete(t *testing.T) {
 	vc := &vcursor{}
-	err := lhm.(Lookup).Delete(vc, []interface{}{1}, []byte("\x16k@\xb4J\xbaK\xd6"))
+	err := lookuphash.(Lookup).Delete(vc, []interface{}{1}, []byte("\x16k@\xb4J\xbaK\xd6"))
 	if err != nil {
 		t.Error(err)
 	}

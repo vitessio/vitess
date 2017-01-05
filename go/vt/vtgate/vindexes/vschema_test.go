@@ -20,10 +20,10 @@ type stFU struct {
 	Params map[string]string
 }
 
-func (v *stFU) String() string                                  { return v.name }
-func (*stFU) Cost() int                                         { return 1 }
-func (*stFU) Verify(VCursor, interface{}, []byte) (bool, error) { return false, nil }
-func (*stFU) Map(VCursor, []interface{}) ([][]byte, error)      { return nil, nil }
+func (v *stFU) String() string                                      { return v.name }
+func (*stFU) Cost() int                                             { return 1 }
+func (*stFU) Verify(VCursor, []interface{}, [][]byte) (bool, error) { return false, nil }
+func (*stFU) Map(VCursor, []interface{}) ([][]byte, error)          { return nil, nil }
 
 func NewSTFU(name string, params map[string]string) (Vindex, error) {
 	return &stFU{name: name, Params: params}, nil
@@ -35,9 +35,9 @@ type stF struct {
 	Params map[string]string
 }
 
-func (v *stF) String() string                                  { return v.name }
-func (*stF) Cost() int                                         { return 0 }
-func (*stF) Verify(VCursor, interface{}, []byte) (bool, error) { return false, nil }
+func (v *stF) String() string                                      { return v.name }
+func (*stF) Cost() int                                             { return 0 }
+func (*stF) Verify(VCursor, []interface{}, [][]byte) (bool, error) { return false, nil }
 
 func NewSTF(name string, params map[string]string) (Vindex, error) {
 	return &stF{name: name, Params: params}, nil
@@ -49,12 +49,12 @@ type stLN struct {
 	Params map[string]string
 }
 
-func (v *stLN) String() string                                  { return v.name }
-func (*stLN) Cost() int                                         { return 0 }
-func (*stLN) Verify(VCursor, interface{}, []byte) (bool, error) { return false, nil }
-func (*stLN) Map(VCursor, []interface{}) ([][][]byte, error)    { return nil, nil }
-func (*stLN) Create(VCursor, interface{}, []byte) error         { return nil }
-func (*stLN) Delete(VCursor, []interface{}, []byte) error       { return nil }
+func (v *stLN) String() string                                      { return v.name }
+func (*stLN) Cost() int                                             { return 0 }
+func (*stLN) Verify(VCursor, []interface{}, [][]byte) (bool, error) { return false, nil }
+func (*stLN) Map(VCursor, []interface{}) ([][][]byte, error)        { return nil, nil }
+func (*stLN) Create(VCursor, []interface{}, [][]byte) error         { return nil }
+func (*stLN) Delete(VCursor, []interface{}, []byte) error           { return nil }
 
 func NewSTLN(name string, params map[string]string) (Vindex, error) {
 	return &stLN{name: name, Params: params}, nil
@@ -66,12 +66,12 @@ type stLU struct {
 	Params map[string]string
 }
 
-func (v *stLU) String() string                                  { return v.name }
-func (*stLU) Cost() int                                         { return 2 }
-func (*stLU) Verify(VCursor, interface{}, []byte) (bool, error) { return false, nil }
-func (*stLU) Map(VCursor, []interface{}) ([][]byte, error)      { return nil, nil }
-func (*stLU) Create(VCursor, interface{}, []byte) error         { return nil }
-func (*stLU) Delete(VCursor, []interface{}, []byte) error       { return nil }
+func (v *stLU) String() string                                      { return v.name }
+func (*stLU) Cost() int                                             { return 2 }
+func (*stLU) Verify(VCursor, []interface{}, [][]byte) (bool, error) { return false, nil }
+func (*stLU) Map(VCursor, []interface{}) ([][]byte, error)          { return nil, nil }
+func (*stLU) Create(VCursor, []interface{}, [][]byte) error         { return nil }
+func (*stLU) Delete(VCursor, []interface{}, []byte) error           { return nil }
 
 func NewSTLU(name string, params map[string]string) (Vindex, error) {
 	return &stLU{name: name, Params: params}, nil

@@ -56,21 +56,27 @@ func (*NumericStaticMap) Cost() int {
 	return 1
 }
 
-// Verify returns true if id and ksid match.
-func (vind *NumericStaticMap) Verify(_ VCursor, id interface{}, ksid []byte) (bool, error) {
-	var keybytes [8]byte
-	num, err := getNumber(id)
-	if err != nil {
-		return false, fmt.Errorf("NumericStaticMap.Verify: %v", err)
+// Verify returns true if ids and ksids match.
+func (vind *NumericStaticMap) Verify(_ VCursor, ids []interface{}, ksids [][]byte) (bool, error) {
+	if len(ids) != len(ksids) {
+		return false, fmt.Errorf("NumericStaticMap.Verify: length of ids %v doesn't match length of ksids %v", len(ids), len(ksids))
 	}
-
-	lookupNum, ok := vind.lookup[uint64(num)]
-	if ok {
-		num = int64(lookupNum)
+	for rowNum := range ids {
+		var keybytes [8]byte
+		num, err := getNumber(ids[rowNum])
+		if err != nil {
+			return false, fmt.Errorf("NumericStaticMap.Verify: %v", err)
+		}
+		lookupNum, ok := vind.lookup[uint64(num)]
+		if ok {
+			num = int64(lookupNum)
+		}
+		binary.BigEndian.PutUint64(keybytes[:], uint64(num))
+		if bytes.Compare(keybytes[:], ksids[rowNum]) != 0 {
+			return false, nil
+		}
 	}
-
-	binary.BigEndian.PutUint64(keybytes[:], uint64(num))
-	return bytes.Compare(keybytes[:], ksid) == 0, nil
+	return true, nil
 }
 
 // Map returns the associated keyspace ids for the given ids.

@@ -1,7 +1,10 @@
 package vindexes
 
 import (
+	"bytes"
 	"fmt"
+	"strconv"
+	"strings"
 )
 
 // lookup implements the functions for the Lookup vindexes.
@@ -13,18 +16,18 @@ type lookup struct {
 	isHashedIndex      bool
 }
 
-func (lkp *lookup) Init(m map[string]string, isHashed bool) {
-	t := m["table"]
-	from := m["from"]
-	to := m["to"]
+func (lkp *lookup) Init(lookupQueryParams map[string]string, isHashed bool) {
+	table := lookupQueryParams["table"]
+	fromCol := lookupQueryParams["from"]
+	toCol := lookupQueryParams["to"]
 
-	lkp.Table = t
-	lkp.From = from
-	lkp.To = to
-	lkp.sel = fmt.Sprintf("select %s from %s where %s = :%s", to, t, from, from)
-	lkp.ver = fmt.Sprintf("select %s from %s where %s = :%s and %s = :%s", from, t, from, from, to, to)
-	lkp.ins = fmt.Sprintf("insert into %s(%s, %s) values(:%s, :%s)", t, from, to, from, to)
-	lkp.del = fmt.Sprintf("delete from %s where %s = :%s and %s = :%s", t, from, from, to, to)
+	lkp.Table = table
+	lkp.From = fromCol
+	lkp.To = toCol
+	lkp.sel = fmt.Sprintf("select %s from %s where %s = :%s", toCol, table, fromCol, fromCol)
+	lkp.ver = fmt.Sprintf("select %s from %s where %s = :%s and %s = :%s", fromCol, table, fromCol, fromCol, toCol, toCol)
+	lkp.ins = fmt.Sprintf("insert into %s(%s, %s) values", table, fromCol, toCol)
+	lkp.del = fmt.Sprintf("delete from %s where %s = :%s and %s = :%s", table, fromCol, fromCol, toCol, toCol)
 	lkp.isHashedIndex = isHashed
 }
 
@@ -87,47 +90,85 @@ func (lkp *lookup) MapNonUniqueLookup(vcursor VCursor, ids []interface{}) ([][][
 	return out, nil
 }
 
-// Verify returns true if id maps to ksid.
-func (lkp *lookup) Verify(vcursor VCursor, id interface{}, ksid []byte) (bool, error) {
-	var val interface{}
+// Verify returns true if ids maps to ksids.
+func (lkp *lookup) Verify(vcursor VCursor, ids []interface{}, ksids [][]byte) (bool, error) {
+	var colBuff bytes.Buffer
 	var err error
-	if lkp.isHashedIndex {
-		val, err = vunhash(ksid)
-		if err != nil {
-			return false, fmt.Errorf("lookup.Verify: %v", err)
-		}
-	} else {
-		val = ksid
+	if len(ids) != len(ksids) {
+		return false, fmt.Errorf("lookup.Verify:length of ids %v doesn't match length of ksids %v", len(ids), len(ksids))
 	}
-	result, err := vcursor.Execute(lkp.ver, map[string]interface{}{
-		lkp.From: id,
-		lkp.To:   val,
-	})
+	val := make([]interface{}, len(ksids))
+	bindVars := make(map[string]interface{}, 2*len(ids))
+	colBuff.WriteString("(")
+	for rowNum, keyspaceID := range ksids {
+		fromStr := lkp.From + strconv.Itoa(rowNum)
+		toStr := lkp.To + strconv.Itoa(rowNum)
+		colBuff.WriteString("(")
+		colBuff.WriteString(lkp.From)
+		colBuff.WriteString("=:")
+		colBuff.WriteString(fromStr)
+		colBuff.WriteString(" and ")
+		colBuff.WriteString(lkp.To)
+		colBuff.WriteString("=:")
+		colBuff.WriteString(toStr)
+		colBuff.WriteString(")or")
+		if lkp.isHashedIndex {
+			val[rowNum], err = vunhash(keyspaceID)
+			if err != nil {
+				return false, fmt.Errorf("lookup.Verify: %v", err)
+			}
+		} else {
+			val[rowNum] = keyspaceID
+		}
+		bindVars[fromStr] = ids[rowNum]
+		bindVars[toStr] = val[rowNum]
+	}
+	lkp.ver = fmt.Sprintf("select %s from %s where %s", lkp.From, lkp.Table, strings.Trim(colBuff.String(), "or")+")")
+	result, err := vcursor.Execute(lkp.ver, bindVars)
 	if err != nil {
 		return false, fmt.Errorf("lookup.Verify: %v", err)
 	}
-	if len(result.Rows) == 0 {
+	if len(result.Rows) != len(ids) {
 		return false, nil
 	}
 	return true, nil
 }
 
-// Create creates an association between id and ksid by inserting a row in the vindex table.
-func (lkp *lookup) Create(vcursor VCursor, id interface{}, ksid []byte) error {
-	var val interface{}
+// Create creates an association between ids and ksids by inserting a row in the vindex table.
+func (lkp *lookup) Create(vcursor VCursor, ids []interface{}, ksids [][]byte) error {
+	var insBuffer bytes.Buffer
 	var err error
-	if lkp.isHashedIndex {
-		val, err = vunhash(ksid)
-		if err != nil {
-			return fmt.Errorf("lookup.Create: %v", err)
-		}
-	} else {
-		val = ksid
+	if len(ids) != len(ksids) {
+		return fmt.Errorf("lookup.Create:length of ids %v doesn't match length of ksids %v", len(ids), len(ksids))
 	}
-	if _, err := vcursor.Execute(lkp.ins, map[string]interface{}{
-		lkp.From: id,
-		lkp.To:   val,
-	}); err != nil {
+	val := make([]interface{}, len(ksids))
+	insBuffer.WriteString("insert into ")
+	insBuffer.WriteString(lkp.Table)
+	insBuffer.WriteString("(")
+	insBuffer.WriteString(lkp.From)
+	insBuffer.WriteString(",")
+	insBuffer.WriteString(lkp.To)
+	insBuffer.WriteString(") values")
+	bindVars := make(map[string]interface{}, 2*len(ids))
+	for rowNum, keyspaceID := range ksids {
+		fromStr := lkp.From + strconv.Itoa(rowNum)
+		toStr := lkp.To + strconv.Itoa(rowNum)
+		insBuffer.WriteString("(:")
+		insBuffer.WriteString(fromStr + ",:" + toStr)
+		insBuffer.WriteString("),")
+		if lkp.isHashedIndex {
+			val[rowNum], err = vunhash(keyspaceID)
+			if err != nil {
+				return fmt.Errorf("lookup.Create: %v", err)
+			}
+		} else {
+			val[rowNum] = keyspaceID
+		}
+		bindVars[fromStr] = ids[rowNum]
+		bindVars[toStr] = val[rowNum]
+	}
+	lkp.ins = strings.Trim(insBuffer.String(), ",")
+	if _, err := vcursor.Execute(lkp.ins, bindVars); err != nil {
 		return fmt.Errorf("lookup.Create: %v", err)
 	}
 	return nil

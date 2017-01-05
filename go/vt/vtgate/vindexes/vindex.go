@@ -37,8 +37,8 @@ type Vindex interface {
 	Cost() int
 
 	// Verify must be implented by all vindexes. It should return
-	// true if the id can be mapped to the keyspace id.
-	Verify(cursor VCursor, id interface{}, ks []byte) (bool, error)
+	// true if the ids can be mapped to the keyspace ids.
+	Verify(cursor VCursor, ids []interface{}, ksids [][]byte) (bool, error)
 }
 
 // Unique defines the interface for a unique vindex.
@@ -65,7 +65,7 @@ func IsUnique(v Vindex) bool {
 // is optional. If present, VTGate can use it to
 // fill column values based on the target keyspace id.
 type Reversible interface {
-	ReverseMap(cursor VCursor, ks []byte) (interface{}, error)
+	ReverseMap(cursor VCursor, ks [][]byte) ([]interface{}, error)
 }
 
 // A Functional vindex is an index that can compute
@@ -86,7 +86,7 @@ type Functional interface {
 // keyspace_id, which must be supplied, can be used
 // to determine the target shard for an insert operation.
 type Lookup interface {
-	Create(VCursor, interface{}, []byte) error
+	Create(VCursor, []interface{}, [][]byte) error
 	Delete(VCursor, []interface{}, []byte) error
 }
 

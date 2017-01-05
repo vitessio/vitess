@@ -18,6 +18,12 @@ func TestUnicodeLooseMD5Cost(t *testing.T) {
 	}
 }
 
+func TestUnicodeLooseMD5String(t *testing.T) {
+	if strings.Compare("utf8ch", charVindex.String()) != 0 {
+		t.Errorf("String(): %s, want utf8ch", charVindex.String())
+	}
+}
+
 func TestUnicodeLooseMD5(t *testing.T) {
 	tcases := []struct {
 		in, out string
@@ -61,13 +67,43 @@ func TestUnicodeLooseMD5(t *testing.T) {
 		if out != tcase.out {
 			t.Errorf("Map(%#v): %#v, want %#v", tcase.in, out, tcase.out)
 		}
-		ok, err := charVindex.Verify(nil, []byte(tcase.in), []byte(tcase.out))
+		ok, err := charVindex.Verify(nil, []interface{}{tcase.in}, [][]byte{[]byte(tcase.out)})
 		if err != nil {
 			t.Error(err)
 		}
 		if !ok {
 			t.Errorf("Verify(%#v): false, want true", tcase.in)
 		}
+	}
+
+	//Negative test case
+	_, err := charVindex.(Unique).Map(nil, []interface{}{1})
+	want := "UnicodeLooseMD5.Map: unexpected data type for getBytes: int"
+	if err.Error() != want {
+		t.Error(err)
+	}
+
+}
+
+func TestUnicodeLooseMD5Neg(t *testing.T) {
+	_, err := charVindex.Verify(nil, []interface{}{[]byte("test1"), []byte("test2")}, [][]byte{[]byte("test1")})
+	want := "UnicodeLooseMD5.Verify: length of ids 2 doesn't match length of ksids 1"
+	if err.Error() != want {
+		t.Error(err.Error())
+	}
+
+	ok, err := charVindex.Verify(nil, []interface{}{[]byte("test2")}, [][]byte{[]byte("test1")})
+	if err != nil {
+		t.Error(err)
+	}
+	if ok {
+		t.Errorf("Verify(%#v): true, want false", []byte("test2"))
+	}
+
+	_, err = charVindex.Verify(nil, []interface{}{1}, [][]byte{[]byte("test1")})
+	want = "UnicodeLooseMD5.Verify: unexpected data type for getBytes: int"
+	if err.Error() != want {
+		t.Error(err)
 	}
 }
 
