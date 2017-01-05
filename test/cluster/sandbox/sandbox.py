@@ -1,10 +1,12 @@
 #!/usr/bin/env python
-"""An open source sandbox.
+"""A cluster sandbox encompassing an application along with a cloud environment.
 
-Users should create a new python class inheriting from the Sandbox class.
-Then, the user can add sandlets to the sandbox's sandlets attribute. Users
-can specify dependencies between sandlets.
+Sandboxes consist of sandlets, which are abstractions used to divide an
+application into individual pieces. Sandlets can be dependent on other sandlets.
+In addition, they can be started or stopped individually from the command line.
 
+Users must create a new python class inheriting from this Sandbox class. This
+combined with the yaml configuration defines the sandbox.
 """
 
 import argparse
@@ -22,14 +24,27 @@ import sandbox_utils
 log_dir = None
 
 
-def _generate_log_file(filename):
+def _create_log_file(filename):
+  """Create a log file.
+
+  This function creates a timestamped log file, and updates a non-timestamped
+  symlink in the log directory.
+
+  Example: For a log called init.INFO, this function will create a log file
+           called init.INFO.20170101-120000.100000 and update a symlink
+           init.INFO to point to it.
+
+  Args:
+    filename: The base name of the log file (string).
+
+  Returns:
+    The opened file handle.
+  """
   timestamp = datetime.datetime.now().strftime('%Y%m%d-%H%M%S.%f')
   symlink_name = os.path.join(log_dir, filename)
   timestamped_name = '%s.%s' % (symlink_name, timestamp)
-  try:
+  if os.path.islink(symlink_name):
     os.remove(symlink_name)
-  except OSError:
-    pass
   os.symlink(timestamped_name, symlink_name)
   return open(timestamped_name, 'w')
 
@@ -47,10 +62,10 @@ def _generate_random_name():
 def parse_config(
     config, sandbox_name=None, cluster_name=None, cluster_type='gke'):
   random_name = _generate_random_name()
-  ret_val = re.sub('{{sandbox_name}}', sandbox_name or random_name, config)
-  ret_val = re.sub('{{cluster_name}}', cluster_name or random_name, ret_val)
-  ret_val = re.sub('{{cluster_type}}', cluster_type, ret_val)
-  return ret_val
+  config = re.sub('{{sandbox_name}}', sandbox_name or random_name, config)
+  config = re.sub('{{cluster_name}}', cluster_name or random_name, ret_val)
+  config = re.sub('{{cluster_type}}', cluster_type, ret_val)
+  return config
 
 
 class SandboxError(Exception):
@@ -64,6 +79,22 @@ class Sandbox(object):
       'gke': gke,
   }
 
+  def __init__(self, sandbox_options):
+    self.sandbox_options = sandbox_options
+    self.name = sandbox_options.get('name')
+    self.cluster_type = sandbox_options.get('cluster_type')
+    if self.cluster_type not in self._cluster_envs.keys():
+      raise SandboxError('Invalid cluster type %s' % self.cluster_type)
+    cluster_config = [c for c in sandbox_options.get('clusters')
+                      if c['type'] == self.cluster_type]
+    if not cluster_config:
+      raise SandboxError(
+          'Cluster config %s not listed in sandbox config' % cluster_config)
+    self.cluster_config = cluster_config[0]
+    self.cluster_env = self._cluster_envs[self.cluster_type]
+    self.cluster = self.cluster_env.Cluster(self.cluster_config)
+    self.sandlets = []
+
   def _get_sandlets(self, sandlets):
     """Returns sandlet objects based on input sandlet string names."""
     if not sandlets:
@@ -76,41 +107,14 @@ class Sandbox(object):
       retval.append(sandlet_obj)
     return retval
 
-  def __init__(self, sandbox_options):
-    self.sandbox_options = sandbox_options
-    self.name = sandbox_options.get('name')
-    self.cluster_type = sandbox_options.get('cluster_type')
-    if self.cluster_type not in self._cluster_envs.keys():
-      logging.fatal('Invalid cluster type %s', self.cluster_type)
-    cluster_config = [c for c in sandbox_options.get('clusters')
-                      if c['type'] == self.cluster_type]
-    if not cluster_config:
-      logging.fatal('Cluster config %s not listed in sandbox config',
-                    cluster_config)
-    self.cluster_config = cluster_config[0]
-    self.cluster_env = self._cluster_envs[self.cluster_type]
-    self.cluster = self.cluster_env.Cluster(self.cluster_config)
-    self.sandlets = []
-
   def set_log_dir(self, log_dir_in=None):
     global log_dir
     if log_dir_in:
       log_dir = log_dir_in
     else:
-      log_dir = os.path.join(os.getenv('HOME', '/tmp'), 'sandbox_logs')
+      log_dir = '/tmp/sandbox_logs'
     if not os.path.exists(log_dir):
       os.makedirs(log_dir)
-
-  def save(self, filename):
-    output = self.__dict__
-    for x in range(len(output['sandlets'])):
-      sandlet = output['sandlets'][x].__dict__
-      output['sandlets'][x] = sandlet
-      for y in range(len(sandlet['components'])):
-        sandlet['components'][y] = sandlet['components'][y].__dict__
-
-    with open(filename, 'w') as f:
-      f.write(yaml.dump(output, default_flow_style=False))
 
   def start(self, sandlets=None):
     self.start_cluster()
@@ -122,12 +126,12 @@ class Sandbox(object):
 
   def start_cluster(self):
     if not self.cluster_type:
-      return
+      raise SandboxError('Cannot start cluster, no cluster_type defined')
     self.cluster.start()
 
   def stop_cluster(self):
     if not self.cluster:
-      return
+      raise SandboxError('Cannot stop cluster, no cluster_type defined')
     self.cluster.stop()
 
   def _execute_sandlets(self, start=True, sandlets=None):
@@ -135,8 +139,9 @@ class Sandbox(object):
     sandlet_graph = sandbox_utils.create_dependency_graph(
         sandlets_to_execute, reverse=(not start))
     while sandlet_graph:
-      ready_sandlets = [
-          (k, v[1]) for (k, v) in sandlet_graph.items() if not v[0]]
+      # Get a list of all sandlets with no current dependencies
+      ready_sandlets = [(k, v['object']) for (k, v) in sandlet_graph.items()
+                        if not v['dependencies']]
       for sandlet_name, sandlet in ready_sandlets:
         if start:
           sandlet.start()
@@ -198,8 +203,8 @@ class Subprocess(SandletComponent):
            [('--%s' % k, str(v)) for k, v in self.script_kwargs.items()]
            for item in sublist])
       logging.info('Executing subprocess script %s', self.script)
-      infofile = _generate_log_file('%s.INFO' % self.name)
-      errorfile = _generate_log_file('%s.ERROR' % self.name)
+      infofile = _create_log_file('%s.INFO' % self.name)
+      errorfile = _create_log_file('%s.ERROR' % self.name)
       subprocess.call(['./%s' % self.script] + script_args, stdout=infofile,
                       stderr=errorfile)
       logging.info('Done')
@@ -214,50 +219,58 @@ class Subprocess(SandletComponent):
 
 
 def sandbox_main(sandbox_cls):
-  """Main."""
+  """Main.
+
+  Args:
+    sandbox_cls: A derived sandbox class. This will be instantiated in this
+                 main function.
+  """
   logging.getLogger().setLevel(logging.INFO)
   parser = argparse.ArgumentParser(description='Create a sandbox')
-  parser.add_argument('-e', metavar='environment', help='Cluster environment',
-                      default='gke')
-  parser.add_argument('-c', metavar='config_file', help='Sandbox config file')
-  parser.add_argument('-n', metavar='sandbox_name', help='Sandbox name')
-  parser.add_argument('-k', metavar='cluster_name', help='Cluster name')
-  parser.add_argument('-l', metavar='log_dir', help='Directory for logs',
-                      default=None)
-  parser.add_argument('-s', metavar='sandlets', help='Sandlets')
   parser.add_argument(
-      '-a', metavar='action',
-      choices=['Start', 'StartCluster', 'StartApp', 'StopApp', 'Stop',
-               'StopCluster', 'PrintSandlets', 'PrintBanner'])
+      '-e', '--environment', help='Cluster environment', default='gke')
+  parser.add_argument('-c', '--config_file', help='Sandbox config file')
+  parser.add_argument('-n', '--sandbox_name', help='Sandbox name')
+  parser.add_argument('-k', '--cluster_name', help='Cluster name')
+  parser.add_argument(
+      '-l', '--log_dir', help='Directory for logs', default=None)
+  parser.add_argument('-s', '--sandlets', help='Sandlets')
+  available_actions = ['Start', 'StartCluster', 'StartApp', 'StopApp', 'Stop',
+                       'StopCluster', 'PrintSandlets', 'PrintBanner']
+  parser.add_argument('-a', '--action', choices=available_actions)
   sandbox_args = parser.parse_args()
-  sandlets = [] if not sandbox_args.s else sandbox_args.s.split(',')
+  sandlets = []
+  if sandbox_args.sandlets:
+    sandlets = sandbox_args.sandlets.split(',')
 
-  with open(sandbox_args.c, 'r') as yaml_file:
+  with open(sandbox_args.config_file, 'r') as yaml_file:
     yaml_config = yaml_file.read()
   sandbox_config = yaml.load(
-      parse_config(yaml_config, sandbox_args.n, sandbox_args.k,
-                   sandbox_args.e))['sandbox']
+      parse_config(
+          yaml_config, sandbox_args.sandbox_name, sandbox_args.cluster_name,
+          sandbox_args.environment))['sandbox']
   sandbox = sandbox_cls(sandbox_config)
-  sandbox.set_log_dir(sandbox_args.l)
+  sandbox.set_log_dir(sandbox_args.log_dir)
   sandbox.generate_from_config()
 
-  if sandbox_args.a == 'Start':
+  if sandbox_args.action == 'Start':
     sandbox.start(sandlets)
     sandbox.print_banner()
-  elif sandbox_args.a == 'StartCluster':
+  elif sandbox_args.action == 'StartCluster':
     sandbox.start_cluster()
-  elif sandbox_args.a == 'StopCluster':
+  elif sandbox_args.action == 'StopCluster':
     sandbox.stop_cluster()
-  elif sandbox_args.a == 'StartApp':
+  elif sandbox_args.action == 'StartApp':
     sandbox.start_sandlets(sandlets)
     sandbox.print_banner()
-  elif sandbox_args.a == 'StopApp':
+  elif sandbox_args.action == 'StopApp':
     sandbox.stop_sandlets(sandlets)
-  elif sandbox_args.a == 'Stop':
+  elif sandbox_args.action == 'Stop':
     sandbox.stop(sandlets)
-  elif sandbox_args.a == 'PrintSandlets':
+  elif sandbox_args.action == 'PrintSandlets':
     logging.info('Sandlets: %s', ', '.join(s.name for s in sandbox.sandlets))
-  elif sandbox_args.a == 'PrintBanner':
+  elif sandbox_args.action == 'PrintBanner':
     sandbox.print_banner()
   else:
-    logging.info('No action selected')
+    logging.info('No available action selected. Choices are: %s',
+                 ', '.join(available_actions))

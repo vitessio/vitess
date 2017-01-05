@@ -43,7 +43,7 @@ class HelmComponent(sandbox.SandletComponent):
           time.sleep(5)
           continue
       else:
-        logging.info('Timed out waiting for helm to become ready')
+        raise sandbox.SandboxError('Timed out waiting for helm to become ready')
       logging.info('Installing helm')
       subprocess.call(
           ['helm', 'install', os.path.join(os.environ['VTTOP'], 'helm/vitess'),
@@ -101,7 +101,7 @@ class KubernetesResource(sandbox.SandletComponent):
 
 
 def get_forwarded_ip(service, namespace='default', max_wait_s=60):
-  """Returns an external ip address exposed by a service."""
+  """Returns an external IP address exposed by a service."""
   start_time = time.time()
   while time.time() - start_time < max_wait_s:
     try:

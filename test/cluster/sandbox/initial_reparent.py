@@ -21,9 +21,6 @@ def is_master(tablet, namespace):
 
 def initial_reparent(keyspace, master_cell, num_shards, namespace):
   """Performs the first reparent."""
-  logging.info('Rebuilding keyspace graph for %s', keyspace)
-  vtctl_sandbox.execute_vtctl_command(
-      ['RebuildKeyspaceGraph', keyspace], namespace=namespace)
   successfully_reparented = []
   master_tablets = {}
   while len(master_tablets) < num_shards:

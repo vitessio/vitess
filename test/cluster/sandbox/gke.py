@@ -43,8 +43,9 @@ class Port(sandlet.Sandlet):
     super(Port, self).__init__(name)
 
   def start(self):
-    # Check for existence first
+    # Check for existence first.
     with open(os.devnull, 'w') as dn:
+      # Suppress output for the existence check to prevent unnecessary output.
       firewall_rules = subprocess.check_output(
           ['gcloud', 'compute', 'firewall-rules', 'list', self.name],
           stderr=dn)
@@ -52,20 +53,12 @@ class Port(sandlet.Sandlet):
         logging.info('Firewall rule %s already exists, skipping creation.',
                      self.name)
         return
-      subprocess.call(['gcloud', 'compute', 'firewall-rules', 'create',
-                       self.name, '--allow', 'tcp:%s' % str(self.port)],
-                      stdout=dn)
+    subprocess.call(['gcloud', 'compute', 'firewall-rules', 'create',
+                     self.name, '--allow', 'tcp:%s' % str(self.port)])
 
   def stop(self):
     try:
       subprocess.check_call(
           ['gcloud', 'compute', 'firewall-rules', 'delete', self.name, '-q'])
     except subprocess.CalledProcessError:
-      logging.info('Failed to delete firewall rule %s', self.name)
-
-  def is_up(self):
-    return True
-
-  def is_down(self):
-    return True
-
+      logging.warn('Failed to delete firewall rule %s', self.name)

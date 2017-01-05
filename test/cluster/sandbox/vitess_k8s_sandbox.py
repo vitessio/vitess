@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""A Vitess sandbox."""
+"""A Vitess sandbox with kubernetes."""
 
 import collections
 import copy
@@ -11,16 +11,15 @@ import yaml
 from vttest import sharding_utils
 
 import sandbox
+import sandbox_utils
 import sandlet
 
-template_dir = '%s/examples/kubernetes' % os.environ['VTTOP']
 
-
-class VitessSandbox(sandbox.Sandbox):
+class VitessK8sSandbox(sandbox.Sandbox):
   """Sandbox implementation for Vitess."""
 
   def __init__(self, sandbox_options):
-    super(VitessSandbox, self).__init__(sandbox_options)
+    super(VitessK8sSandbox, self).__init__(sandbox_options)
 
   def generate_firewall_sandlet(self):
     """Generates sandlet for firewall rules."""
@@ -38,10 +37,14 @@ class VitessSandbox(sandbox.Sandbox):
     self.sandlets.append(firewall_sandlet)
 
   def generate_helm_sandlet(self):
-    """Creates a helm sandlet."""
+    """Creates a helm sandlet.
+
+    This sandlet generates a dynamic values yaml file to be used with the Vitess
+    helm chart in order to encompass most of the Vitess stack.
+    """
     yaml_values = dict(
         vtctld=dict(
-            serviceType='LoadBalancer',
+            serviceType='LoadBalancer',  # Allows port forwarding.
             image=self.app_options.vtctld_image,
             extraFlags={'enable_queries': True},
         ),
@@ -61,7 +64,7 @@ class VitessSandbox(sandbox.Sandbox):
             ),
         ),
         vtgate=dict(
-            serviceType='LoadBalancer',
+            serviceType='LoadBalancer',  # Allows port forwarding.
             image=self.app_options.vtgate_image,
             resources=dict(
                 limits=dict(
@@ -94,10 +97,7 @@ class VitessSandbox(sandbox.Sandbox):
 
       for shard_index, shard_name in enumerate(
           sharding_utils.get_shard_names(ks['shard_count'])):
-        if shard_name.startswith('-'):
-          shard_name = 'x%s' % shard_name[1:]
-        if shard_name.endswith('-'):
-          shard_name = '%sx' % shard_name[:-1]
+        shard_name = sandbox_utils.fix_shard_name(shard_name)
         shard = dict(
             name=shard_name,
             tablets=[dict(
@@ -132,29 +132,29 @@ class VitessSandbox(sandbox.Sandbox):
       if index == 0:
         yaml_values['topology']['cells'][-1]['vtctld'] = dict(replicas=1)
 
-    yaml_file = tempfile.NamedTemporaryFile(delete=False)
-    with open(yaml_file.name, 'w') as f:
+    with tempfile.NamedTemporaryFile(delete=False) as f:
       f.write(yaml.dump(yaml_values, default_flow_style=False))
+      yaml_filename = f.name
 
     helm_sandlet = sandlet.Sandlet('helm')
     helm_sandlet.components = [kubernetes_components.HelmComponent(
-        'helm', self.name, yaml_file.name)]
+        'helm', self.name, yaml_filename)]
     for i, keyspace in enumerate(self.app_options.keyspaces):
       name = keyspace['name']
       shard_count = keyspace['shard_count']
       wait_for_mysql_subprocess = sandbox.Subprocess(
-          'wait_for_mysql_%s' % name, self.name, 'wait_for_mysql.py',
+          'wait_for_mysql_subprocess.%s' % name, self.name, 'wait_for_mysql.py',
           namespace=self.name, shard_count=shard_count,
           cells=':'.join(self.app_options.cells), keyspace=name,
           tablet_count=(keyspace['rdonly_count'] + keyspace['replica_count']),
           starting_uid=i*1000000)
       wait_for_mysql_subprocess.dependencies = ['helm']
       initial_reparent_subprocess = sandbox.Subprocess(
-          'initial_reparent_%s' % name, self.name, 'initial_reparent.py',
-          namespace=self.name, keyspace=name, shard_count=shard_count,
-          master_cell=self.app_options.cells[0])
+          'initial_reparent_subprocess.%s' % name, self.name,
+          'initial_reparent.py', namespace=self.name, keyspace=name,
+          shard_count=shard_count, master_cell=self.app_options.cells[0])
       initial_reparent_subprocess.dependencies = [
-          'wait_for_mysql_%s' % name]
+          'wait_for_mysql_subprocess.%s' % name]
       helm_sandlet.components.append(wait_for_mysql_subprocess)
       helm_sandlet.components.append(initial_reparent_subprocess)
     self.sandlets.append(helm_sandlet)
@@ -193,4 +193,4 @@ class VitessSandbox(sandbox.Sandbox):
 
 
 if __name__ == '__main__':
-  sandbox.sandbox_main(VitessSandbox)
+  sandbox.sandbox_main(VitessK8sSandbox)
