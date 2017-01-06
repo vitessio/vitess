@@ -7,7 +7,9 @@ package tabletserver
 import (
 	"fmt"
 	"sync"
+	"time"
 
+	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/schema"
 )
 
@@ -20,27 +22,29 @@ type MessageReceiver interface {
 // MessagerEngine is the engine for handling messages.
 type MessagerEngine struct {
 	isOpen bool
-	wg     sync.WaitGroup
 
-	qe *QueryEngine
+	qe       *QueryEngine
+	connpool *ConnPool
 
 	mu       sync.Mutex
 	managers map[string]*MessageManager
 }
 
 // NewMessagerEngine creates a new MessagerEngine.
-func NewMessagerEngine(qe *QueryEngine) *MessagerEngine {
+func NewMessagerEngine(qe *QueryEngine, connpool *ConnPool) *MessagerEngine {
 	return &MessagerEngine{
 		qe:       qe,
+		connpool: connpool,
 		managers: make(map[string]*MessageManager),
 	}
 }
 
 // Open starts the MessagerEngine service.
-func (me *MessagerEngine) Open() error {
+func (me *MessagerEngine) Open(dbconfigs dbconfigs.DBConfigs) error {
 	if me.isOpen {
 		return nil
 	}
+	me.connpool.Open(&dbconfigs.App, &dbconfigs.Dba)
 	me.qe.schemaInfo.RegisterNotifier("messages", me.schemaChanged)
 	me.schemaChanged(me.qe.schemaInfo.GetSchema())
 	me.isOpen = true
@@ -53,8 +57,11 @@ func (me *MessagerEngine) Close() {
 		return
 	}
 	me.isOpen = false
-	me.wg.Wait()
 	me.qe.schemaInfo.UnregisterNotifier("messages")
+	for _, mm := range me.managers {
+		mm.Close()
+	}
+	me.connpool.Close()
 }
 
 // Subscribe subscribes the receiver against the message table.
@@ -88,7 +95,8 @@ func (me *MessagerEngine) schemaChanged(tables map[string]*schema.Table) {
 		if me.managers[name] != nil {
 			continue
 		}
-		mm := NewMessageManager(name)
+		// TODO(sougou): hardcoded values.
+		mm := NewMessageManager(name, 10000, 30*time.Second, me.connpool)
 		me.managers[name] = mm
 		mm.Open()
 	}

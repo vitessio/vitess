@@ -6,29 +6,18 @@ package tabletserver
 
 import (
 	"container/heap"
-	"errors"
 	"sync"
 
 	"github.com/youtube/vitess/go/sqltypes"
-)
-
-var (
-	// ErrClosed is returned if queue is closed
-	ErrClosed = errors.New("closed")
-	// ErrQueueFull is returned if the queue is full.
-	ErrQueueFull = errors.New("queue is full")
-	// ErrDupKey is returned if a messager row of the same key
-	// is already in the queue.
-	ErrDupKey = errors.New("duplicate key")
 )
 
 //_______________________________________________
 
 // MessageRow represents a message row.
 type MessageRow struct {
-	ID       sqltypes.Value
 	TimeNext int64
 	Epoch    int64
+	ID       sqltypes.Value
 	Message  sqltypes.Value
 
 	// id is the string representation of id
@@ -68,63 +57,43 @@ func (mh *messageHeap) Pop() interface{} {
 
 // MessagerCache is the cache for the messager.
 type MessagerCache struct {
-	maxSendItems int
-
 	mu        sync.Mutex
-	cond      sync.Cond
-	isOpen    bool
+	size      int
 	sendQueue messageHeap
 	ids       map[string]bool
 }
 
 // NewMessagerCache creates a new MessagerCache.
-func NewMessagerCache(maxSendItems int) *MessagerCache {
+func NewMessagerCache(size int) *MessagerCache {
 	mc := &MessagerCache{
-		maxSendItems: maxSendItems,
-		ids:          make(map[string]bool),
+		size: size,
+		ids:  make(map[string]bool),
 	}
-	mc.cond.L = &mc.mu
 	return mc
 }
 
-// Open starts the cache.
-func (mc *MessagerCache) Open() {
+// Clear clears the cache.
+func (mc *MessagerCache) Clear() {
 	mc.mu.Lock()
 	defer mc.mu.Unlock()
-	mc.isOpen = true
-}
-
-// Close closes the cache.
-func (mc *MessagerCache) Close() {
-	mc.mu.Lock()
-	defer mc.mu.Unlock()
-	if !mc.isOpen {
-		return
-	}
-	mc.isOpen = false
 	mc.sendQueue = nil
 	mc.ids = make(map[string]bool)
-	mc.cond.Broadcast()
 }
 
 // Add adds a MessageRow to the cache. It returns
-// ErrClosed, ErrQueuFull or ErrDupKey on failure.
-func (mc *MessagerCache) Add(mr *MessageRow) error {
+// false if the cache is full.
+func (mc *MessagerCache) Add(mr *MessageRow) bool {
 	mc.mu.Lock()
 	defer mc.mu.Unlock()
-	if !mc.isOpen {
-		return ErrClosed
-	}
-	if len(mc.sendQueue) >= mc.maxSendItems {
-		return ErrQueueFull
+	if len(mc.sendQueue) >= mc.size {
+		return false
 	}
 	if mc.ids[mr.id] {
-		return ErrDupKey
+		return true
 	}
 	heap.Push(&mc.sendQueue, mr)
 	mc.ids[mr.id] = true
-	mc.cond.Signal()
-	return nil
+	return true
 }
 
 // Pop removes the next MessageRow. Once the
@@ -137,15 +106,10 @@ func (mc *MessagerCache) Add(mr *MessageRow) error {
 func (mc *MessagerCache) Pop() *MessageRow {
 	mc.mu.Lock()
 	defer mc.mu.Unlock()
-	for {
-		if !mc.isOpen {
-			return nil
-		}
-		if len(mc.sendQueue) != 0 {
-			return heap.Pop(&mc.sendQueue).(*MessageRow)
-		}
-		mc.cond.Wait()
+	if len(mc.sendQueue) == 0 {
+		return nil
 	}
+	return heap.Pop(&mc.sendQueue).(*MessageRow)
 }
 
 // Discard forgets the specified id.
@@ -153,4 +117,11 @@ func (mc *MessagerCache) Discard(id string) {
 	mc.mu.Lock()
 	defer mc.mu.Unlock()
 	delete(mc.ids, id)
+}
+
+// Size returns the max size of MessagerCache.
+func (mc *MessagerCache) Size() int {
+	mc.mu.Lock()
+	defer mc.mu.Unlock()
+	return mc.size
 }

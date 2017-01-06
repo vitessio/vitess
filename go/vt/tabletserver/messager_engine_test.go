@@ -7,6 +7,7 @@ package tabletserver
 import (
 	"reflect"
 	"testing"
+	"time"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -27,14 +28,14 @@ func TestMessagerEngineState(t *testing.T) {
 	}
 	defer tsv.StopService()
 
-	me := NewMessagerEngine(tsv.qe)
-	if err := me.Open(); err != nil {
+	me := NewMessagerEngine(tsv.qe, newMEConnPool(config, tsv))
+	if err := me.Open(dbconfigs); err != nil {
 		t.Fatal(err)
 	}
 	if l := len(tsv.qe.schemaInfo.notifiers); l != 1 {
 		t.Errorf("len(notifiers): %d, want 1", l)
 	}
-	if err := me.Open(); err != nil {
+	if err := me.Open(dbconfigs); err != nil {
 		t.Fatal(err)
 	}
 	if l := len(tsv.qe.schemaInfo.notifiers); l != 1 {
@@ -66,8 +67,8 @@ func TestMessagerEngineSchemaChanged(t *testing.T) {
 	}
 	defer tsv.StopService()
 
-	me := NewMessagerEngine(tsv.qe)
-	if err := me.Open(); err != nil {
+	me := NewMessagerEngine(tsv.qe, newMEConnPool(config, tsv))
+	if err := me.Open(dbconfigs); err != nil {
 		t.Fatal(err)
 	}
 	tables := map[string]*schema.Table{
@@ -143,8 +144,8 @@ func TestSubscribe(t *testing.T) {
 	}
 	defer tsv.StopService()
 
-	me := NewMessagerEngine(tsv.qe)
-	if err := me.Open(); err != nil {
+	me := NewMessagerEngine(tsv.qe, newMEConnPool(config, tsv))
+	if err := me.Open(dbconfigs); err != nil {
 		t.Fatal(err)
 	}
 	tables := map[string]*schema.Table{
@@ -156,8 +157,8 @@ func TestSubscribe(t *testing.T) {
 		},
 	}
 	me.schemaChanged(tables)
-	r1 := newTestReceiver()
-	r2 := newTestReceiver()
+	r1 := newTestReceiver(1)
+	r2 := newTestReceiver(1)
 	// Each receiver is subscribed to different managers.
 	me.Subscribe("t1", r1)
 	me.Subscribe("t2", r2)
@@ -167,15 +168,15 @@ func TestSubscribe(t *testing.T) {
 	row2 := &MessageRow{
 		id: "2",
 	}
-	me.managers["t1"].cache.Add(row1)
-	me.managers["t2"].cache.Add(row2)
+	me.managers["t1"].Add(row1)
+	me.managers["t2"].Add(row2)
 	<-r1.ch
 	<-r2.ch
 	// One receiver subscribed to multiple managers.
 	me.Unsubscribe(r1)
 	me.Subscribe("t1", r2)
-	me.managers["t2"].cache.Add(row1)
-	me.managers["t2"].cache.Add(row2)
+	me.managers["t2"].Add(row1)
+	me.managers["t2"].Add(row2)
 	<-r2.ch
 	<-r2.ch
 
@@ -185,4 +186,15 @@ func TestSubscribe(t *testing.T) {
 	if err == nil || err.Error() != want {
 		t.Errorf("Subscribe: %v, want %s", err, want)
 	}
+}
+
+func newMEConnPool(config Config, tsv *TabletServer) *ConnPool {
+	return NewConnPool(
+		config.PoolNamePrefix+"MesasgeConnPool",
+		20,
+		time.Duration(config.IdleTimeout*1e9),
+		config.EnablePublishStats,
+		tsv.queryServiceStats,
+		tsv,
+	)
 }
