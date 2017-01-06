@@ -239,6 +239,10 @@ message Field {
 
   // vitess-defined type. Conversion function is in sqltypes package.
   Type type = 2;
+
+  // remaining fields from mysql C API
+  // these fields are only populated when ExecuteOptions.included_fields
+  // is set to IncludedFields.ALL
   string table = 3;
   string org_table = 4;
   string database = 5;

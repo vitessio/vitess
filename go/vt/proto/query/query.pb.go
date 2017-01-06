@@ -605,7 +605,10 @@ type Field struct {
 	// name of the field as returned by mysql C API
 	Name string `protobuf:"bytes,1,opt,name=name" json:"name,omitempty"`
 	// vitess-defined type. Conversion function is in sqltypes package.
-	Type         Type   `protobuf:"varint,2,opt,name=type,enum=query.Type" json:"type,omitempty"`
+	Type Type `protobuf:"varint,2,opt,name=type,enum=query.Type" json:"type,omitempty"`
+	// remaining fields from mysql C API
+	// these fields are only populated when ExecuteOptions.included_fields
+	// is set to IncludedFields.ALL
 	Table        string `protobuf:"bytes,3,opt,name=table" json:"table,omitempty"`
 	OrgTable     string `protobuf:"bytes,4,opt,name=org_table,json=orgTable" json:"org_table,omitempty"`
 	Database     string `protobuf:"bytes,5,opt,name=database" json:"database,omitempty"`
