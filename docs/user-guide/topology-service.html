@@ -285,11 +285,11 @@ architecture. This service is exposed to all Vitess processes, and is used to
 store small pieces of configuration data about the Vitess cluster, and provide
 cluster-wide locks. It also supports watches, which we will use soon.</p>
 
-<p>Concretely, the Topology Service features are implemented by a
-<a href="http://en.wikipedia.org/wiki/Distributed_lock_manager">Lock Server</a>, referred
+<p>Concretely, the Topology Service features are implemented by
+a <a href="http://en.wikipedia.org/wiki/Distributed_lock_manager">Lock Server</a>, referred
 to as Topology Server in the rest of this document. We use a plug-in
-implementation and we support multiple Lock Servers (Zookeeper, etcd, …) as
-backends for the service.</p>
+implementation and we support multiple Lock Servers (Zookeeper, etcd, Consul, …)
+as backends for the service.</p>
 
 <h2 id="requirements-and-usage">Requirements and Usage</h2>
 
@@ -492,9 +492,9 @@ and we also have a set of unit tests for it in <code class="prettyprint">go/vt/t
 <p>This part describes the two implementations we have, and their specific
 behavior.</p>
 
-<p>If starting from scratch, please use the <code class="prettyprint">zk2</code> or the <code class="prettyprint">etcd2</code> implementations,
-as we are deprecating the old <code class="prettyprint">zookeeper</code> and <code class="prettyprint">etcd</code> implementations. See the
-migration section below if you want to migrate.</p>
+<p>If starting from scratch, please use the <code class="prettyprint">zk2</code>, <code class="prettyprint">etcd2</code> or <code class="prettyprint">consul</code>
+implementations, as we are deprecating the old <code class="prettyprint">zookeeper</code> and <code class="prettyprint">etcd</code>
+implementations. See the migration section below if you want to migrate.</p>
 
 <h3 id="zookeeper-zk2-implementation-new-version-of-zookeeper">Zookeeper <code class="prettyprint">zk2</code> Implementation (new version of <code class="prettyprint">zookeeper</code>)</h3>
 
@@ -544,20 +544,20 @@ the same server address, and very importantly a <em>different</em> root director
 <p><em>Global Cell</em>:</p>
 
 <ul>
-<li>Election path: <code class="prettyprint">/elections/&lt;name&gt;</code></li>
-<li>CellInfo path: <code class="prettyprint">/cells/&lt;cell name&gt;/CellInfo</code></li>
-<li>Keyspace:<code class="prettyprint">/keyspaces/&lt;keyspace&gt;/Keyspace</code></li>
-<li>Shard: <code class="prettyprint">/keyspaces/&lt;keyspace&gt;/shards/&lt;shard&gt;/Shard</code></li>
-<li>VSchema: <code class="prettyprint">/keyspaces/&lt;keyspace&gt;/VSchema</code></li>
+<li>Election path: <code class="prettyprint">elections/&lt;name&gt;</code></li>
+<li>CellInfo path: <code class="prettyprint">cells/&lt;cell name&gt;/CellInfo</code></li>
+<li>Keyspace: <code class="prettyprint">keyspaces/&lt;keyspace&gt;/Keyspace</code></li>
+<li>Shard: <code class="prettyprint">keyspaces/&lt;keyspace&gt;/shards/&lt;shard&gt;/Shard</code></li>
+<li>VSchema: <code class="prettyprint">keyspaces/&lt;keyspace&gt;/VSchema</code></li>
 </ul>
 
 <p><em>Local Cell</em>:</p>
 
 <ul>
-<li>Tablet: <code class="prettyprint">/tablets/&lt;cell&gt;-&lt;uid&gt;/Tablet</code></li>
-<li>Replication Graph: <code class="prettyprint">/keyspaces/&lt;keyspace&gt;/shards/&lt;shard&gt;/ShardReplication</code></li>
-<li>SrvKeyspace: <code class="prettyprint">/keyspaces/&lt;keyspace&gt;/SrvKeyspace</code></li>
-<li>SrvVSchema: <code class="prettyprint">/SvrVSchema</code></li>
+<li>Tablet: <code class="prettyprint">tablets/&lt;cell&gt;-&lt;uid&gt;/Tablet</code></li>
+<li>Replication Graph: <code class="prettyprint">keyspaces/&lt;keyspace&gt;/shards/&lt;shard&gt;/ShardReplication</code></li>
+<li>SrvKeyspace: <code class="prettyprint">keyspaces/&lt;keyspace&gt;/SrvKeyspace</code></li>
+<li>SrvVSchema: <code class="prettyprint">SvrVSchema</code></li>
 </ul>
 
 <p>For locks, we create a subdirectory called <code class="prettyprint">locks</code> under either the keyspace
@@ -677,33 +677,32 @@ the same server address and, very importantly, a <em>different</em> root directo
 <p><em>Global Cell</em>:</p>
 
 <ul>
-<li>Election path: <code class="prettyprint">/elections/&lt;name&gt;</code></li>
-<li>CellInfo path: <code class="prettyprint">/cells/&lt;cell name&gt;/CellInfo</code></li>
-<li>Keyspace:<code class="prettyprint">/keyspaces/&lt;keyspace&gt;/Keyspace</code></li>
-<li>Shard: <code class="prettyprint">/keyspaces/&lt;keyspace&gt;/shards/&lt;shard&gt;/Shard</code></li>
-<li>VSchema: <code class="prettyprint">/keyspaces/&lt;keyspace&gt;/VSchema</code></li>
+<li>Election path: <code class="prettyprint">elections/&lt;name&gt;</code></li>
+<li>CellInfo path: <code class="prettyprint">cells/&lt;cell name&gt;/CellInfo</code></li>
+<li>Keyspace: <code class="prettyprint">keyspaces/&lt;keyspace&gt;/Keyspace</code></li>
+<li>Shard: <code class="prettyprint">keyspaces/&lt;keyspace&gt;/shards/&lt;shard&gt;/Shard</code></li>
+<li>VSchema: <code class="prettyprint">keyspaces/&lt;keyspace&gt;/VSchema</code></li>
 </ul>
 
 <p><em>Local Cell</em>:</p>
 
 <ul>
-<li>Tablet: <code class="prettyprint">/tablets/&lt;cell&gt;-&lt;uid&gt;/Tablet</code></li>
-<li>Replication Graph: <code class="prettyprint">/keyspaces/&lt;keyspace&gt;/shards/&lt;shard&gt;/ShardReplication</code></li>
-<li>SrvKeyspace: <code class="prettyprint">/keyspaces/&lt;keyspace&gt;/SrvKeyspace</code></li>
-<li>SrvVSchema: <code class="prettyprint">/SvrVSchema</code></li>
+<li>Tablet: <code class="prettyprint">tablets/&lt;cell&gt;-&lt;uid&gt;/Tablet</code></li>
+<li>Replication Graph: <code class="prettyprint">keyspaces/&lt;keyspace&gt;/shards/&lt;shard&gt;/ShardReplication</code></li>
+<li>SrvKeyspace: <code class="prettyprint">keyspaces/&lt;keyspace&gt;/SrvKeyspace</code></li>
+<li>SrvVSchema: <code class="prettyprint">SvrVSchema</code></li>
 </ul>
 
 <p>For locks, we use a subdirectory named <code class="prettyprint">locks</code> in the directory to lock, and an
 ephemeral file in that subdirectory (it is associated with a lease, whose TTL
 can be set with the <code class="prettyprint">-topo_etcd_lease_duration</code> flag, defaults to 30
-seconds). the ephemeral file with the lowest ModRevision has the lock, the
+seconds). The ephemeral file with the lowest ModRevision has the lock, the
 others wait for files with older ModRevisions to disappear.</p>
 
 <p>Master elections also use a subdirectory, named after the election Name, and use
 a similar method as the locks, with ephemeral files.</p>
 
-<p>We store the proto3 binary data for each object, base64-encoded (as it seems the
-data stored doesn&#39;t work well when containing non-ascii characters).</p>
+<p>We store the proto3 binary data for each object (as the v3 API allows us to store binary data).</p>
 
 <h3 id="old-etcd-etcd-implementaion-deprecated-use-etcd2-instead">Old etcd <code class="prettyprint">etcd</code> Implementaion (deprecated, use <code class="prettyprint">etcd2</code> instead)</h3>
 
@@ -732,7 +731,142 @@ contains the object to lock.</p>
 <li>SrvVSchema: <code class="prettyprint">/vt/ns/_VSchema</code></li>
 </ul>
 
-<h3 id="migration-between-implementations">Migration Between Implementations</h3>
+<h3 id="consul-consul-implementation">Consul <code class="prettyprint">consul</code> Implementation</h3>
+
+<p>This topology service plugin is meant to use Consul clusters as storage backend
+for the topology data.</p>
+
+<p>To configure a <code class="prettyprint">consul</code> installation, let&#39;s start with the global cell
+service. It is described by the address of a server,
+and by the root node path to put the Vitess data in (it cannot start with <code class="prettyprint">/</code>). For instance, assuming we
+want to use servers <code class="prettyprint">global_server:global_port</code> with node path
+<code class="prettyprint">vitess/global</code>:</p>
+<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span class="c"># Set the following flags to let Vitess use this global server,</span>
+<span class="c"># and simplify the example below:</span>
+<span class="c"># -topo_implementation consul</span>
+<span class="c"># -topo_global_server_address global_server:global_port</span>
+<span class="c"># -topo_global_root vitess/global</span>
+<span class="nv">TOPOLOGY</span><span class="o">=</span><span class="err">&quot;</span>-topo_implementation consul -topo_global_server_address global_server:global_port -topo_global_root vitess/global
+</code></pre></div>
+<p>Then to add a cell whose local topology server
+<code class="prettyprint">cell1_server1:cell1_port</code> will store their data under the
+directory <code class="prettyprint">vitess/cell1</code>:</p>
+<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span class="c"># Reference cell1 in the global topology service:</span>
+<span class="c"># (the TOPOLOGY variable is defined in the previous section)</span>
+vtctl <span class="nv">$TOPOLOGY</span> AddCellInfo <span class="se">\</span>
+  -server_address cell1_server1:cell1_port <span class="se">\</span>
+  -root vitess/cell1 <span class="se">\</span>
+  cell1
+</code></pre></div>
+<p>If only one cell is used, the same consul instances can be used for both
+global and local data. A local cell record still needs to be created, just use
+the same server address and, very importantly, a <em>different</em> root node path.</p>
+
+<h4 id="implementation-details">Implementation Details</h4>
+
+<p>We use the following paths:</p>
+
+<p><em>Global Cell</em>:</p>
+
+<ul>
+<li>Election path: <code class="prettyprint">elections/&lt;name&gt;</code></li>
+<li>CellInfo path: <code class="prettyprint">cells/&lt;cell name&gt;/CellInfo</code></li>
+<li>Keyspace: <code class="prettyprint">keyspaces/&lt;keyspace&gt;/Keyspace</code></li>
+<li>Shard: <code class="prettyprint">keyspaces/&lt;keyspace&gt;/shards/&lt;shard&gt;/Shard</code></li>
+<li>VSchema: <code class="prettyprint">keyspaces/&lt;keyspace&gt;/VSchema</code></li>
+</ul>
+
+<p><em>Local Cell</em>:</p>
+
+<ul>
+<li>Tablet: <code class="prettyprint">tablets/&lt;cell&gt;-&lt;uid&gt;/Tablet</code></li>
+<li>Replication Graph: <code class="prettyprint">keyspaces/&lt;keyspace&gt;/shards/&lt;shard&gt;/ShardReplication</code></li>
+<li>SrvKeyspace: <code class="prettyprint">keyspaces/&lt;keyspace&gt;/SrvKeyspace</code></li>
+<li>SrvVSchema: <code class="prettyprint">SvrVSchema</code></li>
+</ul>
+
+<p>For locks, we use a file named <code class="prettyprint">Lock</code> in the directory to lock, and the regular
+Consul Lock API.</p>
+
+<p>Master elections use a single lock file (the Election path) and the regular
+Consul Lock API. The contents of the lock file is the ID of the current master.</p>
+
+<p>Watches use the Consul long polling Get call. They cannot be interrupted, so we
+use a long poll whose duration is set by the <code class="prettyprint">-topo_consul_watch_poll_duration</code>
+flag. Canceling a watch may have to wait until the end of a polling cycle with
+that duration before returning.</p>
+
+<p>We store the proto3 binary data for each object.</p>
+
+<h2 id="running-in-only-one-cell">Running In Only One Cell</h2>
+
+<p>The topology service is meant to be distributed across multiple cells, and
+survive single cell outages. However, one common usage is to run a Vitess
+cluster in only one cell / region. This part explains how to do this, and later
+on upgrade to multiple cells / regions.</p>
+
+<p>If running in a single cell, the same topology service can be used for both
+global and local data.  A local cell record still needs to be created, just use
+the same server address and, very importantly, a <em>different</em> root node path.</p>
+
+<p>In that case, just running 3 servers for topology service quorum is probably
+sufficient. For instance, 3 etcd servers. And use their address for the local
+cell as well. Let&#39;s use a short cell name, like <code class="prettyprint">local</code>, as the local data in
+that topology server will later on be moved to a different topology service,
+which will have the real cell name.</p>
+
+<h3 id="extending-to-more-cells">Extending To More Cells</h3>
+
+<p>To then run in multiple cells, the current topology service needs to be split
+into a global instance and one local instance per cell. Whereas, the initial
+setup had 3 topology servers (used for global and local data), we recommend to
+run 5 global servers across all cells (for global topology data) and 3 local
+servers per cell (for per-cell topology data).</p>
+
+<p>To migrate to such a setup, start by adding the 3 local servers in the second
+cell and run <code class="prettyprint">vtctl AddCellinfo</code> as was done for the first cell. Tablets and
+vtgates can now be started in the second cell, and used normally.</p>
+
+<p>vtgate can then be configured with a list of cells to watch for tablets using
+the <code class="prettyprint">-cells_to_watch</code> command line parameter. It can then use all tablets in all
+cells to route traffic. Note this is necessary to access the master in another
+cell.</p>
+
+<p>After the extension to two cells, the original topo service contains both the
+global topology data, and the first cell topology data. The more symetrical
+configuration we&#39;re after would be to split that original service into two: a
+global one that only contains the global data (spread across both cells), and a
+local one to the original cells. To achieve that split:</p>
+
+<ul>
+<li>Start up a new local topology service in that original cell (3 more local
+servers in that cell).</li>
+<li>Pick a name for that cell, different from <code class="prettyprint">local</code>.</li>
+<li>Use <code class="prettyprint">vtctl AddCellInfo</code> to configure it.</li>
+<li>Make sure all vtgates can see that new local cell (again, using
+<code class="prettyprint">-cells_to_watch</code>).</li>
+<li>Restart all vttablets to be in that new cell, instead of the <code class="prettyprint">local</code> cell name
+used before.</li>
+<li>Use <code class="prettyprint">vtctl RemoveKeyspaceCell</code> to remove all mentions of the <code class="prettyprint">local</code> cell in
+all keyspaces.</li>
+<li>Use <code class="prettyprint">vtctl RemoveCellInfo</code> to remove the global configurations for that
+<code class="prettyprint">local</code> cell.</li>
+<li>Remove all remaining data in the global topology service that are in the old
+local server root.</li>
+</ul>
+
+<p>After this split, the configuration is completely symetrical:</p>
+
+<ul>
+<li>a global topology service, with servers in all cells. Only contains global
+topology data about Keyspaces, Shards and VSchema. Typically it has 5 servers
+across all cells.</li>
+<li>a local topology service to each cell, with servers only in that cell. Only
+contains local topology data about Tablets, and roll-ups of global data for
+efficient access. Typically, it has 3 servers in each cell.</li>
+</ul>
+
+<h2 id="migration-between-implementations">Migration Between Implementations</h2>
 
 <p>We provide the <code class="prettyprint">topo2topo</code> binary file to migrate between one implementation
 and another of the topology service.</p>
@@ -825,7 +959,7 @@ vtctl <span class="nv">$TOPOLOGY</span> RebuildVSchemaGraph
     
     <a href="https://groups.google.com/forum/#!forum/vitess" target="_blank">Contact: vitess@googlegroups.com</a>&nbsp;&nbsp;<b>·</b>&nbsp;&nbsp;
     <a href="https://groups.google.com/forum/#!forum/vitess-announce" target="_blank">Announcements</a>&nbsp;&nbsp;<b>·</b>&nbsp;&nbsp;
-    &#169; 2016 <a href="/">Vitess</a> powered by <a href="https://developers.google.com/open-source/">Google Inc</a>
+    &#169; 2017 <a href="/">Vitess</a> powered by <a href="https://developers.google.com/open-source/">Google Inc</a>
   </nav>
 </footer>
 

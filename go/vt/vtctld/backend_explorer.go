@@ -65,16 +65,18 @@ func (ex *BackendExplorer) HandlePath(nodePath string, r *http.Request) *explore
 	data, _, err := ex.backend.Get(ctx, cell, relativePath)
 	switch err {
 	case nil:
-		// It has contents, we just use it if possible.
-		decoded, err := DecodeContent(relativePath, data)
-		if err != nil {
-			result.Error = err.Error()
-		} else {
-			result.Data = decoded
-		}
+		if len(data) > 0 {
+			// It has contents, we just use it if possible.
+			decoded, err := DecodeContent(relativePath, data)
+			if err != nil {
+				result.Error = err.Error()
+			} else {
+				result.Data = decoded
+			}
 
-		// With contents, it can't have children, so we're done.
-		return result
+			// With contents, it can't have children, so we're done.
+			return result
+		}
 	default:
 		// Something is wrong. Might not be a file.
 		result.Error = err.Error()

@@ -1,4 +1,5 @@
 hostname=`hostname -f`
+vtctld_web_port=15000
 
 # Each ZooKeeper server needs a list of all servers in the quorum.
 # Since we're running them all locally, we need to give them unique ports.
@@ -27,9 +28,9 @@ if [ -z "$VT_MYSQL_ROOT" ]; then
   export VT_MYSQL_ROOT=$(dirname `dirname $mysql_path`)
 fi
 
-# We expect to find zk-client-conf.json in the same folder as this script.
-env_script_root=`dirname "${BASH_SOURCE}"`
-export ZK_CLIENT_CONFIG=$env_script_root/zk-client-conf.json
+# Set topology environment parameters.
+ZK_SERVER="localhost:21811,localhost:21812,localhost:21813"
+TOPOLOGY_FLAGS="-topo_implementation zk2 -topo_global_server_address $ZK_SERVER -topo_global_root /vitess/global"
 
 mkdir -p $VTDATAROOT/tmp
 
