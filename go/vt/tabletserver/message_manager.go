@@ -4,28 +4,58 @@
 
 package tabletserver
 
-import "sync"
+import (
+	"sync"
+	"time"
+
+	log "github.com/golang/glog"
+	"golang.org/x/net/context"
+
+	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/timer"
+	"github.com/youtube/vitess/go/vt/sqlparser"
+)
 
 // MessageManager manages messages for a message table.
 type MessageManager struct {
-	isOpen bool
-	wg     sync.WaitGroup
-	name   string
-	cache  *MessagerCache
+	DBLock sync.Mutex
 
-	mu          sync.Mutex
-	cond        sync.Cond
-	receivers   []MessageReceiver
-	curReceiver int
+	isOpen bool
+
+	name     string
+	cache    *MessagerCache
+	ticks    *timer.Timer
+	connpool *ConnPool
+
+	mu sync.Mutex
+	// cond gets triggered if len(receivers) becomes non-zero,
+	// or an item gets added to the cache, or if the manager is closed.
+	// The trigger wakes up the runSend thread.
+	cond            sync.Cond
+	receivers       []MessageReceiver
+	curReceiver     int
+	messagesPending bool
+
+	// wg is for ensuring all running goroutines have returned
+	// before we can close the manager.
+	wg sync.WaitGroup
+
+	readByTimeNext *sqlparser.ParsedQuery
 }
 
 // NewMessageManager creates a new message manager.
-func NewMessageManager(name string) *MessageManager {
+func NewMessageManager(name string, cacheSize int, pollInterval time.Duration, connpool *ConnPool) *MessageManager {
 	mm := &MessageManager{
-		name:  name,
-		cache: NewMessagerCache(10000),
+		name:     name,
+		cache:    NewMessagerCache(cacheSize),
+		ticks:    timer.NewTimer(pollInterval),
+		connpool: connpool,
 	}
 	mm.cond.L = &mm.mu
+
+	mm.readByTimeNext = buildParsedQuery(
+		"select time_next, epoch, id, message from %v where time_next < %a order by time_next desc limit %a",
+		sqlparser.NewTableIdent(name), ":time_next", ":max")
 	return mm
 }
 
@@ -39,24 +69,28 @@ func (mm *MessageManager) Open() {
 	mm.isOpen = true
 	mm.wg.Add(1)
 	go mm.runSend()
+	// TODO(sougou): improve ticks to add randomness.
+	mm.ticks.Start(mm.runPoller)
 }
 
 // Close stops the MessageManager service.
 func (mm *MessageManager) Close() {
-	func() {
-		mm.mu.Lock()
-		defer mm.mu.Unlock()
-		if !mm.isOpen {
-			return
-		}
-		for _, rcvr := range mm.receivers {
-			rcvr.Cancel()
-		}
-		mm.receivers = nil
-		mm.cache.Close()
-		mm.isOpen = false
-		mm.cond.Broadcast()
-	}()
+	mm.ticks.Stop()
+
+	mm.mu.Lock()
+	if !mm.isOpen {
+		mm.mu.Unlock()
+		return
+	}
+	mm.isOpen = false
+	for _, rcvr := range mm.receivers {
+		rcvr.Cancel()
+	}
+	mm.receivers = nil
+	mm.cache.Clear()
+	mm.cond.Signal()
+	mm.mu.Unlock()
+
 	mm.wg.Wait()
 }
 
@@ -70,8 +104,7 @@ func (mm *MessageManager) Subscribe(receiver MessageReceiver) {
 		}
 	}
 	mm.receivers = append(mm.receivers, receiver)
-	mm.cache.Open()
-	mm.cond.Broadcast()
+	mm.cond.Signal()
 }
 
 // Unsubscribe removes the receiver from the list of subscribers.
@@ -89,32 +122,147 @@ func (mm *MessageManager) Unsubscribe(receiver MessageReceiver) {
 		break
 	}
 	if len(mm.receivers) == 0 {
-		mm.cache.Close()
+		mm.cache.Clear()
 	}
+}
+
+// Add adds the message to the cache. It returns true
+// if successful. If the message is already present,
+// it still returns true.
+func (mm *MessageManager) Add(mr *MessageRow) bool {
+	mm.mu.Lock()
+	defer mm.mu.Unlock()
+	if len(mm.receivers) == 0 {
+		return false
+	}
+	if !mm.cache.Add(mr) {
+		return false
+	}
+	mm.cond.Signal()
+	return true
 }
 
 func (mm *MessageManager) runSend() {
 	defer mm.wg.Done()
-	var receiver MessageReceiver
+	var mr *MessageRow
 	for {
-		mr := mm.cache.Pop()
 		mm.mu.Lock()
-		for len(mm.receivers) == 0 {
+		for {
 			if !mm.isOpen {
 				mm.mu.Unlock()
 				return
 			}
-			// If we're here, cache is closed.
-			// Discard mr.
-			mr = nil
+			if len(mm.receivers) == 0 {
+				mm.cond.Wait()
+				continue
+			}
+			if mr = mm.cache.Pop(); mr != nil {
+				break
+			}
+			if mm.messagesPending {
+				// Trigger the poller to fetch more.
+				mm.ticks.Trigger()
+			}
 			mm.cond.Wait()
 		}
 		mm.curReceiver = (mm.curReceiver + 1) % len(mm.receivers)
-		receiver = mm.receivers[mm.curReceiver]
+		receiver := mm.receivers[mm.curReceiver]
 		mm.mu.Unlock()
-		if mr != nil {
-			_ = receiver.Send(mm.name, mr)
-			mm.cache.Discard(mr.id)
-		}
+
+		_ = receiver.Send(mm.name, mr)
+		mm.DBLock.Lock()
+		mm.cache.Discard(mr.id)
+		mm.DBLock.Unlock()
 	}
+}
+
+func (mm *MessageManager) runPoller() {
+	ctx, cancel := context.WithTimeout(context.Background(), mm.ticks.Interval())
+	defer cancel()
+	conn, err := mm.connpool.Get(ctx)
+	if err != nil {
+		// TODO(sougou): increment internal error.
+		log.Errorf("Error getting connection: %v", err)
+		return
+	}
+	defer conn.Recycle()
+
+	func() {
+		// Fast-path. Skip all the work.
+		if mm.receiverCount() == 0 {
+			return
+		}
+		mm.DBLock.Lock()
+		defer mm.DBLock.Unlock()
+
+		size := mm.cache.Size()
+		bindVars := map[string]interface{}{
+			"time_next": int64(time.Now().UnixNano()),
+			"max":       int64(size),
+		}
+		qr, err := mm.read(ctx, conn, mm.readByTimeNext, bindVars)
+		if err != nil {
+			return
+		}
+
+		// Obtain mu lock to verify and preserve that len(receivers) != 0.
+		mm.mu.Lock()
+		defer mm.mu.Unlock()
+		mm.messagesPending = false
+		if len(qr.Rows) >= size {
+			// There are probably more messages to be sent.
+			mm.messagesPending = true
+		}
+		if len(mm.receivers) == 0 {
+			// Almost never reachable because we just checked this.
+			return
+		}
+		if len(qr.Rows) != 0 {
+			// We've most likely added items.
+			// Wake up the sender.
+			defer mm.cond.Signal()
+		}
+		for _, row := range qr.Rows {
+			timeNext, err := row[0].ParseInt64()
+			if err != nil {
+				// TODO(sougou): increment internal error.
+				log.Errorf("Error parsing time_next '%q': %v", row[0].String(), err)
+				continue
+			}
+			epoch, err := row[1].ParseInt64()
+			if err != nil {
+				// TODO(sougou): increment internal error.
+				log.Errorf("Error parsing epoch '%q': %v", row[1].String(), err)
+				continue
+			}
+			if !mm.cache.Add(&MessageRow{
+				TimeNext: timeNext,
+				Epoch:    epoch,
+				ID:       row[2],
+				Message:  row[3],
+				id:       row[2].String(),
+			}) {
+				mm.messagesPending = true
+				return
+			}
+		}
+	}()
+
+	// TODO(sougou): purge.
+}
+
+func (mm *MessageManager) receiverCount() int {
+	mm.mu.Lock()
+	defer mm.mu.Unlock()
+	return len(mm.receivers)
+}
+
+func (mm *MessageManager) read(ctx context.Context, conn *DBConn, pq *sqlparser.ParsedQuery, bindVars map[string]interface{}) (*sqltypes.Result, error) {
+	b, err := pq.GenerateQuery(bindVars)
+	if err != nil {
+		// TODO(sougou): increment internal error.
+		log.Errorf("Error reading rows from message table: %v", err)
+		return nil, err
+	}
+	return conn.Exec(ctx, string(b), mm.cache.Size()+1, false)
 }
