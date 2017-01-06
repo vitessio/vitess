@@ -17,6 +17,7 @@ import (
 	"github.com/youtube/vitess/go/vt/dbconnpool"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 	"golang.org/x/net/context"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
 // DBConn is a db connection for tabletserver.
@@ -103,7 +104,7 @@ func (dbc *DBConn) ExecOnce(ctx context.Context, query string, maxrows int, want
 }
 
 // Stream executes the query and streams the results.
-func (dbc *DBConn) Stream(ctx context.Context, query string, callback func(*sqltypes.Result) error, streamBufferSize int, excludeFieldNames bool) error {
+func (dbc *DBConn) Stream(ctx context.Context, query string, callback func(*sqltypes.Result) error, streamBufferSize int, includedFields querypb.ExecuteOptions_IncludedFields) error {
 	span := trace.NewSpanFromContext(ctx)
 	span.StartClient("DBConn.Stream")
 	defer span.Finish()
@@ -116,9 +117,7 @@ func (dbc *DBConn) Stream(ctx context.Context, query string, callback func(*sqlt
 			func(r *sqltypes.Result) error {
 				if !resultSent {
 					resultSent = true
-					if excludeFieldNames {
-						r = r.StripFieldNames()
-					}
+					r = r.StripMetadata(includedFields)
 				}
 				return callback(r)
 			},

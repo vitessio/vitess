@@ -17,6 +17,7 @@ import (
 	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
 
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
 func TestDBConnExec(t *testing.T) {
@@ -119,7 +120,7 @@ func TestDBConnStream(t *testing.T) {
 		ctx, sql, func(r *sqltypes.Result) error {
 			result = *r
 			return nil
-		}, 10, false /*excludeFieldNames*/)
+		}, 10, querypb.ExecuteOptions_ALL)
 	if err != nil {
 		t.Fatalf("should not get an error, err: %v", err)
 	}
@@ -129,7 +130,7 @@ func TestDBConnStream(t *testing.T) {
 	err = dbConn.Stream(
 		ctx, sql, func(r *sqltypes.Result) error {
 			return nil
-		}, 10, false /*excludeFieldNames*/)
+		}, 10, querypb.ExecuteOptions_ALL)
 	db.DisableConnFail()
 	want := "connection fail"
 	if err == nil || !strings.Contains(err.Error(), want) {
