@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""A Vitess sandbox with kubernetes."""
+"""A Vitess sandbox with Kubernetes."""
 
 import collections
 import copy
@@ -13,13 +13,20 @@ from vttest import sharding_utils
 import sandbox
 import sandbox_utils
 import sandlet
+import subprocess_component
 
 
-class VitessK8sSandbox(sandbox.Sandbox):
+class VitessKubernetesSandbox(sandbox.Sandbox):
   """Sandbox implementation for Vitess."""
 
+  # Constants used for generating tablet UIDs. Each constant represents the
+  # increment value for each property.
+  cell_epsilon = 100000000
+  keyspace_epsilon = 1000000
+  shard_epsilon = 100
+
   def __init__(self, sandbox_options):
-    super(VitessK8sSandbox, self).__init__(sandbox_options)
+    super(VitessKubernetesSandbox, self).__init__(sandbox_options)
 
   def generate_firewall_sandlet(self):
     """Generates sandlet for firewall rules."""
@@ -87,9 +94,9 @@ class VitessK8sSandbox(sandbox.Sandbox):
       yaml_values['topology']['cells'][0]['orchestrator'] = dict(
           replicas=1,
       )
-    starting_cell_index = 100000000 if len(self.app_options.cells) > 1 else 0
+    starting_cell_index = 0
     if len(self.app_options.cells) > 1:
-      starting_cell_index = 100000000
+      starting_cell_index = self.cell_epsilon
     keyspaces = []
     for ks_index, ks in enumerate(self.app_options.keyspaces):
       keyspace = dict(name=ks['name'], shards=[])
@@ -107,8 +114,9 @@ class VitessK8sSandbox(sandbox.Sandbox):
                 ),
             )],
         )
-        uid_base = (100 + shard_index * 100) + starting_cell_index + (
-            ks_index * 1000000)
+        uid_base = (
+            (100 + shard_index * self.shard_epsilon) + starting_cell_index + (
+                ks_index * self.keyspace_epsilon))
         shard['tablets'][0]['uidBase'] = uid_base
         if ks['rdonly_count']:
           shard['tablets'].append(dict(
@@ -126,7 +134,7 @@ class VitessK8sSandbox(sandbox.Sandbox):
       for keyspace in cell_dict['keyspaces']:
         for shard in keyspace['shards']:
           for tablets in shard['tablets']:
-            tablets['uidBase'] += index * 100000000
+            tablets['uidBase'] += index * self.cell_epsilon
 
       yaml_values['topology']['cells'].append(cell_dict)
       if index == 0:
@@ -142,19 +150,18 @@ class VitessK8sSandbox(sandbox.Sandbox):
     for i, keyspace in enumerate(self.app_options.keyspaces):
       name = keyspace['name']
       shard_count = keyspace['shard_count']
-      wait_for_mysql_subprocess = sandbox.Subprocess(
-          'wait_for_mysql_subprocess.%s' % name, self.name, 'wait_for_mysql.py',
-          namespace=self.name, shard_count=shard_count,
-          cells=':'.join(self.app_options.cells), keyspace=name,
-          tablet_count=(keyspace['rdonly_count'] + keyspace['replica_count']),
-          starting_uid=i*1000000)
+      wait_for_mysql_subprocess = subprocess_component.Subprocess(
+          'wait_for_mysql_%s' % name, self.name, 'wait_for_mysql.py',
+          self.log_dir, namespace=self.name,
+          cells=','.join(self.app_options.cells))
       wait_for_mysql_subprocess.dependencies = ['helm']
-      initial_reparent_subprocess = sandbox.Subprocess(
+      initial_reparent_subprocess = subprocess_component.Subprocess(
           'initial_reparent_subprocess.%s' % name, self.name,
-          'initial_reparent.py', namespace=self.name, keyspace=name,
-          shard_count=shard_count, master_cell=self.app_options.cells[0])
+          'initial_reparent.py', self.log_dir, namespace=self.name,
+          keyspace=name, shard_count=shard_count,
+          master_cell=self.app_options.cells[0])
       initial_reparent_subprocess.dependencies = [
-          'wait_for_mysql_subprocess.%s' % name]
+          wait_for_mysql_subprocess.name]
       helm_sandlet.components.append(wait_for_mysql_subprocess)
       helm_sandlet.components.append(initial_reparent_subprocess)
     self.sandlets.append(helm_sandlet)
@@ -188,9 +195,9 @@ class VitessK8sSandbox(sandbox.Sandbox):
           vtgate: %s
           logs dir: %s""" % (
               vtctld_addr, vtctld_port, ', '.join(vtgate_addrs),
-              sandbox.log_dir)
+              self.log_dir)
     logging.info(banner)
 
 
 if __name__ == '__main__':
-  sandbox.sandbox_main(VitessK8sSandbox)
+  sandbox.sandbox_main(VitessKubernetesSandbox)

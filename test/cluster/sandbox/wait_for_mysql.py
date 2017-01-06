@@ -9,39 +9,30 @@ import vtctl_sandbox
 
 def main():
   parser = optparse.OptionParser(usage='usage: %prog [options] [test_names]')
-  parser.add_option('-n', '--namespace', help='k8s namespace',
+  parser.add_option('-n', '--namespace', help='Kubernetes namespace',
                     default='vitess')
-  parser.add_option('-c', '--cells', help='Colon delimited list of cells',
-                    default='test')
-  parser.add_option('-k', '--keyspace', help='Keyspace name',
-                    default='test_keyspace')
-  parser.add_option('-s', '--shard_count', help='Number of shards', default=2)
-  parser.add_option('-t', '--tablet_count', help='Number of tablets', default=3)
-  parser.add_option('-u', '--starting_uid', help='Starting tablet uid',
-                    default=0)
+  parser.add_option('-c', '--cells', help='Comma separated list of cells')
   logging.getLogger().setLevel(logging.INFO)
 
   options, _ = parser.parse_args()
 
   logging.info('Waiting for mysql to become healthy')
 
-  cells = options.cells.split(':')
-
   tablets = []
-  starting_cell_index = options.starting_uid
-  if len(cells) > 1:
-    starting_cell_index += 100000000
-  for cell_index, cell in enumerate(cells):
-    for shard_index in range(int(options.shard_count)):
-      for tablet_index in range(int(options.tablet_count)):
-        uid = (100 + shard_index * 100) + (
-            tablet_index + starting_cell_index + cell_index * 100000000)
-        tablets.append('%s-%010d' % (cell, uid))
+  cells = options.cells.split(',')
+  for cell in cells:
+    cell_tablets = vtctl_sandbox.execute_vtctl_command(
+        ['ListAllTablets', cell], namespace=options.namespace)[0].split('\n')
+    for t in cell_tablets:
+      tablets.append(t.split(' ')[0])
+  tablets = filter(None, tablets)
+
+  logging.info('Tablets: %s', ', '.join(tablets))
 
   start_time = time.time()
   while time.time() - start_time < 300:
     good_tablets = []
-    for tablet in tablets:
+    for tablet in [t for t in tablets if t not in good_tablets]:
       _, success = vtctl_sandbox.execute_vtctl_command(
           ['ExecuteFetchAsDba', tablet, 'show databases'],
           namespace=options.namespace)
@@ -50,7 +41,9 @@ def main():
     logging.info('%d of %d tablets good', len(good_tablets), len(tablets))
     if len(good_tablets) == len(tablets):
       logging.info('All tablets ready in %f seconds', time.time() - start_time)
-      return
+      break
+  else:
+    logging.warn('Timed out waiting for tablets to be ready.')
 
 
 if __name__ == '__main__':

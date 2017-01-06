@@ -10,61 +10,21 @@ combined with the yaml configuration defines the sandbox.
 """
 
 import argparse
-import datetime
 import logging
 import os
-import random
 import re
-import subprocess
 import yaml
 
 import gke
 import sandbox_utils
 
-log_dir = None
-
-
-def _create_log_file(filename):
-  """Create a log file.
-
-  This function creates a timestamped log file, and updates a non-timestamped
-  symlink in the log directory.
-
-  Example: For a log called init.INFO, this function will create a log file
-           called init.INFO.20170101-120000.100000 and update a symlink
-           init.INFO to point to it.
-
-  Args:
-    filename: The base name of the log file (string).
-
-  Returns:
-    The opened file handle.
-  """
-  timestamp = datetime.datetime.now().strftime('%Y%m%d-%H%M%S.%f')
-  symlink_name = os.path.join(log_dir, filename)
-  timestamped_name = '%s.%s' % (symlink_name, timestamp)
-  if os.path.islink(symlink_name):
-    os.remove(symlink_name)
-  os.symlink(timestamped_name, symlink_name)
-  return open(timestamped_name, 'w')
-
-
-def _generate_random_name():
-  adjectives = []
-  animals = []
-  with open('adjectives.txt', 'r') as f:
-    adjectives = [a for a in f.read().split('\n') if a]
-  with open('animals.txt', 'r') as f:
-    animals = [a for a in f.read().split('\n') if a]
-  return '%s%s' % (random.choice(adjectives), random.choice(animals))
-
 
 def parse_config(
     config, sandbox_name=None, cluster_name=None, cluster_type='gke'):
-  random_name = _generate_random_name()
+  random_name = sandbox_utils.generate_random_name()
   config = re.sub('{{sandbox_name}}', sandbox_name or random_name, config)
-  config = re.sub('{{cluster_name}}', cluster_name or random_name, ret_val)
-  config = re.sub('{{cluster_type}}', cluster_type, ret_val)
+  config = re.sub('{{cluster_name}}', cluster_name or random_name, config)
+  config = re.sub('{{cluster_type}}', cluster_type, config)
   return config
 
 
@@ -73,7 +33,10 @@ class SandboxError(Exception):
 
 
 class Sandbox(object):
-  """Sandbox class."""
+  """Sandbox class providing basic functionality.
+
+  Derive this class in order to specify sandlets and dependencies.
+  """
 
   _cluster_envs = {
       'gke': gke,
@@ -108,13 +71,12 @@ class Sandbox(object):
     return retval
 
   def set_log_dir(self, log_dir_in=None):
-    global log_dir
     if log_dir_in:
-      log_dir = log_dir_in
+      self.log_dir = log_dir_in
     else:
-      log_dir = '/tmp/sandbox_logs'
-    if not os.path.exists(log_dir):
-      os.makedirs(log_dir)
+      self.log_dir = '/tmp/sandbox_logs'
+    if not os.path.exists(self.log_dir):
+      os.makedirs(self.log_dir)
 
   def start(self, sandlets=None):
     self.start_cluster()
@@ -165,61 +127,10 @@ class Sandbox(object):
     raise NotImplementedError('Generate From Config file not implemented!')
 
 
-class SandletComponent(object):
-  """Top level component of a sandlet."""
-
-  def __init__(self, name, sandbox_name):
-    self.name = name
-    self.sandbox_name = sandbox_name
-    self.dependencies = []
-
-  def start(self):
-    logging.info('Starting component %s', self.name)
-
-  def stop(self):
-    pass
-
-  def is_up(self):
-    return True
-
-  def is_down(self):
-    return True
-
-
-class Subprocess(SandletComponent):
-
-  def __init__(self, name, sandbox_name, script, **script_kwargs):
-    super(Subprocess, self).__init__(name, sandbox_name)
-    self.script = script
-    self.script_kwargs = script_kwargs
-
-  def start(self):
-    super(Subprocess, self).start()
-    try:
-      infofile = None
-      errorfile = None
-      script_args = (
-          [item for sublist in
-           [('--%s' % k, str(v)) for k, v in self.script_kwargs.items()]
-           for item in sublist])
-      logging.info('Executing subprocess script %s', self.script)
-      infofile = _create_log_file('%s.INFO' % self.name)
-      errorfile = _create_log_file('%s.ERROR' % self.name)
-      subprocess.call(['./%s' % self.script] + script_args, stdout=infofile,
-                      stderr=errorfile)
-      logging.info('Done')
-    except subprocess.CalledProcessError as error:
-      raise SandboxError('Subprocess %s returned errorcode %d, result %s' % (
-          self.script, error.returncode, error.output))
-    finally:
-      if infofile:
-        infofile.close()
-      if errorfile:
-        errorfile.close()
-
-
 def sandbox_main(sandbox_cls):
   """Main.
+
+  Call this function from the main in the derived sandbox class.
 
   Args:
     sandbox_cls: A derived sandbox class. This will be instantiated in this

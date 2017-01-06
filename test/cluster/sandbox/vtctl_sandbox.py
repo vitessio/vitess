@@ -1,4 +1,11 @@
-"""execute_vtctl_command."""
+"""Wrapper around vtctl execute_vtctl_command for sandboxes.
+
+Note: This also provides a backup option of using kvtctl.sh, a kubernetes script
+used to temporarily forward a port if vtctld has no forwarded port.
+
+TODO(thompsonja): This is heavily tied to the kubernetes and will need to be
+updated if other systems are used.
+"""
 
 import json
 import os
@@ -15,7 +22,7 @@ class Command(object):
     self.stdout = None
     self.stderr = None
 
-  def run(self, timeout):
+  def run(self, timeout_s):
     """Runs the vtctl command."""
     def target():
       self.process = subprocess.Popen(self.cmd, stdout=subprocess.PIPE)
@@ -24,7 +31,7 @@ class Command(object):
     thread = threading.Thread(target=target)
     thread.start()
 
-    thread.join(timeout)
+    thread.join(timeout_s)
     if thread.is_alive():
       self.process.terminate()
       thread.join()
@@ -38,11 +45,13 @@ def execute_vtctl_command(vtctl_args, namespace='default', timeout_s=180):
       ['kubectl', 'get', 'service', 'vtctld', '--namespace=%s' % namespace,
        '-o', 'json']))
   try:
+    # Check to see if the vtctld service has a forwarded port.
     ip = vtctld_info['status']['loadBalancer']['ingress'][0]['ip']
     vtctl_cmd_args = ['vtctlclient', '-server', '%s:15999' % ip] + vtctl_args
-  except Exception:  # pylint: disable=broad-except
+  except (KeyError, IndexError):
     pass
   if not vtctl_cmd_args:
+    # Default to trying to use kvtctl.sh if a forwarded port cannot be found.
     os.environ['VITESS_NAME'] = namespace
     vtctl_cmd_args = (
         [os.path.join(os.environ['VTTOP'], 'examples/kubernetes/kvtctl.sh')]
@@ -53,6 +62,7 @@ def execute_vtctl_command(vtctl_args, namespace='default', timeout_s=180):
     cmd = Command(vtctl_cmd_args)
     retcode = cmd.run(10)
     if cmd.stdout.startswith('Starting port forwarding'):
+      # Ignore this extra output line if using kvtctl.sh
       cmd.stdout = cmd.stdout[cmd.stdout.find('\n')+1:]
     if retcode:
       last_error = 'Failed w/ errorcode %d, stdout %s, stderr %s' % (

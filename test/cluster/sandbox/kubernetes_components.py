@@ -8,6 +8,7 @@ import subprocess
 import time
 
 import sandbox
+import sandlet
 
 
 def set_gke_cluster_context(gke_cluster_name):
@@ -19,7 +20,7 @@ def set_gke_cluster_context(gke_cluster_name):
     subprocess.call(['kubectl', 'config', 'use-context', cluster], stdout=dn)
 
 
-class HelmComponent(sandbox.SandletComponent):
+class HelmComponent(sandlet.SandletComponent):
   """A helm resource."""
 
   def __init__(self, name, sandbox_name, helm_config):
@@ -49,6 +50,7 @@ class HelmComponent(sandbox.SandletComponent):
           ['helm', 'install', os.path.join(os.environ['VTTOP'], 'helm/vitess'),
            '-n', self.sandbox_name, '--namespace', self.sandbox_name,
            '--replace', '--values', self.helm_config], stdout=dn)
+      logging.info('Finished installing helm')
 
   def stop(self):
     subprocess.call(['helm', 'delete', self.sandbox_name, '--purge'])
@@ -61,8 +63,8 @@ class HelmComponent(sandbox.SandletComponent):
         ['kubectl', 'get', 'pods', '--namespace', self.sandbox_name]))
 
 
-class KubernetesResource(sandbox.SandletComponent):
-  """A kubernetes resource (pod, replicationcontroller, etc.)."""
+class KubernetesResource(sandlet.SandletComponent):
+  """A Kubernetes resource (pod, replicationcontroller, etc.)."""
 
   def __init__(self, name, sandbox_name, template_file, **template_params):
     super(KubernetesResource, self).__init__(name, sandbox_name)
@@ -74,29 +76,17 @@ class KubernetesResource(sandbox.SandletComponent):
     sed_script = ''
     for name, value in self.template_params.items():
       sed_script += 's,{{%s}},%s,g;' % (name, value)
-    p1 = subprocess.Popen(['cat', self.template_file], stdout=subprocess.PIPE)
-    p2 = subprocess.Popen(['sed', '-e', sed_script],
-                          stdin=p1.stdout, stdout=subprocess.PIPE)
-    p3 = subprocess.Popen(
-        ['kubectl', 'create', '-f', '-', '--namespace', self.sandbox_name],
-        stdin=p2.stdout, stdout=subprocess.PIPE)
-    p1.stdout.close()
-    p2.stdout.close()
-    logging.info(p3.communicate()[0])
+    os.system('cat %s | sed -e "%s" | kubectl create -f - --namespace %s' % (
+        self.template_file, sed_script, self.sandbox_name))
 
   def stop(self):
     sed_script = ''
     for name, value in self.template_params.items():
       sed_script += 's,{{%s}},%s,g;' % (name, value)
-    p1 = subprocess.Popen(['cat', self.template_file], stdout=subprocess.PIPE)
-    p2 = subprocess.Popen(['sed', '-e', sed_script],
-                          stdin=p1.stdout, stdout=subprocess.PIPE)
-    p3 = subprocess.Popen(
-        ['kubectl', 'delete', '-f', '-', '--namespace', self.sandbox_name],
-        stdin=p2.stdout, stdout=subprocess.PIPE)
-    p1.stdout.close()
-    p2.stdout.close()
-    logging.info(p3.communicate()[0])
+
+    os.system('cat %s | sed -e "%s" | kubectl delete -f - --namespace %s' % (
+        self.template_file, sed_script, self.sandbox_name))
+
     super(KubernetesResource, self).stop()
 
 

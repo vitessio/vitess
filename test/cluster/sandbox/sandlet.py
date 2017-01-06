@@ -1,4 +1,12 @@
-"""Top component of a sandbox."""
+"""Top level component of a sandbox.
+
+A sandlet is an abstraction to be used by applications to organize a sandbox
+into discrete groupings. A user can start an entire sandbox, which will start
+all sandlets, or selectively choose which ones to start.
+
+Sandlets are made up of components, which are the actual subprocesses or jobs
+to run.
+"""
 
 import logging
 import time
@@ -7,49 +15,72 @@ import sandbox_utils
 
 
 class Sandlet(object):
-  """Top-level component of a sandbox."""
+  """Top-level component of a sandbox.
+
+  Sandlets should be defined in a way to split applications in a logical way.
+  """
 
   def __init__(self, name):
     self.name = name
     self.dependencies = []
     self.components = []
 
+  def _execute_components(self, start):
+    component_graph = sandbox_utils.create_dependency_graph(
+        self.components, reverse=not start)
+    while component_graph:
+      components = [x['object'] for x in component_graph.values()
+                    if not x['dependencies']]
+      for component in components:
+        if start:
+          component.start()
+        else:
+          component.stop()
+        del component_graph[component.name]
+        for _, v in component_graph.items():
+          if component.name in v['dependencies']:
+            v['dependencies'].remove(component.name)
+      while True:
+        if start:
+          unfinished_components = [x.name for x in components if not x.is_up()]
+        else:
+          unfinished_components = [
+              x.name for x in components if not x.is_down()]
+        if not unfinished_components:
+          break
+        logging.info(
+            'Waiting for components to be finished: %s',
+            ', '.join(unfinished_components))
+        time.sleep(10)
+
   def start(self):
     logging.info('Starting sandlet %s', self.name)
-    component_graph = sandbox_utils.create_dependency_graph(self.components)
-    while component_graph:
-      components = [(k, v['object']) for (k, v) in component_graph.items()
-                    if not v['dependencies']]
-      for component_name, component in components:
-        component.start()
-        del component_graph[component_name]
-        for _, (dependencies, _) in component_graph.items():
-          if component_name in dependencies:
-            dependencies.remove(component_name)
-      ready_components = sum(x.is_up() for _, x in components)
-      while ready_components < len(components):
-        logging.info(
-            'Waiting for components to be ready: %s',
-            ', '.join([x for x in components if x not in ready_components]))
-        time.sleep(10)
-        ready_components = sum(x.is_up() for _, x in components)
+    self._execute_components(True)
 
   def stop(self):
-    component_graph = (
-        sandbox_utils.create_dependency_graph(self.components, True))
-    while component_graph:
-      components = [(k, v['object']) for (k, v) in component_graph.items()
-                    if not v['dependencies']]
-      for component_name, component in components:
-        component.stop()
-        del component_graph[component_name]
-        for _, (dependencies, _) in component_graph.items():
-          if component_name in dependencies:
-            dependencies.remove(component_name)
-      down_components = sum(x.is_down() for _, x in components)
-      while down_components < len(components):
-        logging.info(
-            'Waiting for components to be down: %s',
-            ', '.join([x for x in components if x not in down_components]))
-        time.sleep(30)
-        down_components = sum(x.is_down() for _, x in components)
+    logging.info('Stopping sandlet %s', self.name)
+    self._execute_components(False)
+
+
+class SandletComponent(object):
+  """Entity of a sandlet that encapsulates a process or job."""
+
+  def __init__(self, name, sandbox_name):
+    self.name = name
+    self.sandbox_name = sandbox_name
+    self.dependencies = []
+
+  def start(self):
+    logging.info('Starting component %s', self.name)
+
+  def stop(self):
+    logging.info('Stopping component %s', self.name)
+
+  def is_up(self):
+    """Whether the component has finished being started."""
+    return True
+
+  def is_down(self):
+    """Whether the component has finished being stopped."""
+    return True
+

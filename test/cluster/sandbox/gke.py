@@ -34,13 +34,13 @@ class Cluster(object):
                      self.params['name'], '-z', zone, '-q'])
 
 
-class Port(sandlet.Sandlet):
+class Port(sandlet.SandletComponent):
   """Used for forwarding ports in Google Container Engine."""
 
   def __init__(self, name, port):
     self.name = name
     self.port = port
-    super(Port, self).__init__(name)
+    super(Port, self).__init__(name, None)
 
   def start(self):
     # Check for existence first.

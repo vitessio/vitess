@@ -4,7 +4,6 @@
 import json
 import logging
 import optparse
-import os
 from vtproto import topodata_pb2
 from vttest import sharding_utils
 import sandbox_utils
@@ -58,7 +57,7 @@ def initial_reparent(keyspace, master_cell, num_shards, namespace):
 
 def main():
   parser = optparse.OptionParser(usage='usage: %prog [options] [test_names]')
-  parser.add_option('-n', '--namespace', help='k8s namespace',
+  parser.add_option('-n', '--namespace', help='Kubernetes namespace',
                     default='vitess')
   parser.add_option('-k', '--keyspace', help='Keyspace name',
                     default='test_keyspace')
@@ -67,7 +66,6 @@ def main():
   logging.getLogger().setLevel(logging.INFO)
 
   options, _ = parser.parse_args()
-  os.environ['VITESS_NAME'] = options.namespace
   initial_reparent(options.keyspace, options.master_cell,
                    int(options.shard_count), options.namespace)
 
