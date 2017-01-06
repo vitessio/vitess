@@ -25,6 +25,7 @@ import unittest
 import environment
 import tablet
 import utils
+from mysql_flavor import mysql_flavor
 
 KEYSPACE = 'ks1'
 SHARD = '0'
@@ -141,104 +142,126 @@ class UpdateThread(AbstractVtgateThread):
     self.i += 1
     logging.debug('UPDATE affected %d row(s).', row_count)
 
+master = tablet.Tablet()
+replica = tablet.Tablet()
+all_tablets = [master, replica]
+
+
+def setUpModule():
+  try:
+    environment.topo_server().setup()
+
+    setup_procs = [t.init_mysql() for t in all_tablets]
+    utils.Vtctld().start()
+    utils.wait_procs(setup_procs)
+
+    utils.run_vtctl(['CreateKeyspace', KEYSPACE])
+
+    # Start tablets.
+    db_name = 'vt_' + KEYSPACE
+    for t in all_tablets:
+      t.create_db(db_name)
+    master.start_vttablet(wait_for_state=None,
+                          init_tablet_type='replica',
+                          init_keyspace=KEYSPACE, init_shard=SHARD,
+                          tablet_index=0)
+    replica.start_vttablet(wait_for_state=None,
+                           init_tablet_type='replica',
+                           init_keyspace=KEYSPACE, init_shard=SHARD,
+                           tablet_index=1)
+    for t in all_tablets:
+      t.wait_for_vttablet_state('NOT_SERVING')
+
+    # Reparent to choose an initial master and enable replication.
+    utils.run_vtctl(['InitShardMaster', '-force', '%s/%s' % (KEYSPACE, SHARD),
+                     master.tablet_alias])
+
+    # Create the schema.
+    utils.run_vtctl(['ApplySchema', '-sql=' + SCHEMA, KEYSPACE])
+
+    start_vtgate()
+
+    # Insert two rows for the later threads (critical read, update).
+    with utils.vtgate.write_transaction(keyspace=KEYSPACE, shards=[SHARD],
+                                        tablet_type='master') as tx:
+      tx.execute('INSERT INTO buffer (id, msg) VALUES (:id, :msg)',
+                 {'id': CRITICAL_READ_ROW_ID, 'msg': 'critical read'})
+      tx.execute('INSERT INTO buffer (id, msg) VALUES (:id, :msg)',
+                 {'id': UPDATE_ROW_ID, 'msg': 'update'})
+  except:
+    tearDownModule()
+    raise
+
+
+def tearDownModule():
+  utils.required_teardown()
+  if utils.options.skip_teardown:
+    return
+
+  teardown_procs = [t.teardown_mysql() for t in [master, replica]]
+  utils.wait_procs(teardown_procs, raise_on_error=False)
+
+  environment.topo_server().teardown()
+  utils.kill_sub_processes()
+  utils.remove_tmp_files()
+  for t in all_tablets:
+    t.remove_tree()
+
+
+def start_vtgate():
+  utils.VtGate().start(extra_args=[
+      '-enable_vtgate_buffer',
+      # Long timeout in case failover is slow.
+      '-vtgate_buffer_window', '10m',
+      '-vtgate_buffer_max_failover_duration', '10m',
+      '-vtgate_buffer_min_time_between_failovers', '20m'],
+                       tablets=all_tablets)
+
 
 class TestBuffer(unittest.TestCase):
 
   def setUp(self):
-    self.master = tablet.Tablet()
-    self.replica = tablet.Tablet()
-    self.all_tablets = [self.master, self.replica]
+    utils.vtgate.kill()
+    # Restart vtgate between each test or the feature
+    # --vtgate_buffer_min_time_between_failovers
+    # will ignore subsequent failovers.
+    start_vtgate()
 
-    try:
-      environment.topo_server().setup()
-
-      setup_procs = [t.init_mysql() for t in self.all_tablets]
-      utils.Vtctld().start()
-      utils.wait_procs(setup_procs)
-
-      utils.run_vtctl(['CreateKeyspace', KEYSPACE])
-
-      # Start tablets.
-      db_name = 'vt_' + KEYSPACE
-      for t in self.all_tablets:
-        t.create_db(db_name)
-      self.master.start_vttablet(wait_for_state=None,
-                                 init_tablet_type='replica',
-                                 init_keyspace=KEYSPACE, init_shard=SHARD,
-                                 tablet_index=0)
-      self.replica.start_vttablet(wait_for_state=None,
-                                  init_tablet_type='replica',
-                                  init_keyspace=KEYSPACE, init_shard=SHARD,
-                                  tablet_index=1)
-      for t in self.all_tablets:
-        t.wait_for_vttablet_state('NOT_SERVING')
-
-      # Reparent to choose an initial master and enable replication.
-      utils.run_vtctl(['InitShardMaster', '-force', '%s/%s' % (KEYSPACE, SHARD),
-                       self.master.tablet_alias])
-
-      # Create the schema.
-      utils.run_vtctl(['ApplySchema', '-sql=' + SCHEMA, KEYSPACE])
-
-      # Start vtgate.
-      utils.VtGate().start(extra_args=[
-          '-enable_vtgate_buffer',
-          # Long timeout in case failover is slow.
-          '-vtgate_buffer_window', '10m',
-          '-vtgate_buffer_max_failover_duration', '10m',
-          '-vtgate_buffer_min_time_between_failovers', '20m'],
-                           tablets=self.all_tablets)
-
-      # Insert two rows for the later threads (critical read, update).
-      with utils.vtgate.write_transaction(keyspace=KEYSPACE, shards=[SHARD],
-                                          tablet_type='master') as tx:
-        tx.execute('INSERT INTO buffer (id, msg) VALUES (:id, :msg)',
-                   {'id': CRITICAL_READ_ROW_ID, 'msg': 'critical read'})
-        tx.execute('INSERT INTO buffer (id, msg) VALUES (:id, :msg)',
-                   {'id': UPDATE_ROW_ID, 'msg': 'update'})
-    except:
-      self.tearDown()
-      raise
-
-  def tearDown(self):
-    utils.required_teardown()
-    if utils.options.skip_teardown:
-      return
-
-    teardown_procs = [t.teardown_mysql() for t in self.all_tablets]
-    utils.wait_procs(teardown_procs, raise_on_error=False)
-
-    environment.topo_server().teardown()
-    utils.kill_sub_processes()
-    utils.remove_tmp_files()
-    for t in self.all_tablets:
-      t.remove_tree()
-
-  def test_buffer(self):
+  def _test_buffer(self, reparent_func):
     # Start both threads.
     read_thread = ReadThread(utils.vtgate)
     update_thread = UpdateThread(utils.vtgate)
 
-    # Verify they got at least 2 RPCs through.
-    read_thread.set_notify_after_n_successful_rpcs(2)
-    update_thread.set_notify_after_n_successful_rpcs(2)
-    read_thread.wait_for_notification.get()
-    update_thread.wait_for_notification.get()
+    try:
+      # Verify they got at least 2 RPCs through.
+      read_thread.set_notify_after_n_successful_rpcs(2)
+      update_thread.set_notify_after_n_successful_rpcs(2)
+      read_thread.wait_for_notification.get()
+      update_thread.wait_for_notification.get()
 
-    # Execute the failover.
-    read_thread.set_notify_after_n_successful_rpcs(10)
-    update_thread.set_notify_after_n_successful_rpcs(10)
-    utils.run_vtctl(['PlannedReparentShard', '-keyspace_shard',
-                     '%s/%s' % (KEYSPACE, SHARD),
-                     '-new_master', self.replica.tablet_alias])
-    read_thread.wait_for_notification.get()
-    update_thread.wait_for_notification.get()
+      # Execute the failover.
+      read_thread.set_notify_after_n_successful_rpcs(10)
+      update_thread.set_notify_after_n_successful_rpcs(10)
 
-    # Stop threads.
-    read_thread.stop()
-    update_thread.stop()
-    read_thread.join()
-    update_thread.join()
+      reparent_func()
+
+      # Failover is done. Swap master and replica for the next test.
+      global master, replica
+      master, replica = replica, master
+
+      read_thread.wait_for_notification.get()
+      update_thread.wait_for_notification.get()
+    except:
+      # Something went wrong. Kill vtgate first to unblock any buffered requests
+      # which would further block the two threads.
+      utils.vtgate.kill()
+      raise
+    finally:
+      # Stop threads.
+      read_thread.stop()
+      update_thread.stop()
+      read_thread.join()
+      update_thread.join()
 
     # Both threads must not see any error.
     self.assertEqual(0, read_thread.errors)
@@ -250,6 +273,45 @@ class TestBuffer(unittest.TestCase):
     self.assertGreater(v['BufferRequestsInFlightMax'][labels], 0)
     logging.debug('Failover was buffered for %d milliseconds.',
                   v['BufferFailoverDurationMs'][labels])
+
+  def test_buffer_planned_reparent(self):
+    def planned_reparent():
+      utils.run_vtctl(['PlannedReparentShard', '-keyspace_shard',
+                       '%s/%s' % (KEYSPACE, SHARD),
+                       '-new_master', replica.tablet_alias])
+    self._test_buffer(planned_reparent)
+
+  def test_buffer_external_reparent(self):
+    def external_reparent():
+      # Demote master.
+      master.mquery('', mysql_flavor().demote_master_commands())
+      if master.semi_sync_enabled():
+        master.set_semi_sync_enabled(master=False)
+
+      # Wait for replica to catch up to master.
+      utils.wait_for_replication_pos(master, replica)
+
+      # Promote replica to new master.
+      replica.mquery('', mysql_flavor().promote_slave_commands())
+      if replica.semi_sync_enabled():
+        replica.set_semi_sync_enabled(master=True)
+      old_master = master
+      new_master = replica
+
+      # Configure old master to use new master.
+      new_pos = mysql_flavor().master_position(new_master)
+      logging.debug('New master position: %s', str(new_pos))
+      # Use 'localhost' as hostname because Travis CI worker hostnames
+      # are too long for MySQL replication.
+      change_master_cmds = mysql_flavor().change_master_commands(
+          'localhost', new_master.mysql_port, new_pos)
+      old_master.mquery('', ['RESET SLAVE'] + change_master_cmds +
+                        ['START SLAVE'])
+
+      # Notify the new vttablet master about the reparent.
+      utils.run_vtctl(['TabletExternallyReparented', new_master.tablet_alias])
+    self._test_buffer(external_reparent)
+
 
 if __name__ == '__main__':
   utils.main()

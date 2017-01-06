@@ -427,6 +427,9 @@ class Tablet(object):
         protocols_flavor().tablet_manager_protocol() == 'grpc' or
         protocols_flavor().binlog_player_protocol() == 'grpc')
 
+  def semi_sync_enabled(self):
+    return self.enable_semi_sync
+
   def flush(self):
     utils.curl('http://localhost:%s%s' %
                (self.port, environment.flush_logs_url),
@@ -477,6 +480,8 @@ class Tablet(object):
     args.extend(['-watch_replication_stream'])
     if enable_semi_sync:
       args.append('-enable_semi_sync')
+    # Remember the setting in case a test wants to know it.
+    self.enable_semi_sync = enable_semi_sync
     if self.use_mysqlctld:
       args.extend(
           ['-mysqlctl_socket', os.path.join(self.tablet_dir, 'mysqlctl.sock')])

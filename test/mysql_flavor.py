@@ -10,12 +10,20 @@ import subprocess
 class MysqlFlavor(object):
   """Base class with default SQL statements."""
 
+  def demote_master_commands(self):
+    """Returns commands to stop the current master."""
+    return [
+        "SET GLOBAL read_only = ON",
+        "FLUSH TABLES WITH READ LOCK",
+        "UNLOCK TABLES",
+    ]
+
   def promote_slave_commands(self):
     """Returns commands to convert a slave to a master."""
     return [
         "STOP SLAVE",
         "RESET SLAVE ALL",
-        "RESET MASTER",
+        "SET GLOBAL read_only = OFF",
     ]
 
   def reset_replication_commands(self):
@@ -61,7 +69,7 @@ class MysqlFlavor(object):
   def enable_binlog_checksum(self, tablet):
     """Enables binlog_checksum and returns True if the flavor supports it.
 
-    Arg:
+    Args:
       tablet: A tablet.Tablet object.
 
     Returns:
@@ -139,25 +147,28 @@ class MySQL56(MysqlFlavor):
         (host, port)]
 
 
-__mysql_flavor = None
+MYSQL_FLAVOR = None
 
 
 # mysql_flavor is a function because we need something to import before the
-# actual __mysql_flavor is initialized, since that doesn't happen until after
+# variable MYSQL_FLAVOR is initialized, since that doesn't happen until after
 # the command-line options are parsed. If we make mysql_flavor a variable and
 # import it before it's initialized, the module that imported it won't get the
 # updated value when it's later initialized.
 def mysql_flavor():
-  return __mysql_flavor
+  return MYSQL_FLAVOR
 
 
 def set_mysql_flavor(flavor):
   """Set the object that will be returned by mysql_flavor().
 
   If flavor is not specified, set it based on MYSQL_FLAVOR environment variable.
+
+  Args:
+    flavor: String of the MySQL flavor e.g. "MariaDB" or "MySQL56".
   """
 
-  global __mysql_flavor
+  global MYSQL_FLAVOR
 
   if not flavor:
     flavor = os.environ.get("MYSQL_FLAVOR", "MariaDB")
@@ -170,9 +181,9 @@ def set_mysql_flavor(flavor):
   os.environ["MYSQL_FLAVOR"] = flavor
 
   if flavor == "MariaDB":
-    __mysql_flavor = MariaDB()
+    MYSQL_FLAVOR = MariaDB()
   elif flavor == "MySQL56":
-    __mysql_flavor = MySQL56()
+    MYSQL_FLAVOR = MySQL56()
   else:
     logging.error("Unknown MYSQL_FLAVOR '%s'", flavor)
     exit(1)
