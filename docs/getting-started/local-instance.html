@@ -372,7 +372,7 @@ for ZooKeeper and etcd.</p>
 
 <ul>
 <li>ZooKeeper 3.3.5 is included by default. </li>
-<li><a href="https://github.com/coreos/etcd/releases">Install etcd v2.0+</a>.
+<li><a href="https://github.com/coreos/etcd/releases">Install etcd v3.0+</a>.
 If you use etcd, remember to include the <code class="prettyprint">etcd</code> command
 on your path.</li>
 </ul></li>
@@ -613,9 +613,10 @@ vitess/examples/local<span class="nv">$ </span>./zk-up.sh
 Vitess process how to connect to ZooKeeper. Then, each process can
 find all of the other Vitess processes by coordinating via ZooKeeper.</p>
 
-<p>Each of our scripts automatically sets the <code class="prettyprint">ZK_CLIENT_CONFIG</code> environment
-variable to point to the <code class="prettyprint">zk-client-conf.json</code> file, which contains the
-ZooKeeper server addresses for each cell.</p></li>
+<p>Each of our scripts automatically uses the <code class="prettyprint">TOPOLOGY_FLAGS</code> environment
+variable to point to the global ZooKeeper instance. The global instance in
+turn is configured to point to the local instance. In our sample scripts,
+they are both hosted in the same ZooKeeper service.</p></li>
 <li><p><strong>Start vtctld</strong></p>
 
 <p>The <em>vtctld</em> server provides a web interface that
@@ -827,7 +828,7 @@ and provide a link to it.</p>
     
     <a href="https://groups.google.com/forum/#!forum/vitess" target="_blank">Contact: vitess@googlegroups.com</a>&nbsp;&nbsp;<b>·</b>&nbsp;&nbsp;
     <a href="https://groups.google.com/forum/#!forum/vitess-announce" target="_blank">Announcements</a>&nbsp;&nbsp;<b>·</b>&nbsp;&nbsp;
-    &#169; 2016 <a href="/">Vitess</a> powered by <a href="https://developers.google.com/open-source/">Google Inc</a>
+    &#169; 2017 <a href="/">Vitess</a> powered by <a href="https://developers.google.com/open-source/">Google Inc</a>
   </nav>
 </footer>
 
