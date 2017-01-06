@@ -7,6 +7,8 @@ package sqldb
 import (
 	"bytes"
 	"fmt"
+	"regexp"
+	"strconv"
 )
 
 const (
@@ -43,6 +45,7 @@ func (se *SQLError) Error() string {
 	// Add MySQL errno and SQLSTATE in a format that we can later parse.
 	// There's no avoiding string parsing because all errors
 	// are converted to strings anyway at RPC boundaries.
+	// See NewSQLErrorFromError.
 	fmt.Fprintf(buf, " (errno %v) (sqlstate %v)", se.Num, se.State)
 
 	if se.Query != "" {
@@ -59,4 +62,50 @@ func (se *SQLError) Number() int {
 // SQLState returns the SQLSTATE value.
 func (se *SQLError) SQLState() string {
 	return se.State
+}
+
+var errExtract = regexp.MustCompile(`.*\(errno ([0-9]*)\) \(sqlstate ([0-9a-zA-Z]{5})\).*`)
+
+// NewSQLErrorFromError returns a *SQLError from the provided error.
+// If it's not the right type, it still tries to get it from a regexp.
+func NewSQLErrorFromError(err error) error {
+	if err == nil {
+		return nil
+	}
+
+	if serr, ok := err.(*SQLError); ok {
+		return serr
+	}
+
+	msg := err.Error()
+	match := errExtract.FindStringSubmatch(msg)
+	if len(match) < 2 {
+		// Not found, build a generic SQLError.
+		// TODO(alainjobart) maybe we can also check the canonical
+		// error code, and translate that into the right error.
+
+		// FIXME(alainjobart): 1105 is unknown error. Will
+		// merge with sqlconn later.
+		return &SQLError{
+			Num:     1105,
+			State:   SQLStateGeneral,
+			Message: msg,
+		}
+	}
+
+	num, err := strconv.Atoi(match[1])
+	if err != nil {
+		return &SQLError{
+			Num:     1105,
+			State:   SQLStateGeneral,
+			Message: msg,
+		}
+	}
+
+	serr := &SQLError{
+		Num:     num,
+		State:   match[2],
+		Message: msg,
+	}
+	return serr
 }

@@ -7,6 +7,7 @@ set -e
 cell='test'
 web_port=15001
 grpc_port=15991
+mysql_server_port=3306
 
 script_root=`dirname "${BASH_SOURCE}"`
 source $script_root/env.sh
@@ -17,6 +18,7 @@ $VTROOT/bin/vtgate \
   -log_dir $VTDATAROOT/tmp \
   -port $web_port \
   -grpc_port $grpc_port \
+  -mysql_server_port $mysql_server_port \
   -cell $cell \
   -cells_to_watch $cell \
   -tablet_types_to_wait MASTER,REPLICA \
