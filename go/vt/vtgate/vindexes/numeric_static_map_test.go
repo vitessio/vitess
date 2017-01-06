@@ -14,27 +14,43 @@ import (
 	"github.com/youtube/vitess/go/testfiles"
 )
 
-var numericStaticMap Vindex
-
-func init() {
+// createVindex creates the "numeric_static_map" vindex object which is used by
+// each test.
+//
+// IMPORTANT: This code is called per test and must not be called from init()
+// because our internal implementation of testfiles.Locate() does not support to
+// be called from init().
+func createVindex() (Vindex, error) {
 	m := make(map[string]string)
 	m["json_path"] = testfiles.Locate("vtgate/numeric_static_map_test.json")
-	numericStaticMap, _ = CreateVindex("numeric_static_map", "numericStaticMap", m)
+	return CreateVindex("numeric_static_map", "numericStaticMap", m)
 }
 
 func TestNumericStaticMapCost(t *testing.T) {
+	numericStaticMap, err := createVindex()
+	if err != nil {
+		t.Fatalf("failed to create vindex: %v", err)
+	}
 	if numericStaticMap.Cost() != 1 {
 		t.Errorf("Cost(): %d, want 1", numericStaticMap.Cost())
 	}
 }
 
 func TestNumericStaticMapString(t *testing.T) {
+	numericStaticMap, err := createVindex()
+	if err != nil {
+		t.Fatalf("failed to create vindex: %v", err)
+	}
 	if strings.Compare("numericStaticMap", numericStaticMap.String()) != 0 {
 		t.Errorf("String(): %s, want num", numericStaticMap.String())
 	}
 }
 
 func TestNumericStaticMapMap(t *testing.T) {
+	numericStaticMap, err := createVindex()
+	if err != nil {
+		t.Fatalf("failed to create vindex: %v", err)
+	}
 	sqlVal, _ := sqltypes.BuildIntegral("8")
 	got, err := numericStaticMap.(Unique).Map(nil, []interface{}{
 		1,
@@ -68,7 +84,11 @@ func TestNumericStaticMapMap(t *testing.T) {
 }
 
 func TestNumericStaticMapMapBadData(t *testing.T) {
-	_, err := numericStaticMap.(Unique).Map(nil, []interface{}{1.1})
+	numericStaticMap, err := createVindex()
+	if err != nil {
+		t.Fatalf("failed to create vindex: %v", err)
+	}
+	_, err = numericStaticMap.(Unique).Map(nil, []interface{}{1.1})
 	want := `NumericStaticMap.Map: getNumber: unexpected type for 1.1: float64`
 	if err == nil || err.Error() != want {
 		t.Errorf("NumericStaticMap.Map: %v, want %v", err, want)
@@ -76,6 +96,10 @@ func TestNumericStaticMapMapBadData(t *testing.T) {
 }
 
 func TestNumericStaticMapVerify(t *testing.T) {
+	numericStaticMap, err := createVindex()
+	if err != nil {
+		t.Fatalf("failed to create vindex: %v", err)
+	}
 	success, err := numericStaticMap.Verify(nil, []interface{}{1}, [][]byte{[]byte("\x00\x00\x00\x00\x00\x00\x00\x01")})
 	if err != nil {
 		t.Error(err)
@@ -86,7 +110,11 @@ func TestNumericStaticMapVerify(t *testing.T) {
 }
 
 func TestNumericStaticMapVerifyNeg(t *testing.T) {
-	_, err := numericStaticMap.Verify(nil, []interface{}{1, 2}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6")})
+	numericStaticMap, err := createVindex()
+	if err != nil {
+		t.Fatalf("failed to create vindex: %v", err)
+	}
+	_, err = numericStaticMap.Verify(nil, []interface{}{1, 2}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6")})
 	want := "NumericStaticMap.Verify: length of ids 2 doesn't match length of ksids 1"
 	if err.Error() != want {
 		t.Error(err.Error())
