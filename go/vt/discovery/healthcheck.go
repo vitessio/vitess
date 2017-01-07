@@ -45,6 +45,14 @@ var (
 const (
 	// DefaultTopoReadConcurrency can be used as default value for the topoReadConcurrency parameter of a TopologyWatcher.
 	DefaultTopoReadConcurrency int = 5
+	// DefaultTopologyWatcherRefreshInterval can be used as the default value for
+	// the refresh interval of a topology watcher.
+	DefaultTopologyWatcherRefreshInterval = 1 * time.Minute
+
+	// See the documentation for NewHealthCheck below for an explanation of these parameters.
+	DefaultHealthCheckConnTimeout = 1 * time.Minute
+	DefaultHealthCheckRetryDelay  = 5 * time.Second
+	DefaultHealthCheckTimeout     = 1 * time.Minute
 
 	// HealthCheckTemplate is the HTML code to display a TabletsCacheStatusList
 	HealthCheckTemplate = `
@@ -229,8 +237,25 @@ type HealthCheckImpl struct {
 	initialUpdatesWG sync.WaitGroup
 }
 
+// NewDefaultHealthCheck creates a new HealthCheck object with a default configuration.
+func NewDefaultHealthCheck() HealthCheck {
+	return NewHealthCheck(
+		DefaultHealthCheckConnTimeout, DefaultHealthCheckRetryDelay, DefaultHealthCheckTimeout)
+}
+
 // NewHealthCheck creates a new HealthCheck object.
-func NewHealthCheck(connTimeout time.Duration, retryDelay time.Duration, healthCheckTimeout time.Duration) HealthCheck {
+// Parameters:
+// connTimeout.
+//   The duration to wait until a health-check streaming connection is up.
+//   0 means it should establish the connection in the background and return immediately.
+// retryDelay.
+//   The duration to wait before retrying to connect (e.g. after a failed connection
+//   attempt).
+// healthCheckTimeout.
+//   The duration for which we consider a health check response to be 'fresh'. If we don't get
+//   a health check response from a tablet for more than this duration, we consider the tablet
+//   not healthy.
+func NewHealthCheck(connTimeout, retryDelay, healthCheckTimeout time.Duration) HealthCheck {
 	hc := &HealthCheckImpl{
 		addrToConns:        make(map[string]*healthCheckConn),
 		connTimeout:        connTimeout,
@@ -725,8 +750,8 @@ func (hc *HealthCheckImpl) CacheStatus() TabletsCacheStatusList {
 }
 
 // Close stops the healthcheck.
-// After Close() returned, it's guaranteed that the listener won't be called
-// anymore.
+// After Close() returned, it's guaranteed that the listener isn't
+// currently executing and won't be called again.
 func (hc *HealthCheckImpl) Close() error {
 	hc.mu.Lock()
 	close(hc.closeChan)
