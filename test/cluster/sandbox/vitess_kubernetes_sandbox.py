@@ -32,16 +32,44 @@ class VitessKubernetesSandbox(sandbox.Sandbox):
     """Generates sandlet for firewall rules."""
     firewall_sandlet = sandlet.Sandlet('firewall')
 
-    if self.app_options.port_forwarding['vtctld']:
+    if 'vtctld' in self.app_options.port_forwarding:
       firewall_sandlet.components.append(
           self.cluster_env.Port('%s-vtctld' % self.name,
                                 self.app_options.port_forwarding['vtctld']))
-    if self.app_options.port_forwarding['vtgate']:
+    if 'vtgate' in self.app_options.port_forwarding:
       for cell in self.app_options.cells:
         firewall_sandlet.components.append(
             self.cluster_env.Port('%s-vtgate-%s' % (self.name, cell),
                                   self.app_options.port_forwarding['vtgate']))
+    if 'guestbook' in self.app_options.port_forwarding:
+      firewall_sandlet.components.append(
+          self.cluster_env.Port('%s-guestbook' % self.name,
+                                self.app_options.port_forwarding['guestbook']))
     self.sandlets.append(firewall_sandlet)
+
+  def generate_guestbook_sandlet(self):
+    """Creates a sandlet encompassing the guestbook app built on Vitess."""
+    guestbook_sandlet = sandlet.Sandlet('guestbook')
+    guestbook_sandlet.dependencies = ['helm']
+    template_dir = os.path.join(os.environ['VTTOP'], 'examples/kubernetes')
+    for keyspace in self.app_options.keyspaces:
+      create_schema_subprocess = subprocess_component.Subprocess(
+          'create_schema_%s' % keyspace['name'], self.name, 'create_schema.py',
+          self.log_dir, namespace=self.name, keyspace=keyspace['name'],
+          drop_table='messages', sql_file=os.path.join(
+              os.environ['VTTOP'], 'examples/kubernetes/create_test_table.sql'))
+      guestbook_sandlet.components.append(create_schema_subprocess)
+    guestbook_sandlet.components.append(
+        kubernetes_components.KubernetesResource(
+            'guestbook-service', self.name,
+            os.path.join(template_dir, 'guestbook-service.yaml'),
+            namespace=self.name))
+    guestbook_sandlet.components.append(
+        kubernetes_components.KubernetesResource(
+            'guestbook-controller', self.name,
+            os.path.join(template_dir, 'guestbook-controller.yaml'),
+            namespace=self.name))
+    self.sandlets.append(guestbook_sandlet)
 
   def generate_helm_sandlet(self):
     """Creates a helm sandlet.
@@ -147,7 +175,7 @@ class VitessKubernetesSandbox(sandbox.Sandbox):
     helm_sandlet = sandlet.Sandlet('helm')
     helm_sandlet.components = [kubernetes_components.HelmComponent(
         'helm', self.name, yaml_filename)]
-    for i, keyspace in enumerate(self.app_options.keyspaces):
+    for keyspace in self.app_options.keyspaces:
       name = keyspace['name']
       shard_count = keyspace['shard_count']
       wait_for_mysql_subprocess = subprocess_component.Subprocess(
@@ -172,13 +200,15 @@ class VitessKubernetesSandbox(sandbox.Sandbox):
         'Struct', self.sandbox_options['application'].keys())(
             *self.sandbox_options['application'].values())
 
-    if (self.app_options.port_forwarding['vtgate'] or
-        self.app_options.port_forwarding['vtctld']):
+    if any(k in self.app_options.port_forwarding
+           for k in ['vtgate', 'vtctld', 'guestbook']):
       self.generate_firewall_sandlet()
     self.generate_helm_sandlet()
+    if 'guestbook' in self.app_options.port_forwarding:
+      self.generate_guestbook_sandlet()
 
   def print_banner(self):
-    logging.info('Fetching forwarded ports')
+    logging.info('Fetching forwarded ports.')
     vtctld_addr = ''
     vtctld_port = self.app_options.port_forwarding['vtctld']
     vtgate_port = self.app_options.port_forwarding['vtgate']

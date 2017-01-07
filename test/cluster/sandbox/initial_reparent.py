@@ -29,8 +29,7 @@ def initial_reparent(keyspace, master_cell, num_shards, namespace):
           ['ListShardTablets', '%s/%s' % (
               keyspace, sandbox_utils.fix_shard_name(shard_name))],
           namespace=namespace)[0].split('\n')
-      tablets = filter(None, tablets)
-      tablets = [x.split(' ') for x in tablets]
+      tablets = [x.split(' ') for x in tablets if x]
       potential_masters = [
           x[0] for x in tablets if x[3] == 'replica'
           and x[0].split('-')[0] == master_cell]
@@ -42,12 +41,12 @@ def initial_reparent(keyspace, master_cell, num_shards, namespace):
       shard_name = sandbox_utils.fix_shard_name(shard_name)
       master_tablet_id = master_tablets[shard_name]
       if is_master(master_tablet_id, namespace):
-        logging.info('Tablet %s is the master of %s/%s',
+        logging.info('Tablet %s is the master of %s/%s.',
                      master_tablet_id, keyspace, shard_name)
         successfully_reparented.append(shard_name)
       if shard_name in successfully_reparented:
         continue
-      logging.info('Setting tablet %s as master for %s/%s',
+      logging.info('Setting tablet %s as master for %s/%s.',
                    master_tablet_id, keyspace, shard_name)
       vtctl_sandbox.execute_vtctl_command(
           ['InitShardMaster', '-force', '%s/%s' % (keyspace, shard_name),

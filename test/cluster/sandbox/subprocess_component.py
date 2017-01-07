@@ -28,17 +28,17 @@ class Subprocess(sandlet.SandletComponent):
           [item for sublist in
            [('--%s' % k, str(v)) for k, v in self.script_kwargs.items()]
            for item in sublist])
-      logging.info('Executing subprocess script %s', self.script)
+      logging.info('Executing subprocess script %s.', self.script)
       infofile = sandbox_utils.create_log_file(
           self.log_dir, '%s.INFO' % self.name)
       errorfile = sandbox_utils.create_log_file(
           self.log_dir, '%s.ERROR' % self.name)
       subprocess.call(['./%s' % self.script] + script_args, stdout=infofile,
                       stderr=errorfile)
-      logging.info('Done')
+      logging.info('Done.')
     except subprocess.CalledProcessError as error:
       raise sandbox.SandboxError(
-          'Subprocess %s returned errorcode %d, result %s' % (
+          'Subprocess %s returned errorcode %d, result %s.' % (
               self.script, error.returncode, error.output))
     finally:
       if infofile:

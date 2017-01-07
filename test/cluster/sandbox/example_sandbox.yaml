@@ -43,6 +43,7 @@ sandbox:
     port_forwarding:
       vtgate: 15001
       vtctld: 15000
+      guestbook: 80
     backup_flags:
       backup_storage_implementation: gcs
       gcs_backup_storage_bucket: 'my-builtin-backup'

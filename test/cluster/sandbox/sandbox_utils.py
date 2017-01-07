@@ -77,11 +77,9 @@ def create_log_file(log_dir, filename):
 
 
 def generate_random_name():
-  adjectives = []
-  animals = []
   with open('naming/adjectives.txt', 'r') as f:
-    adjectives = [a for a in f.read().split('\n') if a]
+    adjectives = [l.strip() for l in f if l.strip()]
   with open('naming/animals.txt', 'r') as f:
-    animals = [a for a in f.read().split('\n') if a]
+    animals = [l.strip() for l in f if l.strip()]
   return '%s%s' % (random.choice(adjectives), random.choice(animals))
 

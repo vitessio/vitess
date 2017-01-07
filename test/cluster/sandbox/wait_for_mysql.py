@@ -16,7 +16,7 @@ def main():
 
   options, _ = parser.parse_args()
 
-  logging.info('Waiting for mysql to become healthy')
+  logging.info('Waiting for mysql to become healthy.')
 
   tablets = []
   cells = options.cells.split(',')
@@ -27,7 +27,7 @@ def main():
       tablets.append(t.split(' ')[0])
   tablets = filter(None, tablets)
 
-  logging.info('Tablets: %s', ', '.join(tablets))
+  logging.info('Tablets: %s.', ', '.join(tablets))
 
   start_time = time.time()
   while time.time() - start_time < 300:
@@ -38,9 +38,10 @@ def main():
           namespace=options.namespace)
       if success:
         good_tablets.append(tablet)
-    logging.info('%d of %d tablets good', len(good_tablets), len(tablets))
+    logging.info('%d of %d tablets healthy.', len(good_tablets), len(tablets))
     if len(good_tablets) == len(tablets):
-      logging.info('All tablets ready in %f seconds', time.time() - start_time)
+      logging.info('All tablets healthy in %f seconds.',
+                   time.time() - start_time)
       break
   else:
     logging.warn('Timed out waiting for tablets to be ready.')

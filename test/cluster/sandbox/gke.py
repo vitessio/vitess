@@ -61,4 +61,4 @@ class Port(sandlet.SandletComponent):
       subprocess.check_call(
           ['gcloud', 'compute', 'firewall-rules', 'delete', self.name, '-q'])
     except subprocess.CalledProcessError:
-      logging.warn('Failed to delete firewall rule %s', self.name)
+      logging.warn('Failed to delete firewall rule %s.', self.name)

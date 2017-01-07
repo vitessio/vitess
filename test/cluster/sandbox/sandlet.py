@@ -26,6 +26,7 @@ class Sandlet(object):
     self.components = []
 
   def _execute_components(self, start):
+    """Bring up or down the components."""
     component_graph = sandbox_utils.create_dependency_graph(
         self.components, reverse=not start)
     while component_graph:
@@ -49,16 +50,16 @@ class Sandlet(object):
         if not unfinished_components:
           break
         logging.info(
-            'Waiting for components to be finished: %s',
+            'Waiting for components to be finished: %s.',
             ', '.join(unfinished_components))
         time.sleep(10)
 
   def start(self):
-    logging.info('Starting sandlet %s', self.name)
+    logging.info('Starting sandlet %s.', self.name)
     self._execute_components(True)
 
   def stop(self):
-    logging.info('Stopping sandlet %s', self.name)
+    logging.info('Stopping sandlet %s.', self.name)
     self._execute_components(False)
 
 
@@ -71,10 +72,10 @@ class SandletComponent(object):
     self.dependencies = []
 
   def start(self):
-    logging.info('Starting component %s', self.name)
+    logging.info('Starting component %s.', self.name)
 
   def stop(self):
-    logging.info('Stopping component %s', self.name)
+    logging.info('Stopping component %s.', self.name)
 
   def is_up(self):
     """Whether the component has finished being started."""

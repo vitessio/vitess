@@ -47,12 +47,12 @@ class Sandbox(object):
     self.name = sandbox_options.get('name')
     self.cluster_type = sandbox_options.get('cluster_type')
     if self.cluster_type not in self._cluster_envs.keys():
-      raise SandboxError('Invalid cluster type %s' % self.cluster_type)
+      raise SandboxError('Invalid cluster type %s.' % self.cluster_type)
     cluster_config = [c for c in sandbox_options.get('clusters')
                       if c['type'] == self.cluster_type]
     if not cluster_config:
       raise SandboxError(
-          'Cluster config %s not listed in sandbox config' % cluster_config)
+          'Cluster config %s not listed in sandbox config.' % cluster_config)
     self.cluster_config = cluster_config[0]
     self.cluster_env = self._cluster_envs[self.cluster_type]
     self.cluster = self.cluster_env.Cluster(self.cluster_config)
@@ -66,7 +66,7 @@ class Sandbox(object):
     for sandlet in sandlets:
       sandlet_obj = next((x for x in self.sandlets if x.name == sandlet), None)
       if not sandlet_obj:
-        raise Exception('No sandlet found with name: %s' % sandlet)
+        raise SandboxError('No sandlet found with name: %s.' % sandlet)
       retval.append(sandlet_obj)
     return retval
 
@@ -88,15 +88,21 @@ class Sandbox(object):
 
   def start_cluster(self):
     if not self.cluster_type:
-      raise SandboxError('Cannot start cluster, no cluster_type defined')
+      raise SandboxError('Cannot start cluster, no cluster_type defined.')
     self.cluster.start()
 
   def stop_cluster(self):
     if not self.cluster:
-      raise SandboxError('Cannot stop cluster, no cluster_type defined')
+      raise SandboxError('Cannot stop cluster, no cluster_type defined.')
     self.cluster.stop()
 
   def _execute_sandlets(self, start=True, sandlets=None):
+    """Bring up or down the sandlets.
+
+    Args:
+      start: True if bringing up, False if bringing down (bool).
+      sandlets: List of sandlets to execute. Set to None to execute all.
+    """
     sandlets_to_execute = self._get_sandlets(sandlets) or self.sandlets
     sandlet_graph = sandbox_utils.create_dependency_graph(
         sandlets_to_execute, reverse=(not start))
@@ -110,9 +116,9 @@ class Sandbox(object):
         else:
           sandlet.stop()
         del sandlet_graph[sandlet_name]
-        for _, (dependencies, _) in sandlet_graph.items():
-          if sandlet_name in dependencies:
-            dependencies.remove(sandlet_name)
+        for _, v in sandlet_graph.items():
+          if sandlet_name in v['dependencies']:
+            v['dependencies'].remove(sandlet_name)
 
   def start_sandlets(self, sandlets=None):
     self._execute_sandlets(start=True, sandlets=sandlets)
@@ -179,9 +185,9 @@ def sandbox_main(sandbox_cls):
   elif sandbox_args.action == 'Stop':
     sandbox.stop(sandlets)
   elif sandbox_args.action == 'PrintSandlets':
-    logging.info('Sandlets: %s', ', '.join(s.name for s in sandbox.sandlets))
+    logging.info('Sandlets: %s.', ', '.join(s.name for s in sandbox.sandlets))
   elif sandbox_args.action == 'PrintBanner':
     sandbox.print_banner()
   else:
-    logging.info('No available action selected. Choices are: %s',
+    logging.info('No available action selected. Choices are: %s.',
                  ', '.join(available_actions))
