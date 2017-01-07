@@ -574,16 +574,8 @@ func (tsv *TabletServer) isMySQLReachable() bool {
 
 // ReloadSchema reloads the schema.
 func (tsv *TabletServer) ReloadSchema(ctx context.Context) error {
-	// We have to prevent tabletserver from shutting down while it's
-	// reloading schema.
-	if err := tsv.startRequest(&tsv.target, false, false); err != nil {
-		return err
-	}
-	defer func() {
-		logError(tsv.qe.queryServiceStats)
-		tsv.endRequest(false)
-	}()
-	return tsv.qe.schemaInfo.Reload(ctx)
+	tsv.qe.schemaInfo.ticks.Trigger()
+	return nil
 }
 
 // ClearQueryPlanCache clears internal query plan cache
