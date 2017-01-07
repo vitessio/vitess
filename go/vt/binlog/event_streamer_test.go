@@ -37,7 +37,7 @@ func TestEventErrors(t *testing.T) {
 		trans := &binlogdatapb.BinlogTransaction{
 			Statements: []*binlogdatapb.BinlogTransaction_Statement{
 				{
-					Category: binlogdatapb.BinlogTransaction_Statement_BL_DML,
+					Category: binlogdatapb.BinlogTransaction_Statement_BL_INSERT,
 					Sql:      []byte(sql),
 				},
 			},
@@ -95,10 +95,10 @@ func TestDMLEvent(t *testing.T) {
 			Category: binlogdatapb.BinlogTransaction_Statement_BL_SET,
 			Sql:      []byte("SET INSERT_ID=10"),
 		}, {
-			Category: binlogdatapb.BinlogTransaction_Statement_BL_DML,
+			Category: binlogdatapb.BinlogTransaction_Statement_BL_INSERT,
 			Sql:      []byte("query /* _stream _table_ (eid id name)  (null 1 'bmFtZQ==' ) (null 18446744073709551615 'bmFtZQ==' ); */"),
 		}, {
-			Category: binlogdatapb.BinlogTransaction_Statement_BL_DML,
+			Category: binlogdatapb.BinlogTransaction_Statement_BL_INSERT,
 			Sql:      []byte("query"),
 		}},
 		EventToken: &querypb.EventToken{

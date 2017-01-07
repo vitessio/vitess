@@ -23,10 +23,10 @@ func TestTablesFilterPass(t *testing.T) {
 				Category: binlogdatapb.BinlogTransaction_Statement_BL_SET,
 				Sql:      []byte("set1"),
 			}, {
-				Category: binlogdatapb.BinlogTransaction_Statement_BL_DML,
+				Category: binlogdatapb.BinlogTransaction_Statement_BL_INSERT,
 				Sql:      []byte("dml1 /* _stream included1 (id ) (500 ); */"),
 			}, {
-				Category: binlogdatapb.BinlogTransaction_Statement_BL_DML,
+				Category: binlogdatapb.BinlogTransaction_Statement_BL_INSERT,
 				Sql:      []byte("dml2 /* _stream included2 (id ) (500 ); */"),
 			},
 		},
@@ -40,9 +40,9 @@ func TestTablesFilterPass(t *testing.T) {
 		return nil
 	})
 	f(&input)
-	want := `statement: <6, "set1"> statement: <4, "dml1 /* _stream included1 (id ) (500 ); */"> statement: <4, "dml2 /* _stream included2 (id ) (500 ); */"> position: "MariaDB/0-41983-1" `
+	want := `statement: <6, "set1"> statement: <7, "dml1 /* _stream included1 (id ) (500 ); */"> statement: <7, "dml2 /* _stream included2 (id ) (500 ); */"> position: "MariaDB/0-41983-1" `
 	if want != got {
-		t.Errorf("want %s, got %s", want, got)
+		t.Errorf("want\n%s, got\n%s", want, got)
 	}
 }
 
@@ -53,7 +53,7 @@ func TestTablesFilterSkip(t *testing.T) {
 				Category: binlogdatapb.BinlogTransaction_Statement_BL_SET,
 				Sql:      []byte("set1"),
 			}, {
-				Category: binlogdatapb.BinlogTransaction_Statement_BL_DML,
+				Category: binlogdatapb.BinlogTransaction_Statement_BL_INSERT,
 				Sql:      []byte("dml1 /* _stream excluded1 (id ) (500 ); */"),
 			},
 		},
@@ -107,10 +107,10 @@ func TestTablesFilterMalformed(t *testing.T) {
 				Category: binlogdatapb.BinlogTransaction_Statement_BL_SET,
 				Sql:      []byte("set1"),
 			}, {
-				Category: binlogdatapb.BinlogTransaction_Statement_BL_DML,
+				Category: binlogdatapb.BinlogTransaction_Statement_BL_INSERT,
 				Sql:      []byte("ddl"),
 			}, {
-				Category: binlogdatapb.BinlogTransaction_Statement_BL_DML,
+				Category: binlogdatapb.BinlogTransaction_Statement_BL_INSERT,
 				Sql:      []byte("dml1 /* _stream excluded1*/"),
 			},
 		},

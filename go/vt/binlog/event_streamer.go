@@ -69,7 +69,9 @@ func (evs *EventStreamer) transactionToEvent(trans *binlogdatapb.BinlogTransacti
 					log.Errorf("%v: %s", err, sql)
 				}
 			}
-		case binlogdatapb.BinlogTransaction_Statement_BL_DML:
+		case binlogdatapb.BinlogTransaction_Statement_BL_INSERT,
+			binlogdatapb.BinlogTransaction_Statement_BL_UPDATE,
+			binlogdatapb.BinlogTransaction_Statement_BL_DELETE:
 			var dmlStatement *querypb.StreamEvent_Statement
 			dmlStatement, insertid, err = evs.buildDMLStatement(string(stmt.Sql), insertid)
 			if err != nil {

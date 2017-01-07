@@ -183,7 +183,7 @@ func TestStreamerParseEventsXID(t *testing.T) {
 		{
 			Statements: []*binlogdatapb.BinlogTransaction_Statement{
 				{Category: binlogdatapb.BinlogTransaction_Statement_BL_SET, Sql: []byte("SET TIMESTAMP=1407805592")},
-				{Category: binlogdatapb.BinlogTransaction_Statement_BL_DML, Sql: []byte("insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */")},
+				{Category: binlogdatapb.BinlogTransaction_Statement_BL_INSERT, Sql: []byte("insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */")},
 			},
 			EventToken: &querypb.EventToken{
 				Timestamp: 1407805592,
@@ -236,7 +236,7 @@ func TestStreamerParseEventsCommit(t *testing.T) {
 		{
 			Statements: []*binlogdatapb.BinlogTransaction_Statement{
 				{Category: binlogdatapb.BinlogTransaction_Statement_BL_SET, Sql: []byte("SET TIMESTAMP=1407805592")},
-				{Category: binlogdatapb.BinlogTransaction_Statement_BL_DML, Sql: []byte("insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */")},
+				{Category: binlogdatapb.BinlogTransaction_Statement_BL_INSERT, Sql: []byte("insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */")},
 			},
 			EventToken: &querypb.EventToken{
 				Timestamp: 1407805592,
@@ -577,7 +577,7 @@ func TestStreamerParseEventsRollback(t *testing.T) {
 		{
 			Statements: []*binlogdatapb.BinlogTransaction_Statement{
 				{Category: binlogdatapb.BinlogTransaction_Statement_BL_SET, Sql: []byte("SET TIMESTAMP=1407805592")},
-				{Category: binlogdatapb.BinlogTransaction_Statement_BL_DML, Sql: []byte("insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */")},
+				{Category: binlogdatapb.BinlogTransaction_Statement_BL_INSERT, Sql: []byte("insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */")},
 			},
 			EventToken: &querypb.EventToken{
 				Timestamp: 1407805592,
@@ -624,7 +624,7 @@ func TestStreamerParseEventsDMLWithoutBegin(t *testing.T) {
 		{
 			Statements: []*binlogdatapb.BinlogTransaction_Statement{
 				{Category: binlogdatapb.BinlogTransaction_Statement_BL_SET, Sql: []byte("SET TIMESTAMP=1407805592")},
-				{Category: binlogdatapb.BinlogTransaction_Statement_BL_DML, Sql: []byte("insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */")},
+				{Category: binlogdatapb.BinlogTransaction_Statement_BL_INSERT, Sql: []byte("insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */")},
 			},
 			EventToken: &querypb.EventToken{
 				Timestamp: 1407805592,
@@ -687,7 +687,7 @@ func TestStreamerParseEventsBeginWithoutCommit(t *testing.T) {
 		{
 			Statements: []*binlogdatapb.BinlogTransaction_Statement{
 				{Category: binlogdatapb.BinlogTransaction_Statement_BL_SET, Sql: []byte("SET TIMESTAMP=1407805592")},
-				{Category: binlogdatapb.BinlogTransaction_Statement_BL_DML, Sql: []byte("insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */")},
+				{Category: binlogdatapb.BinlogTransaction_Statement_BL_INSERT, Sql: []byte("insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */")},
 			},
 			EventToken: &querypb.EventToken{
 				Timestamp: 1407805592,
@@ -752,7 +752,7 @@ func TestStreamerParseEventsSetInsertID(t *testing.T) {
 			Statements: []*binlogdatapb.BinlogTransaction_Statement{
 				{Category: binlogdatapb.BinlogTransaction_Statement_BL_SET, Sql: []byte("SET INSERT_ID=101")},
 				{Category: binlogdatapb.BinlogTransaction_Statement_BL_SET, Sql: []byte("SET TIMESTAMP=1407805592")},
-				{Category: binlogdatapb.BinlogTransaction_Statement_BL_DML, Sql: []byte("insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */")},
+				{Category: binlogdatapb.BinlogTransaction_Statement_BL_INSERT, Sql: []byte("insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */")},
 			},
 			EventToken: &querypb.EventToken{
 				Timestamp: 1407805592,
@@ -838,7 +838,7 @@ func TestStreamerParseEventsOtherDB(t *testing.T) {
 		{
 			Statements: []*binlogdatapb.BinlogTransaction_Statement{
 				{Category: binlogdatapb.BinlogTransaction_Statement_BL_SET, Sql: []byte("SET TIMESTAMP=1407805592")},
-				{Category: binlogdatapb.BinlogTransaction_Statement_BL_DML, Sql: []byte("insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */")},
+				{Category: binlogdatapb.BinlogTransaction_Statement_BL_INSERT, Sql: []byte("insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */")},
 			},
 			EventToken: &querypb.EventToken{
 				Timestamp: 1407805592,
@@ -891,7 +891,7 @@ func TestStreamerParseEventsOtherDBBegin(t *testing.T) {
 		{
 			Statements: []*binlogdatapb.BinlogTransaction_Statement{
 				{Category: binlogdatapb.BinlogTransaction_Statement_BL_SET, Sql: []byte("SET TIMESTAMP=1407805592")},
-				{Category: binlogdatapb.BinlogTransaction_Statement_BL_DML, Sql: []byte("insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */")},
+				{Category: binlogdatapb.BinlogTransaction_Statement_BL_INSERT, Sql: []byte("insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */")},
 			},
 			EventToken: &querypb.EventToken{
 				Timestamp: 1407805592,
@@ -970,7 +970,7 @@ func TestStreamerParseEventsMariadbBeginGTID(t *testing.T) {
 		{
 			Statements: []*binlogdatapb.BinlogTransaction_Statement{
 				{Category: binlogdatapb.BinlogTransaction_Statement_BL_SET, Charset: charset, Sql: []byte("SET TIMESTAMP=1409892744")},
-				{Category: binlogdatapb.BinlogTransaction_Statement_BL_DML, Charset: charset, Sql: []byte("insert into vt_insert_test(msg) values ('test 0') /* _stream vt_insert_test (id ) (null ); */")},
+				{Category: binlogdatapb.BinlogTransaction_Statement_BL_INSERT, Charset: charset, Sql: []byte("insert into vt_insert_test(msg) values ('test 0') /* _stream vt_insert_test (id ) (null ); */")},
 			},
 			EventToken: &querypb.EventToken{
 				Timestamp: 1409892744,
@@ -1056,9 +1056,9 @@ func TestGetStatementCategory(t *testing.T) {
 		"BEGIN":    binlogdatapb.BinlogTransaction_Statement_BL_BEGIN,
 		"COMMIT":   binlogdatapb.BinlogTransaction_Statement_BL_COMMIT,
 		"ROLLBACK": binlogdatapb.BinlogTransaction_Statement_BL_ROLLBACK,
-		"INSERT something (something, something)": binlogdatapb.BinlogTransaction_Statement_BL_DML,
-		"UPDATE something SET something=nothing":  binlogdatapb.BinlogTransaction_Statement_BL_DML,
-		"DELETE something":                        binlogdatapb.BinlogTransaction_Statement_BL_DML,
+		"INSERT something (something, something)": binlogdatapb.BinlogTransaction_Statement_BL_INSERT,
+		"UPDATE something SET something=nothing":  binlogdatapb.BinlogTransaction_Statement_BL_UPDATE,
+		"DELETE something":                        binlogdatapb.BinlogTransaction_Statement_BL_DELETE,
 		"CREATE something":                        binlogdatapb.BinlogTransaction_Statement_BL_DDL,
 		"ALTER something":                         binlogdatapb.BinlogTransaction_Statement_BL_DDL,
 		"DROP something":                          binlogdatapb.BinlogTransaction_Statement_BL_DDL,

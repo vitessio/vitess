@@ -51,30 +51,50 @@ class BaseShardingTest(object):
          'commit'],
         write=True)
 
-  # _insert_multi_value simulates a multivalue insert in the MySQL database
-  # along with the comments required for routing.
-  def _insert_multi_value(self, tablet_obj, table, midList, msgList, keyspace_idList):
-      comma_sep = ','
-      querystr = 'insert into %s(parent_id, id, msg, custom_ksid_col) values' %(table)
-      values_str = ''
-      id_str = '/* id:'
-      ksid_str = ''
+  def _insert_multi_value(self, tablet_obj, table, mids, msgs, keyspace_ids):
+    """Generate multi-shard insert statements."""
+    comma_sep = ','
+    querystr = ('insert into %s(parent_id, id, msg, custom_ksid_col) values'
+                %(table))
+    values_str = ''
+    id_str = '/* id:'
+    ksid_str = ''
 
-      for mid,msg,keyspace_id in zip(midList,msgList,keyspace_idList):
-          ksid_str += utils.uint64_to_hex(keyspace_id)+comma_sep
-          values_str += '(%d, %d, "%s", 0x%x)' % (fixed_parent_id,mid,msg,keyspace_id) + comma_sep
-          id_str += '%d' % (mid) + comma_sep
+    for mid, msg, keyspace_id in zip(mids, msgs, keyspace_ids):
+      ksid_str += utils.uint64_to_hex(keyspace_id)+comma_sep
+      values_str += ('(%d, %d, "%s", 0x%x)' %
+                     (fixed_parent_id, mid, msg, keyspace_id) + comma_sep)
+      id_str += '%d' % (mid) + comma_sep
 
-      values_str = values_str.rstrip(comma_sep) + '/* vtgate:: keyspace_id:%s */ ' %(ksid_str.rstrip(comma_sep))
-      values_str += id_str.rstrip(comma_sep) + '*/'
+    values_str = values_str.rstrip(comma_sep)
+    values_str += '/* vtgate:: keyspace_id:%s */ ' %(ksid_str.rstrip(comma_sep))
+    values_str += id_str.rstrip(comma_sep) + '*/'
 
-      querystr += values_str
-      tablet_obj.mquery(
-          'vt_test_keyspace',
-          ['begin',
-           querystr,
-           'commit'],
-          write=True)
+    querystr += values_str
+    tablet_obj.mquery(
+        'vt_test_keyspace',
+        ['begin',
+         querystr,
+         'commit'],
+        write=True)
+
+  def _exec_non_annotated_update(self, tablet_obj, table, mids, new_val):
+    tablet_obj.mquery(
+        'vt_test_keyspace',
+        ['begin',
+         'update %s set msg = "%s" where parent_id = %d and id in (%s)' %
+         (table, new_val, fixed_parent_id, ','.join([str(i) for i in mids])),
+         'commit'],
+        write=True)
+
+  def _exec_non_annotated_delete(self, tablet_obj, table, mids):
+    tablet_obj.mquery(
+        'vt_test_keyspace',
+        ['begin',
+         'delete from %s where parent_id = %d and id in (%s)' %
+         (table, fixed_parent_id, ','.join([str(i) for i in mids])),
+         'commit'],
+        write=True)
 
   def _get_value(self, tablet_obj, table, mid):
     """Returns the row(s) from the table for the provided id, using MySQL.

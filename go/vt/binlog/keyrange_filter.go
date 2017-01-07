@@ -32,16 +32,19 @@ func KeyRangeFilterFunc(keyrange *topodatapb.KeyRange, sendReply sendTransaction
 			case binlogdatapb.BinlogTransaction_Statement_BL_DDL:
 				log.Warningf("Not forwarding DDL: %s", statement.Sql)
 				continue
-			case binlogdatapb.BinlogTransaction_Statement_BL_DML:
+			case binlogdatapb.BinlogTransaction_Statement_BL_INSERT,
+				binlogdatapb.BinlogTransaction_Statement_BL_UPDATE,
+				binlogdatapb.BinlogTransaction_Statement_BL_DELETE:
 				keyspaceIDS, err := sqlannotation.ExtractKeyspaceIDS(string(statement.Sql))
 				if err != nil {
-					if handleExtractKeySpaceIDError(err) {
-						continue
-					} else {
-						// TODO(erez): Stop filtered-replication here, and alert.
-						// Currently we skip.
+					if statement.Category == binlogdatapb.BinlogTransaction_Statement_BL_INSERT {
+						handleExtractKeySpaceIDError(err)
 						continue
 					}
+					// updates and deletes are safe to replicate to all targets.
+					filtered = append(filtered, statement)
+					matched = true
+					continue
 				}
 				if len(keyspaceIDS) == 1 {
 					if !key.KeyRangeContains(keyrange, keyspaceIDS[0]) {
