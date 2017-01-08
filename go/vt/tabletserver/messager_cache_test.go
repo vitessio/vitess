@@ -96,6 +96,56 @@ func TestMessagerCacheDupKey(t *testing.T) {
 	}
 }
 
+func TestMessagerCacheDiscard(t *testing.T) {
+	mc := NewMessagerCache(10)
+	if !mc.Add(&MessageRow{
+		TimeNext: 1,
+		Epoch:    0,
+		id:       "row01",
+	}) {
+		t.Fatal("Add returned false")
+	}
+	mc.Discard("row01")
+	if row := mc.Pop(); row != nil {
+		t.Errorf("Pop: want nil, got %s", row.id)
+	}
+	if !mc.Add(&MessageRow{
+		TimeNext: 1,
+		Epoch:    0,
+		id:       "row01",
+	}) {
+		t.Fatal("Add returned false")
+	}
+	if row := mc.Pop(); row == nil || row.id != "row01" {
+		t.Errorf("Pop: want row01, got %v", row)
+	}
+
+	// Add will be a no-op.
+	if !mc.Add(&MessageRow{
+		TimeNext: 1,
+		Epoch:    0,
+		id:       "row01",
+	}) {
+		t.Fatal("Add returned false")
+	}
+	if row := mc.Pop(); row != nil {
+		t.Errorf("Pop: want nil, got %s", row.id)
+	}
+	mc.Discard("row01")
+
+	// Now we can add.
+	if !mc.Add(&MessageRow{
+		TimeNext: 1,
+		Epoch:    0,
+		id:       "row01",
+	}) {
+		t.Fatal("Add returned false")
+	}
+	if row := mc.Pop(); row == nil || row.id != "row01" {
+		t.Errorf("Pop: want row01, got %v", row)
+	}
+}
+
 func TestMessagerCacheFull(t *testing.T) {
 	mc := NewMessagerCache(2)
 	if !mc.Add(&MessageRow{

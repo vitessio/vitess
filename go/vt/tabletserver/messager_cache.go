@@ -60,14 +60,14 @@ type MessagerCache struct {
 	mu        sync.Mutex
 	size      int
 	sendQueue messageHeap
-	ids       map[string]bool
+	messages  map[string]*MessageRow
 }
 
 // NewMessagerCache creates a new MessagerCache.
 func NewMessagerCache(size int) *MessagerCache {
 	mc := &MessagerCache{
-		size: size,
-		ids:  make(map[string]bool),
+		size:     size,
+		messages: make(map[string]*MessageRow),
 	}
 	return mc
 }
@@ -77,7 +77,7 @@ func (mc *MessagerCache) Clear() {
 	mc.mu.Lock()
 	defer mc.mu.Unlock()
 	mc.sendQueue = nil
-	mc.ids = make(map[string]bool)
+	mc.messages = make(map[string]*MessageRow)
 }
 
 // Add adds a MessageRow to the cache. It returns
@@ -88,11 +88,13 @@ func (mc *MessagerCache) Add(mr *MessageRow) bool {
 	if len(mc.sendQueue) >= mc.size {
 		return false
 	}
-	if mc.ids[mr.id] {
+	// Don't check for nil. Messages that are popped for
+	// send are nilled out.
+	if _, ok := mc.messages[mr.id]; ok {
 		return true
 	}
 	heap.Push(&mc.sendQueue, mr)
-	mc.ids[mr.id] = true
+	mc.messages[mr.id] = mr
 	return true
 }
 
@@ -101,22 +103,40 @@ func (mc *MessagerCache) Add(mr *MessageRow) bool {
 // The discard has to happen as a separate operation
 // to prevent the poller thread from repopulating the
 // message while it's being sent.
-// If the queue is empty, Pop waits for the next item.
-// If the Cache is closed Pop returns nil.
+// If the Cache is empty Pop returns nil.
 func (mc *MessagerCache) Pop() *MessageRow {
 	mc.mu.Lock()
 	defer mc.mu.Unlock()
-	if len(mc.sendQueue) == 0 {
-		return nil
+	for {
+		if len(mc.sendQueue) == 0 {
+			return nil
+		}
+		mr := heap.Pop(&mc.sendQueue).(*MessageRow)
+		// If message was previously marked as defunct, drop
+		// it and continue.
+		if mr.id == "" {
+			continue
+		}
+		// Point the message entry to nil. If there is a race
+		// with Discard while the item is being sent, it won't
+		// be reachable.
+		mc.messages[mr.id] = nil
+		return mr
 	}
-	return heap.Pop(&mc.sendQueue).(*MessageRow)
 }
 
 // Discard forgets the specified id.
 func (mc *MessagerCache) Discard(id string) {
 	mc.mu.Lock()
 	defer mc.mu.Unlock()
-	delete(mc.ids, id)
+	if mr := mc.messages[id]; mr != nil {
+		// The row is still in the queue somewhere. Mark
+		// it as defunct. It will be "garbage collected" later.
+		mr.id = ""
+		// "Free" the message.
+		mr.Message = sqltypes.NULL
+	}
+	delete(mc.messages, id)
 }
 
 // Size returns the max size of MessagerCache.
