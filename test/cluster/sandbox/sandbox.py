@@ -58,18 +58,6 @@ class Sandbox(object):
     self.cluster = self.cluster_env.Cluster(self.cluster_config)
     self.sandlets = []
 
-  def _get_sandlets(self, sandlets):
-    """Returns sandlet objects based on input sandlet string names."""
-    if not sandlets:
-      return None
-    retval = []
-    for sandlet in sandlets:
-      sandlet_obj = next((x for x in self.sandlets if x.name == sandlet), None)
-      if not sandlet_obj:
-        raise SandboxError('No sandlet found with name: %s.' % sandlet)
-      retval.append(sandlet_obj)
-    return retval
-
   def set_log_dir(self, log_dir_in=None):
     if log_dir_in:
       self.log_dir = log_dir_in
@@ -96,35 +84,15 @@ class Sandbox(object):
       raise SandboxError('Cannot stop cluster, no cluster_type defined.')
     self.cluster.stop()
 
-  def _execute_sandlets(self, start=True, sandlets=None):
-    """Bring up or down the sandlets.
-
-    Args:
-      start: True if bringing up, False if bringing down (bool).
-      sandlets: List of sandlets to execute. Set to None to execute all.
-    """
-    sandlets_to_execute = self._get_sandlets(sandlets) or self.sandlets
-    sandlet_graph = sandbox_utils.create_dependency_graph(
-        sandlets_to_execute, reverse=(not start))
-    while sandlet_graph:
-      # Get a list of all sandlets with no current dependencies
-      ready_sandlets = [(k, v['object']) for (k, v) in sandlet_graph.items()
-                        if not v['dependencies']]
-      for sandlet_name, sandlet in ready_sandlets:
-        if start:
-          sandlet.start()
-        else:
-          sandlet.stop()
-        del sandlet_graph[sandlet_name]
-        for _, v in sandlet_graph.items():
-          if sandlet_name in v['dependencies']:
-            v['dependencies'].remove(sandlet_name)
-
   def start_sandlets(self, sandlets=None):
-    self._execute_sandlets(start=True, sandlets=sandlets)
+    sandlet_graph = sandbox_utils.create_dependency_graph(
+        self.sandlets, False, sandlets)
+    sandbox_utils.execute_dependency_graph(sandlet_graph, True)
 
   def stop_sandlets(self, sandlets=None):
-    self._execute_sandlets(start=False, sandlets=sandlets)
+    sandlet_graph = sandbox_utils.create_dependency_graph(
+        self.sandlets, True, sandlets)
+    sandbox_utils.execute_dependency_graph(sandlet_graph, False)
 
   def print_banner(self):
     pass
