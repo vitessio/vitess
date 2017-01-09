@@ -2,7 +2,6 @@ package buffer
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"runtime/debug"
 	"sync"
@@ -62,6 +61,9 @@ type entry struct {
 	// done will be closed by shardBuffer when the failover is over and the
 	// request can be retried.
 	done chan struct{}
+
+	// err is set if the buffering failed e.g. when the entry was evicted.
+	err error
 
 	// bufferCtx wraps the request ctx and is used to track the retry of a
 	// request during the drain phase. Once the retry is done, the caller
@@ -182,10 +184,21 @@ func (sb *shardBuffer) logErrorIfStateNotLocked(state bufferState) {
 // If buffering fails e.g. due to a full buffer, an error is returned.
 func (sb *shardBuffer) bufferRequestLocked(ctx context.Context) (*entry, error) {
 	if !sb.bufferSizeSema.TryAcquire() {
-		return nil, vterrors.FromError(vtrpcpb.ErrorCode_TRANSIENT_ERROR, errors.New("master buffer is full"))
-	}
+		// Buffer is full. Evict the oldest entry and buffer this request instead.
+		if len(sb.queue) == 0 {
+			// Overall buffer is full, but this shard's queue is empty. That means
+			// there is at least one other shard failing over as well which consumes
+			// the whole buffer.
+			return nil, bufferFullError
+		}
 
-	// TODO(mberlin): Kill the oldest entry if full.
+		e := sb.queue[0]
+		// Evict the entry. Do not release its slot in the buffer and reuse it for
+		// this new request.
+		// NOTE: We keep the lock to avoid racing with drain().
+		sb.unblockAndWait(e, entryEvictedError, false /* releaseSlot */)
+		sb.queue = sb.queue[1:]
+	}
 
 	e := &entry{
 		done: make(chan struct{}),
@@ -196,6 +209,19 @@ func (sb *shardBuffer) bufferRequestLocked(ctx context.Context) (*entry, error) 
 	return e, nil
 }
 
+// unblockAndWait unblocks a blocked request and waits until it reported its end.
+func (sb *shardBuffer) unblockAndWait(e *entry, err error, releaseSlot bool) {
+	// Set error such that the request will see it.
+	e.err = err
+	// Tell blocked request to stop waiting.
+	close(e.done)
+	// Wait for unblocked request to end.
+	<-e.bufferCtx.Done()
+	if releaseSlot {
+		sb.bufferSizeSema.Release()
+	}
+}
+
 // wait blocks while the request is buffered during the failover.
 func (sb *shardBuffer) wait(ctx context.Context, e *entry) error {
 	select {
@@ -203,7 +229,7 @@ func (sb *shardBuffer) wait(ctx context.Context, e *entry) error {
 		// TODO(mberlin): Cancel buffering. Implement an sb.cancel(e) for that.
 		return vterrors.FromError(vtrpcpb.ErrorCode_TRANSIENT_ERROR, fmt.Errorf("context was canceled before failover finished (%v)", ctx.Err()))
 	case <-e.done:
-		return nil
+		return e.err
 	}
 }
 
@@ -259,9 +285,7 @@ func (sb *shardBuffer) drain() {
 	start := time.Now()
 	// TODO(mberlin): Parallelize the drain by pumping the data through a channel.
 	for _, e := range q {
-		close(e.done)
-		<-e.bufferCtx.Done()
-		sb.bufferSizeSema.Release()
+		sb.unblockAndWait(e, nil /* err */, true /* releaseSlot */)
 	}
 	d := time.Since(start)
 	log.Infof("Draining finished for shard: %s Took: %v for: %d requests.", topoproto.KeyspaceShardString(sb.keyspace, sb.shard), d, len(q))

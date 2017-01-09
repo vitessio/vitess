@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -20,6 +21,8 @@ import (
 const (
 	keyspace = "ks1"
 	shard    = "0"
+	// shard2 is only used for tests with two concurrent failovers.
+	shard2 = "-80"
 )
 
 var (
@@ -249,5 +252,100 @@ func TestRequestCanceled(t *testing.T) {
 	}
 	if got, want := bufferErr.Error(), "context was canceled before failover finished (context canceled)"; got != want {
 		t.Fatalf("canceled buffered request should return a different error message. got = %v, want = %v", got, want)
+	}
+}
+
+func TestEviction(t *testing.T) {
+	flag.Set("enable_vtgate_buffer", "true")
+	flag.Set("vtgate_buffer_keyspace_shards", topoproto.KeyspaceShardString(keyspace, shard))
+	flag.Set("vtgate_buffer_size", "2")
+	defer resetFlags()
+	b := New()
+
+	stopped1 := issueRequest(context.Background(), t, b, failoverErr)
+	stopped2 := issueRequest(context.Background(), t, b, failoverErr)
+	if err := waitForRequestsInFlight(b, 2); err != nil {
+		t.Fatal(err)
+	}
+
+	// Third request will evict the oldest.
+	stopped3 := issueRequest(context.Background(), t, b, failoverErr)
+
+	// Evicted request will see an error from the buffer.
+	if err := isEvictedError(<-stopped1); err != nil {
+		t.Fatal(err)
+	}
+
+	// End of failover. Stop buffering.
+	b.StatsUpdate(&discovery.TabletStats{
+		Target: &querypb.Target{Keyspace: keyspace, Shard: shard, TabletType: topodatapb.TabletType_MASTER},
+		TabletExternallyReparentedTimestamp: 1, // Use any value > 0.
+	})
+
+	if err := <-stopped2; err != nil {
+		t.Fatalf("request should have been buffered and not returned an error: %v", err)
+	}
+	if err := <-stopped3; err != nil {
+		t.Fatalf("request should have been buffered and not returned an error: %v", err)
+	}
+}
+
+// isEvictedError returns nil if "err" is or contains "entryEvictedError".
+func isEvictedError(err error) error {
+	if err == nil {
+		return errors.New("request should have been evicted because the buffer was full")
+	}
+	if got, want := vterrors.RecoverVtErrorCode(err), vtrpcpb.ErrorCode_TRANSIENT_ERROR; got != want {
+		return fmt.Errorf("wrong error code for evicted buffered request. got = %v, want = %v full error: %v", got, want, err)
+	}
+	if got, want := err.Error(), entryEvictedError.Error(); !strings.Contains(got, want) {
+		return fmt.Errorf("evicted buffered request should return a different error message. got = %v, want substring = %v", got, want)
+	}
+	return nil
+}
+
+// TestEvictionNotPossible tests the case that the buffer is a) fully in use
+// by two failovers and b) the second failover doesn't use any slot in the
+// buffer and therefore cannot evict older entries.
+func TestEvictionNotPossible(t *testing.T) {
+	flag.Set("enable_vtgate_buffer", "true")
+	flag.Set("vtgate_buffer_keyspace_shards", fmt.Sprintf("%v,%v",
+		topoproto.KeyspaceShardString(keyspace, shard),
+		topoproto.KeyspaceShardString(keyspace, shard2)))
+	flag.Set("vtgate_buffer_size", "1")
+	defer resetFlags()
+	b := New()
+
+	// Make the buffer full (applies to all failovers).
+	// Also triggers buffering for the first shard.
+	stoppedFirstFailover := issueRequest(context.Background(), t, b, failoverErr)
+	if err := waitForRequestsInFlight(b, 1); err != nil {
+		t.Fatal(err)
+	}
+
+	// Newer requests of the second failover cannot evict anything because
+	// they have no entries buffered.
+	retryDone, bufferErr := b.WaitForFailoverEnd(context.Background(), keyspace, shard2, failoverErr)
+	if bufferErr == nil || retryDone != nil {
+		t.Fatalf("buffer should have returned an error because it's full: err: %v retryDone: %v", bufferErr, retryDone)
+	}
+	if got, want := vterrors.RecoverVtErrorCode(bufferErr), vtrpcpb.ErrorCode_TRANSIENT_ERROR; got != want {
+		t.Fatalf("wrong error code for evicted buffered request. got = %v, want = %v", got, want)
+	}
+	if got, want := bufferErr.Error(), bufferFullError.Error(); !strings.Contains(got, want) {
+		t.Fatalf("evicted buffered request should return a different error message. got = %v, want substring = %v", got, want)
+	}
+
+	// End of failover. Stop buffering.
+	b.StatsUpdate(&discovery.TabletStats{
+		Target: &querypb.Target{Keyspace: keyspace, Shard: shard, TabletType: topodatapb.TabletType_MASTER},
+		TabletExternallyReparentedTimestamp: 1, // Use any value > 0.
+	})
+	if err := <-stoppedFirstFailover; err != nil {
+		t.Fatalf("request should have been buffered and not returned an error: %v", err)
+	}
+	// Wait for the failover end to avoid races.
+	if err := waitForState(b, stateIdle); err != nil {
+		t.Fatal(err)
 	}
 }

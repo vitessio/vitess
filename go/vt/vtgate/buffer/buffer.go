@@ -12,6 +12,7 @@ package buffer
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 
@@ -20,8 +21,15 @@ import (
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/discovery"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
+	"github.com/youtube/vitess/go/vt/vterrors"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
+)
+
+var (
+	bufferFullError   = vterrors.FromError(vtrpcpb.ErrorCode_TRANSIENT_ERROR, errors.New("master buffer is full"))
+	entryEvictedError = vterrors.FromError(vtrpcpb.ErrorCode_TRANSIENT_ERROR, errors.New("buffer full: request evicted for newer request"))
 )
 
 // Buffer is used to track ongoing MASTER tablet failovers and buffer
