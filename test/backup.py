@@ -43,7 +43,7 @@ def setUpModule():
     except MySQLdb.DatabaseError:
       password_col = 'authentication_string'
     utils.wait_procs([tablet_master.teardown_mysql()])
-    tablet_master.remove_tree()
+    tablet_master.remove_tree(ignore_options=True)
 
     # Create a new init_db.sql file that sets up passwords for all users.
     # Then we use a db-credentials-file with the passwords.
