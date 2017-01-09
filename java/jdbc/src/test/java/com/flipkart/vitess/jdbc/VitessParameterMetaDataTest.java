@@ -31,18 +31,22 @@ public class VitessParameterMetaDataTest {
 
     @Test
     public void testOutOfBoundsValidation() {
-        VitessParameterMetaData metaData = new VitessParameterMetaData(1);
+        int parameterCount = 1;
+        VitessParameterMetaData metaData = new VitessParameterMetaData(parameterCount);
 
         try {
             metaData.getParameterType(0);
             Assert.fail();
         } catch (SQLException e) {
+            Assert.assertEquals("Parameter index of '0' is invalid.", e.getMessage());
         }
 
+        int paramNumber = 2;
         try {
-            metaData.getParameterType(2);
+            metaData.getParameterType(paramNumber);
             Assert.fail();
         } catch (SQLException e) {
+            Assert.assertEquals("Parameter index of '" + paramNumber + "' is greater than number of parameters, which is '" + parameterCount + "'.", e.getMessage());
         }
     }
 

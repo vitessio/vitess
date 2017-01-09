@@ -65,7 +65,7 @@ public class VitessParameterMetaData implements ParameterMetaData {
 
     @Override
     public int getParameterMode(int param) throws SQLException {
-        return parameterModeIn;
+        return ParameterMetaData.parameterModeIn;
     }
 
     private void checkBounds(int paramNumber) throws SQLException {

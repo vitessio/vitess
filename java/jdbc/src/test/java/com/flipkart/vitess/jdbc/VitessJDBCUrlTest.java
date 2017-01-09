@@ -1,4 +1,4 @@
-package com.flipkart.vitess.jdbc.test;
+package com.flipkart.vitess.jdbc;
 
 import com.flipkart.vitess.jdbc.VitessJDBCUrl;
 import com.youtube.vitess.proto.Topodata;
