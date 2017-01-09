@@ -100,10 +100,10 @@ func main() {
 	defer servenv.Close()
 
 	// Take mysqld down with us on SIGTERM before entering lame duck.
-	servenv.OnTerm(func() {
+	servenv.OnTermSync(func() {
 		log.Infof("mysqlctl received SIGTERM, shutting down mysqld first")
 		ctx := context.Background()
-		mysqld.Shutdown(ctx, false)
+		mysqld.Shutdown(ctx, true)
 	})
 
 	// Start RPC server and wait for SIGTERM.
