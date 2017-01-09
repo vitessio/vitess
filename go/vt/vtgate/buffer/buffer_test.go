@@ -209,6 +209,7 @@ func TestPassthroughDuringDrain(t *testing.T) {
 		t.Fatalf("wrong expected state. got = %v, want = %v", got, want)
 	}
 
+	// Requests during the drain will be passed through and not buffered.
 	if retryDone, err := b.WaitForFailoverEnd(context.Background(), keyspace, shard, nil); err != nil || retryDone != nil {
 		t.Fatalf("requests with no error must not be buffered during a drain. err: %v retryDone: %v", err, retryDone)
 	}
