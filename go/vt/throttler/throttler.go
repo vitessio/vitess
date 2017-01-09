@@ -264,8 +264,7 @@ func (t *Throttler) updateMaxRate() {
 	}
 
 	for threadID := range t.runningThreads {
-		t.threadThrottlers[threadID].setMaxRate(
-			maxRatePerThread + remainderPerThread[threadID])
+		t.threadThrottlers[threadID].setMaxRate(maxRatePerThread + remainderPerThread[threadID])
 	}
 	t.threadRunningsLastUpdate = threadsRunning
 }
