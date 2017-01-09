@@ -196,7 +196,9 @@ func TestPassthroughDuringDrain(t *testing.T) {
 	// Buffer one request.
 	markRetryDone := make(chan struct{})
 	stopped := issueRequestAndBlockRetry(context.Background(), t, b, failoverErr, markRetryDone)
-	waitForRequestsInFlight(b, 1)
+	if err := waitForRequestsInFlight(b, 1); err != nil {
+		t.Fatal(err)
+	}
 
 	// Stop buffering and trigger drain.
 	b.StatsUpdate(&discovery.TabletStats{
@@ -229,7 +231,9 @@ func TestRequestCanceled(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	stopped := issueRequest(ctx, t, b, failoverErr)
-	waitForRequestsInFlight(b, 1)
+	if err := waitForRequestsInFlight(b, 1); err != nil {
+		t.Fatal(err)
+	}
 
 	// Cancel request before buffering stops.
 	cancel()
