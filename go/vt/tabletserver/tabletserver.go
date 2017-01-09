@@ -111,6 +111,7 @@ type TabletServer struct {
 	// the context of a startRequest-endRequest.
 	qe               *QueryEngine
 	te               *TxEngine
+	messager         *MessagerEngine
 	watcher          *ReplicationWatcher
 	updateStreamList *binlog.StreamList
 
@@ -165,6 +166,7 @@ func NewTabletServer(config Config) *TabletServer {
 	tsv.qe = NewQueryEngine(tsv, config, tsv.queryServiceStats)
 	tsv.te = NewTxEngine(tsv, config, tsv.queryServiceStats)
 	tsv.txThrottler = CreateTxThrottlerFromTabletConfig(&config)
+	tsv.messager = NewMessagerEngine(tsv, config, tsv.queryServiceStats)
 	tsv.watcher = NewReplicationWatcher(config, tsv.qe)
 	tsv.updateStreamList = &binlog.StreamList{}
 	if config.EnablePublishStats {
@@ -410,7 +412,9 @@ func (tsv *TabletServer) serveNewType() (err error) {
 		}
 		tsv.watcher.Close()
 		tsv.te.Open(tsv.dbconfigs)
+		tsv.messager.Open(tsv.dbconfigs)
 	} else {
+		tsv.messager.Close()
 		// Wait for in-flight transactional requests to complete
 		// before rolling back everything. In this state new
 		// transactional requests are not allowed. So, we can
@@ -464,6 +468,7 @@ func (tsv *TabletServer) StopService() {
 }
 
 func (tsv *TabletServer) waitForShutdown() {
+	tsv.messager.Close()
 	// Wait till txRequests have completed before waiting on tx pool.
 	// During this state, new Begins are not allowed. After the wait,
 	// we have the assurance that only non-begin transactional calls
@@ -481,6 +486,7 @@ func (tsv *TabletServer) waitForShutdown() {
 // closeAll is called if TabletServer fails to start.
 // It forcibly shuts down everything.
 func (tsv *TabletServer) closeAll() {
+	tsv.messager.Close()
 	tsv.te.Close(true)
 	tsv.watcher.Close()
 	tsv.updateStreamList.Stop()
@@ -625,7 +631,7 @@ func (tsv *TabletServer) Commit(ctx context.Context, target *querypb.Target, tra
 		func(ctx context.Context, logStats *LogStats) error {
 			defer tsv.qe.queryServiceStats.QueryStats.Record("COMMIT", time.Now())
 			logStats.TransactionID = transactionID
-			return tsv.te.txPool.Commit(ctx, transactionID)
+			return tsv.te.txPool.Commit(ctx, transactionID, tsv.messager)
 		},
 	)
 }
@@ -655,6 +661,7 @@ func (tsv *TabletServer) Prepare(ctx context.Context, target *querypb.Target, tr
 				ctx:      ctx,
 				logStats: logStats,
 				te:       tsv.te,
+				messager: tsv.messager,
 			}
 			return txe.Prepare(transactionID, dtid)
 		},
@@ -672,6 +679,7 @@ func (tsv *TabletServer) CommitPrepared(ctx context.Context, target *querypb.Tar
 				ctx:      ctx,
 				logStats: logStats,
 				te:       tsv.te,
+				messager: tsv.messager,
 			}
 			return txe.CommitPrepared(dtid)
 		},
@@ -689,6 +697,7 @@ func (tsv *TabletServer) RollbackPrepared(ctx context.Context, target *querypb.T
 				ctx:      ctx,
 				logStats: logStats,
 				te:       tsv.te,
+				messager: tsv.messager,
 			}
 			return txe.RollbackPrepared(dtid, originalID)
 		},
@@ -706,6 +715,7 @@ func (tsv *TabletServer) CreateTransaction(ctx context.Context, target *querypb.
 				ctx:      ctx,
 				logStats: logStats,
 				te:       tsv.te,
+				messager: tsv.messager,
 			}
 			return txe.CreateTransaction(dtid, participants)
 		},
@@ -724,6 +734,7 @@ func (tsv *TabletServer) StartCommit(ctx context.Context, target *querypb.Target
 				ctx:      ctx,
 				logStats: logStats,
 				te:       tsv.te,
+				messager: tsv.messager,
 			}
 			return txe.StartCommit(transactionID, dtid)
 		},
@@ -742,6 +753,7 @@ func (tsv *TabletServer) SetRollback(ctx context.Context, target *querypb.Target
 				ctx:      ctx,
 				logStats: logStats,
 				te:       tsv.te,
+				messager: tsv.messager,
 			}
 			return txe.SetRollback(dtid, transactionID)
 		},
@@ -760,6 +772,7 @@ func (tsv *TabletServer) ConcludeTransaction(ctx context.Context, target *queryp
 				ctx:      ctx,
 				logStats: logStats,
 				te:       tsv.te,
+				messager: tsv.messager,
 			}
 			return txe.ConcludeTransaction(dtid)
 		},
@@ -777,6 +790,7 @@ func (tsv *TabletServer) ReadTransaction(ctx context.Context, target *querypb.Ta
 				ctx:      ctx,
 				logStats: logStats,
 				te:       tsv.te,
+				messager: tsv.messager,
 			}
 			metadata, err = txe.ReadTransaction(dtid)
 			return err
@@ -807,6 +821,7 @@ func (tsv *TabletServer) Execute(ctx context.Context, target *querypb.Target, sq
 				logStats:      logStats,
 				qe:            tsv.qe,
 				te:            tsv.te,
+				messager:      tsv.messager,
 			}
 			extras := tsv.watcher.ComputeExtras(options)
 			result, err = qre.Execute()
@@ -842,6 +857,7 @@ func (tsv *TabletServer) StreamExecute(ctx context.Context, target *querypb.Targ
 				logStats: logStats,
 				qe:       tsv.qe,
 				te:       tsv.te,
+				messager: tsv.messager,
 			}
 			return qre.Stream(sqltypes.IncludeFieldsOrDefault(options), sendReply)
 		},
@@ -919,6 +935,17 @@ func (tsv *TabletServer) BeginExecuteBatch(ctx context.Context, target *querypb.
 
 	results, err := tsv.ExecuteBatch(ctx, target, queries, asTransaction, transactionID, options)
 	return results, transactionID, err
+}
+
+// MessageSubscribe registers the receiver against a message table.
+func (tsv *TabletServer) MessageSubscribe(name string, receiver MessageReceiver) error {
+	return tsv.messager.Subscribe(name, receiver)
+}
+
+// MessageUnsubscribe Unregisters the receiver from all message tables.
+func (tsv *TabletServer) MessageUnsubscribe(receiver MessageReceiver) error {
+	tsv.messager.Unsubscribe(receiver)
+	return nil
 }
 
 // SplitQuery splits a query + bind variables into smaller queries that return a
@@ -1474,6 +1501,7 @@ func (tsv *TabletServer) registerTwopczHandler() {
 			ctx:      ctx,
 			logStats: NewLogStats(ctx, "twopcz"),
 			te:       tsv.te,
+			messager: tsv.messager,
 		}
 		twopczHandler(txe, w, r)
 	})

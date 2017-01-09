@@ -501,6 +501,7 @@ func newTestTxExecutor() (txe *TxExecutor, tsv *TabletServer, db *fakesqldb.DB) 
 		ctx:      ctx,
 		logStats: logStats,
 		te:       tsv.te,
+		messager: tsv.messager,
 	}, tsv, db
 }
 
@@ -519,6 +520,7 @@ func newShortAgeExecutor() (txe *TxExecutor, tsv *TabletServer, db *fakesqldb.DB
 		ctx:      ctx,
 		logStats: logStats,
 		te:       tsv.te,
+		messager: tsv.messager,
 	}, tsv, db
 }
 
@@ -532,6 +534,7 @@ func newNoTwopcExecutor() (txe *TxExecutor, tsv *TabletServer, db *fakesqldb.DB)
 		ctx:      ctx,
 		logStats: logStats,
 		te:       tsv.te,
+		messager: tsv.messager,
 	}, tsv, db
 }
 

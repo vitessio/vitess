@@ -213,8 +213,8 @@ type ExecPlan struct {
 	// For PlanInsertSubquery: pk columns in the subquery result.
 	SubqueryPKColumns []int `json:",omitempty"`
 
-	// For PlanInsertMessage. Values needed to build MessageRow.
-	MessageValues []MessageRowValues `json:",omitempty"`
+	// For PlanInsertMessage. Query used to reload inserted messages.
+	MessageReloaderQuery *sqlparser.ParsedQuery `json:",omitempty"`
 }
 
 func (plan *ExecPlan) setTableInfo(tableName sqlparser.TableIdent, getTable TableGetter) (*schema.Table, error) {

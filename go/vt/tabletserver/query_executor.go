@@ -18,6 +18,7 @@ import (
 	"github.com/youtube/vitess/go/vt/callinfo"
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
+	"github.com/youtube/vitess/go/vt/schema"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/tabletserver/planbuilder"
 	"golang.org/x/net/context"
@@ -33,6 +34,7 @@ type QueryExecutor struct {
 	logStats      *LogStats
 	qe            *QueryEngine
 	te            *TxEngine
+	messager      *MessagerEngine
 }
 
 var sequenceFields = []*querypb.Field{
@@ -208,7 +210,7 @@ func (qre *QueryExecutor) execAsTransaction(f func(conn *TxConnection) (*sqltype
 		qre.logStats.AddRewrittenSQL("rollback", time.Now())
 		return nil, err
 	}
-	err = qre.te.txPool.LocalCommit(qre.ctx, conn)
+	err = qre.te.txPool.LocalCommit(qre.ctx, conn, qre.messager)
 	if err != nil {
 		return nil, err
 	}
@@ -302,7 +304,7 @@ func (qre *QueryExecutor) execDDL() (*sqltypes.Result, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer qre.te.txPool.LocalCommit(qre.ctx, conn)
+	defer qre.te.txPool.LocalCommit(qre.ctx, conn, qre.messager)
 
 	result, err := qre.execSQL(conn, qre.query, false)
 	if err != nil {
@@ -433,7 +435,30 @@ func (qre *QueryExecutor) execInsertMessage(conn *TxConnection) (*sqltypes.Resul
 	if err != nil {
 		return nil, err
 	}
-	return qre.execInsertPKRows(conn, pkRows)
+	qr, err := qre.execInsertPKRows(conn, pkRows)
+	if err != nil {
+		return nil, err
+	}
+	bv := map[string]interface{}{
+		"#pk": sqlparser.TupleEqualityList{
+			Columns: qre.plan.TableInfo.Indexes[0].Columns,
+			Rows:    pkRows,
+		},
+	}
+	readback, err := qre.txFetch(conn, qre.plan.MessageReloaderQuery, bv, nil, false, false)
+	if err != nil {
+		return nil, err
+	}
+	mrs := conn.NewMessages[qre.plan.TableInfo.Name.String()]
+	for _, row := range readback.Rows {
+		mr, err := BuildMessageRow(row)
+		if err != nil {
+			return nil, err
+		}
+		mrs = append(mrs, mr)
+	}
+	conn.NewMessages[qre.plan.TableInfo.Name.String()] = mrs
+	return qr, nil
 }
 
 func (qre *QueryExecutor) execInsertSubquery(conn *TxConnection) (*sqltypes.Result, error) {
@@ -548,6 +573,13 @@ func (qre *QueryExecutor) execDMLPKRows(conn *TxConnection, query *sqlparser.Par
 		}
 		// DMLs should only return RowsAffected.
 		result.RowsAffected += r.RowsAffected
+	}
+	if qre.plan.TableInfo.Type == schema.Message {
+		ids := conn.ChangedMessages[qre.plan.TableInfo.Name.String()]
+		for _, pkrow := range pkRows {
+			ids = append(ids, pkrow[qre.plan.TableInfo.IDPKIndex].String())
+		}
+		conn.ChangedMessages[qre.plan.TableInfo.Name.String()] = ids
 	}
 	return result, nil
 }

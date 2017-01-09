@@ -7,7 +7,6 @@ package tabletserver
 import (
 	"reflect"
 	"testing"
-	"time"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -28,7 +27,7 @@ func TestMessagerEngineState(t *testing.T) {
 	}
 	defer tsv.StopService()
 
-	me := NewMessagerEngine(tsv.qe, newMEConnPool(config, tsv))
+	me := NewMessagerEngine(tsv, config, tsv.queryServiceStats)
 	if err := me.Open(dbconfigs); err != nil {
 		t.Fatal(err)
 	}
@@ -67,7 +66,7 @@ func TestMessagerEngineSchemaChanged(t *testing.T) {
 	}
 	defer tsv.StopService()
 
-	me := NewMessagerEngine(tsv.qe, newMEConnPool(config, tsv))
+	me := NewMessagerEngine(tsv, config, tsv.queryServiceStats)
 	if err := me.Open(dbconfigs); err != nil {
 		t.Fatal(err)
 	}
@@ -144,7 +143,7 @@ func TestSubscribe(t *testing.T) {
 	}
 	defer tsv.StopService()
 
-	me := NewMessagerEngine(tsv.qe, newMEConnPool(config, tsv))
+	me := NewMessagerEngine(tsv, config, tsv.queryServiceStats)
 	if err := me.Open(dbconfigs); err != nil {
 		t.Fatal(err)
 	}
@@ -186,15 +185,4 @@ func TestSubscribe(t *testing.T) {
 	if err == nil || err.Error() != want {
 		t.Errorf("Subscribe: %v, want %s", err, want)
 	}
-}
-
-func newMEConnPool(config Config, tsv *TabletServer) *ConnPool {
-	return NewConnPool(
-		config.PoolNamePrefix+"MesasgeConnPool",
-		20,
-		time.Duration(config.IdleTimeout*1e9),
-		config.EnablePublishStats,
-		tsv.queryServiceStats,
-		tsv,
-	)
 }

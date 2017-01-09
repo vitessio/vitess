@@ -384,13 +384,7 @@
     1,
     2
   ],
-  "MessageValues": [
-    {
-      "TimeNext": 1,
-      "ID": 2,
-      "Message": "aa"
-    }
-  ]
+  "MessageReloaderQuery": "select time_next, epoch, id, message from msg where :#pk"
 }
 
 # message insert with no time_schedule
@@ -404,13 +398,7 @@
     ":#time_now",
     2
   ],
-  "MessageValues": [
-    {
-      "TimeNext": ":#time_now",
-      "ID": 2,
-      "Message": "aa"
-    }
-  ]
+  "MessageReloaderQuery": "select time_next, epoch, id, message from msg where :#pk"
 }
 
 # message multi-value insert
@@ -430,18 +418,7 @@
       4
     ]
   ],
-  "MessageValues": [
-    {
-      "TimeNext": 1,
-      "ID": 2,
-      "Message": "aa"
-    },
-    {
-      "TimeNext": 3,
-      "ID": 4,
-      "Message": "bb"
-    }
-  ]
+  "MessageReloaderQuery": "select time_next, epoch, id, message from msg where :#pk"
 }
 
 # message insert subquery
@@ -483,18 +460,6 @@
 # message insert message missing
 "insert into msg(id) values(1)"
 "message must be specified for message insert"
-
-# message insert complex time_scheduled
-"insert into msg(time_scheduled, id, message) values(1+1, 1, 'aa')"
-"expression is too complex '1 + 1'"
-
-# message insert complex id
-"insert into msg(id, message) values(1+1, 'aa')"
-"expression is too complex '1 + 1'"
-
-# message insert complex message
-"insert into msg(id, message) values(1, 1+1)"
-"expression is too complex '1 + 1'"
 
 # update cross-db
 "update b.a set name='foo' where eid=1 and id=1"
