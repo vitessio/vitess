@@ -360,7 +360,6 @@ func analyzeInsertMessage(ins *sqlparser.Insert, plan *ExecPlan, tableInfo *sche
 
 	// Perform message specific processing first, because we may be
 	// adding values that address the primary key.
-	plan.MessageValues = make([]MessageRowValues, len(rowList))
 	timeNow := sqlparser.NewValArg([]byte(":#time_now"))
 
 	col := sqlparser.NewColIdent("time_scheduled")
@@ -376,13 +375,6 @@ func analyzeInsertMessage(ins *sqlparser.Insert, plan *ExecPlan, tableInfo *sche
 		return nil, fmt.Errorf("%s must not be specified for message insert", col.String())
 	}
 	_ = copyVal(ins, col, scheduleIndex)
-	for i := range rowList {
-		val, err := sqlparser.AsInterface(rowList[i][scheduleIndex])
-		if err != nil {
-			return nil, err
-		}
-		plan.MessageValues[i].TimeNext = val
-	}
 
 	// time_created should always be now.
 	col = sqlparser.NewColIdent("time_created")
@@ -396,9 +388,9 @@ func analyzeInsertMessage(ins *sqlparser.Insert, plan *ExecPlan, tableInfo *sche
 	if num := findCol(col, ins.Columns); num >= 0 {
 		return nil, fmt.Errorf("%s must not be specified for message insert", col.String())
 	}
-	addVal(ins, col, sqlparser.NewIntVal([]byte("0")))
+	_ = addVal(ins, col, sqlparser.NewIntVal([]byte("0")))
 
-	// time_acked should be NULL.
+	// time_acked should must not be specified.
 	col = sqlparser.NewColIdent("time_acked")
 	if num := findCol(col, ins.Columns); num >= 0 {
 		return nil, fmt.Errorf("%s must not be specified for message insert", col.String())
@@ -409,25 +401,11 @@ func analyzeInsertMessage(ins *sqlparser.Insert, plan *ExecPlan, tableInfo *sche
 	if num < 0 {
 		return nil, fmt.Errorf("%s must be specified for message insert", col.String())
 	}
-	for i := range rowList {
-		val, err := sqlparser.AsInterface(rowList[i][num])
-		if err != nil {
-			return nil, err
-		}
-		plan.MessageValues[i].ID = val
-	}
 
 	col = sqlparser.NewColIdent("message")
 	num = findCol(col, ins.Columns)
 	if num < 0 {
 		return nil, fmt.Errorf("%s must be specified for message insert", col.String())
-	}
-	for i := range rowList {
-		val, err := sqlparser.AsInterface(rowList[i][num])
-		if err != nil {
-			return nil, err
-		}
-		plan.MessageValues[i].Message = val
 	}
 
 	pkColumnNumbers := getInsertPKColumns(ins.Columns, tableInfo)
@@ -444,6 +422,7 @@ func analyzeInsertMessage(ins *sqlparser.Insert, plan *ExecPlan, tableInfo *sche
 	plan.PKValues = pkValues
 	plan.PlanID = PlanInsertMessage
 	plan.OuterQuery = sqlparser.GenerateParsedQuery(ins)
+	plan.MessageReloaderQuery = GenerateLoadMessagesQuery(ins)
 	return plan, nil
 }
 

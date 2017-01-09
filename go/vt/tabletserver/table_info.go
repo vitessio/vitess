@@ -27,6 +27,12 @@ type TableInfo struct {
 	Seq     sync.Mutex
 	NextVal int64
 	LastVal int64
+
+	// IDPKIndex is the index of the ID column
+	// in PKvalues. This is used to extract the ID
+	// value for message tables to discard items
+	// from the cache.
+	IDPKIndex int
 }
 
 // NewTableInfo creates a new TableInfo.
@@ -39,7 +45,7 @@ func NewTableInfo(conn *DBConn, tableName string, tableType string, comment stri
 	case strings.Contains(comment, "vitess_sequence"):
 		ti.Type = schema.Sequence
 	case strings.Contains(comment, "vitess_message"):
-		if err := ti.validateMessage(); err != nil {
+		if err := ti.loadMessageInfo(); err != nil {
 			return nil, err
 		}
 		ti.Type = schema.Message
@@ -156,7 +162,7 @@ func (ti *TableInfo) fetchIndexes(conn *DBConn, sqlTableName string) error {
 	return nil
 }
 
-func (ti *TableInfo) validateMessage() error {
+func (ti *TableInfo) loadMessageInfo() error {
 	findCols := []string{
 		"time_scheduled",
 		"id",
@@ -171,5 +177,11 @@ func (ti *TableInfo) validateMessage() error {
 			return fmt.Errorf("%s missing from message table: %s", col, ti.Name.String())
 		}
 	}
-	return nil
+	for i, j := range ti.PKColumns {
+		if ti.Columns[j].Name.EqualString("id") {
+			ti.IDPKIndex = i
+			return nil
+		}
+	}
+	return fmt.Errorf("id column is not part of the primary key for message table: %s", ti.Name.String())
 }

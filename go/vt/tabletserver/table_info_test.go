@@ -154,6 +154,7 @@ func TestTableInfoMessage(t *testing.T) {
 			Name: sqlparser.NewTableIdent("test_table"),
 			Type: schema.Message,
 		},
+		IDPKIndex: 1,
 	}
 	tableInfo.Columns = nil
 	tableInfo.Indexes = nil
@@ -162,11 +163,37 @@ func TestTableInfoMessage(t *testing.T) {
 		t.Errorf("TableInfo:\n%#v, want\n%#v", tableInfo, want)
 	}
 
+	// id column must be part of primary key.
+	for query, result := range getMessageTableInfoQueries() {
+		db.AddQuery(query, result)
+	}
+	db.AddQuery(
+		"show index from test_table",
+		&sqltypes.Result{
+			RowsAffected: 2,
+			Rows: [][]sqltypes.Value{
+				{
+					sqltypes.MakeString([]byte{}),
+					sqltypes.MakeString([]byte{}),
+					sqltypes.MakeString([]byte("PRIMARY")),
+					sqltypes.MakeString([]byte{}),
+					sqltypes.MakeString([]byte("time_scheduled")),
+					sqltypes.MakeString([]byte{}),
+					sqltypes.MakeString([]byte("300")),
+				},
+			},
+		})
+	_, err = newTestTableInfo("USER_TABLE", "vitess_message", db)
+	wanterr := "id column is not part of the primary key for message table: test_table"
+	if err == nil || err.Error() != wanterr {
+		t.Errorf("newTestTableInfo: %v, want %s", err, wanterr)
+	}
+
 	for query, result := range getTestTableInfoQueries() {
 		db.AddQuery(query, result)
 	}
 	_, err = newTestTableInfo("USER_TABLE", "vitess_message", db)
-	wanterr := "time_scheduled missing from message table: test_table"
+	wanterr = "time_scheduled missing from message table: test_table"
 	if err == nil || err.Error() != wanterr {
 		t.Errorf("newTestTableInfo: %v, want %s", err, wanterr)
 	}

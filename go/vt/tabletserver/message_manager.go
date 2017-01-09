@@ -223,25 +223,13 @@ func (mm *MessageManager) runPoller() {
 			defer mm.cond.Signal()
 		}
 		for _, row := range qr.Rows {
-			timeNext, err := row[0].ParseInt64()
+			mr, err := BuildMessageRow(row)
 			if err != nil {
 				// TODO(sougou): increment internal error.
-				log.Errorf("Error parsing time_next '%q': %v", row[0].String(), err)
+				log.Errorf("Error reading message row: %v", err)
 				continue
 			}
-			epoch, err := row[1].ParseInt64()
-			if err != nil {
-				// TODO(sougou): increment internal error.
-				log.Errorf("Error parsing epoch '%q': %v", row[1].String(), err)
-				continue
-			}
-			if !mm.cache.Add(&MessageRow{
-				TimeNext: timeNext,
-				Epoch:    epoch,
-				ID:       row[2],
-				Message:  row[3],
-				id:       row[2].String(),
-			}) {
+			if !mm.cache.Add(mr) {
 				mm.messagesPending = true
 				return
 			}
@@ -249,6 +237,25 @@ func (mm *MessageManager) runPoller() {
 	}()
 
 	// TODO(sougou): purge.
+}
+
+// BuildMessageRow builds a MessageRow for a db row.
+func BuildMessageRow(row []sqltypes.Value) (*MessageRow, error) {
+	timeNext, err := row[0].ParseInt64()
+	if err != nil {
+		return nil, err
+	}
+	epoch, err := row[1].ParseInt64()
+	if err != nil {
+		return nil, err
+	}
+	return &MessageRow{
+		TimeNext: timeNext,
+		Epoch:    epoch,
+		ID:       row[2],
+		Message:  row[3],
+		id:       row[2].String(),
+	}, nil
 }
 
 func (mm *MessageManager) receiverCount() int {

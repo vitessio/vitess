@@ -23,7 +23,8 @@ type MessageReceiver interface {
 type MessagerEngine struct {
 	isOpen bool
 
-	qe       *QueryEngine
+	// TODO(sougou): This depndency should be cleaned up.
+	tsv      *TabletServer
 	connpool *ConnPool
 
 	mu       sync.Mutex
@@ -31,10 +32,18 @@ type MessagerEngine struct {
 }
 
 // NewMessagerEngine creates a new MessagerEngine.
-func NewMessagerEngine(qe *QueryEngine, connpool *ConnPool) *MessagerEngine {
+func NewMessagerEngine(tsv *TabletServer, config Config, queryServiceStats *QueryServiceStats) *MessagerEngine {
 	return &MessagerEngine{
-		qe:       qe,
-		connpool: connpool,
+		tsv: tsv,
+		connpool: NewConnPool(
+			config.PoolNamePrefix+"MessagerPool",
+			// TODO(sougou): hardcoded value.
+			10,
+			time.Duration(config.IdleTimeout*1e9),
+			config.EnablePublishStats,
+			queryServiceStats,
+			tsv,
+		),
 		managers: make(map[string]*MessageManager),
 	}
 }
@@ -45,8 +54,8 @@ func (me *MessagerEngine) Open(dbconfigs dbconfigs.DBConfigs) error {
 		return nil
 	}
 	me.connpool.Open(&dbconfigs.App, &dbconfigs.Dba)
-	me.qe.schemaInfo.RegisterNotifier("messages", me.schemaChanged)
-	me.schemaChanged(me.qe.schemaInfo.GetSchema())
+	me.tsv.qe.schemaInfo.RegisterNotifier("messages", me.schemaChanged)
+	me.schemaChanged(me.tsv.qe.schemaInfo.GetSchema())
 	me.isOpen = true
 	return nil
 }
@@ -57,7 +66,7 @@ func (me *MessagerEngine) Close() {
 		return
 	}
 	me.isOpen = false
-	me.qe.schemaInfo.UnregisterNotifier("messages")
+	me.tsv.qe.schemaInfo.UnregisterNotifier("messages")
 	for _, mm := range me.managers {
 		mm.Close()
 	}
@@ -82,6 +91,63 @@ func (me *MessagerEngine) Unsubscribe(receiver MessageReceiver) {
 	defer me.mu.Unlock()
 	for _, mm := range me.managers {
 		mm.Unsubscribe(receiver)
+	}
+}
+
+// LockDB obtains db locks for all messages that need to
+// be updated and returns the counterpart unlock function.
+func (me *MessagerEngine) LockDB(newMessages map[string][]*MessageRow, changedMessages map[string][]string) func() {
+	me.mu.Lock()
+	defer me.mu.Unlock()
+	combined := make(map[string]struct{})
+	for name := range newMessages {
+		combined[name] = struct{}{}
+	}
+	for name := range changedMessages {
+		combined[name] = struct{}{}
+	}
+	for name := range combined {
+		if mm := me.managers[name]; mm != nil {
+			mm.DBLock.Lock()
+		}
+	}
+	return func() {
+		me.mu.Lock()
+		defer me.mu.Unlock()
+		for name := range combined {
+			if mm := me.managers[name]; mm != nil {
+				mm.DBLock.Unlock()
+			}
+		}
+	}
+}
+
+// UpdateCaches updates the caches for the committed changes.
+func (me *MessagerEngine) UpdateCaches(newMessages map[string][]*MessageRow, changedMessages map[string][]string) {
+	me.mu.Lock()
+	defer me.mu.Unlock()
+	now := time.Now().UnixNano()
+	for name, mrs := range newMessages {
+		mm := me.managers[name]
+		if mm == nil {
+			continue
+		}
+		for _, mr := range mrs {
+			if mr.TimeNext > now {
+				// We don't handle future messages yet.
+				continue
+			}
+			mm.Add(mr)
+		}
+	}
+	for name, ids := range changedMessages {
+		mm := me.managers[name]
+		if mm == nil {
+			continue
+		}
+		for _, id := range ids {
+			mm.cache.Discard(id)
+		}
 	}
 }
 

@@ -179,12 +179,12 @@ func (axp *TxPool) Begin(ctx context.Context) (int64, error) {
 }
 
 // Commit commits the specified transaction.
-func (axp *TxPool) Commit(ctx context.Context, transactionID int64) error {
+func (axp *TxPool) Commit(ctx context.Context, transactionID int64, messager *MessagerEngine) error {
 	conn, err := axp.Get(transactionID, "for commit")
 	if err != nil {
 		return err
 	}
-	return axp.LocalCommit(ctx, conn)
+	return axp.LocalCommit(ctx, conn, messager)
 }
 
 // Rollback rolls back the specified transaction.
@@ -218,12 +218,18 @@ func (axp *TxPool) LocalBegin(ctx context.Context) (*TxConnection, error) {
 }
 
 // LocalCommit is the commit function for LocalBegin.
-func (axp *TxPool) LocalCommit(ctx context.Context, conn *TxConnection) error {
+func (axp *TxPool) LocalCommit(ctx context.Context, conn *TxConnection, messager *MessagerEngine) error {
 	defer conn.conclude(TxCommit)
+	if messager != nil {
+		defer messager.LockDB(conn.NewMessages, conn.ChangedMessages)()
+	}
 	axp.txStats.Add("Completed", time.Now().Sub(conn.StartTime))
 	if _, err := conn.Exec(ctx, "commit", 1, false); err != nil {
 		conn.Close()
 		return NewTabletErrorSQL(vtrpcpb.ErrorCode_UNKNOWN_ERROR, err)
+	}
+	if messager != nil {
+		messager.UpdateCaches(conn.NewMessages, conn.ChangedMessages)
 	}
 	return nil
 }
@@ -282,6 +288,8 @@ type TxConnection struct {
 	StartTime         time.Time
 	EndTime           time.Time
 	Queries           []string
+	NewMessages       map[string][]*MessageRow
+	ChangedMessages   map[string][]string
 	Conclusion        string
 	LogToFile         sync2.AtomicInt32
 	ImmediateCallerID *querypb.VTGateCallerID
@@ -294,7 +302,8 @@ func newTxConnection(conn *DBConn, transactionID int64, pool *TxPool, immediate 
 		TransactionID:     transactionID,
 		pool:              pool,
 		StartTime:         time.Now(),
-		Queries:           make([]string, 0, 8),
+		NewMessages:       make(map[string][]*MessageRow),
+		ChangedMessages:   make(map[string][]string),
 		ImmediateCallerID: immediate,
 		EffectiveCallerID: effective,
 	}

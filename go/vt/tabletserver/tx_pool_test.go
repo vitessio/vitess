@@ -40,7 +40,7 @@ func TestTxPoolExecuteCommit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer txPool.Commit(ctx, transactionID)
+	defer txPool.Commit(ctx, transactionID, nil)
 	txConn.RecordQuery(sql)
 	_, err = txConn.Exec(ctx, sql, 1, true)
 	txConn.Recycle()
@@ -232,7 +232,7 @@ func TestTxPoolCommitFail(t *testing.T) {
 	if err != nil {
 		t.Fatalf("got exec error: %v", err)
 	}
-	err = txPool.Commit(ctx, transactionID)
+	err = txPool.Commit(ctx, transactionID, nil)
 	want := "error: error: rejected"
 	if err == nil || err.Error() != want {
 		t.Errorf("Commit: %v, want %s", err, want)
@@ -329,7 +329,7 @@ func TestTxPoolLocal(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = txPool.LocalCommit(ctx, conn)
+	err = txPool.LocalCommit(ctx, conn, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

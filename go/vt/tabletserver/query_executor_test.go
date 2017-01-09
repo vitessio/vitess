@@ -161,6 +161,7 @@ func TestQueryExecutorPlanInsertPk(t *testing.T) {
 func TestQueryExecutorPlanInsertMessage(t *testing.T) {
 	db := setUpQueryExecutorTest()
 	db.AddQueryPattern("insert into msg\\(time_scheduled, id, message, time_next, time_created, epoch\\) values \\(1, 2, 3, 1,.*", &sqltypes.Result{})
+	db.AddQuery("select time_next, epoch, id, message from msg where (time_scheduled = 1 and id = 2)", &sqltypes.Result{})
 	want := &sqltypes.Result{
 		Rows: make([][]sqltypes.Value, 0),
 	}
@@ -297,10 +298,8 @@ func TestQueryExecutorPlanUpsertPk(t *testing.T) {
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("qre.Execute() = %v, want %v", err, wantErr)
 	}
-	wantqueries = []string{}
-	gotqueries = fetchRecordedQueries(qre)
-	if !reflect.DeepEqual(gotqueries, wantqueries) {
-		t.Errorf("queries: %v, want %v", gotqueries, wantqueries)
+	if gotqueries = fetchRecordedQueries(qre); gotqueries != nil {
+		t.Errorf("queries: %v, want nil", gotqueries)
 	}
 	testCommitHelper(t, tsv, qre)
 
@@ -317,9 +316,8 @@ func TestQueryExecutorPlanUpsertPk(t *testing.T) {
 		t.Errorf("qre.Execute() = %v, want %v", err, wantErr)
 	}
 	wantqueries = []string{}
-	gotqueries = fetchRecordedQueries(qre)
-	if !reflect.DeepEqual(gotqueries, wantqueries) {
-		t.Errorf("queries: %v, want %v", gotqueries, wantqueries)
+	if gotqueries = fetchRecordedQueries(qre); gotqueries != nil {
+		t.Errorf("queries: %v, want nil", gotqueries)
 	}
 	testCommitHelper(t, tsv, qre)
 
@@ -533,10 +531,8 @@ func TestQueryExecutorPlanOtherWithinATransaction(t *testing.T) {
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got: %v, want: %v", got, want)
 	}
-	wantqueries := []string{}
-	gotqueries := fetchRecordedQueries(qre)
-	if !reflect.DeepEqual(gotqueries, wantqueries) {
-		t.Errorf("queries: %v, want %v", gotqueries, wantqueries)
+	if gotqueries := fetchRecordedQueries(qre); gotqueries != nil {
+		t.Errorf("queries: %v, want nil", gotqueries)
 	}
 }
 
@@ -571,10 +567,8 @@ func TestQueryExecutorPlanPassSelectWithInATransaction(t *testing.T) {
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got: %v, want: %v", got, want)
 	}
-	wantqueries := []string{}
-	gotqueries := fetchRecordedQueries(qre)
-	if !reflect.DeepEqual(gotqueries, wantqueries) {
-		t.Errorf("queries: %v, want %v", gotqueries, wantqueries)
+	if gotqueries := fetchRecordedQueries(qre); gotqueries != nil {
+		t.Errorf("queries: %v, want nil", gotqueries)
 	}
 }
 
@@ -1248,6 +1242,7 @@ func newTestQueryExecutor(ctx context.Context, tsv *TabletServer, sql string, tx
 		logStats:      logStats,
 		qe:            tsv.qe,
 		te:            tsv.te,
+		messager:      tsv.messager,
 	}
 }
 
