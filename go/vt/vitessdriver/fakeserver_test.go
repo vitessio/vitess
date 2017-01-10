@@ -72,7 +72,7 @@ func (f *fakeVTGateService) ExecuteEntityIds(ctx context.Context, sql string, bi
 }
 
 // ExecuteBatch is part of the VTGateService interface
-func (f *fakeVTGateService) ExecuteBatch(ctx context.Context, sql []string, bindVariables []map[string]interface{}, keyspace string, tabletType topodatapb.TabletType, asTransaction bool, session *vtgatepb.Session, options *querypb.ExecuteOptions) ([]sqltypes.QueryResponse, error) {
+func (f *fakeVTGateService) ExecuteBatch(ctx context.Context, sql []string, bindVariables []map[string]interface{}, keyspace string, tabletType topodatapb.TabletType, asTransaction bool, session *vtgatepb.Session, options *querypb.ExecuteOptions, execParallel bool) ([]sqltypes.QueryResponse, error) {
 	if len(sql) == 1 {
 		execCase, ok := execMap[sql[0]]
 		if !ok {
