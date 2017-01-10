@@ -103,7 +103,8 @@ func MakeRowTrusted(fields []*querypb.Field, row *querypb.Row) []Value {
 	return sqlRow
 }
 
-// Normalizes the passed Execution Options, returning our default value if options happens to be nil
+// IncludeFieldsOrDefault normalizes the passed Execution Options.
+// It returns the default value if options is nil.
 func IncludeFieldsOrDefault(options *querypb.ExecuteOptions) querypb.ExecuteOptions_IncludedFields {
 	if options == nil {
 		return querypb.ExecuteOptions_TYPE_AND_NAME

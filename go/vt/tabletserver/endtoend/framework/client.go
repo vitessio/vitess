@@ -117,10 +117,10 @@ func (client *QueryClient) SetServingType(tabletType topodatapb.TabletType) erro
 
 // Execute executes a query.
 func (client *QueryClient) Execute(query string, bindvars map[string]interface{}) (*sqltypes.Result, error) {
-	return client.ExecuteWithOptions(query, bindvars, &querypb.ExecuteOptions{IncludedFields:querypb.ExecuteOptions_ALL})
+	return client.ExecuteWithOptions(query, bindvars, &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL})
 }
 
-// Execute executes a query.
+// ExecuteWithOptions executes a query using 'options'.
 func (client *QueryClient) ExecuteWithOptions(query string, bindvars map[string]interface{}, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
 	return client.server.Execute(
 		client.ctx,
@@ -134,10 +134,10 @@ func (client *QueryClient) ExecuteWithOptions(query string, bindvars map[string]
 
 // StreamExecute executes a query & returns the results.
 func (client *QueryClient) StreamExecute(query string, bindvars map[string]interface{}) (*sqltypes.Result, error) {
-	return client.StreamExecuteWithOptions(query, bindvars, &querypb.ExecuteOptions{IncludedFields:querypb.ExecuteOptions_ALL})
+	return client.StreamExecuteWithOptions(query, bindvars, &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL})
 }
 
-// StreamExecute executes a query & returns the results.
+// StreamExecuteWithOptions executes a query & returns the results using 'options'.
 func (client *QueryClient) StreamExecuteWithOptions(query string, bindvars map[string]interface{}, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
 	result := &sqltypes.Result{}
 	err := client.server.StreamExecute(
@@ -168,7 +168,7 @@ func (client *QueryClient) Stream(query string, bindvars map[string]interface{},
 		&client.target,
 		query,
 		bindvars,
-		&querypb.ExecuteOptions{IncludedFields:querypb.ExecuteOptions_ALL},
+		&querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL},
 		sendFunc,
 	)
 }
@@ -181,6 +181,6 @@ func (client *QueryClient) ExecuteBatch(queries []querytypes.BoundQuery, asTrans
 		queries,
 		asTransaction,
 		client.transactionID,
-		&querypb.ExecuteOptions{IncludedFields:querypb.ExecuteOptions_ALL},
+		&querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL},
 	)
 }
