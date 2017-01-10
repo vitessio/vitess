@@ -15,9 +15,9 @@ import (
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/trace"
 	"github.com/youtube/vitess/go/vt/dbconnpool"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 	"golang.org/x/net/context"
-	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
 // DBConn is a db connection for tabletserver.

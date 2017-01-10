@@ -17,7 +17,7 @@ func getAndSetup(t *testing.T) *framework.QueryClient {
 		"insert into vitess_b values(:eid, :id)",
 		map[string]interface{}{
 			"id":  int64(-2147483648),
-			"eid":     int64(-9223372036854775808),
+			"eid": int64(-9223372036854775808),
 		},
 	)
 	if err != nil {
@@ -38,14 +38,14 @@ func TestMetadataSpecificExecOptions(t *testing.T) {
 
 	qr, err := client.ExecuteWithOptions("select * from vitess_b where id = -2147483648 and eid = -9223372036854775808",
 		nil,
-		&querypb.ExecuteOptions{IncludedFields:querypb.ExecuteOptions_ALL})
+		&querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL})
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	streamQr, err := client.StreamExecuteWithOptions("select * from vitess_b where id = -2147483648 and eid = -9223372036854775808",
 		nil,
-		&querypb.ExecuteOptions{IncludedFields:querypb.ExecuteOptions_ALL})
+		&querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -53,26 +53,26 @@ func TestMetadataSpecificExecOptions(t *testing.T) {
 	want := sqltypes.Result{
 		Fields: []*querypb.Field{
 			{
-				Name: "eid",
-				Type: sqltypes.Int64,
-				Table: "vitess_b",
-				OrgTable: "vitess_b",
-				Database: "vttest",
-				OrgName: "eid",
+				Name:         "eid",
+				Type:         sqltypes.Int64,
+				Table:        "vitess_b",
+				OrgTable:     "vitess_b",
+				Database:     "vttest",
+				OrgName:      "eid",
 				ColumnLength: 20,
-				Charset: 63,
-				Flags: 49155,
+				Charset:      63,
+				Flags:        49155,
 			},
 			{
-				Name: "id",
-				Type: sqltypes.Int32,
-				Table: "vitess_b",
-				OrgTable: "vitess_b",
-				Database: "vttest",
-				OrgName: "id",
+				Name:         "id",
+				Type:         sqltypes.Int32,
+				Table:        "vitess_b",
+				OrgTable:     "vitess_b",
+				Database:     "vttest",
+				OrgName:      "id",
 				ColumnLength: 11,
-				Charset: 63,
-				Flags: 49155,
+				Charset:      63,
+				Flags:        49155,
 			},
 		},
 		RowsAffected: 1,

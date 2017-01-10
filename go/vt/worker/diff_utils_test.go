@@ -51,15 +51,15 @@ func TestCompareRows(t *testing.T) {
 		want        int
 	}{
 		{
-			fields: []*querypb.Field{{Name:"a", Type:sqltypes.Int32}},
+			fields: []*querypb.Field{{Name: "a", Type: sqltypes.Int32}},
 			left:   []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Int32, []byte("123"))},
 			right:  []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Int32, []byte("14"))},
 			want:   1,
 		},
 		{
 			fields: []*querypb.Field{
-				{Name:"a", Type:sqltypes.Int32},
-				{Name:"b", Type:sqltypes.Int32},
+				{Name: "a", Type: sqltypes.Int32},
+				{Name: "b", Type: sqltypes.Int32},
 			},
 			left: []sqltypes.Value{
 				sqltypes.MakeTrusted(sqltypes.Int32, []byte("555")),
@@ -72,43 +72,43 @@ func TestCompareRows(t *testing.T) {
 			want: -1,
 		},
 		{
-			fields: []*querypb.Field{{Name:"a", Type:sqltypes.Int32}},
+			fields: []*querypb.Field{{Name: "a", Type: sqltypes.Int32}},
 			left:   []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Int32, []byte("144"))},
 			right:  []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Int32, []byte("144"))},
 			want:   0,
 		},
 		{
-			fields: []*querypb.Field{{Name:"a", Type:sqltypes.Uint64}},
+			fields: []*querypb.Field{{Name: "a", Type: sqltypes.Uint64}},
 			left:   []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Uint64, []byte("9223372036854775809"))},
 			right:  []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Uint64, []byte("9223372036854775810"))},
 			want:   -1,
 		},
 		{
-			fields: []*querypb.Field{{Name:"a", Type:sqltypes.Uint64}},
+			fields: []*querypb.Field{{Name: "a", Type: sqltypes.Uint64}},
 			left:   []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Uint64, []byte("9223372036854775819"))},
 			right:  []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Uint64, []byte("9223372036854775810"))},
 			want:   1,
 		},
 		{
-			fields: []*querypb.Field{{Name:"a", Type:sqltypes.Float64}},
+			fields: []*querypb.Field{{Name: "a", Type: sqltypes.Float64}},
 			left:   []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Float64, []byte("3.14"))},
 			right:  []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Float64, []byte("3.2"))},
 			want:   -1,
 		},
 		{
-			fields: []*querypb.Field{{Name:"a", Type:sqltypes.Float64}},
+			fields: []*querypb.Field{{Name: "a", Type: sqltypes.Float64}},
 			left:   []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Float64, []byte("123.4"))},
 			right:  []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Float64, []byte("123.2"))},
 			want:   1,
 		},
 		{
-			fields: []*querypb.Field{{Name:"a", Type:sqltypes.Char}},
+			fields: []*querypb.Field{{Name: "a", Type: sqltypes.Char}},
 			left:   []sqltypes.Value{sqltypes.MakeString([]byte("abc"))},
 			right:  []sqltypes.Value{sqltypes.MakeString([]byte("abb"))},
 			want:   1,
 		},
 		{
-			fields: []*querypb.Field{{Name:"a", Type:sqltypes.Char}},
+			fields: []*querypb.Field{{Name: "a", Type: sqltypes.Char}},
 			left:   []sqltypes.Value{sqltypes.MakeString([]byte("abc"))},
 			right:  []sqltypes.Value{sqltypes.MakeString([]byte("abd"))},
 			want:   -1,

@@ -91,10 +91,10 @@ func TestCopy(t *testing.T) {
 
 func TestStripMetaData(t *testing.T) {
 	testcases := []struct {
-		name     	string
-		in       	*Result
-		expected 	*Result
-		includedFields 	querypb.ExecuteOptions_IncludedFields
+		name           string
+		in             *Result
+		expected       *Result
+		includedFields querypb.ExecuteOptions_IncludedFields
 	}{{
 		name:     "no fields",
 		in:       &Result{},
@@ -108,7 +108,7 @@ func TestStripMetaData(t *testing.T) {
 			Fields: []*querypb.Field{},
 		},
 	}, {
-		name: "no name",
+		name:           "no name",
 		includedFields: querypb.ExecuteOptions_TYPE_ONLY,
 		in: &Result{
 			Fields: []*querypb.Field{{
@@ -125,7 +125,7 @@ func TestStripMetaData(t *testing.T) {
 			}},
 		},
 	}, {
-		name: "names",
+		name:           "names",
 		includedFields: querypb.ExecuteOptions_TYPE_ONLY,
 		in: &Result{
 			Fields: []*querypb.Field{{
@@ -144,29 +144,29 @@ func TestStripMetaData(t *testing.T) {
 			}},
 		},
 	}, {
-		name: "all fields - strip to type",
+		name:           "all fields - strip to type",
 		includedFields: querypb.ExecuteOptions_TYPE_ONLY,
 		in: &Result{
 			Fields: []*querypb.Field{{
-				Name: "field1",
-				Table: "table1",
-				OrgTable: "orgtable1",
-				OrgName: "orgname1",
+				Name:         "field1",
+				Table:        "table1",
+				OrgTable:     "orgtable1",
+				OrgName:      "orgname1",
 				ColumnLength: 5,
-				Charset: 63,
-				Decimals: 0,
-				Flags: 2,
-				Type: Int64,
+				Charset:      63,
+				Decimals:     0,
+				Flags:        2,
+				Type:         Int64,
 			}, {
-				Name: "field2",
-				Table: "table2",
-				OrgTable: "orgtable2",
-				OrgName: "orgname2",
+				Name:         "field2",
+				Table:        "table2",
+				OrgTable:     "orgtable2",
+				OrgName:      "orgname2",
 				ColumnLength: 5,
-				Charset: 63,
-				Decimals: 0,
-				Flags: 2,
-				Type: VarChar,
+				Charset:      63,
+				Decimals:     0,
+				Flags:        2,
+				Type:         VarChar,
 			}},
 		},
 		expected: &Result{
@@ -176,78 +176,78 @@ func TestStripMetaData(t *testing.T) {
 				Type: VarChar,
 			}},
 		},
-	},{
-		name: "all fields - not stripped",
+	}, {
+		name:           "all fields - not stripped",
 		includedFields: querypb.ExecuteOptions_ALL,
 		in: &Result{
 			Fields: []*querypb.Field{{
-				Name: "field1",
-				Table: "table1",
-				OrgTable: "orgtable1",
-				OrgName: "orgname1",
+				Name:         "field1",
+				Table:        "table1",
+				OrgTable:     "orgtable1",
+				OrgName:      "orgname1",
 				ColumnLength: 5,
-				Charset: 63,
-				Decimals: 0,
-				Flags: 2,
-				Type: Int64,
+				Charset:      63,
+				Decimals:     0,
+				Flags:        2,
+				Type:         Int64,
 			}, {
-				Name: "field2",
-				Table: "table2",
-				OrgTable: "orgtable2",
-				OrgName: "orgname2",
+				Name:         "field2",
+				Table:        "table2",
+				OrgTable:     "orgtable2",
+				OrgName:      "orgname2",
 				ColumnLength: 5,
-				Charset: 63,
-				Decimals: 0,
-				Flags: 2,
-				Type: VarChar,
+				Charset:      63,
+				Decimals:     0,
+				Flags:        2,
+				Type:         VarChar,
 			}},
 		},
 		expected: &Result{
 			Fields: []*querypb.Field{{
-				Name: "field1",
-				Table: "table1",
-				OrgTable: "orgtable1",
-				OrgName: "orgname1",
+				Name:         "field1",
+				Table:        "table1",
+				OrgTable:     "orgtable1",
+				OrgName:      "orgname1",
 				ColumnLength: 5,
-				Charset: 63,
-				Decimals: 0,
-				Flags: 2,
-				Type: Int64,
+				Charset:      63,
+				Decimals:     0,
+				Flags:        2,
+				Type:         Int64,
 			}, {
-				Name: "field2",
-				Table: "table2",
-				OrgTable: "orgtable2",
-				OrgName: "orgname2",
+				Name:         "field2",
+				Table:        "table2",
+				OrgTable:     "orgtable2",
+				OrgName:      "orgname2",
 				ColumnLength: 5,
-				Charset: 63,
-				Decimals: 0,
-				Flags: 2,
-				Type: VarChar,
+				Charset:      63,
+				Decimals:     0,
+				Flags:        2,
+				Type:         VarChar,
 			}},
 		},
-	},{
+	}, {
 		name: "all fields - strip to type and name",
 		in: &Result{
 			Fields: []*querypb.Field{{
-				Name: "field1",
-				Table: "table1",
-				OrgTable: "orgtable1",
-				OrgName: "orgname1",
+				Name:         "field1",
+				Table:        "table1",
+				OrgTable:     "orgtable1",
+				OrgName:      "orgname1",
 				ColumnLength: 5,
-				Charset: 63,
-				Decimals: 0,
-				Flags: 2,
-				Type: Int64,
+				Charset:      63,
+				Decimals:     0,
+				Flags:        2,
+				Type:         Int64,
 			}, {
-				Name: "field2",
-				Table: "table2",
-				OrgTable: "orgtable2",
-				OrgName: "orgname2",
+				Name:         "field2",
+				Table:        "table2",
+				OrgTable:     "orgtable2",
+				OrgName:      "orgname2",
 				ColumnLength: 5,
-				Charset: 63,
-				Decimals: 0,
-				Flags: 2,
-				Type: VarChar,
+				Charset:      63,
+				Decimals:     0,
+				Flags:        2,
+				Type:         VarChar,
 			}},
 		},
 		expected: &Result{
@@ -259,7 +259,7 @@ func TestStripMetaData(t *testing.T) {
 				Type: VarChar,
 			}},
 		},
-	},}
+	}}
 	for _, tcase := range testcases {
 		inCopy := tcase.in.Copy()
 		out := inCopy.StripMetadata(tcase.includedFields)

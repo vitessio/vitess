@@ -16,8 +16,8 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
 
-	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 func TestDBConnExec(t *testing.T) {

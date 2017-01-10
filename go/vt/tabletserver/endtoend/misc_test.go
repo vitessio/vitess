@@ -62,15 +62,15 @@ func TestBinary(t *testing.T) {
 	want := sqltypes.Result{
 		Fields: []*querypb.Field{
 			{
-				Name: "binval",
-				Type: sqltypes.VarBinary,
-				Table: "vitess_test",
-				OrgTable: "vitess_test",
-				Database: "vttest",
-				OrgName: "binval",
+				Name:         "binval",
+				Type:         sqltypes.VarBinary,
+				Table:        "vitess_test",
+				OrgTable:     "vitess_test",
+				Database:     "vttest",
+				OrgName:      "binval",
 				ColumnLength: 256,
-				Charset: 63,
-				Flags: 128,
+				Charset:      63,
+				Flags:        128,
 			},
 		},
 		RowsAffected: 1,
@@ -320,11 +320,11 @@ func TestBindInSelect(t *testing.T) {
 	}
 	want := &sqltypes.Result{
 		Fields: []*querypb.Field{{
-			Name: "1",
-			Type: sqltypes.Int64,
+			Name:         "1",
+			Type:         sqltypes.Int64,
 			ColumnLength: 1,
-			Charset: 63,
-			Flags: 32897,
+			Charset:      63,
+			Flags:        32897,
 		}},
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
@@ -348,12 +348,12 @@ func TestBindInSelect(t *testing.T) {
 	}
 	want = &sqltypes.Result{
 		Fields: []*querypb.Field{{
-			Name: "abcd",
-			Type: sqltypes.VarChar,
+			Name:         "abcd",
+			Type:         sqltypes.VarChar,
 			ColumnLength: 12,
-			Charset: 33,
-			Decimals: 31,
-			Flags: 1,
+			Charset:      33,
+			Decimals:     31,
+			Flags:        1,
 		}},
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
@@ -377,12 +377,12 @@ func TestBindInSelect(t *testing.T) {
 	}
 	want = &sqltypes.Result{
 		Fields: []*querypb.Field{{
-			Name: "",
-			Type: sqltypes.VarChar,
+			Name:         "",
+			Type:         sqltypes.VarChar,
 			ColumnLength: 6,
-			Charset: 33,
-			Decimals: 31,
-			Flags: 1,
+			Charset:      33,
+			Decimals:     31,
+			Flags:        1,
 		}},
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{

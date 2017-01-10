@@ -7,13 +7,14 @@
 package endtoend
 
 import (
-	"github.com/youtube/vitess/go/sqltypes"
 	"encoding/json"
-	log "github.com/golang/glog"
 	"fmt"
+
+	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/sqltypes"
 )
 
-func prettyPrint(qr sqltypes.Result) (string) {
+func prettyPrint(qr sqltypes.Result) string {
 	out, err := json.Marshal(qr)
 	if err != nil {
 		log.Errorf("Could not marshal result to json for %#v", qr)
@@ -22,7 +23,7 @@ func prettyPrint(qr sqltypes.Result) (string) {
 	return string(out)
 }
 
-func prettyPrintArr(qr []sqltypes.Result) (string) {
+func prettyPrintArr(qr []sqltypes.Result) string {
 	out, err := json.Marshal(qr)
 	if err != nil {
 		log.Errorf("Could not marshal result to json for %#v", qr)
