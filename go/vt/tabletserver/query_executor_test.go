@@ -18,6 +18,7 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/callerid"
 	"github.com/youtube/vitess/go/vt/callinfo"
+	"github.com/youtube/vitess/go/vt/schema"
 	"github.com/youtube/vitess/go/vt/tableacl"
 	"github.com/youtube/vitess/go/vt/tableacl/simpleacl"
 	"github.com/youtube/vitess/go/vt/tabletserver/planbuilder"
@@ -161,7 +162,17 @@ func TestQueryExecutorPlanInsertPk(t *testing.T) {
 func TestQueryExecutorPlanInsertMessage(t *testing.T) {
 	db := setUpQueryExecutorTest()
 	db.AddQueryPattern("insert into msg\\(time_scheduled, id, message, time_next, time_created, epoch\\) values \\(1, 2, 3, 1,.*", &sqltypes.Result{})
-	db.AddQuery("select time_next, epoch, id, message from msg where (time_scheduled = 1 and id = 2)", &sqltypes.Result{})
+	db.AddQuery(
+		"select time_next, epoch, id, message from msg where (time_scheduled = 1 and id = 2)",
+		&sqltypes.Result{
+			Rows: [][]sqltypes.Value{{
+				sqltypes.MakeString([]byte("1")),
+				sqltypes.MakeString([]byte("0")),
+				sqltypes.MakeString([]byte("1")),
+				sqltypes.MakeString([]byte("01")),
+			}},
+		},
+	)
 	want := &sqltypes.Result{
 		Rows: make([][]sqltypes.Value, 0),
 	}
@@ -171,12 +182,30 @@ func TestQueryExecutorPlanInsertMessage(t *testing.T) {
 	qre := newTestQueryExecutor(ctx, tsv, query, 0)
 	defer tsv.StopService()
 	checkPlanID(t, planbuilder.PlanInsertMessage, qre.plan.PlanID)
+	r1 := newTestReceiver(1)
+	tsv.messager.schemaChanged(map[string]*schema.Table{
+		"msg": {
+			Type: schema.Message,
+		},
+	})
+	tsv.messager.Subscribe("msg", r1)
 	got, err := qre.Execute()
 	if err != nil {
 		t.Fatalf("qre.Execute() = %v, want nil", err)
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got: %v, want: %v", got, want)
+	}
+	mr := <-r1.ch
+	wantmr := &MessageRow{
+		TimeNext: 1,
+		Epoch:    0,
+		ID:       sqltypes.MakeString([]byte("1")),
+		Message:  sqltypes.MakeString([]byte("01")),
+		id:       "1",
+	}
+	if !reflect.DeepEqual(mr, wantmr) {
+		t.Errorf("rows:\n%+v, want\n%+v", got, wantmr)
 	}
 
 	txid := newTransaction(tsv)
@@ -431,6 +460,40 @@ func TestQueryExecutorPlanDmlPk(t *testing.T) {
 	if !reflect.DeepEqual(gotqueries, wantqueries) {
 		t.Errorf("queries: %v, want %v", gotqueries, wantqueries)
 	}
+}
+
+func TestQueryExecutorPlanDmlMessage(t *testing.T) {
+	db := setUpQueryExecutorTest()
+	query := "update msg set time_acked = 2, time_next = null where id in (1)"
+	want := &sqltypes.Result{}
+	db.AddQuery("select time_scheduled, id from msg where id in (1) limit 10001 for update", &sqltypes.Result{
+		RowsAffected: 1,
+		Rows: [][]sqltypes.Value{{
+			sqltypes.MakeString([]byte("12")),
+			sqltypes.MakeString([]byte("1")),
+		}},
+	})
+	db.AddQuery("update msg set time_acked = 2, time_next = null where (time_scheduled = '12' and id = '1') /* _stream msg (time_scheduled id ) ('MTI=' 'MQ==' ); */", want)
+	ctx := context.Background()
+	tsv := newTestTabletServer(ctx, enableStrict, db)
+	txid := newTransaction(tsv)
+	qre := newTestQueryExecutor(ctx, tsv, query, txid)
+	defer tsv.StopService()
+	defer testCommitHelper(t, tsv, qre)
+	checkPlanID(t, planbuilder.PlanDMLSubquery, qre.plan.PlanID)
+	_, err := qre.Execute()
+	if err != nil {
+		t.Fatalf("qre.Execute() = %v, want nil", err)
+	}
+	conn, err := qre.te.txPool.Get(txid, "for test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantChanged := map[string][]string{"msg": {"1"}}
+	if !reflect.DeepEqual(conn.ChangedMessages, wantChanged) {
+		t.Errorf("conn.ChangedMessages: %+v, want: %+v", conn.ChangedMessages, wantChanged)
+	}
+	conn.Recycle()
 }
 
 func TestQueryExecutorPlanDmlAutoCommit(t *testing.T) {

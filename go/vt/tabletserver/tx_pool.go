@@ -220,17 +220,13 @@ func (axp *TxPool) LocalBegin(ctx context.Context) (*TxConnection, error) {
 // LocalCommit is the commit function for LocalBegin.
 func (axp *TxPool) LocalCommit(ctx context.Context, conn *TxConnection, messager *MessagerEngine) error {
 	defer conn.conclude(TxCommit)
-	if messager != nil {
-		defer messager.LockDB(conn.NewMessages, conn.ChangedMessages)()
-	}
+	defer messager.LockDB(conn.NewMessages, conn.ChangedMessages)()
 	axp.txStats.Add("Completed", time.Now().Sub(conn.StartTime))
 	if _, err := conn.Exec(ctx, "commit", 1, false); err != nil {
 		conn.Close()
 		return NewTabletErrorSQL(vtrpcpb.ErrorCode_UNKNOWN_ERROR, err)
 	}
-	if messager != nil {
-		messager.UpdateCaches(conn.NewMessages, conn.ChangedMessages)
-	}
+	messager.UpdateCaches(conn.NewMessages, conn.ChangedMessages)
 	return nil
 }
 

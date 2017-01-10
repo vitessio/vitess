@@ -7,6 +7,7 @@ package tabletserver
 import (
 	"reflect"
 	"testing"
+	"time"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -184,5 +185,78 @@ func TestSubscribe(t *testing.T) {
 	err = me.Subscribe("t3", r1)
 	if err == nil || err.Error() != want {
 		t.Errorf("Subscribe: %v, want %s", err, want)
+	}
+}
+
+func TestLockDB(t *testing.T) {
+	db := setUpTabletServerTest()
+	testUtils := newTestUtils()
+	config := testUtils.newQueryServiceConfig()
+	config.TransactionCap = 1
+	tsv := NewTabletServer(config)
+	dbconfigs := testUtils.newDBConfigs(db)
+	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+	err := tsv.StartService(target, dbconfigs, testUtils.newMysqld(&dbconfigs))
+	if err != nil {
+		t.Fatalf("StartService failed: %v", err)
+	}
+	defer tsv.StopService()
+
+	me := NewMessagerEngine(tsv, config, tsv.queryServiceStats)
+	if err := me.Open(dbconfigs); err != nil {
+		t.Fatal(err)
+	}
+	tables := map[string]*schema.Table{
+		"t1": {
+			Type: schema.Message,
+		},
+		"t2": {
+			Type: schema.Message,
+		},
+	}
+	me.schemaChanged(tables)
+	r1 := newTestReceiver(0)
+	me.Subscribe("t1", r1)
+
+	row1 := &MessageRow{
+		id: "1",
+	}
+	row2 := &MessageRow{
+		TimeNext: time.Now().UnixNano() + int64(10*time.Minute),
+		id:       "2",
+	}
+	newMessages := map[string][]*MessageRow{"t1": {row1, row2}, "t3": {row1}}
+	unlock := me.LockDB(newMessages, nil)
+	me.UpdateCaches(newMessages, nil)
+	unlock()
+	<-r1.ch
+	time.Sleep(10 * time.Microsecond)
+	// row2 should not be sent.
+	select {
+	case mr := <-r1.ch:
+		t.Errorf("Unexpected message: %v", mr)
+	default:
+	}
+
+	r2 := newTestReceiver(0)
+	me.Subscribe("t2", r2)
+	mm := me.managers["t2"]
+	mm.Add(&MessageRow{id: "1"})
+	// Make sure the first message is enqueued.
+	r2.WaitForCount(1)
+	// "2" will be in the cache.
+	mm.Add(&MessageRow{id: "2"})
+	changedMessages := map[string][]string{"t2": {"2"}, "t3": {"2"}}
+	unlock = me.LockDB(nil, changedMessages)
+	// This should delete "2".
+	me.UpdateCaches(nil, changedMessages)
+	unlock()
+	<-r2.ch
+	time.Sleep(10 * time.Microsecond)
+	// There should be no more messages.
+	select {
+	case mr := <-r2.ch:
+		t.Errorf("Unexpected message: %v", mr)
+	default:
 	}
 }
