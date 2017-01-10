@@ -17,46 +17,6 @@ import (
 	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
 )
 
-func TestTxPoolExecuteCommit(t *testing.T) {
-	tableName := "test_table"
-	sql := fmt.Sprintf("alter table %s add test_column int", tableName)
-	db := fakesqldb.Register()
-	db.AddQuery("begin", &sqltypes.Result{})
-	db.AddQuery("commit", &sqltypes.Result{})
-	db.AddQuery(sql, &sqltypes.Result{})
-
-	txPool := newTxPool(true)
-	txPool.SetTimeout(1 * time.Second)
-	appParams := sqldb.ConnParams{Engine: db.Name}
-	dbaParams := sqldb.ConnParams{Engine: db.Name}
-	txPool.Open(&appParams, &dbaParams)
-	defer txPool.Close()
-	ctx := context.Background()
-	transactionID, err := txPool.Begin(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	txConn, err := txPool.Get(transactionID, "for query")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer txPool.Commit(ctx, transactionID, nil)
-	txConn.RecordQuery(sql)
-	_, err = txConn.Exec(ctx, sql, 1, true)
-	txConn.Recycle()
-	if err != nil {
-		t.Fatal(err)
-	}
-	txPool.LogActive()
-	txPool.LogActive()
-	// start another transaction which should be killed
-	// in txPool.Close()
-	_, err = txPool.Begin(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-}
-
 func TestTxPoolExecuteRollback(t *testing.T) {
 	sql := "alter table test_table add test_column int"
 	db := fakesqldb.Register()
@@ -207,38 +167,6 @@ func TestTxPoolBeginWithExecError(t *testing.T) {
 	}
 }
 
-func TestTxPoolCommitFail(t *testing.T) {
-	db := fakesqldb.Register()
-	sql := fmt.Sprintf("alter table test_table add test_column int")
-	db.AddQuery("begin", &sqltypes.Result{})
-	db.AddQuery(sql, &sqltypes.Result{})
-	db.AddRejectedQuery("commit", errRejected)
-	txPool := newTxPool(false)
-	appParams := sqldb.ConnParams{Engine: db.Name}
-	dbaParams := sqldb.ConnParams{Engine: db.Name}
-	txPool.Open(&appParams, &dbaParams)
-	defer txPool.Close()
-	ctx := context.Background()
-	transactionID, err := txPool.Begin(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	txConn, err := txPool.Get(transactionID, "for query")
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = txConn.Exec(ctx, sql, 1, true)
-	txConn.Recycle()
-	if err != nil {
-		t.Fatalf("got exec error: %v", err)
-	}
-	err = txPool.Commit(ctx, transactionID, nil)
-	want := "error: error: rejected"
-	if err == nil || err.Error() != want {
-		t.Errorf("Commit: %v, want %s", err, want)
-	}
-}
-
 func TestTxPoolRollbackFail(t *testing.T) {
 	sql := "alter table test_table add test_column int"
 	db := fakesqldb.Register()
@@ -313,43 +241,6 @@ func TestTxPoolExecFailDueToConnFail(t *testing.T) {
 	txConn.Recycle()
 	if err == nil {
 		t.Fatalf("exec should fail because of a conn error")
-	}
-}
-
-func TestTxPoolLocal(t *testing.T) {
-	db := fakesqldb.Register()
-	db.AddQuery("begin", &sqltypes.Result{})
-	db.AddQuery("commit", &sqltypes.Result{})
-	txPool := newTxPool(false)
-	appParams := sqldb.ConnParams{Engine: db.Name}
-	dbaParams := sqldb.ConnParams{Engine: db.Name}
-	txPool.Open(&appParams, &dbaParams)
-	ctx := context.Background()
-	conn, err := txPool.LocalBegin(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	err = txPool.LocalCommit(ctx, conn, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	// Call LocalConclude twice to ensure nothing blows up.
-	txPool.LocalConclude(ctx, conn)
-	txPool.LocalConclude(ctx, conn)
-
-	conn, err = txPool.LocalBegin(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	// Call LocalConclude twice to ensure nothing blows up.
-	txPool.LocalConclude(ctx, conn)
-	txPool.LocalConclude(ctx, conn)
-
-	txPool.Close()
-	_, err = txPool.LocalBegin(ctx)
-	want := "fatal: connection pool is closed"
-	if err == nil || err.Error() != want {
-		t.Errorf("Begin err: %v, want %v", err, want)
 	}
 }
 
