@@ -11,14 +11,11 @@ import environment
 import tablet
 import utils
 
-use_mysqlctld = True
+use_mysqlctld = False
 
-tablet_master = tablet.Tablet(use_mysqlctld=use_mysqlctld,
-                              vt_dba_passwd='VtDbaPass')
-tablet_replica1 = tablet.Tablet(use_mysqlctld=use_mysqlctld,
-                                vt_dba_passwd='VtDbaPass')
-tablet_replica2 = tablet.Tablet(use_mysqlctld=use_mysqlctld,
-                                vt_dba_passwd='VtDbaPass')
+tablet_master = None
+tablet_replica1 = None
+tablet_replica2 = None
 
 new_init_db = ''
 db_credentials_file = ''
@@ -26,6 +23,14 @@ db_credentials_file = ''
 
 def setUpModule():
   global new_init_db, db_credentials_file
+  global tablet_master, tablet_replica1, tablet_replica2
+
+  tablet_master = tablet.Tablet(use_mysqlctld=use_mysqlctld,
+                                vt_dba_passwd='VtDbaPass')
+  tablet_replica1 = tablet.Tablet(use_mysqlctld=use_mysqlctld,
+                                  vt_dba_passwd='VtDbaPass')
+  tablet_replica2 = tablet.Tablet(use_mysqlctld=use_mysqlctld,
+                                  vt_dba_passwd='VtDbaPass')
 
   try:
     environment.topo_server().setup()
