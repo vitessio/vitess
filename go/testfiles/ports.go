@@ -38,6 +38,10 @@ var (
 	// GoVtEtcdtopoPort is used by the go/vt/etcdtopo package.
 	// Takes two ports.
 	GoVtEtcdtopoPort = GoVtZktopoPort + 3
+
+	// GoVtTopoConsultopoPort is used by the go/vt/topo/consultopo package.
+	// Takes five ports.
+	GoVtTopoConsultopoPort = GoVtEtcdtopoPort + 2
 )
 
 //

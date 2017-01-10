@@ -55,11 +55,20 @@ RUN mkdir -p /vt/dist && \
     mv apache-maven-3.3.9 maven
 
 # Install etcd v3.0.15 binaries
-RUN mkdir -p /vt/dist /vt/bin && \
+RUN mkdir -p /vt/dist && \
     cd /vt/dist && \
     curl -sL --connect-timeout 10 --retry 3 \
          https://github.com/coreos/etcd/releases/download/v3.0.15/etcd-v3.0.15-linux-amd64.tar.gz | tar -xz && \
     mv etcd-v3.0.15-linux-amd64 etcd
+
+# Install consul 0.7.2 binaries
+RUN mkdir -p /vt/dist/consul && \
+    cd /vt/dist/consul && \
+    curl -sL --connect-timeout 10 --retry 3 \
+         -o consul_0.7.2_linux_amd64.zip \
+         https://releases.hashicorp.com/consul/0.7.2/consul_0.7.2_linux_amd64.zip && \
+    unzip consul_0.7.2_linux_amd64.zip && \
+    rm -f consul_0.7.2_linux_amd64.zip
 
 # Set up Vitess environment (equivalent to '. dev.env')
 ENV VTTOP /vt/src/github.com/youtube/vitess
@@ -71,7 +80,7 @@ ENV VTPORTSTART 15000
 ENV PYTHONPATH $VTROOT/dist/py-mock-1.0.1/lib/python2.7/site-packages:$VTROOT/py-vtdb:$VTROOT/dist/selenium/lib/python2.7/site-packages
 ENV GOBIN $VTROOT/bin
 ENV GOPATH $VTROOT
-ENV PATH $VTROOT/bin:$VTROOT/dist/maven/bin:$VTROOT/dist/etcd:$VTROOT/dist/chromedriver:$PATH
+ENV PATH $VTROOT/bin:$VTROOT/dist/maven/bin:$VTROOT/dist/etcd:$VTROOT/dist/consul:$VTROOT/dist/chromedriver:$PATH
 ENV VT_MYSQL_ROOT /usr
 ENV PKG_CONFIG_PATH $VTROOT/lib
 ENV GO15VENDOREXPERIMENT 1

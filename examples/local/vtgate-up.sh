@@ -13,6 +13,7 @@ source $script_root/env.sh
 
 # Start vtgate.
 $VTROOT/bin/vtgate \
+  $TOPOLOGY_FLAGS \
   -log_dir $VTDATAROOT/tmp \
   -port $web_port \
   -grpc_port $grpc_port \

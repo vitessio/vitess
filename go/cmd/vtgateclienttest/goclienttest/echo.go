@@ -96,11 +96,11 @@ var (
 	eventTokenEcho = "timestamp:876543 shard:\"-80\" position:\"test_position\" "
 
 	options = &querypb.ExecuteOptions{
-		ExcludeFieldNames: true,
+		IncludedFields: querypb.ExecuteOptions_TYPE_ONLY,
 		IncludeEventToken: true,
 		CompareEventToken: eventToken,
 	}
-	optionsEcho = "exclude_field_names:true include_event_token:true compare_event_token:<" + eventTokenEcho + "> "
+	optionsEcho = "include_event_token:true compare_event_token:<" + eventTokenEcho + "> included_fields:TYPE_ONLY "
 	extrasEcho  = "event_token:<" + eventTokenEcho + "> fresher:true "
 
 	updateStreamEcho = "map[callerId:" + callerIDEcho + " event:" + eventTokenEcho + " keyRange:" + keyRangeZeroEcho + " keyspace:conn_ks shard:echo://" + query + " tabletType:REPLICA timestamp:0]"

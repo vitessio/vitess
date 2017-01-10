@@ -4,7 +4,7 @@
 
 package main
 
-// Imports and register the Zookeeper TopologyServer and its Explorer.
+// Imports and register the 'zookeeper' topo.Server and its Explorer.
 
 import (
 	"github.com/youtube/vitess/go/vt/servenv"

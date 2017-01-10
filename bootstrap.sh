@@ -72,6 +72,24 @@ else
 fi
 ln -snf $etcd_dist/etcd-${etcd_version}-linux-amd64/etcd $VTROOT/bin/etcd
 
+# Download and install consul, link consul binary into our root.
+consul_version=0.7.2
+consul_dist=$VTROOT/dist/consul
+consul_version_file=$consul_dist/version
+if [[ -f $consul_version_file && "$(cat $consul_version_file)" == "$consul_version" ]]; then
+  echo "skipping consul install. remove $consul_version_file to force re-install."
+else
+  rm -rf $consul_dist
+  mkdir -p $consul_dist
+  download_url=https://releases.hashicorp.com/consul
+  (cd $consul_dist && \
+    wget ${download_url}/${consul_version}/consul_${consul_version}_linux_amd64.zip && \
+    unzip consul_${consul_version}_linux_amd64.zip)
+  [ $? -eq 0 ] || fail "consul download failed"
+  echo "$consul_version" > $consul_version_file
+fi
+ln -snf $consul_dist/consul $VTROOT/bin/consul
+
 # install gRPC C++ base, so we can install the python adapters.
 # this also installs protobufs
 grpc_dist=$VTROOT/dist/grpc

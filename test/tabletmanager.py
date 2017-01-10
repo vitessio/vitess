@@ -107,7 +107,7 @@ class TestTabletManager(unittest.TestCase):
 
     # test exclude_field_names to vttablet works as expected.
     qr = tablet_62344.execute('select id, msg from vt_select_test',
-                              execute_options='exclude_field_names:true ')
+                              execute_options='included_fields:TYPE_ONLY ')
     self.assertEqual(len(qr['rows']), 4,
                      'expected 4 rows in vt_select_test: %s' % str(qr))
     self.assertNotIn('name', qr['fields'][0])

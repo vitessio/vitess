@@ -30,7 +30,7 @@ func NewTrackedBuffer(nodeFormatter func(buf *TrackedBuffer, node SQLNode)) *Tra
 	}
 }
 
-// Convenience function, initiates the writing of a single SQLNode tree by passing
+// WriteNode function, initiates the writing of a single SQLNode tree by passing
 // through to Myprintf with a default format string
 func (buf *TrackedBuffer) WriteNode(node SQLNode) *TrackedBuffer {
 	buf.Myprintf("%v", node)

@@ -38,14 +38,14 @@ func (vindex *LookupNonUnique) Map(vcursor VCursor, ids []interface{}) ([][][]by
 	return vindex.lkp.MapNonUniqueLookup(vcursor, ids)
 }
 
-// Verify returns true if id maps to ksid.
-func (vindex *LookupNonUnique) Verify(vcursor VCursor, id interface{}, ksid []byte) (bool, error) {
-	return vindex.lkp.Verify(vcursor, id, ksid)
+// Verify returns true if ids maps to ksids.
+func (vindex *LookupNonUnique) Verify(vcursor VCursor, ids []interface{}, ksids [][]byte) (bool, error) {
+	return vindex.lkp.Verify(vcursor, ids, ksids)
 }
 
 // Create reserves the id by inserting it into the vindex table.
-func (vindex *LookupNonUnique) Create(vcursor VCursor, id interface{}, ksid []byte) error {
-	return vindex.lkp.Create(vcursor, id, ksid)
+func (vindex *LookupNonUnique) Create(vcursor VCursor, id []interface{}, ksids [][]byte) error {
+	return vindex.lkp.Create(vcursor, id, ksids)
 }
 
 // Delete deletes the entry from the vindex table.
@@ -88,14 +88,14 @@ func (vindex *LookupUnique) Map(vcursor VCursor, ids []interface{}) ([][]byte, e
 	return vindex.lkp.MapUniqueLookup(vcursor, ids)
 }
 
-// Verify returns true if id maps to ksid.
-func (vindex *LookupUnique) Verify(vcursor VCursor, id interface{}, ksid []byte) (bool, error) {
-	return vindex.lkp.Verify(vcursor, id, ksid)
+// Verify returns true if ids maps to ksids.
+func (vindex *LookupUnique) Verify(vcursor VCursor, ids []interface{}, ksids [][]byte) (bool, error) {
+	return vindex.lkp.Verify(vcursor, ids, ksids)
 }
 
 // Create reserves the id by inserting it into the vindex table.
-func (vindex *LookupUnique) Create(vcursor VCursor, id interface{}, ksid []byte) error {
-	return vindex.lkp.Create(vcursor, id, ksid)
+func (vindex *LookupUnique) Create(vcursor VCursor, id []interface{}, ksids [][]byte) error {
+	return vindex.lkp.Create(vcursor, id, ksids)
 }
 
 // Delete deletes the entry from the vindex table.

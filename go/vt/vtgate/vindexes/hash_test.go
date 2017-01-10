@@ -6,6 +6,7 @@ package vindexes
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -25,6 +26,12 @@ func TestHashCost(t *testing.T) {
 	}
 }
 
+func TestHashString(t *testing.T) {
+	if strings.Compare("nn", hash.String()) != 0 {
+		t.Errorf("String(): %s, want hash", hash.String())
+	}
+}
+
 func TestHashMap(t *testing.T) {
 	got, err := hash.(Unique).Map(nil, []interface{}{1, int32(2), int64(3), uint(4), uint32(5), uint64(6)})
 	if err != nil {
@@ -41,10 +48,17 @@ func TestHashMap(t *testing.T) {
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("Map(): %#v, want %+v", got, want)
 	}
+
+	//Negative Test Case
+	_, err = hash.(Unique).Map(nil, []interface{}{1.2})
+	wanterr := "hash.Map: getNumber: unexpected type for 1.2: float64"
+	if err.Error() != wanterr {
+		t.Error(err)
+	}
 }
 
 func TestHashVerify(t *testing.T) {
-	success, err := hash.Verify(nil, 1, []byte("\x16k@\xb4J\xbaK\xd6"))
+	success, err := hash.Verify(nil, []interface{}{1}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6")})
 	if err != nil {
 		t.Error(err)
 	}
@@ -53,12 +67,42 @@ func TestHashVerify(t *testing.T) {
 	}
 }
 
-func TestHashReverseMap(t *testing.T) {
-	got, err := hash.(Reversible).ReverseMap(nil, []byte("\x16k@\xb4J\xbaK\xd6"))
+func TestHashVerifyNeg(t *testing.T) {
+	_, err := hash.Verify(nil, []interface{}{1, 2}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6")})
+	want := "hash.Verify: length of ids 2 doesn't match length of ksids 1"
+	if err.Error() != want {
+		t.Error(err.Error())
+	}
+
+	_, err = hash.Verify(nil, []interface{}{1.2}, [][]byte{[]byte("test1")})
+	want = "hash.Verify: getNumber: unexpected type for 1.2: float64"
+	if err.Error() != want {
+		t.Error(err)
+	}
+
+	success, err := hash.Verify(nil, []interface{}{uint(4)}, [][]byte{[]byte("\x06\xe7\xea\"Βp\x8f")})
 	if err != nil {
 		t.Error(err)
 	}
-	if got.(int64) != 1 {
+	if success {
+		t.Errorf("Verify(): %+v, want false", success)
+	}
+}
+
+func TestHashReverseMap(t *testing.T) {
+	got, err := hash.(Reversible).ReverseMap(nil, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6")})
+	if err != nil {
+		t.Error(err)
+	}
+	if got[0].(int64) != 1 {
 		t.Errorf("ReverseMap(): %+v, want 1", got)
+	}
+}
+
+func TestHashReverseMapNeg(t *testing.T) {
+	_, err := hash.(Reversible).ReverseMap(nil, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6\x16k@\xb4J\xbaK\xd6")})
+	want := "invalid keyspace id: 166b40b44aba4bd6166b40b44aba4bd6"
+	if err.Error() != want {
+		t.Error(err)
 	}
 }

@@ -79,39 +79,39 @@ func initTableACL() error {
 	return nil
 }
 
-var testSchema = `create table vitess_test(intval int, floatval float, charval varchar(256), binval varbinary(256), primary key(intval));
+var testSchema = `create table vitess_test(intval int default 0, floatval float default null, charval varchar(256) default null, binval varbinary(256) default null, primary key(intval));
 insert into vitess_test values(1, 1.12345, 0xC2A2, 0x00FF), (2, null, '', null), (3, null, null, null);
 
-create table vitess_a(eid bigint default 1, id int default 1, name varchar(128), foo varbinary(128), primary key(eid, id));
-create table vitess_b(eid bigint, id int, primary key(eid, id));
-create table vitess_c(eid bigint, name varchar(128), foo varbinary(128), primary key(eid, name));
-create table vitess_d(eid bigint, id int);
-create table vitess_e(eid bigint auto_increment, id int default 1, name varchar(128) default 'name', foo varchar(128), primary key(eid, id, name));
-create table vitess_f(vb varbinary(16) default 'ab', id int, primary key(vb));
-create table upsert_test(id1 int, id2 int, primary key (id1));
+create table vitess_a(eid bigint default 0, id int default 1, name varchar(128) default null, foo varbinary(128) default null, primary key(eid, id));
+create table vitess_b(eid bigint default 0, id int default 0, primary key(eid, id));
+create table vitess_c(eid bigint default 0, name varchar(128) default 'name', foo varbinary(128) default null, primary key(eid, name));
+create table vitess_d(eid bigint default null, id int default null);
+create table vitess_e(eid bigint auto_increment, id int default 1, name varchar(128) default 'name', foo varchar(128) default null, primary key(eid, id, name));
+create table vitess_f(vb varbinary(16) default 'ab', id int default null, primary key(vb));
+create table upsert_test(id1 int default 0, id2 int default null, primary key (id1));
 create unique index id2_idx on upsert_test(id2);
 insert into vitess_a(eid, id, name, foo) values(1, 1, 'abcd', 'efgh'), (1, 2, 'bcde', 'fghi');
 insert into vitess_b(eid, id) values(1, 1), (1, 2);
 insert into vitess_c(eid, name, foo) values(10, 'abcd', '20'), (11, 'bcde', '30');
-create table vitess_mixed_case(Col1 int, COL2 int, primary key(col1));
+create table vitess_mixed_case(Col1 int default 0, COL2 int default null, primary key(col1));
 
-create table vitess_big(id int, string1 varchar(128), string2 varchar(100), string3 char(1), string4 varchar(50), string5 varchar(50), string6 varchar(16), string7 varchar(120), bigint1 bigint(20), bigint2 bigint(20), integer1 int, tinyint1 tinyint(4), primary key(id));
+create table vitess_big(id int default 0, string1 varchar(128) default null, string2 varchar(100) default null, string3 char(1) default null, string4 varchar(50) default null, string5 varchar(50) default null, string6 varchar(16) default null, string7 varchar(120) default null, bigint1 bigint(20) default null, bigint2 bigint(20) default null, integer1 int default null, tinyint1 tinyint(4) default null, primary key(id));
 
-create table vitess_ints(tiny tinyint, tinyu tinyint unsigned, small smallint, smallu smallint unsigned, medium mediumint, mediumu mediumint unsigned, normal int, normalu int unsigned, big bigint, bigu bigint unsigned, y year, primary key(tiny));
-create table vitess_fracts(id int, deci decimal(5,2), num numeric(5,2), f float, d double, primary key(id));
-create table vitess_strings(vb varbinary(16), c char(16), vc varchar(16), b binary(4), tb tinyblob, bl blob, ttx tinytext, tx text, en enum('a','b'), s set('a','b'), primary key(vb));
-create table vitess_misc(id int, b bit(8), d date, dt datetime, t time, g geometry, primary key(id));
-create table vitess_unsupported(id int, pt point, primary key(id));
+create table vitess_ints(tiny tinyint default 0, tinyu tinyint unsigned default null, small smallint default null, smallu smallint unsigned default null, medium mediumint default null, mediumu mediumint unsigned default null, normal int default null, normalu int unsigned default null, big bigint default null, bigu bigint unsigned default null, y year default null, primary key(tiny));
+create table vitess_fracts(id int default 0, deci decimal(5,2) default null, num numeric(5,2) default null, f float default null, d double default null, primary key(id));
+create table vitess_strings(vb varbinary(16) default 'vb', c char(16) default null, vc varchar(16) default null, b binary(4) default null, tb tinyblob default null, bl blob default null, ttx tinytext default null, tx text default null, en enum('a','b') default null, s set('a','b') default null, primary key(vb));
+create table vitess_misc(id int default 0, b bit(8) default null, d date default null, dt datetime default null, t time default null, g geometry default null, primary key(id));
+create table vitess_unsupported(id int default 0, pt point default null, primary key(id));
 
-create table vitess_seq(id int, next_id bigint, cache bigint, increment bigint, primary key(id)) comment 'vitess_sequence';
+create table vitess_seq(id int default 0, next_id bigint default null, cache bigint default null, increment bigint default null, primary key(id)) comment 'vitess_sequence';
 insert into vitess_seq(id, next_id, cache) values(0, 1, 3);
 
-create table vitess_acl_no_access(key1 bigint, key2 bigint, primary key(key1));
-create table vitess_acl_read_only(key1 bigint, key2 bigint, primary key(key1));
-create table vitess_acl_read_write(key1 bigint, key2 bigint, primary key(key1));
-create table vitess_acl_admin(key1 bigint, key2 bigint, primary key(key1));
-create table vitess_acl_unmatched(key1 bigint, key2 bigint, primary key(key1));
-create table vitess_acl_all_user_read_only(key1 bigint, key2 bigint, primary key(key1));`
+create table vitess_acl_no_access(key1 bigint default 0, key2 bigint default null, primary key(key1));
+create table vitess_acl_read_only(key1 bigint default 0, key2 bigint default null, primary key(key1));
+create table vitess_acl_read_write(key1 bigint default 0, key2 bigint default null, primary key(key1));
+create table vitess_acl_admin(key1 bigint default 0, key2 bigint default null, primary key(key1));
+create table vitess_acl_unmatched(key1 bigint default 0, key2 bigint default null, primary key(key1));
+create table vitess_acl_all_user_read_only(key1 bigint default 0, key2 bigint default null, primary key(key1));`
 
 var tableACLConfig = `{
   "table_groups": [

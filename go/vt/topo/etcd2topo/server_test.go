@@ -73,7 +73,7 @@ func startEtcd(t *testing.T) (*exec.Cmd, string, string) {
 	return cmd, dataDir, clientAddr
 }
 
-func TestEtcdTopo(t *testing.T) {
+func TestEtcd2Topo(t *testing.T) {
 	// Start a single etcd in the background.
 	cmd, dataDir, clientAddr := startEtcd(t)
 	defer func() {

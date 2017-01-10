@@ -15,6 +15,7 @@ import topo_flavor.zookeeper
 import topo_flavor.zk2
 import topo_flavor.etcd
 import topo_flavor.etcd2
+import topo_flavor.consul
 
 # This imports topo_server into this module, so clients can write
 # environment.topo_server().

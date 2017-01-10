@@ -1982,7 +1982,7 @@ var testCallerID = &vtrpcpb.CallerID{
 }
 
 var testExecuteOptions = &querypb.ExecuteOptions{
-	ExcludeFieldNames: true,
+	IncludedFields: querypb.ExecuteOptions_TYPE_ONLY,
 	IncludeEventToken: true,
 	CompareEventToken: &querypb.EventToken{
 		Timestamp: 135,

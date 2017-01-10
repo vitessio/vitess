@@ -48,18 +48,34 @@ func (vind *Hash) Map(_ VCursor, ids []interface{}) ([][]byte, error) {
 	return out, nil
 }
 
-// Verify returns true if id maps to ksid.
-func (vind *Hash) Verify(_ VCursor, id interface{}, ksid []byte) (bool, error) {
-	num, err := getNumber(id)
-	if err != nil {
-		return false, fmt.Errorf("hash.Verify: %v", err)
+// Verify returns true if ids maps to ksids.
+func (vind *Hash) Verify(_ VCursor, ids []interface{}, ksids [][]byte) (bool, error) {
+	if len(ids) != len(ksids) {
+		return false, fmt.Errorf("hash.Verify: length of ids %v doesn't match length of ksids %v", len(ids), len(ksids))
 	}
-	return bytes.Compare(vhash(num), ksid) == 0, nil
+	for rowNum := range ids {
+		num, err := getNumber(ids[rowNum])
+		if err != nil {
+			return false, fmt.Errorf("hash.Verify: %v", err)
+		}
+		if bytes.Compare(vhash(num), ksids[rowNum]) != 0 {
+			return false, nil
+		}
+	}
+	return true, nil
 }
 
-// ReverseMap returns the id from ksid.
-func (vind *Hash) ReverseMap(_ VCursor, ksid []byte) (interface{}, error) {
-	return vunhash(ksid)
+// ReverseMap returns the ids from ksids.
+func (vind *Hash) ReverseMap(_ VCursor, ksids [][]byte) ([]interface{}, error) {
+	reverseIds := make([]interface{}, len(ksids))
+	var err error
+	for rownum, keyspaceID := range ksids {
+		reverseIds[rownum], err = vunhash(keyspaceID)
+		if err != nil {
+			return reverseIds, err
+		}
+	}
+	return reverseIds, nil
 }
 
 var block3DES cipher.Block

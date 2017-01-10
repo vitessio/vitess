@@ -27,15 +27,42 @@ func TestBatchRead(t *testing.T) {
 		Fields: []*querypb.Field{{
 			Name: "eid",
 			Type: sqltypes.Int64,
+			Table: "vitess_a",
+			OrgTable: "vitess_a",
+			Database: "vttest",
+			OrgName: "eid",
+			ColumnLength: 20,
+			Charset: 63,
+			Flags: 49155,
 		}, {
 			Name: "id",
 			Type: sqltypes.Int32,
+			Table: "vitess_a",
+			OrgTable: "vitess_a",
+			Database: "vttest",
+			OrgName: "id",
+			ColumnLength: 11,
+			Charset: 63,
+			Flags: 49155,
 		}, {
 			Name: "name",
 			Type: sqltypes.VarChar,
+			Table: "vitess_a",
+			OrgTable: "vitess_a",
+			Database: "vttest",
+			OrgName: "name",
+			ColumnLength: 384,
+			Charset: 33,
 		}, {
 			Name: "foo",
 			Type: sqltypes.VarBinary,
+			Table: "vitess_a",
+			OrgTable: "vitess_a",
+			Database: "vttest",
+			OrgName: "foo",
+			ColumnLength: 128,
+			Charset: 63,
+			Flags: 128,
 		}},
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
@@ -51,9 +78,23 @@ func TestBatchRead(t *testing.T) {
 		Fields: []*querypb.Field{{
 			Name: "eid",
 			Type: sqltypes.Int64,
+			Table: "vitess_b",
+			OrgTable: "vitess_b",
+			Database: "vttest",
+			OrgName: "eid",
+			ColumnLength: 20,
+			Charset: 63,
+			Flags: 49155,
 		}, {
 			Name: "id",
 			Type: sqltypes.Int32,
+			Table: "vitess_b",
+			OrgTable: "vitess_b",
+			Database: "vttest",
+			OrgName: "id",
+			ColumnLength: 11,
+			Charset: 63,
+			Flags: 49155,
 		}},
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
@@ -71,7 +112,7 @@ func TestBatchRead(t *testing.T) {
 		return
 	}
 	if !reflect.DeepEqual(qrl, want) {
-		t.Errorf("ExecueBatch: \n%#v, want \n%#v", qrl, want)
+		t.Errorf("ExecueBatch: \n%#v, want \n%#v", prettyPrintArr(qrl), prettyPrintArr(want))
 	}
 }
 

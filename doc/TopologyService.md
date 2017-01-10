@@ -5,11 +5,11 @@ architecture. This service is exposed to all Vitess processes, and is used to
 store small pieces of configuration data about the Vitess cluster, and provide
 cluster-wide locks. It also supports watches, which we will use soon.
 
-Concretely, the Topology Service features are implemented by a
-[Lock Server](http://en.wikipedia.org/wiki/Distributed_lock_manager), referred
+Concretely, the Topology Service features are implemented by
+a [Lock Server](http://en.wikipedia.org/wiki/Distributed_lock_manager), referred
 to as Topology Server in the rest of this document. We use a plug-in
-implementation and we support multiple Lock Servers (Zookeeper, etcd, …) as
-backends for the service.
+implementation and we support multiple Lock Servers (Zookeeper, etcd, Consul, …)
+as backends for the service.
 
 ## Requirements and Usage
 
@@ -167,7 +167,6 @@ keyspaces in a single object.
 It can be rebuilt by running `vtctl RebuildVSchemaGraph`. It is automatically
 rebuilt when using `vtctl ApplyVSchema` (unless prevented by flags).
 
-
 ## Workflows Involving the Topology Server
 
 The Topology Server is involved in many Vitess workflows.
@@ -203,9 +202,9 @@ and we also have a set of unit tests for it in `go/vt/topo/test`.
 This part describes the two implementations we have, and their specific
 behavior.
 
-If starting from scratch, please use the `zk2` or the `etcd2` implementations,
-as we are deprecating the old `zookeeper` and `etcd` implementations. See the
-migration section below if you want to migrate.
+If starting from scratch, please use the `zk2`, `etcd2` or `consul`
+implementations, as we are deprecating the old `zookeeper` and `etcd`
+implementations. See the migration section below if you want to migrate.
 
 ### Zookeeper `zk2` Implementation (new version of `zookeeper`)
 
@@ -260,18 +259,18 @@ We use the following paths:
 
 *Global Cell*:
 
-* Election path: `/elections/<name>`
-* CellInfo path: `/cells/<cell name>/CellInfo`
-* Keyspace:`/keyspaces/<keyspace>/Keyspace`
-* Shard: `/keyspaces/<keyspace>/shards/<shard>/Shard`
-* VSchema: `/keyspaces/<keyspace>/VSchema`
+* Election path: `elections/<name>`
+* CellInfo path: `cells/<cell name>/CellInfo`
+* Keyspace: `keyspaces/<keyspace>/Keyspace`
+* Shard: `keyspaces/<keyspace>/shards/<shard>/Shard`
+* VSchema: `keyspaces/<keyspace>/VSchema`
 
 *Local Cell*:
 
-* Tablet: `/tablets/<cell>-<uid>/Tablet`
-* Replication Graph: `/keyspaces/<keyspace>/shards/<shard>/ShardReplication`
-* SrvKeyspace: `/keyspaces/<keyspace>/SrvKeyspace`
-* SrvVSchema: `/SvrVSchema`
+* Tablet: `tablets/<cell>-<uid>/Tablet`
+* Replication Graph: `keyspaces/<keyspace>/shards/<shard>/ShardReplication`
+* SrvKeyspace: `keyspaces/<keyspace>/SrvKeyspace`
+* SrvVSchema: `SvrVSchema`
 
 For locks, we create a subdirectory called `locks` under either the keyspace
 directory or the shard directory.
@@ -399,18 +398,18 @@ We use the following paths:
 
 *Global Cell*:
 
-* Election path: `/elections/<name>`
-* CellInfo path: `/cells/<cell name>/CellInfo`
-* Keyspace:`/keyspaces/<keyspace>/Keyspace`
-* Shard: `/keyspaces/<keyspace>/shards/<shard>/Shard`
-* VSchema: `/keyspaces/<keyspace>/VSchema`
+* Election path: `elections/<name>`
+* CellInfo path: `cells/<cell name>/CellInfo`
+* Keyspace: `keyspaces/<keyspace>/Keyspace`
+* Shard: `keyspaces/<keyspace>/shards/<shard>/Shard`
+* VSchema: `keyspaces/<keyspace>/VSchema`
 
 *Local Cell*:
 
-* Tablet: `/tablets/<cell>-<uid>/Tablet`
-* Replication Graph: `/keyspaces/<keyspace>/shards/<shard>/ShardReplication`
-* SrvKeyspace: `/keyspaces/<keyspace>/SrvKeyspace`
-* SrvVSchema: `/SvrVSchema`
+* Tablet: `tablets/<cell>-<uid>/Tablet`
+* Replication Graph: `keyspaces/<keyspace>/shards/<shard>/ShardReplication`
+* SrvKeyspace: `keyspaces/<keyspace>/SrvKeyspace`
+* SrvVSchema: `SvrVSchema`
 
 For locks, we use a subdirectory named `locks` in the directory to lock, and an
 ephemeral file in that subdirectory (it is associated with a lease, whose TTL
@@ -421,8 +420,7 @@ others wait for files with older ModRevisions to disappear.
 Master elections also use a subdirectory, named after the election Name, and use
 a similar method as the locks, with ephemeral files.
 
-We store the proto3 binary data for each object, base64-encoded (as it seems the
-data stored doesn't work well when containing non-ascii characters).
+We store the proto3 binary data for each object (as the v3 API allows us to store binary data).
 
 ### Old etcd `etcd` Implementaion (deprecated, use `etcd2` instead)
 
@@ -449,7 +447,140 @@ We use the following paths:
 * SrvKeyspace: `/vt/ns/<keyspace>/_Data`
 * SrvVSchema: `/vt/ns/_VSchema`
 
-### Migration Between Implementations
+### Consul `consul` Implementation
+
+This topology service plugin is meant to use Consul clusters as storage backend
+for the topology data.
+
+To configure a `consul` installation, let's start with the global cell
+service. It is described by the address of a server,
+and by the root node path to put the Vitess data in (it cannot start with `/`). For instance, assuming we
+want to use servers `global_server:global_port` with node path
+`vitess/global`:
+
+``` sh
+# Set the following flags to let Vitess use this global server,
+# and simplify the example below:
+# -topo_implementation consul
+# -topo_global_server_address global_server:global_port
+# -topo_global_root vitess/global
+TOPOLOGY="-topo_implementation consul -topo_global_server_address global_server:global_port -topo_global_root vitess/global
+```
+
+Then to add a cell whose local topology server
+`cell1_server1:cell1_port` will store their data under the
+directory `vitess/cell1`:
+
+``` sh
+# Reference cell1 in the global topology service:
+# (the TOPOLOGY variable is defined in the previous section)
+vtctl $TOPOLOGY AddCellInfo \
+  -server_address cell1_server1:cell1_port \
+  -root vitess/cell1 \
+  cell1
+```
+
+If only one cell is used, the same consul instances can be used for both
+global and local data. A local cell record still needs to be created, just use
+the same server address and, very importantly, a *different* root node path.
+
+#### Implementation Details
+
+We use the following paths:
+
+*Global Cell*:
+
+* Election path: `elections/<name>`
+* CellInfo path: `cells/<cell name>/CellInfo`
+* Keyspace: `keyspaces/<keyspace>/Keyspace`
+* Shard: `keyspaces/<keyspace>/shards/<shard>/Shard`
+* VSchema: `keyspaces/<keyspace>/VSchema`
+
+*Local Cell*:
+
+* Tablet: `tablets/<cell>-<uid>/Tablet`
+* Replication Graph: `keyspaces/<keyspace>/shards/<shard>/ShardReplication`
+* SrvKeyspace: `keyspaces/<keyspace>/SrvKeyspace`
+* SrvVSchema: `SvrVSchema`
+
+For locks, we use a file named `Lock` in the directory to lock, and the regular
+Consul Lock API.
+
+Master elections use a single lock file (the Election path) and the regular
+Consul Lock API. The contents of the lock file is the ID of the current master.
+
+Watches use the Consul long polling Get call. They cannot be interrupted, so we
+use a long poll whose duration is set by the `-topo_consul_watch_poll_duration`
+flag. Canceling a watch may have to wait until the end of a polling cycle with
+that duration before returning.
+
+We store the proto3 binary data for each object.
+
+## Running In Only One Cell
+
+The topology service is meant to be distributed across multiple cells, and
+survive single cell outages. However, one common usage is to run a Vitess
+cluster in only one cell / region. This part explains how to do this, and later
+on upgrade to multiple cells / regions.
+
+If running in a single cell, the same topology service can be used for both
+global and local data.  A local cell record still needs to be created, just use
+the same server address and, very importantly, a *different* root node path.
+
+In that case, just running 3 servers for topology service quorum is probably
+sufficient. For instance, 3 etcd servers. And use their address for the local
+cell as well. Let's use a short cell name, like `local`, as the local data in
+that topology server will later on be moved to a different topology service,
+which will have the real cell name.
+
+### Extending To More Cells
+
+To then run in multiple cells, the current topology service needs to be split
+into a global instance and one local instance per cell. Whereas, the initial
+setup had 3 topology servers (used for global and local data), we recommend to
+run 5 global servers across all cells (for global topology data) and 3 local
+servers per cell (for per-cell topology data).
+
+To migrate to such a setup, start by adding the 3 local servers in the second
+cell and run `vtctl AddCellinfo` as was done for the first cell. Tablets and
+vtgates can now be started in the second cell, and used normally.
+
+vtgate can then be configured with a list of cells to watch for tablets using
+the `-cells_to_watch` command line parameter. It can then use all tablets in all
+cells to route traffic. Note this is necessary to access the master in another
+cell.
+
+After the extension to two cells, the original topo service contains both the
+global topology data, and the first cell topology data. The more symetrical
+configuration we're after would be to split that original service into two: a
+global one that only contains the global data (spread across both cells), and a
+local one to the original cells. To achieve that split:
+
+* Start up a new local topology service in that original cell (3 more local
+  servers in that cell).
+* Pick a name for that cell, different from `local`.
+* Use `vtctl AddCellInfo` to configure it.
+* Make sure all vtgates can see that new local cell (again, using
+  `-cells_to_watch`).
+* Restart all vttablets to be in that new cell, instead of the `local` cell name
+  used before.
+* Use `vtctl RemoveKeyspaceCell` to remove all mentions of the `local` cell in
+  all keyspaces.
+* Use `vtctl RemoveCellInfo` to remove the global configurations for that
+  `local` cell.
+* Remove all remaining data in the global topology service that are in the old
+  local server root.
+
+After this split, the configuration is completely symetrical:
+
+* a global topology service, with servers in all cells. Only contains global
+  topology data about Keyspaces, Shards and VSchema. Typically it has 5 servers
+  across all cells.
+* a local topology service to each cell, with servers only in that cell. Only
+  contains local topology data about Tablets, and roll-ups of global data for
+  efficient access. Typically, it has 3 servers in each cell.
+
+## Migration Between Implementations
 
 We provide the `topo2topo` binary file to migrate between one implementation
 and another of the topology service.

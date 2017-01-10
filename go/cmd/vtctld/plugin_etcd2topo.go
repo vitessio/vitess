@@ -4,7 +4,7 @@
 
 package main
 
-// This plugin imports etcdtopo to register the etcd implementation of TopoServer.
+// Imports and register the 'etcd2' topo.Server and its Explorer.
 
 import (
 	"github.com/youtube/vitess/go/vt/servenv"

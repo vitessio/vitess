@@ -335,6 +335,17 @@
 				"site_test"
 			]
 		},
+		"tabletmanager_consul": {
+			"File": "tabletmanager.py",
+			"Args": ["--topo-server-flavor=consul"],
+			"Command": [],
+			"Manual": false,
+			"Shard": 1,
+			"RetryMax": 0,
+			"Tags": [
+				"site_test"
+			]
+		},
 		"unit": {
 			"File": "",
 			"Args": [],
