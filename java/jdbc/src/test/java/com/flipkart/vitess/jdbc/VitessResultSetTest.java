@@ -1,4 +1,4 @@
-package com.flipkart.vitess.jdbc.test;
+package com.flipkart.vitess.jdbc;
 
 import com.flipkart.vitess.jdbc.VitessResultSet;
 import com.google.protobuf.ByteString;

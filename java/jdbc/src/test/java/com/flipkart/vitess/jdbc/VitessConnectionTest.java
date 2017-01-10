@@ -1,11 +1,11 @@
-package com.flipkart.vitess.jdbc.test;
+package com.flipkart.vitess.jdbc;
 
-import com.flipkart.vitess.jdbc.VitessConnection;
 import com.flipkart.vitess.util.Constants;
 import com.google.common.util.concurrent.Futures;
 import com.youtube.vitess.client.Context;
 import com.youtube.vitess.client.SQLFuture;
 import com.youtube.vitess.client.VTGateTx;
+
 import org.junit.Assert;
 import org.junit.BeforeClass;
 import org.junit.Test;
