@@ -75,6 +75,8 @@ func (session *SafeSession) FindOrAppend(target *querypb.Target, notInTransactio
 	session.mu.Lock()
 	defer session.mu.Unlock()
 	for _, safeShardSession := range session.SafeShardSessions {
+		safeShardSession.mu.Lock()
+		defer safeShardSession.mu.Unlock()
 		if target.Keyspace == safeShardSession.Target.Keyspace && target.TabletType == safeShardSession.Target.TabletType && target.Shard == safeShardSession.Target.Shard {
 			return safeShardSession, nil
 		}
@@ -102,6 +104,8 @@ func (session *SafeSession) append(shardSession *SafeShardSession) error {
 	session.SafeShardSessions = append(session.SafeShardSessions, shardSession)
 	if session.SingleDb && len(session.SafeShardSessions) > 1 {
 		session.mustRollback = true
+		shardSession.mu.Lock()
+		defer shardSession.mu.Unlock()
 		return vterrors.FromError(vtrpcpb.ErrorCode_BAD_INPUT, fmt.Errorf("multi-db transaction attempted: %v", session.SafeShardSessions))
 	}
 	return nil

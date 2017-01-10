@@ -296,6 +296,8 @@ func (stc *ScatterConn) ExecuteBatch(
 			var innerqrs []sqltypes.Result
 			var transactionID int64
 			if session.InTransaction() {
+				safeShardSession.mu.Lock()
+				defer safeShardSession.mu.Unlock()
 				transactionID = safeShardSession.TransactionId
 				if transactionID == 0 {
 					innerqrs, transactionID, err = stc.gateway.BeginExecuteBatch(ctx, target, req.Queries, asTransaction, options)
