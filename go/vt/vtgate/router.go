@@ -45,7 +45,10 @@ func (rtr *Router) Execute(ctx context.Context, sql string, bindVars map[string]
 	if err != nil {
 		return nil, err
 	}
-	return plan.Instructions.Execute(vcursor, queryConstruct, make(map[string]interface{}), true)
+	result, err := plan.Instructions.Execute(vcursor, queryConstruct, make(map[string]interface{}), true)
+	//Mapping the generated session back to VtGateSession object
+	copySession(vcursor.session, session)
+	return result, err
 }
 
 // StreamExecute executes a streaming query.
@@ -66,6 +69,40 @@ func (rtr *Router) StreamExecute(ctx context.Context, sql string, bindVars map[s
 func (rtr *Router) ExecuteBatch(ctx context.Context, sqlList []string, bindVarsList []map[string]interface{}, keyspace string, tabletType topodatapb.TabletType, asTransaction bool, session *vtgatepb.Session, options *querypb.ExecuteOptions, execParallel bool) ([]sqltypes.QueryResponse, error) {
 	vcursor := newQueryExecutor(ctx, tabletType, session, options, rtr)
 	queryBatchConstruct := queryinfo.NewQueryBatchConstruct(sqlList, keyspace, bindVarsList, asTransaction)
+	plan, err := rtr.planner.GetBatchPlan(queryBatchConstruct, execParallel)
+	if err != nil {
+		return nil, err
+	}
+	results, err := plan.Instructions.ExecuteBatch(vcursor, queryBatchConstruct, make(map[string]interface{}), true)
+	//Mapping the generated session back to VtGateSession object
+	copySession(vcursor.session, session)
+	return results, err
+}
+
+// executeVIndex routes a non-streaming vindex query.
+func (rtr *Router) executeVIndex(vcursor *queryExecutor, sql string, bindVars map[string]interface{}) (*sqltypes.Result, error) {
+	if bindVars == nil {
+		bindVars = make(map[string]interface{})
+	}
+	// We have to use an empty keyspace here, because vIndexes that call back can reference
+	// any table.
+	queryConstruct := queryinfo.NewQueryConstruct(sql, "", bindVars, false)
+	plan, err := rtr.planner.GetPlan(sql, "", bindVars)
+	if err != nil {
+		return nil, err
+	}
+
+	return plan.Instructions.Execute(vcursor, queryConstruct, make(map[string]interface{}), true)
+}
+
+// streamExecuteVIndex routes a streaming vindex query.
+func (rtr *Router) streamExecuteVIndex(vcursor *queryExecutor, sql string, bindVars map[string]interface{}, sendReply func(*sqltypes.Result) error) error {
+	panic("streamExecuteVIndex::This method should not be called")
+}
+
+// executeBatchVIndex routes a non-streaming vindex queries.
+func (rtr *Router) executeBatchVIndex(vcursor *queryExecutor, sqlList []string, bindVarsList []map[string]interface{}, asTransaction bool, execParallel bool) ([]sqltypes.QueryResponse, error) {
+	queryBatchConstruct := queryinfo.NewQueryBatchConstruct(sqlList, "", bindVarsList, asTransaction)
 	plan, err := rtr.planner.GetBatchPlan(queryBatchConstruct, execParallel)
 	if err != nil {
 		return nil, err

@@ -48,37 +48,44 @@ func TestTxConnCommitSuccess(t *testing.T) {
 	// Sequence the executes to ensure commit order
 	session := NewSafeSession(&vtgatepb.Session{InTransaction: true})
 	sc.Execute(context.Background(), "query1", nil, "TestTxConn", []string{"0"}, topodatapb.TabletType_MASTER, session, false, nil)
-	wantSession := vtgatepb.Session{
+	wantSession := Session{
 		InTransaction: true,
-		ShardSessions: []*vtgatepb.Session_ShardSession{{
-			Target: &querypb.Target{
-				Keyspace:   "TestTxConn",
-				Shard:      "0",
-				TabletType: topodatapb.TabletType_MASTER,
+		SafeShardSessions: []*SafeShardSession{{
+			Session_ShardSession: &vtgatepb.Session_ShardSession{
+				Target: &querypb.Target{
+					Keyspace:   "TestTxConn",
+					Shard:      "0",
+					TabletType: topodatapb.TabletType_MASTER,
+				},
+				TransactionId: 1,
 			},
-			TransactionId: 1,
-		}},
+		},
+		},
 	}
 	if !reflect.DeepEqual(*session.Session, wantSession) {
 		t.Errorf("Session:\n%+v, want\n%+v", *session.Session, wantSession)
 	}
 	sc.Execute(context.Background(), "query1", nil, "TestTxConn", []string{"0", "1"}, topodatapb.TabletType_MASTER, session, false, nil)
-	wantSession = vtgatepb.Session{
+	wantSession = Session{
 		InTransaction: true,
-		ShardSessions: []*vtgatepb.Session_ShardSession{{
-			Target: &querypb.Target{
-				Keyspace:   "TestTxConn",
-				Shard:      "0",
-				TabletType: topodatapb.TabletType_MASTER,
+		SafeShardSessions: []*SafeShardSession{{
+			Session_ShardSession: &vtgatepb.Session_ShardSession{
+				Target: &querypb.Target{
+					Keyspace:   "TestTxConn",
+					Shard:      "0",
+					TabletType: topodatapb.TabletType_MASTER,
+				},
+				TransactionId: 1,
 			},
-			TransactionId: 1,
 		}, {
-			Target: &querypb.Target{
-				Keyspace:   "TestTxConn",
-				Shard:      "1",
-				TabletType: topodatapb.TabletType_MASTER,
+			Session_ShardSession: &vtgatepb.Session_ShardSession{
+				Target: &querypb.Target{
+					Keyspace:   "TestTxConn",
+					Shard:      "1",
+					TabletType: topodatapb.TabletType_MASTER,
+				},
+				TransactionId: 1,
 			},
-			TransactionId: 1,
 		}},
 	}
 	if !reflect.DeepEqual(*session.Session, wantSession) {
@@ -91,7 +98,7 @@ func TestTxConnCommitSuccess(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("Commit: %v, want %s", err, want)
 	}
-	wantSession = vtgatepb.Session{}
+	wantSession = Session{}
 	if !reflect.DeepEqual(*session.Session, wantSession) {
 		t.Errorf("Session:\n%+v, want\n%+v", *session.Session, wantSession)
 	}
@@ -306,7 +313,7 @@ func TestTxConnRollback(t *testing.T) {
 	if err := sc.txConn.Rollback(context.Background(), session); err != nil {
 		t.Error(err)
 	}
-	wantSession := vtgatepb.Session{}
+	wantSession := Session{}
 	if !reflect.DeepEqual(*session.Session, wantSession) {
 		t.Errorf("Session:\n%+v, want\n%+v", *session.Session, wantSession)
 	}
@@ -586,11 +593,14 @@ func TestTxConnResolveConcludeTransactionFail(t *testing.T) {
 func TestTxConnMultiGoSessions(t *testing.T) {
 	txc := &TxConn{}
 
-	input := []*vtgatepb.Session_ShardSession{{
-		Target: &querypb.Target{
-			Keyspace: "0",
-		},
-	}}
+	input := []*SafeShardSession{
+		{
+			Session_ShardSession: &vtgatepb.Session_ShardSession{
+				Target: &querypb.Target{
+					Keyspace: "0",
+				},
+			},
+		}}
 	err := txc.runSessions(input, func(s *vtgatepb.Session_ShardSession) error {
 		return vterrors.FromError(vtrpcpb.ErrorCode_INTERNAL_ERROR, fmt.Errorf("err %s", s.Target.Keyspace))
 	})
@@ -599,14 +609,14 @@ func TestTxConnMultiGoSessions(t *testing.T) {
 		t.Errorf("runSessions(1): %v, want %s", err, want)
 	}
 
-	input = []*vtgatepb.Session_ShardSession{{
-		Target: &querypb.Target{
+	input = []*SafeShardSession{{
+		Session_ShardSession: &vtgatepb.Session_ShardSession{Target: &querypb.Target{
 			Keyspace: "0",
-		},
+		}},
 	}, {
-		Target: &querypb.Target{
+		Session_ShardSession: &vtgatepb.Session_ShardSession{Target: &querypb.Target{
 			Keyspace: "1",
-		},
+		}},
 	}}
 	err = txc.runSessions(input, func(s *vtgatepb.Session_ShardSession) error {
 		return vterrors.FromError(vtrpcpb.ErrorCode_INTERNAL_ERROR, fmt.Errorf("err %s", s.Target.Keyspace))

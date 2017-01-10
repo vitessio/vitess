@@ -39,10 +39,7 @@ func (txc *TxConn) Commit(ctx context.Context, twopc bool, session *SafeSession)
 	if session == nil {
 		return vterrors.FromError(vtrpcpb.ErrorCode_BAD_INPUT, errors.New("cannot commit: empty session"))
 	}
-	session.mu.Lock()
-	inTransaction := session.InTransaction()
-	session.mu.Unlock()
-	if !inTransaction {
+	if !session.InTransaction() {
 		return vterrors.FromError(vtrpcpb.ErrorCode_NOT_IN_TX, errors.New("cannot commit: not in transaction"))
 	}
 	if twopc {
@@ -54,7 +51,7 @@ func (txc *TxConn) Commit(ctx context.Context, twopc bool, session *SafeSession)
 func (txc *TxConn) commitNormal(ctx context.Context, session *SafeSession) error {
 	var err error
 	committing := true
-	for _, shardSession := range session.ShardSessions {
+	for _, shardSession := range session.SafeShardSessions {
 		if !committing {
 			txc.gateway.Rollback(ctx, shardSession.Target, shardSession.TransactionId)
 			continue
@@ -69,16 +66,16 @@ func (txc *TxConn) commitNormal(ctx context.Context, session *SafeSession) error
 
 func (txc *TxConn) commit2PC(ctx context.Context, session *SafeSession) error {
 	// If the number of participants is one or less, then it's a normal commit.
-	if len(session.ShardSessions) <= 1 {
+	if len(session.SafeShardSessions) <= 1 {
 		return txc.commitNormal(ctx, session)
 	}
 
-	participants := make([]*querypb.Target, 0, len(session.ShardSessions)-1)
-	for _, s := range session.ShardSessions[1:] {
+	participants := make([]*querypb.Target, 0, len(session.SafeShardSessions)-1)
+	for _, s := range session.SafeShardSessions[1:] {
 		participants = append(participants, s.Target)
 	}
-	mmShard := session.ShardSessions[0]
-	dtid := dtids.New(mmShard)
+	mmShard := session.SafeShardSessions[0]
+	dtid := dtids.New(mmShard.Session_ShardSession)
 	err := txc.gateway.CreateTransaction(ctx, mmShard.Target, dtid, participants)
 	if err != nil {
 		// Normal rollback is safe because nothing was prepared yet.
@@ -86,7 +83,7 @@ func (txc *TxConn) commit2PC(ctx context.Context, session *SafeSession) error {
 		return err
 	}
 
-	err = txc.runSessions(session.ShardSessions[1:], func(s *vtgatepb.Session_ShardSession) error {
+	err = txc.runSessions(session.SafeShardSessions[1:], func(s *vtgatepb.Session_ShardSession) error {
 		return txc.gateway.Prepare(ctx, s.Target, s.TransactionId, dtid)
 	})
 	if err != nil {
@@ -104,7 +101,7 @@ func (txc *TxConn) commit2PC(ctx context.Context, session *SafeSession) error {
 		return err
 	}
 
-	err = txc.runSessions(session.ShardSessions[1:], func(s *vtgatepb.Session_ShardSession) error {
+	err = txc.runSessions(session.SafeShardSessions[1:], func(s *vtgatepb.Session_ShardSession) error {
 		return txc.gateway.CommitPrepared(ctx, s.Target, dtid)
 	})
 	if err != nil {
@@ -116,17 +113,11 @@ func (txc *TxConn) commit2PC(ctx context.Context, session *SafeSession) error {
 
 // Rollback rolls back the current transaction. There are no retries on this operation.
 func (txc *TxConn) Rollback(ctx context.Context, session *SafeSession) error {
-	var inTransaction bool
-	if session != nil {
-		session.mu.Lock()
-		inTransaction = session.InTransaction()
-		session.mu.Unlock()
-	}
-	if !inTransaction {
+	if !session.InTransaction() {
 		return nil
 	}
 	defer session.Reset()
-	return txc.runSessions(session.ShardSessions, func(s *vtgatepb.Session_ShardSession) error {
+	return txc.runSessions(session.SafeShardSessions, func(s *vtgatepb.Session_ShardSession) error {
 		return txc.gateway.Rollback(ctx, s.Target, s.TransactionId)
 	})
 }
@@ -190,19 +181,19 @@ func (txc *TxConn) resumeCommit(ctx context.Context, target *querypb.Target, tra
 }
 
 // runSessions executes the action for all shardSessions in parallel and returns a consolildated error.
-func (txc *TxConn) runSessions(shardSessions []*vtgatepb.Session_ShardSession, action func(*vtgatepb.Session_ShardSession) error) error {
+func (txc *TxConn) runSessions(safeShardSessions []*SafeShardSession, action func(*vtgatepb.Session_ShardSession) error) error {
 	// Fastpath.
-	if len(shardSessions) == 1 {
-		return action(shardSessions[0])
+	if len(safeShardSessions) == 1 {
+		return action(safeShardSessions[0].Session_ShardSession)
 	}
 
 	allErrors := new(concurrency.AllErrorRecorder)
 	var wg sync.WaitGroup
-	for _, s := range shardSessions {
+	for _, s := range safeShardSessions {
 		wg.Add(1)
-		go func(s *vtgatepb.Session_ShardSession) {
+		go func(s *SafeShardSession) {
 			defer wg.Done()
-			if err := action(s); err != nil {
+			if err := action(s.Session_ShardSession); err != nil {
 				allErrors.RecordError(err)
 			}
 		}(s)

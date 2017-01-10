@@ -119,6 +119,7 @@ func (res *Resolver) Execute(
 	if err != nil {
 		return nil, err
 	}
+	safeSession := NewSafeSession(session)
 	for {
 		qr, err := res.scatterConn.Execute(
 			ctx,
@@ -127,13 +128,14 @@ func (res *Resolver) Execute(
 			keyspace,
 			shards,
 			tabletType,
-			NewSafeSession(session),
+			safeSession,
 			notInTransaction,
 			options)
 		if isRetryableError(err) {
 			resharding := false
 			newKeyspace, newShards, err := mapToShards(keyspace)
 			if err != nil {
+				copySession(safeSession, session)
 				return nil, err
 			}
 			// check keyspace change for vertical resharding
@@ -151,6 +153,7 @@ func (res *Resolver) Execute(
 				continue
 			}
 		}
+		copySession(safeSession, session)
 		if err != nil {
 			return nil, err
 		}
@@ -184,6 +187,7 @@ func (res *Resolver) ExecuteEntityIds(
 	}
 	keyspace = newKeyspace
 	shards, sqls, bindVars := buildEntityIds(shardIDMap, sql, entityColumnName, bindVariables)
+	safeSession := NewSafeSession(session)
 	for {
 		qr, err := res.scatterConn.ExecuteEntityIds(
 			ctx,
@@ -192,7 +196,7 @@ func (res *Resolver) ExecuteEntityIds(
 			bindVars,
 			keyspace,
 			tabletType,
-			NewSafeSession(session),
+			safeSession,
 			notInTransaction,
 			options)
 		if isRetryableError(err) {
@@ -205,6 +209,7 @@ func (res *Resolver) ExecuteEntityIds(
 				entityKeyspaceIDs,
 				tabletType)
 			if err != nil {
+				copySession(safeSession, session)
 				return nil, err
 			}
 			// check keyspace change for vertical resharding
@@ -225,11 +230,13 @@ func (res *Resolver) ExecuteEntityIds(
 				continue
 			}
 		}
+		copySession(safeSession, session)
 		if err != nil {
 			return nil, err
 		}
 		return qr, err
 	}
+
 }
 
 // ExecuteBatchKeyspaceIds executes a group of queries based on KeyspaceIds.
@@ -259,16 +266,18 @@ func (res *Resolver) ExecuteBatch(
 	if err != nil {
 		return nil, err
 	}
+	safeSession := NewSafeSession(session)
 	for {
 		qrs, err := res.scatterConn.ExecuteBatch(
 			ctx,
 			batchRequest,
 			tabletType,
 			asTransaction,
-			NewSafeSession(session),
+			safeSession,
 			options)
 		// Don't retry transactional requests.
 		if asTransaction {
+			copySession(safeSession, session)
 			return qrs, err
 		}
 		// If lower level retries failed, check if there was a resharding event
@@ -276,16 +285,29 @@ func (res *Resolver) ExecuteBatch(
 		if isRetryableError(err) {
 			newBatchRequest, buildErr := buildBatchRequest()
 			if buildErr != nil {
+				copySession(safeSession, session)
 				return nil, buildErr
 			}
 			// Use reflect to see if the request has changed.
 			if reflect.DeepEqual(*batchRequest, *newBatchRequest) {
+				copySession(safeSession, session)
 				return qrs, err
 			}
 			batchRequest = newBatchRequest
 			continue
 		}
+		copySession(safeSession, session)
 		return qrs, err
+	}
+}
+
+// copySession method, copies the shardSession from SafeSession to VTGateSession.
+func copySession(safeSession *SafeSession, session *vtgatepb.Session) {
+	if safeSession.InTransaction() {
+		session.ShardSessions = nil
+		for _, shardSession := range safeSession.Session.SafeShardSessions {
+			session.ShardSessions = append(session.ShardSessions, shardSession.Session_ShardSession)
+		}
 	}
 }
 

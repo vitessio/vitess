@@ -10,7 +10,7 @@ import (
 
 	"github.com/youtube/vitess/go/vt/vterrors"
 
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	vtgatepb "github.com/youtube/vitess/go/vt/proto/vtgate"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
@@ -22,12 +22,39 @@ import (
 type SafeSession struct {
 	mu           sync.Mutex
 	mustRollback bool
-	*vtgatepb.Session
+	*Session
+}
+
+// Session is to contain information about per shard session.
+type Session struct {
+	InTransaction     bool
+	SafeShardSessions []*SafeShardSession
+	SingleDb          bool
+}
+
+// SafeShardSession is a mutex-protected version of the ShardSession.
+type SafeShardSession struct {
+	mu         sync.Mutex
+	beginError error
+	*vtgatepb.Session_ShardSession
 }
 
 // NewSafeSession returns a new SafeSession based on the Session
 func NewSafeSession(sessn *vtgatepb.Session) *SafeSession {
-	return &SafeSession{Session: sessn}
+	if sessn == nil {
+		return &SafeSession{Session: nil}
+	}
+	var safeshardSessions []*SafeShardSession
+	for _, shSession := range sessn.ShardSessions {
+		safeshardSessions = append(safeshardSessions, &SafeShardSession{
+			Session_ShardSession: shSession,
+		})
+	}
+	return &SafeSession{Session: &Session{
+		InTransaction:     sessn.InTransaction,
+		SingleDb:          sessn.SingleDb,
+		SafeShardSessions: safeshardSessions,
+	}}
 }
 
 // InTransaction returns true if we are in a transaction
@@ -35,30 +62,47 @@ func (session *SafeSession) InTransaction() bool {
 	if session == nil || session.Session == nil {
 		return false
 	}
+	session.mu.Lock()
+	defer session.mu.Unlock()
 	return session.Session.InTransaction
 }
 
-// Find returns the transactionId, if any, for a session
-func (session *SafeSession) Find(keyspace, shard string, tabletType topodatapb.TabletType) int64 {
+// FindOrAppend returns the SafeShardSession, for a session
+func (session *SafeSession) FindOrAppend(target *querypb.Target, notInTransaction bool) (*SafeShardSession, error) {
 	if session == nil {
-		return 0
+		return nil, nil
 	}
-
-	for _, shardSession := range session.ShardSessions {
-		if keyspace == shardSession.Target.Keyspace && tabletType == shardSession.Target.TabletType && shard == shardSession.Target.Shard {
-			return shardSession.TransactionId
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	for _, safeShardSession := range session.SafeShardSessions {
+		if target.Keyspace == safeShardSession.Target.Keyspace && target.TabletType == safeShardSession.Target.TabletType && target.Shard == safeShardSession.Target.Shard {
+			return safeShardSession, nil
 		}
 	}
-	return 0
+	if notInTransaction {
+		return nil, nil
+	}
+	safeShardSession := &SafeShardSession{
+		Session_ShardSession: &vtgatepb.Session_ShardSession{
+			Target:        target,
+			TransactionId: 0,
+		},
+	}
+	err := session.append(safeShardSession)
+	if err != nil {
+		return nil, err
+	}
+
+	return safeShardSession, nil
 }
 
-// Append adds a new ShardSession
-func (session *SafeSession) Append(shardSession *vtgatepb.Session_ShardSession) error {
+// append adds a new SafeShardSession
+func (session *SafeSession) append(shardSession *SafeShardSession) error {
 	// Always append, in order for rollback to succeed.
-	session.ShardSessions = append(session.ShardSessions, shardSession)
-	if session.SingleDb && len(session.ShardSessions) > 1 {
+	session.SafeShardSessions = append(session.SafeShardSessions, shardSession)
+	if session.SingleDb && len(session.SafeShardSessions) > 1 {
 		session.mustRollback = true
-		return vterrors.FromError(vtrpcpb.ErrorCode_BAD_INPUT, fmt.Errorf("multi-db transaction attempted: %v", session.ShardSessions))
+		return vterrors.FromError(vtrpcpb.ErrorCode_BAD_INPUT, fmt.Errorf("multi-db transaction attempted: %v", session.SafeShardSessions))
 	}
 	return nil
 }
@@ -92,5 +136,5 @@ func (session *SafeSession) Reset() {
 	session.mu.Lock()
 	defer session.mu.Unlock()
 	session.Session.InTransaction = false
-	session.ShardSessions = nil
+	session.SafeShardSessions = nil
 }

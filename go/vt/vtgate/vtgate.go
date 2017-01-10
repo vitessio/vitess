@@ -383,8 +383,6 @@ func (vtg *VTGate) ExecuteBatch(ctx context.Context, sqlList []string, bindVaria
 	statsKey := []string{"ExecuteBatch", "Any", ltt}
 	defer vtg.timings.Record(statsKey, startTime)
 
-	// For Testing. Will be removed in final commit.
-	fmt.Printf("execParallel: %v", execParallel)
 	qr, err := vtg.router.ExecuteBatch(ctx, sqlList, bindVariablesList, keyspace, tabletType, asTransaction, session, options, execParallel)
 	if err == nil {
 		for _, queryResponse := range qr {

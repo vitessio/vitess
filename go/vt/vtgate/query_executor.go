@@ -35,14 +35,13 @@ func newQueryExecutor(ctx context.Context, tabletType topodatapb.TabletType, ses
 
 // Execute method call from vindex call to vtgate.
 func (vc *queryExecutor) Execute(query string, bindvars map[string]interface{}) (*sqltypes.Result, error) {
-	// We have to use an empty keyspace here, becasue vindexes that call back can reference
-	// any table.
-	return vc.router.Execute(vc.ctx, query, bindvars, "", vc.tabletType, vc.session.Session, false, vc.options)
+	return vc.router.executeVIndex(vc, query, bindvars)
 }
 
 // ExecuteMultiShard method call from engine call to vtgate.
 func (vc *queryExecutor) ExecuteMultiShard(keyspace string, shardQueries map[string]querytypes.BoundQuery, notInTransaction bool) (*sqltypes.Result, error) {
 	return vc.router.scatterConn.ExecuteMultiShard(vc.ctx, keyspace, shardQueries, vc.tabletType, vc.session, notInTransaction, vc.options)
+
 }
 
 // StreamExecuteMulti method call from engine call to vtgate.
