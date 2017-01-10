@@ -96,7 +96,7 @@ var (
 	eventTokenEcho = "timestamp:876543 shard:\"-80\" position:\"test_position\" "
 
 	options = &querypb.ExecuteOptions{
-		IncludedFields: querypb.ExecuteOptions_TYPE_ONLY,
+		IncludedFields:    querypb.ExecuteOptions_TYPE_ONLY,
 		IncludeEventToken: true,
 		CompareEventToken: eventToken,
 	}

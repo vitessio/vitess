@@ -137,7 +137,7 @@ func TestDeleteEqual(t *testing.T) {
 
 	sbc.SetResults([]*sqltypes.Result{{
 		Fields: []*querypb.Field{
-			{Name:"name", Type:sqltypes.VarChar},
+			{Name: "name", Type: sqltypes.VarChar},
 		},
 		RowsAffected: 1,
 		InsertID:     0,
@@ -218,7 +218,7 @@ func TestDeleteComments(t *testing.T) {
 
 	sbc.SetResults([]*sqltypes.Result{{
 		Fields: []*querypb.Field{
-			{Name:"name", Type:sqltypes.VarChar},
+			{Name: "name", Type: sqltypes.VarChar},
 		},
 		RowsAffected: 1,
 		InsertID:     0,

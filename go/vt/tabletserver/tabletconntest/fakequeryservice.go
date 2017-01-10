@@ -70,7 +70,7 @@ var TestVTGateCallerID = &querypb.VTGateCallerID{
 }
 
 var TestExecuteOptions = &querypb.ExecuteOptions{
-	IncludedFields: querypb.ExecuteOptions_TYPE_ONLY,
+	IncludedFields:    querypb.ExecuteOptions_TYPE_ONLY,
 	IncludeEventToken: true,
 	CompareEventToken: &querypb.EventToken{
 		Timestamp: 9876,
