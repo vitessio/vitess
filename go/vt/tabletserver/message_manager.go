@@ -19,13 +19,15 @@ import (
 // MessageManager manages messages for a message table.
 type MessageManager struct {
 	DBLock sync.Mutex
+	tsv    *TabletServer
 
 	isOpen bool
 
-	name     string
-	cache    *MessagerCache
-	ticks    *timer.Timer
-	connpool *ConnPool
+	name        string
+	ackWaitTime time.Duration
+	cache       *MessagerCache
+	ticks       *timer.Timer
+	connpool    *ConnPool
 
 	mu sync.Mutex
 	// cond gets triggered if len(receivers) becomes non-zero,
@@ -40,22 +42,33 @@ type MessageManager struct {
 	// before we can close the manager.
 	wg sync.WaitGroup
 
-	readByTimeNext *sqlparser.ParsedQuery
+	readByTimeNext  *sqlparser.ParsedQuery
+	ackQuery        *sqlparser.ParsedQuery
+	rescheduleQuery *sqlparser.ParsedQuery
 }
 
 // NewMessageManager creates a new message manager.
-func NewMessageManager(name string, cacheSize int, pollInterval time.Duration, connpool *ConnPool) *MessageManager {
+func NewMessageManager(tsv *TabletServer, name string, ackWaitTime time.Duration, cacheSize int, pollInterval time.Duration, connpool *ConnPool) *MessageManager {
 	mm := &MessageManager{
-		name:     name,
-		cache:    NewMessagerCache(cacheSize),
-		ticks:    timer.NewTimer(pollInterval),
-		connpool: connpool,
+		tsv:         tsv,
+		name:        name,
+		ackWaitTime: ackWaitTime,
+		cache:       NewMessagerCache(cacheSize),
+		ticks:       timer.NewTimer(pollInterval),
+		connpool:    connpool,
 	}
 	mm.cond.L = &mm.mu
 
+	tableName := sqlparser.NewTableIdent(name)
 	mm.readByTimeNext = buildParsedQuery(
 		"select time_next, epoch, id, message from %v where time_next < %a order by time_next desc limit %a",
-		sqlparser.NewTableIdent(name), ":time_next", ":max")
+		tableName, ":time_next", ":max")
+	mm.ackQuery = buildParsedQuery(
+		"update %v set time_acked = %a, time_next = null where id in %a",
+		tableName, ":time_acked", "::ids")
+	mm.rescheduleQuery = buildParsedQuery(
+		"update %v set time_next = %a, epoch = epoch+1 where id in %a and time_acked is null",
+		tableName, ":time_next", "::ids")
 	return mm
 }
 
@@ -170,9 +183,19 @@ func (mm *MessageManager) runSend() {
 		mm.mu.Unlock()
 
 		_ = receiver.Send(mm.name, mr)
-		mm.DBLock.Lock()
+		mm.postpone(mr)
 		mm.cache.Discard(mr.id)
-		mm.DBLock.Unlock()
+	}
+}
+
+func (mm *MessageManager) postpone(mr *MessageRow) {
+	ctx, cancel := context.WithTimeout(context.Background(), mm.ackWaitTime)
+	defer cancel()
+	newTime := time.Now().Add(mm.ackWaitTime << uint64(mr.Epoch)).UnixNano()
+	_, err := mm.tsv.RescheduleMessages(ctx, &mm.tsv.target, mm.name, []string{mr.id}, newTime)
+	if err != nil {
+		// TODO(sougou): incremente internal error.
+		log.Errorf("Unable to postpone message: %v", mr)
 	}
 }
 
@@ -237,6 +260,30 @@ func (mm *MessageManager) runPoller() {
 	}()
 
 	// TODO(sougou): purge.
+}
+
+// GenerateAckQuery returns the query and bind vars for acking a message.
+func (mm *MessageManager) GenerateAckQuery(ids []string) (string, map[string]interface{}) {
+	idbvs := make([]interface{}, len(ids))
+	for i, id := range ids {
+		idbvs[i] = id
+	}
+	return mm.ackQuery.Query, map[string]interface{}{
+		"time_acked": int64(time.Now().UnixNano()),
+		"ids":        idbvs,
+	}
+}
+
+// GenerateRescheduleQuery returns the query and bind vars for rescheduling a message.
+func (mm *MessageManager) GenerateRescheduleQuery(ids []string, timeNew int64) (string, map[string]interface{}) {
+	idbvs := make([]interface{}, len(ids))
+	for i, id := range ids {
+		idbvs[i] = id
+	}
+	return mm.rescheduleQuery.Query, map[string]interface{}{
+		"time_next": timeNew,
+		"ids":       idbvs,
+	}
 }
 
 // BuildMessageRow builds a MessageRow for a db row.

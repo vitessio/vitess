@@ -1388,6 +1388,82 @@ func TestExecuteBatchNestedTransaction(t *testing.T) {
 	tsv.te.txPool.SetTimeout(10)
 }
 
+func TestAckMessages(t *testing.T) {
+	_, tsv, db := newTestTxExecutor()
+	defer tsv.StopService()
+	ctx := context.Background()
+	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+
+	_, err := tsv.AckMessages(ctx, &target, "nonmsg", []string{"1", "2"})
+	want := "error: message table nonmsg not found in schema"
+	if err == nil || err.Error() != want {
+		t.Errorf("tsv.AckMessages(invalid): %v, want %s", err, want)
+	}
+
+	_, err = tsv.AckMessages(ctx, &target, "msg", []string{"1", "2"})
+	want = "error: query: select time_scheduled, id from msg where id in ('1', '2') limit 10001 for update is not supported"
+	if err == nil || err.Error() != want {
+		t.Errorf("tsv.AckMessages(invalid): %v, want %s", err, want)
+	}
+
+	db.AddQuery(
+		"select time_scheduled, id from msg where id in ('1', '2') limit 10001 for update",
+		&sqltypes.Result{
+			RowsAffected: 1,
+			Rows: [][]sqltypes.Value{{
+				sqltypes.MakeString([]byte("1")),
+				sqltypes.MakeString([]byte("1")),
+			}},
+		},
+	)
+	db.AddQueryPattern("update msg set time_acked = .*", &sqltypes.Result{RowsAffected: 1})
+	count, err := tsv.AckMessages(ctx, &target, "msg", []string{"1", "2"})
+	if err != nil {
+		t.Error(err)
+	}
+	if count != 1 {
+		t.Errorf("count: %d, want 1", count)
+	}
+}
+
+func TestRescheduleMessages(t *testing.T) {
+	_, tsv, db := newTestTxExecutor()
+	defer tsv.StopService()
+	ctx := context.Background()
+	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+
+	_, err := tsv.RescheduleMessages(ctx, &target, "nonmsg", []string{"1", "2"}, 0)
+	want := "error: message table nonmsg not found in schema"
+	if err == nil || err.Error() != want {
+		t.Errorf("tsv.RescheduleMessages(invalid): %v, want %s", err, want)
+	}
+
+	_, err = tsv.RescheduleMessages(ctx, &target, "msg", []string{"1", "2"}, 3)
+	want = "error: query: select time_scheduled, id from msg where id in ('1', '2') and time_acked is null limit 10001 for update is not supported"
+	if err == nil || err.Error() != want {
+		t.Errorf("tsv.RescheduleMessages(invalid):\n%v, want\n%s", err, want)
+	}
+
+	db.AddQuery(
+		"select time_scheduled, id from msg where id in ('1', '2') and time_acked is null limit 10001 for update",
+		&sqltypes.Result{
+			RowsAffected: 1,
+			Rows: [][]sqltypes.Value{{
+				sqltypes.MakeString([]byte("1")),
+				sqltypes.MakeString([]byte("1")),
+			}},
+		},
+	)
+	db.AddQueryPattern("update msg set time_next = .*", &sqltypes.Result{RowsAffected: 1})
+	count, err := tsv.RescheduleMessages(ctx, &target, "msg", []string{"1", "2"}, 3)
+	if err != nil {
+		t.Error(err)
+	}
+	if count != 1 {
+		t.Errorf("count: %d, want 1", count)
+	}
+}
+
 func TestTabletServerSplitQuery(t *testing.T) {
 	db := setUpTabletServerTest()
 	db.AddQuery("SELECT MIN(pk), MAX(pk) FROM test_table", &sqltypes.Result{
@@ -1766,7 +1842,7 @@ func getSupportedQueries() map[string]*sqltypes.Result {
 			}},
 		},
 		baseShowTables: {
-			RowsAffected: 1,
+			RowsAffected: 2,
 			Rows: [][]sqltypes.Value{
 				{
 					sqltypes.MakeString([]byte("test_table")),
@@ -1778,6 +1854,17 @@ func getSupportedQueries() map[string]*sqltypes.Result {
 					sqltypes.MakeString([]byte("3")),
 					sqltypes.MakeString([]byte("4")),
 					sqltypes.MakeString([]byte("5")),
+				},
+				{
+					sqltypes.MakeString([]byte("msg")),
+					sqltypes.MakeString([]byte("USER TABLE")),
+					sqltypes.MakeTrusted(sqltypes.Int32, []byte("1427325875")),
+					sqltypes.MakeString([]byte("vitess_message")),
+					sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
+					sqltypes.MakeTrusted(sqltypes.Int32, []byte("2")),
+					sqltypes.MakeTrusted(sqltypes.Int32, []byte("3")),
+					sqltypes.MakeTrusted(sqltypes.Int32, []byte("4")),
+					sqltypes.MakeTrusted(sqltypes.Int32, []byte("5")),
 				},
 			},
 		},
@@ -1848,6 +1935,130 @@ func getSupportedQueries() map[string]*sqltypes.Result {
 					sqltypes.MakeString([]byte("name_string")),
 					sqltypes.MakeString([]byte{}),
 					sqltypes.MakeString([]byte("100")),
+				},
+			},
+		},
+		"select * from msg where 1 != 1": {
+			Fields: []*querypb.Field{{
+				Name: "time_scheduled",
+				Type: sqltypes.Int32,
+			}, {
+				Name: "id",
+				Type: sqltypes.Int64,
+			}, {
+				Name: "time_next",
+				Type: sqltypes.Int64,
+			}, {
+				Name: "epoch",
+				Type: sqltypes.Int64,
+			}, {
+				Name: "time_created",
+				Type: sqltypes.Int64,
+			}, {
+				Name: "time_acked",
+				Type: sqltypes.Int64,
+			}, {
+				Name: "message",
+				Type: sqltypes.Int64,
+			}},
+		},
+		"describe msg": {
+			RowsAffected: 4,
+			Rows: [][]sqltypes.Value{
+				{
+					sqltypes.MakeString([]byte("time_scheduled")),
+					sqltypes.MakeString([]byte("int")),
+					sqltypes.MakeString([]byte{}),
+					sqltypes.MakeString([]byte{}),
+					sqltypes.MakeString([]byte("1")),
+					sqltypes.MakeString([]byte{}),
+				},
+				{
+					sqltypes.MakeString([]byte("id")),
+					sqltypes.MakeString([]byte("bigint")),
+					sqltypes.MakeString([]byte{}),
+					sqltypes.MakeString([]byte{}),
+					sqltypes.MakeString([]byte("1")),
+					sqltypes.MakeString([]byte{}),
+				},
+				{
+					sqltypes.MakeString([]byte("time_next")),
+					sqltypes.MakeString([]byte("bigint")),
+					sqltypes.MakeString([]byte{}),
+					sqltypes.MakeString([]byte{}),
+					sqltypes.MakeString([]byte("1")),
+					sqltypes.MakeString([]byte{}),
+				},
+				{
+					sqltypes.MakeString([]byte("epoch")),
+					sqltypes.MakeString([]byte("bigint")),
+					sqltypes.MakeString([]byte{}),
+					sqltypes.MakeString([]byte{}),
+					sqltypes.MakeString([]byte("1")),
+					sqltypes.MakeString([]byte{}),
+				},
+				{
+					sqltypes.MakeString([]byte("time_created")),
+					sqltypes.MakeString([]byte("bigint")),
+					sqltypes.MakeString([]byte{}),
+					sqltypes.MakeString([]byte{}),
+					sqltypes.MakeString([]byte("1")),
+					sqltypes.MakeString([]byte{}),
+				},
+				{
+					sqltypes.MakeString([]byte("time_acked")),
+					sqltypes.MakeString([]byte("bigint")),
+					sqltypes.MakeString([]byte{}),
+					sqltypes.MakeString([]byte{}),
+					sqltypes.MakeString([]byte("1")),
+					sqltypes.MakeString([]byte{}),
+				},
+				{
+					sqltypes.MakeString([]byte("message")),
+					sqltypes.MakeString([]byte("bigint")),
+					sqltypes.MakeString([]byte{}),
+					sqltypes.MakeString([]byte{}),
+					sqltypes.MakeString([]byte("1")),
+					sqltypes.MakeString([]byte{}),
+				},
+			},
+		},
+		"show index from msg": {
+			RowsAffected: 1,
+			Rows: [][]sqltypes.Value{
+				{
+					sqltypes.MakeString([]byte{}),
+					sqltypes.MakeString([]byte{}),
+					sqltypes.MakeString([]byte("PRIMARY")),
+					sqltypes.MakeString([]byte{}),
+					sqltypes.MakeString([]byte("time_scheduled")),
+					sqltypes.MakeString([]byte{}),
+					sqltypes.MakeString([]byte("300")),
+				},
+				{
+					sqltypes.MakeString([]byte{}),
+					sqltypes.MakeString([]byte{}),
+					sqltypes.MakeString([]byte("PRIMARY")),
+					sqltypes.MakeString([]byte{}),
+					sqltypes.MakeString([]byte("id")),
+					sqltypes.MakeString([]byte{}),
+					sqltypes.MakeString([]byte("300")),
+				},
+			},
+		},
+		baseShowTables + " and table_name = 'msg'": {
+			RowsAffected: 1,
+			Rows: [][]sqltypes.Value{
+				{
+					sqltypes.MakeString([]byte("msg")),
+					sqltypes.MakeString([]byte("USER TABLE")),
+					sqltypes.MakeTrusted(sqltypes.Int32, []byte("1427325875")),
+					sqltypes.MakeString([]byte("vitess_message")),
+					sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
+					sqltypes.MakeTrusted(sqltypes.Int32, []byte("2")),
+					sqltypes.MakeTrusted(sqltypes.Int32, []byte("3")),
+					sqltypes.MakeTrusted(sqltypes.Int32, []byte("4")),
+					sqltypes.MakeTrusted(sqltypes.Int32, []byte("5")),
 				},
 			},
 		},
