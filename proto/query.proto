@@ -240,16 +240,24 @@ message Field {
   // vitess-defined type. Conversion function is in sqltypes package.
   Type type = 2;
 
-  // remaining fields from mysql C API
-  // these fields are only populated when ExecuteOptions.included_fields
-  // is set to IncludedFields.ALL
+  // Remaining fields from mysql C API.
+  // These fields are only populated when ExecuteOptions.included_fields
+  // is set to IncludedFields.ALL.
   string table = 3;
   string org_table = 4;
   string database = 5;
   string org_name = 6;
-  uint64 column_length = 7;
+
+  // column_length is really a uint32. All 32 bits can be used.
+  uint32 column_length = 7;
+
+  // charset is actually a uint16. Only the lower 16 bits are used.
   uint32 charset = 8;
+
+  // decimals is actualy a uint8. Only the lower 8 bits are used.
   uint32 decimals = 9;
+
+  // flags is actually a uint16. Only the lower 16 bits are used.
   uint32 flags = 10;
 }
 

@@ -40,6 +40,12 @@ namespace Vitess\Proto\Vtgateservice {
       return $this->_simpleRequest('/vtgateservice.Vitess/ExecuteEntityIds', $argument, '\Vitess\Proto\Vtgate\ExecuteEntityIdsResponse::deserialize', $metadata, $options);
     }
     /**
+     * @param Vitess\Proto\Vtgate\ExecuteBatchRequest $input
+     */
+    public function ExecuteBatch(\Vitess\Proto\Vtgate\ExecuteBatchRequest $argument, $metadata = array(), $options = array()) {
+      return $this->_simpleRequest('/vtgateservice.Vitess/ExecuteBatch', $argument, '\Vitess\Proto\Vtgate\ExecuteBatchResponse::deserialize', $metadata, $options);
+    }
+    /**
      * @param Vitess\Proto\Vtgate\ExecuteBatchShardsRequest $input
      */
     public function ExecuteBatchShards(\Vitess\Proto\Vtgate\ExecuteBatchShardsRequest $argument, $metadata = array(), $options = array()) {

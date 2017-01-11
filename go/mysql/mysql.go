@@ -270,12 +270,12 @@ func (conn *Connection) Fields() (fields []*querypb.Field, err error) {
 	fields = make([]*querypb.Field, nfields)
 	fvals := make([]querypb.Field, nfields)
 	for i := 0; i < nfields; i++ {
-		fvals[i].Name = copy_string(cfields[i].name_length, cfields[i].name)
-		fvals[i].OrgName = copy_string(cfields[i].org_name_length, cfields[i].org_name)
-		fvals[i].Table = copy_string(cfields[i].table_length, cfields[i].table)
-		fvals[i].OrgTable = copy_string(cfields[i].org_table_length, cfields[i].org_table)
-		fvals[i].Database = copy_string(cfields[i].db_length, cfields[i].db)
-		fvals[i].ColumnLength = uint64(cfields[i].length)
+		fvals[i].Name = copyString(cfields[i].name_length, cfields[i].name)
+		fvals[i].OrgName = copyString(cfields[i].org_name_length, cfields[i].org_name)
+		fvals[i].Table = copyString(cfields[i].table_length, cfields[i].table)
+		fvals[i].OrgTable = copyString(cfields[i].org_table_length, cfields[i].org_table)
+		fvals[i].Database = copyString(cfields[i].db_length, cfields[i].db)
+		fvals[i].ColumnLength = uint32(cfields[i].length)
 		fvals[i].Flags = uint32(cfields[i].flags)
 		fvals[i].Charset = uint32(cfields[i].charsetnr)
 		fvals[i].Decimals = uint32(cfields[i].decimals)
@@ -289,11 +289,11 @@ func (conn *Connection) Fields() (fields []*querypb.Field, err error) {
 	return fields, nil
 }
 
-func copy_string(length C.uint, field *C.char) string {
-	return string(copy_bytes(length, field))
+func copyString(length C.uint, field *C.char) string {
+	return string(copyBytes(length, field))
 }
 
-func copy_bytes(length C.uint, field *C.char) []byte {
+func copyBytes(length C.uint, field *C.char) []byte {
 	return (*[maxSize]byte)(unsafe.Pointer(field))[:length]
 }
 

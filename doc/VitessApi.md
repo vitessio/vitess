@@ -808,17 +808,17 @@ ExecuteOptions is passed around for all Execute calls.
 #### Properties
 
 | Name |Description |
-| :-------- | :--------
-| <code>include_event_token</code> <br>bool| If set, we will try to include an EventToken with the responses. |
+| :-------- | :-------- 
+| <code>include_event_token</code> <br>bool| This used to be exclude_field_names, which was replaced by IncludedFields enum below If set, we will try to include an EventToken with the responses. |
 | <code>compare_event_token</code> <br>[EventToken](#query.eventtoken)| EventToken is a structure that describes a point in time in a replication stream on one shard. The most recent known replication position can be retrieved from vttablet when executing a query. It is also sent with the replication streams from the binlog service. |
-| <code>included_fields</code> <br>[IncludedFields](#query.includedfields) | The IncludedFields allows you to specify which Field metadata returned by a query. This is an optimization for high-QPS queries where the client knows what it's getting. |
+| <code>included_fields</code> <br>[IncludedFields](#executeoptions.includedfields)| Controls what fields are returned in Field message responses from mysql, i.e. field name, table name, etc. This is an optimization for high-QPS queries where the client knows what it's getting |
 
-### query.IncludedFields
+#### Enums
 
-IncludedFields allows you to specify which Field metadata returned by a query. This is an optimization for high-QPS queries where the client knows what it's getting.
+##### ExecuteOptions.IncludedFields
 
 | Name |Value |Description |
-| :-------- | :-------- | :--------
+| :-------- | :-------- | :-------- 
 | <code>TYPE_AND_NAME</code> | <code>0</code> |  |
 | <code>TYPE_ONLY</code> | <code>1</code> |  |
 | <code>ALL</code> | <code>2</code> |  |
@@ -833,6 +833,14 @@ Field describes a single column returned by a query
 | :-------- | :-------- 
 | <code>name</code> <br>string| name of the field as returned by mysql C API |
 | <code>type</code> <br>[Type](#query.type)| vitess-defined type. Conversion function is in sqltypes package. |
+| <code>table</code> <br>string| Remaining fields from mysql C API. These fields are only populated when ExecuteOptions.included_fields is set to IncludedFields.ALL. |
+| <code>org_table</code> <br>string| |
+| <code>database</code> <br>string| |
+| <code>org_name</code> <br>string| |
+| <code>column_length</code> <br>uint32| column_length is really a uint32. All 32 bits can be used. |
+| <code>charset</code> <br>uint32| charset is actually a uint16. Only the lower 16 bits are used. |
+| <code>decimals</code> <br>uint32| decimals is actualy a uint8. Only the lower 8 bits are used. |
+| <code>flags</code> <br>uint32| flags is actually a uint16. Only the lower 16 bits are used. |
 
 ### query.QueryResult
 
