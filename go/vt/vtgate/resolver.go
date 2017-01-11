@@ -304,9 +304,15 @@ func (res *Resolver) ExecuteBatch(
 // copySession method, copies the shardSession from SafeSession to VTGateSession.
 func copySession(safeSession *SafeSession, session *vtgatepb.Session) {
 	if safeSession.InTransaction() {
+		safeSession.mu.Lock()
+		defer safeSession.mu.Unlock()
 		session.ShardSessions = nil
 		for _, shardSession := range safeSession.Session.SafeShardSessions {
-			session.ShardSessions = append(session.ShardSessions, shardSession.Session_ShardSession)
+			shardSession.mu.Lock()
+			defer shardSession.mu.Unlock()
+			if(shardSession.TransactionId != 0) {
+				session.ShardSessions = append(session.ShardSessions, shardSession.Session_ShardSession)
+			}
 		}
 	}
 }
