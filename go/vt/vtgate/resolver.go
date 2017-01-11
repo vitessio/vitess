@@ -135,7 +135,7 @@ func (res *Resolver) Execute(
 			resharding := false
 			newKeyspace, newShards, err := mapToShards(keyspace)
 			if err != nil {
-				copySession(safeSession, session)
+				safeSession.copySession(session)
 				return nil, err
 			}
 			// check keyspace change for vertical resharding
@@ -153,7 +153,7 @@ func (res *Resolver) Execute(
 				continue
 			}
 		}
-		copySession(safeSession, session)
+		safeSession.copySession(session)
 		if err != nil {
 			return nil, err
 		}
@@ -209,7 +209,7 @@ func (res *Resolver) ExecuteEntityIds(
 				entityKeyspaceIDs,
 				tabletType)
 			if err != nil {
-				copySession(safeSession, session)
+				safeSession.copySession(session)
 				return nil, err
 			}
 			// check keyspace change for vertical resharding
@@ -230,7 +230,7 @@ func (res *Resolver) ExecuteEntityIds(
 				continue
 			}
 		}
-		copySession(safeSession, session)
+		safeSession.copySession(session)
 		if err != nil {
 			return nil, err
 		}
@@ -277,7 +277,7 @@ func (res *Resolver) ExecuteBatch(
 			options)
 		// Don't retry transactional requests.
 		if asTransaction {
-			copySession(safeSession, session)
+			safeSession.copySession(session)
 			return qrs, err
 		}
 		// If lower level retries failed, check if there was a resharding event
@@ -285,35 +285,19 @@ func (res *Resolver) ExecuteBatch(
 		if isRetryableError(err) {
 			newBatchRequest, buildErr := buildBatchRequest()
 			if buildErr != nil {
-				copySession(safeSession, session)
+				safeSession.copySession(session)
 				return nil, buildErr
 			}
 			// Use reflect to see if the request has changed.
 			if reflect.DeepEqual(*batchRequest, *newBatchRequest) {
-				copySession(safeSession, session)
+				safeSession.copySession(session)
 				return qrs, err
 			}
 			batchRequest = newBatchRequest
 			continue
 		}
-		copySession(safeSession, session)
+		safeSession.copySession(session)
 		return qrs, err
-	}
-}
-
-// copySession method, copies the shardSession from SafeSession to VTGateSession.
-func copySession(safeSession *SafeSession, session *vtgatepb.Session) {
-	if safeSession.InTransaction() {
-		safeSession.mu.Lock()
-		defer safeSession.mu.Unlock()
-		session.ShardSessions = nil
-		for _, shardSession := range safeSession.Session.SafeShardSessions {
-			shardSession.mu.Lock()
-			defer shardSession.mu.Unlock()
-			if(shardSession.TransactionId != 0) {
-				session.ShardSessions = append(session.ShardSessions, shardSession.Session_ShardSession)
-			}
-		}
 	}
 }
 

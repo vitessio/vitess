@@ -1,6 +1,8 @@
 package engine
 
 import (
+	"errors"
+
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/vtgate/queryinfo"
 )
@@ -41,10 +43,19 @@ func (batchRoute *BatchRoute) executeUnordered(vcursor VCursor, queryBatchConstr
 	queryCount := len(queryBatchConstruct.BoundQueryList)
 	queryResponses := make([]sqltypes.QueryResponse, queryCount)
 	ch := make(chan response, queryCount)
-	for index, plan := range batchRoute.PlanList {
-		go batchRoute.executeParallel(vcursor, queryBatchConstruct, joinvars, wantfields, index, plan, ch)
-	}
 	count := 0
+	for index, plan := range batchRoute.PlanList {
+		if plan == nil {
+			count++
+			queryResponses[index] = sqltypes.QueryResponse{
+				QueryResult: nil,
+				QueryError:  errors.New("no plan generated for this query"),
+			}
+			continue
+		}
+		go batchRoute.executeParallel(vcursor, queryBatchConstruct, joinvars, wantfields, index, plan, ch)
+
+	}
 	for {
 		chResponse := <-ch
 		queryResponses[chResponse.queryIndex] = chResponse.queryResponse
@@ -75,6 +86,13 @@ func (batchRoute *BatchRoute) executeOrdered(vcursor VCursor, queryBatchConstruc
 	// AsTransaction flag is discarded.
 	queryResponses := make([]sqltypes.QueryResponse, len(queryBatchConstruct.BoundQueryList))
 	for i, plan := range batchRoute.PlanList {
+		if plan == nil {
+			queryResponses[i] = sqltypes.QueryResponse{
+				QueryResult: nil,
+				QueryError:  errors.New("no plan generated for this query"),
+			}
+			continue
+		}
 		queryConstruct := queryinfo.NewQueryConstruct(queryBatchConstruct.BoundQueryList[i].SQL, queryBatchConstruct.Keyspace, queryBatchConstruct.BoundQueryList[i].BindVars, false)
 		result, err := plan.Instructions.Execute(vcursor, queryConstruct, joinvars, wantfields)
 		queryResponses[i] = sqltypes.QueryResponse{

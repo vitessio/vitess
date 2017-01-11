@@ -215,3 +215,15 @@ func routerStream(router *Router, sql string) (qr *sqltypes.Result, err error) {
 	}
 	return qr, nil
 }
+
+func routerExecBatch(router *Router, sqlList []string, bvList []map[string]interface{}) ([]sqltypes.QueryResponse, error) {
+	return router.ExecuteBatch(context.Background(),
+		sqlList,
+		bvList,
+		"",
+		topodatapb.TabletType_MASTER,
+		false,
+		nil,
+		nil,
+		false)
+}

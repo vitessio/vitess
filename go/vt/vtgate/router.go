@@ -47,7 +47,7 @@ func (rtr *Router) Execute(ctx context.Context, sql string, bindVars map[string]
 	}
 	result, err := plan.Instructions.Execute(vcursor, queryConstruct, make(map[string]interface{}), true)
 	//Mapping the generated session back to VtGateSession object
-	copySession(vcursor.session, session)
+	vcursor.session.copySession(session)
 	return result, err
 }
 
@@ -67,15 +67,18 @@ func (rtr *Router) StreamExecute(ctx context.Context, sql string, bindVars map[s
 
 // ExecuteBatch routes a non-streaming queries.
 func (rtr *Router) ExecuteBatch(ctx context.Context, sqlList []string, bindVarsList []map[string]interface{}, keyspace string, tabletType topodatapb.TabletType, asTransaction bool, session *vtgatepb.Session, options *querypb.ExecuteOptions, execParallel bool) ([]sqltypes.QueryResponse, error) {
-	vcursor := newQueryExecutor(ctx, tabletType, session, options, rtr)
-	queryBatchConstruct := queryinfo.NewQueryBatchConstruct(sqlList, keyspace, bindVarsList, asTransaction)
+	queryBatchConstruct, err := queryinfo.NewQueryBatchConstruct(sqlList, keyspace, bindVarsList, asTransaction)
+	if err != nil {
+		return nil, err
+	}
 	plan, err := rtr.planner.GetBatchPlan(queryBatchConstruct, execParallel)
 	if err != nil {
 		return nil, err
 	}
+	vcursor := newQueryExecutor(ctx, tabletType, session, options, rtr)
 	results, err := plan.Instructions.ExecuteBatch(vcursor, queryBatchConstruct, make(map[string]interface{}), true)
 	//Mapping the generated session back to VtGateSession object
-	copySession(vcursor.session, session)
+	vcursor.session.copySession(session)
 	return results, err
 }
 
@@ -102,7 +105,10 @@ func (rtr *Router) streamExecuteVIndex(vcursor *queryExecutor, sql string, bindV
 
 // executeBatchVIndex routes a non-streaming vindex queries.
 func (rtr *Router) executeBatchVIndex(vcursor *queryExecutor, sqlList []string, bindVarsList []map[string]interface{}, asTransaction bool, execParallel bool) ([]sqltypes.QueryResponse, error) {
-	queryBatchConstruct := queryinfo.NewQueryBatchConstruct(sqlList, "", bindVarsList, asTransaction)
+	queryBatchConstruct, err := queryinfo.NewQueryBatchConstruct(sqlList, "", bindVarsList, asTransaction)
+	if err != nil {
+		return nil, err
+	}
 	plan, err := rtr.planner.GetBatchPlan(queryBatchConstruct, execParallel)
 	if err != nil {
 		return nil, err

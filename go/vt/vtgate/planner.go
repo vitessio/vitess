@@ -335,10 +335,9 @@ func (plr *Planner) GetBatchPlan(queryBatchConstruct *queryinfo.QueryBatchConstr
 	keyspace := queryBatchConstruct.Keyspace
 	for i, queryBound := range queryBatchConstruct.BoundQueryList {
 		plan, err := plr.GetPlan(queryBound.SQL, keyspace, queryBound.BindVars)
-		if err != nil {
-			return nil, err
+		if err == nil {
+			planList[i] = plan
 		}
-		planList[i] = plan
 	}
 	return &engine.Plan{
 		Original: "BatchPlan",

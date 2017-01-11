@@ -34,7 +34,7 @@ type Session struct {
 
 // SafeShardSession is a mutex-protected version of the ShardSession.
 type SafeShardSession struct {
-	mu         sync.Mutex
+	mu sync.Mutex
 	*vtgatepb.Session_ShardSession
 }
 
@@ -143,4 +143,20 @@ func (session *SafeSession) Reset() {
 	defer session.mu.Unlock()
 	session.Session.InTransaction = false
 	session.SafeShardSessions = nil
+}
+
+// copySession method, copies the shardSession from SafeSession to VTGateSession.
+func (session *SafeSession) copySession(vtgateSession *vtgatepb.Session) {
+	if session.InTransaction() {
+		session.mu.Lock()
+		defer session.mu.Unlock()
+		vtgateSession.ShardSessions = nil
+		for _, shardSession := range session.Session.SafeShardSessions {
+			shardSession.mu.Lock()
+			defer shardSession.mu.Unlock()
+			if shardSession.TransactionId != 0 {
+				vtgateSession.ShardSessions = append(vtgateSession.ShardSessions, shardSession.Session_ShardSession)
+			}
+		}
+	}
 }

@@ -1,6 +1,10 @@
 package queryinfo
 
-import "github.com/youtube/vitess/go/vt/sqlparser"
+import (
+	"errors"
+
+	"github.com/youtube/vitess/go/vt/sqlparser"
+)
 
 // QueryBatchConstruct contains the information about the sql and bindVars to be used by vtgate and engine.
 type QueryBatchConstruct struct {
@@ -16,9 +20,12 @@ type queryBound struct {
 }
 
 // NewQueryBatchConstruct method initializes the structure.
-func NewQueryBatchConstruct(sqlList []string, keyspace string, bindVarsList []map[string]interface{}, asTransaction bool) *QueryBatchConstruct {
+func NewQueryBatchConstruct(sqlList []string, keyspace string, bindVarsList []map[string]interface{}, asTransaction bool) (*QueryBatchConstruct, error) {
 	if bindVarsList == nil {
 		bindVarsList = make([]map[string]interface{}, len(sqlList))
+	}
+	if len(sqlList) != len(bindVarsList) {
+		return nil, errors.New("Query list size does not match bindvars size")
 	}
 	boundQueryList := make([]*queryBound, len(sqlList))
 	for sqlNum, sql := range sqlList {
@@ -38,5 +45,5 @@ func NewQueryBatchConstruct(sqlList []string, keyspace string, bindVarsList []ma
 		BoundQueryList: boundQueryList,
 		Keyspace:       keyspace,
 		AsTransaction:  asTransaction,
-	}
+	}, nil
 }
