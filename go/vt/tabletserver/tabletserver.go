@@ -948,6 +948,57 @@ func (tsv *TabletServer) MessageUnsubscribe(receiver MessageReceiver) error {
 	return nil
 }
 
+// AckMessages acks the list of messages for a given message table.
+// It returns the number of messages successfully acked.
+func (tsv *TabletServer) AckMessages(ctx context.Context, target *querypb.Target, name string, ids []string) (count int64, err error) {
+	return tsv.execDML(ctx, target, func() (string, map[string]interface{}, error) {
+		return tsv.messager.GenerateAckQuery(name, ids)
+	})
+}
+
+// RescheduleMessages reschedules the list of messages for a given message table.
+// It returns the number of messages successfully rescheduled.
+func (tsv *TabletServer) RescheduleMessages(ctx context.Context, target *querypb.Target, name string, ids []string, timeNew int64) (count int64, err error) {
+	return tsv.execDML(ctx, target, func() (string, map[string]interface{}, error) {
+		return tsv.messager.GenerateRescheduleQuery(name, ids, timeNew)
+	})
+}
+
+func (tsv *TabletServer) execDML(ctx context.Context, target *querypb.Target, queryGenerator func() (string, map[string]interface{}, error)) (count int64, err error) {
+	if err = tsv.startRequest(target, false, false); err != nil {
+		return 0, err
+	}
+	defer tsv.endRequest(false)
+	defer tsv.handlePanicAndSendLogStats("ack", nil, &err, nil)
+
+	query, bv, err := queryGenerator()
+	if err != nil {
+		return 0, NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "%v", err)
+	}
+
+	transactionID, err := tsv.Begin(ctx, target)
+	if err != nil {
+		return 0, err
+	}
+	// If transaction was not committed by the end, it means
+	// that there was an error, roll it back.
+	defer func() {
+		if transactionID != 0 {
+			tsv.Rollback(ctx, target, transactionID)
+		}
+	}()
+	qr, err := tsv.Execute(ctx, target, query, bv, transactionID, nil)
+	if err != nil {
+		return 0, err
+	}
+	if err = tsv.Commit(ctx, target, transactionID); err != nil {
+		transactionID = 0
+		return 0, err
+	}
+	transactionID = 0
+	return int64(qr.RowsAffected), nil
+}
+
 // SplitQuery splits a query + bind variables into smaller queries that return a
 // subset of rows from the original query. This is the new version that supports multiple
 // split columns and multiple split algortihms.

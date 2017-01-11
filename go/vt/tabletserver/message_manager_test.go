@@ -14,6 +14,9 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
+
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 type testReceiver struct {
@@ -58,7 +61,18 @@ func (tr *testReceiver) WaitForCount(n int) {
 
 func TestMessageManagerState(t *testing.T) {
 	db := setUpTabletServerTest()
-	mm := NewMessageManager("foo", 10, 1*time.Second, newMMConnPool(db))
+	testUtils := newTestUtils()
+	config := testUtils.newQueryServiceConfig()
+	config.TransactionCap = 1
+	tsv := NewTabletServer(config)
+	dbconfigs := testUtils.newDBConfigs(db)
+	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+	err := tsv.StartService(target, dbconfigs, testUtils.newMysqld(&dbconfigs))
+	if err != nil {
+		t.Fatalf("StartService failed: %v", err)
+	}
+	defer tsv.StopService()
+	mm := NewMessageManager(tsv, "foo", 1*time.Second, 10, 1*time.Second, newMMConnPool(db))
 	// Do it twice
 	for i := 0; i < 2; i++ {
 		mm.Open()
@@ -86,7 +100,18 @@ func TestMessageManagerState(t *testing.T) {
 
 func TestMessageManagerAdd(t *testing.T) {
 	db := setUpTabletServerTest()
-	mm := NewMessageManager("foo", 1, 1*time.Second, newMMConnPool(db))
+	testUtils := newTestUtils()
+	config := testUtils.newQueryServiceConfig()
+	config.TransactionCap = 1
+	tsv := NewTabletServer(config)
+	dbconfigs := testUtils.newDBConfigs(db)
+	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+	err := tsv.StartService(target, dbconfigs, testUtils.newMysqld(&dbconfigs))
+	if err != nil {
+		t.Fatalf("StartService failed: %v", err)
+	}
+	defer tsv.StopService()
+	mm := NewMessageManager(tsv, "foo", 1*time.Second, 1, 1*time.Second, newMMConnPool(db))
 	mm.Open()
 	defer mm.Close()
 
@@ -115,7 +140,18 @@ func TestMessageManagerAdd(t *testing.T) {
 
 func TestMessageManagerSend(t *testing.T) {
 	db := setUpTabletServerTest()
-	mm := NewMessageManager("foo", 10, 1*time.Second, newMMConnPool(db))
+	testUtils := newTestUtils()
+	config := testUtils.newQueryServiceConfig()
+	config.TransactionCap = 1
+	tsv := NewTabletServer(config)
+	dbconfigs := testUtils.newDBConfigs(db)
+	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+	err := tsv.StartService(target, dbconfigs, testUtils.newMysqld(&dbconfigs))
+	if err != nil {
+		t.Fatalf("StartService failed: %v", err)
+	}
+	defer tsv.StopService()
+	mm := NewMessageManager(tsv, "foo", 1*time.Second, 10, 1*time.Second, newMMConnPool(db))
 	mm.Open()
 	defer mm.Close()
 	r1 := newTestReceiver(1)
@@ -152,6 +188,17 @@ func TestMessageManagerSend(t *testing.T) {
 
 func TestMessageManagerPoller(t *testing.T) {
 	db := setUpTabletServerTest()
+	testUtils := newTestUtils()
+	config := testUtils.newQueryServiceConfig()
+	config.TransactionCap = 1
+	tsv := NewTabletServer(config)
+	dbconfigs := testUtils.newDBConfigs(db)
+	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+	err := tsv.StartService(target, dbconfigs, testUtils.newMysqld(&dbconfigs))
+	if err != nil {
+		t.Fatalf("StartService failed: %v", err)
+	}
+	defer tsv.StopService()
 	db.AddQueryPattern(
 		"select time_next, epoch, id, message from foo.*",
 		&sqltypes.Result{
@@ -173,7 +220,7 @@ func TestMessageManagerPoller(t *testing.T) {
 			}},
 		},
 	)
-	mm := NewMessageManager("foo", 10, 1*time.Second, newMMConnPool(db))
+	mm := NewMessageManager(tsv, "foo", 1*time.Second, 10, 1*time.Second, newMMConnPool(db))
 	mm.Open()
 	defer mm.Close()
 	r1 := newTestReceiver(1)
@@ -221,6 +268,17 @@ func TestMessageManagerPoller(t *testing.T) {
 // add items because the cache is full.
 func TestMessagesPending1(t *testing.T) {
 	db := setUpTabletServerTest()
+	testUtils := newTestUtils()
+	config := testUtils.newQueryServiceConfig()
+	config.TransactionCap = 1
+	tsv := NewTabletServer(config)
+	dbconfigs := testUtils.newDBConfigs(db)
+	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+	err := tsv.StartService(target, dbconfigs, testUtils.newMysqld(&dbconfigs))
+	if err != nil {
+		t.Fatalf("StartService failed: %v", err)
+	}
+	defer tsv.StopService()
 	db.AddQueryPattern(
 		"select time_next, epoch, id, message from foo.*",
 		&sqltypes.Result{
@@ -233,7 +291,7 @@ func TestMessagesPending1(t *testing.T) {
 		},
 	)
 	// Set a large polling interval.
-	mm := NewMessageManager("foo", 2, 30*time.Second, newMMConnPool(db))
+	mm := NewMessageManager(tsv, "foo", 1*time.Second, 2, 30*time.Second, newMMConnPool(db))
 	mm.Open()
 	defer mm.Close()
 	r1 := newTestReceiver(0)
@@ -275,6 +333,17 @@ func TestMessagesPending1(t *testing.T) {
 // there are more pending items than the cache size.
 func TestMessagesPending2(t *testing.T) {
 	db := setUpTabletServerTest()
+	testUtils := newTestUtils()
+	config := testUtils.newQueryServiceConfig()
+	config.TransactionCap = 1
+	tsv := NewTabletServer(config)
+	dbconfigs := testUtils.newDBConfigs(db)
+	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+	err := tsv.StartService(target, dbconfigs, testUtils.newMysqld(&dbconfigs))
+	if err != nil {
+		t.Fatalf("StartService failed: %v", err)
+	}
+	defer tsv.StopService()
 	db.AddQueryPattern(
 		"select time_next, epoch, id, message from foo.*",
 		&sqltypes.Result{
@@ -287,7 +356,7 @@ func TestMessagesPending2(t *testing.T) {
 		},
 	)
 	// Set a large polling interval.
-	mm := NewMessageManager("foo", 1, 30*time.Second, newMMConnPool(db))
+	mm := NewMessageManager(tsv, "foo", 1*time.Second, 1, 30*time.Second, newMMConnPool(db))
 	mm.Open()
 	defer mm.Close()
 	r1 := newTestReceiver(0)
@@ -304,6 +373,52 @@ func TestMessagesPending2(t *testing.T) {
 	}
 	if d := time.Now().Sub(start); d > 15*time.Second {
 		t.Errorf("pending work trigger did not happen. Duration: %v", d)
+	}
+}
+
+func TestMMGenerate(t *testing.T) {
+	db := setUpTabletServerTest()
+	testUtils := newTestUtils()
+	config := testUtils.newQueryServiceConfig()
+	config.TransactionCap = 1
+	tsv := NewTabletServer(config)
+	dbconfigs := testUtils.newDBConfigs(db)
+	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+	err := tsv.StartService(target, dbconfigs, testUtils.newMysqld(&dbconfigs))
+	if err != nil {
+		t.Fatalf("StartService failed: %v", err)
+	}
+	defer tsv.StopService()
+	mm := NewMessageManager(tsv, "foo", 1*time.Second, 10, 1*time.Second, newMMConnPool(db))
+	mm.Open()
+	defer mm.Close()
+	query, bv := mm.GenerateAckQuery([]string{"1", "2"})
+	wantQuery := "update foo set time_acked = :time_acked, time_next = null where id in ::ids"
+	if query != wantQuery {
+		t.Errorf("GenerateAckQuery query: %s, want %s", query, wantQuery)
+	}
+	gotAcked := bv["time_acked"].(int64)
+	wantAcked := time.Now().UnixNano()
+	if wantAcked-gotAcked > 10e9 {
+		t.Errorf("gotAcked: %d, should be with 10s of %d", gotAcked, wantAcked)
+	}
+	wantids := []interface{}{"1", "2"}
+	gotids := bv["ids"].([]interface{})
+	if !reflect.DeepEqual(gotids, wantids) {
+		t.Errorf("gotid: %v, want %v", gotids, wantids)
+	}
+
+	query, bv = mm.GenerateRescheduleQuery([]string{"1", "2"}, 3)
+	wantQuery = "update foo set time_next = :time_next, epoch = epoch+1 where id in ::ids and time_acked is null"
+	if query != wantQuery {
+		t.Errorf("GenerateAckQuery query: %s, want %s", query, wantQuery)
+	}
+	wantbv := map[string]interface{}{
+		"time_next": int64(3),
+		"ids":       []interface{}{"1", "2"},
+	}
+	if !reflect.DeepEqual(bv, wantbv) {
+		t.Errorf("gotid: %v, want %v", bv, wantbv)
 	}
 }
 

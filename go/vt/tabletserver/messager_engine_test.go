@@ -81,7 +81,7 @@ func TestMessagerEngineSchemaChanged(t *testing.T) {
 	}
 	me.schemaChanged(tables)
 	got := extractManagerNames(me.managers)
-	want := map[string]bool{"t1": true}
+	want := map[string]bool{"msg": true, "t1": true}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("got: %+v, want %+v", got, want)
 	}
@@ -98,7 +98,7 @@ func TestMessagerEngineSchemaChanged(t *testing.T) {
 	}
 	me.schemaChanged(tables)
 	got = extractManagerNames(me.managers)
-	want = map[string]bool{"t1": true, "t3": true}
+	want = map[string]bool{"msg": true, "t1": true, "t3": true}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("got: %+v, want %+v", got, want)
 	}
@@ -116,7 +116,7 @@ func TestMessagerEngineSchemaChanged(t *testing.T) {
 	me.schemaChanged(tables)
 	got = extractManagerNames(me.managers)
 	// schemaChanged is only additive.
-	want = map[string]bool{"t1": true, "t3": true, "t4": true}
+	want = map[string]bool{"msg": true, "t1": true, "t3": true, "t4": true}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("got: %+v, want %+v", got, want)
 	}
@@ -258,5 +258,44 @@ func TestLockDB(t *testing.T) {
 	case mr := <-r2.ch:
 		t.Errorf("Unexpected message: %v", mr)
 	default:
+	}
+}
+
+func TestMEGenerate(t *testing.T) {
+	db := setUpTabletServerTest()
+	testUtils := newTestUtils()
+	config := testUtils.newQueryServiceConfig()
+	config.TransactionCap = 1
+	tsv := NewTabletServer(config)
+	dbconfigs := testUtils.newDBConfigs(db)
+	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+	err := tsv.StartService(target, dbconfigs, testUtils.newMysqld(&dbconfigs))
+	if err != nil {
+		t.Fatalf("StartService failed: %v", err)
+	}
+	defer tsv.StopService()
+
+	me := NewMessagerEngine(tsv, config, tsv.queryServiceStats)
+	if err := me.Open(dbconfigs); err != nil {
+		t.Fatal(err)
+	}
+	me.schemaChanged(map[string]*schema.Table{
+		"t1": {
+			Type: schema.Message,
+		},
+	})
+	if _, _, err := me.GenerateAckQuery("t1", []string{"1"}); err != nil {
+		t.Error(err)
+	}
+	want := "message table t2 not found in schema"
+	if _, _, err := me.GenerateAckQuery("t2", []string{"1"}); err == nil || err.Error() != want {
+		t.Errorf("me.GenerateAckQuery(invalid): %v, want %s", err, want)
+	}
+
+	if _, _, err := me.GenerateRescheduleQuery("t1", []string{"1"}, 0); err != nil {
+		t.Error(err)
+	}
+	if _, _, err := me.GenerateRescheduleQuery("t2", []string{"1"}, 0); err == nil || err.Error() != want {
+		t.Errorf("me.GenerateAckQuery(invalid): %v, want %s", err, want)
 	}
 }

@@ -151,6 +151,30 @@ func (me *MessagerEngine) UpdateCaches(newMessages map[string][]*MessageRow, cha
 	}
 }
 
+// GenerateAckQuery returns the query and bind vars for acking a message.
+func (me *MessagerEngine) GenerateAckQuery(name string, ids []string) (string, map[string]interface{}, error) {
+	me.mu.Lock()
+	defer me.mu.Unlock()
+	mm := me.managers[name]
+	if mm == nil {
+		return "", nil, fmt.Errorf("message table %s not found in schema", name)
+	}
+	query, bv := mm.GenerateAckQuery(ids)
+	return query, bv, nil
+}
+
+// GenerateRescheduleQuery returns the query and bind vars for rescheduling a message.
+func (me *MessagerEngine) GenerateRescheduleQuery(name string, ids []string, timeNew int64) (string, map[string]interface{}, error) {
+	me.mu.Lock()
+	defer me.mu.Unlock()
+	mm := me.managers[name]
+	if mm == nil {
+		return "", nil, fmt.Errorf("message table %s not found in schema", name)
+	}
+	query, bv := mm.GenerateRescheduleQuery(ids, timeNew)
+	return query, bv, nil
+}
+
 func (me *MessagerEngine) schemaChanged(tables map[string]*schema.Table) {
 	me.mu.Lock()
 	defer me.mu.Unlock()
@@ -162,7 +186,7 @@ func (me *MessagerEngine) schemaChanged(tables map[string]*schema.Table) {
 			continue
 		}
 		// TODO(sougou): hardcoded values.
-		mm := NewMessageManager(name, 10000, 30*time.Second, me.connpool)
+		mm := NewMessageManager(me.tsv, name, 30*time.Second, 10000, 30*time.Second, me.connpool)
 		me.managers[name] = mm
 		mm.Open()
 	}
