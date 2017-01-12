@@ -310,7 +310,8 @@ class TestBuffer(unittest.TestCase):
                         ['START SLAVE'], log_query=True)
 
       # Notify the new vttablet master about the reparent.
-      utils.run_vtctl(['TabletExternallyReparented', new_master.tablet_alias])
+      utils.run_vtctl(['TabletExternallyReparented', new_master.tablet_alias],
+                      auto_log=True)
     self._test_buffer(external_reparent)
 
 
