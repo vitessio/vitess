@@ -339,12 +339,17 @@ func (plr *Planner) GetBatchPlan(queryBatchConstruct *queryinfo.QueryBatchConstr
 			planList[i] = plan
 		}
 	}
+	batchRoute := &engine.BatchRoute{
+		PlanList: planList,
+		Opcode:   engine.ExecuteOrdered,
+	}
+	if execParallel {
+		batchRoute.Opcode = engine.ExecuteUnOrdered
+	}
 	return &engine.Plan{
-		Original: "BatchPlan",
-		Instructions: &engine.BatchRoute{
-			PlanList:     planList,
-			ExecParallel: execParallel,
-		}}, nil
+		Original:     "BatchPlan",
+		Instructions: batchRoute,
+	}, nil
 
 }
 

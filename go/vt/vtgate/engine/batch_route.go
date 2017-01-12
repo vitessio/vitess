@@ -3,6 +3,8 @@ package engine
 import (
 	"errors"
 
+	"fmt"
+
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/vtgate/queryinfo"
 )
@@ -11,9 +13,23 @@ import (
 // one or many vttablets. The meaning and values for the
 // the fields are described in the RouteOpcode values comments.
 type BatchRoute struct {
-	PlanList     []*Plan
-	ExecParallel bool
+	Opcode   BatchRouteOpcode
+	PlanList []*Plan
 }
+
+// BatchRouteOpcode is a number representing the opcode
+// for the BatchRoute primitive.
+type BatchRouteOpcode int
+
+// This is the list of BatchRouteOpcode values.
+// The opcode dictates the execution path.
+const (
+	BatchNoCode = BatchRouteOpcode(iota)
+	// ExecuteOrdered is for executing plans in serial.
+	ExecuteOrdered
+	// ExecuteUnOrdered is for executing plans in parallel.
+	ExecuteUnOrdered
+)
 
 // Execute performs a non-streaming exec.
 func (batchRoute *BatchRoute) Execute(vcursor VCursor, queryConstruct *queryinfo.QueryConstruct, joinvars map[string]interface{}, wantfields bool) (*sqltypes.Result, error) {
@@ -32,10 +48,14 @@ func (batchRoute *BatchRoute) GetFields(vcursor VCursor, queryConstruct *queryin
 
 // ExecuteBatch performs a non-streaming exec of list of queries.
 func (batchRoute *BatchRoute) ExecuteBatch(vcursor VCursor, queryBatchConstruct *queryinfo.QueryBatchConstruct, joinvars map[string]interface{}, wantfields bool) ([]sqltypes.QueryResponse, error) {
-	if batchRoute.ExecParallel {
+	switch batchRoute.Opcode {
+	case ExecuteOrdered:
+		return batchRoute.executeOrdered(vcursor, queryBatchConstruct, joinvars, wantfields)
+	case ExecuteUnOrdered:
 		return batchRoute.executeUnordered(vcursor, queryBatchConstruct, joinvars, wantfields)
+	default:
+		return nil, fmt.Errorf("ExecuteBatch:unsupported query route: %v", batchRoute)
 	}
-	return batchRoute.executeOrdered(vcursor, queryBatchConstruct, joinvars, wantfields)
 }
 
 func (batchRoute *BatchRoute) executeUnordered(vcursor VCursor, queryBatchConstruct *queryinfo.QueryBatchConstruct, joinvars map[string]interface{}, wantfields bool) ([]sqltypes.QueryResponse, error) {
