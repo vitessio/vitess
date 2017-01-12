@@ -55,7 +55,11 @@ type shardBuffer struct {
 	// externallyReparented tracks the last time each shard was reparented.
 	// The value is the seen maximum value of
 	// "StreamHealthResponse.TabletexternallyReparentedTimestamp".
+	// We assume the value is a Unix timestamp in seconds.
 	externallyReparented int64
+	// externallyReparentedAfterStart is the first non-zero value which vtgate
+	// saw after startup. It's necessary for the "reparent too recent" check.
+	externallyReparentedAfterStart int64
 	// lastStart is the last time we saw the start of a failover.
 	lastStart time.Time
 	// lastEnd is the last time we saw the end of a failover.
@@ -124,11 +128,25 @@ func (sb *shardBuffer) waitForFailoverEnd(ctx context.Context, keyspace, shard s
 	// Start buffering if failover is not detected yet.
 	if sb.state == stateIdle {
 		// Do not buffer if last failover is too recent.
-		if d := time.Now().Sub(sb.lastEnd); d < *minTimeBetweenFailovers {
+		now := time.Now()
+		// Checking the reparent time as well is important because we may observe
+		// the reparent (via the HealthCheck callback) *before* we see a failed
+		// request if the QPS is very low. In that case we would start buffering
+		// but not stop because we already observed the promotion of the new master.
+		lastReparent := now.Sub(time.Unix(sb.externallyReparented, 0 /* nsec */))
+		if sb.externallyReparentedAfterStart != sb.externallyReparented && lastReparent < *minTimeBetweenFailovers {
 			sb.mu.Unlock()
-			sb.logTooRecent.Infof("NOT starting buffering for shard: %s because the last failover is too recent (%v < %v)."+
+			sb.logTooRecent.Infof("NOT starting buffering for shard: %s because the last reparent is too recent (%v < %v)."+
 				" (A failover was detected by this seen error: %v.)",
-				topoproto.KeyspaceShardString(keyspace, shard), d, *minTimeBetweenFailovers, err)
+				topoproto.KeyspaceShardString(keyspace, shard), lastReparent, *minTimeBetweenFailovers, err)
+			return nil, nil
+		}
+		lastDetectedFailover := now.Sub(sb.lastEnd)
+		if !sb.lastEnd.IsZero() && lastDetectedFailover < *minTimeBetweenFailovers {
+			sb.mu.Unlock()
+			sb.logTooRecent.Infof("NOT starting buffering for shard: %s because the last detected failover is too recent (%v < %v)."+
+				" (A failover was detected by this seen error: %v.)",
+				topoproto.KeyspaceShardString(keyspace, shard), lastDetectedFailover, *minTimeBetweenFailovers, err)
 			return nil, nil
 		}
 
@@ -325,6 +343,10 @@ func (sb *shardBuffer) recordExternallyReparentedTimestamp(timestamp int64) {
 	}
 
 	sb.externallyReparented = timestamp
+	if sb.externallyReparentedAfterStart == 0 {
+		// First non-zero value after startup. Remember it.
+		sb.externallyReparentedAfterStart = timestamp
+	}
 	sb.stopBufferingLocked("failover end detected")
 }
 
