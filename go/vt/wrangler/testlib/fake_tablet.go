@@ -103,6 +103,7 @@ func StartHTTPServer() TabletOption {
 // has to be between 0 and 99. All the tablet info will be derived
 // from that. Look at the implementation if you need values.
 // Use TabletOption implementations if you need to change values at creation.
+// 'db' can be nil if the test doesn't use a database at all.
 func NewFakeTablet(t *testing.T, wr *wrangler.Wrangler, cell string, uid uint32, tabletType topodatapb.TabletType, db *fakesqldb.DB, options ...TabletOption) *FakeTablet {
 	if uid < 0 || uid > 99 {
 		t.Fatalf("uid has to be between 0 and 99: %v", uid)

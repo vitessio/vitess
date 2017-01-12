@@ -213,7 +213,8 @@ type FakeMysqlDaemon struct {
 }
 
 // NewFakeMysqlDaemon returns a FakeMysqlDaemon where mysqld appears
-// to be running
+// to be running, based on a fakesqldb.DB.
+// 'db' can be nil if the test doesn't use a database at all.
 func NewFakeMysqlDaemon(db *fakesqldb.DB) *FakeMysqlDaemon {
 	return &FakeMysqlDaemon{
 		db:      db,

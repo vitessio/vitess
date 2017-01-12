@@ -13,7 +13,6 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver/grpcqueryservice"
 	"github.com/youtube/vitess/go/vt/tabletserver/queryservice/fakes"
 	"github.com/youtube/vitess/go/vt/topo/memorytopo"
-	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
 	"github.com/youtube/vitess/go/vt/wrangler"
 	"github.com/youtube/vitess/go/vt/wrangler/testlib"
 
@@ -72,7 +71,6 @@ func (s *streamHealthTabletServer) BroadcastHealth(terTimestamp int64, stats *qu
 }
 
 func TestTabletData(t *testing.T) {
-	db := fakesqldb.Register()
 	ts := memorytopo.NewServer("cell1", "cell2")
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 
@@ -83,7 +81,7 @@ func TestTabletData(t *testing.T) {
 		t.Fatalf("CreateKeyspace failed: %v", err)
 	}
 
-	tablet1 := testlib.NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_MASTER, db, testlib.TabletKeyspaceShard(t, "ks", "-80"))
+	tablet1 := testlib.NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_MASTER, nil, testlib.TabletKeyspaceShard(t, "ks", "-80"))
 	tablet1.StartActionLoop(t, wr)
 	defer tablet1.StopActionLoop(t)
 	shsq := newStreamHealthTabletServer(t)

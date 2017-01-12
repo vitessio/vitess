@@ -15,7 +15,6 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/memorytopo"
-	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
 	"github.com/youtube/vitess/go/vt/wrangler"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
@@ -25,14 +24,13 @@ import (
 func TestPermissions(t *testing.T) {
 	// Initialize our environment
 	ctx := context.Background()
-	db := fakesqldb.Register()
 	ts := memorytopo.NewServer("cell1", "cell2")
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 	vp := NewVtctlPipe(t, ts)
 	defer vp.Close()
 
-	master := NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_MASTER, db)
-	replica := NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_REPLICA, db)
+	master := NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_MASTER, nil)
+	replica := NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_REPLICA, nil)
 
 	// mark the master inside the shard
 	_, err := ts.UpdateShardFields(ctx, master.Tablet.Keyspace, master.Tablet.Shard, func(si *topo.ShardInfo) error {
