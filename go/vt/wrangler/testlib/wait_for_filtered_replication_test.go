@@ -19,7 +19,6 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/tabletserver/grpcqueryservice"
 	"github.com/youtube/vitess/go/vt/topo/memorytopo"
-	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
 	"github.com/youtube/vitess/go/vt/wrangler"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
@@ -78,7 +77,6 @@ func TestWaitForFilteredReplication_unhealthy(t *testing.T) {
 }
 
 func waitForFilteredReplication(t *testing.T, expectedErr string, initialStats *querypb.RealtimeStats, broadcastStatsFunc func() *querypb.RealtimeStats) {
-	db := fakesqldb.Register()
 	ts := memorytopo.NewServer("cell1", "cell2")
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 	vp := NewVtctlPipe(t, ts)
@@ -93,10 +91,10 @@ func waitForFilteredReplication(t *testing.T, expectedErr string, initialStats *
 	}
 
 	// source of the filtered replication. We don't start its loop because we don't connect to it.
-	source := NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_MASTER, db,
+	source := NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_MASTER, nil,
 		TabletKeyspaceShard(t, keyspace, "0"))
 	// dest is the master of the dest shard which receives filtered replication events.
-	dest := NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_MASTER, db,
+	dest := NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_MASTER, nil,
 		TabletKeyspaceShard(t, keyspace, destShard))
 	dest.StartActionLoop(t, wr)
 	defer dest.StopActionLoop(t)

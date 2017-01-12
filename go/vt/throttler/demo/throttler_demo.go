@@ -20,7 +20,6 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver/queryservice/fakes"
 	"github.com/youtube/vitess/go/vt/throttler"
 	"github.com/youtube/vitess/go/vt/topo/memorytopo"
-	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
 	"github.com/youtube/vitess/go/vt/wrangler"
 	"github.com/youtube/vitess/go/vt/wrangler/testlib"
 
@@ -96,9 +95,8 @@ func newReplica(lagUpdateInterval, degrationInterval, degrationDuration time.Dur
 	t := &testing.T{}
 	ts := memorytopo.NewServer("cell1")
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
-	db := fakesqldb.Register()
 	fakeTablet := testlib.NewFakeTablet(t, wr, "cell1", 0,
-		topodatapb.TabletType_REPLICA, db, testlib.TabletKeyspaceShard(t, "ks", "-80"))
+		topodatapb.TabletType_REPLICA, nil, testlib.TabletKeyspaceShard(t, "ks", "-80"))
 	fakeTablet.StartActionLoop(t, wr)
 
 	target := querypb.Target{

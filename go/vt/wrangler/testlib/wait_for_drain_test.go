@@ -17,7 +17,6 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver/grpcqueryservice"
 	"github.com/youtube/vitess/go/vt/tabletserver/queryservice/fakes"
 	"github.com/youtube/vitess/go/vt/topo/memorytopo"
-	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
 	"github.com/youtube/vitess/go/vt/wrangler"
 
 	logutilpb "github.com/youtube/vitess/go/vt/proto/logutil"
@@ -59,7 +58,6 @@ func testWaitForDrain(t *testing.T, desc, cells string, drain drainDirective, ex
 	// and the test fails.
 	flag.Set("vtctl_healthcheck_timeout", "1s")
 
-	db := fakesqldb.Register()
 	ts := memorytopo.NewServer("cell1", "cell2")
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 	vp := NewVtctlPipe(t, ts)
@@ -73,9 +71,9 @@ func testWaitForDrain(t *testing.T, desc, cells string, drain drainDirective, ex
 		t.Fatalf("CreateKeyspace failed: %v", err)
 	}
 
-	t1 := NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_REPLICA, db,
+	t1 := NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_REPLICA, nil,
 		TabletKeyspaceShard(t, keyspace, shard))
-	t2 := NewFakeTablet(t, wr, "cell2", 1, topodatapb.TabletType_REPLICA, db,
+	t2 := NewFakeTablet(t, wr, "cell2", 1, topodatapb.TabletType_REPLICA, nil,
 		TabletKeyspaceShard(t, keyspace, shard))
 	for _, ft := range []*FakeTablet{t1, t2} {
 		ft.StartActionLoop(t, wr)
