@@ -186,7 +186,7 @@ func (me *MessagerEngine) schemaChanged(tables map[string]*schema.Table) {
 			continue
 		}
 		// TODO(sougou): hardcoded values.
-		mm := NewMessageManager(me.tsv, name, 30*time.Second, 10000, 30*time.Second, me.connpool)
+		mm := NewMessageManager(me.tsv, name, 1*time.Second, 10000, 1*time.Second, me.connpool)
 		me.managers[name] = mm
 		mm.Open()
 	}
