@@ -245,7 +245,8 @@ class Tablet(object):
     return conn, conn.cursor()
 
   # Query the MySQL instance directly
-  def mquery(self, dbname, query, write=False, user='vt_dba', conn_params=None):
+  def mquery(self, dbname, query, write=False, user='vt_dba', conn_params=None,
+             log_query=False):
     """Runs a query to MySQL directly, using python's SQL driver.
 
     Args:
@@ -254,6 +255,7 @@ class Tablet(object):
       write: if set, wraps the query in a transaction.
       user: the db user to use.
       conn_params: extra mysql connection parameters.
+      log_query: if true, the query will be logged.
     Returns:
       the rows.
     """
@@ -266,7 +268,8 @@ class Tablet(object):
       query = [query]
 
     for q in query:
-      # logging.debug('mysql(%s,%s): %s', self.tablet_uid, dbname, q)
+      if log_query:
+        logging.debug('mysql(%s,%s): %s', self.tablet_uid, dbname, q)
       cursor.execute(q)
 
     if write:

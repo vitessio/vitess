@@ -284,7 +284,7 @@ class TestBuffer(unittest.TestCase):
   def test_buffer_external_reparent(self):
     def external_reparent():
       # Demote master.
-      master.mquery('', mysql_flavor().demote_master_commands())
+      master.mquery('', mysql_flavor().demote_master_commands(), log_query=True)
       if master.semi_sync_enabled():
         master.set_semi_sync_enabled(master=False)
 
@@ -292,7 +292,8 @@ class TestBuffer(unittest.TestCase):
       utils.wait_for_replication_pos(master, replica)
 
       # Promote replica to new master.
-      replica.mquery('', mysql_flavor().promote_slave_commands())
+      replica.mquery('', mysql_flavor().promote_slave_commands(),
+                     log_query=True)
       if replica.semi_sync_enabled():
         replica.set_semi_sync_enabled(master=True)
       old_master = master
@@ -306,7 +307,7 @@ class TestBuffer(unittest.TestCase):
       change_master_cmds = mysql_flavor().change_master_commands(
           'localhost', new_master.mysql_port, new_pos)
       old_master.mquery('', ['RESET SLAVE'] + change_master_cmds +
-                        ['START SLAVE'])
+                        ['START SLAVE'], log_query=True)
 
       # Notify the new vttablet master about the reparent.
       utils.run_vtctl(['TabletExternallyReparented', new_master.tablet_alias])
