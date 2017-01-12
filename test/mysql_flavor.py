@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 """Define abstractions for various MySQL flavors."""
 
 import environment
@@ -147,6 +146,9 @@ class MySQL56(MysqlFlavor):
         (host, port)]
 
 
+# Map of registered MysqlFlavor classes (keyed by an identifier).
+flavor_map = {}
+
 MYSQL_FLAVOR = None
 
 
@@ -176,16 +178,42 @@ def set_mysql_flavor(flavor):
     if not flavor:
       flavor = "MariaDB"
 
-  # Set the environment variable explicitly in case we're overriding it via
-  # command-line flag.
-  os.environ["MYSQL_FLAVOR"] = flavor
-
-  if flavor == "MariaDB":
-    MYSQL_FLAVOR = MariaDB()
-  elif flavor == "MySQL56":
-    MYSQL_FLAVOR = MySQL56()
-  else:
+  v = flavor_map.get(flavor, None)
+  if not v:
     logging.error("Unknown MYSQL_FLAVOR '%s'", flavor)
     exit(1)
 
-  logging.debug("Using MYSQL_FLAVOR=%s", str(flavor))
+  cls = v["cls"]
+  env = v["env"]
+  MYSQL_FLAVOR = cls()
+  # Set the environment variable explicitly in case we're overriding it via
+  # command-line flag.
+  os.environ["MYSQL_FLAVOR"] = env
+
+  logging.debug("Using MySQL flavor: %s, setting MYSQL_FLAVOR=%s (%s)",
+                str(flavor), env, cls)
+
+
+def register_flavor(flavor, cls, env):
+  """Register the available MySQL flavors.
+
+  Note: We need the 'env' argument because our internal implementation is
+  similar to 'MariaDB' (and hence requires MYSQL_FLAVOR=MariaDB) but has its own
+  flavor class.
+
+  Args:
+    flavor: Name of the flavor (must be passed to test flag --mysql-flavor).
+    cls: Class which inherits MysqlFlavor and provides the implementation.
+    env: Value which will be used for the environment variable MYSQL_FLAVOR.
+  """
+  if flavor in flavor_map:
+    old_cls = flavor_map[flavor]["cls"]
+    old_env = flavor_map[flavor]["env"]
+    logging.error("Cannot register MySQL flavor %s because class %s (env: %s)"
+                  " is already registered for it.", flavor, old_cls, old_env)
+    exit(1)
+
+  flavor_map[flavor] = {"cls": cls, "env": env}
+
+register_flavor("MariaDB", MariaDB, "MariaDB")
+register_flavor("MySQL56", MySQL56, "Mysql56")
