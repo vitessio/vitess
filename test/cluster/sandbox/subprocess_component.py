@@ -20,14 +20,9 @@ class Subprocess(sandlet.SandletComponent):
   def start(self):
     super(Subprocess, self).start()
     try:
-      infofile = None
-      errorfile = None
-      # Generate script arguments by creating a list of key-value pairs and then
-      # flattening the list
-      script_args = (
-          [item for sublist in
-           [('--%s' % k, str(v)) for k, v in self.script_kwargs.items()]
-           for item in sublist])
+      script_args = []
+      for k, v in self.script_kwargs.items():
+        script_args += ['--%s' % k, str(v)]
       logging.info('Executing subprocess script %s.', self.script)
       infofile = sandbox_utils.create_log_file(
           self.log_dir, '%s.INFO' % self.name)

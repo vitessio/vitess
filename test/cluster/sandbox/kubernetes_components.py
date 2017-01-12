@@ -4,6 +4,7 @@
 import json
 import logging
 import os
+import re
 import subprocess
 import time
 
@@ -74,19 +75,20 @@ class KubernetesResource(sandlet.SandletComponent):
 
   def start(self):
     super(KubernetesResource, self).start()
-    sed_script = ''
+    with open(self.template_file, 'r') as template_file:
+      template = template_file.read()
     for name, value in self.template_params.items():
-      sed_script += 's,{{%s}},%s,g;' % (name, value)
-    os.system('cat %s | sed -e "%s" | kubectl create -f - --namespace %s' % (
-        self.template_file, sed_script, self.sandbox_name))
+      template = re.sub('{{%s}}' % name, value, template)
+    os.system('echo "%s" | kubectl create -f - --namespace %s' % (
+        template, self.sandbox_name))
 
   def stop(self):
-    sed_script = ''
+    with open(self.template_file, 'r') as template_file:
+      template = template_file.read()
     for name, value in self.template_params.items():
-      sed_script += 's,{{%s}},%s,g;' % (name, value)
-
-    os.system('cat %s | sed -e "%s" | kubectl delete -f - --namespace %s' % (
-        self.template_file, sed_script, self.sandbox_name))
+      template = re.sub('{{%s}}' % name, value, template)
+    os.system('echo "%s" | kubectl delete -f - --namespace %s' % (
+        template, self.sandbox_name))
 
     super(KubernetesResource, self).stop()
 

@@ -184,7 +184,7 @@ class VitessKubernetesSandbox(sandbox.Sandbox):
           cells=','.join(self.app_options.cells))
       wait_for_mysql_subprocess.dependencies = ['helm']
       initial_reparent_subprocess = subprocess_component.Subprocess(
-          'initial_reparent_subprocess.%s' % name, self.name,
+          'initial_reparent_%s' % name, self.name,
           'initial_reparent.py', self.log_dir, namespace=self.name,
           keyspace=name, shard_count=shard_count,
           master_cell=self.app_options.cells[0])
