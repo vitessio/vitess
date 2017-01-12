@@ -9,12 +9,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/youtube/vitess/go/sqltypes"
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	"github.com/youtube/vitess/go/vt/schema"
 )
 
-func TestMessagerEngineState(t *testing.T) {
+func TestMEState(t *testing.T) {
 	db := setUpTabletServerTest()
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
@@ -28,10 +29,7 @@ func TestMessagerEngineState(t *testing.T) {
 	}
 	defer tsv.StopService()
 
-	me := NewMessagerEngine(tsv, config, tsv.queryServiceStats)
-	if err := me.Open(dbconfigs); err != nil {
-		t.Fatal(err)
-	}
+	me := tsv.messager
 	if l := len(tsv.qe.schemaInfo.notifiers); l != 1 {
 		t.Errorf("len(notifiers): %d, want 1", l)
 	}
@@ -53,7 +51,7 @@ func TestMessagerEngineState(t *testing.T) {
 	}
 }
 
-func TestMessagerEngineSchemaChanged(t *testing.T) {
+func TestMESchemaChanged(t *testing.T) {
 	db := setUpTabletServerTest()
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
@@ -67,10 +65,7 @@ func TestMessagerEngineSchemaChanged(t *testing.T) {
 	}
 	defer tsv.StopService()
 
-	me := NewMessagerEngine(tsv, config, tsv.queryServiceStats)
-	if err := me.Open(dbconfigs); err != nil {
-		t.Fatal(err)
-	}
+	me := tsv.messager
 	tables := map[string]*schema.Table{
 		"t1": {
 			Type: schema.Message,
@@ -144,10 +139,7 @@ func TestSubscribe(t *testing.T) {
 	}
 	defer tsv.StopService()
 
-	me := NewMessagerEngine(tsv, config, tsv.queryServiceStats)
-	if err := me.Open(dbconfigs); err != nil {
-		t.Fatal(err)
-	}
+	me := tsv.messager
 	tables := map[string]*schema.Table{
 		"t1": {
 			Type: schema.Message,
@@ -162,21 +154,15 @@ func TestSubscribe(t *testing.T) {
 	// Each receiver is subscribed to different managers.
 	me.Subscribe("t1", r1)
 	me.Subscribe("t2", r2)
-	row1 := &MessageRow{
-		id: "1",
-	}
-	row2 := &MessageRow{
-		id: "2",
-	}
-	me.managers["t1"].Add(row1)
-	me.managers["t2"].Add(row2)
+	me.managers["t1"].Add(&MessageRow{id: "1"})
+	me.managers["t2"].Add(&MessageRow{id: "2"})
 	<-r1.ch
 	<-r2.ch
 	// One receiver subscribed to multiple managers.
 	me.Unsubscribe(r1)
 	me.Subscribe("t1", r2)
-	me.managers["t2"].Add(row1)
-	me.managers["t2"].Add(row2)
+	me.managers["t2"].Add(&MessageRow{id: "3"})
+	me.managers["t2"].Add(&MessageRow{id: "4"})
 	<-r2.ch
 	<-r2.ch
 
@@ -202,10 +188,7 @@ func TestLockDB(t *testing.T) {
 	}
 	defer tsv.StopService()
 
-	me := NewMessagerEngine(tsv, config, tsv.queryServiceStats)
-	if err := me.Open(dbconfigs); err != nil {
-		t.Fatal(err)
-	}
+	me := tsv.messager
 	tables := map[string]*schema.Table{
 		"t1": {
 			Type: schema.Message,
@@ -261,6 +244,45 @@ func TestLockDB(t *testing.T) {
 	}
 }
 
+func TestMESendDiscard(t *testing.T) {
+	db := setUpTabletServerTest()
+	testUtils := newTestUtils()
+	config := testUtils.newQueryServiceConfig()
+	config.TransactionCap = 1
+	tsv := NewTabletServer(config)
+	dbconfigs := testUtils.newDBConfigs(db)
+	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+	err := tsv.StartService(target, dbconfigs, testUtils.newMysqld(&dbconfigs))
+	if err != nil {
+		t.Fatalf("StartService failed: %v", err)
+	}
+	defer tsv.StopService()
+
+	me := tsv.messager
+	r1 := newTestReceiver(0)
+	me.Subscribe("msg", r1)
+
+	db.AddQuery(
+		"select time_scheduled, id from msg where id in ('1') and time_acked is null limit 10001 for update",
+		&sqltypes.Result{
+			RowsAffected: 1,
+			Rows: [][]sqltypes.Value{{
+				sqltypes.MakeString([]byte("1")),
+				sqltypes.MakeString([]byte("1")),
+			}},
+		},
+	)
+	db.AddQueryPattern("update msg set time_next = .*", &sqltypes.Result{RowsAffected: 1})
+	me.managers["msg"].Add(&MessageRow{id: "1"})
+	<-r1.ch
+	// Second add guarantees first add was fully sent and cleared.
+	me.managers["msg"].Add(&MessageRow{id: "2"})
+	<-r1.ch
+	if mr, ok := me.managers["msg"].cache.messages["1"]; ok {
+		t.Errorf("Message 1 is still present in cache: %v", mr)
+	}
+}
+
 func TestMEGenerate(t *testing.T) {
 	db := setUpTabletServerTest()
 	testUtils := newTestUtils()
@@ -275,10 +297,7 @@ func TestMEGenerate(t *testing.T) {
 	}
 	defer tsv.StopService()
 
-	me := NewMessagerEngine(tsv, config, tsv.queryServiceStats)
-	if err := me.Open(dbconfigs); err != nil {
-		t.Fatal(err)
-	}
+	me := tsv.messager
 	me.schemaChanged(map[string]*schema.Table{
 		"t1": {
 			Type: schema.Message,

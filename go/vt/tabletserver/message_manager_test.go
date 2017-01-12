@@ -163,23 +163,21 @@ func TestMessageManagerSend(t *testing.T) {
 	if got := <-r1.ch; got != row1 {
 		t.Errorf("Received: %v, want %v", got, row1)
 	}
+	time.Sleep(10 * time.Microsecond)
 	r2 := newTestReceiver(1)
 	mm.Subscribe(r2)
 	// Subscribing twice is a no-op.
 	mm.Subscribe(r1)
 	// Unsubscribe of non-registered receiver should be no-op.
 	mm.Unsubscribe(newTestReceiver(1))
-	row2 := &MessageRow{
-		id: "2",
-	}
-	mm.Add(row1)
-	mm.Add(row2)
+	mm.Add(&MessageRow{id: "2"})
+	mm.Add(&MessageRow{id: "3"})
 	// Send should be round-robin.
 	<-r1.ch
 	<-r2.ch
 	mm.Unsubscribe(r1)
-	mm.Add(row1)
-	mm.Add(row2)
+	mm.Add(&MessageRow{id: "4"})
+	mm.Add(&MessageRow{id: "5"})
 	// Only r2 should be receiving.
 	<-r2.ch
 	<-r2.ch

@@ -56,6 +56,6 @@ func TestMessage(t *testing.T) {
 		Message: sqltypes.MakeTrusted(sqltypes.VarChar, []byte("hello world")),
 	}
 	if !reflect.DeepEqual(got, want) {
-		t.Errorf("messag received: %v, want %v", got, want)
+		t.Errorf("message received: %v, want %v", got, want)
 	}
 }

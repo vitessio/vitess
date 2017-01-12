@@ -194,8 +194,8 @@ func (mm *MessageManager) postpone(mr *MessageRow) {
 	newTime := time.Now().Add(mm.ackWaitTime << uint64(mr.Epoch)).UnixNano()
 	_, err := mm.tsv.RescheduleMessages(ctx, &mm.tsv.target, mm.name, []string{mr.id}, newTime)
 	if err != nil {
-		// TODO(sougou): incremente internal error.
-		log.Errorf("Unable to postpone message: %v", mr)
+		// TODO(sougou): increment internal error.
+		log.Errorf("Unable to postpone message %v: %v", mr, err)
 	}
 }
 
