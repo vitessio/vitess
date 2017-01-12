@@ -247,6 +247,7 @@ mkdir -p $VTTOP/.git/hooks
 ln -sf $VTTOP/misc/git/pre-commit $VTTOP/.git/hooks/pre-commit
 ln -sf $VTTOP/misc/git/prepare-commit-msg.bugnumber $VTTOP/.git/hooks/prepare-commit-msg
 ln -sf $VTTOP/misc/git/commit-msg.bugnumber $VTTOP/.git/hooks/commit-msg
+(cd $VTTOP && git config core.hooksPath $VTTOP/.git/hooks)
 
 # Download chromedriver
 echo "Installing selenium and chromedriver"
