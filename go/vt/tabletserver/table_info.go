@@ -14,7 +14,6 @@ import (
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	"github.com/youtube/vitess/go/vt/schema"
 	"github.com/youtube/vitess/go/vt/sqlparser"
-	"golang.org/x/net/context"
 )
 
 // TableInfo contains the tabletserver related info for a table.
@@ -66,7 +65,7 @@ func loadTableInfo(conn *DBConn, tableName string) (ti *TableInfo, err error) {
 }
 
 func (ti *TableInfo) fetchColumns(conn *DBConn, sqlTableName string) error {
-	qr, err := conn.Exec(context.Background(), fmt.Sprintf("select * from %s where 1 != 1", sqlTableName), 0, true)
+	qr, err := conn.Exec(localContext(), fmt.Sprintf("select * from %s where 1 != 1", sqlTableName), 0, true)
 	if err != nil {
 		return err
 	}
@@ -74,7 +73,7 @@ func (ti *TableInfo) fetchColumns(conn *DBConn, sqlTableName string) error {
 	for _, field := range qr.Fields {
 		fieldTypes[field.Name] = field.Type
 	}
-	columns, err := conn.Exec(context.Background(), fmt.Sprintf("describe %s", sqlTableName), 10000, false)
+	columns, err := conn.Exec(localContext(), fmt.Sprintf("describe %s", sqlTableName), 10000, false)
 	if err != nil {
 		return err
 	}
@@ -112,7 +111,7 @@ func (ti *TableInfo) SetPK(colnames []string) error {
 }
 
 func (ti *TableInfo) fetchIndexes(conn *DBConn, sqlTableName string) error {
-	indexes, err := conn.Exec(context.Background(), fmt.Sprintf("show index from %s", sqlTableName), 10000, false)
+	indexes, err := conn.Exec(localContext(), fmt.Sprintf("show index from %s", sqlTableName), 10000, false)
 	if err != nil {
 		return err
 	}

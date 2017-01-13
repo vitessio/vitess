@@ -169,7 +169,7 @@ func (si *SchemaInfo) Open(dbaParams *sqldb.ConnParams, strictMode bool) {
 	if si.isOpen {
 		return
 	}
-	ctx := context.Background()
+	ctx := localContext()
 	si.connPool.Open(dbaParams, dbaParams)
 	// Get time first because it needs a connection from the pool.
 	curTime := si.mysqlTime(ctx)

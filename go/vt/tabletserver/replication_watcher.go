@@ -66,7 +66,7 @@ func (rpw *ReplicationWatcher) Open(dbconfigs dbconfigs.DBConfigs, mysqld mysqlc
 	if rpw.isOpen || !rpw.watchReplication {
 		return nil
 	}
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(localContext())
 	rpw.cancel = cancel
 	rpw.wg.Add(1)
 	go rpw.Process(ctx, dbconfigs, mysqld)

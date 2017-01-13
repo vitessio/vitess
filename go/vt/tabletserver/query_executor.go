@@ -220,8 +220,8 @@ func (qre *QueryExecutor) execAsTransaction(f func(conn *TxConnection) (*sqltype
 
 // checkPermissions
 func (qre *QueryExecutor) checkPermissions() error {
-	// Skip permissions check if we have a background context.
-	if qre.ctx == context.Background() {
+	// Skip permissions check if the context is local.
+	if isLocalContext(qre.ctx) {
 		return nil
 	}
 

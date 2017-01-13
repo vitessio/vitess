@@ -15,8 +15,6 @@ import (
 	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
-	"github.com/golang/protobuf/proto"
-
 	"github.com/youtube/vitess/go/acl"
 	"github.com/youtube/vitess/go/history"
 	"github.com/youtube/vitess/go/mysql"
@@ -518,12 +516,9 @@ func (tsv *TabletServer) setTimeBomb() chan struct{} {
 // connect to the database and serving traffic) or an error explaining
 // the unhealthiness otherwise.
 func (tsv *TabletServer) IsHealthy() error {
-	tsv.mu.Lock()
-	target := proto.Clone(&tsv.target).(*querypb.Target)
-	tsv.mu.Unlock()
 	_, err := tsv.Execute(
-		context.Background(),
-		target,
+		localContext(),
+		nil,
 		"select 1 from dual",
 		nil,
 		0,
@@ -879,7 +874,7 @@ func (tsv *TabletServer) ExecuteBatch(ctx context.Context, target *querypb.Targe
 	}
 
 	allowOnShutdown := (transactionID != 0)
-	if err = tsv.startRequest(target, false, allowOnShutdown); err != nil {
+	if err = tsv.startRequest(ctx, target, false, allowOnShutdown); err != nil {
 		return nil, err
 	}
 	defer tsv.endRequest(false)
@@ -966,7 +961,7 @@ func (tsv *TabletServer) RescheduleMessages(ctx context.Context, target *querypb
 }
 
 func (tsv *TabletServer) execDML(ctx context.Context, target *querypb.Target, queryGenerator func() (string, map[string]interface{}, error)) (count int64, err error) {
-	if err = tsv.startRequest(target, false, false); err != nil {
+	if err = tsv.startRequest(ctx, target, false, false); err != nil {
 		return 0, err
 	}
 	defer tsv.endRequest(false)
@@ -1080,7 +1075,7 @@ func (tsv *TabletServer) execRequest(
 	logStats.OriginalSQL = sql
 	logStats.BindVariables = bindVariables
 	defer tsv.handlePanicAndSendLogStats(sql, bindVariables, &err, logStats)
-	if err = tsv.startRequest(target, isTx, allowOnShutdown); err != nil {
+	if err = tsv.startRequest(ctx, target, isTx, allowOnShutdown); err != nil {
 		return err
 	}
 	ctx, cancel := withTimeout(ctx, timeout)
@@ -1391,7 +1386,7 @@ func (tsv *TabletServer) UpdateStream(ctx context.Context, target *querypb.Targe
 	}
 
 	// Validate proper target is used.
-	if err = tsv.startRequest(target, false, false); err != nil {
+	if err = tsv.startRequest(ctx, target, false, false); err != nil {
 		return err
 	}
 	defer tsv.endRequest(false)
@@ -1456,7 +1451,7 @@ func (tsv *TabletServer) BroadcastHealth(terTimestamp int64, stats *querypb.Real
 // isTx must be set to true, which increments an additional waitgroup.
 // During state transitions, this waitgroup will be checked to make
 // sure that no such statements are in-flight while we resolve the tx pool.
-func (tsv *TabletServer) startRequest(target *querypb.Target, isTx, allowOnShutdown bool) (err error) {
+func (tsv *TabletServer) startRequest(ctx context.Context, target *querypb.Target, isTx, allowOnShutdown bool) (err error) {
 	tsv.mu.Lock()
 	defer tsv.mu.Unlock()
 	if tsv.state == StateServing {
@@ -1487,10 +1482,9 @@ verifyTarget:
 			}
 			return NewTabletError(vtrpcpb.ErrorCode_QUERY_NOT_SERVED, "Invalid tablet type: %v, want: %v or %v", target.TabletType, tsv.target.TabletType, tsv.alsoAllow)
 		}
-		goto ok
+	} else if !isLocalContext(ctx) {
+		return NewTabletError(vtrpcpb.ErrorCode_QUERY_NOT_SERVED, "No target")
 	}
-
-	return NewTabletError(vtrpcpb.ErrorCode_QUERY_NOT_SERVED, "No target")
 
 ok:
 	tsv.requests.Add(1)
@@ -1548,7 +1542,7 @@ func (tsv *TabletServer) registerSchemazHandler() {
 
 func (tsv *TabletServer) registerTwopczHandler() {
 	http.HandleFunc("/twopcz", func(w http.ResponseWriter, r *http.Request) {
-		ctx := context.Background()
+		ctx := localContext()
 		txe := &TxExecutor{
 			ctx:      ctx,
 			logStats: NewLogStats(ctx, "twopcz"),
@@ -1657,12 +1651,10 @@ func Rand() int64 {
 }
 
 // withTimeout returns a context based on the specified timeout.
-// If the context is the background context or if timeout is 0, the
+// If the context is local or if timeout is 0, the
 // original context is returned as is.
-// TODO(sougou): cleanup code that treats background context as
-// special case.
 func withTimeout(ctx context.Context, timeout time.Duration) (context.Context, context.CancelFunc) {
-	if timeout == 0 || ctx == context.Background() {
+	if timeout == 0 || isLocalContext(ctx) {
 		return ctx, func() {}
 	}
 	return context.WithTimeout(ctx, timeout)
