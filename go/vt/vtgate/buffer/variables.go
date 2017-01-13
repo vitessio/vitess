@@ -12,4 +12,8 @@ var (
 	// failoverDurationMs tracks for how long vtgate buffered requests during the
 	// last failover.
 	failoverDurationMs = stats.NewMultiCounters("BufferFailoverDurationMs", []string{"Keyspace", "ShardName"})
+
+	// requestsWindowExceeded tracks for how many requests buffering stopped
+	// early because the configured window was exceeded.
+	requestsWindowExceeded = stats.NewMultiCounters("BufferRequestsWindowExceeded", []string{"Keyspace", "ShardName"})
 )
