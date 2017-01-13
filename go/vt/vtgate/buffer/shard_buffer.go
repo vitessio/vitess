@@ -172,7 +172,7 @@ func (sb *shardBuffer) startBufferingLocked(err error) {
 // that "sb.mu" must be locked before calling the method.
 func (sb *shardBuffer) logErrorIfStateNotLocked(state bufferState) {
 	if sb.state != state {
-		log.Errorf("BUG: Buffer state is not '%v' but should be. Full state of buffer object: %#v Stacktrace:\n%s", state, sb, debug.Stack())
+		log.Errorf("BUG: Buffer state should be '%v' and not '%v'. Full state of buffer object: %#v Stacktrace:\n%s", state, sb.state, sb, debug.Stack())
 	}
 }
 
