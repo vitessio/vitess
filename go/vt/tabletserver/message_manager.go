@@ -241,10 +241,10 @@ func (mm *MessageManager) send(receiver *receiverWithStatus, mr *MessageRow) {
 }
 
 func (mm *MessageManager) postpone(mr *MessageRow) {
-	ctx, cancel := context.WithTimeout(context.Background(), mm.ackWaitTime)
+	ctx, cancel := context.WithTimeout(localContext(), mm.ackWaitTime)
 	defer cancel()
 	newTime := time.Now().Add(mm.ackWaitTime << uint64(mr.Epoch)).UnixNano()
-	_, err := mm.tsv.RescheduleMessages(ctx, &mm.tsv.target, mm.name, []string{mr.id}, newTime)
+	_, err := mm.tsv.RescheduleMessages(ctx, nil, mm.name, []string{mr.id}, newTime)
 	if err != nil {
 		// TODO(sougou): increment internal error.
 		log.Errorf("Unable to postpone message %v: %v", mr, err)
@@ -252,7 +252,7 @@ func (mm *MessageManager) postpone(mr *MessageRow) {
 }
 
 func (mm *MessageManager) runPoller() {
-	ctx, cancel := context.WithTimeout(context.Background(), mm.ticks.Interval())
+	ctx, cancel := context.WithTimeout(localContext(), mm.ticks.Interval())
 	defer cancel()
 	conn, err := mm.connpool.Get(ctx)
 	if err != nil {

@@ -184,3 +184,8 @@ func (client *QueryClient) ExecuteBatch(queries []querytypes.BoundQuery, asTrans
 		&querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL},
 	)
 }
+
+// AckMessages acks messages
+func (client *QueryClient) AckMessages(name string, ids []string) (int64, error) {
+	return client.server.AckMessages(client.ctx, &client.target, name, ids)
+}

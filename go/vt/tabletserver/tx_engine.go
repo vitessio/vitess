@@ -154,7 +154,7 @@ func (te *TxEngine) Close(immediate bool) {
 		case <-tmr.C:
 			// The grace period has passed. Rollback, but don't touch the 2pc transactions.
 			log.Info("Grace period exceeded: rolling back non-2pc transactions now.")
-			te.txPool.RollbackNonBusy(context.Background())
+			te.txPool.RollbackNonBusy(localContext())
 		case <-poolEmpty:
 			// The pool cleared before the timer kicked in. Just return.
 			log.Info("Transactions completed before grace period: shutting down.")
@@ -176,7 +176,7 @@ func (te *TxEngine) Close(immediate bool) {
 // into the reserved list, and adjusts the txPool LastID
 // to ensure there are no future collisions.
 func (te *TxEngine) prepareFromRedo() error {
-	ctx := context.Background()
+	ctx := localContext()
 	var allErr concurrency.AllErrorRecorder
 	prepared, failed, err := te.twoPC.ReadAllRedo(ctx)
 	if err != nil {
@@ -235,7 +235,7 @@ outer:
 // This is used for transitioning from a master to a non-master
 // serving type.
 func (te *TxEngine) rollbackTransactions() {
-	ctx := context.Background()
+	ctx := localContext()
 	// The order of rollbacks is currently not material because
 	// we don't allow new statements or commits during
 	// this function. In case of any such change, this will
@@ -250,7 +250,7 @@ func (te *TxEngine) rollbackTransactions() {
 // transactions and calls the notifier on them.
 func (te *TxEngine) startWatchdog() {
 	te.ticks.Start(func() {
-		ctx, cancel := context.WithTimeout(context.Background(), te.abandonAge/4)
+		ctx, cancel := context.WithTimeout(localContext(), te.abandonAge/4)
 		defer cancel()
 
 		// Raise alerts on prepares that have been unresolved for too long.
