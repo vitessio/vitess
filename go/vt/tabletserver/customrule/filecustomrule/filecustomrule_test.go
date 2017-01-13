@@ -10,8 +10,8 @@ import (
 	"path"
 	"testing"
 
-	"github.com/youtube/vitess/go/vt/tabletserver"
-	"github.com/youtube/vitess/go/vt/tabletserver/tabletservermock"
+	"github.com/gitql/vitess/go/vt/tabletserver"
+	"github.com/gitql/vitess/go/vt/tabletserver/tabletservermock"
 )
 
 var customRule1 = `[

@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
+	vtrpcpb "github.com/gitql/vitess/go/vt/proto/vtrpc"
 )
 
 // ConcatenateErrors aggregates an array of errors into a single error by string concatenation.

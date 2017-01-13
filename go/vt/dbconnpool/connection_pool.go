@@ -14,9 +14,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/youtube/vitess/go/pools"
-	"github.com/youtube/vitess/go/sqltypes"
-	"github.com/youtube/vitess/go/stats"
+	"github.com/gitql/vitess/go/pools"
+	"github.com/gitql/vitess/go/sqltypes"
+	"github.com/gitql/vitess/go/stats"
 	"golang.org/x/net/context"
 )
 

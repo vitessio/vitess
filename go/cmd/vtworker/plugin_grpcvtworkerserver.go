@@ -5,8 +5,8 @@
 package main
 
 import (
-	"github.com/youtube/vitess/go/vt/servenv"
-	"github.com/youtube/vitess/go/vt/worker/grpcvtworkerserver"
+	"github.com/gitql/vitess/go/vt/servenv"
+	"github.com/gitql/vitess/go/vt/worker/grpcvtworkerserver"
 )
 
 func init() {

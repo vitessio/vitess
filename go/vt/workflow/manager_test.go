@@ -8,9 +8,9 @@ import (
 
 	"golang.org/x/net/context"
 
-	"github.com/youtube/vitess/go/vt/topo/memorytopo"
+	"github.com/gitql/vitess/go/vt/topo/memorytopo"
 
-	workflowpb "github.com/youtube/vitess/go/vt/proto/workflow"
+	workflowpb "github.com/gitql/vitess/go/vt/proto/workflow"
 )
 
 func startManager(t *testing.T, m *Manager) (*sync.WaitGroup, context.CancelFunc) {

@@ -12,7 +12,7 @@ import (
 	log "github.com/golang/glog"
 	zookeeper "github.com/samuel/go-zookeeper/zk"
 
-	"github.com/youtube/vitess/go/stats"
+	"github.com/gitql/vitess/go/stats"
 )
 
 var (

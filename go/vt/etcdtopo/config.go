@@ -8,10 +8,10 @@ import (
 	"flag"
 	"path"
 
-	"github.com/youtube/vitess/go/flagutil"
+	"github.com/gitql/vitess/go/flagutil"
 
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
-	"github.com/youtube/vitess/go/vt/topo/topoproto"
+	topodatapb "github.com/gitql/vitess/go/vt/proto/topodata"
+	"github.com/gitql/vitess/go/vt/topo/topoproto"
 )
 
 const (

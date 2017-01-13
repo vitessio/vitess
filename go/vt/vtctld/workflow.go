@@ -7,13 +7,13 @@ import (
 	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
-	"github.com/youtube/vitess/go/flagutil"
-	"github.com/youtube/vitess/go/vt/schemamanager/schemaswap"
-	"github.com/youtube/vitess/go/vt/servenv"
-	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/vtctl"
-	"github.com/youtube/vitess/go/vt/workflow"
-	"github.com/youtube/vitess/go/vt/workflow/topovalidator"
+	"github.com/gitql/vitess/go/flagutil"
+	"github.com/gitql/vitess/go/vt/schemamanager/schemaswap"
+	"github.com/gitql/vitess/go/vt/servenv"
+	"github.com/gitql/vitess/go/vt/topo"
+	"github.com/gitql/vitess/go/vt/vtctl"
+	"github.com/gitql/vitess/go/vt/workflow"
+	"github.com/gitql/vitess/go/vt/workflow/topovalidator"
 )
 
 var (

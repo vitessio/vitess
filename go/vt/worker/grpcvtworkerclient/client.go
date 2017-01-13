@@ -12,15 +12,15 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 
-	"github.com/youtube/vitess/go/vt/logutil"
-	"github.com/youtube/vitess/go/vt/servenv/grpcutils"
-	"github.com/youtube/vitess/go/vt/vterrors"
-	"github.com/youtube/vitess/go/vt/worker/vtworkerclient"
+	"github.com/gitql/vitess/go/vt/logutil"
+	"github.com/gitql/vitess/go/vt/servenv/grpcutils"
+	"github.com/gitql/vitess/go/vt/vterrors"
+	"github.com/gitql/vitess/go/vt/worker/vtworkerclient"
 
-	logutilpb "github.com/youtube/vitess/go/vt/proto/logutil"
-	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
-	vtworkerdatapb "github.com/youtube/vitess/go/vt/proto/vtworkerdata"
-	vtworkerservicepb "github.com/youtube/vitess/go/vt/proto/vtworkerservice"
+	logutilpb "github.com/gitql/vitess/go/vt/proto/logutil"
+	vtrpcpb "github.com/gitql/vitess/go/vt/proto/vtrpc"
+	vtworkerdatapb "github.com/gitql/vitess/go/vt/proto/vtworkerdata"
+	vtworkerservicepb "github.com/gitql/vitess/go/vt/proto/vtworkerservice"
 )
 
 var (

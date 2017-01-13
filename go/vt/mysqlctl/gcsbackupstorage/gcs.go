@@ -20,8 +20,8 @@ import (
 	"google.golang.org/api/iterator"
 	"google.golang.org/api/option"
 
-	"github.com/youtube/vitess/go/trace"
-	"github.com/youtube/vitess/go/vt/mysqlctl/backupstorage"
+	"github.com/gitql/vitess/go/trace"
+	"github.com/gitql/vitess/go/vt/mysqlctl/backupstorage"
 )
 
 var (

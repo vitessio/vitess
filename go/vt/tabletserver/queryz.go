@@ -12,9 +12,9 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/acl"
-	"github.com/youtube/vitess/go/vt/logz"
-	"github.com/youtube/vitess/go/vt/tabletserver/planbuilder"
+	"github.com/gitql/vitess/go/acl"
+	"github.com/gitql/vitess/go/vt/logz"
+	"github.com/gitql/vitess/go/vt/tabletserver/planbuilder"
 )
 
 var (

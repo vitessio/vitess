@@ -3,7 +3,7 @@ package zk2topo
 import (
 	"fmt"
 
-	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/gitql/vitess/go/vt/topo"
 )
 
 // ZKVersion is zookeeper's idea of a version.

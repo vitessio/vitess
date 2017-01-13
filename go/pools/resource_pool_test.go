@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/youtube/vitess/go/sync2"
+	"github.com/gitql/vitess/go/sync2"
 	"golang.org/x/net/context"
 )
 

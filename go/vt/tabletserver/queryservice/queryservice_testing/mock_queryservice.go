@@ -5,9 +5,9 @@ package queryservice_testing
 
 import (
 	gomock "github.com/golang/mock/gomock"
-	sqltypes "github.com/youtube/vitess/go/sqltypes"
-	query "github.com/youtube/vitess/go/vt/proto/query"
-	querytypes "github.com/youtube/vitess/go/vt/tabletserver/querytypes"
+	sqltypes "github.com/gitql/vitess/go/sqltypes"
+	query "github.com/gitql/vitess/go/vt/proto/query"
+	querytypes "github.com/gitql/vitess/go/vt/tabletserver/querytypes"
 	context "golang.org/x/net/context"
 )
 

@@ -13,12 +13,12 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/proto"
-	"github.com/youtube/vitess/go/vt/status"
-	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/topo/test/faketopo"
+	"github.com/gitql/vitess/go/vt/status"
+	"github.com/gitql/vitess/go/vt/topo"
+	"github.com/gitql/vitess/go/vt/topo/test/faketopo"
 	"golang.org/x/net/context"
 
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/gitql/vitess/go/vt/proto/topodata"
 )
 
 // fakeTopo is used in testing ResilientSrvTopoServer logic.

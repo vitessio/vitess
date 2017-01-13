@@ -16,8 +16,8 @@ import (
 	"github.com/samuel/go-zookeeper/zk"
 	"golang.org/x/net/context"
 
-	"github.com/youtube/vitess/go/netutil"
-	"github.com/youtube/vitess/go/sync2"
+	"github.com/gitql/vitess/go/netutil"
+	"github.com/gitql/vitess/go/sync2"
 )
 
 const (

@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/youtube/vitess/go/vt/vtgate/vtgateconn"
+	"github.com/gitql/vitess/go/vt/vtgate/vtgateconn"
 	"golang.org/x/net/context"
 )
 

@@ -3,7 +3,7 @@ package etcdtopo
 import (
 	"path"
 
-	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/gitql/vitess/go/vt/topo"
 
 	"golang.org/x/net/context"
 )

@@ -13,7 +13,7 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/youtube/vitess/go/vt/servenv"
+	"github.com/gitql/vitess/go/vt/servenv"
 )
 
 var (

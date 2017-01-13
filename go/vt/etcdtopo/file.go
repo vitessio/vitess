@@ -7,7 +7,7 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/coreos/go-etcd/etcd"
-	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/gitql/vitess/go/vt/topo"
 )
 
 // Create is part of the topo.Backend interface.

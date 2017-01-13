@@ -10,10 +10,10 @@ package main
 import (
 	"flag"
 
-	"github.com/youtube/vitess/go/cmd/vtgateclienttest/services"
-	"github.com/youtube/vitess/go/exit"
-	"github.com/youtube/vitess/go/vt/servenv"
-	"github.com/youtube/vitess/go/vt/vtgate"
+	"github.com/gitql/vitess/go/cmd/vtgateclienttest/services"
+	"github.com/gitql/vitess/go/exit"
+	"github.com/gitql/vitess/go/vt/servenv"
+	"github.com/gitql/vitess/go/vt/vtgate"
 )
 
 func init() {

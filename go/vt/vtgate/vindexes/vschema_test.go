@@ -10,8 +10,8 @@ import (
 	"strings"
 	"testing"
 
-	vschemapb "github.com/youtube/vitess/go/vt/proto/vschema"
-	"github.com/youtube/vitess/go/vt/sqlparser"
+	vschemapb "github.com/gitql/vitess/go/vt/proto/vschema"
+	"github.com/gitql/vitess/go/vt/sqlparser"
 )
 
 // stFU satisfies Functional, Unique.

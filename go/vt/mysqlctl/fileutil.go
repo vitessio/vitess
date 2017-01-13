@@ -11,7 +11,7 @@ import (
 	//	"hash/crc64"
 	"os"
 
-	"github.com/youtube/vitess/go/cgzip"
+	"github.com/gitql/vitess/go/cgzip"
 )
 
 // Use this to simulate failures in tests

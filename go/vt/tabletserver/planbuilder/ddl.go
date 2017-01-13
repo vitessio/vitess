@@ -4,7 +4,7 @@
 
 package planbuilder
 
-import "github.com/youtube/vitess/go/vt/sqlparser"
+import "github.com/gitql/vitess/go/vt/sqlparser"
 
 // DDLPlan provides a plan for DDLs.
 type DDLPlan struct {

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"log/syslog"
 
-	"github.com/youtube/vitess/go/event/syslogger"
+	"github.com/gitql/vitess/go/event/syslogger"
 )
 
 // Syslog writes the event to syslog.

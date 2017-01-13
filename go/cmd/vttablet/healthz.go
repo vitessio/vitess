@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/youtube/vitess/go/vt/servenv"
+	"github.com/gitql/vitess/go/vt/servenv"
 )
 
 // This file registers a /healthz URL that reports the health of the agent.

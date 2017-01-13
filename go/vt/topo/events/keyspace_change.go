@@ -1,7 +1,7 @@
 package events
 
 import (
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/gitql/vitess/go/vt/proto/topodata"
 )
 
 // KeyspaceChange is an event that describes changes to a keyspace.

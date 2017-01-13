@@ -27,14 +27,14 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/mysql"
-	"github.com/youtube/vitess/go/sqldb"
-	"github.com/youtube/vitess/go/stats"
-	"github.com/youtube/vitess/go/vt/dbconfigs"
-	"github.com/youtube/vitess/go/vt/dbconnpool"
-	vtenv "github.com/youtube/vitess/go/vt/env"
-	"github.com/youtube/vitess/go/vt/hook"
-	"github.com/youtube/vitess/go/vt/mysqlctl/mysqlctlclient"
+	"github.com/gitql/vitess/go/mysql"
+	"github.com/gitql/vitess/go/sqldb"
+	"github.com/gitql/vitess/go/stats"
+	"github.com/gitql/vitess/go/vt/dbconfigs"
+	"github.com/gitql/vitess/go/vt/dbconnpool"
+	vtenv "github.com/gitql/vitess/go/vt/env"
+	"github.com/gitql/vitess/go/vt/hook"
+	"github.com/gitql/vitess/go/vt/mysqlctl/mysqlctlclient"
 	"golang.org/x/net/context"
 )
 

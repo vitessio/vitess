@@ -15,7 +15,7 @@ package throttlerservice
 import proto "github.com/golang/protobuf/proto"
 import fmt "fmt"
 import math "math"
-import throttlerdata "github.com/youtube/vitess/go/vt/proto/throttlerdata"
+import throttlerdata "github.com/gitql/vitess/go/vt/proto/throttlerdata"
 
 import (
 	context "golang.org/x/net/context"

@@ -13,9 +13,9 @@ import (
 	"testing"
 	"time"
 
-	tableaclpb "github.com/youtube/vitess/go/vt/proto/tableacl"
-	"github.com/youtube/vitess/go/vt/tableacl/acl"
-	"github.com/youtube/vitess/go/vt/tableacl/simpleacl"
+	tableaclpb "github.com/gitql/vitess/go/vt/proto/tableacl"
+	"github.com/gitql/vitess/go/vt/tableacl/acl"
+	"github.com/gitql/vitess/go/vt/tableacl/simpleacl"
 )
 
 type fakeAclFactory struct{}

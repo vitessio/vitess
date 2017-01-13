@@ -7,5 +7,5 @@ package main
 // Imports and register the gRPC binlog player
 
 import (
-	_ "github.com/youtube/vitess/go/vt/binlog/grpcbinlogplayer"
+	_ "github.com/gitql/vitess/go/vt/binlog/grpcbinlogplayer"
 )

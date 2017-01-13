@@ -16,7 +16,7 @@ import (
 	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
-	"github.com/youtube/vitess/go/trace"
+	"github.com/gitql/vitess/go/trace"
 )
 
 // This file contains utility methods and definitions to lock

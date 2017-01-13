@@ -10,8 +10,8 @@ import (
 	"html/template"
 	"strings"
 
-	"github.com/youtube/vitess/go/vt/key"
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	"github.com/gitql/vitess/go/vt/key"
+	topodatapb "github.com/gitql/vitess/go/vt/proto/topodata"
 )
 
 // KeyspaceShardString returns a "keyspace/shard" string taking

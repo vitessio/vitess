@@ -15,7 +15,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/youtube/vitess/go/vt/vtgate/vtgateconn"
+	"github.com/gitql/vitess/go/vt/vtgate/vtgateconn"
 )
 
 var (

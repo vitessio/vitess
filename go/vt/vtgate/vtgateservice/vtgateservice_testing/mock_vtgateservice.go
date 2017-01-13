@@ -5,10 +5,10 @@ package vtgateservice_testing
 
 import (
 	gomock "github.com/golang/mock/gomock"
-	sqltypes "github.com/youtube/vitess/go/sqltypes"
-	query "github.com/youtube/vitess/go/vt/proto/query"
-	topodata "github.com/youtube/vitess/go/vt/proto/topodata"
-	vtgate "github.com/youtube/vitess/go/vt/proto/vtgate"
+	sqltypes "github.com/gitql/vitess/go/sqltypes"
+	query "github.com/gitql/vitess/go/vt/proto/query"
+	topodata "github.com/gitql/vitess/go/vt/proto/topodata"
+	vtgate "github.com/gitql/vitess/go/vt/proto/vtgate"
 	context "golang.org/x/net/context"
 )
 

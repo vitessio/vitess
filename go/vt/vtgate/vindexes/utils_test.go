@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/gitql/vitess/go/sqltypes"
 
-	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	querypb "github.com/gitql/vitess/go/vt/proto/query"
 )
 
 func TestGetNumber(t *testing.T) {

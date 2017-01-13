@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/youtube/vitess/go/vt/vterrors"
+	"github.com/gitql/vitess/go/vt/vterrors"
 	"google.golang.org/grpc"
 
-	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
+	vtrpcpb "github.com/gitql/vitess/go/vt/proto/vtrpc"
 )
 
 // TabletErrorFromGRPC returns a ServerError or a

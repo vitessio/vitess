@@ -3,12 +3,12 @@ package main
 import (
 	"html/template"
 
-	"github.com/youtube/vitess/go/vt/health"
-	"github.com/youtube/vitess/go/vt/servenv"
-	_ "github.com/youtube/vitess/go/vt/status"
-	"github.com/youtube/vitess/go/vt/tabletmanager"
-	"github.com/youtube/vitess/go/vt/tabletserver"
-	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/gitql/vitess/go/vt/health"
+	"github.com/gitql/vitess/go/vt/servenv"
+	_ "github.com/gitql/vitess/go/vt/status"
+	"github.com/gitql/vitess/go/vt/tabletmanager"
+	"github.com/gitql/vitess/go/vt/tabletserver"
+	"github.com/gitql/vitess/go/vt/topo"
 )
 
 var (

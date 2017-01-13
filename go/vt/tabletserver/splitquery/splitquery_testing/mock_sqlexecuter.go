@@ -5,7 +5,7 @@ package splitquery_testing
 
 import (
 	gomock "github.com/golang/mock/gomock"
-	sqltypes "github.com/youtube/vitess/go/sqltypes"
+	sqltypes "github.com/gitql/vitess/go/sqltypes"
 )
 
 // Mock of SQLExecuter interface

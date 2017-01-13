@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/youtube/vitess/go/vt/tabletserver/endtoend/framework"
+	"github.com/gitql/vitess/go/vt/tabletserver/endtoend/framework"
 )
 
 // compareIntDiff returns an error if end[tag] != start[tag]+diff.

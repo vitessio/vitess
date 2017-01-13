@@ -6,15 +6,15 @@ package binlog
 
 import (
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/vt/key"
-	"github.com/youtube/vitess/go/vt/sqlannotation"
+	"github.com/gitql/vitess/go/vt/key"
+	"github.com/gitql/vitess/go/vt/sqlannotation"
 
 	"errors"
 	"fmt"
 
-	binlogdatapb "github.com/youtube/vitess/go/vt/proto/binlogdata"
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
-	"github.com/youtube/vitess/go/vt/sqlparser"
+	binlogdatapb "github.com/gitql/vitess/go/vt/proto/binlogdata"
+	topodatapb "github.com/gitql/vitess/go/vt/proto/topodata"
+	"github.com/gitql/vitess/go/vt/sqlparser"
 )
 
 // KeyRangeFilterFunc returns a function that calls sendReply only if statements

@@ -17,7 +17,7 @@ package vtworkerdata
 import proto "github.com/golang/protobuf/proto"
 import fmt "fmt"
 import math "math"
-import logutil "github.com/youtube/vitess/go/vt/proto/logutil"
+import logutil "github.com/gitql/vitess/go/vt/proto/logutil"
 
 // Reference imports to suppress errors if they are not otherwise used.
 var _ = proto.Marshal

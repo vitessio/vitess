@@ -13,8 +13,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/youtube/vitess/go/vt/callerid"
-	"github.com/youtube/vitess/go/vt/tabletserver/planbuilder"
+	"github.com/gitql/vitess/go/vt/callerid"
+	"github.com/gitql/vitess/go/vt/tabletserver/planbuilder"
 	"golang.org/x/net/context"
 )
 

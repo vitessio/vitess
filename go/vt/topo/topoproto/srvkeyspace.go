@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"sort"
 
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/gitql/vitess/go/vt/proto/topodata"
 )
 
 // ShardReferenceArray is used for sorting ShardReference arrays

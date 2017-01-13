@@ -7,5 +7,5 @@ package main
 // Imports and register the file custom rule source
 
 import (
-	_ "github.com/youtube/vitess/go/vt/tabletserver/customrule/filecustomrule"
+	_ "github.com/gitql/vitess/go/vt/tabletserver/customrule/filecustomrule"
 )

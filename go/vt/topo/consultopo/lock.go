@@ -6,7 +6,7 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/hashicorp/consul/api"
-	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/gitql/vitess/go/vt/topo"
 	"golang.org/x/net/context"
 )
 

@@ -9,9 +9,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
+	"github.com/gitql/vitess/go/vt/mysqlctl/tmutils"
 
-	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
+	tabletmanagerdatapb "github.com/gitql/vitess/go/vt/proto/tabletmanagerdata"
 )
 
 // tableStatusList contains the status for each table of a schema.

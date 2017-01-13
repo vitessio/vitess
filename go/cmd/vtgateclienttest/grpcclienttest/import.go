@@ -6,5 +6,5 @@ package grpcclienttest
 
 import (
 	// import the grpc client, it will register itself
-	_ "github.com/youtube/vitess/go/vt/vtgate/grpcvtgateconn"
+	_ "github.com/gitql/vitess/go/vt/vtgate/grpcvtgateconn"
 )

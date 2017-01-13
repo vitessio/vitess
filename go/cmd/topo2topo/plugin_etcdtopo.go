@@ -7,5 +7,5 @@ package main
 // This plugin imports etcdtopo to register the etcd implementation of TopoServer.
 
 import (
-	_ "github.com/youtube/vitess/go/vt/etcdtopo"
+	_ "github.com/gitql/vitess/go/vt/etcdtopo"
 )

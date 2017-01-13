@@ -9,8 +9,8 @@ import (
 	"encoding/binary"
 	"fmt"
 
-	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
-	binlogdatapb "github.com/youtube/vitess/go/vt/proto/binlogdata"
+	"github.com/gitql/vitess/go/vt/mysqlctl/replication"
+	binlogdatapb "github.com/gitql/vitess/go/vt/proto/binlogdata"
 )
 
 // binlogEvent wraps a raw packet buffer and provides methods to examine it

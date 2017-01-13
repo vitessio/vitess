@@ -8,8 +8,8 @@ import (
 	"fmt"
 	"log/syslog"
 
-	"github.com/youtube/vitess/go/event/syslogger"
-	"github.com/youtube/vitess/go/vt/topo/topoproto"
+	"github.com/gitql/vitess/go/event/syslogger"
+	"github.com/gitql/vitess/go/vt/topo/topoproto"
 )
 
 // Syslog writes a Reparent event to syslog.

@@ -10,18 +10,18 @@ import (
 	"sync"
 	"time"
 
-	"github.com/youtube/vitess/go/netutil"
-	"github.com/youtube/vitess/go/sqltypes"
-	"github.com/youtube/vitess/go/vt/callerid"
-	"github.com/youtube/vitess/go/vt/servenv/grpcutils"
-	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
-	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
+	"github.com/gitql/vitess/go/netutil"
+	"github.com/gitql/vitess/go/sqltypes"
+	"github.com/gitql/vitess/go/vt/callerid"
+	"github.com/gitql/vitess/go/vt/servenv/grpcutils"
+	"github.com/gitql/vitess/go/vt/tabletserver/querytypes"
+	"github.com/gitql/vitess/go/vt/tabletserver/tabletconn"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 
-	querypb "github.com/youtube/vitess/go/vt/proto/query"
-	queryservicepb "github.com/youtube/vitess/go/vt/proto/queryservice"
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	querypb "github.com/gitql/vitess/go/vt/proto/query"
+	queryservicepb "github.com/gitql/vitess/go/vt/proto/queryservice"
+	topodatapb "github.com/gitql/vitess/go/vt/proto/topodata"
 )
 
 const protocolName = "grpc"

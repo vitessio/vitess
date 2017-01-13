@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	logutilpb "github.com/youtube/vitess/go/vt/proto/logutil"
+	logutilpb "github.com/gitql/vitess/go/vt/proto/logutil"
 )
 
 func TestStreamOutputAndError(t *testing.T) {

@@ -8,8 +8,8 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
-	binlogdatapb "github.com/youtube/vitess/go/vt/proto/binlogdata"
+	"github.com/gitql/vitess/go/vt/mysqlctl/replication"
+	binlogdatapb "github.com/gitql/vitess/go/vt/proto/binlogdata"
 )
 
 // sample event data

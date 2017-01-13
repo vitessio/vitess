@@ -1,6 +1,6 @@
 package events
 
-import topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+import topodatapb "github.com/gitql/vitess/go/vt/proto/topodata"
 
 // TabletChange is an event that describes changes to a tablet's topo record.
 // It is triggered when the CURRENT process changes ANY tablet's record.

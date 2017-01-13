@@ -10,7 +10,7 @@ import (
 	"reflect"
 	"testing"
 
-	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
+	vtrpcpb "github.com/gitql/vitess/go/vt/proto/vtrpc"
 )
 
 var errGeneric = errors.New("generic error")

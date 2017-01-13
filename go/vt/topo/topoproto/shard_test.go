@@ -7,7 +7,7 @@ package topoproto
 import (
 	"testing"
 
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/gitql/vitess/go/vt/proto/topodata"
 )
 
 func TestParseKeyspaceShard(t *testing.T) {

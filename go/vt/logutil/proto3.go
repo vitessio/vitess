@@ -7,7 +7,7 @@ package logutil
 import (
 	"time"
 
-	logutilpb "github.com/youtube/vitess/go/vt/proto/logutil"
+	logutilpb "github.com/gitql/vitess/go/vt/proto/logutil"
 )
 
 // This file contains a few functions to help with proto3.
