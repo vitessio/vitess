@@ -16,6 +16,11 @@ import (
 	"github.com/youtube/vitess/go/vt/sqlparser"
 )
 
+type receiverWithStatus struct {
+	receiver MessageReceiver
+	busy     bool
+}
+
 // MessageManager manages messages for a message table.
 type MessageManager struct {
 	DBLock sync.Mutex
@@ -25,16 +30,16 @@ type MessageManager struct {
 
 	name        string
 	ackWaitTime time.Duration
-	cache       *MessagerCache
 	ticks       *timer.Timer
 	connpool    *ConnPool
 
 	mu sync.Mutex
-	// cond gets triggered if len(receivers) becomes non-zero,
-	// or an item gets added to the cache, or if the manager is closed.
+	// cond gets triggered if a receiver becomes available (curReceiver != -1),
+	// an item gets added to the cache, or if the manager is closed.
 	// The trigger wakes up the runSend thread.
 	cond            sync.Cond
-	receivers       []MessageReceiver
+	cache           *MessagerCache
+	receivers       []*receiverWithStatus
 	curReceiver     int
 	messagesPending bool
 
@@ -97,7 +102,7 @@ func (mm *MessageManager) Close() {
 	}
 	mm.isOpen = false
 	for _, rcvr := range mm.receivers {
-		rcvr.Cancel()
+		rcvr.receiver.Cancel()
 	}
 	mm.receivers = nil
 	mm.cache.Clear()
@@ -112,12 +117,15 @@ func (mm *MessageManager) Subscribe(receiver MessageReceiver) {
 	mm.mu.Lock()
 	defer mm.mu.Unlock()
 	for _, rcv := range mm.receivers {
-		if rcv == receiver {
+		if rcv.receiver == receiver {
 			return
 		}
 	}
-	mm.receivers = append(mm.receivers, receiver)
-	mm.cond.Signal()
+	mm.receivers = append(mm.receivers, &receiverWithStatus{receiver: receiver})
+	if mm.curReceiver == -1 {
+		mm.curReceiver = len(mm.receivers) - 1
+		mm.cond.Broadcast()
+	}
 }
 
 // Unsubscribe removes the receiver from the list of subscribers.
@@ -125,7 +133,7 @@ func (mm *MessageManager) Unsubscribe(receiver MessageReceiver) {
 	mm.mu.Lock()
 	defer mm.mu.Unlock()
 	for i, rcv := range mm.receivers {
-		if rcv != receiver {
+		if rcv.receiver != receiver {
 			continue
 		}
 		// Delete the item at current position.
@@ -134,9 +142,34 @@ func (mm *MessageManager) Unsubscribe(receiver MessageReceiver) {
 		mm.receivers = mm.receivers[0 : n-1]
 		break
 	}
+	// curReceiver is obsolete. Recompute.
+	mm.rescanReceivers(-1)
+	// If there are no receivers. Shut down the cache.
 	if len(mm.receivers) == 0 {
 		mm.cache.Clear()
 	}
+}
+
+// rescanReceivers finds the next available receiver
+// using start as the starting point. If one was found,
+// it sets curReceiver to that index. If curReceiver
+// was previously -1, it broadcasts. If none was found,
+// curReceiver is set to -1. If there's no starting point,
+// it must be specified as -1.
+func (mm *MessageManager) rescanReceivers(start int) {
+	cur := start
+	for range mm.receivers {
+		cur = (cur + 1) % len(mm.receivers)
+		if !mm.receivers[cur].busy {
+			if mm.curReceiver == -1 {
+				mm.cond.Broadcast()
+			}
+			mm.curReceiver = cur
+			return
+		}
+	}
+	// Nothing was found.
+	mm.curReceiver = -1
 }
 
 // Add adds the message to the cache. It returns true
@@ -165,7 +198,7 @@ func (mm *MessageManager) runSend() {
 				mm.mu.Unlock()
 				return
 			}
-			if len(mm.receivers) == 0 {
+			if mm.curReceiver == -1 {
 				mm.cond.Wait()
 				continue
 			}
@@ -178,14 +211,33 @@ func (mm *MessageManager) runSend() {
 			}
 			mm.cond.Wait()
 		}
-		mm.curReceiver = (mm.curReceiver + 1) % len(mm.receivers)
+		// If we're here, there is a current receiver, and a message
+		// to send. Reserve the receiver and find the next one.
 		receiver := mm.receivers[mm.curReceiver]
+		receiver.busy = true
+		mm.rescanReceivers(mm.curReceiver)
 		mm.mu.Unlock()
-
-		_ = receiver.Send(mm.name, mr)
-		mm.postpone(mr)
-		mm.cache.Discard(mr.id)
+		// Send the message asynchronously.
+		go mm.send(receiver, mr)
 	}
+}
+
+func (mm *MessageManager) send(receiver *receiverWithStatus, mr *MessageRow) {
+	_ = receiver.receiver.Send(mm.name, mr)
+	mm.mu.Lock()
+	receiver.busy = false
+	if mm.curReceiver == -1 {
+		// Since the current receiver became non-busy,
+		// rescan.
+		mm.rescanReceivers(-1)
+	}
+	mm.mu.Unlock()
+	// Postpone the message for resend before discarding
+	// from cache. If no timely ack is received, it will be resent.
+	mm.postpone(mr)
+	// postpone should discard, but this is a safety measure
+	// in case it fails.
+	mm.cache.Discard(mr.id)
 }
 
 func (mm *MessageManager) postpone(mr *MessageRow) {

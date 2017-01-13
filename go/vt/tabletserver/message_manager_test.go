@@ -265,6 +265,7 @@ func TestMessageManagerPoller(t *testing.T) {
 // TestMessagesPending1 tests for the case where you can't
 // add items because the cache is full.
 func TestMessagesPending1(t *testing.T) {
+	t.Skip()
 	db := setUpTabletServerTest()
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
