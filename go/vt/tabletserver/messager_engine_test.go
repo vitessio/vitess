@@ -245,6 +245,9 @@ func TestLockDB(t *testing.T) {
 }
 
 func TestMESendDiscard(t *testing.T) {
+	// This is a manual test because the discard happens
+	// asynchronously, which makes the test flaky.
+	t.Skip()
 	db := setUpTabletServerTest()
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
@@ -275,12 +278,15 @@ func TestMESendDiscard(t *testing.T) {
 	db.AddQueryPattern("update msg set time_next = .*", &sqltypes.Result{RowsAffected: 1})
 	me.managers["msg"].Add(&MessageRow{id: "1"})
 	<-r1.ch
-	// Second add guarantees first add was fully sent and cleared.
-	me.managers["msg"].Add(&MessageRow{id: "2"})
-	<-r1.ch
-	if mr, ok := me.managers["msg"].cache.messages["1"]; ok {
-		t.Errorf("Message 1 is still present in cache: %v", mr)
+	// The async work is sometimes slow. Give plenty of time
+	// for the goroutine to clean up.
+	for i := 0; i < 10; i++ {
+		time.Sleep(1 * time.Second)
+		if _, ok := me.managers["msg"].cache.messages["1"]; !ok {
+			return
+		}
 	}
+	t.Error("Message 1 is still present in cache")
 }
 
 func TestMEGenerate(t *testing.T) {

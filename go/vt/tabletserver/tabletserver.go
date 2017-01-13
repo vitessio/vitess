@@ -454,6 +454,7 @@ func (tsv *TabletServer) StopService() {
 	tsv.mu.Unlock()
 
 	log.Infof("Executing graceful transition to NotServing")
+	tsv.messager.Close()
 	tsv.te.Close(false)
 	tsv.watcher.Close()
 	tsv.updateStreamList.Stop()
