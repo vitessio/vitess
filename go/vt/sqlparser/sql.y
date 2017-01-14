@@ -131,7 +131,7 @@ func forceEOF(yylex interface{}) {
 %type <tableExprs> from_opt table_references
 %type <tableExpr> table_reference table_factor join_table
 %type <str> inner_join outer_join natural_join
-%type <tableName> table_name
+%type <tableName> table_name into_table_name
 %type <indexHints> index_hint_list
 %type <colIdents> index_list
 %type <boolExpr> where_expression_opt
@@ -213,19 +213,19 @@ select_statement:
   }
 
 insert_statement:
-  INSERT comment_opt ignore_opt INTO table_name column_list_opt row_list on_dup_opt
+  INSERT comment_opt ignore_opt into_table_name column_list_opt row_list on_dup_opt
   {
-    $$ = &Insert{Comments: Comments($2), Ignore: $3, Table: $5, Columns: $6, Rows: $7, OnDup: OnDup($8)}
+    $$ = &Insert{Comments: Comments($2), Ignore: $3, Table: $4, Columns: $5, Rows: $6, OnDup: OnDup($7)}
   }
-| INSERT comment_opt ignore_opt INTO table_name SET update_list on_dup_opt
+| INSERT comment_opt ignore_opt into_table_name SET update_list on_dup_opt
   {
-    cols := make(Columns, 0, len($7))
+    cols := make(Columns, 0, len($6))
     vals := make(ValTuple, 0, len($7))
-    for _, updateList := range $7 {
+    for _, updateList := range $6 {
       cols = append(cols, updateList.Name)
       vals = append(vals, updateList.Expr)
     }
-    $$ = &Insert{Comments: Comments($2), Ignore: $3, Table: $5, Columns: cols, Rows: Values{vals}, OnDup: OnDup($8)}
+    $$ = &Insert{Comments: Comments($2), Ignore: $3, Table: $4, Columns: cols, Rows: Values{vals}, OnDup: OnDup($7)}
   }
 
 update_statement:
@@ -569,6 +569,16 @@ natural_join:
     } else {
       $$ = NaturalRightJoinStr
     }
+  }
+
+into_table_name:
+  INTO table_name
+  {
+    $$ = $2
+  }
+| table_name
+  {
+    $$ = $1
   }
 
 table_name:
