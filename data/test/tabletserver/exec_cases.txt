@@ -43,6 +43,24 @@
   "FullQuery": "select * from a limit 5"
 }
 
+# limit with offset arg
+"select * from a limit 10, 5"
+{
+  "PlanID": "PASS_SELECT",
+  "TableName": "a",
+  "FieldQuery": "select * from a where 1 != 1",
+  "FullQuery": "select * from a limit 10, 5"
+}
+
+# limit with offset keyword
+"select * from a limit 5 offset 10"
+{
+  "PlanID": "PASS_SELECT",
+  "TableName": "a",
+  "FieldQuery": "select * from a where 1 != 1",
+  "FullQuery": "select * from a limit 10, 5"
+}
+
 # cross-db
 "select * from a.b"
 {
