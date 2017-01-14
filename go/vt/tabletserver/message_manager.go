@@ -31,6 +31,7 @@ type MessageManager struct {
 	name        string
 	ackWaitTime time.Duration
 	purgeAfter  time.Duration
+	batchSize   int
 	pollerTicks *timer.Timer
 	purgeTicks  *timer.Timer
 	connpool    *ConnPool
@@ -49,19 +50,20 @@ type MessageManager struct {
 	// before we can close the manager.
 	wg sync.WaitGroup
 
-	readByTimeNext  *sqlparser.ParsedQuery
-	ackQuery        *sqlparser.ParsedQuery
-	rescheduleQuery *sqlparser.ParsedQuery
-	purgeQuery      *sqlparser.ParsedQuery
+	readByTimeNext *sqlparser.ParsedQuery
+	ackQuery       *sqlparser.ParsedQuery
+	postponeQuery  *sqlparser.ParsedQuery
+	purgeQuery     *sqlparser.ParsedQuery
 }
 
 // NewMessageManager creates a new message manager.
-func NewMessageManager(tsv *TabletServer, name string, ackWaitTime, purgeAfter time.Duration, cacheSize int, pollInterval time.Duration, connpool *ConnPool) *MessageManager {
+func NewMessageManager(tsv *TabletServer, name string, ackWaitTime, purgeAfter time.Duration, batchSize, cacheSize int, pollInterval time.Duration, connpool *ConnPool) *MessageManager {
 	mm := &MessageManager{
 		tsv:         tsv,
 		name:        name,
 		ackWaitTime: ackWaitTime,
 		purgeAfter:  purgeAfter,
+		batchSize:   batchSize,
 		cache:       NewMessagerCache(cacheSize),
 		pollerTicks: timer.NewTimer(pollInterval),
 		purgeTicks:  timer.NewTimer(pollInterval),
@@ -76,9 +78,9 @@ func NewMessageManager(tsv *TabletServer, name string, ackWaitTime, purgeAfter t
 	mm.ackQuery = buildParsedQuery(
 		"update %v set time_acked = %a, time_next = null where id in %a",
 		tableName, ":time_acked", "::ids")
-	mm.rescheduleQuery = buildParsedQuery(
-		"update %v set time_next = %a, epoch = epoch+1 where id in %a and time_acked is null",
-		tableName, ":time_next", "::ids")
+	mm.postponeQuery = buildParsedQuery(
+		"update %v set time_next = %a+(%a<<epoch), epoch = epoch+1 where id in %a and time_acked is null",
+		tableName, ":time_now", ":wait_time", "::ids")
 	mm.purgeQuery = buildParsedQuery(
 		"delete from %v where time_scheduled < %a and time_acked is not null limit 500",
 		tableName, ":time_scheduled")
@@ -116,7 +118,7 @@ func (mm *MessageManager) Close() {
 	}
 	mm.receivers = nil
 	mm.cache.Clear()
-	mm.cond.Signal()
+	mm.cond.Broadcast()
 	mm.mu.Unlock()
 
 	mm.wg.Wait()
@@ -194,14 +196,14 @@ func (mm *MessageManager) Add(mr *MessageRow) bool {
 	if !mm.cache.Add(mr) {
 		return false
 	}
-	mm.cond.Signal()
+	mm.cond.Broadcast()
 	return true
 }
 
 func (mm *MessageManager) runSend() {
 	defer mm.wg.Done()
-	var mr *MessageRow
 	for {
+		var mrs []*MessageRow
 		mm.mu.Lock()
 		for {
 			if !mm.isOpen {
@@ -212,7 +214,14 @@ func (mm *MessageManager) runSend() {
 				mm.cond.Wait()
 				continue
 			}
-			if mr = mm.cache.Pop(); mr != nil {
+			for i := 0; i < mm.batchSize; i++ {
+				if mr := mm.cache.Pop(); mr != nil {
+					mrs = append(mrs, mr)
+					continue
+				}
+				break
+			}
+			if mrs != nil {
 				break
 			}
 			if mm.messagesPending {
@@ -228,12 +237,12 @@ func (mm *MessageManager) runSend() {
 		mm.rescanReceivers(mm.curReceiver)
 		mm.mu.Unlock()
 		// Send the message asynchronously.
-		go mm.send(receiver, mr)
+		go mm.send(receiver, mrs)
 	}
 }
 
-func (mm *MessageManager) send(receiver *receiverWithStatus, mr *MessageRow) {
-	_ = receiver.receiver.Send(mm.name, mr)
+func (mm *MessageManager) send(receiver *receiverWithStatus, mrs []*MessageRow) {
+	_ = receiver.receiver.Send(mm.name, mrs)
 	mm.mu.Lock()
 	receiver.busy = false
 	if mm.curReceiver == -1 {
@@ -242,22 +251,25 @@ func (mm *MessageManager) send(receiver *receiverWithStatus, mr *MessageRow) {
 		mm.rescanReceivers(-1)
 	}
 	mm.mu.Unlock()
-	// Postpone the message for resend before discarding
+	ids := make([]string, len(mrs))
+	for i, mr := range mrs {
+		ids[i] = mr.id
+	}
+	// Postpone the messages for resend before discarding
 	// from cache. If no timely ack is received, it will be resent.
-	mm.postpone(mr)
+	mm.postpone(ids)
 	// postpone should discard, but this is a safety measure
 	// in case it fails.
-	mm.cache.Discard(mr.id)
+	mm.cache.Discard(ids)
 }
 
-func (mm *MessageManager) postpone(mr *MessageRow) {
+func (mm *MessageManager) postpone(ids []string) {
 	ctx, cancel := context.WithTimeout(localContext(), mm.ackWaitTime)
 	defer cancel()
-	newTime := time.Now().Add(mm.ackWaitTime << uint64(mr.Epoch)).UnixNano()
-	_, err := mm.tsv.RescheduleMessages(ctx, nil, mm.name, []string{mr.id}, newTime)
+	_, err := mm.tsv.PostponeMessages(ctx, nil, mm.name, ids)
 	if err != nil {
 		// TODO(sougou): increment internal error.
-		log.Errorf("Unable to postpone message %v: %v", mr, err)
+		log.Errorf("Unable to postpone messages %v: %v", ids, err)
 	}
 }
 
@@ -305,7 +317,7 @@ func (mm *MessageManager) runPoller() {
 		if len(qr.Rows) != 0 {
 			// We've most likely added items.
 			// Wake up the sender.
-			defer mm.cond.Signal()
+			defer mm.cond.Broadcast()
 		}
 		for _, row := range qr.Rows {
 			mr, err := BuildMessageRow(row)
@@ -350,14 +362,15 @@ func (mm *MessageManager) GenerateAckQuery(ids []string) (string, map[string]int
 	}
 }
 
-// GenerateRescheduleQuery returns the query and bind vars for rescheduling a message.
-func (mm *MessageManager) GenerateRescheduleQuery(ids []string, timeNew int64) (string, map[string]interface{}) {
+// GeneratePostponeQuery returns the query and bind vars for postponing a message.
+func (mm *MessageManager) GeneratePostponeQuery(ids []string) (string, map[string]interface{}) {
 	idbvs := make([]interface{}, len(ids))
 	for i, id := range ids {
 		idbvs[i] = id
 	}
-	return mm.rescheduleQuery.Query, map[string]interface{}{
-		"time_next": timeNew,
+	return mm.postponeQuery.Query, map[string]interface{}{
+		"time_now":  int64(time.Now().UnixNano()),
+		"wait_time": int64(mm.ackWaitTime),
 		"ids":       idbvs,
 	}
 }

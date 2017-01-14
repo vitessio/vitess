@@ -1432,16 +1432,16 @@ func TestRescheduleMessages(t *testing.T) {
 	ctx := context.Background()
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
 
-	_, err := tsv.RescheduleMessages(ctx, &target, "nonmsg", []string{"1", "2"}, 0)
+	_, err := tsv.PostponeMessages(ctx, &target, "nonmsg", []string{"1", "2"})
 	want := "error: message table nonmsg not found in schema"
 	if err == nil || err.Error() != want {
-		t.Errorf("tsv.RescheduleMessages(invalid): %v, want %s", err, want)
+		t.Errorf("tsv.PostponeMessages(invalid): %v, want %s", err, want)
 	}
 
-	_, err = tsv.RescheduleMessages(ctx, &target, "msg", []string{"1", "2"}, 3)
+	_, err = tsv.PostponeMessages(ctx, &target, "msg", []string{"1", "2"})
 	want = "error: query: select time_scheduled, id from msg where id in ('1', '2') and time_acked is null limit 10001 for update is not supported"
 	if err == nil || err.Error() != want {
-		t.Errorf("tsv.RescheduleMessages(invalid):\n%v, want\n%s", err, want)
+		t.Errorf("tsv.PostponeMessages(invalid):\n%v, want\n%s", err, want)
 	}
 
 	db.AddQuery(
@@ -1455,7 +1455,7 @@ func TestRescheduleMessages(t *testing.T) {
 		},
 	)
 	db.AddQueryPattern("update msg set time_next = .*", &sqltypes.Result{RowsAffected: 1})
-	count, err := tsv.RescheduleMessages(ctx, &target, "msg", []string{"1", "2"}, 3)
+	count, err := tsv.PostponeMessages(ctx, &target, "msg", []string{"1", "2"})
 	if err != nil {
 		t.Error(err)
 	}

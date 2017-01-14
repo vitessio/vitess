@@ -126,17 +126,19 @@ func (mc *MessagerCache) Pop() *MessageRow {
 }
 
 // Discard forgets the specified id.
-func (mc *MessagerCache) Discard(id string) {
+func (mc *MessagerCache) Discard(ids []string) {
 	mc.mu.Lock()
 	defer mc.mu.Unlock()
-	if mr := mc.messages[id]; mr != nil {
-		// The row is still in the queue somewhere. Mark
-		// it as defunct. It will be "garbage collected" later.
-		mr.id = ""
-		// "Free" the message.
-		mr.Message = sqltypes.NULL
+	for _, id := range ids {
+		if mr := mc.messages[id]; mr != nil {
+			// The row is still in the queue somewhere. Mark
+			// it as defunct. It will be "garbage collected" later.
+			mr.id = ""
+			// "Free" the message.
+			mr.Message = sqltypes.NULL
+		}
+		delete(mc.messages, id)
 	}
-	delete(mc.messages, id)
 }
 
 // Size returns the max size of MessagerCache.

@@ -162,8 +162,8 @@ func TestSubscribe(t *testing.T) {
 	me.Unsubscribe(r1)
 	me.Subscribe("t1", r2)
 	me.managers["t2"].Add(&MessageRow{id: "3"})
-	me.managers["t2"].Add(&MessageRow{id: "4"})
 	<-r2.ch
+	me.managers["t2"].Add(&MessageRow{id: "4"})
 	<-r2.ch
 
 	// Error case.
@@ -317,11 +317,11 @@ func TestMEGenerate(t *testing.T) {
 		t.Errorf("me.GenerateAckQuery(invalid): %v, want %s", err, want)
 	}
 
-	if _, _, err := me.GenerateRescheduleQuery("t1", []string{"1"}, 0); err != nil {
+	if _, _, err := me.GeneratePostponeQuery("t1", []string{"1"}); err != nil {
 		t.Error(err)
 	}
-	if _, _, err := me.GenerateRescheduleQuery("t2", []string{"1"}, 0); err == nil || err.Error() != want {
-		t.Errorf("me.GenerateRescheduleQuery(invalid): %v, want %s", err, want)
+	if _, _, err := me.GeneratePostponeQuery("t2", []string{"1"}); err == nil || err.Error() != want {
+		t.Errorf("me.GeneratePostponeQuery(invalid): %v, want %s", err, want)
 	}
 
 	if _, _, err := me.GeneratePurgeQuery("t1", 0); err != nil {

@@ -9,8 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"golang.org/x/net/context"
-
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
@@ -20,34 +18,25 @@ import (
 )
 
 type testReceiver struct {
-	ctx    context.Context
-	cancel context.CancelFunc
-	count  sync2.AtomicInt64
-	name   string
-	ch     chan *MessageRow
+	count sync2.AtomicInt64
+	name  string
+	ch    chan []*MessageRow
 }
 
 func newTestReceiver(size int) *testReceiver {
-	ctx, cancel := context.WithCancel(context.Background())
 	return &testReceiver{
-		ctx:    ctx,
-		cancel: cancel,
-		ch:     make(chan *MessageRow, size),
+		ch: make(chan []*MessageRow, size),
 	}
 }
 
-func (tr *testReceiver) Send(name string, mr *MessageRow) error {
+func (tr *testReceiver) Send(name string, mrs []*MessageRow) error {
 	tr.count.Add(1)
 	tr.name = name
-	select {
-	case tr.ch <- mr:
-	case <-tr.ctx.Done():
-	}
+	tr.ch <- mrs
 	return nil
 }
 
 func (tr *testReceiver) Cancel() {
-	tr.cancel()
 }
 
 func (tr *testReceiver) WaitForCount(n int) {
@@ -72,7 +61,7 @@ func TestMessageManagerState(t *testing.T) {
 		t.Fatalf("StartService failed: %v", err)
 	}
 	defer tsv.StopService()
-	mm := NewMessageManager(tsv, "foo", 1*time.Second, 3*time.Second, 10, 1*time.Second, newMMConnPool(db))
+	mm := NewMessageManager(tsv, "foo", 1*time.Second, 3*time.Second, 1, 10, 1*time.Second, newMMConnPool(db))
 	// Do it twice
 	for i := 0; i < 2; i++ {
 		mm.Open()
@@ -93,8 +82,6 @@ func TestMessageManagerState(t *testing.T) {
 		// This time the wait is in a different code path.
 		time.Sleep(10 * time.Millisecond)
 		mm.Close()
-		// This should not hang
-		<-r1.ctx.Done()
 	}
 }
 
@@ -111,7 +98,7 @@ func TestMessageManagerAdd(t *testing.T) {
 		t.Fatalf("StartService failed: %v", err)
 	}
 	defer tsv.StopService()
-	mm := NewMessageManager(tsv, "foo", 1*time.Second, 3*time.Second, 1, 1*time.Second, newMMConnPool(db))
+	mm := NewMessageManager(tsv, "foo", 1*time.Second, 3*time.Second, 1, 1, 1*time.Second, newMMConnPool(db))
 	mm.Open()
 	defer mm.Close()
 
@@ -151,7 +138,7 @@ func TestMessageManagerSend(t *testing.T) {
 		t.Fatalf("StartService failed: %v", err)
 	}
 	defer tsv.StopService()
-	mm := NewMessageManager(tsv, "foo", 1*time.Second, 3*time.Second, 10, 1*time.Second, newMMConnPool(db))
+	mm := NewMessageManager(tsv, "foo", 1*time.Second, 3*time.Second, 1, 10, 1*time.Second, newMMConnPool(db))
 	mm.Open()
 	defer mm.Close()
 	r1 := newTestReceiver(1)
@@ -160,10 +147,9 @@ func TestMessageManagerSend(t *testing.T) {
 		id: "1",
 	}
 	mm.Add(row1)
-	if got := <-r1.ch; got != row1 {
+	if got := <-r1.ch; !reflect.DeepEqual(got, []*MessageRow{row1}) {
 		t.Errorf("Received: %v, want %v", got, row1)
 	}
-	time.Sleep(10 * time.Microsecond)
 	r2 := newTestReceiver(1)
 	mm.Subscribe(r2)
 	// Subscribing twice is a no-op.
@@ -182,6 +168,46 @@ func TestMessageManagerSend(t *testing.T) {
 	<-r2.ch
 	<-r2.ch
 	mm.Unsubscribe(r2)
+}
+
+func TestMessageManagerBatchSend(t *testing.T) {
+	db := setUpTabletServerTest()
+	testUtils := newTestUtils()
+	config := testUtils.newQueryServiceConfig()
+	config.TransactionCap = 1
+	tsv := NewTabletServer(config)
+	dbconfigs := testUtils.newDBConfigs(db)
+	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+	err := tsv.StartService(target, dbconfigs, testUtils.newMysqld(&dbconfigs))
+	if err != nil {
+		t.Fatalf("StartService failed: %v", err)
+	}
+	defer tsv.StopService()
+	mm := NewMessageManager(tsv, "foo", 1*time.Second, 3*time.Second, 2, 10, 1*time.Second, newMMConnPool(db))
+	mm.Open()
+	defer mm.Close()
+	r1 := newTestReceiver(1)
+	mm.Subscribe(r1)
+	row1 := &MessageRow{
+		id: "1",
+	}
+	mm.Add(row1)
+	want := []*MessageRow{row1}
+	if got := <-r1.ch; !reflect.DeepEqual(got, want) {
+		t.Errorf("Received: %v, want %v", got, row1)
+	}
+	mm.mu.Lock()
+	mm.cache.Add(&MessageRow{id: "2"})
+	mm.cache.Add(&MessageRow{id: "3"})
+	mm.cond.Broadcast()
+	mm.mu.Unlock()
+	want = []*MessageRow{
+		{id: "2"},
+		{id: "3"},
+	}
+	if got := <-r1.ch; !reflect.DeepEqual(got, want) {
+		t.Errorf("Received: %+v, want %+v", got, row1)
+	}
 }
 
 func TestMessageManagerPoller(t *testing.T) {
@@ -218,13 +244,13 @@ func TestMessageManagerPoller(t *testing.T) {
 			}},
 		},
 	)
-	mm := NewMessageManager(tsv, "foo", 1*time.Second, 3*time.Second, 10, 1*time.Second, newMMConnPool(db))
+	mm := NewMessageManager(tsv, "foo", 1*time.Second, 3*time.Second, 2, 10, 20*time.Second, newMMConnPool(db))
 	mm.Open()
 	defer mm.Close()
 	r1 := newTestReceiver(1)
 	mm.Subscribe(r1)
 	mm.pollerTicks.Trigger()
-	want := []MessageRow{{
+	want := []*MessageRow{{
 		TimeNext: 2,
 		Epoch:    0,
 		ID:       sqltypes.MakeString([]byte("2")),
@@ -243,12 +269,13 @@ func TestMessageManagerPoller(t *testing.T) {
 		Message:  sqltypes.MakeString([]byte("11")),
 		id:       "3",
 	}}
-	var got []MessageRow
-	for i := 0; i < 3; i++ {
-		got = append(got, *(<-r1.ch))
+	var got []*MessageRow
+	// We should get it in 2 iterations.
+	for i := 0; i < 2; i++ {
+		got = append(got, <-r1.ch...)
 	}
 	if !reflect.DeepEqual(got, want) {
-		t.Errorf("rows:\n%+v, want\n%+v", got, want)
+		t.Errorf("rows:\n%v, want\n%v", got, want)
 	}
 
 	// If there are no receivers, nothing should fire.
@@ -289,7 +316,7 @@ func TestMessagesPending1(t *testing.T) {
 		},
 	)
 	// Set a large polling interval.
-	mm := NewMessageManager(tsv, "foo", 1*time.Second, 3*time.Second, 2, 30*time.Second, newMMConnPool(db))
+	mm := NewMessageManager(tsv, "foo", 1*time.Second, 3*time.Second, 1, 2, 30*time.Second, newMMConnPool(db))
 	mm.Open()
 	defer mm.Close()
 	r1 := newTestReceiver(0)
@@ -354,7 +381,7 @@ func TestMessagesPending2(t *testing.T) {
 		},
 	)
 	// Set a large polling interval.
-	mm := NewMessageManager(tsv, "foo", 1*time.Second, 3*time.Second, 1, 30*time.Second, newMMConnPool(db))
+	mm := NewMessageManager(tsv, "foo", 1*time.Second, 3*time.Second, 1, 1, 30*time.Second, newMMConnPool(db))
 	mm.Open()
 	defer mm.Close()
 	r1 := newTestReceiver(0)
@@ -387,7 +414,7 @@ func TestMMGenerate(t *testing.T) {
 		t.Fatalf("StartService failed: %v", err)
 	}
 	defer tsv.StopService()
-	mm := NewMessageManager(tsv, "foo", 1*time.Second, 3*time.Second, 10, 1*time.Second, newMMConnPool(db))
+	mm := NewMessageManager(tsv, "foo", 1*time.Second, 3*time.Second, 1, 10, 1*time.Second, newMMConnPool(db))
 	mm.Open()
 	defer mm.Close()
 	query, bv := mm.GenerateAckQuery([]string{"1", "2"})
@@ -406,13 +433,19 @@ func TestMMGenerate(t *testing.T) {
 		t.Errorf("gotid: %v, want %v", gotids, wantids)
 	}
 
-	query, bv = mm.GenerateRescheduleQuery([]string{"1", "2"}, 3)
-	wantQuery = "update foo set time_next = :time_next, epoch = epoch+1 where id in ::ids and time_acked is null"
+	query, bv = mm.GeneratePostponeQuery([]string{"1", "2"})
+	wantQuery = "update foo set time_next = :time_now+(:wait_time<<epoch), epoch = epoch+1 where id in ::ids and time_acked is null"
 	if query != wantQuery {
-		t.Errorf("GenerateRescheduleQuery query: %s, want %s", query, wantQuery)
+		t.Errorf("GeneratePostponeQuery query: %s, want %s", query, wantQuery)
+	}
+	if _, ok := bv["time_now"]; !ok {
+		t.Errorf("time_now is absent in %v", bv)
+	} else {
+		// time_now cannot be compared.
+		delete(bv, "time_now")
 	}
 	wantbv := map[string]interface{}{
-		"time_next": int64(3),
+		"wait_time": int64(1e9),
 		"ids":       []interface{}{"1", "2"},
 	}
 	if !reflect.DeepEqual(bv, wantbv) {

@@ -15,7 +15,7 @@ import (
 
 // MessageReceiver defines the interface for the receivers.
 type MessageReceiver interface {
-	Send(name string, mr *MessageRow) error
+	Send(name string, mrs []*MessageRow) error
 	Cancel()
 }
 
@@ -145,9 +145,7 @@ func (me *MessagerEngine) UpdateCaches(newMessages map[string][]*MessageRow, cha
 		if mm == nil {
 			continue
 		}
-		for _, id := range ids {
-			mm.cache.Discard(id)
-		}
+		mm.cache.Discard(ids)
 	}
 }
 
@@ -163,15 +161,15 @@ func (me *MessagerEngine) GenerateAckQuery(name string, ids []string) (string, m
 	return query, bv, nil
 }
 
-// GenerateRescheduleQuery returns the query and bind vars for rescheduling a message.
-func (me *MessagerEngine) GenerateRescheduleQuery(name string, ids []string, timeNew int64) (string, map[string]interface{}, error) {
+// GeneratePostponeQuery returns the query and bind vars for postponing a message.
+func (me *MessagerEngine) GeneratePostponeQuery(name string, ids []string) (string, map[string]interface{}, error) {
 	me.mu.Lock()
 	defer me.mu.Unlock()
 	mm := me.managers[name]
 	if mm == nil {
 		return "", nil, fmt.Errorf("message table %s not found in schema", name)
 	}
-	query, bv := mm.GenerateRescheduleQuery(ids, timeNew)
+	query, bv := mm.GeneratePostponeQuery(ids)
 	return query, bv, nil
 }
 
@@ -198,7 +196,7 @@ func (me *MessagerEngine) schemaChanged(tables map[string]*schema.Table) {
 			continue
 		}
 		// TODO(sougou): hardcoded values.
-		mm := NewMessageManager(me.tsv, name, 1*time.Second, 3*time.Second, 10000, 1*time.Second, me.connpool)
+		mm := NewMessageManager(me.tsv, name, 1*time.Second, 3*time.Second, 2, 10000, 1*time.Second, me.connpool)
 		me.managers[name] = mm
 		mm.Open()
 	}
