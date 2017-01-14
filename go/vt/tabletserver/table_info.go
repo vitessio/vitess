@@ -54,7 +54,7 @@ func loadTableInfo(conn *DBConn, tableName string) (ti *TableInfo, err error) {
 }
 
 func (ti *TableInfo) fetchColumns(conn *DBConn, sqlTableName string) error {
-	qr, err := conn.Exec(context.Background(), fmt.Sprintf("select * from %s where 1 != 1", sqlTableName), 10000, true)
+	qr, err := conn.Exec(context.Background(), fmt.Sprintf("select * from %s where 1 != 1", sqlTableName), 0, true)
 	if err != nil {
 		return err
 	}
