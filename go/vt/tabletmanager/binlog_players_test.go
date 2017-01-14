@@ -476,7 +476,7 @@ func TestBinlogPlayerMapHorizontalSplit(t *testing.T) {
 	fbc.keyRangeChannel <- &binlogdatapb.BinlogTransaction{
 		Statements: []*binlogdatapb.BinlogTransaction_Statement{
 			{
-				Category: binlogdatapb.BinlogTransaction_Statement_BL_DML,
+				Category: binlogdatapb.BinlogTransaction_Statement_BL_INSERT,
 				Sql:      []byte("INSERT INTO tablet VALUES(1)"),
 			},
 		},
@@ -674,7 +674,7 @@ func TestBinlogPlayerMapHorizontalSplitStopStartUntil(t *testing.T) {
 		fbc.keyRangeChannel <- &binlogdatapb.BinlogTransaction{
 			Statements: []*binlogdatapb.BinlogTransaction_Statement{
 				{
-					Category: binlogdatapb.BinlogTransaction_Statement_BL_DML,
+					Category: binlogdatapb.BinlogTransaction_Statement_BL_INSERT,
 					Sql:      []byte("INSERT INTO tablet VALUES(1)"),
 				},
 			},
@@ -862,7 +862,7 @@ func TestBinlogPlayerMapVerticalSplit(t *testing.T) {
 	fbc.tablesChannel <- &binlogdatapb.BinlogTransaction{
 		Statements: []*binlogdatapb.BinlogTransaction_Statement{
 			{
-				Category: binlogdatapb.BinlogTransaction_Statement_BL_DML,
+				Category: binlogdatapb.BinlogTransaction_Statement_BL_INSERT,
 				Sql:      []byte("INSERT INTO tablet VALUES(1)"),
 			},
 		},

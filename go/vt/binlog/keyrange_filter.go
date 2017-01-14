@@ -32,16 +32,23 @@ func KeyRangeFilterFunc(keyrange *topodatapb.KeyRange, sendReply sendTransaction
 			case binlogdatapb.BinlogTransaction_Statement_BL_DDL:
 				log.Warningf("Not forwarding DDL: %s", statement.Sql)
 				continue
-			case binlogdatapb.BinlogTransaction_Statement_BL_DML:
+			case binlogdatapb.BinlogTransaction_Statement_BL_INSERT,
+				binlogdatapb.BinlogTransaction_Statement_BL_UPDATE,
+				binlogdatapb.BinlogTransaction_Statement_BL_DELETE:
 				keyspaceIDS, err := sqlannotation.ExtractKeyspaceIDS(string(statement.Sql))
 				if err != nil {
-					if handleExtractKeySpaceIDError(err) {
-						continue
-					} else {
+					if statement.Category == binlogdatapb.BinlogTransaction_Statement_BL_INSERT {
 						// TODO(erez): Stop filtered-replication here, and alert.
-						// Currently we skip.
+						logExtractKeySpaceIDError(err)
 						continue
 					}
+					// If no keyspace IDs are found, we replicate to all tarrgets.
+					// This is safe for UPDATE and DELETE because vttablet rewrites queries to
+					// include the primary key and the query will only affect the shards that
+					// have the rows.
+					filtered = append(filtered, statement)
+					matched = true
+					continue
 				}
 				if len(keyspaceIDS) == 1 {
 					if !key.KeyRangeContains(keyrange, keyspaceIDS[0]) {
@@ -129,13 +136,7 @@ func generateSingleInsertQuery(ins *sqlparser.Insert, keyspaceIDs [][]byte, trai
 	}
 }
 
-// Handles the error in sqlannotation.ExtractKeySpaceIDError.
-// Returns 'true' iff filtered replication should continue (and skip the current SQL
-// statement).
-// TODO(erez): Currently, always returns true. So filtered-replication-unfriendly
-// statemetns also get skipped. We need to abort filtered-replication in a
-// graceful manner.
-func handleExtractKeySpaceIDError(err error) bool {
+func logExtractKeySpaceIDError(err error) {
 	extractErr, ok := err.(*sqlannotation.ExtractKeySpaceIDError)
 	if !ok {
 		log.Fatalf("Expected sqlannotation.ExtractKeySpaceIDError. Got: %v", err)
@@ -145,17 +146,13 @@ func handleExtractKeySpaceIDError(err error) bool {
 		log.Errorf(
 			"Error parsing keyspace id annotation. Skipping statement. (%s)", extractErr.Message)
 		updateStreamErrors.Add("ExtractKeySpaceIDParseError", 1)
-		return true
 	case sqlannotation.ExtractKeySpaceIDReplicationUnfriendlyError:
 		log.Errorf(
 			"Found replication unfriendly statement. (%s). "+
 				"Filtered replication should abort, but we're currenty just skipping the statement.",
 			extractErr.Message)
 		updateStreamErrors.Add("ExtractKeySpaceIDReplicationUnfriendlyError", 1)
-		return true
 	default:
 		log.Fatalf("Unexpected extractErr.Kind. (%v)", extractErr)
-		return true // Unreachable.
 	}
-
 }
