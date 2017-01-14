@@ -72,7 +72,7 @@ func TestMessageManagerState(t *testing.T) {
 		t.Fatalf("StartService failed: %v", err)
 	}
 	defer tsv.StopService()
-	mm := NewMessageManager(tsv, "foo", 1*time.Second, 10, 1*time.Second, newMMConnPool(db))
+	mm := NewMessageManager(tsv, "foo", 1*time.Second, 3*time.Second, 10, 1*time.Second, newMMConnPool(db))
 	// Do it twice
 	for i := 0; i < 2; i++ {
 		mm.Open()
@@ -111,7 +111,7 @@ func TestMessageManagerAdd(t *testing.T) {
 		t.Fatalf("StartService failed: %v", err)
 	}
 	defer tsv.StopService()
-	mm := NewMessageManager(tsv, "foo", 1*time.Second, 1, 1*time.Second, newMMConnPool(db))
+	mm := NewMessageManager(tsv, "foo", 1*time.Second, 3*time.Second, 1, 1*time.Second, newMMConnPool(db))
 	mm.Open()
 	defer mm.Close()
 
@@ -151,7 +151,7 @@ func TestMessageManagerSend(t *testing.T) {
 		t.Fatalf("StartService failed: %v", err)
 	}
 	defer tsv.StopService()
-	mm := NewMessageManager(tsv, "foo", 1*time.Second, 10, 1*time.Second, newMMConnPool(db))
+	mm := NewMessageManager(tsv, "foo", 1*time.Second, 3*time.Second, 10, 1*time.Second, newMMConnPool(db))
 	mm.Open()
 	defer mm.Close()
 	r1 := newTestReceiver(1)
@@ -218,12 +218,12 @@ func TestMessageManagerPoller(t *testing.T) {
 			}},
 		},
 	)
-	mm := NewMessageManager(tsv, "foo", 1*time.Second, 10, 1*time.Second, newMMConnPool(db))
+	mm := NewMessageManager(tsv, "foo", 1*time.Second, 3*time.Second, 10, 1*time.Second, newMMConnPool(db))
 	mm.Open()
 	defer mm.Close()
 	r1 := newTestReceiver(1)
 	mm.Subscribe(r1)
-	mm.ticks.Trigger()
+	mm.pollerTicks.Trigger()
 	want := []MessageRow{{
 		TimeNext: 2,
 		Epoch:    0,
@@ -253,7 +253,7 @@ func TestMessageManagerPoller(t *testing.T) {
 
 	// If there are no receivers, nothing should fire.
 	mm.Unsubscribe(r1)
-	mm.ticks.Trigger()
+	mm.pollerTicks.Trigger()
 	time.Sleep(10 * time.Microsecond)
 	select {
 	case row := <-r1.ch:
@@ -265,7 +265,6 @@ func TestMessageManagerPoller(t *testing.T) {
 // TestMessagesPending1 tests for the case where you can't
 // add items because the cache is full.
 func TestMessagesPending1(t *testing.T) {
-	t.Skip()
 	db := setUpTabletServerTest()
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
@@ -290,7 +289,7 @@ func TestMessagesPending1(t *testing.T) {
 		},
 	)
 	// Set a large polling interval.
-	mm := NewMessageManager(tsv, "foo", 1*time.Second, 2, 30*time.Second, newMMConnPool(db))
+	mm := NewMessageManager(tsv, "foo", 1*time.Second, 3*time.Second, 2, 30*time.Second, newMMConnPool(db))
 	mm.Open()
 	defer mm.Close()
 	r1 := newTestReceiver(0)
@@ -304,7 +303,7 @@ func TestMessagesPending1(t *testing.T) {
 	mm.Add(&MessageRow{id: "3"})
 
 	// Trigger the poller. It should do nothing.
-	mm.ticks.Trigger()
+	mm.pollerTicks.Trigger()
 
 	// Wait for pending flag to be turned on.
 	for {
@@ -355,14 +354,14 @@ func TestMessagesPending2(t *testing.T) {
 		},
 	)
 	// Set a large polling interval.
-	mm := NewMessageManager(tsv, "foo", 1*time.Second, 1, 30*time.Second, newMMConnPool(db))
+	mm := NewMessageManager(tsv, "foo", 1*time.Second, 3*time.Second, 1, 30*time.Second, newMMConnPool(db))
 	mm.Open()
 	defer mm.Close()
 	r1 := newTestReceiver(0)
 	mm.Subscribe(r1)
 
 	// Trigger the poller.
-	mm.ticks.Trigger()
+	mm.pollerTicks.Trigger()
 
 	// Now, let's pull more than 1 item. It should
 	// trigger the poller every time cache gets empty.
@@ -388,7 +387,7 @@ func TestMMGenerate(t *testing.T) {
 		t.Fatalf("StartService failed: %v", err)
 	}
 	defer tsv.StopService()
-	mm := NewMessageManager(tsv, "foo", 1*time.Second, 10, 1*time.Second, newMMConnPool(db))
+	mm := NewMessageManager(tsv, "foo", 1*time.Second, 3*time.Second, 10, 1*time.Second, newMMConnPool(db))
 	mm.Open()
 	defer mm.Close()
 	query, bv := mm.GenerateAckQuery([]string{"1", "2"})
@@ -410,11 +409,23 @@ func TestMMGenerate(t *testing.T) {
 	query, bv = mm.GenerateRescheduleQuery([]string{"1", "2"}, 3)
 	wantQuery = "update foo set time_next = :time_next, epoch = epoch+1 where id in ::ids and time_acked is null"
 	if query != wantQuery {
-		t.Errorf("GenerateAckQuery query: %s, want %s", query, wantQuery)
+		t.Errorf("GenerateRescheduleQuery query: %s, want %s", query, wantQuery)
 	}
 	wantbv := map[string]interface{}{
 		"time_next": int64(3),
 		"ids":       []interface{}{"1", "2"},
+	}
+	if !reflect.DeepEqual(bv, wantbv) {
+		t.Errorf("gotid: %v, want %v", bv, wantbv)
+	}
+
+	query, bv = mm.GeneratePurgeQuery(3)
+	wantQuery = "delete from foo where time_scheduled < :time_scheduled and time_acked is not null limit 500"
+	if query != wantQuery {
+		t.Errorf("GeneratePurgeQuery query: %s, want %s", query, wantQuery)
+	}
+	wantbv = map[string]interface{}{
+		"time_scheduled": int64(3),
 	}
 	if !reflect.DeepEqual(bv, wantbv) {
 		t.Errorf("gotid: %v, want %v", bv, wantbv)

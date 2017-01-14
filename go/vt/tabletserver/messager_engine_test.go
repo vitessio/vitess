@@ -321,6 +321,13 @@ func TestMEGenerate(t *testing.T) {
 		t.Error(err)
 	}
 	if _, _, err := me.GenerateRescheduleQuery("t2", []string{"1"}, 0); err == nil || err.Error() != want {
-		t.Errorf("me.GenerateAckQuery(invalid): %v, want %s", err, want)
+		t.Errorf("me.GenerateRescheduleQuery(invalid): %v, want %s", err, want)
+	}
+
+	if _, _, err := me.GeneratePurgeQuery("t1", 0); err != nil {
+		t.Error(err)
+	}
+	if _, _, err := me.GeneratePurgeQuery("t2", 0); err == nil || err.Error() != want {
+		t.Errorf("me.GeneratePurgeQuery(invalid): %v, want %s", err, want)
 	}
 }
