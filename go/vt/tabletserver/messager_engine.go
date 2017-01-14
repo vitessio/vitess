@@ -175,6 +175,18 @@ func (me *MessagerEngine) GenerateRescheduleQuery(name string, ids []string, tim
 	return query, bv, nil
 }
 
+// GeneratePurgeQuery returns the query and bind vars for purging messages.
+func (me *MessagerEngine) GeneratePurgeQuery(name string, timeCutoff int64) (string, map[string]interface{}, error) {
+	me.mu.Lock()
+	defer me.mu.Unlock()
+	mm := me.managers[name]
+	if mm == nil {
+		return "", nil, fmt.Errorf("message table %s not found in schema", name)
+	}
+	query, bv := mm.GeneratePurgeQuery(timeCutoff)
+	return query, bv, nil
+}
+
 func (me *MessagerEngine) schemaChanged(tables map[string]*schema.Table) {
 	me.mu.Lock()
 	defer me.mu.Unlock()
@@ -186,7 +198,7 @@ func (me *MessagerEngine) schemaChanged(tables map[string]*schema.Table) {
 			continue
 		}
 		// TODO(sougou): hardcoded values.
-		mm := NewMessageManager(me.tsv, name, 1*time.Second, 10000, 1*time.Second, me.connpool)
+		mm := NewMessageManager(me.tsv, name, 1*time.Second, 3*time.Second, 10000, 1*time.Second, me.connpool)
 		me.managers[name] = mm
 		mm.Open()
 	}

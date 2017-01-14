@@ -32,6 +32,7 @@ func (tr *testReceiver) Cancel() {
 func TestMessage(t *testing.T) {
 	tr := &testReceiver{ch: make(chan *tabletserver.MessageRow)}
 	framework.Server.MessageSubscribe("vitess_message", tr)
+	defer framework.Server.MessageUnsubscribe(tr)
 	client := framework.NewClient()
 	err := client.Begin()
 	if err != nil {
@@ -114,10 +115,14 @@ func TestMessage(t *testing.T) {
 	if !(end-1e9 < ack && ack < end) {
 		t.Errorf("ack: %d. must be within 1s of end: %d", ack/1e9, end/1e9)
 	}
-	select {
-	case <-tr.ch:
-		t.Error("Nothing should be received")
-	default:
+	// Within 3+1 seconds, the row should be deleted.
+	time.Sleep(4 * time.Second)
+	qr, err = client.Execute("select time_acked, epoch from vitess_message where id = 1", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if qr.RowsAffected != 0 {
+		t.Error("The row has not been purged yet")
 	}
 }
 

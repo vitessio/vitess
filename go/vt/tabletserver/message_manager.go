@@ -30,7 +30,9 @@ type MessageManager struct {
 
 	name        string
 	ackWaitTime time.Duration
-	ticks       *timer.Timer
+	purgeAfter  time.Duration
+	pollerTicks *timer.Timer
+	purgeTicks  *timer.Timer
 	connpool    *ConnPool
 
 	mu sync.Mutex
@@ -50,16 +52,19 @@ type MessageManager struct {
 	readByTimeNext  *sqlparser.ParsedQuery
 	ackQuery        *sqlparser.ParsedQuery
 	rescheduleQuery *sqlparser.ParsedQuery
+	purgeQuery      *sqlparser.ParsedQuery
 }
 
 // NewMessageManager creates a new message manager.
-func NewMessageManager(tsv *TabletServer, name string, ackWaitTime time.Duration, cacheSize int, pollInterval time.Duration, connpool *ConnPool) *MessageManager {
+func NewMessageManager(tsv *TabletServer, name string, ackWaitTime, purgeAfter time.Duration, cacheSize int, pollInterval time.Duration, connpool *ConnPool) *MessageManager {
 	mm := &MessageManager{
 		tsv:         tsv,
 		name:        name,
 		ackWaitTime: ackWaitTime,
+		purgeAfter:  purgeAfter,
 		cache:       NewMessagerCache(cacheSize),
-		ticks:       timer.NewTimer(pollInterval),
+		pollerTicks: timer.NewTimer(pollInterval),
+		purgeTicks:  timer.NewTimer(pollInterval),
 		connpool:    connpool,
 	}
 	mm.cond.L = &mm.mu
@@ -74,6 +79,9 @@ func NewMessageManager(tsv *TabletServer, name string, ackWaitTime time.Duration
 	mm.rescheduleQuery = buildParsedQuery(
 		"update %v set time_next = %a, epoch = epoch+1 where id in %a and time_acked is null",
 		tableName, ":time_next", "::ids")
+	mm.purgeQuery = buildParsedQuery(
+		"delete from %v where time_scheduled < %a and time_acked is not null limit 500",
+		tableName, ":time_scheduled")
 	return mm
 }
 
@@ -88,12 +96,14 @@ func (mm *MessageManager) Open() {
 	mm.wg.Add(1)
 	go mm.runSend()
 	// TODO(sougou): improve ticks to add randomness.
-	mm.ticks.Start(mm.runPoller)
+	mm.pollerTicks.Start(mm.runPoller)
+	mm.purgeTicks.Start(mm.runPurge)
 }
 
 // Close stops the MessageManager service.
 func (mm *MessageManager) Close() {
-	mm.ticks.Stop()
+	mm.pollerTicks.Stop()
+	mm.purgeTicks.Stop()
 
 	mm.mu.Lock()
 	if !mm.isOpen {
@@ -207,7 +217,7 @@ func (mm *MessageManager) runSend() {
 			}
 			if mm.messagesPending {
 				// Trigger the poller to fetch more.
-				mm.ticks.Trigger()
+				mm.pollerTicks.Trigger()
 			}
 			mm.cond.Wait()
 		}
@@ -252,7 +262,7 @@ func (mm *MessageManager) postpone(mr *MessageRow) {
 }
 
 func (mm *MessageManager) runPoller() {
-	ctx, cancel := context.WithTimeout(localContext(), mm.ticks.Interval())
+	ctx, cancel := context.WithTimeout(localContext(), mm.pollerTicks.Interval())
 	defer cancel()
 	conn, err := mm.connpool.Get(ctx)
 	if err != nil {
@@ -310,8 +320,22 @@ func (mm *MessageManager) runPoller() {
 			}
 		}
 	}()
+}
 
-	// TODO(sougou): purge.
+func (mm *MessageManager) runPurge() {
+	ctx, cancel := context.WithTimeout(localContext(), mm.purgeTicks.Interval())
+	defer cancel()
+	for {
+		count, err := mm.tsv.PurgeMessages(ctx, nil, mm.name, time.Now().Add(-mm.purgeAfter).UnixNano())
+		if err != nil {
+			// TODO(sougou): increment internal error.
+			log.Errorf("Unable to delete messages: %v", err)
+		}
+		// If deleted 500 or more, we should continue.
+		if count < 500 {
+			return
+		}
+	}
 }
 
 // GenerateAckQuery returns the query and bind vars for acking a message.
@@ -335,6 +359,13 @@ func (mm *MessageManager) GenerateRescheduleQuery(ids []string, timeNew int64) (
 	return mm.rescheduleQuery.Query, map[string]interface{}{
 		"time_next": timeNew,
 		"ids":       idbvs,
+	}
+}
+
+// GeneratePurgeQuery returns the query and bind vars for purging messages.
+func (mm *MessageManager) GeneratePurgeQuery(timeCutoff int64) (string, map[string]interface{}) {
+	return mm.purgeQuery.Query, map[string]interface{}{
+		"time_scheduled": timeCutoff,
 	}
 }
 

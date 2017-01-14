@@ -1464,6 +1464,44 @@ func TestRescheduleMessages(t *testing.T) {
 	}
 }
 
+func TestPurgeMessages(t *testing.T) {
+	_, tsv, db := newTestTxExecutor()
+	defer tsv.StopService()
+	ctx := context.Background()
+	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+
+	_, err := tsv.PurgeMessages(ctx, &target, "nonmsg", 0)
+	want := "error: message table nonmsg not found in schema"
+	if err == nil || err.Error() != want {
+		t.Errorf("tsv.PurgeMessages(invalid): %v, want %s", err, want)
+	}
+
+	_, err = tsv.PurgeMessages(ctx, &target, "msg", 0)
+	want = "error: query: select time_scheduled, id from msg where time_scheduled < 0 and time_acked is not null limit 500 for update is not supported"
+	if err == nil || err.Error() != want {
+		t.Errorf("tsv.PurgeMessages(invalid):\n%v, want\n%s", err, want)
+	}
+
+	db.AddQuery(
+		"select time_scheduled, id from msg where time_scheduled < 3 and time_acked is not null limit 500 for update",
+		&sqltypes.Result{
+			RowsAffected: 1,
+			Rows: [][]sqltypes.Value{{
+				sqltypes.MakeString([]byte("1")),
+				sqltypes.MakeString([]byte("1")),
+			}},
+		},
+	)
+	db.AddQuery("delete from msg where (time_scheduled = '1' and id = '1') /* _stream msg (time_scheduled id ) ('MQ==' 'MQ==' ); */", &sqltypes.Result{RowsAffected: 1})
+	count, err := tsv.PurgeMessages(ctx, &target, "msg", 3)
+	if err != nil {
+		t.Error(err)
+	}
+	if count != 1 {
+		t.Errorf("count: %d, want 1", count)
+	}
+}
+
 func TestTabletServerSplitQuery(t *testing.T) {
 	db := setUpTabletServerTest()
 	db.AddQuery("SELECT MIN(pk), MAX(pk) FROM test_table", &sqltypes.Result{

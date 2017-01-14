@@ -960,6 +960,14 @@ func (tsv *TabletServer) RescheduleMessages(ctx context.Context, target *querypb
 	})
 }
 
+// PurgeMessages purges messages older than specified time in Unix Nanoseconds.
+// It purges at most 500 messages. It returns the number of messages successfully purged.
+func (tsv *TabletServer) PurgeMessages(ctx context.Context, target *querypb.Target, name string, timeCutoff int64) (count int64, err error) {
+	return tsv.execDML(ctx, target, func() (string, map[string]interface{}, error) {
+		return tsv.messager.GeneratePurgeQuery(name, timeCutoff)
+	})
+}
+
 func (tsv *TabletServer) execDML(ctx context.Context, target *querypb.Target, queryGenerator func() (string, map[string]interface{}, error)) (count int64, err error) {
 	if err = tsv.startRequest(ctx, target, false, false); err != nil {
 		return 0, err
