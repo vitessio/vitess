@@ -197,13 +197,13 @@ func TestQueryExecutorPlanInsertMessage(t *testing.T) {
 		t.Fatalf("got: %v, want: %v", got, want)
 	}
 	mr := <-r1.ch
-	wantmr := &MessageRow{
+	wantmr := []*MessageRow{{
 		TimeNext: 1,
 		Epoch:    0,
 		ID:       sqltypes.MakeString([]byte("1")),
 		Message:  sqltypes.MakeString([]byte("01")),
 		id:       "1",
-	}
+	}}
 	if !reflect.DeepEqual(mr, wantmr) {
 		t.Errorf("rows:\n%+v, want\n%+v", got, wantmr)
 	}

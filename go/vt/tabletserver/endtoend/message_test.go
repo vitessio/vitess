@@ -20,9 +20,11 @@ type testReceiver struct {
 	ch   chan *tabletserver.MessageRow
 }
 
-func (tr *testReceiver) Send(name string, mr *tabletserver.MessageRow) error {
+func (tr *testReceiver) Send(name string, mrs []*tabletserver.MessageRow) error {
 	tr.name = name
-	tr.ch <- mr
+	for _, mr := range mrs {
+		tr.ch <- mr
+	}
 	return nil
 }
 

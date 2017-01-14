@@ -952,11 +952,11 @@ func (tsv *TabletServer) AckMessages(ctx context.Context, target *querypb.Target
 	})
 }
 
-// RescheduleMessages reschedules the list of messages for a given message table.
-// It returns the number of messages successfully rescheduled.
-func (tsv *TabletServer) RescheduleMessages(ctx context.Context, target *querypb.Target, name string, ids []string, timeNew int64) (count int64, err error) {
+// PostponeMessages postpones the list of messages for a given message table.
+// It returns the number of messages successfully postponed.
+func (tsv *TabletServer) PostponeMessages(ctx context.Context, target *querypb.Target, name string, ids []string) (count int64, err error) {
 	return tsv.execDML(ctx, target, func() (string, map[string]interface{}, error) {
-		return tsv.messager.GenerateRescheduleQuery(name, ids, timeNew)
+		return tsv.messager.GeneratePostponeQuery(name, ids)
 	})
 }
 

@@ -86,7 +86,7 @@ func TestMessagerCacheDupKey(t *testing.T) {
 	}) {
 		t.Error("Add(dup): returned false, want true")
 	}
-	mc.Discard("row01")
+	mc.Discard([]string{"row01"})
 	if !mc.Add(&MessageRow{
 		TimeNext: 1,
 		Epoch:    0,
@@ -105,7 +105,7 @@ func TestMessagerCacheDiscard(t *testing.T) {
 	}) {
 		t.Fatal("Add returned false")
 	}
-	mc.Discard("row01")
+	mc.Discard([]string{"row01"})
 	if row := mc.Pop(); row != nil {
 		t.Errorf("Pop: want nil, got %s", row.id)
 	}
@@ -131,7 +131,7 @@ func TestMessagerCacheDiscard(t *testing.T) {
 	if row := mc.Pop(); row != nil {
 		t.Errorf("Pop: want nil, got %s", row.id)
 	}
-	mc.Discard("row01")
+	mc.Discard([]string{"row01"})
 
 	// Now we can add.
 	if !mc.Add(&MessageRow{
