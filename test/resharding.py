@@ -295,8 +295,10 @@ primary key (name)
     keyspace_ids = [0x9000000000000000, 0xD000000000000000, 0xE000000000000000]
     self._insert_multi_value(shard_1_master, 'resharding1', mids,
                              msg_ids, keyspace_ids)
+    # This update targets two shards.
     self._exec_non_annotated_update(shard_1_master, 'resharding1',
                                     [10000011, 10000012], 'update1')
+    # This update targets one shard.
     self._exec_non_annotated_update(shard_1_master, 'resharding1',
                                     [10000013], 'update2')
 
@@ -305,8 +307,10 @@ primary key (name)
     keyspace_ids = [0x9000000000000000, 0xD000000000000000, 0xE000000000000000]
     self._insert_multi_value(shard_1_master, 'resharding1', mids,
                              msg_ids, keyspace_ids)
+    # This delete targets two shards.
     self._exec_non_annotated_delete(shard_1_master, 'resharding1',
                                     [10000014, 10000015])
+    # This delete targets one shard.
     self._exec_non_annotated_delete(shard_1_master, 'resharding1', [10000016])
 
   def _check_multi_shard_values(self):

@@ -28,9 +28,8 @@ message BinlogTransaction {
       BL_BEGIN = 1;
       BL_COMMIT = 2;
       BL_ROLLBACK = 3;
-      // BL_DML is deprecated. Use BL_INSERT, BL_UPDATE
-      // or BL_DELETE instead.
-      BL_DML = 4;
+      // BL_DML is deprecated.
+      BL_DML_DEPRECATED = 4;
       BL_DDL = 5;
       BL_SET = 6;
       BL_INSERT = 7;

@@ -38,10 +38,14 @@ func KeyRangeFilterFunc(keyrange *topodatapb.KeyRange, sendReply sendTransaction
 				keyspaceIDS, err := sqlannotation.ExtractKeyspaceIDS(string(statement.Sql))
 				if err != nil {
 					if statement.Category == binlogdatapb.BinlogTransaction_Statement_BL_INSERT {
-						handleExtractKeySpaceIDError(err)
+						// TODO(erez): Stop filtered-replication here, and alert.
+						logExtractKeySpaceIDError(err)
 						continue
 					}
-					// updates and deletes are safe to replicate to all targets.
+					// If no keyspace IDs are found, we replicate to all tarrgets.
+					// This is safe for UPDATE and DELETE because vttablet rewrites queries to
+					// include the primary key and the query will only affect the shards that
+					// have the rows.
 					filtered = append(filtered, statement)
 					matched = true
 					continue
@@ -132,13 +136,7 @@ func generateSingleInsertQuery(ins *sqlparser.Insert, keyspaceIDs [][]byte, trai
 	}
 }
 
-// Handles the error in sqlannotation.ExtractKeySpaceIDError.
-// Returns 'true' iff filtered replication should continue (and skip the current SQL
-// statement).
-// TODO(erez): Currently, always returns true. So filtered-replication-unfriendly
-// statemetns also get skipped. We need to abort filtered-replication in a
-// graceful manner.
-func handleExtractKeySpaceIDError(err error) bool {
+func logExtractKeySpaceIDError(err error) {
 	extractErr, ok := err.(*sqlannotation.ExtractKeySpaceIDError)
 	if !ok {
 		log.Fatalf("Expected sqlannotation.ExtractKeySpaceIDError. Got: %v", err)
@@ -148,17 +146,13 @@ func handleExtractKeySpaceIDError(err error) bool {
 		log.Errorf(
 			"Error parsing keyspace id annotation. Skipping statement. (%s)", extractErr.Message)
 		updateStreamErrors.Add("ExtractKeySpaceIDParseError", 1)
-		return true
 	case sqlannotation.ExtractKeySpaceIDReplicationUnfriendlyError:
 		log.Errorf(
 			"Found replication unfriendly statement. (%s). "+
 				"Filtered replication should abort, but we're currenty just skipping the statement.",
 			extractErr.Message)
 		updateStreamErrors.Add("ExtractKeySpaceIDReplicationUnfriendlyError", 1)
-		return true
 	default:
 		log.Fatalf("Unexpected extractErr.Kind. (%v)", extractErr)
-		return true // Unreachable.
 	}
-
 }
