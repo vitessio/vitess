@@ -242,7 +242,9 @@ func (mm *MessageManager) runSend() {
 }
 
 func (mm *MessageManager) send(receiver *receiverWithStatus, mrs []*MessageRow) {
-	_ = receiver.receiver.Send(mm.name, mrs)
+	if err := receiver.receiver.Send(mm.name, mrs); err != nil {
+		log.Errorf("Error sending messages: %v", mrs)
+	}
 	mm.mu.Lock()
 	receiver.busy = false
 	if mm.curReceiver == -1 {
