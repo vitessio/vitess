@@ -2,7 +2,6 @@ package buffer
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"runtime/debug"
 	"sync"
@@ -33,6 +32,12 @@ const (
 // shardBuffer buffers requests during a failover for a particular shard.
 // The object will be reused across failovers. If no failover is currently in
 // progress, the state is "IDLE".
+//
+// Note that this object is accessed concurrently by multiple threads:
+// - vtgate request threads
+// - discovery.HealthCheck listener execution thread
+// - timeout thread (timeout_thread.go) to evict too old buffered requests
+// - drain() thread
 type shardBuffer struct {
 	// Immutable fields set at construction.
 	keyspace       string
@@ -55,13 +60,25 @@ type shardBuffer struct {
 	lastStart time.Time
 	// lastEnd is the last time we saw the end of a failover.
 	lastEnd time.Time
+	// timeoutThread will be set while a failover is in progress and the object is
+	// in the BUFFERING state.
+	timeoutThread *timeoutThread
 }
 
 // entry is created per buffered request.
 type entry struct {
 	// done will be closed by shardBuffer when the failover is over and the
 	// request can be retried.
+	// Any Go routine closing this channel must also remove the entry from the
+	// ShardBuffer queue such that nobody else tries to close it.
 	done chan struct{}
+
+	// deadline is the time when the entry is out of the buffering window and it
+	// must be canceled.
+	deadline time.Time
+
+	// err is set if the buffering failed e.g. when the entry was evicted.
+	err error
 
 	// bufferCtx wraps the request ctx and is used to track the retry of a
 	// request during the drain phase. Once the retry is done, the caller
@@ -154,12 +171,13 @@ func (sb *shardBuffer) startBufferingLocked(err error) {
 	requestsInFlightMax.Set(sb.statsKey, 0)
 	failoverDurationMs.Set(sb.statsKey, 0)
 
-	// TODO(mberlin): Start timer to enforce max failover duration.
-
 	sb.lastStart = time.Now()
 	sb.logErrorIfStateNotLocked(stateIdle)
 	sb.state = stateBuffering
 	sb.queue = make([]*entry, 0)
+
+	sb.timeoutThread = newTimeoutThread(sb)
+	sb.timeoutThread.start()
 	log.Infof("Starting buffering for shard: %s (window: %v, size: %v, max failover duration: %v) (A failover was detected by this seen error: %v.)", topoproto.KeyspaceShardString(sb.keyspace, sb.shard), *window, *size, *maxFailoverDuration, err)
 }
 
@@ -170,7 +188,7 @@ func (sb *shardBuffer) startBufferingLocked(err error) {
 // that "sb.mu" must be locked before calling the method.
 func (sb *shardBuffer) logErrorIfStateNotLocked(state bufferState) {
 	if sb.state != state {
-		log.Errorf("BUG: Buffer state is not '%v' but should be. Full state of buffer object: %#v Stacktrace:\n%s", state, sb, debug.Stack())
+		log.Errorf("BUG: Buffer state should be '%v' and not '%v'. Full state of buffer object: %#v Stacktrace:\n%s", state, sb.state, sb, debug.Stack())
 	}
 }
 
@@ -182,29 +200,107 @@ func (sb *shardBuffer) logErrorIfStateNotLocked(state bufferState) {
 // If buffering fails e.g. due to a full buffer, an error is returned.
 func (sb *shardBuffer) bufferRequestLocked(ctx context.Context) (*entry, error) {
 	if !sb.bufferSizeSema.TryAcquire() {
-		return nil, vterrors.FromError(vtrpcpb.ErrorCode_TRANSIENT_ERROR, errors.New("master buffer is full"))
+		// Buffer is full. Evict the oldest entry and buffer this request instead.
+		if len(sb.queue) == 0 {
+			// Overall buffer is full, but this shard's queue is empty. That means
+			// there is at least one other shard failing over as well which consumes
+			// the whole buffer.
+			return nil, bufferFullError
+		}
+
+		e := sb.queue[0]
+		// Evict the entry. Do not release its slot in the buffer and reuse it for
+		// this new request.
+		// NOTE: We keep the lock to avoid racing with drain().
+		sb.unblockAndWait(e, entryEvictedError, false /* releaseSlot */)
+		sb.queue = sb.queue[1:]
 	}
 
-	// TODO(mberlin): Kill the oldest entry if full.
-
 	e := &entry{
-		done: make(chan struct{}),
+		done:     make(chan struct{}),
+		deadline: time.Now().Add(*window),
 	}
 	e.bufferCtx, e.bufferCancel = context.WithCancel(ctx)
 	sb.queue = append(sb.queue, e)
 	requestsInFlightMax.Add(sb.statsKey, 1)
+	if len(sb.queue) == 1 {
+		sb.timeoutThread.notifyQueueNotEmpty()
+	}
 	return e, nil
+}
+
+// unblockAndWait unblocks a blocked request and waits until it reported its end.
+func (sb *shardBuffer) unblockAndWait(e *entry, err error, releaseSlot bool) {
+	// Set error such that the request will see it.
+	e.err = err
+	// Tell blocked request to stop waiting.
+	close(e.done)
+	// Wait for unblocked request to end.
+	<-e.bufferCtx.Done()
+	if releaseSlot {
+		sb.bufferSizeSema.Release()
+	}
 }
 
 // wait blocks while the request is buffered during the failover.
 func (sb *shardBuffer) wait(ctx context.Context, e *entry) error {
 	select {
 	case <-ctx.Done():
-		// TODO(mberlin): Cancel buffering. Implement an sb.cancel(e) for that.
+		sb.remove(e)
 		return vterrors.FromError(vtrpcpb.ErrorCode_TRANSIENT_ERROR, fmt.Errorf("context was canceled before failover finished (%v)", ctx.Err()))
 	case <-e.done:
-		return nil
+		return e.err
 	}
+}
+
+// oldestEntry returns the head of the queue or nil if the queue is empty.
+func (sb *shardBuffer) oldestEntry() *entry {
+	sb.mu.Lock()
+	defer sb.mu.Unlock()
+
+	if len(sb.queue) > 0 {
+		return sb.queue[0]
+	}
+	return nil
+}
+
+// evictOldestEntry is used by timeoutThread to evict the head entry of the
+// queue if it exceeded its buffering window.
+func (sb *shardBuffer) evictOldestEntry(e *entry) {
+	sb.mu.Lock()
+	if len(sb.queue) == 0 || e != sb.queue[0] {
+		// Entry is already removed e.g. by remove(). Ignore it.
+		return
+	}
+	sb.unblockAndWait(e, nil /* err */, true /* releaseSlot */)
+	sb.queue = sb.queue[1:]
+	sb.mu.Unlock()
+}
+
+// remove must be called when the request was canceled from outside and not
+// internally.
+func (sb *shardBuffer) remove(toRemove *entry) {
+	sb.mu.Lock()
+	defer sb.mu.Unlock()
+
+	if sb.queue == nil {
+		// Queue is cleared because we're already in the DRAIN phase.
+		return
+	}
+
+	// If entry is still in the queue, delete it and cancel it internally.
+	for i, e := range sb.queue {
+		if e == toRemove {
+			// Delete entry at index "i" from slice.
+			sb.queue = append(sb.queue[:i], sb.queue[i+1:]...)
+			// Entry was not canceled internally yet. Finish it explicitly. This way,
+			// timeoutThread will find out about it as well.
+			close(toRemove.done)
+			return
+		}
+	}
+
+	// Entry was already removed. Keep the queue as it is.
 }
 
 func (sb *shardBuffer) recordExternallyReparentedTimestamp(timestamp int64) {
@@ -229,39 +325,48 @@ func (sb *shardBuffer) recordExternallyReparentedTimestamp(timestamp int64) {
 	}
 
 	sb.externallyReparented = timestamp
-	if sb.state == stateBuffering {
-		sb.stopBufferingLocked("failover end detected")
-	}
+	sb.stopBufferingLocked("failover end detected")
+}
+
+func (sb *shardBuffer) stopBufferingDueToMaxDuration() {
+	sb.mu.Lock()
+	defer sb.mu.Unlock()
+
+	sb.stopBufferingLocked(fmt.Sprintf("stopping buffering because failover did not finish in time (%v)", *maxFailoverDuration))
 }
 
 func (sb *shardBuffer) stopBufferingLocked(reason string) {
+	if sb.state != stateBuffering {
+		return
+	}
+
 	// Stop buffering.
 	sb.lastEnd = time.Now()
-	sb.logErrorIfStateNotLocked(stateBuffering)
-	sb.state = stateDraining
 	d := time.Since(sb.lastStart)
 	failoverDurationMs.Set(sb.statsKey, int64(d/time.Millisecond))
 
-	log.Infof("Stopping buffering for shard: %s after: %.1f seconds due to: %v. Draining %d buffered requests now.", topoproto.KeyspaceShardString(sb.keyspace, sb.shard), d.Seconds(), reason, len(sb.queue))
+	sb.logErrorIfStateNotLocked(stateBuffering)
+	sb.state = stateDraining
+	q := sb.queue
+	// Clear the queue such that remove(), oldestEntry() and evictOldestEntry()
+	// will not work on obsolete data.
+	sb.queue = nil
+
+	log.Infof("Stopping buffering for shard: %s after: %.1f seconds due to: %v. Draining %d buffered requests now.", topoproto.KeyspaceShardString(sb.keyspace, sb.shard), d.Seconds(), reason, len(q))
 
 	// Start the drain. (Use a new Go routine to release the lock.)
-	go sb.drain()
+	go sb.drain(q)
 }
 
-func (sb *shardBuffer) drain() {
-	sb.mu.RLock()
-	// Iterate on a copy of "queue" because we want to release the lock such that
-	// other incoming requests can check the state of the buffer.
-	q := make([]*entry, len(sb.queue))
-	copy(q, sb.queue)
-	sb.mu.RUnlock()
+func (sb *shardBuffer) drain(q []*entry) {
+	// stop must be called outside of the lock because the thread may access
+	// shardBuffer as well e.g. to get the current oldest entry.
+	sb.timeoutThread.stop()
 
 	start := time.Now()
 	// TODO(mberlin): Parallelize the drain by pumping the data through a channel.
 	for _, e := range q {
-		close(e.done)
-		<-e.bufferCtx.Done()
-		sb.bufferSizeSema.Release()
+		sb.unblockAndWait(e, nil /* err */, true /* releaseSlot */)
 	}
 	d := time.Since(start)
 	log.Infof("Draining finished for shard: %s Took: %v for: %d requests.", topoproto.KeyspaceShardString(sb.keyspace, sb.shard), d, len(q))
@@ -271,7 +376,7 @@ func (sb *shardBuffer) drain() {
 	defer sb.mu.Unlock()
 	sb.logErrorIfStateNotLocked(stateDraining)
 	sb.state = stateIdle
-	sb.queue = nil
+	sb.timeoutThread = nil
 }
 
 // sizeForTesting is used by the unit test only to find out the current number
