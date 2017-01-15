@@ -256,25 +256,25 @@ func testRequestCanceled(t *testing.T, explicitEnd bool) {
 		flag.Set("vtgate_buffer_max_failover_duration", "100ms")
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	stopped := issueRequest(ctx, t, b, failoverErr)
+	// Buffer 2 requests. The second will be canceled and the first will be drained.
+	stopped1 := issueRequest(context.Background(), t, b, failoverErr)
 	if err := waitForRequestsInFlight(b, 1); err != nil {
 		t.Fatal(err)
 	}
+	ctx2, cancel2 := context.WithCancel(context.Background())
+	stopped2 := issueRequest(ctx2, t, b, failoverErr)
+	if err := waitForRequestsInFlight(b, 2); err != nil {
+		t.Fatal(err)
+	}
 
-	// Cancel request before buffering stops.
-	cancel()
-
+	// Cancel second request before buffering stops.
+	cancel2()
 	// Canceled request will see an error from the buffer.
-	bufferErr := <-stopped
-	if bufferErr == nil {
-		t.Fatalf("buffering should have stopped early and returned an error because the request was canceled from the outside")
+	if err := isCanceledError(<-stopped2); err != nil {
+		t.Fatal(err)
 	}
-	if got, want := vterrors.RecoverVtErrorCode(bufferErr), vtrpcpb.ErrorCode_TRANSIENT_ERROR; got != want {
-		t.Fatalf("wrong error code for canceled buffered request. got = %v, want = %v", got, want)
-	}
-	if got, want := bufferErr.Error(), "context was canceled before failover finished (context canceled)"; got != want {
-		t.Fatalf("canceled buffered request should return a different error message. got = %v, want = %v", got, want)
+	if err := waitForRequestsInFlight(b, 1); err != nil {
+		t.Fatal(err)
 	}
 
 	if explicitEnd {
@@ -287,6 +287,10 @@ func testRequestCanceled(t *testing.T, explicitEnd bool) {
 	// Failover will end eventually.
 	if err := waitForState(b, stateIdle); err != nil {
 		t.Fatal(err)
+	}
+	// First request must have been drained without an error.
+	if err := <-stopped1; err != nil {
+		t.Fatalf("request should have been buffered and not returned an error: %v", err)
 	}
 }
 
@@ -330,6 +334,19 @@ func TestEviction(t *testing.T) {
 	if err := <-stopped3; err != nil {
 		t.Fatalf("request should have been buffered and not returned an error: %v", err)
 	}
+}
+
+func isCanceledError(err error) error {
+	if err == nil {
+		return fmt.Errorf("buffering should have stopped early and returned an error because the request was canceled from the outside")
+	}
+	if got, want := vterrors.RecoverVtErrorCode(err), vtrpcpb.ErrorCode_TRANSIENT_ERROR; got != want {
+		return fmt.Errorf("wrong error code for canceled buffered request. got = %v, want = %v", got, want)
+	}
+	if got, want := err.Error(), "context was canceled before failover finished (context canceled)"; got != want {
+		return fmt.Errorf("canceled buffered request should return a different error message. got = %v, want = %v", got, want)
+	}
+	return nil
 }
 
 // isEvictedError returns nil if "err" is or contains "entryEvictedError".
