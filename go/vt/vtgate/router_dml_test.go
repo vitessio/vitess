@@ -9,12 +9,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/youtube/vitess/go/sqltypes"
-	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
-	"github.com/youtube/vitess/go/vt/tabletserver/sandboxconn"
-	_ "github.com/youtube/vitess/go/vt/vtgate/vindexes"
+	"github.com/gitql/vitess/go/sqltypes"
+	"github.com/gitql/vitess/go/vt/tabletserver/querytypes"
+	"github.com/gitql/vitess/go/vt/tabletserver/sandboxconn"
+	_ "github.com/gitql/vitess/go/vt/vtgate/vindexes"
 
-	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	querypb "github.com/gitql/vitess/go/vt/proto/query"
 )
 
 func TestUpdateEqual(t *testing.T) {

@@ -17,9 +17,9 @@ import (
 	log "github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
 	"github.com/tchap/go-patricia/patricia"
-	"github.com/youtube/vitess/go/vt/tableacl/acl"
+	"github.com/gitql/vitess/go/vt/tableacl/acl"
 
-	tableaclpb "github.com/youtube/vitess/go/vt/proto/tableacl"
+	tableaclpb "github.com/gitql/vitess/go/vt/proto/tableacl"
 )
 
 // ACLResult embeds an acl.ACL and also tell which table group it belongs to.

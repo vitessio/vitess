@@ -12,14 +12,14 @@ import (
 
 	"golang.org/x/net/context"
 
-	"github.com/youtube/vitess/go/sqltypes"
-	"github.com/youtube/vitess/go/vt/discovery"
-	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
-	"github.com/youtube/vitess/go/vt/tabletserver/sandboxconn"
-	_ "github.com/youtube/vitess/go/vt/vtgate/vindexes"
+	"github.com/gitql/vitess/go/sqltypes"
+	"github.com/gitql/vitess/go/vt/discovery"
+	"github.com/gitql/vitess/go/vt/tabletserver/querytypes"
+	"github.com/gitql/vitess/go/vt/tabletserver/sandboxconn"
+	_ "github.com/gitql/vitess/go/vt/vtgate/vindexes"
 
-	querypb "github.com/youtube/vitess/go/vt/proto/query"
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	querypb "github.com/gitql/vitess/go/vt/proto/query"
+	topodatapb "github.com/gitql/vitess/go/vt/proto/topodata"
 )
 
 func TestUnsharded(t *testing.T) {

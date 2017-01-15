@@ -8,10 +8,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/youtube/vitess/go/pools"
-	"github.com/youtube/vitess/go/sqldb"
-	"github.com/youtube/vitess/go/stats"
-	"github.com/youtube/vitess/go/vt/dbconnpool"
+	"github.com/gitql/vitess/go/pools"
+	"github.com/gitql/vitess/go/sqldb"
+	"github.com/gitql/vitess/go/stats"
+	"github.com/gitql/vitess/go/vt/dbconnpool"
 	"golang.org/x/net/context"
 )
 

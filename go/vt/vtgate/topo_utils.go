@@ -9,17 +9,17 @@ import (
 	"encoding/hex"
 	"fmt"
 
-	"github.com/youtube/vitess/go/sqltypes"
-	"github.com/youtube/vitess/go/vt/key"
-	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
-	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/topo/topoproto"
-	"github.com/youtube/vitess/go/vt/vterrors"
+	"github.com/gitql/vitess/go/sqltypes"
+	"github.com/gitql/vitess/go/vt/key"
+	"github.com/gitql/vitess/go/vt/tabletserver/querytypes"
+	"github.com/gitql/vitess/go/vt/topo"
+	"github.com/gitql/vitess/go/vt/topo/topoproto"
+	"github.com/gitql/vitess/go/vt/vterrors"
 	"golang.org/x/net/context"
 
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
-	vtgatepb "github.com/youtube/vitess/go/vt/proto/vtgate"
-	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
+	topodatapb "github.com/gitql/vitess/go/vt/proto/topodata"
+	vtgatepb "github.com/gitql/vitess/go/vt/proto/vtgate"
+	vtrpcpb "github.com/gitql/vitess/go/vt/proto/vtrpc"
 )
 
 func mapKeyspaceIdsToShards(ctx context.Context, topoServ topo.SrvTopoServer, cell, keyspace string, tabletType topodatapb.TabletType, keyspaceIds [][]byte) (string, []string, error) {

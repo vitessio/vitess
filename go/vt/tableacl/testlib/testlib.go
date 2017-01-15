@@ -11,9 +11,9 @@ import (
 	"testing"
 	"time"
 
-	tableaclpb "github.com/youtube/vitess/go/vt/proto/tableacl"
-	"github.com/youtube/vitess/go/vt/tableacl"
-	"github.com/youtube/vitess/go/vt/tableacl/acl"
+	tableaclpb "github.com/gitql/vitess/go/vt/proto/tableacl"
+	"github.com/gitql/vitess/go/vt/tableacl"
+	"github.com/gitql/vitess/go/vt/tableacl/acl"
 )
 
 // TestSuite tests a concrete acl.Factory implementation.

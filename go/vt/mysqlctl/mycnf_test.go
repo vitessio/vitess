@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/youtube/vitess/go/vt/env"
+	"github.com/gitql/vitess/go/vt/env"
 )
 
 var MycnfPath = "/tmp/my.cnf"
@@ -27,9 +27,9 @@ func TestMycnf(t *testing.T) {
 		t.Errorf("err: %v", err)
 	}
 	cnfTemplatePaths := []string{
-		path.Join(root, "src/github.com/youtube/vitess/config/mycnf/default.cnf"),
-		path.Join(root, "src/github.com/youtube/vitess/config/mycnf/replica.cnf"),
-		path.Join(root, "src/github.com/youtube/vitess/config/mycnf/master.cnf"),
+		path.Join(root, "src/github.com/gitql/vitess/config/mycnf/default.cnf"),
+		path.Join(root, "src/github.com/gitql/vitess/config/mycnf/replica.cnf"),
+		path.Join(root, "src/github.com/gitql/vitess/config/mycnf/master.cnf"),
 	}
 	data, err := cnf.makeMycnf(cnfTemplatePaths)
 	if err != nil {

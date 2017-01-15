@@ -7,10 +7,10 @@ package main
 // Imports and register the gRPC queryservice server
 
 import (
-	"github.com/youtube/vitess/go/vt/servenv"
-	"github.com/youtube/vitess/go/vt/tabletserver/grpcqueryservice"
-	"github.com/youtube/vitess/go/vt/tabletserver/queryservice"
-	"github.com/youtube/vitess/go/vt/vtgate/l2vtgate"
+	"github.com/gitql/vitess/go/vt/servenv"
+	"github.com/gitql/vitess/go/vt/tabletserver/grpcqueryservice"
+	"github.com/gitql/vitess/go/vt/tabletserver/queryservice"
+	"github.com/gitql/vitess/go/vt/vtgate/l2vtgate"
 )
 
 func init() {

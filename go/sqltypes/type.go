@@ -7,7 +7,7 @@ package sqltypes
 import (
 	"fmt"
 
-	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	querypb "github.com/gitql/vitess/go/vt/proto/query"
 )
 
 // This file provides wrappers and support

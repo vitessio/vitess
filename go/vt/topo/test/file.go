@@ -6,7 +6,7 @@ import (
 
 	"golang.org/x/net/context"
 
-	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/gitql/vitess/go/vt/topo"
 )
 
 // checkFile tests the file part of the Backend API.

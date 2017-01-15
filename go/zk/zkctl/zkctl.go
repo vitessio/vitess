@@ -23,7 +23,7 @@ import (
 	log "github.com/golang/glog"
 	zookeeper "github.com/samuel/go-zookeeper/zk"
 
-	"github.com/youtube/vitess/go/vt/env"
+	"github.com/gitql/vitess/go/vt/env"
 )
 
 const (

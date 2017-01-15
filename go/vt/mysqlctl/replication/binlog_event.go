@@ -9,7 +9,7 @@ package replication
 import (
 	"fmt"
 
-	binlogdatapb "github.com/youtube/vitess/go/vt/proto/binlogdata"
+	binlogdatapb "github.com/gitql/vitess/go/vt/proto/binlogdata"
 )
 
 // BinlogEvent represents a single event from a raw MySQL binlog dump stream.

@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/youtube/vitess/go/sqldb"
-	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
+	"github.com/gitql/vitess/go/sqldb"
+	"github.com/gitql/vitess/go/vt/vttest/fakesqldb"
 	"golang.org/x/net/context"
 )
 

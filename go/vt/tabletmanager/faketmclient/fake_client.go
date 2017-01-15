@@ -15,16 +15,16 @@ import (
 
 	"golang.org/x/net/context"
 
-	"github.com/youtube/vitess/go/vt/hook"
-	"github.com/youtube/vitess/go/vt/logutil"
-	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
-	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
+	"github.com/gitql/vitess/go/vt/hook"
+	"github.com/gitql/vitess/go/vt/logutil"
+	"github.com/gitql/vitess/go/vt/mysqlctl/tmutils"
+	"github.com/gitql/vitess/go/vt/tabletmanager/tmclient"
 
-	logutilpb "github.com/youtube/vitess/go/vt/proto/logutil"
-	querypb "github.com/youtube/vitess/go/vt/proto/query"
-	replicationdatapb "github.com/youtube/vitess/go/vt/proto/replicationdata"
-	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	logutilpb "github.com/gitql/vitess/go/vt/proto/logutil"
+	querypb "github.com/gitql/vitess/go/vt/proto/query"
+	replicationdatapb "github.com/gitql/vitess/go/vt/proto/replicationdata"
+	tabletmanagerdatapb "github.com/gitql/vitess/go/vt/proto/tabletmanagerdata"
+	topodatapb "github.com/gitql/vitess/go/vt/proto/topodata"
 )
 
 // NewFakeTabletManagerClient should be used to create a new FakeTabletManagerClient.

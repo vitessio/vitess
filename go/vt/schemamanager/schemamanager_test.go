@@ -9,22 +9,22 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/youtube/vitess/go/vt/logutil"
-	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
-	"github.com/youtube/vitess/go/vt/tabletmanager/faketmclient"
-	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
-	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/topo/test/faketopo"
-	"github.com/youtube/vitess/go/vt/topo/topoproto"
-	"github.com/youtube/vitess/go/vt/wrangler"
+	"github.com/gitql/vitess/go/vt/logutil"
+	"github.com/gitql/vitess/go/vt/mysqlctl/tmutils"
+	"github.com/gitql/vitess/go/vt/tabletmanager/faketmclient"
+	"github.com/gitql/vitess/go/vt/tabletmanager/tmclient"
+	"github.com/gitql/vitess/go/vt/topo"
+	"github.com/gitql/vitess/go/vt/topo/test/faketopo"
+	"github.com/gitql/vitess/go/vt/topo/topoproto"
+	"github.com/gitql/vitess/go/vt/wrangler"
 	"golang.org/x/net/context"
 
-	querypb "github.com/youtube/vitess/go/vt/proto/query"
-	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	querypb "github.com/gitql/vitess/go/vt/proto/query"
+	tabletmanagerdatapb "github.com/gitql/vitess/go/vt/proto/tabletmanagerdata"
+	topodatapb "github.com/gitql/vitess/go/vt/proto/topodata"
 
 	// import the gRPC client implementation for tablet manager
-	_ "github.com/youtube/vitess/go/vt/tabletmanager/grpctmclient"
+	_ "github.com/gitql/vitess/go/vt/tabletmanager/grpctmclient"
 )
 
 var (

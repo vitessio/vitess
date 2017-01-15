@@ -17,11 +17,11 @@ import (
 
 	log "github.com/golang/glog"
 
-	"github.com/youtube/vitess/go/sync2"
-	"github.com/youtube/vitess/go/vt/discovery"
-	"github.com/youtube/vitess/go/vt/topo/topoproto"
+	"github.com/gitql/vitess/go/sync2"
+	"github.com/gitql/vitess/go/vt/discovery"
+	"github.com/gitql/vitess/go/vt/topo/topoproto"
 
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/gitql/vitess/go/vt/proto/topodata"
 )
 
 // Buffer is used to track ongoing MASTER tablet failovers and buffer

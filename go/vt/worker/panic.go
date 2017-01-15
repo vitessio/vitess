@@ -9,7 +9,7 @@ import (
 
 	"golang.org/x/net/context"
 
-	"github.com/youtube/vitess/go/vt/wrangler"
+	"github.com/gitql/vitess/go/vt/wrangler"
 )
 
 // PanicWorker will run panic() when executed. For internal tests only.

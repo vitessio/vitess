@@ -7,9 +7,9 @@
 package wrangler
 
 import (
-	"github.com/youtube/vitess/go/vt/logutil"
-	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
-	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/gitql/vitess/go/vt/logutil"
+	"github.com/gitql/vitess/go/vt/tabletmanager/tmclient"
+	"github.com/gitql/vitess/go/vt/topo"
 )
 
 var (

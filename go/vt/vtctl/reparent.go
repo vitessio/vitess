@@ -9,12 +9,12 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/youtube/vitess/go/vt/servenv"
-	"github.com/youtube/vitess/go/vt/topo/topoproto"
-	"github.com/youtube/vitess/go/vt/wrangler"
+	"github.com/gitql/vitess/go/vt/servenv"
+	"github.com/gitql/vitess/go/vt/topo/topoproto"
+	"github.com/gitql/vitess/go/vt/wrangler"
 	"golang.org/x/net/context"
 
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/gitql/vitess/go/vt/proto/topodata"
 )
 
 var (

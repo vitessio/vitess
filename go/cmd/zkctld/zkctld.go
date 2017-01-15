@@ -14,9 +14,9 @@ import (
 	"syscall"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/exit"
-	"github.com/youtube/vitess/go/vt/logutil"
-	"github.com/youtube/vitess/go/zk/zkctl"
+	"github.com/gitql/vitess/go/exit"
+	"github.com/gitql/vitess/go/vt/logutil"
+	"github.com/gitql/vitess/go/zk/zkctl"
 )
 
 var (

@@ -13,17 +13,17 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/youtube/vitess/go/sqltypes"
-	"github.com/youtube/vitess/go/vt/discovery"
-	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
-	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/vtgate/gateway"
+	"github.com/gitql/vitess/go/sqltypes"
+	"github.com/gitql/vitess/go/vt/discovery"
+	"github.com/gitql/vitess/go/vt/tabletserver/tabletconn"
+	"github.com/gitql/vitess/go/vt/topo"
+	"github.com/gitql/vitess/go/vt/vtgate/gateway"
 	"golang.org/x/net/context"
 
-	querypb "github.com/youtube/vitess/go/vt/proto/query"
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
-	vtgatepb "github.com/youtube/vitess/go/vt/proto/vtgate"
-	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
+	querypb "github.com/gitql/vitess/go/vt/proto/query"
+	topodatapb "github.com/gitql/vitess/go/vt/proto/topodata"
+	vtgatepb "github.com/gitql/vitess/go/vt/proto/vtgate"
+	vtrpcpb "github.com/gitql/vitess/go/vt/proto/vtrpc"
 )
 
 // This file uses the sandbox_test framework.

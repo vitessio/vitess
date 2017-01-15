@@ -6,8 +6,8 @@ import (
 
 	"github.com/golang/protobuf/proto"
 
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
-	vschemapb "github.com/youtube/vitess/go/vt/proto/vschema"
+	topodatapb "github.com/gitql/vitess/go/vt/proto/topodata"
+	vschemapb "github.com/gitql/vitess/go/vt/proto/vschema"
 )
 
 // This file contains utility functions to maintain backward

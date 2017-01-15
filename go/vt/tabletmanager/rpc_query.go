@@ -5,10 +5,10 @@
 package tabletmanager
 
 import (
-	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/gitql/vitess/go/sqltypes"
 	"golang.org/x/net/context"
 
-	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	querypb "github.com/gitql/vitess/go/vt/proto/query"
 )
 
 // ExecuteFetchAsDba will execute the given query, possibly disabling binlogs and reload schema.

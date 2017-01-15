@@ -7,8 +7,8 @@ package sqlparser
 import (
 	"fmt"
 
-	"github.com/youtube/vitess/go/sqltypes"
-	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	"github.com/gitql/vitess/go/sqltypes"
+	querypb "github.com/gitql/vitess/go/vt/proto/query"
 )
 
 // Normalize changes the statement to use bind values, and

@@ -5,9 +5,9 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/youtube/vitess/go/vt/discovery"
-	"github.com/youtube/vitess/go/vt/proto/topodata"
-	"github.com/youtube/vitess/go/vt/topo/topoproto"
+	"github.com/gitql/vitess/go/vt/discovery"
+	"github.com/gitql/vitess/go/vt/proto/topodata"
+	"github.com/gitql/vitess/go/vt/topo/topoproto"
 )
 
 // yLabel is used to keep track of the cell and type labels of the heatmap.

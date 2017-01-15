@@ -5,7 +5,7 @@
 package vterrors
 
 import (
-	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
+	vtrpcpb "github.com/gitql/vitess/go/vt/proto/vtrpc"
 )
 
 // A list of all vtrpcpb.ErrorCodes, ordered by priority. These priorities are

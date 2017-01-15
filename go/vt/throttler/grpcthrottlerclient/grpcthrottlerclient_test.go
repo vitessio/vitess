@@ -9,9 +9,9 @@ import (
 	"net"
 	"testing"
 
-	"github.com/youtube/vitess/go/vt/throttler"
-	"github.com/youtube/vitess/go/vt/throttler/grpcthrottlerserver"
-	"github.com/youtube/vitess/go/vt/throttler/throttlerclienttest"
+	"github.com/gitql/vitess/go/vt/throttler"
+	"github.com/gitql/vitess/go/vt/throttler/grpcthrottlerserver"
+	"github.com/gitql/vitess/go/vt/throttler/throttlerclienttest"
 	"google.golang.org/grpc"
 )
 

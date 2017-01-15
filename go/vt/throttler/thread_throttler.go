@@ -8,7 +8,7 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/sync2"
+	"github.com/gitql/vitess/go/sync2"
 )
 
 // threadThrottler implements the core logic which decides if a Throttle() call

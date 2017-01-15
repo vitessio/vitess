@@ -9,8 +9,8 @@ import (
 
 	"golang.org/x/net/context"
 
-	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/zk"
+	"github.com/gitql/vitess/go/vt/topo"
+	"github.com/gitql/vitess/go/zk"
 )
 
 /*

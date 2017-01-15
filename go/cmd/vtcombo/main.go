@@ -18,19 +18,19 @@ import (
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 
-	"github.com/youtube/vitess/go/exit"
-	"github.com/youtube/vitess/go/vt/dbconfigs"
-	"github.com/youtube/vitess/go/vt/discovery"
-	"github.com/youtube/vitess/go/vt/mysqlctl"
-	"github.com/youtube/vitess/go/vt/servenv"
-	"github.com/youtube/vitess/go/vt/tabletserver"
-	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/topo/memorytopo"
-	"github.com/youtube/vitess/go/vt/vtctld"
-	"github.com/youtube/vitess/go/vt/vtgate"
+	"github.com/gitql/vitess/go/exit"
+	"github.com/gitql/vitess/go/vt/dbconfigs"
+	"github.com/gitql/vitess/go/vt/discovery"
+	"github.com/gitql/vitess/go/vt/mysqlctl"
+	"github.com/gitql/vitess/go/vt/servenv"
+	"github.com/gitql/vitess/go/vt/tabletserver"
+	"github.com/gitql/vitess/go/vt/topo"
+	"github.com/gitql/vitess/go/vt/topo/memorytopo"
+	"github.com/gitql/vitess/go/vt/vtctld"
+	"github.com/gitql/vitess/go/vt/vtgate"
 
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
-	vttestpb "github.com/youtube/vitess/go/vt/proto/vttest"
+	topodatapb "github.com/gitql/vitess/go/vt/proto/topodata"
+	vttestpb "github.com/gitql/vitess/go/vt/proto/vttest"
 )
 
 var (

@@ -13,11 +13,11 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"github.com/olekukonko/tablewriter"
-	"github.com/youtube/vitess/go/vt/logutil"
-	"github.com/youtube/vitess/go/vt/proto/throttlerdata"
-	"github.com/youtube/vitess/go/vt/throttler"
-	"github.com/youtube/vitess/go/vt/throttler/throttlerclient"
-	"github.com/youtube/vitess/go/vt/wrangler"
+	"github.com/gitql/vitess/go/vt/logutil"
+	"github.com/gitql/vitess/go/vt/proto/throttlerdata"
+	"github.com/gitql/vitess/go/vt/throttler"
+	"github.com/gitql/vitess/go/vt/throttler/throttlerclient"
+	"github.com/gitql/vitess/go/vt/wrangler"
 	"golang.org/x/net/context"
 )
 

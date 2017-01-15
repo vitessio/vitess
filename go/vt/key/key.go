@@ -12,7 +12,7 @@ import (
 	"math"
 	"strings"
 
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/gitql/vitess/go/vt/proto/topodata"
 )
 
 //

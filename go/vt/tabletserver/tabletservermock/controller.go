@@ -10,12 +10,12 @@ import (
 
 	"golang.org/x/net/context"
 
-	"github.com/youtube/vitess/go/vt/dbconfigs"
-	"github.com/youtube/vitess/go/vt/mysqlctl"
-	querypb "github.com/youtube/vitess/go/vt/proto/query"
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
-	"github.com/youtube/vitess/go/vt/tabletserver"
-	"github.com/youtube/vitess/go/vt/tabletserver/queryservice"
+	"github.com/gitql/vitess/go/vt/dbconfigs"
+	"github.com/gitql/vitess/go/vt/mysqlctl"
+	querypb "github.com/gitql/vitess/go/vt/proto/query"
+	topodatapb "github.com/gitql/vitess/go/vt/proto/topodata"
+	"github.com/gitql/vitess/go/vt/tabletserver"
+	"github.com/gitql/vitess/go/vt/tabletserver/queryservice"
 )
 
 // BroadcastData is used by the mock Controller to send data

@@ -19,8 +19,8 @@ import (
 
 	log "github.com/golang/glog"
 
-	"github.com/youtube/vitess/go/netutil"
-	"github.com/youtube/vitess/go/vt/env"
+	"github.com/gitql/vitess/go/netutil"
+	"github.com/gitql/vitess/go/vt/env"
 )
 
 type zkServerAddr struct {

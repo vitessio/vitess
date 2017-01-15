@@ -14,7 +14,7 @@ import (
 
 	"github.com/coreos/go-etcd/etcd"
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/gitql/vitess/go/vt/topo"
 	"golang.org/x/net/context"
 )
 

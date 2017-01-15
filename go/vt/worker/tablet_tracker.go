@@ -10,9 +10,9 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/youtube/vitess/go/vt/discovery"
-	"github.com/youtube/vitess/go/vt/proto/topodata"
-	"github.com/youtube/vitess/go/vt/topo/topoproto"
+	"github.com/gitql/vitess/go/vt/discovery"
+	"github.com/gitql/vitess/go/vt/proto/topodata"
+	"github.com/gitql/vitess/go/vt/topo/topoproto"
 )
 
 // TabletTracker tracks for each tablet alias how often it is currently in use

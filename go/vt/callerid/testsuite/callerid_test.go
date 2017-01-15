@@ -3,9 +3,9 @@ package testsuite
 import (
 	"testing"
 
-	"github.com/youtube/vitess/go/vt/callerid"
-	querypb "github.com/youtube/vitess/go/vt/proto/query"
-	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
+	"github.com/gitql/vitess/go/vt/callerid"
+	querypb "github.com/gitql/vitess/go/vt/proto/query"
+	vtrpcpb "github.com/gitql/vitess/go/vt/proto/vtrpc"
 )
 
 func TestFakeCallerID(t *testing.T) {

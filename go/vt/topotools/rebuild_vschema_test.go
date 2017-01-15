@@ -6,11 +6,11 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/golang/protobuf/proto"
-	"github.com/youtube/vitess/go/vt/logutil"
-	"github.com/youtube/vitess/go/vt/topo/memorytopo"
+	"github.com/gitql/vitess/go/vt/logutil"
+	"github.com/gitql/vitess/go/vt/topo/memorytopo"
 
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
-	vschemapb "github.com/youtube/vitess/go/vt/proto/vschema"
+	topodatapb "github.com/gitql/vitess/go/vt/proto/topodata"
+	vschemapb "github.com/gitql/vitess/go/vt/proto/vschema"
 )
 
 func TestRebuildVSchema(t *testing.T) {

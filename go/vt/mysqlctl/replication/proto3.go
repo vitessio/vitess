@@ -7,7 +7,7 @@ package replication
 import (
 	"fmt"
 
-	replicationdatapb "github.com/youtube/vitess/go/vt/proto/replicationdata"
+	replicationdatapb "github.com/gitql/vitess/go/vt/proto/replicationdata"
 )
 
 // StatusToProto translates a Status to proto3

@@ -7,7 +7,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/gitql/vitess/go/vt/proto/topodata"
 )
 
 // This file provides the utility methods to save / retrieve CellInfo

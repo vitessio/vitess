@@ -12,11 +12,11 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/youtube/vitess/go/sqltypes"
-	"github.com/youtube/vitess/go/vt/concurrency"
-	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	"github.com/gitql/vitess/go/sqltypes"
+	"github.com/gitql/vitess/go/vt/concurrency"
+	querypb "github.com/gitql/vitess/go/vt/proto/query"
 
-	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
+	tabletmanagerdatapb "github.com/gitql/vitess/go/vt/proto/tabletmanagerdata"
 )
 
 // This file contains helper methods to deal with Permissions.

@@ -8,8 +8,8 @@ import (
 	"flag"
 	"testing"
 
-	"github.com/youtube/vitess/go/vt/vtctl/fakevtctlclient"
-	"github.com/youtube/vitess/go/vt/vtctl/vtctlclient"
+	"github.com/gitql/vitess/go/vt/vtctl/fakevtctlclient"
+	"github.com/gitql/vitess/go/vt/vtctl/vtctlclient"
 )
 
 func TestCopySchemaShardTask(t *testing.T) {

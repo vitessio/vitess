@@ -4,7 +4,7 @@
 
 package simpleacl
 
-import "github.com/youtube/vitess/go/vt/tableacl/acl"
+import "github.com/gitql/vitess/go/vt/tableacl/acl"
 
 // SimpleAcl keeps all entries in a unique in-memory list
 type SimpleAcl map[string]bool

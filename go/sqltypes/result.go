@@ -5,8 +5,8 @@
 package sqltypes
 
 import (
-	"github.com/youtube/vitess/go/vt/binlog/eventtoken"
-	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	"github.com/gitql/vitess/go/vt/binlog/eventtoken"
+	querypb "github.com/gitql/vitess/go/vt/proto/query"
 )
 
 // Result represents a query result.

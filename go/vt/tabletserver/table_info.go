@@ -11,9 +11,9 @@ import (
 	"sync"
 
 	log "github.com/golang/glog"
-	querypb "github.com/youtube/vitess/go/vt/proto/query"
-	"github.com/youtube/vitess/go/vt/schema"
-	"github.com/youtube/vitess/go/vt/sqlparser"
+	querypb "github.com/gitql/vitess/go/vt/proto/query"
+	"github.com/gitql/vitess/go/vt/schema"
+	"github.com/gitql/vitess/go/vt/sqlparser"
 	"golang.org/x/net/context"
 )
 

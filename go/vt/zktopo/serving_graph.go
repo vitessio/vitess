@@ -13,11 +13,11 @@ import (
 	zookeeper "github.com/samuel/go-zookeeper/zk"
 	"golang.org/x/net/context"
 
-	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/zk"
+	"github.com/gitql/vitess/go/vt/topo"
+	"github.com/gitql/vitess/go/zk"
 
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
-	vschemapb "github.com/youtube/vitess/go/vt/proto/vschema"
+	topodatapb "github.com/gitql/vitess/go/vt/proto/topodata"
+	vschemapb "github.com/gitql/vitess/go/vt/proto/vschema"
 )
 
 // This file contains the serving graph management code of zktopo.Server.

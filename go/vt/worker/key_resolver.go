@@ -8,14 +8,14 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/gitql/vitess/go/sqltypes"
 
-	"github.com/youtube/vitess/go/vt/key"
-	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
-	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
-	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
+	"github.com/gitql/vitess/go/vt/key"
+	"github.com/gitql/vitess/go/vt/mysqlctl/tmutils"
+	tabletmanagerdatapb "github.com/gitql/vitess/go/vt/proto/tabletmanagerdata"
+	topodatapb "github.com/gitql/vitess/go/vt/proto/topodata"
+	"github.com/gitql/vitess/go/vt/topo"
+	"github.com/gitql/vitess/go/vt/vtgate/vindexes"
 )
 
 // This file defines the interface and implementations of sharding key resolvers.

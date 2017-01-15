@@ -15,12 +15,12 @@ import (
 	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
-	"github.com/youtube/vitess/go/sqltypes"
-	"github.com/youtube/vitess/go/streamlog"
-	"github.com/youtube/vitess/go/vt/callerid"
-	"github.com/youtube/vitess/go/vt/callinfo"
+	"github.com/gitql/vitess/go/sqltypes"
+	"github.com/gitql/vitess/go/streamlog"
+	"github.com/gitql/vitess/go/vt/callerid"
+	"github.com/gitql/vitess/go/vt/callinfo"
 
-	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	querypb "github.com/gitql/vitess/go/vt/proto/query"
 )
 
 // StatsLogger is the main stream logger object

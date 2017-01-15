@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
-	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/topo/test/faketopo"
+	topodatapb "github.com/gitql/vitess/go/vt/proto/topodata"
+	"github.com/gitql/vitess/go/vt/topo"
+	"github.com/gitql/vitess/go/vt/topo/test/faketopo"
 	"golang.org/x/net/context"
 )
 

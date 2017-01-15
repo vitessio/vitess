@@ -15,7 +15,7 @@ package vtworkerservice
 import proto "github.com/golang/protobuf/proto"
 import fmt "fmt"
 import math "math"
-import vtworkerdata "github.com/youtube/vitess/go/vt/proto/vtworkerdata"
+import vtworkerdata "github.com/gitql/vitess/go/vt/proto/vtworkerdata"
 
 import (
 	context "golang.org/x/net/context"

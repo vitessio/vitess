@@ -7,8 +7,8 @@ package main
 // Imports and register the gRPC vtgateservice server
 
 import (
-	"github.com/youtube/vitess/go/vt/servenv"
-	_ "github.com/youtube/vitess/go/vt/vtgate/grpcvtgateservice"
+	"github.com/gitql/vitess/go/vt/servenv"
+	_ "github.com/gitql/vitess/go/vt/vtgate/grpcvtgateservice"
 )
 
 func init() {

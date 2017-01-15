@@ -12,8 +12,8 @@ import (
 	"fmt"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/mysql"
-	"github.com/youtube/vitess/go/sqldb"
+	"github.com/gitql/vitess/go/mysql"
+	"github.com/gitql/vitess/go/sqldb"
 )
 
 // We keep a global singleton for the db configs, and that's the one

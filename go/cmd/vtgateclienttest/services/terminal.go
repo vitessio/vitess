@@ -10,13 +10,13 @@ import (
 
 	log "github.com/golang/glog"
 
-	"github.com/youtube/vitess/go/sqltypes"
-	"github.com/youtube/vitess/go/tb"
+	"github.com/gitql/vitess/go/sqltypes"
+	"github.com/gitql/vitess/go/tb"
 	"golang.org/x/net/context"
 
-	querypb "github.com/youtube/vitess/go/vt/proto/query"
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
-	vtgatepb "github.com/youtube/vitess/go/vt/proto/vtgate"
+	querypb "github.com/gitql/vitess/go/vt/proto/query"
+	topodatapb "github.com/gitql/vitess/go/vt/proto/topodata"
+	vtgatepb "github.com/gitql/vitess/go/vt/proto/vtgate"
 )
 
 var errTerminal = errors.New("vtgate test client, errTerminal")

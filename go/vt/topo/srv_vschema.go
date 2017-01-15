@@ -6,7 +6,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 
-	vschemapb "github.com/youtube/vitess/go/vt/proto/vschema"
+	vschemapb "github.com/gitql/vitess/go/vt/proto/vschema"
 )
 
 // This file contains the utility methods to manage SrvVSchema objects.

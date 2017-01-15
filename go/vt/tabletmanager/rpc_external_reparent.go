@@ -11,17 +11,17 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
-	"github.com/youtube/vitess/go/event"
-	"github.com/youtube/vitess/go/stats"
-	"github.com/youtube/vitess/go/trace"
-	"github.com/youtube/vitess/go/vt/concurrency"
-	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
-	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/topo/topoproto"
-	"github.com/youtube/vitess/go/vt/topotools/events"
+	"github.com/gitql/vitess/go/event"
+	"github.com/gitql/vitess/go/stats"
+	"github.com/gitql/vitess/go/trace"
+	"github.com/gitql/vitess/go/vt/concurrency"
+	"github.com/gitql/vitess/go/vt/tabletmanager/tmclient"
+	"github.com/gitql/vitess/go/vt/topo"
+	"github.com/gitql/vitess/go/vt/topo/topoproto"
+	"github.com/gitql/vitess/go/vt/topotools/events"
 	"golang.org/x/net/context"
 
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/gitql/vitess/go/vt/proto/topodata"
 )
 
 var (

@@ -8,12 +8,12 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/youtube/vitess/go/vt/binlog/binlogplayer"
-	"github.com/youtube/vitess/go/vt/mysqlctl"
-	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
+	"github.com/gitql/vitess/go/vt/binlog/binlogplayer"
+	"github.com/gitql/vitess/go/vt/mysqlctl"
+	"github.com/gitql/vitess/go/vt/mysqlctl/replication"
 	"golang.org/x/net/context"
 
-	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
+	tabletmanagerdatapb "github.com/gitql/vitess/go/vt/proto/tabletmanagerdata"
 )
 
 // WaitBlpPosition waits until a specific filtered replication position is

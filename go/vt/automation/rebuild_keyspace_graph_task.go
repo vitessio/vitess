@@ -5,7 +5,7 @@
 package automation
 
 import (
-	automationpb "github.com/youtube/vitess/go/vt/proto/automation"
+	automationpb "github.com/gitql/vitess/go/vt/proto/automation"
 	"golang.org/x/net/context"
 )
 

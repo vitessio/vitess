@@ -8,13 +8,13 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/youtube/vitess/go/vt/discovery"
-	"github.com/youtube/vitess/go/vt/throttler"
-	"github.com/youtube/vitess/go/vt/topo/topoproto"
-	"github.com/youtube/vitess/go/vt/wrangler"
+	"github.com/gitql/vitess/go/vt/discovery"
+	"github.com/gitql/vitess/go/vt/throttler"
+	"github.com/gitql/vitess/go/vt/topo/topoproto"
+	"github.com/gitql/vitess/go/vt/wrangler"
 	"golang.org/x/net/context"
 
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/gitql/vitess/go/vt/proto/topodata"
 )
 
 // executor takes care of the write-side of the copy.

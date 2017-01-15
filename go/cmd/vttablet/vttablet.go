@@ -9,20 +9,20 @@ import (
 	"flag"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/exit"
-	"github.com/youtube/vitess/go/vt/dbconfigs"
-	"github.com/youtube/vitess/go/vt/mysqlctl"
-	"github.com/youtube/vitess/go/vt/servenv"
-	"github.com/youtube/vitess/go/vt/tableacl"
-	"github.com/youtube/vitess/go/vt/tableacl/simpleacl"
-	"github.com/youtube/vitess/go/vt/tabletmanager"
-	"github.com/youtube/vitess/go/vt/tabletserver"
-	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/topo/topoproto"
+	"github.com/gitql/vitess/go/exit"
+	"github.com/gitql/vitess/go/vt/dbconfigs"
+	"github.com/gitql/vitess/go/vt/mysqlctl"
+	"github.com/gitql/vitess/go/vt/servenv"
+	"github.com/gitql/vitess/go/vt/tableacl"
+	"github.com/gitql/vitess/go/vt/tableacl/simpleacl"
+	"github.com/gitql/vitess/go/vt/tabletmanager"
+	"github.com/gitql/vitess/go/vt/tabletserver"
+	"github.com/gitql/vitess/go/vt/topo"
+	"github.com/gitql/vitess/go/vt/topo/topoproto"
 	"golang.org/x/net/context"
 
 	// import mysql to register mysql connection function
-	_ "github.com/youtube/vitess/go/mysql"
+	_ "github.com/gitql/vitess/go/mysql"
 )
 
 var (

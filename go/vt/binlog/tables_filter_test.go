@@ -7,8 +7,8 @@ package binlog
 import (
 	"testing"
 
-	binlogdatapb "github.com/youtube/vitess/go/vt/proto/binlogdata"
-	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	binlogdatapb "github.com/gitql/vitess/go/vt/proto/binlogdata"
+	querypb "github.com/gitql/vitess/go/vt/proto/query"
 )
 
 var testTables = []string{

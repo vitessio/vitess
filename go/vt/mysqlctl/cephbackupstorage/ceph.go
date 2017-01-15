@@ -18,8 +18,8 @@ import (
 	minio "github.com/minio/minio-go"
 	"golang.org/x/net/context"
 
-	"github.com/youtube/vitess/go/vt/concurrency"
-	"github.com/youtube/vitess/go/vt/mysqlctl/backupstorage"
+	"github.com/gitql/vitess/go/vt/concurrency"
+	"github.com/gitql/vitess/go/vt/mysqlctl/backupstorage"
 )
 
 var (

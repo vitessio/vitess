@@ -10,9 +10,9 @@ import (
 
 	"errors"
 
-	querypb "github.com/youtube/vitess/go/vt/proto/query"
-	"github.com/youtube/vitess/go/vt/proto/vtrpc"
-	"github.com/youtube/vitess/go/vt/vterrors"
+	querypb "github.com/gitql/vitess/go/vt/proto/query"
+	"github.com/gitql/vitess/go/vt/proto/vtrpc"
+	"github.com/gitql/vitess/go/vt/vterrors"
 )
 
 func TestResult(t *testing.T) {

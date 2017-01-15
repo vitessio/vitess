@@ -13,18 +13,18 @@ import (
 
 	"golang.org/x/net/context"
 
-	"github.com/youtube/vitess/go/sqltypes"
-	"github.com/youtube/vitess/go/stats"
-	"github.com/youtube/vitess/go/vt/concurrency"
-	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
-	"github.com/youtube/vitess/go/vt/topo/topoproto"
-	"github.com/youtube/vitess/go/vt/vterrors"
-	"github.com/youtube/vitess/go/vt/vtgate/gateway"
+	"github.com/gitql/vitess/go/sqltypes"
+	"github.com/gitql/vitess/go/stats"
+	"github.com/gitql/vitess/go/vt/concurrency"
+	"github.com/gitql/vitess/go/vt/tabletserver/querytypes"
+	"github.com/gitql/vitess/go/vt/topo/topoproto"
+	"github.com/gitql/vitess/go/vt/vterrors"
+	"github.com/gitql/vitess/go/vt/vtgate/gateway"
 
-	querypb "github.com/youtube/vitess/go/vt/proto/query"
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
-	vtgatepb "github.com/youtube/vitess/go/vt/proto/vtgate"
-	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
+	querypb "github.com/gitql/vitess/go/vt/proto/query"
+	topodatapb "github.com/gitql/vitess/go/vt/proto/topodata"
+	vtgatepb "github.com/gitql/vitess/go/vt/proto/vtgate"
+	vtrpcpb "github.com/gitql/vitess/go/vt/proto/vtrpc"
 )
 
 // ScatterConn is used for executing queries across

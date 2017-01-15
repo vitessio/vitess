@@ -12,10 +12,10 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/youtube/vitess/go/sync2"
-	"github.com/youtube/vitess/go/vt/wrangler"
-	"github.com/youtube/vitess/go/vt/zktopo"
-	"github.com/youtube/vitess/go/zk"
+	"github.com/gitql/vitess/go/sync2"
+	"github.com/gitql/vitess/go/vt/wrangler"
+	"github.com/gitql/vitess/go/vt/zktopo"
+	"github.com/gitql/vitess/go/zk"
 	"golang.org/x/net/context"
 )
 

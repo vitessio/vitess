@@ -8,8 +8,8 @@ package fakevtctlclient
 import (
 	"time"
 
-	"github.com/youtube/vitess/go/vt/logutil"
-	"github.com/youtube/vitess/go/vt/vtctl/vtctlclient"
+	"github.com/gitql/vitess/go/vt/logutil"
+	"github.com/gitql/vitess/go/vt/vtctl/vtctlclient"
 	"golang.org/x/net/context"
 )
 

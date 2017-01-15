@@ -9,7 +9,7 @@ import (
 	"github.com/samuel/go-zookeeper/zk"
 	"golang.org/x/net/context"
 
-	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/gitql/vitess/go/vt/topo"
 )
 
 // Create is part of the topo.Backend interface.

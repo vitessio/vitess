@@ -8,8 +8,8 @@ import (
 	"flag"
 	"testing"
 
-	"github.com/youtube/vitess/go/vt/worker/fakevtworkerclient"
-	"github.com/youtube/vitess/go/vt/worker/vtworkerclient"
+	"github.com/gitql/vitess/go/vt/worker/fakevtworkerclient"
+	"github.com/gitql/vitess/go/vt/worker/vtworkerclient"
 )
 
 func TestSplitCloneTask(t *testing.T) {

@@ -11,16 +11,16 @@ package grpcvtctlserver
 import (
 	"google.golang.org/grpc"
 
-	"github.com/youtube/vitess/go/vt/logutil"
-	"github.com/youtube/vitess/go/vt/servenv"
-	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
-	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/vtctl"
-	"github.com/youtube/vitess/go/vt/wrangler"
+	"github.com/gitql/vitess/go/vt/logutil"
+	"github.com/gitql/vitess/go/vt/servenv"
+	"github.com/gitql/vitess/go/vt/tabletmanager/tmclient"
+	"github.com/gitql/vitess/go/vt/topo"
+	"github.com/gitql/vitess/go/vt/vtctl"
+	"github.com/gitql/vitess/go/vt/wrangler"
 
-	logutilpb "github.com/youtube/vitess/go/vt/proto/logutil"
-	vtctldatapb "github.com/youtube/vitess/go/vt/proto/vtctldata"
-	vtctlservicepb "github.com/youtube/vitess/go/vt/proto/vtctlservice"
+	logutilpb "github.com/gitql/vitess/go/vt/proto/logutil"
+	vtctldatapb "github.com/gitql/vitess/go/vt/proto/vtctldata"
+	vtctlservicepb "github.com/gitql/vitess/go/vt/proto/vtctlservice"
 )
 
 // VtctlServer is our RPC server

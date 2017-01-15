@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/youtube/vitess/go/netutil"
+	"github.com/gitql/vitess/go/netutil"
 )
 
 const (

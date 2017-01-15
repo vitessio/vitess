@@ -7,5 +7,5 @@ package main
 // Imports and register the gRPC vtctl client.
 
 import (
-	_ "github.com/youtube/vitess/go/vt/vtctl/grpcvtctlclient"
+	_ "github.com/gitql/vitess/go/vt/vtctl/grpcvtctlclient"
 )

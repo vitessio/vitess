@@ -10,11 +10,11 @@ import (
 
 	"google.golang.org/grpc"
 
-	"github.com/youtube/vitess/go/vt/binlog/binlogplayertest"
-	"github.com/youtube/vitess/go/vt/binlog/grpcbinlogstreamer"
+	"github.com/gitql/vitess/go/vt/binlog/binlogplayertest"
+	"github.com/gitql/vitess/go/vt/binlog/grpcbinlogstreamer"
 
-	binlogservicepb "github.com/youtube/vitess/go/vt/proto/binlogservice"
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	binlogservicepb "github.com/gitql/vitess/go/vt/proto/binlogservice"
+	topodatapb "github.com/gitql/vitess/go/vt/proto/topodata"
 )
 
 // the test here creates a fake server implementation, a fake client

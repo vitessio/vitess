@@ -10,9 +10,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/youtube/vitess/go/sqltypes"
-	querypb "github.com/youtube/vitess/go/vt/proto/query"
-	"github.com/youtube/vitess/go/vt/tabletserver/endtoend/framework"
+	"github.com/gitql/vitess/go/sqltypes"
+	querypb "github.com/gitql/vitess/go/vt/proto/query"
+	"github.com/gitql/vitess/go/vt/tabletserver/endtoend/framework"
 )
 
 var point12 = "\x00\x00\x00\x00\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\xf0?\x00\x00\x00\x00\x00\x00\x00@"

@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/youtube/vitess/go/race"
-	logutilpb "github.com/youtube/vitess/go/vt/proto/logutil"
+	"github.com/gitql/vitess/go/race"
+	logutilpb "github.com/gitql/vitess/go/vt/proto/logutil"
 )
 
 func TestLogEvent(t *testing.T) {

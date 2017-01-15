@@ -3,12 +3,12 @@ package discovery
 import (
 	"sync"
 
-	"github.com/youtube/vitess/go/vt/tabletserver/sandboxconn"
-	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
-	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/gitql/vitess/go/vt/tabletserver/sandboxconn"
+	"github.com/gitql/vitess/go/vt/tabletserver/tabletconn"
+	"github.com/gitql/vitess/go/vt/topo"
 
-	querypb "github.com/youtube/vitess/go/vt/proto/query"
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	querypb "github.com/gitql/vitess/go/vt/proto/query"
+	topodatapb "github.com/gitql/vitess/go/vt/proto/topodata"
 )
 
 // This file contains the definitions for a FakeHealthCheck class to

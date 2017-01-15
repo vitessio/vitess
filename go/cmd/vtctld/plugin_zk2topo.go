@@ -3,9 +3,9 @@ package main
 // Imports and register the 'zk2' topo.Server and its Explorer.
 
 import (
-	"github.com/youtube/vitess/go/vt/servenv"
-	"github.com/youtube/vitess/go/vt/topo/zk2topo"
-	"github.com/youtube/vitess/go/vt/vtctld"
+	"github.com/gitql/vitess/go/vt/servenv"
+	"github.com/gitql/vitess/go/vt/topo/zk2topo"
+	"github.com/gitql/vitess/go/vt/vtctld"
 )
 
 func init() {

@@ -17,15 +17,15 @@ import (
 	"golang.org/x/net/context"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/sqldb"
-	"github.com/youtube/vitess/go/sqltypes"
-	"github.com/youtube/vitess/go/stats"
-	"github.com/youtube/vitess/go/sync2"
+	"github.com/gitql/vitess/go/sqldb"
+	"github.com/gitql/vitess/go/sqltypes"
+	"github.com/gitql/vitess/go/stats"
+	"github.com/gitql/vitess/go/sync2"
 
-	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
-	binlogdatapb "github.com/youtube/vitess/go/vt/proto/binlogdata"
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
-	"github.com/youtube/vitess/go/vt/throttler"
+	"github.com/gitql/vitess/go/vt/mysqlctl/replication"
+	binlogdatapb "github.com/gitql/vitess/go/vt/proto/binlogdata"
+	topodatapb "github.com/gitql/vitess/go/vt/proto/topodata"
+	"github.com/gitql/vitess/go/vt/throttler"
 )
 
 var (

@@ -8,7 +8,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/youtube/vitess/go/ewma"
+	"github.com/gitql/vitess/go/ewma"
 )
 
 func TestEstimator(t *testing.T) {

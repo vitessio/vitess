@@ -17,13 +17,13 @@ import (
 
 	log "github.com/golang/glog"
 
-	"github.com/youtube/vitess/go/tb"
-	"github.com/youtube/vitess/go/vt/logutil"
-	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
-	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
-	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/vterrors"
-	"github.com/youtube/vitess/go/vt/wrangler"
+	"github.com/gitql/vitess/go/tb"
+	"github.com/gitql/vitess/go/vt/logutil"
+	vtrpcpb "github.com/gitql/vitess/go/vt/proto/vtrpc"
+	"github.com/gitql/vitess/go/vt/tabletmanager/tmclient"
+	"github.com/gitql/vitess/go/vt/topo"
+	"github.com/gitql/vitess/go/vt/vterrors"
+	"github.com/gitql/vitess/go/vt/wrangler"
 )
 
 // Instance encapsulate the execution state of vtworker.

@@ -1,11 +1,11 @@
 package main
 
 import (
-	"github.com/youtube/vitess/go/vt/discovery"
-	"github.com/youtube/vitess/go/vt/servenv"
-	_ "github.com/youtube/vitess/go/vt/status"
-	"github.com/youtube/vitess/go/vt/vtgate"
-	"github.com/youtube/vitess/go/vt/vtgate/gateway"
+	"github.com/gitql/vitess/go/vt/discovery"
+	"github.com/gitql/vitess/go/vt/servenv"
+	_ "github.com/gitql/vitess/go/vt/status"
+	"github.com/gitql/vitess/go/vt/vtgate"
+	"github.com/gitql/vitess/go/vt/vtgate/gateway"
 )
 
 // For use by plugins which wish to avoid racing when registering status page parts.

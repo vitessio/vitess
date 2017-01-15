@@ -7,8 +7,8 @@ package planbuilder
 import (
 	"fmt"
 
-	"github.com/youtube/vitess/go/vt/sqlparser"
-	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
+	"github.com/gitql/vitess/go/vt/sqlparser"
+	"github.com/gitql/vitess/go/vt/vtgate/vindexes"
 )
 
 // symtab contains the symbols for a SELECT statement.

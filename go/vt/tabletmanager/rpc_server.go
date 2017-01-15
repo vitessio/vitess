@@ -8,9 +8,9 @@ import (
 	"fmt"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/tb"
-	"github.com/youtube/vitess/go/vt/callinfo"
-	"github.com/youtube/vitess/go/vt/topo/topoproto"
+	"github.com/gitql/vitess/go/tb"
+	"github.com/gitql/vitess/go/vt/callinfo"
+	"github.com/gitql/vitess/go/vt/topo/topoproto"
 	"golang.org/x/net/context"
 )
 

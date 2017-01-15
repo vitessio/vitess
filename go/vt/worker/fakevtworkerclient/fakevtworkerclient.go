@@ -10,9 +10,9 @@ import (
 
 	"golang.org/x/net/context"
 
-	"github.com/youtube/vitess/go/vt/logutil"
-	"github.com/youtube/vitess/go/vt/vtctl/fakevtctlclient"
-	"github.com/youtube/vitess/go/vt/worker/vtworkerclient"
+	"github.com/gitql/vitess/go/vt/logutil"
+	"github.com/gitql/vitess/go/vt/vtctl/fakevtctlclient"
+	"github.com/gitql/vitess/go/vt/worker/vtworkerclient"
 )
 
 // FakeVtworkerClient is a fake which implements the vtworkerclient interface.

@@ -7,7 +7,7 @@ package tabletserver
 import (
 	"time"
 
-	"github.com/youtube/vitess/go/stats"
+	"github.com/gitql/vitess/go/stats"
 )
 
 // QueryServiceStats contains stats that used in queryservice level.

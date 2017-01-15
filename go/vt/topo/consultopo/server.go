@@ -10,7 +10,7 @@ import (
 
 	"golang.org/x/net/context"
 
-	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/gitql/vitess/go/vt/topo"
 )
 
 // Server is the implementation of topo.Server for consul.

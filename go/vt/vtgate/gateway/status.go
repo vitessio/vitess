@@ -9,9 +9,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/youtube/vitess/go/stats"
+	"github.com/gitql/vitess/go/stats"
 
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/gitql/vitess/go/vt/proto/topodata"
 )
 
 const (

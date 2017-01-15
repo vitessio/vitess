@@ -11,7 +11,7 @@ package mysqlctl
 import (
 	"fmt"
 
-	"github.com/youtube/vitess/go/vt/dbconfigs"
+	"github.com/gitql/vitess/go/vt/dbconfigs"
 )
 
 // CreateMysqld returns a Mysqld object to use for working with a MySQL

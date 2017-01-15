@@ -11,15 +11,15 @@ import (
 	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
-	"github.com/youtube/vitess/go/stats"
-	"github.com/youtube/vitess/go/sync2"
-	"github.com/youtube/vitess/go/vt/dbconfigs"
-	"github.com/youtube/vitess/go/vt/dbconnpool"
-	"github.com/youtube/vitess/go/vt/logutil"
-	"github.com/youtube/vitess/go/vt/tableacl"
-	"github.com/youtube/vitess/go/vt/tableacl/acl"
+	"github.com/gitql/vitess/go/stats"
+	"github.com/gitql/vitess/go/sync2"
+	"github.com/gitql/vitess/go/vt/dbconfigs"
+	"github.com/gitql/vitess/go/vt/dbconnpool"
+	"github.com/gitql/vitess/go/vt/logutil"
+	"github.com/gitql/vitess/go/vt/tableacl"
+	"github.com/gitql/vitess/go/vt/tableacl/acl"
 
-	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
+	vtrpcpb "github.com/gitql/vitess/go/vt/proto/vtrpc"
 )
 
 // QueryEngine implements the core functionality of tabletserver.

@@ -9,8 +9,8 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/youtube/vitess/go/vt/sqlparser"
-	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
+	"github.com/gitql/vitess/go/vt/sqlparser"
+	"github.com/gitql/vitess/go/vt/vtgate/vindexes"
 )
 
 // This file has functions to analyze postprocessing

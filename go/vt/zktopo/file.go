@@ -8,8 +8,8 @@ import (
 	zookeeper "github.com/samuel/go-zookeeper/zk"
 	"golang.org/x/net/context"
 
-	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/zk"
+	"github.com/gitql/vitess/go/vt/topo"
+	"github.com/gitql/vitess/go/zk"
 )
 
 // FIXME(alainjobart) Need to intercept these calls for existing objects.

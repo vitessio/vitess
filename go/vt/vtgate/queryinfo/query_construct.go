@@ -1,6 +1,6 @@
 package queryinfo
 
-import "github.com/youtube/vitess/go/vt/sqlparser"
+import "github.com/gitql/vitess/go/vt/sqlparser"
 
 // QueryConstruct contains the information about the sql and bindVars to be used by vtgate and engine.
 type QueryConstruct struct {

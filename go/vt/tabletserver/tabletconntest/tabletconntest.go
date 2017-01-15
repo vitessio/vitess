@@ -13,14 +13,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/youtube/vitess/go/vt/callerid"
-	"github.com/youtube/vitess/go/vt/tabletserver"
-	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
-	"github.com/youtube/vitess/go/vt/vterrors"
+	"github.com/gitql/vitess/go/vt/callerid"
+	"github.com/gitql/vitess/go/vt/tabletserver"
+	"github.com/gitql/vitess/go/vt/tabletserver/tabletconn"
+	"github.com/gitql/vitess/go/vt/vterrors"
 	"golang.org/x/net/context"
 
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
-	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
+	topodatapb "github.com/gitql/vitess/go/vt/proto/topodata"
+	vtrpcpb "github.com/gitql/vitess/go/vt/proto/vtrpc"
 )
 
 // testErrorHelper will check one instance of each error type,

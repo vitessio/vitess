@@ -92,22 +92,22 @@ import (
 	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
-	"github.com/youtube/vitess/go/flagutil"
-	"github.com/youtube/vitess/go/sqltypes"
-	hk "github.com/youtube/vitess/go/vt/hook"
-	"github.com/youtube/vitess/go/vt/key"
-	"github.com/youtube/vitess/go/vt/logutil"
-	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
-	"github.com/youtube/vitess/go/vt/schemamanager"
-	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
-	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/topo/topoproto"
-	"github.com/youtube/vitess/go/vt/topotools"
-	"github.com/youtube/vitess/go/vt/wrangler"
+	"github.com/gitql/vitess/go/flagutil"
+	"github.com/gitql/vitess/go/sqltypes"
+	hk "github.com/gitql/vitess/go/vt/hook"
+	"github.com/gitql/vitess/go/vt/key"
+	"github.com/gitql/vitess/go/vt/logutil"
+	"github.com/gitql/vitess/go/vt/mysqlctl/replication"
+	"github.com/gitql/vitess/go/vt/schemamanager"
+	"github.com/gitql/vitess/go/vt/tabletserver/tabletconn"
+	"github.com/gitql/vitess/go/vt/topo"
+	"github.com/gitql/vitess/go/vt/topo/topoproto"
+	"github.com/gitql/vitess/go/vt/topotools"
+	"github.com/gitql/vitess/go/vt/wrangler"
 
-	replicationdatapb "github.com/youtube/vitess/go/vt/proto/replicationdata"
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
-	vschemapb "github.com/youtube/vitess/go/vt/proto/vschema"
+	replicationdatapb "github.com/gitql/vitess/go/vt/proto/replicationdata"
+	topodatapb "github.com/gitql/vitess/go/vt/proto/topodata"
+	vschemapb "github.com/gitql/vitess/go/vt/proto/vschema"
 )
 
 var (
@@ -210,7 +210,7 @@ var commands = []commandGroup{
 			{"TabletExternallyReparented", commandTabletExternallyReparented,
 				"<tablet alias>",
 				"Changes metadata in the topology server to acknowledge a shard master change performed by an external tool. See the Reparenting guide for more information:" +
-					"https://github.com/youtube/vitess/blob/master/doc/Reparenting.md#external-reparents."},
+					"https://github.com/gitql/vitess/blob/master/doc/Reparenting.md#external-reparents."},
 			{"ValidateShard", commandValidateShard,
 				"[-ping-tablets] <keyspace/shard>",
 				"Validates that all nodes that are reachable from this shard are consistent."},

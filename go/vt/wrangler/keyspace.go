@@ -11,17 +11,17 @@ import (
 	"sync"
 	"time"
 
-	"github.com/youtube/vitess/go/event"
-	"github.com/youtube/vitess/go/vt/concurrency"
-	"github.com/youtube/vitess/go/vt/discovery"
-	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/topo/topoproto"
-	"github.com/youtube/vitess/go/vt/topotools"
-	"github.com/youtube/vitess/go/vt/topotools/events"
+	"github.com/gitql/vitess/go/event"
+	"github.com/gitql/vitess/go/vt/concurrency"
+	"github.com/gitql/vitess/go/vt/discovery"
+	"github.com/gitql/vitess/go/vt/topo"
+	"github.com/gitql/vitess/go/vt/topo/topoproto"
+	"github.com/gitql/vitess/go/vt/topotools"
+	"github.com/gitql/vitess/go/vt/topotools/events"
 	"golang.org/x/net/context"
 
-	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	tabletmanagerdatapb "github.com/gitql/vitess/go/vt/proto/tabletmanagerdata"
+	topodatapb "github.com/gitql/vitess/go/vt/proto/topodata"
 )
 
 // TODO(b/26388813): Remove these flags once vtctl WaitForDrain is integrated in the vtctl MigrateServed* commands.

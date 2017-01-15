@@ -11,9 +11,9 @@ import (
 	gouuid "github.com/pborman/uuid"
 	"golang.org/x/net/context"
 
-	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/gitql/vitess/go/vt/topo"
 
-	workflowpb "github.com/youtube/vitess/go/vt/proto/workflow"
+	workflowpb "github.com/gitql/vitess/go/vt/proto/workflow"
 )
 
 var (

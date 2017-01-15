@@ -15,7 +15,7 @@ import (
 
 	"golang.org/x/net/context"
 
-	"github.com/youtube/vitess/go/stats"
+	"github.com/gitql/vitess/go/stats"
 )
 
 // Worker is the base interface for all long running workers.

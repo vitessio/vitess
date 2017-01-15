@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
-	"github.com/youtube/vitess/go/vt/topo/memorytopo"
+	"github.com/gitql/vitess/go/vt/topo/memorytopo"
 )
 
 func TestWebSocket(t *testing.T) {

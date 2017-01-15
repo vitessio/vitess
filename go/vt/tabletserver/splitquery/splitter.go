@@ -3,9 +3,9 @@ package splitquery
 import (
 	"fmt"
 
-	"github.com/youtube/vitess/go/vt/schema"
-	"github.com/youtube/vitess/go/vt/sqlparser"
-	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
+	"github.com/gitql/vitess/go/vt/schema"
+	"github.com/gitql/vitess/go/vt/sqlparser"
+	"github.com/gitql/vitess/go/vt/tabletserver/querytypes"
 )
 
 // Splitter is used to drive the splitting procedure.

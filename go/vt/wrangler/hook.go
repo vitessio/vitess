@@ -8,10 +8,10 @@ import (
 	"fmt"
 	"strings"
 
-	hk "github.com/youtube/vitess/go/vt/hook"
+	hk "github.com/gitql/vitess/go/vt/hook"
 	"golang.org/x/net/context"
 
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/gitql/vitess/go/vt/proto/topodata"
 )
 
 // ExecuteHook will run the hook on the tablet

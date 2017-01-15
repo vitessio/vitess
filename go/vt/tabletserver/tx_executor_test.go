@@ -15,12 +15,12 @@ import (
 
 	"golang.org/x/net/context"
 
-	"github.com/youtube/vitess/go/sqltypes"
-	querypb "github.com/youtube/vitess/go/vt/proto/query"
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
-	"github.com/youtube/vitess/go/vt/vtgate/fakerpcvtgateconn"
-	"github.com/youtube/vitess/go/vt/vtgate/vtgateconn"
-	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
+	"github.com/gitql/vitess/go/sqltypes"
+	querypb "github.com/gitql/vitess/go/vt/proto/query"
+	topodatapb "github.com/gitql/vitess/go/vt/proto/topodata"
+	"github.com/gitql/vitess/go/vt/vtgate/fakerpcvtgateconn"
+	"github.com/gitql/vitess/go/vt/vtgate/vtgateconn"
+	"github.com/gitql/vitess/go/vt/vttest/fakesqldb"
 )
 
 func TestTxExecutorEmptyPrepare(t *testing.T) {

@@ -13,15 +13,15 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/exit"
-	"github.com/youtube/vitess/go/vt/dbconfigs"
-	"github.com/youtube/vitess/go/vt/logutil"
-	"github.com/youtube/vitess/go/vt/mysqlctl"
-	"github.com/youtube/vitess/go/vt/servenv"
+	"github.com/gitql/vitess/go/exit"
+	"github.com/gitql/vitess/go/vt/dbconfigs"
+	"github.com/gitql/vitess/go/vt/logutil"
+	"github.com/gitql/vitess/go/vt/mysqlctl"
+	"github.com/gitql/vitess/go/vt/servenv"
 	"golang.org/x/net/context"
 
 	// import mysql to register mysql connection function
-	_ "github.com/youtube/vitess/go/mysql"
+	_ "github.com/gitql/vitess/go/mysql"
 )
 
 var (

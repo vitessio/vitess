@@ -11,9 +11,9 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/youtube/vitess/go/vt/concurrency"
+	"github.com/gitql/vitess/go/vt/concurrency"
 
-	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
+	tabletmanagerdatapb "github.com/gitql/vitess/go/vt/proto/tabletmanagerdata"
 )
 
 // This file contains helper methods to deal with Schema information.

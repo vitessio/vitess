@@ -9,7 +9,7 @@ import (
 
 	log "github.com/golang/glog"
 
-	binlogdatapb "github.com/youtube/vitess/go/vt/proto/binlogdata"
+	binlogdatapb "github.com/gitql/vitess/go/vt/proto/binlogdata"
 )
 
 const (

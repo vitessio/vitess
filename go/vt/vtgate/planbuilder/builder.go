@@ -7,9 +7,9 @@ package planbuilder
 import (
 	"errors"
 
-	"github.com/youtube/vitess/go/vt/sqlparser"
-	"github.com/youtube/vitess/go/vt/vtgate/engine"
-	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
+	"github.com/gitql/vitess/go/vt/sqlparser"
+	"github.com/gitql/vitess/go/vt/vtgate/engine"
+	"github.com/gitql/vitess/go/vt/vtgate/vindexes"
 )
 
 // A builder is used to build a primitive. The top-level

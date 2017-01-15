@@ -10,7 +10,7 @@ import (
 
 	"golang.org/x/net/context"
 
-	"github.com/youtube/vitess/go/vt/wrangler"
+	"github.com/gitql/vitess/go/vt/wrangler"
 )
 
 // BlockWorker will block infinitely until its context is canceled.

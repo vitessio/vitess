@@ -3,8 +3,8 @@ package topo
 import (
 	"golang.org/x/net/context"
 
-	vschemapb "github.com/youtube/vitess/go/vt/proto/vschema"
-	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
+	vschemapb "github.com/gitql/vitess/go/vt/proto/vschema"
+	"github.com/gitql/vitess/go/vt/vtgate/vindexes"
 )
 
 // SaveVSchema first validates the VSchema, then sends it to the underlying

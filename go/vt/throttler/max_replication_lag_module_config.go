@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/youtube/vitess/go/vt/proto/throttlerdata"
+	"github.com/gitql/vitess/go/vt/proto/throttlerdata"
 )
 
 // MaxReplicationLagModuleConfig stores all configuration parameters for

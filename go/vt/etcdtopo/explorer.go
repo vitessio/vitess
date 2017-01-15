@@ -12,8 +12,8 @@ import (
 
 	"github.com/coreos/go-etcd/etcd"
 
-	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/vtctld/explorer"
+	"github.com/gitql/vitess/go/vt/topo"
+	"github.com/gitql/vitess/go/vt/vtctld/explorer"
 )
 
 // Explorer is an implementation of vtctld's Explorer interface for etcd.

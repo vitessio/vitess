@@ -9,7 +9,7 @@ package querytypes
 import (
 	"fmt"
 
-	"github.com/youtube/vitess/go/bytes2"
+	"github.com/gitql/vitess/go/bytes2"
 )
 
 // This file defines the BoundQuery type.

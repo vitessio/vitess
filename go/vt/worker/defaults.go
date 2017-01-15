@@ -4,7 +4,7 @@
 
 package worker
 
-import "github.com/youtube/vitess/go/vt/throttler"
+import "github.com/gitql/vitess/go/vt/throttler"
 
 const (
 	defaultOnline  = true

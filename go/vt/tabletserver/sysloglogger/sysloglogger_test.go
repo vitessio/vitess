@@ -11,7 +11,7 @@ import (
 
 	"golang.org/x/net/context"
 
-	"github.com/youtube/vitess/go/vt/tabletserver"
+	"github.com/gitql/vitess/go/vt/tabletserver"
 )
 
 // fakeWriter is a mock of the real syslog writer, to enable capturing and playing back of log messages in unit testing.

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/youtube/vitess/go/vt/logutil"
+	"github.com/gitql/vitess/go/vt/logutil"
 )
 
 func init() {

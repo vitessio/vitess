@@ -9,7 +9,7 @@ import (
 
 	log "github.com/golang/glog"
 
-	"github.com/youtube/vitess/go/flagutil"
+	"github.com/gitql/vitess/go/flagutil"
 )
 
 var (

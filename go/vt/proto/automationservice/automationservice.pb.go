@@ -15,7 +15,7 @@ package automationservice
 import proto "github.com/golang/protobuf/proto"
 import fmt "fmt"
 import math "math"
-import automation "github.com/youtube/vitess/go/vt/proto/automation"
+import automation "github.com/gitql/vitess/go/vt/proto/automation"
 
 import (
 	context "golang.org/x/net/context"

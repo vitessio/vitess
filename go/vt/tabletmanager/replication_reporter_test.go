@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/youtube/vitess/go/vt/health"
-	"github.com/youtube/vitess/go/vt/mysqlctl"
+	"github.com/gitql/vitess/go/vt/health"
+	"github.com/gitql/vitess/go/vt/mysqlctl"
 )
 
 func TestBasicMySQLReplicationLag(t *testing.T) {

@@ -11,16 +11,16 @@ import (
 
 	"google.golang.org/grpc"
 
-	"github.com/youtube/vitess/go/vt/discovery"
-	"github.com/youtube/vitess/go/vt/tabletserver/grpcqueryservice"
-	"github.com/youtube/vitess/go/vt/tabletserver/tabletconntest"
-	"github.com/youtube/vitess/go/vt/vtgate/gateway"
-	"github.com/youtube/vitess/go/vt/vtgate/l2vtgate"
+	"github.com/gitql/vitess/go/vt/discovery"
+	"github.com/gitql/vitess/go/vt/tabletserver/grpcqueryservice"
+	"github.com/gitql/vitess/go/vt/tabletserver/tabletconntest"
+	"github.com/gitql/vitess/go/vt/vtgate/gateway"
+	"github.com/gitql/vitess/go/vt/vtgate/l2vtgate"
 
 	// We will use gRPC to connect, register the dialer
-	_ "github.com/youtube/vitess/go/vt/tabletserver/grpctabletconn"
+	_ "github.com/gitql/vitess/go/vt/tabletserver/grpctabletconn"
 
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/gitql/vitess/go/vt/proto/topodata"
 )
 
 // TestGRPCDiscovery tests the discovery gateway with a gRPC

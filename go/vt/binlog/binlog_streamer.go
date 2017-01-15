@@ -12,13 +12,13 @@ import (
 	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
-	"github.com/youtube/vitess/go/sqldb"
-	"github.com/youtube/vitess/go/stats"
-	"github.com/youtube/vitess/go/vt/mysqlctl"
-	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
+	"github.com/gitql/vitess/go/sqldb"
+	"github.com/gitql/vitess/go/stats"
+	"github.com/gitql/vitess/go/vt/mysqlctl"
+	"github.com/gitql/vitess/go/vt/mysqlctl/replication"
 
-	binlogdatapb "github.com/youtube/vitess/go/vt/proto/binlogdata"
-	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	binlogdatapb "github.com/gitql/vitess/go/vt/proto/binlogdata"
+	querypb "github.com/gitql/vitess/go/vt/proto/query"
 )
 
 var (

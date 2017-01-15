@@ -2,16 +2,16 @@
 // implementations. If you are testing your implementation, you will
 // want to call TopoServerTestSuite in your test method. For an
 // example, look at the tests in
-// github.com/youtube/vitess/go/vt/topo/memorytopo.
+// github.com/gitql/vitess/go/vt/topo/memorytopo.
 package test
 
 import (
 	"testing"
 
-	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/gitql/vitess/go/vt/topo"
 	"golang.org/x/net/context"
 
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	topodatapb "github.com/gitql/vitess/go/vt/proto/topodata"
 )
 
 func newKeyRange(value string) *topodatapb.KeyRange {

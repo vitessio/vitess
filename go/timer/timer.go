@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/youtube/vitess/go/sync2"
+	"github.com/gitql/vitess/go/sync2"
 )
 
 // Out-of-band messages

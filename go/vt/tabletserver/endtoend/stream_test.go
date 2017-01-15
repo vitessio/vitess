@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/youtube/vitess/go/sqltypes"
-	"github.com/youtube/vitess/go/vt/tabletserver/endtoend/framework"
+	"github.com/gitql/vitess/go/sqltypes"
+	"github.com/gitql/vitess/go/vt/tabletserver/endtoend/framework"
 )
 
 func TestStreamUnion(t *testing.T) {

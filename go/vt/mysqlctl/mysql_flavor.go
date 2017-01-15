@@ -11,8 +11,8 @@ import (
 	"golang.org/x/net/context"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/sqldb"
-	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
+	"github.com/gitql/vitess/go/sqldb"
+	"github.com/gitql/vitess/go/vt/mysqlctl/replication"
 )
 
 /*

@@ -12,14 +12,14 @@ import (
 	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
-	"github.com/youtube/vitess/go/vt/mysqlctl"
-	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
-	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/topo/topoproto"
-	"github.com/youtube/vitess/go/vt/topotools"
+	"github.com/gitql/vitess/go/vt/mysqlctl"
+	"github.com/gitql/vitess/go/vt/mysqlctl/replication"
+	"github.com/gitql/vitess/go/vt/topo"
+	"github.com/gitql/vitess/go/vt/topo/topoproto"
+	"github.com/gitql/vitess/go/vt/topotools"
 
-	replicationdatapb "github.com/youtube/vitess/go/vt/proto/replicationdata"
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	replicationdatapb "github.com/gitql/vitess/go/vt/proto/replicationdata"
+	topodatapb "github.com/gitql/vitess/go/vt/proto/topodata"
 )
 
 var (
