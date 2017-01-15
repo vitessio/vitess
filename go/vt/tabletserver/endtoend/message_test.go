@@ -32,10 +32,14 @@ func (tr *testReceiver) Cancel() {
 }
 
 func TestMessage(t *testing.T) {
+	// This test is too slow. Skip for now.
+	//t.Skip()
 	tr := &testReceiver{ch: make(chan *tabletserver.MessageRow)}
-	framework.Server.MessageSubscribe("vitess_message", tr)
-	defer framework.Server.MessageUnsubscribe(tr)
 	client := framework.NewClient()
+	if err := client.MessageSubscribe("vitess_message", tr); err != nil {
+		t.Fatal(err)
+	}
+	defer client.MessageUnsubscribe(tr)
 	err := client.Begin()
 	if err != nil {
 		t.Error(err)

@@ -934,7 +934,12 @@ func (tsv *TabletServer) BeginExecuteBatch(ctx context.Context, target *querypb.
 }
 
 // MessageSubscribe registers the receiver against a message table.
-func (tsv *TabletServer) MessageSubscribe(name string, receiver MessageReceiver) error {
+func (tsv *TabletServer) MessageSubscribe(ctx context.Context, target *querypb.Target, name string, receiver MessageReceiver) (err error) {
+	if err = tsv.startRequest(ctx, target, false, false); err != nil {
+		return err
+	}
+	defer tsv.endRequest(false)
+	defer tsv.handlePanicAndSendLogStats("ack", nil, &err, nil)
 	return tsv.messager.Subscribe(name, receiver)
 }
 
