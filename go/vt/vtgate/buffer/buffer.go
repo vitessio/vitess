@@ -14,6 +14,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 
 	log "github.com/golang/glog"
@@ -146,6 +147,46 @@ func (b *Buffer) StatsUpdate(ts *discovery.TabletStats) {
 
 	sb := b.getOrCreateBuffer(ts.Target.Keyspace, ts.Target.Shard)
 	sb.recordExternallyReparentedTimestamp(timestamp)
+}
+
+// causedByFailover returns true if "err" was supposedly caused by a failover.
+// To simplify things, we've merged the detection for different MySQL flavors
+// in one function. Supported flavors: MariaDB, MySQL, Google internal.
+func causedByFailover(err error) bool {
+	log.V(2).Infof("Checking error (type: %T) if it is caused by a failover. err: %v", err, err)
+
+	if vtErr, ok := err.(vterrors.VtError); ok {
+		switch vtErr.VtErrorCode() {
+		case vtrpcpb.ErrorCode_QUERY_NOT_SERVED:
+			// All flavors.
+			if strings.Contains(err.Error(), "retry: operation not allowed in state NOT_SERVING") ||
+				strings.Contains(err.Error(), "retry: operation not allowed in state SHUTTING_DOWN") ||
+				// Match 1290 if -queryserver-config-terse-errors explicitly hid the error message
+				// (which it does to avoid logging the original query including any PII).
+				strings.Contains(err.Error(), "retry: (errno 1290) (sqlstate HY000) during query:") {
+				return true
+			}
+			// MariaDB flavor.
+			if strings.Contains(err.Error(), "retry: The MariaDB server is running with the --read-only option so it cannot execute this statement (errno 1290) (sqlstate HY000)") {
+				return true
+			}
+			// MySQL flavor.
+			if strings.Contains(err.Error(), "retry: The MySQL server is running with the --read-only option so it cannot execute this statement (errno 1290) (sqlstate HY000)") {
+				return true
+			}
+		case vtrpcpb.ErrorCode_INTERNAL_ERROR:
+			// Google internal flavor.
+			if strings.Contains(err.Error(), "fatal: failover in progress (errno 1227) (sqlstate 42000)") {
+				return true
+			}
+		case vtrpcpb.ErrorCode_UNKNOWN_ERROR:
+			// Google internal flavor.
+			if strings.Contains(err.Error(), "fatal: MySQL server has gone away (errno 2006) (sqlstate HY000)") {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func (b *Buffer) getOrCreateBuffer(keyspace, shard string) *shardBuffer {
