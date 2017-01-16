@@ -228,11 +228,6 @@ func (conn *Conn) IsClosed() bool {
 func (conn *Conn) CloseResult() {
 }
 
-// Shutdown invokes the low-level shutdown call on the socket associated with
-// a connection to stop ongoing communication.
-func (conn *Conn) Shutdown() {
-}
-
 // Fields returns the current fields description for the query
 func (conn *Conn) Fields() ([]*querypb.Field, error) {
 	return make([]*querypb.Field, 0), nil
@@ -252,16 +247,6 @@ func (conn *Conn) FetchNext() ([]sqltypes.Value, error) {
 	row := conn.curQueryResult.Rows[conn.curQueryRow]
 	conn.curQueryRow++
 	return row, nil
-}
-
-// ReadPacket reads a raw packet from the connection.
-func (conn *Conn) ReadPacket() ([]byte, error) {
-	return []byte{}, nil
-}
-
-// SendCommand sends a raw command to the db server.
-func (conn *Conn) SendCommand(command uint32, data []byte) error {
-	return nil
 }
 
 // Register registers a fake implementation of sqldb.Conn and returns its registered name

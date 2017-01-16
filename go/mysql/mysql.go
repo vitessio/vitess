@@ -382,43 +382,6 @@ func (conn *Connection) lastError(query string) error {
 	}
 }
 
-// ReadPacket reads a raw packet from the MySQL connection.
-//
-// A MySQL packet is "a single SQL statement sent to the MySQL server, a
-// single row that is sent to the client, or a binary log event sent from a
-// master replication server to a slave." -MySQL 5.1 Reference Manual
-func (conn *Connection) ReadPacket() ([]byte, error) {
-	length := C.vt_cli_safe_read(&conn.c)
-	if length == 0 {
-		return nil, conn.lastError("ReadPacket()")
-	}
-
-	return C.GoBytes(unsafe.Pointer(conn.c.mysql.net.read_pos), C.int(length)), nil
-}
-
-// SendCommand sends a raw command to the MySQL server.
-func (conn *Connection) SendCommand(command uint32, data []byte) error {
-	var ret C.my_bool
-	if data == nil {
-		ret = C.vt_simple_command(&conn.c, command, nil, 0, 1)
-	} else {
-		ret = C.vt_simple_command(&conn.c, command, (*C.uchar)(unsafe.Pointer(&data[0])), C.ulong(len(data)), 1)
-	}
-	if ret != 0 {
-		return conn.lastError(fmt.Sprintf("SendCommand(%#v, %#v)", command, data))
-	}
-	return nil
-}
-
-// Shutdown invokes the low-level shutdown call on the socket associated with
-// a MySQL connection to stop ongoing communication. This is necessary when a
-// thread is blocked in a MySQL I/O call, such as  ReadPacket(), and another
-// thread wants to cancel the operation. We can't use mysql_close() because it
-// isn't thread-safe.
-func (conn *Connection) Shutdown() {
-	C.vt_shutdown(&conn.c)
-}
-
 func cfree(str *C.char) {
 	if str != nil {
 		C.free(unsafe.Pointer(str))

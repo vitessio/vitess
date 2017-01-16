@@ -61,7 +61,7 @@ func (c *Conn) ExecuteStreamFetch(query string) error {
 	// Read the EOF after the fields if necessary.
 	if c.Capabilities&CapabilityClientDeprecateEOF == 0 {
 		// EOF is only present here if it's not deprecated.
-		data, err := c.readPacket()
+		data, err := c.ReadPacket()
 		if err != nil {
 			return err
 		}
@@ -97,7 +97,7 @@ func (c *Conn) FetchNext() ([]sqltypes.Value, error) {
 		return nil, nil
 	}
 
-	data, err := c.readPacket()
+	data, err := c.ReadPacket()
 	if err != nil {
 		return nil, err
 	}
@@ -148,24 +148,6 @@ func (c *Conn) Shutdown() {
 // ID is part of the sqldb.Conn interface.
 func (c *Conn) ID() int64 {
 	return int64(c.ConnectionID)
-}
-
-// ReadPacket is part of the sqldb.Conn interface.
-func (c *Conn) ReadPacket() ([]byte, error) {
-	return c.readPacket()
-}
-
-// SendCommand is part of the sqldb.Conn interface.
-// Note this implementation is not efficient (and the command type is
-// a byte, not a uint32), but this is not used often.  We'll refactor it.
-func (c *Conn) SendCommand(command uint32, data []byte) error {
-	// This is a new command, need to reset the sequence.
-	c.sequence = 0
-
-	fullData := make([]byte, len(data)+1)
-	fullData[0] = byte(command)
-	copy(fullData[1:], data)
-	return c.writePacket(fullData)
 }
 
 func init() {

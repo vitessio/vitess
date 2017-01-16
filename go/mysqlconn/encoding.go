@@ -94,6 +94,18 @@ func writeUint32(data []byte, pos int, value uint32) int {
 	return pos + 4
 }
 
+func writeUint64(data []byte, pos int, value uint64) int {
+	data[pos] = byte(value)
+	data[pos+1] = byte(value >> 8)
+	data[pos+2] = byte(value >> 16)
+	data[pos+3] = byte(value >> 24)
+	data[pos+4] = byte(value >> 32)
+	data[pos+5] = byte(value >> 40)
+	data[pos+6] = byte(value >> 48)
+	data[pos+7] = byte(value >> 56)
+	return pos + 8
+}
+
 func lenEncStringSize(value string) int {
 	l := len(value)
 	return lenEncIntSize(uint64(l)) + l
@@ -146,6 +158,13 @@ func readUint32(data []byte, pos int) (uint32, int, bool) {
 		return 0, 0, false
 	}
 	return binary.LittleEndian.Uint32(data[pos : pos+4]), pos + 4, true
+}
+
+func readUint64(data []byte, pos int) (uint64, int, bool) {
+	if pos+7 >= len(data) {
+		return 0, 0, false
+	}
+	return binary.LittleEndian.Uint64(data[pos : pos+8]), pos + 8, true
 }
 
 func readLenEncInt(data []byte, pos int) (uint64, int, bool) {

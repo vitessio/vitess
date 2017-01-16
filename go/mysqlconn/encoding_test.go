@@ -144,6 +144,31 @@ func TestEncUint32(t *testing.T) {
 	}
 }
 
+func TestEncUint64(t *testing.T) {
+	data := make([]byte, 10)
+
+	val64 := uint64(0xabcdef1011121314)
+
+	if got := writeUint64(data, 1, val64); got != 9 {
+		t.Errorf("writeUint64 returned %v but expected 9", got)
+	}
+
+	if data[1] != 0x14 || data[2] != 0x13 || data[3] != 0x12 || data[4] != 0x11 ||
+		data[5] != 0x10 || data[6] != 0xef || data[7] != 0xcd || data[8] != 0xab {
+		t.Errorf("writeUint64 returned bad result: %v", data)
+	}
+
+	got64, pos, ok := readUint64(data, 1)
+	if !ok || got64 != val64 || pos != 9 {
+		t.Errorf("readUint64 returned %v/%v/%v but expected %v/%v/%v", got64, pos, ok, val64, 6, true)
+	}
+
+	got64, pos, ok = readUint64(data, 7)
+	if ok {
+		t.Errorf("readUint64 returned ok=true for shorter value")
+	}
+}
+
 func TestEncString(t *testing.T) {
 	tests := []struct {
 		value       string

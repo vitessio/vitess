@@ -177,8 +177,7 @@ func (*mariaDB10) SendBinlogDumpCommand(conn *SlaveConnection, startPos replicat
 	}
 
 	// Since we use @slave_connect_state, the file and position here are ignored.
-	buf := makeBinlogDumpCommand(0, 0, conn.slaveID, "")
-	return conn.SendCommand(ComBinlogDump, buf)
+	return conn.WriteComBinlogDump(conn.slaveID, "", 0, 0)
 }
 
 // MakeBinlogEvent implements MysqlFlavor.MakeBinlogEvent().
@@ -208,30 +207,9 @@ func NewMariadbBinlogEvent(buf []byte) replication.BinlogEvent {
 	return mariadbBinlogEvent{binlogEvent: binlogEvent(buf)}
 }
 
-// HasGTID implements BinlogEvent.HasGTID().
-func (ev mariadbBinlogEvent) HasGTID(f replication.BinlogFormat) bool {
-	// MariaDB provides GTIDs in a separate event type GTID_EVENT.
-	return ev.IsGTID()
-}
-
 // IsGTID implements BinlogEvent.IsGTID().
 func (ev mariadbBinlogEvent) IsGTID() bool {
 	return ev.Type() == 162
-}
-
-// IsBeginGTID implements BinlogEvent.IsBeginGTID().
-//
-// Expected format:
-//   # bytes   field
-//   8         sequence number
-//   4         domain ID
-//   1         flags2
-func (ev mariadbBinlogEvent) IsBeginGTID(f replication.BinlogFormat) bool {
-	const FLStandalone = 1
-
-	data := ev.Bytes()[f.HeaderLength:]
-	flags2 := data[8+4]
-	return flags2&FLStandalone == 0
 }
 
 // GTID implements BinlogEvent.GTID().
@@ -241,14 +219,17 @@ func (ev mariadbBinlogEvent) IsBeginGTID(f replication.BinlogFormat) bool {
 //   8         sequence number
 //   4         domain ID
 //   1         flags2
-func (ev mariadbBinlogEvent) GTID(f replication.BinlogFormat) (replication.GTID, error) {
+func (ev mariadbBinlogEvent) GTID(f replication.BinlogFormat) (replication.GTID, bool, error) {
+	const FLStandalone = 1
+
 	data := ev.Bytes()[f.HeaderLength:]
+	flags2 := data[8+4]
 
 	return replication.MariadbGTID{
 		Sequence: binary.LittleEndian.Uint64(data[:8]),
 		Domain:   binary.LittleEndian.Uint32(data[8 : 8+4]),
 		Server:   ev.ServerID(),
-	}, nil
+	}, flags2&FLStandalone == 0, nil
 }
 
 // PreviousGTIDs implements BinlogEvent.PreviousGTIDs().

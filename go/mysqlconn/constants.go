@@ -128,6 +128,12 @@ const (
 	// ComPing is COM_PING.
 	ComPing = 0x0e
 
+	// ComBinlogDump is COM_BINLOG_DUMP.
+	ComBinlogDump = 0x12
+
+	// ComBinlogDumpGTID is COM_BINLOG_DUMP_GTID.
+	ComBinlogDumpGTID = 0x1e
+
 	// OKPacket is the header of the OK packet.
 	OKPacket = 0x00
 

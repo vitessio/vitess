@@ -13,45 +13,27 @@ import (
 	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
 )
 
-func TestMariadbStandaloneGTIDEventHasGTID(t *testing.T) {
-	f, err := binlogEvent(mariadbFormatEvent).Format()
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-		return
-	}
-
+func TestMariadbStandaloneGTIDEventIsGTID(t *testing.T) {
 	input := mariadbBinlogEvent{binlogEvent: binlogEvent(mariadbStandaloneGTIDEvent)}
 	want := true
-	if got := input.HasGTID(f); got != want {
-		t.Errorf("%#v.HasGTID() = %v, want %v", input, got, want)
+	if got := input.IsGTID(); got != want {
+		t.Errorf("%#v.IsGTID() = %v, want %v", input, got, want)
 	}
 }
 
-func TestMariadbBeginGTIDEventHasGTID(t *testing.T) {
-	f, err := binlogEvent(mariadbFormatEvent).Format()
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-		return
-	}
-
+func TestMariadbBeginGTIDEventIsGTID(t *testing.T) {
 	input := mariadbBinlogEvent{binlogEvent: binlogEvent(mariadbBeginGTIDEvent)}
 	want := true
-	if got := input.HasGTID(f); got != want {
-		t.Errorf("%#v.HasGTID() = %v, want %v", input, got, want)
+	if got := input.IsGTID(); got != want {
+		t.Errorf("%#v.IsGTID() = %v, want %v", input, got, want)
 	}
 }
 
-func TestMariadbBinlogEventDoesntHaveGTID(t *testing.T) {
-	f, err := binlogEvent(mariadbFormatEvent).Format()
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-		return
-	}
-
+func TestMariadbBinlogEventIsntGTID(t *testing.T) {
 	input := mariadbBinlogEvent{binlogEvent: binlogEvent(mariadbInsertEvent)}
 	want := false
-	if got := input.HasGTID(f); got != want {
-		t.Errorf("%#v.HasGTID() = %v, want %v", input, got, want)
+	if got := input.IsGTID(); got != want {
+		t.Errorf("%#v.IsGTID() = %v, want %v", input, got, want)
 	}
 }
 
@@ -64,8 +46,8 @@ func TestMariadbNotBeginGTID(t *testing.T) {
 
 	input := mariadbBinlogEvent{binlogEvent: binlogEvent(mariadbStandaloneGTIDEvent)}
 	want := false
-	if got := input.IsBeginGTID(f); got != want {
-		t.Errorf("%#v.IsBeginGTID() = %v, want %v", input, got, want)
+	if _, got, err := input.GTID(f); got != want {
+		t.Errorf("%#v.GTID() = %v (%v), want %v", input, got, err, want)
 	}
 }
 
@@ -78,8 +60,29 @@ func TestMariadbIsBeginGTID(t *testing.T) {
 
 	input := mariadbBinlogEvent{binlogEvent: binlogEvent(mariadbBeginGTIDEvent)}
 	want := true
-	if got := input.IsBeginGTID(f); got != want {
-		t.Errorf("%#v.IsBeginGTID() = %v, want %v", input, got, want)
+	if _, got, err := input.GTID(f); got != want {
+		t.Errorf("%#v.IsBeginGTID() = %v (%v), want %v", input, got, err, want)
+	}
+}
+
+func TestMariadbStandaloneBinlogEventGTID(t *testing.T) {
+	f, err := binlogEvent(mariadbFormatEvent).Format()
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+		return
+	}
+
+	input := mariadbBinlogEvent{binlogEvent: binlogEvent(mariadbStandaloneGTIDEvent)}
+	want := replication.MariadbGTID{Domain: 0, Server: 62344, Sequence: 9}
+	got, hasBegin, err := input.GTID(f)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if hasBegin {
+		t.Errorf("unexpected hasBegin")
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("%#v.GTID() = %#v, want %#v", input, got, want)
 	}
 }
 
@@ -92,9 +95,12 @@ func TestMariadbBinlogEventGTID(t *testing.T) {
 
 	input := mariadbBinlogEvent{binlogEvent: binlogEvent(mariadbBeginGTIDEvent)}
 	want := replication.MariadbGTID{Domain: 0, Server: 62344, Sequence: 10}
-	got, err := input.GTID(f)
+	got, hasBegin, err := input.GTID(f)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
+	}
+	if !hasBegin {
+		t.Errorf("unexpected !hasBegin")
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("%#v.GTID() = %#v, want %#v", input, got, want)

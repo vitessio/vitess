@@ -50,10 +50,6 @@ type BinlogEvent interface {
 	IsIntVar() bool
 	// IsRand returns true if this is a RAND_EVENT.
 	IsRand() bool
-	// HasGTID returns true if this event contains a GTID. That could either be
-	// because it's a GTID_EVENT (MariaDB, MySQL 5.6), or because it is some
-	// arbitrary event type that has a GTID in the header (Google MySQL).
-	HasGTID(BinlogFormat) bool
 	// IsPreviousGTIDs returns true if this event is a PREVIOUS_GTIDS_EVENT.
 	IsPreviousGTIDs() bool
 
@@ -63,14 +59,10 @@ type BinlogEvent interface {
 	// Format returns a BinlogFormat struct based on the event data.
 	// This is only valid if IsFormatDescription() returns true.
 	Format() (BinlogFormat, error)
-	// GTID returns the GTID from the event.
-	// This is only valid if HasGTID() returns true.
-	GTID(BinlogFormat) (GTID, error)
-	// IsBeginGTID returns true if this is a GTID_EVENT that also serves as a
-	// BEGIN statement. Otherwise, the GTID_EVENT is just providing the GTID for
-	// the following QUERY_EVENT.
+	// GTID returns the GTID from the event, and if this event
+	// also serves as a BEGIN statement.
 	// This is only valid if IsGTID() returns true.
-	IsBeginGTID(BinlogFormat) bool
+	GTID(BinlogFormat) (GTID, bool, error)
 	// Query returns a Query struct representing data from a QUERY_EVENT.
 	// This is only valid if IsQuery() returns true.
 	Query(BinlogFormat) (Query, error)
