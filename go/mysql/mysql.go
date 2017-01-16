@@ -231,7 +231,7 @@ func (conn *Connection) ExecuteFetch(query string, maxrows int, wantfields bool)
 		return nil, &sqldb.SQLError{
 			Num:     0,
 			Message: fmt.Sprintf("Row count exceeded %d", maxrows),
-			Query:   string(query),
+			Query:   query,
 		}
 	}
 	if wantfields {

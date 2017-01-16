@@ -90,7 +90,7 @@ func TestMySQL(t *testing.T) {
 	}
 	conn, err := mysql.Connect(params)
 	if err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
 	_, err = conn.ExecuteFetch("insert into a values(1, 'name')", 10, false)
 	if err != nil {
