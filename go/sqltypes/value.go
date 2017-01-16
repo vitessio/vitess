@@ -226,6 +226,14 @@ func (v Value) ToNative() interface{} {
 	return out
 }
 
+// ToBindVar converts Value to a querypb.BindVariable.
+func (v Value) ToBindVar() *querypb.BindVariable {
+	return &querypb.BindVariable{
+		Type:  v.typ,
+		Value: v.val,
+	}
+}
+
 // ParseInt64 will parse a Value into an int64. It does
 // not check the type.
 func (v Value) ParseInt64() (val int64, err error) {

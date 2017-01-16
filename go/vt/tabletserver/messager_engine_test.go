@@ -6,6 +6,7 @@ package tabletserver
 
 import (
 	"reflect"
+	"runtime"
 	"testing"
 	"time"
 
@@ -152,26 +153,52 @@ func TestSubscribe(t *testing.T) {
 	r1 := newTestReceiver(1)
 	r2 := newTestReceiver(1)
 	// Each receiver is subscribed to different managers.
-	me.Subscribe("t1", r1)
-	me.Subscribe("t2", r2)
+	me.Subscribe("t1", r1.rcv)
+	me.Subscribe("t2", r2.rcv)
 	me.managers["t1"].Add(&MessageRow{id: "1"})
 	me.managers["t2"].Add(&MessageRow{id: "2"})
 	<-r1.ch
 	<-r2.ch
-	// One receiver subscribed to multiple managers.
-	me.Unsubscribe(r1)
-	me.Subscribe("t1", r2)
-	me.managers["t2"].Add(&MessageRow{id: "3"})
-	<-r2.ch
-	me.managers["t2"].Add(&MessageRow{id: "4"})
-	<-r2.ch
 
 	// Error case.
 	want := "message table t3 not found"
-	err = me.Subscribe("t3", r1)
+	err = me.Subscribe("t3", r1.rcv)
 	if err == nil || err.Error() != want {
 		t.Errorf("Subscribe: %v, want %s", err, want)
 	}
+}
+
+func TestReceiverEOF(t *testing.T) {
+	db := setUpTabletServerTest()
+	testUtils := newTestUtils()
+	config := testUtils.newQueryServiceConfig()
+	config.TransactionCap = 1
+	tsv := NewTabletServer(config)
+	dbconfigs := testUtils.newDBConfigs(db)
+	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+	err := tsv.StartService(target, dbconfigs, testUtils.newMysqld(&dbconfigs))
+	if err != nil {
+		t.Fatalf("StartService failed: %v", err)
+	}
+	defer tsv.StopService()
+	mm := NewMessageManager(tsv, "foo", 1*time.Second, 3*time.Second, 1, 10, 1*time.Second, newMMConnPool(db))
+	mm.Open()
+	defer mm.Close()
+	r1 := newTestReceiver(1)
+	mm.Subscribe(r1.rcv)
+	r1.done = make(chan struct{})
+	close(r1.done)
+	mm.Add(&MessageRow{id: "1"})
+	// r1 should eventually be unsubscribed.
+	for i := 0; i < 10; i++ {
+		runtime.Gosched()
+		time.Sleep(10 * time.Millisecond)
+		if len(mm.receivers) != 0 {
+			continue
+		}
+		return
+	}
+	t.Errorf("receivers were not cleared: %d", len(mm.receivers))
 }
 
 func TestLockDB(t *testing.T) {
@@ -199,7 +226,7 @@ func TestLockDB(t *testing.T) {
 	}
 	me.schemaChanged(tables)
 	r1 := newTestReceiver(0)
-	me.Subscribe("t1", r1)
+	me.Subscribe("t1", r1.rcv)
 
 	row1 := &MessageRow{
 		id: "1",
@@ -213,7 +240,7 @@ func TestLockDB(t *testing.T) {
 	me.UpdateCaches(newMessages, nil)
 	unlock()
 	<-r1.ch
-	time.Sleep(10 * time.Microsecond)
+	runtime.Gosched()
 	// row2 should not be sent.
 	select {
 	case mr := <-r1.ch:
@@ -222,7 +249,7 @@ func TestLockDB(t *testing.T) {
 	}
 
 	r2 := newTestReceiver(0)
-	me.Subscribe("t2", r2)
+	me.Subscribe("t2", r2.rcv)
 	mm := me.managers["t2"]
 	mm.Add(&MessageRow{id: "1"})
 	// Make sure the first message is enqueued.
@@ -235,7 +262,7 @@ func TestLockDB(t *testing.T) {
 	me.UpdateCaches(nil, changedMessages)
 	unlock()
 	<-r2.ch
-	time.Sleep(10 * time.Microsecond)
+	runtime.Gosched()
 	// There should be no more messages.
 	select {
 	case mr := <-r2.ch:
@@ -263,7 +290,7 @@ func TestMESendDiscard(t *testing.T) {
 
 	me := tsv.messager
 	r1 := newTestReceiver(0)
-	me.Subscribe("msg", r1)
+	me.Subscribe("msg", r1.rcv)
 
 	db.AddQuery(
 		"select time_scheduled, id from msg where id in ('1') and time_acked is null limit 10001 for update",
@@ -278,10 +305,9 @@ func TestMESendDiscard(t *testing.T) {
 	db.AddQueryPattern("update msg set time_next = .*", &sqltypes.Result{RowsAffected: 1})
 	me.managers["msg"].Add(&MessageRow{id: "1"})
 	<-r1.ch
-	// The async work is sometimes slow. Give plenty of time
-	// for the goroutine to clean up.
 	for i := 0; i < 10; i++ {
-		time.Sleep(1 * time.Second)
+		runtime.Gosched()
+		time.Sleep(10 * time.Millisecond)
 		if _, ok := me.managers["msg"].cache.messages["1"]; !ok {
 			return
 		}

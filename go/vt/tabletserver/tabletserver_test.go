@@ -7,8 +7,10 @@ package tabletserver
 import (
 	"expvar"
 	"fmt"
+	"io"
 	"math/rand"
 	"reflect"
+	"runtime"
 	"strconv"
 	"strings"
 	"testing"
@@ -1388,22 +1390,63 @@ func TestExecuteBatchNestedTransaction(t *testing.T) {
 	tsv.te.txPool.SetTimeout(10)
 }
 
-func TestAckMessages(t *testing.T) {
+func TestMessageStream(t *testing.T) {
+	_, tsv, _ := newTestTxExecutor()
+	defer tsv.StopService()
+	ctx := context.Background()
+	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+
+	wanterr := "error: message table nomsg not found"
+	if err := tsv.MessageStream(ctx, &target, "nomsg", func(msr *querypb.MessageStreamResponse) error {
+		return nil
+	}); err == nil || err.Error() != wanterr {
+		t.Errorf("tsv.MessageStream: %v, want %s", err, wanterr)
+	}
+	ch := make(chan *querypb.MessageStreamResponse, 1)
+	done := make(chan struct{})
+	go func() {
+		if err := tsv.MessageStream(ctx, &target, "msg", func(msr *querypb.MessageStreamResponse) error {
+			ch <- msr
+			return io.EOF
+		}); err != nil {
+			t.Error(err)
+		}
+		close(done)
+	}()
+	runtime.Gosched()
+	// TODO(sougou): Find a less hacky way to do this.
+	tsv.messager.managers["msg"].Add(&MessageRow{ID: sqltypes.MakeString([]byte("1")), id: "1"})
+	want := &querypb.MessageStreamResponse{
+		Name: "msg",
+		Messages: []*querypb.VitessMessage{{
+			Id:            sqltypes.MakeString([]byte("1")).ToBindVar(),
+			VitessMessage: sqltypes.NULL.ToBindVar(),
+		}},
+	}
+	got := <-ch
+	if !reflect.DeepEqual(want, got) {
+		t.Errorf("Stream:\n%v, want\n%v", got, want)
+	}
+	// This should not hang.
+	<-done
+}
+
+func TestMessageAck(t *testing.T) {
 	_, tsv, db := newTestTxExecutor()
 	defer tsv.StopService()
 	ctx := context.Background()
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
 
-	_, err := tsv.AckMessages(ctx, &target, "nonmsg", []string{"1", "2"})
+	_, err := tsv.MessageAck(ctx, &target, "nonmsg", []string{"1", "2"})
 	want := "error: message table nonmsg not found in schema"
 	if err == nil || err.Error() != want {
-		t.Errorf("tsv.AckMessages(invalid): %v, want %s", err, want)
+		t.Errorf("tsv.MessageAck(invalid): %v, want %s", err, want)
 	}
 
-	_, err = tsv.AckMessages(ctx, &target, "msg", []string{"1", "2"})
+	_, err = tsv.MessageAck(ctx, &target, "msg", []string{"1", "2"})
 	want = "error: query: select time_scheduled, id from msg where id in ('1', '2') limit 10001 for update is not supported"
 	if err == nil || err.Error() != want {
-		t.Errorf("tsv.AckMessages(invalid): %v, want %s", err, want)
+		t.Errorf("tsv.MessageAck(invalid): %v, want %s", err, want)
 	}
 
 	db.AddQuery(
@@ -1417,7 +1460,7 @@ func TestAckMessages(t *testing.T) {
 		},
 	)
 	db.AddQueryPattern("update msg set time_acked = .*", &sqltypes.Result{RowsAffected: 1})
-	count, err := tsv.AckMessages(ctx, &target, "msg", []string{"1", "2"})
+	count, err := tsv.MessageAck(ctx, &target, "msg", []string{"1", "2"})
 	if err != nil {
 		t.Error(err)
 	}

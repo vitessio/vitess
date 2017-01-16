@@ -188,7 +188,7 @@ func TestQueryExecutorPlanInsertMessage(t *testing.T) {
 			Type: schema.Message,
 		},
 	})
-	tsv.messager.Subscribe("msg", r1)
+	tsv.messager.Subscribe("msg", r1.rcv)
 	got, err := qre.Execute()
 	if err != nil {
 		t.Fatalf("qre.Execute() = %v, want nil", err)

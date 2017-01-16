@@ -562,6 +562,16 @@ message BeginExecuteBatchResponse {
   int64 transaction_id = 3;
 }
 
+message VitessMessage {
+  BindVariable id = 1;
+  BindVariable vitess_message = 2;
+}
+
+message MessageStreamResponse {
+  string name = 1;
+  repeated VitessMessage messages = 2;
+}
+
 // SplitQueryRequest is the payload for SplitQuery sent by VTGate to a VTTablet.
 // See vtgate.SplitQueryRequest for more details.
 message SplitQueryRequest {

@@ -6,6 +6,7 @@ package tabletserver
 
 import (
 	"fmt"
+	"io"
 	"sync"
 	"time"
 
@@ -13,22 +14,55 @@ import (
 	"github.com/youtube/vitess/go/vt/schema"
 )
 
-// MessageReceiver defines the interface for the receivers.
-type MessageReceiver interface {
-	Send(name string, mrs []*MessageRow) error
-	Cancel()
+type messageReceiver struct {
+	mu   sync.Mutex
+	send func(string, []*MessageRow) error
+	done chan struct{}
+}
+
+func newMessageReceiver(send func(string, []*MessageRow) error) (*messageReceiver, chan struct{}) {
+	rcv := &messageReceiver{
+		send: send,
+		done: make(chan struct{}),
+	}
+	return rcv, rcv.done
+}
+
+func (rcv *messageReceiver) Send(name string, mrs []*MessageRow) error {
+	rcv.mu.Lock()
+	defer rcv.mu.Unlock()
+	if rcv.done == nil {
+		return io.EOF
+	}
+	err := rcv.send(name, mrs)
+	if err == io.EOF {
+		close(rcv.done)
+		rcv.done = nil
+	}
+	return err
+}
+
+func (rcv *messageReceiver) Cancel() {
+	// Do this async to avoid getting stuck.
+	go func() {
+		rcv.mu.Lock()
+		defer rcv.mu.Unlock()
+		if rcv.done != nil {
+			close(rcv.done)
+			rcv.done = nil
+		}
+	}()
 }
 
 // MessagerEngine is the engine for handling messages.
 type MessagerEngine struct {
-	isOpen bool
+	mu       sync.Mutex
+	isOpen   bool
+	managers map[string]*MessageManager
 
 	// TODO(sougou): This depndency should be cleaned up.
 	tsv      *TabletServer
 	connpool *ConnPool
-
-	mu       sync.Mutex
-	managers map[string]*MessageManager
 }
 
 // NewMessagerEngine creates a new MessagerEngine.
@@ -62,6 +96,8 @@ func (me *MessagerEngine) Open(dbconfigs dbconfigs.DBConfigs) error {
 
 // Close closes the MessagerEngine service.
 func (me *MessagerEngine) Close() {
+	me.mu.Lock()
+	defer me.mu.Unlock()
 	if !me.isOpen {
 		return
 	}
@@ -70,28 +106,20 @@ func (me *MessagerEngine) Close() {
 	for _, mm := range me.managers {
 		mm.Close()
 	}
+	me.managers = make(map[string]*MessageManager)
 	me.connpool.Close()
 }
 
-// Subscribe subscribes the receiver against the message table.
-func (me *MessagerEngine) Subscribe(name string, receiver MessageReceiver) error {
+// Subscribe subscribes to messages from the requested table.
+func (me *MessagerEngine) Subscribe(name string, rcv *messageReceiver) error {
 	me.mu.Lock()
 	defer me.mu.Unlock()
 	mm := me.managers[name]
 	if mm == nil {
 		return fmt.Errorf("message table %s not found", name)
 	}
-	mm.Subscribe(receiver)
+	mm.Subscribe(rcv)
 	return nil
-}
-
-// Unsubscribe unsubscribes from all message tables.
-func (me *MessagerEngine) Unsubscribe(receiver MessageReceiver) {
-	me.mu.Lock()
-	defer me.mu.Unlock()
-	for _, mm := range me.managers {
-		mm.Unsubscribe(receiver)
-	}
 }
 
 // LockDB obtains db locks for all messages that need to
