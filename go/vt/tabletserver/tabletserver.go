@@ -933,25 +933,37 @@ func (tsv *TabletServer) BeginExecuteBatch(ctx context.Context, target *querypb.
 	return results, transactionID, err
 }
 
-// MessageSubscribe registers the receiver against a message table.
-func (tsv *TabletServer) MessageSubscribe(ctx context.Context, target *querypb.Target, name string, receiver MessageReceiver) (err error) {
+// MessageStream streams messages from the requested table.
+func (tsv *TabletServer) MessageStream(ctx context.Context, target *querypb.Target, name string, sendReply func(*querypb.MessageStreamResponse) error) (err error) {
 	if err = tsv.startRequest(ctx, target, false, false); err != nil {
 		return err
 	}
 	defer tsv.endRequest(false)
 	defer tsv.handlePanicAndSendLogStats("ack", nil, &err, nil)
-	return tsv.messager.Subscribe(name, receiver)
-}
-
-// MessageUnsubscribe Unregisters the receiver from all message tables.
-func (tsv *TabletServer) MessageUnsubscribe(receiver MessageReceiver) error {
-	tsv.messager.Unsubscribe(receiver)
+	// TODO(sougou): perform ACL checks.
+	rcv, done := newMessageReceiver(func(name string, mrs []*MessageRow) error {
+		msgs := make([]*querypb.VitessMessage, 0, len(mrs))
+		for _, mr := range mrs {
+			msgs = append(msgs, &querypb.VitessMessage{
+				Id:            mr.ID.ToBindVar(),
+				VitessMessage: mr.Message.ToBindVar(),
+			})
+		}
+		return sendReply(&querypb.MessageStreamResponse{
+			Name:     name,
+			Messages: msgs,
+		})
+	})
+	if err := tsv.messager.Subscribe(name, rcv); err != nil {
+		return tsv.handleError("message_stream", nil, NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "%v", err), nil)
+	}
+	<-done
 	return nil
 }
 
-// AckMessages acks the list of messages for a given message table.
+// MessageAck acks the list of messages for a given message table.
 // It returns the number of messages successfully acked.
-func (tsv *TabletServer) AckMessages(ctx context.Context, target *querypb.Target, name string, ids []string) (count int64, err error) {
+func (tsv *TabletServer) MessageAck(ctx context.Context, target *querypb.Target, name string, ids []string) (count int64, err error) {
 	return tsv.execDML(ctx, target, func() (string, map[string]interface{}, error) {
 		return tsv.messager.GenerateAckQuery(name, ids)
 	})

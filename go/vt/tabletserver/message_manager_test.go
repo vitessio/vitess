@@ -5,7 +5,10 @@
 package tabletserver
 
 import (
+	"fmt"
+	"io"
 	"reflect"
+	"runtime"
 	"testing"
 	"time"
 
@@ -18,32 +21,49 @@ import (
 )
 
 type testReceiver struct {
+	rcv   *messageReceiver
+	done  chan struct{}
 	count sync2.AtomicInt64
 	name  string
 	ch    chan []*MessageRow
 }
 
 func newTestReceiver(size int) *testReceiver {
-	return &testReceiver{
+	tr := &testReceiver{
 		ch: make(chan []*MessageRow, size),
 	}
-}
-
-func (tr *testReceiver) Send(name string, mrs []*MessageRow) error {
-	tr.count.Add(1)
-	tr.name = name
-	tr.ch <- mrs
-	return nil
-}
-
-func (tr *testReceiver) Cancel() {
+	tr.rcv, tr.done = newMessageReceiver(func(name string, mrs []*MessageRow) error {
+		select {
+		case <-tr.done:
+			return io.EOF
+		default:
+		}
+		tr.count.Add(1)
+		tr.name = name
+		tr.ch <- mrs
+		return nil
+	})
+	return tr
 }
 
 func (tr *testReceiver) WaitForCount(n int) {
 	for {
-		time.Sleep(10 * time.Nanosecond)
+		runtime.Gosched()
+		time.Sleep(10 * time.Millisecond)
 		if tr.count.Get() == int64(n) {
 			return
+		}
+	}
+}
+
+func (tr *testReceiver) WaitForDone() {
+	for {
+		runtime.Gosched()
+		time.Sleep(10 * time.Millisecond)
+		select {
+		case <-tr.done:
+			return
+		default:
 		}
 	}
 }
@@ -67,9 +87,9 @@ func TestMessageManagerState(t *testing.T) {
 		mm.Open()
 		// Idempotence.
 		mm.Open()
-		// The sleep is for making sure runSend starts up
+		// The yield is for making sure runSend starts up
 		// and waits on cond.
-		time.Sleep(10 * time.Millisecond)
+		runtime.Gosched()
 		mm.Close()
 		// Idempotence.
 		mm.Close()
@@ -78,9 +98,9 @@ func TestMessageManagerState(t *testing.T) {
 	for i := 0; i < 2; i++ {
 		mm.Open()
 		r1 := newTestReceiver(1)
-		mm.Subscribe(r1)
+		mm.Subscribe(r1.rcv)
 		// This time the wait is in a different code path.
-		time.Sleep(10 * time.Millisecond)
+		runtime.Gosched()
 		mm.Close()
 	}
 }
@@ -110,7 +130,7 @@ func TestMessageManagerAdd(t *testing.T) {
 	}
 
 	r1 := newTestReceiver(0)
-	mm.Subscribe(r1)
+	mm.Subscribe(r1.rcv)
 	if !mm.Add(row1) {
 		t.Error("Add(1 receiver): false, want true")
 	}
@@ -142,7 +162,7 @@ func TestMessageManagerSend(t *testing.T) {
 	mm.Open()
 	defer mm.Close()
 	r1 := newTestReceiver(1)
-	mm.Subscribe(r1)
+	mm.Subscribe(r1.rcv)
 	row1 := &MessageRow{
 		id: "1",
 	}
@@ -151,23 +171,22 @@ func TestMessageManagerSend(t *testing.T) {
 		t.Errorf("Received: %v, want %v", got, row1)
 	}
 	r2 := newTestReceiver(1)
-	mm.Subscribe(r2)
-	// Subscribing twice is a no-op.
-	mm.Subscribe(r1)
-	// Unsubscribe of non-registered receiver should be no-op.
-	mm.Unsubscribe(newTestReceiver(1))
+	mm.Subscribe(r2.rcv)
 	mm.Add(&MessageRow{id: "2"})
 	mm.Add(&MessageRow{id: "3"})
 	// Send should be round-robin.
 	<-r1.ch
 	<-r2.ch
-	mm.Unsubscribe(r1)
+	r2.rcv.Cancel()
+	r2.WaitForDone()
+	// One of these messages will fail to send
+	// because r1 will return EOF.
 	mm.Add(&MessageRow{id: "4"})
 	mm.Add(&MessageRow{id: "5"})
+	mm.Add(&MessageRow{id: "6"})
 	// Only r2 should be receiving.
-	<-r2.ch
-	<-r2.ch
-	mm.Unsubscribe(r2)
+	<-r1.ch
+	<-r1.ch
 }
 
 func TestMessageManagerBatchSend(t *testing.T) {
@@ -187,7 +206,7 @@ func TestMessageManagerBatchSend(t *testing.T) {
 	mm.Open()
 	defer mm.Close()
 	r1 := newTestReceiver(1)
-	mm.Subscribe(r1)
+	mm.Subscribe(r1.rcv)
 	row1 := &MessageRow{
 		id: "1",
 	}
@@ -248,7 +267,7 @@ func TestMessageManagerPoller(t *testing.T) {
 	mm.Open()
 	defer mm.Close()
 	r1 := newTestReceiver(1)
-	mm.Subscribe(r1)
+	mm.Subscribe(r1.rcv)
 	mm.pollerTicks.Trigger()
 	want := []*MessageRow{{
 		TimeNext: 2,
@@ -272,16 +291,19 @@ func TestMessageManagerPoller(t *testing.T) {
 	var got []*MessageRow
 	// We should get it in 2 iterations.
 	for i := 0; i < 2; i++ {
-		got = append(got, <-r1.ch...)
+		mrs := <-r1.ch
+		got = append(got, mrs...)
+		fmt.Printf("got: %v\n", got)
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("rows:\n%v, want\n%v", got, want)
 	}
 
 	// If there are no receivers, nothing should fire.
-	mm.Unsubscribe(r1)
+	r1.rcv.Cancel()
+	r1.WaitForDone()
 	mm.pollerTicks.Trigger()
-	time.Sleep(10 * time.Microsecond)
+	runtime.Gosched()
 	select {
 	case row := <-r1.ch:
 		t.Errorf("Expecting no value, got: %v", row)
@@ -320,7 +342,7 @@ func TestMessagesPending1(t *testing.T) {
 	mm.Open()
 	defer mm.Close()
 	r1 := newTestReceiver(0)
-	mm.Subscribe(r1)
+	mm.Subscribe(r1.rcv)
 
 	mm.Add(&MessageRow{id: "1"})
 	// Make sure the first message is enqueued.
@@ -334,7 +356,7 @@ func TestMessagesPending1(t *testing.T) {
 
 	// Wait for pending flag to be turned on.
 	for {
-		time.Sleep(10 * time.Nanosecond)
+		runtime.Gosched()
 		mm.mu.Lock()
 		if mm.messagesPending {
 			mm.mu.Unlock()
@@ -385,7 +407,7 @@ func TestMessagesPending2(t *testing.T) {
 	mm.Open()
 	defer mm.Close()
 	r1 := newTestReceiver(0)
-	mm.Subscribe(r1)
+	mm.Subscribe(r1.rcv)
 
 	// Trigger the poller.
 	mm.pollerTicks.Trigger()

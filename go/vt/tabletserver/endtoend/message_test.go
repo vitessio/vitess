@@ -5,41 +5,40 @@
 package endtoend
 
 import (
+	"io"
 	"reflect"
+	"runtime"
 	"strconv"
 	"testing"
 	"time"
 
 	"github.com/youtube/vitess/go/sqltypes"
-	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/tabletserver/endtoend/framework"
+
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
-
-type testReceiver struct {
-	name string
-	ch   chan *tabletserver.MessageRow
-}
-
-func (tr *testReceiver) Send(name string, mrs []*tabletserver.MessageRow) error {
-	tr.name = name
-	for _, mr := range mrs {
-		tr.ch <- mr
-	}
-	return nil
-}
-
-func (tr *testReceiver) Cancel() {
-}
 
 func TestMessage(t *testing.T) {
 	// This test is too slow. Skip for now.
-	//t.Skip()
-	tr := &testReceiver{ch: make(chan *tabletserver.MessageRow)}
+	t.Skip()
+	ch := make(chan *querypb.MessageStreamResponse)
+	done := make(chan struct{})
 	client := framework.NewClient()
-	if err := client.MessageSubscribe("vitess_message", tr); err != nil {
-		t.Fatal(err)
-	}
-	defer client.MessageUnsubscribe(tr)
+	go func() {
+		if err := client.MessageStream("vitess_message", func(msr *querypb.MessageStreamResponse) error {
+			select {
+			case <-done:
+				return io.EOF
+			default:
+			}
+			ch <- msr
+			return nil
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}()
+	runtime.Gosched()
+	defer func() { close(done) }()
 	err := client.Begin()
 	if err != nil {
 		t.Error(err)
@@ -56,14 +55,13 @@ func TestMessage(t *testing.T) {
 		return
 	}
 	start := time.Now().UnixNano()
-	mr := <-tr.ch
-	got := tabletserver.MessageRow{
-		ID:      mr.ID,
-		Message: mr.Message,
-	}
-	want := tabletserver.MessageRow{
-		ID:      sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")),
-		Message: sqltypes.MakeTrusted(sqltypes.VarChar, []byte("hello world")),
+	got := <-ch
+	want := &querypb.MessageStreamResponse{
+		Name: "vitess_message",
+		Messages: []*querypb.VitessMessage{{
+			Id:            sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")).ToBindVar(),
+			VitessMessage: sqltypes.MakeTrusted(sqltypes.VarChar, []byte("hello world")).ToBindVar(),
+		}},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("message received: %v, want %v", got, want)
@@ -86,7 +84,7 @@ func TestMessage(t *testing.T) {
 	default:
 		t.Errorf("epoch: %d, must be 0 or 1", epoch)
 	}
-	<-tr.ch
+	<-ch
 	qr, err = client.Execute("select time_next, epoch from vitess_message where id = 1", nil)
 	if err != nil {
 		t.Fatal(err)
@@ -105,7 +103,7 @@ func TestMessage(t *testing.T) {
 	default:
 		t.Errorf("epoch: %d, must be 1 or 2", epoch)
 	}
-	count, err := client.AckMessages("vitess_message", []string{"1"})
+	count, err := client.MessageAck("vitess_message", []string{"1"})
 	if err != nil {
 		t.Error(err)
 	}

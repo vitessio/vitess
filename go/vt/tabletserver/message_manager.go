@@ -5,6 +5,7 @@
 package tabletserver
 
 import (
+	"io"
 	"sync"
 	"time"
 
@@ -17,7 +18,7 @@ import (
 )
 
 type receiverWithStatus struct {
-	receiver MessageReceiver
+	receiver *messageReceiver
 	busy     bool
 }
 
@@ -96,6 +97,7 @@ func (mm *MessageManager) Open() {
 	}
 	mm.isOpen = true
 	mm.wg.Add(1)
+	mm.curReceiver = -1
 	go mm.runSend()
 	// TODO(sougou): improve ticks to add randomness.
 	mm.pollerTicks.Start(mm.runPoller)
@@ -125,7 +127,7 @@ func (mm *MessageManager) Close() {
 }
 
 // Subscribe adds the receiver to the list of subsribers.
-func (mm *MessageManager) Subscribe(receiver MessageReceiver) {
+func (mm *MessageManager) Subscribe(receiver *messageReceiver) {
 	mm.mu.Lock()
 	defer mm.mu.Unlock()
 	for _, rcv := range mm.receivers {
@@ -140,8 +142,7 @@ func (mm *MessageManager) Subscribe(receiver MessageReceiver) {
 	}
 }
 
-// Unsubscribe removes the receiver from the list of subscribers.
-func (mm *MessageManager) Unsubscribe(receiver MessageReceiver) {
+func (mm *MessageManager) unsubscribe(receiver *messageReceiver) {
 	mm.mu.Lock()
 	defer mm.mu.Unlock()
 	for i, rcv := range mm.receivers {
@@ -243,7 +244,13 @@ func (mm *MessageManager) runSend() {
 
 func (mm *MessageManager) send(receiver *receiverWithStatus, mrs []*MessageRow) {
 	if err := receiver.receiver.Send(mm.name, mrs); err != nil {
-		log.Errorf("Error sending messages: %v", mrs)
+		if err == io.EOF {
+			// No need to call Cancel. MessageReceiver already
+			// does that before returning this error.
+			mm.unsubscribe(receiver.receiver)
+		} else {
+			log.Errorf("Error sending messages: %v", mrs)
+		}
 	}
 	mm.mu.Lock()
 	receiver.busy = false

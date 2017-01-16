@@ -185,18 +185,12 @@ func (client *QueryClient) ExecuteBatch(queries []querytypes.BoundQuery, asTrans
 	)
 }
 
-// MessageSubscribe registers the receiver against a message table.
-func (client *QueryClient) MessageSubscribe(name string, receiver tabletserver.MessageReceiver) (err error) {
-	return client.server.MessageSubscribe(client.ctx, &client.target, name, receiver)
+// MessageStream streams messages from the message table.
+func (client *QueryClient) MessageStream(name string, sendReply func(*querypb.MessageStreamResponse) error) (err error) {
+	return client.server.MessageStream(client.ctx, &client.target, name, sendReply)
 }
 
-// MessageUnsubscribe Unregisters the receiver from all message tables.
-func (client *QueryClient) MessageUnsubscribe(receiver tabletserver.MessageReceiver) error {
-	client.server.MessageUnsubscribe(receiver)
-	return nil
-}
-
-// AckMessages acks messages
-func (client *QueryClient) AckMessages(name string, ids []string) (int64, error) {
-	return client.server.AckMessages(client.ctx, &client.target, name, ids)
+// MessageAck acks messages
+func (client *QueryClient) MessageAck(name string, ids []string) (int64, error) {
+	return client.server.MessageAck(client.ctx, &client.target, name, ids)
 }
