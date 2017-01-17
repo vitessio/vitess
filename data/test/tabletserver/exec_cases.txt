@@ -189,6 +189,16 @@
   "PKValues": ["0"]
 }
 
+# default without INTO
+"insert d(id) values(1)"
+{
+  "PlanID": "INSERT_PK",
+  "TableName": "d",
+  "FullQuery": "insert into d(id) values (1)",
+  "OuterQuery": "insert into d(id) values (1)",
+  "PKValues": ["0"]
+}
+
 # mismatch
 "insert into a (eid, id) values (1)"
 "column count doesn't match value count"
