@@ -72,7 +72,7 @@ func forceEOF(yylex interface{}) {
 
 %token LEX_ERROR
 %left <empty> UNION
-%token <empty> SELECT INSERT UPDATE DELETE FROM WHERE GROUP HAVING ORDER BY LIMIT FOR
+%token <empty> SELECT INSERT UPDATE DELETE FROM WHERE GROUP HAVING ORDER BY LIMIT OFFSET FOR
 %token <empty> ALL DISTINCT AS EXISTS ASC DESC INTO DUPLICATE KEY DEFAULT SET LOCK
 %token <empty> VALUES LAST_INSERT_ID
 %token <empty> NEXT VALUE
@@ -1116,6 +1116,10 @@ limit_opt:
 | LIMIT value_expression ',' value_expression
   {
     $$ = &Limit{Offset: $2, Rowcount: $4}
+  }
+| LIMIT value_expression OFFSET value_expression
+  {
+    $$ = &Limit{Offset: $4, Rowcount: $2}
   }
 
 lock_opt:

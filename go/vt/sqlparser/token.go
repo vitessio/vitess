@@ -180,6 +180,7 @@ var keywords = map[string]int{
 	"no_write_to_binlog":  UNUSED,
 	"null":                NULL,
 	"numeric":             UNUSED,
+	"offset":              OFFSET,
 	"on":                  ON,
 	"optimize":            UNUSED,
 	"optimizer_costs":     UNUSED,
