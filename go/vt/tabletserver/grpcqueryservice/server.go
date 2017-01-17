@@ -301,6 +301,35 @@ func (q *query) BeginExecuteBatch(ctx context.Context, request *querypb.BeginExe
 	}, nil
 }
 
+// MessageStream is part of the queryservice.QueryServer interface
+func (q *query) MessageStream(request *querypb.MessageStreamRequest, stream queryservicepb.Query_MessageStreamServer) (err error) {
+	defer q.server.HandlePanic(&err)
+	ctx := callerid.NewContext(callinfo.GRPCCallInfo(stream.Context()),
+		request.EffectiveCallerId,
+		request.ImmediateCallerId,
+	)
+	if err := q.server.MessageStream(ctx, request.Target, request.Name, stream.Send); err != nil {
+		return vterrors.ToGRPCError(err)
+	}
+	return nil
+}
+
+// MessageAck is part of the queryservice.QueryServer interface
+func (q *query) MessageAck(ctx context.Context, request *querypb.MessageAckRequest) (response *querypb.MessageAckResponse, err error) {
+	defer q.server.HandlePanic(&err)
+	ctx = callerid.NewContext(callinfo.GRPCCallInfo(ctx),
+		request.EffectiveCallerId,
+		request.ImmediateCallerId,
+	)
+	count, err := q.server.MessageAck(ctx, request.Target, request.Name, request.Ids)
+	if err != nil {
+		return nil, vterrors.ToGRPCError(err)
+	}
+	return &querypb.MessageAckResponse{
+		Count: count,
+	}, nil
+}
+
 // SplitQuery is part of the queryservice.QueryServer interface
 func (q *query) SplitQuery(ctx context.Context, request *querypb.SplitQueryRequest) (response *querypb.SplitQueryResponse, err error) {
 	defer q.server.HandlePanic(&err)

@@ -594,6 +594,53 @@ func (f *FakeQueryService) BeginExecuteBatch(ctx context.Context, target *queryp
 	return results, transactionID, err
 }
 
+var (
+	MessageName           = "vitess_message"
+	MessageStreamResponse = &querypb.MessageStreamResponse{
+		Name: "vitess_message",
+		Messages: []*querypb.VitessMessage{{
+			Id:            sqltypes.MakeString([]byte("1")).ToBindVar(),
+			VitessMessage: sqltypes.MakeString([]byte("2")).ToBindVar(),
+		}},
+	}
+	MessageIDs = []*querypb.Value{{
+		Type:  sqltypes.VarChar,
+		Value: []byte("1"),
+	}}
+)
+
+// MessageStream is part of the queryservice.QueryService interface
+func (f *FakeQueryService) MessageStream(ctx context.Context, target *querypb.Target, name string, sendReply func(*querypb.MessageStreamResponse) error) (err error) {
+	if f.HasError {
+		return f.TabletError
+	}
+	if f.Panics {
+		panic(fmt.Errorf("test-triggered panic"))
+	}
+	if name != MessageName {
+		f.t.Errorf("name: %s, want %s", name, MessageName)
+	}
+	sendReply(MessageStreamResponse)
+	return nil
+}
+
+// MessageAck is part of the queryservice.QueryService interface
+func (f *FakeQueryService) MessageAck(ctx context.Context, target *querypb.Target, name string, ids []*querypb.Value) (count int64, err error) {
+	if f.HasError {
+		return 0, f.TabletError
+	}
+	if f.Panics {
+		panic(fmt.Errorf("test-triggered panic"))
+	}
+	if name != MessageName {
+		f.t.Errorf("name: %s, want %s", name, MessageName)
+	}
+	if !reflect.DeepEqual(ids, MessageIDs) {
+		f.t.Errorf("ids: %v, want %v", ids, MessageIDs)
+	}
+	return 1, nil
+}
+
 // SplitQuery is part of the queryservice.QueryService interface
 func (f *FakeQueryService) SplitQuery(
 	ctx context.Context,

@@ -414,6 +414,16 @@ func (sbc *SandboxConn) BeginExecuteBatch(ctx context.Context, target *querypb.T
 	return results, transactionID, err
 }
 
+// MessageStream is part of the TabletConn interface.
+func (sbc *SandboxConn) MessageStream(ctx context.Context, target *querypb.Target, name string, sendReply func(*querypb.MessageStreamResponse) error) (err error) {
+	return fmt.Errorf("unimplemented")
+}
+
+// MessageAck is part of the TabletConn interface.
+func (sbc *SandboxConn) MessageAck(ctx context.Context, target *querypb.Target, name string, ids []*querypb.Value) (count int64, err error) {
+	return 0, fmt.Errorf("unimplemented")
+}
+
 // SandboxSQRowCount is the default number of fake splits returned.
 var SandboxSQRowCount = int64(10)
 

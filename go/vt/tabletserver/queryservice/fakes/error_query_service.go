@@ -99,6 +99,16 @@ func (e *ErrorQueryService) BeginExecuteBatch(ctx context.Context, target *query
 	return nil, 0, fmt.Errorf("ErrorQueryService does not implement any method")
 }
 
+// MessageStream is part of QueryService interface
+func (e *ErrorQueryService) MessageStream(ctx context.Context, target *querypb.Target, name string, sendReply func(*querypb.MessageStreamResponse) error) (err error) {
+	return fmt.Errorf("ErrorQueryService does not implement any method")
+}
+
+// MessageAck is part of QueryService interface
+func (e *ErrorQueryService) MessageAck(ctx context.Context, target *querypb.Target, name string, ids []*querypb.Value) (count int64, err error) {
+	return 0, fmt.Errorf("ErrorQueryService does not implement any method")
+}
+
 // SplitQuery is part of QueryService interface
 func (e *ErrorQueryService) SplitQuery(
 	ctx context.Context,

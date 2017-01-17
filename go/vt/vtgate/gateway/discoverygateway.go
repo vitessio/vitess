@@ -305,6 +305,32 @@ func (dg *discoveryGateway) BeginExecuteBatch(ctx context.Context, target *query
 	return qrs, transactionID, err
 }
 
+// MessageStream streams messages for the
+// specified keyspace, shard, and tablet type.
+func (dg *discoveryGateway) MessageStream(ctx context.Context, target *querypb.Target, name string, sendReply func(*querypb.MessageStreamResponse) error) error {
+	return dg.withRetry(ctx, target, func(conn tabletconn.TabletConn, target *querypb.Target) error {
+		var innerErr error
+		startTime := time.Now()
+		innerErr = conn.MessageStream(ctx, target, name, sendReply)
+		dg.updateStats(target, startTime, innerErr)
+		return innerErr
+	}, false, true)
+}
+
+// MessageAck acks messages for the
+// specified keyspace, shard, and tablet type.
+func (dg *discoveryGateway) MessageAck(ctx context.Context, target *querypb.Target, name string, ids []*querypb.Value) (int64, error) {
+	var count int64
+	err := dg.withRetry(ctx, target, func(conn tabletconn.TabletConn, target *querypb.Target) error {
+		var innerErr error
+		startTime := time.Now()
+		count, innerErr = conn.MessageAck(ctx, target, name, ids)
+		dg.updateStats(target, startTime, innerErr)
+		return innerErr
+	}, false, false)
+	return count, err
+}
+
 // SplitQuery splits a query into sub-queries for the specified keyspace, shard, and tablet type.
 func (dg *discoveryGateway) SplitQuery(
 	ctx context.Context,

@@ -963,9 +963,17 @@ func (tsv *TabletServer) MessageStream(ctx context.Context, target *querypb.Targ
 
 // MessageAck acks the list of messages for a given message table.
 // It returns the number of messages successfully acked.
-func (tsv *TabletServer) MessageAck(ctx context.Context, target *querypb.Target, name string, ids []string) (count int64, err error) {
+func (tsv *TabletServer) MessageAck(ctx context.Context, target *querypb.Target, name string, ids []*querypb.Value) (count int64, err error) {
+	sids := make([]string, 0, len(ids))
+	for _, val := range ids {
+		v, err := sqltypes.BuildConverted(val.Type, val.Value)
+		if err != nil {
+			return 0, tsv.handleError("message_ack", nil, NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "invalid type: %v", err), nil)
+		}
+		sids = append(sids, v.String())
+	}
 	return tsv.execDML(ctx, target, func() (string, map[string]interface{}, error) {
-		return tsv.messager.GenerateAckQuery(name, ids)
+		return tsv.messager.GenerateAckQuery(name, sids)
 	})
 }
 

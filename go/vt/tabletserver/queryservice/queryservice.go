@@ -67,6 +67,10 @@ type QueryService interface {
 	BeginExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, error)
 	BeginExecuteBatch(ctx context.Context, target *querypb.Target, queries []querytypes.BoundQuery, asTransaction bool, options *querypb.ExecuteOptions) ([]sqltypes.Result, int64, error)
 
+	// Messaging methods.
+	MessageStream(ctx context.Context, target *querypb.Target, name string, sendReply func(*querypb.MessageStreamResponse) error) error
+	MessageAck(ctx context.Context, target *querypb.Target, name string, ids []*querypb.Value) (count int64, err error)
+
 	// SplitQuery is a MapReduce helper function
 	// This version of SplitQuery supports multiple algorithms and multiple split columns.
 	// See the documentation of SplitQueryRequest in 'proto/vtgate.proto' for more information.

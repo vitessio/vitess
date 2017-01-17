@@ -1437,13 +1437,20 @@ func TestMessageAck(t *testing.T) {
 	ctx := context.Background()
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
 
-	_, err := tsv.MessageAck(ctx, &target, "nonmsg", []string{"1", "2"})
+	ids := []*querypb.Value{{
+		Type:  sqltypes.VarChar,
+		Value: []byte("1"),
+	}, {
+		Type:  sqltypes.VarChar,
+		Value: []byte("2"),
+	}}
+	_, err := tsv.MessageAck(ctx, &target, "nonmsg", ids)
 	want := "error: message table nonmsg not found in schema"
 	if err == nil || err.Error() != want {
 		t.Errorf("tsv.MessageAck(invalid): %v, want %s", err, want)
 	}
 
-	_, err = tsv.MessageAck(ctx, &target, "msg", []string{"1", "2"})
+	_, err = tsv.MessageAck(ctx, &target, "msg", ids)
 	want = "error: query: select time_scheduled, id from msg where id in ('1', '2') limit 10001 for update is not supported"
 	if err == nil || err.Error() != want {
 		t.Errorf("tsv.MessageAck(invalid): %v, want %s", err, want)
@@ -1460,7 +1467,7 @@ func TestMessageAck(t *testing.T) {
 		},
 	)
 	db.AddQueryPattern("update msg set time_acked = .*", &sqltypes.Result{RowsAffected: 1})
-	count, err := tsv.MessageAck(ctx, &target, "msg", []string{"1", "2"})
+	count, err := tsv.MessageAck(ctx, &target, "msg", ids)
 	if err != nil {
 		t.Error(err)
 	}
