@@ -216,7 +216,7 @@ func routerStream(router *Router, sql string) (qr *sqltypes.Result, err error) {
 	return qr, nil
 }
 
-func routerExecBatch(router *Router, sqlList []string, bvList []map[string]interface{}) ([]sqltypes.QueryResponse, error) {
+func routerExecBatch(router *Router, sqlList []string, bvList []map[string]interface{}, execParallel bool) ([]sqltypes.QueryResponse, error) {
 	return router.ExecuteBatch(context.Background(),
 		sqlList,
 		bvList,
@@ -225,5 +225,5 @@ func routerExecBatch(router *Router, sqlList []string, bvList []map[string]inter
 		false,
 		nil,
 		nil,
-		false)
+		execParallel)
 }

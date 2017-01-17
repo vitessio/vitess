@@ -105,15 +105,7 @@ func (rtr *Router) streamExecuteVIndex(vcursor *queryExecutor, sql string, bindV
 
 // executeBatchVIndex routes a non-streaming vindex queries.
 func (rtr *Router) executeBatchVIndex(vcursor *queryExecutor, sqlList []string, bindVarsList []map[string]interface{}, asTransaction bool, execParallel bool) ([]sqltypes.QueryResponse, error) {
-	queryBatchConstruct, err := queryinfo.NewQueryBatchConstruct(sqlList, "", bindVarsList, asTransaction)
-	if err != nil {
-		return nil, err
-	}
-	plan, err := rtr.planner.GetBatchPlan(queryBatchConstruct, execParallel)
-	if err != nil {
-		return nil, err
-	}
-	return plan.Instructions.ExecuteBatch(vcursor, queryBatchConstruct, make(map[string]interface{}), true)
+	panic("executeBatchVIndex::This method is not implemented")
 }
 
 // IsKeyspaceRangeBasedSharded returns true if the keyspace in the vschema is
