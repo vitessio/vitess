@@ -945,8 +945,8 @@ func (tsv *TabletServer) MessageStream(ctx context.Context, target *querypb.Targ
 		msgs := make([]*querypb.VitessMessage, 0, len(mrs))
 		for _, mr := range mrs {
 			msgs = append(msgs, &querypb.VitessMessage{
-				Id:            mr.ID.ToBindVar(),
-				VitessMessage: mr.Message.ToBindVar(),
+				Id:            mr.ID.ToProtoValue(),
+				VitessMessage: mr.Message.ToProtoValue(),
 			})
 		}
 		return sendReply(&querypb.MessageStreamResponse{

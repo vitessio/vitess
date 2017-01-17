@@ -495,9 +495,9 @@ func TestToNative(t *testing.T) {
 	}
 }
 
-func TestToBindVar(t *testing.T) {
-	got := testVal(Int64, "1").ToBindVar()
-	want := &querypb.BindVariable{
+func TestToProtoValue(t *testing.T) {
+	got := testVal(Int64, "1").ToProtoValue()
+	want := &querypb.Value{
 		Type:  Int64,
 		Value: []byte("1"),
 	}

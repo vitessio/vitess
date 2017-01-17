@@ -168,6 +168,7 @@ func TestSubscribe(t *testing.T) {
 	}
 }
 
+// TestReceiverEOF is here because it's testing MessageReceiver.
 func TestReceiverEOF(t *testing.T) {
 	db := setUpTabletServerTest()
 	testUtils := newTestUtils()
@@ -184,7 +185,7 @@ func TestReceiverEOF(t *testing.T) {
 	mm := NewMessageManager(tsv, "foo", 1*time.Second, 3*time.Second, 1, 10, 1*time.Second, newMMConnPool(db))
 	mm.Open()
 	defer mm.Close()
-	r1 := newTestReceiver(1)
+	r1 := newTestReceiver(0)
 	mm.Subscribe(r1.rcv)
 	r1.done = make(chan struct{})
 	close(r1.done)
@@ -193,9 +194,12 @@ func TestReceiverEOF(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		runtime.Gosched()
 		time.Sleep(10 * time.Millisecond)
+		mm.mu.Lock()
 		if len(mm.receivers) != 0 {
+			mm.mu.Unlock()
 			continue
 		}
+		mm.mu.Unlock()
 		return
 	}
 	t.Errorf("receivers were not cleared: %d", len(mm.receivers))

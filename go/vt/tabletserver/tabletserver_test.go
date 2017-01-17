@@ -1413,19 +1413,34 @@ func TestMessageStream(t *testing.T) {
 		}
 		close(done)
 	}()
-	runtime.Gosched()
-	// TODO(sougou): Find a less hacky way to do this.
-	tsv.messager.managers["msg"].Add(&MessageRow{ID: sqltypes.MakeString([]byte("1")), id: "1"})
-	want := &querypb.MessageStreamResponse{
-		Name: "msg",
-		Messages: []*querypb.VitessMessage{{
-			Id:            sqltypes.MakeString([]byte("1")).ToBindVar(),
-			VitessMessage: sqltypes.NULL.ToBindVar(),
-		}},
+	newMessages := map[string][]*MessageRow{
+		"msg": {
+			&MessageRow{ID: sqltypes.MakeString([]byte("1")), id: "1"},
+		},
 	}
-	got := <-ch
-	if !reflect.DeepEqual(want, got) {
-		t.Errorf("Stream:\n%v, want\n%v", got, want)
+	// We may have to iterate a few times before the stream kicks in.
+	for {
+		runtime.Gosched()
+		time.Sleep(10 * time.Millisecond)
+		unlock := tsv.messager.LockDB(newMessages, nil)
+		tsv.messager.UpdateCaches(newMessages, nil)
+		unlock()
+		want := &querypb.MessageStreamResponse{
+			Name: "msg",
+			Messages: []*querypb.VitessMessage{{
+				Id:            sqltypes.MakeString([]byte("1")).ToProtoValue(),
+				VitessMessage: sqltypes.NULL.ToProtoValue(),
+			}},
+		}
+		select {
+		case got := <-ch:
+			if !reflect.DeepEqual(want, got) {
+				t.Errorf("Stream:\n%v, want\n%v", got, want)
+			}
+		default:
+			continue
+		}
+		break
 	}
 	// This should not hang.
 	<-done

@@ -59,8 +59,8 @@ func TestMessage(t *testing.T) {
 	want := &querypb.MessageStreamResponse{
 		Name: "vitess_message",
 		Messages: []*querypb.VitessMessage{{
-			Id:            sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")).ToBindVar(),
-			VitessMessage: sqltypes.MakeTrusted(sqltypes.VarChar, []byte("hello world")).ToBindVar(),
+			Id:            sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")).ToProtoValue(),
+			VitessMessage: sqltypes.MakeTrusted(sqltypes.VarChar, []byte("hello world")).ToProtoValue(),
 		}},
 	}
 	if !reflect.DeepEqual(got, want) {

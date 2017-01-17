@@ -573,8 +573,8 @@ message MessageStreamRequest {
 
 // VitessMessage represents a single message.
 message VitessMessage {
-  BindVariable id = 1;
-  BindVariable vitess_message = 2;
+  Value id = 1;
+  Value vitess_message = 2;
 }
 
 // MessageStreamResponse is a response for MessageStream.

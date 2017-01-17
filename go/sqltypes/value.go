@@ -226,9 +226,9 @@ func (v Value) ToNative() interface{} {
 	return out
 }
 
-// ToBindVar converts Value to a querypb.BindVariable.
-func (v Value) ToBindVar() *querypb.BindVariable {
-	return &querypb.BindVariable{
+// ToProtoValue converts Value to a querypb.Value.
+func (v Value) ToProtoValue() *querypb.Value {
+	return &querypb.Value{
 		Type:  v.typ,
 		Value: v.val,
 	}

@@ -599,8 +599,8 @@ var (
 	MessageStreamResponse = &querypb.MessageStreamResponse{
 		Name: "vitess_message",
 		Messages: []*querypb.VitessMessage{{
-			Id:            sqltypes.MakeString([]byte("1")).ToBindVar(),
-			VitessMessage: sqltypes.MakeString([]byte("2")).ToBindVar(),
+			Id:            sqltypes.MakeString([]byte("1")).ToProtoValue(),
+			VitessMessage: sqltypes.MakeString([]byte("2")).ToProtoValue(),
 		}},
 	}
 	MessageIDs = []*querypb.Value{{
