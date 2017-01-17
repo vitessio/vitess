@@ -562,14 +562,42 @@ message BeginExecuteBatchResponse {
   int64 transaction_id = 3;
 }
 
+// MessageStreamRequest is the request payload for MessageStream.
+message MessageStreamRequest {
+  vtrpc.CallerID effective_caller_id = 1;
+  VTGateCallerID immediate_caller_id = 2;
+  Target target = 3;
+  // name is the message table name.
+  string name = 4;
+}
+
+// VitessMessage represents a single message.
 message VitessMessage {
   BindVariable id = 1;
   BindVariable vitess_message = 2;
 }
 
+// MessageStreamResponse is a response for MessageStream.
 message MessageStreamResponse {
+  // name is the message table name.
   string name = 1;
   repeated VitessMessage messages = 2;
+}
+
+// MessageAckRequest is the request payload for MessageAck.
+message MessageAckRequest {
+  vtrpc.CallerID effective_caller_id = 1;
+  VTGateCallerID immediate_caller_id = 2;
+  Target target = 3;
+  // name is the message table name.
+  string name = 4;
+  repeated Value ids = 5;
+}
+
+// MessageAckResponse is the response for MessageAck.
+message MessageAckResponse {
+  // count is the number of messages acked.
+  int64 count = 1;
 }
 
 // SplitQueryRequest is the payload for SplitQuery sent by VTGate to a VTTablet.

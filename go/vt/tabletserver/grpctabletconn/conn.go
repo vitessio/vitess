@@ -487,6 +487,65 @@ func (conn *gRPCQueryClient) BeginExecuteBatch(ctx context.Context, target *quer
 	return sqltypes.Proto3ToResults(reply.Results), reply.TransactionId, nil
 }
 
+// MessageStream streams messages.
+func (conn *gRPCQueryClient) MessageStream(ctx context.Context, target *querypb.Target, name string, sendReply func(*querypb.MessageStreamResponse) error) error {
+	stream, err := func() (queryservicepb.Query_MessageStreamClient, error) {
+		conn.mu.RLock()
+		defer conn.mu.RUnlock()
+		if conn.cc == nil {
+			return nil, tabletconn.ConnClosed
+		}
+
+		req := &querypb.MessageStreamRequest{
+			Target:            target,
+			EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
+			ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
+			Name:              name,
+		}
+		stream, err := conn.c.MessageStream(ctx, req)
+		if err != nil {
+			return nil, tabletconn.TabletErrorFromGRPC(err)
+		}
+		return stream, nil
+	}()
+	if err != nil {
+		return err
+	}
+	for {
+		msr, err := stream.Recv()
+		if err != nil {
+			if err == io.EOF {
+				return nil
+			}
+			return tabletconn.TabletErrorFromGRPC(err)
+		}
+		if err := sendReply(msr); err != nil {
+			return tabletconn.TabletErrorFromGRPC(err)
+		}
+	}
+}
+
+// MessageAck acks messages.
+func (conn *gRPCQueryClient) MessageAck(ctx context.Context, target *querypb.Target, name string, ids []*querypb.Value) (int64, error) {
+	conn.mu.RLock()
+	defer conn.mu.RUnlock()
+	if conn.cc == nil {
+		return 0, tabletconn.ConnClosed
+	}
+	req := &querypb.MessageAckRequest{
+		Target:            target,
+		EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
+		ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
+		Name:              name,
+		Ids:               ids,
+	}
+	reply, err := conn.c.MessageAck(ctx, req)
+	if err != nil {
+		return 0, tabletconn.TabletErrorFromGRPC(err)
+	}
+	return reply.Count, nil
+}
+
 // SplitQuery is the stub for TabletServer.SplitQuery RPC
 func (conn *gRPCQueryClient) SplitQuery(
 	ctx context.Context,

@@ -192,5 +192,12 @@ func (client *QueryClient) MessageStream(name string, sendReply func(*querypb.Me
 
 // MessageAck acks messages
 func (client *QueryClient) MessageAck(name string, ids []string) (int64, error) {
-	return client.server.MessageAck(client.ctx, &client.target, name, ids)
+	bids := make([]*querypb.Value, 0, len(ids))
+	for _, id := range ids {
+		bids = append(bids, &querypb.Value{
+			Type:  sqltypes.VarChar,
+			Value: []byte(id),
+		})
+	}
+	return client.server.MessageAck(client.ctx, &client.target, name, bids)
 }

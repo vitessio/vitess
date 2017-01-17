@@ -449,6 +449,18 @@ func (itc *internalTabletConn) BeginExecuteBatch(ctx context.Context, target *qu
 	return results, transactionID, err
 }
 
+// MessageStream is part of tabletconn.TabletConn
+func (itc *internalTabletConn) MessageStream(ctx context.Context, target *querypb.Target, name string, sendReply func(*querypb.MessageStreamResponse) error) error {
+	err := itc.tablet.qsc.QueryService().MessageStream(ctx, target, name, sendReply)
+	return tabletconn.TabletErrorFromGRPC(vterrors.ToGRPCError(err))
+}
+
+// MessageAck is part of tabletconn.TabletConn
+func (itc *internalTabletConn) MessageAck(ctx context.Context, target *querypb.Target, name string, ids []*querypb.Value) (int64, error) {
+	count, err := itc.tablet.qsc.QueryService().MessageAck(ctx, target, name, ids)
+	return count, tabletconn.TabletErrorFromGRPC(vterrors.ToGRPCError(err))
+}
+
 // Close is part of tabletconn.TabletConn
 func (itc *internalTabletConn) Close(ctx context.Context) error {
 	return nil

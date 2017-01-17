@@ -208,6 +208,22 @@ func (l *L2VTGate) BeginExecuteBatch(ctx context.Context, target *querypb.Target
 	return l.gateway.BeginExecuteBatch(ctx, target, queries, asTransaction, options)
 }
 
+// MessageStream is part of the queryservice.QueryService interface
+func (l *L2VTGate) MessageStream(ctx context.Context, target *querypb.Target, name string, sendReply func(*querypb.MessageStreamResponse) error) (err error) {
+	startTime, statsKey := l.startAction("ExecuteBatch", target)
+	defer l.endAction(startTime, statsKey, &err)
+
+	return l.gateway.MessageStream(ctx, target, name, sendReply)
+}
+
+// MessageAck is part of the queryservice.QueryService interface
+func (l *L2VTGate) MessageAck(ctx context.Context, target *querypb.Target, name string, ids []*querypb.Value) (count int64, err error) {
+	startTime, statsKey := l.startAction("ExecuteBatch", target)
+	defer l.endAction(startTime, statsKey, &err)
+
+	return l.gateway.MessageAck(ctx, target, name, ids)
+}
+
 // SplitQuery is part of the queryservice.QueryService interface
 func (l *L2VTGate) SplitQuery(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, splitColumns []string, splitCount int64, numRowsPerQueryPart int64, algorithm querypb.SplitQueryRequest_Algorithm) (splits []querytypes.QuerySplit, err error) {
 	startTime, statsKey := l.startAction("SplitQuery", target)

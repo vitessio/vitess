@@ -19,6 +19,7 @@ import (
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"golang.org/x/net/context"
 
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
@@ -657,6 +658,73 @@ func testBeginExecuteBatchPanics(t *testing.T, conn tabletconn.TabletConn, f *Fa
 	})
 }
 
+func testMessageStream(t *testing.T, conn tabletconn.TabletConn, f *FakeQueryService) {
+	t.Log("testMessageStream")
+	ctx := context.Background()
+	ctx = callerid.NewContext(ctx, TestCallerID, TestVTGateCallerID)
+	var got *querypb.MessageStreamResponse
+	err := conn.MessageStream(ctx, TestTarget, MessageName, func(msr *querypb.MessageStreamResponse) error {
+		got = msr
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("MessageStream failed: %v", err)
+	}
+	if !reflect.DeepEqual(got, MessageStreamResponse) {
+		t.Errorf("Unexpected result from MessageStream: got %v wanted %v", got, MessageStreamResponse)
+	}
+}
+
+func testMessageStreamError(t *testing.T, conn tabletconn.TabletConn, f *FakeQueryService) {
+	t.Log("testMessageStreamError")
+	f.HasError = true
+	testErrorHelper(t, f, "MessageStream", func(ctx context.Context) error {
+		ctx = callerid.NewContext(ctx, TestCallerID, TestVTGateCallerID)
+		return conn.MessageStream(ctx, TestTarget, MessageName, func(msr *querypb.MessageStreamResponse) error { return nil })
+	})
+	f.HasError = false
+}
+
+func testMessageStreamPanics(t *testing.T, conn tabletconn.TabletConn, f *FakeQueryService) {
+	t.Log("testMessageStreamPanics")
+	testPanicHelper(t, f, "MessageStream", func(ctx context.Context) error {
+		err := conn.MessageStream(ctx, TestTarget, MessageName, func(msr *querypb.MessageStreamResponse) error { return nil })
+		return err
+	})
+}
+
+func testMessageAck(t *testing.T, conn tabletconn.TabletConn, f *FakeQueryService) {
+	t.Log("testMessageAck")
+	ctx := context.Background()
+	ctx = callerid.NewContext(ctx, TestCallerID, TestVTGateCallerID)
+	count, err := conn.MessageAck(ctx, TestTarget, MessageName, MessageIDs)
+	if err != nil {
+		t.Fatalf("MessageAck failed: %v", err)
+	}
+	if count != 1 {
+		t.Errorf("Unexpected result from MessageAck: got %v wanted 1", count)
+	}
+}
+
+func testMessageAckError(t *testing.T, conn tabletconn.TabletConn, f *FakeQueryService) {
+	t.Log("testMessageAckError")
+	f.HasError = true
+	testErrorHelper(t, f, "MessageAck", func(ctx context.Context) error {
+		ctx = callerid.NewContext(ctx, TestCallerID, TestVTGateCallerID)
+		_, err := conn.MessageAck(ctx, TestTarget, MessageName, MessageIDs)
+		return err
+	})
+	f.HasError = false
+}
+
+func testMessageAckPanics(t *testing.T, conn tabletconn.TabletConn, f *FakeQueryService) {
+	t.Log("testMessageAckPanics")
+	testPanicHelper(t, f, "MessageAck", func(ctx context.Context) error {
+		_, err := conn.MessageAck(ctx, TestTarget, MessageName, MessageIDs)
+		return err
+	})
+}
+
 func testSplitQuery(t *testing.T, conn tabletconn.TabletConn, f *FakeQueryService) {
 	t.Log("testSplitQuery")
 	ctx := context.Background()
@@ -879,6 +947,8 @@ func TestSuite(t *testing.T, protocol string, tablet *topodatapb.Tablet, fake *F
 		testStreamExecute,
 		testExecuteBatch,
 		testBeginExecuteBatch,
+		testMessageStream,
+		testMessageAck,
 		testSplitQuery,
 		testUpdateStream,
 
@@ -901,6 +971,8 @@ func TestSuite(t *testing.T, protocol string, tablet *topodatapb.Tablet, fake *F
 		testExecuteBatchError,
 		testBeginExecuteBatchErrorInBegin,
 		testBeginExecuteBatchErrorInExecuteBatch,
+		testMessageStreamError,
+		testMessageAckError,
 		testSplitQueryError,
 		testUpdateStreamError,
 
@@ -921,6 +993,8 @@ func TestSuite(t *testing.T, protocol string, tablet *topodatapb.Tablet, fake *F
 		testStreamExecutePanics,
 		testExecuteBatchPanics,
 		testBeginExecuteBatchPanics,
+		testMessageStreamPanics,
+		testMessageAckPanics,
 		testSplitQueryPanics,
 		testUpdateStreamPanics,
 	}

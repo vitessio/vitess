@@ -318,6 +318,32 @@ func (lg *l2VTGateGateway) BeginExecuteBatch(ctx context.Context, target *queryp
 	return qrs, transactionID, err
 }
 
+// MessageStream streams messages for the
+// specified keyspace, shard, and tablet type.
+func (lg *l2VTGateGateway) MessageStream(ctx context.Context, target *querypb.Target, name string, sendReply func(*querypb.MessageStreamResponse) error) error {
+	return lg.withRetry(ctx, target, func(conn *l2VTGateConn) error {
+		var innerErr error
+		startTime := time.Now()
+		innerErr = conn.conn.MessageStream(ctx, target, name, sendReply)
+		lg.updateStats(conn, target.TabletType, startTime, innerErr)
+		return innerErr
+	}, false, true)
+}
+
+// MessageAck acks messages for the
+// specified keyspace, shard, and tablet type.
+func (lg *l2VTGateGateway) MessageAck(ctx context.Context, target *querypb.Target, name string, ids []*querypb.Value) (int64, error) {
+	var count int64
+	err := lg.withRetry(ctx, target, func(conn *l2VTGateConn) error {
+		var innerErr error
+		startTime := time.Now()
+		count, innerErr = conn.conn.MessageAck(ctx, target, name, ids)
+		lg.updateStats(conn, target.TabletType, startTime, innerErr)
+		return innerErr
+	}, false, false)
+	return count, err
+}
+
 func (lg *l2VTGateGateway) SplitQuery(
 	ctx context.Context,
 	target *querypb.Target,

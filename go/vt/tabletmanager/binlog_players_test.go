@@ -199,6 +199,16 @@ func (ftc *fakeTabletConn) BeginExecuteBatch(ctx context.Context, target *queryp
 	return nil, 0, fmt.Errorf("not implemented in this test")
 }
 
+// MessageStream is part of the TabletConn interface
+func (ftc *fakeTabletConn) MessageStream(ctx context.Context, target *querypb.Target, name string, sendReply func(*querypb.MessageStreamResponse) error) (err error) {
+	return fmt.Errorf("not implemented")
+}
+
+// MessageAck is part of the TabletConn interface
+func (ftc *fakeTabletConn) MessageAck(ctx context.Context, target *querypb.Target, name string, ids []*querypb.Value) (count int64, err error) {
+	return 0, fmt.Errorf("not implemented")
+}
+
 // SplitQuery is part of the TabletConn interface
 func (ftc *fakeTabletConn) SplitQuery(
 	ctx context.Context,
