@@ -210,6 +210,9 @@ const (
 const (
 	// CharacterSetUtf8 is for UTF8. We use this by default.
 	CharacterSetUtf8 = 33
+
+	// CharacterSetBinary is for binary. Use by integer fields for instance.
+	CharacterSetBinary = 63
 )
 
 // CharacterSetMap maps the charset name (used in ConnParams) to the
@@ -251,7 +254,7 @@ var CharacterSetMap = map[string]uint8{
 	"cp1256":   57,
 	"cp1257":   59,
 	"utf32":    60,
-	"binary":   63,
+	"binary":   CharacterSetBinary,
 	"geostd8":  92,
 	"cp932":    95,
 	"eucjpms":  97,

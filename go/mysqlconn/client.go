@@ -363,13 +363,17 @@ func (c *Conn) parseInitialHandshakePacket(data []byte) (uint32, []byte, error) 
 }
 
 func (c *Conn) writeHandshakeResponse41(capabilities uint32, cipher []byte, characterSet uint8, params *sqldb.ConnParams) error {
+	// Build our flags.
 	var flags uint32 = CapabilityClientLongPassword |
 		CapabilityClientLongFlag |
 		CapabilityClientProtocol41 |
 		CapabilityClientTransactions |
 		CapabilityClientSecureConnection |
 		CapabilityClientPluginAuth |
-		CapabilityClientPluginAuthLenencClientData
+		CapabilityClientPluginAuthLenencClientData |
+		// If the server supported
+		// CapabilityClientDeprecateEOF, we also support it.
+		c.Capabilities&CapabilityClientDeprecateEOF
 
 	// FIXME(alainjobart) add SSL, multi statement, client found rows.
 
