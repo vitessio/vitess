@@ -64,7 +64,7 @@ orchestrator:
       cpu: "100m"
   mysqlResources:
     limits:
-      memory: "512Mi"
+      memory: "1Gi"
       cpu: "100m"
 
   # Currently supported data volume types:
