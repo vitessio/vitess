@@ -172,8 +172,10 @@ func TestWithRealDatabase(t *testing.T) {
 				Database:     "vttest",
 				OrgName:      "id",
 				ColumnLength: 11,
-				Charset:      63,    // binary
-				Flags:        16387, // NOT_NULL_FLAG, PRI_KEY_FLAG, PART_KEY_FLAG
+				Charset:      CharacterSetBinary,
+				Flags: uint32(querypb.MySqlFlag_NOT_NULL_FLAG |
+					querypb.MySqlFlag_PRI_KEY_FLAG |
+					querypb.MySqlFlag_PART_KEY_FLAG),
 			},
 			{
 				Name:         "name",
@@ -183,7 +185,7 @@ func TestWithRealDatabase(t *testing.T) {
 				Database:     "vttest",
 				OrgName:      "name",
 				ColumnLength: 384,
-				Charset:      33, // utf8
+				Charset:      CharacterSetUtf8,
 			},
 		},
 		Rows: [][]sqltypes.Value{
@@ -194,7 +196,11 @@ func TestWithRealDatabase(t *testing.T) {
 		},
 	}
 	if !reflect.DeepEqual(result, expectedResult) {
-		t.Errorf("unexpected result for select, got:\n%v\nexpected:\n%v\n", result, expectedResult)
+		// MySQL 5.7 is adding the NO_DEFAULT_VALUE_FLAG to Flags.
+		expectedResult.Fields[0].Flags |= uint32(querypb.MySqlFlag_NO_DEFAULT_VALUE_FLAG)
+		if !reflect.DeepEqual(result, expectedResult) {
+			t.Errorf("unexpected result for select, got:\n%v\nexpected:\n%v\n", result, expectedResult)
+		}
 	}
 
 	// Now be serious: insert a thousand rows.
@@ -247,8 +253,10 @@ func readRowsUsingStream(t *testing.T, params *sqldb.ConnParams, expectedCount i
 			Database:     "vttest",
 			OrgName:      "id",
 			ColumnLength: 11,
-			Charset:      63,    // binary
-			Flags:        16387, // NOT_NULL_FLAG, PRI_KEY_FLAG, PART_KEY_FLAG
+			Charset:      CharacterSetBinary,
+			Flags: uint32(querypb.MySqlFlag_NOT_NULL_FLAG |
+				querypb.MySqlFlag_PRI_KEY_FLAG |
+				querypb.MySqlFlag_PART_KEY_FLAG),
 		},
 		{
 			Name:         "name",
@@ -258,7 +266,7 @@ func readRowsUsingStream(t *testing.T, params *sqldb.ConnParams, expectedCount i
 			Database:     "vttest",
 			OrgName:      "name",
 			ColumnLength: 384,
-			Charset:      33, // utf8
+			Charset:      CharacterSetUtf8,
 		},
 	}
 	fields, err := conn.Fields()
@@ -266,7 +274,11 @@ func readRowsUsingStream(t *testing.T, params *sqldb.ConnParams, expectedCount i
 		t.Fatalf("Fields failed: %v", err)
 	}
 	if !reflect.DeepEqual(fields, expectedFields) {
-		t.Fatalf("fields are not right, got:\n%v\nexpected:\n%v", fields, expectedFields)
+		// MySQL 5.7 is adding the NO_DEFAULT_VALUE_FLAG to Flags.
+		expectedFields[0].Flags |= uint32(querypb.MySqlFlag_NO_DEFAULT_VALUE_FLAG)
+		if !reflect.DeepEqual(fields, expectedFields) {
+			t.Fatalf("fields are not right, got:\n%v\nexpected:\n%v", fields, expectedFields)
+		}
 	}
 
 	// Read the rows.
