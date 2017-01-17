@@ -5,7 +5,7 @@ set -e
 tmpdir=`mktemp -d`
 
 script="go get github.com/youtube/vitess/go/cmd/vtctlclient && \
-  git clone https://github.com/enisoc/orchestrator.git src/github.com/github/orchestrator && \
+  git clone https://github.com/github/orchestrator.git src/github.com/github/orchestrator && \
   go install github.com/github/orchestrator/go/cmd/orchestrator"
 
 echo "Building orchestrator..."
