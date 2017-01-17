@@ -7,7 +7,7 @@ set -e
 cell='test'
 web_port=15001
 grpc_port=15991
-mysql_server_port=3306
+mysql_server_port=15306
 
 script_root=`dirname "${BASH_SOURCE}"`
 source $script_root/env.sh
