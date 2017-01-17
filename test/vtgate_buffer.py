@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2016, Google Inc. All rights reserved.
+# Copyright 2016 Google Inc. All rights reserved.
 # Use of this source code is governed by a BSD-style license that can
 # be found in the LICENSE file.
 
@@ -17,6 +17,7 @@ The test reproduces such a scenario as follows:
 
 import logging
 import Queue
+import random
 import threading
 import time
 
@@ -120,27 +121,58 @@ class ReadThread(AbstractVtgateThread):
 
 class UpdateThread(AbstractVtgateThread):
 
-  def __init__(self, vtgate):
+  def __init__(self, vtgate, ignore_error_func=None):
+    self.ignore_error_func = ignore_error_func
+    # Value used in next UPDATE query. Increased after every query.
+    self.i = 1
+    self._commit_errors = 0
     super(UpdateThread, self).__init__(vtgate, 'UpdateThread', writable=True)
-    # Number of executed UPDATE queries.
-    self.i = 0
-    self.commit_errors = 0
 
   def execute(self, cursor):
-    cursor.begin()
-    row_count = cursor.execute('UPDATE buffer SET msg=:msg WHERE id = :id',
-                               {'msg': 'update %d' % self.i,
-                                'id': UPDATE_ROW_ID})
-    try:
-      cursor.commit()
-    except Exception as e:  # pylint: disable=broad-except
-      self.commit_errors += 1
-      if self.commit_errors > 1:
-        raise
-      logging.debug('COMMIT failed. This is okay once because we do not support'
-                    ' buffering it. err: %s', str(e))
+    attempt = self.i
     self.i += 1
-    logging.debug('UPDATE affected %d row(s).', row_count)
+    try:
+      commit_started = False
+      cursor.begin()
+      # Do not use a bind variable for "msg" to make sure that the value shows
+      # up in the logs.
+      row_count = cursor.execute('UPDATE buffer SET msg=\'update %d\' '
+                                 'WHERE id = :id' % attempt,
+                                 {'id': UPDATE_ROW_ID})
+
+      # Sleep between [0, 1] seconds to prolong the time the transaction is in
+      # flight. This is more realistic because applications are going to keep
+      # their transactions open for longer as well.
+      time.sleep(random.randint(0, 1000) / 1000.0)
+
+      commit_started = True
+      cursor.commit()
+      logging.debug('UPDATE %d affected %d row(s).', attempt, row_count)
+    except Exception as e:  # pylint: disable=broad-except
+      try:
+        # Rollback to free the transaction in vttablet.
+        cursor.rollback()
+      except Exception as e:  # pylint: disable=broad-except
+        logging.warn('rollback failed: %s', str(e))
+
+      if not commit_started:
+        logging.debug('UPDATE %d failed before COMMIT. This should not happen.'
+                      ' Re-raising exception.', attempt)
+        raise
+
+      if self.ignore_error_func and self.ignore_error_func(e):
+        logging.debug('UPDATE %d failed during COMMIT. But we cannot buffer'
+                      ' this error and and ignore it. err: %s', attempt, str(e))
+      else:
+        self._commit_errors += 1
+        if self._commit_errors > 1:
+          raise
+        logging.debug('UPDATE %d failed during COMMIT. This is okay once'
+                      ' because we do not support buffering it. err: %s',
+                      attempt, str(e))
+
+  def commit_errors(self):
+    return self._commit_errors
 
 master = tablet.Tablet()
 replica = tablet.Tablet()
@@ -218,29 +250,29 @@ def start_vtgate():
                        tablets=all_tablets)
 
 
-class TestBuffer(unittest.TestCase):
+class TestBufferBase(unittest.TestCase):
 
-  def setUp(self):
-    utils.vtgate.kill()
-    # Restart vtgate between each test or the feature
-    # --vtgate_buffer_min_time_between_failovers
-    # will ignore subsequent failovers.
-    start_vtgate()
-
-  def _test_buffer(self, reparent_func):
+  def _test_buffer(self, reparent_func, enable_read_thread=True,
+                   ignore_error_func=None):
     # Start both threads.
-    read_thread = ReadThread(utils.vtgate)
-    update_thread = UpdateThread(utils.vtgate)
+    if enable_read_thread:
+      read_thread = ReadThread(utils.vtgate)
+    else:
+      logging.debug('ReadThread explicitly disabled in this test.')
+    update_thread = UpdateThread(utils.vtgate, ignore_error_func)
 
     try:
       # Verify they got at least 2 RPCs through.
-      read_thread.set_notify_after_n_successful_rpcs(2)
+      if enable_read_thread:
+        read_thread.set_notify_after_n_successful_rpcs(2)
       update_thread.set_notify_after_n_successful_rpcs(2)
-      read_thread.wait_for_notification.get()
+      if enable_read_thread:
+        read_thread.wait_for_notification.get()
       update_thread.wait_for_notification.get()
 
       # Execute the failover.
-      read_thread.set_notify_after_n_successful_rpcs(10)
+      if enable_read_thread:
+        read_thread.set_notify_after_n_successful_rpcs(10)
       update_thread.set_notify_after_n_successful_rpcs(10)
 
       reparent_func()
@@ -249,7 +281,8 @@ class TestBuffer(unittest.TestCase):
       global master, replica
       master, replica = replica, master
 
-      read_thread.wait_for_notification.get()
+      if enable_read_thread:
+        read_thread.wait_for_notification.get()
       update_thread.wait_for_notification.get()
     except:
       # Something went wrong. Kill vtgate first to unblock any buffered requests
@@ -258,21 +291,86 @@ class TestBuffer(unittest.TestCase):
       raise
     finally:
       # Stop threads.
-      read_thread.stop()
+      if enable_read_thread:
+        read_thread.stop()
       update_thread.stop()
-      read_thread.join()
+      if enable_read_thread:
+        read_thread.join()
       update_thread.join()
 
     # Both threads must not see any error.
-    self.assertEqual(0, read_thread.errors)
+    if enable_read_thread:
+      self.assertEqual(0, read_thread.errors)
     self.assertEqual(0, update_thread.errors)
     # At least one thread should have been buffered.
     # TODO(mberlin): This may fail if a failover is too fast. Add retries then.
     v = utils.vtgate.get_vars()
     labels = '%s.%s' % (KEYSPACE, SHARD)
-    self.assertGreater(v['BufferRequestsInFlightMax'][labels], 0)
-    logging.debug('Failover was buffered for %d milliseconds.',
-                  v['BufferFailoverDurationMs'][labels])
+    in_flight_max = v['BufferRequestsInFlightMax'].get(labels, 0)
+    if in_flight_max == 0:
+      # Missed buffering is okay when we observed the failover during the
+      # COMMIT (which cannot trigger the buffering).
+      self.assertGreater(update_thread.commit_errors(), 0,
+                         'No buffering took place and the update thread saw no'
+                         ' error during COMMIT. But one of it must happen.')
+    else:
+      self.assertGreater(in_flight_max, 0)
+
+    if labels in v['BufferFailoverDurationMs']:
+      logging.debug('Failover was buffered for %d milliseconds.',
+                    v['BufferFailoverDurationMs'][labels])
+
+  def external_reparent(self):
+    # Demote master.
+    start = time.time()
+    master.mquery('', mysql_flavor().demote_master_commands(), log_query=True)
+    if master.semi_sync_enabled():
+      master.set_semi_sync_enabled(master=False)
+
+    # Wait for replica to catch up to master.
+    utils.wait_for_replication_pos(master, replica)
+
+    # Wait for at least one second to articially prolong the failover and give
+    # the buffer a chance to observe it.
+    d = time.time() - start
+    min_unavailability_s = 1
+    if d < min_unavailability_s:
+      w = min_unavailability_s - d
+      logging.debug('Waiting for %.1f seconds because the failover was too fast'
+                    ' (took only %.3f seconds)', w, d)
+      time.sleep(w)
+
+    # Promote replica to new master.
+    replica.mquery('', mysql_flavor().promote_slave_commands(),
+                   log_query=True)
+    if replica.semi_sync_enabled():
+      replica.set_semi_sync_enabled(master=True)
+    old_master = master
+    new_master = replica
+
+    # Configure old master to use new master.
+    new_pos = mysql_flavor().master_position(new_master)
+    logging.debug('New master position: %s', str(new_pos))
+    # Use 'localhost' as hostname because Travis CI worker hostnames
+    # are too long for MySQL replication.
+    change_master_cmds = mysql_flavor().change_master_commands(
+        'localhost', new_master.mysql_port, new_pos)
+    old_master.mquery('', ['RESET SLAVE'] + change_master_cmds +
+                      ['START SLAVE'], log_query=True)
+
+    # Notify the new vttablet master about the reparent.
+    utils.run_vtctl(['TabletExternallyReparented', new_master.tablet_alias],
+                    auto_log=True)
+
+
+class TestBuffer(TestBufferBase):
+
+  def setUp(self):
+    utils.vtgate.kill()
+    # Restart vtgate between each test or the feature
+    # --vtgate_buffer_min_time_between_failovers
+    # will ignore subsequent failovers.
+    start_vtgate()
 
   def test_buffer_planned_reparent(self):
     def planned_reparent():
@@ -282,36 +380,7 @@ class TestBuffer(unittest.TestCase):
     self._test_buffer(planned_reparent)
 
   def test_buffer_external_reparent(self):
-    def external_reparent():
-      # Demote master.
-      master.mquery('', mysql_flavor().demote_master_commands())
-      if master.semi_sync_enabled():
-        master.set_semi_sync_enabled(master=False)
-
-      # Wait for replica to catch up to master.
-      utils.wait_for_replication_pos(master, replica)
-
-      # Promote replica to new master.
-      replica.mquery('', mysql_flavor().promote_slave_commands())
-      if replica.semi_sync_enabled():
-        replica.set_semi_sync_enabled(master=True)
-      old_master = master
-      new_master = replica
-
-      # Configure old master to use new master.
-      new_pos = mysql_flavor().master_position(new_master)
-      logging.debug('New master position: %s', str(new_pos))
-      # Use 'localhost' as hostname because Travis CI worker hostnames
-      # are too long for MySQL replication.
-      change_master_cmds = mysql_flavor().change_master_commands(
-          'localhost', new_master.mysql_port, new_pos)
-      old_master.mquery('', ['RESET SLAVE'] + change_master_cmds +
-                        ['START SLAVE'])
-
-      # Notify the new vttablet master about the reparent.
-      utils.run_vtctl(['TabletExternallyReparented', new_master.tablet_alias])
-    self._test_buffer(external_reparent)
-
+    self._test_buffer(self.external_reparent)
 
 if __name__ == '__main__':
   utils.main()

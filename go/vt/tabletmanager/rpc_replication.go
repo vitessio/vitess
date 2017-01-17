@@ -182,9 +182,11 @@ func (agent *ActionAgent) InitMaster(ctx context.Context) (string, error) {
 	// Set the server read-write, from now on we can accept real
 	// client writes. Note that if semi-sync replication is enabled,
 	// we'll still need some slaves to be able to commit transactions.
+	startTime := time.Now()
 	if err := agent.MysqlDaemon.SetReadOnly(false); err != nil {
 		return "", err
 	}
+	agent.setLastReparentedTime(startTime)
 
 	// Change our type to master if not already
 	if _, err := agent.TopoServer.UpdateTabletFields(ctx, agent.TabletAlias, func(tablet *topodatapb.Tablet) error {
