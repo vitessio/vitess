@@ -5,7 +5,6 @@
 package mysqlctl
 
 import (
-	"bytes"
 	"encoding/binary"
 	"fmt"
 	"strings"
@@ -146,16 +145,14 @@ func (*mysql56) ParseReplicationPosition(s string) (replication.Position, error)
 
 // SendBinlogDumpCommand implements MysqlFlavor.SendBinlogDumpCommand().
 func (flavor *mysql56) SendBinlogDumpCommand(conn *SlaveConnection, startPos replication.Position) error {
-	const ComBinlogDumpGTID = 0x1E // COM_BINLOG_DUMP_GTID
-
 	gtidSet, ok := startPos.GTIDSet.(replication.Mysql56GTIDSet)
 	if !ok {
 		return fmt.Errorf("startPos.GTIDSet is wrong type - expected Mysql56GTIDSet, got: %#v", startPos.GTIDSet)
 	}
 
 	// Build the command.
-	buf := makeBinlogDumpGTIDCommand(0, conn.slaveID, gtidSet)
-	return conn.SendCommand(ComBinlogDumpGTID, buf)
+	sidBlock := gtidSet.SIDBlock()
+	return conn.WriteComBinlogDumpGTID(conn.slaveID, "", 4, 0, sidBlock)
 }
 
 // MakeBinlogEvent implements MysqlFlavor.MakeBinlogEvent().
@@ -190,12 +187,6 @@ func (ev mysql56BinlogEvent) IsGTID() bool {
 	return ev.Type() == 33 // GTID_LOG_EVENT
 }
 
-// HasGTID implements BinlogEvent.HasGTID().
-func (ev mysql56BinlogEvent) HasGTID(f replication.BinlogFormat) bool {
-	// MySQL 5.6 provides GTIDs in a separate event type GTID_EVENT.
-	return ev.IsGTID()
-}
-
 // GTID implements BinlogEvent.GTID().
 //
 // Expected format:
@@ -203,12 +194,12 @@ func (ev mysql56BinlogEvent) HasGTID(f replication.BinlogFormat) bool {
 //   1         flags
 //   16        SID (server UUID)
 //   8         GNO (sequence number, signed int)
-func (ev mysql56BinlogEvent) GTID(f replication.BinlogFormat) (replication.GTID, error) {
+func (ev mysql56BinlogEvent) GTID(f replication.BinlogFormat) (replication.GTID, bool, error) {
 	data := ev.Bytes()[f.HeaderLength:]
 	var sid replication.SID
 	copy(sid[:], data[1:1+16])
 	gno := int64(binary.LittleEndian.Uint64(data[1+16 : 1+16+8]))
-	return replication.Mysql56GTID{Server: sid, Sequence: gno}, nil
+	return replication.Mysql56GTID{Server: sid, Sequence: gno}, false /* hasBegin */, nil
 }
 
 // PreviousGTIDs implements BinlogEvent.PreviousGTIDs().
@@ -241,33 +232,6 @@ func (ev mysql56BinlogEvent) StripChecksum(f replication.BinlogFormat) (replicat
 		// 4 bytes, so we can't support them a priori.
 		return ev, nil, fmt.Errorf("unsupported checksum algorithm: %v", f.ChecksumAlgorithm)
 	}
-}
-
-// makeBinlogDumpGTIDCommand builds a buffer containing the data for a MySQL 5.6
-// COM_BINLOG_DUMP_GTID command. Only the GTID form is supported.
-//
-// https://dev.mysql.com/doc/internals/en/com-binlog-dump-gtid.html
-func makeBinlogDumpGTIDCommand(flags uint16, serverID uint32, gtidSet replication.Mysql56GTIDSet) []byte {
-	sidBlock := gtidSet.SIDBlock()
-
-	var buf bytes.Buffer
-	buf.Grow(2 + 4 + 4 + 8 + 4 + len(sidBlock))
-
-	// flags (2 bytes)
-	binary.Write(&buf, binary.LittleEndian, flags)
-	// server-id of slave (4 bytes)
-	binary.Write(&buf, binary.LittleEndian, serverID)
-	// binlog-filename-len (4 bytes), set to 0 since we don't use filename field.
-	binary.Write(&buf, binary.LittleEndian, uint32(0))
-	// binlog-filename (0 bytes), empty.
-	// binlog-pos (8 bytes), set to 4 (start of file).
-	binary.Write(&buf, binary.LittleEndian, uint64(4))
-	// data-size (4 bytes), length of SID block.
-	binary.Write(&buf, binary.LittleEndian, uint32(len(sidBlock)))
-	// data, SID block.
-	buf.Write(sidBlock)
-
-	return buf.Bytes()
 }
 
 func init() {

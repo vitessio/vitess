@@ -34,7 +34,7 @@ func (c *Conn) writeComInitDB(db string) error {
 }
 
 func (c *Conn) readColumnDefinition(field *querypb.Field, index int) error {
-	colDef, err := c.readPacket()
+	colDef, err := c.ReadPacket()
 	if err != nil {
 		return err
 	}
@@ -115,7 +115,7 @@ func (c *Conn) readColumnDefinition(field *querypb.Field, index int) error {
 // readColumnDefinitionType is a faster version of
 // readColumnDefinition that only fills in the Type.
 func (c *Conn) readColumnDefinitionType(field *querypb.Field, index int) error {
-	colDef, err := c.readPacket()
+	colDef, err := c.ReadPacket()
 	if err != nil {
 		return err
 	}
@@ -251,7 +251,7 @@ func (c *Conn) ExecuteFetch(query string, maxrows int, wantfields bool) (*sqltyp
 
 	if c.Capabilities&CapabilityClientDeprecateEOF == 0 {
 		// EOF is only present here if it's not deprecated.
-		data, err := c.readPacket()
+		data, err := c.ReadPacket()
 		if err != nil {
 			return nil, err
 		}
@@ -270,7 +270,7 @@ func (c *Conn) ExecuteFetch(query string, maxrows int, wantfields bool) (*sqltyp
 
 	// read each row until EOF or OK packet.
 	for {
-		data, err := c.readPacket()
+		data, err := c.ReadPacket()
 		if err != nil {
 			return nil, err
 		}
@@ -317,7 +317,7 @@ func (c *Conn) ExecuteFetch(query string, maxrows int, wantfields bool) (*sqltyp
 // drainResults will read all packets for a result set and ignore them.
 func (c *Conn) drainResults() error {
 	for {
-		data, err := c.readPacket()
+		data, err := c.ReadPacket()
 		if err != nil {
 			return err
 		}
@@ -338,7 +338,7 @@ func (c *Conn) drainResults() error {
 }
 
 func (c *Conn) readComQueryResponse() (uint64, uint64, int, error) {
-	data, err := c.readPacket()
+	data, err := c.ReadPacket()
 	if err != nil {
 		return 0, 0, 0, err
 	}

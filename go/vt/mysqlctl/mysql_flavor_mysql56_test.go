@@ -32,19 +32,6 @@ func TestMysql56IsGTID(t *testing.T) {
 	}
 }
 
-func TestMysql56HasGTID(t *testing.T) {
-	format := replication.BinlogFormat{}
-	if got, want := mysql56FormatEvent.HasGTID(format), false; got != want {
-		t.Errorf("%#v.HasGTID() = %#v, want %#v", mysql56FormatEvent, got, want)
-	}
-	if got, want := mysql56QueryEvent.HasGTID(format), false; got != want {
-		t.Errorf("%#v.HasGTID() = %#v, want %#v", mysql56QueryEvent, got, want)
-	}
-	if got, want := mysql56GTIDEvent.HasGTID(format), true; got != want {
-		t.Errorf("%#v.HasGTID() = %#v, want %#v", mysql56GTIDEvent, got, want)
-	}
-}
-
 func TestMysql56StripChecksum(t *testing.T) {
 	format, err := mysql56FormatEvent.Format()
 	if err != nil {
@@ -87,9 +74,12 @@ func TestMysql56GTID(t *testing.T) {
 	}
 
 	want, _ := (&mysql56{}).ParseGTID("439192bd-f37c-11e4-bbeb-0242ac11035a:4")
-	got, err := input.GTID(format)
+	got, hasBegin, err := input.GTID(format)
 	if err != nil {
 		t.Fatalf("GTID() error: %v", err)
+	}
+	if hasBegin {
+		t.Errorf("GTID() returned hasBegin")
 	}
 	if got != want {
 		t.Errorf("GTID() = %#v, want %#v", got, want)
@@ -249,37 +239,5 @@ func TestMysql56MakeBinlogEvent(t *testing.T) {
 	want := mysql56BinlogEvent{binlogEvent: binlogEvent([]byte{1, 2, 3})}
 	if got := (&mysql56{}).MakeBinlogEvent(input); !reflect.DeepEqual(got, want) {
 		t.Errorf("(&mysql56{}).MakeBinlogEvent(%#v) = %#v, want %#v", input, got, want)
-	}
-}
-
-func TestMakeBinlogDumpGTIDCommand(t *testing.T) {
-	want := []byte{
-		// flags
-		0x00, 0x00,
-		// server_id
-		0x04, 0x03, 0x02, 0x01,
-		// binlog_filename_len
-		0x00, 0x00, 0x00, 0x00,
-		// binlog_filename (0 length)
-		// binlog_pos (4 = start of file)
-		0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-		// data_size (size of everything below)
-		0x30, 0x00, 0x00, 0x00,
-		// n_sids
-		0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-		// sid1
-		0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
-		// n_intervals
-		0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-		// start
-		0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-		// end
-		0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-	}
-
-	pos, _ := (&mysql56{}).ParseReplicationPosition("00010203-0405-0607-0809-0a0b0c0d0e0f:1-2")
-	got := makeBinlogDumpGTIDCommand(0x0000 /* flags */, 0x01020304 /* serverID */, pos.GTIDSet.(replication.Mysql56GTIDSet))
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("makeBinlogDumpGTIDCommand() = %#v, want %#v", got, want)
 	}
 }

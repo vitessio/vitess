@@ -271,11 +271,6 @@ func (ev binlogEvent) Rand(f replication.BinlogFormat) (seed1 uint64, seed2 uint
 	return seed1, seed2, nil
 }
 
-// IsBeginGTID implements BinlogEvent.IsBeginGTID().
-func (ev binlogEvent) IsBeginGTID(f replication.BinlogFormat) bool {
-	return false
-}
-
 // These constants are common between MariaDB 10.0 and MySQL 5.6.
 const (
 	// BinlogChecksumAlgOff indicates that checksums are supported but off.

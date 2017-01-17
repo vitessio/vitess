@@ -67,9 +67,9 @@ func verifyPacketComms(t *testing.T, cConn, sConn *Conn, data []byte) {
 		cConn.flush()
 	}()
 
-	received, err := sConn.readPacket()
+	received, err := sConn.ReadPacket()
 	if err != nil || !bytes.Equal(data, received) {
-		t.Fatalf("readPacket failed: %v %v", received, err)
+		t.Fatalf("ReadPacket failed: %v %v", received, err)
 	}
 }
 
@@ -117,9 +117,9 @@ func TestBasicPackets(t *testing.T) {
 	if err := sConn.writeOKPacket(12, 34, 56, 78); err != nil {
 		t.Fatalf("writeOKPacket failed: %v", err)
 	}
-	data, err := cConn.readPacket()
+	data, err := cConn.ReadPacket()
 	if err != nil || len(data) == 0 || data[0] != OKPacket {
-		t.Fatalf("cConn.readPacket - OKPacket failed: %v %v", data, err)
+		t.Fatalf("cConn.ReadPacket - OKPacket failed: %v %v", data, err)
 	}
 	affectedRows, lastInsertID, statusFlags, warnings, err := parseOKPacket(data)
 	if err != nil || affectedRows != 12 || lastInsertID != 34 || statusFlags != 56 || warnings != 78 {
@@ -130,9 +130,9 @@ func TestBasicPackets(t *testing.T) {
 	if err := sConn.writeOKPacketWithEOFHeader(12, 34, 56, 78); err != nil {
 		t.Fatalf("writeOKPacketWithEOFHeader failed: %v", err)
 	}
-	data, err = cConn.readPacket()
+	data, err = cConn.ReadPacket()
 	if err != nil || len(data) == 0 || data[0] != EOFPacket {
-		t.Fatalf("cConn.readPacket - OKPacket with EOF header failed: %v %v", data, err)
+		t.Fatalf("cConn.ReadPacket - OKPacket with EOF header failed: %v %v", data, err)
 	}
 	affectedRows, lastInsertID, statusFlags, warnings, err = parseOKPacket(data)
 	if err != nil || affectedRows != 12 || lastInsertID != 34 || statusFlags != 56 || warnings != 78 {
@@ -143,9 +143,9 @@ func TestBasicPackets(t *testing.T) {
 	if err := sConn.writeErrorPacket(ERAccessDeniedError, SSAccessDeniedError, "access denied: %v", "reason"); err != nil {
 		t.Fatalf("writeErrorPacket failed: %v", err)
 	}
-	data, err = cConn.readPacket()
+	data, err = cConn.ReadPacket()
 	if err != nil || len(data) == 0 || data[0] != ErrPacket {
-		t.Fatalf("cConn.readPacket - ErrorPacket failed: %v %v", data, err)
+		t.Fatalf("cConn.ReadPacket - ErrorPacket failed: %v %v", data, err)
 	}
 	err = parseErrorPacket(data)
 	if !reflect.DeepEqual(err, sqldb.NewSQLError(ERAccessDeniedError, SSAccessDeniedError, "access denied: reason")) {
@@ -156,9 +156,9 @@ func TestBasicPackets(t *testing.T) {
 	if err := sConn.writeErrorPacketFromError(sqldb.NewSQLError(ERAccessDeniedError, SSAccessDeniedError, "access denied")); err != nil {
 		t.Fatalf("writeErrorPacketFromError failed: %v", err)
 	}
-	data, err = cConn.readPacket()
+	data, err = cConn.ReadPacket()
 	if err != nil || len(data) == 0 || data[0] != ErrPacket {
-		t.Fatalf("cConn.readPacket - ErrorPacket failed: %v %v", data, err)
+		t.Fatalf("cConn.ReadPacket - ErrorPacket failed: %v %v", data, err)
 	}
 	err = parseErrorPacket(data)
 	if !reflect.DeepEqual(err, sqldb.NewSQLError(ERAccessDeniedError, SSAccessDeniedError, "access denied")) {
@@ -170,8 +170,8 @@ func TestBasicPackets(t *testing.T) {
 		t.Fatalf("writeEOFPacket failed: %v", err)
 	}
 	sConn.flush()
-	data, err = cConn.readPacket()
+	data, err = cConn.ReadPacket()
 	if err != nil || len(data) == 0 || data[0] != EOFPacket {
-		t.Fatalf("cConn.readPacket - EOFPacket failed: %v %v", data, err)
+		t.Fatalf("cConn.ReadPacket - EOFPacket failed: %v %v", data, err)
 	}
 }

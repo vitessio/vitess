@@ -22,9 +22,9 @@ func TestComInitDB(t *testing.T) {
 	if err := cConn.writeComInitDB("my_db"); err != nil {
 		t.Fatalf("writeComInitDB failed: %v", err)
 	}
-	data, err := sConn.readPacket()
+	data, err := sConn.ReadPacket()
 	if err != nil || len(data) == 0 || data[0] != ComInitDB {
-		t.Fatalf("sConn.readPacket - ComInitDB failed: %v %v", data, err)
+		t.Fatalf("sConn.ReadPacket - ComInitDB failed: %v %v", data, err)
 	}
 	db := sConn.parseComInitDB(data)
 	if db != "my_db" {
@@ -194,7 +194,7 @@ func checkQueryInternal(t *testing.T, sConn, cConn *Conn, result *sqltypes.Resul
 	}()
 
 	// The other side gets the request, and sends the result.
-	comQuery, err := sConn.readPacket()
+	comQuery, err := sConn.ReadPacket()
 	if err != nil {
 		t.Fatalf("server cannot read query: %v", err)
 	}

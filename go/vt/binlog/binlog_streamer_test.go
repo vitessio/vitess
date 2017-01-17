@@ -25,27 +25,25 @@ import (
 // fakeEvent implements replication.BinlogEvent.
 type fakeEvent struct{}
 
-func (fakeEvent) IsValid() bool                         { return true }
-func (fakeEvent) IsFormatDescription() bool             { return false }
-func (fakeEvent) IsQuery() bool                         { return false }
-func (fakeEvent) IsXID() bool                           { return false }
-func (fakeEvent) IsGTID() bool                          { return false }
-func (fakeEvent) IsRotate() bool                        { return false }
-func (fakeEvent) IsIntVar() bool                        { return false }
-func (fakeEvent) IsRand() bool                          { return false }
-func (fakeEvent) IsPreviousGTIDs() bool                 { return false }
-func (fakeEvent) HasGTID(replication.BinlogFormat) bool { return true }
-func (fakeEvent) Timestamp() uint32                     { return 1407805592 }
+func (fakeEvent) IsValid() bool             { return true }
+func (fakeEvent) IsFormatDescription() bool { return false }
+func (fakeEvent) IsQuery() bool             { return false }
+func (fakeEvent) IsXID() bool               { return false }
+func (fakeEvent) IsGTID() bool              { return false }
+func (fakeEvent) IsRotate() bool            { return false }
+func (fakeEvent) IsIntVar() bool            { return false }
+func (fakeEvent) IsRand() bool              { return false }
+func (fakeEvent) IsPreviousGTIDs() bool     { return false }
+func (fakeEvent) Timestamp() uint32         { return 1407805592 }
 func (fakeEvent) Format() (replication.BinlogFormat, error) {
 	return replication.BinlogFormat{}, errors.New("not a format")
 }
-func (fakeEvent) GTID(replication.BinlogFormat) (replication.GTID, error) {
-	return replication.MariadbGTID{Domain: 0, Server: 62344, Sequence: 0xd}, nil
+func (fakeEvent) GTID(replication.BinlogFormat) (replication.GTID, bool, error) {
+	return nil, false, fmt.Errorf("should never ask for GTID")
 }
 func (fakeEvent) PreviousGTIDs(replication.BinlogFormat) (replication.Position, error) {
 	return replication.Position{}, errors.New("not a PreviousGTIDs")
 }
-func (fakeEvent) IsBeginGTID(replication.BinlogFormat) bool { return false }
 func (fakeEvent) Query(replication.BinlogFormat) (replication.Query, error) {
 	return replication.Query{}, errors.New("not a query")
 }
@@ -80,6 +78,16 @@ func (formatEvent) Format() (replication.BinlogFormat, error) {
 	return replication.BinlogFormat{FormatVersion: 1}, nil
 }
 func (ev formatEvent) StripChecksum(replication.BinlogFormat) (replication.BinlogEvent, []byte, error) {
+	return ev, nil, nil
+}
+
+type gtidEvent struct{ fakeEvent }
+
+func (gtidEvent) IsGTID() bool { return true }
+func (gtidEvent) GTID(replication.BinlogFormat) (replication.GTID, bool, error) {
+	return replication.MariadbGTID{Domain: 0, Server: 62344, Sequence: 0xd}, false, nil
+}
+func (ev gtidEvent) StripChecksum(replication.BinlogFormat) (replication.BinlogEvent, []byte, error) {
 	return ev, nil, nil
 }
 
@@ -168,6 +176,7 @@ func TestStreamerParseEventsXID(t *testing.T) {
 	input := []replication.BinlogEvent{
 		rotateEvent{},
 		formatEvent{},
+		gtidEvent{},
 		queryEvent{query: replication.Query{
 			Database: "vt_test_keyspace",
 			SQL:      "BEGIN"}},
@@ -211,7 +220,7 @@ func TestStreamerParseEventsXID(t *testing.T) {
 	}
 
 	if !reflect.DeepEqual(got, want) {
-		t.Errorf("binlogConnStreamer.parseEvents(): got %v, want %v", got, want)
+		t.Errorf("binlogConnStreamer.parseEvents(): got:\n%v\nwant:\n%v", got, want)
 	}
 }
 
@@ -219,6 +228,7 @@ func TestStreamerParseEventsCommit(t *testing.T) {
 	input := []replication.BinlogEvent{
 		rotateEvent{},
 		formatEvent{},
+		gtidEvent{},
 		queryEvent{query: replication.Query{
 			Database: "vt_test_keyspace",
 			SQL:      "BEGIN"}},
@@ -537,6 +547,7 @@ func TestStreamerParseEventsRollback(t *testing.T) {
 	input := []replication.BinlogEvent{
 		rotateEvent{},
 		formatEvent{},
+		gtidEvent{},
 		queryEvent{query: replication.Query{
 			Database: "vt_test_keyspace",
 			SQL:      "BEGIN"}},
@@ -612,6 +623,7 @@ func TestStreamerParseEventsDMLWithoutBegin(t *testing.T) {
 	input := []replication.BinlogEvent{
 		rotateEvent{},
 		formatEvent{},
+		gtidEvent{},
 		queryEvent{query: replication.Query{
 			Database: "vt_test_keyspace",
 			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}},
@@ -672,6 +684,7 @@ func TestStreamerParseEventsBeginWithoutCommit(t *testing.T) {
 	input := []replication.BinlogEvent{
 		rotateEvent{},
 		formatEvent{},
+		gtidEvent{},
 		queryEvent{query: replication.Query{
 			Database: "vt_test_keyspace",
 			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}},
@@ -735,6 +748,7 @@ func TestStreamerParseEventsSetInsertID(t *testing.T) {
 	input := []replication.BinlogEvent{
 		rotateEvent{},
 		formatEvent{},
+		gtidEvent{},
 		queryEvent{query: replication.Query{
 			Database: "vt_test_keyspace",
 			SQL:      "BEGIN"}},
@@ -820,6 +834,7 @@ func TestStreamerParseEventsOtherDB(t *testing.T) {
 	input := []replication.BinlogEvent{
 		rotateEvent{},
 		formatEvent{},
+		gtidEvent{},
 		queryEvent{query: replication.Query{
 			Database: "vt_test_keyspace",
 			SQL:      "BEGIN"}},
@@ -873,6 +888,7 @@ func TestStreamerParseEventsOtherDBBegin(t *testing.T) {
 	input := []replication.BinlogEvent{
 		rotateEvent{},
 		formatEvent{},
+		gtidEvent{},
 		queryEvent{query: replication.Query{
 			Database: "other",
 			SQL:      "BEGIN"}}, // Check that this doesn't get filtered out.

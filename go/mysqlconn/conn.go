@@ -120,7 +120,9 @@ func (c *Conn) readOnePacket() ([]byte, error) {
 	return data, nil
 }
 
-func (c *Conn) readPacket() ([]byte, error) {
+// ReadPacket reads a packet from the underlying connection.
+// It re-assembles packets that span more than one message.
+func (c *Conn) ReadPacket() ([]byte, error) {
 	// Optimize for a single packet case.
 	data, err := c.readOnePacket()
 	if err != nil {

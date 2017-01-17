@@ -133,7 +133,7 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32) {
 	}
 
 	// Wait for the client response.
-	response, err := c.readPacket()
+	response, err := c.ReadPacket()
 	if err != nil {
 		log.Errorf("Cannot read client handshake response: %v", err)
 		return
@@ -168,7 +168,7 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32) {
 
 	for {
 		c.sequence = 0
-		data, err := c.readPacket()
+		data, err := c.ReadPacket()
 		if err != nil {
 			log.Errorf("Error reading packet from client %v: %v", c.ConnectionID, err)
 			return

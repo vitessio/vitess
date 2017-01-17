@@ -168,7 +168,7 @@ func parseCharacterSet(cs string) (uint8, error) {
 // Note the connection can be closed while this is running.
 func (c *Conn) clientHandshake(characterSet uint8, params *sqldb.ConnParams) error {
 	// Wait for the server initial handshake packet, and parse it.
-	data, err := c.readPacket()
+	data, err := c.ReadPacket()
 	if err != nil {
 		return sqldb.NewSQLError(CRConnHostError, "", "initial packet read failed: %v", err)
 	}
@@ -196,7 +196,7 @@ func (c *Conn) clientHandshake(characterSet uint8, params *sqldb.ConnParams) err
 	}
 
 	// Read the server response.
-	response, err := c.readPacket()
+	response, err := c.ReadPacket()
 	if err != nil {
 		return fmt.Errorf("initial server response failed: %v", err)
 	}
@@ -219,7 +219,7 @@ func (c *Conn) clientHandshake(characterSet uint8, params *sqldb.ConnParams) err
 		}
 
 		// Wait for response, should be OK.
-		response, err := c.readPacket()
+		response, err := c.ReadPacket()
 		if err != nil {
 			return fmt.Errorf("initial server response failed: %v", err)
 		}
