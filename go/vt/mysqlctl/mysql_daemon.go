@@ -9,11 +9,11 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/youtube/vitess/go/mysqlconn/replication"
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/dbconnpool"
-	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
 	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
 	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
 	"golang.org/x/net/context"
@@ -39,7 +39,7 @@ type MysqlDaemon interface {
 	GetMysqlPort() (int32, error)
 
 	// replication related methods
-	SlaveStatus() (replication.Status, error)
+	SlaveStatus() (Status, error)
 	SetSemiSyncEnabled(master, slave bool) error
 	SemiSyncEnabled() (master, slave bool)
 	SemiSyncSlaveStatus() (bool, error)
@@ -274,11 +274,11 @@ func (fmd *FakeMysqlDaemon) GetMysqlPort() (int32, error) {
 }
 
 // SlaveStatus is part of the MysqlDaemon interface
-func (fmd *FakeMysqlDaemon) SlaveStatus() (replication.Status, error) {
+func (fmd *FakeMysqlDaemon) SlaveStatus() (Status, error) {
 	if fmd.SlaveStatusError != nil {
-		return replication.Status{}, fmd.SlaveStatusError
+		return Status{}, fmd.SlaveStatusError
 	}
-	return replication.Status{
+	return Status{
 		Position:            fmd.CurrentMasterPosition,
 		SecondsBehindMaster: fmd.SecondsBehindMaster,
 		SlaveIORunning:      fmd.Replicating,

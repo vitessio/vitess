@@ -306,9 +306,11 @@ func (c *Conn) writeHandshakeV10(serverVersion string) ([]byte, error) {
 	}
 
 	if err := c.writePacket(data); err != nil {
-		return nil, fmt.Errorf("cannot write HandshakeV10 packet: %v", err)
+		return nil, err
 	}
-	c.flush()
+	if err := c.flush(); err != nil {
+		return nil, err
+	}
 
 	return cipher, nil
 }

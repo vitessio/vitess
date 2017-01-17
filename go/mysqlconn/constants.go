@@ -156,8 +156,11 @@ const (
 	// CRConnHostError is CR_CONN_HOST_ERROR
 	CRConnHostError = 2003
 
-	// CR_SERVER_HANDSHAKE_ERR
+	// CRServerHandshakeErr is CR_SERVER_HANDSHAKE_ERR
 	CRServerHandshakeErr = 2012
+
+	// CRServerLost is CR_SERVER_LOST
+	CRServerLost = 2013
 )
 
 // Error codes for server-side errors.

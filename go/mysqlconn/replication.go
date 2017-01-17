@@ -20,7 +20,9 @@ func (c *Conn) WriteComBinlogDump(serverID uint32, binlogFilename string, binlog
 	if err := c.writePacket(data); err != nil {
 		return err
 	}
-	c.flush()
+	if err := c.flush(); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -49,6 +51,8 @@ func (c *Conn) WriteComBinlogDumpGTID(serverID uint32, binlogFilename string, bi
 	if err := c.writePacket(data); err != nil {
 		return err
 	}
-	c.flush()
+	if err := c.flush(); err != nil {
+		return err
+	}
 	return nil
 }

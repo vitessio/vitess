@@ -1,7 +1,3 @@
-// Copyright 2014, Google Inc. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
 package replication
 
 import (
@@ -39,10 +35,10 @@ func TestQueryStringNilCharset(t *testing.T) {
 }
 
 func TestBinlogFormatIsZero(t *testing.T) {
-	table := map[BinlogFormat]bool{
-		BinlogFormat{}:                 true,
-		BinlogFormat{FormatVersion: 1}: false,
-		BinlogFormat{HeaderLength: 1}:  false,
+	table := map[*BinlogFormat]bool{
+		&BinlogFormat{}:                 true,
+		&BinlogFormat{FormatVersion: 1}: false,
+		&BinlogFormat{HeaderLength: 1}:  false,
 	}
 	for input, want := range table {
 		if got := input.IsZero(); got != want {

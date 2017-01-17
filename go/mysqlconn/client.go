@@ -198,7 +198,7 @@ func (c *Conn) clientHandshake(characterSet uint8, params *sqldb.ConnParams) err
 	// Read the server response.
 	response, err := c.ReadPacket()
 	if err != nil {
-		return fmt.Errorf("initial server response failed: %v", err)
+		return err
 	}
 	switch response[0] {
 	case OKPacket:
@@ -215,13 +215,13 @@ func (c *Conn) clientHandshake(characterSet uint8, params *sqldb.ConnParams) err
 	if capabilities&CapabilityClientConnectWithDB == 0 && params.DbName != "" {
 		// Write the packet.
 		if err := c.writeComInitDB(params.DbName); err != nil {
-			return fmt.Errorf("failed to write ComInitDB packet: %v", err)
+			return err
 		}
 
 		// Wait for response, should be OK.
 		response, err := c.ReadPacket()
 		if err != nil {
-			return fmt.Errorf("initial server response failed: %v", err)
+			return err
 		}
 		switch response[0] {
 		case OKPacket:
@@ -238,6 +238,8 @@ func (c *Conn) clientHandshake(characterSet uint8, params *sqldb.ConnParams) err
 	return nil
 }
 
+// parseInitialHandshakePacket parses the initial handshake from the server.
+// It returns a regular error, the caller will turn it into a SQLError.
 func (c *Conn) parseInitialHandshakePacket(data []byte) (uint32, []byte, error) {
 	pos := 0
 
@@ -454,8 +456,9 @@ func (c *Conn) writeHandshakeResponse41(capabilities uint32, cipher []byte, char
 	if err := c.writePacket(data); err != nil {
 		return fmt.Errorf("cannot send HandshakeResponse41: %v", err)
 	}
-	c.flush()
-
+	if err := c.flush(); err != nil {
+		return err
+	}
 	return nil
 }
 

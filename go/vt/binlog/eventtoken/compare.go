@@ -3,7 +3,8 @@
 package eventtoken
 
 import (
-	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
+	"github.com/youtube/vitess/go/mysqlconn/replication"
+
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
