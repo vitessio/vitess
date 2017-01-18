@@ -76,7 +76,7 @@ public class GrpcClientTlsTest extends RpcClientTest {
                 Paths.get(caConfig)
         );
 
-        final String createKey = String.format("openssl genrsa -out %s", caKey);
+        final String createKey = String.format("openssl genrsa -out %s 2048", caKey);
         runProcess(createKey);
 
         final String createCert = String.format("openssl req -new -x509 -nodes -days 3600 -batch -config %s -key %s -out %s", caConfig, caKey, caCert);
