@@ -53,7 +53,7 @@
             </span>
           </div>
         </div>
-        <vt-workflow *ngFor="let child of workflow.children; let i = index" [workflow]="workflow.children[i]" [workflowService]="workflowService"></vt-workflow>
+        <vt-workflow *ngFor="let child of workflow.children; let i = index" [workflow]="workflow.children[i]" [workflowListComponent]="workflowListComponent"></vt-workflow>
       </p-accordionTab>
     </span>
   </p-accordion>
