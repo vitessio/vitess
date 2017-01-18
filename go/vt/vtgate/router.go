@@ -5,6 +5,8 @@
 package vtgate
 
 import (
+	"errors"
+
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/topo"
 	"golang.org/x/net/context"
@@ -13,6 +15,7 @@ import (
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	vtgatepb "github.com/youtube/vitess/go/vt/proto/vtgate"
 	"github.com/youtube/vitess/go/vt/vtgate/queryinfo"
+	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
 )
 
 // Router is the layer to route queries to the correct shards
@@ -89,6 +92,51 @@ func (rtr *Router) ExecuteBatch(ctx context.Context, sqlList []string, bindVarsL
 		queryResponseList = append(queryResponseList, queryResponse)
 	}
 	return queryResponseList, nil
+}
+
+// MessageAck acks messages.
+func (rtr *Router) MessageAck(ctx context.Context, keyspace, name string, ids []*querypb.Value) (int64, error) {
+	vschema := rtr.planner.VSchema()
+	if vschema == nil {
+		return 0, errors.New("vschema not initialized")
+	}
+	table, err := vschema.Find(keyspace, name)
+	if err != nil {
+		return 0, err
+	}
+	vcursor := newQueryExecutor(ctx, topodatapb.TabletType_MASTER, nil, nil, rtr)
+	newKeyspace, _, allShards, err := getKeyspaceShards(ctx, rtr.serv, rtr.cell, table.Keyspace.Name, topodatapb.TabletType_MASTER)
+	shardIDs := make(map[string][]*querypb.Value)
+	if table.Keyspace.Sharded {
+		// We always use the (unique) primary vindex. The ID must be the
+		// primary vindex for message tables.
+		mapper := table.ColumnVindexes[0].Vindex.(vindexes.Unique)
+		// convert []*querypb.Value to []interface{} for calling Map.
+		asInterface := make([]interface{}, 0, len(ids))
+		for _, id := range ids {
+			asInterface = append(asInterface, &querypb.BindVariable{
+				Type:  id.Type,
+				Value: id.Value,
+			})
+		}
+		ksids, err := mapper.Map(vcursor, asInterface)
+		if err != nil {
+			return 0, err
+		}
+		for i, ksid := range ksids {
+			if len(ksid) == 0 {
+				continue
+			}
+			shard, err := getShardForKeyspaceID(allShards, ksid)
+			if err != nil {
+				return 0, err
+			}
+			shardIDs[shard] = append(shardIDs[shard], ids[i])
+		}
+	} else {
+		shardIDs[allShards[0].Name] = ids
+	}
+	return rtr.scatterConn.MessageAck(ctx, newKeyspace, shardIDs, name)
 }
 
 // IsKeyspaceRangeBasedSharded returns true if the keyspace in the vschema is

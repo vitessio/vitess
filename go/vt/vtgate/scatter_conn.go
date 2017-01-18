@@ -432,6 +432,41 @@ func (stc *ScatterConn) StreamExecuteMulti(
 	return allErrors.AggrError(stc.aggregateErrors)
 }
 
+// MessageStream streams messages from the specified shards.
+func (stc *ScatterConn) MessageStream(ctx context.Context, keyspace string, shards []string, name string, sendReply func(*querypb.MessageStreamResponse) error) error {
+	// mu is used to merge multiple sendReply calls into one.
+	var mu sync.Mutex
+	allErrors := stc.multiGo(ctx, "MessageStream", keyspace, shards, topodatapb.TabletType_MASTER, func(target *querypb.Target) error {
+		return stc.gateway.MessageStream(ctx, target, name, func(msr *querypb.MessageStreamResponse) error {
+			mu.Lock()
+			defer mu.Unlock()
+			return sendReply(msr)
+		})
+	})
+	return allErrors.AggrError(stc.aggregateErrors)
+}
+
+// MessageAck acks messages across multiple shards.
+func (stc *ScatterConn) MessageAck(ctx context.Context, keyspace string, shardIDs map[string][]*querypb.Value, name string) (int64, error) {
+	var mu sync.Mutex
+	var totalCount int64
+	shards := make([]string, 0, len(shardIDs))
+	for shard := range shardIDs {
+		shards = append(shards, shard)
+	}
+	allErrors := stc.multiGo(ctx, "MessageAck", keyspace, shards, topodatapb.TabletType_MASTER, func(target *querypb.Target) error {
+		count, err := stc.gateway.MessageAck(ctx, target, name, shardIDs[target.Shard])
+		if err != nil {
+			return err
+		}
+		mu.Lock()
+		totalCount += count
+		mu.Unlock()
+		return nil
+	})
+	return totalCount, allErrors.AggrError(stc.aggregateErrors)
+}
+
 // UpdateStream just sends the query to the gateway,
 // and sends the results back.
 func (stc *ScatterConn) UpdateStream(ctx context.Context, target *querypb.Target, timestamp int64, position string, sendReply func(*querypb.StreamEvent) error) error {

@@ -357,6 +357,24 @@ func (res *Resolver) streamExecute(
 	return err
 }
 
+// MessageStream streams messages.
+func (res *Resolver) MessageStream(ctx context.Context, keyspace string, shard string, keyRange *topodatapb.KeyRange, name string, sendReply func(*querypb.MessageStreamResponse) error) error {
+	var shards []string
+	var err error
+	if shard != "" {
+		// If we pass in a shard, resolve the keyspace following redirects.
+		keyspace, _, _, err = getKeyspaceShards(ctx, res.toposerv, res.cell, keyspace, topodatapb.TabletType_MASTER)
+		shards = []string{shard}
+	} else {
+		// If we pass in a KeyRange, resolve it to one shard only for now.
+		keyspace, shards, err = mapExactShards(ctx, res.toposerv, res.cell, keyspace, topodatapb.TabletType_MASTER, keyRange)
+	}
+	if err != nil {
+		return err
+	}
+	return res.scatterConn.MessageStream(ctx, keyspace, shards, name, sendReply)
+}
+
 // UpdateStream streams the events.
 // TODO(alainjobart): Implement the multi-shards merge code.
 func (res *Resolver) UpdateStream(ctx context.Context, keyspace string, shard string, keyRange *topodatapb.KeyRange, tabletType topodatapb.TabletType, timestamp int64, event *querypb.EventToken, sendReply func(*querypb.StreamEvent, int64) error) error {

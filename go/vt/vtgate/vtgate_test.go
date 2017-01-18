@@ -1033,6 +1033,95 @@ func TestVTGateSplitQuerySharded(t *testing.T) {
 	}
 }
 
+func TestVTGateMessageStreamSharded(t *testing.T) {
+	ks := "TestVTGateMessageStreamSharded"
+	shard1 := "-20"
+	shard2 := "20-40"
+	createSandbox(ks)
+	hcVTGateTest.Reset()
+	_ = hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, ks, shard1, topodatapb.TabletType_MASTER, true, 1, nil)
+	_ = hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1002, ks, shard2, topodatapb.TabletType_MASTER, true, 1, nil)
+	ch := make(chan *querypb.MessageStreamResponse)
+	done := make(chan struct{})
+	go func() {
+		kr := &topodatapb.KeyRange{End: []byte{0x40}}
+		err := rpcVTGate.MessageStream(context.Background(), ks, "", kr, "msg", func(msr *querypb.MessageStreamResponse) error {
+			ch <- msr
+			return nil
+		})
+		if err != nil {
+			t.Error(err)
+		}
+		close(done)
+	}()
+	// We should get two messages.
+	<-ch
+	got := <-ch
+	if !reflect.DeepEqual(got, sandboxconn.DefaultStreamResponse) {
+		t.Errorf("MessageStream: %v, want %v", got, sandboxconn.DefaultStreamResponse)
+	}
+	<-done
+
+	// Test error case.
+	kr := &topodatapb.KeyRange{End: []byte{0x30}}
+	err := rpcVTGate.MessageStream(context.Background(), ks, "", kr, "msg", func(msr *querypb.MessageStreamResponse) error {
+		ch <- msr
+		return nil
+	})
+	want := "keyrange -30 does not exactly match shards"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("MessageStream: %v, must contain %s", err, want)
+	}
+}
+
+func TestVTGateMessageStreamUnsharded(t *testing.T) {
+	ks := KsTestUnsharded
+	createSandbox(ks)
+	hcVTGateTest.Reset()
+	_ = hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, ks, "0", topodatapb.TabletType_MASTER, true, 1, nil)
+	ch := make(chan *querypb.MessageStreamResponse)
+	done := make(chan struct{})
+	go func() {
+		err := rpcVTGate.MessageStream(context.Background(), ks, "0", nil, "msg", func(msr *querypb.MessageStreamResponse) error {
+			ch <- msr
+			return nil
+		})
+		if err != nil {
+			t.Error(err)
+		}
+		close(done)
+	}()
+	got := <-ch
+	if !reflect.DeepEqual(got, sandboxconn.DefaultStreamResponse) {
+		t.Errorf("MessageStream: %v, want %v", got, sandboxconn.DefaultStreamResponse)
+	}
+	<-done
+}
+
+func TestVTGateMessageAckUnsharded(t *testing.T) {
+	ks := KsTestUnsharded
+	createSandbox(ks)
+	hcVTGateTest.Reset()
+	sbc := hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, ks, "0", topodatapb.TabletType_MASTER, true, 1, nil)
+	ids := []*querypb.Value{{
+		Type:  sqltypes.VarChar,
+		Value: []byte("1"),
+	}, {
+		Type:  sqltypes.VarChar,
+		Value: []byte("2"),
+	}}
+	count, err := rpcVTGate.MessageAck(context.Background(), ks, "msg", ids)
+	if err != nil {
+		t.Error(err)
+	}
+	if count != 2 {
+		t.Errorf("MessageAck: %d, want 2", count)
+	}
+	if !reflect.DeepEqual(sbc.MessageIDs, ids) {
+		t.Errorf("sbc1.MessageIDs: %v, want %v", sbc.MessageIDs, ids)
+	}
+}
+
 func TestVTGateSplitQueryUnsharded(t *testing.T) {
 	keyspace := KsTestUnsharded
 	createSandbox(keyspace)
