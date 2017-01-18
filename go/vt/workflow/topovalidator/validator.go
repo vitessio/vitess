@@ -134,7 +134,9 @@ func (w *Workflow) Run(ctx context.Context, manager *workflow.Manager, wi *topo.
 		f.node.Display = workflow.NodeDisplayIndeterminate
 		for _, action := range f.actions {
 			f.node.Actions = append(f.node.Actions, &workflow.Action{
-				Name: action,
+				Name:  action,
+				State: workflow.ActionStateEnabled,
+				Style: workflow.ActionStyleNormal,
 			})
 		}
 		f.node.Listener = f

@@ -28,6 +28,9 @@ func init() {
 
 func initWorkflowManager(ts topo.Server) {
 	if *workflowManagerInit {
+		// Uncomment this line to register the UI test validator.
+		// topovalidator.RegisterUITestValidator()
+
 		// Register the Topo Validators, and the workflow.
 		topovalidator.RegisterKeyspaceValidator()
 		topovalidator.RegisterShardValidator()
