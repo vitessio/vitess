@@ -5,6 +5,8 @@ import (
 
 	"fmt"
 
+	"sync"
+
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/vtgate/queryinfo"
 )
@@ -58,50 +60,6 @@ func (batchRoute *BatchRoute) ExecuteBatch(vcursor VCursor, queryBatchConstruct 
 	}
 }
 
-func (batchRoute *BatchRoute) executeUnordered(vcursor VCursor, queryBatchConstruct *queryinfo.QueryBatchConstruct, joinvars map[string]interface{}, wantfields bool) ([]sqltypes.QueryResponse, error) {
-	// AsTransaction flag is discarded.
-	queryCount := len(queryBatchConstruct.BoundQueryList)
-	queryResponses := make([]sqltypes.QueryResponse, queryCount)
-	ch := make(chan response, queryCount)
-	count := 0
-	for index, plan := range batchRoute.PlanList {
-		if plan == nil {
-			count++
-			queryResponses[index] = sqltypes.QueryResponse{
-				QueryResult: nil,
-				QueryError:  errors.New("no plan generated for this query"),
-			}
-			continue
-		}
-		go batchRoute.executeParallel(vcursor, queryBatchConstruct, joinvars, wantfields, index, plan, ch)
-
-	}
-	for {
-		chResponse := <-ch
-		queryResponses[chResponse.queryIndex] = chResponse.queryResponse
-		count++
-		if count == queryCount {
-			close(ch)
-			break
-		}
-	}
-	return queryResponses, nil
-}
-
-func (batchRoute *BatchRoute) executeParallel(vcursor VCursor, queryBatchConstruct *queryinfo.QueryBatchConstruct, joinvars map[string]interface{}, wantfields bool, index int, plan *Plan, ch chan response) {
-	queryConstruct := queryinfo.NewQueryConstruct(queryBatchConstruct.BoundQueryList[index].SQL, queryBatchConstruct.Keyspace, queryBatchConstruct.BoundQueryList[index].BindVars, false)
-	result, err := plan.Instructions.Execute(vcursor, queryConstruct, joinvars, wantfields)
-	ch <- response{
-		queryIndex:    index,
-		queryResponse: sqltypes.QueryResponse{QueryResult: result, QueryError: err},
-	}
-}
-
-type response struct {
-	queryResponse sqltypes.QueryResponse
-	queryIndex    int
-}
-
 func (batchRoute *BatchRoute) executeOrdered(vcursor VCursor, queryBatchConstruct *queryinfo.QueryBatchConstruct, joinvars map[string]interface{}, wantfields bool) ([]sqltypes.QueryResponse, error) {
 	// AsTransaction flag is discarded.
 	queryResponses := make([]sqltypes.QueryResponse, len(queryBatchConstruct.BoundQueryList))
@@ -120,5 +78,49 @@ func (batchRoute *BatchRoute) executeOrdered(vcursor VCursor, queryBatchConstruc
 			QueryError:  err,
 		}
 	}
+	return queryResponses, nil
+}
+
+type response struct {
+	queryResponse sqltypes.QueryResponse
+	queryIndex    int
+}
+
+func (batchRoute *BatchRoute) executeUnordered(vcursor VCursor, queryBatchConstruct *queryinfo.QueryBatchConstruct, joinvars map[string]interface{}, wantfields bool) ([]sqltypes.QueryResponse, error) {
+	// AsTransaction flag is discarded.
+	var wg sync.WaitGroup
+
+	queryResponses := make([]sqltypes.QueryResponse, len(queryBatchConstruct.BoundQueryList))
+	ch := make(chan response)
+
+	for index, plan := range batchRoute.PlanList {
+		wg.Add(1)
+		go func(index int, plan *Plan) {
+			defer wg.Done()
+			if plan == nil {
+				ch <- response{
+					queryIndex: index,
+					queryResponse: sqltypes.QueryResponse{
+						QueryResult: nil,
+						QueryError:  errors.New("no plan generated for this query"),
+					},
+				}
+				return
+			}
+			queryConstruct := queryinfo.NewQueryConstruct(queryBatchConstruct.BoundQueryList[index].SQL, queryBatchConstruct.Keyspace, queryBatchConstruct.BoundQueryList[index].BindVars, false)
+			result, err := plan.Instructions.Execute(vcursor, queryConstruct, joinvars, wantfields)
+			ch <- response{
+				queryIndex:    index,
+				queryResponse: sqltypes.QueryResponse{QueryResult: result, QueryError: err},
+			}
+		}(index, plan)
+
+	}
+	go func() {
+		for chResponse := range ch {
+			queryResponses[chResponse.queryIndex] = chResponse.queryResponse
+		}
+	}()
+	wg.Wait()
 	return queryResponses, nil
 }
