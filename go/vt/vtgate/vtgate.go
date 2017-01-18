@@ -804,6 +804,45 @@ func (vtg *VTGate) GetSrvKeyspace(ctx context.Context, keyspace string) (*topoda
 	return vtg.resolver.toposerv.GetSrvKeyspace(ctx, vtg.resolver.cell, keyspace)
 }
 
+// MessageStream is part of the vtgate service API.
+func (vtg *VTGate) MessageStream(ctx context.Context, keyspace string, shard string, keyRange *topodatapb.KeyRange, name string, sendReply func(*querypb.MessageStreamResponse) error) error {
+	startTime := time.Now()
+	ltt := topoproto.TabletTypeLString(topodatapb.TabletType_MASTER)
+	statsKey := []string{"MessageStream", keyspace, ltt}
+	defer vtg.timings.Record(statsKey, startTime)
+
+	err := vtg.resolver.MessageStream(
+		ctx,
+		keyspace,
+		shard,
+		keyRange,
+		name,
+		sendReply,
+	)
+	if err != nil {
+		normalErrors.Add(statsKey, 1)
+		query := map[string]interface{}{
+			"Keyspace":    keyspace,
+			"Shard":       shard,
+			"KeyRange":    keyRange,
+			"TabletType":  ltt,
+			"MessageName": name,
+		}
+		logError(err, query, vtg.logUpdateStream)
+	}
+	return formatError(err)
+}
+
+// MessageAck is part of the vtgate service API.
+func (vtg *VTGate) MessageAck(ctx context.Context, keyspace string, name string, ids []*querypb.Value) (int64, error) {
+	startTime := time.Now()
+	ltt := topoproto.TabletTypeLString(topodatapb.TabletType_MASTER)
+	statsKey := []string{"MessageAck", keyspace, ltt}
+	defer vtg.timings.Record(statsKey, startTime)
+	count, err := vtg.router.MessageAck(ctx, keyspace, name, ids)
+	return count, formatError(err)
+}
+
 // UpdateStream is part of the vtgate service API.
 func (vtg *VTGate) UpdateStream(ctx context.Context, keyspace string, shard string, keyRange *topodatapb.KeyRange, tabletType topodatapb.TabletType, timestamp int64, event *querypb.EventToken, sendReply func(*querypb.StreamEvent, int64) error) error {
 	startTime := time.Now()
