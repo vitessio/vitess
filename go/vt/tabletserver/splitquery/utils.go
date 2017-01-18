@@ -41,14 +41,14 @@ func cloneBindVariables(bindVariables map[string]interface{}) map[string]interfa
 // other objects holding a pointer to the original 'Where' clause).
 // If 'selectAST' does not have a WHERE clause, this function will add a new WHERE clause
 // consisting of 'andTerm' alone.
-func addAndTermToWhereClause(selectAST *sqlparser.Select, andTerm sqlparser.BoolExpr) {
+func addAndTermToWhereClause(selectAST *sqlparser.Select, andTerm sqlparser.Expr) {
 	if selectAST.Where == nil || selectAST.Where.Expr == nil {
 		selectAST.Where = sqlparser.NewWhere(sqlparser.WhereStr, andTerm)
 	} else {
 		selectAST.Where = sqlparser.NewWhere(sqlparser.WhereStr,
 			&sqlparser.AndExpr{
-				Left:  &sqlparser.ParenBoolExpr{Expr: selectAST.Where.Expr},
-				Right: &sqlparser.ParenBoolExpr{Expr: andTerm},
+				Left:  &sqlparser.ParenExpr{Expr: selectAST.Where.Expr},
+				Right: &sqlparser.ParenExpr{Expr: andTerm},
 			},
 		)
 	}

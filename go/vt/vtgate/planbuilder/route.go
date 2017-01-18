@@ -164,7 +164,7 @@ func (rb *route) merge(rhs *route, ajoin *sqlparser.JoinTableExpr) (builder, err
 	}
 	for _, filter := range splitAndExpression(nil, ajoin.On) {
 		// If VTGate evolves, this section should be rewritten
-		// to use processBoolExpr.
+		// to use processExpr.
 		_, err = findRoute(filter, rb)
 		if err != nil {
 			return nil, err
@@ -177,7 +177,7 @@ func (rb *route) merge(rhs *route, ajoin *sqlparser.JoinTableExpr) (builder, err
 // isSameRoute returns true if the join constraint makes the routes
 // mergeable by unique vindex. The constraint has to be an equality
 // like a.id = b.id where both columns have the same unique vindex.
-func (rb *route) isSameRoute(rhs *route, filter sqlparser.BoolExpr) bool {
+func (rb *route) isSameRoute(rhs *route, filter sqlparser.Expr) bool {
 	comparison, ok := filter.(*sqlparser.ComparisonExpr)
 	if !ok {
 		return false
@@ -207,7 +207,7 @@ func (rb *route) isSameRoute(rhs *route, filter sqlparser.BoolExpr) bool {
 
 // PushFilter pushes the filter into the route. The primitive will
 // be updated if the new filter improves it.
-func (rb *route) PushFilter(filter sqlparser.BoolExpr, whereType string) error {
+func (rb *route) PushFilter(filter sqlparser.Expr, whereType string) error {
 	if rb.IsRHS {
 		return errors.New("unsupported: complex left join and where claused")
 	}
@@ -227,7 +227,7 @@ func (rb *route) PushFilter(filter sqlparser.BoolExpr, whereType string) error {
 // the route. This function should only be used when merging
 // routes, where the ON clause gets implicitly pushed into
 // the merged route.
-func (rb *route) UpdatePlan(filter sqlparser.BoolExpr) {
+func (rb *route) UpdatePlan(filter sqlparser.Expr) {
 	opcode, vindex, values := rb.computePlan(filter)
 	if opcode == engine.SelectScatter {
 		return
@@ -270,7 +270,7 @@ func (rb *route) updateRoute(opcode engine.RouteOpcode, vindex vindexes.Vindex, 
 }
 
 // ComputePlan computes the plan for the specified filter.
-func (rb *route) computePlan(filter sqlparser.BoolExpr) (opcode engine.RouteOpcode, vindex vindexes.Vindex, values interface{}) {
+func (rb *route) computePlan(filter sqlparser.Expr) (opcode engine.RouteOpcode, vindex vindexes.Vindex, values interface{}) {
 	switch node := filter.(type) {
 	case *sqlparser.ComparisonExpr:
 		switch node.Operator {
@@ -279,7 +279,7 @@ func (rb *route) computePlan(filter sqlparser.BoolExpr) (opcode engine.RouteOpco
 		case sqlparser.InStr:
 			return rb.computeINPlan(node)
 		}
-	case *sqlparser.ParenBoolExpr:
+	case *sqlparser.ParenExpr:
 		return rb.computePlan(node.Expr)
 	}
 	return engine.SelectScatter, nil, nil
@@ -503,7 +503,7 @@ func (rb *route) procureValues(bldr builder, jt *jointab, val interface{}) (inte
 		return ":" + joinVar, nil
 	case sqlparser.ListArg:
 		return string(val), nil
-	case sqlparser.ValExpr:
+	case sqlparser.Expr:
 		return valConvert(val)
 	}
 	panic("unrecognized symbol")
