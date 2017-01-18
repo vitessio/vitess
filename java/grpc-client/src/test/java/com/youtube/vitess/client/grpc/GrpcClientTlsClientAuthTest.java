@@ -19,13 +19,21 @@ public class GrpcClientTlsClientAuthTest extends GrpcClientTlsTest {
     @BeforeClass
     public static void setUpBeforeClass() throws Exception {
 
-        final String cmd = "locate java.security";
+        String cmd = "which java";
         System.out.println(cmd);
         new ProcessBuilder().inheritIO().command(cmd.split(" ")).start().waitFor();
 
-        final String cmd2 = "cat /etc/java-7-openjdk/security/java.security";
-        System.out.println(cmd2);
-        new ProcessBuilder().inheritIO().command(cmd2.split(" ")).start().waitFor();
+        cmd = "echo $JAVA_HOME";
+        System.out.println(cmd);
+        new ProcessBuilder().inheritIO().command(cmd.split(" ")).start().waitFor();
+
+        cmd = "find / -name java.security";
+        System.out.println(cmd);
+        new ProcessBuilder().inheritIO().command(cmd.split(" ")).start().waitFor();
+
+        cmd = "cat /etc/java-7-openjdk/security/java.security";
+        System.out.println(cmd);
+        new ProcessBuilder().inheritIO().command(cmd.split(" ")).start().waitFor();
 
         certDirectory = Files.createTempDir();
         System.out.println("Using cert directory: " + certDirectory.getCanonicalPath());
