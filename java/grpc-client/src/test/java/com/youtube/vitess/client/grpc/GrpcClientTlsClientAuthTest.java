@@ -19,19 +19,11 @@ public class GrpcClientTlsClientAuthTest extends GrpcClientTlsTest {
     @BeforeClass
     public static void setUpBeforeClass() throws Exception {
 
-        String cmd = "which java";
+        String cmd = "java -version";
         System.out.println(cmd);
         new ProcessBuilder().inheritIO().command(cmd.split(" ")).start().waitFor();
 
-        cmd = "echo $JAVA_HOME";
-        System.out.println(cmd);
-        new ProcessBuilder().inheritIO().command(cmd.split(" ")).start().waitFor();
-
-        cmd = "find / -name java.security";
-        System.out.println(cmd);
-        new ProcessBuilder().inheritIO().command(cmd.split(" ")).start().waitFor();
-
-        cmd = "cat /etc/java-7-openjdk/security/java.security";
+        cmd = "cat /usr/lib/jvm/java-7-oracle/jre/lib/security/java.security";
         System.out.println(cmd);
         new ProcessBuilder().inheritIO().command(cmd.split(" ")).start().waitFor();
 
