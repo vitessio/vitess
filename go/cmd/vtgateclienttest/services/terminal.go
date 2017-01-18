@@ -101,6 +101,14 @@ func (c *terminalClient) ResolveTransaction(ctx context.Context, dtid string) er
 	return errTerminal
 }
 
+func (c *terminalClient) MessageStream(ctx context.Context, keyspace string, shard string, keyRange *topodatapb.KeyRange, name string, sendReply func(*querypb.MessageStreamResponse) error) error {
+	return errTerminal
+}
+
+func (c *terminalClient) MessageAck(ctx context.Context, keyspace string, name string, ids []*querypb.Value) (int64, error) {
+	return 0, errTerminal
+}
+
 func (c *terminalClient) SplitQuery(
 	ctx context.Context,
 	keyspace string,

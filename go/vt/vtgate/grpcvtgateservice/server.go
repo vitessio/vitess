@@ -396,6 +396,25 @@ func (vtg *VTGate) ResolveTransaction(ctx context.Context, request *vtgatepb.Res
 	return nil, vterrors.ToGRPCError(vtgErr)
 }
 
+// MessageStream is the RPC version of vtgateservice.VTGateService method
+func (vtg *VTGate) MessageStream(request *vtgatepb.MessageStreamRequest, stream vtgateservicepb.Vitess_MessageStreamServer) (err error) {
+	defer vtg.server.HandlePanic(&err)
+	ctx := withCallerIDContext(stream.Context(), request.CallerId)
+	vtgErr := vtg.server.MessageStream(ctx, request.Keyspace, request.Shard, request.KeyRange, request.Name, stream.Send)
+	return vterrors.ToGRPCError(vtgErr)
+}
+
+// MessageAck is the RPC version of vtgateservice.VTGateService method
+func (vtg *VTGate) MessageAck(ctx context.Context, request *vtgatepb.MessageAckRequest) (response *querypb.MessageAckResponse, err error) {
+	defer vtg.server.HandlePanic(&err)
+	ctx = withCallerIDContext(ctx, request.CallerId)
+	count, vtgErr := vtg.server.MessageAck(ctx, request.Keyspace, request.Name, request.Ids)
+	if vtgErr != nil {
+		return nil, vterrors.ToGRPCError(vtgErr)
+	}
+	return &querypb.MessageAckResponse{Count: count}, nil
+}
+
 // SplitQuery is the RPC version of vtgateservice.VTGateService method
 func (vtg *VTGate) SplitQuery(ctx context.Context, request *vtgatepb.SplitQueryRequest) (response *vtgatepb.SplitQueryResponse, err error) {
 

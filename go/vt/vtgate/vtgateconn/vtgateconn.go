@@ -148,6 +148,16 @@ func (conn *VTGateConn) ResolveTransaction(ctx context.Context, dtid string) err
 	return conn.impl.ResolveTransaction(ctx, dtid)
 }
 
+// MessageStream streams messages.
+func (conn *VTGateConn) MessageStream(ctx context.Context, keyspace string, shard string, keyRange *topodatapb.KeyRange, name string, sendReply func(*querypb.MessageStreamResponse) error) error {
+	return conn.impl.MessageStream(ctx, keyspace, shard, keyRange, name, sendReply)
+}
+
+// MessageAck acks messages.
+func (conn *VTGateConn) MessageAck(ctx context.Context, keyspace string, name string, ids []*querypb.Value) (int64, error) {
+	return conn.impl.MessageAck(ctx, keyspace, name, ids)
+}
+
 // Begin starts a transaction and returns a VTGateTX.
 func (conn *VTGateConn) Begin(ctx context.Context) (*VTGateTx, error) {
 	atomicity := AtomicityFromContext(ctx)
@@ -366,6 +376,10 @@ type Impl interface {
 	Rollback(ctx context.Context, session interface{}) error
 	// ResolveTransaction resolves the specified 2pc transaction.
 	ResolveTransaction(ctx context.Context, dtid string) error
+
+	// Messaging functions.
+	MessageStream(ctx context.Context, keyspace string, shard string, keyRange *topodatapb.KeyRange, name string, sendReply func(*querypb.MessageStreamResponse) error) error
+	MessageAck(ctx context.Context, keyspace string, name string, ids []*querypb.Value) (int64, error)
 
 	// SplitQuery splits a query into smaller queries. It is mostly used by batch job frameworks
 	// such as MapReduce. See the documentation for the vtgate.SplitQueryRequest protocol buffer

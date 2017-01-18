@@ -44,6 +44,10 @@ type VTGateService interface {
 	Rollback(ctx context.Context, session *vtgatepb.Session) error
 	ResolveTransaction(ctx context.Context, dtid string) error
 
+	// Messaging.
+	MessageStream(ctx context.Context, keyspace string, shard string, keyRange *topodatapb.KeyRange, name string, sendReply func(*querypb.MessageStreamResponse) error) error
+	MessageAck(ctx context.Context, keyspace string, name string, ids []*querypb.Value) (int64, error)
+
 	// Map Reduce support
 
 	SplitQuery(
