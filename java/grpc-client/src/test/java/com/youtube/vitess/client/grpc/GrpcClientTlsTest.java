@@ -103,7 +103,7 @@ public class GrpcClientTlsTest extends RpcClientTest {
         final String req = certDirectory.getCanonicalPath() + File.separatorChar + name + "-req.pem";
         final String cert = certDirectory.getCanonicalPath() + File.separatorChar + name + "-cert.pem";
 
-        final String createKeyAndCSR = String.format("openssl req -newkey rsa:2048 -days 3600 -nodes -batch -config %s -keyout %s -out %s", certConfig, key, req);
+        final String createKeyAndCSR = String.format("openssl req -newkey rsa:4096 -days 3600 -nodes -batch -config %s -keyout %s -out %s", certConfig, key, req);
         runProcess(createKeyAndCSR);
 
         final String signKey = String.format("openssl x509 -req -in %s -days 3600 -CA %s -CAkey %s -set_serial %s -out %s", req, caCert, caKey, serial, cert);
