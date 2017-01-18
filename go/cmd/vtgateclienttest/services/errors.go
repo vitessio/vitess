@@ -277,6 +277,24 @@ func (c *errorClient) Rollback(ctx context.Context, session *vtgatepb.Session) e
 	return c.fallbackClient.Rollback(ctx, session)
 }
 
+func (c *errorClient) MessageStream(ctx context.Context, keyspace string, shard string, keyRange *topodatapb.KeyRange, name string, sendReply func(*querypb.MessageStreamResponse) error) error {
+	cid := callerid.EffectiveCallerIDFromContext(ctx)
+	request := callerid.GetPrincipal(cid)
+	if err := requestToError(request); err != nil {
+		return err
+	}
+	return c.fallback.MessageStream(ctx, keyspace, shard, keyRange, name, sendReply)
+}
+
+func (c *errorClient) MessageAck(ctx context.Context, keyspace string, name string, ids []*querypb.Value) (int64, error) {
+	cid := callerid.EffectiveCallerIDFromContext(ctx)
+	request := callerid.GetPrincipal(cid)
+	if err := requestToError(request); err != nil {
+		return 0, err
+	}
+	return c.fallback.MessageAck(ctx, keyspace, name, ids)
+}
+
 func (c *errorClient) SplitQuery(
 	ctx context.Context,
 	keyspace string,

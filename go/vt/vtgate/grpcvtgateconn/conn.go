@@ -442,6 +442,47 @@ func (conn *vtgateConn) ResolveTransaction(ctx context.Context, dtid string) err
 	return vterrors.FromGRPCError(err)
 }
 
+func (conn *vtgateConn) MessageStream(ctx context.Context, keyspace string, shard string, keyRange *topodatapb.KeyRange, name string, sendReply func(*querypb.MessageStreamResponse) error) error {
+	request := &vtgatepb.MessageStreamRequest{
+		CallerId: callerid.EffectiveCallerIDFromContext(ctx),
+		Keyspace: keyspace,
+		Shard:    shard,
+		KeyRange: keyRange,
+		Name:     name,
+	}
+	stream, err := conn.c.MessageStream(ctx, request)
+	if err != nil {
+		return vterrors.FromGRPCError(err)
+	}
+	for {
+		r, err := stream.Recv()
+		if err != nil {
+			if err != io.EOF {
+				return vterrors.FromGRPCError(err)
+			}
+			return nil
+		}
+		err = sendReply(r)
+		if err != nil {
+			return err
+		}
+	}
+}
+
+func (conn *vtgateConn) MessageAck(ctx context.Context, keyspace string, name string, ids []*querypb.Value) (int64, error) {
+	request := &vtgatepb.MessageAckRequest{
+		CallerId: callerid.EffectiveCallerIDFromContext(ctx),
+		Keyspace: keyspace,
+		Name:     name,
+		Ids:      ids,
+	}
+	r, err := conn.c.MessageAck(ctx, request)
+	if err != nil {
+		return 0, vterrors.FromGRPCError(err)
+	}
+	return r.Count, nil
+}
+
 func (conn *vtgateConn) SplitQuery(
 	ctx context.Context,
 	keyspace string,

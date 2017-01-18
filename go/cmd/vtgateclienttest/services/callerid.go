@@ -155,6 +155,20 @@ func (c *callerIDClient) StreamExecuteKeyRanges(ctx context.Context, sql string,
 	return c.fallbackClient.StreamExecuteKeyRanges(ctx, sql, bindVariables, keyspace, keyRanges, tabletType, options, sendReply)
 }
 
+func (c *callerIDClient) MessageStream(ctx context.Context, keyspace string, shard string, keyRange *topodatapb.KeyRange, name string, sendReply func(*querypb.MessageStreamResponse) error) error {
+	if ok, err := c.checkCallerID(ctx, name); ok {
+		return err
+	}
+	return c.fallback.MessageStream(ctx, keyspace, shard, keyRange, name, sendReply)
+}
+
+func (c *callerIDClient) MessageAck(ctx context.Context, keyspace string, name string, ids []*querypb.Value) (int64, error) {
+	if ok, err := c.checkCallerID(ctx, name); ok {
+		return 0, err
+	}
+	return c.fallback.MessageAck(ctx, keyspace, name, ids)
+}
+
 func (c *callerIDClient) SplitQuery(
 	ctx context.Context,
 	keyspace string,

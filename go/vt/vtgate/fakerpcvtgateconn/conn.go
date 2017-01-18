@@ -345,6 +345,16 @@ func (conn *FakeVTGateConn) ResolveTransaction(ctx context.Context, dtid string)
 	return nil
 }
 
+// MessageStream is part of the vtgate service API.
+func (conn *FakeVTGateConn) MessageStream(ctx context.Context, keyspace string, shard string, keyRange *topodatapb.KeyRange, name string, sendReply func(*querypb.MessageStreamResponse) error) error {
+	panic("not implemented")
+}
+
+// MessageAck is part of the vtgate service API.
+func (conn *FakeVTGateConn) MessageAck(ctx context.Context, keyspace string, name string, ids []*querypb.Value) (int64, error) {
+	panic("not implemented")
+}
+
 // SplitQuery please see vtgateconn.Impl.SplitQuery
 func (conn *FakeVTGateConn) SplitQuery(
 	ctx context.Context,

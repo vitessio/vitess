@@ -189,6 +189,14 @@ func (f *fakeVTGateService) ResolveTransaction(ctx context.Context, dtid string)
 	return nil
 }
 
+func (f *fakeVTGateService) MessageStream(ctx context.Context, keyspace string, shard string, keyRange *topodatapb.KeyRange, name string, sendReply func(*querypb.MessageStreamResponse) error) error {
+	return nil
+}
+
+func (f *fakeVTGateService) MessageAck(ctx context.Context, keyspace string, name string, ids []*querypb.Value) (int64, error) {
+	return 0, nil
+}
+
 // SplitQuery is part of the VTGateService interface
 func (f *fakeVTGateService) SplitQuery(
 	ctx context.Context,

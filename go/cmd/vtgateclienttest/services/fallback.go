@@ -91,6 +91,14 @@ func (c fallbackClient) ResolveTransaction(ctx context.Context, dtid string) err
 	return c.fallback.ResolveTransaction(ctx, dtid)
 }
 
+func (c fallbackClient) MessageStream(ctx context.Context, keyspace string, shard string, keyRange *topodatapb.KeyRange, name string, sendReply func(*querypb.MessageStreamResponse) error) error {
+	return c.fallback.MessageStream(ctx, keyspace, shard, keyRange, name, sendReply)
+}
+
+func (c fallbackClient) MessageAck(ctx context.Context, keyspace string, name string, ids []*querypb.Value) (int64, error) {
+	return c.fallback.MessageAck(ctx, keyspace, name, ids)
+}
+
 func (c fallbackClient) SplitQuery(
 	ctx context.Context,
 	keyspace string,
