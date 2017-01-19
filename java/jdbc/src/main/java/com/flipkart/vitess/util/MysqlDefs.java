@@ -72,10 +72,10 @@ public final class MysqlDefs {
     static final int FIELD_TYPE_YEAR = 13;
     static final int FIELD_TYPE_JSON = 245;
     static final int INIT_DB = 2;
-    static final long LENGTH_BLOB = 65535;
-    static final long LENGTH_LONGBLOB = 4294967295L;
-    static final long LENGTH_MEDIUMBLOB = 16777215;
-    static final long LENGTH_TINYBLOB = 255;
+    public static final int LENGTH_BLOB = 65535;
+    public static final int LENGTH_LONGBLOB = Integer.MAX_VALUE;
+    public static final int LENGTH_MEDIUMBLOB = 16777215;
+    public static final int LENGTH_TINYBLOB = 255;
     // Limitations
     static final int MAX_ROWS = 50000000; // From the MySQL FAQ
     static final byte OPEN_CURSOR_FLAG = 1;
