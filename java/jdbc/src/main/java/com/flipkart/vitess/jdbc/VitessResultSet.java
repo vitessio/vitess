@@ -1,6 +1,7 @@
 package com.flipkart.vitess.jdbc;
 
 import com.flipkart.vitess.util.Constants;
+import com.google.common.annotations.VisibleForTesting;
 import com.google.protobuf.ByteString;
 import com.youtube.vitess.client.cursor.Cursor;
 import com.youtube.vitess.client.cursor.Row;
@@ -11,7 +12,23 @@ import java.io.InputStream;
 import java.io.Reader;
 import java.math.BigDecimal;
 import java.net.URL;
-import java.sql.*;
+import java.sql.Array;
+import java.sql.Blob;
+import java.sql.Clob;
+import java.sql.Date;
+import java.sql.NClob;
+import java.sql.Ref;
+import java.sql.ResultSet;
+import java.sql.ResultSetMetaData;
+import java.sql.RowId;
+import java.sql.SQLException;
+import java.sql.SQLFeatureNotSupportedException;
+import java.sql.SQLWarning;
+import java.sql.SQLXML;
+import java.sql.Statement;
+import java.sql.Time;
+import java.sql.Timestamp;
+import java.sql.Types;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.List;
@@ -26,9 +43,10 @@ public class VitessResultSet implements ResultSet {
 
     /* Get actual class name to be printed on */
     private static Logger logger = Logger.getLogger(VitessResultSet.class.getName());
+    private final VitessConnection connection;
 
     private Cursor cursor;
-    private List<Query.Field> fields;
+    private List<FieldWithMetadata> fields;
     private VitessStatement vitessStatement;
     private boolean closed = false;
     private Row row;
@@ -40,11 +58,12 @@ public class VitessResultSet implements ResultSet {
      */
     private int lastIndexRead = -1;
 
-    public VitessResultSet(Cursor cursor) throws SQLException {
-        this(cursor, null);
+    public VitessResultSet(VitessConnection connection, Cursor cursor) throws SQLException {
+        this(connection, cursor, null);
     }
 
-    public VitessResultSet(Cursor cursor, VitessStatement vitessStatement) throws SQLException {
+    public VitessResultSet(VitessConnection connection, Cursor cursor, VitessStatement vitessStatement) throws SQLException {
+        this.connection = connection;
         if (null == cursor) {
             throw new SQLException(Constants.SQLExceptionMessages.CURSOR_NULL);
         }
@@ -52,7 +71,7 @@ public class VitessResultSet implements ResultSet {
         this.cursor = cursor;
         this.vitessStatement = vitessStatement;
         try {
-            this.fields = this.cursor.getFields();
+            this.fields = enhancedFieldsFromCursor();
         } catch (SQLException e) {
             throw new SQLException(Constants.SQLExceptionMessages.RESULT_SET_INIT_ERROR, e);
         }
@@ -63,8 +82,9 @@ public class VitessResultSet implements ResultSet {
         }
     }
 
-    public VitessResultSet(String[] columnNames, Query.Type[] columnTypes, String[][] data)
+    public VitessResultSet(VitessConnection connection, String[] columnNames, Query.Type[] columnTypes, String[][] data)
         throws SQLException {
+        this.connection = connection;
 
         if (columnNames.length != columnTypes.length) {
             throw new SQLException(Constants.SQLExceptionMessages.INVALID_RESULT_SET);
@@ -93,15 +113,16 @@ public class VitessResultSet implements ResultSet {
         this.cursor = new SimpleCursor(queryResultBuilder.build());
         this.vitessStatement = null;
         try {
-            this.fields = this.cursor.getFields();
+            this.fields = enhancedFieldsFromCursor();
         } catch (SQLException e) {
             throw new SQLException(Constants.SQLExceptionMessages.RESULT_SET_INIT_ERROR, e);
         }
         this.currentRow = 0;
     }
 
-    public VitessResultSet(String[] columnNames, Query.Type[] columnTypes,
+    public VitessResultSet(VitessConnection connection, String[] columnNames, Query.Type[] columnTypes,
         ArrayList<ArrayList<String>> data) throws SQLException {
+        this.connection = connection;
 
         if (columnNames.length != columnTypes.length) {
             throw new SQLException(Constants.SQLExceptionMessages.INVALID_RESULT_SET);
@@ -132,11 +153,24 @@ public class VitessResultSet implements ResultSet {
         this.cursor = new SimpleCursor(queryResultBuilder.build());
         this.vitessStatement = null;
         try {
-            fields = cursor.getFields();
+            this.fields = enhancedFieldsFromCursor();
         } catch (SQLException e) {
             throw new SQLException(Constants.SQLExceptionMessages.RESULT_SET_INIT_ERROR, e);
         }
         this.currentRow = 0;
+    }
+
+    private List<FieldWithMetadata> enhancedFieldsFromCursor() throws SQLException {
+        if (cursor == null|| cursor.getFields() == null) {
+            throw new SQLException(Constants.SQLExceptionMessages.CURSOR_NULL);
+        }
+
+        List<Query.Field> rawFields = cursor.getFields();
+        List<FieldWithMetadata> fields = new ArrayList<>(rawFields.size());
+        for (Query.Field field : rawFields) {
+            fields.add(new FieldWithMetadata(connection, field));
+        }
+        return fields;
     }
 
     public boolean next() throws SQLException {
@@ -209,9 +243,9 @@ public class VitessResultSet implements ResultSet {
         }
 
         // Mysql 5.0 and higher have a BIT Data Type, need to check for this as well.
-        Query.Field field = this.fields.get(columnIndex - 1);
+        FieldWithMetadata field = this.fields.get(columnIndex - 1);
 
-        if (field.getType() == Query.Type.BIT) {
+        if (field.getVitessTypeValue() == Query.Type.BIT_VALUE) {
             return byteArrayToBoolean(columnIndex);
         }
 
@@ -508,8 +542,9 @@ public class VitessResultSet implements ResultSet {
         //no-op, All exceptions thrown, none kept as warning
     }
 
+
     public ResultSetMetaData getMetaData() throws SQLException {
-        return new VitessResultSetMetaData(cursor.getFields());
+        return new VitessResultSetMetaData(connection, fields);
     }
 
     public Object getObject(int columnIndex) throws SQLException {
@@ -1381,9 +1416,16 @@ public class VitessResultSet implements ResultSet {
             Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
     }
 
-    private boolean byteArrayToBoolean(int columnIndex) throws SQLException {
-        Object value = this.row.getObject(columnIndex);
+    @VisibleForTesting
+    List<FieldWithMetadata> getFields() {
+        return fields;
+    }
 
+    private boolean byteArrayToBoolean(int columnIndex) throws SQLException {
+        return byteArrayToBoolean(this.row.getObject(columnIndex));
+    }
+
+    private boolean byteArrayToBoolean(Object value) throws SQLException {
         if (value == null) {
             return false;
         }

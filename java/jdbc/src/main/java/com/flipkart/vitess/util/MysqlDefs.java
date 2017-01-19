@@ -103,7 +103,7 @@ public final class MysqlDefs {
     static final int STATISTICS = 9;
 
     static final int TIME = 15;
-    public static Map<Query.Type, Integer> vitesstoMySqlType = new HashMap<Query.Type, Integer>();
+    public static Map<Query.Type, Integer> vitessToJavaType = new HashMap<Query.Type, Integer>();
     public static Map<String, Integer> mysqlConnectionTransactionMapping =
         new HashMap<String, Integer>();
     private static Map<String, Integer> mysqlToJdbcTypesMap = new HashMap<String, Integer>();
@@ -145,35 +145,37 @@ public final class MysqlDefs {
     }
 
     static {
-        vitesstoMySqlType.put(Query.Type.NULL_TYPE, Types.NULL);
-        vitesstoMySqlType.put(Query.Type.INT8, Types.TINYINT);
-        vitesstoMySqlType.put(Query.Type.UINT8, Types.TINYINT);
-        vitesstoMySqlType.put(Query.Type.INT16, Types.SMALLINT);
-        vitesstoMySqlType.put(Query.Type.UINT16, Types.SMALLINT);
-        vitesstoMySqlType.put(Query.Type.INT24, Types.INTEGER);
-        vitesstoMySqlType.put(Query.Type.UINT24, Types.INTEGER);
-        vitesstoMySqlType.put(Query.Type.INT32, Types.INTEGER);
-        vitesstoMySqlType.put(Query.Type.UINT32, Types.INTEGER);
-        vitesstoMySqlType.put(Query.Type.INT64, Types.BIGINT);
-        vitesstoMySqlType.put(Query.Type.UINT64, Types.BIGINT);
-        vitesstoMySqlType.put(Query.Type.FLOAT32, Types.FLOAT);
-        vitesstoMySqlType.put(Query.Type.FLOAT64, Types.DOUBLE);
-        vitesstoMySqlType.put(Query.Type.TIMESTAMP, Types.TIMESTAMP);
-        vitesstoMySqlType.put(Query.Type.DATE, Types.DATE);
-        vitesstoMySqlType.put(Query.Type.TIME, Types.TIME);
-        vitesstoMySqlType.put(Query.Type.DATETIME, Types.TIMESTAMP);
-        vitesstoMySqlType.put(Query.Type.YEAR, Types.SMALLINT);
-        vitesstoMySqlType.put(Query.Type.DECIMAL, Types.DECIMAL);
-        vitesstoMySqlType.put(Query.Type.TEXT, Types.VARCHAR);
-        vitesstoMySqlType.put(Query.Type.BLOB, Types.BLOB);
-        vitesstoMySqlType.put(Query.Type.VARCHAR, Types.VARCHAR);
-        vitesstoMySqlType.put(Query.Type.VARBINARY, Types.VARBINARY);
-        vitesstoMySqlType.put(Query.Type.CHAR, Types.CHAR);
-        vitesstoMySqlType.put(Query.Type.BINARY, Types.BINARY);
-        vitesstoMySqlType.put(Query.Type.BIT, Types.BIT);
-        vitesstoMySqlType.put(Query.Type.ENUM, Types.CHAR);
-        vitesstoMySqlType.put(Query.Type.SET, Types.CHAR);
-        vitesstoMySqlType.put(Query.Type.TUPLE, Types.OTHER);
+        vitessToJavaType.put(Query.Type.NULL_TYPE, Types.NULL);
+        vitessToJavaType.put(Query.Type.INT8, Types.TINYINT);
+        vitessToJavaType.put(Query.Type.UINT8, Types.TINYINT);
+        vitessToJavaType.put(Query.Type.INT16, Types.SMALLINT);
+        vitessToJavaType.put(Query.Type.UINT16, Types.SMALLINT);
+        vitessToJavaType.put(Query.Type.INT24, Types.INTEGER);
+        vitessToJavaType.put(Query.Type.UINT24, Types.INTEGER);
+        vitessToJavaType.put(Query.Type.INT32, Types.INTEGER);
+        vitessToJavaType.put(Query.Type.UINT32, Types.INTEGER);
+        vitessToJavaType.put(Query.Type.INT64, Types.BIGINT);
+        vitessToJavaType.put(Query.Type.UINT64, Types.BIGINT);
+        vitessToJavaType.put(Query.Type.FLOAT32, Types.FLOAT);
+        vitessToJavaType.put(Query.Type.FLOAT64, Types.DOUBLE);
+        vitessToJavaType.put(Query.Type.TIMESTAMP, Types.TIMESTAMP);
+        vitessToJavaType.put(Query.Type.DATE, Types.DATE);
+        vitessToJavaType.put(Query.Type.TIME, Types.TIME);
+        vitessToJavaType.put(Query.Type.DATETIME, Types.TIMESTAMP);
+        vitessToJavaType.put(Query.Type.YEAR, Types.SMALLINT);
+        vitessToJavaType.put(Query.Type.DECIMAL, Types.DECIMAL);
+        vitessToJavaType.put(Query.Type.TEXT, Types.VARCHAR);
+        vitessToJavaType.put(Query.Type.BLOB, Types.BLOB);
+        vitessToJavaType.put(Query.Type.VARCHAR, Types.VARCHAR);
+        vitessToJavaType.put(Query.Type.VARBINARY, Types.VARBINARY);
+        vitessToJavaType.put(Query.Type.CHAR, Types.CHAR);
+        vitessToJavaType.put(Query.Type.BINARY, Types.BINARY);
+        vitessToJavaType.put(Query.Type.BIT, Types.BIT);
+        vitessToJavaType.put(Query.Type.ENUM, Types.CHAR);
+        vitessToJavaType.put(Query.Type.SET, Types.CHAR);
+        vitessToJavaType.put(Query.Type.TUPLE, Types.OTHER);
+        vitessToJavaType.put(Query.Type.GEOMETRY, Types.BINARY);
+        vitessToJavaType.put(Query.Type.JSON, Types.BINARY);
     }
 
     static {

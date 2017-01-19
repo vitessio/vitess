@@ -26,6 +26,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.logging.Logger;
 
+
 /**
  * Created by harshit.gangal on 19/01/16.
  * <p>
@@ -41,6 +42,7 @@ public class VitessStatement implements Statement {
     /* Get actual class name to be printed on */
     private static Logger logger = Logger.getLogger(VitessStatement.class.getName());
     protected VitessResultSet vitessResultSet;
+
     protected VitessConnection vitessConnection;
     protected boolean closed;
     protected long resultCount;
@@ -134,7 +136,7 @@ public class VitessStatement implements Statement {
             if (null == cursor) {
                 throw new SQLException(Constants.SQLExceptionMessages.METHOD_CALL_FAILED);
             }
-            this.vitessResultSet = new VitessResultSet(cursor, this);
+            this.vitessResultSet = new VitessResultSet(vitessConnection, cursor, this);
         } catch (SQLRecoverableException ex) {
             this.vitessConnection.setVtGateTx(null);
             throw ex;
@@ -387,7 +389,7 @@ public class VitessStatement implements Statement {
             }
         }
 
-        return new VitessResultSet(columnNames, columnTypes, data);
+        return new VitessResultSet(vitessConnection, columnNames, columnTypes, data);
     }
 
     /**
@@ -496,7 +498,7 @@ public class VitessStatement implements Statement {
         if (showSql) {
             cursor = this.executeShow(sql);
             if (!(null == cursor || null == cursor.getFields() || cursor.getFields().isEmpty())) {
-                this.vitessResultSet = new VitessResultSet(cursor, this);
+                this.vitessResultSet = new VitessResultSet(vitessConnection, cursor, this);
                 return true;
             }
             throw new SQLException(Constants.SQLExceptionMessages.METHOD_CALL_FAILED);

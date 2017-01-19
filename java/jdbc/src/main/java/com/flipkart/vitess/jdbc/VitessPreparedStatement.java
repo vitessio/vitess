@@ -144,7 +144,7 @@ public class VitessPreparedStatement extends VitessStatement implements Prepared
                 throw new SQLException(Constants.SQLExceptionMessages.METHOD_CALL_FAILED);
             }
 
-            this.vitessResultSet = new VitessResultSet(cursor, this);
+            this.vitessResultSet = new VitessResultSet(vitessConnection, cursor, this);
         } catch (SQLRecoverableException ex) {
             this.vitessConnection.setVtGateTx(null);
             throw ex;
@@ -231,7 +231,7 @@ public class VitessPreparedStatement extends VitessStatement implements Prepared
         if (showSql) {
             cursor = this.executeShow(this.sql);
             if (!(null == cursor || null == cursor.getFields() || cursor.getFields().isEmpty())) {
-                this.vitessResultSet = new VitessResultSet(cursor, this);
+                this.vitessResultSet = new VitessResultSet(vitessConnection, cursor, this);
                 return true;
             }
             throw new SQLException(Constants.SQLExceptionMessages.METHOD_CALL_FAILED);
