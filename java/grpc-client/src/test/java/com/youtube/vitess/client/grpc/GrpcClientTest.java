@@ -42,6 +42,7 @@ public class GrpcClientTest extends RpcClientTest {
                     Integer.toString(port),
                     "-service_map",
                     "grpc-vtgateservice"))
+            .inheritIO()
             .start();
 
     Thread.sleep(TimeUnit.SECONDS.toMillis(10));

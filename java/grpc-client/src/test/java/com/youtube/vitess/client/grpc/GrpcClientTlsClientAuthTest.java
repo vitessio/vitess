@@ -146,7 +146,7 @@ public class GrpcClientTlsClientAuthTest extends RpcClientTest {
         final String vtgateCommand = String.format("%s -grpc_cert %s -grpc_key %s -grpc_ca %s -logtostderr -grpc_port %s -service_map grpc-vtgateservice",
                 vtRoot + "/bin/vtgateclienttest", cert, key, caCert, Integer.toString(port));
         System.out.println(vtgateCommand);
-        vtgateclienttest = new ProcessBuilder(vtgateCommand.split(" ")).start();
+        vtgateclienttest = new ProcessBuilder(vtgateCommand.split(" ")).inheritIO().start();
 
         Thread.sleep(TimeUnit.SECONDS.toMillis(10));
     }
