@@ -23,7 +23,6 @@ import java.nio.file.Paths;
  * The SSL setup is adapted from "test/encrypted_transport.py"
  */
 @RunWith(JUnit4.class)
-@Ignore
 public class GrpcClientTlsTest extends RpcClientTest {
 
     protected static Process vtgateclienttest;

@@ -5,6 +5,7 @@ import com.youtube.vitess.client.Context;
 import com.youtube.vitess.client.grpc.tls.TlsOptions;
 import org.joda.time.Duration;
 import org.junit.BeforeClass;
+import org.junit.Ignore;
 
 import java.io.File;
 import java.net.InetSocketAddress;
@@ -14,6 +15,7 @@ import java.net.ServerSocket;
  * This tests GrpcClient with a mock vtgate server (go/cmd/vtgateclienttest), over an SSL connection with client
  * authentication enabled.
  */
+@Ignore
 public class GrpcClientTlsClientAuthTest extends GrpcClientTlsTest {
 
     @BeforeClass
