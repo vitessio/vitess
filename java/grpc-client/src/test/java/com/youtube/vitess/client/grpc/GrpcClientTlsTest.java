@@ -25,15 +25,15 @@ import java.nio.file.Paths;
 @RunWith(JUnit4.class)
 public class GrpcClientTlsTest extends RpcClientTest {
 
-    protected static Process vtgateclienttest;
-    protected static int port;
-    protected static File certDirectory;
+    private static Process vtgateclienttest;
+    private static int port;
+    private static File certDirectory;
 
-    protected static String caConfig;
-    protected static String caKey;
-    protected static String caCert;
-    protected static String caCertDer;
-    protected static String trustStore;
+    private static String caConfig;
+    private static String caKey;
+    private static String caCert;
+    private static String caCertDer;
+    private static String trustStore;
 
     @BeforeClass
     public static void setUpBeforeClass() throws Exception {
@@ -65,13 +65,13 @@ public class GrpcClientTlsTest extends RpcClientTest {
         }
     }
 
-    protected static void runProcess(final String command) throws IOException, InterruptedException {
+    private static void runProcess(final String command) throws IOException, InterruptedException {
         System.out.println("\nExecuting: " + command);
         int exitCode = new ProcessBuilder().inheritIO().command(command.split(" ")).start().waitFor();
         System.out.println("Exit code: " + exitCode + "\n");
     }
 
-    protected static void createCA() throws Exception {
+    private static void createCA() throws Exception {
         java.nio.file.Files.copy(
                 GrpcClientTlsTest.class.getResourceAsStream("/ca.config"),
                 Paths.get(caConfig)
@@ -84,7 +84,7 @@ public class GrpcClientTlsTest extends RpcClientTest {
         runProcess(createCert);
     }
 
-    protected static void createTrustStore() throws Exception {
+    private static void createTrustStore() throws Exception {
         final String convertCaCert = String.format("openssl x509 -outform der -in %s -out %s", caCert, caCertDer);
         runProcess(convertCaCert);
 
@@ -92,7 +92,7 @@ public class GrpcClientTlsTest extends RpcClientTest {
         runProcess(createTrustStore);
     }
 
-    protected static void createSignedCert(final String serial, final String name) throws Exception {
+    private static void createSignedCert(final String serial, final String name) throws Exception {
         final String certConfig = certDirectory.getCanonicalPath() + File.separatorChar + "cert.config";
         if (!(new File(certConfig)).exists()) {
             java.nio.file.Files.copy(
