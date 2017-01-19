@@ -91,7 +91,7 @@ class TestAutomationHorizontalResharding(worker.TestBaseSplitClone):
         self, worker.shard_master,
         serving=False, tablet_control_disabled=True)
 
-    # dest shard -80: query service must be disabled after MigrateServedTypes.
+    # dest shard -80: query service must be enabled after MigrateServedTypes.
     utils.check_tablet_query_service(
         self, worker.shard_0_rdonly1,
         serving=True, tablet_control_disabled=False)
@@ -102,7 +102,7 @@ class TestAutomationHorizontalResharding(worker.TestBaseSplitClone):
         self, worker.shard_0_master,
         serving=True, tablet_control_disabled=False)
 
-    # dest shard 80-: query service must be disabled after MigrateServedTypes.
+    # dest shard 80-: query service must be enabled after MigrateServedTypes.
     utils.check_tablet_query_service(
         self, worker.shard_1_rdonly1,
         serving=True, tablet_control_disabled=False)
