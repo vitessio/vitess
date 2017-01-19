@@ -13,7 +13,6 @@ import com.youtube.vitess.proto.Topodata;
 import com.youtube.vitess.proto.Vtrpc;
 
 import java.sql.BatchUpdateException;
-import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.SQLFeatureNotSupportedException;
@@ -322,7 +321,7 @@ public class VitessStatement implements Statement {
         return this.resultSetType;
     }
 
-    public Connection getConnection() throws SQLException {
+    public VitessConnection getConnection() throws SQLException {
         checkOpen();
         return vitessConnection;
     }

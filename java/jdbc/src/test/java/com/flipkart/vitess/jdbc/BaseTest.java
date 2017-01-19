@@ -21,4 +21,8 @@ public class BaseTest {
     protected VitessConnection getVitessConnection() throws SQLException {
         return new VitessConnection(dbURL, new Properties());
     }
+
+    protected VitessStatement getVitessStatement() throws SQLException {
+        return new VitessStatement(getVitessConnection());
+    }
 }

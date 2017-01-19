@@ -174,6 +174,8 @@ public final class MysqlDefs {
         vitesstoMySqlType.put(Query.Type.ENUM, Types.CHAR);
         vitesstoMySqlType.put(Query.Type.SET, Types.CHAR);
         vitesstoMySqlType.put(Query.Type.TUPLE, Types.OTHER);
+        vitesstoMySqlType.put(Query.Type.GEOMETRY, Types.BINARY);
+        vitesstoMySqlType.put(Query.Type.JSON, Types.BINARY);
     }
 
     static {
