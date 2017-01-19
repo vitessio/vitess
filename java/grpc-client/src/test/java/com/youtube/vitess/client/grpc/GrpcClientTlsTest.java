@@ -62,6 +62,7 @@ public class GrpcClientTlsTest extends RpcClientTest {
         }
         if (vtgateclienttest != null) {
             vtgateclienttest.destroy();
+            vtgateclienttest.waitFor();
         }
     }
 
