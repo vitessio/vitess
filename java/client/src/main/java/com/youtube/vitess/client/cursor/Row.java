@@ -653,6 +653,8 @@ public class Row {
       case VARBINARY: // fall through
       case CHAR: // fall through
       case BINARY:
+      case GEOMETRY:
+      case JSON:
         return value.toByteArray();
       default:
         throw new SQLDataException("unknown field type: " + field.getType());
