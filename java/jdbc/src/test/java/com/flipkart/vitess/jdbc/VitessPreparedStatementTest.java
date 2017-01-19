@@ -621,13 +621,13 @@ import java.util.TimeZone;
         } catch (SQLException ex) {
             Assert.assertEquals(Constants.SQLExceptionMessages.METHOD_NOT_ALLOWED, ex.getMessage());
         }
-        statement.setString(1, "hi");
+        statement.setString(1, "string1");
         statement.addBatch();
         try {
             Field privateStringField =
                 VitessPreparedStatement.class.getDeclaredField("batchedArgs");
             privateStringField.setAccessible(true);
-            Assert.assertEquals("hi",
+            Assert.assertEquals("string1",
                 (((List<Map<String, Object>>) privateStringField.get(statement)).get(0)).get("v1"));
         } catch (NoSuchFieldException e) {
             Assert.fail("Private Field should exists: batchedArgs");
@@ -639,7 +639,7 @@ import java.util.TimeZone;
     @Test public void testClearBatch() throws SQLException {
         VitessConnection mockConn = PowerMockito.mock(VitessConnection.class);
         VitessPreparedStatement statement = new VitessPreparedStatement(mockConn, sqlInsert);
-        statement.setString(1, "hi");
+        statement.setString(1, "string1");
         statement.addBatch();
         statement.clearBatch();
         try {
@@ -680,24 +680,25 @@ import java.util.TimeZone;
             .thenReturn(PowerMockito.mock(Cursor.class));
         mockCursorWithErrorList.add(mockCursorWithError1);
 
-        statement.setString(1, "hi");
+        statement.setString(1, "string1");
         statement.addBatch();
         updateCounts = statement.executeBatch();
         Assert.assertEquals(1, updateCounts.length);
 
         CursorWithError mockCursorWithError2 = PowerMockito.mock(CursorWithError.class);
+        Vtrpc.RPCError rpcError = Vtrpc.RPCError.newBuilder().setMessage("preparedStatement execute batch error").build();
         PowerMockito.when(mockCursorWithError2.getError())
-            .thenReturn(PowerMockito.mock(Vtrpc.RPCError.class));
+            .thenReturn(rpcError);
         mockCursorWithErrorList.add(mockCursorWithError2);
-        statement.setString(1, "hi");
+        statement.setString(1, "string1");
         statement.addBatch();
-        statement.setString(1, "bye");
+        statement.setString(1, "string2");
         statement.addBatch();
         try {
             statement.executeBatch();
             Assert.fail("Should have thrown Exception");
         } catch (BatchUpdateException ex) {
-            Assert.assertEquals("rPCError", ex.getMessage());
+            Assert.assertEquals(rpcError.toString(), ex.getMessage());
             Assert.assertEquals(2, ex.getUpdateCounts().length);
             Assert.assertEquals(Statement.EXECUTE_FAILED, ex.getUpdateCounts()[1]);
         }
