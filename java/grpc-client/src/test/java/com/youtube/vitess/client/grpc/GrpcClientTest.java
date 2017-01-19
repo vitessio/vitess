@@ -46,8 +46,6 @@ public class GrpcClientTest extends RpcClientTest {
             .start();
     Thread.sleep(TimeUnit.SECONDS.toMillis(10));
 
-    Thread.sleep(TimeUnit.SECONDS.toMillis(10));
-
     client =
         new GrpcClientFactory()
             .create(

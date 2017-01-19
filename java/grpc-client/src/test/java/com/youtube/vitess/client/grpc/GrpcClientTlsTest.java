@@ -7,7 +7,6 @@ import com.youtube.vitess.client.grpc.tls.TlsOptions;
 import org.joda.time.Duration;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
-import org.junit.Ignore;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
