@@ -3,15 +3,13 @@ package com.youtube.vitess.client;
 import com.google.gson.Gson;
 import com.google.gson.JsonSyntaxException;
 import com.google.gson.reflect.TypeToken;
-
+import com.youtube.vitess.proto.Query;
 import com.youtube.vitess.proto.Topodata.TabletType;
 
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.joda.time.Duration;
 import org.junit.Assert;
-
-import vttest.Vttest.VTTestTopology;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
@@ -20,6 +18,8 @@ import java.net.InetSocketAddress;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+
+import vttest.Vttest.VTTestTopology;
 
 public class TestUtil {
   static final Logger logger = LogManager.getLogger(TestUtil.class.getName());
@@ -119,7 +119,7 @@ public class TestUtil {
         bindVars.put("name", "name_" + id);
         bindVars.put("age", id % 10);
         bindVars.put("percent", id / 100.0);
-        tx.execute(ctx, insertSql, bindVars, TabletType.MASTER);
+        tx.execute(ctx, insertSql, bindVars, TabletType.MASTER, Query.ExecuteOptions.IncludedFields.ALL);
       }
       tx.commit(ctx);
     }
