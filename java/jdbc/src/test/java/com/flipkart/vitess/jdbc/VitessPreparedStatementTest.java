@@ -1,7 +1,5 @@
 package com.flipkart.vitess.jdbc;
 
-import com.flipkart.vitess.jdbc.VitessConnection;
-import com.flipkart.vitess.jdbc.VitessPreparedStatement;
 import com.flipkart.vitess.util.Constants;
 import com.google.common.collect.ImmutableMap;
 import com.youtube.vitess.client.Context;
@@ -13,7 +11,6 @@ import com.youtube.vitess.client.cursor.CursorWithError;
 import com.youtube.vitess.proto.Query;
 import com.youtube.vitess.proto.Topodata;
 import com.youtube.vitess.proto.Vtrpc;
-
 import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -700,7 +697,7 @@ import java.util.TimeZone;
             statement.executeBatch();
             Assert.fail("Should have thrown Exception");
         } catch (BatchUpdateException ex) {
-            Assert.assertEquals(Constants.SQLExceptionMessages.QUERY_FAILED, ex.getMessage());
+            Assert.assertEquals("rPCError", ex.getMessage());
             Assert.assertEquals(2, ex.getUpdateCounts().length);
             Assert.assertEquals(Statement.EXECUTE_FAILED, ex.getUpdateCounts()[1]);
         }
