@@ -31,13 +31,16 @@ func IsColName(node ValExpr) bool {
 // IsValue returns true if the ValExpr is a string, integral or value arg.
 // NULL is not considered to be a value.
 func IsValue(node ValExpr) bool {
-	v, ok := node.(*SQLVal)
-	if !ok {
-		return false
-	}
-	switch v.Type {
-	case StrVal, HexVal, IntVal, ValArg:
-		return true
+	switch v := node.(type) {
+	case *SQLVal:
+		switch v.Type {
+		case StrVal, HexVal, IntVal, ValArg:
+			return true
+		}
+	case *ValuesFuncExpr:
+		if v.Resolved != nil {
+			return IsValue(v.Resolved)
+		}
 	}
 	return false
 }
@@ -75,6 +78,10 @@ func IsSimpleTuple(node ValExpr) bool {
 // Otherwise, it returns an error.
 func AsInterface(node ValExpr) (interface{}, error) {
 	switch node := node.(type) {
+	case *ValuesFuncExpr:
+		if node.Resolved != nil {
+			return AsInterface(node.Resolved)
+		}
 	case ValTuple:
 		vals := make([]interface{}, 0, len(node))
 		for _, val := range node {

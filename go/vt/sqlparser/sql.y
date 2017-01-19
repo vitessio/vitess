@@ -950,6 +950,10 @@ value_expression:
   {
     $$ = $1
   }
+| VALUES openb sql_id closeb
+  {
+    $$ = &ValuesFuncExpr{Name: $3}
+  }
 
 // These keywords can be used as functions, with parenthesis, or
 // as standalone keywords -- i.e. CURRENT_DATE and CURRENT_DATE()

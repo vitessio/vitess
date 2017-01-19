@@ -581,6 +581,17 @@ func (node Columns) WalkSubtree(visit Visit) error {
 	return nil
 }
 
+// FindColumn finds a column in the column list, returning
+// the index if it exists or -1 otherwise
+func (node Columns) FindColumn(col ColIdent) int {
+	for i, colName := range node {
+		if colName.Equal(col) {
+			return i
+		}
+	}
+	return -1
+}
+
 // TableExprs represents a list of table expressions.
 type TableExprs []TableExpr
 
@@ -872,6 +883,7 @@ func (*IntervalExpr) iExpr()   {}
 func (*CollateExpr) iExpr()    {}
 func (*FuncExpr) iExpr()       {}
 func (*CaseExpr) iExpr()       {}
+func (*ValuesFuncExpr) iExpr() {}
 
 // BoolExpr represents a boolean expression.
 type BoolExpr interface {
@@ -1120,6 +1132,7 @@ func (*CollateExpr)  iValExpr() {}
 func (*FuncExpr) iValExpr()     {}
 func (*CaseExpr) iValExpr()     {}
 func (BoolVal) iValExpr()       {}
+func (*ValuesFuncExpr) iValExpr() {}
 
 // ValType specifies the type for SQLVal.
 type ValType int
@@ -1525,6 +1538,36 @@ var Aggregates = map[string]bool{
 // IsAggregate returns true if the function is an aggregate.
 func (node *FuncExpr) IsAggregate() bool {
 	return Aggregates[node.Name.Lowered()]
+}
+
+// ValuesFuncExpr represents a function call.
+type ValuesFuncExpr struct {
+	Name     ColIdent
+	Resolved ValExpr
+}
+
+// Format formats the node.
+func (node *ValuesFuncExpr) Format(buf *TrackedBuffer) {
+	// Function names should not be back-quoted even
+	// if they match a reserved word. So, print the
+	// name as is.
+	if node.Resolved != nil {
+		buf.Myprintf("%v", node.Resolved)
+	} else {
+		buf.Myprintf("values(%s)", node.Name.String())
+	}
+}
+
+// WalkSubtree walks the nodes of the subtree.
+func (node *ValuesFuncExpr) WalkSubtree(visit Visit) error {
+	if node == nil {
+		return nil
+	}
+	return Walk(
+		visit,
+		node.Name,
+		node.Resolved,
+	)
 }
 
 // CaseExpr represents a CASE expression.

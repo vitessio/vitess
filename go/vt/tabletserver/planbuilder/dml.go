@@ -320,7 +320,12 @@ func analyzeInsertNoType(ins *sqlparser.Insert, plan *ExecPlan, tableInfo *schem
 		plan.Reason = ReasonUpsert
 		return plan, nil
 	}
-	plan.SecondaryPKValues, err = analyzeUpdateExpressions(sqlparser.UpdateExprs(ins.OnDup), tableInfo.Indexes[0])
+	updateExprs, err := resolveUpsertUpdateValues(rowList[0], ins.Columns, ins.OnDup)
+	if err != nil {
+		plan.Reason = ReasonUpsertColMismatch
+		return plan, nil
+	}
+	plan.SecondaryPKValues, err = analyzeUpdateExpressions(updateExprs, tableInfo.Indexes[0])
 	if err != nil {
 		plan.Reason = ReasonPKChange
 		return plan, nil
@@ -333,10 +338,27 @@ func analyzeInsertNoType(ins *sqlparser.Insert, plan *ExecPlan, tableInfo *schem
 	upd := &sqlparser.Update{
 		Comments: ins.Comments,
 		Table:    ins.Table,
-		Exprs:    sqlparser.UpdateExprs(ins.OnDup),
+		Exprs:    updateExprs,
 	}
 	plan.UpsertQuery = GenerateUpdateOuterQuery(upd)
 	return plan, nil
+}
+
+// resolveUpsertUpdateValues walks the UpdateExprs tree for an upsert, replacing
+// any VALUES(foo) expressions with the correct value from the rowList, in this
+// example the value for column 'foo'
+func resolveUpsertUpdateValues(rowList sqlparser.ValTuple, columns sqlparser.Columns, dup sqlparser.OnDup) (sqlparser.UpdateExprs, error) {
+	err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+		if cast, ok := node.(*sqlparser.ValuesFuncExpr); ok {
+			colID := columns.FindColumn(cast.Name)
+			if colID == -1 {
+				return false, fmt.Errorf("Could not find column %v", cast.Name)
+			}
+			cast.Resolved = rowList[colID]
+		}
+		return true, nil
+	}, dup)
+	return sqlparser.UpdateExprs(dup), err
 }
 
 func analyzeInsertMessage(ins *sqlparser.Insert, plan *ExecPlan, tableInfo *schema.Table) (*ExecPlan, error) {
