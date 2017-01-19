@@ -1,7 +1,5 @@
 package com.flipkart.vitess.jdbc;
 
-import com.flipkart.vitess.jdbc.VitessConnection;
-import com.flipkart.vitess.jdbc.VitessStatement;
 import com.flipkart.vitess.util.Constants;
 import com.youtube.vitess.client.Context;
 import com.youtube.vitess.client.SQLFuture;
@@ -648,8 +646,9 @@ import java.util.List;
         Assert.assertEquals(1, updateCounts.length);
 
         CursorWithError mockCursorWithError2 = PowerMockito.mock(CursorWithError.class);
+        Vtrpc.RPCError rpcError = Vtrpc.RPCError.newBuilder().setMessage("statement execute batch error").build();
         PowerMockito.when(mockCursorWithError2.getError())
-            .thenReturn(PowerMockito.mock(Vtrpc.RPCError.class));
+            .thenReturn(rpcError);
         mockCursorWithErrorList.add(mockCursorWithError2);
         statement.addBatch(sqlUpdate);
         statement.addBatch(sqlUpdate);
@@ -657,7 +656,7 @@ import java.util.List;
             statement.executeBatch();
             Assert.fail("Should have thrown Exception");
         } catch (BatchUpdateException ex) {
-            Assert.assertEquals(Constants.SQLExceptionMessages.QUERY_FAILED, ex.getMessage());
+            Assert.assertEquals(rpcError.toString(), ex.getMessage());
             Assert.assertEquals(2, ex.getUpdateCounts().length);
             Assert.assertEquals(Statement.EXECUTE_FAILED, ex.getUpdateCounts()[1]);
         }

@@ -3,12 +3,14 @@ package com.flipkart.vitess.jdbc;
 import com.flipkart.vitess.util.Constants;
 import com.flipkart.vitess.util.StringUtils;
 import com.youtube.vitess.client.Context;
+import com.youtube.vitess.client.Proto;
 import com.youtube.vitess.client.VTGateConn;
 import com.youtube.vitess.client.VTGateTx;
 import com.youtube.vitess.client.cursor.Cursor;
 import com.youtube.vitess.client.cursor.CursorWithError;
 import com.youtube.vitess.proto.Query;
 import com.youtube.vitess.proto.Topodata;
+import com.youtube.vitess.proto.Vtrpc;
 
 import java.sql.BatchUpdateException;
 import java.sql.Connection;
@@ -656,10 +658,10 @@ public class VitessStatement implements Statement {
      */
     protected int[] generateBatchUpdateResult(List<CursorWithError> cursorWithErrorList)
         throws BatchUpdateException {
-        boolean queryExecutionFailed = false;
         int[] updateCounts = new int[cursorWithErrorList.size()];
         int i = 0;
 
+        Vtrpc.RPCError rpcError = null;
         for (CursorWithError cursorWithError : cursorWithErrorList) {
             if (null == cursorWithError.getError()) {
                 try {
@@ -671,15 +673,16 @@ public class VitessStatement implements Statement {
                     updateCounts[i] = Statement.SUCCESS_NO_INFO;
                 }
             } else {
-                queryExecutionFailed = true;
+                rpcError = cursorWithError.getError();
                 updateCounts[i] = Statement.EXECUTE_FAILED;
             }
             ++i;
         }
 
-        if (queryExecutionFailed) {
-            throw new BatchUpdateException(Constants.SQLExceptionMessages.QUERY_FAILED,
-                updateCounts);
+        if (null != rpcError) {
+            int errno = Proto.getErrno(rpcError.getMessage());
+            String sqlState = Proto.getSQLState(rpcError.getMessage());
+            throw new BatchUpdateException(rpcError.toString(), sqlState, errno, updateCounts);
         }
         return updateCounts;
     }
