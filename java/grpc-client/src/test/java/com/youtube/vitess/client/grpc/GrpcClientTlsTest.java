@@ -73,7 +73,7 @@ public class GrpcClientTlsTest extends RpcClientTest {
         System.out.println("Exit code: " + exitCode + "\n");
     }
 
-    private static void createCA() throws Exception {
+    protected static void createCA() throws Exception {
         java.nio.file.Files.copy(
                 GrpcClientTlsTest.class.getResourceAsStream("/ca.config"),
                 Paths.get(caConfig)
@@ -86,7 +86,7 @@ public class GrpcClientTlsTest extends RpcClientTest {
         runProcess(createCert);
     }
 
-    private static void createTrustStore() throws Exception {
+    protected static void createTrustStore() throws Exception {
         final String convertCaCert = String.format("openssl x509 -outform der -in %s -out %s", caCert, caCertDer);
         runProcess(convertCaCert);
 
@@ -94,7 +94,7 @@ public class GrpcClientTlsTest extends RpcClientTest {
         runProcess(createTrustStore);
     }
 
-    private static void createSignedCert(final String serial, final String name) throws Exception {
+    protected static void createSignedCert(final String serial, final String name) throws Exception {
         final String certConfig = certDirectory.getCanonicalPath() + File.separatorChar + "cert.config";
         if (!(new File(certConfig)).exists()) {
             java.nio.file.Files.copy(
@@ -133,7 +133,6 @@ public class GrpcClientTlsTest extends RpcClientTest {
         );
         System.out.println(vtgate);
         vtgateclienttest = new ProcessBuilder().inheritIO().command(vtgate.split(" ")).start();
-
         Thread.sleep(TimeUnit.SECONDS.toMillis(10));
     }
 

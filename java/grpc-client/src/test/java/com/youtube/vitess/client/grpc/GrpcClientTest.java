@@ -44,7 +44,6 @@ public class GrpcClientTest extends RpcClientTest {
                     "grpc-vtgateservice"))
             .inheritIO()
             .start();
-
     Thread.sleep(TimeUnit.SECONDS.toMillis(10));
 
     client =

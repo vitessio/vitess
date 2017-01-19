@@ -2,21 +2,16 @@ package com.youtube.vitess.client.grpc;
 
 import com.google.common.io.Files;
 import com.youtube.vitess.client.Context;
-import com.youtube.vitess.client.RpcClient;
-import com.youtube.vitess.client.RpcClientTest;
 import com.youtube.vitess.client.grpc.tls.TlsOptions;
 import org.joda.time.Duration;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
-import org.junit.Ignore;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
 import java.io.File;
-import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
-import java.nio.file.Paths;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -24,7 +19,7 @@ import java.util.concurrent.TimeUnit;
  * authentication enabled.
  */
 @RunWith(JUnit4.class)
-public class GrpcClientTlsClientAuthTest extends RpcClientTest {
+public class GrpcClientTlsClientAuthTest extends GrpcClientTlsTest {
 
     private static Process vtgateclienttest;
     private static int port;
@@ -69,52 +64,6 @@ public class GrpcClientTlsClientAuthTest extends RpcClientTest {
         Thread.sleep(TimeUnit.SECONDS.toMillis(10));
     }
 
-    private static void runProcess(final String command) throws IOException, InterruptedException {
-        System.out.println("\nExecuting: " + command);
-        int exitCode = new ProcessBuilder().inheritIO().command(command.split(" ")).start().waitFor();
-        System.out.println("Exit code: " + exitCode + "\n");
-    }
-
-    private static void createCA() throws Exception {
-        java.nio.file.Files.copy(
-                GrpcClientTlsTest.class.getResourceAsStream("/ca.config"),
-                Paths.get(caConfig)
-        );
-
-        final String createKey = String.format("openssl genrsa -out %s 2048", caKey);
-        runProcess(createKey);
-
-        final String createCert = String.format("openssl req -new -x509 -nodes -days 3600 -batch -config %s -key %s -out %s", caConfig, caKey, caCert);
-        runProcess(createCert);
-    }
-
-    private static void createTrustStore() throws Exception {
-        final String convertCaCert = String.format("openssl x509 -outform der -in %s -out %s", caCert, caCertDer);
-        runProcess(convertCaCert);
-
-        final String createTrustStore = String.format("keytool -import -alias cacert -keystore %s -file %s -storepass passwd -trustcacerts -noprompt", trustStore, caCertDer);
-        runProcess(createTrustStore);
-    }
-
-    private static void createSignedCert(final String serial, final String name) throws Exception {
-        final String certConfig = certDirectory.getCanonicalPath() + File.separatorChar + "cert.config";
-        if (!(new File(certConfig)).exists()) {
-            java.nio.file.Files.copy(
-                    GrpcClientTlsTest.class.getResourceAsStream("/cert.config"),
-                    Paths.get(certConfig)
-            );
-        }
-        final String key = certDirectory.getCanonicalPath() + File.separatorChar + name + "-key.pem";
-        final String req = certDirectory.getCanonicalPath() + File.separatorChar + name + "-req.pem";
-        final String cert = certDirectory.getCanonicalPath() + File.separatorChar + name + "-cert.pem";
-
-        final String createKeyAndCSR = String.format("openssl req -newkey rsa:2048 -days 3600 -nodes -batch -config %s -keyout %s -out %s", certConfig, key, req);
-        runProcess(createKeyAndCSR);
-
-        final String signKey = String.format("openssl x509 -req -in %s -days 3600 -CA %s -CAkey %s -set_serial %s -out %s", req, caCert, caKey, serial, cert);
-        runProcess(signKey);
-    }
-
     private static void createKeyStore(final String name) throws Exception {
         final String cert = certDirectory.getCanonicalPath() + File.separatorChar + name + "-cert.pem";
         final String key = certDirectory.getCanonicalPath() + File.separatorChar + name + "-key.pem";
@@ -147,7 +96,6 @@ public class GrpcClientTlsClientAuthTest extends RpcClientTest {
                 vtRoot + "/bin/vtgateclienttest", cert, key, caCert, Integer.toString(port));
         System.out.println(vtgateCommand);
         vtgateclienttest = new ProcessBuilder(vtgateCommand.split(" ")).inheritIO().start();
-
         Thread.sleep(TimeUnit.SECONDS.toMillis(10));
     }
 
