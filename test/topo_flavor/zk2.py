@@ -58,7 +58,8 @@ class Zk2TopoServer(server.TopoServer):
     ca_addr = self.addr
     if add_bad_host:
       ca_addr += ',does.not.exists:1234'
-    utils.run_vtctl_vtctl(['AddCellInfo',
+    # Use UpdateCellInfo for this one, more coverage.
+    utils.run_vtctl_vtctl(['UpdateCellInfo',
                            '-root', '/test_ca',
                            '-server_address', ca_addr,
                            'test_ca'])

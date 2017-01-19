@@ -74,6 +74,49 @@ func (ts Server) CreateCellInfo(ctx context.Context, cell string, ci *topodatapb
 	return err
 }
 
+// UpdateCellInfoFields is a high level helper method to read a CellInfo
+// object, update its fields, and then write it back. If the write fails due to
+// a version mismatch, it will re-read the record and retry the update.
+// If the update method returns ErrNoUpdateNeeded, nothing is written,
+// and nil is returned.
+func (ts Server) UpdateCellInfoFields(ctx context.Context, cell string, update func(*topodatapb.CellInfo) error) error {
+	filePath := pathForCellInfo(cell)
+	for {
+		ci := &topodatapb.CellInfo{}
+
+		// Read the file, unpack the contents.
+		contents, version, err := ts.Get(ctx, GlobalCell, filePath)
+		switch err {
+		case nil:
+			if err := proto.Unmarshal(contents, ci); err != nil {
+				return err
+			}
+		case ErrNoNode:
+			// Nothing to do.
+		default:
+			return err
+		}
+
+		// Call update method.
+		if err = update(ci); err != nil {
+			if err == ErrNoUpdateNeeded {
+				return nil
+			}
+			return err
+		}
+
+		// Pack and save.
+		contents, err = proto.Marshal(ci)
+		if err != nil {
+			return err
+		}
+		if _, err = ts.Update(ctx, GlobalCell, filePath, contents, version); err != ErrBadVersion {
+			// This includes the 'err=nil' case.
+			return err
+		}
+	}
+}
+
 // DeleteCellInfo deletes the specified CellInfo.
 // We first make sure no Shard record points to the cell.
 func (ts Server) DeleteCellInfo(ctx context.Context, cell string) error {
