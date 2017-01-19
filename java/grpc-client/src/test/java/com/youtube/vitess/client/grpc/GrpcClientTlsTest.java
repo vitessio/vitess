@@ -7,7 +7,6 @@ import com.youtube.vitess.client.grpc.tls.TlsOptions;
 import org.joda.time.Duration;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
-import org.junit.Ignore;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
@@ -16,6 +15,7 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.nio.file.Paths;
+import java.util.concurrent.TimeUnit;
 
 /**
  * This tests GrpcClient with a mock vtgate server (go/cmd/vtgateclienttest), over an SSL connection.
@@ -64,6 +64,7 @@ public class GrpcClientTlsTest extends RpcClientTest {
             vtgateclienttest.destroy();
             vtgateclienttest.waitFor();
         }
+        Thread.sleep(TimeUnit.SECONDS.toMillis(10));
     }
 
     private static void runProcess(final String command) throws IOException, InterruptedException {
@@ -132,6 +133,8 @@ public class GrpcClientTlsTest extends RpcClientTest {
         );
         System.out.println(vtgate);
         vtgateclienttest = new ProcessBuilder().inheritIO().command(vtgate.split(" ")).start();
+
+        Thread.sleep(TimeUnit.SECONDS.toMillis(10));
     }
 
     private static void createClientConnection() throws Exception {

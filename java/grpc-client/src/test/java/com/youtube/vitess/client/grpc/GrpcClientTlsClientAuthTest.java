@@ -17,6 +17,7 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.nio.file.Paths;
+import java.util.concurrent.TimeUnit;
 
 /**
  * This tests GrpcClient with a mock vtgate server (go/cmd/vtgateclienttest), over an SSL connection with client
@@ -65,6 +66,7 @@ public class GrpcClientTlsClientAuthTest extends RpcClientTest {
             vtgateclienttest.destroy();
             vtgateclienttest.waitFor();
         }
+        Thread.sleep(TimeUnit.SECONDS.toMillis(10));
     }
 
     private static void runProcess(final String command) throws IOException, InterruptedException {
@@ -145,6 +147,8 @@ public class GrpcClientTlsClientAuthTest extends RpcClientTest {
                 vtRoot + "/bin/vtgateclienttest", cert, key, caCert, Integer.toString(port));
         System.out.println(vtgateCommand);
         vtgateclienttest = new ProcessBuilder(vtgateCommand.split(" ")).start();
+
+        Thread.sleep(TimeUnit.SECONDS.toMillis(10));
     }
 
     private static void createClientConnection() throws Exception {
