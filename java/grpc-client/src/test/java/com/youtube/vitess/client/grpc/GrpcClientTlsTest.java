@@ -29,8 +29,6 @@ public class GrpcClientTlsTest extends RpcClientTest {
     private static int port;
     private static File certDirectory;
 
-    private static String caConfig;
-    private static String caKey;
     private static String caCert;
     private static String caCertDer;
     private static String trustStore;
@@ -40,8 +38,6 @@ public class GrpcClientTlsTest extends RpcClientTest {
         certDirectory = Files.createTempDir();
         System.out.println("Using cert directory: " + certDirectory.getCanonicalPath());
 
-        caConfig = certDirectory.getCanonicalPath() + File.separatorChar + "ca.config";
-        caKey = certDirectory.getCanonicalPath() + File.separatorChar + "ca-key.pem";
         caCert = certDirectory.getCanonicalPath() + File.separatorChar + "ca-cert.pem";
         caCertDer = certDirectory.getCanonicalPath() + File.separatorChar + "ca-cert.der";
         trustStore = certDirectory.getCanonicalPath() + File.separatorChar + "ca-trustStore.jks";
@@ -74,6 +70,8 @@ public class GrpcClientTlsTest extends RpcClientTest {
     }
 
     protected static void createCA() throws Exception {
+        final String caConfig = certDirectory.getCanonicalPath() + File.separatorChar + "ca.config";
+        final String caKey = certDirectory.getCanonicalPath() + File.separatorChar + "ca-key.pem";
         java.nio.file.Files.copy(
                 GrpcClientTlsTest.class.getResourceAsStream("/ca.config"),
                 Paths.get(caConfig)
@@ -96,6 +94,7 @@ public class GrpcClientTlsTest extends RpcClientTest {
 
     protected static void createSignedCert(final String serial, final String name) throws Exception {
         final String certConfig = certDirectory.getCanonicalPath() + File.separatorChar + "cert.config";
+        final String caKey = certDirectory.getCanonicalPath() + File.separatorChar + "ca-key.pem";
         if (!(new File(certConfig)).exists()) {
             java.nio.file.Files.copy(
                     GrpcClientTlsTest.class.getResourceAsStream("/cert.config"),
