@@ -7,6 +7,7 @@ import com.youtube.vitess.client.grpc.tls.TlsOptions;
 import org.joda.time.Duration;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
+import org.junit.Ignore;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
@@ -22,6 +23,7 @@ import java.nio.file.Paths;
  * The SSL setup is adapted from "test/encrypted_transport.py"
  */
 @RunWith(JUnit4.class)
+@Ignore
 public class GrpcClientTlsTest extends RpcClientTest {
 
     protected static Process vtgateclienttest;
