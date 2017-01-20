@@ -78,21 +78,6 @@ public class VitessVTGateManager {
      * @param hostname
      * @param port
      * @param username
-     * @return
-     */
-    private static VTGateConn getVtGateConn(String hostname, int port, String username) {
-        Context context = CommonUtils.createContext(username, Constants.CONNECTION_TIMEOUT);
-        InetSocketAddress inetSocketAddress = new InetSocketAddress(hostname, port);
-        RpcClient client = new GrpcClientFactory().create(context, inetSocketAddress);
-        return (new VTGateConn(client));
-    }
-
-    /**
-     * Create vtGateConn object with given identifier.
-     *
-     * @param hostname
-     * @param port
-     * @param username
      * @param keyspace
      * @return
      */
@@ -114,8 +99,6 @@ public class VitessVTGateManager {
      * @param identifier
      * @param hostname
      * @param port
-     * @param username
-     * @param keyspace
      */
     private static void updateVtGateConnHashMap(String identifier, String hostname, int port,
         String username, String keyspace) {

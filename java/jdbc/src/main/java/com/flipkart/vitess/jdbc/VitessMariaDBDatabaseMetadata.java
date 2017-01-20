@@ -3,7 +3,12 @@ package com.flipkart.vitess.jdbc;
 import com.flipkart.vitess.util.Constants;
 import com.youtube.vitess.proto.Query;
 
-import java.sql.*;
+import java.sql.Connection;
+import java.sql.DatabaseMetaData;
+import java.sql.ResultSet;
+import java.sql.RowIdLifetime;
+import java.sql.SQLException;
+import java.sql.SQLFeatureNotSupportedException;
 import java.util.logging.Logger;
 
 /**
@@ -418,7 +423,7 @@ public class VitessMariaDBDatabaseMetadata extends VitessDatabaseMetaData
                 {"TIMESTAMP", "93", "27", "'", "'", "[(M)]", "1", "0", "3", "0", "0", "0",
                     "TIMESTAMP", "0", "0", "0", "0", "10"}};
 
-        return new VitessResultSet(columnNames, columnTypes, data);
+        return new VitessResultSet(connection, columnNames, columnTypes, data);
     }
 
     public ResultSet getIndexInfo(String catalog, String schema, String table, boolean unique,

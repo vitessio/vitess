@@ -1,9 +1,7 @@
 package com.flipkart.vitess.jdbc;
 
-import com.flipkart.vitess.jdbc.VitessConnection;
-import com.flipkart.vitess.jdbc.VitessDriver;
 import com.flipkart.vitess.util.Constants;
-import com.youtube.vitess.proto.Topodata;
+
 import org.junit.Assert;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -11,6 +9,7 @@ import org.junit.Test;
 import java.sql.DriverManager;
 import java.sql.DriverPropertyInfo;
 import java.sql.SQLException;
+import java.util.Properties;
 
 /**
  * Created by harshit.gangal on 19/01/16.
@@ -35,7 +34,7 @@ public class VitessDriverTest {
     @Test public void testConnect() {
         try {
             VitessConnection connection =
-                (VitessConnection) DriverManager.getConnection(dbURL, null);
+                (VitessConnection) DriverManager.getConnection(dbURL, new Properties());
             Assert.assertEquals(connection.getUrl(), dbURL);
         } catch (SQLException e) {
             Assert.fail("SQLException Not Expected");
@@ -61,7 +60,14 @@ public class VitessDriverTest {
     }
 
     @Test public void testGetPropertyInfo() throws SQLException {
+        // Used to ensure that we're properly adding the below URL-based properties at the beginning
+        // of the full ConnectionProperties configuration
+        DriverPropertyInfo[] underlying = ConnectionProperties.exposeAsDriverPropertyInfo(new Properties(), 0);
+
+
         DriverPropertyInfo[] driverPropertyInfos = driver.getPropertyInfo(dbURL, null);
+        Assert.assertEquals(underlying.length + 5, driverPropertyInfos.length);
+
         Assert.assertEquals(driverPropertyInfos[0].description, Constants.VITESS_HOST);
         Assert.assertEquals(driverPropertyInfos[0].required, true);
         Assert.assertEquals(driverPropertyInfos[0].name, Constants.Property.HOST);
@@ -77,28 +83,23 @@ public class VitessDriverTest {
         Assert.assertEquals(driverPropertyInfos[2].name, Constants.Property.KEYSPACE);
         Assert.assertEquals(driverPropertyInfos[2].value, "shipment");
 
-        Assert.assertEquals(driverPropertyInfos[3].description, Constants.VITESS_TABLET_TYPE);
+        Assert.assertEquals(driverPropertyInfos[3].description, Constants.VITESS_DB_NAME);
         Assert.assertEquals(driverPropertyInfos[3].required, false);
-        Assert.assertEquals(driverPropertyInfos[3].name, Constants.Property.TABLET_TYPE);
-        Assert.assertEquals(driverPropertyInfos[3].value, Topodata.TabletType.MASTER.toString());
+        Assert.assertEquals(driverPropertyInfos[3].name, Constants.Property.DBNAME);
+        Assert.assertEquals(driverPropertyInfos[3].value, "vt_shipment");
 
-        Assert.assertEquals(driverPropertyInfos[4].description, Constants.EXECUTE_TYPE_DESC);
+        Assert.assertEquals(driverPropertyInfos[4].description, Constants.USERNAME_DESC);
         Assert.assertEquals(driverPropertyInfos[4].required, false);
-        Assert.assertEquals(driverPropertyInfos[4].name, Constants.Property.EXECUTE_TYPE);
-        Assert.assertEquals(driverPropertyInfos[4].value,
-            Constants.QueryExecuteType.STREAM.toString());
+        Assert.assertEquals(driverPropertyInfos[4].name, Constants.Property.USERNAME);
+        Assert.assertEquals(driverPropertyInfos[4].value, "user");
 
-        Assert.assertEquals(driverPropertyInfos[5].description, Constants.VITESS_DB_NAME);
-        Assert.assertEquals(driverPropertyInfos[5].required, true);
-        Assert.assertEquals(driverPropertyInfos[5].name, Constants.Property.DBNAME);
-        Assert.assertEquals(driverPropertyInfos[5].value, "vt_shipment");
-
-        Assert.assertEquals(driverPropertyInfos[6].description, Constants.USERNAME_DESC);
-        Assert.assertEquals(driverPropertyInfos[6].required, false);
-        Assert.assertEquals(driverPropertyInfos[6].name, Constants.Property.USERNAME);
-        Assert.assertEquals(driverPropertyInfos[6].value, "user");
-
-
+        // Validate the remainder of the driver properties match up with the underlying
+        for (int i = 5; i < driverPropertyInfos.length; i++) {
+            Assert.assertEquals(underlying[i - 5].description, driverPropertyInfos[i].description);
+            Assert.assertEquals(underlying[i - 5].required, driverPropertyInfos[i].required);
+            Assert.assertEquals(underlying[i - 5].name, driverPropertyInfos[i].name);
+            Assert.assertEquals(underlying[i - 5].value, driverPropertyInfos[i].value);
+        }
     }
 
     @Test public void testGetMajorVersion() {

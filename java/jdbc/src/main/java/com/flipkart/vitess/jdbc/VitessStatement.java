@@ -26,6 +26,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.logging.Logger;
 
+
 /**
  * Created by harshit.gangal on 19/01/16.
  * <p>
@@ -41,6 +42,7 @@ public class VitessStatement implements Statement {
     /* Get actual class name to be printed on */
     private static Logger logger = Logger.getLogger(VitessStatement.class.getName());
     protected VitessResultSet vitessResultSet;
+
     protected VitessConnection vitessConnection;
     protected boolean closed;
     protected long resultCount;
@@ -111,11 +113,10 @@ public class VitessStatement implements Statement {
                     .getAutoCommit()) {
                     Context context =
                         this.vitessConnection.createContext(this.queryTimeoutInMillis);
-                    if (Constants.QueryExecuteType.SIMPLE == vitessConnection
-                        .getExecuteTypeParam()) {
-                        cursor = vtGateConn.execute(context, sql, null, tabletType).checkedGet();
+                    if (vitessConnection.isSimpleExecute()) {
+                        cursor = vtGateConn.execute(context, sql, null, tabletType, vitessConnection.getIncludedFields()).checkedGet();
                     } else {
-                        cursor = vtGateConn.streamExecute(context, sql, null, tabletType);
+                        cursor = vtGateConn.streamExecute(context, sql, null, tabletType, vitessConnection.getIncludedFields());
                     }
                 } else {
                     VTGateTx vtGateTx = this.vitessConnection.getVtGateTx();
@@ -128,14 +129,14 @@ public class VitessStatement implements Statement {
                     Context context =
                         this.vitessConnection.createContext(this.queryTimeoutInMillis);
                 /* Stream query is not suppose to run in a txn. */
-                    cursor = vtGateTx.execute(context, sql, null, tabletType).checkedGet();
+                    cursor = vtGateTx.execute(context, sql, null, tabletType, vitessConnection.getIncludedFields()).checkedGet();
                 }
             }
 
             if (null == cursor) {
                 throw new SQLException(Constants.SQLExceptionMessages.METHOD_CALL_FAILED);
             }
-            this.vitessResultSet = new VitessResultSet(cursor, this);
+            this.vitessResultSet = new VitessResultSet(vitessConnection, cursor, this);
         } catch (SQLRecoverableException ex) {
             this.vitessConnection.setVtGateTx(null);
             throw ex;
@@ -388,7 +389,7 @@ public class VitessStatement implements Statement {
             }
         }
 
-        return new VitessResultSet(columnNames, columnTypes, data);
+        return new VitessResultSet(vitessConnection, columnNames, columnTypes, data);
     }
 
     /**
@@ -424,7 +425,7 @@ public class VitessStatement implements Statement {
         try {
             if (this.vitessConnection.getAutoCommit()) {
                 Context context = this.vitessConnection.createContext(this.queryTimeoutInMillis);
-                cursor = vtGateConn.execute(context, sql, null, tabletType).checkedGet();
+                cursor = vtGateConn.execute(context, sql, null, tabletType, vitessConnection.getIncludedFields()).checkedGet();
             } else {
                 vtGateTx = this.vitessConnection.getVtGateTx();
                 if (null == vtGateTx) {
@@ -435,7 +436,7 @@ public class VitessStatement implements Statement {
                 }
 
                 Context context = this.vitessConnection.createContext(this.queryTimeoutInMillis);
-                cursor = vtGateTx.execute(context, sql, null, tabletType).checkedGet();
+                cursor = vtGateTx.execute(context, sql, null, tabletType, vitessConnection.getIncludedFields()).checkedGet();
             }
 
             if (null == cursor) {
@@ -497,7 +498,7 @@ public class VitessStatement implements Statement {
         if (showSql) {
             cursor = this.executeShow(sql);
             if (!(null == cursor || null == cursor.getFields() || cursor.getFields().isEmpty())) {
-                this.vitessResultSet = new VitessResultSet(cursor, this);
+                this.vitessResultSet = new VitessResultSet(vitessConnection, cursor, this);
                 return true;
             }
             throw new SQLException(Constants.SQLExceptionMessages.METHOD_CALL_FAILED);
@@ -572,7 +573,7 @@ public class VitessStatement implements Statement {
             if (this.vitessConnection.getAutoCommit()) {
                 Context context = this.vitessConnection.createContext(this.queryTimeoutInMillis);
                 cursorWithErrorList =
-                    vtGateConn.executeBatch(context, batchedArgs, null, tabletType).checkedGet();
+                    vtGateConn.executeBatch(context, batchedArgs, null, tabletType, vitessConnection.getIncludedFields()).checkedGet();
             } else {
                 vtGateTx = this.vitessConnection.getVtGateTx();
                 if (null == vtGateTx) {
@@ -584,7 +585,7 @@ public class VitessStatement implements Statement {
 
                 Context context = this.vitessConnection.createContext(this.queryTimeoutInMillis);
                 cursorWithErrorList =
-                    vtGateTx.executeBatch(context, batchedArgs, null, tabletType).checkedGet();
+                    vtGateTx.executeBatch(context, batchedArgs, null, tabletType, vitessConnection.getIncludedFields()).checkedGet();
             }
 
             if (null == cursorWithErrorList) {
@@ -644,7 +645,7 @@ public class VitessStatement implements Statement {
         Context context = this.vitessConnection.createContext(this.queryTimeoutInMillis);
         return this.vitessConnection.getVtGateConn()
             .executeKeyspaceIds(context, sql, keyspace, keyspaceIds, null,
-                this.vitessConnection.getTabletType()).checkedGet();
+                this.vitessConnection.getTabletType(), vitessConnection.getIncludedFields()).checkedGet();
     }
 
     /**

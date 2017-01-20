@@ -1,11 +1,11 @@
 package com.flipkart.vitess.jdbc;
 
-import com.flipkart.vitess.jdbc.*;
 import com.flipkart.vitess.util.Constants;
 import com.google.protobuf.ByteString;
 import com.youtube.vitess.client.cursor.Cursor;
 import com.youtube.vitess.client.cursor.SimpleCursor;
 import com.youtube.vitess.proto.Query;
+
 import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -13,19 +13,25 @@ import org.powermock.api.mockito.PowerMockito;
 import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.modules.junit4.PowerMockRunner;
 
-import java.sql.*;
+import java.sql.Connection;
+import java.sql.ResultSet;
+import java.sql.ResultSetMetaData;
+import java.sql.SQLException;
+import java.sql.Types;
 import java.util.ArrayList;
 import java.util.Properties;
 
 /**
  * Created by ashudeep.sharma on 08/03/16.
  */
-@RunWith(PowerMockRunner.class) @PrepareForTest(VitessMySQLDatabaseMetadata.class) public class VitessDatabaseMetadataTest {
+@RunWith(PowerMockRunner.class)
+@PrepareForTest(VitessMySQLDatabaseMetadata.class)
+public class VitessDatabaseMetadataTest extends BaseTest{
 
     private ResultSet resultSet;
 
     @Test public void getPseudoColumnsTest() throws SQLException {
-        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
+        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(getVitessConnection());
         this.resultSet = vitessDatabaseMetaData.getPseudoColumns(null, null, null, null);
 
         ResultSetMetaData resultSetMetaData = resultSet.getMetaData();
@@ -44,7 +50,7 @@ import java.util.Properties;
     }
 
     @Test public void getClientInfoPropertiesTest() throws SQLException {
-        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
+        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(getVitessConnection());
         this.resultSet = vitessDatabaseMetaData.getClientInfoProperties();
 
         ResultSetMetaData resultSetMetaData = resultSet.getMetaData();
@@ -55,7 +61,7 @@ import java.util.Properties;
     }
 
     @Test public void getSchemasTest() throws SQLException {
-        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
+        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(getVitessConnection());
         this.resultSet = vitessDatabaseMetaData.getSchemas(null, null);
 
         ResultSetMetaData resultSetMetaData = resultSet.getMetaData();
@@ -64,7 +70,7 @@ import java.util.Properties;
     }
 
     @Test public void getAttributesTest() throws SQLException {
-        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
+        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(getVitessConnection());
         this.resultSet = vitessDatabaseMetaData.getAttributes(null, null, null, null);
 
         ResultSetMetaData resultSetMetaData = resultSet.getMetaData();
@@ -93,7 +99,7 @@ import java.util.Properties;
 
     @Test public void getSuperTablesTest() throws SQLException {
 
-        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
+        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(getVitessConnection());
         this.resultSet = vitessDatabaseMetaData.getSuperTables(null, null, null);
 
         ResultSetMetaData resultSetMetaData = resultSet.getMetaData();
@@ -104,7 +110,7 @@ import java.util.Properties;
     }
 
     @Test public void getSuperTypesTest() throws SQLException {
-        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
+        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(getVitessConnection());
         this.resultSet = vitessDatabaseMetaData.getSuperTypes(null, null, null);
 
         ResultSetMetaData resultSetMetaData = resultSet.getMetaData();
@@ -117,7 +123,7 @@ import java.util.Properties;
     }
 
     @Test public void getUDTsTest() throws SQLException {
-        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
+        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(getVitessConnection());
         this.resultSet = vitessDatabaseMetaData.getUDTs(null, null, null, null);
 
         ResultSetMetaData resultSetMetaData = resultSet.getMetaData();
@@ -131,7 +137,7 @@ import java.util.Properties;
     }
 
     @Test public void getTypeInfoTest() throws SQLException {
-        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
+        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(getVitessConnection());
         this.resultSet = vitessDatabaseMetaData.getTypeInfo();
 
         ResultSetMetaData resultSetMetaData = resultSet.getMetaData();
@@ -159,7 +165,7 @@ import java.util.Properties;
 
     @Test public void getTableTypesTest() throws SQLException {
 
-        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
+        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(getVitessConnection());
         this.resultSet = vitessDatabaseMetaData.getTableTypes();
 
         ArrayList<String> data = new ArrayList<String>();
@@ -178,7 +184,7 @@ import java.util.Properties;
     }
 
     @Test public void getSchemasTest2() throws SQLException {
-        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
+        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(getVitessConnection());
         this.resultSet = vitessDatabaseMetaData.getSchemas();
 
         ResultSetMetaData resultSetMetaData = resultSet.getMetaData();
@@ -187,61 +193,61 @@ import java.util.Properties;
     }
 
     @Test public void allProceduresAreCallableTest() throws SQLException {
-        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
+        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(getVitessConnection());
 
         Assert.assertEquals(false, vitessDatabaseMetaData.allProceduresAreCallable());
     }
 
     @Test public void allTablesAreSelectableTest() throws SQLException {
-        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
+        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(getVitessConnection());
 
         Assert.assertEquals(false, vitessDatabaseMetaData.allTablesAreSelectable());
     }
 
     @Test public void nullsAreSortedHighTest() throws SQLException {
-        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
+        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(getVitessConnection());
         VitessDatabaseMetaData vitessMariaDBDatabaseMetadata =
-            new VitessMariaDBDatabaseMetadata(null);
+            new VitessMariaDBDatabaseMetadata(getVitessConnection());
 
         Assert.assertEquals(false, vitessDatabaseMetaData.nullsAreSortedHigh());
         Assert.assertEquals(false, vitessMariaDBDatabaseMetadata.nullsAreSortedHigh());
     }
 
     @Test public void nullsAreSortedLowTest() throws SQLException {
-        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
+        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(getVitessConnection());
         VitessDatabaseMetaData vitessMariaDBDatabaseMetadata =
-            new VitessMariaDBDatabaseMetadata(null);
+            new VitessMariaDBDatabaseMetadata(getVitessConnection());
 
         Assert.assertEquals(true, vitessDatabaseMetaData.nullsAreSortedLow());
         Assert.assertEquals(true, vitessMariaDBDatabaseMetadata.nullsAreSortedLow());
     }
 
     @Test public void nullsAreSortedAtStartTest() throws SQLException {
-        VitessDatabaseMetaData vitessMySQLDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
+        VitessDatabaseMetaData vitessMySQLDatabaseMetaData = new VitessMySQLDatabaseMetadata(getVitessConnection());
         VitessDatabaseMetaData vitessMariaDBDatabaseMetadata =
-            new VitessMariaDBDatabaseMetadata(null);
+            new VitessMariaDBDatabaseMetadata(getVitessConnection());
 
         Assert.assertEquals(false, vitessMySQLDatabaseMetaData.nullsAreSortedAtStart());
         Assert.assertEquals(false, vitessMariaDBDatabaseMetadata.nullsAreSortedAtStart());
     }
 
     @Test public void nullsAreSortedAtEndTest() throws SQLException {
-        VitessDatabaseMetaData vitessMySQLDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
+        VitessDatabaseMetaData vitessMySQLDatabaseMetaData = new VitessMySQLDatabaseMetadata(getVitessConnection());
         VitessDatabaseMetaData vitessMariaDBDatabaseMetadata =
-            new VitessMariaDBDatabaseMetadata(null);
+            new VitessMariaDBDatabaseMetadata(getVitessConnection());
 
         Assert.assertEquals(false, vitessMySQLDatabaseMetaData.nullsAreSortedAtEnd());
         Assert.assertEquals(true, vitessMariaDBDatabaseMetadata.nullsAreSortedAtEnd());
     }
 
     @Test public void getDatabaseProductNameTest() throws SQLException {
-        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
+        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(getVitessConnection());
 
         Assert.assertEquals("MySQL", vitessDatabaseMetaData.getDatabaseProductName());
     }
 
     @Test public void getDriverVersionTest() throws SQLException {
-        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
+        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(getVitessConnection());
         StringBuilder driverVersionBuilder = new StringBuilder();
         driverVersionBuilder.append(Constants.DRIVER_MAJOR_VERSION);
         driverVersionBuilder.append(".");
@@ -251,383 +257,383 @@ import java.util.Properties;
     }
 
     @Test public void getDriverMajorVersionTest() throws SQLException {
-        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
+        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(getVitessConnection());
 
         Assert.assertEquals(Constants.DRIVER_MAJOR_VERSION,
             vitessDatabaseMetaData.getDriverMajorVersion());
     }
 
     @Test public void getDriverMinorVersionTest() throws SQLException {
-        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
+        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(getVitessConnection());
 
         Assert.assertEquals(Constants.DRIVER_MINOR_VERSION,
             vitessDatabaseMetaData.getDriverMinorVersion());
     }
 
     @Test public void getSearchStringEscapeTest() throws SQLException {
-        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
+        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(getVitessConnection());
 
         Assert.assertEquals("\\", vitessDatabaseMetaData.getSearchStringEscape());
     }
 
     @Test public void getExtraNameCharactersTest() throws SQLException {
-        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
+        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(getVitessConnection());
 
         Assert.assertEquals("#@", vitessDatabaseMetaData.getExtraNameCharacters());
     }
 
     @Test public void supportsAlterTableWithAddColumnTest() throws SQLException {
-        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
+        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(getVitessConnection());
 
         Assert.assertEquals(false, vitessDatabaseMetaData.supportsAlterTableWithAddColumn());
     }
 
     @Test public void supportsAlterTableWithDropColumnTest() throws SQLException {
-        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
+        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(getVitessConnection());
 
         Assert.assertEquals(false, vitessDatabaseMetaData.supportsAlterTableWithDropColumn());
     }
 
     @Test public void supportsColumnAliasingTest() throws SQLException {
-        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
+        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(getVitessConnection());
 
         Assert.assertEquals(true, vitessDatabaseMetaData.supportsColumnAliasing());
     }
 
     @Test public void nullPlusNonNullIsNullTest() throws SQLException {
-        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
+        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(getVitessConnection());
 
         Assert.assertEquals(true, vitessDatabaseMetaData.nullPlusNonNullIsNull());
     }
 
     @Test public void supportsExpressionsInOrderByTest() throws SQLException {
-        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
+        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(getVitessConnection());
 
         Assert.assertEquals(false, vitessDatabaseMetaData.supportsExpressionsInOrderBy());
     }
 
     @Test public void supportsOrderByUnrelatedTest() throws SQLException {
-        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
+        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(getVitessConnection());
 
         Assert.assertEquals(false, vitessDatabaseMetaData.supportsOrderByUnrelated());
     }
 
     @Test public void supportsGroupByTest() throws SQLException {
-        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
+        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(getVitessConnection());
 
         Assert.assertEquals(false, vitessDatabaseMetaData.supportsGroupBy());
     }
 
     @Test public void supportsGroupByUnrelatedTest() throws SQLException {
-        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
+        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(getVitessConnection());
 
         Assert.assertEquals(false, vitessDatabaseMetaData.supportsGroupByUnrelated());
     }
 
     @Test public void supportsGroupByBeyondSelectTest() throws SQLException {
-        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
+        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(getVitessConnection());
 
         Assert.assertEquals(false, vitessDatabaseMetaData.supportsGroupByBeyondSelect());
     }
 
     @Test public void supportsLikeEscapeClauseTest() throws SQLException {
-        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
+        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(getVitessConnection());
 
         Assert.assertEquals(true, vitessDatabaseMetaData.supportsLikeEscapeClause());
     }
 
     @Test public void supportsMultipleResultSetsTest() throws SQLException {
-        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
+        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(getVitessConnection());
 
         Assert.assertEquals(false, vitessDatabaseMetaData.supportsMultipleResultSets());
     }
 
     @Test public void supportsMultipleTransactionsTest() throws SQLException {
-        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
+        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(getVitessConnection());
 
         Assert.assertEquals(true, vitessDatabaseMetaData.supportsMultipleTransactions());
     }
 
     @Test public void supportsNonNullableColumnsTest() throws SQLException {
-        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
+        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(getVitessConnection());
 
         Assert.assertEquals(true, vitessDatabaseMetaData.supportsNonNullableColumns());
     }
 
     @Test public void supportsMinimumSQLGrammarTest() throws SQLException {
-        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
+        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(getVitessConnection());
 
         Assert.assertEquals(true, vitessDatabaseMetaData.supportsMinimumSQLGrammar());
     }
 
     @Test public void supportsCoreSQLGrammarTest() throws SQLException {
-        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
+        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(getVitessConnection());
 
         Assert.assertEquals(false, vitessDatabaseMetaData.supportsCoreSQLGrammar());
     }
 
     @Test public void supportsExtendedSQLGrammarTest() throws SQLException {
-        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
+        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(getVitessConnection());
 
         Assert.assertEquals(false, vitessDatabaseMetaData.supportsExtendedSQLGrammar());
     }
 
     @Test public void supportsOuterJoinsTest() throws SQLException {
-        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
+        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(getVitessConnection());
 
         Assert.assertEquals(false, vitessDatabaseMetaData.supportsOuterJoins());
     }
 
     @Test public void supportsFullOuterJoinsTest() throws SQLException {
-        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
+        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(getVitessConnection());
 
         Assert.assertEquals(false, vitessDatabaseMetaData.supportsFullOuterJoins());
     }
 
     @Test public void supportsLimitedOuterJoinsTest() throws SQLException {
-        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
+        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(getVitessConnection());
 
         Assert.assertEquals(false, vitessDatabaseMetaData.supportsLimitedOuterJoins());
     }
 
     @Test public void getSchemaTermTest() throws SQLException {
-        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
+        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(getVitessConnection());
 
         Assert.assertEquals("", vitessDatabaseMetaData.getSchemaTerm());
     }
 
     @Test public void getProcedureTermTest() throws SQLException {
-        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
+        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(getVitessConnection());
 
         Assert.assertEquals("procedure", vitessDatabaseMetaData.getProcedureTerm());
     }
 
     @Test public void getCatalogTermTest() throws SQLException {
-        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
+        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(getVitessConnection());
 
         Assert.assertEquals("database", vitessDatabaseMetaData.getCatalogTerm());
     }
 
     @Test public void isCatalogAtStartTest() throws SQLException {
-        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
+        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(getVitessConnection());
 
         Assert.assertEquals(true, vitessDatabaseMetaData.isCatalogAtStart());
     }
 
     @Test public void getCatalogSeparatorTest() throws SQLException {
-        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
+        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(getVitessConnection());
 
         Assert.assertEquals(".", vitessDatabaseMetaData.getCatalogSeparator());
     }
 
     @Test public void supportsSchemasInDataManipulationTest() throws SQLException {
-        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
+        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(getVitessConnection());
 
         Assert.assertEquals(false, vitessDatabaseMetaData.supportsSchemasInDataManipulation());
     }
 
     @Test public void supportsSchemasInProcedureCallsTest() throws SQLException {
-        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
+        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(getVitessConnection());
 
         Assert.assertEquals(false, vitessDatabaseMetaData.supportsSchemasInProcedureCalls());
     }
 
     @Test public void supportsSchemasInTableDefinitionsTest() throws SQLException {
-        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
+        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(getVitessConnection());
 
         Assert.assertEquals(false, vitessDatabaseMetaData.supportsSchemasInTableDefinitions());
     }
 
     @Test public void supportsSchemasInIndexDefinitionsTest() throws SQLException {
-        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
+        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(getVitessConnection());
 
         Assert.assertEquals(false, vitessDatabaseMetaData.supportsSchemasInIndexDefinitions());
     }
 
     @Test public void supportsSelectForUpdateTest() throws SQLException {
-        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
+        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(getVitessConnection());
 
         Assert.assertEquals(false, vitessDatabaseMetaData.supportsSelectForUpdate());
     }
 
     @Test public void supportsStoredProceduresTest() throws SQLException {
-        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
+        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(getVitessConnection());
 
         Assert.assertEquals(false, vitessDatabaseMetaData.supportsStoredProcedures());
     }
 
     @Test public void supportsSubqueriesInComparisonsTest() throws SQLException {
-        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
+        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(getVitessConnection());
 
         Assert.assertEquals(false, vitessDatabaseMetaData.supportsSubqueriesInComparisons());
     }
 
     @Test public void supportsSubqueriesInExistsTest() throws SQLException {
-        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
+        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(getVitessConnection());
 
         Assert.assertEquals(false, vitessDatabaseMetaData.supportsSubqueriesInExists());
     }
 
     @Test public void supportsSubqueriesInInsTest() throws SQLException {
-        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
+        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(getVitessConnection());
 
         Assert.assertEquals(false, vitessDatabaseMetaData.supportsSubqueriesInIns());
     }
 
     @Test public void supportsSubqueriesInQuantifiedsTest() throws SQLException {
-        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
+        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(getVitessConnection());
 
         Assert.assertEquals(false, vitessDatabaseMetaData.supportsSubqueriesInQuantifieds());
     }
 
     @Test public void supportsCorrelatedSubqueriesTest() throws SQLException {
-        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
+        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(getVitessConnection());
 
         Assert.assertEquals(false, vitessDatabaseMetaData.supportsCorrelatedSubqueries());
     }
 
     @Test public void supportsUnionTest() throws SQLException {
-        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
+        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(getVitessConnection());
 
         Assert.assertEquals(false, vitessDatabaseMetaData.supportsUnion());
     }
 
     @Test public void supportsUnionAllTest() throws SQLException {
-        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
+        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(getVitessConnection());
 
         Assert.assertEquals(false, vitessDatabaseMetaData.supportsUnionAll());
     }
 
     @Test public void supportsOpenCursorsAcrossRollbackTest() throws SQLException {
-        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
+        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(getVitessConnection());
 
         Assert.assertEquals(false, vitessDatabaseMetaData.supportsOpenCursorsAcrossRollback());
     }
 
     @Test public void supportsOpenStatementsAcrossCommitTest() throws SQLException {
-        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
+        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(getVitessConnection());
 
         Assert.assertEquals(false, vitessDatabaseMetaData.supportsOpenStatementsAcrossCommit());
     }
 
     @Test public void supportsOpenStatementsAcrossRollbackTest() throws SQLException {
-        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
+        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(getVitessConnection());
 
         Assert.assertEquals(false, vitessDatabaseMetaData.supportsOpenStatementsAcrossRollback());
     }
 
     @Test public void supportsOpenCursorsAcrossCommitTest() throws SQLException {
-        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
+        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(getVitessConnection());
 
         Assert.assertEquals(false, vitessDatabaseMetaData.supportsOpenCursorsAcrossCommit());
     }
 
     @Test public void getMaxBinaryLiteralLengthTest() throws SQLException {
-        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
+        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(getVitessConnection());
 
         Assert.assertEquals(16777208, vitessDatabaseMetaData.getMaxBinaryLiteralLength());
     }
 
     @Test public void getMaxCharLiteralLengthTest() throws SQLException {
-        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
+        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(getVitessConnection());
 
         Assert.assertEquals(16777208, vitessDatabaseMetaData.getMaxCharLiteralLength());
     }
 
     @Test public void getMaxColumnNameLengthTest() throws SQLException {
-        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
+        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(getVitessConnection());
 
         Assert.assertEquals(64, vitessDatabaseMetaData.getMaxColumnNameLength());
     }
 
     @Test public void getMaxColumnsInGroupByTest() throws SQLException {
-        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
+        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(getVitessConnection());
 
         Assert.assertEquals(64, vitessDatabaseMetaData.getMaxColumnsInGroupBy());
     }
 
     @Test public void getMaxColumnsInIndexTest() throws SQLException {
-        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
+        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(getVitessConnection());
 
         Assert.assertEquals(16, vitessDatabaseMetaData.getMaxColumnsInIndex());
     }
 
     @Test public void getMaxColumnsInOrderByTest() throws SQLException {
-        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
+        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(getVitessConnection());
 
         Assert.assertEquals(64, vitessDatabaseMetaData.getMaxColumnsInOrderBy());
     }
 
     @Test public void getMaxColumnsInSelectTest() throws SQLException {
-        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
+        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(getVitessConnection());
 
         Assert.assertEquals(256, vitessDatabaseMetaData.getMaxColumnsInSelect());
     }
 
     @Test public void getMaxIndexLengthTest() throws SQLException {
-        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
+        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(getVitessConnection());
 
         Assert.assertEquals(256, vitessDatabaseMetaData.getMaxIndexLength());
     }
 
     @Test public void doesMaxRowSizeIncludeBlobsTest() throws SQLException {
-        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
+        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(getVitessConnection());
 
         Assert.assertEquals(false, vitessDatabaseMetaData.doesMaxRowSizeIncludeBlobs());
     }
 
     @Test public void getMaxTableNameLengthTest() throws SQLException {
-        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
+        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(getVitessConnection());
 
         Assert.assertEquals(64, vitessDatabaseMetaData.getMaxTableNameLength());
     }
 
     @Test public void getMaxTablesInSelectTest() throws SQLException {
-        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
+        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(getVitessConnection());
 
         Assert.assertEquals(256, vitessDatabaseMetaData.getMaxTablesInSelect());
     }
 
     @Test public void getMaxUserNameLengthTest() throws SQLException {
-        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
+        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(getVitessConnection());
 
         Assert.assertEquals(16, vitessDatabaseMetaData.getMaxUserNameLength());
     }
 
     @Test public void supportsDataDefinitionAndDataManipulationTransactionsTest()
         throws SQLException {
-        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
+        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(getVitessConnection());
 
         Assert.assertEquals(false,
             vitessDatabaseMetaData.supportsDataDefinitionAndDataManipulationTransactions());
     }
 
     @Test public void dataDefinitionCausesTransactionCommitTest() throws SQLException {
-        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
+        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(getVitessConnection());
 
         Assert.assertEquals(false, vitessDatabaseMetaData.dataDefinitionCausesTransactionCommit());
     }
 
     @Test public void dataDefinitionIgnoredInTransactionsTest() throws SQLException {
-        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
+        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(getVitessConnection());
 
         Assert.assertEquals(false, vitessDatabaseMetaData.dataDefinitionIgnoredInTransactions());
     }
 
     @Test public void getIdentifierQuoteStringTest() throws SQLException {
-        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
+        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(getVitessConnection());
 
         Assert.assertEquals("`", vitessDatabaseMetaData.getIdentifierQuoteString());
     }
 
     @Test public void getProceduresTest() throws SQLException {
-        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
+        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(getVitessConnection());
 
         Assert.assertEquals(null, vitessDatabaseMetaData.getProcedures(null, null, null));
     }
 
     @Test public void supportsResultSetTypeTest() throws SQLException {
-        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
+        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(getVitessConnection());
 
         Assert.assertEquals(true,
             vitessDatabaseMetaData.supportsResultSetType(ResultSet.TYPE_FORWARD_ONLY));
@@ -652,7 +658,7 @@ import java.util.Properties;
     }
 
     @Test public void supportsResultSetConcurrencyTest() throws SQLException {
-        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
+        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(getVitessConnection());
         Assert.assertEquals(true, vitessDatabaseMetaData
             .supportsResultSetConcurrency(ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY));
         Assert.assertEquals(false, vitessDatabaseMetaData
@@ -680,19 +686,19 @@ import java.util.Properties;
     }
 
     @Test public void getJDBCMajorVersionTest() throws SQLException {
-        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
+        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(getVitessConnection());
 
         Assert.assertEquals(1, vitessDatabaseMetaData.getJDBCMajorVersion());
     }
 
     @Test public void getJDBCMinorVersionTest() throws SQLException {
-        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
+        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(getVitessConnection());
 
         Assert.assertEquals(0, vitessDatabaseMetaData.getJDBCMinorVersion());
     }
 
     @Test public void getNumericFunctionsTest() throws SQLException {
-        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
+        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(getVitessConnection());
 
         Assert.assertEquals(
             "ABS,ACOS,ASIN,ATAN,ATAN2,BIT_COUNT,CEILING,COS,COT,DEGREES,EXP,FLOOR,LOG,LOG10,MAX,MIN,MOD,PI,POW,POWER,"
@@ -701,7 +707,7 @@ import java.util.Properties;
     }
 
     @Test public void getStringFunctionsTest() throws SQLException {
-        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
+        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(getVitessConnection());
 
         Assert.assertEquals(
             "ASCII,BIN,BIT_LENGTH,CHAR,CHARACTER_LENGTH,CHAR_LENGTH,CONCAT,CONCAT_WS,CONV,ELT,EXPORT_SET,FIELD,"
@@ -715,9 +721,9 @@ import java.util.Properties;
     }
 
     @Test public void getSystemFunctionsTest() throws SQLException {
-        VitessDatabaseMetaData vitessMySQLDatabaseMetadata = new VitessMySQLDatabaseMetadata(null);
+        VitessDatabaseMetaData vitessMySQLDatabaseMetadata = new VitessMySQLDatabaseMetadata(getVitessConnection());
         VitessDatabaseMetaData vitessMariaDBDatbaseMetadata =
-            new VitessMariaDBDatabaseMetadata(null);
+            new VitessMariaDBDatabaseMetadata(getVitessConnection());
 
         Assert.assertEquals(
             "DATABASE,USER,SYSTEM_USER,SESSION_USER,LAST_INSERT_ID,VERSION,PASSWORD,ENCRYPT",
@@ -727,7 +733,7 @@ import java.util.Properties;
     }
 
     @Test public void getTimeDateFunctionsTest() throws SQLException {
-        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
+        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(getVitessConnection());
 
         Assert.assertEquals(
             "DAYOFWEEK,WEEKDAY,DAYOFMONTH,DAYOFYEAR,MONTH,DAYNAME,MONTHNAME,QUARTER,WEEK,YEAR,HOUR,MINUTE,SECOND,"
@@ -739,7 +745,7 @@ import java.util.Properties;
     }
 
     @Test public void autoCommitFailureClosesAllResultSetsTest() throws SQLException {
-        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
+        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(getVitessConnection());
 
         Assert.assertEquals(false, vitessDatabaseMetaData.autoCommitFailureClosesAllResultSets());
     }
@@ -760,9 +766,9 @@ import java.util.Properties;
     }
 
     @Test public void getDriverNameTest() throws SQLException {
-        VitessDatabaseMetaData vitessMySQLDatabaseMetadata = new VitessMySQLDatabaseMetadata(null);
+        VitessDatabaseMetaData vitessMySQLDatabaseMetadata = new VitessMySQLDatabaseMetadata(getVitessConnection());
         VitessDatabaseMetaData vitessMariaDBDatabaseMetadata =
-            new VitessMariaDBDatabaseMetadata(null);
+            new VitessMariaDBDatabaseMetadata(getVitessConnection());
 
         Assert
             .assertEquals("Vitess MySQL JDBC Driver", vitessMySQLDatabaseMetadata.getDriverName());
@@ -771,7 +777,7 @@ import java.util.Properties;
     }
 
     @Test public void usesLocalFilesTest() throws SQLException {
-        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
+        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(getVitessConnection());
 
         Assert.assertEquals(false, vitessDatabaseMetaData.usesLocalFiles());
         Assert.assertEquals(false, vitessDatabaseMetaData.usesLocalFilePerTable());
@@ -779,18 +785,18 @@ import java.util.Properties;
     }
 
     @Test public void storeIdentifiersTest() throws SQLException {
-        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
+        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(getVitessConnection());
 
         Assert.assertEquals(false, vitessDatabaseMetaData.storesUpperCaseIdentifiers());
     }
 
     @Test public void supportsTransactionsTest() throws SQLException {
-        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
+        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(getVitessConnection());
         Assert.assertEquals(true, vitessDatabaseMetaData.supportsTransactions());
     }
 
     @Test public void supportsTransactionIsolationLevelTest() throws SQLException {
-        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
+        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(getVitessConnection());
         Assert.assertEquals(false,
             vitessDatabaseMetaData.supportsTransactionIsolationLevel(Connection.TRANSACTION_NONE));
         Assert.assertEquals(true, vitessDatabaseMetaData
@@ -804,50 +810,50 @@ import java.util.Properties;
     }
 
     @Test public void getMaxProcedureNameLengthTest() throws SQLException {
-        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
+        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(getVitessConnection());
         Assert.assertEquals(256, vitessDatabaseMetaData.getMaxProcedureNameLength());
     }
 
     @Test public void getMaxCatalogNameLengthTest() throws SQLException {
-        VitessDatabaseMetaData vitessMySqlDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
+        VitessDatabaseMetaData vitessMySqlDatabaseMetaData = new VitessMySQLDatabaseMetadata(getVitessConnection());
         VitessDatabaseMetaData vitessMariaDBDatabaseMetadata =
-            new VitessMariaDBDatabaseMetadata(null);
+            new VitessMariaDBDatabaseMetadata(getVitessConnection());
 
         Assert.assertEquals(32, vitessMySqlDatabaseMetaData.getMaxCatalogNameLength());
         Assert.assertEquals(0, vitessMariaDBDatabaseMetadata.getMaxCatalogNameLength());
     }
 
     @Test public void getMaxRowSizeTest() throws SQLException {
-        VitessDatabaseMetaData vitessMySqlDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
+        VitessDatabaseMetaData vitessMySqlDatabaseMetaData = new VitessMySQLDatabaseMetadata(getVitessConnection());
         VitessDatabaseMetaData vitessMariaDBDatabaseMetadata =
-            new VitessMariaDBDatabaseMetadata(null);
+            new VitessMariaDBDatabaseMetadata(getVitessConnection());
 
         Assert.assertEquals(2147483639, vitessMySqlDatabaseMetaData.getMaxRowSize());
         Assert.assertEquals(0, vitessMariaDBDatabaseMetadata.getMaxRowSize());
     }
 
     @Test public void getMaxStatementLengthTest() throws SQLException {
-        VitessDatabaseMetaData vitessMySqlDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
+        VitessDatabaseMetaData vitessMySqlDatabaseMetaData = new VitessMySQLDatabaseMetadata(getVitessConnection());
         VitessDatabaseMetaData vitessMariaDBDatabaseMetadata =
-            new VitessMariaDBDatabaseMetadata(null);
+            new VitessMariaDBDatabaseMetadata(getVitessConnection());
 
         Assert.assertEquals(65531, vitessMySqlDatabaseMetaData.getMaxStatementLength());
         Assert.assertEquals(0, vitessMariaDBDatabaseMetadata.getMaxStatementLength());
     }
 
     @Test public void getMaxStatementsTest() throws SQLException {
-        VitessDatabaseMetaData vitessMySqlDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
+        VitessDatabaseMetaData vitessMySqlDatabaseMetaData = new VitessMySQLDatabaseMetadata(getVitessConnection());
         VitessDatabaseMetaData vitessMariaDBDatabaseMetadata =
-            new VitessMariaDBDatabaseMetadata(null);
+            new VitessMariaDBDatabaseMetadata(getVitessConnection());
 
         Assert.assertEquals(0, vitessMySqlDatabaseMetaData.getMaxStatements());
         Assert.assertEquals(0, vitessMariaDBDatabaseMetadata.getMaxStatements());
     }
 
     @Test public void supportsDataManipulationTransactionsOnlyTest() throws SQLException {
-        VitessDatabaseMetaData vitessMySqlDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
+        VitessDatabaseMetaData vitessMySqlDatabaseMetaData = new VitessMySQLDatabaseMetadata(getVitessConnection());
         VitessDatabaseMetaData vitessMariaDBDatabaseMetadata =
-            new VitessMariaDBDatabaseMetadata(null);
+            new VitessMariaDBDatabaseMetadata(getVitessConnection());
 
         Assert.assertEquals(false,
             vitessMySqlDatabaseMetaData.supportsDataManipulationTransactionsOnly());
@@ -856,45 +862,45 @@ import java.util.Properties;
     }
 
     @Test public void getMaxSchemaNameLengthTest() throws SQLException {
-        VitessDatabaseMetaData vitessMySqlDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
+        VitessDatabaseMetaData vitessMySqlDatabaseMetaData = new VitessMySQLDatabaseMetadata(getVitessConnection());
         VitessDatabaseMetaData vitessMariaDBDatabaseMetadata =
-            new VitessMariaDBDatabaseMetadata(null);
+            new VitessMariaDBDatabaseMetadata(getVitessConnection());
 
         Assert.assertEquals(0, vitessMySqlDatabaseMetaData.getMaxSchemaNameLength());
         Assert.assertEquals(32, vitessMariaDBDatabaseMetadata.getMaxSchemaNameLength());
     }
 
     @Test public void supportsSavepointsTest() throws SQLException {
-        VitessDatabaseMetaData vitessMySqlDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
+        VitessDatabaseMetaData vitessMySqlDatabaseMetaData = new VitessMySQLDatabaseMetadata(getVitessConnection());
         VitessDatabaseMetaData vitessMariaDBDatabaseMetadata =
-            new VitessMariaDBDatabaseMetadata(null);
+            new VitessMariaDBDatabaseMetadata(getVitessConnection());
 
         Assert.assertEquals(false, vitessMySqlDatabaseMetaData.supportsSavepoints());
         Assert.assertEquals(false, vitessMariaDBDatabaseMetadata.supportsSavepoints());
     }
 
     @Test public void supportsMultipleOpenResultsTest() throws SQLException {
-        VitessDatabaseMetaData vitessMySqlDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
+        VitessDatabaseMetaData vitessMySqlDatabaseMetaData = new VitessMySQLDatabaseMetadata(getVitessConnection());
         VitessDatabaseMetaData vitessMariaDBDatabaseMetadata =
-            new VitessMariaDBDatabaseMetadata(null);
+            new VitessMariaDBDatabaseMetadata(getVitessConnection());
 
         Assert.assertEquals(false, vitessMySqlDatabaseMetaData.supportsMultipleOpenResults());
         Assert.assertEquals(false, vitessMariaDBDatabaseMetadata.supportsMultipleOpenResults());
     }
 
     @Test public void locatorsUpdateCopyTest() throws SQLException {
-        VitessDatabaseMetaData vitessMySqlDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
+        VitessDatabaseMetaData vitessMySqlDatabaseMetaData = new VitessMySQLDatabaseMetadata(getVitessConnection());
         VitessDatabaseMetaData vitessMariaDBDatabaseMetadata =
-            new VitessMariaDBDatabaseMetadata(null);
+            new VitessMariaDBDatabaseMetadata(getVitessConnection());
 
         Assert.assertEquals(true, vitessMySqlDatabaseMetaData.locatorsUpdateCopy());
         Assert.assertEquals(false, vitessMariaDBDatabaseMetadata.locatorsUpdateCopy());
     }
 
     @Test public void supportsStatementPooling() throws SQLException {
-        VitessDatabaseMetaData vitessMySqlDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
+        VitessDatabaseMetaData vitessMySqlDatabaseMetaData = new VitessMySQLDatabaseMetadata(getVitessConnection());
         VitessDatabaseMetaData vitessMariaDBDatabaseMetadata =
-            new VitessMariaDBDatabaseMetadata(null);
+            new VitessMariaDBDatabaseMetadata(getVitessConnection());
 
         Assert.assertEquals(false, vitessMySqlDatabaseMetaData.supportsStatementPooling());
         Assert.assertEquals(false, vitessMariaDBDatabaseMetadata.supportsStatementPooling());
@@ -913,12 +919,11 @@ import java.util.Properties;
                 Query.Row.newBuilder().addLengths("dummyDB".length())
                     .setValues(ByteString.copyFromUtf8("dummyDB"))).build());
 
-        VitessStatement vitessStatement = PowerMockito.mock(VitessStatement.class);
+        VitessStatement vitessStatement = PowerMockito.spy(new VitessStatement(getVitessConnection()));
         PowerMockito.whenNew(VitessStatement.class).withAnyArguments().thenReturn(vitessStatement);
-        PowerMockito.when(vitessStatement.executeQuery(sql))
-            .thenReturn(new VitessResultSet(mockedCursor));
+        PowerMockito.doReturn(new VitessResultSet(getVitessConnection(), mockedCursor)).when(vitessStatement).executeQuery(sql);
 
-        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
+        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(getVitessConnection());
         ResultSet resultSet = vitessDatabaseMetaData.getCatalogs();
         ArrayList<String> resultSetList = new ArrayList<String>();
         while (resultSet.next()) {
@@ -972,14 +977,13 @@ import java.util.Properties;
                 .setValues(ByteString.copyFromUtf8("TestDB2SampleLocalTemporaryLOCAL TEMPORARY")))
             .build());
 
-        VitessStatement vitessStatement = PowerMockito.mock(VitessStatement.class);
+        VitessStatement vitessStatement = PowerMockito.spy(new VitessStatement(getVitessConnection()));
         PowerMockito.whenNew(VitessStatement.class).withAnyArguments().thenReturn(vitessStatement);
-        PowerMockito.when(vitessStatement.executeQuery(sql))
-            .thenReturn(new VitessResultSet(mockedCursor));
+        PowerMockito.doReturn(new VitessResultSet(getVitessConnection(), mockedCursor)).when(vitessStatement).executeQuery(sql);
 
-        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(null);
+        VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(getVitessConnection());
         ResultSet actualResultSet = vitessDatabaseMetaData.getTables("vt", null, null, null);
-        ResultSet expectedResultSet = new VitessResultSet(mockedCursor);
+        ResultSet expectedResultSet = new VitessResultSet(getVitessConnection(), mockedCursor);
 
         assertResultSetEquals(actualResultSet, expectedResultSet);
     }
@@ -1081,19 +1085,15 @@ import java.util.Properties;
                     "TestDB1sampleTable1trackingid12VARCHAR25565535101CommentNULL002552YESNONO")))
             .build());
 
-        VitessStatement vitessStatement = PowerMockito.mock(VitessStatement.class);
+        VitessStatement vitessStatement = PowerMockito.spy(new VitessStatement(getVitessConnection()));
+        PowerMockito.doReturn(new VitessResultSet(getVitessConnection(), actualCursor)).when(vitessStatement).executeQuery(sql);
         PowerMockito.whenNew(VitessStatement.class).withAnyArguments().thenReturn(vitessStatement);
-        PowerMockito.when(vitessStatement.executeQuery(sql))
-            .thenReturn(new VitessResultSet(actualCursor));
 
-        VitessDatabaseMetaData vitessDatabaseMetaData =
-            PowerMockito.mock(VitessMySQLDatabaseMetadata.class);
-        PowerMockito.doCallRealMethod().when(vitessDatabaseMetaData)
-            .getColumns("TestDB1", null, null, null);
-        PowerMockito.when(vitessDatabaseMetaData.getTables("TestDB1", null, "%", new String[0]))
-            .thenReturn(new VitessResultSet(mockedTablecursor));
+        VitessDatabaseMetaData vitessDatabaseMetaData = PowerMockito.spy(new VitessMySQLDatabaseMetadata(getVitessConnection()));
+        PowerMockito.doReturn(new VitessResultSet(getVitessConnection(), mockedTablecursor)).when(vitessDatabaseMetaData).getTables("TestDB1", null, "%", new String[0]);
+
         ResultSet actualResultSet = vitessDatabaseMetaData.getColumns("TestDB1", null, null, null);
-        ResultSet expectedResultSet = new VitessResultSet(expectedCursor);
+        ResultSet expectedResultSet = new VitessResultSet(getVitessConnection(), expectedCursor);
 
         assertResultSetEquals(actualResultSet, expectedResultSet);
     }
@@ -1135,17 +1135,17 @@ import java.util.Properties;
                 .addLengths("1".length()).addLengths("PRIMARY".length())
                 .setValues(ByteString.copyFromUtf8("vtshipmentshipmentid1PRIMARY"))).build());
 
-        VitessStatement vitessStatement = PowerMockito.mock(VitessStatement.class);
+        VitessStatement vitessStatement = PowerMockito.spy(new VitessStatement(getVitessConnection()));
         VitessDatabaseMetaData vitessDatabaseMetaData =
-            PowerMockito.mock(VitessMySQLDatabaseMetadata.class);
-        PowerMockito.mock(VitessMySQLDatabaseMetadata.class);
+            PowerMockito.spy(new VitessMySQLDatabaseMetadata(getVitessConnection()));
+
         PowerMockito.doCallRealMethod().when(vitessDatabaseMetaData)
             .getPrimaryKeys("vt", null, "shipment");
         PowerMockito.whenNew(VitessStatement.class).withAnyArguments().thenReturn(vitessStatement);
-        PowerMockito.when(vitessStatement.executeQuery(sql))
-            .thenReturn(new VitessResultSet(mockedCursor));
+        PowerMockito.doReturn(new VitessResultSet(getVitessConnection(), mockedCursor)).when(vitessStatement).executeQuery(sql);
+
         ResultSet expectedResultSet = vitessDatabaseMetaData.getPrimaryKeys("vt", null, "shipment");
-        ResultSet actualResultSet = new VitessResultSet(expectedcursor);
+        ResultSet actualResultSet = new VitessResultSet(getVitessConnection(), expectedcursor);
 
         assertResultSetEquals(actualResultSet, expectedResultSet);
     }
@@ -1199,18 +1199,17 @@ import java.util.Properties;
                 .addLengths("434880".length()).addLengths("0".length()).addLengths(-1)
                 .setValues(ByteString.copyFromUtf8("vtshipmentfalsePRIMARY31shipmentidA4348800")))
             .build());
-        VitessStatement vitessStatement = PowerMockito.mock(VitessStatement.class);
+        VitessStatement vitessStatement = PowerMockito.spy(new VitessStatement(getVitessConnection()));
         VitessDatabaseMetaData vitessDatabaseMetaData =
-            PowerMockito.mock(VitessMySQLDatabaseMetadata.class);
-        PowerMockito.mock(VitessMySQLDatabaseMetadata.class);
+            PowerMockito.spy(new VitessMySQLDatabaseMetadata(getVitessConnection()));
+
         PowerMockito.doCallRealMethod().when(vitessDatabaseMetaData)
             .getIndexInfo("vt", null, "shipment", true, false);
         PowerMockito.whenNew(VitessStatement.class).withAnyArguments().thenReturn(vitessStatement);
-        PowerMockito.when(vitessStatement.executeQuery(sql))
-            .thenReturn(new VitessResultSet(mockedCursor));
+        PowerMockito.doReturn(new VitessResultSet(getVitessConnection(), mockedCursor)).when(vitessStatement).executeQuery(sql);
         ResultSet actualResultSet =
             vitessDatabaseMetaData.getIndexInfo("vt", null, "shipment", true, false);
-        ResultSet expectedResultSet = new VitessResultSet(expectedcursor);
+        ResultSet expectedResultSet = new VitessResultSet(getVitessConnection(), expectedcursor);
 
         assertResultSetEquals(actualResultSet, expectedResultSet);
     }
@@ -1283,12 +1282,12 @@ import java.util.Properties;
     @Test public void getUserNameTest() {
         try {
             VitessConnection vitessConnection =
-                new VitessConnection("jdbc:vitess://username@ip1:port1/keyspace", null);
+                new VitessConnection("jdbc:vitess://username@ip1:port1/keyspace", new Properties());
             VitessDatabaseMetaData vitessDatabaseMetaData =
                 new VitessMySQLDatabaseMetadata(vitessConnection);
             Assert.assertEquals("username", vitessDatabaseMetaData.getUserName());
 
-            vitessConnection = new VitessConnection("jdbc:vitess://ip1:port1/keyspace", null);
+            vitessConnection = new VitessConnection("jdbc:vitess://ip1:port1/keyspace", new Properties());
             vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(vitessConnection);
             Assert.assertEquals(null, vitessDatabaseMetaData.getUserName());
 
