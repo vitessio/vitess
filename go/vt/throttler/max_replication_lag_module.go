@@ -461,23 +461,29 @@ func (m *MaxReplicationLagModule) increaseRate(r *result, now time.Time, lagReco
 	m.markCurrentRateAsBadOrGood(r, now, stateIncreaseRate, unknown)
 
 	oldRate := m.rate.Get()
+	actualRate := m.actualRatesHistory.average(m.lastRateChange, now)
+	// Do not increase the rate if we didn't see an actual rate that approached the current max rate.
+	// actualRate will be NaN if there were no observations in the history.
+	if math.IsNaN(actualRate) ||
+		actualRate < float64(oldRate)*m.config.MaxRateApproachThreshold {
+		r.RateChange = unchangedRate
+		r.OldRate = oldRate
+		r.NewRate = oldRate
+		r.Reason = fmt.Sprintf("Skipping periodic increase of the max rate (%v) since the actual: average rate (%v) did not approach it.", oldRate, actualRate)
+		r.CurrentRate = int64(actualRate)
+		return
+	}
 
-	// Calculate new rate based on the previous (preferrably actual) rate.
+	// Calculate new rate based on the previous (preferrably highest good) rate.
 	highestGood := m.memory.highestGood()
 	previousRateSource := "highest known good rate"
 	previousRate := float64(highestGood)
-	if previousRate == 0.0 && !m.lastRateChange.IsZero() {
+	if previousRate == 0.0 {
 		// No known high good rate. Use the actual value instead.
 		// (It might be lower because the system was slower or the throttler rate was
 		// set by a different module and not us.)
 		previousRateSource = "previous actual rate"
-		previousRate = m.actualRatesHistory.average(m.lastRateChange, now)
-	}
-	if previousRate == 0.0 || math.IsNaN(previousRate) {
-		// NaN (0.0/0.0) occurs when no observations were in the timespan.
-		// Use the set rate in this case.
-		previousRateSource = "previous set rate"
-		previousRate = float64(oldRate)
+		previousRate = actualRate
 	}
 
 	// a) Increase rate by MaxIncrease.
