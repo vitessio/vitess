@@ -7,7 +7,7 @@ import java.sql.SQLException;
 import java.util.Properties;
 
 public class BaseTest {
-    String dbURL = "jdbc:vitess://locahost:9000/vt_keyspace/testDatabase";
+    String dbURL = "jdbc:vitess://locahost:9000/vt_keyspace/keyspace";
 
     @BeforeClass
     public static void setUp() {

@@ -184,7 +184,7 @@ public class VitessConnectionTest extends BaseTest {
 
     @Test public void testGetCatalog() throws SQLException {
         VitessConnection vitessConnection = getVitessConnection();
-        Assert.assertEquals("testDatabase", vitessConnection.getCatalog());
+        Assert.assertEquals("keyspace", vitessConnection.getCatalog());
     }
 
     @Test public void testSetCatalog() throws SQLException {
@@ -194,7 +194,7 @@ public class VitessConnectionTest extends BaseTest {
     }
 
     @Test public void testPropertiesFromJdbcUrl() throws SQLException {
-        String url = "jdbc:vitess://locahost:9000/vt_keyspace/testDatabase?TABLET_TYPE=replica&includedFields=type_and_name";
+        String url = "jdbc:vitess://locahost:9000/vt_keyspace/keyspace?TABLET_TYPE=replica&includedFields=type_and_name";
         VitessConnection conn = new VitessConnection(url, new Properties());
 
         // Properties from the url should be passed into the connection properties, and override whatever defaults we've defined
