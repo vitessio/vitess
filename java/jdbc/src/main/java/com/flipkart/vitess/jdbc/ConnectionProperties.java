@@ -1,11 +1,9 @@
 package com.flipkart.vitess.jdbc;
 
 import com.flipkart.vitess.util.Constants;
-import com.flipkart.vitess.util.StringUtils;
 import com.youtube.vitess.proto.Query;
 import com.youtube.vitess.proto.Topodata;
 
-import java.io.UnsupportedEncodingException;
 import java.lang.reflect.Field;
 import java.sql.DriverPropertyInfo;
 import java.sql.SQLException;
@@ -28,10 +26,7 @@ public class ConnectionProperties {
                 }
             }
         } catch (Exception ex) {
-            RuntimeException rtEx = new RuntimeException();
-            rtEx.initCause(ex);
-
-            throw rtEx;
+            throw new RuntimeException(ex);
         }
     }
 
@@ -65,7 +60,6 @@ public class ConnectionProperties {
         for (Field propertyField : PROPERTY_LIST) {
             try {
                 ConnectionProperty propToSet = (ConnectionProperty) propertyField.get(this);
-
                 propToSet.initializeFrom(propsCopy);
             } catch (IllegalAccessException iae) {
                 throw new SQLException("Unable to initialize driver properties due to " + iae.toString());
@@ -88,7 +82,6 @@ public class ConnectionProperties {
 
     protected DriverPropertyInfo[] exposeAsDriverPropertyInfoInternal(Properties info, int slotsToReserve) throws SQLException {
         initializeProperties(info);
-
         int numProperties = PROPERTY_LIST.size();
         int listSize = numProperties + slotsToReserve;
         DriverPropertyInfo[] driverProperties = new DriverPropertyInfo[listSize];
@@ -97,11 +90,9 @@ public class ConnectionProperties {
             java.lang.reflect.Field propertyField = PROPERTY_LIST.get(i - slotsToReserve);
             try {
                 ConnectionProperty propToExpose = (ConnectionProperty) propertyField.get(this);
-
                 if (info != null) {
                     propToExpose.initializeFrom(info);
                 }
-
                 driverProperties[i] = propToExpose.getAsDriverPropertyInfo();
             } catch (IllegalAccessException iae) {
                 throw new SQLException("Internal properties failure", iae);
@@ -193,21 +184,12 @@ public class ConnectionProperties {
             return name;
         }
 
-        public Object getDefaultValue() {
-            return defaultValue;
-        }
-
-        public Object getValueAsObject() {
-            return valueAsObject;
-        }
-
         DriverPropertyInfo getAsDriverPropertyInfo() {
             DriverPropertyInfo dpi = new DriverPropertyInfo(this.name, null);
             dpi.choices = getAllowableValues();
             dpi.value = (this.valueAsObject != null) ? this.valueAsObject.toString() : null;
             dpi.required = this.required;
             dpi.description = this.description;
-
             return dpi;
         }
     }
@@ -245,10 +227,6 @@ public class ConnectionProperties {
 
         private final String[] allowableValues;
 
-        private StringConnectionProperty(String name, String description, String defaultValue) {
-            this(name, description, defaultValue, null);
-        }
-
         private StringConnectionProperty(String name, String description, String defaultValue, String[] allowableValuesToSet) {
             super(name, description, defaultValue);
             allowableValues = allowableValuesToSet;
@@ -266,10 +244,6 @@ public class ConnectionProperties {
         @Override
         String[] getAllowableValues() {
             return allowableValues;
-        }
-
-        String getValueAsString() {
-            return (String) valueAsObject;
         }
 
         public void setValue(String value) {

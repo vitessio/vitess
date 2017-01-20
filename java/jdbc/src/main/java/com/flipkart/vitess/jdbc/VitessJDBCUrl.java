@@ -14,7 +14,17 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Created by naveen.nahata on 17/02/16.
+ * VitessJDBCUrl is responsible for parsing a driver URL and Properties object,
+ * returning a new Properties object with configuration from the URL and passed in Properties
+ * merged.
+ *
+ * Parameters passed in through the Properties object take precedence over the parameters
+ * in the URL, where there are conflicts.
+ *
+ * The Passed in URL is expected to conform to the following basic format:
+ *
+ * jdbc:vitess://username:password@ip1:port1,ip2:port2/keyspace/catalog?property1=value1..
+ *
  */
 public class VitessJDBCUrl {
 

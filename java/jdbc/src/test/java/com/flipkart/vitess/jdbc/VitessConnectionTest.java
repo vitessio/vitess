@@ -184,17 +184,17 @@ public class VitessConnectionTest extends BaseTest {
 
     @Test public void testGetCatalog() throws SQLException {
         VitessConnection vitessConnection = getVitessConnection();
-        Assert.assertEquals("shipment", vitessConnection.getCatalog());
+        Assert.assertEquals("testDatabase", vitessConnection.getCatalog());
     }
 
     @Test public void testSetCatalog() throws SQLException {
         VitessConnection vitessConnection = getVitessConnection();
-        vitessConnection.setCatalog("order");
-        Assert.assertEquals("order", vitessConnection.getCatalog());
+        vitessConnection.setCatalog("myDB");
+        Assert.assertEquals("myDB", vitessConnection.getCatalog());
     }
 
     @Test public void testPropertiesFromJdbcUrl() throws SQLException {
-        String url = "jdbc:vitess://locahost:9000/vt_shipment/shipment?TABLET_TYPE=replica&includedFields=type_and_name";
+        String url = "jdbc:vitess://locahost:9000/vt_keyspace/testDatabase?TABLET_TYPE=replica&includedFields=type_and_name";
         VitessConnection conn = new VitessConnection(url, new Properties());
 
         // Properties from the url should be passed into the connection properties, and override whatever defaults we've defined

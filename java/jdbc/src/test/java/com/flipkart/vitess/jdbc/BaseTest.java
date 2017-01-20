@@ -7,11 +7,10 @@ import java.sql.SQLException;
 import java.util.Properties;
 
 public class BaseTest {
-    String dbURL = "jdbc:vitess://locahost:9000/vt_shipment/shipment";
+    String dbURL = "jdbc:vitess://locahost:9000/vt_keyspace/testDatabase";
 
     @BeforeClass
     public static void setUp() {
-        // load Vitess driver
         try {
             Class.forName("com.flipkart.vitess.jdbc.VitessDriver");
         } catch (ClassNotFoundException e) {

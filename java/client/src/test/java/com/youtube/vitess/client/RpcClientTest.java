@@ -94,6 +94,7 @@ public abstract class RpcClientTest {
   private static final TabletType TABLET_TYPE = TabletType.REPLICA;
   private static final String TABLET_TYPE_ECHO = TABLET_TYPE.toString();
   private static final Query.ExecuteOptions.IncludedFields ALL_FIELDS = Query.ExecuteOptions.IncludedFields.ALL;
+  private static final String OPTIONS_ALL_FIELDS_ECHO = "included_fields:" + ALL_FIELDS.toString() + " ";
 
   private static final Map<String, Object> BIND_VARS = new ImmutableMap.Builder<String, Object>()
       .put("int", 123).put("float", 2.5).put("bytes", new byte[] {1, 2, 3}).build();
@@ -146,6 +147,7 @@ public abstract class RpcClientTest {
     Assert.assertEquals(KEYSPACE, echo.get("keyspace"));
     Assert.assertEquals(BIND_VARS_ECHO, echo.get("bindVars"));
     Assert.assertEquals(TABLET_TYPE_ECHO, echo.get("tabletType"));
+    Assert.assertEquals(OPTIONS_ALL_FIELDS_ECHO, echo.get("options"));
 
     echo = getEcho(
         conn.executeShards(ctx, ECHO_PREFIX + QUERY, KEYSPACE, SHARDS, BIND_VARS, TABLET_TYPE, ALL_FIELDS));
@@ -155,6 +157,7 @@ public abstract class RpcClientTest {
     Assert.assertEquals(SHARDS_ECHO, echo.get("shards"));
     Assert.assertEquals(BIND_VARS_ECHO, echo.get("bindVars"));
     Assert.assertEquals(TABLET_TYPE_ECHO, echo.get("tabletType"));
+    Assert.assertEquals(OPTIONS_ALL_FIELDS_ECHO, echo.get("options"));
 
     echo = getEcho(conn.executeKeyspaceIds(ctx, ECHO_PREFIX + QUERY, KEYSPACE, KEYSPACE_IDS,
         BIND_VARS, TABLET_TYPE, ALL_FIELDS));
@@ -164,6 +167,7 @@ public abstract class RpcClientTest {
     Assert.assertEquals(KEYSPACE_IDS_ECHO, echo.get("keyspaceIds"));
     Assert.assertEquals(BIND_VARS_ECHO, echo.get("bindVars"));
     Assert.assertEquals(TABLET_TYPE_ECHO, echo.get("tabletType"));
+    Assert.assertEquals(OPTIONS_ALL_FIELDS_ECHO, echo.get("options"));
 
     echo = getEcho(conn.executeKeyRanges(ctx, ECHO_PREFIX + QUERY, KEYSPACE, KEY_RANGES, BIND_VARS,
         TABLET_TYPE, ALL_FIELDS));
@@ -173,6 +177,7 @@ public abstract class RpcClientTest {
     Assert.assertEquals(KEY_RANGES_ECHO, echo.get("keyRanges"));
     Assert.assertEquals(BIND_VARS_ECHO, echo.get("bindVars"));
     Assert.assertEquals(TABLET_TYPE_ECHO, echo.get("tabletType"));
+    Assert.assertEquals(OPTIONS_ALL_FIELDS_ECHO, echo.get("options"));
 
     echo = getEcho(conn.executeEntityIds(ctx, ECHO_PREFIX + QUERY, KEYSPACE, "column1",
         ENTITY_KEYSPACE_IDS, BIND_VARS, TABLET_TYPE, ALL_FIELDS));
@@ -183,6 +188,7 @@ public abstract class RpcClientTest {
     Assert.assertEquals(ENTITY_KEYSPACE_IDS_ECHO, echo.get("entityIds"));
     Assert.assertEquals(BIND_VARS_ECHO, echo.get("bindVars"));
     Assert.assertEquals(TABLET_TYPE_ECHO, echo.get("tabletType"));
+    Assert.assertEquals(OPTIONS_ALL_FIELDS_ECHO, echo.get("options"));
 
     echo = getEcho(conn.executeBatchShards(ctx,
         Arrays.asList(Proto.bindShardQuery(KEYSPACE, SHARDS, ECHO_PREFIX + QUERY, BIND_VARS)),
@@ -194,6 +200,7 @@ public abstract class RpcClientTest {
     Assert.assertEquals(BIND_VARS_ECHO, echo.get("bindVars"));
     Assert.assertEquals(TABLET_TYPE_ECHO, echo.get("tabletType"));
     Assert.assertEquals("true", echo.get("asTransaction"));
+    Assert.assertEquals(OPTIONS_ALL_FIELDS_ECHO, echo.get("options"));
 
     echo = getEcho(conn.executeBatchKeyspaceIds(ctx,
         Arrays.asList(
@@ -206,6 +213,7 @@ public abstract class RpcClientTest {
     Assert.assertEquals(BIND_VARS_ECHO, echo.get("bindVars"));
     Assert.assertEquals(TABLET_TYPE_ECHO, echo.get("tabletType"));
     Assert.assertEquals("true", echo.get("asTransaction"));
+    Assert.assertEquals(OPTIONS_ALL_FIELDS_ECHO, echo.get("options"));
   }
 
   @Test
@@ -218,6 +226,7 @@ public abstract class RpcClientTest {
     Assert.assertEquals(KEYSPACE, echo.get("keyspace"));
     Assert.assertEquals(BIND_VARS_ECHO, echo.get("bindVars"));
     Assert.assertEquals(TABLET_TYPE_ECHO, echo.get("tabletType"));
+    Assert.assertEquals(OPTIONS_ALL_FIELDS_ECHO, echo.get("options"));
 
     echo = getEcho(conn.streamExecuteShards(ctx, ECHO_PREFIX + QUERY, KEYSPACE, SHARDS, BIND_VARS,
         TABLET_TYPE, ALL_FIELDS));
@@ -227,6 +236,7 @@ public abstract class RpcClientTest {
     Assert.assertEquals(SHARDS_ECHO, echo.get("shards"));
     Assert.assertEquals(BIND_VARS_ECHO, echo.get("bindVars"));
     Assert.assertEquals(TABLET_TYPE_ECHO, echo.get("tabletType"));
+    Assert.assertEquals(OPTIONS_ALL_FIELDS_ECHO, echo.get("options"));
 
     echo = getEcho(conn.streamExecuteKeyspaceIds(ctx, ECHO_PREFIX + QUERY, KEYSPACE, KEYSPACE_IDS,
         BIND_VARS, TABLET_TYPE, ALL_FIELDS));
@@ -236,6 +246,7 @@ public abstract class RpcClientTest {
     Assert.assertEquals(KEYSPACE_IDS_ECHO, echo.get("keyspaceIds"));
     Assert.assertEquals(BIND_VARS_ECHO, echo.get("bindVars"));
     Assert.assertEquals(TABLET_TYPE_ECHO, echo.get("tabletType"));
+    Assert.assertEquals(OPTIONS_ALL_FIELDS_ECHO, echo.get("options"));
 
     echo = getEcho(conn.streamExecuteKeyRanges(ctx, ECHO_PREFIX + QUERY, KEYSPACE, KEY_RANGES,
         BIND_VARS, TABLET_TYPE, ALL_FIELDS));
@@ -245,6 +256,7 @@ public abstract class RpcClientTest {
     Assert.assertEquals(KEY_RANGES_ECHO, echo.get("keyRanges"));
     Assert.assertEquals(BIND_VARS_ECHO, echo.get("bindVars"));
     Assert.assertEquals(TABLET_TYPE_ECHO, echo.get("tabletType"));
+    Assert.assertEquals(OPTIONS_ALL_FIELDS_ECHO, echo.get("options"));
   }
 
   @Test
@@ -261,6 +273,7 @@ public abstract class RpcClientTest {
     Assert.assertEquals(TABLET_TYPE_ECHO, echo.get("tabletType"));
     Assert.assertEquals(SESSION_ECHO, echo.get("session"));
     Assert.assertEquals("false", echo.get("notInTransaction"));
+    Assert.assertEquals(OPTIONS_ALL_FIELDS_ECHO, echo.get("options"));
 
     echo = getEcho(
         tx.executeShards(ctx, ECHO_PREFIX + QUERY, KEYSPACE, SHARDS, BIND_VARS, TABLET_TYPE, ALL_FIELDS));
@@ -272,6 +285,7 @@ public abstract class RpcClientTest {
     Assert.assertEquals(TABLET_TYPE_ECHO, echo.get("tabletType"));
     Assert.assertEquals(SESSION_ECHO, echo.get("session"));
     Assert.assertEquals("false", echo.get("notInTransaction"));
+    Assert.assertEquals(OPTIONS_ALL_FIELDS_ECHO, echo.get("options"));
 
     echo = getEcho(tx.executeKeyspaceIds(ctx, ECHO_PREFIX + QUERY, KEYSPACE, KEYSPACE_IDS,
         BIND_VARS, TABLET_TYPE, ALL_FIELDS));
@@ -283,6 +297,7 @@ public abstract class RpcClientTest {
     Assert.assertEquals(TABLET_TYPE_ECHO, echo.get("tabletType"));
     Assert.assertEquals(SESSION_ECHO, echo.get("session"));
     Assert.assertEquals("false", echo.get("notInTransaction"));
+    Assert.assertEquals(OPTIONS_ALL_FIELDS_ECHO, echo.get("options"));
 
     echo = getEcho(tx.executeKeyRanges(ctx, ECHO_PREFIX + QUERY, KEYSPACE, KEY_RANGES, BIND_VARS,
         TABLET_TYPE, ALL_FIELDS));
@@ -294,6 +309,7 @@ public abstract class RpcClientTest {
     Assert.assertEquals(TABLET_TYPE_ECHO, echo.get("tabletType"));
     Assert.assertEquals(SESSION_ECHO, echo.get("session"));
     Assert.assertEquals("false", echo.get("notInTransaction"));
+    Assert.assertEquals(OPTIONS_ALL_FIELDS_ECHO, echo.get("options"));
 
     echo = getEcho(tx.executeEntityIds(ctx, ECHO_PREFIX + QUERY, KEYSPACE, "column1",
         ENTITY_KEYSPACE_IDS, BIND_VARS, TABLET_TYPE, ALL_FIELDS));
@@ -306,6 +322,7 @@ public abstract class RpcClientTest {
     Assert.assertEquals(TABLET_TYPE_ECHO, echo.get("tabletType"));
     Assert.assertEquals(SESSION_ECHO, echo.get("session"));
     Assert.assertEquals("false", echo.get("notInTransaction"));
+    Assert.assertEquals(OPTIONS_ALL_FIELDS_ECHO, echo.get("options"));
 
     tx.rollback(ctx);
     tx = conn.begin(ctx);
@@ -321,6 +338,7 @@ public abstract class RpcClientTest {
     Assert.assertEquals(TABLET_TYPE_ECHO, echo.get("tabletType"));
     Assert.assertEquals(SESSION_ECHO, echo.get("session"));
     Assert.assertEquals("false", echo.get("asTransaction"));
+    Assert.assertEquals(OPTIONS_ALL_FIELDS_ECHO, echo.get("options"));
 
     echo = getEcho(tx.executeBatchKeyspaceIds(ctx,
         Arrays.asList(
@@ -334,6 +352,7 @@ public abstract class RpcClientTest {
     Assert.assertEquals(TABLET_TYPE_ECHO, echo.get("tabletType"));
     Assert.assertEquals(SESSION_ECHO, echo.get("session"));
     Assert.assertEquals("false", echo.get("asTransaction"));
+    Assert.assertEquals(OPTIONS_ALL_FIELDS_ECHO, echo.get("options"));
 
     tx.commit(ctx);
   }
