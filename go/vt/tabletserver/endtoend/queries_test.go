@@ -777,6 +777,7 @@ func TestNocacheCases(t *testing.T) {
 				framework.TestQuery("begin"),
 				framework.TestQuery("delete from vitess_a where eid>1"),
 				framework.TestQuery("delete from vitess_c where eid<10"),
+				framework.TestQuery("delete from vitess_e where eid in (20, 21)"),
 				framework.TestQuery("commit"),
 			},
 		},
@@ -891,6 +892,341 @@ func TestNocacheCases(t *testing.T) {
 					Query: "select * from upsert_test",
 					Result: [][]string{
 						{"2", "1"},
+					},
+				},
+				framework.TestQuery("commit"),
+				framework.TestQuery("begin"),
+				framework.TestQuery("delete from upsert_test"),
+				framework.TestQuery("commit"),
+			},
+		},
+		&framework.MultiCase{
+			Name: "simple replace - no collision",
+			Cases: []framework.Testable{
+				framework.TestQuery("begin"),
+				&framework.TestCase{
+					Query: "replace /* simple */ into vitess_a values (2, 1, 'aaaa', 'bbbb')",
+					Rewritten: []string{
+						"replace /* simple */ into vitess_a values (2, 1, 'aaaa', 'bbbb') /* _stream vitess_a (eid id ) (2 1 )",
+					},
+					RowsAffected: 1,
+				},
+				framework.TestQuery("commit"),
+				&framework.TestCase{
+					Query: "select * from vitess_a where eid = 2 and id = 1",
+					Result: [][]string{
+						{"2", "1", "aaaa", "bbbb"},
+					},
+				},
+				framework.TestQuery("begin"),
+				framework.TestQuery("delete from vitess_a where eid>1"),
+				framework.TestQuery("commit"),
+			},
+		},
+		&framework.MultiCase{
+			Name: "simple replace - with collision",
+			Cases: []framework.Testable{
+				framework.TestQuery("begin"),
+				&framework.TestCase{
+					Query: "insert /* simple */ into vitess_a values (2, 1, 'aaaa', 'bbbb')",
+					Rewritten: []string{
+						"insert /* simple */ into vitess_a values (2, 1, 'aaaa', 'bbbb') /* _stream vitess_a (eid id ) (2 1 )",
+					},
+					RowsAffected: 1,
+				},
+				framework.TestQuery("commit"),
+				&framework.TestCase{
+					Query: "select * from vitess_a where eid = 2 and id = 1",
+					Result: [][]string{
+						{"2", "1", "aaaa", "bbbb"},
+					},
+				},
+				framework.TestQuery("begin"),
+				&framework.TestCase{
+					Query: "replace /* simple */ into vitess_a values (2, 1, 'cccc', 'dddd')",
+					Rewritten: []string{
+						"replace /* simple */ into vitess_a values (2, 1, 'cccc', 'dddd') /* _stream vitess_a (eid id ) (2 1 )",
+					},
+					RowsAffected: 2,
+				},
+				framework.TestQuery("commit"),
+				&framework.TestCase{
+					Query: "select * from vitess_a where eid = 2 and id = 1",
+					Result: [][]string{
+						{"2", "1", "cccc", "dddd"},
+					},
+				},
+				framework.TestQuery("begin"),
+				framework.TestQuery("delete from vitess_a where eid>1"),
+				framework.TestQuery("commit"),
+			},
+		},
+		&framework.MultiCase{
+			Name: "qualified - replace one of two",
+			Cases: []framework.Testable{
+				framework.TestQuery("begin"),
+				&framework.TestCase{
+					Query: "insert /* qualified - dont replace */ into vitess_a(eid, id, name, foo) values (3, 1, 'aaaa', 'cccc')",
+					Rewritten: []string{
+						"insert /* qualified - dont replace */ into vitess_a(eid, id, name, foo) values (3, 1, 'aaaa', 'cccc') /* _stream vitess_a (eid id ) (3 1 )",
+					},
+					RowsAffected: 1,
+				},
+				&framework.TestCase{
+					Query: "insert /* qualified - to replace */ into vitess_a(eid, id, name, foo) values (3, 2, 'ffff', 'gggg')",
+					Rewritten: []string{
+						"insert /* qualified - to replace */ into vitess_a(eid, id, name, foo) values (3, 2, 'ffff', 'gggg') /* _stream vitess_a (eid id ) (3 2 )",
+					},
+					RowsAffected: 1,
+				},
+				&framework.TestCase{
+					Query: "replace /* qualified - replace value */ into vitess_a(eid, id, name, foo) values (3, 1, 'dddd', 'eeee')",
+					Rewritten: []string{
+						"replace /* qualified - replace value */ into vitess_a(eid, id, name, foo) values (3, 1, 'dddd', 'eeee') /* _stream vitess_a (eid id ) (3 1 )",
+					},
+					RowsAffected: 2,
+				},
+				framework.TestQuery("commit"),
+				&framework.TestCase{
+					Query: "select * from vitess_a where eid = 3 and id in (1, 2)",
+					Result: [][]string{
+						{"3", "1", "dddd", "eeee"},
+						{"3", "2", "ffff", "gggg"},
+					},
+				},
+				framework.TestQuery("begin"),
+				framework.TestQuery("delete from vitess_a where eid>1"),
+				framework.TestQuery("commit"),
+			},
+		},
+		&framework.MultiCase{
+			Name: "replace - auto_increment so no replace",
+			Cases: []framework.Testable{
+				framework.TestQuery("alter table vitess_e auto_increment = 1"),
+				framework.TestQuery("begin"),
+				&framework.TestCase{
+					Query: "insert /* auto_increment */ into vitess_e(name, foo) values ('aaaa', 'cccc')",
+					Rewritten: []string{
+						"insert /* auto_increment */ into vitess_e(name, foo) values ('aaaa', 'cccc') /* _stream vitess_e (eid id name ) (null 1 'YWFhYQ==' )",
+					},
+					RowsAffected: 1,
+				},
+				&framework.TestCase{
+					Query: "replace /* auto_increment */ into vitess_e(name, foo) values ('bbbb', 'dddd')",
+					Rewritten: []string{
+						"replace /* auto_increment */ into vitess_e(name, foo) values ('bbbb', 'dddd') /* _stream vitess_e (eid id name ) (null 1 'YmJiYg==' )",
+					},
+					RowsAffected: 1,
+				},
+				framework.TestQuery("commit"),
+				&framework.TestCase{
+					Query: "select * from vitess_e",
+					Result: [][]string{
+						{"1", "1", "aaaa", "cccc"},
+						{"2", "1", "bbbb", "dddd"},
+					},
+				},
+				framework.TestQuery("begin"),
+				framework.TestQuery("delete from vitess_e"),
+				framework.TestQuery("commit"),
+			},
+		},
+		&framework.MultiCase{
+			Name: "replace with bind values",
+			Cases: []framework.Testable{
+				framework.TestQuery("begin"),
+				&framework.TestCase{
+					Query: "insert /* bind values */ into vitess_a(eid, id, name, foo) values (:eid, :id, :name, :foo)",
+					BindVars: map[string]interface{}{
+						"foo":  "cccc",
+						"eid":  4,
+						"name": "aaaa",
+						"id":   1,
+					},
+					Rewritten: []string{
+						"insert /* bind values */ into vitess_a(eid, id, name, foo) values (4, 1, 'aaaa', 'cccc') /* _stream vitess_a (eid id ) (4 1 )",
+					},
+					RowsAffected: 1,
+				},
+				framework.TestQuery("commit"),
+				framework.TestQuery("begin"),
+				&framework.TestCase{
+					Query: "replace /* bind values */ into vitess_a(eid, id, name, foo) values (:eid, :id, :name, :foo)",
+					BindVars: map[string]interface{}{
+						"foo":  "cccc",
+						"eid":  4,
+						"name": "bbbb",
+						"id":   1,
+					},
+					Rewritten: []string{
+						"replace /* bind values */ into vitess_a(eid, id, name, foo) values (4, 1, 'bbbb', 'cccc') /* _stream vitess_a (eid id ) (4 1 )",
+					},
+					RowsAffected: 2,
+				},
+				framework.TestQuery("commit"),
+				&framework.TestCase{
+					Query: "select * from vitess_a where eid = 4 and id = 1",
+					Result: [][]string{
+						{"4", "1", "bbbb", "cccc"},
+					},
+				},
+				framework.TestQuery("begin"),
+				framework.TestQuery("delete from vitess_a where eid>1"),
+				framework.TestQuery("commit"),
+			},
+		},
+		&framework.MultiCase{
+			Name: "replace as insert, with positional values",
+			Cases: []framework.Testable{
+				framework.TestQuery("begin"),
+				&framework.TestCase{
+					Query: "replace /* positional values */ into vitess_a(eid, id, name, foo) values (?, ?, ?, ?)",
+					BindVars: map[string]interface{}{
+						"v1": 4,
+						"v2": 1,
+						"v3": "aaaa",
+						"v4": "cccc",
+					},
+					Rewritten: []string{
+						"replace /* positional values */ into vitess_a(eid, id, name, foo) values (4, 1, 'aaaa', 'cccc') /* _stream vitess_a (eid id ) (4 1 )",
+					},
+					RowsAffected: 1,
+				},
+				framework.TestQuery("commit"),
+				&framework.TestCase{
+					Query: "select * from vitess_a where eid = 4 and id = 1",
+					Result: [][]string{
+						{"4", "1", "aaaa", "cccc"},
+					},
+				},
+				framework.TestQuery("begin"),
+				framework.TestQuery("delete from vitess_a where eid>1"),
+				framework.TestQuery("commit"),
+			},
+		},
+		&framework.MultiCase{
+			Name: "replace with subquery",
+			Cases: []framework.Testable{
+				framework.TestQuery("begin"),
+				&framework.TestCase{
+					Query: "replace /* subquery */ into vitess_a(eid, name, foo) select eid, name, foo from vitess_c",
+					Rewritten: []string{
+						"select eid, name, foo from vitess_c limit 10001",
+						"replace /* subquery */ into vitess_a(eid, name, foo) values (10, 'abcd', '20'), (11, 'bcde', '30') /* _stream vitess_a (eid id ) (10 1 ) (11 1 )",
+					},
+					RowsAffected: 2,
+				},
+				framework.TestQuery("commit"),
+				&framework.TestCase{
+					Query: "select * from vitess_a where eid in (10, 11)",
+					Result: [][]string{
+						{"10", "1", "abcd", "20"},
+						{"11", "1", "bcde", "30"},
+					},
+				},
+				framework.TestQuery("alter table vitess_e auto_increment = 20"),
+				framework.TestQuery("begin"),
+				&framework.TestCase{
+					Query: "replace into vitess_e(id, name, foo) select eid, name, foo from vitess_c",
+					Rewritten: []string{
+						"select eid, name, foo from vitess_c limit 10001",
+						"replace into vitess_e(id, name, foo) values (10, 'abcd', '20'), (11, 'bcde', '30') /* _stream vitess_e (eid id name ) (null 10 'YWJjZA==' ) (null 11 'YmNkZQ==' )",
+					},
+					RowsAffected: 2,
+				},
+				framework.TestQuery("commit"),
+				&framework.TestCase{
+					Query: "select eid, id, name, foo from vitess_e",
+					Result: [][]string{
+						{"20", "10", "abcd", "20"},
+						{"21", "11", "bcde", "30"},
+					},
+				},
+				framework.TestQuery("begin"),
+				framework.TestQuery("delete from vitess_a where eid>1"),
+				framework.TestQuery("delete from vitess_c where eid<10"),
+				framework.TestQuery("commit"),
+			},
+		},
+		&framework.MultiCase{
+			Name: "replace multi-value",
+			Cases: []framework.Testable{
+				framework.TestQuery("begin"),
+				&framework.TestCase{
+					Query: "replace into vitess_a(eid, id, name, foo) values (5, 1, 'a', 'a'), (7, 1, 'b', 'b')",
+					Rewritten: []string{
+						"replace into vitess_a(eid, id, name, foo) values (5, 1, 'a', 'a'), (7, 1, 'b', 'b') /* _stream vitess_a (eid id ) (5 1 ) (7 1 )",
+					},
+					RowsAffected: 2,
+				},
+				&framework.TestCase{
+					Query: "replace into vitess_a(eid, id, name, foo) values (5, 1, 'a', 'b'), (7, 1, 'b', 'c'), (8, 1, 'c', 'd')",
+					Rewritten: []string{
+						"replace into vitess_a(eid, id, name, foo) values (5, 1, 'a', 'b'), (7, 1, 'b', 'c'), (8, 1, 'c', 'd') /* _stream vitess_a (eid id ) (5 1 ) (7 1 ) (8 1 )",
+					},
+					RowsAffected: 5,
+				},
+				framework.TestQuery("commit"),
+				&framework.TestCase{
+					Query: "select * from vitess_a where eid>1",
+					Result: [][]string{
+						{"5", "1", "a", "b"},
+						{"7", "1", "b", "c"},
+						{"8", "1", "c", "d"},
+					},
+				},
+				framework.TestQuery("begin"),
+				framework.TestQuery("delete from vitess_a where eid>1"),
+				framework.TestQuery("commit"),
+			},
+		},
+		&framework.MultiCase{
+			Name: "replace single row present/absent",
+			Cases: []framework.Testable{
+				framework.TestQuery("begin"),
+				&framework.TestCase{
+					Query: "insert into upsert_test(id1, id2) values (1, 1) on duplicate key update id2 = 1",
+					Rewritten: []string{
+						"insert into upsert_test(id1, id2) values (1, 1) /* _stream upsert_test (id1 ) (1 )",
+					},
+					RowsAffected: 1,
+				},
+				&framework.TestCase{
+					Query: "select * from upsert_test",
+					Result: [][]string{
+						{"1", "1"},
+					},
+				},
+				&framework.TestCase{
+					Query: "replace into upsert_test(id1, id2) values (1, 2)",
+					Rewritten: []string{
+						"replace into upsert_test(id1, id2) values (1, 2) /* _stream upsert_test (id1 ) (1 )",
+					},
+					RowsAffected: 2,
+				},
+				&framework.TestCase{
+					Query: "select * from upsert_test",
+					Result: [][]string{
+						{"1", "2"},
+					},
+				},
+				&framework.TestCase{
+					Query: "replace into upsert_test(id1, id2) values (1, 2)",
+					Rewritten: []string{
+						"replace into upsert_test(id1, id2) values (1, 2) /* _stream upsert_test (id1 ) (1 )",
+					},
+				},
+				&framework.TestCase{
+					Query: "replace into upsert_test(id1, id2) values (1, 3)",
+					Rewritten: []string{
+						"replace into upsert_test(id1, id2) values (1, 3) /* _stream upsert_test (id1 ) (1 )",
+					},
+					RowsAffected: 2,
+				},
+				&framework.TestCase{
+					Query: "select * from upsert_test",
+					Result: [][]string{
+						{"1", "3"},
 					},
 				},
 				framework.TestQuery("commit"),

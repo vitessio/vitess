@@ -123,7 +123,7 @@ func forceEOF(yylex interface{}) {
 
 %type <statement> command
 %type <selStmt> select_statement
-%type <statement> insert_statement update_statement delete_statement set_statement
+%type <statement> insert_statement replace_statement update_statement delete_statement set_statement
 %type <statement> create_statement alter_statement rename_statement drop_statement
 %type <statement> analyze_statement other_statement
 %type <bytes2> comment_opt comment_list
@@ -193,6 +193,7 @@ command:
     $$ = $1
   }
 | insert_statement
+| replace_statement
 | update_statement
 | delete_statement
 | set_statement
@@ -231,6 +232,22 @@ insert_statement:
       vals = append(vals, updateList.Expr)
     }
     $$ = &Insert{Comments: Comments($2), Ignore: $3, Table: $4, Columns: cols, Rows: Values{vals}, OnDup: OnDup($7)}
+  }
+
+replace_statement:
+  REPLACE comment_opt into_table_name column_list_opt row_list
+  {
+    $$ = &Insert{Comments: Comments($2), Table: $3, Columns: $4, Rows: $5, Replace: true}
+  }
+| REPLACE comment_opt into_table_name SET update_list
+  {
+    cols := make(Columns, 0, len($5))
+    vals := make(ValTuple, 0, len($5))
+    for _, updateList := range $5 {
+      cols = append(cols, updateList.Name)
+      vals = append(vals, updateList.Expr)
+    }
+    $$ = &Insert{Comments: Comments($2), Table: $3, Columns: cols, Rows: Values{vals}, Replace: true}
   }
 
 update_statement:
