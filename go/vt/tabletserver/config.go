@@ -9,12 +9,16 @@ import (
 	"fmt"
 	"net/url"
 
+	"github.com/golang/protobuf/proto"
+
 	"golang.org/x/net/context"
 
+	"github.com/youtube/vitess/go/flagutil"
 	"github.com/youtube/vitess/go/streamlog"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/tabletserver/queryservice"
+	"github.com/youtube/vitess/go/vt/throttler"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -54,6 +58,9 @@ func init() {
 	flag.BoolVar(&qsConfig.TwoPCEnable, "twopc_enable", DefaultQsConfig.TwoPCEnable, "if the flag is on, 2pc is enabled. Other 2pc flags must be supplied.")
 	flag.StringVar(&qsConfig.TwoPCCoordinatorAddress, "twopc_coordinator_address", DefaultQsConfig.TwoPCCoordinatorAddress, "address of the (VTGate) process(es) that will be used to notify of abandoned transactions.")
 	flag.Float64Var(&qsConfig.TwoPCAbandonAge, "twopc_abandon_age", DefaultQsConfig.TwoPCAbandonAge, "time in seconds. Any unresolved transaction older than this time will be sent to the coordinator to be resolved.")
+	flag.BoolVar(&qsConfig.EnableTxThrottler, "enable-tx-throttler", DefaultQsConfig.EnableTxThrottler, "If true replication-lag-based throttling on transactions will be enabled.")
+	flag.StringVar(&qsConfig.TxThrottlerConfig, "tx-throttler-config", DefaultQsConfig.TxThrottlerConfig, "The configuration of the transaction throttler as a text formatted throttlerdata.Configuration protocol buffer message")
+	flagutil.StringListVar(&qsConfig.TxThrottlerHealthCheckCells, "tx-throttler-healthcheck-cells", DefaultQsConfig.TxThrottlerHealthCheckCells, "A comma-separated list of cells. Only tabletservers running in these cells will be monitored for replication lag by the transaction throttler.")
 }
 
 // Init must be called after flag.Parse, and before doing any other operations.
@@ -91,6 +98,10 @@ type Config struct {
 	TwoPCEnable             bool
 	TwoPCCoordinatorAddress string
 	TwoPCAbandonAge         float64
+
+	EnableTxThrottler           bool
+	TxThrottlerConfig           string
+	TxThrottlerHealthCheckCells []string
 }
 
 // DefaultQsConfig is the default value for the query service config.
@@ -128,6 +139,24 @@ var DefaultQsConfig = Config{
 	TwoPCEnable:             false,
 	TwoPCCoordinatorAddress: "",
 	TwoPCAbandonAge:         0,
+
+	EnableTxThrottler: false,
+	TxThrottlerConfig: defaultTxThrottlerConfig(),
+
+	TxThrottlerHealthCheckCells: []string{},
+}
+
+// defaultTxThrottlerConfig formats the default throttlerdata.Configuration
+// object in text format. It uses the object returned by
+// throttler.DefaultMaxReplicationLagModuleConfig().Configuration and overrides some of its
+// fields. It panics on error.
+func defaultTxThrottlerConfig() string {
+	// Take throttler.DefaultMaxReplicationLagModuleConfig and override some fields.
+	config := throttler.DefaultMaxReplicationLagModuleConfig().Configuration
+	// TODO(erez): Make DefaultMaxReplicationLagModuleConfig() return a MaxReplicationLagSec of 10
+	// and remove this line.
+	config.MaxReplicationLagSec = 10
+	return proto.MarshalTextString(&config)
 }
 
 var qsConfig Config
@@ -155,7 +184,6 @@ func NewServer() *TabletServer {
 type Controller interface {
 	// Register registers this query service with the RPC layer.
 	Register()
-
 	// AddStatusPart adds the status part to the status page
 	AddStatusPart()
 

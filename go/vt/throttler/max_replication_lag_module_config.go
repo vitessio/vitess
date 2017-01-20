@@ -44,6 +44,11 @@ var defaultMaxReplicationLagModuleConfig = MaxReplicationLagModuleConfig{
 	},
 }
 
+// DefaultMaxReplicationLagModuleConfig returns a copy of the default config object.
+func DefaultMaxReplicationLagModuleConfig() MaxReplicationLagModuleConfig {
+	return defaultMaxReplicationLagModuleConfig
+}
+
 // NewMaxReplicationLagModuleConfig returns a default configuration where
 // only "maxReplicationLag" is set.
 func NewMaxReplicationLagModuleConfig(maxReplicationLag int64) MaxReplicationLagModuleConfig {

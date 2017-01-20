@@ -3,7 +3,7 @@
 package flagutil
 
 import (
-	_ "flag"
+	"flag"
 	"sort"
 	"strings"
 )
@@ -56,6 +56,13 @@ func (value StringListValue) String() string {
 	}
 	return strings.Join(parts, ",")
 
+}
+
+// StringListVar defines a []string flag with the specified name, value and usage
+// string. The argument 'p' points to a []string in which to store the value of the flag.
+func StringListVar(p *[]string, name string, defaultValue []string, usage string) {
+	*p = defaultValue
+	flag.Var((*StringListValue)(p), name, usage)
 }
 
 // StringMapValue is a map[string]string flag. It accepts a

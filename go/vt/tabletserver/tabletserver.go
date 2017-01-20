@@ -15,6 +15,7 @@ import (
 	log "github.com/golang/glog"
 
 	"github.com/golang/protobuf/proto"
+
 	"github.com/youtube/vitess/go/acl"
 	"github.com/youtube/vitess/go/history"
 	"github.com/youtube/vitess/go/mysql"
@@ -117,6 +118,9 @@ type TabletServer struct {
 	// requests sent to CheckMySQL.
 	checkMySQLThrottler *sync2.Semaphore
 
+	// txThrottler is used to throttle transactions based on the observed replication lag.
+	txThrottler *TxThrottler
+
 	// streamHealthMutex protects all the following fields
 	streamHealthMutex        sync.Mutex
 	streamHealthIndex        int
@@ -160,6 +164,7 @@ func NewTabletServer(config Config) *TabletServer {
 	tsv.queryServiceStats = NewQueryServiceStats(config.StatsPrefix, config.EnablePublishStats)
 	tsv.qe = NewQueryEngine(tsv, config, tsv.queryServiceStats)
 	tsv.te = NewTxEngine(tsv, config, tsv.queryServiceStats)
+	tsv.txThrottler = CreateTxThrottlerFromTabletConfig(&config)
 	tsv.watcher = NewReplicationWatcher(config, tsv.qe)
 	tsv.updateStreamList = &binlog.StreamList{}
 	if config.EnablePublishStats {
@@ -370,11 +375,12 @@ func (tsv *TabletServer) decideAction(tabletType topodatapb.TabletType, serving 
 func (tsv *TabletServer) fullStart() (err error) {
 	defer func() {
 		if x := recover(); x != nil {
-			log.Errorf("Could not start tabletserver: %v", x)
+			log.Errorf("Could not start tabletserver: %v.\nStack trace:\n%s", x, tb.Stack(4))
 			tsv.te.Close(true)
 			tsv.qe.Close()
 			tsv.updateStreamList.Stop()
 			tsv.watcher.Close()
+			tsv.txThrottler.Close()
 			tsv.transition(StateNotConnected)
 			err = x.(error)
 		}
@@ -398,16 +404,20 @@ func (tsv *TabletServer) fullStart() (err error) {
 func (tsv *TabletServer) serveNewType() (err error) {
 	defer func() {
 		if x := recover(); x != nil {
-			log.Errorf("Could not start tabletserver: %v", x)
+			log.Errorf("Could not start tabletserver: %v.\nStack trace:\n%s", x, tb.Stack(4))
 			tsv.te.Close(true)
 			tsv.qe.Close()
 			tsv.updateStreamList.Stop()
 			tsv.watcher.Close()
+			tsv.txThrottler.Close()
 			tsv.transition(StateNotConnected)
 			err = x.(error)
 		}
 	}()
 	if tsv.target.TabletType == topodatapb.TabletType_MASTER {
+		if err := tsv.txThrottler.Open(tsv.target.Keyspace, tsv.target.Shard); err != nil {
+			return err
+		}
 		tsv.watcher.Close()
 		tsv.te.Open(tsv.dbconfigs)
 	} else {
@@ -421,6 +431,7 @@ func (tsv *TabletServer) serveNewType() (err error) {
 			// TODO(sougou): change to normal error handling.
 			panic(err)
 		}
+		tsv.txThrottler.Close()
 	}
 	tsv.transition(StateServing)
 	return nil
@@ -456,6 +467,8 @@ func (tsv *TabletServer) StopService() {
 	}()
 	log.Infof("Shutting down query service")
 	tsv.qe.Close()
+
+	tsv.txThrottler.Close()
 }
 
 func (tsv *TabletServer) waitForShutdown() {
@@ -470,6 +483,7 @@ func (tsv *TabletServer) waitForShutdown() {
 	tsv.updateStreamList.Stop()
 	tsv.watcher.Close()
 	tsv.requests.Wait()
+	tsv.txThrottler.Close()
 }
 
 func (tsv *TabletServer) setTimeBomb() chan struct{} {
@@ -585,6 +599,9 @@ func (tsv *TabletServer) Begin(ctx context.Context, target *querypb.Target) (tra
 		target, true, false,
 		func(ctx context.Context, logStats *LogStats) error {
 			defer tsv.qe.queryServiceStats.QueryStats.Record("BEGIN", time.Now())
+			if tsv.txThrottler.Throttle() {
+				return NewTabletError(vtrpcpb.ErrorCode_TRANSIENT_ERROR, "Transaction throttled")
+			}
 			transactionID, err = tsv.te.txPool.Begin(ctx)
 			logStats.TransactionID = transactionID
 			return err
@@ -1042,7 +1059,7 @@ func (tsv *TabletServer) handleError(
 	}()
 	terr, ok := err.(*TabletError)
 	if !ok {
-		panic(fmt.Sprintf("Got an error that is not a TabletError: %v", err))
+		panic(fmt.Errorf("Got an error that is not a TabletError: %v", err))
 	}
 	var myError error
 	if tsv.config.TerseErrors && terr.SQLError != 0 && len(bindVariables) != 0 {
@@ -1160,7 +1177,7 @@ func createSplitParams(
 			sql, bindVariables, splitColumns, splitCount, schema)
 		return splitParams, splitQueryToTabletError(err)
 	default:
-		panic(fmt.Sprintf("Exactly one of {numRowsPerQueryPart, splitCount} must be"+
+		panic(fmt.Errorf("Exactly one of {numRowsPerQueryPart, splitCount} must be"+
 			" non zero. This should have already been caught by 'validateSplitQueryParameters' and "+
 			" returned as an error. Got: numRowsPerQueryPart=%v, splitCount=%v. SQL: %v",
 			numRowsPerQueryPart,
@@ -1249,7 +1266,7 @@ func createSplitQueryAlgorithmObject(
 	case querypb.SplitQueryRequest_EQUAL_SPLITS:
 		return splitquery.NewEqualSplitsAlgorithm(splitParams, sqlExecuter)
 	default:
-		panic(fmt.Sprintf("Unknown algorithm enum: %+v", algorithm))
+		panic(fmt.Errorf("Unknown algorithm enum: %+v", algorithm))
 	}
 }
 
@@ -1332,7 +1349,7 @@ func (tsv *TabletServer) UpdateStream(ctx context.Context, target *querypb.Targe
 // HandlePanic is part of the queryservice.QueryService interface
 func (tsv *TabletServer) HandlePanic(err *error) {
 	if x := recover(); x != nil {
-		*err = fmt.Errorf("uncaught panic: %v", x)
+		*err = fmt.Errorf("uncaught panic: %v\n. Stack-trace:\n%s", x, tb.Stack(4))
 	}
 }
 
