@@ -15,22 +15,6 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/timer"
 	"github.com/youtube/vitess/go/vt/sqlparser"
-
-	querypb "github.com/youtube/vitess/go/vt/proto/query"
-)
-
-var (
-	// FieldResult is a place-holder for now.
-	// TODO(sougou): Build this from the database.
-	FieldResult = &sqltypes.Result{
-		Fields: []*querypb.Field{{
-			Name: "id",
-			Type: querypb.Type_VARBINARY,
-		}, {
-			Name: "message",
-			Type: querypb.Type_VARBINARY,
-		}},
-	}
 )
 
 type messageReceiver struct {
@@ -88,7 +72,8 @@ type MessageManager struct {
 
 	isOpen bool
 
-	name        string
+	name        sqlparser.TableIdent
+	fieldResult *sqltypes.Result
 	ackWaitTime time.Duration
 	purgeAfter  time.Duration
 	batchSize   int
@@ -117,10 +102,13 @@ type MessageManager struct {
 }
 
 // NewMessageManager creates a new message manager.
-func NewMessageManager(tsv *TabletServer, name string, ackWaitTime, purgeAfter time.Duration, batchSize, cacheSize int, pollInterval time.Duration, connpool *ConnPool) *MessageManager {
+func NewMessageManager(tsv *TabletServer, table *TableInfo, ackWaitTime, purgeAfter time.Duration, batchSize, cacheSize int, pollInterval time.Duration, connpool *ConnPool) *MessageManager {
 	mm := &MessageManager{
-		tsv:         tsv,
-		name:        name,
+		tsv:  tsv,
+		name: table.Name,
+		fieldResult: &sqltypes.Result{
+			Fields: table.MessageFields,
+		},
 		ackWaitTime: ackWaitTime,
 		purgeAfter:  purgeAfter,
 		batchSize:   batchSize,
@@ -131,19 +119,18 @@ func NewMessageManager(tsv *TabletServer, name string, ackWaitTime, purgeAfter t
 	}
 	mm.cond.L = &mm.mu
 
-	tableName := sqlparser.NewTableIdent(name)
 	mm.readByTimeNext = buildParsedQuery(
 		"select time_next, epoch, id, message from %v where time_next < %a order by time_next desc limit %a",
-		tableName, ":time_next", ":max")
+		mm.name, ":time_next", ":max")
 	mm.ackQuery = buildParsedQuery(
 		"update %v set time_acked = %a, time_next = null where id in %a",
-		tableName, ":time_acked", "::ids")
+		mm.name, ":time_acked", "::ids")
 	mm.postponeQuery = buildParsedQuery(
 		"update %v set time_next = %a+(%a<<epoch), epoch = epoch+1 where id in %a and time_acked is null",
-		tableName, ":time_now", ":wait_time", "::ids")
+		mm.name, ":time_now", ":wait_time", "::ids")
 	mm.purgeQuery = buildParsedQuery(
 		"delete from %v where time_scheduled < %a and time_acked is not null limit 500",
-		tableName, ":time_scheduled")
+		mm.name, ":time_scheduled")
 	return mm
 }
 
@@ -199,7 +186,7 @@ func (mm *MessageManager) Subscribe(receiver *messageReceiver) {
 		busy:     true,
 	}
 	mm.receivers = append(mm.receivers, withStatus)
-	go mm.send(withStatus, FieldResult)
+	go mm.send(withStatus, mm.fieldResult)
 }
 
 func (mm *MessageManager) unsubscribe(receiver *messageReceiver) {
@@ -339,7 +326,7 @@ func (mm *MessageManager) send(receiver *receiverWithStatus, qr *sqltypes.Result
 func (mm *MessageManager) postpone(ids []string) {
 	ctx, cancel := context.WithTimeout(localContext(), mm.ackWaitTime)
 	defer cancel()
-	_, err := mm.tsv.PostponeMessages(ctx, nil, mm.name, ids)
+	_, err := mm.tsv.PostponeMessages(ctx, nil, mm.name.String(), ids)
 	if err != nil {
 		// TODO(sougou): increment internal error.
 		log.Errorf("Unable to postpone messages %v: %v", ids, err)
@@ -411,7 +398,7 @@ func (mm *MessageManager) runPurge() {
 	ctx, cancel := context.WithTimeout(localContext(), mm.purgeTicks.Interval())
 	defer cancel()
 	for {
-		count, err := mm.tsv.PurgeMessages(ctx, nil, mm.name, time.Now().Add(-mm.purgeAfter).UnixNano())
+		count, err := mm.tsv.PurgeMessages(ctx, nil, mm.name.String(), time.Now().Add(-mm.purgeAfter).UnixNano())
 		if err != nil {
 			// TODO(sougou): increment internal error.
 			log.Errorf("Unable to delete messages: %v", err)

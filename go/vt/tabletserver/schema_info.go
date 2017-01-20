@@ -91,7 +91,7 @@ func (ep *ExecPlan) Stats() (queryCount int64, duration, mysqlTime time.Duration
 
 //_______________________________________________
 
-type notifier func(map[string]*schema.Table)
+type notifier func(map[string]*TableInfo)
 
 // SchemaInfo stores the schema info and performs operations that
 // keep itself up-to-date.
@@ -112,9 +112,7 @@ type SchemaInfo struct {
 	queryRuleSources  *QueryRuleInfo
 	queryServiceStats *QueryServiceStats
 
-	// Notification vars for broadcasting schema changes.
-	notifyMutex sync.Mutex
-	notifiers   map[string]notifier
+	notifiers map[string]notifier
 }
 
 // NewSchemaInfo creates a new SchemaInfo.
@@ -379,29 +377,25 @@ func (si *SchemaInfo) DropTable(tableName sqlparser.TableIdent) {
 }
 
 // RegisterNotifier registers the function for schema change notification.
+// It also causes an immediate notification to the caller.
 func (si *SchemaInfo) RegisterNotifier(name string, f notifier) {
-	si.notifyMutex.Lock()
-	defer si.notifyMutex.Unlock()
+	si.mu.Lock()
+	defer si.mu.Unlock()
 	si.notifiers[name] = f
+	f(si.tables)
 }
 
 // UnregisterNotifier unregisters the notifier function.
 func (si *SchemaInfo) UnregisterNotifier(name string) {
-	si.notifyMutex.Lock()
-	defer si.notifyMutex.Unlock()
+	si.mu.Lock()
+	defer si.mu.Unlock()
 	delete(si.notifiers, name)
 }
 
 // broadcast must be called while holding a lock on si.mu.
 func (si *SchemaInfo) broadcast() {
-	schema := make(map[string]*schema.Table, len(si.tables))
-	for k, v := range si.tables {
-		schema[k] = v.Table
-	}
-	si.notifyMutex.Lock()
-	defer si.notifyMutex.Unlock()
 	for _, f := range si.notifiers {
-		f(schema)
+		f(si.tables)
 	}
 }
 

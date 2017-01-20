@@ -16,7 +16,6 @@ import (
 
 	"github.com/youtube/vitess/go/mysqlconn/fakesqldb"
 	"github.com/youtube/vitess/go/sqltypes"
-	"github.com/youtube/vitess/go/vt/schema"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
@@ -272,7 +271,7 @@ func TestSchemaInfoCreateOrUpdateTable(t *testing.T) {
 	schemaInfo := newTestSchemaInfo(10, 1*time.Second, 1*time.Second, false)
 	schemaInfo.Open(dbaParams, false)
 	found := false
-	schemaInfo.RegisterNotifier("test", func(schema map[string]*schema.Table) {
+	schemaInfo.RegisterNotifier("test", func(schema map[string]*TableInfo) {
 		_, found = schema["test_table_01"]
 	})
 	schemaInfo.CreateOrUpdateTable(context.Background(), "test_table_01")
@@ -305,7 +304,7 @@ func TestSchemaInfoDropTable(t *testing.T) {
 		t.Fatalf("table: %s should exist", existingTable)
 	}
 	found := false
-	schemaInfo.RegisterNotifier("test", func(schema map[string]*schema.Table) {
+	schemaInfo.RegisterNotifier("test", func(schema map[string]*TableInfo) {
 		_, found = schema["test_table_01"]
 	})
 	schemaInfo.DropTable(existingTable)

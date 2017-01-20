@@ -67,12 +67,16 @@ func TestMESchemaChanged(t *testing.T) {
 	defer tsv.StopService()
 
 	me := tsv.messager
-	tables := map[string]*schema.Table{
+	tables := map[string]*TableInfo{
 		"t1": {
-			Type: schema.Message,
+			Table: &schema.Table{
+				Type: schema.Message,
+			},
 		},
 		"t2": {
-			Type: schema.NoType,
+			Table: &schema.Table{
+				Type: schema.NoType,
+			},
 		},
 	}
 	me.schemaChanged(tables)
@@ -81,15 +85,21 @@ func TestMESchemaChanged(t *testing.T) {
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("got: %+v, want %+v", got, want)
 	}
-	tables = map[string]*schema.Table{
+	tables = map[string]*TableInfo{
 		"t1": {
-			Type: schema.Message,
+			Table: &schema.Table{
+				Type: schema.Message,
+			},
 		},
 		"t2": {
-			Type: schema.NoType,
+			Table: &schema.Table{
+				Type: schema.NoType,
+			},
 		},
 		"t3": {
-			Type: schema.Message,
+			Table: &schema.Table{
+				Type: schema.Message,
+			},
 		},
 	}
 	me.schemaChanged(tables)
@@ -98,15 +108,21 @@ func TestMESchemaChanged(t *testing.T) {
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("got: %+v, want %+v", got, want)
 	}
-	tables = map[string]*schema.Table{
+	tables = map[string]*TableInfo{
 		"t1": {
-			Type: schema.Message,
+			Table: &schema.Table{
+				Type: schema.Message,
+			},
 		},
 		"t2": {
-			Type: schema.NoType,
+			Table: &schema.Table{
+				Type: schema.NoType,
+			},
 		},
 		"t4": {
-			Type: schema.Message,
+			Table: &schema.Table{
+				Type: schema.Message,
+			},
 		},
 	}
 	me.schemaChanged(tables)
@@ -141,12 +157,16 @@ func TestSubscribe(t *testing.T) {
 	defer tsv.StopService()
 
 	me := tsv.messager
-	tables := map[string]*schema.Table{
+	tables := map[string]*TableInfo{
 		"t1": {
-			Type: schema.Message,
+			Table: &schema.Table{
+				Type: schema.Message,
+			},
 		},
 		"t2": {
-			Type: schema.Message,
+			Table: &schema.Table{
+				Type: schema.Message,
+			},
 		},
 	}
 	me.schemaChanged(tables)
@@ -185,12 +205,16 @@ func TestLockDB(t *testing.T) {
 	defer tsv.StopService()
 
 	me := tsv.messager
-	tables := map[string]*schema.Table{
+	tables := map[string]*TableInfo{
 		"t1": {
-			Type: schema.Message,
+			Table: &schema.Table{
+				Type: schema.Message,
+			},
 		},
 		"t2": {
-			Type: schema.Message,
+			Table: &schema.Table{
+				Type: schema.Message,
+			},
 		},
 	}
 	me.schemaChanged(tables)
@@ -302,9 +326,11 @@ func TestMEGenerate(t *testing.T) {
 	defer tsv.StopService()
 
 	me := tsv.messager
-	me.schemaChanged(map[string]*schema.Table{
+	me.schemaChanged(map[string]*TableInfo{
 		"t1": {
-			Type: schema.Message,
+			Table: &schema.Table{
+				Type: schema.Message,
+			},
 		},
 	})
 	if _, _, err := me.GenerateAckQuery("t1", []string{"1"}); err != nil {

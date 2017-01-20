@@ -12,8 +12,9 @@ import (
 
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/sync2"
-	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	"github.com/youtube/vitess/go/vt/sqlparser"
+
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
 // Table types

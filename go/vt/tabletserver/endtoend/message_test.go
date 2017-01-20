@@ -14,6 +14,8 @@ import (
 
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/tabletserver/endtoend/framework"
+
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
 func TestMessage(t *testing.T) {
@@ -33,7 +35,19 @@ func TestMessage(t *testing.T) {
 			t.Fatal(err)
 		}
 	}()
-	<-ch
+	got := <-ch
+	want := &sqltypes.Result{
+		Fields: []*querypb.Field{{
+			Name: "id",
+			Type: sqltypes.Int64,
+		}, {
+			Name: "message",
+			Type: sqltypes.VarChar,
+		}},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("message(field) received:\n%v, want\n%v", got, want)
+	}
 	runtime.Gosched()
 	defer func() { close(done) }()
 	err := client.Begin()
@@ -52,15 +66,15 @@ func TestMessage(t *testing.T) {
 		return
 	}
 	start := time.Now().UnixNano()
-	got := <-ch
-	want := &sqltypes.Result{
+	got = <-ch
+	want = &sqltypes.Result{
 		Rows: [][]sqltypes.Value{{
 			sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")),
 			sqltypes.MakeTrusted(sqltypes.VarChar, []byte("hello world")),
 		}},
 	}
 	if !reflect.DeepEqual(got, want) {
-		t.Errorf("message received:\n%+v, want\n%+v", got, want)
+		t.Errorf("message received:\n%v, want\n%v", got, want)
 	}
 	qr, err := client.Execute("select time_next, epoch from vitess_message where id = 1", nil)
 	if err != nil {

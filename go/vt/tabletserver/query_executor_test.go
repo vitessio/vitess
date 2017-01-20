@@ -183,9 +183,11 @@ func TestQueryExecutorPlanInsertMessage(t *testing.T) {
 	defer tsv.StopService()
 	checkPlanID(t, planbuilder.PlanInsertMessage, qre.plan.PlanID)
 	r1 := newTestReceiver(1)
-	tsv.messager.schemaChanged(map[string]*schema.Table{
+	tsv.messager.schemaChanged(map[string]*TableInfo{
 		"msg": {
-			Type: schema.Message,
+			Table: &schema.Table{
+				Type: schema.Message,
+			},
 		},
 	})
 	tsv.messager.Subscribe("msg", r1.rcv)

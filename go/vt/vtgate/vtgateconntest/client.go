@@ -19,7 +19,6 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/tb"
 	"github.com/youtube/vitess/go/vt/callerid"
-	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateconn"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateservice"
@@ -2620,7 +2619,13 @@ var getSrvKeyspaceResult = &topodatapb.SrvKeyspace{
 
 var messageName = "vitess_message"
 var messageStreamResult = &sqltypes.Result{
-	Fields: tabletserver.FieldResult.Fields,
+	Fields: []*querypb.Field{{
+		Name: "id",
+		Type: sqltypes.VarBinary,
+	}, {
+		Name: "message",
+		Type: sqltypes.VarBinary,
+	}},
 	Rows: [][]sqltypes.Value{{
 		sqltypes.MakeTrusted(sqltypes.VarBinary, []byte("2")),
 		sqltypes.MakeTrusted(sqltypes.VarBinary, []byte("3")),

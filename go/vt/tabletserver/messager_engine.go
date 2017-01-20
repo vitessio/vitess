@@ -48,7 +48,6 @@ func (me *MessagerEngine) Open(dbconfigs dbconfigs.DBConfigs) error {
 	}
 	me.connpool.Open(&dbconfigs.App, &dbconfigs.Dba)
 	me.tsv.qe.schemaInfo.RegisterNotifier("messages", me.schemaChanged)
-	me.schemaChanged(me.tsv.qe.schemaInfo.GetSchema())
 	me.isOpen = true
 	return nil
 }
@@ -172,7 +171,7 @@ func (me *MessagerEngine) GeneratePurgeQuery(name string, timeCutoff int64) (str
 	return query, bv, nil
 }
 
-func (me *MessagerEngine) schemaChanged(tables map[string]*schema.Table) {
+func (me *MessagerEngine) schemaChanged(tables map[string]*TableInfo) {
 	me.mu.Lock()
 	defer me.mu.Unlock()
 	for name, t := range tables {
@@ -180,10 +179,11 @@ func (me *MessagerEngine) schemaChanged(tables map[string]*schema.Table) {
 			continue
 		}
 		if me.managers[name] != nil {
+			// TODO(sougou): Need to update values instead.
 			continue
 		}
 		// TODO(sougou): hardcoded values.
-		mm := NewMessageManager(me.tsv, name, 1*time.Second, 3*time.Second, 2, 10000, 1*time.Second, me.connpool)
+		mm := NewMessageManager(me.tsv, t, 1*time.Second, 3*time.Second, 2, 10000, 1*time.Second, me.connpool)
 		me.managers[name] = mm
 		mm.Open()
 	}
