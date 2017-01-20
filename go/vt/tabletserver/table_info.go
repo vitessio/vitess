@@ -12,6 +12,7 @@ import (
 
 	log "github.com/golang/glog"
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
+
 	"github.com/youtube/vitess/go/vt/schema"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 )
@@ -32,6 +33,9 @@ type TableInfo struct {
 	// value for message tables to discard items
 	// from the cache.
 	IDPKIndex int
+	// MessageFields stores the field info to be
+	// returned for subscribers.
+	MessageFields []*querypb.Field
 }
 
 // NewTableInfo creates a new TableInfo.
@@ -70,6 +74,7 @@ func (ti *TableInfo) fetchColumns(conn *DBConn, sqlTableName string) error {
 		return err
 	}
 	fieldTypes := make(map[string]querypb.Type, len(qr.Fields))
+	// TODO(sougou): Store the full field info in the schema.
 	for _, field := range qr.Fields {
 		fieldTypes[field.Name] = field.Type
 	}
@@ -171,9 +176,23 @@ func (ti *TableInfo) loadMessageInfo() error {
 		"time_acked",
 		"message",
 	}
+	ti.MessageFields = make([]*querypb.Field, 2)
 	for _, col := range findCols {
-		if ti.FindColumn(sqlparser.NewColIdent(col)) == -1 {
+		num := ti.FindColumn(sqlparser.NewColIdent(col))
+		if num == -1 {
 			return fmt.Errorf("%s missing from message table: %s", col, ti.Name.String())
+		}
+		switch col {
+		case "id":
+			ti.MessageFields[0] = &querypb.Field{
+				Name: ti.Columns[num].Name.String(),
+				Type: ti.Columns[num].Type,
+			}
+		case "message":
+			ti.MessageFields[1] = &querypb.Field{
+				Name: ti.Columns[num].Name.String(),
+				Type: ti.Columns[num].Type,
+			}
 		}
 	}
 	for i, j := range ti.PKColumns {

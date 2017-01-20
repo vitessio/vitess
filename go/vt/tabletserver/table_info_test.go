@@ -155,12 +155,19 @@ func TestTableInfoMessage(t *testing.T) {
 			Type: schema.Message,
 		},
 		IDPKIndex: 1,
+		MessageFields: []*querypb.Field{{
+			Name: "id",
+			Type: sqltypes.Int64,
+		}, {
+			Name: "message",
+			Type: sqltypes.VarBinary,
+		}},
 	}
 	tableInfo.Columns = nil
 	tableInfo.Indexes = nil
 	tableInfo.PKColumns = nil
 	if !reflect.DeepEqual(tableInfo, want) {
-		t.Errorf("TableInfo:\n%#v, want\n%#v", tableInfo, want)
+		t.Errorf("TableInfo:\n%v, want\n%v", tableInfo, want)
 	}
 
 	// id column must be part of primary key.
@@ -322,7 +329,7 @@ func getMessageTableInfoQueries() map[string]*sqltypes.Result {
 				Type: sqltypes.Int64,
 			}, {
 				Name: "message",
-				Type: sqltypes.Int64,
+				Type: sqltypes.VarBinary,
 			}},
 		},
 		"describe test_table": {

@@ -597,7 +597,13 @@ func (f *FakeQueryService) BeginExecuteBatch(ctx context.Context, target *queryp
 var (
 	MessageName         = "vitess_message"
 	MessageStreamResult = &sqltypes.Result{
-		Fields: tabletserver.FieldResult.Fields,
+		Fields: []*querypb.Field{{
+			Name: "id",
+			Type: sqltypes.VarBinary,
+		}, {
+			Name: "message",
+			Type: sqltypes.VarBinary,
+		}},
 		Rows: [][]sqltypes.Value{{
 			sqltypes.MakeTrusted(sqltypes.VarBinary, []byte("1")),
 			sqltypes.MakeTrusted(sqltypes.VarBinary, []byte("row1 value2")),
