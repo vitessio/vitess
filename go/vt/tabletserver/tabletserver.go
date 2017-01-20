@@ -934,26 +934,14 @@ func (tsv *TabletServer) BeginExecuteBatch(ctx context.Context, target *querypb.
 }
 
 // MessageStream streams messages from the requested table.
-func (tsv *TabletServer) MessageStream(ctx context.Context, target *querypb.Target, name string, sendReply func(*querypb.MessageStreamResponse) error) (err error) {
+func (tsv *TabletServer) MessageStream(ctx context.Context, target *querypb.Target, name string, sendReply func(*sqltypes.Result) error) (err error) {
 	if err = tsv.startRequest(ctx, target, false, false); err != nil {
 		return err
 	}
 	defer tsv.endRequest(false)
 	defer tsv.handlePanicAndSendLogStats("ack", nil, &err, nil)
 	// TODO(sougou): perform ACL checks.
-	rcv, done := newMessageReceiver(func(name string, mrs []*MessageRow) error {
-		msgs := make([]*querypb.VitessMessage, 0, len(mrs))
-		for _, mr := range mrs {
-			msgs = append(msgs, &querypb.VitessMessage{
-				Id:            mr.ID.ToProtoValue(),
-				VitessMessage: mr.Message.ToProtoValue(),
-			})
-		}
-		return sendReply(&querypb.MessageStreamResponse{
-			Name:     name,
-			Messages: msgs,
-		})
-	})
+	rcv, done := newMessageReceiver(sendReply)
 	if err := tsv.messager.Subscribe(name, rcv); err != nil {
 		return tsv.handleError("message_stream", nil, NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "%v", err), nil)
 	}

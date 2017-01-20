@@ -200,7 +200,7 @@ func (ftc *fakeTabletConn) BeginExecuteBatch(ctx context.Context, target *queryp
 }
 
 // MessageStream is part of the TabletConn interface
-func (ftc *fakeTabletConn) MessageStream(ctx context.Context, target *querypb.Target, name string, sendReply func(*querypb.MessageStreamResponse) error) (err error) {
+func (ftc *fakeTabletConn) MessageStream(ctx context.Context, target *querypb.Target, name string, sendReply func(*sqltypes.Result) error) (err error) {
 	return fmt.Errorf("not implemented")
 }
 

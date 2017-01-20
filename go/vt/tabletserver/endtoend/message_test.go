@@ -14,29 +14,26 @@ import (
 
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/tabletserver/endtoend/framework"
-
-	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
 func TestMessage(t *testing.T) {
-	// This test is too slow. Skip for now.
-	t.Skip()
-	ch := make(chan *querypb.MessageStreamResponse)
+	ch := make(chan *sqltypes.Result)
 	done := make(chan struct{})
 	client := framework.NewClient()
 	go func() {
-		if err := client.MessageStream("vitess_message", func(msr *querypb.MessageStreamResponse) error {
+		if err := client.MessageStream("vitess_message", func(qr *sqltypes.Result) error {
 			select {
 			case <-done:
 				return io.EOF
 			default:
 			}
-			ch <- msr
+			ch <- qr
 			return nil
 		}); err != nil {
 			t.Fatal(err)
 		}
 	}()
+	<-ch
 	runtime.Gosched()
 	defer func() { close(done) }()
 	err := client.Begin()
@@ -56,15 +53,14 @@ func TestMessage(t *testing.T) {
 	}
 	start := time.Now().UnixNano()
 	got := <-ch
-	want := &querypb.MessageStreamResponse{
-		Name: "vitess_message",
-		Messages: []*querypb.VitessMessage{{
-			Id:            sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")).ToProtoValue(),
-			VitessMessage: sqltypes.MakeTrusted(sqltypes.VarChar, []byte("hello world")).ToProtoValue(),
+	want := &sqltypes.Result{
+		Rows: [][]sqltypes.Value{{
+			sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")),
+			sqltypes.MakeTrusted(sqltypes.VarChar, []byte("hello world")),
 		}},
 	}
 	if !reflect.DeepEqual(got, want) {
-		t.Errorf("message received: %v, want %v", got, want)
+		t.Errorf("message received:\n%+v, want\n%+v", got, want)
 	}
 	qr, err := client.Execute("select time_next, epoch from vitess_message where id = 1", nil)
 	if err != nil {

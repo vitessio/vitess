@@ -307,7 +307,7 @@ func (dg *discoveryGateway) BeginExecuteBatch(ctx context.Context, target *query
 
 // MessageStream streams messages for the
 // specified keyspace, shard, and tablet type.
-func (dg *discoveryGateway) MessageStream(ctx context.Context, target *querypb.Target, name string, sendReply func(*querypb.MessageStreamResponse) error) error {
+func (dg *discoveryGateway) MessageStream(ctx context.Context, target *querypb.Target, name string, sendReply func(*sqltypes.Result) error) error {
 	return dg.withRetry(ctx, target, func(conn tabletconn.TabletConn, target *querypb.Target) error {
 		var innerErr error
 		startTime := time.Now()

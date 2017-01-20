@@ -101,7 +101,7 @@ func (c *terminalClient) ResolveTransaction(ctx context.Context, dtid string) er
 	return errTerminal
 }
 
-func (c *terminalClient) MessageStream(ctx context.Context, keyspace string, shard string, keyRange *topodatapb.KeyRange, name string, sendReply func(*querypb.MessageStreamResponse) error) error {
+func (c *terminalClient) MessageStream(ctx context.Context, keyspace string, shard string, keyRange *topodatapb.KeyRange, name string, sendReply func(*sqltypes.Result) error) error {
 	return errTerminal
 }
 

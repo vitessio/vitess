@@ -358,7 +358,7 @@ func (res *Resolver) streamExecute(
 }
 
 // MessageStream streams messages.
-func (res *Resolver) MessageStream(ctx context.Context, keyspace string, shard string, keyRange *topodatapb.KeyRange, name string, sendReply func(*querypb.MessageStreamResponse) error) error {
+func (res *Resolver) MessageStream(ctx context.Context, keyspace string, shard string, keyRange *topodatapb.KeyRange, name string, sendReply func(*sqltypes.Result) error) error {
 	var shards []string
 	var err error
 	if shard != "" {

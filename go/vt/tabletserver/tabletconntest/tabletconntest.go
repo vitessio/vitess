@@ -13,13 +13,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/callerid"
 	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"golang.org/x/net/context"
 
-	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
@@ -662,16 +662,16 @@ func testMessageStream(t *testing.T, conn tabletconn.TabletConn, f *FakeQuerySer
 	t.Log("testMessageStream")
 	ctx := context.Background()
 	ctx = callerid.NewContext(ctx, TestCallerID, TestVTGateCallerID)
-	var got *querypb.MessageStreamResponse
-	err := conn.MessageStream(ctx, TestTarget, MessageName, func(msr *querypb.MessageStreamResponse) error {
-		got = msr
+	var got *sqltypes.Result
+	err := conn.MessageStream(ctx, TestTarget, MessageName, func(qr *sqltypes.Result) error {
+		got = qr
 		return nil
 	})
 	if err != nil {
 		t.Fatalf("MessageStream failed: %v", err)
 	}
-	if !reflect.DeepEqual(got, MessageStreamResponse) {
-		t.Errorf("Unexpected result from MessageStream: got %v wanted %v", got, MessageStreamResponse)
+	if !reflect.DeepEqual(got, MessageStreamResult) {
+		t.Errorf("Unexpected result from MessageStream: got %v wanted %v", got, MessageStreamResult)
 	}
 }
 
@@ -680,7 +680,7 @@ func testMessageStreamError(t *testing.T, conn tabletconn.TabletConn, f *FakeQue
 	f.HasError = true
 	testErrorHelper(t, f, "MessageStream", func(ctx context.Context) error {
 		ctx = callerid.NewContext(ctx, TestCallerID, TestVTGateCallerID)
-		return conn.MessageStream(ctx, TestTarget, MessageName, func(msr *querypb.MessageStreamResponse) error { return nil })
+		return conn.MessageStream(ctx, TestTarget, MessageName, func(qr *sqltypes.Result) error { return nil })
 	})
 	f.HasError = false
 }
@@ -688,7 +688,7 @@ func testMessageStreamError(t *testing.T, conn tabletconn.TabletConn, f *FakeQue
 func testMessageStreamPanics(t *testing.T, conn tabletconn.TabletConn, f *FakeQueryService) {
 	t.Log("testMessageStreamPanics")
 	testPanicHelper(t, f, "MessageStream", func(ctx context.Context) error {
-		err := conn.MessageStream(ctx, TestTarget, MessageName, func(msr *querypb.MessageStreamResponse) error { return nil })
+		err := conn.MessageStream(ctx, TestTarget, MessageName, func(qr *sqltypes.Result) error { return nil })
 		return err
 	})
 }

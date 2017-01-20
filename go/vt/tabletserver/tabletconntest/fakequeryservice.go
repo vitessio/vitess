@@ -595,12 +595,15 @@ func (f *FakeQueryService) BeginExecuteBatch(ctx context.Context, target *queryp
 }
 
 var (
-	MessageName           = "vitess_message"
-	MessageStreamResponse = &querypb.MessageStreamResponse{
-		Name: "vitess_message",
-		Messages: []*querypb.VitessMessage{{
-			Id:            sqltypes.MakeString([]byte("1")).ToProtoValue(),
-			VitessMessage: sqltypes.MakeString([]byte("2")).ToProtoValue(),
+	MessageName         = "vitess_message"
+	MessageStreamResult = &sqltypes.Result{
+		Fields: tabletserver.FieldResult.Fields,
+		Rows: [][]sqltypes.Value{{
+			sqltypes.MakeTrusted(sqltypes.VarBinary, []byte("1")),
+			sqltypes.MakeTrusted(sqltypes.VarBinary, []byte("row1 value2")),
+		}, {
+			sqltypes.MakeTrusted(sqltypes.VarBinary, []byte("2")),
+			sqltypes.MakeTrusted(sqltypes.VarBinary, []byte("row2 value2")),
 		}},
 	}
 	MessageIDs = []*querypb.Value{{
@@ -610,7 +613,7 @@ var (
 )
 
 // MessageStream is part of the queryservice.QueryService interface
-func (f *FakeQueryService) MessageStream(ctx context.Context, target *querypb.Target, name string, sendReply func(*querypb.MessageStreamResponse) error) (err error) {
+func (f *FakeQueryService) MessageStream(ctx context.Context, target *querypb.Target, name string, sendReply func(*sqltypes.Result) error) (err error) {
 	if f.HasError {
 		return f.TabletError
 	}
@@ -620,7 +623,7 @@ func (f *FakeQueryService) MessageStream(ctx context.Context, target *querypb.Ta
 	if name != MessageName {
 		f.t.Errorf("name: %s, want %s", name, MessageName)
 	}
-	sendReply(MessageStreamResponse)
+	sendReply(MessageStreamResult)
 	return nil
 }
 

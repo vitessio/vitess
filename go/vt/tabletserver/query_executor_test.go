@@ -189,6 +189,7 @@ func TestQueryExecutorPlanInsertMessage(t *testing.T) {
 		},
 	})
 	tsv.messager.Subscribe("msg", r1.rcv)
+	<-r1.ch
 	got, err := qre.Execute()
 	if err != nil {
 		t.Fatalf("qre.Execute() = %v, want nil", err)
@@ -197,14 +198,14 @@ func TestQueryExecutorPlanInsertMessage(t *testing.T) {
 		t.Fatalf("got: %v, want: %v", got, want)
 	}
 	mr := <-r1.ch
-	wantmr := []*MessageRow{{
-		TimeNext: 1,
-		Epoch:    0,
-		ID:       sqltypes.MakeString([]byte("1")),
-		Message:  sqltypes.MakeString([]byte("01")),
-	}}
-	if !reflect.DeepEqual(mr, wantmr) {
-		t.Errorf("rows:\n%+v, want\n%+v", got, wantmr)
+	wantqr := &sqltypes.Result{
+		Rows: [][]sqltypes.Value{{
+			sqltypes.MakeString([]byte("1")),
+			sqltypes.MakeString([]byte("01")),
+		}},
+	}
+	if !reflect.DeepEqual(mr, wantqr) {
+		t.Errorf("rows:\n%+v, want\n%+v", got, wantqr)
 	}
 
 	txid := newTransaction(tsv)

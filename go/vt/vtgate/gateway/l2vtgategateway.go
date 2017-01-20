@@ -320,7 +320,7 @@ func (lg *l2VTGateGateway) BeginExecuteBatch(ctx context.Context, target *queryp
 
 // MessageStream streams messages for the
 // specified keyspace, shard, and tablet type.
-func (lg *l2VTGateGateway) MessageStream(ctx context.Context, target *querypb.Target, name string, sendReply func(*querypb.MessageStreamResponse) error) error {
+func (lg *l2VTGateGateway) MessageStream(ctx context.Context, target *querypb.Target, name string, sendReply func(*sqltypes.Result) error) error {
 	return lg.withRetry(ctx, target, func(conn *l2VTGateConn) error {
 		var innerErr error
 		startTime := time.Now()

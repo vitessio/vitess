@@ -416,18 +416,9 @@ func (sbc *SandboxConn) BeginExecuteBatch(ctx context.Context, target *querypb.T
 	return results, transactionID, err
 }
 
-// DefaultStreamResponse is the response returned by MessageStream.
-var DefaultStreamResponse = &querypb.MessageStreamResponse{
-	Name: "msg",
-	Messages: []*querypb.VitessMessage{{
-		Id:            sqltypes.MakeString([]byte("1")).ToProtoValue(),
-		VitessMessage: sqltypes.MakeString([]byte("2")).ToProtoValue(),
-	}},
-}
-
 // MessageStream is part of the TabletConn interface.
-func (sbc *SandboxConn) MessageStream(ctx context.Context, target *querypb.Target, name string, sendReply func(*querypb.MessageStreamResponse) error) (err error) {
-	sendReply(DefaultStreamResponse)
+func (sbc *SandboxConn) MessageStream(ctx context.Context, target *querypb.Target, name string, sendReply func(*sqltypes.Result) error) (err error) {
+	sendReply(SingleRowResult)
 	return nil
 }
 

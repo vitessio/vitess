@@ -571,17 +571,9 @@ message MessageStreamRequest {
   string name = 4;
 }
 
-// VitessMessage represents a single message.
-message VitessMessage {
-  Value id = 1;
-  Value vitess_message = 2;
-}
-
 // MessageStreamResponse is a response for MessageStream.
 message MessageStreamResponse {
-  // name is the message table name.
-  string name = 1;
-  repeated VitessMessage messages = 2;
+  QueryResult result = 1;
 }
 
 // MessageAckRequest is the request payload for MessageAck.
