@@ -155,8 +155,8 @@ func TestSubscribe(t *testing.T) {
 	// Each receiver is subscribed to different managers.
 	me.Subscribe("t1", r1.rcv)
 	me.Subscribe("t2", r2.rcv)
-	me.managers["t1"].Add(&MessageRow{id: "1"})
-	me.managers["t2"].Add(&MessageRow{id: "2"})
+	me.managers["t1"].Add(&MessageRow{ID: sqltypes.MakeString([]byte("1"))})
+	me.managers["t2"].Add(&MessageRow{ID: sqltypes.MakeString([]byte("2"))})
 	<-r1.ch
 	<-r2.ch
 
@@ -166,43 +166,6 @@ func TestSubscribe(t *testing.T) {
 	if err == nil || err.Error() != want {
 		t.Errorf("Subscribe: %v, want %s", err, want)
 	}
-}
-
-// TestReceiverEOF is here because it's testing MessageReceiver.
-func TestReceiverEOF(t *testing.T) {
-	db := setUpTabletServerTest()
-	testUtils := newTestUtils()
-	config := testUtils.newQueryServiceConfig()
-	config.TransactionCap = 1
-	tsv := NewTabletServer(config)
-	dbconfigs := testUtils.newDBConfigs(db)
-	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
-	err := tsv.StartService(target, dbconfigs, testUtils.newMysqld(&dbconfigs))
-	if err != nil {
-		t.Fatalf("StartService failed: %v", err)
-	}
-	defer tsv.StopService()
-	mm := NewMessageManager(tsv, "foo", 1*time.Second, 3*time.Second, 1, 10, 1*time.Second, newMMConnPool(db))
-	mm.Open()
-	defer mm.Close()
-	r1 := newTestReceiver(0)
-	mm.Subscribe(r1.rcv)
-	r1.done = make(chan struct{})
-	close(r1.done)
-	mm.Add(&MessageRow{id: "1"})
-	// r1 should eventually be unsubscribed.
-	for i := 0; i < 10; i++ {
-		runtime.Gosched()
-		time.Sleep(10 * time.Millisecond)
-		mm.mu.Lock()
-		if len(mm.receivers) != 0 {
-			mm.mu.Unlock()
-			continue
-		}
-		mm.mu.Unlock()
-		return
-	}
-	t.Errorf("receivers were not cleared: %d", len(mm.receivers))
 }
 
 func TestLockDB(t *testing.T) {
@@ -233,11 +196,11 @@ func TestLockDB(t *testing.T) {
 	me.Subscribe("t1", r1.rcv)
 
 	row1 := &MessageRow{
-		id: "1",
+		ID: sqltypes.MakeString([]byte("1")),
 	}
 	row2 := &MessageRow{
 		TimeNext: time.Now().UnixNano() + int64(10*time.Minute),
-		id:       "2",
+		ID:       sqltypes.MakeString([]byte("2")),
 	}
 	newMessages := map[string][]*MessageRow{"t1": {row1, row2}, "t3": {row1}}
 	unlock := me.LockDB(newMessages, nil)
@@ -255,11 +218,11 @@ func TestLockDB(t *testing.T) {
 	r2 := newTestReceiver(0)
 	me.Subscribe("t2", r2.rcv)
 	mm := me.managers["t2"]
-	mm.Add(&MessageRow{id: "1"})
+	mm.Add(&MessageRow{ID: sqltypes.MakeString([]byte("1"))})
 	// Make sure the first message is enqueued.
 	r2.WaitForCount(1)
 	// "2" will be in the cache.
-	mm.Add(&MessageRow{id: "2"})
+	mm.Add(&MessageRow{ID: sqltypes.MakeString([]byte("2"))})
 	changedMessages := map[string][]string{"t2": {"2"}, "t3": {"2"}}
 	unlock = me.LockDB(nil, changedMessages)
 	// This should delete "2".
@@ -307,7 +270,7 @@ func TestMESendDiscard(t *testing.T) {
 		},
 	)
 	db.AddQueryPattern("update msg set time_next = .*", &sqltypes.Result{RowsAffected: 1})
-	me.managers["msg"].Add(&MessageRow{id: "1"})
+	me.managers["msg"].Add(&MessageRow{ID: sqltypes.MakeString([]byte("1"))})
 	<-r1.ch
 	for i := 0; i < 10; i++ {
 		runtime.Gosched()

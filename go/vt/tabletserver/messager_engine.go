@@ -6,53 +6,12 @@ package tabletserver
 
 import (
 	"fmt"
-	"io"
 	"sync"
 	"time"
 
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/schema"
 )
-
-type messageReceiver struct {
-	mu   sync.Mutex
-	send func(string, []*MessageRow) error
-	done chan struct{}
-}
-
-func newMessageReceiver(send func(string, []*MessageRow) error) (*messageReceiver, chan struct{}) {
-	rcv := &messageReceiver{
-		send: send,
-		done: make(chan struct{}),
-	}
-	return rcv, rcv.done
-}
-
-func (rcv *messageReceiver) Send(name string, mrs []*MessageRow) error {
-	rcv.mu.Lock()
-	defer rcv.mu.Unlock()
-	if rcv.done == nil {
-		return io.EOF
-	}
-	err := rcv.send(name, mrs)
-	if err == io.EOF {
-		close(rcv.done)
-		rcv.done = nil
-	}
-	return err
-}
-
-func (rcv *messageReceiver) Cancel() {
-	// Do this async to avoid getting stuck.
-	go func() {
-		rcv.mu.Lock()
-		defer rcv.mu.Unlock()
-		if rcv.done != nil {
-			close(rcv.done)
-			rcv.done = nil
-		}
-	}()
-}
 
 // MessagerEngine is the engine for handling messages.
 type MessagerEngine struct {

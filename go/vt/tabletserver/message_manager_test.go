@@ -68,6 +68,42 @@ func (tr *testReceiver) WaitForDone() {
 	}
 }
 
+func TestReceiverEOF(t *testing.T) {
+	db := setUpTabletServerTest()
+	testUtils := newTestUtils()
+	config := testUtils.newQueryServiceConfig()
+	config.TransactionCap = 1
+	tsv := NewTabletServer(config)
+	dbconfigs := testUtils.newDBConfigs(db)
+	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+	err := tsv.StartService(target, dbconfigs, testUtils.newMysqld(&dbconfigs))
+	if err != nil {
+		t.Fatalf("StartService failed: %v", err)
+	}
+	defer tsv.StopService()
+	mm := NewMessageManager(tsv, "foo", 1*time.Second, 3*time.Second, 1, 10, 1*time.Second, newMMConnPool(db))
+	mm.Open()
+	defer mm.Close()
+	r1 := newTestReceiver(0)
+	mm.Subscribe(r1.rcv)
+	r1.done = make(chan struct{})
+	close(r1.done)
+	mm.Add(&MessageRow{ID: sqltypes.MakeString([]byte("1"))})
+	// r1 should eventually be unsubscribed.
+	for i := 0; i < 10; i++ {
+		runtime.Gosched()
+		time.Sleep(10 * time.Millisecond)
+		mm.mu.Lock()
+		if len(mm.receivers) != 0 {
+			mm.mu.Unlock()
+			continue
+		}
+		mm.mu.Unlock()
+		return
+	}
+	t.Errorf("receivers were not cleared: %d", len(mm.receivers))
+}
+
 func TestMessageManagerState(t *testing.T) {
 	db := setUpTabletServerTest()
 	testUtils := newTestUtils()
@@ -123,7 +159,7 @@ func TestMessageManagerAdd(t *testing.T) {
 	defer mm.Close()
 
 	row1 := &MessageRow{
-		id: "1",
+		ID: sqltypes.MakeString([]byte("1")),
 	}
 	if mm.Add(row1) {
 		t.Error("Add(no receivers): true, want false")
@@ -137,10 +173,10 @@ func TestMessageManagerAdd(t *testing.T) {
 	// Make sure message is enqueued.
 	r1.WaitForCount(1)
 	// This will fill up the cache.
-	mm.Add(&MessageRow{id: "2"})
+	mm.Add(&MessageRow{ID: sqltypes.MakeString([]byte("2"))})
 
 	// The third add has to fail.
-	if mm.Add(&MessageRow{id: "3"}) {
+	if mm.Add(&MessageRow{ID: sqltypes.MakeString([]byte("3"))}) {
 		t.Error("Add(cache full): true, want false")
 	}
 }
@@ -164,7 +200,7 @@ func TestMessageManagerSend(t *testing.T) {
 	r1 := newTestReceiver(1)
 	mm.Subscribe(r1.rcv)
 	row1 := &MessageRow{
-		id: "1",
+		ID: sqltypes.MakeString([]byte("1")),
 	}
 	mm.Add(row1)
 	if got := <-r1.ch; !reflect.DeepEqual(got, []*MessageRow{row1}) {
@@ -172,8 +208,8 @@ func TestMessageManagerSend(t *testing.T) {
 	}
 	r2 := newTestReceiver(1)
 	mm.Subscribe(r2.rcv)
-	mm.Add(&MessageRow{id: "2"})
-	mm.Add(&MessageRow{id: "3"})
+	mm.Add(&MessageRow{ID: sqltypes.MakeString([]byte("2"))})
+	mm.Add(&MessageRow{ID: sqltypes.MakeString([]byte("3"))})
 	// Send should be round-robin.
 	<-r1.ch
 	<-r2.ch
@@ -181,9 +217,9 @@ func TestMessageManagerSend(t *testing.T) {
 	r2.WaitForDone()
 	// One of these messages will fail to send
 	// because r1 will return EOF.
-	mm.Add(&MessageRow{id: "4"})
-	mm.Add(&MessageRow{id: "5"})
-	mm.Add(&MessageRow{id: "6"})
+	mm.Add(&MessageRow{ID: sqltypes.MakeString([]byte("4"))})
+	mm.Add(&MessageRow{ID: sqltypes.MakeString([]byte("5"))})
+	mm.Add(&MessageRow{ID: sqltypes.MakeString([]byte("6"))})
 	// Only r2 should be receiving.
 	<-r1.ch
 	<-r1.ch
@@ -208,7 +244,7 @@ func TestMessageManagerBatchSend(t *testing.T) {
 	r1 := newTestReceiver(1)
 	mm.Subscribe(r1.rcv)
 	row1 := &MessageRow{
-		id: "1",
+		ID: sqltypes.MakeString([]byte("1")),
 	}
 	mm.Add(row1)
 	want := []*MessageRow{row1}
@@ -216,13 +252,13 @@ func TestMessageManagerBatchSend(t *testing.T) {
 		t.Errorf("Received: %v, want %v", got, row1)
 	}
 	mm.mu.Lock()
-	mm.cache.Add(&MessageRow{id: "2"})
-	mm.cache.Add(&MessageRow{id: "3"})
+	mm.cache.Add(&MessageRow{ID: sqltypes.MakeString([]byte("2"))})
+	mm.cache.Add(&MessageRow{ID: sqltypes.MakeString([]byte("3"))})
 	mm.cond.Broadcast()
 	mm.mu.Unlock()
 	want = []*MessageRow{
-		{id: "2"},
-		{id: "3"},
+		{ID: sqltypes.MakeString([]byte("2"))},
+		{ID: sqltypes.MakeString([]byte("3"))},
 	}
 	if got := <-r1.ch; !reflect.DeepEqual(got, want) {
 		t.Errorf("Received: %+v, want %+v", got, row1)
@@ -274,19 +310,16 @@ func TestMessageManagerPoller(t *testing.T) {
 		Epoch:    0,
 		ID:       sqltypes.MakeString([]byte("2")),
 		Message:  sqltypes.MakeString([]byte("02")),
-		id:       "2",
 	}, {
 		TimeNext: 1,
 		Epoch:    0,
 		ID:       sqltypes.MakeString([]byte("1")),
 		Message:  sqltypes.MakeString([]byte("01")),
-		id:       "1",
 	}, {
 		TimeNext: 1,
 		Epoch:    1,
 		ID:       sqltypes.MakeString([]byte("3")),
 		Message:  sqltypes.MakeString([]byte("11")),
-		id:       "3",
 	}}
 	var got []*MessageRow
 	// We should get it in 2 iterations.
@@ -344,12 +377,12 @@ func TestMessagesPending1(t *testing.T) {
 	r1 := newTestReceiver(0)
 	mm.Subscribe(r1.rcv)
 
-	mm.Add(&MessageRow{id: "1"})
+	mm.Add(&MessageRow{ID: sqltypes.MakeString([]byte("1"))})
 	// Make sure the first message is enqueued.
 	r1.WaitForCount(1)
 	// This will fill up the cache.
-	mm.Add(&MessageRow{id: "2"})
-	mm.Add(&MessageRow{id: "3"})
+	mm.Add(&MessageRow{ID: sqltypes.MakeString([]byte("2"))})
+	mm.Add(&MessageRow{ID: sqltypes.MakeString([]byte("3"))})
 
 	// Trigger the poller. It should do nothing.
 	mm.pollerTicks.Trigger()

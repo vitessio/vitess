@@ -1415,7 +1415,7 @@ func TestMessageStream(t *testing.T) {
 	}()
 	newMessages := map[string][]*MessageRow{
 		"msg": {
-			&MessageRow{ID: sqltypes.MakeString([]byte("1")), id: "1"},
+			&MessageRow{ID: sqltypes.MakeString([]byte("1"))},
 		},
 	}
 	// We may have to iterate a few times before the stream kicks in.

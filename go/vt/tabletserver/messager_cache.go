@@ -19,9 +19,6 @@ type MessageRow struct {
 	Epoch    int64
 	ID       sqltypes.Value
 	Message  sqltypes.Value
-
-	// id is the string representation of id
-	id string
 }
 
 type messageHeap []*MessageRow
@@ -88,13 +85,14 @@ func (mc *MessagerCache) Add(mr *MessageRow) bool {
 	if len(mc.sendQueue) >= mc.size {
 		return false
 	}
+	id := mr.ID.String()
 	// Don't check for nil. Messages that are popped for
 	// send are nilled out.
-	if _, ok := mc.messages[mr.id]; ok {
+	if _, ok := mc.messages[id]; ok {
 		return true
 	}
 	heap.Push(&mc.sendQueue, mr)
-	mc.messages[mr.id] = mr
+	mc.messages[id] = mr
 	return true
 }
 
@@ -112,15 +110,16 @@ func (mc *MessagerCache) Pop() *MessageRow {
 			return nil
 		}
 		mr := heap.Pop(&mc.sendQueue).(*MessageRow)
+		id := mr.ID.String()
 		// If message was previously marked as defunct, drop
 		// it and continue.
-		if mr.id == "" {
+		if id == "" {
 			continue
 		}
 		// Point the message entry to nil. If there is a race
 		// with Discard while the item is being sent, it won't
 		// be reachable.
-		mc.messages[mr.id] = nil
+		mc.messages[id] = nil
 		return mr
 	}
 }
@@ -133,7 +132,7 @@ func (mc *MessagerCache) Discard(ids []string) {
 		if mr := mc.messages[id]; mr != nil {
 			// The row is still in the queue somewhere. Mark
 			// it as defunct. It will be "garbage collected" later.
-			mr.id = ""
+			mr.ID = sqltypes.NULL
 			// "Free" the message.
 			mr.Message = sqltypes.NULL
 		}
