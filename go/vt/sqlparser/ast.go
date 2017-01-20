@@ -997,6 +997,7 @@ const (
 	NotRegexpStr         = "not regexp"
 	JSONExtractOp        = "->"
 	JSONUnquoteExtractOp = "->>"
+	CollateStr 	     = "collate"
 )
 
 // Format formats the node.
@@ -1801,7 +1802,7 @@ func (node ColIdent) CompliantName() string {
 	return compliantName(node.val)
 }
 
-// Lowered returns a lower-cased column name.
+// Lowered returns a lowezr-cased column name.
 // This function should generally be used only for optimizing
 // comparisons.
 func (node ColIdent) Lowered() string {

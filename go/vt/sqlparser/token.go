@@ -59,7 +59,7 @@ var keywords = map[string]int{
 	"char":                UNUSED,
 	"character":           UNUSED,
 	"check":               UNUSED,
-	"collate":             UNUSED,
+	"collate":             COLLATE,
 	"column":              UNUSED,
 	"condition":           UNUSED,
 	"constraint":          UNUSED,

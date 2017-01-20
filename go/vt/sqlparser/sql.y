@@ -98,6 +98,7 @@ func forceEOF(yylex interface{}) {
 %left <empty> '*' '/' '%' MOD
 %left <empty> '^'
 %right <empty> '~' UNARY
+%left <empty> COLLATE
 %right <empty> INTERVAL
 %nonassoc <empty> '.'
 
@@ -769,6 +770,10 @@ compare:
   {
     $$ = NullSafeEqualStr
   }
+| COLLATE
+  {
+    $$ = CollateStr
+  }
 
 col_tuple:
   openb value_expression_list closeb
@@ -868,6 +873,10 @@ value_expression:
 | column_name JSON_UNQUOTE_EXTRACT_OP value
   {
     $$ = &BinaryExpr{Left: $1, Operator: JSONUnquoteExtractOp, Right: $3}
+  }
+| column_name COLLATE value
+  {
+    $$ = &BinaryExpr{Left: $1, Operator: Collate, Right: $3}
   }
 | '+'  value_expression %prec UNARY
   {

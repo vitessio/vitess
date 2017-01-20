@@ -796,3 +796,61 @@ func TestJSONType(t *testing.T) {
 	}
 
 }
+
+func TestCollateOperator(t *testing.T) {
+	client := framework.NewClient()
+	if _, err := client.Execute("create table vitess_collate(id int default 1, name, primary key(id))", nil); err != nil {
+		// If it's a syntax error, MySQL is an older version. Skip this test.
+		if strings.Contains(err.Error(), "syntax") {
+			return
+		}
+		t.Fatal(err)
+	}
+	defer client.Execute("drop table vitess_json", nil)
+
+	if _, err := client.Execute(`insert into vitess_collate values(1, 'hi')`, nil); err != nil {
+		t.Fatal(err)
+	}
+
+
+	qr, err := client.Execute("select id, name from vitess_collate order by name collate utf8_general_ci", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := sqltypes.Result{
+		Fields: []*querypb.Field{
+			{
+				Name:         "id",
+				Type:         sqltypes.Int32,
+				Table:        "vitess_collate",
+				OrgTable:     "vitess_collate",
+				Database:     "vttest",
+				OrgName:      "id",
+				ColumnLength: 11,
+				Charset:      63,
+				Flags:        49155,
+			}, {
+				Name:         "val",
+				Type:         sqltypes.TypeJSON,
+				Table:        "vitess_json",
+				OrgTable:     "vitess_json",
+				Database:     "vttest",
+				OrgName:      "val",
+				ColumnLength: 4294967295,
+				Charset:      63,
+				Flags:        144,
+			},
+		},
+		RowsAffected: 1,
+		Rows: [][]sqltypes.Value{
+			{
+				sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
+				sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte("{\"foo\": \"bar\"}")),
+			},
+		},
+	}
+	if !reflect.DeepEqual(*qr, want) {
+		t.Errorf("Execute: \n%v, want \n%v", prettyPrint(*qr), prettyPrint(want))
+	}
+
+}
