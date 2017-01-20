@@ -19,6 +19,7 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/tb"
 	"github.com/youtube/vitess/go/vt/callerid"
+	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateconn"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateservice"
@@ -698,7 +699,7 @@ func (f *fakeVTGateService) ResolveTransaction(ctx context.Context, dtid string)
 	return nil
 }
 
-func (f *fakeVTGateService) MessageStream(ctx context.Context, keyspace string, shard string, keyRange *topodatapb.KeyRange, name string, sendReply func(*querypb.MessageStreamResponse) error) error {
+func (f *fakeVTGateService) MessageStream(ctx context.Context, keyspace string, shard string, keyRange *topodatapb.KeyRange, name string, sendReply func(*sqltypes.Result) error) error {
 	if f.hasError {
 		return errTestVtGateError
 	}
@@ -709,7 +710,7 @@ func (f *fakeVTGateService) MessageStream(ctx context.Context, keyspace string, 
 	if name != messageName {
 		return errors.New("MessageStream name mismatch")
 	}
-	sendReply(messageStreamResponse)
+	sendReply(messageStreamResult)
 	return nil
 }
 
@@ -1853,9 +1854,9 @@ func testTxFail(t *testing.T, conn *vtgateconn.VTGateConn) {
 
 func testMessageStream(t *testing.T, conn *vtgateconn.VTGateConn) {
 	ctx := newContext()
-	err := conn.MessageStream(ctx, "", "", nil, messageName, func(msr *querypb.MessageStreamResponse) error {
-		if !reflect.DeepEqual(msr, messageStreamResponse) {
-			t.Errorf("reply: %v, want %v", msr, messageStreamResponse)
+	err := conn.MessageStream(ctx, "", "", nil, messageName, func(qr *sqltypes.Result) error {
+		if !reflect.DeepEqual(qr, messageStreamResult) {
+			t.Errorf("reply: %v, want %v", qr, messageStreamResult)
 		}
 		return nil
 	})
@@ -1866,7 +1867,7 @@ func testMessageStream(t *testing.T, conn *vtgateconn.VTGateConn) {
 
 func testMessageStreamError(t *testing.T, conn *vtgateconn.VTGateConn) {
 	ctx := newContext()
-	err := conn.MessageStream(ctx, "", "", nil, messageName, func(msr *querypb.MessageStreamResponse) error {
+	err := conn.MessageStream(ctx, "", "", nil, messageName, func(qr *sqltypes.Result) error {
 		return nil
 	})
 	verifyError(t, err, "MessageStream")
@@ -1874,7 +1875,7 @@ func testMessageStreamError(t *testing.T, conn *vtgateconn.VTGateConn) {
 
 func testMessageStreamPanic(t *testing.T, conn *vtgateconn.VTGateConn) {
 	ctx := newContext()
-	err := conn.MessageStream(ctx, "", "", nil, messageName, func(msr *querypb.MessageStreamResponse) error {
+	err := conn.MessageStream(ctx, "", "", nil, messageName, func(qr *sqltypes.Result) error {
 		return nil
 	})
 	expectPanic(t, err)
@@ -2618,11 +2619,11 @@ var getSrvKeyspaceResult = &topodatapb.SrvKeyspace{
 }
 
 var messageName = "vitess_message"
-var messageStreamResponse = &querypb.MessageStreamResponse{
-	Name: "vitess_message",
-	Messages: []*querypb.VitessMessage{{
-		Id:            sqltypes.MakeString([]byte("1")).ToProtoValue(),
-		VitessMessage: sqltypes.MakeString([]byte("2")).ToProtoValue(),
+var messageStreamResult = &sqltypes.Result{
+	Fields: tabletserver.FieldResult.Fields,
+	Rows: [][]sqltypes.Value{{
+		sqltypes.MakeTrusted(sqltypes.VarBinary, []byte("2")),
+		sqltypes.MakeTrusted(sqltypes.VarBinary, []byte("3")),
 	}},
 }
 var messageids = []*querypb.Value{

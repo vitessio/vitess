@@ -15,15 +15,31 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/timer"
 	"github.com/youtube/vitess/go/vt/sqlparser"
+
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
+)
+
+var (
+	// FieldResult is a place-holder for now.
+	// TODO(sougou): Build this from the database.
+	FieldResult = &sqltypes.Result{
+		Fields: []*querypb.Field{{
+			Name: "id",
+			Type: querypb.Type_VARBINARY,
+		}, {
+			Name: "message",
+			Type: querypb.Type_VARBINARY,
+		}},
+	}
 )
 
 type messageReceiver struct {
 	mu   sync.Mutex
-	send func(string, []*MessageRow) error
+	send func(*sqltypes.Result) error
 	done chan struct{}
 }
 
-func newMessageReceiver(send func(string, []*MessageRow) error) (*messageReceiver, chan struct{}) {
+func newMessageReceiver(send func(*sqltypes.Result) error) (*messageReceiver, chan struct{}) {
 	rcv := &messageReceiver{
 		send: send,
 		done: make(chan struct{}),
@@ -31,13 +47,13 @@ func newMessageReceiver(send func(string, []*MessageRow) error) (*messageReceive
 	return rcv, rcv.done
 }
 
-func (rcv *messageReceiver) Send(name string, mrs []*MessageRow) error {
+func (rcv *messageReceiver) Send(qr *sqltypes.Result) error {
 	rcv.mu.Lock()
 	defer rcv.mu.Unlock()
 	if rcv.done == nil {
 		return io.EOF
 	}
-	err := rcv.send(name, mrs)
+	err := rcv.send(qr)
 	if err == io.EOF {
 		close(rcv.done)
 		rcv.done = nil
@@ -178,11 +194,12 @@ func (mm *MessageManager) Subscribe(receiver *messageReceiver) {
 			return
 		}
 	}
-	mm.receivers = append(mm.receivers, &receiverWithStatus{receiver: receiver})
-	if mm.curReceiver == -1 {
-		mm.curReceiver = len(mm.receivers) - 1
-		mm.cond.Broadcast()
+	withStatus := &receiverWithStatus{
+		receiver: receiver,
+		busy:     true,
 	}
+	mm.receivers = append(mm.receivers, withStatus)
+	go mm.send(withStatus, FieldResult)
 }
 
 func (mm *MessageManager) unsubscribe(receiver *messageReceiver) {
@@ -247,7 +264,7 @@ func (mm *MessageManager) Add(mr *MessageRow) bool {
 func (mm *MessageManager) runSend() {
 	defer mm.wg.Done()
 	for {
-		var mrs []*MessageRow
+		var rows [][]sqltypes.Value
 		mm.mu.Lock()
 		for {
 			if !mm.isOpen {
@@ -260,12 +277,12 @@ func (mm *MessageManager) runSend() {
 			}
 			for i := 0; i < mm.batchSize; i++ {
 				if mr := mm.cache.Pop(); mr != nil {
-					mrs = append(mrs, mr)
+					rows = append(rows, []sqltypes.Value{mr.ID, mr.Message})
 					continue
 				}
 				break
 			}
-			if mrs != nil {
+			if rows != nil {
 				break
 			}
 			if mm.messagesPending {
@@ -274,25 +291,25 @@ func (mm *MessageManager) runSend() {
 			}
 			mm.cond.Wait()
 		}
-		// If we're here, there is a current receiver, and a message
+		// If we're here, there is a current receiver, and messages
 		// to send. Reserve the receiver and find the next one.
 		receiver := mm.receivers[mm.curReceiver]
 		receiver.busy = true
 		mm.rescanReceivers(mm.curReceiver)
 		mm.mu.Unlock()
 		// Send the message asynchronously.
-		go mm.send(receiver, mrs)
+		go mm.send(receiver, &sqltypes.Result{Rows: rows})
 	}
 }
 
-func (mm *MessageManager) send(receiver *receiverWithStatus, mrs []*MessageRow) {
-	if err := receiver.receiver.Send(mm.name, mrs); err != nil {
+func (mm *MessageManager) send(receiver *receiverWithStatus, qr *sqltypes.Result) {
+	if err := receiver.receiver.Send(qr); err != nil {
 		if err == io.EOF {
 			// No need to call Cancel. MessageReceiver already
 			// does that before returning this error.
 			mm.unsubscribe(receiver.receiver)
 		} else {
-			log.Errorf("Error sending messages: %v", mrs)
+			log.Errorf("Error sending messages: %v", qr)
 		}
 	}
 	mm.mu.Lock()
@@ -303,9 +320,13 @@ func (mm *MessageManager) send(receiver *receiverWithStatus, mrs []*MessageRow) 
 		mm.rescanReceivers(-1)
 	}
 	mm.mu.Unlock()
-	ids := make([]string, len(mrs))
-	for i, mr := range mrs {
-		ids[i] = mr.ID.String()
+	if len(qr.Rows) == 0 {
+		// It was just a Fields send.
+		return
+	}
+	ids := make([]string, len(qr.Rows))
+	for i, row := range qr.Rows {
+		ids[i] = row[0].String()
 	}
 	// Postpone the messages for resend before discarding
 	// from cache. If no timely ack is received, it will be resent.

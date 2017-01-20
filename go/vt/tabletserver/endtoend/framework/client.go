@@ -186,7 +186,7 @@ func (client *QueryClient) ExecuteBatch(queries []querytypes.BoundQuery, asTrans
 }
 
 // MessageStream streams messages from the message table.
-func (client *QueryClient) MessageStream(name string, sendReply func(*querypb.MessageStreamResponse) error) (err error) {
+func (client *QueryClient) MessageStream(name string, sendReply func(*sqltypes.Result) error) (err error) {
 	return client.server.MessageStream(client.ctx, &client.target, name, sendReply)
 }
 

@@ -100,7 +100,7 @@ func (e *ErrorQueryService) BeginExecuteBatch(ctx context.Context, target *query
 }
 
 // MessageStream is part of QueryService interface
-func (e *ErrorQueryService) MessageStream(ctx context.Context, target *querypb.Target, name string, sendReply func(*querypb.MessageStreamResponse) error) (err error) {
+func (e *ErrorQueryService) MessageStream(ctx context.Context, target *querypb.Target, name string, sendReply func(*sqltypes.Result) error) (err error) {
 	return fmt.Errorf("ErrorQueryService does not implement any method")
 }
 

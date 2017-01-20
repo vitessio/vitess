@@ -149,7 +149,7 @@ func (conn *VTGateConn) ResolveTransaction(ctx context.Context, dtid string) err
 }
 
 // MessageStream streams messages.
-func (conn *VTGateConn) MessageStream(ctx context.Context, keyspace string, shard string, keyRange *topodatapb.KeyRange, name string, sendReply func(*querypb.MessageStreamResponse) error) error {
+func (conn *VTGateConn) MessageStream(ctx context.Context, keyspace string, shard string, keyRange *topodatapb.KeyRange, name string, sendReply func(*sqltypes.Result) error) error {
 	return conn.impl.MessageStream(ctx, keyspace, shard, keyRange, name, sendReply)
 }
 
@@ -378,7 +378,7 @@ type Impl interface {
 	ResolveTransaction(ctx context.Context, dtid string) error
 
 	// Messaging functions.
-	MessageStream(ctx context.Context, keyspace string, shard string, keyRange *topodatapb.KeyRange, name string, sendReply func(*querypb.MessageStreamResponse) error) error
+	MessageStream(ctx context.Context, keyspace string, shard string, keyRange *topodatapb.KeyRange, name string, sendReply func(*sqltypes.Result) error) error
 	MessageAck(ctx context.Context, keyspace string, name string, ids []*querypb.Value) (int64, error)
 
 	// SplitQuery splits a query into smaller queries. It is mostly used by batch job frameworks

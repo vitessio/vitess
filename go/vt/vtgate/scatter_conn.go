@@ -433,14 +433,14 @@ func (stc *ScatterConn) StreamExecuteMulti(
 }
 
 // MessageStream streams messages from the specified shards.
-func (stc *ScatterConn) MessageStream(ctx context.Context, keyspace string, shards []string, name string, sendReply func(*querypb.MessageStreamResponse) error) error {
+func (stc *ScatterConn) MessageStream(ctx context.Context, keyspace string, shards []string, name string, sendReply func(*sqltypes.Result) error) error {
 	// mu is used to merge multiple sendReply calls into one.
 	var mu sync.Mutex
 	allErrors := stc.multiGo(ctx, "MessageStream", keyspace, shards, topodatapb.TabletType_MASTER, func(target *querypb.Target) error {
-		return stc.gateway.MessageStream(ctx, target, name, func(msr *querypb.MessageStreamResponse) error {
+		return stc.gateway.MessageStream(ctx, target, name, func(qr *sqltypes.Result) error {
 			mu.Lock()
 			defer mu.Unlock()
-			return sendReply(msr)
+			return sendReply(qr)
 		})
 	})
 	return allErrors.AggrError(stc.aggregateErrors)

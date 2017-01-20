@@ -155,7 +155,7 @@ func (c *callerIDClient) StreamExecuteKeyRanges(ctx context.Context, sql string,
 	return c.fallbackClient.StreamExecuteKeyRanges(ctx, sql, bindVariables, keyspace, keyRanges, tabletType, options, sendReply)
 }
 
-func (c *callerIDClient) MessageStream(ctx context.Context, keyspace string, shard string, keyRange *topodatapb.KeyRange, name string, sendReply func(*querypb.MessageStreamResponse) error) error {
+func (c *callerIDClient) MessageStream(ctx context.Context, keyspace string, shard string, keyRange *topodatapb.KeyRange, name string, sendReply func(*sqltypes.Result) error) error {
 	if ok, err := c.checkCallerID(ctx, name); ok {
 		return err
 	}

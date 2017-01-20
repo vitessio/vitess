@@ -308,7 +308,11 @@ func (q *query) MessageStream(request *querypb.MessageStreamRequest, stream quer
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-	if err := q.server.MessageStream(ctx, request.Target, request.Name, stream.Send); err != nil {
+	if err := q.server.MessageStream(ctx, request.Target, request.Name, func(qr *sqltypes.Result) error {
+		return stream.Send(&querypb.MessageStreamResponse{
+			Result: sqltypes.ResultToProto3(qr),
+		})
+	}); err != nil {
 		return vterrors.ToGRPCError(err)
 	}
 	return nil

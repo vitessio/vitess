@@ -450,7 +450,7 @@ func (itc *internalTabletConn) BeginExecuteBatch(ctx context.Context, target *qu
 }
 
 // MessageStream is part of tabletconn.TabletConn
-func (itc *internalTabletConn) MessageStream(ctx context.Context, target *querypb.Target, name string, sendReply func(*querypb.MessageStreamResponse) error) error {
+func (itc *internalTabletConn) MessageStream(ctx context.Context, target *querypb.Target, name string, sendReply func(*sqltypes.Result) error) error {
 	err := itc.tablet.qsc.QueryService().MessageStream(ctx, target, name, sendReply)
 	return tabletconn.TabletErrorFromGRPC(vterrors.ToGRPCError(err))
 }

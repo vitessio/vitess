@@ -209,7 +209,7 @@ func (l *L2VTGate) BeginExecuteBatch(ctx context.Context, target *querypb.Target
 }
 
 // MessageStream is part of the queryservice.QueryService interface
-func (l *L2VTGate) MessageStream(ctx context.Context, target *querypb.Target, name string, sendReply func(*querypb.MessageStreamResponse) error) (err error) {
+func (l *L2VTGate) MessageStream(ctx context.Context, target *querypb.Target, name string, sendReply func(*sqltypes.Result) error) (err error) {
 	startTime, statsKey := l.startAction("ExecuteBatch", target)
 	defer l.endAction(startTime, statsKey, &err)
 

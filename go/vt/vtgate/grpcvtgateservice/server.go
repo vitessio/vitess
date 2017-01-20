@@ -400,7 +400,11 @@ func (vtg *VTGate) ResolveTransaction(ctx context.Context, request *vtgatepb.Res
 func (vtg *VTGate) MessageStream(request *vtgatepb.MessageStreamRequest, stream vtgateservicepb.Vitess_MessageStreamServer) (err error) {
 	defer vtg.server.HandlePanic(&err)
 	ctx := withCallerIDContext(stream.Context(), request.CallerId)
-	vtgErr := vtg.server.MessageStream(ctx, request.Keyspace, request.Shard, request.KeyRange, request.Name, stream.Send)
+	vtgErr := vtg.server.MessageStream(ctx, request.Keyspace, request.Shard, request.KeyRange, request.Name, func(qr *sqltypes.Result) error {
+		return stream.Send(&querypb.MessageStreamResponse{
+			Result: sqltypes.ResultToProto3(qr),
+		})
+	})
 	return vterrors.ToGRPCError(vtgErr)
 }
 

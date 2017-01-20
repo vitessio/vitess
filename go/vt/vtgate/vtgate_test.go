@@ -1041,12 +1041,12 @@ func TestVTGateMessageStreamSharded(t *testing.T) {
 	hcVTGateTest.Reset()
 	_ = hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, ks, shard1, topodatapb.TabletType_MASTER, true, 1, nil)
 	_ = hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1002, ks, shard2, topodatapb.TabletType_MASTER, true, 1, nil)
-	ch := make(chan *querypb.MessageStreamResponse)
+	ch := make(chan *sqltypes.Result)
 	done := make(chan struct{})
 	go func() {
 		kr := &topodatapb.KeyRange{End: []byte{0x40}}
-		err := rpcVTGate.MessageStream(context.Background(), ks, "", kr, "msg", func(msr *querypb.MessageStreamResponse) error {
-			ch <- msr
+		err := rpcVTGate.MessageStream(context.Background(), ks, "", kr, "msg", func(qr *sqltypes.Result) error {
+			ch <- qr
 			return nil
 		})
 		if err != nil {
@@ -1057,15 +1057,15 @@ func TestVTGateMessageStreamSharded(t *testing.T) {
 	// We should get two messages.
 	<-ch
 	got := <-ch
-	if !reflect.DeepEqual(got, sandboxconn.DefaultStreamResponse) {
-		t.Errorf("MessageStream: %v, want %v", got, sandboxconn.DefaultStreamResponse)
+	if !reflect.DeepEqual(got, sandboxconn.SingleRowResult) {
+		t.Errorf("MessageStream: %v, want %v", got, sandboxconn.SingleRowResult)
 	}
 	<-done
 
 	// Test error case.
 	kr := &topodatapb.KeyRange{End: []byte{0x30}}
-	err := rpcVTGate.MessageStream(context.Background(), ks, "", kr, "msg", func(msr *querypb.MessageStreamResponse) error {
-		ch <- msr
+	err := rpcVTGate.MessageStream(context.Background(), ks, "", kr, "msg", func(qr *sqltypes.Result) error {
+		ch <- qr
 		return nil
 	})
 	want := "keyrange -30 does not exactly match shards"
@@ -1079,11 +1079,11 @@ func TestVTGateMessageStreamUnsharded(t *testing.T) {
 	createSandbox(ks)
 	hcVTGateTest.Reset()
 	_ = hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, ks, "0", topodatapb.TabletType_MASTER, true, 1, nil)
-	ch := make(chan *querypb.MessageStreamResponse)
+	ch := make(chan *sqltypes.Result)
 	done := make(chan struct{})
 	go func() {
-		err := rpcVTGate.MessageStream(context.Background(), ks, "0", nil, "msg", func(msr *querypb.MessageStreamResponse) error {
-			ch <- msr
+		err := rpcVTGate.MessageStream(context.Background(), ks, "0", nil, "msg", func(qr *sqltypes.Result) error {
+			ch <- qr
 			return nil
 		})
 		if err != nil {
@@ -1092,8 +1092,8 @@ func TestVTGateMessageStreamUnsharded(t *testing.T) {
 		close(done)
 	}()
 	got := <-ch
-	if !reflect.DeepEqual(got, sandboxconn.DefaultStreamResponse) {
-		t.Errorf("MessageStream: %v, want %v", got, sandboxconn.DefaultStreamResponse)
+	if !reflect.DeepEqual(got, sandboxconn.SingleRowResult) {
+		t.Errorf("MessageStream: %v, want %v", got, sandboxconn.SingleRowResult)
 	}
 	<-done
 }

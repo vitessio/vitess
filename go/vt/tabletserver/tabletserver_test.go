@@ -1397,22 +1397,28 @@ func TestMessageStream(t *testing.T) {
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
 
 	wanterr := "error: message table nomsg not found"
-	if err := tsv.MessageStream(ctx, &target, "nomsg", func(msr *querypb.MessageStreamResponse) error {
+	if err := tsv.MessageStream(ctx, &target, "nomsg", func(qr *sqltypes.Result) error {
 		return nil
 	}); err == nil || err.Error() != wanterr {
 		t.Errorf("tsv.MessageStream: %v, want %s", err, wanterr)
 	}
-	ch := make(chan *querypb.MessageStreamResponse, 1)
+	ch := make(chan *sqltypes.Result, 1)
 	done := make(chan struct{})
+	skippedField := false
 	go func() {
-		if err := tsv.MessageStream(ctx, &target, "msg", func(msr *querypb.MessageStreamResponse) error {
-			ch <- msr
+		if err := tsv.MessageStream(ctx, &target, "msg", func(qr *sqltypes.Result) error {
+			if !skippedField {
+				skippedField = true
+				return nil
+			}
+			ch <- qr
 			return io.EOF
 		}); err != nil {
 			t.Error(err)
 		}
 		close(done)
 	}()
+	// Skip first result (field info).
 	newMessages := map[string][]*MessageRow{
 		"msg": {
 			&MessageRow{ID: sqltypes.MakeString([]byte("1"))},
@@ -1425,11 +1431,10 @@ func TestMessageStream(t *testing.T) {
 		unlock := tsv.messager.LockDB(newMessages, nil)
 		tsv.messager.UpdateCaches(newMessages, nil)
 		unlock()
-		want := &querypb.MessageStreamResponse{
-			Name: "msg",
-			Messages: []*querypb.VitessMessage{{
-				Id:            sqltypes.MakeString([]byte("1")).ToProtoValue(),
-				VitessMessage: sqltypes.NULL.ToProtoValue(),
+		want := &sqltypes.Result{
+			Rows: [][]sqltypes.Value{{
+				sqltypes.MakeString([]byte("1")),
+				sqltypes.NULL,
 			}},
 		}
 		select {

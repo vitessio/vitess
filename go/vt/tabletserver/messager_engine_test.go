@@ -154,7 +154,9 @@ func TestSubscribe(t *testing.T) {
 	r2 := newTestReceiver(1)
 	// Each receiver is subscribed to different managers.
 	me.Subscribe("t1", r1.rcv)
+	<-r1.ch
 	me.Subscribe("t2", r2.rcv)
+	<-r2.ch
 	me.managers["t1"].Add(&MessageRow{ID: sqltypes.MakeString([]byte("1"))})
 	me.managers["t2"].Add(&MessageRow{ID: sqltypes.MakeString([]byte("2"))})
 	<-r1.ch
@@ -194,6 +196,7 @@ func TestLockDB(t *testing.T) {
 	me.schemaChanged(tables)
 	r1 := newTestReceiver(0)
 	me.Subscribe("t1", r1.rcv)
+	<-r1.ch
 
 	row1 := &MessageRow{
 		ID: sqltypes.MakeString([]byte("1")),
@@ -217,10 +220,11 @@ func TestLockDB(t *testing.T) {
 
 	r2 := newTestReceiver(0)
 	me.Subscribe("t2", r2.rcv)
+	<-r2.ch
 	mm := me.managers["t2"]
 	mm.Add(&MessageRow{ID: sqltypes.MakeString([]byte("1"))})
 	// Make sure the first message is enqueued.
-	r2.WaitForCount(1)
+	r2.WaitForCount(2)
 	// "2" will be in the cache.
 	mm.Add(&MessageRow{ID: sqltypes.MakeString([]byte("2"))})
 	changedMessages := map[string][]string{"t2": {"2"}, "t3": {"2"}}
@@ -258,6 +262,7 @@ func TestMESendDiscard(t *testing.T) {
 	me := tsv.messager
 	r1 := newTestReceiver(0)
 	me.Subscribe("msg", r1.rcv)
+	<-r1.ch
 
 	db.AddQuery(
 		"select time_scheduled, id from msg where id in ('1') and time_acked is null limit 10001 for update",

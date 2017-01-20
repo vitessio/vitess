@@ -488,7 +488,7 @@ func (conn *gRPCQueryClient) BeginExecuteBatch(ctx context.Context, target *quer
 }
 
 // MessageStream streams messages.
-func (conn *gRPCQueryClient) MessageStream(ctx context.Context, target *querypb.Target, name string, sendReply func(*querypb.MessageStreamResponse) error) error {
+func (conn *gRPCQueryClient) MessageStream(ctx context.Context, target *querypb.Target, name string, sendReply func(*sqltypes.Result) error) error {
 	stream, err := func() (queryservicepb.Query_MessageStreamClient, error) {
 		conn.mu.RLock()
 		defer conn.mu.RUnlock()
@@ -511,6 +511,7 @@ func (conn *gRPCQueryClient) MessageStream(ctx context.Context, target *querypb.
 	if err != nil {
 		return err
 	}
+	var fields []*querypb.Field
 	for {
 		msr, err := stream.Recv()
 		if err != nil {
@@ -519,7 +520,10 @@ func (conn *gRPCQueryClient) MessageStream(ctx context.Context, target *querypb.
 			}
 			return tabletconn.TabletErrorFromGRPC(err)
 		}
-		if err := sendReply(msr); err != nil {
+		if fields == nil {
+			fields = msr.Result.Fields
+		}
+		if err := sendReply(sqltypes.CustomProto3ToResult(fields, msr.Result)); err != nil {
 			return tabletconn.TabletErrorFromGRPC(err)
 		}
 	}

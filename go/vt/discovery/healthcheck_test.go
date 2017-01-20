@@ -534,7 +534,7 @@ func (fc *fakeConn) BeginExecuteBatch(ctx context.Context, target *querypb.Targe
 }
 
 // MessageStream implements tabletconn.TabletConn.
-func (fc *fakeConn) MessageStream(ctx context.Context, target *querypb.Target, name string, sendReply func(*querypb.MessageStreamResponse) error) (err error) {
+func (fc *fakeConn) MessageStream(ctx context.Context, target *querypb.Target, name string, sendReply func(*sqltypes.Result) error) (err error) {
 	return fmt.Errorf("not implemented")
 }
 
