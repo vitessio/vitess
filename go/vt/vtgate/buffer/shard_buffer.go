@@ -286,13 +286,14 @@ func (sb *shardBuffer) oldestEntry() *entry {
 // queue if it exceeded its buffering window.
 func (sb *shardBuffer) evictOldestEntry(e *entry) {
 	sb.mu.Lock()
+	defer sb.mu.Unlock()
+
 	if len(sb.queue) == 0 || e != sb.queue[0] {
 		// Entry is already removed e.g. by remove(). Ignore it.
 		return
 	}
 	sb.unblockAndWait(e, nil /* err */, true /* releaseSlot */)
 	sb.queue = sb.queue[1:]
-	sb.mu.Unlock()
 }
 
 // remove must be called when the request was canceled from outside and not
