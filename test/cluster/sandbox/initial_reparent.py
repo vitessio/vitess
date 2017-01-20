@@ -61,12 +61,13 @@ def main():
   parser.add_option('-k', '--keyspace', help='Keyspace name',
                     default='test_keyspace')
   parser.add_option('-m', '--master_cell', help='Master cell')
-  parser.add_option('-s', '--shard_count', help='Number of shards', default=2)
+  parser.add_option('-s', '--shard_count', help='Number of shards', default=2,
+                    type=int)
   logging.getLogger().setLevel(logging.INFO)
 
   options, _ = parser.parse_args()
   initial_reparent(options.keyspace, options.master_cell,
-                   int(options.shard_count), options.namespace)
+                   options.shard_count, options.namespace)
 
 
 if __name__ == '__main__':

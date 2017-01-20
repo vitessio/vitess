@@ -16,9 +16,14 @@ def set_gke_cluster_context(gke_cluster_name):
   logging.info('Changing cluster to %s.', gke_cluster_name)
   clusters = subprocess.check_output(
       ['kubectl', 'config', 'get-clusters']).split('\n')
-  cluster = [c for c in clusters if c.endswith('_%s' % gke_cluster_name)][0]
-  with open(os.devnull, 'w') as dn:
-    subprocess.call(['kubectl', 'config', 'use-context', cluster], stdout=dn)
+  cluster = [c for c in clusters if c.endswith('_%s' % gke_cluster_name)]
+  if not cluster:
+    raise sandbox.SandboxError(
+        'Cannot change GKE cluster context, cluster %s not found',
+        gke_cluster_name)
+  with open(os.devnull, 'w') as devnull:
+    subprocess.call(['kubectl', 'config', 'use-context', cluster[0]],
+                    stdout=devnull)
 
 
 class HelmComponent(sandlet.SandletComponent):
@@ -30,20 +35,20 @@ class HelmComponent(sandlet.SandletComponent):
 
   def start(self):
     logging.info('Initializing helm.')
-    with open(os.devnull, 'w') as dn:
-      subprocess.call(['helm', 'init'], stdout=dn)
+    with open(os.devnull, 'w') as devnull:
+      subprocess.call(['helm', 'init'], stdout=devnull)
       start_time = time.time()
 
       # helm init on a fresh cluster takes a while to be ready.
       # Wait until 'helm list' returns cleanly.
       while time.time() - start_time < 120:
         try:
-          subprocess.check_call(['helm', 'list'], stdout=dn, stderr=dn)
+          subprocess.check_call(['helm', 'list'], stdout=devnull,
+                                stderr=devnull)
           logging.info('Helm is ready.')
           break
         except subprocess.CalledProcessError:
           time.sleep(5)
-          continue
       else:
         raise sandbox.SandboxError(
             'Timed out waiting for helm to become ready.')
@@ -51,7 +56,7 @@ class HelmComponent(sandlet.SandletComponent):
       subprocess.call(
           ['helm', 'install', os.path.join(os.environ['VTTOP'], 'helm/vitess'),
            '-n', self.sandbox_name, '--namespace', self.sandbox_name,
-           '--replace', '--values', self.helm_config], stdout=dn)
+           '--replace', '--values', self.helm_config], stdout=devnull)
       logging.info('Finished installing helm.')
 
   def stop(self):
@@ -103,6 +108,6 @@ def get_forwarded_ip(service, namespace='default', max_wait_s=60):
            '-o', 'json']))
       return service_info['status']['loadBalancer']['ingress'][0]['ip']
     except (KeyError, subprocess.CalledProcessError):
-      continue
+      time.sleep(1)
   return ''
 
