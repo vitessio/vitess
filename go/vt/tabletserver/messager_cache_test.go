@@ -7,6 +7,8 @@ package tabletserver
 import (
 	"reflect"
 	"testing"
+
+	"github.com/youtube/vitess/go/sqltypes"
 )
 
 func TestMessagerCacheOrder(t *testing.T) {
@@ -14,41 +16,41 @@ func TestMessagerCacheOrder(t *testing.T) {
 	if !mc.Add(&MessageRow{
 		TimeNext: 1,
 		Epoch:    0,
-		id:       "row01",
+		ID:       sqltypes.MakeString([]byte("row01")),
 	}) {
 		t.Fatal("Add returned false")
 	}
 	if !mc.Add(&MessageRow{
 		TimeNext: 2,
 		Epoch:    0,
-		id:       "row02",
+		ID:       sqltypes.MakeString([]byte("row02")),
 	}) {
 		t.Fatal("Add returned false")
 	}
 	if !mc.Add(&MessageRow{
 		TimeNext: 2,
 		Epoch:    1,
-		id:       "row12",
+		ID:       sqltypes.MakeString([]byte("row12")),
 	}) {
 		t.Fatal("Add returned false")
 	}
 	if !mc.Add(&MessageRow{
 		TimeNext: 1,
 		Epoch:    1,
-		id:       "row11",
+		ID:       sqltypes.MakeString([]byte("row11")),
 	}) {
 		t.Fatal("Add returned false")
 	}
 	if !mc.Add(&MessageRow{
 		TimeNext: 3,
 		Epoch:    0,
-		id:       "row03",
+		ID:       sqltypes.MakeString([]byte("row03")),
 	}) {
 		t.Fatal("Add returned false")
 	}
 	var rows []string
 	for i := 0; i < 5; i++ {
-		rows = append(rows, mc.Pop().id)
+		rows = append(rows, mc.Pop().ID.String())
 	}
 	want := []string{
 		"row03",
@@ -67,14 +69,14 @@ func TestMessagerCacheDupKey(t *testing.T) {
 	if !mc.Add(&MessageRow{
 		TimeNext: 1,
 		Epoch:    0,
-		id:       "row01",
+		ID:       sqltypes.MakeString([]byte("row01")),
 	}) {
 		t.Fatal("Add returned false")
 	}
 	if !mc.Add(&MessageRow{
 		TimeNext: 1,
 		Epoch:    0,
-		id:       "row01",
+		ID:       sqltypes.MakeString([]byte("row01")),
 	}) {
 		t.Error("Add(dup): returned false, want true")
 	}
@@ -82,7 +84,7 @@ func TestMessagerCacheDupKey(t *testing.T) {
 	if !mc.Add(&MessageRow{
 		TimeNext: 1,
 		Epoch:    0,
-		id:       "row01",
+		ID:       sqltypes.MakeString([]byte("row01")),
 	}) {
 		t.Error("Add(dup): returned false, want true")
 	}
@@ -90,7 +92,7 @@ func TestMessagerCacheDupKey(t *testing.T) {
 	if !mc.Add(&MessageRow{
 		TimeNext: 1,
 		Epoch:    0,
-		id:       "row01",
+		ID:       sqltypes.MakeString([]byte("row01")),
 	}) {
 		t.Fatal("Add returned false")
 	}
@@ -101,22 +103,22 @@ func TestMessagerCacheDiscard(t *testing.T) {
 	if !mc.Add(&MessageRow{
 		TimeNext: 1,
 		Epoch:    0,
-		id:       "row01",
+		ID:       sqltypes.MakeString([]byte("row01")),
 	}) {
 		t.Fatal("Add returned false")
 	}
 	mc.Discard([]string{"row01"})
 	if row := mc.Pop(); row != nil {
-		t.Errorf("Pop: want nil, got %s", row.id)
+		t.Errorf("Pop: want nil, got %s", row.ID.String())
 	}
 	if !mc.Add(&MessageRow{
 		TimeNext: 1,
 		Epoch:    0,
-		id:       "row01",
+		ID:       sqltypes.MakeString([]byte("row01")),
 	}) {
 		t.Fatal("Add returned false")
 	}
-	if row := mc.Pop(); row == nil || row.id != "row01" {
+	if row := mc.Pop(); row == nil || row.ID.String() != "row01" {
 		t.Errorf("Pop: want row01, got %v", row)
 	}
 
@@ -124,12 +126,12 @@ func TestMessagerCacheDiscard(t *testing.T) {
 	if !mc.Add(&MessageRow{
 		TimeNext: 1,
 		Epoch:    0,
-		id:       "row01",
+		ID:       sqltypes.MakeString([]byte("row01")),
 	}) {
 		t.Fatal("Add returned false")
 	}
 	if row := mc.Pop(); row != nil {
-		t.Errorf("Pop: want nil, got %s", row.id)
+		t.Errorf("Pop: want nil, got %s", row.ID.String())
 	}
 	mc.Discard([]string{"row01"})
 
@@ -137,11 +139,11 @@ func TestMessagerCacheDiscard(t *testing.T) {
 	if !mc.Add(&MessageRow{
 		TimeNext: 1,
 		Epoch:    0,
-		id:       "row01",
+		ID:       sqltypes.MakeString([]byte("row01")),
 	}) {
 		t.Fatal("Add returned false")
 	}
-	if row := mc.Pop(); row == nil || row.id != "row01" {
+	if row := mc.Pop(); row == nil || row.ID.String() != "row01" {
 		t.Errorf("Pop: want row01, got %v", row)
 	}
 }
@@ -151,21 +153,21 @@ func TestMessagerCacheFull(t *testing.T) {
 	if !mc.Add(&MessageRow{
 		TimeNext: 1,
 		Epoch:    0,
-		id:       "row01",
+		ID:       sqltypes.MakeString([]byte("row01")),
 	}) {
 		t.Fatal("Add returned false")
 	}
 	if !mc.Add(&MessageRow{
 		TimeNext: 2,
 		Epoch:    0,
-		id:       "row02",
+		ID:       sqltypes.MakeString([]byte("row02")),
 	}) {
 		t.Fatal("Add returned false")
 	}
 	if mc.Add(&MessageRow{
 		TimeNext: 2,
 		Epoch:    1,
-		id:       "row12",
+		ID:       sqltypes.MakeString([]byte("row12")),
 	}) {
 		t.Error("Add(full): returned true, want false")
 	}
@@ -176,7 +178,7 @@ func TestMessagerCacheEmpty(t *testing.T) {
 	if !mc.Add(&MessageRow{
 		TimeNext: 1,
 		Epoch:    0,
-		id:       "row01",
+		ID:       sqltypes.MakeString([]byte("row01")),
 	}) {
 		t.Fatal("Add returned false")
 	}
@@ -187,7 +189,7 @@ func TestMessagerCacheEmpty(t *testing.T) {
 	if !mc.Add(&MessageRow{
 		TimeNext: 1,
 		Epoch:    0,
-		id:       "row01",
+		ID:       sqltypes.MakeString([]byte("row01")),
 	}) {
 		t.Fatal("Add returned false")
 	}

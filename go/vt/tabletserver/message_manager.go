@@ -17,6 +17,49 @@ import (
 	"github.com/youtube/vitess/go/vt/sqlparser"
 )
 
+type messageReceiver struct {
+	mu   sync.Mutex
+	send func(string, []*MessageRow) error
+	done chan struct{}
+}
+
+func newMessageReceiver(send func(string, []*MessageRow) error) (*messageReceiver, chan struct{}) {
+	rcv := &messageReceiver{
+		send: send,
+		done: make(chan struct{}),
+	}
+	return rcv, rcv.done
+}
+
+func (rcv *messageReceiver) Send(name string, mrs []*MessageRow) error {
+	rcv.mu.Lock()
+	defer rcv.mu.Unlock()
+	if rcv.done == nil {
+		return io.EOF
+	}
+	err := rcv.send(name, mrs)
+	if err == io.EOF {
+		close(rcv.done)
+		rcv.done = nil
+	}
+	return err
+}
+
+func (rcv *messageReceiver) Cancel() {
+	// Do this async to avoid getting stuck.
+	go func() {
+		rcv.mu.Lock()
+		defer rcv.mu.Unlock()
+		if rcv.done != nil {
+			close(rcv.done)
+			rcv.done = nil
+		}
+	}()
+}
+
+// receiverWithStatus is a separate struct to signify
+// that the busy flag is controlled by the MessageManager
+// mutex.
 type receiverWithStatus struct {
 	receiver *messageReceiver
 	busy     bool
@@ -262,7 +305,7 @@ func (mm *MessageManager) send(receiver *receiverWithStatus, mrs []*MessageRow) 
 	mm.mu.Unlock()
 	ids := make([]string, len(mrs))
 	for i, mr := range mrs {
-		ids[i] = mr.id
+		ids[i] = mr.ID.String()
 	}
 	// Postpone the messages for resend before discarding
 	// from cache. If no timely ack is received, it will be resent.
@@ -406,7 +449,6 @@ func BuildMessageRow(row []sqltypes.Value) (*MessageRow, error) {
 		Epoch:    epoch,
 		ID:       row[2],
 		Message:  row[3],
-		id:       row[2].String(),
 	}, nil
 }
 
