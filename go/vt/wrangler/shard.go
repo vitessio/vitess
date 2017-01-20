@@ -320,7 +320,7 @@ func (wr *Wrangler) SourceShardDelete(ctx context.Context, keyspace, shard strin
 	return err
 }
 
-// SourceShardAdd will add a new SourceShard inside a shard
+// SourceShardAdd will add a new SourceShard inside a shard.
 func (wr *Wrangler) SourceShardAdd(ctx context.Context, keyspace, shard string, uid uint32, skeyspace, sshard string, keyRange *topodatapb.KeyRange, tables []string) (err error) {
 	// lock the keyspace
 	ctx, unlock, lockErr := wr.ts.LockKeyspace(ctx, keyspace, fmt.Sprintf("SourceShardAdd(%v)", uid))

@@ -25,6 +25,11 @@ import (
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
+const (
+	// DefaultWaitSlaveTimeout is the default value for waitSlaveTimeout, which is used when calling method CopySchemaShardFromShard.
+	DefaultWaitSlaveTimeout = 10 * time.Second
+)
+
 // GetSchema uses an RPC to get the schema from a remote tablet
 func (wr *Wrangler) GetSchema(ctx context.Context, tabletAlias *topodatapb.TabletAlias, tables, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error) {
 	ti, err := wr.ts.GetTablet(ctx, tabletAlias)
