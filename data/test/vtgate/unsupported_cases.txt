@@ -255,6 +255,42 @@
 "insert into user(id, val) values((select 1), 1)"
 "unsupported: subquery in insert values"
 
+# sharded replace no vindex
+"replace into user(val) values(1, 'foo')"
+"unsupported: REPLACE INTO with sharded schema"
+
+# sharded replace with vindex
+"replace into user(id, name) values(1, 'foo')"
+"unsupported: REPLACE INTO with sharded schema"
+
+# replace no column list
+"replace into user values(1, 2, 3)"
+"unsupported: REPLACE INTO with sharded schema"
+
+# replace with mimatched column list
+"replace into user(id) values (1, 2)"
+"unsupported: REPLACE INTO with sharded schema"
+
+# replace with one vindex
+"replace into user(id) values (1)"
+"unsupported: REPLACE INTO with sharded schema"
+
+# replace with non vindex on vindex-enabled table
+"replace into user(nonid) values (2)"
+"unsupported: REPLACE INTO with sharded schema"
+
+# replace with all vindexes supplied
+"replace into user(nonid, name, id) values (2, 'foo', 1)"
+"unsupported: REPLACE INTO with sharded schema"
+
+# replace for non-vindex autoinc
+"replace into user_extra(nonid) values (2)"
+"unsupported: REPLACE INTO with sharded schema"
+
+# replace with multiple rows
+"replace into user(id) values (1), (2)"
+"unsupported: REPLACE INTO with sharded schema"
+
 # complex expression in parenthesis with limit not supported yet
 "select * from user where (id = 4 AND name ='abc') limit 5"
 "unsupported: limits with scatter"

@@ -151,7 +151,7 @@ func forceEOF(yylex interface{}) {
 %type <statement> create_statement alter_statement rename_statement drop_statement
 %type <statement> analyze_statement show_statement use_statement other_statement
 %type <bytes2> comment_opt comment_list
-%type <str> union_op
+%type <str> union_op insert_or_replace
 %type <str> distinct_opt straight_join_opt cache_opt match_option separator_opt
 %type <expr> like_escape_opt
 %type <selectExprs> select_expression_list select_expression_list_opt
@@ -284,17 +284,18 @@ union_rhs:
 
 
 insert_statement:
-  INSERT comment_opt ignore_opt into_table_name insert_data on_dup_opt
+  insert_or_replace comment_opt ignore_opt into_table_name insert_data on_dup_opt
   {
     // insert_data returns a *Insert pre-filled with Columns & Values
     ins := $5
+    ins.Action = $1
     ins.Comments = $2
     ins.Ignore = $3
     ins.Table = $4
     ins.OnDup = OnDup($6)
     $$ = ins
   }
-| INSERT comment_opt ignore_opt into_table_name SET update_list on_dup_opt
+| insert_or_replace comment_opt ignore_opt into_table_name SET update_list on_dup_opt
   {
     cols := make(Columns, 0, len($6))
     vals := make(ValTuple, 0, len($7))
@@ -302,7 +303,17 @@ insert_statement:
       cols = append(cols, updateList.Name.Name)
       vals = append(vals, updateList.Expr)
     }
-    $$ = &Insert{Comments: Comments($2), Ignore: $3, Table: $4, Columns: cols, Rows: Values{vals}, OnDup: OnDup($7)}
+    $$ = &Insert{Action: $1, Comments: Comments($2), Ignore: $3, Table: $4, Columns: cols, Rows: Values{vals}, OnDup: OnDup($7)}
+  }
+
+insert_or_replace:
+  INSERT
+  {
+    $$ = InsertStr
+  }
+| REPLACE
+  {
+    $$ = ReplaceStr
   }
 
 update_statement:

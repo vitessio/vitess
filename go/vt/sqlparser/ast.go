@@ -335,8 +335,15 @@ func (node *Union) WalkSubtree(visit Visit) error {
 	)
 }
 
-// Insert represents an INSERT statement.
+// Insert represents an INSERT or REPLACE statement.
+// Per the MySQL docs, http://dev.mysql.com/doc/refman/5.7/en/replace.html
+// Replace is the counterpart to `INSERT IGNORE`, and works exactly like a
+// normal INSERT except if the row exists. In that case it first deletes
+// the row and re-inserts with new values. For that reason we keep it as an Insert struct.
+// Replaces are currently disallowed in sharded schemas because
+// of the implications the deletion part may have on vindexes.
 type Insert struct {
+	Action   string
 	Comments Comments
 	Ignore   string
 	Table    *TableName
@@ -345,9 +352,16 @@ type Insert struct {
 	OnDup    OnDup
 }
 
+// DDL strings.
+const (
+	InsertStr  = "insert"
+	ReplaceStr = "replace"
+)
+
 // Format formats the node.
 func (node *Insert) Format(buf *TrackedBuffer) {
-	buf.Myprintf("insert %v%sinto %v%v %v%v",
+	buf.Myprintf("%s %v%sinto %v%v %v%v",
+		node.Action,
 		node.Comments, node.Ignore,
 		node.Table, node.Columns, node.Rows, node.OnDup)
 }
