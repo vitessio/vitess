@@ -377,13 +377,14 @@ func (dg *discoveryGateway) withRetry(ctx context.Context, target *querypb.Targe
 	var err error
 	invalidTablets := make(map[string]bool)
 
+	bufferedOnce := false
 	for i := 0; i < dg.retryCount+1; i++ {
 		// Check if we should buffer MASTER queries which failed due to an ongoing
 		// failover.
-		// Note: We only buffer "!inTransaction" queries i.e.
+		// Note: We only buffer once and only "!inTransaction" queries i.e.
 		// a) no transaction is necessary (e.g. critical reads) or
 		// b) no transaction was created yet.
-		if !inTransaction && target.TabletType == topodatapb.TabletType_MASTER {
+		if !bufferedOnce && !inTransaction && target.TabletType == topodatapb.TabletType_MASTER {
 			// The next call blocks if we should buffer during a failover.
 			retryDone, bufferErr := dg.buffer.WaitForFailoverEnd(ctx, target.Keyspace, target.Shard, err)
 			if bufferErr != nil {
@@ -401,6 +402,7 @@ func (dg *discoveryGateway) withRetry(ctx context.Context, target *querypb.Targe
 				// We're going to retry this request as part of a buffer drain.
 				// Notify the buffer after we retried.
 				defer retryDone()
+				bufferedOnce = true
 			}
 		}
 
