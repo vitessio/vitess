@@ -84,6 +84,13 @@ def make_row(row, convs):
   return converted_row
 
 
+def build_value(v):
+  """Build a proto value from any valid input."""
+  val = query_pb2.Value()
+  convert_value(v, val)
+  return val
+
+
 def convert_value(value, proto_value, allow_lists=False):
   """Convert a variable from python type to proto type+value.
 
@@ -544,6 +551,58 @@ class Proto3Connection(object):
     if key_range:
       request.key_range.start = key_range.Start
       request.key_range.end = key_range.End
+    self._add_caller_id(request, effective_caller_id)
+    return request
+
+  def message_stream_request(self,
+                             keyspace_name,
+                             shard,
+                             key_range,
+                             name,
+                             effective_caller_id):
+    """Builds the right vtgate_pb2 MessageStreamRequest.
+
+    Args:
+      keyspace_name: keyspace to apply the query to.
+      shard: shard to ask for.
+      key_range: keyrange.KeyRange object.
+      name: message table name.
+      effective_caller_id: optional vtgate_client.CallerID.
+
+    Returns:
+      A vtgate_pb2.MessageStreamRequest object.
+    """
+    request = vtgate_pb2.MessageStreamRequest(keyspace=keyspace_name,
+                                              name=name,
+                                              shard=shard)
+    if key_range:
+      request.key_range.start = key_range.Start
+      request.key_range.end = key_range.End
+    self._add_caller_id(request, effective_caller_id)
+    return request
+
+  def message_ack_request(self,
+                          keyspace_name,
+                          name,
+                          ids,
+                          effective_caller_id):
+    """Builds the right vtgate_pb2 MessageAckRequest.
+
+    Args:
+      keyspace_name: keyspace to apply the query to.
+      name: message table name.
+      ids: list of message ids.
+      effective_caller_id: optional vtgate_client.CallerID.
+
+    Returns:
+      A vtgate_pb2.MessageAckRequest object.
+    """
+    vals = []
+    for v in ids:
+      vals.append(build_value(v))
+    request = vtgate_pb2.MessageAckRequest(keyspace=keyspace_name,
+                                           name=name,
+                                           ids=vals)
     self._add_caller_id(request, effective_caller_id)
     return request
 

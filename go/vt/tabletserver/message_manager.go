@@ -123,7 +123,7 @@ func NewMessageManager(tsv *TabletServer, table *TableInfo, connpool *ConnPool) 
 		"select time_next, epoch, id, message from %v where time_next < %a order by time_next desc limit %a",
 		mm.name, ":time_next", ":max")
 	mm.ackQuery = buildParsedQuery(
-		"update %v set time_acked = %a, time_next = null where id in %a",
+		"update %v set time_acked = %a, time_next = null where id in %a and time_acked is null",
 		mm.name, ":time_acked", "::ids")
 	mm.postponeQuery = buildParsedQuery(
 		"update %v set time_next = %a+(%a<<epoch), epoch = epoch+1 where id in %a and time_acked is null",

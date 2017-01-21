@@ -127,6 +127,7 @@ type VTGate struct {
 	logStreamExecuteKeyRanges   *logutil.ThrottledLogger
 	logStreamExecuteShards      *logutil.ThrottledLogger
 	logUpdateStream             *logutil.ThrottledLogger
+	logMessageStream            *logutil.ThrottledLogger
 }
 
 // RegisterVTGate defines the type of registration mechanism.
@@ -177,6 +178,7 @@ func Init(ctx context.Context, hc discovery.HealthCheck, topoServer topo.Server,
 		logStreamExecuteKeyRanges:   logutil.NewThrottledLogger("StreamExecuteKeyRanges", 5*time.Second),
 		logStreamExecuteShards:      logutil.NewThrottledLogger("StreamExecuteShards", 5*time.Second),
 		logUpdateStream:             logutil.NewThrottledLogger("UpdateStream", 5*time.Second),
+		logMessageStream:            logutil.NewThrottledLogger("MessageStream", 5*time.Second),
 	}
 
 	normalErrors = stats.NewMultiCounters("VtgateApiErrorCounts", []string{"Operation", "Keyspace", "DbType"})
@@ -828,7 +830,7 @@ func (vtg *VTGate) MessageStream(ctx context.Context, keyspace string, shard str
 			"TabletType":  ltt,
 			"MessageName": name,
 		}
-		logError(err, query, vtg.logUpdateStream)
+		logError(err, query, vtg.logMessageStream)
 	}
 	return formatError(err)
 }

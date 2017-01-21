@@ -5,7 +5,6 @@
 package vtgate
 
 import (
-	"bytes"
 	"encoding/hex"
 	"fmt"
 
@@ -168,14 +167,14 @@ func mapExactShards(ctx context.Context, topoServ topo.SrvTopoServer, cell, keys
 	}
 	shardnum := 0
 	for shardnum < len(allShards) {
-		if bytes.Compare(kr.Start, []byte(allShards[shardnum].KeyRange.Start)) == 0 {
+		if key.KeyRangeStartEqual(kr, allShards[shardnum].KeyRange) {
 			break
 		}
 		shardnum++
 	}
 	for shardnum < len(allShards) {
 		shards = append(shards, allShards[shardnum].Name)
-		if bytes.Compare(kr.End, []byte(allShards[shardnum].KeyRange.End)) == 0 {
+		if key.KeyRangeEndEqual(kr, allShards[shardnum].KeyRange) {
 			return keyspace, shards, nil
 		}
 		shardnum++

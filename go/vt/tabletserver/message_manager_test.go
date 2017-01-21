@@ -538,7 +538,7 @@ func TestMMGenerate(t *testing.T) {
 	mm.Open()
 	defer mm.Close()
 	query, bv := mm.GenerateAckQuery([]string{"1", "2"})
-	wantQuery := "update foo set time_acked = :time_acked, time_next = null where id in ::ids"
+	wantQuery := "update foo set time_acked = :time_acked, time_next = null where id in ::ids and time_acked is null"
 	if query != wantQuery {
 		t.Errorf("GenerateAckQuery query: %s, want %s", query, wantQuery)
 	}

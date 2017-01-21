@@ -436,10 +436,16 @@ func (stc *ScatterConn) StreamExecuteMulti(
 func (stc *ScatterConn) MessageStream(ctx context.Context, keyspace string, shards []string, name string, sendReply func(*sqltypes.Result) error) error {
 	// mu is used to merge multiple sendReply calls into one.
 	var mu sync.Mutex
+	fieldSent := false
 	allErrors := stc.multiGo(ctx, "MessageStream", keyspace, shards, topodatapb.TabletType_MASTER, func(target *querypb.Target) error {
 		return stc.gateway.MessageStream(ctx, target, name, func(qr *sqltypes.Result) error {
 			mu.Lock()
 			defer mu.Unlock()
+			if fieldSent && len(qr.Rows) == 0 {
+				return nil
+			}
+			// First result is always the field info.
+			fieldSent = true
 			return sendReply(qr)
 		})
 	})
