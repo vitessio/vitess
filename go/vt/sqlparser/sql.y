@@ -876,7 +876,7 @@ value_expression:
   }
 | column_name COLLATE value
   {
-    $$ = &BinaryExpr{Left: $1, Operator: Collate, Right: $3}
+    $$ = &BinaryExpr{Left: $1, Operator: COLLATE, Right: $3}
   }
 | '+'  value_expression %prec UNARY
   {

@@ -1884,7 +1884,7 @@ yydefault:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		//line sql.y:878
 		{
-			yyVAL.valExpr = &BinaryExpr{Left: yyDollar[1].colName, Operator: Collate, Right: yyDollar[3].valExpr}
+			yyVAL.valExpr = &BinaryExpr{Left: yyDollar[1].colName, Operator: COLLATE, Right: yyDollar[3].valExpr}
 		}
 	case 160:
 		yyDollar = yyS[yypt-2 : yypt+1]
