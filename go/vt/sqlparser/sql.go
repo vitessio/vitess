@@ -1746,7 +1746,7 @@ yydefault:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		//line sql.y:774
 		{
-			yyVAL.str = Collate
+			yyVAL.str = CollateStr
 		}
 	case 136:
 		yyDollar = yyS[yypt-3 : yypt+1]
