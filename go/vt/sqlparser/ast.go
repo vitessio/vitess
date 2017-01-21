@@ -1802,7 +1802,7 @@ func (node ColIdent) CompliantName() string {
 	return compliantName(node.val)
 }
 
-// Lowered returns a lowezr-cased column name.
+// Lowered returns a lower-cased column name.
 // This function should generally be used only for optimizing
 // comparisons.
 func (node ColIdent) Lowered() string {
