@@ -80,7 +80,7 @@ func initTableACL() error {
 }
 
 var testSchema = `create table vitess_test(intval int default 0, floatval float default null, charval varchar(256) default null, binval varbinary(256) default null, primary key(intval));
-insert into vitess_test values(1, 1.12345, 0xC2A2, 0x00FF), (2, null, '', null), (3, null, null, null), (4, null, 'test collate', null);
+insert into vitess_test values(1, 1.12345, 0xC2A2, 0x00FF), (2, null, '', null), (3, null, null, null);
 
 create table vitess_a(eid bigint default 0, id int default 1, name varchar(128) default null, foo varbinary(128) default null, primary key(eid, id));
 create table vitess_b(eid bigint default 0, id int default 0, primary key(eid, id));
