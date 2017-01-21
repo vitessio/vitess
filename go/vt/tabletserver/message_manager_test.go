@@ -30,13 +30,29 @@ var (
 		Type: sqltypes.VarBinary,
 	}}
 
-	testTableInfo = &TableInfo{
+	mmTableInfo = &TableInfo{
 		Table: &schema.Table{
 			Name: sqlparser.NewTableIdent("foo"),
+			Type: schema.Message,
 		},
-		MessageFields: testFields,
+		MessageInfo: &MessageInfo{
+			Fields:             testFields,
+			AckWaitDuration:    1 * time.Second,
+			PurgeAfterDuration: 3 * time.Second,
+			BatchSize:          1,
+			CacheSize:          10,
+			PollInterval:       1 * time.Second,
+		},
 	}
 )
+
+// newMMTableInfo is not a true copy, but enough to massage what we need.
+func newMMTableInfo() *TableInfo {
+	ti := *mmTableInfo
+	fi := *mmTableInfo.MessageInfo
+	ti.MessageInfo = &fi
+	return &ti
+}
 
 type testReceiver struct {
 	rcv   *messageReceiver
@@ -97,7 +113,7 @@ func TestReceiverEOF(t *testing.T) {
 		t.Fatalf("StartService failed: %v", err)
 	}
 	defer tsv.StopService()
-	mm := NewMessageManager(tsv, testTableInfo, 1*time.Second, 3*time.Second, 1, 10, 1*time.Second, newMMConnPool(db))
+	mm := NewMessageManager(tsv, mmTableInfo, newMMConnPool(db))
 	mm.Open()
 	defer mm.Close()
 	r1 := newTestReceiver(0)
@@ -132,7 +148,7 @@ func TestMessageManagerState(t *testing.T) {
 		t.Fatalf("StartService failed: %v", err)
 	}
 	defer tsv.StopService()
-	mm := NewMessageManager(tsv, testTableInfo, 1*time.Second, 3*time.Second, 1, 10, 1*time.Second, newMMConnPool(db))
+	mm := NewMessageManager(tsv, mmTableInfo, newMMConnPool(db))
 	// Do it twice
 	for i := 0; i < 2; i++ {
 		mm.Open()
@@ -169,7 +185,9 @@ func TestMessageManagerAdd(t *testing.T) {
 		t.Fatalf("StartService failed: %v", err)
 	}
 	defer tsv.StopService()
-	mm := NewMessageManager(tsv, testTableInfo, 1*time.Second, 3*time.Second, 1, 1, 1*time.Second, newMMConnPool(db))
+	ti := newMMTableInfo()
+	ti.MessageInfo.CacheSize = 1
+	mm := NewMessageManager(tsv, ti, newMMConnPool(db))
 	mm.Open()
 	defer mm.Close()
 
@@ -210,7 +228,7 @@ func TestMessageManagerSend(t *testing.T) {
 		t.Fatalf("StartService failed: %v", err)
 	}
 	defer tsv.StopService()
-	mm := NewMessageManager(tsv, testTableInfo, 1*time.Second, 3*time.Second, 1, 10, 1*time.Second, newMMConnPool(db))
+	mm := NewMessageManager(tsv, mmTableInfo, newMMConnPool(db))
 	mm.Open()
 	defer mm.Close()
 	r1 := newTestReceiver(1)
@@ -267,7 +285,9 @@ func TestMessageManagerBatchSend(t *testing.T) {
 		t.Fatalf("StartService failed: %v", err)
 	}
 	defer tsv.StopService()
-	mm := NewMessageManager(tsv, testTableInfo, 1*time.Second, 3*time.Second, 2, 10, 1*time.Second, newMMConnPool(db))
+	ti := newMMTableInfo()
+	ti.MessageInfo.BatchSize = 2
+	mm := NewMessageManager(tsv, ti, newMMConnPool(db))
 	mm.Open()
 	defer mm.Close()
 	r1 := newTestReceiver(1)
@@ -339,7 +359,10 @@ func TestMessageManagerPoller(t *testing.T) {
 			}},
 		},
 	)
-	mm := NewMessageManager(tsv, testTableInfo, 1*time.Second, 3*time.Second, 2, 10, 20*time.Second, newMMConnPool(db))
+	ti := newMMTableInfo()
+	ti.MessageInfo.BatchSize = 2
+	ti.MessageInfo.PollInterval = 20 * time.Second
+	mm := NewMessageManager(tsv, ti, newMMConnPool(db))
 	mm.Open()
 	defer mm.Close()
 	r1 := newTestReceiver(1)
@@ -405,7 +428,10 @@ func TestMessagesPending1(t *testing.T) {
 		},
 	)
 	// Set a large polling interval.
-	mm := NewMessageManager(tsv, testTableInfo, 1*time.Second, 3*time.Second, 1, 2, 30*time.Second, newMMConnPool(db))
+	ti := newMMTableInfo()
+	ti.MessageInfo.CacheSize = 2
+	ti.MessageInfo.PollInterval = 30 * time.Second
+	mm := NewMessageManager(tsv, ti, newMMConnPool(db))
 	mm.Open()
 	defer mm.Close()
 	r1 := newTestReceiver(0)
@@ -471,7 +497,10 @@ func TestMessagesPending2(t *testing.T) {
 		},
 	)
 	// Set a large polling interval.
-	mm := NewMessageManager(tsv, testTableInfo, 1*time.Second, 3*time.Second, 1, 1, 30*time.Second, newMMConnPool(db))
+	ti := newMMTableInfo()
+	ti.MessageInfo.CacheSize = 1
+	ti.MessageInfo.PollInterval = 30 * time.Second
+	mm := NewMessageManager(tsv, ti, newMMConnPool(db))
 	mm.Open()
 	defer mm.Close()
 	r1 := newTestReceiver(0)
@@ -505,7 +534,7 @@ func TestMMGenerate(t *testing.T) {
 		t.Fatalf("StartService failed: %v", err)
 	}
 	defer tsv.StopService()
-	mm := NewMessageManager(tsv, testTableInfo, 1*time.Second, 3*time.Second, 1, 10, 1*time.Second, newMMConnPool(db))
+	mm := NewMessageManager(tsv, mmTableInfo, newMMConnPool(db))
 	mm.Open()
 	defer mm.Close()
 	query, bv := mm.GenerateAckQuery([]string{"1", "2"})

@@ -7,6 +7,7 @@ package tabletserver
 import (
 	"errors"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -145,7 +146,7 @@ func TestTableInfoMessage(t *testing.T) {
 	for query, result := range getMessageTableInfoQueries() {
 		db.AddQuery(query, result)
 	}
-	tableInfo, err := newTestTableInfo("USER_TABLE", "vitess_message", db)
+	tableInfo, err := newTestTableInfo("USER_TABLE", "vitess_message,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30", db)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -154,20 +155,34 @@ func TestTableInfoMessage(t *testing.T) {
 			Name: sqlparser.NewTableIdent("test_table"),
 			Type: schema.Message,
 		},
-		IDPKIndex: 1,
-		MessageFields: []*querypb.Field{{
-			Name: "id",
-			Type: sqltypes.Int64,
-		}, {
-			Name: "message",
-			Type: sqltypes.VarBinary,
-		}},
+		MessageInfo: &MessageInfo{
+			IDPKIndex: 1,
+			Fields: []*querypb.Field{{
+				Name: "id",
+				Type: sqltypes.Int64,
+			}, {
+				Name: "message",
+				Type: sqltypes.VarBinary,
+			}},
+			AckWaitDuration:    30 * time.Second,
+			PurgeAfterDuration: 120 * time.Second,
+			BatchSize:          1,
+			CacheSize:          10,
+			PollInterval:       30 * time.Second,
+		},
 	}
 	tableInfo.Columns = nil
 	tableInfo.Indexes = nil
 	tableInfo.PKColumns = nil
 	if !reflect.DeepEqual(tableInfo, want) {
 		t.Errorf("TableInfo:\n%v, want\n%v", tableInfo, want)
+	}
+
+	// Missing property
+	_, err = newTestTableInfo("USER_TABLE", "vitess_message,vt_ack_wait=30", db)
+	wanterr := "not specified for message table"
+	if err == nil || !strings.Contains(err.Error(), wanterr) {
+		t.Errorf("newTestTableInfo: %v, want %s", err, wanterr)
 	}
 
 	// id column must be part of primary key.
@@ -190,8 +205,8 @@ func TestTableInfoMessage(t *testing.T) {
 				},
 			},
 		})
-	_, err = newTestTableInfo("USER_TABLE", "vitess_message", db)
-	wanterr := "id column is not part of the primary key for message table: test_table"
+	_, err = newTestTableInfo("USER_TABLE", "vitess_message,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30", db)
+	wanterr = "id column is not part of the primary key for message table: test_table"
 	if err == nil || err.Error() != wanterr {
 		t.Errorf("newTestTableInfo: %v, want %s", err, wanterr)
 	}
@@ -199,7 +214,7 @@ func TestTableInfoMessage(t *testing.T) {
 	for query, result := range getTestTableInfoQueries() {
 		db.AddQuery(query, result)
 	}
-	_, err = newTestTableInfo("USER_TABLE", "vitess_message", db)
+	_, err = newTestTableInfo("USER_TABLE", "vitess_message,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30", db)
 	wanterr = "time_scheduled missing from message table: test_table"
 	if err == nil || err.Error() != wanterr {
 		t.Errorf("newTestTableInfo: %v, want %s", err, wanterr)

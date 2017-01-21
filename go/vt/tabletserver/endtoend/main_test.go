@@ -106,7 +106,7 @@ create table vitess_unsupported(id int default 0, pt point default null, primary
 create table vitess_seq(id int default 0, next_id bigint default null, cache bigint default null, increment bigint default null, primary key(id)) comment 'vitess_sequence';
 insert into vitess_seq(id, next_id, cache) values(0, 1, 3);
 
-create table vitess_message(time_scheduled bigint, id bigint, time_next bigint, epoch bigint, time_created bigint, time_acked bigint, message varchar(128), primary key(time_scheduled, id), unique index id_idx(id), index next_idx(time_next, epoch)) comment 'vitess_message';
+create table vitess_message(time_scheduled bigint, id bigint, time_next bigint, epoch bigint, time_created bigint, time_acked bigint, message varchar(128), primary key(time_scheduled, id), unique index id_idx(id), index next_idx(time_next, epoch)) comment 'vitess_message,vt_ack_wait=1,vt_purge_after=3,vt_batch_size=2,vt_cache_size=10,vt_poller_interval=1';
 
 create table vitess_acl_no_access(key1 bigint default 0, key2 bigint default null, primary key(key1));
 create table vitess_acl_read_only(key1 bigint default 0, key2 bigint default null, primary key(key1));

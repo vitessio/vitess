@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	log "github.com/golang/glog"
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
@@ -28,14 +29,43 @@ type TableInfo struct {
 	NextVal int64
 	LastVal int64
 
+	// MessageInfo contains info for message tables.
+	MessageInfo *MessageInfo
+}
+
+// MessageInfo contains info specific to message tables.
+type MessageInfo struct {
 	// IDPKIndex is the index of the ID column
 	// in PKvalues. This is used to extract the ID
 	// value for message tables to discard items
 	// from the cache.
 	IDPKIndex int
-	// MessageFields stores the field info to be
+
+	// Fields stores the field info to be
 	// returned for subscribers.
-	MessageFields []*querypb.Field
+	Fields []*querypb.Field
+
+	// AckWaitDuration specifies how long to wait after
+	// the message was first sent. The back-off doubles
+	// every attempt.
+	AckWaitDuration time.Duration
+
+	// PurgeAfterDuration specifies the time after which
+	// a successfully acked message can be deleted.
+	PurgeAfterDuration time.Duration
+
+	// BatchSize specifies the max number of events to
+	// send per response.
+	BatchSize int
+
+	// CacheSize specifies the number of messages to keep
+	// in cache. Anything that cannot fit in the cache
+	// is sent as best effort.
+	CacheSize int
+
+	// PollInterval specifies the polling frequency to
+	// look for messages to be sent.
+	PollInterval time.Duration
 }
 
 // NewTableInfo creates a new TableInfo.
@@ -48,7 +78,7 @@ func NewTableInfo(conn *DBConn, tableName string, tableType string, comment stri
 	case strings.Contains(comment, "vitess_sequence"):
 		ti.Type = schema.Sequence
 	case strings.Contains(comment, "vitess_message"):
-		if err := ti.loadMessageInfo(); err != nil {
+		if err := ti.loadMessageInfo(comment); err != nil {
 			return nil, err
 		}
 		ti.Type = schema.Message
@@ -166,7 +196,7 @@ func (ti *TableInfo) fetchIndexes(conn *DBConn, sqlTableName string) error {
 	return nil
 }
 
-func (ti *TableInfo) loadMessageInfo() error {
+func (ti *TableInfo) loadMessageInfo(comment string) error {
 	findCols := []string{
 		"time_scheduled",
 		"id",
@@ -176,7 +206,35 @@ func (ti *TableInfo) loadMessageInfo() error {
 		"time_acked",
 		"message",
 	}
-	ti.MessageFields = make([]*querypb.Field, 2)
+	ti.MessageInfo = &MessageInfo{
+		Fields: make([]*querypb.Field, 2),
+	}
+	// Extract keyvalues.
+	keyvals := make(map[string]string)
+	inputs := strings.Split(comment, ",")
+	for _, input := range inputs {
+		kv := strings.Split(input, "=")
+		if len(kv) != 2 {
+			continue
+		}
+		keyvals[kv[0]] = kv[1]
+	}
+	var err error
+	if ti.MessageInfo.AckWaitDuration, err = getDuration(keyvals, "vt_ack_wait"); err != nil {
+		return err
+	}
+	if ti.MessageInfo.PurgeAfterDuration, err = getDuration(keyvals, "vt_purge_after"); err != nil {
+		return err
+	}
+	if ti.MessageInfo.BatchSize, err = getNum(keyvals, "vt_batch_size"); err != nil {
+		return err
+	}
+	if ti.MessageInfo.CacheSize, err = getNum(keyvals, "vt_cache_size"); err != nil {
+		return err
+	}
+	if ti.MessageInfo.PollInterval, err = getDuration(keyvals, "vt_poller_interval"); err != nil {
+		return err
+	}
 	for _, col := range findCols {
 		num := ti.FindColumn(sqlparser.NewColIdent(col))
 		if num == -1 {
@@ -184,12 +242,12 @@ func (ti *TableInfo) loadMessageInfo() error {
 		}
 		switch col {
 		case "id":
-			ti.MessageFields[0] = &querypb.Field{
+			ti.MessageInfo.Fields[0] = &querypb.Field{
 				Name: ti.Columns[num].Name.String(),
 				Type: ti.Columns[num].Type,
 			}
 		case "message":
-			ti.MessageFields[1] = &querypb.Field{
+			ti.MessageInfo.Fields[1] = &querypb.Field{
 				Name: ti.Columns[num].Name.String(),
 				Type: ti.Columns[num].Type,
 			}
@@ -197,9 +255,33 @@ func (ti *TableInfo) loadMessageInfo() error {
 	}
 	for i, j := range ti.PKColumns {
 		if ti.Columns[j].Name.EqualString("id") {
-			ti.IDPKIndex = i
+			ti.MessageInfo.IDPKIndex = i
 			return nil
 		}
 	}
 	return fmt.Errorf("id column is not part of the primary key for message table: %s", ti.Name.String())
+}
+
+func getDuration(in map[string]string, key string) (time.Duration, error) {
+	sv := in[key]
+	if sv == "" {
+		return 0, fmt.Errorf("Attribute %s not specified for message table", key)
+	}
+	v, err := strconv.ParseFloat(sv, 64)
+	if err != nil {
+		return 0, err
+	}
+	return time.Duration(v * 1e9), nil
+}
+
+func getNum(in map[string]string, key string) (int, error) {
+	sv := in[key]
+	if sv == "" {
+		return 0, fmt.Errorf("Attribute %s not specified for message table", key)
+	}
+	v, err := strconv.Atoi(sv)
+	if err != nil {
+		return 0, err
+	}
+	return v, nil
 }

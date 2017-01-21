@@ -577,7 +577,7 @@ func (qre *QueryExecutor) execDMLPKRows(conn *TxConnection, query *sqlparser.Par
 	if qre.plan.TableInfo.Type == schema.Message {
 		ids := conn.ChangedMessages[qre.plan.TableInfo.Name.String()]
 		for _, pkrow := range pkRows {
-			ids = append(ids, pkrow[qre.plan.TableInfo.IDPKIndex].String())
+			ids = append(ids, pkrow[qre.plan.TableInfo.MessageInfo.IDPKIndex].String())
 		}
 		conn.ChangedMessages[qre.plan.TableInfo.Name.String()] = ids
 	}
