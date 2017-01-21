@@ -874,9 +874,9 @@ value_expression:
   {
     $$ = &BinaryExpr{Left: $1, Operator: JSONUnquoteExtractOp, Right: $3}
   }
-| column_name COLLATE value
+| value_expression COLLATE value_expression
   {
-    $$ = &BinaryExpr{Left: $1, Operator: COLLATE, Right: $3}
+    $$ = &ComparisonExpr{Left: $1, Operator: COLLATE, Right: $3}
   }
 | '+'  value_expression %prec UNARY
   {
