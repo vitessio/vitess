@@ -83,8 +83,6 @@ func (me *MessagerEngine) Subscribe(name string, rcv *messageReceiver) error {
 // LockDB obtains db locks for all messages that need to
 // be updated and returns the counterpart unlock function.
 func (me *MessagerEngine) LockDB(newMessages map[string][]*MessageRow, changedMessages map[string][]string) func() {
-	me.mu.Lock()
-	defer me.mu.Unlock()
 	combined := make(map[string]struct{})
 	for name := range newMessages {
 		combined[name] = struct{}{}
@@ -92,18 +90,24 @@ func (me *MessagerEngine) LockDB(newMessages map[string][]*MessageRow, changedMe
 	for name := range changedMessages {
 		combined[name] = struct{}{}
 	}
-	for name := range combined {
-		if mm := me.managers[name]; mm != nil {
-			mm.DBLock.Lock()
-		}
-	}
-	return func() {
+	var mms []*MessageManager
+	// Don't do DBLock while holding lock on mu.
+	// It causes deadlocks.
+	func() {
 		me.mu.Lock()
 		defer me.mu.Unlock()
 		for name := range combined {
 			if mm := me.managers[name]; mm != nil {
-				mm.DBLock.Unlock()
+				mms = append(mms, mm)
 			}
+		}
+	}()
+	for _, mm := range mms {
+		mm.DBLock.Lock()
+	}
+	return func() {
+		for _, mm := range mms {
+			mm.DBLock.Unlock()
 		}
 	}
 }

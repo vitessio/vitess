@@ -117,8 +117,8 @@ func TestReceiverEOF(t *testing.T) {
 	mm.Open()
 	defer mm.Close()
 	r1 := newTestReceiver(0)
-	mm.Subscribe(r1.rcv)
 	r1.done = make(chan struct{})
+	mm.Subscribe(r1.rcv)
 	close(r1.done)
 	// r1 should eventually be unsubscribed.
 	for i := 0; i < 10; i++ {
