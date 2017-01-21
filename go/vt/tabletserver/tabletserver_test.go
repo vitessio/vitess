@@ -1471,13 +1471,13 @@ func TestMessageAck(t *testing.T) {
 	}
 
 	_, err = tsv.MessageAck(ctx, &target, "msg", ids)
-	want = "error: query: select time_scheduled, id from msg where id in ('1', '2') limit 10001 for update is not supported"
+	want = "error: query: select time_scheduled, id from msg where id in ('1', '2') and time_acked is null limit 10001 for update is not supported"
 	if err == nil || err.Error() != want {
 		t.Errorf("tsv.MessageAck(invalid): %v, want %s", err, want)
 	}
 
 	db.AddQuery(
-		"select time_scheduled, id from msg where id in ('1', '2') limit 10001 for update",
+		"select time_scheduled, id from msg where id in ('1', '2') and time_acked is null limit 10001 for update",
 		&sqltypes.Result{
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{{
