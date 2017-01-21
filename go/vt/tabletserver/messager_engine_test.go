@@ -16,6 +16,13 @@ import (
 	"github.com/youtube/vitess/go/vt/schema"
 )
 
+var meTableInfo = &TableInfo{
+	Table: &schema.Table{
+		Type: schema.Message,
+	},
+	MessageInfo: mmTableInfo.MessageInfo,
+}
+
 func TestMEState(t *testing.T) {
 	db := setUpTabletServerTest()
 	testUtils := newTestUtils()
@@ -68,11 +75,7 @@ func TestMESchemaChanged(t *testing.T) {
 
 	me := tsv.messager
 	tables := map[string]*TableInfo{
-		"t1": {
-			Table: &schema.Table{
-				Type: schema.Message,
-			},
-		},
+		"t1": meTableInfo,
 		"t2": {
 			Table: &schema.Table{
 				Type: schema.NoType,
@@ -86,21 +89,13 @@ func TestMESchemaChanged(t *testing.T) {
 		t.Errorf("got: %+v, want %+v", got, want)
 	}
 	tables = map[string]*TableInfo{
-		"t1": {
-			Table: &schema.Table{
-				Type: schema.Message,
-			},
-		},
+		"t1": meTableInfo,
 		"t2": {
 			Table: &schema.Table{
 				Type: schema.NoType,
 			},
 		},
-		"t3": {
-			Table: &schema.Table{
-				Type: schema.Message,
-			},
-		},
+		"t3": meTableInfo,
 	}
 	me.schemaChanged(tables)
 	got = extractManagerNames(me.managers)
@@ -109,21 +104,13 @@ func TestMESchemaChanged(t *testing.T) {
 		t.Errorf("got: %+v, want %+v", got, want)
 	}
 	tables = map[string]*TableInfo{
-		"t1": {
-			Table: &schema.Table{
-				Type: schema.Message,
-			},
-		},
+		"t1": meTableInfo,
 		"t2": {
 			Table: &schema.Table{
 				Type: schema.NoType,
 			},
 		},
-		"t4": {
-			Table: &schema.Table{
-				Type: schema.Message,
-			},
-		},
+		"t4": meTableInfo,
 	}
 	me.schemaChanged(tables)
 	got = extractManagerNames(me.managers)
@@ -158,16 +145,8 @@ func TestSubscribe(t *testing.T) {
 
 	me := tsv.messager
 	tables := map[string]*TableInfo{
-		"t1": {
-			Table: &schema.Table{
-				Type: schema.Message,
-			},
-		},
-		"t2": {
-			Table: &schema.Table{
-				Type: schema.Message,
-			},
-		},
+		"t1": meTableInfo,
+		"t2": meTableInfo,
 	}
 	me.schemaChanged(tables)
 	r1 := newTestReceiver(1)
@@ -206,16 +185,8 @@ func TestLockDB(t *testing.T) {
 
 	me := tsv.messager
 	tables := map[string]*TableInfo{
-		"t1": {
-			Table: &schema.Table{
-				Type: schema.Message,
-			},
-		},
-		"t2": {
-			Table: &schema.Table{
-				Type: schema.Message,
-			},
-		},
+		"t1": meTableInfo,
+		"t2": meTableInfo,
 	}
 	me.schemaChanged(tables)
 	r1 := newTestReceiver(0)
@@ -327,11 +298,7 @@ func TestMEGenerate(t *testing.T) {
 
 	me := tsv.messager
 	me.schemaChanged(map[string]*TableInfo{
-		"t1": {
-			Table: &schema.Table{
-				Type: schema.Message,
-			},
-		},
+		"t1": meTableInfo,
 	})
 	if _, _, err := me.GenerateAckQuery("t1", []string{"1"}); err != nil {
 		t.Error(err)

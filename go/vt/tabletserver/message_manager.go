@@ -102,19 +102,19 @@ type MessageManager struct {
 }
 
 // NewMessageManager creates a new message manager.
-func NewMessageManager(tsv *TabletServer, table *TableInfo, ackWaitTime, purgeAfter time.Duration, batchSize, cacheSize int, pollInterval time.Duration, connpool *ConnPool) *MessageManager {
+func NewMessageManager(tsv *TabletServer, table *TableInfo, connpool *ConnPool) *MessageManager {
 	mm := &MessageManager{
 		tsv:  tsv,
 		name: table.Name,
 		fieldResult: &sqltypes.Result{
-			Fields: table.MessageFields,
+			Fields: table.MessageInfo.Fields,
 		},
-		ackWaitTime: ackWaitTime,
-		purgeAfter:  purgeAfter,
-		batchSize:   batchSize,
-		cache:       NewMessagerCache(cacheSize),
-		pollerTicks: timer.NewTimer(pollInterval),
-		purgeTicks:  timer.NewTimer(pollInterval),
+		ackWaitTime: table.MessageInfo.AckWaitDuration,
+		purgeAfter:  table.MessageInfo.PurgeAfterDuration,
+		batchSize:   table.MessageInfo.BatchSize,
+		cache:       NewMessagerCache(table.MessageInfo.CacheSize),
+		pollerTicks: timer.NewTimer(table.MessageInfo.PollInterval),
+		purgeTicks:  timer.NewTimer(table.MessageInfo.PollInterval),
 		connpool:    connpool,
 	}
 	mm.cond.L = &mm.mu
