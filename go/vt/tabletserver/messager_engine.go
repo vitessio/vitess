@@ -30,8 +30,7 @@ func NewMessagerEngine(tsv *TabletServer, config Config, queryServiceStats *Quer
 		tsv: tsv,
 		connpool: NewConnPool(
 			config.PoolNamePrefix+"MessagerPool",
-			// TODO(sougou): hardcoded value.
-			10,
+			config.MessagePoolSize,
 			time.Duration(config.IdleTimeout*1e9),
 			config.EnablePublishStats,
 			queryServiceStats,
@@ -186,7 +185,6 @@ func (me *MessagerEngine) schemaChanged(tables map[string]*TableInfo) {
 			// TODO(sougou): Need to update values instead.
 			continue
 		}
-		// TODO(sougou): hardcoded values.
 		mm := NewMessageManager(me.tsv, t, me.connpool)
 		me.managers[name] = mm
 		mm.Open()
