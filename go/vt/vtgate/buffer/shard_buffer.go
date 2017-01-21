@@ -44,8 +44,10 @@ type shardBuffer struct {
 	shard          string
 	bufferSizeSema *sync2.Semaphore
 	// statsKey is used to update the stats variables.
-	statsKey     []string
-	logTooRecent *logutil.ThrottledLogger
+	statsKey []string
+	// statsKeyJoined is all elements of "statsKey" in one string, joined by ".".
+	statsKeyJoined string
+	logTooRecent   *logutil.ThrottledLogger
 
 	// mu guards the fields below.
 	mu    sync.RWMutex
@@ -97,6 +99,7 @@ func newShardBuffer(keyspace, shard string, bufferSizeSema *sync2.Semaphore) *sh
 		shard:          shard,
 		bufferSizeSema: bufferSizeSema,
 		statsKey:       []string{keyspace, shard},
+		statsKeyJoined: fmt.Sprintf("%s.%s", keyspace, shard),
 		logTooRecent:   logutil.NewThrottledLogger(fmt.Sprintf("FailoverTooRecent-%v", topoproto.KeyspaceShardString(keyspace, shard)), 5*time.Second),
 		state:          stateIdle,
 	}
@@ -240,7 +243,11 @@ func (sb *shardBuffer) bufferRequestLocked(ctx context.Context) (*entry, error) 
 	}
 	e.bufferCtx, e.bufferCancel = context.WithCancel(ctx)
 	sb.queue = append(sb.queue, e)
-	requestsInFlightMax.Add(sb.statsKey, 1)
+
+	if max := requestsInFlightMax.Counts()[sb.statsKeyJoined]; max < int64(len(sb.queue)) {
+		requestsInFlightMax.Set(sb.statsKey, int64(len(sb.queue)))
+	}
+
 	if len(sb.queue) == 1 {
 		sb.timeoutThread.notifyQueueNotEmpty()
 	}
