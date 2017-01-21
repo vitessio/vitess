@@ -40,8 +40,9 @@ const (
 // - drain() thread
 type shardBuffer struct {
 	// Immutable fields set at construction.
-	keyspace       string
-	shard          string
+	keyspace string
+	shard    string
+	// bufferSizeSema is the shared pool of slots. See "Buffer.bufferSizeSema".
 	bufferSizeSema *sync2.Semaphore
 	// statsKey is used to update the stats variables.
 	statsKey []string
@@ -233,7 +234,10 @@ func (sb *shardBuffer) bufferRequestLocked(ctx context.Context) (*entry, error) 
 		// Evict the entry. Do not release its slot in the buffer and reuse it for
 		// this new request.
 		// NOTE: We keep the lock to avoid racing with drain().
-		sb.unblockAndWait(e, entryEvictedError, false /* releaseSlot */)
+		// NOTE: We're not waiting until the request finishes and instead reuse its
+		// slot immediately, i.e. the number of evicted requests + drained requests
+		// can be bigger than the buffer size.
+		sb.unblockAndWait(e, entryEvictedError, false /* releaseSlot */, false /* blockingWait */)
 		sb.queue = sb.queue[1:]
 	}
 
@@ -254,14 +258,34 @@ func (sb *shardBuffer) bufferRequestLocked(ctx context.Context) (*entry, error) 
 	return e, nil
 }
 
-// unblockAndWait unblocks a blocked request and waits until it reported its end.
-func (sb *shardBuffer) unblockAndWait(e *entry, err error, releaseSlot bool) {
+// unblockAndWait unblocks a blocked request.
+// If releaseSlot is true, the buffer semaphore will be decreased by 1 when
+// the request retried and finished.
+// If blockingWait is true, this call will block until the request retried and
+// finished. This mode is used during the drain (to avoid flooding the master)
+// while the non-blocking mode is used when evicting a request e.g. because the
+// buffer is full or it exceeded the buffering window
+func (sb *shardBuffer) unblockAndWait(e *entry, err error, releaseSlot, blockingWait bool) {
 	// Set error such that the request will see it.
 	e.err = err
 	// Tell blocked request to stop waiting.
 	close(e.done)
-	// Wait for unblocked request to end.
+
+	if blockingWait {
+		sb.waitForRequestFinish(e, releaseSlot)
+	} else {
+		go sb.waitForRequestFinish(e, releaseSlot)
+	}
+}
+
+func (sb *shardBuffer) waitForRequestFinish(e *entry, releaseSlot bool) {
+	// Wait for unblocked request to finish.
 	<-e.bufferCtx.Done()
+
+	// Release the slot to the buffer.
+	// NOTE: We always wait for the request first, even if the calling code like
+	// the buffer full eviction or the timeout thread does not block on us.
+	// This way, the request's slot can only be reused after the request finished.
 	if releaseSlot {
 		sb.bufferSizeSema.Release()
 	}
@@ -299,7 +323,15 @@ func (sb *shardBuffer) evictOldestEntry(e *entry) {
 		// Entry is already removed e.g. by remove(). Ignore it.
 		return
 	}
-	sb.unblockAndWait(e, nil /* err */, true /* releaseSlot */)
+
+	// Evict the entry.
+	//
+	// NOTE: We're not waiting for the request to finish in order to unblock the
+	// timeout thread as fast as possible. However, the slot of the evicted
+	// request is only returned after it has finished i.e. the buffer may stay
+	// full in the meantime. This is a design tradeoff to keep things simple and
+	// avoid additional pressure on the master tablet.
+	sb.unblockAndWait(e, nil /* err */, true /* releaseSlot */, false /* blockingWait */)
 	sb.queue = sb.queue[1:]
 }
 
@@ -396,7 +428,7 @@ func (sb *shardBuffer) drain(q []*entry) {
 	start := time.Now()
 	// TODO(mberlin): Parallelize the drain by pumping the data through a channel.
 	for _, e := range q {
-		sb.unblockAndWait(e, nil /* err */, true /* releaseSlot */)
+		sb.unblockAndWait(e, nil /* err */, true /* releaseSlot */, true /* blockingWait */)
 	}
 	d := time.Since(start)
 	log.Infof("Draining finished for shard: %s Took: %v for: %d requests.", topoproto.KeyspaceShardString(sb.keyspace, sb.shard), d, len(q))
