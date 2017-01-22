@@ -1,10 +1,12 @@
 package com.flipkart.vitess.jdbc;
 
-import com.flipkart.vitess.jdbc.VitessJDBCUrl;
+import com.flipkart.vitess.util.Constants;
 import com.youtube.vitess.proto.Topodata;
+
 import org.junit.Assert;
 import org.junit.Test;
 
+import java.sql.SQLException;
 import java.util.Properties;
 
 /**
@@ -69,7 +71,7 @@ public class VitessJDBCUrlTest {
         Assert.assertEquals(15991, vitessJDBCUrl.getHostInfos().get(1).getPort());
         Assert.assertEquals("hostname3", vitessJDBCUrl.getHostInfos().get(2).getHostname());
         Assert.assertEquals(15991, vitessJDBCUrl.getHostInfos().get(2).getPort());
-        Assert.assertEquals(Topodata.TabletType.MASTER, vitessJDBCUrl.getTabletType());
+        Assert.assertEquals(Topodata.TabletType.MASTER.name(), vitessJDBCUrl.getProperties().getProperty(Constants.Property.TABLET_TYPE).toUpperCase());
         Assert.assertEquals("user", vitessJDBCUrl.getUsername());
     }
 
@@ -97,7 +99,7 @@ public class VitessJDBCUrlTest {
         Assert.assertEquals(15991, vitessJDBCUrl.getHostInfos().get(2).getPort());
         Assert.assertEquals("hostname3", vitessJDBCUrl1.getHostInfos().get(2).getHostname());
         Assert.assertEquals(15001, vitessJDBCUrl1.getHostInfos().get(2).getPort());
-        Assert.assertEquals(vitessJDBCUrl.getTabletType(), Topodata.TabletType.MASTER);
+        Assert.assertEquals(Topodata.TabletType.MASTER.name(), vitessJDBCUrl.getProperties().getProperty(Constants.Property.TABLET_TYPE).toUpperCase());
         Assert.assertEquals("user", vitessJDBCUrl.getUsername());
     }
 
@@ -145,21 +147,31 @@ public class VitessJDBCUrlTest {
         Assert.assertEquals(15991, vitessJDBCUrl.getHostInfos().get(1).getPort());
         Assert.assertEquals("keyspace", vitessJDBCUrl.getKeyspace());
         Assert.assertEquals("catalog", vitessJDBCUrl.getCatalog());
-        Assert.assertEquals("val1", info.getProperty("prop1"));
-        Assert.assertEquals("val2", info.getProperty("prop2"));
+        Assert.assertEquals("val1", vitessJDBCUrl.getProperties().getProperty("prop1"));
+        Assert.assertEquals("val2", vitessJDBCUrl.getProperties().getProperty("prop2"));
     }
 
-    @Test public void testTwoPCEnabledURL() throws Exception {
-        VitessJDBCUrl vitessJDBCUrl =
-            new VitessJDBCUrl("jdbc:vitess://host:15991?twopcEnabled=true", null);
-        Assert.assertTrue(vitessJDBCUrl.isTwopcEnabled());
+    @Test public void testLeaveOriginalPropertiesAlone() throws Exception {
+        Properties info = new Properties();
+        VitessJDBCUrl vitessJDBCUrl = new VitessJDBCUrl(
+            "jdbc:vitess://user:pass@hostname1:15991,hostname2:15991/keyspace/catalog?prop1=val1&prop2=val2",
+            info);
 
-        vitessJDBCUrl = new VitessJDBCUrl("jdbc:vitess://host:15991?twopcEnabled=false", null);
-        Assert.assertFalse(vitessJDBCUrl.isTwopcEnabled());
-
-        vitessJDBCUrl = new VitessJDBCUrl("jdbc:vitess://host:15991", null);
-        Assert.assertFalse(vitessJDBCUrl.isTwopcEnabled());
-
+        Assert.assertEquals(null, info.getProperty("prop1"));
+        Assert.assertEquals("val1", vitessJDBCUrl.getProperties().getProperty("prop1"));
     }
 
+    @Test public void testPropertiesTakePrecendenceOverUrl() throws SQLException {
+        Properties info = new Properties();
+        info.setProperty("prop1", "val3");
+        info.setProperty("prop2", "val4");
+
+        VitessJDBCUrl vitessJDBCUrl = new VitessJDBCUrl(
+            "jdbc:vitess://user:pass@hostname1:15991,hostname2:15991/keyspace/catalog?prop1=val1&prop2=val2&prop3=val3",
+            info);
+
+        Assert.assertEquals("val3", vitessJDBCUrl.getProperties().getProperty("prop1"));
+        Assert.assertEquals("val4", vitessJDBCUrl.getProperties().getProperty("prop2"));
+        Assert.assertEquals("val3", vitessJDBCUrl.getProperties().getProperty("prop3"));
+    }
 }

@@ -8,6 +8,7 @@ import com.youtube.vitess.client.RpcClientFactory;
 import com.youtube.vitess.client.VTGateBlockingConn;
 import com.youtube.vitess.client.cursor.Cursor;
 import com.youtube.vitess.client.cursor.Row;
+import com.youtube.vitess.proto.Query;
 import com.youtube.vitess.proto.Query.BoundQuery;
 import com.youtube.vitess.proto.Topodata.TabletType;
 import com.youtube.vitess.proto.Vtgate.SplitQueryResponse;
@@ -32,6 +33,7 @@ public class VitessRecordReader extends RecordReader<NullWritable, RowWritable> 
   private long rowsProcessed = 0;
   private Cursor cursor;
   private RowWritable currentRow;
+  private Query.ExecuteOptions.IncludedFields includedFields;
 
   /**
    * Fetch connection parameters from Configuraiton and open VtGate connection.
@@ -53,6 +55,7 @@ public class VitessRecordReader extends RecordReader<NullWritable, RowWritable> 
           Context.getDefault().withDeadlineAfter(Duration.millis(conf.getTimeoutMs())),
           new InetSocketAddress(hostAndPort.getHostText(), hostAndPort.getPort()));
       vtgate = new VTGateBlockingConn(rpcClient);
+      includedFields = conf.getIncludedFields();
     } catch (ClassNotFoundException | InstantiationException | IllegalAccessException e) {
       throw new RuntimeException(e);
     }
@@ -102,13 +105,13 @@ public class VitessRecordReader extends RecordReader<NullWritable, RowWritable> 
           SplitQueryResponse.KeyRangePart keyRangePart = splitInfo.getKeyRangePart();
           cursor = vtgate.streamExecuteKeyRanges(Context.getDefault(), query.getSql(),
               keyRangePart.getKeyspace(), keyRangePart.getKeyRangesList(), query.getBindVariables(),
-              TabletType.RDONLY);
+              TabletType.RDONLY, includedFields);
         } else if (splitInfo.hasShardPart()) {
           BoundQuery query = splitInfo.getQuery();
           SplitQueryResponse.ShardPart shardPart = splitInfo.getShardPart();
           cursor = vtgate.streamExecuteShards(Context.getDefault(), query.getSql(),
               shardPart.getKeyspace(), shardPart.getShardsList(), query.getBindVariables(),
-              TabletType.RDONLY);
+              TabletType.RDONLY, includedFields);
         } else {
           throw new IllegalArgumentException("unknown split info: " + splitInfo);
         }

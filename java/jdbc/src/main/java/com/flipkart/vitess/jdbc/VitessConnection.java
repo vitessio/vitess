@@ -6,7 +6,6 @@ import com.flipkart.vitess.util.MysqlDefs;
 import com.youtube.vitess.client.Context;
 import com.youtube.vitess.client.VTGateConn;
 import com.youtube.vitess.client.VTGateTx;
-import com.youtube.vitess.proto.Topodata;
 
 import java.sql.Array;
 import java.sql.Blob;
@@ -38,37 +37,37 @@ import java.util.logging.Logger;
 /**
  * Created by harshit.gangal on 23/01/16.
  */
-public class VitessConnection implements Connection {
+public class VitessConnection extends ConnectionProperties implements Connection {
 
     private static final int DEFAULT_RESULT_SET_TYPE = ResultSet.TYPE_FORWARD_ONLY;
     private static final int DEFAULT_RESULT_SET_CONCURRENCY = ResultSet.CONCUR_READ_ONLY;
+
     /* Get actual class name to be printed on */
     private static Logger logger = Logger.getLogger(VitessConnection.class.getName());
     private static DatabaseMetaData databaseMetaData = null;
+
     /**
      * A Map of currently open statements
      */
-    protected Set<Statement> openStatements = new HashSet<>();
+    private Set<Statement> openStatements = new HashSet<>();
     private VitessVTGateManager.VTGateConnections vTGateConnections;
     private VTGateTx vtGateTx;
     private boolean closed = true;
     private boolean autoCommit = true;
     private boolean readOnly = false;
     private DBProperties dbProperties;
-    private VitessJDBCUrl vitessJDBCUrl;
-
+    private final VitessJDBCUrl vitessJDBCUrl;
 
     /**
      * Constructor to Create Connection Object
      *
      * @param url  - Connection url
-     * @param info - property for the connection
+     * @param connectionProperties - property for the connection
      * @throws SQLException
      */
-    public VitessConnection(String url, Properties info) throws SQLException {
-
+    public VitessConnection(String url, Properties connectionProperties) throws SQLException {
         try {
-            this.vitessJDBCUrl = new VitessJDBCUrl(url, info);
+            this.vitessJDBCUrl = new VitessJDBCUrl(url, connectionProperties);
             this.vTGateConnections = new VitessVTGateManager.VTGateConnections(vitessJDBCUrl);
             this.closed = false;
             this.dbProperties = null;
@@ -76,6 +75,8 @@ public class VitessConnection implements Connection {
             throw new SQLException(
                 Constants.SQLExceptionMessages.CONN_INIT_ERROR + " - " + e.getMessage(), e);
         }
+
+        initializeProperties(vitessJDBCUrl.getProperties());
     }
 
     /**
@@ -153,7 +154,7 @@ public class VitessConnection implements Connection {
         try {
             if (isInTransaction()) {
                 Context context = createContext(Constants.CONNECTION_TIMEOUT);
-                this.vtGateTx.commit(context, this.vitessJDBCUrl.isTwopcEnabled()).checkedGet();
+                this.vtGateTx.commit(context, getTwopcEnabled()).checkedGet();
             }
         } finally {
             this.vtGateTx = null;
@@ -583,16 +584,8 @@ public class VitessConnection implements Connection {
         this.vtGateTx = vtGateTx;
     }
 
-    public Topodata.TabletType getTabletType() {
-        return this.vitessJDBCUrl.getTabletType();
-    }
-
     public String getUrl() {
         return this.vitessJDBCUrl.getUrl();
-    }
-
-    public Constants.QueryExecuteType getExecuteTypeParam() {
-        return this.vitessJDBCUrl.getExecuteType();
     }
 
     /**

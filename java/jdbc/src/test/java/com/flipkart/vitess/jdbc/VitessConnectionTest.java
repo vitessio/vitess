@@ -5,9 +5,10 @@ import com.google.common.util.concurrent.Futures;
 import com.youtube.vitess.client.Context;
 import com.youtube.vitess.client.SQLFuture;
 import com.youtube.vitess.client.VTGateTx;
+import com.youtube.vitess.proto.Query;
+import com.youtube.vitess.proto.Topodata;
 
 import org.junit.Assert;
-import org.junit.BeforeClass;
 import org.junit.Test;
 import org.mockito.Matchers;
 import org.powermock.api.mockito.PowerMockito;
@@ -15,29 +16,15 @@ import org.powermock.api.mockito.PowerMockito;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.Properties;
 
 /**
  * Created by harshit.gangal on 19/01/16.
  */
-public class VitessConnectionTest {
-
-    String dbURL = "jdbc:vitess://locahost:9000/vt_shipment/shipment";
-
-    @BeforeClass public static void setUp() {
-        // load Vitess driver
-        try {
-            Class.forName("com.flipkart.vitess.jdbc.VitessDriver");
-        } catch (ClassNotFoundException e) {
-            Assert.fail("Driver is not in the CLASSPATH -> " + e.getMessage());
-        }
-    }
-
-    private VitessConnection getVitessConnection() throws SQLException {
-        return new VitessConnection(dbURL, null);
-    }
+public class VitessConnectionTest extends BaseTest {
 
     @Test public void testVitessConnection() throws SQLException {
-        VitessConnection vitessConnection = new VitessConnection(dbURL, null);
+        VitessConnection vitessConnection = new VitessConnection(dbURL, new Properties());
         Assert.assertEquals(false, vitessConnection.isClosed());
         Assert.assertNull(vitessConnection.getDbProperties());
     }
@@ -197,13 +184,22 @@ public class VitessConnectionTest {
 
     @Test public void testGetCatalog() throws SQLException {
         VitessConnection vitessConnection = getVitessConnection();
-        Assert.assertEquals("shipment", vitessConnection.getCatalog());
+        Assert.assertEquals("keyspace", vitessConnection.getCatalog());
     }
 
     @Test public void testSetCatalog() throws SQLException {
         VitessConnection vitessConnection = getVitessConnection();
-        vitessConnection.setCatalog("order");
-        Assert.assertEquals("order", vitessConnection.getCatalog());
+        vitessConnection.setCatalog("myDB");
+        Assert.assertEquals("myDB", vitessConnection.getCatalog());
     }
 
+    @Test public void testPropertiesFromJdbcUrl() throws SQLException {
+        String url = "jdbc:vitess://locahost:9000/vt_keyspace/keyspace?TABLET_TYPE=replica&includedFields=type_and_name";
+        VitessConnection conn = new VitessConnection(url, new Properties());
+
+        // Properties from the url should be passed into the connection properties, and override whatever defaults we've defined
+        Assert.assertEquals(Query.ExecuteOptions.IncludedFields.TYPE_AND_NAME, conn.getIncludedFields());
+        Assert.assertEquals(false, conn.isIncludeAllFields());
+        Assert.assertEquals(Topodata.TabletType.REPLICA, conn.getTabletType());
+    }
 }

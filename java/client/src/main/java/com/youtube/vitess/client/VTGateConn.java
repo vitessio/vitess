@@ -96,13 +96,18 @@ public final class VTGateConn implements Closeable {
   }
 
   public SQLFuture<Cursor> execute(Context ctx, String query, @Nullable Map<String, ?> bindVars,
-      TabletType tabletType) throws SQLException {
-    ExecuteRequest.Builder requestBuilder =
-        ExecuteRequest.newBuilder().setQuery(Proto.bindQuery(checkNotNull(query), bindVars))
-            .setKeyspace(keyspace).setTabletType(checkNotNull(tabletType));
+    TabletType tabletType, Query.ExecuteOptions.IncludedFields includedFields) throws SQLException {
+    ExecuteRequest.Builder requestBuilder = ExecuteRequest.newBuilder()
+            .setQuery(Proto.bindQuery(checkNotNull(query), bindVars))
+            .setKeyspace(keyspace)
+            .setTabletType(checkNotNull(tabletType))
+            .setOptions(Query.ExecuteOptions.newBuilder()
+                .setIncludedFields(includedFields));
+
     if (ctx.getCallerId() != null) {
       requestBuilder.setCallerId(ctx.getCallerId());
     }
+
     return new SQLFuture<Cursor>(Futures.transformAsync(client.execute(ctx, requestBuilder.build()),
         new AsyncFunction<ExecuteResponse, Cursor>() {
           @Override
@@ -114,15 +119,22 @@ public final class VTGateConn implements Closeable {
   }
 
   public SQLFuture<Cursor> executeShards(Context ctx, String query, String keyspace,
-      Iterable<String> shards, @Nullable Map<String, ?> bindVars, TabletType tabletType)
+      Iterable<String> shards, @Nullable Map<String, ?> bindVars, TabletType tabletType,
+      Query.ExecuteOptions.IncludedFields includedFields)
       throws SQLException {
     ExecuteShardsRequest.Builder requestBuilder =
-        ExecuteShardsRequest.newBuilder().setQuery(Proto.bindQuery(checkNotNull(query), bindVars))
-            .setKeyspace(checkNotNull(keyspace)).addAllShards(checkNotNull(shards))
-            .setTabletType(checkNotNull(tabletType));
+        ExecuteShardsRequest.newBuilder()
+            .setQuery(Proto.bindQuery(checkNotNull(query), bindVars))
+            .setKeyspace(checkNotNull(keyspace))
+            .addAllShards(checkNotNull(shards))
+            .setTabletType(checkNotNull(tabletType))
+            .setOptions(Query.ExecuteOptions.newBuilder()
+                .setIncludedFields(includedFields));
+
     if (ctx.getCallerId() != null) {
       requestBuilder.setCallerId(ctx.getCallerId());
     }
+
     return new SQLFuture<Cursor>(
         Futures.transformAsync(client.executeShards(ctx, requestBuilder.build()),
             new AsyncFunction<ExecuteShardsResponse, Cursor>() {
@@ -136,17 +148,22 @@ public final class VTGateConn implements Closeable {
   }
 
   public SQLFuture<Cursor> executeKeyspaceIds(Context ctx, String query, String keyspace,
-      Iterable<byte[]> keyspaceIds, @Nullable Map<String, ?> bindVars, TabletType tabletType)
+      Iterable<byte[]> keyspaceIds, @Nullable Map<String, ?> bindVars, TabletType tabletType,
+      Query.ExecuteOptions.IncludedFields includedFields)
       throws SQLException {
     ExecuteKeyspaceIdsRequest.Builder requestBuilder = ExecuteKeyspaceIdsRequest.newBuilder()
         .setQuery(Proto.bindQuery(checkNotNull(query), bindVars))
         .setKeyspace(checkNotNull(keyspace))
         .addAllKeyspaceIds(
             Iterables.transform(checkNotNull(keyspaceIds), Proto.BYTE_ARRAY_TO_BYTE_STRING))
-        .setTabletType(checkNotNull(tabletType));
+        .setTabletType(checkNotNull(tabletType))
+        .setOptions(Query.ExecuteOptions.newBuilder()
+            .setIncludedFields(includedFields));
+
     if (ctx.getCallerId() != null) {
       requestBuilder.setCallerId(ctx.getCallerId());
     }
+
     return new SQLFuture<Cursor>(
         Futures.transformAsync(client.executeKeyspaceIds(ctx, requestBuilder.build()),
             new AsyncFunction<ExecuteKeyspaceIdsResponse, Cursor>() {
@@ -161,14 +178,19 @@ public final class VTGateConn implements Closeable {
 
   public SQLFuture<Cursor> executeKeyRanges(Context ctx, String query, String keyspace,
       Iterable<? extends KeyRange> keyRanges, @Nullable Map<String, ?> bindVars,
-      TabletType tabletType) throws SQLException {
+      TabletType tabletType, Query.ExecuteOptions.IncludedFields includedFields) throws SQLException {
     ExecuteKeyRangesRequest.Builder requestBuilder = ExecuteKeyRangesRequest.newBuilder()
         .setQuery(Proto.bindQuery(checkNotNull(query), bindVars))
-        .setKeyspace(checkNotNull(keyspace)).addAllKeyRanges(checkNotNull(keyRanges))
-        .setTabletType(checkNotNull(tabletType));
+        .setKeyspace(checkNotNull(keyspace))
+        .addAllKeyRanges(checkNotNull(keyRanges))
+        .setTabletType(checkNotNull(tabletType))
+        .setOptions(Query.ExecuteOptions.newBuilder()
+            .setIncludedFields(includedFields));
+
     if (ctx.getCallerId() != null) {
       requestBuilder.setCallerId(ctx.getCallerId());
     }
+
     return new SQLFuture<Cursor>(
         Futures.transformAsync(client.executeKeyRanges(ctx, requestBuilder.build()),
             new AsyncFunction<ExecuteKeyRangesResponse, Cursor>() {
@@ -183,16 +205,21 @@ public final class VTGateConn implements Closeable {
 
   public SQLFuture<Cursor> executeEntityIds(Context ctx, String query, String keyspace,
       String entityColumnName, Map<byte[], ?> entityKeyspaceIds, @Nullable Map<String, ?> bindVars,
-      TabletType tabletType) throws SQLException {
+      TabletType tabletType, Query.ExecuteOptions.IncludedFields includedFields) throws SQLException {
     ExecuteEntityIdsRequest.Builder requestBuilder = ExecuteEntityIdsRequest.newBuilder()
         .setQuery(Proto.bindQuery(checkNotNull(query), bindVars))
         .setKeyspace(checkNotNull(keyspace))
-        .setEntityColumnName(checkNotNull(entityColumnName)).addAllEntityKeyspaceIds(Iterables
+        .setEntityColumnName(checkNotNull(entityColumnName))
+        .addAllEntityKeyspaceIds(Iterables
             .transform(entityKeyspaceIds.entrySet(), Proto.MAP_ENTRY_TO_ENTITY_KEYSPACE_ID))
-        .setTabletType(checkNotNull(tabletType));
+        .setTabletType(checkNotNull(tabletType))
+        .setOptions(Query.ExecuteOptions.newBuilder()
+            .setIncludedFields(includedFields));
+
     if (ctx.getCallerId() != null) {
       requestBuilder.setCallerId(ctx.getCallerId());
     }
+
     return new SQLFuture<Cursor>(
         Futures.transformAsync(client.executeEntityIds(ctx, requestBuilder.build()),
             new AsyncFunction<ExecuteEntityIdsResponse, Cursor>() {
@@ -206,13 +233,14 @@ public final class VTGateConn implements Closeable {
   }
 
     public SQLFuture<List<CursorWithError>> executeBatch(Context ctx, List<String> queryList,
-        @Nullable List<Map<String, ?>> bindVarsList, TabletType tabletType) throws SQLException {
-        return executeBatch(ctx, queryList, bindVarsList, tabletType, false);
+        @Nullable List<Map<String, ?>> bindVarsList, TabletType tabletType,
+        Query.ExecuteOptions.IncludedFields includedFields) throws SQLException {
+        return executeBatch(ctx, queryList, bindVarsList, tabletType, false, includedFields);
     }
 
     public SQLFuture<List<CursorWithError>> executeBatch(Context ctx, List<String> queryList,
         @Nullable List<Map<String, ?>> bindVarsList, TabletType tabletType,
-        boolean asTransaction) throws SQLException {
+        boolean asTransaction, Query.ExecuteOptions.IncludedFields includedFields) throws SQLException {
         List<Query.BoundQuery> queries = new ArrayList<>();
 
         if (null != bindVarsList && bindVarsList.size() != queryList.size()) {
@@ -226,12 +254,18 @@ public final class VTGateConn implements Closeable {
         }
 
         Vtgate.ExecuteBatchRequest.Builder requestBuilder =
-            Vtgate.ExecuteBatchRequest.newBuilder().addAllQueries(checkNotNull(queries))
-                .setKeyspace(keyspace).setTabletType(checkNotNull(tabletType))
-                .setAsTransaction(asTransaction);
+            Vtgate.ExecuteBatchRequest.newBuilder()
+                .addAllQueries(checkNotNull(queries))
+                .setKeyspace(keyspace)
+                .setTabletType(checkNotNull(tabletType))
+                .setAsTransaction(asTransaction)
+                .setOptions(Query.ExecuteOptions.newBuilder()
+                    .setIncludedFields(includedFields));
+
         if (ctx.getCallerId() != null) {
             requestBuilder.setCallerId(ctx.getCallerId());
         }
+
         return new SQLFuture<>(Futures
             .transformAsync(client.executeBatch(ctx, requestBuilder.build()),
                 new AsyncFunction<Vtgate.ExecuteBatchResponse, List<CursorWithError>>() {
@@ -251,14 +285,21 @@ public final class VTGateConn implements Closeable {
    *        the batch queries.
    */
   public SQLFuture<List<Cursor>> executeBatchShards(Context ctx,
-      Iterable<? extends BoundShardQuery> queries, TabletType tabletType, boolean asTransaction)
+      Iterable<? extends BoundShardQuery> queries, TabletType tabletType, boolean asTransaction,
+      Query.ExecuteOptions.IncludedFields includedFields)
       throws SQLException {
     ExecuteBatchShardsRequest.Builder requestBuilder =
-        ExecuteBatchShardsRequest.newBuilder().addAllQueries(checkNotNull(queries))
-            .setTabletType(checkNotNull(tabletType)).setAsTransaction(asTransaction);
+        ExecuteBatchShardsRequest.newBuilder()
+            .addAllQueries(checkNotNull(queries))
+            .setTabletType(checkNotNull(tabletType))
+            .setAsTransaction(asTransaction)
+            .setOptions(Query.ExecuteOptions.newBuilder()
+                .setIncludedFields(includedFields));
+
     if (ctx.getCallerId() != null) {
       requestBuilder.setCallerId(ctx.getCallerId());
     }
+
     return new SQLFuture<List<Cursor>>(
         Futures.transformAsync(client.executeBatchShards(ctx, requestBuilder.build()),
             new AsyncFunction<ExecuteBatchShardsResponse, List<Cursor>>() {
@@ -280,13 +321,19 @@ public final class VTGateConn implements Closeable {
    */
   public SQLFuture<List<Cursor>> executeBatchKeyspaceIds(Context ctx,
       Iterable<? extends BoundKeyspaceIdQuery> queries, TabletType tabletType,
-      boolean asTransaction) throws SQLException {
+      boolean asTransaction, Query.ExecuteOptions.IncludedFields includedFields) throws SQLException {
     ExecuteBatchKeyspaceIdsRequest.Builder requestBuilder =
-        ExecuteBatchKeyspaceIdsRequest.newBuilder().addAllQueries(checkNotNull(queries))
-            .setTabletType(checkNotNull(tabletType)).setAsTransaction(asTransaction);
+        ExecuteBatchKeyspaceIdsRequest.newBuilder()
+            .addAllQueries(checkNotNull(queries))
+            .setTabletType(checkNotNull(tabletType))
+            .setAsTransaction(asTransaction)
+            .setOptions(Query.ExecuteOptions.newBuilder()
+                .setIncludedFields(includedFields));
+
     if (ctx.getCallerId() != null) {
       requestBuilder.setCallerId(ctx.getCallerId());
     }
+
     return new SQLFuture<List<Cursor>>(
         Futures.transformAsync(client.executeBatchKeyspaceIds(ctx, requestBuilder.build()),
             new AsyncFunction<ExecuteBatchKeyspaceIdsResponse, List<Cursor>>() {
@@ -301,54 +348,78 @@ public final class VTGateConn implements Closeable {
   }
 
   public Cursor streamExecute(Context ctx, String query, @Nullable Map<String, ?> bindVars,
-      TabletType tabletType) throws SQLException {
+      TabletType tabletType, Query.ExecuteOptions.IncludedFields includedFields) throws SQLException {
     StreamExecuteRequest.Builder requestBuilder =
-        StreamExecuteRequest.newBuilder().setQuery(Proto.bindQuery(checkNotNull(query), bindVars))
-            .setKeyspace(keyspace).setTabletType(checkNotNull(tabletType));
+        StreamExecuteRequest.newBuilder()
+            .setQuery(Proto.bindQuery(checkNotNull(query), bindVars))
+            .setKeyspace(keyspace)
+            .setTabletType(checkNotNull(tabletType))
+            .setOptions(Query.ExecuteOptions.newBuilder()
+                .setIncludedFields(includedFields));
+
     if (ctx.getCallerId() != null) {
       requestBuilder.setCallerId(ctx.getCallerId());
     }
+
     return new StreamCursor(client.streamExecute(ctx, requestBuilder.build()));
   }
 
   public Cursor streamExecuteShards(Context ctx, String query, String keyspace,
-      Iterable<String> shards, @Nullable Map<String, ?> bindVars, TabletType tabletType)
+      Iterable<String> shards, @Nullable Map<String, ?> bindVars, TabletType tabletType,
+      Query.ExecuteOptions.IncludedFields includedFields)
       throws SQLException {
     StreamExecuteShardsRequest.Builder requestBuilder = StreamExecuteShardsRequest.newBuilder()
         .setQuery(Proto.bindQuery(checkNotNull(query), bindVars))
-        .setKeyspace(checkNotNull(keyspace)).addAllShards(checkNotNull(shards))
-        .setTabletType(checkNotNull(tabletType));
+        .setKeyspace(checkNotNull(keyspace))
+        .addAllShards(checkNotNull(shards))
+        .setTabletType(checkNotNull(tabletType))
+        .setOptions(Query.ExecuteOptions.newBuilder()
+            .setIncludedFields(includedFields));
+
     if (ctx.getCallerId() != null) {
       requestBuilder.setCallerId(ctx.getCallerId());
     }
+
     return new StreamCursor(client.streamExecuteShards(ctx, requestBuilder.build()));
   }
 
   public Cursor streamExecuteKeyspaceIds(Context ctx, String query, String keyspace,
-      Iterable<byte[]> keyspaceIds, @Nullable Map<String, ?> bindVars, TabletType tabletType)
+      Iterable<byte[]> keyspaceIds, @Nullable Map<String, ?> bindVars, TabletType tabletType,
+      Query.ExecuteOptions.IncludedFields includedFields)
       throws SQLException {
     StreamExecuteKeyspaceIdsRequest.Builder requestBuilder = StreamExecuteKeyspaceIdsRequest
-        .newBuilder().setQuery(Proto.bindQuery(checkNotNull(query), bindVars))
+        .newBuilder()
+        .setQuery(Proto.bindQuery(checkNotNull(query), bindVars))
         .setKeyspace(checkNotNull(keyspace))
         .addAllKeyspaceIds(
             Iterables.transform(checkNotNull(keyspaceIds), Proto.BYTE_ARRAY_TO_BYTE_STRING))
-        .setTabletType(checkNotNull(tabletType));
+        .setTabletType(checkNotNull(tabletType))
+        .setOptions(Query.ExecuteOptions.newBuilder()
+            .setIncludedFields(includedFields));
+
     if (ctx.getCallerId() != null) {
       requestBuilder.setCallerId(ctx.getCallerId());
     }
+
     return new StreamCursor(client.streamExecuteKeyspaceIds(ctx, requestBuilder.build()));
   }
 
   public Cursor streamExecuteKeyRanges(Context ctx, String query, String keyspace,
       Iterable<? extends KeyRange> keyRanges, @Nullable Map<String, ?> bindVars,
-      TabletType tabletType) throws SQLException {
+      TabletType tabletType, Query.ExecuteOptions.IncludedFields includedFields) throws SQLException {
     StreamExecuteKeyRangesRequest.Builder requestBuilder = StreamExecuteKeyRangesRequest
-        .newBuilder().setQuery(Proto.bindQuery(checkNotNull(query), bindVars))
-        .setKeyspace(checkNotNull(keyspace)).addAllKeyRanges(checkNotNull(keyRanges))
-        .setTabletType(checkNotNull(tabletType));
+        .newBuilder()
+        .setQuery(Proto.bindQuery(checkNotNull(query), bindVars))
+        .setKeyspace(checkNotNull(keyspace))
+        .addAllKeyRanges(checkNotNull(keyRanges))
+        .setTabletType(checkNotNull(tabletType))
+        .setOptions(Query.ExecuteOptions.newBuilder()
+            .setIncludedFields(includedFields));
+
     if (ctx.getCallerId() != null) {
       requestBuilder.setCallerId(ctx.getCallerId());
     }
+
     return new StreamCursor(client.streamExecuteKeyRanges(ctx, requestBuilder.build()));
   }
 

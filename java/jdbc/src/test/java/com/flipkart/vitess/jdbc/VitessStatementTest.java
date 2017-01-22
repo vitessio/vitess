@@ -10,6 +10,7 @@ import com.youtube.vitess.client.cursor.CursorWithError;
 import com.youtube.vitess.proto.Query;
 import com.youtube.vitess.proto.Topodata;
 import com.youtube.vitess.proto.Vtrpc;
+
 import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -73,19 +74,20 @@ import java.util.List;
         PowerMockito.when(mockConn.getVtGateTx()).thenReturn(mockVtGateTx);
         PowerMockito.when(mockVtGateTx
             .execute(Matchers.any(Context.class), Matchers.anyString(), Matchers.anyMap(),
-                Matchers.any(Topodata.TabletType.class))).thenReturn(mockSqlFutureCursor);
+                Matchers.any(Topodata.TabletType.class), Matchers.any(Query.ExecuteOptions.IncludedFields.class))).thenReturn(mockSqlFutureCursor);
         PowerMockito.when(mockVtGateConn
             .execute(Matchers.any(Context.class), Matchers.anyString(), Matchers.anyMap(),
-                Matchers.any(Topodata.TabletType.class))).thenReturn(mockSqlFutureCursor);
+                Matchers.any(Topodata.TabletType.class), Matchers.any(Query.ExecuteOptions.IncludedFields.class))).thenReturn(mockSqlFutureCursor);
         PowerMockito.when(mockVtGateConn
             .executeKeyspaceIds(Matchers.any(Context.class), Matchers.anyString(),
                 Matchers.anyString(), Matchers.anyCollection(), Matchers.anyMap(),
-                Matchers.any(Topodata.TabletType.class))).thenReturn(mockSqlFutureCursor);
-        PowerMockito.when(mockConn.getExecuteTypeParam())
+                Matchers.any(Topodata.TabletType.class), Matchers.any(Query.ExecuteOptions.IncludedFields.class))).thenReturn(mockSqlFutureCursor);
+        PowerMockito.when(mockConn.getExecuteType())
             .thenReturn(Constants.QueryExecuteType.SIMPLE);
+        PowerMockito.when(mockConn.isSimpleExecute()).thenReturn(true);
         PowerMockito.when(mockSqlFutureCursor.checkedGet()).thenReturn(mockCursor);
         PowerMockito.when(mockSqlFutureVtGateTx.checkedGet()).thenReturn(mockVtGateTx);
-        PowerMockito.when(mockCursor.getFields()).thenReturn(null);
+        PowerMockito.when(mockCursor.getFields()).thenReturn(Query.QueryResult.getDefaultInstance().getFieldsList());
 
         VitessStatement statement = new VitessStatement(mockConn);
         try {
@@ -143,19 +145,19 @@ import java.util.List;
         PowerMockito.when(mockConn.getVtGateTx()).thenReturn(mockVtGateTx);
         PowerMockito.when(mockVtGateTx
             .execute(Matchers.any(Context.class), Matchers.anyString(), Matchers.anyMap(),
-                Matchers.any(Topodata.TabletType.class))).thenReturn(mockSqlFutureCursor);
+                Matchers.any(Topodata.TabletType.class), Matchers.any(Query.ExecuteOptions.IncludedFields.class))).thenReturn(mockSqlFutureCursor);
         PowerMockito.when(mockVtGateConn
             .streamExecute(Matchers.any(Context.class), Matchers.anyString(), Matchers.anyMap(),
-                Matchers.any(Topodata.TabletType.class))).thenReturn(mockCursor);
+                Matchers.any(Topodata.TabletType.class), Matchers.any(Query.ExecuteOptions.IncludedFields.class))).thenReturn(mockCursor);
         PowerMockito.when(mockVtGateConn
             .executeKeyspaceIds(Matchers.any(Context.class), Matchers.anyString(),
                 Matchers.anyString(), Matchers.anyCollection(), Matchers.anyMap(),
-                Matchers.any(Topodata.TabletType.class))).thenReturn(mockSqlFutureCursor);
-        PowerMockito.when(mockConn.getExecuteTypeParam())
+                Matchers.any(Topodata.TabletType.class), Matchers.any(Query.ExecuteOptions.IncludedFields.class))).thenReturn(mockSqlFutureCursor);
+        PowerMockito.when(mockConn.getExecuteType())
             .thenReturn(Constants.QueryExecuteType.STREAM);
         PowerMockito.when(mockSqlFutureCursor.checkedGet()).thenReturn(mockCursor);
         PowerMockito.when(mockSqlFutureVtGateTx.checkedGet()).thenReturn(mockVtGateTx);
-        PowerMockito.when(mockCursor.getFields()).thenReturn(null);
+        PowerMockito.when(mockCursor.getFields()).thenReturn(Query.QueryResult.getDefaultInstance().getFieldsList());
 
         VitessStatement statement = new VitessStatement(mockConn);
         try {
@@ -214,17 +216,17 @@ import java.util.List;
         PowerMockito.when(mockConn.getVtGateTx()).thenReturn(mockVtGateTx);
         PowerMockito.when(mockVtGateTx
             .execute(Matchers.any(Context.class), Matchers.anyString(), Matchers.anyMap(),
-                Matchers.any(Topodata.TabletType.class))).thenReturn(mockSqlFutureCursor);
+                Matchers.any(Topodata.TabletType.class), Matchers.any(Query.ExecuteOptions.IncludedFields.class))).thenReturn(mockSqlFutureCursor);
         PowerMockito.when(mockVtGateConn
             .execute(Matchers.any(Context.class), Matchers.anyString(), Matchers.anyMap(),
-                Matchers.any(Topodata.TabletType.class))).thenReturn(mockSqlFutureCursor);
+                Matchers.any(Topodata.TabletType.class), Matchers.any(Query.ExecuteOptions.IncludedFields.class))).thenReturn(mockSqlFutureCursor);
         PowerMockito.when(mockVtGateConn
             .executeKeyspaceIds(Matchers.any(Context.class), Matchers.anyString(),
                 Matchers.anyString(), Matchers.anyCollection(), Matchers.anyMap(),
-                Matchers.any(Topodata.TabletType.class))).thenReturn(mockSqlFutureCursor);
+                Matchers.any(Topodata.TabletType.class), Matchers.any(Query.ExecuteOptions.IncludedFields.class))).thenReturn(mockSqlFutureCursor);
         PowerMockito.when(mockSqlFutureCursor.checkedGet()).thenReturn(mockCursor);
         PowerMockito.when(mockSqlFutureVtGateTx.checkedGet()).thenReturn(mockVtGateTx);
-        PowerMockito.when(mockCursor.getFields()).thenReturn(null);
+        PowerMockito.when(mockCursor.getFields()).thenReturn(Query.QueryResult.getDefaultInstance().getFieldsList());
 
         VitessStatement statement = new VitessStatement(mockConn);
         try {
@@ -286,28 +288,29 @@ import java.util.List;
         Cursor mockCursor = PowerMockito.mock(Cursor.class);
         SQLFuture mockSqlFutureCursor = PowerMockito.mock(SQLFuture.class);
         SQLFuture mockSqlFutureVtGateTx = PowerMockito.mock(SQLFuture.class);
-        List<Query.Field> mockFieldList = PowerMockito.mock(ArrayList.class);
+        List<Query.Field> mockFieldList = PowerMockito.spy(new ArrayList<Query.Field>());
 
         PowerMockito.when(mockConn.getKeyspace()).thenReturn("test_keyspace");
         PowerMockito.when(mockConn.getVtGateConn()).thenReturn(mockVtGateConn);
         PowerMockito.when(mockConn.getTabletType()).thenReturn(Topodata.TabletType.MASTER);
         PowerMockito.when(mockVtGateConn
             .execute(Matchers.any(Context.class), Matchers.anyString(), Matchers.anyMap(),
-                Matchers.any(Topodata.TabletType.class))).thenReturn(mockSqlFutureCursor);
+                Matchers.any(Topodata.TabletType.class), Matchers.any(Query.ExecuteOptions.IncludedFields.class))).thenReturn(mockSqlFutureCursor);
         PowerMockito.when(mockVtGateConn
             .executeKeyspaceIds(Matchers.any(Context.class), Matchers.anyString(),
                 Matchers.anyString(), Matchers.anyCollection(), Matchers.anyMap(),
-                Matchers.any(Topodata.TabletType.class))).thenReturn(mockSqlFutureCursor);
+                Matchers.any(Topodata.TabletType.class), Matchers.any(Query.ExecuteOptions.IncludedFields.class))).thenReturn(mockSqlFutureCursor);
         PowerMockito.when(mockConn.getVtGateTx()).thenReturn(null);
         PowerMockito.when(mockVtGateConn.begin(Matchers.any(Context.class)))
             .thenReturn(mockSqlFutureVtGateTx);
 
         PowerMockito.when(mockVtGateTx
             .execute(Matchers.any(Context.class), Matchers.anyString(), Matchers.anyMap(),
-                Matchers.any(Topodata.TabletType.class))).thenReturn(mockSqlFutureCursor);
+                Matchers.any(Topodata.TabletType.class), Matchers.any(Query.ExecuteOptions.IncludedFields.class))).thenReturn(mockSqlFutureCursor);
         PowerMockito.when(mockConn.getAutoCommit()).thenReturn(true);
-        PowerMockito.when(mockConn.getExecuteTypeParam())
+        PowerMockito.when(mockConn.getExecuteType())
             .thenReturn(Constants.QueryExecuteType.SIMPLE);
+        PowerMockito.when(mockConn.isSimpleExecute()).thenReturn(true);
         PowerMockito.when(mockVtGateTx.commit(Matchers.any(Context.class)))
             .thenReturn(mockSqlFutureCursor);
 
@@ -320,7 +323,9 @@ import java.util.List;
 
             int fieldSize = 5;
             PowerMockito.when(mockCursor.getFields()).thenReturn(mockFieldList);
-            PowerMockito.when(mockFieldList.size()).thenReturn(fieldSize);
+            PowerMockito.doReturn(fieldSize).when(mockFieldList).size();
+            PowerMockito.doReturn(false).when(mockFieldList).isEmpty();
+
             boolean hasResultSet = statement.execute(sqlSelect);
             Assert.assertTrue(hasResultSet);
             Assert.assertNotNull(statement.getResultSet());
@@ -330,7 +335,7 @@ import java.util.List;
             Assert.assertNotNull(statement.getResultSet());
 
             int mockUpdateCount = 10;
-            PowerMockito.when(mockCursor.getFields()).thenReturn(null);
+            PowerMockito.when(mockCursor.getFields()).thenReturn(Query.QueryResult.getDefaultInstance().getFieldsList());
             PowerMockito.when(mockCursor.getRowsAffected()).thenReturn((long) mockUpdateCount);
             hasResultSet = statement.execute(sqlUpdate);
             Assert.assertFalse(hasResultSet);
@@ -363,9 +368,9 @@ import java.util.List;
         PowerMockito.when(mockConn.getVtGateTx()).thenReturn(mockVtGateTx);
         PowerMockito.when(mockVtGateTx
             .execute(Matchers.any(Context.class), Matchers.anyString(), Matchers.anyMap(),
-                Matchers.any(Topodata.TabletType.class))).thenReturn(mockSqlFuture);
+                Matchers.any(Topodata.TabletType.class), Matchers.any(Query.ExecuteOptions.IncludedFields.class))).thenReturn(mockSqlFuture);
         PowerMockito.when(mockSqlFuture.checkedGet()).thenReturn(mockCursor);
-        PowerMockito.when(mockCursor.getFields()).thenReturn(null);
+        PowerMockito.when(mockCursor.getFields()).thenReturn(Query.QueryResult.getDefaultInstance().getFieldsList());
 
         VitessStatement statement = new VitessStatement(mockConn);
         try {
@@ -400,9 +405,10 @@ import java.util.List;
         PowerMockito.when(mockConn.getTabletType()).thenReturn(Topodata.TabletType.REPLICA);
         PowerMockito.when(mockVtGateConn
             .execute(Matchers.any(Context.class), Matchers.anyString(), Matchers.anyMap(),
-                Matchers.any(Topodata.TabletType.class))).thenReturn(mockSqlFutureCursor);
-        PowerMockito.when(mockConn.getExecuteTypeParam())
+                Matchers.any(Topodata.TabletType.class), Matchers.any(Query.ExecuteOptions.IncludedFields.class))).thenReturn(mockSqlFutureCursor);
+        PowerMockito.when(mockConn.getExecuteType())
             .thenReturn(Constants.QueryExecuteType.SIMPLE);
+        PowerMockito.when(mockConn.isSimpleExecute()).thenReturn(true);
         PowerMockito.when(mockSqlFutureCursor.checkedGet()).thenReturn(mockCursor);
 
         VitessStatement statement = new VitessStatement(mockConn);
@@ -525,17 +531,17 @@ import java.util.List;
         PowerMockito.when(mockConn.getVtGateTx()).thenReturn(mockVtGateTx);
         PowerMockito.when(mockVtGateTx
             .execute(Matchers.any(Context.class), Matchers.anyString(), Matchers.anyMap(),
-                Matchers.any(Topodata.TabletType.class))).thenReturn(mockSqlFutureCursor);
+                Matchers.any(Topodata.TabletType.class), Matchers.any(Query.ExecuteOptions.IncludedFields.class))).thenReturn(mockSqlFutureCursor);
         PowerMockito.when(mockVtGateConn
             .execute(Matchers.any(Context.class), Matchers.anyString(), Matchers.anyMap(),
-                Matchers.any(Topodata.TabletType.class))).thenReturn(mockSqlFutureCursor);
+                Matchers.any(Topodata.TabletType.class), Matchers.any(Query.ExecuteOptions.IncludedFields.class))).thenReturn(mockSqlFutureCursor);
         PowerMockito.when(mockVtGateConn
             .executeKeyspaceIds(Matchers.any(Context.class), Matchers.anyString(),
                 Matchers.anyString(), Matchers.anyCollection(), Matchers.anyMap(),
-                Matchers.any(Topodata.TabletType.class))).thenReturn(mockSqlFutureCursor);
+                Matchers.any(Topodata.TabletType.class), Matchers.any(Query.ExecuteOptions.IncludedFields.class))).thenReturn(mockSqlFutureCursor);
         PowerMockito.when(mockSqlFutureCursor.checkedGet()).thenReturn(mockCursor);
         PowerMockito.when(mockSqlFutureVtGateTx.checkedGet()).thenReturn(mockVtGateTx);
-        PowerMockito.when(mockCursor.getFields()).thenReturn(null);
+        PowerMockito.when(mockCursor.getFields()).thenReturn(Query.QueryResult.getDefaultInstance().getFieldsList());
         PowerMockito.when(mockConn.getTabletType()).thenReturn(Topodata.TabletType.MASTER);
 
         VitessStatement statement = new VitessStatement(mockConn);
@@ -630,7 +636,7 @@ import java.util.List;
         SQLFuture mockSqlFutureCursor = PowerMockito.mock(SQLFuture.class);
         PowerMockito.when(mockVtGateConn
             .executeBatch(Matchers.any(Context.class), Matchers.anyList(), Matchers.anyList(),
-                Matchers.any(Topodata.TabletType.class))).thenReturn(mockSqlFutureCursor);
+                Matchers.any(Topodata.TabletType.class), Matchers.any(Query.ExecuteOptions.IncludedFields.class))).thenReturn(mockSqlFutureCursor);
 
         List<CursorWithError> mockCursorWithErrorList = new ArrayList<>();
         PowerMockito.when(mockSqlFutureCursor.checkedGet()).thenReturn(mockCursorWithErrorList);

@@ -24,6 +24,11 @@ import (
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
+const (
+	// DefaultFilteredReplicationWaitTime is the default value for argument filteredReplicationWaitTime.
+	DefaultFilteredReplicationWaitTime = 30 * time.Second
+)
+
 // TODO(b/26388813): Remove these flags once vtctl WaitForDrain is integrated in the vtctl MigrateServed* commands.
 var (
 	waitForDrainSleepRdonly  = flag.Duration("wait_for_drain_sleep_rdonly", 5*time.Second, "time to wait before shutting the query service on old RDONLY tablets during MigrateServedTypes")

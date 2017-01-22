@@ -82,6 +82,10 @@ func TestBuffer(t *testing.T) {
 	if _, ok := durations[statsKeyJoined]; !ok {
 		t.Fatalf("a failover time must have been recorded: %v", durations)
 	}
+	// Recorded max buffer usage should be 3 now.
+	if got, want := requestsInFlightMax.Counts()[statsKeyJoined], int64(3); got != want {
+		t.Fatalf("wrong value for BufferRequestsInFlightMax: got = %v, want = %v", got, want)
+	}
 	// Drain will reset the state to "idle" eventually.
 	if err := waitForState(b, stateIdle); err != nil {
 		t.Fatal(err)
@@ -98,6 +102,10 @@ func TestBuffer(t *testing.T) {
 	if err := waitForRequestsInFlight(b, 1); err != nil {
 		t.Fatal(err)
 	}
+	// Recorded max buffer usage should be 1 for the second failover.
+	if got, want := requestsInFlightMax.Counts()[statsKeyJoined], int64(1); got != want {
+		t.Fatalf("wrong value for BufferRequestsInFlightMax: got = %v, want = %v", got, want)
+	}
 	// Stop buffering.
 	b.StatsUpdate(&discovery.TabletStats{
 		Target: &querypb.Target{Keyspace: keyspace, Shard: shard, TabletType: topodatapb.TabletType_MASTER},
@@ -112,7 +120,7 @@ func resetFlags() {
 	flag.Set("enable_vtgate_buffer", "false")
 	flag.Set("vtgate_buffer_window", "10s")
 	flag.Set("vtgate_buffer_keyspace_shards", "")
-	flag.Set("vtgate_buffer_max_failover_duration", "40s")
+	flag.Set("vtgate_buffer_max_failover_duration", "20s")
 	flag.Set("vtgate_buffer_min_time_between_failovers", "5m")
 }
 
@@ -275,6 +283,10 @@ func testRequestCanceled(t *testing.T, explicitEnd bool) {
 	}
 	if err := waitForRequestsInFlight(b, 1); err != nil {
 		t.Fatal(err)
+	}
+	// Recorded max buffer usage stay at 2 although the second request was canceled.
+	if got, want := requestsInFlightMax.Counts()[statsKeyJoined], int64(2); got != want {
+		t.Fatalf("wrong value for BufferRequestsInFlightMax: got = %v, want = %v", got, want)
 	}
 
 	if explicitEnd {
