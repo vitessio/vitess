@@ -28,6 +28,7 @@ import (
 	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
 
 	vschemapb "github.com/youtube/vitess/go/vt/proto/vschema"
+	"github.com/youtube/vitess/go/vt/vtgate/queryinfo"
 )
 
 // Planner is used to compute the plan. It contains
@@ -322,6 +323,34 @@ func (plr *Planner) GetPlan(sql, keyspace string, bindvars map[string]interface{
 	}
 	plr.plans.Set(normkey, plan)
 	return plan, nil
+}
+
+// GetBatchPlan computes the plan for the given queries. If one is in
+// the cache, it reuses it.
+func (plr *Planner) GetBatchPlan(queryBatchConstruct *queryinfo.QueryBatchConstruct, execParallel bool) (*engine.Plan, error) {
+	if plr.VSchema() == nil {
+		return nil, errors.New("vschema not initialized")
+	}
+	planList := make([]*engine.Plan, len(queryBatchConstruct.BoundQueryList))
+	keyspace := queryBatchConstruct.Keyspace
+	for i, queryBound := range queryBatchConstruct.BoundQueryList {
+		plan, err := plr.GetPlan(queryBound.SQL, keyspace, queryBound.BindVars)
+		if err == nil {
+			planList[i] = plan
+		}
+	}
+	batchRoute := &engine.BatchRoute{
+		PlanList: planList,
+		Opcode:   engine.ExecuteOrdered,
+	}
+	if execParallel {
+		batchRoute.Opcode = engine.ExecuteUnOrdered
+	}
+	return &engine.Plan{
+		Original:     "BatchPlan",
+		Instructions: batchRoute,
+	}, nil
+
 }
 
 // ServeHTTP shows the current plans in the query cache.

@@ -288,21 +288,32 @@ func (stc *ScatterConn) ExecuteBatch(
 			startTime, statsKey := stc.startAction("ExecuteBatch", target)
 			defer stc.endAction(startTime, allErrors, statsKey, &err, session)
 
-			shouldBegin, transactionID := transactionInfo(target, session, false)
+			safeShardSession, AppendErr := transactionInfo(target, session, false)
+			if AppendErr != nil {
+				err = AppendErr
+				return
+			}
 			var innerqrs []sqltypes.Result
-			if shouldBegin {
-				innerqrs, transactionID, err = stc.gateway.BeginExecuteBatch(ctx, target, req.Queries, asTransaction, options)
-				if transactionID != 0 {
-					if appendErr := session.Append(&vtgatepb.Session_ShardSession{
-						Target:        target,
-						TransactionId: transactionID,
-					}); appendErr != nil {
-						err = appendErr
+			var transactionID int64
+			if session.InTransaction() {
+				safeShardSession.mu.Lock()
+				defer safeShardSession.mu.Unlock()
+				transactionID = safeShardSession.TransactionId
+				if transactionID == 0 {
+					innerqrs, transactionID, err = stc.gateway.BeginExecuteBatch(ctx, target, req.Queries, asTransaction, options)
+					if transactionID != 0 {
+						safeShardSession.TransactionId = transactionID
+					}
+					if err != nil {
+						return
+					}
+				} else {
+					innerqrs, err = stc.gateway.ExecuteBatch(ctx, target, req.Queries, asTransaction, transactionID, options)
+					if err != nil {
+						return
 					}
 				}
-				if err != nil {
-					return
-				}
+
 			} else {
 				innerqrs, err = stc.gateway.ExecuteBatch(ctx, target, req.Queries, asTransaction, transactionID, options)
 				if err != nil {
@@ -689,14 +700,20 @@ func (stc *ScatterConn) multiGoTransaction(
 		startTime, statsKey := stc.startAction(name, target)
 		defer stc.endAction(startTime, allErrors, statsKey, &err, session)
 
-		shouldBegin, transactionID := transactionInfo(target, session, notInTransaction)
-		transactionID, err = action(target, shouldBegin, transactionID)
-		if shouldBegin && transactionID != 0 {
-			if appendErr := session.Append(&vtgatepb.Session_ShardSession{
-				Target:        target,
-				TransactionId: transactionID,
-			}); appendErr != nil {
-				err = appendErr
+		safeShardSession, appendErr := transactionInfo(target, session, notInTransaction)
+		if appendErr != nil {
+			err = appendErr
+			return
+		}
+		if safeShardSession == nil {
+			_, err = action(target, false, 0)
+		} else {
+			safeShardSession.mu.Lock()
+			defer safeShardSession.mu.Unlock()
+			if safeShardSession.TransactionId != 0 {
+				_, err = action(target, false, safeShardSession.TransactionId)
+			} else {
+				safeShardSession.TransactionId, err = action(target, true, 0)
 			}
 		}
 	}
@@ -736,26 +753,15 @@ func transactionInfo(
 	target *querypb.Target,
 	session *SafeSession,
 	notInTransaction bool,
-) (shouldBegin bool, transactionID int64) {
+) (*SafeShardSession, error) {
 	if !session.InTransaction() {
-		return false, 0
+		return nil, nil
 	}
 	// No need to protect ourselves from the race condition between
 	// Find and Append. The higher level functions ensure that no
 	// duplicate (target) tuples can execute
 	// this at the same time.
-	transactionID = session.Find(target.Keyspace, target.Shard, target.TabletType)
-	if transactionID != 0 {
-		return false, transactionID
-	}
-	// We are in a transaction at higher level,
-	// but client requires not to start a transaction for this query.
-	// If a transaction was started on this conn, we will use it (as above).
-	if notInTransaction {
-		return false, 0
-	}
-
-	return true, 0
+	return session.FindOrAppend(target, notInTransaction)
 }
 
 func getShards(shardVars map[string]map[string]interface{}) []string {

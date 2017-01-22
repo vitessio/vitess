@@ -309,16 +309,19 @@ func TestScatterConnQueryNotInTransaction(t *testing.T) {
 	sc.Execute(context.Background(), "query1", nil, "TestScatterConnQueryNotInTransaction", []string{"0"}, topodatapb.TabletType_REPLICA, session, true, nil)
 	sc.Execute(context.Background(), "query1", nil, "TestScatterConnQueryNotInTransaction", []string{"1"}, topodatapb.TabletType_REPLICA, session, false, nil)
 
-	wantSession := vtgatepb.Session{
+	wantSession := Session{
 		InTransaction: true,
-		ShardSessions: []*vtgatepb.Session_ShardSession{{
-			Target: &querypb.Target{
-				Keyspace:   "TestScatterConnQueryNotInTransaction",
-				Shard:      "1",
-				TabletType: topodatapb.TabletType_REPLICA,
+		SafeShardSessions: []*SafeShardSession{{
+			Session_ShardSession: &vtgatepb.Session_ShardSession{
+				Target: &querypb.Target{
+					Keyspace:   "TestScatterConnQueryNotInTransaction",
+					Shard:      "1",
+					TabletType: topodatapb.TabletType_REPLICA,
+				},
+				TransactionId: 1,
 			},
-			TransactionId: 1,
-		}},
+		},
+		},
 	}
 	if !reflect.DeepEqual(wantSession, *session.Session) {
 		t.Errorf("want\n%+v\ngot\n%+v", wantSession, *session.Session)
@@ -348,16 +351,19 @@ func TestScatterConnQueryNotInTransaction(t *testing.T) {
 	sc.Execute(context.Background(), "query1", nil, "TestScatterConnQueryNotInTransaction", []string{"0"}, topodatapb.TabletType_REPLICA, session, false, nil)
 	sc.Execute(context.Background(), "query1", nil, "TestScatterConnQueryNotInTransaction", []string{"1"}, topodatapb.TabletType_REPLICA, session, true, nil)
 
-	wantSession = vtgatepb.Session{
+	wantSession = Session{
 		InTransaction: true,
-		ShardSessions: []*vtgatepb.Session_ShardSession{{
-			Target: &querypb.Target{
-				Keyspace:   "TestScatterConnQueryNotInTransaction",
-				Shard:      "0",
-				TabletType: topodatapb.TabletType_REPLICA,
+		SafeShardSessions: []*SafeShardSession{{
+			Session_ShardSession: &vtgatepb.Session_ShardSession{
+				Target: &querypb.Target{
+					Keyspace:   "TestScatterConnQueryNotInTransaction",
+					Shard:      "0",
+					TabletType: topodatapb.TabletType_REPLICA,
+				},
+				TransactionId: 1,
 			},
-			TransactionId: 1,
-		}},
+		},
+		},
 	}
 	if !reflect.DeepEqual(wantSession, *session.Session) {
 		t.Errorf("want\n%+v\ngot\n%+v", wantSession, *session.Session)
@@ -387,16 +393,19 @@ func TestScatterConnQueryNotInTransaction(t *testing.T) {
 	sc.Execute(context.Background(), "query1", nil, "TestScatterConnQueryNotInTransaction", []string{"0"}, topodatapb.TabletType_REPLICA, session, false, nil)
 	sc.Execute(context.Background(), "query1", nil, "TestScatterConnQueryNotInTransaction", []string{"0", "1"}, topodatapb.TabletType_REPLICA, session, true, nil)
 
-	wantSession = vtgatepb.Session{
+	wantSession = Session{
 		InTransaction: true,
-		ShardSessions: []*vtgatepb.Session_ShardSession{{
-			Target: &querypb.Target{
-				Keyspace:   "TestScatterConnQueryNotInTransaction",
-				Shard:      "0",
-				TabletType: topodatapb.TabletType_REPLICA,
+		SafeShardSessions: []*SafeShardSession{{
+			Session_ShardSession: &vtgatepb.Session_ShardSession{
+				Target: &querypb.Target{
+					Keyspace:   "TestScatterConnQueryNotInTransaction",
+					Shard:      "0",
+					TabletType: topodatapb.TabletType_REPLICA,
+				},
+				TransactionId: 1,
 			},
-			TransactionId: 1,
-		}},
+		},
+		},
 	}
 	if !reflect.DeepEqual(wantSession, *session.Session) {
 		t.Errorf("want\n%+v\ngot\n%+v", wantSession, *session.Session)

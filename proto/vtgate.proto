@@ -283,6 +283,9 @@ message ExecuteBatchRequest {
 
   // options
   query.ExecuteOptions options = 7;
+
+  // parallel, if set the queries are executed in parallel without any ordering guarantee.
+  bool exec_parallel = 8;
 }
 
 

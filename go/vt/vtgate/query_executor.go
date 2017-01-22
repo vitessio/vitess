@@ -18,7 +18,7 @@ import (
 type queryExecutor struct {
 	ctx        context.Context
 	tabletType topodatapb.TabletType
-	session    *vtgatepb.Session
+	session    *SafeSession
 	options    *querypb.ExecuteOptions
 	router     *Router
 }
@@ -27,7 +27,7 @@ func newQueryExecutor(ctx context.Context, tabletType topodatapb.TabletType, ses
 	return &queryExecutor{
 		ctx:        ctx,
 		tabletType: tabletType,
-		session:    session,
+		session:    NewSafeSession(session),
 		options:    options,
 		router:     router,
 	}
@@ -35,14 +35,13 @@ func newQueryExecutor(ctx context.Context, tabletType topodatapb.TabletType, ses
 
 // Execute method call from vindex call to vtgate.
 func (vc *queryExecutor) Execute(query string, bindvars map[string]interface{}) (*sqltypes.Result, error) {
-	// We have to use an empty keyspace here, becasue vindexes that call back can reference
-	// any table.
-	return vc.router.Execute(vc.ctx, query, bindvars, "", vc.tabletType, vc.session, false, vc.options)
+	return vc.router.executeVIndex(vc, query, bindvars)
 }
 
 // ExecuteMultiShard method call from engine call to vtgate.
 func (vc *queryExecutor) ExecuteMultiShard(keyspace string, shardQueries map[string]querytypes.BoundQuery, notInTransaction bool) (*sqltypes.Result, error) {
-	return vc.router.scatterConn.ExecuteMultiShard(vc.ctx, keyspace, shardQueries, vc.tabletType, NewSafeSession(vc.session), notInTransaction, vc.options)
+	return vc.router.scatterConn.ExecuteMultiShard(vc.ctx, keyspace, shardQueries, vc.tabletType, vc.session, notInTransaction, vc.options)
+
 }
 
 // StreamExecuteMulti method call from engine call to vtgate.
@@ -57,7 +56,7 @@ func (vc *queryExecutor) GetAnyShard(keyspace string) (ks, shard string, err err
 
 // ScatterConnExecute method call from engine call to vtgate.
 func (vc *queryExecutor) ScatterConnExecute(query string, bindVars map[string]interface{}, keyspace string, shards []string, notInTransaction bool) (*sqltypes.Result, error) {
-	return vc.router.scatterConn.Execute(vc.ctx, query, bindVars, keyspace, shards, vc.tabletType, NewSafeSession(vc.session), notInTransaction, vc.options)
+	return vc.router.scatterConn.Execute(vc.ctx, query, bindVars, keyspace, shards, vc.tabletType, vc.session, notInTransaction, vc.options)
 }
 
 // GetKeyspaceShards method call from engine call to vtgate.

@@ -115,10 +115,11 @@ type queryExecuteBatch struct {
 	TabletType        topodatapb.TabletType
 	Session           *vtgatepb.Session
 	AsTransaction     bool
+	ExecParallel      bool
 }
 
 // ExecuteBatch is part of the VTGateService interface
-func (f *fakeVTGateService) ExecuteBatch(ctx context.Context, sqlList []string, bindVariablesList []map[string]interface{}, keyspace string, tabletType topodatapb.TabletType, asTransaction bool, session *vtgatepb.Session, options *querypb.ExecuteOptions) ([]sqltypes.QueryResponse, error) {
+func (f *fakeVTGateService) ExecuteBatch(ctx context.Context, sqlList []string, bindVariablesList []map[string]interface{}, keyspace string, tabletType topodatapb.TabletType, asTransaction bool, session *vtgatepb.Session, options *querypb.ExecuteOptions, execParallel bool) ([]sqltypes.QueryResponse, error) {
 	if f.hasError {
 		return nil, errTestVtGateError
 	}
@@ -140,6 +141,7 @@ func (f *fakeVTGateService) ExecuteBatch(ctx context.Context, sqlList []string, 
 		TabletType:        tabletType,
 		Session:           session,
 		AsTransaction:     asTransaction,
+		ExecParallel:      execParallel,
 	}
 	if !reflect.DeepEqual(query, execCase.execQuery) {
 		f.t.Errorf("Execute: %+v, want %+v", query, execCase.execQuery)

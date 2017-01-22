@@ -44,17 +44,32 @@ public class VitessJDBCExample {
             conn.commit();
 
             // Read it back from replica.
-            dbURL += "/test_keyspace?TABLET_TYPE=replica";
+            dbURL = "jdbc:vitess://" + args[0] + "/test_keyspace?TABLET_TYPE=replica";
             try (Connection connReplica = DriverManager.getConnection(dbURL, null)) {
                 System.out.println("Reading from replica...");
                 readData(connReplica);
             }
 
             // Execute DML Queries in a Batch
+            System.out.println("Executing Batch...");
             batchedQueries(conn);
 
             // To Commit Open Transaction
             conn.commit();
+
+            // Read it back from replica.
+            dbURL = "jdbc:vitess://" + args[0] + "?batchExecParallel=true";
+            try (Connection connParallel = DriverManager.getConnection(dbURL, null)) {
+                System.out.println("Executing batch in parallel");
+
+                connParallel.setAutoCommit(false);
+
+                // Execute DML Queries in a Parallel Batch
+                batchedQueries(connParallel);
+
+                // To Commit Open Transaction
+                connParallel.commit();
+            }
 
         } catch (Exception e) {
             System.out.println("Vitess JDBC example failed.");
@@ -141,10 +156,10 @@ public class VitessJDBCExample {
         for (int i = 0; i < updateCounts.length; i++) {
             switch (updateCounts[i]) {
                 case Statement.EXECUTE_FAILED:
-                    System.out.println("execution failed");
+                    System.err.println("execution failed");
                     break;
                 case Statement.SUCCESS_NO_INFO:
-                    System.out.println("execution success with no result");
+                    System.err.println("execution success with no result");
                     break;
                 default:
                     System.out.println("execution success with rows changed: " + updateCounts[i]);

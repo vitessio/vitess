@@ -52,7 +52,7 @@ func (c *terminalClient) ExecuteEntityIds(ctx context.Context, sql string, bindV
 	return nil, errTerminal
 }
 
-func (c *terminalClient) ExecuteBatch(ctx context.Context, sqlList []string, bindVariablesList []map[string]interface{}, keyspace string, tabletType topodatapb.TabletType, asTransaction bool, session *vtgatepb.Session, options *querypb.ExecuteOptions) ([]sqltypes.QueryResponse, error) {
+func (c *terminalClient) ExecuteBatch(ctx context.Context, sqlList []string, bindVariablesList []map[string]interface{}, keyspace string, tabletType topodatapb.TabletType, asTransaction bool, session *vtgatepb.Session, options *querypb.ExecuteOptions, execParallel bool) ([]sqltypes.QueryResponse, error) {
 	if len(sqlList) == 1 {
 		if sqlList[0] == "quit://" {
 			log.Fatal("Received quit:// query. Going down.")

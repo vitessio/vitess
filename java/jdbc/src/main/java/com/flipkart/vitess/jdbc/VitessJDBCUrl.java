@@ -27,6 +27,7 @@ public class VitessJDBCUrl {
     private String catalog;
     private final String executeType;
     private final boolean twopcEnabled;
+    private final boolean batchExecParallel;
 
 
     /*
@@ -108,6 +109,8 @@ public class VitessJDBCUrl {
         this.url = url;
         this.twopcEnabled =
             "true".equalsIgnoreCase(info.getProperty(Constants.Property.TWOPC_ENABLED));
+        this.batchExecParallel =
+            "true".equalsIgnoreCase(info.getProperty(Constants.Property.BATCH_EXEC_PARALLEL));
     }
 
     public String getUsername() {
@@ -252,5 +255,9 @@ public class VitessJDBCUrl {
 
     public boolean isTwopcEnabled() {
         return twopcEnabled;
+    }
+
+    public boolean isBatchExecParallel() {
+        return batchExecParallel;
     }
 }

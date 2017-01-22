@@ -6,6 +6,9 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/youtube/vitess/go/vt/vtgate/engine"
+	"github.com/youtube/vitess/go/vt/vtgate/queryinfo"
 )
 
 // TestVSchemaStats makes sure the building and displaying of the
@@ -147,5 +150,45 @@ func TestGetPlanNormalized(t *testing.T) {
 	}
 	if keys := r.planner.plans.Keys(); !reflect.DeepEqual(keys, want) {
 		t.Errorf("Plan keys: %s, want %s", keys, want)
+	}
+}
+
+func TestGetBatchPlan(t *testing.T) {
+	r, _, _, _ := createRouterEnv()
+	query1 := "select * from music_user_map where id = 1"
+	query2 := "select * from user where id = 1"
+	queries := []string{query1, query2}
+	queryBatchConstruct, err := queryinfo.NewQueryBatchConstruct(queries, "", nil, false)
+	if err != nil {
+		t.Error(err)
+	}
+	plan1, err := r.planner.GetBatchPlan(queryBatchConstruct, false)
+	if err != nil {
+		t.Error(err)
+	}
+	plan2, err := r.planner.GetBatchPlan(queryBatchConstruct, false)
+	if err != nil {
+		t.Error(err)
+	}
+	if !reflect.DeepEqual(plan1, plan2) {
+		t.Errorf("GetBatchPlan(query1): plans must be equal: %p %p", plan1, plan2)
+	}
+
+	query3 := "select * from no_table where id = 1"
+	queries = []string{query1, query2, query3}
+	queryBatchConstruct, err = queryinfo.NewQueryBatchConstruct(queries, "", nil, false)
+	if err != nil {
+		t.Error(err)
+	}
+	plan3, err := r.planner.GetBatchPlan(queryBatchConstruct, false)
+	if err != nil {
+		t.Error(err)
+	}
+	batchPlan, ok := plan3.Instructions.(*engine.BatchRoute)
+	if !ok {
+		t.Error("wanted batch plan")
+	}
+	if batchPlan.PlanList[2] != nil {
+		t.Errorf("GetBatchPlan: want plan to be nil but got : %p", batchPlan.PlanList[2])
 	}
 }

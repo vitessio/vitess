@@ -198,7 +198,7 @@ func (conn *vtgateConn) ExecuteEntityIds(ctx context.Context, query string, keys
 	return sqltypes.Proto3ToResult(response.Result), response.Session, nil
 }
 
-func (conn *vtgateConn) ExecuteBatch(ctx context.Context, queryList []string, bindVarsList []map[string]interface{}, keyspace string, tabletType topodatapb.TabletType, asTransaction bool, session interface{}, options *querypb.ExecuteOptions) ([]sqltypes.QueryResponse, interface{}, error) {
+func (conn *vtgateConn) ExecuteBatch(ctx context.Context, queryList []string, bindVarsList []map[string]interface{}, keyspace string, tabletType topodatapb.TabletType, asTransaction bool, session interface{}, options *querypb.ExecuteOptions, execParallel bool) ([]sqltypes.QueryResponse, interface{}, error) {
 	var s *vtgatepb.Session
 	if session != nil {
 		s = session.(*vtgatepb.Session)
@@ -215,6 +215,7 @@ func (conn *vtgateConn) ExecuteBatch(ctx context.Context, queryList []string, bi
 		TabletType:    tabletType,
 		AsTransaction: asTransaction,
 		Options:       options,
+		ExecParallel:  execParallel,
 	}
 	response, err := conn.c.ExecuteBatch(ctx, request)
 	if err != nil {

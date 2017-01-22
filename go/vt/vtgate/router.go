@@ -45,7 +45,10 @@ func (rtr *Router) Execute(ctx context.Context, sql string, bindVars map[string]
 	if err != nil {
 		return nil, err
 	}
-	return plan.Instructions.Execute(vcursor, queryConstruct, make(map[string]interface{}), true)
+	result, err := plan.Instructions.Execute(vcursor, queryConstruct, make(map[string]interface{}), true)
+	//Mapping the generated session back to VtGateSession object
+	vcursor.session.copySession(session)
+	return result, err
 }
 
 // StreamExecute executes a streaming query.
@@ -63,32 +66,46 @@ func (rtr *Router) StreamExecute(ctx context.Context, sql string, bindVars map[s
 }
 
 // ExecuteBatch routes a non-streaming queries.
-func (rtr *Router) ExecuteBatch(ctx context.Context, sqlList []string, bindVarsList []map[string]interface{}, keyspace string, tabletType topodatapb.TabletType, asTransaction bool, session *vtgatepb.Session, options *querypb.ExecuteOptions) ([]sqltypes.QueryResponse, error) {
-	if bindVarsList == nil {
-		bindVarsList = make([]map[string]interface{}, len(sqlList))
+func (rtr *Router) ExecuteBatch(ctx context.Context, sqlList []string, bindVarsList []map[string]interface{}, keyspace string, tabletType topodatapb.TabletType, asTransaction bool, session *vtgatepb.Session, options *querypb.ExecuteOptions, execParallel bool) ([]sqltypes.QueryResponse, error) {
+	queryBatchConstruct, err := queryinfo.NewQueryBatchConstruct(sqlList, keyspace, bindVarsList, asTransaction)
+	if err != nil {
+		return nil, err
 	}
-	queryResponseList := make([]sqltypes.QueryResponse, 0, len(sqlList))
-	for sqlNum, query := range sqlList {
-		var queryResponse sqltypes.QueryResponse
+	plan, err := rtr.planner.GetBatchPlan(queryBatchConstruct, execParallel)
+	if err != nil {
+		return nil, err
+	}
+	vcursor := newQueryExecutor(ctx, tabletType, session, options, rtr)
+	results, err := plan.Instructions.ExecuteBatch(vcursor, queryBatchConstruct, make(map[string]interface{}), true)
+	//Mapping the generated session back to VtGateSession object
+	vcursor.session.copySession(session)
+	return results, err
+}
 
-		bindVars := bindVarsList[sqlNum]
-		if bindVars == nil {
-			bindVars = make(map[string]interface{})
-		}
-		//Using same QueryExecutor -> marking notInTransaction as false and not using asTransaction flag
-		vcursor := newQueryExecutor(ctx, tabletType, session, options, rtr)
-		queryConstruct := queryinfo.NewQueryConstruct(query, keyspace, bindVars, false)
-		plan, err := rtr.planner.GetPlan(query, keyspace, bindVars)
-		if err != nil {
-			queryResponse.QueryError = err
-		} else {
-			result, err := plan.Instructions.Execute(vcursor, queryConstruct, make(map[string]interface{}), true)
-			queryResponse.QueryResult = result
-			queryResponse.QueryError = err
-		}
-		queryResponseList = append(queryResponseList, queryResponse)
+// executeVIndex routes a non-streaming vindex query.
+func (rtr *Router) executeVIndex(vcursor *queryExecutor, sql string, bindVars map[string]interface{}) (*sqltypes.Result, error) {
+	if bindVars == nil {
+		bindVars = make(map[string]interface{})
 	}
-	return queryResponseList, nil
+	// We have to use an empty keyspace here, because vIndexes that call back can reference
+	// any table.
+	queryConstruct := queryinfo.NewQueryConstruct(sql, "", bindVars, false)
+	plan, err := rtr.planner.GetPlan(sql, "", bindVars)
+	if err != nil {
+		return nil, err
+	}
+
+	return plan.Instructions.Execute(vcursor, queryConstruct, make(map[string]interface{}), true)
+}
+
+// streamExecuteVIndex routes a streaming vindex query.
+func (rtr *Router) streamExecuteVIndex(vcursor *queryExecutor, sql string, bindVars map[string]interface{}, sendReply func(*sqltypes.Result) error) error {
+	panic("streamExecuteVIndex::This method should not be called")
+}
+
+// executeBatchVIndex routes a non-streaming vindex queries.
+func (rtr *Router) executeBatchVIndex(vcursor *queryExecutor, sqlList []string, bindVarsList []map[string]interface{}, asTransaction bool, execParallel bool) ([]sqltypes.QueryResponse, error) {
+	panic("executeBatchVIndex::This method is not implemented")
 }
 
 // IsKeyspaceRangeBasedSharded returns true if the keyspace in the vschema is
