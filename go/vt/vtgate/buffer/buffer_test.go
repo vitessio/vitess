@@ -120,7 +120,7 @@ func resetFlags() {
 	flag.Set("enable_vtgate_buffer", "false")
 	flag.Set("vtgate_buffer_window", "10s")
 	flag.Set("vtgate_buffer_keyspace_shards", "")
-	flag.Set("vtgate_buffer_max_failover_duration", "40s")
+	flag.Set("vtgate_buffer_max_failover_duration", "20s")
 	flag.Set("vtgate_buffer_min_time_between_failovers", "5m")
 }
 

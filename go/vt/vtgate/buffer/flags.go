@@ -12,7 +12,7 @@ var (
 
 	window                  = flag.Duration("vtgate_buffer_window", 10*time.Second, "Duration for how long a request should be buffered at most.")
 	size                    = flag.Int("vtgate_buffer_size", 10, "Maximum number of buffered requests in flight (across all ongoing failovers).")
-	maxFailoverDuration     = flag.Duration("vtgate_buffer_max_failover_duration", 40*time.Second, "Stop buffering completely if a failover takes longer than this duration.")
+	maxFailoverDuration     = flag.Duration("vtgate_buffer_max_failover_duration", 20*time.Second, "Stop buffering completely if a failover takes longer than this duration.")
 	minTimeBetweenFailovers = flag.Duration("vtgate_buffer_min_time_between_failovers", 5*time.Minute, "Minimum time between the end of a failover and the start of the next one. Faster consecutive failovers will not trigger buffering.")
 
 	drainConcurrency = flag.Int("vtgate_buffer_drain_concurrency", 1, "Maximum number of requests retried simultaneously.")
