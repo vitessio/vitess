@@ -611,7 +611,23 @@ func TestValid(t *testing.T) {
 	}, {
 		input: "select /* GE false */ 1 from t where a >= false",
 	}, {
-		input: "select * from t order by a collate utf8_general_ci asc",
+		input: "select * from t order by a collate utf8_general_ci",
+		output: "select * from t order by a collate utf8_general_ci asc",
+	}, {
+		input: "SELECT k COLLATE latin1_german2_ci AS k1 FROM t1 ORDER BY k1",
+		output: "SELECT k COLLATE latin1_german2_ci AS k1 FROM t1 ORDER BY k1 asc",
+	}, {
+		input: "select * from t group by a collate utf8_general_ci",
+	}, {
+		input: "SELECT MAX(k COLLATE latin1_german2_ci) FROM t1",
+	}, {
+		input: "SELECT DISTINCT k COLLATE latin1_german2_ci FROM t1",
+	}, {
+		input: "SELECT * FROM t1 WHERE _latin1 'Müller' COLLATE latin1_german2_ci = k",
+	}, {
+		input: "SELECT * FROM t1 WHERE k LIKE _latin1 'Müller' COLLATE latin1_german2_ci",
+	}, {
+		input: "SELECT k FROM t1 GROUP BY k HAVING k = _latin1 'Müller' COLLATE latin1_german2_ci",
 	}}
 	for _, tcase := range validSQL {
 		if tcase.output == "" {
