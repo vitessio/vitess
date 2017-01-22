@@ -2,18 +2,19 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package replication
+package mysqlctl
 
 import (
 	"fmt"
 
+	"github.com/youtube/vitess/go/mysqlconn/replication"
 	replicationdatapb "github.com/youtube/vitess/go/vt/proto/replicationdata"
 )
 
 // StatusToProto translates a Status to proto3
 func StatusToProto(r Status) *replicationdatapb.Status {
 	return &replicationdatapb.Status{
-		Position:            EncodePosition(r.Position),
+		Position:            replication.EncodePosition(r.Position),
 		SlaveIoRunning:      r.SlaveIORunning,
 		SlaveSqlRunning:     r.SlaveSQLRunning,
 		SecondsBehindMaster: uint32(r.SecondsBehindMaster),
@@ -25,7 +26,7 @@ func StatusToProto(r Status) *replicationdatapb.Status {
 
 // ProtoToStatus translates a proto Status, or panics
 func ProtoToStatus(r *replicationdatapb.Status) Status {
-	pos, err := DecodePosition(r.Position)
+	pos, err := replication.DecodePosition(r.Position)
 	if err != nil {
 		panic(fmt.Errorf("cannot decode Position: %v", err))
 	}
