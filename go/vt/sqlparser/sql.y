@@ -770,10 +770,6 @@ compare:
   {
     $$ = NullSafeEqualStr
   }
-| COLLATE
-  {
-    $$ = CollateStr
-  }
 
 col_tuple:
   openb value_expression_list closeb

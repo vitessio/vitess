@@ -610,6 +610,8 @@ func TestValid(t *testing.T) {
 		input: "select /* GE true */ 1 from t where a >= true",
 	}, {
 		input: "select /* GE false */ 1 from t where a >= false",
+	}, {
+		input: "select * from t order by a collate utf8_general_ci",
 	}}
 	for _, tcase := range validSQL {
 		if tcase.output == "" {
