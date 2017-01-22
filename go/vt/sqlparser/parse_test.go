@@ -610,6 +610,29 @@ func TestValid(t *testing.T) {
 		input: "select /* GE true */ 1 from t where a >= true",
 	}, {
 		input: "select /* GE false */ 1 from t where a >= false",
+	}, {
+		input: "select * from t order by a collate utf8_general_ci",
+		output: "select * from t order by a collate utf8_general_ci asc",
+	}, {
+		input: "SELECT k COLLATE latin1_german2_ci AS k1 FROM t1 ORDER BY k1",
+		output: "select k collate latin1_german2_ci as k1 from t1 order by k1 asc",
+	}, {
+		input: "select * from t group by a collate utf8_general_ci",
+	}, {
+		input: "SELECT MAX(k COLLATE latin1_german2_ci) FROM t1",
+		output: "select MAX(k collate latin1_german2_ci) from t1",
+	}, {
+		input: "SELECT DISTINCT k COLLATE latin1_german2_ci FROM t1",
+		output: "select distinct k collate latin1_german2_ci from t1",
+	}, {
+		input: "SELECT * FROM t1 WHERE 'Müller' COLLATE latin1_german2_ci = k",
+		output: "select * from t1 where 'Müller' collate latin1_german2_ci = k",
+	}, {
+		input: "SELECT * FROM t1 WHERE k LIKE 'Müller' COLLATE latin1_german2_ci",
+		output: "select * from t1 where k like 'Müller' collate latin1_german2_ci",
+	}, {
+		input: "SELECT k FROM t1 GROUP BY k HAVING k = 'Müller' COLLATE latin1_german2_ci",
+		output: "select k from t1 group by k having k = 'Müller' collate latin1_german2_ci",
 	}}
 	for _, tcase := range validSQL {
 		if tcase.output == "" {

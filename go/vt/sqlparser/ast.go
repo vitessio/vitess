@@ -997,6 +997,7 @@ const (
 	NotRegexpStr         = "not regexp"
 	JSONExtractOp        = "->"
 	JSONUnquoteExtractOp = "->>"
+	CollateStr 	     = "collate"
 )
 
 // Format formats the node.
