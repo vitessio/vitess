@@ -1,11 +1,12 @@
 package com.youtube.vitess.hadoop;
 
 import com.youtube.vitess.client.RpcClientFactory;
+import com.youtube.vitess.proto.Query;
 import com.youtube.vitess.proto.Query.SplitQueryRequest;
 
-import java.util.Collection;
-
 import org.apache.hadoop.conf.Configuration;
+
+import java.util.Collection;
 
 /**
  * Collection of configuration properties used for {@link VitessInputFormat}
@@ -20,6 +21,7 @@ public class VitessConf {
   public static final String SPLIT_COLUMNS = "vitess.client.split_columns";
   public static final String ALGORITHM = "vitess.client.algorithm";
   public static final String RPC_FACTORY_CLASS = "vitess.client.factory";
+  public static final String INCLUDED_FIELDS = "vitess.client.included.fields";
   public static final String HOSTS_DELIM = ",";
 
   private Configuration conf;
@@ -96,5 +98,13 @@ public class VitessConf {
 
   public void setRpcFactoryClass(Class<? extends RpcClientFactory> clz) {
     conf.set(RPC_FACTORY_CLASS, clz.getName());
+  }
+
+  public Query.ExecuteOptions.IncludedFields getIncludedFields() {
+    return conf.getEnum(INCLUDED_FIELDS, Query.ExecuteOptions.IncludedFields.TYPE_AND_NAME);
+  }
+
+  public void setIncludedFields(Query.ExecuteOptions.IncludedFields includedFields) {
+    conf.setEnum(INCLUDED_FIELDS, includedFields);
   }
 }
