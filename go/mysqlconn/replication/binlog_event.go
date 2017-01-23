@@ -55,13 +55,13 @@ type BinlogEvent interface {
 	// RBR events.
 
 	// IsTableMapEvent returns true if this is a TABLE_MAP_EVENT.
-	IsTableMapEvent() bool
+	IsTableMap() bool
 	// IsWriteRowsEvent returns true if this is a WRITE_ROWS_EVENT.
-	IsWriteRowsEvent() bool
+	IsWriteRows() bool
 	// IsUpdateRowsEvent returns true if this is a UPDATE_ROWS_EVENT.
-	IsUpdateRowsEvent() bool
+	IsUpdateRows() bool
 	// IsDeleteRowsEvent returns true if this is a DELETE_ROWS_EVENT.
-	IsDeleteRowsEvent() bool
+	IsDeleteRows() bool
 
 	// Timestamp returns the timestamp from the event header.
 	Timestamp() uint32
@@ -76,9 +76,9 @@ type BinlogEvent interface {
 	// Query returns a Query struct representing data from a QUERY_EVENT.
 	// This is only valid if IsQuery() returns true.
 	Query(BinlogFormat) (Query, error)
-	// IntVar returns the name and value of the variable for an INTVAR_EVENT.
+	// IntVar returns the type and value of the variable for an INTVAR_EVENT.
 	// This is only valid if IsIntVar() returns true.
-	IntVar(BinlogFormat) (string, uint64, error)
+	IntVar(BinlogFormat) (byte, uint64, error)
 	// Rand returns the two seed values for a RAND_EVENT.
 	// This is only valid if IsRand() returns true.
 	Rand(BinlogFormat) (uint64, uint64, error)
@@ -128,69 +128,6 @@ type BinlogFormat struct {
 	// HeaderSizes is an array of sizes of the headers for each message.
 	HeaderSizes []byte
 }
-
-// These constants are common between MariaDB 10.0 and MySQL 5.6.
-const (
-	// BinlogChecksumAlgOff indicates that checksums are supported but off.
-	BinlogChecksumAlgOff = 0
-	// BinlogChecksumAlgCRC32 indicates that CRC32 checksums are used.
-	BinlogChecksumAlgCRC32 = 1
-	// BinlogChecksumAlgUndef indicates that checksums are not supported.
-	BinlogChecksumAlgUndef = 255
-)
-
-// These constants describe the event types.
-// See: http://dev.mysql.com/doc/internals/en/binlog-event-type.html
-const (
-	eUnknownEvent           = 0
-	eStartEventV3           = 1
-	eQueryEvent             = 2
-	eStopEvent              = 3
-	eRotateEvent            = 4
-	eIntvarEvent            = 5
-	eLoadEvent              = 6
-	eSlaveEvent             = 7
-	eCreateFileEvent        = 8
-	eAppendBlockEvent       = 9
-	eExecLoadEvent          = 10
-	eDeleteFileEvent        = 11
-	eNewLoadEvent           = 12
-	eRandEvent              = 13
-	eUserVarEvent           = 14
-	eFormatDescriptionEvent = 15
-	eXIDEvent               = 16
-	eBeginLoadQueryEvent    = 17
-	eExecuteLoadQueryEvent  = 18
-	eTableMapEvent          = 19
-	eWriteRowsEventV0       = 20
-	eUpdateRowsEventV0      = 21
-	eDeleteRowsEventV0      = 22
-	eWriteRowsEventV1       = 23
-	eUpdateRowsEventV1      = 24
-	eDeleteRowsEventV1      = 25
-	eIncidentEvent          = 26
-	eHeartbeatEvent         = 27
-	eIgnorableEvent         = 28
-	eRowsQueryEvent         = 29
-	eWriteRowsEventV2       = 30
-	eUpdateRowsEventV2      = 31
-	eDeleteRowsEventV2      = 32
-	eGTIDEvent              = 33
-	eAnonymousGTIDEvent     = 34
-	ePreviousGTIDsEvent     = 35
-
-	// MySQL 5.7 events
-	eTransactionContextEvent = 36
-	eViewChangeEvent         = 37
-	eXAPrepareLogEvent       = 38
-
-	// MariaDB specific values. They start at 160.
-	eMariaAnnotateRowsEvent     = 160
-	eMariaBinlogCheckpointEvent = 161
-	eMariaGTIDEvent             = 162
-	eMariaGTIDListEvent         = 163
-	eMariaStartEncryptionEvent  = 164
-)
 
 // IsZero returns true if the BinlogFormat has not been initialized.
 func (f BinlogFormat) IsZero() bool {
@@ -285,6 +222,15 @@ func newBitmap(data []byte, pos int, count int) (Bitmap, int) {
 	}, pos + byteSize
 }
 
+// NewServerBitmap returns a bitmap that can hold 'count' bits.
+func NewServerBitmap(count int) Bitmap {
+	byteSize := (count + 7) / 8
+	return Bitmap{
+		data:  make([]byte, byteSize),
+		count: count,
+	}
+}
+
 // Count returns the number of bits in this Bitmap.
 func (b *Bitmap) Count() int {
 	return b.count
@@ -295,6 +241,17 @@ func (b *Bitmap) Bit(index int) bool {
 	byteIndex := index / 8
 	bitMask := byte(1 << (uint(index) & 0x7))
 	return b.data[byteIndex]&bitMask > 0
+}
+
+// Set sets the given boolean value.
+func (b *Bitmap) Set(index int, value bool) {
+	byteIndex := index / 8
+	bitMask := byte(1 << (uint(index) & 0x7))
+	if value {
+		b.data[byteIndex] |= bitMask
+	} else {
+		b.data[byteIndex] &= 0xff - bitMask
+	}
 }
 
 // BitCount returns how many bits are set in the bitmap.

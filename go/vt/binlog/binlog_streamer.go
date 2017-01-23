@@ -175,6 +175,10 @@ func (bls *Streamer) parseEvents(ctx context.Context, events <-chan replication.
 	var autocommit = true
 	var err error
 
+	// Remember the RBR state.
+	// tableMaps is indexed by tableID.
+	tableMaps := make(map[uint64]*replication.TableMap)
+
 	// A begin can be triggered either by a BEGIN query, or by a GTID_EVENT.
 	begin := func() {
 		if statements != nil {
@@ -275,13 +279,13 @@ func (bls *Streamer) parseEvents(ctx context.Context, events <-chan replication.
 				return pos, err
 			}
 		case ev.IsIntVar(): // INTVAR_EVENT
-			name, value, err := ev.IntVar(format)
+			typ, value, err := ev.IntVar(format)
 			if err != nil {
 				return pos, fmt.Errorf("can't parse INTVAR_EVENT: %v, event data: %#v", err, ev)
 			}
 			statements = append(statements, &binlogdatapb.BinlogTransaction_Statement{
 				Category: binlogdatapb.BinlogTransaction_Statement_BL_SET,
-				Sql:      []byte(fmt.Sprintf("SET %s=%d", name, value)),
+				Sql:      []byte(fmt.Sprintf("SET %s=%d", replication.IntVarNames[typ], value)),
 			})
 		case ev.IsRand(): // RAND_EVENT
 			seed1, seed2, err := ev.Rand(format)
@@ -312,7 +316,7 @@ func (bls *Streamer) parseEvents(ctx context.Context, events <-chan replication.
 				if err = commit(ev.Timestamp()); err != nil {
 					return pos, err
 				}
-			default: // BL_DDL, BL_DML, BL_SET, BL_UNRECOGNIZED
+			default: // BL_DDL, BL_SET, BL_INSERT, BL_UPDATE, BL_DELETE, BL_UNRECOGNIZED
 				if q.Database != "" && q.Database != bls.dbname {
 					// Skip cross-db statements.
 					continue
@@ -355,6 +359,48 @@ func (bls *Streamer) parseEvents(ctx context.Context, events <-chan replication.
 			pos = newPos
 			if err = commit(ev.Timestamp()); err != nil {
 				return pos, err
+			}
+		case ev.IsTableMap():
+			// Save all tables, even not in the same DB.
+			tableID := ev.TableID(format)
+			tm, err := ev.TableMap(format)
+			if err != nil {
+				return pos, err
+			}
+			tableMaps[tableID] = tm
+		case ev.IsUpdateRows():
+			tableID := ev.TableID(format)
+			tm, ok := tableMaps[tableID]
+			if !ok {
+				return pos, fmt.Errorf("unknown tableID %v in UpdateRows event", tableID)
+			}
+			if tm.Database != "" && tm.Database != bls.dbname {
+				// Skip cross-db statements.
+				continue
+			}
+			rows, err := ev.Rows(format, tm)
+			if err != nil {
+				return pos, err
+			}
+			setTimestamp := &binlogdatapb.BinlogTransaction_Statement{
+				Category: binlogdatapb.BinlogTransaction_Statement_BL_SET,
+				Sql:      []byte(fmt.Sprintf("SET TIMESTAMP=%d", ev.Timestamp())),
+			}
+			statements = append(statements, setTimestamp)
+			for i := range rows.Rows {
+				identifies := rows.StringIdentifies(tm, i)
+				values := rows.StringValues(tm, i)
+				update := &binlogdatapb.BinlogTransaction_Statement{
+					Category: binlogdatapb.BinlogTransaction_Statement_BL_UPDATE,
+					Sql:      []byte(fmt.Sprintf("WIP: update table %v set values = %v where identifies = %v", tm.Name, values, identifies)),
+				}
+				statements = append(statements, update)
+			}
+
+			if autocommit {
+				if err = commit(ev.Timestamp()); err != nil {
+					return pos, err
+				}
 			}
 		}
 	}

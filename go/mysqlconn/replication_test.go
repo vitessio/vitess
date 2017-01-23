@@ -517,7 +517,7 @@ func testRowReplicationWithRealDatabase(t *testing.T, params *sqldb.ConnParams) 
 		case be.IsXID():
 			commitCount++
 			t.Logf("Got XID event")
-		case be.IsTableMapEvent():
+		case be.IsTableMap():
 			tableID = be.TableID(f) // This would be 0x00ffffff for an event to clear all table map entries.
 			var err error
 			tableMap, err = be.TableMap(f)
@@ -533,7 +533,7 @@ func testRowReplicationWithRealDatabase(t *testing.T, params *sqldb.ConnParams) 
 				t.Errorf("got wrong TableMap: %v", tableMap)
 			}
 			gotTableMapEvent = true
-		case be.IsWriteRowsEvent():
+		case be.IsWriteRows():
 			if got := be.TableID(f); got != tableID {
 				t.Fatalf("WriteRows event got table ID %v but was expecting %v", got, tableID)
 			}
@@ -550,7 +550,7 @@ func testRowReplicationWithRealDatabase(t *testing.T, params *sqldb.ConnParams) 
 			}
 
 			gotInsert = true
-		case be.IsUpdateRowsEvent():
+		case be.IsUpdateRows():
 			if got := be.TableID(f); got != tableID {
 				t.Fatalf("UpdateRows event got table ID %v but was expecting %v", got, tableID)
 			}
@@ -574,7 +574,7 @@ func testRowReplicationWithRealDatabase(t *testing.T, params *sqldb.ConnParams) 
 			}
 
 			gotUpdate = true
-		case be.IsDeleteRowsEvent():
+		case be.IsDeleteRows():
 			if got := be.TableID(f); got != tableID {
 				t.Fatalf("DeleteRows event got table ID %v but was expecting %v", got, tableID)
 			}

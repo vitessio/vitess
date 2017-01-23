@@ -106,7 +106,7 @@ func (ev binlogEvent) IsXID() bool {
 
 // IsIntVar implements BinlogEvent.IsIntVar().
 func (ev binlogEvent) IsIntVar() bool {
-	return ev.Type() == eIntvarEvent
+	return ev.Type() == eIntVarEvent
 }
 
 // IsRand implements BinlogEvent.IsRand().
@@ -119,28 +119,28 @@ func (ev binlogEvent) IsPreviousGTIDs() bool {
 	return ev.Type() == ePreviousGTIDsEvent
 }
 
-// IsTableMapEvent implements BinlogEvent.IsTableMapEvent().
-func (ev binlogEvent) IsTableMapEvent() bool {
+// IsTableMap implements BinlogEvent.IsTableMap().
+func (ev binlogEvent) IsTableMap() bool {
 	return ev.Type() == eTableMapEvent
 }
 
-// IsWriteRowsEvent implements BinlogEvent.IsWriteRowsEvent().
+// IsWriteRows implements BinlogEvent.IsWriteRows().
 // We do not support v0.
-func (ev binlogEvent) IsWriteRowsEvent() bool {
+func (ev binlogEvent) IsWriteRows() bool {
 	return ev.Type() == eWriteRowsEventV1 ||
 		ev.Type() == eWriteRowsEventV2
 }
 
-// IsUpdateRowsEvent implements BinlogEvent.IsUpdateRowsEvent().
+// IsUpdateRows implements BinlogEvent.IsUpdateRows().
 // We do not support v0.
-func (ev binlogEvent) IsUpdateRowsEvent() bool {
+func (ev binlogEvent) IsUpdateRows() bool {
 	return ev.Type() == eUpdateRowsEventV1 ||
 		ev.Type() == eUpdateRowsEventV2
 }
 
-// IsDeleteRowsEvent implements BinlogEvent.IsDeleteRowsEvent().
+// IsDeleteRows implements BinlogEvent.IsDeleteRows().
 // We do not support v0.
-func (ev binlogEvent) IsDeleteRowsEvent() bool {
+func (ev binlogEvent) IsDeleteRows() bool {
 	return ev.Type() == eDeleteRowsEventV1 ||
 		ev.Type() == eDeleteRowsEventV2
 }
@@ -230,21 +230,21 @@ varsLoop:
 		// increasing order (except for 6 which occurs in the place of 2) to allow
 		// for backward compatibility.
 		switch code {
-		case 0, 3: // Q_FLAGS2_CODE, Q_AUTO_INCREMENT
+		case QFlags2Code, QAutoIncrement:
 			pos += 4
-		case 1: // Q_SQL_MODE_CODE
+		case QSQLModeCode:
 			pos += 8
-		case 2: // Q_CATALOG_CODE (used in MySQL 5.0.0 - 5.0.3)
+		case QCatalog: // Used in MySQL 5.0.0 - 5.0.3
 			if pos+1 > len(vars) {
-				return query, fmt.Errorf("Q_CATALOG_CODE status var overflows buffer (%v + 1 > %v)", pos, len(vars))
+				return query, fmt.Errorf("Q_CATALOG status var overflows buffer (%v + 1 > %v)", pos, len(vars))
 			}
 			pos += 1 + int(vars[pos]) + 1
-		case 6: // Q_CATALOG_NZ_CODE (used in MySQL > 5.0.3 to replace 2)
+		case QCatalogNZCode: // Used in MySQL > 5.0.3 to replace QCatalog
 			if pos+1 > len(vars) {
 				return query, fmt.Errorf("Q_CATALOG_NZ_CODE status var overflows buffer (%v + 1 > %v)", pos, len(vars))
 			}
 			pos += 1 + int(vars[pos])
-		case 4: // Q_CHARSET_CODE
+		case QCharsetCode:
 			if pos+6 > len(vars) {
 				return query, fmt.Errorf("Q_CHARSET_CODE status var overflows buffer (%v + 6 > %v)", pos, len(vars))
 			}
@@ -269,20 +269,16 @@ varsLoop:
 //   # bytes   field
 //   1         variable ID
 //   8         variable value
-func (ev binlogEvent) IntVar(f BinlogFormat) (name string, value uint64, err error) {
+func (ev binlogEvent) IntVar(f BinlogFormat) (byte, uint64, error) {
 	data := ev.Bytes()[f.HeaderLength:]
 
-	switch data[0] {
-	case 1:
-		name = "LAST_INSERT_ID"
-	case 2:
-		name = "INSERT_ID"
-	default:
-		return "", 0, fmt.Errorf("invalid IntVar ID: %v", data[0])
+	typ := data[0]
+	if typ != IntVarLastInsertID && typ != IntVarInsertID {
+		return 0, 0, fmt.Errorf("invalid IntVar ID: %v", data[0])
 	}
 
-	value = binary.LittleEndian.Uint64(data[1 : 1+8])
-	return name, value, nil
+	value := binary.LittleEndian.Uint64(data[1 : 1+8])
+	return typ, value, nil
 }
 
 // Rand implements BinlogEvent.Rand().
@@ -399,7 +395,8 @@ func cellLength(data []byte, pos int, tmc *TableMapColumn) (int, error) {
 	}
 }
 
-// FIXME(alainjobart) are the ints signed? It seems Tiny is unsigned, but the others are.
+// FIXME(alainjobart) are the ints signed? It seems Tiny is unsigned,
+// but the others are.
 func cellData(data []byte, pos int, tmc *TableMapColumn) (string, int) {
 	switch tmc.Type {
 	case TypeTiny:
