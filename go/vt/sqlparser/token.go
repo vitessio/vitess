@@ -334,8 +334,16 @@ func (tkn *Tokenizer) Scan() (int, []byte) {
 		switch ch {
 		case eofChar:
 			return 0, nil
-		case '=', ',', ';', '(', ')', '+', '*', '%', '&', '|', '^', '~':
+		case '=', ',', ';', '(', ')', '+', '*', '%', '&', '^', '~':
 			return int(ch), nil
+		case '|':
+			switch tkn.lastChar {
+			case '|':
+				tkn.next()
+				return OR_PIPE, nil
+			default:
+				return int(ch), nil
+			}
 		case '?':
 			tkn.posVarIndex++
 			buf := new(bytes.Buffer)

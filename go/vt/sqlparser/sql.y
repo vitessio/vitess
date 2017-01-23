@@ -86,7 +86,7 @@ func forceEOF(yylex interface{}) {
 // Some of these operators don't conflict in our situation. Nevertheless,
 // it's better to have these listed in the correct order. Also, we don't
 // support all operators yet.
-%left <empty> OR
+%left <empty> OR OR_PIPE
 %left <empty> AND
 %right <empty> NOT
 %left <empty> BETWEEN CASE WHEN THEN ELSE END
@@ -635,6 +635,10 @@ boolean_expression:
     $$ = &AndExpr{Left: $1, Right: $3}
   }
 | boolean_expression OR boolean_expression
+  {
+    $$ = &OrExpr{Left: $1, Right: $3}
+  }
+| boolean_expression OR_PIPE boolean_expression
   {
     $$ = &OrExpr{Left: $1, Right: $3}
   }

@@ -214,6 +214,9 @@ func TestValid(t *testing.T) {
 	}, {
 		input: "select /* or */ 1 from t where a = b or a = c",
 	}, {
+		input: "select /* || */ 1 from t where a = b || a = c",
+		output: "select /* || */ 1 from t where a = b or a = c",
+	}, {
 		input: "select /* not */ 1 from t where not a = b",
 	}, {
 		input: "select /* bool is */ 1 from t where a = b is null",
