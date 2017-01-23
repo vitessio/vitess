@@ -63,3 +63,50 @@ The comment section specifies additional configuration parameters. The fields ar
 * `vt_poller_interval=30`: Poll every 30s for messages that are due to be sent.
 
 If any of the above fields are missing, vitess will fail to load the table. No operation will be allowed on a table that has failed to load.
+
+# Enqueuing messages
+
+The application can enqueue messages using an insert statement:
+
+```
+insert into my_message(id, message) values(1, 'hello world')
+```
+
+These inserts can be part of a regular transaction. Multiple messages can be inserted to different tables. Avoid accumulating too many big messages within a transaction as it consumes memory on the VTTablet side. At the time of commit, memoery permitting, all messages are instantly enqueued to be sent.
+
+Messages can also be created to be sent in the future:
+
+```
+insert into my_message(id, message, time_scheduled) values(1, 'hello world', :future_time)
+```
+
+`future_time` must be the unix time expressed in nanoseconds.
+
+# Receiving messages
+
+Processes can subscribe to receive messages by sending a `MessageStream` request to VTGate. If there are multiple subscribers, the messages will be delivered in a round-robin fashion. Note that this is not a broadcast; Each message will be sent to at the most one subscriber.
+
+Messages will be sent in the standard Vitess `Result` format. This means that standard database tools that understand query results can also be message recipients. Currently, there is no SQL format for subscribing to messages, but one will be provided soon.
+
+## Subsetting
+
+It's possible that you may want to subscribe to specific shards or groups of shards while requesting messages. This is useful for partitioning or load balancing. The `MessageStream` API allows you to specify these constraints. The request parameters are as follows:
+
+* `Name`: Name of the message table.
+* `Keyspace`: Keyspace where the message table is present.
+* `Shard`: For unsharded keyspaces, this is usually "0". However, an empty shard will also work. For sharded keyspaces, a specific shard name can be specified.
+* `KeyRange`: If the keyspace is sharded, streaming will be performed only from the shards that match the range. This must be an exact match.
+
+# Acknowledging messages
+
+A received (or processed) message can be acknowledged using the `MessageAck` API call. This call accepts the following parameters:
+
+* `Name`: Name of the message table.
+* `Keyspace`: Keypsace where the message table is present. This field can be empty if the table name is unique across all keyspaces.
+* `Ids`: The list of ids that need to be acked.
+
+Once a message is successfully acked, it will never be resent.
+
+## Exponential backoff
+
+A message that was successfully sent will wait for the specified ack wait time. If no ack is received by then, it will be resent. The next attempt will be 2x the previous wait, and this delay is doubled for every attempt.
