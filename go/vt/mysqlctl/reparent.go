@@ -14,7 +14,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
+	"github.com/youtube/vitess/go/mysqlconn/replication"
 
 	"golang.org/x/net/context"
 )

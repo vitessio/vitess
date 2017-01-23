@@ -118,7 +118,6 @@ func TestServer(t *testing.T) {
 	if ok {
 		t.Fatalf("mysql should have failed: %v", output)
 	}
-	t.Logf("Output of 'error' command:\n%v", output)
 	if !strings.Contains(output, "ERROR 1047 (08S01)") ||
 		!strings.Contains(output, "forced query handling error for") {
 		t.Errorf("Unexpected output for 'error'")
@@ -130,7 +129,6 @@ func TestServer(t *testing.T) {
 	if ok {
 		t.Fatalf("mysql should have failed: %v", output)
 	}
-	t.Logf("Output of 'panic' command:\n%v", output)
 	if !strings.Contains(output, "ERROR 2013 (HY000)") ||
 		!strings.Contains(output, "Lost connection to MySQL server during query") {
 		t.Errorf("Unexpected output for 'panic'")
@@ -141,7 +139,6 @@ func TestServer(t *testing.T) {
 	if !ok {
 		t.Fatalf("mysql failed: %v", output)
 	}
-	t.Logf("Output of 'select rows' command:\n%v", output)
 	if !strings.Contains(output, "nice name") ||
 		!strings.Contains(output, "nicer name") ||
 		!strings.Contains(output, "2 rows in set") {
@@ -153,7 +150,6 @@ func TestServer(t *testing.T) {
 	if !ok {
 		t.Fatalf("mysql failed: %v", output)
 	}
-	t.Logf("Output of 'insert' command:\n%v", output)
 	if !strings.Contains(output, "Query OK, 123 rows affected") {
 		t.Errorf("Unexpected output for 'insert'")
 	}
@@ -164,7 +160,6 @@ func TestServer(t *testing.T) {
 	if !ok {
 		t.Fatalf("mysql failed: %v", output)
 	}
-	t.Logf("Output of 'schema echo' command:\n%v", output)
 	if !strings.Contains(output, params.DbName) {
 		t.Errorf("Unexpected output for 'schema echo'")
 	}
@@ -224,7 +219,6 @@ func runMysql(t *testing.T, params *sqldb.ConnParams, command string) (string, b
 	out, err := cmd.CombinedOutput()
 	output := string(out)
 	if err != nil {
-		t.Logf("mysql: %v failed: %v\n%v", name, err, output)
 		return output, false
 	}
 	return output, true

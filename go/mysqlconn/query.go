@@ -18,7 +18,9 @@ func (c *Conn) writeComQuery(query string) error {
 	if err := c.writePacket(data); err != nil {
 		return err
 	}
-	c.flush()
+	if err := c.flush(); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -29,7 +31,9 @@ func (c *Conn) writeComInitDB(db string) error {
 	if err := c.writePacket(data); err != nil {
 		return err
 	}
-	c.flush()
+	if err := c.flush(); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -497,7 +501,9 @@ func (c *Conn) writeResult(result *sqltypes.Result) error {
 		if err := c.writeEOFPacket(c.StatusFlags, 0); err != nil {
 			return err
 		}
-		c.flush()
+		if err := c.flush(); err != nil {
+			return err
+		}
 	} else {
 		// This will flush too.
 		if err := c.writeOKPacketWithEOFHeader(0, 0, c.StatusFlags, 0); err != nil {

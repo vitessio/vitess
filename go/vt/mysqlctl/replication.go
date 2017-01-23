@@ -19,11 +19,11 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/mysql"
+	"github.com/youtube/vitess/go/mysqlconn/replication"
 	"github.com/youtube/vitess/go/netutil"
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/hook"
-	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
 )
 
 const (
@@ -61,8 +61,8 @@ func changeMasterArgs(params *sqldb.ConnParams, masterHost string, masterPort in
 }
 
 // parseSlaveStatus parses the common fields of SHOW SLAVE STATUS.
-func parseSlaveStatus(fields map[string]string) replication.Status {
-	status := replication.Status{
+func parseSlaveStatus(fields map[string]string) Status {
+	status := Status{
 		MasterHost:      fields["Master_Host"],
 		SlaveIORunning:  fields["Slave_IO_Running"] == "Yes",
 		SlaveSQLRunning: fields["Slave_SQL_Running"] == "Yes",
@@ -186,10 +186,10 @@ func (mysqld *Mysqld) WaitMasterPos(ctx context.Context, targetPos replication.P
 }
 
 // SlaveStatus returns the slave replication statuses
-func (mysqld *Mysqld) SlaveStatus() (replication.Status, error) {
+func (mysqld *Mysqld) SlaveStatus() (Status, error) {
 	flavor, err := mysqld.flavor()
 	if err != nil {
-		return replication.Status{}, fmt.Errorf("SlaveStatus needs flavor: %v", err)
+		return Status{}, fmt.Errorf("SlaveStatus needs flavor: %v", err)
 	}
 	return flavor.SlaveStatus(mysqld)
 }

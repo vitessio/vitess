@@ -22,12 +22,12 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/cgzip"
+	"github.com/youtube/vitess/go/mysqlconn/replication"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/hook"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/mysqlctl/backupstorage"
-	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
 )
 
 // This file handles the backup and restore related code
@@ -289,7 +289,7 @@ func backup(ctx context.Context, mysqld MysqlDaemon, logger logutil.Logger, bh b
 		if err = StopSlave(mysqld, hookExtraEnv); err != nil {
 			return false, fmt.Errorf("can't stop slave: %v", err)
 		}
-		var slaveStatus replication.Status
+		var slaveStatus Status
 		slaveStatus, err = mysqld.SlaveStatus()
 		if err != nil {
 			return false, fmt.Errorf("can't get slave status: %v", err)

@@ -96,12 +96,12 @@ func (c *Conn) readOnePacket() ([]byte, error) {
 	var header [4]byte
 
 	if _, err := io.ReadFull(c.reader, header[:]); err != nil {
-		return nil, fmt.Errorf("io.ReadFull(header size) failed: %v", err)
+		return nil, sqldb.NewSQLError(CRServerLost, SSUnknownComError, "io.ReadFull(header size) failed: %v", err)
 	}
 
 	sequence := uint8(header[3])
 	if sequence != c.sequence {
-		return nil, fmt.Errorf("invalid sequence, expected %v got %v", c.sequence, sequence)
+		return nil, sqldb.NewSQLError(CRServerLost, SSUnknownComError, "invalid sequence, expected %v got %v", c.sequence, sequence)
 	}
 
 	c.sequence++
@@ -115,7 +115,7 @@ func (c *Conn) readOnePacket() ([]byte, error) {
 
 	data := make([]byte, length)
 	if _, err := io.ReadFull(c.reader, data); err != nil {
-		return nil, fmt.Errorf("io.ReadFull(packet body of length %v) failed: %v", length, err)
+		return nil, sqldb.NewSQLError(CRServerLost, SSUnknownComError, "io.ReadFull(packet body of length %v) failed: %v", length, err)
 	}
 	return data, nil
 }
@@ -188,16 +188,16 @@ func (c *Conn) writePacket(data []byte) error {
 		header[2] = byte(packetLength >> 16)
 		header[3] = c.sequence
 		if n, err := c.writer.Write(header[:]); err != nil {
-			return fmt.Errorf("Write(header) failed: %v", err)
+			return sqldb.NewSQLError(CRServerLost, SSUnknownComError, "Write(header) failed: %v", err)
 		} else if n != 4 {
-			return fmt.Errorf("Write(header) returned a short write: %v < 4", n)
+			return sqldb.NewSQLError(CRServerLost, SSUnknownComError, "Write(header) returned a short write: %v < 4", n)
 		}
 
 		// Write the body.
 		if n, err := c.writer.Write(data[index : index+packetLength]); err != nil {
-			return fmt.Errorf("Write(packet) failed: %v", err)
+			return sqldb.NewSQLError(CRServerLost, SSUnknownComError, "Write(packet) failed: %v", err)
 		} else if n != packetLength {
-			return fmt.Errorf("Write(packet) returned a short write: %v < %v", n, packetLength)
+			return sqldb.NewSQLError(CRServerLost, SSUnknownComError, "Write(packet) returned a short write: %v < %v", n, packetLength)
 		}
 
 		// Update our state.
@@ -213,9 +213,9 @@ func (c *Conn) writePacket(data []byte) error {
 				header[2] = 0
 				header[3] = c.sequence
 				if n, err := c.writer.Write(header[:]); err != nil {
-					return fmt.Errorf("Write(empty header) failed: %v", err)
+					return sqldb.NewSQLError(CRServerLost, SSUnknownComError, "Write(empty header) failed: %v", err)
 				} else if n != 4 {
-					return fmt.Errorf("Write(empty header) returned a short write: %v < 4", n)
+					return sqldb.NewSQLError(CRServerLost, SSUnknownComError, "Write(empty header) returned a short write: %v < 4", n)
 				}
 				c.sequence++
 			}
@@ -225,8 +225,11 @@ func (c *Conn) writePacket(data []byte) error {
 	}
 }
 
-func (c *Conn) flush() {
-	c.writer.Flush()
+func (c *Conn) flush() error {
+	if err := c.writer.Flush(); err != nil {
+		return sqldb.NewSQLError(CRServerLost, SSUnknownComError, "Flush() failed: %v", err)
+	}
+	return nil
 }
 
 // Close closes the connection.
@@ -256,7 +259,9 @@ func (c *Conn) writeOKPacket(affectedRows, lastInsertID uint64, flags uint16, wa
 	if err := c.writePacket(data); err != nil {
 		return err
 	}
-	c.flush()
+	if err := c.flush(); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -280,7 +285,9 @@ func (c *Conn) writeOKPacketWithEOFHeader(affectedRows, lastInsertID uint64, fla
 	if err := c.writePacket(data); err != nil {
 		return err
 	}
-	c.flush()
+	if err := c.flush(); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -304,7 +311,9 @@ func (c *Conn) writeErrorPacket(errorCode uint16, sqlState string, format string
 	if err := c.writePacket(data); err != nil {
 		return err
 	}
-	c.flush()
+	if err := c.flush(); err != nil {
+		return err
+	}
 	return nil
 }
 

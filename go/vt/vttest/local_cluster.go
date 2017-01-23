@@ -61,6 +61,16 @@ func Verbose(verbose bool) VitessOption {
 	}
 }
 
+// NoStderr makes the underlying local_cluster stderr output disapper.
+func NoStderr() VitessOption {
+	return VitessOption{
+		beforeRun: func(hdl *Handle) error {
+			hdl.cmd.Stderr = nil
+			return nil
+		},
+	}
+}
+
 // SchemaDirectory is used to specify a directory to read schema from.
 // It cannot be used at the same time as Schema.
 func SchemaDirectory(dir string) VitessOption {
@@ -284,6 +294,8 @@ func (hdl *Handle) run(
 		launcher,
 		"--port", strconv.Itoa(port),
 	)
+	hdl.cmd.Stderr = os.Stderr
+
 	for _, option := range options {
 		if err := option.beforeRun(hdl); err != nil {
 			return err
@@ -295,7 +307,6 @@ func (hdl *Handle) run(
 
 	log.Infof("executing: %v", strings.Join(hdl.cmd.Args, " "))
 
-	hdl.cmd.Stderr = os.Stderr
 	stdout, err := hdl.cmd.StdoutPipe()
 	if err != nil {
 		return err
@@ -312,7 +323,7 @@ func (hdl *Handle) run(
 	err = decoder.Decode(&hdl.Data)
 	if err != nil {
 		err = fmt.Errorf(
-			"Error (%v) parsing JSON output from command: %v.", err, launcher)
+			"error (%v) parsing JSON output from command: %v", err, launcher)
 	}
 	return err
 }
