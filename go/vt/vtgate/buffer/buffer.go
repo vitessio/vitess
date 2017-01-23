@@ -29,8 +29,9 @@ import (
 )
 
 var (
-	bufferFullError   = vterrors.FromError(vtrpcpb.ErrorCode_TRANSIENT_ERROR, errors.New("master buffer is full"))
-	entryEvictedError = vterrors.FromError(vtrpcpb.ErrorCode_TRANSIENT_ERROR, errors.New("buffer full: request evicted for newer request"))
+	bufferFullError      = vterrors.FromError(vtrpcpb.ErrorCode_TRANSIENT_ERROR, errors.New("master buffer is full"))
+	entryEvictedError    = vterrors.FromError(vtrpcpb.ErrorCode_TRANSIENT_ERROR, errors.New("buffer full: request evicted for newer request"))
+	contextCanceledError = vterrors.FromError(vtrpcpb.ErrorCode_TRANSIENT_ERROR, errors.New("context was canceled before failover finished"))
 )
 
 // Buffer is used to track ongoing MASTER tablet failovers and buffer

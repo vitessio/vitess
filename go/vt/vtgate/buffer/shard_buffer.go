@@ -13,8 +13,6 @@ import (
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/vterrors"
-
-	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 // bufferState represents the different states a shardBuffer object can be in.
@@ -296,7 +294,7 @@ func (sb *shardBuffer) wait(ctx context.Context, e *entry) error {
 	select {
 	case <-ctx.Done():
 		sb.remove(e)
-		return vterrors.FromError(vtrpcpb.ErrorCode_TRANSIENT_ERROR, fmt.Errorf("context was canceled before failover finished (%v)", ctx.Err()))
+		return vterrors.WithSuffix(contextCanceledError, fmt.Sprintf(": %v", ctx.Err()))
 	case <-e.done:
 		return e.err
 	}
