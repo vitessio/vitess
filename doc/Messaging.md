@@ -84,9 +84,9 @@ insert into my_message(id, message, time_scheduled) values(1, 'hello world', :fu
 
 # Receiving messages
 
-Processes can subscribe to receive messages by sending a `MessageStream` request to VTGate. If there are multiple subscribers, the messages will be delivered in a round-robin fashion. Note that this is not a broadcast; Each message will be sent to at the most one subscriber.
+Processes can subscribe to receive messages by sending a `MessageStream` request to VTGate. If there are multiple subscribers, the messages will be delivered in a round-robin fashion. Note that this is not a broadcast; Each message will be sent to at most one subscriber.
 
-Messages will be sent in the standard Vitess `Result` format. This means that standard database tools that understand query results can also be message recipients. Currently, there is no SQL format for subscribing to messages, but one will be provided soon.
+The format for messages is the same as a vitess `Result`. This means that standard database tools that understand query results can also be message recipients. Currently, there is no SQL format for subscribing to messages, but one will be provided soon.
 
 ## Subsetting
 
@@ -110,3 +110,31 @@ Once a message is successfully acked, it will never be resent.
 ## Exponential backoff
 
 A message that was successfully sent will wait for the specified ack wait time. If no ack is received by then, it will be resent. The next attempt will be 2x the previous wait, and this delay is doubled for every attempt.
+
+# Purging
+
+Messages that have been successfully acked will be deleted after their age exceeds the time period specified by `vt_purge_after`.
+
+# Advanced usage
+
+The `MessageAck` functionality is currently an API call and cannot be used inside a transaction. However, you can ack a message using a regular DML. It should look like this:
+
+```
+update my_message set time_acked = :time_acked, time_next = null where id in ::ids and time_acked is null
+```
+
+You can also view messages using regular `select` queries.
+
+# Known limitations
+
+The message feature is currently in alpha, and can be improved. Here is the list of possible limitations/improvements:
+
+* Flexible columns: Allow any number of application defined columns to be in the message table.
+* No ACL check for receivers: To be added.
+* Proactive scheduling: Upcoming messages can be proactively scheduled for timely delivery instead of waiting for the next polling cycle.
+* Monitoring support: To be added.
+* Dropped tables: The message engine does not currently detect dropped tables.
+* Changed properties: Although the engine detects new message tables, it does not refresh properties of an existing table.
+* A `SELECT` style syntax for subscribing to messages.
+* No rate limiting.
+* Usage of partitions for efficient purging.
