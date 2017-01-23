@@ -340,7 +340,7 @@ func (tkn *Tokenizer) Scan() (int, []byte) {
 			switch tkn.lastChar {
 			case '|':
 				tkn.next()
-				return OR_PIPE, nil
+				return OR, nil
 			default:
 				return int(ch), nil
 			}
