@@ -416,7 +416,11 @@ func (vtg *VTGate) MessageAck(ctx context.Context, request *vtgatepb.MessageAckR
 	if vtgErr != nil {
 		return nil, vterrors.ToGRPCError(vtgErr)
 	}
-	return &querypb.MessageAckResponse{Count: count}, nil
+	return &querypb.MessageAckResponse{
+		Result: &querypb.QueryResult{
+			RowsAffected: uint64(count),
+		},
+	}, nil
 }
 
 // SplitQuery is the RPC version of vtgateservice.VTGateService method

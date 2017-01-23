@@ -484,7 +484,7 @@ func (conn *vtgateConn) MessageAck(ctx context.Context, keyspace string, name st
 	if err != nil {
 		return 0, vterrors.FromGRPCError(err)
 	}
-	return r.Count, nil
+	return int64(r.Result.RowsAffected), nil
 }
 
 func (conn *vtgateConn) SplitQuery(

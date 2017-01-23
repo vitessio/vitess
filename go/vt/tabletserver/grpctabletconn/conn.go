@@ -547,7 +547,7 @@ func (conn *gRPCQueryClient) MessageAck(ctx context.Context, target *querypb.Tar
 	if err != nil {
 		return 0, tabletconn.TabletErrorFromGRPC(err)
 	}
-	return reply.Count, nil
+	return int64(reply.Result.RowsAffected), nil
 }
 
 // SplitQuery is the stub for TabletServer.SplitQuery RPC
