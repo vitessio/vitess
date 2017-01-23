@@ -58,8 +58,8 @@ The comment section specifies additional configuration parameters. The fields ar
 * `vitess_message`: Indicates that this is a message table.
 * `vt_ack_wait=30`: Wait for 30s for the first message ack. If one is not received, resend.
 * `vt_purge_after=86400`: Purge acked messages that are older than 86400 seconds (1 day).
-* `vt_batch_size=10`: Send up to 10 messages per batch.
-* `vt_cache_seze=10000`: Store up to 10000 messages in the cache.
+* `vt_batch_size=10`: Send up to 10 messages per RPC packet.
+* `vt_cache_size=10000`: Store up to 10000 messages in the cache. If the demand is higher, the rest of the items will have to wait for the next poller cycle.
 * `vt_poller_interval=30`: Poll every 30s for messages that are due to be sent.
 
 If any of the above fields are missing, vitess will fail to load the table. No operation will be allowed on a table that has failed to load.
@@ -72,7 +72,7 @@ The application can enqueue messages using an insert statement:
 insert into my_message(id, message) values(1, 'hello world')
 ```
 
-These inserts can be part of a regular transaction. Multiple messages can be inserted to different tables. Avoid accumulating too many big messages within a transaction as it consumes memory on the VTTablet side. At the time of commit, memoery permitting, all messages are instantly enqueued to be sent.
+These inserts can be part of a regular transaction. Multiple messages can be inserted to different tables. Avoid accumulating too many big messages within a transaction as it consumes memory on the VTTablet side. At the time of commit, memory permitting, all messages are instantly enqueued to be sent.
 
 Messages can also be created to be sent in the future:
 
@@ -117,11 +117,19 @@ Messages that have been successfully acked will be deleted after their age excee
 
 # Advanced usage
 
-The `MessageAck` functionality is currently an API call and cannot be used inside a transaction. However, you can ack a message using a regular DML. It should look like this:
+The `MessageAck` functionality is currently an API call and cannot be used inside a transaction. However, you can ack messages using a regular DML. It should look like this:
 
 ```
 update my_message set time_acked = :time_acked, time_next = null where id in ::ids and time_acked is null
 ```
+
+You can manually change the schedule of existing messages with a statement like this:
+
+```
+update my_message set time_next = :time_next, epoch = :epoch where id in ::ids and time_acked is null
+```
+
+This comes in handy if a bunch of messages had chronic failures and got postponed to the distant future. If the root cause of the problem was fixed, the application could reschedule them to be delivered immediately. You can also optionally change the epoch. Lower epoch values increase the priority of the message and the back-off is less aggressive.
 
 You can also view messages using regular `select` queries.
 
