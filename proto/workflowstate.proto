@@ -1,0 +1,27 @@
+syntax = "proto3";
+
+package workflow;
+
+enum TaskState {
+  Created = 0;
+  Running = 1;
+  Done = 2;
+  Paused = 3;
+  Failed = 4;
+}
+
+message TaskParam {
+  repeated string source_shards = 1;
+  repeated string destination_shards = 2;
+  string vtworker = 3;
+  string keyspace = 4;
+}
+
+message Task {
+  TaskState state = 1;
+  TaskParam param = 2;
+}
+
+message TaskContainer {
+  map<string, Task> tasks = 1;
+}
