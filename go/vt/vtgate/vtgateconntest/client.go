@@ -724,7 +724,7 @@ func (f *fakeVTGateService) MessageAck(ctx context.Context, keyspace string, nam
 	if !reflect.DeepEqual(ids, messageids) {
 		return 0, errors.New("MessageAck ids mismatch")
 	}
-	return 1, nil
+	return messageAckRowsAffected, nil
 }
 
 // querySplitQuery contains all the fields we use to test SplitQuery
@@ -1882,7 +1882,10 @@ func testMessageStreamPanic(t *testing.T, conn *vtgateconn.VTGateConn) {
 
 func testMessageAck(t *testing.T, conn *vtgateconn.VTGateConn) {
 	ctx := newContext()
-	_, err := conn.MessageAck(ctx, "", messageName, messageids)
+	got, err := conn.MessageAck(ctx, "", messageName, messageids)
+	if got != messageAckRowsAffected {
+		t.Errorf("MessageAck: %d, want %d", got, messageAckRowsAffected)
+	}
 	if err != nil {
 		t.Error(err)
 	}
@@ -2635,3 +2638,4 @@ var messageids = []*querypb.Value{
 	sqltypes.MakeString([]byte("1")).ToProtoValue(),
 	sqltypes.MakeString([]byte("3")).ToProtoValue(),
 }
+var messageAckRowsAffected = int64(1)

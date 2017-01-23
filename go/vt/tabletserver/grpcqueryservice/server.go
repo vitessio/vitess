@@ -330,7 +330,9 @@ func (q *query) MessageAck(ctx context.Context, request *querypb.MessageAckReque
 		return nil, vterrors.ToGRPCError(err)
 	}
 	return &querypb.MessageAckResponse{
-		Count: count,
+		Result: &querypb.QueryResult{
+			RowsAffected: uint64(count),
+		},
 	}, nil
 }
 

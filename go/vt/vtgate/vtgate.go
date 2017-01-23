@@ -806,7 +806,8 @@ func (vtg *VTGate) GetSrvKeyspace(ctx context.Context, keyspace string) (*topoda
 	return vtg.resolver.toposerv.GetSrvKeyspace(ctx, vtg.resolver.cell, keyspace)
 }
 
-// MessageStream is part of the vtgate service API.
+// MessageStream is part of the vtgate service API. This is a V2 level API that's sent
+// to the Resolver.
 func (vtg *VTGate) MessageStream(ctx context.Context, keyspace string, shard string, keyRange *topodatapb.KeyRange, name string, sendReply func(*sqltypes.Result) error) error {
 	startTime := time.Now()
 	ltt := topoproto.TabletTypeLString(topodatapb.TabletType_MASTER)
@@ -835,7 +836,9 @@ func (vtg *VTGate) MessageStream(ctx context.Context, keyspace string, shard str
 	return formatError(err)
 }
 
-// MessageAck is part of the vtgate service API.
+// MessageAck is part of the vtgate service API. This is a V3 level API that's sent
+// to the Router. The table name will be resolved using V3 rules, and the routing
+// will make use of vindexes for sharded keyspaces.
 func (vtg *VTGate) MessageAck(ctx context.Context, keyspace string, name string, ids []*querypb.Value) (int64, error) {
 	startTime := time.Now()
 	ltt := topoproto.TabletTypeLString(topodatapb.TabletType_MASTER)

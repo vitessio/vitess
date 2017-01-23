@@ -490,7 +490,8 @@ func (si *SchemaInfo) GetTable(tableName sqlparser.TableIdent) *TableInfo {
 	return si.tables[tableName.String()]
 }
 
-// GetSchema returns a copy of the schema.
+// GetSchema returns the current schema. The Tables are a shared
+// data strucutre and must be treated as read-only.
 func (si *SchemaInfo) GetSchema() map[string]*schema.Table {
 	si.mu.Lock()
 	defer si.mu.Unlock()

@@ -298,7 +298,7 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient,
           e, 'MessageAck', name=name, ids=ids,
           keyspace=keyspace)
 
-    return response.count
+    return response.result.rows_affected
 
 
 def _convert_exception(exc, *args, **kwargs):

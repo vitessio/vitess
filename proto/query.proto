@@ -588,8 +588,10 @@ message MessageAckRequest {
 
 // MessageAckResponse is the response for MessageAck.
 message MessageAckResponse {
-  // count is the number of messages acked.
-  int64 count = 1;
+  // result contains the result of the ack operation.
+  // Since this acts like a DML, only
+  // RowsAffected is returned in the result.
+  QueryResult result = 1;
 }
 
 // SplitQueryRequest is the payload for SplitQuery sent by VTGate to a VTTablet.
