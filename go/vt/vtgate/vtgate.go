@@ -920,6 +920,11 @@ func handleExecuteError(err error, statsKey []string, query map[string]interface
 	case vtrpcpb.ErrorCode_PERMISSION_DENIED:
 		// User violated permissions (TableACL), no need to log.
 		infoErrors.Add("PermissionDenied", 1)
+	case vtrpcpb.ErrorCode_TRANSIENT_ERROR:
+		// Temporary error which should be retried by user. Do not log.
+		// As of 01/2017, only the vttablet transaction throttler and the vtgate
+		// master buffer (if buffer full) return this error.
+		infoErrors.Add("TransientError", 1)
 	default:
 		// Regular error, we will log if caused by vtgate.
 		normalErrors.Add(statsKey, 1)
