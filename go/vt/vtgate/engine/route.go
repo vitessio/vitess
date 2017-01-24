@@ -421,7 +421,7 @@ func (route *Route) execDeleteEqual(vcursor VCursor, queryConstruct *queryinfo.Q
 	if len(ksid) == 0 {
 		return &sqltypes.Result{}, nil
 	}
-	if route.Subquery != "" {
+	if route.Subquery != "" && len(route.Table.Owned) != 0 {
 		err = route.deleteVindexEntries(vcursor, queryConstruct, ks, shard, ksid)
 		if err != nil {
 			return nil, fmt.Errorf("execDeleteEqual: %v", err)
@@ -684,7 +684,7 @@ func (route *Route) deleteVindexEntries(vcursor VCursor, queryConstruct *queryin
 				return err
 			}
 		default:
-			panic("unexpceted")
+			panic("unexpected")
 		}
 	}
 	return nil

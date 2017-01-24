@@ -211,6 +211,24 @@ func TestDeleteEqual(t *testing.T) {
 	if sbc.Queries != nil {
 		t.Errorf("sbc.Queries: %+v, want nil\n", sbc.Queries)
 	}
+
+	sbc.Queries = nil
+	sbclookup.Queries = nil
+	sbclookup.SetResults([]*sqltypes.Result{{}})
+	_, err = routerExec(router, "delete from user_extra where user_id = 1", nil)
+	if err != nil {
+		t.Error(err)
+	}
+	wantQueries = []querytypes.BoundQuery{{
+		Sql:           "delete from user_extra where user_id = 1 /* vtgate:: keyspace_id:166b40b44aba4bd6 */",
+		BindVariables: map[string]interface{}{},
+	}}
+	if !reflect.DeepEqual(sbc.Queries, wantQueries) {
+		t.Errorf("sbc.Queries:\n%+v, want\n%+v\n", sbc.Queries, wantQueries)
+	}
+	if sbclookup.Queries != nil {
+		t.Errorf("sbc.Queries: %+v, want nil\n", sbc.Queries)
+	}
 }
 
 func TestDeleteComments(t *testing.T) {
