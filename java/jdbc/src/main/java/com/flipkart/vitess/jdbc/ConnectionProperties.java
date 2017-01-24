@@ -35,10 +35,6 @@ public class ConnectionProperties {
         "tinyInt1isBit",
         "Should the driver treat the datatype TINYINT(1) as the BIT type (because the server silently converts BIT -> TINYINT(1) when creating tables)?",
         true);
-    private BooleanConnectionProperty transformedBitIsBoolean = new BooleanConnectionProperty(
-        "transformedBitIsBoolean",
-        "If the driver converts TINYINT(1) to a different type, should it use BOOLEAN instead of BIT for future compatibility with MySQL-5.0, as MySQL-5.0 has a BIT type?",
-        false);
     private BooleanConnectionProperty yearIsDateType = new BooleanConnectionProperty(
         "yearIsDateType",
         "Should the JDBC driver treat the MySQL type \"YEAR\" as a java.sql.Date, or as a SHORT?",
@@ -121,14 +117,6 @@ public class ConnectionProperties {
 
     public void setTinyInt1isBit(boolean tinyInt1isBit) {
         this.tinyInt1isBit.setValue(tinyInt1isBit);
-    }
-
-    public boolean getTransformedBitIsBoolean() {
-        return transformedBitIsBoolean.getValueAsBoolean();
-    }
-
-    public void setTransformedBitIsBoolean(boolean transformedBitIsBoolean) {
-        this.transformedBitIsBoolean.setValue(transformedBitIsBoolean);
     }
 
     public boolean getYearIsDateType() {

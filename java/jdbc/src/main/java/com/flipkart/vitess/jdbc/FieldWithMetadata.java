@@ -43,11 +43,7 @@ public class FieldWithMetadata {
         if (connection.isIncludeAllFields()) {
             // Re-map TINYINT(1) as bit or pseudo-boolean
             if (this.javaType == Types.TINYINT && this.field.getColumnLength() == 1 && connection.getTinyInt1isBit()) {
-                if (connection.getTransformedBitIsBoolean()) {
-                    this.javaType = Types.BOOLEAN;
-                } else {
-                    this.javaType = Types.BIT;
-                }
+                this.javaType = Types.BIT;
             }
 
             if (!isNativeNumericType() && !isNativeDateTimeType()) {

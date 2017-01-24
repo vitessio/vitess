@@ -15,6 +15,8 @@ import java.util.Properties;
 
 public class ConnectionPropertiesTest {
 
+    private static final int NUM_PROPS = 6;
+
     @Test
     public void testReflection() throws Exception {
         ConnectionProperties props = new ConnectionProperties();
@@ -24,8 +26,8 @@ public class ConnectionPropertiesTest {
 
         // Just testing that we are properly picking up all the fields defined in the properties
         // For each field we call initializeFrom, which should call getProperty and remove
-        Mockito.verify(info, Mockito.times(7)).getProperty(Mockito.anyString());
-        Mockito.verify(info, Mockito.times(7)).remove(Mockito.anyString());
+        Mockito.verify(info, Mockito.times(NUM_PROPS)).getProperty(Mockito.anyString());
+        Mockito.verify(info, Mockito.times(NUM_PROPS)).remove(Mockito.anyString());
     }
 
     @Test
@@ -35,7 +37,6 @@ public class ConnectionPropertiesTest {
         props.initializeProperties(new Properties());
 
         Assert.assertEquals("tinyInt1isBit", true, props.getTinyInt1isBit());
-        Assert.assertEquals("transformedBitIsBoolean", false, props.getTransformedBitIsBoolean());
         Assert.assertEquals("yearIsDateType", true, props.getYearIsDateType());
         Assert.assertEquals("executeType", Constants.DEFAULT_EXECUTE_TYPE, props.getExecuteType());
         Assert.assertEquals("twopcEnabled", false, props.getTwopcEnabled());
@@ -50,7 +51,6 @@ public class ConnectionPropertiesTest {
         ConnectionProperties props = new ConnectionProperties();
         Properties info = new Properties();
         info.setProperty("tinyInt1isBit", "yes");
-        info.setProperty("transformedBitIsBoolean", "yes");
         info.setProperty("yearIsDateType", "yes");
         info.setProperty("executeType", Constants.QueryExecuteType.STREAM.name());
         info.setProperty("twopcEnabled", "yes");
@@ -60,7 +60,6 @@ public class ConnectionPropertiesTest {
         props.initializeProperties(info);
 
         Assert.assertEquals("tinyInt1isBit", true, props.getTinyInt1isBit());
-        Assert.assertEquals("transformedBitIsBoolean", true, props.getTransformedBitIsBoolean());
         Assert.assertEquals("yearIsDateType", true, props.getYearIsDateType());
         Assert.assertEquals("executeType", Constants.QueryExecuteType.STREAM, props.getExecuteType());
         Assert.assertEquals("twopcEnabled", true, props.getTwopcEnabled());
@@ -73,27 +72,27 @@ public class ConnectionPropertiesTest {
     public void testDriverPropertiesOutput() throws SQLException {
         Properties info = new Properties();
         DriverPropertyInfo[] infos = ConnectionProperties.exposeAsDriverPropertyInfo(info, 0);
-        Assert.assertEquals(7, infos.length);
+        Assert.assertEquals(NUM_PROPS, infos.length);
 
         // Test the expected fields for just 1
-        Assert.assertEquals("executeType", infos[3].name);
+        int indexForFullTest = 2;
+        Assert.assertEquals("executeType", infos[indexForFullTest].name);
         Assert.assertEquals("Query execution type: simple or stream",
-            infos[3].description);
-        Assert.assertEquals(false, infos[3].required);
+            infos[indexForFullTest].description);
+        Assert.assertEquals(false, infos[indexForFullTest].required);
         Constants.QueryExecuteType[] enumConstants = Constants.QueryExecuteType.values();
         String[] allowed = new String[enumConstants.length];
         for (int i = 0; i < enumConstants.length; i++) {
             allowed[i] = enumConstants[i].toString();
         }
-        Assert.assertArrayEquals(allowed, infos[3].choices);
+        Assert.assertArrayEquals(allowed, infos[indexForFullTest].choices);
 
         // Test that name exists for the others, as a sanity check
         Assert.assertEquals("tinyInt1isBit", infos[0].name);
-        Assert.assertEquals("transformedBitIsBoolean", infos[1].name);
-        Assert.assertEquals("yearIsDateType", infos[2].name);
-        Assert.assertEquals(Constants.Property.TWOPC_ENABLED, infos[4].name);
-        Assert.assertEquals(Constants.Property.INCLUDED_FIELDS, infos[5].name);
-        Assert.assertEquals(Constants.Property.TABLET_TYPE, infos[6].name);
+        Assert.assertEquals("yearIsDateType", infos[1].name);
+        Assert.assertEquals(Constants.Property.TWOPC_ENABLED, infos[3].name);
+        Assert.assertEquals(Constants.Property.INCLUDED_FIELDS, infos[4].name);
+        Assert.assertEquals(Constants.Property.TABLET_TYPE, infos[5].name);
     }
 
     @Test

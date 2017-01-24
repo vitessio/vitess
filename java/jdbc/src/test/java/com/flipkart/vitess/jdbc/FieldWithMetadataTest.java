@@ -38,10 +38,6 @@ public class FieldWithMetadataTest extends BaseTest {
         fieldWithMetadata = new FieldWithMetadata(conn, raw);
         Assert.assertEquals(Types.BIT, fieldWithMetadata.getJavaType());
 
-        conn.setTransformedBitIsBoolean(true);
-        fieldWithMetadata = new FieldWithMetadata(conn, raw);
-        Assert.assertEquals(Types.BOOLEAN, fieldWithMetadata.getJavaType());
-
         conn.setIncludedFields(Query.ExecuteOptions.IncludedFields.TYPE_AND_NAME);
         fieldWithMetadata = new FieldWithMetadata(conn, raw);
         Assert.assertEquals(Types.TINYINT, fieldWithMetadata.getJavaType());
