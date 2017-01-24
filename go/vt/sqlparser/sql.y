@@ -874,6 +874,10 @@ value_expression:
   {
     $$ = &CollateExpr{Expr: $1, Charset: string($3)}
   }
+| value_expression COLLATE ID
+  {
+    $$ = &CollateExpr{Expr: $1, Charset: string($3)}
+  }
 | '+'  value_expression %prec UNARY
   {
     if num, ok := $2.(*SQLVal); ok && num.Type == IntVal {
