@@ -98,7 +98,7 @@ func forceEOF(yylex interface{}) {
 %left <empty> '*' '/' '%' MOD
 %left <empty> '^'
 %right <empty> '~' UNARY
-%left <empty> COLLATE
+%right <empty> COLLATE
 %right <empty> INTERVAL
 %nonassoc <empty> '.'
 
@@ -870,9 +870,9 @@ value_expression:
   {
     $$ = &BinaryExpr{Left: $1, Operator: JSONUnquoteExtractOp, Right: $3}
   }
-| value_expression COLLATE value_expression
+| value_expression COLLATE STRING
   {
-    $$ = &BinaryExpr{Left: $1, Operator: CollateStr, Right: $3}
+    $$ = &CollateExpr{Expr: $1, Charset: string($3)}
   }
 | '+'  value_expression %prec UNARY
   {
