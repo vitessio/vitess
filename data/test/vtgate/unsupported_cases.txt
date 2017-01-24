@@ -108,7 +108,7 @@
 
 # Order by uses complex expression
 "select id from user order by id+1"
-"unsupported: scatter and order by"
+"unsupported: complex expression in order by"
 
 # Order by for join, but sequce is too complex
 "select user.col1 as a, user.col2, music.col3 from user join music on user.id = music.id where user.id = 1 order by 1 asc, 3 desc, 2 asc"
