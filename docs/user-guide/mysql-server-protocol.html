@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Vitess / Search</title>
+    <title>Vitess / MySQL Server Protocol</title>
 
         <!-- Webfont -->
     <link href='http://fonts.googleapis.com/css?family=Roboto:400,100,100italic,300,300italic,400italic,500,500italic,700,700italic,900,900italic' rel='stylesheet' type='text/css'>
@@ -35,7 +35,7 @@
 
 
     <!-- metadata -->
-    <meta name="og:title" content="Vitess / Search"/>
+    <meta name="og:title" content="Vitess / MySQL Server Protocol"/>
     <meta name="og:image" content="/images/vitess_logo_with_border.svg"/>
     <meta name="og:description" content="Vitess is a database clustering system for horizontal scaling of MySQL."/>
 
@@ -181,7 +181,7 @@
   <div class="container">
     <div class="row">
       <div class="col-md-9">
-        <h1>Search</h1>
+        <h1>MySQL Server Protocol</h1>
       </div>
     </div>
   </div>
@@ -286,21 +286,133 @@
     </div>
     <div class="col-md-7" id="centerCol">
       <div id="centerTextCol">
-        <div class="reset-box-sizing">
-<script>
-  (function() {
-    var cx = '005097355927880609135:zep-j7kflte';
-    var gcse = document.createElement('script');
-    gcse.type = 'text/javascript';
-    gcse.async = true;
-    gcse.src = (document.location.protocol == 'https:' ? 'https:' : 'http:') +
-        '//cse.google.com/cse.js?cx=' + cx;
-    var s = document.getElementsByTagName('script')[0];
-    s.parentNode.insertBefore(gcse, s);
-  })();
-</script>
-<gcse:search></gcse:search>
-</div>
+        <h1 id="mysql-binary-protocol">MySQL Binary Protocol</h1>
+
+<p>Vitess 2.1 is adding alpha support for the MySQL binary protocol (refered to as the
+<code class="prettyprint">protocol</code> in the rest of this document). This allows existing applications to
+connect to Vitess directly without any change, or new driver / connector.</p>
+
+<p>However, this also has limitations. The RPC protocol traditionnally exposed by
+Vitess is reacher in features, and allows finer grain control of the query
+behaviours.</p>
+
+<p>This document explores the limitations of using this protocol.</p>
+
+<h2 id="protocol-limitations">Protocol Limitations</h2>
+
+<p>The following features are not represented in the protocol.</p>
+
+<h3 id="bind-variables">Bind Variables</h3>
+
+<p>In the traditional connector, queries are sent as plain text to the server. This
+protocol does not support bind variable.</p>
+
+<p>The Prepared Statement part of the API can support bind variables, but it
+requires per-connection state, and using binary bind variables, which are much
+harder to implement. It is also not recommended.</p>
+
+<p>Most database drivers (JDBC, go, ...) support bind variables. These end up being
+implemented as client-side bind variables, where the values are printed in the
+SQL statement by the client, and re-interpreted by the server.</p>
+
+<p>A Vitess Connector, on the other end, can send the Bind Variable map to the
+server along with the query. The query plan is then cached by both vtgate and
+vttablet, providing much better execution times.</p>
+
+<p>Note we added the <code class="prettyprint">normalize_queries</code> command line parameter to vtgate to
+mitigate this problem. With this flag, vtgate will try to extract bind variables
+from full queries. This makes the vttablet side optimized, but still costs extra
+CPU on the vtgate side.</p>
+
+<h3 id="tablet-type">Tablet Type</h3>
+
+<p>The regular Vitess API provides the ability to specify the tablet type to
+target: <code class="prettyprint">master</code>, <code class="prettyprint">replica</code>, <code class="prettyprint">rdonly</code>. The current MySQL connector we created
+only uses the <code class="prettyprint">master</code> type.</p>
+
+<p>Note we could implement a different policy for this.</p>
+
+<h3 id="transaction-type">Transaction Type</h3>
+
+<p>The regular Vitess API provides the ability to specify the transaction type: one
+shard only, or 2PC. The current MYSQL connector uses the transaction type
+provided to vtgate by the <code class="prettyprint">transaction_mode</code>, which usually is the highest
+transaction level allowed by vtgate, not the default one.</p>
+
+<h3 id="streaming-queries">Streaming Queries</h3>
+
+<p>The Vitess RPC protocol supports both non-streaming queries (for web-like
+traffic), and streaming queries (for data analysis traffic). The current MySQL
+connector only uses non-streaming queries.</p>
+
+<p>This could be changed with a flag. Or we could try to be smart: anything within
+a transaction could be non-streaming query, anything outside a transaction could
+be streaming.</p>
+
+<h3 id="extra-query-features">Extra Query Features</h3>
+
+<p>There are even more Vitess specific features in the API, that are not
+represented in the MySQL server API. Event Tokens for cache invalidation, Update
+Stream, Messages, ... These seem somewhat impossible to implement using the
+MySQL binary protocol.</p>
+
+<h3 id="security">Security</h3>
+
+<p>The current RPC protocol uses the security provided by the RPC protocol, TLS for
+gRPC. We then use the certificate name as the user name for our authorization
+(table ACLs).</p>
+
+<p>The MySQL server connector requires user names and passwords, that need to
+maintained, rotated, ... We do not include TLS support yet, although it can be
+easily added. We also need to add the username as authenticated user to use for
+our authorization.</p>
+
+<p>We have plans to provide an LDAP plug-in to authenticate the users (but no firm
+development plan for it yet).</p>
+
+<h3 id="query-multiplexing">Query Multiplexing</h3>
+
+<p>gRPC can multiplex multiple request / responses on the same TCP connection. The
+MySQL server protocol is very synchronous, and can only have one request in
+flight at any given time.</p>
+
+<h2 id="recommended-use-cases">Recommended Use Cases</h2>
+
+<p>With all these limitations, why did we even bother implementing this? Well,
+there is something to be said for drop-in replacement and ease of use:</p>
+
+<ul>
+<li><p>When migrating an existing application to Vitess, it is useful to run Vitess
+on top of an existing database, and only change the server address in the
+client code to point at vtgate, and not change anything else. This allows for
+an easier transition, and then the client code can be update later to use a
+better connector.</p></li>
+<li><p>Some tools only support MySQL server protocol, and not connectors / not Vitess
+(yet!).</p></li>
+<li><p>Most of the mentioned limitations are going to affect production systems
+running at a somewhat high load. For smaller workloads, none of this really
+matters.</p></li>
+<li><p>A lot more programming languages have MySQL connectors than what we support
+already (we have connectors for Java, Python, PHP, Go). They can use the MySQL
+server protocol until a native connector for gRPC can be immplemented.</p></li>
+</ul>
+
+<h2 id="future-features">Future Features</h2>
+
+<p>We are thinking about the following features to make this connector more useful:</p>
+
+<ul>
+<li><p>Add SSL support.</p></li>
+<li><p>Provided more authentication schemes than <code class="prettyprint">mysql_native_password</code>. In
+particular, <code class="prettyprint">sha256</code> seems easy.</p></li>
+<li><p>Use an LDAP client to validate users and passwords on the server side.</p></li>
+<li><p>Implement a lot more DBA features in the protocol. Statements like <code class="prettyprint">SHOW
+TABLES</code> are not supported yet. They will make the MySQL binary protocol much
+more useful.</p></li>
+<li><p>Possibly add hints to the queries so they can use more advanced features. Like
+provide a <code class="prettyprint">commit 2pc</code> syntax to enable 2PC for some commits.</p></li>
+<li><p>Provide direct SQL access for some features like Vitess Messages.</p></li>
+</ul>
 
       </div>
     </div>

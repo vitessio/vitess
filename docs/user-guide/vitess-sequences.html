@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Vitess / Search</title>
+    <title>Vitess / Vitess Sequences</title>
 
         <!-- Webfont -->
     <link href='http://fonts.googleapis.com/css?family=Roboto:400,100,100italic,300,300italic,400italic,500,500italic,700,700italic,900,900italic' rel='stylesheet' type='text/css'>
@@ -35,7 +35,7 @@
 
 
     <!-- metadata -->
-    <meta name="og:title" content="Vitess / Search"/>
+    <meta name="og:title" content="Vitess / Vitess Sequences"/>
     <meta name="og:image" content="/images/vitess_logo_with_border.svg"/>
     <meta name="og:description" content="Vitess is a database clustering system for horizontal scaling of MySQL."/>
 
@@ -181,7 +181,7 @@
   <div class="container">
     <div class="row">
       <div class="col-md-9">
-        <h1>Search</h1>
+        <h1>Vitess Sequences</h1>
       </div>
     </div>
   </div>
@@ -286,21 +286,189 @@
     </div>
     <div class="col-md-7" id="centerCol">
       <div id="centerTextCol">
-        <div class="reset-box-sizing">
-<script>
-  (function() {
-    var cx = '005097355927880609135:zep-j7kflte';
-    var gcse = document.createElement('script');
-    gcse.type = 'text/javascript';
-    gcse.async = true;
-    gcse.src = (document.location.protocol == 'https:' ? 'https:' : 'http:') +
-        '//cse.google.com/cse.js?cx=' + cx;
-    var s = document.getElementsByTagName('script')[0];
-    s.parentNode.insertBefore(gcse, s);
-  })();
-</script>
-<gcse:search></gcse:search>
-</div>
+        <h1 id="vitess-sequences">Vitess Sequences</h1>
+
+<p>This document describes the Vitess Sequences feature, and how to use it.</p>
+
+<h2 id="motivation">Motivation</h2>
+
+<p>MySQL provides the <code class="prettyprint">auto-increment</code> feature to assign monotonically incrementing
+IDs to a column in a table. However, when a table is sharded across multiple
+instances, maintaining the same feature is a lot more tricky.</p>
+
+<p>Vitess Sequences fill that gap:</p>
+
+<ul>
+<li><p>Inspired from the usual SQL sequences (implemented in different ways by
+Oracle, SQL Server and PostgreSQL).</p></li>
+<li><p>Very high throughput for ID creation, using a configurable in-memory block allocation.</p></li>
+<li><p>Transparent use, similar to MySQL auto-increment: when the field is omitted in
+an <code class="prettyprint">insert</code> statement, the next sequence value is used.</p></li>
+</ul>
+
+<h2 id="when-not-to-use-auto-increment">When <em>not</em> to Use Auto-Increment</h2>
+
+<p>Before we go any further, an auto-increment column has limitations and
+drawbacks. let&#39;s explore this topic a bit here.</p>
+
+<h3 id="security-considerations">Security Considerations</h3>
+
+<p>Using auto-increment can leak confidential information about a service. Let&#39;s
+take the example of a web site that store user information, and assign user IDs
+to its users as they sign in. The user ID is then passed in a cookie for all
+subsequent requests.</p>
+
+<p>The client then knows their own user ID. It is now possible to:</p>
+
+<ul>
+<li><p>Try other user IDs and expose potential system vulnerabilities.</p></li>
+<li><p>Get an approximate number of users of the system (using the user ID).</p></li>
+<li><p>Get an approximate number of sign-ins during a week (creating two accounts a
+week apart, and diffing the two IDs).</p></li>
+</ul>
+
+<p>Auto-incrementing IDs should be reserved for either internal applications, or
+exposed to the clients only when safe.</p>
+
+<h3 id="alternatives">Alternatives</h3>
+
+<p>Alternative to auto-incrementing IDs are:</p>
+
+<ul>
+<li><p>use a 64 bits random generator number. Try to insert a new row with that
+ID. If taken (because the statement returns an integrity error), try another
+ID.</p></li>
+<li><p>use a UUID scheme, and generate trully unique IDs.</p></li>
+</ul>
+
+<p>Now that this is out of the way, let&#39;s get to MySQL auto-increment.</p>
+
+<h2 id="mysql-auto-increment-feature">MySQL Auto-increment Feature</h2>
+
+<p>Let&#39;s start by looking at the MySQL auto-increment feature:</p>
+
+<ul>
+<li><p>A row that has no value for the auto-increment value will be given the next ID.</p></li>
+<li><p>The current value is stored in the table metadata.</p></li>
+<li><p>Values may be ‘burned’ (by rolled back transactions).</p></li>
+<li><p>Inserting a row with a given value that is higher than the current value will
+set the current value.</p></li>
+<li><p>The value used by the master in a statement is sent in the replication stream,
+so slaves will have the same value when re-playing the stream.</p></li>
+<li><p>There is no strict guarantee about ordering: two concurrent statements may
+have their commit time in one order, but their auto-incrementing ID in the
+opposite order (as the value for the ID is reserved when the statement is
+issued, not when the transaction is committed).</p></li>
+<li><p>MySQL has multiple options for auto-increment, like only using every N number
+(for multi-master configurations), or performance related features (locking
+that table’s current ID may have concurrency implications).</p></li>
+<li><p>When inserting a row in a table with an auto-increment column, if the value
+for the auto-increment row is not set, the value for the column is returned to
+the client alongside the statement result.</p></li>
+</ul>
+
+<h2 id="vitess-sequences">Vitess Sequences</h2>
+
+<p>An early design was to use a single unsharded database and a table with an
+auto-increment value to generate new values. However, this has serious
+limitations, in particular throughtput, and storing one entry for each value in
+that table, for no reason.</p>
+
+<p>So we decided instead to base sequences on a MySQL table, and use a single value
+in that table to describe which values the sequence should have next. To
+increase performance, we also support block allocation of IDs: each update to
+the MySQL table is only done every N IDs (N being configurable), and in between
+only memory structures in vttablet are updated, making the QPS only limited by
+RPC latency.</p>
+
+<p>In a sharded keyspace, a Sequence&#39;s data is only present in one shard (but its
+schema is in all the shards). We configure which shard has the data by using a
+keyspace_id for the sequence, and route all sequence traffic to the shard that
+hold that keyspace_id. That way we are completely compatible with any horizontal
+resharding.</p>
+
+<p>The final goal is to have Sequences supported with SQL statements, like:</p>
+<div class="highlight"><pre><code class="language-sql" data-lang="sql"><span class="cm">/* DDL support */</span>
+<span class="k">CREATE</span> <span class="n">SEQUENCE</span> <span class="n">my_sequence</span><span class="p">;</span>
+
+<span class="k">SELECT</span> <span class="k">NEXT</span> <span class="n">VALUE</span> <span class="k">FROM</span> <span class="n">my_sequence</span><span class="p">;</span>
+
+<span class="k">ALTER</span> <span class="n">SEQUENCE</span> <span class="n">my_sequence</span> <span class="p">...;</span>
+
+<span class="k">DROP</span> <span class="n">SEQUENCE</span> <span class="n">my_sequence</span><span class="p">;</span>
+
+<span class="k">SHOW</span> <span class="k">CREATE</span> <span class="n">SEQUENCE</span> <span class="n">my_sequence</span><span class="p">;</span>
+</code></pre></div>
+<p>In the current implementation, we support the query access to Sequences, but not
+the administration commands yet.</p>
+
+<h3 id="creating-a-sequence">Creating a Sequence</h3>
+
+<p><em>Note</em>: The names in this section are extracted from the examples/demo sample
+application.</p>
+
+<p>To create a Sequence, a backing table must first be created. The columns for
+that table have to be respected.</p>
+
+<p>This is an example:</p>
+<div class="highlight"><pre><code class="language-sql" data-lang="sql"><span class="k">create</span> <span class="k">table</span> <span class="n">user_seq</span><span class="p">(</span><span class="n">id</span> <span class="nb">int</span><span class="p">,</span> <span class="n">next_id</span> <span class="nb">bigint</span><span class="p">,</span> <span class="k">cache</span> <span class="nb">bigint</span><span class="p">,</span> <span class="k">primary</span> <span class="k">key</span><span class="p">(</span><span class="n">id</span><span class="p">))</span> <span class="k">comment</span> <span class="s1">&#39;vitess_sequence&#39;</span><span class="p">;</span>
+</code></pre></div>
+<p>Then, the Sequence has to be define in the VSchema for that keyspace:</p>
+<div class="highlight"><pre><code class="language-json" data-lang="json"><span class="p">{</span>
+  <span class="nt">&quot;sharded&quot;</span><span class="p">:</span> <span class="kc">false</span><span class="p">,</span>
+  <span class="nt">&quot;tables&quot;</span><span class="p">:</span> <span class="p">{</span>
+    <span class="nt">&quot;user_seq&quot;</span><span class="p">:</span> <span class="p">{</span>
+      <span class="nt">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;sequence&quot;</span>
+    <span class="p">},</span>
+    <span class="err">...</span>
+  <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div>
+<p>And the table it is going to be using it can also reference the Sequence in its VSchema:</p>
+<div class="highlight"><pre><code class="language-json" data-lang="json"><span class="p">{</span>
+  <span class="err">...</span>
+  <span class="nt">&quot;tables&quot;</span> <span class="p">:</span> <span class="p">{</span>
+    <span class="nt">&quot;user&quot;</span><span class="p">:</span> <span class="p">{</span>
+      <span class="nt">&quot;column_vindexes&quot;</span><span class="p">:</span> <span class="p">[</span>
+           <span class="err">...</span>
+      <span class="p">],</span>
+      <span class="nt">&quot;auto_increment&quot;</span><span class="p">:</span> <span class="p">{</span>
+        <span class="nt">&quot;column&quot;</span><span class="p">:</span> <span class="s2">&quot;user_id&quot;</span><span class="p">,</span>
+        <span class="nt">&quot;sequence&quot;</span><span class="p">:</span> <span class="s2">&quot;user_seq&quot;</span>
+      <span class="p">}</span>
+    <span class="p">},</span>
+</code></pre></div>
+<p>After this done (and the Schema has been reloaded on master tablet, and the
+VSchema has been pushed), the sequence can be used.</p>
+
+<h3 id="accessing-a-sequence">Accessing a Sequence</h3>
+
+<p>If a Sequence is used to fill in a column for a table, nothing further needs to
+be done. Just sending no value for the column will make vtgate insert the next
+Sequence value in its place.</p>
+
+<p>It is also possible to access the Sequence directly with the following SQL constructs:</p>
+<div class="highlight"><pre><code class="language-sql" data-lang="sql"><span class="cm">/* Returns the next value for the sequence */</span>
+<span class="k">select</span> <span class="k">next</span> <span class="n">value</span> <span class="k">from</span> <span class="n">my_sequence</span><span class="p">;</span>
+
+<span class="cm">/* Returns the next value for the sequence, and also reserve 4 values after that. */</span>
+<span class="k">select</span> <span class="k">next</span> <span class="mi">5</span> <span class="k">values</span> <span class="k">from</span> <span class="n">my_sequence</span><span class="p">;</span>
+</code></pre></div>
+<h2 id="to-do-list">TO-DO List</h2>
+
+<h3 id="ddl-support">DDL Support</h3>
+
+<p>We want to add DDL support for sequences, as previously mentioned:</p>
+<div class="highlight"><pre><code class="language-sql" data-lang="sql"><span class="k">CREATE</span> <span class="n">SEQUENCE</span> <span class="n">my_sequence</span><span class="p">;</span>
+
+<span class="k">ALTER</span> <span class="n">SEQUENCE</span> <span class="n">my_sequence</span> <span class="p">...;</span>
+
+<span class="k">DROP</span> <span class="n">SEQUENCE</span> <span class="n">my_sequence</span><span class="p">;</span>
+
+<span class="k">SHOW</span> <span class="k">CREATE</span> <span class="n">SEQUENCE</span> <span class="n">my_sequence</span><span class="p">;</span>
+</code></pre></div>
+<p>But for now, the Sequence backing table has to be created and managed using the
+usual schema management features, with the right column definitions and table comment.</p>
 
       </div>
     </div>

@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Vitess / Search</title>
+    <title>Vitess / Row Based Replication</title>
 
         <!-- Webfont -->
     <link href='http://fonts.googleapis.com/css?family=Roboto:400,100,100italic,300,300italic,400italic,500,500italic,700,700italic,900,900italic' rel='stylesheet' type='text/css'>
@@ -35,7 +35,7 @@
 
 
     <!-- metadata -->
-    <meta name="og:title" content="Vitess / Search"/>
+    <meta name="og:title" content="Vitess / Row Based Replication"/>
     <meta name="og:image" content="/images/vitess_logo_with_border.svg"/>
     <meta name="og:description" content="Vitess is a database clustering system for horizontal scaling of MySQL."/>
 
@@ -181,7 +181,7 @@
   <div class="container">
     <div class="row">
       <div class="col-md-9">
-        <h1>Search</h1>
+        <h1>Row Based Replication</h1>
       </div>
     </div>
   </div>
@@ -286,21 +286,149 @@
     </div>
     <div class="col-md-7" id="centerCol">
       <div id="centerTextCol">
-        <div class="reset-box-sizing">
-<script>
-  (function() {
-    var cx = '005097355927880609135:zep-j7kflte';
-    var gcse = document.createElement('script');
-    gcse.type = 'text/javascript';
-    gcse.async = true;
-    gcse.src = (document.location.protocol == 'https:' ? 'https:' : 'http:') +
-        '//cse.google.com/cse.js?cx=' + cx;
-    var s = document.getElementsByTagName('script')[0];
-    s.parentNode.insertBefore(gcse, s);
-  })();
-</script>
-<gcse:search></gcse:search>
-</div>
+        <h1 id="row-based-replication">Row Based Replication</h1>
+
+<p>In Vitess 2.2, we are adding preliminary support for Row Based Replication. This
+document explains how we are managing it and how it affects various Vitess
+features.</p>
+
+<p>See the <a href="/user-guide/vitess-replication.html">Vites and Replication</a> document
+for an introduction on various types of replication and how it affects Vitess.</p>
+
+<h2 id="mysql-row-based-replication">MySQL Row Based Replication</h2>
+
+<p>With Row Based replication, a more compact binary version of the rows affected
+are sent through the replication stream, instead of the SQL statements. The
+slaves then do not spend any time parsing the SQL, or performing any complex SQL
+operations (like <code class="prettyprint">where</code> clauses). They can just apply the new rows directly.</p>
+
+<p>A few binlog events are used:</p>
+
+<ul>
+<li><p>Table Map event: describes a table that is affected by the next
+events. Contains the database and table name, the number of columns, and the
+Type for each column. It does not contain the individual column names, nor the
+flags for each column (so it is impossible to differentiate signed vs unsigned
+integers for instance).</p></li>
+<li><p>Write Rows: equivalent of Insert.</p></li>
+<li><p>Update Rows: change the values of some rows.</p></li>
+<li><p>Delete Rows: delete the provided rows.</p></li>
+</ul>
+
+<p>The
+<a href="https://dev.mysql.com/doc/refman/5.7/en/replication-options-binary-log.html#sysvar_binlog_row_image"><code class="prettyprint">binlog-row-image</code> option</a> can
+be used to control which rows are used to identify the columns for the Update
+and Delete Rows events. The default setting for that option is to log all columns.</p>
+
+<h2 id="vitess-use-of-replication-stream">Vitess Use of Replication Stream</h2>
+
+<p>Vitess uses the Replication Stream in a number of places. This part explains how
+we can use RBR for these.</p>
+
+<h3 id="vttablet-replication-stream-watcher">vttablet Replication Stream Watcher</h3>
+
+<p>This is enabled by the <code class="prettyprint">watch_replication_stream</code> option, and is used by <a href="/user-guide/update-stream.html">Update
+Stream</a>. It only cares about the GTIDs for the events, so it is unaffected by the use of RBR.</p>
+
+<p><em>Note</em>: the current vttablet also reloads the schema when it sees a DDL in the
+stream. See below for more information on this.</p>
+
+<h3 id="update-stream">Update Stream</h3>
+
+<p>The current implementation uses comments in the original SQL (in SQR) to provide
+the primary key of the column that is being changed.</p>
+
+<p>We are changing this to also parse the RBR events, and extract the primary key value.</p>
+
+<p><em>Note</em>: this means we need accurate schema information. See below.</p>
+
+<h3 id="filtered-replication">Filtered Replication</h3>
+
+<p>This is used during horizontal and vertical resharding, to keep source and
+destination shards up to date.</p>
+
+<p>We need to transform the RBR events into SQL statements, filter them based
+either on keyspace_id (horizontal resharding) or table name (vertical
+resharding), and apply them.</p>
+
+<p>For horizontal splits, we need to understand the VSchema to be able to find the
+primary VIndex used for sharding.</p>
+
+<p><em>Note</em>: this again means we need accurate schema information. We could do one of
+two things:</p>
+
+<ul>
+<li><p>Send all statements to all destination shards, and let them do the
+filtering. They can have accurate schema information if they receive and apply
+all schema changes through Filtered Replication.</p></li>
+<li><p>Have the filtering be done on the stream server side, and assume the schema
+doesn&#39;t change in incompatible ways. As this is simpler for now, that&#39;s the
+option we&#39;re going with.</p></li>
+</ul>
+
+<h2 id="database-schema-considerations">Database Schema Considerations</h2>
+
+<h3 id="interpreting-rbr-events">Interpreting RBR Events</h3>
+
+<p>A lot of the work to interpret RBR events correctly requires knowledge of the
+table&#39;s schema. However, this introduces the possibility of inconsistencies
+during schema changes: the current schema for a table might be newer than the
+schema an older replication stream event was using.</p>
+
+<p>For the short term, Vitess will not deal very gracefully with this scenario: we
+will only support the case where the current schema for a table has exactly the
+same columns as all events in the binlog, plus some other optional columns that
+are then unused. That way, it is possible to add columns to tables without
+breaking anything.</p>
+
+<p>Note if the main use case is Filtered Replicaiton for resharding, this
+limitation only exists while the resharding process is running. It is somewhat
+easy to not change the schema at the same time as resharding is on-going.</p>
+
+<h3 id="applying-schema-changes">Applying Schema Changes</h3>
+
+<p>When using
+RBR, <a href="/user-guide/vitess-replication.html#vitess-schema-swap">Schema Swap</a>
+becomes useless, as replication between hosts with different schemas will most
+likely break. This is however an existing limitation that is already known and
+handled by MySQL DBAs.</p>
+
+<p>Vitess at this point does not provide an integrated way of applying involved
+schema changes through RBR. A number of external tools however already exist to
+handle this case, like <a href="https://github.com/github/gh-ost">gh-ost</a>.</p>
+
+<p>We have future plans to:</p>
+
+<ul>
+<li><p>Integrate with a tool like gh-ost to provide a seamless schema change story.</p></li>
+<li><p>Maintain a history of the schema changes that happen on all shards, so events
+can be parsed correctly in all cases.</p></li>
+</ul>
+
+<h2 id="update-stream-extensions">Update Stream Extensions</h2>
+
+<p><a href="/user-guide/update-stream.html">Update Stream</a> can be changed to contain both
+old and new values of the rows being changed. Again the values will depend on
+the schema. We will also make this feature optional, so if the client is using
+this for Primary Key based cache invalidation for instance, no extra unneeded
+data is sent.</p>
+
+<p>This can be used to re-populate a cache with Update Stream, instead of
+invalidating it, by putting the new values directly in there.</p>
+
+<p>Then, using this in conjunction with <code class="prettyprint">binlog-row-image</code> would help provide a
+feature-complete way of always getting all changes on rows. It would also help
+handle Update Stream corner cases that replay events during resharding, when
+switching traffic from old to new shards.</p>
+
+<h2 id="vttablet-simplifications">Vttablet Simplifications</h2>
+
+<p>A lot of the work done by vttablet now is to find the Primary Key of the
+modified rows, to rewrite the queries in an efficient way and tag each statement
+with the Primary Key. None of this may be necessary with RBR.</p>
+
+<p>We plan to eventually add a <code class="prettyprint">rbr_mode</code> flag to vttablet to disable all the things it can
+skip if RBR is used.</p>
 
       </div>
     </div>
