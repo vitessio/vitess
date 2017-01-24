@@ -28,7 +28,6 @@ import java.sql.SQLXML;
 import java.sql.Statement;
 import java.sql.Time;
 import java.sql.Timestamp;
-import java.sql.Types;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.List;
@@ -60,6 +59,10 @@ public class VitessResultSet implements ResultSet {
 
     public VitessResultSet(VitessConnection connection, Cursor cursor) throws SQLException {
         this(connection, cursor, null);
+    }
+
+    public VitessResultSet(Cursor cursor, VitessStatement vitessStatement) throws SQLException {
+        this(vitessStatement.getConnection(), cursor, vitessStatement);
     }
 
     public VitessResultSet(VitessConnection connection, Cursor cursor, VitessStatement vitessStatement) throws SQLException {

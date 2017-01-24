@@ -13,7 +13,6 @@ import com.youtube.vitess.proto.Topodata;
 import com.youtube.vitess.proto.Vtrpc;
 
 import java.sql.BatchUpdateException;
-import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.SQLFeatureNotSupportedException;
@@ -136,7 +135,7 @@ public class VitessStatement implements Statement {
             if (null == cursor) {
                 throw new SQLException(Constants.SQLExceptionMessages.METHOD_CALL_FAILED);
             }
-            this.vitessResultSet = new VitessResultSet(vitessConnection, cursor, this);
+            this.vitessResultSet = new VitessResultSet(cursor, this);
         } catch (SQLRecoverableException ex) {
             this.vitessConnection.setVtGateTx(null);
             throw ex;
@@ -324,7 +323,7 @@ public class VitessStatement implements Statement {
         return this.resultSetType;
     }
 
-    public Connection getConnection() throws SQLException {
+    public VitessConnection getConnection() throws SQLException {
         checkOpen();
         return vitessConnection;
     }
@@ -498,7 +497,7 @@ public class VitessStatement implements Statement {
         if (showSql) {
             cursor = this.executeShow(sql);
             if (!(null == cursor || null == cursor.getFields() || cursor.getFields().isEmpty())) {
-                this.vitessResultSet = new VitessResultSet(vitessConnection, cursor, this);
+                this.vitessResultSet = new VitessResultSet(cursor, this);
                 return true;
             }
             throw new SQLException(Constants.SQLExceptionMessages.METHOD_CALL_FAILED);
