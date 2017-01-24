@@ -614,7 +614,7 @@ func TestValid(t *testing.T) {
 	}, {
 		input: "select /* GE false */ 1 from t where a >= false",
 	}, {
-		input: "select * from t order by a collate utf8_general_ci",
+		input:  "select * from t order by a collate utf8_general_ci",
 		output: "select * from t order by a collate utf8_general_ci asc",
 	}, {
 		input: "select k collate latin1_german2_ci as k1 from t1 order by k1 asc",
@@ -761,6 +761,67 @@ func TestCaseSensitivity(t *testing.T) {
 	}
 }
 
+func TestKeywords(t *testing.T) {
+	validSQL := []struct {
+		input  string
+		output string
+	}{{
+		input:  "select current_timestamp",
+		output: "select current_timestamp() from dual",
+	}, {
+		input: "update t set a = current_timestamp()",
+	}, {
+		input:  "select a, current_date from t",
+		output: "select a, current_date() from t",
+	}, {
+		input:  "insert into t(a, b) values (current_date, current_date())",
+		output: "insert into t(a, b) values (current_date(), current_date())",
+	}, {
+		input: "select * from t where a > utc_timestmp()",
+	}, {
+		input:  "update t set b = utc_timestamp + 5",
+		output: "update t set b = utc_timestamp() + 5",
+	}, {
+		input:  "select utc_time, utc_date",
+		output: "select utc_time(), utc_date() from dual",
+	}, {
+		input:  "select 1 from dual where localtime > utc_time",
+		output: "select 1 from dual where localtime() > utc_time()",
+	}, {
+		input:  "update t set a = localtimestamp(), b = utc_timestamp",
+		output: "update t set a = localtimestamp(), b = utc_timestamp()",
+	}, {
+		input: "insert into t(a) values (unix_timestamp)",
+	}, {
+		input: "select replace(a, 'foo', 'bar') from t",
+	}, {
+		input: "update t set a = replace('1234', '2', '1')",
+	}, {
+		input: "insert into t(a, b) values ('foo', 'bar') on duplicate key update a = replace(hex('foo'), 'f', 'b')",
+	}, {
+		input: "update t set a = left('1234', 3)",
+	}, {
+		input: "select left(a, 5) from t",
+	}, {
+		input: "insert into t(a, b) values (left('foo', 1), 'b')",
+	}}
+
+	for _, tcase := range validSQL {
+		if tcase.output == "" {
+			tcase.output = tcase.input
+		}
+		tree, err := Parse(tcase.input)
+		if err != nil {
+			t.Errorf("input: %s, err: %v", tcase.input, err)
+			continue
+		}
+		out := String(tree)
+		if out != tcase.output {
+			t.Errorf("out: %s, want %s", out, tcase.output)
+		}
+	}
+}
+
 func TestErrors(t *testing.T) {
 	invalidSQL := []struct {
 		input  string
@@ -849,6 +910,12 @@ func TestErrors(t *testing.T) {
 	}, {
 		input:  "insert into a values (select * from b)",
 		output: "syntax error at position 29 near 'select'",
+	}, {
+		input:  "select database",
+		output: "syntax error at position 17",
+	}, {
+		input:  "select mod from t",
+		output: "syntax error at position 16 near 'from'",
 	}}
 	for _, tcase := range invalidSQL {
 		if tcase.output == "" {

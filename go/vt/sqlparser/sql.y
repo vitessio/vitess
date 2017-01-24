@@ -113,7 +113,10 @@ func forceEOF(yylex interface{}) {
 %token <empty> SHOW DESCRIBE EXPLAIN
 
 // Functions
-%token <empty> CURRENT_TIMESTAMP DATABASE
+%token <empty> CURRENT_TIMESTAMP DATABASE CURRENT_DATE
+%token <empty> UNIX_TIMESTAMP CURRENT_TIME LOCALTIME LOCALTIMESTAMP
+%token <empty> UTC_DATE UTC_TIME UTC_TIMESTAMP
+%token <empty> REPLACE
 
 // MySQL reserved words that are unused by this grammar will map to this token.
 %token <empty> UNUSED
@@ -154,7 +157,7 @@ func forceEOF(yylex interface{}) {
 %type <valExpr> value_expression_opt else_expression_opt
 %type <valExprs> group_by_opt
 %type <boolExpr> having_opt
-%type <colIdent> keyword_func
+%type <colIdent> keyword_func keyword
 %type <orderBy> order_by_opt order_list
 %type <order> order
 %type <str> asc_desc_opt
@@ -939,27 +942,78 @@ value_expression:
   {
     $$ = &FuncExpr{Name: $1, Exprs: $3}
   }
+| keyword
+  {
+    $$ = &FuncExpr{Name: $1}
+  }
 | case_expression
   {
     $$ = $1
   }
 
-keyword_func:
-  IF
-  {
-    $$ = NewColIdent("if")
-  }
-| CURRENT_TIMESTAMP
+// These keywords can be used as functions, with parenthesis, or
+// as standalone keywords -- i.e. CURRENT_DATE and CURRENT_DATE()
+keyword:
+  CURRENT_TIMESTAMP
   {
     $$ = NewColIdent("current_timestamp")
+  }
+| CURRENT_DATE
+  {
+    $$ = NewColIdent("current_date")
+  }
+| CURRENT_TIME
+  {
+    $$ = NewColIdent("current_time")
+  }
+| UTC_TIMESTAMP
+  {
+    $$ = NewColIdent("utc_timestamp")
+  }
+| UTC_TIME
+  {
+    $$ = NewColIdent("utc_time")
+  }
+| UTC_DATE
+  {
+    $$ = NewColIdent("utc_date")
+  }
+| LOCALTIME
+  {
+    $$ = NewColIdent("localtime")
+  }
+| LOCALTIMESTAMP
+  {
+    $$ = NewColIdent("localtimestamp")
+  }
+
+// These keywords require parenthesis, and possibly arguments,
+// to be considered functions -- i.e. DATABASE(), or LEFT('foo', 1)
+keyword_func:
+  keyword
+| IF
+  {
+    $$ = NewColIdent("if")
   }
 | DATABASE
   {
     $$ = NewColIdent("database")
   }
+| UNIX_TIMESTAMP
+  {
+    $$ = NewColIdent("unix_timestamp")
+  }
 | MOD
   {
     $$ = NewColIdent("mod")
+  }
+| REPLACE
+  {
+    $$ = NewColIdent("replace")
+  }
+| LEFT
+  {
+    $$ = NewColIdent("left")
   }
 
 case_expression:
