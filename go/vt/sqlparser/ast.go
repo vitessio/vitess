@@ -1458,8 +1458,7 @@ type CollateExpr struct {
 
 // Format formats the node.
 func (node *CollateExpr) Format(buf *TrackedBuffer) {
-	s := sqltypes.MakeString([]byte(node.Charset))
-	buf.Myprintf("%v collate %s", node.Expr, s)
+	buf.Myprintf("%v collate %s", node.Expr, node.Charset)
 }
 
 // WalkSubtree walks the nodes of the subtree.
