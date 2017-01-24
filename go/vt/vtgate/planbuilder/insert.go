@@ -23,7 +23,7 @@ func buildInsertPlan(ins *sqlparser.Insert, vschema VSchema) (*engine.Route, err
 	if !table.Keyspace.Sharded {
 		return buildInsertUnshardedPlan(ins, table, vschema)
 	}
-	if ins.Replace {
+	if ins.Action == sqlparser.ReplaceStr {
 		return nil, errors.New("unsupported: REPLACE INTO with sharded schema")
 	}
 	return buildInsertShardedPlan(ins, table)
