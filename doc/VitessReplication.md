@@ -140,9 +140,10 @@ process!), this does not add much more complexity to a running system.
 
 ## Update Stream
 
-Since the replication stream also contains comments of which primary key is
+Since the SBR replication stream also contains comments of which primary key is
 affected by a change, it is possible to look at the replication stream and know
-exactly what objects have changed. This Vitess feature is called Update Stream.
+exactly what objects have changed. This Vitess feature is
+called [Update Stream](/user-guide/update-stream.html).
 
 By subscribing to the Update Stream for a given shard, one can know what values
 change. This stream can be used to create a stream of data changes (export to an
@@ -152,8 +153,8 @@ Note: the Update Stream only reliably contains the primary key values of the
 rows that have changed, not the actual values for all columns. To get these
 values, it is necessary to re-query the database.
 
-We have plans to make this Update Stream feature more consistent, very
-resilient, fast, and transparent to sharding.
+We have plans to make this [Update Stream](/user-guide/update-stream.html)
+feature more consistent, very resilient, fast, and transparent to sharding.
 
 ## Semi-Sync
 
@@ -210,62 +211,6 @@ master.
 
 ## Appendix: Adding support for RBR in Vitess
 
-This part describe the extend of the work required to add support for Row-Based
-Replication to Vitess.
+We are in the process of adding support for RBR in Vitess.
 
-The main two places where we depend on SBR at the moment are Filtered
-Replication (used during resharding), and Update Stream.
-
-For query serving and reparenting, Vitess does not depend on SBR vs RBR, and can
-work as is now.
-
-Schema Swap (see description earlier) does not depend on RBR. However, the way
-it works, it may cause imcompatible schemas between master and slaves, when the
-change is not as simple as adding a column at the end of a table, or creating a
-new table. So it is not recommended in most cases.
-
-### Filtered Replication
-
-The purpose of Filtered Replication is to filter the SQL statements during
-horizontal or vertical resharding. To achieve this, when we commit any statement
-on a master, we also add a comment that describes the affected table, and the
-value of the affected sharding key. That way, to see if a statement needs to be
-applied, we just read the comment:
-
-* For vertical splits, we extract the table name. We then see if that table is
-  being moved.
-
-* For horizontal splits, we extract the value of the sharding key, and see if it
-  is in range for the destination.
-
-When using RBR the comments are gone. Instead, we just get the table name, the
-primary key of the modified row, and a binary description of the modified other
-columns for that row. The table name is perfectly enough for vertical splits to
-work. However, we don't have the sharding key for horizontal splits. Our current
-thinking is as follows:
-
-* If the sharding key can be computed from the primary key columns (using a
-  simple vindex), then we can get it back from the provided data.
-  
-* If not, we can still provide valuable workarounds:
-
-  * for INSERT statements, all the columns are specified, so we can compute the
-    sharding key.
- 
-  * for DELETE and UPDATE statements, we can just apply them all to all
-    destination shards. If the data is not present, no harm will be done. If the
-    data is there, then it will be updated correctly.
-
-### Update Stream
-
-The Update Stream feature provides a stream of the primary keys of the rows that
-are changing, along with an Event Token to describe the timing of the changes.
-
-The current feature reads the comments left by the Query Service on the master
-for each DML, and forwards them. Since the only thing we're interested in is the
-Primary Key, we could just as well extract the values from a RBR statement. This
-would not be a lot of work at all.
-
-Additionally, RBR statements contain the entire row that is changing. We could
-also add this as optional fields to the UpdateStream response, and then provide
-a full stream, containing both Primary Key and data.
+See [this document](/user-guide/row-based-replication.html)) for more information.
