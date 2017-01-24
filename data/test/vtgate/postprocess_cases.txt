@@ -486,6 +486,59 @@
   }
 }
 
+# Order by join qualified by collate operator
+"select user.col1 as a, user_extra.col2 as b from user inner join user_extra on user_extra.user_id = 5 where user.id = 5 order by a collate utf8_general_ci, b collate utf8_general_ci"
+{
+   "Original":"select user.col1 as a, user_extra.col2 as b from user inner join user_extra on user_extra.user_id = 5 where user.id = 5 order by a collate utf8_general_ci, b collate utf8_general_ci",
+   "Instructions":{
+      "Opcode":"Join",
+      "Left":{
+         "Opcode":"SelectEqualUnique",
+         "Keyspace":{
+            "Name":"user",
+            "Sharded":true
+         },
+         "Query":"select user.col1 as a from user where user.id = 5 order by a collate utf8_general_ci asc",
+         "FieldQuery":"select user.col1 as a from user where 1 != 1",
+         "Vindex":"user_index",
+         "Values":5
+      },
+      "Right":{
+         "Opcode":"SelectEqualUnique",
+         "Keyspace":{
+            "Name":"user",
+            "Sharded":true
+         },
+         "Query":"select user_extra.col2 as b from user_extra where user_extra.user_id = 5 order by b collate utf8_general_ci asc",
+         "FieldQuery":"select user_extra.col2 as b from user_extra where 1 != 1",
+         "Vindex":"user_index",
+         "Values":5
+      },
+      "Cols":[
+         -1,
+         1
+      ]
+   }
+}
+
+# Group by with collate operator
+"select user.col1 as a from user where user.id = 5 group by a collate utf8_general_ci"
+{
+   "Original":"select user.col1 as a from user where user.id = 5 group by a collate utf8_general_ci",
+   "Instructions":{
+      "Opcode":"SelectEqualUnique",
+      "Keyspace":{
+         "Name":"user",
+         "Sharded":true
+      },
+      "Query":"select user.col1 as a from user where user.id = 5 group by a collate utf8_general_ci",
+      "FieldQuery":"select user.col1 as a from user where 1 != 1 group by a collate utf8_general_ci",
+      "Vindex":"user_index",
+      "Values":5
+   }
+}
+
+
 # LIMIT
 "select col1 from user where id = 1 limit 1"
 {

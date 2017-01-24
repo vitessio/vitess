@@ -122,10 +122,6 @@
 "select user.col1 as a, user_extra.col2 as b from user left join user_extra on user_extra.user_id = 5 where user.id = 5 order by 1, 2"
 "unsupported: complex left join and order by"
 
-# Order by and inner join
-"select user.col1 as a, user_extra.col2 as b from user inner join user_extra on user_extra.user_id = 5 where user.id = 5 order by user.col1 collate utf8_general_ci"
-"unsupported: complex left join and order by"
-
 # limit for joins
 "select user.col from user join user_extra limit 1"
 "unsupported: limits with complex joins"
