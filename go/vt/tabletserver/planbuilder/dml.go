@@ -19,7 +19,7 @@ func analyzeUpdate(upd *sqlparser.Update, getTable TableGetter) (plan *ExecPlan,
 		FullQuery: GenerateFullQuery(upd),
 	}
 
-	tableName := sqlparser.GetTableName(upd.Table)
+	tableName := sqlparser.GetTableName(upd.Table.Expr)
 	if tableName.IsEmpty() {
 		plan.Reason = ReasonTable
 		return plan, nil
@@ -101,7 +101,7 @@ func analyzeSet(set *sqlparser.Set) (plan *ExecPlan) {
 
 func analyzeUpdateExpressions(exprs sqlparser.UpdateExprs, pkIndex *schema.Index) (pkValues []interface{}, err error) {
 	for _, expr := range exprs {
-		index := pkIndex.FindColumn(expr.Name)
+		index := pkIndex.FindColumn(expr.Name.Name)
 		if index == -1 {
 			continue
 		}
@@ -337,7 +337,7 @@ func analyzeInsertNoType(ins *sqlparser.Insert, plan *ExecPlan, tableInfo *schem
 	plan.OuterQuery = sqlparser.GenerateParsedQuery(&newins)
 	upd := &sqlparser.Update{
 		Comments: ins.Comments,
-		Table:    ins.Table,
+		Table:    &sqlparser.AliasedTableExpr{Expr: ins.Table},
 		Exprs:    updateExprs,
 	}
 	plan.UpsertQuery = GenerateUpdateOuterQuery(upd)

@@ -27,8 +27,10 @@ func buildUpdatePlan(upd *sqlparser.Update, vschema VSchema) (*engine.Route, err
 	route := &engine.Route{
 		Query: generateQuery(upd),
 	}
+	updateTable, _ := upd.Table.Expr.(*sqlparser.TableName)
+
 	var err error
-	route.Table, err = vschema.Find(upd.Table.Qualifier, upd.Table.Name)
+	route.Table, err = vschema.Find(updateTable.Qualifier, updateTable.Name)
 	if err != nil {
 		return nil, err
 	}
@@ -63,7 +65,7 @@ func generateQuery(statement sqlparser.Statement) string {
 func isIndexChanging(setClauses sqlparser.UpdateExprs, colVindexes []*vindexes.ColumnVindex) bool {
 	for _, assignment := range setClauses {
 		for _, vcol := range colVindexes {
-			if vcol.Column.Equal(assignment.Name) {
+			if vcol.Column.Equal(assignment.Name.Name) {
 				return true
 			}
 		}
