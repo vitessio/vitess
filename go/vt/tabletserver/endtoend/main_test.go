@@ -89,6 +89,7 @@ create table vitess_d(eid bigint default null, id int default null);
 create table vitess_e(eid bigint auto_increment, id int default 1, name varchar(128) default 'name', foo varchar(128) default null, primary key(eid, id, name));
 create table vitess_f(vb varbinary(16) default 'ab', id int default null, primary key(vb));
 create table upsert_test(id1 int default 0, id2 int default null, primary key (id1));
+create table replace_test(id int, val1 int, val2 int, primary key(id), unique index v1(val1), unique index v2(val2));
 create unique index id2_idx on upsert_test(id2);
 insert into vitess_a(eid, id, name, foo) values(1, 1, 'abcd', 'efgh'), (1, 2, 'bcde', 'fghi');
 insert into vitess_b(eid, id) values(1, 1), (1, 2);
@@ -147,7 +148,7 @@ var tableACLConfig = `{
     },
     {
       "name": "vitess",
-      "table_names_or_prefixes": ["vitess_a", "vitess_b", "vitess_c", "dual", "vitess_d", "vitess_temp", "vitess_e", "vitess_f", "vitess_mixed_case", "upsert_test", "vitess_strings", "vitess_fracts", "vitess_ints", "vitess_misc", "vitess_big", "vitess_view", "vitess_json"],
+      "table_names_or_prefixes": ["vitess_a", "vitess_b", "vitess_c", "dual", "vitess_d", "vitess_temp", "vitess_e", "vitess_f", "vitess_mixed_case", "upsert_test", "replace_test", "vitess_strings", "vitess_fracts", "vitess_ints", "vitess_misc", "vitess_big", "vitess_view", "vitess_json"],
       "readers": ["dev"],
       "writers": ["dev"],
       "admins": ["dev"]

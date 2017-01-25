@@ -155,7 +155,11 @@ func (ti *TableInfo) fetchIndexes(conn *DBConn, sqlTableName string) error {
 	for _, row := range indexes.Rows {
 		indexName := row[2].String()
 		if currentName != indexName {
-			currentIndex = ti.AddIndex(indexName)
+			var unique bool
+			if row[1].String() == "0" {
+				unique = true
+			}
+			currentIndex = ti.AddIndex(indexName, unique)
 			currentName = indexName
 		}
 		var cardinality uint64

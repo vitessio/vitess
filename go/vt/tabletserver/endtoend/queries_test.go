@@ -1236,6 +1236,46 @@ func TestNocacheCases(t *testing.T) {
 			},
 		},
 		&framework.MultiCase{
+			Name: "replace - affects multiple unique key rows",
+			Cases: []framework.Testable{
+				framework.TestQuery("begin"),
+				&framework.TestCase{
+					Query: "insert into replace_test values(1, 2, 3), (2, 3, 2)",
+					Rewritten: []string{
+						"insert into replace_test values (1, 2, 3), (2, 3, 2) /* _stream replace_test (id ) (1 ) (2 )",
+					},
+					RowsAffected: 2,
+				},
+				framework.TestQuery("commit"),
+				&framework.TestCase{
+					Query: "select * from replace_test",
+					Result: [][]string{
+						{"1", "2", "3"},
+						{"2", "3", "2"},
+					},
+				},
+				framework.TestQuery("begin"),
+				&framework.TestCase{
+					Query: "replace into replace_test values(3, 2, 2)",
+					Rewritten: []string{
+						"replace into replace_test values (3, 2, 2) /* _stream replace_test (id1 ) (3 )",
+					},
+					RowsAffected: 2,
+				},
+				framework.TestQuery("commit"),
+				&framework.TestCase{
+					Query: "select * from replace_test",
+					Result: [][]string{
+						{"3", "2", "2"},
+					},
+				},
+				framework.TestQuery("commit"),
+				framework.TestQuery("begin"),
+				framework.TestQuery("delete from replace_test"),
+				framework.TestQuery("commit"),
+			},
+		},
+		&framework.MultiCase{
 			Name: "update",
 			Cases: []framework.Testable{
 				framework.TestQuery("begin"),
