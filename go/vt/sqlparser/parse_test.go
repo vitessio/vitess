@@ -214,6 +214,9 @@ func TestValid(t *testing.T) {
 	}, {
 		input: "select /* or */ 1 from t where a = b or a = c",
 	}, {
+		input: "select /* || */ 1 from t where a = b || a = c",
+		output: "select /* || */ 1 from t where a = b or a = c",
+	}, {
 		input: "select /* not */ 1 from t where not a = b",
 	}, {
 		input: "select /* bool is */ 1 from t where a = b is null",
@@ -633,6 +636,9 @@ func TestValid(t *testing.T) {
 	}, {
 		input: "SELECT k FROM t1 GROUP BY k HAVING k = 'Müller' COLLATE latin1_german2_ci",
 		output: "select k from t1 group by k having k = 'Müller' collate latin1_german2_ci",
+	}, {
+		input: "SELECT k FROM t1 join t2 order by a COLLATE latin1_german2_ci, b COLLATE latin1_german2_ci",
+		output: "select k from t1 join t2 order by a collate latin1_german2_ci asc, b collate latin1_german2_ci asc",
 	}}
 	for _, tcase := range validSQL {
 		if tcase.output == "" {

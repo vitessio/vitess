@@ -108,7 +108,7 @@
 
 # Order by uses complex expression
 "select id from user order by id+1"
-"unsupported: complex expression in order by"
+"unsupported: scatter and order by"
 
 # Order by for join, but sequce is too complex
 "select user.col1 as a, user.col2, music.col3 from user join music on user.id = music.id where user.id = 1 order by 1 asc, 3 desc, 2 asc"
@@ -121,6 +121,14 @@
 # Order by and left join
 "select user.col1 as a, user_extra.col2 as b from user left join user_extra on user_extra.user_id = 5 where user.id = 5 order by 1, 2"
 "unsupported: complex left join and order by"
+
+# Order by column number with collate
+"select user.col1 as a from user order by 1 collate utf8_general_ci"
+"unsupported: complex order by"
+
+#Order by for join, but order by is complex
+"select user.col1 as a, user_extra.col2 as b from user join user_extra on user_extra.user_id = 5 where user.id = 5 order by a+b"
+"unsupported: complex join and complex order by"
 
 # limit for joins
 "select user.col from user join user_extra limit 1"

@@ -869,6 +869,7 @@ func (ListArg) iExpr()         {}
 func (*BinaryExpr) iExpr()     {}
 func (*UnaryExpr) iExpr()      {}
 func (*IntervalExpr) iExpr()   {}
+func (*CollateExpr) iExpr()    {}
 func (*FuncExpr) iExpr()       {}
 func (*CaseExpr) iExpr()       {}
 
@@ -997,7 +998,6 @@ const (
 	NotRegexpStr         = "not regexp"
 	JSONExtractOp        = "->"
 	JSONUnquoteExtractOp = "->>"
-	CollateStr 	     = "collate"
 )
 
 // Format formats the node.
@@ -1116,6 +1116,7 @@ func (ListArg) iValExpr()       {}
 func (*BinaryExpr) iValExpr()   {}
 func (*UnaryExpr) iValExpr()    {}
 func (*IntervalExpr) iValExpr() {}
+func (*CollateExpr)  iValExpr() {}
 func (*FuncExpr) iValExpr()     {}
 func (*CaseExpr) iValExpr()     {}
 func (BoolVal) iValExpr()       {}
@@ -1446,6 +1447,28 @@ func (node *IntervalExpr) WalkSubtree(visit Visit) error {
 		visit,
 		node.Expr,
 		node.Unit,
+	)
+}
+
+// CollateExpr represents dynamic collate operator.
+type CollateExpr struct {
+	Expr Expr
+	Charset string
+}
+
+// Format formats the node.
+func (node *CollateExpr) Format(buf *TrackedBuffer) {
+	buf.Myprintf("%v collate %s", node.Expr, node.Charset)
+}
+
+// WalkSubtree walks the nodes of the subtree.
+func (node *CollateExpr) WalkSubtree(visit Visit) error {
+	if node == nil {
+		return nil
+	}
+	return Walk(
+		visit,
+		node.Expr,
 	)
 }
 
