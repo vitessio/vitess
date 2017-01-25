@@ -636,6 +636,7 @@ func TestValid(t *testing.T) {
 		input: "select k collate 'latin1_german2_ci' as k1 from t1 order by k1 asc",
 		output: "select k collate latin1_german2_ci as k1 from t1 order by k1 asc",
 	}}
+
 	for _, tcase := range validSQL {
 		if tcase.output == "" {
 			tcase.output = tcase.input
