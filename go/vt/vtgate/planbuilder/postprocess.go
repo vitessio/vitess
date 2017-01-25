@@ -117,7 +117,7 @@ func pushOrderBy(orderBy sqlparser.OrderBy, bldr builder) error {
 						rb = curRoute
 						return true, nil
 					}
-					return false, errors.New("unsupported: complex join and complex order by clause")
+					return false, errors.New("unsupported: complex join and complex order by")
 				}
 				return true, nil
 			}, order.Expr)
