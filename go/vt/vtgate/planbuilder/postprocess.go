@@ -81,6 +81,9 @@ func pushOrderBy(orderBy sqlparser.OrderBy, bldr builder) error {
 		// we have to build a new node.
 		pushOrder := order
 		var rb *route
+
+
+
 		if node, ok := order.Expr.(*sqlparser.SQLVal); ok && node.Type == sqlparser.IntVal {
 			num, err := strconv.ParseInt(string(node.Val), 0, 64)
 			if err != nil {
@@ -124,6 +127,9 @@ func pushOrderBy(orderBy sqlparser.OrderBy, bldr builder) error {
 			if err != nil {
 				return err
 			}
+		}
+		if rb == nil{
+			return errors.New("unsupported: complex order by")
 		}
 		if rb.Order() < routeNumber {
 			return errors.New("unsupported: complex join and out of sequence order by")
