@@ -17,6 +17,7 @@ import yaml
 
 import gke
 import sandbox_utils
+import sandlet
 
 
 def parse_config(
@@ -56,7 +57,7 @@ class Sandbox(object):
     self.cluster_config = cluster_config[0]
     self.cluster_env = self._cluster_envs[self.cluster_type]
     self.cluster = self.cluster_env.Cluster(self.cluster_config)
-    self.sandlets = []
+    self.sandlets = sandlet.ComponentGroup()
 
   def set_log_dir(self, log_dir_in=None):
     if log_dir_in:
@@ -85,14 +86,10 @@ class Sandbox(object):
     self.cluster.stop()
 
   def start_sandlets(self, sandlets=None):
-    sandlet_graph = sandbox_utils.create_dependency_graph(
-        self.sandlets, False, sandlets)
-    sandbox_utils.execute_dependency_graph(sandlet_graph, True)
+    self.sandlets.execute(sandlet.StartAction, sandlets)
 
   def stop_sandlets(self, sandlets=None):
-    sandlet_graph = sandbox_utils.create_dependency_graph(
-        self.sandlets, True, sandlets)
-    sandbox_utils.execute_dependency_graph(sandlet_graph, False)
+    self.sandlets.execute(sandlet.StopAction, sandlets)
 
   def print_banner(self):
     pass

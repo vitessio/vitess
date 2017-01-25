@@ -1,10 +1,8 @@
 """Sandbox util functions."""
 
 import datetime
-import logging
 import os
 import random
-import time
 
 
 def fix_shard_name(shard_name):
@@ -15,7 +13,7 @@ def fix_shard_name(shard_name):
   Example: -80 becomes x80, 80- becomes 80x.
 
   Args:
-    shard_name: A standard shard name (like -80) (string).
+    shard_name: string, A standard shard name (like -80).
 
   Returns:
     A fixed shard name suitable for kubernetes (string).
@@ -25,69 +23,6 @@ def fix_shard_name(shard_name):
   if shard_name.endswith('-'):
     return '%sx' % shard_name[:-1]
   return shard_name
-
-
-class DependencyError(Exception):
-  pass
-
-
-def create_dependency_graph(objs, reverse=False, subgraph=None):
-  """Creates a dependency graph based on dependencies attributes.
-
-  Args:
-    objs: A list of objects where each one has an attribute named dependencies.
-    reverse: Whether to reverse the dependencies (bool).
-    subgraph: A list of object names to limit the graph to ([string]).
-
-  Returns:
-    A map of object names to a pair of a list of dependent object names and
-    the object itself {string: ([string], obj)}
-  """
-  subgraph = subgraph or [x.name for x in objs]
-  graph = {}
-  for obj in objs:
-    if obj.name not in subgraph:
-      continue
-    if reverse:
-      dependencies = [a.name for a in objs
-                      if obj.name in a.dependencies and a.name in subgraph]
-    else:
-      dependencies = list(set(obj.dependencies).intersection(subgraph))
-    graph[obj.name] = {
-        'dependencies': dependencies,
-        'object': obj,
-    }
-  return graph
-
-
-def execute_dependency_graph(graph, start):
-  while graph:
-    components = [x['object'] for x in graph.values()
-                  if not x['dependencies']]
-    if not components:
-      # This is a cycle
-      raise DependencyError(
-          'Cycle detected: remaining dependency graph: %s.' % graph)
-    for component in components:
-      if start:
-        component.start()
-      else:
-        component.stop()
-      del graph[component.name]
-      for _, v in graph.items():
-        if component.name in v['dependencies']:
-          v['dependencies'].remove(component.name)
-    while True:
-      if start:
-        unfinished_components = [x.name for x in components if not x.is_up()]
-      else:
-        unfinished_components = [
-            x.name for x in components if not x.is_down()]
-      if not unfinished_components:
-        break
-      logging.info(
-          'Waiting to be finished: %s.', ', '.join(unfinished_components))
-      time.sleep(10)
 
 
 def create_log_file(log_dir, filename):
@@ -101,8 +36,8 @@ def create_log_file(log_dir, filename):
            init.INFO to point to it.
 
   Args:
-    log_dir: Base path for logs (string).
-    filename: The base name of the log file (string).
+    log_dir: string, Base path for logs.
+    filename: string, The base name of the log file.
 
   Returns:
     The opened file handle.
