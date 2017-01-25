@@ -469,6 +469,160 @@
 "select col from user order by 2"
 "order by column number out of range"
 
+# Order by, '*' expression with qualified reference and using collate
+"select * from user where id = 5 order by user.col collate utf8_general_ci"
+{
+  "Original": "select * from user where id = 5 order by user.col collate utf8_general_ci",
+  "Instructions": {
+    "Opcode": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select * from user where id = 5 order by user.col collate utf8_general_ci asc",
+    "FieldQuery": "select * from user where 1 != 1",
+    "Vindex": "user_index",
+    "Values": 5
+  }
+}
+
+# Order by join qualified by collate operator
+"select user.col1 as a, user_extra.col2 as b from user inner join user_extra on user_extra.user_id = 5 where user.id = 5 order by a collate utf8_general_ci, b collate utf8_general_ci"
+{
+   "Original":"select user.col1 as a, user_extra.col2 as b from user inner join user_extra on user_extra.user_id = 5 where user.id = 5 order by a collate utf8_general_ci, b collate utf8_general_ci",
+   "Instructions":{
+      "Opcode":"Join",
+      "Left":{
+         "Opcode":"SelectEqualUnique",
+         "Keyspace":{
+            "Name":"user",
+            "Sharded":true
+         },
+         "Query":"select user.col1 as a from user where user.id = 5 order by a collate utf8_general_ci asc",
+         "FieldQuery":"select user.col1 as a from user where 1 != 1",
+         "Vindex":"user_index",
+         "Values":5
+      },
+      "Right":{
+         "Opcode":"SelectEqualUnique",
+         "Keyspace":{
+            "Name":"user",
+            "Sharded":true
+         },
+         "Query":"select user_extra.col2 as b from user_extra where user_extra.user_id = 5 order by b collate utf8_general_ci asc",
+         "FieldQuery":"select user_extra.col2 as b from user_extra where 1 != 1",
+         "Vindex":"user_index",
+         "Values":5
+      },
+      "Cols":[
+         -1,
+         1
+      ]
+   }
+}
+
+# Group by with collate operator
+"select user.col1 as a from user where user.id = 5 group by a collate utf8_general_ci"
+{
+   "Original":"select user.col1 as a from user where user.id = 5 group by a collate utf8_general_ci",
+   "Instructions":{
+      "Opcode":"SelectEqualUnique",
+      "Keyspace":{
+         "Name":"user",
+         "Sharded":true
+      },
+      "Query":"select user.col1 as a from user where user.id = 5 group by a collate utf8_general_ci",
+      "FieldQuery":"select user.col1 as a from user where 1 != 1 group by a collate utf8_general_ci",
+      "Vindex":"user_index",
+      "Values":5
+   }
+}
+
+#Order by with aggregates
+"select * from user where id = 5 order by count(id)"
+{
+   "Original":"select * from user where id = 5 order by count(id)",
+   "Instructions":{
+      "Opcode":"SelectEqualUnique",
+      "Keyspace":{
+         "Name":"user",
+         "Sharded":true
+      },
+      "Query":"select * from user where id = 5 order by count(id) asc",
+      "FieldQuery":"select * from user where 1 != 1",
+      "Vindex":"user_index",
+      "Values":5
+   }
+}
+
+#Order by with math functions
+"select * from user where id = 5 order by -col1"
+{
+   "Original":"select * from user where id = 5 order by -col1",
+   "Instructions":{
+      "Opcode":"SelectEqualUnique",
+      "Keyspace":{
+         "Name":"user",
+         "Sharded":true
+      },
+      "Query":"select * from user where id = 5 order by -col1 asc",
+      "FieldQuery":"select * from user where 1 != 1",
+      "Vindex":"user_index",
+      "Values":5
+   }
+}
+
+#Order by with string operations operations
+"select * from user where id = 5 order by concat(col,col1) collate utf8_general_ci desc"
+{
+   "Original":"select * from user where id = 5 order by concat(col,col1) collate utf8_general_ci desc",
+   "Instructions":{
+      "Opcode":"SelectEqualUnique",
+      "Keyspace":{
+         "Name":"user",
+         "Sharded":true
+      },
+      "Query":"select * from user where id = 5 order by concat(col, col1) collate utf8_general_ci desc",
+      "FieldQuery":"select * from user where 1 != 1",
+      "Vindex":"user_index",
+      "Values":5
+   }
+}
+
+#Order by with math operations
+"select * from user where id = 5 order by id+col collate utf8_general_ci desc"
+{
+   "Original":"select * from user where id = 5 order by id+col collate utf8_general_ci desc",
+   "Instructions":{
+      "Opcode":"SelectEqualUnique",
+      "Keyspace":{
+         "Name":"user",
+         "Sharded":true
+      },
+      "Query":"select * from user where id = 5 order by id + col collate utf8_general_ci desc",
+      "FieldQuery":"select * from user where 1 != 1",
+      "Vindex":"user_index",
+      "Values":5
+   }
+}
+
+#Order by subquery column
+"select * from user u join (select user_id from user_extra where user_id = 5) eu on u.id = eu.user_id where u.id = 5 order by eu.user_id"
+{
+   "Original":"select * from user u join (select user_id from user_extra where user_id = 5) eu on u.id = eu.user_id where u.id = 5 order by eu.user_id",
+   "Instructions":{
+      "Opcode":"SelectEqualUnique",
+      "Keyspace":{
+         "Name":"user",
+         "Sharded":true
+      },
+      "Query":"select * from user as u join (select user_id from user_extra where user_id = 5) as eu on u.id = eu.user_id where u.id = 5 order by eu.user_id asc",
+      "FieldQuery":"select * from user as u join (select user_id from user_extra where 1 != 1) as eu on u.id = eu.user_id where 1 != 1",
+      "Vindex":"user_index",
+      "Values":5
+   }
+}
+
 # LIMIT
 "select col1 from user where id = 1 limit 1"
 {
