@@ -98,7 +98,7 @@ func forceEOF(yylex interface{}) {
 %left <empty> '*' '/' '%' MOD
 %left <empty> '^'
 %right <empty> '~' UNARY
-%right <empty> COLLATE
+%left <empty> COLLATE
 %right <empty> INTERVAL
 %nonassoc <empty> '.'
 

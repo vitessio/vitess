@@ -128,7 +128,7 @@ func pushOrderBy(orderBy sqlparser.OrderBy, bldr builder) error {
 				return err
 			}
 		}
-		if rb == nil{
+		if rb == nil {
 			return errors.New("unsupported: complex order by")
 		}
 		if rb.Order() < routeNumber {

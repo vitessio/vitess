@@ -337,13 +337,11 @@ func (tkn *Tokenizer) Scan() (int, []byte) {
 		case '=', ',', ';', '(', ')', '+', '*', '%', '&', '^', '~':
 			return int(ch), nil
 		case '|':
-			switch tkn.lastChar {
-			case '|':
+			if tkn.lastChar == '|' {
 				tkn.next()
 				return OR, nil
-			default:
-				return int(ch), nil
 			}
+			return int(ch), nil
 		case '?':
 			tkn.posVarIndex++
 			buf := new(bytes.Buffer)
