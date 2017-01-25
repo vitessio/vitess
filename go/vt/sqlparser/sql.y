@@ -172,6 +172,7 @@ func forceEOF(yylex interface{}) {
 %type <tableIdent> table_id table_alias as_opt_id
 %type <empty> as_opt
 %type <empty> force_eof
+%type <str> charset
 
 %start any_command
 
@@ -801,6 +802,16 @@ value_expression_list:
     $$ = append($1, $3)
   }
 
+charset:
+  ID
+    {
+      $$ = string($1)
+    }
+| STRING
+    {
+      $$ = string($1)
+    }
+
 value_expression:
   value
   {
@@ -870,9 +881,9 @@ value_expression:
   {
     $$ = &BinaryExpr{Left: $1, Operator: JSONUnquoteExtractOp, Right: $3}
   }
-| value_expression COLLATE value_expression
+| value_expression COLLATE charset
   {
-    $$ = &BinaryExpr{Left: $1, Operator: CollateStr, Right: $3}
+    $$ = &CollateExpr{Expr: $1, Charset: $3}
   }
 | '+'  value_expression %prec UNARY
   {

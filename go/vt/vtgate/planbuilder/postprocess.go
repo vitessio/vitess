@@ -81,13 +81,10 @@ func pushOrderBy(orderBy sqlparser.OrderBy, bldr builder) error {
 		// we have to build a new node.
 		pushOrder := order
 		var rb *route
-		if node, ok := order.Expr.(*sqlparser.ColName); ok {
-			var err error
-			rb, _, err = bldr.Symtab().Find(node, true)
-			if err != nil {
-				return err
-			}
-		} else if node, ok := order.Expr.(*sqlparser.SQLVal); ok && node.Type == sqlparser.IntVal {
+
+
+
+		if node, ok := order.Expr.(*sqlparser.SQLVal); ok && node.Type == sqlparser.IntVal {
 			num, err := strconv.ParseInt(string(node.Val), 0, 64)
 			if err != nil {
 				return fmt.Errorf("error parsing order by clause: %s", sqlparser.String(node))
@@ -110,7 +107,29 @@ func pushOrderBy(orderBy sqlparser.OrderBy, bldr builder) error {
 				panic("unexpected: column not found for order by")
 			}
 		} else {
-			return errors.New("unsupported: complex expression in order by")
+			// Analyze column references within the expression to make sure they all
+			// go to the same route.
+			err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+				switch node := node.(type) {
+				case *sqlparser.ColName:
+					curRoute, _, err := bldr.Symtab().Find(node, true)
+					if err != nil {
+						return false, err
+					}
+					if rb == nil || rb == curRoute {
+						rb = curRoute
+						return true, nil
+					}
+					return false, errors.New("unsupported: complex join and complex order by")
+				}
+				return true, nil
+			}, order.Expr)
+			if err != nil {
+				return err
+			}
+		}
+		if rb == nil {
+			return errors.New("unsupported: complex order by")
 		}
 		if rb.Order() < routeNumber {
 			return errors.New("unsupported: complex join and out of sequence order by")
