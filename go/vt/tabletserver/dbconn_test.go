@@ -12,61 +12,66 @@ import (
 
 	"golang.org/x/net/context"
 
+	"github.com/youtube/vitess/go/mysqlconn/fakesqldb"
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/sqltypes"
-	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 func TestDBConnExec(t *testing.T) {
-	db := fakesqldb.Register()
+	db := fakesqldb.New(t)
+	defer db.Close()
 	testUtils := newTestUtils()
 	sql := "select * from test_table limit 1000"
 	expectedResult := &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{Type: sqltypes.VarChar},
+		},
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
-			{sqltypes.MakeString([]byte("123"))},
+			{sqltypes.MakeTrusted(sqltypes.VarChar, []byte("123"))},
 		},
 	}
 	db.AddQuery(sql, expectedResult)
 	connPool := testUtils.newConnPool()
-	appParams := &sqldb.ConnParams{Engine: db.Name}
-	dbaParams := &sqldb.ConnParams{Engine: db.Name}
-	connPool.Open(appParams, dbaParams)
+	connPool.Open(db.ConnParams(), db.ConnParams())
 	defer connPool.Close()
 	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(10*time.Second))
 	defer cancel()
 	queryServiceStats := NewQueryServiceStats("", false)
-	dbConn, err := NewDBConn(connPool, appParams, dbaParams, queryServiceStats)
+	dbConn, err := NewDBConn(connPool, db.ConnParams(), db.ConnParams(), queryServiceStats)
 	defer dbConn.Close()
 	if err != nil {
 		t.Fatalf("should not get an error, err: %v", err)
 	}
-	// Exec succeed
+	// Exec succeed, not asking for fields.
 	result, err := dbConn.Exec(ctx, sql, 1, false)
 	if err != nil {
 		t.Fatalf("should not get an error, err: %v", err)
 	}
+	expectedResult.Fields = nil
 	testUtils.checkEqual(t, expectedResult, result)
 	// Exec fail
-	db.EnableConnFail()
+	db.AddRejectedQuery(sql, &sqldb.SQLError{
+		Num:     2012,
+		Message: "connection fail",
+		Query:   "",
+	})
 	_, err = dbConn.Exec(ctx, sql, 1, false)
-	db.DisableConnFail()
 	testUtils.checkTabletError(t, err, vtrpcpb.ErrorCode_INTERNAL_ERROR, "")
 }
 
 func TestDBConnKill(t *testing.T) {
-	db := fakesqldb.Register()
+	db := fakesqldb.New(t)
+	defer db.Close()
 	testUtils := newTestUtils()
 	connPool := testUtils.newConnPool()
-	appParams := &sqldb.ConnParams{Engine: db.Name}
-	dbaParams := &sqldb.ConnParams{Engine: db.Name}
-	connPool.Open(appParams, dbaParams)
+	connPool.Open(db.ConnParams(), db.ConnParams())
 	defer connPool.Close()
 	queryServiceStats := NewQueryServiceStats("", false)
-	dbConn, err := NewDBConn(connPool, appParams, dbaParams, queryServiceStats)
+	dbConn, err := NewDBConn(connPool, db.ConnParams(), db.ConnParams(), queryServiceStats)
 	defer dbConn.Close()
 	query := fmt.Sprintf("kill %d", dbConn.ID())
 	db.AddQuery(query, &sqltypes.Result{})
@@ -95,30 +100,37 @@ func TestDBConnKill(t *testing.T) {
 }
 
 func TestDBConnStream(t *testing.T) {
-	db := fakesqldb.Register()
+	db := fakesqldb.New(t)
+	defer db.Close()
 	testUtils := newTestUtils()
 	sql := "select * from test_table limit 1000"
 	expectedResult := &sqltypes.Result{
-		RowsAffected: 0,
+		Fields: []*querypb.Field{
+			{Type: sqltypes.VarChar},
+		},
 		Rows: [][]sqltypes.Value{
-			{sqltypes.MakeString([]byte("123"))},
+			{sqltypes.MakeTrusted(sqltypes.VarChar, []byte("123"))},
 		},
 	}
 	db.AddQuery(sql, expectedResult)
 	connPool := testUtils.newConnPool()
-	appParams := &sqldb.ConnParams{Engine: db.Name}
-	dbaParams := &sqldb.ConnParams{Engine: db.Name}
-	connPool.Open(appParams, dbaParams)
+	connPool.Open(db.ConnParams(), db.ConnParams())
 	defer connPool.Close()
 	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(10*time.Second))
 	defer cancel()
 	queryServiceStats := NewQueryServiceStats("", false)
-	dbConn, err := NewDBConn(connPool, appParams, dbaParams, queryServiceStats)
+	dbConn, err := NewDBConn(connPool, db.ConnParams(), db.ConnParams(), queryServiceStats)
 	defer dbConn.Close()
 	var result sqltypes.Result
 	err = dbConn.Stream(
 		ctx, sql, func(r *sqltypes.Result) error {
-			result = *r
+			// Aggregate Fields and Rows
+			if r.Fields != nil {
+				result.Fields = r.Fields
+			}
+			if r.Rows != nil {
+				result.Rows = append(result.Rows, r.Rows...)
+			}
 			return nil
 		}, 10, querypb.ExecuteOptions_ALL)
 	if err != nil {
@@ -126,13 +138,14 @@ func TestDBConnStream(t *testing.T) {
 	}
 	testUtils.checkEqual(t, expectedResult, &result)
 	// Stream fail
-	db.EnableConnFail()
+	db.Close()
+	dbConn.Close()
 	err = dbConn.Stream(
 		ctx, sql, func(r *sqltypes.Result) error {
 			return nil
 		}, 10, querypb.ExecuteOptions_ALL)
 	db.DisableConnFail()
-	want := "connection fail"
+	want := "Connection is closed"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("Error: %v, must contain %s\n", err, want)
 	}

@@ -12,7 +12,8 @@ import (
 )
 
 func TestTxEngineClose(t *testing.T) {
-	db := setUpQueryExecutorTest()
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
 	testUtils := newTestUtils()
 	dbconfigs := testUtils.newDBConfigs(db)
 	ctx := context.Background()

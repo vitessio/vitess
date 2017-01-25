@@ -10,12 +10,12 @@ import (
 
 	"golang.org/x/net/context"
 
+	"github.com/youtube/vitess/go/mysqlconn/fakesqldb"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/topo/memorytopo"
-	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
 	"github.com/youtube/vitess/go/vt/wrangler"
 
 	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
@@ -28,7 +28,8 @@ import (
 // allowed.
 func TestApplySchema_AllowLongUnavailability(t *testing.T) {
 	cell := "cell1"
-	db := fakesqldb.Register()
+	db := fakesqldb.New(t)
+	defer db.Close()
 	ts := memorytopo.NewServer(cell)
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 	vp := NewVtctlPipe(t, ts)

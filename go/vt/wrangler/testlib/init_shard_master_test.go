@@ -12,6 +12,7 @@ import (
 
 	"golang.org/x/net/context"
 
+	"github.com/youtube/vitess/go/mysqlconn/fakesqldb"
 	"github.com/youtube/vitess/go/mysqlconn/replication"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/logutil"
@@ -19,7 +20,6 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/memorytopo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
-	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
 	"github.com/youtube/vitess/go/vt/wrangler"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -29,7 +29,8 @@ import (
 // works as planned
 func TestInitMasterShard(t *testing.T) {
 	ctx := context.Background()
-	db := fakesqldb.Register()
+	db := fakesqldb.New(t)
+	defer db.Close()
 	ts := memorytopo.NewServer("cell1", "cell2")
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 	vp := NewVtctlPipe(t, ts)
@@ -131,7 +132,8 @@ func TestInitMasterShard(t *testing.T) {
 // TestInitMasterShardChecks makes sure the safety checks work
 func TestInitMasterShardChecks(t *testing.T) {
 	ctx := context.Background()
-	db := fakesqldb.Register()
+	db := fakesqldb.New(t)
+	defer db.Close()
 	ts := memorytopo.NewServer("cell1", "cell2")
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 
@@ -169,7 +171,8 @@ func TestInitMasterShardChecks(t *testing.T) {
 // proceed, the action completes anyway
 func TestInitMasterShardOneSlaveFails(t *testing.T) {
 	ctx := context.Background()
-	db := fakesqldb.Register()
+	db := fakesqldb.New(t)
+	defer db.Close()
 	ts := memorytopo.NewServer("cell1", "cell2")
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 

@@ -24,7 +24,8 @@ var meTableInfo = &TableInfo{
 }
 
 func TestMEState(t *testing.T) {
-	db := setUpTabletServerTest()
+	db := setUpTabletServerTest(t)
+	defer db.Close()
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	config.TransactionCap = 1
@@ -60,7 +61,8 @@ func TestMEState(t *testing.T) {
 }
 
 func TestMESchemaChanged(t *testing.T) {
-	db := setUpTabletServerTest()
+	db := setUpTabletServerTest(t)
+	defer db.Close()
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	config.TransactionCap = 1
@@ -130,7 +132,8 @@ func extractManagerNames(in map[string]*MessageManager) map[string]bool {
 }
 
 func TestSubscribe(t *testing.T) {
-	db := setUpTabletServerTest()
+	db := setUpTabletServerTest(t)
+	defer db.Close()
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	config.TransactionCap = 1
@@ -170,7 +173,8 @@ func TestSubscribe(t *testing.T) {
 }
 
 func TestLockDB(t *testing.T) {
-	db := setUpTabletServerTest()
+	db := setUpTabletServerTest(t)
+	defer db.Close()
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	config.TransactionCap = 1
@@ -241,7 +245,8 @@ func TestMESendDiscard(t *testing.T) {
 	// This is a manual test because the discard happens
 	// asynchronously, which makes the test flaky.
 	t.Skip()
-	db := setUpTabletServerTest()
+	db := setUpTabletServerTest(t)
+	defer db.Close()
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	config.TransactionCap = 1
@@ -262,10 +267,14 @@ func TestMESendDiscard(t *testing.T) {
 	db.AddQuery(
 		"select time_scheduled, id from msg where id in ('1') and time_acked is null limit 10001 for update",
 		&sqltypes.Result{
+			Fields: []*querypb.Field{
+				{Type: sqltypes.Int64},
+				{Type: sqltypes.Int64},
+			},
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{{
-				sqltypes.MakeString([]byte("1")),
-				sqltypes.MakeString([]byte("1")),
+				sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")),
+				sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")),
 			}},
 		},
 	)
@@ -283,7 +292,8 @@ func TestMESendDiscard(t *testing.T) {
 }
 
 func TestMEGenerate(t *testing.T) {
-	db := setUpTabletServerTest()
+	db := setUpTabletServerTest(t)
+	defer db.Close()
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	config.TransactionCap = 1

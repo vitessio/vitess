@@ -9,14 +9,14 @@ import (
 	"reflect"
 	"strings"
 
+	"golang.org/x/net/context"
+
+	"github.com/youtube/vitess/go/mysqlconn/fakesqldb"
 	"github.com/youtube/vitess/go/mysqlconn/replication"
-	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/dbconnpool"
 	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
-	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
-	"golang.org/x/net/context"
 
 	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
 )
@@ -99,6 +99,7 @@ type MysqlDaemon interface {
 // FakeMysqlDaemon implements MysqlDaemon and allows the user to fake
 // everything.
 type FakeMysqlDaemon struct {
+	// The fake SQL DB we may use for some queries
 	db *fakesqldb.DB
 
 	// Mycnf will be returned by Cnf()
@@ -469,12 +470,12 @@ func (fmd *FakeMysqlDaemon) GetAppConnection(ctx context.Context) (dbconnpool.Po
 
 // GetDbaConnection is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) GetDbaConnection() (*dbconnpool.DBConnection, error) {
-	return dbconnpool.NewDBConnection(&sqldb.ConnParams{Engine: fmd.db.Name}, stats.NewTimings(""))
+	return dbconnpool.NewDBConnection(fmd.db.ConnParams(), stats.NewTimings(""))
 }
 
 // GetAllPrivsConnection is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) GetAllPrivsConnection() (*dbconnpool.DBConnection, error) {
-	return dbconnpool.NewDBConnection(&sqldb.ConnParams{Engine: fmd.db.Name}, stats.NewTimings(""))
+	return dbconnpool.NewDBConnection(fmd.db.ConnParams(), stats.NewTimings(""))
 }
 
 // SetSemiSyncEnabled is part of the MysqlDaemon interface.

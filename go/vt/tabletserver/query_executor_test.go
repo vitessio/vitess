@@ -14,6 +14,8 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/mysql"
+	"github.com/youtube/vitess/go/mysqlconn"
+	"github.com/youtube/vitess/go/mysqlconn/fakesqldb"
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/callerid"
@@ -22,7 +24,6 @@ import (
 	"github.com/youtube/vitess/go/vt/tableacl"
 	"github.com/youtube/vitess/go/vt/tableacl/simpleacl"
 	"github.com/youtube/vitess/go/vt/tabletserver/planbuilder"
-	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	tableaclpb "github.com/youtube/vitess/go/vt/proto/tableacl"
@@ -31,11 +32,10 @@ import (
 )
 
 func TestQueryExecutorPlanDDL(t *testing.T) {
-	db := setUpQueryExecutorTest()
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
 	query := "alter table test_table add zipcode int"
-	want := &sqltypes.Result{
-		Rows: [][]sqltypes.Value{},
-	}
+	want := &sqltypes.Result{}
 	db.AddQuery(query, want)
 	ctx := context.Background()
 	tsv := newTestTabletServer(ctx, enableStrict, db)
@@ -52,11 +52,10 @@ func TestQueryExecutorPlanDDL(t *testing.T) {
 }
 
 func TestQueryExecutorPlanPassDmlStrictMode(t *testing.T) {
-	db := setUpQueryExecutorTest()
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
 	query := "update test_table set pk = foo()"
-	want := &sqltypes.Result{
-		Rows: [][]sqltypes.Value{},
-	}
+	want := &sqltypes.Result{}
 	db.AddQuery(query, want)
 	ctx := context.Background()
 	// non strict mode
@@ -99,11 +98,10 @@ func TestQueryExecutorPlanPassDmlStrictMode(t *testing.T) {
 }
 
 func TestQueryExecutorPlanPassDmlStrictModeAutoCommit(t *testing.T) {
-	db := setUpQueryExecutorTest()
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
 	query := "update test_table set pk = foo()"
-	want := &sqltypes.Result{
-		Rows: [][]sqltypes.Value{},
-	}
+	want := &sqltypes.Result{}
 	db.AddQuery(query, want)
 	// non strict mode
 	ctx := context.Background()
@@ -139,11 +137,10 @@ func TestQueryExecutorPlanPassDmlStrictModeAutoCommit(t *testing.T) {
 }
 
 func TestQueryExecutorPlanInsertPk(t *testing.T) {
-	db := setUpQueryExecutorTest()
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
 	db.AddQuery("insert into test_table values (1) /* _stream test_table (pk ) (1 ); */", &sqltypes.Result{})
-	want := &sqltypes.Result{
-		Rows: make([][]sqltypes.Value, 0),
-	}
+	want := &sqltypes.Result{}
 	query := "insert into test_table values(1)"
 	ctx := context.Background()
 	tsv := newTestTabletServer(ctx, enableStrict, db)
@@ -160,11 +157,19 @@ func TestQueryExecutorPlanInsertPk(t *testing.T) {
 }
 
 func TestQueryExecutorPlanInsertMessage(t *testing.T) {
-	db := setUpQueryExecutorTest()
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
 	db.AddQueryPattern("insert into msg\\(time_scheduled, id, message, time_next, time_created, epoch\\) values \\(1, 2, 3, 1,.*", &sqltypes.Result{})
 	db.AddQuery(
 		"select time_next, epoch, id, message from msg where (time_scheduled = 1 and id = 2)",
 		&sqltypes.Result{
+			Fields: []*querypb.Field{
+				{Type: sqltypes.Int64},
+				{Type: sqltypes.Int64},
+				{Type: sqltypes.Int64},
+				{Type: sqltypes.Int64},
+			},
+			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{{
 				sqltypes.MakeString([]byte("1")),
 				sqltypes.MakeString([]byte("0")),
@@ -173,9 +178,7 @@ func TestQueryExecutorPlanInsertMessage(t *testing.T) {
 			}},
 		},
 	)
-	want := &sqltypes.Result{
-		Rows: make([][]sqltypes.Value, 0),
-	}
+	want := &sqltypes.Result{}
 	query := "insert into msg(time_scheduled, id, message) values(1, 2, 3)"
 	ctx := context.Background()
 	tsv := newTestTabletServer(ctx, enableStrict, db)
@@ -202,12 +205,12 @@ func TestQueryExecutorPlanInsertMessage(t *testing.T) {
 	mr := <-r1.ch
 	wantqr := &sqltypes.Result{
 		Rows: [][]sqltypes.Value{{
-			sqltypes.MakeString([]byte("1")),
-			sqltypes.MakeString([]byte("01")),
+			sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")),
+			sqltypes.MakeTrusted(sqltypes.Int64, []byte("01")),
 		}},
 	}
 	if !reflect.DeepEqual(mr, wantqr) {
-		t.Errorf("rows:\n%+v, want\n%+v", got, wantqr)
+		t.Errorf("rows:\n%+v, want\n%+v", mr, wantqr)
 	}
 
 	txid := newTransaction(tsv)
@@ -223,14 +226,17 @@ func TestQueryExecutorPlanInsertMessage(t *testing.T) {
 }
 
 func TestQueryExecutorPlanInsertSubQueryAutoCommmit(t *testing.T) {
-	db := setUpQueryExecutorTest()
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
 	query := "insert into test_table(pk) select pk from test_table where pk = 1 limit 1000"
-	want := &sqltypes.Result{
-		Rows: [][]sqltypes.Value{},
-	}
+	want := &sqltypes.Result{}
 	db.AddQuery(query, want)
 	selectQuery := "select pk from test_table where pk = 1 limit 1000"
 	db.AddQuery(selectQuery, &sqltypes.Result{
+		Fields: []*querypb.Field{{
+			Name: "pk",
+			Type: sqltypes.Int32,
+		}},
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			{sqltypes.MakeTrusted(sqltypes.Int32, []byte("2"))},
@@ -255,14 +261,17 @@ func TestQueryExecutorPlanInsertSubQueryAutoCommmit(t *testing.T) {
 }
 
 func TestQueryExecutorPlanInsertSubQuery(t *testing.T) {
-	db := setUpQueryExecutorTest()
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
 	query := "insert into test_table(pk) select pk from test_table where pk = 1 limit 1000"
-	want := &sqltypes.Result{
-		Rows: [][]sqltypes.Value{},
-	}
+	want := &sqltypes.Result{}
 	db.AddQuery(query, want)
 	selectQuery := "select pk from test_table where pk = 1 limit 1000"
 	db.AddQuery(selectQuery, &sqltypes.Result{
+		Fields: []*querypb.Field{{
+			Name: "pk",
+			Type: sqltypes.Int32,
+		}},
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			{sqltypes.MakeTrusted(sqltypes.Int32, []byte("2"))},
@@ -295,11 +304,10 @@ func TestQueryExecutorPlanInsertSubQuery(t *testing.T) {
 }
 
 func TestQueryExecutorPlanUpsertPk(t *testing.T) {
-	db := setUpQueryExecutorTest()
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
 	db.AddQuery("insert into test_table values (1) /* _stream test_table (pk ) (1 ); */", &sqltypes.Result{})
-	want := &sqltypes.Result{
-		Rows: make([][]sqltypes.Value, 0),
-	}
+	want := &sqltypes.Result{}
 	query := "insert into test_table values(1) on duplicate key update val=1"
 	ctx := context.Background()
 	tsv := newTestTabletServer(ctx, enableStrict, db)
@@ -326,7 +334,7 @@ func TestQueryExecutorPlanUpsertPk(t *testing.T) {
 	qre = newTestQueryExecutor(ctx, tsv, query, txid)
 	_, err = qre.Execute()
 	wantErr := "error: rejected"
-	if err == nil || err.Error() != wantErr {
+	if err == nil || !strings.Contains(err.Error(), wantErr) {
 		t.Errorf("qre.Execute() = %v, want %v", err, wantErr)
 	}
 	if gotqueries = fetchRecordedQueries(qre); gotqueries != nil {
@@ -343,7 +351,7 @@ func TestQueryExecutorPlanUpsertPk(t *testing.T) {
 	qre = newTestQueryExecutor(ctx, tsv, query, txid)
 	_, err = qre.Execute()
 	wantErr = "error: err (errno 1062) (sqlstate 23000)"
-	if err == nil || err.Error() != wantErr {
+	if err == nil || !strings.Contains(err.Error(), wantErr) {
 		t.Errorf("qre.Execute() = %v, want %v", err, wantErr)
 	}
 	wantqueries = []string{}
@@ -381,11 +389,10 @@ func TestQueryExecutorPlanUpsertPk(t *testing.T) {
 }
 
 func TestQueryExecutorPlanUpsertPkAutoCommit(t *testing.T) {
-	db := setUpQueryExecutorTest()
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
 	db.AddQuery("insert into test_table values (1) /* _stream test_table (pk ) (1 ); */", &sqltypes.Result{})
-	want := &sqltypes.Result{
-		Rows: make([][]sqltypes.Value, 0),
-	}
+	want := &sqltypes.Result{}
 	query := "insert into test_table values(1) on duplicate key update val=1"
 	ctx := context.Background()
 	tsv := newTestTabletServer(ctx, enableStrict, db)
@@ -403,7 +410,7 @@ func TestQueryExecutorPlanUpsertPkAutoCommit(t *testing.T) {
 	db.AddRejectedQuery("insert into test_table values (1) /* _stream test_table (pk ) (1 ); */", errRejected)
 	_, err = qre.Execute()
 	wantErr := "error: rejected"
-	if err == nil || err.Error() != wantErr {
+	if err == nil || !strings.Contains(err.Error(), wantErr) {
 		t.Fatalf("qre.Execute() = %v, want %v", err, wantErr)
 	}
 
@@ -414,7 +421,7 @@ func TestQueryExecutorPlanUpsertPkAutoCommit(t *testing.T) {
 	db.AddQuery("update test_table set val = 1 where pk in (1) /* _stream test_table (pk ) (1 ); */", &sqltypes.Result{})
 	_, err = qre.Execute()
 	wantErr = "error: err (errno 1062) (sqlstate 23000)"
-	if err == nil || err.Error() != wantErr {
+	if err == nil || !strings.Contains(err.Error(), wantErr) {
 		t.Fatalf("qre.Execute() = %v, want %v", err, wantErr)
 	}
 
@@ -439,7 +446,8 @@ func TestQueryExecutorPlanUpsertPkAutoCommit(t *testing.T) {
 }
 
 func TestQueryExecutorPlanDmlPk(t *testing.T) {
-	db := setUpQueryExecutorTest()
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
 	query := "update test_table set name = 2 where pk in (1) /* _stream test_table (pk ) (1 ); */"
 	want := &sqltypes.Result{}
 	db.AddQuery(query, want)
@@ -465,17 +473,22 @@ func TestQueryExecutorPlanDmlPk(t *testing.T) {
 }
 
 func TestQueryExecutorPlanDmlMessage(t *testing.T) {
-	db := setUpQueryExecutorTest()
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
 	query := "update msg set time_acked = 2, time_next = null where id in (1)"
 	want := &sqltypes.Result{}
 	db.AddQuery("select time_scheduled, id from msg where id in (1) limit 10001 for update", &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{Type: sqltypes.Int64},
+			{Type: sqltypes.Int64},
+		},
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{{
 			sqltypes.MakeString([]byte("12")),
 			sqltypes.MakeString([]byte("1")),
 		}},
 	})
-	db.AddQuery("update msg set time_acked = 2, time_next = null where (time_scheduled = '12' and id = '1') /* _stream msg (time_scheduled id ) ('MTI=' 'MQ==' ); */", want)
+	db.AddQuery("update msg set time_acked = 2, time_next = null where (time_scheduled = 12 and id = 1) /* _stream msg (time_scheduled id ) (12 1 ); */", want)
 	ctx := context.Background()
 	tsv := newTestTabletServer(ctx, enableStrict, db)
 	txid := newTransaction(tsv)
@@ -499,7 +512,8 @@ func TestQueryExecutorPlanDmlMessage(t *testing.T) {
 }
 
 func TestQueryExecutorPlanDmlAutoCommit(t *testing.T) {
-	db := setUpQueryExecutorTest()
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
 	query := "update test_table set name = 2 where pk in (1) /* _stream test_table (pk ) (1 ); */"
 	want := &sqltypes.Result{}
 	db.AddQuery(query, want)
@@ -518,12 +532,16 @@ func TestQueryExecutorPlanDmlAutoCommit(t *testing.T) {
 }
 
 func TestQueryExecutorPlanDmlSubQuery(t *testing.T) {
-	db := setUpQueryExecutorTest()
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
 	query := "update test_table set addr = 3 where name = 1 limit 1000"
 	expandedQuery := "select pk from test_table where name = 1 limit 1000 for update"
 	want := &sqltypes.Result{}
 	db.AddQuery(query, want)
 	db.AddQuery(expandedQuery, &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{Type: sqltypes.Int32},
+		},
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			{sqltypes.MakeTrusted(sqltypes.Int32, []byte("2"))},
@@ -553,7 +571,8 @@ func TestQueryExecutorPlanDmlSubQuery(t *testing.T) {
 }
 
 func TestQueryExecutorPlanDmlSubQueryAutoCommit(t *testing.T) {
-	db := setUpQueryExecutorTest()
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
 	query := "update test_table set addr = 3 where name = 1 limit 1000"
 	expandedQuery := "select pk from test_table where name = 1 limit 1000 for update"
 	want := &sqltypes.Result{}
@@ -574,12 +593,11 @@ func TestQueryExecutorPlanDmlSubQueryAutoCommit(t *testing.T) {
 }
 
 func TestQueryExecutorPlanOtherWithinATransaction(t *testing.T) {
-	db := setUpQueryExecutorTest()
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
 	query := "show test_table"
 	want := &sqltypes.Result{
-		Fields:       getTestTableFields(),
-		RowsAffected: 0,
-		Rows:         [][]sqltypes.Value{},
+		Fields: getTestTableFields(),
 	}
 	db.AddQuery(query, want)
 	ctx := context.Background()
@@ -593,6 +611,11 @@ func TestQueryExecutorPlanOtherWithinATransaction(t *testing.T) {
 	if err != nil {
 		t.Fatalf("qre.Execute() = %v, want nil", err)
 	}
+	// Clear the flags, they interfere with the diff.
+	// FIXME(alainjobart) the new mysqlconn client won't have this issue.
+	for _, field := range got.Fields {
+		field.Flags = 0
+	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got: %v, want: %v", got, want)
 	}
@@ -602,7 +625,8 @@ func TestQueryExecutorPlanOtherWithinATransaction(t *testing.T) {
 }
 
 func TestQueryExecutorPlanPassSelectWithInATransaction(t *testing.T) {
-	db := setUpQueryExecutorTest()
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
 	fields := []*querypb.Field{
 		{Name: "addr", Type: sqltypes.Int32},
 	}
@@ -611,7 +635,7 @@ func TestQueryExecutorPlanPassSelectWithInATransaction(t *testing.T) {
 		Fields:       fields,
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
-			{sqltypes.MakeString([]byte("123"))},
+			{sqltypes.MakeTrusted(sqltypes.Int32, []byte("123"))},
 		},
 	}
 	db.AddQuery(query, want)
@@ -629,6 +653,11 @@ func TestQueryExecutorPlanPassSelectWithInATransaction(t *testing.T) {
 	if err != nil {
 		t.Fatalf("qre.Execute() = %v, want nil", err)
 	}
+	// Clear the flags, they interfere with the diff.
+	// FIXME(alainjobart) the new mysqlconn client won't have this issue.
+	for _, field := range got.Fields {
+		field.Flags = 0
+	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got: %v, want: %v", got, want)
 	}
@@ -638,7 +667,8 @@ func TestQueryExecutorPlanPassSelectWithInATransaction(t *testing.T) {
 }
 
 func TestQueryExecutorPlanPassSelectWithLockOutsideATransaction(t *testing.T) {
-	db := setUpQueryExecutorTest()
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
 	query := "select * from test_table for update"
 	want := &sqltypes.Result{
 		Fields: getTestTableFields(),
@@ -667,11 +697,11 @@ func TestQueryExecutorPlanPassSelectWithLockOutsideATransaction(t *testing.T) {
 }
 
 func TestQueryExecutorPlanPassSelect(t *testing.T) {
-	db := setUpQueryExecutorTest()
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
 	query := "select * from test_table limit 1000"
 	want := &sqltypes.Result{
 		Fields: getTestTableFields(),
-		Rows:   [][]sqltypes.Value{},
 	}
 	db.AddQuery(query, want)
 	db.AddQuery("select * from test_table where 1 != 1", &sqltypes.Result{
@@ -686,13 +716,19 @@ func TestQueryExecutorPlanPassSelect(t *testing.T) {
 	if err != nil {
 		t.Fatalf("qre.Execute() = %v, want nil", err)
 	}
+	// Clear the flags, they interfere with the diff.
+	// FIXME(alainjobart) the new mysqlconn client won't have this issue.
+	for _, field := range got.Fields {
+		field.Flags = 0
+	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got: %v, want: %v", got, want)
 	}
 }
 
 func TestQueryExecutorPlanSet(t *testing.T) {
-	db := setUpQueryExecutorTest()
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
 	setQuery := "set unknown_key = 1"
 	db.AddQuery(setQuery, &sqltypes.Result{})
 	ctx := context.Background()
@@ -702,9 +738,7 @@ func TestQueryExecutorPlanSet(t *testing.T) {
 	checkPlanID(t, planbuilder.PlanSet, qre.plan.PlanID)
 	// Query will be delegated to MySQL and both Fields and Rows should be
 	// empty arrays in this case.
-	want := &sqltypes.Result{
-		Rows: make([][]sqltypes.Value, 0),
-	}
+	want := &sqltypes.Result{}
 	got, err := qre.Execute()
 	if err != nil {
 		t.Fatalf("qre.Execute() = %v, want nil", err)
@@ -733,12 +767,11 @@ func TestQueryExecutorPlanSet(t *testing.T) {
 }
 
 func TestQueryExecutorPlanOther(t *testing.T) {
-	db := setUpQueryExecutorTest()
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
 	query := "show test_table"
 	want := &sqltypes.Result{
-		Fields:       getTestTableFields(),
-		RowsAffected: 0,
-		Rows:         [][]sqltypes.Value{},
+		Fields: getTestTableFields(),
 	}
 	db.AddQuery(query, want)
 	ctx := context.Background()
@@ -750,15 +783,25 @@ func TestQueryExecutorPlanOther(t *testing.T) {
 	if err != nil {
 		t.Fatalf("got: %v, want nil", err)
 	}
+	// Clear the flags, they interfere with the diff.
+	// FIXME(alainjobart) the new mysqlconn client won't have this issue.
+	for _, field := range got.Fields {
+		field.Flags = 0
+	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("qre.Execute() = %v, want: %v", got, want)
 	}
 }
 
 func TestQueryExecutorPlanNextval(t *testing.T) {
-	db := setUpQueryExecutorTest()
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
 	selQuery := "select next_id, cache from seq where id = 0 for update"
 	db.AddQuery(selQuery, &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{Type: sqltypes.Int64},
+			{Type: sqltypes.Int64},
+		},
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{{
 			sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")),
@@ -815,6 +858,10 @@ func TestQueryExecutorPlanNextval(t *testing.T) {
 	// NextVal==3, LastVal==4
 	// Let's try the next 2 values.
 	db.AddQuery(selQuery, &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{Type: sqltypes.Int64},
+			{Type: sqltypes.Int64},
+		},
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{{
 			sqltypes.MakeTrusted(sqltypes.Int64, []byte("4")),
@@ -845,6 +892,10 @@ func TestQueryExecutorPlanNextval(t *testing.T) {
 	// NextVal==5, LastVal==7
 	// Let's try jumping a full cache range.
 	db.AddQuery(selQuery, &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{Type: sqltypes.Int64},
+			{Type: sqltypes.Int64},
+		},
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{{
 			sqltypes.MakeTrusted(sqltypes.Int64, []byte("7")),
@@ -877,12 +928,11 @@ func TestQueryExecutorTableAcl(t *testing.T) {
 	aclName := fmt.Sprintf("simpleacl-test-%d", rand.Int63())
 	tableacl.Register(aclName, &simpleacl.Factory{})
 	tableacl.SetDefaultACL(aclName)
-	db := setUpQueryExecutorTest()
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
 	query := "select * from test_table limit 1000"
 	want := &sqltypes.Result{
-		Fields:       getTestTableFields(),
-		RowsAffected: 0,
-		Rows:         [][]sqltypes.Value{},
+		Fields: getTestTableFields(),
 	}
 	db.AddQuery(query, want)
 	db.AddQuery("select * from test_table where 1 != 1", &sqltypes.Result{
@@ -913,6 +963,11 @@ func TestQueryExecutorTableAcl(t *testing.T) {
 	if err != nil {
 		t.Fatalf("got: %v, want nil", err)
 	}
+	// Clear the flags, they interfere with the diff.
+	// FIXME(alainjobart) the new mysqlconn client won't have this issue.
+	for _, field := range got.Fields {
+		field.Flags = 0
+	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("qre.Execute() = %v, want: %v", got, want)
 	}
@@ -922,12 +977,11 @@ func TestQueryExecutorTableAclNoPermission(t *testing.T) {
 	aclName := fmt.Sprintf("simpleacl-test-%d", rand.Int63())
 	tableacl.Register(aclName, &simpleacl.Factory{})
 	tableacl.SetDefaultACL(aclName)
-	db := setUpQueryExecutorTest()
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
 	query := "select * from test_table limit 1000"
 	want := &sqltypes.Result{
-		Fields:       getTestTableFields(),
-		RowsAffected: 0,
-		Rows:         [][]sqltypes.Value{},
+		Fields: getTestTableFields(),
 	}
 	db.AddQuery(query, want)
 	db.AddQuery("select * from test_table where 1 != 1", &sqltypes.Result{
@@ -958,6 +1012,11 @@ func TestQueryExecutorTableAclNoPermission(t *testing.T) {
 	if err != nil {
 		t.Fatalf("got: %v, want nil", err)
 	}
+	// Clear the flags, they interfere with the diff.
+	// FIXME(alainjobart) the new mysqlconn client won't have this issue.
+	for _, f := range got.Fields {
+		f.Flags = 0
+	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("qre.Execute() = %v, want: %v", got, want)
 	}
@@ -986,7 +1045,8 @@ func TestQueryExecutorTableAclExemptACL(t *testing.T) {
 	aclName := fmt.Sprintf("simpleacl-test-%d", rand.Int63())
 	tableacl.Register(aclName, &simpleacl.Factory{})
 	tableacl.SetDefaultACL(aclName)
-	db := setUpQueryExecutorTest()
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
 	query := "select * from test_table limit 1000"
 	want := &sqltypes.Result{
 		Fields:       getTestTableFields(),
@@ -1059,7 +1119,8 @@ func TestQueryExecutorTableAclDryRun(t *testing.T) {
 	aclName := fmt.Sprintf("simpleacl-test-%d", rand.Int63())
 	tableacl.Register(aclName, &simpleacl.Factory{})
 	tableacl.SetDefaultACL(aclName)
-	db := setUpQueryExecutorTest()
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
 	query := "select * from test_table limit 1000"
 	want := &sqltypes.Result{
 		Fields:       getTestTableFields(),
@@ -1114,7 +1175,8 @@ func TestQueryExecutorTableAclDryRun(t *testing.T) {
 }
 
 func TestQueryExecutorBlacklistQRFail(t *testing.T) {
-	db := setUpQueryExecutorTest()
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
 	query := "select * from test_table where name = 1 limit 1000"
 	expandedQuery := "select pk from test_table use index (`index`) where name = 1 limit 1000"
 	expected := &sqltypes.Result{
@@ -1174,7 +1236,8 @@ func TestQueryExecutorBlacklistQRFail(t *testing.T) {
 }
 
 func TestQueryExecutorBlacklistQRRetry(t *testing.T) {
-	db := setUpQueryExecutorTest()
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
 	query := "select * from test_table where name = 1 limit 1000"
 	expandedQuery := "select pk from test_table use index (`index`) where name = 1 limit 1000"
 	expected := &sqltypes.Result{
@@ -1317,8 +1380,8 @@ func testCommitHelper(t *testing.T, tsv *TabletServer, queryExecutor *QueryExecu
 	}
 }
 
-func setUpQueryExecutorTest() *fakesqldb.DB {
-	db := fakesqldb.Register()
+func setUpQueryExecutorTest(t *testing.T) *fakesqldb.DB {
+	db := fakesqldb.New(t)
 	initQueryExecutorTestDB(db)
 	return db
 }
@@ -1371,24 +1434,34 @@ func getQueryExecutorSupportedQueries() map[string]*sqltypes.Result {
 		fmt.Sprintf(sqlCreateTableDTParticipant, "`_vt`"): {},
 		// queries for schema info
 		"select unix_timestamp()": {
+			Fields: []*querypb.Field{{
+				Type: sqltypes.Uint64,
+			}},
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
 				{sqltypes.MakeTrusted(sqltypes.Int32, []byte("1427325875"))},
 			},
 		},
 		"select @@global.sql_mode": {
+			Fields: []*querypb.Field{{
+				Type: sqltypes.VarChar,
+			}},
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
 				{sqltypes.MakeString([]byte("STRICT_TRANS_TABLES"))},
 			},
 		},
 		"select @@autocommit": {
+			Fields: []*querypb.Field{{
+				Type: sqltypes.Uint64,
+			}},
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
 				{sqltypes.MakeString([]byte("1"))},
 			},
 		},
 		baseShowTables: {
+			Fields:       createTestTableBaseShowTableFields(),
 			RowsAffected: 2,
 			Rows: [][]sqltypes.Value{
 				{
@@ -1439,36 +1512,17 @@ func getQueryExecutorSupportedQueries() map[string]*sqltypes.Result {
 			}},
 		},
 		"describe test_table": {
+			Fields:       mysqlconn.DescribeTableFields,
 			RowsAffected: 3,
 			Rows: [][]sqltypes.Value{
-				{
-					sqltypes.MakeString([]byte("pk")),
-					sqltypes.MakeString([]byte("int")),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("1")),
-					sqltypes.MakeString([]byte{}),
-				},
-				{
-					sqltypes.MakeString([]byte("name")),
-					sqltypes.MakeString([]byte("int")),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("1")),
-					sqltypes.MakeString([]byte{}),
-				},
-				{
-					sqltypes.MakeString([]byte("addr")),
-					sqltypes.MakeString([]byte("int")),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("1")),
-					sqltypes.MakeString([]byte{}),
-				},
+				mysqlconn.DescribeTableRow("pk", "int(11)", false, "PRI", "0"),
+				mysqlconn.DescribeTableRow("name", "int(11)", false, "", "0"),
+				mysqlconn.DescribeTableRow("addr", "int(11)", false, "", "0"),
 			},
 		},
 		// for SplitQuery because it needs a primary key column
 		"show index from test_table": {
+			Fields:       createShowIndexFields(),
 			RowsAffected: 2,
 			Rows: [][]sqltypes.Value{
 				{
@@ -1494,6 +1548,7 @@ func getQueryExecutorSupportedQueries() map[string]*sqltypes.Result {
 		"begin":  {},
 		"commit": {},
 		baseShowTables + " and table_name = 'test_table'": {
+			Fields:       createTestTableBaseShowTableFields(),
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
 				{
@@ -1526,43 +1581,17 @@ func getQueryExecutorSupportedQueries() map[string]*sqltypes.Result {
 			}},
 		},
 		"describe seq": {
+			Fields:       mysqlconn.DescribeTableFields,
 			RowsAffected: 4,
 			Rows: [][]sqltypes.Value{
-				{
-					sqltypes.MakeString([]byte("id")),
-					sqltypes.MakeString([]byte("int")),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("1")),
-					sqltypes.MakeString([]byte{}),
-				},
-				{
-					sqltypes.MakeString([]byte("next_id")),
-					sqltypes.MakeString([]byte("bigint")),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("1")),
-					sqltypes.MakeString([]byte{}),
-				},
-				{
-					sqltypes.MakeString([]byte("cache")),
-					sqltypes.MakeString([]byte("bigint")),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("1")),
-					sqltypes.MakeString([]byte{}),
-				},
-				{
-					sqltypes.MakeString([]byte("increment")),
-					sqltypes.MakeString([]byte("bigint")),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("1")),
-					sqltypes.MakeString([]byte{}),
-				},
+				mysqlconn.DescribeTableRow("id", "int(11)", false, "PRI", "0"),
+				mysqlconn.DescribeTableRow("next_id", "bigint(20)", false, "", "0"),
+				mysqlconn.DescribeTableRow("cache", "bigint(20)", false, "", "0"),
+				mysqlconn.DescribeTableRow("increment", "bigint(20)", false, "", "0"),
 			},
 		},
 		"show index from seq": {
+			Fields:       createShowIndexFields(),
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
 				{
@@ -1577,6 +1606,7 @@ func getQueryExecutorSupportedQueries() map[string]*sqltypes.Result {
 			},
 		},
 		baseShowTables + " and table_name = 'seq'": {
+			Fields:       createTestTableBaseShowTableFields(),
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
 				{
@@ -1617,67 +1647,20 @@ func getQueryExecutorSupportedQueries() map[string]*sqltypes.Result {
 			}},
 		},
 		"describe msg": {
-			RowsAffected: 4,
+			Fields:       mysqlconn.DescribeTableFields,
+			RowsAffected: 7,
 			Rows: [][]sqltypes.Value{
-				{
-					sqltypes.MakeString([]byte("time_scheduled")),
-					sqltypes.MakeString([]byte("int")),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("1")),
-					sqltypes.MakeString([]byte{}),
-				},
-				{
-					sqltypes.MakeString([]byte("id")),
-					sqltypes.MakeString([]byte("bigint")),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("1")),
-					sqltypes.MakeString([]byte{}),
-				},
-				{
-					sqltypes.MakeString([]byte("time_next")),
-					sqltypes.MakeString([]byte("bigint")),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("1")),
-					sqltypes.MakeString([]byte{}),
-				},
-				{
-					sqltypes.MakeString([]byte("epoch")),
-					sqltypes.MakeString([]byte("bigint")),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("1")),
-					sqltypes.MakeString([]byte{}),
-				},
-				{
-					sqltypes.MakeString([]byte("time_created")),
-					sqltypes.MakeString([]byte("bigint")),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("1")),
-					sqltypes.MakeString([]byte{}),
-				},
-				{
-					sqltypes.MakeString([]byte("time_acked")),
-					sqltypes.MakeString([]byte("bigint")),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("1")),
-					sqltypes.MakeString([]byte{}),
-				},
-				{
-					sqltypes.MakeString([]byte("message")),
-					sqltypes.MakeString([]byte("bigint")),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("1")),
-					sqltypes.MakeString([]byte{}),
-				},
+				mysqlconn.DescribeTableRow("time_scheduled", "int(11)", false, "MUL", "0"),
+				mysqlconn.DescribeTableRow("id", "bigint(20)", false, "PRI", "0"),
+				mysqlconn.DescribeTableRow("time_next", "bigint(20)", false, "", "0"),
+				mysqlconn.DescribeTableRow("epoch", "bigint(20)", false, "", "0"),
+				mysqlconn.DescribeTableRow("time_created", "bigint(20)", false, "", "0"),
+				mysqlconn.DescribeTableRow("time_acked", "bigint(20)", false, "", "0"),
+				mysqlconn.DescribeTableRow("message", "bigint(20)", false, "", "0"),
 			},
 		},
 		"show index from msg": {
+			Fields:       createShowIndexFields(),
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
 				{
@@ -1701,6 +1684,7 @@ func getQueryExecutorSupportedQueries() map[string]*sqltypes.Result {
 			},
 		},
 		baseShowTables + " and table_name = 'msg'": {
+			Fields:       createTestTableBaseShowTableFields(),
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
 				{

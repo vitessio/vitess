@@ -15,16 +15,17 @@ import (
 
 	"golang.org/x/net/context"
 
+	"github.com/youtube/vitess/go/mysqlconn/fakesqldb"
 	"github.com/youtube/vitess/go/sqltypes"
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	"github.com/youtube/vitess/go/vt/vtgate/fakerpcvtgateconn"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateconn"
-	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
 )
 
 func TestTxExecutorEmptyPrepare(t *testing.T) {
-	txe, tsv, _ := newTestTxExecutor()
+	txe, tsv, db := newTestTxExecutor(t)
+	defer db.Close()
 	defer tsv.StopService()
 	txid := newTransaction(tsv)
 	err := txe.Prepare(txid, "aa")
@@ -38,7 +39,8 @@ func TestTxExecutorEmptyPrepare(t *testing.T) {
 }
 
 func TestTxExecutorPrepare(t *testing.T) {
-	txe, tsv, _ := newTestTxExecutor()
+	txe, tsv, db := newTestTxExecutor(t)
+	defer db.Close()
 	defer tsv.StopService()
 	txid := newTxForPrep(tsv)
 	err := txe.Prepare(txid, "aa")
@@ -62,7 +64,8 @@ func TestTxExecutorPrepare(t *testing.T) {
 }
 
 func TestTxExecutorPrepareNotInTx(t *testing.T) {
-	txe, tsv, _ := newTestTxExecutor()
+	txe, tsv, db := newTestTxExecutor(t)
+	defer db.Close()
 	defer tsv.StopService()
 	err := txe.Prepare(0, "aa")
 	want := "not_in_tx: Transaction 0: not found"
@@ -72,7 +75,8 @@ func TestTxExecutorPrepareNotInTx(t *testing.T) {
 }
 
 func TestTxExecutorPreparePoolFail(t *testing.T) {
-	txe, tsv, _ := newTestTxExecutor()
+	txe, tsv, db := newTestTxExecutor(t)
+	defer db.Close()
 	defer tsv.StopService()
 	txid1 := newTxForPrep(tsv)
 	txid2 := newTxForPrep(tsv)
@@ -89,20 +93,22 @@ func TestTxExecutorPreparePoolFail(t *testing.T) {
 }
 
 func TestTxExecutorPrepareRedoBeginFail(t *testing.T) {
-	txe, tsv, db := newTestTxExecutor()
+	txe, tsv, db := newTestTxExecutor(t)
+	defer db.Close()
 	defer tsv.StopService()
 	txid := newTxForPrep(tsv)
 	db.AddRejectedQuery("begin", errors.New("begin fail"))
 	err := txe.Prepare(txid, "aa")
 	defer txe.RollbackPrepared("aa", 0)
-	want := "error: error: begin fail"
-	if err == nil || err.Error() != want {
+	want := "error: begin fail"
+	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("Prepare err: %v, want %s", err, want)
 	}
 }
 
 func TestTxExecutorPrepareRedoFail(t *testing.T) {
-	txe, tsv, _ := newTestTxExecutor()
+	txe, tsv, db := newTestTxExecutor(t)
+	defer db.Close()
 	defer tsv.StopService()
 	txid := newTxForPrep(tsv)
 	err := txe.Prepare(txid, "bb")
@@ -114,20 +120,22 @@ func TestTxExecutorPrepareRedoFail(t *testing.T) {
 }
 
 func TestTxExecutorPrepareRedoCommitFail(t *testing.T) {
-	txe, tsv, db := newTestTxExecutor()
+	txe, tsv, db := newTestTxExecutor(t)
+	defer db.Close()
 	defer tsv.StopService()
 	txid := newTxForPrep(tsv)
 	db.AddRejectedQuery("commit", errors.New("commit fail"))
 	err := txe.Prepare(txid, "aa")
 	defer txe.RollbackPrepared("aa", 0)
-	want := "error: error: commit fail"
-	if err == nil || err.Error() != want {
+	want := "error: commit fail"
+	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("Prepare err: %v, want %s", err, want)
 	}
 }
 
 func TestTxExecutorCommit(t *testing.T) {
-	txe, tsv, _ := newTestTxExecutor()
+	txe, tsv, db := newTestTxExecutor(t)
+	defer db.Close()
 	defer tsv.StopService()
 	txid := newTxForPrep(tsv)
 	err := txe.Prepare(txid, "aa")
@@ -146,7 +154,8 @@ func TestTxExecutorCommit(t *testing.T) {
 }
 
 func TestTxExecutorCommitRedoFail(t *testing.T) {
-	txe, tsv, db := newTestTxExecutor()
+	txe, tsv, db := newTestTxExecutor(t)
+	defer db.Close()
 	defer tsv.StopService()
 	txid := newTxForPrep(tsv)
 	// Allow all additions to redo logs to succeed
@@ -171,7 +180,8 @@ func TestTxExecutorCommitRedoFail(t *testing.T) {
 }
 
 func TestTxExecutorCommitRedoCommitFail(t *testing.T) {
-	txe, tsv, db := newTestTxExecutor()
+	txe, tsv, db := newTestTxExecutor(t)
+	defer db.Close()
 	defer tsv.StopService()
 	txid := newTxForPrep(tsv)
 	err := txe.Prepare(txid, "aa")
@@ -181,14 +191,15 @@ func TestTxExecutorCommitRedoCommitFail(t *testing.T) {
 	defer txe.RollbackPrepared("aa", 0)
 	db.AddRejectedQuery("commit", errors.New("commit fail"))
 	err = txe.CommitPrepared("aa")
-	want := "error: error: commit fail"
-	if err == nil || err.Error() != want {
+	want := "error: commit fail"
+	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("Prepare err: %v, want %s", err, want)
 	}
 }
 
 func TestTxExecutorRollbackBeginFail(t *testing.T) {
-	txe, tsv, db := newTestTxExecutor()
+	txe, tsv, db := newTestTxExecutor(t)
+	defer db.Close()
 	defer tsv.StopService()
 	txid := newTxForPrep(tsv)
 	err := txe.Prepare(txid, "aa")
@@ -197,14 +208,15 @@ func TestTxExecutorRollbackBeginFail(t *testing.T) {
 	}
 	db.AddRejectedQuery("begin", errors.New("begin fail"))
 	err = txe.RollbackPrepared("aa", txid)
-	want := "error: error: begin fail"
-	if err == nil || err.Error() != want {
+	want := "error: begin fail"
+	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("Prepare err: %v, want %s", err, want)
 	}
 }
 
 func TestTxExecutorRollbackRedoFail(t *testing.T) {
-	txe, tsv, db := newTestTxExecutor()
+	txe, tsv, db := newTestTxExecutor(t)
+	defer db.Close()
 	defer tsv.StopService()
 	txid := newTxForPrep(tsv)
 	// Allow all additions to redo logs to succeed
@@ -221,7 +233,8 @@ func TestTxExecutorRollbackRedoFail(t *testing.T) {
 }
 
 func TestExecutorCreateTransaction(t *testing.T) {
-	txe, tsv, db := newTestTxExecutor()
+	txe, tsv, db := newTestTxExecutor(t)
+	defer db.Close()
 	defer tsv.StopService()
 
 	db.AddQueryPattern(fmt.Sprintf("insert into `_vt`\\.dt_state\\(dtid, state, time_created\\) values \\('aa', %d,.*", int(querypb.TransactionState_PREPARE)), &sqltypes.Result{})
@@ -236,7 +249,8 @@ func TestExecutorCreateTransaction(t *testing.T) {
 }
 
 func TestExecutorStartCommit(t *testing.T) {
-	txe, tsv, db := newTestTxExecutor()
+	txe, tsv, db := newTestTxExecutor(t)
+	defer db.Close()
 	defer tsv.StopService()
 
 	commitTransition := fmt.Sprintf("update `_vt`.dt_state set state = %d where dtid = 'aa' and state = %d", int(querypb.TransactionState_COMMIT), int(querypb.TransactionState_PREPARE))
@@ -251,13 +265,14 @@ func TestExecutorStartCommit(t *testing.T) {
 	txid = newTxForPrep(tsv)
 	err = txe.StartCommit(txid, "aa")
 	want := "error: could not transition to COMMIT: aa"
-	if err == nil || err.Error() != want {
+	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("Prepare err: %v, want %s", err, want)
 	}
 }
 
 func TestExecutorSetRollback(t *testing.T) {
-	txe, tsv, db := newTestTxExecutor()
+	txe, tsv, db := newTestTxExecutor(t)
+	defer db.Close()
 	defer tsv.StopService()
 
 	rollbackTransition := fmt.Sprintf("update `_vt`.dt_state set state = %d where dtid = 'aa' and state = %d", int(querypb.TransactionState_ROLLBACK), int(querypb.TransactionState_PREPARE))
@@ -272,13 +287,14 @@ func TestExecutorSetRollback(t *testing.T) {
 	txid = newTxForPrep(tsv)
 	err = txe.SetRollback("aa", txid)
 	want := "error: could not transition to ROLLBACK: aa"
-	if err == nil || err.Error() != want {
+	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("Prepare err: %v, want %s", err, want)
 	}
 }
 
 func TestExecutorConcludeTransaction(t *testing.T) {
-	txe, tsv, db := newTestTxExecutor()
+	txe, tsv, db := newTestTxExecutor(t)
+	defer db.Close()
 	defer tsv.StopService()
 
 	db.AddQuery("delete from `_vt`.dt_state where dtid = 'aa'", &sqltypes.Result{})
@@ -290,7 +306,8 @@ func TestExecutorConcludeTransaction(t *testing.T) {
 }
 
 func TestExecutorReadTransaction(t *testing.T) {
-	txe, tsv, db := newTestTxExecutor()
+	txe, tsv, db := newTestTxExecutor(t)
+	defer db.Close()
 	defer tsv.StopService()
 
 	db.AddQuery("select dtid, state, time_created from `_vt`.dt_state where dtid = 'aa'", &sqltypes.Result{})
@@ -304,6 +321,11 @@ func TestExecutorReadTransaction(t *testing.T) {
 	}
 
 	txResult := &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{Type: sqltypes.VarChar},
+			{Type: sqltypes.Int64},
+			{Type: sqltypes.Int64},
+		},
 		Rows: [][]sqltypes.Value{{
 			sqltypes.MakeString([]byte("aa")),
 			sqltypes.MakeString([]byte(strconv.Itoa(int(querypb.TransactionState_PREPARE)))),
@@ -312,6 +334,10 @@ func TestExecutorReadTransaction(t *testing.T) {
 	}
 	db.AddQuery("select dtid, state, time_created from `_vt`.dt_state where dtid = 'aa'", txResult)
 	db.AddQuery("select keyspace, shard from `_vt`.dt_participant where dtid = 'aa'", &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{Type: sqltypes.VarChar},
+			{Type: sqltypes.VarChar},
+		},
 		Rows: [][]sqltypes.Value{{
 			sqltypes.MakeString([]byte("test1")),
 			sqltypes.MakeString([]byte("0")),
@@ -342,7 +368,18 @@ func TestExecutorReadTransaction(t *testing.T) {
 		t.Errorf("ReadTransaction: %v, want %v", got, want)
 	}
 
-	txResult.Rows[0][1] = sqltypes.MakeString([]byte(strconv.Itoa(int(querypb.TransactionState_COMMIT))))
+	txResult = &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{Type: sqltypes.VarChar},
+			{Type: sqltypes.Int64},
+			{Type: sqltypes.Int64},
+		},
+		Rows: [][]sqltypes.Value{{
+			sqltypes.MakeString([]byte("aa")),
+			sqltypes.MakeString([]byte(strconv.Itoa(int(querypb.TransactionState_COMMIT)))),
+			sqltypes.MakeString([]byte("1")),
+		}},
+	}
 	db.AddQuery("select dtid, state, time_created from `_vt`.dt_state where dtid = 'aa'", txResult)
 	want.State = querypb.TransactionState_COMMIT
 	got, err = txe.ReadTransaction("aa")
@@ -353,7 +390,18 @@ func TestExecutorReadTransaction(t *testing.T) {
 		t.Errorf("ReadTransaction: %v, want %v", got, want)
 	}
 
-	txResult.Rows[0][1] = sqltypes.MakeString([]byte(strconv.Itoa(int(querypb.TransactionState_ROLLBACK))))
+	txResult = &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{Type: sqltypes.VarChar},
+			{Type: sqltypes.Int64},
+			{Type: sqltypes.Int64},
+		},
+		Rows: [][]sqltypes.Value{{
+			sqltypes.MakeString([]byte("aa")),
+			sqltypes.MakeString([]byte(strconv.Itoa(int(querypb.TransactionState_ROLLBACK)))),
+			sqltypes.MakeString([]byte("1")),
+		}},
+	}
 	db.AddQuery("select dtid, state, time_created from `_vt`.dt_state where dtid = 'aa'", txResult)
 	want.State = querypb.TransactionState_ROLLBACK
 	got, err = txe.ReadTransaction("aa")
@@ -366,10 +414,18 @@ func TestExecutorReadTransaction(t *testing.T) {
 }
 
 func TestExecutorReadAllTransactions(t *testing.T) {
-	txe, tsv, db := newTestTxExecutor()
+	txe, tsv, db := newTestTxExecutor(t)
+	defer db.Close()
 	defer tsv.StopService()
 
 	db.AddQuery(txe.te.twoPC.readAllTransactions, &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{Type: sqltypes.VarChar},
+			{Type: sqltypes.Int64},
+			{Type: sqltypes.Int64},
+			{Type: sqltypes.VarChar},
+			{Type: sqltypes.VarChar},
+		},
 		Rows: [][]sqltypes.Value{{
 			sqltypes.MakeString([]byte("dtid0")),
 			sqltypes.MakeString([]byte(strconv.Itoa(int(querypb.TransactionState_PREPARE)))),
@@ -419,12 +475,17 @@ func TestExecutorResolveTransaction(t *testing.T) {
 			FakeVTGateConn: fakerpcvtgateconn.FakeVTGateConn{},
 		}, nil
 	})
-	_, tsv, db := newShortAgeExecutor()
+	_, tsv, db := newShortAgeExecutor(t)
+	defer db.Close()
 	defer tsv.StopService()
 	want := "aa"
 	db.AddQueryPattern(
 		"select dtid, time_created from `_vt`\\.dt_state where time_created.*",
 		&sqltypes.Result{
+			Fields: []*querypb.Field{
+				{Type: sqltypes.VarChar},
+				{Type: sqltypes.Int64},
+			},
 			Rows: [][]sqltypes.Value{{
 				sqltypes.MakeString([]byte(want)),
 				sqltypes.MakeString([]byte("1")),
@@ -437,7 +498,8 @@ func TestExecutorResolveTransaction(t *testing.T) {
 }
 
 func TestNoTwopc(t *testing.T) {
-	txe, tsv, _ := newNoTwopcExecutor()
+	txe, tsv, db := newNoTwopcExecutor(t)
+	defer db.Close()
 	defer tsv.StopService()
 
 	testcases := []struct {
@@ -487,8 +549,8 @@ func TestNoTwopc(t *testing.T) {
 	}
 }
 
-func newTestTxExecutor() (txe *TxExecutor, tsv *TabletServer, db *fakesqldb.DB) {
-	db = setUpQueryExecutorTest()
+func newTestTxExecutor(t *testing.T) (txe *TxExecutor, tsv *TabletServer, db *fakesqldb.DB) {
+	db = setUpQueryExecutorTest(t)
 	ctx := context.Background()
 	logStats := NewLogStats(ctx, "TestTxExecutor")
 	tsv = newTestTabletServer(ctx, smallTxPool, db)
@@ -506,8 +568,8 @@ func newTestTxExecutor() (txe *TxExecutor, tsv *TabletServer, db *fakesqldb.DB) 
 }
 
 // newShortAgeExecutor is same as newTestTxExecutor, but shorter transaction abandon age.
-func newShortAgeExecutor() (txe *TxExecutor, tsv *TabletServer, db *fakesqldb.DB) {
-	db = setUpQueryExecutorTest()
+func newShortAgeExecutor(t *testing.T) (txe *TxExecutor, tsv *TabletServer, db *fakesqldb.DB) {
+	db = setUpQueryExecutorTest(t)
 	ctx := context.Background()
 	logStats := NewLogStats(ctx, "TestTxExecutor")
 	tsv = newTestTabletServer(ctx, smallTxPool|shortTwopcAge, db)
@@ -525,8 +587,8 @@ func newShortAgeExecutor() (txe *TxExecutor, tsv *TabletServer, db *fakesqldb.DB
 }
 
 // newNoTwopcExecutor is same as newTestTxExecutor, but 2pc disabled.
-func newNoTwopcExecutor() (txe *TxExecutor, tsv *TabletServer, db *fakesqldb.DB) {
-	db = setUpQueryExecutorTest()
+func newNoTwopcExecutor(t *testing.T) (txe *TxExecutor, tsv *TabletServer, db *fakesqldb.DB) {
+	db = setUpQueryExecutorTest(t)
 	ctx := context.Background()
 	logStats := NewLogStats(ctx, "TestTxExecutor")
 	tsv = newTestTabletServer(ctx, noTwopc, db)

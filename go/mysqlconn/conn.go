@@ -78,7 +78,10 @@ type Conn struct {
 	sequence uint8
 
 	// Internal variables for sqldb.Conn API for stream queries.
-	// This is set only if a streaming query is in progress.
+	// This is set only if a streaming query is in progress, it is
+	// nil if no streaming query is in progress.  If the streaming
+	// query returned no fields, this is set to an empty array
+	// (but not nil).
 	fields []*querypb.Field
 }
 

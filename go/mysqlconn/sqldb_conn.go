@@ -87,13 +87,22 @@ func (c *Conn) Fields() ([]*querypb.Field, error) {
 	if c.fields == nil {
 		return nil, fmt.Errorf("no streaming query in progress")
 	}
+	if len(c.fields) == 0 {
+		// The query returned an empty field list.
+		return nil, nil
+	}
 	return c.fields, nil
 }
 
 // FetchNext is part of the sqldb.Conn interface.
 func (c *Conn) FetchNext() ([]sqltypes.Value, error) {
 	if c.fields == nil {
-		// We are already done.
+		// We are already done, and the result was closed.
+		return nil, fmt.Errorf("no streaming query in progress")
+	}
+
+	if len(c.fields) == 0 {
+		// We received no fields, so there is no data.
 		return nil, nil
 	}
 
@@ -103,13 +112,13 @@ func (c *Conn) FetchNext() ([]sqltypes.Value, error) {
 	}
 
 	switch data[0] {
-	case OKPacket:
-		// The entire contents of the packet is ignored.
-		// This packet is only seen if CapabilityClientDeprecateEOF is set.
-		// But we can still understand it anyway.
-		c.fields = nil
-		return nil, nil
 	case EOFPacket:
+		// This packet may be one of two kinds:
+		// - an EOF packet,
+		// - an OK packet with an EOF header if
+		// CapabilityClientDeprecateEOF is set.
+		// We do not parse it anyway, so it doesn't matter.
+
 		// Warnings and status flags are ignored.
 		c.fields = nil
 		return nil, nil
@@ -126,10 +135,10 @@ func (c *Conn) FetchNext() ([]sqltypes.Value, error) {
 // Just drain the remaining values.
 func (c *Conn) CloseResult() {
 	for c.fields != nil {
-		_, err := c.FetchNext()
-		if err != nil {
+		rows, err := c.FetchNext()
+		if err != nil || rows == nil {
+			// We either got an error, or got the last result.
 			c.fields = nil
-			return
 		}
 	}
 }
