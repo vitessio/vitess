@@ -41,7 +41,7 @@ func TestGetTableName(t *testing.T) {
 
 func TestIsColName(t *testing.T) {
 	testcases := []struct {
-		in  ValExpr
+		in  Expr
 		out bool
 	}{{
 		in:  &ColName{},
@@ -59,7 +59,7 @@ func TestIsColName(t *testing.T) {
 
 func TestIsValue(t *testing.T) {
 	testcases := []struct {
-		in  ValExpr
+		in  Expr
 		out bool
 	}{{
 		in:  newStrVal(""),
@@ -86,7 +86,7 @@ func TestIsValue(t *testing.T) {
 
 func TestIsNull(t *testing.T) {
 	testcases := []struct {
-		in  ValExpr
+		in  Expr
 		out bool
 	}{{
 		in:  &NullVal{},
@@ -104,7 +104,7 @@ func TestIsNull(t *testing.T) {
 
 func TestIsSimpleTuple(t *testing.T) {
 	testcases := []struct {
-		in  ValExpr
+		in  Expr
 		out bool
 	}{{
 		in:  ValTuple{newStrVal("")},
@@ -127,7 +127,7 @@ func TestIsSimpleTuple(t *testing.T) {
 
 func TestAsInterface(t *testing.T) {
 	testcases := []struct {
-		in  ValExpr
+		in  Expr
 		out interface{}
 	}{{
 		in:  ValTuple{newStrVal("aa")},

@@ -48,11 +48,9 @@ func forceEOF(yylex interface{}) {
   tableName   *TableName
   indexHints  *IndexHints
   expr        Expr
-  boolExpr    BoolExpr
+  exprs       Exprs
   boolVal     BoolVal
-  valExpr     ValExpr
   colTuple    ColTuple
-  valExprs    ValExprs
   values      Values
   valTuple    ValTuple
   subquery    *Subquery
@@ -128,22 +126,22 @@ func forceEOF(yylex interface{}) {
 %type <str> distinct_opt straight_join_opt
 %type <selectExprs> select_expression_list
 %type <selectExpr> select_expression
-%type <expr> expression
+%type <exprs> value_expression_list group_by_opt
+%type <expr> expression having_opt where_expression_opt
+%type <expr> boolean_expression condition
+%type <expr> value value_expression num_val
+%type <expr> value_expression_opt else_expression_opt
 %type <tableExprs> from_opt table_references
 %type <tableExpr> table_reference table_factor join_table
 %type <str> inner_join outer_join natural_join
 %type <tableName> table_name into_table_name
 %type <indexHints> index_hint_list
 %type <colIdents> index_list
-%type <boolExpr> where_expression_opt
-%type <boolExpr> boolean_expression condition
 %type <boolVal> boolean_value
 %type <str> compare
 %type <insRows> row_list
-%type <valExpr> value value_expression num_val
 %type <str> is_suffix
 %type <colTuple> col_tuple
-%type <valExprs> value_expression_list
 %type <values> tuple_list
 %type <valTuple> row_tuple
 %type <subquery> subquery
@@ -151,9 +149,6 @@ func forceEOF(yylex interface{}) {
 %type <caseExpr> case_expression
 %type <whens> when_expression_list
 %type <when> when_expression
-%type <valExpr> value_expression_opt else_expression_opt
-%type <valExprs> group_by_opt
-%type <boolExpr> having_opt
 %type <colIdent> keyword_func
 %type <orderBy> order_by_opt order_list
 %type <order> order
@@ -644,12 +639,13 @@ boolean_expression:
   }
 | openb boolean_expression closeb
   {
-    $$ = &ParenBoolExpr{Expr: $2}
+    $$ = &ParenExpr{Expr: $2}
   }
 | boolean_expression IS is_suffix
   {
     $$ = &IsExpr{Operator: $3, Expr: $1}
   }
+
 
 boolean_value:
   TRUE
@@ -794,7 +790,7 @@ subquery:
 value_expression_list:
   value_expression
   {
-    $$ = ValExprs{$1}
+    $$ = Exprs{$1}
   }
 | value_expression_list ',' value_expression
   {

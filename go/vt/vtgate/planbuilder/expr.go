@@ -14,10 +14,10 @@ import (
 	"github.com/youtube/vitess/go/vt/vtgate/engine"
 )
 
-// splitAndExpression breaks up the BoolExpr into AND-separated conditions
+// splitAndExpression breaks up the Expr into AND-separated conditions
 // and appends them to filters, which can be shuffled and recombined
 // as needed.
-func splitAndExpression(filters []sqlparser.BoolExpr, node sqlparser.BoolExpr) []sqlparser.BoolExpr {
+func splitAndExpression(filters []sqlparser.Expr, node sqlparser.Expr) []sqlparser.Expr {
 	if node == nil {
 		return filters
 	}
@@ -144,7 +144,7 @@ func hasSubquery(node sqlparser.SQLNode) bool {
 
 // exprIsValue returns true if the expression can be treated as a value
 // for the current route. External references are treated as value.
-func exprIsValue(expr sqlparser.ValExpr, rb *route) bool {
+func exprIsValue(expr sqlparser.Expr, rb *route) bool {
 	if node, ok := expr.(*sqlparser.ColName); ok {
 		return node.Metadata.(sym).Route() != rb
 	}
@@ -204,7 +204,7 @@ func hexEqual(a, b *sqlparser.SQLVal) bool {
 }
 
 // valConvert converts an AST value to the Value field in the route.
-func valConvert(node sqlparser.ValExpr) (interface{}, error) {
+func valConvert(node sqlparser.Expr) (interface{}, error) {
 	switch node := node.(type) {
 	case *sqlparser.SQLVal:
 		switch node.Type {
