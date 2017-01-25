@@ -48,9 +48,7 @@ func forceEOF(yylex interface{}) {
   tableName   *TableName
   indexHints  *IndexHints
   expr        Expr
-  boolExpr    BoolExpr
   boolVal     BoolVal
-  valExpr     ValExpr
   colTuple    ColTuple
   valExprs    ValExprs
   values      Values
@@ -135,12 +133,12 @@ func forceEOF(yylex interface{}) {
 %type <tableName> table_name into_table_name
 %type <indexHints> index_hint_list
 %type <colIdents> index_list
-%type <boolExpr> where_expression_opt
-%type <boolExpr> boolean_expression condition
+%type <expr> where_expression_opt
+%type <expr> expression
 %type <boolVal> boolean_value
 %type <str> compare
 %type <insRows> row_list
-%type <valExpr> value value_expression num_val
+%type <expr> value expression num_val
 %type <str> is_suffix
 %type <colTuple> col_tuple
 %type <valExprs> value_expression_list
@@ -148,12 +146,12 @@ func forceEOF(yylex interface{}) {
 %type <valTuple> row_tuple
 %type <subquery> subquery
 %type <colName> column_name
-%type <caseExpr> case_expression
+%type <expr> case_expression
 %type <whens> when_expression_list
 %type <when> when_expression
-%type <valExpr> value_expression_opt else_expression_opt
+%type <expr> value_expression_opt else_expression_opt
 %type <valExprs> group_by_opt
-%type <boolExpr> having_opt
+%type <expr> having_opt
 %type <colIdent> keyword_func
 %type <orderBy> order_by_opt order_list
 %type <order> order
@@ -406,13 +404,195 @@ select_expression:
   }
 
 expression:
-  boolean_expression
+  value
   {
     $$ = $1
   }
-| value_expression
+| column_name
   {
     $$ = $1
+  }
+| row_tuple
+  {
+    $$ = $1
+  }
+| subquery
+  {
+    $$ = $1
+  }
+| expression '&' expression
+  {
+    $$ = &BinaryExpr{Left: $1, Operator: BitAndStr, Right: $3}
+  }
+| expression '|' expression
+  {
+    $$ = &BinaryExpr{Left: $1, Operator: BitOrStr, Right: $3}
+  }
+| expression '^' expression
+  {
+    $$ = &BinaryExpr{Left: $1, Operator: BitXorStr, Right: $3}
+  }
+| expression '+' expression
+  {
+    $$ = &BinaryExpr{Left: $1, Operator: PlusStr, Right: $3}
+  }
+| expression '-' expression
+  {
+    $$ = &BinaryExpr{Left: $1, Operator: MinusStr, Right: $3}
+  }
+| expression '*' expression
+  {
+    $$ = &BinaryExpr{Left: $1, Operator: MultStr, Right: $3}
+  }
+| expression '/' expression
+  {
+    $$ = &BinaryExpr{Left: $1, Operator: DivStr, Right: $3}
+  }
+| expression '%' expression
+  {
+    $$ = &BinaryExpr{Left: $1, Operator: ModStr, Right: $3}
+  }
+| expression MOD expression
+  {
+    $$ = &BinaryExpr{Left: $1, Operator: ModStr, Right: $3}
+  }
+| expression SHIFT_LEFT expression
+  {
+    $$ = &BinaryExpr{Left: $1, Operator: ShiftLeftStr, Right: $3}
+  }
+| expression SHIFT_RIGHT expression
+  {
+    $$ = &BinaryExpr{Left: $1, Operator: ShiftRightStr, Right: $3}
+  }
+| column_name JSON_EXTRACT_OP value
+  {
+    $$ = &BinaryExpr{Left: $1, Operator: JSONExtractOp, Right: $3}
+  }
+| column_name JSON_UNQUOTE_EXTRACT_OP value
+  {
+    $$ = &BinaryExpr{Left: $1, Operator: JSONUnquoteExtractOp, Right: $3}
+  }
+| expression COLLATE expression
+  {
+    $$ = &BinaryExpr{Left: $1, Operator: CollateStr, Right: $3}
+  }
+| '+'  expression %prec UNARY
+  {
+    if num, ok := $2.(*SQLVal); ok && num.Type == IntVal {
+      $$ = num
+    } else {
+      $$ = &UnaryExpr{Operator: UPlusStr, Expr: $2}
+    }
+  }
+| '-'  expression %prec UNARY
+  {
+    if num, ok := $2.(*SQLVal); ok && num.Type == IntVal {
+      // Handle double negative
+      if num.Val[0] == '-' {
+        num.Val = num.Val[1:]
+        $$ = num
+      } else {
+        $$ = NewIntVal(append([]byte("-"), num.Val...))
+      }
+    } else {
+      $$ = &UnaryExpr{Operator: UMinusStr, Expr: $2}
+    }
+  }
+| '~'  expression
+  {
+    $$ = &UnaryExpr{Operator: TildaStr, Expr: $2}
+  }
+| INTERVAL expression sql_id
+  {
+    // This rule prevents the usage of INTERVAL
+    // as a function. If support is needed for that,
+    // we'll need to revisit this. The solution
+    // will be non-trivial because of grammar conflicts.
+    $$ = &IntervalExpr{Expr: $2, Unit: $3}
+  }
+| sql_id openb closeb
+  {
+    $$ = &FuncExpr{Name: $1}
+  }
+| sql_id openb select_expression_list closeb
+  {
+    $$ = &FuncExpr{Name: $1, Exprs: $3}
+  }
+| sql_id openb DISTINCT select_expression_list closeb
+  {
+    $$ = &FuncExpr{Name: $1, Distinct: true, Exprs: $4}
+  }
+| keyword_func openb closeb
+  {
+    $$ = &FuncExpr{Name: $1}
+  }
+| keyword_func openb select_expression_list closeb
+  {
+    $$ = &FuncExpr{Name: $1, Exprs: $3}
+  }
+| case_expression
+  {
+    $$ = $1
+  }
+| expression AND expression
+  {
+    $$ = &AndExpr{Left: $1, Right: $3}
+  }
+| expression OR expression
+  {
+    $$ = &OrExpr{Left: $1, Right: $3}
+  }
+| NOT expression
+  {
+    $$ = &NotExpr{Expr: $2}
+  }
+| expression IS is_suffix
+  {
+    $$ = &IsExpr{Operator: $3, Expr: $1}
+  }
+| boolean_value
+  {
+    $$ = $1
+  }
+| expression '=' expression
+  {
+    $$ = &ComparisonExpr{Left: $1, Operator: $2, Right: $3}
+  }
+| expression IN col_tuple
+  {
+    $$ = &ComparisonExpr{Left: $1, Operator: InStr, Right: $3}
+  }
+| expression NOT IN col_tuple
+  {
+    $$ = &ComparisonExpr{Left: $1, Operator: NotInStr, Right: $4}
+  }
+| expression LIKE expression
+  {
+    $$ = &ComparisonExpr{Left: $1, Operator: LikeStr, Right: $3}
+  }
+| expression NOT LIKE expression
+  {
+    $$ = &ComparisonExpr{Left: $1, Operator: NotLikeStr, Right: $4}
+  }
+| expression REGEXP expression
+  {
+    $$ = &ComparisonExpr{Left: $1, Operator: RegexpStr, Right: $3}
+  }
+| expression NOT REGEXP expression
+  {
+    $$ = &ComparisonExpr{Left: $1, Operator: NotRegexpStr, Right: $4}
+  }
+| expression BETWEEN expression AND expression
+  {
+    $$ = &RangeCond{Left: $1, Operator: BetweenStr, From: $3, To: $5}
+  }
+| expression NOT BETWEEN expression AND expression
+  {
+    $$ = &RangeCond{Left: $1, Operator: NotBetweenStr, From: $4, To: $6}
+  }
+| EXISTS subquery
+  {
+    $$ = &ExistsExpr{Subquery: $2}
   }
 
 as_ci_opt:
@@ -484,11 +664,11 @@ join_table:
   {
     $$ = &JoinTableExpr{LeftExpr: $1, Join: $2, RightExpr: $3}
   }
-| table_reference inner_join table_factor ON boolean_expression
+| table_reference inner_join table_factor ON expression
   {
     $$ = &JoinTableExpr{LeftExpr: $1, Join: $2, RightExpr: $3, On: $5}
   }
-| table_reference outer_join table_reference ON boolean_expression
+| table_reference outer_join table_reference ON expression
   {
     $$ = &JoinTableExpr{LeftExpr: $1, Join: $2, RightExpr: $3, On: $5}
   }
@@ -623,32 +803,9 @@ where_expression_opt:
   {
     $$ = nil
   }
-| WHERE boolean_expression
+| WHERE expression
   {
     $$ = $2
-  }
-
-boolean_expression:
-  condition
-| boolean_expression AND boolean_expression
-  {
-    $$ = &AndExpr{Left: $1, Right: $3}
-  }
-| boolean_expression OR boolean_expression
-  {
-    $$ = &OrExpr{Left: $1, Right: $3}
-  }
-| NOT boolean_expression
-  {
-    $$ = &NotExpr{Expr: $2}
-  }
-| openb boolean_expression closeb
-  {
-    $$ = &ParenBoolExpr{Expr: $2}
-  }
-| boolean_expression IS is_suffix
-  {
-    $$ = &IsExpr{Operator: $3, Expr: $1}
   }
 
 boolean_value:
@@ -659,60 +816,6 @@ boolean_value:
 | FALSE
   {
     $$ = BoolVal(false)
-  }
-
-condition:
-  boolean_value
-  {
-    $$ = $1
-  }
-| value_expression compare boolean_value
-  {
-    $$ = &ComparisonExpr{Left: $1, Operator: $2, Right: $3}
-  }
-| value_expression compare value_expression
-  {
-    $$ = &ComparisonExpr{Left: $1, Operator: $2, Right: $3}
-  }
-| value_expression IN col_tuple
-  {
-    $$ = &ComparisonExpr{Left: $1, Operator: InStr, Right: $3}
-  }
-| value_expression NOT IN col_tuple
-  {
-    $$ = &ComparisonExpr{Left: $1, Operator: NotInStr, Right: $4}
-  }
-| value_expression LIKE value_expression
-  {
-    $$ = &ComparisonExpr{Left: $1, Operator: LikeStr, Right: $3}
-  }
-| value_expression NOT LIKE value_expression
-  {
-    $$ = &ComparisonExpr{Left: $1, Operator: NotLikeStr, Right: $4}
-  }
-| value_expression REGEXP value_expression
-  {
-    $$ = &ComparisonExpr{Left: $1, Operator: RegexpStr, Right: $3}
-  }
-| value_expression NOT REGEXP value_expression
-  {
-    $$ = &ComparisonExpr{Left: $1, Operator: NotRegexpStr, Right: $4}
-  }
-| value_expression BETWEEN value_expression AND value_expression
-  {
-    $$ = &RangeCond{Left: $1, Operator: BetweenStr, From: $3, To: $5}
-  }
-| value_expression NOT BETWEEN value_expression AND value_expression
-  {
-    $$ = &RangeCond{Left: $1, Operator: NotBetweenStr, From: $4, To: $6}
-  }
-| value_expression IS is_suffix
-  {
-    $$ = &IsExpr{Operator: $3, Expr: $1}
-  }
-| EXISTS subquery
-  {
-    $$ = &ExistsExpr{Subquery: $2}
   }
 
 is_suffix:
@@ -792,145 +895,13 @@ subquery:
   }
 
 value_expression_list:
-  value_expression
+  expression
   {
     $$ = ValExprs{$1}
   }
-| value_expression_list ',' value_expression
+| value_expression_list ',' expression
   {
     $$ = append($1, $3)
-  }
-
-value_expression:
-  value
-  {
-    $$ = $1
-  }
-| column_name
-  {
-    $$ = $1
-  }
-| row_tuple
-  {
-    $$ = $1
-  }
-| subquery
-  {
-    $$ = $1
-  }
-| value_expression '&' value_expression
-  {
-    $$ = &BinaryExpr{Left: $1, Operator: BitAndStr, Right: $3}
-  }
-| value_expression '|' value_expression
-  {
-    $$ = &BinaryExpr{Left: $1, Operator: BitOrStr, Right: $3}
-  }
-| value_expression '^' value_expression
-  {
-    $$ = &BinaryExpr{Left: $1, Operator: BitXorStr, Right: $3}
-  }
-| value_expression '+' value_expression
-  {
-    $$ = &BinaryExpr{Left: $1, Operator: PlusStr, Right: $3}
-  }
-| value_expression '-' value_expression
-  {
-    $$ = &BinaryExpr{Left: $1, Operator: MinusStr, Right: $3}
-  }
-| value_expression '*' value_expression
-  {
-    $$ = &BinaryExpr{Left: $1, Operator: MultStr, Right: $3}
-  }
-| value_expression '/' value_expression
-  {
-    $$ = &BinaryExpr{Left: $1, Operator: DivStr, Right: $3}
-  }
-| value_expression '%' value_expression
-  {
-    $$ = &BinaryExpr{Left: $1, Operator: ModStr, Right: $3}
-  }
-| value_expression MOD value_expression
-  {
-    $$ = &BinaryExpr{Left: $1, Operator: ModStr, Right: $3}
-  }
-| value_expression SHIFT_LEFT value_expression
-  {
-    $$ = &BinaryExpr{Left: $1, Operator: ShiftLeftStr, Right: $3}
-  }
-| value_expression SHIFT_RIGHT value_expression
-  {
-    $$ = &BinaryExpr{Left: $1, Operator: ShiftRightStr, Right: $3}
-  }
-| column_name JSON_EXTRACT_OP value
-  {
-    $$ = &BinaryExpr{Left: $1, Operator: JSONExtractOp, Right: $3}
-  }
-| column_name JSON_UNQUOTE_EXTRACT_OP value
-  {
-    $$ = &BinaryExpr{Left: $1, Operator: JSONUnquoteExtractOp, Right: $3}
-  }
-| value_expression COLLATE value_expression
-  {
-    $$ = &BinaryExpr{Left: $1, Operator: CollateStr, Right: $3}
-  }
-| '+'  value_expression %prec UNARY
-  {
-    if num, ok := $2.(*SQLVal); ok && num.Type == IntVal {
-      $$ = num
-    } else {
-      $$ = &UnaryExpr{Operator: UPlusStr, Expr: $2}
-    }
-  }
-| '-'  value_expression %prec UNARY
-  {
-    if num, ok := $2.(*SQLVal); ok && num.Type == IntVal {
-      // Handle double negative
-      if num.Val[0] == '-' {
-        num.Val = num.Val[1:]
-        $$ = num
-      } else {
-        $$ = NewIntVal(append([]byte("-"), num.Val...))
-      }
-    } else {
-      $$ = &UnaryExpr{Operator: UMinusStr, Expr: $2}
-    }
-  }
-| '~'  value_expression
-  {
-    $$ = &UnaryExpr{Operator: TildaStr, Expr: $2}
-  }
-| INTERVAL value_expression sql_id
-  {
-    // This rule prevents the usage of INTERVAL
-    // as a function. If support is needed for that,
-    // we'll need to revisit this. The solution
-    // will be non-trivial because of grammar conflicts.
-    $$ = &IntervalExpr{Expr: $2, Unit: $3}
-  }
-| sql_id openb closeb
-  {
-    $$ = &FuncExpr{Name: $1}
-  }
-| sql_id openb select_expression_list closeb
-  {
-    $$ = &FuncExpr{Name: $1, Exprs: $3}
-  }
-| sql_id openb DISTINCT select_expression_list closeb
-  {
-    $$ = &FuncExpr{Name: $1, Distinct: true, Exprs: $4}
-  }
-| keyword_func openb closeb
-  {
-    $$ = &FuncExpr{Name: $1}
-  }
-| keyword_func openb select_expression_list closeb
-  {
-    $$ = &FuncExpr{Name: $1, Exprs: $3}
-  }
-| case_expression
-  {
-    $$ = $1
   }
 
 keyword_func:
@@ -961,7 +932,7 @@ value_expression_opt:
   {
     $$ = nil
   }
-| value_expression
+| expression
   {
     $$ = $1
   }
@@ -977,7 +948,7 @@ when_expression_list:
   }
 
 when_expression:
-  WHEN boolean_expression THEN value_expression
+  WHEN expression THEN expression
   {
     $$ = &When{Cond: $2, Val: $4}
   }
@@ -986,7 +957,7 @@ else_expression_opt:
   {
     $$ = nil
   }
-| ELSE value_expression
+| ELSE expression
   {
     $$ = $2
   }
@@ -1067,7 +1038,7 @@ having_opt:
   {
     $$ = nil
   }
-| HAVING boolean_expression
+| HAVING expression
   {
     $$ = $2
   }
@@ -1092,7 +1063,7 @@ order_list:
   }
 
 order:
-  value_expression asc_desc_opt
+  expression asc_desc_opt
   {
     $$ = &Order{Expr: $1, Direction: $2}
   }
@@ -1114,15 +1085,15 @@ limit_opt:
   {
     $$ = nil
   }
-| LIMIT value_expression
+| LIMIT expression
   {
     $$ = &Limit{Rowcount: $2}
   }
-| LIMIT value_expression ',' value_expression
+| LIMIT expression ',' expression
   {
     $$ = &Limit{Offset: $2, Rowcount: $4}
   }
-| LIMIT value_expression OFFSET value_expression
+| LIMIT expression OFFSET expression
   {
     $$ = &Limit{Offset: $4, Rowcount: $2}
   }
@@ -1213,7 +1184,7 @@ update_list:
   }
 
 update_expression:
-  sql_id '=' value_expression
+  sql_id '=' expression
   {
     $$ = &UpdateExpr{Name: $1, Expr: $3}
   }
