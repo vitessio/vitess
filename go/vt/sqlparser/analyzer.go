@@ -22,15 +22,15 @@ func GetTableName(node SimpleTableExpr) TableIdent {
 	return NewTableIdent("")
 }
 
-// IsColName returns true if the ValExpr is a *ColName.
-func IsColName(node ValExpr) bool {
+// IsColName returns true if the Expr is a *ColName.
+func IsColName(node Expr) bool {
 	_, ok := node.(*ColName)
 	return ok
 }
 
-// IsValue returns true if the ValExpr is a string, integral or value arg.
+// IsValue returns true if the Expr is a string, integral or value arg.
 // NULL is not considered to be a value.
-func IsValue(node ValExpr) bool {
+func IsValue(node Expr) bool {
 	switch v := node.(type) {
 	case *SQLVal:
 		switch v.Type {
@@ -45,8 +45,8 @@ func IsValue(node ValExpr) bool {
 	return false
 }
 
-// IsNull returns true if the ValExpr is SQL NULL
-func IsNull(node ValExpr) bool {
+// IsNull returns true if the Expr is SQL NULL
+func IsNull(node Expr) bool {
 	switch node.(type) {
 	case *NullVal:
 		return true
@@ -54,9 +54,9 @@ func IsNull(node ValExpr) bool {
 	return false
 }
 
-// IsSimpleTuple returns true if the ValExpr is a ValTuple that
+// IsSimpleTuple returns true if the Expr is a ValTuple that
 // contains simple values or if it's a list arg.
-func IsSimpleTuple(node ValExpr) bool {
+func IsSimpleTuple(node Expr) bool {
 	switch vals := node.(type) {
 	case ValTuple:
 		for _, n := range vals {
@@ -72,11 +72,11 @@ func IsSimpleTuple(node ValExpr) bool {
 	return false
 }
 
-// AsInterface converts the ValExpr to an interface. It converts
+// AsInterface converts the Expr to an interface. It converts
 // ValTuple to []interface{}, ValArg to string, StrVal to sqltypes.String,
 // IntVal to sqltypes.Numeric, NullVal to nil.
 // Otherwise, it returns an error.
-func AsInterface(node ValExpr) (interface{}, error) {
+func AsInterface(node Expr) (interface{}, error) {
 	switch node := node.(type) {
 	case *ValuesFuncExpr:
 		if node.Resolved != nil {

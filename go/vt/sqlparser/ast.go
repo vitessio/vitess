@@ -180,9 +180,9 @@ func (node *Select) WalkSubtree(visit Visit) error {
 // is an OR clause, it parenthesizes it. Currently,
 // the OR operator is the only one that's lower precedence
 // than AND.
-func (node *Select) AddWhere(expr BoolExpr) {
+func (node *Select) AddWhere(expr Expr) {
 	if _, ok := expr.(*OrExpr); ok {
-		expr = &ParenBoolExpr{Expr: expr}
+		expr = &ParenExpr{Expr: expr}
 	}
 	if node.Where == nil {
 		node.Where = &Where{
@@ -203,9 +203,9 @@ func (node *Select) AddWhere(expr BoolExpr) {
 // is an OR clause, it parenthesizes it. Currently,
 // the OR operator is the only one that's lower precedence
 // than AND.
-func (node *Select) AddHaving(expr BoolExpr) {
+func (node *Select) AddHaving(expr Expr) {
 	if _, ok := expr.(*OrExpr); ok {
-		expr = &ParenBoolExpr{Expr: expr}
+		expr = &ParenExpr{Expr: expr}
 	}
 	if node.Having == nil {
 		node.Having = &Where{
@@ -542,7 +542,7 @@ func (node *NonStarExpr) WalkSubtree(visit Visit) error {
 
 // Nextval defines the NEXT VALUE expression.
 type Nextval struct {
-	Expr ValExpr
+	Expr Expr
 }
 
 // Format formats the node.
@@ -744,7 +744,7 @@ type JoinTableExpr struct {
 	LeftExpr  TableExpr
 	Join      string
 	RightExpr TableExpr
-	On        BoolExpr
+	On        Expr
 }
 
 // JoinTableExpr.Join
@@ -819,7 +819,7 @@ func (node *IndexHints) WalkSubtree(visit Visit) error {
 // Where represents a WHERE or HAVING clause.
 type Where struct {
 	Type string
-	Expr BoolExpr
+	Expr Expr
 }
 
 // Where.Type
@@ -829,8 +829,8 @@ const (
 )
 
 // NewWhere creates a WHERE or HAVING clause out
-// of a BoolExpr. If the expression is nil, it returns nil.
-func NewWhere(typ string, expr BoolExpr) *Where {
+// of a Expr. If the expression is nil, it returns nil.
+func NewWhere(typ string, expr Expr) *Where {
 	if expr == nil {
 		return nil
 	}
@@ -865,7 +865,7 @@ type Expr interface {
 func (*AndExpr) iExpr()        {}
 func (*OrExpr) iExpr()         {}
 func (*NotExpr) iExpr()        {}
-func (*ParenBoolExpr) iExpr()  {}
+func (*ParenExpr) iExpr()      {}
 func (*ComparisonExpr) iExpr() {}
 func (*RangeCond) iExpr()      {}
 func (*IsExpr) iExpr()         {}
@@ -885,25 +885,32 @@ func (*FuncExpr) iExpr()       {}
 func (*CaseExpr) iExpr()       {}
 func (*ValuesFuncExpr) iExpr() {}
 
-// BoolExpr represents a boolean expression.
-type BoolExpr interface {
-	iBoolExpr()
-	Expr
+// Exprs represents a list of value expressions.
+// It's not a valid expression because it's not parenthesized.
+type Exprs []Expr
+
+// Format formats the node.
+func (node Exprs) Format(buf *TrackedBuffer) {
+	var prefix string
+	for _, n := range node {
+		buf.Myprintf("%s%v", prefix, n)
+		prefix = ", "
+	}
 }
 
-func (BoolVal) iBoolExpr()         {}
-func (*AndExpr) iBoolExpr()        {}
-func (*OrExpr) iBoolExpr()         {}
-func (*NotExpr) iBoolExpr()        {}
-func (*ParenBoolExpr) iBoolExpr()  {}
-func (*ComparisonExpr) iBoolExpr() {}
-func (*RangeCond) iBoolExpr()      {}
-func (*IsExpr) iBoolExpr()         {}
-func (*ExistsExpr) iBoolExpr()     {}
+// WalkSubtree walks the nodes of the subtree.
+func (node Exprs) WalkSubtree(visit Visit) error {
+	for _, n := range node {
+		if err := Walk(visit, n); err != nil {
+			return err
+		}
+	}
+	return nil
+}
 
 // AndExpr represents an AND expression.
 type AndExpr struct {
-	Left, Right BoolExpr
+	Left, Right Expr
 }
 
 // Format formats the node.
@@ -925,7 +932,7 @@ func (node *AndExpr) WalkSubtree(visit Visit) error {
 
 // OrExpr represents an OR expression.
 type OrExpr struct {
-	Left, Right BoolExpr
+	Left, Right Expr
 }
 
 // Format formats the node.
@@ -947,7 +954,7 @@ func (node *OrExpr) WalkSubtree(visit Visit) error {
 
 // NotExpr represents a NOT expression.
 type NotExpr struct {
-	Expr BoolExpr
+	Expr Expr
 }
 
 // Format formats the node.
@@ -966,18 +973,18 @@ func (node *NotExpr) WalkSubtree(visit Visit) error {
 	)
 }
 
-// ParenBoolExpr represents a parenthesized boolean expression.
-type ParenBoolExpr struct {
-	Expr BoolExpr
+// ParenExpr represents a parenthesized boolean expression.
+type ParenExpr struct {
+	Expr Expr
 }
 
 // Format formats the node.
-func (node *ParenBoolExpr) Format(buf *TrackedBuffer) {
+func (node *ParenExpr) Format(buf *TrackedBuffer) {
 	buf.Myprintf("(%v)", node.Expr)
 }
 
 // WalkSubtree walks the nodes of the subtree.
-func (node *ParenBoolExpr) WalkSubtree(visit Visit) error {
+func (node *ParenExpr) WalkSubtree(visit Visit) error {
 	if node == nil {
 		return nil
 	}
@@ -990,7 +997,7 @@ func (node *ParenBoolExpr) WalkSubtree(visit Visit) error {
 // ComparisonExpr represents a two-value comparison expression.
 type ComparisonExpr struct {
 	Operator    string
-	Left, Right ValExpr
+	Left, Right Expr
 }
 
 // ComparisonExpr.Operator
@@ -1010,6 +1017,7 @@ const (
 	NotRegexpStr         = "not regexp"
 	JSONExtractOp        = "->"
 	JSONUnquoteExtractOp = "->>"
+	CollateStr           = "collate"
 )
 
 // Format formats the node.
@@ -1032,8 +1040,8 @@ func (node *ComparisonExpr) WalkSubtree(visit Visit) error {
 // RangeCond represents a BETWEEN or a NOT BETWEEN expression.
 type RangeCond struct {
 	Operator string
-	Left     ValExpr
-	From, To ValExpr
+	Left     Expr
+	From, To Expr
 }
 
 // RangeCond.Operator
@@ -1112,27 +1120,6 @@ func (node *ExistsExpr) WalkSubtree(visit Visit) error {
 		node.Subquery,
 	)
 }
-
-// ValExpr represents a value expression.
-type ValExpr interface {
-	iValExpr()
-	Expr
-}
-
-func (*SQLVal) iValExpr()       {}
-func (*NullVal) iValExpr()      {}
-func (*ColName) iValExpr()      {}
-func (ValTuple) iValExpr()      {}
-func (*Subquery) iValExpr()     {}
-func (ListArg) iValExpr()       {}
-func (*BinaryExpr) iValExpr()   {}
-func (*UnaryExpr) iValExpr()    {}
-func (*IntervalExpr) iValExpr() {}
-func (*CollateExpr)  iValExpr() {}
-func (*FuncExpr) iValExpr()     {}
-func (*CaseExpr) iValExpr()     {}
-func (BoolVal) iValExpr()       {}
-func (*ValuesFuncExpr) iValExpr() {}
 
 // ValType specifies the type for SQLVal.
 type ValType int
@@ -1293,7 +1280,7 @@ func (node *ColName) Equal(c *ColName) bool {
 // It can be ValTuple, Subquery, ListArg.
 type ColTuple interface {
 	iColTuple()
-	ValExpr
+	Expr
 }
 
 func (ValTuple) iColTuple()  {}
@@ -1301,39 +1288,16 @@ func (*Subquery) iColTuple() {}
 func (ListArg) iColTuple()   {}
 
 // ValTuple represents a tuple of actual values.
-type ValTuple ValExprs
+type ValTuple Exprs
 
 // Format formats the node.
 func (node ValTuple) Format(buf *TrackedBuffer) {
-	buf.Myprintf("(%v)", ValExprs(node))
+	buf.Myprintf("(%v)", Exprs(node))
 }
 
 // WalkSubtree walks the nodes of the subtree.
 func (node ValTuple) WalkSubtree(visit Visit) error {
-	return Walk(visit, ValExprs(node))
-}
-
-// ValExprs represents a list of value expressions.
-// It's not a valid expression because it's not parenthesized.
-type ValExprs []ValExpr
-
-// Format formats the node.
-func (node ValExprs) Format(buf *TrackedBuffer) {
-	var prefix string
-	for _, n := range node {
-		buf.Myprintf("%s%v", prefix, n)
-		prefix = ", "
-	}
-}
-
-// WalkSubtree walks the nodes of the subtree.
-func (node ValExprs) WalkSubtree(visit Visit) error {
-	for _, n := range node {
-		if err := Walk(visit, n); err != nil {
-			return err
-		}
-	}
-	return nil
+	return Walk(visit, Exprs(node))
 }
 
 // Subquery represents a subquery.
@@ -1465,7 +1429,7 @@ func (node *IntervalExpr) WalkSubtree(visit Visit) error {
 
 // CollateExpr represents dynamic collate operator.
 type CollateExpr struct {
-	Expr Expr
+	Expr    Expr
 	Charset string
 }
 
@@ -1543,7 +1507,7 @@ func (node *FuncExpr) IsAggregate() bool {
 // ValuesFuncExpr represents a function call.
 type ValuesFuncExpr struct {
 	Name     ColIdent
-	Resolved ValExpr
+	Resolved Expr
 }
 
 // Format formats the node.
@@ -1572,9 +1536,9 @@ func (node *ValuesFuncExpr) WalkSubtree(visit Visit) error {
 
 // CaseExpr represents a CASE expression.
 type CaseExpr struct {
-	Expr  ValExpr
+	Expr  Expr
 	Whens []*When
-	Else  ValExpr
+	Else  Expr
 }
 
 // Format formats the node.
@@ -1613,8 +1577,8 @@ func (node *CaseExpr) WalkSubtree(visit Visit) error {
 
 // When represents a WHEN sub-expression.
 type When struct {
-	Cond BoolExpr
-	Val  ValExpr
+	Cond Expr
+	Val  Expr
 }
 
 // Format formats the node.
@@ -1635,7 +1599,7 @@ func (node *When) WalkSubtree(visit Visit) error {
 }
 
 // GroupBy represents a GROUP BY clause.
-type GroupBy []ValExpr
+type GroupBy []Expr
 
 // Format formats the node.
 func (node GroupBy) Format(buf *TrackedBuffer) {
@@ -1680,7 +1644,7 @@ func (node OrderBy) WalkSubtree(visit Visit) error {
 
 // Order represents an ordering expression.
 type Order struct {
-	Expr      ValExpr
+	Expr      Expr
 	Direction string
 }
 
@@ -1712,7 +1676,7 @@ func (node *Order) WalkSubtree(visit Visit) error {
 
 // Limit represents a LIMIT clause.
 type Limit struct {
-	Offset, Rowcount ValExpr
+	Offset, Rowcount Expr
 }
 
 // Format formats the node.
@@ -1786,7 +1750,7 @@ func (node UpdateExprs) WalkSubtree(visit Visit) error {
 // UpdateExpr represents an update expression.
 type UpdateExpr struct {
 	Name ColIdent
-	Expr ValExpr
+	Expr Expr
 }
 
 // Format formats the node.

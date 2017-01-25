@@ -152,8 +152,8 @@ func buildNoninitialQuery(
 	addAndTermToWhereClause(
 		resultSelectAST,
 		constructTupleInequality(
-			convertBindVariableNamesToValExpr(prevBindVariableNames),
-			convertColumnsToValExpr(splitParams.splitColumns),
+			convertBindVariableNamesToExpr(prevBindVariableNames),
+			convertColumnsToExpr(splitParams.splitColumns),
 			false /* strict */))
 	return &querytypes.BoundQuery{
 		Sql:           sqlparser.String(resultSelectAST),

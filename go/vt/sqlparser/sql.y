@@ -48,11 +48,9 @@ func forceEOF(yylex interface{}) {
   tableName   *TableName
   indexHints  *IndexHints
   expr        Expr
-  boolExpr    BoolExpr
+  exprs       Exprs
   boolVal     BoolVal
-  valExpr     ValExpr
   colTuple    ColTuple
-  valExprs    ValExprs
   values      Values
   valTuple    ValTuple
   subquery    *Subquery
@@ -138,25 +136,26 @@ func forceEOF(yylex interface{}) {
 %type <tableName> table_name into_table_name
 %type <indexHints> index_hint_list
 %type <colIdents> index_list
-%type <boolExpr> where_expression_opt
-%type <boolExpr> condition
+%type <expr> where_expression_opt
+%type <expr> condition
 %type <boolVal> boolean_value
 %type <str> compare
 %type <insRows> row_list
-%type <valExpr> value value_expression num_val
+%type <expr> value value_expression num_val
 %type <str> is_suffix
 %type <colTuple> col_tuple
-%type <valExprs> value_expression_list
+%type <exprs> value_expression_list
 %type <values> tuple_list
 %type <valTuple> row_tuple
+%type <expr> tuple_expression
 %type <subquery> subquery
 %type <colName> column_name
 %type <caseExpr> case_expression
 %type <whens> when_expression_list
 %type <when> when_expression
-%type <valExpr> value_expression_opt else_expression_opt
-%type <valExprs> group_by_opt
-%type <boolExpr> having_opt
+%type <expr> value_expression_opt else_expression_opt
+%type <exprs> group_by_opt
+%type <expr> having_opt
 %type <colIdent> keyword_func keyword
 %type <orderBy> order_by_opt order_list
 %type <order> order
@@ -625,7 +624,7 @@ where_expression_opt:
 expression:
   condition
   {
-    $$ = nil
+    $$ = $1
   }
 | expression AND expression
   {
@@ -645,7 +644,7 @@ expression:
   }
 | value_expression
   {
-    $$ = nil
+    $$ = $1
   }
 
 boolean_value:
@@ -765,9 +764,9 @@ compare:
   }
 
 col_tuple:
-  openb value_expression_list closeb
+  row_tuple
   {
-    $$ = ValTuple($2)
+    $$ = $1
   }
 | subquery
   {
@@ -787,7 +786,7 @@ subquery:
 value_expression_list:
   expression
   {
-    $$ = ValExprs{$1}
+    $$ = Exprs{$1}
   }
 | value_expression_list ',' expression
   {
@@ -813,7 +812,7 @@ value_expression:
   {
     $$ = $1
   }
-| row_tuple
+| tuple_expression
   {
     $$ = $1
   }
@@ -1258,6 +1257,16 @@ row_tuple:
   openb value_expression_list closeb
   {
     $$ = ValTuple($2)
+  }
+
+tuple_expression:
+  row_tuple
+  {
+    if len($1) == 1 {
+      $$ = &ParenExpr{$1[0]}
+    } else {
+      $$ = $1
+    }
   }
 
 update_list:

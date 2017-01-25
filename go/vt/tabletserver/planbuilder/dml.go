@@ -178,7 +178,7 @@ func analyzeWhere(node *sqlparser.Where, pkIndex *schema.Index) []interface{} {
 	return getPKValues(conditions, pkIndex)
 }
 
-func analyzeBoolean(node sqlparser.BoolExpr) (conditions []*sqlparser.ComparisonExpr) {
+func analyzeBoolean(node sqlparser.Expr) (conditions []*sqlparser.ComparisonExpr) {
 	switch node := node.(type) {
 	case *sqlparser.AndExpr:
 		left := analyzeBoolean(node.Left)
@@ -187,7 +187,7 @@ func analyzeBoolean(node sqlparser.BoolExpr) (conditions []*sqlparser.Comparison
 			return nil
 		}
 		return append(left, right...)
-	case *sqlparser.ParenBoolExpr:
+	case *sqlparser.ParenExpr:
 		return analyzeBoolean(node.Expr)
 	case *sqlparser.ComparisonExpr:
 		switch {
@@ -476,7 +476,7 @@ func findCol(col sqlparser.ColIdent, cols sqlparser.Columns) int {
 	return -1
 }
 
-func addVal(ins *sqlparser.Insert, col sqlparser.ColIdent, expr sqlparser.ValExpr) int {
+func addVal(ins *sqlparser.Insert, col sqlparser.ColIdent, expr sqlparser.Expr) int {
 	ins.Columns = append(ins.Columns, col)
 	rows := ins.Rows.(sqlparser.Values)
 	for i := range rows {
