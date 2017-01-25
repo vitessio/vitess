@@ -279,15 +279,15 @@ func TestBinlogEventIntVar1(t *testing.T) {
 	}
 
 	input := binlogEvent(googleIntVarEvent1)
-	wantName := "LAST_INSERT_ID"
+	wantType := byte(IntVarLastInsertID)
 	wantValue := uint64(101)
-	gotName, gotValue, err := input.IntVar(f)
+	gotType, gotValue, err := input.IntVar(f)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 		return
 	}
-	if gotName != wantName || gotValue != wantValue {
-		t.Errorf("%#v.IntVar() = (%#v, %#v), want (%#v, %#v)", input, gotName, gotValue, wantName, wantValue)
+	if gotType != wantType || gotValue != wantValue {
+		t.Errorf("%#v.IntVar() = (%#v, %#v), want (%#v, %#v)", input, gotType, gotValue, wantType, wantValue)
 	}
 }
 
@@ -299,15 +299,15 @@ func TestBinlogEventIntVar2(t *testing.T) {
 	}
 
 	input := binlogEvent(googleIntVarEvent2)
-	wantName := "INSERT_ID"
+	wantType := byte(IntVarInsertID)
 	wantValue := uint64(101)
-	gotName, gotValue, err := input.IntVar(f)
+	gotType, gotValue, err := input.IntVar(f)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 		return
 	}
-	if gotName != wantName || gotValue != wantValue {
-		t.Errorf("%#v.IntVar() = (%#v, %#v), want (%#v, %#v)", input, gotName, gotValue, wantName, wantValue)
+	if gotType != wantType || gotValue != wantValue {
+		t.Errorf("%#v.IntVar() = (%#v, %#v), want (%#v, %#v)", input, gotType, gotValue, wantType, wantValue)
 	}
 }
 
