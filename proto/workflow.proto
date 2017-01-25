@@ -58,3 +58,31 @@ message Workflow {
   // This field only makes sense if 'state' is Done.
   int64 end_time = 8;
 }
+
+// TaskArribute includes the parameters the task needs.
+// Not all fields are necessary for all tasks.
+message TaskAttribute {
+  string source_shard = 1;
+  string destination_shard = 2;
+  string vtworker = 3;
+  string keyspace = 4;
+}
+
+// Task is the data structure that stores the execution status and the attributes
+// of a task.
+message Task {
+  WorkflowState state = 1;
+  TaskAttribute attribute = 2;
+}
+
+message WorkflowCheckpoints {
+  // code_version is to distinguish the implementation version of the workflow.
+  // This is helpful when restarting the job while the code is changed.
+  string code_version = 1;
+  // tasks stores all tasks of the workflow in a map. The key is a unique name
+  // to identify the task, e.g. clone/-80.
+  map<string, Task> tasks = 2;
+  // settings includes information like source shards, destination shards for the
+  // workflow. The information will be leveraged by the task runner.
+  map<string, string> settings = 3;
+}
