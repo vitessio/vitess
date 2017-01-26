@@ -2032,16 +2032,44 @@
 </tr>
 </thead><tbody>
 <tr>
-<td style="text-align: left"><code>exclude_field_names</code> <br>bool</td>
-<td style="text-align: left">If set, the resulting Field array won’t have a Name, just a Type. This is an optimization for high-QPS queries where the client knows what it&#39;s getting.</td>
-</tr>
-<tr>
 <td style="text-align: left"><code>include_event_token</code> <br>bool</td>
-<td style="text-align: left">If set, we will try to include an EventToken with the responses.</td>
+<td style="text-align: left">This used to be exclude_field_names, which was replaced by IncludedFields enum below If set, we will try to include an EventToken with the responses.</td>
 </tr>
 <tr>
 <td style="text-align: left"><code>compare_event_token</code> <br><a href="#query.eventtoken">EventToken</a></td>
 <td style="text-align: left">EventToken is a structure that describes a point in time in a replication stream on one shard. The most recent known replication position can be retrieved from vttablet when executing a query. It is also sent with the replication streams from the binlog service.</td>
+</tr>
+<tr>
+<td style="text-align: left"><code>included_fields</code> <br><a href="#executeoptions.includedfields">IncludedFields</a></td>
+<td style="text-align: left">Controls what fields are returned in Field message responses from mysql, i.e. field name, table name, etc. This is an optimization for high-QPS queries where the client knows what it&#39;s getting</td>
+</tr>
+</tbody></table>
+
+<h4 id="enums">Enums</h4>
+
+<h5 id="executeoptions-includedfields">ExecuteOptions.IncludedFields</h5>
+
+<table><thead>
+<tr>
+<th style="text-align: left">Name</th>
+<th style="text-align: left">Value</th>
+<th style="text-align: left">Description</th>
+</tr>
+</thead><tbody>
+<tr>
+<td style="text-align: left"><code>TYPE_AND_NAME</code></td>
+<td style="text-align: left"><code>0</code></td>
+<td style="text-align: left"></td>
+</tr>
+<tr>
+<td style="text-align: left"><code>TYPE_ONLY</code></td>
+<td style="text-align: left"><code>1</code></td>
+<td style="text-align: left"></td>
+</tr>
+<tr>
+<td style="text-align: left"><code>ALL</code></td>
+<td style="text-align: left"><code>2</code></td>
+<td style="text-align: left"></td>
 </tr>
 </tbody></table>
 
@@ -2064,6 +2092,38 @@
 <tr>
 <td style="text-align: left"><code>type</code> <br><a href="#query.type">Type</a></td>
 <td style="text-align: left">vitess-defined type. Conversion function is in sqltypes package.</td>
+</tr>
+<tr>
+<td style="text-align: left"><code>table</code> <br>string</td>
+<td style="text-align: left">Remaining fields from mysql C API. These fields are only populated when ExecuteOptions.included_fields is set to IncludedFields.ALL.</td>
+</tr>
+<tr>
+<td style="text-align: left"><code>org_table</code> <br>string</td>
+<td style="text-align: left"></td>
+</tr>
+<tr>
+<td style="text-align: left"><code>database</code> <br>string</td>
+<td style="text-align: left"></td>
+</tr>
+<tr>
+<td style="text-align: left"><code>org_name</code> <br>string</td>
+<td style="text-align: left"></td>
+</tr>
+<tr>
+<td style="text-align: left"><code>column_length</code> <br>uint32</td>
+<td style="text-align: left">column_length is really a uint32. All 32 bits can be used.</td>
+</tr>
+<tr>
+<td style="text-align: left"><code>charset</code> <br>uint32</td>
+<td style="text-align: left">charset is actually a uint16. Only the lower 16 bits are used.</td>
+</tr>
+<tr>
+<td style="text-align: left"><code>decimals</code> <br>uint32</td>
+<td style="text-align: left">decimals is actualy a uint8. Only the lower 8 bits are used.</td>
+</tr>
+<tr>
+<td style="text-align: left"><code>flags</code> <br>uint32</td>
+<td style="text-align: left">flags is actually a uint16. Only the lower 16 bits are used.</td>
 </tr>
 </tbody></table>
 

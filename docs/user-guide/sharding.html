@@ -393,16 +393,24 @@ by a hyphen. For instance, if a shard&#39;s key range is the array of bytes
 beginning with [ 0x80 ] and ending, noninclusively, with [ 0xc0], then
 the shard&#39;s name is <code>80-c0</code>.</p>
 
-<p>Using this naming convention, the following six shards would be a valid
-full (albeit highly uneven) partition:</p>
+<p>Using this naming convention, the following four shards would be a valid
+full partition:</p>
 
 <ul>
 <li>-40</li>
 <li>40-80</li>
 <li>80-c0</li>
-<li>c000-d0c0</li>
-<li>d0c0-d000</li>
-<li>d000-</li>
+<li>c0-</li>
+</ul>
+
+<p>Shards do not need to handle the same size portion of the key space. For example, the following five shards would also be a valid full partition, albeit with a highly uneven distribution of keys.</p>
+
+<ul>
+<li>-80</li>
+<li>80-c0</li>
+<li>c0-dc00</li>
+<li>dc00-dc80</li>
+<li>dc80-</li>
 </ul>
 
 <h2 id="resharding">Resharding</h2>
