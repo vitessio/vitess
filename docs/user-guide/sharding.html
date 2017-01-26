@@ -388,6 +388,7 @@ value equal to or higher than 0x80 are assigned to the other shard.</p>
 <span class="nv">Start</span><span class="o">=[]</span>, <span class="nv">End</span><span class="o">=[</span>0x80<span class="o">]</span>: Lower half of the Key Range.
 <span class="nv">Start</span><span class="o">=[</span>0x80<span class="o">]</span>, <span class="nv">End</span><span class="o">=[]</span>: Upper half of the Key Range.
 <span class="nv">Start</span><span class="o">=[</span>0x40<span class="o">]</span>, <span class="nv">End</span><span class="o">=[</span>0x80<span class="o">]</span>: Second quarter of the Key Range.
+<span class="nv">Start</span><span class="o">=[</span>0xFF00<span class="o">]</span>, <span class="nv">End</span><span class="o">=[</span>0xFF80<span class="o">]</span>: Second to last 1/512th of the Key Range.
 </code></pre></div>
 <p>Two key ranges are consecutive if the end value of one range equals the
 start value of the other range.</p>
@@ -408,6 +409,16 @@ full partition:</p>
 <li>40-80</li>
 <li>80-c0</li>
 <li>c0-</li>
+</ul>
+
+<p>Shards do not need to handle the same size portion of the key space. For example, the following five shards would also be a valid full partition, albeit with a highly uneven distribution of keys.</p>
+
+<ul>
+<li>-80</li>
+<li>80-c0</li>
+<li>c0-dc00</li>
+<li>dc00-dc80</li>
+<li>dc80-</li>
 </ul>
 
 <h2 id="resharding">Resharding</h2>
