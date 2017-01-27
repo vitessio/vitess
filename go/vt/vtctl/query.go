@@ -510,7 +510,7 @@ func commandVtTabletStreamHealth(ctx context.Context, wr *wrangler.Wrangler, sub
 		return err
 	}
 	if subFlags.NArg() != 1 {
-		return fmt.Errorf("The <tablet alias> argument is required for the VtTabletStreamHealth command.")
+		return fmt.Errorf("the <tablet alias> argument is required for the VtTabletStreamHealth command")
 	}
 	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
 	if err != nil {
@@ -554,7 +554,7 @@ func commandVtTabletUpdateStream(ctx context.Context, wr *wrangler.Wrangler, sub
 		return err
 	}
 	if subFlags.NArg() != 1 {
-		return fmt.Errorf("The <tablet alias> argument is required for the VtTabletUpdateStream command.")
+		return fmt.Errorf("the <tablet alias> argument is required for the VtTabletUpdateStream command")
 	}
 	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
 	if err != nil {
