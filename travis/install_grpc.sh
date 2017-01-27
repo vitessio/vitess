@@ -20,15 +20,21 @@ if [ -n "$grpc_dist" ]; then
 fi
 
 # Python requires a very recent version of virtualenv.
+# We also require a recent version of pip, as we use it to
+# upgrade the other tools.
+# For instance, setuptools doesn't work with pip 6.0:
+# https://github.com/pypa/setuptools/issues/945
+# (and setuptools is used by grpc install).
 if [ -n "$grpc_dist" ]; then
   # Create a virtualenv, which also creates a virualenv-boxed pip.
+  # Update both pip and virtualenv.
   virtualenv $grpc_dist/usr/local
-  $grpc_dist/usr/local/bin/pip install --upgrade --ignore-installed virtualenv
   $grpc_dist/usr/local/bin/pip install --upgrade pip
+  $grpc_dist/usr/local/bin/pip install --upgrade --ignore-installed virtualenv
 else
-  # system wide installations require an explicit upgrade of
-  # certain gRPC Python dependencies e.g. "six" on Debian Jessie.
   pip install --upgrade pip
+  # System wide installations require an explicit upgrade of
+  # certain gRPC Python dependencies e.g. "six" on Debian Jessie.
   pip install --upgrade --ignore-installed six
 fi
 
