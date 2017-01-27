@@ -24,9 +24,11 @@ if [ -n "$grpc_dist" ]; then
   # Create a virtualenv, which also creates a virualenv-boxed pip.
   virtualenv $grpc_dist/usr/local
   $grpc_dist/usr/local/bin/pip install --upgrade --ignore-installed virtualenv
+  $grpc_dist/usr/local/bin/pip install --upgrade pip
 else
   # system wide installations require an explicit upgrade of
   # certain gRPC Python dependencies e.g. "six" on Debian Jessie.
+  pip install --upgrade pip
   pip install --upgrade --ignore-installed six
 fi
 
@@ -73,7 +75,7 @@ fi
 
 # Install gRPC python libraries from PyPI.
 # Dependencies like protobuf python will be installed automatically.
-grpcio_ver=1.0.0
+grpcio_ver=1.0.4
 if [ -n "$grpc_dist" ]; then
   $grpc_dist/usr/local/bin/pip install --upgrade grpcio==$grpcio_ver
 else
