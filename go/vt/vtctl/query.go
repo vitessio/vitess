@@ -71,23 +71,23 @@ func init() {
 		addCommand(queriesGroupName, command{
 			"VtTabletExecute",
 			commandVtTabletExecute,
-			"[-bind_variables <JSON map>] [-connect_timeout <connect timeout>] [-transaction_id <transaction_id>] [-tablet_type <tablet_type>] [-options <proto text options>] [-json] -keyspace <keyspace> -shard <shard> <tablet alias> <sql>",
-			"Executes the given query on the given tablet."})
+			"[-connect_timeout <connect timeout>] [-transaction_id <transaction_id>] [-options <proto text options>] [-json] <tablet alias> <sql>",
+			"Executes the given query on the given tablet. -transaction_id is optional. Use VtTabletBegin to start a transaction."})
 		addCommand(queriesGroupName, command{
 			"VtTabletBegin",
 			commandVtTabletBegin,
-			"[-connect_timeout <connect timeout>] [-tablet_type <tablet_type>] -keyspace <keyspace> -shard <shard> <tablet alias>",
+			"[-connect_timeout <connect timeout>] <tablet alias>",
 			"Starts a transaction on the provided server."})
 		addCommand(queriesGroupName, command{
 			"VtTabletCommit",
 			commandVtTabletCommit,
-			"[-connect_timeout <connect timeout>] [-tablet_type <tablet_type>] -keyspace <keyspace> -shard <shard> <tablet alias> <transaction_id>",
-			"Commits a transaction on the provided server."})
+			"[-connect_timeout <connect timeout>] <transaction_id>",
+			"Commits the given transaction on the provided server."})
 		addCommand(queriesGroupName, command{
 			"VtTabletRollback",
 			commandVtTabletRollback,
-			"[-connect_timeout <connect timeout>] [-tablet_type <tablet_type>] -keyspace <keyspace> -shard <shard> <tablet alias> <transaction_id>",
-			"Rollbacks a transaction on the provided server."})
+			"[-connect_timeout <connect timeout>] <tablet alias> <transaction_id>",
+			"Rollbacks the given transaction on the provided server."})
 		addCommand(queriesGroupName, command{
 			"VtTabletStreamHealth",
 			commandVtTabletStreamHealth,
