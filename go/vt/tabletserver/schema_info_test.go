@@ -202,9 +202,11 @@ func TestSchemaInfoReload(t *testing.T) {
 		},
 	})
 	db.AddQuery("show index from test_table_04", &sqltypes.Result{
-		Fields:       createShowIndexFields(),
+		Fields:       mysqlconn.ShowIndexFromTableFields,
 		RowsAffected: 1,
-		Rows:         [][]sqltypes.Value{createTestTableShowIndex("pk")},
+		Rows: [][]sqltypes.Value{
+			mysqlconn.ShowIndexFromTableRow("test_table_04", true, "PRIMARY", 1, "pk", false),
+		},
 	})
 
 	schemaInfo.Reload(ctx)
@@ -451,9 +453,11 @@ func TestUpdatedMysqlStats(t *testing.T) {
 	})
 	q = fmt.Sprintf("show index from %s", tableName)
 	db.AddQuery(q, &sqltypes.Result{
-		Fields:       createShowIndexFields(),
+		Fields:       mysqlconn.ShowIndexFromTableFields,
 		RowsAffected: 1,
-		Rows:         [][]sqltypes.Value{createTestTableShowIndex("pk")},
+		Rows: [][]sqltypes.Value{
+			mysqlconn.ShowIndexFromTableRow(tableName.String(), true, "PRIMARY", 1, "pk", false),
+		},
 	})
 
 	if err := schemaInfo.Reload(ctx); err != nil {
@@ -579,30 +583,6 @@ func createTestTableUpdatedStats(tableName string) []sqltypes.Value {
 	}
 }
 
-func createShowIndexFields() []*querypb.Field {
-	return []*querypb.Field{
-		{Type: sqltypes.VarChar},
-		{Type: sqltypes.VarChar},
-		{Type: sqltypes.VarChar},
-		{Type: sqltypes.VarChar},
-		{Type: sqltypes.VarChar},
-		{Type: sqltypes.VarChar},
-		{Type: sqltypes.Uint64},
-	}
-}
-
-func createTestTableShowIndex(pkColumnName string) []sqltypes.Value {
-	return []sqltypes.Value{
-		sqltypes.MakeString([]byte{}),
-		sqltypes.MakeString([]byte{}),
-		sqltypes.MakeString([]byte("PRIMARY")),
-		sqltypes.MakeString([]byte{}),
-		sqltypes.MakeString([]byte(pkColumnName)),
-		sqltypes.MakeString([]byte{}),
-		sqltypes.MakeString([]byte("300")),
-	}
-}
-
 func getSchemaInfoTestSupportedQueries() map[string]*sqltypes.Result {
 	return map[string]*sqltypes.Result{
 		// queries for schema info
@@ -713,48 +693,24 @@ func getSchemaInfoTestSupportedQueries() map[string]*sqltypes.Result {
 		},
 		// for SplitQuery because it needs a primary key column
 		"show index from test_table_01": {
-			Fields:       createShowIndexFields(),
+			Fields:       mysqlconn.ShowIndexFromTableFields,
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
-				{
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("PRIMARY")),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("pk")),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("300")),
-				},
+				mysqlconn.ShowIndexFromTableRow("test_table_01", true, "PRIMARY", 1, "pk", false),
 			},
 		},
 		"show index from test_table_02": {
-			Fields:       createShowIndexFields(),
+			Fields:       mysqlconn.ShowIndexFromTableFields,
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
-				{
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("PRIMARY")),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("pk")),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("300")),
-				},
+				mysqlconn.ShowIndexFromTableRow("test_table_02", true, "PRIMARY", 1, "pk", false),
 			},
 		},
 		"show index from test_table_03": {
-			Fields:       createShowIndexFields(),
+			Fields:       mysqlconn.ShowIndexFromTableFields,
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
-				{
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("PRIMARY")),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("pk")),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("300")),
-				},
+				mysqlconn.ShowIndexFromTableRow("test_table_03", true, "PRIMARY", 1, "pk", false),
 			},
 		},
 		"begin":  {},

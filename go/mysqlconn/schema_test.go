@@ -11,7 +11,7 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 )
 
-// testDescribeTable makes sure the fields returned by 'describe table'
+// testDescribeTable makes sure the fields returned by 'describe <table>'
 // are what we expect.
 func testDescribeTable(t *testing.T, params *sqldb.ConnParams) {
 	ctx := context.Background()
@@ -19,6 +19,7 @@ func testDescribeTable(t *testing.T, params *sqldb.ConnParams) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer conn.Close()
 
 	// Note this specific table sets a default '0' for the 'id' column.
 	// This is because without this, we have exceptions:
@@ -63,6 +64,65 @@ func testDescribeTable(t *testing.T, params *sqldb.ConnParams) {
 	}
 }
 
+// testShowIndexFromTable makes sure the fields returned by 'show index from <table>'
+// are what we expect.
+func testShowIndexFromTable(t *testing.T, params *sqldb.ConnParams) {
+	ctx := context.Background()
+	conn, err := Connect(ctx, params)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+
+	if _, err := conn.ExecuteFetch("create table for_show_index(id int, name varchar(128), zipcode varchar(5), primary key(id), unique index on_name (name), index on_zipcode (zipcode), index on_zipcode_name (zipcode, name))", 0, false); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := conn.ExecuteFetch("show index from for_show_index", 10, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !reflect.DeepEqual(result.Fields, ShowIndexFromTableFields) {
+		for i, f := range result.Fields {
+			if i < len(ShowIndexFromTableFields) && !reflect.DeepEqual(f, ShowIndexFromTableFields[i]) {
+				t.Logf("result.Fields[%v] = %v", i, f)
+				t.Logf("        expected = %v", ShowIndexFromTableFields[i])
+			}
+		}
+		t.Errorf("Fields returned by 'show index from' differ from expected fields: got:\n%v\nexpected:\n%v", result.Fields, ShowIndexFromTableFields)
+	}
+
+	if len(result.Rows) != 5 {
+		t.Errorf("Got %v rows, expected 5", len(result.Rows))
+	}
+
+	want := ShowIndexFromTableRow("for_show_index", true, "PRIMARY", 1, "id", false)
+	if !reflect.DeepEqual(result.Rows[0], want) {
+		t.Errorf("Row[0] returned by 'show index from' differ from expected content: got:\n%v\nexpected:\n%v", RowString(result.Rows[0]), RowString(want))
+	}
+
+	want = ShowIndexFromTableRow("for_show_index", true, "on_name", 1, "name", true)
+	if !reflect.DeepEqual(result.Rows[1], want) {
+		t.Errorf("Row[1] returned by 'show index from' differ from expected content: got:\n%v\nexpected:\n%v", RowString(result.Rows[1]), RowString(want))
+	}
+
+	want = ShowIndexFromTableRow("for_show_index", false, "on_zipcode", 1, "zipcode", true)
+	if !reflect.DeepEqual(result.Rows[2], want) {
+		t.Errorf("Row[2] returned by 'show index from' differ from expected content: got:\n%v\nexpected:\n%v", RowString(result.Rows[2]), RowString(want))
+	}
+
+	want = ShowIndexFromTableRow("for_show_index", false, "on_zipcode_name", 1, "zipcode", true)
+	if !reflect.DeepEqual(result.Rows[3], want) {
+		t.Errorf("Row[3] returned by 'show index from' differ from expected content: got:\n%v\nexpected:\n%v", RowString(result.Rows[3]), RowString(want))
+	}
+
+	want = ShowIndexFromTableRow("for_show_index", false, "on_zipcode_name", 2, "name", true)
+	if !reflect.DeepEqual(result.Rows[4], want) {
+		t.Errorf("Row[4] returned by 'show index from' differ from expected content: got:\n%v\nexpected:\n%v", RowString(result.Rows[4]), RowString(want))
+	}
+}
+
 func RowString(row []sqltypes.Value) string {
 	l := len(row)
 	result := fmt.Sprintf("%v values:", l)
@@ -80,5 +140,9 @@ func RowString(row []sqltypes.Value) string {
 func testSchema(t *testing.T, params *sqldb.ConnParams) {
 	t.Run("DescribeTable", func(t *testing.T) {
 		testDescribeTable(t, params)
+	})
+
+	t.Run("ShowIndexFromTable", func(t *testing.T) {
+		testShowIndexFromTable(t, params)
 	})
 }

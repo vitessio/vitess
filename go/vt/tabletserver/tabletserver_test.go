@@ -2112,36 +2112,12 @@ func getSupportedQueries() map[string]*sqltypes.Result {
 		},
 		// for SplitQuery because it needs a primary key column
 		"show index from test_table": {
-			Fields:       createShowIndexFields(),
+			Fields:       mysqlconn.ShowIndexFromTableFields,
 			RowsAffected: 3,
 			Rows: [][]sqltypes.Value{
-				{
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("PRIMARY")),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("pk")),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("300")),
-				},
-				{
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("INDEX")),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("name")),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("300")),
-				},
-				{
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("name_string_INDEX")),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("name_string")),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("100")),
-				},
+				mysqlconn.ShowIndexFromTableRow("test_table", true, "PRIMARY", 1, "pk", false),
+				mysqlconn.ShowIndexFromTableRow("test_table", false, "index", 1, "name", true),
+				mysqlconn.ShowIndexFromTableRow("test_table", false, "name_string_INDEX", 1, "name_string", true),
 			},
 		},
 		"select * from msg where 1 != 1": {
@@ -2182,27 +2158,11 @@ func getSupportedQueries() map[string]*sqltypes.Result {
 			},
 		},
 		"show index from msg": {
-			Fields:       createShowIndexFields(),
+			Fields:       mysqlconn.ShowIndexFromTableFields,
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
-				{
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("PRIMARY")),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("time_scheduled")),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("300")),
-				},
-				{
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("PRIMARY")),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("id")),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("300")),
-				},
+				mysqlconn.ShowIndexFromTableRow("msg", true, "PRIMARY", 1, "time_scheduled", false),
+				mysqlconn.ShowIndexFromTableRow("msg", true, "PRIMARY", 2, "id", false),
 			},
 		},
 		baseShowTables + " and table_name = 'msg'": {

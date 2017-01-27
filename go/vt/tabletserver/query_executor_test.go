@@ -1522,27 +1522,11 @@ func getQueryExecutorSupportedQueries() map[string]*sqltypes.Result {
 		},
 		// for SplitQuery because it needs a primary key column
 		"show index from test_table": {
-			Fields:       createShowIndexFields(),
+			Fields:       mysqlconn.ShowIndexFromTableFields,
 			RowsAffected: 2,
 			Rows: [][]sqltypes.Value{
-				{
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("PRIMARY")),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("pk")),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("300")),
-				},
-				{
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("index")),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("name")),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("300")),
-				},
+				mysqlconn.ShowIndexFromTableRow("test_table", true, "PRIMARY", 1, "pk", false),
+				mysqlconn.ShowIndexFromTableRow("test_table", false, "index", 1, "name", true),
 			},
 		},
 		"begin":  {},
@@ -1591,18 +1575,10 @@ func getQueryExecutorSupportedQueries() map[string]*sqltypes.Result {
 			},
 		},
 		"show index from seq": {
-			Fields:       createShowIndexFields(),
+			Fields:       mysqlconn.ShowIndexFromTableFields,
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
-				{
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("PRIMARY")),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("id")),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("300")),
-				},
+				mysqlconn.ShowIndexFromTableRow("seq", true, "PRIMARY", 1, "id", false),
 			},
 		},
 		baseShowTables + " and table_name = 'seq'": {
@@ -1650,7 +1626,7 @@ func getQueryExecutorSupportedQueries() map[string]*sqltypes.Result {
 			Fields:       mysqlconn.DescribeTableFields,
 			RowsAffected: 7,
 			Rows: [][]sqltypes.Value{
-				mysqlconn.DescribeTableRow("time_scheduled", "int(11)", false, "MUL", "0"),
+				mysqlconn.DescribeTableRow("time_scheduled", "int(11)", false, "PRI", "0"),
 				mysqlconn.DescribeTableRow("id", "bigint(20)", false, "PRI", "0"),
 				mysqlconn.DescribeTableRow("time_next", "bigint(20)", false, "", "0"),
 				mysqlconn.DescribeTableRow("epoch", "bigint(20)", false, "", "0"),
@@ -1660,27 +1636,11 @@ func getQueryExecutorSupportedQueries() map[string]*sqltypes.Result {
 			},
 		},
 		"show index from msg": {
-			Fields:       createShowIndexFields(),
+			Fields:       mysqlconn.ShowIndexFromTableFields,
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
-				{
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("PRIMARY")),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("time_scheduled")),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("300")),
-				},
-				{
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("PRIMARY")),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("id")),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("300")),
-				},
+				mysqlconn.ShowIndexFromTableRow("msg", true, "PRIMARY", 1, "time_scheduled", false),
+				mysqlconn.ShowIndexFromTableRow("msg", true, "PRIMARY", 2, "id", false),
 			},
 		},
 		baseShowTables + " and table_name = 'msg'": {
