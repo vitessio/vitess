@@ -123,6 +123,55 @@ func testShowIndexFromTable(t *testing.T, params *sqldb.ConnParams) {
 	}
 }
 
+// testBaseShowTables makes sure the fields returned by
+// BaseShowTablesForTable are what we expect.
+func testBaseShowTables(t *testing.T, params *sqldb.ConnParams) {
+	ctx := context.Background()
+	conn, err := Connect(ctx, params)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+
+	if _, err := conn.ExecuteFetch("create table for_base_show_tables(id int, name varchar(128), primary key(id)) comment 'fancy table'", 0, false); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := conn.ExecuteFetch(BaseShowTablesForTable("for_base_show_tables"), 10, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !reflect.DeepEqual(result.Fields, BaseShowTablesFields) {
+		// MariaDB has length 17 for unix_timestamp(create_time), see if that's the only difference.
+		if result.Fields[2].ColumnLength == 17 {
+			result.Fields[2].ColumnLength = 11
+		}
+
+		// And try again.
+		if !reflect.DeepEqual(result.Fields, BaseShowTablesFields) {
+			for i, f := range result.Fields {
+				if !reflect.DeepEqual(f, BaseShowTablesFields[i]) {
+					t.Logf("result.Fields[%v] = %v", i, f)
+					t.Logf("        expected = %v", BaseShowTablesFields[i])
+				}
+			}
+			t.Errorf("Fields returned by BaseShowTables differ from expected fields: got:\n%v\nexpected:\n%v", result.Fields, BaseShowTablesFields)
+		}
+	}
+
+	want := BaseShowTablesRow("for_base_show_tables", false, "fancy table")
+	result.Rows[0][2] = sqltypes.MakeTrusted(sqltypes.Int64, []byte("1427325875")) // unix_timestamp(create_time)
+	result.Rows[0][4] = sqltypes.MakeTrusted(sqltypes.Uint64, []byte("0"))         // table_rows
+	result.Rows[0][5] = sqltypes.MakeTrusted(sqltypes.Uint64, []byte("0"))         // data_length
+	result.Rows[0][6] = sqltypes.MakeTrusted(sqltypes.Uint64, []byte("0"))         // index_length
+	result.Rows[0][7] = sqltypes.MakeTrusted(sqltypes.Uint64, []byte("0"))         // data_free
+	result.Rows[0][8] = sqltypes.MakeTrusted(sqltypes.Uint64, []byte("0"))         // max_data_length
+	if !reflect.DeepEqual(result.Rows[0], want) {
+		t.Errorf("Row[0] returned by BaseShowTables differ from expected content: got:\n%v\nexpected:\n%v", RowString(result.Rows[0]), RowString(want))
+	}
+}
+
 func RowString(row []sqltypes.Value) string {
 	l := len(row)
 	result := fmt.Sprintf("%v values:", l)
@@ -144,5 +193,9 @@ func testSchema(t *testing.T, params *sqldb.ConnParams) {
 
 	t.Run("ShowIndexFromTable", func(t *testing.T) {
 		testShowIndexFromTable(t, params)
+	})
+
+	t.Run("BaseShowTables", func(t *testing.T) {
+		testBaseShowTables(t, params)
 	})
 }

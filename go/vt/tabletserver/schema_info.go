@@ -16,6 +16,7 @@ import (
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/acl"
 	"github.com/youtube/vitess/go/cache"
+	"github.com/youtube/vitess/go/mysqlconn"
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/stats"
@@ -30,8 +31,6 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver/planbuilder"
 	"golang.org/x/net/context"
 )
-
-const baseShowTables = "SELECT table_name, table_type, unix_timestamp(create_time), table_comment, table_rows, data_length, index_length, data_free, max_data_length FROM information_schema.tables WHERE table_schema = database()"
 
 const maxTableCount = 10000
 
@@ -181,7 +180,7 @@ func (si *SchemaInfo) Open(dbaParams *sqldb.ConnParams, strictMode bool) {
 		}
 	}
 
-	tableData, err := conn.Exec(ctx, baseShowTables, maxTableCount, false)
+	tableData, err := conn.Exec(ctx, mysqlconn.BaseShowTables, maxTableCount, false)
 	if err != nil {
 		panic(PrefixTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, err, "Could not get table list: "))
 	}
@@ -260,7 +259,7 @@ func (si *SchemaInfo) Reload(ctx context.Context) error {
 	func() {
 		conn := getOrPanic(ctx, si.connPool)
 		defer conn.Recycle()
-		tableData, err = conn.Exec(ctx, baseShowTables, maxTableCount, false)
+		tableData, err = conn.Exec(ctx, mysqlconn.BaseShowTables, maxTableCount, false)
 	}()
 	if err != nil {
 		return fmt.Errorf("could not get table list for reload: %v", err)
@@ -324,7 +323,7 @@ func (si *SchemaInfo) ClearQueryPlanCache() {
 func (si *SchemaInfo) CreateOrUpdateTable(ctx context.Context, tableName string) error {
 	conn := getOrPanic(ctx, si.connPool)
 	defer conn.Recycle()
-	tableData, err := conn.Exec(ctx, fmt.Sprintf("%s and table_name = '%s'", baseShowTables, tableName), 1, false)
+	tableData, err := conn.Exec(ctx, mysqlconn.BaseShowTablesForTable(tableName), 1, false)
 	if err != nil {
 		si.queryServiceStats.InternalErrors.Add("Schema", 1)
 		return PrefixTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, err,
