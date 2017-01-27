@@ -1,10 +1,11 @@
 package mysqlconn
 
 import (
-	"context"
 	"fmt"
 	"sync"
 	"testing"
+
+	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/sqldb"

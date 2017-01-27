@@ -19,9 +19,10 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/golang/protobuf/proto"
+	"github.com/youtube/vitess/go/mysqlconn"
+	"github.com/youtube/vitess/go/mysqlconn/fakesqldb"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
-	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -44,7 +45,6 @@ func TestTabletServerGetState(t *testing.T) {
 		"NOT_SERVING",
 		"SHUTTING_DOWN",
 	}
-	setUpTabletServerTest()
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServer(config)
@@ -61,7 +61,8 @@ func TestTabletServerGetState(t *testing.T) {
 }
 
 func TestTabletServerAllowQueriesFailBadConn(t *testing.T) {
-	db := setUpTabletServerTest()
+	db := setUpTabletServerTest(t)
+	defer db.Close()
 	db.EnableConnFail()
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
@@ -77,7 +78,8 @@ func TestTabletServerAllowQueriesFailBadConn(t *testing.T) {
 }
 
 func TestTabletServerAllowQueries(t *testing.T) {
-	db := setUpTabletServerTest()
+	db := setUpTabletServerTest(t)
+	defer db.Close()
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServer(config)
@@ -100,7 +102,8 @@ func TestTabletServerAllowQueries(t *testing.T) {
 }
 
 func TestTabletServerInitDBConfig(t *testing.T) {
-	db := setUpTabletServerTest()
+	db := setUpTabletServerTest(t)
+	defer db.Close()
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServer(config)
@@ -120,7 +123,8 @@ func TestTabletServerInitDBConfig(t *testing.T) {
 }
 
 func TestDecideAction(t *testing.T) {
-	db := setUpTabletServerTest()
+	db := setUpTabletServerTest(t)
+	defer db.Close()
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServer(config)
@@ -226,7 +230,8 @@ func TestDecideAction(t *testing.T) {
 }
 
 func TestSetServingType(t *testing.T) {
-	db := setUpTabletServerTest()
+	db := setUpTabletServerTest(t)
+	defer db.Close()
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServer(config)
@@ -295,9 +300,11 @@ func TestSetServingType(t *testing.T) {
 }
 
 func TestTabletServerSingleSchemaFailure(t *testing.T) {
-	db := setUpTabletServerTest()
+	db := setUpTabletServerTest(t)
+	defer db.Close()
 
 	want := &sqltypes.Result{
+		Fields:       createTestTableBaseShowTableFields(),
 		RowsAffected: 2,
 		Rows: [][]sqltypes.Value{
 			{
@@ -346,9 +353,11 @@ func TestTabletServerSingleSchemaFailure(t *testing.T) {
 }
 
 func TestTabletServerAllSchemaFailure(t *testing.T) {
-	db := setUpTabletServerTest()
+	db := setUpTabletServerTest(t)
+	defer db.Close()
 	// Return only tables that tabletserver can't access (the mock will reject all queries to them).
 	want := &sqltypes.Result{
+		Fields:       createTestTableBaseShowTableFields(),
 		RowsAffected: 2,
 		Rows: [][]sqltypes.Value{
 			{
@@ -389,7 +398,8 @@ func TestTabletServerAllSchemaFailure(t *testing.T) {
 }
 
 func TestTabletServerCheckMysql(t *testing.T) {
-	db := setUpTabletServerTest()
+	db := setUpTabletServerTest(t)
+	defer db.Close()
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServer(config)
@@ -417,7 +427,8 @@ func TestTabletServerCheckMysql(t *testing.T) {
 }
 
 func TestTabletServerCheckMysqlFailInvalidConn(t *testing.T) {
-	db := setUpTabletServerTest()
+	db := setUpTabletServerTest(t)
+	defer db.Close()
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServer(config)
@@ -429,14 +440,13 @@ func TestTabletServerCheckMysqlFailInvalidConn(t *testing.T) {
 		t.Fatalf("TabletServer.StartService should succeed, but got error: %v", err)
 	}
 	// make mysql conn fail
-	db.EnableConnFail()
+	db.Close()
 	if tsv.isMySQLReachable() {
 		t.Fatalf("isMySQLReachable should return false")
 	}
 }
 
 func TestTabletServerCheckMysqlInUnintialized(t *testing.T) {
-	_ = setUpTabletServerTest()
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	config.EnablePublishStats = true
@@ -461,7 +471,8 @@ func TestTabletServerCheckMysqlInUnintialized(t *testing.T) {
 }
 
 func TestTabletServerReconnect(t *testing.T) {
-	db := setUpTabletServerTest()
+	db := setUpTabletServerTest(t)
+	defer db.Close()
 	query := "select addr from test_table where pk = 1 limit 1000"
 	want := &sqltypes.Result{}
 	db.AddQuery(query, want)
@@ -486,7 +497,7 @@ func TestTabletServerReconnect(t *testing.T) {
 	}
 
 	// make mysql conn fail
-	db.EnableConnFail()
+	db.Close()
 	_, err = tsv.Execute(context.Background(), &target, query, nil, 0, nil)
 	if err == nil {
 		t.Error("Execute: want error, got nil")
@@ -497,7 +508,10 @@ func TestTabletServerReconnect(t *testing.T) {
 	}
 
 	// make mysql conn work
-	db.DisableConnFail()
+	db = setUpTabletServerTest(t)
+	db.AddQuery(query, want)
+	db.AddQuery("select addr from test_table where 1 != 1", &sqltypes.Result{})
+	dbconfigs = testUtils.newDBConfigs(db)
 	err = tsv.StartService(target, dbconfigs, testUtils.newMysqld(&dbconfigs))
 	if err != nil {
 		t.Error(err)
@@ -509,7 +523,8 @@ func TestTabletServerReconnect(t *testing.T) {
 }
 
 func TestTabletServerTarget(t *testing.T) {
-	db := setUpTabletServerTest()
+	db := setUpTabletServerTest(t)
+	defer db.Close()
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServer(config)
@@ -601,7 +616,8 @@ func TestTabletServerTarget(t *testing.T) {
 
 func TestTabletServerStopWithPrepare(t *testing.T) {
 	// Reuse code from tx_executor_test.
-	_, tsv, _ := newTestTxExecutor()
+	_, tsv, db := newTestTxExecutor(t)
+	defer db.Close()
 	ctx := context.Background()
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
 	transactionID, err := tsv.Begin(ctx, &target)
@@ -643,7 +659,8 @@ func TestTabletServerStopWithPrepare(t *testing.T) {
 
 func TestTabletServerMasterToReplica(t *testing.T) {
 	// Reuse code from tx_executor_test.
-	_, tsv, _ := newTestTxExecutor()
+	_, tsv, db := newTestTxExecutor(t)
+	defer db.Close()
 	ctx := context.Background()
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
 	txid1, err := tsv.Begin(ctx, &target)
@@ -689,7 +706,8 @@ func TestTabletServerMasterToReplica(t *testing.T) {
 
 func TestTabletServerReplicaToMaster(t *testing.T) {
 	// Reuse code from tx_executor_test.
-	_, tsv, db := newTestTxExecutor()
+	_, tsv, db := newTestTxExecutor(t)
+	defer db.Close()
 	defer tsv.StopService()
 	tsv.SetServingType(topodatapb.TabletType_REPLICA, true, nil)
 	tpc := tsv.te.twoPC
@@ -702,6 +720,12 @@ func TestTabletServerReplicaToMaster(t *testing.T) {
 	tsv.SetServingType(topodatapb.TabletType_REPLICA, true, nil)
 
 	db.AddQuery(tpc.readAllRedo, &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{Type: sqltypes.VarBinary},
+			{Type: sqltypes.Uint64},
+			{Type: sqltypes.Uint64},
+			{Type: sqltypes.VarBinary},
+		},
 		Rows: [][]sqltypes.Value{{
 			sqltypes.MakeString([]byte("dtid0")),
 			sqltypes.MakeString([]byte(strconv.Itoa(RedoStatePrepared))),
@@ -723,6 +747,12 @@ func TestTabletServerReplicaToMaster(t *testing.T) {
 	tsv.te.txPool.lastID.Set(1)
 	// Ensure we continue past errors.
 	db.AddQuery(tpc.readAllRedo, &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{Type: sqltypes.VarBinary},
+			{Type: sqltypes.Uint64},
+			{Type: sqltypes.Uint64},
+			{Type: sqltypes.VarBinary},
+		},
 		Rows: [][]sqltypes.Value{{
 			sqltypes.MakeString([]byte("bogus")),
 			sqltypes.MakeString([]byte(strconv.Itoa(RedoStatePrepared))),
@@ -761,7 +791,8 @@ func TestTabletServerReplicaToMaster(t *testing.T) {
 }
 
 func TestTabletServerCreateTransaction(t *testing.T) {
-	_, tsv, db := newTestTxExecutor()
+	_, tsv, db := newTestTxExecutor(t)
+	defer db.Close()
 	defer tsv.StopService()
 	ctx := context.Background()
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
@@ -778,7 +809,8 @@ func TestTabletServerCreateTransaction(t *testing.T) {
 }
 
 func TestTabletServerStartCommit(t *testing.T) {
-	_, tsv, db := newTestTxExecutor()
+	_, tsv, db := newTestTxExecutor(t)
+	defer db.Close()
 	defer tsv.StopService()
 	ctx := context.Background()
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
@@ -801,7 +833,8 @@ func TestTabletServerStartCommit(t *testing.T) {
 }
 
 func TestTabletserverSetRollback(t *testing.T) {
-	_, tsv, db := newTestTxExecutor()
+	_, tsv, db := newTestTxExecutor(t)
+	defer db.Close()
 	defer tsv.StopService()
 	ctx := context.Background()
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
@@ -824,7 +857,8 @@ func TestTabletserverSetRollback(t *testing.T) {
 }
 
 func TestTabletServerReadTransaction(t *testing.T) {
-	_, tsv, db := newTestTxExecutor()
+	_, tsv, db := newTestTxExecutor(t)
+	defer db.Close()
 	defer tsv.StopService()
 	ctx := context.Background()
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
@@ -840,6 +874,11 @@ func TestTabletServerReadTransaction(t *testing.T) {
 	}
 
 	txResult := &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{Type: sqltypes.VarBinary},
+			{Type: sqltypes.Uint64},
+			{Type: sqltypes.Uint64},
+		},
 		Rows: [][]sqltypes.Value{{
 			sqltypes.MakeString([]byte("aa")),
 			sqltypes.MakeString([]byte(strconv.Itoa(int(querypb.TransactionState_PREPARE)))),
@@ -848,6 +887,10 @@ func TestTabletServerReadTransaction(t *testing.T) {
 	}
 	db.AddQuery("select dtid, state, time_created from `_vt`.dt_state where dtid = 'aa'", txResult)
 	db.AddQuery("select keyspace, shard from `_vt`.dt_participant where dtid = 'aa'", &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{Type: sqltypes.VarBinary},
+			{Type: sqltypes.VarBinary},
+		},
 		Rows: [][]sqltypes.Value{{
 			sqltypes.MakeString([]byte("test1")),
 			sqltypes.MakeString([]byte("0")),
@@ -878,7 +921,18 @@ func TestTabletServerReadTransaction(t *testing.T) {
 		t.Errorf("ReadTransaction: %v, want %v", got, want)
 	}
 
-	txResult.Rows[0][1] = sqltypes.MakeString([]byte(strconv.Itoa(int(querypb.TransactionState_COMMIT))))
+	txResult = &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{Type: sqltypes.VarBinary},
+			{Type: sqltypes.Uint64},
+			{Type: sqltypes.Uint64},
+		},
+		Rows: [][]sqltypes.Value{{
+			sqltypes.MakeString([]byte("aa")),
+			sqltypes.MakeString([]byte(strconv.Itoa(int(querypb.TransactionState_COMMIT)))),
+			sqltypes.MakeString([]byte("1")),
+		}},
+	}
 	db.AddQuery("select dtid, state, time_created from `_vt`.dt_state where dtid = 'aa'", txResult)
 	want.State = querypb.TransactionState_COMMIT
 	got, err = tsv.ReadTransaction(ctx, &target, "aa")
@@ -889,7 +943,18 @@ func TestTabletServerReadTransaction(t *testing.T) {
 		t.Errorf("ReadTransaction: %v, want %v", got, want)
 	}
 
-	txResult.Rows[0][1] = sqltypes.MakeString([]byte(strconv.Itoa(int(querypb.TransactionState_ROLLBACK))))
+	txResult = &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{Type: sqltypes.VarBinary},
+			{Type: sqltypes.Uint64},
+			{Type: sqltypes.Uint64},
+		},
+		Rows: [][]sqltypes.Value{{
+			sqltypes.MakeString([]byte("aa")),
+			sqltypes.MakeString([]byte(strconv.Itoa(int(querypb.TransactionState_ROLLBACK)))),
+			sqltypes.MakeString([]byte("1")),
+		}},
+	}
 	db.AddQuery("select dtid, state, time_created from `_vt`.dt_state where dtid = 'aa'", txResult)
 	want.State = querypb.TransactionState_ROLLBACK
 	got, err = tsv.ReadTransaction(ctx, &target, "aa")
@@ -902,7 +967,8 @@ func TestTabletServerReadTransaction(t *testing.T) {
 }
 
 func TestTabletServerConcludeTransaction(t *testing.T) {
-	_, tsv, db := newTestTxExecutor()
+	_, tsv, db := newTestTxExecutor(t)
+	defer db.Close()
 	defer tsv.StopService()
 	ctx := context.Background()
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
@@ -916,7 +982,8 @@ func TestTabletServerConcludeTransaction(t *testing.T) {
 }
 
 func TestTabletServerBeginFail(t *testing.T) {
-	db := setUpTabletServerTest()
+	db := setUpTabletServerTest(t)
+	defer db.Close()
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	config.TransactionCap = 1
@@ -939,11 +1006,15 @@ func TestTabletServerBeginFail(t *testing.T) {
 }
 
 func TestTabletServerCommitTransaction(t *testing.T) {
-	db := setUpTabletServerTest()
+	db := setUpTabletServerTest(t)
+	defer db.Close()
 	testUtils := newTestUtils()
 	// sql that will be executed in this test
 	executeSQL := "select * from test_table limit 1000"
 	executeSQLResult := &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{Type: sqltypes.VarBinary},
+		},
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			{sqltypes.MakeString([]byte("row01"))},
@@ -973,7 +1044,8 @@ func TestTabletServerCommitTransaction(t *testing.T) {
 }
 
 func TestTabletServerCommiRollbacktFail(t *testing.T) {
-	db := setUpTabletServerTest()
+	db := setUpTabletServerTest(t)
+	defer db.Close()
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServer(config)
@@ -997,11 +1069,15 @@ func TestTabletServerCommiRollbacktFail(t *testing.T) {
 }
 
 func TestTabletServerRollback(t *testing.T) {
-	db := setUpTabletServerTest()
+	db := setUpTabletServerTest(t)
+	defer db.Close()
 	testUtils := newTestUtils()
 	// sql that will be executed in this test
 	executeSQL := "select * from test_table limit 1000"
 	executeSQLResult := &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{Type: sqltypes.VarBinary},
+		},
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			{sqltypes.MakeString([]byte("row01"))},
@@ -1032,7 +1108,8 @@ func TestTabletServerRollback(t *testing.T) {
 
 func TestTabletServerPrepare(t *testing.T) {
 	// Reuse code from tx_executor_test.
-	_, tsv, _ := newTestTxExecutor()
+	_, tsv, db := newTestTxExecutor(t)
+	defer db.Close()
 	defer tsv.StopService()
 	ctx := context.Background()
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
@@ -1051,7 +1128,8 @@ func TestTabletServerPrepare(t *testing.T) {
 
 func TestTabletServerCommitPrepared(t *testing.T) {
 	// Reuse code from tx_executor_test.
-	_, tsv, _ := newTestTxExecutor()
+	_, tsv, db := newTestTxExecutor(t)
+	defer db.Close()
 	defer tsv.StopService()
 	ctx := context.Background()
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
@@ -1073,7 +1151,8 @@ func TestTabletServerCommitPrepared(t *testing.T) {
 
 func TestTabletServerRollbackPrepared(t *testing.T) {
 	// Reuse code from tx_executor_test.
-	_, tsv, _ := newTestTxExecutor()
+	_, tsv, db := newTestTxExecutor(t)
+	defer db.Close()
 	defer tsv.StopService()
 	ctx := context.Background()
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
@@ -1093,11 +1172,15 @@ func TestTabletServerRollbackPrepared(t *testing.T) {
 }
 
 func TestTabletServerStreamExecute(t *testing.T) {
-	db := setUpTabletServerTest()
+	db := setUpTabletServerTest(t)
+	defer db.Close()
 	testUtils := newTestUtils()
 	// sql that will be executed in this test
 	executeSQL := "select * from test_table limit 1000"
 	executeSQLResult := &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{Type: sqltypes.VarBinary},
+		},
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			{sqltypes.MakeString([]byte("row01"))},
@@ -1123,7 +1206,8 @@ func TestTabletServerStreamExecute(t *testing.T) {
 }
 
 func TestTabletServerExecuteBatch(t *testing.T) {
-	db := setUpTabletServerTest()
+	db := setUpTabletServerTest(t)
+	defer db.Close()
 	testUtils := newTestUtils()
 	sql := "insert into test_table values (1, 2)"
 	sqlResult := &sqltypes.Result{}
@@ -1153,7 +1237,8 @@ func TestTabletServerExecuteBatch(t *testing.T) {
 }
 
 func TestTabletServerExecuteBatchFailEmptyQueryList(t *testing.T) {
-	db := setUpTabletServerTest()
+	db := setUpTabletServerTest(t)
+	defer db.Close()
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServer(config)
@@ -1170,7 +1255,8 @@ func TestTabletServerExecuteBatchFailEmptyQueryList(t *testing.T) {
 }
 
 func TestTabletServerExecuteBatchFailAsTransaction(t *testing.T) {
-	db := setUpTabletServerTest()
+	db := setUpTabletServerTest(t)
+	defer db.Close()
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServer(config)
@@ -1192,7 +1278,8 @@ func TestTabletServerExecuteBatchFailAsTransaction(t *testing.T) {
 }
 
 func TestTabletServerExecuteBatchBeginFail(t *testing.T) {
-	db := setUpTabletServerTest()
+	db := setUpTabletServerTest(t)
+	defer db.Close()
 	testUtils := newTestUtils()
 	// make "begin" query fail
 	db.AddRejectedQuery("begin", errRejected)
@@ -1217,7 +1304,8 @@ func TestTabletServerExecuteBatchBeginFail(t *testing.T) {
 }
 
 func TestTabletServerExecuteBatchCommitFail(t *testing.T) {
-	db := setUpTabletServerTest()
+	db := setUpTabletServerTest(t)
+	defer db.Close()
 	testUtils := newTestUtils()
 	// make "commit" query fail
 	db.AddRejectedQuery("commit", errRejected)
@@ -1246,7 +1334,8 @@ func TestTabletServerExecuteBatchCommitFail(t *testing.T) {
 }
 
 func TestTabletServerExecuteBatchSqlExecFailInTransaction(t *testing.T) {
-	db := setUpTabletServerTest()
+	db := setUpTabletServerTest(t)
+	defer db.Close()
 	testUtils := newTestUtils()
 	sql := "insert into test_table values (1, 2)"
 	sqlResult := &sqltypes.Result{}
@@ -1288,7 +1377,8 @@ func TestTabletServerExecuteBatchSqlExecFailInTransaction(t *testing.T) {
 }
 
 func TestTabletServerExecuteBatchSqlSucceedInTransaction(t *testing.T) {
-	db := setUpTabletServerTest()
+	db := setUpTabletServerTest(t)
+	defer db.Close()
 	testUtils := newTestUtils()
 	sql := "insert into test_table values (1, 2)"
 	sqlResult := &sqltypes.Result{}
@@ -1322,7 +1412,8 @@ func TestTabletServerExecuteBatchSqlSucceedInTransaction(t *testing.T) {
 }
 
 func TestTabletServerExecuteBatchCallCommitWithoutABegin(t *testing.T) {
-	db := setUpTabletServerTest()
+	db := setUpTabletServerTest(t)
+	defer db.Close()
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServer(config)
@@ -1345,7 +1436,8 @@ func TestTabletServerExecuteBatchCallCommitWithoutABegin(t *testing.T) {
 }
 
 func TestExecuteBatchNestedTransaction(t *testing.T) {
-	db := setUpTabletServerTest()
+	db := setUpTabletServerTest(t)
+	defer db.Close()
 	testUtils := newTestUtils()
 	sql := "insert into test_table values (1, 2)"
 	sqlResult := &sqltypes.Result{}
@@ -1391,7 +1483,8 @@ func TestExecuteBatchNestedTransaction(t *testing.T) {
 }
 
 func TestMessageStream(t *testing.T) {
-	_, tsv, _ := newTestTxExecutor()
+	_, tsv, db := newTestTxExecutor(t)
+	defer db.Close()
 	defer tsv.StopService()
 	ctx := context.Background()
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
@@ -1452,7 +1545,8 @@ func TestMessageStream(t *testing.T) {
 }
 
 func TestMessageAck(t *testing.T) {
-	_, tsv, db := newTestTxExecutor()
+	_, tsv, db := newTestTxExecutor(t)
+	defer db.Close()
 	defer tsv.StopService()
 	ctx := context.Background()
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
@@ -1471,14 +1565,18 @@ func TestMessageAck(t *testing.T) {
 	}
 
 	_, err = tsv.MessageAck(ctx, &target, "msg", ids)
-	want = "error: query: select time_scheduled, id from msg where id in ('1', '2') and time_acked is null limit 10001 for update is not supported"
-	if err == nil || err.Error() != want {
+	want = "error: query: select time_scheduled, id from msg where id in ('1', '2') and time_acked is null limit 10001 for update is not supported on fakesqldb"
+	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("tsv.MessageAck(invalid): %v, want %s", err, want)
 	}
 
 	db.AddQuery(
 		"select time_scheduled, id from msg where id in ('1', '2') and time_acked is null limit 10001 for update",
 		&sqltypes.Result{
+			Fields: []*querypb.Field{
+				{Type: sqltypes.Int64},
+				{Type: sqltypes.Int64},
+			},
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{{
 				sqltypes.MakeString([]byte("1")),
@@ -1497,7 +1595,8 @@ func TestMessageAck(t *testing.T) {
 }
 
 func TestRescheduleMessages(t *testing.T) {
-	_, tsv, db := newTestTxExecutor()
+	_, tsv, db := newTestTxExecutor(t)
+	defer db.Close()
 	defer tsv.StopService()
 	ctx := context.Background()
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
@@ -1510,13 +1609,17 @@ func TestRescheduleMessages(t *testing.T) {
 
 	_, err = tsv.PostponeMessages(ctx, &target, "msg", []string{"1", "2"})
 	want = "error: query: select time_scheduled, id from msg where id in ('1', '2') and time_acked is null limit 10001 for update is not supported"
-	if err == nil || err.Error() != want {
+	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("tsv.PostponeMessages(invalid):\n%v, want\n%s", err, want)
 	}
 
 	db.AddQuery(
 		"select time_scheduled, id from msg where id in ('1', '2') and time_acked is null limit 10001 for update",
 		&sqltypes.Result{
+			Fields: []*querypb.Field{
+				{Type: sqltypes.Int64},
+				{Type: sqltypes.Int64},
+			},
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{{
 				sqltypes.MakeString([]byte("1")),
@@ -1535,7 +1638,8 @@ func TestRescheduleMessages(t *testing.T) {
 }
 
 func TestPurgeMessages(t *testing.T) {
-	_, tsv, db := newTestTxExecutor()
+	_, tsv, db := newTestTxExecutor(t)
+	defer db.Close()
 	defer tsv.StopService()
 	ctx := context.Background()
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
@@ -1548,13 +1652,17 @@ func TestPurgeMessages(t *testing.T) {
 
 	_, err = tsv.PurgeMessages(ctx, &target, "msg", 0)
 	want = "error: query: select time_scheduled, id from msg where time_scheduled < 0 and time_acked is not null limit 500 for update is not supported"
-	if err == nil || err.Error() != want {
+	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("tsv.PurgeMessages(invalid):\n%v, want\n%s", err, want)
 	}
 
 	db.AddQuery(
 		"select time_scheduled, id from msg where time_scheduled < 3 and time_acked is not null limit 500 for update",
 		&sqltypes.Result{
+			Fields: []*querypb.Field{
+				{Type: sqltypes.Int64},
+				{Type: sqltypes.Int64},
+			},
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{{
 				sqltypes.MakeString([]byte("1")),
@@ -1562,7 +1670,7 @@ func TestPurgeMessages(t *testing.T) {
 			}},
 		},
 	)
-	db.AddQuery("delete from msg where (time_scheduled = '1' and id = '1') /* _stream msg (time_scheduled id ) ('MQ==' 'MQ==' ); */", &sqltypes.Result{RowsAffected: 1})
+	db.AddQuery("delete from msg where (time_scheduled = 1 and id = 1) /* _stream msg (time_scheduled id ) (1 1 ); */", &sqltypes.Result{RowsAffected: 1})
 	count, err := tsv.PurgeMessages(ctx, &target, "msg", 3)
 	if err != nil {
 		t.Error(err)
@@ -1573,10 +1681,12 @@ func TestPurgeMessages(t *testing.T) {
 }
 
 func TestTabletServerSplitQuery(t *testing.T) {
-	db := setUpTabletServerTest()
+	db := setUpTabletServerTest(t)
+	defer db.Close()
 	db.AddQuery("SELECT MIN(pk), MAX(pk) FROM test_table", &sqltypes.Result{
 		Fields: []*querypb.Field{
-			{Name: "pk", Type: sqltypes.Int32},
+			{Type: sqltypes.Int32},
+			{Type: sqltypes.Int32},
 		},
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
@@ -1616,7 +1726,8 @@ func TestTabletServerSplitQuery(t *testing.T) {
 }
 
 func TestTabletServerSplitQueryInvalidQuery(t *testing.T) {
-	db := setUpTabletServerTest()
+	db := setUpTabletServerTest(t)
+	defer db.Close()
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServer(config)
@@ -1646,7 +1757,8 @@ func TestTabletServerSplitQueryInvalidQuery(t *testing.T) {
 
 func TestTabletServerSplitQueryInvalidParams(t *testing.T) {
 	// Tests that SplitQuery returns an error when both numRowsPerQueryPart and splitCount are given.
-	db := setUpTabletServerTest()
+	db := setUpTabletServerTest(t)
+	defer db.Close()
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServer(config)
@@ -1675,7 +1787,8 @@ func TestTabletServerSplitQueryInvalidParams(t *testing.T) {
 
 // Tests that using Equal Splits on a string column returns an error.
 func TestTabletServerSplitQueryEqualSplitsOnStringColumn(t *testing.T) {
-	db := setUpTabletServerTest()
+	db := setUpTabletServerTest(t)
+	defer db.Close()
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServer(config)
@@ -1803,7 +1916,8 @@ func TestTerseErrorsNoBindVars(t *testing.T) {
 }
 
 func TestConfigChanges(t *testing.T) {
-	db := setUpTabletServerTest()
+	db := setUpTabletServerTest(t)
+	defer db.Close()
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServer(config)
@@ -1885,8 +1999,8 @@ func TestConfigChanges(t *testing.T) {
 	}
 }
 
-func setUpTabletServerTest() *fakesqldb.DB {
-	db := fakesqldb.Register()
+func setUpTabletServerTest(t *testing.T) *fakesqldb.DB {
+	db := fakesqldb.New(t)
 	for query, result := range getSupportedQueries() {
 		db.AddQuery(query, result)
 	}
@@ -1917,18 +2031,27 @@ func getSupportedQueries() map[string]*sqltypes.Result {
 		fmt.Sprintf(sqlCreateTableDTParticipant, "`_vt`"): {},
 		// queries for schema info
 		"select unix_timestamp()": {
+			Fields: []*querypb.Field{{
+				Type: sqltypes.Uint64,
+			}},
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
 				{sqltypes.MakeString([]byte("1427325875"))},
 			},
 		},
 		"select @@global.sql_mode": {
+			Fields: []*querypb.Field{{
+				Type: sqltypes.VarChar,
+			}},
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
 				{sqltypes.MakeString([]byte("STRICT_TRANS_TABLES"))},
 			},
 		},
 		"select @@autocommit": {
+			Fields: []*querypb.Field{{
+				Type: sqltypes.Uint64,
+			}},
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
 				{sqltypes.MakeString([]byte("1"))},
@@ -1950,6 +2073,7 @@ func getSupportedQueries() map[string]*sqltypes.Result {
 			}},
 		},
 		baseShowTables: {
+			Fields:       createTestTableBaseShowTableFields(),
 			RowsAffected: 2,
 			Rows: [][]sqltypes.Value{
 				{
@@ -1977,44 +2101,18 @@ func getSupportedQueries() map[string]*sqltypes.Result {
 			},
 		},
 		"describe test_table": {
+			Fields:       mysqlconn.DescribeTableFields,
 			RowsAffected: 4,
 			Rows: [][]sqltypes.Value{
-				{
-					sqltypes.MakeString([]byte("pk")),
-					sqltypes.MakeString([]byte("int")),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("1")),
-					sqltypes.MakeString([]byte{}),
-				},
-				{
-					sqltypes.MakeString([]byte("name")),
-					sqltypes.MakeString([]byte("int")),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("1")),
-					sqltypes.MakeString([]byte{}),
-				},
-				{
-					sqltypes.MakeString([]byte("addr")),
-					sqltypes.MakeString([]byte("int")),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("1")),
-					sqltypes.MakeString([]byte{}),
-				},
-				{
-					sqltypes.MakeString([]byte("name_string")), /* Field */
-					sqltypes.MakeString([]byte("varchar(10)")), /* Type */
-					sqltypes.MakeString([]byte{}),              /* NULL */
-					sqltypes.MakeString([]byte{}),              /* Key */
-					sqltypes.MakeString([]byte("foo")),         /* Default Value */
-					sqltypes.MakeString([]byte{}),              /* Extra */
-				},
+				mysqlconn.DescribeTableRow("pk", "int(11)", false, "PRI", "0"),
+				mysqlconn.DescribeTableRow("name", "int(11)", false, "", "0"),
+				mysqlconn.DescribeTableRow("addr", "int(11)", false, "", "0"),
+				mysqlconn.DescribeTableRow("name_string", "varchar(10)", false, "", "foo"),
 			},
 		},
 		// for SplitQuery because it needs a primary key column
 		"show index from test_table": {
+			Fields:       createShowIndexFields(),
 			RowsAffected: 3,
 			Rows: [][]sqltypes.Value{
 				{
@@ -2071,67 +2169,20 @@ func getSupportedQueries() map[string]*sqltypes.Result {
 			}},
 		},
 		"describe msg": {
+			Fields:       mysqlconn.DescribeTableFields,
 			RowsAffected: 4,
 			Rows: [][]sqltypes.Value{
-				{
-					sqltypes.MakeString([]byte("time_scheduled")),
-					sqltypes.MakeString([]byte("int")),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("1")),
-					sqltypes.MakeString([]byte{}),
-				},
-				{
-					sqltypes.MakeString([]byte("id")),
-					sqltypes.MakeString([]byte("bigint")),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("1")),
-					sqltypes.MakeString([]byte{}),
-				},
-				{
-					sqltypes.MakeString([]byte("time_next")),
-					sqltypes.MakeString([]byte("bigint")),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("1")),
-					sqltypes.MakeString([]byte{}),
-				},
-				{
-					sqltypes.MakeString([]byte("epoch")),
-					sqltypes.MakeString([]byte("bigint")),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("1")),
-					sqltypes.MakeString([]byte{}),
-				},
-				{
-					sqltypes.MakeString([]byte("time_created")),
-					sqltypes.MakeString([]byte("bigint")),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("1")),
-					sqltypes.MakeString([]byte{}),
-				},
-				{
-					sqltypes.MakeString([]byte("time_acked")),
-					sqltypes.MakeString([]byte("bigint")),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("1")),
-					sqltypes.MakeString([]byte{}),
-				},
-				{
-					sqltypes.MakeString([]byte("message")),
-					sqltypes.MakeString([]byte("bigint")),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("1")),
-					sqltypes.MakeString([]byte{}),
-				},
+				mysqlconn.DescribeTableRow("time_scheduled", "int(11)", false, "", "0"),
+				mysqlconn.DescribeTableRow("id", "bigint(20)", false, "", "0"),
+				mysqlconn.DescribeTableRow("time_next", "bigint(20)", false, "", "0"),
+				mysqlconn.DescribeTableRow("epoch", "bigint(20)", false, "", "0"),
+				mysqlconn.DescribeTableRow("time_created", "bigint(20)", false, "", "0"),
+				mysqlconn.DescribeTableRow("time_acked", "bigint(20)", false, "", "0"),
+				mysqlconn.DescribeTableRow("message", "bigint(20)", false, "", "0"),
 			},
 		},
 		"show index from msg": {
+			Fields:       createShowIndexFields(),
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
 				{
@@ -2155,6 +2206,7 @@ func getSupportedQueries() map[string]*sqltypes.Result {
 			},
 		},
 		baseShowTables + " and table_name = 'msg'": {
+			Fields:       createTestTableBaseShowTableFields(),
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
 				{
@@ -2174,6 +2226,7 @@ func getSupportedQueries() map[string]*sqltypes.Result {
 		"commit":   {},
 		"rollback": {},
 		baseShowTables + " and table_name = 'test_table'": {
+			Fields:       createTestTableBaseShowTableFields(),
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
 				{

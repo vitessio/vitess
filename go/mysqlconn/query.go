@@ -87,18 +87,17 @@ func (c *Conn) readColumnDefinition(field *querypb.Field, index int) error {
 		return fmt.Errorf("extracting col %v columnLength failed", index)
 	}
 
-	// type is one byte
+	// type is one byte.
 	t, pos, ok := readByte(colDef, pos)
 	if !ok {
 		return fmt.Errorf("extracting col %v type failed", index)
 	}
 
-	// flags is 2 bytes
+	// flags is 2 bytes.
 	flags, pos, ok := readUint16(colDef, pos)
 	if !ok {
 		return fmt.Errorf("extracting col %v flags failed", index)
 	}
-	field.Flags = uint32(flags)
 
 	// Convert MySQL type to Vitess type.
 	field.Type, err = sqltypes.MySQLToType(int64(t), int64(flags))
@@ -112,6 +111,13 @@ func (c *Conn) readColumnDefinition(field *querypb.Field, index int) error {
 		return fmt.Errorf("extracting col %v decimals failed", index)
 	}
 	field.Decimals = uint32(decimals)
+
+	// If we didn't get column length or character set,
+	// we assume the orignal row on the other side was encoded from
+	// a Field without that data, so we don't return the flags.
+	if field.ColumnLength != 0 || field.Charset != 0 {
+		field.Flags = uint32(flags)
+	}
 
 	return nil
 }
@@ -402,9 +408,13 @@ func (c *Conn) writeColumnDefinition(field *querypb.Field) error {
 		1 + // decimals
 		2 // filler
 
-	// Only get the type back. The flags can be retrieved from the
-	// Field.
-	typ, _ := sqltypes.TypeToMySQL(field.Type)
+	// Get the type and the flags back. If the Field contains
+	// non-zero flags, we use them. Otherwise use the flags we
+	// derive from the type.
+	typ, flags := sqltypes.TypeToMySQL(field.Type)
+	if field.Flags != 0 {
+		flags = int64(field.Flags)
+	}
 
 	data := make([]byte, length)
 	pos := 0
@@ -419,7 +429,7 @@ func (c *Conn) writeColumnDefinition(field *querypb.Field) error {
 	pos = writeUint16(data, pos, uint16(field.Charset))
 	pos = writeUint32(data, pos, field.ColumnLength)
 	pos = writeByte(data, pos, byte(typ))
-	pos = writeUint16(data, pos, uint16(field.Flags))
+	pos = writeUint16(data, pos, uint16(flags))
 	pos = writeByte(data, pos, byte(field.Decimals))
 	pos += 2
 

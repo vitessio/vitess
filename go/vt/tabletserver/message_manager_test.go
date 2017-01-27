@@ -11,11 +11,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/youtube/vitess/go/mysqlconn/fakesqldb"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/schema"
 	"github.com/youtube/vitess/go/vt/sqlparser"
-	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -101,7 +101,8 @@ func (tr *testReceiver) WaitForDone() {
 }
 
 func TestReceiverEOF(t *testing.T) {
-	db := setUpTabletServerTest()
+	db := setUpTabletServerTest(t)
+	defer db.Close()
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	config.TransactionCap = 1
@@ -136,7 +137,8 @@ func TestReceiverEOF(t *testing.T) {
 }
 
 func TestMessageManagerState(t *testing.T) {
-	db := setUpTabletServerTest()
+	db := setUpTabletServerTest(t)
+	defer db.Close()
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	config.TransactionCap = 1
@@ -173,7 +175,8 @@ func TestMessageManagerState(t *testing.T) {
 }
 
 func TestMessageManagerAdd(t *testing.T) {
-	db := setUpTabletServerTest()
+	db := setUpTabletServerTest(t)
+	defer db.Close()
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	config.TransactionCap = 1
@@ -216,7 +219,8 @@ func TestMessageManagerAdd(t *testing.T) {
 }
 
 func TestMessageManagerSend(t *testing.T) {
-	db := setUpTabletServerTest()
+	db := setUpTabletServerTest(t)
+	defer db.Close()
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	config.TransactionCap = 1
@@ -273,7 +277,8 @@ func TestMessageManagerSend(t *testing.T) {
 }
 
 func TestMessageManagerBatchSend(t *testing.T) {
-	db := setUpTabletServerTest()
+	db := setUpTabletServerTest(t)
+	defer db.Close()
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	config.TransactionCap = 1
@@ -326,7 +331,8 @@ func TestMessageManagerBatchSend(t *testing.T) {
 }
 
 func TestMessageManagerPoller(t *testing.T) {
-	db := setUpTabletServerTest()
+	db := setUpTabletServerTest(t)
+	defer db.Close()
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	config.TransactionCap = 1
@@ -341,20 +347,26 @@ func TestMessageManagerPoller(t *testing.T) {
 	db.AddQueryPattern(
 		"select time_next, epoch, id, message from foo.*",
 		&sqltypes.Result{
+			Fields: []*querypb.Field{
+				{Type: sqltypes.Int64},
+				{Type: sqltypes.Int64},
+				{Type: sqltypes.Int64},
+				{Type: sqltypes.VarBinary},
+			},
 			Rows: [][]sqltypes.Value{{
-				sqltypes.MakeString([]byte("1")),
-				sqltypes.MakeString([]byte("0")),
-				sqltypes.MakeString([]byte("1")),
+				sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")),
+				sqltypes.MakeTrusted(sqltypes.Int64, []byte("0")),
+				sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")),
 				sqltypes.MakeString([]byte("01")),
 			}, {
-				sqltypes.MakeString([]byte("2")),
-				sqltypes.MakeString([]byte("0")),
-				sqltypes.MakeString([]byte("2")),
+				sqltypes.MakeTrusted(sqltypes.Int64, []byte("2")),
+				sqltypes.MakeTrusted(sqltypes.Int64, []byte("0")),
+				sqltypes.MakeTrusted(sqltypes.Int64, []byte("2")),
 				sqltypes.MakeString([]byte("02")),
 			}, {
-				sqltypes.MakeString([]byte("1")),
-				sqltypes.MakeString([]byte("1")),
-				sqltypes.MakeString([]byte("3")),
+				sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")),
+				sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")),
+				sqltypes.MakeTrusted(sqltypes.Int64, []byte("3")),
 				sqltypes.MakeString([]byte("11")),
 			}},
 		},
@@ -370,13 +382,13 @@ func TestMessageManagerPoller(t *testing.T) {
 	<-r1.ch
 	mm.pollerTicks.Trigger()
 	want := [][]sqltypes.Value{{
-		sqltypes.MakeString([]byte("2")),
+		sqltypes.MakeTrusted(sqltypes.Int64, []byte("2")),
 		sqltypes.MakeString([]byte("02")),
 	}, {
-		sqltypes.MakeString([]byte("1")),
+		sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")),
 		sqltypes.MakeString([]byte("01")),
 	}, {
-		sqltypes.MakeString([]byte("3")),
+		sqltypes.MakeTrusted(sqltypes.Int64, []byte("3")),
 		sqltypes.MakeString([]byte("11")),
 	}}
 	var got [][]sqltypes.Value
@@ -386,7 +398,7 @@ func TestMessageManagerPoller(t *testing.T) {
 		got = append(got, qr.Rows...)
 	}
 	if !reflect.DeepEqual(got, want) {
-		t.Errorf("rows:\n%v, want\n%v", got, want)
+		t.Errorf("rows:\n%+v, want\n%+v", got, want)
 	}
 
 	// If there are no receivers, nothing should fire.
@@ -404,7 +416,8 @@ func TestMessageManagerPoller(t *testing.T) {
 // TestMessagesPending1 tests for the case where you can't
 // add items because the cache is full.
 func TestMessagesPending1(t *testing.T) {
-	db := setUpTabletServerTest()
+	db := setUpTabletServerTest(t)
+	defer db.Close()
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	config.TransactionCap = 1
@@ -419,10 +432,16 @@ func TestMessagesPending1(t *testing.T) {
 	db.AddQueryPattern(
 		"select time_next, epoch, id, message from foo.*",
 		&sqltypes.Result{
+			Fields: []*querypb.Field{
+				{Type: sqltypes.Int64},
+				{Type: sqltypes.Int64},
+				{Type: sqltypes.Int64},
+				{Type: sqltypes.VarBinary},
+			},
 			Rows: [][]sqltypes.Value{{
-				sqltypes.MakeString([]byte("1")),
-				sqltypes.MakeString([]byte("0")),
-				sqltypes.MakeString([]byte("a")),
+				sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")),
+				sqltypes.MakeTrusted(sqltypes.Int64, []byte("0")),
+				sqltypes.MakeTrusted(sqltypes.Int64, []byte("a")),
 				sqltypes.MakeString([]byte("a")),
 			}},
 		},
@@ -473,7 +492,8 @@ func TestMessagesPending1(t *testing.T) {
 // TestMessagesPending2 tests for the case where
 // there are more pending items than the cache size.
 func TestMessagesPending2(t *testing.T) {
-	db := setUpTabletServerTest()
+	db := setUpTabletServerTest(t)
+	defer db.Close()
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	config.TransactionCap = 1
@@ -488,10 +508,16 @@ func TestMessagesPending2(t *testing.T) {
 	db.AddQueryPattern(
 		"select time_next, epoch, id, message from foo.*",
 		&sqltypes.Result{
+			Fields: []*querypb.Field{
+				{Type: sqltypes.Int64},
+				{Type: sqltypes.Int64},
+				{Type: sqltypes.Int64},
+				{Type: sqltypes.VarBinary},
+			},
 			Rows: [][]sqltypes.Value{{
-				sqltypes.MakeString([]byte("1")),
-				sqltypes.MakeString([]byte("0")),
-				sqltypes.MakeString([]byte("a")),
+				sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")),
+				sqltypes.MakeTrusted(sqltypes.Int64, []byte("0")),
+				sqltypes.MakeTrusted(sqltypes.Int64, []byte("a")),
 				sqltypes.MakeString([]byte("a")),
 			}},
 		},
@@ -522,7 +548,8 @@ func TestMessagesPending2(t *testing.T) {
 }
 
 func TestMMGenerate(t *testing.T) {
-	db := setUpTabletServerTest()
+	db := setUpTabletServerTest(t)
+	defer db.Close()
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	config.TransactionCap = 1

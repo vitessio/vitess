@@ -146,4 +146,9 @@ func TestWithRealDatabase(t *testing.T) {
 	t.Run("RBR", func(t *testing.T) {
 		testRowReplicationWithRealDatabase(t, &params)
 	})
+
+	// Test Schema queries work as intended.
+	t.Run("Schema", func(t *testing.T) {
+		testSchema(t, &params)
+	})
 }
