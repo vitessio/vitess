@@ -1067,6 +1067,39 @@ class TestVTGateFunctions(unittest.TestCase):
     finally:
       vtgate_conn.rollback()
 
+  def test_replace_into(self):
+    # vt_user
+    # main
+    vtgate_conn = get_connection()
+    try:
+      vtgate_conn.begin()
+      with self.assertRaisesRegexp(
+        dbexceptions.DatabaseError, '.*unsupported: REPLACE INTO.*'):
+        self.execute_on_master(
+            vtgate_conn,
+            'replace into vt_user (id, name) values (:id0, :name0), (:id1, :name1)',
+            {'id0': 5, 'name0': 'test 5','id1': 7, 'name1': 'test 7'})
+    finally:
+      vtgate_conn.rollback()
+
+    cursor = vtgate_conn.cursor(
+      tablet_type='master', keyspace=None, writable=True, twopc=False)
+    cursor.begin()
+    cursor.execute(
+      'insert into main (id, val) values (:id0, :val0), (:id1, :val1)',
+      {'id0': 5, 'val0': 'test 5','id1': 7, 'val1': 'test 7'})
+    cursor.execute(
+      'replace into main (id, val) values (:id0, :val0), (:id2, :val2)',
+      {'id0': 5, 'val0': 'test 9', 'id2': 9, 'val2': 'test 11'})
+    cursor.commit()
+
+    cursor.execute('select id, val from main where id = 5', {})
+    self.assertEqual(cursor.fetchall(), [(5, 'test 9')])
+    cursor.execute('select id, val from main where id = 7', {})
+    self.assertEqual(cursor.fetchall(), [(7, 'test 7')])
+    cursor.execute('select id, val from main where id = 9', {})
+    self.assertEqual(cursor.fetchall(), [(9, 'test 11')])
+
   def test_transaction_modes(self):
     vtgate_conn = get_connection()
     cursor = vtgate_conn.cursor(

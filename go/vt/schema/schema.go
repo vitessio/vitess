@@ -97,8 +97,8 @@ func (ta *Table) GetPKColumn(index int) *TableColumn {
 }
 
 // AddIndex adds an index to the table.
-func (ta *Table) AddIndex(name string) (index *Index) {
-	index = NewIndex(name)
+func (ta *Table) AddIndex(name string, unique bool) (index *Index) {
+	index = NewIndex(name, unique)
 	ta.Indexes = append(ta.Indexes, index)
 	return index
 }
@@ -125,6 +125,8 @@ func (ta *Table) HasPrimary() bool {
 // Index contains info about a table index.
 type Index struct {
 	Name sqlparser.ColIdent
+	// Whether this index represents a unique index or not
+	Unique bool
 	// Columns are the columns comprising the index.
 	Columns []sqlparser.ColIdent
 	// Cardinality[i] is the number of distinct values of Columns[i] in the
@@ -136,8 +138,8 @@ type Index struct {
 }
 
 // NewIndex creates a new Index.
-func NewIndex(name string) *Index {
-	return &Index{Name: sqlparser.NewColIdent(name)}
+func NewIndex(name string, unique bool) *Index {
+	return &Index{Name: sqlparser.NewColIdent(name), Unique: unique}
 }
 
 // AddColumn adds a column to the index.

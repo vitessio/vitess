@@ -5,6 +5,8 @@
 package planbuilder
 
 import (
+	"errors"
+
 	"github.com/youtube/vitess/go/vt/schema"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 )
@@ -48,7 +50,8 @@ func GenerateSelectLimitQuery(selStmt sqlparser.SelectStatement) *sqlparser.Pars
 // GenerateInsertOuterQuery generates the outer query for inserts.
 func GenerateInsertOuterQuery(ins *sqlparser.Insert) *sqlparser.ParsedQuery {
 	buf := sqlparser.NewTrackedBuffer(nil)
-	buf.Myprintf("insert %v%sinto %v%v values %a",
+	buf.Myprintf("%s %v%sinto %v%v values %a",
+		ins.Action,
 		ins.Comments,
 		ins.Ignore,
 		ins.Table,
@@ -63,6 +66,39 @@ func GenerateLoadMessagesQuery(ins *sqlparser.Insert) *sqlparser.ParsedQuery {
 	buf := sqlparser.NewTrackedBuffer(nil)
 	buf.Myprintf("select time_next, epoch, id, message from %v where %a", ins.Table, ":#pk")
 	return buf.ParsedQuery()
+}
+
+func GenerateInsertSubquery(ins *sqlparser.Insert, tableInfo *schema.Table) (*sqlparser.ParsedQuery, error) {
+	uniqueIndexes := make([]*schema.Index, 0)
+	for _, index := range tableInfo.Indexes {
+		if index.Unique {
+			uniqueIndexes = append(uniqueIndexes, index)
+		}
+	}
+
+	if len(uniqueIndexes) <= 1 {
+		return nil, nil
+	}
+
+	if values, ok := ins.Rows.(sqlparser.Values); ok {
+		buf := sqlparser.NewTrackedBuffer(nil)
+		buf.WriteString("select ")
+		prefix := ""
+
+		for _, c := range tableInfo.Indexes[0].Columns {
+			buf.Myprintf("%s%v", prefix, c)
+			prefix = ", "
+		}
+		buf.Myprintf(" from %v", &sqlparser.AliasedTableExpr{Expr: ins.Table})
+
+		ins.Rows[0]
+		if forUpdate {
+			buf.Myprintf(sqlparser.ForUpdateStr)
+		}
+		return buf.ParsedQuery(), nil
+	}
+
+	return nil, errors.New("possibly unsafe REPLACE: multiple unique keys and not simple values")
 }
 
 // GenerateUpdateOuterQuery generates the outer query for updates.
