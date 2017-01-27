@@ -76,7 +76,7 @@ func TestValEqual(t *testing.T) {
 
 func TestValConvert(t *testing.T) {
 	testcases := []struct {
-		in  sqlparser.ValExpr
+		in  sqlparser.Expr
 		out interface{}
 	}{{
 		in:  newValArg(":aa"),

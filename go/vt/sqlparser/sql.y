@@ -48,11 +48,9 @@ func forceEOF(yylex interface{}) {
   tableName   *TableName
   indexHints  *IndexHints
   expr        Expr
-  boolExpr    BoolExpr
+  exprs       Exprs
   boolVal     BoolVal
-  valExpr     ValExpr
   colTuple    ColTuple
-  valExprs    ValExprs
   values      Values
   valTuple    ValTuple
   subquery    *Subquery
@@ -138,25 +136,26 @@ func forceEOF(yylex interface{}) {
 %type <tableName> table_name into_table_name
 %type <indexHints> index_hint_list
 %type <colIdents> index_list
-%type <boolExpr> where_expression_opt
-%type <boolExpr> boolean_expression condition
+%type <expr> where_expression_opt
+%type <expr> condition
 %type <boolVal> boolean_value
 %type <str> compare
 %type <insRows> row_list
-%type <valExpr> value value_expression num_val
+%type <expr> value value_expression num_val
 %type <str> is_suffix
 %type <colTuple> col_tuple
-%type <valExprs> value_expression_list
+%type <exprs> value_expression_list
 %type <values> tuple_list
 %type <valTuple> row_tuple
+%type <expr> tuple_expression
 %type <subquery> subquery
 %type <colName> column_name
 %type <caseExpr> case_expression
 %type <whens> when_expression_list
 %type <when> when_expression
-%type <valExpr> value_expression_opt else_expression_opt
-%type <valExprs> group_by_opt
-%type <boolExpr> having_opt
+%type <expr> value_expression_opt else_expression_opt
+%type <exprs> group_by_opt
+%type <expr> having_opt
 %type <colIdent> keyword_func keyword
 %type <orderBy> order_by_opt order_list
 %type <order> order
@@ -409,16 +408,6 @@ select_expression:
     $$ = &StarExpr{TableName: &TableName{Qualifier: $1, Name: $3}}
   }
 
-expression:
-  boolean_expression
-  {
-    $$ = $1
-  }
-| value_expression
-  {
-    $$ = $1
-  }
-
 as_ci_opt:
   {
     $$ = ColIdent{}
@@ -488,11 +477,11 @@ join_table:
   {
     $$ = &JoinTableExpr{LeftExpr: $1, Join: $2, RightExpr: $3}
   }
-| table_reference inner_join table_factor ON boolean_expression
+| table_reference inner_join table_factor ON expression
   {
     $$ = &JoinTableExpr{LeftExpr: $1, Join: $2, RightExpr: $3, On: $5}
   }
-| table_reference outer_join table_reference ON boolean_expression
+| table_reference outer_join table_reference ON expression
   {
     $$ = &JoinTableExpr{LeftExpr: $1, Join: $2, RightExpr: $3, On: $5}
   }
@@ -627,32 +616,35 @@ where_expression_opt:
   {
     $$ = nil
   }
-| WHERE boolean_expression
+| WHERE expression
   {
     $$ = $2
   }
 
-boolean_expression:
+expression:
   condition
-| boolean_expression AND boolean_expression
+  {
+    $$ = $1
+  }
+| expression AND expression
   {
     $$ = &AndExpr{Left: $1, Right: $3}
   }
-| boolean_expression OR boolean_expression
+| expression OR expression
   {
     $$ = &OrExpr{Left: $1, Right: $3}
   }
-| NOT boolean_expression
+| NOT expression
   {
     $$ = &NotExpr{Expr: $2}
   }
-| openb boolean_expression closeb
-  {
-    $$ = &ParenBoolExpr{Expr: $2}
-  }
-| boolean_expression IS is_suffix
+| expression IS is_suffix
   {
     $$ = &IsExpr{Operator: $3, Expr: $1}
+  }
+| value_expression
+  {
+    $$ = $1
   }
 
 boolean_value:
@@ -709,10 +701,6 @@ condition:
 | value_expression NOT BETWEEN value_expression AND value_expression
   {
     $$ = &RangeCond{Left: $1, Operator: NotBetweenStr, From: $4, To: $6}
-  }
-| value_expression IS is_suffix
-  {
-    $$ = &IsExpr{Operator: $3, Expr: $1}
   }
 | EXISTS subquery
   {
@@ -776,9 +764,9 @@ compare:
   }
 
 col_tuple:
-  openb value_expression_list closeb
+  row_tuple
   {
-    $$ = ValTuple($2)
+    $$ = $1
   }
 | subquery
   {
@@ -796,11 +784,11 @@ subquery:
   }
 
 value_expression_list:
-  value_expression
+  expression
   {
-    $$ = ValExprs{$1}
+    $$ = Exprs{$1}
   }
-| value_expression_list ',' value_expression
+| value_expression_list ',' expression
   {
     $$ = append($1, $3)
   }
@@ -824,7 +812,7 @@ value_expression:
   {
     $$ = $1
   }
-| row_tuple
+| tuple_expression
   {
     $$ = $1
   }
@@ -1030,7 +1018,7 @@ value_expression_opt:
   {
     $$ = nil
   }
-| value_expression
+| expression
   {
     $$ = $1
   }
@@ -1046,7 +1034,7 @@ when_expression_list:
   }
 
 when_expression:
-  WHEN boolean_expression THEN value_expression
+  WHEN expression THEN expression
   {
     $$ = &When{Cond: $2, Val: $4}
   }
@@ -1055,7 +1043,7 @@ else_expression_opt:
   {
     $$ = nil
   }
-| ELSE value_expression
+| ELSE expression
   {
     $$ = $2
   }
@@ -1136,7 +1124,7 @@ having_opt:
   {
     $$ = nil
   }
-| HAVING boolean_expression
+| HAVING expression
   {
     $$ = $2
   }
@@ -1161,7 +1149,7 @@ order_list:
   }
 
 order:
-  value_expression asc_desc_opt
+  expression asc_desc_opt
   {
     $$ = &Order{Expr: $1, Direction: $2}
   }
@@ -1183,15 +1171,15 @@ limit_opt:
   {
     $$ = nil
   }
-| LIMIT value_expression
+| LIMIT expression
   {
     $$ = &Limit{Rowcount: $2}
   }
-| LIMIT value_expression ',' value_expression
+| LIMIT expression ',' expression
   {
     $$ = &Limit{Offset: $2, Rowcount: $4}
   }
-| LIMIT value_expression OFFSET value_expression
+| LIMIT expression OFFSET expression
   {
     $$ = &Limit{Offset: $4, Rowcount: $2}
   }
@@ -1271,6 +1259,16 @@ row_tuple:
     $$ = ValTuple($2)
   }
 
+tuple_expression:
+  row_tuple
+  {
+    if len($1) == 1 {
+      $$ = &ParenExpr{$1[0]}
+    } else {
+      $$ = $1
+    }
+  }
+
 update_list:
   update_expression
   {
@@ -1282,7 +1280,7 @@ update_list:
   }
 
 update_expression:
-  sql_id '=' value_expression
+  sql_id '=' expression
   {
     $$ = &UpdateExpr{Name: $1, Expr: $3}
   }

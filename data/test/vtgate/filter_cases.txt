@@ -403,17 +403,54 @@
   }
 }
 
-# Route with multiple route constraints, SelectEqual is the best constraint.
-"select id from user where user.col = 5 and user.id in (1, 2) and user.name = 'aa'"
+# Route with multiple route constraints and boolean, SelectIN is the best constraint.
+"select id from user where user.col = case user.col when 'foo' then true else false end and user.id in (1, 2)"
 {
-  "Original": "select id from user where user.col = 5 and user.id in (1, 2) and user.name = 'aa'",
+  "Original": "select id from user where user.col = case user.col when 'foo' then true else false end and user.id in (1, 2)",
+  "Instructions": {
+    "Opcode": "SelectIN",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select id from user where user.col = case user.col when 'foo' then true else false end and user.id in ::__vals",
+    "FieldQuery": "select id from user where 1 != 1",
+    "Vindex": "user_index",
+    "Values": [
+      1,
+      2
+    ]
+  }
+}
+
+# Route with multiple route constraints and boolean, SelectEqual is the best constraint.
+"select (id or col) as val from user where user.col = 5 and user.id in (1, 2) and user.name = 'aa'"
+{
+  "Original": "select (id or col) as val from user where user.col = 5 and user.id in (1, 2) and user.name = 'aa'",
   "Instructions": {
     "Opcode": "SelectEqual",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
-    "Query": "select id from user where user.col = 5 and user.id in (1, 2) and user.name = 'aa'",
+    "Query": "select (id or col) as val from user where user.col = 5 and user.id in (1, 2) and user.name = 'aa'",
+    "FieldQuery": "select (id or col) as val from user where 1 != 1",
+    "Vindex": "name_user_map",
+    "Values": "aa"
+  }
+}
+
+# Route with multiple route constraints, SelectEqual is the best constraint.
+"select id from user where user.col = false and user.id in (1, 2) and user.name = 'aa'"
+{
+  "Original": "select id from user where user.col = false and user.id in (1, 2) and user.name = 'aa'",
+  "Instructions": {
+    "Opcode": "SelectEqual",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select id from user where user.col = false and user.id in (1, 2) and user.name = 'aa'",
     "FieldQuery": "select id from user where 1 != 1",
     "Vindex": "name_user_map",
     "Values": "aa"

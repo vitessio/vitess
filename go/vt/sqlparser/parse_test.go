@@ -214,7 +214,7 @@ func TestValid(t *testing.T) {
 	}, {
 		input: "select /* or */ 1 from t where a = b or a = c",
 	}, {
-		input: "select /* || */ 1 from t where a = b || a = c",
+		input:  "select /* || */ 1 from t where a = b || a = c",
 		output: "select /* || */ 1 from t where a = b or a = c",
 	}, {
 		input: "select /* not */ 1 from t where not a = b",
@@ -444,6 +444,26 @@ func TestValid(t *testing.T) {
 		input:  "select /* DUAL */ 1 from Dual",
 		output: "select /* DUAL */ 1 from dual",
 	}, {
+		input: "select /* column as bool in where */ a from t where b",
+	}, {
+		input: "select /* OR of columns in where */ * from t where a or b",
+	}, {
+		input: "select /* OR of mixed columns in where */ * from t where a = 5 or b and c is not null",
+	}, {
+		input: "select /* OR in select columns */ (a or b) from t where c = 5",
+	}, {
+		input: "select /* bool as select value */ a, true from t",
+	}, {
+		input: "select /* bool column in ON clause */ * from t join s on t.id = s.id and s.foo where t.bar",
+	}, {
+		input: "select /* bool in order by */ * from t order by a is null or b asc",
+	}, {
+		input: "select /* string in case statement */ if(max(case a when 'foo' then 1 else 0 end) = 1, 'foo', 'bar') as foobar from t",
+	}, {
+		input: "select /* dual */ 1 from dual",
+	}, {
+		input: "select /* dual */ 1 from dual",
+	}, {
 		input: "insert /* simple */ into a values (1)",
 	}, {
 		input: "insert /* a.b */ into a.b values (1)",
@@ -465,6 +485,12 @@ func TestValid(t *testing.T) {
 	}, {
 		input: "insert /* on duplicate */ into a values (1, 2) on duplicate key update b = func(a), c = d",
 	}, {
+		input: "insert /* bool in insert value */ into a values (1, true, false)",
+	}, {
+		input: "insert /* bool in on duplicate */ into a values (1, 2) on duplicate key update b = false, c = d",
+	}, {
+		input: "insert /* bool expression on duplicate */ into a values (1, 2) on duplicate key update b = func(a), c = a > d",
+	}, {
 		input: "update /* simple */ a set b = 3",
 	}, {
 		input: "update /* a.b */ a.b set b = 3",
@@ -478,6 +504,12 @@ func TestValid(t *testing.T) {
 		input: "update /* order */ a set b = 3 order by c desc",
 	}, {
 		input: "update /* limit */ a set b = 3 limit c",
+	}, {
+		input: "update /* bool in update */ a set b = true",
+	}, {
+		input: "update /* bool expr in update */ a set b = 5 > 2",
+	}, {
+		input: "update /* bool in update where */ a set b = 5 where c",
 	}, {
 		input: "delete /* simple */ from a",
 	}, {
@@ -633,7 +665,7 @@ func TestValid(t *testing.T) {
 	}, {
 		input: "select k from t1 join t2 order by a collate latin1_german2_ci asc, b collate latin1_german2_ci asc",
 	}, {
-		input: "select k collate 'latin1_german2_ci' as k1 from t1 order by k1 asc",
+		input:  "select k collate 'latin1_german2_ci' as k1 from t1 order by k1 asc",
 		output: "select k collate latin1_german2_ci as k1 from t1 order by k1 asc",
 	}}
 

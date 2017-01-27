@@ -63,9 +63,9 @@ func (splitter *Splitter) Split() ([]querytypes.QuerySplit, error) {
 // initQueryPartSQLs initializes the firstQueryPartSQL, middleQueryPartSQL and lastQueryPartSQL
 // fields.
 func (splitter *Splitter) initQueryPartSQLs() {
-	splitColumns := convertColumnsToValExpr(splitter.algorithm.getSplitColumns())
-	startBindVariables := convertBindVariableNamesToValExpr(splitter.startBindVariableNames)
-	endBindVariables := convertBindVariableNamesToValExpr(splitter.endBindVariableNames)
+	splitColumns := convertColumnsToExpr(splitter.algorithm.getSplitColumns())
+	startBindVariables := convertBindVariableNamesToExpr(splitter.startBindVariableNames)
+	endBindVariables := convertBindVariableNamesToExpr(splitter.endBindVariableNames)
 	splitColsLessThanEnd := constructTupleInequality(
 		splitColumns,
 		endBindVariables,
@@ -80,8 +80,8 @@ func (splitter *Splitter) initQueryPartSQLs() {
 	splitter.middleQueryPartSQL = sqlparser.String(
 		queryWithAdditionalWhere(splitter.splitParams.selectAST,
 			&sqlparser.AndExpr{
-				Left:  &sqlparser.ParenBoolExpr{Expr: splitColsGreaterThanOrEqualToStart},
-				Right: &sqlparser.ParenBoolExpr{Expr: splitColsLessThanEnd},
+				Left:  &sqlparser.ParenExpr{Expr: splitColsGreaterThanOrEqualToStart},
+				Right: &sqlparser.ParenExpr{Expr: splitColsLessThanEnd},
 			}))
 	splitter.lastQueryPartSQL = sqlparser.String(
 		queryWithAdditionalWhere(splitter.splitParams.selectAST, splitColsGreaterThanOrEqualToStart))
@@ -132,16 +132,16 @@ func populateBoundaryBindVariables(
 	}
 }
 
-func convertColumnsToValExpr(columns []*schema.TableColumn) []sqlparser.ValExpr {
-	valExprs := make([]sqlparser.ValExpr, 0, len(columns))
+func convertColumnsToExpr(columns []*schema.TableColumn) []sqlparser.Expr {
+	valExprs := make([]sqlparser.Expr, 0, len(columns))
 	for _, column := range columns {
 		valExprs = append(valExprs, &sqlparser.ColName{Name: column.Name})
 	}
 	return valExprs
 }
 
-func convertBindVariableNamesToValExpr(bindVariableNames []string) []sqlparser.ValExpr {
-	valExprs := make([]sqlparser.ValExpr, 0, len(bindVariableNames))
+func convertBindVariableNamesToExpr(bindVariableNames []string) []sqlparser.Expr {
+	valExprs := make([]sqlparser.Expr, 0, len(bindVariableNames))
 	for _, bindVariableName := range bindVariableNames {
 		valExprs = append(valExprs, sqlparser.NewValArg([]byte([]byte(":"+bindVariableName))))
 	}
@@ -164,7 +164,7 @@ func convertBindVariableNamesToValExpr(bindVariableNames []string) []sqlparser.V
 // and
 // (l1 < r1) or ((l1 = r1) and (l2 < r2)), otherwise.
 func constructTupleInequality(
-	lhsTuple []sqlparser.ValExpr, rhsTuple []sqlparser.ValExpr, strict bool) sqlparser.BoolExpr {
+	lhsTuple []sqlparser.Expr, rhsTuple []sqlparser.Expr, strict bool) sqlparser.Expr {
 	if len(lhsTuple) != len(rhsTuple) {
 		panic(fmt.Sprintf("len(lhsTuple)!=len(rhsTuple): %v!=%v", len(lhsTuple), len(rhsTuple)))
 	}
@@ -176,9 +176,9 @@ func constructTupleInequality(
 	// It's a recursive function and so we must define the 'constructTupleInequalityUnchecked'
 	// variable beforehand.
 	var constructTupleInequalityUnchecked func(
-		lhsTuple []sqlparser.ValExpr, rhsTuple []sqlparser.ValExpr, strict bool) sqlparser.BoolExpr
+		lhsTuple []sqlparser.Expr, rhsTuple []sqlparser.Expr, strict bool) sqlparser.Expr
 	constructTupleInequalityUnchecked = func(
-		lhsTuple []sqlparser.ValExpr, rhsTuple []sqlparser.ValExpr, strict bool) sqlparser.BoolExpr {
+		lhsTuple []sqlparser.Expr, rhsTuple []sqlparser.Expr, strict bool) sqlparser.Expr {
 		if len(lhsTuple) == 1 {
 			op := sqlparser.LessEqualStr
 			if strict {
@@ -194,7 +194,7 @@ func constructTupleInequality(
 		if len(lhsTuple[1:]) > 1 {
 			// A non-scalar inequality needs to be parenthesized since we combine it below with
 			// other expressions.
-			restOfTupleInequality = &sqlparser.ParenBoolExpr{
+			restOfTupleInequality = &sqlparser.ParenExpr{
 				Expr: restOfTupleInequality,
 			}
 		}
@@ -207,7 +207,7 @@ func constructTupleInequality(
 				Left:     lhsTuple[0],
 				Right:    rhsTuple[0],
 			},
-			Right: &sqlparser.ParenBoolExpr{
+			Right: &sqlparser.ParenExpr{
 				Expr: &sqlparser.AndExpr{
 					Left: &sqlparser.ComparisonExpr{
 						Operator: sqlparser.EqualStr,
@@ -227,7 +227,7 @@ func constructTupleInequality(
 // the query's WHERE clause. If the query does not already have a WHERE clause, 'addedWhere'
 // becomes the query's WHERE clause.
 func queryWithAdditionalWhere(
-	selectAST *sqlparser.Select, addedWhere sqlparser.BoolExpr) *sqlparser.Select {
+	selectAST *sqlparser.Select, addedWhere sqlparser.Expr) *sqlparser.Select {
 	result := *selectAST // Create a shallow-copy of 'selectAST'
 	addAndTermToWhereClause(&result, addedWhere)
 	return &result
