@@ -11,13 +11,15 @@ import (
 	"testing"
 	"time"
 
+	"golang.org/x/net/context"
+
 	"github.com/youtube/vitess/go/mysqlconn"
 	"github.com/youtube/vitess/go/mysqlconn/fakesqldb"
 	"github.com/youtube/vitess/go/sqltypes"
-	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	"github.com/youtube/vitess/go/vt/schema"
 	"github.com/youtube/vitess/go/vt/sqlparser"
-	"golang.org/x/net/context"
+
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
 var errRejected = errors.New("rejected")
@@ -64,18 +66,10 @@ func TestTableInfoSetPKColumn(t *testing.T) {
 		db.AddQuery(query, result)
 	}
 	db.AddQuery("show index from test_table", &sqltypes.Result{
-		Fields:       createShowIndexFields(),
+		Fields:       mysqlconn.ShowIndexFromTableFields,
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
-			{
-				sqltypes.MakeString([]byte{}),
-				sqltypes.MakeString([]byte{}),
-				sqltypes.MakeString([]byte("INDEX")),
-				sqltypes.MakeString([]byte{}),
-				sqltypes.MakeString([]byte("name")),
-				sqltypes.MakeString([]byte{}),
-				sqltypes.MakeString([]byte("300")),
-			},
+			mysqlconn.ShowIndexFromTableRow("test_table", false, "index", 1, "name", true),
 		},
 	})
 	tableInfo, err := newTestTableInfo("USER_TABLE", "test table", db)
@@ -100,19 +94,13 @@ func TestTableInfoInvalidCardinalityInIndex(t *testing.T) {
 	for query, result := range getTestTableInfoQueries() {
 		db.AddQuery(query, result)
 	}
+	row := mysqlconn.ShowIndexFromTableRow("test_table", true, "PRIMARY", 1, "pk", false)
+	row[6] = sqltypes.MakeString([]byte("invalid"))
 	db.AddQuery("show index from test_table", &sqltypes.Result{
-		Fields:       createShowIndexFields(),
+		Fields:       mysqlconn.ShowIndexFromTableFields,
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
-			{
-				sqltypes.MakeString([]byte{}),
-				sqltypes.MakeString([]byte{}),
-				sqltypes.MakeString([]byte("PRIMARY")),
-				sqltypes.MakeString([]byte{}),
-				sqltypes.MakeString([]byte("pk")),
-				sqltypes.MakeString([]byte{}),
-				sqltypes.MakeString([]byte("invalid")),
-			},
+			row,
 		},
 	})
 	tableInfo, err := newTestTableInfo("USER_TABLE", "test table", db)
@@ -202,18 +190,10 @@ func TestTableInfoMessage(t *testing.T) {
 	db.AddQuery(
 		"show index from test_table",
 		&sqltypes.Result{
-			Fields:       createShowIndexFields(),
-			RowsAffected: 2,
+			Fields:       mysqlconn.ShowIndexFromTableFields,
+			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
-				{
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("PRIMARY")),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("time_scheduled")),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("300")),
-				},
+				mysqlconn.ShowIndexFromTableRow("test_table", true, "PRIMARY", 1, "time_scheduled", false),
 			},
 		})
 	_, err = newTestTableInfo("USER_TABLE", "vitess_message,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30", db)
@@ -278,36 +258,12 @@ func getTestTableInfoQueries() map[string]*sqltypes.Result {
 			},
 		},
 		"show index from test_table": {
-			Fields:       createShowIndexFields(),
+			Fields:       mysqlconn.ShowIndexFromTableFields,
 			RowsAffected: 3,
 			Rows: [][]sqltypes.Value{
-				{
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("PRIMARY")),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("pk")),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("300")),
-				},
-				{
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("INDEX")),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("pk")),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("300")),
-				},
-				{
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("INDEX")),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("name")),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("300")),
-				},
+				mysqlconn.ShowIndexFromTableRow("test_table", true, "PRIMARY", 1, "pk", false),
+				mysqlconn.ShowIndexFromTableRow("test_table", true, "index", 1, "pk", false),
+				mysqlconn.ShowIndexFromTableRow("test_table", true, "index", 2, "name", false),
 			},
 		},
 	}
@@ -353,27 +309,11 @@ func getMessageTableInfoQueries() map[string]*sqltypes.Result {
 			},
 		},
 		"show index from test_table": {
-			Fields:       createShowIndexFields(),
+			Fields:       mysqlconn.ShowIndexFromTableFields,
 			RowsAffected: 2,
 			Rows: [][]sqltypes.Value{
-				{
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("PRIMARY")),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("time_scheduled")),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("300")),
-				},
-				{
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("PRIMARY")),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("id")),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("300")),
-				},
+				mysqlconn.ShowIndexFromTableRow("test_table", true, "PRIMARY", 1, "time_scheduled", false),
+				mysqlconn.ShowIndexFromTableRow("test_table", true, "PRIMARY", 2, "id", false),
 			},
 		},
 	}

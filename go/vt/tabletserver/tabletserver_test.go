@@ -304,35 +304,15 @@ func TestTabletServerSingleSchemaFailure(t *testing.T) {
 	defer db.Close()
 
 	want := &sqltypes.Result{
-		Fields:       createTestTableBaseShowTableFields(),
+		Fields:       mysqlconn.BaseShowTablesFields,
 		RowsAffected: 2,
 		Rows: [][]sqltypes.Value{
-			{
-				sqltypes.MakeString([]byte("test_table")),
-				sqltypes.MakeString([]byte("USER TABLE")),
-				sqltypes.MakeString([]byte("1427325875")),
-				sqltypes.MakeString([]byte("")),
-				sqltypes.MakeString([]byte("1")),
-				sqltypes.MakeString([]byte("2")),
-				sqltypes.MakeString([]byte("3")),
-				sqltypes.MakeString([]byte("4")),
-				sqltypes.MakeString([]byte("5")),
-			},
+			mysqlconn.BaseShowTablesRow("test_table", false, ""),
 			// Return a table that tabletserver can't access (the mock will reject all queries to it).
-			{
-				sqltypes.MakeString([]byte("rejected_table")),
-				sqltypes.MakeString([]byte("USER TABLE")),
-				sqltypes.MakeString([]byte("1427325876")),
-				sqltypes.MakeString([]byte("")),
-				sqltypes.MakeString([]byte("1")),
-				sqltypes.MakeString([]byte("2")),
-				sqltypes.MakeString([]byte("3")),
-				sqltypes.MakeString([]byte("4")),
-				sqltypes.MakeString([]byte("5")),
-			},
+			mysqlconn.BaseShowTablesRow("rejected_table", false, ""),
 		},
 	}
-	db.AddQuery(baseShowTables, want)
+	db.AddQuery(mysqlconn.BaseShowTables, want)
 
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
@@ -357,34 +337,14 @@ func TestTabletServerAllSchemaFailure(t *testing.T) {
 	defer db.Close()
 	// Return only tables that tabletserver can't access (the mock will reject all queries to them).
 	want := &sqltypes.Result{
-		Fields:       createTestTableBaseShowTableFields(),
+		Fields:       mysqlconn.BaseShowTablesFields,
 		RowsAffected: 2,
 		Rows: [][]sqltypes.Value{
-			{
-				sqltypes.MakeString([]byte("rejected_table_1")),
-				sqltypes.MakeString([]byte("USER TABLE")),
-				sqltypes.MakeString([]byte("1427325875")),
-				sqltypes.MakeString([]byte("")),
-				sqltypes.MakeString([]byte("1")),
-				sqltypes.MakeString([]byte("2")),
-				sqltypes.MakeString([]byte("3")),
-				sqltypes.MakeString([]byte("4")),
-				sqltypes.MakeString([]byte("5")),
-			},
-			{
-				sqltypes.MakeString([]byte("rejected_table_2")),
-				sqltypes.MakeString([]byte("USER TABLE")),
-				sqltypes.MakeString([]byte("1427325876")),
-				sqltypes.MakeString([]byte("")),
-				sqltypes.MakeString([]byte("1")),
-				sqltypes.MakeString([]byte("2")),
-				sqltypes.MakeString([]byte("3")),
-				sqltypes.MakeString([]byte("4")),
-				sqltypes.MakeString([]byte("5")),
-			},
+			mysqlconn.BaseShowTablesRow("rejected_table_1", false, ""),
+			mysqlconn.BaseShowTablesRow("rejected_table_2", false, ""),
 		},
 	}
-	db.AddQuery(baseShowTables, want)
+	db.AddQuery(mysqlconn.BaseShowTables, want)
 
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
@@ -2072,32 +2032,12 @@ func getSupportedQueries() map[string]*sqltypes.Result {
 				Type: sqltypes.VarChar,
 			}},
 		},
-		baseShowTables: {
-			Fields:       createTestTableBaseShowTableFields(),
+		mysqlconn.BaseShowTables: {
+			Fields:       mysqlconn.BaseShowTablesFields,
 			RowsAffected: 2,
 			Rows: [][]sqltypes.Value{
-				{
-					sqltypes.MakeString([]byte("test_table")),
-					sqltypes.MakeString([]byte("USER TABLE")),
-					sqltypes.MakeString([]byte("1427325875")),
-					sqltypes.MakeString([]byte("")),
-					sqltypes.MakeString([]byte("1")),
-					sqltypes.MakeString([]byte("2")),
-					sqltypes.MakeString([]byte("3")),
-					sqltypes.MakeString([]byte("4")),
-					sqltypes.MakeString([]byte("5")),
-				},
-				{
-					sqltypes.MakeString([]byte("msg")),
-					sqltypes.MakeString([]byte("USER TABLE")),
-					sqltypes.MakeTrusted(sqltypes.Int32, []byte("1427325875")),
-					sqltypes.MakeString([]byte("vitess_message,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30")),
-					sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
-					sqltypes.MakeTrusted(sqltypes.Int32, []byte("2")),
-					sqltypes.MakeTrusted(sqltypes.Int32, []byte("3")),
-					sqltypes.MakeTrusted(sqltypes.Int32, []byte("4")),
-					sqltypes.MakeTrusted(sqltypes.Int32, []byte("5")),
-				},
+				mysqlconn.BaseShowTablesRow("test_table", false, ""),
+				mysqlconn.BaseShowTablesRow("msg", false, "vitess_message,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30"),
 			},
 		},
 		"describe test_table": {
@@ -2112,36 +2052,12 @@ func getSupportedQueries() map[string]*sqltypes.Result {
 		},
 		// for SplitQuery because it needs a primary key column
 		"show index from test_table": {
-			Fields:       createShowIndexFields(),
+			Fields:       mysqlconn.ShowIndexFromTableFields,
 			RowsAffected: 3,
 			Rows: [][]sqltypes.Value{
-				{
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("PRIMARY")),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("pk")),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("300")),
-				},
-				{
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("INDEX")),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("name")),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("300")),
-				},
-				{
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("name_string_INDEX")),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("name_string")),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("100")),
-				},
+				mysqlconn.ShowIndexFromTableRow("test_table", true, "PRIMARY", 1, "pk", false),
+				mysqlconn.ShowIndexFromTableRow("test_table", false, "index", 1, "name", true),
+				mysqlconn.ShowIndexFromTableRow("test_table", false, "name_string_INDEX", 1, "name_string", true),
 			},
 		},
 		"select * from msg where 1 != 1": {
@@ -2182,64 +2098,28 @@ func getSupportedQueries() map[string]*sqltypes.Result {
 			},
 		},
 		"show index from msg": {
-			Fields:       createShowIndexFields(),
+			Fields:       mysqlconn.ShowIndexFromTableFields,
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
-				{
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("PRIMARY")),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("time_scheduled")),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("300")),
-				},
-				{
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("PRIMARY")),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("id")),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("300")),
-				},
+				mysqlconn.ShowIndexFromTableRow("msg", true, "PRIMARY", 1, "time_scheduled", false),
+				mysqlconn.ShowIndexFromTableRow("msg", true, "PRIMARY", 2, "id", false),
 			},
 		},
-		baseShowTables + " and table_name = 'msg'": {
-			Fields:       createTestTableBaseShowTableFields(),
+		mysqlconn.BaseShowTablesForTable("msg"): {
+			Fields:       mysqlconn.BaseShowTablesFields,
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
-				{
-					sqltypes.MakeString([]byte("msg")),
-					sqltypes.MakeString([]byte("USER TABLE")),
-					sqltypes.MakeTrusted(sqltypes.Int32, []byte("1427325875")),
-					sqltypes.MakeString([]byte("vitess_message,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30")),
-					sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
-					sqltypes.MakeTrusted(sqltypes.Int32, []byte("2")),
-					sqltypes.MakeTrusted(sqltypes.Int32, []byte("3")),
-					sqltypes.MakeTrusted(sqltypes.Int32, []byte("4")),
-					sqltypes.MakeTrusted(sqltypes.Int32, []byte("5")),
-				},
+				mysqlconn.BaseShowTablesRow("msg", false, "vitess_message,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30"),
 			},
 		},
 		"begin":    {},
 		"commit":   {},
 		"rollback": {},
-		baseShowTables + " and table_name = 'test_table'": {
-			Fields:       createTestTableBaseShowTableFields(),
+		mysqlconn.BaseShowTablesForTable("test_table"): {
+			Fields:       mysqlconn.BaseShowTablesFields,
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
-				{
-					sqltypes.MakeString([]byte("test_table")),
-					sqltypes.MakeString([]byte("USER TABLE")),
-					sqltypes.MakeString([]byte("1427325875")),
-					sqltypes.MakeString([]byte("")),
-					sqltypes.MakeString([]byte("1")),
-					sqltypes.MakeString([]byte("2")),
-					sqltypes.MakeString([]byte("3")),
-					sqltypes.MakeString([]byte("4")),
-					sqltypes.MakeString([]byte("5")),
-				},
+				mysqlconn.BaseShowTablesRow("test_table", false, ""),
 			},
 		},
 		fmt.Sprintf(sqlReadAllRedo, "`_vt`", "`_vt`"): {},

@@ -110,7 +110,7 @@ func TestSchemaInfoOpenFailedDueToExecErr(t *testing.T) {
 	for query, result := range getSchemaInfoBaseTestQueries() {
 		db.AddQuery(query, result)
 	}
-	db.AddRejectedQuery(baseShowTables, fmt.Errorf("injected error"))
+	db.AddRejectedQuery(mysqlconn.BaseShowTables, fmt.Errorf("injected error"))
 	schemaInfo := newTestSchemaInfo(10, 1*time.Second, 1*time.Second, false)
 	defer handleAndVerifyTabletError(
 		t,
@@ -126,11 +126,11 @@ func TestSchemaInfoOpenFailedDueToTableInfoErr(t *testing.T) {
 	for query, result := range getSchemaInfoBaseTestQueries() {
 		db.AddQuery(query, result)
 	}
-	db.AddQuery(baseShowTables, &sqltypes.Result{
-		Fields:       createTestTableBaseShowTableFields(),
+	db.AddQuery(mysqlconn.BaseShowTables, &sqltypes.Result{
+		Fields:       mysqlconn.BaseShowTablesFields,
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
-			createTestTableBaseShowTable("test_table"),
+			mysqlconn.BaseShowTablesRow("test_table", false, ""),
 		},
 	})
 	db.AddQuery("select * from test_table where 1 != 1", &sqltypes.Result{
@@ -175,16 +175,15 @@ func TestSchemaInfoReload(t *testing.T) {
 	if tableInfo != nil {
 		t.Fatalf("table: %s exists; expecting nil", newTable)
 	}
-	db.AddQuery(baseShowTables, &sqltypes.Result{
+	db.AddQuery(mysqlconn.BaseShowTables, &sqltypes.Result{
 		// make this query return nothing during reload
-		Fields: createTestTableBaseShowTableFields(),
+		Fields: mysqlconn.BaseShowTablesFields,
 	})
-	createOrDropTableQuery := fmt.Sprintf("%s and table_name = '%s'", baseShowTables, newTable)
-	db.AddQuery(createOrDropTableQuery, &sqltypes.Result{
-		Fields:       createTestTableBaseShowTableFields(),
+	db.AddQuery(mysqlconn.BaseShowTablesForTable(newTable.String()), &sqltypes.Result{
+		Fields:       mysqlconn.BaseShowTablesFields,
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
-			createTestTableBaseShowTable(newTable.String()),
+			mysqlconn.BaseShowTablesRow(newTable.String(), false, ""),
 		},
 	})
 
@@ -202,9 +201,11 @@ func TestSchemaInfoReload(t *testing.T) {
 		},
 	})
 	db.AddQuery("show index from test_table_04", &sqltypes.Result{
-		Fields:       createShowIndexFields(),
+		Fields:       mysqlconn.ShowIndexFromTableFields,
 		RowsAffected: 1,
-		Rows:         [][]sqltypes.Value{createTestTableShowIndex("pk")},
+		Rows: [][]sqltypes.Value{
+			mysqlconn.ShowIndexFromTableRow("test_table_04", true, "PRIMARY", 1, "pk", false),
+		},
 	})
 
 	schemaInfo.Reload(ctx)
@@ -214,11 +215,11 @@ func TestSchemaInfoReload(t *testing.T) {
 	}
 
 	// test reload with new table: test_table_04
-	db.AddQuery(baseShowTables, &sqltypes.Result{
-		Fields:       createTestTableBaseShowTableFields(),
+	db.AddQuery(mysqlconn.BaseShowTables, &sqltypes.Result{
+		Fields:       mysqlconn.BaseShowTablesFields,
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
-			createTestTableBaseShowTable(newTable.String()),
+			mysqlconn.BaseShowTablesRow(newTable.String(), false, ""),
 		},
 	})
 	tableInfo = schemaInfo.GetTable(newTable)
@@ -240,8 +241,7 @@ func TestSchemaInfoCreateOrUpdateTableFailedDuetoExecErr(t *testing.T) {
 	for query, result := range getSchemaInfoTestSupportedQueries() {
 		db.AddQuery(query, result)
 	}
-	createOrDropTableQuery := fmt.Sprintf("%s and table_name = '%s'", baseShowTables, "test_table")
-	db.AddRejectedQuery(createOrDropTableQuery, fmt.Errorf("forced fail"))
+	db.AddRejectedQuery(mysqlconn.BaseShowTablesForTable("test_table"), fmt.Errorf("forced fail"))
 	schemaInfo := newTestSchemaInfo(10, 1*time.Second, 1*time.Second, true)
 	schemaInfo.Open(db.ConnParams(), false)
 	defer schemaInfo.Close()
@@ -263,12 +263,11 @@ func TestSchemaInfoCreateOrUpdateTable(t *testing.T) {
 		db.AddQuery(query, result)
 	}
 	existingTable := "test_table_01"
-	createOrDropTableQuery := fmt.Sprintf("%s and table_name = '%s'", baseShowTables, existingTable)
-	db.AddQuery(createOrDropTableQuery, &sqltypes.Result{
-		Fields:       createTestTableBaseShowTableFields(),
+	db.AddQuery(mysqlconn.BaseShowTablesForTable(existingTable), &sqltypes.Result{
+		Fields:       mysqlconn.BaseShowTablesFields,
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
-			createTestTableBaseShowTable(existingTable),
+			mysqlconn.BaseShowTablesRow(existingTable, false, ""),
 		},
 	})
 	schemaInfo := newTestSchemaInfo(10, 1*time.Second, 1*time.Second, false)
@@ -292,12 +291,11 @@ func TestSchemaInfoDropTable(t *testing.T) {
 		db.AddQuery(query, result)
 	}
 	existingTable := sqlparser.NewTableIdent("test_table_01")
-	createOrDropTableQuery := fmt.Sprintf("%s and table_name = '%s'", baseShowTables, existingTable)
-	db.AddQuery(createOrDropTableQuery, &sqltypes.Result{
-		Fields:       createTestTableBaseShowTableFields(),
+	db.AddQuery(mysqlconn.BaseShowTablesForTable(existingTable.String()), &sqltypes.Result{
+		Fields:       mysqlconn.BaseShowTablesFields,
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
-			createTestTableBaseShowTable(existingTable.String()),
+			mysqlconn.BaseShowTablesRow(existingTable.String(), false, ""),
 		},
 	})
 	schemaInfo := newTestSchemaInfo(10, 1*time.Second, 1*time.Second, false)
@@ -418,23 +416,22 @@ func TestUpdatedMysqlStats(t *testing.T) {
 	defer schemaInfo.Close()
 	// Add new table
 	tableName := sqlparser.NewTableIdent("mysql_stats_test_table")
-	db.AddQuery(baseShowTables, &sqltypes.Result{
-		Fields:       createTestTableBaseShowTableFields(),
+	db.AddQuery(mysqlconn.BaseShowTables, &sqltypes.Result{
+		Fields:       mysqlconn.BaseShowTablesFields,
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
-			createTestTableBaseShowTable(tableName.String()),
+			mysqlconn.BaseShowTablesRow(tableName.String(), false, ""),
 		},
 	})
 	// Add queries necessary for CreateOrUpdateTable() and NewTableInfo()
-	q := fmt.Sprintf("%s and table_name = '%s'", baseShowTables, tableName)
-	db.AddQuery(q, &sqltypes.Result{
-		Fields:       createTestTableBaseShowTableFields(),
+	db.AddQuery(mysqlconn.BaseShowTablesForTable(tableName.String()), &sqltypes.Result{
+		Fields:       mysqlconn.BaseShowTablesFields,
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
-			createTestTableBaseShowTable(tableName.String()),
+			mysqlconn.BaseShowTablesRow(tableName.String(), false, ""),
 		},
 	})
-	q = fmt.Sprintf("select * from %s where 1 != 1", tableName)
+	q := fmt.Sprintf("select * from %s where 1 != 1", tableName)
 	db.AddQuery(q, &sqltypes.Result{
 		Fields: []*querypb.Field{{
 			Name: "pk",
@@ -451,9 +448,11 @@ func TestUpdatedMysqlStats(t *testing.T) {
 	})
 	q = fmt.Sprintf("show index from %s", tableName)
 	db.AddQuery(q, &sqltypes.Result{
-		Fields:       createShowIndexFields(),
+		Fields:       mysqlconn.ShowIndexFromTableFields,
 		RowsAffected: 1,
-		Rows:         [][]sqltypes.Value{createTestTableShowIndex("pk")},
+		Rows: [][]sqltypes.Value{
+			mysqlconn.ShowIndexFromTableRow(tableName.String(), true, "PRIMARY", 1, "pk", false),
+		},
 	})
 
 	if err := schemaInfo.Reload(ctx); err != nil {
@@ -469,11 +468,18 @@ func TestUpdatedMysqlStats(t *testing.T) {
 	df1 := tableInfo.DataFree
 	mdl1 := tableInfo.MaxDataLength
 	// Update existing table with new stats.
-	db.AddQuery(baseShowTables, &sqltypes.Result{
-		Fields:       createTestTableBaseShowTableFields(),
+	row := mysqlconn.BaseShowTablesRow(tableName.String(), false, "")
+	row[2] = sqltypes.MakeTrusted(sqltypes.Uint64, []byte("0")) // smaller timestamp
+	row[4] = sqltypes.MakeTrusted(sqltypes.Uint64, []byte("2")) // table_rows
+	row[5] = sqltypes.MakeTrusted(sqltypes.Uint64, []byte("3")) // data_length
+	row[6] = sqltypes.MakeTrusted(sqltypes.Uint64, []byte("4")) // index_length
+	row[7] = sqltypes.MakeTrusted(sqltypes.Uint64, []byte("5")) // data_free
+	row[8] = sqltypes.MakeTrusted(sqltypes.Uint64, []byte("6")) // max_data_length
+	db.AddQuery(mysqlconn.BaseShowTables, &sqltypes.Result{
+		Fields:       mysqlconn.BaseShowTablesFields,
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
-			createTestTableUpdatedStats(tableName.String()),
+			row,
 		},
 	})
 	if err := schemaInfo.Reload(ctx); err != nil {
@@ -486,6 +492,7 @@ func TestUpdatedMysqlStats(t *testing.T) {
 	df2 := tableInfo.DataFree
 	mdl2 := tableInfo.MaxDataLength
 	if tr1 == tr2 || dl1 == dl2 || il1 == il2 || df1 == df2 || mdl1 == mdl2 {
+		t.Logf("%v==%v %v==%v %v==%v %v==%v %v==%v", tr1, tr2, dl1, dl2, il1, il2, df1, df2, mdl1, mdl2)
 		t.Fatalf("MysqlStats() results failed to change between queries. ")
 	}
 }
@@ -537,72 +544,6 @@ func getSchemaInfoBaseTestQueries() map[string]*sqltypes.Result {
 	}
 }
 
-func createTestTableBaseShowTableFields() []*querypb.Field {
-	return []*querypb.Field{
-		{Type: querypb.Type_VARCHAR},
-		{Type: querypb.Type_VARCHAR},
-		{Type: querypb.Type_INT32},
-		{Type: querypb.Type_VARCHAR},
-		{Type: querypb.Type_INT32},
-		{Type: querypb.Type_INT32},
-		{Type: querypb.Type_INT32},
-		{Type: querypb.Type_INT32},
-		{Type: querypb.Type_INT32},
-	}
-}
-
-func createTestTableBaseShowTable(tableName string) []sqltypes.Value {
-	return []sqltypes.Value{
-		sqltypes.MakeString([]byte(tableName)),
-		sqltypes.MakeString([]byte("USER TABLE")),
-		sqltypes.MakeTrusted(sqltypes.Int32, []byte("1427325875")),
-		sqltypes.MakeString([]byte("")),
-		sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
-		sqltypes.MakeTrusted(sqltypes.Int32, []byte("2")),
-		sqltypes.MakeTrusted(sqltypes.Int32, []byte("3")),
-		sqltypes.MakeTrusted(sqltypes.Int32, []byte("4")),
-		sqltypes.MakeTrusted(sqltypes.Int32, []byte("5")),
-	}
-}
-
-func createTestTableUpdatedStats(tableName string) []sqltypes.Value {
-	return []sqltypes.Value{
-		sqltypes.MakeString([]byte(tableName)),
-		sqltypes.MakeString([]byte("USER TABLE")),
-		sqltypes.MakeTrusted(sqltypes.Int32, []byte("0")),
-		sqltypes.MakeString([]byte("")),
-		sqltypes.MakeTrusted(sqltypes.Int32, []byte("4")),
-		sqltypes.MakeTrusted(sqltypes.Int32, []byte("5")),
-		sqltypes.MakeTrusted(sqltypes.Int32, []byte("6")),
-		sqltypes.MakeTrusted(sqltypes.Int32, []byte("7")),
-		sqltypes.MakeTrusted(sqltypes.Int32, []byte("8")),
-	}
-}
-
-func createShowIndexFields() []*querypb.Field {
-	return []*querypb.Field{
-		{Type: sqltypes.VarChar},
-		{Type: sqltypes.VarChar},
-		{Type: sqltypes.VarChar},
-		{Type: sqltypes.VarChar},
-		{Type: sqltypes.VarChar},
-		{Type: sqltypes.VarChar},
-		{Type: sqltypes.Uint64},
-	}
-}
-
-func createTestTableShowIndex(pkColumnName string) []sqltypes.Value {
-	return []sqltypes.Value{
-		sqltypes.MakeString([]byte{}),
-		sqltypes.MakeString([]byte{}),
-		sqltypes.MakeString([]byte("PRIMARY")),
-		sqltypes.MakeString([]byte{}),
-		sqltypes.MakeString([]byte(pkColumnName)),
-		sqltypes.MakeString([]byte{}),
-		sqltypes.MakeString([]byte("300")),
-	}
-}
-
 func getSchemaInfoTestSupportedQueries() map[string]*sqltypes.Result {
 	return map[string]*sqltypes.Result{
 		// queries for schema info
@@ -633,43 +574,13 @@ func getSchemaInfoTestSupportedQueries() map[string]*sqltypes.Result {
 				{sqltypes.MakeString([]byte("1"))},
 			},
 		},
-		baseShowTables: {
-			Fields:       createTestTableBaseShowTableFields(),
+		mysqlconn.BaseShowTables: {
+			Fields:       mysqlconn.BaseShowTablesFields,
 			RowsAffected: 3,
 			Rows: [][]sqltypes.Value{
-				{
-					sqltypes.MakeString([]byte("test_table_01")),
-					sqltypes.MakeString([]byte("USER TABLE")),
-					sqltypes.MakeTrusted(sqltypes.Int32, []byte("1427325875")),
-					sqltypes.MakeString([]byte("")),
-					sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
-					sqltypes.MakeTrusted(sqltypes.Int32, []byte("2")),
-					sqltypes.MakeTrusted(sqltypes.Int32, []byte("3")),
-					sqltypes.MakeTrusted(sqltypes.Int32, []byte("4")),
-					sqltypes.MakeTrusted(sqltypes.Int32, []byte("5")),
-				},
-				{
-					sqltypes.MakeString([]byte("test_table_02")),
-					sqltypes.MakeString([]byte("USER TABLE")),
-					sqltypes.MakeTrusted(sqltypes.Int32, []byte("1427325875")),
-					sqltypes.MakeString([]byte("")),
-					sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
-					sqltypes.MakeTrusted(sqltypes.Int32, []byte("2")),
-					sqltypes.MakeTrusted(sqltypes.Int32, []byte("3")),
-					sqltypes.MakeTrusted(sqltypes.Int32, []byte("4")),
-					sqltypes.MakeTrusted(sqltypes.Int32, []byte("5")),
-				},
-				{
-					sqltypes.MakeString([]byte("test_table_03")),
-					sqltypes.MakeString([]byte("USER TABLE")),
-					sqltypes.MakeTrusted(sqltypes.Int32, []byte("1427325875")),
-					sqltypes.MakeString([]byte("")),
-					sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
-					sqltypes.MakeTrusted(sqltypes.Int32, []byte("2")),
-					sqltypes.MakeTrusted(sqltypes.Int32, []byte("3")),
-					sqltypes.MakeTrusted(sqltypes.Int32, []byte("4")),
-					sqltypes.MakeTrusted(sqltypes.Int32, []byte("5")),
-				},
+				mysqlconn.BaseShowTablesRow("test_table_01", false, ""),
+				mysqlconn.BaseShowTablesRow("test_table_02", false, ""),
+				mysqlconn.BaseShowTablesRow("test_table_03", false, ""),
 			},
 		},
 		"select * from test_table_01 where 1 != 1": {
@@ -713,48 +624,24 @@ func getSchemaInfoTestSupportedQueries() map[string]*sqltypes.Result {
 		},
 		// for SplitQuery because it needs a primary key column
 		"show index from test_table_01": {
-			Fields:       createShowIndexFields(),
+			Fields:       mysqlconn.ShowIndexFromTableFields,
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
-				{
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("PRIMARY")),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("pk")),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("300")),
-				},
+				mysqlconn.ShowIndexFromTableRow("test_table_01", true, "PRIMARY", 1, "pk", false),
 			},
 		},
 		"show index from test_table_02": {
-			Fields:       createShowIndexFields(),
+			Fields:       mysqlconn.ShowIndexFromTableFields,
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
-				{
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("PRIMARY")),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("pk")),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("300")),
-				},
+				mysqlconn.ShowIndexFromTableRow("test_table_02", true, "PRIMARY", 1, "pk", false),
 			},
 		},
 		"show index from test_table_03": {
-			Fields:       createShowIndexFields(),
+			Fields:       mysqlconn.ShowIndexFromTableFields,
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
-				{
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("PRIMARY")),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("pk")),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("300")),
-				},
+				mysqlconn.ShowIndexFromTableRow("test_table_03", true, "PRIMARY", 1, "pk", false),
 			},
 		},
 		"begin":  {},
