@@ -14,6 +14,7 @@ enum WorkflowState {
   NotStarted = 0;
   Running = 1;
   Done = 2;
+  Failed = 3;
 }
 
 // Workflow is the persisted state of a long-running workflow.
@@ -57,4 +58,40 @@ message Workflow {
   // end_time is set when the workflow is finished.
   // This field only makes sense if 'state' is Done.
   int64 end_time = 8;
+}
+
+message TaskAttribute {
+  map<string, string> data = 1;
+}
+
+// Prefix "Task" is used here for naming since protoc dosen't allow defining same
+// name in sibling enum.
+enum TaskState {
+  TaskNotStated = 0;
+  TaskRunning = 1;
+  TaskDone = 2;
+  TaskFailed = 3;
+}
+// Task is the data structure that stores the execution status and the attributes
+// of a task.
+message Task {
+  TaskState state = 1;
+  // TaskArribute includes the parameters the task needs.
+  // Not all fields are necessary for all tasks.
+  TaskAttribute attributes = 2;
+}
+
+message WorkflowCheckpoint {
+  // code_version is used to distinguish the implementation version of the workflow.
+  // This is helpful when restarting the job while the code is changed.
+  int32 code_version = 1;
+  // tasks stores all tasks of the workflow in a map. The key is a unique name
+  // to identify the task, e.g. clone/-80.
+  
+  // Task is the data structure that stores the execution status and the
+  // attributes of a task.
+  map<string, Task> tasks = 2;
+  // settings includes workflow specific data, e.g. the resharding workflow
+  // would sotre the source shards and destination shards.
+  map<string, string> settings = 3;
 }
