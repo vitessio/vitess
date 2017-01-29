@@ -139,6 +139,25 @@ func testKillWithRealDatabase(t *testing.T, params *sqldb.ConnParams) {
 	assertSQLError(t, err, CRServerLost, SSSignalException, "EOF")
 }
 
+// testDupEntryWithRealDatabase tests a duplicate key is properly raised.
+func testDupEntryWithRealDatabase(t *testing.T, params *sqldb.ConnParams) {
+	ctx := context.Background()
+	conn, err := Connect(ctx, params)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+
+	if _, err := conn.ExecuteFetch("create table dup_entry(id int, name int, primary key(id), unique index(name))", 0, false); err != nil {
+		t.Fatalf("create table failed: %v", err)
+	}
+	if _, err := conn.ExecuteFetch("insert into dup_entry(id, name) values(1, 10)", 0, false); err != nil {
+		t.Fatalf("first insert failed: %v", err)
+	}
+	_, err = conn.ExecuteFetch("insert into dup_entry(id, name) values(2, 10)", 0, false)
+	assertSQLError(t, err, ERDupEntry, SSDupKey, "Duplicate entry")
+}
+
 // TestWithRealDatabase runs a real MySQL database, and runs all kinds
 // of tests on it. To minimize overhead, we only run one database, and
 // run all the tests on it.
@@ -163,6 +182,11 @@ func TestWithRealDatabase(t *testing.T) {
 	// Kill tests the query part of the API.
 	t.Run("Kill", func(t *testing.T) {
 		testKillWithRealDatabase(t, &params)
+	})
+
+	// DupEntry tests a duplicate key returns the right error.
+	t.Run("DupEntry", func(t *testing.T) {
+		testDupEntryWithRealDatabase(t, &params)
 	})
 
 	// Queries tests the query part of the API.

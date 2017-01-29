@@ -172,6 +172,9 @@ const (
 	// ERUnknownComError is ER_UNKNOWN_COM_ERROR
 	ERUnknownComError = 1047
 
+	// ERDupEntry is ER_DUP_ENTRY
+	ERDupEntry = 1062
+
 	// ERUnknownError is ER_UNKNOWN_ERROR
 	ERUnknownError = 1105
 
@@ -185,6 +188,9 @@ const (
 const (
 	// SSSignalException is ER_SIGNAL_EXCEPTION
 	SSSignalException = "HY000"
+
+	// SSDupKey is ER_DUP_KEY
+	SSDupKey = "23000"
 
 	// SSAccessDeniedError is ER_ACCESS_DENIED_ERROR
 	SSAccessDeniedError = "28000"
