@@ -2,6 +2,7 @@ package tabletconn
 
 import (
 	"fmt"
+	"io"
 	"strings"
 
 	"github.com/youtube/vitess/go/vt/vterrors"
@@ -13,7 +14,8 @@ import (
 // TabletErrorFromGRPC returns a ServerError or a
 // OperationalError from the gRPC error.
 func TabletErrorFromGRPC(err error) error {
-	if err == nil {
+	// io.EOF is end of stream. Don't treat it as an error.
+	if err == nil || err == io.EOF {
 		return nil
 	}
 

@@ -8,7 +8,6 @@ package l2vtgate
 
 import (
 	"fmt"
-	"io"
 	"time"
 
 	log "github.com/golang/glog"
@@ -162,26 +161,11 @@ func (l *L2VTGate) Execute(ctx context.Context, target *querypb.Target, sql stri
 }
 
 // StreamExecute is part of the queryservice.QueryService interface
-func (l *L2VTGate) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, options *querypb.ExecuteOptions, sendReply func(*sqltypes.Result) error) (err error) {
+func (l *L2VTGate) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) (err error) {
 	startTime, statsKey := l.startAction("StreamExecute", target)
 	defer l.endAction(startTime, statsKey, &err)
 
-	stream, err := l.gateway.StreamExecute(ctx, target, sql, bindVariables, options)
-	if err != nil {
-		return err
-	}
-	for {
-		r, err := stream.Recv()
-		if err != nil {
-			if err == io.EOF {
-				return nil
-			}
-			return err
-		}
-		if err := sendReply(r); err != nil {
-			return err
-		}
-	}
+	return l.gateway.StreamExecute(ctx, target, sql, bindVariables, options, callback)
 }
 
 // ExecuteBatch is part of the queryservice.QueryService interface
@@ -209,11 +193,11 @@ func (l *L2VTGate) BeginExecuteBatch(ctx context.Context, target *querypb.Target
 }
 
 // MessageStream is part of the queryservice.QueryService interface
-func (l *L2VTGate) MessageStream(ctx context.Context, target *querypb.Target, name string, sendReply func(*sqltypes.Result) error) (err error) {
+func (l *L2VTGate) MessageStream(ctx context.Context, target *querypb.Target, name string, callback func(*sqltypes.Result) error) (err error) {
 	startTime, statsKey := l.startAction("ExecuteBatch", target)
 	defer l.endAction(startTime, statsKey, &err)
 
-	return l.gateway.MessageStream(ctx, target, name, sendReply)
+	return l.gateway.MessageStream(ctx, target, name, callback)
 }
 
 // MessageAck is part of the queryservice.QueryService interface
@@ -236,34 +220,15 @@ func (l *L2VTGate) SplitQuery(ctx context.Context, target *querypb.Target, sql s
 	return l.gateway.SplitQuery(ctx, target, query, splitColumns, splitCount, numRowsPerQueryPart, algorithm)
 }
 
-// StreamHealthRegister is part of the queryservice.QueryService interface
-func (l *L2VTGate) StreamHealthRegister(chan<- *querypb.StreamHealthResponse) (int, error) {
-	return -1, fmt.Errorf("L2VTGate does not provide health status")
-}
-
-// StreamHealthUnregister is part of the queryservice.QueryService interface
-func (l *L2VTGate) StreamHealthUnregister(int) error {
+// StreamHealth is part of the queryservice.QueryService interface
+func (l *L2VTGate) StreamHealth(ctx context.Context, callback func(*querypb.StreamHealthResponse) error) error {
 	return fmt.Errorf("L2VTGate does not provide health status")
 }
 
 // UpdateStream is part of the queryservice.QueryService interface
-func (l *L2VTGate) UpdateStream(ctx context.Context, target *querypb.Target, position string, timestamp int64, sendReply func(*querypb.StreamEvent) error) error {
-	stream, err := l.gateway.UpdateStream(ctx, target, position, timestamp)
-	if err != nil {
-		return err
-	}
-	for {
-		r, err := stream.Recv()
-		if err != nil {
-			if err == io.EOF {
-				return nil
-			}
-			return err
-		}
-		if err := sendReply(r); err != nil {
-			return err
-		}
-	}
+func (l *L2VTGate) UpdateStream(ctx context.Context, target *querypb.Target, position string, timestamp int64, callback func(*querypb.StreamEvent) error) error {
+	err := l.gateway.UpdateStream(ctx, target, position, timestamp, callback)
+	return err
 }
 
 // HandlePanic is part of the queryservice.QueryService interface

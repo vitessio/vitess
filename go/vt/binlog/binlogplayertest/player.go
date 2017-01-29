@@ -85,7 +85,7 @@ var testBinlogTransaction = &binlogdatapb.BinlogTransaction{
 }
 
 // StreamKeyRange is part of the the UpdateStream interface
-func (fake *FakeBinlogStreamer) StreamKeyRange(ctx context.Context, position string, keyRange *topodatapb.KeyRange, charset *binlogdatapb.Charset, sendReply func(reply *binlogdatapb.BinlogTransaction) error) error {
+func (fake *FakeBinlogStreamer) StreamKeyRange(ctx context.Context, position string, keyRange *topodatapb.KeyRange, charset *binlogdatapb.Charset, callback func(reply *binlogdatapb.BinlogTransaction) error) error {
 	if fake.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
@@ -97,7 +97,7 @@ func (fake *FakeBinlogStreamer) StreamKeyRange(ctx context.Context, position str
 	if !reflect.DeepEqual(req, testKeyRangeRequest) {
 		fake.t.Errorf("wrong StreamKeyRange parameter, got %+v want %+v", req, testKeyRangeRequest)
 	}
-	sendReply(testBinlogTransaction)
+	callback(testBinlogTransaction)
 	return nil
 }
 
@@ -149,7 +149,7 @@ var testTablesRequest = &tablesRequest{
 }
 
 // StreamTables is part of the the UpdateStream interface
-func (fake *FakeBinlogStreamer) StreamTables(ctx context.Context, position string, tables []string, charset *binlogdatapb.Charset, sendReply func(reply *binlogdatapb.BinlogTransaction) error) error {
+func (fake *FakeBinlogStreamer) StreamTables(ctx context.Context, position string, tables []string, charset *binlogdatapb.Charset, callback func(reply *binlogdatapb.BinlogTransaction) error) error {
 	if fake.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
@@ -161,7 +161,7 @@ func (fake *FakeBinlogStreamer) StreamTables(ctx context.Context, position strin
 	if !reflect.DeepEqual(req, testTablesRequest) {
 		fake.t.Errorf("wrong StreamTables parameter, got %+v want %+v", req, testTablesRequest)
 	}
-	sendReply(testBinlogTransaction)
+	callback(testBinlogTransaction)
 	return nil
 }
 

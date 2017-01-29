@@ -52,7 +52,7 @@ func (rtr *Router) Execute(ctx context.Context, sql string, bindVars map[string]
 }
 
 // StreamExecute executes a streaming query.
-func (rtr *Router) StreamExecute(ctx context.Context, sql string, bindVars map[string]interface{}, keyspace string, tabletType topodatapb.TabletType, options *querypb.ExecuteOptions, sendReply func(*sqltypes.Result) error) error {
+func (rtr *Router) StreamExecute(ctx context.Context, sql string, bindVars map[string]interface{}, keyspace string, tabletType topodatapb.TabletType, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
 	if bindVars == nil {
 		bindVars = make(map[string]interface{})
 	}
@@ -62,7 +62,7 @@ func (rtr *Router) StreamExecute(ctx context.Context, sql string, bindVars map[s
 	if err != nil {
 		return err
 	}
-	return plan.Instructions.StreamExecute(vcursor, queryConstruct, make(map[string]interface{}), true, sendReply)
+	return plan.Instructions.StreamExecute(vcursor, queryConstruct, make(map[string]interface{}), true, callback)
 }
 
 // ExecuteBatch routes a non-streaming queries.

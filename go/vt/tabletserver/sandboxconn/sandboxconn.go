@@ -8,7 +8,6 @@ package sandboxconn
 
 import (
 	"fmt"
-	"io"
 
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/sync2"
@@ -233,21 +232,8 @@ func (sbc *SandboxConn) ExecuteBatch(ctx context.Context, target *querypb.Target
 	return result, nil
 }
 
-type streamExecuteAdapter struct {
-	result *sqltypes.Result
-	done   bool
-}
-
-func (a *streamExecuteAdapter) Recv() (*sqltypes.Result, error) {
-	if a.done {
-		return nil, io.EOF
-	}
-	a.done = true
-	return a.result, nil
-}
-
 // StreamExecute is part of the TabletConn interface.
-func (sbc *SandboxConn) StreamExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]interface{}, options *querypb.ExecuteOptions) (sqltypes.ResultStream, error) {
+func (sbc *SandboxConn) StreamExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]interface{}, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
 	sbc.ExecCount.Add(1)
 	bv := make(map[string]interface{})
 	for k, v := range bindVars {
@@ -260,10 +246,9 @@ func (sbc *SandboxConn) StreamExecute(ctx context.Context, target *querypb.Targe
 	sbc.Options = append(sbc.Options, options)
 	err := sbc.getError()
 	if err != nil {
-		return nil, err
+		return err
 	}
-	r := sbc.getNextResult()
-	return &streamExecuteAdapter{result: r}, nil
+	return callback(sbc.getNextResult())
 }
 
 // Begin is part of the TabletConn interface.
@@ -417,8 +402,8 @@ func (sbc *SandboxConn) BeginExecuteBatch(ctx context.Context, target *querypb.T
 }
 
 // MessageStream is part of the TabletConn interface.
-func (sbc *SandboxConn) MessageStream(ctx context.Context, target *querypb.Target, name string, sendReply func(*sqltypes.Result) error) (err error) {
-	sendReply(SingleRowResult)
+func (sbc *SandboxConn) MessageStream(ctx context.Context, target *querypb.Target, name string, callback func(*sqltypes.Result) error) (err error) {
+	callback(SingleRowResult)
 	return nil
 }
 
@@ -456,14 +441,14 @@ func (sbc *SandboxConn) SplitQuery(
 }
 
 // StreamHealth is not implemented.
-func (sbc *SandboxConn) StreamHealth(ctx context.Context) (tabletconn.StreamHealthReader, error) {
-	return nil, fmt.Errorf("Not implemented in test")
+func (sbc *SandboxConn) StreamHealth(ctx context.Context, callback func(*querypb.StreamHealthResponse) error) error {
+	return fmt.Errorf("Not implemented in test")
 }
 
 // UpdateStream is part of the TabletConn interface.
-func (sbc *SandboxConn) UpdateStream(ctx context.Context, target *querypb.Target, position string, timestamp int64) (tabletconn.StreamEventReader, error) {
+func (sbc *SandboxConn) UpdateStream(ctx context.Context, target *querypb.Target, position string, timestamp int64, callback func(*querypb.StreamEvent) error) error {
 	// FIXME(alainjobart) implement, use in vtgate tests.
-	return nil, fmt.Errorf("Not implemented in test")
+	return fmt.Errorf("Not implemented in test")
 }
 
 // Close does not change ExecCount

@@ -20,6 +20,7 @@ import (
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"golang.org/x/net/context"
 
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
@@ -471,33 +472,34 @@ func testStreamExecute(t *testing.T, conn tabletconn.TabletConn, f *FakeQuerySer
 	t.Log("testStreamExecute")
 	ctx := context.Background()
 	ctx = callerid.NewContext(ctx, TestCallerID, TestVTGateCallerID)
-	stream, err := conn.StreamExecute(ctx, TestTarget, StreamExecuteQuery, StreamExecuteBindVars, TestExecuteOptions)
+	i := 0
+	err := conn.StreamExecute(ctx, TestTarget, StreamExecuteQuery, StreamExecuteBindVars, TestExecuteOptions, func(qr *sqltypes.Result) error {
+		switch i {
+		case 0:
+			if len(qr.Rows) == 0 {
+				qr.Rows = nil
+			}
+			if !reflect.DeepEqual(*qr, StreamExecuteQueryResult1) {
+				t.Errorf("Unexpected result1 from StreamExecute: got %v wanted %v", qr, StreamExecuteQueryResult1)
+			}
+		case 1:
+			if len(qr.Fields) == 0 {
+				qr.Fields = nil
+			}
+			if !reflect.DeepEqual(*qr, StreamExecuteQueryResult2) {
+				t.Errorf("Unexpected result2 from StreamExecute: got %v wanted %v", qr, StreamExecuteQueryResult2)
+			}
+		default:
+			t.Fatal("callback should not be called any more")
+		}
+		i++
+		if i >= 2 {
+			return io.EOF
+		}
+		return nil
+	})
 	if err != nil {
-		t.Fatalf("StreamExecute failed: %v", err)
-	}
-	qr, err := stream.Recv()
-	if err != nil {
-		t.Fatalf("StreamExecute failed: cannot read result1: %v", err)
-	}
-	if len(qr.Rows) == 0 {
-		qr.Rows = nil
-	}
-	if !reflect.DeepEqual(*qr, StreamExecuteQueryResult1) {
-		t.Errorf("Unexpected result1 from StreamExecute: got %v wanted %v", qr, StreamExecuteQueryResult1)
-	}
-	qr, err = stream.Recv()
-	if err != nil {
-		t.Fatalf("StreamExecute failed: cannot read result2: %v", err)
-	}
-	if len(qr.Fields) == 0 {
-		qr.Fields = nil
-	}
-	if !reflect.DeepEqual(*qr, StreamExecuteQueryResult2) {
-		t.Errorf("Unexpected result2 from StreamExecute: got %v wanted %v", qr, StreamExecuteQueryResult2)
-	}
-	qr, err = stream.Recv()
-	if err != io.EOF {
-		t.Fatalf("StreamExecute errFunc failed: %v", err)
+		t.Fatal(err)
 	}
 }
 
@@ -507,28 +509,23 @@ func testStreamExecuteError(t *testing.T, conn tabletconn.TabletConn, f *FakeQue
 	testErrorHelper(t, f, "StreamExecute", func(ctx context.Context) error {
 		f.ErrorWait = make(chan struct{})
 		ctx = callerid.NewContext(ctx, TestCallerID, TestVTGateCallerID)
-		stream, err := conn.StreamExecute(ctx, TestTarget, StreamExecuteQuery, StreamExecuteBindVars, TestExecuteOptions)
-		if err != nil {
-			t.Fatalf("StreamExecute failed: %v", err)
-		}
-		qr, err := stream.Recv()
-		if err != nil {
-			t.Fatalf("StreamExecute failed: cannot read result1: %v", err)
-		}
-		if len(qr.Rows) == 0 {
-			qr.Rows = nil
-		}
-		if !reflect.DeepEqual(*qr, StreamExecuteQueryResult1) {
-			t.Errorf("Unexpected result1 from StreamExecute: got %v wanted %v", qr, StreamExecuteQueryResult1)
-		}
-		// signal to the server that the first result has been received
-		close(f.ErrorWait)
-		// After 1 result, we expect to get an error (no more results).
-		qr, err = stream.Recv()
-		if err == nil {
-			t.Fatalf("StreamExecute channel wasn't closed")
-		}
-		return err
+		return conn.StreamExecute(ctx, TestTarget, StreamExecuteQuery, StreamExecuteBindVars, TestExecuteOptions, func(qr *sqltypes.Result) error {
+			// For some errors, the call can be retried.
+			select {
+			case <-f.ErrorWait:
+				return nil
+			default:
+			}
+			if len(qr.Rows) == 0 {
+				qr.Rows = nil
+			}
+			if !reflect.DeepEqual(*qr, StreamExecuteQueryResult1) {
+				t.Errorf("Unexpected result1 from StreamExecute: got %v wanted %v", qr, StreamExecuteQueryResult1)
+			}
+			// signal to the server that the first result has been received
+			close(f.ErrorWait)
+			return nil
+		})
 	})
 	f.HasError = false
 }
@@ -541,12 +538,9 @@ func testStreamExecutePanics(t *testing.T, conn tabletconn.TabletConn, f *FakeQu
 	f.StreamExecutePanicsEarly = true
 	testPanicHelper(t, f, "StreamExecute.Early", func(ctx context.Context) error {
 		ctx = callerid.NewContext(ctx, TestCallerID, TestVTGateCallerID)
-		stream, err := conn.StreamExecute(ctx, TestTarget, StreamExecuteQuery, StreamExecuteBindVars, TestExecuteOptions)
-		if err != nil {
-			return err
-		}
-		_, err = stream.Recv()
-		return err
+		return conn.StreamExecute(ctx, TestTarget, StreamExecuteQuery, StreamExecuteBindVars, TestExecuteOptions, func(qr *sqltypes.Result) error {
+			return nil
+		})
 	})
 
 	// late panic is after sending Fields
@@ -554,23 +548,23 @@ func testStreamExecutePanics(t *testing.T, conn tabletconn.TabletConn, f *FakeQu
 	testPanicHelper(t, f, "StreamExecute.Late", func(ctx context.Context) error {
 		f.PanicWait = make(chan struct{})
 		ctx = callerid.NewContext(ctx, TestCallerID, TestVTGateCallerID)
-		stream, err := conn.StreamExecute(ctx, TestTarget, StreamExecuteQuery, StreamExecuteBindVars, TestExecuteOptions)
-		if err != nil {
-			t.Fatalf("StreamExecute failed: %v", err)
-		}
-		qr, err := stream.Recv()
-		if err != nil {
-			t.Fatalf("StreamExecute failed: cannot read result1: %v", err)
-		}
-		if len(qr.Rows) == 0 {
-			qr.Rows = nil
-		}
-		if !reflect.DeepEqual(*qr, StreamExecuteQueryResult1) {
-			t.Errorf("Unexpected result1 from StreamExecute: got %v wanted %v", qr, StreamExecuteQueryResult1)
-		}
-		close(f.PanicWait)
-		_, err = stream.Recv()
-		return err
+		return conn.StreamExecute(ctx, TestTarget, StreamExecuteQuery, StreamExecuteBindVars, TestExecuteOptions, func(qr *sqltypes.Result) error {
+			// For some errors, the call can be retried.
+			select {
+			case <-f.PanicWait:
+				return nil
+			default:
+			}
+			if len(qr.Rows) == 0 {
+				qr.Rows = nil
+			}
+			if !reflect.DeepEqual(*qr, StreamExecuteQueryResult1) {
+				t.Errorf("Unexpected result1 from StreamExecute: got %v wanted %v", qr, StreamExecuteQueryResult1)
+			}
+			// signal to the server that the first result has been received
+			close(f.PanicWait)
+			return nil
+		})
 	})
 }
 
@@ -788,18 +782,16 @@ func testStreamHealth(t *testing.T, conn tabletconn.TabletConn, f *FakeQueryServ
 	t.Log("testStreamHealth")
 	ctx := context.Background()
 
-	stream, err := conn.StreamHealth(ctx)
+	var health *querypb.StreamHealthResponse
+	err := conn.StreamHealth(ctx, func(shr *querypb.StreamHealthResponse) error {
+		health = shr
+		return io.EOF
+	})
 	if err != nil {
 		t.Fatalf("StreamHealth failed: %v", err)
 	}
-	// channel should have one response, then closed
-	shr, err := stream.Recv()
-	if err != nil {
-		t.Fatalf("StreamHealth got no response")
-	}
-
-	if !reflect.DeepEqual(*shr, *TestStreamHealthStreamHealthResponse) {
-		t.Errorf("invalid StreamHealthResponse: got %v expected %v", *shr, *TestStreamHealthStreamHealthResponse)
+	if !reflect.DeepEqual(*health, *TestStreamHealthStreamHealthResponse) {
+		t.Errorf("invalid StreamHealthResponse: got %v expected %v", *health, *TestStreamHealthStreamHealthResponse)
 	}
 }
 
@@ -807,11 +799,10 @@ func testStreamHealthError(t *testing.T, conn tabletconn.TabletConn, f *FakeQuer
 	t.Log("testStreamHealthError")
 	f.HasError = true
 	ctx := context.Background()
-	stream, err := conn.StreamHealth(ctx)
-	if err != nil {
-		t.Fatalf("StreamHealth failed: %v", err)
-	}
-	_, err = stream.Recv()
+	err := conn.StreamHealth(ctx, func(shr *querypb.StreamHealthResponse) error {
+		t.Fatalf("Unexpected call to callback")
+		return nil
+	})
 	if err == nil || !strings.Contains(err.Error(), TestStreamHealthErrorMsg) {
 		t.Fatalf("StreamHealth failed with the wrong error: %v", err)
 	}
@@ -821,12 +812,10 @@ func testStreamHealthError(t *testing.T, conn tabletconn.TabletConn, f *FakeQuer
 func testStreamHealthPanics(t *testing.T, conn tabletconn.TabletConn, f *FakeQueryService) {
 	t.Log("testStreamHealthPanics")
 	testPanicHelper(t, f, "StreamHealth", func(ctx context.Context) error {
-		stream, err := conn.StreamHealth(ctx)
-		if err != nil {
-			t.Fatalf("StreamHealth failed: %v", err)
-		}
-		_, err = stream.Recv()
-		return err
+		return conn.StreamHealth(ctx, func(shr *querypb.StreamHealthResponse) error {
+			t.Fatalf("Unexpected call to callback")
+			return nil
+		})
 	})
 }
 
@@ -834,27 +823,25 @@ func testUpdateStream(t *testing.T, conn tabletconn.TabletConn, f *FakeQueryServ
 	t.Log("testUpdateStream")
 	ctx := context.Background()
 	ctx = callerid.NewContext(ctx, TestCallerID, TestVTGateCallerID)
-	stream, err := conn.UpdateStream(ctx, TestTarget, UpdateStreamPosition, UpdateStreamTimestamp)
+	i := 0
+	err := conn.UpdateStream(ctx, TestTarget, UpdateStreamPosition, UpdateStreamTimestamp, func(qr *querypb.StreamEvent) error {
+		switch i {
+		case 0:
+			if !reflect.DeepEqual(*qr, UpdateStreamStreamEvent1) {
+				t.Errorf("Unexpected result1 from UpdateStream: got %v wanted %v", qr, UpdateStreamStreamEvent1)
+			}
+		case 1:
+			if !reflect.DeepEqual(*qr, UpdateStreamStreamEvent2) {
+				t.Errorf("Unexpected result2 from UpdateStream: got %v wanted %v", qr, UpdateStreamStreamEvent2)
+			}
+		default:
+			t.Fatal("callback should not be called any more")
+		}
+		i++
+		return nil
+	})
 	if err != nil {
 		t.Fatalf("UpdateStream failed: %v", err)
-	}
-	qr, err := stream.Recv()
-	if err != nil {
-		t.Fatalf("UpdateStream failed: cannot read result1: %v", err)
-	}
-	if !reflect.DeepEqual(*qr, UpdateStreamStreamEvent1) {
-		t.Errorf("Unexpected result1 from UpdateStream: got %v wanted %v", qr, UpdateStreamStreamEvent1)
-	}
-	qr, err = stream.Recv()
-	if err != nil {
-		t.Fatalf("UpdateStream failed: cannot read result2: %v", err)
-	}
-	if !reflect.DeepEqual(*qr, UpdateStreamStreamEvent2) {
-		t.Errorf("Unexpected result2 from UpdateStream: got %v wanted %v", qr, UpdateStreamStreamEvent2)
-	}
-	qr, err = stream.Recv()
-	if err != io.EOF {
-		t.Fatalf("UpdateStream errFunc failed: %v", err)
 	}
 }
 
@@ -864,25 +851,20 @@ func testUpdateStreamError(t *testing.T, conn tabletconn.TabletConn, f *FakeQuer
 	testErrorHelper(t, f, "UpdateStream", func(ctx context.Context) error {
 		f.ErrorWait = make(chan struct{})
 		ctx = callerid.NewContext(ctx, TestCallerID, TestVTGateCallerID)
-		stream, err := conn.UpdateStream(ctx, TestTarget, UpdateStreamPosition, UpdateStreamTimestamp)
-		if err != nil {
-			t.Fatalf("UpdateStream failed: %v", err)
-		}
-		qr, err := stream.Recv()
-		if err != nil {
-			t.Fatalf("UpdateStream failed: cannot read result1: %v", err)
-		}
-		if !reflect.DeepEqual(*qr, UpdateStreamStreamEvent1) {
-			t.Errorf("Unexpected result1 from UpdateStream: got %v wanted %v", qr, UpdateStreamStreamEvent1)
-		}
-		// signal to the server that the first result has been received
-		close(f.ErrorWait)
-		// After 1 result, we expect to get an error (no more results).
-		qr, err = stream.Recv()
-		if err == nil {
-			t.Fatalf("UpdateStream channel wasn't closed")
-		}
-		return err
+		return conn.UpdateStream(ctx, TestTarget, UpdateStreamPosition, UpdateStreamTimestamp, func(qr *querypb.StreamEvent) error {
+			// For some errors, the call can be retried.
+			select {
+			case <-f.ErrorWait:
+				return nil
+			default:
+			}
+			if !reflect.DeepEqual(*qr, UpdateStreamStreamEvent1) {
+				t.Errorf("Unexpected result1 from UpdateStream: got %v wanted %v", qr, UpdateStreamStreamEvent1)
+			}
+			// signal to the server that the first result has been received
+			close(f.ErrorWait)
+			return nil
+		})
 	})
 	f.HasError = false
 }
@@ -895,12 +877,9 @@ func testUpdateStreamPanics(t *testing.T, conn tabletconn.TabletConn, f *FakeQue
 	f.UpdateStreamPanicsEarly = true
 	testPanicHelper(t, f, "UpdateStream.Early", func(ctx context.Context) error {
 		ctx = callerid.NewContext(ctx, TestCallerID, TestVTGateCallerID)
-		stream, err := conn.UpdateStream(ctx, TestTarget, UpdateStreamPosition, UpdateStreamTimestamp)
-		if err != nil {
-			return err
-		}
-		_, err = stream.Recv()
-		return err
+		return conn.UpdateStream(ctx, TestTarget, UpdateStreamPosition, UpdateStreamTimestamp, func(qr *querypb.StreamEvent) error {
+			return nil
+		})
 	})
 
 	// late panic is after sending Fields
@@ -908,20 +887,26 @@ func testUpdateStreamPanics(t *testing.T, conn tabletconn.TabletConn, f *FakeQue
 	testPanicHelper(t, f, "UpdateStream.Late", func(ctx context.Context) error {
 		f.PanicWait = make(chan struct{})
 		ctx = callerid.NewContext(ctx, TestCallerID, TestVTGateCallerID)
-		stream, err := conn.UpdateStream(ctx, TestTarget, UpdateStreamPosition, UpdateStreamTimestamp)
-		if err != nil {
-			t.Fatalf("UpdateStream failed: %v", err)
-		}
-		qr, err := stream.Recv()
-		if err != nil {
-			t.Fatalf("UpdateStream failed: cannot read result1: %v", err)
-		}
-		if !reflect.DeepEqual(*qr, UpdateStreamStreamEvent1) {
-			t.Errorf("Unexpected result1 from UpdateStream: got %v wanted %v", qr, UpdateStreamStreamEvent1)
-		}
-		close(f.PanicWait)
-		_, err = stream.Recv()
-		return err
+		i := 0
+		return conn.UpdateStream(ctx, TestTarget, UpdateStreamPosition, UpdateStreamTimestamp, func(qr *querypb.StreamEvent) error {
+			// For some errors, the call can be retried.
+			select {
+			case <-f.PanicWait:
+				return nil
+			default:
+			}
+			switch i {
+			case 0:
+				if !reflect.DeepEqual(*qr, UpdateStreamStreamEvent1) {
+					t.Errorf("Unexpected result1 from UpdateStream: got %v wanted %v", qr, UpdateStreamStreamEvent1)
+				}
+				close(f.PanicWait)
+			default:
+				t.Fatal("callback should not be called any more")
+			}
+			i++
+			return nil
+		})
 	})
 }
 

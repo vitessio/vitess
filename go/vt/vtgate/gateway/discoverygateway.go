@@ -151,17 +151,10 @@ func (dg *discoveryGateway) ExecuteBatch(ctx context.Context, target *querypb.Ta
 }
 
 // StreamExecute executes a streaming query for the specified keyspace, shard, and tablet type.
-func (dg *discoveryGateway) StreamExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]interface{}, options *querypb.ExecuteOptions) (sqltypes.ResultStream, error) {
-	var stream sqltypes.ResultStream
-	err := dg.withRetry(ctx, target, func(conn tabletconn.TabletConn, target *querypb.Target) error {
-		var err error
-		stream, err = conn.StreamExecute(ctx, target, query, bindVars, options)
-		return err
+func (dg *discoveryGateway) StreamExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]interface{}, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
+	return dg.withRetry(ctx, target, func(conn tabletconn.TabletConn, target *querypb.Target) error {
+		return conn.StreamExecute(ctx, target, query, bindVars, options, callback)
 	}, false, true)
-	if err != nil {
-		return nil, err
-	}
-	return stream, nil
 }
 
 // Begin starts a transaction for the specified keyspace, shard, and tablet type.
@@ -307,11 +300,11 @@ func (dg *discoveryGateway) BeginExecuteBatch(ctx context.Context, target *query
 
 // MessageStream streams messages for the
 // specified keyspace, shard, and tablet type.
-func (dg *discoveryGateway) MessageStream(ctx context.Context, target *querypb.Target, name string, sendReply func(*sqltypes.Result) error) error {
+func (dg *discoveryGateway) MessageStream(ctx context.Context, target *querypb.Target, name string, callback func(*sqltypes.Result) error) error {
 	return dg.withRetry(ctx, target, func(conn tabletconn.TabletConn, target *querypb.Target) error {
 		var innerErr error
 		startTime := time.Now()
-		innerErr = conn.MessageStream(ctx, target, name, sendReply)
+		innerErr = conn.MessageStream(ctx, target, name, callback)
 		dg.updateStats(target, startTime, innerErr)
 		return innerErr
 	}, false, true)
@@ -353,17 +346,10 @@ func (dg *discoveryGateway) SplitQuery(
 
 // UpdateStream starts an update stream for the specified keyspace,
 // shard, and tablet type.
-func (dg *discoveryGateway) UpdateStream(ctx context.Context, target *querypb.Target, position string, timestamp int64) (tabletconn.StreamEventReader, error) {
-	var stream tabletconn.StreamEventReader
-	err := dg.withRetry(ctx, target, func(conn tabletconn.TabletConn, target *querypb.Target) error {
-		var err error
-		stream, err = conn.UpdateStream(ctx, target, position, timestamp)
-		return err
+func (dg *discoveryGateway) UpdateStream(ctx context.Context, target *querypb.Target, position string, timestamp int64, callback func(*querypb.StreamEvent) error) error {
+	return dg.withRetry(ctx, target, func(conn tabletconn.TabletConn, target *querypb.Target) error {
+		return conn.UpdateStream(ctx, target, position, timestamp, callback)
 	}, false, true)
-	if err != nil {
-		return nil, err
-	}
-	return stream, nil
 }
 
 // Close shuts down underlying connections.
@@ -390,7 +376,7 @@ func (dg *discoveryGateway) CacheStatus() TabletCacheStatusList {
 
 // StreamHealth is currently not implemented.
 // TODO(alainjobart): Maybe we should?
-func (dg *discoveryGateway) StreamHealth(ctx context.Context) (tabletconn.StreamHealthReader, error) {
+func (dg *discoveryGateway) StreamHealth(ctx context.Context, callback func(*querypb.StreamHealthResponse) error) error {
 	panic("not implemented")
 }
 

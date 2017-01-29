@@ -348,106 +348,64 @@ func (hc *HealthCheckImpl) checkConn(hcc *healthCheckConn, name string) {
 	}
 	hc.initialUpdatesWG.Done()
 
-	// retry health check if it fails
+	// Read stream health responses.
 	for {
-		// Try to connect to the tablet.
-		stream, err := hcc.connect(hc)
-		if err != nil {
-			select {
-			case <-hcc.ctx.Done():
-				return
-			default:
-			}
-			hcc.mu.Lock()
-			hcc.tabletStats.Serving = false
-			hcc.tabletStats.LastError = err
-			target := hcc.tabletStats.Target
-			hcc.mu.Unlock()
-			hcErrorCounters.Add([]string{target.Keyspace, target.Shard, topoproto.TabletTypeLString(target.TabletType)}, 1)
+		_ = hcc.stream(hc, func(shr *querypb.StreamHealthResponse) error {
+			return hcc.processResponse(hc, shr)
+		})
 
-			// Sleep until the next retry is up or the context is done/canceled.
-			select {
-			case <-hcc.ctx.Done():
-			case <-time.After(hc.retryDelay):
-			}
-			continue
-		}
-
-		// Read stream health responses.
-		for {
-			reconnect, err := hcc.processResponse(hc, stream)
-			if err != nil {
-				hcc.mu.Lock()
-				hcc.tabletStats.Serving = false
-				hcc.tabletStats.LastError = err
-				ts := hcc.tabletStats
-				hcc.mu.Unlock()
-				// notify downstream for serving status change
-				if hc.listener != nil {
-					hc.listener.StatsUpdate(&ts)
-				}
-				select {
-				case <-hcc.ctx.Done():
-					return
-				default:
-				}
-				hcErrorCounters.Add([]string{ts.Target.Keyspace, ts.Target.Shard, topoproto.TabletTypeLString(ts.Target.TabletType)}, 1)
-				if reconnect {
-					hcc.mu.Lock()
-					hcc.conn.Close(hcc.ctx)
-					hcc.conn = nil
-					hcc.tabletStats.Target = &querypb.Target{}
-					hcc.mu.Unlock()
-
-					// Sleep until the next retry is up or the context is done/canceled.
-					select {
-					case <-hcc.ctx.Done():
-					case <-time.After(hc.retryDelay):
-					}
-					break
-				}
-			}
+		// Sleep until the next retry is up or the context is done/canceled.
+		select {
+		case <-hcc.ctx.Done():
+			return
+		case <-time.After(hc.retryDelay):
 		}
 	}
 }
 
-// connect creates connection to the tablet and starts streaming.
-func (hcc *healthCheckConn) connect(hc *HealthCheckImpl) (tabletconn.StreamHealthReader, error) {
-	// Keyspace, shard and tabletType are the ones from the tablet
-	// record, but they won't be used just yet.
-	conn, err := tabletconn.GetDialer()(hcc.tabletStats.Tablet, hc.connTimeout)
-	if err != nil {
-		return nil, err
-	}
-	stream, err := conn.StreamHealth(hcc.ctx)
-	if err != nil {
-		conn.Close(hcc.ctx)
-		return nil, err
-	}
+// stream streams healthcheck responses to callback.
+func (hcc *healthCheckConn) stream(hc *HealthCheckImpl, callback func(*querypb.StreamHealthResponse) error) error {
 	hcc.mu.Lock()
-	hcc.conn = conn
-	hcc.tabletStats.LastError = nil
+	conn := hcc.conn
 	hcc.mu.Unlock()
-	return stream, nil
+	if conn == nil {
+		var err error
+		// Keyspace, shard and tabletType are the ones from the tablet
+		// record, but they won't be used just yet.
+		conn, err = tabletconn.GetDialer()(hcc.tabletStats.Tablet, hc.connTimeout)
+		if err != nil {
+			return err
+		}
+		hcc.mu.Lock()
+		hcc.conn = conn
+		hcc.tabletStats.LastError = nil
+		hcc.mu.Unlock()
+	}
+
+	if err := conn.StreamHealth(hcc.ctx, callback); err != nil {
+		hcc.mu.Lock()
+		hcc.conn.Close(hcc.ctx)
+		hcc.conn = nil
+		hcc.tabletStats.Target = &querypb.Target{}
+		hcc.tabletStats.Serving = false
+		hcc.tabletStats.LastError = err
+		hcc.mu.Unlock()
+		return err
+	}
+	return nil
 }
 
 // processResponse reads one health check response, and notifies HealthCheckStatsListener.
-// It returns bool to indicate if the caller should reconnect. We do not need to reconnect when the streaming is working.
-func (hcc *healthCheckConn) processResponse(hc *HealthCheckImpl, stream tabletconn.StreamHealthReader) (bool, error) {
+func (hcc *healthCheckConn) processResponse(hc *HealthCheckImpl, shr *querypb.StreamHealthResponse) error {
 	select {
 	case <-hcc.ctx.Done():
-		return false, hcc.ctx.Err()
+		return hcc.ctx.Err()
 	default:
-	}
-
-	shr, err := stream.Recv()
-	if err != nil {
-		return true, err
 	}
 
 	// Check for invalid data, better than panicking.
 	if shr.Target == nil || shr.RealtimeStats == nil {
-		return false, fmt.Errorf("health stats is not valid: %v", shr)
+		return fmt.Errorf("health stats is not valid: %v", shr)
 	}
 
 	// an app-level error from tablet, force serving state.
@@ -486,7 +444,7 @@ func (hcc *healthCheckConn) processResponse(hc *HealthCheckImpl, stream tabletco
 	if hc.listener != nil {
 		hc.listener.StatsUpdate(&ts)
 	}
-	return false, nil
+	return nil
 }
 
 // update updates the stats of a healthCheckConn, and returns a copy

@@ -6,6 +6,7 @@ package endtoend
 
 import (
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"reflect"
@@ -414,11 +415,14 @@ func TestHealth(t *testing.T) {
 }
 
 func TestStreamHealth(t *testing.T) {
-	ch := make(chan *querypb.StreamHealthResponse, 10)
-	id, _ := framework.Server.StreamHealthRegister(ch)
-	defer framework.Server.StreamHealthUnregister(id)
+	var health *querypb.StreamHealthResponse
 	framework.Server.BroadcastHealth(0, nil)
-	health := <-ch
+	if err := framework.Server.StreamHealth(context.Background(), func(shr *querypb.StreamHealthResponse) error {
+		health = shr
+		return io.EOF
+	}); err != nil {
+		t.Fatal(err)
+	}
 	if !reflect.DeepEqual(*health.Target, framework.Target) {
 		t.Errorf("Health: %+v, want %+v", *health.Target, framework.Target)
 	}

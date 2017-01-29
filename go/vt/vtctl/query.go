@@ -7,6 +7,7 @@ package vtctl
 import (
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -526,21 +527,25 @@ func commandVtTabletStreamHealth(ctx context.Context, wr *wrangler.Wrangler, sub
 		return fmt.Errorf("cannot connect to tablet %v: %v", tabletAlias, err)
 	}
 
-	stream, err := conn.StreamHealth(ctx)
-	if err != nil {
-		return err
-	}
-	for i := 0; i < *count; i++ {
-		shr, err := stream.Recv()
-		if err != nil {
-			return fmt.Errorf("stream ended early: %v", err)
-		}
+	i := 0
+	err = conn.StreamHealth(ctx, func(shr *querypb.StreamHealthResponse) error {
 		data, err := json.Marshal(shr)
 		if err != nil {
 			wr.Logger().Errorf("cannot json-marshal structure: %v", err)
 		} else {
 			wr.Logger().Printf("%v\n", string(data))
 		}
+		i++
+		if i >= *count {
+			return io.EOF
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	if i < *count {
+		return errors.New("stream ended early")
 	}
 	return nil
 }
@@ -570,25 +575,29 @@ func commandVtTabletUpdateStream(ctx context.Context, wr *wrangler.Wrangler, sub
 		return fmt.Errorf("cannot connect to tablet %v: %v", tabletAlias, err)
 	}
 
-	stream, err := conn.UpdateStream(ctx, &querypb.Target{
+	i := 0
+	err = conn.UpdateStream(ctx, &querypb.Target{
 		Keyspace:   tabletInfo.Tablet.Keyspace,
 		Shard:      tabletInfo.Tablet.Shard,
 		TabletType: tabletInfo.Tablet.Type,
-	}, *position, int64(*timestamp))
-	if err != nil {
-		return err
-	}
-	for i := 0; i < *count; i++ {
-		se, err := stream.Recv()
-		if err != nil {
-			return fmt.Errorf("stream ended early: %v", err)
-		}
+	}, *position, int64(*timestamp), func(se *querypb.StreamEvent) error {
 		data, err := json.Marshal(se)
 		if err != nil {
 			wr.Logger().Errorf("cannot json-marshal structure: %v", err)
 		} else {
 			wr.Logger().Printf("%v\n", string(data))
 		}
+		i++
+		if i >= *count {
+			return io.EOF
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	if i < *count {
+		return errors.New("stream ended early")
 	}
 	return nil
 }

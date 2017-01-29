@@ -6,6 +6,7 @@ package tabletserver
 
 import (
 	"fmt"
+	"io"
 	"math/rand"
 	"net/http"
 	"strings"
@@ -835,7 +836,7 @@ func (tsv *TabletServer) Execute(ctx context.Context, target *querypb.Target, sq
 // StreamExecute executes the query and streams the result.
 // The first QueryResult will have Fields set (and Rows nil).
 // The subsequent QueryResult will have Rows set (and Fields nil).
-func (tsv *TabletServer) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, options *querypb.ExecuteOptions, sendReply func(*sqltypes.Result) error) (err error) {
+func (tsv *TabletServer) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) (err error) {
 	err = tsv.execRequest(
 		ctx, 0,
 		"StreamExecute", sql, bindVariables,
@@ -855,7 +856,7 @@ func (tsv *TabletServer) StreamExecute(ctx context.Context, target *querypb.Targ
 				te:       tsv.te,
 				messager: tsv.messager,
 			}
-			return qre.Stream(sqltypes.IncludeFieldsOrDefault(options), sendReply)
+			return qre.Stream(sqltypes.IncludeFieldsOrDefault(options), callback)
 		},
 	)
 	return err
@@ -934,14 +935,21 @@ func (tsv *TabletServer) BeginExecuteBatch(ctx context.Context, target *querypb.
 }
 
 // MessageStream streams messages from the requested table.
-func (tsv *TabletServer) MessageStream(ctx context.Context, target *querypb.Target, name string, sendReply func(*sqltypes.Result) error) (err error) {
+func (tsv *TabletServer) MessageStream(ctx context.Context, target *querypb.Target, name string, callback func(*sqltypes.Result) error) (err error) {
 	if err = tsv.startRequest(ctx, target, false, false); err != nil {
 		return err
 	}
 	defer tsv.endRequest(false)
 	defer tsv.handlePanicAndSendLogStats("ack", nil, &err, nil)
 	// TODO(sougou): perform ACL checks.
-	rcv, done := newMessageReceiver(sendReply)
+	rcv, done := newMessageReceiver(func(r *sqltypes.Result) error {
+		select {
+		case <-ctx.Done():
+			return io.EOF
+		default:
+		}
+		return callback(r)
+	})
 	if err := tsv.messager.Subscribe(name, rcv); err != nil {
 		return tsv.handleError("message_stream", nil, NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "%v", err), nil)
 	}
@@ -1387,31 +1395,84 @@ func splitQueryToTabletError(err error) error {
 	return NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "splitquery: %v", err)
 }
 
-// StreamHealthRegister is part of queryservice.QueryService interface
-func (tsv *TabletServer) StreamHealthRegister(c chan<- *querypb.StreamHealthResponse) (int, error) {
+// StreamHealth streams the health status to callback.
+// At the beginning, if TabletServer has a valid health
+// state, that response is immediately sent.
+func (tsv *TabletServer) StreamHealth(ctx context.Context, callback func(*querypb.StreamHealthResponse) error) error {
+	tsv.streamHealthMutex.Lock()
+	shr := tsv.lastStreamHealthResponse
+	tsv.streamHealthMutex.Unlock()
+	// Send current state immediately.
+	if shr != nil {
+		if err := callback(shr); err != nil {
+			if err == io.EOF {
+				return nil
+			}
+			return err
+		}
+	}
+
+	// Broadcast periodic updates.
+	id, ch := tsv.streamHealthRegister()
+	defer tsv.streamHealthUnregister(id)
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+		case shr = <-ch:
+		}
+		if err := callback(shr); err != nil {
+			if err == io.EOF {
+				return nil
+			}
+			return err
+		}
+	}
+}
+
+func (tsv *TabletServer) streamHealthRegister() (int, chan *querypb.StreamHealthResponse) {
 	tsv.streamHealthMutex.Lock()
 	defer tsv.streamHealthMutex.Unlock()
 
 	id := tsv.streamHealthIndex
 	tsv.streamHealthIndex++
-	tsv.streamHealthMap[id] = c
-	if tsv.lastStreamHealthResponse != nil {
-		c <- tsv.lastStreamHealthResponse
-	}
-	return id, nil
+	ch := make(chan *querypb.StreamHealthResponse, 10)
+	tsv.streamHealthMap[id] = ch
+	return id, ch
 }
 
-// StreamHealthUnregister is part of queryservice.QueryService interface
-func (tsv *TabletServer) StreamHealthUnregister(id int) error {
+func (tsv *TabletServer) streamHealthUnregister(id int) {
 	tsv.streamHealthMutex.Lock()
 	defer tsv.streamHealthMutex.Unlock()
-
 	delete(tsv.streamHealthMap, id)
-	return nil
+}
+
+// BroadcastHealth will broadcast the current health to all listeners
+func (tsv *TabletServer) BroadcastHealth(terTimestamp int64, stats *querypb.RealtimeStats) {
+	tsv.mu.Lock()
+	target := tsv.target
+	tsv.mu.Unlock()
+	shr := &querypb.StreamHealthResponse{
+		Target:  &target,
+		Serving: tsv.IsServing(),
+		TabletExternallyReparentedTimestamp: terTimestamp,
+		RealtimeStats:                       stats,
+	}
+
+	tsv.streamHealthMutex.Lock()
+	defer tsv.streamHealthMutex.Unlock()
+	for _, c := range tsv.streamHealthMap {
+		// Do not block on any write.
+		select {
+		case c <- shr:
+		default:
+		}
+	}
+	tsv.lastStreamHealthResponse = shr
 }
 
 // UpdateStream streams binlog events.
-func (tsv *TabletServer) UpdateStream(ctx context.Context, target *querypb.Target, position string, timestamp int64, sendReply func(*querypb.StreamEvent) error) error {
+func (tsv *TabletServer) UpdateStream(ctx context.Context, target *querypb.Target, position string, timestamp int64, callback func(*querypb.StreamEvent) error) error {
 	// Parse the position if needed.
 	var p replication.Position
 	var err error
@@ -1432,9 +1493,7 @@ func (tsv *TabletServer) UpdateStream(ctx context.Context, target *querypb.Targe
 	}
 	defer tsv.endRequest(false)
 
-	s := binlog.NewEventStreamer(tsv.dbconfigs.App.DbName, tsv.mysqld, p, timestamp, func(event *querypb.StreamEvent) error {
-		return sendReply(event)
-	})
+	s := binlog.NewEventStreamer(tsv.dbconfigs.App.DbName, tsv.mysqld, p, timestamp, callback)
 
 	// Create a cancelable wrapping context.
 	streamCtx, streamCancel := context.WithCancel(ctx)
@@ -1446,7 +1505,7 @@ func (tsv *TabletServer) UpdateStream(ctx context.Context, target *querypb.Targe
 	switch err {
 	case mysqlctl.ErrBinlogUnavailable:
 		return NewTabletError(vtrpcpb.ErrorCode_QUERY_NOT_SERVED, "%v", err)
-	case nil:
+	case nil, io.EOF:
 		return nil
 	default:
 		return NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "%v", err)
@@ -1458,30 +1517,6 @@ func (tsv *TabletServer) HandlePanic(err *error) {
 	if x := recover(); x != nil {
 		*err = fmt.Errorf("uncaught panic: %v\n. Stack-trace:\n%s", x, tb.Stack(4))
 	}
-}
-
-// BroadcastHealth will broadcast the current health to all listeners
-func (tsv *TabletServer) BroadcastHealth(terTimestamp int64, stats *querypb.RealtimeStats) {
-	tsv.mu.Lock()
-	target := tsv.target
-	tsv.mu.Unlock()
-	shr := &querypb.StreamHealthResponse{
-		Target:  &target,
-		Serving: tsv.IsServing(),
-		TabletExternallyReparentedTimestamp: terTimestamp,
-		RealtimeStats:                       stats,
-	}
-
-	tsv.streamHealthMutex.Lock()
-	defer tsv.streamHealthMutex.Unlock()
-	for _, c := range tsv.streamHealthMap {
-		// do not block on any write
-		select {
-		case c <- shr:
-		default:
-		}
-	}
-	tsv.lastStreamHealthResponse = shr
 }
 
 // startRequest validates the current state and target and registers

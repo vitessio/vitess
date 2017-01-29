@@ -17,11 +17,11 @@ import (
 	"github.com/youtube/vitess/go/vt/sqlparser"
 )
 
-// KeyRangeFilterFunc returns a function that calls sendReply only if statements
+// KeyRangeFilterFunc returns a function that calls callback only if statements
 // in the transaction match the specified keyrange. The resulting function can be
 // passed into the Streamer: bls.Stream(file, pos, sendTransaction) ->
 // bls.Stream(file, pos, KeyRangeFilterFunc(keyrange, sendTransaction))
-func KeyRangeFilterFunc(keyrange *topodatapb.KeyRange, sendReply sendTransactionFunc) sendTransactionFunc {
+func KeyRangeFilterFunc(keyrange *topodatapb.KeyRange, callback sendTransactionFunc) sendTransactionFunc {
 	return func(reply *binlogdatapb.BinlogTransaction) error {
 		matched := false
 		filtered := make([]*binlogdatapb.BinlogTransaction_Statement, 0, len(reply.Statements))
@@ -85,7 +85,7 @@ func KeyRangeFilterFunc(keyrange *topodatapb.KeyRange, sendReply sendTransaction
 		} else {
 			reply.Statements = nil
 		}
-		return sendReply(reply)
+		return callback(reply)
 	}
 }
 

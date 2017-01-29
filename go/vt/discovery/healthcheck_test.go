@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"html/template"
+	"io"
 	"reflect"
 	"testing"
 	"time"
@@ -90,7 +91,7 @@ func TestHealthCheck(t *testing.T) {
 		}},
 	}}
 	if !reflect.DeepEqual(tcsl, tcslWant) {
-		t.Errorf(`hc.CacheStatus() = %+v; want %+v`, tcsl, tcslWant)
+		t.Errorf("hc.CacheStatus() =\n%+v; want\n%+v", tcsl[0], tcslWant[0])
 	}
 
 	// TabletType changed, should get both old and new event
@@ -191,7 +192,7 @@ func TestHealthCheck(t *testing.T) {
 	}
 	res = <-l.output
 	if !reflect.DeepEqual(res, want) {
-		t.Errorf(`<-l.output: %+v; want %+v`, res, want)
+		t.Errorf("<-l.output:\n%+v; want\n%+v", res, want)
 	}
 
 	// close healthcheck
@@ -423,34 +424,22 @@ type fakeConn struct {
 	hcChan chan *querypb.StreamHealthResponse
 }
 
-type streamHealthReader struct {
-	c <-chan *querypb.StreamHealthResponse
-	// ctx is the client context which can be used to cancel an ongoing RPC.
-	ctx context.Context
-}
-
-// Recv implements tabletconn.StreamHealthReader.
-// It returns one response from the chan.
-func (r *streamHealthReader) Recv() (*querypb.StreamHealthResponse, error) {
-	select {
-	case resp, ok := <-r.c:
-		if !ok {
-			return nil, fmt.Errorf("recv error (should not happen)")
-		}
-		return resp, nil
-	case <-r.ctx.Done():
-		// Return error because the context is done e.g. when the tablet was removed
-		// from the healthcheck and the connection was closed.
-		return nil, r.ctx.Err()
-	}
-}
-
 // StreamHealth implements tabletconn.TabletConn.
-func (fc *fakeConn) StreamHealth(ctx context.Context) (tabletconn.StreamHealthReader, error) {
-	return &streamHealthReader{
-		c:   fc.hcChan,
-		ctx: ctx,
-	}, nil
+func (fc *fakeConn) StreamHealth(ctx context.Context, callback func(shr *querypb.StreamHealthResponse) error) error {
+	var shr *querypb.StreamHealthResponse
+	for {
+		select {
+		case shr = <-fc.hcChan:
+		case <-ctx.Done():
+			return nil
+		}
+		if err := callback(shr); err != nil {
+			if err == io.EOF {
+				return nil
+			}
+			return err
+		}
+	}
 }
 
 // Execute implements tabletconn.TabletConn.
@@ -464,8 +453,8 @@ func (fc *fakeConn) ExecuteBatch(ctx context.Context, target *querypb.Target, qu
 }
 
 // StreamExecute implements tabletconn.TabletConn.
-func (fc *fakeConn) StreamExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]interface{}, options *querypb.ExecuteOptions) (sqltypes.ResultStream, error) {
-	return nil, fmt.Errorf("not implemented")
+func (fc *fakeConn) StreamExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]interface{}, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
+	return fmt.Errorf("not implemented")
 }
 
 // Begin implements tabletconn.TabletConn.
@@ -534,7 +523,7 @@ func (fc *fakeConn) BeginExecuteBatch(ctx context.Context, target *querypb.Targe
 }
 
 // MessageStream implements tabletconn.TabletConn.
-func (fc *fakeConn) MessageStream(ctx context.Context, target *querypb.Target, name string, sendReply func(*sqltypes.Result) error) (err error) {
+func (fc *fakeConn) MessageStream(ctx context.Context, target *querypb.Target, name string, callback func(*sqltypes.Result) error) (err error) {
 	return fmt.Errorf("not implemented")
 }
 
@@ -557,8 +546,8 @@ func (fc *fakeConn) SplitQuery(
 }
 
 // UpdateStream implements tabletconn.TabletConn.
-func (fc *fakeConn) UpdateStream(ctx context.Context, target *querypb.Target, position string, timestamp int64) (tabletconn.StreamEventReader, error) {
-	return nil, fmt.Errorf("not implemented")
+func (fc *fakeConn) UpdateStream(ctx context.Context, target *querypb.Target, position string, timestamp int64, callback func(*querypb.StreamEvent) error) error {
+	return fmt.Errorf("not implemented")
 }
 
 // Tablet returns the tablet associated with the connection.

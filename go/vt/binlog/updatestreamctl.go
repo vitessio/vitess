@@ -216,7 +216,7 @@ func (updateStream *UpdateStreamImpl) IsEnabled() bool {
 }
 
 // StreamKeyRange is part of the UpdateStream interface
-func (updateStream *UpdateStreamImpl) StreamKeyRange(ctx context.Context, position string, keyRange *topodatapb.KeyRange, charset *binlogdatapb.Charset, sendReply func(reply *binlogdatapb.BinlogTransaction) error) (err error) {
+func (updateStream *UpdateStreamImpl) StreamKeyRange(ctx context.Context, position string, keyRange *topodatapb.KeyRange, charset *binlogdatapb.Charset, callback func(reply *binlogdatapb.BinlogTransaction) error) (err error) {
 	pos, err := replication.DecodePosition(position)
 	if err != nil {
 		return err
@@ -236,11 +236,11 @@ func (updateStream *UpdateStreamImpl) StreamKeyRange(ctx context.Context, positi
 	defer streamCount.Add("KeyRange", -1)
 	log.Infof("ServeUpdateStream starting @ %#v", pos)
 
-	// Calls cascade like this: binlog.Streamer->KeyRangeFilterFunc->func(*binlogdatapb.BinlogTransaction)->sendReply
+	// Calls cascade like this: binlog.Streamer->KeyRangeFilterFunc->func(*binlogdatapb.BinlogTransaction)->callback
 	f := KeyRangeFilterFunc(keyRange, func(reply *binlogdatapb.BinlogTransaction) error {
 		keyrangeStatements.Add(int64(len(reply.Statements)))
 		keyrangeTransactions.Add(1)
-		return sendReply(reply)
+		return callback(reply)
 	})
 	bls := NewStreamer(updateStream.dbname, updateStream.mysqld, charset, pos, 0, f)
 
@@ -252,7 +252,7 @@ func (updateStream *UpdateStreamImpl) StreamKeyRange(ctx context.Context, positi
 }
 
 // StreamTables is part of the UpdateStream interface
-func (updateStream *UpdateStreamImpl) StreamTables(ctx context.Context, position string, tables []string, charset *binlogdatapb.Charset, sendReply func(reply *binlogdatapb.BinlogTransaction) error) (err error) {
+func (updateStream *UpdateStreamImpl) StreamTables(ctx context.Context, position string, tables []string, charset *binlogdatapb.Charset, callback func(reply *binlogdatapb.BinlogTransaction) error) (err error) {
 	pos, err := replication.DecodePosition(position)
 	if err != nil {
 		return err
@@ -272,11 +272,11 @@ func (updateStream *UpdateStreamImpl) StreamTables(ctx context.Context, position
 	defer streamCount.Add("Tables", -1)
 	log.Infof("ServeUpdateStream starting @ %#v", pos)
 
-	// Calls cascade like this: binlog.Streamer->TablesFilterFunc->func(*binlogdatapb.BinlogTransaction)->sendReply
+	// Calls cascade like this: binlog.Streamer->TablesFilterFunc->func(*binlogdatapb.BinlogTransaction)->callback
 	f := TablesFilterFunc(tables, func(reply *binlogdatapb.BinlogTransaction) error {
 		tablesStatements.Add(int64(len(reply.Statements)))
 		tablesTransactions.Add(1)
-		return sendReply(reply)
+		return callback(reply)
 	})
 	bls := NewStreamer(updateStream.dbname, updateStream.mysqld, charset, pos, 0, f)
 

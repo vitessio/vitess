@@ -3,14 +3,12 @@ package main
 import (
 	"flag"
 	"fmt"
-	"io"
 	"os"
 	"path"
 	"strings"
 	"time"
 
 	log "github.com/golang/glog"
-	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/sqltypes"
@@ -313,51 +311,20 @@ func (itc *internalTabletConn) ExecuteBatch(ctx context.Context, target *querypb
 	return results, nil
 }
 
-type streamExecuteAdapter struct {
-	c   chan *sqltypes.Result
-	err *error
-}
-
-func (a *streamExecuteAdapter) Recv() (*sqltypes.Result, error) {
-	r, ok := <-a.c
-	if !ok {
-		if *a.err == nil {
-			return nil, io.EOF
-		}
-		return nil, *a.err
-	}
-	return r, nil
-}
-
 // StreamExecute is part of tabletconn.TabletConn
 // We need to copy the bind variables as tablet server will change them.
-func (itc *internalTabletConn) StreamExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]interface{}, options *querypb.ExecuteOptions) (sqltypes.ResultStream, error) {
+func (itc *internalTabletConn) StreamExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]interface{}, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
 	bv, err := querytypes.BindVariablesToProto3(bindVars)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	bindVars, err = querytypes.Proto3ToBindVariables(bv)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	result := make(chan *sqltypes.Result, 10)
-	var finalErr error
 
-	go func() {
-		finalErr = itc.tablet.qsc.QueryService().StreamExecute(ctx, target, query, bindVars, options, func(reply *sqltypes.Result) error {
-			// We need to deep-copy the reply before returning,
-			// because the underlying buffers are reused.
-			result <- reply.Copy()
-			return nil
-		})
-		finalErr = tabletconn.TabletErrorFromGRPC(vterrors.ToGRPCError(finalErr))
-
-		// the client will only access finalErr after the
-		// channel is closed, and then it's already set.
-		close(result)
-	}()
-
-	return &streamExecuteAdapter{result, &finalErr}, nil
+	err = itc.tablet.qsc.QueryService().StreamExecute(ctx, target, query, bindVars, options, callback)
+	return tabletconn.TabletErrorFromGRPC(vterrors.ToGRPCError(err))
 }
 
 // Begin is part of tabletconn.TabletConn
@@ -450,8 +417,8 @@ func (itc *internalTabletConn) BeginExecuteBatch(ctx context.Context, target *qu
 }
 
 // MessageStream is part of tabletconn.TabletConn
-func (itc *internalTabletConn) MessageStream(ctx context.Context, target *querypb.Target, name string, sendReply func(*sqltypes.Result) error) error {
-	err := itc.tablet.qsc.QueryService().MessageStream(ctx, target, name, sendReply)
+func (itc *internalTabletConn) MessageStream(ctx context.Context, target *querypb.Target, name string, callback func(*sqltypes.Result) error) error {
+	err := itc.tablet.qsc.QueryService().MessageStream(ctx, target, name, callback)
 	return tabletconn.TabletErrorFromGRPC(vterrors.ToGRPCError(err))
 }
 
@@ -496,86 +463,16 @@ func (itc *internalTabletConn) SplitQuery(
 	return splits, nil
 }
 
-type streamHealthReader struct {
-	c   <-chan *querypb.StreamHealthResponse
-	err *error
-}
-
-// Recv implements tabletconn.StreamHealthReader.
-// It returns one response from the chan.
-func (r *streamHealthReader) Recv() (*querypb.StreamHealthResponse, error) {
-	resp, ok := <-r.c
-	if !ok {
-		return nil, *r.err
-	}
-	return resp, nil
-}
-
 // StreamHealth is part of tabletconn.TabletConn
-func (itc *internalTabletConn) StreamHealth(ctx context.Context) (tabletconn.StreamHealthReader, error) {
-	result := make(chan *querypb.StreamHealthResponse, 10)
-
-	id, err := itc.tablet.qsc.QueryService().StreamHealthRegister(result)
-	if err != nil {
-		return nil, err
-	}
-
-	var finalErr error
-	go func() {
-		select {
-		case <-ctx.Done():
-		}
-
-		// We populate finalErr before closing the channel.
-		// The consumer first waits on the channel closure,
-		// then read finalErr
-		finalErr = itc.tablet.qsc.QueryService().StreamHealthUnregister(id)
-		finalErr = tabletconn.TabletErrorFromGRPC(vterrors.ToGRPCError(finalErr))
-		close(result)
-	}()
-
-	return &streamHealthReader{
-		c:   result,
-		err: &finalErr,
-	}, nil
-}
-
-type updateStreamAdapter struct {
-	c   chan *querypb.StreamEvent
-	err *error
-}
-
-func (a *updateStreamAdapter) Recv() (*querypb.StreamEvent, error) {
-	r, ok := <-a.c
-	if !ok {
-		if *a.err == nil {
-			return nil, io.EOF
-		}
-		return nil, *a.err
-	}
-	return r, nil
+func (itc *internalTabletConn) StreamHealth(ctx context.Context, callback func(*querypb.StreamHealthResponse) error) error {
+	err := itc.tablet.qsc.QueryService().StreamHealth(ctx, callback)
+	return tabletconn.TabletErrorFromGRPC(vterrors.ToGRPCError(err))
 }
 
 // UpdateStream is part of tabletconn.TabletConn.
-func (itc *internalTabletConn) UpdateStream(ctx context.Context, target *querypb.Target, position string, timestamp int64) (tabletconn.StreamEventReader, error) {
-	result := make(chan *querypb.StreamEvent, 10)
-	var finalErr error
-
-	go func() {
-		finalErr = itc.tablet.qsc.QueryService().UpdateStream(ctx, target, position, timestamp, func(reply *querypb.StreamEvent) error {
-			// We need to deep-copy the reply before returning,
-			// because the underlying buffers are reused.
-			result <- proto.Clone(reply).(*querypb.StreamEvent)
-			return nil
-		})
-		finalErr = tabletconn.TabletErrorFromGRPC(vterrors.ToGRPCError(finalErr))
-
-		// the client will only access finalErr after the
-		// channel is closed, and then it's already set.
-		close(result)
-	}()
-
-	return &updateStreamAdapter{result, &finalErr}, nil
+func (itc *internalTabletConn) UpdateStream(ctx context.Context, target *querypb.Target, position string, timestamp int64, callback func(*querypb.StreamEvent) error) error {
+	err := itc.tablet.qsc.QueryService().UpdateStream(ctx, target, position, timestamp, callback)
+	return tabletconn.TabletErrorFromGRPC(vterrors.ToGRPCError(err))
 }
 
 //

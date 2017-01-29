@@ -164,17 +164,10 @@ func (lg *l2VTGateGateway) ExecuteBatch(ctx context.Context, target *querypb.Tar
 }
 
 // StreamExecute executes a streaming query for the specified keyspace, shard, and tablet type.
-func (lg *l2VTGateGateway) StreamExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]interface{}, options *querypb.ExecuteOptions) (sqltypes.ResultStream, error) {
-	var stream sqltypes.ResultStream
-	err := lg.withRetry(ctx, target, func(conn *l2VTGateConn) error {
-		var err error
-		stream, err = conn.conn.StreamExecute(ctx, target, query, bindVars, options)
-		return err
+func (lg *l2VTGateGateway) StreamExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]interface{}, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
+	return lg.withRetry(ctx, target, func(conn *l2VTGateConn) error {
+		return conn.conn.StreamExecute(ctx, target, query, bindVars, options, callback)
 	}, false, true)
-	if err != nil {
-		return nil, err
-	}
-	return stream, nil
 }
 
 // Begin starts a transaction for the specified keyspace, shard, and tablet type.
@@ -320,11 +313,11 @@ func (lg *l2VTGateGateway) BeginExecuteBatch(ctx context.Context, target *queryp
 
 // MessageStream streams messages for the
 // specified keyspace, shard, and tablet type.
-func (lg *l2VTGateGateway) MessageStream(ctx context.Context, target *querypb.Target, name string, sendReply func(*sqltypes.Result) error) error {
+func (lg *l2VTGateGateway) MessageStream(ctx context.Context, target *querypb.Target, name string, callback func(*sqltypes.Result) error) error {
 	return lg.withRetry(ctx, target, func(conn *l2VTGateConn) error {
 		var innerErr error
 		startTime := time.Now()
-		innerErr = conn.conn.MessageStream(ctx, target, name, sendReply)
+		innerErr = conn.conn.MessageStream(ctx, target, name, callback)
 		lg.updateStats(conn, target.TabletType, startTime, innerErr)
 		return innerErr
 	}, false, true)
@@ -364,22 +357,15 @@ func (lg *l2VTGateGateway) SplitQuery(
 }
 
 // UpdateStream request an update stream for the specified keyspace, shard, and tablet type.
-func (lg *l2VTGateGateway) UpdateStream(ctx context.Context, target *querypb.Target, position string, timestamp int64) (tabletconn.StreamEventReader, error) {
-	var stream tabletconn.StreamEventReader
-	err := lg.withRetry(ctx, target, func(conn *l2VTGateConn) error {
-		var err error
-		stream, err = conn.conn.UpdateStream(ctx, target, position, timestamp)
-		return err
+func (lg *l2VTGateGateway) UpdateStream(ctx context.Context, target *querypb.Target, position string, timestamp int64, callback func(*querypb.StreamEvent) error) error {
+	return lg.withRetry(ctx, target, func(conn *l2VTGateConn) error {
+		return conn.conn.UpdateStream(ctx, target, position, timestamp, callback)
 	}, false, true)
-	if err != nil {
-		return nil, err
-	}
-	return stream, nil
 }
 
 // StreamHealth is currently not implemented.
 // TODO(alainjobart): Maybe we should?
-func (lg *l2VTGateGateway) StreamHealth(ctx context.Context) (tabletconn.StreamHealthReader, error) {
+func (lg *l2VTGateGateway) StreamHealth(ctx context.Context, callback func(*querypb.StreamHealthResponse) error) error {
 	panic("not implemented")
 }
 

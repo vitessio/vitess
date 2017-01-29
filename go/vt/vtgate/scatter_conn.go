@@ -6,7 +6,6 @@ package vtgate
 
 import (
 	"fmt"
-	"io"
 	"math/rand"
 	"sync"
 	"time"
@@ -328,42 +327,15 @@ func (stc *ScatterConn) ExecuteBatch(
 	return results, nil
 }
 
-func (stc *ScatterConn) processOneStreamingResult(mu *sync.Mutex, stream sqltypes.ResultStream, err error, replyErr *error, fieldSent *bool, sendReply func(reply *sqltypes.Result) error) error {
-	if err != nil {
-		return err
+func (stc *ScatterConn) processOneStreamingResult(mu *sync.Mutex, fieldSent *bool, qr *sqltypes.Result, callback func(*sqltypes.Result) error) error {
+	mu.Lock()
+	defer mu.Unlock()
+	if *fieldSent && len(qr.Rows) == 0 {
+		return nil
 	}
-	for {
-		qr, err := stream.Recv()
-		if err != nil {
-			if err == io.EOF {
-				return nil
-			}
-			return err
-		}
-
-		mu.Lock()
-		if *replyErr != nil {
-			mu.Unlock()
-			// we had an error sending results, drain input
-			for {
-				if _, err := stream.Recv(); err != nil {
-					break
-				}
-			}
-			return nil
-		}
-
-		// only send field info once for scattered streaming
-		if len(qr.Fields) > 0 && len(qr.Rows) == 0 {
-			if *fieldSent {
-				mu.Unlock()
-				continue
-			}
-			*fieldSent = true
-		}
-		*replyErr = sendReply(qr)
-		mu.Unlock()
-	}
+	// First result is always the field info.
+	*fieldSent = true
+	return callback(qr)
 }
 
 // StreamExecute executes a streaming query on vttablet. The retry rules are the same.
@@ -375,27 +347,18 @@ func (stc *ScatterConn) StreamExecute(
 	shards []string,
 	tabletType topodatapb.TabletType,
 	options *querypb.ExecuteOptions,
-	sendReply func(reply *sqltypes.Result) error,
+	callback func(reply *sqltypes.Result) error,
 ) error {
 
-	// mu protects fieldSent, replyErr and sendReply
+	// mu protects fieldSent, replyErr and callback
 	var mu sync.Mutex
-	var replyErr error
 	fieldSent := false
 
-	allErrors := stc.multiGo(
-		ctx,
-		"StreamExecute",
-		keyspace,
-		shards,
-		tabletType,
-		func(target *querypb.Target) error {
-			stream, err := stc.gateway.StreamExecute(ctx, target, query, bindVars, options)
-			return stc.processOneStreamingResult(&mu, stream, err, &replyErr, &fieldSent, sendReply)
+	allErrors := stc.multiGo(ctx, "StreamExecute", keyspace, shards, tabletType, func(target *querypb.Target) error {
+		return stc.gateway.StreamExecute(ctx, target, query, bindVars, options, func(qr *sqltypes.Result) error {
+			return stc.processOneStreamingResult(&mu, &fieldSent, qr, callback)
 		})
-	if replyErr != nil {
-		allErrors.RecordError(replyErr)
-	}
+	})
 	return allErrors.AggrError(stc.aggregateErrors)
 }
 
@@ -409,44 +372,28 @@ func (stc *ScatterConn) StreamExecuteMulti(
 	shardVars map[string]map[string]interface{},
 	tabletType topodatapb.TabletType,
 	options *querypb.ExecuteOptions,
-	sendReply func(reply *sqltypes.Result) error,
+	callback func(reply *sqltypes.Result) error,
 ) error {
-	// mu protects fieldSent, sendReply and replyErr
+	// mu protects fieldSent, callback and replyErr
 	var mu sync.Mutex
-	var replyErr error
 	fieldSent := false
 
-	allErrors := stc.multiGo(
-		ctx,
-		"StreamExecute",
-		keyspace,
-		getShards(shardVars),
-		tabletType,
-		func(target *querypb.Target) error {
-			stream, err := stc.gateway.StreamExecute(ctx, target, query, shardVars[target.Shard], options)
-			return stc.processOneStreamingResult(&mu, stream, err, &replyErr, &fieldSent, sendReply)
+	allErrors := stc.multiGo(ctx, "StreamExecute", keyspace, getShards(shardVars), tabletType, func(target *querypb.Target) error {
+		return stc.gateway.StreamExecute(ctx, target, query, shardVars[target.Shard], options, func(qr *sqltypes.Result) error {
+			return stc.processOneStreamingResult(&mu, &fieldSent, qr, callback)
 		})
-	if replyErr != nil {
-		allErrors.RecordError(replyErr)
-	}
+	})
 	return allErrors.AggrError(stc.aggregateErrors)
 }
 
 // MessageStream streams messages from the specified shards.
-func (stc *ScatterConn) MessageStream(ctx context.Context, keyspace string, shards []string, name string, sendReply func(*sqltypes.Result) error) error {
-	// mu is used to merge multiple sendReply calls into one.
+func (stc *ScatterConn) MessageStream(ctx context.Context, keyspace string, shards []string, name string, callback func(*sqltypes.Result) error) error {
+	// mu is used to merge multiple callback calls into one.
 	var mu sync.Mutex
 	fieldSent := false
 	allErrors := stc.multiGo(ctx, "MessageStream", keyspace, shards, topodatapb.TabletType_MASTER, func(target *querypb.Target) error {
 		return stc.gateway.MessageStream(ctx, target, name, func(qr *sqltypes.Result) error {
-			mu.Lock()
-			defer mu.Unlock()
-			if fieldSent && len(qr.Rows) == 0 {
-				return nil
-			}
-			// First result is always the field info.
-			fieldSent = true
-			return sendReply(qr)
+			return stc.processOneStreamingResult(&mu, &fieldSent, qr, callback)
 		})
 	})
 	return allErrors.AggrError(stc.aggregateErrors)
@@ -475,21 +422,8 @@ func (stc *ScatterConn) MessageAck(ctx context.Context, keyspace string, shardID
 
 // UpdateStream just sends the query to the gateway,
 // and sends the results back.
-func (stc *ScatterConn) UpdateStream(ctx context.Context, target *querypb.Target, timestamp int64, position string, sendReply func(*querypb.StreamEvent) error) error {
-	ser, err := stc.gateway.UpdateStream(ctx, target, position, timestamp)
-	if err != nil {
-		return err
-	}
-
-	for {
-		se, err := ser.Recv()
-		if err != nil {
-			return err
-		}
-		if err = sendReply(se); err != nil {
-			return err
-		}
-	}
+func (stc *ScatterConn) UpdateStream(ctx context.Context, target *querypb.Target, timestamp int64, position string, callback func(*querypb.StreamEvent) error) error {
+	return stc.gateway.UpdateStream(ctx, target, position, timestamp, callback)
 }
 
 // SplitQuery scatters a SplitQuery request to the shards whose names are given in 'shards'.

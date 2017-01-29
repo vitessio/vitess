@@ -2,6 +2,7 @@ package vtctld
 
 import (
 	"flag"
+	"io"
 	"sync"
 	"time"
 
@@ -89,26 +90,10 @@ func (th *tabletHealth) stream(ctx context.Context, ts topo.Server, tabletAlias 
 	}
 	defer conn.Close(ctx)
 
-	stream, err := conn.StreamHealth(ctx)
-	if err != nil {
-		return err
-	}
-
 	first := true
-	for time.Since(th.lastAccessed()) < *tabletHealthKeepAlive {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		default:
-		}
-
-		result, err := stream.Recv()
-		if err != nil {
-			return err
-		}
-
+	return conn.StreamHealth(ctx, func(shr *querypb.StreamHealthResponse) error {
 		th.mu.Lock()
-		th.result = result
+		th.result = shr
 		th.mu.Unlock()
 
 		if first {
@@ -116,9 +101,11 @@ func (th *tabletHealth) stream(ctx context.Context, ts topo.Server, tabletAlias 
 			close(th.ready)
 			first = false
 		}
-	}
-
-	return nil
+		if time.Since(th.lastAccessed()) >= *tabletHealthKeepAlive {
+			return io.EOF
+		}
+		return nil
+	})
 }
 
 type tabletHealthCache struct {
