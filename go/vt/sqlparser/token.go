@@ -35,6 +35,16 @@ func NewStringTokenizer(sql string) *Tokenizer {
 	return &Tokenizer{InStream: strings.NewReader(sql)}
 }
 
+// keywords is a map of mysql keywords that fall into two categories:
+// 1) keywords considered reserved by MySQL
+// 2) keywords for us to handle specially in sql.y
+//
+// Those marked as UNUSED are likely reserved keywords. We add them here so that
+// when rewriting queries we can properly backtick quote them so they don't cause issues
+//
+// NOTE: If you add new keywords, add them also to the reserved_keywords or
+// non_reserved_keywords grammar in sql.y -- this will allow the keyword to be used
+// in identifiers. See the docs for each grammar to determine which one to put it into.
 var keywords = map[string]int{
 	"accessible":          UNUSED,
 	"add":                 UNUSED,
@@ -80,6 +90,7 @@ var keywords = map[string]int{
 	"day_microsecond":     UNUSED,
 	"day_minute":          UNUSED,
 	"day_second":          UNUSED,
+	"date":                DATE,
 	"dec":                 UNUSED,
 	"declare":             UNUSED,
 	"default":             DEFAULT,
@@ -99,6 +110,7 @@ var keywords = map[string]int{
 	"elseif":              UNUSED,
 	"enclosed":            UNUSED,
 	"end":                 END,
+	"escape":              ESCAPE,
 	"escaped":             UNUSED,
 	"exists":              EXISTS,
 	"exit":                UNUSED,
@@ -293,10 +305,7 @@ func (tkn *Tokenizer) Lex(lval *yySymType) int {
 		}
 		typ, val = tkn.Scan()
 	}
-	switch typ {
-	case ID, STRING, HEX, INTEGRAL, FLOAT, HEXNUM, VALUE_ARG, LIST_ARG, COMMENT:
-		lval.bytes = val
-	}
+	lval.bytes = val
 	tkn.lastToken = val
 	return typ
 }
@@ -342,7 +351,13 @@ func (tkn *Tokenizer) Scan() (int, []byte) {
 		switch ch {
 		case eofChar:
 			return 0, nil
-		case '=', ',', ';', '(', ')', '+', '*', '%', '&', '^', '~':
+		case '=', ',', ';', '(', ')', '+', '*', '%', '^', '~':
+			return int(ch), nil
+		case '&':
+			if tkn.lastChar == '&' {
+				tkn.next()
+				return AND, nil
+			}
 			return int(ch), nil
 		case '|':
 			if tkn.lastChar == '|' {
@@ -371,6 +386,9 @@ func (tkn *Tokenizer) Scan() (int, []byte) {
 			default:
 				return int(ch), nil
 			}
+		case '#':
+			tkn.next()
+			return tkn.scanCommentType1("#")
 		case '-':
 			switch tkn.lastChar {
 			case '-':

@@ -1008,6 +1008,7 @@ func (node *ParenExpr) WalkSubtree(visit Visit) error {
 type ComparisonExpr struct {
 	Operator    string
 	Left, Right Expr
+	Escape      Expr
 }
 
 // ComparisonExpr.Operator
@@ -1032,6 +1033,9 @@ const (
 // Format formats the node.
 func (node *ComparisonExpr) Format(buf *TrackedBuffer) {
 	buf.Myprintf("%v %s %v", node.Left, node.Operator, node.Right)
+	if node.Escape != nil {
+		buf.Myprintf(" escape %v", node.Escape)
+	}
 }
 
 // WalkSubtree walks the nodes of the subtree.
@@ -1463,9 +1467,10 @@ func (node *CollateExpr) WalkSubtree(visit Visit) error {
 
 // FuncExpr represents a function call.
 type FuncExpr struct {
-	Name     ColIdent
-	Distinct bool
-	Exprs    SelectExprs
+	Qualifier ColIdent
+	Name      ColIdent
+	Distinct  bool
+	Exprs     SelectExprs
 }
 
 // Format formats the node.
@@ -1473,6 +1478,9 @@ func (node *FuncExpr) Format(buf *TrackedBuffer) {
 	var distinct string
 	if node.Distinct {
 		distinct = "distinct "
+	}
+	if !node.Qualifier.IsEmpty() {
+		buf.Myprintf("%v.", node.Qualifier)
 	}
 	// Function names should not be back-quoted even
 	// if they match a reserved word. So, print the
@@ -1928,6 +1936,13 @@ func NewColIdent(str string) ColIdent {
 	return ColIdent{
 		val: str,
 	}
+}
+
+// AsTableIdent converts a ColIdent to a TableIdent by
+// using its original value, rather than the Lowered() version
+// since TableIdent is case-sensitive
+func (node ColIdent) AsTableIdent() TableIdent {
+	return TableIdent{node.val}
 }
 
 // Format formats the node.
