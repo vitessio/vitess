@@ -55,14 +55,11 @@ func NewQueryResultReaderForTablet(ctx context.Context, ts topo.Server, tabletAl
 		return nil, err
 	}
 
-	stream, err := conn.StreamExecute(ctx, &querypb.Target{
+	stream := tabletconn.ExecuteWithStreamer(ctx, conn, &querypb.Target{
 		Keyspace:   tablet.Tablet.Keyspace,
 		Shard:      tablet.Tablet.Shard,
 		TabletType: tablet.Tablet.Type,
 	}, sql, make(map[string]interface{}), nil)
-	if err != nil {
-		return nil, err
-	}
 
 	// read the columns, or grab the error
 	cols, err := stream.Recv()

@@ -113,14 +113,11 @@ func (r *RestartableResultReader) getTablet() (bool, error) {
 func (r *RestartableResultReader) startStream() (bool, error) {
 	// Start the streaming query.
 	r.generateQuery()
-	stream, err := r.conn.StreamExecute(r.ctx, &querypb.Target{
+	stream := tabletconn.ExecuteWithStreamer(r.ctx, r.conn, &querypb.Target{
 		Keyspace:   r.tablet.Keyspace,
 		Shard:      r.tablet.Shard,
 		TabletType: r.tablet.Type,
 	}, r.query, make(map[string]interface{}), nil)
-	if err != nil {
-		return true /* retryable */, fmt.Errorf("failed to call StreamExecute() for query '%v': %v", r.query, err)
-	}
 
 	// Read the fields information.
 	cols, err := stream.Recv()

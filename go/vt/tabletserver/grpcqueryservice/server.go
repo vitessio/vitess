@@ -371,23 +371,10 @@ func (q *query) SplitQuery(ctx context.Context, request *querypb.SplitQueryReque
 // StreamHealth is part of the queryservice.QueryServer interface
 func (q *query) StreamHealth(request *querypb.StreamHealthRequest, stream queryservicepb.Query_StreamHealthServer) (err error) {
 	defer q.server.HandlePanic(&err)
-
-	c := make(chan *querypb.StreamHealthResponse, 10)
-
-	id, err := q.server.StreamHealthRegister(c)
-	if err != nil {
-		close(c)
-		return err
+	if err = q.server.StreamHealth(stream.Context(), stream.Send); err != nil {
+		return vterrors.ToGRPCError(err)
 	}
-
-	for shr := range c {
-		// we send until the client disconnects
-		if err := stream.Send(shr); err != nil {
-			break
-		}
-	}
-
-	return q.server.StreamHealthUnregister(id)
+	return nil
 }
 
 // UpdateStream is part of the queryservice.QueryServer interface

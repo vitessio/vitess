@@ -321,7 +321,7 @@ func newTestQueryService(t *testing.T, target querypb.Target, shqs *fakes.Stream
 	}
 }
 
-func (sq *testQueryService) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, options *querypb.ExecuteOptions, sendReply func(reply *sqltypes.Result) error) error {
+func (sq *testQueryService) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, options *querypb.ExecuteOptions, callback func(reply *sqltypes.Result) error) error {
 	// Custom parsing of the query we expect.
 	// Example: SELECT `id`, `msg`, `keyspace_id` FROM table1 WHERE id>=180 AND id<190 ORDER BY id
 	min := math.MinInt32
@@ -359,7 +359,7 @@ func (sq *testQueryService) StreamExecute(ctx context.Context, target *querypb.T
 	}
 
 	// Send the headers.
-	if err := sendReply(&sqltypes.Result{Fields: sq.fields}); err != nil {
+	if err := callback(&sqltypes.Result{Fields: sq.fields}); err != nil {
 		return err
 	}
 
@@ -374,7 +374,7 @@ func (sq *testQueryService) StreamExecute(ctx context.Context, target *querypb.T
 				return errStreamingQueryTimeout
 			}
 
-			if err := sendReply(&sqltypes.Result{
+			if err := callback(&sqltypes.Result{
 				Rows: [][]sqltypes.Value{row},
 			}); err != nil {
 				return err

@@ -1,6 +1,8 @@
 package fakes
 
 import (
+	"golang.org/x/net/context"
+
 	"github.com/golang/protobuf/proto"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
@@ -34,16 +36,14 @@ func NewStreamHealthQueryService(target querypb.Target) *StreamHealthQueryServic
 	}
 }
 
-// StreamHealthRegister implements the QueryService interface.
+// StreamHealth implements the QueryService interface.
 // It sends all queued and future healthResponses to the connected client e.g.
 // the healthcheck module.
-func (q *StreamHealthQueryService) StreamHealthRegister(c chan<- *querypb.StreamHealthResponse) (int, error) {
-	go func() {
-		for shr := range q.healthResponses {
-			c <- shr
-		}
-	}()
-	return 0, nil
+func (q *StreamHealthQueryService) StreamHealth(ctx context.Context, callback func(*querypb.StreamHealthResponse) error) error {
+	for shr := range q.healthResponses {
+		callback(shr)
+	}
+	return nil
 }
 
 // AddDefaultHealthResponse adds a faked health response to the buffer channel.

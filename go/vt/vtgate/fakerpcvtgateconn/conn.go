@@ -346,7 +346,7 @@ func (conn *FakeVTGateConn) ResolveTransaction(ctx context.Context, dtid string)
 }
 
 // MessageStream is part of the vtgate service API.
-func (conn *FakeVTGateConn) MessageStream(ctx context.Context, keyspace string, shard string, keyRange *topodatapb.KeyRange, name string, sendReply func(*sqltypes.Result) error) error {
+func (conn *FakeVTGateConn) MessageStream(ctx context.Context, keyspace string, shard string, keyRange *topodatapb.KeyRange, name string, callback func(*sqltypes.Result) error) error {
 	panic("not implemented")
 }
 

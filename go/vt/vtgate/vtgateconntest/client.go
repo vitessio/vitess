@@ -433,7 +433,7 @@ func (f *fakeVTGateService) ExecuteBatchKeyspaceIds(ctx context.Context, queries
 }
 
 // StreamExecute is part of the VTGateService interface
-func (f *fakeVTGateService) StreamExecute(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, tabletType topodatapb.TabletType, options *querypb.ExecuteOptions, sendReply func(*sqltypes.Result) error) error {
+func (f *fakeVTGateService) StreamExecute(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, tabletType topodatapb.TabletType, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
 	if f.panics {
 		panic(fmt.Errorf("test forced panic"))
 	}
@@ -459,7 +459,7 @@ func (f *fakeVTGateService) StreamExecute(ctx context.Context, sql string, bindV
 		result := &sqltypes.Result{
 			Fields: execCase.result.Fields,
 		}
-		if err := sendReply(result); err != nil {
+		if err := callback(result); err != nil {
 			return err
 		}
 		if f.hasError {
@@ -473,7 +473,7 @@ func (f *fakeVTGateService) StreamExecute(ctx context.Context, sql string, bindV
 			result := &sqltypes.Result{
 				Rows: [][]sqltypes.Value{row},
 			}
-			if err := sendReply(result); err != nil {
+			if err := callback(result); err != nil {
 				return err
 			}
 		}
@@ -482,7 +482,7 @@ func (f *fakeVTGateService) StreamExecute(ctx context.Context, sql string, bindV
 }
 
 // StreamExecuteShards is part of the VTGateService interface
-func (f *fakeVTGateService) StreamExecuteShards(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, shards []string, tabletType topodatapb.TabletType, options *querypb.ExecuteOptions, sendReply func(*sqltypes.Result) error) error {
+func (f *fakeVTGateService) StreamExecuteShards(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, shards []string, tabletType topodatapb.TabletType, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
 	if f.panics {
 		panic(fmt.Errorf("test forced panic"))
 	}
@@ -509,7 +509,7 @@ func (f *fakeVTGateService) StreamExecuteShards(ctx context.Context, sql string,
 		result := &sqltypes.Result{
 			Fields: execCase.result.Fields,
 		}
-		if err := sendReply(result); err != nil {
+		if err := callback(result); err != nil {
 			return err
 		}
 		if f.hasError {
@@ -523,7 +523,7 @@ func (f *fakeVTGateService) StreamExecuteShards(ctx context.Context, sql string,
 			result := &sqltypes.Result{
 				Rows: [][]sqltypes.Value{row},
 			}
-			if err := sendReply(result); err != nil {
+			if err := callback(result); err != nil {
 				return err
 			}
 		}
@@ -532,7 +532,7 @@ func (f *fakeVTGateService) StreamExecuteShards(ctx context.Context, sql string,
 }
 
 // StreamExecuteKeyspaceIds is part of the VTGateService interface
-func (f *fakeVTGateService) StreamExecuteKeyspaceIds(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyspaceIds [][]byte, tabletType topodatapb.TabletType, options *querypb.ExecuteOptions, sendReply func(*sqltypes.Result) error) error {
+func (f *fakeVTGateService) StreamExecuteKeyspaceIds(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyspaceIds [][]byte, tabletType topodatapb.TabletType, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
 	if f.panics {
 		panic(fmt.Errorf("test forced panic"))
 	}
@@ -559,7 +559,7 @@ func (f *fakeVTGateService) StreamExecuteKeyspaceIds(ctx context.Context, sql st
 		result := &sqltypes.Result{
 			Fields: execCase.result.Fields,
 		}
-		if err := sendReply(result); err != nil {
+		if err := callback(result); err != nil {
 			return err
 		}
 		if f.hasError {
@@ -573,7 +573,7 @@ func (f *fakeVTGateService) StreamExecuteKeyspaceIds(ctx context.Context, sql st
 			result := &sqltypes.Result{
 				Rows: [][]sqltypes.Value{row},
 			}
-			if err := sendReply(result); err != nil {
+			if err := callback(result); err != nil {
 				return err
 			}
 		}
@@ -582,7 +582,7 @@ func (f *fakeVTGateService) StreamExecuteKeyspaceIds(ctx context.Context, sql st
 }
 
 // StreamExecuteKeyRanges is part of the VTGateService interface
-func (f *fakeVTGateService) StreamExecuteKeyRanges(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyRanges []*topodatapb.KeyRange, tabletType topodatapb.TabletType, options *querypb.ExecuteOptions, sendReply func(*sqltypes.Result) error) error {
+func (f *fakeVTGateService) StreamExecuteKeyRanges(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyRanges []*topodatapb.KeyRange, tabletType topodatapb.TabletType, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
 	if f.panics {
 		panic(fmt.Errorf("test forced panic"))
 	}
@@ -609,7 +609,7 @@ func (f *fakeVTGateService) StreamExecuteKeyRanges(ctx context.Context, sql stri
 		result := &sqltypes.Result{
 			Fields: execCase.result.Fields,
 		}
-		if err := sendReply(result); err != nil {
+		if err := callback(result); err != nil {
 			return err
 		}
 		if f.hasError {
@@ -623,7 +623,7 @@ func (f *fakeVTGateService) StreamExecuteKeyRanges(ctx context.Context, sql stri
 			result := &sqltypes.Result{
 				Rows: [][]sqltypes.Value{row},
 			}
-			if err := sendReply(result); err != nil {
+			if err := callback(result); err != nil {
 				return err
 			}
 		}
@@ -698,7 +698,7 @@ func (f *fakeVTGateService) ResolveTransaction(ctx context.Context, dtid string)
 	return nil
 }
 
-func (f *fakeVTGateService) MessageStream(ctx context.Context, keyspace string, shard string, keyRange *topodatapb.KeyRange, name string, sendReply func(*sqltypes.Result) error) error {
+func (f *fakeVTGateService) MessageStream(ctx context.Context, keyspace string, shard string, keyRange *topodatapb.KeyRange, name string, callback func(*sqltypes.Result) error) error {
 	if f.hasError {
 		return errTestVtGateError
 	}
@@ -709,7 +709,7 @@ func (f *fakeVTGateService) MessageStream(ctx context.Context, keyspace string, 
 	if name != messageName {
 		return errors.New("MessageStream name mismatch")
 	}
-	sendReply(messageStreamResult)
+	callback(messageStreamResult)
 	return nil
 }
 
@@ -795,7 +795,7 @@ type queryUpdateStream struct {
 }
 
 // UpdateStream is part of the VTGateService interface
-func (f *fakeVTGateService) UpdateStream(ctx context.Context, keyspace string, shard string, keyRange *topodatapb.KeyRange, tabletType topodatapb.TabletType, timestamp int64, event *querypb.EventToken, sendReply func(*querypb.StreamEvent, int64) error) error {
+func (f *fakeVTGateService) UpdateStream(ctx context.Context, keyspace string, shard string, keyRange *topodatapb.KeyRange, tabletType topodatapb.TabletType, timestamp int64, event *querypb.EventToken, callback func(*querypb.StreamEvent, int64) error) error {
 	if f.panics {
 		panic(fmt.Errorf("test forced panic"))
 	}
@@ -825,7 +825,7 @@ func (f *fakeVTGateService) UpdateStream(ctx context.Context, keyspace string, s
 				},
 			},
 		}
-		if err := sendReply(result, int64(execCase.result.RowsAffected)); err != nil {
+		if err := callback(result, int64(execCase.result.RowsAffected)); err != nil {
 			return err
 		}
 		if f.hasError {
@@ -844,7 +844,7 @@ func (f *fakeVTGateService) UpdateStream(ctx context.Context, keyspace string, s
 					},
 				},
 			}
-			if err := sendReply(result, int64(execCase.result.RowsAffected)); err != nil {
+			if err := callback(result, int64(execCase.result.RowsAffected)); err != nil {
 				return err
 			}
 		}

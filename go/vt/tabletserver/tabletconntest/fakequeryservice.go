@@ -409,7 +409,7 @@ var StreamExecuteQueryResult2 = sqltypes.Result{
 }
 
 // StreamExecute is part of the queryservice.QueryService interface
-func (f *FakeQueryService) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, options *querypb.ExecuteOptions, sendReply func(*sqltypes.Result) error) error {
+func (f *FakeQueryService) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
 	if f.Panics && f.StreamExecutePanicsEarly {
 		panic(fmt.Errorf("test-triggered panic early"))
 	}
@@ -423,8 +423,8 @@ func (f *FakeQueryService) StreamExecute(ctx context.Context, target *querypb.Ta
 		f.t.Errorf("invalid StreamExecute.ExecuteOptions: got %v expected %v", options, TestExecuteOptions)
 	}
 	f.checkTargetCallerID(ctx, "StreamExecute", target)
-	if err := sendReply(&StreamExecuteQueryResult1); err != nil {
-		f.t.Errorf("sendReply1 failed: %v", err)
+	if err := callback(&StreamExecuteQueryResult1); err != nil {
+		f.t.Errorf("callback1 failed: %v", err)
 	}
 	if f.Panics && !f.StreamExecutePanicsEarly {
 		// wait until the client gets the response, then panics
@@ -438,8 +438,8 @@ func (f *FakeQueryService) StreamExecute(ctx context.Context, target *querypb.Ta
 		<-f.ErrorWait
 		return f.TabletError
 	}
-	if err := sendReply(&StreamExecuteQueryResult2); err != nil {
-		f.t.Errorf("sendReply2 failed: %v", err)
+	if err := callback(&StreamExecuteQueryResult2); err != nil {
+		f.t.Errorf("callback2 failed: %v", err)
 	}
 	return nil
 }
@@ -619,7 +619,7 @@ var (
 )
 
 // MessageStream is part of the queryservice.QueryService interface
-func (f *FakeQueryService) MessageStream(ctx context.Context, target *querypb.Target, name string, sendReply func(*sqltypes.Result) error) (err error) {
+func (f *FakeQueryService) MessageStream(ctx context.Context, target *querypb.Target, name string, callback func(*sqltypes.Result) error) (err error) {
 	if f.HasError {
 		return f.TabletError
 	}
@@ -629,7 +629,7 @@ func (f *FakeQueryService) MessageStream(ctx context.Context, target *querypb.Ta
 	if name != MessageName {
 		f.t.Errorf("name: %s, want %s", name, MessageName)
 	}
-	sendReply(MessageStreamResult)
+	callback(MessageStreamResult)
 	return nil
 }
 
@@ -713,10 +713,10 @@ var TestStreamHealthStreamHealthResponse = &querypb.StreamHealthResponse{
 }
 var TestStreamHealthErrorMsg = "to trigger a server error"
 
-// StreamHealthRegister is part of the queryservice.QueryService interface
-func (f *FakeQueryService) StreamHealthRegister(c chan<- *querypb.StreamHealthResponse) (int, error) {
+// StreamHealth is part of the queryservice.QueryService interface
+func (f *FakeQueryService) StreamHealth(ctx context.Context, callback func(*querypb.StreamHealthResponse) error) error {
 	if f.HasError {
-		return 0, errors.New(TestStreamHealthErrorMsg)
+		return errors.New(TestStreamHealthErrorMsg)
 	}
 	if f.Panics {
 		panic(fmt.Errorf("test-triggered panic"))
@@ -725,12 +725,7 @@ func (f *FakeQueryService) StreamHealthRegister(c chan<- *querypb.StreamHealthRe
 	if shr == nil {
 		shr = TestStreamHealthStreamHealthResponse
 	}
-	c <- shr
-	return 1, nil
-}
-
-// StreamHealthUnregister is part of the queryservice.QueryService interface
-func (f *FakeQueryService) StreamHealthUnregister(int) error {
+	callback(shr)
 	return nil
 }
 
@@ -767,7 +762,7 @@ var UpdateStreamStreamEvent2 = querypb.StreamEvent{
 }
 
 // UpdateStream is part of the queryservice.QueryService interface
-func (f *FakeQueryService) UpdateStream(ctx context.Context, target *querypb.Target, position string, timestamp int64, sendReply func(*querypb.StreamEvent) error) error {
+func (f *FakeQueryService) UpdateStream(ctx context.Context, target *querypb.Target, position string, timestamp int64, callback func(*querypb.StreamEvent) error) error {
 	if f.Panics && f.UpdateStreamPanicsEarly {
 		panic(fmt.Errorf("test-triggered panic early"))
 	}
@@ -778,8 +773,8 @@ func (f *FakeQueryService) UpdateStream(ctx context.Context, target *querypb.Tar
 		f.t.Errorf("invalid UpdateStream.timestamp: got %v expected %v", timestamp, UpdateStreamTimestamp)
 	}
 	f.checkTargetCallerID(ctx, "UpdateStream", target)
-	if err := sendReply(&UpdateStreamStreamEvent1); err != nil {
-		f.t.Errorf("sendReply1 failed: %v", err)
+	if err := callback(&UpdateStreamStreamEvent1); err != nil {
+		f.t.Errorf("callback1 failed: %v", err)
 	}
 	if f.Panics && !f.UpdateStreamPanicsEarly {
 		// wait until the client gets the response, then panics
@@ -793,8 +788,8 @@ func (f *FakeQueryService) UpdateStream(ctx context.Context, target *querypb.Tar
 		<-f.ErrorWait
 		return f.TabletError
 	}
-	if err := sendReply(&UpdateStreamStreamEvent2); err != nil {
-		f.t.Errorf("sendReply2 failed: %v", err)
+	if err := callback(&UpdateStreamStreamEvent2); err != nil {
+		f.t.Errorf("callback2 failed: %v", err)
 	}
 	return nil
 }

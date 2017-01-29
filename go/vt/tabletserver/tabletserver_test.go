@@ -1158,8 +1158,8 @@ func TestTabletServerStreamExecute(t *testing.T) {
 	}
 	defer tsv.StopService()
 	ctx := context.Background()
-	sendReply := func(*sqltypes.Result) error { return nil }
-	if err := tsv.StreamExecute(ctx, &target, executeSQL, nil, nil, sendReply); err != nil {
+	callback := func(*sqltypes.Result) error { return nil }
+	if err := tsv.StreamExecute(ctx, &target, executeSQL, nil, nil, callback); err != nil {
 		t.Fatalf("TabletServer.StreamExecute should success: %s, but get error: %v",
 			executeSQL, err)
 	}

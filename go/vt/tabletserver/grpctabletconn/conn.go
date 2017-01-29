@@ -139,50 +139,62 @@ func (conn *gRPCQueryClient) ExecuteBatch(ctx context.Context, target *querypb.T
 	return sqltypes.Proto3ToResults(ebr.Results), nil
 }
 
-type streamExecuteAdapter struct {
-	stream queryservicepb.Query_StreamExecuteClient
-	fields []*querypb.Field
-}
+// StreamExecute executes the query and streams results back through callback.
+func (conn *gRPCQueryClient) StreamExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]interface{}, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
+	// All streaming clients should follow the code pattern below.
+	// The first part of the function starts the stream while holding
+	// a lock on conn.mu. The second part receives the data and calls
+	// callback.
+	// A new cancelable context is needed because there's currently
+	// no direct API to end a stream from the client side. If callback
+	// returns an error, we return from the function. The deferred
+	// cancel will then cause the stream to be terminated.
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 
-func (a *streamExecuteAdapter) Recv() (*sqltypes.Result, error) {
-	ser, err := a.stream.Recv()
-	switch err {
-	case nil:
-		if a.fields == nil {
-			a.fields = ser.Result.Fields
+	stream, err := func() (queryservicepb.Query_StreamExecuteClient, error) {
+		conn.mu.RLock()
+		defer conn.mu.RUnlock()
+		if conn.cc == nil {
+			return nil, tabletconn.ConnClosed
 		}
-		return sqltypes.CustomProto3ToResult(a.fields, ser.Result), nil
-	case io.EOF:
-		return nil, err
-	default:
-		return nil, tabletconn.TabletErrorFromGRPC(err)
-	}
-}
 
-// StreamExecute starts a streaming query to VTTablet.
-func (conn *gRPCQueryClient) StreamExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]interface{}, options *querypb.ExecuteOptions) (sqltypes.ResultStream, error) {
-	conn.mu.RLock()
-	defer conn.mu.RUnlock()
-	if conn.cc == nil {
-		return nil, tabletconn.ConnClosed
-	}
-
-	q, err := querytypes.BoundQueryToProto3(query, bindVars)
+		q, err := querytypes.BoundQueryToProto3(query, bindVars)
+		if err != nil {
+			return nil, err
+		}
+		req := &querypb.StreamExecuteRequest{
+			Target:            target,
+			EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
+			ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
+			Query:             q,
+			Options:           options,
+		}
+		stream, err := conn.c.StreamExecute(ctx, req)
+		if err != nil {
+			return nil, tabletconn.TabletErrorFromGRPC(err)
+		}
+		return stream, nil
+	}()
 	if err != nil {
-		return nil, err
+		return err
 	}
-	req := &querypb.StreamExecuteRequest{
-		Target:            target,
-		EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
-		ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
-		Query:             q,
-		Options:           options,
+	var fields []*querypb.Field
+	for {
+		ser, err := stream.Recv()
+		if err != nil {
+			return tabletconn.TabletErrorFromGRPC(err)
+		}
+		if fields == nil {
+			fields = ser.Result.Fields
+		}
+		if err := callback(sqltypes.CustomProto3ToResult(fields, ser.Result)); err != nil {
+			if err == nil || err == io.EOF {
+				return nil
+			}
+			return err
+		}
 	}
-	stream, err := conn.c.StreamExecute(ctx, req)
-	if err != nil {
-		return nil, tabletconn.TabletErrorFromGRPC(err)
-	}
-	return &streamExecuteAdapter{stream: stream}, err
 }
 
 // Begin starts a transaction.
@@ -488,7 +500,11 @@ func (conn *gRPCQueryClient) BeginExecuteBatch(ctx context.Context, target *quer
 }
 
 // MessageStream streams messages.
-func (conn *gRPCQueryClient) MessageStream(ctx context.Context, target *querypb.Target, name string, sendReply func(*sqltypes.Result) error) error {
+func (conn *gRPCQueryClient) MessageStream(ctx context.Context, target *querypb.Target, name string, callback func(*sqltypes.Result) error) error {
+	// Please see comments in StreamExecute to see how this works.
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
 	stream, err := func() (queryservicepb.Query_MessageStreamClient, error) {
 		conn.mu.RLock()
 		defer conn.mu.RUnlock()
@@ -515,16 +531,16 @@ func (conn *gRPCQueryClient) MessageStream(ctx context.Context, target *querypb.
 	for {
 		msr, err := stream.Recv()
 		if err != nil {
-			if err == io.EOF {
-				return nil
-			}
 			return tabletconn.TabletErrorFromGRPC(err)
 		}
 		if fields == nil {
 			fields = msr.Result.Fields
 		}
-		if err := sendReply(sqltypes.CustomProto3ToResult(fields, msr.Result)); err != nil {
-			return tabletconn.TabletErrorFromGRPC(err)
+		if err := callback(sqltypes.CustomProto3ToResult(fields, msr.Result)); err != nil {
+			if err == nil || err == io.EOF {
+				return nil
+			}
+			return err
 		}
 	}
 }
@@ -593,52 +609,82 @@ func (conn *gRPCQueryClient) SplitQuery(
 }
 
 // StreamHealth starts a streaming RPC for VTTablet health status updates.
-func (conn *gRPCQueryClient) StreamHealth(ctx context.Context) (tabletconn.StreamHealthReader, error) {
-	conn.mu.RLock()
-	defer conn.mu.RUnlock()
-	if conn.cc == nil {
-		return nil, tabletconn.ConnClosed
+func (conn *gRPCQueryClient) StreamHealth(ctx context.Context, callback func(*querypb.StreamHealthResponse) error) error {
+	// Please see comments in StreamExecute to see how this works.
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	stream, err := func() (queryservicepb.Query_StreamHealthClient, error) {
+		conn.mu.RLock()
+		defer conn.mu.RUnlock()
+		if conn.cc == nil {
+			return nil, tabletconn.ConnClosed
+		}
+
+		stream, err := conn.c.StreamHealth(ctx, &querypb.StreamHealthRequest{})
+		if err != nil {
+			return nil, tabletconn.TabletErrorFromGRPC(err)
+		}
+		return stream, nil
+	}()
+	if err != nil {
+		return err
 	}
-
-	return conn.c.StreamHealth(ctx, &querypb.StreamHealthRequest{})
-}
-
-type updateStreamAdapter struct {
-	stream queryservicepb.Query_UpdateStreamClient
-}
-
-func (a *updateStreamAdapter) Recv() (*querypb.StreamEvent, error) {
-	r, err := a.stream.Recv()
-	switch err {
-	case nil:
-		return r.Event, nil
-	case io.EOF:
-		return nil, err
-	default:
-		return nil, tabletconn.TabletErrorFromGRPC(err)
+	for {
+		shr, err := stream.Recv()
+		if err != nil {
+			return tabletconn.TabletErrorFromGRPC(err)
+		}
+		if err := callback(shr); err != nil {
+			if err == nil || err == io.EOF {
+				return nil
+			}
+			return err
+		}
 	}
 }
 
 // UpdateStream starts a streaming query to VTTablet.
-func (conn *gRPCQueryClient) UpdateStream(ctx context.Context, target *querypb.Target, position string, timestamp int64) (tabletconn.StreamEventReader, error) {
-	conn.mu.RLock()
-	defer conn.mu.RUnlock()
-	if conn.cc == nil {
-		return nil, tabletconn.ConnClosed
-	}
+func (conn *gRPCQueryClient) UpdateStream(ctx context.Context, target *querypb.Target, position string, timestamp int64, callback func(*querypb.StreamEvent) error) error {
+	// Please see comments in StreamExecute to see how this works.
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 
-	req := &querypb.UpdateStreamRequest{
-		Target:            target,
-		EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
-		ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
-		Position:          position,
-		Timestamp:         timestamp,
-	}
-	stream, err := conn.c.UpdateStream(ctx, req)
+	stream, err := func() (queryservicepb.Query_UpdateStreamClient, error) {
+		conn.mu.RLock()
+		defer conn.mu.RUnlock()
+		if conn.cc == nil {
+			return nil, tabletconn.ConnClosed
+		}
+
+		req := &querypb.UpdateStreamRequest{
+			Target:            target,
+			EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
+			ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
+			Position:          position,
+			Timestamp:         timestamp,
+		}
+		stream, err := conn.c.UpdateStream(ctx, req)
+		if err != nil {
+			return nil, tabletconn.TabletErrorFromGRPC(err)
+		}
+		return stream, nil
+	}()
 	if err != nil {
-		return nil, tabletconn.TabletErrorFromGRPC(err)
+		return err
 	}
-	return &updateStreamAdapter{stream: stream}, err
+	for {
+		r, err := stream.Recv()
+		if err != nil {
+			return tabletconn.TabletErrorFromGRPC(err)
+		}
+		if err := callback(r.Event); err != nil {
+			if err == nil || err == io.EOF {
+				return nil
+			}
+			return err
+		}
+	}
 }
 
 // Close closes underlying gRPC channel.

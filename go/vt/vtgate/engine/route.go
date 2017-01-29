@@ -284,7 +284,7 @@ func (route *Route) Execute(vcursor VCursor, queryConstruct *queryinfo.QueryCons
 }
 
 // StreamExecute performs a streaming exec.
-func (route *Route) StreamExecute(vcursor VCursor, queryConstruct *queryinfo.QueryConstruct, joinvars map[string]interface{}, wantfields bool, sendReply func(*sqltypes.Result) error) error {
+func (route *Route) StreamExecute(vcursor VCursor, queryConstruct *queryinfo.QueryConstruct, joinvars map[string]interface{}, wantfields bool, callback func(*sqltypes.Result) error) error {
 	saved := copyBindVars(queryConstruct.BindVars)
 	defer func() { queryConstruct.BindVars = saved }()
 	for k, v := range joinvars {
@@ -312,7 +312,7 @@ func (route *Route) StreamExecute(vcursor VCursor, queryConstruct *queryinfo.Que
 		route.Query+queryConstruct.Comments,
 		params.ks,
 		params.shardVars,
-		sendReply,
+		callback,
 	)
 }
 

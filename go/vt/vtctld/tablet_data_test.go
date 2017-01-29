@@ -1,6 +1,7 @@
 package vtctld
 
 import (
+	"io"
 	"sync"
 	"testing"
 	"time"
@@ -38,17 +39,32 @@ func newStreamHealthTabletServer(t *testing.T) *streamHealthTabletServer {
 	}
 }
 
-func (s *streamHealthTabletServer) StreamHealthRegister(c chan<- *querypb.StreamHealthResponse) (int, error) {
+func (s *streamHealthTabletServer) StreamHealth(ctx context.Context, callback func(*querypb.StreamHealthResponse) error) error {
+	id, ch := s.streamHealthRegister()
+	defer s.streamHealthUnregister(id)
+	for shr := range ch {
+		if err := callback(shr); err != nil {
+			if err == io.EOF {
+				return nil
+			}
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *streamHealthTabletServer) streamHealthRegister() (id int, ch chan *querypb.StreamHealthResponse) {
 	s.streamHealthMutex.Lock()
 	defer s.streamHealthMutex.Unlock()
 
-	id := s.streamHealthIndex
+	id = s.streamHealthIndex
 	s.streamHealthIndex++
-	s.streamHealthMap[id] = c
-	return id, nil
+	ch = make(chan *querypb.StreamHealthResponse, 10)
+	s.streamHealthMap[id] = ch
+	return id, ch
 }
 
-func (s *streamHealthTabletServer) StreamHealthUnregister(id int) error {
+func (s *streamHealthTabletServer) streamHealthUnregister(id int) error {
 	s.streamHealthMutex.Lock()
 	defer s.streamHealthMutex.Unlock()
 

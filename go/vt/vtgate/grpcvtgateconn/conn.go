@@ -442,7 +442,7 @@ func (conn *vtgateConn) ResolveTransaction(ctx context.Context, dtid string) err
 	return vterrors.FromGRPCError(err)
 }
 
-func (conn *vtgateConn) MessageStream(ctx context.Context, keyspace string, shard string, keyRange *topodatapb.KeyRange, name string, sendReply func(*sqltypes.Result) error) error {
+func (conn *vtgateConn) MessageStream(ctx context.Context, keyspace string, shard string, keyRange *topodatapb.KeyRange, name string, callback func(*sqltypes.Result) error) error {
 	request := &vtgatepb.MessageStreamRequest{
 		CallerId: callerid.EffectiveCallerIDFromContext(ctx),
 		Keyspace: keyspace,
@@ -466,7 +466,7 @@ func (conn *vtgateConn) MessageStream(ctx context.Context, keyspace string, shar
 		if fields == nil {
 			fields = r.Result.Fields
 		}
-		err = sendReply(sqltypes.CustomProto3ToResult(fields, r.Result))
+		err = callback(sqltypes.CustomProto3ToResult(fields, r.Result))
 		if err != nil {
 			return err
 		}

@@ -46,8 +46,8 @@ func (vc *queryExecutor) ExecuteMultiShard(keyspace string, shardQueries map[str
 }
 
 // StreamExecuteMulti method call from engine call to vtgate.
-func (vc *queryExecutor) StreamExecuteMulti(query string, keyspace string, shardVars map[string]map[string]interface{}, sendReply func(reply *sqltypes.Result) error) error {
-	return vc.router.scatterConn.StreamExecuteMulti(vc.ctx, query, keyspace, shardVars, vc.tabletType, vc.options, sendReply)
+func (vc *queryExecutor) StreamExecuteMulti(query string, keyspace string, shardVars map[string]map[string]interface{}, callback func(reply *sqltypes.Result) error) error {
+	return vc.router.scatterConn.StreamExecuteMulti(vc.ctx, query, keyspace, shardVars, vc.tabletType, vc.options, callback)
 }
 
 // GetAnyShard method call from engine call to vtgate.

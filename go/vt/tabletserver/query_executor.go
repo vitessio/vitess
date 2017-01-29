@@ -142,7 +142,7 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 }
 
 // Stream performs a streaming query execution.
-func (qre *QueryExecutor) Stream(includedFields querypb.ExecuteOptions_IncludedFields, sendReply func(*sqltypes.Result) error) error {
+func (qre *QueryExecutor) Stream(includedFields querypb.ExecuteOptions_IncludedFields, callback func(*sqltypes.Result) error) error {
 	qre.logStats.OriginalSQL = qre.query
 	qre.logStats.PlanType = qre.plan.PlanID.String()
 
@@ -165,7 +165,7 @@ func (qre *QueryExecutor) Stream(includedFields querypb.ExecuteOptions_IncludedF
 	qre.qe.streamQList.Add(qd)
 	defer qre.qe.streamQList.Remove(qd)
 
-	return qre.streamFetch(conn, qre.plan.FullQuery, qre.bindVars, nil, includedFields, sendReply)
+	return qre.streamFetch(conn, qre.plan.FullQuery, qre.bindVars, nil, includedFields, callback)
 }
 
 func (qre *QueryExecutor) execDmlAutoCommit() (reply *sqltypes.Result, err error) {

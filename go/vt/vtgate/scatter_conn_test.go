@@ -273,8 +273,8 @@ func TestScatterConnStreamExecuteSendError(t *testing.T) {
 	})
 	want := "send error"
 	// Ensure that we handle send errors.
-	if err == nil || err.Error() != want {
-		t.Errorf("want %s, got %v", want, err)
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("got %s, must contain %v", err, want)
 	}
 }
 

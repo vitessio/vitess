@@ -36,7 +36,7 @@ type destinationTabletServer struct {
 	excludedTable string
 }
 
-func (sq *destinationTabletServer) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, options *querypb.ExecuteOptions, sendReply func(reply *sqltypes.Result) error) error {
+func (sq *destinationTabletServer) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, options *querypb.ExecuteOptions, callback func(reply *sqltypes.Result) error) error {
 	if strings.Contains(sql, sq.excludedTable) {
 		sq.t.Errorf("Split Diff operation on destination should skip the excluded table: %v query: %v", sq.excludedTable, sql)
 	}
@@ -48,7 +48,7 @@ func (sq *destinationTabletServer) StreamExecute(ctx context.Context, target *qu
 	sq.t.Logf("destinationTabletServer: got query: %v", sql)
 
 	// Send the headers
-	if err := sendReply(&sqltypes.Result{
+	if err := callback(&sqltypes.Result{
 		Fields: []*querypb.Field{
 			{
 				Name: "id",
@@ -74,7 +74,7 @@ func (sq *destinationTabletServer) StreamExecute(ctx context.Context, target *qu
 		if i%2 == 1 {
 			continue
 		}
-		if err := sendReply(&sqltypes.Result{
+		if err := callback(&sqltypes.Result{
 			Rows: [][]sqltypes.Value{
 				{
 					sqltypes.MakeString([]byte(fmt.Sprintf("%v", i))),
@@ -98,7 +98,7 @@ type sourceTabletServer struct {
 	v3            bool
 }
 
-func (sq *sourceTabletServer) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, options *querypb.ExecuteOptions, sendReply func(reply *sqltypes.Result) error) error {
+func (sq *sourceTabletServer) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, options *querypb.ExecuteOptions, callback func(reply *sqltypes.Result) error) error {
 	if strings.Contains(sql, sq.excludedTable) {
 		sq.t.Errorf("Split Diff operation on source should skip the excluded table: %v query: %v", sq.excludedTable, sql)
 	}
@@ -113,7 +113,7 @@ func (sq *sourceTabletServer) StreamExecute(ctx context.Context, target *querypb
 	sq.t.Logf("sourceTabletServer: got query: %v", sql)
 
 	// Send the headers
-	if err := sendReply(&sqltypes.Result{
+	if err := callback(&sqltypes.Result{
 		Fields: []*querypb.Field{
 			{
 				Name: "id",
@@ -139,7 +139,7 @@ func (sq *sourceTabletServer) StreamExecute(ctx context.Context, target *querypb
 			// for v2, filtering is done at SQL layer
 			continue
 		}
-		if err := sendReply(&sqltypes.Result{
+		if err := callback(&sqltypes.Result{
 			Rows: [][]sqltypes.Value{
 				{
 					sqltypes.MakeString([]byte(fmt.Sprintf("%v", i))),

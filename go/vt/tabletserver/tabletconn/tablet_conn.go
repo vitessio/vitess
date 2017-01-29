@@ -6,6 +6,7 @@ package tabletconn
 
 import (
 	"flag"
+	"io"
 	"time"
 
 	log "github.com/golang/glog"
@@ -49,20 +50,6 @@ type OperationalError string
 
 func (e OperationalError) Error() string { return string(e) }
 
-// StreamHealthReader defines the interface for a reader to read
-// StreamHealth messages.
-type StreamHealthReader interface {
-	// Recv reads one StreamHealthResponse.
-	Recv() (*querypb.StreamHealthResponse, error)
-}
-
-// StreamEventReader defines the interface for a reader to read
-// StreamEvent messages.
-type StreamEventReader interface {
-	// Recv reads one StreamEvent.
-	Recv() (*querypb.StreamEvent, error)
-}
-
 // In all the following calls, context is an opaque structure that may
 // carry data related to the call. For instance, if an incoming RPC
 // call is responsible for these outgoing calls, and the incoming
@@ -96,12 +83,8 @@ type TabletConn interface {
 	// ExecuteBatch executes a group of queries.
 	ExecuteBatch(ctx context.Context, target *querypb.Target, queries []querytypes.BoundQuery, asTransaction bool, transactionID int64, options *querypb.ExecuteOptions) ([]sqltypes.Result, error)
 
-	// StreamExecute executes a streaming query on vttablet. It
-	// returns a sqltypes.ResultStream to get results from. If
-	// error is non-nil, it means that the StreamExecute failed to
-	// send the request. Otherwise, you can pull values from the
-	// ResultStream until io.EOF, or any other error.
-	StreamExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]interface{}, options *querypb.ExecuteOptions) (sqltypes.ResultStream, error)
+	// StreamExecute executes a streaming query on vttablet.
+	StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error
 
 	// Transaction support
 	Begin(ctx context.Context, target *querypb.Target) (transactionID int64, err error)
@@ -123,7 +106,7 @@ type TabletConn interface {
 	BeginExecuteBatch(ctx context.Context, target *querypb.Target, queries []querytypes.BoundQuery, asTransaction bool, options *querypb.ExecuteOptions) (results []sqltypes.Result, transactionID int64, err error)
 
 	// Messaging methods.
-	MessageStream(ctx context.Context, target *querypb.Target, name string, sendReply func(*sqltypes.Result) error) error
+	MessageStream(ctx context.Context, target *querypb.Target, name string, callback func(*sqltypes.Result) error) error
 	MessageAck(ctx context.Context, target *querypb.Target, name string, ids []*querypb.Value) (count int64, err error)
 
 	// SplitQuery splits a query into equally sized smaller queries by
@@ -138,17 +121,52 @@ type TabletConn interface {
 		algorithm querypb.SplitQueryRequest_Algorithm) (queries []querytypes.QuerySplit, err error)
 
 	// StreamHealth starts a streaming RPC for VTTablet health status updates.
-	StreamHealth(ctx context.Context) (StreamHealthReader, error)
+	StreamHealth(ctx context.Context, callback func(*querypb.StreamHealthResponse) error) error
 
-	// UpdateStream asks for a stream of updates from a server.
-	// It returns a StreamEventReader to get results from. If
-	// error is non-nil, it means that the UpdateStream failed to
-	// send the request. Otherwise, you can pull values from the
-	// StreamEventReader until io.EOF, or any other error.
-	UpdateStream(ctx context.Context, target *querypb.Target, position string, timestamp int64) (StreamEventReader, error)
+	// UpdateStream streams updates from the provided position or timestamp.
+	UpdateStream(ctx context.Context, target *querypb.Target, position string, timestamp int64, callback func(*querypb.StreamEvent) error) error
 
 	// Close must be called for releasing resources.
 	Close(ctx context.Context) error
+}
+
+type resultStreamer struct {
+	done chan struct{}
+	ch   chan *sqltypes.Result
+	err  error
+}
+
+func (rs *resultStreamer) Recv() (*sqltypes.Result, error) {
+	select {
+	case <-rs.done:
+		return nil, rs.err
+	case qr := <-rs.ch:
+		return qr, nil
+	}
+}
+
+// ExecuteWithStreamer performs a StreamExecute, but returns a *sqltypes.ResultStream to iterate on.
+// This function should only be used for legacy code. New usage should directly use StreamExecute.
+func ExecuteWithStreamer(ctx context.Context, conn TabletConn, target *querypb.Target, sql string, bindVariables map[string]interface{}, options *querypb.ExecuteOptions) sqltypes.ResultStream {
+	rs := &resultStreamer{
+		done: make(chan struct{}),
+		ch:   make(chan *sqltypes.Result),
+	}
+	go func() {
+		defer close(rs.done)
+		rs.err = conn.StreamExecute(ctx, target, sql, bindVariables, options, func(qr *sqltypes.Result) error {
+			select {
+			case <-ctx.Done():
+				return io.EOF
+			case rs.ch <- qr:
+			}
+			return nil
+		})
+		if rs.err == nil {
+			rs.err = io.EOF
+		}
+	}()
+	return rs
 }
 
 var dialers = make(map[string]TabletDialer)

@@ -7,7 +7,6 @@ package tabletmanager
 import (
 	"flag"
 	"fmt"
-	"io"
 	"strings"
 	"sync"
 	"testing"
@@ -130,8 +129,8 @@ func (ftc *fakeTabletConn) ExecuteBatch(ctx context.Context, target *querypb.Tar
 }
 
 // StreamExecute is part of the TabletConn interface
-func (ftc *fakeTabletConn) StreamExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]interface{}, options *querypb.ExecuteOptions) (sqltypes.ResultStream, error) {
-	return nil, fmt.Errorf("not implemented in this test")
+func (ftc *fakeTabletConn) StreamExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]interface{}, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
+	return fmt.Errorf("not implemented in this test")
 }
 
 // Begin is part of the TabletConn interface
@@ -200,7 +199,7 @@ func (ftc *fakeTabletConn) BeginExecuteBatch(ctx context.Context, target *queryp
 }
 
 // MessageStream is part of the TabletConn interface
-func (ftc *fakeTabletConn) MessageStream(ctx context.Context, target *querypb.Target, name string, sendReply func(*sqltypes.Result) error) (err error) {
+func (ftc *fakeTabletConn) MessageStream(ctx context.Context, target *querypb.Target, name string, callback func(*sqltypes.Result) error) (err error) {
 	return fmt.Errorf("not implemented")
 }
 
@@ -221,53 +220,23 @@ func (ftc *fakeTabletConn) SplitQuery(
 	return nil, fmt.Errorf("not implemented in this test")
 }
 
-type streamHealthReader struct {
-	c   <-chan *querypb.StreamHealthResponse
-	err *error
-}
-
-// Recv implements tabletconn.StreamHealthReader.
-// It returns one response from the chan.
-func (r *streamHealthReader) Recv() (*querypb.StreamHealthResponse, error) {
-	resp, ok := <-r.c
-	if !ok {
-		if *r.err == nil {
-			return nil, io.EOF
-		}
-		return nil, *r.err
-	}
-	return resp, nil
-}
-
 // StreamHealth is part of tabletconn.TabletConn.
-func (ftc *fakeTabletConn) StreamHealth(ctx context.Context) (tabletconn.StreamHealthReader, error) {
-	c := make(chan *querypb.StreamHealthResponse)
-	var finalErr error
-	go func() {
-		c <- &querypb.StreamHealthResponse{
-			Serving: true,
-			Target: &querypb.Target{
-				Keyspace:   ftc.tablet.Keyspace,
-				Shard:      ftc.tablet.Shard,
-				TabletType: ftc.tablet.Type,
-			},
-			RealtimeStats: &querypb.RealtimeStats{},
-		}
-		select {
-		case <-ctx.Done():
-			finalErr = ctx.Err()
-			close(c)
-		}
-	}()
-	return &streamHealthReader{
-		c:   c,
-		err: &finalErr,
-	}, nil
+func (ftc *fakeTabletConn) StreamHealth(ctx context.Context, callback func(*querypb.StreamHealthResponse) error) error {
+	callback(&querypb.StreamHealthResponse{
+		Serving: true,
+		Target: &querypb.Target{
+			Keyspace:   ftc.tablet.Keyspace,
+			Shard:      ftc.tablet.Shard,
+			TabletType: ftc.tablet.Type,
+		},
+		RealtimeStats: &querypb.RealtimeStats{},
+	})
+	return nil
 }
 
 // UpdateStream is part of the TabletConn interface
-func (ftc *fakeTabletConn) UpdateStream(ctx context.Context, target *querypb.Target, position string, timestamp int64) (tabletconn.StreamEventReader, error) {
-	return nil, fmt.Errorf("not implemented in this test")
+func (ftc *fakeTabletConn) UpdateStream(ctx context.Context, target *querypb.Target, position string, timestamp int64, callback func(*querypb.StreamEvent) error) error {
+	return fmt.Errorf("not implemented in this test")
 }
 
 // Close is part of the TabletConn interface

@@ -80,7 +80,7 @@ func (e *ErrorQueryService) Execute(ctx context.Context, target *querypb.Target,
 }
 
 // StreamExecute is part of QueryService interface
-func (e *ErrorQueryService) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, options *querypb.ExecuteOptions, sendReply func(*sqltypes.Result) error) error {
+func (e *ErrorQueryService) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
 	return fmt.Errorf("ErrorQueryService does not implement any method")
 }
 
@@ -100,7 +100,7 @@ func (e *ErrorQueryService) BeginExecuteBatch(ctx context.Context, target *query
 }
 
 // MessageStream is part of QueryService interface
-func (e *ErrorQueryService) MessageStream(ctx context.Context, target *querypb.Target, name string, sendReply func(*sqltypes.Result) error) (err error) {
+func (e *ErrorQueryService) MessageStream(ctx context.Context, target *querypb.Target, name string, callback func(*sqltypes.Result) error) (err error) {
 	return fmt.Errorf("ErrorQueryService does not implement any method")
 }
 
@@ -123,18 +123,13 @@ func (e *ErrorQueryService) SplitQuery(
 	return nil, fmt.Errorf("ErrorQueryService does not implement any method")
 }
 
-// StreamHealthRegister is part of QueryService interface
-func (e *ErrorQueryService) StreamHealthRegister(chan<- *querypb.StreamHealthResponse) (int, error) {
-	return 0, fmt.Errorf("ErrorQueryService does not implement any method")
-}
-
-// StreamHealthUnregister is part of QueryService interface
-func (e *ErrorQueryService) StreamHealthUnregister(int) error {
+// StreamHealth is part of QueryService interface
+func (e *ErrorQueryService) StreamHealth(ctx context.Context, callback func(*querypb.StreamHealthResponse) error) error {
 	return fmt.Errorf("ErrorQueryService does not implement any method")
 }
 
 // UpdateStream is part of QueryService interface
-func (e *ErrorQueryService) UpdateStream(ctx context.Context, target *querypb.Target, position string, timestamp int64, sendReply func(*querypb.StreamEvent) error) error {
+func (e *ErrorQueryService) UpdateStream(ctx context.Context, target *querypb.Target, position string, timestamp int64, callback func(*querypb.StreamEvent) error) error {
 	return fmt.Errorf("ErrorQueryService does not implement any method")
 }
 

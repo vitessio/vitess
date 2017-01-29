@@ -77,7 +77,7 @@ func (jn *Join) Execute(vcursor VCursor, queryConstruct *queryinfo.QueryConstruc
 }
 
 // StreamExecute performs a streaming exec.
-func (jn *Join) StreamExecute(vcursor VCursor, queryConstruct *queryinfo.QueryConstruct, joinvars map[string]interface{}, wantfields bool, sendReply func(*sqltypes.Result) error) error {
+func (jn *Join) StreamExecute(vcursor VCursor, queryConstruct *queryinfo.QueryConstruct, joinvars map[string]interface{}, wantfields bool, callback func(*sqltypes.Result) error) error {
 	err := jn.Left.StreamExecute(vcursor, queryConstruct, joinvars, wantfields, func(lresult *sqltypes.Result) error {
 		for _, lrow := range lresult.Rows {
 			for k, col := range jn.Vars {
@@ -96,7 +96,7 @@ func (jn *Join) StreamExecute(vcursor VCursor, queryConstruct *queryinfo.QueryCo
 				if len(rresult.Rows) != 0 {
 					rowSent = true
 				}
-				return sendReply(result)
+				return callback(result)
 			})
 			if err != nil {
 				return err
@@ -112,7 +112,7 @@ func (jn *Join) StreamExecute(vcursor VCursor, queryConstruct *queryinfo.QueryCo
 					nil,
 					jn.Cols,
 				)}
-				return sendReply(result)
+				return callback(result)
 			}
 		}
 		if wantfields {
@@ -126,7 +126,7 @@ func (jn *Join) StreamExecute(vcursor VCursor, queryConstruct *queryinfo.QueryCo
 				return err
 			}
 			result.Fields = joinFields(lresult.Fields, rresult.Fields, jn.Cols)
-			return sendReply(result)
+			return callback(result)
 		}
 		return nil
 	})

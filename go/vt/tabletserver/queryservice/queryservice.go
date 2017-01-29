@@ -16,6 +16,11 @@ import (
 )
 
 // QueryService is the interface implemented by the tablet's query service.
+// All streaming methods accept a callback function that will be called for
+// each response. If the callback returns an error, that error is returned
+// back by the function, except in the case of io.EOF in which case the stream
+// will be terminated with no error. Streams can also be terminated by canceling
+// the context.
 type QueryService interface {
 	// Transaction management
 
@@ -57,7 +62,7 @@ type QueryService interface {
 
 	// Query execution
 	Execute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, transactionID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, error)
-	StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, options *querypb.ExecuteOptions, sendReply func(*sqltypes.Result) error) error
+	StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error
 	ExecuteBatch(ctx context.Context, target *querypb.Target, queries []querytypes.BoundQuery, asTransaction bool, transactionID int64, options *querypb.ExecuteOptions) ([]sqltypes.Result, error)
 
 	// Combo methods, they also return the transactionID from the
@@ -68,7 +73,7 @@ type QueryService interface {
 	BeginExecuteBatch(ctx context.Context, target *querypb.Target, queries []querytypes.BoundQuery, asTransaction bool, options *querypb.ExecuteOptions) ([]sqltypes.Result, int64, error)
 
 	// Messaging methods.
-	MessageStream(ctx context.Context, target *querypb.Target, name string, sendReply func(*sqltypes.Result) error) error
+	MessageStream(ctx context.Context, target *querypb.Target, name string, callback func(*sqltypes.Result) error) error
 	MessageAck(ctx context.Context, target *querypb.Target, name string, ids []*querypb.Value) (count int64, err error)
 
 	// SplitQuery is a MapReduce helper function
@@ -85,14 +90,11 @@ type QueryService interface {
 		algorithm querypb.SplitQueryRequest_Algorithm,
 	) ([]querytypes.QuerySplit, error)
 
-	// StreamHealthRegister registers a listener for StreamHealth
-	StreamHealthRegister(chan<- *querypb.StreamHealthResponse) (int, error)
-
-	// StreamHealthUnregister unregisters a listener for StreamHealth
-	StreamHealthUnregister(int) error
+	// StreamHealth streams health status.
+	StreamHealth(ctx context.Context, callback func(*querypb.StreamHealthResponse) error) error
 
 	// UpdateStream streams updates from the provided position or timestamp.
-	UpdateStream(ctx context.Context, target *querypb.Target, position string, timestamp int64, sendReply func(*querypb.StreamEvent) error) error
+	UpdateStream(ctx context.Context, target *querypb.Target, position string, timestamp int64, callback func(*querypb.StreamEvent) error) error
 
 	// Helper for RPC panic handling: call this in a defer statement
 	// at the beginning of each RPC handling method.
