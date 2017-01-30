@@ -240,7 +240,7 @@ func TestTxPoolBeginWithPoolConnectionError_Errno2006_Permanent(t *testing.T) {
 	// DBConn.Exec() will return the reconnect error as final error and not the
 	// initial connection error.
 	_, err = txPool.LocalBegin(context.Background(), false)
-	if err == nil || !strings.Contains(err.Error(), "Lost connection to MySQL server") || !strings.Contains(err.Error(), "(errno 2013)") {
+	if err == nil || !strings.Contains(err.Error(), "(errno 2013)") {
 		t.Fatalf("Begin did not return the reconnect error: %v", err)
 	}
 	sqlErr, ok := err.(*sqldb.SQLError)
@@ -433,6 +433,8 @@ func TestTxPoolExecFailDueToConnFail_Errno2013(t *testing.T) {
 }
 
 func TestTxPoolCloseKillsStrayTransactions(t *testing.T) {
+	before := tabletenv.InternalErrors.Counts()["StrayTransactions"]
+
 	db := fakesqldb.New(t)
 	defer db.Close()
 	db.AddQuery("begin", &sqltypes.Result{})
@@ -448,7 +450,7 @@ func TestTxPoolCloseKillsStrayTransactions(t *testing.T) {
 
 	// Close kills stray transaction.
 	txPool.Close()
-	if got, want := tabletenv.InternalErrors.Counts()["StrayTransactions"], int64(1); got != want {
+	if got, want := tabletenv.InternalErrors.Counts()["StrayTransactions"]-before, int64(1); got != want {
 		t.Fatalf("internal error count for stray transactions not increased: got = %v, want = %v", got, want)
 	}
 	if got, want := txPool.conns.Capacity(), int64(0); got != want {

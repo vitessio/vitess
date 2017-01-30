@@ -92,7 +92,7 @@ func TestDBConnKill(t *testing.T) {
 	// Kill failed because we are not able to connect to the database
 	db.EnableConnFail()
 	err = dbConn.Kill("test kill")
-	want := "Lost connection"
+	want := "errno 2013"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("Exec: %v, want %s", err, want)
 	}

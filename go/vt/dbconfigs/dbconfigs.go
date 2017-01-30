@@ -58,7 +58,7 @@ const redactedPassword = "****"
 
 // The flags will change the global singleton
 func registerConnFlags(connParams *sqldb.ConnParams, name string) {
-	flag.StringVar(&connParams.Engine, "db-config-"+name+"-engine", "libmysqlclient", "db "+name+" engine to use (empty for default, libmysqlclient or mysqlconn)")
+	flag.StringVar(&connParams.Engine, "db-config-"+name+"-engine", "mysqlconn", "db "+name+" engine to use (empty for default, libmysqlclient or mysqlconn)")
 	flag.StringVar(&connParams.Host, "db-config-"+name+"-host", "", "db "+name+" connection host")
 	flag.IntVar(&connParams.Port, "db-config-"+name+"-port", 0, "db "+name+" connection port")
 	flag.StringVar(&connParams.Uname, "db-config-"+name+"-uname", "", "db "+name+" connection uname")

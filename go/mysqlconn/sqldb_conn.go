@@ -179,12 +179,8 @@ func init() {
 		ctx := context.Background()
 		return Connect(ctx, &params)
 	})
-
-	// Uncomment this and comment out the call to sqldb.RegisterDefault in
-	// go/mysql/mysql.go to make this the default.
-
-	//	sqldb.RegisterDefault(func(params sqldb.ConnParams) (sqldb.Conn, error) {
-	//		ctx := context.Background()
-	//		return Connect(ctx, &params)
-	//	})
+	sqldb.RegisterDefault(func(params sqldb.ConnParams) (sqldb.Conn, error) {
+		ctx := context.Background()
+		return Connect(ctx, &params)
+	})
 }
