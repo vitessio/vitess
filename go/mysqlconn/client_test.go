@@ -104,7 +104,7 @@ func TestConnectTimeout(t *testing.T) {
 	ctx = context.Background()
 	_, err = Connect(ctx, params)
 	os.Remove(name)
-	assertSQLError(t, err, CRConnectionError, SSSignalException, "connection refused")
+	assertSQLError(t, err, CRConnHostError, SSSignalException, "connection refused")
 }
 
 // testKillWithRealDatabase opens a connection, issues a command that
