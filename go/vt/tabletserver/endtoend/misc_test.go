@@ -16,7 +16,7 @@ import (
 
 	"golang.org/x/net/context"
 
-	"github.com/youtube/vitess/go/mysql"
+	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/tabletserver/endtoend/framework"
 
@@ -226,7 +226,7 @@ func TestUpsertNonPKHit(t *testing.T) {
 }
 
 func TestSchemaReload(t *testing.T) {
-	conn, err := mysql.Connect(connParams)
+	conn, err := sqldb.Connect(connParams)
 	if err != nil {
 		t.Error(err)
 		return
@@ -260,7 +260,7 @@ func TestSchemaReload(t *testing.T) {
 }
 
 func TestSidecarTables(t *testing.T) {
-	conn, err := mysql.Connect(connParams)
+	conn, err := sqldb.Connect(connParams)
 	if err != nil {
 		t.Error(err)
 		return
