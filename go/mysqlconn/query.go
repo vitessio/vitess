@@ -297,6 +297,7 @@ func (c *Conn) ExecuteFetch(query string, maxrows int, wantfields bool) (*sqltyp
 			if !wantfields {
 				result.Fields = nil
 			}
+			result.RowsAffected = uint64(len(result.Rows))
 			return result, nil
 		case ErrPacket:
 			// Error packet.

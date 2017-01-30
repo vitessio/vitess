@@ -409,12 +409,16 @@ func testQueriesWithRealDatabase(t *testing.T, params *sqldb.ConnParams) {
 	}
 
 	// Try a simple DDL.
-	if _, err := conn.ExecuteFetch("create table a(id int, name varchar(128), primary key(id))", 0, false); err != nil {
+	result, err := conn.ExecuteFetch("create table a(id int, name varchar(128), primary key(id))", 0, false)
+	if err != nil {
 		t.Fatalf("create table failed: %v", err)
+	}
+	if result.RowsAffected != 0 {
+		t.Errorf("create table returned RowsAffected %v, was expecting 0", result.RowsAffected)
 	}
 
 	// Try a simple insert.
-	result, err := conn.ExecuteFetch("insert into a(id, name) values(10, 'nice name')", 1000, true)
+	result, err = conn.ExecuteFetch("insert into a(id, name) values(10, 'nice name')", 1000, true)
 	if err != nil {
 		t.Fatalf("insert failed: %v", err)
 	}
@@ -459,6 +463,7 @@ func testQueriesWithRealDatabase(t *testing.T, params *sqldb.ConnParams) {
 				sqltypes.MakeTrusted(querypb.Type_VARCHAR, []byte("nice name")),
 			},
 		},
+		RowsAffected: 1,
 	}
 	if !reflect.DeepEqual(result, expectedResult) {
 		// MySQL 5.7 is adding the NO_DEFAULT_VALUE_FLAG to Flags.
@@ -470,9 +475,12 @@ func testQueriesWithRealDatabase(t *testing.T, params *sqldb.ConnParams) {
 
 	// Insert a few rows.
 	for i := 0; i < 100; i++ {
-		_, err := conn.ExecuteFetch(fmt.Sprintf("insert into a(id, name) values(%v, 'nice name %v')", 1000+i, i), 1000, true)
+		result, err := conn.ExecuteFetch(fmt.Sprintf("insert into a(id, name) values(%v, 'nice name %v')", 1000+i, i), 1000, true)
 		if err != nil {
 			t.Fatalf("ExecuteFetch(%v) failed: %v", i, err)
+		}
+		if result.RowsAffected != 1 {
+			t.Errorf("insert into returned RowsAffected %v, was expecting 1", result.RowsAffected)
 		}
 	}
 
@@ -482,8 +490,12 @@ func testQueriesWithRealDatabase(t *testing.T, params *sqldb.ConnParams) {
 	readRowsUsingStream(t, conn, 101)
 
 	// And drop the table.
-	if _, err := conn.ExecuteFetch("drop table a", 0, false); err != nil {
+	result, err = conn.ExecuteFetch("drop table a", 0, false)
+	if err != nil {
 		t.Fatalf("drop table failed: %v", err)
+	}
+	if result.RowsAffected != 0 {
+		t.Errorf("insert into returned RowsAffected %v, was expecting 0", result.RowsAffected)
 	}
 }
 
