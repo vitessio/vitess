@@ -268,3 +268,12 @@ var CharacterSetMap = map[string]uint8{
 	"cp932":    95,
 	"eucjpms":  97,
 }
+
+// IsNum returns true if a MySQL type is a numeric value.
+// It is the same as IS_NUM defined in mysql.h.
+//
+// FIXME(alainjobart) This needs to use the constants in
+// replication/constants.go, so we are using numerical values here.
+func IsNum(typ uint8) bool {
+	return ((typ <= 9 /* MYSQL_TYPE_INT24 */ && typ != 7 /* MYSQL_TYPE_TIMESTAMP */) || typ == 13 /* MYSQL_TYPE_YEAR */ || typ == 246 /* MYSQL_TYPE_NEWDECIMAL */)
+}

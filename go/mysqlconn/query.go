@@ -117,6 +117,16 @@ func (c *Conn) readColumnDefinition(field *querypb.Field, index int) error {
 	// a Field without that data, so we don't return the flags.
 	if field.ColumnLength != 0 || field.Charset != 0 {
 		field.Flags = uint32(flags)
+
+		// FIXME(alainjobart): This is something the MySQL
+		// client library does: If the type is numerical, it
+		// adds a NUM_FLAG to the flags.  We're doing it here
+		// only to be compatible with the C library. Once
+		// we're not using that library any more, we'll remove this.
+		// See doc.go.
+		if IsNum(t) {
+			field.Flags |= uint32(querypb.MySqlFlag_NUM_FLAG)
+		}
 	}
 
 	return nil

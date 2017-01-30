@@ -77,6 +77,7 @@ func TestQueries(t *testing.T) {
 				sqltypes.NULL,
 			},
 		},
+		RowsAffected: 2,
 	})
 
 	// Typicall Select with TYPE_AND_NAME.
@@ -179,6 +180,7 @@ func TestQueries(t *testing.T) {
 				sqltypes.NULL,
 			},
 		},
+		RowsAffected: 2,
 	})
 
 	// Typicall Select with TYPE_AND_NAME.
@@ -198,6 +200,7 @@ func TestQueries(t *testing.T) {
 				sqltypes.MakeTrusted(querypb.Type_VARCHAR, []byte("nice name")),
 			},
 		},
+		RowsAffected: 2,
 	})
 
 	// Typicall Select with TYPE_ONLY.
@@ -215,6 +218,7 @@ func TestQueries(t *testing.T) {
 				sqltypes.MakeTrusted(querypb.Type_INT64, []byte("20")),
 			},
 		},
+		RowsAffected: 2,
 	})
 
 	// Typicall Select with ALL.
@@ -230,7 +234,10 @@ func TestQueries(t *testing.T) {
 				ColumnLength: 0x80020304,
 				Charset:      0x1234,
 				Decimals:     36,
-				Flags:        16387, // NOT_NULL_FLAG, PRI_KEY_FLAG, PART_KEY_FLAG
+				Flags: uint32(querypb.MySqlFlag_NOT_NULL_FLAG |
+					querypb.MySqlFlag_PRI_KEY_FLAG |
+					querypb.MySqlFlag_PART_KEY_FLAG |
+					querypb.MySqlFlag_NUM_FLAG),
 			},
 		},
 		Rows: [][]sqltypes.Value{
@@ -244,6 +251,7 @@ func TestQueries(t *testing.T) {
 				sqltypes.MakeTrusted(querypb.Type_INT64, []byte("30")),
 			},
 		},
+		RowsAffected: 3,
 	})
 }
 
@@ -313,8 +321,8 @@ func checkQueryInternal(t *testing.T, query string, sConn, cConn *Conn, result *
 		if !reflect.DeepEqual(got, &expected) {
 			for i, f := range got.Fields {
 				if !reflect.DeepEqual(f, expected.Fields[i]) {
-					t.Errorf("Got      field(%v) = %v", i, f)
-					t.Errorf("Expected field(%v) = %v", i, expected.Fields[i])
+					t.Logf("Got      field(%v) = %v", i, f)
+					t.Logf("Expected field(%v) = %v", i, expected.Fields[i])
 				}
 			}
 			t.Fatalf("ExecuteFetch(wantfields=%v) returned:\n%v\nBut was expecting:\n%v", wantfields, got, expected)
@@ -444,7 +452,8 @@ func testQueriesWithRealDatabase(t *testing.T, params *sqldb.ConnParams) {
 				Charset:      CharacterSetBinary,
 				Flags: uint32(querypb.MySqlFlag_NOT_NULL_FLAG |
 					querypb.MySqlFlag_PRI_KEY_FLAG |
-					querypb.MySqlFlag_PART_KEY_FLAG),
+					querypb.MySqlFlag_PART_KEY_FLAG |
+					querypb.MySqlFlag_NUM_FLAG),
 			},
 			{
 				Name:         "name",
@@ -518,7 +527,8 @@ func readRowsUsingStream(t *testing.T, conn *Conn, expectedCount int) {
 			Charset:      CharacterSetBinary,
 			Flags: uint32(querypb.MySqlFlag_NOT_NULL_FLAG |
 				querypb.MySqlFlag_PRI_KEY_FLAG |
-				querypb.MySqlFlag_PART_KEY_FLAG),
+				querypb.MySqlFlag_PART_KEY_FLAG |
+				querypb.MySqlFlag_NUM_FLAG),
 		},
 		{
 			Name:         "name",

@@ -28,7 +28,7 @@ var DescribeTableFields = []*querypb.Field{
 		OrgName:      "COLUMN_NAME",
 		ColumnLength: 192,
 		Charset:      33,
-		Flags:        1,
+		Flags:        uint32(querypb.MySqlFlag_NOT_NULL_FLAG),
 	},
 	{
 		Name:         "Type",
@@ -39,7 +39,7 @@ var DescribeTableFields = []*querypb.Field{
 		OrgName:      "COLUMN_TYPE",
 		ColumnLength: 589815,
 		Charset:      33,
-		Flags:        17,
+		Flags:        uint32(querypb.MySqlFlag_NOT_NULL_FLAG | querypb.MySqlFlag_BLOB_FLAG),
 	},
 	{
 		Name:         "Null",
@@ -50,7 +50,7 @@ var DescribeTableFields = []*querypb.Field{
 		OrgName:      "IS_NULLABLE",
 		ColumnLength: 9,
 		Charset:      33,
-		Flags:        1,
+		Flags:        uint32(querypb.MySqlFlag_NOT_NULL_FLAG),
 	},
 	{
 		Name:         "Key",
@@ -61,7 +61,7 @@ var DescribeTableFields = []*querypb.Field{
 		OrgName:      "COLUMN_KEY",
 		ColumnLength: 9,
 		Charset:      33,
-		Flags:        1,
+		Flags:        uint32(querypb.MySqlFlag_NOT_NULL_FLAG),
 	},
 	{
 		Name:         "Default",
@@ -72,7 +72,7 @@ var DescribeTableFields = []*querypb.Field{
 		OrgName:      "COLUMN_DEFAULT",
 		ColumnLength: 589815,
 		Charset:      33,
-		Flags:        16,
+		Flags:        uint32(querypb.MySqlFlag_BLOB_FLAG),
 	},
 	{
 		Name:         "Extra",
@@ -83,7 +83,7 @@ var DescribeTableFields = []*querypb.Field{
 		OrgName:      "EXTRA",
 		ColumnLength: 90,
 		Charset:      33,
-		Flags:        1,
+		Flags:        uint32(querypb.MySqlFlag_NOT_NULL_FLAG),
 	},
 }
 
@@ -134,7 +134,7 @@ var ShowIndexFromTableFields = []*querypb.Field{
 		OrgName:      "TABLE_NAME",
 		ColumnLength: 192,
 		Charset:      CharacterSetUtf8,
-		Flags:        1,
+		Flags:        uint32(querypb.MySqlFlag_NOT_NULL_FLAG),
 	},
 	{
 		Name:         "Non_unique",
@@ -145,7 +145,7 @@ var ShowIndexFromTableFields = []*querypb.Field{
 		OrgName:      "NON_UNIQUE",
 		ColumnLength: 1,
 		Charset:      CharacterSetBinary,
-		Flags:        1,
+		Flags:        uint32(querypb.MySqlFlag_NOT_NULL_FLAG | querypb.MySqlFlag_NUM_FLAG),
 	},
 	{
 		Name:         "Key_name",
@@ -156,7 +156,7 @@ var ShowIndexFromTableFields = []*querypb.Field{
 		OrgName:      "INDEX_NAME",
 		ColumnLength: 192,
 		Charset:      33,
-		Flags:        1,
+		Flags:        uint32(querypb.MySqlFlag_NOT_NULL_FLAG),
 	},
 	{
 		Name:         "Seq_in_index",
@@ -167,7 +167,7 @@ var ShowIndexFromTableFields = []*querypb.Field{
 		OrgName:      "SEQ_IN_INDEX",
 		ColumnLength: 2,
 		Charset:      CharacterSetBinary,
-		Flags:        1,
+		Flags:        uint32(querypb.MySqlFlag_NOT_NULL_FLAG | querypb.MySqlFlag_NUM_FLAG),
 	},
 	{
 		Name:         "Column_name",
@@ -178,7 +178,7 @@ var ShowIndexFromTableFields = []*querypb.Field{
 		OrgName:      "COLUMN_NAME",
 		ColumnLength: 192,
 		Charset:      33,
-		Flags:        1,
+		Flags:        uint32(querypb.MySqlFlag_NOT_NULL_FLAG),
 	},
 	{
 		Name:         "Collation",
@@ -199,6 +199,7 @@ var ShowIndexFromTableFields = []*querypb.Field{
 		OrgName:      "CARDINALITY",
 		ColumnLength: 21,
 		Charset:      CharacterSetBinary,
+		Flags:        uint32(querypb.MySqlFlag_NUM_FLAG),
 	},
 	{
 		Name:         "Sub_part",
@@ -209,6 +210,7 @@ var ShowIndexFromTableFields = []*querypb.Field{
 		OrgName:      "SUB_PART",
 		ColumnLength: 3,
 		Charset:      CharacterSetBinary,
+		Flags:        uint32(querypb.MySqlFlag_NUM_FLAG),
 	},
 	{
 		Name:         "Packed",
@@ -240,7 +242,7 @@ var ShowIndexFromTableFields = []*querypb.Field{
 		OrgName:      "INDEX_TYPE",
 		ColumnLength: 48,
 		Charset:      33,
-		Flags:        1,
+		Flags:        uint32(querypb.MySqlFlag_NOT_NULL_FLAG),
 	},
 	{
 		Name:         "Comment",
@@ -261,7 +263,7 @@ var ShowIndexFromTableFields = []*querypb.Field{
 		OrgName:      "INDEX_COMMENT",
 		ColumnLength: 3072,
 		Charset:      33,
-		Flags:        1,
+		Flags:        uint32(querypb.MySqlFlag_NOT_NULL_FLAG),
 	},
 }
 
@@ -320,7 +322,7 @@ var BaseShowTablesFields = []*querypb.Field{
 		OrgName:      "TABLE_NAME",
 		ColumnLength: 192,
 		Charset:      CharacterSetUtf8,
-		Flags:        1,
+		Flags:        uint32(querypb.MySqlFlag_NOT_NULL_FLAG),
 	},
 	{
 		Name:         "table_type",
@@ -331,14 +333,14 @@ var BaseShowTablesFields = []*querypb.Field{
 		OrgName:      "TABLE_TYPE",
 		ColumnLength: 192,
 		Charset:      CharacterSetUtf8,
-		Flags:        1,
+		Flags:        uint32(querypb.MySqlFlag_NOT_NULL_FLAG),
 	},
 	{
 		Name:         "unix_timestamp(create_time)",
 		Type:         querypb.Type_INT64,
 		ColumnLength: 11,
 		Charset:      CharacterSetBinary,
-		Flags:        128,
+		Flags:        uint32(querypb.MySqlFlag_BINARY_FLAG | querypb.MySqlFlag_NUM_FLAG),
 	},
 	{
 		Name:         "table_comment",
@@ -349,7 +351,7 @@ var BaseShowTablesFields = []*querypb.Field{
 		OrgName:      "TABLE_COMMENT",
 		ColumnLength: 6144,
 		Charset:      CharacterSetUtf8,
-		Flags:        1,
+		Flags:        uint32(querypb.MySqlFlag_NOT_NULL_FLAG),
 	},
 	{
 		Name:         "table_rows",
@@ -360,7 +362,7 @@ var BaseShowTablesFields = []*querypb.Field{
 		OrgName:      "TABLE_ROWS",
 		ColumnLength: 21,
 		Charset:      CharacterSetBinary,
-		Flags:        32,
+		Flags:        uint32(querypb.MySqlFlag_UNSIGNED_FLAG | querypb.MySqlFlag_NUM_FLAG),
 	},
 	{
 		Name:         "data_length",
@@ -371,7 +373,7 @@ var BaseShowTablesFields = []*querypb.Field{
 		OrgName:      "DATA_LENGTH",
 		ColumnLength: 21,
 		Charset:      CharacterSetBinary,
-		Flags:        32,
+		Flags:        uint32(querypb.MySqlFlag_UNSIGNED_FLAG | querypb.MySqlFlag_NUM_FLAG),
 	},
 	{
 		Name:         "index_length",
@@ -382,7 +384,7 @@ var BaseShowTablesFields = []*querypb.Field{
 		OrgName:      "INDEX_LENGTH",
 		ColumnLength: 21,
 		Charset:      CharacterSetBinary,
-		Flags:        32,
+		Flags:        uint32(querypb.MySqlFlag_UNSIGNED_FLAG | querypb.MySqlFlag_NUM_FLAG),
 	},
 	{
 		Name:         "data_free",
@@ -393,7 +395,7 @@ var BaseShowTablesFields = []*querypb.Field{
 		OrgName:      "DATA_FREE",
 		ColumnLength: 21,
 		Charset:      CharacterSetBinary,
-		Flags:        32,
+		Flags:        uint32(querypb.MySqlFlag_UNSIGNED_FLAG | querypb.MySqlFlag_NUM_FLAG),
 	},
 	{
 		Name:         "max_data_length",
@@ -404,7 +406,7 @@ var BaseShowTablesFields = []*querypb.Field{
 		OrgName:      "MAX_DATA_LENGTH",
 		ColumnLength: 21,
 		Charset:      CharacterSetBinary,
-		Flags:        32,
+		Flags:        uint32(querypb.MySqlFlag_UNSIGNED_FLAG | querypb.MySqlFlag_NUM_FLAG),
 	},
 }
 
