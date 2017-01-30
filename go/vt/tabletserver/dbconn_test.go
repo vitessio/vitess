@@ -145,8 +145,9 @@ func TestDBConnStream(t *testing.T) {
 			return nil
 		}, 10, querypb.ExecuteOptions_ALL)
 	db.DisableConnFail()
-	want := "Connection is closed"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("Error: %v, must contain %s\n", err, want)
+	want1 := "Connection is closed"
+	want2 := "use of closed network connection"
+	if err == nil || (!strings.Contains(err.Error(), want1) && !strings.Contains(err.Error(), want2)) {
+		t.Errorf("Error: '%v', must contain '%s' or '%s'\n", err, want1, want2)
 	}
 }
