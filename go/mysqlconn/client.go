@@ -72,7 +72,7 @@ func Connect(ctx context.Context, params *sqldb.ConnParams) (*Conn, error) {
 		}
 		if err != nil {
 			status <- connectResult{
-				err: sqldb.NewSQLError(CRConnectionError, "", "net.Dial(%v,%v) failed: %v", netProto, addr, err),
+				err: sqldb.NewSQLError(CRConnHostError, "", "net.Dial(%v,%v) failed: %v", netProto, addr, err),
 			}
 			return
 		}

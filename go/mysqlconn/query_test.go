@@ -77,6 +77,7 @@ func TestQueries(t *testing.T) {
 				sqltypes.NULL,
 			},
 		},
+		RowsAffected: 2,
 	})
 
 	// Typicall Select with TYPE_AND_NAME.
@@ -179,6 +180,7 @@ func TestQueries(t *testing.T) {
 				sqltypes.NULL,
 			},
 		},
+		RowsAffected: 2,
 	})
 
 	// Typicall Select with TYPE_AND_NAME.
@@ -198,6 +200,7 @@ func TestQueries(t *testing.T) {
 				sqltypes.MakeTrusted(querypb.Type_VARCHAR, []byte("nice name")),
 			},
 		},
+		RowsAffected: 2,
 	})
 
 	// Typicall Select with TYPE_ONLY.
@@ -215,6 +218,7 @@ func TestQueries(t *testing.T) {
 				sqltypes.MakeTrusted(querypb.Type_INT64, []byte("20")),
 			},
 		},
+		RowsAffected: 2,
 	})
 
 	// Typicall Select with ALL.
@@ -230,7 +234,10 @@ func TestQueries(t *testing.T) {
 				ColumnLength: 0x80020304,
 				Charset:      0x1234,
 				Decimals:     36,
-				Flags:        16387, // NOT_NULL_FLAG, PRI_KEY_FLAG, PART_KEY_FLAG
+				Flags: uint32(querypb.MySqlFlag_NOT_NULL_FLAG |
+					querypb.MySqlFlag_PRI_KEY_FLAG |
+					querypb.MySqlFlag_PART_KEY_FLAG |
+					querypb.MySqlFlag_NUM_FLAG),
 			},
 		},
 		Rows: [][]sqltypes.Value{
@@ -244,6 +251,7 @@ func TestQueries(t *testing.T) {
 				sqltypes.MakeTrusted(querypb.Type_INT64, []byte("30")),
 			},
 		},
+		RowsAffected: 3,
 	})
 }
 
@@ -313,8 +321,8 @@ func checkQueryInternal(t *testing.T, query string, sConn, cConn *Conn, result *
 		if !reflect.DeepEqual(got, &expected) {
 			for i, f := range got.Fields {
 				if !reflect.DeepEqual(f, expected.Fields[i]) {
-					t.Errorf("Got      field(%v) = %v", i, f)
-					t.Errorf("Expected field(%v) = %v", i, expected.Fields[i])
+					t.Logf("Got      field(%v) = %v", i, f)
+					t.Logf("Expected field(%v) = %v", i, expected.Fields[i])
 				}
 			}
 			t.Fatalf("ExecuteFetch(wantfields=%v) returned:\n%v\nBut was expecting:\n%v", wantfields, got, expected)
@@ -409,12 +417,16 @@ func testQueriesWithRealDatabase(t *testing.T, params *sqldb.ConnParams) {
 	}
 
 	// Try a simple DDL.
-	if _, err := conn.ExecuteFetch("create table a(id int, name varchar(128), primary key(id))", 0, false); err != nil {
+	result, err := conn.ExecuteFetch("create table a(id int, name varchar(128), primary key(id))", 0, false)
+	if err != nil {
 		t.Fatalf("create table failed: %v", err)
+	}
+	if result.RowsAffected != 0 {
+		t.Errorf("create table returned RowsAffected %v, was expecting 0", result.RowsAffected)
 	}
 
 	// Try a simple insert.
-	result, err := conn.ExecuteFetch("insert into a(id, name) values(10, 'nice name')", 1000, true)
+	result, err = conn.ExecuteFetch("insert into a(id, name) values(10, 'nice name')", 1000, true)
 	if err != nil {
 		t.Fatalf("insert failed: %v", err)
 	}
@@ -440,7 +452,8 @@ func testQueriesWithRealDatabase(t *testing.T, params *sqldb.ConnParams) {
 				Charset:      CharacterSetBinary,
 				Flags: uint32(querypb.MySqlFlag_NOT_NULL_FLAG |
 					querypb.MySqlFlag_PRI_KEY_FLAG |
-					querypb.MySqlFlag_PART_KEY_FLAG),
+					querypb.MySqlFlag_PART_KEY_FLAG |
+					querypb.MySqlFlag_NUM_FLAG),
 			},
 			{
 				Name:         "name",
@@ -459,6 +472,7 @@ func testQueriesWithRealDatabase(t *testing.T, params *sqldb.ConnParams) {
 				sqltypes.MakeTrusted(querypb.Type_VARCHAR, []byte("nice name")),
 			},
 		},
+		RowsAffected: 1,
 	}
 	if !reflect.DeepEqual(result, expectedResult) {
 		// MySQL 5.7 is adding the NO_DEFAULT_VALUE_FLAG to Flags.
@@ -470,9 +484,12 @@ func testQueriesWithRealDatabase(t *testing.T, params *sqldb.ConnParams) {
 
 	// Insert a few rows.
 	for i := 0; i < 100; i++ {
-		_, err := conn.ExecuteFetch(fmt.Sprintf("insert into a(id, name) values(%v, 'nice name %v')", 1000+i, i), 1000, true)
+		result, err := conn.ExecuteFetch(fmt.Sprintf("insert into a(id, name) values(%v, 'nice name %v')", 1000+i, i), 1000, true)
 		if err != nil {
 			t.Fatalf("ExecuteFetch(%v) failed: %v", i, err)
+		}
+		if result.RowsAffected != 1 {
+			t.Errorf("insert into returned RowsAffected %v, was expecting 1", result.RowsAffected)
 		}
 	}
 
@@ -482,8 +499,12 @@ func testQueriesWithRealDatabase(t *testing.T, params *sqldb.ConnParams) {
 	readRowsUsingStream(t, conn, 101)
 
 	// And drop the table.
-	if _, err := conn.ExecuteFetch("drop table a", 0, false); err != nil {
+	result, err = conn.ExecuteFetch("drop table a", 0, false)
+	if err != nil {
 		t.Fatalf("drop table failed: %v", err)
+	}
+	if result.RowsAffected != 0 {
+		t.Errorf("insert into returned RowsAffected %v, was expecting 0", result.RowsAffected)
 	}
 }
 
@@ -506,7 +527,8 @@ func readRowsUsingStream(t *testing.T, conn *Conn, expectedCount int) {
 			Charset:      CharacterSetBinary,
 			Flags: uint32(querypb.MySqlFlag_NOT_NULL_FLAG |
 				querypb.MySqlFlag_PRI_KEY_FLAG |
-				querypb.MySqlFlag_PART_KEY_FLAG),
+				querypb.MySqlFlag_PART_KEY_FLAG |
+				querypb.MySqlFlag_NUM_FLAG),
 		},
 		{
 			Name:         "name",

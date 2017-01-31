@@ -172,6 +172,9 @@ const (
 	// ERUnknownComError is ER_UNKNOWN_COM_ERROR
 	ERUnknownComError = 1047
 
+	// ERDupEntry is ER_DUP_ENTRY
+	ERDupEntry = 1062
+
 	// ERUnknownError is ER_UNKNOWN_ERROR
 	ERUnknownError = 1105
 
@@ -185,6 +188,9 @@ const (
 const (
 	// SSSignalException is ER_SIGNAL_EXCEPTION
 	SSSignalException = "HY000"
+
+	// SSDupKey is ER_DUP_KEY
+	SSDupKey = "23000"
 
 	// SSAccessDeniedError is ER_ACCESS_DENIED_ERROR
 	SSAccessDeniedError = "28000"
@@ -261,4 +267,13 @@ var CharacterSetMap = map[string]uint8{
 	"geostd8":  92,
 	"cp932":    95,
 	"eucjpms":  97,
+}
+
+// IsNum returns true if a MySQL type is a numeric value.
+// It is the same as IS_NUM defined in mysql.h.
+//
+// FIXME(alainjobart) This needs to use the constants in
+// replication/constants.go, so we are using numerical values here.
+func IsNum(typ uint8) bool {
+	return ((typ <= 9 /* MYSQL_TYPE_INT24 */ && typ != 7 /* MYSQL_TYPE_TIMESTAMP */) || typ == 13 /* MYSQL_TYPE_YEAR */ || typ == 246 /* MYSQL_TYPE_NEWDECIMAL */)
 }

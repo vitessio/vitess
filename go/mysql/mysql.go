@@ -32,6 +32,10 @@ const (
 func init() {
 	// This needs to be called before threads begin to spawn.
 	C.vt_library_init()
+	sqldb.Register("libmysqlclient", Connect)
+
+	// Comment this out and uncomment call to sqldb.RegisterDefault in
+	// go/mysqlconn/sqldb_conn.go to make it the default.
 	sqldb.RegisterDefault(Connect)
 }
 
