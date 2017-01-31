@@ -127,7 +127,7 @@ public class FieldWithMetadata {
 
     private void checkConnection() throws SQLException {
         if (connection == null) {
-            throw new SQLException(Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
+            throw new SQLException(Constants.SQLExceptionMessages.CONN_UNAVAILABLE);
         }
     }
 

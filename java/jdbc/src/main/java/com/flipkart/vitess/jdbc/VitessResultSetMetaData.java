@@ -62,8 +62,16 @@ public class VitessResultSetMetaData implements ResultSetMetaData {
         return false;
     }
 
+    /**
+     * Indicates the nullability of values in the designated column.
+     *
+     * @param column the first column is 1, the second is 2, ...
+     * @return the nullability status of the given column; one of <code>columnNoNulls</code>,
+     *          <code>columnNullable</code> or <code>columnNullableUnknown</code>
+     * @exception SQLException if a database access error occurs
+     */
     public int isNullable(int column) throws SQLException {
-        return getField(column).isNotNull() ? 0 : 2;
+        return getField(column).isNotNull() ? ResultSetMetaData.columnNoNulls : ResultSetMetaData.columnNullableUnknown;
     }
 
     public boolean isSigned(int column) throws SQLException {
