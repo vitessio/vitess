@@ -99,12 +99,12 @@ func (c *Conn) readOnePacket() ([]byte, error) {
 	var header [4]byte
 
 	if _, err := io.ReadFull(c.reader, header[:]); err != nil {
-		return nil, sqldb.NewSQLError(CRServerLost, SSSignalException, "io.ReadFull(header size) failed: %v", err)
+		return nil, fmt.Errorf("io.ReadFull(header size) failed: %v", err)
 	}
 
 	sequence := uint8(header[3])
 	if sequence != c.sequence {
-		return nil, sqldb.NewSQLError(CRServerLost, SSSignalException, "invalid sequence, expected %v got %v", c.sequence, sequence)
+		return nil, fmt.Errorf("invalid sequence, expected %v got %v", c.sequence, sequence)
 	}
 
 	c.sequence++
@@ -118,14 +118,15 @@ func (c *Conn) readOnePacket() ([]byte, error) {
 
 	data := make([]byte, length)
 	if _, err := io.ReadFull(c.reader, data); err != nil {
-		return nil, sqldb.NewSQLError(CRServerLost, SSSignalException, "io.ReadFull(packet body of length %v) failed: %v", length, err)
+		return nil, fmt.Errorf("io.ReadFull(packet body of length %v) failed: %v", length, err)
 	}
 	return data, nil
 }
 
-// ReadPacket reads a packet from the underlying connection.
+// readPacket reads a packet from the underlying connection.
 // It re-assembles packets that span more than one message.
-func (c *Conn) ReadPacket() ([]byte, error) {
+// This method returns a generic error, not a sqldb.SQLError.
+func (c *Conn) readPacket() ([]byte, error) {
 	// Optimize for a single packet case.
 	data, err := c.readOnePacket()
 	if err != nil {
@@ -158,6 +159,16 @@ func (c *Conn) ReadPacket() ([]byte, error) {
 	return data, nil
 }
 
+// ReadPacket reads a packet from the underlying connection.
+// it is the public API version, that returns a sqldb.SQLError.
+func (c *Conn) ReadPacket() ([]byte, error) {
+	result, err := c.readPacket()
+	if err != nil {
+		return nil, sqldb.NewSQLError(CRServerLost, SSUnknownSQLState, "%v", err)
+	}
+	return result, err
+}
+
 // writePacket writes a packet, possibly cutting it into multiple
 // chunks.  Note this is not very efficient, as the client probably
 // has to build the []byte and that makes a memory copy.
@@ -173,6 +184,8 @@ func (c *Conn) ReadPacket() ([]byte, error) {
 // finishPacket()
 //   - checks the packet is done.
 //   - write an empty packet if the write was a multiple of MaxPacketSize
+//
+// This method returns a generic error, not a sqldb.SQLError.
 func (c *Conn) writePacket(data []byte) error {
 	index := 0
 	length := len(data)
@@ -191,16 +204,16 @@ func (c *Conn) writePacket(data []byte) error {
 		header[2] = byte(packetLength >> 16)
 		header[3] = c.sequence
 		if n, err := c.writer.Write(header[:]); err != nil {
-			return sqldb.NewSQLError(CRServerLost, SSSignalException, "Write(header) failed: %v", err)
+			return fmt.Errorf("Write(header) failed: %v", err)
 		} else if n != 4 {
-			return sqldb.NewSQLError(CRServerLost, SSSignalException, "Write(header) returned a short write: %v < 4", n)
+			return fmt.Errorf("Write(header) returned a short write: %v < 4", n)
 		}
 
 		// Write the body.
 		if n, err := c.writer.Write(data[index : index+packetLength]); err != nil {
-			return sqldb.NewSQLError(CRServerLost, SSSignalException, "Write(packet) failed: %v", err)
+			return fmt.Errorf("Write(packet) failed: %v", err)
 		} else if n != packetLength {
-			return sqldb.NewSQLError(CRServerLost, SSSignalException, "Write(packet) returned a short write: %v < %v", n, packetLength)
+			return fmt.Errorf("Write(packet) returned a short write: %v < %v", n, packetLength)
 		}
 
 		// Update our state.
@@ -216,9 +229,9 @@ func (c *Conn) writePacket(data []byte) error {
 				header[2] = 0
 				header[3] = c.sequence
 				if n, err := c.writer.Write(header[:]); err != nil {
-					return sqldb.NewSQLError(CRServerLost, SSSignalException, "Write(empty header) failed: %v", err)
+					return fmt.Errorf("Write(empty header) failed: %v", err)
 				} else if n != 4 {
-					return sqldb.NewSQLError(CRServerLost, SSSignalException, "Write(empty header) returned a short write: %v < 4", n)
+					return fmt.Errorf("Write(empty header) returned a short write: %v < 4", n)
 				}
 				c.sequence++
 			}
@@ -228,9 +241,11 @@ func (c *Conn) writePacket(data []byte) error {
 	}
 }
 
+// flush flushes the written data to the socket.
+// This method returns a generic error, not a sqldb.SQLError.
 func (c *Conn) flush() error {
 	if err := c.writer.Flush(); err != nil {
-		return sqldb.NewSQLError(CRServerLost, SSSignalException, "Flush() failed: %v", err)
+		return fmt.Errorf("Flush() failed: %v", err)
 	}
 	return nil
 }
@@ -245,6 +260,9 @@ func (c *Conn) Close() {
 // Packet writing methods, for generic packets.
 //
 
+// writeOKPacket writes an OK packet.
+// Server -> Client.
+// This method returns a generic error, not a sqldb.SQLError.
 func (c *Conn) writeOKPacket(affectedRows, lastInsertID uint64, flags uint16, warnings uint16) error {
 	length := 1 + // OKPacket
 		lenEncIntSize(affectedRows) +
@@ -271,6 +289,8 @@ func (c *Conn) writeOKPacket(affectedRows, lastInsertID uint64, flags uint16, wa
 // writeOKPacketWithEOFHeader writes an OK packet with an EOF header.
 // This is used at the end of a result set if
 // CapabilityClientDeprecateEOF is set.
+// Server -> Client.
+// This method returns a generic error, not a sqldb.SQLError.
 func (c *Conn) writeOKPacketWithEOFHeader(affectedRows, lastInsertID uint64, flags uint16, warnings uint16) error {
 	length := 1 + // EOFPacket
 		lenEncIntSize(affectedRows) +
@@ -294,6 +314,9 @@ func (c *Conn) writeOKPacketWithEOFHeader(affectedRows, lastInsertID uint64, fla
 	return nil
 }
 
+// writeErrorPacket writes an error packet.
+// Server -> Client.
+// This method returns a generic error, not a sqldb.SQLError.
 func (c *Conn) writeErrorPacket(errorCode uint16, sqlState string, format string, args ...interface{}) error {
 	errorMessage := fmt.Sprintf(format, args...)
 	length := 1 + 2 + 1 + 5 + len(errorMessage)
@@ -303,7 +326,7 @@ func (c *Conn) writeErrorPacket(errorCode uint16, sqlState string, format string
 	pos = writeUint16(data, pos, errorCode)
 	pos = writeByte(data, pos, '#')
 	if sqlState == "" {
-		sqlState = SSSignalException
+		sqlState = SSUnknownSQLState
 	}
 	if len(sqlState) != 5 {
 		panic("sqlState has to be 5 characters long")
@@ -325,7 +348,7 @@ func (c *Conn) writeErrorPacketFromError(err error) error {
 		return c.writeErrorPacket(uint16(se.Num), se.State, "%v", se.Message)
 	}
 
-	return c.writeErrorPacket(ERUnknownError, SSSignalException, "unknown error: %v", err)
+	return c.writeErrorPacket(ERUnknownError, SSUnknownSQLState, "unknown error: %v", err)
 }
 
 func (c *Conn) writeEOFPacket(flags uint16, warnings uint16) error {
@@ -377,6 +400,7 @@ func parseOKPacket(data []byte) (uint64, uint64, uint16, uint16, error) {
 	return affectedRows, lastInsertID, statusFlags, warnings, nil
 }
 
+// parseErrorPacket parses the error packet and returns a sqldb.SQLError.
 func parseErrorPacket(data []byte) error {
 	// We already read the type.
 	pos := 1
@@ -384,7 +408,7 @@ func parseErrorPacket(data []byte) error {
 	// Error code is 2 bytes.
 	code, pos, ok := readUint16(data, pos)
 	if !ok {
-		return fmt.Errorf("invalid error packet code: %v", data)
+		return sqldb.NewSQLError(CRUnknownError, SSUnknownSQLState, "invalid error packet code: %v", data)
 	}
 
 	// '#' marker of the SQL state is 1 byte. Ignored.
@@ -393,7 +417,7 @@ func parseErrorPacket(data []byte) error {
 	// SQL state is 5 bytes
 	sqlState, pos, ok := readBytes(data, pos, 5)
 	if !ok {
-		return fmt.Errorf("invalid error packet sqlState: %v", data)
+		return sqldb.NewSQLError(CRUnknownError, SSUnknownSQLState, "invalid error packet sqlState: %v", data)
 	}
 
 	// Human readable error message is the rest.
