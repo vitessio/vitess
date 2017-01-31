@@ -654,8 +654,7 @@ func (f *FakeQueryService) MessageAck(ctx context.Context, target *querypb.Targe
 func (f *FakeQueryService) SplitQuery(
 	ctx context.Context,
 	target *querypb.Target,
-	sql string,
-	bindVariables map[string]interface{},
+	query querytypes.BoundQuery,
 	splitColumns []string,
 	splitCount int64,
 	numRowsPerQueryPart int64,
@@ -670,11 +669,11 @@ func (f *FakeQueryService) SplitQuery(
 	}
 	f.checkTargetCallerID(ctx, "SplitQuery", target)
 	if !reflect.DeepEqual(querytypes.BoundQuery{
-		Sql:           sql,
-		BindVariables: bindVariables,
+		Sql:           query.Sql,
+		BindVariables: query.BindVariables,
 	}, SplitQueryBoundQuery) {
 		f.t.Errorf("invalid SplitQuery.SplitQueryRequest.Query: got %v expected %v",
-			querytypes.QueryAsString(sql, bindVariables), SplitQueryBoundQuery)
+			querytypes.QueryAsString(query.Sql, query.BindVariables), SplitQueryBoundQuery)
 	}
 	if !reflect.DeepEqual(splitColumns, SplitQuerySplitColumns) {
 		f.t.Errorf("invalid SplitQuery.SplitColumn: got %v expected %v",

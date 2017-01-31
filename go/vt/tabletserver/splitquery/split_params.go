@@ -5,6 +5,7 @@ import (
 
 	"github.com/youtube/vitess/go/vt/schema"
 	"github.com/youtube/vitess/go/vt/sqlparser"
+	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 )
 
 // SplitParams stores the context for a splitquery computation. It is used by
@@ -56,8 +57,7 @@ type SplitParams struct {
 // 'schema' should map a table name to a schema.Table. It is used for looking up the split-column
 // types and error checking.
 func NewSplitParamsGivenNumRowsPerQueryPart(
-	sql string,
-	bindVariables map[string]interface{},
+	query querytypes.BoundQuery,
 	splitColumnNames []sqlparser.ColIdent,
 	numRowsPerQueryPart int64,
 	schema map[string]*schema.Table,
@@ -66,7 +66,7 @@ func NewSplitParamsGivenNumRowsPerQueryPart(
 		return nil, fmt.Errorf("numRowsPerQueryPart must be positive. Got: %v",
 			numRowsPerQueryPart)
 	}
-	result, err := newSplitParams(sql, bindVariables, splitColumnNames, schema)
+	result, err := newSplitParams(query, splitColumnNames, schema)
 	if err != nil {
 		return nil, err
 	}
@@ -98,8 +98,7 @@ func NewSplitParamsGivenNumRowsPerQueryPart(
 // 'schema' should map a table name to a schema.Table. It is used for looking up the split-column
 // types and error checking.
 func NewSplitParamsGivenSplitCount(
-	sql string,
-	bindVariables map[string]interface{},
+	query querytypes.BoundQuery,
 	splitColumnNames []sqlparser.ColIdent,
 	splitCount int64,
 	schema map[string]*schema.Table,
@@ -108,7 +107,7 @@ func NewSplitParamsGivenSplitCount(
 		return nil, fmt.Errorf("splitCount must be positive. Got: %v",
 			splitCount)
 	}
-	result, err := newSplitParams(sql, bindVariables, splitColumnNames, schema)
+	result, err := newSplitParams(query, splitColumnNames, schema)
 	if err != nil {
 		return nil, err
 	}
@@ -125,14 +124,13 @@ func (sp *SplitParams) GetSplitTableName() sqlparser.TableIdent {
 // newSplitParams validates and initializes all the fields except splitCount and
 // numRowsPerQueryPart. It contains the common code for the constructors above.
 func newSplitParams(
-	sql string,
-	bindVariables map[string]interface{},
+	query querytypes.BoundQuery,
 	splitColumnNames []sqlparser.ColIdent,
 	schemaMap map[string]*schema.Table,
 ) (*SplitParams, error) {
-	statement, err := sqlparser.Parse(sql)
+	statement, err := sqlparser.Parse(query.Sql)
 	if err != nil {
-		return nil, fmt.Errorf("failed parsing query: '%v', err: '%v'", sql, err)
+		return nil, fmt.Errorf("failed parsing query: '%v', err: '%v'", query.Sql, err)
 	}
 	selectAST, ok := statement.(*sqlparser.Select)
 	if !ok {
@@ -142,17 +140,17 @@ func newSplitParams(
 		selectAST.Having != nil || len(selectAST.From) != 1 ||
 		selectAST.OrderBy != nil || selectAST.Limit != nil ||
 		selectAST.Lock != "" {
-		return nil, fmt.Errorf("unsupported query: %v", sql)
+		return nil, fmt.Errorf("unsupported query: %v", query.Sql)
 	}
 	var aliasedTableExpr *sqlparser.AliasedTableExpr
 	aliasedTableExpr, ok = selectAST.From[0].(*sqlparser.AliasedTableExpr)
 	if !ok {
-		return nil, fmt.Errorf("unsupported FROM clause in query: %v", sql)
+		return nil, fmt.Errorf("unsupported FROM clause in query: %v", query.Sql)
 	}
 	tableName := sqlparser.GetTableName(aliasedTableExpr.Expr)
 	if tableName.IsEmpty() {
 		return nil, fmt.Errorf("unsupported FROM clause in query"+
-			" (must be a simple table expression): %v", sql)
+			" (must be a simple table expression): %v", query.Sql)
 	}
 	tableSchema, ok := schemaMap[tableName.String()]
 	if tableSchema == nil {
@@ -166,7 +164,7 @@ func newSplitParams(
 		if len(splitColumns) == 0 {
 			return nil, fmt.Errorf("no split columns where given and the queried table has"+
 				" no primary key columns (is the table a view? Running SplitQuery on a view"+
-				" is not supported). query: %v", sql)
+				" is not supported). query: %v", query.Sql)
 		}
 	} else {
 		splitColumns, err = findSplitColumnsInSchema(splitColumnNames, tableSchema)
@@ -175,7 +173,7 @@ func newSplitParams(
 		}
 		if !areColumnsAPrefixOfAnIndex(splitColumns, tableSchema) {
 			return nil, fmt.Errorf("split-columns must be a prefix of the columns composing"+
-				" an index. Sql: %v, split-columns: %v", sql, splitColumns)
+				" an index. Sql: %v, split-columns: %v", query.Sql, splitColumns)
 		}
 	}
 
@@ -186,8 +184,8 @@ func newSplitParams(
 	}
 
 	return &SplitParams{
-		sql:              sql,
-		bindVariables:    bindVariables,
+		sql:              query.Sql,
+		bindVariables:    query.BindVariables,
 		splitColumns:     splitColumns,
 		selectAST:        selectAST,
 		splitTableSchema: tableSchema,

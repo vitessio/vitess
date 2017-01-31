@@ -113,8 +113,7 @@ func (e *ErrorQueryService) MessageAck(ctx context.Context, target *querypb.Targ
 func (e *ErrorQueryService) SplitQuery(
 	ctx context.Context,
 	target *querypb.Target,
-	sql string,
-	bindVariables map[string]interface{},
+	query querytypes.BoundQuery,
 	splitColumns []string,
 	splitCount int64,
 	numRowsPerQueryPart int64,

@@ -7,6 +7,7 @@ import (
 
 	"github.com/youtube/vitess/go/vt/schema"
 	"github.com/youtube/vitess/go/vt/sqlparser"
+	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 )
 
 var splitParamsTestCases = []struct {
@@ -197,15 +198,19 @@ func TestSplitParams(t *testing.T) {
 		var err error
 		if testCase.NumRowsPerQueryPart != 0 {
 			splitParams, err = NewSplitParamsGivenNumRowsPerQueryPart(
-				testCase.SQL,
-				testCase.BindVariables,
+				querytypes.BoundQuery{
+					Sql:           testCase.SQL,
+					BindVariables: testCase.BindVariables,
+				},
 				testCase.SplitColumnNames,
 				testCase.NumRowsPerQueryPart,
 				testCase.Schema)
 		} else {
 			splitParams, err = NewSplitParamsGivenSplitCount(
-				testCase.SQL,
-				testCase.BindVariables,
+				querytypes.BoundQuery{
+					Sql:           testCase.SQL,
+					BindVariables: testCase.BindVariables,
+				},
 				testCase.SplitColumnNames,
 				testCase.SplitCount,
 				testCase.Schema)
