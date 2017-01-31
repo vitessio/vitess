@@ -16,7 +16,7 @@ import (
 
 	// FIXME(alainjobart) remove this when it's the only option.
 	// Registers our implementation.
-	_ "github.com/youtube/vitess/go/mysqlconn"
+	_ "github.com/youtube/vitess/go/mysql"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	vttestpb "github.com/youtube/vitess/go/vt/proto/vttest"
