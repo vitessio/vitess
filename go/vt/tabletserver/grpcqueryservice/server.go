@@ -352,8 +352,7 @@ func (q *query) SplitQuery(ctx context.Context, request *querypb.SplitQueryReque
 	splits, err = q.server.SplitQuery(
 		ctx,
 		request.Target,
-		bq.Sql,
-		bq.BindVariables,
+		*bq,
 		request.SplitColumn,
 		request.SplitCount,
 		request.NumRowsPerQueryPart,

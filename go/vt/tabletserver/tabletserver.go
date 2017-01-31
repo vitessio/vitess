@@ -1031,8 +1031,7 @@ func (tsv *TabletServer) execDML(ctx context.Context, target *querypb.Target, qu
 func (tsv *TabletServer) SplitQuery(
 	ctx context.Context,
 	target *querypb.Target,
-	sql string,
-	bindVariables map[string]interface{},
+	query querytypes.BoundQuery,
 	splitColumns []string,
 	splitCount int64,
 	numRowsPerQueryPart int64,
@@ -1040,7 +1039,7 @@ func (tsv *TabletServer) SplitQuery(
 ) (splits []querytypes.QuerySplit, err error) {
 	err = tsv.execRequest(
 		ctx, 0,
-		"SplitQuery", sql, bindVariables,
+		"SplitQuery", query.Sql, query.BindVariables,
 		target, false, false,
 		func(ctx context.Context, logStats *LogStats) error {
 			// SplitQuery using the Full Scan algorithm can take a while and
@@ -1052,8 +1051,7 @@ func (tsv *TabletServer) SplitQuery(
 
 			if err := validateSplitQueryParameters(
 				target,
-				sql,
-				bindVariables,
+				query,
 				splitColumns,
 				splitCount,
 				numRowsPerQueryPart,
@@ -1063,7 +1061,7 @@ func (tsv *TabletServer) SplitQuery(
 			}
 			schema := tsv.qe.schemaInfo.GetSchema()
 			splitParams, err := createSplitParams(
-				sql, bindVariables, ciSplitColumns, splitCount, numRowsPerQueryPart, schema)
+				query, ciSplitColumns, splitCount, numRowsPerQueryPart, schema)
 			if err != nil {
 				return err
 			}
@@ -1238,8 +1236,7 @@ func (tsv *TabletServer) handleError(
 // returns an error that can be returned to the user if a validation fails.
 func validateSplitQueryParameters(
 	target *querypb.Target,
-	sql string,
-	bindVariables map[string]interface{},
+	query querytypes.BoundQuery,
 	splitColumns []string,
 	splitCount int64,
 	numRowsPerQueryPart int64,
@@ -1258,14 +1255,14 @@ func validateSplitQueryParameters(
 			vtrpcpb.ErrorCode_BAD_INPUT,
 			"splitQuery: numRowsPerQueryPart must be non-negative. Got: %v. SQL: %v",
 			numRowsPerQueryPart,
-			querytypes.QueryAsString(sql, bindVariables))
+			querytypes.QueryAsString(query.Sql, query.BindVariables))
 	}
 	if splitCount < 0 {
 		return NewTabletError(
 			vtrpcpb.ErrorCode_BAD_INPUT,
 			"splitQuery: splitCount must be non-negative. Got: %v. SQL: %v",
 			splitCount,
-			querytypes.QueryAsString(sql, bindVariables))
+			querytypes.QueryAsString(query.Sql, query.BindVariables))
 	}
 	if (splitCount == 0 && numRowsPerQueryPart == 0) ||
 		(splitCount != 0 && numRowsPerQueryPart != 0) {
@@ -1275,7 +1272,7 @@ func validateSplitQueryParameters(
 				" non zero. Got: numRowsPerQueryPart=%v, splitCount=%v. SQL: %v",
 			numRowsPerQueryPart,
 			splitCount,
-			querytypes.QueryAsString(sql, bindVariables))
+			querytypes.QueryAsString(query.Sql, query.BindVariables))
 	}
 	if algorithm != querypb.SplitQueryRequest_EQUAL_SPLITS &&
 		algorithm != querypb.SplitQueryRequest_FULL_SCAN {
@@ -1283,14 +1280,13 @@ func validateSplitQueryParameters(
 			vtrpcpb.ErrorCode_BAD_INPUT,
 			"splitquery: unsupported algorithm: %v. SQL: %v",
 			algorithm,
-			querytypes.QueryAsString(sql, bindVariables))
+			querytypes.QueryAsString(query.Sql, query.BindVariables))
 	}
 	return nil
 }
 
 func createSplitParams(
-	sql string,
-	bindVariables map[string]interface{},
+	query querytypes.BoundQuery,
 	splitColumns []sqlparser.ColIdent,
 	splitCount int64,
 	numRowsPerQueryPart int64,
@@ -1299,11 +1295,11 @@ func createSplitParams(
 	switch {
 	case numRowsPerQueryPart != 0 && splitCount == 0:
 		splitParams, err := splitquery.NewSplitParamsGivenNumRowsPerQueryPart(
-			sql, bindVariables, splitColumns, numRowsPerQueryPart, schema)
+			query, splitColumns, numRowsPerQueryPart, schema)
 		return splitParams, splitQueryToTabletError(err)
 	case numRowsPerQueryPart == 0 && splitCount != 0:
 		splitParams, err := splitquery.NewSplitParamsGivenSplitCount(
-			sql, bindVariables, splitColumns, splitCount, schema)
+			query, splitColumns, splitCount, schema)
 		return splitParams, splitQueryToTabletError(err)
 	default:
 		panic(fmt.Errorf("Exactly one of {numRowsPerQueryPart, splitCount} must be"+
@@ -1311,7 +1307,7 @@ func createSplitParams(
 			" returned as an error. Got: numRowsPerQueryPart=%v, splitCount=%v. SQL: %v",
 			numRowsPerQueryPart,
 			splitCount,
-			querytypes.QueryAsString(sql, bindVariables)))
+			querytypes.QueryAsString(query.Sql, query.BindVariables)))
 	}
 }
 

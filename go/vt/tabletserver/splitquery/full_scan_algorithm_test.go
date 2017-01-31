@@ -8,6 +8,7 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/sqlparser"
+	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 	"github.com/youtube/vitess/go/vt/tabletserver/splitquery/splitquery_testing"
 )
 
@@ -15,8 +16,7 @@ func TestMultipleBoundaries(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	defer mockCtrl.Finish()
 	splitParams, err := NewSplitParamsGivenNumRowsPerQueryPart(
-		"select * from test_table where int_col > 5",
-		nil, /* bindVariables */
+		querytypes.BoundQuery{Sql: "select * from test_table where int_col > 5"},
 		[]sqlparser.ColIdent{
 			sqlparser.NewColIdent("id"),
 			sqlparser.NewColIdent("user_id"),
@@ -93,8 +93,7 @@ func TestSmallNumberOfRows(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	defer mockCtrl.Finish()
 	splitParams, err := NewSplitParamsGivenNumRowsPerQueryPart(
-		"select * from test_table where int_col > 5",
-		nil, /* bindVariables */
+		querytypes.BoundQuery{Sql: "select * from test_table where int_col > 5"},
 		[]sqlparser.ColIdent{
 			sqlparser.NewColIdent("id"),
 			sqlparser.NewColIdent("user_id"),
@@ -132,8 +131,7 @@ func TestSQLExecuterReturnsError(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	defer mockCtrl.Finish()
 	splitParams, err := NewSplitParamsGivenNumRowsPerQueryPart(
-		"select * from test_table where int_col > 5",
-		nil, /* bindVariables */
+		querytypes.BoundQuery{Sql: "select * from test_table where int_col > 5"},
 		[]sqlparser.ColIdent{
 			sqlparser.NewColIdent("id"),
 			sqlparser.NewColIdent("user_id"),

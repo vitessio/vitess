@@ -451,8 +451,7 @@ func (itc *internalTabletConn) SplitQuery(
 	splits, err := itc.tablet.qsc.QueryService().SplitQuery(
 		ctx,
 		target,
-		query.Sql,
-		query.BindVariables,
+		query,
 		splitColumns,
 		splitCount,
 		numRowsPerQueryPart,

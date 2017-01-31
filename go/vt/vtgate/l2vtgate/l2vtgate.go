@@ -209,14 +209,10 @@ func (l *L2VTGate) MessageAck(ctx context.Context, target *querypb.Target, name 
 }
 
 // SplitQuery is part of the queryservice.QueryService interface
-func (l *L2VTGate) SplitQuery(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, splitColumns []string, splitCount int64, numRowsPerQueryPart int64, algorithm querypb.SplitQueryRequest_Algorithm) (splits []querytypes.QuerySplit, err error) {
+func (l *L2VTGate) SplitQuery(ctx context.Context, target *querypb.Target, query querytypes.BoundQuery, splitColumns []string, splitCount int64, numRowsPerQueryPart int64, algorithm querypb.SplitQueryRequest_Algorithm) (splits []querytypes.QuerySplit, err error) {
 	startTime, statsKey := l.startAction("SplitQuery", target)
 	defer l.endAction(startTime, statsKey, &err)
 
-	query := querytypes.BoundQuery{
-		Sql:           sql,
-		BindVariables: bindVariables,
-	}
 	return l.gateway.SplitQuery(ctx, target, query, splitColumns, splitCount, numRowsPerQueryPart, algorithm)
 }
 

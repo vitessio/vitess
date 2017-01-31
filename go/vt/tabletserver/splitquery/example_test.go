@@ -5,6 +5,7 @@ import (
 
 	"github.com/youtube/vitess/go/vt/schema"
 	"github.com/youtube/vitess/go/vt/sqlparser"
+	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 )
 
 func Example() {
@@ -18,8 +19,10 @@ func Example() {
 	// This schema can is typically derived from tabletserver.TabletServer.qe.schemaInfo.
 	schema := map[string]*schema.Table{}
 	splitParams, err := NewSplitParamsGivenSplitCount(
-		"SELECT * FROM table WHERE id > :id",   // SQL query
-		map[string]interface{}{"id": int64(5)}, // Bind Variables
+		querytypes.BoundQuery{
+			Sql:           "SELECT * FROM table WHERE id > :id",
+			BindVariables: map[string]interface{}{"id": int64(5)},
+		},
 		[]sqlparser.ColIdent{
 			sqlparser.NewColIdent("id"),
 			sqlparser.NewColIdent("user_id"),

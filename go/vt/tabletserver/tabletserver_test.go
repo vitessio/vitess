@@ -1671,8 +1671,7 @@ func TestTabletServerSplitQuery(t *testing.T) {
 	splits, err := tsv.SplitQuery(
 		ctx,
 		&querypb.Target{TabletType: topodatapb.TabletType_RDONLY},
-		sql,
-		nil,        /* bindVariables */
+		querytypes.BoundQuery{Sql: sql},
 		[]string{}, /* splitColumns */
 		10,         /* splitCount */
 		0,          /* numRowsPerQueryPart */
@@ -1704,8 +1703,7 @@ func TestTabletServerSplitQueryInvalidQuery(t *testing.T) {
 	_, err = tsv.SplitQuery(
 		ctx,
 		&querypb.Target{TabletType: topodatapb.TabletType_RDONLY},
-		sql,
-		nil,        /* bindVariables */
+		querytypes.BoundQuery{Sql: sql},
 		[]string{}, /* splitColumns */
 		10,         /* splitCount */
 		0,          /* numRowsPerQueryPart */
@@ -1734,8 +1732,7 @@ func TestTabletServerSplitQueryInvalidParams(t *testing.T) {
 	_, err = tsv.SplitQuery(
 		ctx,
 		&querypb.Target{TabletType: topodatapb.TabletType_RDONLY},
-		sql,
-		nil,        /* bindVariables */
+		querytypes.BoundQuery{Sql: sql},
 		[]string{}, /* splitColumns */
 		10,         /* splitCount */
 		11,         /* numRowsPerQueryPart */
@@ -1764,8 +1761,7 @@ func TestTabletServerSplitQueryEqualSplitsOnStringColumn(t *testing.T) {
 	_, err = tsv.SplitQuery(
 		ctx,
 		&querypb.Target{TabletType: topodatapb.TabletType_RDONLY},
-		sql,
-		nil, /* bindVariables */
+		querytypes.BoundQuery{Sql: sql},
 		// EQUAL_SPLITS should not work on a string column.
 		[]string{"name_string"}, /* splitColumns */
 		10, /* splitCount */
