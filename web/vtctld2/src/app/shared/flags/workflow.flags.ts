@@ -28,8 +28,8 @@ export class NewWorkflowFlags {
     this.flags['horizontal_resharding_keyspace'].positional = true;
     this.flags['horizontal_resharding_keyspace'].namedPositional = 'keyspace';
     this.flags['horizontal_resharding_vtworkers'] = new HorizontalReshardingVtworkerFlag(6, 'horizontal_resharding_vtworkers');
-    this.flags['horizontal_resharding_vtworkers'].positional = true
-    this.flags['horizontal_resharding_vtworkers'].namedPositional = 'vtworkers'
+    this.flags['horizontal_resharding_vtworkers'].positional = true;
+    this.flags['horizontal_resharding_vtworkers'].namedPositional = 'vtworkers';
   }
 }
 
@@ -42,7 +42,7 @@ export class FactoryNameFlag extends DropDownFlag {
         label: 'Horizontal Resharding',
         value: 'horizontal_resharding'
       });
-    }   
+    }
     if (workflows.schema_swap) {
       options.push({
         label: 'Schema Swap',
@@ -105,7 +105,7 @@ export class HorizontalReshardingVtworkerFlag extends InputFlag {
     super(position, id, 'vtworker Addresses', 'Comma-separated list of vtworker addresses.', value);
     this.setDisplayOn('factory_name', 'horizontal_resharding');
   }
-} 
+}
 
 // WorkflowFlags is used by the Start / Stop / Delete dialogs.
 export class WorkflowFlags {

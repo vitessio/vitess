@@ -70,6 +70,16 @@ export class ShardReplicationPosFlags {
   }
 }
 
+export class ReloadSchemaShardFlags {
+  flags= {};
+  constructor(keyspaceName, shardName) {
+    this.flags['shard_ref'] = new ShardRefFlag(0, 'shard_ref', keyspaceName + '/' + shardName);
+    this.flags['shard_ref']['positional'] = true;
+    this.flags['concurrency'] = new ConcurrencyFlag(1, 'concurrency', '10');
+  }
+}
+
+
 export class ValidateVerShardFlags {
   flags= {};
   constructor(keyspaceName, shardName) {
@@ -156,5 +166,11 @@ export class UpperBoundFlag extends InputFlag {
 export class WaitSlaveTimeoutFlag extends InputFlag {
   constructor(position: number, id: string, value= '') {
     super(position, id, 'Wait Slave Timeout', 'Time to wait for slaves to catch up in reparenting.', value);
+  }
+}
+
+export class ConcurrencyFlag extends InputFlag {
+  constructor(position: number, id: string, value= '', show= true) {
+    super(position, id, 'Concurrency', 'How many tablets to work on concurrently.', value, show);
   }
 }

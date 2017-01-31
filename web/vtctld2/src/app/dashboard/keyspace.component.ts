@@ -8,7 +8,8 @@ import { DialogSettings } from '../shared/dialog/dialog-settings';
 import { NewShardFlags } from '../shared/flags/shard.flags';
 import { KeyspaceService } from '../api/keyspace.service';
 import { PrepareResponse } from '../shared/prepare-response';
-import { RebuildKeyspaceGraphFlags, RemoveKeyspaceCellFlags, ValidateKeyspaceFlags,
+import { RebuildKeyspaceGraphFlags, ReloadSchemaKeyspaceFlags,
+         RemoveKeyspaceCellFlags, ValidateKeyspaceFlags,
          ValidateSchemaFlags, ValidateVersionFlags } from '../shared/flags/keyspace.flags';
 import { VtctlService } from '../api/vtctl.service';
 
@@ -44,8 +45,9 @@ export class KeyspaceComponent implements OnInit, OnDestroy {
         {label: 'Validate Schema', command: (event) => {this.openValidateSchemaDialog(); }},
         {label: 'Validate Version', command: (event) => {this.openValidateVersionDialog(); }},
       ]},
-      {label: 'Rebuild', items: [
+      {label: 'Rebuild / Reload', items: [
         {label: 'Rebuild Keyspace Graph', command: (event) => {this.openRebuildKeyspaceGraphDialog(); }},
+        {label: 'Reload Schema in Keyspace', command: (event) => {this.openReloadSchemaKeyspaceDialog(); }},
       ]},
       {label: 'Change', items: [
         {label: 'Remove Keyspace Cell', command: (event) => {this.openRemoveKeyspaceCellDialog(); }},
@@ -140,6 +142,15 @@ export class KeyspaceComponent implements OnInit, OnDestroy {
     this.dialogSettings.onCloseFunction = this.refreshKeyspaceView.bind(this);
     let flags = new RebuildKeyspaceGraphFlags(this.keyspaceName).flags;
     this.dialogContent = new DialogContent('keyspace_name', flags, {}, undefined, 'RebuildKeyspaceGraph');
+    this.dialogSettings.toggleModal();
+  }
+
+  openReloadSchemaKeyspaceDialog() {
+    this.dialogSettings = new DialogSettings('Reload Schema', `Reload Schema in ${this.keyspaceName}`, '',
+                                             'There was a problem reloading schema in {{keyspace_name}}:');
+    this.dialogSettings.setMessage('Reloaded {{keyspace_name}} Schema');
+    let flags = new ReloadSchemaKeyspaceFlags(this.keyspaceName).flags;
+    this.dialogContent = new DialogContent('keyspace_name', flags, {}, undefined, 'ReloadSchemaKeyspace');
     this.dialogSettings.toggleModal();
   }
 
