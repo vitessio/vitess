@@ -84,8 +84,7 @@ def setUpModule():
     master_tablet.mquery('vt_test_keyspace', _create_vt_a)
     master_tablet.mquery('vt_test_keyspace', _create_vt_b)
 
-    utils.run_vtctl(['ReloadSchema', master_tablet.tablet_alias])
-    utils.run_vtctl(['ReloadSchema', replica_tablet.tablet_alias])
+    utils.run_vtctl(['ReloadSchemaShard', 'test_keyspace/0'])
     utils.run_vtctl(['RebuildVSchemaGraph'])
 
     utils.VtGate().start(tablets=[master_tablet, replica_tablet])

@@ -117,7 +117,7 @@ export class SchemaComponent implements OnInit {
 
       if (!schemaResp.Error) {
         schemaResp = JSON.parse(schemaResp.Output);
-        if ('tables' in schemaResp) {
+        if ('table_definitions' in schemaResp) {
           if (!vSchemaResp.Error && 'tables' in vSchemaResp) {
             let vindexes = this.createVindexMap(vSchemaResp.tables);
             this.schemas = schemaResp.table_definitions.map(table => {

@@ -95,6 +95,7 @@ import (
 	"github.com/youtube/vitess/go/flagutil"
 	"github.com/youtube/vitess/go/mysqlconn/replication"
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/sync2"
 	hk "github.com/youtube/vitess/go/vt/hook"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/logutil"
@@ -323,6 +324,12 @@ var commands = []commandGroup{
 			{"ReloadSchema", commandReloadSchema,
 				"<tablet alias>",
 				"Reloads the schema on a remote tablet."},
+			{"ReloadSchemaShard", commandReloadSchemaShard,
+				"[-concurrency=10] [-include_master=false] <keyspace/shard>",
+				"Reloads the schema on all the tablets in a shard."},
+			{"ReloadSchemaKeyspace", commandReloadSchemaKeyspace,
+				"[-concurrency=10] [-include_master=false] <keyspace>",
+				"Reloads the schema on all the tablets in a keyspace."},
 			{"ValidateSchemaShard", commandValidateSchemaShard,
 				"[-exclude_tables=''] [-include-views] <keyspace/shard>",
 				"Validates that the master schema matches all of the slaves."},
@@ -1783,6 +1790,37 @@ func commandReloadSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 		return err
 	}
 	return wr.ReloadSchema(ctx, tabletAlias)
+}
+
+func commandReloadSchemaShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	concurrency := subFlags.Int("concurrency", 10, "How many tablets to reload in parallel")
+	includeMaster := subFlags.Bool("include_master", true, "Include the master tablet")
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+	if subFlags.NArg() != 1 {
+		return fmt.Errorf("the <keyspace/shard> argument is required for the ReloadSchemaShard command")
+	}
+	keyspace, shard, err := topoproto.ParseKeyspaceShard(subFlags.Arg(0))
+	if err != nil {
+		return err
+	}
+	sema := sync2.NewSemaphore(*concurrency, 0)
+	wr.ReloadSchemaShard(ctx, keyspace, shard, "" /* waitPosition */, sema, *includeMaster)
+	return nil
+}
+
+func commandReloadSchemaKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	concurrency := subFlags.Int("concurrency", 10, "How many tablets to reload in parallel")
+	includeMaster := subFlags.Bool("include_master", true, "Include the master tablet(s)")
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+	if subFlags.NArg() != 1 {
+		return fmt.Errorf("the <keyspace> argument is required for the ReloadSchemaKeyspace command")
+	}
+	sema := sync2.NewSemaphore(*concurrency, 0)
+	return wr.ReloadSchemaKeyspace(ctx, subFlags.Arg(0), sema, *includeMaster)
 }
 
 func commandValidateSchemaShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {

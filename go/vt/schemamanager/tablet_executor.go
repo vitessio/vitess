@@ -11,6 +11,7 @@ import (
 
 	"golang.org/x/net/context"
 
+	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/wrangler"
@@ -179,7 +180,7 @@ func (exec *TabletExecutor) preflightSchemaChanges(ctx context.Context, sqls []s
 				// DROP IF EXISTS on a nonexistent table does not change the schema. It's safe to ignore.
 				continue
 			}
-			return fmt.Errorf("Schema change: '%s' does not introduce any table definition change.", sqls[i])
+			return fmt.Errorf("schema change: '%s' does not introduce any table definition change", sqls[i])
 		}
 	}
 	exec.schemaDiffs = schemaDiffs
@@ -261,13 +262,14 @@ func (exec *TabletExecutor) executeOnAllTablets(ctx context.Context, execResult 
 	// If all shards succeeded, wait (up to waitSlaveTimeout) for slaves to
 	// execute the schema change via replication. This is best-effort, meaning
 	// we still return overall success if the timeout expires.
+	concurrency := sync2.NewSemaphore(10, 0)
 	reloadCtx, cancel := context.WithTimeout(ctx, exec.waitSlaveTimeout)
 	defer cancel()
 	for _, result := range execResult.SuccessShards {
 		wg.Add(1)
 		go func(result ShardResult) {
 			defer wg.Done()
-			exec.wr.ReloadSchemaShard(reloadCtx, exec.keyspace, result.Shard, result.Position)
+			exec.wr.ReloadSchemaShard(reloadCtx, exec.keyspace, result.Shard, result.Position, concurrency, false /* includeMaster */)
 		}(result)
 	}
 	wg.Wait()

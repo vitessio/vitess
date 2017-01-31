@@ -16,6 +16,7 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -56,31 +57,35 @@ func (wr *Wrangler) ReloadSchema(ctx context.Context, tabletAlias *topodatapb.Ta
 // and the periodic schema reload makes them self-healing anyway.
 // So we do this on a best-effort basis, and log warnings for any tablets
 // that fail to reload within the context deadline.
-// Note that this skips the master because it's assumed that the schema
-// was reloaded there right after applying it.
-func (wr *Wrangler) ReloadSchemaShard(ctx context.Context, keyspace, shard, replicationPos string) {
+func (wr *Wrangler) ReloadSchemaShard(ctx context.Context, keyspace, shard, replicationPos string, concurrency *sync2.Semaphore, includeMaster bool) {
 	tablets, err := wr.ts.GetTabletMapForShard(ctx, keyspace, shard)
-	if err != nil {
-		if err != topo.ErrPartialResult {
-			// This is best-effort, so just log it and move on.
-			wr.logger.Warningf("Failed to reload schema on slave tablets in %v/%v (use vtctl ReloadSchema to fix individual tablets): %v", keyspace, shard, err)
-			return
-		}
-		// We got a partial result. Do what we can, but warn that some may be missed.
-		wr.logger.Warningf("Failed to fetch all tablets for %v/%v. Some slave tablets may not have schema reloaded (use vtctl ReloadSchema to fix individual tablets)", keyspace, shard)
+	switch err {
+	case topo.ErrPartialResult:
+		// We got a partial result. Do what we can, but warn
+		// that some may be missed.
+		wr.logger.Warningf("ReloadSchemaShard(%v/%v) got a partial tablet list. Some tablets may not have schema reloaded (use vtctl ReloadSchema to fix individual tablets)", keyspace, shard)
+	case nil:
+		// Good case, keep going too.
+	default:
+		// This is best-effort, so just log it and move on.
+		wr.logger.Warningf("ReloadSchemaShard(%v/%v) failed to load tablet list, will not reload schema (use vtctl ReloadSchemaShard to try again): %v", keyspace, shard, err)
+		return
 	}
 
 	var wg sync.WaitGroup
 	for _, ti := range tablets {
-		if ti.Type == topodatapb.TabletType_MASTER {
-			// We don't need to reload on the master because we assume
-			// ExecuteFetchAsDba() already did that.
+		if !includeMaster && ti.Type == topodatapb.TabletType_MASTER {
+			// We don't need to reload on the master
+			// because we assume ExecuteFetchAsDba()
+			// already did that.
 			continue
 		}
 
 		wg.Add(1)
 		go func(tablet *topodatapb.Tablet) {
 			defer wg.Done()
+			concurrency.Acquire()
+			defer concurrency.Release()
 			if err := wr.tmc.ReloadSchema(ctx, tablet, replicationPos); err != nil {
 				wr.logger.Warningf(
 					"Failed to reload schema on slave tablet %v in %v/%v (use vtctl ReloadSchema to try again): %v",
@@ -89,6 +94,21 @@ func (wr *Wrangler) ReloadSchemaShard(ctx context.Context, keyspace, shard, repl
 		}(ti.Tablet)
 	}
 	wg.Wait()
+}
+
+// ReloadSchemaKeyspace reloads the schema in all shards in a
+// keyspace.  The concurrency is shared across all shards (only that
+// many tablets will be reloaded at once).
+func (wr *Wrangler) ReloadSchemaKeyspace(ctx context.Context, keyspace string, concurrency *sync2.Semaphore, includeMaster bool) error {
+	shards, err := wr.ts.GetShardNames(ctx, keyspace)
+	if err != nil {
+		return err
+	}
+
+	for _, shard := range shards {
+		wr.ReloadSchemaShard(ctx, keyspace, shard, "" /* waitPosition */, concurrency, includeMaster)
+	}
+	return nil
 }
 
 // helper method to asynchronously diff a schema
@@ -321,9 +341,10 @@ func (wr *Wrangler) CopySchemaShard(ctx context.Context, sourceTabletAlias *topo
 	}
 
 	// Notify slaves to reload schema. This is best-effort.
+	concurrency := sync2.NewSemaphore(10, 0)
 	reloadCtx, cancel := context.WithTimeout(ctx, waitSlaveTimeout)
 	defer cancel()
-	wr.ReloadSchemaShard(reloadCtx, destKeyspace, destShard, destMasterPos)
+	wr.ReloadSchemaShard(reloadCtx, destKeyspace, destShard, destMasterPos, concurrency, true /* includeMaster */)
 	return nil
 }
 
