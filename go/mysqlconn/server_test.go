@@ -16,9 +16,30 @@ import (
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
-type testHandler struct {
-	t *testing.T
+var selectRowsResult = &sqltypes.Result{
+	Fields: []*querypb.Field{
+		{
+			Name: "id",
+			Type: querypb.Type_INT32,
+		},
+		{
+			Name: "name",
+			Type: querypb.Type_VARCHAR,
+		},
+	},
+	Rows: [][]sqltypes.Value{
+		{
+			sqltypes.MakeTrusted(querypb.Type_INT32, []byte("10")),
+			sqltypes.MakeTrusted(querypb.Type_VARCHAR, []byte("nice name")),
+		},
+		{
+			sqltypes.MakeTrusted(querypb.Type_INT32, []byte("20")),
+			sqltypes.MakeTrusted(querypb.Type_VARCHAR, []byte("nicer name")),
+		},
+	},
 }
+
+type testHandler struct{}
 
 func (th *testHandler) NewConnection(c *Conn) {
 }
@@ -27,8 +48,6 @@ func (th *testHandler) ConnectionClosed(c *Conn) {
 }
 
 func (th *testHandler) ComQuery(c *Conn, query string) (*sqltypes.Result, error) {
-	th.t.Logf("ComQuery(id=%v,schemaName=%v): %v", c.ConnectionID, c.SchemaName, query)
-
 	if query == "error" {
 		return nil, sqldb.NewSQLError(ERUnknownComError, SSUnknownComError, "forced query handling error for: %v", query)
 	}
@@ -38,28 +57,7 @@ func (th *testHandler) ComQuery(c *Conn, query string) (*sqltypes.Result, error)
 	}
 
 	if query == "select rows" {
-		return &sqltypes.Result{
-			Fields: []*querypb.Field{
-				{
-					Name: "id",
-					Type: querypb.Type_INT32,
-				},
-				{
-					Name: "name",
-					Type: querypb.Type_VARCHAR,
-				},
-			},
-			Rows: [][]sqltypes.Value{
-				{
-					sqltypes.MakeTrusted(querypb.Type_INT32, []byte("10")),
-					sqltypes.MakeTrusted(querypb.Type_VARCHAR, []byte("nice name")),
-				},
-				{
-					sqltypes.MakeTrusted(querypb.Type_INT32, []byte("20")),
-					sqltypes.MakeTrusted(querypb.Type_VARCHAR, []byte("nicer name")),
-				},
-			},
-		}, nil
+		return selectRowsResult, nil
 	}
 
 	if query == "insert" {
@@ -89,7 +87,7 @@ func (th *testHandler) ComQuery(c *Conn, query string) (*sqltypes.Result, error)
 }
 
 func TestServer(t *testing.T) {
-	th := &testHandler{t: t}
+	th := &testHandler{}
 
 	l, err := NewListener("tcp", ":0", th)
 	if err != nil {
