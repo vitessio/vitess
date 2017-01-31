@@ -1875,6 +1875,26 @@ func TestTerseErrorsNoBindVars(t *testing.T) {
 	})
 }
 
+func TestTerseErrorsIgnoreFailoverInProgress(t *testing.T) {
+	testUtils := newTestUtils()
+	config := testUtils.newQueryServiceConfig()
+	tsv := NewTabletServer(config)
+	tsv.config.TerseErrors = true
+
+	err := tsv.handleError("select * from test_table where id = :a",
+		map[string]interface{}{"a": 1},
+		&TabletError{
+			ErrorCode: vtrpcpb.ErrorCode_INTERNAL_ERROR,
+			Message:   "failover in progress (errno 1227) (sqlstate 42000)",
+			SQLError:  1227,
+			SQLState:  "42000",
+		},
+		nil /* logStats */)
+	if got, want := err.Error(), "fatal: failover in progress (errno 1227) (sqlstate 42000)"; got != want {
+		t.Fatalf("'failover in progress' text must never be stripped: got = %v, want = %v", got, want)
+	}
+}
+
 func TestConfigChanges(t *testing.T) {
 	db := setUpTabletServerTest(t)
 	defer db.Close()

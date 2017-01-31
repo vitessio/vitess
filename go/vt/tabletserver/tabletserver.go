@@ -1175,15 +1175,24 @@ func (tsv *TabletServer) handleError(
 	// e.g. syntax errors on the rewritten query.
 	var myError error
 	if tsv.config.TerseErrors && terr.SQLError != 0 && len(bindVariables) != 0 {
-		myError = &TabletError{
-			SQLError:  terr.SQLError,
-			SQLState:  terr.SQLState,
-			ErrorCode: terr.ErrorCode,
-			Message:   fmt.Sprintf("(errno %d) (sqlstate %s) during query: %s", terr.SQLError, terr.SQLState, sql),
+		switch {
+		// Google internal flavor error only. Do not strip it because the vtgate
+		// buffer starts buffering master traffic when it sees the full error.
+		case terr.SQLError == 1227 && terr.Message == "failover in progress (errno 1227) (sqlstate 42000)":
+			myError = terr
+		default:
+			// Non-whitelisted error. Strip the error message.
+			myError = &TabletError{
+				SQLError:  terr.SQLError,
+				SQLState:  terr.SQLState,
+				ErrorCode: terr.ErrorCode,
+				Message:   fmt.Sprintf("(errno %d) (sqlstate %s) during query: %s", terr.SQLError, terr.SQLState, sql),
+			}
 		}
 	} else {
 		myError = terr
 	}
+
 	terr.RecordStats(tsv.qe.queryServiceStats)
 
 	logMethod := log.Infof
