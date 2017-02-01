@@ -368,6 +368,7 @@ func (dg *discoveryGateway) UpdateStream(ctx context.Context, target *querypb.Ta
 
 // Close shuts down underlying connections.
 func (dg *discoveryGateway) Close(ctx context.Context) error {
+	dg.buffer.Shutdown()
 	for _, ctw := range dg.tabletsWatchers {
 		ctw.Stop()
 	}

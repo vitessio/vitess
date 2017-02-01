@@ -39,7 +39,15 @@ import (
 )
 
 var (
-	hcErrorCounters *stats.MultiCounters
+	hcErrorCounters          = stats.NewMultiCounters("HealthcheckErrors", []string{"keyspace", "shardname", "tablettype"})
+	hcMasterPromotedCounters = stats.NewMultiCounters("HealthcheckMasterPromoted", []string{"keyspace", "shardname"})
+)
+
+// See the documentation for NewHealthCheck below for an explanation of these parameters.
+const (
+	DefaultHealthCheckConnTimeout = 1 * time.Minute
+	DefaultHealthCheckRetryDelay  = 5 * time.Second
+	DefaultHealthCheckTimeout     = 1 * time.Minute
 )
 
 const (
@@ -48,11 +56,6 @@ const (
 	// DefaultTopologyWatcherRefreshInterval can be used as the default value for
 	// the refresh interval of a topology watcher.
 	DefaultTopologyWatcherRefreshInterval = 1 * time.Minute
-
-	// See the documentation for NewHealthCheck below for an explanation of these parameters.
-	DefaultHealthCheckConnTimeout = 1 * time.Minute
-	DefaultHealthCheckRetryDelay  = 5 * time.Second
-	DefaultHealthCheckTimeout     = 1 * time.Minute
 
 	// HealthCheckTemplate is the HTML code to display a TabletsCacheStatusList
 	HealthCheckTemplate = `
@@ -88,10 +91,6 @@ const (
 </table>
 `
 )
-
-func init() {
-	hcErrorCounters = stats.NewMultiCounters("HealthcheckErrors", []string{"keyspace", "shardname", "tablettype"})
-}
 
 // HealthCheckStatsListener is the listener to receive health check stats update.
 type HealthCheckStatsListener interface {
@@ -472,6 +471,12 @@ func (hcc *healthCheckConn) processResponse(hc *HealthCheckImpl, stream tabletco
 		if hc.listener != nil && hc.sendDownEvents {
 			oldTs.Up = false
 			hc.listener.StatsUpdate(&oldTs)
+		}
+
+		// Track how often a tablet gets promoted to master. It is used for
+		// comparing against the variables in go/vtgate/buffer/variables.go.
+		if oldTs.Target.TabletType != topodatapb.TabletType_MASTER && shr.Target.TabletType == topodatapb.TabletType_MASTER {
+			hcMasterPromotedCounters.Add([]string{shr.Target.Keyspace, shr.Target.Shard}, 1)
 		}
 	}
 
