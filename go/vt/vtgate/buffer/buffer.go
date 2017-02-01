@@ -34,6 +34,18 @@ var (
 	contextCanceledError = vterrors.FromError(vtrpcpb.ErrorCode_TRANSIENT_ERROR, errors.New("context was canceled before failover finished"))
 )
 
+// bufferMode specifies how the buffer is configured for a given shard.
+type bufferMode int
+
+const (
+	// bufferDisabled will let all requests pass through and do nothing.
+	bufferDisabled bufferMode = iota
+	// bufferEnabled means all requests should be buffered.
+	bufferEnabled
+	// bufferDryRun will track the failover, but not actually buffer requests.
+	bufferDryRun
+)
+
 // Buffer is used to track ongoing MASTER tablet failovers and buffer
 // requests while the MASTER tablet is unavailable.
 // Once the new MASTER starts accepting requests, buffering stops and requests
@@ -43,12 +55,11 @@ var (
 // instance of "ShardBuffer" will be created.
 type Buffer struct {
 	// Immutable configuration fields (parsed from command line flags).
+	// keyspaces has the same purpose as "shards" but applies to a whole keyspace.
+	keyspaces map[string]bool
 	// shards is a set of keyspace/shard entries to which buffering is limited.
 	// If empty (and *enabled==true), buffering is enabled for all shards.
 	shards map[string]bool
-	// shardsDryRun is the set of keyspace/shard entries for which dry-run mode
-	// should be enabled (failover tracking), even if buffering is disabled.
-	shardsDryRun map[string]bool
 
 	// bufferSizeSema limits how many requests can be buffered
 	// ("-vtgate_buffer_size") and is shared by all shardBuffer instances.
@@ -72,32 +83,73 @@ func New() *Buffer {
 	if err := verifyFlags(); err != nil {
 		log.Fatalf("Invalid buffer configuration: %v", err)
 	}
+	keyspaces, shards := keyspaceShardsToSets(*shards)
+
+	if *enabledDryRun {
+		log.Infof("vtgate buffer in dry-run mode enabled for all requests. Dry-run bufferings will log failovers but not buffer requests.")
+	}
 
 	if *enabled {
 		log.Infof("vtgate buffer enabled. MASTER requests will be buffered during detected failovers.")
-	} else {
+
+		// Log a second line if it's only enabled for some keyspaces or shards.
+		header := "Buffering limited to configured "
+		limited := ""
+		if len(keyspaces) > 0 {
+			limited = "keyspaces: " + setToString(keyspaces)
+		}
+		if len(shards) > 0 {
+			if limited == "" {
+				limited += " and "
+			}
+			limited = "shards: " + setToString(shards)
+		}
+		if limited != "" {
+			limited = header + limited
+			dryRunOverride := ""
+			if *enabledDryRun {
+				dryRunOverride = " Dry-run mode is overriden for these entries and actual buffering will take place."
+			}
+			log.Infof("%v.%v", limited, dryRunOverride)
+		}
+	}
+
+	if !*enabledDryRun && !*enabled {
 		log.Infof("vtgate buffer not enabled.")
 	}
 
 	return &Buffer{
-		shards:         listToSet(*shards),
-		shardsDryRun:   listToSet(*shards),
+		keyspaces:      keyspaces,
+		shards:         shards,
 		bufferSizeSema: sync2.NewSemaphore(*size, 0),
 		buffers:        make(map[string]*shardBuffer),
 	}
 }
 
-func (b *Buffer) bufferingEnabled(keyspaceShard string) bool {
-	if *enabled == false {
-		return false
-	}
-
-	if len(b.shards) == 0 {
+// mode determines for the given keyspace and shard if buffering, dry-run
+// buffering or no buffering at all should be enabled.
+func (b *Buffer) mode(keyspace, shard string) bufferMode {
+	// Actual buffering is enabled if
+	// a) no keyspaces and shards were listed in particular,
+	if *enabled && len(b.keyspaces) == 0 && len(b.shards) == 0 {
 		// No explicit whitelist given i.e. all shards should be buffered.
-		return true
+		return bufferEnabled
+	}
+	// b) or this keyspace is listed,
+	if b.keyspaces[keyspace] {
+		return bufferEnabled
+	}
+	// c) or this shard is listed.
+	keyspaceShard := topoproto.KeyspaceShardString(keyspace, shard)
+	if b.shards[keyspaceShard] {
+		return bufferEnabled
 	}
 
-	return b.shards[keyspaceShard]
+	if *enabledDryRun {
+		return bufferDryRun
+	}
+
+	return bufferDisabled
 }
 
 // RetryDoneFunc will be returned for each buffered request and must be called
@@ -114,13 +166,6 @@ type RetryDoneFunc context.CancelFunc
 // If it does not return an error, it may return a RetryDoneFunc which must be
 // called after the request was retried.
 func (b *Buffer) WaitForFailoverEnd(ctx context.Context, keyspace, shard string, err error) (RetryDoneFunc, error) {
-	key := topoproto.KeyspaceShardString(keyspace, shard)
-
-	// TODO(mberlin): Go through some of the logic if the dry-run mode is enabled.
-	if !b.bufferingEnabled(key) {
-		return nil, nil
-	}
-
 	// If an err is given, it must be related to a failover.
 	// We never buffer requests with other errors.
 	if err != nil && !causedByFailover(err) {
@@ -128,6 +173,11 @@ func (b *Buffer) WaitForFailoverEnd(ctx context.Context, keyspace, shard string,
 	}
 
 	sb := b.getOrCreateBuffer(keyspace, shard)
+	if sb.disabled() {
+		// TODO(mberlin): Increment variable here.
+		return nil, nil
+	}
+
 	return sb.waitForFailoverEnd(ctx, keyspace, shard, err)
 }
 
@@ -200,7 +250,7 @@ func (b *Buffer) getOrCreateBuffer(keyspace, shard string) *shardBuffer {
 	// Look it up again because it could have been created in the meantime.
 	sb, ok = b.buffers[key]
 	if !ok {
-		sb = newShardBuffer(keyspace, shard, b.bufferSizeSema)
+		sb = newShardBuffer(b.mode(keyspace, shard), keyspace, shard, b.bufferSizeSema)
 		b.buffers[key] = sb
 	}
 	return sb

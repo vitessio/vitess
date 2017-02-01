@@ -38,7 +38,9 @@ func TestBuffer(t *testing.T) {
 	// Enable the buffer.
 	flag.Set("enable_vtgate_buffer", "true")
 	flag.Set("vtgate_buffer_keyspace_shards", topoproto.KeyspaceShardString(keyspace, shard))
-	defer resetFlags()
+	// Dry-run mode will apply to other keyspaces and shards. Not tested here.
+	flag.Set("enable_vtgate_buffer_dry_run", "true")
+	defer resetFlagsForTesting()
 
 	// Create the buffer.
 	b := New()
@@ -116,14 +118,6 @@ func TestBuffer(t *testing.T) {
 	}
 }
 
-func resetFlags() {
-	flag.Set("enable_vtgate_buffer", "false")
-	flag.Set("vtgate_buffer_window", "10s")
-	flag.Set("vtgate_buffer_keyspace_shards", "")
-	flag.Set("vtgate_buffer_max_failover_duration", "20s")
-	flag.Set("vtgate_buffer_min_time_between_failovers", "5m")
-}
-
 // issueRequest simulates executing a request which goes through the buffer.
 // If the buffering returned an error, it will be sent on the returned channel.
 func issueRequest(ctx context.Context, t *testing.T, b *Buffer, err error) chan error {
@@ -186,12 +180,40 @@ func waitForState(b *Buffer, want bufferState) error {
 	}
 }
 
+// TestDryRun tests the case when only the dry-run mode is enabled globally.
+func TestDryRun(t *testing.T) {
+	flag.Set("enable_vtgate_buffer_dry_run", "true")
+	defer resetFlagsForTesting()
+	b := New()
+
+	// Request does not get buffered.
+	if retryDone, err := b.WaitForFailoverEnd(context.Background(), keyspace, shard, failoverErr); err != nil || retryDone != nil {
+		t.Fatalf("requests must not be buffered during dry-run. err: %v retryDone: %v", err, retryDone)
+	}
+	// But the internal state changes though.
+	if err := waitForState(b, stateBuffering); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := requestsDryRunMax.Counts()[statsKeyJoined], int64(1); got != want {
+		t.Fatalf("dry-run request count did not increase: got = %v, want = %v", got, want)
+	}
+
+	// End of failover is tracked as well.
+	b.StatsUpdate(&discovery.TabletStats{
+		Target: &querypb.Target{Keyspace: keyspace, Shard: shard, TabletType: topodatapb.TabletType_MASTER},
+		TabletExternallyReparentedTimestamp: 1, // Use any value > 0.
+	})
+	if err := waitForState(b, stateIdle); err != nil {
+		t.Fatal(err)
+	}
+}
+
 // TestPassthrough tests the case when no failover is in progress and
 // requests have no failover related error.
 func TestPassthrough(t *testing.T) {
 	flag.Set("enable_vtgate_buffer", "true")
 	flag.Set("vtgate_buffer_keyspace_shards", topoproto.KeyspaceShardString(keyspace, shard))
-	defer resetFlags()
+	defer resetFlagsForTesting()
 	b := New()
 
 	if retryDone, err := b.WaitForFailoverEnd(context.Background(), keyspace, shard, nil); err != nil || retryDone != nil {
@@ -206,8 +228,8 @@ func TestPassthrough(t *testing.T) {
 // we see the failover end faster than the beginning.
 func TestPassThroughLastReparentTooRecent(t *testing.T) {
 	flag.Set("enable_vtgate_buffer", "true")
-	flag.Set("vtgate_buffer_keyspace_shards", topoproto.KeyspaceShardString(keyspace, shard))
-	defer resetFlags()
+	// Enable the buffer (no explicit whitelist i.e. it applies to everything).
+	defer resetFlagsForTesting()
 	b := New()
 
 	// Simulate that the old master notified us about its reparented timestamp
@@ -236,7 +258,7 @@ func TestPassThroughLastReparentTooRecent(t *testing.T) {
 func TestPassthroughDuringDrain(t *testing.T) {
 	flag.Set("enable_vtgate_buffer", "true")
 	flag.Set("vtgate_buffer_keyspace_shards", topoproto.KeyspaceShardString(keyspace, shard))
-	defer resetFlags()
+	defer resetFlagsForTesting()
 	b := New()
 
 	// Buffer one request.
@@ -284,8 +306,9 @@ func TestRequestCanceled_MaxDurationEnd(t *testing.T) {
 // (more precisively its context) before the failover/buffering ends.
 func testRequestCanceled(t *testing.T, explicitEnd bool) {
 	flag.Set("enable_vtgate_buffer", "true")
-	flag.Set("vtgate_buffer_keyspace_shards", topoproto.KeyspaceShardString(keyspace, shard))
-	defer resetFlags()
+	// Enable buffering for the complete keyspace and not just a specific shard.
+	flag.Set("vtgate_buffer_keyspace_shards", keyspace)
+	defer resetFlagsForTesting()
 	b := New()
 	if !explicitEnd {
 		// Set value after constructor to work-around hardcoded minimum values.
@@ -351,7 +374,7 @@ func TestEviction(t *testing.T) {
 	flag.Set("enable_vtgate_buffer", "true")
 	flag.Set("vtgate_buffer_keyspace_shards", topoproto.KeyspaceShardString(keyspace, shard))
 	flag.Set("vtgate_buffer_size", "2")
-	defer resetFlags()
+	defer resetFlagsForTesting()
 	b := New()
 
 	stopped1 := issueRequest(context.Background(), t, b, failoverErr)
@@ -425,7 +448,7 @@ func TestEvictionNotPossible(t *testing.T) {
 		topoproto.KeyspaceShardString(keyspace, shard),
 		topoproto.KeyspaceShardString(keyspace, shard2)))
 	flag.Set("vtgate_buffer_size", "1")
-	defer resetFlags()
+	defer resetFlagsForTesting()
 	b := New()
 
 	// Make the buffer full (applies to all failovers).
@@ -469,7 +492,7 @@ func TestWindow(t *testing.T) {
 		topoproto.KeyspaceShardString(keyspace, shard),
 		topoproto.KeyspaceShardString(keyspace, shard2)))
 	flag.Set("vtgate_buffer_size", "1")
-	defer resetFlags()
+	defer resetFlagsForTesting()
 	b := New()
 	// Set value after constructor to work-around hardcoded minimum values.
 	flag.Set("vtgate_buffer_window", "1ms")
