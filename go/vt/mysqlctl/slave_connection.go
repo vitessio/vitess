@@ -11,7 +11,6 @@ import (
 	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
-	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/mysqlconn"
 	"github.com/youtube/vitess/go/mysqlconn/replication"
 	"github.com/youtube/vitess/go/pools"
@@ -158,8 +157,8 @@ func (sc *SlaveConnection) StartBinlogDumpFromPosition(ctx context.Context, star
 
 			buf, err = sc.Conn.ReadPacket()
 			if err != nil {
-				if sqlErr, ok := err.(*sqldb.SQLError); ok && sqlErr.Number() == mysql.ErrServerLost {
-					// ErrServerLost = Lost connection to MySQL server during query
+				if sqlErr, ok := err.(*sqldb.SQLError); ok && sqlErr.Number() == mysqlconn.CRServerLost {
+					// CRServerLost = Lost connection to MySQL server during query
 					// This is not necessarily an error. It could just be that we closed
 					// the connection from outside.
 					log.Infof("connection closed during binlog stream (possibly intentional): %v", err)
@@ -303,8 +302,8 @@ func (sc *SlaveConnection) StartBinlogDumpFromBinlogBeforeTimestamp(ctx context.
 
 			buf, err := sc.Conn.ReadPacket()
 			if err != nil {
-				if sqlErr, ok := err.(*sqldb.SQLError); ok && sqlErr.Number() == mysql.ErrServerLost {
-					// ErrServerLost = Lost connection to MySQL server during query
+				if sqlErr, ok := err.(*sqldb.SQLError); ok && sqlErr.Number() == mysqlconn.CRServerLost {
+					// CRServerLost = Lost connection to MySQL server during query
 					// This is not necessarily an error. It could just be that we closed
 					// the connection from outside.
 					log.Infof("connection closed during binlog stream (possibly intentional): %v", err)

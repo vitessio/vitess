@@ -17,7 +17,7 @@ import (
 
 	"github.com/youtube/vitess/go/acl"
 	"github.com/youtube/vitess/go/history"
-	"github.com/youtube/vitess/go/mysql"
+	"github.com/youtube/vitess/go/mysqlconn"
 	"github.com/youtube/vitess/go/mysqlconn/replication"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/stats"
@@ -1209,10 +1209,13 @@ func (tsv *TabletServer) handleError(
 	default:
 		// We want to suppress/demote some MySQL error codes.
 		switch terr.SQLError {
-		case mysql.ErrDupEntry:
+		case mysqlconn.ERDupEntry:
 			return myError
-		case mysql.ErrLockWaitTimeout, mysql.ErrLockDeadlock, mysql.ErrDataTooLong,
-			mysql.ErrDataOutOfRange, mysql.ErrBadNullError:
+		case mysqlconn.ERLockWaitTimeout,
+			mysqlconn.ERLockDeadlock,
+			mysqlconn.ERDataTooLong,
+			mysqlconn.ERDataOutOfRange,
+			mysqlconn.ERBadNullError:
 			logMethod = log.Infof
 		case 0:
 			if !strings.Contains(terr.Error(), "Row count exceeded") {

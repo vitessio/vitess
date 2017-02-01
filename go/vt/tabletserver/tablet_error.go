@@ -11,7 +11,7 @@ import (
 	"strings"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/mysql"
+	"github.com/youtube/vitess/go/mysqlconn"
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/tb"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
@@ -55,15 +55,15 @@ func NewTabletErrorSQL(errCode vtrpcpb.ErrorCode, err error) *TabletError {
 		errnum = sqlErr.Number()
 		sqlState = sqlErr.SQLState()
 		switch errnum {
-		case mysql.ErrOptionPreventsStatement:
+		case mysqlconn.EROptionPreventsStatement:
 			// Override error type if MySQL is in read-only mode. It's probably because
 			// there was a remaster and there are old clients still connected.
 			if strings.Contains(errstr, "read-only") {
 				errCode = vtrpcpb.ErrorCode_QUERY_NOT_SERVED
 			}
-		case mysql.ErrDupEntry:
+		case mysqlconn.ERDupEntry:
 			errCode = vtrpcpb.ErrorCode_INTEGRITY_ERROR
-		case mysql.ErrDataTooLong, mysql.ErrDataOutOfRange:
+		case mysqlconn.ERDataTooLong, mysqlconn.ERDataOutOfRange:
 			errCode = vtrpcpb.ErrorCode_BAD_INPUT
 		default:
 		}
@@ -118,8 +118,8 @@ func IsConnErr(err error) bool {
 			return false
 		}
 	}
-	// ErrServerLost means that someone sniped the query.
-	if sqlError == mysql.ErrServerLost {
+	// CRServerLost means that someone sniped the query.
+	if sqlError == mysqlconn.CRServerLost {
 		return false
 	}
 	return sqlError >= 2000 && sqlError <= 2018
@@ -148,7 +148,7 @@ func (te *TabletError) Prefix() string {
 		prefix = "not_in_tx: "
 	}
 	// Special case for killed queries.
-	if te.SQLError == mysql.ErrServerLost {
+	if te.SQLError == mysqlconn.CRServerLost {
 		prefix = prefix + "the query was killed either because it timed out or was canceled: "
 	}
 	return prefix
@@ -167,9 +167,9 @@ func (te *TabletError) RecordStats(queryServiceStats *QueryServiceStats) {
 		queryServiceStats.ErrorStats.Add("NotInTx", 1)
 	default:
 		switch te.SQLError {
-		case mysql.ErrDupEntry:
+		case mysqlconn.ERDupEntry:
 			queryServiceStats.InfoErrors.Add("DupKey", 1)
-		case mysql.ErrLockWaitTimeout, mysql.ErrLockDeadlock:
+		case mysqlconn.ERLockWaitTimeout, mysqlconn.ERLockDeadlock:
 			queryServiceStats.ErrorStats.Add("Deadlock", 1)
 		default:
 			queryServiceStats.ErrorStats.Add("Fail", 1)

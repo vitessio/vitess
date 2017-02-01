@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/youtube/vitess/go/hack"
-	"github.com/youtube/vitess/go/mysql"
+	"github.com/youtube/vitess/go/mysqlconn"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/trace"
 	"github.com/youtube/vitess/go/vt/callerid"
@@ -505,7 +505,7 @@ func (qre *QueryExecutor) execUpsertPK(conn *TxConnection) (*sqltypes.Result, er
 	if !ok {
 		return result, err
 	}
-	if terr.SQLError != mysql.ErrDupEntry {
+	if terr.SQLError != mysqlconn.ERDupEntry {
 		return nil, err
 	}
 	// If the error didn't match pk, just return the error without updating.

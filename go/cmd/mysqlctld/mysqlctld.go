@@ -19,9 +19,6 @@ import (
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/servenv"
 	"golang.org/x/net/context"
-
-	// import mysql to register mysql connection function
-	_ "github.com/youtube/vitess/go/mysql"
 )
 
 var (

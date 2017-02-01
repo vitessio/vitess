@@ -123,33 +123,6 @@ const (
 		FlagSet
 )
 
-const (
-	// ErrDupEntry is C.ER_DUP_ENTRY
-	ErrDupEntry = C.ER_DUP_ENTRY
-
-	// ErrLockWaitTimeout is C.ER_LOCK_WAIT_TIMEOUT
-	ErrLockWaitTimeout = C.ER_LOCK_WAIT_TIMEOUT
-
-	// ErrLockDeadlock is C.ER_LOCK_DEADLOCK
-	ErrLockDeadlock = C.ER_LOCK_DEADLOCK
-
-	// ErrOptionPreventsStatement is C.ER_OPTION_PREVENTS_STATEMENT
-	ErrOptionPreventsStatement = C.ER_OPTION_PREVENTS_STATEMENT
-
-	// ErrDataTooLong is C.ER_DATA_TOO_LONG
-	ErrDataTooLong = C.ER_DATA_TOO_LONG
-
-	// ErrBadNullError is C.ER_BAD_NULL_ERROR
-	ErrBadNullError = C.ER_BAD_NULL_ERROR
-
-	// ErrDataOutOfRange is C.ER_WARN_DATA_OUT_OF_RANGE
-	ErrDataOutOfRange = C.ER_WARN_DATA_OUT_OF_RANGE
-
-	// ErrServerLost is C.CR_SERVER_LOST.
-	// It's hard-coded for now because it causes problems on import.
-	ErrServerLost = 2013
-)
-
 func handleError(err *error) {
 	if x := recover(); x != nil {
 		terr := x.(*sqldb.SQLError)
