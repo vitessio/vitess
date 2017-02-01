@@ -290,6 +290,25 @@ func TestPassthroughDuringDrain(t *testing.T) {
 	<-stopped
 }
 
+// TestPassthroughIgnoredKeyspaceOrShard tests that the explicit whitelisting
+// of keyspaces (and optionally shards) ignores entries which are not listed.
+func TestPassthroughIgnoredKeyspaceOrShard(t *testing.T) {
+	flag.Set("enable_vtgate_buffer", "true")
+	flag.Set("vtgate_buffer_keyspace_shards", topoproto.KeyspaceShardString(keyspace, shard))
+	defer resetFlagsForTesting()
+	b := New()
+
+	ignoredKeyspace := "ignored_ks"
+	if retryDone, err := b.WaitForFailoverEnd(context.Background(), ignoredKeyspace, shard, failoverErr); err != nil || retryDone != nil {
+		t.Fatalf("requests for ignored keyspaces must not be buffered. err: %v retryDone: %v", err, retryDone)
+	}
+
+	ignoredShard := "ff-"
+	if retryDone, err := b.WaitForFailoverEnd(context.Background(), keyspace, ignoredShard, failoverErr); err != nil || retryDone != nil {
+		t.Fatalf("requests for ignored shards must not be buffered. err: %v retryDone: %v", err, retryDone)
+	}
+}
+
 // TestRequestCanceled_ExplicitEnd stops the buffering because the we see the
 // new master.
 func TestRequestCanceled_ExplicitEnd(t *testing.T) {
