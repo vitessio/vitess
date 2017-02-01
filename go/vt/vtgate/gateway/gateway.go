@@ -14,7 +14,7 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/vt/discovery"
-	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
+	"github.com/youtube/vitess/go/vt/tabletserver/queryservice"
 	"github.com/youtube/vitess/go/vt/topo"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -31,7 +31,7 @@ var (
 // A Gateway is the query processing module for each shard,
 // which is used by ScatterConn.
 type Gateway interface {
-	tabletconn.TabletConn
+	queryservice.QueryService
 
 	// WaitForTablets asks the gateway to wait for the provided
 	// tablets types to be available. It the context is canceled

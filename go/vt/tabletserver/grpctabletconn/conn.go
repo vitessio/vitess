@@ -14,6 +14,7 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/callerid"
 	"github.com/youtube/vitess/go/vt/servenv/grpcutils"
+	"github.com/youtube/vitess/go/vt/tabletserver/queryservice"
 	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"golang.org/x/net/context"
@@ -37,7 +38,7 @@ func init() {
 	tabletconn.RegisterDialer(protocolName, DialTablet)
 }
 
-// gRPCQueryClient implements a gRPC implementation for TabletConn
+// gRPCQueryClient implements a gRPC implementation for QueryService
 type gRPCQueryClient struct {
 	// tablet is set at construction time, and never changed
 	tablet *topodatapb.Tablet
@@ -49,7 +50,7 @@ type gRPCQueryClient struct {
 }
 
 // DialTablet creates and initializes gRPCQueryClient.
-func DialTablet(tablet *topodatapb.Tablet, timeout time.Duration) (tabletconn.TabletConn, error) {
+func DialTablet(tablet *topodatapb.Tablet, timeout time.Duration) (queryservice.QueryService, error) {
 	// create the RPC client
 	addr := ""
 	if grpcPort, ok := tablet.PortMap["grpc"]; ok {
@@ -685,6 +686,10 @@ func (conn *gRPCQueryClient) UpdateStream(ctx context.Context, target *querypb.T
 			return err
 		}
 	}
+}
+
+// HandlePanic is a no-op.
+func (conn *gRPCQueryClient) HandlePanic(err *error) {
 }
 
 // Close closes underlying gRPC channel.

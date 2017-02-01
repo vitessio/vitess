@@ -33,6 +33,7 @@ import (
 	"github.com/youtube/vitess/go/stats"
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	"github.com/youtube/vitess/go/vt/tabletserver/queryservice"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"golang.org/x/net/context"
@@ -187,7 +188,7 @@ type HealthCheck interface {
 	// corresponding to AddTablet() calls made during its execution.
 	WaitForInitialStatsUpdates()
 	// GetConnection returns the TabletConn of the given tablet.
-	GetConnection(key string) tabletconn.TabletConn
+	GetConnection(key string) queryservice.QueryService
 	// CacheStatus returns a displayable version of the cache.
 	CacheStatus() TabletsCacheStatusList
 	// Close stops the healthcheck.
@@ -207,7 +208,7 @@ type healthCheckConn struct {
 	// HealthCheck.mu goes first.
 	// Note tabletStats.Tablet and tabletStats.Name are immutable.
 	mu                    sync.RWMutex
-	conn                  tabletconn.TabletConn
+	conn                  queryservice.QueryService
 	tabletStats           TabletStats
 	lastResponseTimestamp time.Time // timestamp of the last healthcheck response
 }
@@ -585,7 +586,7 @@ func (hc *HealthCheckImpl) WaitForInitialStatsUpdates() {
 }
 
 // GetConnection returns the TabletConn of the given tablet.
-func (hc *HealthCheckImpl) GetConnection(key string) tabletconn.TabletConn {
+func (hc *HealthCheckImpl) GetConnection(key string) queryservice.QueryService {
 	hc.mu.RLock()
 	defer hc.mu.RUnlock()
 	hcc := hc.addrToConns[key]

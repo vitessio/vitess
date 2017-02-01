@@ -7,6 +7,8 @@
 package queryservice
 
 import (
+	"io"
+
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/sqltypes"
@@ -21,6 +23,8 @@ import (
 // back by the function, except in the case of io.EOF in which case the stream
 // will be terminated with no error. Streams can also be terminated by canceling
 // the context.
+// This API is common for both server and client implementations. All functions
+// must be safe to be called concurrently.
 type QueryService interface {
 	// Transaction management
 
@@ -79,26 +83,56 @@ type QueryService interface {
 	// SplitQuery is a MapReduce helper function
 	// This version of SplitQuery supports multiple algorithms and multiple split columns.
 	// See the documentation of SplitQueryRequest in 'proto/vtgate.proto' for more information.
-	SplitQuery(
-		ctx context.Context,
-		target *querypb.Target,
-		query querytypes.BoundQuery,
-		splitColumns []string,
-		splitCount int64,
-		numRowsPerQueryPart int64,
-		algorithm querypb.SplitQueryRequest_Algorithm,
-	) ([]querytypes.QuerySplit, error)
-
-	// StreamHealth streams health status.
-	StreamHealth(ctx context.Context, callback func(*querypb.StreamHealthResponse) error) error
+	SplitQuery(ctx context.Context, target *querypb.Target, query querytypes.BoundQuery, splitColumns []string, splitCount int64, numRowsPerQueryPart int64, algorithm querypb.SplitQueryRequest_Algorithm) ([]querytypes.QuerySplit, error)
 
 	// UpdateStream streams updates from the provided position or timestamp.
 	UpdateStream(ctx context.Context, target *querypb.Target, position string, timestamp int64, callback func(*querypb.StreamEvent) error) error
 
-	// Helper for RPC panic handling: call this in a defer statement
-	// at the beginning of each RPC handling method.
-	HandlePanic(*error)
+	// StreamHealth streams health status.
+	StreamHealth(ctx context.Context, callback func(*querypb.StreamHealthResponse) error) error
+
+	// HandlePanic will be called if any of the functions panic.
+	HandlePanic(err *error)
+
+	// Close must be called for releasing resources.
+	Close(ctx context.Context) error
 }
 
-// Command to generate a mock for this interface with mockgen.
-//go:generate mockgen -source $GOFILE -destination queryservice_testing/mock_queryservice.go -package queryservice_testing
+type resultStreamer struct {
+	done chan struct{}
+	ch   chan *sqltypes.Result
+	err  error
+}
+
+func (rs *resultStreamer) Recv() (*sqltypes.Result, error) {
+	select {
+	case <-rs.done:
+		return nil, rs.err
+	case qr := <-rs.ch:
+		return qr, nil
+	}
+}
+
+// ExecuteWithStreamer performs a StreamExecute, but returns a *sqltypes.ResultStream to iterate on.
+// This function should only be used for legacy code. New usage should directly use StreamExecute.
+func ExecuteWithStreamer(ctx context.Context, conn QueryService, target *querypb.Target, sql string, bindVariables map[string]interface{}, options *querypb.ExecuteOptions) sqltypes.ResultStream {
+	rs := &resultStreamer{
+		done: make(chan struct{}),
+		ch:   make(chan *sqltypes.Result),
+	}
+	go func() {
+		defer close(rs.done)
+		rs.err = conn.StreamExecute(ctx, target, sql, bindVariables, options, func(qr *sqltypes.Result) error {
+			select {
+			case <-ctx.Done():
+				return io.EOF
+			case rs.ch <- qr:
+			}
+			return nil
+		})
+		if rs.err == nil {
+			rs.err = io.EOF
+		}
+	}()
+	return rs
+}

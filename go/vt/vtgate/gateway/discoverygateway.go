@@ -17,9 +17,8 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/flagutil"
-	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/discovery"
-	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
+	"github.com/youtube/vitess/go/vt/tabletserver/queryservice"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vterrors"
@@ -48,6 +47,7 @@ func init() {
 }
 
 type discoveryGateway struct {
+	queryservice.QueryService
 	hc            discovery.HealthCheck
 	tsc           *discovery.TabletStatsCache
 	topoServer    topo.Server
@@ -103,6 +103,7 @@ func createDiscoveryGateway(hc discovery.HealthCheck, topoServer topo.Server, se
 		ctw := discovery.NewCellTabletsWatcher(dg.topoServer, tr, c, *refreshInterval, *topoReadConcurrency)
 		dg.tabletsWatchers = append(dg.tabletsWatchers, ctw)
 	}
+	dg.QueryService = queryservice.Wrap(dg, dg.withRetry)
 	return dg
 }
 
@@ -126,233 +127,15 @@ func (dg *discoveryGateway) WaitForTablets(ctx context.Context, tabletTypesToWai
 	return dg.tsc.WaitForAllServingTablets(ctx, dg.srvTopoServer, dg.localCell, tabletTypesToWait)
 }
 
-// Execute executes the non-streaming query for the specified keyspace, shard, and tablet type.
-func (dg *discoveryGateway) Execute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]interface{}, transactionID int64, options *querypb.ExecuteOptions) (qr *sqltypes.Result, err error) {
-	err = dg.withRetry(ctx, target, func(conn tabletconn.TabletConn, target *querypb.Target) error {
-		var innerErr error
-		startTime := time.Now()
-		qr, innerErr = conn.Execute(ctx, target, query, bindVars, transactionID, options)
-		dg.updateStats(target, startTime, innerErr)
-		return innerErr
-	}, transactionID != 0, false)
-	return qr, err
-}
-
-// ExecuteBatch executes a group of queries for the specified keyspace, shard, and tablet type.
-func (dg *discoveryGateway) ExecuteBatch(ctx context.Context, target *querypb.Target, queries []querytypes.BoundQuery, asTransaction bool, transactionID int64, options *querypb.ExecuteOptions) (qrs []sqltypes.Result, err error) {
-	err = dg.withRetry(ctx, target, func(conn tabletconn.TabletConn, target *querypb.Target) error {
-		var innerErr error
-		startTime := time.Now()
-		qrs, innerErr = conn.ExecuteBatch(ctx, target, queries, asTransaction, transactionID, options)
-		dg.updateStats(target, startTime, innerErr)
-		return innerErr
-	}, transactionID != 0, false)
-	return qrs, err
-}
-
-// StreamExecute executes a streaming query for the specified keyspace, shard, and tablet type.
-func (dg *discoveryGateway) StreamExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]interface{}, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
-	return dg.withRetry(ctx, target, func(conn tabletconn.TabletConn, target *querypb.Target) error {
-		return conn.StreamExecute(ctx, target, query, bindVars, options, callback)
-	}, false, true)
-}
-
-// Begin starts a transaction for the specified keyspace, shard, and tablet type.
-// It returns the transaction ID.
-func (dg *discoveryGateway) Begin(ctx context.Context, target *querypb.Target) (transactionID int64, err error) {
-	err = dg.withRetry(ctx, target, func(conn tabletconn.TabletConn, target *querypb.Target) error {
-		var innerErr error
-		startTime := time.Now()
-		transactionID, innerErr = conn.Begin(ctx, target)
-		dg.updateStats(target, startTime, innerErr)
-		return innerErr
-	}, false, false)
-	return transactionID, err
-}
-
-// Commit commits the current transaction for the specified keyspace, shard, and tablet type.
-func (dg *discoveryGateway) Commit(ctx context.Context, target *querypb.Target, transactionID int64) error {
-	return dg.withRetry(ctx, target, func(conn tabletconn.TabletConn, target *querypb.Target) error {
-		startTime := time.Now()
-		innerErr := conn.Commit(ctx, target, transactionID)
-		dg.updateStats(target, startTime, innerErr)
-		return innerErr
-	}, true, false)
-}
-
-// Rollback rolls back the current transaction for the specified keyspace, shard, and tablet type.
-func (dg *discoveryGateway) Rollback(ctx context.Context, target *querypb.Target, transactionID int64) error {
-	return dg.withRetry(ctx, target, func(conn tabletconn.TabletConn, target *querypb.Target) error {
-		startTime := time.Now()
-		innerErr := conn.Rollback(ctx, target, transactionID)
-		dg.updateStats(target, startTime, innerErr)
-		return innerErr
-	}, true, false)
-}
-
-// Prepare rolls back the current transaction for the specified keyspace, shard, and tablet type.
-func (dg *discoveryGateway) Prepare(ctx context.Context, target *querypb.Target, transactionID int64, dtid string) error {
-	return dg.withRetry(ctx, target, func(conn tabletconn.TabletConn, target *querypb.Target) error {
-		startTime := time.Now()
-		innerErr := conn.Prepare(ctx, target, transactionID, dtid)
-		dg.updateStats(target, startTime, innerErr)
-		return innerErr
-	}, true, false)
-}
-
-// CommitPrepared rolls back the current transaction for the specified keyspace, shard, and tablet type.
-func (dg *discoveryGateway) CommitPrepared(ctx context.Context, target *querypb.Target, dtid string) (err error) {
-	return dg.withRetry(ctx, target, func(conn tabletconn.TabletConn, target *querypb.Target) error {
-		startTime := time.Now()
-		innerErr := conn.CommitPrepared(ctx, target, dtid)
-		dg.updateStats(target, startTime, innerErr)
-		return innerErr
-	}, true, false)
-}
-
-// RollbackPrepared rolls back the current transaction for the specified keyspace, shard, and tablet type.
-func (dg *discoveryGateway) RollbackPrepared(ctx context.Context, target *querypb.Target, dtid string, originalID int64) (err error) {
-	return dg.withRetry(ctx, target, func(conn tabletconn.TabletConn, target *querypb.Target) error {
-		startTime := time.Now()
-		innerErr := conn.RollbackPrepared(ctx, target, dtid, originalID)
-		dg.updateStats(target, startTime, innerErr)
-		return innerErr
-	}, true, false)
-}
-
-// CreateTransaction rolls back the current transaction for the specified keyspace, shard, and tablet type.
-func (dg *discoveryGateway) CreateTransaction(ctx context.Context, target *querypb.Target, dtid string, participants []*querypb.Target) (err error) {
-	return dg.withRetry(ctx, target, func(conn tabletconn.TabletConn, target *querypb.Target) error {
-		startTime := time.Now()
-		innerErr := conn.CreateTransaction(ctx, target, dtid, participants)
-		dg.updateStats(target, startTime, innerErr)
-		return innerErr
-	}, true, false)
-}
-
-// StartCommit rolls back the current transaction for the specified keyspace, shard, and tablet type.
-func (dg *discoveryGateway) StartCommit(ctx context.Context, target *querypb.Target, transactionID int64, dtid string) (err error) {
-	return dg.withRetry(ctx, target, func(conn tabletconn.TabletConn, target *querypb.Target) error {
-		startTime := time.Now()
-		innerErr := conn.StartCommit(ctx, target, transactionID, dtid)
-		dg.updateStats(target, startTime, innerErr)
-		return innerErr
-	}, true, false)
-}
-
-// SetRollback rolls back the current transaction for the specified keyspace, shard, and tablet type.
-func (dg *discoveryGateway) SetRollback(ctx context.Context, target *querypb.Target, dtid string, transactionID int64) (err error) {
-	return dg.withRetry(ctx, target, func(conn tabletconn.TabletConn, target *querypb.Target) error {
-		startTime := time.Now()
-		innerErr := conn.SetRollback(ctx, target, dtid, transactionID)
-		dg.updateStats(target, startTime, innerErr)
-		return innerErr
-	}, true, false)
-}
-
-// ConcludeTransaction rolls back the current transaction for the specified keyspace, shard, and tablet type.
-func (dg *discoveryGateway) ConcludeTransaction(ctx context.Context, target *querypb.Target, dtid string) (err error) {
-	return dg.withRetry(ctx, target, func(conn tabletconn.TabletConn, target *querypb.Target) error {
-		startTime := time.Now()
-		innerErr := conn.ConcludeTransaction(ctx, target, dtid)
-		dg.updateStats(target, startTime, innerErr)
-		return innerErr
-	}, true, false)
-}
-
-// ReadTransaction rolls back the current transaction for the specified keyspace, shard, and tablet type.
-func (dg *discoveryGateway) ReadTransaction(ctx context.Context, target *querypb.Target, dtid string) (metadata *querypb.TransactionMetadata, err error) {
-	err = dg.withRetry(ctx, target, func(conn tabletconn.TabletConn, target *querypb.Target) error {
-		startTime := time.Now()
-		var innerErr error
-		metadata, innerErr = conn.ReadTransaction(ctx, target, dtid)
-		dg.updateStats(target, startTime, innerErr)
-		return innerErr
-	}, false, false)
-	return metadata, err
-}
-
-// BeginExecute executes a begin and the non-streaming query for the
-// specified keyspace, shard, and tablet type.
-func (dg *discoveryGateway) BeginExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]interface{}, options *querypb.ExecuteOptions) (qr *sqltypes.Result, transactionID int64, err error) {
-	err = dg.withRetry(ctx, target, func(conn tabletconn.TabletConn, target *querypb.Target) error {
-		var innerErr error
-		startTime := time.Now()
-		qr, transactionID, innerErr = conn.BeginExecute(ctx, target, query, bindVars, options)
-		dg.updateStats(target, startTime, innerErr)
-		return innerErr
-	}, false, false)
-	return qr, transactionID, err
-}
-
-// BeginExecuteBatch executes a begin and a group of queries for the
-// specified keyspace, shard, and tablet type.
-func (dg *discoveryGateway) BeginExecuteBatch(ctx context.Context, target *querypb.Target, queries []querytypes.BoundQuery, asTransaction bool, options *querypb.ExecuteOptions) (qrs []sqltypes.Result, transactionID int64, err error) {
-	err = dg.withRetry(ctx, target, func(conn tabletconn.TabletConn, target *querypb.Target) error {
-		var innerErr error
-		startTime := time.Now()
-		qrs, transactionID, innerErr = conn.BeginExecuteBatch(ctx, target, queries, asTransaction, options)
-		dg.updateStats(target, startTime, innerErr)
-		return innerErr
-	}, false, false)
-	return qrs, transactionID, err
-}
-
-// MessageStream streams messages for the
-// specified keyspace, shard, and tablet type.
-func (dg *discoveryGateway) MessageStream(ctx context.Context, target *querypb.Target, name string, callback func(*sqltypes.Result) error) error {
-	return dg.withRetry(ctx, target, func(conn tabletconn.TabletConn, target *querypb.Target) error {
-		var innerErr error
-		startTime := time.Now()
-		innerErr = conn.MessageStream(ctx, target, name, callback)
-		dg.updateStats(target, startTime, innerErr)
-		return innerErr
-	}, false, true)
-}
-
-// MessageAck acks messages for the
-// specified keyspace, shard, and tablet type.
-func (dg *discoveryGateway) MessageAck(ctx context.Context, target *querypb.Target, name string, ids []*querypb.Value) (int64, error) {
-	var count int64
-	err := dg.withRetry(ctx, target, func(conn tabletconn.TabletConn, target *querypb.Target) error {
-		var innerErr error
-		startTime := time.Now()
-		count, innerErr = conn.MessageAck(ctx, target, name, ids)
-		dg.updateStats(target, startTime, innerErr)
-		return innerErr
-	}, false, false)
-	return count, err
-}
-
-// SplitQuery splits a query into sub-queries for the specified keyspace, shard, and tablet type.
-func (dg *discoveryGateway) SplitQuery(
-	ctx context.Context,
-	target *querypb.Target,
-	query querytypes.BoundQuery,
-	splitColumns []string,
-	splitCount int64,
-	numRowsPerQueryPart int64,
-	algorithm querypb.SplitQueryRequest_Algorithm) (queries []querytypes.QuerySplit, err error) {
-
-	err = dg.withRetry(ctx, target, func(conn tabletconn.TabletConn, target *querypb.Target) error {
-		var innerErr error
-		startTime := time.Now()
-		queries, innerErr = conn.SplitQuery(ctx, target, query, splitColumns, splitCount, numRowsPerQueryPart, algorithm)
-		dg.updateStats(target, startTime, innerErr)
-		return innerErr
-	}, false, false)
-	return
-}
-
-// UpdateStream starts an update stream for the specified keyspace,
-// shard, and tablet type.
-func (dg *discoveryGateway) UpdateStream(ctx context.Context, target *querypb.Target, position string, timestamp int64, callback func(*querypb.StreamEvent) error) error {
-	return dg.withRetry(ctx, target, func(conn tabletconn.TabletConn, target *querypb.Target) error {
-		return conn.UpdateStream(ctx, target, position, timestamp, callback)
-	}, false, true)
+// StreamHealth is currently not implemented.
+// This function hides the inner implementation.
+// TODO(alainjobart): Maybe we should?
+func (dg *discoveryGateway) StreamHealth(ctx context.Context, callback func(*querypb.StreamHealthResponse) error) error {
+	panic("not implemented")
 }
 
 // Close shuts down underlying connections.
+// This function hides the inner implementation.
 func (dg *discoveryGateway) Close(ctx context.Context) error {
 	dg.buffer.Shutdown()
 	for _, ctw := range dg.tabletsWatchers {
@@ -374,18 +157,12 @@ func (dg *discoveryGateway) CacheStatus() TabletCacheStatusList {
 	return res
 }
 
-// StreamHealth is currently not implemented.
-// TODO(alainjobart): Maybe we should?
-func (dg *discoveryGateway) StreamHealth(ctx context.Context, callback func(*querypb.StreamHealthResponse) error) error {
-	panic("not implemented")
-}
-
 // withRetry gets available connections and executes the action. If there are retryable errors,
 // it retries retryCount times before failing. It does not retry if the connection is in
 // the middle of a transaction. While returning the error check if it maybe a result of
 // a resharding event, and set the re-resolve bit and let the upper layers
 // re-resolve and retry.
-func (dg *discoveryGateway) withRetry(ctx context.Context, target *querypb.Target, action func(conn tabletconn.TabletConn, target *querypb.Target) error, inTransaction, isStreaming bool) error {
+func (dg *discoveryGateway) withRetry(ctx context.Context, target *querypb.Target, conn queryservice.QueryService, name string, inTransaction, isStreaming bool, inner func(ctx context.Context, target *querypb.Target, conn queryservice.QueryService) error) error {
 	var tabletLastUsed *topodatapb.Tablet
 	var err error
 	invalidTablets := make(map[string]bool)
@@ -457,7 +234,9 @@ func (dg *discoveryGateway) withRetry(ctx context.Context, target *querypb.Targe
 			return bufferErr
 		}
 
-		err = action(conn, ts.Target)
+		startTime := time.Now()
+		err = inner(ctx, ts.Target, conn)
+		dg.updateStats(target, startTime, err)
 		if dg.canRetry(ctx, err, inTransaction, isStreaming) {
 			invalidTablets[ts.Key] = true
 			continue

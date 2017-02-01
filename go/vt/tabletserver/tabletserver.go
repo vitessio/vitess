@@ -1515,6 +1515,11 @@ func (tsv *TabletServer) HandlePanic(err *error) {
 	}
 }
 
+// Close is a no-op.
+func (tsv *TabletServer) Close(ctx context.Context) error {
+	return nil
+}
+
 // startRequest validates the current state and target and registers
 // the request (a waitgroup) as started. Every startRequest requires one
 // and only one corresponding endRequest. When the service shuts down,

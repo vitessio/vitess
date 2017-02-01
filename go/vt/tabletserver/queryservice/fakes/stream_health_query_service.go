@@ -7,6 +7,7 @@ import (
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	"github.com/youtube/vitess/go/vt/tabletserver/queryservice"
 )
 
 const (
@@ -23,7 +24,7 @@ const (
 // If you want to override other QueryService methods, embed this struct
 // as anonymous field in your own QueryService fake.
 type StreamHealthQueryService struct {
-	ErrorQueryService
+	queryservice.QueryService
 	healthResponses chan *querypb.StreamHealthResponse
 	target          querypb.Target
 }
@@ -31,6 +32,7 @@ type StreamHealthQueryService struct {
 // NewStreamHealthQueryService creates a new fake query service for the target.
 func NewStreamHealthQueryService(target querypb.Target) *StreamHealthQueryService {
 	return &StreamHealthQueryService{
+		QueryService:    ErrorQueryService,
 		healthResponses: make(chan *querypb.StreamHealthResponse, 1000),
 		target:          target,
 	}
