@@ -20,4 +20,19 @@ var (
 	// requestsWindowExceeded tracks for how many requests buffering stopped
 	// early because the configured window was exceeded.
 	requestsWindowExceeded = stats.NewMultiCounters("BufferRequestsWindowExceeded", []string{"Keyspace", "ShardName"})
+
+	// starts counts how often we started buffering (including dry-run bufferings).
+	starts = stats.NewMultiCounters("BufferStarts", []string{"Keyspace", "ShardName"})
+	// stops counts how often we triggered the stop of a buffering, including
+	// dry-run bufferings.
+	// See the type "stopReason" below for all possible values of "Reason".
+	stops = stats.NewMultiCounters("BufferStops", []string{"Keyspace", "ShardName", "Reason"})
+)
+
+// stopReason is used in "stopsByReason" as "Reason" label.
+type stopReason string
+
+const (
+	stopReasonFailoverEndDetected         stopReason = "NewMasterSeen"
+	stopReasonMaxFailoverDurationExceeded            = "MaxDurationExceeded"
 )

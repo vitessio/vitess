@@ -229,6 +229,7 @@ func (sb *shardBuffer) startBufferingLocked(err error) {
 	if sb.mode == bufferDryRun {
 		msg = "Dry-run: Would have started buffering"
 	}
+	starts.Add(sb.statsKey, 1)
 	log.Infof("%v for shard: %s (window: %v, size: %v, max failover duration: %v) (A failover was detected by this seen error: %v.)",
 		msg, topoproto.KeyspaceShardString(sb.keyspace, sb.shard), *window, *size, *maxFailoverDuration, err)
 }
@@ -417,17 +418,18 @@ func (sb *shardBuffer) recordExternallyReparentedTimestamp(timestamp int64) {
 		// First non-zero value after startup. Remember it.
 		sb.externallyReparentedAfterStart = timestamp
 	}
-	sb.stopBufferingLocked("failover end detected")
+	sb.stopBufferingLocked(stopReasonFailoverEndDetected, "failover end detected")
 }
 
 func (sb *shardBuffer) stopBufferingDueToMaxDuration() {
 	sb.mu.Lock()
 	defer sb.mu.Unlock()
 
-	sb.stopBufferingLocked(fmt.Sprintf("stopping buffering because failover did not finish in time (%v)", *maxFailoverDuration))
+	sb.stopBufferingLocked(stopReasonMaxFailoverDurationExceeded,
+		fmt.Sprintf("stopping buffering because failover did not finish in time (%v)", *maxFailoverDuration))
 }
 
-func (sb *shardBuffer) stopBufferingLocked(reason string) {
+func (sb *shardBuffer) stopBufferingLocked(reason stopReason, details string) {
 	if sb.state != stateBuffering {
 		return
 	}
@@ -436,6 +438,8 @@ func (sb *shardBuffer) stopBufferingLocked(reason string) {
 	sb.lastEnd = time.Now()
 	d := time.Since(sb.lastStart)
 	failoverDurationMs.Set(sb.statsKey, int64(d/time.Millisecond))
+	statsKeyWithReason := append(sb.statsKey, string(reason))
+	stops.Add(statsKeyWithReason, 1)
 
 	sb.logErrorIfStateNotLocked(stateBuffering)
 	sb.state = stateDraining
@@ -448,7 +452,7 @@ func (sb *shardBuffer) stopBufferingLocked(reason string) {
 	if sb.mode == bufferDryRun {
 		msg = "Dry-run: Would have stopped buffering"
 	}
-	log.Infof("%v for shard: %s after: %.1f seconds due to: %v. Draining %d buffered requests now.", msg, topoproto.KeyspaceShardString(sb.keyspace, sb.shard), d.Seconds(), reason, len(q))
+	log.Infof("%v for shard: %s after: %.1f seconds due to: %v. Draining %d buffered requests now.", msg, topoproto.KeyspaceShardString(sb.keyspace, sb.shard), d.Seconds(), details, len(q))
 
 	// Start the drain. (Use a new Go routine to release the lock.)
 	go sb.drain(q)

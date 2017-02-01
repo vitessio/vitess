@@ -31,10 +31,13 @@ var (
 	nonFailoverErr = vterrors.FromError(vtrpcpb.ErrorCode_QUERY_NOT_SERVED,
 		errors.New("vttablet: rpc error: code = 9 desc = gRPCServerError: retry: TODO(mberlin): Insert here any realistic error not caused by a failover"))
 
-	statsKeyJoined = fmt.Sprintf("%s.%s", keyspace, shard)
+	statsKeyJoined                    = fmt.Sprintf("%s.%s", keyspace, shard)
+	statsKeyJoinedFailoverEndDetected = statsKeyJoined + "." + string(stopReasonFailoverEndDetected)
 )
 
 func TestBuffer(t *testing.T) {
+	resetVariables()
+
 	// Enable the buffer.
 	flag.Set("enable_vtgate_buffer", "true")
 	flag.Set("vtgate_buffer_keyspace_shards", topoproto.KeyspaceShardString(keyspace, shard))
@@ -49,6 +52,10 @@ func TestBuffer(t *testing.T) {
 	stopped := issueRequest(context.Background(), t, b, failoverErr)
 	if err := waitForRequestsInFlight(b, 1); err != nil {
 		t.Fatal(err)
+	}
+	// Start counter must have been increased.
+	if got, want := starts.Counts()[statsKeyJoined], int64(1); got != want {
+		t.Fatalf("buffering start was not tracked: got = %v, want = %v", got, want)
 	}
 
 	// Subsequent requests with errors not related to the failover are not buffered.
@@ -88,6 +95,10 @@ func TestBuffer(t *testing.T) {
 	if got, want := requestsInFlightMax.Counts()[statsKeyJoined], int64(3); got != want {
 		t.Fatalf("wrong value for BufferRequestsInFlightMax: got = %v, want = %v", got, want)
 	}
+	// Stop counter should have been increased.
+	if got, want := stops.Counts()[statsKeyJoinedFailoverEndDetected], int64(1); got != want {
+		t.Fatalf("buffering stop was not tracked: got = %v, want = %v", got, want)
+	}
 	// Drain will reset the state to "idle" eventually.
 	if err := waitForState(b, stateIdle); err != nil {
 		t.Fatal(err)
@@ -108,6 +119,10 @@ func TestBuffer(t *testing.T) {
 	if got, want := requestsInFlightMax.Counts()[statsKeyJoined], int64(1); got != want {
 		t.Fatalf("wrong value for BufferRequestsInFlightMax: got = %v, want = %v", got, want)
 	}
+	// Start counter must have been increased for the second failover.
+	if got, want := starts.Counts()[statsKeyJoined], int64(2); got != want {
+		t.Fatalf("buffering start was not tracked: got = %v, want = %v", got, want)
+	}
 	// Stop buffering.
 	b.StatsUpdate(&discovery.TabletStats{
 		Target: &querypb.Target{Keyspace: keyspace, Shard: shard, TabletType: topodatapb.TabletType_MASTER},
@@ -115,6 +130,10 @@ func TestBuffer(t *testing.T) {
 	})
 	if err := <-stopped4; err != nil {
 		t.Fatalf("request should have been buffered and not returned an error: %v", err)
+	}
+	// Stop counter must have been increased for the second failover.
+	if got, want := stops.Counts()[statsKeyJoinedFailoverEndDetected], int64(2); got != want {
+		t.Fatalf("buffering stop was not tracked: got = %v, want = %v", got, want)
 	}
 }
 
@@ -182,6 +201,8 @@ func waitForState(b *Buffer, want bufferState) error {
 
 // TestDryRun tests the case when only the dry-run mode is enabled globally.
 func TestDryRun(t *testing.T) {
+	resetVariables()
+
 	flag.Set("enable_vtgate_buffer_dry_run", "true")
 	defer resetFlagsForTesting()
 	b := New()
@@ -194,6 +215,9 @@ func TestDryRun(t *testing.T) {
 	if err := waitForState(b, stateBuffering); err != nil {
 		t.Fatal(err)
 	}
+	if got, want := starts.Counts()[statsKeyJoined], int64(1); got != want {
+		t.Fatalf("buffering start was not tracked: got = %v, want = %v", got, want)
+	}
 	if got, want := requestsDryRunMax.Counts()[statsKeyJoined], int64(1); got != want {
 		t.Fatalf("dry-run request count did not increase: got = %v, want = %v", got, want)
 	}
@@ -205,6 +229,9 @@ func TestDryRun(t *testing.T) {
 	})
 	if err := waitForState(b, stateIdle); err != nil {
 		t.Fatal(err)
+	}
+	if got, want := stops.Counts()[statsKeyJoinedFailoverEndDetected], int64(1); got != want {
+		t.Fatalf("buffering stop was not tracked: got = %v, want = %v", got, want)
 	}
 }
 
@@ -599,4 +626,11 @@ func waitForRequestsExceededWindow(count int) error {
 			return fmt.Errorf("wrong number of requests which exceeded their buffering window: got = %v, want = %v", got, want)
 		}
 	}
+}
+
+// resetVariables resets the task level variables. The code does not reset these
+// with very failover.
+func resetVariables() {
+	starts.Reset()
+	stops.Reset()
 }
