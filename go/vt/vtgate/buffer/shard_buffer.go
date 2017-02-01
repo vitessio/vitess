@@ -183,7 +183,7 @@ func (sb *shardBuffer) waitForFailoverEnd(ctx context.Context, keyspace, shard s
 	if sb.mode == bufferDryRun {
 		sb.mu.Unlock()
 		// Dry-run. Do not actually buffer the request and return early.
-		requestsDryRunMax.Add(sb.statsKey, 1)
+		lastRequestsDryRunMax.Add(sb.statsKey, 1)
 		return nil, nil
 	}
 
@@ -222,9 +222,9 @@ func (sb *shardBuffer) shouldBufferLocked(failoverDetected bool) bool {
 
 func (sb *shardBuffer) startBufferingLocked(err error) {
 	// Reset monitoring data from previous failover.
-	requestsInFlightMax.Set(sb.statsKey, 0)
-	requestsDryRunMax.Set(sb.statsKey, 0)
-	failoverDurationMs.Set(sb.statsKey, 0)
+	lastRequestsInFlightMax.Set(sb.statsKey, 0)
+	lastRequestsDryRunMax.Set(sb.statsKey, 0)
+	failoverDurationSumMs.Set(sb.statsKey, 0)
 
 	sb.lastStart = time.Now()
 	sb.logErrorIfStateNotLocked(stateIdle)
@@ -287,8 +287,8 @@ func (sb *shardBuffer) bufferRequestLocked(ctx context.Context) (*entry, error) 
 	e.bufferCtx, e.bufferCancel = context.WithCancel(ctx)
 	sb.queue = append(sb.queue, e)
 
-	if max := requestsInFlightMax.Counts()[sb.statsKeyJoined]; max < int64(len(sb.queue)) {
-		requestsInFlightMax.Set(sb.statsKey, int64(len(sb.queue)))
+	if max := lastRequestsInFlightMax.Counts()[sb.statsKeyJoined]; max < int64(len(sb.queue)) {
+		lastRequestsInFlightMax.Set(sb.statsKey, int64(len(sb.queue)))
 	}
 
 	if len(sb.queue) == 1 {
@@ -445,9 +445,21 @@ func (sb *shardBuffer) stopBufferingLocked(reason stopReason, details string) {
 	// Stop buffering.
 	sb.lastEnd = time.Now()
 	d := time.Since(sb.lastStart)
-	failoverDurationMs.Set(sb.statsKey, int64(d/time.Millisecond))
+
 	statsKeyWithReason := append(sb.statsKey, string(reason))
 	stops.Add(statsKeyWithReason, 1)
+
+	lastFailoverDurationMs.Set(sb.statsKey, int64(d/time.Millisecond))
+	failoverDurationSumMs.Add(sb.statsKey, int64(d/time.Millisecond))
+	if sb.mode == bufferDryRun {
+		utilDryRunMax := int64(
+			float64(lastRequestsDryRunMax.Counts()[sb.statsKeyJoined]) / float64(*size) * 100.0)
+		utilizationDryRunSum.Add(sb.statsKey, utilDryRunMax)
+	} else {
+		utilMax := int64(
+			float64(lastRequestsInFlightMax.Counts()[sb.statsKeyJoined]) / float64(*size) * 100.0)
+		utilizationSum.Add(sb.statsKey, utilMax)
+	}
 
 	sb.logErrorIfStateNotLocked(stateBuffering)
 	sb.state = stateDraining

@@ -91,17 +91,21 @@ func TestBuffer(t *testing.T) {
 		t.Fatalf("request should have been buffered and not returned an error: %v", err)
 	}
 	// Failover time should have been be published.
-	durations := failoverDurationMs.Counts()
+	durations := failoverDurationSumMs.Counts()
 	if _, ok := durations[statsKeyJoined]; !ok {
 		t.Fatalf("a failover time must have been recorded: %v", durations)
 	}
 	// Recorded max buffer usage should be 3 now.
-	if got, want := requestsInFlightMax.Counts()[statsKeyJoined], int64(3); got != want {
+	if got, want := lastRequestsInFlightMax.Counts()[statsKeyJoined], int64(3); got != want {
 		t.Fatalf("wrong value for BufferRequestsInFlightMax: got = %v, want = %v", got, want)
 	}
 	// Stop counter should have been increased.
 	if got, want := stops.Counts()[statsKeyJoinedFailoverEndDetected], int64(1); got != want {
 		t.Fatalf("buffering stop was not tracked: got = %v, want = %v", got, want)
+	}
+	// Utilization in percentage has increased.
+	if got, want := utilizationSum.Counts()[statsKeyJoined], int64(30); got != want {
+		t.Fatalf("wrong buffer utilization: got = %v, want = %v", got, want)
 	}
 	// Drain will reset the state to "idle" eventually.
 	if err := waitForState(b, stateIdle); err != nil {
@@ -123,7 +127,7 @@ func TestBuffer(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Recorded max buffer usage should be 1 for the second failover.
-	if got, want := requestsInFlightMax.Counts()[statsKeyJoined], int64(1); got != want {
+	if got, want := lastRequestsInFlightMax.Counts()[statsKeyJoined], int64(1); got != want {
 		t.Fatalf("wrong value for BufferRequestsInFlightMax: got = %v, want = %v", got, want)
 	}
 	// Start counter must have been increased for the second failover.
@@ -141,6 +145,10 @@ func TestBuffer(t *testing.T) {
 	// Stop counter must have been increased for the second failover.
 	if got, want := stops.Counts()[statsKeyJoinedFailoverEndDetected], int64(2); got != want {
 		t.Fatalf("buffering stop was not tracked: got = %v, want = %v", got, want)
+	}
+	// Utilization in percentage has increased.
+	if got, want := utilizationSum.Counts()[statsKeyJoined], int64(40); got != want {
+		t.Fatalf("wrong buffer utilization: got = %v, want = %v", got, want)
 	}
 }
 
@@ -225,7 +233,7 @@ func TestDryRun(t *testing.T) {
 	if got, want := starts.Counts()[statsKeyJoined], int64(1); got != want {
 		t.Fatalf("buffering start was not tracked: got = %v, want = %v", got, want)
 	}
-	if got, want := requestsDryRunMax.Counts()[statsKeyJoined], int64(1); got != want {
+	if got, want := lastRequestsDryRunMax.Counts()[statsKeyJoined], int64(1); got != want {
 		t.Fatalf("dry-run request count did not increase: got = %v, want = %v", got, want)
 	}
 
@@ -239,6 +247,9 @@ func TestDryRun(t *testing.T) {
 	}
 	if got, want := stops.Counts()[statsKeyJoinedFailoverEndDetected], int64(1); got != want {
 		t.Fatalf("buffering stop was not tracked: got = %v, want = %v", got, want)
+	}
+	if got, want := utilizationDryRunSum.Counts()[statsKeyJoined], int64(10); got != want {
+		t.Fatalf("wrong buffer utilization: got = %v, want = %v", got, want)
 	}
 }
 
@@ -393,7 +404,7 @@ func testRequestCanceled(t *testing.T, explicitEnd bool) {
 		t.Fatal(err)
 	}
 	// Recorded max buffer usage stay at 2 although the second request was canceled.
-	if got, want := requestsInFlightMax.Counts()[statsKeyJoined], int64(2); got != want {
+	if got, want := lastRequestsInFlightMax.Counts()[statsKeyJoined], int64(2); got != want {
 		t.Fatalf("wrong value for BufferRequestsInFlightMax: got = %v, want = %v", got, want)
 	}
 
@@ -643,6 +654,9 @@ func waitForRequestsExceededWindow(count int) error {
 func resetVariables() {
 	starts.Reset()
 	stops.Reset()
+
+	utilizationSum.Reset()
+	utilizationDryRunSum.Reset()
 
 	startsSkipped.Reset()
 }
