@@ -20,6 +20,9 @@ var _ QueryService = &wrappedService{}
 type WrapperFunc func(ctx context.Context, target *querypb.Target, conn QueryService, name string, inTransaction, isStreaming bool, inner func(context.Context, *querypb.Target, QueryService) error) error
 
 // Wrap returns a wrapped version of the original QueryService implementation.
+// This lets you avoid repeating boiler-plate code by consolidating it in the
+// wrapper function.
+// A good example of this is go/vt/vtgate/gateway/discoverygateway.go.
 // For every method invocation, the wrapper function is called, which can
 // in turn call the provided inner function that will use the input parameters
 // to call the implementation. In order to load balance across multiple

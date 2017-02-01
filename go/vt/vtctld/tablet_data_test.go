@@ -12,6 +12,7 @@ import (
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/tabletserver/grpcqueryservice"
+	"github.com/youtube/vitess/go/vt/tabletserver/queryservice"
 	"github.com/youtube/vitess/go/vt/tabletserver/queryservice/fakes"
 	"github.com/youtube/vitess/go/vt/topo/memorytopo"
 	"github.com/youtube/vitess/go/vt/wrangler"
@@ -23,7 +24,7 @@ import (
 
 // streamHealthTabletServer is a local QueryService implementation to support the tests
 type streamHealthTabletServer struct {
-	fakes.ErrorQueryService
+	queryservice.QueryService
 	t *testing.T
 
 	// streamHealthMutex protects all the following fields
@@ -34,6 +35,7 @@ type streamHealthTabletServer struct {
 
 func newStreamHealthTabletServer(t *testing.T) *streamHealthTabletServer {
 	return &streamHealthTabletServer{
+		QueryService:    fakes.ErrorQueryService,
 		t:               t,
 		streamHealthMap: make(map[int]chan<- *querypb.StreamHealthResponse),
 	}

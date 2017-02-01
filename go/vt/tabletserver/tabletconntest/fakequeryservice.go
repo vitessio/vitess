@@ -45,6 +45,11 @@ type FakeQueryService struct {
 	StreamHealthResponse *querypb.StreamHealthResponse
 }
 
+// Close is a no-op.
+func (f *FakeQueryService) Close(ctx context.Context) error {
+	return nil
+}
+
 // HandlePanic is part of the queryservice.QueryService interface
 func (f *FakeQueryService) HandlePanic(err *error) {
 	if x := recover(); x != nil {
@@ -668,10 +673,7 @@ func (f *FakeQueryService) SplitQuery(
 		panic(fmt.Errorf("test-triggered panic"))
 	}
 	f.checkTargetCallerID(ctx, "SplitQuery", target)
-	if !reflect.DeepEqual(querytypes.BoundQuery{
-		Sql:           query.Sql,
-		BindVariables: query.BindVariables,
-	}, SplitQueryBoundQuery) {
+	if !reflect.DeepEqual(query, SplitQueryBoundQuery) {
 		f.t.Errorf("invalid SplitQuery.SplitQueryRequest.Query: got %v expected %v",
 			querytypes.QueryAsString(query.Sql, query.BindVariables), SplitQueryBoundQuery)
 	}

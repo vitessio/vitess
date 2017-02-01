@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// Package sandboxconn provides a fake TabletConn implementation for tests.
+// Package sandboxconn provides a fake QueryService implementation for tests.
 // It can return real results, and simulate error cases.
 package sandboxconn
 
@@ -11,6 +11,7 @@ import (
 
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/sync2"
+	"github.com/youtube/vitess/go/vt/tabletserver/queryservice"
 	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"golang.org/x/net/context"
@@ -20,7 +21,7 @@ import (
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
-// SandboxConn satisfies the TabletConn interface
+// SandboxConn satisfies the QueryService interface
 type SandboxConn struct {
 	tablet *topodatapb.Tablet
 
@@ -89,7 +90,7 @@ type SandboxConn struct {
 	TransactionID sync2.AtomicInt64
 }
 
-var _ tabletconn.TabletConn = (*SandboxConn)(nil) // compile-time interface check
+var _ queryservice.QueryService = (*SandboxConn)(nil) // compile-time interface check
 
 // NewSandboxConn returns a new SandboxConn targeted to the provided tablet.
 func NewSandboxConn(t *topodatapb.Tablet) *SandboxConn {
@@ -196,7 +197,7 @@ func (sbc *SandboxConn) SetResults(r []*sqltypes.Result) {
 	sbc.results = r
 }
 
-// Execute is part of the TabletConn interface.
+// Execute is part of the QueryService interface.
 func (sbc *SandboxConn) Execute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]interface{}, transactionID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
 	sbc.ExecCount.Add(1)
 	bv := make(map[string]interface{})
@@ -214,7 +215,7 @@ func (sbc *SandboxConn) Execute(ctx context.Context, target *querypb.Target, que
 	return sbc.getNextResult(), nil
 }
 
-// ExecuteBatch is part of the TabletConn interface.
+// ExecuteBatch is part of the QueryService interface.
 func (sbc *SandboxConn) ExecuteBatch(ctx context.Context, target *querypb.Target, queries []querytypes.BoundQuery, asTransaction bool, transactionID int64, options *querypb.ExecuteOptions) ([]sqltypes.Result, error) {
 	sbc.ExecCount.Add(1)
 	if asTransaction {
@@ -232,7 +233,7 @@ func (sbc *SandboxConn) ExecuteBatch(ctx context.Context, target *querypb.Target
 	return result, nil
 }
 
-// StreamExecute is part of the TabletConn interface.
+// StreamExecute is part of the QueryService interface.
 func (sbc *SandboxConn) StreamExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]interface{}, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
 	sbc.ExecCount.Add(1)
 	bv := make(map[string]interface{})
@@ -251,7 +252,7 @@ func (sbc *SandboxConn) StreamExecute(ctx context.Context, target *querypb.Targe
 	return callback(sbc.getNextResult())
 }
 
-// Begin is part of the TabletConn interface.
+// Begin is part of the QueryService interface.
 func (sbc *SandboxConn) Begin(ctx context.Context, target *querypb.Target) (int64, error) {
 	sbc.BeginCount.Add(1)
 	err := sbc.getError()
@@ -261,13 +262,13 @@ func (sbc *SandboxConn) Begin(ctx context.Context, target *querypb.Target) (int6
 	return sbc.TransactionID.Add(1), nil
 }
 
-// Commit is part of the TabletConn interface.
+// Commit is part of the QueryService interface.
 func (sbc *SandboxConn) Commit(ctx context.Context, target *querypb.Target, transactionID int64) error {
 	sbc.CommitCount.Add(1)
 	return sbc.getError()
 }
 
-// Rollback is part of the TabletConn interface.
+// Rollback is part of the QueryService interface.
 func (sbc *SandboxConn) Rollback(ctx context.Context, target *querypb.Target, transactionID int64) error {
 	sbc.RollbackCount.Add(1)
 	return sbc.getError()
@@ -381,7 +382,7 @@ func (sbc *SandboxConn) ReadTransaction(ctx context.Context, target *querypb.Tar
 	return nil, nil
 }
 
-// BeginExecute is part of the TabletConn interface.
+// BeginExecute is part of the QueryService interface.
 func (sbc *SandboxConn) BeginExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]interface{}, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, error) {
 	transactionID, err := sbc.Begin(ctx, target)
 	if err != nil {
@@ -391,7 +392,7 @@ func (sbc *SandboxConn) BeginExecute(ctx context.Context, target *querypb.Target
 	return result, transactionID, err
 }
 
-// BeginExecuteBatch is part of the TabletConn interface.
+// BeginExecuteBatch is part of the QueryService interface.
 func (sbc *SandboxConn) BeginExecuteBatch(ctx context.Context, target *querypb.Target, queries []querytypes.BoundQuery, asTransaction bool, options *querypb.ExecuteOptions) ([]sqltypes.Result, int64, error) {
 	transactionID, err := sbc.Begin(ctx, target)
 	if err != nil {
@@ -401,13 +402,13 @@ func (sbc *SandboxConn) BeginExecuteBatch(ctx context.Context, target *querypb.T
 	return results, transactionID, err
 }
 
-// MessageStream is part of the TabletConn interface.
+// MessageStream is part of the QueryService interface.
 func (sbc *SandboxConn) MessageStream(ctx context.Context, target *querypb.Target, name string, callback func(*sqltypes.Result) error) (err error) {
 	callback(SingleRowResult)
 	return nil
 }
 
-// MessageAck is part of the TabletConn interface.
+// MessageAck is part of the QueryService interface.
 func (sbc *SandboxConn) MessageAck(ctx context.Context, target *querypb.Target, name string, ids []*querypb.Value) (count int64, err error) {
 	sbc.MessageIDs = ids
 	return int64(len(ids)), nil
@@ -445,10 +446,14 @@ func (sbc *SandboxConn) StreamHealth(ctx context.Context, callback func(*querypb
 	return fmt.Errorf("Not implemented in test")
 }
 
-// UpdateStream is part of the TabletConn interface.
+// UpdateStream is part of the QueryService interface.
 func (sbc *SandboxConn) UpdateStream(ctx context.Context, target *querypb.Target, position string, timestamp int64, callback func(*querypb.StreamEvent) error) error {
 	// FIXME(alainjobart) implement, use in vtgate tests.
 	return fmt.Errorf("Not implemented in test")
+}
+
+// HandlePanic is part of the QueryService interface.
+func (sbc *SandboxConn) HandlePanic(err *error) {
 }
 
 // Close does not change ExecCount
@@ -456,7 +461,7 @@ func (sbc *SandboxConn) Close(ctx context.Context) error {
 	return nil
 }
 
-// Tablet is part of the TabletConn interface.
+// Tablet is part of the QueryService interface.
 func (sbc *SandboxConn) Tablet() *topodatapb.Tablet {
 	return sbc.tablet
 }
