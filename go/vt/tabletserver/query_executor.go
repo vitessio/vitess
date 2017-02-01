@@ -10,18 +10,20 @@ import (
 	"strings"
 	"time"
 
+	"golang.org/x/net/context"
+
 	"github.com/youtube/vitess/go/hack"
-	"github.com/youtube/vitess/go/mysql"
+	"github.com/youtube/vitess/go/mysqlconn"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/trace"
 	"github.com/youtube/vitess/go/vt/callerid"
 	"github.com/youtube/vitess/go/vt/callinfo"
-	querypb "github.com/youtube/vitess/go/vt/proto/query"
-	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 	"github.com/youtube/vitess/go/vt/schema"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/tabletserver/planbuilder"
-	"golang.org/x/net/context"
+
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 // QueryExecutor is used for executing a query request.
@@ -44,15 +46,6 @@ var sequenceFields = []*querypb.Field{
 	},
 }
 
-func addUserTableQueryStats(queryServiceStats *QueryServiceStats, ctx context.Context, tableName sqlparser.TableIdent, queryType string, duration int64) {
-	username := callerid.GetPrincipal(callerid.EffectiveCallerIDFromContext(ctx))
-	if username == "" {
-		username = callerid.GetUsername(callerid.ImmediateCallerIDFromContext(ctx))
-	}
-	queryServiceStats.UserTableQueryCount.Add([]string{tableName.String(), username, queryType}, 1)
-	queryServiceStats.UserTableQueryTimesNs.Add([]string{tableName.String(), username, queryType}, int64(duration))
-}
-
 // Execute performs a non-streaming query execution.
 func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 	qre.logStats.TransactionID = qre.transactionID
@@ -61,7 +54,7 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 	defer func(start time.Time) {
 		duration := time.Now().Sub(start)
 		qre.qe.queryServiceStats.QueryStats.Add(planName, duration)
-		addUserTableQueryStats(qre.qe.queryServiceStats, qre.ctx, qre.plan.TableName, "Execute", int64(duration))
+		qre.qe.queryServiceStats.addUserTableQueryStats(qre.ctx, qre.plan.TableName, "Execute", int64(duration))
 
 		if reply == nil {
 			qre.plan.AddStats(1, duration, qre.logStats.MysqlResponseTime, 0, 1)
@@ -148,7 +141,7 @@ func (qre *QueryExecutor) Stream(includedFields querypb.ExecuteOptions_IncludedF
 
 	defer func(start time.Time) {
 		qre.qe.queryServiceStats.QueryStats.Record(qre.plan.PlanID.String(), start)
-		addUserTableQueryStats(qre.qe.queryServiceStats, qre.ctx, qre.plan.TableName, "Stream", int64(time.Now().Sub(start)))
+		qre.qe.queryServiceStats.addUserTableQueryStats(qre.ctx, qre.plan.TableName, "Stream", int64(time.Now().Sub(start)))
 	}(time.Now())
 
 	if err := qre.checkPermissions(); err != nil {
@@ -505,7 +498,7 @@ func (qre *QueryExecutor) execUpsertPK(conn *TxConnection) (*sqltypes.Result, er
 	if !ok {
 		return result, err
 	}
-	if terr.SQLError != mysql.ErrDupEntry {
+	if terr.SQLError != mysqlconn.ERDupEntry {
 		return nil, err
 	}
 	// If the error didn't match pk, just return the error without updating.

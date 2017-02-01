@@ -6,6 +6,7 @@ import (
 	"net"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -77,7 +78,10 @@ func TestConnectTimeout(t *testing.T) {
 	}
 
 	// Now the server will listen, but close all connections on accept.
+	wg := sync.WaitGroup{}
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		for {
 			conn, err := listener.Accept()
 			if err != nil {
@@ -91,9 +95,16 @@ func TestConnectTimeout(t *testing.T) {
 	_, err = Connect(ctx, params)
 	assertSQLError(t, err, CRServerLost, SSUnknownSQLState, "initial packet read failed")
 
-	// Tests a connection where Dial fails properly returns the
-	// right error. To simulate exactly the right failure, try to dial
-	// a Unix socket that's just a temp file.
+	// Now close the listener. Connect should fail right away,
+	// check the error.
+	listener.Close()
+	wg.Wait()
+	_, err = Connect(ctx, params)
+	assertSQLError(t, err, CRConnHostError, SSUnknownSQLState, "connection refused")
+
+	// Tests a connection where Dial to a unix socket fails
+	// properly returns the right error. To simulate exactly the
+	// right failure, try to dial a Unix socket that's just a temp file.
 	fd, err := ioutil.TempFile("", "mysqlconn")
 	if err != nil {
 		t.Fatalf("cannot create TemFile: %v", err)

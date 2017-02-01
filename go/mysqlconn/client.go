@@ -71,8 +71,17 @@ func Connect(ctx context.Context, params *sqldb.ConnParams) (*Conn, error) {
 			conn, err = net.Dial(netProto, addr)
 		}
 		if err != nil {
-			status <- connectResult{
-				err: sqldb.NewSQLError(CRConnectionError, SSUnknownSQLState, "net.Dial(%v,%v) failed: %v", netProto, addr, err),
+			// If we get an error, the connection to a Unix socket
+			// should return a 2002, but for a TCP socket it
+			// should return a 2003.
+			if netProto == "tcp" {
+				status <- connectResult{
+					err: sqldb.NewSQLError(CRConnHostError, SSUnknownSQLState, "net.Dial(%v) failed: %v", addr, err),
+				}
+			} else {
+				status <- connectResult{
+					err: sqldb.NewSQLError(CRConnectionError, SSUnknownSQLState, "net.Dial(%v) to local server failed: %v", addr, err),
+				}
 			}
 			return
 		}

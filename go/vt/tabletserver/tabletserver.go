@@ -18,7 +18,7 @@ import (
 
 	"github.com/youtube/vitess/go/acl"
 	"github.com/youtube/vitess/go/history"
-	"github.com/youtube/vitess/go/mysql"
+	"github.com/youtube/vitess/go/mysqlconn"
 	"github.com/youtube/vitess/go/mysqlconn/replication"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/stats"
@@ -1067,8 +1067,7 @@ func (tsv *TabletServer) SplitQuery(
 			}
 			defer func(start time.Time) {
 				splitTableName := splitParams.GetSplitTableName()
-				addUserTableQueryStats(
-					tsv.qe.queryServiceStats, ctx, splitTableName, "SplitQuery", int64(time.Now().Sub(start)))
+				tsv.qe.queryServiceStats.addUserTableQueryStats(ctx, splitTableName, "SplitQuery", int64(time.Now().Sub(start)))
 			}(time.Now())
 			sqlExecuter, err := newSplitQuerySQLExecuter(ctx, logStats, tsv.qe)
 			if err != nil {
@@ -1215,10 +1214,13 @@ func (tsv *TabletServer) handleError(
 	default:
 		// We want to suppress/demote some MySQL error codes.
 		switch terr.SQLError {
-		case mysql.ErrDupEntry:
+		case mysqlconn.ERDupEntry:
 			return myError
-		case mysql.ErrLockWaitTimeout, mysql.ErrLockDeadlock, mysql.ErrDataTooLong,
-			mysql.ErrDataOutOfRange, mysql.ErrBadNullError:
+		case mysqlconn.ERLockWaitTimeout,
+			mysqlconn.ERLockDeadlock,
+			mysqlconn.ERDataTooLong,
+			mysqlconn.ERDataOutOfRange,
+			mysqlconn.ERBadNullError:
 			logMethod = log.Infof
 		case 0:
 			if !strings.Contains(terr.Error(), "Row count exceeded") {

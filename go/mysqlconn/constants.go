@@ -154,9 +154,11 @@ const (
 	CRUnknownError = 2000
 
 	// CRConnectionError is CR_CONNECTION_ERROR
+	// This is returned if a connection via a Unix socket fails.
 	CRConnectionError = 2002
 
 	// CRConnHostError is CR_CONN_HOST_ERROR
+	// This is returned if a connection via a TCP socket fails.
 	CRConnHostError = 2003
 
 	// CRServerGone is CR_SERVER_GONE_ERROR.
@@ -200,6 +202,9 @@ const (
 	// ERUnknownComError is ER_UNKNOWN_COM_ERROR
 	ERUnknownComError = 1047
 
+	// ERBadNullError is ER_BAD_NULL_ERROR
+	ERBadNullError = 1048
+
 	// ERDupEntry is ER_DUP_ENTRY
 	ERDupEntry = 1062
 
@@ -209,6 +214,21 @@ const (
 	// ERCantDoThisDuringAnTransaction is
 	// ER_CANT_DO_THIS_DURING_AN_TRANSACTION
 	ERCantDoThisDuringAnTransaction = 1179
+
+	// ERLockWaitTimeout is ER_LOCK_WAIT_TIMEOUT
+	ERLockWaitTimeout = 1205
+
+	// ERLockDeadlock is ER_LOCK_DEADLOCK
+	ERLockDeadlock = 1213
+
+	// EROptionPreventsStatement is ER_OPTION_PREVENTS_STATEMENT
+	EROptionPreventsStatement = 1290
+
+	// ERDataTooLong is ER_DATA_TOO_LONG
+	ERDataTooLong = 1406
+
+	// ERDataOutOfRange is ER_DATA_OUT_OF_RANGE
+	ERDataOutOfRange = 1690
 )
 
 // Sql states for errors.
@@ -220,21 +240,33 @@ const (
 	// in client.c. So using that one.
 	SSUnknownSQLState = "HY000"
 
-	// SSDupKey is ER_DUP_KEY
-	SSDupKey = "23000"
-
-	// SSAccessDeniedError is ER_ACCESS_DENIED_ERROR
-	SSAccessDeniedError = "28000"
-
 	// SSUnknownComError is ER_UNKNOWN_COM_ERROR
 	SSUnknownComError = "08S01"
 
 	// SSHandshakeError is ER_HANDSHAKE_ERROR
 	SSHandshakeError = "08S01"
 
+	// SSDataTooLong is ER_DATA_TOO_LONG
+	SSDataTooLong = "22001"
+
+	// SSDataOutOfRange is ER_DATA_OUT_OF_RANGE
+	SSDataOutOfRange = "22003"
+
+	// SSBadNullError is ER_BAD_NULL_ERROR
+	SSBadNullError = "23000"
+
+	// SSDupKey is ER_DUP_KEY
+	SSDupKey = "23000"
+
 	// SSCantDoThisDuringAnTransaction is
 	// ER_CANT_DO_THIS_DURING_AN_TRANSACTION
 	SSCantDoThisDuringAnTransaction = "25000"
+
+	// SSAccessDeniedError is ER_ACCESS_DENIED_ERROR
+	SSAccessDeniedError = "28000"
+
+	// SSLockDeadlock is ER_LOCK_DEADLOCK
+	SSLockDeadlock = "40001"
 )
 
 // Status flags. They are returned by the server in a few cases.

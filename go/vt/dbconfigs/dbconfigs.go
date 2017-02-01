@@ -12,8 +12,11 @@ import (
 	"fmt"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/sqldb"
+
+	// Include both current implementations.
+	_ "github.com/youtube/vitess/go/mysql"
+	_ "github.com/youtube/vitess/go/mysqlconn"
 )
 
 // We keep a global singleton for the db configs, and that's the one
@@ -37,6 +40,9 @@ const (
 	FilteredConfig
 	ReplConfig
 )
+
+// redactedPassword is used in redacted configs so it's not in logs.
+const redactedPassword = "****"
 
 // The flags will change the global singleton
 func registerConnFlags(connParams *sqldb.ConnParams, name string) {
@@ -118,7 +124,7 @@ type DBConfigs struct {
 }
 
 func (dbcfgs *DBConfigs) String() string {
-	if dbcfgs.App.Pass != mysql.RedactedPassword {
+	if dbcfgs.App.Pass != redactedPassword {
 		panic("Cannot log a non-redacted DBConfig")
 	}
 	data, err := json.MarshalIndent(dbcfgs, "", "  ")
@@ -130,11 +136,11 @@ func (dbcfgs *DBConfigs) String() string {
 
 // Redact will remove the password, so the object can be logged
 func (dbcfgs *DBConfigs) Redact() {
-	dbcfgs.App.Pass = mysql.RedactedPassword
-	dbcfgs.AllPrivs.Pass = mysql.RedactedPassword
-	dbcfgs.Dba.Pass = mysql.RedactedPassword
-	dbcfgs.Filtered.Pass = mysql.RedactedPassword
-	dbcfgs.Repl.Pass = mysql.RedactedPassword
+	dbcfgs.App.Pass = redactedPassword
+	dbcfgs.AllPrivs.Pass = redactedPassword
+	dbcfgs.Dba.Pass = redactedPassword
+	dbcfgs.Filtered.Pass = redactedPassword
+	dbcfgs.Repl.Pass = redactedPassword
 }
 
 // IsZero returns true if DBConfigs was uninitialized.
