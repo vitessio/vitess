@@ -333,6 +333,18 @@ func testRequestCanceled(t *testing.T, explicitEnd bool) {
 	if err := <-stopped1; err != nil {
 		t.Fatalf("request should have been buffered and not returned an error: %v", err)
 	}
+
+	// If buffering stopped implicitly, the explicit signal will still happen
+	// shortly after. In that case, the buffer should ignore it.
+	if !explicitEnd {
+		b.StatsUpdate(&discovery.TabletStats{
+			Target: &querypb.Target{Keyspace: keyspace, Shard: shard, TabletType: topodatapb.TabletType_MASTER},
+			TabletExternallyReparentedTimestamp: 1, // Use any value > 0.
+		})
+	}
+	if err := waitForState(b, stateIdle); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestEviction(t *testing.T) {
