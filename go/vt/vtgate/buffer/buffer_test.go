@@ -202,6 +202,35 @@ func TestPassthrough(t *testing.T) {
 	}
 }
 
+// TestPassThroughLastReparentTooRecent tests that buffering is skipped if
+// we see the failover end faster than the beginning.
+func TestPassThroughLastReparentTooRecent(t *testing.T) {
+	flag.Set("enable_vtgate_buffer", "true")
+	flag.Set("vtgate_buffer_keyspace_shards", topoproto.KeyspaceShardString(keyspace, shard))
+	defer resetFlags()
+	b := New()
+
+	// Simulate that the old master notified us about its reparented timestamp
+	// very recently (time.Now()).
+	// vtgate should see this immediately after the start.
+	nowSeconds := time.Now().Unix()
+	b.StatsUpdate(&discovery.TabletStats{
+		Target: &querypb.Target{Keyspace: keyspace, Shard: shard, TabletType: topodatapb.TabletType_MASTER},
+		TabletExternallyReparentedTimestamp: nowSeconds,
+	})
+
+	// Failover to new master. Its end is detected faster than the beginning.
+	// Do not start buffering.
+	b.StatsUpdate(&discovery.TabletStats{
+		Target: &querypb.Target{Keyspace: keyspace, Shard: shard, TabletType: topodatapb.TabletType_MASTER},
+		TabletExternallyReparentedTimestamp: nowSeconds + 1,
+	})
+
+	if retryDone, err := b.WaitForFailoverEnd(context.Background(), keyspace, shard, failoverErr); err != nil || retryDone != nil {
+		t.Fatalf("requests where the failover end was recently detected before the start must not be buffered. err: %v retryDone: %v", err, retryDone)
+	}
+}
+
 // TestPassthroughDuringDrain tests the behavior of requests while the buffer is
 // in the drain phase: They should not be buffered and passed through instead.
 func TestPassthroughDuringDrain(t *testing.T) {
