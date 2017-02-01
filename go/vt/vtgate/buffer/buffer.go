@@ -180,11 +180,6 @@ func causedByFailover(err error) bool {
 			if strings.Contains(err.Error(), "fatal: failover in progress (errno 1227) (sqlstate 42000)") {
 				return true
 			}
-		case vtrpcpb.ErrorCode_UNKNOWN_ERROR:
-			// Google internal flavor.
-			if strings.Contains(err.Error(), "fatal: MySQL server has gone away (errno 2006) (sqlstate HY000)") {
-				return true
-			}
 		}
 	}
 	return false
