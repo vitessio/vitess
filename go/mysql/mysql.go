@@ -148,9 +148,6 @@ const (
 	// ErrServerLost is C.CR_SERVER_LOST.
 	// It's hard-coded for now because it causes problems on import.
 	ErrServerLost = 2013
-
-	// RedactedPassword is the password value used in redacted configs
-	RedactedPassword = "****"
 )
 
 func handleError(err *error) {
