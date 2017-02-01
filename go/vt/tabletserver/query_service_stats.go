@@ -7,7 +7,11 @@ package tabletserver
 import (
 	"time"
 
+	"golang.org/x/net/context"
+
 	"github.com/youtube/vitess/go/stats"
+	"github.com/youtube/vitess/go/vt/callerid"
+	"github.com/youtube/vitess/go/vt/sqlparser"
 )
 
 // QueryServiceStats contains stats that used in queryservice level.
@@ -97,4 +101,13 @@ func NewQueryServiceStats(statsPrefix string, enablePublishStats bool) *QuerySer
 		QPSRates:    stats.NewRates(qpsRateName, queryStats, 15*60/5, 5*time.Second),
 		ResultStats: stats.NewHistogram(resultStatsName, resultBuckets),
 	}
+}
+
+func (qss *QueryServiceStats) addUserTableQueryStats(ctx context.Context, tableName sqlparser.TableIdent, queryType string, duration int64) {
+	username := callerid.GetPrincipal(callerid.EffectiveCallerIDFromContext(ctx))
+	if username == "" {
+		username = callerid.GetUsername(callerid.ImmediateCallerIDFromContext(ctx))
+	}
+	qss.UserTableQueryCount.Add([]string{tableName.String(), username, queryType}, 1)
+	qss.UserTableQueryTimesNs.Add([]string{tableName.String(), username, queryType}, int64(duration))
 }

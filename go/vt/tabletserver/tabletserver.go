@@ -1061,8 +1061,7 @@ func (tsv *TabletServer) SplitQuery(
 			}
 			defer func(start time.Time) {
 				splitTableName := splitParams.GetSplitTableName()
-				addUserTableQueryStats(
-					tsv.qe.queryServiceStats, ctx, splitTableName, "SplitQuery", int64(time.Now().Sub(start)))
+				tsv.qe.queryServiceStats.addUserTableQueryStats(ctx, splitTableName, "SplitQuery", int64(time.Now().Sub(start)))
 			}(time.Now())
 			sqlExecuter, err := newSplitQuerySQLExecuter(ctx, logStats, tsv.qe)
 			if err != nil {
