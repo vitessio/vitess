@@ -150,17 +150,45 @@ const (
 // Error codes for client-side errors.
 // Originally found in include/mysql/errmsg.h
 const (
+	// CRUnknownError is CR_UNKNOWN_ERROR
+	CRUnknownError = 2000
+
 	// CRConnectionError is CR_CONNECTION_ERROR
 	CRConnectionError = 2002
 
 	// CRConnHostError is CR_CONN_HOST_ERROR
 	CRConnHostError = 2003
 
+	// CRServerGone is CR_SERVER_GONE_ERROR.
+	// This is returned if the client tries to send a command but it fails.
+	CRServerGone = 2006
+
+	// CRVersionError is CR_VERSION_ERROR
+	// This is returned if the server versions don't match what we support.
+	CRVersionError = 2007
+
 	// CRServerHandshakeErr is CR_SERVER_HANDSHAKE_ERR
 	CRServerHandshakeErr = 2012
 
-	// CRServerLost is CR_SERVER_LOST
+	// CRServerLost is CR_SERVER_LOST.
+	// Used when:
+	// - the client cannot write an initial auth packet.
+	// - the client cannot read an initial auth packet.
+	// - the client cannot read a response from the server.
 	CRServerLost = 2013
+
+	// CRCommandsOutOfSync is CR_COMMANDS_OUT_OF_SYNC
+	// Sent when the streaming calls are not done in the right order.
+	CRCommandsOutOfSync = 2014
+
+	// CRCantReadCharset is CR_CANT_READ_CHARSET
+	CRCantReadCharset = 2019
+
+	// CRSSLConnectionError is CR_SSL_CONNECTION_ERROR
+	CRSSLConnectionError = 2026
+
+	// CRMalformedPacket is CR_MALFORMED_PACKET
+	CRMalformedPacket = 2027
 )
 
 // Error codes for server-side errors.
@@ -186,8 +214,11 @@ const (
 // Sql states for errors.
 // Originally found in include/mysql/sql_state.h
 const (
-	// SSSignalException is ER_SIGNAL_EXCEPTION
-	SSSignalException = "HY000"
+	// SSUnknownSqlstate is ER_SIGNAL_EXCEPTION in
+	// include/mysql/sql_state.h, but:
+	// const char *unknown_sqlstate= "HY000"
+	// in client.c. So using that one.
+	SSUnknownSQLState = "HY000"
 
 	// SSDupKey is ER_DUP_KEY
 	SSDupKey = "23000"

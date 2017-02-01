@@ -54,7 +54,7 @@ func (vh *vtgateHandler) begin(ctx context.Context, c *mysqlconn.Conn) (*sqltype
 	// Do the begin.
 	session, err := vh.vtg.Begin(ctx, false /* singledb */)
 	if err != nil {
-		return nil, sqldb.NewSQLError(mysqlconn.ERUnknownError, mysqlconn.SSSignalException, "vtgate.Begin failed: %v", err)
+		return nil, sqldb.NewSQLError(mysqlconn.ERUnknownError, mysqlconn.SSUnknownSQLState, "vtgate.Begin failed: %v", err)
 	}
 
 	// Save the session.
@@ -65,16 +65,16 @@ func (vh *vtgateHandler) begin(ctx context.Context, c *mysqlconn.Conn) (*sqltype
 func (vh *vtgateHandler) commit(ctx context.Context, c *mysqlconn.Conn) (*sqltypes.Result, error) {
 	// Check we're inside a transaction already.
 	if c.ClientData == nil {
-		return nil, sqldb.NewSQLError(mysqlconn.ERUnknownError, mysqlconn.SSSignalException, "not in a transaction")
+		return nil, sqldb.NewSQLError(mysqlconn.ERUnknownError, mysqlconn.SSUnknownSQLState, "not in a transaction")
 	}
 	session, ok := c.ClientData.(*vtgatepb.Session)
 	if !ok || session == nil {
-		return nil, sqldb.NewSQLError(mysqlconn.ERUnknownError, mysqlconn.SSSignalException, "internal error: got a weird ClientData of type %T: %v %v", c.ClientData, session, ok)
+		return nil, sqldb.NewSQLError(mysqlconn.ERUnknownError, mysqlconn.SSUnknownSQLState, "internal error: got a weird ClientData of type %T: %v %v", c.ClientData, session, ok)
 	}
 
 	// Commit using vtgate's transaction mode.
 	if err := vh.vtg.Commit(ctx, vh.vtg.transactionMode == TxTwoPC, session); err != nil {
-		return nil, sqldb.NewSQLError(mysqlconn.ERUnknownError, mysqlconn.SSSignalException, "vtgate.Commit failed: %v", err)
+		return nil, sqldb.NewSQLError(mysqlconn.ERUnknownError, mysqlconn.SSUnknownSQLState, "vtgate.Commit failed: %v", err)
 	}
 
 	// Clear the Session.
@@ -85,16 +85,16 @@ func (vh *vtgateHandler) commit(ctx context.Context, c *mysqlconn.Conn) (*sqltyp
 func (vh *vtgateHandler) rollback(ctx context.Context, c *mysqlconn.Conn) (*sqltypes.Result, error) {
 	// Check we're inside a transaction already.
 	if c.ClientData == nil {
-		return nil, sqldb.NewSQLError(mysqlconn.ERUnknownError, mysqlconn.SSSignalException, "not in a transaction")
+		return nil, sqldb.NewSQLError(mysqlconn.ERUnknownError, mysqlconn.SSUnknownSQLState, "not in a transaction")
 	}
 	session, ok := c.ClientData.(*vtgatepb.Session)
 	if !ok || session == nil {
-		return nil, sqldb.NewSQLError(mysqlconn.ERUnknownError, mysqlconn.SSSignalException, "internal error: got a weird ClientData of type %T: %v %v", c.ClientData, session, ok)
+		return nil, sqldb.NewSQLError(mysqlconn.ERUnknownError, mysqlconn.SSUnknownSQLState, "internal error: got a weird ClientData of type %T: %v %v", c.ClientData, session, ok)
 	}
 
 	// Rollback.
 	if err := vh.vtg.Rollback(ctx, session); err != nil {
-		return nil, sqldb.NewSQLError(mysqlconn.ERUnknownError, mysqlconn.SSSignalException, "vtgate.Rollback failed: %v", err)
+		return nil, sqldb.NewSQLError(mysqlconn.ERUnknownError, mysqlconn.SSUnknownSQLState, "vtgate.Rollback failed: %v", err)
 	}
 
 	// Clear the Session.

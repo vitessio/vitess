@@ -89,7 +89,7 @@ func TestConnectTimeout(t *testing.T) {
 	}()
 	ctx = context.Background()
 	_, err = Connect(ctx, params)
-	assertSQLError(t, err, CRConnHostError, SSSignalException, "initial packet read failed")
+	assertSQLError(t, err, CRServerLost, SSUnknownSQLState, "initial packet read failed")
 
 	// Tests a connection where Dial fails properly returns the
 	// right error. To simulate exactly the right failure, try to dial
@@ -104,7 +104,7 @@ func TestConnectTimeout(t *testing.T) {
 	ctx = context.Background()
 	_, err = Connect(ctx, params)
 	os.Remove(name)
-	assertSQLError(t, err, CRConnHostError, SSSignalException, "connection refused")
+	assertSQLError(t, err, CRConnectionError, SSUnknownSQLState, "connection refused")
 }
 
 // testKillWithRealDatabase opens a connection, issues a command that
@@ -136,7 +136,7 @@ func testKillWithRealDatabase(t *testing.T, params *sqldb.ConnParams) {
 	}
 
 	err = <-errChan
-	assertSQLError(t, err, CRServerLost, SSSignalException, "EOF")
+	assertSQLError(t, err, CRServerLost, SSUnknownSQLState, "EOF")
 }
 
 // testDupEntryWithRealDatabase tests a duplicate key is properly raised.

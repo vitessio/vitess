@@ -1,8 +1,6 @@
 package mysqlconn
 
 import (
-	"fmt"
-
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/sqldb"
@@ -20,10 +18,11 @@ import (
 // Close() is in conn.go.
 
 // ExecuteStreamFetch is part of the sqldb.Conn interface.
+// Returns a sqldb.SQLError.
 func (c *Conn) ExecuteStreamFetch(query string) error {
 	// Sanity check.
 	if c.fields != nil {
-		return fmt.Errorf("streaming query already in progress")
+		return sqldb.NewSQLError(CRCommandsOutOfSync, SSUnknownSQLState, "streaming query already in progress")
 	}
 
 	// This is a new command, need to reset the sequence.
@@ -74,7 +73,7 @@ func (c *Conn) ExecuteStreamFetch(query string) error {
 			// Error packet.
 			return parseErrorPacket(data)
 		default:
-			return fmt.Errorf("unexpected packet after fields: %v", data)
+			return sqldb.NewSQLError(CRCommandsOutOfSync, SSUnknownSQLState, "unexpected packet after fields: %v", data)
 		}
 	}
 
@@ -85,7 +84,7 @@ func (c *Conn) ExecuteStreamFetch(query string) error {
 // Fields is part of the sqldb.Conn interface.
 func (c *Conn) Fields() ([]*querypb.Field, error) {
 	if c.fields == nil {
-		return nil, fmt.Errorf("no streaming query in progress")
+		return nil, sqldb.NewSQLError(CRCommandsOutOfSync, SSUnknownSQLState, "no streaming query in progress")
 	}
 	if len(c.fields) == 0 {
 		// The query returned an empty field list.
@@ -98,7 +97,7 @@ func (c *Conn) Fields() ([]*querypb.Field, error) {
 func (c *Conn) FetchNext() ([]sqltypes.Value, error) {
 	if c.fields == nil {
 		// We are already done, and the result was closed.
-		return nil, fmt.Errorf("no streaming query in progress")
+		return nil, sqldb.NewSQLError(CRCommandsOutOfSync, SSUnknownSQLState, "no streaming query in progress")
 	}
 
 	if len(c.fields) == 0 {
