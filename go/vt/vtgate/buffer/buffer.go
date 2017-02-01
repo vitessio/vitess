@@ -175,7 +175,7 @@ func (b *Buffer) WaitForFailoverEnd(ctx context.Context, keyspace, shard string,
 
 	sb := b.getOrCreateBuffer(keyspace, shard)
 	if sb.disabled() {
-		// TODO(mberlin): Increment variable here.
+		requestsSkipped.Add([]string{keyspace, shard, skippedDisabled}, 1)
 		return nil, nil
 	}
 

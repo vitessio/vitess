@@ -154,8 +154,8 @@ func (sb *shardBuffer) waitForFailoverEnd(ctx context.Context, keyspace, shard s
 				" (A failover was detected by this seen error: %v.)",
 				msg, topoproto.KeyspaceShardString(keyspace, shard), lastReparent, *minTimeBetweenFailovers, err)
 
-			statsKeyWithReason := append(sb.statsKey, string(startSkippedLastReparentTooRecent))
-			startsSkipped.Add(statsKeyWithReason, 1)
+			statsKeyWithReason := append(sb.statsKey, string(skippedLastReparentTooRecent))
+			requestsSkipped.Add(statsKeyWithReason, 1)
 			return nil, nil
 		}
 		lastDetectedFailover := now.Sub(sb.lastEnd)
@@ -172,8 +172,8 @@ func (sb *shardBuffer) waitForFailoverEnd(ctx context.Context, keyspace, shard s
 				" (A failover was detected by this seen error: %v.)",
 				msg, topoproto.KeyspaceShardString(keyspace, shard), lastDetectedFailover, *minTimeBetweenFailovers, err)
 
-			statsKeyWithReason := append(sb.statsKey, string(startSkippedLastFailoverTooRecent))
-			startsSkipped.Add(statsKeyWithReason, 1)
+			statsKeyWithReason := append(sb.statsKey, string(skippedLastFailoverTooRecent))
+			requestsSkipped.Add(statsKeyWithReason, 1)
 			return nil, nil
 		}
 
@@ -184,6 +184,7 @@ func (sb *shardBuffer) waitForFailoverEnd(ctx context.Context, keyspace, shard s
 		sb.mu.Unlock()
 		// Dry-run. Do not actually buffer the request and return early.
 		lastRequestsDryRunMax.Add(sb.statsKey, 1)
+		requestsBufferedDryRun.Add(sb.statsKey, 1)
 		return nil, nil
 	}
 
@@ -266,6 +267,8 @@ func (sb *shardBuffer) bufferRequestLocked(ctx context.Context) (*entry, error) 
 			// Overall buffer is full, but this shard's queue is empty. That means
 			// there is at least one other shard failing over as well which consumes
 			// the whole buffer.
+			statsKeyWithReason := append(sb.statsKey, string(skippedBufferFull))
+			requestsSkipped.Add(statsKeyWithReason, 1)
 			return nil, bufferFullError
 		}
 
@@ -278,6 +281,8 @@ func (sb *shardBuffer) bufferRequestLocked(ctx context.Context) (*entry, error) 
 		// can be bigger than the buffer size.
 		sb.unblockAndWait(e, entryEvictedError, false /* releaseSlot */, false /* blockingWait */)
 		sb.queue = sb.queue[1:]
+		statsKeyWithReason := append(sb.statsKey, evictedBufferFull)
+		requestsEvicted.Add(statsKeyWithReason, 1)
 	}
 
 	e := &entry{
@@ -290,6 +295,7 @@ func (sb *shardBuffer) bufferRequestLocked(ctx context.Context) (*entry, error) 
 	if max := lastRequestsInFlightMax.Counts()[sb.statsKeyJoined]; max < int64(len(sb.queue)) {
 		lastRequestsInFlightMax.Set(sb.statsKey, int64(len(sb.queue)))
 	}
+	requestsBuffered.Add(sb.statsKey, 1)
 
 	if len(sb.queue) == 1 {
 		sb.timeoutThread.notifyQueueNotEmpty()
@@ -372,6 +378,8 @@ func (sb *shardBuffer) evictOldestEntry(e *entry) {
 	// avoid additional pressure on the master tablet.
 	sb.unblockAndWait(e, nil /* err */, true /* releaseSlot */, false /* blockingWait */)
 	sb.queue = sb.queue[1:]
+	statsKeyWithReason := append(sb.statsKey, evictedWindowExceeded)
+	requestsEvicted.Add(statsKeyWithReason, 1)
 }
 
 // remove must be called when the request was canceled from outside and not
@@ -393,6 +401,9 @@ func (sb *shardBuffer) remove(toRemove *entry) {
 			// Entry was not canceled internally yet. Finish it explicitly. This way,
 			// timeoutThread will find out about it as well.
 			close(toRemove.done)
+			// Track it as "ContextDone" eviction.
+			statsKeyWithReason := append(sb.statsKey, string(evictedContextDone))
+			requestsEvicted.Add(statsKeyWithReason, 1)
 			return
 		}
 	}
@@ -490,6 +501,7 @@ func (sb *shardBuffer) drain(q []*entry) {
 	}
 	d := time.Since(start)
 	log.Infof("Draining finished for shard: %s Took: %v for: %d requests.", topoproto.KeyspaceShardString(sb.keyspace, sb.shard), d, len(q))
+	requestsDrained.Add(sb.statsKey, int64(len(q)))
 
 	// Draining is done. Change state from "draining" to "idle".
 	sb.mu.Lock()

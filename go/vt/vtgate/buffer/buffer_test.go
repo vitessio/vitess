@@ -35,12 +35,15 @@ var (
 
 	statsKeyJoinedFailoverEndDetected = statsKeyJoined + "." + string(stopReasonFailoverEndDetected)
 
-	statsKeyJoinedLastReparentTooRecent = statsKeyJoined + "." + string(startSkippedLastReparentTooRecent)
-	statsKeyJoinedLastFailoverTooRecent = statsKeyJoined + "." + string(startSkippedLastFailoverTooRecent)
+	statsKeyJoinedWindowExceeded = statsKeyJoined + "." + string(evictedWindowExceeded)
+
+	statsKeyJoinedLastReparentTooRecent = statsKeyJoined + "." + string(skippedLastReparentTooRecent)
+	statsKeyJoinedLastFailoverTooRecent = statsKeyJoined + "." + string(skippedLastFailoverTooRecent)
 )
 
 func TestBuffer(t *testing.T) {
 	resetVariables()
+	defer checkVariables(t)
 
 	// Enable the buffer.
 	flag.Set("enable_vtgate_buffer", "true")
@@ -116,8 +119,8 @@ func TestBuffer(t *testing.T) {
 	if retryDone, err := b.WaitForFailoverEnd(context.Background(), keyspace, shard, failoverErr); err != nil || retryDone != nil {
 		t.Fatalf("subsequent failovers must be skipped due to -vtgate_buffer_min_time_between_failovers setting. err: %v retryDone: %v", err, retryDone)
 	}
-	if got, want := startsSkipped.Counts()[statsKeyJoinedLastFailoverTooRecent], int64(1); got != want {
-		t.Fatalf("buffering skip was not tracked: got = %v, want = %v", got, want)
+	if got, want := requestsSkipped.Counts()[statsKeyJoinedLastFailoverTooRecent], int64(1); got != want {
+		t.Fatalf("skipped request was not tracked: got = %v, want = %v", got, want)
 	}
 
 	// Second failover is buffered if we reduce the limit.
@@ -272,6 +275,8 @@ func TestPassthrough(t *testing.T) {
 // TestPassThroughLastReparentTooRecent tests that buffering is skipped if
 // we see the failover end faster than the beginning.
 func TestPassThroughLastReparentTooRecent(t *testing.T) {
+	resetVariables()
+
 	flag.Set("enable_vtgate_buffer", "true")
 	// Enable the buffer (no explicit whitelist i.e. it applies to everything).
 	defer resetFlagsForTesting()
@@ -296,8 +301,11 @@ func TestPassThroughLastReparentTooRecent(t *testing.T) {
 	if retryDone, err := b.WaitForFailoverEnd(context.Background(), keyspace, shard, failoverErr); err != nil || retryDone != nil {
 		t.Fatalf("requests where the failover end was recently detected before the start must not be buffered. err: %v retryDone: %v", err, retryDone)
 	}
-	if got, want := startsSkipped.Counts()[statsKeyJoinedLastReparentTooRecent], int64(1); got != want {
-		t.Fatalf("buffering skip was not tracked: got = %v, want = %v", got, want)
+	if got, want := requestsSkipped.Counts()[statsKeyJoinedLastReparentTooRecent], int64(1); got != want {
+		t.Fatalf("skipped request was not tracked: got = %v, want = %v", got, want)
+	}
+	if got, want := requestsBuffered.Counts()[statsKeyJoined], int64(0); got != want {
+		t.Fatalf("no request should have been tracked as buffered: got = %v, want = %v", got, want)
 	}
 }
 
@@ -350,10 +358,18 @@ func TestPassthroughIgnoredKeyspaceOrShard(t *testing.T) {
 	if retryDone, err := b.WaitForFailoverEnd(context.Background(), ignoredKeyspace, shard, failoverErr); err != nil || retryDone != nil {
 		t.Fatalf("requests for ignored keyspaces must not be buffered. err: %v retryDone: %v", err, retryDone)
 	}
+	statsKeyJoined := strings.Join([]string{ignoredKeyspace, shard, skippedDisabled}, ".")
+	if got, want := requestsSkipped.Counts()[statsKeyJoined], int64(1); got != want {
+		t.Fatalf("request was not skipped as disabled: got = %v, want = %v", got, want)
+	}
 
 	ignoredShard := "ff-"
 	if retryDone, err := b.WaitForFailoverEnd(context.Background(), keyspace, ignoredShard, failoverErr); err != nil || retryDone != nil {
 		t.Fatalf("requests for ignored shards must not be buffered. err: %v retryDone: %v", err, retryDone)
+	}
+	statsKeyJoined = strings.Join([]string{keyspace, ignoredShard, skippedDisabled}, ".")
+	if got, want := requestsSkipped.Counts()[statsKeyJoined], int64(1); got != want {
+		t.Fatalf("request was not skipped as disabled: got = %v, want = %v", got, want)
 	}
 }
 
@@ -372,6 +388,9 @@ func TestRequestCanceled_MaxDurationEnd(t *testing.T) {
 // testRequestCanceled tests the case when a buffered request is canceled
 // (more precisively its context) before the failover/buffering ends.
 func testRequestCanceled(t *testing.T, explicitEnd bool) {
+	resetVariables()
+	defer checkVariables(t)
+
 	flag.Set("enable_vtgate_buffer", "true")
 	// Enable buffering for the complete keyspace and not just a specific shard.
 	flag.Set("vtgate_buffer_keyspace_shards", keyspace)
@@ -438,6 +457,9 @@ func testRequestCanceled(t *testing.T, explicitEnd bool) {
 }
 
 func TestEviction(t *testing.T) {
+	resetVariables()
+	defer checkVariables(t)
+
 	flag.Set("enable_vtgate_buffer", "true")
 	flag.Set("vtgate_buffer_keyspace_shards", topoproto.KeyspaceShardString(keyspace, shard))
 	flag.Set("vtgate_buffer_size", "2")
@@ -510,6 +532,9 @@ func isEvictedError(err error) error {
 // by two failovers and b) the second failover doesn't use any slot in the
 // buffer and therefore cannot evict older entries.
 func TestEvictionNotPossible(t *testing.T) {
+	resetVariables()
+	defer checkVariables(t)
+
 	flag.Set("enable_vtgate_buffer", "true")
 	flag.Set("vtgate_buffer_keyspace_shards", fmt.Sprintf("%v,%v",
 		topoproto.KeyspaceShardString(keyspace, shard),
@@ -550,10 +575,16 @@ func TestEvictionNotPossible(t *testing.T) {
 	if err := waitForState(b, stateIdle); err != nil {
 		t.Fatal(err)
 	}
+	statsKeyJoined := strings.Join([]string{keyspace, shard2, string(skippedBufferFull)}, ".")
+	if got, want := requestsSkipped.Counts()[statsKeyJoined], int64(1); got != want {
+		t.Fatalf("skipped request was not tracked: got = %v, want = %v", got, want)
+	}
 }
 
 func TestWindow(t *testing.T) {
-	requestsWindowExceeded.Reset()
+	resetVariables()
+	defer checkVariables(t)
+
 	flag.Set("enable_vtgate_buffer", "true")
 	flag.Set("vtgate_buffer_keyspace_shards", fmt.Sprintf("%v,%v",
 		topoproto.KeyspaceShardString(keyspace, shard),
@@ -603,7 +634,7 @@ func TestWindow(t *testing.T) {
 	}
 
 	// Verify that the window was not exceeded.
-	if got, want := requestsWindowExceeded.Counts()[statsKeyJoined], int64(1); got != want {
+	if got, want := requestsEvicted.Counts()[statsKeyJoinedWindowExceeded], int64(1); got != want {
 		t.Fatalf("second or third request should not have exceed its buffering window. got = %v, want = %v", got, want)
 	}
 
@@ -638,7 +669,7 @@ func TestWindow(t *testing.T) {
 func waitForRequestsExceededWindow(count int) error {
 	start := time.Now()
 	for {
-		got, want := requestsWindowExceeded.Counts()[statsKeyJoined], int64(count)
+		got, want := requestsEvicted.Counts()[statsKeyJoinedWindowExceeded], int64(count)
 		if got == want {
 			return nil
 		}
@@ -658,5 +689,31 @@ func resetVariables() {
 	utilizationSum.Reset()
 	utilizationDryRunSum.Reset()
 
-	startsSkipped.Reset()
+	requestsBuffered.Reset()
+	requestsBufferedDryRun.Reset()
+	requestsDrained.Reset()
+	requestsEvicted.Reset()
+	requestsSkipped.Reset()
+}
+
+// checkVariables makes sure that the invariants described in variables.go
+// hold up.
+func checkVariables(t *testing.T) {
+	for k, buffered := range requestsBuffered.Counts() {
+		evicted := int64(0)
+		// The evicted count is grouped by Reason i.e. the entries are named
+		// "<Keyspace>.<Shard>.<Reason>". Match all reasons for this shard.
+		for withReason, v := range requestsEvicted.Counts() {
+			if strings.HasPrefix(withReason, fmt.Sprintf("%s.", k)) {
+				evicted += v
+			}
+		}
+		drained := requestsDrained.Counts()[k]
+
+		if buffered != evicted+drained {
+			t.Fatalf("buffered == evicted + drained is violated: %v != %v + %v", buffered, evicted, drained)
+		} else {
+			t.Logf("buffered == evicted + drained: %v == %v + %v", buffered, evicted, drained)
+		}
+	}
 }

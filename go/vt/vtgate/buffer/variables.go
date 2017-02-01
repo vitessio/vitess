@@ -34,14 +34,24 @@ var (
 	// TODO(mberlin): Replace this with a MultiHistogram once it's available.
 	utilizationDryRunSum = stats.NewMultiCounters("BufferUtilizationDryRunSum", []string{"Keyspace", "ShardName"})
 
-	// requestsWindowExceeded tracks for how many requests buffering stopped
-	// early because the configured window was exceeded.
-	requestsWindowExceeded = stats.NewMultiCounters("BufferRequestsWindowExceeded", []string{"Keyspace", "ShardName"})
-
-	// startsSkipped tracks *how many requests* would have started buffering but
-	// eventually did not (includes dry-run bufferings).
-	// See the type "startSkippedReason" below for all possible values of "Reason".
-	startsSkipped = stats.NewMultiCounters("BufferStartsSkipped", []string{"Keyspace", "ShardName", "Reason"})
+	// requestsBuffered tracks how many requests were added to the buffer.
+	// NOTE: The two counters "Buffered" and "Skipped" should cover all requests
+	// which passed through the buffer.
+	requestsBuffered = stats.NewMultiCounters("BufferRequestsBuffered", []string{"Keyspace", "ShardName"})
+	// requestsBufferedDryRun tracks how many requests would have been added to
+	// the buffer (dry-run mode).
+	requestsBufferedDryRun = stats.NewMultiCounters("BufferRequestsBufferedDryRun", []string{"Keyspace", "ShardName"})
+	// requestsBuffered tracks how many requests were drained from the buffer.
+	// NOTE: The sum of the two counters "Drained" and "Evicted" should be
+	// identical to the "Buffered" counter value.
+	requestsDrained = stats.NewMultiCounters("BufferRequestsDrained", []string{"Keyspace", "ShardName"})
+	// requestsEvicted tracks how many requests were evicted early from the buffer.
+	// See the type "evictedReason" below for all possible values of "Reason".
+	requestsEvicted = stats.NewMultiCounters("BufferRequestsEvicted", []string{"Keyspace", "ShardName", "Reason"})
+	// requestsSkipped tracks how many requests would have been buffered but
+	// eventually were not (includes dry-run bufferings).
+	// See the type "skippedReason" below for all possible values of "Reason".
+	requestsSkipped = stats.NewMultiCounters("BufferRequestsSkipped", []string{"Keyspace", "ShardName", "Reason"})
 )
 
 // stopReason is used in "stopsByReason" as "Reason" label.
@@ -52,12 +62,28 @@ const (
 	stopReasonMaxFailoverDurationExceeded            = "MaxDurationExceeded"
 )
 
-// startSkippedReason is used in "startsSkippedByReason" as "Reason" label.
-type startSkippedReason string
+// evictedReason is used in "requestsEvicted" as "Reason" label.
+type evictedReason string
 
 const (
-	startSkippedLastReparentTooRecent startSkippedReason = "LastReparentTooRecent"
-	startSkippedLastFailoverTooRecent                    = "LastFailoverTooRecent"
+	evictedContextDone    evictedReason = "ContextDone"
+	evictedBufferFull                   = "BufferFull"
+	evictedWindowExceeded               = "WindowExceeded"
+)
+
+// skippedReason is used in "requestsSkipped" as "Reason" label.
+type skippedReason string
+
+const (
+	// skippedBufferFull occurs when all slots in the buffer are occupied by one
+	// or more concurrent failovers. Unlike "evictedBufferFull", no request could
+	// be evicted and therefore we had to skip this request.
+	skippedBufferFull skippedReason = "BufferFull"
+	// skippedDisabled is used when the buffer was disabled for that particular
+	// keyspace/shard.
+	skippedDisabled              = "Disabled"
+	skippedLastReparentTooRecent = "LastReparentTooRecent"
+	skippedLastFailoverTooRecent = "LastFailoverTooRecent"
 )
 
 // TODO(mberlin): Remove the gauge values below once we store them
