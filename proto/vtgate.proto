@@ -584,6 +584,40 @@ message ResolveTransactionRequest {
   string dtid = 2;
 }
 
+// MessageStreamRequest is the request payload for MessageStream.
+message MessageStreamRequest {
+  // caller_id identifies the caller. This is the effective caller ID,
+  // set by the application to further identify the caller.
+  vtrpc.CallerID caller_id = 1;
+
+  // keyspace to target the query to.
+  string keyspace = 2;
+
+  // shard to target the query to, for unsharded keyspaces.
+  string shard = 3;
+
+  // KeyRange to target the query to, for sharded keyspaces.
+  topodata.KeyRange key_range = 4;
+
+  // name is the message table name.
+  string name = 5;
+}
+
+// MessageAckRequest is the request payload for MessageAck.
+message MessageAckRequest {
+  // caller_id identifies the caller. This is the effective caller ID,
+  // set by the application to further identify the caller.
+  vtrpc.CallerID caller_id = 1;
+
+  // Optional keyspace for message table.
+  string keyspace = 2;
+
+  // name is the message table name.
+  string name = 3;
+  // ids is the list of ids to ack.
+  repeated query.Value ids = 4;
+}
+
 // ResolveTransactionResponse is the returned value from Rollback.
 message ResolveTransactionResponse {
 }

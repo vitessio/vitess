@@ -363,10 +363,10 @@
 			"revisionTime": "2016-01-21T18:51:14Z"
 		},
 		{
-			"checksumSHA1": "NgOgDwqQnfQhahsECFCsSPEenE0=",
+			"checksumSHA1": "APDDi2ohrU7OkChQCekD9tSVUhs=",
 			"path": "github.com/golang/protobuf/jsonpb",
-			"revision": "1f49d83d9aa00e6ce4fc8258c71cc7786aec968a",
-			"revisionTime": "2016-08-24T20:12:15Z"
+			"revision": "8ee79997227bf9b34611aee7946ae64735e6fd93",
+			"revisionTime": "2016-11-17T03:31:26Z"
 		},
 		{
 			"checksumSHA1": "uaSm4Hhyzl+DHL8kSt4mrZ7GBIk=",
@@ -863,6 +863,12 @@
 			"path": "golang.org/x/text/unicode/rangetable",
 			"revision": "d5d7737684e596dbabf914ecf946d2783f35bdc2",
 			"revisionTime": "2016-07-10T05:19:30Z"
+		},
+		{
+			"checksumSHA1": "eFQDEix/mGnhwnFu/Hq63zMfrX8=",
+			"path": "golang.org/x/time/rate",
+			"revision": "f51c12702a4d776e4c1fa9b0fabab841babae631",
+			"revisionTime": "2016-10-28T04:02:39Z"
 		},
 		{
 			"checksumSHA1": "I1JSeU5OMapl+4s2VrnBkMon3Bw=",

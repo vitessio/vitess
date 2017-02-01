@@ -78,14 +78,21 @@ public class VTGateTx {
   }
 
   public synchronized SQLFuture<Cursor> execute(Context ctx, String query, Map<String, ?> bindVars,
-      TabletType tabletType) throws SQLException {
+      TabletType tabletType, Query.ExecuteOptions.IncludedFields includedFields) throws SQLException {
     checkCallIsAllowed("execute");
     ExecuteRequest.Builder requestBuilder =
-        ExecuteRequest.newBuilder().setQuery(Proto.bindQuery(query, bindVars)).setKeyspace(keyspace)
-            .setTabletType(tabletType).setSession(session);
+        ExecuteRequest.newBuilder()
+            .setQuery(Proto.bindQuery(query, bindVars))
+            .setKeyspace(keyspace)
+            .setTabletType(tabletType)
+            .setSession(session)
+            .setOptions(Query.ExecuteOptions.newBuilder()
+                .setIncludedFields(includedFields));
+
     if (ctx.getCallerId() != null) {
       requestBuilder.setCallerId(ctx.getCallerId());
     }
+
     SQLFuture<Cursor> call =
         new SQLFuture<>(Futures.transformAsync(client.execute(ctx, requestBuilder.build()),
             new AsyncFunction<ExecuteResponse, Cursor>() {
@@ -101,14 +108,22 @@ public class VTGateTx {
   }
 
   public synchronized SQLFuture<Cursor> executeShards(Context ctx, String query, String keyspace,
-      Iterable<String> shards, Map<String, ?> bindVars, TabletType tabletType) throws SQLException {
+      Iterable<String> shards, Map<String, ?> bindVars, TabletType tabletType,
+      Query.ExecuteOptions.IncludedFields includedFields) throws SQLException {
     checkCallIsAllowed("executeShards");
     ExecuteShardsRequest.Builder requestBuilder = ExecuteShardsRequest.newBuilder()
-        .setQuery(Proto.bindQuery(query, bindVars)).setKeyspace(keyspace).addAllShards(shards)
-        .setTabletType(tabletType).setSession(session);
+        .setQuery(Proto.bindQuery(query, bindVars))
+        .setKeyspace(keyspace)
+        .addAllShards(shards)
+        .setTabletType(tabletType)
+        .setSession(session)
+        .setOptions(Query.ExecuteOptions.newBuilder()
+            .setIncludedFields(includedFields));
+
     if (ctx.getCallerId() != null) {
       requestBuilder.setCallerId(ctx.getCallerId());
     }
+
     SQLFuture<Cursor> call =
         new SQLFuture<>(Futures.transformAsync(client.executeShards(ctx, requestBuilder.build()),
             new AsyncFunction<ExecuteShardsResponse, Cursor>() {
@@ -125,16 +140,23 @@ public class VTGateTx {
   }
 
   public synchronized SQLFuture<Cursor> executeKeyspaceIds(Context ctx, String query,
-      String keyspace, Iterable<byte[]> keyspaceIds, Map<String, ?> bindVars, TabletType tabletType)
+      String keyspace, Iterable<byte[]> keyspaceIds, Map<String, ?> bindVars, TabletType tabletType,
+      Query.ExecuteOptions.IncludedFields includedFields)
       throws SQLException {
     checkCallIsAllowed("executeKeyspaceIds");
     ExecuteKeyspaceIdsRequest.Builder requestBuilder = ExecuteKeyspaceIdsRequest.newBuilder()
-        .setQuery(Proto.bindQuery(query, bindVars)).setKeyspace(keyspace)
+        .setQuery(Proto.bindQuery(query, bindVars))
+        .setKeyspace(keyspace)
         .addAllKeyspaceIds(Iterables.transform(keyspaceIds, Proto.BYTE_ARRAY_TO_BYTE_STRING))
-        .setTabletType(tabletType).setSession(session);
+        .setTabletType(tabletType)
+        .setSession(session)
+        .setOptions(Query.ExecuteOptions.newBuilder()
+            .setIncludedFields(includedFields));
+
     if (ctx.getCallerId() != null) {
       requestBuilder.setCallerId(ctx.getCallerId());
     }
+
     SQLFuture<Cursor> call = new SQLFuture<>(
         Futures.transformAsync(client.executeKeyspaceIds(ctx, requestBuilder.build()),
             new AsyncFunction<ExecuteKeyspaceIdsResponse, Cursor>() {
@@ -151,15 +173,23 @@ public class VTGateTx {
   }
 
   public synchronized SQLFuture<Cursor> executeKeyRanges(Context ctx, String query, String keyspace,
-      Iterable<? extends KeyRange> keyRanges, Map<String, ?> bindVars, TabletType tabletType)
+      Iterable<? extends KeyRange> keyRanges, Map<String, ?> bindVars, TabletType tabletType,
+      Query.ExecuteOptions.IncludedFields includedFields)
       throws SQLException {
     checkCallIsAllowed("executeKeyRanges");
     ExecuteKeyRangesRequest.Builder requestBuilder = ExecuteKeyRangesRequest.newBuilder()
-        .setQuery(Proto.bindQuery(query, bindVars)).setKeyspace(keyspace).addAllKeyRanges(keyRanges)
-        .setTabletType(tabletType).setSession(session);
+        .setQuery(Proto.bindQuery(query, bindVars))
+        .setKeyspace(keyspace)
+        .addAllKeyRanges(keyRanges)
+        .setTabletType(tabletType)
+        .setSession(session)
+        .setOptions(Query.ExecuteOptions.newBuilder()
+            .setIncludedFields(includedFields));
+
     if (ctx.getCallerId() != null) {
       requestBuilder.setCallerId(ctx.getCallerId());
     }
+
     SQLFuture<Cursor> call =
         new SQLFuture<>(Futures.transformAsync(client.executeKeyRanges(ctx, requestBuilder.build()),
             new AsyncFunction<ExecuteKeyRangesResponse, Cursor>() {
@@ -177,16 +207,23 @@ public class VTGateTx {
 
   public synchronized SQLFuture<Cursor> executeEntityIds(Context ctx, String query, String keyspace,
       String entityColumnName, Map<byte[], ?> entityKeyspaceIds, Map<String, ?> bindVars,
-      TabletType tabletType) throws SQLException {
+      TabletType tabletType, Query.ExecuteOptions.IncludedFields includedFields) throws SQLException {
     checkCallIsAllowed("executeEntityIds");
     ExecuteEntityIdsRequest.Builder requestBuilder = ExecuteEntityIdsRequest.newBuilder()
-        .setQuery(Proto.bindQuery(query, bindVars)).setKeyspace(keyspace)
-        .setEntityColumnName(entityColumnName).addAllEntityKeyspaceIds(Iterables
+        .setQuery(Proto.bindQuery(query, bindVars))
+        .setKeyspace(keyspace)
+        .setEntityColumnName(entityColumnName)
+        .addAllEntityKeyspaceIds(Iterables
             .transform(entityKeyspaceIds.entrySet(), Proto.MAP_ENTRY_TO_ENTITY_KEYSPACE_ID))
-        .setTabletType(tabletType).setSession(session);
+        .setTabletType(tabletType)
+        .setSession(session)
+        .setOptions(Query.ExecuteOptions.newBuilder()
+            .setIncludedFields(includedFields));
+
     if (ctx.getCallerId() != null) {
       requestBuilder.setCallerId(ctx.getCallerId());
     }
+
     SQLFuture<Cursor> call =
         new SQLFuture<>(Futures.transformAsync(client.executeEntityIds(ctx, requestBuilder.build()),
             new AsyncFunction<ExecuteEntityIdsResponse, Cursor>() {
@@ -203,7 +240,8 @@ public class VTGateTx {
   }
 
     public SQLFuture<List<CursorWithError>> executeBatch(Context ctx, List<String> queryList,
-        @Nullable List<Map<String, ?>> bindVarsList, TabletType tabletType)
+        @Nullable List<Map<String, ?>> bindVarsList, TabletType tabletType,
+        Query.ExecuteOptions.IncludedFields includedFields)
         throws SQLException {
         List<Query.BoundQuery> queries = new ArrayList<>();
 
@@ -218,11 +256,18 @@ public class VTGateTx {
         }
 
         Vtgate.ExecuteBatchRequest.Builder requestBuilder =
-            Vtgate.ExecuteBatchRequest.newBuilder().addAllQueries(checkNotNull(queries))
-                .setKeyspace(keyspace).setTabletType(checkNotNull(tabletType)).setSession(session);
+            Vtgate.ExecuteBatchRequest.newBuilder()
+                .addAllQueries(checkNotNull(queries))
+                .setKeyspace(keyspace)
+                .setTabletType(checkNotNull(tabletType))
+                .setSession(session)
+                .setOptions(Query.ExecuteOptions.newBuilder()
+                    .setIncludedFields(includedFields));
+
         if (ctx.getCallerId() != null) {
             requestBuilder.setCallerId(ctx.getCallerId());
         }
+
         return new SQLFuture<>(Futures
             .transformAsync(client.executeBatch(ctx, requestBuilder.build()),
                 new AsyncFunction<Vtgate.ExecuteBatchResponse, List<CursorWithError>>() {
@@ -237,13 +282,20 @@ public class VTGateTx {
     }
 
   public synchronized SQLFuture<List<Cursor>> executeBatchShards(Context ctx,
-      Iterable<? extends BoundShardQuery> queries, TabletType tabletType) throws SQLException {
+      Iterable<? extends BoundShardQuery> queries, TabletType tabletType,
+      Query.ExecuteOptions.IncludedFields includedFields) throws SQLException {
     checkCallIsAllowed("executeBatchShards");
     ExecuteBatchShardsRequest.Builder requestBuilder = ExecuteBatchShardsRequest.newBuilder()
-        .addAllQueries(queries).setTabletType(tabletType).setSession(session);
+        .addAllQueries(queries)
+        .setTabletType(tabletType)
+        .setSession(session)
+        .setOptions(Query.ExecuteOptions.newBuilder()
+            .setIncludedFields(includedFields));
+
     if (ctx.getCallerId() != null) {
       requestBuilder.setCallerId(ctx.getCallerId());
     }
+
     SQLFuture<List<Cursor>> call = new SQLFuture<>(
         Futures.transformAsync(client.executeBatchShards(ctx, requestBuilder.build()),
             new AsyncFunction<ExecuteBatchShardsResponse, List<Cursor>>() {
@@ -261,13 +313,21 @@ public class VTGateTx {
   }
 
   public synchronized SQLFuture<List<Cursor>> executeBatchKeyspaceIds(Context ctx,
-      Iterable<? extends BoundKeyspaceIdQuery> queries, TabletType tabletType) throws SQLException {
+      Iterable<? extends BoundKeyspaceIdQuery> queries, TabletType tabletType,
+      Query.ExecuteOptions.IncludedFields includedFields) throws SQLException {
     checkCallIsAllowed("executeBatchKeyspaceIds");
     ExecuteBatchKeyspaceIdsRequest.Builder requestBuilder = ExecuteBatchKeyspaceIdsRequest
-        .newBuilder().addAllQueries(queries).setTabletType(tabletType).setSession(session);
+        .newBuilder()
+        .addAllQueries(queries)
+        .setTabletType(tabletType)
+        .setSession(session)
+        .setOptions(Query.ExecuteOptions.newBuilder()
+            .setIncludedFields(includedFields));
+
     if (ctx.getCallerId() != null) {
       requestBuilder.setCallerId(ctx.getCallerId());
     }
+
     SQLFuture<List<Cursor>> call = new SQLFuture<>(
         Futures.transformAsync(client.executeBatchKeyspaceIds(ctx, requestBuilder.build()),
             new AsyncFunction<ExecuteBatchKeyspaceIdsResponse, List<Cursor>>() {

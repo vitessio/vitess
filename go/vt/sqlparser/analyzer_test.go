@@ -41,7 +41,7 @@ func TestGetTableName(t *testing.T) {
 
 func TestIsColName(t *testing.T) {
 	testcases := []struct {
-		in  ValExpr
+		in  Expr
 		out bool
 	}{{
 		in:  &ColName{},
@@ -59,7 +59,7 @@ func TestIsColName(t *testing.T) {
 
 func TestIsValue(t *testing.T) {
 	testcases := []struct {
-		in  ValExpr
+		in  Expr
 		out bool
 	}{{
 		in:  newStrVal(""),
@@ -86,7 +86,7 @@ func TestIsValue(t *testing.T) {
 
 func TestIsNull(t *testing.T) {
 	testcases := []struct {
-		in  ValExpr
+		in  Expr
 		out bool
 	}{{
 		in:  &NullVal{},
@@ -104,7 +104,7 @@ func TestIsNull(t *testing.T) {
 
 func TestIsSimpleTuple(t *testing.T) {
 	testcases := []struct {
-		in  ValExpr
+		in  Expr
 		out bool
 	}{{
 		in:  ValTuple{newStrVal("")},
@@ -127,14 +127,14 @@ func TestIsSimpleTuple(t *testing.T) {
 
 func TestAsInterface(t *testing.T) {
 	testcases := []struct {
-		in  ValExpr
+		in  Expr
 		out interface{}
 	}{{
 		in:  ValTuple{newStrVal("aa")},
 		out: []interface{}{sqltypes.MakeString([]byte("aa"))},
 	}, {
 		in:  ValTuple{&ColName{}},
-		out: errors.New("unexpected node ''"),
+		out: errors.New("expression is too complex ''"),
 	}, {
 		in:  newValArg(":aa"),
 		out: ":aa",
@@ -158,13 +158,13 @@ func TestAsInterface(t *testing.T) {
 		out: errors.New("type mismatch: strconv.ParseUint: parsing \"18446744073709551616\": value out of range"),
 	}, {
 		in:  newFloatVal("1.2"),
-		out: errors.New("unexpected node '1.2'"),
+		out: errors.New("expression is too complex '1.2'"),
 	}, {
 		in:  &NullVal{},
 		out: nil,
 	}, {
 		in:  &ColName{},
-		out: errors.New("unexpected node ''"),
+		out: errors.New("expression is too complex ''"),
 	}}
 	for _, tc := range testcases {
 		out, err := AsInterface(tc.in)

@@ -7,22 +7,26 @@ package tabletserver
 import (
 	"errors"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
-	"github.com/youtube/vitess/go/sqldb"
+	"golang.org/x/net/context"
+
+	"github.com/youtube/vitess/go/mysqlconn"
+	"github.com/youtube/vitess/go/mysqlconn/fakesqldb"
 	"github.com/youtube/vitess/go/sqltypes"
-	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	"github.com/youtube/vitess/go/vt/schema"
 	"github.com/youtube/vitess/go/vt/sqlparser"
-	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
-	"golang.org/x/net/context"
+
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
 var errRejected = errors.New("rejected")
 
 func TestTableInfoFailBecauseUnableToRetrieveTableIndex(t *testing.T) {
-	db := fakesqldb.Register()
+	db := fakesqldb.New(t)
+	defer db.Close()
 	for query, result := range getTestTableInfoQueries() {
 		db.AddQuery(query, result)
 	}
@@ -34,7 +38,8 @@ func TestTableInfoFailBecauseUnableToRetrieveTableIndex(t *testing.T) {
 }
 
 func TestTableInfoReplacePKColumn(t *testing.T) {
-	db := fakesqldb.Register()
+	db := fakesqldb.New(t)
+	defer db.Close()
 	for query, result := range getTestTableInfoQueries() {
 		db.AddQuery(query, result)
 	}
@@ -55,22 +60,16 @@ func TestTableInfoReplacePKColumn(t *testing.T) {
 }
 
 func TestTableInfoSetPKColumn(t *testing.T) {
-	db := fakesqldb.Register()
+	db := fakesqldb.New(t)
+	defer db.Close()
 	for query, result := range getTestTableInfoQueries() {
 		db.AddQuery(query, result)
 	}
 	db.AddQuery("show index from test_table", &sqltypes.Result{
+		Fields:       mysqlconn.ShowIndexFromTableFields,
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
-			{
-				sqltypes.MakeString([]byte{}),
-				sqltypes.MakeString([]byte{}),
-				sqltypes.MakeString([]byte("INDEX")),
-				sqltypes.MakeString([]byte{}),
-				sqltypes.MakeString([]byte("name")),
-				sqltypes.MakeString([]byte{}),
-				sqltypes.MakeString([]byte("300")),
-			},
+			mysqlconn.ShowIndexFromTableRow("test_table", false, "index", 1, "name", true),
 		},
 	})
 	tableInfo, err := newTestTableInfo("USER_TABLE", "test table", db)
@@ -90,22 +89,18 @@ func TestTableInfoSetPKColumn(t *testing.T) {
 }
 
 func TestTableInfoInvalidCardinalityInIndex(t *testing.T) {
-	db := fakesqldb.Register()
+	db := fakesqldb.New(t)
+	defer db.Close()
 	for query, result := range getTestTableInfoQueries() {
 		db.AddQuery(query, result)
 	}
+	row := mysqlconn.ShowIndexFromTableRow("test_table", true, "PRIMARY", 1, "pk", false)
+	row[6] = sqltypes.MakeString([]byte("invalid"))
 	db.AddQuery("show index from test_table", &sqltypes.Result{
+		Fields:       mysqlconn.ShowIndexFromTableFields,
 		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
-			{
-				sqltypes.MakeString([]byte{}),
-				sqltypes.MakeString([]byte{}),
-				sqltypes.MakeString([]byte("PRIMARY")),
-				sqltypes.MakeString([]byte{}),
-				sqltypes.MakeString([]byte("pk")),
-				sqltypes.MakeString([]byte{}),
-				sqltypes.MakeString([]byte("invalid")),
-			},
+			row,
 		},
 	})
 	tableInfo, err := newTestTableInfo("USER_TABLE", "test table", db)
@@ -118,7 +113,8 @@ func TestTableInfoInvalidCardinalityInIndex(t *testing.T) {
 }
 
 func TestTableInfoSequence(t *testing.T) {
-	db := fakesqldb.Register()
+	db := fakesqldb.New(t)
+	defer db.Close()
 	for query, result := range getTestTableInfoQueries() {
 		db.AddQuery(query, result)
 	}
@@ -140,14 +136,90 @@ func TestTableInfoSequence(t *testing.T) {
 	}
 }
 
+func TestTableInfoMessage(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	for query, result := range getMessageTableInfoQueries() {
+		db.AddQuery(query, result)
+	}
+	tableInfo, err := newTestTableInfo("USER_TABLE", "vitess_message,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30", db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := &TableInfo{
+		Table: &schema.Table{
+			Name: sqlparser.NewTableIdent("test_table"),
+			Type: schema.Message,
+		},
+		MessageInfo: &MessageInfo{
+			IDPKIndex: 1,
+			Fields: []*querypb.Field{{
+				Name: "id",
+				Type: sqltypes.Int64,
+			}, {
+				Name: "message",
+				Type: sqltypes.VarBinary,
+			}},
+			AckWaitDuration:    30 * time.Second,
+			PurgeAfterDuration: 120 * time.Second,
+			BatchSize:          1,
+			CacheSize:          10,
+			PollInterval:       30 * time.Second,
+		},
+	}
+	tableInfo.Columns = nil
+	tableInfo.Indexes = nil
+	tableInfo.PKColumns = nil
+	if !reflect.DeepEqual(tableInfo, want) {
+		t.Errorf("TableInfo:\n%+v, want\n%+v", tableInfo.Table, want.Table)
+		t.Errorf("TableInfo:\n%+v, want\n%+v", tableInfo.MessageInfo, want.MessageInfo)
+		t.Errorf("TableInfo:\n%+v, want\n%+v", tableInfo, want)
+	}
+
+	// Missing property
+	_, err = newTestTableInfo("USER_TABLE", "vitess_message,vt_ack_wait=30", db)
+	wanterr := "not specified for message table"
+	if err == nil || !strings.Contains(err.Error(), wanterr) {
+		t.Errorf("newTestTableInfo: %v, want %s", err, wanterr)
+	}
+
+	// id column must be part of primary key.
+	for query, result := range getMessageTableInfoQueries() {
+		db.AddQuery(query, result)
+	}
+	db.AddQuery(
+		"show index from test_table",
+		&sqltypes.Result{
+			Fields:       mysqlconn.ShowIndexFromTableFields,
+			RowsAffected: 1,
+			Rows: [][]sqltypes.Value{
+				mysqlconn.ShowIndexFromTableRow("test_table", true, "PRIMARY", 1, "time_scheduled", false),
+			},
+		})
+	_, err = newTestTableInfo("USER_TABLE", "vitess_message,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30", db)
+	wanterr = "id column is not part of the primary key for message table: test_table"
+	if err == nil || err.Error() != wanterr {
+		t.Errorf("newTestTableInfo: %v, want %s", err, wanterr)
+	}
+
+	for query, result := range getTestTableInfoQueries() {
+		db.AddQuery(query, result)
+	}
+	_, err = newTestTableInfo("USER_TABLE", "vitess_message,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30", db)
+	wanterr = "time_scheduled missing from message table: test_table"
+	if err == nil || err.Error() != wanterr {
+		t.Errorf("newTestTableInfo: %v, want %s", err, wanterr)
+	}
+}
+
 func newTestTableInfo(tableType string, comment string, db *fakesqldb.DB) (*TableInfo, error) {
 	ctx := context.Background()
-	appParams := sqldb.ConnParams{Engine: db.Name}
-	dbaParams := sqldb.ConnParams{Engine: db.Name}
+	appParams := db.ConnParams()
+	dbaParams := db.ConnParams()
 	queryServiceStats := NewQueryServiceStats("", false)
 	connPoolIdleTimeout := 10 * time.Second
 	connPool := NewConnPool("", 2, connPoolIdleTimeout, false, queryServiceStats, DummyChecker)
-	connPool.Open(&appParams, &dbaParams)
+	connPool.Open(appParams, dbaParams)
 	conn, err := connPool.Get(ctx)
 	if err != nil {
 		return nil, err
@@ -177,64 +249,71 @@ func getTestTableInfoQueries() map[string]*sqltypes.Result {
 			}},
 		},
 		"describe test_table": {
+			Fields:       mysqlconn.DescribeTableFields,
 			RowsAffected: 3,
 			Rows: [][]sqltypes.Value{
-				{
-					sqltypes.MakeString([]byte("pk")),
-					sqltypes.MakeString([]byte("int")),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("1")),
-					sqltypes.MakeString([]byte{}),
-				},
-				{
-					sqltypes.MakeString([]byte("name")),
-					sqltypes.MakeString([]byte("int")),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("1")),
-					sqltypes.MakeString([]byte{}),
-				},
-				{
-					sqltypes.MakeString([]byte("addr")),
-					sqltypes.MakeString([]byte("int")),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("1")),
-					sqltypes.MakeString([]byte{}),
-				},
+				mysqlconn.DescribeTableRow("pk", "int(11)", false, "PRI", "0"),
+				mysqlconn.DescribeTableRow("name", "int(11)", false, "", "0"),
+				mysqlconn.DescribeTableRow("addr", "int(11)", false, "", "0"),
 			},
 		},
 		"show index from test_table": {
+			Fields:       mysqlconn.ShowIndexFromTableFields,
 			RowsAffected: 3,
 			Rows: [][]sqltypes.Value{
-				{
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("PRIMARY")),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("pk")),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("300")),
-				},
-				{
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("INDEX")),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("pk")),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("300")),
-				},
-				{
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("INDEX")),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("name")),
-					sqltypes.MakeString([]byte{}),
-					sqltypes.MakeString([]byte("300")),
-				},
+				mysqlconn.ShowIndexFromTableRow("test_table", true, "PRIMARY", 1, "pk", false),
+				mysqlconn.ShowIndexFromTableRow("test_table", true, "index", 1, "pk", false),
+				mysqlconn.ShowIndexFromTableRow("test_table", true, "index", 2, "name", false),
+			},
+		},
+	}
+}
+
+func getMessageTableInfoQueries() map[string]*sqltypes.Result {
+	return map[string]*sqltypes.Result{
+		"select * from test_table where 1 != 1": {
+			Fields: []*querypb.Field{{
+				Name: "time_scheduled",
+				Type: sqltypes.Int64,
+			}, {
+				Name: "id",
+				Type: sqltypes.Int64,
+			}, {
+				Name: "time_next",
+				Type: sqltypes.Int64,
+			}, {
+				Name: "epoch",
+				Type: sqltypes.Int64,
+			}, {
+				Name: "time_created",
+				Type: sqltypes.Int64,
+			}, {
+				Name: "time_acked",
+				Type: sqltypes.Int64,
+			}, {
+				Name: "message",
+				Type: sqltypes.VarBinary,
+			}},
+		},
+		"describe test_table": {
+			Fields:       mysqlconn.DescribeTableFields,
+			RowsAffected: 7,
+			Rows: [][]sqltypes.Value{
+				mysqlconn.DescribeTableRow("time_scheduled", "bigint(20)", false, "", "0"),
+				mysqlconn.DescribeTableRow("id", "bigint(20)", false, "PRI", "0"),
+				mysqlconn.DescribeTableRow("time_next", "bigint(20)", false, "", "0"),
+				mysqlconn.DescribeTableRow("epoch", "bigint(20)", false, "", "0"),
+				mysqlconn.DescribeTableRow("time_created", "bigint(20)", false, "", "0"),
+				mysqlconn.DescribeTableRow("time_acked", "bigint(20)", false, "", "0"),
+				mysqlconn.DescribeTableRow("message", "bigint(20)", false, "", "0"),
+			},
+		},
+		"show index from test_table": {
+			Fields:       mysqlconn.ShowIndexFromTableFields,
+			RowsAffected: 2,
+			Rows: [][]sqltypes.Value{
+				mysqlconn.ShowIndexFromTableRow("test_table", true, "PRIMARY", 1, "time_scheduled", false),
+				mysqlconn.ShowIndexFromTableRow("test_table", true, "PRIMARY", 2, "id", false),
 			},
 		},
 	}

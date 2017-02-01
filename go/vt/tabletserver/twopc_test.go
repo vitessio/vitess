@@ -19,7 +19,8 @@ import (
 
 func TestReadAllRedo(t *testing.T) {
 	// Reuse code from tx_executor_test.
-	_, tsv, db := newTestTxExecutor()
+	_, tsv, db := newTestTxExecutor(t)
+	defer db.Close()
 	defer tsv.StopService()
 	tpc := tsv.te.twoPC
 	ctx := context.Background()
@@ -44,6 +45,12 @@ func TestReadAllRedo(t *testing.T) {
 	}
 
 	db.AddQuery(tpc.readAllRedo, &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{Type: sqltypes.VarChar},
+			{Type: sqltypes.Int64},
+			{Type: sqltypes.Int64},
+			{Type: sqltypes.VarChar},
+		},
 		Rows: [][]sqltypes.Value{{
 			sqltypes.MakeString([]byte("dtid0")),
 			sqltypes.MakeString([]byte(strconv.Itoa(RedoStatePrepared))),
@@ -68,6 +75,12 @@ func TestReadAllRedo(t *testing.T) {
 	}
 
 	db.AddQuery(tpc.readAllRedo, &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{Type: sqltypes.VarChar},
+			{Type: sqltypes.Int64},
+			{Type: sqltypes.Int64},
+			{Type: sqltypes.VarChar},
+		},
 		Rows: [][]sqltypes.Value{{
 			sqltypes.MakeString([]byte("dtid0")),
 			sqltypes.MakeString([]byte(strconv.Itoa(RedoStatePrepared))),
@@ -97,6 +110,12 @@ func TestReadAllRedo(t *testing.T) {
 	}
 
 	db.AddQuery(tpc.readAllRedo, &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{Type: sqltypes.VarChar},
+			{Type: sqltypes.Int64},
+			{Type: sqltypes.Int64},
+			{Type: sqltypes.VarChar},
+		},
 		Rows: [][]sqltypes.Value{{
 			sqltypes.MakeString([]byte("dtid0")),
 			sqltypes.MakeString([]byte(strconv.Itoa(RedoStatePrepared))),
@@ -135,6 +154,12 @@ func TestReadAllRedo(t *testing.T) {
 	}
 
 	db.AddQuery(tpc.readAllRedo, &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{Type: sqltypes.VarChar},
+			{Type: sqltypes.Int64},
+			{Type: sqltypes.Int64},
+			{Type: sqltypes.VarChar},
+		},
 		Rows: [][]sqltypes.Value{{
 			sqltypes.MakeString([]byte("dtid0")),
 			sqltypes.MakeString([]byte(strconv.Itoa(RedoStatePrepared))),
@@ -198,7 +223,8 @@ func TestReadAllRedo(t *testing.T) {
 }
 
 func TestReadAllTransactions(t *testing.T) {
-	_, tsv, db := newTestTxExecutor()
+	_, tsv, db := newTestTxExecutor(t)
+	defer db.Close()
 	defer tsv.StopService()
 	tpc := tsv.te.twoPC
 	ctx := context.Background()
@@ -220,6 +246,13 @@ func TestReadAllTransactions(t *testing.T) {
 	}
 
 	db.AddQuery(tpc.readAllTransactions, &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{Type: sqltypes.VarChar},
+			{Type: sqltypes.Int64},
+			{Type: sqltypes.Int64},
+			{Type: sqltypes.VarChar},
+			{Type: sqltypes.VarChar},
+		},
 		Rows: [][]sqltypes.Value{{
 			sqltypes.MakeString([]byte("dtid0")),
 			sqltypes.MakeString([]byte(strconv.Itoa(RedoStatePrepared))),
@@ -246,6 +279,13 @@ func TestReadAllTransactions(t *testing.T) {
 	}
 
 	db.AddQuery(tpc.readAllTransactions, &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{Type: sqltypes.VarChar},
+			{Type: sqltypes.Int64},
+			{Type: sqltypes.Int64},
+			{Type: sqltypes.VarChar},
+			{Type: sqltypes.VarChar},
+		},
 		Rows: [][]sqltypes.Value{{
 			sqltypes.MakeString([]byte("dtid0")),
 			sqltypes.MakeString([]byte(strconv.Itoa(RedoStatePrepared))),
@@ -281,6 +321,13 @@ func TestReadAllTransactions(t *testing.T) {
 	}
 
 	db.AddQuery(tpc.readAllTransactions, &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{Type: sqltypes.VarChar},
+			{Type: sqltypes.Int64},
+			{Type: sqltypes.Int64},
+			{Type: sqltypes.VarChar},
+			{Type: sqltypes.VarChar},
+		},
 		Rows: [][]sqltypes.Value{{
 			sqltypes.MakeString([]byte("dtid0")),
 			sqltypes.MakeString([]byte(strconv.Itoa(RedoStatePrepared))),

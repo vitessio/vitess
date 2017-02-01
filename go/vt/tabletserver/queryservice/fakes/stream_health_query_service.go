@@ -1,10 +1,13 @@
 package fakes
 
 import (
+	"golang.org/x/net/context"
+
 	"github.com/golang/protobuf/proto"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	"github.com/youtube/vitess/go/vt/tabletserver/queryservice"
 )
 
 const (
@@ -21,7 +24,7 @@ const (
 // If you want to override other QueryService methods, embed this struct
 // as anonymous field in your own QueryService fake.
 type StreamHealthQueryService struct {
-	ErrorQueryService
+	queryservice.QueryService
 	healthResponses chan *querypb.StreamHealthResponse
 	target          querypb.Target
 }
@@ -29,21 +32,20 @@ type StreamHealthQueryService struct {
 // NewStreamHealthQueryService creates a new fake query service for the target.
 func NewStreamHealthQueryService(target querypb.Target) *StreamHealthQueryService {
 	return &StreamHealthQueryService{
+		QueryService:    ErrorQueryService,
 		healthResponses: make(chan *querypb.StreamHealthResponse, 1000),
 		target:          target,
 	}
 }
 
-// StreamHealthRegister implements the QueryService interface.
+// StreamHealth implements the QueryService interface.
 // It sends all queued and future healthResponses to the connected client e.g.
 // the healthcheck module.
-func (q *StreamHealthQueryService) StreamHealthRegister(c chan<- *querypb.StreamHealthResponse) (int, error) {
-	go func() {
-		for shr := range q.healthResponses {
-			c <- shr
-		}
-	}()
-	return 0, nil
+func (q *StreamHealthQueryService) StreamHealth(ctx context.Context, callback func(*querypb.StreamHealthResponse) error) error {
+	for shr := range q.healthResponses {
+		callback(shr)
+	}
+	return nil
 }
 
 // AddDefaultHealthResponse adds a faked health response to the buffer channel.

@@ -15,18 +15,26 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Created by naveen.nahata on 17/02/16.
+ * VitessJDBCUrl is responsible for parsing a driver URL and Properties object,
+ * returning a new Properties object with configuration from the URL and passed in Properties
+ * merged.
+ *
+ * Parameters passed in through the Properties object take precedence over the parameters
+ * in the URL, where there are conflicts.
+ *
+ * The Passed in URL is expected to conform to the following basic format:
+ *
+ * jdbc:vitess://username:password@ip1:port1,ip2:port2/keyspace/catalog?property1=value1..
+ *
  */
 public class VitessJDBCUrl {
 
     private final String username;
-    private final Topodata.TabletType tabletType;
     private final String url;
     private final List<HostInfo> hostInfos;
     private final String keyspace;
+    private final Properties info;
     private String catalog;
-    private final String executeType;
-    private final boolean twopcEnabled;
 
     private final boolean useSSL;
     private final String keyStore;
@@ -128,6 +136,7 @@ public class VitessJDBCUrl {
         if (!m.find()) {
             throw new SQLException(Constants.SQLExceptionMessages.MALFORMED_URL);
         }
+
         info = getURLParamProperties(m.group(12), info);
 
         this.username =
@@ -144,14 +153,6 @@ public class VitessJDBCUrl {
             StringUtils.isNullOrEmptyWithoutWS(m.group(10)) ? this.keyspace : m.group(10);
         this.hostInfos = getURLHostInfos(postUrl);
 
-        String tabletType = info.getProperty(Constants.Property.TABLET_TYPE);
-        if (null == tabletType) {
-            tabletType = Constants.DEFAULT_TABLET_TYPE;
-        }
-
-        this.tabletType = getTabletType(tabletType);
-        this.executeType = info.getProperty(Constants.Property.EXECUTE_TYPE);
-
         this.useSSL = "true".equalsIgnoreCase(caseInsensitiveKeyLookup(info, Constants.Property.USE_SSL));
         this.keyStore = caseInsensitiveKeyLookup(info, Constants.Property.KEYSTORE);
         this.keyStorePassword = caseInsensitiveKeyLookup(info, Constants.Property.KEYSTORE_PASSWORD);
@@ -162,16 +163,11 @@ public class VitessJDBCUrl {
         this.trustAlias = caseInsensitiveKeyLookup(info, Constants.Property.TRUSTSTORE_ALIAS);
 
         this.url = url;
-        this.twopcEnabled =
-            "true".equalsIgnoreCase(info.getProperty(Constants.Property.TWOPC_ENABLED));
+        this.info = info;
     }
 
     public String getUsername() {
         return username;
-    }
-
-    public Topodata.TabletType getTabletType() {
-        return tabletType;
     }
 
     public String getUrl() {
@@ -192,18 +188,6 @@ public class VitessJDBCUrl {
 
     public void setCatalog(String catalog) {
         this.catalog = catalog;
-    }
-
-    public Constants.QueryExecuteType getExecuteType() {
-        if (this.executeType != null) {
-            switch (this.executeType) {
-                case "simple":
-                    return Constants.QueryExecuteType.SIMPLE;
-                case "stream":
-                    return Constants.QueryExecuteType.STREAM;
-            }
-        }
-        return Constants.DEFAULT_EXECUTE_TYPE;
     }
 
     public boolean isUseSSL() {
@@ -248,9 +232,9 @@ public class VitessJDBCUrl {
 
     private static Properties getURLParamProperties(String paramString, Properties info)
         throws SQLException {
-        if (null == info) {
-            info = new Properties();
-        }
+        // If passed in, don't use info properties directly so we don't act upon it accidentally.
+        // instead use as defaults for a new properties object
+        info = (info == null) ? new Properties() : new Properties(info);
 
         if (!StringUtils.isNullOrEmptyWithoutWS(paramString)) {
             StringTokenizer queryParams = new StringTokenizer(paramString, "&"); //$NON-NLS-1$
@@ -269,7 +253,9 @@ public class VitessJDBCUrl {
                     }
                 }
 
-                if ((null != value && value.length() > 0) && (parameter.length() > 0)) {
+                // Per the mysql-connector-java docs, passed in Properties values should take precedence over
+                // those in the URL. See javadoc for NonRegisteringDriver#connect
+                if ((null != value && value.length() > 0) && (parameter.length() > 0) && null == info.getProperty(parameter)) {
                     try {
                         info.put(parameter, URLDecoder.decode(value, "UTF-8"));
                     } catch (UnsupportedEncodingException | NoSuchMethodError badEncoding) {
@@ -319,27 +305,8 @@ public class VitessJDBCUrl {
         return hostInfos;
     }
 
-    /**
-     * Converting string tabletType to Topodata.TabletType
-     *
-     * @param tabletType
-     * @return
-     */
-    public static Topodata.TabletType getTabletType(String tabletType) {
-        switch (tabletType.toLowerCase()) {
-            case "master":
-                return Topodata.TabletType.MASTER;
-            case "replica":
-                return Topodata.TabletType.REPLICA;
-            case "rdonly":
-                return Topodata.TabletType.RDONLY;
-            default:
-                return Topodata.TabletType.UNRECOGNIZED;
-        }
-    }
-
-    public boolean isTwopcEnabled() {
-        return twopcEnabled;
+    public Properties getProperties() {
+        return info;
     }
 
     /**

@@ -20,6 +20,8 @@ var (
 	execLimit     = &sqlparser.Limit{Rowcount: sqlparser.NewValArg([]byte(":#maxLimit"))}
 )
 
+//_______________________________________________
+
 // PlanType indicates a query plan type.
 type PlanType int
 
@@ -46,6 +48,8 @@ const (
 	PlanInsertSubquery
 	// PlanUpsertPK is for insert ... on duplicate key constructs
 	PlanUpsertPK
+	// PlanInsertMessage is for inserting into message tables
+	PlanInsertMessage
 	// PlanSet is for SET statements
 	PlanSet
 	// PlanDDL is for DDL statements
@@ -69,6 +73,7 @@ var planName = []string{
 	"INSERT_PK",
 	"INSERT_SUBQUERY",
 	"UPSERT_PK",
+	"INSERT_MESSAGE",
 	"SET",
 	"DDL",
 	"SELECT_STREAM",
@@ -104,10 +109,12 @@ func (pt PlanType) MarshalJSON() ([]byte, error) {
 
 // MinRole is the minimum Role required to execute this PlanType.
 func (pt PlanType) MinRole() tableacl.Role {
-	return tableAclRoles[pt]
+	return tableACLRoles[pt]
 }
 
-var tableAclRoles = map[PlanType]tableacl.Role{
+//_______________________________________________
+
+var tableACLRoles = map[PlanType]tableacl.Role{
 	PlanPassSelect:     tableacl.READER,
 	PlanSelectLock:     tableacl.READER,
 	PlanSet:            tableacl.READER,
@@ -123,6 +130,8 @@ var tableAclRoles = map[PlanType]tableacl.Role{
 	PlanNextval:        tableacl.WRITER,
 }
 
+//_______________________________________________
+
 // ReasonType indicates why a query plan fails to build
 type ReasonType int
 
@@ -134,6 +143,7 @@ const (
 	ReasonPKChange
 	ReasonComplexExpr
 	ReasonUpsert
+	ReasonUpsertColMismatch
 )
 
 // Must exactly match order of reason constants.
@@ -144,6 +154,7 @@ var reasonName = []string{
 	"PK_CHANGE",
 	"COMPLEX_EXPR",
 	"UPSERT",
+	"UPSERT_COL_MISMATCH",
 }
 
 // String returns a string representation of a ReasonType.
@@ -155,6 +166,18 @@ func (rt ReasonType) String() string {
 func (rt ReasonType) MarshalJSON() ([]byte, error) {
 	return ([]byte)(fmt.Sprintf("\"%s\"", rt.String())), nil
 }
+
+//_______________________________________________
+
+// MessageRowValues is used to store the values
+// of a message row in a plan.
+type MessageRowValues struct {
+	TimeNext interface{}
+	ID       interface{}
+	Message  interface{}
+}
+
+//_______________________________________________
 
 // ExecPlan is built for selects and DMLs.
 // PK Values values within ExecPlan can be:
@@ -191,6 +214,9 @@ type ExecPlan struct {
 
 	// For PlanInsertSubquery: pk columns in the subquery result.
 	SubqueryPKColumns []int `json:",omitempty"`
+
+	// For PlanInsertMessage. Query used to reload inserted messages.
+	MessageReloaderQuery *sqlparser.ParsedQuery `json:",omitempty"`
 }
 
 func (plan *ExecPlan) setTableInfo(tableName sqlparser.TableIdent, getTable TableGetter) (*schema.Table, error) {

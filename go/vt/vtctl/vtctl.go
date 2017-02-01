@@ -93,13 +93,13 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/flagutil"
+	"github.com/youtube/vitess/go/mysqlconn/replication"
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/sync2"
 	hk "github.com/youtube/vitess/go/vt/hook"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/logutil"
-	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
 	"github.com/youtube/vitess/go/vt/schemamanager"
-	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/topotools"
@@ -324,6 +324,12 @@ var commands = []commandGroup{
 			{"ReloadSchema", commandReloadSchema,
 				"<tablet alias>",
 				"Reloads the schema on a remote tablet."},
+			{"ReloadSchemaShard", commandReloadSchemaShard,
+				"[-concurrency=10] [-include_master=false] <keyspace/shard>",
+				"Reloads the schema on all the tablets in a shard."},
+			{"ReloadSchemaKeyspace", commandReloadSchemaKeyspace,
+				"[-concurrency=10] [-include_master=false] <keyspace>",
+				"Reloads the schema on all the tablets in a keyspace."},
 			{"ValidateSchemaShard", commandValidateSchemaShard,
 				"[-exclude_tables=''] [-include-views] <keyspace/shard>",
 				"Validates that the master schema matches all of the slaves."},
@@ -1370,7 +1376,7 @@ func commandShardReplicationFix(ctx context.Context, wr *wrangler.Wrangler, subF
 }
 
 func commandWaitForFilteredReplication(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	maxDelay := subFlags.Duration("max_delay", 30*time.Second,
+	maxDelay := subFlags.Duration("max_delay", wrangler.DefaultWaitForFilteredReplicationMaxDelay,
 		"Specifies the maximum delay, in seconds, the filtered replication of the"+
 			" given destination shard should lag behind the source shard. When"+
 			" higher, the command will block and wait for the delay to decrease.")
@@ -1385,72 +1391,7 @@ func commandWaitForFilteredReplication(ctx context.Context, wr *wrangler.Wrangle
 	if err != nil {
 		return err
 	}
-	shardInfo, err := wr.TopoServer().GetShard(ctx, keyspace, shard)
-	if err != nil {
-		return err
-	}
-	if len(shardInfo.SourceShards) == 0 {
-		return fmt.Errorf("shard %v/%v has no source shard", keyspace, shard)
-	}
-	if !shardInfo.HasMaster() {
-		return fmt.Errorf("shard %v/%v has no master", keyspace, shard)
-	}
-	alias := shardInfo.MasterAlias
-	tabletInfo, err := wr.TopoServer().GetTablet(ctx, alias)
-	if err != nil {
-		return err
-	}
-
-	// Always run an explicit healthcheck first to make sure we don't see any outdated values.
-	// This is especially true for tests and automation where there is no pause of multiple seconds
-	// between commands and the periodic healthcheck did not run again yet.
-	if err := wr.TabletManagerClient().RunHealthCheck(ctx, tabletInfo.Tablet); err != nil {
-		return fmt.Errorf("failed to run explicit healthcheck on tablet: %v err: %v", tabletInfo, err)
-	}
-
-	conn, err := tabletconn.GetDialer()(tabletInfo.Tablet, 30*time.Second)
-	if err != nil {
-		return fmt.Errorf("cannot connect to tablet %v: %v", alias, err)
-	}
-
-	stream, err := conn.StreamHealth(ctx)
-	if err != nil {
-		return fmt.Errorf("could not stream health records from tablet: %v err: %v", alias, err)
-	}
-	var lastSeenDelay int
-	for {
-		select {
-		case <-ctx.Done():
-			return fmt.Errorf("context was done before filtered replication did catch up. Last seen delay: %v context Error: %v", lastSeenDelay, ctx.Err())
-		default:
-		}
-
-		shr, err := stream.Recv()
-		if err != nil {
-			return fmt.Errorf("stream ended early: %v", err)
-		}
-		stats := shr.RealtimeStats
-		if stats == nil {
-			return fmt.Errorf("health record does not include RealtimeStats message. tablet: %v health record: %v", alias, shr)
-		}
-		if stats.HealthError != "" {
-			return fmt.Errorf("tablet is not healthy. tablet: %v health record: %v", alias, shr)
-		}
-		if stats.BinlogPlayersCount == 0 {
-			return fmt.Errorf("no filtered replication running on tablet: %v health record: %v", alias, shr)
-		}
-
-		delaySecs := stats.SecondsBehindMasterFilteredReplication
-		lastSeenDelay := time.Duration(delaySecs) * time.Second
-		if lastSeenDelay < 0 {
-			return fmt.Errorf("last seen delay should never be negative. tablet: %v delay: %v", alias, lastSeenDelay)
-		}
-		if lastSeenDelay <= *maxDelay {
-			wr.Logger().Printf("Filtered replication on tablet: %v has caught up. Last seen delay: %.1f seconds\n", alias, lastSeenDelay.Seconds())
-			return nil
-		}
-		wr.Logger().Printf("Waiting for filtered replication to catch up on tablet: %v Last seen delay: %.1f seconds\n", alias, lastSeenDelay.Seconds())
-	}
+	return wr.WaitForFilteredReplication(ctx, keyspace, shard, *maxDelay)
 }
 
 func commandRemoveShardCell(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -1851,6 +1792,37 @@ func commandReloadSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 	return wr.ReloadSchema(ctx, tabletAlias)
 }
 
+func commandReloadSchemaShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	concurrency := subFlags.Int("concurrency", 10, "How many tablets to reload in parallel")
+	includeMaster := subFlags.Bool("include_master", true, "Include the master tablet")
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+	if subFlags.NArg() != 1 {
+		return fmt.Errorf("the <keyspace/shard> argument is required for the ReloadSchemaShard command")
+	}
+	keyspace, shard, err := topoproto.ParseKeyspaceShard(subFlags.Arg(0))
+	if err != nil {
+		return err
+	}
+	sema := sync2.NewSemaphore(*concurrency, 0)
+	wr.ReloadSchemaShard(ctx, keyspace, shard, "" /* waitPosition */, sema, *includeMaster)
+	return nil
+}
+
+func commandReloadSchemaKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	concurrency := subFlags.Int("concurrency", 10, "How many tablets to reload in parallel")
+	includeMaster := subFlags.Bool("include_master", true, "Include the master tablet(s)")
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+	if subFlags.NArg() != 1 {
+		return fmt.Errorf("the <keyspace> argument is required for the ReloadSchemaKeyspace command")
+	}
+	sema := sync2.NewSemaphore(*concurrency, 0)
+	return wr.ReloadSchemaKeyspace(ctx, subFlags.Arg(0), sema, *includeMaster)
+}
+
 func commandValidateSchemaShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	excludeTables := subFlags.String("exclude_tables", "", "Specifies a comma-separated list of tables to exclude. Each is either an exact match, or a regular expression of the form /regexp/")
 	includeViews := subFlags.Bool("include-views", false, "Includes views in the validation")
@@ -1894,7 +1866,7 @@ func commandApplySchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 	allowLongUnavailability := subFlags.Bool("allow_long_unavailability", false, "Allow large schema changes which incur a longer unavailability of the database.")
 	sql := subFlags.String("sql", "", "A list of semicolon-delimited SQL commands")
 	sqlFile := subFlags.String("sql-file", "", "Identifies the file that contains the SQL commands")
-	waitSlaveTimeout := subFlags.Duration("wait_slave_timeout", 10*time.Second, "The amount of time to wait for slaves to receive the schema change via replication.")
+	waitSlaveTimeout := subFlags.Duration("wait_slave_timeout", wrangler.DefaultWaitSlaveTimeout, "The amount of time to wait for slaves to receive the schema change via replication.")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}

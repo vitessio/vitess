@@ -306,7 +306,7 @@ class TestBufferBase(unittest.TestCase):
     # TODO(mberlin): This may fail if a failover is too fast. Add retries then.
     v = utils.vtgate.get_vars()
     labels = '%s.%s' % (KEYSPACE, SHARD)
-    in_flight_max = v['BufferRequestsInFlightMax'].get(labels, 0)
+    in_flight_max = v['BufferLastRequestsInFlightMax'].get(labels, 0)
     if in_flight_max == 0:
       # Missed buffering is okay when we observed the failover during the
       # COMMIT (which cannot trigger the buffering).
@@ -316,9 +316,17 @@ class TestBufferBase(unittest.TestCase):
     else:
       self.assertGreater(in_flight_max, 0)
 
-    if labels in v['BufferFailoverDurationMs']:
+    # There was a failover and the HealthCheck module must have seen it.
+    master_promoted_count = v['HealthcheckMasterPromoted'].get(labels, 0)
+    self.assertGreater(master_promoted_count, 0)
+
+    if labels in v['BufferFailoverDurationSumMs']:
+      # Buffering was actually started.
       logging.debug('Failover was buffered for %d milliseconds.',
-                    v['BufferFailoverDurationMs'][labels])
+                    v['BufferFailoverDurationSumMs'][labels])
+      # Number of buffering stops must be equal to the number of seen failovers.
+      buffering_stops = v['BufferStops'].get('%s.NewMasterSeen' % labels, 0)
+      self.assertEqual(master_promoted_count, buffering_stops)
 
   def external_reparent(self):
     # Demote master.

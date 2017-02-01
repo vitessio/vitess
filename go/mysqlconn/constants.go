@@ -150,14 +150,47 @@ const (
 // Error codes for client-side errors.
 // Originally found in include/mysql/errmsg.h
 const (
+	// CRUnknownError is CR_UNKNOWN_ERROR
+	CRUnknownError = 2000
+
 	// CRConnectionError is CR_CONNECTION_ERROR
+	// This is returned if a connection via a Unix socket fails.
 	CRConnectionError = 2002
 
 	// CRConnHostError is CR_CONN_HOST_ERROR
+	// This is returned if a connection via a TCP socket fails.
 	CRConnHostError = 2003
 
-	// CR_SERVER_HANDSHAKE_ERR
+	// CRServerGone is CR_SERVER_GONE_ERROR.
+	// This is returned if the client tries to send a command but it fails.
+	CRServerGone = 2006
+
+	// CRVersionError is CR_VERSION_ERROR
+	// This is returned if the server versions don't match what we support.
+	CRVersionError = 2007
+
+	// CRServerHandshakeErr is CR_SERVER_HANDSHAKE_ERR
 	CRServerHandshakeErr = 2012
+
+	// CRServerLost is CR_SERVER_LOST.
+	// Used when:
+	// - the client cannot write an initial auth packet.
+	// - the client cannot read an initial auth packet.
+	// - the client cannot read a response from the server.
+	CRServerLost = 2013
+
+	// CRCommandsOutOfSync is CR_COMMANDS_OUT_OF_SYNC
+	// Sent when the streaming calls are not done in the right order.
+	CRCommandsOutOfSync = 2014
+
+	// CRCantReadCharset is CR_CANT_READ_CHARSET
+	CRCantReadCharset = 2019
+
+	// CRSSLConnectionError is CR_SSL_CONNECTION_ERROR
+	CRSSLConnectionError = 2026
+
+	// CRMalformedPacket is CR_MALFORMED_PACKET
+	CRMalformedPacket = 2027
 )
 
 // Error codes for server-side errors.
@@ -169,22 +202,43 @@ const (
 	// ERUnknownComError is ER_UNKNOWN_COM_ERROR
 	ERUnknownComError = 1047
 
+	// ERBadNullError is ER_BAD_NULL_ERROR
+	ERBadNullError = 1048
+
+	// ERDupEntry is ER_DUP_ENTRY
+	ERDupEntry = 1062
+
 	// ERUnknownError is ER_UNKNOWN_ERROR
 	ERUnknownError = 1105
 
 	// ERCantDoThisDuringAnTransaction is
 	// ER_CANT_DO_THIS_DURING_AN_TRANSACTION
 	ERCantDoThisDuringAnTransaction = 1179
+
+	// ERLockWaitTimeout is ER_LOCK_WAIT_TIMEOUT
+	ERLockWaitTimeout = 1205
+
+	// ERLockDeadlock is ER_LOCK_DEADLOCK
+	ERLockDeadlock = 1213
+
+	// EROptionPreventsStatement is ER_OPTION_PREVENTS_STATEMENT
+	EROptionPreventsStatement = 1290
+
+	// ERDataTooLong is ER_DATA_TOO_LONG
+	ERDataTooLong = 1406
+
+	// ERDataOutOfRange is ER_DATA_OUT_OF_RANGE
+	ERDataOutOfRange = 1690
 )
 
 // Sql states for errors.
 // Originally found in include/mysql/sql_state.h
 const (
-	// SSSignalException is ER_SIGNAL_EXCEPTION
-	SSSignalException = "HY000"
-
-	// SSAccessDeniedError is ER_ACCESS_DENIED_ERROR
-	SSAccessDeniedError = "28000"
+	// SSUnknownSqlstate is ER_SIGNAL_EXCEPTION in
+	// include/mysql/sql_state.h, but:
+	// const char *unknown_sqlstate= "HY000"
+	// in client.c. So using that one.
+	SSUnknownSQLState = "HY000"
 
 	// SSUnknownComError is ER_UNKNOWN_COM_ERROR
 	SSUnknownComError = "08S01"
@@ -192,9 +246,27 @@ const (
 	// SSHandshakeError is ER_HANDSHAKE_ERROR
 	SSHandshakeError = "08S01"
 
+	// SSDataTooLong is ER_DATA_TOO_LONG
+	SSDataTooLong = "22001"
+
+	// SSDataOutOfRange is ER_DATA_OUT_OF_RANGE
+	SSDataOutOfRange = "22003"
+
+	// SSBadNullError is ER_BAD_NULL_ERROR
+	SSBadNullError = "23000"
+
+	// SSDupKey is ER_DUP_KEY
+	SSDupKey = "23000"
+
 	// SSCantDoThisDuringAnTransaction is
 	// ER_CANT_DO_THIS_DURING_AN_TRANSACTION
 	SSCantDoThisDuringAnTransaction = "25000"
+
+	// SSAccessDeniedError is ER_ACCESS_DENIED_ERROR
+	SSAccessDeniedError = "28000"
+
+	// SSLockDeadlock is ER_LOCK_DEADLOCK
+	SSLockDeadlock = "40001"
 )
 
 // Status flags. They are returned by the server in a few cases.
@@ -258,4 +330,13 @@ var CharacterSetMap = map[string]uint8{
 	"geostd8":  92,
 	"cp932":    95,
 	"eucjpms":  97,
+}
+
+// IsNum returns true if a MySQL type is a numeric value.
+// It is the same as IS_NUM defined in mysql.h.
+//
+// FIXME(alainjobart) This needs to use the constants in
+// replication/constants.go, so we are using numerical values here.
+func IsNum(typ uint8) bool {
+	return ((typ <= 9 /* MYSQL_TYPE_INT24 */ && typ != 7 /* MYSQL_TYPE_TIMESTAMP */) || typ == 13 /* MYSQL_TYPE_YEAR */ || typ == 246 /* MYSQL_TYPE_NEWDECIMAL */)
 }

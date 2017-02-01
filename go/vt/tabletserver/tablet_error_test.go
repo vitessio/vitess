@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/youtube/vitess/go/mysql"
+	"github.com/youtube/vitess/go/mysqlconn"
 	"github.com/youtube/vitess/go/sqldb"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
@@ -23,25 +23,25 @@ func TestTabletErrorCode(t *testing.T) {
 }
 
 func TestTabletErrorRetriableErrorTypeOverwrite(t *testing.T) {
-	sqlErr := sqldb.NewSQLError(mysql.ErrOptionPreventsStatement, "HY000", "read-only")
+	sqlErr := sqldb.NewSQLError(mysqlconn.EROptionPreventsStatement, mysqlconn.SSUnknownSQLState, "read-only")
 	tabletErr := NewTabletErrorSQL(vtrpcpb.ErrorCode_INTERNAL_ERROR, sqlErr)
 	if tabletErr.ErrorCode != vtrpcpb.ErrorCode_QUERY_NOT_SERVED {
 		t.Fatalf("got: %v wanted: QUERY_NOT_SERVED", tabletErr.ErrorCode)
 	}
 
-	sqlErr = sqldb.NewSQLError(mysql.ErrDupEntry, "23000", "error")
+	sqlErr = sqldb.NewSQLError(mysqlconn.ERDupEntry, mysqlconn.SSDupKey, "error")
 	tabletErr = NewTabletErrorSQL(vtrpcpb.ErrorCode_INTERNAL_ERROR, sqlErr)
 	if tabletErr.ErrorCode != vtrpcpb.ErrorCode_INTEGRITY_ERROR {
 		t.Fatalf("got: %v wanted: INTEGRITY_ERROR", tabletErr.ErrorCode)
 	}
 
-	sqlErr = sqldb.NewSQLError(mysql.ErrDataTooLong, "22001", "error")
+	sqlErr = sqldb.NewSQLError(mysqlconn.ERDataTooLong, mysqlconn.SSDataTooLong, "error")
 	tabletErr = NewTabletErrorSQL(vtrpcpb.ErrorCode_INTERNAL_ERROR, sqlErr)
 	if tabletErr.ErrorCode != vtrpcpb.ErrorCode_BAD_INPUT {
 		t.Fatalf("got: %v wanted: BAD_INPUT", tabletErr.ErrorCode)
 	}
 
-	sqlErr = sqldb.NewSQLError(mysql.ErrDataOutOfRange, "22003", "error")
+	sqlErr = sqldb.NewSQLError(mysqlconn.ERDataOutOfRange, mysqlconn.SSDataOutOfRange, "error")
 	tabletErr = NewTabletErrorSQL(vtrpcpb.ErrorCode_INTERNAL_ERROR, sqlErr)
 	if tabletErr.ErrorCode != vtrpcpb.ErrorCode_BAD_INPUT {
 		t.Fatalf("got: %v wanted: BAD_INPUT", tabletErr.ErrorCode)
@@ -57,7 +57,7 @@ func TestTabletErrorMsgTooLong(t *testing.T) {
 		buf[i] = 'a'
 	}
 	msg := string(buf)
-	sqlErr := sqldb.NewSQLError(mysql.ErrDupEntry, "23000", msg)
+	sqlErr := sqldb.NewSQLError(mysqlconn.ERDupEntry, mysqlconn.SSDupKey, msg)
 	tabletErr := NewTabletErrorSQL(vtrpcpb.ErrorCode_INTERNAL_ERROR, sqlErr)
 	if tabletErr.ErrorCode != vtrpcpb.ErrorCode_INTEGRITY_ERROR {
 		t.Fatalf("got %v wanted INTEGRITY_ERROR", tabletErr.ErrorCode)
@@ -70,15 +70,15 @@ func TestTabletErrorMsgTooLong(t *testing.T) {
 func TestTabletErrorConnError(t *testing.T) {
 	tabletErr := NewTabletErrorSQL(vtrpcpb.ErrorCode_INTERNAL_ERROR, sqldb.NewSQLError(1999, "HY000", "test"))
 	if IsConnErr(tabletErr) {
-		t.Fatalf("table error: %v is not a connection error", tabletErr)
+		t.Fatalf("tablet error: %v is not a connection error", tabletErr)
 	}
-	tabletErr = NewTabletErrorSQL(vtrpcpb.ErrorCode_INTERNAL_ERROR, sqldb.NewSQLError(2000, "HY000", "test"))
+	tabletErr = NewTabletErrorSQL(vtrpcpb.ErrorCode_INTERNAL_ERROR, sqldb.NewSQLError(2000, mysqlconn.SSUnknownSQLState, "test"))
 	if !IsConnErr(tabletErr) {
-		t.Fatalf("table error: %v is a connection error", tabletErr)
+		t.Fatalf("tablet error: %v is a connection error", tabletErr)
 	}
-	tabletErr = NewTabletErrorSQL(vtrpcpb.ErrorCode_INTERNAL_ERROR, sqldb.NewSQLError(mysql.ErrServerLost, "HY000", "test"))
+	tabletErr = NewTabletErrorSQL(vtrpcpb.ErrorCode_INTERNAL_ERROR, sqldb.NewSQLError(mysqlconn.CRServerLost, mysqlconn.SSUnknownSQLState, "test"))
 	if IsConnErr(tabletErr) {
-		t.Fatalf("table error: %v is not a connection error", tabletErr)
+		t.Fatalf("tablet error: %v is not a connection error", tabletErr)
 	}
 	want := "fatal: the query was killed either because it timed out or was canceled: test (errno 2013) (sqlstate HY000)"
 	if tabletErr.Error() != want {
@@ -157,36 +157,36 @@ func TestTabletErrorRecordStats(t *testing.T) {
 		t.Fatalf("tablet error with error code NOT_IN_TX should increase NotInTx error count by 1")
 	}
 
-	tabletErr = NewTabletErrorSQL(vtrpcpb.ErrorCode_UNKNOWN_ERROR, sqldb.NewSQLError(mysql.ErrDupEntry, "23000", "test"))
+	tabletErr = NewTabletErrorSQL(vtrpcpb.ErrorCode_UNKNOWN_ERROR, sqldb.NewSQLError(mysqlconn.ERDupEntry, mysqlconn.SSDupKey, "test"))
 	dupKeyCounterBefore := queryServiceStats.InfoErrors.Counts()["DupKey"]
 	tabletErr.RecordStats(queryServiceStats)
 	dupKeyCounterAfter := queryServiceStats.InfoErrors.Counts()["DupKey"]
 	if dupKeyCounterAfter-dupKeyCounterBefore != 1 {
-		t.Fatalf("sql error with SQL error mysql.ErrDupEntry should increase DupKey error count by 1")
+		t.Fatalf("sql error with SQL error mysqlconn.ERDupEntry should increase DupKey error count by 1")
 	}
 
-	tabletErr = NewTabletErrorSQL(vtrpcpb.ErrorCode_UNKNOWN_ERROR, sqldb.NewSQLError(mysql.ErrLockWaitTimeout, "HY000", "test"))
+	tabletErr = NewTabletErrorSQL(vtrpcpb.ErrorCode_UNKNOWN_ERROR, sqldb.NewSQLError(mysqlconn.ERLockWaitTimeout, mysqlconn.SSUnknownSQLState, "test"))
 	lockWaitTimeoutCounterBefore := queryServiceStats.ErrorStats.Counts()["Deadlock"]
 	tabletErr.RecordStats(queryServiceStats)
 	lockWaitTimeoutCounterAfter := queryServiceStats.ErrorStats.Counts()["Deadlock"]
 	if lockWaitTimeoutCounterAfter-lockWaitTimeoutCounterBefore != 1 {
-		t.Fatalf("sql error with SQL error mysql.ErrLockWaitTimeout should increase Deadlock error count by 1")
+		t.Fatalf("sql error with SQL error mysqlconn.ERLockWaitTimeout should increase Deadlock error count by 1")
 	}
 
-	tabletErr = NewTabletErrorSQL(vtrpcpb.ErrorCode_UNKNOWN_ERROR, sqldb.NewSQLError(mysql.ErrLockDeadlock, "40001", "test"))
+	tabletErr = NewTabletErrorSQL(vtrpcpb.ErrorCode_UNKNOWN_ERROR, sqldb.NewSQLError(mysqlconn.ERLockDeadlock, mysqlconn.SSLockDeadlock, "test"))
 	deadlockCounterBefore := queryServiceStats.ErrorStats.Counts()["Deadlock"]
 	tabletErr.RecordStats(queryServiceStats)
 	deadlockCounterAfter := queryServiceStats.ErrorStats.Counts()["Deadlock"]
 	if deadlockCounterAfter-deadlockCounterBefore != 1 {
-		t.Fatalf("sql error with SQL error mysql.ErrLockDeadlock should increase Deadlock error count by 1")
+		t.Fatalf("sql error with SQL error mysqlconn.ERLockDeadlock should increase Deadlock error count by 1")
 	}
 
-	tabletErr = NewTabletErrorSQL(vtrpcpb.ErrorCode_UNKNOWN_ERROR, sqldb.NewSQLError(mysql.ErrOptionPreventsStatement, "HY000", "test"))
+	tabletErr = NewTabletErrorSQL(vtrpcpb.ErrorCode_UNKNOWN_ERROR, sqldb.NewSQLError(mysqlconn.EROptionPreventsStatement, mysqlconn.SSUnknownSQLState, "test"))
 	failCounterBefore := queryServiceStats.ErrorStats.Counts()["Fail"]
 	tabletErr.RecordStats(queryServiceStats)
 	failCounterAfter := queryServiceStats.ErrorStats.Counts()["Fail"]
 	if failCounterAfter-failCounterBefore != 1 {
-		t.Fatalf("sql error with SQL error mysql.ErrOptionPreventsStatement should increase Fail error count by 1")
+		t.Fatalf("sql error with SQL error mysqlconn.EROptionPreventsStatement should increase Fail error count by 1")
 	}
 }
 

@@ -3,8 +3,8 @@ package discovery
 import (
 	"sync"
 
+	"github.com/youtube/vitess/go/vt/tabletserver/queryservice"
 	"github.com/youtube/vitess/go/vt/tabletserver/sandboxconn"
-	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
@@ -34,7 +34,7 @@ type FakeHealthCheck struct {
 
 type fhcItem struct {
 	ts   *TabletStats
-	conn tabletconn.TabletConn
+	conn queryservice.QueryService
 }
 
 //
@@ -91,7 +91,7 @@ func (fhc *FakeHealthCheck) RemoveTablet(tablet *topodatapb.Tablet) {
 }
 
 // GetConnection returns the TabletConn of the given tablet.
-func (fhc *FakeHealthCheck) GetConnection(key string) tabletconn.TabletConn {
+func (fhc *FakeHealthCheck) GetConnection(key string) queryservice.QueryService {
 	fhc.mu.RLock()
 	defer fhc.mu.RUnlock()
 	if item := fhc.items[key]; item != nil {

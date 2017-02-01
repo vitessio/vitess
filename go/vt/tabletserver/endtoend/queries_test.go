@@ -900,6 +900,70 @@ func TestNocacheCases(t *testing.T) {
 			},
 		},
 		&framework.MultiCase{
+			Name: "upsert single row with values()",
+			Cases: []framework.Testable{
+				framework.TestQuery("begin"),
+				&framework.TestCase{
+					Query: "insert into upsert_test(id1, id2) values (1, 1) on duplicate key update id2 = values(id2) + 1",
+					Rewritten: []string{
+						"insert into upsert_test(id1, id2) values (1, 1) /* _stream upsert_test (id1 ) (1 )",
+					},
+					RowsAffected: 1,
+				},
+				&framework.TestCase{
+					Query: "select * from upsert_test",
+					Result: [][]string{
+						{"1", "1"},
+					},
+				},
+				&framework.TestCase{
+					Query: "insert into upsert_test(id1, id2) values (1, 2) on duplicate key update id2 = values(id2) + 1",
+					Rewritten: []string{
+						"insert into upsert_test(id1, id2) values (1, 2) /* _stream upsert_test (id1 ) (1 )",
+						"update upsert_test set id2 = 2 + 1 where id1 in (1) /* _stream upsert_test (id1 ) (1 )",
+					},
+					RowsAffected: 2,
+				},
+				&framework.TestCase{
+					Query: "select * from upsert_test",
+					Result: [][]string{
+						{"1", "3"},
+					},
+				},
+				&framework.TestCase{
+					Query: "insert into upsert_test(id1, id2) values (1, 2) on duplicate key update id2 = values(id1)",
+					Rewritten: []string{
+						"insert into upsert_test(id1, id2) values (1, 2) /* _stream upsert_test (id1 ) (1 )",
+						"update upsert_test set id2 = 1 where id1 in (1) /* _stream upsert_test (id1 ) (1 )",
+					},
+				},
+				&framework.TestCase{
+					Query: "select * from upsert_test",
+					Result: [][]string{
+						{"1", "1"},
+					},
+				},
+				&framework.TestCase{
+					Query: "insert ignore into upsert_test(id1, id2) values (1, 3) on duplicate key update id2 = greatest(values(id1), values(id2))",
+					Rewritten: []string{
+						"insert into upsert_test(id1, id2) values (1, 3) /* _stream upsert_test (id1 ) (1 )",
+						"update upsert_test set id2 = greatest(1, 3) where id1 in (1) /* _stream upsert_test (id1 ) (1 )",
+					},
+					RowsAffected: 2,
+				},
+				&framework.TestCase{
+					Query: "select * from upsert_test",
+					Result: [][]string{
+						{"1", "3"},
+					},
+				},
+				framework.TestQuery("commit"),
+				framework.TestQuery("begin"),
+				framework.TestQuery("delete from upsert_test"),
+				framework.TestQuery("commit"),
+			},
+		},
+		&framework.MultiCase{
 			Name: "update",
 			Cases: []framework.Testable{
 				framework.TestQuery("begin"),
@@ -1570,6 +1634,108 @@ func TestNocacheCases(t *testing.T) {
 				framework.TestQuery("begin"),
 				framework.TestQuery("delete from vitess_misc"),
 				framework.TestQuery("commit"),
+			},
+		},
+		&framework.MultiCase{
+			Name: "boolean expressions",
+			Cases: []framework.Testable{
+				framework.TestQuery("begin"),
+				framework.TestQuery("insert into vitess_bool(bval, sval, ival) values (true, 'foo', false)"),
+				framework.TestQuery("commit"),
+				&framework.TestCase{
+					Query: "select * from vitess_bool",
+					Result: [][]string{
+						{"1", "1", "foo", "0"},
+					},
+				},
+				framework.TestQuery("begin"),
+				framework.TestQuery("insert into vitess_bool(bval, sval, ival) values (true, 'bar', 23)"),
+				framework.TestQuery("insert into vitess_bool(bval, sval, ival) values (true, 'baz', 2342)"),
+				framework.TestQuery("insert into vitess_bool(bval, sval, ival) values (true, 'test', 123)"),
+				framework.TestQuery("insert into vitess_bool(bval, sval, ival) values (true, 'aa', 384)"),
+				framework.TestQuery("insert into vitess_bool(bval, sval, ival) values (false, 'bbb', 213)"),
+				framework.TestQuery("insert into vitess_bool(bval, sval, ival) values (false, 'cc', 24342)"),
+				framework.TestQuery("insert into vitess_bool(bval, sval, ival) values (false, 'd', 1231)"),
+				framework.TestQuery("insert into vitess_bool(bval, sval, ival) values (false, 'ee', 3894)"),
+				framework.TestQuery("commit"),
+				&framework.TestCase{
+					Query: "select * from vitess_bool where bval",
+					Result: [][]string{
+						{"1", "1", "foo", "0"},
+						{"2", "1", "bar", "23"},
+						{"3", "1", "baz", "2342"},
+						{"4", "1", "test", "123"},
+						{"5", "1", "aa", "384"},
+					},
+				},
+				&framework.TestCase{
+					Query: "select * from vitess_bool where case sval when 'foo' then true when 'test' then true else false end",
+					Result: [][]string{
+						{"1", "1", "foo", "0"},
+						{"4", "1", "test", "123"},
+					},
+				},
+				framework.TestQuery("begin"),
+				&framework.TestCase{
+					Query: "insert into vitess_bool(auto, bval, sval, ival) values (1, false, 'test2', 191) on duplicate key update bval = false",
+					Rewritten: []string{
+						"insert into vitess_bool(auto, bval, sval, ival) values (1, false, 'test2', 191) /* _stream vitess_bool (auto ) (1 )",
+						"update vitess_bool set bval = false where auto in (1) /* _stream vitess_bool (auto ) (1 )",
+					},
+					RowsAffected: 2,
+				},
+				framework.TestQuery("commit"),
+				&framework.TestCase{
+					Query: "select * from vitess_bool where bval",
+					Result: [][]string{
+						{"2", "1", "bar", "23"},
+						{"3", "1", "baz", "2342"},
+						{"4", "1", "test", "123"},
+						{"5", "1", "aa", "384"},
+					},
+				},
+				&framework.TestCase{
+					Query: "select * from vitess_bool where not bval",
+					Result: [][]string{
+						{"1", "0", "foo", "0"},
+						{"6", "0", "bbb", "213"},
+						{"7", "0", "cc", "24342"},
+						{"8", "0", "d", "1231"},
+						{"9", "0", "ee", "3894"},
+					},
+				},
+				framework.TestQuery("begin"),
+				&framework.TestCase{
+					Query: "update vitess_bool set sval = 'test' where bval is false or ival = 23",
+					Rewritten: []string{
+						"select auto from vitess_bool where bval is false or ival = 23 limit 10001 for update",
+						"update vitess_bool set sval = 'test' where auto in (1, 2, 6, 7, 8, 9) /* _stream vitess_bool (auto ) (1 ) (2 ) (6 ) (7 ) (8 ) (9 )",
+					},
+					RowsAffected: 6,
+				},
+				framework.TestQuery("commit"),
+				&framework.TestCase{
+					Query: "select * from vitess_bool where not bval",
+					Result: [][]string{
+						{"1", "0", "test", "0"},
+						{"6", "0", "test", "213"},
+						{"7", "0", "test", "24342"},
+						{"8", "0", "test", "1231"},
+						{"9", "0", "test", "3894"},
+					},
+				},
+				&framework.TestCase{
+					Query: "select (bval or ival) from vitess_bool where ival = 213",
+					Result: [][]string{
+						{"1"},
+					},
+				},
+				&framework.TestCase{
+					Query: "select bval from vitess_bool where ival = 213",
+					Result: [][]string{
+						{"0"},
+					},
+				},
 			},
 		},
 	}

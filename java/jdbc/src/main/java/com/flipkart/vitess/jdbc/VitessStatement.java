@@ -3,12 +3,14 @@ package com.flipkart.vitess.jdbc;
 import com.flipkart.vitess.util.Constants;
 import com.flipkart.vitess.util.StringUtils;
 import com.youtube.vitess.client.Context;
+import com.youtube.vitess.client.Proto;
 import com.youtube.vitess.client.VTGateConn;
 import com.youtube.vitess.client.VTGateTx;
 import com.youtube.vitess.client.cursor.Cursor;
 import com.youtube.vitess.client.cursor.CursorWithError;
 import com.youtube.vitess.proto.Query;
 import com.youtube.vitess.proto.Topodata;
+import com.youtube.vitess.proto.Vtrpc;
 
 import java.sql.BatchUpdateException;
 import java.sql.Connection;
@@ -109,11 +111,10 @@ public class VitessStatement implements Statement {
                     .getAutoCommit()) {
                     Context context =
                         this.vitessConnection.createContext(this.queryTimeoutInMillis);
-                    if (Constants.QueryExecuteType.SIMPLE == vitessConnection
-                        .getExecuteTypeParam()) {
-                        cursor = vtGateConn.execute(context, sql, null, tabletType).checkedGet();
+                    if (vitessConnection.isSimpleExecute()) {
+                        cursor = vtGateConn.execute(context, sql, null, tabletType, vitessConnection.getIncludedFields()).checkedGet();
                     } else {
-                        cursor = vtGateConn.streamExecute(context, sql, null, tabletType);
+                        cursor = vtGateConn.streamExecute(context, sql, null, tabletType, vitessConnection.getIncludedFields());
                     }
                 } else {
                     VTGateTx vtGateTx = this.vitessConnection.getVtGateTx();
@@ -126,7 +127,7 @@ public class VitessStatement implements Statement {
                     Context context =
                         this.vitessConnection.createContext(this.queryTimeoutInMillis);
                 /* Stream query is not suppose to run in a txn. */
-                    cursor = vtGateTx.execute(context, sql, null, tabletType).checkedGet();
+                    cursor = vtGateTx.execute(context, sql, null, tabletType, vitessConnection.getIncludedFields()).checkedGet();
                 }
             }
 
@@ -422,7 +423,7 @@ public class VitessStatement implements Statement {
         try {
             if (this.vitessConnection.getAutoCommit()) {
                 Context context = this.vitessConnection.createContext(this.queryTimeoutInMillis);
-                cursor = vtGateConn.execute(context, sql, null, tabletType).checkedGet();
+                cursor = vtGateConn.execute(context, sql, null, tabletType, vitessConnection.getIncludedFields()).checkedGet();
             } else {
                 vtGateTx = this.vitessConnection.getVtGateTx();
                 if (null == vtGateTx) {
@@ -433,7 +434,7 @@ public class VitessStatement implements Statement {
                 }
 
                 Context context = this.vitessConnection.createContext(this.queryTimeoutInMillis);
-                cursor = vtGateTx.execute(context, sql, null, tabletType).checkedGet();
+                cursor = vtGateTx.execute(context, sql, null, tabletType, vitessConnection.getIncludedFields()).checkedGet();
             }
 
             if (null == cursor) {
@@ -570,7 +571,7 @@ public class VitessStatement implements Statement {
             if (this.vitessConnection.getAutoCommit()) {
                 Context context = this.vitessConnection.createContext(this.queryTimeoutInMillis);
                 cursorWithErrorList =
-                    vtGateConn.executeBatch(context, batchedArgs, null, tabletType).checkedGet();
+                    vtGateConn.executeBatch(context, batchedArgs, null, tabletType, vitessConnection.getIncludedFields()).checkedGet();
             } else {
                 vtGateTx = this.vitessConnection.getVtGateTx();
                 if (null == vtGateTx) {
@@ -582,7 +583,7 @@ public class VitessStatement implements Statement {
 
                 Context context = this.vitessConnection.createContext(this.queryTimeoutInMillis);
                 cursorWithErrorList =
-                    vtGateTx.executeBatch(context, batchedArgs, null, tabletType).checkedGet();
+                    vtGateTx.executeBatch(context, batchedArgs, null, tabletType, vitessConnection.getIncludedFields()).checkedGet();
             }
 
             if (null == cursorWithErrorList) {
@@ -642,7 +643,7 @@ public class VitessStatement implements Statement {
         Context context = this.vitessConnection.createContext(this.queryTimeoutInMillis);
         return this.vitessConnection.getVtGateConn()
             .executeKeyspaceIds(context, sql, keyspace, keyspaceIds, null,
-                this.vitessConnection.getTabletType()).checkedGet();
+                this.vitessConnection.getTabletType(), vitessConnection.getIncludedFields()).checkedGet();
     }
 
     /**
@@ -656,10 +657,10 @@ public class VitessStatement implements Statement {
      */
     protected int[] generateBatchUpdateResult(List<CursorWithError> cursorWithErrorList)
         throws BatchUpdateException {
-        boolean queryExecutionFailed = false;
         int[] updateCounts = new int[cursorWithErrorList.size()];
         int i = 0;
 
+        Vtrpc.RPCError rpcError = null;
         for (CursorWithError cursorWithError : cursorWithErrorList) {
             if (null == cursorWithError.getError()) {
                 try {
@@ -671,15 +672,16 @@ public class VitessStatement implements Statement {
                     updateCounts[i] = Statement.SUCCESS_NO_INFO;
                 }
             } else {
-                queryExecutionFailed = true;
+                rpcError = cursorWithError.getError();
                 updateCounts[i] = Statement.EXECUTE_FAILED;
             }
             ++i;
         }
 
-        if (queryExecutionFailed) {
-            throw new BatchUpdateException(Constants.SQLExceptionMessages.QUERY_FAILED,
-                updateCounts);
+        if (null != rpcError) {
+            int errno = Proto.getErrno(rpcError.getMessage());
+            String sqlState = Proto.getSQLState(rpcError.getMessage());
+            throw new BatchUpdateException(rpcError.toString(), sqlState, errno, updateCounts);
         }
         return updateCounts;
     }

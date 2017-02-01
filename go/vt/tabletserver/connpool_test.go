@@ -8,18 +8,16 @@ import (
 	"testing"
 	"time"
 
-	"github.com/youtube/vitess/go/sqldb"
-	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
+	"github.com/youtube/vitess/go/mysqlconn/fakesqldb"
 	"golang.org/x/net/context"
 )
 
 func TestConnPoolGet(t *testing.T) {
-	db := fakesqldb.Register()
+	db := fakesqldb.New(t)
+	defer db.Close()
 	testUtils := newTestUtils()
-	appParams := &sqldb.ConnParams{Engine: db.Name}
-	dbaParams := &sqldb.ConnParams{Engine: db.Name}
 	connPool := testUtils.newConnPool()
-	connPool.Open(appParams, dbaParams)
+	connPool.Open(db.ConnParams(), db.ConnParams())
 	defer connPool.Close()
 	dbConn, err := connPool.Get(context.Background())
 	if err != nil {
@@ -32,7 +30,6 @@ func TestConnPoolGet(t *testing.T) {
 }
 
 func TestConnPoolPutWhilePoolIsClosed(t *testing.T) {
-	fakesqldb.Register()
 	testUtils := newTestUtils()
 	connPool := testUtils.newConnPool()
 	defer func() {
@@ -44,12 +41,11 @@ func TestConnPoolPutWhilePoolIsClosed(t *testing.T) {
 }
 
 func TestConnPoolSetCapacity(t *testing.T) {
-	db := fakesqldb.Register()
+	db := fakesqldb.New(t)
+	defer db.Close()
 	testUtils := newTestUtils()
-	appParams := &sqldb.ConnParams{Engine: db.Name}
-	dbaParams := &sqldb.ConnParams{Engine: db.Name}
 	connPool := testUtils.newConnPool()
-	connPool.Open(appParams, dbaParams)
+	connPool.Open(db.ConnParams(), db.ConnParams())
 	defer connPool.Close()
 	err := connPool.SetCapacity(-10)
 	if err == nil {
@@ -65,15 +61,14 @@ func TestConnPoolSetCapacity(t *testing.T) {
 }
 
 func TestConnPoolStatJSON(t *testing.T) {
-	db := fakesqldb.Register()
+	db := fakesqldb.New(t)
+	defer db.Close()
 	testUtils := newTestUtils()
 	connPool := testUtils.newConnPool()
 	if connPool.StatsJSON() != "{}" {
 		t.Fatalf("pool is closed, stats json should be empty: {}")
 	}
-	appParams := &sqldb.ConnParams{Engine: db.Name}
-	dbaParams := &sqldb.ConnParams{Engine: db.Name}
-	connPool.Open(appParams, dbaParams)
+	connPool.Open(db.ConnParams(), db.ConnParams())
 	defer connPool.Close()
 	statsJSON := connPool.StatsJSON()
 	if statsJSON == "" || statsJSON == "{}" {
@@ -82,7 +77,6 @@ func TestConnPoolStatJSON(t *testing.T) {
 }
 
 func TestConnPoolStateWhilePoolIsClosed(t *testing.T) {
-	fakesqldb.Register()
 	testUtils := newTestUtils()
 	connPool := testUtils.newConnPool()
 	if connPool.Capacity() != 0 {
@@ -106,13 +100,12 @@ func TestConnPoolStateWhilePoolIsClosed(t *testing.T) {
 }
 
 func TestConnPoolStateWhilePoolIsOpen(t *testing.T) {
-	db := fakesqldb.Register()
+	db := fakesqldb.New(t)
+	defer db.Close()
 	testUtils := newTestUtils()
-	appParams := &sqldb.ConnParams{Engine: db.Name}
-	dbaParams := &sqldb.ConnParams{Engine: db.Name}
 	idleTimeout := 10 * time.Second
 	connPool := testUtils.newConnPool()
-	connPool.Open(appParams, dbaParams)
+	connPool.Open(db.ConnParams(), db.ConnParams())
 	defer connPool.Close()
 	if connPool.Capacity() != 100 {
 		t.Fatalf("pool capacity should be 100")

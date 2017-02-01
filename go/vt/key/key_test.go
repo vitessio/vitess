@@ -86,6 +86,21 @@ func TestEvenShardsKeyRange(t *testing.T) {
 				End:   []byte{0x80, 0x80},
 			},
 		},
+		// Second to last shard out of 512.
+		{510, 512,
+			"ff00-ff80",
+			&topodatapb.KeyRange{
+				Start: []byte{0xff, 0x00},
+				End:   []byte{0xff, 0x80},
+			},
+		},
+		// Last out of 512 shards.
+		{511, 512,
+			"ff80-",
+			&topodatapb.KeyRange{
+				Start: []byte{0xff, 0x80},
+			},
+		},
 	}
 
 	for _, tc := range testCases {

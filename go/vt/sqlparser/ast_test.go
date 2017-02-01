@@ -328,3 +328,33 @@ func TestEscape(t *testing.T) {
 		}
 	}
 }
+
+func TestColumns_FindColumn(t *testing.T) {
+	cols := Columns{NewColIdent("a"), NewColIdent("c"), NewColIdent("b"), NewColIdent("0")}
+
+	testcases := []struct {
+		in  string
+		out int
+	}{{
+		in:  "a",
+		out: 0,
+	}, {
+		in:  "b",
+		out: 2,
+	},
+		{
+			in:  "0",
+			out: 3,
+		},
+		{
+			in:  "f",
+			out: -1,
+		}}
+
+	for _, tc := range testcases {
+		val := cols.FindColumn(NewColIdent(tc.in))
+		if val != tc.out {
+			t.Errorf("FindColumn(%s): %d, want %d", tc.in, val, tc.out)
+		}
+	}
+}

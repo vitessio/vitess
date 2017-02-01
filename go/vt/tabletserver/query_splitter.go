@@ -81,8 +81,8 @@ func (qs *QuerySplitter) validateQuery() error {
 	if qs.tableName.IsEmpty() {
 		return fmt.Errorf("not a simple table expression")
 	}
-	tableInfo, ok := qs.schemaInfo.tables[qs.tableName.String()]
-	if !ok {
+	tableInfo := qs.schemaInfo.GetTable(qs.tableName)
+	if tableInfo == nil {
 		return fmt.Errorf("can't find table in schema")
 	}
 	if len(tableInfo.PKColumns) == 0 {
@@ -145,7 +145,7 @@ func (qs *QuerySplitter) split(columnType querypb.Type, pkMinMax *sqltypes.Resul
 func (qs *QuerySplitter) getWhereClause(whereClause *sqlparser.Where, bindVars map[string]interface{}, start, end sqltypes.Value) *sqlparser.Where {
 	var startClause *sqlparser.ComparisonExpr
 	var endClause *sqlparser.ComparisonExpr
-	var clauses sqlparser.BoolExpr
+	var clauses sqlparser.Expr
 	// No upper or lower bound, just return the where clause of original query
 	if start.IsNull() && end.IsNull() {
 		return whereClause
@@ -185,8 +185,8 @@ func (qs *QuerySplitter) getWhereClause(whereClause *sqlparser.Where, bindVars m
 	}
 	if whereClause != nil {
 		clauses = &sqlparser.AndExpr{
-			Left:  &sqlparser.ParenBoolExpr{Expr: whereClause.Expr},
-			Right: &sqlparser.ParenBoolExpr{Expr: clauses},
+			Left:  &sqlparser.ParenExpr{Expr: whereClause.Expr},
+			Right: &sqlparser.ParenExpr{Expr: clauses},
 		}
 	}
 	return &sqlparser.Where{

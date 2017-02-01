@@ -258,6 +258,32 @@
   }
 }
 
+# insert unsharded, column absent
+"insert into unsharded_auto(val) values(false)"
+{
+  "Original": "insert into unsharded_auto(val) values(false)",
+  "Instructions": {
+    "Opcode": "InsertUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "insert into unsharded_auto(val, id) values (false, :__seq0)",
+    "Table": "unsharded_auto",
+    "Generate": {
+      "Opcode": "SelectUnsharded",
+      "Keyspace": {
+        "Name": "main",
+        "Sharded": false
+      },
+      "Query": "select next :n values from seq",
+      "Value": [
+        null
+      ]
+    }
+  }
+}
+
 # insert unsharded, multi-val
 "insert into unsharded_auto(id, val) values(1, 'aa'), (null, 'bb')"
 {
@@ -352,6 +378,37 @@
     },
     "Prefix": "insert into user(nonid, Id, Name, Costly) values ",
     "Mid": ["(2, :_Id0, :_Name0, :_Costly0)"]
+  }
+}
+
+# insert with non vindex bool value
+"insert into user(nonid) values (true)"
+{
+  "Original": "insert into user(nonid) values (true)",
+  "Instructions": {
+    "Opcode": "InsertSharded",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "insert into user(nonid, Id, Name, Costly) values (true, :_Id0, :_Name0, :_Costly0)",
+    "Values": [[
+      ":__seq0",
+      null,
+      null
+    ]],
+    "Table": "user",
+    "Generate": {
+      "Opcode": "SelectUnsharded",
+      "Keyspace": {
+        "Name": "main",
+        "Sharded": false
+      },
+      "Query": "select next :n values from seq",
+      "Value": [null]
+    },
+    "Prefix": "insert into user(nonid, Id, Name, Costly) values ",
+    "Mid": ["(true, :_Id0, :_Name0, :_Costly0)"]
   }
 }
 

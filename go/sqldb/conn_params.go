@@ -17,10 +17,25 @@ type ConnParams struct {
 	Charset    string `json:"charset"`
 	Flags      uint64 `json:"flags"`
 
-	// the following flags are only used for 'Change Master' command
+	// The following flags are only used for 'Change Master' command
 	// for now (along with flags |= 2048 for CLIENT_SSL)
 	SslCa     string `json:"ssl_ca"`
 	SslCaPath string `json:"ssl_ca_path"`
 	SslCert   string `json:"ssl_cert"`
 	SslKey    string `json:"ssl_key"`
+}
+
+// capabilityClientSSL is CLIENT_SSL.
+// FIXME(alainjobart) when this package is merge with go/mysqlconn,
+// use the same constant.
+const capabilityClientSSL = 1 << 11
+
+// EnableSSL will set the right flag on the parameters.
+func (cp *ConnParams) EnableSSL() {
+	cp.Flags |= capabilityClientSSL
+}
+
+// SslEnabled returns if SSL is enabled.
+func (cp *ConnParams) SslEnabled() bool {
+	return (cp.Flags & capabilityClientSSL) > 0
 }

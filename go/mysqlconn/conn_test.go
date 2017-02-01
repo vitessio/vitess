@@ -64,7 +64,10 @@ func verifyPacketComms(t *testing.T, cConn, sConn *Conn, data []byte) {
 		if err := cConn.writePacket(data); err != nil {
 			t.Fatalf("writePacket failed: %v", err)
 		}
-		cConn.flush()
+		if err := cConn.flush(); err != nil {
+			t.Fatalf("flush failed: %v", err)
+		}
+
 	}()
 
 	received, err := sConn.ReadPacket()
@@ -169,7 +172,9 @@ func TestBasicPackets(t *testing.T) {
 	if err := sConn.writeEOFPacket(0x8912, 0xabba); err != nil {
 		t.Fatalf("writeEOFPacket failed: %v", err)
 	}
-	sConn.flush()
+	if err := sConn.flush(); err != nil {
+		t.Fatalf("flush failed: %v", err)
+	}
 	data, err = cConn.ReadPacket()
 	if err != nil || len(data) == 0 || data[0] != EOFPacket {
 		t.Fatalf("cConn.ReadPacket - EOFPacket failed: %v %v", data, err)

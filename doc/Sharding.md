@@ -96,6 +96,7 @@ Start=[], End=[]: Full Key Range
 Start=[], End=[0x80]: Lower half of the Key Range.
 Start=[0x80], End=[]: Upper half of the Key Range.
 Start=[0x40], End=[0x80]: Second quarter of the Key Range.
+Start=[0xFF00], End=[0xFF80]: Second to last 1/512th of the Key Range.
 ```
 
 Two key ranges are consecutive if the end value of one range equals the
@@ -116,6 +117,14 @@ full partition:
 * 40-80
 * 80-c0
 * c0-
+
+Shards do not need to handle the same size portion of the key space. For example, the following five shards would also be a valid full partition, albeit with a highly uneven distribution of keys.
+
+* -80
+* 80-c0
+* c0-dc00
+* dc00-dc80
+* dc80-
 
 ## Resharding
 

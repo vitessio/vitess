@@ -11,8 +11,8 @@ import (
 	"golang.org/x/net/context"
 
 	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/mysqlconn/replication"
 	"github.com/youtube/vitess/go/sqldb"
-	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
 )
 
 /*
@@ -30,7 +30,7 @@ type MysqlFlavor interface {
 	MasterPosition(mysqld *Mysqld) (replication.Position, error)
 
 	// SlaveStatus returns the ReplicationStatus of a slave.
-	SlaveStatus(mysqld *Mysqld) (replication.Status, error)
+	SlaveStatus(mysqld *Mysqld) (Status, error)
 
 	// ResetReplicationCommands returns the commands to completely reset
 	// replication on the host.

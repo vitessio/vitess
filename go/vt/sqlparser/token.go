@@ -59,7 +59,7 @@ var keywords = map[string]int{
 	"char":                UNUSED,
 	"character":           UNUSED,
 	"check":               UNUSED,
-	"collate":             UNUSED,
+	"collate":             COLLATE,
 	"column":              UNUSED,
 	"condition":           UNUSED,
 	"constraint":          UNUSED,
@@ -67,8 +67,8 @@ var keywords = map[string]int{
 	"convert":             UNUSED,
 	"create":              CREATE,
 	"cross":               CROSS,
-	"current_date":        UNUSED,
-	"current_time":        UNUSED,
+	"current_date":        CURRENT_DATE,
+	"current_time":        CURRENT_TIME,
 	"current_timestamp":   CURRENT_TIMESTAMP,
 	"current_user":        UNUSED,
 	"cursor":              UNUSED,
@@ -155,8 +155,8 @@ var keywords = map[string]int{
 	"linear":              UNUSED,
 	"lines":               UNUSED,
 	"load":                UNUSED,
-	"localtime":           UNUSED,
-	"localtimestamp":      UNUSED,
+	"localtime":           LOCALTIME,
+	"localtimestamp":      LOCALTIMESTAMP,
 	"lock":                LOCK,
 	"long":                UNUSED,
 	"longblob":            UNUSED,
@@ -205,7 +205,7 @@ var keywords = map[string]int{
 	"release":             UNUSED,
 	"rename":              RENAME,
 	"repeat":              UNUSED,
-	"replace":             UNUSED,
+	"replace":             REPLACE,
 	"require":             UNUSED,
 	"resignal":            UNUSED,
 	"restrict":            UNUSED,
@@ -255,9 +255,9 @@ var keywords = map[string]int{
 	"usage":               UNUSED,
 	"use":                 USE,
 	"using":               USING,
-	"utc_date":            UNUSED,
-	"utc_time":            UNUSED,
-	"utc_timestamp":       UNUSED,
+	"utc_date":            UTC_DATE,
+	"utc_time":            UTC_TIME,
+	"utc_timestamp":       UTC_TIMESTAMP,
 	"values":              VALUES,
 	"varbinary":           UNUSED,
 	"varchar":             UNUSED,
@@ -334,7 +334,13 @@ func (tkn *Tokenizer) Scan() (int, []byte) {
 		switch ch {
 		case eofChar:
 			return 0, nil
-		case '=', ',', ';', '(', ')', '+', '*', '%', '&', '|', '^', '~':
+		case '=', ',', ';', '(', ')', '+', '*', '%', '&', '^', '~':
+			return int(ch), nil
+		case '|':
+			if tkn.lastChar == '|' {
+				tkn.next()
+				return OR, nil
+			}
 			return int(ch), nil
 		case '?':
 			tkn.posVarIndex++

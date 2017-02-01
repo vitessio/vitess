@@ -45,6 +45,11 @@ type FakeQueryService struct {
 	StreamHealthResponse *querypb.StreamHealthResponse
 }
 
+// Close is a no-op.
+func (f *FakeQueryService) Close(ctx context.Context) error {
+	return nil
+}
+
 // HandlePanic is part of the queryservice.QueryService interface
 func (f *FakeQueryService) HandlePanic(err *error) {
 	if x := recover(); x != nil {
@@ -409,7 +414,7 @@ var StreamExecuteQueryResult2 = sqltypes.Result{
 }
 
 // StreamExecute is part of the queryservice.QueryService interface
-func (f *FakeQueryService) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, options *querypb.ExecuteOptions, sendReply func(*sqltypes.Result) error) error {
+func (f *FakeQueryService) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
 	if f.Panics && f.StreamExecutePanicsEarly {
 		panic(fmt.Errorf("test-triggered panic early"))
 	}
@@ -423,8 +428,8 @@ func (f *FakeQueryService) StreamExecute(ctx context.Context, target *querypb.Ta
 		f.t.Errorf("invalid StreamExecute.ExecuteOptions: got %v expected %v", options, TestExecuteOptions)
 	}
 	f.checkTargetCallerID(ctx, "StreamExecute", target)
-	if err := sendReply(&StreamExecuteQueryResult1); err != nil {
-		f.t.Errorf("sendReply1 failed: %v", err)
+	if err := callback(&StreamExecuteQueryResult1); err != nil {
+		f.t.Errorf("callback1 failed: %v", err)
 	}
 	if f.Panics && !f.StreamExecutePanicsEarly {
 		// wait until the client gets the response, then panics
@@ -438,8 +443,8 @@ func (f *FakeQueryService) StreamExecute(ctx context.Context, target *querypb.Ta
 		<-f.ErrorWait
 		return f.TabletError
 	}
-	if err := sendReply(&StreamExecuteQueryResult2); err != nil {
-		f.t.Errorf("sendReply2 failed: %v", err)
+	if err := callback(&StreamExecuteQueryResult2); err != nil {
+		f.t.Errorf("callback2 failed: %v", err)
 	}
 	return nil
 }
@@ -594,12 +599,67 @@ func (f *FakeQueryService) BeginExecuteBatch(ctx context.Context, target *queryp
 	return results, transactionID, err
 }
 
+var (
+	MessageName         = "vitess_message"
+	MessageStreamResult = &sqltypes.Result{
+		Fields: []*querypb.Field{{
+			Name: "id",
+			Type: sqltypes.VarBinary,
+		}, {
+			Name: "message",
+			Type: sqltypes.VarBinary,
+		}},
+		Rows: [][]sqltypes.Value{{
+			sqltypes.MakeTrusted(sqltypes.VarBinary, []byte("1")),
+			sqltypes.MakeTrusted(sqltypes.VarBinary, []byte("row1 value2")),
+		}, {
+			sqltypes.MakeTrusted(sqltypes.VarBinary, []byte("2")),
+			sqltypes.MakeTrusted(sqltypes.VarBinary, []byte("row2 value2")),
+		}},
+	}
+	MessageIDs = []*querypb.Value{{
+		Type:  sqltypes.VarChar,
+		Value: []byte("1"),
+	}}
+)
+
+// MessageStream is part of the queryservice.QueryService interface
+func (f *FakeQueryService) MessageStream(ctx context.Context, target *querypb.Target, name string, callback func(*sqltypes.Result) error) (err error) {
+	if f.HasError {
+		return f.TabletError
+	}
+	if f.Panics {
+		panic(fmt.Errorf("test-triggered panic"))
+	}
+	if name != MessageName {
+		f.t.Errorf("name: %s, want %s", name, MessageName)
+	}
+	callback(MessageStreamResult)
+	return nil
+}
+
+// MessageAck is part of the queryservice.QueryService interface
+func (f *FakeQueryService) MessageAck(ctx context.Context, target *querypb.Target, name string, ids []*querypb.Value) (count int64, err error) {
+	if f.HasError {
+		return 0, f.TabletError
+	}
+	if f.Panics {
+		panic(fmt.Errorf("test-triggered panic"))
+	}
+	if name != MessageName {
+		f.t.Errorf("name: %s, want %s", name, MessageName)
+	}
+	if !reflect.DeepEqual(ids, MessageIDs) {
+		f.t.Errorf("ids: %v, want %v", ids, MessageIDs)
+	}
+	return 1, nil
+}
+
 // SplitQuery is part of the queryservice.QueryService interface
 func (f *FakeQueryService) SplitQuery(
 	ctx context.Context,
 	target *querypb.Target,
-	sql string,
-	bindVariables map[string]interface{},
+	query querytypes.BoundQuery,
 	splitColumns []string,
 	splitCount int64,
 	numRowsPerQueryPart int64,
@@ -613,12 +673,9 @@ func (f *FakeQueryService) SplitQuery(
 		panic(fmt.Errorf("test-triggered panic"))
 	}
 	f.checkTargetCallerID(ctx, "SplitQuery", target)
-	if !reflect.DeepEqual(querytypes.BoundQuery{
-		Sql:           sql,
-		BindVariables: bindVariables,
-	}, SplitQueryBoundQuery) {
+	if !reflect.DeepEqual(query, SplitQueryBoundQuery) {
 		f.t.Errorf("invalid SplitQuery.SplitQueryRequest.Query: got %v expected %v",
-			querytypes.QueryAsString(sql, bindVariables), SplitQueryBoundQuery)
+			querytypes.QueryAsString(query.Sql, query.BindVariables), SplitQueryBoundQuery)
 	}
 	if !reflect.DeepEqual(splitColumns, SplitQuerySplitColumns) {
 		f.t.Errorf("invalid SplitQuery.SplitColumn: got %v expected %v",
@@ -657,10 +714,10 @@ var TestStreamHealthStreamHealthResponse = &querypb.StreamHealthResponse{
 }
 var TestStreamHealthErrorMsg = "to trigger a server error"
 
-// StreamHealthRegister is part of the queryservice.QueryService interface
-func (f *FakeQueryService) StreamHealthRegister(c chan<- *querypb.StreamHealthResponse) (int, error) {
+// StreamHealth is part of the queryservice.QueryService interface
+func (f *FakeQueryService) StreamHealth(ctx context.Context, callback func(*querypb.StreamHealthResponse) error) error {
 	if f.HasError {
-		return 0, errors.New(TestStreamHealthErrorMsg)
+		return errors.New(TestStreamHealthErrorMsg)
 	}
 	if f.Panics {
 		panic(fmt.Errorf("test-triggered panic"))
@@ -669,12 +726,7 @@ func (f *FakeQueryService) StreamHealthRegister(c chan<- *querypb.StreamHealthRe
 	if shr == nil {
 		shr = TestStreamHealthStreamHealthResponse
 	}
-	c <- shr
-	return 1, nil
-}
-
-// StreamHealthUnregister is part of the queryservice.QueryService interface
-func (f *FakeQueryService) StreamHealthUnregister(int) error {
+	callback(shr)
 	return nil
 }
 
@@ -711,7 +763,7 @@ var UpdateStreamStreamEvent2 = querypb.StreamEvent{
 }
 
 // UpdateStream is part of the queryservice.QueryService interface
-func (f *FakeQueryService) UpdateStream(ctx context.Context, target *querypb.Target, position string, timestamp int64, sendReply func(*querypb.StreamEvent) error) error {
+func (f *FakeQueryService) UpdateStream(ctx context.Context, target *querypb.Target, position string, timestamp int64, callback func(*querypb.StreamEvent) error) error {
 	if f.Panics && f.UpdateStreamPanicsEarly {
 		panic(fmt.Errorf("test-triggered panic early"))
 	}
@@ -722,8 +774,8 @@ func (f *FakeQueryService) UpdateStream(ctx context.Context, target *querypb.Tar
 		f.t.Errorf("invalid UpdateStream.timestamp: got %v expected %v", timestamp, UpdateStreamTimestamp)
 	}
 	f.checkTargetCallerID(ctx, "UpdateStream", target)
-	if err := sendReply(&UpdateStreamStreamEvent1); err != nil {
-		f.t.Errorf("sendReply1 failed: %v", err)
+	if err := callback(&UpdateStreamStreamEvent1); err != nil {
+		f.t.Errorf("callback1 failed: %v", err)
 	}
 	if f.Panics && !f.UpdateStreamPanicsEarly {
 		// wait until the client gets the response, then panics
@@ -737,8 +789,8 @@ func (f *FakeQueryService) UpdateStream(ctx context.Context, target *querypb.Tar
 		<-f.ErrorWait
 		return f.TabletError
 	}
-	if err := sendReply(&UpdateStreamStreamEvent2); err != nil {
-		f.t.Errorf("sendReply2 failed: %v", err)
+	if err := callback(&UpdateStreamStreamEvent2); err != nil {
+		f.t.Errorf("callback2 failed: %v", err)
 	}
 	return nil
 }

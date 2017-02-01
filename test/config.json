@@ -467,6 +467,15 @@
 			"RetryMax": 0,
 			"Tags": []
 		},
+		"messaging": {
+			"File": "messaging.py",
+			"Args": [],
+			"Command": [],
+			"Manual": false,
+			"Shard": 4,
+			"RetryMax": 0,
+			"Tags": []
+		},
 		"vttest_sample": {
 			"File": "vttest_sample_test.py",
 			"Args": [],

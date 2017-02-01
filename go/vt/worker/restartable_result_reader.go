@@ -17,6 +17,7 @@ import (
 
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/logutil"
+	"github.com/youtube/vitess/go/vt/tabletserver/queryservice"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 
@@ -41,7 +42,7 @@ type RestartableResultReader struct {
 	query string
 
 	tablet *topodatapb.Tablet
-	conn   tabletconn.TabletConn
+	conn   queryservice.QueryService
 	fields []*querypb.Field
 	output sqltypes.ResultStream
 
@@ -113,14 +114,11 @@ func (r *RestartableResultReader) getTablet() (bool, error) {
 func (r *RestartableResultReader) startStream() (bool, error) {
 	// Start the streaming query.
 	r.generateQuery()
-	stream, err := r.conn.StreamExecute(r.ctx, &querypb.Target{
+	stream := queryservice.ExecuteWithStreamer(r.ctx, r.conn, &querypb.Target{
 		Keyspace:   r.tablet.Keyspace,
 		Shard:      r.tablet.Shard,
 		TabletType: r.tablet.Type,
 	}, r.query, make(map[string]interface{}), nil)
-	if err != nil {
-		return true /* retryable */, fmt.Errorf("failed to call StreamExecute() for query '%v': %v", r.query, err)
-	}
 
 	// Read the fields information.
 	cols, err := stream.Recv()

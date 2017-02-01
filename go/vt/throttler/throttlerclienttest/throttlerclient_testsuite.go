@@ -130,6 +130,7 @@ func (tf *testFixture) configuration(t *testing.T, client throttlerclient.Client
 		IgnoreNSlowestRdonlys:          11,
 		AgeBadRateAfterSec:             12,
 		BadRateIncrease:                0.13,
+		MaxRateApproachThreshold:       0.9,
 	}
 	names, err := client.UpdateConfiguration(context.Background(), "t2", config /* false */, true /* copyZeroValues */)
 	if err != nil {

@@ -214,6 +214,9 @@ func TestValid(t *testing.T) {
 	}, {
 		input: "select /* or */ 1 from t where a = b or a = c",
 	}, {
+		input:  "select /* || */ 1 from t where a = b || a = c",
+		output: "select /* || */ 1 from t where a = b or a = c",
+	}, {
 		input: "select /* not */ 1 from t where not a = b",
 	}, {
 		input: "select /* bool is */ 1 from t where a = b is null",
@@ -441,6 +444,26 @@ func TestValid(t *testing.T) {
 		input:  "select /* DUAL */ 1 from Dual",
 		output: "select /* DUAL */ 1 from dual",
 	}, {
+		input: "select /* column as bool in where */ a from t where b",
+	}, {
+		input: "select /* OR of columns in where */ * from t where a or b",
+	}, {
+		input: "select /* OR of mixed columns in where */ * from t where a = 5 or b and c is not null",
+	}, {
+		input: "select /* OR in select columns */ (a or b) from t where c = 5",
+	}, {
+		input: "select /* bool as select value */ a, true from t",
+	}, {
+		input: "select /* bool column in ON clause */ * from t join s on t.id = s.id and s.foo where t.bar",
+	}, {
+		input: "select /* bool in order by */ * from t order by a is null or b asc",
+	}, {
+		input: "select /* string in case statement */ if(max(case a when 'foo' then 1 else 0 end) = 1, 'foo', 'bar') as foobar from t",
+	}, {
+		input: "select /* dual */ 1 from dual",
+	}, {
+		input: "select /* dual */ 1 from dual",
+	}, {
 		input: "insert /* simple */ into a values (1)",
 	}, {
 		input: "insert /* a.b */ into a.b values (1)",
@@ -462,6 +485,12 @@ func TestValid(t *testing.T) {
 	}, {
 		input: "insert /* on duplicate */ into a values (1, 2) on duplicate key update b = func(a), c = d",
 	}, {
+		input: "insert /* bool in insert value */ into a values (1, true, false)",
+	}, {
+		input: "insert /* bool in on duplicate */ into a values (1, 2) on duplicate key update b = false, c = d",
+	}, {
+		input: "insert /* bool expression on duplicate */ into a values (1, 2) on duplicate key update b = func(a), c = a > d",
+	}, {
 		input: "update /* simple */ a set b = 3",
 	}, {
 		input: "update /* a.b */ a.b set b = 3",
@@ -475,6 +504,12 @@ func TestValid(t *testing.T) {
 		input: "update /* order */ a set b = 3 order by c desc",
 	}, {
 		input: "update /* limit */ a set b = 3 limit c",
+	}, {
+		input: "update /* bool in update */ a set b = true",
+	}, {
+		input: "update /* bool expr in update */ a set b = 5 > 2",
+	}, {
+		input: "update /* bool in update where */ a set b = 5 where c",
 	}, {
 		input: "delete /* simple */ from a",
 	}, {
@@ -610,7 +645,30 @@ func TestValid(t *testing.T) {
 		input: "select /* GE true */ 1 from t where a >= true",
 	}, {
 		input: "select /* GE false */ 1 from t where a >= false",
+	}, {
+		input:  "select * from t order by a collate utf8_general_ci",
+		output: "select * from t order by a collate utf8_general_ci asc",
+	}, {
+		input: "select k collate latin1_german2_ci as k1 from t1 order by k1 asc",
+	}, {
+		input: "select * from t group by a collate utf8_general_ci",
+	}, {
+		input: "select MAX(k collate latin1_german2_ci) from t1",
+	}, {
+		input: "select distinct k collate latin1_german2_ci from t1",
+	}, {
+		input: "select * from t1 where 'Müller' collate latin1_german2_ci = k",
+	}, {
+		input: "select * from t1 where k like 'Müller' collate latin1_german2_ci",
+	}, {
+		input: "select k from t1 group by k having k = 'Müller' collate latin1_german2_ci",
+	}, {
+		input: "select k from t1 join t2 order by a collate latin1_german2_ci asc, b collate latin1_german2_ci asc",
+	}, {
+		input:  "select k collate 'latin1_german2_ci' as k1 from t1 order by k1 asc",
+		output: "select k collate latin1_german2_ci as k1 from t1 order by k1 asc",
 	}}
+
 	for _, tcase := range validSQL {
 		if tcase.output == "" {
 			tcase.output = tcase.input
@@ -735,6 +793,67 @@ func TestCaseSensitivity(t *testing.T) {
 	}
 }
 
+func TestKeywords(t *testing.T) {
+	validSQL := []struct {
+		input  string
+		output string
+	}{{
+		input:  "select current_timestamp",
+		output: "select current_timestamp() from dual",
+	}, {
+		input: "update t set a = current_timestamp()",
+	}, {
+		input:  "select a, current_date from t",
+		output: "select a, current_date() from t",
+	}, {
+		input:  "insert into t(a, b) values (current_date, current_date())",
+		output: "insert into t(a, b) values (current_date(), current_date())",
+	}, {
+		input: "select * from t where a > utc_timestmp()",
+	}, {
+		input:  "update t set b = utc_timestamp + 5",
+		output: "update t set b = utc_timestamp() + 5",
+	}, {
+		input:  "select utc_time, utc_date",
+		output: "select utc_time(), utc_date() from dual",
+	}, {
+		input:  "select 1 from dual where localtime > utc_time",
+		output: "select 1 from dual where localtime() > utc_time()",
+	}, {
+		input:  "update t set a = localtimestamp(), b = utc_timestamp",
+		output: "update t set a = localtimestamp(), b = utc_timestamp()",
+	}, {
+		input: "insert into t(a) values (unix_timestamp)",
+	}, {
+		input: "select replace(a, 'foo', 'bar') from t",
+	}, {
+		input: "update t set a = replace('1234', '2', '1')",
+	}, {
+		input: "insert into t(a, b) values ('foo', 'bar') on duplicate key update a = replace(hex('foo'), 'f', 'b')",
+	}, {
+		input: "update t set a = left('1234', 3)",
+	}, {
+		input: "select left(a, 5) from t",
+	}, {
+		input: "insert into t(a, b) values (left('foo', 1), 'b')",
+	}}
+
+	for _, tcase := range validSQL {
+		if tcase.output == "" {
+			tcase.output = tcase.input
+		}
+		tree, err := Parse(tcase.input)
+		if err != nil {
+			t.Errorf("input: %s, err: %v", tcase.input, err)
+			continue
+		}
+		out := String(tree)
+		if out != tcase.output {
+			t.Errorf("out: %s, want %s", out, tcase.output)
+		}
+	}
+}
+
 func TestErrors(t *testing.T) {
 	invalidSQL := []struct {
 		input  string
@@ -777,7 +896,7 @@ func TestErrors(t *testing.T) {
 		output: "syntax error at position 25 near '::'",
 	}, {
 		input:  "update a set c = values(1)",
-		output: "syntax error at position 24 near 'values'",
+		output: "syntax error at position 26 near '1'",
 	}, {
 		input:  "update a set c = last_insert_id(1)",
 		output: "syntax error at position 32 near 'last_insert_id'",
@@ -823,6 +942,12 @@ func TestErrors(t *testing.T) {
 	}, {
 		input:  "insert into a values (select * from b)",
 		output: "syntax error at position 29 near 'select'",
+	}, {
+		input:  "select database",
+		output: "syntax error at position 17",
+	}, {
+		input:  "select mod from t",
+		output: "syntax error at position 16 near 'from'",
 	}}
 	for _, tcase := range invalidSQL {
 		if tcase.output == "" {

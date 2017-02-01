@@ -22,6 +22,7 @@ type TxExecutor struct {
 	ctx      context.Context
 	logStats *LogStats
 	te       *TxEngine
+	messager *MessagerEngine
 }
 
 // Prepare performs a prepare on a connection including the redo log work.
@@ -63,7 +64,7 @@ func (txe *TxExecutor) Prepare(transactionID int64, dtid string) error {
 		return err
 	}
 
-	err = txe.te.txPool.LocalCommit(txe.ctx, localConn)
+	err = txe.te.txPool.LocalCommit(txe.ctx, localConn, txe.messager)
 	if err != nil {
 		return err
 	}
@@ -95,7 +96,7 @@ func (txe *TxExecutor) CommitPrepared(dtid string) error {
 		txe.markFailed(ctx, dtid)
 		return err
 	}
-	err = txe.te.txPool.LocalCommit(ctx, conn)
+	err = txe.te.txPool.LocalCommit(ctx, conn, txe.messager)
 	if err != nil {
 		txe.markFailed(ctx, dtid)
 		return err
@@ -126,7 +127,7 @@ func (txe *TxExecutor) markFailed(ctx context.Context, dtid string) {
 		return
 	}
 
-	if err = txe.te.txPool.LocalCommit(ctx, conn); err != nil {
+	if err = txe.te.txPool.LocalCommit(ctx, conn, txe.messager); err != nil {
 		log.Errorf("markFailed: Commit failed for dtid %s: %v", dtid, err)
 	}
 }
@@ -165,7 +166,7 @@ func (txe *TxExecutor) RollbackPrepared(dtid string, originalID int64) error {
 		goto returnConn
 	}
 
-	err = txe.te.txPool.LocalCommit(txe.ctx, conn)
+	err = txe.te.txPool.LocalCommit(txe.ctx, conn, txe.messager)
 
 returnConn:
 	if preparedConn := txe.te.preparedPool.FetchForRollback(dtid); preparedConn != nil {
@@ -194,7 +195,7 @@ func (txe *TxExecutor) CreateTransaction(dtid string, participants []*querypb.Ta
 	if err != nil {
 		return err
 	}
-	return txe.te.txPool.LocalCommit(txe.ctx, conn)
+	return txe.te.txPool.LocalCommit(txe.ctx, conn, txe.messager)
 }
 
 // StartCommit atomically commits the transaction along with the
@@ -216,7 +217,7 @@ func (txe *TxExecutor) StartCommit(transactionID int64, dtid string) error {
 	if err != nil {
 		return err
 	}
-	return txe.te.txPool.LocalCommit(txe.ctx, conn)
+	return txe.te.txPool.LocalCommit(txe.ctx, conn, txe.messager)
 }
 
 // SetRollback transitions the 2pc transaction to the Rollback state.
@@ -243,7 +244,7 @@ func (txe *TxExecutor) SetRollback(dtid string, transactionID int64) error {
 		return err
 	}
 
-	err = txe.te.txPool.LocalCommit(txe.ctx, conn)
+	err = txe.te.txPool.LocalCommit(txe.ctx, conn, txe.messager)
 	if err != nil {
 		return err
 	}
@@ -269,7 +270,7 @@ func (txe *TxExecutor) ConcludeTransaction(dtid string) error {
 	if err != nil {
 		return err
 	}
-	return txe.te.txPool.LocalCommit(txe.ctx, conn)
+	return txe.te.txPool.LocalCommit(txe.ctx, conn, txe.messager)
 }
 
 // ReadTransaction returns the metadata for the sepcified dtid.

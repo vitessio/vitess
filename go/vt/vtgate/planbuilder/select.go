@@ -68,7 +68,7 @@ func processSelect(sel *sqlparser.Select, vschema VSchema, outer builder) (build
 // pushFilter identifies the target route for the specified bool expr,
 // pushes it down, and updates the route info if the new constraint improves
 // the primitive. This function can push to a WHERE or HAVING clause.
-func pushFilter(boolExpr sqlparser.BoolExpr, bldr builder, whereType string) error {
+func pushFilter(boolExpr sqlparser.Expr, bldr builder, whereType string) error {
 	filters := splitAndExpression(nil, boolExpr)
 	reorderBySubquery(filters)
 	for _, filter := range filters {
@@ -89,7 +89,7 @@ func pushFilter(boolExpr sqlparser.BoolExpr, bldr builder, whereType string) err
 // pushed first because they can potentially improve the routing
 // plan, which can later allow a filter containing a subquery
 // to successfully merge with the corresponding route.
-func reorderBySubquery(filters []sqlparser.BoolExpr) {
+func reorderBySubquery(filters []sqlparser.Expr) {
 	max := len(filters)
 	for i := 0; i < max; i++ {
 		if !hasSubquery(filters[i]) {

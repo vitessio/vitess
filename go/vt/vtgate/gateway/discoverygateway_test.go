@@ -7,6 +7,7 @@ import (
 
 	"golang.org/x/net/context"
 
+	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/discovery"
 	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -43,7 +44,9 @@ func TestDiscoveryGatewayExecuteBatch(t *testing.T) {
 
 func TestDiscoveryGatewayExecuteStream(t *testing.T) {
 	testDiscoveryGatewayGeneric(t, true, func(dg Gateway, target *querypb.Target) error {
-		_, err := dg.StreamExecute(context.Background(), target, "query", nil, nil)
+		err := dg.StreamExecute(context.Background(), target, "query", nil, nil, func(qr *sqltypes.Result) error {
+			return nil
+		})
 		return err
 	})
 }

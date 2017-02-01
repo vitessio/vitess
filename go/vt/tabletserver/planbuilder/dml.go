@@ -178,7 +178,7 @@ func analyzeWhere(node *sqlparser.Where, pkIndex *schema.Index) []interface{} {
 	return getPKValues(conditions, pkIndex)
 }
 
-func analyzeBoolean(node sqlparser.BoolExpr) (conditions []*sqlparser.ComparisonExpr) {
+func analyzeBoolean(node sqlparser.Expr) (conditions []*sqlparser.ComparisonExpr) {
 	switch node := node.(type) {
 	case *sqlparser.AndExpr:
 		left := analyzeBoolean(node.Left)
@@ -187,7 +187,7 @@ func analyzeBoolean(node sqlparser.BoolExpr) (conditions []*sqlparser.Comparison
 			return nil
 		}
 		return append(left, right...)
-	case *sqlparser.ParenBoolExpr:
+	case *sqlparser.ParenExpr:
 		return analyzeBoolean(node.Expr)
 	case *sqlparser.ComparisonExpr:
 		switch {
@@ -258,7 +258,17 @@ func analyzeInsert(ins *sqlparser.Insert, getTable TableGetter) (plan *ExecPlan,
 		plan.Reason = ReasonTableNoIndex
 		return plan, nil
 	}
+	switch tableInfo.Type {
+	case schema.NoType, schema.Sequence:
+		// For now, allow sequence inserts.
+		return analyzeInsertNoType(ins, plan, tableInfo)
+	case schema.Message:
+		return analyzeInsertMessage(ins, plan, tableInfo)
+	}
+	panic("unexpected")
+}
 
+func analyzeInsertNoType(ins *sqlparser.Insert, plan *ExecPlan, tableInfo *schema.Table) (*ExecPlan, error) {
 	pkColumnNumbers := getInsertPKColumns(ins.Columns, tableInfo)
 
 	if sel, ok := ins.Rows.(sqlparser.SelectStatement); ok {
@@ -310,7 +320,12 @@ func analyzeInsert(ins *sqlparser.Insert, getTable TableGetter) (plan *ExecPlan,
 		plan.Reason = ReasonUpsert
 		return plan, nil
 	}
-	plan.SecondaryPKValues, err = analyzeUpdateExpressions(sqlparser.UpdateExprs(ins.OnDup), tableInfo.Indexes[0])
+	updateExprs, err := resolveUpsertUpdateValues(rowList[0], ins.Columns, ins.OnDup)
+	if err != nil {
+		plan.Reason = ReasonUpsertColMismatch
+		return plan, nil
+	}
+	plan.SecondaryPKValues, err = analyzeUpdateExpressions(updateExprs, tableInfo.Indexes[0])
 	if err != nil {
 		plan.Reason = ReasonPKChange
 		return plan, nil
@@ -323,9 +338,113 @@ func analyzeInsert(ins *sqlparser.Insert, getTable TableGetter) (plan *ExecPlan,
 	upd := &sqlparser.Update{
 		Comments: ins.Comments,
 		Table:    ins.Table,
-		Exprs:    sqlparser.UpdateExprs(ins.OnDup),
+		Exprs:    updateExprs,
 	}
 	plan.UpsertQuery = GenerateUpdateOuterQuery(upd)
+	return plan, nil
+}
+
+// resolveUpsertUpdateValues walks the UpdateExprs tree for an upsert, replacing
+// any VALUES(foo) expressions with the correct value from the rowList, in this
+// example the value for column 'foo'
+func resolveUpsertUpdateValues(rowList sqlparser.ValTuple, columns sqlparser.Columns, dup sqlparser.OnDup) (sqlparser.UpdateExprs, error) {
+	err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+		if cast, ok := node.(*sqlparser.ValuesFuncExpr); ok {
+			colID := columns.FindColumn(cast.Name)
+			if colID == -1 {
+				return false, fmt.Errorf("Could not find column %v", cast.Name)
+			}
+			cast.Resolved = rowList[colID]
+		}
+		return true, nil
+	}, dup)
+	return sqlparser.UpdateExprs(dup), err
+}
+
+func analyzeInsertMessage(ins *sqlparser.Insert, plan *ExecPlan, tableInfo *schema.Table) (*ExecPlan, error) {
+	if _, ok := ins.Rows.(sqlparser.SelectStatement); ok {
+		return nil, fmt.Errorf("subquery not allowed for message table: %s", tableInfo.Name.String())
+	}
+	if ins.OnDup != nil {
+		return nil, fmt.Errorf("'on duplicate key' construct not allowed for message table: %s", tableInfo.Name.String())
+	}
+	if len(ins.Columns) == 0 {
+		return nil, fmt.Errorf("column list must be specified for message table insert: %s", tableInfo.Name.String())
+	}
+
+	// Sanity check first so we don't have to repeat this.
+	rowList := ins.Rows.(sqlparser.Values)
+	for _, row := range rowList {
+		if len(row) != len(ins.Columns) {
+			return nil, errors.New("column count doesn't match value count")
+		}
+	}
+
+	// Perform message specific processing first, because we may be
+	// adding values that address the primary key.
+	timeNow := sqlparser.NewValArg([]byte(":#time_now"))
+
+	col := sqlparser.NewColIdent("time_scheduled")
+	scheduleIndex := findCol(col, ins.Columns)
+	if scheduleIndex == -1 {
+		scheduleIndex = addVal(ins, col, timeNow)
+	}
+
+	// time_next should be the same as time_scheduled.
+	col = sqlparser.NewColIdent("time_next")
+	num := findCol(col, ins.Columns)
+	if num != -1 {
+		return nil, fmt.Errorf("%s must not be specified for message insert", col.String())
+	}
+	_ = copyVal(ins, col, scheduleIndex)
+
+	// time_created should always be now.
+	col = sqlparser.NewColIdent("time_created")
+	if num := findCol(col, ins.Columns); num >= 0 {
+		return nil, fmt.Errorf("%s must not be specified for message insert", col.String())
+	}
+	_ = addVal(ins, col, timeNow)
+
+	// epoch should always be 0.
+	col = sqlparser.NewColIdent("epoch")
+	if num := findCol(col, ins.Columns); num >= 0 {
+		return nil, fmt.Errorf("%s must not be specified for message insert", col.String())
+	}
+	_ = addVal(ins, col, sqlparser.NewIntVal([]byte("0")))
+
+	// time_acked should must not be specified.
+	col = sqlparser.NewColIdent("time_acked")
+	if num := findCol(col, ins.Columns); num >= 0 {
+		return nil, fmt.Errorf("%s must not be specified for message insert", col.String())
+	}
+
+	col = sqlparser.NewColIdent("id")
+	num = findCol(col, ins.Columns)
+	if num < 0 {
+		return nil, fmt.Errorf("%s must be specified for message insert", col.String())
+	}
+
+	col = sqlparser.NewColIdent("message")
+	num = findCol(col, ins.Columns)
+	if num < 0 {
+		return nil, fmt.Errorf("%s must be specified for message insert", col.String())
+	}
+
+	pkColumnNumbers := getInsertPKColumns(ins.Columns, tableInfo)
+	pkValues, err := getInsertPKValues(pkColumnNumbers, rowList, tableInfo)
+	if err != nil {
+		// Dead code. We've already sanity checked the row lengths.
+		return nil, err
+	}
+	if pkValues == nil {
+		// Dead code. The previous checks already catch this condition.
+		plan.Reason = ReasonComplexExpr
+		return plan, nil
+	}
+	plan.PKValues = pkValues
+	plan.PlanID = PlanInsertMessage
+	plan.OuterQuery = sqlparser.GenerateParsedQuery(ins)
+	plan.MessageReloaderQuery = GenerateLoadMessagesQuery(ins)
 	return plan, nil
 }
 
@@ -346,6 +465,33 @@ func getInsertPKColumns(columns sqlparser.Columns, tableInfo *schema.Table) (pkC
 		pkColumnNumbers[index] = i
 	}
 	return pkColumnNumbers
+}
+
+func findCol(col sqlparser.ColIdent, cols sqlparser.Columns) int {
+	for i, insCol := range cols {
+		if insCol.Equal(col) {
+			return i
+		}
+	}
+	return -1
+}
+
+func addVal(ins *sqlparser.Insert, col sqlparser.ColIdent, expr sqlparser.Expr) int {
+	ins.Columns = append(ins.Columns, col)
+	rows := ins.Rows.(sqlparser.Values)
+	for i := range rows {
+		rows[i] = append(rows[i], expr)
+	}
+	return len(ins.Columns) - 1
+}
+
+func copyVal(ins *sqlparser.Insert, col sqlparser.ColIdent, colIndex int) int {
+	ins.Columns = append(ins.Columns, col)
+	rows := ins.Rows.(sqlparser.Values)
+	for i := range rows {
+		rows[i] = append(rows[i], rows[i][colIndex])
+	}
+	return len(ins.Columns) - 1
 }
 
 func getInsertPKValues(pkColumnNumbers []int, rowList sqlparser.Values, tableInfo *schema.Table) (pkValues []interface{}, err error) {

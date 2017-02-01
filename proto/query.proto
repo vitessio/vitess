@@ -562,6 +562,38 @@ message BeginExecuteBatchResponse {
   int64 transaction_id = 3;
 }
 
+// MessageStreamRequest is the request payload for MessageStream.
+message MessageStreamRequest {
+  vtrpc.CallerID effective_caller_id = 1;
+  VTGateCallerID immediate_caller_id = 2;
+  Target target = 3;
+  // name is the message table name.
+  string name = 4;
+}
+
+// MessageStreamResponse is a response for MessageStream.
+message MessageStreamResponse {
+  QueryResult result = 1;
+}
+
+// MessageAckRequest is the request payload for MessageAck.
+message MessageAckRequest {
+  vtrpc.CallerID effective_caller_id = 1;
+  VTGateCallerID immediate_caller_id = 2;
+  Target target = 3;
+  // name is the message table name.
+  string name = 4;
+  repeated Value ids = 5;
+}
+
+// MessageAckResponse is the response for MessageAck.
+message MessageAckResponse {
+  // result contains the result of the ack operation.
+  // Since this acts like a DML, only
+  // RowsAffected is returned in the result.
+  QueryResult result = 1;
+}
+
 // SplitQueryRequest is the payload for SplitQuery sent by VTGate to a VTTablet.
 // See vtgate.SplitQueryRequest for more details.
 message SplitQueryRequest {

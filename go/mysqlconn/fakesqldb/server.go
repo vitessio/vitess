@@ -20,8 +20,19 @@ import (
 type DB struct {
 	// Fields set at construction time.
 
+	// t is our testing.T instance
+	t *testing.T
+
 	// listener is our mysqlconn.Listener.
 	listener *mysqlconn.Listener
+
+	// name is the name of this DB. Set to 'fakesqldb' by default.
+	// Use SetName() to change.
+	name string
+
+	// acceptWG is set when we listen, and can be waited on to
+	// make sure we don't accept any more.
+	acceptWG sync.WaitGroup
 
 	// Fields set at runtime.
 
@@ -45,9 +56,11 @@ type exprResult struct {
 }
 
 // New creates a server, and starts listening.
-func New(t *testing.T) (*DB, *sqldb.ConnParams) {
+func New(t *testing.T) *DB {
 	// Create our DB.
 	db := &DB{
+		t:            t,
+		name:         "fakesqldb",
 		data:         make(map[string]*sqltypes.Result),
 		rejectedData: make(map[string]error),
 		queryCalled:  make(map[string]int),
@@ -61,26 +74,47 @@ func New(t *testing.T) (*DB, *sqldb.ConnParams) {
 	}
 
 	db.listener.PasswordMap["user1"] = "password1"
+	db.acceptWG.Add(1)
 	go func() {
+		defer db.acceptWG.Done()
 		db.listener.Accept()
 	}()
 
-	// Return the connection parameters.
-	host := db.listener.Addr().(*net.TCPAddr).IP.String()
-	port := db.listener.Addr().(*net.TCPAddr).Port
+	// Return the db and connection parameters.
+	return db
+}
 
-	return db, &sqldb.ConnParams{
-		Host:    host,
-		Port:    port,
+// SetName sets the name of the DB. to differentiate them in tests if needed.
+func (db *DB) SetName(name string) *DB {
+	db.name = name
+	return db
+}
+
+// Close closes the Listener and waits for it to stop accepting.
+func (db *DB) Close() {
+	db.listener.Close()
+	db.acceptWG.Wait()
+}
+
+// Host returns the host we're listening on.
+func (db *DB) Host() string {
+	return db.listener.Addr().(*net.TCPAddr).IP.String()
+}
+
+// Port returns the port we're listening on.
+func (db *DB) Port() int {
+	return db.listener.Addr().(*net.TCPAddr).Port
+}
+
+// ConnParams returns the ConnParams to connect to the DB.
+func (db *DB) ConnParams() *sqldb.ConnParams {
+	return &sqldb.ConnParams{
+		Host:    db.Host(),
+		Port:    db.Port(),
 		Uname:   "user1",
 		Pass:    "password1",
 		Charset: "utf8",
 	}
-}
-
-// Close closes the Listener.
-func (db *DB) Close() {
-	db.listener.Close()
 }
 
 //
@@ -100,6 +134,8 @@ func (db *DB) ConnectionClosed(c *mysqlconn.Conn) {
 
 // ComQuery is part of the mysqlconn.Handler interface.
 func (db *DB) ComQuery(c *mysqlconn.Conn, query string) (*sqltypes.Result, error) {
+	db.t.Logf("ComQuery(%v): %v", db.name, query)
+
 	key := strings.ToLower(query)
 	db.mu.Lock()
 	defer db.mu.Unlock()
@@ -131,7 +167,7 @@ func (db *DB) ComQuery(c *mysqlconn.Conn, query string) (*sqltypes.Result, error
 	}
 
 	// Nothing matched.
-	return nil, fmt.Errorf("query: %s is not supported", query)
+	return nil, fmt.Errorf("query: %s is not supported on %v", query, db.name)
 }
 
 //
@@ -140,6 +176,9 @@ func (db *DB) ComQuery(c *mysqlconn.Conn, query string) (*sqltypes.Result, error
 
 // AddQuery adds a query and its expected result.
 func (db *DB) AddQuery(query string, expectedResult *sqltypes.Result) {
+	if len(expectedResult.Rows) > 0 && len(expectedResult.Fields) == 0 {
+		panic(fmt.Errorf("Please add Fields to this Result so it's valid: %v", query))
+	}
 	result := &sqltypes.Result{}
 	*result = *expectedResult
 	db.mu.Lock()
@@ -154,6 +193,9 @@ func (db *DB) AddQuery(query string, expectedResult *sqltypes.Result) {
 // This function forces the addition of begin/end anchors (^$) and turns on
 // case-insensitive matching mode.
 func (db *DB) AddQueryPattern(queryPattern string, expectedResult *sqltypes.Result) {
+	if len(expectedResult.Rows) > 0 && len(expectedResult.Fields) == 0 {
+		panic(fmt.Errorf("Please add Fields to this Result so it's valid: %v", queryPattern))
+	}
 	expr := regexp.MustCompile("(?is)^" + queryPattern + "$")
 	result := *expectedResult
 	db.mu.Lock()

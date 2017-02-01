@@ -3,14 +3,12 @@ package main
 import (
 	"flag"
 	"fmt"
-	"io"
 	"os"
 	"path"
 	"strings"
 	"time"
 
 	log "github.com/golang/glog"
-	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/sqltypes"
@@ -23,6 +21,7 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletmanager"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/tabletserver"
+	"github.com/youtube/vitess/go/vt/tabletserver/queryservice"
 	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -253,7 +252,7 @@ func initTabletMap(ts topo.Server, tpb *vttestpb.VTTestTopology, mysqld mysqlctl
 //
 
 // dialer is our tabletconn.Dialer
-func dialer(tablet *topodatapb.Tablet, timeout time.Duration) (tabletconn.TabletConn, error) {
+func dialer(tablet *topodatapb.Tablet, timeout time.Duration) (queryservice.QueryService, error) {
 	t, ok := tabletMap[tablet.Alias.Uid]
 	if !ok {
 		return nil, tabletconn.OperationalError("connection refused")
@@ -265,14 +264,14 @@ func dialer(tablet *topodatapb.Tablet, timeout time.Duration) (tabletconn.Tablet
 	}, nil
 }
 
-// internalTabletConn implements tabletconn.TabletConn by forwarding everything
+// internalTabletConn implements queryservice.QueryService by forwarding everything
 // to the tablet
 type internalTabletConn struct {
 	tablet     *tablet
 	topoTablet *topodatapb.Tablet
 }
 
-// Execute is part of tabletconn.TabletConn
+// Execute is part of queryservice.QueryService
 // We need to copy the bind variables as tablet server will change them.
 func (itc *internalTabletConn) Execute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]interface{}, transactionID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
 	bv, err := querytypes.BindVariablesToProto3(bindVars)
@@ -290,7 +289,7 @@ func (itc *internalTabletConn) Execute(ctx context.Context, target *querypb.Targ
 	return reply, nil
 }
 
-// ExecuteBatch is part of tabletconn.TabletConn
+// ExecuteBatch is part of queryservice.QueryService
 // We need to copy the bind variables as tablet server will change them.
 func (itc *internalTabletConn) ExecuteBatch(ctx context.Context, target *querypb.Target, queries []querytypes.BoundQuery, asTransaction bool, transactionID int64, options *querypb.ExecuteOptions) ([]sqltypes.Result, error) {
 	q := make([]querytypes.BoundQuery, len(queries))
@@ -313,54 +312,23 @@ func (itc *internalTabletConn) ExecuteBatch(ctx context.Context, target *querypb
 	return results, nil
 }
 
-type streamExecuteAdapter struct {
-	c   chan *sqltypes.Result
-	err *error
-}
-
-func (a *streamExecuteAdapter) Recv() (*sqltypes.Result, error) {
-	r, ok := <-a.c
-	if !ok {
-		if *a.err == nil {
-			return nil, io.EOF
-		}
-		return nil, *a.err
-	}
-	return r, nil
-}
-
-// StreamExecute is part of tabletconn.TabletConn
+// StreamExecute is part of queryservice.QueryService
 // We need to copy the bind variables as tablet server will change them.
-func (itc *internalTabletConn) StreamExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]interface{}, options *querypb.ExecuteOptions) (sqltypes.ResultStream, error) {
+func (itc *internalTabletConn) StreamExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]interface{}, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
 	bv, err := querytypes.BindVariablesToProto3(bindVars)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	bindVars, err = querytypes.Proto3ToBindVariables(bv)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	result := make(chan *sqltypes.Result, 10)
-	var finalErr error
 
-	go func() {
-		finalErr = itc.tablet.qsc.QueryService().StreamExecute(ctx, target, query, bindVars, options, func(reply *sqltypes.Result) error {
-			// We need to deep-copy the reply before returning,
-			// because the underlying buffers are reused.
-			result <- reply.Copy()
-			return nil
-		})
-		finalErr = tabletconn.TabletErrorFromGRPC(vterrors.ToGRPCError(finalErr))
-
-		// the client will only access finalErr after the
-		// channel is closed, and then it's already set.
-		close(result)
-	}()
-
-	return &streamExecuteAdapter{result, &finalErr}, nil
+	err = itc.tablet.qsc.QueryService().StreamExecute(ctx, target, query, bindVars, options, callback)
+	return tabletconn.TabletErrorFromGRPC(vterrors.ToGRPCError(err))
 }
 
-// Begin is part of tabletconn.TabletConn
+// Begin is part of queryservice.QueryService
 func (itc *internalTabletConn) Begin(ctx context.Context, target *querypb.Target) (int64, error) {
 	transactionID, err := itc.tablet.qsc.QueryService().Begin(ctx, target)
 	if err != nil {
@@ -369,67 +337,67 @@ func (itc *internalTabletConn) Begin(ctx context.Context, target *querypb.Target
 	return transactionID, nil
 }
 
-// Commit is part of tabletconn.TabletConn
+// Commit is part of queryservice.QueryService
 func (itc *internalTabletConn) Commit(ctx context.Context, target *querypb.Target, transactionID int64) error {
 	err := itc.tablet.qsc.QueryService().Commit(ctx, target, transactionID)
 	return tabletconn.TabletErrorFromGRPC(vterrors.ToGRPCError(err))
 }
 
-// Rollback is part of tabletconn.TabletConn
+// Rollback is part of queryservice.QueryService
 func (itc *internalTabletConn) Rollback(ctx context.Context, target *querypb.Target, transactionID int64) error {
 	err := itc.tablet.qsc.QueryService().Rollback(ctx, target, transactionID)
 	return tabletconn.TabletErrorFromGRPC(vterrors.ToGRPCError(err))
 }
 
-// Prepare is part of tabletconn.TabletConn
+// Prepare is part of queryservice.QueryService
 func (itc *internalTabletConn) Prepare(ctx context.Context, target *querypb.Target, transactionID int64, dtid string) error {
 	err := itc.tablet.qsc.QueryService().Prepare(ctx, target, transactionID, dtid)
 	return tabletconn.TabletErrorFromGRPC(vterrors.ToGRPCError(err))
 }
 
-// CommitPrepared is part of tabletconn.TabletConn
+// CommitPrepared is part of queryservice.QueryService
 func (itc *internalTabletConn) CommitPrepared(ctx context.Context, target *querypb.Target, dtid string) error {
 	err := itc.tablet.qsc.QueryService().CommitPrepared(ctx, target, dtid)
 	return tabletconn.TabletErrorFromGRPC(vterrors.ToGRPCError(err))
 }
 
-// RollbackPrepared is part of tabletconn.TabletConn
+// RollbackPrepared is part of queryservice.QueryService
 func (itc *internalTabletConn) RollbackPrepared(ctx context.Context, target *querypb.Target, dtid string, originalID int64) error {
 	err := itc.tablet.qsc.QueryService().RollbackPrepared(ctx, target, dtid, originalID)
 	return tabletconn.TabletErrorFromGRPC(vterrors.ToGRPCError(err))
 }
 
-// CreateTransaction is part of tabletconn.TabletConn
+// CreateTransaction is part of queryservice.QueryService
 func (itc *internalTabletConn) CreateTransaction(ctx context.Context, target *querypb.Target, dtid string, participants []*querypb.Target) error {
 	err := itc.tablet.qsc.QueryService().CreateTransaction(ctx, target, dtid, participants)
 	return tabletconn.TabletErrorFromGRPC(vterrors.ToGRPCError(err))
 }
 
-// StartCommit is part of tabletconn.TabletConn
+// StartCommit is part of queryservice.QueryService
 func (itc *internalTabletConn) StartCommit(ctx context.Context, target *querypb.Target, transactionID int64, dtid string) error {
 	err := itc.tablet.qsc.QueryService().StartCommit(ctx, target, transactionID, dtid)
 	return tabletconn.TabletErrorFromGRPC(vterrors.ToGRPCError(err))
 }
 
-// SetRollback is part of tabletconn.TabletConn
+// SetRollback is part of queryservice.QueryService
 func (itc *internalTabletConn) SetRollback(ctx context.Context, target *querypb.Target, dtid string, transactionID int64) error {
 	err := itc.tablet.qsc.QueryService().SetRollback(ctx, target, dtid, transactionID)
 	return tabletconn.TabletErrorFromGRPC(vterrors.ToGRPCError(err))
 }
 
-// ConcludeTransaction is part of tabletconn.TabletConn
+// ConcludeTransaction is part of queryservice.QueryService
 func (itc *internalTabletConn) ConcludeTransaction(ctx context.Context, target *querypb.Target, dtid string) error {
 	err := itc.tablet.qsc.QueryService().ConcludeTransaction(ctx, target, dtid)
 	return tabletconn.TabletErrorFromGRPC(vterrors.ToGRPCError(err))
 }
 
-// ReadTransaction is part of tabletconn.TabletConn
+// ReadTransaction is part of queryservice.QueryService
 func (itc *internalTabletConn) ReadTransaction(ctx context.Context, target *querypb.Target, dtid string) (metadata *querypb.TransactionMetadata, err error) {
 	metadata, err = itc.tablet.qsc.QueryService().ReadTransaction(ctx, target, dtid)
 	return metadata, tabletconn.TabletErrorFromGRPC(vterrors.ToGRPCError(err))
 }
 
-// BeginExecute is part of tabletconn.TabletConn
+// BeginExecute is part of queryservice.QueryService
 func (itc *internalTabletConn) BeginExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]interface{}, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, error) {
 	transactionID, err := itc.Begin(ctx, target)
 	if err != nil {
@@ -439,7 +407,7 @@ func (itc *internalTabletConn) BeginExecute(ctx context.Context, target *querypb
 	return result, transactionID, err
 }
 
-// BeginExecuteBatch is part of tabletconn.TabletConn
+// BeginExecuteBatch is part of queryservice.QueryService
 func (itc *internalTabletConn) BeginExecuteBatch(ctx context.Context, target *querypb.Target, queries []querytypes.BoundQuery, asTransaction bool, options *querypb.ExecuteOptions) ([]sqltypes.Result, int64, error) {
 	transactionID, err := itc.Begin(ctx, target)
 	if err != nil {
@@ -449,17 +417,33 @@ func (itc *internalTabletConn) BeginExecuteBatch(ctx context.Context, target *qu
 	return results, transactionID, err
 }
 
-// Close is part of tabletconn.TabletConn
+// MessageStream is part of queryservice.QueryService
+func (itc *internalTabletConn) MessageStream(ctx context.Context, target *querypb.Target, name string, callback func(*sqltypes.Result) error) error {
+	err := itc.tablet.qsc.QueryService().MessageStream(ctx, target, name, callback)
+	return tabletconn.TabletErrorFromGRPC(vterrors.ToGRPCError(err))
+}
+
+// MessageAck is part of queryservice.QueryService
+func (itc *internalTabletConn) MessageAck(ctx context.Context, target *querypb.Target, name string, ids []*querypb.Value) (int64, error) {
+	count, err := itc.tablet.qsc.QueryService().MessageAck(ctx, target, name, ids)
+	return count, tabletconn.TabletErrorFromGRPC(vterrors.ToGRPCError(err))
+}
+
+// Handle panic is part of the QueryService interface.
+func (itc *internalTabletConn) HandlePanic(err *error) {
+}
+
+// Close is part of queryservice.QueryService
 func (itc *internalTabletConn) Close(ctx context.Context) error {
 	return nil
 }
 
-// Tablet is part of tabletconn.TabletConn
+// Tablet is part of queryservice.QueryService
 func (itc *internalTabletConn) Tablet() *topodatapb.Tablet {
 	return itc.topoTablet
 }
 
-// SplitQuery is part of tabletconn.TabletConn
+// SplitQuery is part of queryservice.QueryService
 func (itc *internalTabletConn) SplitQuery(
 	ctx context.Context,
 	target *querypb.Target,
@@ -472,8 +456,7 @@ func (itc *internalTabletConn) SplitQuery(
 	splits, err := itc.tablet.qsc.QueryService().SplitQuery(
 		ctx,
 		target,
-		query.Sql,
-		query.BindVariables,
+		query,
 		splitColumns,
 		splitCount,
 		numRowsPerQueryPart,
@@ -484,86 +467,16 @@ func (itc *internalTabletConn) SplitQuery(
 	return splits, nil
 }
 
-type streamHealthReader struct {
-	c   <-chan *querypb.StreamHealthResponse
-	err *error
+// StreamHealth is part of queryservice.QueryService
+func (itc *internalTabletConn) StreamHealth(ctx context.Context, callback func(*querypb.StreamHealthResponse) error) error {
+	err := itc.tablet.qsc.QueryService().StreamHealth(ctx, callback)
+	return tabletconn.TabletErrorFromGRPC(vterrors.ToGRPCError(err))
 }
 
-// Recv implements tabletconn.StreamHealthReader.
-// It returns one response from the chan.
-func (r *streamHealthReader) Recv() (*querypb.StreamHealthResponse, error) {
-	resp, ok := <-r.c
-	if !ok {
-		return nil, *r.err
-	}
-	return resp, nil
-}
-
-// StreamHealth is part of tabletconn.TabletConn
-func (itc *internalTabletConn) StreamHealth(ctx context.Context) (tabletconn.StreamHealthReader, error) {
-	result := make(chan *querypb.StreamHealthResponse, 10)
-
-	id, err := itc.tablet.qsc.QueryService().StreamHealthRegister(result)
-	if err != nil {
-		return nil, err
-	}
-
-	var finalErr error
-	go func() {
-		select {
-		case <-ctx.Done():
-		}
-
-		// We populate finalErr before closing the channel.
-		// The consumer first waits on the channel closure,
-		// then read finalErr
-		finalErr = itc.tablet.qsc.QueryService().StreamHealthUnregister(id)
-		finalErr = tabletconn.TabletErrorFromGRPC(vterrors.ToGRPCError(finalErr))
-		close(result)
-	}()
-
-	return &streamHealthReader{
-		c:   result,
-		err: &finalErr,
-	}, nil
-}
-
-type updateStreamAdapter struct {
-	c   chan *querypb.StreamEvent
-	err *error
-}
-
-func (a *updateStreamAdapter) Recv() (*querypb.StreamEvent, error) {
-	r, ok := <-a.c
-	if !ok {
-		if *a.err == nil {
-			return nil, io.EOF
-		}
-		return nil, *a.err
-	}
-	return r, nil
-}
-
-// UpdateStream is part of tabletconn.TabletConn.
-func (itc *internalTabletConn) UpdateStream(ctx context.Context, target *querypb.Target, position string, timestamp int64) (tabletconn.StreamEventReader, error) {
-	result := make(chan *querypb.StreamEvent, 10)
-	var finalErr error
-
-	go func() {
-		finalErr = itc.tablet.qsc.QueryService().UpdateStream(ctx, target, position, timestamp, func(reply *querypb.StreamEvent) error {
-			// We need to deep-copy the reply before returning,
-			// because the underlying buffers are reused.
-			result <- proto.Clone(reply).(*querypb.StreamEvent)
-			return nil
-		})
-		finalErr = tabletconn.TabletErrorFromGRPC(vterrors.ToGRPCError(finalErr))
-
-		// the client will only access finalErr after the
-		// channel is closed, and then it's already set.
-		close(result)
-	}()
-
-	return &updateStreamAdapter{result, &finalErr}, nil
+// UpdateStream is part of queryservice.QueryService.
+func (itc *internalTabletConn) UpdateStream(ctx context.Context, target *querypb.Target, position string, timestamp int64, callback func(*querypb.StreamEvent) error) error {
+	err := itc.tablet.qsc.QueryService().UpdateStream(ctx, target, position, timestamp, callback)
+	return tabletconn.TabletErrorFromGRPC(vterrors.ToGRPCError(err))
 }
 
 //

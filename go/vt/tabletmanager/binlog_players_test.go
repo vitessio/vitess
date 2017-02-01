@@ -7,7 +7,6 @@ package tabletmanager
 import (
 	"flag"
 	"fmt"
-	"io"
 	"strings"
 	"sync"
 	"testing"
@@ -20,7 +19,8 @@ import (
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
-	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
+	"github.com/youtube/vitess/go/vt/tabletserver/queryservice"
+	"github.com/youtube/vitess/go/vt/tabletserver/queryservice/fakes"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/memorytopo"
@@ -116,158 +116,22 @@ func (fbc *fakeBinlogClient) StreamKeyRange(ctx context.Context, position string
 // fakeTabletConn implement TabletConn interface. We only care about the
 // health check part.
 type fakeTabletConn struct {
+	queryservice.QueryService
 	tablet *topodatapb.Tablet
 }
 
-// Execute is part of the TabletConn interface
-func (ftc *fakeTabletConn) Execute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]interface{}, transactionID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
-	return nil, fmt.Errorf("not implemented in this test")
-}
-
-// Execute is part of the TabletConn interface
-func (ftc *fakeTabletConn) ExecuteBatch(ctx context.Context, target *querypb.Target, queries []querytypes.BoundQuery, asTransaction bool, transactionID int64, options *querypb.ExecuteOptions) ([]sqltypes.Result, error) {
-	return nil, fmt.Errorf("not implemented in this test")
-}
-
-// StreamExecute is part of the TabletConn interface
-func (ftc *fakeTabletConn) StreamExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]interface{}, options *querypb.ExecuteOptions) (sqltypes.ResultStream, error) {
-	return nil, fmt.Errorf("not implemented in this test")
-}
-
-// Begin is part of the TabletConn interface
-func (ftc *fakeTabletConn) Begin(ctx context.Context, target *querypb.Target) (transactionID int64, err error) {
-	return 0, fmt.Errorf("not implemented in this test")
-}
-
-// Commit is part of the TabletConn interface
-func (ftc *fakeTabletConn) Commit(ctx context.Context, target *querypb.Target, transactionID int64) error {
-	return fmt.Errorf("not implemented in this test")
-}
-
-// Rollback is part of the TabletConn interface
-func (ftc *fakeTabletConn) Rollback(ctx context.Context, target *querypb.Target, transactionID int64) error {
-	return fmt.Errorf("not implemented in this test")
-}
-
-// Prepare is part of the TabletConn interface
-func (ftc *fakeTabletConn) Prepare(ctx context.Context, target *querypb.Target, transactionID int64, dtid string) (err error) {
-	return fmt.Errorf("not implemented in this test")
-}
-
-// CommitPrepared is part of the TabletConn interface
-func (ftc *fakeTabletConn) CommitPrepared(ctx context.Context, target *querypb.Target, dtid string) (err error) {
-	return fmt.Errorf("not implemented in this test")
-}
-
-// RollbackPrepared is part of the TabletConn interface
-func (ftc *fakeTabletConn) RollbackPrepared(ctx context.Context, target *querypb.Target, dtid string, originalID int64) (err error) {
-	return fmt.Errorf("not implemented in this test")
-}
-
-// CreateTransaction is part of the TabletConn interface
-func (ftc *fakeTabletConn) CreateTransaction(ctx context.Context, target *querypb.Target, dtid string, participants []*querypb.Target) (err error) {
-	return fmt.Errorf("not implemented in this test")
-}
-
-// StartCommit is part of the TabletConn interface
-func (ftc *fakeTabletConn) StartCommit(ctx context.Context, target *querypb.Target, transactionID int64, dtid string) (err error) {
-	return fmt.Errorf("not implemented in this test")
-}
-
-// SetRollback is part of the TabletConn interface
-func (ftc *fakeTabletConn) SetRollback(ctx context.Context, target *querypb.Target, dtid string, transactionID int64) (err error) {
-	return fmt.Errorf("not implemented in this test")
-}
-
-// ConcludeTransaction is part of the TabletConn interface
-func (ftc *fakeTabletConn) ConcludeTransaction(ctx context.Context, target *querypb.Target, dtid string) (err error) {
-	return fmt.Errorf("not implemented in this test")
-}
-
-// ReadTransaction is part of the TabletConn interface
-func (ftc *fakeTabletConn) ReadTransaction(ctx context.Context, target *querypb.Target, dtid string) (metadata *querypb.TransactionMetadata, err error) {
-	return nil, fmt.Errorf("not implemented in this test")
-}
-
-// BeginExecute is part of the TabletConn interface
-func (ftc *fakeTabletConn) BeginExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]interface{}, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, error) {
-	return nil, 0, fmt.Errorf("not implemented in this test")
-}
-
-// BeginExecuteBatch is part of the TabletConn interface
-func (ftc *fakeTabletConn) BeginExecuteBatch(ctx context.Context, target *querypb.Target, queries []querytypes.BoundQuery, asTransaction bool, options *querypb.ExecuteOptions) ([]sqltypes.Result, int64, error) {
-	return nil, 0, fmt.Errorf("not implemented in this test")
-}
-
-// SplitQuery is part of the TabletConn interface
-func (ftc *fakeTabletConn) SplitQuery(
-	ctx context.Context,
-	target *querypb.Target,
-	query querytypes.BoundQuery,
-	splitColumns []string,
-	splitCount int64,
-	numRowsPerQueryPart int64,
-	algorithm querypb.SplitQueryRequest_Algorithm) ([]querytypes.QuerySplit, error) {
-	return nil, fmt.Errorf("not implemented in this test")
-}
-
-type streamHealthReader struct {
-	c   <-chan *querypb.StreamHealthResponse
-	err *error
-}
-
-// Recv implements tabletconn.StreamHealthReader.
-// It returns one response from the chan.
-func (r *streamHealthReader) Recv() (*querypb.StreamHealthResponse, error) {
-	resp, ok := <-r.c
-	if !ok {
-		if *r.err == nil {
-			return nil, io.EOF
-		}
-		return nil, *r.err
-	}
-	return resp, nil
-}
-
-// StreamHealth is part of tabletconn.TabletConn.
-func (ftc *fakeTabletConn) StreamHealth(ctx context.Context) (tabletconn.StreamHealthReader, error) {
-	c := make(chan *querypb.StreamHealthResponse)
-	var finalErr error
-	go func() {
-		c <- &querypb.StreamHealthResponse{
-			Serving: true,
-			Target: &querypb.Target{
-				Keyspace:   ftc.tablet.Keyspace,
-				Shard:      ftc.tablet.Shard,
-				TabletType: ftc.tablet.Type,
-			},
-			RealtimeStats: &querypb.RealtimeStats{},
-		}
-		select {
-		case <-ctx.Done():
-			finalErr = ctx.Err()
-			close(c)
-		}
-	}()
-	return &streamHealthReader{
-		c:   c,
-		err: &finalErr,
-	}, nil
-}
-
-// UpdateStream is part of the TabletConn interface
-func (ftc *fakeTabletConn) UpdateStream(ctx context.Context, target *querypb.Target, position string, timestamp int64) (tabletconn.StreamEventReader, error) {
-	return nil, fmt.Errorf("not implemented in this test")
-}
-
-// Close is part of the TabletConn interface
-func (ftc *fakeTabletConn) Close(ctx context.Context) error {
+// StreamHealth is part of queryservice.QueryService.
+func (ftc *fakeTabletConn) StreamHealth(ctx context.Context, callback func(*querypb.StreamHealthResponse) error) error {
+	callback(&querypb.StreamHealthResponse{
+		Serving: true,
+		Target: &querypb.Target{
+			Keyspace:   ftc.tablet.Keyspace,
+			Shard:      ftc.tablet.Shard,
+			TabletType: ftc.tablet.Type,
+		},
+		RealtimeStats: &querypb.RealtimeStats{},
+	})
 	return nil
-}
-
-// Tablet is part of the TabletConn interface
-func (ftc *fakeTabletConn) Tablet() *topodatapb.Tablet {
-	return ftc.tablet
 }
 
 // createSourceTablet is a helper method to create the source tablet
@@ -298,9 +162,10 @@ func createSourceTablet(t *testing.T, name string, ts topo.Server, keyspace, sha
 
 	// register a tablet conn dialer that will return the instance
 	// we want
-	tabletconn.RegisterDialer(name, func(tablet *topodatapb.Tablet, timeout time.Duration) (tabletconn.TabletConn, error) {
+	tabletconn.RegisterDialer(name, func(tablet *topodatapb.Tablet, timeout time.Duration) (queryservice.QueryService, error) {
 		return &fakeTabletConn{
-			tablet: tablet,
+			QueryService: fakes.ErrorQueryService,
+			tablet:       tablet,
 		}, nil
 	})
 	flag.Set("tablet_protocol", name)

@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/youtube/vitess/go/mysql"
+	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/tabletserver/endtoend/framework"
 
@@ -750,7 +750,7 @@ func TestManualTwopcz(t *testing.T) {
 	t.Skip()
 	client := framework.NewClient()
 	defer client.Execute("delete from vitess_test where intval=4", nil)
-	conn, err := mysql.Connect(connParams)
+	conn, err := sqldb.Connect(connParams)
 	if err != nil {
 		t.Error(err)
 		return

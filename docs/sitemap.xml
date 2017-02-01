@@ -22,25 +22,25 @@
     <loc>http://vitess.io/user-guide/horizontal-sharding.html</loc>
   </url>
   <url>
-    <loc>http://vitess.io/search/</loc>
-  </url>
-  <url>
-    <loc>http://vitess.io/about/</loc>
-  </url>
-  <url>
     <loc>http://vitess.io/overview/</loc>
   </url>
   <url>
-    <loc>http://vitess.io/contributing/</loc>
-  </url>
-  <url>
-    <loc>http://vitess.io/getting-started/</loc>
+    <loc>http://vitess.io/about/</loc>
   </url>
   <url>
     <loc>http://vitess.io/terms/</loc>
   </url>
   <url>
     <loc>http://vitess.io/</loc>
+  </url>
+  <url>
+    <loc>http://vitess.io/search/</loc>
+  </url>
+  <url>
+    <loc>http://vitess.io/getting-started/</loc>
+  </url>
+  <url>
+    <loc>http://vitess.io/contributing/</loc>
   </url>
   <url>
     <loc>http://vitess.io/user-guide/introduction.html</loc>
@@ -50,6 +50,9 @@
   </url>
   <url>
     <loc>http://vitess.io/getting-started/local-instance.html</loc>
+  </url>
+  <url>
+    <loc>http://vitess.io/user-guide/mysql-server-protocol.html</loc>
   </url>
   <url>
     <loc>http://vitess.io/resources/presentations.html</loc>
@@ -62,6 +65,9 @@
   </url>
   <url>
     <loc>http://vitess.io/resources/roadmap.html</loc>
+  </url>
+  <url>
+    <loc>http://vitess.io/user-guide/row-based-replication.html</loc>
   </url>
   <url>
     <loc>http://vitess.io/user-guide/scalability-philosophy.html</loc>
@@ -97,6 +103,9 @@
     <loc>http://vitess.io/user-guide/twopc.html</loc>
   </url>
   <url>
+    <loc>http://vitess.io/user-guide/update-stream.html</loc>
+  </url>
+  <url>
     <loc>http://vitess.io/user-guide/upgrading.html</loc>
   </url>
   <url>
@@ -104,6 +113,9 @@
   </url>
   <url>
     <loc>http://vitess.io/user-guide/vitess-replication.html</loc>
+  </url>
+  <url>
+    <loc>http://vitess.io/user-guide/vitess-sequences.html</loc>
   </url>
   <url>
     <loc>http://vitess.io/reference/vtctl.html</loc>

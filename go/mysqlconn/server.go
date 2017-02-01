@@ -133,7 +133,7 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32) {
 	}
 
 	// Wait for the client response.
-	response, err := c.ReadPacket()
+	response, err := c.readPacket()
 	if err != nil {
 		log.Errorf("Cannot read client handshake response: %v", err)
 		return
@@ -168,7 +168,7 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32) {
 
 	for {
 		c.sequence = 0
-		data, err := c.ReadPacket()
+		data, err := c.readPacket()
 		if err != nil {
 			log.Errorf("Error reading packet from client %v: %v", c.ConnectionID, err)
 			return
@@ -306,9 +306,11 @@ func (c *Conn) writeHandshakeV10(serverVersion string) ([]byte, error) {
 	}
 
 	if err := c.writePacket(data); err != nil {
-		return nil, fmt.Errorf("cannot write HandshakeV10 packet: %v", err)
+		return nil, err
 	}
-	c.flush()
+	if err := c.flush(); err != nil {
+		return nil, err
+	}
 
 	return cipher, nil
 }
@@ -332,7 +334,8 @@ func (l *Listener) parseClientHandshakePacket(c *Conn, data []byte) (string, []b
 
 	// Max packet size. Don't do anything with this now.
 	// See doc.go for more information.
-	/*maxPacketSize*/ _, pos, ok = readUint32(data, pos)
+	/*maxPacketSize*/
+	_, pos, ok = readUint32(data, pos)
 	if !ok {
 		return "", nil, fmt.Errorf("parseClientHandshakePacket: can't read maxPacketSize")
 	}

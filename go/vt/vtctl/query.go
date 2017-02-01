@@ -7,6 +7,7 @@ package vtctl
 import (
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -71,23 +72,23 @@ func init() {
 		addCommand(queriesGroupName, command{
 			"VtTabletExecute",
 			commandVtTabletExecute,
-			"[-bind_variables <JSON map>] [-connect_timeout <connect timeout>] [-transaction_id <transaction_id>] [-tablet_type <tablet_type>] [-options <proto text options>] [-json] -keyspace <keyspace> -shard <shard> <tablet alias> <sql>",
-			"Executes the given query on the given tablet."})
+			"[-connect_timeout <connect timeout>] [-transaction_id <transaction_id>] [-options <proto text options>] [-json] <tablet alias> <sql>",
+			"Executes the given query on the given tablet. -transaction_id is optional. Use VtTabletBegin to start a transaction."})
 		addCommand(queriesGroupName, command{
 			"VtTabletBegin",
 			commandVtTabletBegin,
-			"[-connect_timeout <connect timeout>] [-tablet_type <tablet_type>] -keyspace <keyspace> -shard <shard> <tablet alias>",
+			"[-connect_timeout <connect timeout>] <tablet alias>",
 			"Starts a transaction on the provided server."})
 		addCommand(queriesGroupName, command{
 			"VtTabletCommit",
 			commandVtTabletCommit,
-			"[-connect_timeout <connect timeout>] [-tablet_type <tablet_type>] -keyspace <keyspace> -shard <shard> <tablet alias> <transaction_id>",
-			"Commits a transaction on the provided server."})
+			"[-connect_timeout <connect timeout>] <transaction_id>",
+			"Commits the given transaction on the provided server."})
 		addCommand(queriesGroupName, command{
 			"VtTabletRollback",
 			commandVtTabletRollback,
-			"[-connect_timeout <connect timeout>] [-tablet_type <tablet_type>] -keyspace <keyspace> -shard <shard> <tablet alias> <transaction_id>",
-			"Rollbacks a transaction on the provided server."})
+			"[-connect_timeout <connect timeout>] <tablet alias> <transaction_id>",
+			"Rollbacks the given transaction on the provided server."})
 		addCommand(queriesGroupName, command{
 			"VtTabletStreamHealth",
 			commandVtTabletStreamHealth,
@@ -510,7 +511,7 @@ func commandVtTabletStreamHealth(ctx context.Context, wr *wrangler.Wrangler, sub
 		return err
 	}
 	if subFlags.NArg() != 1 {
-		return fmt.Errorf("The <tablet alias> argument is required for the VtTabletStreamHealth command.")
+		return fmt.Errorf("the <tablet alias> argument is required for the VtTabletStreamHealth command")
 	}
 	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
 	if err != nil {
@@ -526,21 +527,25 @@ func commandVtTabletStreamHealth(ctx context.Context, wr *wrangler.Wrangler, sub
 		return fmt.Errorf("cannot connect to tablet %v: %v", tabletAlias, err)
 	}
 
-	stream, err := conn.StreamHealth(ctx)
-	if err != nil {
-		return err
-	}
-	for i := 0; i < *count; i++ {
-		shr, err := stream.Recv()
-		if err != nil {
-			return fmt.Errorf("stream ended early: %v", err)
-		}
+	i := 0
+	err = conn.StreamHealth(ctx, func(shr *querypb.StreamHealthResponse) error {
 		data, err := json.Marshal(shr)
 		if err != nil {
 			wr.Logger().Errorf("cannot json-marshal structure: %v", err)
 		} else {
 			wr.Logger().Printf("%v\n", string(data))
 		}
+		i++
+		if i >= *count {
+			return io.EOF
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	if i < *count {
+		return errors.New("stream ended early")
 	}
 	return nil
 }
@@ -554,7 +559,7 @@ func commandVtTabletUpdateStream(ctx context.Context, wr *wrangler.Wrangler, sub
 		return err
 	}
 	if subFlags.NArg() != 1 {
-		return fmt.Errorf("The <tablet alias> argument is required for the VtTabletUpdateStream command.")
+		return fmt.Errorf("the <tablet alias> argument is required for the VtTabletUpdateStream command")
 	}
 	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
 	if err != nil {
@@ -570,25 +575,29 @@ func commandVtTabletUpdateStream(ctx context.Context, wr *wrangler.Wrangler, sub
 		return fmt.Errorf("cannot connect to tablet %v: %v", tabletAlias, err)
 	}
 
-	stream, err := conn.UpdateStream(ctx, &querypb.Target{
+	i := 0
+	err = conn.UpdateStream(ctx, &querypb.Target{
 		Keyspace:   tabletInfo.Tablet.Keyspace,
 		Shard:      tabletInfo.Tablet.Shard,
 		TabletType: tabletInfo.Tablet.Type,
-	}, *position, int64(*timestamp))
-	if err != nil {
-		return err
-	}
-	for i := 0; i < *count; i++ {
-		se, err := stream.Recv()
-		if err != nil {
-			return fmt.Errorf("stream ended early: %v", err)
-		}
+	}, *position, int64(*timestamp), func(se *querypb.StreamEvent) error {
 		data, err := json.Marshal(se)
 		if err != nil {
 			wr.Logger().Errorf("cannot json-marshal structure: %v", err)
 		} else {
 			wr.Logger().Printf("%v\n", string(data))
 		}
+		i++
+		if i >= *count {
+			return io.EOF
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	if i < *count {
+		return errors.New("stream ended early")
 	}
 	return nil
 }

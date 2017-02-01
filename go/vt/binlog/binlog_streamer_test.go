@@ -5,7 +5,6 @@
 package binlog
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"reflect"
@@ -15,154 +14,10 @@ import (
 
 	"golang.org/x/net/context"
 
-	"github.com/youtube/vitess/go/vt/mysqlctl"
-	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
+	"github.com/youtube/vitess/go/mysqlconn/replication"
 
 	binlogdatapb "github.com/youtube/vitess/go/vt/proto/binlogdata"
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
-)
-
-// fakeEvent implements replication.BinlogEvent.
-type fakeEvent struct{}
-
-func (fakeEvent) IsValid() bool             { return true }
-func (fakeEvent) IsFormatDescription() bool { return false }
-func (fakeEvent) IsQuery() bool             { return false }
-func (fakeEvent) IsXID() bool               { return false }
-func (fakeEvent) IsGTID() bool              { return false }
-func (fakeEvent) IsRotate() bool            { return false }
-func (fakeEvent) IsIntVar() bool            { return false }
-func (fakeEvent) IsRand() bool              { return false }
-func (fakeEvent) IsPreviousGTIDs() bool     { return false }
-func (fakeEvent) Timestamp() uint32         { return 1407805592 }
-func (fakeEvent) Format() (replication.BinlogFormat, error) {
-	return replication.BinlogFormat{}, errors.New("not a format")
-}
-func (fakeEvent) GTID(replication.BinlogFormat) (replication.GTID, bool, error) {
-	return nil, false, fmt.Errorf("should never ask for GTID")
-}
-func (fakeEvent) PreviousGTIDs(replication.BinlogFormat) (replication.Position, error) {
-	return replication.Position{}, errors.New("not a PreviousGTIDs")
-}
-func (fakeEvent) Query(replication.BinlogFormat) (replication.Query, error) {
-	return replication.Query{}, errors.New("not a query")
-}
-func (fakeEvent) IntVar(replication.BinlogFormat) (string, uint64, error) {
-	return "", 0, errors.New("not an intvar")
-}
-func (fakeEvent) Rand(replication.BinlogFormat) (uint64, uint64, error) {
-	return 0, 0, errors.New("not a rand")
-}
-func (ev fakeEvent) StripChecksum(replication.BinlogFormat) (replication.BinlogEvent, []byte, error) {
-	return ev, nil, nil
-}
-
-type invalidEvent struct{ fakeEvent }
-
-func (invalidEvent) IsValid() bool { return false }
-func (ev invalidEvent) StripChecksum(replication.BinlogFormat) (replication.BinlogEvent, []byte, error) {
-	return ev, nil, nil
-}
-
-type rotateEvent struct{ fakeEvent }
-
-func (rotateEvent) IsRotate() bool { return true }
-func (ev rotateEvent) StripChecksum(replication.BinlogFormat) (replication.BinlogEvent, []byte, error) {
-	return ev, nil, nil
-}
-
-type formatEvent struct{ fakeEvent }
-
-func (formatEvent) IsFormatDescription() bool { return true }
-func (formatEvent) Format() (replication.BinlogFormat, error) {
-	return replication.BinlogFormat{FormatVersion: 1}, nil
-}
-func (ev formatEvent) StripChecksum(replication.BinlogFormat) (replication.BinlogEvent, []byte, error) {
-	return ev, nil, nil
-}
-
-type gtidEvent struct{ fakeEvent }
-
-func (gtidEvent) IsGTID() bool { return true }
-func (gtidEvent) GTID(replication.BinlogFormat) (replication.GTID, bool, error) {
-	return replication.MariadbGTID{Domain: 0, Server: 62344, Sequence: 0xd}, false, nil
-}
-func (ev gtidEvent) StripChecksum(replication.BinlogFormat) (replication.BinlogEvent, []byte, error) {
-	return ev, nil, nil
-}
-
-type invalidFormatEvent struct{ formatEvent }
-
-func (invalidFormatEvent) Format() (replication.BinlogFormat, error) {
-	return replication.BinlogFormat{}, errors.New("invalid format event")
-}
-func (ev invalidFormatEvent) StripChecksum(replication.BinlogFormat) (replication.BinlogEvent, []byte, error) {
-	return ev, nil, nil
-}
-
-type queryEvent struct {
-	fakeEvent
-	query replication.Query
-}
-
-func (queryEvent) IsQuery() bool { return true }
-func (ev queryEvent) Query(replication.BinlogFormat) (replication.Query, error) {
-	return ev.query, nil
-}
-func (ev queryEvent) StripChecksum(replication.BinlogFormat) (replication.BinlogEvent, []byte, error) {
-	return ev, nil, nil
-}
-
-type invalidQueryEvent struct{ queryEvent }
-
-func (invalidQueryEvent) Query(replication.BinlogFormat) (replication.Query, error) {
-	return replication.Query{}, errors.New("invalid query event")
-}
-func (ev invalidQueryEvent) StripChecksum(replication.BinlogFormat) (replication.BinlogEvent, []byte, error) {
-	return ev, nil, nil
-}
-
-type xidEvent struct{ fakeEvent }
-
-func (xidEvent) IsXID() bool { return true }
-func (ev xidEvent) StripChecksum(replication.BinlogFormat) (replication.BinlogEvent, []byte, error) {
-	return ev, nil, nil
-}
-
-type intVarEvent struct {
-	fakeEvent
-	name  string
-	value uint64
-}
-
-func (intVarEvent) IsIntVar() bool { return true }
-func (ev intVarEvent) IntVar(replication.BinlogFormat) (string, uint64, error) {
-	return ev.name, ev.value, nil
-}
-func (ev intVarEvent) StripChecksum(replication.BinlogFormat) (replication.BinlogEvent, []byte, error) {
-	return ev, nil, nil
-}
-
-type invalidIntVarEvent struct{ intVarEvent }
-
-func (invalidIntVarEvent) IntVar(replication.BinlogFormat) (string, uint64, error) {
-	return "", 0, errors.New("invalid intvar event")
-}
-func (ev invalidIntVarEvent) StripChecksum(replication.BinlogFormat) (replication.BinlogEvent, []byte, error) {
-	return ev, nil, nil
-}
-
-// sample MariaDB event data
-var (
-	mariadbRotateEvent         = mysqlctl.NewMariadbBinlogEvent([]byte{0x0, 0x0, 0x0, 0x0, 0x4, 0x88, 0xf3, 0x0, 0x0, 0x33, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x20, 0x0, 0x4, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x76, 0x74, 0x2d, 0x30, 0x30, 0x30, 0x30, 0x30, 0x36, 0x32, 0x33, 0x34, 0x34, 0x2d, 0x62, 0x69, 0x6e, 0x2e, 0x30, 0x30, 0x30, 0x30, 0x30, 0x31})
-	mariadbFormatEvent         = mysqlctl.NewMariadbBinlogEvent([]byte{0x87, 0x41, 0x9, 0x54, 0xf, 0x88, 0xf3, 0x0, 0x0, 0xf4, 0x0, 0x0, 0x0, 0xf8, 0x0, 0x0, 0x0, 0x0, 0x0, 0x4, 0x0, 0x31, 0x30, 0x2e, 0x30, 0x2e, 0x31, 0x33, 0x2d, 0x4d, 0x61, 0x72, 0x69, 0x61, 0x44, 0x42, 0x2d, 0x31, 0x7e, 0x70, 0x72, 0x65, 0x63, 0x69, 0x73, 0x65, 0x2d, 0x6c, 0x6f, 0x67, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x87, 0x41, 0x9, 0x54, 0x13, 0x38, 0xd, 0x0, 0x8, 0x0, 0x12, 0x0, 0x4, 0x4, 0x4, 0x4, 0x12, 0x0, 0x0, 0xdc, 0x0, 0x4, 0x1a, 0x8, 0x0, 0x0, 0x0, 0x8, 0x8, 0x8, 0x2, 0x0, 0x0, 0x0, 0xa, 0xa, 0xa, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x4, 0x13, 0x4, 0x0, 0x6e, 0xe0, 0xfd, 0x41})
-	mariadbStandaloneGTIDEvent = mysqlctl.NewMariadbBinlogEvent([]byte{0x88, 0x41, 0x9, 0x54, 0xa2, 0x88, 0xf3, 0x0, 0x0, 0x26, 0x0, 0x0, 0x0, 0xcf, 0x8, 0x0, 0x0, 0x8, 0x0, 0x9, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0})
-	mariadbBeginGTIDEvent      = mysqlctl.NewMariadbBinlogEvent([]byte{0x88, 0x41, 0x9, 0x54, 0xa2, 0x88, 0xf3, 0x0, 0x0, 0x26, 0x0, 0x0, 0x0, 0xb5, 0x9, 0x0, 0x0, 0x8, 0x0, 0xa, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0})
-	mariadbCreateEvent         = mysqlctl.NewMariadbBinlogEvent([]byte{0x88, 0x41, 0x9, 0x54, 0x2, 0x88, 0xf3, 0x0, 0x0, 0xc2, 0x0, 0x0, 0x0, 0xf2, 0x6, 0x0, 0x0, 0x0, 0x0, 0x20, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x10, 0x0, 0x0, 0x1a, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x20, 0x0, 0x0, 0x0, 0x0, 0x0, 0x6, 0x3, 0x73, 0x74, 0x64, 0x4, 0x8, 0x0, 0x8, 0x0, 0x21, 0x0, 0x76, 0x74, 0x5f, 0x74, 0x65, 0x73, 0x74, 0x5f, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x0, 0x63, 0x72, 0x65, 0x61, 0x74, 0x65, 0x20, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x20, 0x69, 0x66, 0x20, 0x6e, 0x6f, 0x74, 0x20, 0x65, 0x78, 0x69, 0x73, 0x74, 0x73, 0x20, 0x76, 0x74, 0x5f, 0x69, 0x6e, 0x73, 0x65, 0x72, 0x74, 0x5f, 0x74, 0x65, 0x73, 0x74, 0x20, 0x28, 0xa, 0x69, 0x64, 0x20, 0x62, 0x69, 0x67, 0x69, 0x6e, 0x74, 0x20, 0x61, 0x75, 0x74, 0x6f, 0x5f, 0x69, 0x6e, 0x63, 0x72, 0x65, 0x6d, 0x65, 0x6e, 0x74, 0x2c, 0xa, 0x6d, 0x73, 0x67, 0x20, 0x76, 0x61, 0x72, 0x63, 0x68, 0x61, 0x72, 0x28, 0x36, 0x34, 0x29, 0x2c, 0xa, 0x70, 0x72, 0x69, 0x6d, 0x61, 0x72, 0x79, 0x20, 0x6b, 0x65, 0x79, 0x20, 0x28, 0x69, 0x64, 0x29, 0xa, 0x29, 0x20, 0x45, 0x6e, 0x67, 0x69, 0x6e, 0x65, 0x3d, 0x49, 0x6e, 0x6e, 0x6f, 0x44, 0x42})
-	mariadbInsertEvent         = mysqlctl.NewMariadbBinlogEvent([]byte{0x88, 0x41, 0x9, 0x54, 0x2, 0x88, 0xf3, 0x0, 0x0, 0xa8, 0x0, 0x0, 0x0, 0x79, 0xa, 0x0, 0x0, 0x0, 0x0, 0x27, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x10, 0x0, 0x0, 0x1a, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x20, 0x0, 0x0, 0x0, 0x0, 0x0, 0x6, 0x3, 0x73, 0x74, 0x64, 0x4, 0x21, 0x0, 0x21, 0x0, 0x21, 0x0, 0x76, 0x74, 0x5f, 0x74, 0x65, 0x73, 0x74, 0x5f, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x0, 0x69, 0x6e, 0x73, 0x65, 0x72, 0x74, 0x20, 0x69, 0x6e, 0x74, 0x6f, 0x20, 0x76, 0x74, 0x5f, 0x69, 0x6e, 0x73, 0x65, 0x72, 0x74, 0x5f, 0x74, 0x65, 0x73, 0x74, 0x28, 0x6d, 0x73, 0x67, 0x29, 0x20, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x73, 0x20, 0x28, 0x27, 0x74, 0x65, 0x73, 0x74, 0x20, 0x30, 0x27, 0x29, 0x20, 0x2f, 0x2a, 0x20, 0x5f, 0x73, 0x74, 0x72, 0x65, 0x61, 0x6d, 0x20, 0x76, 0x74, 0x5f, 0x69, 0x6e, 0x73, 0x65, 0x72, 0x74, 0x5f, 0x74, 0x65, 0x73, 0x74, 0x20, 0x28, 0x69, 0x64, 0x20, 0x29, 0x20, 0x28, 0x6e, 0x75, 0x6c, 0x6c, 0x20, 0x29, 0x3b, 0x20, 0x2a, 0x2f})
-	mariadbXidEvent            = mysqlctl.NewMariadbBinlogEvent([]byte{0x88, 0x41, 0x9, 0x54, 0x10, 0x88, 0xf3, 0x0, 0x0, 0x1b, 0x0, 0x0, 0x0, 0xe0, 0xc, 0x0, 0x0, 0x0, 0x0, 0x85, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0})
-
-	charset = &binlogdatapb.Charset{Client: 33, Conn: 33, Server: 33}
 )
 
 func sendTestEvents(channel chan<- replication.BinlogEvent, events []replication.BinlogEvent) {
@@ -173,17 +28,21 @@ func sendTestEvents(channel chan<- replication.BinlogEvent, events []replication
 }
 
 func TestStreamerParseEventsXID(t *testing.T) {
+	f := replication.NewMySQL56BinlogFormat()
+	s := replication.NewFakeBinlogStream()
+	s.ServerID = 62344
+
 	input := []replication.BinlogEvent{
-		rotateEvent{},
-		formatEvent{},
-		gtidEvent{},
-		queryEvent{query: replication.Query{
+		replication.NewRotateEvent(f, s, 0, ""),
+		replication.NewFormatDescriptionEvent(f, s),
+		replication.NewMariaDBGTIDEvent(f, s, replication.MariadbGTID{Domain: 0, Sequence: 0xd}, false /* hasBegin */),
+		replication.NewQueryEvent(f, s, replication.Query{
 			Database: "vt_test_keyspace",
-			SQL:      "BEGIN"}},
-		queryEvent{query: replication.Query{
+			SQL:      "BEGIN"}),
+		replication.NewQueryEvent(f, s, replication.Query{
 			Database: "vt_test_keyspace",
-			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}},
-		xidEvent{},
+			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}),
+		replication.NewXIDEvent(f, s),
 	}
 
 	events := make(chan replication.BinlogEvent)
@@ -225,19 +84,23 @@ func TestStreamerParseEventsXID(t *testing.T) {
 }
 
 func TestStreamerParseEventsCommit(t *testing.T) {
+	f := replication.NewMySQL56BinlogFormat()
+	s := replication.NewFakeBinlogStream()
+	s.ServerID = 62344
+
 	input := []replication.BinlogEvent{
-		rotateEvent{},
-		formatEvent{},
-		gtidEvent{},
-		queryEvent{query: replication.Query{
+		replication.NewRotateEvent(f, s, 0, ""),
+		replication.NewFormatDescriptionEvent(f, s),
+		replication.NewMariaDBGTIDEvent(f, s, replication.MariadbGTID{Domain: 0, Sequence: 0xd}, false /* hasBegin */),
+		replication.NewQueryEvent(f, s, replication.Query{
 			Database: "vt_test_keyspace",
-			SQL:      "BEGIN"}},
-		queryEvent{query: replication.Query{
+			SQL:      "BEGIN"}),
+		replication.NewQueryEvent(f, s, replication.Query{
 			Database: "vt_test_keyspace",
-			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}},
-		queryEvent{query: replication.Query{
+			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}),
+		replication.NewQueryEvent(f, s, replication.Query{
 			Database: "vt_test_keyspace",
-			SQL:      "COMMIT"}},
+			SQL:      "COMMIT"}),
 	}
 
 	events := make(chan replication.BinlogEvent)
@@ -308,16 +171,19 @@ func TestStreamerStop(t *testing.T) {
 }
 
 func TestStreamerParseEventsClientEOF(t *testing.T) {
+	f := replication.NewMySQL56BinlogFormat()
+	s := replication.NewFakeBinlogStream()
+
 	input := []replication.BinlogEvent{
-		rotateEvent{},
-		formatEvent{},
-		queryEvent{query: replication.Query{
+		replication.NewRotateEvent(f, s, 0, ""),
+		replication.NewFormatDescriptionEvent(f, s),
+		replication.NewQueryEvent(f, s, replication.Query{
 			Database: "vt_test_keyspace",
-			SQL:      "BEGIN"}},
-		queryEvent{query: replication.Query{
+			SQL:      "BEGIN"}),
+		replication.NewQueryEvent(f, s, replication.Query{
 			Database: "vt_test_keyspace",
-			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}},
-		xidEvent{},
+			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}),
+		replication.NewXIDEvent(f, s),
 	}
 	want := ErrClientEOF
 
@@ -353,16 +219,19 @@ func TestStreamerParseEventsServerEOF(t *testing.T) {
 }
 
 func TestStreamerParseEventsSendErrorXID(t *testing.T) {
+	f := replication.NewMySQL56BinlogFormat()
+	s := replication.NewFakeBinlogStream()
+
 	input := []replication.BinlogEvent{
-		rotateEvent{},
-		formatEvent{},
-		queryEvent{query: replication.Query{
+		replication.NewRotateEvent(f, s, 0, ""),
+		replication.NewFormatDescriptionEvent(f, s),
+		replication.NewQueryEvent(f, s, replication.Query{
 			Database: "vt_test_keyspace",
-			SQL:      "BEGIN"}},
-		queryEvent{query: replication.Query{
+			SQL:      "BEGIN"}),
+		replication.NewQueryEvent(f, s, replication.Query{
 			Database: "vt_test_keyspace",
-			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}},
-		xidEvent{},
+			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}),
+		replication.NewXIDEvent(f, s),
 	}
 	want := "send reply error: foobar"
 
@@ -386,18 +255,21 @@ func TestStreamerParseEventsSendErrorXID(t *testing.T) {
 }
 
 func TestStreamerParseEventsSendErrorCommit(t *testing.T) {
+	f := replication.NewMySQL56BinlogFormat()
+	s := replication.NewFakeBinlogStream()
+
 	input := []replication.BinlogEvent{
-		rotateEvent{},
-		formatEvent{},
-		queryEvent{query: replication.Query{
+		replication.NewRotateEvent(f, s, 0, ""),
+		replication.NewFormatDescriptionEvent(f, s),
+		replication.NewQueryEvent(f, s, replication.Query{
 			Database: "vt_test_keyspace",
-			SQL:      "BEGIN"}},
-		queryEvent{query: replication.Query{
+			SQL:      "BEGIN"}),
+		replication.NewQueryEvent(f, s, replication.Query{
 			Database: "vt_test_keyspace",
-			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}},
-		queryEvent{query: replication.Query{
+			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}),
+		replication.NewQueryEvent(f, s, replication.Query{
 			Database: "vt_test_keyspace",
-			SQL:      "COMMIT"}},
+			SQL:      "COMMIT"}),
 	}
 	want := "send reply error: foobar"
 
@@ -420,14 +292,17 @@ func TestStreamerParseEventsSendErrorCommit(t *testing.T) {
 }
 
 func TestStreamerParseEventsInvalid(t *testing.T) {
+	f := replication.NewMySQL56BinlogFormat()
+	s := replication.NewFakeBinlogStream()
+
 	input := []replication.BinlogEvent{
-		rotateEvent{},
-		formatEvent{},
-		queryEvent{query: replication.Query{
+		replication.NewRotateEvent(f, s, 0, ""),
+		replication.NewFormatDescriptionEvent(f, s),
+		replication.NewQueryEvent(f, s, replication.Query{
 			Database: "vt_test_keyspace",
-			SQL:      "BEGIN"}},
-		invalidEvent{},
-		xidEvent{},
+			SQL:      "BEGIN"}),
+		replication.NewInvalidEvent(),
+		replication.NewXIDEvent(f, s),
 	}
 	want := "can't parse binlog event, invalid data:"
 
@@ -450,16 +325,19 @@ func TestStreamerParseEventsInvalid(t *testing.T) {
 }
 
 func TestStreamerParseEventsInvalidFormat(t *testing.T) {
+	f := replication.NewMySQL56BinlogFormat()
+	s := replication.NewFakeBinlogStream()
+
 	input := []replication.BinlogEvent{
-		rotateEvent{},
-		invalidFormatEvent{},
-		queryEvent{query: replication.Query{
+		replication.NewRotateEvent(f, s, 0, ""),
+		replication.NewInvalidFormatDescriptionEvent(f, s),
+		replication.NewQueryEvent(f, s, replication.Query{
 			Database: "vt_test_keyspace",
-			SQL:      "BEGIN"}},
-		queryEvent{query: replication.Query{
+			SQL:      "BEGIN"}),
+		replication.NewQueryEvent(f, s, replication.Query{
 			Database: "vt_test_keyspace",
-			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}},
-		xidEvent{},
+			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}),
+		replication.NewXIDEvent(f, s),
 	}
 	want := "can't parse FORMAT_DESCRIPTION_EVENT:"
 
@@ -482,16 +360,19 @@ func TestStreamerParseEventsInvalidFormat(t *testing.T) {
 }
 
 func TestStreamerParseEventsNoFormat(t *testing.T) {
+	f := replication.NewMySQL56BinlogFormat()
+	s := replication.NewFakeBinlogStream()
+
 	input := []replication.BinlogEvent{
-		rotateEvent{},
-		//formatEvent{},
-		queryEvent{query: replication.Query{
+		replication.NewRotateEvent(f, s, 0, ""),
+		//replication.NewFormatDescriptionEvent(f, s),
+		replication.NewQueryEvent(f, s, replication.Query{
 			Database: "vt_test_keyspace",
-			SQL:      "BEGIN"}},
-		queryEvent{query: replication.Query{
+			SQL:      "BEGIN"}),
+		replication.NewQueryEvent(f, s, replication.Query{
 			Database: "vt_test_keyspace",
-			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}},
-		xidEvent{},
+			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}),
+		replication.NewXIDEvent(f, s),
 	}
 	want := "got a real event before FORMAT_DESCRIPTION_EVENT:"
 
@@ -514,14 +395,17 @@ func TestStreamerParseEventsNoFormat(t *testing.T) {
 }
 
 func TestStreamerParseEventsInvalidQuery(t *testing.T) {
+	f := replication.NewMySQL56BinlogFormat()
+	s := replication.NewFakeBinlogStream()
+
 	input := []replication.BinlogEvent{
-		rotateEvent{},
-		formatEvent{},
-		queryEvent{query: replication.Query{
+		replication.NewRotateEvent(f, s, 0, ""),
+		replication.NewFormatDescriptionEvent(f, s),
+		replication.NewQueryEvent(f, s, replication.Query{
 			Database: "vt_test_keyspace",
-			SQL:      "BEGIN"}},
-		invalidQueryEvent{},
-		xidEvent{},
+			SQL:      "BEGIN"}),
+		replication.NewInvalidQueryEvent(f, s),
+		replication.NewXIDEvent(f, s),
 	}
 	want := "can't get query from binlog event:"
 
@@ -544,29 +428,33 @@ func TestStreamerParseEventsInvalidQuery(t *testing.T) {
 }
 
 func TestStreamerParseEventsRollback(t *testing.T) {
+	f := replication.NewMySQL56BinlogFormat()
+	s := replication.NewFakeBinlogStream()
+	s.ServerID = 62344
+
 	input := []replication.BinlogEvent{
-		rotateEvent{},
-		formatEvent{},
-		gtidEvent{},
-		queryEvent{query: replication.Query{
+		replication.NewRotateEvent(f, s, 0, ""),
+		replication.NewFormatDescriptionEvent(f, s),
+		replication.NewMariaDBGTIDEvent(f, s, replication.MariadbGTID{Domain: 0, Sequence: 0xd}, false /* hasBegin */),
+		replication.NewQueryEvent(f, s, replication.Query{
 			Database: "vt_test_keyspace",
-			SQL:      "BEGIN"}},
-		queryEvent{query: replication.Query{
+			SQL:      "BEGIN"}),
+		replication.NewQueryEvent(f, s, replication.Query{
 			Database: "vt_test_keyspace",
-			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}},
-		queryEvent{query: replication.Query{
+			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}),
+		replication.NewQueryEvent(f, s, replication.Query{
 			Database: "vt_test_keyspace",
-			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}},
-		queryEvent{query: replication.Query{
+			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}),
+		replication.NewQueryEvent(f, s, replication.Query{
 			Database: "vt_test_keyspace",
-			SQL:      "ROLLBACK"}},
-		queryEvent{query: replication.Query{
+			SQL:      "ROLLBACK"}),
+		replication.NewQueryEvent(f, s, replication.Query{
 			Database: "vt_test_keyspace",
-			SQL:      "BEGIN"}},
-		queryEvent{query: replication.Query{
+			SQL:      "BEGIN"}),
+		replication.NewQueryEvent(f, s, replication.Query{
 			Database: "vt_test_keyspace",
-			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}},
-		xidEvent{},
+			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}),
+		replication.NewXIDEvent(f, s),
 	}
 
 	events := make(chan replication.BinlogEvent)
@@ -620,14 +508,18 @@ func TestStreamerParseEventsRollback(t *testing.T) {
 }
 
 func TestStreamerParseEventsDMLWithoutBegin(t *testing.T) {
+	f := replication.NewMySQL56BinlogFormat()
+	s := replication.NewFakeBinlogStream()
+	s.ServerID = 62344
+
 	input := []replication.BinlogEvent{
-		rotateEvent{},
-		formatEvent{},
-		gtidEvent{},
-		queryEvent{query: replication.Query{
+		replication.NewRotateEvent(f, s, 0, ""),
+		replication.NewFormatDescriptionEvent(f, s),
+		replication.NewMariaDBGTIDEvent(f, s, replication.MariadbGTID{Domain: 0, Sequence: 0xd}, false /* hasBegin */),
+		replication.NewQueryEvent(f, s, replication.Query{
 			Database: "vt_test_keyspace",
-			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}},
-		xidEvent{},
+			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}),
+		replication.NewXIDEvent(f, s),
 	}
 
 	events := make(chan replication.BinlogEvent)
@@ -676,22 +568,26 @@ func TestStreamerParseEventsDMLWithoutBegin(t *testing.T) {
 	}
 
 	if !reflect.DeepEqual(got, want) {
-		t.Errorf("binlogConnStreamer.parseEvents(): got %v, want %v", got, want)
+		t.Errorf("binlogConnStreamer.parseEvents(): got:\n%v\nwant:\n%v", got, want)
 	}
 }
 
 func TestStreamerParseEventsBeginWithoutCommit(t *testing.T) {
+	f := replication.NewMySQL56BinlogFormat()
+	s := replication.NewFakeBinlogStream()
+	s.ServerID = 62344
+
 	input := []replication.BinlogEvent{
-		rotateEvent{},
-		formatEvent{},
-		gtidEvent{},
-		queryEvent{query: replication.Query{
+		replication.NewRotateEvent(f, s, 0, ""),
+		replication.NewFormatDescriptionEvent(f, s),
+		replication.NewMariaDBGTIDEvent(f, s, replication.MariadbGTID{Domain: 0, Sequence: 0xd}, false /* hasBegin */),
+		replication.NewQueryEvent(f, s, replication.Query{
 			Database: "vt_test_keyspace",
-			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}},
-		queryEvent{query: replication.Query{
+			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}),
+		replication.NewQueryEvent(f, s, replication.Query{
 			Database: "vt_test_keyspace",
-			SQL:      "BEGIN"}},
-		xidEvent{},
+			SQL:      "BEGIN"}),
+		replication.NewXIDEvent(f, s),
 	}
 
 	events := make(chan replication.BinlogEvent)
@@ -740,23 +636,27 @@ func TestStreamerParseEventsBeginWithoutCommit(t *testing.T) {
 	}
 
 	if !reflect.DeepEqual(got, want) {
-		t.Errorf("binlogConnStreamer.parseEvents(): got %v, want %v", got, want)
+		t.Errorf("binlogConnStreamer.parseEvents(): got:\n%v\nwant:\n%v", got, want)
 	}
 }
 
 func TestStreamerParseEventsSetInsertID(t *testing.T) {
+	f := replication.NewMySQL56BinlogFormat()
+	s := replication.NewFakeBinlogStream()
+	s.ServerID = 62344
+
 	input := []replication.BinlogEvent{
-		rotateEvent{},
-		formatEvent{},
-		gtidEvent{},
-		queryEvent{query: replication.Query{
+		replication.NewRotateEvent(f, s, 0, ""),
+		replication.NewFormatDescriptionEvent(f, s),
+		replication.NewMariaDBGTIDEvent(f, s, replication.MariadbGTID{Domain: 0, Sequence: 0xd}, false /* hasBegin */),
+		replication.NewQueryEvent(f, s, replication.Query{
 			Database: "vt_test_keyspace",
-			SQL:      "BEGIN"}},
-		intVarEvent{name: "INSERT_ID", value: 101},
-		queryEvent{query: replication.Query{
+			SQL:      "BEGIN"}),
+		replication.NewIntVarEvent(f, s, replication.IntVarInsertID, 101),
+		replication.NewQueryEvent(f, s, replication.Query{
 			Database: "vt_test_keyspace",
-			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}},
-		xidEvent{},
+			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}),
+		replication.NewXIDEvent(f, s),
 	}
 
 	events := make(chan replication.BinlogEvent)
@@ -798,17 +698,20 @@ func TestStreamerParseEventsSetInsertID(t *testing.T) {
 }
 
 func TestStreamerParseEventsInvalidIntVar(t *testing.T) {
+	f := replication.NewMySQL56BinlogFormat()
+	s := replication.NewFakeBinlogStream()
+
 	input := []replication.BinlogEvent{
-		rotateEvent{},
-		formatEvent{},
-		queryEvent{query: replication.Query{
+		replication.NewRotateEvent(f, s, 0, ""),
+		replication.NewFormatDescriptionEvent(f, s),
+		replication.NewQueryEvent(f, s, replication.Query{
 			Database: "vt_test_keyspace",
-			SQL:      "BEGIN"}},
-		invalidIntVarEvent{},
-		queryEvent{query: replication.Query{
+			SQL:      "BEGIN"}),
+		replication.NewIntVarEvent(f, s, replication.IntVarInvalidInt, 0), // Invalid intvar.
+		replication.NewQueryEvent(f, s, replication.Query{
 			Database: "vt_test_keyspace",
-			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}},
-		xidEvent{},
+			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}),
+		replication.NewXIDEvent(f, s),
 	}
 	want := "can't parse INTVAR_EVENT:"
 
@@ -831,20 +734,24 @@ func TestStreamerParseEventsInvalidIntVar(t *testing.T) {
 }
 
 func TestStreamerParseEventsOtherDB(t *testing.T) {
+	f := replication.NewMySQL56BinlogFormat()
+	s := replication.NewFakeBinlogStream()
+	s.ServerID = 62344
+
 	input := []replication.BinlogEvent{
-		rotateEvent{},
-		formatEvent{},
-		gtidEvent{},
-		queryEvent{query: replication.Query{
+		replication.NewRotateEvent(f, s, 0, ""),
+		replication.NewFormatDescriptionEvent(f, s),
+		replication.NewMariaDBGTIDEvent(f, s, replication.MariadbGTID{Domain: 0, Sequence: 0xd}, false /* hasBegin */),
+		replication.NewQueryEvent(f, s, replication.Query{
 			Database: "vt_test_keyspace",
-			SQL:      "BEGIN"}},
-		queryEvent{query: replication.Query{
+			SQL:      "BEGIN"}),
+		replication.NewQueryEvent(f, s, replication.Query{
 			Database: "other",
-			SQL:      "INSERT INTO test values (3, 4)"}},
-		queryEvent{query: replication.Query{
+			SQL:      "INSERT INTO test values (3, 4)"}),
+		replication.NewQueryEvent(f, s, replication.Query{
 			Database: "vt_test_keyspace",
-			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}},
-		xidEvent{},
+			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}),
+		replication.NewXIDEvent(f, s),
 	}
 
 	events := make(chan replication.BinlogEvent)
@@ -885,20 +792,24 @@ func TestStreamerParseEventsOtherDB(t *testing.T) {
 }
 
 func TestStreamerParseEventsOtherDBBegin(t *testing.T) {
+	f := replication.NewMySQL56BinlogFormat()
+	s := replication.NewFakeBinlogStream()
+	s.ServerID = 62344
+
 	input := []replication.BinlogEvent{
-		rotateEvent{},
-		formatEvent{},
-		gtidEvent{},
-		queryEvent{query: replication.Query{
+		replication.NewRotateEvent(f, s, 0, ""),
+		replication.NewFormatDescriptionEvent(f, s),
+		replication.NewMariaDBGTIDEvent(f, s, replication.MariadbGTID{Domain: 0, Sequence: 0xd}, false /* hasBegin */),
+		replication.NewQueryEvent(f, s, replication.Query{
 			Database: "other",
-			SQL:      "BEGIN"}}, // Check that this doesn't get filtered out.
-		queryEvent{query: replication.Query{
+			SQL:      "BEGIN"}), // Check that this doesn't get filtered out.
+		replication.NewQueryEvent(f, s, replication.Query{
 			Database: "other",
-			SQL:      "INSERT INTO test values (3, 4)"}},
-		queryEvent{query: replication.Query{
+			SQL:      "INSERT INTO test values (3, 4)"}),
+		replication.NewQueryEvent(f, s, replication.Query{
 			Database: "vt_test_keyspace",
-			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}},
-		xidEvent{},
+			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}),
+		replication.NewXIDEvent(f, s),
 	}
 
 	events := make(chan replication.BinlogEvent)
@@ -939,18 +850,21 @@ func TestStreamerParseEventsOtherDBBegin(t *testing.T) {
 }
 
 func TestStreamerParseEventsBeginAgain(t *testing.T) {
+	f := replication.NewMySQL56BinlogFormat()
+	s := replication.NewFakeBinlogStream()
+
 	input := []replication.BinlogEvent{
-		rotateEvent{},
-		formatEvent{},
-		queryEvent{query: replication.Query{
+		replication.NewRotateEvent(f, s, 0, ""),
+		replication.NewFormatDescriptionEvent(f, s),
+		replication.NewQueryEvent(f, s, replication.Query{
 			Database: "vt_test_keyspace",
-			SQL:      "BEGIN"}},
-		queryEvent{query: replication.Query{
+			SQL:      "BEGIN"}),
+		replication.NewQueryEvent(f, s, replication.Query{
 			Database: "vt_test_keyspace",
-			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}},
-		queryEvent{query: replication.Query{
+			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */"}),
+		replication.NewQueryEvent(f, s, replication.Query{
 			Database: "vt_test_keyspace",
-			SQL:      "BEGIN"}},
+			SQL:      "BEGIN"}),
 	}
 
 	events := make(chan replication.BinlogEvent)
@@ -971,13 +885,23 @@ func TestStreamerParseEventsBeginAgain(t *testing.T) {
 	}
 }
 
+// TestStreamerParseEventsMariadbStandaloneGTID tests a MariaDB server
+// with no checksum, using a GTID with a Begin.
 func TestStreamerParseEventsMariadbBeginGTID(t *testing.T) {
+	f := replication.NewMariaDBBinlogFormat()
+	s := replication.NewFakeBinlogStream()
+	s.ServerID = 62344
+	s.Timestamp = 1409892744
+
 	input := []replication.BinlogEvent{
-		mariadbRotateEvent,
-		mariadbFormatEvent,
-		mariadbBeginGTIDEvent,
-		mariadbInsertEvent,
-		mariadbXidEvent,
+		replication.NewRotateEvent(f, s, 4, "filename.0001"),
+		replication.NewFormatDescriptionEvent(f, s),
+		replication.NewMariaDBGTIDEvent(f, s, replication.MariadbGTID{Domain: 0, Sequence: 10}, true /* hasBegin */),
+		replication.NewQueryEvent(f, s, replication.Query{
+			Charset: &binlogdatapb.Charset{Client: 33, Conn: 33, Server: 33},
+			SQL:     "insert into vt_insert_test(msg) values ('test 0') /* _stream vt_insert_test (id ) (null ); */",
+		}),
+		replication.NewXIDEvent(f, s),
 	}
 
 	events := make(chan replication.BinlogEvent)
@@ -985,8 +909,16 @@ func TestStreamerParseEventsMariadbBeginGTID(t *testing.T) {
 	want := []binlogdatapb.BinlogTransaction{
 		{
 			Statements: []*binlogdatapb.BinlogTransaction_Statement{
-				{Category: binlogdatapb.BinlogTransaction_Statement_BL_SET, Charset: charset, Sql: []byte("SET TIMESTAMP=1409892744")},
-				{Category: binlogdatapb.BinlogTransaction_Statement_BL_INSERT, Charset: charset, Sql: []byte("insert into vt_insert_test(msg) values ('test 0') /* _stream vt_insert_test (id ) (null ); */")},
+				{
+					Category: binlogdatapb.BinlogTransaction_Statement_BL_SET,
+					Charset:  &binlogdatapb.Charset{Client: 33, Conn: 33, Server: 33},
+					Sql:      []byte("SET TIMESTAMP=1409892744"),
+				},
+				{
+					Category: binlogdatapb.BinlogTransaction_Statement_BL_INSERT,
+					Charset:  &binlogdatapb.Charset{Client: 33, Conn: 33, Server: 33},
+					Sql:      []byte("insert into vt_insert_test(msg) values ('test 0') /* _stream vt_insert_test (id ) (null ); */"),
+				},
 			},
 			EventToken: &querypb.EventToken{
 				Timestamp: 1409892744,
@@ -1013,16 +945,26 @@ func TestStreamerParseEventsMariadbBeginGTID(t *testing.T) {
 	}
 
 	if !reflect.DeepEqual(got, want) {
-		t.Errorf("binlogConnStreamer.parseEvents(): got %v, want %v", got, want)
+		t.Errorf("binlogConnStreamer.parseEvents(): got:\n%v\nwant:\n%v", got, want)
 	}
 }
 
+// TestStreamerParseEventsMariadbStandaloneGTID tests a MariaDB server
+// with no checksum, using a standalone GTID.
 func TestStreamerParseEventsMariadbStandaloneGTID(t *testing.T) {
+	f := replication.NewMariaDBBinlogFormat()
+	s := replication.NewFakeBinlogStream()
+	s.ServerID = 62344
+	s.Timestamp = 1409892744
+
 	input := []replication.BinlogEvent{
-		mariadbRotateEvent,
-		mariadbFormatEvent,
-		mariadbStandaloneGTIDEvent,
-		mariadbCreateEvent,
+		replication.NewRotateEvent(f, s, 4, "filename.0001"),
+		replication.NewFormatDescriptionEvent(f, s),
+		replication.NewMariaDBGTIDEvent(f, s, replication.MariadbGTID{Domain: 0, Sequence: 9}, false /* hasBegin */),
+		replication.NewQueryEvent(f, s, replication.Query{
+			Charset: &binlogdatapb.Charset{Client: 8, Conn: 8, Server: 33},
+			SQL:     "create table if not exists vt_insert_test (\nid bigint auto_increment,\nmsg varchar(64),\nprimary key (id)\n) Engine=InnoDB",
+		}),
 	}
 
 	events := make(chan replication.BinlogEvent)
@@ -1058,7 +1000,7 @@ func TestStreamerParseEventsMariadbStandaloneGTID(t *testing.T) {
 	}
 
 	if !reflect.DeepEqual(got, want) {
-		t.Errorf("binlogConnStreamer.parseEvents(): got %v, want %v", got, want)
+		t.Errorf("binlogConnStreamer.parseEvents(): got:\n%v\nwant:\n%v", got, want)
 	}
 }
 

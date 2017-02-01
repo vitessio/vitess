@@ -9,6 +9,7 @@ import (
 
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/sqlparser"
+	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 	"github.com/youtube/vitess/go/vt/tabletserver/splitquery/splitquery_testing"
 )
 
@@ -135,8 +136,7 @@ func TestEqualSplitsAlgorithm(t *testing.T) {
 	// singleTest is a function that executes a single-test.
 	singleTest := func(testCase *equalSplitsAlgorithmTestCaseType) {
 		splitParams, err := NewSplitParamsGivenSplitCount(
-			"select * from test_table where int_col > 5",
-			/* bindVariables */ nil,
+			querytypes.BoundQuery{Sql: "select * from test_table where int_col > 5"},
 			[]sqlparser.ColIdent{sqlparser.NewColIdent(testCase.SplitColumn)},
 			testCase.SplitCount,
 			getTestSchema(),

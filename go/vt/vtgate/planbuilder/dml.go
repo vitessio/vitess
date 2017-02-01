@@ -139,7 +139,7 @@ func getDMLRouting(where *sqlparser.Where, route *engine.Route) error {
 // getMatch returns the matched value if there is an equality
 // constraint on the specified column that can be used to
 // decide on a route.
-func getMatch(node sqlparser.BoolExpr, col sqlparser.ColIdent) interface{} {
+func getMatch(node sqlparser.Expr, col sqlparser.ColIdent) interface{} {
 	filters := splitAndExpression(nil, node)
 	for _, filter := range filters {
 		comparison, ok := filter.(*sqlparser.ComparisonExpr)
@@ -164,7 +164,7 @@ func getMatch(node sqlparser.BoolExpr, col sqlparser.ColIdent) interface{} {
 	return nil
 }
 
-func nameMatch(node sqlparser.ValExpr, col sqlparser.ColIdent) bool {
+func nameMatch(node sqlparser.Expr, col sqlparser.ColIdent) bool {
 	colname, ok := node.(*sqlparser.ColName)
 	return ok && colname.Name.Equal(col)
 }

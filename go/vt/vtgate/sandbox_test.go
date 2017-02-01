@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/youtube/vitess/go/vt/key"
+	"github.com/youtube/vitess/go/vt/tabletserver/queryservice"
 	"github.com/youtube/vitess/go/vt/tabletserver/sandboxconn"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -260,7 +261,7 @@ func (sct *sandboxTopo) WatchSrvVSchema(ctx context.Context, cell string) (*topo
 	}, make(chan *topo.WatchSrvVSchemaData), func() {}
 }
 
-func sandboxDialer(tablet *topodatapb.Tablet, timeout time.Duration) (tabletconn.TabletConn, error) {
+func sandboxDialer(tablet *topodatapb.Tablet, timeout time.Duration) (queryservice.QueryService, error) {
 	sand := getSandbox(tablet.Keyspace)
 	sand.sandmu.Lock()
 	defer sand.sandmu.Unlock()

@@ -1,5 +1,8 @@
 package com.flipkart.vitess.util;
 
+import com.youtube.vitess.proto.Query;
+import com.youtube.vitess.proto.Topodata;
+
 /**
  * Created by harshit.gangal on 25/01/16.
  */
@@ -15,7 +18,7 @@ public class Constants {
     public static final String VITESS_TABLET_TYPE =
         "Tablet Type to which Vitess will connect(master, replica, rdonly)";
     public static final String DEFAULT_PORT = "15991";
-    public static final String DEFAULT_TABLET_TYPE = "MASTER";
+    public static final Topodata.TabletType DEFAULT_TABLET_TYPE = Topodata.TabletType.MASTER;
     public static final long CONNECTION_TIMEOUT = 30000;
     public static final String LITERAL_V = "v";
     public static final String LITERAL_SINGLE_QUOTE = "'";
@@ -30,7 +33,7 @@ public class Constants {
     public static final Constants.QueryExecuteType DEFAULT_EXECUTE_TYPE = QueryExecuteType.SIMPLE;
     public static final String EXECUTE_TYPE_DESC = "Query execution type: simple or stream \n";
     public static final String USERNAME_DESC = "Username used for ACL validation \n";
-
+    public static final Query.ExecuteOptions.IncludedFields DEFAULT_INCLUDED_FIELDS = Query.ExecuteOptions.IncludedFields.ALL;
 
     private Constants() {
     }
@@ -100,9 +103,9 @@ public class Constants {
         public static final String USERNAME = "userName";
         public static final String EXECUTE_TYPE = "executeType";
         public static final String TWOPC_ENABLED = "twopcEnabled";
-        
+
 	public static final String USE_SSL = "useSSL";
-        
+
 	public static final String KEYSTORE = "keyStore";
         public static final String KEYSTORE_PASSWORD = "keyStorePassword";
         public static final String KEY_ALIAS = "keyAlias";
@@ -118,6 +121,7 @@ public class Constants {
         public static final String TRUSTSTORE_FULL = "javax.net.ssl.trustStore";
         public static final String TRUSTSTORE_PASSWORD_FULL = "javax.net.ssl.trustStorePassword";
         public static final String TRUSTSTORE_ALIAS_FULL = "javax.net.ssl.trustAlias";
+        public static final String INCLUDED_FIELDS = "includedFields";
     }
 
 

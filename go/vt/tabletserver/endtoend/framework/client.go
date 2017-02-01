@@ -184,3 +184,20 @@ func (client *QueryClient) ExecuteBatch(queries []querytypes.BoundQuery, asTrans
 		&querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL},
 	)
 }
+
+// MessageStream streams messages from the message table.
+func (client *QueryClient) MessageStream(name string, callback func(*sqltypes.Result) error) (err error) {
+	return client.server.MessageStream(client.ctx, &client.target, name, callback)
+}
+
+// MessageAck acks messages
+func (client *QueryClient) MessageAck(name string, ids []string) (int64, error) {
+	bids := make([]*querypb.Value, 0, len(ids))
+	for _, id := range ids {
+		bids = append(bids, &querypb.Value{
+			Type:  sqltypes.VarChar,
+			Value: []byte(id),
+		})
+	}
+	return client.server.MessageAck(client.ctx, &client.target, name, bids)
+}

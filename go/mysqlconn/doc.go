@@ -88,4 +88,20 @@ We should add the following protections for the server:
   Should start during initial handshake, maybe have a shorter value during
   handshake.
 
+--
+NUM_FLAG flag:
+
+It is added by the C client library if the field is numerical.
+
+  if (IS_NUM(client_field->type))
+    client_field->flags|= NUM_FLAG;
+
+This is somewhat useless. Also, that flag overlaps with GROUP_FLAG
+(which seems to be used by the server only for temporary tables in
+some cases, so it's not a big deal).
+
+But eventually, we probably want to remove it entirely, as it is not
+transmitted over the wire. For now, we keep it for backward
+compatibility with the C client.
+
 */

@@ -53,8 +53,10 @@ func verifyQueryPartsEqual(t *testing.T, expected, got []querytypes.QuerySplit) 
 
 func TestSplit1SplitColumn(t *testing.T) {
 	splitParams, err := NewSplitParamsGivenNumRowsPerQueryPart(
-		"select * from test_table",
-		map[string]interface{}{},
+		querytypes.BoundQuery{
+			Sql:           "select * from test_table",
+			BindVariables: map[string]interface{}{},
+		},
 		[]sqlparser.ColIdent{sqlparser.NewColIdent("id")},
 		1000, // numRowsPerQueryPart
 		getTestSchema())
@@ -115,8 +117,10 @@ func TestSplit1SplitColumn(t *testing.T) {
 
 func TestSplit2SplitColumns(t *testing.T) {
 	splitParams, err := NewSplitParamsGivenNumRowsPerQueryPart(
-		"select * from test_table",
-		map[string]interface{}{},
+		querytypes.BoundQuery{
+			Sql:           "select * from test_table",
+			BindVariables: map[string]interface{}{},
+		},
 		[]sqlparser.ColIdent{
 			sqlparser.NewColIdent("id"),
 			sqlparser.NewColIdent("user_id"),
@@ -193,8 +197,10 @@ func TestSplit2SplitColumns(t *testing.T) {
 
 func TestSplit3SplitColumns(t *testing.T) {
 	splitParams, err := NewSplitParamsGivenNumRowsPerQueryPart(
-		"select * from test_table",
-		map[string]interface{}{},
+		querytypes.BoundQuery{
+			Sql:           "select * from test_table",
+			BindVariables: map[string]interface{}{},
+		},
 		[]sqlparser.ColIdent{
 			sqlparser.NewColIdent("id"),
 			sqlparser.NewColIdent("user_id"),
@@ -277,8 +283,10 @@ func TestSplit3SplitColumns(t *testing.T) {
 
 func TestSplitWithWhereClause(t *testing.T) {
 	splitParams, err := NewSplitParamsGivenNumRowsPerQueryPart(
-		"select * from test_table where name!='foo'",
-		map[string]interface{}{},
+		querytypes.BoundQuery{
+			Sql:           "select * from test_table where name!='foo'",
+			BindVariables: map[string]interface{}{},
+		},
 		[]sqlparser.ColIdent{
 			sqlparser.NewColIdent("id"),
 			sqlparser.NewColIdent("user_id"),
@@ -355,8 +363,10 @@ func TestSplitWithWhereClause(t *testing.T) {
 
 func TestSplitWithExistingBindVariables(t *testing.T) {
 	splitParams, err := NewSplitParamsGivenNumRowsPerQueryPart(
-		"select * from test_table",
-		map[string]interface{}{"foo": int64(100)},
+		querytypes.BoundQuery{
+			Sql:           "select * from test_table",
+			BindVariables: map[string]interface{}{"foo": int64(100)},
+		},
 		[]sqlparser.ColIdent{
 			sqlparser.NewColIdent("id"),
 			sqlparser.NewColIdent("user_id"),
@@ -437,8 +447,10 @@ func TestSplitWithExistingBindVariables(t *testing.T) {
 
 func TestSplitWithEmptyBoundaryList(t *testing.T) {
 	splitParams, err := NewSplitParamsGivenNumRowsPerQueryPart(
-		"select * from test_table",
-		map[string]interface{}{"foo": int64(100)},
+		querytypes.BoundQuery{
+			Sql:           "select * from test_table",
+			BindVariables: map[string]interface{}{"foo": int64(100)},
+		},
 		[]sqlparser.ColIdent{
 			sqlparser.NewColIdent("id"),
 			sqlparser.NewColIdent("user_id"),
@@ -471,8 +483,10 @@ func TestSplitWithEmptyBoundaryList(t *testing.T) {
 
 func TestWithRealEqualSplits(t *testing.T) {
 	splitParams, err := NewSplitParamsGivenSplitCount(
-		"select * from test_table",
-		map[string]interface{}{},
+		querytypes.BoundQuery{
+			Sql:           "select * from test_table",
+			BindVariables: map[string]interface{}{},
+		},
 		[]sqlparser.ColIdent{sqlparser.NewColIdent("id"), sqlparser.NewColIdent("user_id")},
 		3, /* split_count */
 		getTestSchema())

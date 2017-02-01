@@ -4,32 +4,22 @@
     "Columns": [
       {
         "Name": "eid",
-        "Category": 1,
-        "IsAuto": false,
         "Default": 0
       },
       {
         "Name": "id",
-        "Category": 1,
-        "IsAuto": false,
         "Default": 0
       },
       {
         "Name": "name",
-        "Category": 0,
-        "IsAuto": false,
         "Default": "MA=="
       },
       {
         "Name": "foo",
-        "Category": 0,
-        "IsAuto": false,
         "Default": "MA=="
       },
       {
         "Name": "CamelCase",
-        "Category": 0,
-        "IsAuto": false,
         "Default": "MA=="
       }
     ],
@@ -107,14 +97,10 @@
     "Columns": [
       {
         "Name": "eid",
-        "Category": 1,
-        "IsAuto": false,
         "Default": 0
       },
       {
         "Name": "id",
-        "Category": 1,
-        "IsAuto": false,
         "Default": 0
       }
     ],
@@ -206,14 +192,10 @@
     "Columns": [
       {
         "Name": "eid",
-        "Category": 1,
-        "IsAuto": false,
         "Default": 0
       },
       {
         "Name": "id",
-        "Category": 1,
-        "IsAuto": false,
         "Default": 0
       }
     ],
@@ -226,26 +208,18 @@
     "Columns": [
       {
         "Name": "name",
-        "Category": 2,
-        "IsAuto": false,
         "Default": "MA=="
       },
       {
         "Name": "id",
-        "Category": 1,
-        "IsAuto": false,
         "Default": 0
       },
       {
         "Name": "foo",
-        "Category": 0,
-        "IsAuto": false,
         "Default": "MA=="
       },
       {
         "Name": "bar",
-        "Category": 0,
-        "IsAuto": false,
         "Default": "MA=="
       }
     ],
@@ -310,7 +284,68 @@
   },
   {
     "Name": "seq",
+    "Indexes": [
+      {
+        "Name": "PRIMARY",
+        "Columns": [
+          "id"
+        ],
+        "Cardinality": [
+          1
+        ],
+        "DataColumns": [
+        ]
+      }
+    ],
+    "PKColumns": [
+      0
+    ],
     "Type": 1
+  },
+  {
+    "Name": "msg",
+    "Columns": [
+      {
+        "Name": "time_scheduled"
+      },
+      {
+        "Name": "id"
+      },
+      {
+        "Name": "time_next"
+      },
+      {
+        "Name": "epoch"
+      },
+      {
+        "Name": "time_created"
+      },
+      {
+        "Name": "time_acked"
+      },
+      {
+        "Name": "message"
+      }
+    ],
+    "Indexes": [
+      {
+        "Name": "PRIMARY",
+        "Columns": [
+          "time_scheduled",
+          "id"
+        ],
+        "Cardinality": [
+          1
+        ],
+        "DataColumns": [
+        ]
+      }
+    ],
+    "PKColumns": [
+      0,
+      1
+    ],
+    "Type": 2
   },
   {
     "Name": "dual",

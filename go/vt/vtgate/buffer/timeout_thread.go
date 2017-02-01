@@ -103,7 +103,6 @@ func (tt *timeoutThread) waitForEntry(e *entry) bool {
 	case <-windowExceeded.C:
 		// Entry expired. Evict it and then get the next entry.
 		tt.sb.evictOldestEntry(e)
-		requestsWindowExceeded.Add(tt.sb.statsKey, 1)
 		return false
 	}
 }

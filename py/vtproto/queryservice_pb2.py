@@ -20,7 +20,7 @@ DESCRIPTOR = _descriptor.FileDescriptor(
   name='queryservice.proto',
   package='queryservice',
   syntax='proto3',
-  serialized_pb=_b('\n\x12queryservice.proto\x12\x0cqueryservice\x1a\x0bquery.proto2\x92\x0b\n\x05Query\x12:\n\x07\x45xecute\x12\x15.query.ExecuteRequest\x1a\x16.query.ExecuteResponse\"\x00\x12I\n\x0c\x45xecuteBatch\x12\x1a.query.ExecuteBatchRequest\x1a\x1b.query.ExecuteBatchResponse\"\x00\x12N\n\rStreamExecute\x12\x1b.query.StreamExecuteRequest\x1a\x1c.query.StreamExecuteResponse\"\x00\x30\x01\x12\x34\n\x05\x42\x65gin\x12\x13.query.BeginRequest\x1a\x14.query.BeginResponse\"\x00\x12\x37\n\x06\x43ommit\x12\x14.query.CommitRequest\x1a\x15.query.CommitResponse\"\x00\x12=\n\x08Rollback\x12\x16.query.RollbackRequest\x1a\x17.query.RollbackResponse\"\x00\x12:\n\x07Prepare\x12\x15.query.PrepareRequest\x1a\x16.query.PrepareResponse\"\x00\x12O\n\x0e\x43ommitPrepared\x12\x1c.query.CommitPreparedRequest\x1a\x1d.query.CommitPreparedResponse\"\x00\x12U\n\x10RollbackPrepared\x12\x1e.query.RollbackPreparedRequest\x1a\x1f.query.RollbackPreparedResponse\"\x00\x12X\n\x11\x43reateTransaction\x12\x1f.query.CreateTransactionRequest\x1a .query.CreateTransactionResponse\"\x00\x12\x46\n\x0bStartCommit\x12\x19.query.StartCommitRequest\x1a\x1a.query.StartCommitResponse\"\x00\x12\x46\n\x0bSetRollback\x12\x19.query.SetRollbackRequest\x1a\x1a.query.SetRollbackResponse\"\x00\x12^\n\x13\x43oncludeTransaction\x12!.query.ConcludeTransactionRequest\x1a\".query.ConcludeTransactionResponse\"\x00\x12R\n\x0fReadTransaction\x12\x1d.query.ReadTransactionRequest\x1a\x1e.query.ReadTransactionResponse\"\x00\x12I\n\x0c\x42\x65ginExecute\x12\x1a.query.BeginExecuteRequest\x1a\x1b.query.BeginExecuteResponse\"\x00\x12X\n\x11\x42\x65ginExecuteBatch\x12\x1f.query.BeginExecuteBatchRequest\x1a .query.BeginExecuteBatchResponse\"\x00\x12\x43\n\nSplitQuery\x12\x18.query.SplitQueryRequest\x1a\x19.query.SplitQueryResponse\"\x00\x12K\n\x0cStreamHealth\x12\x1a.query.StreamHealthRequest\x1a\x1b.query.StreamHealthResponse\"\x00\x30\x01\x12K\n\x0cUpdateStream\x12\x1a.query.UpdateStreamRequest\x1a\x1b.query.UpdateStreamResponse\"\x00\x30\x01\x62\x06proto3')
+  serialized_pb=_b('\n\x12queryservice.proto\x12\x0cqueryservice\x1a\x0bquery.proto2\xa7\x0c\n\x05Query\x12:\n\x07\x45xecute\x12\x15.query.ExecuteRequest\x1a\x16.query.ExecuteResponse\"\x00\x12I\n\x0c\x45xecuteBatch\x12\x1a.query.ExecuteBatchRequest\x1a\x1b.query.ExecuteBatchResponse\"\x00\x12N\n\rStreamExecute\x12\x1b.query.StreamExecuteRequest\x1a\x1c.query.StreamExecuteResponse\"\x00\x30\x01\x12\x34\n\x05\x42\x65gin\x12\x13.query.BeginRequest\x1a\x14.query.BeginResponse\"\x00\x12\x37\n\x06\x43ommit\x12\x14.query.CommitRequest\x1a\x15.query.CommitResponse\"\x00\x12=\n\x08Rollback\x12\x16.query.RollbackRequest\x1a\x17.query.RollbackResponse\"\x00\x12:\n\x07Prepare\x12\x15.query.PrepareRequest\x1a\x16.query.PrepareResponse\"\x00\x12O\n\x0e\x43ommitPrepared\x12\x1c.query.CommitPreparedRequest\x1a\x1d.query.CommitPreparedResponse\"\x00\x12U\n\x10RollbackPrepared\x12\x1e.query.RollbackPreparedRequest\x1a\x1f.query.RollbackPreparedResponse\"\x00\x12X\n\x11\x43reateTransaction\x12\x1f.query.CreateTransactionRequest\x1a .query.CreateTransactionResponse\"\x00\x12\x46\n\x0bStartCommit\x12\x19.query.StartCommitRequest\x1a\x1a.query.StartCommitResponse\"\x00\x12\x46\n\x0bSetRollback\x12\x19.query.SetRollbackRequest\x1a\x1a.query.SetRollbackResponse\"\x00\x12^\n\x13\x43oncludeTransaction\x12!.query.ConcludeTransactionRequest\x1a\".query.ConcludeTransactionResponse\"\x00\x12R\n\x0fReadTransaction\x12\x1d.query.ReadTransactionRequest\x1a\x1e.query.ReadTransactionResponse\"\x00\x12I\n\x0c\x42\x65ginExecute\x12\x1a.query.BeginExecuteRequest\x1a\x1b.query.BeginExecuteResponse\"\x00\x12X\n\x11\x42\x65ginExecuteBatch\x12\x1f.query.BeginExecuteBatchRequest\x1a .query.BeginExecuteBatchResponse\"\x00\x12N\n\rMessageStream\x12\x1b.query.MessageStreamRequest\x1a\x1c.query.MessageStreamResponse\"\x00\x30\x01\x12\x43\n\nMessageAck\x12\x18.query.MessageAckRequest\x1a\x19.query.MessageAckResponse\"\x00\x12\x43\n\nSplitQuery\x12\x18.query.SplitQueryRequest\x1a\x19.query.SplitQueryResponse\"\x00\x12K\n\x0cStreamHealth\x12\x1a.query.StreamHealthRequest\x1a\x1b.query.StreamHealthResponse\"\x00\x30\x01\x12K\n\x0cUpdateStream\x12\x1a.query.UpdateStreamRequest\x1a\x1b.query.UpdateStreamResponse\"\x00\x30\x01\x62\x06proto3')
   ,
   dependencies=[query__pb2.DESCRIPTOR,])
 _sym_db.RegisterFileDescriptor(DESCRIPTOR)
@@ -125,6 +125,16 @@ class QueryStub(object):
         '/queryservice.Query/BeginExecuteBatch',
         request_serializer=query__pb2.BeginExecuteBatchRequest.SerializeToString,
         response_deserializer=query__pb2.BeginExecuteBatchResponse.FromString,
+        )
+    self.MessageStream = channel.unary_stream(
+        '/queryservice.Query/MessageStream',
+        request_serializer=query__pb2.MessageStreamRequest.SerializeToString,
+        response_deserializer=query__pb2.MessageStreamResponse.FromString,
+        )
+    self.MessageAck = channel.unary_unary(
+        '/queryservice.Query/MessageAck',
+        request_serializer=query__pb2.MessageAckRequest.SerializeToString,
+        response_deserializer=query__pb2.MessageAckResponse.FromString,
         )
     self.SplitQuery = channel.unary_unary(
         '/queryservice.Query/SplitQuery',
@@ -264,6 +274,20 @@ class QueryServicer(object):
     context.set_details('Method not implemented!')
     raise NotImplementedError('Method not implemented!')
 
+  def MessageStream(self, request, context):
+    """MessageStream streams messages from a message table.
+    """
+    context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+    context.set_details('Method not implemented!')
+    raise NotImplementedError('Method not implemented!')
+
+  def MessageAck(self, request, context):
+    """MessageAck acks messages for a table.
+    """
+    context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+    context.set_details('Method not implemented!')
+    raise NotImplementedError('Method not implemented!')
+
   def SplitQuery(self, request, context):
     """SplitQuery is the API to facilitate MapReduce-type iterations
     over large data sets (like full table dumps).
@@ -370,6 +394,16 @@ def add_QueryServicer_to_server(servicer, server):
           request_deserializer=query__pb2.BeginExecuteBatchRequest.FromString,
           response_serializer=query__pb2.BeginExecuteBatchResponse.SerializeToString,
       ),
+      'MessageStream': grpc.unary_stream_rpc_method_handler(
+          servicer.MessageStream,
+          request_deserializer=query__pb2.MessageStreamRequest.FromString,
+          response_serializer=query__pb2.MessageStreamResponse.SerializeToString,
+      ),
+      'MessageAck': grpc.unary_unary_rpc_method_handler(
+          servicer.MessageAck,
+          request_deserializer=query__pb2.MessageAckRequest.FromString,
+          response_serializer=query__pb2.MessageAckResponse.SerializeToString,
+      ),
       'SplitQuery': grpc.unary_unary_rpc_method_handler(
           servicer.SplitQuery,
           request_deserializer=query__pb2.SplitQueryRequest.FromString,
@@ -461,6 +495,14 @@ class BetaQueryServicer(object):
     context.code(beta_interfaces.StatusCode.UNIMPLEMENTED)
   def BeginExecuteBatch(self, request, context):
     """BeginExecuteBatch executes a begin and a list of queries.
+    """
+    context.code(beta_interfaces.StatusCode.UNIMPLEMENTED)
+  def MessageStream(self, request, context):
+    """MessageStream streams messages from a message table.
+    """
+    context.code(beta_interfaces.StatusCode.UNIMPLEMENTED)
+  def MessageAck(self, request, context):
+    """MessageAck acks messages for a table.
     """
     context.code(beta_interfaces.StatusCode.UNIMPLEMENTED)
   def SplitQuery(self, request, context):
@@ -566,6 +608,15 @@ class BetaQueryStub(object):
     """
     raise NotImplementedError()
   BeginExecuteBatch.future = None
+  def MessageStream(self, request, timeout, metadata=None, with_call=False, protocol_options=None):
+    """MessageStream streams messages from a message table.
+    """
+    raise NotImplementedError()
+  def MessageAck(self, request, timeout, metadata=None, with_call=False, protocol_options=None):
+    """MessageAck acks messages for a table.
+    """
+    raise NotImplementedError()
+  MessageAck.future = None
   def SplitQuery(self, request, timeout, metadata=None, with_call=False, protocol_options=None):
     """SplitQuery is the API to facilitate MapReduce-type iterations
     over large data sets (like full table dumps).
@@ -594,6 +645,8 @@ def beta_create_Query_server(servicer, pool=None, pool_size=None, default_timeou
     ('queryservice.Query', 'CreateTransaction'): query__pb2.CreateTransactionRequest.FromString,
     ('queryservice.Query', 'Execute'): query__pb2.ExecuteRequest.FromString,
     ('queryservice.Query', 'ExecuteBatch'): query__pb2.ExecuteBatchRequest.FromString,
+    ('queryservice.Query', 'MessageAck'): query__pb2.MessageAckRequest.FromString,
+    ('queryservice.Query', 'MessageStream'): query__pb2.MessageStreamRequest.FromString,
     ('queryservice.Query', 'Prepare'): query__pb2.PrepareRequest.FromString,
     ('queryservice.Query', 'ReadTransaction'): query__pb2.ReadTransactionRequest.FromString,
     ('queryservice.Query', 'Rollback'): query__pb2.RollbackRequest.FromString,
@@ -615,6 +668,8 @@ def beta_create_Query_server(servicer, pool=None, pool_size=None, default_timeou
     ('queryservice.Query', 'CreateTransaction'): query__pb2.CreateTransactionResponse.SerializeToString,
     ('queryservice.Query', 'Execute'): query__pb2.ExecuteResponse.SerializeToString,
     ('queryservice.Query', 'ExecuteBatch'): query__pb2.ExecuteBatchResponse.SerializeToString,
+    ('queryservice.Query', 'MessageAck'): query__pb2.MessageAckResponse.SerializeToString,
+    ('queryservice.Query', 'MessageStream'): query__pb2.MessageStreamResponse.SerializeToString,
     ('queryservice.Query', 'Prepare'): query__pb2.PrepareResponse.SerializeToString,
     ('queryservice.Query', 'ReadTransaction'): query__pb2.ReadTransactionResponse.SerializeToString,
     ('queryservice.Query', 'Rollback'): query__pb2.RollbackResponse.SerializeToString,
@@ -636,6 +691,8 @@ def beta_create_Query_server(servicer, pool=None, pool_size=None, default_timeou
     ('queryservice.Query', 'CreateTransaction'): face_utilities.unary_unary_inline(servicer.CreateTransaction),
     ('queryservice.Query', 'Execute'): face_utilities.unary_unary_inline(servicer.Execute),
     ('queryservice.Query', 'ExecuteBatch'): face_utilities.unary_unary_inline(servicer.ExecuteBatch),
+    ('queryservice.Query', 'MessageAck'): face_utilities.unary_unary_inline(servicer.MessageAck),
+    ('queryservice.Query', 'MessageStream'): face_utilities.unary_stream_inline(servicer.MessageStream),
     ('queryservice.Query', 'Prepare'): face_utilities.unary_unary_inline(servicer.Prepare),
     ('queryservice.Query', 'ReadTransaction'): face_utilities.unary_unary_inline(servicer.ReadTransaction),
     ('queryservice.Query', 'Rollback'): face_utilities.unary_unary_inline(servicer.Rollback),
@@ -662,6 +719,8 @@ def beta_create_Query_stub(channel, host=None, metadata_transformer=None, pool=N
     ('queryservice.Query', 'CreateTransaction'): query__pb2.CreateTransactionRequest.SerializeToString,
     ('queryservice.Query', 'Execute'): query__pb2.ExecuteRequest.SerializeToString,
     ('queryservice.Query', 'ExecuteBatch'): query__pb2.ExecuteBatchRequest.SerializeToString,
+    ('queryservice.Query', 'MessageAck'): query__pb2.MessageAckRequest.SerializeToString,
+    ('queryservice.Query', 'MessageStream'): query__pb2.MessageStreamRequest.SerializeToString,
     ('queryservice.Query', 'Prepare'): query__pb2.PrepareRequest.SerializeToString,
     ('queryservice.Query', 'ReadTransaction'): query__pb2.ReadTransactionRequest.SerializeToString,
     ('queryservice.Query', 'Rollback'): query__pb2.RollbackRequest.SerializeToString,
@@ -683,6 +742,8 @@ def beta_create_Query_stub(channel, host=None, metadata_transformer=None, pool=N
     ('queryservice.Query', 'CreateTransaction'): query__pb2.CreateTransactionResponse.FromString,
     ('queryservice.Query', 'Execute'): query__pb2.ExecuteResponse.FromString,
     ('queryservice.Query', 'ExecuteBatch'): query__pb2.ExecuteBatchResponse.FromString,
+    ('queryservice.Query', 'MessageAck'): query__pb2.MessageAckResponse.FromString,
+    ('queryservice.Query', 'MessageStream'): query__pb2.MessageStreamResponse.FromString,
     ('queryservice.Query', 'Prepare'): query__pb2.PrepareResponse.FromString,
     ('queryservice.Query', 'ReadTransaction'): query__pb2.ReadTransactionResponse.FromString,
     ('queryservice.Query', 'Rollback'): query__pb2.RollbackResponse.FromString,
@@ -704,6 +765,8 @@ def beta_create_Query_stub(channel, host=None, metadata_transformer=None, pool=N
     'CreateTransaction': cardinality.Cardinality.UNARY_UNARY,
     'Execute': cardinality.Cardinality.UNARY_UNARY,
     'ExecuteBatch': cardinality.Cardinality.UNARY_UNARY,
+    'MessageAck': cardinality.Cardinality.UNARY_UNARY,
+    'MessageStream': cardinality.Cardinality.UNARY_STREAM,
     'Prepare': cardinality.Cardinality.UNARY_UNARY,
     'ReadTransaction': cardinality.Cardinality.UNARY_UNARY,
     'Rollback': cardinality.Cardinality.UNARY_UNARY,

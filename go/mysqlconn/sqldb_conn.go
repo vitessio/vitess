@@ -1,8 +1,6 @@
 package mysqlconn
 
 import (
-	"fmt"
-
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/sqldb"
@@ -20,10 +18,11 @@ import (
 // Close() is in conn.go.
 
 // ExecuteStreamFetch is part of the sqldb.Conn interface.
+// Returns a sqldb.SQLError.
 func (c *Conn) ExecuteStreamFetch(query string) error {
 	// Sanity check.
 	if c.fields != nil {
-		return fmt.Errorf("streaming query already in progress")
+		return sqldb.NewSQLError(CRCommandsOutOfSync, SSUnknownSQLState, "streaming query already in progress")
 	}
 
 	// This is a new command, need to reset the sequence.
@@ -74,7 +73,7 @@ func (c *Conn) ExecuteStreamFetch(query string) error {
 			// Error packet.
 			return parseErrorPacket(data)
 		default:
-			return fmt.Errorf("unexpected packet after fields: %v", data)
+			return sqldb.NewSQLError(CRCommandsOutOfSync, SSUnknownSQLState, "unexpected packet after fields: %v", data)
 		}
 	}
 
@@ -85,7 +84,11 @@ func (c *Conn) ExecuteStreamFetch(query string) error {
 // Fields is part of the sqldb.Conn interface.
 func (c *Conn) Fields() ([]*querypb.Field, error) {
 	if c.fields == nil {
-		return nil, fmt.Errorf("no streaming query in progress")
+		return nil, sqldb.NewSQLError(CRCommandsOutOfSync, SSUnknownSQLState, "no streaming query in progress")
+	}
+	if len(c.fields) == 0 {
+		// The query returned an empty field list.
+		return nil, nil
 	}
 	return c.fields, nil
 }
@@ -93,7 +96,12 @@ func (c *Conn) Fields() ([]*querypb.Field, error) {
 // FetchNext is part of the sqldb.Conn interface.
 func (c *Conn) FetchNext() ([]sqltypes.Value, error) {
 	if c.fields == nil {
-		// We are already done.
+		// We are already done, and the result was closed.
+		return nil, sqldb.NewSQLError(CRCommandsOutOfSync, SSUnknownSQLState, "no streaming query in progress")
+	}
+
+	if len(c.fields) == 0 {
+		// We received no fields, so there is no data.
 		return nil, nil
 	}
 
@@ -103,13 +111,13 @@ func (c *Conn) FetchNext() ([]sqltypes.Value, error) {
 	}
 
 	switch data[0] {
-	case OKPacket:
-		// The entire contents of the packet is ignored.
-		// This packet is only seen if CapabilityClientDeprecateEOF is set.
-		// But we can still understand it anyway.
-		c.fields = nil
-		return nil, nil
 	case EOFPacket:
+		// This packet may be one of two kinds:
+		// - an EOF packet,
+		// - an OK packet with an EOF header if
+		// CapabilityClientDeprecateEOF is set.
+		// We do not parse it anyway, so it doesn't matter.
+
 		// Warnings and status flags are ignored.
 		c.fields = nil
 		return nil, nil
@@ -126,10 +134,10 @@ func (c *Conn) FetchNext() ([]sqltypes.Value, error) {
 // Just drain the remaining values.
 func (c *Conn) CloseResult() {
 	for c.fields != nil {
-		_, err := c.FetchNext()
-		if err != nil {
+		rows, err := c.FetchNext()
+		if err != nil || rows == nil {
+			// We either got an error, or got the last result.
 			c.fields = nil
-			return
 		}
 	}
 }
@@ -151,8 +159,16 @@ func (c *Conn) ID() int64 {
 }
 
 func init() {
-	sqldb.Register("sqlconn", func(params sqldb.ConnParams) (sqldb.Conn, error) {
+	sqldb.Register("mysqlconn", func(params sqldb.ConnParams) (sqldb.Conn, error) {
 		ctx := context.Background()
 		return Connect(ctx, &params)
 	})
+
+	// Uncomment this and comment out the call to sqldb.RegisterDefault in
+	// go/mysql/mysql.go to make this the default.
+
+	//	sqldb.RegisterDefault(func(params sqldb.ConnParams) (sqldb.Conn, error) {
+	//		ctx := context.Background()
+	//		return Connect(ctx, &params)
+	//	})
 }

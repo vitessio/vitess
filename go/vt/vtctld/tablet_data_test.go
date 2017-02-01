@@ -1,6 +1,7 @@
 package vtctld
 
 import (
+	"io"
 	"sync"
 	"testing"
 	"time"
@@ -11,6 +12,7 @@ import (
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/tabletserver/grpcqueryservice"
+	"github.com/youtube/vitess/go/vt/tabletserver/queryservice"
 	"github.com/youtube/vitess/go/vt/tabletserver/queryservice/fakes"
 	"github.com/youtube/vitess/go/vt/topo/memorytopo"
 	"github.com/youtube/vitess/go/vt/wrangler"
@@ -22,7 +24,7 @@ import (
 
 // streamHealthTabletServer is a local QueryService implementation to support the tests
 type streamHealthTabletServer struct {
-	fakes.ErrorQueryService
+	queryservice.QueryService
 	t *testing.T
 
 	// streamHealthMutex protects all the following fields
@@ -33,22 +35,38 @@ type streamHealthTabletServer struct {
 
 func newStreamHealthTabletServer(t *testing.T) *streamHealthTabletServer {
 	return &streamHealthTabletServer{
+		QueryService:    fakes.ErrorQueryService,
 		t:               t,
 		streamHealthMap: make(map[int]chan<- *querypb.StreamHealthResponse),
 	}
 }
 
-func (s *streamHealthTabletServer) StreamHealthRegister(c chan<- *querypb.StreamHealthResponse) (int, error) {
+func (s *streamHealthTabletServer) StreamHealth(ctx context.Context, callback func(*querypb.StreamHealthResponse) error) error {
+	id, ch := s.streamHealthRegister()
+	defer s.streamHealthUnregister(id)
+	for shr := range ch {
+		if err := callback(shr); err != nil {
+			if err == io.EOF {
+				return nil
+			}
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *streamHealthTabletServer) streamHealthRegister() (id int, ch chan *querypb.StreamHealthResponse) {
 	s.streamHealthMutex.Lock()
 	defer s.streamHealthMutex.Unlock()
 
-	id := s.streamHealthIndex
+	id = s.streamHealthIndex
 	s.streamHealthIndex++
-	s.streamHealthMap[id] = c
-	return id, nil
+	ch = make(chan *querypb.StreamHealthResponse, 10)
+	s.streamHealthMap[id] = ch
+	return id, ch
 }
 
-func (s *streamHealthTabletServer) StreamHealthUnregister(id int) error {
+func (s *streamHealthTabletServer) streamHealthUnregister(id int) error {
 	s.streamHealthMutex.Lock()
 	defer s.streamHealthMutex.Unlock()
 

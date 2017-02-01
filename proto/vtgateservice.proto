@@ -8,6 +8,7 @@ option java_package="com.youtube.vitess.proto.grpc";
 package vtgateservice;
 
 import "vtgate.proto";
+import "query.proto";
 
 // Vitess is the main service to access a Vitess cluster. It is the API that vtgate
 // exposes to serve all queries.
@@ -85,6 +86,12 @@ service Vitess {
   // ResolveTransaction resolves a transaction.
   // API group: Transactions
   rpc ResolveTransaction(vtgate.ResolveTransactionRequest) returns (vtgate.ResolveTransactionResponse) {};
+
+  // MessageStream streams messages from a message table.
+  rpc MessageStream(vtgate.MessageStreamRequest) returns (stream query.MessageStreamResponse) {};
+
+  // MessageAck acks messages for a table.
+  rpc MessageAck(vtgate.MessageAckRequest) returns (query.MessageAckResponse) {};
 
   // Split a query into non-overlapping sub queries
   // API group: Map Reduce
