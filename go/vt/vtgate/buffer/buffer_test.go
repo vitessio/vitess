@@ -31,8 +31,12 @@ var (
 	nonFailoverErr = vterrors.FromError(vtrpcpb.ErrorCode_QUERY_NOT_SERVED,
 		errors.New("vttablet: rpc error: code = 9 desc = gRPCServerError: retry: TODO(mberlin): Insert here any realistic error not caused by a failover"))
 
-	statsKeyJoined                    = fmt.Sprintf("%s.%s", keyspace, shard)
+	statsKeyJoined = fmt.Sprintf("%s.%s", keyspace, shard)
+
 	statsKeyJoinedFailoverEndDetected = statsKeyJoined + "." + string(stopReasonFailoverEndDetected)
+
+	statsKeyJoinedLastReparentTooRecent = statsKeyJoined + "." + string(startSkippedLastReparentTooRecent)
+	statsKeyJoinedLastFailoverTooRecent = statsKeyJoined + "." + string(startSkippedLastFailoverTooRecent)
 )
 
 func TestBuffer(t *testing.T) {
@@ -107,6 +111,9 @@ func TestBuffer(t *testing.T) {
 	// Second failover: Buffering is skipped because last failover is too recent.
 	if retryDone, err := b.WaitForFailoverEnd(context.Background(), keyspace, shard, failoverErr); err != nil || retryDone != nil {
 		t.Fatalf("subsequent failovers must be skipped due to -vtgate_buffer_min_time_between_failovers setting. err: %v retryDone: %v", err, retryDone)
+	}
+	if got, want := startsSkipped.Counts()[statsKeyJoinedLastFailoverTooRecent], int64(1); got != want {
+		t.Fatalf("buffering skip was not tracked: got = %v, want = %v", got, want)
 	}
 
 	// Second failover is buffered if we reduce the limit.
@@ -277,6 +284,9 @@ func TestPassThroughLastReparentTooRecent(t *testing.T) {
 
 	if retryDone, err := b.WaitForFailoverEnd(context.Background(), keyspace, shard, failoverErr); err != nil || retryDone != nil {
 		t.Fatalf("requests where the failover end was recently detected before the start must not be buffered. err: %v retryDone: %v", err, retryDone)
+	}
+	if got, want := startsSkipped.Counts()[statsKeyJoinedLastReparentTooRecent], int64(1); got != want {
+		t.Fatalf("buffering skip was not tracked: got = %v, want = %v", got, want)
 	}
 }
 
@@ -633,4 +643,6 @@ func waitForRequestsExceededWindow(count int) error {
 func resetVariables() {
 	starts.Reset()
 	stops.Reset()
+
+	startsSkipped.Reset()
 }

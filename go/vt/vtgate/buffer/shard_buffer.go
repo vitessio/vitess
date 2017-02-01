@@ -149,9 +149,13 @@ func (sb *shardBuffer) waitForFailoverEnd(ctx context.Context, keyspace, shard s
 			if sb.mode == bufferDryRun {
 				msg = "Dry-run: Would NOT have started buffering"
 			}
+
 			sb.logTooRecent.Infof("%v for shard: %s because the last reparent is too recent (%v < %v)."+
 				" (A failover was detected by this seen error: %v.)",
 				msg, topoproto.KeyspaceShardString(keyspace, shard), lastReparent, *minTimeBetweenFailovers, err)
+
+			statsKeyWithReason := append(sb.statsKey, string(startSkippedLastReparentTooRecent))
+			startsSkipped.Add(statsKeyWithReason, 1)
 			return nil, nil
 		}
 		lastDetectedFailover := now.Sub(sb.lastEnd)
@@ -163,9 +167,13 @@ func (sb *shardBuffer) waitForFailoverEnd(ctx context.Context, keyspace, shard s
 			if sb.mode == bufferDryRun {
 				msg = "Dry-run: Would NOT have started buffering"
 			}
+
 			sb.logTooRecent.Infof("%v for shard: %s because the last detected failover is too recent (%v < %v)."+
 				" (A failover was detected by this seen error: %v.)",
 				msg, topoproto.KeyspaceShardString(keyspace, shard), lastDetectedFailover, *minTimeBetweenFailovers, err)
+
+			statsKeyWithReason := append(sb.statsKey, string(startSkippedLastFailoverTooRecent))
+			startsSkipped.Add(statsKeyWithReason, 1)
 			return nil, nil
 		}
 

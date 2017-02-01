@@ -27,6 +27,11 @@ var (
 	// dry-run bufferings.
 	// See the type "stopReason" below for all possible values of "Reason".
 	stops = stats.NewMultiCounters("BufferStops", []string{"Keyspace", "ShardName", "Reason"})
+
+	// startsSkipped tracks *how many requests* would have started buffering but
+	// eventually did not (includes dry-run bufferings).
+	// See the type "startSkippedReason" below for all possible values of "Reason".
+	startsSkipped = stats.NewMultiCounters("BufferStartsSkipped", []string{"Keyspace", "ShardName", "Reason"})
 )
 
 // stopReason is used in "stopsByReason" as "Reason" label.
@@ -35,4 +40,12 @@ type stopReason string
 const (
 	stopReasonFailoverEndDetected         stopReason = "NewMasterSeen"
 	stopReasonMaxFailoverDurationExceeded            = "MaxDurationExceeded"
+)
+
+// startSkippedReason is used in "startsSkippedByReason" as "Reason" label.
+type startSkippedReason string
+
+const (
+	startSkippedLastReparentTooRecent startSkippedReason = "LastReparentTooRecent"
+	startSkippedLastFailoverTooRecent                    = "LastFailoverTooRecent"
 )

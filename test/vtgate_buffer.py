@@ -316,9 +316,17 @@ class TestBufferBase(unittest.TestCase):
     else:
       self.assertGreater(in_flight_max, 0)
 
+    # There was a failover and the HealthCheck module must have seen it.
+    master_promoted_count = v['HealthcheckMasterPromoted'].get(labels, 0)
+    self.assertGreater(master_promoted_count, 0)
+
     if labels in v['BufferFailoverDurationMs']:
+      # Buffering was actually started.
       logging.debug('Failover was buffered for %d milliseconds.',
                     v['BufferFailoverDurationMs'][labels])
+      # Number of buffering stops must be equal to the number of seen failovers.
+      buffering_stops = v['BufferStops'].get('%s.NewMasterSeen' % labels, 0)
+      self.assertEqual(master_promoted_count, buffering_stops)
 
   def external_reparent(self):
     # Demote master.
