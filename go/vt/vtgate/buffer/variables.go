@@ -6,6 +6,9 @@ import "github.com/youtube/vitess/go/stats"
 // buffer.
 
 var (
+	// bufferSize publishes the configured per vtgate buffer size. It can be used
+	// to calculate the utilization of the buffer.
+	bufferSize = stats.NewInt("BufferSize")
 	// requestsInFlightMax has the maximum value of buffered requests in flight
 	// of the last failover.
 	requestsInFlightMax = stats.NewMultiCounters("BufferRequestsInFlightMax", []string{"Keyspace", "ShardName"})

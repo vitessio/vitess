@@ -83,6 +83,7 @@ func New() *Buffer {
 	if err := verifyFlags(); err != nil {
 		log.Fatalf("Invalid buffer configuration: %v", err)
 	}
+	bufferSize.Set(int64(*size))
 	keyspaces, shards := keyspaceShardsToSets(*shards)
 
 	if *enabledDryRun {
