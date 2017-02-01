@@ -69,6 +69,9 @@ type shardBuffer struct {
 	// timeoutThread will be set while a failover is in progress and the object is
 	// in the BUFFERING state.
 	timeoutThread *timeoutThread
+	// wg tracks all pending Go routines. waitForShutdown() will use this field to
+	// block on them.
+	wg sync.WaitGroup
 }
 
 // entry is created per buffered request.
@@ -317,13 +320,18 @@ func (sb *shardBuffer) unblockAndWait(e *entry, err error, releaseSlot, blocking
 	close(e.done)
 
 	if blockingWait {
-		sb.waitForRequestFinish(e, releaseSlot)
+		sb.waitForRequestFinish(e, releaseSlot, false /* async */)
 	} else {
-		go sb.waitForRequestFinish(e, releaseSlot)
+		sb.wg.Add(1)
+		go sb.waitForRequestFinish(e, releaseSlot, true /* async */)
 	}
 }
 
-func (sb *shardBuffer) waitForRequestFinish(e *entry, releaseSlot bool) {
+func (sb *shardBuffer) waitForRequestFinish(e *entry, releaseSlot, async bool) {
+	if async {
+		defer sb.wg.Done()
+	}
+
 	// Wait for unblocked request to finish.
 	<-e.bufferCtx.Done()
 
@@ -486,10 +494,13 @@ func (sb *shardBuffer) stopBufferingLocked(reason stopReason, details string) {
 	log.Infof("%v for shard: %s after: %.1f seconds due to: %v. Draining %d buffered requests now.", msg, topoproto.KeyspaceShardString(sb.keyspace, sb.shard), d.Seconds(), details, len(q))
 
 	// Start the drain. (Use a new Go routine to release the lock.)
+	sb.wg.Add(1)
 	go sb.drain(q)
 }
 
 func (sb *shardBuffer) drain(q []*entry) {
+	defer sb.wg.Done()
+
 	// stop must be called outside of the lock because the thread may access
 	// shardBuffer as well e.g. to get the current oldest entry.
 	sb.timeoutThread.stop()
@@ -509,6 +520,16 @@ func (sb *shardBuffer) drain(q []*entry) {
 	sb.logErrorIfStateNotLocked(stateDraining)
 	sb.state = stateIdle
 	sb.timeoutThread = nil
+}
+
+func (sb *shardBuffer) shutdown() {
+	sb.mu.Lock()
+	sb.stopBufferingLocked(stopShutdown, "shutdown")
+	sb.mu.Unlock()
+}
+
+func (sb *shardBuffer) waitForShutdown() {
+	sb.wg.Wait()
 }
 
 // sizeForTesting is used by the unit test only to find out the current number

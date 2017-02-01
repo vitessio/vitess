@@ -60,6 +60,7 @@ type stopReason string
 const (
 	stopReasonFailoverEndDetected         stopReason = "NewMasterSeen"
 	stopReasonMaxFailoverDurationExceeded            = "MaxDurationExceeded"
+	stopShutdown                                     = "Shutdown"
 )
 
 // evictedReason is used in "requestsEvicted" as "Reason" label.
@@ -82,6 +83,7 @@ const (
 	// skippedDisabled is used when the buffer was disabled for that particular
 	// keyspace/shard.
 	skippedDisabled              = "Disabled"
+	skippedShutdown              = "Shutdown"
 	skippedLastReparentTooRecent = "LastReparentTooRecent"
 	skippedLastFailoverTooRecent = "LastFailoverTooRecent"
 )

@@ -145,6 +145,10 @@ func TestBuffer(t *testing.T) {
 	if err := <-stopped4; err != nil {
 		t.Fatalf("request should have been buffered and not returned an error: %v", err)
 	}
+	if err := waitForState(b, stateIdle); err != nil {
+		t.Fatal(err)
+	}
+
 	// Stop counter must have been increased for the second failover.
 	if got, want := stops.Counts()[statsKeyJoinedFailoverEndDetected], int64(2); got != want {
 		t.Fatalf("buffering stop was not tracked: got = %v, want = %v", got, want)
@@ -344,6 +348,11 @@ func TestPassthroughDuringDrain(t *testing.T) {
 	// Finish draining by telling the buffer that the retry is done.
 	close(markRetryDone)
 	<-stopped
+
+	// Wait for the drain to complete to avoid races with other tests.
+	if err := waitForState(b, stateIdle); err != nil {
+		t.Fatal(err)
+	}
 }
 
 // TestPassthroughIgnoredKeyspaceOrShard tests that the explicit whitelisting
@@ -498,6 +507,9 @@ func TestEviction(t *testing.T) {
 	}
 	if err := <-stopped3; err != nil {
 		t.Fatalf("request should have been buffered and not returned an error: %v", err)
+	}
+	if err := waitForState(b, stateIdle); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -677,6 +689,31 @@ func waitForRequestsExceededWindow(count int) error {
 		if time.Since(start) > 2*time.Second {
 			return fmt.Errorf("wrong number of requests which exceeded their buffering window: got = %v, want = %v", got, want)
 		}
+	}
+}
+
+// TestShutdown tests that Buffer.Shutdown() unblocks any pending bufferings
+// immediately.
+func TestShutdown(t *testing.T) {
+	resetVariables()
+	defer checkVariables(t)
+
+	flag.Set("enable_vtgate_buffer", "true")
+	defer resetFlagsForTesting()
+	b := New()
+
+	// Buffer one request.
+	stopped1 := issueRequest(context.Background(), t, b, failoverErr)
+	if err := waitForRequestsInFlight(b, 1); err != nil {
+		t.Fatal(err)
+	}
+
+	// Shutdown buffer and unblock buffered request immediately.
+	b.Shutdown()
+
+	// Request must have been drained without an error.
+	if err := <-stopped1; err != nil {
+		t.Fatalf("request should have been buffered and not returned an error: %v", err)
 	}
 }
 

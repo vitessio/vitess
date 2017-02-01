@@ -76,6 +76,8 @@ type Buffer struct {
 	// progress.
 	// Key Format: "<keyspace>/<shard>"
 	buffers map[string]*shardBuffer
+	// stopped is true after Shutdown() was run.
+	stopped bool
 }
 
 // New creates a new Buffer object.
@@ -174,6 +176,11 @@ func (b *Buffer) WaitForFailoverEnd(ctx context.Context, keyspace, shard string,
 	}
 
 	sb := b.getOrCreateBuffer(keyspace, shard)
+	if sb == nil {
+		// Buffer is shut down. Ignore all calls.
+		requestsSkipped.Add([]string{keyspace, shard, skippedShutdown}, 1)
+		return nil, nil
+	}
 	if sb.disabled() {
 		requestsSkipped.Add([]string{keyspace, shard, skippedDisabled}, 1)
 		return nil, nil
@@ -198,6 +205,10 @@ func (b *Buffer) StatsUpdate(ts *discovery.TabletStats) {
 	}
 
 	sb := b.getOrCreateBuffer(ts.Target.Keyspace, ts.Target.Shard)
+	if sb == nil {
+		// Buffer is shut down. Ignore all calls.
+		return
+	}
 	sb.recordExternallyReparentedTimestamp(timestamp)
 }
 
@@ -236,12 +247,18 @@ func causedByFailover(err error) bool {
 	return false
 }
 
+// getOrCreateBuffer returns the ShardBuffer for the given keyspace and shard.
+// It returns nil if Buffer is shut down and all calls should be ignored.
 func (b *Buffer) getOrCreateBuffer(keyspace, shard string) *shardBuffer {
 	key := topoproto.KeyspaceShardString(keyspace, shard)
 	b.mu.RLock()
 	sb, ok := b.buffers[key]
+	stopped := b.stopped
 	b.mu.RUnlock()
 
+	if stopped {
+		return nil
+	}
 	if ok {
 		return sb
 	}
@@ -255,4 +272,31 @@ func (b *Buffer) getOrCreateBuffer(keyspace, shard string) *shardBuffer {
 		b.buffers[key] = sb
 	}
 	return sb
+}
+
+// Shutdown blocks until all pending ShardBuffer objects are shut down.
+// In particular, it guarantees that all launched Go routines are stopped after
+// it returns.
+func (b *Buffer) Shutdown() {
+	b.shutdown()
+	b.waitForShutdown()
+}
+
+func (b *Buffer) shutdown() {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	for _, sb := range b.buffers {
+		sb.shutdown()
+	}
+	b.stopped = true
+}
+
+func (b *Buffer) waitForShutdown() {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+
+	for _, sb := range b.buffers {
+		sb.waitForShutdown()
+	}
 }
