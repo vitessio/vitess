@@ -157,16 +157,6 @@ func handleError(err *error) {
 	}
 }
 
-// EnableSSL will set the right flag on the parameters
-func EnableSSL(connParams *sqldb.ConnParams) {
-	connParams.Flags |= C.CLIENT_SSL
-}
-
-// SslEnabled returns if SSL is enabled
-func SslEnabled(connParams *sqldb.ConnParams) bool {
-	return (connParams.Flags & C.CLIENT_SSL) != 0
-}
-
 // Connection encapsulates a C mysql library connection
 type Connection struct {
 	c C.VT_CONN

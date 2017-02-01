@@ -18,7 +18,6 @@ import (
 	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
-	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/mysqlconn/replication"
 	"github.com/youtube/vitess/go/netutil"
 	"github.com/youtube/vitess/go/sqldb"
@@ -42,7 +41,7 @@ func changeMasterArgs(params *sqldb.ConnParams, masterHost string, masterPort in
 	args = append(args, fmt.Sprintf("MASTER_PASSWORD = '%s'", params.Pass))
 	args = append(args, fmt.Sprintf("MASTER_CONNECT_RETRY = %d", masterConnectRetry))
 
-	if mysql.SslEnabled(params) {
+	if params.SslEnabled() {
 		args = append(args, "MASTER_SSL = 1")
 	}
 	if params.SslCa != "" {

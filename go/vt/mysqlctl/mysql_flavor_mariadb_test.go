@@ -8,7 +8,6 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/mysqlconn/replication"
 	"github.com/youtube/vitess/go/sqldb"
 )
@@ -76,7 +75,7 @@ func TestMariadbSetMasterCommandsSSL(t *testing.T) {
 		SslCert:   "ssl-cert",
 		SslKey:    "ssl-key",
 	}
-	mysql.EnableSSL(params)
+	params.EnableSSL()
 	masterHost := "localhost"
 	masterPort := 123
 	masterConnectRetry := 1234
