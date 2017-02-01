@@ -154,9 +154,11 @@ const (
 	CRUnknownError = 2000
 
 	// CRConnectionError is CR_CONNECTION_ERROR
+	// This is returned if a connection via a Unix socket fails.
 	CRConnectionError = 2002
 
 	// CRConnHostError is CR_CONN_HOST_ERROR
+	// This is returned if a connection via a TCP socket fails.
 	CRConnHostError = 2003
 
 	// CRServerGone is CR_SERVER_GONE_ERROR.
