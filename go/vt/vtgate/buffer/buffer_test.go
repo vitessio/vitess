@@ -198,7 +198,7 @@ func waitForRequestsInFlight(b *Buffer, count int) error {
 			return nil
 		}
 
-		if time.Since(start) > 2*time.Second {
+		if time.Since(start) > 10*time.Second {
 			return fmt.Errorf("wrong buffered requests in flight: got = %v, want = %v", got, want)
 		}
 	}
@@ -215,7 +215,7 @@ func waitForState(b *Buffer, want bufferState) error {
 			return nil
 		}
 
-		if time.Since(start) > 2*time.Second {
+		if time.Since(start) > 10*time.Second {
 			return fmt.Errorf("wrong buffer state: got = %v, want = %v", got, want)
 		}
 	}
@@ -686,7 +686,7 @@ func waitForRequestsExceededWindow(count int) error {
 			return nil
 		}
 
-		if time.Since(start) > 2*time.Second {
+		if time.Since(start) > 10*time.Second {
 			return fmt.Errorf("wrong number of requests which exceeded their buffering window: got = %v, want = %v", got, want)
 		}
 	}
