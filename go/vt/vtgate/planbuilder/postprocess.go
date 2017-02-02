@@ -82,8 +82,6 @@ func pushOrderBy(orderBy sqlparser.OrderBy, bldr builder) error {
 		pushOrder := order
 		var rb *route
 
-
-
 		if node, ok := order.Expr.(*sqlparser.SQLVal); ok && node.Type == sqlparser.IntVal {
 			num, err := strconv.ParseInt(string(node.Val), 0, 64)
 			if err != nil {

@@ -2,6 +2,7 @@ package com.flipkart.vitess.jdbc;
 
 import com.flipkart.vitess.util.Constants;
 import com.flipkart.vitess.util.StringUtils;
+import com.youtube.vitess.proto.Topodata;
 
 import java.io.UnsupportedEncodingException;
 import java.net.URLDecoder;
@@ -35,6 +36,16 @@ public class VitessJDBCUrl {
     private final Properties info;
     private String catalog;
 
+    private final boolean useSSL;
+    private final String keyStore;
+    private final String keyStorePassword;
+    private final String keyAlias;
+    private final String keyPassword;
+    private final String trustStore;
+    private final String trustStorePassword;
+    private final String trustAlias;
+
+
     /*
      Assuming List of vtGate ips could be given in url, separated by ","
     */
@@ -57,7 +68,45 @@ public class VitessJDBCUrl {
     }
 
     /**
-     * Create VitessJDBC url object for given urls and properties.
+     * <p>Create VitessJDBC url object for given urls and properties.</p>
+     *
+     * <p>To indicate that SSL should be used, URL's follow the MySQL and MariaDB convention of including
+     * the property <code>useSSL=true</code>.  To use a keyStore and trustStore other than the JRE
+     * default, you can add the following URL properties:</p>
+     *
+     * <p>
+     *     <ul>
+     *         <li><code>keyStore</code>=path_to_keystore_file</li>
+     *         <li><code>keyStorePassword</code>=password (if set)</li>
+     *         <li><code>keyPassword</code>=password (only needed if the private key password differs from
+     *                  the keyStore password)</li>
+     *         <li><code>keyAlias</code>=alias_under_which_private_key_is_stored (if not set, then the
+     *                  first valid <code>PrivateKeyEntry</code> found in the keyStore will be used)</li>
+     *         <li><code>trustStore</code>=path_to_truststore_file</li>
+     *         <li><code>trustStorePassword</code>=password (if set)</li>
+     *         <li><code>trustAlias</code>=alias_under_which_certificate_chain_is_stored (if not set,
+     *                  then the first valid <code>X509Certificate</code> found in the trustStore will be used)</li>
+     *     </ul>
+     * </p>
+     *
+     * <p>If <code>useSSL=true</code>, and any of these additional properties are not set on the JDBC URL,
+     * then the driver will look to see if these corresponding property was set at JVM startup time:</p>
+     *
+     * <p>
+     *     <ul>
+     *         <li><code>-Djavax.net.ssl.keyStore</code></li>
+     *         <li><code>-Djavax.net.ssl.keyStorePassword</code></li>
+     *         <li><code>-Djavax.net.ssl.keyPassword</code></li>
+     *         <li><code>-Djavax.net.ssl.keyAlias</code></li>
+     *         <li><code>-Djavax.net.ssl.trustStore</code></li>
+     *         <li><code>-Djavax.net.ssl.trustStorePassword</code></li>
+     *         <li><code>-Djavax.net.ssl.trustStoreAlias</code></li>
+     *     </ul>
+     * </p>
+     *
+     * <p>See:</p>
+     * <p>https://mariadb.com/kb/en/mariadb/about-mariadb-connector-j/#tls-ssl</p>
+     * <p>https://dev.mysql.com/doc/connector-j/5.1/en/connector-j-reference-using-ssl.html</p>
      *
      * @param url
      * @param info
@@ -104,6 +153,15 @@ public class VitessJDBCUrl {
             StringUtils.isNullOrEmptyWithoutWS(m.group(10)) ? this.keyspace : m.group(10);
         this.hostInfos = getURLHostInfos(postUrl);
 
+        this.useSSL = "true".equalsIgnoreCase(caseInsensitiveKeyLookup(info, Constants.Property.USE_SSL));
+        this.keyStore = caseInsensitiveKeyLookup(info, Constants.Property.KEYSTORE);
+        this.keyStorePassword = caseInsensitiveKeyLookup(info, Constants.Property.KEYSTORE_PASSWORD);
+        this.keyAlias = caseInsensitiveKeyLookup(info, Constants.Property.KEY_ALIAS);
+        this.keyPassword = caseInsensitiveKeyLookup(info, Constants.Property.KEY_PASSWORD);
+        this.trustStore = caseInsensitiveKeyLookup(info, Constants.Property.TRUSTSTORE);
+        this.trustStorePassword = caseInsensitiveKeyLookup(info, Constants.Property.TRUSTSTORE_PASSWORD);
+        this.trustAlias = caseInsensitiveKeyLookup(info, Constants.Property.TRUSTSTORE_ALIAS);
+
         this.url = url;
         this.info = info;
     }
@@ -130,6 +188,38 @@ public class VitessJDBCUrl {
 
     public void setCatalog(String catalog) {
         this.catalog = catalog;
+    }
+
+    public boolean isUseSSL() {
+        return useSSL;
+    }
+
+    public String getKeyStore() {
+        return keyStore;
+    }
+
+    public String getKeyStorePassword() {
+        return keyStorePassword;
+    }
+
+    public String getKeyAlias() {
+        return keyAlias;
+    }
+
+    public String getKeyPassword() {
+        return keyPassword;
+    }
+
+    public String getTrustStore() {
+        return trustStore;
+    }
+
+    public String getTrustStorePassword() {
+        return trustStorePassword;
+    }
+
+    public String getTrustAlias() {
+        return trustAlias;
     }
 
     /**
@@ -218,4 +308,27 @@ public class VitessJDBCUrl {
     public Properties getProperties() {
         return info;
     }
+
+    /**
+     * Retrieves the value (if any) for a given key from a <code>Properties</code> object, regardless of the
+     * capitalization used in the actual key.  Used by the constructor for parsing SSL-related optional parameters,
+     * so that both the names and values of those parameters can be case-insensitive.
+     *
+     * @param properties
+     * @param key
+     * @return The first value found with a key that is a case-insensitive match for <code>key</code>, or <code>null</code> if there is no value found.
+     */
+    private static String caseInsensitiveKeyLookup(final Properties properties, final String key) {
+        if (properties == null || key == null) return null;
+        for (final Object uncastKeyBuffer : properties.keySet()) {
+            if (uncastKeyBuffer instanceof String) {
+                final String keyBuffer = (String) uncastKeyBuffer;
+                if (key.equalsIgnoreCase(keyBuffer)) {
+                    return properties.getProperty(keyBuffer);
+                }
+            }
+        }
+        return null;
+    }
+
 }
