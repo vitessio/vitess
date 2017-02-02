@@ -6,6 +6,7 @@ import com.youtube.vitess.proto.Query;
 import org.junit.Assert;
 import org.junit.Test;
 
+import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.sql.Types;
 import java.util.ArrayList;
@@ -296,14 +297,14 @@ public class VitessResultSetMetadataTest extends BaseTest {
         VitessConnection conn = getVitessConnection();
         List<FieldWithMetadata> fieldList = getFieldList(conn);
         VitessResultSetMetaData md = new VitessResultSetMetaData(fieldList);
-        Assert.assertEquals("NOT_NULL flag means 0 value for isNullable", 0, md.isNullable(1));
+        Assert.assertEquals("NOT_NULL flag means columnNoNulls (0) value for isNullable", ResultSetMetaData.columnNoNulls, md.isNullable(1));
         for (int i = 1; i < fieldList.size(); i++) {
-            Assert.assertEquals("lack of NOT_NULL flag means 2 value for isNullable", 2, md.isNullable(i + 1));
+            Assert.assertEquals("lack of NOT_NULL flag means columnNullable (1) value for isNullable", ResultSetMetaData.columnNullable, md.isNullable(i + 1));
         }
 
         conn.setIncludedFields(Query.ExecuteOptions.IncludedFields.TYPE_AND_NAME);
         for (int i = 0; i < fieldList.size(); i++) {
-            Assert.assertEquals(fieldList.get(i).getName() + " - isNullable is 0 for all when lack of included fields", 0, md.isNullable(i + 1));
+            Assert.assertEquals(fieldList.get(i).getName() + " - isNullable is columnNullableUnknown (2) for all when lack of included fields", 2, md.isNullable(i + 1));
         }
     }
 
@@ -426,7 +427,7 @@ public class VitessResultSetMetadataTest extends BaseTest {
             Assert.assertEquals(shouldBeSensitive, vitessResultSetMetaData.isCaseSensitive(i));
             Assert.assertEquals(field.getName(), true, vitessResultSetMetaData.isSearchable(i));
             Assert.assertEquals(field.getName(), false, vitessResultSetMetaData.isCurrency(i));
-            Assert.assertEquals(field.getName(), 0, vitessResultSetMetaData.isNullable(i));
+            Assert.assertEquals(field.getName(), ResultSetMetaData.columnNullableUnknown, vitessResultSetMetaData.isNullable(i));
             Assert.assertEquals(field.getName(), false, vitessResultSetMetaData.isSigned(i));
             Assert.assertEquals(field.getName(), 0, vitessResultSetMetaData.getColumnDisplaySize(i));
             Assert.assertEquals(field.getName(), field.getName(), vitessResultSetMetaData.getColumnLabel(i));
