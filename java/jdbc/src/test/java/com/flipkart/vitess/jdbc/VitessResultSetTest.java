@@ -199,13 +199,13 @@ public class VitessResultSetTest extends BaseTest {
             .addFields(Query.Field.newBuilder().setName("col1").build())
             .addFields(Query.Field.newBuilder().setName("col2").build()).build());
 
-        VitessResultSet vitessResultSet = new VitessResultSet(cursor, getVitessStatement());
+        VitessResultSet vitessResultSet = new VitessResultSet(cursor);
         Assert.assertEquals(false, vitessResultSet.next());
     }
 
     @Test public void testNextWithNonZeroRows() throws Exception {
         Cursor cursor = getCursorWithRows();
-        VitessResultSet vitessResultSet = new VitessResultSet(cursor, getVitessStatement());
+        VitessResultSet vitessResultSet = new VitessResultSet(cursor);
         Assert.assertEquals(true, vitessResultSet.next());
         Assert.assertEquals(false, vitessResultSet.next());
     }
@@ -462,7 +462,7 @@ public class VitessResultSetTest extends BaseTest {
 
     @Test public void testgetAsciiStream() throws SQLException, UnsupportedEncodingException {
         Cursor cursor = getCursorWithRows();
-        VitessResultSet vitessResultSet = new VitessResultSet(cursor, getVitessStatement());
+        VitessResultSet vitessResultSet = new VitessResultSet(cursor);
         vitessResultSet.next();
         // Need to implement AssertEquivalant
         //Assert.assertEquals((InputStream)(new ByteArrayInputStream("HELLO TDS TEAM".getBytes())), vitessResultSet

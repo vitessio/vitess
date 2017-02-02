@@ -71,7 +71,11 @@ public class VitessResultSetMetaData implements ResultSetMetaData {
      * @exception SQLException if a database access error occurs
      */
     public int isNullable(int column) throws SQLException {
-        return getField(column).isNotNull() ? ResultSetMetaData.columnNoNulls : ResultSetMetaData.columnNullableUnknown;
+        FieldWithMetadata field = getField(column);
+        if (!field.getConnection().isIncludeAllFields()) {
+            return ResultSetMetaData.columnNullableUnknown;
+        }
+        return field.isNotNull() ? ResultSetMetaData.columnNoNulls : ResultSetMetaData.columnNullable;
     }
 
     public boolean isSigned(int column) throws SQLException {
