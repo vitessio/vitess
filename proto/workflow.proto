@@ -66,7 +66,7 @@ enum TaskState {
 }
 
 message Task {
-  string task_id = 1;
+  string id = 1;
   TaskState state = 2;
   // attributes includes the parameters the task needs.
   map<string, string> attributes = 3;

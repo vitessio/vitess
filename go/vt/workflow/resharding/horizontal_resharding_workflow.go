@@ -10,13 +10,11 @@ import (
 	"flag"
 	"fmt"
 	"strings"
-	"sync"
 
 	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/vt/automation"
-	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -28,16 +26,19 @@ import (
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	workflowpb "github.com/youtube/vitess/go/vt/proto/workflow"
-	statepb "github.com/youtube/vitess/go/vt/proto/workflowstate"
 )
 
+// TODO(yipeiw): the order of exported and unexported variables?
 const (
+	codeVersion = 1
+
 	horizontalReshardingFactoryName = "horizontal_resharding"
-	copySchemaTaskName              = "copy_schema"
-	splitCloneTaskName              = "split_clone"
-	waitFilteredReplicationTaskName = "wait_replication"
-	splitDiffTaskName               = "split_diff"
-	migrateTaskName                 = "migrate"
+
+	CopySchemaName              = "copy_schema"
+	SplitCloneName              = "clone"
+	WaitFilteredReplicationName = "wait_replication"
+	SplitDiffName               = "diff"
+	MigrateName                 = "migrate"
 )
 
 // HorizontalReshardingData is the data structure to store resharding arguments.
@@ -54,9 +55,7 @@ type HorizontalReshardingWorkflow struct {
 	wr         ReshardingWrangler
 	manager    *workflow.Manager
 	topoServer topo.Server
-	// wi is the topo.WorkflowInfo
-	wi *topo.WorkflowInfo
-
+	wi         *topo.WorkflowInfo
 	// logger is the logger we export UI logs from.
 	logger *logutil.MemoryLogger
 
@@ -70,23 +69,30 @@ type HorizontalReshardingWorkflow struct {
 	keyspace  string
 	vtworkers []string
 
-	subWorkflows []*PerShardHorizontalResharding
+	data             []*PerShardHorizontalResharding
+	checkpoint       *workflowpb.WorkflowCheckpoint
+	checkpointWriter *CheckpointWriter
 
-	subTasks       map[string]*statepb.TaskContainer
-	taskParameters []*statepb.TaskParam
+	// Each phase has its own ParallelRunner object.
+	copyRunner    *ParallelRunner
+	cloneRunner   *ParallelRunner
+	waitRunner    *ParallelRunner
+	diffRunner    *ParallelRunner
+	migrateRunner *ParallelRunner
 }
 
-// PerShardHorizontalReshardingData is the data structure to store the resharding arguments for each shard.
+// PerShardHorizontalReshardingData is the data structure to store the resharding arguments for a single source shard.
 type PerShardHorizontalReshardingData struct {
-	Keyspace          string
-	SourceShard       string
-	DestinationShards []string
-	Vtworker          string
+	keyspace          string
+	sourceShard       string
+	destinationShards []string
+	vtworker          string
 }
 
-// PerShardHorizontalResharding contains the data and method for horizontal resharding from a single source shard.
+// PerShardHorizontalResharding contains the data for horizontal resharding from a single source shard.
 type PerShardHorizontalResharding struct {
 	PerShardHorizontalReshardingData
+
 	parent *HorizontalReshardingWorkflow
 
 	copySchemaShardUINode *workflow.Node
@@ -103,24 +109,56 @@ func (hw *HorizontalReshardingWorkflow) Run(ctx context.Context, manager *workfl
 	hw.ctx = ctx
 	hw.topoServer = manager.TopoServer()
 	hw.wr = wrangler.New(logutil.NewConsoleLogger(), manager.TopoServer(), tmclient.NewTabletManagerClient())
+	hw.wi = wi
 
+	// TODO(yipeiw): separate the source shards, destination shards finding code and other initialization code for the convenience of unit test.
 	hw.createSubWorkflows()
-
 	hw.setUIMessage("Horizontal resharding: workflow created successfully.")
 
 	hw.rootUINode.Display = workflow.NodeDisplayDeterminate
 	hw.rootUINode.BroadcastChanges(true /* updateChildren */)
 
-	// TODO(yipeiw): Support action button to allow retry, stop, restart.
-	//	if err := hw.executeWorkflow(); err != nil {
-	//		return err
-	//	}
 	if err := hw.runWorkflow(); err != nil {
+		hw.setUIMessage(fmt.Sprintf("Horizontal Resharding failed: %v", err))
 		return err
 	}
 
 	hw.setUIMessage(fmt.Sprintf("Horizontal Resharding on %v: finished sucessfully.", hw.keyspace))
 
+	return nil
+}
+
+func (hw *HorizontalReshardingWorkflow) runWorkflow() error {
+	hw.checkpoint = hw.InitTasks()
+	hw.checkpointWriter = NewCheckpointWriter(hw.topoServer, hw.checkpoint, hw.wi)
+	hw.checkpointWriter.Save()
+
+	copyTasks := hw.GenerateTasks(hw.checkpoint, CopySchemaName)
+	if err := hw.copyRunner.Run(copyTasks, hw.runCopySchema, hw.checkpointWriter, PARALLEL); err != nil {
+		return err
+	}
+
+	cloneTasks := hw.GenerateTasks(hw.checkpoint, SplitCloneName)
+	if err := hw.cloneRunner.Run(cloneTasks, hw.runSplitClone, hw.checkpointWriter, PARALLEL); err != nil {
+		return err
+	}
+
+	waitTasks := hw.GenerateTasks(hw.checkpoint, WaitFilteredReplicationName)
+	if err := hw.waitRunner.Run(waitTasks, hw.runWaitFilteredReplication, hw.checkpointWriter, PARALLEL); err != nil {
+		return err
+	}
+
+	diffTasks := hw.GenerateTasks(hw.checkpoint, SplitDiffName)
+	// SplitDiff requires the vtworker only work for one destination shard at a time.
+	// To simplify the concurrency control, we run all the SplitDiff task sequentially.
+	if err := hw.diffRunner.Run(diffTasks, hw.runSplitDiff, hw.checkpointWriter, SEQUENTIAL); err != nil {
+		return err
+	}
+
+	migrateTasks := hw.GenerateTasks(hw.checkpoint, MigrateName)
+	if err := hw.migrateRunner.Run(migrateTasks, hw.runMigrate, hw.checkpointWriter, SEQUENTIAL); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -147,15 +185,6 @@ func (hw *HorizontalReshardingWorkflow) createSubWorkflows() error {
 			return err
 		}
 	}
-	// Initialize the tasks (parameters and states) for the workflow.
-	hw.subTasks = map[string]*statepb.TaskContainer{
-		copySchemaTaskName:              new(CopySchemaTaskHelper).InitTasks(hw.subWorkflows),
-		splitCloneTaskName:              new(SplitCloneTaskHelper).InitTasks(hw.subWorkflows),
-		waitFilteredReplicationTaskName: new(WaitFilteredReplicationTaskHelper).InitTasks(hw.subWorkflows),
-		splitDiffTaskName:               new(SplitDiffTaskHelper).InitTasks(hw.subWorkflows),
-		migrateTaskName:                 new(MigrateTaskHelper).InitTasks(hw.subWorkflows),
-	}
-
 	return nil
 }
 
@@ -168,10 +197,10 @@ func (hw *HorizontalReshardingWorkflow) createWorkflowPerShard(sourceShard *topo
 
 	perShard := &PerShardHorizontalResharding{
 		PerShardHorizontalReshardingData: PerShardHorizontalReshardingData{
-			Keyspace:          hw.keyspace,
-			SourceShard:       sourceShardName,
-			DestinationShards: destShardNames,
-			Vtworker:          vtworker,
+			keyspace:          hw.keyspace,
+			sourceShard:       sourceShardName,
+			destinationShards: destShardNames,
+			vtworker:          vtworker,
 		},
 		copySchemaShardUINode: &workflow.Node{
 			Name:     "Shard " + sourceShardName,
@@ -198,145 +227,17 @@ func (hw *HorizontalReshardingWorkflow) createWorkflowPerShard(sourceShard *topo
 	hw.splitDiffUINode.Children = append(hw.splitDiffUINode.Children, perShard.splitDiffShardUINode)
 	hw.migrateUINode.Children = append(hw.migrateUINode.Children, perShard.migrateShardUINode)
 
-	hw.subWorkflows = append(hw.subWorkflows, perShard)
+	hw.data = append(hw.data, perShard)
 	return nil
-}
-
-// checkpointed saves a checkpoint in topo server.
-// Needs to be called with the lock.
-func (hw *HorizontalReshardingWorkflow) checkpointed(ctx context.Context) error {
-	var err error
-	hw.wi.Data, err = json.Marshal(hw.subTasks)
-	if err != nil {
-		return err
-	}
-	err = hw.topoServer.SaveWorkflow(ctx, hw.wi)
-	if err != nil {
-		hw.logger.Errorf("SaveWorkflow failed: %v", err)
-	} else {
-		hw.logger.Infof("SaveWorkflow successful")
-	}
-	return err
-}
-
-// updateStatus will update the status for specific task
-func (hw *HorizontalReshardingWorkflow) updateStatus(step string, taskParam *statepb.TaskParam, status statepb.TaskState) {
-	hw.subTasks[step].Tasks[taskParam.String()].State = status
-	hw.checkpointed(context.TODO()) // I think this context needs separate control, we always want the checkpointing to succeed.
-}
-
-func (hw *HorizontalReshardingWorkflow) runWorkflow() error {
-	// TODO(yipeiw): the code for each step execution is very similar, code refactorition needed in the next step.
-
-	// Dynamically decides the task parameters based on the step and execution states.
-	hw.taskParameters = GetTaskParam(hw.subTasks[copySchemaTaskName])
-
-	// To verify the task parameters and status, I Print it out and check manually in unit test.
-	PrintTasks(copySchemaTaskName, hw.subTasks[copySchemaTaskName], hw.taskParameters)
-	var err error
-	err = hw.runAllTasks(
-		func(param *statepb.TaskParam) error {
-			var taskErr error
-			status := statepb.TaskState_Done
-			taskErr = hw.runCopySchema(param)
-			if taskErr != nil {
-				status = statepb.TaskState_Failed
-				hw.logger.Infof("Horizontal Resharding: error in CopySchemaShard: %v.", taskErr)
-			}
-			hw.updateStatus(copySchemaTaskName, param, status)
-			return taskErr
-		})
-	PrintTasks("AFTER_"+copySchemaTaskName, hw.subTasks[copySchemaTaskName], nil)
-
-	hw.taskParameters = GetTaskParam(hw.subTasks[splitCloneTaskName])
-	PrintTasks(splitCloneTaskName, hw.subTasks[splitCloneTaskName], hw.taskParameters)
-	err = hw.runAllTasks(
-		func(param *statepb.TaskParam) error {
-			var taskErr error
-			status := statepb.TaskState_Done
-			taskErr = hw.runSplitClone(param)
-			if taskErr != nil {
-				status = statepb.TaskState_Failed
-				hw.logger.Infof("Horizontal Resharding: error in SplitClone: %v.", err)
-			}
-			hw.updateStatus(splitCloneTaskName, param, status)
-			return taskErr
-		})
-	PrintTasks("AFTER_"+splitCloneTaskName, hw.subTasks[splitCloneTaskName], nil)
-
-	hw.taskParameters = GetTaskParam(hw.subTasks[waitFilteredReplicationTaskName])
-	PrintTasks(waitFilteredReplicationTaskName, hw.subTasks[waitFilteredReplicationTaskName], hw.taskParameters)
-	err = hw.runAllTasks(
-		func(param *statepb.TaskParam) error {
-			var taskErr error
-			status := statepb.TaskState_Done
-			taskErr = hw.runWaitFilteredReplication(param)
-			if taskErr != nil {
-				status = statepb.TaskState_Failed
-				hw.logger.Infof("Horizontal Resharding: error in SplitDiff: %v.", err)
-			}
-			hw.updateStatus(waitFilteredReplicationTaskName, param, status)
-			return taskErr
-		})
-	PrintTasks("AFTER_"+waitFilteredReplicationTaskName, hw.subTasks[waitFilteredReplicationTaskName], nil)
-
-	hw.taskParameters = GetTaskParam(hw.subTasks[splitDiffTaskName])
-	PrintTasks(splitDiffTaskName, hw.subTasks[splitDiffTaskName], hw.taskParameters)
-	err = hw.runAllTasks(
-		func(param *statepb.TaskParam) error {
-			var taskErr error
-			status := statepb.TaskState_Done
-			taskErr = hw.runSplitDiff(param)
-			if taskErr != nil {
-				status = statepb.TaskState_Failed
-				hw.logger.Infof("Horizontal Resharding: error in SplitDiff: %v.", err)
-			}
-			hw.updateStatus(splitDiffTaskName, param, status)
-			return taskErr
-		})
-	PrintTasks("After_"+splitDiffTaskName, hw.subTasks[splitDiffTaskName], nil)
-
-	hw.taskParameters = GetTaskParam(hw.subTasks[migrateTaskName])
-	PrintTasks(migrateTaskName, hw.subTasks[migrateTaskName], hw.taskParameters)
-	// run the migration tasks sequentially.
-	for _, param := range hw.taskParameters {
-		status := statepb.TaskState_Done
-		if taskErr := hw.runMigrate(param); taskErr != nil {
-			status = statepb.TaskState_Failed
-			hw.logger.Infof("Horizontal Resharding: error in MigratedServedType: %v.", err)
-			return taskErr
-		}
-		hw.updateStatus(migrateTaskName, param, status)
-	}
-	PrintTasks("AFTER_"+migrateTaskName, hw.subTasks[migrateTaskName], nil)
-
-	return nil
-}
-
-// runAllTasks runs jobs in parallel. The task parameters are dynamically updated befor execution on each step. It depends on the parallism pattern for the specific step and
-// progress of each step (if it is retried).
-// The executeFunc is responsible for handling how to use the parameter in the step.
-func (hw *HorizontalReshardingWorkflow) runAllTasks(executeFunc func(param *statepb.TaskParam) error) error {
-	ec := concurrency.AllErrorRecorder{}
-	wg := sync.WaitGroup{}
-	for _, s := range hw.taskParameters {
-		wg.Add(1)
-		go func(s *statepb.TaskParam) {
-			defer wg.Done()
-			ec.RecordError(executeFunc(s))
-		}(s)
-	}
-	wg.Wait()
-	return ec.Error()
 }
 
 // runCopySchemaPerShard runs CopySchema for a destination shard.
 // There should be #destshards parameters, while each param includes 1 sourceshard and 1 destshard.
-func (hw *HorizontalReshardingWorkflow) runCopySchema(param *statepb.TaskParam) error {
-	s := param.SourceShards[0]
-	d := param.DestinationShards[0]
+func (hw *HorizontalReshardingWorkflow) runCopySchema(attr map[string]string) error {
+	s := attr["source_shard"]
+	d := attr["destination_shard"]
 	err := hw.wr.CopySchemaShardFromShard(hw.ctx, nil /* tableArray*/, nil /* excludeTableArray */, true, /*includeViews*/
-		param.Keyspace, s, param.Keyspace, d, wrangler.DefaultWaitSlaveTimeout)
+		hw.keyspace, s, hw.keyspace, d, wrangler.DefaultWaitSlaveTimeout)
 	if err != nil {
 		hw.logger.Infof("Horizontal Resharding: error in CopySchemaShardFromShard from %s to %s: %v.", s, d, err)
 	}
@@ -346,18 +247,20 @@ func (hw *HorizontalReshardingWorkflow) runCopySchema(param *statepb.TaskParam) 
 
 // runSplitClonePerShard runs SplitClone for a source shard.
 // There should be #sourceshards parameters, while each param includes 1 sourceshard and its destshards. The destShards are useless here.
-func (hw *HorizontalReshardingWorkflow) runSplitClone(param *statepb.TaskParam) error {
-	sourceKeyspaceShard := topoproto.KeyspaceShardString(param.Keyspace, param.SourceShards[0])
+func (hw *HorizontalReshardingWorkflow) runSplitClone(attr map[string]string) error {
+	s := attr["source_shard"]
+	worker := attr["vtworker"]
 
+	sourceKeyspaceShard := topoproto.KeyspaceShardString(hw.keyspace, s)
 	// Reset the vtworker to avoid error if vtworker command has been called elsewhere.
 	// This is because vtworker class doesn't cleanup the environment after execution.
-	automation.ExecuteVtworker(hw.ctx, param.Vtworker, []string{"Reset"})
+	automation.ExecuteVtworker(hw.ctx, worker, []string{"Reset"})
 	// The flag min_healthy_rdonly_tablets is set to 1 (default value is 2).
 	// Therefore, we can reuse the normal end to end test setting, which has only 1 rdonly tablet.
 	// TODO(yipeiw): Add min_healthy_rdonly_tablets as an input argument in UI.
 	args := []string{"SplitClone", "--min_healthy_rdonly_tablets=1", sourceKeyspaceShard}
-	if _, err := automation.ExecuteVtworker(hw.ctx, param.Vtworker, args); err != nil {
-		hw.logger.Infof("Horizontal resharding: error in SplitClone in keyspace %s: %v.", param.Keyspace, err)
+	if _, err := automation.ExecuteVtworker(hw.ctx, worker, args); err != nil {
+		hw.logger.Infof("Horizontal resharding: error in SplitClone in keyspace %s: %v.", hw.keyspace, err)
 		return err
 	}
 	hw.logger.Infof("Horizontal resharding: SplitClone is finished.")
@@ -367,9 +270,9 @@ func (hw *HorizontalReshardingWorkflow) runSplitClone(param *statepb.TaskParam) 
 
 // runWaitFilteredReplication runs WaitForFilteredReplication for a destination shard.
 // There should be #destshards parameters, while each param includes 1 sourceshard and 1 destshard.
-func (hw *HorizontalReshardingWorkflow) runWaitFilteredReplication(param *statepb.TaskParam) error {
-	d := param.DestinationShards[0]
-	if err := hw.wr.WaitForFilteredReplication(hw.ctx, param.Keyspace, d, wrangler.DefaultWaitForFilteredReplicationMaxDelay); err != nil {
+func (hw *HorizontalReshardingWorkflow) runWaitFilteredReplication(attr map[string]string) error {
+	d := attr["destination_shard"]
+	if err := hw.wr.WaitForFilteredReplication(hw.ctx, hw.keyspace, d, wrangler.DefaultWaitForFilteredReplicationMaxDelay); err != nil {
 		hw.logger.Infof("Horizontal Resharding: error in WaitForFilteredReplication: %v.", err)
 		return err
 	}
@@ -379,34 +282,31 @@ func (hw *HorizontalReshardingWorkflow) runWaitFilteredReplication(param *statep
 
 // runSplitDiffPerShard runs SplitDiff for a source shard.
 // There should be #sourceshards parameters, while each param includes 1 sourceshard and its destshards.
-func (hw *HorizontalReshardingWorkflow) runSplitDiff(param *statepb.TaskParam) error {
-	var destinationKeyspaceShards []string
-	for _, destShard := range param.DestinationShards {
-		destinationKeyspaceShards = append(destinationKeyspaceShards, topoproto.KeyspaceShardString(param.Keyspace, destShard))
+func (hw *HorizontalReshardingWorkflow) runSplitDiff(attr map[string]string) error {
+	d := attr["destination_shard"]
+	worker := attr["vtworker"]
+
+	automation.ExecuteVtworker(hw.ctx, worker, []string{"Reset"})
+	args := []string{"SplitDiff", "--min_healthy_rdonly_tablets=1", topoproto.KeyspaceShardString(hw.keyspace, d)}
+	_, err := automation.ExecuteVtworker(hw.ctx, worker, args)
+	if err != nil {
+		return err
 	}
 
-	for _, d := range destinationKeyspaceShards {
-		automation.ExecuteVtworker(hw.ctx, param.Vtworker, []string{"Reset"})
-		args := []string{"SplitDiff", "--min_healthy_rdonly_tablets=1", d}
-		_, err := automation.ExecuteVtworker(hw.ctx, param.Vtworker, args)
-		if err != nil {
-			return err
-		}
-	}
 	hw.logger.Infof("Horizontal resharding: SplitDiff is finished.")
 	return nil
 }
 
 // runMigratePerShard runs the migration sequentially among all source shards.
 // There should be 1 parameter, which includes all source shards to be migrated.
-func (hw *HorizontalReshardingWorkflow) runMigrate(param *statepb.TaskParam) error {
-	s := param.SourceShards[0]
-	sourceKeyspaceShard := topoproto.KeyspaceShardString(param.Keyspace, s)
+func (hw *HorizontalReshardingWorkflow) runMigrate(attr map[string]string) error {
+	s := attr["source_shard"]
+	sourceKeyspaceShard := topoproto.KeyspaceShardString(hw.keyspace, s)
 	servedTypeParams := []topodatapb.TabletType{topodatapb.TabletType_RDONLY,
 		topodatapb.TabletType_REPLICA,
 		topodatapb.TabletType_MASTER}
 	for _, servedType := range servedTypeParams {
-		err := hw.wr.MigrateServedTypes(hw.ctx, param.Keyspace, s, nil /* cells */, servedType, false /* reverse */, false /* skipReFreshState */, wrangler.DefaultFilteredReplicationWaitTime)
+		err := hw.wr.MigrateServedTypes(hw.ctx, hw.keyspace, s, nil /* cells */, servedType, false /* reverse */, false /* skipReFreshState */, wrangler.DefaultFilteredReplicationWaitTime)
 		if err != nil {
 			hw.logger.Infof("Horizontal Resharding: error in MigrateServedTypes on servedType %s: %v.", servedType, err)
 			return err
@@ -415,126 +315,6 @@ func (hw *HorizontalReshardingWorkflow) runMigrate(param *statepb.TaskParam) err
 	}
 	return nil
 }
-
-// All the executeXXX. functions are in the old implementation, which is replaced by the runXXX function now.
-//func (hw *HorizontalReshardingWorkflow) executeWorkflow() error {
-//	if err := hw.runAllSubWorkflows(hw.executeCopySchemaPerShard); err != nil {
-//		hw.logger.Infof("Horizontal Resharding: error in CopySchemaShard: %v.", err)
-//		return err
-//	}
-//
-//	if err := hw.runAllSubWorkflows(hw.executeSplitClonePerShard); err != nil {
-//		hw.logger.Infof("Horizontal Resharding: error in SplitClone: %v.", err)
-//		return err
-//	}
-//	if err := hw.runAllSubWorkflows(hw.executeSplitDiffPerShard); err != nil {
-//		hw.logger.Infof("Horizontal Resharding: error in SplitDiff: %v.", err)
-//		return err
-//	}
-//	if err := hw.runAllSubWorkflows(hw.executeMigratePerShard); err != nil {
-//		hw.logger.Infof("Horizontal Resharding: error in MigratedServedType: %v.", err)
-//		return err
-//	}
-//	return nil
-//}
-//
-//// runAllSubWorkflows runs jobs in parallel.
-//func (hw *HorizontalReshardingWorkflow) runAllSubWorkflows(executeFunc func(subWorkflow *PerShardHorizontalResharding) error) error {
-//	ec := concurrency.AllErrorRecorder{}
-//	wg := sync.WaitGroup{}
-//	for _, sw := range hw.subWorkflows {
-//		wg.Add(1)
-//		go func(s *PerShardHorizontalResharding) {
-//			defer wg.Done()
-//			ec.RecordError(executeFunc(s))
-//		}(sw)
-//	}
-//	wg.Wait()
-//	return ec.Error()
-//}
-//
-//// executeCopySchemaPerShard runs CopySchemaShard to copy the schema of a source shard to all its destination shards.
-//// TODO(yipeiw): excludeTable information can be added to UI input parameters, s.t the user can customize excluded tables during resharding.
-//func (hw *HorizontalReshardingWorkflow) executeCopySchemaPerShard(perhw *PerShardHorizontalResharding) error {
-//	sourceKeyspaceShard := topoproto.KeyspaceShardString(perhw.Keyspace, perhw.SourceShard)
-//	for _, d := range perhw.DestinationShards {
-//		err := hw.wr.CopySchemaShardFromShard(hw.ctx, nil /* tableArray*/, nil /* excludeTableArray */, true /*includeViews*/, perhw.Keyspace, perhw.SourceShard, perhw.Keyspace, d, wrangler.DefaultWaitSlaveTimeout)
-//		if err != nil {
-//			hw.logger.Infof("Horizontal Resharding: error in CopySchemaShardFromShard from %s to %s: %v.", sourceKeyspaceShard, d, err)
-//			return err
-//		}
-//		hw.logger.Infof("Horizontal Resharding: CopySchemaShardFromShard from %s to %s is finished.", sourceKeyspaceShard, d)
-//	}
-//	return nil
-//}
-//
-//// executeSplitClonePerShard runs SplitClone to clone the data within a keyspace from a source shard to its destination shards.
-//func (hw *HorizontalReshardingWorkflow) executeSplitClonePerShard(perhw *PerShardHorizontalResharding) error {
-//	sourceKeyspaceShard := topoproto.KeyspaceShardString(perhw.Keyspace, perhw.SourceShard)
-//	var destinationKeyspaceShards []string
-//	for _, destShard := range perhw.DestinationShards {
-//		destinationKeyspaceShards = append(destinationKeyspaceShards, topoproto.KeyspaceShardString(perhw.Keyspace, destShard))
-//	}
-//
-//	// Reset the vtworker to avoid error if vtworker command has been called elsewhere.
-//	// This is because vtworker class doesn't cleanup the environment after execution.
-//	automation.ExecuteVtworker(hw.ctx, perhw.Vtworker, []string{"Reset"})
-//	// The flag min_healthy_rdonly_tablets is set to 1 (default value is 2).
-//	// Therefore, we can reuse the normal end to end test setting, which has only 1 rdonly tablet.
-//	// TODO(yipeiw): Add min_healthy_rdonly_tablets as an input argument in UI.
-//	args := []string{"SplitClone", "--min_healthy_rdonly_tablets=1", sourceKeyspaceShard}
-//	if _, err := automation.ExecuteVtworker(hw.ctx, perhw.Vtworker, args); err != nil {
-//		hw.logger.Infof("Horizontal resharding: error in SplitClone in keyspace %s: %v.", perhw.Keyspace, err)
-//		return err
-//	}
-//	hw.logger.Infof("Horizontal resharding: SplitClone is finished.")
-//	// Wait for filtered replication task.
-//	for _, d := range perhw.DestinationShards {
-//		if err := hw.wr.WaitForFilteredReplication(hw.ctx, perhw.Keyspace, d, wrangler.DefaultWaitForFilteredReplicationMaxDelay); err != nil {
-//			hw.logger.Infof("Horizontal Resharding: error in WaitForFilteredReplication: %v.", err)
-//			return err
-//		}
-//		hw.logger.Infof("Horizontal Resharding:WaitForFilteredReplication is finished on " + d)
-//	}
-//	return nil
-//}
-//
-//// executeSplitDiffPerShard runs SplitDiff for every destination shard to the source and destination
-//// to ensure all the data is present and correct.
-//func (hw *HorizontalReshardingWorkflow) executeSplitDiffPerShard(perhw *PerShardHorizontalResharding) error {
-//	var destinationKeyspaceShards []string
-//	for _, destShard := range perhw.DestinationShards {
-//		destinationKeyspaceShards = append(destinationKeyspaceShards, topoproto.KeyspaceShardString(perhw.Keyspace, destShard))
-//	}
-//
-//	for _, d := range destinationKeyspaceShards {
-//		automation.ExecuteVtworker(hw.ctx, perhw.Vtworker, []string{"Reset"})
-//		args := []string{"SplitDiff", "--min_healthy_rdonly_tablets=1", d}
-//		_, err := automation.ExecuteVtworker(hw.ctx, perhw.Vtworker, args)
-//		if err != nil {
-//			return err
-//		}
-//	}
-//	hw.logger.Infof("Horizontal resharding: SplitDiff is finished.")
-//	return nil
-//}
-//
-//// executeMigratePerShard runs MigrateServedTypes to switch over to serving from the new shards.
-//func (hw *HorizontalReshardingWorkflow) executeMigratePerShard(perhw *PerShardHorizontalResharding) error {
-//	sourceKeyspaceShard := topoproto.KeyspaceShardString(perhw.Keyspace, perhw.SourceShard)
-//	servedTypeParams := []topodatapb.TabletType{topodatapb.TabletType_RDONLY,
-//		topodatapb.TabletType_REPLICA,
-//		topodatapb.TabletType_MASTER}
-//	for _, servedType := range servedTypeParams {
-//		err := hw.wr.MigrateServedTypes(hw.ctx, perhw.Keyspace, perhw.SourceShard, nil /* cells */, servedType, false /* reverse */, false /* skipReFreshState */, wrangler.DefaultFilteredReplicationWaitTime)
-//		if err != nil {
-//			hw.logger.Infof("Horizontal Resharding: error in MigrateServedTypes on servedType %s: %v.", servedType, err)
-//			return err
-//		}
-//		hw.logger.Infof("Horizontal Resharding: MigrateServedTypes is finished on tablet %s serve type %s.", sourceKeyspaceShard, servedType)
-//	}
-//	return nil
-//}
 
 func (hw *HorizontalReshardingWorkflow) setUIMessage(message string) {
 	log.Infof("Horizontal resharding on keyspace %v: %v.", hw.keyspace, message)

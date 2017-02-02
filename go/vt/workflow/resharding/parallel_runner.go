@@ -13,34 +13,38 @@ import (
 type level int
 
 const (
+	// SEQUENTIAL means that the tasks will run sequentially.
 	SEQUENTIAL level = 1 + iota
+	//PARALLEL means that the tasks will run in parallel.
 	PARALLEL
 )
 
 // ParallelRunner is used to control executing tasks concurrently.
 // Each phase has its own ParallelRunner object.
 type ParallelRunner struct {
-	// TODO(yipeiw) : ParallelRunner should fields for per-task controllable actions.
+	// TODO(yipeiw) : ParallelRunner should have fields for per-task controllable actions.
 }
 
 // Run is the entry point for controling task executions.
-// runTasks should be a copy of tasks with the expected execution order, the status of task should be
+// tasks should be a copy of tasks with the expected execution order, the status of task should be
 // both updated in this copy and the original one (checkpointer.Update does this). This is to avoid
 // data racing situation.
-func (p *ParallelRunner) Run(runTasks []*workflowpb.Task, executeFunc func(map[string]string) error, cp *Checkpoint, concurrencyLevel level) error {
+func (p *ParallelRunner) Run(tasks []*workflowpb.Task, executeFunc func(map[string]string) error, cp *CheckpointWriter, concurrencyLevel level) error {
 	var parallelNum int // default value is 0. The task will not run in this case.
 	switch concurrencyLevel {
 	case SEQUENTIAL:
 		parallelNum = 1
 	case PARALLEL:
-		parallelNum = len(runTasks)
+		parallelNum = len(tasks)
+	default:
+		panic(fmt.Sprintf("BUG: Invalid concurrency level: %v", concurrencyLevel))
 	}
 
 	// TODO(yipeiw): Support retry, restart, pause actions. Wrap the execution to interleave with actions.
 	// sem is a channel used to control the level of concurrency.
 	sem := make(chan bool, parallelNum)
 	var ec concurrency.AllErrorRecorder
-	for _, task := range runTasks {
+	for _, task := range tasks {
 		// TODO(yipeiw): Add checking logics to support retry, pause, restart actions when lauching tasks.
 		if task.State == workflowpb.TaskState_TaskDone {
 			continue
@@ -52,15 +56,15 @@ func (p *ParallelRunner) Run(runTasks []*workflowpb.Task, executeFunc func(map[s
 			status := workflowpb.TaskState_TaskDone
 			if err := executeFunc(t.Attributes); err != nil {
 				status = workflowpb.TaskState_TaskNotStarted
-				t.Error = fmt.Sprintf("%v", err)
+				t.Error = err.Error()
 				ec.RecordError(err)
 			}
 
 			t.State = status
-			// only log the error passage rather then propograting it through ErrorRecorder. The reason is that error message in
+			// Only log the error passage rather then propograting it through ErrorRecorder. The reason is that error message in
 			// ErrorRecorder will leads to stop of the workflow, which is unexpected if only checkpointing fails.
-			// However, the checkpointing failure right after initializing the tasks should lead to the stop of the workflow.
-			if err := cp.Update(task.TaskId, status); err != nil {
+			// However, the checkpointing failure right after initializing the tasks should lead to a stop of the workflow.
+			if err := cp.UpdateTask(t.Id, status); err != nil {
 				log.Errorf("%v", err)
 			}
 		}(task)
