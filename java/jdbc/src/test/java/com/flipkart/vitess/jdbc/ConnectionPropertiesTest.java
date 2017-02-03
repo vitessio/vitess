@@ -24,13 +24,12 @@ public class ConnectionPropertiesTest {
 
         // Just testing that we are properly picking up all the fields defined in the properties
         // For each field we call initializeFrom, which should call getProperty and remove
-        Mockito.verify(info, Mockito.times(4)).getProperty(Mockito.anyString());
-        Mockito.verify(info, Mockito.times(4)).remove(Mockito.anyString());
+        Mockito.verify(info, Mockito.times(12)).getProperty(Mockito.anyString());
+        Mockito.verify(info, Mockito.times(12)).remove(Mockito.anyString());
     }
 
     @Test
     public void testDefaults() throws SQLException {
-
         ConnectionProperties props = new ConnectionProperties();
         props.initializeProperties(new Properties());
 
@@ -39,6 +38,7 @@ public class ConnectionPropertiesTest {
         Assert.assertEquals("includedFields", Constants.DEFAULT_INCLUDED_FIELDS, props.getIncludedFields());
         Assert.assertEquals("includedFieldsCache", true, props.isIncludeAllFields());
         Assert.assertEquals("tabletType", Constants.DEFAULT_TABLET_TYPE, props.getTabletType());
+        Assert.assertEquals("useSSL", false, props.getUseSSL());
     }
 
     @Test
@@ -64,7 +64,7 @@ public class ConnectionPropertiesTest {
     public void testDriverPropertiesOutput() throws SQLException {
         Properties info = new Properties();
         DriverPropertyInfo[] infos = ConnectionProperties.exposeAsDriverPropertyInfo(info, 0);
-        Assert.assertEquals(4, infos.length);
+        Assert.assertEquals(12, infos.length);
 
         // Test the expected fields for just 1
         Assert.assertEquals("executeType", infos[0].name);

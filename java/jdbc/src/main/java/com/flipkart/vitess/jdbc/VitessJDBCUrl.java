@@ -160,7 +160,7 @@ public class VitessJDBCUrl {
         this.keyPassword = caseInsensitiveKeyLookup(info, Constants.Property.KEY_PASSWORD);
         this.trustStore = caseInsensitiveKeyLookup(info, Constants.Property.TRUSTSTORE);
         this.trustStorePassword = caseInsensitiveKeyLookup(info, Constants.Property.TRUSTSTORE_PASSWORD);
-        this.trustAlias = caseInsensitiveKeyLookup(info, Constants.Property.TRUSTSTORE_ALIAS);
+        this.trustAlias = caseInsensitiveKeyLookup(info, Constants.Property.TRUST_ALIAS);
 
         this.url = url;
         this.info = info;

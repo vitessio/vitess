@@ -68,7 +68,6 @@ public class VitessConnection extends ConnectionProperties implements Connection
     public VitessConnection(String url, Properties connectionProperties) throws SQLException {
         try {
             this.vitessJDBCUrl = new VitessJDBCUrl(url, connectionProperties);
-            this.vTGateConnections = new VitessVTGateManager.VTGateConnections(vitessJDBCUrl);
             this.closed = false;
             this.dbProperties = null;
         } catch (Exception e) {
@@ -77,6 +76,10 @@ public class VitessConnection extends ConnectionProperties implements Connection
         }
 
         initializeProperties(vitessJDBCUrl.getProperties());
+    }
+
+    public void connect() {
+        this.vTGateConnections = new VitessVTGateManager.VTGateConnections(this);
     }
 
     /**
@@ -584,8 +587,8 @@ public class VitessConnection extends ConnectionProperties implements Connection
         this.vtGateTx = vtGateTx;
     }
 
-    public String getUrl() {
-        return this.vitessJDBCUrl.getUrl();
+    public VitessJDBCUrl getUrl() {
+        return this.vitessJDBCUrl;
     }
 
     /**

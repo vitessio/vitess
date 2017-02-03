@@ -26,7 +26,7 @@ public abstract class VitessDatabaseMetaData implements DatabaseMetaData {
     protected VitessConnection connection = null;
 
     public String getURL() throws SQLException {
-        return this.connection.getUrl();
+        return this.connection.getUrl().getUrl();
     }
 
     public String getUserName() throws SQLException {
