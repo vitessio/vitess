@@ -93,6 +93,50 @@ public class ConnectionProperties {
         "Tablet Type to which Vitess will connect(master, replica, rdonly)",
         Constants.DEFAULT_TABLET_TYPE);
 
+    // TLS-related configs
+    private BooleanConnectionProperty useSSL = new BooleanConnectionProperty(
+        Constants.Property.USE_SSL,
+        "Whether this connection should use transport-layer security",
+        false);
+    private StringConnectionProperty keyStore = new StringConnectionProperty(
+        Constants.Property.KEYSTORE,
+        "The Java .JKS keystore file to use when TLS is enabled",
+        null,
+        null);
+    private StringConnectionProperty keyStorePassword = new StringConnectionProperty(
+        Constants.Property.KEYSTORE_PASSWORD,
+        "The password protecting the keystore file (if a password is set)",
+        null,
+        null);
+    private StringConnectionProperty keyAlias = new StringConnectionProperty(
+        Constants.Property.KEY_ALIAS,
+        "Alias under which the private key is stored in the keystore file (if not specified, then the "
+            + "first valid `PrivateKeyEntry` will be used)",
+        null,
+        null);
+    private StringConnectionProperty keyPassword = new StringConnectionProperty(
+        Constants.Property.KEY_PASSWORD,
+        "The additional password protecting the private key entry within the keystore file (if not "
+                + "specified, then the logic will fallback to the keystore password and then to no password at all)",
+        null,
+        null);
+    private StringConnectionProperty trustStore = new StringConnectionProperty(
+        Constants.Property.TRUSTSTORE,
+        "The Java .JKS truststore file to use when TLS is enabled",
+        null,
+        null);
+    private StringConnectionProperty trustStorePassword = new StringConnectionProperty(
+        Constants.Property.TRUSTSTORE_PASSWORD,
+        "The password protecting the truststore file (if a password is set)",
+        null,
+        null);
+    private StringConnectionProperty trustAlias = new StringConnectionProperty(
+        Constants.Property.TRUST_ALIAS,
+        "Alias under which the certficate chain is stored in the truststore file (if not specified, then "
+                + "the first valid `X509Certificate` will be used)",
+        null,
+        null);
+
     // Caching of some hot properties to avoid casting over and over
     private Topodata.TabletType tabletTypeCache;
     private Query.ExecuteOptions.IncludedFields includedFieldsCache;
@@ -274,6 +318,38 @@ public class ConnectionProperties {
         this.tabletTypeCache = this.tabletType.getValueAsEnum();
     }
 
+    public boolean getUseSSL() {
+        return useSSL.getValueAsBoolean();
+    }
+
+    public String getKeyStore() {
+        return keyStore.getValueAsString();
+    }
+
+    public String getKeyStorePassword() {
+        return keyStorePassword.getValueAsString();
+    }
+
+    public String getKeyAlias() {
+        return keyAlias.getValueAsString();
+    }
+
+    public String getKeyPassword() {
+        return keyPassword.getValueAsString();
+    }
+
+    public String getTrustStore() {
+        return trustStore.getValueAsString();
+    }
+
+    public String getTrustStorePassword() {
+        return trustStorePassword.getValueAsString();
+    }
+
+    public String getTrustAlias() {
+        return trustAlias.getValueAsString();
+    }
+
     abstract static class ConnectionProperty {
 
         private final String name;
@@ -369,10 +445,6 @@ public class ConnectionProperties {
             }
         }
 
-        public String getValueAsString() {
-            return (String) valueAsObject;
-        }
-
         @Override
         String[] getAllowableValues() {
             return allowableValues;
@@ -380,6 +452,10 @@ public class ConnectionProperties {
 
         public void setValue(String value) {
             this.valueAsObject = value;
+        }
+
+        String getValueAsString() {
+            return valueAsObject == null ? null : valueAsObject.toString();
         }
     }
 

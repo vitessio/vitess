@@ -31,7 +31,12 @@ public class VitessDriver implements Driver {
 
     @Override
     public Connection connect(String url, Properties info) throws SQLException {
-        return acceptsURL(url) ? new VitessConnection(url, info) : null;
+        if (!acceptsURL(url)) {
+            return null;
+        }
+        final VitessConnection connection = new VitessConnection(url, info);
+        connection.connect();
+        return connection;
     }
 
     /**

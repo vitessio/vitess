@@ -35,7 +35,7 @@ public class VitessDriverTest {
         try {
             VitessConnection connection =
                 (VitessConnection) DriverManager.getConnection(dbURL, new Properties());
-            Assert.assertEquals(connection.getUrl(), dbURL);
+            Assert.assertEquals(connection.getUrl().getUrl(), dbURL);
         } catch (SQLException e) {
             Assert.fail("SQLException Not Expected");
         }
