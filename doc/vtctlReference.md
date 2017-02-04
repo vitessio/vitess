@@ -734,18 +734,19 @@ Starts a transaction on the provided server.
 
 #### Example
 
-<pre class="command-example">VtTabletBegin [-connect_timeout &lt;connect timeout&gt;] &lt;tablet alias&gt;</pre>
+<pre class="command-example">VtTabletBegin [-username &lt;TableACL user&gt;] [-connect_timeout &lt;connect timeout&gt;] &lt;tablet alias&gt;</pre>
 
 #### Flags
 
 | Name | Type | Definition |
 | :-------- | :--------- | :--------- |
 | connect_timeout | Duration | Connection timeout for vttablet client |
+| username | string | If set, value is set as immediate caller id in the request and used by vttablet for TableACL check |
 
 
 #### Arguments
 
-* <code>&lt;connect timeout&gt;</code> &ndash; Required.
+* <code>&lt;TableACL user&gt;</code> &ndash; Required.
 * <code>&lt;tablet alias&gt;</code> &ndash; Required. A Tablet Alias uniquely identifies a vttablet. The argument value is in the format <code>&lt;cell name&gt;-&lt;uid&gt;</code>.
 
 #### Errors
@@ -761,18 +762,19 @@ Commits the given transaction on the provided server.
 
 #### Example
 
-<pre class="command-example">VtTabletCommit [-connect_timeout &lt;connect timeout&gt;] &lt;transaction_id&gt;</pre>
+<pre class="command-example">VtTabletCommit [-username &lt;TableACL user&gt;] [-connect_timeout &lt;connect timeout&gt;] &lt;transaction_id&gt;</pre>
 
 #### Flags
 
 | Name | Type | Definition |
 | :-------- | :--------- | :--------- |
 | connect_timeout | Duration | Connection timeout for vttablet client |
+| username | string | If set, value is set as immediate caller id in the request and used by vttablet for TableACL check |
 
 
 #### Arguments
 
-* <code>&lt;connect timeout&gt;</code> &ndash; Required.
+* <code>&lt;TableACL user&gt;</code> &ndash; Required.
 * <code>&lt;transaction_id&gt;</code> &ndash; Required.
 
 #### Errors
@@ -787,7 +789,7 @@ Executes the given query on the given tablet. -transaction_id is optional. Use V
 
 #### Example
 
-<pre class="command-example">VtTabletExecute [-connect_timeout &lt;connect timeout&gt;] [-transaction_id &lt;transaction_id&gt;] [-options &lt;proto text options&gt;] [-json] &lt;tablet alias&gt; &lt;sql&gt;</pre>
+<pre class="command-example">VtTabletExecute [-username &lt;TableACL user&gt;] [-connect_timeout &lt;connect timeout&gt;] [-transaction_id &lt;transaction_id&gt;] [-options &lt;proto text options&gt;] [-json] &lt;tablet alias&gt; &lt;sql&gt;</pre>
 
 #### Flags
 
@@ -797,11 +799,12 @@ Executes the given query on the given tablet. -transaction_id is optional. Use V
 | json | Boolean | Output JSON instead of human-readable table |
 | options | string | execute options values as a text encoded proto of the ExecuteOptions structure |
 | transaction_id | Int | transaction id to use, if inside a transaction. |
+| username | string | If set, value is set as immediate caller id in the request and used by vttablet for TableACL check |
 
 
 #### Arguments
 
-* <code>&lt;connect timeout&gt;</code> &ndash; Required.
+* <code>&lt;TableACL user&gt;</code> &ndash; Required.
 * <code>&lt;tablet alias&gt;</code> &ndash; Required. A Tablet Alias uniquely identifies a vttablet. The argument value is in the format <code>&lt;cell name&gt;-&lt;uid&gt;</code>.
 * <code>&lt;sql&gt;</code> &ndash; Required.
 
@@ -818,18 +821,19 @@ Rollbacks the given transaction on the provided server.
 
 #### Example
 
-<pre class="command-example">VtTabletRollback [-connect_timeout &lt;connect timeout&gt;] &lt;tablet alias&gt; &lt;transaction_id&gt;</pre>
+<pre class="command-example">VtTabletRollback [-username &lt;TableACL user&gt;] [-connect_timeout &lt;connect timeout&gt;] &lt;tablet alias&gt; &lt;transaction_id&gt;</pre>
 
 #### Flags
 
 | Name | Type | Definition |
 | :-------- | :--------- | :--------- |
 | connect_timeout | Duration | Connection timeout for vttablet client |
+| username | string | If set, value is set as immediate caller id in the request and used by vttablet for TableACL check |
 
 
 #### Arguments
 
-* <code>&lt;connect timeout&gt;</code> &ndash; Required.
+* <code>&lt;TableACL user&gt;</code> &ndash; Required.
 * <code>&lt;tablet alias&gt;</code> &ndash; Required. A Tablet Alias uniquely identifies a vttablet. The argument value is in the format <code>&lt;cell name&gt;-&lt;uid&gt;</code>.
 * <code>&lt;transaction_id&gt;</code> &ndash; Required.
 
@@ -864,7 +868,6 @@ Executes the StreamHealth streaming query to a vttablet process. Will stop after
 
 * the <code>&lt;tablet alias&gt;</code> argument is required for the <code>&lt;VtTabletStreamHealth&gt;</code> command This error occurs if the command is not called with exactly one argument.
 * cannot connect to tablet %v: %v
-* stream ended early: %v
 
 
 ### VtTabletUpdateStream
@@ -894,7 +897,6 @@ Executes the UpdateStream streaming query to a vttablet process. Will stop after
 
 * the <code>&lt;tablet alias&gt;</code> argument is required for the <code>&lt;VtTabletUpdateStream&gt;</code> command This error occurs if the command is not called with exactly one argument.
 * cannot connect to tablet %v: %v
-* stream ended early: %v
 
 
 ## Replication Graph
