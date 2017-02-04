@@ -444,6 +444,63 @@ func TestQueryExecutorPlanUpsertPkAutoCommit(t *testing.T) {
 	}
 }
 
+func TestUpsertPkAutoCommitEnableClientFoundRows(t *testing.T) {
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+	db.AddQuery("insert into test_table values (1) /* _stream test_table (pk ) (1 ); */", &sqltypes.Result{})
+	want := &sqltypes.Result{}
+	query := "insert into test_table values(1) on duplicate key update val=1"
+	ctx := context.Background()
+	tsv := newTestTabletServer(ctx, enableStrict|enableClientFoundRows, db)
+	qre := newTestQueryExecutor(ctx, tsv, query, 0)
+	defer tsv.StopService()
+	checkPlanID(t, planbuilder.PlanUpsertPK, qre.plan.PlanID)
+	got, err := qre.Execute()
+	if err != nil {
+		t.Fatalf("qre.Execute() = %v, want nil", err)
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got: %v, want: %v", got, want)
+	}
+
+	db.AddRejectedQuery("insert into test_table values (1) /* _stream test_table (pk ) (1 ); */", errRejected)
+	_, err = qre.Execute()
+	wantErr := "error: rejected"
+	if err == nil || !strings.Contains(err.Error(), wantErr) {
+		t.Fatalf("qre.Execute() = %v, want %v", err, wantErr)
+	}
+
+	db.AddRejectedQuery(
+		"insert into test_table values (1) /* _stream test_table (pk ) (1 ); */",
+		sqldb.NewSQLError(mysqlconn.ERDupEntry, mysqlconn.SSDupKey, "err"),
+	)
+	db.AddQuery("update test_table set val = 1 where pk in (1) /* _stream test_table (pk ) (1 ); */", &sqltypes.Result{})
+	_, err = qre.Execute()
+	wantErr = "error: err (errno 1062) (sqlstate 23000)"
+	if err == nil || !strings.Contains(err.Error(), wantErr) {
+		t.Fatalf("qre.Execute() = %v, want %v", err, wantErr)
+	}
+
+	db.AddRejectedQuery(
+		"insert into test_table values (1) /* _stream test_table (pk ) (1 ); */",
+		sqldb.NewSQLError(mysqlconn.ERDupEntry, mysqlconn.SSDupKey, "ERROR 1062 (23000): Duplicate entry '2' for key 'PRIMARY'"),
+	)
+	db.AddQuery(
+		"update test_table set val = 1 where pk in (1) /* _stream test_table (pk ) (1 ); */",
+		&sqltypes.Result{RowsAffected: 1},
+	)
+	got, err = qre.Execute()
+	if err != nil {
+		t.Fatalf("qre.Execute() = %v, want nil", err)
+	}
+	want = &sqltypes.Result{
+		RowsAffected: 1,
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got: %v, want: %v", got, want)
+	}
+}
+
 func TestQueryExecutorPlanDmlPk(t *testing.T) {
 	db := setUpQueryExecutorTest(t)
 	defer db.Close()
@@ -1303,6 +1360,7 @@ const (
 	smallTxPool
 	noTwopc
 	shortTwopcAge
+	enableClientFoundRows
 )
 
 // newTestQueryExecutor uses a package level variable testTabletServer defined in tabletserver_test.go
@@ -1344,7 +1402,11 @@ func newTestTabletServer(ctx context.Context, flags executorFlags, db *fakesqldb
 	}
 	tsv := NewTabletServer(config)
 	testUtils := newTestUtils()
+
 	dbconfigs := testUtils.newDBConfigs(db)
+	if flags&enableClientFoundRows > 0 {
+		dbconfigs.App.EnableClientFoundRows()
+	}
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
 	tsv.StartService(target, dbconfigs, testUtils.newMysqld(&dbconfigs))
 	return tsv
