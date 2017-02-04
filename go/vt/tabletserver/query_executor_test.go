@@ -1360,12 +1360,16 @@ func newTransaction(tsv *TabletServer) int64 {
 
 func newTestQueryExecutor(ctx context.Context, tsv *TabletServer, sql string, txID int64) *QueryExecutor {
 	logStats := NewLogStats(ctx, "TestQueryExecutor")
+	plan, err := tsv.qe.schemaInfo.GetPlan(ctx, logStats, sql)
+	if err != nil {
+		panic(err)
+	}
 	return &QueryExecutor{
 		ctx:           ctx,
 		query:         sql,
 		bindVars:      make(map[string]interface{}),
 		transactionID: txID,
-		plan:          tsv.qe.schemaInfo.GetPlan(ctx, logStats, sql),
+		plan:          plan,
 		logStats:      logStats,
 		qe:            tsv.qe,
 		te:            tsv.te,

@@ -126,8 +126,7 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 			return qre.execSQL(conn, qre.query, true)
 		default:
 			if qre.qe.autoCommit.Get() == 0 {
-				return nil, NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT,
-					"unsupported query outside transaction: %s", qre.query)
+				return nil, NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "Disallowed outside transaction")
 			}
 			return qre.execDmlAutoCommit()
 		}

@@ -9,7 +9,6 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
-	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/sync2"
@@ -18,8 +17,6 @@ import (
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/tableacl"
 	"github.com/youtube/vitess/go/vt/tableacl/acl"
-
-	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 // QueryEngine implements the core functionality of tabletserver.
@@ -33,10 +30,6 @@ import (
 //
 // Close: There should be no more pending queries when this
 // function is called.
-//
-// Functions of QueryEngine do not return errors. They instead
-// panic with NewTabletError as the error type.
-// TODO(sougou): Switch to error return scheme.
 type QueryEngine struct {
 	schemaInfo *SchemaInfo
 	config     Config
@@ -71,21 +64,6 @@ type QueryEngine struct {
 
 	// Stats
 	queryServiceStats *QueryServiceStats
-}
-
-// Helper method for conn pools to convert errors
-func getOrPanic(ctx context.Context, pool *ConnPool) *DBConn {
-	conn, err := pool.Get(ctx)
-	if err == nil {
-		return conn
-	}
-	if err == ErrConnPoolClosed {
-		panic(ErrConnPoolClosed)
-	}
-	// If there's a problem with getting a connection out of the pool, that is
-	// probably not due to the query itself. The query might succeed on a different
-	// tablet.
-	panic(NewTabletErrorSQL(vtrpcpb.ErrorCode_INTERNAL_ERROR, err))
 }
 
 // NewQueryEngine creates a new QueryEngine.
@@ -182,7 +160,7 @@ func NewQueryEngine(checker MySQLChecker, config Config, queryServiceStats *Quer
 }
 
 // Open must be called before sending requests to QueryEngine.
-func (qe *QueryEngine) Open(dbconfigs dbconfigs.DBConfigs) {
+func (qe *QueryEngine) Open(dbconfigs dbconfigs.DBConfigs) error {
 	qe.dbconfigs = dbconfigs
 
 	strictMode := false
@@ -191,11 +169,14 @@ func (qe *QueryEngine) Open(dbconfigs dbconfigs.DBConfigs) {
 	}
 
 	start := time.Now()
-	qe.schemaInfo.Open(&qe.dbconfigs.Dba, strictMode)
+	if err := qe.schemaInfo.Open(&qe.dbconfigs.Dba, strictMode); err != nil {
+		return err
+	}
 	log.Infof("Time taken to load the schema: %v", time.Now().Sub(start))
 
 	qe.connPool.Open(&qe.dbconfigs.App, &qe.dbconfigs.Dba)
 	qe.streamConnPool.Open(&qe.dbconfigs.App, &qe.dbconfigs.Dba)
+	return nil
 }
 
 // IsMySQLReachable returns true if we can connect to MySQL.

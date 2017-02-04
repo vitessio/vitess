@@ -162,27 +162,33 @@ func NewSchemaInfo(
 // Synchronization between the above operations is
 // the responsibility of the caller.
 // Close is idempotent.
-func (si *SchemaInfo) Open(dbaParams *sqldb.ConnParams, strictMode bool) {
+func (si *SchemaInfo) Open(dbaParams *sqldb.ConnParams, strictMode bool) error {
 	if si.isOpen {
-		return
+		return nil
 	}
 	ctx := localContext()
 	si.connPool.Open(dbaParams, dbaParams)
-	// Get time first because it needs a connection from the pool.
-	curTime := si.mysqlTime(ctx)
 
-	conn := getOrPanic(ctx, si.connPool)
+	conn, err := si.connPool.Get(ctx)
+	if err != nil {
+		return NewTabletErrorSQL(vtrpcpb.ErrorCode_INTERNAL_ERROR, err)
+	}
 	defer conn.Recycle()
+
+	curTime, err := si.mysqlTime(ctx, conn)
+	if err != nil {
+		return err
+	}
 
 	if strictMode {
 		if err := conn.VerifyMode(); err != nil {
-			panic(NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, err.Error()))
+			return NewTabletError(vtrpcpb.ErrorCode_UNKNOWN_ERROR, err.Error())
 		}
 	}
 
 	tableData, err := conn.Exec(ctx, mysqlconn.BaseShowTables, maxTableCount, false)
 	if err != nil {
-		panic(PrefixTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, err, "Could not get table list: "))
+		return PrefixTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, err, "Could not get table list: ")
 	}
 
 	tables := make(map[string]*TableInfo, len(tableData.Rows)+1)
@@ -194,10 +200,14 @@ func (si *SchemaInfo) Open(dbaParams *sqldb.ConnParams, strictMode bool) {
 		go func(row []sqltypes.Value) {
 			defer wg.Done()
 
-			conn := getOrPanic(ctx, si.connPool)
+			tableName := row[0].String()
+			conn, err := si.connPool.Get(ctx)
+			if err != nil {
+				log.Errorf("SchemaInfo.Open: connection error while reading table %s: %v", tableName, err)
+				return
+			}
 			defer conn.Recycle()
 
-			tableName := row[0].String()
 			tableInfo, err := NewTableInfo(
 				conn,
 				tableName,
@@ -220,7 +230,7 @@ func (si *SchemaInfo) Open(dbaParams *sqldb.ConnParams, strictMode bool) {
 
 	// Fail if we can't load the schema for any tables, but we know that some tables exist. This points to a configuration problem.
 	if len(tableData.Rows) != 0 && len(tables) == 1 { // len(tables) is always at least 1 because of the "dual" table
-		panic(NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "could not get schema for any tables"))
+		return NewTabletError(vtrpcpb.ErrorCode_UNKNOWN_ERROR, "could not get schema for any tables")
 	}
 	si.tables = tables
 	si.lastChange = curTime
@@ -231,6 +241,7 @@ func (si *SchemaInfo) Open(dbaParams *sqldb.ConnParams, strictMode bool) {
 	})
 	si.notifiers = make(map[string]notifier)
 	si.isOpen = true
+	return nil
 }
 
 // Close shuts down SchemaInfo. It can be re-opened after Close.
@@ -251,15 +262,22 @@ func (si *SchemaInfo) Close() {
 // This is a no-op if the SchemaInfo is closed.
 func (si *SchemaInfo) Reload(ctx context.Context) error {
 	defer logError(si.queryServiceStats)
-	// Get time first because it needs a connection from the pool.
-	curTime := si.mysqlTime(ctx)
 
-	var tableData *sqltypes.Result
-	var err error
-	func() {
-		conn := getOrPanic(ctx, si.connPool)
+	curTime, tableData, err := func() (int64, *sqltypes.Result, error) {
+		conn, err := si.connPool.Get(ctx)
+		if err != nil {
+			return 0, nil, NewTabletErrorSQL(vtrpcpb.ErrorCode_INTERNAL_ERROR, err)
+		}
 		defer conn.Recycle()
-		tableData, err = conn.Exec(ctx, mysqlconn.BaseShowTables, maxTableCount, false)
+		curTime, err := si.mysqlTime(ctx, conn)
+		if err != nil {
+			return 0, nil, err
+		}
+		tableData, err := conn.Exec(ctx, mysqlconn.BaseShowTables, maxTableCount, false)
+		if err != nil {
+			return 0, nil, err
+		}
+		return curTime, tableData, nil
 	}()
 	if err != nil {
 		return fmt.Errorf("could not get table list for reload: %v", err)
@@ -297,21 +315,19 @@ func (si *SchemaInfo) Reload(ctx context.Context) error {
 	return rec.Error()
 }
 
-func (si *SchemaInfo) mysqlTime(ctx context.Context) int64 {
-	conn := getOrPanic(ctx, si.connPool)
-	defer conn.Recycle()
+func (si *SchemaInfo) mysqlTime(ctx context.Context, conn *DBConn) (int64, error) {
 	tm, err := conn.Exec(ctx, "select unix_timestamp()", 1, false)
 	if err != nil {
-		panic(PrefixTabletError(vtrpcpb.ErrorCode_UNKNOWN_ERROR, err, "Could not get MySQL time: "))
+		return 0, PrefixTabletError(vtrpcpb.ErrorCode_UNKNOWN_ERROR, err, "Could not get MySQL time: ")
 	}
 	if len(tm.Rows) != 1 || len(tm.Rows[0]) != 1 || tm.Rows[0][0].IsNull() {
-		panic(NewTabletError(vtrpcpb.ErrorCode_UNKNOWN_ERROR, "Unexpected result for MySQL time: %+v", tm.Rows))
+		return 0, NewTabletError(vtrpcpb.ErrorCode_UNKNOWN_ERROR, "Unexpected result for MySQL time: %+v", tm.Rows)
 	}
 	t, err := strconv.ParseInt(tm.Rows[0][0].String(), 10, 64)
 	if err != nil {
-		panic(NewTabletError(vtrpcpb.ErrorCode_UNKNOWN_ERROR, "Could not parse time %+v: %v", tm, err))
+		return 0, NewTabletError(vtrpcpb.ErrorCode_UNKNOWN_ERROR, "Could not parse time %+v: %v", tm, err)
 	}
-	return t
+	return t, nil
 }
 
 // ClearQueryPlanCache should be called if query plan cache is potentially obsolete
@@ -321,7 +337,10 @@ func (si *SchemaInfo) ClearQueryPlanCache() {
 
 // CreateOrUpdateTable must be called if a DDL was applied to that table.
 func (si *SchemaInfo) CreateOrUpdateTable(ctx context.Context, tableName string) error {
-	conn := getOrPanic(ctx, si.connPool)
+	conn, err := si.connPool.Get(ctx)
+	if err != nil {
+		return NewTabletErrorSQL(vtrpcpb.ErrorCode_INTERNAL_ERROR, err)
+	}
 	defer conn.Recycle()
 	tableData, err := conn.Exec(ctx, mysqlconn.BaseShowTablesForTable(tableName), 1, false)
 	if err != nil {
@@ -399,14 +418,14 @@ func (si *SchemaInfo) broadcast() {
 }
 
 // GetPlan returns the ExecPlan that for the query. Plans are cached in a cache.LRUCache.
-func (si *SchemaInfo) GetPlan(ctx context.Context, logStats *LogStats, sql string) *ExecPlan {
+func (si *SchemaInfo) GetPlan(ctx context.Context, logStats *LogStats, sql string) (*ExecPlan, error) {
 	span := trace.NewSpanFromContext(ctx)
 	span.StartLocal("SchemaInfo.GetPlan")
 	defer span.Finish()
 
 	// Fastpath if plan already exists.
 	if plan := si.getQuery(sql); plan != nil {
-		return plan
+		return plan, nil
 	}
 
 	// TODO(sougou): It's not correct to hold this lock here because the code
@@ -419,7 +438,7 @@ func (si *SchemaInfo) GetPlan(ctx context.Context, logStats *LogStats, sql strin
 	defer si.mu.Unlock()
 	// Recheck. A plan might have been built by someone else.
 	if plan := si.getQuery(sql); plan != nil {
-		return plan
+		return plan, nil
 	}
 
 	var tableInfo *TableInfo
@@ -432,7 +451,7 @@ func (si *SchemaInfo) GetPlan(ctx context.Context, logStats *LogStats, sql strin
 	}
 	splan, err := planbuilder.GetExecPlan(sql, GetTable)
 	if err != nil {
-		panic(PrefixTabletError(vtrpcpb.ErrorCode_UNKNOWN_ERROR, err, ""))
+		return nil, PrefixTabletError(vtrpcpb.ErrorCode_UNKNOWN_ERROR, err, "")
 	}
 	plan := &ExecPlan{ExecPlan: splan, TableInfo: tableInfo}
 	plan.Rules = si.queryRuleSources.filterByPlan(sql, plan.PlanID, plan.TableName.String())
@@ -441,27 +460,31 @@ func (si *SchemaInfo) GetPlan(ctx context.Context, logStats *LogStats, sql strin
 		if plan.FieldQuery == nil {
 			log.Warningf("Cannot cache field info: %s", sql)
 		} else {
-			conn := getOrPanic(ctx, si.connPool)
+			conn, err := si.connPool.Get(ctx)
+			if err != nil {
+				return nil, NewTabletErrorSQL(vtrpcpb.ErrorCode_INTERNAL_ERROR, err)
+			}
 			defer conn.Recycle()
+
 			sql := plan.FieldQuery.Query
 			start := time.Now()
 			r, err := conn.Exec(ctx, sql, 1, true)
 			logStats.AddRewrittenSQL(sql, start)
 			if err != nil {
-				panic(PrefixTabletError(vtrpcpb.ErrorCode_UNKNOWN_ERROR, err, "Error fetching fields: "))
+				return nil, PrefixTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, err, "Error fetching fields: ")
 			}
 			plan.Fields = r.Fields
 		}
 	} else if plan.PlanID == planbuilder.PlanDDL || plan.PlanID == planbuilder.PlanSet {
-		return plan
+		return plan, nil
 	}
 	si.queries.Set(sql, plan)
-	return plan
+	return plan, nil
 }
 
 // GetStreamPlan is similar to GetPlan, but doesn't use the cache
 // and doesn't enforce a limit. It just returns the parsed query.
-func (si *SchemaInfo) GetStreamPlan(sql string) *ExecPlan {
+func (si *SchemaInfo) GetStreamPlan(sql string) (*ExecPlan, error) {
 	var tableInfo *TableInfo
 	GetTable := func(tableName sqlparser.TableIdent) (table *schema.Table, ok bool) {
 		si.mu.Lock()
@@ -474,12 +497,12 @@ func (si *SchemaInfo) GetStreamPlan(sql string) *ExecPlan {
 	}
 	splan, err := planbuilder.GetStreamExecPlan(sql, GetTable)
 	if err != nil {
-		panic(PrefixTabletError(vtrpcpb.ErrorCode_UNKNOWN_ERROR, err, ""))
+		return nil, PrefixTabletError(vtrpcpb.ErrorCode_BAD_INPUT, err, "")
 	}
 	plan := &ExecPlan{ExecPlan: splan, TableInfo: tableInfo}
 	plan.Rules = si.queryRuleSources.filterByPlan(sql, plan.PlanID, plan.TableName.String())
 	plan.Authorized = tableacl.Authorized(plan.TableName.String(), plan.PlanID.MinRole())
-	return plan
+	return plan, nil
 }
 
 // GetTable returns the TableInfo for a table.
@@ -520,7 +543,7 @@ func (si *SchemaInfo) peekQuery(sql string) *ExecPlan {
 // SetQueryCacheCap sets the query cache capacity.
 func (si *SchemaInfo) SetQueryCacheCap(size int) {
 	if size <= 0 {
-		panic(NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "cache size %v out of range", size))
+		size = 1
 	}
 	si.queries.SetCapacity(int64(size))
 }

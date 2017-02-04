@@ -9,8 +9,6 @@ import (
 
 	"github.com/golang/protobuf/proto"
 
-	"github.com/youtube/vitess/go/stats"
-	"github.com/youtube/vitess/go/tb"
 	"github.com/youtube/vitess/go/vt/discovery"
 	"github.com/youtube/vitess/go/vt/throttler"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -27,9 +25,8 @@ import (
 //   t := CreateTxThrottlerFromTabletConfig(&tabletserver.Config{...})
 //
 //   // A transaction throttler must be opened before its first use:
-//   err := t.Open(keyspace, shard)
-//   if err != nil {
-//     panic("Error: %v", err)
+//   if err := t.Open(keyspace, shard); err != nil {
+//     return err
 //   }
 //
 //   // Checking whether to throttle can be done as follows before starting a transaction.
@@ -53,9 +50,6 @@ type TxThrottler struct {
 	// It is populated in NewTxThrottler and is not modified
 	// since.
 	config *txThrottlerConfig
-
-	// uncaughtPanicsCount counts the number of uncaught panics.
-	uncaughtPanicsCount *stats.Int
 
 	// state holds an open transaction throttler state. It is nil
 	// if the TransactionThrottler is closed.
@@ -159,15 +153,8 @@ func newTxThrottler(config *txThrottlerConfig) (*TxThrottler, error) {
 			return nil, fmt.Errorf("Empty healthCheckCells given. %+v", config)
 		}
 	}
-
-	uncaughtPanicsStatName := config.statsPrefix + "TxThrottlerUncaughtPanics"
-	if !config.enablePublishStats {
-		// Clearing the name of the stats will cause it not to be published.
-		uncaughtPanicsStatName = ""
-	}
 	return &TxThrottler{
-		config:              config,
-		uncaughtPanicsCount: stats.NewInt(uncaughtPanicsStatName),
+		config: config,
 	}, nil
 }
 
@@ -207,17 +194,6 @@ func (t *TxThrottler) Throttle() (result bool) {
 	if !t.config.enabled {
 		return false
 	}
-	// We catch panics here and allow the request to go through rather
-	// than have a panic in the throttler code abort the transaction.
-	defer func() {
-		if x := recover(); x != nil {
-			log.Errorf("Uncaught panic in throttle. Throttle() will return 'false'. %v, Stack trace:%s",
-				x,
-				tb.Stack(4))
-			t.uncaughtPanicsCount.Add(1)
-			result = false
-		}
-	}()
 	if t.state == nil {
 		panic("BUG: Throttle() called on a closed TxThrottler")
 	}

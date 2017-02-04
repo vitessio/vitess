@@ -354,7 +354,7 @@ func TestTabletServerAllSchemaFailure(t *testing.T) {
 	err := tsv.StartService(target, dbconfigs, testUtils.newMysqld(&dbconfigs))
 	defer tsv.StopService()
 	// tabletsever shouldn't start if it can't access schema for any tables
-	testUtils.checkTabletError(t, err, vtrpcpb.ErrorCode_INTERNAL_ERROR, "could not get schema for any tables")
+	testUtils.checkTabletError(t, err, vtrpcpb.ErrorCode_UNKNOWN_ERROR, "could not get schema for any tables")
 }
 
 func TestTabletServerCheckMysql(t *testing.T) {
@@ -1788,87 +1788,70 @@ func TestHandleExecUnknownError(t *testing.T) {
 }
 
 func TestHandleExecTabletError(t *testing.T) {
-	ctx := context.Background()
-	logStats := NewLogStats(ctx, "TestHandleExecError")
-	var err error
-	defer func() {
-		want := "fatal: tablet error"
-		if err == nil || err.Error() != want {
-			t.Errorf("Error: %v, want '%s'", err, want)
-		}
-	}()
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServer(config)
-	defer tsv.handlePanicAndSendLogStats("select * from test_table", nil, &err, logStats)
-	panic(NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "tablet error"))
+	err := tsv.handleError(
+		"select * from test_table",
+		nil,
+		NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "tablet error"),
+		nil,
+	)
+	want := "fatal: tablet error"
+	if err == nil || err.Error() != want {
+		t.Errorf("Error: %v, want '%s'", err, want)
+	}
 }
 
 func TestTerseErrorsNonSQLError(t *testing.T) {
-	ctx := context.Background()
-	logStats := NewLogStats(ctx, "TestHandleExecError")
-	var err error
-	defer func() {
-		want := "fatal: tablet error"
-		if err == nil || err.Error() != want {
-			t.Errorf("Error: %v, want '%s'", err, want)
-		}
-	}()
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServer(config)
 	tsv.config.TerseErrors = true
-	defer tsv.handlePanicAndSendLogStats("select * from test_table", nil, &err, logStats)
-	panic(NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "tablet error"))
+	err := tsv.handleError(
+		"select * from test_table",
+		nil,
+		NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "tablet error"),
+		nil,
+	)
+	want := "fatal: tablet error"
+	if err == nil || err.Error() != want {
+		t.Errorf("Error: %v, want '%s'", err, want)
+	}
 }
 
 func TestTerseErrorsBindVars(t *testing.T) {
-	ctx := context.Background()
-	logStats := NewLogStats(ctx, "TestHandleExecError")
-	var err error
-	defer func() {
-		want := "error: (errno 10) (sqlstate HY000) during query: select * from test_table"
-		if err == nil || err.Error() != want {
-			t.Errorf("Error: %v, want '%s'", err, want)
-		}
-	}()
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
+	config.TerseErrors = true
 	tsv := NewTabletServer(config)
-	tsv.config.TerseErrors = true
-	defer tsv.handlePanicAndSendLogStats(
+	err := tsv.handleError(
 		"select * from test_table",
 		map[string]interface{}{"a": 1},
-		&err,
-		logStats)
-	panic(&TabletError{
-		ErrorCode: vtrpcpb.ErrorCode_DEADLINE_EXCEEDED,
-		Message:   "msg",
-		SQLError:  10,
-		SQLState:  "HY000",
-	})
+		&TabletError{
+			ErrorCode: vtrpcpb.ErrorCode_DEADLINE_EXCEEDED,
+			Message:   "msg",
+			SQLError:  10,
+			SQLState:  "HY000",
+		},
+		nil,
+	)
+	want := "error: (errno 10) (sqlstate HY000) during query: select * from test_table"
+	if err == nil || err.Error() != want {
+		t.Errorf("Error: %v, want '%s'", err, want)
+	}
 }
 
 func TestTerseErrorsNoBindVars(t *testing.T) {
-	ctx := context.Background()
-	logStats := NewLogStats(ctx, "TestHandleExecError")
-	var err error
-	defer func() {
-		want := "error: msg"
-		if err == nil || err.Error() != want {
-			t.Errorf("Error: %v, want '%s'", err, want)
-		}
-	}()
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServer(config)
 	tsv.config.TerseErrors = true
-	defer tsv.handlePanicAndSendLogStats("select * from test_table", nil, &err, logStats)
-	panic(&TabletError{
-		ErrorCode: vtrpcpb.ErrorCode_DEADLINE_EXCEEDED,
-		Message:   "msg",
-		SQLError:  10,
-	})
+	err := tsv.handleError("", nil, NewTabletError(vtrpcpb.ErrorCode_DEADLINE_EXCEEDED, "msg"), nil)
+	want := "error: msg"
+	if err == nil || err.Error() != want {
+		t.Errorf("Error: %v, want '%s'", err, want)
+	}
 }
 
 func TestTerseErrorsIgnoreFailoverInProgress(t *testing.T) {

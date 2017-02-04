@@ -11,6 +11,8 @@ import (
 
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/schema"
+
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 // MessagerEngine is the engine for handling messages.
@@ -73,7 +75,7 @@ func (me *MessagerEngine) Subscribe(name string, rcv *messageReceiver) error {
 	defer me.mu.Unlock()
 	mm := me.managers[name]
 	if mm == nil {
-		return fmt.Errorf("message table %s not found", name)
+		return NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "message table %s not found", name)
 	}
 	mm.Subscribe(rcv)
 	return nil

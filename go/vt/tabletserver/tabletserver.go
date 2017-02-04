@@ -256,7 +256,7 @@ func (tsv *TabletServer) InitDBConfig(target querypb.Target, dbconfigs dbconfigs
 	tsv.mu.Lock()
 	defer tsv.mu.Unlock()
 	if tsv.state != StateNotConnected {
-		return NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "InitDBConfig failed, current state: %s", stateName[tsv.state])
+		return NewTabletError(vtrpcpb.ErrorCode_UNKNOWN_ERROR, "InitDBConfig failed, current state: %s", stateName[tsv.state])
 	}
 	tsv.target = target
 	tsv.dbconfigs = dbconfigs
@@ -309,23 +309,31 @@ const (
 // primary serving type, while alsoAllow specifies other tablet types that
 // should also be honored for serving.
 // Returns true if the state of QueryService or the tablet type changed.
-func (tsv *TabletServer) SetServingType(tabletType topodatapb.TabletType, serving bool, alsoAllow []topodatapb.TabletType) (bool, error) {
+func (tsv *TabletServer) SetServingType(tabletType topodatapb.TabletType, serving bool, alsoAllow []topodatapb.TabletType) (stateChanged bool, err error) {
 	defer tsv.ExitLameduck()
 
 	action, err := tsv.decideAction(tabletType, serving, alsoAllow)
 	if err != nil {
-		return false /* state did not change */, err
+		return false, err
 	}
 	switch action {
 	case actionNone:
-		return false /* state did not change */, nil
+		return false, nil
 	case actionFullStart:
-		return true /* state changed */, tsv.fullStart()
+		if err := tsv.fullStart(); err != nil {
+			tsv.closeAll()
+			return true, err
+		}
+		return true, nil
 	case actionServeNewType:
-		return true /* state changed */, tsv.serveNewType()
+		if err := tsv.serveNewType(); err != nil {
+			tsv.closeAll()
+			return true, err
+		}
+		return true, nil
 	case actionGracefulStop:
 		tsv.gracefulStop()
-		return true /* state changed */, nil
+		return true, nil
 	}
 	panic("unreachable")
 }
@@ -368,43 +376,29 @@ func (tsv *TabletServer) decideAction(tabletType topodatapb.TabletType, serving 
 	case StateTransitioning, StateShuttingDown:
 		return actionNone, NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "cannot SetServingType, current state: %s", stateName[tsv.state])
 	default:
-		panic("uncreachable")
+		panic("unreachable")
 	}
 	return actionNone, nil
 }
 
 func (tsv *TabletServer) fullStart() (err error) {
-	defer func() {
-		if x := recover(); x != nil {
-			log.Errorf("Could not start tabletserver: %v.\nStack trace:\n%s", x, tb.Stack(4))
-			tsv.closeAll()
-			err = x.(error)
-		}
-	}()
-
 	c, err := dbconnpool.NewDBConnection(&tsv.dbconfigs.App, tsv.qe.queryServiceStats.MySQLStats)
 	if err != nil {
-		panic(err)
+		return err
 	}
 	c.Close()
 
-	tsv.qe.Open(tsv.dbconfigs)
+	if err := tsv.qe.Open(tsv.dbconfigs); err != nil {
+		return err
+	}
 	if err := tsv.te.Init(tsv.dbconfigs); err != nil {
-		// TODO(sougou): change to normal error handling.
-		panic(err)
+		return err
 	}
 	tsv.updateStreamList.Init()
 	return tsv.serveNewType()
 }
 
 func (tsv *TabletServer) serveNewType() (err error) {
-	defer func() {
-		if x := recover(); x != nil {
-			log.Errorf("Could not start tabletserver: %v.\nStack trace:\n%s", x, tb.Stack(4))
-			tsv.closeAll()
-			err = x.(error)
-		}
-	}()
 	if tsv.target.TabletType == topodatapb.TabletType_MASTER {
 		if err := tsv.txThrottler.Open(tsv.target.Keyspace, tsv.target.Shard); err != nil {
 			return err
@@ -420,10 +414,7 @@ func (tsv *TabletServer) serveNewType() (err error) {
 		// be sure that the tx pool won't change after the wait.
 		tsv.txRequests.Wait()
 		tsv.te.Close(true)
-		if err := tsv.watcher.Open(tsv.dbconfigs, tsv.mysqld); err != nil {
-			// TODO(sougou): change to normal error handling.
-			panic(err)
-		}
+		tsv.watcher.Open(tsv.dbconfigs, tsv.mysqld)
 		tsv.txThrottler.Close()
 	}
 	tsv.transition(StateServing)
@@ -437,9 +428,11 @@ func (tsv *TabletServer) gracefulStop() {
 }
 
 // StopService shuts down the tabletserver to the uninitialized state.
-// It first transitions to StateShuttingDown, then waits for existing
-// transactions to complete. Once all transactions are resolved, it shuts
-// down the rest of the services and transitions to StateNotConnected.
+// It first transitions to StateShuttingDown, then waits for active
+// services to shut down. Then it shuts down QueryEngine. This function
+// should be called before process termination, or if MySQL is unreachable.
+// Under normal circumstances, SetServingType should be called, which will
+// keep QueryEngine open.
 func (tsv *TabletServer) StopService() {
 	defer close(tsv.setTimeBomb())
 	defer logError(tsv.qe.queryServiceStats)
@@ -452,19 +445,11 @@ func (tsv *TabletServer) StopService() {
 	tsv.setState(StateShuttingDown)
 	tsv.mu.Unlock()
 
-	log.Infof("Executing graceful transition to NotServing")
-	tsv.messager.Close()
-	tsv.te.Close(false)
-	tsv.watcher.Close()
-	tsv.updateStreamList.Stop()
-
-	defer func() {
-		tsv.transition(StateNotConnected)
-	}()
-	log.Infof("Shutting down query service")
+	log.Infof("Executing complete shutdown.")
+	tsv.waitForShutdown()
 	tsv.qe.Close()
-
-	tsv.txThrottler.Close()
+	log.Infof("Shutdown complete.")
+	tsv.transition(StateNotConnected)
 }
 
 func (tsv *TabletServer) waitForShutdown() {
@@ -808,7 +793,10 @@ func (tsv *TabletServer) Execute(ctx context.Context, target *querypb.Target, sq
 				bindVariables = make(map[string]interface{})
 			}
 			sql = stripTrailing(sql, bindVariables)
-			plan := tsv.qe.schemaInfo.GetPlan(ctx, logStats, sql)
+			plan, err := tsv.qe.schemaInfo.GetPlan(ctx, logStats, sql)
+			if err != nil {
+				return err
+			}
 			qre := &QueryExecutor{
 				query:         sql,
 				bindVars:      bindVariables,
@@ -837,7 +825,7 @@ func (tsv *TabletServer) Execute(ctx context.Context, target *querypb.Target, sq
 // The first QueryResult will have Fields set (and Rows nil).
 // The subsequent QueryResult will have Rows set (and Fields nil).
 func (tsv *TabletServer) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) (err error) {
-	err = tsv.execRequest(
+	return tsv.execRequest(
 		ctx, 0,
 		"StreamExecute", sql, bindVariables,
 		target, false, false,
@@ -846,10 +834,14 @@ func (tsv *TabletServer) StreamExecute(ctx context.Context, target *querypb.Targ
 				bindVariables = make(map[string]interface{})
 			}
 			sql = stripTrailing(sql, bindVariables)
+			plan, err := tsv.qe.schemaInfo.GetStreamPlan(sql)
+			if err != nil {
+				return err
+			}
 			qre := &QueryExecutor{
 				query:    sql,
 				bindVars: bindVariables,
-				plan:     tsv.qe.schemaInfo.GetStreamPlan(sql),
+				plan:     plan,
 				ctx:      ctx,
 				logStats: logStats,
 				qe:       tsv.qe,
@@ -859,7 +851,6 @@ func (tsv *TabletServer) StreamExecute(ctx context.Context, target *querypb.Targ
 			return qre.Stream(sqltypes.IncludeFieldsOrDefault(options), callback)
 		},
 	)
-	return err
 }
 
 // ExecuteBatch executes a group of queries and returns their results as a list.
@@ -936,25 +927,27 @@ func (tsv *TabletServer) BeginExecuteBatch(ctx context.Context, target *querypb.
 
 // MessageStream streams messages from the requested table.
 func (tsv *TabletServer) MessageStream(ctx context.Context, target *querypb.Target, name string, callback func(*sqltypes.Result) error) (err error) {
-	if err = tsv.startRequest(ctx, target, false, false); err != nil {
-		return err
-	}
-	defer tsv.endRequest(false)
-	defer tsv.handlePanicAndSendLogStats("ack", nil, &err, nil)
-	// TODO(sougou): perform ACL checks.
-	rcv, done := newMessageReceiver(func(r *sqltypes.Result) error {
-		select {
-		case <-ctx.Done():
-			return io.EOF
-		default:
-		}
-		return callback(r)
-	})
-	if err := tsv.messager.Subscribe(name, rcv); err != nil {
-		return tsv.handleError("message_stream", nil, NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "%v", err), nil)
-	}
-	<-done
-	return nil
+	return tsv.execRequest(
+		ctx, 0,
+		"MessageStream", "stream", nil,
+		target, false, false,
+		func(ctx context.Context, logStats *LogStats) error {
+			// TODO(sougou): perform ACL checks.
+			rcv, done := newMessageReceiver(func(r *sqltypes.Result) error {
+				select {
+				case <-ctx.Done():
+					return io.EOF
+				default:
+				}
+				return callback(r)
+			})
+			if err := tsv.messager.Subscribe(name, rcv); err != nil {
+				return err
+			}
+			<-done
+			return nil
+		},
+	)
 }
 
 // MessageAck acks the list of messages for a given message table.
@@ -1124,26 +1117,17 @@ func (tsv *TabletServer) handlePanicAndSendLogStats(
 	logStats *LogStats,
 ) {
 	if x := recover(); x != nil {
-		terr, ok := x.(*TabletError)
-		if ok {
-			// If the thrown error is a *TabletError then it's a (deprecated)
-			// use of panic to report a "regular" (i.e. non-logic) error;
-			// thus we call handleError.
-			// TODO(erez): Remove this once we report all regular
-			// errors without panic()'s.
-			*err = tsv.handleError(sql, bindVariables, terr, logStats)
-		} else {
-			errorMessage := fmt.Sprintf(
-				"Uncaught panic for %v:\n%v\n%s",
-				querytypes.QueryAsString(sql, bindVariables),
-				x,
-				tb.Stack(4) /* Skip the last 4 boiler-plate frames. */)
-			log.Errorf(errorMessage)
-			*err = NewTabletError(vtrpcpb.ErrorCode_UNKNOWN_ERROR, errorMessage)
-			tsv.qe.queryServiceStats.InternalErrors.Add("Panic", 1)
-			if logStats != nil {
-				logStats.Error = nil
-			}
+		errorMessage := fmt.Sprintf(
+			"Uncaught panic for %v:\n%v\n%s",
+			querytypes.QueryAsString(sql, bindVariables),
+			x,
+			tb.Stack(4) /* Skip the last 4 boiler-plate frames. */)
+		log.Errorf(errorMessage)
+		terr := NewTabletError(vtrpcpb.ErrorCode_UNKNOWN_ERROR, "%s", errorMessage)
+		*err = terr
+		tsv.qe.queryServiceStats.InternalErrors.Add("Panic", 1)
+		if logStats != nil {
+			logStats.Error = terr
 		}
 	}
 	if logStats != nil {
@@ -1165,7 +1149,9 @@ func (tsv *TabletServer) handleError(
 	}()
 	terr, ok := err.(*TabletError)
 	if !ok {
-		panic(fmt.Errorf("Got an error that is not a TabletError: %v", err))
+		terr = NewTabletError(vtrpcpb.ErrorCode_UNKNOWN_ERROR, "%v", err)
+		// We only want to see TabletError here.
+		tsv.qe.queryServiceStats.InternalErrors.Add("UnknownError", 1)
 	}
 
 	// If TerseErrors is on, strip the error message returned by MySQL and only

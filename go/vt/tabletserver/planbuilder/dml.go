@@ -265,7 +265,7 @@ func analyzeInsert(ins *sqlparser.Insert, getTable TableGetter) (plan *ExecPlan,
 	case schema.Message:
 		return analyzeInsertMessage(ins, plan, tableInfo)
 	}
-	panic("unexpected")
+	panic("unreachable")
 }
 
 func analyzeInsertNoType(ins *sqlparser.Insert, plan *ExecPlan, tableInfo *schema.Table) (*ExecPlan, error) {

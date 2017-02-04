@@ -62,16 +62,15 @@ func NewReplicationWatcher(config Config, qe *QueryEngine) *ReplicationWatcher {
 }
 
 // Open starts the ReplicationWatcher service.
-func (rpw *ReplicationWatcher) Open(dbconfigs dbconfigs.DBConfigs, mysqld mysqlctl.MysqlDaemon) error {
+func (rpw *ReplicationWatcher) Open(dbconfigs dbconfigs.DBConfigs, mysqld mysqlctl.MysqlDaemon) {
 	if rpw.isOpen || !rpw.watchReplication {
-		return nil
+		return
 	}
 	ctx, cancel := context.WithCancel(localContext())
 	rpw.cancel = cancel
 	rpw.wg.Add(1)
 	go rpw.Process(ctx, dbconfigs, mysqld)
 	rpw.isOpen = true
-	return nil
 }
 
 // Close stops the ReplicationWatcher service.

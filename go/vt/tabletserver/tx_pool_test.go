@@ -90,7 +90,7 @@ func TestTxPoolTransactionKiller(t *testing.T) {
 
 	txPool := newTxPool(false)
 	// make sure transaction killer will run frequent enough
-	txPool.SetTimeout(time.Duration(10))
+	txPool.SetTimeout(1 * time.Millisecond)
 	txPool.Open(db.ConnParams(), db.ConnParams())
 	defer txPool.Close()
 	ctx := context.Background()
