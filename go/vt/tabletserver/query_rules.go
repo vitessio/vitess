@@ -591,7 +591,7 @@ func (uval bvcuint64) eval(bv interface{}, op Operator, onMismatch bool) bool {
 			return true
 		}
 	default:
-		panic("unexpected:")
+		panic("unreachable")
 	}
 
 	return onMismatch
@@ -645,7 +645,7 @@ func (ival bvcint64) eval(bv interface{}, op Operator, onMismatch bool) bool {
 			return false
 		}
 	default:
-		panic("unexpected:")
+		panic("unreachable")
 	}
 
 	return onMismatch
@@ -672,7 +672,7 @@ func (sval bvcstring) eval(bv interface{}, op Operator, onMismatch bool) bool {
 	case QRLessEqual:
 		return str <= string(sval)
 	}
-	panic("unexpected:")
+	panic("unreachable")
 }
 
 type bvcre struct {
@@ -690,7 +690,7 @@ func (reval bvcre) eval(bv interface{}, op Operator, onMismatch bool) bool {
 	case QRNoMatch:
 		return !reval.re.MatchString(str)
 	}
-	panic("unexpected:")
+	panic("unreachable")
 }
 
 type bvcKeyRange topodatapb.KeyRange
@@ -724,7 +724,7 @@ func (krval *bvcKeyRange) eval(bv interface{}, op Operator, onMismatch bool) boo
 			return !key.KeyRangeContains((*topodatapb.KeyRange)(krval), []byte(str))
 		}
 	default:
-		panic("unexpected:")
+		panic("unreachable")
 	}
 	return onMismatch
 }

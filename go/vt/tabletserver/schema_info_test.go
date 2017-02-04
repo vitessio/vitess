@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -31,13 +32,11 @@ func TestSchemaInfoStrictMode(t *testing.T) {
 	}
 	schemaInfo := newTestSchemaInfo(10, 1*time.Second, 1*time.Second, false)
 	t.Log(schemaInfo)
-	defer handleAndVerifyTabletError(
-		t,
-		"schema info Open should fail because of underlying "+
-			"connection cannot verify strict mode",
-		vtrpcpb.ErrorCode_INTERNAL_ERROR,
-	)
-	schemaInfo.Open(db.ConnParams(), true)
+	err := schemaInfo.Open(db.ConnParams(), true)
+	want := "error: could not verify mode"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("schemaInfo.Open: %v, must contain %s", err, want)
+	}
 }
 
 func TestSchemaInfoOpenFailedDueToMissMySQLTime(t *testing.T) {
@@ -54,12 +53,11 @@ func TestSchemaInfoOpenFailedDueToMissMySQLTime(t *testing.T) {
 		},
 	})
 	schemaInfo := newTestSchemaInfo(10, 1*time.Second, 1*time.Second, false)
-	defer handleAndVerifyTabletError(
-		t,
-		"schema info Open should fail because of it could not get MySQL time",
-		vtrpcpb.ErrorCode_UNKNOWN_ERROR,
-	)
-	schemaInfo.Open(db.ConnParams(), false)
+	err := schemaInfo.Open(db.ConnParams(), false)
+	want := "Could not get MySQL time"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("schemaInfo.Open: %v, want %s", err, want)
+	}
 }
 
 func TestSchemaInfoOpenFailedDueToIncorrectMysqlRowNum(t *testing.T) {
@@ -75,12 +73,11 @@ func TestSchemaInfoOpenFailedDueToIncorrectMysqlRowNum(t *testing.T) {
 		},
 	})
 	schemaInfo := newTestSchemaInfo(10, 1*time.Second, 1*time.Second, false)
-	defer handleAndVerifyTabletError(
-		t,
-		"schema info Open should fail because of incorrect MySQL row number",
-		vtrpcpb.ErrorCode_UNKNOWN_ERROR,
-	)
-	schemaInfo.Open(db.ConnParams(), false)
+	err := schemaInfo.Open(db.ConnParams(), false)
+	want := "Unexpected result for MySQL time"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("schemaInfo.Open: %v, want %s", err, want)
+	}
 }
 
 func TestSchemaInfoOpenFailedDueToInvalidTimeFormat(t *testing.T) {
@@ -96,12 +93,11 @@ func TestSchemaInfoOpenFailedDueToInvalidTimeFormat(t *testing.T) {
 		},
 	})
 	schemaInfo := newTestSchemaInfo(10, 1*time.Second, 1*time.Second, false)
-	defer handleAndVerifyTabletError(
-		t,
-		"schema info Open should fail because it could not get MySQL time",
-		vtrpcpb.ErrorCode_UNKNOWN_ERROR,
-	)
-	schemaInfo.Open(db.ConnParams(), false)
+	err := schemaInfo.Open(db.ConnParams(), false)
+	want := "Could not parse time"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("schemaInfo.Open: %v, want %s", err, want)
+	}
 }
 
 func TestSchemaInfoOpenFailedDueToExecErr(t *testing.T) {
@@ -112,12 +108,11 @@ func TestSchemaInfoOpenFailedDueToExecErr(t *testing.T) {
 	}
 	db.AddRejectedQuery(mysqlconn.BaseShowTables, fmt.Errorf("injected error"))
 	schemaInfo := newTestSchemaInfo(10, 1*time.Second, 1*time.Second, false)
-	defer handleAndVerifyTabletError(
-		t,
-		"schema info Open should fail because conn.Exec failed",
-		vtrpcpb.ErrorCode_UNKNOWN_ERROR,
-	)
-	schemaInfo.Open(db.ConnParams(), false)
+	err := schemaInfo.Open(db.ConnParams(), false)
+	want := "Could not get table list"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("schemaInfo.Open: %v, want %s", err, want)
+	}
 }
 
 func TestSchemaInfoOpenFailedDueToTableInfoErr(t *testing.T) {
@@ -145,12 +140,11 @@ func TestSchemaInfoOpenFailedDueToTableInfoErr(t *testing.T) {
 		},
 	})
 	schemaInfo := newTestSchemaInfo(10, 1*time.Second, 1*time.Second, false)
-	defer handleAndVerifyTabletError(
-		t,
-		"schema info Open should fail because NewTableInfo failed",
-		vtrpcpb.ErrorCode_INTERNAL_ERROR,
-	)
-	schemaInfo.Open(db.ConnParams(), false)
+	err := schemaInfo.Open(db.ConnParams(), false)
+	want := "could not get schema for any tables"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("schemaInfo.Open: %v, want %s", err, want)
+	}
 }
 
 func TestSchemaInfoReload(t *testing.T) {
@@ -331,29 +325,11 @@ func TestSchemaInfoGetPlanPanicDuetoEmptyQuery(t *testing.T) {
 
 	ctx := context.Background()
 	logStats := NewLogStats(ctx, "GetPlanStats")
-	defer handleAndVerifyTabletError(
-		t,
-		"schema info GetPlan should fail because of empty query",
-		vtrpcpb.ErrorCode_UNKNOWN_ERROR,
-	)
-	schemaInfo.GetPlan(ctx, logStats, "")
-}
-
-func TestSchemaInfoQueryCacheFailDueToInvalidCacheSize(t *testing.T) {
-	db := fakesqldb.New(t)
-	defer db.Close()
-	for query, result := range getSchemaInfoTestSupportedQueries() {
-		db.AddQuery(query, result)
+	_, err := schemaInfo.GetPlan(ctx, logStats, "")
+	want := "syntax error"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("schemaInfo.GetPlan: %v, want %s", err, want)
 	}
-	schemaInfo := newTestSchemaInfo(10, 10*time.Second, 10*time.Second, false)
-	schemaInfo.Open(db.ConnParams(), true)
-	defer schemaInfo.Close()
-	defer handleAndVerifyTabletError(
-		t,
-		"schema info SetQueryCacheSize should use a positive size",
-		vtrpcpb.ErrorCode_BAD_INPUT,
-	)
-	schemaInfo.SetQueryCacheCap(0)
 }
 
 func TestSchemaInfoQueryCache(t *testing.T) {
@@ -375,11 +351,17 @@ func TestSchemaInfoQueryCache(t *testing.T) {
 	ctx := context.Background()
 	logStats := NewLogStats(ctx, "GetPlanStats")
 	schemaInfo.SetQueryCacheCap(1)
-	firstPlan := schemaInfo.GetPlan(ctx, logStats, firstQuery)
+	firstPlan, err := schemaInfo.GetPlan(ctx, logStats, firstQuery)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if firstPlan == nil {
 		t.Fatalf("plan should not be nil")
 	}
-	secondPlan := schemaInfo.GetPlan(ctx, logStats, secondQuery)
+	secondPlan, err := schemaInfo.GetPlan(ctx, logStats, secondQuery)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if secondPlan == nil {
 		t.Fatalf("plan should not be nil")
 	}
@@ -647,14 +629,6 @@ func getSchemaInfoTestSupportedQueries() map[string]*sqltypes.Result {
 		"begin":  {},
 		"commit": {},
 	}
-}
-
-func handleAndVerifyTabletError(t *testing.T, msg string, tabletErrCode vtrpcpb.ErrorCode) {
-	err := recover()
-	if err == nil {
-		t.Fatalf(msg)
-	}
-	verifyTabletError(t, err, tabletErrCode)
 }
 
 func verifyTabletError(t *testing.T, err interface{}, tabletErrCode vtrpcpb.ErrorCode) {

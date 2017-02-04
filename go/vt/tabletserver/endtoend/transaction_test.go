@@ -289,7 +289,7 @@ func TestAutoCommitOff(t *testing.T) {
 	defer framework.Server.SetAutoCommit(true)
 
 	_, err := framework.NewClient().Execute("insert into vitess_test values(4, null, null, null)", nil)
-	want := "error: unsupported query"
+	want := "error: Disallowed outside transaction"
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
 		t.Errorf("Error: %v, must start with %s", err, want)
 	}
