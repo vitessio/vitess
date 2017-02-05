@@ -15,6 +15,7 @@ import (
 
 	"github.com/youtube/vitess/go/mysqlconn/fakesqldb"
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/vt/tabletserver/tabletstats"
 )
 
 func TestTxPoolExecuteRollback(t *testing.T) {
@@ -25,7 +26,7 @@ func TestTxPoolExecuteRollback(t *testing.T) {
 	db.AddQuery("begin", &sqltypes.Result{})
 	db.AddQuery("rollback", &sqltypes.Result{})
 
-	txPool := newTxPool(false)
+	txPool := newTxPool()
 	txPool.Open(db.ConnParams(), db.ConnParams())
 	defer txPool.Close()
 	ctx := context.Background()
@@ -52,7 +53,7 @@ func TestTxPoolRollbackNonBusy(t *testing.T) {
 	db.AddQuery("begin", &sqltypes.Result{})
 	db.AddQuery("rollback", &sqltypes.Result{})
 
-	txPool := newTxPool(false)
+	txPool := newTxPool()
 	txPool.Open(db.ConnParams(), db.ConnParams())
 	defer txPool.Close()
 	ctx := context.Background()
@@ -88,13 +89,13 @@ func TestTxPoolTransactionKiller(t *testing.T) {
 	db.AddQuery(sql, &sqltypes.Result{})
 	db.AddQuery("begin", &sqltypes.Result{})
 
-	txPool := newTxPool(false)
+	txPool := newTxPool()
 	// make sure transaction killer will run frequent enough
 	txPool.SetTimeout(1 * time.Millisecond)
 	txPool.Open(db.ConnParams(), db.ConnParams())
 	defer txPool.Close()
 	ctx := context.Background()
-	killCount := txPool.queryServiceStats.KillStats.Counts()["Transactions"]
+	killCount := tabletstats.KillStats.Counts()["Transactions"]
 	transactionID, err := txPool.Begin(ctx)
 	if err != nil {
 		t.Fatal(err)
@@ -107,7 +108,7 @@ func TestTxPoolTransactionKiller(t *testing.T) {
 	txConn.Recycle()
 	// transaction killer should kill the query
 	txPool.WaitForEmpty()
-	killCountDiff := txPool.queryServiceStats.KillStats.Counts()["Transactions"] - killCount
+	killCountDiff := tabletstats.KillStats.Counts()["Transactions"] - killCount
 	if killCountDiff != 1 {
 		t.Fatalf("query: %s should be killed by transaction killer", sql)
 	}
@@ -116,7 +117,7 @@ func TestTxPoolTransactionKiller(t *testing.T) {
 func TestTxPoolBeginAfterConnPoolClosed(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
-	txPool := newTxPool(false)
+	txPool := newTxPool()
 	txPool.SetTimeout(time.Duration(10))
 	txPool.Open(db.ConnParams(), db.ConnParams())
 	txPool.Close()
@@ -135,7 +136,7 @@ func TestTxPoolBeginWithPoolConnectionError(t *testing.T) {
 	db := fakesqldb.New(t)
 	db.Close()
 	//	db.EnableConnFail()
-	txPool := newTxPool(false)
+	txPool := newTxPool()
 	txPool.Open(db.ConnParams(), db.ConnParams())
 	defer txPool.Close()
 	ctx := context.Background()
@@ -150,7 +151,7 @@ func TestTxPoolBeginWithExecError(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 	db.AddRejectedQuery("begin", errRejected)
-	txPool := newTxPool(false)
+	txPool := newTxPool()
 	txPool.Open(db.ConnParams(), db.ConnParams())
 	defer txPool.Close()
 	ctx := context.Background()
@@ -169,7 +170,7 @@ func TestTxPoolRollbackFail(t *testing.T) {
 	db.AddQuery("begin", &sqltypes.Result{})
 	db.AddRejectedQuery("rollback", errRejected)
 
-	txPool := newTxPool(false)
+	txPool := newTxPool()
 	txPool.Open(db.ConnParams(), db.ConnParams())
 	defer txPool.Close()
 	ctx := context.Background()
@@ -197,7 +198,7 @@ func TestTxPoolRollbackFail(t *testing.T) {
 func TestTxPoolGetConnFail(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
-	txPool := newTxPool(false)
+	txPool := newTxPool()
 	txPool.Open(db.ConnParams(), db.ConnParams())
 	defer txPool.Close()
 	_, err := txPool.Get(12345, "for query")
@@ -212,7 +213,7 @@ func TestTxPoolExecFailDueToConnFail(t *testing.T) {
 	defer db.Close()
 	db.AddQuery("begin", &sqltypes.Result{})
 
-	txPool := newTxPool(false)
+	txPool := newTxPool()
 	txPool.Open(db.ConnParams(), db.ConnParams())
 	defer txPool.Close()
 	ctx := context.Background()
@@ -235,22 +236,17 @@ func TestTxPoolExecFailDueToConnFail(t *testing.T) {
 	}
 }
 
-func newTxPool(enablePublishStats bool) *TxPool {
+func newTxPool() *TxPool {
 	randID := rand.Int63()
 	poolName := fmt.Sprintf("TestTransactionPool-%d", randID)
-	txStatsPrefix := fmt.Sprintf("TxStats-%d-", randID)
 	transactionCap := 300
 	transactionTimeout := time.Duration(30 * time.Second)
 	idleTimeout := time.Duration(30 * time.Second)
-	queryServiceStats := NewQueryServiceStats("", enablePublishStats)
 	return NewTxPool(
 		poolName,
-		txStatsPrefix,
 		transactionCap,
 		transactionTimeout,
 		idleTimeout,
-		enablePublishStats,
-		queryServiceStats,
 		DummyChecker,
 	)
 }

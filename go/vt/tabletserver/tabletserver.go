@@ -34,6 +34,7 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver/queryservice"
 	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 	"github.com/youtube/vitess/go/vt/tabletserver/splitquery"
+	"github.com/youtube/vitess/go/vt/tabletserver/tabletstats"
 	"github.com/youtube/vitess/go/vt/utils"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
@@ -130,9 +131,6 @@ type TabletServer struct {
 	// history records changes in state for display on the status page.
 	// It has its own internal mutex.
 	history *history.History
-
-	// Stats
-	queryServiceStats *QueryServiceStats
 }
 
 // RegisterFunction is a callback type to be called when we
@@ -150,6 +148,8 @@ type MySQLChecker interface {
 	CheckMySQL()
 }
 
+var tsOnce sync.Once
+
 // NewTabletServer creates an instance of TabletServer. Only one instance
 // of TabletServer can be created per process.
 func NewTabletServer(config Config) *TabletServer {
@@ -161,24 +161,23 @@ func NewTabletServer(config Config) *TabletServer {
 		streamHealthMap:     make(map[int]chan<- *querypb.StreamHealthResponse),
 		history:             history.New(10),
 	}
-	tsv.queryServiceStats = NewQueryServiceStats(config.StatsPrefix, config.EnablePublishStats)
-	tsv.qe = NewQueryEngine(tsv, config, tsv.queryServiceStats)
-	tsv.te = NewTxEngine(tsv, config, tsv.queryServiceStats)
+	tsv.qe = NewQueryEngine(tsv, config)
+	tsv.te = NewTxEngine(tsv, config)
 	tsv.txThrottler = CreateTxThrottlerFromTabletConfig(&config)
-	tsv.messager = NewMessagerEngine(tsv, config, tsv.queryServiceStats)
+	tsv.messager = NewMessagerEngine(tsv, config)
 	tsv.watcher = NewReplicationWatcher(config, tsv.qe)
 	tsv.updateStreamList = &binlog.StreamList{}
-	if config.EnablePublishStats {
-		stats.Publish(config.StatsPrefix+"TabletState", stats.IntFunc(func() int64 {
+	tsOnce.Do(func() {
+		stats.Publish("TabletState", stats.IntFunc(func() int64 {
 			tsv.mu.Lock()
 			state := tsv.state
 			tsv.mu.Unlock()
 			return state
 		}))
-		stats.Publish(config.StatsPrefix+"QueryTimeout", stats.DurationFunc(tsv.QueryTimeout.Get))
-		stats.Publish(config.StatsPrefix+"BeginTimeout", stats.DurationFunc(tsv.BeginTimeout.Get))
-		stats.Publish(config.StatsPrefix+"TabletStateName", stats.StringFunc(tsv.GetState))
-	}
+		stats.Publish("QueryTimeout", stats.DurationFunc(tsv.QueryTimeout.Get))
+		stats.Publish("BeginTimeout", stats.DurationFunc(tsv.BeginTimeout.Get))
+		stats.Publish("TabletStateName", stats.StringFunc(tsv.GetState))
+	})
 	return tsv
 }
 
@@ -382,7 +381,7 @@ func (tsv *TabletServer) decideAction(tabletType topodatapb.TabletType, serving 
 }
 
 func (tsv *TabletServer) fullStart() (err error) {
-	c, err := dbconnpool.NewDBConnection(&tsv.dbconfigs.App, tsv.qe.queryServiceStats.MySQLStats)
+	c, err := dbconnpool.NewDBConnection(&tsv.dbconfigs.App, tabletstats.MySQLStats)
 	if err != nil {
 		return err
 	}
@@ -435,7 +434,7 @@ func (tsv *TabletServer) gracefulStop() {
 // keep QueryEngine open.
 func (tsv *TabletServer) StopService() {
 	defer close(tsv.setTimeBomb())
-	defer logError(tsv.qe.queryServiceStats)
+	defer logError()
 
 	tsv.mu.Lock()
 	if tsv.state != StateServing && tsv.state != StateNotServing {
@@ -522,7 +521,7 @@ func (tsv *TabletServer) CheckMySQL() {
 	}
 	go func() {
 		defer func() {
-			logError(tsv.qe.queryServiceStats)
+			logError()
 			time.Sleep(1 * time.Second)
 			tsv.checkMySQLThrottler.Release()
 		}()
@@ -579,12 +578,6 @@ func (tsv *TabletServer) QueryService() queryservice.QueryService {
 	return tsv
 }
 
-// QueryServiceStats returns the QueryServiceStats instance of the
-// TabletServer's QueryEngine.
-func (tsv *TabletServer) QueryServiceStats() *QueryServiceStats {
-	return tsv.qe.queryServiceStats
-}
-
 // Begin starts a new transaction. This is allowed only if the state is StateServing.
 func (tsv *TabletServer) Begin(ctx context.Context, target *querypb.Target) (transactionID int64, err error) {
 	err = tsv.execRequest(
@@ -592,7 +585,7 @@ func (tsv *TabletServer) Begin(ctx context.Context, target *querypb.Target) (tra
 		"Begin", "begin", nil,
 		target, true, false,
 		func(ctx context.Context, logStats *LogStats) error {
-			defer tsv.qe.queryServiceStats.QueryStats.Record("BEGIN", time.Now())
+			defer tabletstats.QueryStats.Record("BEGIN", time.Now())
 			if tsv.txThrottler.Throttle() {
 				return NewTabletError(vtrpcpb.ErrorCode_TRANSIENT_ERROR, "Transaction throttled")
 			}
@@ -611,7 +604,7 @@ func (tsv *TabletServer) Commit(ctx context.Context, target *querypb.Target, tra
 		"Commit", "commit", nil,
 		target, true, true,
 		func(ctx context.Context, logStats *LogStats) error {
-			defer tsv.qe.queryServiceStats.QueryStats.Record("COMMIT", time.Now())
+			defer tabletstats.QueryStats.Record("COMMIT", time.Now())
 			logStats.TransactionID = transactionID
 			return tsv.te.txPool.Commit(ctx, transactionID, tsv.messager)
 		},
@@ -625,7 +618,7 @@ func (tsv *TabletServer) Rollback(ctx context.Context, target *querypb.Target, t
 		"Rollback", "rollback", nil,
 		target, true, true,
 		func(ctx context.Context, logStats *LogStats) error {
-			defer tsv.qe.queryServiceStats.QueryStats.Record("ROLLBACK", time.Now())
+			defer tabletstats.QueryStats.Record("ROLLBACK", time.Now())
 			logStats.TransactionID = transactionID
 			return tsv.te.txPool.Rollback(ctx, transactionID)
 		},
@@ -1060,7 +1053,7 @@ func (tsv *TabletServer) SplitQuery(
 			}
 			defer func(start time.Time) {
 				splitTableName := splitParams.GetSplitTableName()
-				tsv.qe.queryServiceStats.addUserTableQueryStats(ctx, splitTableName, "SplitQuery", int64(time.Now().Sub(start)))
+				tabletstats.RecordUserQuery(ctx, splitTableName, "SplitQuery", int64(time.Now().Sub(start)))
 			}(time.Now())
 			sqlExecuter, err := newSplitQuerySQLExecuter(ctx, logStats, tsv.qe)
 			if err != nil {
@@ -1125,7 +1118,7 @@ func (tsv *TabletServer) handlePanicAndSendLogStats(
 		log.Errorf(errorMessage)
 		terr := NewTabletError(vtrpcpb.ErrorCode_UNKNOWN_ERROR, "%s", errorMessage)
 		*err = terr
-		tsv.qe.queryServiceStats.InternalErrors.Add("Panic", 1)
+		tabletstats.InternalErrors.Add("Panic", 1)
 		if logStats != nil {
 			logStats.Error = terr
 		}
@@ -1151,7 +1144,7 @@ func (tsv *TabletServer) handleError(
 	if !ok {
 		terr = NewTabletError(vtrpcpb.ErrorCode_UNKNOWN_ERROR, "%v", err)
 		// We only want to see TabletError here.
-		tsv.qe.queryServiceStats.InternalErrors.Add("UnknownError", 1)
+		tabletstats.InternalErrors.Add("UnknownError", 1)
 	}
 
 	// If TerseErrors is on, strip the error message returned by MySQL and only
@@ -1184,7 +1177,7 @@ func (tsv *TabletServer) handleError(
 		myError = terr
 	}
 
-	terr.RecordStats(tsv.qe.queryServiceStats)
+	terr.RecordStats()
 
 	logMethod := log.Infof
 	// Suppress or demote some errors in logs.

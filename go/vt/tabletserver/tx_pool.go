@@ -22,6 +22,7 @@ import (
 	"github.com/youtube/vitess/go/vt/callerid"
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
+	"github.com/youtube/vitess/go/vt/tabletserver/tabletstats"
 	"golang.org/x/net/context"
 )
 
@@ -41,16 +42,19 @@ const (
 
 const txLogInterval = time.Duration(1 * time.Minute)
 
+var (
+	txOnce  sync.Once
+	txStats = stats.NewTimings("Transactions")
+)
+
 // TxPool is the transaction pool for the query service.
 type TxPool struct {
-	pool              *ConnPool
-	activePool        *pools.Numbered
-	lastID            sync2.AtomicInt64
-	timeout           sync2.AtomicDuration
-	ticks             *timer.Timer
-	txStats           *stats.Timings
-	queryServiceStats *QueryServiceStats
-	checker           MySQLChecker
+	pool       *ConnPool
+	activePool *pools.Numbered
+	lastID     sync2.AtomicInt64
+	timeout    sync2.AtomicDuration
+	ticks      *timer.Timer
+	checker    MySQLChecker
 	// Tracking culprits that cause tx pool full errors.
 	logMu   sync.Mutex
 	lastLog time.Time
@@ -59,34 +63,23 @@ type TxPool struct {
 // NewTxPool creates a new TxPool. It's not operational until it's Open'd.
 func NewTxPool(
 	name string,
-	txStatsPrefix string,
 	capacity int,
 	timeout time.Duration,
 	idleTimeout time.Duration,
-	enablePublishStats bool,
-	qStats *QueryServiceStats,
 	checker MySQLChecker) *TxPool {
-
-	txStatsName := ""
-	if enablePublishStats {
-		txStatsName = txStatsPrefix + "Transactions"
-	}
-
 	axp := &TxPool{
-		pool:              NewConnPool(name, capacity, idleTimeout, enablePublishStats, qStats, checker),
-		activePool:        pools.NewNumbered(),
-		lastID:            sync2.NewAtomicInt64(time.Now().UnixNano()),
-		timeout:           sync2.NewAtomicDuration(timeout),
-		ticks:             timer.NewTimer(timeout / 10),
-		txStats:           stats.NewTimings(txStatsName),
-		checker:           checker,
-		queryServiceStats: qStats,
+		pool:       NewConnPool(name, capacity, idleTimeout, checker),
+		activePool: pools.NewNumbered(),
+		lastID:     sync2.NewAtomicInt64(time.Now().UnixNano()),
+		timeout:    sync2.NewAtomicDuration(timeout),
+		ticks:      timer.NewTimer(timeout / 10),
+		checker:    checker,
 	}
-	// Careful: pool also exports name+"xxx" vars,
-	// but we know it doesn't export Timeout.
-	if enablePublishStats {
+	txOnce.Do(func() {
+		// Careful: pool also exports name+"xxx" vars,
+		// but we know it doesn't export Timeout.
 		stats.Publish(name+"Timeout", stats.DurationFunc(axp.timeout.Get))
-	}
+	})
 	return axp
 }
 
@@ -104,7 +97,7 @@ func (axp *TxPool) Close() {
 	for _, v := range axp.activePool.GetOutdated(time.Duration(0), "for closing") {
 		conn := v.(*TxConnection)
 		log.Warningf("killing transaction for shutdown: %s", conn.Format(nil))
-		axp.queryServiceStats.InternalErrors.Add("StrayTransactions", 1)
+		tabletstats.InternalErrors.Add("StrayTransactions", 1)
 		conn.Close()
 		conn.conclude(TxClose)
 	}
@@ -131,11 +124,11 @@ func (axp *TxPool) RollbackNonBusy(ctx context.Context) {
 }
 
 func (axp *TxPool) transactionKiller() {
-	defer logError(axp.queryServiceStats)
+	defer logError()
 	for _, v := range axp.activePool.GetOutdated(time.Duration(axp.Timeout()), "for rollback") {
 		conn := v.(*TxConnection)
 		log.Warningf("killing transaction (exceeded timeout: %v): %s", axp.Timeout(), conn.Format(nil))
-		axp.queryServiceStats.KillStats.Add("Transactions", 1)
+		tabletstats.KillStats.Add("Transactions", 1)
 		conn.Close()
 		conn.conclude(TxKill)
 	}
@@ -221,7 +214,7 @@ func (axp *TxPool) LocalBegin(ctx context.Context) (*TxConnection, error) {
 func (axp *TxPool) LocalCommit(ctx context.Context, conn *TxConnection, messager *MessagerEngine) error {
 	defer conn.conclude(TxCommit)
 	defer messager.LockDB(conn.NewMessages, conn.ChangedMessages)()
-	axp.txStats.Add("Completed", time.Now().Sub(conn.StartTime))
+	txStats.Add("Completed", time.Now().Sub(conn.StartTime))
 	if _, err := conn.Exec(ctx, "commit", 1, false); err != nil {
 		conn.Close()
 		return NewTabletErrorSQL(vtrpcpb.ErrorCode_UNKNOWN_ERROR, err)
@@ -240,7 +233,7 @@ func (axp *TxPool) LocalConclude(ctx context.Context, conn *TxConnection) {
 
 func (axp *TxPool) localRollback(ctx context.Context, conn *TxConnection) error {
 	defer conn.conclude(TxRollback)
-	axp.txStats.Add("Aborted", time.Now().Sub(conn.StartTime))
+	txStats.Add("Aborted", time.Now().Sub(conn.StartTime))
 	if _, err := conn.Exec(ctx, "rollback", 1, false); err != nil {
 		conn.Close()
 		return NewTabletErrorSQL(vtrpcpb.ErrorCode_UNKNOWN_ERROR, err)
@@ -349,8 +342,8 @@ func (txc *TxConnection) log(conclusion string) {
 		username = callerid.GetUsername(txc.ImmediateCallerID)
 	}
 	duration := txc.EndTime.Sub(txc.StartTime)
-	txc.pool.queryServiceStats.UserTransactionCount.Add([]string{username, conclusion}, 1)
-	txc.pool.queryServiceStats.UserTransactionTimesNs.Add([]string{username, conclusion}, int64(duration))
+	tabletstats.UserTransactionCount.Add([]string{username, conclusion}, 1)
+	tabletstats.UserTransactionTimesNs.Add([]string{username, conclusion}, int64(duration))
 	if txc.LogToFile.Get() != 0 {
 		log.Infof("Logged transaction: %s", txc.Format(nil))
 	}

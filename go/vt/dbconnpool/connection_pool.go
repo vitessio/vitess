@@ -24,6 +24,7 @@ var (
 	// ErrConnPoolClosed is returned / panicked whent he
 	// connection pool is closed.
 	ErrConnPoolClosed = errors.New("connection pool is closed")
+	usedNames         = make(map[string]bool)
 )
 
 // PoolConnection is the interface implemented by users of this specialized pool.
@@ -53,9 +54,10 @@ type ConnectionPool struct {
 // to publish stats only.
 func NewConnectionPool(name string, capacity int, idleTimeout time.Duration) *ConnectionPool {
 	cp := &ConnectionPool{capacity: capacity, idleTimeout: idleTimeout}
-	if name == "" {
+	if name == "" || usedNames[name] {
 		return cp
 	}
+	usedNames[name] = true
 	stats.Publish(name+"Capacity", stats.IntFunc(cp.Capacity))
 	stats.Publish(name+"Available", stats.IntFunc(cp.Available))
 	stats.Publish(name+"MaxCap", stats.IntFunc(cp.MaxCap))

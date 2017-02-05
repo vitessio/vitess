@@ -84,7 +84,6 @@ func (util *testUtils) newMysqld(dbcfgs *dbconfigs.DBConfigs) mysqlctl.MysqlDaem
 		cnf,
 		dbcfgs,
 		dbconfigs.AppConfig, // These tests only use the app pool.
-		false,               /* enablePublishStats */
 	)
 }
 
@@ -98,21 +97,17 @@ func (util *testUtils) newDBConfigs(db *fakesqldb.DB) dbconfigs.DBConfigs {
 func (util *testUtils) newQueryServiceConfig() Config {
 	randID := rand.Int63()
 	config := DefaultQsConfig
-	config.StatsPrefix = fmt.Sprintf("Stats-%d-", randID)
 	config.DebugURLPrefix = fmt.Sprintf("/debug-%d-", randID)
 	config.PoolNamePrefix = fmt.Sprintf("Pool-%d-", randID)
 	config.StrictMode = true
-	config.EnablePublishStats = false
 	return config
 }
 
 func (util *testUtils) newConnPool() *ConnPool {
 	return NewConnPool(
-		"ConnPool",
+		fmt.Sprintf("TestPool%d", rand.Int63()),
 		100,
 		10*time.Second,
-		false,
-		NewQueryServiceStats("", false),
 		DummyChecker,
 	)
 }
@@ -120,13 +115,9 @@ func (util *testUtils) newConnPool() *ConnPool {
 func newTestSchemaInfo(
 	queryCacheSize int,
 	reloadTime time.Duration,
-	idleTimeout time.Duration,
-	enablePublishStats bool) *SchemaInfo {
+	idleTimeout time.Duration) *SchemaInfo {
 	randID := rand.Int63()
-	name := fmt.Sprintf("TestSchemaInfo-%d-", randID)
-	queryServiceStats := NewQueryServiceStats(name, enablePublishStats)
 	return NewSchemaInfo(
-		name,
 		DummyChecker,
 		queryCacheSize,
 		reloadTime,
@@ -136,7 +127,5 @@ func newTestSchemaInfo(
 			debugQueryStatsKey: fmt.Sprintf("/debug/query_stats_%d", randID),
 			debugSchemaKey:     fmt.Sprintf("/debug/schema_%d", randID),
 		},
-		enablePublishStats,
-		queryServiceStats,
 	)
 }

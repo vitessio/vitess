@@ -94,9 +94,6 @@ func initTabletMap(ts topo.Server, tpb *vttestpb.VTTestTopology, mysqld mysqlctl
 
 	ctx := context.Background()
 
-	// disable publishing of stats from query service
-	flag.Set("queryserver-config-enable-publish-stats", "false")
-
 	// iterate through the keyspaces
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, nil)
 	var uid uint32 = 1

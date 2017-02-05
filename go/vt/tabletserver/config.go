@@ -50,8 +50,6 @@ func init() {
 	flag.BoolVar(&qsConfig.EnableTableAclDryRun, "queryserver-config-enable-table-acl-dry-run", DefaultQsConfig.EnableTableAclDryRun, "If this flag is enabled, tabletserver will emit monitoring metrics and let the request pass regardless of table acl check results")
 	flag.StringVar(&qsConfig.TableAclExemptACL, "queryserver-config-acl-exempt-acl", DefaultQsConfig.TableAclExemptACL, "an acl that exempt from table acl checking (this acl is free to access any vitess tables).")
 	flag.BoolVar(&qsConfig.TerseErrors, "queryserver-config-terse-errors", DefaultQsConfig.TerseErrors, "prevent bind vars from escaping in returned errors")
-	flag.BoolVar(&qsConfig.EnablePublishStats, "queryserver-config-enable-publish-stats", DefaultQsConfig.EnablePublishStats, "set this flag to true makes queryservice publish monitoring stats")
-	flag.StringVar(&qsConfig.StatsPrefix, "stats-prefix", DefaultQsConfig.StatsPrefix, "prefix for variable names exported via expvar")
 	flag.StringVar(&qsConfig.DebugURLPrefix, "debug-url-prefix", DefaultQsConfig.DebugURLPrefix, "debug url prefix, vttablet will report various system debug pages and this config controls the prefix of these debug urls")
 	flag.StringVar(&qsConfig.PoolNamePrefix, "pool-name-prefix", DefaultQsConfig.PoolNamePrefix, "pool name prefix, vttablet has several pools and each of them has a name. This config specifies the prefix of these pool names")
 	flag.BoolVar(&qsConfig.WatchReplication, "watch_replication_stream", false, "When enabled, vttablet will stream the MySQL replication stream from the local server, and use it to support the include_event_token ExecuteOptions.")
@@ -89,10 +87,8 @@ type Config struct {
 	StrictMode              bool
 	StrictTableAcl          bool
 	TerseErrors             bool
-	EnablePublishStats      bool
 	EnableAutoCommit        bool
 	EnableTableAclDryRun    bool
-	StatsPrefix             string
 	DebugURLPrefix          string
 	PoolNamePrefix          string
 	TableAclExemptACL       string
@@ -131,10 +127,8 @@ var DefaultQsConfig = Config{
 	StrictMode:              true,
 	StrictTableAcl:          false,
 	TerseErrors:             false,
-	EnablePublishStats:      true,
 	EnableAutoCommit:        false,
 	EnableTableAclDryRun:    false,
-	StatsPrefix:             "",
 	DebugURLPrefix:          "/debug",
 	PoolNamePrefix:          "",
 	TableAclExemptACL:       "",
@@ -223,8 +217,6 @@ type Controller interface {
 
 	// QueryService returns the QueryService object used by this Controller
 	QueryService() queryservice.QueryService
-
-	QueryServiceStats() *QueryServiceStats
 
 	// BroadcastHealth sends the current health to all listeners
 	BroadcastHealth(terTimestamp int64, stats *querypb.RealtimeStats)
