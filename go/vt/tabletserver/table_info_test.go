@@ -216,9 +216,8 @@ func newTestTableInfo(tableType string, comment string, db *fakesqldb.DB) (*Tabl
 	ctx := context.Background()
 	appParams := db.ConnParams()
 	dbaParams := db.ConnParams()
-	queryServiceStats := NewQueryServiceStats("", false)
 	connPoolIdleTimeout := 10 * time.Second
-	connPool := NewConnPool("", 2, connPoolIdleTimeout, false, queryServiceStats, DummyChecker)
+	connPool := NewConnPool("", 2, connPoolIdleTimeout, DummyChecker)
 	connPool.Open(appParams, dbaParams)
 	conn, err := connPool.Get(ctx)
 	if err != nil {

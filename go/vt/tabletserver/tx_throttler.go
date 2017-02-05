@@ -69,9 +69,7 @@ func CreateTxThrottlerFromTabletConfig(tsvConfig *Config) *TxThrottler {
 		log.Errorf("Error creating transaction throttler. Transaction throttling will"+
 			" be disabled. Error: %v", err)
 		config := &txThrottlerConfig{
-			enabled:            false,
-			enablePublishStats: tsvConfig.EnablePublishStats,
-			statsPrefix:        tsvConfig.StatsPrefix,
+			enabled: false,
 		}
 		txThrottler, err = newTxThrottler(config)
 		if err != nil {
@@ -85,9 +83,7 @@ func CreateTxThrottlerFromTabletConfig(tsvConfig *Config) *TxThrottler {
 
 func tryCreateTxThrottler(tsvConfig *Config) (*TxThrottler, error) {
 	config := &txThrottlerConfig{
-		enabled:            tsvConfig.EnableTxThrottler,
-		enablePublishStats: tsvConfig.EnablePublishStats,
-		statsPrefix:        tsvConfig.StatsPrefix,
+		enabled: tsvConfig.EnableTxThrottler,
 	}
 	if !tsvConfig.EnableTxThrottler {
 		return newTxThrottler(config)
@@ -112,13 +108,6 @@ type txThrottlerConfig struct {
 	// of a disabled transaction throttler do nothing and Throttle() always
 	// returns false.
 	enabled bool
-
-	// enablePublishStats controls whether we want to enable publishing stats.
-	enablePublishStats bool
-
-	// statsPrefix contains the prefix to add to exported variables. It's only
-	// used if enablePublishStats is true.
-	statsPrefix string
 
 	throttlerConfig *throttlerdatapb.Configuration
 	// healthCheckCells stores the cell names in which running vttablets will be monitored for

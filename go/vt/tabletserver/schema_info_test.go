@@ -19,6 +19,7 @@ import (
 	"github.com/youtube/vitess/go/mysqlconn/fakesqldb"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/sqlparser"
+	"github.com/youtube/vitess/go/vt/tabletserver/tabletstats"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
@@ -30,7 +31,7 @@ func TestSchemaInfoStrictMode(t *testing.T) {
 	for query, result := range getSchemaInfoBaseTestQueries() {
 		db.AddQuery(query, result)
 	}
-	schemaInfo := newTestSchemaInfo(10, 1*time.Second, 1*time.Second, false)
+	schemaInfo := newTestSchemaInfo(10, 1*time.Second, 1*time.Second)
 	t.Log(schemaInfo)
 	err := schemaInfo.Open(db.ConnParams(), true)
 	want := "error: could not verify mode"
@@ -52,7 +53,7 @@ func TestSchemaInfoOpenFailedDueToMissMySQLTime(t *testing.T) {
 			{sqltypes.MakeString([]byte("1427325875"))},
 		},
 	})
-	schemaInfo := newTestSchemaInfo(10, 1*time.Second, 1*time.Second, false)
+	schemaInfo := newTestSchemaInfo(10, 1*time.Second, 1*time.Second)
 	err := schemaInfo.Open(db.ConnParams(), false)
 	want := "Could not get MySQL time"
 	if err == nil || !strings.Contains(err.Error(), want) {
@@ -72,7 +73,7 @@ func TestSchemaInfoOpenFailedDueToIncorrectMysqlRowNum(t *testing.T) {
 			{sqltypes.NULL},
 		},
 	})
-	schemaInfo := newTestSchemaInfo(10, 1*time.Second, 1*time.Second, false)
+	schemaInfo := newTestSchemaInfo(10, 1*time.Second, 1*time.Second)
 	err := schemaInfo.Open(db.ConnParams(), false)
 	want := "Unexpected result for MySQL time"
 	if err == nil || !strings.Contains(err.Error(), want) {
@@ -92,7 +93,7 @@ func TestSchemaInfoOpenFailedDueToInvalidTimeFormat(t *testing.T) {
 			{sqltypes.MakeString([]byte("invalid_time"))},
 		},
 	})
-	schemaInfo := newTestSchemaInfo(10, 1*time.Second, 1*time.Second, false)
+	schemaInfo := newTestSchemaInfo(10, 1*time.Second, 1*time.Second)
 	err := schemaInfo.Open(db.ConnParams(), false)
 	want := "Could not parse time"
 	if err == nil || !strings.Contains(err.Error(), want) {
@@ -107,7 +108,7 @@ func TestSchemaInfoOpenFailedDueToExecErr(t *testing.T) {
 		db.AddQuery(query, result)
 	}
 	db.AddRejectedQuery(mysqlconn.BaseShowTables, fmt.Errorf("injected error"))
-	schemaInfo := newTestSchemaInfo(10, 1*time.Second, 1*time.Second, false)
+	schemaInfo := newTestSchemaInfo(10, 1*time.Second, 1*time.Second)
 	err := schemaInfo.Open(db.ConnParams(), false)
 	want := "Could not get table list"
 	if err == nil || !strings.Contains(err.Error(), want) {
@@ -139,7 +140,7 @@ func TestSchemaInfoOpenFailedDueToTableInfoErr(t *testing.T) {
 			{sqltypes.MakeString([]byte(""))},
 		},
 	})
-	schemaInfo := newTestSchemaInfo(10, 1*time.Second, 1*time.Second, false)
+	schemaInfo := newTestSchemaInfo(10, 1*time.Second, 1*time.Second)
 	err := schemaInfo.Open(db.ConnParams(), false)
 	want := "could not get schema for any tables"
 	if err == nil || !strings.Contains(err.Error(), want) {
@@ -155,7 +156,7 @@ func TestSchemaInfoReload(t *testing.T) {
 		db.AddQuery(query, result)
 	}
 	idleTimeout := 10 * time.Second
-	schemaInfo := newTestSchemaInfo(10, 10*time.Second, idleTimeout, false)
+	schemaInfo := newTestSchemaInfo(10, 10*time.Second, idleTimeout)
 	schemaInfo.Open(db.ConnParams(), true)
 	defer schemaInfo.Close()
 	// this new table does not exist
@@ -236,14 +237,14 @@ func TestSchemaInfoCreateOrUpdateTableFailedDuetoExecErr(t *testing.T) {
 		db.AddQuery(query, result)
 	}
 	db.AddRejectedQuery(mysqlconn.BaseShowTablesForTable("test_table"), fmt.Errorf("forced fail"))
-	schemaInfo := newTestSchemaInfo(10, 1*time.Second, 1*time.Second, true)
+	schemaInfo := newTestSchemaInfo(10, 1*time.Second, 1*time.Second)
 	schemaInfo.Open(db.ConnParams(), false)
 	defer schemaInfo.Close()
-	originalSchemaErrorCount := schemaInfo.queryServiceStats.InternalErrors.Counts()["Schema"]
+	originalSchemaErrorCount := tabletstats.InternalErrors.Counts()["Schema"]
 	// should silently fail: no errors returned, but increment a counter
 	schemaInfo.CreateOrUpdateTable(context.Background(), "test_table")
 
-	newSchemaErrorCount := schemaInfo.queryServiceStats.InternalErrors.Counts()["Schema"]
+	newSchemaErrorCount := tabletstats.InternalErrors.Counts()["Schema"]
 	schemaErrorDiff := newSchemaErrorCount - originalSchemaErrorCount
 	if schemaErrorDiff != 1 {
 		t.Errorf("InternalErrors.Schema counter should have increased by 1, instead got %v", schemaErrorDiff)
@@ -264,7 +265,7 @@ func TestSchemaInfoCreateOrUpdateTable(t *testing.T) {
 			mysqlconn.BaseShowTablesRow(existingTable, false, ""),
 		},
 	})
-	schemaInfo := newTestSchemaInfo(10, 1*time.Second, 1*time.Second, false)
+	schemaInfo := newTestSchemaInfo(10, 1*time.Second, 1*time.Second)
 	schemaInfo.Open(db.ConnParams(), false)
 	found := false
 	schemaInfo.RegisterNotifier("test", func(schema map[string]*TableInfo) {
@@ -292,7 +293,7 @@ func TestSchemaInfoDropTable(t *testing.T) {
 			mysqlconn.BaseShowTablesRow(existingTable.String(), false, ""),
 		},
 	})
-	schemaInfo := newTestSchemaInfo(10, 1*time.Second, 1*time.Second, false)
+	schemaInfo := newTestSchemaInfo(10, 1*time.Second, 1*time.Second)
 	schemaInfo.Open(db.ConnParams(), false)
 	tableInfo := schemaInfo.GetTable(existingTable)
 	if tableInfo == nil {
@@ -319,7 +320,7 @@ func TestSchemaInfoGetPlanPanicDuetoEmptyQuery(t *testing.T) {
 	for query, result := range getSchemaInfoTestSupportedQueries() {
 		db.AddQuery(query, result)
 	}
-	schemaInfo := newTestSchemaInfo(10, 10*time.Second, 10*time.Second, false)
+	schemaInfo := newTestSchemaInfo(10, 10*time.Second, 10*time.Second)
 	schemaInfo.Open(db.ConnParams(), true)
 	defer schemaInfo.Close()
 
@@ -344,7 +345,7 @@ func TestSchemaInfoQueryCache(t *testing.T) {
 	db.AddQuery("select * from test_table_01 where 1 != 1", &sqltypes.Result{})
 	db.AddQuery("select * from test_table_02 where 1 != 1", &sqltypes.Result{})
 
-	schemaInfo := newTestSchemaInfo(10, 10*time.Second, 10*time.Second, true)
+	schemaInfo := newTestSchemaInfo(10, 10*time.Second, 10*time.Second)
 	schemaInfo.Open(db.ConnParams(), true)
 	defer schemaInfo.Close()
 
@@ -377,7 +378,7 @@ func TestSchemaInfoExportVars(t *testing.T) {
 	for query, result := range getSchemaInfoTestSupportedQueries() {
 		db.AddQuery(query, result)
 	}
-	schemaInfo := newTestSchemaInfo(10, 1*time.Second, 1*time.Second, true)
+	schemaInfo := newTestSchemaInfo(10, 1*time.Second, 1*time.Second)
 	schemaInfo.Open(db.ConnParams(), true)
 	defer schemaInfo.Close()
 	expvar.Do(func(kv expvar.KeyValue) {
@@ -393,7 +394,7 @@ func TestUpdatedMysqlStats(t *testing.T) {
 		db.AddQuery(query, result)
 	}
 	idleTimeout := 10 * time.Second
-	schemaInfo := newTestSchemaInfo(10, 10*time.Second, idleTimeout, false)
+	schemaInfo := newTestSchemaInfo(10, 10*time.Second, idleTimeout)
 	schemaInfo.Open(db.ConnParams(), true)
 	defer schemaInfo.Close()
 	// Add new table
@@ -487,7 +488,7 @@ func TestSchemaInfoStatsURL(t *testing.T) {
 	}
 	query := "select * from test_table_01"
 	db.AddQuery("select * from test_table_01 where 1 != 1", &sqltypes.Result{})
-	schemaInfo := newTestSchemaInfo(10, 1*time.Second, 1*time.Second, false)
+	schemaInfo := newTestSchemaInfo(10, 1*time.Second, 1*time.Second)
 	schemaInfo.Open(db.ConnParams(), true)
 	defer schemaInfo.Close()
 	// warm up cache

@@ -57,7 +57,6 @@ func StartServer(connParams sqldb.ConnParams) error {
 		&mysqlctl.Mycnf{},
 		&dbcfgs,
 		dbconfigs.AppConfig,
-		true, /* enablePublishStats */
 	)
 
 	BaseConfig = tabletserver.DefaultQsConfig

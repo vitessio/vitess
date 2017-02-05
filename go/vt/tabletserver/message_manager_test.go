@@ -621,8 +621,6 @@ func newMMConnPool(db *fakesqldb.DB) *ConnPool {
 		config.PoolNamePrefix+"MesasgeConnPool",
 		20,
 		time.Duration(config.IdleTimeout*1e9),
-		config.EnablePublishStats,
-		tsv.queryServiceStats,
 		tsv,
 	)
 	pool.Open(&dbconfigs.App, &dbconfigs.Dba)

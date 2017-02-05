@@ -6,6 +6,7 @@ package tabletserver
 
 import (
 	"net/http"
+	"sync"
 	"time"
 
 	log "github.com/golang/glog"
@@ -17,6 +18,7 @@ import (
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/tableacl"
 	"github.com/youtube/vitess/go/vt/tableacl/acl"
+	"github.com/youtube/vitess/go/vt/tabletserver/tabletstats"
 )
 
 // QueryEngine implements the core functionality of tabletserver.
@@ -52,30 +54,26 @@ type QueryEngine struct {
 	// tableaclExemptCount count the number of accesses allowed
 	// based on membership in the superuser ACL
 	tableaclExemptCount  sync2.AtomicInt64
-	tableaclAllowed      *stats.MultiCounters
-	tableaclDenied       *stats.MultiCounters
-	tableaclPseudoDenied *stats.MultiCounters
 	strictTableAcl       bool
 	enableTableAclDryRun bool
 	exemptACL            acl.ACL
 
 	// Loggers
 	accessCheckerLogger *logutil.ThrottledLogger
-
-	// Stats
-	queryServiceStats *QueryServiceStats
 }
+
+var (
+	qeOnce sync.Once
+)
 
 // NewQueryEngine creates a new QueryEngine.
 // This is a singleton class.
 // You must call this only once.
-func NewQueryEngine(checker MySQLChecker, config Config, queryServiceStats *QueryServiceStats) *QueryEngine {
+func NewQueryEngine(checker MySQLChecker, config Config) *QueryEngine {
 	qe := &QueryEngine{
-		config:            config,
-		queryServiceStats: queryServiceStats,
+		config: config,
 	}
 	qe.schemaInfo = NewSchemaInfo(
-		config.StatsPrefix,
 		checker,
 		config.QueryCacheSize,
 		time.Duration(config.SchemaReloadTime*1e9),
@@ -86,24 +84,18 @@ func NewQueryEngine(checker MySQLChecker, config Config, queryServiceStats *Quer
 			debugSchemaKey:     config.DebugURLPrefix + "/schema",
 			debugQueryRulesKey: config.DebugURLPrefix + "/query_rules",
 		},
-		config.EnablePublishStats,
-		qe.queryServiceStats,
 	)
 
 	qe.connPool = NewConnPool(
 		config.PoolNamePrefix+"ConnPool",
 		config.PoolSize,
 		time.Duration(config.IdleTimeout*1e9),
-		config.EnablePublishStats,
-		qe.queryServiceStats,
 		checker,
 	)
 	qe.streamConnPool = NewConnPool(
 		config.PoolNamePrefix+"StreamConnPool",
 		config.StreamPoolSize,
 		time.Duration(config.IdleTimeout*1e9),
-		config.EnablePublishStats,
-		qe.queryServiceStats,
 		checker,
 	)
 
@@ -139,22 +131,12 @@ func NewQueryEngine(checker MySQLChecker, config Config, queryServiceStats *Quer
 
 	qe.accessCheckerLogger = logutil.NewThrottledLogger("accessChecker", 1*time.Second)
 
-	var tableACLAllowedName string
-	var tableACLDeniedName string
-	var tableACLPseudoDeniedName string
-	if config.EnablePublishStats {
-		stats.Publish(config.StatsPrefix+"MaxResultSize", stats.IntFunc(qe.maxResultSize.Get))
-		stats.Publish(config.StatsPrefix+"MaxDMLRows", stats.IntFunc(qe.maxDMLRows.Get))
-		stats.Publish(config.StatsPrefix+"StreamBufferSize", stats.IntFunc(qe.streamBufferSize.Get))
-		stats.Publish(config.StatsPrefix+"TableACLExemptCount", stats.IntFunc(qe.tableaclExemptCount.Get))
-		tableACLAllowedName = "TableACLAllowed"
-		tableACLDeniedName = "TableACLDenied"
-		tableACLPseudoDeniedName = "TableACLPseudoDenied"
-	}
-
-	qe.tableaclAllowed = stats.NewMultiCounters(tableACLAllowedName, []string{"TableName", "TableGroup", "PlanID", "Username"})
-	qe.tableaclDenied = stats.NewMultiCounters(tableACLDeniedName, []string{"TableName", "TableGroup", "PlanID", "Username"})
-	qe.tableaclPseudoDenied = stats.NewMultiCounters(tableACLPseudoDeniedName, []string{"TableName", "TableGroup", "PlanID", "Username"})
+	qeOnce.Do(func() {
+		stats.Publish("MaxResultSize", stats.IntFunc(qe.maxResultSize.Get))
+		stats.Publish("MaxDMLRows", stats.IntFunc(qe.maxDMLRows.Get))
+		stats.Publish("StreamBufferSize", stats.IntFunc(qe.streamBufferSize.Get))
+		stats.Publish("TableACLExemptCount", stats.IntFunc(qe.tableaclExemptCount.Get))
+	})
 
 	return qe
 }
@@ -181,7 +163,7 @@ func (qe *QueryEngine) Open(dbconfigs dbconfigs.DBConfigs) error {
 
 // IsMySQLReachable returns true if we can connect to MySQL.
 func (qe *QueryEngine) IsMySQLReachable() bool {
-	conn, err := dbconnpool.NewDBConnection(&qe.dbconfigs.App, qe.queryServiceStats.MySQLStats)
+	conn, err := dbconnpool.NewDBConnection(&qe.dbconfigs.App, tabletstats.MySQLStats)
 	if err != nil {
 		if IsConnErr(err) {
 			return false

@@ -23,6 +23,7 @@ import (
 	"github.com/youtube/vitess/go/mysqlconn/fakesqldb"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
+	"github.com/youtube/vitess/go/vt/tabletserver/tabletstats"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -319,13 +320,13 @@ func TestTabletServerSingleSchemaFailure(t *testing.T) {
 	tsv := NewTabletServer(config)
 	dbconfigs := testUtils.newDBConfigs(db)
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
-	originalSchemaErrorCount := tsv.qe.queryServiceStats.InternalErrors.Counts()["Schema"]
+	originalSchemaErrorCount := tabletstats.InternalErrors.Counts()["Schema"]
 	err := tsv.StartService(target, dbconfigs, testUtils.newMysqld(&dbconfigs))
 	defer tsv.StopService()
 	if err != nil {
 		t.Fatalf("TabletServer should successfully start even if a table's schema is unloadable, but got error: %v", err)
 	}
-	newSchemaErrorCount := tsv.qe.queryServiceStats.InternalErrors.Counts()["Schema"]
+	newSchemaErrorCount := tabletstats.InternalErrors.Counts()["Schema"]
 	schemaErrorDiff := newSchemaErrorCount - originalSchemaErrorCount
 	if schemaErrorDiff != 1 {
 		t.Errorf("InternalErrors.Schema counter should have increased by 1, instead got %v", schemaErrorDiff)
@@ -409,7 +410,6 @@ func TestTabletServerCheckMysqlFailInvalidConn(t *testing.T) {
 func TestTabletServerCheckMysqlInUnintialized(t *testing.T) {
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
-	config.EnablePublishStats = true
 	tsv := NewTabletServer(config)
 	// TabletServer start request fail because we are in StateNotConnected;
 	// however, isMySQLReachable should return true. Here, we always assume
@@ -417,9 +417,9 @@ func TestTabletServerCheckMysqlInUnintialized(t *testing.T) {
 	if !tsv.isMySQLReachable() {
 		t.Fatalf("isMySQLReachable should return true")
 	}
-	tabletState := expvar.Get(config.StatsPrefix + "TabletState")
+	tabletState := expvar.Get("TabletState")
 	if tabletState == nil {
-		t.Fatalf("%sTabletState should be exposed", config.StatsPrefix)
+		t.Fatal("TabletState should be exposed")
 	}
 	varzState, err := strconv.Atoi(tabletState.String())
 	if err != nil {

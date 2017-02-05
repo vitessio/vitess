@@ -155,11 +155,6 @@ func (tqsc *Controller) QueryService() queryservice.QueryService {
 	return nil
 }
 
-// QueryServiceStats is part of the tabletserver.Controller interface
-func (tqsc *Controller) QueryServiceStats() *tabletserver.QueryServiceStats {
-	return nil
-}
-
 // BroadcastHealth is part of the tabletserver.Controller interface
 func (tqsc *Controller) BroadcastHealth(terTimestamp int64, stats *querypb.RealtimeStats) {
 	tqsc.mu.Lock()

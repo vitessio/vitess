@@ -12,8 +12,11 @@ import (
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/dbconnpool"
+	"github.com/youtube/vitess/go/vt/tabletserver/tabletstats"
 	"golang.org/x/net/context"
 )
+
+var usedNames = make(map[string]bool)
 
 // ConnPool implements a custom connection pool for tabletserver.
 // It's similar to dbconnpool.ConnPool, but the connections it creates
@@ -22,13 +25,12 @@ import (
 // Other than the connection type, ConnPool maintains an additional
 // pool of dba connections that are used to kill connections.
 type ConnPool struct {
-	mu                sync.Mutex
-	connections       *pools.ResourcePool
-	capacity          int
-	idleTimeout       time.Duration
-	dbaPool           *dbconnpool.ConnectionPool
-	queryServiceStats *QueryServiceStats
-	checker           MySQLChecker
+	mu          sync.Mutex
+	connections *pools.ResourcePool
+	capacity    int
+	idleTimeout time.Duration
+	dbaPool     *dbconnpool.ConnectionPool
+	checker     MySQLChecker
 }
 
 // NewConnPool creates a new ConnPool. The name is used
@@ -37,27 +39,23 @@ func NewConnPool(
 	name string,
 	capacity int,
 	idleTimeout time.Duration,
-	enablePublishStats bool,
-	queryServiceStats *QueryServiceStats,
 	checker MySQLChecker) *ConnPool {
 	cp := &ConnPool{
-		capacity:          capacity,
-		idleTimeout:       idleTimeout,
-		dbaPool:           dbconnpool.NewConnectionPool("", 1, idleTimeout),
-		queryServiceStats: queryServiceStats,
-		checker:           checker,
+		capacity:    capacity,
+		idleTimeout: idleTimeout,
+		dbaPool:     dbconnpool.NewConnectionPool("", 1, idleTimeout),
+		checker:     checker,
 	}
-	if name == "" {
+	if name == "" || usedNames[name] {
 		return cp
 	}
-	if enablePublishStats {
-		stats.Publish(name+"Capacity", stats.IntFunc(cp.Capacity))
-		stats.Publish(name+"Available", stats.IntFunc(cp.Available))
-		stats.Publish(name+"MaxCap", stats.IntFunc(cp.MaxCap))
-		stats.Publish(name+"WaitCount", stats.IntFunc(cp.WaitCount))
-		stats.Publish(name+"WaitTime", stats.DurationFunc(cp.WaitTime))
-		stats.Publish(name+"IdleTimeout", stats.DurationFunc(cp.IdleTimeout))
-	}
+	usedNames[name] = true
+	stats.Publish(name+"Capacity", stats.IntFunc(cp.Capacity))
+	stats.Publish(name+"Available", stats.IntFunc(cp.Available))
+	stats.Publish(name+"MaxCap", stats.IntFunc(cp.MaxCap))
+	stats.Publish(name+"WaitCount", stats.IntFunc(cp.WaitCount))
+	stats.Publish(name+"WaitTime", stats.DurationFunc(cp.WaitTime))
+	stats.Publish(name+"IdleTimeout", stats.DurationFunc(cp.IdleTimeout))
 	return cp
 }
 
@@ -74,10 +72,10 @@ func (cp *ConnPool) Open(appParams, dbaParams *sqldb.ConnParams) {
 	defer cp.mu.Unlock()
 
 	f := func() (pools.Resource, error) {
-		return NewDBConn(cp, appParams, dbaParams, cp.queryServiceStats)
+		return NewDBConn(cp, appParams, dbaParams)
 	}
 	cp.connections = pools.NewResourcePool(f, cp.capacity, cp.capacity, cp.idleTimeout)
-	cp.dbaPool.Open(dbconnpool.DBConnectionCreator(dbaParams, cp.queryServiceStats.MySQLStats))
+	cp.dbaPool.Open(dbconnpool.DBConnectionCreator(dbaParams, tabletstats.MySQLStats))
 }
 
 // Close will close the pool and wait for connections to be returned before

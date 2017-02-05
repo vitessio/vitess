@@ -15,6 +15,7 @@ import (
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/tb"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
+	"github.com/youtube/vitess/go/vt/tabletserver/tabletstats"
 )
 
 const (
@@ -155,34 +156,34 @@ func (te *TabletError) Prefix() string {
 }
 
 // RecordStats will record the error in the proper stat bucket
-func (te *TabletError) RecordStats(queryServiceStats *QueryServiceStats) {
+func (te *TabletError) RecordStats() {
 	switch te.ErrorCode {
 	case vtrpcpb.ErrorCode_QUERY_NOT_SERVED:
-		queryServiceStats.InfoErrors.Add("Retry", 1)
+		tabletstats.InfoErrors.Add("Retry", 1)
 	case vtrpcpb.ErrorCode_INTERNAL_ERROR:
-		queryServiceStats.ErrorStats.Add("Fatal", 1)
+		tabletstats.ErrorStats.Add("Fatal", 1)
 	case vtrpcpb.ErrorCode_RESOURCE_EXHAUSTED:
-		queryServiceStats.ErrorStats.Add("TxPoolFull", 1)
+		tabletstats.ErrorStats.Add("TxPoolFull", 1)
 	case vtrpcpb.ErrorCode_NOT_IN_TX:
-		queryServiceStats.ErrorStats.Add("NotInTx", 1)
+		tabletstats.ErrorStats.Add("NotInTx", 1)
 	default:
 		switch te.SQLError {
 		case mysqlconn.ERDupEntry:
-			queryServiceStats.InfoErrors.Add("DupKey", 1)
+			tabletstats.InfoErrors.Add("DupKey", 1)
 		case mysqlconn.ERLockWaitTimeout, mysqlconn.ERLockDeadlock:
-			queryServiceStats.ErrorStats.Add("Deadlock", 1)
+			tabletstats.ErrorStats.Add("Deadlock", 1)
 		default:
-			queryServiceStats.ErrorStats.Add("Fail", 1)
+			tabletstats.ErrorStats.Add("Fail", 1)
 		}
 	}
 }
 
-func logError(queryServiceStats *QueryServiceStats) {
+func logError() {
 	if x := recover(); x != nil {
 		terr, ok := x.(*TabletError)
 		if !ok {
 			log.Errorf("Uncaught panic:\n%v\n%s", x, tb.Stack(4))
-			queryServiceStats.InternalErrors.Add("Panic", 1)
+			tabletstats.InternalErrors.Add("Panic", 1)
 			return
 		}
 		log.Errorf("%v", terr)

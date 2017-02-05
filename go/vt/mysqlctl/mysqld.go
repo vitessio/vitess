@@ -47,17 +47,19 @@ var (
 
 	// masterConnectRetry is used in 'SET MASTER' commands
 	masterConnectRetry = flag.Duration("master_connect_retry", 10*time.Second, "how long to wait in between slave -> connection attempts. Only precise to the second.")
+
+	dbaMysqlStats      = stats.NewTimings("MysqlDba")
+	allprivsMysqlStats = stats.NewTimings("MysqlAllPrivs")
+	appMysqlStats      = stats.NewTimings("appMysqlStatsName")
 )
 
 // Mysqld is the object that represents a mysqld daemon running on this server.
 type Mysqld struct {
-	config             *Mycnf
-	dbcfgs             *dbconfigs.DBConfigs
-	dbaPool            *dbconnpool.ConnectionPool
-	appPool            *dbconnpool.ConnectionPool
-	dbaMysqlStats      *stats.Timings
-	allprivsMysqlStats *stats.Timings
-	tabletDir          string
+	config    *Mycnf
+	dbcfgs    *dbconfigs.DBConfigs
+	dbaPool   *dbconnpool.ConnectionPool
+	appPool   *dbconnpool.ConnectionPool
+	tabletDir string
 
 	// mutex protects the fields below.
 	mutex         sync.Mutex
@@ -68,7 +70,7 @@ type Mysqld struct {
 
 // NewMysqld creates a Mysqld object based on the provided configuration
 // and connection parameters.
-func NewMysqld(config *Mycnf, dbcfgs *dbconfigs.DBConfigs, dbconfigsFlags dbconfigs.DBConfigFlag, enablePublishStats bool) *Mysqld {
+func NewMysqld(config *Mycnf, dbcfgs *dbconfigs.DBConfigs, dbconfigsFlags dbconfigs.DBConfigFlag) *Mysqld {
 	result := &Mysqld{
 		config:    config,
 		dbcfgs:    dbcfgs,
@@ -77,36 +79,13 @@ func NewMysqld(config *Mycnf, dbcfgs *dbconfigs.DBConfigs, dbconfigsFlags dbconf
 
 	// Create and open the connection pool for dba access.
 	if dbconfigs.DbaConfig&dbconfigsFlags != 0 {
-		dbaMysqlStatsName := ""
-		dbaPoolName := ""
-		if enablePublishStats {
-			dbaMysqlStatsName = "MysqlDba"
-			dbaPoolName = "DbaConnPool"
-		}
-		result.dbaMysqlStats = stats.NewTimings(dbaMysqlStatsName)
-		result.dbaPool = dbconnpool.NewConnectionPool(dbaPoolName, *dbaPoolSize, *dbaIdleTimeout)
-		result.dbaPool.Open(dbconnpool.DBConnectionCreator(&dbcfgs.Dba, result.dbaMysqlStats))
-	}
-
-	// Configure the stats for the AllPrivs connections.
-	if dbconfigs.AllPrivsConfig&dbconfigsFlags != 0 {
-		allprivsMysqlStatsName := ""
-		if enablePublishStats {
-			allprivsMysqlStatsName = "MysqlAllPrivs"
-		}
-		result.allprivsMysqlStats = stats.NewTimings(allprivsMysqlStatsName)
+		result.dbaPool = dbconnpool.NewConnectionPool("DbaConnPool", *dbaPoolSize, *dbaIdleTimeout)
+		result.dbaPool.Open(dbconnpool.DBConnectionCreator(&dbcfgs.Dba, dbaMysqlStats))
 	}
 
 	// Create and open the connection pool for app access.
 	if dbconfigs.AppConfig&dbconfigsFlags != 0 {
-		appMysqlStatsName := ""
-		appPoolName := ""
-		if enablePublishStats {
-			appMysqlStatsName = "MysqlApp"
-			appPoolName = "AppConnPool"
-		}
-		appMysqlStats := stats.NewTimings(appMysqlStatsName)
-		result.appPool = dbconnpool.NewConnectionPool(appPoolName, *appPoolSize, *appIdleTimeout)
+		result.appPool = dbconnpool.NewConnectionPool("AppConnPool", *appPoolSize, *appIdleTimeout)
 		result.appPool.Open(dbconnpool.DBConnectionCreator(&dbcfgs.App, appMysqlStats))
 	}
 
@@ -799,12 +778,12 @@ func (mysqld *Mysqld) GetAppConnection(ctx context.Context) (dbconnpool.PoolConn
 
 // GetDbaConnection creates a new DBConnection.
 func (mysqld *Mysqld) GetDbaConnection() (*dbconnpool.DBConnection, error) {
-	return dbconnpool.NewDBConnection(&mysqld.dbcfgs.Dba, mysqld.dbaMysqlStats)
+	return dbconnpool.NewDBConnection(&mysqld.dbcfgs.Dba, dbaMysqlStats)
 }
 
 // GetAllPrivsConnection creates a new DBConnection.
 func (mysqld *Mysqld) GetAllPrivsConnection() (*dbconnpool.DBConnection, error) {
-	return dbconnpool.NewDBConnection(&mysqld.dbcfgs.AllPrivs, mysqld.allprivsMysqlStats)
+	return dbconnpool.NewDBConnection(&mysqld.dbcfgs.AllPrivs, allprivsMysqlStats)
 }
 
 // Close will close this instance of Mysqld. It will wait for all dba

@@ -29,6 +29,7 @@ import (
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/tableacl"
 	"github.com/youtube/vitess/go/vt/tabletserver/planbuilder"
+	"github.com/youtube/vitess/go/vt/tabletserver/tabletstats"
 	"golang.org/x/net/context"
 )
 
@@ -104,56 +105,53 @@ type SchemaInfo struct {
 
 	// The following vars are either read-only or have
 	// their own synchronization.
-	queries           *cache.LRUCache
-	connPool          *ConnPool
-	ticks             *timer.Timer
-	endpoints         map[string]string
-	queryRuleSources  *QueryRuleInfo
-	queryServiceStats *QueryServiceStats
+	queries          *cache.LRUCache
+	connPool         *ConnPool
+	ticks            *timer.Timer
+	endpoints        map[string]string
+	queryRuleSources *QueryRuleInfo
 
 	notifiers map[string]notifier
 }
 
+var schemaOnce sync.Once
+
 // NewSchemaInfo creates a new SchemaInfo.
 func NewSchemaInfo(
-	statsPrefix string,
 	checker MySQLChecker,
 	queryCacheSize int,
 	reloadTime time.Duration,
 	idleTimeout time.Duration,
-	endpoints map[string]string,
-	enablePublishStats bool,
-	queryServiceStats *QueryServiceStats) *SchemaInfo {
+	endpoints map[string]string) *SchemaInfo {
 	si := &SchemaInfo{
-		queries:           cache.NewLRUCache(int64(queryCacheSize)),
-		connPool:          NewConnPool("", 3, idleTimeout, enablePublishStats, queryServiceStats, checker),
-		ticks:             timer.NewTimer(reloadTime),
-		endpoints:         endpoints,
-		reloadTime:        reloadTime,
-		queryRuleSources:  NewQueryRuleInfo(),
-		queryServiceStats: queryServiceStats,
+		queries:          cache.NewLRUCache(int64(queryCacheSize)),
+		connPool:         NewConnPool("", 3, idleTimeout, checker),
+		ticks:            timer.NewTimer(reloadTime),
+		endpoints:        endpoints,
+		reloadTime:       reloadTime,
+		queryRuleSources: NewQueryRuleInfo(),
 	}
-	if enablePublishStats {
-		stats.Publish(statsPrefix+"QueryCacheLength", stats.IntFunc(si.queries.Length))
-		stats.Publish(statsPrefix+"QueryCacheSize", stats.IntFunc(si.queries.Size))
-		stats.Publish(statsPrefix+"QueryCacheCapacity", stats.IntFunc(si.queries.Capacity))
-		stats.Publish(statsPrefix+"QueryCacheOldest", stats.StringFunc(func() string {
+	schemaOnce.Do(func() {
+		stats.Publish("QueryCacheLength", stats.IntFunc(si.queries.Length))
+		stats.Publish("QueryCacheSize", stats.IntFunc(si.queries.Size))
+		stats.Publish("QueryCacheCapacity", stats.IntFunc(si.queries.Capacity))
+		stats.Publish("QueryCacheOldest", stats.StringFunc(func() string {
 			return fmt.Sprintf("%v", si.queries.Oldest())
 		}))
-		stats.Publish(statsPrefix+"SchemaReloadTime", stats.DurationFunc(si.ticks.Interval))
-		_ = stats.NewMultiCountersFunc(statsPrefix+"QueryCounts", []string{"Table", "Plan"}, si.getQueryCount)
-		_ = stats.NewMultiCountersFunc(statsPrefix+"QueryTimesNs", []string{"Table", "Plan"}, si.getQueryTime)
-		_ = stats.NewMultiCountersFunc(statsPrefix+"QueryRowCounts", []string{"Table", "Plan"}, si.getQueryRowCount)
-		_ = stats.NewMultiCountersFunc(statsPrefix+"QueryErrorCounts", []string{"Table", "Plan"}, si.getQueryErrorCount)
-		_ = stats.NewMultiCountersFunc(statsPrefix+"TableRows", []string{"Table"}, si.getTableRows)
-		_ = stats.NewMultiCountersFunc(statsPrefix+"DataLength", []string{"Table"}, si.getDataLength)
-		_ = stats.NewMultiCountersFunc(statsPrefix+"IndexLength", []string{"Table"}, si.getIndexLength)
-		_ = stats.NewMultiCountersFunc(statsPrefix+"DataFree", []string{"Table"}, si.getDataFree)
-		_ = stats.NewMultiCountersFunc(statsPrefix+"MaxDataLength", []string{"Table"}, si.getMaxDataLength)
-	}
-	for _, ep := range endpoints {
-		http.Handle(ep, si)
-	}
+		stats.Publish("SchemaReloadTime", stats.DurationFunc(si.ticks.Interval))
+		_ = stats.NewMultiCountersFunc("QueryCounts", []string{"Table", "Plan"}, si.getQueryCount)
+		_ = stats.NewMultiCountersFunc("QueryTimesNs", []string{"Table", "Plan"}, si.getQueryTime)
+		_ = stats.NewMultiCountersFunc("QueryRowCounts", []string{"Table", "Plan"}, si.getQueryRowCount)
+		_ = stats.NewMultiCountersFunc("QueryErrorCounts", []string{"Table", "Plan"}, si.getQueryErrorCount)
+		_ = stats.NewMultiCountersFunc("TableRows", []string{"Table"}, si.getTableRows)
+		_ = stats.NewMultiCountersFunc("DataLength", []string{"Table"}, si.getDataLength)
+		_ = stats.NewMultiCountersFunc("IndexLength", []string{"Table"}, si.getIndexLength)
+		_ = stats.NewMultiCountersFunc("DataFree", []string{"Table"}, si.getDataFree)
+		_ = stats.NewMultiCountersFunc("MaxDataLength", []string{"Table"}, si.getMaxDataLength)
+		for _, ep := range endpoints {
+			http.Handle(ep, si)
+		}
+	})
 	return si
 }
 
@@ -215,7 +213,7 @@ func (si *SchemaInfo) Open(dbaParams *sqldb.ConnParams, strictMode bool) error {
 				row[3].String(), // table_comment
 			)
 			if err != nil {
-				si.queryServiceStats.InternalErrors.Add("Schema", 1)
+				tabletstats.InternalErrors.Add("Schema", 1)
 				log.Errorf("SchemaInfo.Open: failed to create TableInfo for table %s: %v", tableName, err)
 				// Skip over the table that had an error and move on to the next one
 				return
@@ -261,7 +259,7 @@ func (si *SchemaInfo) Close() {
 // Any tables that have changed since the last load are updated.
 // This is a no-op if the SchemaInfo is closed.
 func (si *SchemaInfo) Reload(ctx context.Context) error {
-	defer logError(si.queryServiceStats)
+	defer logError()
 
 	curTime, tableData, err := func() (int64, *sqltypes.Result, error) {
 		conn, err := si.connPool.Get(ctx)
@@ -344,7 +342,7 @@ func (si *SchemaInfo) CreateOrUpdateTable(ctx context.Context, tableName string)
 	defer conn.Recycle()
 	tableData, err := conn.Exec(ctx, mysqlconn.BaseShowTablesForTable(tableName), 1, false)
 	if err != nil {
-		si.queryServiceStats.InternalErrors.Add("Schema", 1)
+		tabletstats.InternalErrors.Add("Schema", 1)
 		return PrefixTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, err,
 			fmt.Sprintf("CreateOrUpdateTable: information_schema query failed for table %s: ", tableName))
 	}
@@ -360,7 +358,7 @@ func (si *SchemaInfo) CreateOrUpdateTable(ctx context.Context, tableName string)
 		row[3].String(), // table_comment
 	)
 	if err != nil {
-		si.queryServiceStats.InternalErrors.Add("Schema", 1)
+		tabletstats.InternalErrors.Add("Schema", 1)
 		return PrefixTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, err,
 			fmt.Sprintf("CreateOrUpdateTable: failed to create TableInfo for table %s: ", tableName))
 	}

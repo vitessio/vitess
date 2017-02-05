@@ -21,6 +21,7 @@ import (
 	"github.com/youtube/vitess/go/vt/schema"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/tabletserver/planbuilder"
+	"github.com/youtube/vitess/go/vt/tabletserver/tabletstats"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
@@ -53,8 +54,8 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 	qre.logStats.PlanType = planName
 	defer func(start time.Time) {
 		duration := time.Now().Sub(start)
-		qre.qe.queryServiceStats.QueryStats.Add(planName, duration)
-		qre.qe.queryServiceStats.addUserTableQueryStats(qre.ctx, qre.plan.TableName, "Execute", int64(duration))
+		tabletstats.QueryStats.Add(planName, duration)
+		tabletstats.RecordUserQuery(qre.ctx, qre.plan.TableName, "Execute", int64(duration))
 
 		if reply == nil {
 			qre.plan.AddStats(1, duration, qre.logStats.MysqlResponseTime, 0, 1)
@@ -63,7 +64,7 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 		qre.plan.AddStats(1, duration, qre.logStats.MysqlResponseTime, int64(reply.RowsAffected), 0)
 		qre.logStats.RowsAffected = int(reply.RowsAffected)
 		qre.logStats.Rows = reply.Rows
-		qre.qe.queryServiceStats.ResultStats.Add(int64(len(reply.Rows)))
+		tabletstats.ResultStats.Add(int64(len(reply.Rows)))
 	}(time.Now())
 
 	if err := qre.checkPermissions(); err != nil {
@@ -139,8 +140,8 @@ func (qre *QueryExecutor) Stream(includedFields querypb.ExecuteOptions_IncludedF
 	qre.logStats.PlanType = qre.plan.PlanID.String()
 
 	defer func(start time.Time) {
-		qre.qe.queryServiceStats.QueryStats.Record(qre.plan.PlanID.String(), start)
-		qre.qe.queryServiceStats.addUserTableQueryStats(qre.ctx, qre.plan.TableName, "Stream", int64(time.Now().Sub(start)))
+		tabletstats.QueryStats.Record(qre.plan.PlanID.String(), start)
+		tabletstats.RecordUserQuery(qre.ctx, qre.plan.TableName, "Stream", int64(time.Now().Sub(start)))
 	}(time.Now())
 
 	if err := qre.checkPermissions(); err != nil {
@@ -270,19 +271,19 @@ func (qre *QueryExecutor) checkPermissions() error {
 	// perform table ACL check if it is enabled.
 	if !qre.plan.Authorized.IsMember(callerID.Username) {
 		if qre.qe.enableTableAclDryRun {
-			qre.qe.tableaclPseudoDenied.Add(tableACLStatsKey, 1)
+			tabletstats.TableaclPseudoDenied.Add(tableACLStatsKey, 1)
 			return nil
 		}
 		// raise error if in strictTableAcl mode, else just log an error.
 		if qre.qe.strictTableAcl {
 			errStr := fmt.Sprintf("table acl error: %q cannot run %v on table %q", callerID.Username, qre.plan.PlanID, qre.plan.TableName)
-			qre.qe.tableaclDenied.Add(tableACLStatsKey, 1)
+			tabletstats.TableaclDenied.Add(tableACLStatsKey, 1)
 			qre.qe.accessCheckerLogger.Infof("%s", errStr)
 			return NewTabletError(vtrpcpb.ErrorCode_PERMISSION_DENIED, "%s", errStr)
 		}
 		return nil
 	}
-	qre.qe.tableaclAllowed.Add(tableACLStatsKey, 1)
+	tabletstats.TableaclAllowed.Add(tableACLStatsKey, 1)
 	return nil
 }
 
@@ -623,7 +624,7 @@ func (qre *QueryExecutor) qFetch(logStats *LogStats, parsedQuery *sqlparser.Pars
 		logStats.QuerySources |= QuerySourceConsolidator
 		startTime := time.Now()
 		q.Wait()
-		qre.qe.queryServiceStats.WaitStats.Record("Consolidations", startTime)
+		tabletstats.WaitStats.Record("Consolidations", startTime)
 	}
 	if q.Err != nil {
 		return nil, q.Err

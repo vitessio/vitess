@@ -38,26 +38,28 @@ type ReplicationWatcher struct {
 	eventToken *querypb.EventToken
 }
 
+var replOnce sync.Once
+
 // NewReplicationWatcher creates a new ReplicationWatcher.
 func NewReplicationWatcher(config Config, qe *QueryEngine) *ReplicationWatcher {
 	rpw := &ReplicationWatcher{
 		watchReplication: config.WatchReplication,
 		qe:               qe,
 	}
-	if config.EnablePublishStats {
-		stats.Publish(config.StatsPrefix+"EventTokenPosition", stats.StringFunc(func() string {
+	replOnce.Do(func() {
+		stats.Publish("EventTokenPosition", stats.StringFunc(func() string {
 			if e := rpw.EventToken(); e != nil {
 				return e.Position
 			}
 			return ""
 		}))
-		stats.Publish(config.StatsPrefix+"EventTokenTimestamp", stats.IntFunc(func() int64 {
+		stats.Publish("EventTokenTimestamp", stats.IntFunc(func() int64 {
 			if e := rpw.EventToken(); e != nil {
 				return e.Timestamp
 			}
 			return 0
 		}))
-	}
+	})
 	return rpw
 }
 

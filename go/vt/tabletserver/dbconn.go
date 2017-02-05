@@ -17,6 +17,7 @@ import (
 	"github.com/youtube/vitess/go/vt/dbconnpool"
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
+	"github.com/youtube/vitess/go/vt/tabletserver/tabletstats"
 	"golang.org/x/net/context"
 )
 
@@ -26,29 +27,26 @@ import (
 // its own queries and the underlying connection.
 // It will also trigger a CheckMySQL whenever applicable.
 type DBConn struct {
-	conn              *dbconnpool.DBConnection
-	info              *sqldb.ConnParams
-	pool              *ConnPool
-	queryServiceStats *QueryServiceStats
-	current           sync2.AtomicString
+	conn    *dbconnpool.DBConnection
+	info    *sqldb.ConnParams
+	pool    *ConnPool
+	current sync2.AtomicString
 }
 
 // NewDBConn creates a new DBConn. It triggers a CheckMySQL if creation fails.
 func NewDBConn(
 	cp *ConnPool,
 	appParams,
-	dbaParams *sqldb.ConnParams,
-	qStats *QueryServiceStats) (*DBConn, error) {
-	c, err := dbconnpool.NewDBConnection(appParams, qStats.MySQLStats)
+	dbaParams *sqldb.ConnParams) (*DBConn, error) {
+	c, err := dbconnpool.NewDBConnection(appParams, tabletstats.MySQLStats)
 	if err != nil {
 		cp.checker.CheckMySQL()
 		return nil, err
 	}
 	return &DBConn{
-		conn:              c,
-		info:              appParams,
-		pool:              cp,
-		queryServiceStats: qStats,
+		conn: c,
+		info: appParams,
+		pool: cp,
 	}, nil
 }
 
@@ -181,7 +179,7 @@ func (dbc *DBConn) Recycle() {
 // and on the connection side. If no query is executing, it's a no-op.
 // Kill will also not kill a query more than once.
 func (dbc *DBConn) Kill(reason string) error {
-	dbc.queryServiceStats.KillStats.Add("Queries", 1)
+	tabletstats.KillStats.Add("Queries", 1)
 	log.Infof("Due to %s, killing query %s", reason, dbc.Current())
 	killConn, err := dbc.pool.dbaPool.Get(context.TODO())
 	if err != nil {
@@ -212,7 +210,7 @@ func (dbc *DBConn) ID() int64 {
 
 func (dbc *DBConn) reconnect() error {
 	dbc.conn.Close()
-	newConn, err := dbconnpool.NewDBConnection(dbc.info, dbc.queryServiceStats.MySQLStats)
+	newConn, err := dbconnpool.NewDBConnection(dbc.info, tabletstats.MySQLStats)
 	if err != nil {
 		return err
 	}
@@ -248,7 +246,7 @@ func (dbc *DBConn) setDeadline(ctx context.Context) (chan bool, *sync.WaitGroup)
 		defer tmr2.Stop()
 		select {
 		case <-tmr2.C:
-			dbc.queryServiceStats.InternalErrors.Add("HungQuery", 1)
+			tabletstats.InternalErrors.Add("HungQuery", 1)
 			log.Warningf("Query may be hung: %s", dbc.Current())
 		case <-done:
 			return
