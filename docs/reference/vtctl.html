@@ -1399,7 +1399,7 @@
 
 <h4 id="example">Example</h4>
 
-<pre class="command-example">VtTabletBegin [-connect_timeout &lt;connect timeout&gt;] &lt;tablet alias&gt;</pre>
+<pre class="command-example">VtTabletBegin [-username &lt;TableACL user&gt;] [-connect_timeout &lt;connect timeout&gt;] &lt;tablet alias&gt;</pre>
 
 <h4 id="flags">Flags</h4>
 
@@ -1415,12 +1415,17 @@
 <td style="text-align: left">Duration</td>
 <td style="text-align: left">Connection timeout for vttablet client</td>
 </tr>
+<tr>
+<td style="text-align: left">username</td>
+<td style="text-align: left">string</td>
+<td style="text-align: left">If set, value is set as immediate caller id in the request and used by vttablet for TableACL check</td>
+</tr>
 </tbody></table>
 
 <h4 id="arguments">Arguments</h4>
 
 <ul>
-<li><code>&lt;connect timeout&gt;</code> &ndash; Required.</li>
+<li><code>&lt;TableACL user&gt;</code> &ndash; Required.</li>
 <li><code>&lt;tablet alias&gt;</code> &ndash; Required. A Tablet Alias uniquely identifies a vttablet. The argument value is in the format <code>&lt;cell name&gt;-&lt;uid&gt;</code>.</li>
 </ul>
 
@@ -1438,7 +1443,7 @@
 
 <h4 id="example">Example</h4>
 
-<pre class="command-example">VtTabletCommit [-connect_timeout &lt;connect timeout&gt;] &lt;transaction_id&gt;</pre>
+<pre class="command-example">VtTabletCommit [-username &lt;TableACL user&gt;] [-connect_timeout &lt;connect timeout&gt;] &lt;transaction_id&gt;</pre>
 
 <h4 id="flags">Flags</h4>
 
@@ -1454,12 +1459,17 @@
 <td style="text-align: left">Duration</td>
 <td style="text-align: left">Connection timeout for vttablet client</td>
 </tr>
+<tr>
+<td style="text-align: left">username</td>
+<td style="text-align: left">string</td>
+<td style="text-align: left">If set, value is set as immediate caller id in the request and used by vttablet for TableACL check</td>
+</tr>
 </tbody></table>
 
 <h4 id="arguments">Arguments</h4>
 
 <ul>
-<li><code>&lt;connect timeout&gt;</code> &ndash; Required.</li>
+<li><code>&lt;TableACL user&gt;</code> &ndash; Required.</li>
 <li><code>&lt;transaction_id&gt;</code> &ndash; Required.</li>
 </ul>
 
@@ -1476,7 +1486,7 @@
 
 <h4 id="example">Example</h4>
 
-<pre class="command-example">VtTabletExecute [-connect_timeout &lt;connect timeout&gt;] [-transaction_id &lt;transaction_id&gt;] [-options &lt;proto text options&gt;] [-json] &lt;tablet alias&gt; &lt;sql&gt;</pre>
+<pre class="command-example">VtTabletExecute [-username &lt;TableACL user&gt;] [-connect_timeout &lt;connect timeout&gt;] [-transaction_id &lt;transaction_id&gt;] [-options &lt;proto text options&gt;] [-json] &lt;tablet alias&gt; &lt;sql&gt;</pre>
 
 <h4 id="flags">Flags</h4>
 
@@ -1507,12 +1517,17 @@
 <td style="text-align: left">Int</td>
 <td style="text-align: left">transaction id to use, if inside a transaction.</td>
 </tr>
+<tr>
+<td style="text-align: left">username</td>
+<td style="text-align: left">string</td>
+<td style="text-align: left">If set, value is set as immediate caller id in the request and used by vttablet for TableACL check</td>
+</tr>
 </tbody></table>
 
 <h4 id="arguments">Arguments</h4>
 
 <ul>
-<li><code>&lt;connect timeout&gt;</code> &ndash; Required.</li>
+<li><code>&lt;TableACL user&gt;</code> &ndash; Required.</li>
 <li><code>&lt;tablet alias&gt;</code> &ndash; Required. A Tablet Alias uniquely identifies a vttablet. The argument value is in the format <code>&lt;cell name&gt;-&lt;uid&gt;</code>.</li>
 <li><code>&lt;sql&gt;</code> &ndash; Required.</li>
 </ul>
@@ -1531,7 +1546,7 @@
 
 <h4 id="example">Example</h4>
 
-<pre class="command-example">VtTabletRollback [-connect_timeout &lt;connect timeout&gt;] &lt;tablet alias&gt; &lt;transaction_id&gt;</pre>
+<pre class="command-example">VtTabletRollback [-username &lt;TableACL user&gt;] [-connect_timeout &lt;connect timeout&gt;] &lt;tablet alias&gt; &lt;transaction_id&gt;</pre>
 
 <h4 id="flags">Flags</h4>
 
@@ -1547,12 +1562,17 @@
 <td style="text-align: left">Duration</td>
 <td style="text-align: left">Connection timeout for vttablet client</td>
 </tr>
+<tr>
+<td style="text-align: left">username</td>
+<td style="text-align: left">string</td>
+<td style="text-align: left">If set, value is set as immediate caller id in the request and used by vttablet for TableACL check</td>
+</tr>
 </tbody></table>
 
 <h4 id="arguments">Arguments</h4>
 
 <ul>
-<li><code>&lt;connect timeout&gt;</code> &ndash; Required.</li>
+<li><code>&lt;TableACL user&gt;</code> &ndash; Required.</li>
 <li><code>&lt;tablet alias&gt;</code> &ndash; Required. A Tablet Alias uniquely identifies a vttablet. The argument value is in the format <code>&lt;cell name&gt;-&lt;uid&gt;</code>.</li>
 <li><code>&lt;transaction_id&gt;</code> &ndash; Required.</li>
 </ul>
@@ -1605,7 +1625,6 @@
 <ul>
 <li>the <code>&lt;tablet alias&gt;</code> argument is required for the <code>&lt;VtTabletStreamHealth&gt;</code> command This error occurs if the command is not called with exactly one argument.</li>
 <li>cannot connect to tablet %v: %v</li>
-<li>stream ended early: %v</li>
 </ul>
 
 <h3 id="vttabletupdatestream">VtTabletUpdateStream</h3>
@@ -1659,7 +1678,6 @@
 <ul>
 <li>the <code>&lt;tablet alias&gt;</code> argument is required for the <code>&lt;VtTabletUpdateStream&gt;</code> command This error occurs if the command is not called with exactly one argument.</li>
 <li>cannot connect to tablet %v: %v</li>
-<li>stream ended early: %v</li>
 </ul>
 
 <h2 id="replication-graph">Replication Graph</h2>
@@ -1910,6 +1928,8 @@
 <li><a href="#getvschema">GetVSchema</a></li>
 <li><a href="#rebuildvschemagraph">RebuildVSchemaGraph</a></li>
 <li><a href="#reloadschema">ReloadSchema</a></li>
+<li><a href="#reloadschemakeyspace">ReloadSchemaKeyspace</a></li>
+<li><a href="#reloadschemashard">ReloadSchemaShard</a></li>
 <li><a href="#validatepermissionskeyspace">ValidatePermissionsKeyspace</a></li>
 <li><a href="#validatepermissionsshard">ValidatePermissionsShard</a></li>
 <li><a href="#validateschemakeyspace">ValidateSchemaKeyspace</a></li>
@@ -2212,6 +2232,88 @@
 
 <ul>
 <li>the <code>&lt;tablet alias&gt;</code> argument is required for the <code>&lt;ReloadSchema&gt;</code> command This error occurs if the command is not called with exactly one argument.</li>
+</ul>
+
+<h3 id="reloadschemakeyspace">ReloadSchemaKeyspace</h3>
+
+<p>Reloads the schema on all the tablets in a keyspace.</p>
+
+<h4 id="example">Example</h4>
+
+<pre class="command-example">ReloadSchemaKeyspace [-concurrency=10] [-include_master=false] &lt;keyspace&gt;</pre>
+
+<h4 id="flags">Flags</h4>
+
+<table><thead>
+<tr>
+<th style="text-align: left">Name</th>
+<th style="text-align: left">Type</th>
+<th style="text-align: left">Definition</th>
+</tr>
+</thead><tbody>
+<tr>
+<td style="text-align: left">concurrency</td>
+<td style="text-align: left">Int</td>
+<td style="text-align: left">How many tablets to reload in parallel</td>
+</tr>
+<tr>
+<td style="text-align: left">include_master</td>
+<td style="text-align: left">Boolean</td>
+<td style="text-align: left">Include the master tablet(s)</td>
+</tr>
+</tbody></table>
+
+<h4 id="arguments">Arguments</h4>
+
+<ul>
+<li><code>&lt;keyspace&gt;</code> &ndash; Required. The name of a sharded database that contains one or more tables. Vitess distributes keyspace shards into multiple machines and provides an SQL interface to query the data. The argument value must be a string that does not contain whitespace.</li>
+</ul>
+
+<h4 id="errors">Errors</h4>
+
+<ul>
+<li>the <code>&lt;keyspace&gt;</code> argument is required for the <code>&lt;ReloadSchemaKeyspace&gt;</code> command This error occurs if the command is not called with exactly one argument.</li>
+</ul>
+
+<h3 id="reloadschemashard">ReloadSchemaShard</h3>
+
+<p>Reloads the schema on all the tablets in a shard.</p>
+
+<h4 id="example">Example</h4>
+
+<pre class="command-example">ReloadSchemaShard [-concurrency=10] [-include_master=false] &lt;keyspace/shard&gt;</pre>
+
+<h4 id="flags">Flags</h4>
+
+<table><thead>
+<tr>
+<th style="text-align: left">Name</th>
+<th style="text-align: left">Type</th>
+<th style="text-align: left">Definition</th>
+</tr>
+</thead><tbody>
+<tr>
+<td style="text-align: left">concurrency</td>
+<td style="text-align: left">Int</td>
+<td style="text-align: left">How many tablets to reload in parallel</td>
+</tr>
+<tr>
+<td style="text-align: left">include_master</td>
+<td style="text-align: left">Boolean</td>
+<td style="text-align: left">Include the master tablet</td>
+</tr>
+</tbody></table>
+
+<h4 id="arguments">Arguments</h4>
+
+<ul>
+<li><code>&lt;keyspace/shard&gt;</code> &ndash; Required. The name of a sharded database that contains one or more tables as well as the shard associated with the command. The keyspace must be identified by a string that does not contain whitepace, while the shard is typically identified by a string in the format <code>&lt;range start&gt;-&lt;range end&gt;</code>.</li>
+</ul>
+
+<h4 id="errors">Errors</h4>
+
+<ul>
+<li>the <code>&lt;keyspace/shard&gt;</code> argument is required for the <code>&lt;ReloadSchemaShard&gt;</code> command This error occurs if the command is not called with exactly one argument.</li>
 </ul>
 
 <h3 id="validatepermissionskeyspace">ValidatePermissionsKeyspace</h3>

@@ -18,6 +18,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/olekukonko/tablewriter"
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/vt/callerid"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
@@ -72,22 +73,22 @@ func init() {
 		addCommand(queriesGroupName, command{
 			"VtTabletExecute",
 			commandVtTabletExecute,
-			"[-connect_timeout <connect timeout>] [-transaction_id <transaction_id>] [-options <proto text options>] [-json] <tablet alias> <sql>",
+			"[-username <TableACL user>] [-connect_timeout <connect timeout>] [-transaction_id <transaction_id>] [-options <proto text options>] [-json] <tablet alias> <sql>",
 			"Executes the given query on the given tablet. -transaction_id is optional. Use VtTabletBegin to start a transaction."})
 		addCommand(queriesGroupName, command{
 			"VtTabletBegin",
 			commandVtTabletBegin,
-			"[-connect_timeout <connect timeout>] <tablet alias>",
+			"[-username <TableACL user>] [-connect_timeout <connect timeout>] <tablet alias>",
 			"Starts a transaction on the provided server."})
 		addCommand(queriesGroupName, command{
 			"VtTabletCommit",
 			commandVtTabletCommit,
-			"[-connect_timeout <connect timeout>] <transaction_id>",
+			"[-username <TableACL user>] [-connect_timeout <connect timeout>] <transaction_id>",
 			"Commits the given transaction on the provided server."})
 		addCommand(queriesGroupName, command{
 			"VtTabletRollback",
 			commandVtTabletRollback,
-			"[-connect_timeout <connect timeout>] <tablet alias> <transaction_id>",
+			"[-username <TableACL user>] [-connect_timeout <connect timeout>] <tablet alias> <transaction_id>",
 			"Rollbacks the given transaction on the provided server."})
 		addCommand(queriesGroupName, command{
 			"VtTabletStreamHealth",
@@ -353,6 +354,7 @@ func commandVtGateSplitQuery(ctx context.Context, wr *wrangler.Wrangler, subFlag
 }
 
 func commandVtTabletExecute(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	username := subFlags.String("username", "", "If set, value is set as immediate caller id in the request and used by vttablet for TableACL check")
 	transactionID := subFlags.Int("transaction_id", 0, "transaction id to use, if inside a transaction.")
 	bindVariables := newBindvars(subFlags)
 	connectTimeout := subFlags.Duration("connect_timeout", 30*time.Second, "Connection timeout for vttablet client")
@@ -378,6 +380,12 @@ func commandVtTabletExecute(ctx context.Context, wr *wrangler.Wrangler, subFlags
 		return err
 	}
 
+	if *username != "" {
+		ctx = callerid.NewContext(ctx,
+			callerid.NewEffectiveCallerID("vtctl", "" /* component */, "" /* subComponent */),
+			callerid.NewImmediateCallerID(*username))
+	}
+
 	conn, err := tabletconn.GetDialer()(tabletInfo.Tablet, *connectTimeout)
 	if err != nil {
 		return fmt.Errorf("cannot connect to tablet %v: %v", tabletAlias, err)
@@ -400,6 +408,7 @@ func commandVtTabletExecute(ctx context.Context, wr *wrangler.Wrangler, subFlags
 }
 
 func commandVtTabletBegin(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	username := subFlags.String("username", "", "If set, value is set as immediate caller id in the request and used by vttablet for TableACL check")
 	connectTimeout := subFlags.Duration("connect_timeout", 30*time.Second, "Connection timeout for vttablet client")
 	if err := subFlags.Parse(args); err != nil {
 		return err
@@ -414,6 +423,12 @@ func commandVtTabletBegin(ctx context.Context, wr *wrangler.Wrangler, subFlags *
 	tabletInfo, err := wr.TopoServer().GetTablet(ctx, tabletAlias)
 	if err != nil {
 		return err
+	}
+
+	if *username != "" {
+		ctx = callerid.NewContext(ctx,
+			callerid.NewEffectiveCallerID("vtctl", "" /* component */, "" /* subComponent */),
+			callerid.NewImmediateCallerID(*username))
 	}
 
 	conn, err := tabletconn.GetDialer()(tabletInfo.Tablet, *connectTimeout)
@@ -437,6 +452,7 @@ func commandVtTabletBegin(ctx context.Context, wr *wrangler.Wrangler, subFlags *
 }
 
 func commandVtTabletCommit(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	username := subFlags.String("username", "", "If set, value is set as immediate caller id in the request and used by vttablet for TableACL check")
 	connectTimeout := subFlags.Duration("connect_timeout", 30*time.Second, "Connection timeout for vttablet client")
 	if err := subFlags.Parse(args); err != nil {
 		return err
@@ -457,6 +473,12 @@ func commandVtTabletCommit(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 		return err
 	}
 
+	if *username != "" {
+		ctx = callerid.NewContext(ctx,
+			callerid.NewEffectiveCallerID("vtctl", "" /* component */, "" /* subComponent */),
+			callerid.NewImmediateCallerID(*username))
+	}
+
 	conn, err := tabletconn.GetDialer()(tabletInfo.Tablet, *connectTimeout)
 	if err != nil {
 		return fmt.Errorf("cannot connect to tablet %v: %v", tabletAlias, err)
@@ -471,6 +493,7 @@ func commandVtTabletCommit(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 }
 
 func commandVtTabletRollback(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	username := subFlags.String("username", "", "If set, value is set as immediate caller id in the request and used by vttablet for TableACL check")
 	connectTimeout := subFlags.Duration("connect_timeout", 30*time.Second, "Connection timeout for vttablet client")
 	if err := subFlags.Parse(args); err != nil {
 		return err
@@ -489,6 +512,12 @@ func commandVtTabletRollback(ctx context.Context, wr *wrangler.Wrangler, subFlag
 	tabletInfo, err := wr.TopoServer().GetTablet(ctx, tabletAlias)
 	if err != nil {
 		return err
+	}
+
+	if *username != "" {
+		ctx = callerid.NewContext(ctx,
+			callerid.NewEffectiveCallerID("vtctl", "" /* component */, "" /* subComponent */),
+			callerid.NewImmediateCallerID(*username))
 	}
 
 	conn, err := tabletconn.GetDialer()(tabletInfo.Tablet, *connectTimeout)
