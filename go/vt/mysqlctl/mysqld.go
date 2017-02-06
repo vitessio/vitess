@@ -50,7 +50,7 @@ var (
 
 	dbaMysqlStats      = stats.NewTimings("MysqlDba")
 	allprivsMysqlStats = stats.NewTimings("MysqlAllPrivs")
-	appMysqlStats      = stats.NewTimings("appMysqlStatsName")
+	appMysqlStats      = stats.NewTimings("MysqlApp")
 )
 
 // Mysqld is the object that represents a mysqld daemon running on this server.

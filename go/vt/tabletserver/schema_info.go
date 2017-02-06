@@ -149,6 +149,7 @@ func NewSchemaInfo(
 		_ = stats.NewMultiCountersFunc("IndexLength", []string{"Table"}, si.getIndexLength)
 		_ = stats.NewMultiCountersFunc("DataFree", []string{"Table"}, si.getDataFree)
 		_ = stats.NewMultiCountersFunc("MaxDataLength", []string{"Table"}, si.getMaxDataLength)
+
 		for _, ep := range endpoints {
 			http.Handle(ep, si)
 		}
