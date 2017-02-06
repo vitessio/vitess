@@ -15,7 +15,7 @@ import (
 
 	"github.com/youtube/vitess/go/mysqlconn/fakesqldb"
 	"github.com/youtube/vitess/go/sqltypes"
-	"github.com/youtube/vitess/go/vt/tabletserver/tabletstats"
+	"github.com/youtube/vitess/go/vt/tabletserver/tabletenv"
 )
 
 func TestTxPoolExecuteRollback(t *testing.T) {
@@ -95,7 +95,7 @@ func TestTxPoolTransactionKiller(t *testing.T) {
 	txPool.Open(db.ConnParams(), db.ConnParams())
 	defer txPool.Close()
 	ctx := context.Background()
-	killCount := tabletstats.KillStats.Counts()["Transactions"]
+	killCount := tabletenv.KillStats.Counts()["Transactions"]
 	transactionID, err := txPool.Begin(ctx)
 	if err != nil {
 		t.Fatal(err)
@@ -108,7 +108,7 @@ func TestTxPoolTransactionKiller(t *testing.T) {
 	txConn.Recycle()
 	// transaction killer should kill the query
 	txPool.WaitForEmpty()
-	killCountDiff := tabletstats.KillStats.Counts()["Transactions"] - killCount
+	killCountDiff := tabletenv.KillStats.Counts()["Transactions"] - killCount
 	if killCountDiff != 1 {
 		t.Fatalf("query: %s should be killed by transaction killer", sql)
 	}
@@ -126,9 +126,9 @@ func TestTxPoolBeginAfterConnPoolClosed(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expect to get an error")
 	}
-	terr, ok := err.(*TabletError)
-	if !ok || terr != ErrConnPoolClosed {
-		t.Fatalf("get error: %v, but expect: %v", terr, ErrConnPoolClosed)
+	terr, ok := err.(*tabletenv.TabletError)
+	if !ok || terr != tabletenv.ErrConnPoolClosed {
+		t.Fatalf("get error: %v, but expect: %v", terr, tabletenv.ErrConnPoolClosed)
 	}
 }
 

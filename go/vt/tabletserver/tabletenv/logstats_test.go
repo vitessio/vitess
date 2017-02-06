@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package tabletserver
+package tabletenv
 
 import (
 	"net/url"
@@ -14,6 +14,7 @@ import (
 
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/callinfo"
+	"github.com/youtube/vitess/go/vt/callinfo/fakecallinfo"
 
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
@@ -89,8 +90,8 @@ func TestLogStatsFormatQuerySources(t *testing.T) {
 
 func TestLogStatsContextHTML(t *testing.T) {
 	html := "HtmlContext"
-	callInfo := &fakeCallInfo{
-		html: html,
+	callInfo := &fakecallinfo.FakeCallInfo{
+		Html: html,
 	}
 	ctx := callinfo.NewContext(context.Background(), callInfo)
 	logStats := NewLogStats(ctx, "test")
@@ -126,9 +127,9 @@ func TestLogStatsRemoteAddrUsername(t *testing.T) {
 
 	remoteAddr := "1.2.3.4"
 	username := "vt"
-	callInfo := &fakeCallInfo{
-		remoteAddr: remoteAddr,
-		username:   username,
+	callInfo := &fakecallinfo.FakeCallInfo{
+		Remote: remoteAddr,
+		User:   username,
 	}
 	ctx := callinfo.NewContext(context.Background(), callInfo)
 	logStats = NewLogStats(ctx, "test")

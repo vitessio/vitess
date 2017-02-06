@@ -13,11 +13,12 @@ import (
 
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/callerid"
+	"github.com/youtube/vitess/go/vt/tabletserver/tabletenv"
 )
 
 func testHandler(req *http.Request, t *testing.T) {
 	response := httptest.NewRecorder()
-	TxLogger.Send("test msg")
+	tabletenv.TxLogger.Send("test msg")
 	txlogzHandler(response, req)
 	if !strings.Contains(response.Body.String(), "error") {
 		t.Fatalf("should show an error page since transaction log format is invalid.")
@@ -33,15 +34,15 @@ func testHandler(req *http.Request, t *testing.T) {
 	}
 	txConn.EndTime = txConn.StartTime
 	response = httptest.NewRecorder()
-	TxLogger.Send(txConn)
+	tabletenv.TxLogger.Send(txConn)
 	txlogzHandler(response, req)
 	txConn.EndTime = txConn.StartTime.Add(time.Duration(2) * time.Second)
 	response = httptest.NewRecorder()
-	TxLogger.Send(txConn)
+	tabletenv.TxLogger.Send(txConn)
 	txlogzHandler(response, req)
 	txConn.EndTime = txConn.StartTime.Add(time.Duration(500) * time.Millisecond)
 	response = httptest.NewRecorder()
-	TxLogger.Send(txConn)
+	tabletenv.TxLogger.Send(txConn)
 	txlogzHandler(response, req)
 
 }

@@ -19,11 +19,12 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/callerid"
 	"github.com/youtube/vitess/go/vt/callinfo"
+	"github.com/youtube/vitess/go/vt/callinfo/fakecallinfo"
 	"github.com/youtube/vitess/go/vt/schema"
 	"github.com/youtube/vitess/go/vt/tableacl"
 	"github.com/youtube/vitess/go/vt/tableacl/simpleacl"
 	"github.com/youtube/vitess/go/vt/tabletserver/planbuilder"
-	"github.com/youtube/vitess/go/vt/tabletserver/tabletstats"
+	"github.com/youtube/vitess/go/vt/tabletserver/tabletenv"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	tableaclpb "github.com/youtube/vitess/go/vt/proto/tableacl"
@@ -88,9 +89,9 @@ func TestQueryExecutorPlanPassDmlStrictMode(t *testing.T) {
 	if err == nil {
 		t.Fatal("qre.Execute() = nil, want error")
 	}
-	tabletError, ok := err.(*TabletError)
+	tabletError, ok := err.(*tabletenv.TabletError)
 	if !ok {
-		t.Fatalf("got: %v, want: a TabletError", tabletError)
+		t.Fatalf("got: %v, want: a tabletenv.TabletError", tabletError)
 	}
 	if tabletError.ErrorCode != vtrpcpb.ErrorCode_BAD_INPUT {
 		t.Fatalf("got: %s, want: BAD_INPUT", tabletError.ErrorCode)
@@ -127,9 +128,9 @@ func TestQueryExecutorPlanPassDmlStrictModeAutoCommit(t *testing.T) {
 	if err == nil {
 		t.Fatal("got: nil, want: error")
 	}
-	tabletError, ok := err.(*TabletError)
+	tabletError, ok := err.(*tabletenv.TabletError)
 	if !ok {
-		t.Fatalf("got: %v, want: *TabletError", tabletError)
+		t.Fatalf("got: %v, want: *tabletenv.TabletError", tabletError)
 	}
 	if tabletError.ErrorCode != vtrpcpb.ErrorCode_BAD_INPUT {
 		t.Fatalf("got: %s, want: BAD_INPUT", tabletError.ErrorCode)
@@ -687,9 +688,9 @@ func TestQueryExecutorPlanPassSelectWithLockOutsideATransaction(t *testing.T) {
 	if err == nil {
 		t.Fatal("got: nil, want: error")
 	}
-	got, ok := err.(*TabletError)
+	got, ok := err.(*tabletenv.TabletError)
 	if !ok {
-		t.Fatalf("got: %v, want: *TabletError", err)
+		t.Fatalf("got: %v, want: *tabletenv.TabletError", err)
 	}
 	if got.ErrorCode != vtrpcpb.ErrorCode_BAD_INPUT {
 		t.Fatalf("got: %s, want: BAD_INPUT", got.ErrorCode)
@@ -1032,9 +1033,9 @@ func TestQueryExecutorTableAclNoPermission(t *testing.T) {
 	if err == nil {
 		t.Fatal("got: nil, want: error")
 	}
-	tabletError, ok := err.(*TabletError)
+	tabletError, ok := err.(*tabletenv.TabletError)
 	if !ok {
-		t.Fatalf("got: %v, want: *TabletError", err)
+		t.Fatalf("got: %v, want: *tabletenv.TabletError", err)
 	}
 	if tabletError.ErrorCode != vtrpcpb.ErrorCode_PERMISSION_DENIED {
 		t.Fatalf("got: %s, want: PERMISSION_DENIED", tabletError.ErrorCode)
@@ -1086,9 +1087,9 @@ func TestQueryExecutorTableAclExemptACL(t *testing.T) {
 	if err == nil {
 		t.Fatal("got: nil, want: error")
 	}
-	tabletError, ok := err.(*TabletError)
+	tabletError, ok := err.(*tabletenv.TabletError)
 	if !ok {
-		t.Fatalf("got: %v, want: *TabletError", err)
+		t.Fatalf("got: %v, want: *tabletenv.TabletError", err)
 	}
 	if tabletError.ErrorCode != vtrpcpb.ErrorCode_PERMISSION_DENIED {
 		t.Fatalf("got: %s, want: PERMISSION_DENIED", tabletError.ErrorCode)
@@ -1162,13 +1163,13 @@ func TestQueryExecutorTableAclDryRun(t *testing.T) {
 	qre := newTestQueryExecutor(ctx, tsv, query, 0)
 	defer tsv.StopService()
 	checkPlanID(t, planbuilder.PlanPassSelect, qre.plan.PlanID)
-	beforeCount := tabletstats.TableaclPseudoDenied.Counters.Counts()[tableACLStatsKey]
+	beforeCount := tabletenv.TableaclPseudoDenied.Counters.Counts()[tableACLStatsKey]
 	// query should fail because current user do not have read permissions
 	_, err := qre.Execute()
 	if err != nil {
 		t.Fatalf("qre.Execute() = %v, want: nil", err)
 	}
-	afterCount := tabletstats.TableaclPseudoDenied.Counters.Counts()[tableACLStatsKey]
+	afterCount := tabletenv.TableaclPseudoDenied.Counters.Counts()[tableACLStatsKey]
 	if afterCount-beforeCount != 1 {
 		t.Fatalf("table acl pseudo denied count should increase by one. got: %d, want: %d", afterCount, beforeCount+1)
 	}
@@ -1203,9 +1204,9 @@ func TestQueryExecutorBlacklistQRFail(t *testing.T) {
 	rules := NewQueryRules()
 	rules.Add(alterRule)
 
-	callInfo := &fakeCallInfo{
-		remoteAddr: bannedAddr,
-		username:   bannedUser,
+	callInfo := &fakecallinfo.FakeCallInfo{
+		Remote: bannedAddr,
+		User:   bannedUser,
 	}
 	ctx := callinfo.NewContext(context.Background(), callInfo)
 	tsv := newTestTabletServer(ctx, enableStrict, db)
@@ -1226,9 +1227,9 @@ func TestQueryExecutorBlacklistQRFail(t *testing.T) {
 	if err == nil {
 		t.Fatal("got: nil, want: error")
 	}
-	got, ok := err.(*TabletError)
+	got, ok := err.(*tabletenv.TabletError)
 	if !ok {
-		t.Fatalf("got: %v, want: *TabletError", err)
+		t.Fatalf("got: %v, want: *tabletenv.TabletError", err)
 	}
 	if got.ErrorCode != vtrpcpb.ErrorCode_BAD_INPUT {
 		t.Fatalf("got: %s, want: BAD_INPUT", got.ErrorCode)
@@ -1264,9 +1265,9 @@ func TestQueryExecutorBlacklistQRRetry(t *testing.T) {
 	rules := NewQueryRules()
 	rules.Add(alterRule)
 
-	callInfo := &fakeCallInfo{
-		remoteAddr: bannedAddr,
-		username:   bannedUser,
+	callInfo := &fakecallinfo.FakeCallInfo{
+		Remote: bannedAddr,
+		User:   bannedUser,
 	}
 	ctx := callinfo.NewContext(context.Background(), callInfo)
 	tsv := newTestTabletServer(ctx, enableStrict, db)
@@ -1286,9 +1287,9 @@ func TestQueryExecutorBlacklistQRRetry(t *testing.T) {
 	if err == nil {
 		t.Fatal("got: nil, want: error")
 	}
-	got, ok := err.(*TabletError)
+	got, ok := err.(*tabletenv.TabletError)
 	if !ok {
-		t.Fatalf("got: %v, want: *TabletError", err)
+		t.Fatalf("got: %v, want: *tabletenv.TabletError", err)
 	}
 	if got.ErrorCode != vtrpcpb.ErrorCode_QUERY_NOT_SERVED {
 		t.Fatalf("got: %s, want: QUERY_NOT_SERVED", got.ErrorCode)
@@ -1309,7 +1310,8 @@ const (
 // newTestQueryExecutor uses a package level variable testTabletServer defined in tabletserver_test.go
 func newTestTabletServer(ctx context.Context, flags executorFlags, db *fakesqldb.DB) *TabletServer {
 	randID := rand.Int63()
-	config := DefaultQsConfig
+	tabletenv.Config = tabletenv.DefaultQsConfig
+	config := &tabletenv.Config
 	config.DebugURLPrefix = fmt.Sprintf("/debug-%d-", randID)
 	config.PoolNamePrefix = fmt.Sprintf("Pool-%d-", randID)
 	config.PoolSize = 100
@@ -1341,7 +1343,7 @@ func newTestTabletServer(ctx context.Context, flags executorFlags, db *fakesqldb
 	} else {
 		config.TwoPCAbandonAge = 10
 	}
-	tsv := NewTabletServer(config)
+	tsv := NewTabletServer()
 	testUtils := newTestUtils()
 	dbconfigs := testUtils.newDBConfigs(db)
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
@@ -1358,7 +1360,7 @@ func newTransaction(tsv *TabletServer) int64 {
 }
 
 func newTestQueryExecutor(ctx context.Context, tsv *TabletServer, sql string, txID int64) *QueryExecutor {
-	logStats := NewLogStats(ctx, "TestQueryExecutor")
+	logStats := tabletenv.NewLogStats(ctx, "TestQueryExecutor")
 	plan, err := tsv.qe.schemaInfo.GetPlan(ctx, logStats, sql)
 	if err != nil {
 		panic(err)

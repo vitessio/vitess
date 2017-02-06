@@ -18,7 +18,8 @@ import (
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/tableacl"
 	"github.com/youtube/vitess/go/vt/tableacl/acl"
-	"github.com/youtube/vitess/go/vt/tabletserver/tabletstats"
+	"github.com/youtube/vitess/go/vt/tabletserver/connpool"
+	"github.com/youtube/vitess/go/vt/tabletserver/tabletenv"
 )
 
 // QueryEngine implements the core functionality of tabletserver.
@@ -34,12 +35,11 @@ import (
 // function is called.
 type QueryEngine struct {
 	schemaInfo *SchemaInfo
-	config     Config
 	dbconfigs  dbconfigs.DBConfigs
 
 	// Pools
-	connPool       *ConnPool
-	streamConnPool *ConnPool
+	conns       *connpool.Pool
+	streamConns *connpool.Pool
 
 	// Services
 	consolidator *sync2.Consolidator
@@ -69,53 +69,51 @@ var (
 // NewQueryEngine creates a new QueryEngine.
 // This is a singleton class.
 // You must call this only once.
-func NewQueryEngine(checker MySQLChecker, config Config) *QueryEngine {
-	qe := &QueryEngine{
-		config: config,
-	}
+func NewQueryEngine(checker MySQLChecker) *QueryEngine {
+	qe := &QueryEngine{}
 	qe.schemaInfo = NewSchemaInfo(
 		checker,
-		config.QueryCacheSize,
-		time.Duration(config.SchemaReloadTime*1e9),
-		time.Duration(config.IdleTimeout*1e9),
+		tabletenv.Config.QueryCacheSize,
+		time.Duration(tabletenv.Config.SchemaReloadTime*1e9),
+		time.Duration(tabletenv.Config.IdleTimeout*1e9),
 		map[string]string{
-			debugQueryPlansKey: config.DebugURLPrefix + "/query_plans",
-			debugQueryStatsKey: config.DebugURLPrefix + "/query_stats",
-			debugSchemaKey:     config.DebugURLPrefix + "/schema",
-			debugQueryRulesKey: config.DebugURLPrefix + "/query_rules",
+			debugQueryPlansKey: tabletenv.Config.DebugURLPrefix + "/query_plans",
+			debugQueryStatsKey: tabletenv.Config.DebugURLPrefix + "/query_stats",
+			debugSchemaKey:     tabletenv.Config.DebugURLPrefix + "/schema",
+			debugQueryRulesKey: tabletenv.Config.DebugURLPrefix + "/query_rules",
 		},
 	)
 
-	qe.connPool = NewConnPool(
-		config.PoolNamePrefix+"ConnPool",
-		config.PoolSize,
-		time.Duration(config.IdleTimeout*1e9),
+	qe.conns = connpool.New(
+		tabletenv.Config.PoolNamePrefix+"ConnPool",
+		tabletenv.Config.PoolSize,
+		time.Duration(tabletenv.Config.IdleTimeout*1e9),
 		checker,
 	)
-	qe.streamConnPool = NewConnPool(
-		config.PoolNamePrefix+"StreamConnPool",
-		config.StreamPoolSize,
-		time.Duration(config.IdleTimeout*1e9),
+	qe.streamConns = connpool.New(
+		tabletenv.Config.PoolNamePrefix+"StreamConnPool",
+		tabletenv.Config.StreamPoolSize,
+		time.Duration(tabletenv.Config.IdleTimeout*1e9),
 		checker,
 	)
 
 	qe.consolidator = sync2.NewConsolidator()
-	http.Handle(config.DebugURLPrefix+"/consolidations", qe.consolidator)
+	http.Handle(tabletenv.Config.DebugURLPrefix+"/consolidations", qe.consolidator)
 	qe.streamQList = NewQueryList()
 
-	if config.StrictMode {
+	if tabletenv.Config.StrictMode {
 		qe.strictMode.Set(1)
 	}
-	if config.EnableAutoCommit {
+	if tabletenv.Config.EnableAutoCommit {
 		qe.autoCommit.Set(1)
 	}
-	qe.strictTableAcl = config.StrictTableAcl
-	qe.enableTableAclDryRun = config.EnableTableAclDryRun
+	qe.strictTableAcl = tabletenv.Config.StrictTableAcl
+	qe.enableTableAclDryRun = tabletenv.Config.EnableTableAclDryRun
 
-	if config.TableAclExemptACL != "" {
+	if tabletenv.Config.TableAclExemptACL != "" {
 		if f, err := tableacl.GetCurrentAclFactory(); err == nil {
-			if exemptACL, err := f.New([]string{config.TableAclExemptACL}); err == nil {
-				log.Infof("Setting Table ACL exempt rule for %v", config.TableAclExemptACL)
+			if exemptACL, err := f.New([]string{tabletenv.Config.TableAclExemptACL}); err == nil {
+				log.Infof("Setting Table ACL exempt rule for %v", tabletenv.Config.TableAclExemptACL)
 				qe.exemptACL = exemptACL
 			} else {
 				log.Infof("Cannot build exempt ACL for table ACL: %v", err)
@@ -125,9 +123,9 @@ func NewQueryEngine(checker MySQLChecker, config Config) *QueryEngine {
 		}
 	}
 
-	qe.maxResultSize = sync2.NewAtomicInt64(int64(config.MaxResultSize))
-	qe.maxDMLRows = sync2.NewAtomicInt64(int64(config.MaxDMLRows))
-	qe.streamBufferSize = sync2.NewAtomicInt64(int64(config.StreamBufferSize))
+	qe.maxResultSize = sync2.NewAtomicInt64(int64(tabletenv.Config.MaxResultSize))
+	qe.maxDMLRows = sync2.NewAtomicInt64(int64(tabletenv.Config.MaxDMLRows))
+	qe.streamBufferSize = sync2.NewAtomicInt64(int64(tabletenv.Config.StreamBufferSize))
 
 	qe.accessCheckerLogger = logutil.NewThrottledLogger("accessChecker", 1*time.Second)
 
@@ -156,16 +154,16 @@ func (qe *QueryEngine) Open(dbconfigs dbconfigs.DBConfigs) error {
 	}
 	log.Infof("Time taken to load the schema: %v", time.Now().Sub(start))
 
-	qe.connPool.Open(&qe.dbconfigs.App, &qe.dbconfigs.Dba)
-	qe.streamConnPool.Open(&qe.dbconfigs.App, &qe.dbconfigs.Dba)
+	qe.conns.Open(&qe.dbconfigs.App, &qe.dbconfigs.Dba)
+	qe.streamConns.Open(&qe.dbconfigs.App, &qe.dbconfigs.Dba)
 	return nil
 }
 
 // IsMySQLReachable returns true if we can connect to MySQL.
 func (qe *QueryEngine) IsMySQLReachable() bool {
-	conn, err := dbconnpool.NewDBConnection(&qe.dbconfigs.App, tabletstats.MySQLStats)
+	conn, err := dbconnpool.NewDBConnection(&qe.dbconfigs.App, tabletenv.MySQLStats)
 	if err != nil {
-		if IsConnErr(err) {
+		if tabletenv.IsConnErr(err) {
 			return false
 		}
 		log.Warningf("checking MySQL, unexpected error: %v", err)
@@ -180,7 +178,7 @@ func (qe *QueryEngine) IsMySQLReachable() bool {
 // before calling Close.
 func (qe *QueryEngine) Close() {
 	// Close in reverse order of Open.
-	qe.streamConnPool.Close()
-	qe.connPool.Close()
+	qe.streamConns.Close()
+	qe.conns.Close()
 	qe.schemaInfo.Close()
 }

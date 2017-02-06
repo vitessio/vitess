@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package tabletserver
+package tabletenv
 
 import (
 	"encoding/json"
@@ -16,15 +16,11 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/sqltypes"
-	"github.com/youtube/vitess/go/streamlog"
 	"github.com/youtube/vitess/go/vt/callerid"
 	"github.com/youtube/vitess/go/vt/callinfo"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
-
-// StatsLogger is the main stream logger object
-var StatsLogger = streamlog.New("TabletServer", 50)
 
 const (
 	// QuerySourceConsolidator means query result is found in consolidator.
@@ -35,7 +31,7 @@ const (
 
 // LogStats records the stats for a single query
 type LogStats struct {
-	ctx                  context.Context
+	Ctx                  context.Context
 	Method               string
 	Target               *querypb.Target
 	PlanType             string
@@ -58,7 +54,7 @@ type LogStats struct {
 // field values, and the StartTime field set to the present time.
 func NewLogStats(ctx context.Context, methodName string) *LogStats {
 	return &LogStats{
-		ctx:       ctx,
+		Ctx:       ctx,
 		Method:    methodName,
 		StartTime: time.Now(),
 	}
@@ -72,17 +68,17 @@ func (stats *LogStats) Send() {
 
 // Context returns the context used by LogStats.
 func (stats *LogStats) Context() context.Context {
-	return stats.ctx
+	return stats.Ctx
 }
 
-// ImmediateCaller returns the immediate caller stored in LogStats.ctx
+// ImmediateCaller returns the immediate caller stored in LogStats.Ctx
 func (stats *LogStats) ImmediateCaller() string {
-	return callerid.GetUsername(callerid.ImmediateCallerIDFromContext(stats.ctx))
+	return callerid.GetUsername(callerid.ImmediateCallerIDFromContext(stats.Ctx))
 }
 
-// EffectiveCaller returns the effective caller stored in LogStats.ctx
+// EffectiveCaller returns the effective caller stored in LogStats.Ctx
 func (stats *LogStats) EffectiveCaller() string {
-	return callerid.GetPrincipal(callerid.EffectiveCallerIDFromContext(stats.ctx))
+	return callerid.GetPrincipal(callerid.EffectiveCallerIDFromContext(stats.Ctx))
 }
 
 // EventTime returns the time the event was created.
@@ -179,7 +175,7 @@ func (stats *LogStats) FmtQuerySources() string {
 // This is a method on LogStats instead of a field so that it doesn't need
 // to be passed by value everywhere.
 func (stats *LogStats) ContextHTML() template.HTML {
-	return callinfo.HTMLFromContext(stats.ctx)
+	return callinfo.HTMLFromContext(stats.Ctx)
 }
 
 // ErrorStr returns the error string or ""
@@ -192,7 +188,7 @@ func (stats *LogStats) ErrorStr() string {
 
 // RemoteAddrUsername returns some parts of CallInfo if set
 func (stats *LogStats) RemoteAddrUsername() (string, string) {
-	ci, ok := callinfo.FromContext(stats.ctx)
+	ci, ok := callinfo.FromContext(stats.Ctx)
 	if !ok {
 		return "", ""
 	}

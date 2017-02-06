@@ -14,6 +14,7 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/tabletserver/planbuilder"
+	"github.com/youtube/vitess/go/vt/tabletserver/tabletenv"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -96,7 +97,7 @@ func (qrs *QueryRules) UnmarshalJSON(data []byte) (err error) {
 		// Ideally, we should have an error code that means "This isn't the query's
 		// fault, but don't retry either, as this will be a global problem".
 		// (true for all INTERNAL_ERRORS in query_rules)
-		return NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "%v", err)
+		return tabletenv.NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "%v", err)
 	}
 	for _, ruleInfo := range rulesInfo {
 		qr, err := BuildQueryRule(ruleInfo)
@@ -332,7 +333,7 @@ func (qr *QueryRule) AddBindVarCond(name string, onAbsent, onMismatch bool, op O
 			// Change the value to compiled regexp
 			re, err := regexp.Compile(makeExact(v))
 			if err != nil {
-				return NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "processing %s: %v", v, err)
+				return tabletenv.NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "processing %s: %v", v, err)
 			}
 			converted = bvcre{re}
 		} else {
@@ -345,13 +346,13 @@ func (qr *QueryRule) AddBindVarCond(name string, onAbsent, onMismatch bool, op O
 		b := bvcKeyRange(*v)
 		converted = &b
 	default:
-		return NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "type %T not allowed as condition operand (%v)", value, value)
+		return tabletenv.NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "type %T not allowed as condition operand (%v)", value, value)
 	}
 	qr.bindVarConds = append(qr.bindVarConds, BindVarCond{name, onAbsent, onMismatch, op, converted})
 	return nil
 
 Error:
-	return NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "invalid operator %s for type %T (%v)", op, value, value)
+	return tabletenv.NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "invalid operator %s for type %T (%v)", op, value, value)
 }
 
 // filterByPlan returns a new QueryRule if the query and planid match.
@@ -884,7 +885,7 @@ func MapStrOperator(strop string) (op Operator, err error) {
 	if op, ok := opmap[strop]; ok {
 		return op, nil
 	}
-	return QRNoOp, NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "invalid Operator %s", strop)
+	return QRNoOp, tabletenv.NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "invalid Operator %s", strop)
 }
 
 // BuildQueryRule builds a query rule from a ruleInfo.
@@ -898,15 +899,15 @@ func BuildQueryRule(ruleInfo map[string]interface{}) (qr *QueryRule, err error) 
 		case "Name", "Description", "RequestIP", "User", "Query", "Action":
 			sv, ok = v.(string)
 			if !ok {
-				return nil, NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "want string for %s", k)
+				return nil, tabletenv.NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "want string for %s", k)
 			}
 		case "Plans", "BindVarConds", "TableNames":
 			lv, ok = v.([]interface{})
 			if !ok {
-				return nil, NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "want list for %s", k)
+				return nil, tabletenv.NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "want list for %s", k)
 			}
 		default:
-			return nil, NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "unrecognized tag %s", k)
+			return nil, tabletenv.NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "unrecognized tag %s", k)
 		}
 		switch k {
 		case "Name":
@@ -916,27 +917,27 @@ func BuildQueryRule(ruleInfo map[string]interface{}) (qr *QueryRule, err error) 
 		case "RequestIP":
 			err = qr.SetIPCond(sv)
 			if err != nil {
-				return nil, NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "could not set IP condition: %v", sv)
+				return nil, tabletenv.NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "could not set IP condition: %v", sv)
 			}
 		case "User":
 			err = qr.SetUserCond(sv)
 			if err != nil {
-				return nil, NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "could not set User condition: %v", sv)
+				return nil, tabletenv.NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "could not set User condition: %v", sv)
 			}
 		case "Query":
 			err = qr.SetQueryCond(sv)
 			if err != nil {
-				return nil, NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "could not set Query condition: %v", sv)
+				return nil, tabletenv.NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "could not set Query condition: %v", sv)
 			}
 		case "Plans":
 			for _, p := range lv {
 				pv, ok := p.(string)
 				if !ok {
-					return nil, NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "want string for Plans")
+					return nil, tabletenv.NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "want string for Plans")
 				}
 				pt, ok := planbuilder.PlanByName(pv)
 				if !ok {
-					return nil, NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "invalid plan name: %s", pv)
+					return nil, tabletenv.NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "invalid plan name: %s", pv)
 				}
 				qr.AddPlanCond(pt)
 			}
@@ -944,7 +945,7 @@ func BuildQueryRule(ruleInfo map[string]interface{}) (qr *QueryRule, err error) 
 			for _, t := range lv {
 				tableName, ok := t.(string)
 				if !ok {
-					return nil, NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "want string for TableNames")
+					return nil, tabletenv.NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "want string for TableNames")
 				}
 				qr.AddTableCond(tableName)
 			}
@@ -966,7 +967,7 @@ func BuildQueryRule(ruleInfo map[string]interface{}) (qr *QueryRule, err error) 
 			case "FAIL_RETRY":
 				qr.act = QRFailRetry
 			default:
-				return nil, NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "invalid Action %s", sv)
+				return nil, tabletenv.NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "invalid Action %s", sv)
 			}
 		}
 	}
@@ -976,41 +977,41 @@ func BuildQueryRule(ruleInfo map[string]interface{}) (qr *QueryRule, err error) 
 func buildBindVarCondition(bvc interface{}) (name string, onAbsent, onMismatch bool, op Operator, value interface{}, err error) {
 	bvcinfo, ok := bvc.(map[string]interface{})
 	if !ok {
-		err = NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "want json object for bind var conditions")
+		err = tabletenv.NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "want json object for bind var conditions")
 		return
 	}
 
 	var v interface{}
 	v, ok = bvcinfo["Name"]
 	if !ok {
-		err = NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "Name missing in BindVarConds")
+		err = tabletenv.NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "Name missing in BindVarConds")
 		return
 	}
 	name, ok = v.(string)
 	if !ok {
-		err = NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "want string for Name in BindVarConds")
+		err = tabletenv.NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "want string for Name in BindVarConds")
 		return
 	}
 
 	v, ok = bvcinfo["OnAbsent"]
 	if !ok {
-		err = NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "OnAbsent missing in BindVarConds")
+		err = tabletenv.NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "OnAbsent missing in BindVarConds")
 		return
 	}
 	onAbsent, ok = v.(bool)
 	if !ok {
-		err = NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "want bool for OnAbsent")
+		err = tabletenv.NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "want bool for OnAbsent")
 		return
 	}
 
 	v, ok = bvcinfo["Operator"]
 	if !ok {
-		err = NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "Operator missing in BindVarConds")
+		err = tabletenv.NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "Operator missing in BindVarConds")
 		return
 	}
 	strop, ok := v.(string)
 	if !ok {
-		err = NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "want string for Operator")
+		err = tabletenv.NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "want string for Operator")
 		return
 	}
 	op, err = MapStrOperator(strop)
@@ -1022,7 +1023,7 @@ func buildBindVarCondition(bvc interface{}) (name string, onAbsent, onMismatch b
 	}
 	v, ok = bvcinfo["Value"]
 	if !ok {
-		err = NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "Value missing in BindVarConds")
+		err = tabletenv.NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "Value missing in BindVarConds")
 		return
 	}
 	if op >= QREqual && op <= QRLessEqual {
@@ -1033,50 +1034,50 @@ func buildBindVarCondition(bvc interface{}) (name string, onAbsent, onMismatch b
 				// Maybe uint64
 				value, err = strconv.ParseUint(string(v), 10, 64)
 				if err != nil {
-					err = NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "want int64/uint64: %s", string(v))
+					err = tabletenv.NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "want int64/uint64: %s", string(v))
 					return
 				}
 			}
 		case string:
 			value = v
 		default:
-			err = NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "want string or number: %v", v)
+			err = tabletenv.NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "want string or number: %v", v)
 			return
 		}
 	} else if op == QRMatch || op == QRNoMatch {
 		strvalue, ok := v.(string)
 		if !ok {
-			err = NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "want string: %v", v)
+			err = tabletenv.NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "want string: %v", v)
 			return
 		}
 		value = strvalue
 	} else if op == QRIn || op == QRNotIn {
 		kr, ok := v.(map[string]interface{})
 		if !ok {
-			err = NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "want keyrange for Value")
+			err = tabletenv.NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "want keyrange for Value")
 			return
 		}
 		keyrange := &topodatapb.KeyRange{}
 		strstart, ok := kr["Start"]
 		if !ok {
-			err = NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "Start missing in KeyRange")
+			err = tabletenv.NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "Start missing in KeyRange")
 			return
 		}
 		start, ok := strstart.(string)
 		if !ok {
-			err = NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "want string for Start")
+			err = tabletenv.NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "want string for Start")
 			return
 		}
 		keyrange.Start = []byte(start)
 
 		strend, ok := kr["End"]
 		if !ok {
-			err = NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "End missing in KeyRange")
+			err = tabletenv.NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "End missing in KeyRange")
 			return
 		}
 		end, ok := strend.(string)
 		if !ok {
-			err = NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "want string for End")
+			err = tabletenv.NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "want string for End")
 			return
 		}
 		keyrange.End = []byte(end)
@@ -1085,12 +1086,12 @@ func buildBindVarCondition(bvc interface{}) (name string, onAbsent, onMismatch b
 
 	v, ok = bvcinfo["OnMismatch"]
 	if !ok {
-		err = NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "OnMismatch missing in BindVarConds")
+		err = tabletenv.NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "OnMismatch missing in BindVarConds")
 		return
 	}
 	onMismatch, ok = v.(bool)
 	if !ok {
-		err = NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "want bool for OnMismatch")
+		err = tabletenv.NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "want bool for OnMismatch")
 		return
 	}
 	return

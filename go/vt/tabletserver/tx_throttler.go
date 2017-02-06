@@ -10,6 +10,7 @@ import (
 	"github.com/golang/protobuf/proto"
 
 	"github.com/youtube/vitess/go/vt/discovery"
+	"github.com/youtube/vitess/go/vt/tabletserver/tabletenv"
 	"github.com/youtube/vitess/go/vt/throttler"
 	"github.com/youtube/vitess/go/vt/topo"
 
@@ -63,8 +64,8 @@ type TxThrottler struct {
 // and returns an error if one occurred.
 // TODO(erez): This function should return an error instead of returning a disabled
 // transaction throttler. Fix this after NewTabletServer is changed to return an error as well.
-func CreateTxThrottlerFromTabletConfig(tsvConfig *Config) *TxThrottler {
-	txThrottler, err := tryCreateTxThrottler(tsvConfig)
+func CreateTxThrottlerFromTabletConfig() *TxThrottler {
+	txThrottler, err := tryCreateTxThrottler()
 	if err != nil {
 		log.Errorf("Error creating transaction throttler. Transaction throttling will"+
 			" be disabled. Error: %v", err)
@@ -81,23 +82,23 @@ func CreateTxThrottlerFromTabletConfig(tsvConfig *Config) *TxThrottler {
 	return txThrottler
 }
 
-func tryCreateTxThrottler(tsvConfig *Config) (*TxThrottler, error) {
+func tryCreateTxThrottler() (*TxThrottler, error) {
 	config := &txThrottlerConfig{
-		enabled: tsvConfig.EnableTxThrottler,
+		enabled: tabletenv.Config.EnableTxThrottler,
 	}
-	if !tsvConfig.EnableTxThrottler {
+	if !tabletenv.Config.EnableTxThrottler {
 		return newTxThrottler(config)
 	}
 	var throttlerConfig throttlerdatapb.Configuration
 
-	if err := proto.UnmarshalText(tsvConfig.TxThrottlerConfig, &throttlerConfig); err != nil {
+	if err := proto.UnmarshalText(tabletenv.Config.TxThrottlerConfig, &throttlerConfig); err != nil {
 		return nil, err
 	}
 
 	// Clone tsv.TxThrottlerHealthCheckCells so that we don't assume tsv.TxThrottlerHealthCheckCells
 	// is immutable.
-	config.healthCheckCells = make([]string, len(tsvConfig.TxThrottlerHealthCheckCells))
-	copy(config.healthCheckCells, tsvConfig.TxThrottlerHealthCheckCells)
+	config.healthCheckCells = make([]string, len(tabletenv.Config.TxThrottlerHealthCheckCells))
+	copy(config.healthCheckCells, tabletenv.Config.TxThrottlerHealthCheckCells)
 	return newTxThrottler(config)
 }
 

@@ -15,8 +15,8 @@ import (
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/vt/tableacl"
 	"github.com/youtube/vitess/go/vt/tableacl/simpleacl"
-	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/tabletserver/endtoend/framework"
+	"github.com/youtube/vitess/go/vt/tabletserver/tabletenv"
 	"github.com/youtube/vitess/go/vt/vttest"
 )
 
@@ -26,7 +26,7 @@ var (
 
 func TestMain(m *testing.M) {
 	flag.Parse() // Do not remove this comment, import into google3 depends on it
-	tabletserver.Init()
+	tabletenv.Init()
 
 	exitCode := func() int {
 		hdl, err := vttest.LaunchVitess(vttest.MySQLOnly("vttest"), vttest.Schema(testSchema), vttest.Verbose(testing.Verbose()))

@@ -20,8 +20,9 @@ import (
 	"github.com/youtube/vitess/go/vt/callinfo"
 	"github.com/youtube/vitess/go/vt/schema"
 	"github.com/youtube/vitess/go/vt/sqlparser"
+	"github.com/youtube/vitess/go/vt/tabletserver/connpool"
 	"github.com/youtube/vitess/go/vt/tabletserver/planbuilder"
-	"github.com/youtube/vitess/go/vt/tabletserver/tabletstats"
+	"github.com/youtube/vitess/go/vt/tabletserver/tabletenv"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
@@ -34,7 +35,7 @@ type QueryExecutor struct {
 	transactionID int64
 	plan          *ExecPlan
 	ctx           context.Context
-	logStats      *LogStats
+	logStats      *tabletenv.LogStats
 	qe            *QueryEngine
 	te            *TxEngine
 	messager      *MessagerEngine
@@ -54,8 +55,8 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 	qre.logStats.PlanType = planName
 	defer func(start time.Time) {
 		duration := time.Now().Sub(start)
-		tabletstats.QueryStats.Add(planName, duration)
-		tabletstats.RecordUserQuery(qre.ctx, qre.plan.TableName, "Execute", int64(duration))
+		tabletenv.QueryStats.Add(planName, duration)
+		tabletenv.RecordUserQuery(qre.ctx, qre.plan.TableName, "Execute", int64(duration))
 
 		if reply == nil {
 			qre.plan.AddStats(1, duration, qre.logStats.MysqlResponseTime, 0, 1)
@@ -64,7 +65,7 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 		qre.plan.AddStats(1, duration, qre.logStats.MysqlResponseTime, int64(reply.RowsAffected), 0)
 		qre.logStats.RowsAffected = int(reply.RowsAffected)
 		qre.logStats.Rows = reply.Rows
-		tabletstats.ResultStats.Add(int64(len(reply.Rows)))
+		tabletenv.ResultStats.Add(int64(len(reply.Rows)))
 	}(time.Now())
 
 	if err := qre.checkPermissions(); err != nil {
@@ -88,7 +89,7 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 		switch qre.plan.PlanID {
 		case planbuilder.PlanPassDML:
 			if qre.qe.strictMode.Get() != 0 {
-				return nil, NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "DML too complex")
+				return nil, tabletenv.NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "DML too complex")
 			}
 			return qre.txFetch(conn, qre.plan.FullQuery, qre.bindVars, nil, false, true)
 		case planbuilder.PlanInsertPK:
@@ -115,11 +116,11 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 		case planbuilder.PlanPassSelect:
 			return qre.execSelect()
 		case planbuilder.PlanSelectLock:
-			return nil, NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "Disallowed outside transaction")
+			return nil, tabletenv.NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "Disallowed outside transaction")
 		case planbuilder.PlanSet:
 			return qre.execSet()
 		case planbuilder.PlanOther:
-			conn, connErr := qre.getConn(qre.qe.connPool)
+			conn, connErr := qre.getConn(qre.qe.conns)
 			if connErr != nil {
 				return nil, connErr
 			}
@@ -127,7 +128,7 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 			return qre.execSQL(conn, qre.query, true)
 		default:
 			if qre.qe.autoCommit.Get() == 0 {
-				return nil, NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "Disallowed outside transaction")
+				return nil, tabletenv.NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "Disallowed outside transaction")
 			}
 			return qre.execDmlAutoCommit()
 		}
@@ -140,21 +141,21 @@ func (qre *QueryExecutor) Stream(includedFields querypb.ExecuteOptions_IncludedF
 	qre.logStats.PlanType = qre.plan.PlanID.String()
 
 	defer func(start time.Time) {
-		tabletstats.QueryStats.Record(qre.plan.PlanID.String(), start)
-		tabletstats.RecordUserQuery(qre.ctx, qre.plan.TableName, "Stream", int64(time.Now().Sub(start)))
+		tabletenv.QueryStats.Record(qre.plan.PlanID.String(), start)
+		tabletenv.RecordUserQuery(qre.ctx, qre.plan.TableName, "Stream", int64(time.Now().Sub(start)))
 	}(time.Now())
 
 	if err := qre.checkPermissions(); err != nil {
 		return err
 	}
 
-	conn, err := qre.getConn(qre.qe.streamConnPool)
+	conn, err := qre.getConn(qre.qe.streamConns)
 	if err != nil {
 		return err
 	}
 	defer conn.Recycle()
 
-	qd := NewQueryDetail(qre.logStats.ctx, conn)
+	qd := NewQueryDetail(qre.logStats.Ctx, conn)
 	qre.qe.streamQList.Add(qd)
 	defer qre.qe.streamQList.Remove(qd)
 
@@ -166,7 +167,7 @@ func (qre *QueryExecutor) execDmlAutoCommit() (reply *sqltypes.Result, err error
 		switch qre.plan.PlanID {
 		case planbuilder.PlanPassDML:
 			if qre.qe.strictMode.Get() != 0 {
-				return nil, NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "DML too complex")
+				return nil, tabletenv.NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "DML too complex")
 			}
 			reply, err = qre.txFetch(conn, qre.plan.FullQuery, qre.bindVars, nil, false, true)
 		case planbuilder.PlanInsertPK:
@@ -182,7 +183,7 @@ func (qre *QueryExecutor) execDmlAutoCommit() (reply *sqltypes.Result, err error
 		case planbuilder.PlanUpsertPK:
 			reply, err = qre.execUpsertPK(conn)
 		default:
-			return nil, NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "unsupported query: %s", qre.query)
+			return nil, tabletenv.NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "unsupported query: %s", qre.query)
 		}
 		return reply, err
 	})
@@ -229,9 +230,9 @@ func (qre *QueryExecutor) checkPermissions() error {
 	action, desc := qre.plan.Rules.getAction(remoteAddr, username, qre.bindVars)
 	switch action {
 	case QRFail:
-		return NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "Query disallowed due to rule: %s", desc)
+		return tabletenv.NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "Query disallowed due to rule: %s", desc)
 	case QRFailRetry:
-		return NewTabletError(vtrpcpb.ErrorCode_QUERY_NOT_SERVED, "Query disallowed due to rule: %s", desc)
+		return tabletenv.NewTabletError(vtrpcpb.ErrorCode_QUERY_NOT_SERVED, "Query disallowed due to rule: %s", desc)
 	}
 
 	// Check for SuperUser calling directly to VTTablet (e.g. VTWorker)
@@ -243,7 +244,7 @@ func (qre *QueryExecutor) checkPermissions() error {
 	callerID := callerid.ImmediateCallerIDFromContext(qre.ctx)
 	if callerID == nil {
 		if qre.qe.strictTableAcl {
-			return NewTabletError(vtrpcpb.ErrorCode_UNAUTHENTICATED, "missing caller id")
+			return tabletenv.NewTabletError(vtrpcpb.ErrorCode_UNAUTHENTICATED, "missing caller id")
 		}
 		return nil
 	}
@@ -260,7 +261,7 @@ func (qre *QueryExecutor) checkPermissions() error {
 	}
 
 	if qre.plan.Authorized == nil {
-		return NewTabletError(vtrpcpb.ErrorCode_PERMISSION_DENIED, "table acl error: nil acl")
+		return tabletenv.NewTabletError(vtrpcpb.ErrorCode_PERMISSION_DENIED, "table acl error: nil acl")
 	}
 	tableACLStatsKey := []string{
 		qre.plan.TableName.String(),
@@ -271,26 +272,26 @@ func (qre *QueryExecutor) checkPermissions() error {
 	// perform table ACL check if it is enabled.
 	if !qre.plan.Authorized.IsMember(callerID.Username) {
 		if qre.qe.enableTableAclDryRun {
-			tabletstats.TableaclPseudoDenied.Add(tableACLStatsKey, 1)
+			tabletenv.TableaclPseudoDenied.Add(tableACLStatsKey, 1)
 			return nil
 		}
 		// raise error if in strictTableAcl mode, else just log an error.
 		if qre.qe.strictTableAcl {
 			errStr := fmt.Sprintf("table acl error: %q cannot run %v on table %q", callerID.Username, qre.plan.PlanID, qre.plan.TableName)
-			tabletstats.TableaclDenied.Add(tableACLStatsKey, 1)
+			tabletenv.TableaclDenied.Add(tableACLStatsKey, 1)
 			qre.qe.accessCheckerLogger.Infof("%s", errStr)
-			return NewTabletError(vtrpcpb.ErrorCode_PERMISSION_DENIED, "%s", errStr)
+			return tabletenv.NewTabletError(vtrpcpb.ErrorCode_PERMISSION_DENIED, "%s", errStr)
 		}
 		return nil
 	}
-	tabletstats.TableaclAllowed.Add(tableACLStatsKey, 1)
+	tabletenv.TableaclAllowed.Add(tableACLStatsKey, 1)
 	return nil
 }
 
 func (qre *QueryExecutor) execDDL() (*sqltypes.Result, error) {
 	ddlPlan := planbuilder.DDLParse(qre.query)
 	if ddlPlan.Action == "" {
-		return nil, NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "DDL is not understood")
+		return nil, tabletenv.NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "DDL is not understood")
 	}
 
 	conn, err := qre.te.txPool.LocalBegin(qre.ctx)
@@ -406,7 +407,7 @@ func (qre *QueryExecutor) execSelect() (*sqltypes.Result, error) {
 		newResult.Fields = qre.plan.Fields
 		return &newResult, nil
 	}
-	conn, err := qre.getConn(qre.qe.connPool)
+	conn, err := qre.getConn(qre.qe.conns)
 	if err != nil {
 		return nil, err
 	}
@@ -464,7 +465,7 @@ func (qre *QueryExecutor) execInsertSubquery(conn *TxConnection) (*sqltypes.Resu
 		return &sqltypes.Result{RowsAffected: 0}, nil
 	}
 	if len(qre.plan.ColumnNumbers) != len(innerRows[0]) {
-		return nil, NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "Subquery length does not match column list")
+		return nil, tabletenv.NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "Subquery length does not match column list")
 	}
 	pkRows := make([][]sqltypes.Value, len(innerRows))
 	for i, innerRow := range innerRows {
@@ -494,7 +495,7 @@ func (qre *QueryExecutor) execUpsertPK(conn *TxConnection) (*sqltypes.Result, er
 	if err == nil {
 		return result, nil
 	}
-	terr, ok := err.(*TabletError)
+	terr, ok := err.(*tabletenv.TabletError)
 	if !ok {
 		return result, err
 	}
@@ -578,7 +579,7 @@ func (qre *QueryExecutor) execDMLPKRows(conn *TxConnection, query *sqlparser.Par
 }
 
 func (qre *QueryExecutor) execSet() (*sqltypes.Result, error) {
-	conn, err := qre.getConn(qre.qe.connPool)
+	conn, err := qre.getConn(qre.qe.conns)
 	if err != nil {
 		return nil, err
 	}
@@ -586,7 +587,7 @@ func (qre *QueryExecutor) execSet() (*sqltypes.Result, error) {
 	return qre.dbConnFetch(conn, qre.plan.FullQuery, qre.bindVars, nil, false)
 }
 
-func (qre *QueryExecutor) getConn(pool *ConnPool) (*DBConn, error) {
+func (qre *QueryExecutor) getConn(pool *connpool.Pool) (*connpool.DBConn, error) {
 	span := trace.NewSpanFromContext(qre.ctx)
 	span.StartLocal("QueryExecutor.getConn")
 	defer span.Finish()
@@ -597,13 +598,13 @@ func (qre *QueryExecutor) getConn(pool *ConnPool) (*DBConn, error) {
 	case nil:
 		qre.logStats.WaitingForConnection += time.Now().Sub(start)
 		return conn, nil
-	case ErrConnPoolClosed:
+	case tabletenv.ErrConnPoolClosed:
 		return nil, err
 	}
-	return nil, NewTabletErrorSQL(vtrpcpb.ErrorCode_INTERNAL_ERROR, err)
+	return nil, tabletenv.NewTabletErrorSQL(vtrpcpb.ErrorCode_INTERNAL_ERROR, err)
 }
 
-func (qre *QueryExecutor) qFetch(logStats *LogStats, parsedQuery *sqlparser.ParsedQuery, bindVars map[string]interface{}) (*sqltypes.Result, error) {
+func (qre *QueryExecutor) qFetch(logStats *tabletenv.LogStats, parsedQuery *sqlparser.ParsedQuery, bindVars map[string]interface{}) (*sqltypes.Result, error) {
 	sql, err := qre.generateFinalSQL(parsedQuery, bindVars, nil)
 	if err != nil {
 		return nil, err
@@ -612,19 +613,19 @@ func (qre *QueryExecutor) qFetch(logStats *LogStats, parsedQuery *sqlparser.Pars
 	if ok {
 		defer q.Broadcast()
 		waitingForConnectionStart := time.Now()
-		conn, err := qre.qe.connPool.Get(qre.ctx)
+		conn, err := qre.qe.conns.Get(qre.ctx)
 		logStats.WaitingForConnection += time.Now().Sub(waitingForConnectionStart)
 		if err != nil {
-			q.Err = NewTabletErrorSQL(vtrpcpb.ErrorCode_INTERNAL_ERROR, err)
+			q.Err = tabletenv.NewTabletErrorSQL(vtrpcpb.ErrorCode_INTERNAL_ERROR, err)
 		} else {
 			defer conn.Recycle()
 			q.Result, q.Err = qre.execSQL(conn, sql, false)
 		}
 	} else {
-		logStats.QuerySources |= QuerySourceConsolidator
+		logStats.QuerySources |= tabletenv.QuerySourceConsolidator
 		startTime := time.Now()
 		q.Wait()
-		tabletstats.WaitStats.Record("Consolidations", startTime)
+		tabletenv.WaitStats.Record("Consolidations", startTime)
 	}
 	if q.Err != nil {
 		return nil, q.Err
@@ -649,8 +650,8 @@ func (qre *QueryExecutor) txFetch(conn *TxConnection, parsedQuery *sqlparser.Par
 	return qr, nil
 }
 
-// dbConnFetch fetches from a DBConn.
-func (qre *QueryExecutor) dbConnFetch(conn *DBConn, parsedQuery *sqlparser.ParsedQuery, bindVars map[string]interface{}, buildStreamComment []byte, wantfields bool) (*sqltypes.Result, error) {
+// dbConnFetch fetches from a connpool.DBConn.
+func (qre *QueryExecutor) dbConnFetch(conn *connpool.DBConn, parsedQuery *sqlparser.ParsedQuery, bindVars map[string]interface{}, buildStreamComment []byte, wantfields bool) (*sqltypes.Result, error) {
 	sql, err := qre.generateFinalSQL(parsedQuery, bindVars, buildStreamComment)
 	if err != nil {
 		return nil, err
@@ -659,7 +660,7 @@ func (qre *QueryExecutor) dbConnFetch(conn *DBConn, parsedQuery *sqlparser.Parse
 }
 
 // streamFetch performs a streaming fetch.
-func (qre *QueryExecutor) streamFetch(conn *DBConn, parsedQuery *sqlparser.ParsedQuery, bindVars map[string]interface{}, buildStreamComment []byte, includedFields querypb.ExecuteOptions_IncludedFields, callback func(*sqltypes.Result) error) error {
+func (qre *QueryExecutor) streamFetch(conn *connpool.DBConn, parsedQuery *sqlparser.ParsedQuery, bindVars map[string]interface{}, buildStreamComment []byte, includedFields querypb.ExecuteOptions_IncludedFields, callback func(*sqltypes.Result) error) error {
 	sql, err := qre.generateFinalSQL(parsedQuery, bindVars, buildStreamComment)
 	if err != nil {
 		return err
@@ -671,7 +672,7 @@ func (qre *QueryExecutor) generateFinalSQL(parsedQuery *sqlparser.ParsedQuery, b
 	bindVars["#maxLimit"] = qre.qe.maxResultSize.Get() + 1
 	sql, err := parsedQuery.GenerateQuery(bindVars)
 	if err != nil {
-		return "", NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "%s", err)
+		return "", tabletenv.NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "%s", err)
 	}
 	if buildStreamComment != nil {
 		sql = append(sql, buildStreamComment...)
@@ -690,13 +691,13 @@ func (qre *QueryExecutor) execSQL(conn poolConn, sql string, wantfields bool) (*
 	return conn.Exec(qre.ctx, sql, int(qre.qe.maxResultSize.Get()), wantfields)
 }
 
-func (qre *QueryExecutor) execStreamSQL(conn *DBConn, sql string, includedFields querypb.ExecuteOptions_IncludedFields, callback func(*sqltypes.Result) error) error {
+func (qre *QueryExecutor) execStreamSQL(conn *connpool.DBConn, sql string, includedFields querypb.ExecuteOptions_IncludedFields, callback func(*sqltypes.Result) error) error {
 	start := time.Now()
 	err := conn.Stream(qre.ctx, sql, callback, int(qre.qe.streamBufferSize.Get()), includedFields)
 	qre.logStats.AddRewrittenSQL(sql, start)
 	if err != nil {
 		// MySQL error that isn't due to a connection issue
-		return NewTabletErrorSQL(vtrpcpb.ErrorCode_UNKNOWN_ERROR, err)
+		return tabletenv.NewTabletErrorSQL(vtrpcpb.ErrorCode_UNKNOWN_ERROR, err)
 	}
 	return nil
 }

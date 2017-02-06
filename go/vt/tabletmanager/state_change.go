@@ -20,7 +20,7 @@ import (
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/tabletmanager/events"
 	"github.com/youtube/vitess/go/vt/tabletserver"
-	"github.com/youtube/vitess/go/vt/tabletserver/tabletstats"
+	"github.com/youtube/vitess/go/vt/tabletserver/tabletenv"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 
@@ -99,7 +99,7 @@ func (agent *ActionAgent) broadcastHealth() {
 	if agent.BinlogPlayerMap != nil {
 		stats.SecondsBehindMasterFilteredReplication, stats.BinlogPlayersCount = agent.BinlogPlayerMap.StatusSummary()
 	}
-	stats.Qps = tabletstats.QPSRates.TotalRate()
+	stats.Qps = tabletenv.QPSRates.TotalRate()
 	if healthError != nil {
 		stats.HealthError = healthError.Error()
 	}

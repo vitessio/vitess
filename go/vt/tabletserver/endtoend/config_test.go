@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/youtube/vitess/go/vt/tabletserver/endtoend/framework"
+	"github.com/youtube/vitess/go/vt/tabletserver/tabletenv"
 )
 
 // compareIntDiff returns an error if end[tag] != start[tag]+diff.
@@ -35,64 +36,64 @@ func TestConfigVars(t *testing.T) {
 		val int
 	}{{
 		tag: "BeginTimeout",
-		val: int(framework.BaseConfig.TxPoolTimeout * 1e9),
+		val: int(tabletenv.Config.TxPoolTimeout * 1e9),
 	}, {
 		tag: "ConnPoolAvailable",
-		val: framework.BaseConfig.PoolSize,
+		val: tabletenv.Config.PoolSize,
 	}, {
 		tag: "ConnPoolCapacity",
-		val: framework.BaseConfig.PoolSize,
+		val: tabletenv.Config.PoolSize,
 	}, {
 		tag: "ConnPoolIdleTimeout",
-		val: int(framework.BaseConfig.IdleTimeout * 1e9),
+		val: int(tabletenv.Config.IdleTimeout * 1e9),
 	}, {
 		tag: "ConnPoolMaxCap",
-		val: framework.BaseConfig.PoolSize,
+		val: tabletenv.Config.PoolSize,
 	}, {
 		tag: "MaxDMLRows",
-		val: framework.BaseConfig.MaxDMLRows,
+		val: tabletenv.Config.MaxDMLRows,
 	}, {
 		tag: "MaxResultSize",
-		val: framework.BaseConfig.MaxResultSize,
+		val: tabletenv.Config.MaxResultSize,
 	}, {
 		tag: "QueryCacheCapacity",
-		val: framework.BaseConfig.QueryCacheSize,
+		val: tabletenv.Config.QueryCacheSize,
 	}, {
 		tag: "QueryTimeout",
-		val: int(framework.BaseConfig.QueryTimeout * 1e9),
+		val: int(tabletenv.Config.QueryTimeout * 1e9),
 	}, {
 		tag: "SchemaReloadTime",
-		val: int(framework.BaseConfig.SchemaReloadTime * 1e9),
+		val: int(tabletenv.Config.SchemaReloadTime * 1e9),
 	}, {
 		tag: "StreamBufferSize",
-		val: framework.BaseConfig.StreamBufferSize,
+		val: tabletenv.Config.StreamBufferSize,
 	}, {
 		tag: "StreamConnPoolAvailable",
-		val: framework.BaseConfig.StreamPoolSize,
+		val: tabletenv.Config.StreamPoolSize,
 	}, {
 		tag: "StreamConnPoolCapacity",
-		val: framework.BaseConfig.StreamPoolSize,
+		val: tabletenv.Config.StreamPoolSize,
 	}, {
 		tag: "StreamConnPoolIdleTimeout",
-		val: int(framework.BaseConfig.IdleTimeout * 1e9),
+		val: int(tabletenv.Config.IdleTimeout * 1e9),
 	}, {
 		tag: "StreamConnPoolMaxCap",
-		val: framework.BaseConfig.StreamPoolSize,
+		val: tabletenv.Config.StreamPoolSize,
 	}, {
 		tag: "TransactionPoolAvailable",
-		val: framework.BaseConfig.TransactionCap,
+		val: tabletenv.Config.TransactionCap,
 	}, {
 		tag: "TransactionPoolCapacity",
-		val: framework.BaseConfig.TransactionCap,
+		val: tabletenv.Config.TransactionCap,
 	}, {
 		tag: "TransactionPoolIdleTimeout",
-		val: int(framework.BaseConfig.IdleTimeout * 1e9),
+		val: int(tabletenv.Config.IdleTimeout * 1e9),
 	}, {
 		tag: "TransactionPoolMaxCap",
-		val: framework.BaseConfig.TransactionCap,
+		val: tabletenv.Config.TransactionCap,
 	}, {
 		tag: "TransactionPoolTimeout",
-		val: int(framework.BaseConfig.TransactionTimeout * 1e9),
+		val: int(tabletenv.Config.TransactionTimeout * 1e9),
 	}}
 	for _, tcase := range cases {
 		if err := verifyIntValue(vars, tcase.tag, tcase.val); err != nil {

@@ -7,7 +7,7 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/servenv"
-	"github.com/youtube/vitess/go/vt/tabletserver"
+	"github.com/youtube/vitess/go/vt/tabletserver/tabletenv"
 )
 
 // syslogWriter is an interface that wraps syslog.Writer, so it can be mocked in unit tests.
@@ -46,15 +46,15 @@ func run() {
 
 	// ch will only be non-nil in a unit test context, when a mock has been populated
 	if ch == nil {
-		ch = tabletserver.StatsLogger.Subscribe("gwslog")
-		defer tabletserver.StatsLogger.Unsubscribe(ch)
+		ch = tabletenv.StatsLogger.Subscribe("gwslog")
+		defer tabletenv.StatsLogger.Unsubscribe(ch)
 	}
 
 	formatParams := map[string][]string{"full": {}}
 	for out := range ch {
-		stats, ok := out.(*tabletserver.LogStats)
+		stats, ok := out.(*tabletenv.LogStats)
 		if !ok {
-			log.Errorf("Unexpected value in query logs: %#v (expecting value of type %T)", out, &tabletserver.LogStats{})
+			log.Errorf("Unexpected value in query logs: %#v (expecting value of type %T)", out, &tabletenv.LogStats{})
 			continue
 		}
 		if err := writer.Info(stats.Format(formatParams)); err != nil {

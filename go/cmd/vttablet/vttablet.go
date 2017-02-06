@@ -17,6 +17,7 @@ import (
 	"github.com/youtube/vitess/go/vt/tableacl/simpleacl"
 	"github.com/youtube/vitess/go/vt/tabletmanager"
 	"github.com/youtube/vitess/go/vt/tabletserver"
+	"github.com/youtube/vitess/go/vt/tabletserver/tabletenv"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"golang.org/x/net/context"
@@ -42,7 +43,7 @@ func main() {
 	dbconfigs.RegisterFlags(dbconfigFlags)
 	mysqlctl.RegisterFlags()
 	flag.Parse()
-	tabletserver.Init()
+	tabletenv.Init()
 	if len(flag.Args()) > 0 {
 		flag.Usage()
 		log.Errorf("vttablet doesn't take any positional arguments")

@@ -12,24 +12,21 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
+	"golang.org/x/net/context"
+
 	"github.com/youtube/vitess/go/pools"
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/stats"
-	"github.com/youtube/vitess/go/streamlog"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/timer"
 	"github.com/youtube/vitess/go/vt/callerid"
+	"github.com/youtube/vitess/go/vt/tabletserver/connpool"
+	"github.com/youtube/vitess/go/vt/tabletserver/tabletenv"
+
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
-	"github.com/youtube/vitess/go/vt/tabletserver/tabletstats"
-	"golang.org/x/net/context"
 )
-
-// TxLogger can be used to enable logging of transactions.
-// Call TxLogger.ServeLogs in your main program to enable logging.
-// The log format can be inferred by looking at TxConnection.Format.
-var TxLogger = streamlog.New("TxLog", 10)
 
 // These consts identify how a transaction was resolved.
 const (
@@ -49,7 +46,7 @@ var (
 
 // TxPool is the transaction pool for the query service.
 type TxPool struct {
-	pool       *ConnPool
+	conns      *connpool.Pool
 	activePool *pools.Numbered
 	lastID     sync2.AtomicInt64
 	timeout    sync2.AtomicDuration
@@ -68,7 +65,7 @@ func NewTxPool(
 	idleTimeout time.Duration,
 	checker MySQLChecker) *TxPool {
 	axp := &TxPool{
-		pool:       NewConnPool(name, capacity, idleTimeout, checker),
+		conns:      connpool.New(name, capacity, idleTimeout, checker),
 		activePool: pools.NewNumbered(),
 		lastID:     sync2.NewAtomicInt64(time.Now().UnixNano()),
 		timeout:    sync2.NewAtomicDuration(timeout),
@@ -76,7 +73,7 @@ func NewTxPool(
 		checker:    checker,
 	}
 	txOnce.Do(func() {
-		// Careful: pool also exports name+"xxx" vars,
+		// Careful: conns also exports name+"xxx" vars,
 		// but we know it doesn't export Timeout.
 		stats.Publish(name+"Timeout", stats.DurationFunc(axp.timeout.Get))
 	})
@@ -87,7 +84,7 @@ func NewTxPool(
 // that will kill long-running transactions.
 func (axp *TxPool) Open(appParams, dbaParams *sqldb.ConnParams) {
 	log.Infof("Starting transaction id: %d", axp.lastID)
-	axp.pool.Open(appParams, dbaParams)
+	axp.conns.Open(appParams, dbaParams)
 	axp.ticks.Start(func() { axp.transactionKiller() })
 }
 
@@ -97,11 +94,11 @@ func (axp *TxPool) Close() {
 	for _, v := range axp.activePool.GetOutdated(time.Duration(0), "for closing") {
 		conn := v.(*TxConnection)
 		log.Warningf("killing transaction for shutdown: %s", conn.Format(nil))
-		tabletstats.InternalErrors.Add("StrayTransactions", 1)
+		tabletenv.InternalErrors.Add("StrayTransactions", 1)
 		conn.Close()
 		conn.conclude(TxClose)
 	}
-	axp.pool.Close()
+	axp.conns.Close()
 }
 
 // AdjustLastID adjusts the last transaction id to be at least
@@ -124,11 +121,11 @@ func (axp *TxPool) RollbackNonBusy(ctx context.Context) {
 }
 
 func (axp *TxPool) transactionKiller() {
-	defer logError()
+	defer tabletenv.LogError()
 	for _, v := range axp.activePool.GetOutdated(time.Duration(axp.Timeout()), "for rollback") {
 		conn := v.(*TxConnection)
 		log.Warningf("killing transaction (exceeded timeout: %v): %s", axp.Timeout(), conn.Format(nil))
-		tabletstats.KillStats.Add("Transactions", 1)
+		tabletenv.KillStats.Add("Transactions", 1)
 		conn.Close()
 		conn.conclude(TxKill)
 	}
@@ -142,20 +139,20 @@ func (axp *TxPool) WaitForEmpty() {
 // Begin begins a transaction, and returns the associated transaction id.
 // Subsequent statements can access the connection through the transaction id.
 func (axp *TxPool) Begin(ctx context.Context) (int64, error) {
-	conn, err := axp.pool.Get(ctx)
+	conn, err := axp.conns.Get(ctx)
 	if err != nil {
 		switch err {
-		case ErrConnPoolClosed:
+		case tabletenv.ErrConnPoolClosed:
 			return 0, err
 		case pools.ErrTimeout:
 			axp.LogActive()
-			return 0, NewTabletError(vtrpcpb.ErrorCode_RESOURCE_EXHAUSTED, "Transaction pool connection limit exceeded")
+			return 0, tabletenv.NewTabletError(vtrpcpb.ErrorCode_RESOURCE_EXHAUSTED, "Transaction pool connection limit exceeded")
 		}
-		return 0, NewTabletErrorSQL(vtrpcpb.ErrorCode_INTERNAL_ERROR, err)
+		return 0, tabletenv.NewTabletErrorSQL(vtrpcpb.ErrorCode_INTERNAL_ERROR, err)
 	}
 	if _, err := conn.Exec(ctx, "begin", 1, false); err != nil {
 		conn.Recycle()
-		return 0, NewTabletErrorSQL(vtrpcpb.ErrorCode_UNKNOWN_ERROR, err)
+		return 0, tabletenv.NewTabletErrorSQL(vtrpcpb.ErrorCode_UNKNOWN_ERROR, err)
 	}
 	transactionID := axp.lastID.Add(1)
 	axp.activePool.Register(
@@ -194,7 +191,7 @@ func (axp *TxPool) Rollback(ctx context.Context, transactionID int64) error {
 func (axp *TxPool) Get(transactionID int64, reason string) (*TxConnection, error) {
 	v, err := axp.activePool.Get(transactionID, reason)
 	if err != nil {
-		return nil, NewTabletError(vtrpcpb.ErrorCode_NOT_IN_TX, "Transaction %d: %v", transactionID, err)
+		return nil, tabletenv.NewTabletError(vtrpcpb.ErrorCode_NOT_IN_TX, "Transaction %d: %v", transactionID, err)
 	}
 	return v.(*TxConnection), nil
 }
@@ -217,7 +214,7 @@ func (axp *TxPool) LocalCommit(ctx context.Context, conn *TxConnection, messager
 	txStats.Add("Completed", time.Now().Sub(conn.StartTime))
 	if _, err := conn.Exec(ctx, "commit", 1, false); err != nil {
 		conn.Close()
-		return NewTabletErrorSQL(vtrpcpb.ErrorCode_UNKNOWN_ERROR, err)
+		return tabletenv.NewTabletErrorSQL(vtrpcpb.ErrorCode_UNKNOWN_ERROR, err)
 	}
 	messager.UpdateCaches(conn.NewMessages, conn.ChangedMessages)
 	return nil
@@ -236,7 +233,7 @@ func (axp *TxPool) localRollback(ctx context.Context, conn *TxConnection) error 
 	txStats.Add("Aborted", time.Now().Sub(conn.StartTime))
 	if _, err := conn.Exec(ctx, "rollback", 1, false); err != nil {
 		conn.Close()
-		return NewTabletErrorSQL(vtrpcpb.ErrorCode_UNKNOWN_ERROR, err)
+		return tabletenv.NewTabletErrorSQL(vtrpcpb.ErrorCode_UNKNOWN_ERROR, err)
 	}
 	return nil
 }
@@ -271,7 +268,7 @@ func (axp *TxPool) SetTimeout(timeout time.Duration) {
 // the tx pool correctly. It also does not retry statements if there
 // are failures.
 type TxConnection struct {
-	*DBConn
+	*connpool.DBConn
 	TransactionID     int64
 	pool              *TxPool
 	StartTime         time.Time
@@ -285,7 +282,7 @@ type TxConnection struct {
 	EffectiveCallerID *vtrpcpb.CallerID
 }
 
-func newTxConnection(conn *DBConn, transactionID int64, pool *TxPool, immediate *querypb.VTGateCallerID, effective *vtrpcpb.CallerID) *TxConnection {
+func newTxConnection(conn *connpool.DBConn, transactionID int64, pool *TxPool, immediate *querypb.VTGateCallerID, effective *vtrpcpb.CallerID) *TxConnection {
 	return &TxConnection{
 		DBConn:            conn,
 		TransactionID:     transactionID,
@@ -302,11 +299,11 @@ func newTxConnection(conn *DBConn, transactionID int64, pool *TxPool, immediate 
 func (txc *TxConnection) Exec(ctx context.Context, query string, maxrows int, wantfields bool) (*sqltypes.Result, error) {
 	r, err := txc.DBConn.ExecOnce(ctx, query, maxrows, wantfields)
 	if err != nil {
-		if IsConnErr(err) {
+		if tabletenv.IsConnErr(err) {
 			txc.pool.checker.CheckMySQL()
-			return nil, NewTabletErrorSQL(vtrpcpb.ErrorCode_INTERNAL_ERROR, err)
+			return nil, tabletenv.NewTabletErrorSQL(vtrpcpb.ErrorCode_INTERNAL_ERROR, err)
 		}
-		return nil, NewTabletErrorSQL(vtrpcpb.ErrorCode_UNKNOWN_ERROR, err)
+		return nil, tabletenv.NewTabletErrorSQL(vtrpcpb.ErrorCode_UNKNOWN_ERROR, err)
 	}
 	return r, nil
 }
@@ -342,12 +339,12 @@ func (txc *TxConnection) log(conclusion string) {
 		username = callerid.GetUsername(txc.ImmediateCallerID)
 	}
 	duration := txc.EndTime.Sub(txc.StartTime)
-	tabletstats.UserTransactionCount.Add([]string{username, conclusion}, 1)
-	tabletstats.UserTransactionTimesNs.Add([]string{username, conclusion}, int64(duration))
+	tabletenv.UserTransactionCount.Add([]string{username, conclusion}, 1)
+	tabletenv.UserTransactionTimesNs.Add([]string{username, conclusion}, int64(duration))
 	if txc.LogToFile.Get() != 0 {
 		log.Infof("Logged transaction: %s", txc.Format(nil))
 	}
-	TxLogger.Send(txc)
+	tabletenv.TxLogger.Send(txc)
 }
 
 // EventTime returns the time the event was created.

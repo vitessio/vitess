@@ -2,9 +2,11 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package tabletserver
+package connpool
 
 import (
+	"fmt"
+	"math/rand"
 	"testing"
 	"time"
 
@@ -15,8 +17,7 @@ import (
 func TestConnPoolGet(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
-	testUtils := newTestUtils()
-	connPool := testUtils.newConnPool()
+	connPool := newPool()
 	connPool.Open(db.ConnParams(), db.ConnParams())
 	defer connPool.Close()
 	dbConn, err := connPool.Get(context.Background())
@@ -30,8 +31,7 @@ func TestConnPoolGet(t *testing.T) {
 }
 
 func TestConnPoolPutWhilePoolIsClosed(t *testing.T) {
-	testUtils := newTestUtils()
-	connPool := testUtils.newConnPool()
+	connPool := newPool()
 	defer func() {
 		if recover() == nil {
 			t.Fatalf("pool is closed, should get an error")
@@ -43,8 +43,7 @@ func TestConnPoolPutWhilePoolIsClosed(t *testing.T) {
 func TestConnPoolSetCapacity(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
-	testUtils := newTestUtils()
-	connPool := testUtils.newConnPool()
+	connPool := newPool()
 	connPool.Open(db.ConnParams(), db.ConnParams())
 	defer connPool.Close()
 	err := connPool.SetCapacity(-10)
@@ -63,8 +62,7 @@ func TestConnPoolSetCapacity(t *testing.T) {
 func TestConnPoolStatJSON(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
-	testUtils := newTestUtils()
-	connPool := testUtils.newConnPool()
+	connPool := newPool()
 	if connPool.StatsJSON() != "{}" {
 		t.Fatalf("pool is closed, stats json should be empty: {}")
 	}
@@ -77,8 +75,7 @@ func TestConnPoolStatJSON(t *testing.T) {
 }
 
 func TestConnPoolStateWhilePoolIsClosed(t *testing.T) {
-	testUtils := newTestUtils()
-	connPool := testUtils.newConnPool()
+	connPool := newPool()
 	if connPool.Capacity() != 0 {
 		t.Fatalf("pool capacity should be 0 because it is still closed")
 	}
@@ -102,9 +99,8 @@ func TestConnPoolStateWhilePoolIsClosed(t *testing.T) {
 func TestConnPoolStateWhilePoolIsOpen(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
-	testUtils := newTestUtils()
 	idleTimeout := 10 * time.Second
-	connPool := testUtils.newConnPool()
+	connPool := newPool()
 	connPool.Open(db.ConnParams(), db.ConnParams())
 	defer connPool.Close()
 	if connPool.Capacity() != 100 {
@@ -133,4 +129,20 @@ func TestConnPoolStateWhilePoolIsOpen(t *testing.T) {
 	if connPool.Available() != 100 {
 		t.Fatalf("pool available connections should be 100")
 	}
+}
+
+type dummyChecker struct {
+}
+
+func (dummyChecker) CheckMySQL() {}
+
+var checker = dummyChecker{}
+
+func newPool() *Pool {
+	return New(
+		fmt.Sprintf("TestPool%d", rand.Int63()),
+		100,
+		10*time.Second,
+		checker,
+	)
 }

@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package tabletserver
+package tabletenv
 
 import (
 	"fmt"
@@ -11,11 +11,12 @@ import (
 	"strings"
 
 	log "github.com/golang/glog"
+
 	"github.com/youtube/vitess/go/mysqlconn"
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/tb"
+
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
-	"github.com/youtube/vitess/go/vt/tabletserver/tabletstats"
 )
 
 const (
@@ -159,33 +160,29 @@ func (te *TabletError) Prefix() string {
 func (te *TabletError) RecordStats() {
 	switch te.ErrorCode {
 	case vtrpcpb.ErrorCode_QUERY_NOT_SERVED:
-		tabletstats.InfoErrors.Add("Retry", 1)
+		InfoErrors.Add("Retry", 1)
 	case vtrpcpb.ErrorCode_INTERNAL_ERROR:
-		tabletstats.ErrorStats.Add("Fatal", 1)
+		ErrorStats.Add("Fatal", 1)
 	case vtrpcpb.ErrorCode_RESOURCE_EXHAUSTED:
-		tabletstats.ErrorStats.Add("TxPoolFull", 1)
+		ErrorStats.Add("TxPoolFull", 1)
 	case vtrpcpb.ErrorCode_NOT_IN_TX:
-		tabletstats.ErrorStats.Add("NotInTx", 1)
+		ErrorStats.Add("NotInTx", 1)
 	default:
 		switch te.SQLError {
 		case mysqlconn.ERDupEntry:
-			tabletstats.InfoErrors.Add("DupKey", 1)
+			InfoErrors.Add("DupKey", 1)
 		case mysqlconn.ERLockWaitTimeout, mysqlconn.ERLockDeadlock:
-			tabletstats.ErrorStats.Add("Deadlock", 1)
+			ErrorStats.Add("Deadlock", 1)
 		default:
-			tabletstats.ErrorStats.Add("Fail", 1)
+			ErrorStats.Add("Fail", 1)
 		}
 	}
 }
 
-func logError() {
+// LogErrors logs panics and increments InternalErrors.
+func LogError() {
 	if x := recover(); x != nil {
-		terr, ok := x.(*TabletError)
-		if !ok {
-			log.Errorf("Uncaught panic:\n%v\n%s", x, tb.Stack(4))
-			tabletstats.InternalErrors.Add("Panic", 1)
-			return
-		}
-		log.Errorf("%v", terr)
+		log.Errorf("Uncaught panic:\n%v\n%s", x, tb.Stack(4))
+		InternalErrors.Add("Panic", 1)
 	}
 }
