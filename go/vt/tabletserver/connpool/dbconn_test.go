@@ -2,10 +2,12 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package tabletserver
+package connpool
 
 import (
+	"errors"
 	"fmt"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -17,13 +19,11 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
-	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 func TestDBConnExec(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
-	testUtils := newTestUtils()
 	sql := "select * from test_table limit 1000"
 	expectedResult := &sqltypes.Result{
 		Fields: []*querypb.Field{
@@ -35,7 +35,7 @@ func TestDBConnExec(t *testing.T) {
 		},
 	}
 	db.AddQuery(sql, expectedResult)
-	connPool := testUtils.newConnPool()
+	connPool := newPool()
 	connPool.Open(db.ConnParams(), db.ConnParams())
 	defer connPool.Close()
 	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(10*time.Second))
@@ -51,7 +51,9 @@ func TestDBConnExec(t *testing.T) {
 		t.Fatalf("should not get an error, err: %v", err)
 	}
 	expectedResult.Fields = nil
-	testUtils.checkEqual(t, expectedResult, result)
+	if !reflect.DeepEqual(expectedResult, result) {
+		t.Errorf("Exec: %v, want %v", expectedResult, result)
+	}
 	// Exec fail
 	db.AddRejectedQuery(sql, &sqldb.SQLError{
 		Num:     2012,
@@ -59,14 +61,16 @@ func TestDBConnExec(t *testing.T) {
 		Query:   "",
 	})
 	_, err = dbConn.Exec(ctx, sql, 1, false)
-	testUtils.checkTabletError(t, err, vtrpcpb.ErrorCode_INTERNAL_ERROR, "")
+	want := "connection fail"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("Exec: %v, want %s", err, want)
+	}
 }
 
 func TestDBConnKill(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
-	testUtils := newTestUtils()
-	connPool := testUtils.newConnPool()
+	connPool := newPool()
 	connPool.Open(db.ConnParams(), db.ConnParams())
 	defer connPool.Close()
 	dbConn, err := NewDBConn(connPool, db.ConnParams(), db.ConnParams())
@@ -76,7 +80,10 @@ func TestDBConnKill(t *testing.T) {
 	// Kill failed because we are not able to connect to the database
 	db.EnableConnFail()
 	err = dbConn.Kill("test kill")
-	testUtils.checkTabletError(t, err, vtrpcpb.ErrorCode_INTERNAL_ERROR, "Failed to get conn from dba pool")
+	want := "Failed to get conn from dba pool"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("Exec: %v, want %s", err, want)
+	}
 	db.DisableConnFail()
 
 	// Kill succeed
@@ -91,16 +98,17 @@ func TestDBConnKill(t *testing.T) {
 	}
 	newKillQuery := fmt.Sprintf("kill %d", dbConn.ID())
 	// Kill failed because "kill query_id" failed
-	db.AddRejectedQuery(newKillQuery, errRejected)
+	db.AddRejectedQuery(newKillQuery, errors.New("rejected"))
 	err = dbConn.Kill("test kill")
-	testUtils.checkTabletError(t, err, vtrpcpb.ErrorCode_INTERNAL_ERROR, "Could not kill query")
-
+	want = "Could not kill query"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("Exec: %v, want %s", err, want)
+	}
 }
 
 func TestDBConnStream(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
-	testUtils := newTestUtils()
 	sql := "select * from test_table limit 1000"
 	expectedResult := &sqltypes.Result{
 		Fields: []*querypb.Field{
@@ -111,7 +119,7 @@ func TestDBConnStream(t *testing.T) {
 		},
 	}
 	db.AddQuery(sql, expectedResult)
-	connPool := testUtils.newConnPool()
+	connPool := newPool()
 	connPool.Open(db.ConnParams(), db.ConnParams())
 	defer connPool.Close()
 	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(10*time.Second))
@@ -133,7 +141,9 @@ func TestDBConnStream(t *testing.T) {
 	if err != nil {
 		t.Fatalf("should not get an error, err: %v", err)
 	}
-	testUtils.checkEqual(t, expectedResult, &result)
+	if !reflect.DeepEqual(expectedResult, &result) {
+		t.Errorf("Exec: %v, want %v", expectedResult, &result)
+	}
 	// Stream fail
 	db.Close()
 	dbConn.Close()

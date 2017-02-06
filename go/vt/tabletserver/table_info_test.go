@@ -18,6 +18,7 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/schema"
 	"github.com/youtube/vitess/go/vt/sqlparser"
+	"github.com/youtube/vitess/go/vt/tabletserver/connpool"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
@@ -217,7 +218,7 @@ func newTestTableInfo(tableType string, comment string, db *fakesqldb.DB) (*Tabl
 	appParams := db.ConnParams()
 	dbaParams := db.ConnParams()
 	connPoolIdleTimeout := 10 * time.Second
-	connPool := NewConnPool("", 2, connPoolIdleTimeout, DummyChecker)
+	connPool := connpool.New("", 2, connPoolIdleTimeout, DummyChecker)
 	connPool.Open(appParams, dbaParams)
 	conn, err := connPool.Get(ctx)
 	if err != nil {

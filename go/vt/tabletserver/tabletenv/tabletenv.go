@@ -2,8 +2,9 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// Package tabletstats maintains stat variables for tabletserver.
-package tabletstats
+// Package tabletenv maintains environment variables and types that
+// are common for all packages of tabletserver.
+package tabletenv
 
 import (
 	"context"

@@ -15,7 +15,8 @@ import (
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/dtids"
-	"github.com/youtube/vitess/go/vt/tabletserver/tabletstats"
+	"github.com/youtube/vitess/go/vt/tabletserver/connpool"
+	"github.com/youtube/vitess/go/vt/tabletserver/tabletenv"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateconn"
 )
 
@@ -33,30 +34,30 @@ type TxEngine struct {
 }
 
 // NewTxEngine creates a new TxEngine.
-func NewTxEngine(checker MySQLChecker, config Config) *TxEngine {
+func NewTxEngine(checker MySQLChecker) *TxEngine {
 	te := &TxEngine{
-		shutdownGracePeriod: time.Duration(config.TxShutDownGracePeriod * 1e9),
+		shutdownGracePeriod: time.Duration(tabletenv.Config.TxShutDownGracePeriod * 1e9),
 	}
 	te.txPool = NewTxPool(
-		config.PoolNamePrefix+"TransactionPool",
-		config.TransactionCap,
-		time.Duration(config.TransactionTimeout*1e9),
-		time.Duration(config.IdleTimeout*1e9),
+		tabletenv.Config.PoolNamePrefix+"TransactionPool",
+		tabletenv.Config.TransactionCap,
+		time.Duration(tabletenv.Config.TransactionTimeout*1e9),
+		time.Duration(tabletenv.Config.IdleTimeout*1e9),
 		checker,
 	)
-	te.twopcEnabled = config.TwoPCEnable
+	te.twopcEnabled = tabletenv.Config.TwoPCEnable
 	if te.twopcEnabled {
-		if config.TwoPCCoordinatorAddress == "" {
+		if tabletenv.Config.TwoPCCoordinatorAddress == "" {
 			log.Error("Coordinator address not specified: Disabling 2PC")
 			te.twopcEnabled = false
 		}
-		if config.TwoPCAbandonAge <= 0 {
+		if tabletenv.Config.TwoPCAbandonAge <= 0 {
 			log.Error("2PC abandon age not specified: Disabling 2PC")
 			te.twopcEnabled = false
 		}
 	}
-	te.coordinatorAddress = config.TwoPCCoordinatorAddress
-	te.abandonAge = time.Duration(config.TwoPCAbandonAge * 1e9)
+	te.coordinatorAddress = tabletenv.Config.TwoPCCoordinatorAddress
+	te.abandonAge = time.Duration(tabletenv.Config.TwoPCAbandonAge * 1e9)
 	te.ticks = timer.NewTimer(te.abandonAge / 2)
 
 	// Set the prepared pool capacity to something lower than
@@ -64,11 +65,11 @@ func NewTxEngine(checker MySQLChecker, config Config) *TxEngine {
 	// perform metadata state change operations. Without this,
 	// the system can deadlock if all connections get moved to
 	// the TxPreparedPool.
-	te.preparedPool = NewTxPreparedPool(config.TransactionCap - 2)
-	readPool := NewConnPool(
-		config.PoolNamePrefix+"TxReadPool",
+	te.preparedPool = NewTxPreparedPool(tabletenv.Config.TransactionCap - 2)
+	readPool := connpool.New(
+		tabletenv.Config.PoolNamePrefix+"TxReadPool",
 		3,
-		time.Duration(config.IdleTimeout*1e9),
+		time.Duration(tabletenv.Config.IdleTimeout*1e9),
 		checker,
 	)
 	te.twoPC = NewTwoPC(readPool)
@@ -101,7 +102,7 @@ func (te *TxEngine) Open(dbconfigs dbconfigs.DBConfigs) {
 		// If this operation fails, we choose to raise an alert and
 		// continue anyway. Serving traffic is considered more important
 		// than blocking everything for the sake of a few transactions.
-		tabletstats.InternalErrors.Add("TwopcResurrection", 1)
+		tabletenv.InternalErrors.Add("TwopcResurrection", 1)
 		log.Errorf("Could not prepare transactions: %v", err)
 	}
 	te.startWatchdog()
@@ -250,15 +251,15 @@ func (te *TxEngine) startWatchdog() {
 		// Use 5x abandonAge to give opportunity for watchdog to resolve these.
 		count, err := te.twoPC.CountUnresolvedRedo(ctx, time.Now().Add(-te.abandonAge*5))
 		if err != nil {
-			tabletstats.InternalErrors.Add("WatchdogFail", 1)
+			tabletenv.InternalErrors.Add("WatchdogFail", 1)
 			log.Errorf("Error reading unresolved prepares: '%v': %v", te.coordinatorAddress, err)
 		}
-		tabletstats.Unresolved.Set("Prepares", count)
+		tabletenv.Unresolved.Set("Prepares", count)
 
 		// Resolve lingering distributed transactions.
 		txs, err := te.twoPC.ReadAbandoned(ctx, time.Now().Add(-te.abandonAge))
 		if err != nil {
-			tabletstats.InternalErrors.Add("WatchdogFail", 1)
+			tabletenv.InternalErrors.Add("WatchdogFail", 1)
 			log.Errorf("Error reading transactions for 2pc watchdog: %v", err)
 			return
 		}
@@ -268,7 +269,7 @@ func (te *TxEngine) startWatchdog() {
 
 		coordConn, err := vtgateconn.Dial(ctx, te.coordinatorAddress, te.abandonAge/4, "")
 		if err != nil {
-			tabletstats.InternalErrors.Add("WatchdogFail", 1)
+			tabletenv.InternalErrors.Add("WatchdogFail", 1)
 			log.Errorf("Error connecting to coordinator '%v': %v", te.coordinatorAddress, err)
 			return
 		}
@@ -280,7 +281,7 @@ func (te *TxEngine) startWatchdog() {
 			go func(dtid string) {
 				defer wg.Done()
 				if err := coordConn.ResolveTransaction(ctx, dtid); err != nil {
-					tabletstats.InternalErrors.Add("WatchdogFail", 1)
+					tabletenv.InternalErrors.Add("WatchdogFail", 1)
 					log.Errorf("Error notifying for dtid %s: %v", dtid, err)
 				}
 			}(tx)

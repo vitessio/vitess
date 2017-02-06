@@ -15,6 +15,7 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/timer"
 	"github.com/youtube/vitess/go/vt/sqlparser"
+	"github.com/youtube/vitess/go/vt/tabletserver/connpool"
 )
 
 type messageReceiver struct {
@@ -79,7 +80,7 @@ type MessageManager struct {
 	batchSize   int
 	pollerTicks *timer.Timer
 	purgeTicks  *timer.Timer
-	connpool    *ConnPool
+	conns       *connpool.Pool
 
 	mu sync.Mutex
 	// cond gets triggered if a receiver becomes available (curReceiver != -1),
@@ -102,7 +103,7 @@ type MessageManager struct {
 }
 
 // NewMessageManager creates a new message manager.
-func NewMessageManager(tsv *TabletServer, table *TableInfo, connpool *ConnPool) *MessageManager {
+func NewMessageManager(tsv *TabletServer, table *TableInfo, conns *connpool.Pool) *MessageManager {
 	mm := &MessageManager{
 		tsv:  tsv,
 		name: table.Name,
@@ -115,7 +116,7 @@ func NewMessageManager(tsv *TabletServer, table *TableInfo, connpool *ConnPool) 
 		cache:       NewMessagerCache(table.MessageInfo.CacheSize),
 		pollerTicks: timer.NewTimer(table.MessageInfo.PollInterval),
 		purgeTicks:  timer.NewTimer(table.MessageInfo.PollInterval),
-		connpool:    connpool,
+		conns:       conns,
 	}
 	mm.cond.L = &mm.mu
 
@@ -336,7 +337,7 @@ func (mm *MessageManager) postpone(ids []string) {
 func (mm *MessageManager) runPoller() {
 	ctx, cancel := context.WithTimeout(localContext(), mm.pollerTicks.Interval())
 	defer cancel()
-	conn, err := mm.connpool.Get(ctx)
+	conn, err := mm.conns.Get(ctx)
 	if err != nil {
 		// TODO(sougou): increment internal error.
 		log.Errorf("Error getting connection: %v", err)
@@ -466,7 +467,7 @@ func (mm *MessageManager) receiverCount() int {
 	return len(mm.receivers)
 }
 
-func (mm *MessageManager) read(ctx context.Context, conn *DBConn, pq *sqlparser.ParsedQuery, bindVars map[string]interface{}) (*sqltypes.Result, error) {
+func (mm *MessageManager) read(ctx context.Context, conn *connpool.DBConn, pq *sqlparser.ParsedQuery, bindVars map[string]interface{}) (*sqltypes.Result, error) {
 	b, err := pq.GenerateQuery(bindVars)
 	if err != nil {
 		// TODO(sougou): increment internal error.

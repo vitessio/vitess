@@ -18,13 +18,12 @@ import (
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	"github.com/youtube/vitess/go/vt/tabletserver"
+	"github.com/youtube/vitess/go/vt/tabletserver/tabletenv"
 	"github.com/youtube/vitess/go/vt/vtgate/fakerpcvtgateconn"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateconn"
 )
 
 var (
-	// BaseConfig is the base config of the server.
-	BaseConfig tabletserver.Config
 	// Target is the target info for the server.
 	Target querypb.Target
 	// Server is the TabletServer for the framework.
@@ -59,12 +58,11 @@ func StartServer(connParams sqldb.ConnParams) error {
 		dbconfigs.AppConfig,
 	)
 
-	BaseConfig = tabletserver.DefaultQsConfig
-	BaseConfig.EnableAutoCommit = true
-	BaseConfig.StrictTableAcl = true
-	BaseConfig.TwoPCEnable = true
-	BaseConfig.TwoPCAbandonAge = 1
-	BaseConfig.TwoPCCoordinatorAddress = "fake"
+	tabletenv.Config.EnableAutoCommit = true
+	tabletenv.Config.StrictTableAcl = true
+	tabletenv.Config.TwoPCEnable = true
+	tabletenv.Config.TwoPCAbandonAge = 1
+	tabletenv.Config.TwoPCCoordinatorAddress = "fake"
 
 	Target = querypb.Target{
 		Keyspace:   "vttest",
@@ -72,7 +70,7 @@ func StartServer(connParams sqldb.ConnParams) error {
 		TabletType: topodatapb.TabletType_MASTER,
 	}
 
-	Server = tabletserver.NewTabletServer(BaseConfig)
+	Server = tabletserver.NewTabletServer()
 	Server.Register()
 	err := Server.StartService(Target, dbcfgs, mysqld)
 	if err != nil {

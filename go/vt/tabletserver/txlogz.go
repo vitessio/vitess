@@ -15,6 +15,7 @@ import (
 	"github.com/youtube/vitess/go/acl"
 	"github.com/youtube/vitess/go/vt/callerid"
 	"github.com/youtube/vitess/go/vt/logz"
+	"github.com/youtube/vitess/go/vt/tabletserver/tabletenv"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
@@ -73,8 +74,8 @@ func txlogzHandler(w http.ResponseWriter, req *http.Request) {
 	}
 
 	timeout, limit := parseTimeoutLimitParams(req)
-	ch := TxLogger.Subscribe("txlogz")
-	defer TxLogger.Unsubscribe(ch)
+	ch := tabletenv.TxLogger.Subscribe("txlogz")
+	defer tabletenv.TxLogger.Unsubscribe(ch)
 	logz.StartHTMLTable(w)
 	defer logz.EndHTMLTable(w)
 	w.Write(txlogzHeader)
@@ -86,7 +87,7 @@ func txlogzHandler(w http.ResponseWriter, req *http.Request) {
 		case out := <-ch:
 			txc, ok := out.(*TxConnection)
 			if !ok {
-				err := fmt.Errorf("Unexpected value in %s: %#v (expecting value of type %T)", TxLogger.Name(), out, &TxConnection{})
+				err := fmt.Errorf("Unexpected value in %s: %#v (expecting value of type %T)", tabletenv.TxLogger.Name(), out, &TxConnection{})
 				io.WriteString(w, `<tr class="error">`)
 				io.WriteString(w, err.Error())
 				io.WriteString(w, "</tr>")

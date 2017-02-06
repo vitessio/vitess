@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package tabletserver
+package connpool
 
 import (
 	"sync"
@@ -12,35 +12,39 @@ import (
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/dbconnpool"
-	"github.com/youtube/vitess/go/vt/tabletserver/tabletstats"
+	"github.com/youtube/vitess/go/vt/tabletserver/tabletenv"
 	"golang.org/x/net/context"
 )
 
 var usedNames = make(map[string]bool)
 
-// ConnPool implements a custom connection pool for tabletserver.
+type mysqlChecker interface {
+	CheckMySQL()
+}
+
+// Pool implements a custom connection pool for tabletserver.
 // It's similar to dbconnpool.ConnPool, but the connections it creates
 // come with built-in ability to kill in-flight queries. These connections
 // also trigger a CheckMySQL call if we fail to connect to MySQL.
 // Other than the connection type, ConnPool maintains an additional
 // pool of dba connections that are used to kill connections.
-type ConnPool struct {
+type Pool struct {
 	mu          sync.Mutex
 	connections *pools.ResourcePool
 	capacity    int
 	idleTimeout time.Duration
 	dbaPool     *dbconnpool.ConnectionPool
-	checker     MySQLChecker
+	checker     mysqlChecker
 }
 
-// NewConnPool creates a new ConnPool. The name is used
+// New creates a new Pool. The name is used
 // to publish stats only.
-func NewConnPool(
+func New(
 	name string,
 	capacity int,
 	idleTimeout time.Duration,
-	checker MySQLChecker) *ConnPool {
-	cp := &ConnPool{
+	checker mysqlChecker) *Pool {
+	cp := &Pool{
 		capacity:    capacity,
 		idleTimeout: idleTimeout,
 		dbaPool:     dbconnpool.NewConnectionPool("", 1, idleTimeout),
@@ -59,7 +63,7 @@ func NewConnPool(
 	return cp
 }
 
-func (cp *ConnPool) pool() (p *pools.ResourcePool) {
+func (cp *Pool) pool() (p *pools.ResourcePool) {
 	cp.mu.Lock()
 	p = cp.connections
 	cp.mu.Unlock()
@@ -67,7 +71,7 @@ func (cp *ConnPool) pool() (p *pools.ResourcePool) {
 }
 
 // Open must be called before starting to use the pool.
-func (cp *ConnPool) Open(appParams, dbaParams *sqldb.ConnParams) {
+func (cp *Pool) Open(appParams, dbaParams *sqldb.ConnParams) {
 	cp.mu.Lock()
 	defer cp.mu.Unlock()
 
@@ -75,12 +79,12 @@ func (cp *ConnPool) Open(appParams, dbaParams *sqldb.ConnParams) {
 		return NewDBConn(cp, appParams, dbaParams)
 	}
 	cp.connections = pools.NewResourcePool(f, cp.capacity, cp.capacity, cp.idleTimeout)
-	cp.dbaPool.Open(dbconnpool.DBConnectionCreator(dbaParams, tabletstats.MySQLStats))
+	cp.dbaPool.Open(dbconnpool.DBConnectionCreator(dbaParams, tabletenv.MySQLStats))
 }
 
 // Close will close the pool and wait for connections to be returned before
 // exiting.
-func (cp *ConnPool) Close() {
+func (cp *Pool) Close() {
 	p := cp.pool()
 	if p == nil {
 		return
@@ -96,10 +100,10 @@ func (cp *ConnPool) Close() {
 
 // Get returns a connection.
 // You must call Recycle on DBConn once done.
-func (cp *ConnPool) Get(ctx context.Context) (*DBConn, error) {
+func (cp *Pool) Get(ctx context.Context) (*DBConn, error) {
 	p := cp.pool()
 	if p == nil {
-		return nil, ErrConnPoolClosed
+		return nil, tabletenv.ErrConnPoolClosed
 	}
 	r, err := p.Get(ctx)
 	if err != nil {
@@ -109,10 +113,10 @@ func (cp *ConnPool) Get(ctx context.Context) (*DBConn, error) {
 }
 
 // Put puts a connection into the pool.
-func (cp *ConnPool) Put(conn *DBConn) {
+func (cp *Pool) Put(conn *DBConn) {
 	p := cp.pool()
 	if p == nil {
-		panic(ErrConnPoolClosed)
+		panic(tabletenv.ErrConnPoolClosed)
 	}
 	if conn == nil {
 		p.Put(nil)
@@ -122,7 +126,7 @@ func (cp *ConnPool) Put(conn *DBConn) {
 }
 
 // SetCapacity alters the size of the pool at runtime.
-func (cp *ConnPool) SetCapacity(capacity int) (err error) {
+func (cp *Pool) SetCapacity(capacity int) (err error) {
 	cp.mu.Lock()
 	defer cp.mu.Unlock()
 	if cp.connections != nil {
@@ -136,7 +140,7 @@ func (cp *ConnPool) SetCapacity(capacity int) (err error) {
 }
 
 // SetIdleTimeout sets the idleTimeout on the pool.
-func (cp *ConnPool) SetIdleTimeout(idleTimeout time.Duration) {
+func (cp *Pool) SetIdleTimeout(idleTimeout time.Duration) {
 	cp.mu.Lock()
 	defer cp.mu.Unlock()
 	if cp.connections != nil {
@@ -147,7 +151,7 @@ func (cp *ConnPool) SetIdleTimeout(idleTimeout time.Duration) {
 }
 
 // StatsJSON returns the pool stats as a JSON object.
-func (cp *ConnPool) StatsJSON() string {
+func (cp *Pool) StatsJSON() string {
 	p := cp.pool()
 	if p == nil {
 		return "{}"
@@ -156,7 +160,7 @@ func (cp *ConnPool) StatsJSON() string {
 }
 
 // Capacity returns the pool capacity.
-func (cp *ConnPool) Capacity() int64 {
+func (cp *Pool) Capacity() int64 {
 	p := cp.pool()
 	if p == nil {
 		return 0
@@ -165,7 +169,7 @@ func (cp *ConnPool) Capacity() int64 {
 }
 
 // Available returns the number of available connections in the pool
-func (cp *ConnPool) Available() int64 {
+func (cp *Pool) Available() int64 {
 	p := cp.pool()
 	if p == nil {
 		return 0
@@ -174,7 +178,7 @@ func (cp *ConnPool) Available() int64 {
 }
 
 // MaxCap returns the maximum size of the pool
-func (cp *ConnPool) MaxCap() int64 {
+func (cp *Pool) MaxCap() int64 {
 	p := cp.pool()
 	if p == nil {
 		return 0
@@ -183,7 +187,7 @@ func (cp *ConnPool) MaxCap() int64 {
 }
 
 // WaitCount returns how many clients are waiting for a connection
-func (cp *ConnPool) WaitCount() int64 {
+func (cp *Pool) WaitCount() int64 {
 	p := cp.pool()
 	if p == nil {
 		return 0
@@ -192,7 +196,7 @@ func (cp *ConnPool) WaitCount() int64 {
 }
 
 // WaitTime return the pool WaitTime.
-func (cp *ConnPool) WaitTime() time.Duration {
+func (cp *Pool) WaitTime() time.Duration {
 	p := cp.pool()
 	if p == nil {
 		return 0
@@ -201,7 +205,7 @@ func (cp *ConnPool) WaitTime() time.Duration {
 }
 
 // IdleTimeout returns the idle timeout for the pool.
-func (cp *ConnPool) IdleTimeout() time.Duration {
+func (cp *Pool) IdleTimeout() time.Duration {
 	p := cp.pool()
 	if p == nil {
 		return 0

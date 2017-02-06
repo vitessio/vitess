@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"golang.org/x/net/context"
+	"github.com/youtube/vitess/go/vt/tabletserver/tabletenv"
 
-	"github.com/youtube/vitess/go/vt/tabletserver"
+	"golang.org/x/net/context"
 )
 
 // fakeWriter is a mock of the real syslog writer, to enable capturing and playing back of log messages in unit testing.
@@ -32,8 +32,8 @@ func (fw *fakeWriter) Info(msg string) error { return fw.write(syslog.LOG_INFO, 
 func (fw *fakeWriter) Close() error          { return nil }
 
 // mockLogStats generates a dummy tabletserver.LogStats message for testing.
-func mockLogStats(originalSQL string) *tabletserver.LogStats {
-	logstats := tabletserver.NewLogStats(context.Background(), "Execute")
+func mockLogStats(originalSQL string) *tabletenv.LogStats {
+	logstats := tabletenv.NewLogStats(context.Background(), "Execute")
 	logstats.StartTime = time.Time{}
 	logstats.PlanType = "PASS_SELECT"
 	logstats.OriginalSQL = originalSQL

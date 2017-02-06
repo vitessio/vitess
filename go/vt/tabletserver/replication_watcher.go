@@ -17,6 +17,7 @@ import (
 	"github.com/youtube/vitess/go/vt/binlog/eventtoken"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
+	"github.com/youtube/vitess/go/vt/tabletserver/tabletenv"
 
 	binlogdatapb "github.com/youtube/vitess/go/vt/proto/binlogdata"
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
@@ -41,9 +42,9 @@ type ReplicationWatcher struct {
 var replOnce sync.Once
 
 // NewReplicationWatcher creates a new ReplicationWatcher.
-func NewReplicationWatcher(config Config, qe *QueryEngine) *ReplicationWatcher {
+func NewReplicationWatcher(qe *QueryEngine) *ReplicationWatcher {
 	rpw := &ReplicationWatcher{
-		watchReplication: config.WatchReplication,
+		watchReplication: tabletenv.Config.WatchReplication,
 		qe:               qe,
 	}
 	replOnce.Do(func() {

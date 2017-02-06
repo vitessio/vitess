@@ -6,7 +6,6 @@ package tabletserver
 
 import (
 	"fmt"
-	"html/template"
 	"math/rand"
 	"reflect"
 	"strings"
@@ -16,6 +15,7 @@ import (
 	"github.com/youtube/vitess/go/mysqlconn/fakesqldb"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
+	"github.com/youtube/vitess/go/vt/tabletserver/tabletenv"
 
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
@@ -26,29 +26,6 @@ type dummyChecker struct {
 func (dummyChecker) CheckMySQL() {}
 
 var DummyChecker = dummyChecker{}
-
-type fakeCallInfo struct {
-	remoteAddr string
-	username   string
-	text       string
-	html       string
-}
-
-func (fci *fakeCallInfo) RemoteAddr() string {
-	return fci.remoteAddr
-}
-
-func (fci *fakeCallInfo) Username() string {
-	return fci.username
-}
-
-func (fci *fakeCallInfo) Text() string {
-	return fci.text
-}
-
-func (fci *fakeCallInfo) HTML() template.HTML {
-	return template.HTML(fci.html)
-}
 
 type testUtils struct{}
 
@@ -63,7 +40,7 @@ func (util *testUtils) checkEqual(t *testing.T, expected interface{}, result int
 }
 
 func (util *testUtils) checkTabletError(t *testing.T, err interface{}, tabletErrCode vtrpcpb.ErrorCode, tabletErrStr string) {
-	tabletError, ok := err.(*TabletError)
+	tabletError, ok := err.(*tabletenv.TabletError)
 	if !ok {
 		t.Fatalf("should return a TabletError, but got err: %v", err)
 	}
@@ -94,22 +71,13 @@ func (util *testUtils) newDBConfigs(db *fakesqldb.DB) dbconfigs.DBConfigs {
 	}
 }
 
-func (util *testUtils) newQueryServiceConfig() Config {
+func (util *testUtils) newQueryServiceConfig() *tabletenv.TabletConfig {
 	randID := rand.Int63()
-	config := DefaultQsConfig
+	tabletenv.Config = tabletenv.DefaultQsConfig
+	config := &tabletenv.Config
 	config.DebugURLPrefix = fmt.Sprintf("/debug-%d-", randID)
 	config.PoolNamePrefix = fmt.Sprintf("Pool-%d-", randID)
-	config.StrictMode = true
 	return config
-}
-
-func (util *testUtils) newConnPool() *ConnPool {
-	return NewConnPool(
-		fmt.Sprintf("TestPool%d", rand.Int63()),
-		100,
-		10*time.Second,
-		DummyChecker,
-	)
 }
 
 func newTestSchemaInfo(

@@ -19,6 +19,7 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	"github.com/youtube/vitess/go/vt/tabletserver/tabletenv"
 	"github.com/youtube/vitess/go/vt/vtgate/fakerpcvtgateconn"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateconn"
 )
@@ -552,7 +553,7 @@ func TestNoTwopc(t *testing.T) {
 func newTestTxExecutor(t *testing.T) (txe *TxExecutor, tsv *TabletServer, db *fakesqldb.DB) {
 	db = setUpQueryExecutorTest(t)
 	ctx := context.Background()
-	logStats := NewLogStats(ctx, "TestTxExecutor")
+	logStats := tabletenv.NewLogStats(ctx, "TestTxExecutor")
 	tsv = newTestTabletServer(ctx, smallTxPool, db)
 	db.AddQueryPattern("insert into `_vt`\\.redo_state\\(dtid, state, time_created\\) values \\('aa', 1,.*", &sqltypes.Result{})
 	db.AddQueryPattern("insert into `_vt`\\.redo_statement.*", &sqltypes.Result{})
@@ -571,7 +572,7 @@ func newTestTxExecutor(t *testing.T) (txe *TxExecutor, tsv *TabletServer, db *fa
 func newShortAgeExecutor(t *testing.T) (txe *TxExecutor, tsv *TabletServer, db *fakesqldb.DB) {
 	db = setUpQueryExecutorTest(t)
 	ctx := context.Background()
-	logStats := NewLogStats(ctx, "TestTxExecutor")
+	logStats := tabletenv.NewLogStats(ctx, "TestTxExecutor")
 	tsv = newTestTabletServer(ctx, smallTxPool|shortTwopcAge, db)
 	db.AddQueryPattern("insert into `_vt`\\.redo_state\\(dtid, state, time_created\\) values \\('aa', 1,.*", &sqltypes.Result{})
 	db.AddQueryPattern("insert into `_vt`\\.redo_statement.*", &sqltypes.Result{})
@@ -590,7 +591,7 @@ func newShortAgeExecutor(t *testing.T) (txe *TxExecutor, tsv *TabletServer, db *
 func newNoTwopcExecutor(t *testing.T) (txe *TxExecutor, tsv *TabletServer, db *fakesqldb.DB) {
 	db = setUpQueryExecutorTest(t)
 	ctx := context.Background()
-	logStats := NewLogStats(ctx, "TestTxExecutor")
+	logStats := tabletenv.NewLogStats(ctx, "TestTxExecutor")
 	tsv = newTestTabletServer(ctx, noTwopc, db)
 	return &TxExecutor{
 		ctx:      ctx,

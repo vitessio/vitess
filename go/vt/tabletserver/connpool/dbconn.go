@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package tabletserver
+package connpool
 
 import (
 	"fmt"
@@ -17,7 +17,7 @@ import (
 	"github.com/youtube/vitess/go/vt/dbconnpool"
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
-	"github.com/youtube/vitess/go/vt/tabletserver/tabletstats"
+	"github.com/youtube/vitess/go/vt/tabletserver/tabletenv"
 	"golang.org/x/net/context"
 )
 
@@ -29,16 +29,16 @@ import (
 type DBConn struct {
 	conn    *dbconnpool.DBConnection
 	info    *sqldb.ConnParams
-	pool    *ConnPool
+	pool    *Pool
 	current sync2.AtomicString
 }
 
 // NewDBConn creates a new DBConn. It triggers a CheckMySQL if creation fails.
 func NewDBConn(
-	cp *ConnPool,
+	cp *Pool,
 	appParams,
 	dbaParams *sqldb.ConnParams) (*DBConn, error) {
-	c, err := dbconnpool.NewDBConnection(appParams, tabletstats.MySQLStats)
+	c, err := dbconnpool.NewDBConnection(appParams, tabletenv.MySQLStats)
 	if err != nil {
 		cp.checker.CheckMySQL()
 		return nil, err
@@ -62,19 +62,19 @@ func (dbc *DBConn) Exec(ctx context.Context, query string, maxrows int, wantfiel
 		switch {
 		case err == nil:
 			return r, nil
-		case !IsConnErr(err):
+		case !tabletenv.IsConnErr(err):
 			// MySQL error that isn't due to a connection issue
-			return nil, NewTabletErrorSQL(vtrpcpb.ErrorCode_UNKNOWN_ERROR, err)
+			return nil, tabletenv.NewTabletErrorSQL(vtrpcpb.ErrorCode_UNKNOWN_ERROR, err)
 		case attempt == 2:
 			// If the MySQL connection is bad, we assume that there is nothing wrong with
 			// the query itself, and retrying it might succeed. The MySQL connection might
 			// fix itself, or the query could succeed on a different VtTablet.
-			return nil, NewTabletErrorSQL(vtrpcpb.ErrorCode_INTERNAL_ERROR, err)
+			return nil, tabletenv.NewTabletErrorSQL(vtrpcpb.ErrorCode_INTERNAL_ERROR, err)
 		}
 		err2 := dbc.reconnect()
 		if err2 != nil {
 			dbc.pool.checker.CheckMySQL()
-			return nil, NewTabletErrorSQL(vtrpcpb.ErrorCode_INTERNAL_ERROR, err)
+			return nil, tabletenv.NewTabletErrorSQL(vtrpcpb.ErrorCode_INTERNAL_ERROR, err)
 		}
 	}
 	panic("unreachable")
@@ -124,7 +124,7 @@ func (dbc *DBConn) Stream(ctx context.Context, query string, callback func(*sqlt
 		switch {
 		case err == nil:
 			return nil
-		case !IsConnErr(err) || resultSent || attempt == 2:
+		case !tabletenv.IsConnErr(err) || resultSent || attempt == 2:
 			// MySQL error that isn't due to a connection issue
 			return err
 		}
@@ -179,13 +179,13 @@ func (dbc *DBConn) Recycle() {
 // and on the connection side. If no query is executing, it's a no-op.
 // Kill will also not kill a query more than once.
 func (dbc *DBConn) Kill(reason string) error {
-	tabletstats.KillStats.Add("Queries", 1)
+	tabletenv.KillStats.Add("Queries", 1)
 	log.Infof("Due to %s, killing query %s", reason, dbc.Current())
 	killConn, err := dbc.pool.dbaPool.Get(context.TODO())
 	if err != nil {
 		log.Warningf("Failed to get conn from dba pool: %v", err)
 		// TODO(aaijazi): Find the right error code for an internal error that we don't want to retry
-		return NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "Failed to get conn from dba pool: %v", err)
+		return tabletenv.NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "Failed to get conn from dba pool: %v", err)
 	}
 	defer killConn.Recycle()
 	sql := fmt.Sprintf("kill %d", dbc.conn.ID())
@@ -193,7 +193,7 @@ func (dbc *DBConn) Kill(reason string) error {
 	if err != nil {
 		log.Errorf("Could not kill query %s: %v", dbc.Current(), err)
 		// TODO(aaijazi): Find the right error code for an internal error that we don't want to retry
-		return NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "Could not kill query %s: %v", dbc.Current(), err)
+		return tabletenv.NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "Could not kill query %s: %v", dbc.Current(), err)
 	}
 	return nil
 }
@@ -210,7 +210,7 @@ func (dbc *DBConn) ID() int64 {
 
 func (dbc *DBConn) reconnect() error {
 	dbc.conn.Close()
-	newConn, err := dbconnpool.NewDBConnection(dbc.info, tabletstats.MySQLStats)
+	newConn, err := dbconnpool.NewDBConnection(dbc.info, tabletenv.MySQLStats)
 	if err != nil {
 		return err
 	}
@@ -246,7 +246,7 @@ func (dbc *DBConn) setDeadline(ctx context.Context) (chan bool, *sync.WaitGroup)
 		defer tmr2.Stop()
 		select {
 		case <-tmr2.C:
-			tabletstats.InternalErrors.Add("HungQuery", 1)
+			tabletenv.InternalErrors.Add("HungQuery", 1)
 			log.Warningf("Query may be hung: %s", dbc.Current())
 		case <-done:
 			return

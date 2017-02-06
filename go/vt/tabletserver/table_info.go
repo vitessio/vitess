@@ -13,6 +13,7 @@ import (
 
 	log "github.com/golang/glog"
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	"github.com/youtube/vitess/go/vt/tabletserver/connpool"
 
 	"github.com/youtube/vitess/go/vt/schema"
 	"github.com/youtube/vitess/go/vt/sqlparser"
@@ -69,7 +70,7 @@ type MessageInfo struct {
 }
 
 // NewTableInfo creates a new TableInfo.
-func NewTableInfo(conn *DBConn, tableName string, tableType string, comment string) (ti *TableInfo, err error) {
+func NewTableInfo(conn *connpool.DBConn, tableName string, tableType string, comment string) (ti *TableInfo, err error) {
 	ti, err = loadTableInfo(conn, tableName)
 	if err != nil {
 		return nil, err
@@ -86,7 +87,7 @@ func NewTableInfo(conn *DBConn, tableName string, tableType string, comment stri
 	return ti, nil
 }
 
-func loadTableInfo(conn *DBConn, tableName string) (ti *TableInfo, err error) {
+func loadTableInfo(conn *connpool.DBConn, tableName string) (ti *TableInfo, err error) {
 	ti = &TableInfo{Table: schema.NewTable(tableName)}
 	sqlTableName := sqlparser.String(ti.Name)
 	if err = ti.fetchColumns(conn, sqlTableName); err != nil {
@@ -98,7 +99,7 @@ func loadTableInfo(conn *DBConn, tableName string) (ti *TableInfo, err error) {
 	return ti, nil
 }
 
-func (ti *TableInfo) fetchColumns(conn *DBConn, sqlTableName string) error {
+func (ti *TableInfo) fetchColumns(conn *connpool.DBConn, sqlTableName string) error {
 	qr, err := conn.Exec(localContext(), fmt.Sprintf("select * from %s where 1 != 1", sqlTableName), 0, true)
 	if err != nil {
 		return err
@@ -145,7 +146,7 @@ func (ti *TableInfo) SetPK(colnames []string) error {
 	return nil
 }
 
-func (ti *TableInfo) fetchIndexes(conn *DBConn, sqlTableName string) error {
+func (ti *TableInfo) fetchIndexes(conn *connpool.DBConn, sqlTableName string) error {
 	indexes, err := conn.Exec(localContext(), fmt.Sprintf("show index from %s", sqlTableName), 10000, false)
 	if err != nil {
 		return err

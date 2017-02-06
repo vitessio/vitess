@@ -19,6 +19,8 @@ import (
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/dbconnpool"
 	"github.com/youtube/vitess/go/vt/sqlparser"
+	"github.com/youtube/vitess/go/vt/tabletserver/connpool"
+	"github.com/youtube/vitess/go/vt/tabletserver/tabletenv"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -86,7 +88,7 @@ const (
 
 // TwoPC performs 2PC metadata management (MM) functions.
 type TwoPC struct {
-	readPool *ConnPool
+	readPool *connpool.Pool
 
 	insertRedoTx        *sqlparser.ParsedQuery
 	insertRedoStmt      *sqlparser.ParsedQuery
@@ -108,7 +110,7 @@ type TwoPC struct {
 }
 
 // NewTwoPC creates a TwoPC variable.
-func NewTwoPC(readPool *ConnPool) *TwoPC {
+func NewTwoPC(readPool *connpool.Pool) *TwoPC {
 	return &TwoPC{readPool: readPool}
 }
 
@@ -135,7 +137,7 @@ func (tpc *TwoPC) Init(sidecarDBName string, dbaparams *sqldb.ConnParams) error 
 	}
 	for _, s := range statements {
 		if _, err := conn.ExecuteFetch(s, 0, false); err != nil {
-			return NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, err.Error())
+			return tabletenv.NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, err.Error())
 		}
 	}
 	tpc.insertRedoTx = buildParsedQuery(
@@ -366,7 +368,7 @@ func (tpc *TwoPC) Transition(ctx context.Context, conn *TxConnection, dtid strin
 		return err
 	}
 	if qr.RowsAffected != 1 {
-		return NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "could not transition to %v: %s", state, dtid)
+		return tabletenv.NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "could not transition to %v: %s", state, dtid)
 	}
 	return nil
 }
@@ -524,7 +526,7 @@ func (tpc *TwoPC) exec(ctx context.Context, conn *TxConnection, pq *sqlparser.Pa
 	return conn.Exec(ctx, hack.String(b), 1, false)
 }
 
-func (tpc *TwoPC) read(ctx context.Context, conn *DBConn, pq *sqlparser.ParsedQuery, bindVars map[string]interface{}) (*sqltypes.Result, error) {
+func (tpc *TwoPC) read(ctx context.Context, conn *connpool.DBConn, pq *sqlparser.ParsedQuery, bindVars map[string]interface{}) (*sqltypes.Result, error) {
 	b, err := pq.GenerateQuery(bindVars)
 	if err != nil {
 		return nil, err

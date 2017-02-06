@@ -14,6 +14,7 @@ import (
 
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/tabletserver/planbuilder"
+	"github.com/youtube/vitess/go/vt/tabletserver/tabletenv"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -791,7 +792,7 @@ func TestInvalidJSON(t *testing.T) {
 	}
 	qrs := NewQueryRules()
 	err := qrs.UnmarshalJSON([]byte(`{`))
-	terr, ok := err.(*TabletError)
+	terr, ok := err.(*tabletenv.TabletError)
 	if !ok {
 		t.Fatalf("invalid json, should get a tablet error")
 	}

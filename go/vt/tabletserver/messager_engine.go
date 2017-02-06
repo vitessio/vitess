@@ -11,6 +11,8 @@ import (
 
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/schema"
+	"github.com/youtube/vitess/go/vt/tabletserver/connpool"
+	"github.com/youtube/vitess/go/vt/tabletserver/tabletenv"
 
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
@@ -22,18 +24,18 @@ type MessagerEngine struct {
 	managers map[string]*MessageManager
 
 	// TODO(sougou): This depndency should be cleaned up.
-	tsv      *TabletServer
-	connpool *ConnPool
+	tsv   *TabletServer
+	conns *connpool.Pool
 }
 
 // NewMessagerEngine creates a new MessagerEngine.
-func NewMessagerEngine(tsv *TabletServer, config Config) *MessagerEngine {
+func NewMessagerEngine(tsv *TabletServer) *MessagerEngine {
 	return &MessagerEngine{
 		tsv: tsv,
-		connpool: NewConnPool(
-			config.PoolNamePrefix+"MessagerPool",
-			config.MessagePoolSize,
-			time.Duration(config.IdleTimeout*1e9),
+		conns: connpool.New(
+			tabletenv.Config.PoolNamePrefix+"MessagerPool",
+			tabletenv.Config.MessagePoolSize,
+			time.Duration(tabletenv.Config.IdleTimeout*1e9),
 			tsv,
 		),
 		managers: make(map[string]*MessageManager),
@@ -45,7 +47,7 @@ func (me *MessagerEngine) Open(dbconfigs dbconfigs.DBConfigs) error {
 	if me.isOpen {
 		return nil
 	}
-	me.connpool.Open(&dbconfigs.App, &dbconfigs.Dba)
+	me.conns.Open(&dbconfigs.App, &dbconfigs.Dba)
 	me.tsv.qe.schemaInfo.RegisterNotifier("messages", me.schemaChanged)
 	me.isOpen = true
 	return nil
@@ -64,7 +66,7 @@ func (me *MessagerEngine) Close() {
 		mm.Close()
 	}
 	me.managers = make(map[string]*MessageManager)
-	me.connpool.Close()
+	me.conns.Close()
 }
 
 // Subscribe subscribes to messages from the requested table.
@@ -73,7 +75,7 @@ func (me *MessagerEngine) Subscribe(name string, rcv *messageReceiver) error {
 	defer me.mu.Unlock()
 	mm := me.managers[name]
 	if mm == nil {
-		return NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "message table %s not found", name)
+		return tabletenv.NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "message table %s not found", name)
 	}
 	mm.Subscribe(rcv)
 	return nil
@@ -185,7 +187,7 @@ func (me *MessagerEngine) schemaChanged(tables map[string]*TableInfo) {
 			// TODO(sougou): Need to update values instead.
 			continue
 		}
-		mm := NewMessageManager(me.tsv, t, me.connpool)
+		mm := NewMessageManager(me.tsv, t, me.conns)
 		me.managers[name] = mm
 		mm.Open()
 	}

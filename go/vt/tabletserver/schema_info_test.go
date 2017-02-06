@@ -19,7 +19,7 @@ import (
 	"github.com/youtube/vitess/go/mysqlconn/fakesqldb"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/sqlparser"
-	"github.com/youtube/vitess/go/vt/tabletserver/tabletstats"
+	"github.com/youtube/vitess/go/vt/tabletserver/tabletenv"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
@@ -240,11 +240,11 @@ func TestSchemaInfoCreateOrUpdateTableFailedDuetoExecErr(t *testing.T) {
 	schemaInfo := newTestSchemaInfo(10, 1*time.Second, 1*time.Second)
 	schemaInfo.Open(db.ConnParams(), false)
 	defer schemaInfo.Close()
-	originalSchemaErrorCount := tabletstats.InternalErrors.Counts()["Schema"]
+	originalSchemaErrorCount := tabletenv.InternalErrors.Counts()["Schema"]
 	// should silently fail: no errors returned, but increment a counter
 	schemaInfo.CreateOrUpdateTable(context.Background(), "test_table")
 
-	newSchemaErrorCount := tabletstats.InternalErrors.Counts()["Schema"]
+	newSchemaErrorCount := tabletenv.InternalErrors.Counts()["Schema"]
 	schemaErrorDiff := newSchemaErrorCount - originalSchemaErrorCount
 	if schemaErrorDiff != 1 {
 		t.Errorf("InternalErrors.Schema counter should have increased by 1, instead got %v", schemaErrorDiff)
@@ -325,7 +325,7 @@ func TestSchemaInfoGetPlanPanicDuetoEmptyQuery(t *testing.T) {
 	defer schemaInfo.Close()
 
 	ctx := context.Background()
-	logStats := NewLogStats(ctx, "GetPlanStats")
+	logStats := tabletenv.NewLogStats(ctx, "GetPlanStats")
 	_, err := schemaInfo.GetPlan(ctx, logStats, "")
 	want := "syntax error"
 	if err == nil || !strings.Contains(err.Error(), want) {
@@ -350,7 +350,7 @@ func TestSchemaInfoQueryCache(t *testing.T) {
 	defer schemaInfo.Close()
 
 	ctx := context.Background()
-	logStats := NewLogStats(ctx, "GetPlanStats")
+	logStats := tabletenv.NewLogStats(ctx, "GetPlanStats")
 	schemaInfo.SetQueryCacheCap(1)
 	firstPlan, err := schemaInfo.GetPlan(ctx, logStats, firstQuery)
 	if err != nil {
@@ -493,7 +493,7 @@ func TestSchemaInfoStatsURL(t *testing.T) {
 	defer schemaInfo.Close()
 	// warm up cache
 	ctx := context.Background()
-	logStats := NewLogStats(ctx, "GetPlanStats")
+	logStats := tabletenv.NewLogStats(ctx, "GetPlanStats")
 	schemaInfo.GetPlan(ctx, logStats, query)
 
 	request, _ := http.NewRequest("GET", schemaInfo.endpoints[debugQueryPlansKey], nil)
@@ -633,7 +633,7 @@ func getSchemaInfoTestSupportedQueries() map[string]*sqltypes.Result {
 }
 
 func verifyTabletError(t *testing.T, err interface{}, tabletErrCode vtrpcpb.ErrorCode) {
-	tabletError, ok := err.(*TabletError)
+	tabletError, ok := err.(*tabletenv.TabletError)
 	if !ok {
 		t.Fatalf("should return a TabletError, but got err: %v", err)
 	}

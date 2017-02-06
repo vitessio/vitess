@@ -14,6 +14,7 @@ import (
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/tabletserver/endtoend/framework"
+	"github.com/youtube/vitess/go/vt/tabletserver/tabletenv"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -305,7 +306,7 @@ func TestTxPoolSize(t *testing.T) {
 		return
 	}
 	defer client1.Rollback()
-	if err := verifyIntValue(framework.DebugVars(), "TransactionPoolAvailable", framework.BaseConfig.TransactionCap-1); err != nil {
+	if err := verifyIntValue(framework.DebugVars(), "TransactionPoolAvailable", tabletenv.Config.TransactionCap-1); err != nil {
 		t.Error(err)
 	}
 

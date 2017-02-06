@@ -15,6 +15,7 @@ import (
 
 	"github.com/youtube/vitess/go/vt/callerid"
 	"github.com/youtube/vitess/go/vt/tabletserver/planbuilder"
+	"github.com/youtube/vitess/go/vt/tabletserver/tabletenv"
 	"golang.org/x/net/context"
 )
 
@@ -32,7 +33,7 @@ func TestQuerylogzHandlerInvalidLogStats(t *testing.T) {
 
 func TestQuerylogzHandler(t *testing.T) {
 	req, _ := http.NewRequest("GET", "/querylogz?timeout=10&limit=1", nil)
-	logStats := NewLogStats(context.Background(), "Execute")
+	logStats := tabletenv.NewLogStats(context.Background(), "Execute")
 	logStats.PlanType = planbuilder.PlanPassSelect.String()
 	logStats.OriginalSQL = "select name from test_table limit 1000"
 	logStats.RowsAffected = 1000
@@ -41,7 +42,7 @@ func TestQuerylogzHandler(t *testing.T) {
 	logStats.MysqlResponseTime = 1 * time.Millisecond
 	logStats.WaitingForConnection = 10 * time.Nanosecond
 	logStats.TransactionID = 131
-	logStats.ctx = callerid.NewContext(
+	logStats.Ctx = callerid.NewContext(
 		context.Background(),
 		callerid.NewEffectiveCallerID("effective-caller", "component", "subcomponent"),
 		callerid.NewImmediateCallerID("immediate-caller"),
@@ -137,7 +138,7 @@ func TestQuerylogzHandler(t *testing.T) {
 	checkQuerylogzHasStats(t, slowQueryPattern, logStats, body)
 }
 
-func checkQuerylogzHasStats(t *testing.T, pattern []string, logStats *LogStats, page []byte) {
+func checkQuerylogzHasStats(t *testing.T, pattern []string, logStats *tabletenv.LogStats, page []byte) {
 	matcher := regexp.MustCompile(strings.Join(pattern, `\s*`))
 	if !matcher.Match(page) {
 		t.Fatalf("querylogz page does not contain stats: %v, pattern: %v, page: %s", logStats, pattern, string(page))
