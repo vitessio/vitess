@@ -217,6 +217,13 @@ func TestMessageManagerAdd(t *testing.T) {
 	if mm.Add(&MessageRow{ID: sqltypes.MakeString([]byte("3"))}) {
 		t.Error("Add(cache full): true, want false")
 	}
+	// Pull everything possible from r1. Otherwise
+	// the mm will be stuck sending and won't be able
+	// to close.
+	go func() {
+		for range r1.ch {
+		}
+	}()
 }
 
 func TestMessageManagerSend(t *testing.T) {

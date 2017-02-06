@@ -93,7 +93,9 @@ type MessageManager struct {
 	messagesPending bool
 
 	// wg is for ensuring all running goroutines have returned
-	// before we can close the manager.
+	// before we can close the manager. You need to Add before
+	// launching any gorooutine while holding a lock on mu.
+	// The goroutine must in turn defer on Done.
 	wg sync.WaitGroup
 
 	readByTimeNext *sqlparser.ParsedQuery
@@ -187,6 +189,9 @@ func (mm *MessageManager) Subscribe(receiver *messageReceiver) {
 		busy:     true,
 	}
 	mm.receivers = append(mm.receivers, withStatus)
+
+	// Send the message asynchronously.
+	mm.wg.Add(1)
 	go mm.send(withStatus, mm.fieldResult)
 }
 
@@ -284,13 +289,16 @@ func (mm *MessageManager) runSend() {
 		receiver := mm.receivers[mm.curReceiver]
 		receiver.busy = true
 		mm.rescanReceivers(mm.curReceiver)
-		mm.mu.Unlock()
+
 		// Send the message asynchronously.
+		mm.wg.Add(1)
 		go mm.send(receiver, &sqltypes.Result{Rows: rows})
+		mm.mu.Unlock()
 	}
 }
 
 func (mm *MessageManager) send(receiver *receiverWithStatus, qr *sqltypes.Result) {
+	defer mm.wg.Done()
 	if err := receiver.receiver.Send(qr); err != nil {
 		if err == io.EOF {
 			// No need to call Cancel. MessageReceiver already

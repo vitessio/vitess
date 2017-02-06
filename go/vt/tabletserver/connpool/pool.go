@@ -16,6 +16,11 @@ import (
 	"golang.org/x/net/context"
 )
 
+// usedNames is for preventing expvar from panicking. Tests
+// create pool objects multiple time. If a name was previously
+// used, expvar initialization is skipped.
+// TODO(sougou): Find a way to still crash if this happened
+// through non-test code.
 var usedNames = make(map[string]bool)
 
 type mysqlChecker interface {

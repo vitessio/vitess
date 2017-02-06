@@ -21,10 +21,14 @@ import (
 )
 
 var (
-	// ErrConnPoolClosed is returned / panicked whent he
-	// connection pool is closed.
+	// ErrConnPoolClosed is returned if the connection pool is closed.
 	ErrConnPoolClosed = errors.New("connection pool is closed")
-	usedNames         = make(map[string]bool)
+	// usedNames is for preventing expvar from panicking. Tests
+	// create pool objects multiple time. If a name was previously
+	// used, expvar initialization is skipped.
+	// TODO(sougou): Find a way to still crash if this happened
+	// through non-test code.
+	usedNames = make(map[string]bool)
 )
 
 // PoolConnection is the interface implemented by users of this specialized pool.
