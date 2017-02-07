@@ -45,7 +45,7 @@ if [ -f $zk_dist/.build_finished ]; then
 else
   rm -rf $zk_dist
   (cd $VTROOT/dist && \
-    wget http://archive.apache.org/dist/zookeeper/zookeeper-$zk_ver/zookeeper-$zk_ver.tar.gz && \
+    wget http://apache.org/dist/zookeeper/zookeeper-$zk_ver/zookeeper-$zk_ver.tar.gz && \
     tar -xzf zookeeper-$zk_ver.tar.gz && \
     mkdir -p $zk_dist/lib && \
     cp zookeeper-$zk_ver/contrib/fatjar/zookeeper-$zk_ver-fatjar.jar $zk_dist/lib && \
