@@ -48,7 +48,7 @@ func (me *MessagerEngine) Open(dbconfigs dbconfigs.DBConfigs) error {
 		return nil
 	}
 	me.conns.Open(&dbconfigs.App, &dbconfigs.Dba)
-	me.tsv.qe.schemaInfo.RegisterNotifier("messages", me.schemaChanged)
+	me.tsv.qe.se.RegisterNotifier("messages", me.schemaChanged)
 	me.isOpen = true
 	return nil
 }
@@ -61,7 +61,7 @@ func (me *MessagerEngine) Close() {
 		return
 	}
 	me.isOpen = false
-	me.tsv.qe.schemaInfo.UnregisterNotifier("messages")
+	me.tsv.qe.se.UnregisterNotifier("messages")
 	for _, mm := range me.managers {
 		mm.Close()
 	}

@@ -39,23 +39,23 @@ func TestMEState(t *testing.T) {
 	defer tsv.StopService()
 
 	me := tsv.messager
-	if l := len(tsv.qe.schemaInfo.notifiers); l != 1 {
+	if l := len(tsv.qe.se.notifiers); l != 1 {
 		t.Errorf("len(notifiers): %d, want 1", l)
 	}
 	if err := me.Open(dbconfigs); err != nil {
 		t.Fatal(err)
 	}
-	if l := len(tsv.qe.schemaInfo.notifiers); l != 1 {
+	if l := len(tsv.qe.se.notifiers); l != 1 {
 		t.Errorf("len(notifiers) after reopen: %d, want 1", l)
 	}
 
 	me.Close()
-	if l := len(tsv.qe.schemaInfo.notifiers); l != 0 {
+	if l := len(tsv.qe.se.notifiers); l != 0 {
 		t.Errorf("len(notifiers) after close: %d, want 0", l)
 	}
 
 	me.Close()
-	if l := len(tsv.qe.schemaInfo.notifiers); l != 0 {
+	if l := len(tsv.qe.se.notifiers); l != 0 {
 		t.Errorf("len(notifiers) after close: %d, want 0", l)
 	}
 }

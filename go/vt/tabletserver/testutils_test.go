@@ -80,12 +80,12 @@ func (util *testUtils) newQueryServiceConfig() *tabletenv.TabletConfig {
 	return config
 }
 
-func newTestSchemaInfo(
+func newTestSchemaEngine(
 	queryCacheSize int,
 	reloadTime time.Duration,
-	idleTimeout time.Duration) *SchemaInfo {
+	idleTimeout time.Duration) *SchemaEngine {
 	randID := rand.Int63()
-	return NewSchemaInfo(
+	return NewSchemaEngine(
 		DummyChecker,
 		queryCacheSize,
 		reloadTime,

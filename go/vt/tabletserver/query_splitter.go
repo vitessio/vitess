@@ -21,7 +21,7 @@ type QuerySplitter struct {
 	sql           string
 	bindVariables map[string]interface{}
 	splitCount    int64
-	schemaInfo    *SchemaInfo
+	se            *SchemaEngine
 	sel           *sqlparser.Select
 	tableName     sqlparser.TableIdent
 	splitColumn   sqlparser.ColIdent
@@ -41,7 +41,7 @@ func NewQuerySplitter(
 	bindVariables map[string]interface{},
 	splitColumn string,
 	splitCount int64,
-	schemaInfo *SchemaInfo) *QuerySplitter {
+	se *SchemaEngine) *QuerySplitter {
 	if splitCount < 1 {
 		splitCount = 1
 	}
@@ -49,7 +49,7 @@ func NewQuerySplitter(
 		sql:           sql,
 		bindVariables: bindVariables,
 		splitCount:    splitCount,
-		schemaInfo:    schemaInfo,
+		se:            se,
 		splitColumn:   sqlparser.NewColIdent(splitColumn),
 	}
 }
@@ -81,7 +81,7 @@ func (qs *QuerySplitter) validateQuery() error {
 	if qs.tableName.IsEmpty() {
 		return fmt.Errorf("not a simple table expression")
 	}
-	tableInfo := qs.schemaInfo.GetTable(qs.tableName)
+	tableInfo := qs.se.GetTable(qs.tableName)
 	if tableInfo == nil {
 		return fmt.Errorf("can't find table in schema")
 	}

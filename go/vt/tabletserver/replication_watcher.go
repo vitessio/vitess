@@ -102,7 +102,7 @@ func (rpw *ReplicationWatcher) Process(ctx context.Context, dbconfigs dbconfigs.
 				if statement.Category != binlogdatapb.BinlogTransaction_Statement_BL_DDL {
 					continue
 				}
-				err := rpw.qe.schemaInfo.Reload(ctx)
+				err := rpw.qe.se.Reload(ctx)
 				log.Infof("Streamer triggered a schema reload, with result: %v", err)
 				return nil
 			}

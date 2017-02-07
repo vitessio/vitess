@@ -243,7 +243,7 @@ func (qre *QueryExecutor) checkPermissions() error {
 
 	callerID := callerid.ImmediateCallerIDFromContext(qre.ctx)
 	if callerID == nil {
-		if qre.qe.strictTableAcl {
+		if qre.qe.strictTableACL {
 			return tabletenv.NewTabletError(vtrpcpb.ErrorCode_UNAUTHENTICATED, "missing caller id")
 		}
 		return nil
@@ -271,12 +271,12 @@ func (qre *QueryExecutor) checkPermissions() error {
 	}
 	// perform table ACL check if it is enabled.
 	if !qre.plan.Authorized.IsMember(callerID.Username) {
-		if qre.qe.enableTableAclDryRun {
+		if qre.qe.enableTableACLDryRun {
 			tabletenv.TableaclPseudoDenied.Add(tableACLStatsKey, 1)
 			return nil
 		}
 		// raise error if in strictTableAcl mode, else just log an error.
-		if qre.qe.strictTableAcl {
+		if qre.qe.strictTableACL {
 			errStr := fmt.Sprintf("table acl error: %q cannot run %v on table %q", callerID.Username, qre.plan.PlanID, qre.plan.TableName)
 			tabletenv.TableaclDenied.Add(tableACLStatsKey, 1)
 			qre.qe.accessCheckerLogger.Infof("%s", errStr)
@@ -306,10 +306,10 @@ func (qre *QueryExecutor) execDDL() (*sqltypes.Result, error) {
 	}
 	if !ddlPlan.TableName.IsEmpty() && ddlPlan.TableName != ddlPlan.NewName {
 		// It's a drop or rename.
-		qre.qe.schemaInfo.DropTable(ddlPlan.TableName)
+		qre.qe.se.DropTable(ddlPlan.TableName)
 	}
 	if !ddlPlan.NewName.IsEmpty() {
-		if err := qre.qe.schemaInfo.CreateOrUpdateTable(qre.ctx, ddlPlan.NewName.String()); err != nil {
+		if err := qre.qe.se.CreateOrUpdateTable(qre.ctx, ddlPlan.NewName.String()); err != nil {
 			return nil, err
 		}
 	}

@@ -1927,8 +1927,8 @@ func TestConfigChanges(t *testing.T) {
 	if val := tsv.QueryCacheCap(); val != newSize {
 		t.Errorf("QueryCacheCap: %d, want %d", val, newSize)
 	}
-	if val := int(tsv.qe.schemaInfo.QueryCacheCap()); val != newSize {
-		t.Errorf("tsv.qe.schemaInfo.QueryCacheCap: %d, want %d", val, newSize)
+	if val := int(tsv.qe.se.QueryCacheCap()); val != newSize {
+		t.Errorf("tsv.qe.se.QueryCacheCap: %d, want %d", val, newSize)
 	}
 
 	tsv.SetStrictMode(false)
