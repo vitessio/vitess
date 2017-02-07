@@ -43,7 +43,11 @@ func processTableExpr(tableExpr sqlparser.TableExpr, vschema VSchema) (builder, 
 		// more routes can be merged with this one. If so, the order
 		// should be maintained as dictated by the parenthesis.
 		if rb, ok := bldr.(*route); ok {
-			rb.Select.From = sqlparser.TableExprs{tableExpr}
+			// If a route is returned in this context, then we know that it only
+			// contains the from clause of a brand new, partially built Select.
+			// If there was a subquery, it would have been aliased to a name and the
+			// entire thing would still be the from clause of a partially built Select.
+			rb.Select.(*sqlparser.Select).From = sqlparser.TableExprs{tableExpr}
 		}
 		return bldr, err
 	case *sqlparser.JoinTableExpr:
@@ -53,14 +57,14 @@ func processTableExpr(tableExpr sqlparser.TableExpr, vschema VSchema) (builder, 
 }
 
 // processAliasedTable produces a builder subtree for the given AliasedTableExpr.
-// If the expression is a subquery, then the the route built for it will contain
-// the entire subquery tree in the from clause, as if it was a table.
+// If the expression is a subquery, then the route built for it will contain
+// the entire subquery tree in the from clause, as if it were a table.
 // The symtab entry for the query will be a tabsym where the columns
 // will be built from the select expressions of the subquery.
 // Since the table aliases only contain vindex columns, we'll follow
 // the same rule: only columns from the subquery that are identified as
 // vindex columns will be added to the tabsym.
-// A symtab symbol can only point to a route. This means that we canoot
+// A symtab symbol can only point to a route. This means that we cannot
 // support complex joins in subqueries yet.
 func processAliasedTable(tableExpr *sqlparser.AliasedTableExpr, vschema VSchema) (builder, error) {
 	switch expr := tableExpr.Expr.(type) {
@@ -76,7 +80,7 @@ func processAliasedTable(tableExpr *sqlparser.AliasedTableExpr, vschema VSchema)
 			astName = tableExpr.As
 		}
 		return newRoute(
-			sqlparser.TableExprs([]sqlparser.TableExpr{tableExpr}),
+			&sqlparser.Select{From: sqlparser.TableExprs([]sqlparser.TableExpr{tableExpr})},
 			eroute,
 			table,
 			vschema,
@@ -84,11 +88,16 @@ func processAliasedTable(tableExpr *sqlparser.AliasedTableExpr, vschema VSchema)
 			astName,
 		), nil
 	case *sqlparser.Subquery:
-		sel, ok := expr.Select.(*sqlparser.Select)
-		if !ok {
-			return nil, errors.New("unsupported: union operator in subqueries")
+		var err error
+		var subplan builder
+		switch stmt := expr.Select.(type) {
+		case *sqlparser.Select:
+			subplan, err = processSelect(stmt, vschema, nil)
+		case *sqlparser.Union:
+			subplan, err = processUnion(stmt, vschema, nil)
+		default:
+			panic("unreachable")
 		}
-		subplan, err := processSelect(sel, vschema, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -116,7 +125,7 @@ func processAliasedTable(tableExpr *sqlparser.AliasedTableExpr, vschema VSchema)
 			})
 		}
 		rtb := newRoute(
-			sqlparser.TableExprs([]sqlparser.TableExpr{tableExpr}),
+			&sqlparser.Select{From: sqlparser.TableExprs([]sqlparser.TableExpr{tableExpr})},
 			subroute.ERoute,
 			table,
 			vschema,

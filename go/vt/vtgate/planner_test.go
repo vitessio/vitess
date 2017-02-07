@@ -141,7 +141,7 @@ func TestGetPlanNormalized(t *testing.T) {
 		t.Errorf("GetPlan(syntax): %v, want %s", err, wantErr)
 	}
 	_, err = r.planner.GetPlan("create table a(id int)", "", map[string]interface{}{})
-	wantErr = "unsupported construct"
+	wantErr = "unsupported construct: ddl"
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("GetPlan(syntax): %v, want %s", err, wantErr)
 	}

@@ -27,7 +27,7 @@ type route struct {
 	IsRHS bool
 	// Select is the AST for the query fragment that will be
 	// executed by this route.
-	Select sqlparser.Select
+	Select sqlparser.SelectStatement
 	order  int
 	symtab *symtab
 	// Colsyms represent the columns returned by this route.
@@ -36,7 +36,7 @@ type route struct {
 	ERoute *engine.Route
 }
 
-func newRoute(from sqlparser.TableExprs, eroute *engine.Route, table *vindexes.Table, vschema VSchema, alias *sqlparser.TableName, astName sqlparser.TableIdent) *route {
+func newRoute(stmt sqlparser.SelectStatement, eroute *engine.Route, table *vindexes.Table, vschema VSchema, alias *sqlparser.TableName, astName sqlparser.TableIdent) *route {
 	// We have some circular pointer references here:
 	// The route points to the symtab idicating
 	// the symtab that should be used to resolve symbols
@@ -50,7 +50,7 @@ func newRoute(from sqlparser.TableExprs, eroute *engine.Route, table *vindexes.T
 	// be pointing to a different route. This information is used
 	// to determine if symbol references are local or not.
 	rb := &route{
-		Select: sqlparser.Select{From: from},
+		Select: stmt,
 		symtab: newSymtab(vschema),
 		order:  1,
 		ERoute: eroute,
@@ -146,10 +146,12 @@ func (rb *route) SetRHS() {
 // the expression contains a non-pushable subquery. ajoin can be nil
 // if the join is on a ',' operator.
 func (rb *route) merge(rhs *route, ajoin *sqlparser.JoinTableExpr) (builder, error) {
+	sel := rb.Select.(*sqlparser.Select)
 	if ajoin == nil {
-		rb.Select.From = append(rb.Select.From, rhs.Select.From...)
+		rhsSel := rhs.Select.(*sqlparser.Select)
+		sel.From = append(sel.From, rhsSel.From...)
 	} else {
-		rb.Select.From = sqlparser.TableExprs{ajoin}
+		sel.From = sqlparser.TableExprs{ajoin}
 		if ajoin.Join == sqlparser.LeftJoinStr {
 			rhs.Symtab().SetRHS()
 		}
@@ -209,13 +211,14 @@ func (rb *route) isSameRoute(rhs *route, filter sqlparser.Expr) bool {
 // be updated if the new filter improves it.
 func (rb *route) PushFilter(filter sqlparser.Expr, whereType string) error {
 	if rb.IsRHS {
-		return errors.New("unsupported: complex left join and where claused")
+		return errors.New("unsupported: complex left join and where clause")
 	}
+	sel := rb.Select.(*sqlparser.Select)
 	switch whereType {
 	case sqlparser.WhereStr:
-		rb.Select.AddWhere(filter)
+		sel.AddWhere(filter)
 	case sqlparser.HavingStr:
-		rb.Select.AddHaving(filter)
+		sel.AddHaving(filter)
 	}
 	rb.UpdatePlan(filter)
 	return nil
@@ -347,7 +350,8 @@ func (rb *route) PushSelect(expr *sqlparser.NonStarExpr, _ *route) (colsym *cols
 		// to reference such expressions. So, we leave the
 		// alias blank.
 	}
-	rb.Select.SelectExprs = append(rb.Select.SelectExprs, expr)
+	sel := rb.Select.(*sqlparser.Select)
+	sel.SelectExprs = append(sel.SelectExprs, expr)
 	rb.Colsyms = append(rb.Colsyms, colsym)
 	return colsym, len(rb.Colsyms) - 1, nil
 }
@@ -357,19 +361,20 @@ func (rb *route) PushStar(expr *sqlparser.StarExpr) *colsym {
 	// We just create a place-holder colsym. It won't
 	// match anything.
 	colsym := newColsym(rb, rb.Symtab())
-	rb.Select.SelectExprs = append(rb.Select.SelectExprs, expr)
+	sel := rb.Select.(*sqlparser.Select)
+	sel.SelectExprs = append(sel.SelectExprs, expr)
 	rb.Colsyms = append(rb.Colsyms, colsym)
 	return colsym
 }
 
 // MakeDistinct sets the DISTINCT property to the select.
 func (rb *route) MakeDistinct() {
-	rb.Select.Distinct = sqlparser.DistinctStr
+	rb.Select.(*sqlparser.Select).Distinct = sqlparser.DistinctStr
 }
 
 // SetGroupBy sets the GROUP BY clause for the route.
 func (rb *route) SetGroupBy(groupBy sqlparser.GroupBy) {
-	rb.Select.GroupBy = groupBy
+	rb.Select.(*sqlparser.Select).GroupBy = groupBy
 }
 
 // AddOrder adds an ORDER BY expression to the route.
@@ -377,24 +382,25 @@ func (rb *route) AddOrder(order *sqlparser.Order) error {
 	if rb.IsRHS {
 		return errors.New("unsupported: complex left join and order by")
 	}
-	rb.Select.OrderBy = append(rb.Select.OrderBy, order)
+	sel := rb.Select.(*sqlparser.Select)
+	sel.OrderBy = append(sel.OrderBy, order)
 	return nil
 }
 
 // SetLimit adds a LIMIT clause to the route.
 func (rb *route) SetLimit(limit *sqlparser.Limit) {
-	rb.Select.Limit = limit
+	rb.Select.(*sqlparser.Select).Limit = limit
 }
 
 // PushOrderByNull updates the comments & 'for update' sections of the route.
 func (rb *route) PushOrderByNull() {
-	rb.Select.OrderBy = sqlparser.OrderBy{&sqlparser.Order{Expr: &sqlparser.NullVal{}}}
+	rb.Select.(*sqlparser.Select).OrderBy = sqlparser.OrderBy{&sqlparser.Order{Expr: &sqlparser.NullVal{}}}
 }
 
 // PushMisc updates the comments & 'for update' sections of the route.
 func (rb *route) PushMisc(sel *sqlparser.Select) {
-	rb.Select.Comments = sel.Comments
-	rb.Select.Lock = sel.Lock
+	rb.Select.(*sqlparser.Select).Comments = sel.Comments
+	rb.Select.(*sqlparser.Select).Lock = sel.Lock
 }
 
 // Wireup performs the wire-up tasks.
@@ -436,7 +442,7 @@ func (rb *route) Wireup(bldr builder, jt *jointab) error {
 			}
 		}
 		return true, nil
-	}, &rb.Select)
+	}, rb.Select)
 
 	// Generate query while simultaneously resolving values.
 	varFormatter := func(buf *sqlparser.TrackedBuffer, node sqlparser.SQLNode) {
@@ -455,9 +461,9 @@ func (rb *route) Wireup(bldr builder, jt *jointab) error {
 		node.Format(buf)
 	}
 	buf := sqlparser.NewTrackedBuffer(varFormatter)
-	varFormatter(buf, &rb.Select)
+	varFormatter(buf, rb.Select)
 	rb.ERoute.Query = buf.ParsedQuery().Query
-	rb.ERoute.FieldQuery = rb.generateFieldQuery(&rb.Select, jt)
+	rb.ERoute.FieldQuery = rb.generateFieldQuery(rb.Select, jt)
 	return nil
 }
 
@@ -496,7 +502,7 @@ func (rb *route) isLocal(col *sqlparser.ColName) bool {
 // generateFieldQuery generates a query with an impossible where.
 // This will be used on the RHS node to fetch field info if the LHS
 // returns no result.
-func (rb *route) generateFieldQuery(sel *sqlparser.Select, jt *jointab) string {
+func (rb *route) generateFieldQuery(sel sqlparser.SelectStatement, jt *jointab) string {
 	formatter := func(buf *sqlparser.TrackedBuffer, node sqlparser.SQLNode) {
 		switch node := node.(type) {
 		case *sqlparser.ColName:
@@ -530,8 +536,9 @@ func (rb *route) SupplyCol(ref colref) int {
 		}
 	}
 	rb.Colsyms = append(rb.Colsyms, &colsym{Underlying: ref})
-	rb.Select.SelectExprs = append(
-		rb.Select.SelectExprs,
+	sel := rb.Select.(*sqlparser.Select)
+	sel.SelectExprs = append(
+		sel.SelectExprs,
 		&sqlparser.NonStarExpr{
 			Expr: &sqlparser.ColName{
 				Metadata:  ref.Meta,
