@@ -1,4 +1,4 @@
-package tabletserver
+package txthrottler
 
 import (
 	"fmt"
@@ -23,7 +23,7 @@ import (
 // It uses a discovery.HealthCheck to send replication-lag updates to the wrapped throttler.
 //
 // Intended Usage:
-//   t := CreateTxThrottlerFromTabletConfig(&tabletserver.Config{...})
+//   t := CreateTxThrottlerFromTabletConfig()
 //
 //   // A transaction throttler must be opened before its first use:
 //   if err := t.Open(keyspace, shard); err != nil {
@@ -43,9 +43,6 @@ import (
 // A TxThrottler object is generally not thread-safe: at any given time at most one goroutine should
 // be executing a method. The only exception is the 'Throttle' method where multiple goroutines are
 // allowed to execute it concurrently.
-//
-// TODO(erez): Move this to its own package. Currently, only exported functions and types are
-// intended to be used from outside this file by non-test code.
 type TxThrottler struct {
 	// config stores the transaction throttler's configuration.
 	// It is populated in NewTxThrottler and is not modified
@@ -58,21 +55,16 @@ type TxThrottler struct {
 }
 
 // CreateTxThrottlerFromTabletConfig tries to construct a TxThrottler from the
-// relevant fields in the given tabletserver.Config object. It returns a disabled TxThrottler if
+// relevant fields in the tabletenv.Config object. It returns a disabled TxThrottler if
 // any error occurs.
 // This function calls tryCreateTxThrottler that does the actual creation work
 // and returns an error if one occurred.
-// TODO(erez): This function should return an error instead of returning a disabled
-// transaction throttler. Fix this after NewTabletServer is changed to return an error as well.
-func CreateTxThrottlerFromTabletConfig(tsvConfig tabletenv.TabletConfig) *TxThrottler {
-	txThrottler, err := tryCreateTxThrottler(tsvConfig)
+func CreateTxThrottlerFromTabletConfig() *TxThrottler {
+	txThrottler, err := tryCreateTxThrottler()
 	if err != nil {
 		log.Errorf("Error creating transaction throttler. Transaction throttling will"+
 			" be disabled. Error: %v", err)
-		config := &txThrottlerConfig{
-			enabled: false,
-		}
-		txThrottler, err = newTxThrottler(config)
+		txThrottler, err = newTxThrottler(&txThrottlerConfig{enabled: false})
 		if err != nil {
 			panic("BUG: Can't create a disabled transaction throttler")
 		}
@@ -82,24 +74,26 @@ func CreateTxThrottlerFromTabletConfig(tsvConfig tabletenv.TabletConfig) *TxThro
 	return txThrottler
 }
 
-func tryCreateTxThrottler(tsvConfig tabletenv.TabletConfig) (*TxThrottler, error) {
-	config := &txThrottlerConfig{
-		enabled: tsvConfig.EnableTxThrottler,
+func tryCreateTxThrottler() (*TxThrottler, error) {
+	if !tabletenv.Config.EnableTxThrottler {
+		return newTxThrottler(&txThrottlerConfig{enabled: false})
 	}
-	if !tsvConfig.EnableTxThrottler {
-		return newTxThrottler(config)
-	}
-	var throttlerConfig throttlerdatapb.Configuration
 
-	if err := proto.UnmarshalText(tsvConfig.TxThrottlerConfig, &throttlerConfig); err != nil {
+	var throttlerConfig throttlerdatapb.Configuration
+	if err := proto.UnmarshalText(tabletenv.Config.TxThrottlerConfig, &throttlerConfig); err != nil {
 		return nil, err
 	}
 
 	// Clone tsv.TxThrottlerHealthCheckCells so that we don't assume tsv.TxThrottlerHealthCheckCells
 	// is immutable.
-	config.healthCheckCells = make([]string, len(tsvConfig.TxThrottlerHealthCheckCells))
-	copy(config.healthCheckCells, tsvConfig.TxThrottlerHealthCheckCells)
-	return newTxThrottler(config)
+	healthCheckCells := make([]string, len(tabletenv.Config.TxThrottlerHealthCheckCells))
+	copy(healthCheckCells, tabletenv.Config.TxThrottlerHealthCheckCells)
+
+	return newTxThrottler(&txThrottlerConfig{
+		enabled:          true,
+		throttlerConfig:  &throttlerConfig,
+		healthCheckCells: healthCheckCells,
+	})
 }
 
 // txThrottlerConfig holds the parameters that need to be
@@ -116,20 +110,73 @@ type txThrottlerConfig struct {
 	healthCheckCells []string
 }
 
+// ThrottlerInterface defines the public interface that is implemented by go/vt/throttler.Throttler
+// It is only used here to allow mocking out a throttler object.
+type ThrottlerInterface interface {
+	Throttle(threadID int) time.Duration
+	ThreadFinished(threadID int)
+	Close()
+	MaxRate() int64
+	SetMaxRate(rate int64)
+	RecordReplicationLag(time time.Time, ts *discovery.TabletStats)
+	GetConfiguration() *throttlerdatapb.Configuration
+	UpdateConfiguration(configuration *throttlerdatapb.Configuration, copyZeroValues bool) error
+	ResetConfiguration()
+}
+
+// TopologyWatcherInterface defines the public interface that is implemented by
+// discovery.TopologyWatcher. It is only used here to allow mocking out
+// go/vt/discovery.TopologyWatcher.
+type TopologyWatcherInterface interface {
+	WaitForInitialTopology() error
+	Stop()
+}
+
 // txThrottlerState holds the state of an open TxThrottler object.
 type txThrottlerState struct {
 	// throttleMu serializes calls to throttler.Throttler.Throttle(threadId).
 	// That method is required to be called in serial for each threadId.
 	throttleMu sync.Mutex
-	throttler  *throttler.Throttler
+	throttler  ThrottlerInterface
 
 	topoServer       topo.Server
 	healthCheck      discovery.HealthCheck
-	topologyWatchers []*discovery.TopologyWatcher
+	topologyWatchers []TopologyWatcherInterface
 }
 
-// TxThrottlerName is the name the wrapped go/vt/throttler object will be registered
-// with go/vt/throttler.GlobalManager.
+// These vars store the functions used to create the topo server, healthcheck,
+// topology watchers and go/vt/throttler. These are provided here so that they can be overridden
+// in tests to generate mocks.
+type topoServerFactoryFunc func() topo.Server
+type healthCheckFactoryFunc func() discovery.HealthCheck
+type topologyWatcherFactoryFunc func(topoServer topo.Server, tr discovery.TabletRecorder, cell, keyspace, shard string, refreshInterval time.Duration, topoReadConcurrency int) TopologyWatcherInterface
+type throttlerFactoryFunc func(name, unit string, threadCount int, maxRate, maxReplicationLag int64) (ThrottlerInterface, error)
+
+var (
+	topoServerFactory      topoServerFactoryFunc
+	healthCheckFactory     healthCheckFactoryFunc
+	topologyWatcherFactory topologyWatcherFactoryFunc
+	throttlerFactory       throttlerFactoryFunc
+)
+
+func init() {
+	resetTxThrottlerFactories()
+}
+
+func resetTxThrottlerFactories() {
+	topoServerFactory = topo.Open
+	healthCheckFactory = discovery.NewDefaultHealthCheck
+	topologyWatcherFactory = func(topoServer topo.Server, tr discovery.TabletRecorder, cell, keyspace, shard string, refreshInterval time.Duration, topoReadConcurrency int) TopologyWatcherInterface {
+		return discovery.NewShardReplicationWatcher(
+			topoServer, tr, cell, keyspace, shard, refreshInterval, topoReadConcurrency)
+	}
+	throttlerFactory = func(name, unit string, threadCount int, maxRate, maxReplicationLag int64) (ThrottlerInterface, error) {
+		return throttler.NewThrottler(name, unit, threadCount, maxRate, maxReplicationLag)
+	}
+}
+
+// TxThrottlerName is the name the wrapped go/vt/throttler object will be registered with
+// go/vt/throttler.GlobalManager.
 const TxThrottlerName = "TransactionThrottler"
 
 func newTxThrottler(config *txThrottlerConfig) (*TxThrottler, error) {
@@ -192,7 +239,7 @@ func (t *TxThrottler) Throttle() (result bool) {
 
 func newTxThrottlerState(config *txThrottlerConfig, keyspace, shard string,
 ) (*txThrottlerState, error) {
-	t, err := throttler.NewThrottler(
+	t, err := throttlerFactory(
 		TxThrottlerName,
 		"TPS", /* unit */
 		1,     /* threadCount */
@@ -208,14 +255,15 @@ func newTxThrottlerState(config *txThrottlerConfig, keyspace, shard string,
 	result := &txThrottlerState{
 		throttler: t,
 	}
-	result.topoServer = topo.Open()
-	result.healthCheck = discovery.NewDefaultHealthCheck()
+	result.topoServer = topoServerFactory()
+	result.healthCheck = healthCheckFactory()
 	result.healthCheck.SetListener(result, false /* sendDownEvents */)
-	result.topologyWatchers = make([]*discovery.TopologyWatcher, 0, len(config.healthCheckCells))
+	result.topologyWatchers = make(
+		[]TopologyWatcherInterface, 0, len(config.healthCheckCells))
 	for _, cell := range config.healthCheckCells {
 		result.topologyWatchers = append(
 			result.topologyWatchers,
-			discovery.NewShardReplicationWatcher(
+			topologyWatcherFactory(
 				result.topoServer,
 				result.healthCheck, /* TabletRecorder */
 				cell,
