@@ -34,8 +34,8 @@ import (
 // Close: There should be no more pending queries when this
 // function is called.
 type QueryEngine struct {
-	schemaInfo *SchemaInfo
-	dbconfigs  dbconfigs.DBConfigs
+	se        *SchemaEngine
+	dbconfigs dbconfigs.DBConfigs
 
 	// Pools
 	conns       *connpool.Pool
@@ -54,8 +54,8 @@ type QueryEngine struct {
 	// tableaclExemptCount count the number of accesses allowed
 	// based on membership in the superuser ACL
 	tableaclExemptCount  sync2.AtomicInt64
-	strictTableAcl       bool
-	enableTableAclDryRun bool
+	strictTableACL       bool
+	enableTableACLDryRun bool
 	exemptACL            acl.ACL
 
 	// Loggers
@@ -71,7 +71,7 @@ var (
 // You must call this only once.
 func NewQueryEngine(checker MySQLChecker) *QueryEngine {
 	qe := &QueryEngine{}
-	qe.schemaInfo = NewSchemaInfo(
+	qe.se = NewSchemaEngine(
 		checker,
 		tabletenv.Config.QueryCacheSize,
 		time.Duration(tabletenv.Config.SchemaReloadTime*1e9),
@@ -107,8 +107,8 @@ func NewQueryEngine(checker MySQLChecker) *QueryEngine {
 	if tabletenv.Config.EnableAutoCommit {
 		qe.autoCommit.Set(1)
 	}
-	qe.strictTableAcl = tabletenv.Config.StrictTableAcl
-	qe.enableTableAclDryRun = tabletenv.Config.EnableTableAclDryRun
+	qe.strictTableACL = tabletenv.Config.StrictTableAcl
+	qe.enableTableACLDryRun = tabletenv.Config.EnableTableAclDryRun
 
 	if tabletenv.Config.TableAclExemptACL != "" {
 		if f, err := tableacl.GetCurrentAclFactory(); err == nil {
@@ -149,7 +149,7 @@ func (qe *QueryEngine) Open(dbconfigs dbconfigs.DBConfigs) error {
 	}
 
 	start := time.Now()
-	if err := qe.schemaInfo.Open(&qe.dbconfigs.Dba, strictMode); err != nil {
+	if err := qe.se.Open(&qe.dbconfigs.Dba, strictMode); err != nil {
 		return err
 	}
 	log.Infof("Time taken to load the schema: %v", time.Now().Sub(start))
@@ -180,5 +180,5 @@ func (qe *QueryEngine) Close() {
 	// Close in reverse order of Open.
 	qe.streamConns.Close()
 	qe.conns.Close()
-	qe.schemaInfo.Close()
+	qe.se.Close()
 }

@@ -1159,7 +1159,7 @@ func TestQueryExecutorTableAclDryRun(t *testing.T) {
 	}, ".")
 	// enable Config.StrictTableAcl
 	tsv := newTestTabletServer(ctx, enableStrict|enableStrictTableACL, db)
-	tsv.qe.enableTableAclDryRun = true
+	tsv.qe.enableTableACLDryRun = true
 	qre := newTestQueryExecutor(ctx, tsv, query, 0)
 	defer tsv.StopService()
 	checkPlanID(t, planbuilder.PlanPassSelect, qre.plan.PlanID)
@@ -1210,11 +1210,11 @@ func TestQueryExecutorBlacklistQRFail(t *testing.T) {
 	}
 	ctx := callinfo.NewContext(context.Background(), callInfo)
 	tsv := newTestTabletServer(ctx, enableStrict, db)
-	tsv.qe.schemaInfo.queryRuleSources.UnRegisterQueryRuleSource(rulesName)
-	tsv.qe.schemaInfo.queryRuleSources.RegisterQueryRuleSource(rulesName)
-	defer tsv.qe.schemaInfo.queryRuleSources.UnRegisterQueryRuleSource(rulesName)
+	tsv.qe.se.queryRuleSources.UnRegisterQueryRuleSource(rulesName)
+	tsv.qe.se.queryRuleSources.RegisterQueryRuleSource(rulesName)
+	defer tsv.qe.se.queryRuleSources.UnRegisterQueryRuleSource(rulesName)
 
-	if err := tsv.qe.schemaInfo.queryRuleSources.SetRules(rulesName, rules); err != nil {
+	if err := tsv.qe.se.queryRuleSources.SetRules(rulesName, rules); err != nil {
 		t.Fatalf("failed to set rule, error: %v", err)
 	}
 
@@ -1271,11 +1271,11 @@ func TestQueryExecutorBlacklistQRRetry(t *testing.T) {
 	}
 	ctx := callinfo.NewContext(context.Background(), callInfo)
 	tsv := newTestTabletServer(ctx, enableStrict, db)
-	tsv.qe.schemaInfo.queryRuleSources.UnRegisterQueryRuleSource(rulesName)
-	tsv.qe.schemaInfo.queryRuleSources.RegisterQueryRuleSource(rulesName)
-	defer tsv.qe.schemaInfo.queryRuleSources.UnRegisterQueryRuleSource(rulesName)
+	tsv.qe.se.queryRuleSources.UnRegisterQueryRuleSource(rulesName)
+	tsv.qe.se.queryRuleSources.RegisterQueryRuleSource(rulesName)
+	defer tsv.qe.se.queryRuleSources.UnRegisterQueryRuleSource(rulesName)
 
-	if err := tsv.qe.schemaInfo.queryRuleSources.SetRules(rulesName, rules); err != nil {
+	if err := tsv.qe.se.queryRuleSources.SetRules(rulesName, rules); err != nil {
 		t.Fatalf("failed to set rule, error: %v", err)
 	}
 
@@ -1361,7 +1361,7 @@ func newTransaction(tsv *TabletServer) int64 {
 
 func newTestQueryExecutor(ctx context.Context, tsv *TabletServer, sql string, txID int64) *QueryExecutor {
 	logStats := tabletenv.NewLogStats(ctx, "TestQueryExecutor")
-	plan, err := tsv.qe.schemaInfo.GetPlan(ctx, logStats, sql)
+	plan, err := tsv.qe.se.GetPlan(ctx, logStats, sql)
 	if err != nil {
 		panic(err)
 	}

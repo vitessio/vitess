@@ -115,7 +115,7 @@ func (s *queryzSorter) Len() int           { return len(s.rows) }
 func (s *queryzSorter) Swap(i, j int)      { s.rows[i], s.rows[j] = s.rows[j], s.rows[i] }
 func (s *queryzSorter) Less(i, j int) bool { return s.less(s.rows[i], s.rows[j]) }
 
-func queryzHandler(si *SchemaInfo, w http.ResponseWriter, r *http.Request) {
+func queryzHandler(si *SchemaEngine, w http.ResponseWriter, r *http.Request) {
 	if err := acl.CheckAccessHTTP(r, acl.DEBUGGING); err != nil {
 		acl.SendError(w, err)
 		return

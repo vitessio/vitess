@@ -16,7 +16,7 @@ func Example() {
 	// object. It is used for error-checking the split columns and their types. We use an empty
 	// object for this toy example, but in real code this object must have correct entries.
 	//
-	// This schema can is typically derived from tabletserver.TabletServer.qe.schemaInfo.
+	// This schema can is typically derived from tabletserver.TabletServer.qe.se.
 	schema := map[string]*schema.Table{}
 	splitParams, err := NewSplitParamsGivenSplitCount(
 		querytypes.BoundQuery{
