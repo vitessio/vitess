@@ -24,68 +24,84 @@ import (
 // See: https://github.com/grpc/grpc-go/issues/319
 const GRPCServerErrPrefix = "gRPCServerError:"
 
+const (
+	OK                 = vtrpcpb.ErrorCode_SUCCESS
+	Canceled           = vtrpcpb.ErrorCode_CANCELLED
+	Unknown            = vtrpcpb.ErrorCode_UNKNOWN_ERROR
+	InvalidArgument    = vtrpcpb.ErrorCode_BAD_INPUT
+	DeadlineExceeded   = vtrpcpb.ErrorCode_DEADLINE_EXCEEDED
+	AlreadyExists      = vtrpcpb.ErrorCode_INTEGRITY_ERROR
+	PermissionDenied   = vtrpcpb.ErrorCode_PERMISSION_DENIED
+	ResourceExhausted  = vtrpcpb.ErrorCode_RESOURCE_EXHAUSTED
+	FailedPrecondition = vtrpcpb.ErrorCode_QUERY_NOT_SERVED
+	Aborted            = vtrpcpb.ErrorCode_NOT_IN_TX
+	Internal           = vtrpcpb.ErrorCode_INTERNAL_ERROR
+	Unavailable        = vtrpcpb.ErrorCode_TRANSIENT_ERROR
+	Unauthenticated    = vtrpcpb.ErrorCode_UNAUTHENTICATED
+)
+
 // GRPCCodeToErrorCode maps a gRPC codes.Code to a vtrpcpb.ErrorCode.
 func GRPCCodeToErrorCode(code codes.Code) vtrpcpb.ErrorCode {
 	switch code {
 	case codes.OK:
-		return vtrpcpb.ErrorCode_SUCCESS
+		return OK
 	case codes.Canceled:
-		return vtrpcpb.ErrorCode_CANCELLED
+		return Canceled
 	case codes.Unknown:
-		return vtrpcpb.ErrorCode_UNKNOWN_ERROR
+		return Unknown
 	case codes.InvalidArgument:
-		return vtrpcpb.ErrorCode_BAD_INPUT
+		return InvalidArgument
 	case codes.DeadlineExceeded:
-		return vtrpcpb.ErrorCode_DEADLINE_EXCEEDED
+		return DeadlineExceeded
 	case codes.AlreadyExists:
-		return vtrpcpb.ErrorCode_INTEGRITY_ERROR
+		return AlreadyExists
 	case codes.PermissionDenied:
-		return vtrpcpb.ErrorCode_PERMISSION_DENIED
+		return PermissionDenied
 	case codes.ResourceExhausted:
-		return vtrpcpb.ErrorCode_RESOURCE_EXHAUSTED
+		return ResourceExhausted
 	case codes.FailedPrecondition:
-		return vtrpcpb.ErrorCode_QUERY_NOT_SERVED
+		return FailedPrecondition
 	case codes.Aborted:
-		return vtrpcpb.ErrorCode_NOT_IN_TX
+		return Aborted
 	case codes.Internal:
-		return vtrpcpb.ErrorCode_INTERNAL_ERROR
+		return Internal
 	case codes.Unavailable:
-		return vtrpcpb.ErrorCode_TRANSIENT_ERROR
+		return Unavailable
 	case codes.Unauthenticated:
-		return vtrpcpb.ErrorCode_UNAUTHENTICATED
+		return Unauthenticated
 	default:
-		return vtrpcpb.ErrorCode_UNKNOWN_ERROR
+		return Unknown
 	}
 }
 
 // ErrorCodeToGRPCCode maps a vtrpcpb.ErrorCode to a gRPC codes.Code.
 func ErrorCodeToGRPCCode(code vtrpcpb.ErrorCode) codes.Code {
 	switch code {
-	case vtrpcpb.ErrorCode_SUCCESS:
+	case OK:
 		return codes.OK
-	case vtrpcpb.ErrorCode_CANCELLED:
+	case Canceled:
 		return codes.Canceled
-	case vtrpcpb.ErrorCode_UNKNOWN_ERROR:
+	case Unknown:
 		return codes.Unknown
-	case vtrpcpb.ErrorCode_BAD_INPUT:
+	case InvalidArgument:
 		return codes.InvalidArgument
-	case vtrpcpb.ErrorCode_DEADLINE_EXCEEDED:
+	case DeadlineExceeded:
 		return codes.DeadlineExceeded
-	case vtrpcpb.ErrorCode_INTEGRITY_ERROR:
+	case AlreadyExists:
 		return codes.AlreadyExists
-	case vtrpcpb.ErrorCode_PERMISSION_DENIED:
+	case PermissionDenied:
 		return codes.PermissionDenied
-	case vtrpcpb.ErrorCode_RESOURCE_EXHAUSTED:
+	case ResourceExhausted:
 		return codes.ResourceExhausted
-	case vtrpcpb.ErrorCode_QUERY_NOT_SERVED:
+	case FailedPrecondition:
 		return codes.FailedPrecondition
-	case vtrpcpb.ErrorCode_NOT_IN_TX:
+	case Aborted:
 		return codes.Aborted
-	case vtrpcpb.ErrorCode_INTERNAL_ERROR:
+	case Internal:
 		return codes.Internal
-	case vtrpcpb.ErrorCode_TRANSIENT_ERROR:
+	case Unavailable:
 		return codes.Unavailable
-	case vtrpcpb.ErrorCode_UNAUTHENTICATED:
+	case Unauthenticated:
 		return codes.Unauthenticated
 	default:
 		return codes.Unknown

@@ -79,10 +79,10 @@ func (stc *ScatterConn) endAction(startTime time.Time, allErrors *concurrency.Al
 		// keys or bad queries, as those errors are caused by
 		// client queries and are not VTGate's fault.
 		ec := vterrors.RecoverVtErrorCode(*err)
-		if ec != vtrpcpb.ErrorCode_INTEGRITY_ERROR && ec != vtrpcpb.ErrorCode_BAD_INPUT {
+		if ec != vterrors.AlreadyExists && ec != vterrors.InvalidArgument {
 			stc.tabletCallErrorCount.Add(statsKey, 1)
 		}
-		if ec == vtrpcpb.ErrorCode_RESOURCE_EXHAUSTED || ec == vtrpcpb.ErrorCode_NOT_IN_TX {
+		if ec == vterrors.ResourceExhausted || ec == vterrors.Aborted {
 			session.SetRollback()
 		}
 	}
@@ -571,7 +571,7 @@ func (stc *ScatterConn) aggregateErrors(errors []error) error {
 	allRetryableError := true
 	for _, e := range errors {
 		connError, ok := e.(*gateway.ShardError)
-		if !ok || (connError.ErrorCode != vtrpcpb.ErrorCode_QUERY_NOT_SERVED && connError.ErrorCode != vtrpcpb.ErrorCode_INTERNAL_ERROR) || connError.InTransaction {
+		if !ok || (connError.ErrorCode != vterrors.FailedPrecondition && connError.ErrorCode != vterrors.Internal) || connError.InTransaction {
 			allRetryableError = false
 			break
 		}

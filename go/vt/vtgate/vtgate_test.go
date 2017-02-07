@@ -1193,7 +1193,7 @@ func TestVTGateSplitQueryUnsharded(t *testing.T) {
 func TestIsErrorCausedByVTGate(t *testing.T) {
 	unknownError := fmt.Errorf("unknown error")
 	serverError := &tabletconn.ServerError{
-		ServerCode: vtrpcpb.ErrorCode_QUERY_NOT_SERVED,
+		ServerCode: vterrors.FailedPrecondition,
 		Err:        "vttablet: retry: error message",
 	}
 	shardConnUnknownErr := &gateway.ShardError{Err: unknownError}
@@ -1988,84 +1988,84 @@ func TestErrorPropagation(t *testing.T) {
 		sbc.MustFailCanceled = 20
 	}, func(sbc *sandboxconn.SandboxConn) {
 		sbc.MustFailCanceled = 0
-	}, vtrpcpb.ErrorCode_CANCELLED)
+	}, vterrors.Canceled)
 
 	// ErrorCode_UNKNOWN_ERROR
 	testErrorPropagation(t, sbcs, func(sbc *sandboxconn.SandboxConn) {
 		sbc.MustFailUnknownError = 20
 	}, func(sbc *sandboxconn.SandboxConn) {
 		sbc.MustFailUnknownError = 0
-	}, vtrpcpb.ErrorCode_UNKNOWN_ERROR)
+	}, vterrors.Unknown)
 
 	// ErrorCode_BAD_INPUT
 	testErrorPropagation(t, sbcs, func(sbc *sandboxconn.SandboxConn) {
 		sbc.MustFailServer = 20
 	}, func(sbc *sandboxconn.SandboxConn) {
 		sbc.MustFailServer = 0
-	}, vtrpcpb.ErrorCode_BAD_INPUT)
+	}, vterrors.InvalidArgument)
 
 	// ErrorCode_DEADLINE_EXCEEDED
 	testErrorPropagation(t, sbcs, func(sbc *sandboxconn.SandboxConn) {
 		sbc.MustFailDeadlineExceeded = 20
 	}, func(sbc *sandboxconn.SandboxConn) {
 		sbc.MustFailDeadlineExceeded = 0
-	}, vtrpcpb.ErrorCode_DEADLINE_EXCEEDED)
+	}, vterrors.DeadlineExceeded)
 
 	// ErrorCode_INTEGRITY_ERROR
 	testErrorPropagation(t, sbcs, func(sbc *sandboxconn.SandboxConn) {
 		sbc.MustFailIntegrityError = 20
 	}, func(sbc *sandboxconn.SandboxConn) {
 		sbc.MustFailIntegrityError = 0
-	}, vtrpcpb.ErrorCode_INTEGRITY_ERROR)
+	}, vterrors.AlreadyExists)
 
 	// ErrorCode_PERMISSION_DENIED
 	testErrorPropagation(t, sbcs, func(sbc *sandboxconn.SandboxConn) {
 		sbc.MustFailPermissionDenied = 20
 	}, func(sbc *sandboxconn.SandboxConn) {
 		sbc.MustFailPermissionDenied = 0
-	}, vtrpcpb.ErrorCode_PERMISSION_DENIED)
+	}, vterrors.PermissionDenied)
 
 	// ErrorCode_RESOURCE_EXHAUSTED
 	testErrorPropagation(t, sbcs, func(sbc *sandboxconn.SandboxConn) {
 		sbc.MustFailTxPool = 20
 	}, func(sbc *sandboxconn.SandboxConn) {
 		sbc.MustFailTxPool = 0
-	}, vtrpcpb.ErrorCode_RESOURCE_EXHAUSTED)
+	}, vterrors.ResourceExhausted)
 
 	// ErrorCode_QUERY_NOT_SERVED
 	testErrorPropagation(t, sbcs, func(sbc *sandboxconn.SandboxConn) {
 		sbc.MustFailRetry = 20
 	}, func(sbc *sandboxconn.SandboxConn) {
 		sbc.MustFailRetry = 0
-	}, vtrpcpb.ErrorCode_QUERY_NOT_SERVED)
+	}, vterrors.FailedPrecondition)
 
 	// ErrorCode_NOT_IN_TX
 	testErrorPropagation(t, sbcs, func(sbc *sandboxconn.SandboxConn) {
 		sbc.MustFailNotTx = 20
 	}, func(sbc *sandboxconn.SandboxConn) {
 		sbc.MustFailNotTx = 0
-	}, vtrpcpb.ErrorCode_NOT_IN_TX)
+	}, vterrors.Aborted)
 
 	// ErrorCode_INTERNAL_ERROR
 	testErrorPropagation(t, sbcs, func(sbc *sandboxconn.SandboxConn) {
 		sbc.MustFailFatal = 20
 	}, func(sbc *sandboxconn.SandboxConn) {
 		sbc.MustFailFatal = 0
-	}, vtrpcpb.ErrorCode_INTERNAL_ERROR)
+	}, vterrors.Internal)
 
 	// ErrorCode_TRANSIENT_ERROR
 	testErrorPropagation(t, sbcs, func(sbc *sandboxconn.SandboxConn) {
 		sbc.MustFailTransientError = 20
 	}, func(sbc *sandboxconn.SandboxConn) {
 		sbc.MustFailTransientError = 0
-	}, vtrpcpb.ErrorCode_TRANSIENT_ERROR)
+	}, vterrors.Unavailable)
 
 	// ErrorCode_UNAUTHENTICATED
 	testErrorPropagation(t, sbcs, func(sbc *sandboxconn.SandboxConn) {
 		sbc.MustFailUnauthenticated = 20
 	}, func(sbc *sandboxconn.SandboxConn) {
 		sbc.MustFailUnauthenticated = 0
-	}, vtrpcpb.ErrorCode_UNAUTHENTICATED)
+	}, vterrors.Unauthenticated)
 }
 
 // This test makes sure that if we start a transaction and hit a critical
@@ -2077,7 +2077,7 @@ func TestErrorIssuesRollback(t *testing.T) {
 
 	// Start a transaction, send one statement.
 	// Simulate an error that should trigger a rollback:
-	// vtrpcpb.ErrorCode_NOT_IN_TX case.
+	// vterrors.Aborted case.
 	session, err := rpcVTGate.Begin(context.Background(), false)
 	if err != nil {
 		t.Fatalf("cannot start a transaction: %v", err)
@@ -2116,7 +2116,7 @@ func TestErrorIssuesRollback(t *testing.T) {
 
 	// Start a transaction, send one statement.
 	// Simulate an error that should trigger a rollback:
-	// vtrpcpb.ErrorCode_RESOURCE_EXHAUSTED case.
+	// vterrors.ResourceExhausted case.
 	session, err = rpcVTGate.Begin(context.Background(), false)
 	if err != nil {
 		t.Fatalf("cannot start a transaction: %v", err)
@@ -2155,7 +2155,7 @@ func TestErrorIssuesRollback(t *testing.T) {
 
 	// Start a transaction, send one statement.
 	// Simulate an error that should *not* trigger a rollback:
-	// vtrpcpb.ErrorCode_INTEGRITY_ERROR case.
+	// vterrors.AlreadyExists case.
 	session, err = rpcVTGate.Begin(context.Background(), false)
 	if err != nil {
 		t.Fatalf("cannot start a transaction: %v", err)

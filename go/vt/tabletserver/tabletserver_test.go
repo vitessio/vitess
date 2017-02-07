@@ -24,10 +24,10 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletenv"
+	"github.com/youtube/vitess/go/vt/vterrors"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
-	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 func TestTabletServerGetState(t *testing.T) {
@@ -355,7 +355,7 @@ func TestTabletServerAllSchemaFailure(t *testing.T) {
 	err := tsv.StartService(target, dbconfigs, testUtils.newMysqld(&dbconfigs))
 	defer tsv.StopService()
 	// tabletsever shouldn't start if it can't access schema for any tables
-	testUtils.checkTabletError(t, err, vtrpcpb.ErrorCode_UNKNOWN_ERROR, "could not get schema for any tables")
+	testUtils.checkTabletError(t, err, vterrors.Unknown, "could not get schema for any tables")
 }
 
 func TestTabletServerCheckMysql(t *testing.T) {
@@ -1211,7 +1211,7 @@ func TestTabletServerExecuteBatchFailEmptyQueryList(t *testing.T) {
 	defer tsv.StopService()
 	ctx := context.Background()
 	_, err = tsv.ExecuteBatch(ctx, nil, []querytypes.BoundQuery{}, false, 0, nil)
-	verifyTabletError(t, err, vtrpcpb.ErrorCode_BAD_INPUT)
+	verifyTabletError(t, err, vterrors.InvalidArgument)
 }
 
 func TestTabletServerExecuteBatchFailAsTransaction(t *testing.T) {
@@ -1234,7 +1234,7 @@ func TestTabletServerExecuteBatchFailAsTransaction(t *testing.T) {
 			BindVariables: nil,
 		},
 	}, true, 1, nil)
-	verifyTabletError(t, err, vtrpcpb.ErrorCode_BAD_INPUT)
+	verifyTabletError(t, err, vterrors.InvalidArgument)
 }
 
 func TestTabletServerExecuteBatchBeginFail(t *testing.T) {
@@ -1794,7 +1794,7 @@ func TestHandleExecTabletError(t *testing.T) {
 	err := tsv.handleError(
 		"select * from test_table",
 		nil,
-		tabletenv.NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "tablet error"),
+		tabletenv.NewTabletError(vterrors.Internal, "tablet error"),
 		nil,
 	)
 	want := "fatal: tablet error"
@@ -1811,7 +1811,7 @@ func TestTerseErrorsNonSQLError(t *testing.T) {
 	err := tsv.handleError(
 		"select * from test_table",
 		nil,
-		tabletenv.NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "tablet error"),
+		tabletenv.NewTabletError(vterrors.Internal, "tablet error"),
 		nil,
 	)
 	want := "fatal: tablet error"
@@ -1829,7 +1829,7 @@ func TestTerseErrorsBindVars(t *testing.T) {
 		"select * from test_table",
 		map[string]interface{}{"a": 1},
 		&tabletenv.TabletError{
-			ErrorCode: vtrpcpb.ErrorCode_DEADLINE_EXCEEDED,
+			ErrorCode: vterrors.DeadlineExceeded,
 			Message:   "msg",
 			SQLError:  10,
 			SQLState:  "HY000",
@@ -1847,7 +1847,7 @@ func TestTerseErrorsNoBindVars(t *testing.T) {
 	config := testUtils.newQueryServiceConfig()
 	config.TerseErrors = true
 	tsv := NewTabletServer()
-	err := tsv.handleError("", nil, tabletenv.NewTabletError(vtrpcpb.ErrorCode_DEADLINE_EXCEEDED, "msg"), nil)
+	err := tsv.handleError("", nil, tabletenv.NewTabletError(vterrors.DeadlineExceeded, "msg"), nil)
 	want := "error: msg"
 	if err == nil || err.Error() != want {
 		t.Errorf("Error: %v, want '%s'", err, want)
@@ -1863,7 +1863,7 @@ func TestTerseErrorsIgnoreFailoverInProgress(t *testing.T) {
 	err := tsv.handleError("select * from test_table where id = :a",
 		map[string]interface{}{"a": 1},
 		&tabletenv.TabletError{
-			ErrorCode: vtrpcpb.ErrorCode_INTERNAL_ERROR,
+			ErrorCode: vterrors.Internal,
 			Message:   "failover in progress (errno 1227) (sqlstate 42000)",
 			SQLError:  1227,
 			SQLState:  "42000",

@@ -26,7 +26,6 @@ import (
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
-	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 var (
@@ -48,7 +47,7 @@ var timeSleep = time.Sleep
 
 // errBufferFull is the error returned a buffer request is rejected because the buffer is full.
 var errBufferFull = vterrors.FromError(
-	vtrpcpb.ErrorCode_TRANSIENT_ERROR,
+	vterrors.Unavailable,
 	errors.New("master request buffer full, rejecting request"),
 )
 

@@ -17,6 +17,7 @@ import (
 	"github.com/youtube/vitess/go/tb"
 
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
+	"github.com/youtube/vitess/go/vt/vterrors"
 )
 
 const (
@@ -27,7 +28,7 @@ const (
 var ErrConnPoolClosed = NewTabletError(
 	// connection pool being closed is not the query's fault, it can be retried on a
 	// different VtTablet.
-	vtrpcpb.ErrorCode_INTERNAL_ERROR,
+	vterrors.Internal,
 	"connection pool is closed")
 
 // TabletError is the error type we use in this library.
@@ -61,12 +62,12 @@ func NewTabletErrorSQL(errCode vtrpcpb.ErrorCode, err error) *TabletError {
 			// Override error type if MySQL is in read-only mode. It's probably because
 			// there was a remaster and there are old clients still connected.
 			if strings.Contains(errstr, "read-only") {
-				errCode = vtrpcpb.ErrorCode_QUERY_NOT_SERVED
+				errCode = vterrors.FailedPrecondition
 			}
 		case mysqlconn.ERDupEntry:
-			errCode = vtrpcpb.ErrorCode_INTEGRITY_ERROR
+			errCode = vterrors.AlreadyExists
 		case mysqlconn.ERDataTooLong, mysqlconn.ERDataOutOfRange:
-			errCode = vtrpcpb.ErrorCode_BAD_INPUT
+			errCode = vterrors.InvalidArgument
 		default:
 		}
 	}
@@ -140,13 +141,13 @@ func (te *TabletError) VtErrorCode() vtrpcpb.ErrorCode {
 func (te *TabletError) Prefix() string {
 	prefix := "error: "
 	switch te.ErrorCode {
-	case vtrpcpb.ErrorCode_QUERY_NOT_SERVED:
+	case vterrors.FailedPrecondition:
 		prefix = "retry: "
-	case vtrpcpb.ErrorCode_INTERNAL_ERROR:
+	case vterrors.Internal:
 		prefix = "fatal: "
-	case vtrpcpb.ErrorCode_RESOURCE_EXHAUSTED:
+	case vterrors.ResourceExhausted:
 		prefix = "tx_pool_full: "
-	case vtrpcpb.ErrorCode_NOT_IN_TX:
+	case vterrors.Aborted:
 		prefix = "not_in_tx: "
 	}
 	// Special case for killed queries.
@@ -159,13 +160,13 @@ func (te *TabletError) Prefix() string {
 // RecordStats will record the error in the proper stat bucket
 func (te *TabletError) RecordStats() {
 	switch te.ErrorCode {
-	case vtrpcpb.ErrorCode_QUERY_NOT_SERVED:
+	case vterrors.FailedPrecondition:
 		InfoErrors.Add("Retry", 1)
-	case vtrpcpb.ErrorCode_INTERNAL_ERROR:
+	case vterrors.Internal:
 		ErrorStats.Add("Fatal", 1)
-	case vtrpcpb.ErrorCode_RESOURCE_EXHAUSTED:
+	case vterrors.ResourceExhausted:
 		ErrorStats.Add("TxPoolFull", 1)
-	case vtrpcpb.ErrorCode_NOT_IN_TX:
+	case vterrors.Aborted:
 		ErrorStats.Add("NotInTx", 1)
 	default:
 		switch te.SQLError {

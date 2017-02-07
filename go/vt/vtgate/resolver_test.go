@@ -17,13 +17,13 @@ import (
 	"github.com/youtube/vitess/go/vt/discovery"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vtgate/gateway"
 	"golang.org/x/net/context"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	vtgatepb "github.com/youtube/vitess/go/vt/proto/vtgate"
-	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 // This file uses the sandbox_test framework.
@@ -560,13 +560,13 @@ func TestIsRetryableError(t *testing.T) {
 		{fmt.Errorf("generic error"), false},
 		{&ScatterConnError{Retryable: true}, true},
 		{&ScatterConnError{Retryable: false}, false},
-		{&gateway.ShardError{ErrorCode: vtrpcpb.ErrorCode_QUERY_NOT_SERVED}, true},
-		{&gateway.ShardError{ErrorCode: vtrpcpb.ErrorCode_INTERNAL_ERROR}, false},
+		{&gateway.ShardError{ErrorCode: vterrors.FailedPrecondition}, true},
+		{&gateway.ShardError{ErrorCode: vterrors.Internal}, false},
 		// tabletconn.ServerError will not come directly here,
 		// they'll be wrapped in ScatterConnError or ShardConnError.
 		// So they can't be retried as is.
-		{&tabletconn.ServerError{ServerCode: vtrpcpb.ErrorCode_QUERY_NOT_SERVED}, false},
-		{&tabletconn.ServerError{ServerCode: vtrpcpb.ErrorCode_PERMISSION_DENIED}, false},
+		{&tabletconn.ServerError{ServerCode: vterrors.FailedPrecondition}, false},
+		{&tabletconn.ServerError{ServerCode: vterrors.PermissionDenied}, false},
 	}
 
 	for _, tt := range connErrorTests {

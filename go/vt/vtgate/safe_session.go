@@ -12,7 +12,6 @@ import (
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	vtgatepb "github.com/youtube/vitess/go/vt/proto/vtgate"
-	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 // SafeSession is a mutex-protected version of the Session.
@@ -63,7 +62,7 @@ func (session *SafeSession) Append(shardSession *vtgatepb.Session_ShardSession) 
 	session.ShardSessions = append(session.ShardSessions, shardSession)
 	if session.SingleDb && len(session.ShardSessions) > 1 {
 		session.mustRollback = true
-		return vterrors.FromError(vtrpcpb.ErrorCode_BAD_INPUT, fmt.Errorf("multi-db transaction attempted: %v", session.ShardSessions))
+		return vterrors.FromError(vterrors.InvalidArgument, fmt.Errorf("multi-db transaction attempted: %v", session.ShardSessions))
 	}
 	return nil
 }

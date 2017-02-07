@@ -24,13 +24,13 @@ import (
 	"github.com/youtube/vitess/go/trace"
 	"github.com/youtube/vitess/go/vt/concurrency"
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
-	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 	"github.com/youtube/vitess/go/vt/schema"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/tableacl"
 	"github.com/youtube/vitess/go/vt/tabletserver/connpool"
 	"github.com/youtube/vitess/go/vt/tabletserver/planbuilder"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletenv"
+	"github.com/youtube/vitess/go/vt/vterrors"
 	"golang.org/x/net/context"
 )
 
@@ -171,7 +171,7 @@ func (si *SchemaInfo) Open(dbaParams *sqldb.ConnParams, strictMode bool) error {
 
 	conn, err := si.conns.Get(ctx)
 	if err != nil {
-		return tabletenv.NewTabletErrorSQL(vtrpcpb.ErrorCode_INTERNAL_ERROR, err)
+		return tabletenv.NewTabletErrorSQL(vterrors.Internal, err)
 	}
 	defer conn.Recycle()
 
@@ -182,13 +182,13 @@ func (si *SchemaInfo) Open(dbaParams *sqldb.ConnParams, strictMode bool) error {
 
 	if strictMode {
 		if err := conn.VerifyMode(); err != nil {
-			return tabletenv.NewTabletError(vtrpcpb.ErrorCode_UNKNOWN_ERROR, err.Error())
+			return tabletenv.NewTabletError(vterrors.Unknown, err.Error())
 		}
 	}
 
 	tableData, err := conn.Exec(ctx, mysqlconn.BaseShowTables, maxTableCount, false)
 	if err != nil {
-		return tabletenv.PrefixTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, err, "Could not get table list: ")
+		return tabletenv.PrefixTabletError(vterrors.Internal, err, "Could not get table list: ")
 	}
 
 	tables := make(map[string]*TableInfo, len(tableData.Rows)+1)
@@ -230,7 +230,7 @@ func (si *SchemaInfo) Open(dbaParams *sqldb.ConnParams, strictMode bool) error {
 
 	// Fail if we can't load the schema for any tables, but we know that some tables exist. This points to a configuration problem.
 	if len(tableData.Rows) != 0 && len(tables) == 1 { // len(tables) is always at least 1 because of the "dual" table
-		return tabletenv.NewTabletError(vtrpcpb.ErrorCode_UNKNOWN_ERROR, "could not get schema for any tables")
+		return tabletenv.NewTabletError(vterrors.Unknown, "could not get schema for any tables")
 	}
 	si.tables = tables
 	si.lastChange = curTime
@@ -266,7 +266,7 @@ func (si *SchemaInfo) Reload(ctx context.Context) error {
 	curTime, tableData, err := func() (int64, *sqltypes.Result, error) {
 		conn, err := si.conns.Get(ctx)
 		if err != nil {
-			return 0, nil, tabletenv.NewTabletErrorSQL(vtrpcpb.ErrorCode_INTERNAL_ERROR, err)
+			return 0, nil, tabletenv.NewTabletErrorSQL(vterrors.Internal, err)
 		}
 		defer conn.Recycle()
 		curTime, err := si.mysqlTime(ctx, conn)
@@ -318,14 +318,14 @@ func (si *SchemaInfo) Reload(ctx context.Context) error {
 func (si *SchemaInfo) mysqlTime(ctx context.Context, conn *connpool.DBConn) (int64, error) {
 	tm, err := conn.Exec(ctx, "select unix_timestamp()", 1, false)
 	if err != nil {
-		return 0, tabletenv.PrefixTabletError(vtrpcpb.ErrorCode_UNKNOWN_ERROR, err, "Could not get MySQL time: ")
+		return 0, tabletenv.PrefixTabletError(vterrors.Unknown, err, "Could not get MySQL time: ")
 	}
 	if len(tm.Rows) != 1 || len(tm.Rows[0]) != 1 || tm.Rows[0][0].IsNull() {
-		return 0, tabletenv.NewTabletError(vtrpcpb.ErrorCode_UNKNOWN_ERROR, "Unexpected result for MySQL time: %+v", tm.Rows)
+		return 0, tabletenv.NewTabletError(vterrors.Unknown, "Unexpected result for MySQL time: %+v", tm.Rows)
 	}
 	t, err := strconv.ParseInt(tm.Rows[0][0].String(), 10, 64)
 	if err != nil {
-		return 0, tabletenv.NewTabletError(vtrpcpb.ErrorCode_UNKNOWN_ERROR, "Could not parse time %+v: %v", tm, err)
+		return 0, tabletenv.NewTabletError(vterrors.Unknown, "Could not parse time %+v: %v", tm, err)
 	}
 	return t, nil
 }
@@ -339,13 +339,13 @@ func (si *SchemaInfo) ClearQueryPlanCache() {
 func (si *SchemaInfo) CreateOrUpdateTable(ctx context.Context, tableName string) error {
 	conn, err := si.conns.Get(ctx)
 	if err != nil {
-		return tabletenv.NewTabletErrorSQL(vtrpcpb.ErrorCode_INTERNAL_ERROR, err)
+		return tabletenv.NewTabletErrorSQL(vterrors.Internal, err)
 	}
 	defer conn.Recycle()
 	tableData, err := conn.Exec(ctx, mysqlconn.BaseShowTablesForTable(tableName), 1, false)
 	if err != nil {
 		tabletenv.InternalErrors.Add("Schema", 1)
-		return tabletenv.PrefixTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, err,
+		return tabletenv.PrefixTabletError(vterrors.Internal, err,
 			fmt.Sprintf("CreateOrUpdateTable: information_schema query failed for table %s: ", tableName))
 	}
 	if len(tableData.Rows) != 1 {
@@ -361,7 +361,7 @@ func (si *SchemaInfo) CreateOrUpdateTable(ctx context.Context, tableName string)
 	)
 	if err != nil {
 		tabletenv.InternalErrors.Add("Schema", 1)
-		return tabletenv.PrefixTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, err,
+		return tabletenv.PrefixTabletError(vterrors.Internal, err,
 			fmt.Sprintf("CreateOrUpdateTable: failed to create TableInfo for table %s: ", tableName))
 	}
 	// table_rows, data_length, index_length, max_data_length
@@ -451,7 +451,7 @@ func (si *SchemaInfo) GetPlan(ctx context.Context, logStats *tabletenv.LogStats,
 	}
 	splan, err := planbuilder.GetExecPlan(sql, GetTable)
 	if err != nil {
-		return nil, tabletenv.PrefixTabletError(vtrpcpb.ErrorCode_UNKNOWN_ERROR, err, "")
+		return nil, tabletenv.PrefixTabletError(vterrors.Unknown, err, "")
 	}
 	plan := &ExecPlan{ExecPlan: splan, TableInfo: tableInfo}
 	plan.Rules = si.queryRuleSources.filterByPlan(sql, plan.PlanID, plan.TableName.String())
@@ -462,7 +462,7 @@ func (si *SchemaInfo) GetPlan(ctx context.Context, logStats *tabletenv.LogStats,
 		} else {
 			conn, err := si.conns.Get(ctx)
 			if err != nil {
-				return nil, tabletenv.NewTabletErrorSQL(vtrpcpb.ErrorCode_INTERNAL_ERROR, err)
+				return nil, tabletenv.NewTabletErrorSQL(vterrors.Internal, err)
 			}
 			defer conn.Recycle()
 
@@ -471,7 +471,7 @@ func (si *SchemaInfo) GetPlan(ctx context.Context, logStats *tabletenv.LogStats,
 			r, err := conn.Exec(ctx, sql, 1, true)
 			logStats.AddRewrittenSQL(sql, start)
 			if err != nil {
-				return nil, tabletenv.PrefixTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, err, "Error fetching fields: ")
+				return nil, tabletenv.PrefixTabletError(vterrors.Internal, err, "Error fetching fields: ")
 			}
 			plan.Fields = r.Fields
 		}
@@ -497,7 +497,7 @@ func (si *SchemaInfo) GetStreamPlan(sql string) (*ExecPlan, error) {
 	}
 	splan, err := planbuilder.GetStreamExecPlan(sql, GetTable)
 	if err != nil {
-		return nil, tabletenv.PrefixTabletError(vtrpcpb.ErrorCode_BAD_INPUT, err, "")
+		return nil, tabletenv.PrefixTabletError(vterrors.InvalidArgument, err, "")
 	}
 	plan := &ExecPlan{ExecPlan: splan, TableInfo: tableInfo}
 	plan.Rules = si.queryRuleSources.filterByPlan(sql, plan.PlanID, plan.TableName.String())

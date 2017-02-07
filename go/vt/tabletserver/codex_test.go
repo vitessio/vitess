@@ -12,9 +12,9 @@ import (
 
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/schema"
+	"github.com/youtube/vitess/go/vt/vterrors"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
-	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 func TestCodexBuildValuesList(t *testing.T) {
@@ -257,7 +257,7 @@ func TestCodexResolvePKValues(t *testing.T) {
 	pkValues = make([]interface{}, 0, 10)
 	pkValues = append(pkValues, sqltypes.MakeString([]byte("type_mismatch")))
 	_, _, err = resolvePKValues(&tableInfo, pkValues, nil)
-	testUtils.checkTabletError(t, err, vtrpcpb.ErrorCode_BAD_INPUT, "strconv.ParseInt")
+	testUtils.checkTabletError(t, err, vterrors.InvalidArgument, "strconv.ParseInt")
 	// pkValues with different length
 	bindVariables = make(map[string]interface{})
 	bindVariables[key] = 1
@@ -269,7 +269,7 @@ func TestCodexResolvePKValues(t *testing.T) {
 	pkValues = append(pkValues, []interface{}{":" + key})
 	pkValues = append(pkValues, []interface{}{":" + key2, ":" + key3})
 	_, _, err = resolvePKValues(&tableInfo, pkValues, bindVariables)
-	testUtils.checkTabletError(t, err, vtrpcpb.ErrorCode_BAD_INPUT, "mismatched lengths")
+	testUtils.checkTabletError(t, err, vterrors.InvalidArgument, "mismatched lengths")
 }
 
 func TestCodexResolveListArg(t *testing.T) {
@@ -284,7 +284,7 @@ func TestCodexResolveListArg(t *testing.T) {
 	bindVariables[key] = []interface{}{fmt.Errorf("error is not supported")}
 
 	_, err := resolveListArg(tableInfo.GetPKColumn(0), "::"+key, bindVariables)
-	testUtils.checkTabletError(t, err, vtrpcpb.ErrorCode_BAD_INPUT, "")
+	testUtils.checkTabletError(t, err, vterrors.InvalidArgument, "")
 
 	// This should successfully convert.
 	bindVariables[key] = []interface{}{"1"}
@@ -413,10 +413,10 @@ func TestCodexValidateRow(t *testing.T) {
 		[]string{"pk1", "pk2"})
 	// #columns and #rows do not match
 	err := validateRow(&tableInfo, []int{1}, []sqltypes.Value{})
-	testUtils.checkTabletError(t, err, vtrpcpb.ErrorCode_BAD_INPUT, "data inconsistency")
+	testUtils.checkTabletError(t, err, vterrors.InvalidArgument, "data inconsistency")
 	// column 0 is int type but row is in string type
 	err = validateRow(&tableInfo, []int{0}, []sqltypes.Value{sqltypes.MakeString([]byte("str"))})
-	testUtils.checkTabletError(t, err, vtrpcpb.ErrorCode_BAD_INPUT, "type mismatch")
+	testUtils.checkTabletError(t, err, vterrors.InvalidArgument, "type mismatch")
 }
 
 func TestCodexApplyFilterWithPKDefaults(t *testing.T) {

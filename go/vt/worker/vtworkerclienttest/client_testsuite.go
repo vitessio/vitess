@@ -33,8 +33,6 @@ import (
 	// Import the gRPC client implementation for tablet manager because the real
 	// vtworker implementation requires it.
 	_ "github.com/youtube/vitess/go/vt/tabletmanager/grpctmclient"
-
-	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 func init() {
@@ -129,7 +127,7 @@ func commandErrorsBecauseBusy(t *testing.T, client vtworkerclient.Client, server
 			if _, err := stream.Recv(); err != nil {
 				// We see CANCELED from the RPC client (client side cancelation) or
 				// from vtworker itself (server side cancelation).
-				if vterrors.RecoverVtErrorCode(err) != vtrpcpb.ErrorCode_CANCELLED {
+				if vterrors.RecoverVtErrorCode(err) != vterrors.Canceled {
 					errorCodeCheck = fmt.Errorf("Block command should only error due to canceled context: %v", err)
 				}
 				// Stream has finished.
@@ -150,7 +148,7 @@ func commandErrorsBecauseBusy(t *testing.T, client vtworkerclient.Client, server
 	// vtworker should send an error back that it's busy and we should retry later.
 	<-blockCommandStarted
 	gotErr := runVtworkerCommand(client, []string{"Ping", "Are you busy?"})
-	wantCode := vtrpcpb.ErrorCode_TRANSIENT_ERROR
+	wantCode := vterrors.Unavailable
 	if gotCode := vterrors.RecoverVtErrorCode(gotErr); gotCode != wantCode {
 		t.Fatalf("wrong error code for second cmd: got = %v, want = %v, err: %v", gotCode, wantCode, gotErr)
 	}
@@ -174,7 +172,7 @@ func commandErrorsBecauseBusy(t *testing.T, client vtworkerclient.Client, server
 	// canceled but not reset yet. New commands are still failing with a
 	// retryable error.
 	gotErr2 := runVtworkerCommand(client, []string{"Ping", "canceled and still busy?"})
-	wantCode2 := vtrpcpb.ErrorCode_TRANSIENT_ERROR
+	wantCode2 := vterrors.Unavailable
 	if gotCode2 := vterrors.RecoverVtErrorCode(gotErr2); gotCode2 != wantCode2 {
 		t.Fatalf("wrong error code for second cmd before reset: got = %v, want = %v, err: %v", gotCode2, wantCode2, gotErr2)
 	}

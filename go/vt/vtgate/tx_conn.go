@@ -20,7 +20,6 @@ import (
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	vtgatepb "github.com/youtube/vitess/go/vt/proto/vtgate"
-	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 // TxConn is used for executing transactional requests.
@@ -37,10 +36,10 @@ func NewTxConn(gw gateway.Gateway) *TxConn {
 // is used to ensure atomicity.
 func (txc *TxConn) Commit(ctx context.Context, twopc bool, session *SafeSession) error {
 	if session == nil {
-		return vterrors.FromError(vtrpcpb.ErrorCode_BAD_INPUT, errors.New("cannot commit: empty session"))
+		return vterrors.FromError(vterrors.InvalidArgument, errors.New("cannot commit: empty session"))
 	}
 	if !session.InTransaction() {
-		return vterrors.FromError(vtrpcpb.ErrorCode_NOT_IN_TX, errors.New("cannot commit: not in transaction"))
+		return vterrors.FromError(vterrors.Aborted, errors.New("cannot commit: not in transaction"))
 	}
 	if twopc {
 		return txc.commit2PC(ctx, session)
@@ -155,7 +154,7 @@ func (txc *TxConn) Resolve(ctx context.Context, dtid string) error {
 		}
 	default:
 		// Should never happen.
-		return vterrors.FromError(vtrpcpb.ErrorCode_INTERNAL_ERROR, fmt.Errorf("invalid state: %v", transaction.State))
+		return vterrors.FromError(vterrors.Internal, fmt.Errorf("invalid state: %v", transaction.State))
 	}
 	return nil
 }

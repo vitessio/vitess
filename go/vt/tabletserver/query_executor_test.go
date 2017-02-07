@@ -25,11 +25,11 @@ import (
 	"github.com/youtube/vitess/go/vt/tableacl/simpleacl"
 	"github.com/youtube/vitess/go/vt/tabletserver/planbuilder"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletenv"
+	"github.com/youtube/vitess/go/vt/vterrors"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	tableaclpb "github.com/youtube/vitess/go/vt/proto/tableacl"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
-	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 func TestQueryExecutorPlanDDL(t *testing.T) {
@@ -93,7 +93,7 @@ func TestQueryExecutorPlanPassDmlStrictMode(t *testing.T) {
 	if !ok {
 		t.Fatalf("got: %v, want: a tabletenv.TabletError", tabletError)
 	}
-	if tabletError.ErrorCode != vtrpcpb.ErrorCode_BAD_INPUT {
+	if tabletError.ErrorCode != vterrors.InvalidArgument {
 		t.Fatalf("got: %s, want: BAD_INPUT", tabletError.ErrorCode)
 	}
 }
@@ -132,7 +132,7 @@ func TestQueryExecutorPlanPassDmlStrictModeAutoCommit(t *testing.T) {
 	if !ok {
 		t.Fatalf("got: %v, want: *tabletenv.TabletError", tabletError)
 	}
-	if tabletError.ErrorCode != vtrpcpb.ErrorCode_BAD_INPUT {
+	if tabletError.ErrorCode != vterrors.InvalidArgument {
 		t.Fatalf("got: %s, want: BAD_INPUT", tabletError.ErrorCode)
 	}
 }
@@ -692,7 +692,7 @@ func TestQueryExecutorPlanPassSelectWithLockOutsideATransaction(t *testing.T) {
 	if !ok {
 		t.Fatalf("got: %v, want: *tabletenv.TabletError", err)
 	}
-	if got.ErrorCode != vtrpcpb.ErrorCode_BAD_INPUT {
+	if got.ErrorCode != vterrors.InvalidArgument {
 		t.Fatalf("got: %s, want: BAD_INPUT", got.ErrorCode)
 	}
 }
@@ -1037,7 +1037,7 @@ func TestQueryExecutorTableAclNoPermission(t *testing.T) {
 	if !ok {
 		t.Fatalf("got: %v, want: *tabletenv.TabletError", err)
 	}
-	if tabletError.ErrorCode != vtrpcpb.ErrorCode_PERMISSION_DENIED {
+	if tabletError.ErrorCode != vterrors.PermissionDenied {
 		t.Fatalf("got: %s, want: PERMISSION_DENIED", tabletError.ErrorCode)
 	}
 }
@@ -1091,7 +1091,7 @@ func TestQueryExecutorTableAclExemptACL(t *testing.T) {
 	if !ok {
 		t.Fatalf("got: %v, want: *tabletenv.TabletError", err)
 	}
-	if tabletError.ErrorCode != vtrpcpb.ErrorCode_PERMISSION_DENIED {
+	if tabletError.ErrorCode != vterrors.PermissionDenied {
 		t.Fatalf("got: %s, want: PERMISSION_DENIED", tabletError.ErrorCode)
 	}
 	if !strings.Contains(tabletError.Error(), "table acl error") {
@@ -1231,7 +1231,7 @@ func TestQueryExecutorBlacklistQRFail(t *testing.T) {
 	if !ok {
 		t.Fatalf("got: %v, want: *tabletenv.TabletError", err)
 	}
-	if got.ErrorCode != vtrpcpb.ErrorCode_BAD_INPUT {
+	if got.ErrorCode != vterrors.InvalidArgument {
 		t.Fatalf("got: %s, want: BAD_INPUT", got.ErrorCode)
 	}
 }
@@ -1291,7 +1291,7 @@ func TestQueryExecutorBlacklistQRRetry(t *testing.T) {
 	if !ok {
 		t.Fatalf("got: %v, want: *tabletenv.TabletError", err)
 	}
-	if got.ErrorCode != vtrpcpb.ErrorCode_QUERY_NOT_SERVED {
+	if got.ErrorCode != vterrors.FailedPrecondition {
 		t.Fatalf("got: %s, want: QUERY_NOT_SERVED", got.ErrorCode)
 	}
 }

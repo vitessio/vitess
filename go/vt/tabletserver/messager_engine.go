@@ -13,8 +13,7 @@ import (
 	"github.com/youtube/vitess/go/vt/schema"
 	"github.com/youtube/vitess/go/vt/tabletserver/connpool"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletenv"
-
-	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
+	"github.com/youtube/vitess/go/vt/vterrors"
 )
 
 // MessagerEngine is the engine for handling messages.
@@ -75,7 +74,7 @@ func (me *MessagerEngine) Subscribe(name string, rcv *messageReceiver) error {
 	defer me.mu.Unlock()
 	mm := me.managers[name]
 	if mm == nil {
-		return tabletenv.NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "message table %s not found", name)
+		return tabletenv.NewTabletError(vterrors.InvalidArgument, "message table %s not found", name)
 	}
 	mm.Subscribe(rcv)
 	return nil

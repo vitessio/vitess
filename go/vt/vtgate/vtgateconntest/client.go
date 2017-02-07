@@ -42,7 +42,7 @@ type fakeVTGateService struct {
 }
 
 const expectedErrMatch string = "test vtgate error"
-const expectedCode vtrpcpb.ErrorCode = vtrpcpb.ErrorCode_BAD_INPUT
+const expectedCode vtrpcpb.ErrorCode = vterrors.InvalidArgument
 
 var errTestVtGateError = vterrors.FromError(expectedCode, errors.New(expectedErrMatch))
 
