@@ -20,7 +20,7 @@ import (
 func TestQueryzHandler(t *testing.T) {
 	resp := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", "/schemaz", nil)
-	se := newTestSchemaEngine(100, 10*time.Second, 10*time.Second)
+	se := newTestSchemaEngine(100, 10*time.Second, 10*time.Second, true)
 
 	plan1 := &ExecPlan{
 		ExecPlan: &planbuilder.ExecPlan{

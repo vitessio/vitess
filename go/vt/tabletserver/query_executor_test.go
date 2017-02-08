@@ -193,7 +193,7 @@ func TestQueryExecutorPlanInsertMessage(t *testing.T) {
 				Type: schema.Message,
 			},
 		},
-	})
+	}, []string{"msg"}, nil, nil)
 	tsv.messager.Subscribe("msg", r1.rcv)
 	<-r1.ch
 	got, err := qre.Execute()
@@ -501,7 +501,7 @@ func TestQueryExecutorPlanDmlMessage(t *testing.T) {
 	if err != nil {
 		t.Fatalf("qre.Execute() = %v, want nil", err)
 	}
-	conn, err := qre.te.txPool.Get(txid, "for test")
+	conn, err := qre.tsv.te.txPool.Get(txid, "for test")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1210,11 +1210,11 @@ func TestQueryExecutorBlacklistQRFail(t *testing.T) {
 	}
 	ctx := callinfo.NewContext(context.Background(), callInfo)
 	tsv := newTestTabletServer(ctx, enableStrict, db)
-	tsv.qe.se.queryRuleSources.UnRegisterQueryRuleSource(rulesName)
-	tsv.qe.se.queryRuleSources.RegisterQueryRuleSource(rulesName)
-	defer tsv.qe.se.queryRuleSources.UnRegisterQueryRuleSource(rulesName)
+	tsv.se.queryRuleSources.UnRegisterQueryRuleSource(rulesName)
+	tsv.se.queryRuleSources.RegisterQueryRuleSource(rulesName)
+	defer tsv.se.queryRuleSources.UnRegisterQueryRuleSource(rulesName)
 
-	if err := tsv.qe.se.queryRuleSources.SetRules(rulesName, rules); err != nil {
+	if err := tsv.se.queryRuleSources.SetRules(rulesName, rules); err != nil {
 		t.Fatalf("failed to set rule, error: %v", err)
 	}
 
@@ -1271,11 +1271,11 @@ func TestQueryExecutorBlacklistQRRetry(t *testing.T) {
 	}
 	ctx := callinfo.NewContext(context.Background(), callInfo)
 	tsv := newTestTabletServer(ctx, enableStrict, db)
-	tsv.qe.se.queryRuleSources.UnRegisterQueryRuleSource(rulesName)
-	tsv.qe.se.queryRuleSources.RegisterQueryRuleSource(rulesName)
-	defer tsv.qe.se.queryRuleSources.UnRegisterQueryRuleSource(rulesName)
+	tsv.se.queryRuleSources.UnRegisterQueryRuleSource(rulesName)
+	tsv.se.queryRuleSources.RegisterQueryRuleSource(rulesName)
+	defer tsv.se.queryRuleSources.UnRegisterQueryRuleSource(rulesName)
 
-	if err := tsv.qe.se.queryRuleSources.SetRules(rulesName, rules); err != nil {
+	if err := tsv.se.queryRuleSources.SetRules(rulesName, rules); err != nil {
 		t.Fatalf("failed to set rule, error: %v", err)
 	}
 
@@ -1311,7 +1311,6 @@ const (
 func newTestTabletServer(ctx context.Context, flags executorFlags, db *fakesqldb.DB) *TabletServer {
 	randID := rand.Int63()
 	config := tabletenv.DefaultQsConfig
-	config.DebugURLPrefix = fmt.Sprintf("/debug-%d-", randID)
 	config.PoolNamePrefix = fmt.Sprintf("Pool-%d-", randID)
 	config.PoolSize = 100
 	if flags&smallTxPool > 0 {
@@ -1327,9 +1326,9 @@ func newTestTabletServer(ctx context.Context, flags executorFlags, db *fakesqldb
 		config.StrictMode = false
 	}
 	if flags&enableStrictTableACL > 0 {
-		config.StrictTableAcl = true
+		config.StrictTableACL = true
 	} else {
-		config.StrictTableAcl = false
+		config.StrictTableACL = false
 	}
 	if flags&noTwopc > 0 {
 		config.TwoPCEnable = false
@@ -1360,7 +1359,7 @@ func newTransaction(tsv *TabletServer) int64 {
 
 func newTestQueryExecutor(ctx context.Context, tsv *TabletServer, sql string, txID int64) *QueryExecutor {
 	logStats := tabletenv.NewLogStats(ctx, "TestQueryExecutor")
-	plan, err := tsv.qe.se.GetPlan(ctx, logStats, sql)
+	plan, err := tsv.se.GetPlan(ctx, logStats, sql)
 	if err != nil {
 		panic(err)
 	}
@@ -1371,9 +1370,7 @@ func newTestQueryExecutor(ctx context.Context, tsv *TabletServer, sql string, tx
 		transactionID: txID,
 		plan:          plan,
 		logStats:      logStats,
-		qe:            tsv.qe,
-		te:            tsv.te,
-		messager:      tsv.messager,
+		tsv:           tsv,
 	}
 }
 
@@ -1396,7 +1393,7 @@ func initQueryExecutorTestDB(db *fakesqldb.DB) {
 }
 
 func fetchRecordedQueries(qre *QueryExecutor) []string {
-	conn, err := qre.te.txPool.Get(qre.transactionID, "for query")
+	conn, err := qre.tsv.te.txPool.Get(qre.transactionID, "for query")
 	if err != nil {
 		panic(err)
 	}

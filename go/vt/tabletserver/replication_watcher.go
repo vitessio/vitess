@@ -33,7 +33,7 @@ type ReplicationWatcher struct {
 	wg     sync.WaitGroup
 
 	watchReplication bool
-	qe               *QueryEngine
+	se               *SchemaEngine
 
 	mu         sync.Mutex
 	eventToken *querypb.EventToken
@@ -42,10 +42,10 @@ type ReplicationWatcher struct {
 var replOnce sync.Once
 
 // NewReplicationWatcher creates a new ReplicationWatcher.
-func NewReplicationWatcher(qe *QueryEngine, config tabletenv.TabletConfig) *ReplicationWatcher {
+func NewReplicationWatcher(se *SchemaEngine, config tabletenv.TabletConfig) *ReplicationWatcher {
 	rpw := &ReplicationWatcher{
 		watchReplication: config.WatchReplication,
-		qe:               qe,
+		se:               se,
 	}
 	replOnce.Do(func() {
 		stats.Publish("EventTokenPosition", stats.StringFunc(func() string {
@@ -102,7 +102,7 @@ func (rpw *ReplicationWatcher) Process(ctx context.Context, dbconfigs dbconfigs.
 				if statement.Category != binlogdatapb.BinlogTransaction_Statement_BL_DDL {
 					continue
 				}
-				err := rpw.qe.se.Reload(ctx)
+				err := rpw.se.Reload(ctx)
 				log.Infof("Streamer triggered a schema reload, with result: %v", err)
 				return nil
 			}

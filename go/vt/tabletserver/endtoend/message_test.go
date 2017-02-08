@@ -18,10 +18,28 @@ import (
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
+var createMessage = `create table vitess_message(
+	time_scheduled bigint,
+	id bigint,
+	time_next bigint,
+	epoch bigint,
+	time_created bigint,
+	time_acked bigint,
+	message varchar(128),
+	primary key(time_scheduled, id),
+	unique index id_idx(id),
+	index next_idx(time_next, epoch))
+comment 'vitess_message,vt_ack_wait=1,vt_purge_after=3,vt_batch_size=2,vt_cache_size=10,vt_poller_interval=1'`
+
 func TestMessage(t *testing.T) {
 	ch := make(chan *sqltypes.Result)
 	done := make(chan struct{})
 	client := framework.NewClient()
+	if _, err := client.Execute(createMessage, nil); err != nil {
+		t.Fatal(err)
+	}
+	defer client.Execute("drop table vitess_message", nil)
+
 	go func() {
 		if err := client.MessageStream("vitess_message", func(qr *sqltypes.Result) error {
 			select {

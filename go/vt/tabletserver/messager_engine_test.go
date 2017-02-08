@@ -39,23 +39,23 @@ func TestMEState(t *testing.T) {
 	defer tsv.StopService()
 
 	me := tsv.messager
-	if l := len(tsv.qe.se.notifiers); l != 1 {
+	if l := len(tsv.se.notifiers); l != 1 {
 		t.Errorf("len(notifiers): %d, want 1", l)
 	}
 	if err := me.Open(dbconfigs); err != nil {
 		t.Fatal(err)
 	}
-	if l := len(tsv.qe.se.notifiers); l != 1 {
+	if l := len(tsv.se.notifiers); l != 1 {
 		t.Errorf("len(notifiers) after reopen: %d, want 1", l)
 	}
 
 	me.Close()
-	if l := len(tsv.qe.se.notifiers); l != 0 {
+	if l := len(tsv.se.notifiers); l != 0 {
 		t.Errorf("len(notifiers) after close: %d, want 0", l)
 	}
 
 	me.Close()
-	if l := len(tsv.qe.se.notifiers); l != 0 {
+	if l := len(tsv.se.notifiers); l != 0 {
 		t.Errorf("len(notifiers) after close: %d, want 0", l)
 	}
 }
@@ -84,7 +84,7 @@ func TestMESchemaChanged(t *testing.T) {
 			},
 		},
 	}
-	me.schemaChanged(tables)
+	me.schemaChanged(tables, []string{"t1", "t2"}, nil, nil)
 	got := extractManagerNames(me.managers)
 	want := map[string]bool{"msg": true, "t1": true}
 	if !reflect.DeepEqual(got, want) {
@@ -99,7 +99,7 @@ func TestMESchemaChanged(t *testing.T) {
 		},
 		"t3": meTableInfo,
 	}
-	me.schemaChanged(tables)
+	me.schemaChanged(tables, []string{"t3"}, nil, nil)
 	got = extractManagerNames(me.managers)
 	want = map[string]bool{"msg": true, "t1": true, "t3": true}
 	if !reflect.DeepEqual(got, want) {
@@ -114,10 +114,10 @@ func TestMESchemaChanged(t *testing.T) {
 		},
 		"t4": meTableInfo,
 	}
-	me.schemaChanged(tables)
+	me.schemaChanged(tables, []string{"t4"}, nil, []string{"t3"})
 	got = extractManagerNames(me.managers)
 	// schemaChanged is only additive.
-	want = map[string]bool{"msg": true, "t1": true, "t3": true, "t4": true}
+	want = map[string]bool{"msg": true, "t1": true, "t4": true}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("got: %+v, want %+v", got, want)
 	}
@@ -151,7 +151,7 @@ func TestSubscribe(t *testing.T) {
 		"t1": meTableInfo,
 		"t2": meTableInfo,
 	}
-	me.schemaChanged(tables)
+	me.schemaChanged(tables, []string{"t1", "t2"}, nil, nil)
 	r1 := newTestReceiver(1)
 	r2 := newTestReceiver(1)
 	// Each receiver is subscribed to different managers.
@@ -192,7 +192,7 @@ func TestLockDB(t *testing.T) {
 		"t1": meTableInfo,
 		"t2": meTableInfo,
 	}
-	me.schemaChanged(tables)
+	me.schemaChanged(tables, []string{"t1", "t2"}, nil, nil)
 	r1 := newTestReceiver(0)
 	me.Subscribe("t1", r1.rcv)
 	<-r1.ch
@@ -309,7 +309,7 @@ func TestMEGenerate(t *testing.T) {
 	me := tsv.messager
 	me.schemaChanged(map[string]*TableInfo{
 		"t1": meTableInfo,
-	})
+	}, []string{"t1"}, nil, nil)
 	if _, _, err := me.GenerateAckQuery("t1", []string{"1"}); err != nil {
 		t.Error(err)
 	}

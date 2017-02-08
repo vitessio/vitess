@@ -36,9 +36,7 @@ type QueryExecutor struct {
 	plan          *ExecPlan
 	ctx           context.Context
 	logStats      *tabletenv.LogStats
-	qe            *QueryEngine
-	te            *TxEngine
-	messager      *MessagerEngine
+	tsv           *TabletServer
 }
 
 var sequenceFields = []*querypb.Field{
@@ -81,14 +79,14 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 
 	if qre.transactionID != 0 {
 		// Need upfront connection for DMLs and transactions
-		conn, err := qre.te.txPool.Get(qre.transactionID, "for query")
+		conn, err := qre.tsv.te.txPool.Get(qre.transactionID, "for query")
 		if err != nil {
 			return nil, err
 		}
 		defer conn.Recycle()
 		switch qre.plan.PlanID {
 		case planbuilder.PlanPassDML:
-			if qre.qe.strictMode.Get() != 0 {
+			if qre.tsv.qe.strictMode.Get() {
 				return nil, tabletenv.NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "DML too complex")
 			}
 			return qre.txFetch(conn, qre.plan.FullQuery, qre.bindVars, nil, false, true)
@@ -120,14 +118,14 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 		case planbuilder.PlanSet:
 			return qre.execSet()
 		case planbuilder.PlanOther:
-			conn, connErr := qre.getConn(qre.qe.conns)
+			conn, connErr := qre.getConn(qre.tsv.qe.conns)
 			if connErr != nil {
 				return nil, connErr
 			}
 			defer conn.Recycle()
 			return qre.execSQL(conn, qre.query, true)
 		default:
-			if qre.qe.autoCommit.Get() == 0 {
+			if !qre.tsv.qe.autoCommit.Get() {
 				return nil, tabletenv.NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "Disallowed outside transaction")
 			}
 			return qre.execDmlAutoCommit()
@@ -149,15 +147,15 @@ func (qre *QueryExecutor) Stream(includedFields querypb.ExecuteOptions_IncludedF
 		return err
 	}
 
-	conn, err := qre.getConn(qre.qe.streamConns)
+	conn, err := qre.getConn(qre.tsv.qe.streamConns)
 	if err != nil {
 		return err
 	}
 	defer conn.Recycle()
 
 	qd := NewQueryDetail(qre.logStats.Ctx, conn)
-	qre.qe.streamQList.Add(qd)
-	defer qre.qe.streamQList.Remove(qd)
+	qre.tsv.qe.streamQList.Add(qd)
+	defer qre.tsv.qe.streamQList.Remove(qd)
 
 	return qre.streamFetch(conn, qre.plan.FullQuery, qre.bindVars, nil, includedFields, callback)
 }
@@ -166,7 +164,7 @@ func (qre *QueryExecutor) execDmlAutoCommit() (reply *sqltypes.Result, err error
 	return qre.execAsTransaction(func(conn *TxConnection) (reply *sqltypes.Result, err error) {
 		switch qre.plan.PlanID {
 		case planbuilder.PlanPassDML:
-			if qre.qe.strictMode.Get() != 0 {
+			if qre.tsv.qe.strictMode.Get() {
 				return nil, tabletenv.NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "DML too complex")
 			}
 			reply, err = qre.txFetch(conn, qre.plan.FullQuery, qre.bindVars, nil, false, true)
@@ -190,21 +188,21 @@ func (qre *QueryExecutor) execDmlAutoCommit() (reply *sqltypes.Result, err error
 }
 
 func (qre *QueryExecutor) execAsTransaction(f func(conn *TxConnection) (*sqltypes.Result, error)) (reply *sqltypes.Result, err error) {
-	conn, err := qre.te.txPool.LocalBegin(qre.ctx)
+	conn, err := qre.tsv.te.txPool.LocalBegin(qre.ctx)
 	if err != nil {
 		return nil, err
 	}
-	defer qre.te.txPool.LocalConclude(qre.ctx, conn)
+	defer qre.tsv.te.txPool.LocalConclude(qre.ctx, conn)
 	qre.logStats.AddRewrittenSQL("begin", time.Now())
 
 	reply, err = f(conn)
 
 	if err != nil {
-		qre.te.txPool.LocalConclude(qre.ctx, conn)
+		qre.tsv.te.txPool.LocalConclude(qre.ctx, conn)
 		qre.logStats.AddRewrittenSQL("rollback", time.Now())
 		return nil, err
 	}
-	err = qre.te.txPool.LocalCommit(qre.ctx, conn, qre.messager)
+	err = qre.tsv.te.txPool.LocalCommit(qre.ctx, conn, qre.tsv.messager)
 	if err != nil {
 		return nil, err
 	}
@@ -236,22 +234,22 @@ func (qre *QueryExecutor) checkPermissions() error {
 	}
 
 	// Check for SuperUser calling directly to VTTablet (e.g. VTWorker)
-	if qre.qe.exemptACL != nil && qre.qe.exemptACL.IsMember(username) {
-		qre.qe.tableaclExemptCount.Add(1)
+	if qre.tsv.qe.exemptACL != nil && qre.tsv.qe.exemptACL.IsMember(username) {
+		qre.tsv.qe.tableaclExemptCount.Add(1)
 		return nil
 	}
 
 	callerID := callerid.ImmediateCallerIDFromContext(qre.ctx)
 	if callerID == nil {
-		if qre.qe.strictTableACL {
+		if qre.tsv.qe.strictTableACL {
 			return tabletenv.NewTabletError(vtrpcpb.ErrorCode_UNAUTHENTICATED, "missing caller id")
 		}
 		return nil
 	}
 
 	// a superuser that exempts from table ACL checking.
-	if qre.qe.exemptACL != nil && qre.qe.exemptACL.IsMember(callerID.Username) {
-		qre.qe.tableaclExemptCount.Add(1)
+	if qre.tsv.qe.exemptACL != nil && qre.tsv.qe.exemptACL.IsMember(callerID.Username) {
+		qre.tsv.qe.tableaclExemptCount.Add(1)
 		return nil
 	}
 
@@ -271,15 +269,15 @@ func (qre *QueryExecutor) checkPermissions() error {
 	}
 	// perform table ACL check if it is enabled.
 	if !qre.plan.Authorized.IsMember(callerID.Username) {
-		if qre.qe.enableTableACLDryRun {
+		if qre.tsv.qe.enableTableACLDryRun {
 			tabletenv.TableaclPseudoDenied.Add(tableACLStatsKey, 1)
 			return nil
 		}
 		// raise error if in strictTableAcl mode, else just log an error.
-		if qre.qe.strictTableACL {
+		if qre.tsv.qe.strictTableACL {
 			errStr := fmt.Sprintf("table acl error: %q cannot run %v on table %q", callerID.Username, qre.plan.PlanID, qre.plan.TableName)
 			tabletenv.TableaclDenied.Add(tableACLStatsKey, 1)
-			qre.qe.accessCheckerLogger.Infof("%s", errStr)
+			qre.tsv.qe.accessCheckerLogger.Infof("%s", errStr)
 			return tabletenv.NewTabletError(vtrpcpb.ErrorCode_PERMISSION_DENIED, "%s", errStr)
 		}
 		return nil
@@ -294,11 +292,11 @@ func (qre *QueryExecutor) execDDL() (*sqltypes.Result, error) {
 		return nil, tabletenv.NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "DDL is not understood")
 	}
 
-	conn, err := qre.te.txPool.LocalBegin(qre.ctx)
+	conn, err := qre.tsv.te.txPool.LocalBegin(qre.ctx)
 	if err != nil {
 		return nil, err
 	}
-	defer qre.te.txPool.LocalCommit(qre.ctx, conn, qre.messager)
+	defer qre.tsv.te.txPool.LocalCommit(qre.ctx, conn, qre.tsv.messager)
 
 	result, err := qre.execSQL(conn, qre.query, false)
 	if err != nil {
@@ -306,10 +304,10 @@ func (qre *QueryExecutor) execDDL() (*sqltypes.Result, error) {
 	}
 	if !ddlPlan.TableName.IsEmpty() && ddlPlan.TableName != ddlPlan.NewName {
 		// It's a drop or rename.
-		qre.qe.se.DropTable(ddlPlan.TableName)
+		qre.tsv.se.DropTable(ddlPlan.TableName)
 	}
 	if !ddlPlan.NewName.IsEmpty() {
-		if err := qre.qe.se.CreateOrUpdateTable(qre.ctx, ddlPlan.NewName.String()); err != nil {
+		if err := qre.tsv.se.CreateOrAlterTable(qre.ctx, ddlPlan.NewName.String()); err != nil {
 			return nil, err
 		}
 	}
@@ -407,7 +405,7 @@ func (qre *QueryExecutor) execSelect() (*sqltypes.Result, error) {
 		newResult.Fields = qre.plan.Fields
 		return &newResult, nil
 	}
-	conn, err := qre.getConn(qre.qe.conns)
+	conn, err := qre.getConn(qre.tsv.qe.conns)
 	if err != nil {
 		return nil, err
 	}
@@ -545,7 +543,7 @@ func (qre *QueryExecutor) execDMLPKRows(conn *TxConnection, query *sqlparser.Par
 	}
 
 	result := &sqltypes.Result{}
-	maxRows := int(qre.qe.maxDMLRows.Get())
+	maxRows := int(qre.tsv.qe.maxDMLRows.Get())
 	for i := 0; i < len(pkRows); i += maxRows {
 		end := i + maxRows
 		if end >= len(pkRows) {
@@ -579,7 +577,7 @@ func (qre *QueryExecutor) execDMLPKRows(conn *TxConnection, query *sqlparser.Par
 }
 
 func (qre *QueryExecutor) execSet() (*sqltypes.Result, error) {
-	conn, err := qre.getConn(qre.qe.conns)
+	conn, err := qre.getConn(qre.tsv.qe.conns)
 	if err != nil {
 		return nil, err
 	}
@@ -609,11 +607,11 @@ func (qre *QueryExecutor) qFetch(logStats *tabletenv.LogStats, parsedQuery *sqlp
 	if err != nil {
 		return nil, err
 	}
-	q, ok := qre.qe.consolidator.Create(string(sql))
+	q, ok := qre.tsv.qe.consolidator.Create(string(sql))
 	if ok {
 		defer q.Broadcast()
 		waitingForConnectionStart := time.Now()
-		conn, err := qre.qe.conns.Get(qre.ctx)
+		conn, err := qre.tsv.qe.conns.Get(qre.ctx)
 		logStats.WaitingForConnection += time.Now().Sub(waitingForConnectionStart)
 		if err != nil {
 			q.Err = tabletenv.NewTabletErrorSQL(vtrpcpb.ErrorCode_INTERNAL_ERROR, err)
@@ -669,7 +667,7 @@ func (qre *QueryExecutor) streamFetch(conn *connpool.DBConn, parsedQuery *sqlpar
 }
 
 func (qre *QueryExecutor) generateFinalSQL(parsedQuery *sqlparser.ParsedQuery, bindVars map[string]interface{}, buildStreamComment []byte) (string, error) {
-	bindVars["#maxLimit"] = qre.qe.maxResultSize.Get() + 1
+	bindVars["#maxLimit"] = qre.tsv.qe.maxResultSize.Get() + 1
 	sql, err := parsedQuery.GenerateQuery(bindVars)
 	if err != nil {
 		return "", tabletenv.NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "%s", err)
@@ -688,12 +686,12 @@ type poolConn interface {
 
 func (qre *QueryExecutor) execSQL(conn poolConn, sql string, wantfields bool) (*sqltypes.Result, error) {
 	defer qre.logStats.AddRewrittenSQL(sql, time.Now())
-	return conn.Exec(qre.ctx, sql, int(qre.qe.maxResultSize.Get()), wantfields)
+	return conn.Exec(qre.ctx, sql, int(qre.tsv.qe.maxResultSize.Get()), wantfields)
 }
 
 func (qre *QueryExecutor) execStreamSQL(conn *connpool.DBConn, sql string, includedFields querypb.ExecuteOptions_IncludedFields, callback func(*sqltypes.Result) error) error {
 	start := time.Now()
-	err := conn.Stream(qre.ctx, sql, callback, int(qre.qe.streamBufferSize.Get()), includedFields)
+	err := conn.Stream(qre.ctx, sql, callback, int(qre.tsv.qe.streamBufferSize.Get()), includedFields)
 	qre.logStats.AddRewrittenSQL(sql, start)
 	if err != nil {
 		// MySQL error that isn't due to a connection issue

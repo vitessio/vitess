@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -31,9 +32,9 @@ func TestSchemaEngineStrictMode(t *testing.T) {
 	for query, result := range getSchemaEngineBaseTestQueries() {
 		db.AddQuery(query, result)
 	}
-	se := newTestSchemaEngine(10, 1*time.Second, 1*time.Second)
+	se := newTestSchemaEngine(10, 1*time.Second, 1*time.Second, true)
 	t.Log(se)
-	err := se.Open(db.ConnParams(), true)
+	err := se.Open(db.ConnParams())
 	want := "error: could not verify mode"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("se.Open: %v, must contain %s", err, want)
@@ -53,8 +54,8 @@ func TestSchemaEngineOpenFailedDueToMissMySQLTime(t *testing.T) {
 			{sqltypes.MakeString([]byte("1427325875"))},
 		},
 	})
-	se := newTestSchemaEngine(10, 1*time.Second, 1*time.Second)
-	err := se.Open(db.ConnParams(), false)
+	se := newTestSchemaEngine(10, 1*time.Second, 1*time.Second, false)
+	err := se.Open(db.ConnParams())
 	want := "Could not get MySQL time"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("se.Open: %v, want %s", err, want)
@@ -73,8 +74,8 @@ func TestSchemaEngineOpenFailedDueToIncorrectMysqlRowNum(t *testing.T) {
 			{sqltypes.NULL},
 		},
 	})
-	se := newTestSchemaEngine(10, 1*time.Second, 1*time.Second)
-	err := se.Open(db.ConnParams(), false)
+	se := newTestSchemaEngine(10, 1*time.Second, 1*time.Second, false)
+	err := se.Open(db.ConnParams())
 	want := "Unexpected result for MySQL time"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("se.Open: %v, want %s", err, want)
@@ -93,8 +94,8 @@ func TestSchemaEngineOpenFailedDueToInvalidTimeFormat(t *testing.T) {
 			{sqltypes.MakeString([]byte("invalid_time"))},
 		},
 	})
-	se := newTestSchemaEngine(10, 1*time.Second, 1*time.Second)
-	err := se.Open(db.ConnParams(), false)
+	se := newTestSchemaEngine(10, 1*time.Second, 1*time.Second, false)
+	err := se.Open(db.ConnParams())
 	want := "Could not parse time"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("se.Open: %v, want %s", err, want)
@@ -108,8 +109,8 @@ func TestSchemaEngineOpenFailedDueToExecErr(t *testing.T) {
 		db.AddQuery(query, result)
 	}
 	db.AddRejectedQuery(mysqlconn.BaseShowTables, fmt.Errorf("injected error"))
-	se := newTestSchemaEngine(10, 1*time.Second, 1*time.Second)
-	err := se.Open(db.ConnParams(), false)
+	se := newTestSchemaEngine(10, 1*time.Second, 1*time.Second, false)
+	err := se.Open(db.ConnParams())
 	want := "Could not get table list"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("se.Open: %v, want %s", err, want)
@@ -140,8 +141,8 @@ func TestSchemaEngineOpenFailedDueToTableInfoErr(t *testing.T) {
 			{sqltypes.MakeString([]byte(""))},
 		},
 	})
-	se := newTestSchemaEngine(10, 1*time.Second, 1*time.Second)
-	err := se.Open(db.ConnParams(), false)
+	se := newTestSchemaEngine(10, 1*time.Second, 1*time.Second, false)
+	err := se.Open(db.ConnParams())
 	want := "could not get schema for any tables"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("se.Open: %v, want %s", err, want)
@@ -156,8 +157,8 @@ func TestSchemaEngineReload(t *testing.T) {
 		db.AddQuery(query, result)
 	}
 	idleTimeout := 10 * time.Second
-	se := newTestSchemaEngine(10, 10*time.Second, idleTimeout)
-	se.Open(db.ConnParams(), true)
+	se := newTestSchemaEngine(10, 10*time.Second, idleTimeout, true)
+	se.Open(db.ConnParams())
 	defer se.Close()
 	// this new table does not exist
 	newTable := sqlparser.NewTableIdent("test_table_04")
@@ -237,12 +238,12 @@ func TestSchemaEngineCreateOrUpdateTableFailedDuetoExecErr(t *testing.T) {
 		db.AddQuery(query, result)
 	}
 	db.AddRejectedQuery(mysqlconn.BaseShowTablesForTable("test_table"), fmt.Errorf("forced fail"))
-	se := newTestSchemaEngine(10, 1*time.Second, 1*time.Second)
-	se.Open(db.ConnParams(), false)
+	se := newTestSchemaEngine(10, 1*time.Second, 1*time.Second, false)
+	se.Open(db.ConnParams())
 	defer se.Close()
 	originalSchemaErrorCount := tabletenv.InternalErrors.Counts()["Schema"]
 	// should silently fail: no errors returned, but increment a counter
-	se.CreateOrUpdateTable(context.Background(), "test_table")
+	se.CreateOrAlterTable(context.Background(), "test_table")
 
 	newSchemaErrorCount := tabletenv.InternalErrors.Counts()["Schema"]
 	schemaErrorDiff := newSchemaErrorCount - originalSchemaErrorCount
@@ -257,6 +258,9 @@ func TestSchemaEngineCreateOrUpdateTable(t *testing.T) {
 	for query, result := range getSchemaEngineTestSupportedQueries() {
 		db.AddQuery(query, result)
 	}
+	se := newTestSchemaEngine(10, 1*time.Second, 1*time.Second, false)
+	se.Open(db.ConnParams())
+	defer se.Close()
 	existingTable := "test_table_01"
 	db.AddQuery(mysqlconn.BaseShowTablesForTable(existingTable), &sqltypes.Result{
 		Fields:       mysqlconn.BaseShowTablesFields,
@@ -265,18 +269,30 @@ func TestSchemaEngineCreateOrUpdateTable(t *testing.T) {
 			mysqlconn.BaseShowTablesRow(existingTable, false, ""),
 		},
 	})
-	se := newTestSchemaEngine(10, 1*time.Second, 1*time.Second)
-	se.Open(db.ConnParams(), false)
-	found := false
-	se.RegisterNotifier("test", func(schema map[string]*TableInfo) {
-		_, found = schema["test_table_01"]
+	i := 0
+	se.RegisterNotifier("test", func(schema map[string]*TableInfo, created, altered, dropped []string) {
+		switch i {
+		case 0:
+			if len(created) != 4 {
+				t.Errorf("callback 0: %v, want len of 4\n", created)
+			}
+		case 1:
+			want := []string{"test_table_01"}
+			if !reflect.DeepEqual(altered, want) {
+				t.Errorf("callback 0: %v, want %v\n", created, want)
+			}
+		default:
+			t.Fatal("unexpected")
+		}
+		i++
 	})
-	se.CreateOrUpdateTable(context.Background(), "test_table_01")
-	if !found {
-		t.Error("Notifier: want true, got false")
+	defer se.UnregisterNotifier("test")
+	if err := se.CreateOrAlterTable(context.Background(), "test_table_01"); err != nil {
+		t.Fatal(err)
 	}
-	se.UnregisterNotifier("test")
-	se.Close()
+	if i < 2 {
+		t.Error("Notifier did not get called")
+	}
 }
 
 func TestSchemaEngineDropTable(t *testing.T) {
@@ -286,32 +302,36 @@ func TestSchemaEngineDropTable(t *testing.T) {
 		db.AddQuery(query, result)
 	}
 	existingTable := sqlparser.NewTableIdent("test_table_01")
-	db.AddQuery(mysqlconn.BaseShowTablesForTable(existingTable.String()), &sqltypes.Result{
-		Fields:       mysqlconn.BaseShowTablesFields,
-		RowsAffected: 1,
-		Rows: [][]sqltypes.Value{
-			mysqlconn.BaseShowTablesRow(existingTable.String(), false, ""),
-		},
-	})
-	se := newTestSchemaEngine(10, 1*time.Second, 1*time.Second)
-	se.Open(db.ConnParams(), false)
+	se := newTestSchemaEngine(10, 1*time.Second, 1*time.Second, false)
+	se.Open(db.ConnParams())
+	defer se.Close()
 	tableInfo := se.GetTable(existingTable)
 	if tableInfo == nil {
 		t.Fatalf("table: %s should exist", existingTable)
 	}
-	found := false
-	se.RegisterNotifier("test", func(schema map[string]*TableInfo) {
-		_, found = schema["test_table_01"]
+	i := 0
+	se.RegisterNotifier("test", func(schema map[string]*TableInfo, created, altered, dropped []string) {
+		switch i {
+		case 0:
+			// Ignore.
+		case 1:
+			want := []string{"test_table_01"}
+			if !reflect.DeepEqual(dropped, want) {
+				t.Errorf("callback 1: %v, want %v\n", dropped, want)
+			}
+		default:
+			t.Fatal("unexpected")
+		}
+		i++
 	})
 	se.DropTable(existingTable)
-	if found {
-		t.Error("Notifier: want false, got true")
-	}
 	tableInfo = se.GetTable(existingTable)
 	if tableInfo != nil {
 		t.Fatalf("table: %s should not exist", existingTable)
 	}
-	se.Close()
+	if i < 2 {
+		t.Error("Notifier did not get called")
+	}
 }
 
 func TestSchemaEngineGetPlanPanicDuetoEmptyQuery(t *testing.T) {
@@ -320,8 +340,8 @@ func TestSchemaEngineGetPlanPanicDuetoEmptyQuery(t *testing.T) {
 	for query, result := range getSchemaEngineTestSupportedQueries() {
 		db.AddQuery(query, result)
 	}
-	se := newTestSchemaEngine(10, 10*time.Second, 10*time.Second)
-	se.Open(db.ConnParams(), true)
+	se := newTestSchemaEngine(10, 10*time.Second, 10*time.Second, true)
+	se.Open(db.ConnParams())
 	defer se.Close()
 
 	ctx := context.Background()
@@ -345,8 +365,8 @@ func TestSchemaEngineQueryCache(t *testing.T) {
 	db.AddQuery("select * from test_table_01 where 1 != 1", &sqltypes.Result{})
 	db.AddQuery("select * from test_table_02 where 1 != 1", &sqltypes.Result{})
 
-	se := newTestSchemaEngine(10, 10*time.Second, 10*time.Second)
-	se.Open(db.ConnParams(), true)
+	se := newTestSchemaEngine(10, 10*time.Second, 10*time.Second, true)
+	se.Open(db.ConnParams())
 	defer se.Close()
 
 	ctx := context.Background()
@@ -378,8 +398,8 @@ func TestSchemaEngineExportVars(t *testing.T) {
 	for query, result := range getSchemaEngineTestSupportedQueries() {
 		db.AddQuery(query, result)
 	}
-	se := newTestSchemaEngine(10, 1*time.Second, 1*time.Second)
-	se.Open(db.ConnParams(), true)
+	se := newTestSchemaEngine(10, 1*time.Second, 1*time.Second, true)
+	se.Open(db.ConnParams())
 	defer se.Close()
 	expvar.Do(func(kv expvar.KeyValue) {
 		_ = kv.Value.String()
@@ -394,8 +414,8 @@ func TestUpdatedMysqlStats(t *testing.T) {
 		db.AddQuery(query, result)
 	}
 	idleTimeout := 10 * time.Second
-	se := newTestSchemaEngine(10, 10*time.Second, idleTimeout)
-	se.Open(db.ConnParams(), true)
+	se := newTestSchemaEngine(10, 10*time.Second, idleTimeout, true)
+	se.Open(db.ConnParams())
 	defer se.Close()
 	// Add new table
 	tableName := sqlparser.NewTableIdent("mysql_stats_test_table")
@@ -406,7 +426,7 @@ func TestUpdatedMysqlStats(t *testing.T) {
 			mysqlconn.BaseShowTablesRow(tableName.String(), false, ""),
 		},
 	})
-	// Add queries necessary for CreateOrUpdateTable() and NewTableInfo()
+	// Add queries necessary for CreateOrAlterTable() and NewTableInfo()
 	db.AddQuery(mysqlconn.BaseShowTablesForTable(tableName.String()), &sqltypes.Result{
 		Fields:       mysqlconn.BaseShowTablesFields,
 		RowsAffected: 1,
@@ -488,23 +508,27 @@ func TestSchemaEngineStatsURL(t *testing.T) {
 	}
 	query := "select * from test_table_01"
 	db.AddQuery("select * from test_table_01 where 1 != 1", &sqltypes.Result{})
-	se := newTestSchemaEngine(10, 1*time.Second, 1*time.Second)
-	se.Open(db.ConnParams(), true)
+	se := newTestSchemaEngine(10, 1*time.Second, 1*time.Second, true)
+	se.Open(db.ConnParams())
 	defer se.Close()
 	// warm up cache
 	ctx := context.Background()
 	logStats := tabletenv.NewLogStats(ctx, "GetPlanStats")
 	se.GetPlan(ctx, logStats, query)
 
-	request, _ := http.NewRequest("GET", se.endpoints[debugQueryPlansKey], nil)
+	request, _ := http.NewRequest("GET", "/debug/tablet_plans", nil)
 	response := httptest.NewRecorder()
 	se.ServeHTTP(response, request)
 
-	request, _ = http.NewRequest("GET", se.endpoints[debugQueryStatsKey], nil)
+	request, _ = http.NewRequest("GET", "/debug/query_stats", nil)
 	response = httptest.NewRecorder()
 	se.ServeHTTP(response, request)
 
-	request, _ = http.NewRequest("GET", se.endpoints[debugSchemaKey], nil)
+	request, _ = http.NewRequest("GET", "/debug/schema", nil)
+	response = httptest.NewRecorder()
+	se.ServeHTTP(response, request)
+
+	request, _ = http.NewRequest("GET", "/debug/query_rules", nil)
 	response = httptest.NewRecorder()
 	se.ServeHTTP(response, request)
 

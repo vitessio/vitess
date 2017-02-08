@@ -73,7 +73,14 @@ func newTestReceiver(size int) *testReceiver {
 		default:
 		}
 		tr.count.Add(1)
-		tr.ch <- qr
+		select {
+		case tr.ch <- qr:
+		case <-time.After(10 * time.Second):
+			// This timeout is to make sure any stray
+			// sends from MM are ignored. Otherwise, this
+			// can hold send hostage and not allow MMs to
+			// close, and the tests will hang.
+		}
 		return nil
 	})
 	return tr
@@ -226,13 +233,6 @@ func TestMessageManagerAdd(t *testing.T) {
 	if mm.Add(&MessageRow{ID: sqltypes.MakeString([]byte("3"))}) {
 		t.Error("Add(cache full): true, want false")
 	}
-	// Pull everything possible from r1. Otherwise
-	// the mm will be stuck sending and won't be able
-	// to close.
-	go func() {
-		for range r1.ch {
-		}
-	}()
 }
 
 func TestMessageManagerSend(t *testing.T) {

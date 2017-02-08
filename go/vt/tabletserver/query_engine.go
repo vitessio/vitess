@@ -34,7 +34,6 @@ import (
 // Close: There should be no more pending queries when this
 // function is called.
 type QueryEngine struct {
-	se        *SchemaEngine
 	dbconfigs dbconfigs.DBConfigs
 
 	// Pools
@@ -46,8 +45,8 @@ type QueryEngine struct {
 	streamQList  *QueryList
 
 	// Vars
-	strictMode       sync2.AtomicInt64
-	autoCommit       sync2.AtomicInt64
+	strictMode       sync2.AtomicBool
+	autoCommit       sync2.AtomicBool
 	maxResultSize    sync2.AtomicInt64
 	maxDMLRows       sync2.AtomicInt64
 	streamBufferSize sync2.AtomicInt64
@@ -71,18 +70,6 @@ var (
 // You must call this only once.
 func NewQueryEngine(checker MySQLChecker, config tabletenv.TabletConfig) *QueryEngine {
 	qe := &QueryEngine{}
-	qe.se = NewSchemaEngine(
-		checker,
-		config.QueryCacheSize,
-		time.Duration(config.SchemaReloadTime*1e9),
-		time.Duration(config.IdleTimeout*1e9),
-		map[string]string{
-			debugQueryPlansKey: config.DebugURLPrefix + "/query_plans",
-			debugQueryStatsKey: config.DebugURLPrefix + "/query_stats",
-			debugSchemaKey:     config.DebugURLPrefix + "/schema",
-			debugQueryRulesKey: config.DebugURLPrefix + "/query_rules",
-		},
-	)
 
 	qe.conns = connpool.New(
 		config.PoolNamePrefix+"ConnPool",
@@ -100,19 +87,15 @@ func NewQueryEngine(checker MySQLChecker, config tabletenv.TabletConfig) *QueryE
 	qe.consolidator = sync2.NewConsolidator()
 	qe.streamQList = NewQueryList()
 
-	if config.StrictMode {
-		qe.strictMode.Set(1)
-	}
-	if config.EnableAutoCommit {
-		qe.autoCommit.Set(1)
-	}
-	qe.strictTableACL = config.StrictTableAcl
-	qe.enableTableACLDryRun = config.EnableTableAclDryRun
+	qe.strictMode.Set(config.StrictMode)
+	qe.autoCommit.Set(config.EnableAutoCommit)
+	qe.strictTableACL = config.StrictTableACL
+	qe.enableTableACLDryRun = config.EnableTableACLDryRun
 
-	if config.TableAclExemptACL != "" {
+	if config.TableACLExemptACL != "" {
 		if f, err := tableacl.GetCurrentAclFactory(); err == nil {
-			if exemptACL, err := f.New([]string{config.TableAclExemptACL}); err == nil {
-				log.Infof("Setting Table ACL exempt rule for %v", config.TableAclExemptACL)
+			if exemptACL, err := f.New([]string{config.TableACLExemptACL}); err == nil {
+				log.Infof("Setting Table ACL exempt rule for %v", config.TableACLExemptACL)
 				qe.exemptACL = exemptACL
 			} else {
 				log.Infof("Cannot build exempt ACL for table ACL: %v", err)
@@ -134,7 +117,7 @@ func NewQueryEngine(checker MySQLChecker, config tabletenv.TabletConfig) *QueryE
 		stats.Publish("StreamBufferSize", stats.IntFunc(qe.streamBufferSize.Get))
 		stats.Publish("TableACLExemptCount", stats.IntFunc(qe.tableaclExemptCount.Get))
 
-		http.Handle(config.DebugURLPrefix+"/consolidations", qe.consolidator)
+		http.Handle("/debug/consolidations", qe.consolidator)
 	})
 
 	return qe
@@ -143,18 +126,6 @@ func NewQueryEngine(checker MySQLChecker, config tabletenv.TabletConfig) *QueryE
 // Open must be called before sending requests to QueryEngine.
 func (qe *QueryEngine) Open(dbconfigs dbconfigs.DBConfigs) error {
 	qe.dbconfigs = dbconfigs
-
-	strictMode := false
-	if qe.strictMode.Get() != 0 {
-		strictMode = true
-	}
-
-	start := time.Now()
-	if err := qe.se.Open(&qe.dbconfigs.Dba, strictMode); err != nil {
-		return err
-	}
-	log.Infof("Time taken to load the schema: %v", time.Now().Sub(start))
-
 	qe.conns.Open(&qe.dbconfigs.App, &qe.dbconfigs.Dba)
 	qe.streamConns.Open(&qe.dbconfigs.App, &qe.dbconfigs.Dba)
 	return nil
@@ -181,5 +152,4 @@ func (qe *QueryEngine) Close() {
 	// Close in reverse order of Open.
 	qe.streamConns.Close()
 	qe.conns.Close()
-	qe.se.Close()
 }
