@@ -271,6 +271,15 @@ func (m *NodeManager) AddRootNode(n *Node) error {
 	return m.updateNodeAndBroadcastLocked(n, true /* updateChildren */)
 }
 
+func (m *NodeManager) AddChildren(children []*Node, root *Node) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for _, n := range children {
+		n.nodeManager = root.nodeManager
+	}
+	return m.updateNodeAndBroadcastLocked(root, true /* updateChildren */)
+}
+
 // RemoveRootNode removes a toplevel Node from the NodeManager,
 // and broadcasts the change to the listeners.
 func (m *NodeManager) RemoveRootNode(n *Node) {
