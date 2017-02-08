@@ -34,30 +34,30 @@ type TxEngine struct {
 }
 
 // NewTxEngine creates a new TxEngine.
-func NewTxEngine(checker MySQLChecker) *TxEngine {
+func NewTxEngine(checker MySQLChecker, config tabletenv.TabletConfig) *TxEngine {
 	te := &TxEngine{
-		shutdownGracePeriod: time.Duration(tabletenv.Config.TxShutDownGracePeriod * 1e9),
+		shutdownGracePeriod: time.Duration(config.TxShutDownGracePeriod * 1e9),
 	}
 	te.txPool = NewTxPool(
-		tabletenv.Config.PoolNamePrefix+"TransactionPool",
-		tabletenv.Config.TransactionCap,
-		time.Duration(tabletenv.Config.TransactionTimeout*1e9),
-		time.Duration(tabletenv.Config.IdleTimeout*1e9),
+		config.PoolNamePrefix+"TransactionPool",
+		config.TransactionCap,
+		time.Duration(config.TransactionTimeout*1e9),
+		time.Duration(config.IdleTimeout*1e9),
 		checker,
 	)
-	te.twopcEnabled = tabletenv.Config.TwoPCEnable
+	te.twopcEnabled = config.TwoPCEnable
 	if te.twopcEnabled {
-		if tabletenv.Config.TwoPCCoordinatorAddress == "" {
+		if config.TwoPCCoordinatorAddress == "" {
 			log.Error("Coordinator address not specified: Disabling 2PC")
 			te.twopcEnabled = false
 		}
-		if tabletenv.Config.TwoPCAbandonAge <= 0 {
+		if config.TwoPCAbandonAge <= 0 {
 			log.Error("2PC abandon age not specified: Disabling 2PC")
 			te.twopcEnabled = false
 		}
 	}
-	te.coordinatorAddress = tabletenv.Config.TwoPCCoordinatorAddress
-	te.abandonAge = time.Duration(tabletenv.Config.TwoPCAbandonAge * 1e9)
+	te.coordinatorAddress = config.TwoPCCoordinatorAddress
+	te.abandonAge = time.Duration(config.TwoPCAbandonAge * 1e9)
 	te.ticks = timer.NewTimer(te.abandonAge / 2)
 
 	// Set the prepared pool capacity to something lower than
@@ -65,11 +65,11 @@ func NewTxEngine(checker MySQLChecker) *TxEngine {
 	// perform metadata state change operations. Without this,
 	// the system can deadlock if all connections get moved to
 	// the TxPreparedPool.
-	te.preparedPool = NewTxPreparedPool(tabletenv.Config.TransactionCap - 2)
+	te.preparedPool = NewTxPreparedPool(config.TransactionCap - 2)
 	readPool := connpool.New(
-		tabletenv.Config.PoolNamePrefix+"TxReadPool",
+		config.PoolNamePrefix+"TxReadPool",
 		3,
-		time.Duration(tabletenv.Config.IdleTimeout*1e9),
+		time.Duration(config.IdleTimeout*1e9),
 		checker,
 	)
 	te.twoPC = NewTwoPC(readPool)

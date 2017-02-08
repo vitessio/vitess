@@ -29,13 +29,13 @@ type MessagerEngine struct {
 }
 
 // NewMessagerEngine creates a new MessagerEngine.
-func NewMessagerEngine(tsv *TabletServer) *MessagerEngine {
+func NewMessagerEngine(tsv *TabletServer, config tabletenv.TabletConfig) *MessagerEngine {
 	return &MessagerEngine{
 		tsv: tsv,
 		conns: connpool.New(
-			tabletenv.Config.PoolNamePrefix+"MessagerPool",
-			tabletenv.Config.MessagePoolSize,
-			time.Duration(tabletenv.Config.IdleTimeout*1e9),
+			config.PoolNamePrefix+"MessagerPool",
+			config.MessagePoolSize,
+			time.Duration(config.IdleTimeout*1e9),
 			tsv,
 		),
 		managers: make(map[string]*MessageManager),

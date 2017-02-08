@@ -64,8 +64,8 @@ type TxThrottler struct {
 // and returns an error if one occurred.
 // TODO(erez): This function should return an error instead of returning a disabled
 // transaction throttler. Fix this after NewTabletServer is changed to return an error as well.
-func CreateTxThrottlerFromTabletConfig() *TxThrottler {
-	txThrottler, err := tryCreateTxThrottler()
+func CreateTxThrottlerFromTabletConfig(tsvConfig tabletenv.TabletConfig) *TxThrottler {
+	txThrottler, err := tryCreateTxThrottler(tsvConfig)
 	if err != nil {
 		log.Errorf("Error creating transaction throttler. Transaction throttling will"+
 			" be disabled. Error: %v", err)
@@ -82,23 +82,23 @@ func CreateTxThrottlerFromTabletConfig() *TxThrottler {
 	return txThrottler
 }
 
-func tryCreateTxThrottler() (*TxThrottler, error) {
+func tryCreateTxThrottler(tsvConfig tabletenv.TabletConfig) (*TxThrottler, error) {
 	config := &txThrottlerConfig{
-		enabled: tabletenv.Config.EnableTxThrottler,
+		enabled: tsvConfig.EnableTxThrottler,
 	}
-	if !tabletenv.Config.EnableTxThrottler {
+	if !tsvConfig.EnableTxThrottler {
 		return newTxThrottler(config)
 	}
 	var throttlerConfig throttlerdatapb.Configuration
 
-	if err := proto.UnmarshalText(tabletenv.Config.TxThrottlerConfig, &throttlerConfig); err != nil {
+	if err := proto.UnmarshalText(tsvConfig.TxThrottlerConfig, &throttlerConfig); err != nil {
 		return nil, err
 	}
 
 	// Clone tsv.TxThrottlerHealthCheckCells so that we don't assume tsv.TxThrottlerHealthCheckCells
 	// is immutable.
-	config.healthCheckCells = make([]string, len(tabletenv.Config.TxThrottlerHealthCheckCells))
-	copy(config.healthCheckCells, tabletenv.Config.TxThrottlerHealthCheckCells)
+	config.healthCheckCells = make([]string, len(tsvConfig.TxThrottlerHealthCheckCells))
+	copy(config.healthCheckCells, tsvConfig.TxThrottlerHealthCheckCells)
 	return newTxThrottler(config)
 }
 

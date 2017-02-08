@@ -1310,8 +1310,7 @@ const (
 // newTestQueryExecutor uses a package level variable testTabletServer defined in tabletserver_test.go
 func newTestTabletServer(ctx context.Context, flags executorFlags, db *fakesqldb.DB) *TabletServer {
 	randID := rand.Int63()
-	tabletenv.Config = tabletenv.DefaultQsConfig
-	config := &tabletenv.Config
+	config := tabletenv.DefaultQsConfig
 	config.DebugURLPrefix = fmt.Sprintf("/debug-%d-", randID)
 	config.PoolNamePrefix = fmt.Sprintf("Pool-%d-", randID)
 	config.PoolSize = 100
@@ -1343,7 +1342,7 @@ func newTestTabletServer(ctx context.Context, flags executorFlags, db *fakesqldb
 	} else {
 		config.TwoPCAbandonAge = 10
 	}
-	tsv := NewTabletServer()
+	tsv := NewTabletServer(config)
 	testUtils := newTestUtils()
 	dbconfigs := testUtils.newDBConfigs(db)
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}

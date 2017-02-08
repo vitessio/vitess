@@ -69,51 +69,50 @@ var (
 // NewQueryEngine creates a new QueryEngine.
 // This is a singleton class.
 // You must call this only once.
-func NewQueryEngine(checker MySQLChecker) *QueryEngine {
+func NewQueryEngine(checker MySQLChecker, config tabletenv.TabletConfig) *QueryEngine {
 	qe := &QueryEngine{}
 	qe.se = NewSchemaEngine(
 		checker,
-		tabletenv.Config.QueryCacheSize,
-		time.Duration(tabletenv.Config.SchemaReloadTime*1e9),
-		time.Duration(tabletenv.Config.IdleTimeout*1e9),
+		config.QueryCacheSize,
+		time.Duration(config.SchemaReloadTime*1e9),
+		time.Duration(config.IdleTimeout*1e9),
 		map[string]string{
-			debugQueryPlansKey: tabletenv.Config.DebugURLPrefix + "/query_plans",
-			debugQueryStatsKey: tabletenv.Config.DebugURLPrefix + "/query_stats",
-			debugSchemaKey:     tabletenv.Config.DebugURLPrefix + "/schema",
-			debugQueryRulesKey: tabletenv.Config.DebugURLPrefix + "/query_rules",
+			debugQueryPlansKey: config.DebugURLPrefix + "/query_plans",
+			debugQueryStatsKey: config.DebugURLPrefix + "/query_stats",
+			debugSchemaKey:     config.DebugURLPrefix + "/schema",
+			debugQueryRulesKey: config.DebugURLPrefix + "/query_rules",
 		},
 	)
 
 	qe.conns = connpool.New(
-		tabletenv.Config.PoolNamePrefix+"ConnPool",
-		tabletenv.Config.PoolSize,
-		time.Duration(tabletenv.Config.IdleTimeout*1e9),
+		config.PoolNamePrefix+"ConnPool",
+		config.PoolSize,
+		time.Duration(config.IdleTimeout*1e9),
 		checker,
 	)
 	qe.streamConns = connpool.New(
-		tabletenv.Config.PoolNamePrefix+"StreamConnPool",
-		tabletenv.Config.StreamPoolSize,
-		time.Duration(tabletenv.Config.IdleTimeout*1e9),
+		config.PoolNamePrefix+"StreamConnPool",
+		config.StreamPoolSize,
+		time.Duration(config.IdleTimeout*1e9),
 		checker,
 	)
 
 	qe.consolidator = sync2.NewConsolidator()
-	http.Handle(tabletenv.Config.DebugURLPrefix+"/consolidations", qe.consolidator)
 	qe.streamQList = NewQueryList()
 
-	if tabletenv.Config.StrictMode {
+	if config.StrictMode {
 		qe.strictMode.Set(1)
 	}
-	if tabletenv.Config.EnableAutoCommit {
+	if config.EnableAutoCommit {
 		qe.autoCommit.Set(1)
 	}
-	qe.strictTableACL = tabletenv.Config.StrictTableAcl
-	qe.enableTableACLDryRun = tabletenv.Config.EnableTableAclDryRun
+	qe.strictTableACL = config.StrictTableAcl
+	qe.enableTableACLDryRun = config.EnableTableAclDryRun
 
-	if tabletenv.Config.TableAclExemptACL != "" {
+	if config.TableAclExemptACL != "" {
 		if f, err := tableacl.GetCurrentAclFactory(); err == nil {
-			if exemptACL, err := f.New([]string{tabletenv.Config.TableAclExemptACL}); err == nil {
-				log.Infof("Setting Table ACL exempt rule for %v", tabletenv.Config.TableAclExemptACL)
+			if exemptACL, err := f.New([]string{config.TableAclExemptACL}); err == nil {
+				log.Infof("Setting Table ACL exempt rule for %v", config.TableAclExemptACL)
 				qe.exemptACL = exemptACL
 			} else {
 				log.Infof("Cannot build exempt ACL for table ACL: %v", err)
@@ -123,9 +122,9 @@ func NewQueryEngine(checker MySQLChecker) *QueryEngine {
 		}
 	}
 
-	qe.maxResultSize = sync2.NewAtomicInt64(int64(tabletenv.Config.MaxResultSize))
-	qe.maxDMLRows = sync2.NewAtomicInt64(int64(tabletenv.Config.MaxDMLRows))
-	qe.streamBufferSize = sync2.NewAtomicInt64(int64(tabletenv.Config.StreamBufferSize))
+	qe.maxResultSize = sync2.NewAtomicInt64(int64(config.MaxResultSize))
+	qe.maxDMLRows = sync2.NewAtomicInt64(int64(config.MaxDMLRows))
+	qe.streamBufferSize = sync2.NewAtomicInt64(int64(config.StreamBufferSize))
 
 	qe.accessCheckerLogger = logutil.NewThrottledLogger("accessChecker", 1*time.Second)
 
@@ -134,6 +133,8 @@ func NewQueryEngine(checker MySQLChecker) *QueryEngine {
 		stats.Publish("MaxDMLRows", stats.IntFunc(qe.maxDMLRows.Get))
 		stats.Publish("StreamBufferSize", stats.IntFunc(qe.streamBufferSize.Get))
 		stats.Publish("TableACLExemptCount", stats.IntFunc(qe.tableaclExemptCount.Get))
+
+		http.Handle(config.DebugURLPrefix+"/consolidations", qe.consolidator)
 	})
 
 	return qe

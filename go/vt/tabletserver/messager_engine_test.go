@@ -29,7 +29,7 @@ func TestMEState(t *testing.T) {
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	config.TransactionCap = 1
-	tsv := NewTabletServer()
+	tsv := NewTabletServer(config)
 	dbconfigs := testUtils.newDBConfigs(db)
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
 	err := tsv.StartService(target, dbconfigs, testUtils.newMysqld(&dbconfigs))
@@ -66,7 +66,7 @@ func TestMESchemaChanged(t *testing.T) {
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	config.TransactionCap = 1
-	tsv := NewTabletServer()
+	tsv := NewTabletServer(config)
 	dbconfigs := testUtils.newDBConfigs(db)
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
 	err := tsv.StartService(target, dbconfigs, testUtils.newMysqld(&dbconfigs))
@@ -137,7 +137,7 @@ func TestSubscribe(t *testing.T) {
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	config.TransactionCap = 1
-	tsv := NewTabletServer()
+	tsv := NewTabletServer(config)
 	dbconfigs := testUtils.newDBConfigs(db)
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
 	err := tsv.StartService(target, dbconfigs, testUtils.newMysqld(&dbconfigs))
@@ -178,7 +178,7 @@ func TestLockDB(t *testing.T) {
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	config.TransactionCap = 1
-	tsv := NewTabletServer()
+	tsv := NewTabletServer(config)
 	dbconfigs := testUtils.newDBConfigs(db)
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
 	err := tsv.StartService(target, dbconfigs, testUtils.newMysqld(&dbconfigs))
@@ -250,7 +250,7 @@ func TestMESendDiscard(t *testing.T) {
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	config.TransactionCap = 1
-	tsv := NewTabletServer()
+	tsv := NewTabletServer(config)
 	dbconfigs := testUtils.newDBConfigs(db)
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
 	err := tsv.StartService(target, dbconfigs, testUtils.newMysqld(&dbconfigs))
@@ -297,7 +297,7 @@ func TestMEGenerate(t *testing.T) {
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	config.TransactionCap = 1
-	tsv := NewTabletServer()
+	tsv := NewTabletServer(config)
 	dbconfigs := testUtils.newDBConfigs(db)
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
 	err := tsv.StartService(target, dbconfigs, testUtils.newMysqld(&dbconfigs))
