@@ -60,7 +60,7 @@ func StartServer(connParams sqldb.ConnParams) error {
 
 	config := tabletenv.DefaultQsConfig
 	config.EnableAutoCommit = true
-	config.StrictTableAcl = true
+	config.StrictTableACL = true
 	config.TwoPCEnable = true
 	config.TwoPCAbandonAge = 1
 	config.TwoPCCoordinatorAddress = "fake"

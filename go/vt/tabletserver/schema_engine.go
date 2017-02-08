@@ -14,34 +14,30 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
+	"golang.org/x/net/context"
+
 	"github.com/youtube/vitess/go/acl"
 	"github.com/youtube/vitess/go/cache"
 	"github.com/youtube/vitess/go/mysqlconn"
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/stats"
+	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/timer"
 	"github.com/youtube/vitess/go/trace"
 	"github.com/youtube/vitess/go/vt/concurrency"
-	querypb "github.com/youtube/vitess/go/vt/proto/query"
-	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 	"github.com/youtube/vitess/go/vt/schema"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/tableacl"
 	"github.com/youtube/vitess/go/vt/tabletserver/connpool"
 	"github.com/youtube/vitess/go/vt/tabletserver/planbuilder"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletenv"
-	"golang.org/x/net/context"
+
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 const maxTableCount = 10000
-
-const (
-	debugQueryPlansKey = "query_plans"
-	debugQueryStatsKey = "query_stats"
-	debugSchemaKey     = "schema"
-	debugQueryRulesKey = "query_rules"
-)
 
 //_______________________________________________
 
@@ -92,7 +88,7 @@ func (ep *ExecPlan) Stats() (queryCount int64, duration, mysqlTime time.Duration
 
 //_______________________________________________
 
-type notifier func(map[string]*TableInfo)
+type notifier func(full map[string]*TableInfo, created, altered, dropped []string)
 
 // SchemaEngine stores the schema info and performs operations that
 // keep itself up-to-date.
@@ -103,13 +99,13 @@ type SchemaEngine struct {
 	tables     map[string]*TableInfo
 	lastChange int64
 	reloadTime time.Duration
+	strictMode sync2.AtomicBool
 
 	// The following vars are either read-only or have
 	// their own synchronization.
 	queries          *cache.LRUCache
 	conns            *connpool.Pool
 	ticks            *timer.Timer
-	endpoints        map[string]string
 	queryRuleSources *QueryRuleInfo
 
 	notifiers map[string]notifier
@@ -118,43 +114,46 @@ type SchemaEngine struct {
 var schemaOnce sync.Once
 
 // NewSchemaEngine creates a new SchemaEngine.
-func NewSchemaEngine(
-	checker MySQLChecker,
-	queryCacheSize int,
-	reloadTime time.Duration,
-	idleTimeout time.Duration,
-	endpoints map[string]string) *SchemaEngine {
-	si := &SchemaEngine{
-		queries:          cache.NewLRUCache(int64(queryCacheSize)),
+func NewSchemaEngine(checker MySQLChecker, config tabletenv.TabletConfig) *SchemaEngine {
+	reloadTime := time.Duration(config.SchemaReloadTime * 1e9)
+	idleTimeout := time.Duration(config.IdleTimeout * 1e9)
+	se := &SchemaEngine{
+		queries:          cache.NewLRUCache(int64(config.QueryCacheSize)),
 		conns:            connpool.New("", 3, idleTimeout, checker),
 		ticks:            timer.NewTimer(reloadTime),
-		endpoints:        endpoints,
 		reloadTime:       reloadTime,
+		strictMode:       sync2.NewAtomicBool(config.StrictMode),
 		queryRuleSources: NewQueryRuleInfo(),
 	}
 	schemaOnce.Do(func() {
-		stats.Publish("QueryCacheLength", stats.IntFunc(si.queries.Length))
-		stats.Publish("QueryCacheSize", stats.IntFunc(si.queries.Size))
-		stats.Publish("QueryCacheCapacity", stats.IntFunc(si.queries.Capacity))
+		stats.Publish("QueryCacheLength", stats.IntFunc(se.queries.Length))
+		stats.Publish("QueryCacheSize", stats.IntFunc(se.queries.Size))
+		stats.Publish("QueryCacheCapacity", stats.IntFunc(se.queries.Capacity))
 		stats.Publish("QueryCacheOldest", stats.StringFunc(func() string {
-			return fmt.Sprintf("%v", si.queries.Oldest())
+			return fmt.Sprintf("%v", se.queries.Oldest())
 		}))
-		stats.Publish("SchemaReloadTime", stats.DurationFunc(si.ticks.Interval))
-		_ = stats.NewMultiCountersFunc("QueryCounts", []string{"Table", "Plan"}, si.getQueryCount)
-		_ = stats.NewMultiCountersFunc("QueryTimesNs", []string{"Table", "Plan"}, si.getQueryTime)
-		_ = stats.NewMultiCountersFunc("QueryRowCounts", []string{"Table", "Plan"}, si.getQueryRowCount)
-		_ = stats.NewMultiCountersFunc("QueryErrorCounts", []string{"Table", "Plan"}, si.getQueryErrorCount)
-		_ = stats.NewMultiCountersFunc("TableRows", []string{"Table"}, si.getTableRows)
-		_ = stats.NewMultiCountersFunc("DataLength", []string{"Table"}, si.getDataLength)
-		_ = stats.NewMultiCountersFunc("IndexLength", []string{"Table"}, si.getIndexLength)
-		_ = stats.NewMultiCountersFunc("DataFree", []string{"Table"}, si.getDataFree)
-		_ = stats.NewMultiCountersFunc("MaxDataLength", []string{"Table"}, si.getMaxDataLength)
+		stats.Publish("SchemaReloadTime", stats.DurationFunc(se.ticks.Interval))
+		_ = stats.NewMultiCountersFunc("QueryCounts", []string{"Table", "Plan"}, se.getQueryCount)
+		_ = stats.NewMultiCountersFunc("QueryTimesNs", []string{"Table", "Plan"}, se.getQueryTime)
+		_ = stats.NewMultiCountersFunc("QueryRowCounts", []string{"Table", "Plan"}, se.getQueryRowCount)
+		_ = stats.NewMultiCountersFunc("QueryErrorCounts", []string{"Table", "Plan"}, se.getQueryErrorCount)
+		_ = stats.NewMultiCountersFunc("TableRows", []string{"Table"}, se.getTableRows)
+		_ = stats.NewMultiCountersFunc("DataLength", []string{"Table"}, se.getDataLength)
+		_ = stats.NewMultiCountersFunc("IndexLength", []string{"Table"}, se.getIndexLength)
+		_ = stats.NewMultiCountersFunc("DataFree", []string{"Table"}, se.getDataFree)
+		_ = stats.NewMultiCountersFunc("MaxDataLength", []string{"Table"}, se.getMaxDataLength)
 
+		endpoints := []string{
+			"/debug/tablet_plans",
+			"/debug/query_stats",
+			"/debug/schema",
+			"/debug/query_rules",
+		}
 		for _, ep := range endpoints {
-			http.Handle(ep, si)
+			http.Handle(ep, se)
 		}
 	})
-	return si
+	return se
 }
 
 // Open initializes the SchemaEngine.
@@ -162,25 +161,27 @@ func NewSchemaEngine(
 // Synchronization between the above operations is
 // the responsibility of the caller.
 // Close is idempotent.
-func (si *SchemaEngine) Open(dbaParams *sqldb.ConnParams, strictMode bool) error {
-	if si.isOpen {
+func (se *SchemaEngine) Open(dbaParams *sqldb.ConnParams) error {
+	if se.isOpen {
 		return nil
 	}
+	start := time.Now()
+	defer log.Infof("Time taken to load the schema: %v", time.Now().Sub(start))
 	ctx := localContext()
-	si.conns.Open(dbaParams, dbaParams)
+	se.conns.Open(dbaParams, dbaParams)
 
-	conn, err := si.conns.Get(ctx)
+	conn, err := se.conns.Get(ctx)
 	if err != nil {
 		return tabletenv.NewTabletErrorSQL(vtrpcpb.ErrorCode_INTERNAL_ERROR, err)
 	}
 	defer conn.Recycle()
 
-	curTime, err := si.mysqlTime(ctx, conn)
+	curTime, err := se.mysqlTime(ctx, conn)
 	if err != nil {
 		return err
 	}
 
-	if strictMode {
+	if se.strictMode.Get() {
 		if err := conn.VerifyMode(); err != nil {
 			return tabletenv.NewTabletError(vtrpcpb.ErrorCode_UNKNOWN_ERROR, err.Error())
 		}
@@ -201,7 +202,7 @@ func (si *SchemaEngine) Open(dbaParams *sqldb.ConnParams, strictMode bool) error
 			defer wg.Done()
 
 			tableName := row[0].String()
-			conn, err := si.conns.Get(ctx)
+			conn, err := se.conns.Get(ctx)
 			if err != nil {
 				log.Errorf("SchemaEngine.Open: connection error while reading table %s: %v", tableName, err)
 				return
@@ -232,44 +233,44 @@ func (si *SchemaEngine) Open(dbaParams *sqldb.ConnParams, strictMode bool) error
 	if len(tableData.Rows) != 0 && len(tables) == 1 { // len(tables) is always at least 1 because of the "dual" table
 		return tabletenv.NewTabletError(vtrpcpb.ErrorCode_UNKNOWN_ERROR, "could not get schema for any tables")
 	}
-	si.tables = tables
-	si.lastChange = curTime
-	si.ticks.Start(func() {
-		if err := si.Reload(ctx); err != nil {
+	se.tables = tables
+	se.lastChange = curTime
+	se.ticks.Start(func() {
+		if err := se.Reload(ctx); err != nil {
 			log.Errorf("periodic schema reload failed: %v", err)
 		}
 	})
-	si.notifiers = make(map[string]notifier)
-	si.isOpen = true
+	se.notifiers = make(map[string]notifier)
+	se.isOpen = true
 	return nil
 }
 
 // Close shuts down SchemaEngine. It can be re-opened after Close.
-func (si *SchemaEngine) Close() {
-	if !si.isOpen {
+func (se *SchemaEngine) Close() {
+	if !se.isOpen {
 		return
 	}
-	si.ticks.Stop()
-	si.conns.Close()
-	si.queries.Clear()
-	si.tables = nil
-	si.notifiers = nil
-	si.isOpen = false
+	se.ticks.Stop()
+	se.conns.Close()
+	se.queries.Clear()
+	se.tables = nil
+	se.notifiers = nil
+	se.isOpen = false
 }
 
 // Reload reloads the schema info from the db.
 // Any tables that have changed since the last load are updated.
 // This is a no-op if the SchemaEngine is closed.
-func (si *SchemaEngine) Reload(ctx context.Context) error {
+func (se *SchemaEngine) Reload(ctx context.Context) error {
 	defer tabletenv.LogError()
 
 	curTime, tableData, err := func() (int64, *sqltypes.Result, error) {
-		conn, err := si.conns.Get(ctx)
+		conn, err := se.conns.Get(ctx)
 		if err != nil {
 			return 0, nil, tabletenv.NewTabletErrorSQL(vtrpcpb.ErrorCode_INTERNAL_ERROR, err)
 		}
 		defer conn.Recycle()
-		curTime, err := si.mysqlTime(ctx, conn)
+		curTime, err := se.mysqlTime(ctx, conn)
 		if err != nil {
 			return 0, nil, err
 		}
@@ -287,35 +288,47 @@ func (si *SchemaEngine) Reload(ctx context.Context) error {
 	// but we return success only if all tables succeed.
 	// The following section requires us to hold mu.
 	rec := concurrency.AllErrorRecorder{}
-	schemaChanged := false
-	si.mu.Lock()
-	defer si.mu.Unlock()
+	se.mu.Lock()
+	defer se.mu.Unlock()
+	curTables := map[string]bool{"dual": true}
 	for _, row := range tableData.Rows {
 		tableName := row[0].String()
+		curTables[tableName] = true
 		createTime, _ := row[2].ParseInt64()
 		// Check if we know about the table or it has been recreated.
-		if _, ok := si.tables[tableName]; !ok || createTime >= si.lastChange {
-			schemaChanged = true
+		if _, ok := se.tables[tableName]; !ok || createTime >= se.lastChange {
 			func() {
-				// Unlock so CreateOrUpdateTable can lock.
-				si.mu.Unlock()
-				defer si.mu.Lock()
+				// Unlock so CreateOrAlterTable can lock.
+				se.mu.Unlock()
+				defer se.mu.Lock()
 				log.Infof("Reloading schema for table: %s", tableName)
-				rec.RecordError(si.CreateOrUpdateTable(ctx, tableName))
+				rec.RecordError(se.CreateOrAlterTable(ctx, tableName))
 			}()
 			continue
 		}
 		// Only update table_rows, data_length, index_length, max_data_length
-		si.tables[tableName].SetMysqlStats(row[4], row[5], row[6], row[7], row[8])
+		se.tables[tableName].SetMysqlStats(row[4], row[5], row[6], row[7], row[8])
 	}
-	si.lastChange = curTime
-	if schemaChanged {
-		si.broadcast()
+	se.lastChange = curTime
+
+	// Handle table drops
+	var dropped []string
+	for tableName := range se.tables {
+		if curTables[tableName] {
+			continue
+		}
+		delete(se.tables, tableName)
+		dropped = append(dropped, tableName)
+	}
+	// We only need to broadcast dropped tables because
+	// CreateOrAlterTable will broadcast the other changes.
+	if len(dropped) > 0 {
+		se.broadcast(nil, nil, dropped)
 	}
 	return rec.Error()
 }
 
-func (si *SchemaEngine) mysqlTime(ctx context.Context, conn *connpool.DBConn) (int64, error) {
+func (se *SchemaEngine) mysqlTime(ctx context.Context, conn *connpool.DBConn) (int64, error) {
 	tm, err := conn.Exec(ctx, "select unix_timestamp()", 1, false)
 	if err != nil {
 		return 0, tabletenv.PrefixTabletError(vtrpcpb.ErrorCode_UNKNOWN_ERROR, err, "Could not get MySQL time: ")
@@ -331,13 +344,13 @@ func (si *SchemaEngine) mysqlTime(ctx context.Context, conn *connpool.DBConn) (i
 }
 
 // ClearQueryPlanCache should be called if query plan cache is potentially obsolete
-func (si *SchemaEngine) ClearQueryPlanCache() {
-	si.queries.Clear()
+func (se *SchemaEngine) ClearQueryPlanCache() {
+	se.queries.Clear()
 }
 
-// CreateOrUpdateTable must be called if a DDL was applied to that table.
-func (si *SchemaEngine) CreateOrUpdateTable(ctx context.Context, tableName string) error {
-	conn, err := si.conns.Get(ctx)
+// CreateOrAlterTable must be called if a DDL was applied to that table.
+func (se *SchemaEngine) CreateOrAlterTable(ctx context.Context, tableName string) error {
+	conn, err := se.conns.Get(ctx)
 	if err != nil {
 		return tabletenv.NewTabletErrorSQL(vtrpcpb.ErrorCode_INTERNAL_ERROR, err)
 	}
@@ -346,7 +359,7 @@ func (si *SchemaEngine) CreateOrUpdateTable(ctx context.Context, tableName strin
 	if err != nil {
 		tabletenv.InternalErrors.Add("Schema", 1)
 		return tabletenv.PrefixTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, err,
-			fmt.Sprintf("CreateOrUpdateTable: information_schema query failed for table %s: ", tableName))
+			fmt.Sprintf("CreateOrAlterTable: information_schema query failed for table %s: ", tableName))
 	}
 	if len(tableData.Rows) != 1 {
 		// This can happen if DDLs race with each other.
@@ -362,69 +375,77 @@ func (si *SchemaEngine) CreateOrUpdateTable(ctx context.Context, tableName strin
 	if err != nil {
 		tabletenv.InternalErrors.Add("Schema", 1)
 		return tabletenv.PrefixTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, err,
-			fmt.Sprintf("CreateOrUpdateTable: failed to create TableInfo for table %s: ", tableName))
+			fmt.Sprintf("CreateOrAlterTable: failed to create TableInfo for table %s: ", tableName))
 	}
 	// table_rows, data_length, index_length, max_data_length
 	tableInfo.SetMysqlStats(row[4], row[5], row[6], row[7], row[8])
 
 	// Need to acquire lock now.
-	si.mu.Lock()
-	defer si.mu.Unlock()
-	if _, ok := si.tables[tableName]; ok {
+	se.mu.Lock()
+	defer se.mu.Unlock()
+	var created, altered []string
+	if _, ok := se.tables[tableName]; ok {
 		// If the table already exists, we overwrite it with the latest info.
 		// This also means that the query cache needs to be cleared.
 		// Otherwise, the query plans may not be in sync with the schema.
-		si.queries.Clear()
+		se.queries.Clear()
 		log.Infof("Updating table %s", tableName)
+		altered = append(altered, tableName)
+	} else {
+		created = append(created, tableName)
 	}
-	si.tables[tableName] = tableInfo
+	se.tables[tableName] = tableInfo
 	log.Infof("Initialized table: %s, type: %s", tableName, schema.TypeNames[tableInfo.Type])
-	si.broadcast()
+	se.broadcast(created, altered, nil)
 	return nil
 }
 
 // DropTable must be called if a table was dropped.
-func (si *SchemaEngine) DropTable(tableName sqlparser.TableIdent) {
-	si.mu.Lock()
-	defer si.mu.Unlock()
+func (se *SchemaEngine) DropTable(tableName sqlparser.TableIdent) {
+	se.mu.Lock()
+	defer se.mu.Unlock()
 
-	delete(si.tables, tableName.String())
-	si.queries.Clear()
+	delete(se.tables, tableName.String())
+	se.queries.Clear()
 	log.Infof("Table %s forgotten", tableName)
-	si.broadcast()
+	se.broadcast(nil, nil, []string{tableName.String()})
 }
 
 // RegisterNotifier registers the function for schema change notification.
 // It also causes an immediate notification to the caller.
-func (si *SchemaEngine) RegisterNotifier(name string, f notifier) {
-	si.mu.Lock()
-	defer si.mu.Unlock()
-	si.notifiers[name] = f
-	f(si.tables)
+func (se *SchemaEngine) RegisterNotifier(name string, f notifier) {
+	se.mu.Lock()
+	defer se.mu.Unlock()
+	se.notifiers[name] = f
+	var created []string
+	for tableName := range se.tables {
+		created = append(created, tableName)
+	}
+	f(se.tables, created, nil, nil)
 }
 
 // UnregisterNotifier unregisters the notifier function.
-func (si *SchemaEngine) UnregisterNotifier(name string) {
-	si.mu.Lock()
-	defer si.mu.Unlock()
-	delete(si.notifiers, name)
+func (se *SchemaEngine) UnregisterNotifier(name string) {
+	se.mu.Lock()
+	defer se.mu.Unlock()
+	delete(se.notifiers, name)
 }
 
-// broadcast must be called while holding a lock on si.mu.
-func (si *SchemaEngine) broadcast() {
-	for _, f := range si.notifiers {
-		f(si.tables)
+// broadcast must be called while holding a lock on se.mu.
+func (se *SchemaEngine) broadcast(created, altered, dropped []string) {
+	for _, f := range se.notifiers {
+		f(se.tables, created, altered, dropped)
 	}
 }
 
 // GetPlan returns the ExecPlan that for the query. Plans are cached in a cache.LRUCache.
-func (si *SchemaEngine) GetPlan(ctx context.Context, logStats *tabletenv.LogStats, sql string) (*ExecPlan, error) {
+func (se *SchemaEngine) GetPlan(ctx context.Context, logStats *tabletenv.LogStats, sql string) (*ExecPlan, error) {
 	span := trace.NewSpanFromContext(ctx)
 	span.StartLocal("SchemaEngine.GetPlan")
 	defer span.Finish()
 
 	// Fastpath if plan already exists.
-	if plan := si.getQuery(sql); plan != nil {
+	if plan := se.getQuery(sql); plan != nil {
 		return plan, nil
 	}
 
@@ -434,16 +455,16 @@ func (si *SchemaEngine) GetPlan(ctx context.Context, logStats *tabletenv.LogStat
 	// plans and compete with populating the query cache. In other words, we
 	// need a more elaborate scheme that blocks less, but still prevents these
 	// race conditions.
-	si.mu.Lock()
-	defer si.mu.Unlock()
+	se.mu.Lock()
+	defer se.mu.Unlock()
 	// Recheck. A plan might have been built by someone else.
-	if plan := si.getQuery(sql); plan != nil {
+	if plan := se.getQuery(sql); plan != nil {
 		return plan, nil
 	}
 
 	var tableInfo *TableInfo
 	GetTable := func(tableName sqlparser.TableIdent) (table *schema.Table, ok bool) {
-		tableInfo, ok = si.tables[tableName.String()]
+		tableInfo, ok = se.tables[tableName.String()]
 		if !ok {
 			return nil, false
 		}
@@ -454,13 +475,13 @@ func (si *SchemaEngine) GetPlan(ctx context.Context, logStats *tabletenv.LogStat
 		return nil, tabletenv.PrefixTabletError(vtrpcpb.ErrorCode_UNKNOWN_ERROR, err, "")
 	}
 	plan := &ExecPlan{ExecPlan: splan, TableInfo: tableInfo}
-	plan.Rules = si.queryRuleSources.filterByPlan(sql, plan.PlanID, plan.TableName.String())
+	plan.Rules = se.queryRuleSources.filterByPlan(sql, plan.PlanID, plan.TableName.String())
 	plan.Authorized = tableacl.Authorized(plan.TableName.String(), plan.PlanID.MinRole())
 	if plan.PlanID.IsSelect() {
 		if plan.FieldQuery == nil {
 			log.Warningf("Cannot cache field info: %s", sql)
 		} else {
-			conn, err := si.conns.Get(ctx)
+			conn, err := se.conns.Get(ctx)
 			if err != nil {
 				return nil, tabletenv.NewTabletErrorSQL(vtrpcpb.ErrorCode_INTERNAL_ERROR, err)
 			}
@@ -478,18 +499,18 @@ func (si *SchemaEngine) GetPlan(ctx context.Context, logStats *tabletenv.LogStat
 	} else if plan.PlanID == planbuilder.PlanDDL || plan.PlanID == planbuilder.PlanSet {
 		return plan, nil
 	}
-	si.queries.Set(sql, plan)
+	se.queries.Set(sql, plan)
 	return plan, nil
 }
 
 // GetStreamPlan is similar to GetPlan, but doesn't use the cache
 // and doesn't enforce a limit. It just returns the parsed query.
-func (si *SchemaEngine) GetStreamPlan(sql string) (*ExecPlan, error) {
+func (se *SchemaEngine) GetStreamPlan(sql string) (*ExecPlan, error) {
 	var tableInfo *TableInfo
 	GetTable := func(tableName sqlparser.TableIdent) (table *schema.Table, ok bool) {
-		si.mu.Lock()
-		defer si.mu.Unlock()
-		tableInfo, ok = si.tables[tableName.String()]
+		se.mu.Lock()
+		defer se.mu.Unlock()
+		tableInfo, ok = se.tables[tableName.String()]
 		if !ok {
 			return nil, false
 		}
@@ -500,165 +521,165 @@ func (si *SchemaEngine) GetStreamPlan(sql string) (*ExecPlan, error) {
 		return nil, tabletenv.PrefixTabletError(vtrpcpb.ErrorCode_BAD_INPUT, err, "")
 	}
 	plan := &ExecPlan{ExecPlan: splan, TableInfo: tableInfo}
-	plan.Rules = si.queryRuleSources.filterByPlan(sql, plan.PlanID, plan.TableName.String())
+	plan.Rules = se.queryRuleSources.filterByPlan(sql, plan.PlanID, plan.TableName.String())
 	plan.Authorized = tableacl.Authorized(plan.TableName.String(), plan.PlanID.MinRole())
 	return plan, nil
 }
 
 // GetTable returns the TableInfo for a table.
-func (si *SchemaEngine) GetTable(tableName sqlparser.TableIdent) *TableInfo {
-	si.mu.Lock()
-	defer si.mu.Unlock()
-	return si.tables[tableName.String()]
+func (se *SchemaEngine) GetTable(tableName sqlparser.TableIdent) *TableInfo {
+	se.mu.Lock()
+	defer se.mu.Unlock()
+	return se.tables[tableName.String()]
 }
 
 // GetSchema returns the current schema. The Tables are a shared
 // data strucutre and must be treated as read-only.
-func (si *SchemaEngine) GetSchema() map[string]*schema.Table {
-	si.mu.Lock()
-	defer si.mu.Unlock()
-	tables := make(map[string]*schema.Table, len(si.tables))
-	for k, v := range si.tables {
+func (se *SchemaEngine) GetSchema() map[string]*schema.Table {
+	se.mu.Lock()
+	defer se.mu.Unlock()
+	tables := make(map[string]*schema.Table, len(se.tables))
+	for k, v := range se.tables {
 		tables[k] = v.Table
 	}
 	return tables
 }
 
 // getQuery fetches the plan and makes it the most recent.
-func (si *SchemaEngine) getQuery(sql string) *ExecPlan {
-	if cacheResult, ok := si.queries.Get(sql); ok {
+func (se *SchemaEngine) getQuery(sql string) *ExecPlan {
+	if cacheResult, ok := se.queries.Get(sql); ok {
 		return cacheResult.(*ExecPlan)
 	}
 	return nil
 }
 
 // peekQuery fetches the plan without changing the LRU order.
-func (si *SchemaEngine) peekQuery(sql string) *ExecPlan {
-	if cacheResult, ok := si.queries.Peek(sql); ok {
+func (se *SchemaEngine) peekQuery(sql string) *ExecPlan {
+	if cacheResult, ok := se.queries.Peek(sql); ok {
 		return cacheResult.(*ExecPlan)
 	}
 	return nil
 }
 
 // SetQueryCacheCap sets the query cache capacity.
-func (si *SchemaEngine) SetQueryCacheCap(size int) {
+func (se *SchemaEngine) SetQueryCacheCap(size int) {
 	if size <= 0 {
 		size = 1
 	}
-	si.queries.SetCapacity(int64(size))
+	se.queries.SetCapacity(int64(size))
 }
 
 // QueryCacheCap returns the capacity of the query cache.
-func (si *SchemaEngine) QueryCacheCap() int {
-	return int(si.queries.Capacity())
+func (se *SchemaEngine) QueryCacheCap() int {
+	return int(se.queries.Capacity())
 }
 
 // SetReloadTime changes how often the schema is reloaded. This
 // call also triggers an immediate reload.
-func (si *SchemaEngine) SetReloadTime(reloadTime time.Duration) {
-	si.ticks.Trigger()
-	si.ticks.SetInterval(reloadTime)
-	si.mu.Lock()
-	defer si.mu.Unlock()
-	si.reloadTime = reloadTime
+func (se *SchemaEngine) SetReloadTime(reloadTime time.Duration) {
+	se.ticks.Trigger()
+	se.ticks.SetInterval(reloadTime)
+	se.mu.Lock()
+	defer se.mu.Unlock()
+	se.reloadTime = reloadTime
 }
 
 // ReloadTime returns schema info reload time.
-func (si *SchemaEngine) ReloadTime() time.Duration {
-	si.mu.Lock()
-	defer si.mu.Unlock()
-	return si.reloadTime
+func (se *SchemaEngine) ReloadTime() time.Duration {
+	se.mu.Lock()
+	defer se.mu.Unlock()
+	return se.reloadTime
 }
 
-func (si *SchemaEngine) getTableRows() map[string]int64 {
-	si.mu.Lock()
-	defer si.mu.Unlock()
+func (se *SchemaEngine) getTableRows() map[string]int64 {
+	se.mu.Lock()
+	defer se.mu.Unlock()
 	tstats := make(map[string]int64)
-	for k, v := range si.tables {
+	for k, v := range se.tables {
 		tstats[k] = v.TableRows.Get()
 	}
 	return tstats
 }
 
-func (si *SchemaEngine) getDataLength() map[string]int64 {
-	si.mu.Lock()
-	defer si.mu.Unlock()
+func (se *SchemaEngine) getDataLength() map[string]int64 {
+	se.mu.Lock()
+	defer se.mu.Unlock()
 	tstats := make(map[string]int64)
-	for k, v := range si.tables {
+	for k, v := range se.tables {
 		tstats[k] = v.DataLength.Get()
 	}
 	return tstats
 }
 
-func (si *SchemaEngine) getIndexLength() map[string]int64 {
-	si.mu.Lock()
-	defer si.mu.Unlock()
+func (se *SchemaEngine) getIndexLength() map[string]int64 {
+	se.mu.Lock()
+	defer se.mu.Unlock()
 	tstats := make(map[string]int64)
-	for k, v := range si.tables {
+	for k, v := range se.tables {
 		tstats[k] = v.IndexLength.Get()
 	}
 	return tstats
 }
 
-func (si *SchemaEngine) getDataFree() map[string]int64 {
-	si.mu.Lock()
-	defer si.mu.Unlock()
+func (se *SchemaEngine) getDataFree() map[string]int64 {
+	se.mu.Lock()
+	defer se.mu.Unlock()
 	tstats := make(map[string]int64)
-	for k, v := range si.tables {
+	for k, v := range se.tables {
 		tstats[k] = v.DataFree.Get()
 	}
 	return tstats
 }
 
-func (si *SchemaEngine) getMaxDataLength() map[string]int64 {
-	si.mu.Lock()
-	defer si.mu.Unlock()
+func (se *SchemaEngine) getMaxDataLength() map[string]int64 {
+	se.mu.Lock()
+	defer se.mu.Unlock()
 	tstats := make(map[string]int64)
-	for k, v := range si.tables {
+	for k, v := range se.tables {
 		tstats[k] = v.MaxDataLength.Get()
 	}
 	return tstats
 }
 
-func (si *SchemaEngine) getQueryCount() map[string]int64 {
+func (se *SchemaEngine) getQueryCount() map[string]int64 {
 	f := func(plan *ExecPlan) int64 {
 		queryCount, _, _, _, _ := plan.Stats()
 		return queryCount
 	}
-	return si.getQueryStats(f)
+	return se.getQueryStats(f)
 }
 
-func (si *SchemaEngine) getQueryTime() map[string]int64 {
+func (se *SchemaEngine) getQueryTime() map[string]int64 {
 	f := func(plan *ExecPlan) int64 {
 		_, time, _, _, _ := plan.Stats()
 		return int64(time)
 	}
-	return si.getQueryStats(f)
+	return se.getQueryStats(f)
 }
 
-func (si *SchemaEngine) getQueryRowCount() map[string]int64 {
+func (se *SchemaEngine) getQueryRowCount() map[string]int64 {
 	f := func(plan *ExecPlan) int64 {
 		_, _, _, rowCount, _ := plan.Stats()
 		return rowCount
 	}
-	return si.getQueryStats(f)
+	return se.getQueryStats(f)
 }
 
-func (si *SchemaEngine) getQueryErrorCount() map[string]int64 {
+func (se *SchemaEngine) getQueryErrorCount() map[string]int64 {
 	f := func(plan *ExecPlan) int64 {
 		_, _, _, _, errorCount := plan.Stats()
 		return errorCount
 	}
-	return si.getQueryStats(f)
+	return se.getQueryStats(f)
 }
 
 type queryStatsFunc func(*ExecPlan) int64
 
-func (si *SchemaEngine) getQueryStats(f queryStatsFunc) map[string]int64 {
-	keys := si.queries.Keys()
+func (se *SchemaEngine) getQueryStats(f queryStatsFunc) map[string]int64 {
+	keys := se.queries.Keys()
 	qstats := make(map[string]int64)
 	for _, v := range keys {
-		if plan := si.peekQuery(v); plan != nil {
+		if plan := se.peekQuery(v); plan != nil {
 			table := plan.TableName
 			if table.IsEmpty() {
 				table = sqlparser.NewTableIdent("Join")
@@ -682,31 +703,32 @@ type perQueryStats struct {
 	ErrorCount int64
 }
 
-func (si *SchemaEngine) ServeHTTP(response http.ResponseWriter, request *http.Request) {
+func (se *SchemaEngine) ServeHTTP(response http.ResponseWriter, request *http.Request) {
 	if err := acl.CheckAccessHTTP(request, acl.DEBUGGING); err != nil {
 		acl.SendError(response, err)
 		return
 	}
-	if ep, ok := si.endpoints[debugQueryPlansKey]; ok && request.URL.Path == ep {
-		si.handleHTTPQueryPlans(response, request)
-	} else if ep, ok := si.endpoints[debugQueryStatsKey]; ok && request.URL.Path == ep {
-		si.handleHTTPQueryStats(response, request)
-	} else if ep, ok := si.endpoints[debugSchemaKey]; ok && request.URL.Path == ep {
-		si.handleHTTPSchema(response, request)
-	} else if ep, ok := si.endpoints[debugQueryRulesKey]; ok && request.URL.Path == ep {
-		si.handleHTTPQueryRules(response, request)
-	} else {
+	switch request.URL.Path {
+	case "/debug/tablet_plans":
+		se.handleHTTPQueryPlans(response, request)
+	case "/debug/query_stats":
+		se.handleHTTPQueryStats(response, request)
+	case "/debug/schema":
+		se.handleHTTPSchema(response, request)
+	case "/debug/query_rules":
+		se.handleHTTPQueryRules(response, request)
+	default:
 		response.WriteHeader(http.StatusNotFound)
 	}
 }
 
-func (si *SchemaEngine) handleHTTPQueryPlans(response http.ResponseWriter, request *http.Request) {
-	keys := si.queries.Keys()
+func (se *SchemaEngine) handleHTTPQueryPlans(response http.ResponseWriter, request *http.Request) {
+	keys := se.queries.Keys()
 	response.Header().Set("Content-Type", "text/plain")
 	response.Write([]byte(fmt.Sprintf("Length: %d\n", len(keys))))
 	for _, v := range keys {
 		response.Write([]byte(fmt.Sprintf("%#v\n", v)))
-		if plan := si.peekQuery(v); plan != nil {
+		if plan := se.peekQuery(v); plan != nil {
 			if b, err := json.MarshalIndent(plan.ExecPlan, "", "  "); err != nil {
 				response.Write([]byte(err.Error()))
 			} else {
@@ -717,12 +739,12 @@ func (si *SchemaEngine) handleHTTPQueryPlans(response http.ResponseWriter, reque
 	}
 }
 
-func (si *SchemaEngine) handleHTTPQueryStats(response http.ResponseWriter, request *http.Request) {
-	keys := si.queries.Keys()
+func (se *SchemaEngine) handleHTTPQueryStats(response http.ResponseWriter, request *http.Request) {
+	keys := se.queries.Keys()
 	response.Header().Set("Content-Type", "application/json; charset=utf-8")
 	qstats := make([]perQueryStats, 0, len(keys))
 	for _, v := range keys {
-		if plan := si.peekQuery(v); plan != nil {
+		if plan := se.peekQuery(v); plan != nil {
 			var pqstats perQueryStats
 			pqstats.Query = unicoded(v)
 			pqstats.Table = plan.TableName.String()
@@ -738,9 +760,9 @@ func (si *SchemaEngine) handleHTTPQueryStats(response http.ResponseWriter, reque
 	}
 }
 
-func (si *SchemaEngine) handleHTTPSchema(response http.ResponseWriter, request *http.Request) {
+func (se *SchemaEngine) handleHTTPSchema(response http.ResponseWriter, request *http.Request) {
 	response.Header().Set("Content-Type", "application/json; charset=utf-8")
-	b, err := json.MarshalIndent(si.GetSchema(), "", " ")
+	b, err := json.MarshalIndent(se.GetSchema(), "", " ")
 	if err != nil {
 		response.Write([]byte(err.Error()))
 		return
@@ -750,9 +772,9 @@ func (si *SchemaEngine) handleHTTPSchema(response http.ResponseWriter, request *
 	response.Write(buf.Bytes())
 }
 
-func (si *SchemaEngine) handleHTTPQueryRules(response http.ResponseWriter, request *http.Request) {
+func (se *SchemaEngine) handleHTTPQueryRules(response http.ResponseWriter, request *http.Request) {
 	response.Header().Set("Content-Type", "application/json; charset=utf-8")
-	b, err := json.MarshalIndent(si.queryRuleSources, "", " ")
+	b, err := json.MarshalIndent(se.queryRuleSources, "", " ")
 	if err != nil {
 		response.Write([]byte(err.Error()))
 		return

@@ -9,6 +9,8 @@ import (
 	"sync"
 	"time"
 
+	log "github.com/golang/glog"
+
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/schema"
 	"github.com/youtube/vitess/go/vt/tabletserver/connpool"
@@ -48,7 +50,7 @@ func (me *MessagerEngine) Open(dbconfigs dbconfigs.DBConfigs) error {
 		return nil
 	}
 	me.conns.Open(&dbconfigs.App, &dbconfigs.Dba)
-	me.tsv.qe.se.RegisterNotifier("messages", me.schemaChanged)
+	me.tsv.se.RegisterNotifier("messages", me.schemaChanged)
 	me.isOpen = true
 	return nil
 }
@@ -61,7 +63,7 @@ func (me *MessagerEngine) Close() {
 		return
 	}
 	me.isOpen = false
-	me.tsv.qe.se.UnregisterNotifier("messages")
+	me.tsv.se.UnregisterNotifier("messages")
 	for _, mm := range me.managers {
 		mm.Close()
 	}
@@ -176,19 +178,32 @@ func (me *MessagerEngine) GeneratePurgeQuery(name string, timeCutoff int64) (str
 	return query, bv, nil
 }
 
-func (me *MessagerEngine) schemaChanged(tables map[string]*TableInfo) {
+func (me *MessagerEngine) schemaChanged(tables map[string]*TableInfo, created, altered, dropped []string) {
 	me.mu.Lock()
 	defer me.mu.Unlock()
-	for name, t := range tables {
+	for _, name := range created {
+		t := tables[name]
 		if t.Type != schema.Message {
 			continue
 		}
 		if me.managers[name] != nil {
-			// TODO(sougou): Need to update values instead.
+			// TODO(sougou): Increment internal error counter.
+			log.Errorf("Newly created table alread exists in messages: %s", name)
 			continue
 		}
 		mm := NewMessageManager(me.tsv, t, me.conns)
 		me.managers[name] = mm
 		mm.Open()
+	}
+
+	// TODO(sougou): Update altered tables.
+
+	for _, name := range dropped {
+		mm := me.managers[name]
+		if mm == nil {
+			continue
+		}
+		mm.Close()
+		delete(me.managers, name)
 	}
 }

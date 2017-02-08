@@ -1927,18 +1927,18 @@ func TestConfigChanges(t *testing.T) {
 	if val := tsv.QueryCacheCap(); val != newSize {
 		t.Errorf("QueryCacheCap: %d, want %d", val, newSize)
 	}
-	if val := int(tsv.qe.se.QueryCacheCap()); val != newSize {
-		t.Errorf("tsv.qe.se.QueryCacheCap: %d, want %d", val, newSize)
+	if val := int(tsv.se.QueryCacheCap()); val != newSize {
+		t.Errorf("tsv.se.QueryCacheCap: %d, want %d", val, newSize)
 	}
 
 	tsv.SetStrictMode(false)
-	if val := tsv.qe.strictMode.Get(); val != 0 {
-		t.Errorf("tsv.qe.strictMode.Get: %d, want 0", val)
+	if val := tsv.qe.strictMode.Get(); val {
+		t.Errorf("tsv.qe.strictMode.Get: %d, want false", val)
 	}
 
 	tsv.SetAutoCommit(true)
-	if val := tsv.qe.autoCommit.Get(); val == 0 {
-		t.Errorf("tsv.qe.autoCommit.Get: %d, want non-0", val)
+	if val := tsv.qe.autoCommit.Get(); !val {
+		t.Errorf("tsv.qe.autoCommit.Get: %d, want true", val)
 	}
 
 	tsv.SetMaxResultSize(newSize)

@@ -74,25 +74,15 @@ func (util *testUtils) newDBConfigs(db *fakesqldb.DB) dbconfigs.DBConfigs {
 func (util *testUtils) newQueryServiceConfig() tabletenv.TabletConfig {
 	randID := rand.Int63()
 	config := tabletenv.DefaultQsConfig
-	config.DebugURLPrefix = fmt.Sprintf("/debug-%d-", randID)
 	config.PoolNamePrefix = fmt.Sprintf("Pool-%d-", randID)
 	return config
 }
 
-func newTestSchemaEngine(
-	queryCacheSize int,
-	reloadTime time.Duration,
-	idleTimeout time.Duration) *SchemaEngine {
-	randID := rand.Int63()
-	return NewSchemaEngine(
-		DummyChecker,
-		queryCacheSize,
-		reloadTime,
-		idleTimeout,
-		map[string]string{
-			debugQueryPlansKey: fmt.Sprintf("/debug/query_plans_%d", randID),
-			debugQueryStatsKey: fmt.Sprintf("/debug/query_stats_%d", randID),
-			debugSchemaKey:     fmt.Sprintf("/debug/schema_%d", randID),
-		},
-	)
+func newTestSchemaEngine(queryCacheSize int, reloadTime time.Duration, idleTimeout time.Duration, strict bool) *SchemaEngine {
+	config := tabletenv.DefaultQsConfig
+	config.QueryCacheSize = queryCacheSize
+	config.SchemaReloadTime = float64(reloadTime) / 1e9
+	config.IdleTimeout = float64(idleTimeout) / 1e9
+	config.StrictMode = strict
+	return NewSchemaEngine(DummyChecker, config)
 }
