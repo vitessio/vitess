@@ -58,11 +58,12 @@ func StartServer(connParams sqldb.ConnParams) error {
 		dbconfigs.AppConfig,
 	)
 
-	tabletenv.Config.EnableAutoCommit = true
-	tabletenv.Config.StrictTableAcl = true
-	tabletenv.Config.TwoPCEnable = true
-	tabletenv.Config.TwoPCAbandonAge = 1
-	tabletenv.Config.TwoPCCoordinatorAddress = "fake"
+	config := tabletenv.DefaultQsConfig
+	config.EnableAutoCommit = true
+	config.StrictTableAcl = true
+	config.TwoPCEnable = true
+	config.TwoPCAbandonAge = 1
+	config.TwoPCCoordinatorAddress = "fake"
 
 	Target = querypb.Target{
 		Keyspace:   "vttest",
@@ -70,7 +71,7 @@ func StartServer(connParams sqldb.ConnParams) error {
 		TabletType: topodatapb.TabletType_MASTER,
 	}
 
-	Server = tabletserver.NewTabletServer()
+	Server = tabletserver.NewTabletServer(config)
 	Server.Register()
 	err := Server.StartService(Target, dbcfgs, mysqld)
 	if err != nil {

@@ -71,10 +71,9 @@ func (util *testUtils) newDBConfigs(db *fakesqldb.DB) dbconfigs.DBConfigs {
 	}
 }
 
-func (util *testUtils) newQueryServiceConfig() *tabletenv.TabletConfig {
+func (util *testUtils) newQueryServiceConfig() tabletenv.TabletConfig {
 	randID := rand.Int63()
-	tabletenv.Config = tabletenv.DefaultQsConfig
-	config := &tabletenv.Config
+	config := tabletenv.DefaultQsConfig
 	config.DebugURLPrefix = fmt.Sprintf("/debug-%d-", randID)
 	config.PoolNamePrefix = fmt.Sprintf("Pool-%d-", randID)
 	return config

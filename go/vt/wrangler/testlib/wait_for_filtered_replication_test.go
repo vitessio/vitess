@@ -5,8 +5,6 @@
 package testlib
 
 import (
-	"fmt"
-	"math/rand"
 	"strings"
 	"testing"
 	"time"
@@ -113,9 +111,7 @@ func waitForFilteredReplication(t *testing.T, expectedErr string, initialStats *
 	dest.Agent.BinlogPlayerMap = tabletmanager.NewBinlogPlayerMap(ts, nil, nil)
 
 	// Use real, but trimmed down QueryService.
-	tabletenv.Config = tabletenv.DefaultQsConfig
-	tabletenv.Config.DebugURLPrefix = fmt.Sprintf("TestWaitForFilteredReplication-%d-", rand.Int63())
-	qs := tabletserver.NewTabletServer()
+	qs := tabletserver.NewTabletServer(tabletenv.DefaultQsConfig)
 	grpcqueryservice.Register(dest.RPCServer, qs)
 
 	qs.BroadcastHealth(42, initialStats)

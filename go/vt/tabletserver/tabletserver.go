@@ -80,6 +80,7 @@ var stateName = []string{
 type TabletServer struct {
 	QueryTimeout sync2.AtomicDuration
 	BeginTimeout sync2.AtomicDuration
+	TerseErrors  bool
 
 	// mu is used to access state. The lock should only be held
 	// for short periods. For longer periods, you have to transition
@@ -146,26 +147,27 @@ type MySQLChecker interface {
 
 // NewServer creates a new TabletServer based on the command line flags.
 func NewServer() *TabletServer {
-	return NewTabletServer()
+	return NewTabletServer(tabletenv.Config)
 }
 
 var tsOnce sync.Once
 
 // NewTabletServer creates an instance of TabletServer. Only one instance
 // of TabletServer can be created per process.
-func NewTabletServer() *TabletServer {
+func NewTabletServer(config tabletenv.TabletConfig) *TabletServer {
 	tsv := &TabletServer{
-		QueryTimeout:        sync2.NewAtomicDuration(time.Duration(tabletenv.Config.QueryTimeout * 1e9)),
-		BeginTimeout:        sync2.NewAtomicDuration(time.Duration(tabletenv.Config.TxPoolTimeout * 1e9)),
+		QueryTimeout:        sync2.NewAtomicDuration(time.Duration(config.QueryTimeout * 1e9)),
+		BeginTimeout:        sync2.NewAtomicDuration(time.Duration(config.TxPoolTimeout * 1e9)),
+		TerseErrors:         config.TerseErrors,
 		checkMySQLThrottler: sync2.NewSemaphore(1, 0),
 		streamHealthMap:     make(map[int]chan<- *querypb.StreamHealthResponse),
 		history:             history.New(10),
 	}
-	tsv.qe = NewQueryEngine(tsv)
-	tsv.te = NewTxEngine(tsv)
-	tsv.txThrottler = CreateTxThrottlerFromTabletConfig()
-	tsv.messager = NewMessagerEngine(tsv)
-	tsv.watcher = NewReplicationWatcher(tsv.qe)
+	tsv.qe = NewQueryEngine(tsv, config)
+	tsv.te = NewTxEngine(tsv, config)
+	tsv.txThrottler = CreateTxThrottlerFromTabletConfig(config)
+	tsv.messager = NewMessagerEngine(tsv, config)
+	tsv.watcher = NewReplicationWatcher(tsv.qe, config)
 	tsv.updateStreamList = &binlog.StreamList{}
 	tsOnce.Do(func() {
 		stats.Publish("TabletState", stats.IntFunc(func() int64 {
@@ -1158,7 +1160,7 @@ func (tsv *TabletServer) handleError(
 	// where users manually write queries and need the error message to debug
 	// e.g. syntax errors on the rewritten query.
 	var myError error
-	if tabletenv.Config.TerseErrors && terr.SQLError != 0 && len(bindVariables) != 0 {
+	if tsv.TerseErrors && terr.SQLError != 0 && len(bindVariables) != 0 {
 		switch {
 		// Google internal flavor error only. Do not strip it because the vtgate
 		// buffer starts buffering master traffic when it sees the full error.

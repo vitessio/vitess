@@ -42,9 +42,9 @@ type ReplicationWatcher struct {
 var replOnce sync.Once
 
 // NewReplicationWatcher creates a new ReplicationWatcher.
-func NewReplicationWatcher(qe *QueryEngine) *ReplicationWatcher {
+func NewReplicationWatcher(qe *QueryEngine, config tabletenv.TabletConfig) *ReplicationWatcher {
 	rpw := &ReplicationWatcher{
-		watchReplication: tabletenv.Config.WatchReplication,
+		watchReplication: config.WatchReplication,
 		qe:               qe,
 	}
 	replOnce.Do(func() {
