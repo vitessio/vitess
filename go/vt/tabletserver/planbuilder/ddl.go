@@ -36,9 +36,9 @@ func analyzeDDL(ddl *sqlparser.DDL, getTable TableGetter) *ExecPlan {
 	tableName := ddl.Table
 	// Skip TableName if table is empty (create statements) or not found in schema
 	if !tableName.IsEmpty() {
-		tableInfo, ok := getTable(tableName)
+		table, ok := getTable(tableName)
 		if ok {
-			plan.TableName = tableInfo.Name
+			plan.TableName = table.Name
 		}
 	}
 	return plan

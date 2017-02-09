@@ -19,6 +19,7 @@ import (
 	"github.com/youtube/vitess/go/mysqlconn"
 	"github.com/youtube/vitess/go/mysqlconn/fakesqldb"
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/vt/schema"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletenv"
 
@@ -117,7 +118,7 @@ func TestSchemaEngineOpenFailedDueToExecErr(t *testing.T) {
 	}
 }
 
-func TestSchemaEngineOpenFailedDueToTableInfoErr(t *testing.T) {
+func TestSchemaEngineOpenFailedDueToTableErr(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 	for query, result := range getSchemaEngineBaseTestQueries() {
@@ -131,7 +132,7 @@ func TestSchemaEngineOpenFailedDueToTableInfoErr(t *testing.T) {
 		},
 	})
 	db.AddQuery("select * from test_table where 1 != 1", &sqltypes.Result{
-		// this will cause NewTableInfo error, as it expects zero rows.
+		// this will cause NewTable error, as it expects zero rows.
 		Fields: []*querypb.Field{
 			{
 				Type: querypb.Type_VARCHAR,
@@ -162,13 +163,13 @@ func TestSchemaEngineReload(t *testing.T) {
 	defer se.Close()
 	// this new table does not exist
 	newTable := sqlparser.NewTableIdent("test_table_04")
-	tableInfo := se.GetTable(newTable)
-	if tableInfo != nil {
+	table := se.GetTable(newTable)
+	if table != nil {
 		t.Fatalf("table: %s exists; expecting nil", newTable)
 	}
 	se.Reload(ctx)
-	tableInfo = se.GetTable(newTable)
-	if tableInfo != nil {
+	table = se.GetTable(newTable)
+	if table != nil {
 		t.Fatalf("table: %s exists; expecting nil", newTable)
 	}
 	db.AddQuery(mysqlconn.BaseShowTables, &sqltypes.Result{
@@ -205,8 +206,8 @@ func TestSchemaEngineReload(t *testing.T) {
 	})
 
 	se.Reload(ctx)
-	tableInfo = se.GetTable(newTable)
-	if tableInfo != nil {
+	table = se.GetTable(newTable)
+	if table != nil {
 		t.Fatalf("table: %s exists; expecting nil", newTable)
 	}
 
@@ -218,15 +219,15 @@ func TestSchemaEngineReload(t *testing.T) {
 			mysqlconn.BaseShowTablesRow(newTable.String(), false, ""),
 		},
 	})
-	tableInfo = se.GetTable(newTable)
-	if tableInfo != nil {
+	table = se.GetTable(newTable)
+	if table != nil {
 		t.Fatalf("table: %s exists; expecting nil", newTable)
 	}
 	if err := se.Reload(ctx); err != nil {
 		t.Fatalf("se.Reload() error: %v", err)
 	}
-	tableInfo = se.GetTable(newTable)
-	if tableInfo == nil {
+	table = se.GetTable(newTable)
+	if table == nil {
 		t.Fatalf("table: %s should exist", newTable)
 	}
 }
@@ -270,7 +271,7 @@ func TestSchemaEngineCreateOrUpdateTable(t *testing.T) {
 		},
 	})
 	i := 0
-	se.RegisterNotifier("test", func(schema map[string]*TableInfo, created, altered, dropped []string) {
+	se.RegisterNotifier("test", func(schema map[string]*schema.Table, created, altered, dropped []string) {
 		switch i {
 		case 0:
 			if len(created) != 4 {
@@ -305,12 +306,12 @@ func TestSchemaEngineDropTable(t *testing.T) {
 	se := newTestSchemaEngine(10, 1*time.Second, 1*time.Second, false)
 	se.Open(db.ConnParams())
 	defer se.Close()
-	tableInfo := se.GetTable(existingTable)
-	if tableInfo == nil {
+	table := se.GetTable(existingTable)
+	if table == nil {
 		t.Fatalf("table: %s should exist", existingTable)
 	}
 	i := 0
-	se.RegisterNotifier("test", func(schema map[string]*TableInfo, created, altered, dropped []string) {
+	se.RegisterNotifier("test", func(schema map[string]*schema.Table, created, altered, dropped []string) {
 		switch i {
 		case 0:
 			// Ignore.
@@ -325,71 +326,13 @@ func TestSchemaEngineDropTable(t *testing.T) {
 		i++
 	})
 	se.DropTable(existingTable)
-	tableInfo = se.GetTable(existingTable)
-	if tableInfo != nil {
+	table = se.GetTable(existingTable)
+	if table != nil {
 		t.Fatalf("table: %s should not exist", existingTable)
 	}
 	if i < 2 {
 		t.Error("Notifier did not get called")
 	}
-}
-
-func TestSchemaEngineGetPlanPanicDuetoEmptyQuery(t *testing.T) {
-	db := fakesqldb.New(t)
-	defer db.Close()
-	for query, result := range getSchemaEngineTestSupportedQueries() {
-		db.AddQuery(query, result)
-	}
-	se := newTestSchemaEngine(10, 10*time.Second, 10*time.Second, true)
-	se.Open(db.ConnParams())
-	defer se.Close()
-
-	ctx := context.Background()
-	logStats := tabletenv.NewLogStats(ctx, "GetPlanStats")
-	_, err := se.GetPlan(ctx, logStats, "")
-	want := "syntax error"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("se.GetPlan: %v, want %s", err, want)
-	}
-}
-
-func TestSchemaEngineQueryCache(t *testing.T) {
-	db := fakesqldb.New(t)
-	defer db.Close()
-	for query, result := range getSchemaEngineTestSupportedQueries() {
-		db.AddQuery(query, result)
-	}
-
-	firstQuery := "select * from test_table_01"
-	secondQuery := "select * from test_table_02"
-	db.AddQuery("select * from test_table_01 where 1 != 1", &sqltypes.Result{})
-	db.AddQuery("select * from test_table_02 where 1 != 1", &sqltypes.Result{})
-
-	se := newTestSchemaEngine(10, 10*time.Second, 10*time.Second, true)
-	se.Open(db.ConnParams())
-	defer se.Close()
-
-	ctx := context.Background()
-	logStats := tabletenv.NewLogStats(ctx, "GetPlanStats")
-	se.SetQueryCacheCap(1)
-	firstPlan, err := se.GetPlan(ctx, logStats, firstQuery)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if firstPlan == nil {
-		t.Fatalf("plan should not be nil")
-	}
-	secondPlan, err := se.GetPlan(ctx, logStats, secondQuery)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if secondPlan == nil {
-		t.Fatalf("plan should not be nil")
-	}
-	expvar.Do(func(kv expvar.KeyValue) {
-		_ = kv.Value.String()
-	})
-	se.ClearQueryPlanCache()
 }
 
 func TestSchemaEngineExportVars(t *testing.T) {
@@ -426,7 +369,7 @@ func TestUpdatedMysqlStats(t *testing.T) {
 			mysqlconn.BaseShowTablesRow(tableName.String(), false, ""),
 		},
 	})
-	// Add queries necessary for CreateOrAlterTable() and NewTableInfo()
+	// Add queries necessary for CreateOrAlterTable() and NewTable()
 	db.AddQuery(mysqlconn.BaseShowTablesForTable(tableName.String()), &sqltypes.Result{
 		Fields:       mysqlconn.BaseShowTablesFields,
 		RowsAffected: 1,
@@ -461,15 +404,15 @@ func TestUpdatedMysqlStats(t *testing.T) {
 	if err := se.Reload(ctx); err != nil {
 		t.Fatalf("se.Reload() error: %v", err)
 	}
-	tableInfo := se.GetTable(tableName)
-	if tableInfo == nil {
+	table := se.GetTable(tableName)
+	if table == nil {
 		t.Fatalf("table: %s should exist", tableName)
 	}
-	tr1 := tableInfo.TableRows
-	dl1 := tableInfo.DataLength
-	il1 := tableInfo.IndexLength
-	df1 := tableInfo.DataFree
-	mdl1 := tableInfo.MaxDataLength
+	tr1 := table.TableRows
+	dl1 := table.DataLength
+	il1 := table.IndexLength
+	df1 := table.DataFree
+	mdl1 := table.MaxDataLength
 	// Update existing table with new stats.
 	row := mysqlconn.BaseShowTablesRow(tableName.String(), false, "")
 	row[2] = sqltypes.MakeTrusted(sqltypes.Uint64, []byte("0")) // smaller timestamp
@@ -488,52 +431,30 @@ func TestUpdatedMysqlStats(t *testing.T) {
 	if err := se.Reload(ctx); err != nil {
 		t.Fatalf("se.Reload() error: %v", err)
 	}
-	tableInfo = se.GetTable(tableName)
-	tr2 := tableInfo.TableRows
-	dl2 := tableInfo.DataLength
-	il2 := tableInfo.IndexLength
-	df2 := tableInfo.DataFree
-	mdl2 := tableInfo.MaxDataLength
+	table = se.GetTable(tableName)
+	tr2 := table.TableRows
+	dl2 := table.DataLength
+	il2 := table.IndexLength
+	df2 := table.DataFree
+	mdl2 := table.MaxDataLength
 	if tr1 == tr2 || dl1 == dl2 || il1 == il2 || df1 == df2 || mdl1 == mdl2 {
 		t.Logf("%v==%v %v==%v %v==%v %v==%v %v==%v", tr1, tr2, dl1, dl2, il1, il2, df1, df2, mdl1, mdl2)
 		t.Fatalf("MysqlStats() results failed to change between queries. ")
 	}
 }
 
-func TestSchemaEngineStatsURL(t *testing.T) {
+func TestQueryEngineStatsURL(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 	for query, result := range getSchemaEngineTestSupportedQueries() {
 		db.AddQuery(query, result)
 	}
-	query := "select * from test_table_01"
-	db.AddQuery("select * from test_table_01 where 1 != 1", &sqltypes.Result{})
 	se := newTestSchemaEngine(10, 1*time.Second, 1*time.Second, true)
 	se.Open(db.ConnParams())
 	defer se.Close()
-	// warm up cache
-	ctx := context.Background()
-	logStats := tabletenv.NewLogStats(ctx, "GetPlanStats")
-	se.GetPlan(ctx, logStats, query)
 
-	request, _ := http.NewRequest("GET", "/debug/tablet_plans", nil)
+	request, _ := http.NewRequest("GET", "/debug/schema", nil)
 	response := httptest.NewRecorder()
-	se.ServeHTTP(response, request)
-
-	request, _ = http.NewRequest("GET", "/debug/query_stats", nil)
-	response = httptest.NewRecorder()
-	se.ServeHTTP(response, request)
-
-	request, _ = http.NewRequest("GET", "/debug/schema", nil)
-	response = httptest.NewRecorder()
-	se.ServeHTTP(response, request)
-
-	request, _ = http.NewRequest("GET", "/debug/query_rules", nil)
-	response = httptest.NewRecorder()
-	se.ServeHTTP(response, request)
-
-	request, _ = http.NewRequest("GET", "/debug/unknown", nil)
-	response = httptest.NewRecorder()
 	se.ServeHTTP(response, request)
 }
 

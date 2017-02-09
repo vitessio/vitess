@@ -80,9 +80,9 @@ func GenerateDeleteOuterQuery(del *sqlparser.Delete) *sqlparser.ParsedQuery {
 }
 
 // GenerateUpdateSubquery generates the subquery for updats.
-func GenerateUpdateSubquery(upd *sqlparser.Update, tableInfo *schema.Table) *sqlparser.ParsedQuery {
+func GenerateUpdateSubquery(upd *sqlparser.Update, table *schema.Table) *sqlparser.ParsedQuery {
 	return GenerateSubquery(
-		tableInfo.Indexes[0].Columns,
+		table.Indexes[0].Columns,
 		upd.Table,
 		upd.Where,
 		upd.OrderBy,
@@ -92,9 +92,9 @@ func GenerateUpdateSubquery(upd *sqlparser.Update, tableInfo *schema.Table) *sql
 }
 
 // GenerateDeleteSubquery generates the subquery for deletes.
-func GenerateDeleteSubquery(del *sqlparser.Delete, tableInfo *schema.Table) *sqlparser.ParsedQuery {
+func GenerateDeleteSubquery(del *sqlparser.Delete, table *schema.Table) *sqlparser.ParsedQuery {
 	return GenerateSubquery(
-		tableInfo.Indexes[0].Columns,
+		table.Indexes[0].Columns,
 		&sqlparser.AliasedTableExpr{Expr: del.Table},
 		del.Where,
 		del.OrderBy,

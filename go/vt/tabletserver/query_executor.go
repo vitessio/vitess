@@ -323,10 +323,10 @@ func (qre *QueryExecutor) execNextval() (*sqltypes.Result, error) {
 		return nil, fmt.Errorf("invalid increment for sequence %s: %d", qre.plan.TableName, inc)
 	}
 
-	t := qre.plan.TableInfo
-	t.Seq.Lock()
-	defer t.Seq.Unlock()
-	if t.NextVal == 0 || t.NextVal+inc > t.LastVal {
+	t := qre.plan.Table
+	t.SequenceInfo.Lock()
+	defer t.SequenceInfo.Unlock()
+	if t.SequenceInfo.NextVal == 0 || t.SequenceInfo.NextVal+inc > t.SequenceInfo.LastVal {
 		_, err := qre.execAsTransaction(func(conn *TxConnection) (*sqltypes.Result, error) {
 			query := fmt.Sprintf("select next_id, cache from %s where id = 0 for update", sqlparser.String(qre.plan.TableName))
 			qr, err := qre.execSQL(conn, query, false)
@@ -340,9 +340,9 @@ func (qre *QueryExecutor) execNextval() (*sqltypes.Result, error) {
 			if err != nil {
 				return nil, fmt.Errorf("error loading sequence %s: %v", qre.plan.TableName, err)
 			}
-			// Initialize NextVal if it wasn't already.
-			if t.NextVal == 0 {
-				t.NextVal = nextID
+			// Initialize SequenceInfo.NextVal if it wasn't already.
+			if t.SequenceInfo.NextVal == 0 {
+				t.SequenceInfo.NextVal = nextID
 			}
 			cache, err := qr.Rows[0][1].ParseInt64()
 			if err != nil {
@@ -352,7 +352,7 @@ func (qre *QueryExecutor) execNextval() (*sqltypes.Result, error) {
 				return nil, fmt.Errorf("invalid cache value for sequence %s: %d", qre.plan.TableName, cache)
 			}
 			newLast := nextID + cache
-			for newLast <= t.NextVal+inc {
+			for newLast <= t.SequenceInfo.NextVal+inc {
 				newLast += cache
 			}
 			query = fmt.Sprintf("update %s set next_id = %d where id = 0", sqlparser.String(qre.plan.TableName), newLast)
@@ -361,15 +361,15 @@ func (qre *QueryExecutor) execNextval() (*sqltypes.Result, error) {
 			if err != nil {
 				return nil, err
 			}
-			t.LastVal = newLast
+			t.SequenceInfo.LastVal = newLast
 			return nil, nil
 		})
 		if err != nil {
 			return nil, err
 		}
 	}
-	ret := t.NextVal
-	t.NextVal += inc
+	ret := t.SequenceInfo.NextVal
+	t.SequenceInfo.NextVal += inc
 	return &sqltypes.Result{
 		Fields: sequenceFields,
 		Rows: [][]sqltypes.Value{{
@@ -414,7 +414,7 @@ func (qre *QueryExecutor) execSelect() (*sqltypes.Result, error) {
 }
 
 func (qre *QueryExecutor) execInsertPK(conn *TxConnection) (*sqltypes.Result, error) {
-	pkRows, err := buildValueList(qre.plan.TableInfo, qre.plan.PKValues, qre.bindVars)
+	pkRows, err := buildValueList(qre.plan.Table, qre.plan.PKValues, qre.bindVars)
 	if err != nil {
 		return nil, err
 	}
@@ -423,7 +423,7 @@ func (qre *QueryExecutor) execInsertPK(conn *TxConnection) (*sqltypes.Result, er
 
 func (qre *QueryExecutor) execInsertMessage(conn *TxConnection) (*sqltypes.Result, error) {
 	qre.bindVars["#time_now"] = time.Now().UnixNano()
-	pkRows, err := buildValueList(qre.plan.TableInfo, qre.plan.PKValues, qre.bindVars)
+	pkRows, err := buildValueList(qre.plan.Table, qre.plan.PKValues, qre.bindVars)
 	if err != nil {
 		return nil, err
 	}
@@ -433,7 +433,7 @@ func (qre *QueryExecutor) execInsertMessage(conn *TxConnection) (*sqltypes.Resul
 	}
 	bv := map[string]interface{}{
 		"#pk": sqlparser.TupleEqualityList{
-			Columns: qre.plan.TableInfo.Indexes[0].Columns,
+			Columns: qre.plan.Table.Indexes[0].Columns,
 			Rows:    pkRows,
 		},
 	}
@@ -441,7 +441,7 @@ func (qre *QueryExecutor) execInsertMessage(conn *TxConnection) (*sqltypes.Resul
 	if err != nil {
 		return nil, err
 	}
-	mrs := conn.NewMessages[qre.plan.TableInfo.Name.String()]
+	mrs := conn.NewMessages[qre.plan.Table.Name.String()]
 	for _, row := range readback.Rows {
 		mr, err := BuildMessageRow(row)
 		if err != nil {
@@ -449,7 +449,7 @@ func (qre *QueryExecutor) execInsertMessage(conn *TxConnection) (*sqltypes.Resul
 		}
 		mrs = append(mrs, mr)
 	}
-	conn.NewMessages[qre.plan.TableInfo.Name.String()] = mrs
+	conn.NewMessages[qre.plan.Table.Name.String()] = mrs
 	return qr, nil
 }
 
@@ -467,10 +467,10 @@ func (qre *QueryExecutor) execInsertSubquery(conn *TxConnection) (*sqltypes.Resu
 	}
 	pkRows := make([][]sqltypes.Value, len(innerRows))
 	for i, innerRow := range innerRows {
-		pkRows[i] = applyFilterWithPKDefaults(qre.plan.TableInfo, qre.plan.SubqueryPKColumns, innerRow)
+		pkRows[i] = applyFilterWithPKDefaults(qre.plan.Table, qre.plan.SubqueryPKColumns, innerRow)
 	}
 	// Validating first row is sufficient
-	if err := validateRow(qre.plan.TableInfo, qre.plan.TableInfo.PKColumns, pkRows[0]); err != nil {
+	if err := validateRow(qre.plan.Table, qre.plan.Table.PKColumns, pkRows[0]); err != nil {
 		return nil, err
 	}
 
@@ -479,16 +479,16 @@ func (qre *QueryExecutor) execInsertSubquery(conn *TxConnection) (*sqltypes.Resu
 }
 
 func (qre *QueryExecutor) execInsertPKRows(conn *TxConnection, pkRows [][]sqltypes.Value) (*sqltypes.Result, error) {
-	bsc := buildStreamComment(qre.plan.TableInfo, pkRows, nil)
+	bsc := buildStreamComment(qre.plan.Table, pkRows, nil)
 	return qre.txFetch(conn, qre.plan.OuterQuery, qre.bindVars, bsc, false, true)
 }
 
 func (qre *QueryExecutor) execUpsertPK(conn *TxConnection) (*sqltypes.Result, error) {
-	pkRows, err := buildValueList(qre.plan.TableInfo, qre.plan.PKValues, qre.bindVars)
+	pkRows, err := buildValueList(qre.plan.Table, qre.plan.PKValues, qre.bindVars)
 	if err != nil {
 		return nil, err
 	}
-	bsc := buildStreamComment(qre.plan.TableInfo, pkRows, nil)
+	bsc := buildStreamComment(qre.plan.Table, pkRows, nil)
 	result, err := qre.txFetch(conn, qre.plan.OuterQuery, qre.bindVars, bsc, false, true)
 	if err == nil {
 		return result, nil
@@ -518,7 +518,7 @@ func (qre *QueryExecutor) execUpsertPK(conn *TxConnection) (*sqltypes.Result, er
 }
 
 func (qre *QueryExecutor) execDMLPK(conn *TxConnection) (*sqltypes.Result, error) {
-	pkRows, err := buildValueList(qre.plan.TableInfo, qre.plan.PKValues, qre.bindVars)
+	pkRows, err := buildValueList(qre.plan.Table, qre.plan.PKValues, qre.bindVars)
 	if err != nil {
 		return nil, err
 	}
@@ -537,7 +537,7 @@ func (qre *QueryExecutor) execDMLPKRows(conn *TxConnection, query *sqlparser.Par
 	if len(pkRows) == 0 {
 		return &sqltypes.Result{RowsAffected: 0}, nil
 	}
-	secondaryList, err := buildSecondaryList(qre.plan.TableInfo, pkRows, qre.plan.SecondaryPKValues, qre.bindVars)
+	secondaryList, err := buildSecondaryList(qre.plan.Table, pkRows, qre.plan.SecondaryPKValues, qre.bindVars)
 	if err != nil {
 		return nil, err
 	}
@@ -554,9 +554,9 @@ func (qre *QueryExecutor) execDMLPKRows(conn *TxConnection, query *sqlparser.Par
 		if secondaryList != nil {
 			secondaryList = secondaryList[i:end]
 		}
-		bsc := buildStreamComment(qre.plan.TableInfo, pkRows, secondaryList)
+		bsc := buildStreamComment(qre.plan.Table, pkRows, secondaryList)
 		qre.bindVars["#pk"] = sqlparser.TupleEqualityList{
-			Columns: qre.plan.TableInfo.Indexes[0].Columns,
+			Columns: qre.plan.Table.Indexes[0].Columns,
 			Rows:    pkRows,
 		}
 		r, err := qre.txFetch(conn, query, qre.bindVars, bsc, false, true)
@@ -566,12 +566,12 @@ func (qre *QueryExecutor) execDMLPKRows(conn *TxConnection, query *sqlparser.Par
 		// DMLs should only return RowsAffected.
 		result.RowsAffected += r.RowsAffected
 	}
-	if qre.plan.TableInfo.Type == schema.Message {
-		ids := conn.ChangedMessages[qre.plan.TableInfo.Name.String()]
+	if qre.plan.Table.Type == schema.Message {
+		ids := conn.ChangedMessages[qre.plan.Table.Name.String()]
 		for _, pkrow := range pkRows {
-			ids = append(ids, pkrow[qre.plan.TableInfo.MessageInfo.IDPKIndex].String())
+			ids = append(ids, pkrow[qre.plan.Table.MessageInfo.IDPKIndex].String())
 		}
-		conn.ChangedMessages[qre.plan.TableInfo.Name.String()] = ids
+		conn.ChangedMessages[qre.plan.Table.Name.String()] = ids
 	}
 	return result, nil
 }

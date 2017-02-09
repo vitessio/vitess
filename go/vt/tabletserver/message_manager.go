@@ -14,6 +14,7 @@ import (
 
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/timer"
+	"github.com/youtube/vitess/go/vt/schema"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/tabletserver/connpool"
 )
@@ -105,7 +106,7 @@ type MessageManager struct {
 }
 
 // NewMessageManager creates a new message manager.
-func NewMessageManager(tsv *TabletServer, table *TableInfo, conns *connpool.Pool) *MessageManager {
+func NewMessageManager(tsv *TabletServer, table *schema.Table, conns *connpool.Pool) *MessageManager {
 	mm := &MessageManager{
 		tsv:  tsv,
 		name: table.Name,

@@ -81,24 +81,24 @@ func (qs *QuerySplitter) validateQuery() error {
 	if qs.tableName.IsEmpty() {
 		return fmt.Errorf("not a simple table expression")
 	}
-	tableInfo := qs.se.GetTable(qs.tableName)
-	if tableInfo == nil {
+	table := qs.se.GetTable(qs.tableName)
+	if table == nil {
 		return fmt.Errorf("can't find table in schema")
 	}
-	if len(tableInfo.PKColumns) == 0 {
+	if len(table.PKColumns) == 0 {
 		return fmt.Errorf("no primary keys")
 	}
 	if !qs.splitColumn.IsEmpty() {
-		for _, index := range tableInfo.Indexes {
+		for _, index := range table.Indexes {
 			for _, column := range index.Columns {
 				if qs.splitColumn.Equal(column) {
 					return nil
 				}
 			}
 		}
-		return fmt.Errorf("split column is not indexed or does not exist in table schema, SplitColumn: %v, TableInfo.Table: %v", qs.splitColumn, tableInfo.Table)
+		return fmt.Errorf("split column is not indexed or does not exist in table schema, SplitColumn: %v, Table: %v", qs.splitColumn, table)
 	}
-	qs.splitColumn = tableInfo.GetPKColumn(0).Name
+	qs.splitColumn = table.GetPKColumn(0).Name
 	return nil
 }
 

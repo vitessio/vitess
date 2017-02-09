@@ -187,11 +187,9 @@ func TestQueryExecutorPlanInsertMessage(t *testing.T) {
 	defer tsv.StopService()
 	checkPlanID(t, planbuilder.PlanInsertMessage, qre.plan.PlanID)
 	r1 := newTestReceiver(1)
-	tsv.messager.schemaChanged(map[string]*TableInfo{
+	tsv.messager.schemaChanged(map[string]*schema.Table{
 		"msg": {
-			Table: &schema.Table{
-				Type: schema.Message,
-			},
+			Type: schema.Message,
 		},
 	}, []string{"msg"}, nil, nil)
 	tsv.messager.Subscribe("msg", r1.rcv)
@@ -1210,11 +1208,11 @@ func TestQueryExecutorBlacklistQRFail(t *testing.T) {
 	}
 	ctx := callinfo.NewContext(context.Background(), callInfo)
 	tsv := newTestTabletServer(ctx, enableStrict, db)
-	tsv.se.queryRuleSources.UnRegisterQueryRuleSource(rulesName)
-	tsv.se.queryRuleSources.RegisterQueryRuleSource(rulesName)
-	defer tsv.se.queryRuleSources.UnRegisterQueryRuleSource(rulesName)
+	tsv.qe.queryRuleSources.UnRegisterQueryRuleSource(rulesName)
+	tsv.qe.queryRuleSources.RegisterQueryRuleSource(rulesName)
+	defer tsv.qe.queryRuleSources.UnRegisterQueryRuleSource(rulesName)
 
-	if err := tsv.se.queryRuleSources.SetRules(rulesName, rules); err != nil {
+	if err := tsv.qe.queryRuleSources.SetRules(rulesName, rules); err != nil {
 		t.Fatalf("failed to set rule, error: %v", err)
 	}
 
@@ -1271,11 +1269,11 @@ func TestQueryExecutorBlacklistQRRetry(t *testing.T) {
 	}
 	ctx := callinfo.NewContext(context.Background(), callInfo)
 	tsv := newTestTabletServer(ctx, enableStrict, db)
-	tsv.se.queryRuleSources.UnRegisterQueryRuleSource(rulesName)
-	tsv.se.queryRuleSources.RegisterQueryRuleSource(rulesName)
-	defer tsv.se.queryRuleSources.UnRegisterQueryRuleSource(rulesName)
+	tsv.qe.queryRuleSources.UnRegisterQueryRuleSource(rulesName)
+	tsv.qe.queryRuleSources.RegisterQueryRuleSource(rulesName)
+	defer tsv.qe.queryRuleSources.UnRegisterQueryRuleSource(rulesName)
 
-	if err := tsv.se.queryRuleSources.SetRules(rulesName, rules); err != nil {
+	if err := tsv.qe.queryRuleSources.SetRules(rulesName, rules); err != nil {
 		t.Fatalf("failed to set rule, error: %v", err)
 	}
 
@@ -1359,7 +1357,7 @@ func newTransaction(tsv *TabletServer) int64 {
 
 func newTestQueryExecutor(ctx context.Context, tsv *TabletServer, sql string, txID int64) *QueryExecutor {
 	logStats := tabletenv.NewLogStats(ctx, "TestQueryExecutor")
-	plan, err := tsv.se.GetPlan(ctx, logStats, sql)
+	plan, err := tsv.qe.GetPlan(ctx, logStats, sql)
 	if err != nil {
 		panic(err)
 	}
