@@ -28,14 +28,14 @@ fi
 if [ -n "$grpc_dist" ]; then
   # Create a virtualenv, which also creates a virualenv-boxed pip.
   # Update both pip and virtualenv.
-  virtualenv $grpc_dist/usr/local
-  $grpc_dist/usr/local/bin/pip install --upgrade pip
-  $grpc_dist/usr/local/bin/pip install --upgrade --ignore-installed virtualenv
+  virtualenv2 -v $grpc_dist/usr/local
+  $grpc_dist/usr/local/bin/pip2 install --upgrade pip
+  $grpc_dist/usr/local/bin/pip2 install --upgrade --ignore-installed virtualenv
 else
-  pip install --upgrade pip
+  pip2 install --upgrade pip
   # System wide installations require an explicit upgrade of
   # certain gRPC Python dependencies e.g. "six" on Debian Jessie.
-  pip install --upgrade --ignore-installed six
+  pip2 install --upgrade --ignore-installed six
 fi
 
 # clone the repository, setup the submodules
@@ -47,7 +47,7 @@ git submodule update --init
 # OSX specific setting + dependencies
 if [ `uname -s` == "Darwin" ]; then
   export GRPC_PYTHON_BUILD_WITH_CYTHON=1
-  $grpc_dist/usr/local/bin/pip install Cython
+  $grpc_dist/usr/local/bin/pip2 install Cython
 
   # Work-around macOS Sierra blocker, see: https://github.com/youtube/vitess/issues/2115
   # TODO(mberlin): Remove this when the underlying issue is fixed and available
@@ -83,9 +83,9 @@ fi
 # Dependencies like protobuf python will be installed automatically.
 grpcio_ver=1.0.4
 if [ -n "$grpc_dist" ]; then
-  $grpc_dist/usr/local/bin/pip install --upgrade grpcio==$grpcio_ver
+  $grpc_dist/usr/local/bin/pip2 install --upgrade grpcio==$grpcio_ver
 else
-  pip install --upgrade grpcio==$grpcio_ver
+  pip2 install --upgrade grpcio==$grpcio_ver
 fi
 
 # Build PHP extension, only if requested.

@@ -235,7 +235,7 @@ else
   cd $VTTOP/third_party/py && \
     tar -xzf mock-1.0.1.tar.gz && \
     cd mock-1.0.1 && \
-    python ./setup.py install --prefix=$mock_dist && \
+    python2 ./setup.py install --prefix=$mock_dist && \
     touch $mock_dist/.build_finished && \
     cd .. && \
     rm -r mock-1.0.1
@@ -253,8 +253,8 @@ ln -sf $VTTOP/misc/git/commit-msg.bugnumber $VTTOP/.git/hooks/commit-msg
 echo "Installing selenium and chromedriver"
 selenium_dist=$VTROOT/dist/selenium
 mkdir -p $selenium_dist
-virtualenv $selenium_dist
-$selenium_dist/bin/pip install selenium
+virtualenv2 $selenium_dist
+$selenium_dist/bin/pip2 install selenium
 mkdir -p $VTROOT/dist/chromedriver
 curl -sL http://chromedriver.storage.googleapis.com/2.25/chromedriver_linux64.zip > chromedriver_linux64.zip
 unzip -o -q chromedriver_linux64.zip -d $VTROOT/dist/chromedriver
