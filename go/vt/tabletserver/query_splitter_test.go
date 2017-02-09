@@ -29,15 +29,15 @@ func getSchemaEngine() *SchemaEngine {
 	id2Index := table.AddIndex("idx_id2")
 	id2Index.AddColumn("id2", 1234)
 
-	tables := make(map[string]*TableInfo, 1)
-	tables["test_table"] = &TableInfo{Table: table}
+	tables := make(map[string]*schema.Table, 1)
+	tables["test_table"] = table
 
 	tableNoPK := &schema.Table{
 		Name: sqlparser.NewTableIdent("test_table_no_pk"),
 	}
 	tableNoPK.AddColumn("id", sqltypes.Int64, zero, "")
 	tableNoPK.PKColumns = []int{}
-	tables["test_table_no_pk"] = &TableInfo{Table: tableNoPK}
+	tables["test_table_no_pk"] = tableNoPK
 
 	return &SchemaEngine{tables: tables}
 }

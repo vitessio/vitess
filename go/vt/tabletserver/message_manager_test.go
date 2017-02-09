@@ -31,12 +31,10 @@ var (
 		Type: sqltypes.VarBinary,
 	}}
 
-	mmTableInfo = &TableInfo{
-		Table: &schema.Table{
-			Name: sqlparser.NewTableIdent("foo"),
-			Type: schema.Message,
-		},
-		MessageInfo: &MessageInfo{
+	mmTable = &schema.Table{
+		Name: sqlparser.NewTableIdent("foo"),
+		Type: schema.Message,
+		MessageInfo: &schema.MessageInfo{
 			Fields:             testFields,
 			AckWaitDuration:    1 * time.Second,
 			PurgeAfterDuration: 3 * time.Second,
@@ -47,11 +45,11 @@ var (
 	}
 )
 
-// newMMTableInfo is not a true copy, but enough to massage what we need.
-func newMMTableInfo() *TableInfo {
-	ti := *mmTableInfo
-	fi := *mmTableInfo.MessageInfo
-	ti.MessageInfo = &fi
+// newMMTable is not a true copy, but enough to massage what we need.
+func newMMTable() *schema.Table {
+	ti := *mmTable
+	msg := *ti.MessageInfo
+	ti.MessageInfo = &msg
 	return &ti
 }
 
@@ -76,10 +74,7 @@ func newTestReceiver(size int) *testReceiver {
 		select {
 		case tr.ch <- qr:
 		case <-time.After(10 * time.Second):
-			// This timeout is to make sure any stray
-			// sends from MM are ignored. Otherwise, this
-			// can hold send hostage and not allow MMs to
-			// close, and the tests will hang.
+			panic("test may be hung")
 		}
 		return nil
 	})
@@ -122,7 +117,7 @@ func TestReceiverEOF(t *testing.T) {
 	if err != nil {
 		t.Fatalf("StartService failed: %v", err)
 	}
-	mm := NewMessageManager(tsv, mmTableInfo, newMMConnPool(db))
+	mm := NewMessageManager(tsv, mmTable, newMMConnPool(db))
 	mm.Open()
 	defer func() {
 		// tsv should stop service first. Otherwise, there's
@@ -163,7 +158,7 @@ func TestMessageManagerState(t *testing.T) {
 		t.Fatalf("StartService failed: %v", err)
 	}
 	defer tsv.StopService()
-	mm := NewMessageManager(tsv, mmTableInfo, newMMConnPool(db))
+	mm := NewMessageManager(tsv, mmTable, newMMConnPool(db))
 	// Do it twice
 	for i := 0; i < 2; i++ {
 		mm.Open()
@@ -200,7 +195,7 @@ func TestMessageManagerAdd(t *testing.T) {
 	if err != nil {
 		t.Fatalf("StartService failed: %v", err)
 	}
-	ti := newMMTableInfo()
+	ti := newMMTable()
 	ti.MessageInfo.CacheSize = 1
 	mm := NewMessageManager(tsv, ti, newMMConnPool(db))
 	mm.Open()
@@ -233,6 +228,11 @@ func TestMessageManagerAdd(t *testing.T) {
 	if mm.Add(&MessageRow{ID: sqltypes.MakeString([]byte("3"))}) {
 		t.Error("Add(cache full): true, want false")
 	}
+	// Drain the receiver to prevent hangs.
+	go func() {
+		for range r1.ch {
+		}
+	}()
 }
 
 func TestMessageManagerSend(t *testing.T) {
@@ -248,7 +248,7 @@ func TestMessageManagerSend(t *testing.T) {
 	if err != nil {
 		t.Fatalf("StartService failed: %v", err)
 	}
-	mm := NewMessageManager(tsv, mmTableInfo, newMMConnPool(db))
+	mm := NewMessageManager(tsv, mmTable, newMMConnPool(db))
 	mm.Open()
 	defer func() {
 		// tsv should stop service first. Otherwise, there's
@@ -310,7 +310,7 @@ func TestMessageManagerBatchSend(t *testing.T) {
 	if err != nil {
 		t.Fatalf("StartService failed: %v", err)
 	}
-	ti := newMMTableInfo()
+	ti := newMMTable()
 	ti.MessageInfo.BatchSize = 2
 	mm := NewMessageManager(tsv, ti, newMMConnPool(db))
 	mm.Open()
@@ -395,7 +395,7 @@ func TestMessageManagerPoller(t *testing.T) {
 			}},
 		},
 	)
-	ti := newMMTableInfo()
+	ti := newMMTable()
 	ti.MessageInfo.BatchSize = 2
 	ti.MessageInfo.PollInterval = 20 * time.Second
 	mm := NewMessageManager(tsv, ti, newMMConnPool(db))
@@ -475,7 +475,7 @@ func TestMessagesPending1(t *testing.T) {
 		},
 	)
 	// Set a large polling interval.
-	ti := newMMTableInfo()
+	ti := newMMTable()
 	ti.MessageInfo.CacheSize = 2
 	ti.MessageInfo.PollInterval = 30 * time.Second
 	mm := NewMessageManager(tsv, ti, newMMConnPool(db))
@@ -555,7 +555,7 @@ func TestMessagesPending2(t *testing.T) {
 		},
 	)
 	// Set a large polling interval.
-	ti := newMMTableInfo()
+	ti := newMMTable()
 	ti.MessageInfo.CacheSize = 1
 	ti.MessageInfo.PollInterval = 30 * time.Second
 	mm := NewMessageManager(tsv, ti, newMMConnPool(db))
@@ -597,7 +597,7 @@ func TestMMGenerate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("StartService failed: %v", err)
 	}
-	mm := NewMessageManager(tsv, mmTableInfo, newMMConnPool(db))
+	mm := NewMessageManager(tsv, mmTable, newMMConnPool(db))
 	mm.Open()
 	defer func() {
 		// tsv should stop service first. Otherwise, there's

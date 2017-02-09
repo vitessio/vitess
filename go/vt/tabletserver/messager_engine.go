@@ -178,7 +178,7 @@ func (me *MessagerEngine) GeneratePurgeQuery(name string, timeCutoff int64) (str
 	return query, bv, nil
 }
 
-func (me *MessagerEngine) schemaChanged(tables map[string]*TableInfo, created, altered, dropped []string) {
+func (me *MessagerEngine) schemaChanged(tables map[string]*schema.Table, created, altered, dropped []string) {
 	me.mu.Lock()
 	defer me.mu.Unlock()
 	for _, name := range created {

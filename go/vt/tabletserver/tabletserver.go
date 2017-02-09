@@ -165,7 +165,7 @@ func NewTabletServer(config tabletenv.TabletConfig) *TabletServer {
 		history:             history.New(10),
 	}
 	tsv.se = NewSchemaEngine(tsv, config)
-	tsv.qe = NewQueryEngine(tsv, config)
+	tsv.qe = NewQueryEngine(tsv, tsv.se, config)
 	tsv.te = NewTxEngine(tsv, config)
 	tsv.txThrottler = CreateTxThrottlerFromTabletConfig(config)
 	tsv.messager = NewMessagerEngine(tsv, config)
@@ -200,21 +200,21 @@ func (tsv *TabletServer) Register() {
 
 // RegisterQueryRuleSource registers ruleSource for setting query rules.
 func (tsv *TabletServer) RegisterQueryRuleSource(ruleSource string) {
-	tsv.se.queryRuleSources.RegisterQueryRuleSource(ruleSource)
+	tsv.qe.queryRuleSources.RegisterQueryRuleSource(ruleSource)
 }
 
 // UnRegisterQueryRuleSource unregisters ruleSource from query rules.
 func (tsv *TabletServer) UnRegisterQueryRuleSource(ruleSource string) {
-	tsv.se.queryRuleSources.UnRegisterQueryRuleSource(ruleSource)
+	tsv.qe.queryRuleSources.UnRegisterQueryRuleSource(ruleSource)
 }
 
 // SetQueryRules sets the query rules for a registered ruleSource.
 func (tsv *TabletServer) SetQueryRules(ruleSource string, qrs *QueryRules) error {
-	err := tsv.se.queryRuleSources.SetRules(ruleSource, qrs)
+	err := tsv.qe.queryRuleSources.SetRules(ruleSource, qrs)
 	if err != nil {
 		return err
 	}
-	tsv.se.ClearQueryPlanCache()
+	tsv.qe.ClearQueryPlanCache()
 	return nil
 }
 
@@ -579,7 +579,7 @@ func (tsv *TabletServer) ClearQueryPlanCache() {
 	// We should ideally bracket this with start & endErequest,
 	// but query plan cache clearing is safe to call even if the
 	// tabletserver is down.
-	tsv.se.ClearQueryPlanCache()
+	tsv.qe.ClearQueryPlanCache()
 }
 
 // QueryService returns the QueryService part of TabletServer.
@@ -795,7 +795,7 @@ func (tsv *TabletServer) Execute(ctx context.Context, target *querypb.Target, sq
 				bindVariables = make(map[string]interface{})
 			}
 			sql = stripTrailing(sql, bindVariables)
-			plan, err := tsv.se.GetPlan(ctx, logStats, sql)
+			plan, err := tsv.qe.GetPlan(ctx, logStats, sql)
 			if err != nil {
 				return err
 			}
@@ -834,7 +834,7 @@ func (tsv *TabletServer) StreamExecute(ctx context.Context, target *querypb.Targ
 				bindVariables = make(map[string]interface{})
 			}
 			sql = stripTrailing(sql, bindVariables)
-			plan, err := tsv.se.GetStreamPlan(sql)
+			plan, err := tsv.qe.GetStreamPlan(sql)
 			if err != nil {
 				return err
 			}
@@ -1584,7 +1584,7 @@ func (tsv *TabletServer) registerDebugHealthHandler() {
 
 func (tsv *TabletServer) registerQueryzHandler() {
 	http.HandleFunc("/queryz", func(w http.ResponseWriter, r *http.Request) {
-		queryzHandler(tsv.se, w, r)
+		queryzHandler(tsv.qe, w, r)
 	})
 }
 
@@ -1658,12 +1658,12 @@ func (tsv *TabletServer) TxTimeout() time.Duration {
 
 // SetQueryCacheCap changes the pool size to the specified value.
 func (tsv *TabletServer) SetQueryCacheCap(val int) {
-	tsv.se.SetQueryCacheCap(val)
+	tsv.qe.SetQueryCacheCap(val)
 }
 
 // QueryCacheCap returns the pool size.
 func (tsv *TabletServer) QueryCacheCap() int {
-	return int(tsv.se.QueryCacheCap())
+	return int(tsv.qe.QueryCacheCap())
 }
 
 // SetStrictMode sets strict mode on or off.

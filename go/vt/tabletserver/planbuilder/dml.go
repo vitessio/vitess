@@ -24,18 +24,18 @@ func analyzeUpdate(upd *sqlparser.Update, getTable TableGetter) (plan *ExecPlan,
 		plan.Reason = ReasonTable
 		return plan, nil
 	}
-	tableInfo, err := plan.setTableInfo(tableName, getTable)
+	table, err := plan.setTable(tableName, getTable)
 	if err != nil {
 		return nil, err
 	}
 
-	if !tableInfo.HasPrimary() {
+	if !table.HasPrimary() {
 		log.Warningf("no primary key for table %s", tableName)
 		plan.Reason = ReasonTableNoIndex
 		return plan, nil
 	}
 
-	plan.SecondaryPKValues, err = analyzeUpdateExpressions(upd.Exprs, tableInfo.Indexes[0])
+	plan.SecondaryPKValues, err = analyzeUpdateExpressions(upd.Exprs, table.Indexes[0])
 	if err != nil {
 		if err == ErrTooComplex {
 			plan.Reason = ReasonPKChange
@@ -46,14 +46,14 @@ func analyzeUpdate(upd *sqlparser.Update, getTable TableGetter) (plan *ExecPlan,
 
 	plan.OuterQuery = GenerateUpdateOuterQuery(upd)
 
-	if pkValues := analyzeWhere(upd.Where, tableInfo.Indexes[0]); pkValues != nil {
+	if pkValues := analyzeWhere(upd.Where, table.Indexes[0]); pkValues != nil {
 		plan.PlanID = PlanDMLPK
 		plan.PKValues = pkValues
 		return plan, nil
 	}
 
 	plan.PlanID = PlanDMLSubquery
-	plan.Subquery = GenerateUpdateSubquery(upd, tableInfo)
+	plan.Subquery = GenerateUpdateSubquery(upd, table)
 	return plan, nil
 }
 
@@ -68,12 +68,12 @@ func analyzeDelete(del *sqlparser.Delete, getTable TableGetter) (plan *ExecPlan,
 		plan.Reason = ReasonTable
 		return plan, nil
 	}
-	tableInfo, err := plan.setTableInfo(tableName, getTable)
+	table, err := plan.setTable(tableName, getTable)
 	if err != nil {
 		return nil, err
 	}
 
-	if !tableInfo.HasPrimary() {
+	if !table.HasPrimary() {
 		log.Warningf("no primary key for table %s", tableName)
 		plan.Reason = ReasonTableNoIndex
 		return plan, nil
@@ -81,14 +81,14 @@ func analyzeDelete(del *sqlparser.Delete, getTable TableGetter) (plan *ExecPlan,
 
 	plan.OuterQuery = GenerateDeleteOuterQuery(del)
 
-	if pkValues := analyzeWhere(del.Where, tableInfo.Indexes[0]); pkValues != nil {
+	if pkValues := analyzeWhere(del.Where, table.Indexes[0]); pkValues != nil {
 		plan.PlanID = PlanDMLPK
 		plan.PKValues = pkValues
 		return plan, nil
 	}
 
 	plan.PlanID = PlanDMLSubquery
-	plan.Subquery = GenerateDeleteSubquery(del, tableInfo)
+	plan.Subquery = GenerateDeleteSubquery(del, table)
 	return plan, nil
 }
 
@@ -134,14 +134,14 @@ func analyzeSelect(sel *sqlparser.Select, getTable TableGetter) (plan *ExecPlan,
 	if tableName.IsEmpty() {
 		return plan, nil
 	}
-	tableInfo, err := plan.setTableInfo(tableName, getTable)
+	table, err := plan.setTable(tableName, getTable)
 	if err != nil {
 		return nil, err
 	}
 
 	// Check if it's a NEXT VALUE statement.
 	if nextVal, ok := sel.SelectExprs[0].(sqlparser.Nextval); ok {
-		if tableInfo.Type != schema.Sequence {
+		if table.Type != schema.Sequence {
 			return nil, fmt.Errorf("%s is not a sequence", tableName)
 		}
 		plan.PlanID = PlanNextval
@@ -248,28 +248,28 @@ func analyzeInsert(ins *sqlparser.Insert, getTable TableGetter) (plan *ExecPlan,
 		plan.Reason = ReasonTable
 		return plan, nil
 	}
-	tableInfo, err := plan.setTableInfo(tableName, getTable)
+	table, err := plan.setTable(tableName, getTable)
 	if err != nil {
 		return nil, err
 	}
 
-	if !tableInfo.HasPrimary() {
+	if !table.HasPrimary() {
 		log.Warningf("no primary key for table %s", tableName)
 		plan.Reason = ReasonTableNoIndex
 		return plan, nil
 	}
-	switch tableInfo.Type {
+	switch table.Type {
 	case schema.NoType, schema.Sequence:
 		// For now, allow sequence inserts.
-		return analyzeInsertNoType(ins, plan, tableInfo)
+		return analyzeInsertNoType(ins, plan, table)
 	case schema.Message:
-		return analyzeInsertMessage(ins, plan, tableInfo)
+		return analyzeInsertMessage(ins, plan, table)
 	}
 	panic("unreachable")
 }
 
-func analyzeInsertNoType(ins *sqlparser.Insert, plan *ExecPlan, tableInfo *schema.Table) (*ExecPlan, error) {
-	pkColumnNumbers := getInsertPKColumns(ins.Columns, tableInfo)
+func analyzeInsertNoType(ins *sqlparser.Insert, plan *ExecPlan, table *schema.Table) (*ExecPlan, error) {
+	pkColumnNumbers := getInsertPKColumns(ins.Columns, table)
 
 	if sel, ok := ins.Rows.(sqlparser.SelectStatement); ok {
 		if ins.OnDup != nil {
@@ -283,15 +283,15 @@ func analyzeInsertNoType(ins *sqlparser.Insert, plan *ExecPlan, tableInfo *schem
 		plan.Subquery = GenerateSelectLimitQuery(sel)
 		if len(ins.Columns) != 0 {
 			for _, col := range ins.Columns {
-				colIndex := tableInfo.FindColumn(col)
+				colIndex := table.FindColumn(col)
 				if colIndex == -1 {
-					return nil, fmt.Errorf("column %v not found in table %s", col, tableInfo.Name)
+					return nil, fmt.Errorf("column %v not found in table %s", col, table.Name)
 				}
 				plan.ColumnNumbers = append(plan.ColumnNumbers, colIndex)
 			}
 		} else {
 			// Add all columns.
-			for colIndex := range tableInfo.Columns {
+			for colIndex := range table.Columns {
 				plan.ColumnNumbers = append(plan.ColumnNumbers, colIndex)
 			}
 		}
@@ -301,7 +301,7 @@ func analyzeInsertNoType(ins *sqlparser.Insert, plan *ExecPlan, tableInfo *schem
 
 	// If it's not a sqlparser.SelectStatement, it's Values.
 	rowList := ins.Rows.(sqlparser.Values)
-	pkValues, err := getInsertPKValues(pkColumnNumbers, rowList, tableInfo)
+	pkValues, err := getInsertPKValues(pkColumnNumbers, rowList, table)
 	if err != nil {
 		return nil, err
 	}
@@ -325,7 +325,7 @@ func analyzeInsertNoType(ins *sqlparser.Insert, plan *ExecPlan, tableInfo *schem
 		plan.Reason = ReasonUpsertColMismatch
 		return plan, nil
 	}
-	plan.SecondaryPKValues, err = analyzeUpdateExpressions(updateExprs, tableInfo.Indexes[0])
+	plan.SecondaryPKValues, err = analyzeUpdateExpressions(updateExprs, table.Indexes[0])
 	if err != nil {
 		plan.Reason = ReasonPKChange
 		return plan, nil
@@ -361,15 +361,15 @@ func resolveUpsertUpdateValues(rowList sqlparser.ValTuple, columns sqlparser.Col
 	return sqlparser.UpdateExprs(dup), err
 }
 
-func analyzeInsertMessage(ins *sqlparser.Insert, plan *ExecPlan, tableInfo *schema.Table) (*ExecPlan, error) {
+func analyzeInsertMessage(ins *sqlparser.Insert, plan *ExecPlan, table *schema.Table) (*ExecPlan, error) {
 	if _, ok := ins.Rows.(sqlparser.SelectStatement); ok {
-		return nil, fmt.Errorf("subquery not allowed for message table: %s", tableInfo.Name.String())
+		return nil, fmt.Errorf("subquery not allowed for message table: %s", table.Name.String())
 	}
 	if ins.OnDup != nil {
-		return nil, fmt.Errorf("'on duplicate key' construct not allowed for message table: %s", tableInfo.Name.String())
+		return nil, fmt.Errorf("'on duplicate key' construct not allowed for message table: %s", table.Name.String())
 	}
 	if len(ins.Columns) == 0 {
-		return nil, fmt.Errorf("column list must be specified for message table insert: %s", tableInfo.Name.String())
+		return nil, fmt.Errorf("column list must be specified for message table insert: %s", table.Name.String())
 	}
 
 	// Sanity check first so we don't have to repeat this.
@@ -430,8 +430,8 @@ func analyzeInsertMessage(ins *sqlparser.Insert, plan *ExecPlan, tableInfo *sche
 		return nil, fmt.Errorf("%s must be specified for message insert", col.String())
 	}
 
-	pkColumnNumbers := getInsertPKColumns(ins.Columns, tableInfo)
-	pkValues, err := getInsertPKValues(pkColumnNumbers, rowList, tableInfo)
+	pkColumnNumbers := getInsertPKColumns(ins.Columns, table)
+	pkValues, err := getInsertPKValues(pkColumnNumbers, rowList, table)
 	if err != nil {
 		// Dead code. We've already sanity checked the row lengths.
 		return nil, err
@@ -448,11 +448,11 @@ func analyzeInsertMessage(ins *sqlparser.Insert, plan *ExecPlan, tableInfo *sche
 	return plan, nil
 }
 
-func getInsertPKColumns(columns sqlparser.Columns, tableInfo *schema.Table) (pkColumnNumbers []int) {
+func getInsertPKColumns(columns sqlparser.Columns, table *schema.Table) (pkColumnNumbers []int) {
 	if len(columns) == 0 {
-		return tableInfo.PKColumns
+		return table.PKColumns
 	}
-	pkIndex := tableInfo.Indexes[0]
+	pkIndex := table.Indexes[0]
 	pkColumnNumbers = make([]int, len(pkIndex.Columns))
 	for i := range pkColumnNumbers {
 		pkColumnNumbers[i] = -1
@@ -494,11 +494,11 @@ func copyVal(ins *sqlparser.Insert, col sqlparser.ColIdent, colIndex int) int {
 	return len(ins.Columns) - 1
 }
 
-func getInsertPKValues(pkColumnNumbers []int, rowList sqlparser.Values, tableInfo *schema.Table) (pkValues []interface{}, err error) {
+func getInsertPKValues(pkColumnNumbers []int, rowList sqlparser.Values, table *schema.Table) (pkValues []interface{}, err error) {
 	pkValues = make([]interface{}, len(pkColumnNumbers))
 	for index, columnNumber := range pkColumnNumbers {
 		if columnNumber == -1 {
-			pkValues[index] = tableInfo.GetPKColumn(index).Default
+			pkValues[index] = table.GetPKColumn(index).Default
 			continue
 		}
 		values := make([]interface{}, len(rowList))

@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	log "github.com/golang/glog"
@@ -19,67 +18,25 @@ import (
 	"github.com/youtube/vitess/go/vt/sqlparser"
 )
 
-// TableInfo contains the tabletserver related info for a table.
-// It's a superset of schema.Table.
-type TableInfo struct {
-	*schema.Table
-
-	// Seq must be locked before accessing the sequence vars.
-	// If CurVal==LastVal, we have to cache new values.
-	Seq     sync.Mutex
-	NextVal int64
-	LastVal int64
-
-	// MessageInfo contains info for message tables.
-	MessageInfo *MessageInfo
-}
-
-// MessageInfo contains info specific to message tables.
-type MessageInfo struct {
-	// IDPKIndex is the index of the ID column
-	// in PKvalues. This is used to extract the ID
-	// value for message tables to discard items
-	// from the cache.
-	IDPKIndex int
-
-	// Fields stores the field info to be
-	// returned for subscribers.
-	Fields []*querypb.Field
-
-	// AckWaitDuration specifies how long to wait after
-	// the message was first sent. The back-off doubles
-	// every attempt.
-	AckWaitDuration time.Duration
-
-	// PurgeAfterDuration specifies the time after which
-	// a successfully acked message can be deleted.
-	PurgeAfterDuration time.Duration
-
-	// BatchSize specifies the max number of events to
-	// send per response.
-	BatchSize int
-
-	// CacheSize specifies the number of messages to keep
-	// in cache. Anything that cannot fit in the cache
-	// is sent as best effort.
-	CacheSize int
-
-	// PollInterval specifies the polling frequency to
-	// look for messages to be sent.
-	PollInterval time.Duration
-}
-
-// NewTableInfo creates a new TableInfo.
-func NewTableInfo(conn *connpool.DBConn, tableName string, tableType string, comment string) (ti *TableInfo, err error) {
-	ti, err = loadTableInfo(conn, tableName)
+// LoadTable creates a Table from the schema info in the database.
+func LoadTable(conn *connpool.DBConn, tableName string, tableType string, comment string) (ti *schema.Table, err error) {
+	ti = schema.NewTable(tableName)
+	sqlTableName := sqlparser.String(ti.Name)
+	if err = fetchColumns(ti, conn, sqlTableName); err != nil {
+		return nil, err
+	}
+	if err = fetchIndexes(ti, conn, sqlTableName); err != nil {
+		return nil, err
+	}
 	if err != nil {
 		return nil, err
 	}
 	switch {
 	case strings.Contains(comment, "vitess_sequence"):
 		ti.Type = schema.Sequence
+		ti.SequenceInfo = &schema.SequenceInfo{}
 	case strings.Contains(comment, "vitess_message"):
-		if err := ti.loadMessageInfo(comment); err != nil {
+		if err := loadMessageInfo(ti, comment); err != nil {
 			return nil, err
 		}
 		ti.Type = schema.Message
@@ -87,19 +44,7 @@ func NewTableInfo(conn *connpool.DBConn, tableName string, tableType string, com
 	return ti, nil
 }
 
-func loadTableInfo(conn *connpool.DBConn, tableName string) (ti *TableInfo, err error) {
-	ti = &TableInfo{Table: schema.NewTable(tableName)}
-	sqlTableName := sqlparser.String(ti.Name)
-	if err = ti.fetchColumns(conn, sqlTableName); err != nil {
-		return nil, err
-	}
-	if err = ti.fetchIndexes(conn, sqlTableName); err != nil {
-		return nil, err
-	}
-	return ti, nil
-}
-
-func (ti *TableInfo) fetchColumns(conn *connpool.DBConn, sqlTableName string) error {
+func fetchColumns(ti *schema.Table, conn *connpool.DBConn, sqlTableName string) error {
 	qr, err := conn.Exec(localContext(), fmt.Sprintf("select * from %s where 1 != 1", sqlTableName), 0, true)
 	if err != nil {
 		return err
@@ -125,28 +70,7 @@ func (ti *TableInfo) fetchColumns(conn *connpool.DBConn, sqlTableName string) er
 	return nil
 }
 
-// SetPK sets the pk columns for a TableInfo.
-func (ti *TableInfo) SetPK(colnames []string) error {
-	pkIndex := schema.NewIndex("PRIMARY")
-	colnums := make([]int, len(colnames))
-	for i, colname := range colnames {
-		colnums[i] = ti.FindColumn(sqlparser.NewColIdent(colname))
-		if colnums[i] == -1 {
-			return fmt.Errorf("column %s not found", colname)
-		}
-		pkIndex.AddColumn(colname, 1)
-	}
-	for _, col := range ti.Columns {
-		pkIndex.DataColumns = append(pkIndex.DataColumns, col.Name)
-	}
-	ti.Indexes = append(ti.Indexes, nil)
-	copy(ti.Indexes[1:], ti.Indexes[:len(ti.Indexes)-1])
-	ti.Indexes[0] = pkIndex
-	ti.PKColumns = colnums
-	return nil
-}
-
-func (ti *TableInfo) fetchIndexes(conn *connpool.DBConn, sqlTableName string) error {
+func fetchIndexes(ti *schema.Table, conn *connpool.DBConn, sqlTableName string) error {
 	indexes, err := conn.Exec(localContext(), fmt.Sprintf("show index from %s", sqlTableName), 10000, false)
 	if err != nil {
 		return err
@@ -197,7 +121,7 @@ func (ti *TableInfo) fetchIndexes(conn *connpool.DBConn, sqlTableName string) er
 	return nil
 }
 
-func (ti *TableInfo) loadMessageInfo(comment string) error {
+func loadMessageInfo(ti *schema.Table, comment string) error {
 	findCols := []string{
 		"time_scheduled",
 		"id",
@@ -207,7 +131,7 @@ func (ti *TableInfo) loadMessageInfo(comment string) error {
 		"time_acked",
 		"message",
 	}
-	ti.MessageInfo = &MessageInfo{
+	ti.MessageInfo = &schema.MessageInfo{
 		Fields: make([]*querypb.Field, 2),
 	}
 	// Extract keyvalues.

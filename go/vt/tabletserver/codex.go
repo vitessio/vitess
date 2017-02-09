@@ -17,8 +17,8 @@ import (
 // buildValueList builds the set of PK reference rows used to drive the next query.
 // It uses the PK values supplied in the original query and bind variables.
 // The generated reference rows are validated for type match against the PK of the table.
-func buildValueList(tableInfo *TableInfo, pkValues []interface{}, bindVars map[string]interface{}) ([][]sqltypes.Value, error) {
-	resolved, length, err := resolvePKValues(tableInfo, pkValues, bindVars)
+func buildValueList(table *schema.Table, pkValues []interface{}, bindVars map[string]interface{}) ([][]sqltypes.Value, error) {
+	resolved, length, err := resolvePKValues(table, pkValues, bindVars)
 	if err != nil {
 		return nil, err
 	}
@@ -36,7 +36,7 @@ func buildValueList(tableInfo *TableInfo, pkValues []interface{}, bindVars map[s
 	return valueList, nil
 }
 
-func resolvePKValues(tableInfo *TableInfo, pkValues []interface{}, bindVars map[string]interface{}) (resolved []interface{}, length int, err error) {
+func resolvePKValues(table *schema.Table, pkValues []interface{}, bindVars map[string]interface{}) (resolved []interface{}, length int, err error) {
 	length = -1
 	setLengthFunc := func(list []sqltypes.Value) error {
 		if length == -1 {
@@ -51,12 +51,12 @@ func resolvePKValues(tableInfo *TableInfo, pkValues []interface{}, bindVars map[
 		switch val := val.(type) {
 		case string:
 			if val[1] != ':' {
-				resolved[i], err = resolveValue(tableInfo.GetPKColumn(i), val, bindVars)
+				resolved[i], err = resolveValue(table.GetPKColumn(i), val, bindVars)
 				if err != nil {
 					return nil, 0, err
 				}
 			} else {
-				list, err := resolveListArg(tableInfo.GetPKColumn(i), val, bindVars)
+				list, err := resolveListArg(table.GetPKColumn(i), val, bindVars)
 				if err != nil {
 					return nil, 0, err
 				}
@@ -68,7 +68,7 @@ func resolvePKValues(tableInfo *TableInfo, pkValues []interface{}, bindVars map[
 		case []interface{}:
 			list := make([]sqltypes.Value, len(val))
 			for j, listVal := range val {
-				list[j], err = resolveValue(tableInfo.GetPKColumn(i), listVal, bindVars)
+				list[j], err = resolveValue(table.GetPKColumn(i), listVal, bindVars)
 				if err != nil {
 					return nil, 0, err
 				}
@@ -78,7 +78,7 @@ func resolvePKValues(tableInfo *TableInfo, pkValues []interface{}, bindVars map[
 			}
 			resolved[i] = list
 		default:
-			resolved[i], err = resolveValue(tableInfo.GetPKColumn(i), val, nil)
+			resolved[i], err = resolveValue(table.GetPKColumn(i), val, nil)
 			if err != nil {
 				return nil, 0, err
 			}
@@ -134,7 +134,7 @@ func resolveListArg(col *schema.TableColumn, key string, bindVars map[string]int
 }
 
 // buildSecondaryList is used for handling ON DUPLICATE DMLs, or those that change the PK.
-func buildSecondaryList(tableInfo *TableInfo, pkList [][]sqltypes.Value, secondaryList []interface{}, bindVars map[string]interface{}) ([][]sqltypes.Value, error) {
+func buildSecondaryList(table *schema.Table, pkList [][]sqltypes.Value, secondaryList []interface{}, bindVars map[string]interface{}) ([][]sqltypes.Value, error) {
 	if secondaryList == nil {
 		return nil, nil
 	}
@@ -146,7 +146,7 @@ func buildSecondaryList(tableInfo *TableInfo, pkList [][]sqltypes.Value, seconda
 				valueList[i][j] = cell
 			} else {
 				var err error
-				if valueList[i][j], err = resolveValue(tableInfo.GetPKColumn(j), secondaryList[j], bindVars); err != nil {
+				if valueList[i][j], err = resolveValue(table.GetPKColumn(j), secondaryList[j], bindVars); err != nil {
 					return valueList, err
 				}
 			}
@@ -192,12 +192,12 @@ func resolveNumber(value interface{}, bindVars map[string]interface{}) (int64, e
 	return ret, nil
 }
 
-func validateRow(tableInfo *TableInfo, columnNumbers []int, row []sqltypes.Value) error {
+func validateRow(table *schema.Table, columnNumbers []int, row []sqltypes.Value) error {
 	if len(row) != len(columnNumbers) {
 		return tabletenv.NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "data inconsistency %d vs %d", len(row), len(columnNumbers))
 	}
 	for j, value := range row {
-		if err := validateValue(&tableInfo.Columns[columnNumbers[j]], value); err != nil {
+		if err := validateValue(&table.Columns[columnNumbers[j]], value); err != nil {
 			return err
 		}
 	}
@@ -221,21 +221,21 @@ func validateValue(col *schema.TableColumn, value sqltypes.Value) error {
 	return nil
 }
 
-func buildStreamComment(tableInfo *TableInfo, pkValueList [][]sqltypes.Value, secondaryList [][]sqltypes.Value) []byte {
+func buildStreamComment(table *schema.Table, pkValueList [][]sqltypes.Value, secondaryList [][]sqltypes.Value) []byte {
 	buf := sqlparser.NewTrackedBuffer(nil)
-	buf.Myprintf(" /* _stream %v (", tableInfo.Name)
+	buf.Myprintf(" /* _stream %v (", table.Name)
 	// We assume the first index exists, and is the pk
-	for _, pkName := range tableInfo.Indexes[0].Columns {
+	for _, pkName := range table.Indexes[0].Columns {
 		buf.Myprintf("%v ", pkName)
 	}
 	buf.WriteString(")")
-	buildPKValueList(buf, tableInfo, pkValueList)
-	buildPKValueList(buf, tableInfo, secondaryList)
+	buildPKValueList(buf, table, pkValueList)
+	buildPKValueList(buf, table, secondaryList)
 	buf.WriteString("; */")
 	return buf.Bytes()
 }
 
-func buildPKValueList(buf *sqlparser.TrackedBuffer, tableInfo *TableInfo, pkValueList [][]sqltypes.Value) {
+func buildPKValueList(buf *sqlparser.TrackedBuffer, table *schema.Table, pkValueList [][]sqltypes.Value) {
 	for _, pkValues := range pkValueList {
 		buf.WriteString(" (")
 		for _, pkValue := range pkValues {
@@ -246,13 +246,13 @@ func buildPKValueList(buf *sqlparser.TrackedBuffer, tableInfo *TableInfo, pkValu
 	}
 }
 
-func applyFilterWithPKDefaults(tableInfo *TableInfo, columnNumbers []int, input []sqltypes.Value) (output []sqltypes.Value) {
+func applyFilterWithPKDefaults(table *schema.Table, columnNumbers []int, input []sqltypes.Value) (output []sqltypes.Value) {
 	output = make([]sqltypes.Value, len(columnNumbers))
 	for colIndex, colPointer := range columnNumbers {
 		if colPointer >= 0 {
 			output[colIndex] = input[colPointer]
 		} else {
-			output[colIndex] = tableInfo.GetPKColumn(colIndex).Default
+			output[colIndex] = table.GetPKColumn(colIndex).Default
 		}
 	}
 	return output

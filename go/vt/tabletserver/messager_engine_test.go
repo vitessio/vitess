@@ -16,11 +16,9 @@ import (
 	"github.com/youtube/vitess/go/vt/schema"
 )
 
-var meTableInfo = &TableInfo{
-	Table: &schema.Table{
-		Type: schema.Message,
-	},
-	MessageInfo: mmTableInfo.MessageInfo,
+var meTable = &schema.Table{
+	Type:        schema.Message,
+	MessageInfo: mmTable.MessageInfo,
 }
 
 func TestMEState(t *testing.T) {
@@ -39,24 +37,22 @@ func TestMEState(t *testing.T) {
 	defer tsv.StopService()
 
 	me := tsv.messager
-	if l := len(tsv.se.notifiers); l != 1 {
-		t.Errorf("len(notifiers): %d, want 1", l)
-	}
+	start := len(tsv.se.notifiers)
 	if err := me.Open(dbconfigs); err != nil {
 		t.Fatal(err)
 	}
-	if l := len(tsv.se.notifiers); l != 1 {
-		t.Errorf("len(notifiers) after reopen: %d, want 1", l)
+	if l := len(tsv.se.notifiers); l != start {
+		t.Errorf("len(notifiers) after reopen: %d, want %d", l, start)
 	}
 
 	me.Close()
-	if l := len(tsv.se.notifiers); l != 0 {
-		t.Errorf("len(notifiers) after close: %d, want 0", l)
+	if l := len(tsv.se.notifiers); l != start-1 {
+		t.Errorf("len(notifiers) after close: %d, want %d", l, start-1)
 	}
 
 	me.Close()
-	if l := len(tsv.se.notifiers); l != 0 {
-		t.Errorf("len(notifiers) after close: %d, want 0", l)
+	if l := len(tsv.se.notifiers); l != start-1 {
+		t.Errorf("len(notifiers) after close: %d, want %d", l, start-1)
 	}
 }
 
@@ -76,12 +72,10 @@ func TestMESchemaChanged(t *testing.T) {
 	defer tsv.StopService()
 
 	me := tsv.messager
-	tables := map[string]*TableInfo{
-		"t1": meTableInfo,
+	tables := map[string]*schema.Table{
+		"t1": meTable,
 		"t2": {
-			Table: &schema.Table{
-				Type: schema.NoType,
-			},
+			Type: schema.NoType,
 		},
 	}
 	me.schemaChanged(tables, []string{"t1", "t2"}, nil, nil)
@@ -90,14 +84,12 @@ func TestMESchemaChanged(t *testing.T) {
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("got: %+v, want %+v", got, want)
 	}
-	tables = map[string]*TableInfo{
-		"t1": meTableInfo,
+	tables = map[string]*schema.Table{
+		"t1": meTable,
 		"t2": {
-			Table: &schema.Table{
-				Type: schema.NoType,
-			},
+			Type: schema.NoType,
 		},
-		"t3": meTableInfo,
+		"t3": meTable,
 	}
 	me.schemaChanged(tables, []string{"t3"}, nil, nil)
 	got = extractManagerNames(me.managers)
@@ -105,14 +97,12 @@ func TestMESchemaChanged(t *testing.T) {
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("got: %+v, want %+v", got, want)
 	}
-	tables = map[string]*TableInfo{
-		"t1": meTableInfo,
+	tables = map[string]*schema.Table{
+		"t1": meTable,
 		"t2": {
-			Table: &schema.Table{
-				Type: schema.NoType,
-			},
+			Type: schema.NoType,
 		},
-		"t4": meTableInfo,
+		"t4": meTable,
 	}
 	me.schemaChanged(tables, []string{"t4"}, nil, []string{"t3"})
 	got = extractManagerNames(me.managers)
@@ -147,9 +137,9 @@ func TestSubscribe(t *testing.T) {
 	defer tsv.StopService()
 
 	me := tsv.messager
-	tables := map[string]*TableInfo{
-		"t1": meTableInfo,
-		"t2": meTableInfo,
+	tables := map[string]*schema.Table{
+		"t1": meTable,
+		"t2": meTable,
 	}
 	me.schemaChanged(tables, []string{"t1", "t2"}, nil, nil)
 	r1 := newTestReceiver(1)
@@ -188,9 +178,9 @@ func TestLockDB(t *testing.T) {
 	defer tsv.StopService()
 
 	me := tsv.messager
-	tables := map[string]*TableInfo{
-		"t1": meTableInfo,
-		"t2": meTableInfo,
+	tables := map[string]*schema.Table{
+		"t1": meTable,
+		"t2": meTable,
 	}
 	me.schemaChanged(tables, []string{"t1", "t2"}, nil, nil)
 	r1 := newTestReceiver(0)
@@ -307,8 +297,8 @@ func TestMEGenerate(t *testing.T) {
 	defer tsv.StopService()
 
 	me := tsv.messager
-	me.schemaChanged(map[string]*TableInfo{
-		"t1": meTableInfo,
+	me.schemaChanged(map[string]*schema.Table{
+		"t1": meTable,
 	}, []string{"t1"}, nil, nil)
 	if _, _, err := me.GenerateAckQuery("t1", []string{"1"}); err != nil {
 		t.Error(err)
