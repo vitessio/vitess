@@ -143,6 +143,9 @@ func checkAggregates(sel *sqlparser.Select, bldr builder) error {
 					hasAggregates = true
 					return false, errors.New("dummy")
 				}
+			case *sqlparser.GroupConcatExpr:
+				hasAggregates = true
+				return false, errors.New("dummy")
 			}
 			return true, nil
 		}, sel.SelectExprs)

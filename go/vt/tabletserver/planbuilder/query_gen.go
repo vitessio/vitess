@@ -83,7 +83,7 @@ func GenerateDeleteOuterQuery(del *sqlparser.Delete) *sqlparser.ParsedQuery {
 func GenerateUpdateSubquery(upd *sqlparser.Update, tableInfo *schema.Table) *sqlparser.ParsedQuery {
 	return GenerateSubquery(
 		tableInfo.Indexes[0].Columns,
-		&sqlparser.AliasedTableExpr{Expr: upd.Table},
+		upd.Table,
 		upd.Where,
 		upd.OrderBy,
 		upd.Limit,

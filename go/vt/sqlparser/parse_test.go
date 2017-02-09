@@ -219,6 +219,8 @@ func TestValid(t *testing.T) {
 	}, {
 		input: "select /* not */ 1 from t where not a = b",
 	}, {
+		input: "select /* ! */ 1 from t where a = !1",
+	}, {
 		input: "select /* bool is */ 1 from t where a = b is null",
 	}, {
 		input: "select /* bool is not */ 1 from t where a = b is not false",
@@ -311,6 +313,8 @@ func TestValid(t *testing.T) {
 		input: "select /* / */ 1 from t where a = b / c",
 	}, {
 		input: "select /* % */ 1 from t where a = b % c",
+	}, {
+		input: "select /* DIV */ 1 from t where a = b DIV c",
 	}, {
 		input:  "select /* MOD */ 1 from t where a = b MOD c",
 		output: "select /* MOD */ 1 from t where a = b % c",
@@ -434,6 +438,12 @@ func TestValid(t *testing.T) {
 	}, {
 		input: "select /* - - */ - -b from t",
 	}, {
+		input: "select /* binary binary */ binary  binary b from t",
+	}, {
+		input: "select /* binary ~ */ binary  ~b from t",
+	}, {
+		input: "select /* ~ binary */ ~ binary b from t",
+	}, {
 		input: "select /* interval */ adddate('2008-01-02', interval 31 day) from t",
 	}, {
 		input: "select /* dual */ 1 from dual",
@@ -481,6 +491,9 @@ func TestValid(t *testing.T) {
 	}, {
 		input: "insert /* qualified column list */ into a(a, b) values (1, 2)",
 	}, {
+		input:  "insert /* qualified columns */ into t (t.a, t.b) values (1, 2)",
+		output: "insert /* qualified columns */ into t(a, b) values (1, 2)",
+	}, {
 		input: "insert /* select */ into a select b, c from d",
 	}, {
 		input: "insert /* on duplicate */ into a values (1, 2) on duplicate key update b = func(a), c = d",
@@ -510,6 +523,13 @@ func TestValid(t *testing.T) {
 		input: "update /* bool expr in update */ a set b = 5 > 2",
 	}, {
 		input: "update /* bool in update where */ a set b = 5 where c",
+	}, {
+		input: "update /* table qualifier */ a set a.b = 3",
+	}, {
+		input: "update /* table qualifier */ a set t.a.b = 3",
+	}, {
+		input:  "update /* table alias */ tt aa set aa.cc = 3",
+		output: "update /* table alias */ tt as aa set aa.cc = 3",
 	}, {
 		input: "delete /* simple */ from a",
 	}, {
@@ -667,6 +687,21 @@ func TestValid(t *testing.T) {
 	}, {
 		input:  "select k collate 'latin1_german2_ci' as k1 from t1 order by k1 asc",
 		output: "select k collate latin1_german2_ci as k1 from t1 order by k1 asc",
+	}, {
+		input:  "select /* drop trailing semicolon */ 1 from dual;",
+		output: "select /* drop trailing semicolon */ 1 from dual",
+	}, {
+		input: "select /* cache directive */ SQL_NO_CACHE 'foo' from t",
+	}, {
+		input: "select binary 'a' = 'A' from t",
+	}, {
+		input: "select match(a) against ('foo') from t",
+	}, {
+		input: "select match(a1, a2) against ('foo' in natural language mode with query expansion) from t",
+	}, {
+		input: "select name, group_concat(score) from t group by name",
+	}, {
+		input: "select name, group_concat(distinct id, score order by id desc separator ':') from t group by name",
 	}}
 
 	for _, tcase := range validSQL {
@@ -854,14 +889,109 @@ func TestKeywords(t *testing.T) {
 	}
 }
 
+func TestConvert(t *testing.T) {
+	validSQL := []struct {
+		input  string
+		output string
+	}{{
+		input:  "select cast('abc' as date) from t",
+		output: "select convert('abc', date) from t",
+	}, {
+		input: "select convert('abc', binary(4)) from t",
+	}, {
+		input: "select convert('abc', binary) from t",
+	}, {
+		input: "select convert('abc', char character set binary) from t",
+	}, {
+		input: "select convert('abc', char(4) ascii) from t",
+	}, {
+		input: "select convert('abc', char unicode) from t",
+	}, {
+		input: "select convert('abc', char(4)) from t",
+	}, {
+		input: "select convert('abc', char) from t",
+	}, {
+		input: "select convert('abc', nchar(4)) from t",
+	}, {
+		input: "select convert('abc', nchar) from t",
+	}, {
+		input: "select convert('abc', signed) from t",
+	}, {
+		input:  "select convert('abc', signed integer) from t",
+		output: "select convert('abc', signed) from t",
+	}, {
+		input: "select convert('abc', unsigned) from t",
+	}, {
+		input:  "select convert('abc', unsigned integer) from t",
+		output: "select convert('abc', unsigned) from t",
+	}, {
+		input: "select convert('abc', decimal(3, 4)) from t",
+	}, {
+		input: "select convert('abc', decimal(4)) from t",
+	}, {
+		input: "select convert('abc', decimal) from t",
+	}, {
+		input: "select convert('abc', date) from t",
+	}, {
+		input: "select convert('abc', time(4)) from t",
+	}, {
+		input: "select convert('abc', time) from t",
+	}, {
+		input: "select convert('abc', datetime(9)) from t",
+	}, {
+		input: "select convert('abc', datetime) from t",
+	}, {
+		input: "select convert('abc', json) from t",
+	}}
+
+	for _, tcase := range validSQL {
+		if tcase.output == "" {
+			tcase.output = tcase.input
+		}
+		tree, err := Parse(tcase.input)
+		if err != nil {
+			t.Errorf("input: %s, err: %v", tcase.input, err)
+			continue
+		}
+		out := String(tree)
+		if out != tcase.output {
+			t.Errorf("out: %s, want %s", out, tcase.output)
+		}
+	}
+
+	invalidSQL := []struct {
+		input  string
+		output string
+	}{{
+		input:  "select convert('abc' as date) from t",
+		output: "syntax error at position 24 near 'as'",
+	}, {
+		input:  "select convert from t",
+		output: "syntax error at position 20 near 'from'",
+	}, {
+		input:  "select cast('foo', decimal) from t",
+		output: "syntax error at position 19",
+	}, {
+		input:  "select convert('abc', datetime(4+9)) from t",
+		output: "syntax error at position 34",
+	}, {
+		input:  "select convert('abc', decimal(4+9)) from t",
+		output: "syntax error at position 33",
+	}}
+
+	for _, tcase := range invalidSQL {
+		_, err := Parse(tcase.input)
+		if err == nil || err.Error() != tcase.output {
+			t.Errorf("%s: %v, want %s", tcase.input, err, tcase.output)
+		}
+	}
+}
+
 func TestErrors(t *testing.T) {
 	invalidSQL := []struct {
 		input  string
 		output string
 	}{{
-		input:  "select !8 from t",
-		output: "syntax error at position 9 near '!'",
-	}, {
 		input:  "select $ from t",
 		output: "syntax error at position 9 near '$'",
 	}, {
@@ -948,6 +1078,18 @@ func TestErrors(t *testing.T) {
 	}, {
 		input:  "select mod from t",
 		output: "syntax error at position 16 near 'from'",
+	}, {
+		input:  "select 1 from t where div 5",
+		output: "syntax error at position 26 near 'div'",
+	}, {
+		input:  "select 1 from t where binary",
+		output: "syntax error at position 30",
+	}, {
+		input:  "update (select id from foo) subqalias set id = 4",
+		output: "syntax error at position 9",
+	}, {
+		input:  "select match(a1, a2) against ('foo' in boolean mode with query expansion) from t",
+		output: "syntax error at position 57 near 'with'",
 	}}
 	for _, tcase := range invalidSQL {
 		if tcase.output == "" {
