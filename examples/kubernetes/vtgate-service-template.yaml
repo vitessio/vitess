@@ -13,7 +13,7 @@ spec:
     - name: grpc
       port: 15991
     - name: mysql
-      port: 15306
+      port: {{mysql_server_port}}
   selector:
     component: vtgate
     cell: {{cell}}
