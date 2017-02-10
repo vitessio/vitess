@@ -1467,7 +1467,7 @@ func (node *CollateExpr) WalkSubtree(visit Visit) error {
 
 // FuncExpr represents a function call.
 type FuncExpr struct {
-	Qualifier ColIdent
+	Qualifier TableIdent
 	Name      ColIdent
 	Distinct  bool
 	Exprs     SelectExprs
@@ -1936,13 +1936,6 @@ func NewColIdent(str string) ColIdent {
 	return ColIdent{
 		val: str,
 	}
-}
-
-// AsTableIdent converts a ColIdent to a TableIdent by
-// using its original value, rather than the Lowered() version
-// since TableIdent is case-sensitive
-func (node ColIdent) AsTableIdent() TableIdent {
-	return TableIdent{node.val}
 }
 
 // Format formats the node.

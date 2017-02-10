@@ -439,13 +439,13 @@ select_expression:
   {
     $$ = &NonStarExpr{Expr: $1, As: $2}
   }
-| sql_id '.' '*'
+| table_id '.' '*'
   {
-    $$ = &StarExpr{TableName: &TableName{Name: $1.AsTableIdent()}}
+    $$ = &StarExpr{TableName: &TableName{Name: $1}}
   }
-| sql_id '.' reserved_sql_id '.' '*'
+| table_id '.' reserved_table_id '.' '*'
   {
-    $$ = &StarExpr{TableName: &TableName{Qualifier: $1.AsTableIdent(), Name: $3.AsTableIdent()}}
+    $$ = &StarExpr{TableName: &TableName{Qualifier: $1, Name: $3}}
   }
 
 as_ci_opt:
@@ -1003,7 +1003,7 @@ function_call_generic:
   {
     $$ = &FuncExpr{Name: $1, Distinct: true, Exprs: $4}
   }
-| sql_id '.' reserved_sql_id openb select_expression_list_opt closeb
+| table_id '.' reserved_sql_id openb select_expression_list_opt closeb
   {
     $$ = &FuncExpr{Qualifier: $1, Name: $3, Exprs: $5}
   }
@@ -1223,13 +1223,13 @@ column_name:
   {
     $$ = &ColName{Name: $1}
   }
-| sql_id '.' reserved_sql_id
+| table_id '.' reserved_sql_id
   {
-    $$ = &ColName{Qualifier: &TableName{Name: $1.AsTableIdent()}, Name: $3}
+    $$ = &ColName{Qualifier: &TableName{Name: $1}, Name: $3}
   }
-| sql_id '.' reserved_sql_id '.' reserved_sql_id
+| table_id '.' reserved_table_id '.' reserved_sql_id
   {
-    $$ = &ColName{Qualifier: &TableName{Qualifier: $1.AsTableIdent(), Name: $3.AsTableIdent()}, Name: $5}
+    $$ = &ColName{Qualifier: &TableName{Qualifier: $1, Name: $3}, Name: $5}
   }
 
 value:
