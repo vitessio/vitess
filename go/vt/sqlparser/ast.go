@@ -151,8 +151,8 @@ const (
 
 // Select.Cache
 const (
-	SQLCacheStr   = "SQL_CACHE "
-	SQLNoCacheStr = "SQL_NO_CACHE "
+	SQLCacheStr   = "sql_cache "
+	SQLNoCacheStr = "sql_no_cache "
 )
 
 // Format formats the node.
@@ -1358,7 +1358,7 @@ const (
 	MinusStr      = "-"
 	MultStr       = "*"
 	DivStr        = "/"
-	IntDivStr     = "DIV"
+	IntDivStr     = "div"
 	ModStr        = "%"
 	ShiftLeftStr  = "<<"
 	ShiftRightStr = ">>"

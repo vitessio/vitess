@@ -314,7 +314,7 @@ func TestValid(t *testing.T) {
 	}, {
 		input: "select /* % */ 1 from t where a = b % c",
 	}, {
-		input: "select /* DIV */ 1 from t where a = b DIV c",
+		input: "select /* div */ 1 from t where a = b div c",
 	}, {
 		input:  "select /* MOD */ 1 from t where a = b MOD c",
 		output: "select /* MOD */ 1 from t where a = b % c",
@@ -691,7 +691,7 @@ func TestValid(t *testing.T) {
 		input:  "select /* drop trailing semicolon */ 1 from dual;",
 		output: "select /* drop trailing semicolon */ 1 from dual",
 	}, {
-		input: "select /* cache directive */ SQL_NO_CACHE 'foo' from t",
+		input: "select /* cache directive */ sql_no_cache 'foo' from t",
 	}, {
 		input: "select binary 'a' = 'A' from t",
 	}, {
