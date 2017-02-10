@@ -40,6 +40,7 @@ public class Constants {
 
 
     public static final class SQLExceptionMessages {
+        public static final String CONN_UNAVAILABLE = "Connection not available";
         public static final String CONN_CLOSED = "Connection is Closed";
         public static final String INIT_FAILED = "Failed to Initialize Vitess JDBC Driver";
         public static final String INVALID_CONN_URL = "Connection URL is invalid";

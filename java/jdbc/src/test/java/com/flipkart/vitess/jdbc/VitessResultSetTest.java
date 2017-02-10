@@ -1,10 +1,10 @@
 package com.flipkart.vitess.jdbc;
 
-import com.flipkart.vitess.jdbc.VitessResultSet;
 import com.google.protobuf.ByteString;
 import com.youtube.vitess.client.cursor.Cursor;
 import com.youtube.vitess.client.cursor.SimpleCursor;
 import com.youtube.vitess.proto.Query;
+
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -18,7 +18,7 @@ import java.sql.Timestamp;
 /**
  * Created by harshit.gangal on 19/01/16.
  */
-public class VitessResultSetTest {
+public class VitessResultSetTest extends BaseTest {
 
     public Cursor getCursorWithRows() {
         /*
@@ -212,7 +212,7 @@ public class VitessResultSetTest {
 
     @Test public void testgetString() throws SQLException {
         Cursor cursor = getCursorWithRowsAsNull();
-        VitessResultSet vitessResultSet = new VitessResultSet(cursor);
+        VitessResultSet vitessResultSet = new VitessResultSet(cursor, getVitessStatement());
         vitessResultSet.next();
         Assert.assertEquals("-50", vitessResultSet.getString(1));
         Assert.assertEquals("50", vitessResultSet.getString(2));
@@ -246,11 +246,11 @@ public class VitessResultSetTest {
     @Test public void testgetBoolean() throws SQLException {
         Cursor cursor = getCursorWithRows();
         Cursor cursorWithRowsAsNull = getCursorWithRowsAsNull();
-        VitessResultSet vitessResultSet = new VitessResultSet(cursor);
+        VitessResultSet vitessResultSet = new VitessResultSet(cursor, getVitessStatement());
         vitessResultSet.next();
         Assert.assertEquals(true, vitessResultSet.getBoolean(25));
         Assert.assertEquals(false, vitessResultSet.getBoolean(1));
-        vitessResultSet = new VitessResultSet(cursorWithRowsAsNull);
+        vitessResultSet = new VitessResultSet(cursorWithRowsAsNull, getVitessStatement());
         vitessResultSet.next();
         Assert.assertEquals(false, vitessResultSet.getBoolean(25));
         Assert.assertEquals(false, vitessResultSet.getBoolean(1));
@@ -258,7 +258,7 @@ public class VitessResultSetTest {
 
     @Test public void testgetByte() throws SQLException {
         Cursor cursor = getCursorWithRows();
-        VitessResultSet vitessResultSet = new VitessResultSet(cursor);
+        VitessResultSet vitessResultSet = new VitessResultSet(cursor, getVitessStatement());
         vitessResultSet.next();
         Assert.assertEquals(-50, vitessResultSet.getByte(1));
         Assert.assertEquals(1, vitessResultSet.getByte(25));
@@ -266,42 +266,42 @@ public class VitessResultSetTest {
 
     @Test public void testgetShort() throws SQLException {
         Cursor cursor = getCursorWithRows();
-        VitessResultSet vitessResultSet = new VitessResultSet(cursor);
+        VitessResultSet vitessResultSet = new VitessResultSet(cursor, getVitessStatement());
         vitessResultSet.next();
         Assert.assertEquals(-23000, vitessResultSet.getShort(3));
     }
 
     @Test public void testgetInt() throws SQLException {
         Cursor cursor = getCursorWithRows();
-        VitessResultSet vitessResultSet = new VitessResultSet(cursor);
+        VitessResultSet vitessResultSet = new VitessResultSet(cursor, getVitessStatement());
         vitessResultSet.next();
         Assert.assertEquals(-100, vitessResultSet.getInt(7));
     }
 
     @Test public void testgetLong() throws SQLException {
         Cursor cursor = getCursorWithRows();
-        VitessResultSet vitessResultSet = new VitessResultSet(cursor);
+        VitessResultSet vitessResultSet = new VitessResultSet(cursor, getVitessStatement());
         vitessResultSet.next();
         Assert.assertEquals(-1000, vitessResultSet.getInt(9));
     }
 
     @Test public void testgetFloat() throws SQLException {
         Cursor cursor = getCursorWithRows();
-        VitessResultSet vitessResultSet = new VitessResultSet(cursor);
+        VitessResultSet vitessResultSet = new VitessResultSet(cursor, getVitessStatement());
         vitessResultSet.next();
         Assert.assertEquals(24.52f, vitessResultSet.getFloat(11), 0.001);
     }
 
     @Test public void testgetDouble() throws SQLException {
         Cursor cursor = getCursorWithRows();
-        VitessResultSet vitessResultSet = new VitessResultSet(cursor);
+        VitessResultSet vitessResultSet = new VitessResultSet(cursor, getVitessStatement());
         vitessResultSet.next();
         Assert.assertEquals(100.43, vitessResultSet.getFloat(12), 0.001);
     }
 
     @Test public void testBigDecimal() throws SQLException {
         Cursor cursor = getCursorWithRows();
-        VitessResultSet vitessResultSet = new VitessResultSet(cursor);
+        VitessResultSet vitessResultSet = new VitessResultSet(cursor, getVitessStatement());
         vitessResultSet.next();
         Assert.assertEquals(new BigDecimal(BigInteger.valueOf(123456789), 5),
             vitessResultSet.getBigDecimal(18));
@@ -309,28 +309,28 @@ public class VitessResultSetTest {
 
     @Test public void testgetBytes() throws SQLException, UnsupportedEncodingException {
         Cursor cursor = getCursorWithRows();
-        VitessResultSet vitessResultSet = new VitessResultSet(cursor);
+        VitessResultSet vitessResultSet = new VitessResultSet(cursor, getVitessStatement());
         vitessResultSet.next();
         Assert.assertArrayEquals("HELLO TDS TEAM".getBytes("UTF-8"), vitessResultSet.getBytes(19));
     }
 
     @Test public void testgetDate() throws SQLException, UnsupportedEncodingException {
         Cursor cursor = getCursorWithRows();
-        VitessResultSet vitessResultSet = new VitessResultSet(cursor);
+        VitessResultSet vitessResultSet = new VitessResultSet(cursor, getVitessStatement());
         vitessResultSet.next();
         Assert.assertEquals(new java.sql.Date(116, 1, 6), vitessResultSet.getDate(14));
     }
 
     @Test public void testgetTime() throws SQLException, UnsupportedEncodingException {
         Cursor cursor = getCursorWithRows();
-        VitessResultSet vitessResultSet = new VitessResultSet(cursor);
+        VitessResultSet vitessResultSet = new VitessResultSet(cursor, getVitessStatement());
         vitessResultSet.next();
         Assert.assertEquals(new Time(12, 34, 56), vitessResultSet.getTime(15));
     }
 
     @Test public void testgetTimestamp() throws SQLException, UnsupportedEncodingException {
         Cursor cursor = getCursorWithRows();
-        VitessResultSet vitessResultSet = new VitessResultSet(cursor);
+        VitessResultSet vitessResultSet = new VitessResultSet(cursor, getVitessStatement());
         vitessResultSet.next();
         Assert.assertEquals(new Timestamp(116, 1, 6, 14, 15, 16, 0),
             vitessResultSet.getTimestamp(13));
@@ -338,7 +338,7 @@ public class VitessResultSetTest {
 
     @Test public void testgetStringbyColumnLabel() throws SQLException {
         Cursor cursor = getCursorWithRows();
-        VitessResultSet vitessResultSet = new VitessResultSet(cursor);
+        VitessResultSet vitessResultSet = new VitessResultSet(cursor, getVitessStatement());
         vitessResultSet.next();
         Assert.assertEquals("-50", vitessResultSet.getString("col1"));
         Assert.assertEquals("50", vitessResultSet.getString("col2"));
@@ -371,7 +371,7 @@ public class VitessResultSetTest {
 
     @Test public void testgetBooleanbyColumnLabel() throws SQLException {
         Cursor cursor = getCursorWithRows();
-        VitessResultSet vitessResultSet = new VitessResultSet(cursor);
+        VitessResultSet vitessResultSet = new VitessResultSet(cursor, getVitessStatement());
         vitessResultSet.next();
         Assert.assertEquals(true, vitessResultSet.getBoolean("col25"));
         Assert.assertEquals(false, vitessResultSet.getBoolean("col1"));
@@ -379,7 +379,7 @@ public class VitessResultSetTest {
 
     @Test public void testgetBytebyColumnLabel() throws SQLException {
         Cursor cursor = getCursorWithRows();
-        VitessResultSet vitessResultSet = new VitessResultSet(cursor);
+        VitessResultSet vitessResultSet = new VitessResultSet(cursor, getVitessStatement());
         vitessResultSet.next();
         Assert.assertEquals(-50, vitessResultSet.getByte("col1"));
         Assert.assertEquals(1, vitessResultSet.getByte("col25"));
@@ -387,42 +387,42 @@ public class VitessResultSetTest {
 
     @Test public void testgetShortbyColumnLabel() throws SQLException {
         Cursor cursor = getCursorWithRows();
-        VitessResultSet vitessResultSet = new VitessResultSet(cursor);
+        VitessResultSet vitessResultSet = new VitessResultSet(cursor, getVitessStatement());
         vitessResultSet.next();
         Assert.assertEquals(-23000, vitessResultSet.getShort("col3"));
     }
 
     @Test public void testgetIntbyColumnLabel() throws SQLException {
         Cursor cursor = getCursorWithRows();
-        VitessResultSet vitessResultSet = new VitessResultSet(cursor);
+        VitessResultSet vitessResultSet = new VitessResultSet(cursor, getVitessStatement());
         vitessResultSet.next();
         Assert.assertEquals(-100, vitessResultSet.getInt("col7"));
     }
 
     @Test public void testgetLongbyColumnLabel() throws SQLException {
         Cursor cursor = getCursorWithRows();
-        VitessResultSet vitessResultSet = new VitessResultSet(cursor);
+        VitessResultSet vitessResultSet = new VitessResultSet(cursor, getVitessStatement());
         vitessResultSet.next();
         Assert.assertEquals(-1000, vitessResultSet.getInt("col9"));
     }
 
     @Test public void testgetFloatbyColumnLabel() throws SQLException {
         Cursor cursor = getCursorWithRows();
-        VitessResultSet vitessResultSet = new VitessResultSet(cursor);
+        VitessResultSet vitessResultSet = new VitessResultSet(cursor, getVitessStatement());
         vitessResultSet.next();
         Assert.assertEquals(24.52f, vitessResultSet.getFloat("col11"), 0.001);
     }
 
     @Test public void testgetDoublebyColumnLabel() throws SQLException {
         Cursor cursor = getCursorWithRows();
-        VitessResultSet vitessResultSet = new VitessResultSet(cursor);
+        VitessResultSet vitessResultSet = new VitessResultSet(cursor, getVitessStatement());
         vitessResultSet.next();
         Assert.assertEquals(100.43, vitessResultSet.getFloat("col12"), 0.001);
     }
 
     @Test public void testBigDecimalbyColumnLabel() throws SQLException {
         Cursor cursor = getCursorWithRows();
-        VitessResultSet vitessResultSet = new VitessResultSet(cursor);
+        VitessResultSet vitessResultSet = new VitessResultSet(cursor, getVitessStatement());
         vitessResultSet.next();
         Assert.assertEquals(new BigDecimal(BigInteger.valueOf(123456789), 5),
             vitessResultSet.getBigDecimal("col18"));
@@ -431,7 +431,7 @@ public class VitessResultSetTest {
     @Test public void testgetBytesbyColumnLabel()
         throws SQLException, UnsupportedEncodingException {
         Cursor cursor = getCursorWithRows();
-        VitessResultSet vitessResultSet = new VitessResultSet(cursor);
+        VitessResultSet vitessResultSet = new VitessResultSet(cursor, getVitessStatement());
         vitessResultSet.next();
         Assert.assertArrayEquals("HELLO TDS TEAM".getBytes("UTF-8"),
             vitessResultSet.getBytes("col19"));
@@ -439,14 +439,14 @@ public class VitessResultSetTest {
 
     @Test public void testgetDatebyColumnLabel() throws SQLException, UnsupportedEncodingException {
         Cursor cursor = getCursorWithRows();
-        VitessResultSet vitessResultSet = new VitessResultSet(cursor);
+        VitessResultSet vitessResultSet = new VitessResultSet(cursor, getVitessStatement());
         vitessResultSet.next();
         Assert.assertEquals(new java.sql.Date(116, 1, 6), vitessResultSet.getDate("col14"));
     }
 
     @Test public void testgetTimebyColumnLabel() throws SQLException, UnsupportedEncodingException {
         Cursor cursor = getCursorWithRows();
-        VitessResultSet vitessResultSet = new VitessResultSet(cursor);
+        VitessResultSet vitessResultSet = new VitessResultSet(cursor, getVitessStatement());
         vitessResultSet.next();
         Assert.assertEquals(new Time(12, 34, 56), vitessResultSet.getTime("col15"));
     }
@@ -454,7 +454,7 @@ public class VitessResultSetTest {
     @Test public void testgetTimestampbyColumnLabel()
         throws SQLException, UnsupportedEncodingException {
         Cursor cursor = getCursorWithRows();
-        VitessResultSet vitessResultSet = new VitessResultSet(cursor);
+        VitessResultSet vitessResultSet = new VitessResultSet(cursor, getVitessStatement());
         vitessResultSet.next();
         Assert.assertEquals(new Timestamp(116, 1, 6, 14, 15, 16, 0),
             vitessResultSet.getTimestamp("col13"));
@@ -469,4 +469,9 @@ public class VitessResultSetTest {
         // .getAsciiStream(19));
     }
 
+    @Test public void testEnhancedFieldsFromCursor() throws Exception {
+        Cursor cursor = getCursorWithRows();
+        VitessResultSet vitessResultSet = new VitessResultSet(cursor, getVitessStatement());
+        Assert.assertEquals(cursor.getFields().size(), vitessResultSet.getFields().size());
+    }
 }

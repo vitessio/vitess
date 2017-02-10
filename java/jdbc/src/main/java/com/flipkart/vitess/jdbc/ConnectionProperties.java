@@ -30,6 +30,16 @@ public class ConnectionProperties {
         }
     }
 
+    // Configs for handing tinyint(1)
+    private BooleanConnectionProperty tinyInt1isBit = new BooleanConnectionProperty(
+        "tinyInt1isBit",
+        "Should the driver treat the datatype TINYINT(1) as the BIT type (because the server silently converts BIT -> TINYINT(1) when creating tables)?",
+        true);
+    private BooleanConnectionProperty yearIsDateType = new BooleanConnectionProperty(
+        "yearIsDateType",
+        "Should the JDBC driver treat the MySQL type \"YEAR\" as a java.sql.Date, or as a SHORT?",
+        true);
+
     // Vitess-specific configs
     private EnumConnectionProperty<Constants.QueryExecuteType> executeType = new EnumConnectionProperty<>(
         Constants.Property.EXECUTE_TYPE,
@@ -99,6 +109,22 @@ public class ConnectionProperties {
             }
         }
         return driverProperties;
+    }
+
+    public boolean getTinyInt1isBit() {
+        return tinyInt1isBit.getValueAsBoolean();
+    }
+
+    public void setTinyInt1isBit(boolean tinyInt1isBit) {
+        this.tinyInt1isBit.setValue(tinyInt1isBit);
+    }
+
+    public boolean getYearIsDateType() {
+        return yearIsDateType.getValueAsBoolean();
+    }
+
+    public void setYearIsDateType(boolean yearIsDateType) {
+        this.yearIsDateType.setValue(yearIsDateType);
     }
 
     public Query.ExecuteOptions.IncludedFields getIncludedFields() {
