@@ -43,7 +43,8 @@ var (
 	appPoolSize    = flag.Int("app_pool_size", 40, "Size of the connection pool for app connections")
 	appIdleTimeout = flag.Duration("app_idle_timeout", time.Minute, "Idle timeout for app connections")
 
-	socketFile = flag.String("mysqlctl_socket", "", "socket file to use for remote mysqlctl actions (empty for local actions)")
+	socketFile        = flag.String("mysqlctl_socket", "", "socket file to use for remote mysqlctl actions (empty for local actions)")
+	mycnfTemplateFile = flag.String("mysqlctl_mycnf_template", "", "template file to use for generating the my.cnf file during server init")
 
 	// masterConnectRetry is used in 'SET MASTER' commands
 	masterConnectRetry = flag.Duration("master_connect_retry", 10*time.Second, "how long to wait in between slave -> connection attempts. Only precise to the second.")
@@ -561,19 +562,8 @@ func (mysqld *Mysqld) initConfig(root string) error {
 
 	switch hr := hook.NewSimpleHook("make_mycnf").Execute(); hr.ExitStatus {
 	case hook.HOOK_DOES_NOT_EXIST:
-		log.Infof("make_mycnf hook doesn't exist, reading default template files")
-		cnfTemplatePaths := []string{
-			path.Join(root, "config/mycnf/default.cnf"),
-			path.Join(root, "config/mycnf/master.cnf"),
-			path.Join(root, "config/mycnf/replica.cnf"),
-		}
-
-		if extraCnf := os.Getenv("EXTRA_MY_CNF"); extraCnf != "" {
-			parts := strings.Split(extraCnf, ":")
-			cnfTemplatePaths = append(cnfTemplatePaths, parts...)
-		}
-
-		configData, err = mysqld.config.makeMycnf(cnfTemplatePaths)
+		log.Infof("make_mycnf hook doesn't exist, reading template files")
+		configData, err = mysqld.config.makeMycnf(getMycnfTemplates(root))
 	case hook.HOOK_SUCCESS:
 		configData, err = mysqld.config.fillMycnfTemplate(hr.Stdout)
 	default:
@@ -584,6 +574,25 @@ func (mysqld *Mysqld) initConfig(root string) error {
 	}
 
 	return ioutil.WriteFile(mysqld.config.path, []byte(configData), 0664)
+}
+
+func getMycnfTemplates(root string) []string {
+	if *mycnfTemplateFile != "" {
+		return []string{*mycnfTemplateFile}
+	}
+
+	cnfTemplatePaths := []string{
+		path.Join(root, "config/mycnf/default.cnf"),
+		path.Join(root, "config/mycnf/master.cnf"),
+		path.Join(root, "config/mycnf/replica.cnf"),
+	}
+
+	if extraCnf := os.Getenv("EXTRA_MY_CNF"); extraCnf != "" {
+		parts := strings.Split(extraCnf, ":")
+		cnfTemplatePaths = append(cnfTemplatePaths, parts...)
+	}
+
+	return cnfTemplatePaths
 }
 
 // ReinitConfig updates the config file as if Mysqld is initializing. At the
