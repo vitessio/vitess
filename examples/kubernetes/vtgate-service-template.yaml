@@ -12,6 +12,8 @@ spec:
       port: 15001
     - name: grpc
       port: 15991
+    - name: mysql
+      port: 15306
   selector:
     component: vtgate
     cell: {{cell}}

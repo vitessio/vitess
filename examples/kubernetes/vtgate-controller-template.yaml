@@ -42,6 +42,7 @@ spec:
               -alsologtostderr
               -port 15001
               -grpc_port 15991
+              -mysql_server_port 15306
               -service_map 'grpc-vtgateservice'
               -cells_to_watch {{cell}}
               -tablet_types_to_wait MASTER,REPLICA
