@@ -30,11 +30,12 @@ func NewCheckpointWriter(ts topo.Server, checkpoint *workflowpb.WorkflowCheckpoi
 }
 
 // UpdateTask updates the status and checkpointing the update.
-func (c *CheckpointWriter) UpdateTask(taskID string, status workflowpb.TaskState) error {
+func (c *CheckpointWriter) UpdateTask(taskID string, status workflowpb.TaskState, err string) error {
 	c.checkpointMu.Lock()
 	defer c.checkpointMu.Unlock()
 
 	c.checkpoint.Tasks[taskID].State = status
+	c.checkpoint.Tasks[taskID].Error = err
 	return c.Save()
 }
 

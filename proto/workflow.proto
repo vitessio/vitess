@@ -59,20 +59,6 @@ message Workflow {
   int64 end_time = 8;
 }
 
-enum TaskState {
-  TaskNotStarted = 0;
-  TaskRunning = 1;
-  TaskDone = 2;
-}
-
-message Task {
-  string id = 1;
-  TaskState state = 2;
-  // attributes includes the parameters the task needs.
-  map<string, string> attributes = 3;
-  string error = 4;
-}
-
 message WorkflowCheckpoint {
   // code_version is used to detect incompabilities between the version of the
   // running workflow and the one which wrote the checkpoint. If they don't
@@ -89,3 +75,18 @@ message WorkflowCheckpoint {
   // would store the source shards and destination shards.
   map<string, string> settings = 3;
 }
+
+enum TaskState {
+  TaskNotStarted = 0;
+  TaskRunning = 1;
+  TaskDone = 2;
+}
+
+message Task {
+  string id = 1;
+  TaskState state = 2;
+  // attributes includes the parameters the task needs.
+  map<string, string> attributes = 3;
+  string error = 4;
+}
+

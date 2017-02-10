@@ -102,7 +102,7 @@ type ActionListener interface {
 // the Angular 2 web app.
 type Node struct {
 	// nodeManager is the NodeManager handling this Node.
-	// It is set by AddRootNode, and propagated by AddChild.
+	// It is set by AddRootNode, and propagated by AddChildren.
 	// Any change to this node must take the Manager's lock.
 	nodeManager *NodeManager
 

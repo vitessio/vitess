@@ -9,6 +9,7 @@ import (
 	"github.com/youtube/vitess/go/vt/topo/memorytopo"
 	"github.com/youtube/vitess/go/vt/worker/fakevtworkerclient"
 	"github.com/youtube/vitess/go/vt/worker/vtworkerclient"
+	"github.com/youtube/vitess/go/vt/workflow"
 	"github.com/youtube/vitess/go/vt/wrangler"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -41,7 +42,7 @@ func TestHorizontalResharding(t *testing.T) {
 
 	// Checking all tasks are Done.
 	for _, task := range hw.checkpoint.Tasks {
-		if task.State != workflowpb.TaskState_TaskDone {
+		if task.State != workflowpb.TaskState_TaskDone || task.Error != "" {
 			t.Fatalf("task is not done: Id: %v, State: %v, Attributes:%v", task.Id, task.State, task.Attributes)
 		}
 	}
@@ -53,25 +54,38 @@ func setUp(t *testing.T, ctrl *gomock.Controller) *HorizontalReshardingWorkflow 
 	ts := memorytopo.NewServer("cell")
 	// Create fake wrangler using mock interface, which is used for the unit test in steps CopySchema and MigratedServedType.
 	mockWranglerInterface := NewMockReshardingWrangler(ctrl)
+	// Create the checkpoint for workflow.
+	keyspace := "test_keyspace"
+	vtworkers := []string{"localhost:15032"}
+
+	taskMap := make(map[string]*workflowpb.Task)
+	source := "0"
+	destinations := []string{"-80", "80-"}
+	worker := vtworkers[0]
+	updatePerSourceTask(keyspace, source, worker, SplitCloneName, taskMap)
+	updatePerSourceTask(keyspace, source, worker, MigrateName, taskMap)
+
+	for _, d := range destinations {
+		updatePerDestinationTask(keyspace, source, d, worker, CopySchemaName, taskMap)
+		updatePerDestinationTask(keyspace, source, d, worker, WaitFilteredReplicationName, taskMap)
+		updatePerDestinationTask(keyspace, source, d, worker, SplitDiffName, taskMap)
+	}
 
 	// Create the workflow (ignore the node construction since we don't test the front-end part in this unit test).
 	hw := &HorizontalReshardingWorkflow{
-		keyspace:   "test_keyspace",
-		vtworkers:  []string{"localhost:15032"},
 		wr:         mockWranglerInterface,
 		topoServer: ts,
 		logger:     logutil.NewMemoryLogger(),
-	}
-	perShard := &PerShardHorizontalResharding{
-		parent: hw,
-		PerShardHorizontalReshardingData: PerShardHorizontalReshardingData{
-			keyspace:          "test_keyspace",
-			sourceShard:       "0",
-			destinationShards: []string{"-80", "80-"},
-			vtworker:          "localhost:15032",
+		checkpoint: &workflowpb.WorkflowCheckpoint{
+			CodeVersion: codeVersion,
+			Tasks:       taskMap,
+			Settings: map[string]string{
+				"source_shards":      "0",
+				"destination_shards": "-80,80-",
+			},
 		},
+		taskUINodeMap: make(map[string]*workflow.Node),
 	}
-	hw.data = append(hw.data, perShard)
 	// Create the initial workflowpb.Workflow object.
 	w := &workflowpb.Workflow{
 		Uuid:        "testworkflow0000",
@@ -84,6 +98,7 @@ func setUp(t *testing.T, ctrl *gomock.Controller) *HorizontalReshardingWorkflow 
 		t.Errorf("%s: Horizontal resharding workflow fails in creating workflowInfo", err)
 		return nil
 	}
+	hw.checkpointWriter = NewCheckpointWriter(hw.topoServer, hw.checkpoint, hw.wi)
 
 	// Set the expected behaviors for mock wrangler.
 	mockWranglerInterface.EXPECT().CopySchemaShardFromShard(

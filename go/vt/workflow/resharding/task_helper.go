@@ -4,11 +4,16 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/youtube/vitess/go/vt/automation"
+	"github.com/youtube/vitess/go/vt/topo/topoproto"
+	"github.com/youtube/vitess/go/vt/wrangler"
+
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	workflowpb "github.com/youtube/vitess/go/vt/proto/workflow"
 )
 
-func getTaskID(phase, shardType, shardName string) string {
-	return fmt.Sprintf("%s_%s/%s", phase, shardType, shardName)
+func createTaskID(phase, shardType, shardName string) string {
+	return fmt.Sprintf("%s_%s_%s", phase, shardType, shardName)
 }
 
 // GenerateTasks generates a copy of tasks for a specific step. The task status is not checked in this function.
@@ -16,51 +21,113 @@ func (hw *HorizontalReshardingWorkflow) GenerateTasks(checkpoint *workflowpb.Wor
 	var tasks []*workflowpb.Task
 	switch stepName {
 	case CopySchemaName, WaitFilteredReplicationName, SplitDiffName:
-		// TODO: clean the logics and combine it into one function.
 		for _, d := range strings.Split(checkpoint.Settings["destination_shards"], ",") {
-			taskID := getTaskID(stepName, "dest", d)
+			taskID := createTaskID(stepName, "dest", d)
 			tasks = append(tasks, checkpoint.Tasks[taskID])
 		}
 	case SplitCloneName, MigrateName:
 		for _, s := range strings.Split(checkpoint.Settings["source_shards"], ",") {
-			taskID := getTaskID(stepName, "source", s)
+			taskID := createTaskID(stepName, "source", s)
 			tasks = append(tasks, checkpoint.Tasks[taskID])
 		}
 	}
 	return tasks
 }
 
-// InitTasks initialized the tasks for the workflow and return a checkpoint to store the information.
-func (hw *HorizontalReshardingWorkflow) InitTasks() *workflowpb.WorkflowCheckpoint {
-	taskMap := make(map[string]*workflowpb.Task)
-	var sourceShards, destinationShards []string
-
-	for _, perSrc := range hw.data {
-		s := perSrc.sourceShard
-		worker := perSrc.vtworker
-		sourceShards = append(sourceShards, s)
-		for _, d := range perSrc.destinationShards {
-			destinationShards = append(destinationShards, d)
-			updatePerDestinationTask(s, d, worker, CopySchemaName, taskMap)
-			updatePerDestinationTask(s, d, worker, WaitFilteredReplicationName, taskMap)
-			updatePerDestinationTask(s, d, worker, SplitDiffName, taskMap)
-		}
-		updatePerSourceTask(s, worker, SplitCloneName, taskMap)
-		updatePerSourceTask(s, worker, MigrateName, taskMap)
+// runCopySchemaPerShard runs CopySchema for a destination shard.
+// There should be #destshards parameters, while each param includes 1 sourceshard and 1 destshard.
+func (hw *HorizontalReshardingWorkflow) runCopySchema(attr map[string]string) error {
+	s := attr["source_shard"]
+	d := attr["destination_shard"]
+	keyspace := attr["keyspace"]
+	err := hw.wr.CopySchemaShardFromShard(hw.ctx, nil /* tableArray*/, nil /* excludeTableArray */, true, /*includeViews*/
+		keyspace, s, keyspace, d, wrangler.DefaultWaitSlaveTimeout)
+	if err != nil {
+		hw.logger.Infof("Horizontal Resharding: error in CopySchemaShardFromShard from %s to %s: %v.", s, d, err)
 	}
-
-	return &workflowpb.WorkflowCheckpoint{
-		CodeVersion: codeVersion,
-		Tasks:       taskMap,
-		Settings: map[string]string{
-			"source_shards":      strings.Join(sourceShards, ","),
-			"destination_shards": strings.Join(destinationShards, ","),
-		},
-	}
+	hw.logger.Infof("Horizontal Resharding: CopySchemaShardFromShard from %s to %s is finished.", s, d)
+	return err
 }
 
-func updatePerDestinationTask(sourceShard, destinationShard, worker, name string, taskMap map[string]*workflowpb.Task) {
-	taskID := getTaskID(name, "dest", destinationShard)
+// runSplitClonePerShard runs SplitClone for a source shard.
+// There should be #sourceshards parameters, while each param includes 1 sourceshard and its destshards. The destShards are useless here.
+func (hw *HorizontalReshardingWorkflow) runSplitClone(attr map[string]string) error {
+	s := attr["source_shard"]
+	worker := attr["vtworker"]
+	keyspace := attr["keyspace"]
+
+	sourceKeyspaceShard := topoproto.KeyspaceShardString(keyspace, s)
+	// Reset the vtworker to avoid error if vtworker command has been called elsewhere.
+	// This is because vtworker class doesn't cleanup the environment after execution.
+	automation.ExecuteVtworker(hw.ctx, worker, []string{"Reset"})
+	// The flag min_healthy_rdonly_tablets is set to 1 (default value is 2).
+	// Therefore, we can reuse the normal end to end test setting, which has only 1 rdonly tablet.
+	// TODO(yipeiw): Add min_healthy_rdonly_tablets as an input argument in UI.
+	args := []string{"SplitClone", "--min_healthy_rdonly_tablets=1", sourceKeyspaceShard}
+	if _, err := automation.ExecuteVtworker(hw.ctx, worker, args); err != nil {
+		hw.logger.Infof("Horizontal resharding: error in SplitClone in keyspace %s: %v.", keyspace, err)
+		return err
+	}
+	hw.logger.Infof("Horizontal resharding: SplitClone is finished.")
+
+	return nil
+}
+
+// runWaitFilteredReplication runs WaitForFilteredReplication for a destination shard.
+// There should be #destshards parameters, while each param includes 1 sourceshard and 1 destshard.
+func (hw *HorizontalReshardingWorkflow) runWaitFilteredReplication(attr map[string]string) error {
+	d := attr["destination_shard"]
+	keyspace := attr["keyspace"]
+
+	if err := hw.wr.WaitForFilteredReplication(hw.ctx, keyspace, d, wrangler.DefaultWaitForFilteredReplicationMaxDelay); err != nil {
+		hw.logger.Infof("Horizontal Resharding: error in WaitForFilteredReplication: %v.", err)
+		return err
+	}
+	hw.logger.Infof("Horizontal Resharding:WaitForFilteredReplication is finished on " + d)
+	return nil
+}
+
+// runSplitDiffPerShard runs SplitDiff for a source shard.
+// There should be #sourceshards parameters, while each param includes 1 sourceshard and its destshards.
+func (hw *HorizontalReshardingWorkflow) runSplitDiff(attr map[string]string) error {
+	d := attr["destination_shard"]
+	worker := attr["vtworker"]
+	keyspace := attr["keyspace"]
+
+	automation.ExecuteVtworker(hw.ctx, worker, []string{"Reset"})
+	args := []string{"SplitDiff", "--min_healthy_rdonly_tablets=1", topoproto.KeyspaceShardString(keyspace, d)}
+	_, err := automation.ExecuteVtworker(hw.ctx, worker, args)
+	if err != nil {
+		return err
+	}
+
+	hw.logger.Infof("Horizontal resharding: SplitDiff is finished.")
+	return nil
+}
+
+// runMigratePerShard runs the migration sequentially among all source shards.
+// There should be 1 parameter, which includes all source shards to be migrated.
+func (hw *HorizontalReshardingWorkflow) runMigrate(attr map[string]string) error {
+	s := attr["source_shard"]
+	keyspace := attr["keyspace"]
+
+	sourceKeyspaceShard := topoproto.KeyspaceShardString(keyspace, s)
+	servedTypeParams := []topodatapb.TabletType{topodatapb.TabletType_RDONLY,
+		topodatapb.TabletType_REPLICA,
+		topodatapb.TabletType_MASTER}
+	for _, servedType := range servedTypeParams {
+		err := hw.wr.MigrateServedTypes(hw.ctx, keyspace, s, nil /* cells */, servedType, false /* reverse */, false /* skipReFreshState */, wrangler.DefaultFilteredReplicationWaitTime)
+		if err != nil {
+			hw.logger.Infof("Horizontal Resharding: error in MigrateServedTypes on servedType %s: %v.", servedType, err)
+			return err
+		}
+		hw.logger.Infof("Horizontal Resharding: MigrateServedTypes is finished on tablet %s serve type %s.", sourceKeyspaceShard, servedType)
+	}
+	return nil
+}
+
+func updatePerDestinationTask(keyspace, sourceShard, destinationShard, worker, name string, taskMap map[string]*workflowpb.Task) {
+	taskID := createTaskID(name, "dest", destinationShard)
 	taskMap[taskID] = &workflowpb.Task{
 		Id:    taskID,
 		State: workflowpb.TaskState_TaskNotStarted,
@@ -68,18 +135,20 @@ func updatePerDestinationTask(sourceShard, destinationShard, worker, name string
 			"source_shard":      sourceShard,
 			"destination_shard": destinationShard,
 			"vtworker":          worker,
+			"keyspace":          keyspace,
 		},
 	}
 }
 
-func updatePerSourceTask(sourceShard, vtworker, name string, taskMap map[string]*workflowpb.Task) {
-	taskID := getTaskID(name, "source", sourceShard)
+func updatePerSourceTask(keyspace, sourceShard, vtworker, name string, taskMap map[string]*workflowpb.Task) {
+	taskID := createTaskID(name, "source", sourceShard)
 	taskMap[taskID] = &workflowpb.Task{
 		Id:    taskID,
 		State: workflowpb.TaskState_TaskNotStarted,
 		Attributes: map[string]string{
 			"source_shard": sourceShard,
 			"vtworker":     vtworker,
+			"keyspace":     keyspace,
 		},
 	}
 }
