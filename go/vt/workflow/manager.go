@@ -135,6 +135,7 @@ func (m *Manager) Run(ctx context.Context) {
 	// the manager is running.
 	m.mu.Lock()
 	if m.ctx != nil {
+		m.mu.Unlock()
 		panic("Manager is already running")
 	}
 	m.ctx = ctx
