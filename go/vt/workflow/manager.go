@@ -69,6 +69,10 @@ type Manager struct {
 	// shut down, either at startup or shutdown, or is not the
 	// elected master.
 	ctx context.Context
+	// started is used to signal that the manager is running i.e. Run() has been
+	// successfully called and the manager can start workflows.
+	// This channel is closed and re-created every time Run() is called.
+	started chan struct{}
 	// workflows is a map from job UUID to runningWorkflow.
 	workflows map[string]*runningWorkflow
 }
@@ -105,6 +109,7 @@ func NewManager(ts topo.Server) *Manager {
 	return &Manager{
 		ts:          ts,
 		nodeManager: NewNodeManager(),
+		started:     make(chan struct{}),
 		workflows:   make(map[string]*runningWorkflow),
 	}
 }
@@ -135,10 +140,14 @@ func (m *Manager) Run(ctx context.Context) {
 	// the manager is running.
 	m.mu.Lock()
 	if m.ctx != nil {
+		m.mu.Unlock()
 		panic("Manager is already running")
 	}
 	m.ctx = ctx
 	m.loadAndStartJobsLocked()
+	// Signal the successful startup.
+	close(m.started)
+	m.started = make(chan struct{})
 	m.mu.Unlock()
 
 	// Wait for the context to be canceled.
@@ -162,6 +171,25 @@ func (m *Manager) Run(ctx context.Context) {
 		select {
 		case <-rw.done:
 		}
+	}
+}
+
+// WaitUntilRunning blocks until Run() has progressed to a state where the
+// manager can start workflows. It is mainly used by tests.
+func (m *Manager) WaitUntilRunning() {
+	for {
+		m.mu.Lock()
+
+		if m.ctx != nil {
+			m.mu.Unlock()
+			return
+		}
+
+		started := m.started
+		m.mu.Unlock()
+
+		// Block until we have been started.
+		<-started
 	}
 }
 
