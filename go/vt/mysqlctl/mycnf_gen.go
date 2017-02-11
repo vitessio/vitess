@@ -55,6 +55,7 @@ func NewMycnf(tabletUID uint32, mysqlPort int32) *Mycnf {
 	cnf.InnodbDataHomeDir = path.Join(tabletDir, innodbDataSubdir)
 	cnf.InnodbLogGroupHomeDir = path.Join(tabletDir, innodbLogSubdir)
 	cnf.SocketFile = path.Join(tabletDir, "mysql.sock")
+	cnf.GeneralLogPath = path.Join(tabletDir, "general.log")
 	cnf.ErrorLogPath = path.Join(tabletDir, "error.log")
 	cnf.SlowLogPath = path.Join(tabletDir, "slow-query.log")
 	cnf.RelayLogPath = path.Join(tabletDir, relayLogDir,
