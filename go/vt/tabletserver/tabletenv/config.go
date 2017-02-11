@@ -29,6 +29,12 @@ var (
 	StatsLogger = streamlog.New("TabletServer", 50)
 )
 
+// MySQLChecker defines the CheckMySQL interface that lower
+// level objects can use to call back into TabletServer.
+type MySQLChecker interface {
+	CheckMySQL()
+}
+
 func init() {
 	flag.IntVar(&Config.PoolSize, "queryserver-config-pool-size", DefaultQsConfig.PoolSize, "query server connection pool size, connection pool is used by regular queries (non streaming, not in a transaction)")
 	flag.IntVar(&Config.StreamPoolSize, "queryserver-config-stream-pool-size", DefaultQsConfig.StreamPoolSize, "query server stream connection pool size, stream pool is used by stream queries: queries that return results to client in a streaming fashion")

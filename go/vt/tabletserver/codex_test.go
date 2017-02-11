@@ -11,10 +11,10 @@ import (
 	"testing"
 
 	"github.com/youtube/vitess/go/sqltypes"
-	"github.com/youtube/vitess/go/vt/schema"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
+	"github.com/youtube/vitess/go/vt/tabletserver/engines/schema"
 )
 
 func TestCodexBuildValuesList(t *testing.T) {
@@ -29,7 +29,7 @@ func TestCodexBuildValuesList(t *testing.T) {
 	pkValues := []interface{}{pk1Val}
 	// want [[1]]
 	want := [][]sqltypes.Value{{pk1Val}}
-	got, _ := buildValueList(&table, pkValues, bindVars)
+	got, _ := buildValueList(table, pkValues, bindVars)
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %v, want %v", got, want)
 	}
@@ -39,7 +39,7 @@ func TestCodexBuildValuesList(t *testing.T) {
 	pkValues = []interface{}{":pk1"}
 	// want [[1]]
 	want = [][]sqltypes.Value{{pk1Val}}
-	got, _ = buildValueList(&table, pkValues, bindVars)
+	got, _ = buildValueList(table, pkValues, bindVars)
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %v, want %v", got, want)
 	}
@@ -49,7 +49,7 @@ func TestCodexBuildValuesList(t *testing.T) {
 	pkValues = []interface{}{":pk1"}
 	// want [[1]]
 	want = [][]sqltypes.Value{{{}}}
-	got, _ = buildValueList(&table, pkValues, bindVars)
+	got, _ = buildValueList(table, pkValues, bindVars)
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %v, want %v", got, want)
 	}
@@ -59,7 +59,7 @@ func TestCodexBuildValuesList(t *testing.T) {
 	pkValues = []interface{}{":pk1"}
 	wantErr := "error: unexpected type struct {}: {}"
 
-	got, err := buildValueList(&table, pkValues, bindVars)
+	got, err := buildValueList(table, pkValues, bindVars)
 
 	if err == nil || !strings.Contains(err.Error(), wantErr) {
 		t.Fatalf("got %v, want %v", err, wantErr)
@@ -70,7 +70,7 @@ func TestCodexBuildValuesList(t *testing.T) {
 	pkValues = []interface{}{":pk1"}
 	wantErr = "error: strconv.ParseInt"
 
-	got, err = buildValueList(&table, pkValues, bindVars)
+	got, err = buildValueList(table, pkValues, bindVars)
 	if err == nil || !strings.Contains(err.Error(), wantErr) {
 		t.Fatalf("got %v, want %v", err, wantErr)
 	}
@@ -81,7 +81,7 @@ func TestCodexBuildValuesList(t *testing.T) {
 	pkValues = []interface{}{":pk1", ":pk2"}
 	wantErr = "error: type mismatch, expecting string type for 1"
 
-	got, err = buildValueList(&table, pkValues, bindVars)
+	got, err = buildValueList(table, pkValues, bindVars)
 	if err == nil || !strings.Contains(err.Error(), wantErr) {
 		t.Fatalf("got %v, want %v", err, wantErr)
 	}
@@ -91,7 +91,7 @@ func TestCodexBuildValuesList(t *testing.T) {
 	pkValues = []interface{}{pk1Val, pk2Val}
 	// want [[1 abc]]
 	want = [][]sqltypes.Value{{pk1Val, pk2Val}}
-	got, _ = buildValueList(&table, pkValues, bindVars)
+	got, _ = buildValueList(table, pkValues, bindVars)
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %v, want %v", got, want)
 	}
@@ -108,7 +108,7 @@ func TestCodexBuildValuesList(t *testing.T) {
 	want = [][]sqltypes.Value{
 		{pk1Val, pk2Val},
 		{pk1Val2, pk2Val2}}
-	got, _ = buildValueList(&table, pkValues, bindVars)
+	got, _ = buildValueList(table, pkValues, bindVars)
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %v, want %v", got, want)
 	}
@@ -125,7 +125,7 @@ func TestCodexBuildValuesList(t *testing.T) {
 		{pk1Val, pk2Val2},
 	}
 
-	got, _ = buildValueList(&table, pkValues, bindVars)
+	got, _ = buildValueList(table, pkValues, bindVars)
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %v, want %v", got, want)
 	}
@@ -147,7 +147,7 @@ func TestCodexBuildValuesList(t *testing.T) {
 		{pk1Val, pk2Val},
 		{pk1Val, pk2Val2},
 	}
-	got, _ = buildValueList(&table, pkValues, bindVars)
+	got, _ = buildValueList(table, pkValues, bindVars)
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %v, want %v", got, want)
 	}
@@ -178,7 +178,7 @@ func TestCodexBuildValuesList(t *testing.T) {
 		{pk1Val, pk2Val},
 		{pk1Val, pk2Val2},
 	}
-	got, err = buildValueList(&table, pkValues, bindVars)
+	got, err = buildValueList(table, pkValues, bindVars)
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %v / %v, want %v", got, err, want)
 	}
@@ -198,7 +198,7 @@ func TestCodexBuildValuesList(t *testing.T) {
 	want = [][]sqltypes.Value{
 		{pk1Val, pk2Val},
 	}
-	got, _ = buildValueList(&table, pkValues, bindVars)
+	got, _ = buildValueList(table, pkValues, bindVars)
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %v, want %v", got, want)
 	}
@@ -212,7 +212,7 @@ func TestCodexBuildValuesList(t *testing.T) {
 		"::list",
 	}
 	wantErr = "error: empty list supplied for list"
-	got, err = buildValueList(&table, pkValues, bindVars)
+	got, err = buildValueList(table, pkValues, bindVars)
 	if err == nil || !strings.Contains(err.Error(), wantErr) {
 		t.Fatalf("got %v, want %v", err, wantErr)
 	}
@@ -226,7 +226,7 @@ func TestCodexBuildValuesList(t *testing.T) {
 		":list",
 	}
 	wantErr = "error: unexpected arg type []interface {} for key list"
-	got, err = buildValueList(&table, pkValues, bindVars)
+	got, err = buildValueList(table, pkValues, bindVars)
 	if err == nil || !strings.Contains(err.Error(), wantErr) {
 		t.Fatalf("got %v, want %v", err, wantErr)
 	}
@@ -245,7 +245,7 @@ func TestCodexResolvePKValues(t *testing.T) {
 	pkValues := make([]interface{}, 0, 10)
 	pkValues = append(pkValues, []interface{}{":" + key})
 	// resolvePKValues should succeed for strings that can be converted to int.
-	v, _, err := resolvePKValues(&table, pkValues, bindVariables)
+	v, _, err := resolvePKValues(table, pkValues, bindVariables)
 	if err != nil {
 		t.Error(err)
 	}
@@ -256,7 +256,7 @@ func TestCodexResolvePKValues(t *testing.T) {
 	// resolvePKValues should fail because of conversion error.
 	pkValues = make([]interface{}, 0, 10)
 	pkValues = append(pkValues, sqltypes.MakeString([]byte("type_mismatch")))
-	_, _, err = resolvePKValues(&table, pkValues, nil)
+	_, _, err = resolvePKValues(table, pkValues, nil)
 	testUtils.checkTabletError(t, err, vtrpcpb.ErrorCode_BAD_INPUT, "strconv.ParseInt")
 	// pkValues with different length
 	bindVariables = make(map[string]interface{})
@@ -268,7 +268,7 @@ func TestCodexResolvePKValues(t *testing.T) {
 	pkValues = make([]interface{}, 0, 10)
 	pkValues = append(pkValues, []interface{}{":" + key})
 	pkValues = append(pkValues, []interface{}{":" + key2, ":" + key3})
-	_, _, err = resolvePKValues(&table, pkValues, bindVariables)
+	_, _, err = resolvePKValues(table, pkValues, bindVariables)
 	testUtils.checkTabletError(t, err, vtrpcpb.ErrorCode_BAD_INPUT, "mismatched lengths")
 }
 
@@ -363,19 +363,19 @@ func TestCodexBuildSecondaryList(t *testing.T) {
 	pk1Val, _ := sqltypes.BuildValue(1)
 	pk2Val, _ := sqltypes.BuildValue("abc")
 	pkValues := []interface{}{pk1Val, pk2Val}
-	pkList, _ := buildValueList(&table, pkValues, bindVars)
+	pkList, _ := buildValueList(table, pkValues, bindVars)
 	pk2SecVal, _ := sqltypes.BuildValue("xyz")
 	secondaryPKValues := []interface{}{nil, pk2SecVal}
 	// want [[1 xyz]]
 	want := [][]sqltypes.Value{
 		{pk1Val, pk2SecVal}}
-	got, _ := buildSecondaryList(&table, pkList, secondaryPKValues, bindVars)
+	got, _ := buildSecondaryList(table, pkList, secondaryPKValues, bindVars)
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("case 1 failed, got %v, want %v", got, want)
 	}
 
 	secondaryPKValues = []interface{}{"invalid_type", 1}
-	_, err := buildSecondaryList(&table, pkList, secondaryPKValues, bindVars)
+	_, err := buildSecondaryList(table, pkList, secondaryPKValues, bindVars)
 	if err == nil {
 		t.Fatalf("should get an error, column 0 is int type, but secondary list provides a string")
 	}
@@ -394,12 +394,12 @@ func TestCodexBuildStreamComment(t *testing.T) {
 	pk1Val, _ := sqltypes.BuildValue(1)
 	pk2Val, _ := sqltypes.BuildValue("abc")
 	pkValues := []interface{}{pk1Val, pk2Val}
-	pkList, _ := buildValueList(&table, pkValues, bindVars)
+	pkList, _ := buildValueList(table, pkValues, bindVars)
 	pk2SecVal, _ := sqltypes.BuildValue("xyz")
 	secondaryPKValues := []interface{}{nil, pk2SecVal}
-	secondaryList, _ := buildSecondaryList(&table, pkList, secondaryPKValues, bindVars)
+	secondaryList, _ := buildSecondaryList(table, pkList, secondaryPKValues, bindVars)
 	want := []byte(" /* _stream `Table` (pk1 pk2 ) (1 'YWJj' ) (1 'eHl6' ); */")
-	got := buildStreamComment(&table, pkList, secondaryList)
+	got := buildStreamComment(table, pkList, secondaryList)
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("case 1 failed, got\n%s, want\n%s", got, want)
 	}
@@ -412,10 +412,10 @@ func TestCodexValidateRow(t *testing.T) {
 		[]querypb.Type{sqltypes.Int64, sqltypes.VarBinary, sqltypes.Int32},
 		[]string{"pk1", "pk2"})
 	// #columns and #rows do not match
-	err := validateRow(&table, []int{1}, []sqltypes.Value{})
+	err := validateRow(table, []int{1}, []sqltypes.Value{})
 	testUtils.checkTabletError(t, err, vtrpcpb.ErrorCode_BAD_INPUT, "data inconsistency")
 	// column 0 is int type but row is in string type
-	err = validateRow(&table, []int{0}, []sqltypes.Value{sqltypes.MakeString([]byte("str"))})
+	err = validateRow(table, []int{0}, []sqltypes.Value{sqltypes.MakeString([]byte("str"))})
 	testUtils.checkTabletError(t, err, vtrpcpb.ErrorCode_BAD_INPUT, "type mismatch")
 }
 
@@ -425,7 +425,7 @@ func TestCodexApplyFilterWithPKDefaults(t *testing.T) {
 		[]string{"pk1", "pk2", "col1"},
 		[]querypb.Type{sqltypes.Int64, sqltypes.VarBinary, sqltypes.Int32},
 		[]string{"pk1", "pk2"})
-	output := applyFilterWithPKDefaults(&table, []int{-1}, []sqltypes.Value{})
+	output := applyFilterWithPKDefaults(table, []int{-1}, []sqltypes.Value{})
 	if len(output) != 1 {
 		t.Fatalf("expect to only one output but got: %v", output)
 	}
@@ -446,7 +446,7 @@ func TestCodexUnicoded(t *testing.T) {
 	testUtils.checkEqual(t, "tes", out)
 }
 
-func createTable(name string, colNames []string, colTypes []querypb.Type, pKeys []string) schema.Table {
+func createTable(name string, colNames []string, colTypes []querypb.Type, pKeys []string) *schema.Table {
 	table := schema.NewTable(name)
 	for i, colName := range colNames {
 		colType := colTypes[i]
@@ -459,5 +459,17 @@ func createTable(name string, colNames []string, colTypes []querypb.Type, pKeys 
 		table.AddColumn(colName, colType, defaultVal, "")
 	}
 	setPK(table, pKeys)
-	return *table
+	return table
+}
+
+func setPK(ta *schema.Table, colnames []string) error {
+	if len(ta.Indexes) != 0 {
+		panic("setPK must be called before adding other indexes")
+	}
+	pkIndex := ta.AddIndex("PRIMARY")
+	for _, colname := range colnames {
+		pkIndex.AddColumn(colname, 1)
+	}
+	ta.Done()
+	return nil
 }

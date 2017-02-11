@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package tabletserver
+package schema
 
 import (
 	"bytes"
@@ -24,7 +24,6 @@ import (
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/timer"
 	"github.com/youtube/vitess/go/vt/concurrency"
-	"github.com/youtube/vitess/go/vt/schema"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/tabletserver/connpool"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletenv"
@@ -34,33 +33,33 @@ import (
 
 const maxTableCount = 10000
 
-type notifier func(full map[string]*schema.Table, created, altered, dropped []string)
+type notifier func(full map[string]*Table, created, altered, dropped []string)
 
-// SchemaEngine stores the schema info and performs operations that
+// Engine stores the schema info and performs operations that
 // keep itself up-to-date.
-type SchemaEngine struct {
-	isOpen bool
-
+type Engine struct {
+	// mu protects the following fields.
 	mu         sync.Mutex
-	tables     map[string]*schema.Table
+	isOpen     bool
+	tables     map[string]*Table
 	lastChange int64
 	reloadTime time.Duration
+	notifiers  map[string]notifier
+
+	// The following fields have their own synchronization
+	// and do not require locking mu.
 	strictMode sync2.AtomicBool
-
-	// The following vars have their own synchronization.
-	conns *connpool.Pool
-	ticks *timer.Timer
-
-	notifiers map[string]notifier
+	conns      *connpool.Pool
+	ticks      *timer.Timer
 }
 
 var schemaOnce sync.Once
 
-// NewSchemaEngine creates a new SchemaEngine.
-func NewSchemaEngine(checker MySQLChecker, config tabletenv.TabletConfig) *SchemaEngine {
+// NewEngine creates a new Engine.
+func NewEngine(checker tabletenv.MySQLChecker, config tabletenv.TabletConfig) *Engine {
 	reloadTime := time.Duration(config.SchemaReloadTime * 1e9)
 	idleTimeout := time.Duration(config.IdleTimeout * 1e9)
-	se := &SchemaEngine{
+	se := &Engine{
 		conns:      connpool.New("", 3, idleTimeout, checker),
 		ticks:      timer.NewTimer(reloadTime),
 		reloadTime: reloadTime,
@@ -75,22 +74,24 @@ func NewSchemaEngine(checker MySQLChecker, config tabletenv.TabletConfig) *Schem
 		_ = stats.NewMultiCountersFunc("MaxDataLength", []string{"Table"}, se.getMaxDataLength)
 
 		http.Handle("/debug/schema", se)
+		http.HandleFunc("/schemaz", func(w http.ResponseWriter, r *http.Request) {
+			schemazHandler(se.GetSchema(), w, r)
+		})
 	})
 	return se
 }
 
-// Open initializes the SchemaEngine.
-// The state transition is Open->Operations->Close.
-// Synchronization between the above operations is
-// the responsibility of the caller.
-// Close is idempotent.
-func (se *SchemaEngine) Open(dbaParams *sqldb.ConnParams) error {
+// Open initializes the Engine. Calling Open on an already
+// open engine is a no-op.
+func (se *Engine) Open(dbaParams *sqldb.ConnParams) error {
+	se.mu.Lock()
+	defer se.mu.Unlock()
 	if se.isOpen {
 		return nil
 	}
 	start := time.Now()
 	defer log.Infof("Time taken to load the schema: %v", time.Now().Sub(start))
-	ctx := localContext()
+	ctx := tabletenv.LocalContext()
 	se.conns.Open(dbaParams, dbaParams)
 
 	conn, err := se.conns.Get(ctx)
@@ -115,8 +116,8 @@ func (se *SchemaEngine) Open(dbaParams *sqldb.ConnParams) error {
 		return tabletenv.PrefixTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, err, "Could not get table list: ")
 	}
 
-	tables := make(map[string]*schema.Table, len(tableData.Rows)+1)
-	tables["dual"] = schema.NewTable("dual")
+	tables := make(map[string]*Table, len(tableData.Rows)+1)
+	tables["dual"] = NewTable("dual")
 	wg := sync.WaitGroup{}
 	mu := sync.Mutex{}
 	for _, row := range tableData.Rows {
@@ -127,7 +128,7 @@ func (se *SchemaEngine) Open(dbaParams *sqldb.ConnParams) error {
 			tableName := row[0].String()
 			conn, err := se.conns.Get(ctx)
 			if err != nil {
-				log.Errorf("SchemaEngine.Open: connection error while reading table %s: %v", tableName, err)
+				log.Errorf("Engine.Open: connection error while reading table %s: %v", tableName, err)
 				return
 			}
 			defer conn.Recycle()
@@ -140,7 +141,7 @@ func (se *SchemaEngine) Open(dbaParams *sqldb.ConnParams) error {
 			)
 			if err != nil {
 				tabletenv.InternalErrors.Add("Schema", 1)
-				log.Errorf("SchemaEngine.Open: failed to load table %s: %v", tableName, err)
+				log.Errorf("Engine.Open: failed to load table %s: %v", tableName, err)
 				// Skip over the table that had an error and move on to the next one
 				return
 			}
@@ -168,22 +169,30 @@ func (se *SchemaEngine) Open(dbaParams *sqldb.ConnParams) error {
 	return nil
 }
 
-// Close shuts down SchemaEngine. It can be re-opened after Close.
-func (se *SchemaEngine) Close() {
+// Close shuts down Engine and is idempotent.
+// It can be re-opened after Close.
+func (se *Engine) Close() {
+	se.mu.Lock()
+	defer se.mu.Unlock()
 	if !se.isOpen {
 		return
 	}
 	se.ticks.Stop()
 	se.conns.Close()
-	se.tables = nil
-	se.notifiers = nil
+	se.tables = make(map[string]*Table)
+	se.notifiers = make(map[string]notifier)
 	se.isOpen = false
 }
 
 // Reload reloads the schema info from the db.
 // Any tables that have changed since the last load are updated.
-// This is a no-op if the SchemaEngine is closed.
-func (se *SchemaEngine) Reload(ctx context.Context) error {
+// This is a no-op if the Engine is closed.
+func (se *Engine) Reload(ctx context.Context) error {
+	se.mu.Lock()
+	defer se.mu.Unlock()
+	if !se.isOpen {
+		return nil
+	}
 	defer tabletenv.LogError()
 
 	curTime, tableData, err := func() (int64, *sqltypes.Result, error) {
@@ -210,8 +219,6 @@ func (se *SchemaEngine) Reload(ctx context.Context) error {
 	// but we return success only if all tables succeed.
 	// The following section requires us to hold mu.
 	rec := concurrency.AllErrorRecorder{}
-	se.mu.Lock()
-	defer se.mu.Unlock()
 	curTables := map[string]bool{"dual": true}
 	for _, row := range tableData.Rows {
 		tableName := row[0].String()
@@ -220,12 +227,16 @@ func (se *SchemaEngine) Reload(ctx context.Context) error {
 		// Check if we know about the table or it has been recreated.
 		if _, ok := se.tables[tableName]; !ok || createTime >= se.lastChange {
 			func() {
-				// Unlock so CreateOrAlterTable can lock.
+				// Unlock so TableWasCreatedOrAltered can lock.
 				se.mu.Unlock()
 				defer se.mu.Lock()
 				log.Infof("Reloading schema for table: %s", tableName)
-				rec.RecordError(se.CreateOrAlterTable(ctx, tableName))
+				rec.RecordError(se.TableWasCreatedOrAltered(ctx, tableName))
 			}()
+			// In case someone closed se when lock was released.
+			if !se.isOpen {
+				return nil
+			}
 			continue
 		}
 		// Only update table_rows, data_length, index_length, max_data_length
@@ -243,14 +254,14 @@ func (se *SchemaEngine) Reload(ctx context.Context) error {
 		dropped = append(dropped, tableName)
 	}
 	// We only need to broadcast dropped tables because
-	// CreateOrAlterTable will broadcast the other changes.
+	// TableWasCreatedOrAltered will broadcast the other changes.
 	if len(dropped) > 0 {
 		se.broadcast(nil, nil, dropped)
 	}
 	return rec.Error()
 }
 
-func (se *SchemaEngine) mysqlTime(ctx context.Context, conn *connpool.DBConn) (int64, error) {
+func (se *Engine) mysqlTime(ctx context.Context, conn *connpool.DBConn) (int64, error) {
 	tm, err := conn.Exec(ctx, "select unix_timestamp()", 1, false)
 	if err != nil {
 		return 0, tabletenv.PrefixTabletError(vtrpcpb.ErrorCode_UNKNOWN_ERROR, err, "Could not get MySQL time: ")
@@ -265,8 +276,14 @@ func (se *SchemaEngine) mysqlTime(ctx context.Context, conn *connpool.DBConn) (i
 	return t, nil
 }
 
-// CreateOrAlterTable must be called if a DDL was applied to that table.
-func (se *SchemaEngine) CreateOrAlterTable(ctx context.Context, tableName string) error {
+// TableWasCreatedOrAltered must be called if a DDL was applied to that table.
+func (se *Engine) TableWasCreatedOrAltered(ctx context.Context, tableName string) error {
+	se.mu.Lock()
+	defer se.mu.Unlock()
+	if !se.isOpen {
+		return tabletenv.NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "DDL called on closed schema")
+	}
+
 	conn, err := se.conns.Get(ctx)
 	if err != nil {
 		return tabletenv.NewTabletErrorSQL(vtrpcpb.ErrorCode_INTERNAL_ERROR, err)
@@ -276,7 +293,7 @@ func (se *SchemaEngine) CreateOrAlterTable(ctx context.Context, tableName string
 	if err != nil {
 		tabletenv.InternalErrors.Add("Schema", 1)
 		return tabletenv.PrefixTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, err,
-			fmt.Sprintf("CreateOrAlterTable: information_schema query failed for table %s: ", tableName))
+			fmt.Sprintf("TableWasCreatedOrAltered: information_schema query failed for table %s: ", tableName))
 	}
 	if len(tableData.Rows) != 1 {
 		// This can happen if DDLs race with each other.
@@ -292,14 +309,11 @@ func (se *SchemaEngine) CreateOrAlterTable(ctx context.Context, tableName string
 	if err != nil {
 		tabletenv.InternalErrors.Add("Schema", 1)
 		return tabletenv.PrefixTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, err,
-			fmt.Sprintf("CreateOrAlterTable: failed to load table %s: ", tableName))
+			fmt.Sprintf("TableWasCreatedOrAltered: failed to load table %s: ", tableName))
 	}
 	// table_rows, data_length, index_length, max_data_length
 	table.SetMysqlStats(row[4], row[5], row[6], row[7], row[8])
 
-	// Need to acquire lock now.
-	se.mu.Lock()
-	defer se.mu.Unlock()
 	var created, altered []string
 	if _, ok := se.tables[tableName]; ok {
 		// If the table already exists, we overwrite it with the latest info.
@@ -311,15 +325,18 @@ func (se *SchemaEngine) CreateOrAlterTable(ctx context.Context, tableName string
 		created = append(created, tableName)
 	}
 	se.tables[tableName] = table
-	log.Infof("Initialized table: %s, type: %s", tableName, schema.TypeNames[table.Type])
+	log.Infof("Initialized table: %s, type: %s", tableName, TypeNames[table.Type])
 	se.broadcast(created, altered, nil)
 	return nil
 }
 
-// DropTable must be called if a table was dropped.
-func (se *SchemaEngine) DropTable(tableName sqlparser.TableIdent) {
+// TableWasDropped must be called if a table was dropped.
+func (se *Engine) TableWasDropped(tableName sqlparser.TableIdent) {
 	se.mu.Lock()
 	defer se.mu.Unlock()
+	if !se.isOpen {
+		return
+	}
 
 	delete(se.tables, tableName.String())
 	log.Infof("Table %s forgotten", tableName)
@@ -330,9 +347,13 @@ func (se *SchemaEngine) DropTable(tableName sqlparser.TableIdent) {
 // It also causes an immediate notification to the caller. The notified
 // function must not change the map or its contents. The only exception
 // is the sequence table where the values can be changed using the lock.
-func (se *SchemaEngine) RegisterNotifier(name string, f notifier) {
+func (se *Engine) RegisterNotifier(name string, f notifier) {
 	se.mu.Lock()
 	defer se.mu.Unlock()
+	if !se.isOpen {
+		return
+	}
+
 	se.notifiers[name] = f
 	var created []string
 	for tableName := range se.tables {
@@ -342,15 +363,19 @@ func (se *SchemaEngine) RegisterNotifier(name string, f notifier) {
 }
 
 // UnregisterNotifier unregisters the notifier function.
-func (se *SchemaEngine) UnregisterNotifier(name string) {
+func (se *Engine) UnregisterNotifier(name string) {
 	se.mu.Lock()
 	defer se.mu.Unlock()
+	if !se.isOpen {
+		return
+	}
+
 	delete(se.notifiers, name)
 }
 
 // broadcast must be called while holding a lock on se.mu.
-func (se *SchemaEngine) broadcast(created, altered, dropped []string) {
-	s := make(map[string]*schema.Table, len(se.tables))
+func (se *Engine) broadcast(created, altered, dropped []string) {
+	s := make(map[string]*Table, len(se.tables))
 	for k, v := range se.tables {
 		s[k] = v
 	}
@@ -360,18 +385,18 @@ func (se *SchemaEngine) broadcast(created, altered, dropped []string) {
 }
 
 // GetTable returns the info for a table.
-func (se *SchemaEngine) GetTable(tableName sqlparser.TableIdent) *schema.Table {
+func (se *Engine) GetTable(tableName sqlparser.TableIdent) *Table {
 	se.mu.Lock()
 	defer se.mu.Unlock()
 	return se.tables[tableName.String()]
 }
 
-// GetSchema returns the current schema. The Tables are a shared
+// GetSchema returns the current The Tables are a shared
 // data strucutre and must be treated as read-only.
-func (se *SchemaEngine) GetSchema() map[string]*schema.Table {
+func (se *Engine) GetSchema() map[string]*Table {
 	se.mu.Lock()
 	defer se.mu.Unlock()
-	tables := make(map[string]*schema.Table, len(se.tables))
+	tables := make(map[string]*Table, len(se.tables))
 	for k, v := range se.tables {
 		tables[k] = v
 	}
@@ -380,22 +405,22 @@ func (se *SchemaEngine) GetSchema() map[string]*schema.Table {
 
 // SetReloadTime changes how often the schema is reloaded. This
 // call also triggers an immediate reload.
-func (se *SchemaEngine) SetReloadTime(reloadTime time.Duration) {
-	se.ticks.Trigger()
-	se.ticks.SetInterval(reloadTime)
+func (se *Engine) SetReloadTime(reloadTime time.Duration) {
 	se.mu.Lock()
 	defer se.mu.Unlock()
+	se.ticks.Trigger()
+	se.ticks.SetInterval(reloadTime)
 	se.reloadTime = reloadTime
 }
 
 // ReloadTime returns schema info reload time.
-func (se *SchemaEngine) ReloadTime() time.Duration {
+func (se *Engine) ReloadTime() time.Duration {
 	se.mu.Lock()
 	defer se.mu.Unlock()
 	return se.reloadTime
 }
 
-func (se *SchemaEngine) getTableRows() map[string]int64 {
+func (se *Engine) getTableRows() map[string]int64 {
 	se.mu.Lock()
 	defer se.mu.Unlock()
 	tstats := make(map[string]int64)
@@ -405,7 +430,7 @@ func (se *SchemaEngine) getTableRows() map[string]int64 {
 	return tstats
 }
 
-func (se *SchemaEngine) getDataLength() map[string]int64 {
+func (se *Engine) getDataLength() map[string]int64 {
 	se.mu.Lock()
 	defer se.mu.Unlock()
 	tstats := make(map[string]int64)
@@ -415,7 +440,7 @@ func (se *SchemaEngine) getDataLength() map[string]int64 {
 	return tstats
 }
 
-func (se *SchemaEngine) getIndexLength() map[string]int64 {
+func (se *Engine) getIndexLength() map[string]int64 {
 	se.mu.Lock()
 	defer se.mu.Unlock()
 	tstats := make(map[string]int64)
@@ -425,7 +450,7 @@ func (se *SchemaEngine) getIndexLength() map[string]int64 {
 	return tstats
 }
 
-func (se *SchemaEngine) getDataFree() map[string]int64 {
+func (se *Engine) getDataFree() map[string]int64 {
 	se.mu.Lock()
 	defer se.mu.Unlock()
 	tstats := make(map[string]int64)
@@ -435,7 +460,7 @@ func (se *SchemaEngine) getDataFree() map[string]int64 {
 	return tstats
 }
 
-func (se *SchemaEngine) getMaxDataLength() map[string]int64 {
+func (se *Engine) getMaxDataLength() map[string]int64 {
 	se.mu.Lock()
 	defer se.mu.Unlock()
 	tstats := make(map[string]int64)
@@ -445,7 +470,7 @@ func (se *SchemaEngine) getMaxDataLength() map[string]int64 {
 	return tstats
 }
 
-func (se *SchemaEngine) ServeHTTP(response http.ResponseWriter, request *http.Request) {
+func (se *Engine) ServeHTTP(response http.ResponseWriter, request *http.Request) {
 	if err := acl.CheckAccessHTTP(request, acl.DEBUGGING); err != nil {
 		acl.SendError(response, err)
 		return
@@ -453,7 +478,7 @@ func (se *SchemaEngine) ServeHTTP(response http.ResponseWriter, request *http.Re
 	se.handleHTTPSchema(response, request)
 }
 
-func (se *SchemaEngine) handleHTTPSchema(response http.ResponseWriter, request *http.Request) {
+func (se *Engine) handleHTTPSchema(response http.ResponseWriter, request *http.Request) {
 	response.Header().Set("Content-Type", "application/json; charset=utf-8")
 	b, err := json.MarshalIndent(se.GetSchema(), "", " ")
 	if err != nil {

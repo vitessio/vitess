@@ -15,13 +15,15 @@ import (
 
 	"github.com/youtube/vitess/go/mysqlconn/fakesqldb"
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/vt/tabletserver/engines/schema"
+	"github.com/youtube/vitess/go/vt/tabletserver/engines/schema/schematest"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletenv"
 )
 
-func TestSchemaEngineGetPlanPanicDuetoEmptyQuery(t *testing.T) {
+func TestGetPlanPanicDuetoEmptyQuery(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
-	for query, result := range getSchemaEngineTestSupportedQueries() {
+	for query, result := range schematest.Queries() {
 		db.AddQuery(query, result)
 	}
 	qe := newTestQueryEngine(10, 10*time.Second, true)
@@ -40,10 +42,10 @@ func TestSchemaEngineGetPlanPanicDuetoEmptyQuery(t *testing.T) {
 	}
 }
 
-func TestSchemaEngineQueryCache(t *testing.T) {
+func TestQueryCache(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
-	for query, result := range getSchemaEngineTestSupportedQueries() {
+	for query, result := range schematest.Queries() {
 		db.AddQuery(query, result)
 	}
 
@@ -82,10 +84,10 @@ func TestSchemaEngineQueryCache(t *testing.T) {
 	qe.ClearQueryPlanCache()
 }
 
-func TestSchemaEngineStatsURL(t *testing.T) {
+func TestStatsURL(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
-	for query, result := range getSchemaEngineTestSupportedQueries() {
+	for query, result := range schematest.Queries() {
 		db.AddQuery(query, result)
 	}
 	query := "select * from test_table_01"
@@ -123,5 +125,5 @@ func newTestQueryEngine(queryCacheSize int, idleTimeout time.Duration, strict bo
 	config.QueryCacheSize = queryCacheSize
 	config.IdleTimeout = float64(idleTimeout) / 1e9
 	config.StrictMode = strict
-	return NewQueryEngine(DummyChecker, NewSchemaEngine(DummyChecker, config), config)
+	return NewQueryEngine(DummyChecker, schema.NewEngine(DummyChecker, config), config)
 }

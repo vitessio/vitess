@@ -5,12 +5,12 @@
 package tabletserver
 
 import (
+	"errors"
 	"fmt"
 	"math/rand"
 	"reflect"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/youtube/vitess/go/mysqlconn/fakesqldb"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
@@ -19,6 +19,8 @@ import (
 
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
+
+var errRejected = errors.New("rejected")
 
 type dummyChecker struct {
 }
@@ -76,13 +78,4 @@ func (util *testUtils) newQueryServiceConfig() tabletenv.TabletConfig {
 	config := tabletenv.DefaultQsConfig
 	config.PoolNamePrefix = fmt.Sprintf("Pool-%d-", randID)
 	return config
-}
-
-func newTestSchemaEngine(queryCacheSize int, reloadTime time.Duration, idleTimeout time.Duration, strict bool) *SchemaEngine {
-	config := tabletenv.DefaultQsConfig
-	config.QueryCacheSize = queryCacheSize
-	config.SchemaReloadTime = float64(reloadTime) / 1e9
-	config.IdleTimeout = float64(idleTimeout) / 1e9
-	config.StrictMode = strict
-	return NewSchemaEngine(DummyChecker, config)
 }

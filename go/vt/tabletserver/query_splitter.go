@@ -8,6 +8,7 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	"github.com/youtube/vitess/go/vt/sqlparser"
+	"github.com/youtube/vitess/go/vt/tabletserver/engines/schema"
 	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 )
 
@@ -21,7 +22,7 @@ type QuerySplitter struct {
 	sql           string
 	bindVariables map[string]interface{}
 	splitCount    int64
-	se            *SchemaEngine
+	se            *schema.Engine
 	sel           *sqlparser.Select
 	tableName     sqlparser.TableIdent
 	splitColumn   sqlparser.ColIdent
@@ -41,7 +42,7 @@ func NewQuerySplitter(
 	bindVariables map[string]interface{},
 	splitColumn string,
 	splitCount int64,
-	se *SchemaEngine) *QuerySplitter {
+	se *schema.Engine) *QuerySplitter {
 	if splitCount < 1 {
 		splitCount = 1
 	}

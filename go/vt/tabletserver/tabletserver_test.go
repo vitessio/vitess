@@ -1211,7 +1211,10 @@ func TestTabletServerExecuteBatchFailEmptyQueryList(t *testing.T) {
 	defer tsv.StopService()
 	ctx := context.Background()
 	_, err = tsv.ExecuteBatch(ctx, nil, []querytypes.BoundQuery{}, false, 0, nil)
-	verifyTabletError(t, err, vtrpcpb.ErrorCode_BAD_INPUT)
+	want := "Empty query list"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("ExecuteBatch: %v, must contain %s", err, want)
+	}
 }
 
 func TestTabletServerExecuteBatchFailAsTransaction(t *testing.T) {
@@ -1234,7 +1237,10 @@ func TestTabletServerExecuteBatchFailAsTransaction(t *testing.T) {
 			BindVariables: nil,
 		},
 	}, true, 1, nil)
-	verifyTabletError(t, err, vtrpcpb.ErrorCode_BAD_INPUT)
+	want := "cannot start a new transaction"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("ExecuteBatch: %v, must contain %s", err, want)
+	}
 }
 
 func TestTabletServerExecuteBatchBeginFail(t *testing.T) {
