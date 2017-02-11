@@ -29,9 +29,9 @@ import (
 	"github.com/youtube/vitess/go/vt/dbconnpool"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
-	"github.com/youtube/vitess/go/vt/schema"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/tabletserver/connpool"
+	"github.com/youtube/vitess/go/vt/tabletserver/engines/schema"
 	"github.com/youtube/vitess/go/vt/tabletserver/queryservice"
 	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 	"github.com/youtube/vitess/go/vt/tabletserver/splitquery"
@@ -106,7 +106,7 @@ type TabletServer struct {
 
 	// The following variables should only be accessed within
 	// the context of a startRequest-endRequest.
-	se               *SchemaEngine
+	se               *schema.Engine
 	qe               *QueryEngine
 	te               *TxEngine
 	messager         *MessagerEngine
@@ -164,7 +164,7 @@ func NewTabletServer(config tabletenv.TabletConfig) *TabletServer {
 		streamHealthMap:     make(map[int]chan<- *querypb.StreamHealthResponse),
 		history:             history.New(10),
 	}
-	tsv.se = NewSchemaEngine(tsv, config)
+	tsv.se = schema.NewEngine(tsv, config)
 	tsv.qe = NewQueryEngine(tsv, tsv.se, config)
 	tsv.te = NewTxEngine(tsv, config)
 	tsv.txThrottler = CreateTxThrottlerFromTabletConfig(config)
@@ -193,7 +193,6 @@ func (tsv *TabletServer) Register() {
 	}
 	tsv.registerDebugHealthHandler()
 	tsv.registerQueryzHandler()
-	tsv.registerSchemazHandler()
 	tsv.registerStreamQueryzHandlers()
 	tsv.registerTwopczHandler()
 }
@@ -511,7 +510,7 @@ func (tsv *TabletServer) setTimeBomb() chan struct{} {
 // the unhealthiness otherwise.
 func (tsv *TabletServer) IsHealthy() error {
 	_, err := tsv.Execute(
-		localContext(),
+		tabletenv.LocalContext(),
 		nil,
 		"select 1 from dual",
 		nil,
@@ -570,7 +569,7 @@ func (tsv *TabletServer) isMySQLReachable() bool {
 
 // ReloadSchema reloads the schema.
 func (tsv *TabletServer) ReloadSchema(ctx context.Context) error {
-	tsv.se.ticks.Trigger()
+	tsv.se.Reload(ctx)
 	return nil
 }
 
@@ -1545,7 +1544,7 @@ verifyTarget:
 			}
 			return tabletenv.NewTabletError(vtrpcpb.ErrorCode_QUERY_NOT_SERVED, "Invalid tablet type: %v, want: %v or %v", target.TabletType, tsv.target.TabletType, tsv.alsoAllow)
 		}
-	} else if !isLocalContext(ctx) {
+	} else if !tabletenv.IsLocalContext(ctx) {
 		return tabletenv.NewTabletError(vtrpcpb.ErrorCode_QUERY_NOT_SERVED, "No target")
 	}
 
@@ -1597,15 +1596,9 @@ func (tsv *TabletServer) registerStreamQueryzHandlers() {
 	})
 }
 
-func (tsv *TabletServer) registerSchemazHandler() {
-	http.HandleFunc("/schemaz", func(w http.ResponseWriter, r *http.Request) {
-		schemazHandler(tsv.se.GetSchema(), w, r)
-	})
-}
-
 func (tsv *TabletServer) registerTwopczHandler() {
 	http.HandleFunc("/twopcz", func(w http.ResponseWriter, r *http.Request) {
-		ctx := localContext()
+		ctx := tabletenv.LocalContext()
 		txe := &TxExecutor{
 			ctx:      ctx,
 			logStats: tabletenv.NewLogStats(ctx, "twopcz"),
@@ -1617,6 +1610,7 @@ func (tsv *TabletServer) registerTwopczHandler() {
 }
 
 // SetPoolSize changes the pool size to the specified value.
+// This function should only be used for testing.
 func (tsv *TabletServer) SetPoolSize(val int) {
 	tsv.qe.conns.SetCapacity(val)
 }
@@ -1627,6 +1621,7 @@ func (tsv *TabletServer) PoolSize() int {
 }
 
 // SetStreamPoolSize changes the pool size to the specified value.
+// This function should only be used for testing.
 func (tsv *TabletServer) SetStreamPoolSize(val int) {
 	tsv.qe.streamConns.SetCapacity(val)
 }
@@ -1637,6 +1632,7 @@ func (tsv *TabletServer) StreamPoolSize() int {
 }
 
 // SetTxPoolSize changes the tx pool size to the specified value.
+// This function should only be used for testing.
 func (tsv *TabletServer) SetTxPoolSize(val int) {
 	tsv.te.txPool.conns.SetCapacity(val)
 }
@@ -1647,6 +1643,7 @@ func (tsv *TabletServer) TxPoolSize() int {
 }
 
 // SetTxTimeout changes the transaction timeout to the specified value.
+// This function should only be used for testing.
 func (tsv *TabletServer) SetTxTimeout(val time.Duration) {
 	tsv.te.txPool.SetTimeout(val)
 }
@@ -1657,6 +1654,7 @@ func (tsv *TabletServer) TxTimeout() time.Duration {
 }
 
 // SetQueryCacheCap changes the pool size to the specified value.
+// This function should only be used for testing.
 func (tsv *TabletServer) SetQueryCacheCap(val int) {
 	tsv.qe.SetQueryCacheCap(val)
 }
@@ -1667,17 +1665,21 @@ func (tsv *TabletServer) QueryCacheCap() int {
 }
 
 // SetStrictMode sets strict mode on or off.
+// This only sets the mode for QueryEngine, but not
+// for schema.Engine.
+// This function should only be used for testing.
 func (tsv *TabletServer) SetStrictMode(strict bool) {
-	tsv.se.strictMode.Set(strict)
 	tsv.qe.strictMode.Set(strict)
 }
 
 // SetAutoCommit sets autocommit on or off.
+// This function should only be used for testing.
 func (tsv *TabletServer) SetAutoCommit(auto bool) {
 	tsv.qe.autoCommit.Set(auto)
 }
 
 // SetMaxResultSize changes the max result size to the specified value.
+// This function should only be used for testing.
 func (tsv *TabletServer) SetMaxResultSize(val int) {
 	tsv.qe.maxResultSize.Set(int64(val))
 }
@@ -1688,6 +1690,7 @@ func (tsv *TabletServer) MaxResultSize() int {
 }
 
 // SetMaxDMLRows changes the max result size to the specified value.
+// This function should only be used for testing.
 func (tsv *TabletServer) SetMaxDMLRows(val int) {
 	tsv.qe.maxDMLRows.Set(int64(val))
 }
@@ -1710,7 +1713,7 @@ func Rand() int64 {
 // If the context is local or if timeout is 0, the
 // original context is returned as is.
 func withTimeout(ctx context.Context, timeout time.Duration) (context.Context, context.CancelFunc) {
-	if timeout == 0 || isLocalContext(ctx) {
+	if timeout == 0 || tabletenv.IsLocalContext(ctx) {
 		return ctx, func() {}
 	}
 	return context.WithTimeout(ctx, timeout)

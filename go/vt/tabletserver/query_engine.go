@@ -23,11 +23,11 @@ import (
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/dbconnpool"
 	"github.com/youtube/vitess/go/vt/logutil"
-	"github.com/youtube/vitess/go/vt/schema"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/tableacl"
 	tacl "github.com/youtube/vitess/go/vt/tableacl/acl"
 	"github.com/youtube/vitess/go/vt/tabletserver/connpool"
+	"github.com/youtube/vitess/go/vt/tabletserver/engines/schema"
 	"github.com/youtube/vitess/go/vt/tabletserver/planbuilder"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletenv"
 
@@ -92,9 +92,10 @@ func (ep *ExecPlan) Stats() (queryCount int64, duration, mysqlTime time.Duration
 // Close: There should be no more pending queries when this
 // function is called.
 type QueryEngine struct {
-	se        *SchemaEngine
+	se        *schema.Engine
 	dbconfigs dbconfigs.DBConfigs
 
+	// mu protects the following fields.
 	mu               sync.Mutex
 	tables           map[string]*schema.Table
 	queries          *cache.LRUCache
@@ -133,7 +134,7 @@ var (
 // NewQueryEngine creates a new QueryEngine.
 // This is a singleton class.
 // You must call this only once.
-func NewQueryEngine(checker MySQLChecker, se *SchemaEngine, config tabletenv.TabletConfig) *QueryEngine {
+func NewQueryEngine(checker MySQLChecker, se *schema.Engine, config tabletenv.TabletConfig) *QueryEngine {
 	qe := &QueryEngine{
 		se:               se,
 		tables:           make(map[string]*schema.Table),
@@ -237,7 +238,7 @@ func (qe *QueryEngine) Close() {
 // GetPlan returns the ExecPlan that for the query. Plans are cached in a cache.LRUCache.
 func (qe *QueryEngine) GetPlan(ctx context.Context, logStats *tabletenv.LogStats, sql string) (*ExecPlan, error) {
 	span := trace.NewSpanFromContext(ctx)
-	span.StartLocal("SchemaEngine.GetPlan")
+	span.StartLocal("QueryEngine.GetPlan")
 	defer span.Finish()
 
 	// Fastpath if plan already exists.

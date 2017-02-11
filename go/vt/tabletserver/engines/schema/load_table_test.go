@@ -2,11 +2,10 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package tabletserver
+package schema
 
 import (
 	"errors"
-	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -17,7 +16,6 @@ import (
 	"github.com/youtube/vitess/go/mysqlconn"
 	"github.com/youtube/vitess/go/mysqlconn/fakesqldb"
 	"github.com/youtube/vitess/go/sqltypes"
-	"github.com/youtube/vitess/go/vt/schema"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/tabletserver/connpool"
 
@@ -25,6 +23,30 @@ import (
 )
 
 var errRejected = errors.New("rejected")
+
+func TestLoadTable(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	for query, result := range getTestLoadTableQueries() {
+		db.AddQuery(query, result)
+	}
+	table, err := newTestLoadTable("USER_TABLE", "test table", db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(table.PKColumns) != 1 {
+		t.Fatalf("table should have one PK column although the cardinality is invalid")
+	}
+	if idx := table.Indexes[0].FindColumn(sqlparser.NewColIdent("pk")); idx != 0 {
+		t.Errorf("table.Indexes[0].FindColumn(pk): %d, want 0", idx)
+	}
+	if idx := table.Indexes[0].FindColumn(sqlparser.NewColIdent("none")); idx != -1 {
+		t.Errorf("table.Indexes[0].FindColumn(none): %d, want 0", idx)
+	}
+	if name := table.GetPKColumn(0).Name.String(); name != "pk" {
+		t.Errorf("table.GetPKColumn(0): %s, want pk", name)
+	}
+}
 
 func TestLoadTableFailBecauseUnableToRetrieveTableIndex(t *testing.T) {
 	db := fakesqldb.New(t)
@@ -34,83 +56,9 @@ func TestLoadTableFailBecauseUnableToRetrieveTableIndex(t *testing.T) {
 	}
 	db.AddRejectedQuery("show index from test_table", errRejected)
 	_, err := newTestLoadTable("USER_TABLE", "test table", db)
-	if err == nil {
-		t.Fatalf("table info creation should fail because it is unable to get test_table index")
-	}
-}
-
-func TestLoadTableReplacePKColumn(t *testing.T) {
-	db := fakesqldb.New(t)
-	defer db.Close()
-	for query, result := range getTestLoadTableQueries() {
-		db.AddQuery(query, result)
-	}
-	table, err := newTestLoadTable("USER_TABLE", "test table", db)
-	if err != nil {
-		t.Fatalf("failed to create a table info")
-	}
-	if len(table.PKColumns) != 1 {
-		t.Fatalf("table should only have one PK column")
-	}
-	err = setPK(table, []string{"name"})
-	if err != nil {
-		t.Fatalf("failed to set primary key: %v", err)
-	}
-	if len(table.PKColumns) != 1 {
-		t.Fatalf("table should only have one PK column")
-	}
-}
-
-func TestLoadTableSetPKColumn(t *testing.T) {
-	db := fakesqldb.New(t)
-	defer db.Close()
-	for query, result := range getTestLoadTableQueries() {
-		db.AddQuery(query, result)
-	}
-	db.AddQuery("show index from test_table", &sqltypes.Result{
-		Fields:       mysqlconn.ShowIndexFromTableFields,
-		RowsAffected: 1,
-		Rows: [][]sqltypes.Value{
-			mysqlconn.ShowIndexFromTableRow("test_table", false, "index", 1, "name", true),
-		},
-	})
-	table, err := newTestLoadTable("USER_TABLE", "test table", db)
-	if err != nil {
-		t.Fatalf("failed to create a table info")
-	}
-	if len(table.PKColumns) != 0 {
-		t.Fatalf("table should not have a PK column")
-	}
-	err = setPK(table, []string{"name"})
-	if err != nil {
-		t.Fatalf("failed to set primary key: %v", err)
-	}
-	if len(table.PKColumns) != 1 {
-		t.Fatalf("table should only have one PK column")
-	}
-}
-
-func TestLoadTableInvalidCardinalityInIndex(t *testing.T) {
-	db := fakesqldb.New(t)
-	defer db.Close()
-	for query, result := range getTestLoadTableQueries() {
-		db.AddQuery(query, result)
-	}
-	row := mysqlconn.ShowIndexFromTableRow("test_table", true, "PRIMARY", 1, "pk", false)
-	row[6] = sqltypes.MakeString([]byte("invalid"))
-	db.AddQuery("show index from test_table", &sqltypes.Result{
-		Fields:       mysqlconn.ShowIndexFromTableFields,
-		RowsAffected: 1,
-		Rows: [][]sqltypes.Value{
-			row,
-		},
-	})
-	table, err := newTestLoadTable("USER_TABLE", "test table", db)
-	if err != nil {
-		t.Fatalf("failed to create a table info: %v", err)
-	}
-	if len(table.PKColumns) != 1 {
-		t.Fatalf("table should have one PK column although the cardinality is invalid")
+	want := "rejected"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("LoadTable: %v, must contain %s", err, want)
 	}
 }
 
@@ -122,12 +70,12 @@ func TestLoadTableSequence(t *testing.T) {
 	}
 	table, err := newTestLoadTable("USER_TABLE", "vitess_sequence", db)
 	if err != nil {
-		t.Fatalf("failed to create a test table info")
+		t.Fatal(err)
 	}
-	want := &schema.Table{
+	want := &Table{
 		Name:         sqlparser.NewTableIdent("test_table"),
-		Type:         schema.Sequence,
-		SequenceInfo: &schema.SequenceInfo{},
+		Type:         Sequence,
+		SequenceInfo: &SequenceInfo{},
 	}
 	table.Columns = nil
 	table.Indexes = nil
@@ -147,10 +95,10 @@ func TestLoadTableMessage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := &schema.Table{
+	want := &Table{
 		Name: sqlparser.NewTableIdent("test_table"),
-		Type: schema.Message,
-		MessageInfo: &schema.MessageInfo{
+		Type: Message,
+		MessageInfo: &MessageInfo{
 			IDPKIndex: 1,
 			Fields: []*querypb.Field{{
 				Name: "id",
@@ -210,7 +158,7 @@ func TestLoadTableMessage(t *testing.T) {
 	}
 }
 
-func newTestLoadTable(tableType string, comment string, db *fakesqldb.DB) (*schema.Table, error) {
+func newTestLoadTable(tableType string, comment string, db *fakesqldb.DB) (*Table, error) {
 	ctx := context.Background()
 	appParams := db.ConnParams()
 	dbaParams := db.ConnParams()
@@ -224,26 +172,6 @@ func newTestLoadTable(tableType string, comment string, db *fakesqldb.DB) (*sche
 	defer conn.Recycle()
 
 	return LoadTable(conn, "test_table", tableType, comment)
-}
-
-func setPK(ti *schema.Table, colnames []string) error {
-	pkIndex := schema.NewIndex("PRIMARY")
-	colnums := make([]int, len(colnames))
-	for i, colname := range colnames {
-		colnums[i] = ti.FindColumn(sqlparser.NewColIdent(colname))
-		if colnums[i] == -1 {
-			return fmt.Errorf("column %s not found", colname)
-		}
-		pkIndex.AddColumn(colname, 1)
-	}
-	for _, col := range ti.Columns {
-		pkIndex.DataColumns = append(pkIndex.DataColumns, col.Name)
-	}
-	ti.Indexes = append(ti.Indexes, nil)
-	copy(ti.Indexes[1:], ti.Indexes[:len(ti.Indexes)-1])
-	ti.Indexes[0] = pkIndex
-	ti.PKColumns = colnums
-	return nil
 }
 
 func getTestLoadTableQueries() map[string]*sqltypes.Result {

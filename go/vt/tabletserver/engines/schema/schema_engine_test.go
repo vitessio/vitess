@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package tabletserver
+package schema
 
 import (
 	"expvar"
@@ -19,21 +19,21 @@ import (
 	"github.com/youtube/vitess/go/mysqlconn"
 	"github.com/youtube/vitess/go/mysqlconn/fakesqldb"
 	"github.com/youtube/vitess/go/sqltypes"
-	"github.com/youtube/vitess/go/vt/schema"
 	"github.com/youtube/vitess/go/vt/sqlparser"
+	"github.com/youtube/vitess/go/vt/tabletserver/engines/schema/schematest"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletenv"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
-	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
-func TestSchemaEngineStrictMode(t *testing.T) {
+func TestStrictMode(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
-	for query, result := range getSchemaEngineBaseTestQueries() {
+	for query, result := range schematest.Queries() {
 		db.AddQuery(query, result)
 	}
-	se := newTestSchemaEngine(10, 1*time.Second, 1*time.Second, true)
+	db.AddRejectedQuery("select @@global.sql_mode", errRejected)
+	se := newEngine(10, 1*time.Second, 1*time.Second, true)
 	t.Log(se)
 	err := se.Open(db.ConnParams())
 	want := "error: could not verify mode"
@@ -42,7 +42,7 @@ func TestSchemaEngineStrictMode(t *testing.T) {
 	}
 }
 
-func TestSchemaEngineOpenFailedDueToMissMySQLTime(t *testing.T) {
+func TestOpenFailedDueToMissMySQLTime(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 	db.AddQuery("select unix_timestamp()", &sqltypes.Result{
@@ -55,7 +55,7 @@ func TestSchemaEngineOpenFailedDueToMissMySQLTime(t *testing.T) {
 			{sqltypes.MakeString([]byte("1427325875"))},
 		},
 	})
-	se := newTestSchemaEngine(10, 1*time.Second, 1*time.Second, false)
+	se := newEngine(10, 1*time.Second, 1*time.Second, false)
 	err := se.Open(db.ConnParams())
 	want := "Could not get MySQL time"
 	if err == nil || !strings.Contains(err.Error(), want) {
@@ -63,7 +63,7 @@ func TestSchemaEngineOpenFailedDueToMissMySQLTime(t *testing.T) {
 	}
 }
 
-func TestSchemaEngineOpenFailedDueToIncorrectMysqlRowNum(t *testing.T) {
+func TestOpenFailedDueToIncorrectMysqlRowNum(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 	db.AddQuery("select unix_timestamp()", &sqltypes.Result{
@@ -75,7 +75,7 @@ func TestSchemaEngineOpenFailedDueToIncorrectMysqlRowNum(t *testing.T) {
 			{sqltypes.NULL},
 		},
 	})
-	se := newTestSchemaEngine(10, 1*time.Second, 1*time.Second, false)
+	se := newEngine(10, 1*time.Second, 1*time.Second, false)
 	err := se.Open(db.ConnParams())
 	want := "Unexpected result for MySQL time"
 	if err == nil || !strings.Contains(err.Error(), want) {
@@ -83,7 +83,7 @@ func TestSchemaEngineOpenFailedDueToIncorrectMysqlRowNum(t *testing.T) {
 	}
 }
 
-func TestSchemaEngineOpenFailedDueToInvalidTimeFormat(t *testing.T) {
+func TestOpenFailedDueToInvalidTimeFormat(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 	db.AddQuery("select unix_timestamp()", &sqltypes.Result{
@@ -95,7 +95,7 @@ func TestSchemaEngineOpenFailedDueToInvalidTimeFormat(t *testing.T) {
 			{sqltypes.MakeString([]byte("invalid_time"))},
 		},
 	})
-	se := newTestSchemaEngine(10, 1*time.Second, 1*time.Second, false)
+	se := newEngine(10, 1*time.Second, 1*time.Second, false)
 	err := se.Open(db.ConnParams())
 	want := "Could not parse time"
 	if err == nil || !strings.Contains(err.Error(), want) {
@@ -103,14 +103,14 @@ func TestSchemaEngineOpenFailedDueToInvalidTimeFormat(t *testing.T) {
 	}
 }
 
-func TestSchemaEngineOpenFailedDueToExecErr(t *testing.T) {
+func TestOpenFailedDueToExecErr(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
-	for query, result := range getSchemaEngineBaseTestQueries() {
+	for query, result := range schematest.Queries() {
 		db.AddQuery(query, result)
 	}
 	db.AddRejectedQuery(mysqlconn.BaseShowTables, fmt.Errorf("injected error"))
-	se := newTestSchemaEngine(10, 1*time.Second, 1*time.Second, false)
+	se := newEngine(10, 1*time.Second, 1*time.Second, false)
 	err := se.Open(db.ConnParams())
 	want := "Could not get table list"
 	if err == nil || !strings.Contains(err.Error(), want) {
@@ -118,10 +118,10 @@ func TestSchemaEngineOpenFailedDueToExecErr(t *testing.T) {
 	}
 }
 
-func TestSchemaEngineOpenFailedDueToTableErr(t *testing.T) {
+func TestOpenFailedDueToTableErr(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
-	for query, result := range getSchemaEngineBaseTestQueries() {
+	for query, result := range schematest.Queries() {
 		db.AddQuery(query, result)
 	}
 	db.AddQuery(mysqlconn.BaseShowTables, &sqltypes.Result{
@@ -142,7 +142,7 @@ func TestSchemaEngineOpenFailedDueToTableErr(t *testing.T) {
 			{sqltypes.MakeString([]byte(""))},
 		},
 	})
-	se := newTestSchemaEngine(10, 1*time.Second, 1*time.Second, false)
+	se := newEngine(10, 1*time.Second, 1*time.Second, false)
 	err := se.Open(db.ConnParams())
 	want := "could not get schema for any tables"
 	if err == nil || !strings.Contains(err.Error(), want) {
@@ -150,15 +150,15 @@ func TestSchemaEngineOpenFailedDueToTableErr(t *testing.T) {
 	}
 }
 
-func TestSchemaEngineReload(t *testing.T) {
+func TestReload(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 	ctx := context.Background()
-	for query, result := range getSchemaEngineTestSupportedQueries() {
+	for query, result := range schematest.Queries() {
 		db.AddQuery(query, result)
 	}
 	idleTimeout := 10 * time.Second
-	se := newTestSchemaEngine(10, 10*time.Second, idleTimeout, true)
+	se := newEngine(10, 10*time.Second, idleTimeout, true)
 	se.Open(db.ConnParams())
 	defer se.Close()
 	// this new table does not exist
@@ -232,19 +232,19 @@ func TestSchemaEngineReload(t *testing.T) {
 	}
 }
 
-func TestSchemaEngineCreateOrUpdateTableFailedDuetoExecErr(t *testing.T) {
+func TestCreateOrUpdateTableFailedDuetoExecErr(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
-	for query, result := range getSchemaEngineTestSupportedQueries() {
+	for query, result := range schematest.Queries() {
 		db.AddQuery(query, result)
 	}
 	db.AddRejectedQuery(mysqlconn.BaseShowTablesForTable("test_table"), fmt.Errorf("forced fail"))
-	se := newTestSchemaEngine(10, 1*time.Second, 1*time.Second, false)
+	se := newEngine(10, 1*time.Second, 1*time.Second, false)
 	se.Open(db.ConnParams())
 	defer se.Close()
 	originalSchemaErrorCount := tabletenv.InternalErrors.Counts()["Schema"]
 	// should silently fail: no errors returned, but increment a counter
-	se.CreateOrAlterTable(context.Background(), "test_table")
+	se.TableWasCreatedOrAltered(context.Background(), "test_table")
 
 	newSchemaErrorCount := tabletenv.InternalErrors.Counts()["Schema"]
 	schemaErrorDiff := newSchemaErrorCount - originalSchemaErrorCount
@@ -253,13 +253,13 @@ func TestSchemaEngineCreateOrUpdateTableFailedDuetoExecErr(t *testing.T) {
 	}
 }
 
-func TestSchemaEngineCreateOrUpdateTable(t *testing.T) {
+func TestCreateOrUpdateTable(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
-	for query, result := range getSchemaEngineTestSupportedQueries() {
+	for query, result := range schematest.Queries() {
 		db.AddQuery(query, result)
 	}
-	se := newTestSchemaEngine(10, 1*time.Second, 1*time.Second, false)
+	se := newEngine(10, 1*time.Second, 1*time.Second, false)
 	se.Open(db.ConnParams())
 	defer se.Close()
 	existingTable := "test_table_01"
@@ -271,7 +271,7 @@ func TestSchemaEngineCreateOrUpdateTable(t *testing.T) {
 		},
 	})
 	i := 0
-	se.RegisterNotifier("test", func(schema map[string]*schema.Table, created, altered, dropped []string) {
+	se.RegisterNotifier("test", func(schema map[string]*Table, created, altered, dropped []string) {
 		switch i {
 		case 0:
 			if len(created) != 4 {
@@ -288,7 +288,7 @@ func TestSchemaEngineCreateOrUpdateTable(t *testing.T) {
 		i++
 	})
 	defer se.UnregisterNotifier("test")
-	if err := se.CreateOrAlterTable(context.Background(), "test_table_01"); err != nil {
+	if err := se.TableWasCreatedOrAltered(context.Background(), "test_table_01"); err != nil {
 		t.Fatal(err)
 	}
 	if i < 2 {
@@ -296,14 +296,14 @@ func TestSchemaEngineCreateOrUpdateTable(t *testing.T) {
 	}
 }
 
-func TestSchemaEngineDropTable(t *testing.T) {
+func TestDropTable(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
-	for query, result := range getSchemaEngineTestSupportedQueries() {
+	for query, result := range schematest.Queries() {
 		db.AddQuery(query, result)
 	}
 	existingTable := sqlparser.NewTableIdent("test_table_01")
-	se := newTestSchemaEngine(10, 1*time.Second, 1*time.Second, false)
+	se := newEngine(10, 1*time.Second, 1*time.Second, false)
 	se.Open(db.ConnParams())
 	defer se.Close()
 	table := se.GetTable(existingTable)
@@ -311,7 +311,7 @@ func TestSchemaEngineDropTable(t *testing.T) {
 		t.Fatalf("table: %s should exist", existingTable)
 	}
 	i := 0
-	se.RegisterNotifier("test", func(schema map[string]*schema.Table, created, altered, dropped []string) {
+	se.RegisterNotifier("test", func(schema map[string]*Table, created, altered, dropped []string) {
 		switch i {
 		case 0:
 			// Ignore.
@@ -325,7 +325,7 @@ func TestSchemaEngineDropTable(t *testing.T) {
 		}
 		i++
 	})
-	se.DropTable(existingTable)
+	se.TableWasDropped(existingTable)
 	table = se.GetTable(existingTable)
 	if table != nil {
 		t.Fatalf("table: %s should not exist", existingTable)
@@ -335,13 +335,13 @@ func TestSchemaEngineDropTable(t *testing.T) {
 	}
 }
 
-func TestSchemaEngineExportVars(t *testing.T) {
+func TestExportVars(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
-	for query, result := range getSchemaEngineTestSupportedQueries() {
+	for query, result := range schematest.Queries() {
 		db.AddQuery(query, result)
 	}
-	se := newTestSchemaEngine(10, 1*time.Second, 1*time.Second, true)
+	se := newEngine(10, 1*time.Second, 1*time.Second, true)
 	se.Open(db.ConnParams())
 	defer se.Close()
 	expvar.Do(func(kv expvar.KeyValue) {
@@ -353,11 +353,11 @@ func TestUpdatedMysqlStats(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 	ctx := context.Background()
-	for query, result := range getSchemaEngineTestSupportedQueries() {
+	for query, result := range schematest.Queries() {
 		db.AddQuery(query, result)
 	}
 	idleTimeout := 10 * time.Second
-	se := newTestSchemaEngine(10, 10*time.Second, idleTimeout, true)
+	se := newEngine(10, 10*time.Second, idleTimeout, true)
 	se.Open(db.ConnParams())
 	defer se.Close()
 	// Add new table
@@ -369,7 +369,7 @@ func TestUpdatedMysqlStats(t *testing.T) {
 			mysqlconn.BaseShowTablesRow(tableName.String(), false, ""),
 		},
 	})
-	// Add queries necessary for CreateOrAlterTable() and NewTable()
+	// Add queries necessary for TableWasCreatedOrAltered() and NewTable()
 	db.AddQuery(mysqlconn.BaseShowTablesForTable(tableName.String()), &sqltypes.Result{
 		Fields:       mysqlconn.BaseShowTablesFields,
 		RowsAffected: 1,
@@ -443,13 +443,13 @@ func TestUpdatedMysqlStats(t *testing.T) {
 	}
 }
 
-func TestQueryEngineStatsURL(t *testing.T) {
+func TestStatsURL(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
-	for query, result := range getSchemaEngineTestSupportedQueries() {
+	for query, result := range schematest.Queries() {
 		db.AddQuery(query, result)
 	}
-	se := newTestSchemaEngine(10, 1*time.Second, 1*time.Second, true)
+	se := newEngine(10, 1*time.Second, 1*time.Second, true)
 	se.Open(db.ConnParams())
 	defer se.Close()
 
@@ -458,131 +458,18 @@ func TestQueryEngineStatsURL(t *testing.T) {
 	se.ServeHTTP(response, request)
 }
 
-func getSchemaEngineBaseTestQueries() map[string]*sqltypes.Result {
-	return map[string]*sqltypes.Result{
-		// queries for schema info
-		"select unix_timestamp()": {
-			Fields: []*querypb.Field{{
-				Type: sqltypes.Uint64,
-			}},
-			Rows: [][]sqltypes.Value{
-				{sqltypes.MakeString([]byte("1427325875"))},
-			},
-		},
-	}
+type dummyChecker struct {
 }
 
-func getSchemaEngineTestSupportedQueries() map[string]*sqltypes.Result {
-	return map[string]*sqltypes.Result{
-		// queries for schema info
-		"select unix_timestamp()": {
-			Fields: []*querypb.Field{{
-				Type: sqltypes.Uint64,
-			}},
-			RowsAffected: 1,
-			Rows: [][]sqltypes.Value{
-				{sqltypes.MakeTrusted(sqltypes.Int32, []byte("1427325875"))},
-			},
-		},
-		"select @@global.sql_mode": {
-			Fields: []*querypb.Field{{
-				Type: sqltypes.VarChar,
-			}},
-			RowsAffected: 1,
-			Rows: [][]sqltypes.Value{
-				{sqltypes.MakeString([]byte("STRICT_TRANS_TABLES"))},
-			},
-		},
-		"select @@autocommit": {
-			Fields: []*querypb.Field{{
-				Type: sqltypes.Uint64,
-			}},
-			RowsAffected: 1,
-			Rows: [][]sqltypes.Value{
-				{sqltypes.MakeString([]byte("1"))},
-			},
-		},
-		mysqlconn.BaseShowTables: {
-			Fields:       mysqlconn.BaseShowTablesFields,
-			RowsAffected: 3,
-			Rows: [][]sqltypes.Value{
-				mysqlconn.BaseShowTablesRow("test_table_01", false, ""),
-				mysqlconn.BaseShowTablesRow("test_table_02", false, ""),
-				mysqlconn.BaseShowTablesRow("test_table_03", false, ""),
-			},
-		},
-		"select * from test_table_01 where 1 != 1": {
-			Fields: []*querypb.Field{{
-				Name: "pk",
-				Type: sqltypes.Int32,
-			}},
-		},
-		"describe test_table_01": {
-			Fields:       mysqlconn.DescribeTableFields,
-			RowsAffected: 1,
-			Rows: [][]sqltypes.Value{
-				mysqlconn.DescribeTableRow("pk", "int(11)", false, "PRI", "0"),
-			},
-		},
-		"select * from test_table_02 where 1 != 1": {
-			Fields: []*querypb.Field{{
-				Name: "pk",
-				Type: sqltypes.Int32,
-			}},
-		},
-		"describe test_table_02": {
-			Fields:       mysqlconn.DescribeTableFields,
-			RowsAffected: 1,
-			Rows: [][]sqltypes.Value{
-				mysqlconn.DescribeTableRow("pk", "int(11)", false, "PRI", "0"),
-			},
-		},
-		"select * from test_table_03 where 1 != 1": {
-			Fields: []*querypb.Field{{
-				Name: "pk",
-				Type: sqltypes.Int32,
-			}},
-		},
-		"describe test_table_03": {
-			Fields:       mysqlconn.DescribeTableFields,
-			RowsAffected: 1,
-			Rows: [][]sqltypes.Value{
-				mysqlconn.DescribeTableRow("pk", "int(11)", false, "PRI", "0"),
-			},
-		},
-		// for SplitQuery because it needs a primary key column
-		"show index from test_table_01": {
-			Fields:       mysqlconn.ShowIndexFromTableFields,
-			RowsAffected: 1,
-			Rows: [][]sqltypes.Value{
-				mysqlconn.ShowIndexFromTableRow("test_table_01", true, "PRIMARY", 1, "pk", false),
-			},
-		},
-		"show index from test_table_02": {
-			Fields:       mysqlconn.ShowIndexFromTableFields,
-			RowsAffected: 1,
-			Rows: [][]sqltypes.Value{
-				mysqlconn.ShowIndexFromTableRow("test_table_02", true, "PRIMARY", 1, "pk", false),
-			},
-		},
-		"show index from test_table_03": {
-			Fields:       mysqlconn.ShowIndexFromTableFields,
-			RowsAffected: 1,
-			Rows: [][]sqltypes.Value{
-				mysqlconn.ShowIndexFromTableRow("test_table_03", true, "PRIMARY", 1, "pk", false),
-			},
-		},
-		"begin":  {},
-		"commit": {},
-	}
-}
+func (dummyChecker) CheckMySQL() {}
 
-func verifyTabletError(t *testing.T, err interface{}, tabletErrCode vtrpcpb.ErrorCode) {
-	tabletError, ok := err.(*tabletenv.TabletError)
-	if !ok {
-		t.Fatalf("should return a TabletError, but got err: %v", err)
-	}
-	if tabletError.ErrorCode != tabletErrCode {
-		t.Fatalf("got a TabletError with error code %s but wanted %s: %v", tabletError.ErrorCode, tabletErrCode, err)
-	}
+var DummyChecker = dummyChecker{}
+
+func newEngine(queryCacheSize int, reloadTime time.Duration, idleTimeout time.Duration, strict bool) *Engine {
+	config := tabletenv.DefaultQsConfig
+	config.QueryCacheSize = queryCacheSize
+	config.SchemaReloadTime = float64(reloadTime) / 1e9
+	config.IdleTimeout = float64(idleTimeout) / 1e9
+	config.StrictMode = strict
+	return NewEngine(DummyChecker, config)
 }

@@ -12,8 +12,8 @@ import (
 	log "github.com/golang/glog"
 
 	"github.com/youtube/vitess/go/vt/dbconfigs"
-	"github.com/youtube/vitess/go/vt/schema"
 	"github.com/youtube/vitess/go/vt/tabletserver/connpool"
+	"github.com/youtube/vitess/go/vt/tabletserver/engines/schema"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletenv"
 
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"

@@ -18,9 +18,9 @@ import (
 	"github.com/youtube/vitess/go/trace"
 	"github.com/youtube/vitess/go/vt/callerid"
 	"github.com/youtube/vitess/go/vt/callinfo"
-	"github.com/youtube/vitess/go/vt/schema"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/tabletserver/connpool"
+	"github.com/youtube/vitess/go/vt/tabletserver/engines/schema"
 	"github.com/youtube/vitess/go/vt/tabletserver/planbuilder"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletenv"
 
@@ -213,7 +213,7 @@ func (qre *QueryExecutor) execAsTransaction(f func(conn *TxConnection) (*sqltype
 // checkPermissions
 func (qre *QueryExecutor) checkPermissions() error {
 	// Skip permissions check if the context is local.
-	if isLocalContext(qre.ctx) {
+	if tabletenv.IsLocalContext(qre.ctx) {
 		return nil
 	}
 
@@ -304,10 +304,10 @@ func (qre *QueryExecutor) execDDL() (*sqltypes.Result, error) {
 	}
 	if !ddlPlan.TableName.IsEmpty() && ddlPlan.TableName != ddlPlan.NewName {
 		// It's a drop or rename.
-		qre.tsv.se.DropTable(ddlPlan.TableName)
+		qre.tsv.se.TableWasDropped(ddlPlan.TableName)
 	}
 	if !ddlPlan.NewName.IsEmpty() {
-		if err := qre.tsv.se.CreateOrAlterTable(qre.ctx, ddlPlan.NewName.String()); err != nil {
+		if err := qre.tsv.se.TableWasCreatedOrAltered(qre.ctx, ddlPlan.NewName.String()); err != nil {
 			return nil, err
 		}
 	}

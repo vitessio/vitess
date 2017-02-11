@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package tabletserver
+package schema
 
 import (
 	"html/template"
@@ -12,7 +12,6 @@ import (
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/acl"
 	"github.com/youtube/vitess/go/vt/logz"
-	"github.com/youtube/vitess/go/vt/schema"
 )
 
 var (
@@ -45,8 +44,8 @@ var (
 )
 
 type schemazSorter struct {
-	rows []*schema.Table
-	less func(row1, row2 *schema.Table) bool
+	rows []*Table
+	less func(row1, row2 *Table) bool
 }
 
 func (sorter *schemazSorter) Len() int {
@@ -61,7 +60,7 @@ func (sorter *schemazSorter) Less(i, j int) bool {
 	return sorter.less(sorter.rows[i], sorter.rows[j])
 }
 
-func schemazHandler(tables map[string]*schema.Table, w http.ResponseWriter, r *http.Request) {
+func schemazHandler(tables map[string]*Table, w http.ResponseWriter, r *http.Request) {
 	if err := acl.CheckAccessHTTP(r, acl.DEBUGGING); err != nil {
 		acl.SendError(w, err)
 		return
@@ -70,23 +69,23 @@ func schemazHandler(tables map[string]*schema.Table, w http.ResponseWriter, r *h
 	defer logz.EndHTMLTable(w)
 	w.Write(schemazHeader)
 
-	tableList := make([]*schema.Table, 0, len(tables))
+	tableList := make([]*Table, 0, len(tables))
 	for _, t := range tables {
 		tableList = append(tableList, t)
 	}
 
 	sorter := schemazSorter{
 		rows: tableList,
-		less: func(row1, row2 *schema.Table) bool {
+		less: func(row1, row2 *Table) bool {
 			return row1.Name.String() > row2.Name.String()
 		},
 	}
 	sort.Sort(&sorter)
 	envelope := struct {
 		Type  []string
-		Table *schema.Table
+		Table *Table
 	}{
-		Type: schema.TypeNames,
+		Type: TypeNames,
 	}
 	for _, Value := range sorter.rows {
 		envelope.Table = Value

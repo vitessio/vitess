@@ -11,49 +11,15 @@ import (
 	"time"
 
 	"github.com/youtube/vitess/go/sqltypes"
+
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
-	"github.com/youtube/vitess/go/vt/schema"
+	"github.com/youtube/vitess/go/vt/tabletserver/engines/schema"
 )
 
 var meTable = &schema.Table{
 	Type:        schema.Message,
 	MessageInfo: mmTable.MessageInfo,
-}
-
-func TestMEState(t *testing.T) {
-	db := setUpTabletServerTest(t)
-	defer db.Close()
-	testUtils := newTestUtils()
-	config := testUtils.newQueryServiceConfig()
-	config.TransactionCap = 1
-	tsv := NewTabletServer(config)
-	dbconfigs := testUtils.newDBConfigs(db)
-	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
-	err := tsv.StartService(target, dbconfigs, testUtils.newMysqld(&dbconfigs))
-	if err != nil {
-		t.Fatalf("StartService failed: %v", err)
-	}
-	defer tsv.StopService()
-
-	me := tsv.messager
-	start := len(tsv.se.notifiers)
-	if err := me.Open(dbconfigs); err != nil {
-		t.Fatal(err)
-	}
-	if l := len(tsv.se.notifiers); l != start {
-		t.Errorf("len(notifiers) after reopen: %d, want %d", l, start)
-	}
-
-	me.Close()
-	if l := len(tsv.se.notifiers); l != start-1 {
-		t.Errorf("len(notifiers) after close: %d, want %d", l, start-1)
-	}
-
-	me.Close()
-	if l := len(tsv.se.notifiers); l != start-1 {
-		t.Errorf("len(notifiers) after close: %d, want %d", l, start-1)
-	}
 }
 
 func TestMESchemaChanged(t *testing.T) {

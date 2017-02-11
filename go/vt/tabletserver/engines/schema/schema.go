@@ -117,6 +117,19 @@ func NewTable(name string) *Table {
 	}
 }
 
+// Done must be called after columns and indexes are added to
+// the table. It will build additional metadata like PKColumns.
+func (ta *Table) Done() {
+	if !ta.HasPrimary() {
+		return
+	}
+	pkIndex := ta.Indexes[0]
+	ta.PKColumns = make([]int, len(pkIndex.Columns))
+	for i, pkCol := range pkIndex.Columns {
+		ta.PKColumns[i] = ta.FindColumn(pkCol)
+	}
+}
+
 // AddColumn adds a column to the Table.
 func (ta *Table) AddColumn(name string, columnType querypb.Type, defval sqltypes.Value, extra string) {
 	index := len(ta.Columns)
@@ -184,9 +197,6 @@ type Index struct {
 	// Cardinality[i] is the number of distinct values of Columns[i] in the
 	// table.
 	Cardinality []uint64
-	// DataColumns are the primary-key columns for secondary indices and
-	// all the columns for the primary-key index.
-	DataColumns []sqlparser.ColIdent
 }
 
 // NewIndex creates a new Index.
@@ -207,17 +217,6 @@ func (idx *Index) AddColumn(name string, cardinality uint64) {
 // Otherwise, it returns -1.
 func (idx *Index) FindColumn(name sqlparser.ColIdent) int {
 	for i, colName := range idx.Columns {
-		if colName.Equal(name) {
-			return i
-		}
-	}
-	return -1
-}
-
-// FindDataColumn finds a data column in the index. It returns the index if found.
-// Otherwise, it returns -1.
-func (idx *Index) FindDataColumn(name sqlparser.ColIdent) int {
-	for i, colName := range idx.DataColumns {
 		if colName.Equal(name) {
 			return i
 		}

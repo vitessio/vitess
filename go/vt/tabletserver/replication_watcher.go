@@ -17,6 +17,7 @@ import (
 	"github.com/youtube/vitess/go/vt/binlog/eventtoken"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
+	"github.com/youtube/vitess/go/vt/tabletserver/engines/schema"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletenv"
 
 	binlogdatapb "github.com/youtube/vitess/go/vt/proto/binlogdata"
@@ -33,7 +34,7 @@ type ReplicationWatcher struct {
 	wg     sync.WaitGroup
 
 	watchReplication bool
-	se               *SchemaEngine
+	se               *schema.Engine
 
 	mu         sync.Mutex
 	eventToken *querypb.EventToken
@@ -42,7 +43,7 @@ type ReplicationWatcher struct {
 var replOnce sync.Once
 
 // NewReplicationWatcher creates a new ReplicationWatcher.
-func NewReplicationWatcher(se *SchemaEngine, config tabletenv.TabletConfig) *ReplicationWatcher {
+func NewReplicationWatcher(se *schema.Engine, config tabletenv.TabletConfig) *ReplicationWatcher {
 	rpw := &ReplicationWatcher{
 		watchReplication: config.WatchReplication,
 		se:               se,
@@ -69,7 +70,7 @@ func (rpw *ReplicationWatcher) Open(dbconfigs dbconfigs.DBConfigs, mysqld mysqlc
 	if rpw.isOpen || !rpw.watchReplication {
 		return
 	}
-	ctx, cancel := context.WithCancel(localContext())
+	ctx, cancel := context.WithCancel(tabletenv.LocalContext())
 	rpw.cancel = cancel
 	rpw.wg.Add(1)
 	go rpw.Process(ctx, dbconfigs, mysqld)
