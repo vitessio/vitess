@@ -33,10 +33,6 @@
 			"revisionTime": "2016-12-16T21:27:53Z"
 		},
 		{
-			"path": "context",
-			"revision": ""
-		},
-		{
 			"checksumSHA1": "L4I+Spyy1yw6GbDjnx+Qyj+q9kw=",
 			"path": "github.com/aws/aws-sdk-go/aws",
 			"revision": "2e1a49c71fb7d8f6b7e8cca2259ed9b68d9b97ce",
