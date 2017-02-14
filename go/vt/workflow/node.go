@@ -102,7 +102,7 @@ type ActionListener interface {
 // the Angular 2 web app.
 type Node struct {
 	// nodeManager is the NodeManager handling this Node.
-	// It is set by AddRootNode, and propagated by AddChildren.
+	// It is set by AddRootNode, and propagated by AddChild.
 	// Any change to this node must take the Manager's lock.
 	nodeManager *NodeManager
 
@@ -394,6 +394,15 @@ func (m *NodeManager) Action(ctx context.Context, ap *ActionParameters) error {
 		return fmt.Errorf("Action %v is invoked on a node without listener (node path is %v)", ap.Name, ap.Path)
 	}
 	return n.Listener.Action(ctx, ap.Path, ap.Name)
+}
+
+func (m *NodeManager) GetNodeByRelativePath(parentNode *Node, childPath string) (*Node, error) {
+	fullNodePath := path.Join(parentNode.PathName, childPath)
+	node, err := m.getNodeByPath(fullNodePath)
+	if err != nil {
+		return nil, err
+	}
+	return node, nil
 }
 
 func (m *NodeManager) getNodeByPath(nodePath string) (*Node, error) {

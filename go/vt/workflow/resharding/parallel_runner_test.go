@@ -52,7 +52,8 @@ func TestParallelRunnerRetryAction(t *testing.T) {
 
 	ctx := context.Background()
 
-	// Create UI nodes. Each task has a node. These task nodes are the children of a root node.
+	// Create UI nodes. Each task has a node.
+	// These task nodes are the children of a root node.
 	notifications := make(chan []byte, 10)
 	nodeManager := workflow.NewNodeManager()
 	_, index, err := nodeManager.GetAndWatchFullTree(notifications)
@@ -117,7 +118,7 @@ func TestParallelRunnerRetryAction(t *testing.T) {
 	}
 
 	go func() {
-		// This goroutine is used to mornitor the UI change.
+		// This goroutine is used to monitor the UI change.
 		// When the retry action is enabled, it will trigger it using nodemanager.
 		for {
 			select {
@@ -155,8 +156,9 @@ func TestParallelRunnerRetryAction(t *testing.T) {
 		}
 	}()
 
-	// Call ParallelRunner.Run through a goroutine. In this way, the failure of task will not block the main function.
-	var waitGroup sync.WaitGroup
+	// Call ParallelRunner.Run through a goroutine. In this way,
+	// the failure of task will not block the main function.
+	waitGroup := sync.WaitGroup{}
 	waitGroup.Add(1)
 	go func() {
 		defer waitGroup.Done()

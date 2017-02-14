@@ -1,10 +1,13 @@
 package resharding
 
 import (
+	"context"
 	"flag"
+	"strings"
 	"testing"
 
 	"github.com/golang/mock/gomock"
+	"github.com/golang/protobuf/proto"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/topo/memorytopo"
 	"github.com/youtube/vitess/go/vt/worker/fakevtworkerclient"
@@ -16,26 +19,34 @@ import (
 	workflowpb "github.com/youtube/vitess/go/vt/proto/workflow"
 )
 
+// TestHorizontalResharding runs resharding from 1 shard to 2 shards.
 func TestHorizontalResharding(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
+	// Initialize the checkpoint for the workflow.
+	oneShard := ReshardingData{
+		Keyspace:          "test_keyspace",
+		SourceShard:       "0",
+		DestinationShards: []string{"-80", "80-"},
+		Vtworker:          "localhost:15032",
+	}
+	initCp := createCheckpoint([]ReshardingData{oneShard})
 
-	hw := setUp(t, ctrl)
+	// Create the horizontal resharding workflow.
+	hw := setupWorkflow(t, initCp)
 	if hw == nil {
 		return
 	}
-	// Create fakeworkerclient, which is used for the unit test in steps SplitClone and SplitDiff.
-	flag.Set("vtworker_client_protocol", "fake")
-	fakeVtworkerClient := fakevtworkerclient.NewFakeVtworkerClient()
+	// Create the mock wrangler and set the expected behavior.
+	// Then pass it to the workflow.
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	hw.wr = setupMockWrangler(hw.ctx, ctrl)
+
+	// Set up the fake vtworkerclient.
+	fakeVtworkerClient := setupFakeVtworker()
 	vtworkerclient.RegisterFactory("fake", fakeVtworkerClient.FakeVtworkerClientFactory)
 	defer vtworkerclient.UnregisterFactoryForTest("fake")
 
-	fakeVtworkerClient.RegisterResultForAddr("localhost:15032", []string{"SplitClone", "--min_healthy_rdonly_tablets=1", "test_keyspace/0"}, "", nil)
-	fakeVtworkerClient.RegisterResultForAddr("localhost:15032", []string{"SplitDiff", "--min_healthy_rdonly_tablets=1", "test_keyspace/-80"}, "", nil)
-	fakeVtworkerClient.RegisterResultForAddr("localhost:15032", []string{"SplitDiff", "--min_healthy_rdonly_tablets=1", "test_keyspace/80-"}, "", nil)
-
-	// Test the execution of horizontal resharding.
-	// To simply demonstate the ability to track task status and leverage it for control the workflow execution, only happy path is used here.
+	// Run the workflow.
 	if err := hw.runWorkflow(); err != nil {
 		t.Errorf("%s: Horizontal resharding workflow should not fail", err)
 	}
@@ -48,44 +59,120 @@ func TestHorizontalResharding(t *testing.T) {
 	}
 }
 
-// setUp prepare the test environement for the happy path.
-// Other test cases can reuse this basic setup and modified it based on its need.
-func setUp(t *testing.T, ctrl *gomock.Controller) *HorizontalReshardingWorkflow {
+// TestHorizontalReshardingRestart restarts a stopped worklow
+// by loading a hand-crafted checkpoint. This checkpoint is used to fake
+// the one saved by the killed workflow. It records that some tasks
+// in the workflow are finished successfully.
+func TestHorizontalReshardingRestart(t *testing.T) {
+	// Initialize the checkpoint for the workflow.
+	oneShard := ReshardingData{
+		Keyspace:          "test_keyspace",
+		SourceShard:       "0",
+		DestinationShards: []string{"-80", "80-"},
+		Vtworker:          "localhost:15032",
+	}
+	initCp := createCheckpoint([]ReshardingData{oneShard})
+
+	// Set checkpoint to record that the copySchemaTask on destination shard
+	// "-80" succeeded.
+	t1 := initCp.Tasks[createTaskID(copySchemaName, "dest", "-80")]
+	t1.State = workflowpb.TaskState_TaskDone
+	// Set checkpoint to record that the copySchemaTask on destination shard
+	// "80-" failed with errors.
+	t2 := initCp.Tasks[createTaskID(copySchemaName, "dest", "80-")]
+	t2.State = workflowpb.TaskState_TaskDone
+	t2.Error = "the task CopySchema for shard 80- fails."
+
+	// Create the workflow proto message, which will be loaded
+	// when restarting the stopped workflow.
+	workflowProto := &workflowpb.Workflow{
+		Uuid:        "testworkflow0000",
+		FactoryName: "horizontal_resharding",
+		State:       workflowpb.WorkflowState_Running,
+	}
+	data, err := proto.Marshal(initCp)
+	if err != nil {
+		t.Errorf("error in encoding checkpoint proto message: %v", err)
+	}
+	workflowProto.Data = data
+
+	nodeManager := workflow.NewNodeManager()
+	rootNode := &workflow.Node{
+		PathName: "test_root",
+		Name:     "root",
+	}
+	if err := nodeManager.AddRootNode(rootNode); err != nil {
+		t.Errorf("adding root node failed: %v", err)
+	}
+
+	// The workflow is created using Instantiate method when it is restarted.
+	var factory *HorizontalReshardingWorkflowFactory
+	w, err := factory.Instantiate(workflowProto, rootNode)
+	if err != nil {
+		t.Errorf("horizontal resharding workflow not instantiated successfully")
+	}
+	hw := w.(*HorizontalReshardingWorkflow)
+
+	ts := memorytopo.NewServer("cell")
+	wi, err := ts.CreateWorkflow(context.TODO(), workflowProto)
+	if err != nil {
+		t.Errorf("creating workflow fails: %v", err)
+	}
+	hw.ctx = context.Background()
+	hw.topoServer = ts
+	hw.wi = wi
+	hw.checkpointWriter = NewCheckpointWriter(hw.topoServer, hw.checkpoint, hw.wi)
+	if err := hw.checkpointWriter.Save(); err != nil {
+		t.Errorf("checkpointWriter save fails: %v", err)
+	}
+
+	// Create the mock wrangler and set the expected behavior.
+	// Then pass it to the workflow.
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	hw.wr = setupMockWranglerRestart(hw.ctx, ctrl)
+
+	// Set up the fake vtworkerclient.
+	fakeVtworkerClient := setupFakeVtworker()
+	vtworkerclient.RegisterFactory("fake", fakeVtworkerClient.FakeVtworkerClientFactory)
+	defer vtworkerclient.UnregisterFactoryForTest("fake")
+
+	// Run the workflow.
+	if err := hw.runWorkflow(); err != nil {
+		t.Errorf("%s: Horizontal resharding workflow should not fail", err)
+	}
+
+	// Checking all tasks are Done.
+	for _, task := range hw.checkpoint.Tasks {
+		if task.State != workflowpb.TaskState_TaskDone || task.Error != "" {
+			t.Fatalf("task is not done: Id: %v, State: %v, Attributes:%v", task.Id, task.State, task.Attributes)
+		}
+	}
+}
+
+func setupFakeVtworker() *fakevtworkerclient.FakeVtworkerClient {
+	// Create fakeworkerclient, which is used for the unit test in phase of
+	// SplitClone and SplitDiff.
+	flag.Set("vtworker_client_protocol", "fake")
+	fakeVtworkerClient := fakevtworkerclient.NewFakeVtworkerClient()
+	fakeVtworkerClient.RegisterResultForAddr("localhost:15032", []string{"SplitClone", "--min_healthy_rdonly_tablets=1", "test_keyspace/0"}, "", nil)
+	fakeVtworkerClient.RegisterResultForAddr("localhost:15032", []string{"SplitDiff", "--min_healthy_rdonly_tablets=1", "test_keyspace/-80"}, "", nil)
+	fakeVtworkerClient.RegisterResultForAddr("localhost:15032", []string{"SplitDiff", "--min_healthy_rdonly_tablets=1", "test_keyspace/80-"}, "", nil)
+	return fakeVtworkerClient
+}
+
+// setUpWorkflow prepares the test environement for the happy path.
+func setupWorkflow(t *testing.T, initCheckpoint *workflowpb.WorkflowCheckpoint) *HorizontalReshardingWorkflow {
 	ts := memorytopo.NewServer("cell")
 	// Create fake wrangler using mock interface, which is used for the unit test in steps CopySchema and MigratedServedType.
-	mockWranglerInterface := NewMockReshardingWrangler(ctrl)
-	// Create the checkpoint for workflow.
-	keyspace := "test_keyspace"
-	vtworkers := []string{"localhost:15032"}
 
-	taskMap := make(map[string]*workflowpb.Task)
-	source := "0"
-	destinations := []string{"-80", "80-"}
-	worker := vtworkers[0]
-	updatePerSourceTask(keyspace, source, worker, SplitCloneName, taskMap)
-	updatePerSourceTask(keyspace, source, worker, MigrateName, taskMap)
-
-	for _, d := range destinations {
-		updatePerDestinationTask(keyspace, source, d, worker, CopySchemaName, taskMap)
-		updatePerDestinationTask(keyspace, source, d, worker, WaitFilteredReplicationName, taskMap)
-		updatePerDestinationTask(keyspace, source, d, worker, SplitDiffName, taskMap)
-	}
-
-	// Create the workflow (ignore the node construction since we don't test the front-end part in this unit test).
 	hw := &HorizontalReshardingWorkflow{
-		wr:         mockWranglerInterface,
-		topoServer: ts,
-		logger:     logutil.NewMemoryLogger(),
-		checkpoint: &workflowpb.WorkflowCheckpoint{
-			CodeVersion: codeVersion,
-			Tasks:       taskMap,
-			Settings: map[string]string{
-				"source_shards":      "0",
-				"destination_shards": "-80,80-",
-			},
-		},
+		topoServer:    ts,
+		logger:        logutil.NewMemoryLogger(),
+		checkpoint:    initCheckpoint,
 		taskUINodeMap: make(map[string]*workflow.Node),
 	}
+
 	// Create the initial workflowpb.Workflow object.
 	w := &workflowpb.Workflow{
 		Uuid:        "testworkflow0000",
@@ -99,10 +186,14 @@ func setUp(t *testing.T, ctrl *gomock.Controller) *HorizontalReshardingWorkflow 
 		return nil
 	}
 	hw.checkpointWriter = NewCheckpointWriter(hw.topoServer, hw.checkpoint, hw.wi)
+	return hw
+}
 
-	// Set the expected behaviors for mock wrangler.
+// setupMockWrangler sets the expected behaviors for mock wrangler.
+func setupMockWrangler(ctx context.Context, ctrl *gomock.Controller) *MockReshardingWrangler {
+	mockWranglerInterface := NewMockReshardingWrangler(ctrl)
 	mockWranglerInterface.EXPECT().CopySchemaShardFromShard(
-		hw.ctx,
+		ctx,
 		nil,  /* tableArray*/
 		nil,  /* excludeTableArray */
 		true, /*includeViews*/
@@ -113,7 +204,7 @@ func setUp(t *testing.T, ctrl *gomock.Controller) *HorizontalReshardingWorkflow 
 		wrangler.DefaultWaitSlaveTimeout).Return(nil)
 
 	mockWranglerInterface.EXPECT().CopySchemaShardFromShard(
-		hw.ctx,
+		ctx,
 		nil,  /* tableArray*/
 		nil,  /* excludeTableArray */
 		true, /*includeViews*/
@@ -123,15 +214,15 @@ func setUp(t *testing.T, ctrl *gomock.Controller) *HorizontalReshardingWorkflow 
 		"80-",
 		wrangler.DefaultWaitSlaveTimeout).Return(nil)
 
-	mockWranglerInterface.EXPECT().WaitForFilteredReplication(hw.ctx, "test_keyspace", "-80", wrangler.DefaultWaitForFilteredReplicationMaxDelay).Return(nil)
-	mockWranglerInterface.EXPECT().WaitForFilteredReplication(hw.ctx, "test_keyspace", "80-", wrangler.DefaultWaitForFilteredReplicationMaxDelay).Return(nil)
+	mockWranglerInterface.EXPECT().WaitForFilteredReplication(ctx, "test_keyspace", "-80", wrangler.DefaultWaitForFilteredReplicationMaxDelay).Return(nil)
+	mockWranglerInterface.EXPECT().WaitForFilteredReplication(ctx, "test_keyspace", "80-", wrangler.DefaultWaitForFilteredReplicationMaxDelay).Return(nil)
 
 	servedTypeParams := []topodatapb.TabletType{topodatapb.TabletType_RDONLY,
 		topodatapb.TabletType_REPLICA,
 		topodatapb.TabletType_MASTER}
 	for _, servedType := range servedTypeParams {
 		mockWranglerInterface.EXPECT().MigrateServedTypes(
-			hw.ctx,
+			ctx,
 			"test_keyspace",
 			"0",
 			nil, /* cells */
@@ -140,10 +231,78 @@ func setUp(t *testing.T, ctrl *gomock.Controller) *HorizontalReshardingWorkflow 
 			false, /* skipReFreshState */
 			wrangler.DefaultFilteredReplicationWaitTime).Return(nil)
 	}
-	return hw
+	return mockWranglerInterface
 }
 
-// TODO(yipeiw): fake a retry situation: fails first for made error, then fix the inserted bug and manually trigger the retry signal,
-// verify whether the retrying job can be done successfully.
-// problem for unit test: hard to fake action, node part, hard to separate the logic from front-end control. (figure out the call path of Init, s.t. we can create the front-end needed set-up if it is easy enough)
-// problem for end-to-end test, need a way to check the workflow status; need to trigger the button through http request.
+func setupMockWranglerRestart(ctx context.Context, ctrl *gomock.Controller) *MockReshardingWrangler {
+	// Set the mock wrangler expectations without the call of copyschema
+	// on shard "-80". That task is supposed to be finished
+	// and must not be called when restarting the workflow.
+	mockWranglerInterface := NewMockReshardingWrangler(ctrl)
+	mockWranglerInterface.EXPECT().CopySchemaShardFromShard(
+		ctx,
+		nil,  /* tableArray*/
+		nil,  /* excludeTableArray */
+		true, /*includeViews*/
+		"test_keyspace",
+		"0",
+		"test_keyspace",
+		"80-",
+		wrangler.DefaultWaitSlaveTimeout).Return(nil)
+
+	mockWranglerInterface.EXPECT().WaitForFilteredReplication(ctx, "test_keyspace", "-80", wrangler.DefaultWaitForFilteredReplicationMaxDelay).Return(nil)
+	mockWranglerInterface.EXPECT().WaitForFilteredReplication(ctx, "test_keyspace", "80-", wrangler.DefaultWaitForFilteredReplicationMaxDelay).Return(nil)
+
+	servedTypeParams := []topodatapb.TabletType{topodatapb.TabletType_RDONLY,
+		topodatapb.TabletType_REPLICA,
+		topodatapb.TabletType_MASTER}
+	for _, servedType := range servedTypeParams {
+		mockWranglerInterface.EXPECT().MigrateServedTypes(
+			ctx,
+			"test_keyspace",
+			"0",
+			nil, /* cells */
+			servedType,
+			false, /* reverse */
+			false, /* skipReFreshState */
+			wrangler.DefaultFilteredReplicationWaitTime).Return(nil)
+	}
+	return mockWranglerInterface
+}
+
+// ReshardingData stores the data for resharding one source shard.
+type ReshardingData struct {
+	Keyspace          string
+	SourceShard       string
+	DestinationShards []string
+	Vtworker          string
+}
+
+func createCheckpoint(data []ReshardingData) *workflowpb.WorkflowCheckpoint {
+	taskMap := make(map[string]*workflowpb.Task)
+	var sourceList, destinationList []string
+
+	for _, info := range data {
+		keyspace := info.Keyspace
+		s := info.SourceShard
+		worker := info.Vtworker
+		sourceList = append(sourceList, s)
+		updatePerSourceTask(keyspace, s, worker, splitCloneName, taskMap)
+		updatePerSourceTask(keyspace, s, worker, migrateName, taskMap)
+		for _, d := range info.DestinationShards {
+			destinationList = append(destinationList, d)
+			updatePerDestinationTask(keyspace, s, d, worker, copySchemaName, taskMap)
+			updatePerDestinationTask(keyspace, s, d, worker, waitFilteredReplicationName, taskMap)
+			updatePerDestinationTask(keyspace, s, d, worker, splitDiffName, taskMap)
+		}
+	}
+
+	return &workflowpb.WorkflowCheckpoint{
+		CodeVersion: codeVersion,
+		Tasks:       taskMap,
+		Settings: map[string]string{
+			"source_shards":      strings.Join(sourceList, ","),
+			"destination_shards": strings.Join(destinationList, ","),
+		},
+	}
+}

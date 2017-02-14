@@ -22,6 +22,7 @@ import (
 	"github.com/youtube/vitess/go/vt/workflow"
 	"github.com/youtube/vitess/go/vt/wrangler"
 
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	workflowpb "github.com/youtube/vitess/go/vt/proto/workflow"
 )
 
@@ -30,39 +31,37 @@ const (
 
 	horizontalReshardingFactoryName = "horizontal_resharding"
 
-	CopySchemaName              = "copy_schema"
-	SplitCloneName              = "clone"
-	WaitFilteredReplicationName = "wait_replication"
-	SplitDiffName               = "diff"
-	MigrateName                 = "migrate"
+	copySchemaName                 = "copy_schema"
+	cloneName                      = "clone"
+	waitForFilteredReplicationName = "wait_for_filtered_replication"
+	diffName                       = "diff"
+	migrateRdonlyName              = "migrate_rdonly"
+	migrateReplicaName             = "migrate_replica"
+	migrateMasterName              = "migrate_master"
 )
 
-// HorizontalReshardingData is the data structure to store resharding arguments.
-type HorizontalReshardingData struct {
-	Keyspace  string
-	Vtworkers []string
-}
-
-// HorizontalReshardingWorkflow contains meta-information and methods to control horizontal resharding workflow.
+// HorizontalReshardingWorkflow contains meta-information and methods
+// to control horizontal resharding workflow.
 type HorizontalReshardingWorkflow struct {
-	// ctx is the context of the whole horizontal resharding process. Once this context is canceled,
-	// the horizontal resharding process stops.
+	// ctx is the context of the whole horizontal resharding process.
+	// Once this context is canceled, the horizontal resharding process stops.
 	ctx        context.Context
-	wr         ReshardingWrangler
 	manager    *workflow.Manager
 	topoServer topo.Server
 	wi         *topo.WorkflowInfo
+	wr         ReshardingWrangler
 	// logger is the logger we export UI logs from.
 	logger *logutil.MemoryLogger
 
 	// rootUINode is the root node representing the workflow in the UI.
-	rootUINode                    *workflow.Node
-	copySchemaUINode              *workflow.Node
-	splitCloneUINode              *workflow.Node
-	waitFilteredReplicationUINode *workflow.Node
-	splitDiffUINode               *workflow.Node
-	migrateUINode                 *workflow.Node
-	taskUINodeMap                 map[string]*workflow.Node
+	rootUINode                       *workflow.Node
+	copySchemaUINode                 *workflow.Node
+	cloneUINode                      *workflow.Node
+	waitForFilteredReplicationUINode *workflow.Node
+	diffUINode                       *workflow.Node
+	migrateRdonlyUINode              *workflow.Node
+	migrateReplicaUINode             *workflow.Node
+	migrateMasterUINode              *workflow.Node
 
 	checkpoint       *workflowpb.WorkflowCheckpoint
 	checkpointWriter *CheckpointWriter
@@ -72,9 +71,11 @@ type HorizontalReshardingWorkflow struct {
 // It implements the workflow.Workflow interface.
 func (hw *HorizontalReshardingWorkflow) Run(ctx context.Context, manager *workflow.Manager, wi *topo.WorkflowInfo) error {
 	hw.ctx = ctx
+	hw.manager = manager
 	hw.topoServer = manager.TopoServer()
-	hw.wr = wrangler.New(logutil.NewConsoleLogger(), manager.TopoServer(), tmclient.NewTabletManagerClient())
 	hw.wi = wi
+	hw.wr = wrangler.New(logutil.NewConsoleLogger(), manager.TopoServer(), tmclient.NewTabletManagerClient())
+
 	hw.checkpointWriter = NewCheckpointWriter(hw.topoServer, hw.checkpoint, hw.wi)
 	if err := hw.checkpointWriter.Save(); err != nil {
 		return err
@@ -91,37 +92,51 @@ func (hw *HorizontalReshardingWorkflow) Run(ctx context.Context, manager *workfl
 }
 
 func (hw *HorizontalReshardingWorkflow) runWorkflow() error {
-	copyTasks := hw.GenerateTasks(hw.checkpoint, CopySchemaName)
-	copyRunner := NewParallelRunner(hw.ctx, hw.checkpointWriter, hw.taskUINodeMap, copyTasks)
-	if err := copyRunner.Run(hw.runCopySchema, PARALLEL); err != nil {
+	copyTasks := hw.GetTasks(hw.checkpoint, copySchemaName)
+	copyRunner := NewParallelRunner(hw.ctx, hw.manager.NodeManager(), hw.copySchemaUINode, hw.checkpointWriter, copyTasks, hw.runCopySchema, PARALLEL)
+	if err := copyRunner.Run(); err != nil {
 		return err
 	}
 
-	cloneTasks := hw.GenerateTasks(hw.checkpoint, SplitCloneName)
-	cloneRunner := NewParallelRunner(hw.ctx, hw.checkpointWriter, hw.taskUINodeMap, cloneTasks)
-	if err := cloneRunner.Run(hw.runSplitClone, PARALLEL); err != nil {
+	cloneTasks := hw.GetTasks(hw.checkpoint, cloneName)
+	cloneRunner := NewParallelRunner(hw.ctx, hw.manager.NodeManager(), hw.cloneUINode, hw.checkpointWriter, cloneTasks, hw.runSplitClone, PARALLEL)
+	if err := cloneRunner.Run(); err != nil {
 		return err
 	}
 
-	waitTasks := hw.GenerateTasks(hw.checkpoint, WaitFilteredReplicationName)
-	waitRunner := NewParallelRunner(hw.ctx, hw.checkpointWriter, hw.taskUINodeMap, waitTasks)
-	if err := waitRunner.Run(hw.runWaitFilteredReplication, PARALLEL); err != nil {
+	waitTasks := hw.GetTasks(hw.checkpoint, waitForFilteredReplicationName)
+	waitRunner := NewParallelRunner(hw.ctx, hw.manager.NodeManager(), hw.waitForFilteredReplicationUINode, hw.checkpointWriter, waitTasks, hw.runWaitForFilteredReplication, PARALLEL)
+	if err := waitRunner.Run(); err != nil {
 		return err
 	}
 
-	diffTasks := hw.GenerateTasks(hw.checkpoint, SplitDiffName)
-	diffRunner := NewParallelRunner(hw.ctx, hw.checkpointWriter, hw.taskUINodeMap, diffTasks)
-	// SplitDiff requires the vtworker only work for one destination shard at a time.
-	// To simplify the concurrency control, we run all the SplitDiff task sequentially.
-	if err := diffRunner.Run(hw.runSplitDiff, SEQUENTIAL); err != nil {
+	diffTasks := hw.GetTasks(hw.checkpoint, diffName)
+	diffRunner := NewParallelRunner(hw.ctx, hw.manager.NodeManager(), hw.diffUINode, hw.checkpointWriter, diffTasks, hw.runSplitDiff, SEQUENTIAL)
+	// SplitDiff requires the vtworker only work for one destination shard
+	// at a time. To simplify the concurrency control, we run all the SplitDiff
+	// task sequentially.
+	if err := diffRunner.Run(); err != nil {
 		return err
 	}
 
-	migrateTasks := hw.GenerateTasks(hw.checkpoint, MigrateName)
-	migrateRunner := NewParallelRunner(hw.ctx, hw.checkpointWriter, hw.taskUINodeMap, migrateTasks)
-	if err := migrateRunner.Run(hw.runMigrate, SEQUENTIAL); err != nil {
+	migrateRdonlyTasks := hw.GetTasks(hw.checkpoint, migrateRdonlyName)
+	migrateRdonlyRunner := NewParallelRunner(hw.ctx, hw.manager.NodeManager(), hw.migrateRdonlyUINode, hw.checkpointWriter, migrateRdonlyTasks, hw.runMigrate, SEQUENTIAL)
+	if err := migrateRdonlyRunner.Run(); err != nil {
 		return err
 	}
+
+	migrateReplicaTasks := hw.GetTasks(hw.checkpoint, migrateReplicaName)
+	migrateReplicaRunner := NewParallelRunner(hw.ctx, hw.manager.NodeManager(), hw.migrateReplicaUINode, hw.checkpointWriter, migrateReplicaTasks, hw.runMigrate, SEQUENTIAL)
+	if err := migrateReplicaRunner.Run(); err != nil {
+		return err
+	}
+
+	migrateMasterTasks := hw.GetTasks(hw.checkpoint, migrateMasterName)
+	migrateMasterRunner := NewParallelRunner(hw.ctx, hw.manager.NodeManager(), hw.migrateMasterUINode, hw.checkpointWriter, migrateMasterTasks, hw.runMigrate, SEQUENTIAL)
+	if err := migrateMasterRunner.Run(); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -132,16 +147,18 @@ func (hw *HorizontalReshardingWorkflow) setUIMessage(message string) {
 	hw.rootUINode.BroadcastChanges(false /* updateChildren */)
 }
 
-// Register registers horizontal_resharding as a valid factory in the workflow framework.
+// Register registers horizontal_resharding as a valid factory
+// in the workflow framework.
 func Register() {
 	workflow.Register(horizontalReshardingFactoryName, &HorizontalReshardingWorkflowFactory{})
 }
 
-// HorizontalReshardingWorkflowFactory is the factory to register the HorizontalReshard Workflow.
+// HorizontalReshardingWorkflowFactory is the factory to register
+// the HorizontalResharding Workflow.
 type HorizontalReshardingWorkflowFactory struct{}
 
 // Init is part of the workflow.Factory interface.
-func (*HorizontalReshardingWorkflowFactory) Init(workflowProto *workflowpb.Workflow, args []string) error {
+func (*HorizontalReshardingWorkflowFactory) Init(w *workflowpb.Workflow, args []string) error {
 	subFlags := flag.NewFlagSet(horizontalReshardingFactoryName, flag.ContinueOnError)
 	keyspace := subFlags.String("keyspace", "", "Name of keyspace to perform horizontal resharding")
 	vtworkersStr := subFlags.String("vtworkers", "", "A comma-separated list of vtworker addresses")
@@ -154,16 +171,14 @@ func (*HorizontalReshardingWorkflowFactory) Init(workflowProto *workflowpb.Workf
 	}
 
 	vtworkers := strings.Split(*vtworkersStr, ",")
-	workflowProto.Name = fmt.Sprintf("Horizontal resharding on keyspace %s", *keyspace)
+	w.Name = fmt.Sprintf("Horizontal resharding on keyspace %s", *keyspace)
 
-	ts := topo.Open()
-	defer ts.Close()
-	workflowCheckpoint, err := initCheckpoint(*keyspace, vtworkers, ts)
+	checkpoint, err := initCheckpoint(*keyspace, vtworkers)
 	if err != nil {
 		return err
 	}
 
-	workflowProto.Data, err = proto.Marshal(workflowCheckpoint)
+	w.Data, err = proto.Marshal(checkpoint)
 	if err != nil {
 		return err
 	}
@@ -171,81 +186,92 @@ func (*HorizontalReshardingWorkflowFactory) Init(workflowProto *workflowpb.Workf
 }
 
 // Instantiate is part of the workflow.Factory interface.
-func (*HorizontalReshardingWorkflowFactory) Instantiate(workflowProto *workflowpb.Workflow, rootNode *workflow.Node) (workflow.Workflow, error) {
+func (*HorizontalReshardingWorkflowFactory) Instantiate(w *workflowpb.Workflow, rootNode *workflow.Node) (workflow.Workflow, error) {
 	rootNode.Message = "This is a workflow to execute horizontal resharding automatically."
 
-	workflowCheckpoint := &workflowpb.WorkflowCheckpoint{}
-	if err := proto.Unmarshal(workflowProto.Data, workflowCheckpoint); err != nil {
+	checkpoint := &workflowpb.WorkflowCheckpoint{}
+	if err := proto.Unmarshal(w.Data, checkpoint); err != nil {
 		return nil, err
 	}
 
 	hw := &HorizontalReshardingWorkflow{
-		checkpoint: workflowCheckpoint,
+		checkpoint: checkpoint,
 		rootUINode: rootNode,
 		copySchemaUINode: &workflow.Node{
 			Name:     "CopySchemaShard",
-			PathName: CopySchemaName,
+			PathName: copySchemaName,
 		},
-		splitCloneUINode: &workflow.Node{
+		cloneUINode: &workflow.Node{
 			Name:     "SplitClone",
-			PathName: "clone",
+			PathName: cloneName,
 		},
-		waitFilteredReplicationUINode: &workflow.Node{
+		waitForFilteredReplicationUINode: &workflow.Node{
 			Name:     "WaitForFilteredReplication",
-			PathName: WaitFilteredReplicationName,
+			PathName: waitForFilteredReplicationName,
 		},
-		splitDiffUINode: &workflow.Node{
+		diffUINode: &workflow.Node{
 			Name:     "SplitDiff",
-			PathName: SplitDiffName,
+			PathName: diffName,
 		},
-		migrateUINode: &workflow.Node{
-			Name:     "MigrateServedType",
-			PathName: "migrate",
+		migrateRdonlyUINode: &workflow.Node{
+			Name:     "MigrateServedTypeRDONLY",
+			PathName: migrateRdonlyName,
+		},
+		migrateReplicaUINode: &workflow.Node{
+			Name:     "MigrateServedTypeREPLICA",
+			PathName: migrateReplicaName,
+		},
+		migrateMasterUINode: &workflow.Node{
+			Name:     "MigrateServedTypeMASTER",
+			PathName: migrateMasterName,
 		},
 		logger: logutil.NewMemoryLogger(),
 	}
 	hw.rootUINode.Children = []*workflow.Node{
 		hw.copySchemaUINode,
-		hw.splitCloneUINode,
-		hw.waitFilteredReplicationUINode,
-		hw.splitDiffUINode,
-		hw.migrateUINode,
+		hw.cloneUINode,
+		hw.waitForFilteredReplicationUINode,
+		hw.diffUINode,
+		hw.migrateRdonlyUINode,
+		hw.migrateReplicaUINode,
+		hw.migrateMasterUINode,
 	}
 
-	taskNodeMap := make(map[string]*workflow.Node)
-	for _, d := range strings.Split(hw.checkpoint.Settings["destination_shards"], ",") {
-		createUINode(CopySchemaName, "dest", d, hw.copySchemaUINode, taskNodeMap)
-		createUINode(WaitFilteredReplicationName, "dest", d, hw.waitFilteredReplicationUINode, taskNodeMap)
-		createUINode(SplitDiffName, "dest", d, hw.splitDiffUINode, taskNodeMap)
-	}
-	for _, s := range strings.Split(hw.checkpoint.Settings["source_shards"], ",") {
-		createUINode(SplitCloneName, "source", s, hw.splitCloneUINode, taskNodeMap)
-		createUINode(MigrateName, "source", s, hw.migrateUINode, taskNodeMap)
-	}
+	destinationShards := strings.Split(checkpoint.Settings["destination_shards"], ",")
+	sourceShards := strings.Split(checkpoint.Settings["source_shards"], ",")
+	createUINode(copySchemaName, destinationShards, hw.copySchemaUINode)
+	createUINode(cloneName, sourceShards, hw.cloneUINode)
+	createUINode(waitForFilteredReplicationName, destinationShards, hw.waitForFilteredReplicationUINode)
+	createUINode(diffName, destinationShards, hw.diffUINode)
+	createUINode(migrateRdonlyName, sourceShards, hw.migrateRdonlyUINode)
+	createUINode(migrateReplicaName, sourceShards, hw.migrateReplicaUINode)
+	createUINode(migrateMasterName, sourceShards, hw.migrateMasterUINode)
+
 	return hw, nil
 }
 
-func createUINode(name, shardType, shardName string, rootNode *workflow.Node, nodeMap map[string]*workflow.Node) {
-	taskID := createTaskID(name, shardType, shardName)
-	taskUINode := &workflow.Node{
-		Name:     "Shard " + shardName,
-		PathName: taskID,
+func createUINode(phaseName string, shards []string, rootNode *workflow.Node) {
+	for _, shardName := range shards {
+		taskID := createTaskID(phaseName, shardName)
+		taskUINode := &workflow.Node{
+			Name:     "Shard " + shardName,
+			PathName: taskID,
+		}
+		rootNode.Children = append(rootNode.Children, taskUINode)
 	}
-	rootNode.Children = append(rootNode.Children, taskUINode)
-	nodeMap[taskID] = taskUINode
 }
 
-// createSubWorkflows creates a per source shard horizontal resharding workflow for each source shard in the keyspace.
-func initCheckpoint(keyspace string, vtworkers []string, ts topo.Server) (*workflowpb.WorkflowCheckpoint, error) {
+func initCheckpoint(keyspace string, vtworkers []string) (*workflowpb.WorkflowCheckpoint, error) {
+	ts := topo.Open()
+	defer ts.Close()
+
 	overlappingShards, err := topotools.FindOverlappingShards(context.Background(), ts, keyspace)
 	if err != nil {
 		return nil, err
 	}
 
-	taskMap := make(map[string]*workflowpb.Task)
 	var sourceShardList, destinationShardList []string
-
-	for i, os := range overlappingShards {
+	for _, os := range overlappingShards {
 		var sourceShard *topo.ShardInfo
 		var destinationShards []*topo.ShardInfo
 		// Judge which side is source shard by checking the number of servedTypes.
@@ -257,21 +283,65 @@ func initCheckpoint(keyspace string, vtworkers []string, ts topo.Server) (*workf
 			destinationShards = os.Left
 		}
 
-		s := sourceShard.ShardName()
-		sourceShardList = append(sourceShardList, s)
-		worker := vtworkers[i]
-		for _, ds := range destinationShards {
-			d := ds.ShardName()
-			destinationShardList = append(destinationShardList, d)
-
-			updatePerDestinationTask(keyspace, s, d, worker, CopySchemaName, taskMap)
-			updatePerDestinationTask(keyspace, s, d, worker, WaitFilteredReplicationName, taskMap)
-			updatePerDestinationTask(keyspace, s, d, worker, SplitDiffName, taskMap)
+		sourceShardList = append(sourceShardList, sourceShard.ShardName())
+		for _, d := range destinationShards {
+			destinationShardList = append(destinationShardList, d.ShardName())
 		}
-		updatePerSourceTask(keyspace, s, worker, SplitCloneName, taskMap)
-		updatePerSourceTask(keyspace, s, worker, MigrateName, taskMap)
 	}
 
+	taskMap := make(map[string]*workflowpb.Task)
+	initTasks(copySchemaName, destinationShardList, taskMap, func(i int, shard string) map[string]string {
+		return map[string]string{
+			"source_shard":      sourceShardList[0],
+			"destination_shard": shard,
+			"keyspace":          keyspace,
+		}
+	})
+
+	initTasks(cloneName, sourceShardList, taskMap, func(i int, shard string) map[string]string {
+		return map[string]string{
+			"source_shard": shard,
+			"vtworker":     vtworkers[i],
+			"keyspace":     keyspace,
+		}
+	})
+
+	initTasks(waitForFilteredReplicationName, destinationShardList, taskMap, func(i int, shard string) map[string]string {
+		return map[string]string{
+			"destination_shard": shard,
+			"keyspace":          keyspace,
+		}
+	})
+
+	initTasks(diffName, destinationShardList, taskMap, func(i int, shard string) map[string]string {
+		return map[string]string{
+			"destination_shard": shard,
+			"vtworker":          vtworkers[0],
+			"keyspace":          keyspace,
+		}
+	})
+
+	initTasks(migrateRdonlyName, sourceShardList, taskMap, func(i int, shard string) map[string]string {
+		return map[string]string{
+			"source_shard": shard,
+			"keyspace":     keyspace,
+			"served_type":  topodatapb.TabletType_RDONLY.String(),
+		}
+	})
+	initTasks(migrateReplicaName, sourceShardList, taskMap, func(i int, shard string) map[string]string {
+		return map[string]string{
+			"source_shard": shard,
+			"keyspace":     keyspace,
+			"served_type":  topodatapb.TabletType_REPLICA.String(),
+		}
+	})
+	initTasks(migrateMasterName, sourceShardList, taskMap, func(i int, shard string) map[string]string {
+		return map[string]string{
+			"source_shard": shard,
+			"keyspace":     keyspace,
+			"served_type":  topodatapb.TabletType_MASTER.String(),
+		}
+	})
 	return &workflowpb.WorkflowCheckpoint{
 		CodeVersion: codeVersion,
 		Tasks:       taskMap,
@@ -280,4 +350,15 @@ func initCheckpoint(keyspace string, vtworkers []string, ts topo.Server) (*workf
 			"destination_shards": strings.Join(destinationShardList, ","),
 		},
 	}, nil
+}
+
+func initTasks(phaseName string, shards []string, taskMap map[string]*workflowpb.Task, createAttributes func(int, string) map[string]string) {
+	for i, s := range shards {
+		taskID := createTaskID(phaseName, s)
+		taskMap[taskID] = &workflowpb.Task{
+			Id:         taskID,
+			State:      workflowpb.TaskState_TaskNotStarted,
+			Attributes: createAttributes(i, s),
+		}
+	}
 }

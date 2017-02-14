@@ -17,7 +17,7 @@ const (
 	workflowFilename = "Workflow"
 )
 
-func PathForWorkflow(uuid string) string {
+func pathForWorkflow(uuid string) string {
 	return path.Join(workflowsPath, uuid, workflowFilename)
 }
 
@@ -25,14 +25,6 @@ func PathForWorkflow(uuid string) string {
 type WorkflowInfo struct {
 	version Version
 	*workflowpb.Workflow
-}
-
-func (w *WorkflowInfo) SetVersion(v Version) {
-	w.version = v
-}
-
-func (w *WorkflowInfo) Version() Version {
-	return w.version
 }
 
 // GetWorkflowNames returns the names of the existing
@@ -59,7 +51,7 @@ func (ts Server) CreateWorkflow(ctx context.Context, w *workflowpb.Workflow) (*W
 	}
 
 	// Save it.
-	filePath := PathForWorkflow(w.Uuid)
+	filePath := pathForWorkflow(w.Uuid)
 	version, err := ts.Create(ctx, GlobalCell, filePath, contents)
 	if err != nil {
 		return nil, err
@@ -73,7 +65,7 @@ func (ts Server) CreateWorkflow(ctx context.Context, w *workflowpb.Workflow) (*W
 // GetWorkflow reads a workflow from the Backend.
 func (ts Server) GetWorkflow(ctx context.Context, uuid string) (*WorkflowInfo, error) {
 	// Read the file.
-	filePath := PathForWorkflow(uuid)
+	filePath := pathForWorkflow(uuid)
 	contents, version, err := ts.Get(ctx, GlobalCell, filePath)
 	if err != nil {
 		return nil, err
@@ -101,7 +93,7 @@ func (ts Server) SaveWorkflow(ctx context.Context, wi *WorkflowInfo) error {
 	}
 
 	// Save it.
-	filePath := PathForWorkflow(wi.Uuid)
+	filePath := pathForWorkflow(wi.Uuid)
 	version, err := ts.Update(ctx, GlobalCell, filePath, contents, wi.version)
 	if err != nil {
 		return err
@@ -115,6 +107,6 @@ func (ts Server) SaveWorkflow(ctx context.Context, wi *WorkflowInfo) error {
 // DeleteWorkflow deletes the specified workflow.  After this, the
 // WorkflowInfo object should not be used any more.
 func (ts Server) DeleteWorkflow(ctx context.Context, wi *WorkflowInfo) error {
-	filePath := PathForWorkflow(wi.Uuid)
+	filePath := pathForWorkflow(wi.Uuid)
 	return ts.Delete(ctx, GlobalCell, filePath, wi.version)
 }

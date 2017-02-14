@@ -2,15 +2,15 @@ package resharding
 
 import (
 	"context"
-	"encoding/json"
 	"sync"
 
+	"github.com/golang/protobuf/proto"
 	"github.com/youtube/vitess/go/vt/topo"
 
 	workflowpb "github.com/youtube/vitess/go/vt/proto/workflow"
 )
 
-// CheckpointWriter save the checkpoint data into topology server.
+// CheckpointWriter saves the checkpoint data into topology server.
 type CheckpointWriter struct {
 	topoServer topo.Server
 
@@ -29,8 +29,10 @@ func NewCheckpointWriter(ts topo.Server, checkpoint *workflowpb.WorkflowCheckpoi
 	}
 }
 
-// UpdateTask updates the status and checkpointing the update.
+// UpdateTask updates the status of task in the checkpoint.
 func (c *CheckpointWriter) UpdateTask(taskID string, status workflowpb.TaskState, err string) error {
+	// Writing the checkpoint is protected to avoid the situation that the
+	// task value is partially updated when saving the checkpoint.
 	c.checkpointMu.Lock()
 	defer c.checkpointMu.Unlock()
 
@@ -41,8 +43,14 @@ func (c *CheckpointWriter) UpdateTask(taskID string, status workflowpb.TaskState
 
 // Save packets the checkpoint and sends it to the topology server.
 func (c *CheckpointWriter) Save() error {
+	c.checkpointMu.Lock()
+	defer c.checkpointMu.Unlock()
+	return c.saveLocked()
+}
+
+func (c *CheckpointWriter) saveLocked() error {
 	var err error
-	c.wi.Data, err = json.Marshal(c.checkpoint)
+	c.wi.Data, err = proto.Marshal(c.checkpoint)
 	if err != nil {
 		return err
 	}

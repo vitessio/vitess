@@ -2,7 +2,6 @@ package resharding
 
 import (
 	"fmt"
-	"path"
 	"sync"
 
 	log "github.com/golang/glog"
@@ -25,42 +24,44 @@ const (
 // ParallelRunner is used to control executing tasks concurrently.
 // Each phase has its own ParallelRunner object.
 type ParallelRunner struct {
-	ctx context.Context
-
+	ctx              context.Context
+	nodeManager      *workflow.NodeManager
+	phaseUINode      *workflow.Node
 	checkpointWriter *CheckpointWriter
-	taskUINodes      map[string]*workflow.Node
+	// tasks stores selected tasks for the phase with expected execution order.
 	tasks            []*workflowpb.Task
-
+	concurrencyLevel level
+	executeFunc      func(context.Context, map[string]string) error
 	// mu is used to protect the retryActionRegistery.
 	mu sync.Mutex
-	// retryAtionRegistry stores the data for all actions. Each task can retrieve its control object through task ID.
-	retryActionRegistery map[string]*RetryController
+	// retryAtionRegistry stores the data for retry actions.
+	// Each task can retrieve its RetryController through its UI node path.
+	retryActionRegistry map[string]*RetryController
 }
 
-func NewParallelRunner(ctx context.Context, cp *CheckpointWriter, taskUINodes map[string]*workflow.Node, tasks []*workflowpb.Task) *ParallelRunner {
-	p := &ParallelRunner{
-		ctx:              ctx,
-		checkpointWriter: cp,
-		taskUINodes:      taskUINodes,
-		tasks:            tasks,
+func NewParallelRunner(ctx context.Context, nodeManager *workflow.NodeManager, phaseUINode *workflow.Node, cp *CheckpointWriter, tasks []*workflowpb.Task, executeFunc func(context.Context, map[string]string) error, concurrencyLevel level) *ParallelRunner {
+	return &ParallelRunner{
+		ctx:                 ctx,
+		nodeManager:         nodeManager,
+		phaseUINode:         phaseUINode,
+		checkpointWriter:    cp,
+		tasks:               tasks,
+		executeFunc:         executeFunc,
+		concurrencyLevel:    concurrencyLevel,
+		retryActionRegistry: make(map[string]*RetryController),
 	}
-	p.retryActionRegistery = make(map[string]*RetryController)
-	return p
 }
 
 // Run is the entry point for controling task executions.
-// tasks should be a copy of tasks with the expected execution order, the status of task should be
-// both updated in this copy and the original one (checkpointer.UpdateTask does this). This is used
-// to avoid data racing situation.
-func (p *ParallelRunner) Run(executeFunc func(map[string]string) error, concurrencyLevel level) error {
+func (p *ParallelRunner) Run() error {
 	var parallelNum int // default value is 0. The task will not run in this case.
-	switch concurrencyLevel {
+	switch p.concurrencyLevel {
 	case SEQUENTIAL:
 		parallelNum = 1
 	case PARALLEL:
 		parallelNum = len(p.tasks)
 	default:
-		panic(fmt.Sprintf("BUG: Invalid concurrency level: %v", concurrencyLevel))
+		panic(fmt.Sprintf("BUG: Invalid concurrency level: %v", p.concurrencyLevel))
 	}
 
 	// sem is a channel used to control the level of concurrency.
@@ -76,53 +77,35 @@ func (p *ParallelRunner) Run(executeFunc func(map[string]string) error, concurre
 
 			taskID := t.Id
 			for {
-				err := executeFunc(t.Attributes)
-				t.State = workflowpb.TaskState_TaskDone
-				if err != nil {
-					t.Error = err.Error()
-				}
-
+				err := p.executeFunc(p.ctx, t.Attributes)
+				// Update the task status in the checkpoint.
 				if updateErr := p.checkpointWriter.UpdateTask(taskID, workflowpb.TaskState_TaskDone, t.Error); updateErr != nil {
-					// Only logging the error rather then propograting it through ErrorRecorder. Error message in
-					// ErrorRecorder will lead to the stop of the workflow, which is unexpected if only checkpointing fails.
-					// If the checkpointing fails during initialization, we should stop the workflow.
+					// Only logging the error rather then passing it to ErrorRecorder.
+					// Errors in ErrorRecorder will lead to the stop of a workflow. We
+					// don't want to stop the workflow if only checkpointing fails.
 					log.Errorf("%v", updateErr)
 				}
-
+				// The function returns if the task is executed successfully.
 				if err == nil {
 					t.Error = ""
 					return
 				}
-
-				// If task fails, the retry action is enabled.
-				n, ok := p.taskUINodes[taskID]
-				if !ok {
-					log.Errorf("UI node not found for task %v", taskID)
-					return
-				}
-
-				retryAction := &workflow.Action{
-					Name:  "Retry",
-					State: workflow.ActionStateEnabled,
-					Style: workflow.ActionStyleWaiting,
-				}
-				n.Actions = []*workflow.Action{retryAction}
-				n.Listener = p
-
-				p.mu.Lock()
-				p.retryActionRegistery[taskID] = &RetryController{
-					node:         n,
-					retryChannel: make(chan struct{}),
-				}
-				p.mu.Unlock()
-				n.BroadcastChanges(false /* updateChildren */)
-
-				// Block the task execution until the retry action is triggered or the job is canceled.
+				// When task fails, first check whether the context is cancelled.
+				// If so, return right away. If not, enable the retry action.
 				select {
-				case <-p.retryActionRegistery[taskID].retryChannel:
+				case <-p.ctx.Done():
+					return
+				default:
+				}
+				retryChannel := p.addRetryAction(taskID)
+
+				// Block the task execution until the retry action is triggered
+				// or the context is canceled.
+				select {
+				case <-retryChannel:
 					continue
 				case <-p.ctx.Done():
-					p.retryActionRegistery = nil
+					p.retryActionRegistry = nil
 					return
 				}
 			}
@@ -138,25 +121,52 @@ func (p *ParallelRunner) Run(executeFunc func(map[string]string) error, concurre
 
 // Action handles the retry action. It implements the interface ActionListener.
 func (p *ParallelRunner) Action(ctx context.Context, pathName, name string) error {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-
-	actionID := getTaskID(pathName)
-	c, ok := p.retryActionRegistery[actionID]
-	if !ok {
-		return fmt.Errorf("Unknown node path for the action: %v", pathName)
-	}
-
 	switch name {
 	case "Retry":
-		c.closeRetryChannel()
-		delete(p.retryActionRegistery, actionID)
+		return p.triggerRetry(pathName)
 	default:
 		return fmt.Errorf("Unknown action: %v", name)
 	}
+}
+
+func (p *ParallelRunner) addRetryAction(taskID string) chan struct{} {
+	node, err := p.nodeManager.GetNodeByRelativePath(p.phaseUINode, taskID)
+	if err != nil {
+		panic(fmt.Errorf("%v: UI node not found for task %v", err, taskID))
+	}
+	retryController := CreateRetryController(node, p /* actionListener */)
+	p.registerRetryController(node.PathName, retryController)
+	return retryController.retryChannel
+}
+
+func (p *ParallelRunner) triggerRetry(nodePath string) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	c, ok := p.retryActionRegistry[nodePath]
+	if !ok {
+		return fmt.Errorf("Unknown node path for the action: %v", nodePath)
+	}
+	p.unregisterRetryController(nodePath)
+	c.triggerRetry()
 	return nil
 }
 
-func getTaskID(nodePath string) string {
-	return path.Base(nodePath)
+func (p *ParallelRunner) registerRetryController(nodePath string, c *RetryController) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if _, ok := p.retryActionRegistry[nodePath]; ok {
+		panic(fmt.Errorf("duplicate retry action on node: %v", nodePath))
+	}
+	p.retryActionRegistry[nodePath] = c
+}
+
+func (p *ParallelRunner) unregisterRetryController(nodePath string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if _, ok := p.retryActionRegistry[nodePath]; !ok {
+		log.Warningf("retry action on node: %v doesn't exist, cannot unregister it", nodePath)
+	} else {
+		delete(p.retryActionRegistry, nodePath)
+	}
 }
