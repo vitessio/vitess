@@ -486,6 +486,7 @@ func (qre *QueryExecutor) execInsertPKRows(conn *TxConnection, pkRows [][]sqltyp
 }
 
 func (qre *QueryExecutor) execUpsertPK(conn *TxConnection) (*sqltypes.Result, error) {
+
 	pkRows, err := buildValueList(qre.plan.TableInfo, qre.plan.PKValues, qre.bindVars)
 	if err != nil {
 		return nil, err
@@ -512,8 +513,9 @@ func (qre *QueryExecutor) execUpsertPK(conn *TxConnection) (*sqltypes.Result, er
 	if err != nil {
 		return nil, err
 	}
+
 	// Follow MySQL convention. RowsAffected must be 2 if a row was updated.
-	if result.RowsAffected == 1 {
+	if result.RowsAffected == 1 && !conn.info.IsClientFoundRows() {
 		result.RowsAffected = 2
 	}
 	return result, err

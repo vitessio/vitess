@@ -29,6 +29,7 @@ type ConnParams struct {
 // FIXME(alainjobart) when this package is merge with go/mysqlconn,
 // use the same constant.
 const capabilityClientSSL = 1 << 11
+const clientFoundRows = 1 << 1
 
 // EnableSSL will set the right flag on the parameters.
 func (cp *ConnParams) EnableSSL() {
@@ -38,4 +39,18 @@ func (cp *ConnParams) EnableSSL() {
 // SslEnabled returns if SSL is enabled.
 func (cp *ConnParams) SslEnabled() bool {
 	return (cp.Flags & capabilityClientSSL) > 0
+}
+
+// EnableClientFoundRows will set the CLIENT_FOUND_ROWS flag on the parameters
+// so that MySQL returns the found (matched) rows when a DML is executed
+// rather than the affected rows
+func (cp *ConnParams) EnableClientFoundRows() {
+	cp.Flags |= clientFoundRows
+}
+
+// IsClientFoundRows returns if CLIENT_FOUND_ROWS MySQL flag is enabled,
+// which causes MySQL to returns the found (matched) rows when a DML is executed
+// rather than the affected rows
+func (cp *ConnParams) IsClientFoundRows() bool {
+	return (cp.Flags & clientFoundRows) > 0
 }
