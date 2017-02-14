@@ -43,10 +43,9 @@ func (zs *Server) GetVSchema(ctx context.Context, keyspace string) (*vschemapb.K
 	if err != nil {
 		return nil, err
 	}
-	var vs vschemapb.Keyspace
-	err = proto.Unmarshal(data, &vs)
-	if err != nil {
+	vs := &vschemapb.Keyspace{}
+	if err := proto.Unmarshal(data, vs); err != nil {
 		return nil, fmt.Errorf("bad vschema data (%v): %q", err, data)
 	}
-	return &vs, nil
+	return vs, nil
 }
