@@ -1047,6 +1047,7 @@ func (node *ComparisonExpr) WalkSubtree(visit Visit) error {
 		visit,
 		node.Left,
 		node.Right,
+		node.Escape,
 	)
 }
 
@@ -1495,6 +1496,8 @@ func (node *FuncExpr) WalkSubtree(visit Visit) error {
 	}
 	return Walk(
 		visit,
+		node.Qualifier,
+		node.Name,
 		node.Exprs,
 	)
 }
