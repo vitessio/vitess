@@ -15,12 +15,18 @@ const (
 	// connBufferSize is how much we buffer for reading and
 	// writing. It is also how much we allocate for ephemeral buffers.
 	connBufferSize = 16 * 1024
+)
 
-	// Constants for how ephemeral buffers were used for writing.
+// Constants for how ephemeral buffers were used for reading / writing.
+const (
+	// ephemeralUnused means the ephemeral buffer is not in use at this
+	// moment. This is the default value, and is checked so we don't
+	// read a packet while writing one.
+	ephemeralUnused = iota
 
 	// ephemeralGlobalBuffer means conn.buffer was used.
 	// The first four bytes contain size and sequence.
-	ephemeralGlobalBuffer = iota
+	ephemeralGlobalBuffer
 
 	// ephemeralSingleBuffer means a single buffer was allocated.
 	// It is in c.currentEphemeralPacket. The first four bytes
@@ -145,8 +151,11 @@ func newConn(conn net.Conn) *Conn {
 // after the next readEphemeralPacket.  If the packet is bigger than
 // connBufferSize, we revert to using the same behavior as a regular readPacket.
 func (c *Conn) readEphemeralPacket() ([]byte, error) {
-	var header [4]byte
+	if c.currentEphemeralPolicy != ephemeralUnused {
+		panic(fmt.Errorf("readEphemeralPacket: unexpected currentEphemeralPolicy: %v", c.currentEphemeralPolicy))
+	}
 
+	var header [4]byte
 	if _, err := io.ReadFull(c.reader, header[:]); err != nil {
 		return nil, fmt.Errorf("io.ReadFull(header size) failed: %v", err)
 	}
@@ -344,6 +353,10 @@ func (c *Conn) writePacket(data []byte) error {
 }
 
 func (c *Conn) startEphemeralPacket(length int) []byte {
+	if c.currentEphemeralPolicy != ephemeralUnused {
+		panic("startEphemeralPacket cannot be used while a packet is already started.")
+	}
+
 	// Fast path: we can reuse a single memory buffer for
 	// both the header and the data.
 	if length <= cap(c.buffer)-4 {
@@ -376,12 +389,19 @@ func (c *Conn) startEphemeralPacket(length int) []byte {
 }
 
 func (c *Conn) writeEphemeralPacket(direct bool) error {
+	defer func() {
+		c.currentEphemeralPolicy = ephemeralUnused
+	}()
+
 	var w io.Writer = c.writer
 	if direct {
 		w = c.conn
 	}
 
 	switch c.currentEphemeralPolicy {
+	case ephemeralUnused:
+		// Programming error.
+		panic("trying to call writeEphemeralPacket while currentEphemeralPolicy is ephemeralUnused")
 	case ephemeralGlobalBuffer:
 		// Just write c.buffer as a single buffer.
 		// It has both header and data.
