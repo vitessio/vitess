@@ -29,7 +29,7 @@ func RecoverVtErrorCode(err error) vtrpcpb.ErrorCode {
 	if vtErr, ok := err.(VtError); ok {
 		return vtErr.VtErrorCode()
 	}
-	return vtrpcpb.ErrorCode_UNKNOWN_ERROR
+	return Unknown
 }
 
 // VitessError is the error type that we use internally for passing structured errors.
@@ -73,7 +73,7 @@ func (e *VitessError) AsString() string {
 // existing error.
 // Use this method also when you want to create a VitessError without a custom
 // message. For example:
-//	 err := vterrors.FromError(vtrpcpb.ErrorCode_INTERNAL_ERROR,
+//	 err := vterrors.FromError(vterrors.Internal,
 //     errors.New("no valid endpoint"))
 func FromError(code vtrpcpb.ErrorCode, err error) error {
 	return &VitessError{

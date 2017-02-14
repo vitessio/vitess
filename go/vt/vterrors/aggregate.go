@@ -31,26 +31,26 @@ const (
 )
 
 var errorPriorities = map[vtrpcpb.ErrorCode]int{
-	vtrpcpb.ErrorCode_SUCCESS:            PrioritySuccess,
-	vtrpcpb.ErrorCode_CANCELLED:          PriorityCancelled,
-	vtrpcpb.ErrorCode_UNKNOWN_ERROR:      PriorityUnknownError,
-	vtrpcpb.ErrorCode_BAD_INPUT:          PriorityBadInput,
-	vtrpcpb.ErrorCode_DEADLINE_EXCEEDED:  PriorityDeadlineExceeded,
-	vtrpcpb.ErrorCode_INTEGRITY_ERROR:    PriorityIntegrityError,
-	vtrpcpb.ErrorCode_PERMISSION_DENIED:  PriorityPermissionDenied,
-	vtrpcpb.ErrorCode_RESOURCE_EXHAUSTED: PriorityResourceExhausted,
-	vtrpcpb.ErrorCode_QUERY_NOT_SERVED:   PriorityQueryNotServed,
-	vtrpcpb.ErrorCode_NOT_IN_TX:          PriorityNotInTx,
-	vtrpcpb.ErrorCode_INTERNAL_ERROR:     PriorityInternalError,
-	vtrpcpb.ErrorCode_TRANSIENT_ERROR:    PriorityTransientError,
-	vtrpcpb.ErrorCode_UNAUTHENTICATED:    PriorityUnauthenticated,
+	OK:                 PrioritySuccess,
+	Canceled:           PriorityCancelled,
+	Unknown:            PriorityUnknownError,
+	InvalidArgument:    PriorityBadInput,
+	DeadlineExceeded:   PriorityDeadlineExceeded,
+	AlreadyExists:      PriorityIntegrityError,
+	PermissionDenied:   PriorityPermissionDenied,
+	ResourceExhausted:  PriorityResourceExhausted,
+	FailedPrecondition: PriorityQueryNotServed,
+	Aborted:            PriorityNotInTx,
+	Internal:           PriorityInternalError,
+	Unavailable:        PriorityTransientError,
+	Unauthenticated:    PriorityUnauthenticated,
 }
 
 // AggregateVtGateErrorCodes aggregates a list of errors into a single
 // error code.  It does so by finding the highest priority error code
 // in the list.
 func AggregateVtGateErrorCodes(errors []error) vtrpcpb.ErrorCode {
-	highCode := vtrpcpb.ErrorCode_SUCCESS
+	highCode := OK
 	for _, e := range errors {
 		code := RecoverVtErrorCode(e)
 		if errorPriorities[code] > errorPriorities[highCode] {

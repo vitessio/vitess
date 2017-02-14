@@ -27,36 +27,36 @@ func TestAggregateVtGateErrorCodes(t *testing.T) {
 		{
 			// aggregation of no errors is a success code
 			input:    nil,
-			expected: vtrpcpb.ErrorCode_SUCCESS,
+			expected: OK,
 		},
 		{
 			// single error code gets returned directly
-			input:    []error{errFromCode(vtrpcpb.ErrorCode_BAD_INPUT)},
-			expected: vtrpcpb.ErrorCode_BAD_INPUT,
+			input:    []error{errFromCode(InvalidArgument)},
+			expected: InvalidArgument,
 		},
 		{
 			// aggregate two codes to the highest priority
 			input: []error{
-				errFromCode(vtrpcpb.ErrorCode_SUCCESS),
-				errFromCode(vtrpcpb.ErrorCode_TRANSIENT_ERROR),
+				errFromCode(OK),
+				errFromCode(Unavailable),
 			},
-			expected: vtrpcpb.ErrorCode_TRANSIENT_ERROR,
+			expected: Unavailable,
 		},
 		{
 			input: []error{
-				errFromCode(vtrpcpb.ErrorCode_SUCCESS),
-				errFromCode(vtrpcpb.ErrorCode_TRANSIENT_ERROR),
-				errFromCode(vtrpcpb.ErrorCode_BAD_INPUT),
+				errFromCode(OK),
+				errFromCode(Unavailable),
+				errFromCode(InvalidArgument),
 			},
-			expected: vtrpcpb.ErrorCode_BAD_INPUT,
+			expected: InvalidArgument,
 		},
 		{
 			// unknown errors map to the unknown code
 			input: []error{
-				errFromCode(vtrpcpb.ErrorCode_SUCCESS),
+				errFromCode(OK),
 				fmt.Errorf("unknown error"),
 			},
-			expected: vtrpcpb.ErrorCode_UNKNOWN_ERROR,
+			expected: Unknown,
 		},
 	}
 	for _, tc := range testcases {
@@ -79,12 +79,12 @@ func TestAggregateVtGateErrors(t *testing.T) {
 		},
 		{
 			input: []error{
-				errFromCode(vtrpcpb.ErrorCode_SUCCESS),
-				errFromCode(vtrpcpb.ErrorCode_TRANSIENT_ERROR),
-				errFromCode(vtrpcpb.ErrorCode_BAD_INPUT),
+				errFromCode(OK),
+				errFromCode(Unavailable),
+				errFromCode(InvalidArgument),
 			},
 			expected: FromError(
-				vtrpcpb.ErrorCode_BAD_INPUT,
+				InvalidArgument,
 				ConcatenateErrors([]error{errGeneric, errGeneric, errGeneric}),
 			),
 		},

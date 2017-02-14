@@ -22,10 +22,10 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
+	"github.com/youtube/vitess/go/vt/vterrors"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
-	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 const (
@@ -238,7 +238,7 @@ func (lg *l2VTGateGateway) canRetry(ctx context.Context, err error, inTransactio
 	}
 	if serverError, ok := err.(*tabletconn.ServerError); ok {
 		switch serverError.ServerCode {
-		case vtrpcpb.ErrorCode_INTERNAL_ERROR:
+		case vterrors.Internal:
 			// Do not retry on fatal error for streaming query.
 			// For streaming query, vttablet sends:
 			// - QUERY_NOT_SERVED, if streaming is not started yet;
@@ -248,7 +248,7 @@ func (lg *l2VTGateGateway) canRetry(ctx context.Context, err error, inTransactio
 				return false
 			}
 			fallthrough
-		case vtrpcpb.ErrorCode_QUERY_NOT_SERVED:
+		case vterrors.FailedPrecondition:
 			// Retry on QUERY_NOT_SERVED and
 			// INTERNAL_ERROR if not in a transaction.
 			return !inTransaction

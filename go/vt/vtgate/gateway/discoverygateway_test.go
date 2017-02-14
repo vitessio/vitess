@@ -129,7 +129,7 @@ func testDiscoveryGatewayGeneric(t *testing.T, streaming bool, f func(dg Gateway
 	dg.tsc.ResetForTesting()
 	want := "target: ks.0.replica, no valid tablet"
 	err := f(dg, target)
-	verifyShardError(t, err, want, vtrpcpb.ErrorCode_INTERNAL_ERROR)
+	verifyShardError(t, err, want, vterrors.Internal)
 
 	// tablet with error
 	hc.Reset()
@@ -137,7 +137,7 @@ func testDiscoveryGatewayGeneric(t *testing.T, streaming bool, f func(dg Gateway
 	hc.AddTestTablet("cell", "1.1.1.1", 1001, keyspace, shard, tabletType, false, 10, fmt.Errorf("no connection"))
 	want = "target: ks.0.replica, no valid tablet"
 	err = f(dg, target)
-	verifyShardError(t, err, want, vtrpcpb.ErrorCode_INTERNAL_ERROR)
+	verifyShardError(t, err, want, vterrors.Internal)
 
 	// tablet without connection
 	hc.Reset()
@@ -145,7 +145,7 @@ func testDiscoveryGatewayGeneric(t *testing.T, streaming bool, f func(dg Gateway
 	ep1 := hc.AddTestTablet("cell", "1.1.1.1", 1001, keyspace, shard, tabletType, false, 10, nil).Tablet()
 	want = fmt.Sprintf(`target: ks.0.replica, no valid tablet`)
 	err = f(dg, target)
-	verifyShardError(t, err, want, vtrpcpb.ErrorCode_INTERNAL_ERROR)
+	verifyShardError(t, err, want, vterrors.Internal)
 
 	// retry error
 	hc.Reset()
@@ -191,7 +191,7 @@ func testDiscoveryGatewayGeneric(t *testing.T, streaming bool, f func(dg Gateway
 	ep1 = sc1.Tablet()
 	want = fmt.Sprintf(`target: ks.0.replica, used tablet: (%+v), error: err`, ep1)
 	err = f(dg, target)
-	verifyShardError(t, err, want, vtrpcpb.ErrorCode_BAD_INPUT)
+	verifyShardError(t, err, want, vterrors.InvalidArgument)
 
 	// conn error - no retry
 	hc.Reset()
@@ -201,7 +201,7 @@ func testDiscoveryGatewayGeneric(t *testing.T, streaming bool, f func(dg Gateway
 	ep1 = sc1.Tablet()
 	want = fmt.Sprintf(`target: ks.0.replica, used tablet: (%+v), error: conn`, ep1)
 	err = f(dg, target)
-	verifyShardError(t, err, want, vtrpcpb.ErrorCode_UNKNOWN_ERROR)
+	verifyShardError(t, err, want, vterrors.Unknown)
 
 	// no failure
 	hc.Reset()
@@ -251,7 +251,7 @@ func testDiscoveryGatewayTransact(t *testing.T, streaming bool, f func(dg Gatewa
 	ep1 = sc1.Tablet()
 	want := fmt.Sprintf(`target: ks.0.replica, used tablet: (%+v), error: conn`, ep1)
 	err = f(dg, target)
-	verifyShardError(t, err, want, vtrpcpb.ErrorCode_UNKNOWN_ERROR)
+	verifyShardError(t, err, want, vterrors.Unknown)
 }
 
 func verifyShardError(t *testing.T, err error, wantErr string, wantCode vtrpcpb.ErrorCode) {

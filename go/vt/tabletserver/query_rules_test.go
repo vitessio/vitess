@@ -15,10 +15,10 @@ import (
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/tabletserver/planbuilder"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletenv"
+	"github.com/youtube/vitess/go/vt/vterrors"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
-	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 func TestQueryRules(t *testing.T) {
@@ -796,7 +796,7 @@ func TestInvalidJSON(t *testing.T) {
 	if !ok {
 		t.Fatalf("invalid json, should get a tablet error")
 	}
-	if terr.ErrorCode != vtrpcpb.ErrorCode_INTERNAL_ERROR {
+	if terr.ErrorCode != vterrors.Internal {
 		t.Fatalf("got: %v wanted: INTERNAL_ERROR", terr.ErrorCode)
 	}
 }

@@ -25,13 +25,12 @@ import (
 	"github.com/youtube/vitess/go/vt/vterrors"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
-	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 var (
-	bufferFullError      = vterrors.FromError(vtrpcpb.ErrorCode_TRANSIENT_ERROR, errors.New("master buffer is full"))
-	entryEvictedError    = vterrors.FromError(vtrpcpb.ErrorCode_TRANSIENT_ERROR, errors.New("buffer full: request evicted for newer request"))
-	contextCanceledError = vterrors.FromError(vtrpcpb.ErrorCode_TRANSIENT_ERROR, errors.New("context was canceled before failover finished"))
+	bufferFullError      = vterrors.FromError(vterrors.Unavailable, errors.New("master buffer is full"))
+	entryEvictedError    = vterrors.FromError(vterrors.Unavailable, errors.New("buffer full: request evicted for newer request"))
+	contextCanceledError = vterrors.FromError(vterrors.Unavailable, errors.New("context was canceled before failover finished"))
 )
 
 // bufferMode specifies how the buffer is configured for a given shard.
@@ -220,7 +219,7 @@ func causedByFailover(err error) bool {
 
 	if vtErr, ok := err.(vterrors.VtError); ok {
 		switch vtErr.VtErrorCode() {
-		case vtrpcpb.ErrorCode_QUERY_NOT_SERVED:
+		case vterrors.FailedPrecondition:
 			// All flavors.
 			if strings.Contains(err.Error(), "retry: operation not allowed in state NOT_SERVING") ||
 				strings.Contains(err.Error(), "retry: operation not allowed in state SHUTTING_DOWN") ||
@@ -237,7 +236,7 @@ func causedByFailover(err error) bool {
 			if strings.Contains(err.Error(), "retry: The MySQL server is running with the --read-only option so it cannot execute this statement (errno 1290) (sqlstate HY000)") {
 				return true
 			}
-		case vtrpcpb.ErrorCode_INTERNAL_ERROR:
+		case vterrors.Internal:
 			// Google internal flavor.
 			if strings.Contains(err.Error(), "fatal: failover in progress (errno 1227) (sqlstate 42000)") {
 				return true

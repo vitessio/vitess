@@ -19,7 +19,6 @@ import (
 
 	"github.com/youtube/vitess/go/tb"
 	"github.com/youtube/vitess/go/vt/logutil"
-	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vterrors"
@@ -75,7 +74,7 @@ func (wi *Instance) setAndStartWorker(ctx context.Context, wrk Worker, wr *wrang
 	defer wi.currentWorkerMutex.Unlock()
 
 	if wi.currentContext != nil {
-		return nil, vterrors.FromError(vtrpcpb.ErrorCode_TRANSIENT_ERROR,
+		return nil, vterrors.FromError(vterrors.Unavailable,
 			fmt.Errorf("A worker job is already in progress: %v", wi.currentWorker.StatusAsText()))
 	}
 
@@ -84,14 +83,14 @@ func (wi *Instance) setAndStartWorker(ctx context.Context, wrk Worker, wr *wrang
 		const gracePeriod = 1 * time.Minute
 		gracePeriodEnd := time.Now().Add(gracePeriod)
 		if wi.lastRunStopTime.Before(gracePeriodEnd) {
-			return nil, vterrors.FromError(vtrpcpb.ErrorCode_TRANSIENT_ERROR,
+			return nil, vterrors.FromError(vterrors.Unavailable,
 				fmt.Errorf("A worker job was recently stopped (%f seconds ago): %v",
 					time.Now().Sub(wi.lastRunStopTime).Seconds(),
 					wi.currentWorker))
 		}
 
 		// QUERY_NOT_SERVED = FailedPrecondition => manual resolution required.
-		return nil, vterrors.FromError(vtrpcpb.ErrorCode_QUERY_NOT_SERVED,
+		return nil, vterrors.FromError(vterrors.FailedPrecondition,
 			fmt.Errorf("The worker job was stopped %.1f minutes ago, but not reset. You have to reset it manually. Job: %v",
 				time.Now().Sub(wi.lastRunStopTime).Minutes(),
 				wi.currentWorker))
@@ -141,7 +140,7 @@ func (wi *Instance) setAndStartWorker(ctx context.Context, wrk Worker, wr *wrang
 		case <-wi.currentContext.Done():
 			// Context is done i.e. probably canceled.
 			if wi.currentContext.Err() == context.Canceled {
-				err = vterrors.NewVitessError(vtrpcpb.ErrorCode_CANCELLED, err, "vtworker command was canceled: %v", err)
+				err = vterrors.NewVitessError(vterrors.Canceled, err, "vtworker command was canceled: %v", err)
 			}
 		default:
 		}

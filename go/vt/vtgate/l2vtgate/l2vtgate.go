@@ -23,7 +23,6 @@ import (
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
-	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 var (
@@ -98,7 +97,7 @@ func (l *L2VTGate) endAction(startTime time.Time, statsKey []string, err *error)
 		// keys or bad queries, as those errors are caused by
 		// client queries and are not VTGate's fault.
 		ec := vterrors.RecoverVtErrorCode(*err)
-		if ec != vtrpcpb.ErrorCode_INTEGRITY_ERROR && ec != vtrpcpb.ErrorCode_BAD_INPUT {
+		if ec != vterrors.AlreadyExists && ec != vterrors.InvalidArgument {
 			l.tabletCallErrorCount.Add(statsKey, 1)
 		}
 	}

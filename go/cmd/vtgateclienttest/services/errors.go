@@ -19,7 +19,6 @@ import (
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	vtgatepb "github.com/youtube/vitess/go/vt/proto/vtgate"
-	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 // errorClient implements vtgateservice.VTGateService
@@ -81,53 +80,53 @@ func trimmedRequestToError(received string) error {
 	switch received {
 	case "bad input":
 		return vterrors.FromError(
-			vtrpcpb.ErrorCode_BAD_INPUT,
+			vterrors.InvalidArgument,
 			errors.New("vtgate test client forced error: bad input"),
 		)
 	case "deadline exceeded":
 		return vterrors.FromError(
-			vtrpcpb.ErrorCode_DEADLINE_EXCEEDED,
+			vterrors.DeadlineExceeded,
 			errors.New("vtgate test client forced error: deadline exceeded"),
 		)
 	case "integrity error":
 		return vterrors.FromError(
-			vtrpcpb.ErrorCode_INTEGRITY_ERROR,
+			vterrors.AlreadyExists,
 			errors.New("vtgate test client forced error: integrity error (errno 1062) (sqlstate 23000)"),
 		)
 	// request backlog and general throttling type errors
 	case "transient error":
 		return vterrors.FromError(
-			vtrpcpb.ErrorCode_TRANSIENT_ERROR,
+			vterrors.Unavailable,
 			errors.New("request_backlog: too many requests in flight: vtgate test client forced error: transient error"),
 		)
 	case "throttled error":
 		return vterrors.FromError(
-			vtrpcpb.ErrorCode_TRANSIENT_ERROR,
+			vterrors.Unavailable,
 			errors.New("request_backlog: exceeded XXX quota, rate limiting: vtgate test client forced error: transient error"),
 		)
 	case "unauthenticated":
 		return vterrors.FromError(
-			vtrpcpb.ErrorCode_UNAUTHENTICATED,
+			vterrors.Unauthenticated,
 			errors.New("vtgate test client forced error: unauthenticated"),
 		)
 	case "aborted":
 		return vterrors.FromError(
-			vtrpcpb.ErrorCode_NOT_IN_TX,
+			vterrors.Aborted,
 			errors.New("vtgate test client forced error: aborted"),
 		)
 	case "query not served":
 		return vterrors.FromError(
-			vtrpcpb.ErrorCode_QUERY_NOT_SERVED,
+			vterrors.FailedPrecondition,
 			errors.New("vtgate test client forced error: query not served"),
 		)
 	case "unknown error":
 		return vterrors.FromError(
-			vtrpcpb.ErrorCode_UNKNOWN_ERROR,
+			vterrors.Unknown,
 			errors.New("vtgate test client forced error: unknown error"),
 		)
 	default:
 		return vterrors.FromError(
-			vtrpcpb.ErrorCode_UNKNOWN_ERROR,
+			vterrors.Unknown,
 			fmt.Errorf("vtgate test client error request unrecognized: %v", received),
 		)
 	}
