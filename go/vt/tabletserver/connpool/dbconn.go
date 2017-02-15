@@ -71,11 +71,17 @@ func (dbc *DBConn) Exec(ctx context.Context, query string, maxrows int, wantfiel
 			// fix itself, or the query could succeed on a different VtTablet.
 			return nil, tabletenv.NewTabletErrorSQL(vtrpcpb.ErrorCode_INTERNAL_ERROR, err)
 		}
-		err2 := dbc.reconnect()
-		if err2 != nil {
+
+		// Connection error. Try to reconnect.
+		if reconnectErr := dbc.reconnect(); reconnectErr != nil {
+			// Reconnect failed.
 			dbc.pool.checker.CheckMySQL()
-			return nil, tabletenv.NewTabletErrorSQL(vtrpcpb.ErrorCode_INTERNAL_ERROR, err)
+			// Return the error of the reconnect and not the original connection error.
+			// NOTE: We return a tryable error code here.
+			return nil, tabletenv.NewTabletErrorSQL(vtrpcpb.ErrorCode_INTERNAL_ERROR, reconnectErr)
 		}
+
+		// Reconnect succeeded. Retry query at second attempt.
 	}
 	panic("unreachable")
 }
