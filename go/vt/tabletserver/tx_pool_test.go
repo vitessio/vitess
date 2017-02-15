@@ -215,7 +215,7 @@ func TestTxPoolGetConnNonExistentTransaction(t *testing.T) {
 	}
 }
 
-func TestTxPoolExecFailDueToConnFail(t *testing.T) {
+func TestTxPoolExecFailDueToConnFail_Errno2006(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 	db.AddQuery("begin", &sqltypes.Result{})
@@ -224,21 +224,61 @@ func TestTxPoolExecFailDueToConnFail(t *testing.T) {
 	txPool.Open(db.ConnParams(), db.ConnParams())
 	defer txPool.Close()
 	ctx := context.Background()
-	sql := "alter table test_table add test_column int"
 
-	transactionID, err := txPool.Begin(ctx)
+	// Start the transaction.
+	txConn, err := txPool.LocalBegin(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
-	txConn, err := txPool.Get(transactionID, "for query")
-	if err != nil {
+
+	// Close the connection on the server side. Future queries will fail.
+	db.CloseAllConnections()
+	if err := db.WaitForClose(2 * time.Second); err != nil {
 		t.Fatal(err)
 	}
-	db.EnableConnFail()
+
+	// Query is going to fail with connection error because the connection was closed.
+	sql := "alter table test_table add test_column int"
 	_, err = txConn.Exec(ctx, sql, 1, true)
 	txConn.Recycle()
-	if err == nil {
-		t.Fatalf("exec should fail because of a conn error")
+	if err == nil || !strings.Contains(err.Error(), "(errno 2006)") {
+		t.Fatalf("Exec must return connection error with MySQL errno 2006: %v", err)
+	}
+	if got, want := vterrors.RecoverVtErrorCode(err), vtrpcpb.ErrorCode_INTERNAL_ERROR; got != want {
+		t.Errorf("wrong error code for Exec error: got = %v, want = %v", got, want)
+	}
+}
+
+func TestTxPoolExecFailDueToConnFail_Errno2013(t *testing.T) {
+	db := fakesqldb.New(t)
+	// No db.Close() needed. We close it below.
+	db.AddQuery("begin", &sqltypes.Result{})
+
+	txPool := newTxPool()
+	txPool.Open(db.ConnParams(), db.ConnParams())
+	defer txPool.Close()
+	ctx := context.Background()
+
+	// Start the transaction.
+	txConn, err := txPool.LocalBegin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Close the connection *after* the server received the query.
+	// This will provoke a MySQL client error with errno 2013.
+	db.EnableShouldClose()
+
+	// Query is going to fail with connection error because the connection was closed.
+	sql := "alter table test_table add test_column int"
+	db.AddQuery(sql, &sqltypes.Result{})
+	_, err = txConn.Exec(ctx, sql, 1, true)
+	txConn.Recycle()
+	if err == nil || !strings.Contains(err.Error(), "(errno 2013)") {
+		t.Fatalf("Exec must return connection error with MySQL errno 2013: %v", err)
+	}
+	if got, want := vterrors.RecoverVtErrorCode(err), vtrpcpb.ErrorCode_UNKNOWN_ERROR; got != want {
+		t.Errorf("wrong error code for Exec error: got = %v, want = %v", got, want)
 	}
 }
 

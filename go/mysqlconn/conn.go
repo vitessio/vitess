@@ -33,7 +33,6 @@ type Conn struct {
 	// - at Connect() time for clients, with the value returned by
 	// the server.
 	// - at accept time for the server.
-	// If Close() or Shutdown() was called, this is reset to 0.
 	ConnectionID uint32
 
 	// Capabilities is the current set of features this connection
@@ -252,7 +251,6 @@ func (c *Conn) flush() error {
 
 // Close closes the connection.
 func (c *Conn) Close() {
-	c.ConnectionID = 0
 	c.conn.Close()
 }
 
