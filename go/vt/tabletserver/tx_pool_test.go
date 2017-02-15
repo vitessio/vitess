@@ -120,9 +120,10 @@ func TestTxPoolBeginAfterConnPoolClosed(t *testing.T) {
 	txPool := newTxPool()
 	txPool.SetTimeout(time.Duration(10))
 	txPool.Open(db.ConnParams(), db.ConnParams())
+
 	txPool.Close()
-	ctx := context.Background()
-	_, err := txPool.Begin(ctx)
+
+	_, err := txPool.Begin(context.Background())
 	if err == nil {
 		t.Fatalf("expect to get an error")
 	}
