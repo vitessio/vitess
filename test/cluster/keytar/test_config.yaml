@@ -1,0 +1,15 @@
+install:
+  path:
+    - /test_path
+config:
+  - docker_image: test/image
+    github:
+      repo: youtube/vitess
+      repo_prefix: src/github.com/youtube/vitess
+    before_test:
+      - touch /tmp/test_file
+    environment:
+      cluster_type: gke
+      application_type: k8s
+    tests:
+      - file: test/cluster/keytar/dummy_test.py

@@ -1,0 +1,15 @@
+kind: Service
+apiVersion: v1
+metadata:
+  name: keytar
+  labels:
+    component: frontend
+    app: keytar
+spec:
+  ports:
+    - port: 80
+      targetPort: http-server
+  selector:
+    component: frontend
+    app: keytar
+  type: LoadBalancer
