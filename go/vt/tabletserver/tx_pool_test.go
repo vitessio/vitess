@@ -202,7 +202,7 @@ func TestTxPoolRollbackFail(t *testing.T) {
 	}
 }
 
-func TestTxPoolGetConnFail(t *testing.T) {
+func TestTxPoolGetConnNonExistentTransaction(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 	txPool := newTxPool()
