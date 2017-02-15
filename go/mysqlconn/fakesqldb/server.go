@@ -15,8 +15,7 @@ import (
 )
 
 // DB is a fake database and all its methods are thread safe.  It
-// creates a mysqlconn.Listener and implements the mysqlconn.Hanlder
-// interface.
+// creates a mysqlconn.Listener and implements the mysqlconn.Handler interface.
 type DB struct {
 	// Fields set at construction time.
 
