@@ -26,10 +26,6 @@ type DB struct {
 	// listener is our mysqlconn.Listener.
 	listener *mysqlconn.Listener
 
-	// name is the name of this DB. Set to 'fakesqldb' by default.
-	// Use SetName() to change.
-	name string
-
 	// acceptWG is set when we listen, and can be waited on to
 	// make sure we don't accept any more.
 	acceptWG sync.WaitGroup
@@ -38,6 +34,9 @@ type DB struct {
 
 	// mu protects all the following fields.
 	mu sync.Mutex
+	// name is the name of this DB. Set to 'fakesqldb' by default.
+	// Use SetName() to change.
+	name string
 	// isConnFail trigger a panic in the connection handler.
 	isConnFail bool
 	// shouldClose, if true, tells ComQuery() to close the connection when
@@ -94,6 +93,9 @@ func New(t *testing.T) *DB {
 
 // SetName sets the name of the DB. to differentiate them in tests if needed.
 func (db *DB) SetName(name string) *DB {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
 	db.name = name
 	return db
 }
@@ -177,14 +179,14 @@ func (db *DB) ConnParams() *sqldb.ConnParams {
 
 // NewConnection is part of the mysqlconn.Handler interface.
 func (db *DB) NewConnection(c *mysqlconn.Conn) {
-	db.t.Logf("NewConnection(%v): client %v", db.name, c.ConnectionID)
-
-	if db.IsConnFail() {
-		panic(fmt.Errorf("simulating a connection failure"))
-	}
-
 	db.mu.Lock()
 	defer db.mu.Unlock()
+
+	db.t.Logf("NewConnection(%v): client %v", db.name, c.ConnectionID)
+
+	if db.isConnFail {
+		panic(fmt.Errorf("simulating a connection failure"))
+	}
 
 	if conn, ok := db.connections[c.ConnectionID]; ok {
 		db.t.Fatalf("BUG: connection with id: %v is already active. existing conn: %v new conn: %v", c.ConnectionID, conn, c)
@@ -194,10 +196,10 @@ func (db *DB) NewConnection(c *mysqlconn.Conn) {
 
 // ConnectionClosed is part of the mysqlconn.Handler interface.
 func (db *DB) ConnectionClosed(c *mysqlconn.Conn) {
-	db.t.Logf("ConnectionClosed(%v): client %v", db.name, c.ConnectionID)
-
 	db.mu.Lock()
 	defer db.mu.Unlock()
+
+	db.t.Logf("ConnectionClosed(%v): client %v", db.name, c.ConnectionID)
 
 	if _, ok := db.connections[c.ConnectionID]; !ok {
 		db.t.Fatalf("BUG: Cannot delete connection from list of open connections because it is not registered. ID: %v Conn: %v", c.ConnectionID, c)
@@ -328,13 +330,6 @@ func (db *DB) DisableConnFail() {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 	db.isConnFail = false
-}
-
-// IsConnFail tests whether there is a connection failure.
-func (db *DB) IsConnFail() bool {
-	db.mu.Lock()
-	defer db.mu.Unlock()
-	return db.isConnFail
 }
 
 // EnableShouldClose closes the connection when processing the next query.
