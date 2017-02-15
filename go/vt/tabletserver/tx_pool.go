@@ -152,6 +152,11 @@ func (axp *TxPool) Begin(ctx context.Context) (int64, error) {
 	}
 	if _, err := conn.Exec(ctx, "begin", 1, false); err != nil {
 		conn.Recycle()
+		if _, ok := err.(*tabletenv.TabletError); ok {
+			// Exec() already returned a TabletError. Don't wrap err into another
+			// TabletError and instead preserve the error code.
+			return 0, err
+		}
 		return 0, tabletenv.NewTabletErrorSQL(vtrpcpb.ErrorCode_UNKNOWN_ERROR, err)
 	}
 	transactionID := axp.lastID.Add(1)
