@@ -217,7 +217,6 @@ func TestTxPoolExecFailDueToConnFail(t *testing.T) {
 	txPool.Open(db.ConnParams(), db.ConnParams())
 	defer txPool.Close()
 	ctx := context.Background()
-	txPool.Begin(ctx)
 	sql := "alter table test_table add test_column int"
 
 	transactionID, err := txPool.Begin(ctx)
@@ -233,6 +232,30 @@ func TestTxPoolExecFailDueToConnFail(t *testing.T) {
 	txConn.Recycle()
 	if err == nil {
 		t.Fatalf("exec should fail because of a conn error")
+	}
+}
+
+func TestTxPoolCloseKillsStrayTransactions(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	db.AddQuery("begin", &sqltypes.Result{})
+
+	txPool := newTxPool()
+	txPool.Open(db.ConnParams(), db.ConnParams())
+
+	// Start stray transaction.
+	_, err := txPool.Begin(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Close kills stray transaction.
+	txPool.Close()
+	if got, want := tabletenv.InternalErrors.Counts()["StrayTransactions"], int64(1); got != want {
+		t.Fatalf("internal error count for stray transactions not increased: got = %v, want = %v", got, want)
+	}
+	if got, want := txPool.conns.Capacity(), int64(0); got != want {
+		t.Fatalf("resource pool was not closed. capacity: got = %v, want = %v", got, want)
 	}
 }
 
