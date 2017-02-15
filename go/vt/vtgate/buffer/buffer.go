@@ -62,7 +62,7 @@ type Buffer struct {
 	shards map[string]bool
 
 	// bufferSizeSema limits how many requests can be buffered
-	// ("-vtgate_buffer_size") and is shared by all shardBuffer instances.
+	// ("-buffer_size") and is shared by all shardBuffer instances.
 	bufferSizeSema *sync2.Semaphore
 
 	// mu guards all fields in this group.
@@ -70,7 +70,7 @@ type Buffer struct {
 	// - 1. Requests which may buffer (RLock, can be run in parallel)
 	// - 2. Request which starts buffering (based on the seen error)
 	// - 3. HealthCheck listener ("StatsUpdate") which stops buffering
-	// - 4. Timer which may stop buffering after -vtgate_buffer_max_failover_duration
+	// - 4. Timer which may stop buffering after -buffer_max_failover_duration
 	mu sync.RWMutex
 	// buffers holds a shardBuffer object per shard, even if no failover is in
 	// progress.
