@@ -2,6 +2,7 @@ package mysqlconn
 
 import (
 	"fmt"
+	"net"
 	"sync"
 	"testing"
 
@@ -119,4 +120,73 @@ func benchmarkOldParallelReads(b *testing.B, params sqldb.ConnParams, parallelCo
 		}(i)
 	}
 	wg.Wait()
+}
+
+// BenchmarkParallelShortQueries creates N simultaneous connections, then
+// executes M queries on them, then closes them.
+// It is meant as a somewhat real load test.
+func BenchmarkParallelShortQueries(b *testing.B) {
+	th := &testHandler{}
+
+	l, err := NewListener("tcp", ":0", th)
+	if err != nil {
+		b.Fatalf("NewListener failed: %v", err)
+	}
+	defer l.Close()
+	l.PasswordMap["user1"] = "password1"
+
+	go func() {
+		l.Accept()
+	}()
+
+	host := l.Addr().(*net.TCPAddr).IP.String()
+	port := l.Addr().(*net.TCPAddr).Port
+	params := &sqldb.ConnParams{
+		Host:  host,
+		Port:  port,
+		Uname: "user1",
+		Pass:  "password1",
+	}
+
+	ctx := context.Background()
+	threadCount := 10
+
+	wg := sync.WaitGroup{}
+	conns := make([]*Conn, threadCount)
+	for i := 0; i < threadCount; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+
+			var err error
+			conns[i], err = Connect(ctx, params)
+			if err != nil {
+				b.Errorf("cannot connect: %v", err)
+				return
+			}
+		}(i)
+	}
+	wg.Wait()
+
+	b.ResetTimer()
+	for i := 0; i < threadCount; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer func() {
+				wg.Done()
+				conns[i].writeComQuit()
+				conns[i].Close()
+			}()
+			for j := 0; j < b.N; j++ {
+				_, err = conns[i].ExecuteFetch("select rows", 1000, true)
+				if err != nil {
+					b.Errorf("ExecuteFetch failed: %v", err)
+					return
+				}
+			}
+		}(i)
+	}
+
+	wg.Wait()
+
 }

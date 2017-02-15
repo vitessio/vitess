@@ -13,8 +13,30 @@ import (
 
 const (
 	// connBufferSize is how much we buffer for reading and
-	// writing.
+	// writing. It is also how much we allocate for ephemeral buffers.
 	connBufferSize = 16 * 1024
+)
+
+// Constants for how ephemeral buffers were used for reading / writing.
+const (
+	// ephemeralUnused means the ephemeral buffer is not in use at this
+	// moment. This is the default value, and is checked so we don't
+	// read a packet while writing one.
+	ephemeralUnused = iota
+
+	// ephemeralGlobalBuffer means conn.buffer was used.
+	// The first four bytes contain size and sequence.
+	ephemeralGlobalBuffer
+
+	// ephemeralSingleBuffer means a single buffer was allocated.
+	// It is in c.currentEphemeralPacket. The first four bytes
+	// contain size and sequence.
+	ephemeralSingleBuffer
+
+	// ephemeralBigBuffer means a big buffer was allocated, and
+	// will need to be split when sending.
+	// The allocated buffer is in c.currentEphemeralPacket.
+	ephemeralBigBuffer
 )
 
 // Conn is a connection between a client and a server, using the MySQL
@@ -83,6 +105,34 @@ type Conn struct {
 	// query returned no fields, this is set to an empty array
 	// (but not nil).
 	fields []*querypb.Field
+
+	// Internal buffer for zero-allocation reads and writes.  This
+	// uses the fact that both sides of a connection either read
+	// packets, or write packets, but never do both, and both
+	// sides know who is expected to read or write a packet next.
+	//
+	// Reading side: if the next expected packet will most likely be
+	// small, and we don't need to hand on to the memory after reading
+	// the packet, use readEphemeralPacket instead of readPacket.
+	// If the packet is too big, it will revert to the usual read.
+	// But if the packet is smaller than connBufferSize, this buffer
+	// will be used instead.
+	//
+	// Writing side: if the next packet to write is smaller than
+	// connBufferSize-4, this buffer can be used to create a
+	// packet. It will contain both the size and sequence header,
+	// and the contents of the packet.
+	// Call startEphemeralPacket(length) to get a buffer. If length
+	// is smaller or equal than connBufferSize-4, this buffer will be used.
+	// Otherwise memory will be allocated for it.
+	buffer []byte
+
+	// Keep track of how and of the buffer we allocated for an
+	// ephemeral packet on the write side.
+	// These fields are used by the startEphemeralPacket /
+	// writeEphemeralPacket methods.
+	currentEphemeralPolicy int
+	currentEphemeralPacket []byte
 }
 
 func newConn(conn net.Conn) *Conn {
@@ -92,9 +142,79 @@ func newConn(conn net.Conn) *Conn {
 		reader:   bufio.NewReaderSize(conn, connBufferSize),
 		writer:   bufio.NewWriterSize(conn, connBufferSize),
 		sequence: 0,
+		buffer:   make([]byte, connBufferSize),
 	}
 }
 
+// readEphemeralPacket attempts to read a packet into c.buffer.  Do
+// not use this method if the contents of the packet needs to be kept
+// after the next readEphemeralPacket.  If the packet is bigger than
+// connBufferSize, we revert to using the same behavior as a regular readPacket.
+func (c *Conn) readEphemeralPacket() ([]byte, error) {
+	if c.currentEphemeralPolicy != ephemeralUnused {
+		panic(fmt.Errorf("readEphemeralPacket: unexpected currentEphemeralPolicy: %v", c.currentEphemeralPolicy))
+	}
+
+	var header [4]byte
+	if _, err := io.ReadFull(c.reader, header[:]); err != nil {
+		return nil, fmt.Errorf("io.ReadFull(header size) failed: %v", err)
+	}
+
+	sequence := uint8(header[3])
+	if sequence != c.sequence {
+		return nil, fmt.Errorf("invalid sequence, expected %v got %v", c.sequence, sequence)
+	}
+
+	c.sequence++
+
+	length := int(uint32(header[0]) | uint32(header[1])<<8 | uint32(header[2])<<16)
+	if length == 0 {
+		// This can be caused by the packet after a packet of
+		// exactly size MaxPacketSize.
+		return nil, nil
+	}
+	if length <= cap(c.buffer) {
+		// Fast path: read into buffer, we're good.
+		c.buffer = c.buffer[:length]
+		if _, err := io.ReadFull(c.reader, c.buffer); err != nil {
+			return nil, fmt.Errorf("io.ReadFull(packet body of length %v) failed: %v", length, err)
+		}
+		return c.buffer, nil
+	}
+
+	// Slow path, revert to allocating.
+	data := make([]byte, length)
+	if _, err := io.ReadFull(c.reader, data); err != nil {
+		return nil, fmt.Errorf("io.ReadFull(packet body of length %v) failed: %v", length, err)
+	}
+
+	// This is a single packet.
+	if length < MaxPacketSize {
+		return data, nil
+	}
+
+	// There is more than one packet, read them all.
+	for {
+		next, err := c.readOnePacket()
+		if err != nil {
+			return nil, err
+		}
+
+		if len(next) == 0 {
+			// Again, the packet after a packet of exactly size MaxPacketSize.
+			break
+		}
+
+		data = append(data, next...)
+		if len(next) < MaxPacketSize {
+			break
+		}
+	}
+
+	return data, nil
+}
+
+// readOnePacket reads a single packet into a newly allocated buffer.
 func (c *Conn) readOnePacket() ([]byte, error) {
 	var header [4]byte
 
@@ -161,6 +281,8 @@ func (c *Conn) readPacket() ([]byte, error) {
 
 // ReadPacket reads a packet from the underlying connection.
 // it is the public API version, that returns a sqldb.SQLError.
+// The memory for the packet is always allocated, and it is owned by the caller
+// after this function returns.
 func (c *Conn) ReadPacket() ([]byte, error) {
 	result, err := c.readPacket()
 	if err != nil {
@@ -172,18 +294,7 @@ func (c *Conn) ReadPacket() ([]byte, error) {
 // writePacket writes a packet, possibly cutting it into multiple
 // chunks.  Note this is not very efficient, as the client probably
 // has to build the []byte and that makes a memory copy.
-//
-// TODO(alainjobart): to write packets more efficiently, the following API should be added:
-// startPacket(length int)
-//   - remembers we started writing a packet.
-//   - writes the first packet header.
-// writePacketChunk(data []byte) / writeByte(b byte)
-//   - writes the bytes, respecting packet boundaries.
-//   - if we need to go from one packet to the next, do it.
-// - checks we're not past the initial packet size.
-// finishPacket()
-//   - checks the packet is done.
-//   - write an empty packet if the write was a multiple of MaxPacketSize
+// Try to use startEphemeralPacket/writeEphemeralPacket instead.
 //
 // This method returns a generic error, not a sqldb.SQLError.
 func (c *Conn) writePacket(data []byte) error {
@@ -241,6 +352,87 @@ func (c *Conn) writePacket(data []byte) error {
 	}
 }
 
+func (c *Conn) startEphemeralPacket(length int) []byte {
+	if c.currentEphemeralPolicy != ephemeralUnused {
+		panic("startEphemeralPacket cannot be used while a packet is already started.")
+	}
+
+	// Fast path: we can reuse a single memory buffer for
+	// both the header and the data.
+	if length <= cap(c.buffer)-4 {
+		c.currentEphemeralPolicy = ephemeralGlobalBuffer
+		c.buffer = c.buffer[:length+4]
+		c.buffer[0] = byte(length)
+		c.buffer[1] = byte(length >> 8)
+		c.buffer[2] = byte(length >> 16)
+		c.buffer[3] = c.sequence
+		c.sequence++
+		return c.buffer[4:]
+	}
+
+	// Slower path: we can use a single buffer for both the header and the data, but it has to be allocated.
+	if length < MaxPacketSize {
+		c.currentEphemeralPolicy = ephemeralSingleBuffer
+		c.currentEphemeralPacket = make([]byte, length+4)
+		c.currentEphemeralPacket[0] = byte(length)
+		c.currentEphemeralPacket[1] = byte(length >> 8)
+		c.currentEphemeralPacket[2] = byte(length >> 16)
+		c.currentEphemeralPacket[3] = c.sequence
+		c.sequence++
+		return c.currentEphemeralPacket[4:]
+	}
+
+	// Even slower path: create a full size buffer and return it.
+	c.currentEphemeralPolicy = ephemeralBigBuffer
+	c.currentEphemeralPacket = make([]byte, length)
+	return c.currentEphemeralPacket
+}
+
+func (c *Conn) writeEphemeralPacket(direct bool) error {
+	defer func() {
+		c.currentEphemeralPolicy = ephemeralUnused
+	}()
+
+	var w io.Writer = c.writer
+	if direct {
+		w = c.conn
+	}
+
+	switch c.currentEphemeralPolicy {
+	case ephemeralUnused:
+		// Programming error.
+		panic("trying to call writeEphemeralPacket while currentEphemeralPolicy is ephemeralUnused")
+	case ephemeralGlobalBuffer:
+		// Just write c.buffer as a single buffer.
+		// It has both header and data.
+		if n, err := w.Write(c.buffer); err != nil {
+			return fmt.Errorf("Write(c.buffer) failed: %v", err)
+		} else if n != len(c.buffer) {
+			return fmt.Errorf("Write(c.buffer) returned a short write: %v < %v", n, len(c.buffer))
+		}
+	case ephemeralSingleBuffer:
+		// Write the allocated buffer as a single buffer.
+		// It has both header and data.
+		if n, err := w.Write(c.currentEphemeralPacket); err != nil {
+			return fmt.Errorf("Write(c.currentEphemeralPacket) failed: %v", err)
+		} else if n != len(c.currentEphemeralPacket) {
+			return fmt.Errorf("Write(c.currentEphemeralPacket) returned a short write: %v < %v", n, len(c.currentEphemeralPacket))
+		}
+	case ephemeralBigBuffer:
+		// This is the slower path for big data.
+		// With direct=true, the caller expects a flush, so we call it
+		// manually.
+		if err := c.writePacket(c.currentEphemeralPacket); err != nil {
+			return err
+		}
+		if direct {
+			return c.flush()
+		}
+	}
+
+	return nil
+}
+
 // flush flushes the written data to the socket.
 // This method returns a generic error, not a sqldb.SQLError.
 func (c *Conn) flush() error {
@@ -250,7 +442,24 @@ func (c *Conn) flush() error {
 	return nil
 }
 
-// Close closes the connection.
+// writeComQuit writes a Quit message for the server, to indicate we
+// want to close the connection.
+// Client -> Server.
+// Returns sqldb.SQLError(CRServerGone) if it can't.
+func (c *Conn) writeComQuit() error {
+	// This is a new command, need to reset the sequence.
+	c.sequence = 0
+
+	data := c.startEphemeralPacket(1)
+	data[0] = ComQuit
+	if err := c.writeEphemeralPacket(true); err != nil {
+		return sqldb.NewSQLError(CRServerGone, SSUnknownSQLState, err.Error())
+	}
+	return nil
+}
+
+// Close closes the connection. It can be called from a different go
+// routine to interrupt the current connection.
 func (c *Conn) Close() {
 	c.ConnectionID = 0
 	c.conn.Close()
@@ -260,7 +469,8 @@ func (c *Conn) Close() {
 // Packet writing methods, for generic packets.
 //
 
-// writeOKPacket writes an OK packet.
+// writeOKPacket writes an OK packet, directly. Do not use this if
+// there is already a packet in the buffer.
 // Server -> Client.
 // This method returns a generic error, not a sqldb.SQLError.
 func (c *Conn) writeOKPacket(affectedRows, lastInsertID uint64, flags uint16, warnings uint16) error {
@@ -269,7 +479,7 @@ func (c *Conn) writeOKPacket(affectedRows, lastInsertID uint64, flags uint16, wa
 		lenEncIntSize(lastInsertID) +
 		2 + // flags
 		2 // warnings
-	data := make([]byte, length)
+	data := c.startEphemeralPacket(length)
 	pos := 0
 	pos = writeByte(data, pos, OKPacket)
 	pos = writeLenEncInt(data, pos, affectedRows)
@@ -277,13 +487,7 @@ func (c *Conn) writeOKPacket(affectedRows, lastInsertID uint64, flags uint16, wa
 	pos = writeUint16(data, pos, flags)
 	pos = writeUint16(data, pos, warnings)
 
-	if err := c.writePacket(data); err != nil {
-		return err
-	}
-	if err := c.flush(); err != nil {
-		return err
-	}
-	return nil
+	return c.writeEphemeralPacket(true)
 }
 
 // writeOKPacketWithEOFHeader writes an OK packet with an EOF header.
@@ -297,7 +501,7 @@ func (c *Conn) writeOKPacketWithEOFHeader(affectedRows, lastInsertID uint64, fla
 		lenEncIntSize(lastInsertID) +
 		2 + // flags
 		2 // warnings
-	data := make([]byte, length)
+	data := c.startEphemeralPacket(length)
 	pos := 0
 	pos = writeByte(data, pos, EOFPacket)
 	pos = writeLenEncInt(data, pos, affectedRows)
@@ -305,7 +509,7 @@ func (c *Conn) writeOKPacketWithEOFHeader(affectedRows, lastInsertID uint64, fla
 	pos = writeUint16(data, pos, flags)
 	pos = writeUint16(data, pos, warnings)
 
-	if err := c.writePacket(data); err != nil {
+	if err := c.writeEphemeralPacket(false); err != nil {
 		return err
 	}
 	if err := c.flush(); err != nil {
@@ -315,12 +519,14 @@ func (c *Conn) writeOKPacketWithEOFHeader(affectedRows, lastInsertID uint64, fla
 }
 
 // writeErrorPacket writes an error packet.
+// It writes directly to the socket, so this cannot be called after other
+// packets have already been written.
 // Server -> Client.
 // This method returns a generic error, not a sqldb.SQLError.
 func (c *Conn) writeErrorPacket(errorCode uint16, sqlState string, format string, args ...interface{}) error {
 	errorMessage := fmt.Sprintf(format, args...)
 	length := 1 + 2 + 1 + 5 + len(errorMessage)
-	data := make([]byte, length)
+	data := c.startEphemeralPacket(length)
 	pos := 0
 	pos = writeByte(data, pos, ErrPacket)
 	pos = writeUint16(data, pos, errorCode)
@@ -334,15 +540,14 @@ func (c *Conn) writeErrorPacket(errorCode uint16, sqlState string, format string
 	pos = writeEOFString(data, pos, sqlState)
 	pos = writeEOFString(data, pos, errorMessage)
 
-	if err := c.writePacket(data); err != nil {
-		return err
-	}
-	if err := c.flush(); err != nil {
+	if err := c.writeEphemeralPacket(true); err != nil {
 		return err
 	}
 	return nil
 }
 
+// writeErrorPacketFromError writes an error packet, from a regular error.
+// See writeErrorPacket for other info.
 func (c *Conn) writeErrorPacketFromError(err error) error {
 	if se, ok := err.(*sqldb.SQLError); ok {
 		return c.writeErrorPacket(uint16(se.Num), se.State, "%v", se.Message)
@@ -351,18 +556,17 @@ func (c *Conn) writeErrorPacketFromError(err error) error {
 	return c.writeErrorPacket(ERUnknownError, SSUnknownSQLState, "unknown error: %v", err)
 }
 
+// writeEOFPacket writes an EOF packet, through the buffer, and
+// doesn't flush (as it is used as part of a query result).
 func (c *Conn) writeEOFPacket(flags uint16, warnings uint16) error {
 	length := 5
-	data := make([]byte, length)
+	data := c.startEphemeralPacket(length)
 	pos := 0
 	pos = writeByte(data, pos, EOFPacket)
 	pos = writeUint16(data, pos, warnings)
 	pos = writeUint16(data, pos, flags)
 
-	if err := c.writePacket(data); err != nil {
-		return err
-	}
-	return nil
+	return c.writeEphemeralPacket(false)
 }
 
 //
