@@ -195,6 +195,28 @@ func TestTxPoolBeginWithPoolConnectionError_Errno2006_Permanent(t *testing.T) {
 	}
 }
 
+func TestTxPoolBeginWithPoolConnectionError_Errno2013(t *testing.T) {
+	db, txPool, err := primeTxPoolWithConnection(t)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// No db.Close() needed. We close it below.
+	defer txPool.Close()
+
+	// Close the connection *after* the server received the query.
+	// This will provoke a MySQL client error with errno 2013.
+	db.EnableShouldClose()
+
+	// 2013 is not retryable. DBConn.Exec() fails after the first attempt.
+	_, err = txPool.Begin(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "(errno 2013)") {
+		t.Fatalf("Begin must return connection error with MySQL errno 2013: %v", err)
+	}
+	if got, want := vterrors.RecoverVtErrorCode(err), vtrpcpb.ErrorCode_UNKNOWN_ERROR; got != want {
+		t.Errorf("wrong error code for Begin error: got = %v, want = %v", got, want)
+	}
+}
+
 // primeTxPoolWithConnection is a helper function. It reconstructs the
 // scenario where future transactions are going to reuse an open db connection.
 func primeTxPoolWithConnection(t *testing.T) (*fakesqldb.DB, *TxPool, error) {
