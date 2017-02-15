@@ -53,7 +53,7 @@ var (
 	// statsThrottledCounters is the number of times a write has been throttled,
 	// grouped by (keyspace, shard, threadID). Mainly used for testing.
 	// If throttling is enabled, this should always be non-zero for all threads.
-	statsThrottledCounters = stats.NewMultiCounters("WorkerThrottledCounters", []string{"keyspace", "shardname", "thread_id"})
+	statsThrottledCounters = stats.NewMultiCounters("WorkerThrottledCounters", []string{"Keyspace", "ShardName", "ThreadId"})
 	// statsStateDurations tracks for each state how much time was spent in it. Mainly used for testing.
 	statsStateDurationsNs = stats.NewCounters("WorkerStateDurations")
 
