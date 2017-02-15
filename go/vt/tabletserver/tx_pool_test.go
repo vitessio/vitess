@@ -138,8 +138,8 @@ func TestTxPoolBeginAfterConnPoolClosed(t *testing.T) {
 
 // TestTxPoolBeginWithPoolConnectionError_TransientErrno2006 tests the case
 // where we see a transient errno 2006 e.g. because MySQL killed the
-// db connection. DBConn.Exec() is going to retry automatically due to this
-// connection error and the BEGIN will succeed.
+// db connection. DBConn.Exec() is going to reconnect and retry automatically
+// due to this connection error and the BEGIN will succeed.
 func TestTxPoolBeginWithPoolConnectionError_Errno2006_Transient(t *testing.T) {
 	db, txPool, err := primeTxPoolWithConnection(t)
 	if err != nil {
@@ -163,7 +163,7 @@ func TestTxPoolBeginWithPoolConnectionError_Errno2006_Transient(t *testing.T) {
 }
 
 // TestTxPoolBeginWithPoolConnectionError_Errno2006_Permanent tests the case
-// where a transient errno 2006 is followed by a permanent, *different* error.
+// where a transient errno 2006 is followed by permanent connection rejections.
 // For example, if all open connections are killed and new connections are
 // rejected.
 func TestTxPoolBeginWithPoolConnectionError_Errno2006_Permanent(t *testing.T) {
@@ -182,16 +182,16 @@ func TestTxPoolBeginWithPoolConnectionError_Errno2006_Permanent(t *testing.T) {
 	// Prevent new connections as well.
 	db.EnableConnFail()
 
-	// This Begin will be retried automatically by vttablet.
-	// It will see a 2006 on the first attempt and the ConnFail error
-	// "simulating a connection failure" on the second attempt.
-	// However, DBConn.Exec() is returning the first and not the second error.
+	// This Begin will error with 2006.
+	// After that, vttablet will automatically try to reconnect and this fail.
+	// DBConn.Exec() will return the reconnect error as final error and not the
+	// initial connection error.
 	_, err = txPool.LocalBegin(context.Background())
-	if err == nil || !strings.Contains(err.Error(), "(errno 2006)") {
-		t.Fatalf("Begin must return connection error with MySQL errno 2006: %v", err)
+	if err == nil || !strings.Contains(err.Error(), "Lost connection to MySQL server at 'reading initial communication packet'") {
+		t.Fatalf("Begin did not return the reconnect error: %v", err)
 	}
 	if got, want := vterrors.RecoverVtErrorCode(err), vtrpcpb.ErrorCode_INTERNAL_ERROR; got != want {
-		t.Errorf("wrong error code for Begin error: got = %v, want = %v", got, want)
+		t.Errorf("wrong error code for reconnect error after Begin: got = %v, want = %v", got, want)
 	}
 }
 
