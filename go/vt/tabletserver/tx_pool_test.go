@@ -136,19 +136,86 @@ func TestTxPoolBeginAfterConnPoolClosed(t *testing.T) {
 	}
 }
 
-func TestTxPoolBeginWithPoolConnectionError(t *testing.T) {
-	db := fakesqldb.New(t)
-	db.Close()
-	//	db.EnableConnFail()
-	txPool := newTxPool()
-	txPool.Open(db.ConnParams(), db.ConnParams())
-	defer txPool.Close()
-	ctx := context.Background()
-	_, err := txPool.Begin(ctx)
-	want := "errno 2003"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("Begin: %v, want %s", err, want)
+// TestTxPoolBeginWithPoolConnectionError_TransientErrno2006 tests the case
+// where we see a transient errno 2006 e.g. because MySQL killed the
+// db connection. DBConn.Exec() is going to retry automatically due to this
+// connection error and the BEGIN will succeed.
+func TestTxPoolBeginWithPoolConnectionError_Errno2006_Transient(t *testing.T) {
+	db, txPool, err := primeTxPoolWithConnection(t)
+	if err != nil {
+		t.Fatal(err)
 	}
+	defer db.Close()
+	defer txPool.Close()
+
+	// Close the connection on the server side.
+	db.CloseAllConnections()
+	if err := db.WaitForClose(2 * time.Second); err != nil {
+		t.Fatal(err)
+	}
+
+	ctx := context.Background()
+	txConn, err := txPool.LocalBegin(ctx)
+	if err != nil {
+		t.Fatalf("Begin should have succeeded after the retry in DBConn.Exec(): %v", err)
+	}
+	txPool.LocalConclude(ctx, txConn)
+}
+
+// TestTxPoolBeginWithPoolConnectionError_Errno2006_Permanent tests the case
+// where a transient errno 2006 is followed by a permanent, *different* error.
+// For example, if all open connections are killed and new connections are
+// rejected.
+func TestTxPoolBeginWithPoolConnectionError_Errno2006_Permanent(t *testing.T) {
+	db, txPool, err := primeTxPoolWithConnection(t)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	defer txPool.Close()
+
+	// Close the connection on the server side.
+	db.CloseAllConnections()
+	if err := db.WaitForClose(2 * time.Second); err != nil {
+		t.Fatal(err)
+	}
+	// Prevent new connections as well.
+	db.EnableConnFail()
+
+	// This Begin will be retried automatically by vttablet.
+	// It will see a 2006 on the first attempt and the ConnFail error
+	// "simulating a connection failure" on the second attempt.
+	// However, DBConn.Exec() is returning the first and not the second error.
+	_, err = txPool.LocalBegin(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "(errno 2006)") {
+		t.Fatalf("Begin must return connection error with MySQL errno 2006: %v", err)
+	}
+	if got, want := vterrors.RecoverVtErrorCode(err), vtrpcpb.ErrorCode_INTERNAL_ERROR; got != want {
+		t.Errorf("wrong error code for Begin error: got = %v, want = %v", got, want)
+	}
+}
+
+// primeTxPoolWithConnection is a helper function. It reconstructs the
+// scenario where future transactions are going to reuse an open db connection.
+func primeTxPoolWithConnection(t *testing.T) (*fakesqldb.DB, *TxPool, error) {
+	db := fakesqldb.New(t)
+	txPool := newTxPool()
+	// Set the capacity to 1 to ensure that the db connection is reused.
+	txPool.conns.SetCapacity(1)
+	txPool.Open(db.ConnParams(), db.ConnParams())
+
+	// Run a query to trigger a database connection. That connection will be
+	// reused by subsequent transactions.
+	db.AddQuery("begin", &sqltypes.Result{})
+	db.AddQuery("rollback", &sqltypes.Result{})
+	ctx := context.Background()
+	txConn, err := txPool.LocalBegin(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	txPool.LocalConclude(ctx, txConn)
+
+	return db, txPool, nil
 }
 
 func TestTxPoolBeginWithError(t *testing.T) {
