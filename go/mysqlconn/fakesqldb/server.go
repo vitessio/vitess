@@ -217,7 +217,7 @@ func (db *DB) ComQuery(c *mysqlconn.Conn, query string) (*sqltypes.Result, error
 	// Check if we should close the connection and provoke errno 2013.
 	if db.shouldClose {
 		c.Close()
-		return nil, nil
+		return &sqltypes.Result{}, nil
 	}
 
 	// Using special handling for 'SET NAMES utf8'.  The driver
