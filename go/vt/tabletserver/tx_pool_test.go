@@ -16,6 +16,9 @@ import (
 	"github.com/youtube/vitess/go/mysqlconn/fakesqldb"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletenv"
+	"github.com/youtube/vitess/go/vt/vterrors"
+
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 func TestTxPoolExecuteRollback(t *testing.T) {
@@ -148,7 +151,7 @@ func TestTxPoolBeginWithPoolConnectionError(t *testing.T) {
 	}
 }
 
-func TestTxPoolBeginWithExecError(t *testing.T) {
+func TestTxPoolBeginWithError(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 	db.AddRejectedQuery("begin", errRejected)
@@ -160,6 +163,9 @@ func TestTxPoolBeginWithExecError(t *testing.T) {
 	want := "error: rejected"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("Begin: %v, want %s", err, want)
+	}
+	if got, want := vterrors.RecoverVtErrorCode(err), vtrpcpb.ErrorCode_UNKNOWN_ERROR; got != want {
+		t.Errorf("wrong error code for Begin error: got = %v, want = %v", got, want)
 	}
 }
 
