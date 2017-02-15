@@ -46,10 +46,10 @@ func TestBuffer(t *testing.T) {
 	defer checkVariables(t)
 
 	// Enable the buffer.
-	flag.Set("enable_vtgate_buffer", "true")
-	flag.Set("vtgate_buffer_keyspace_shards", topoproto.KeyspaceShardString(keyspace, shard))
+	flag.Set("enable_buffer", "true")
+	flag.Set("buffer_keyspace_shards", topoproto.KeyspaceShardString(keyspace, shard))
 	// Dry-run mode will apply to other keyspaces and shards. Not tested here.
-	flag.Set("enable_vtgate_buffer_dry_run", "true")
+	flag.Set("enable_buffer_dry_run", "true")
 	defer resetFlagsForTesting()
 
 	// Create the buffer.
@@ -117,14 +117,14 @@ func TestBuffer(t *testing.T) {
 
 	// Second failover: Buffering is skipped because last failover is too recent.
 	if retryDone, err := b.WaitForFailoverEnd(context.Background(), keyspace, shard, failoverErr); err != nil || retryDone != nil {
-		t.Fatalf("subsequent failovers must be skipped due to -vtgate_buffer_min_time_between_failovers setting. err: %v retryDone: %v", err, retryDone)
+		t.Fatalf("subsequent failovers must be skipped due to -buffer_min_time_between_failovers setting. err: %v retryDone: %v", err, retryDone)
 	}
 	if got, want := requestsSkipped.Counts()[statsKeyJoinedLastFailoverTooRecent], int64(1); got != want {
 		t.Fatalf("skipped request was not tracked: got = %v, want = %v", got, want)
 	}
 
 	// Second failover is buffered if we reduce the limit.
-	flag.Set("vtgate_buffer_min_time_between_failovers", "0s")
+	flag.Set("buffer_min_time_between_failovers", "0s")
 	stopped4 := issueRequest(context.Background(), t, b, failoverErr)
 	if err := waitForRequestsInFlight(b, 1); err != nil {
 		t.Fatal(err)
@@ -225,7 +225,7 @@ func waitForState(b *Buffer, want bufferState) error {
 func TestDryRun(t *testing.T) {
 	resetVariables()
 
-	flag.Set("enable_vtgate_buffer_dry_run", "true")
+	flag.Set("enable_buffer_dry_run", "true")
 	defer resetFlagsForTesting()
 	b := New()
 
@@ -263,8 +263,8 @@ func TestDryRun(t *testing.T) {
 // TestPassthrough tests the case when no failover is in progress and
 // requests have no failover related error.
 func TestPassthrough(t *testing.T) {
-	flag.Set("enable_vtgate_buffer", "true")
-	flag.Set("vtgate_buffer_keyspace_shards", topoproto.KeyspaceShardString(keyspace, shard))
+	flag.Set("enable_buffer", "true")
+	flag.Set("buffer_keyspace_shards", topoproto.KeyspaceShardString(keyspace, shard))
 	defer resetFlagsForTesting()
 	b := New()
 
@@ -281,7 +281,7 @@ func TestPassthrough(t *testing.T) {
 func TestPassThroughLastReparentTooRecent(t *testing.T) {
 	resetVariables()
 
-	flag.Set("enable_vtgate_buffer", "true")
+	flag.Set("enable_buffer", "true")
 	// Enable the buffer (no explicit whitelist i.e. it applies to everything).
 	defer resetFlagsForTesting()
 	b := New()
@@ -316,8 +316,8 @@ func TestPassThroughLastReparentTooRecent(t *testing.T) {
 // TestPassthroughDuringDrain tests the behavior of requests while the buffer is
 // in the drain phase: They should not be buffered and passed through instead.
 func TestPassthroughDuringDrain(t *testing.T) {
-	flag.Set("enable_vtgate_buffer", "true")
-	flag.Set("vtgate_buffer_keyspace_shards", topoproto.KeyspaceShardString(keyspace, shard))
+	flag.Set("enable_buffer", "true")
+	flag.Set("buffer_keyspace_shards", topoproto.KeyspaceShardString(keyspace, shard))
 	defer resetFlagsForTesting()
 	b := New()
 
@@ -358,8 +358,8 @@ func TestPassthroughDuringDrain(t *testing.T) {
 // TestPassthroughIgnoredKeyspaceOrShard tests that the explicit whitelisting
 // of keyspaces (and optionally shards) ignores entries which are not listed.
 func TestPassthroughIgnoredKeyspaceOrShard(t *testing.T) {
-	flag.Set("enable_vtgate_buffer", "true")
-	flag.Set("vtgate_buffer_keyspace_shards", topoproto.KeyspaceShardString(keyspace, shard))
+	flag.Set("enable_buffer", "true")
+	flag.Set("buffer_keyspace_shards", topoproto.KeyspaceShardString(keyspace, shard))
 	defer resetFlagsForTesting()
 	b := New()
 
@@ -400,15 +400,15 @@ func testRequestCanceled(t *testing.T, explicitEnd bool) {
 	resetVariables()
 	defer checkVariables(t)
 
-	flag.Set("enable_vtgate_buffer", "true")
+	flag.Set("enable_buffer", "true")
 	// Enable buffering for the complete keyspace and not just a specific shard.
-	flag.Set("vtgate_buffer_keyspace_shards", keyspace)
+	flag.Set("buffer_keyspace_shards", keyspace)
 	defer resetFlagsForTesting()
 	b := New()
 	if !explicitEnd {
 		// Set value after constructor to work-around hardcoded minimum values.
-		flag.Set("vtgate_buffer_window", "100ms")
-		flag.Set("vtgate_buffer_max_failover_duration", "100ms")
+		flag.Set("buffer_window", "100ms")
+		flag.Set("buffer_max_failover_duration", "100ms")
 	}
 
 	// Buffer 2 requests. The second will be canceled and the first will be drained.
@@ -469,9 +469,9 @@ func TestEviction(t *testing.T) {
 	resetVariables()
 	defer checkVariables(t)
 
-	flag.Set("enable_vtgate_buffer", "true")
-	flag.Set("vtgate_buffer_keyspace_shards", topoproto.KeyspaceShardString(keyspace, shard))
-	flag.Set("vtgate_buffer_size", "2")
+	flag.Set("enable_buffer", "true")
+	flag.Set("buffer_keyspace_shards", topoproto.KeyspaceShardString(keyspace, shard))
+	flag.Set("buffer_size", "2")
 	defer resetFlagsForTesting()
 	b := New()
 
@@ -547,11 +547,11 @@ func TestEvictionNotPossible(t *testing.T) {
 	resetVariables()
 	defer checkVariables(t)
 
-	flag.Set("enable_vtgate_buffer", "true")
-	flag.Set("vtgate_buffer_keyspace_shards", fmt.Sprintf("%v,%v",
+	flag.Set("enable_buffer", "true")
+	flag.Set("buffer_keyspace_shards", fmt.Sprintf("%v,%v",
 		topoproto.KeyspaceShardString(keyspace, shard),
 		topoproto.KeyspaceShardString(keyspace, shard2)))
-	flag.Set("vtgate_buffer_size", "1")
+	flag.Set("buffer_size", "1")
 	defer resetFlagsForTesting()
 	b := New()
 
@@ -597,15 +597,15 @@ func TestWindow(t *testing.T) {
 	resetVariables()
 	defer checkVariables(t)
 
-	flag.Set("enable_vtgate_buffer", "true")
-	flag.Set("vtgate_buffer_keyspace_shards", fmt.Sprintf("%v,%v",
+	flag.Set("enable_buffer", "true")
+	flag.Set("buffer_keyspace_shards", fmt.Sprintf("%v,%v",
 		topoproto.KeyspaceShardString(keyspace, shard),
 		topoproto.KeyspaceShardString(keyspace, shard2)))
-	flag.Set("vtgate_buffer_size", "1")
+	flag.Set("buffer_size", "1")
 	defer resetFlagsForTesting()
 	b := New()
 	// Set value after constructor to work-around hardcoded minimum values.
-	flag.Set("vtgate_buffer_window", "1ms")
+	flag.Set("buffer_window", "1ms")
 
 	// Buffer one request.
 	t.Logf("first request exceeds its window")
@@ -622,7 +622,7 @@ func TestWindow(t *testing.T) {
 
 	// Increase the window and buffer a request again
 	// (queue becomes not empty a second time).
-	flag.Set("vtgate_buffer_window", "10m")
+	flag.Set("buffer_window", "10m")
 
 	// This time the request does not go out of window and gets evicted by a third
 	// request instead.
@@ -651,7 +651,7 @@ func TestWindow(t *testing.T) {
 	}
 
 	// Reduce the window again.
-	flag.Set("vtgate_buffer_window", "100ms")
+	flag.Set("buffer_window", "100ms")
 
 	// Fourth request evicts the third
 	t.Logf("fourth request exceeds its window (and evicts the third)")
@@ -698,7 +698,7 @@ func TestShutdown(t *testing.T) {
 	resetVariables()
 	defer checkVariables(t)
 
-	flag.Set("enable_vtgate_buffer", "true")
+	flag.Set("enable_buffer", "true")
 	defer resetFlagsForTesting()
 	b := New()
 
