@@ -191,13 +191,6 @@ func (n *Node) deepCopyFrom(otherNode *Node, copyChildren bool) error {
 	*n = *otherNode
 	n.Children = oldChildren
 
-	n.Actions = []*Action{}
-	for _, otherAction := range otherNode.Actions {
-		action := &Action{}
-		*action = *otherAction
-		n.Actions = append(n.Actions, action)
-	}
-
 	if !copyChildren {
 		return nil
 	}
@@ -355,6 +348,7 @@ func (m *NodeManager) updateNodeAndBroadcastLocked(userNode *Node, updateChildre
 	if err != nil {
 		return err
 	}
+
 	userNode.LastChanged = time.Now().Unix()
 	if err := savedNode.deepCopyFrom(userNode, updateChildren); err != nil {
 		return err
@@ -394,6 +388,11 @@ func (m *NodeManager) Action(ctx context.Context, ap *ActionParameters) error {
 		return fmt.Errorf("Action %v is invoked on a node without listener (node path is %v)", ap.Name, ap.Path)
 	}
 	return n.Listener.Action(ctx, ap.Path, ap.Name)
+}
+
+// GetNodeByPath returns the node using the path.
+func (m *NodeManager) GetNodeByPath(nodePath string) (*Node, error) {
+	return m.getNodeByPath(nodePath)
 }
 
 func (m *NodeManager) getNodeByPath(nodePath string) (*Node, error) {
