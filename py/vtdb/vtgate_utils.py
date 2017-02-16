@@ -102,7 +102,7 @@ class VitessError(Exception):
 
     Args:
       method_name: RPC method name, as a string, that was called.
-      code: integer that represents the error code. From vtrpc_pb2.ErrorCode.
+      code: integer that represents the error code. From vtrpc_pb2.Code.
       message: string representation of the error.
     """
     self.method_name = method_name
@@ -114,7 +114,7 @@ class VitessError(Exception):
   def __str__(self):
     """Print the error nicely, converting the proto error enum to its name."""
     return '%s returned %s with message: %s' % (
-        self.method_name, vtrpc_pb2.ErrorCode.Name(self.code), self.message)
+        self.method_name, vtrpc_pb2.Code.Name(self.code), self.message)
 
   def convert_to_dbexception(self, args):
     """Converts from a VitessError to the appropriate dbexceptions class.
@@ -128,13 +128,13 @@ class VitessError(Exception):
     # FIXME(alainjobart): this is extremely confusing: self.message is only
     # used for integrity errors, and nothing else. The other cases
     # have to provide the message in the args.
-    if self.code == vtrpc_pb2.TRANSIENT_ERROR:
+    if self.code == vtrpc_pb2.UNAVAILABLE:
       if throttler_err_re.search(self.message):
         return dbexceptions.ThrottledError(args)
       return dbexceptions.TransientError(args)
-    if self.code == vtrpc_pb2.QUERY_NOT_SERVED:
+    if self.code == vtrpc_pb2.FAILED_PRECONDITION:
       return dbexceptions.QueryNotServed(args)
-    if self.code == vtrpc_pb2.INTEGRITY_ERROR:
+    if self.code == vtrpc_pb2.ALREADY_EXISTS:
       # Prune the error message to truncate after the mysql errno, since
       # the error message may contain the query string with bind variables.
       msg = self.message.lower()
@@ -142,7 +142,7 @@ class VitessError(Exception):
       pruned_msg = msg[:msg.find(parts[2])]
       new_args = (pruned_msg,) + tuple(args[1:])
       return dbexceptions.IntegrityError(new_args)
-    if self.code == vtrpc_pb2.BAD_INPUT:
+    if self.code == vtrpc_pb2.INVALID_ARGUMENT:
       return dbexceptions.ProgrammingError(args)
     return dbexceptions.DatabaseError(args)
 

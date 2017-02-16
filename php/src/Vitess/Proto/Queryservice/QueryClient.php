@@ -106,6 +106,18 @@ namespace Vitess\Proto\Queryservice {
       return $this->_simpleRequest('/queryservice.Query/BeginExecuteBatch', $argument, '\Vitess\Proto\Query\BeginExecuteBatchResponse::deserialize', $metadata, $options);
     }
     /**
+     * @param Vitess\Proto\Query\MessageStreamRequest $input
+     */
+    public function MessageStream($argument, $metadata = array(), $options = array()) {
+      return $this->_serverStreamRequest('/queryservice.Query/MessageStream', $argument, '\Vitess\Proto\Query\MessageStreamResponse::deserialize', $metadata, $options);
+    }
+    /**
+     * @param Vitess\Proto\Query\MessageAckRequest $input
+     */
+    public function MessageAck(\Vitess\Proto\Query\MessageAckRequest $argument, $metadata = array(), $options = array()) {
+      return $this->_simpleRequest('/queryservice.Query/MessageAck', $argument, '\Vitess\Proto\Query\MessageAckResponse::deserialize', $metadata, $options);
+    }
+    /**
      * @param Vitess\Proto\Query\SplitQueryRequest $input
      */
     public function SplitQuery(\Vitess\Proto\Query\SplitQueryRequest $argument, $metadata = array(), $options = array()) {

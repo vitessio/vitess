@@ -24,68 +24,68 @@ import (
 // See: https://github.com/grpc/grpc-go/issues/319
 const GRPCServerErrPrefix = "gRPCServerError:"
 
-// CodeToLegacyErrorCode maps a vtrpcpb.Code to a vtrpcpb.ErrorCode.
-func CodeToLegacyErrorCode(code vtrpcpb.Code) vtrpcpb.ErrorCode {
+// CodeToLegacyErrorCode maps a vtrpcpb.Code to a vtrpcpb.LegacyErrorCode.
+func CodeToLegacyErrorCode(code vtrpcpb.Code) vtrpcpb.LegacyErrorCode {
 	switch code {
 	case vtrpcpb.Code_OK:
-		return vtrpcpb.ErrorCode_SUCCESS
+		return vtrpcpb.LegacyErrorCode_SUCCESS_LEGACY
 	case vtrpcpb.Code_CANCELED:
-		return vtrpcpb.ErrorCode_CANCELLED_LEGACY
+		return vtrpcpb.LegacyErrorCode_CANCELLED_LEGACY
 	case vtrpcpb.Code_UNKNOWN:
-		return vtrpcpb.ErrorCode_UNKNOWN_ERROR
+		return vtrpcpb.LegacyErrorCode_UNKNOWN_ERROR_LEGACY
 	case vtrpcpb.Code_INVALID_ARGUMENT:
-		return vtrpcpb.ErrorCode_BAD_INPUT
+		return vtrpcpb.LegacyErrorCode_BAD_INPUT_LEGACY
 	case vtrpcpb.Code_DEADLINE_EXCEEDED:
-		return vtrpcpb.ErrorCode_DEADLINE_EXCEEDED_LEGACY
+		return vtrpcpb.LegacyErrorCode_DEADLINE_EXCEEDED_LEGACY
 	case vtrpcpb.Code_ALREADY_EXISTS:
-		return vtrpcpb.ErrorCode_INTEGRITY_ERROR
+		return vtrpcpb.LegacyErrorCode_INTEGRITY_ERROR_LEGACY
 	case vtrpcpb.Code_PERMISSION_DENIED:
-		return vtrpcpb.ErrorCode_PERMISSION_DENIED_LEGACY
+		return vtrpcpb.LegacyErrorCode_PERMISSION_DENIED_LEGACY
 	case vtrpcpb.Code_RESOURCE_EXHAUSTED:
-		return vtrpcpb.ErrorCode_RESOURCE_EXHAUSTED_LEGACY
+		return vtrpcpb.LegacyErrorCode_RESOURCE_EXHAUSTED_LEGACY
 	case vtrpcpb.Code_FAILED_PRECONDITION:
-		return vtrpcpb.ErrorCode_QUERY_NOT_SERVED
+		return vtrpcpb.LegacyErrorCode_QUERY_NOT_SERVED_LEGACY
 	case vtrpcpb.Code_ABORTED:
-		return vtrpcpb.ErrorCode_NOT_IN_TX
+		return vtrpcpb.LegacyErrorCode_NOT_IN_TX_LEGACY
 	case vtrpcpb.Code_INTERNAL:
-		return vtrpcpb.ErrorCode_INTERNAL_ERROR
+		return vtrpcpb.LegacyErrorCode_INTERNAL_ERROR_LEGACY
 	case vtrpcpb.Code_UNAVAILABLE:
-		return vtrpcpb.ErrorCode_TRANSIENT_ERROR
+		return vtrpcpb.LegacyErrorCode_TRANSIENT_ERROR_LEGACY
 	case vtrpcpb.Code_UNAUTHENTICATED:
-		return vtrpcpb.ErrorCode_UNAUTHENTICATED_LEGACY
+		return vtrpcpb.LegacyErrorCode_UNAUTHENTICATED_LEGACY
 	default:
-		return vtrpcpb.ErrorCode_UNKNOWN_ERROR
+		return vtrpcpb.LegacyErrorCode_UNKNOWN_ERROR_LEGACY
 	}
 }
 
-// LegacyErrorCodeToCode maps a vtrpcpb.ErrorCode to a gRPC vtrpcpb.Code.
-func LegacyErrorCodeToCode(code vtrpcpb.ErrorCode) vtrpcpb.Code {
+// LegacyErrorCodeToCode maps a vtrpcpb.LegacyErrorCode to a gRPC vtrpcpb.Code.
+func LegacyErrorCodeToCode(code vtrpcpb.LegacyErrorCode) vtrpcpb.Code {
 	switch code {
-	case vtrpcpb.ErrorCode_SUCCESS:
+	case vtrpcpb.LegacyErrorCode_SUCCESS_LEGACY:
 		return vtrpcpb.Code_OK
-	case vtrpcpb.ErrorCode_CANCELLED_LEGACY:
+	case vtrpcpb.LegacyErrorCode_CANCELLED_LEGACY:
 		return vtrpcpb.Code_CANCELED
-	case vtrpcpb.ErrorCode_UNKNOWN_ERROR:
+	case vtrpcpb.LegacyErrorCode_UNKNOWN_ERROR_LEGACY:
 		return vtrpcpb.Code_UNKNOWN
-	case vtrpcpb.ErrorCode_BAD_INPUT:
+	case vtrpcpb.LegacyErrorCode_BAD_INPUT_LEGACY:
 		return vtrpcpb.Code_INVALID_ARGUMENT
-	case vtrpcpb.ErrorCode_DEADLINE_EXCEEDED_LEGACY:
+	case vtrpcpb.LegacyErrorCode_DEADLINE_EXCEEDED_LEGACY:
 		return vtrpcpb.Code_DEADLINE_EXCEEDED
-	case vtrpcpb.ErrorCode_INTEGRITY_ERROR:
+	case vtrpcpb.LegacyErrorCode_INTEGRITY_ERROR_LEGACY:
 		return vtrpcpb.Code_ALREADY_EXISTS
-	case vtrpcpb.ErrorCode_PERMISSION_DENIED_LEGACY:
+	case vtrpcpb.LegacyErrorCode_PERMISSION_DENIED_LEGACY:
 		return vtrpcpb.Code_PERMISSION_DENIED
-	case vtrpcpb.ErrorCode_RESOURCE_EXHAUSTED_LEGACY:
+	case vtrpcpb.LegacyErrorCode_RESOURCE_EXHAUSTED_LEGACY:
 		return vtrpcpb.Code_RESOURCE_EXHAUSTED
-	case vtrpcpb.ErrorCode_QUERY_NOT_SERVED:
+	case vtrpcpb.LegacyErrorCode_QUERY_NOT_SERVED_LEGACY:
 		return vtrpcpb.Code_FAILED_PRECONDITION
-	case vtrpcpb.ErrorCode_NOT_IN_TX:
+	case vtrpcpb.LegacyErrorCode_NOT_IN_TX_LEGACY:
 		return vtrpcpb.Code_ABORTED
-	case vtrpcpb.ErrorCode_INTERNAL_ERROR:
+	case vtrpcpb.LegacyErrorCode_INTERNAL_ERROR_LEGACY:
 		return vtrpcpb.Code_INTERNAL
-	case vtrpcpb.ErrorCode_TRANSIENT_ERROR:
+	case vtrpcpb.LegacyErrorCode_TRANSIENT_ERROR_LEGACY:
 		return vtrpcpb.Code_UNAVAILABLE
-	case vtrpcpb.ErrorCode_UNAUTHENTICATED_LEGACY:
+	case vtrpcpb.LegacyErrorCode_UNAUTHENTICATED_LEGACY:
 		return vtrpcpb.Code_UNAUTHENTICATED
 	default:
 		return vtrpcpb.Code_UNKNOWN

@@ -36,19 +36,37 @@ class ProtoUtils
         $error = $response->getError();
         if ($error) {
             switch ($error->getCode()) {
-                case ErrorCode::SUCCESS:
+                case ErrorCode::OK:
                     break;
-                case ErrorCode::BAD_INPUT:
+                case ErrorCode::INVALID_ARGUMENT:
                     throw new Error\BadInput($error->getMessage());
                 case ErrorCode::DEADLINE_EXCEEDED:
                     throw new Error\DeadlineExceeded($error->getMessage());
-                case ErrorCode::INTEGRITY_ERROR:
+                case ErrorCode::ALREADY_EXISTS:
                     throw new Error\Integrity($error->getMessage());
-                case ErrorCode::TRANSIENT_ERROR:
+                case ErrorCode::UNAVAILABLE:
                     throw new Error\Transient($error->getMessage());
                 case ErrorCode::UNAUTHENTICATED:
                     throw new Error\Unauthenticated($error->getMessage());
-                case ErrorCode::NOT_IN_TX:
+                case ErrorCode::ABORTED:
+                    throw new Error\Aborted($error->getMessage());
+                default:
+                    throw new Exception($error->getCode() . ': ' . $error->getMessage());
+            }
+            switch ($error->getLegacyCode()) {
+                case ErrorCode::SUCCESS:
+                    break;
+                case ErrorCode::BAD_INPUT_LEGACY:
+                    throw new Error\BadInput($error->getMessage());
+                case ErrorCode::DEADLINE_EXCEEDED_LEGACY:
+                    throw new Error\DeadlineExceeded($error->getMessage());
+                case ErrorCode::INTEGRITY_ERROR_LEGACY:
+                    throw new Error\Integrity($error->getMessage());
+                case ErrorCode::TRANSIENT_ERROR_LEGACY:
+                    throw new Error\Transient($error->getMessage());
+                case ErrorCode::UNAUTHENTICATED_LEGACY:
+                    throw new Error\Unauthenticated($error->getMessage());
+                case ErrorCode::NOT_IN_TX_LEGACY:
                     throw new Error\Aborted($error->getMessage());
                 default:
                     throw new Exception($error->getCode() . ': ' . $error->getMessage());

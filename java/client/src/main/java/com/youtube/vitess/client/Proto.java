@@ -51,19 +51,39 @@ public class Proto {
       String sqlState = getSQLState(error.getMessage());
 
       switch (error.getCode()) {
-        case SUCCESS:
+        case OK:
           break;
-        case BAD_INPUT:
+        case INVALID_ARGUMENT:
           throw new SQLSyntaxErrorException(error.toString(), sqlState, errno);
         case DEADLINE_EXCEEDED:
           throw new SQLTimeoutException(error.toString(), sqlState, errno);
-        case INTEGRITY_ERROR:
+        case ALREADY_EXISTS:
           throw new SQLIntegrityConstraintViolationException(error.toString(), sqlState, errno);
-        case TRANSIENT_ERROR:
+        case UNAVAILABLE:
           throw new SQLTransientException(error.toString(), sqlState, errno);
         case UNAUTHENTICATED:
           throw new SQLInvalidAuthorizationSpecException(error.toString(), sqlState, errno);
-        case NOT_IN_TX:
+        case ABORTED:
+          throw new SQLRecoverableException(error.toString(), sqlState, errno);
+        default:
+          throw new SQLNonTransientException("Vitess RPC error: " + error.toString(), sqlState,
+              errno);
+      }
+
+      switch (error.getLegacyCode()) {
+        case SUCCESS_LEGACY:
+          break;
+        case BAD_INPUT_LEGACY:
+          throw new SQLSyntaxErrorException(error.toString(), sqlState, errno);
+        case DEADLINE_EXCEEDED_LEGACY:
+          throw new SQLTimeoutException(error.toString(), sqlState, errno);
+        case INTEGRITY_ERROR_LEGACY:
+          throw new SQLIntegrityConstraintViolationException(error.toString(), sqlState, errno);
+        case TRANSIENT_ERROR_LEGACY:
+          throw new SQLTransientException(error.toString(), sqlState, errno);
+        case UNAUTHENTICATED_LEGACY:
+          throw new SQLInvalidAuthorizationSpecException(error.toString(), sqlState, errno);
+        case NOT_IN_TX_LEGACY:
           throw new SQLRecoverableException(error.toString(), sqlState, errno);
         default:
           throw new SQLNonTransientException("Vitess RPC error: " + error.toString(), sqlState,
