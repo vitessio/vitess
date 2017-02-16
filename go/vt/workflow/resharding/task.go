@@ -14,35 +14,33 @@ import (
 	workflowpb "github.com/youtube/vitess/go/vt/proto/workflow"
 )
 
-func createTaskID(phase, shardName string) string {
+func createTaskID(phase PhaseType, shardName string) string {
 	return fmt.Sprintf("%s_%s", phase, shardName)
 }
 
 // GetTasks returns selected tasks for a phase from the checkpoint
 // with expected execution order.
-func (hw *HorizontalReshardingWorkflow) GetTasks(checkpoint *workflowpb.WorkflowCheckpoint, phaseName string) []*workflowpb.Task {
+func (hw *HorizontalReshardingWorkflow) GetTasks(checkpoint *workflowpb.WorkflowCheckpoint, phase PhaseType) []*workflowpb.Task {
 	var shards []string
-	switch phaseName {
-	case copySchemaName, waitForFilteredReplicationName, diffName:
+	switch phase {
+	case phaseCopySchema, phaseWaitForFilteredReplication, phaseDiff:
 		shards = strings.Split(checkpoint.Settings["destination_shards"], ",")
-	case cloneName, migrateRdonlyName, migrateReplicaName, migrateMasterName:
+	case phaseClone, phaseMigrateRdonly, phaseMigrateReplica, phaseMigrateMaster:
 		shards = strings.Split(checkpoint.Settings["source_shards"], ",")
 	}
 
 	var tasks []*workflowpb.Task
 	for _, s := range shards {
-		taskID := createTaskID(phaseName, s)
+		taskID := createTaskID(phase, s)
 		tasks = append(tasks, checkpoint.Tasks[taskID])
 	}
 	return tasks
 }
 
-// runCopySchema runs CopySchema for a destination shard.
-// There should be #destshards parameters, while each param includes 1 sourceshard and 1 destshard.
-func (hw *HorizontalReshardingWorkflow) runCopySchema(ctx context.Context, attributes map[string]string) error {
-	s := attributes["source_shard"]
-	d := attributes["destination_shard"]
-	keyspace := attributes["keyspace"]
+func (hw *HorizontalReshardingWorkflow) runCopySchema(ctx context.Context, t *workflowpb.Task) error {
+	s := t.Attributes["source_shard"]
+	d := t.Attributes["destination_shard"]
+	keyspace := t.Attributes["keyspace"]
 	err := hw.wr.CopySchemaShardFromShard(ctx, nil /* tableArray*/, nil /* excludeTableArray */, true, /*includeViews*/
 		keyspace, s, keyspace, d, wrangler.DefaultWaitSlaveTimeout)
 	if err != nil {
@@ -52,12 +50,10 @@ func (hw *HorizontalReshardingWorkflow) runCopySchema(ctx context.Context, attri
 	return err
 }
 
-// runSplitClone runs SplitClone for a source shard.
-// There should be #sourceshards parameters, while each param includes 1 sourceshard and its destshards. The destShards are useless here.
-func (hw *HorizontalReshardingWorkflow) runSplitClone(ctx context.Context, attributes map[string]string) error {
-	s := attributes["source_shard"]
-	worker := attributes["vtworker"]
-	keyspace := attributes["keyspace"]
+func (hw *HorizontalReshardingWorkflow) runSplitClone(ctx context.Context, t *workflowpb.Task) error {
+	s := t.Attributes["source_shard"]
+	worker := t.Attributes["vtworker"]
+	keyspace := t.Attributes["keyspace"]
 
 	sourceKeyspaceShard := topoproto.KeyspaceShardString(keyspace, s)
 	// Reset the vtworker to avoid error if vtworker command has been called elsewhere.
@@ -76,11 +72,9 @@ func (hw *HorizontalReshardingWorkflow) runSplitClone(ctx context.Context, attri
 	return nil
 }
 
-// runWaitForFilteredReplication runs WaitForFilteredReplication for a destination shard.
-// There should be #destshards parameters, while each param includes 1 sourceshard and 1 destshard.
-func (hw *HorizontalReshardingWorkflow) runWaitForFilteredReplication(ctx context.Context, attributes map[string]string) error {
-	d := attributes["destination_shard"]
-	keyspace := attributes["keyspace"]
+func (hw *HorizontalReshardingWorkflow) runWaitForFilteredReplication(ctx context.Context, t *workflowpb.Task) error {
+	d := t.Attributes["destination_shard"]
+	keyspace := t.Attributes["keyspace"]
 
 	if err := hw.wr.WaitForFilteredReplication(ctx, keyspace, d, wrangler.DefaultWaitForFilteredReplicationMaxDelay); err != nil {
 		hw.logger.Infof("Horizontal Resharding: error in WaitForFilteredReplication: %v.", err)
@@ -90,11 +84,10 @@ func (hw *HorizontalReshardingWorkflow) runWaitForFilteredReplication(ctx contex
 	return nil
 }
 
-// runSplitDiff runs SplitDiff for a destination shard.
-func (hw *HorizontalReshardingWorkflow) runSplitDiff(ctx context.Context, attributes map[string]string) error {
-	d := attributes["destination_shard"]
-	worker := attributes["vtworker"]
-	keyspace := attributes["keyspace"]
+func (hw *HorizontalReshardingWorkflow) runSplitDiff(ctx context.Context, t *workflowpb.Task) error {
+	d := t.Attributes["destination_shard"]
+	worker := t.Attributes["vtworker"]
+	keyspace := t.Attributes["keyspace"]
 
 	automation.ExecuteVtworker(hw.ctx, worker, []string{"Reset"})
 	args := []string{"SplitDiff", "--min_healthy_rdonly_tablets=1", topoproto.KeyspaceShardString(keyspace, d)}
@@ -107,12 +100,10 @@ func (hw *HorizontalReshardingWorkflow) runSplitDiff(ctx context.Context, attrib
 	return nil
 }
 
-// runMigrate runs the migration sequentially among all source shards.
-// There should be 1 parameter, which includes all source shards to be migrated.
-func (hw *HorizontalReshardingWorkflow) runMigrate(ctx context.Context, attributes map[string]string) error {
-	s := attributes["source_shard"]
-	keyspace := attributes["keyspace"]
-	servedTypeStr := attributes["served_type"]
+func (hw *HorizontalReshardingWorkflow) runMigrate(ctx context.Context, t *workflowpb.Task) error {
+	s := t.Attributes["source_shard"]
+	keyspace := t.Attributes["keyspace"]
+	servedTypeStr := t.Attributes["served_type"]
 
 	servedType, err := topoproto.ParseTabletType(servedTypeStr)
 	if err != nil {

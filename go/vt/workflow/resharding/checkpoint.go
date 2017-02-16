@@ -2,6 +2,7 @@ package resharding
 
 import (
 	"context"
+	"fmt"
 	"sync"
 
 	"github.com/golang/protobuf/proto"
@@ -15,9 +16,9 @@ type CheckpointWriter struct {
 	topoServer topo.Server
 
 	// checkpointMu is used for protecting data access during checkpointing.
-	checkpointMu sync.Mutex
-	checkpoint   *workflowpb.WorkflowCheckpoint
-	wi           *topo.WorkflowInfo
+	mu         sync.Mutex
+	checkpoint *workflowpb.WorkflowCheckpoint
+	wi         *topo.WorkflowInfo
 }
 
 // NewCheckpointWriter creates a CheckpointWriter.
@@ -29,22 +30,23 @@ func NewCheckpointWriter(ts topo.Server, checkpoint *workflowpb.WorkflowCheckpoi
 	}
 }
 
-// UpdateTask updates the status of task in the checkpoint.
-func (c *CheckpointWriter) UpdateTask(taskID string, status workflowpb.TaskState, err string) error {
-	// Writing the checkpoint is protected to avoid the situation that the
-	// task value is partially updated when saving the checkpoint.
-	c.checkpointMu.Lock()
-	defer c.checkpointMu.Unlock()
+// UpdateTask updates the task status in the checkpointing copy and
+// saves the full checkpoint to the topology server.
+func (c *CheckpointWriter) UpdateTask(taskID string, status workflowpb.TaskState, err error) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 
-	c.checkpoint.Tasks[taskID].State = status
-	c.checkpoint.Tasks[taskID].Error = err
-	return c.Save()
-}
+	errorMessage := ""
+	if err != nil {
+		errorMessage = err.Error()
+	}
 
-// Save packets the checkpoint and sends it to the topology server.
-func (c *CheckpointWriter) Save() error {
-	c.checkpointMu.Lock()
-	defer c.checkpointMu.Unlock()
+	t := c.checkpoint.Tasks[taskID]
+
+	fmt.Printf("error message send to task %v: %v\n", t.Id, errorMessage)
+
+	t.State = status
+	t.Error = errorMessage
 	return c.saveLocked()
 }
 

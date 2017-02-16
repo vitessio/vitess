@@ -191,13 +191,13 @@ func (n *Node) deepCopyFrom(otherNode *Node, copyChildren bool) error {
 	*n = *otherNode
 	n.Children = oldChildren
 
-	n.Actions = []*Action{}
+	/*n.Actions = []*Action{}
 	for _, otherAction := range otherNode.Actions {
 		action := &Action{}
 		*action = *otherAction
 		n.Actions = append(n.Actions, action)
 	}
-
+	*/
 	if !copyChildren {
 		return nil
 	}
@@ -355,6 +355,7 @@ func (m *NodeManager) updateNodeAndBroadcastLocked(userNode *Node, updateChildre
 	if err != nil {
 		return err
 	}
+
 	userNode.LastChanged = time.Now().Unix()
 	if err := savedNode.deepCopyFrom(userNode, updateChildren); err != nil {
 		return err
@@ -396,13 +397,8 @@ func (m *NodeManager) Action(ctx context.Context, ap *ActionParameters) error {
 	return n.Listener.Action(ctx, ap.Path, ap.Name)
 }
 
-func (m *NodeManager) GetNodeByRelativePath(parentNode *Node, childPath string) (*Node, error) {
-	fullNodePath := path.Join(parentNode.PathName, childPath)
-	node, err := m.getNodeByPath(fullNodePath)
-	if err != nil {
-		return nil, err
-	}
-	return node, nil
+func (m *NodeManager) GetNodeByPath(nodePath string) (*Node, error) {
+	return m.getNodeByPath(nodePath)
 }
 
 func (m *NodeManager) getNodeByPath(nodePath string) (*Node, error) {

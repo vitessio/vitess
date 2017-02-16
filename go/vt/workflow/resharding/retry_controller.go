@@ -20,7 +20,6 @@ func CreateRetryController(node *workflow.Node, actionListener workflow.ActionLi
 	}
 	node.Actions = []*workflow.Action{retryAction}
 	node.Listener = actionListener
-	node.BroadcastChanges(false /* updateChildren */)
 	return &RetryController{
 		node:         node,
 		retryChannel: make(chan struct{}),

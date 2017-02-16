@@ -2,233 +2,228 @@ package resharding
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"strconv"
+	"path"
 	"strings"
 	"sync"
 	"testing"
 
+	"github.com/golang/protobuf/proto"
+	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/memorytopo"
 	"github.com/youtube/vitess/go/vt/workflow"
 
 	workflowpb "github.com/youtube/vitess/go/vt/proto/workflow"
 )
 
-const (
-	printName = "Sleep"
-)
-
 func TestParallelRunner(t *testing.T) {
-	cp, err := startWorkflow(5)
+	ts := memorytopo.NewServer("cell")
+	m := workflow.NewManager(ts)
+
+	// Run the manager in the background.
+	wg, cancel, _ := startManager(t, m)
+
+	// Create a testworkflow.
+	uuid, err := m.Create(context.Background(), testWorkflowFactoryName, []string{"-retry=false", "-count=2"})
 	if err != nil {
-		t.Errorf("%s: Fails in creating workflow", err)
-	}
-	ctx := context.Background()
-	tasks := GetOrderedPrintTasks(cp.checkpoint)
-
-	p := NewParallelRunner(ctx, cp, make(map[string]*workflow.Node), tasks)
-	executeLog := func(attr map[string]string) error {
-		t.Logf("The number passed to me is %v \n", attr["number"])
-		return nil
-	}
-	if err := p.Run(executeLog, PARALLEL); err != nil {
-		t.Errorf("%s: Parallel Runner should not fail", err)
+		t.Fatalf("cannot create testworkflow: %v", err)
 	}
 
-	// Check whether all tasks are in finished status.
-	for _, task := range cp.checkpoint.Tasks {
-		if task.State != workflowpb.TaskState_TaskDone || task.Error != "" {
-			t.Fatalf("Task info: %v, %v, %v: Parallel Runner task not succeed", task.Id, task.State, task.Attributes)
-		}
+	// Start the job
+	if err := m.Start(context.Background(), uuid); err != nil {
+		t.Fatalf("cannot start testworkflow: %v", err)
 	}
+
+	// Wait for the workflow to end.
+	m.Wait(context.Background(), uuid)
+
+	verifyWorkflowSuccess(context.Background(), t, ts, uuid)
+
+	// Stop the manager.
+	if err := m.Stop(context.Background(), uuid); err != nil {
+		t.Fatalf("cannot stop testworkflow: %v", err)
+	}
+	cancel()
+	wg.Wait()
 }
 
 func TestParallelRunnerRetryAction(t *testing.T) {
-	cp, err := startWorkflow(5)
+	// Tasks in the workflow are forced to fail at the first attempt. Then we
+	// retry task1, after it is finished successfully, we retry task2.
+	ts := memorytopo.NewServer("cell")
+	m := workflow.NewManager(ts)
+
+	// Run the manager in the background.
+	wg, cancel, ctx := startManager(t, m)
+
+	// Create a testworkflow.
+	uuid, err := m.Create(context.Background(), testWorkflowFactoryName, []string{"-retry=true", "-count=2"})
 	if err != nil {
-		t.Errorf("%s: Fails in creating workflow", err)
+		t.Fatalf("cannot create testworkflow: %v", err)
 	}
 
-	ctx := context.Background()
-
-	// Create UI nodes. Each task has a node.
-	// These task nodes are the children of a root node.
+	// We use notifications channel to monitor the update of UI.
 	notifications := make(chan []byte, 10)
-	nodeManager := workflow.NewNodeManager()
-	_, index, err := nodeManager.GetAndWatchFullTree(notifications)
+	_, index, err := m.NodeManager().GetAndWatchFullTree(notifications)
 	if err != nil {
 		t.Errorf("GetAndWatchTree Failed: %v", err)
 	}
-	defer nodeManager.CloseWatcher(index)
-
-	rootNode := &workflow.Node{
-		PathName: "test_root",
-		Name:     "root",
-	}
-	if err := nodeManager.AddRootNode(rootNode); err != nil {
-		t.Errorf("adding root node failed: %v", err)
-	}
-	result, ok := <-notifications
-
-	taskNodeMap := make(map[string]*workflow.Node)
-	for _, task := range cp.checkpoint.Tasks {
-		taskNode := &workflow.Node{
-			PathName: task.Id,
-			Name:     "task_" + task.Id,
-		}
-		taskNodeMap[task.Id] = taskNode
-		rootNode.Children = append(rootNode.Children, taskNode)
-	}
-
-	rootNode.BroadcastChanges(true /*updateChildren*/)
-
-	result, ok = <-notifications
-	if !ok ||
-		strings.Contains(string(result), `"children":[]`) ||
-		!strings.Contains(string(result), `"name":"task_Sleep_0"`) ||
-		!strings.Contains(string(result), `"name":"task_Sleep_1"`) ||
-		!strings.Contains(string(result), `"name":"task_Sleep_2"`) ||
-		!strings.Contains(string(result), `"name":"task_Sleep_3"`) ||
-		!strings.Contains(string(result), `"name":"task_Sleep_4"`) {
-		t.Errorf("unexpected behavior in adding children nodes: %v, %v", ok, string(result))
-	}
-
-	// Set up ParallelRunner.
-	tasks := GetOrderedPrintTasks(cp.checkpoint)
-	p := NewParallelRunner(ctx, cp, taskNodeMap, tasks)
-
-	// Set retry flag to be false. The targeting task will fail under this condition.
-	retryFlag := false
-	errMessage := "fake error for testing retry"
-	executeLog := func(attr map[string]string) error {
-		t.Logf("The number passed to me is %v \n", attr["number"])
-		n, err := strconv.Atoi(attr["number"])
-		if err != nil {
-			t.Logf("Converting number string to int fails: %v \n", attr["number"])
-			return err
-		}
-		if !retryFlag {
-			if n == 3 {
-				t.Logf("I will fail at this time since retry flag is false.")
-				return errors.New(errMessage)
-			}
-		}
-		return nil
-	}
-
+	defer m.NodeManager().CloseWatcher(index)
 	go func() {
-		// This goroutine is used to monitor the UI change.
-		// When the retry action is enabled, it will trigger it using nodemanager.
+		// This goroutine is used to detect and trigger the retry actions.
+		task1ID := createTestTaskID(PhaseSimple, 0)
+		task2ID := createTestTaskID(PhaseSimple, 1)
+
+		task1Node, err := m.NodeManager().GetNodeByPath(path.Join("/"+uuid, task1ID))
+		if err != nil {
+			t.Errorf("fail to find node for task %v: %v", task1ID, err)
+		}
+		task2Node, err := m.NodeManager().GetNodeByPath(path.Join("/"+uuid, task2ID))
+		if err != nil {
+			t.Errorf("fail to find node for task %v: %v", task2ID, err)
+		}
+
+		retry1 := false
+		retry2 := false
 		for {
 			select {
-			case mornitor := <-notifications:
-				if strings.Contains(string(mornitor), "Retry") {
-					// Check if Retry action is enabled for the expected task.
-					taskName := logTaskName(3)
-					nodeTarget := taskNodeMap[taskName]
-					taskTarget := cp.checkpoint.Tasks[taskName]
-					if taskTarget.State != workflowpb.TaskState_TaskDone ||
-						taskTarget.Error != errMessage ||
-						len(nodeTarget.Actions) != 1 {
-						t.Fatalf("Retry action is not enabled as expectedL %v, %v, %v", &nodeTarget, taskTarget.State, taskTarget.Error)
+			case monitor, ok := <-notifications:
+				monitorStr := string(monitor)
+				if !ok {
+					t.Errorf("notifications channel is closed unexpectedly: %v, %v", ok, monitorStr)
+				}
+				if strings.Contains(monitorStr, "Retry") {
+					if strings.Contains(monitorStr, task1ID) {
+						verifyTaskSuccessOrFailure(context.Background(), t, ts, uuid, task1ID, false /* isSuccess*/)
+						verifyRetryAction(t, task1Node)
+						retry1 = true
 					}
-
-					// Reset the retryFlag to make the task succeed when retrying.
-					retryFlag = true
-
-					t.Logf("Triggering retry action.")
-					if err := nodeManager.Action(ctx, &workflow.ActionParameters{
-						Path: "/test_root/" + logTaskName(3),
-						Name: "Retry",
-					}); err != nil {
-						t.Errorf("unexpected action error: %v", err)
+					if strings.Contains(monitorStr, task2ID) {
+						verifyTaskSuccessOrFailure(context.Background(), t, ts, uuid, task2ID, false /* isSuccess*/)
+						verifyRetryAction(t, task2Node)
+						retry2 = true
 					}
+				}
+				// After detecting both tasks have enabled retry actions after failure,
+				// retry task1, check its success, then retry task2, check its success.
+				if retry1 && retry2 {
+					clickRetry(ctx, t, m, task1Node.Path)
+					waitForFinished(ctx, t, notifications, task1ID, task1Node)
+					verifyTaskSuccessOrFailure(context.Background(), t, ts, uuid, task1ID, true /* isSuccess*/)
 
-					if len(nodeTarget.Actions) != 0 {
-						t.Fatalf("the node actions should be empty after triggering retry: %v", nodeTarget.Actions)
-					}
+					clickRetry(ctx, t, m, task2Node.Path)
+					waitForFinished(ctx, t, notifications, task2ID, task2Node)
+					verifyTaskSuccessOrFailure(context.Background(), t, ts, uuid, task2ID, true /* isSuccess*/)
 					return
 				}
 			case <-ctx.Done():
+				t.Errorf("context is canceled")
 				return
 			}
 		}
 	}()
 
-	// Call ParallelRunner.Run through a goroutine. In this way,
-	// the failure of task will not block the main function.
-	waitGroup := sync.WaitGroup{}
-	waitGroup.Add(1)
+	// Start the job
+	if err := m.Start(context.Background(), uuid); err != nil {
+		t.Fatalf("cannot start testworkflow: %v", err)
+	}
+	// Wait for the workflow to end.
+	m.Wait(context.Background(), uuid)
+
+	verifyWorkflowSuccess(context.Background(), t, ts, uuid)
+	// Stop the manager.
+	if err := m.Stop(context.Background(), uuid); err != nil {
+		t.Fatalf("cannot stop testworkflow: %v", err)
+	}
+	cancel()
+	wg.Wait()
+}
+
+func startManager(t *testing.T, m *workflow.Manager) (*sync.WaitGroup, context.CancelFunc, context.Context) {
+	// Run the manager in the background.
+	ctx, cancel := context.WithCancel(context.Background())
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
 	go func() {
-		defer waitGroup.Done()
-		err := p.Run(executeLog, PARALLEL)
-		if err != nil {
-			t.Logf("ParallelRunner.Run fails: %v", err)
-		}
+		m.Run(ctx)
+		wg.Done()
 	}()
 
-	waitGroup.Wait()
-	// Check that all tasks are finished successfully.
-	for _, task := range cp.checkpoint.Tasks {
-		if task.State != workflowpb.TaskState_TaskDone || task.Error != "" {
-			t.Fatalf("Task info: %v, %v, %v: Parallel Runner task not succeed", task.Id, task.State, task.Attributes)
+	m.WaitUntilRunning()
+	return wg, cancel, ctx
+}
+
+func clickRetry(ctx context.Context, t *testing.T, m *workflow.Manager, nodePath string) {
+	t.Logf("Click retry action on node: %v.", nodePath)
+	if err := m.NodeManager().Action(ctx, &workflow.ActionParameters{
+		Path: nodePath,
+		Name: "Retry",
+	}); err != nil {
+		t.Errorf("unexpected action error: %v", err)
+	}
+}
+
+func waitForFinished(ctx context.Context, t *testing.T, notifications chan []byte, taskID string, node *workflow.Node) {
+	for {
+		select {
+		case monitor, ok := <-notifications:
+			if !ok {
+				t.Errorf("unexpected notification: %v, %v", ok, string(monitor))
+			}
+
+			finishMessage := fmt.Sprintf(`"message":"task %v finished"`, taskID)
+			if strings.Contains(string(monitor), finishMessage) {
+				if len(node.Actions) != 0 {
+					t.Fatalf("the node actions should be empty after triggering retry: %v", node.Actions)
+				}
+				return
+			}
+		case <-ctx.Done():
+			return
 		}
 	}
 }
 
-func startWorkflow(taskNum int) (*CheckpointWriter, error) {
-	initCheckpoint := InitPrintTasks(taskNum)
-
-	w := &workflowpb.Workflow{
-		Uuid:        "testparallelrunner",
-		FactoryName: "simple_print",
-		State:       workflowpb.WorkflowState_NotStarted,
-	}
-	ts := memorytopo.NewServer("cell")
-	wi, err := ts.CreateWorkflow(context.TODO(), w)
+func verifyWorkflowSuccess(ctx context.Context, t *testing.T, ts topo.Server, uuid string) {
+	wi, err := ts.GetWorkflow(ctx, uuid)
 	if err != nil {
-		return nil, err
+		t.Errorf("fail to get workflow for: %v", uuid)
+	}
+	checkpoint := &workflowpb.WorkflowCheckpoint{}
+	if err := proto.Unmarshal(wi.Workflow.Data, checkpoint); err != nil {
+		t.Errorf("fails to get checkpoint for the workflow: %v", err)
 	}
 
-	cp := NewCheckpointWriter(ts, initCheckpoint, wi)
-	cp.Save()
-	return cp, nil
-}
-
-func logTaskName(num int) string {
-	return fmt.Sprintf("%v_%v", printName, num)
-}
-
-func InitPrintTasks(numTasks int) *workflowpb.WorkflowCheckpoint {
-	tasks := make(map[string]*workflowpb.Task)
-	var infoList []string
-	for i := 0; i < numTasks; i++ {
-		numStr := fmt.Sprintf("%v", i)
-		t := &workflowpb.Task{
-			Id:         logTaskName(i),
-			State:      workflowpb.TaskState_TaskNotStarted,
-			Attributes: map[string]string{"number": numStr},
+	for _, task := range checkpoint.Tasks {
+		if task.State != workflowpb.TaskState_TaskDone || task.Error != "" {
+			t.Fatalf("task: %v should succeed: task status: %v, %v", task.Id, task.State, task.Attributes)
 		}
-		tasks[t.Id] = t
-		infoList = append(infoList, numStr)
-	}
-	return &workflowpb.WorkflowCheckpoint{
-		CodeVersion: 0,
-		Tasks:       tasks,
-		Settings:    map[string]string{"numbers": strings.Join(infoList, ",")},
 	}
 }
 
-func GetOrderedPrintTasks(checkpoint *workflowpb.WorkflowCheckpoint) []*workflowpb.Task {
-	var tasks []*workflowpb.Task
-	for _, n := range strings.Split(checkpoint.Settings["numbers"], ",") {
-		num, err := strconv.Atoi(n)
-		if err != nil {
-			return nil
-		}
-		taskID := logTaskName(num)
-		tasks = append(tasks, checkpoint.Tasks[taskID])
+func verifyTaskSuccessOrFailure(ctx context.Context, t *testing.T, ts topo.Server, uuid, taskID string, isSuccess bool) {
+	wi, err := ts.GetWorkflow(ctx, uuid)
+	if err != nil {
+		t.Errorf("fail to get workflow for: %v", uuid)
 	}
-	return tasks
+
+	checkpoint := &workflowpb.WorkflowCheckpoint{}
+	if err := proto.Unmarshal(wi.Workflow.Data, checkpoint); err != nil {
+		t.Errorf("fails to get checkpoint for the workflow: %v", err)
+	}
+	task := checkpoint.Tasks[taskID]
+
+	taskError := ""
+	if !isSuccess {
+		taskError = errMessage
+	}
+	if task.State != workflowpb.TaskState_TaskDone || task.Error != taskError {
+		t.Errorf("task: %v should succeed. Task status: %v, %v", task.State, task.Error)
+	}
+}
+
+func verifyRetryAction(t *testing.T, node *workflow.Node) {
+	if len(node.Actions) != 1 || node.Actions[0].Name != "Retry" {
+		t.Errorf("unexpected Ation values: %v", node.Actions)
+	}
 }
