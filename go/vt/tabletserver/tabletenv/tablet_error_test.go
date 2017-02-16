@@ -114,7 +114,7 @@ func TestTabletErrorPrefix(t *testing.T) {
 	if tabletErr.Prefix() != "fatal: " {
 		t.Fatalf("tablet error with error code: INTERNAL_ERROR should has prefix: 'fatal: '")
 	}
-	tabletErr = NewTabletErrorSQL(vtrpcpb.ErrorCode_RESOURCE_EXHAUSTED, sqldb.NewSQLError(2000, "HY000", "test"))
+	tabletErr = NewTabletErrorSQL(vtrpcpb.ErrorCode_RESOURCE_EXHAUSTED_LEGACY, sqldb.NewSQLError(2000, "HY000", "test"))
 	if tabletErr.Prefix() != "tx_pool_full: " {
 		t.Fatalf("tablet error with error code: RESOURCE_EXHAUSTED should has prefix: 'tx_pool_full: '")
 	}
@@ -141,7 +141,7 @@ func TestTabletErrorRecordStats(t *testing.T) {
 		t.Fatalf("tablet error with error code INTERNAL_ERROR should increase Fatal error count by 1")
 	}
 
-	tabletErr = NewTabletErrorSQL(vtrpcpb.ErrorCode_RESOURCE_EXHAUSTED, sqldb.NewSQLError(2000, "HY000", "test"))
+	tabletErr = NewTabletErrorSQL(vtrpcpb.ErrorCode_RESOURCE_EXHAUSTED_LEGACY, sqldb.NewSQLError(2000, "HY000", "test"))
 	txPoolFullCounterBefore := ErrorStats.Counts()["TxPoolFull"]
 	tabletErr.RecordStats()
 	txPoolFullCounterAfter := ErrorStats.Counts()["TxPoolFull"]
@@ -203,7 +203,7 @@ func TestTabletErrorLogUncaughtErr(t *testing.T) {
 }
 
 func TestTabletErrorTxPoolFull(t *testing.T) {
-	tabletErr := NewTabletErrorSQL(vtrpcpb.ErrorCode_RESOURCE_EXHAUSTED, sqldb.NewSQLError(1000, "HY000", "test"))
+	tabletErr := NewTabletErrorSQL(vtrpcpb.ErrorCode_RESOURCE_EXHAUSTED_LEGACY, sqldb.NewSQLError(1000, "HY000", "test"))
 	defer func() {
 		err := recover()
 		if err != nil {

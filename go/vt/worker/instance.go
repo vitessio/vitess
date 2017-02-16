@@ -141,7 +141,7 @@ func (wi *Instance) setAndStartWorker(ctx context.Context, wrk Worker, wr *wrang
 		case <-wi.currentContext.Done():
 			// Context is done i.e. probably canceled.
 			if wi.currentContext.Err() == context.Canceled {
-				err = vterrors.NewVitessError(vtrpcpb.ErrorCode_CANCELLED, err, "vtworker command was canceled: %v", err)
+				err = vterrors.NewVitessError(vtrpcpb.ErrorCode_CANCELLED_LEGACY, err, "vtworker command was canceled: %v", err)
 			}
 		default:
 		}

@@ -82,7 +82,7 @@ func (stc *ScatterConn) endAction(startTime time.Time, allErrors *concurrency.Al
 		if ec != vtrpcpb.ErrorCode_INTEGRITY_ERROR && ec != vtrpcpb.ErrorCode_BAD_INPUT {
 			stc.tabletCallErrorCount.Add(statsKey, 1)
 		}
-		if ec == vtrpcpb.ErrorCode_RESOURCE_EXHAUSTED || ec == vtrpcpb.ErrorCode_NOT_IN_TX {
+		if ec == vtrpcpb.ErrorCode_RESOURCE_EXHAUSTED_LEGACY || ec == vtrpcpb.ErrorCode_NOT_IN_TX {
 			session.SetRollback()
 		}
 	}

@@ -1189,7 +1189,7 @@ func (tsv *TabletServer) handleError(
 	switch terr.ErrorCode {
 	case vtrpcpb.ErrorCode_QUERY_NOT_SERVED:
 		return myError
-	case vtrpcpb.ErrorCode_RESOURCE_EXHAUSTED:
+	case vtrpcpb.ErrorCode_RESOURCE_EXHAUSTED_LEGACY:
 		logMethod = logTxPoolFull.Errorf
 	case vtrpcpb.ErrorCode_INTERNAL_ERROR:
 		logMethod = log.Errorf

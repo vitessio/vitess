@@ -22,7 +22,7 @@ func FromVtRPCError(rpcErr *vtrpcpb.RPCError) error {
 		return nil
 	}
 	return &VitessError{
-		Code: rpcErr.Code,
+		Code: rpcErr.LegacyCode,
 		err:  errors.New(rpcErr.Message),
 	}
 }
@@ -33,7 +33,7 @@ func VtRPCErrorFromVtError(err error) *vtrpcpb.RPCError {
 		return nil
 	}
 	return &vtrpcpb.RPCError{
-		Code:    RecoverVtErrorCode(err),
-		Message: err.Error(),
+		LegacyCode: RecoverVtErrorCode(err),
+		Message:    err.Error(),
 	}
 }

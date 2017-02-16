@@ -1035,7 +1035,7 @@ func TestQueryExecutorTableAclNoPermission(t *testing.T) {
 	if !ok {
 		t.Fatalf("got: %v, want: *tabletenv.TabletError", err)
 	}
-	if tabletError.ErrorCode != vtrpcpb.ErrorCode_PERMISSION_DENIED {
+	if tabletError.ErrorCode != vtrpcpb.ErrorCode_PERMISSION_DENIED_LEGACY {
 		t.Fatalf("got: %s, want: PERMISSION_DENIED", tabletError.ErrorCode)
 	}
 }
@@ -1089,7 +1089,7 @@ func TestQueryExecutorTableAclExemptACL(t *testing.T) {
 	if !ok {
 		t.Fatalf("got: %v, want: *tabletenv.TabletError", err)
 	}
-	if tabletError.ErrorCode != vtrpcpb.ErrorCode_PERMISSION_DENIED {
+	if tabletError.ErrorCode != vtrpcpb.ErrorCode_PERMISSION_DENIED_LEGACY {
 		t.Fatalf("got: %s, want: PERMISSION_DENIED", tabletError.ErrorCode)
 	}
 	if !strings.Contains(tabletError.Error(), "table acl error") {

@@ -1988,7 +1988,7 @@ func TestErrorPropagation(t *testing.T) {
 		sbc.MustFailCanceled = 20
 	}, func(sbc *sandboxconn.SandboxConn) {
 		sbc.MustFailCanceled = 0
-	}, vtrpcpb.ErrorCode_CANCELLED)
+	}, vtrpcpb.ErrorCode_CANCELLED_LEGACY)
 
 	// ErrorCode_UNKNOWN_ERROR
 	testErrorPropagation(t, sbcs, func(sbc *sandboxconn.SandboxConn) {
@@ -2009,7 +2009,7 @@ func TestErrorPropagation(t *testing.T) {
 		sbc.MustFailDeadlineExceeded = 20
 	}, func(sbc *sandboxconn.SandboxConn) {
 		sbc.MustFailDeadlineExceeded = 0
-	}, vtrpcpb.ErrorCode_DEADLINE_EXCEEDED)
+	}, vtrpcpb.ErrorCode_DEADLINE_EXCEEDED_LEGACY)
 
 	// ErrorCode_INTEGRITY_ERROR
 	testErrorPropagation(t, sbcs, func(sbc *sandboxconn.SandboxConn) {
@@ -2023,14 +2023,14 @@ func TestErrorPropagation(t *testing.T) {
 		sbc.MustFailPermissionDenied = 20
 	}, func(sbc *sandboxconn.SandboxConn) {
 		sbc.MustFailPermissionDenied = 0
-	}, vtrpcpb.ErrorCode_PERMISSION_DENIED)
+	}, vtrpcpb.ErrorCode_PERMISSION_DENIED_LEGACY)
 
 	// ErrorCode_RESOURCE_EXHAUSTED
 	testErrorPropagation(t, sbcs, func(sbc *sandboxconn.SandboxConn) {
 		sbc.MustFailTxPool = 20
 	}, func(sbc *sandboxconn.SandboxConn) {
 		sbc.MustFailTxPool = 0
-	}, vtrpcpb.ErrorCode_RESOURCE_EXHAUSTED)
+	}, vtrpcpb.ErrorCode_RESOURCE_EXHAUSTED_LEGACY)
 
 	// ErrorCode_QUERY_NOT_SERVED
 	testErrorPropagation(t, sbcs, func(sbc *sandboxconn.SandboxConn) {
@@ -2065,7 +2065,7 @@ func TestErrorPropagation(t *testing.T) {
 		sbc.MustFailUnauthenticated = 20
 	}, func(sbc *sandboxconn.SandboxConn) {
 		sbc.MustFailUnauthenticated = 0
-	}, vtrpcpb.ErrorCode_UNAUTHENTICATED)
+	}, vtrpcpb.ErrorCode_UNAUTHENTICATED_LEGACY)
 }
 
 // This test makes sure that if we start a transaction and hit a critical

@@ -20,10 +20,93 @@ DESCRIPTOR = _descriptor.FileDescriptor(
   name='vtrpc.proto',
   package='vtrpc',
   syntax='proto3',
-  serialized_pb=_b('\n\x0bvtrpc.proto\x12\x05vtrpc\"F\n\x08\x43\x61llerID\x12\x11\n\tprincipal\x18\x01 \x01(\t\x12\x11\n\tcomponent\x18\x02 \x01(\t\x12\x14\n\x0csubcomponent\x18\x03 \x01(\t\";\n\x08RPCError\x12\x1e\n\x04\x63ode\x18\x01 \x01(\x0e\x32\x10.vtrpc.ErrorCode\x12\x0f\n\x07message\x18\x02 \x01(\t*\x87\x02\n\tErrorCode\x12\x0b\n\x07SUCCESS\x10\x00\x12\r\n\tCANCELLED\x10\x01\x12\x11\n\rUNKNOWN_ERROR\x10\x02\x12\r\n\tBAD_INPUT\x10\x03\x12\x15\n\x11\x44\x45\x41\x44LINE_EXCEEDED\x10\x04\x12\x13\n\x0fINTEGRITY_ERROR\x10\x05\x12\x15\n\x11PERMISSION_DENIED\x10\x06\x12\x16\n\x12RESOURCE_EXHAUSTED\x10\x07\x12\x14\n\x10QUERY_NOT_SERVED\x10\x08\x12\r\n\tNOT_IN_TX\x10\t\x12\x12\n\x0eINTERNAL_ERROR\x10\n\x12\x13\n\x0fTRANSIENT_ERROR\x10\x0b\x12\x13\n\x0fUNAUTHENTICATED\x10\x0c\x42\x1a\n\x18\x63om.youtube.vitess.protob\x06proto3')
+  serialized_pb=_b('\n\x0bvtrpc.proto\x12\x05vtrpc\"F\n\x08\x43\x61llerID\x12\x11\n\tprincipal\x18\x01 \x01(\t\x12\x11\n\tcomponent\x18\x02 \x01(\t\x12\x14\n\x0csubcomponent\x18\x03 \x01(\t\"B\n\x08RPCError\x12%\n\x0blegacy_code\x18\x01 \x01(\x0e\x32\x10.vtrpc.ErrorCode\x12\x0f\n\x07message\x18\x02 \x01(\t*\xb6\x02\n\x04\x43ode\x12\x06\n\x02OK\x10\x00\x12\x0c\n\x08\x43\x41NCELED\x10\x01\x12\x0b\n\x07UNKNOWN\x10\x02\x12\x14\n\x10INVALID_ARGUMENT\x10\x03\x12\x15\n\x11\x44\x45\x41\x44LINE_EXCEEDED\x10\x04\x12\r\n\tNOT_FOUND\x10\x05\x12\x12\n\x0e\x41LREADY_EXISTS\x10\x06\x12\x15\n\x11PERMISSION_DENIED\x10\x07\x12\x13\n\x0fUNAUTHENTICATED\x10\x10\x12\x16\n\x12RESOURCE_EXHAUSTED\x10\x08\x12\x17\n\x13\x46\x41ILED_PRECONDITION\x10\t\x12\x0b\n\x07\x41\x42ORTED\x10\n\x12\x10\n\x0cOUT_OF_RANGE\x10\x0b\x12\x11\n\rUNIMPLEMENTED\x10\x0c\x12\x0c\n\x08INTERNAL\x10\r\x12\x0f\n\x0bUNAVAILABLE\x10\x0e\x12\r\n\tDATA_LOSS\x10\x0f*\xaa\x02\n\tErrorCode\x12\x0b\n\x07SUCCESS\x10\x00\x12\x14\n\x10\x43\x41NCELLED_LEGACY\x10\x01\x12\x11\n\rUNKNOWN_ERROR\x10\x02\x12\r\n\tBAD_INPUT\x10\x03\x12\x1c\n\x18\x44\x45\x41\x44LINE_EXCEEDED_LEGACY\x10\x04\x12\x13\n\x0fINTEGRITY_ERROR\x10\x05\x12\x1c\n\x18PERMISSION_DENIED_LEGACY\x10\x06\x12\x1d\n\x19RESOURCE_EXHAUSTED_LEGACY\x10\x07\x12\x14\n\x10QUERY_NOT_SERVED\x10\x08\x12\r\n\tNOT_IN_TX\x10\t\x12\x12\n\x0eINTERNAL_ERROR\x10\n\x12\x13\n\x0fTRANSIENT_ERROR\x10\x0b\x12\x1a\n\x16UNAUTHENTICATED_LEGACY\x10\x0c\x42\x1a\n\x18\x63om.youtube.vitess.protob\x06proto3')
 )
 _sym_db.RegisterFileDescriptor(DESCRIPTOR)
 
+_CODE = _descriptor.EnumDescriptor(
+  name='Code',
+  full_name='vtrpc.Code',
+  filename=None,
+  file=DESCRIPTOR,
+  values=[
+    _descriptor.EnumValueDescriptor(
+      name='OK', index=0, number=0,
+      options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='CANCELED', index=1, number=1,
+      options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='UNKNOWN', index=2, number=2,
+      options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='INVALID_ARGUMENT', index=3, number=3,
+      options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='DEADLINE_EXCEEDED', index=4, number=4,
+      options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='NOT_FOUND', index=5, number=5,
+      options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='ALREADY_EXISTS', index=6, number=6,
+      options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='PERMISSION_DENIED', index=7, number=7,
+      options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='UNAUTHENTICATED', index=8, number=16,
+      options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='RESOURCE_EXHAUSTED', index=9, number=8,
+      options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='FAILED_PRECONDITION', index=10, number=9,
+      options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='ABORTED', index=11, number=10,
+      options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='OUT_OF_RANGE', index=12, number=11,
+      options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='UNIMPLEMENTED', index=13, number=12,
+      options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='INTERNAL', index=14, number=13,
+      options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='UNAVAILABLE', index=15, number=14,
+      options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='DATA_LOSS', index=16, number=15,
+      options=None,
+      type=None),
+  ],
+  containing_type=None,
+  options=None,
+  serialized_start=163,
+  serialized_end=473,
+)
+_sym_db.RegisterEnumDescriptor(_CODE)
+
+Code = enum_type_wrapper.EnumTypeWrapper(_CODE)
 _ERRORCODE = _descriptor.EnumDescriptor(
   name='ErrorCode',
   full_name='vtrpc.ErrorCode',
@@ -35,7 +118,7 @@ _ERRORCODE = _descriptor.EnumDescriptor(
       options=None,
       type=None),
     _descriptor.EnumValueDescriptor(
-      name='CANCELLED', index=1, number=1,
+      name='CANCELLED_LEGACY', index=1, number=1,
       options=None,
       type=None),
     _descriptor.EnumValueDescriptor(
@@ -47,7 +130,7 @@ _ERRORCODE = _descriptor.EnumDescriptor(
       options=None,
       type=None),
     _descriptor.EnumValueDescriptor(
-      name='DEADLINE_EXCEEDED', index=4, number=4,
+      name='DEADLINE_EXCEEDED_LEGACY', index=4, number=4,
       options=None,
       type=None),
     _descriptor.EnumValueDescriptor(
@@ -55,11 +138,11 @@ _ERRORCODE = _descriptor.EnumDescriptor(
       options=None,
       type=None),
     _descriptor.EnumValueDescriptor(
-      name='PERMISSION_DENIED', index=6, number=6,
+      name='PERMISSION_DENIED_LEGACY', index=6, number=6,
       options=None,
       type=None),
     _descriptor.EnumValueDescriptor(
-      name='RESOURCE_EXHAUSTED', index=7, number=7,
+      name='RESOURCE_EXHAUSTED_LEGACY', index=7, number=7,
       options=None,
       type=None),
     _descriptor.EnumValueDescriptor(
@@ -79,31 +162,48 @@ _ERRORCODE = _descriptor.EnumDescriptor(
       options=None,
       type=None),
     _descriptor.EnumValueDescriptor(
-      name='UNAUTHENTICATED', index=12, number=12,
+      name='UNAUTHENTICATED_LEGACY', index=12, number=12,
       options=None,
       type=None),
   ],
   containing_type=None,
   options=None,
-  serialized_start=156,
-  serialized_end=419,
+  serialized_start=476,
+  serialized_end=774,
 )
 _sym_db.RegisterEnumDescriptor(_ERRORCODE)
 
 ErrorCode = enum_type_wrapper.EnumTypeWrapper(_ERRORCODE)
+OK = 0
+CANCELED = 1
+UNKNOWN = 2
+INVALID_ARGUMENT = 3
+DEADLINE_EXCEEDED = 4
+NOT_FOUND = 5
+ALREADY_EXISTS = 6
+PERMISSION_DENIED = 7
+UNAUTHENTICATED = 16
+RESOURCE_EXHAUSTED = 8
+FAILED_PRECONDITION = 9
+ABORTED = 10
+OUT_OF_RANGE = 11
+UNIMPLEMENTED = 12
+INTERNAL = 13
+UNAVAILABLE = 14
+DATA_LOSS = 15
 SUCCESS = 0
-CANCELLED = 1
+CANCELLED_LEGACY = 1
 UNKNOWN_ERROR = 2
 BAD_INPUT = 3
-DEADLINE_EXCEEDED = 4
+DEADLINE_EXCEEDED_LEGACY = 4
 INTEGRITY_ERROR = 5
-PERMISSION_DENIED = 6
-RESOURCE_EXHAUSTED = 7
+PERMISSION_DENIED_LEGACY = 6
+RESOURCE_EXHAUSTED_LEGACY = 7
 QUERY_NOT_SERVED = 8
 NOT_IN_TX = 9
 INTERNAL_ERROR = 10
 TRANSIENT_ERROR = 11
-UNAUTHENTICATED = 12
+UNAUTHENTICATED_LEGACY = 12
 
 
 
@@ -160,7 +260,7 @@ _RPCERROR = _descriptor.Descriptor(
   containing_type=None,
   fields=[
     _descriptor.FieldDescriptor(
-      name='code', full_name='vtrpc.RPCError.code', index=0,
+      name='legacy_code', full_name='vtrpc.RPCError.legacy_code', index=0,
       number=1, type=14, cpp_type=8, label=1,
       has_default_value=False, default_value=0,
       message_type=None, enum_type=None, containing_type=None,
@@ -186,12 +286,13 @@ _RPCERROR = _descriptor.Descriptor(
   oneofs=[
   ],
   serialized_start=94,
-  serialized_end=153,
+  serialized_end=160,
 )
 
-_RPCERROR.fields_by_name['code'].enum_type = _ERRORCODE
+_RPCERROR.fields_by_name['legacy_code'].enum_type = _ERRORCODE
 DESCRIPTOR.message_types_by_name['CallerID'] = _CALLERID
 DESCRIPTOR.message_types_by_name['RPCError'] = _RPCERROR
+DESCRIPTOR.enum_types_by_name['Code'] = _CODE
 DESCRIPTOR.enum_types_by_name['ErrorCode'] = _ERRORCODE
 
 CallerID = _reflection.GeneratedProtocolMessageType('CallerID', (_message.Message,), dict(

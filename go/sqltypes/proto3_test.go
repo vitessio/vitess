@@ -244,7 +244,7 @@ func TestQueryReponses(t *testing.T) {
 			QueryError: nil,
 		}, {
 			QueryResult: nil,
-			QueryError:  vterrors.FromError(vtrpc.ErrorCode_DEADLINE_EXCEEDED, errors.New("deadline exceeded")),
+			QueryError:  vterrors.FromError(vtrpc.ErrorCode_DEADLINE_EXCEEDED_LEGACY, errors.New("deadline exceeded")),
 		},
 	}
 
@@ -287,8 +287,8 @@ func TestQueryReponses(t *testing.T) {
 			},
 		}, {
 			Error: &vtrpc.RPCError{
-				Code:    vtrpc.ErrorCode_DEADLINE_EXCEEDED,
-				Message: "deadline exceeded",
+				LegacyCode: vtrpc.ErrorCode_DEADLINE_EXCEEDED_LEGACY,
+				Message:    "deadline exceeded",
 			},
 			Result: nil,
 		},

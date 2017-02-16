@@ -42,6 +42,6 @@ func TabletErrorFromRPCError(err *vtrpcpb.RPCError) error {
 	// server side error, convert it
 	return &ServerError{
 		Err:        fmt.Sprintf("vttablet: %v", err),
-		ServerCode: err.Code,
+		ServerCode: err.LegacyCode,
 	}
 }

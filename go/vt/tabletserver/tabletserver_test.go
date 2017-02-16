@@ -1835,7 +1835,7 @@ func TestTerseErrorsBindVars(t *testing.T) {
 		"select * from test_table",
 		map[string]interface{}{"a": 1},
 		&tabletenv.TabletError{
-			ErrorCode: vtrpcpb.ErrorCode_DEADLINE_EXCEEDED,
+			ErrorCode: vtrpcpb.ErrorCode_DEADLINE_EXCEEDED_LEGACY,
 			Message:   "msg",
 			SQLError:  10,
 			SQLState:  "HY000",
@@ -1853,7 +1853,7 @@ func TestTerseErrorsNoBindVars(t *testing.T) {
 	config := testUtils.newQueryServiceConfig()
 	config.TerseErrors = true
 	tsv := NewTabletServer(config)
-	err := tsv.handleError("", nil, tabletenv.NewTabletError(vtrpcpb.ErrorCode_DEADLINE_EXCEEDED, "msg"), nil)
+	err := tsv.handleError("", nil, tabletenv.NewTabletError(vtrpcpb.ErrorCode_DEADLINE_EXCEEDED_LEGACY, "msg"), nil)
 	want := "error: msg"
 	if err == nil || err.Error() != want {
 		t.Errorf("Error: %v, want '%s'", err, want)

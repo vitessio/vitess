@@ -29,17 +29,173 @@ var _ = math.Inf
 // proto package needs to be updated.
 const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
 
-// ErrorCode is the enum values for Errors. Internally, errors should
-// be created with one of these codes. These will then be translated over the wire
-// by various RPC frameworks.
+// Code represnts canonical error codes. The names and numbers must match
+// the ones defined by grpc: https://godoc.org/google.golang.org/grpc/codes.
+type Code int32
+
+const (
+	// OK is returned on success.
+	Code_OK Code = 0
+	// CANCELED indicates the operation was cancelled (typically by the caller).
+	Code_CANCELED Code = 1
+	// UNKNOWN error. An example of where this error may be returned is
+	// if a Status value received from another address space belongs to
+	// an error-space that is not known in this address space. Also
+	// errors raised by APIs that do not return enough error information
+	// may be converted to this error.
+	Code_UNKNOWN Code = 2
+	// INVALID_ARGUMENT indicates client specified an invalid argument.
+	// Note that this differs from FAILED_PRECONDITION. It indicates arguments
+	// that are problematic regardless of the state of the system
+	// (e.g., a malformed file name).
+	Code_INVALID_ARGUMENT Code = 3
+	// DEADLINE_EXCEEDED means operation expired before completion.
+	// For operations that change the state of the system, this error may be
+	// returned even if the operation has completed successfully. For
+	// example, a successful response from a server could have been delayed
+	// long enough for the deadline to expire.
+	Code_DEADLINE_EXCEEDED Code = 4
+	// NOT_FOUND means some requested entity (e.g., file or directory) was
+	// not found.
+	Code_NOT_FOUND Code = 5
+	// ALREADY_EXISTS means an attempt to create an entity failed because one
+	// already exists.
+	Code_ALREADY_EXISTS Code = 6
+	// PERMISSION_DENIED indicates the caller does not have permission to
+	// execute the specified operation. It must not be used for rejections
+	// caused by exhausting some resource (use RESOURCE_EXHAUSTED
+	// instead for those errors).  It must not be
+	// used if the caller cannot be identified (use Unauthenticated
+	// instead for those errors).
+	Code_PERMISSION_DENIED Code = 7
+	// UNAUTHENTICATED indicates the request does not have valid
+	// authentication credentials for the operation.
+	Code_UNAUTHENTICATED Code = 16
+	// RESOURCE_EXHAUSTED indicates some resource has been exhausted, perhaps
+	// a per-user quota, or perhaps the entire file system is out of space.
+	Code_RESOURCE_EXHAUSTED Code = 8
+	// FAILED_PRECONDITION indicates operation was rejected because the
+	// system is not in a state required for the operation's execution.
+	// For example, directory to be deleted may be non-empty, an rmdir
+	// operation is applied to a non-directory, etc.
+	//
+	// A litmus test that may help a service implementor in deciding
+	// between FAILED_PRECONDITION, ABORTED, and UNAVAILABLE:
+	//  (a) Use UNAVAILABLE if the client can retry just the failing call.
+	//  (b) Use ABORTED if the client should retry at a higher-level
+	//      (e.g., restarting a read-modify-write sequence).
+	//  (c) Use FAILED_PRECONDITION if the client should not retry until
+	//      the system state has been explicitly fixed.  E.g., if an "rmdir"
+	//      fails because the directory is non-empty, FAILED_PRECONDITION
+	//      should be returned since the client should not retry unless
+	//      they have first fixed up the directory by deleting files from it.
+	//  (d) Use FAILED_PRECONDITION if the client performs conditional
+	//      REST Get/Update/Delete on a resource and the resource on the
+	//      server does not match the condition. E.g., conflicting
+	//      read-modify-write on the same resource.
+	Code_FAILED_PRECONDITION Code = 9
+	// ABORTED indicates the operation was aborted, typically due to a
+	// concurrency issue like sequencer check failures, transaction aborts,
+	// etc.
+	//
+	// See litmus test above for deciding between FAILED_PRECONDITION,
+	// ABORTED, and UNAVAILABLE.
+	Code_ABORTED Code = 10
+	// OUT_OF_RANGE means operation was attempted past the valid range.
+	// E.g., seeking or reading past end of file.
+	//
+	// Unlike INVALID_ARGUMENT, this error indicates a problem that may
+	// be fixed if the system state changes. For example, a 32-bit file
+	// system will generate INVALID_ARGUMENT if asked to read at an
+	// offset that is not in the range [0,2^32-1], but it will generate
+	// OUT_OF_RANGE if asked to read from an offset past the current
+	// file size.
+	//
+	// There is a fair bit of overlap between FAILED_PRECONDITION and
+	// OUT_OF_RANGE.  We recommend using OUT_OF_RANGE (the more specific
+	// error) when it applies so that callers who are iterating through
+	// a space can easily look for an OUT_OF_RANGE error to detect when
+	// they are done.
+	Code_OUT_OF_RANGE Code = 11
+	// UNIMPLEMENTED indicates operation is not implemented or not
+	// supported/enabled in this service.
+	Code_UNIMPLEMENTED Code = 12
+	// INTERNAL errors.  Means some invariants expected by underlying
+	// system has been broken.  If you see one of these errors,
+	// something is very broken.
+	Code_INTERNAL Code = 13
+	// UNAVAILABLE indicates the service is currently unavailable.
+	// This is a most likely a transient condition and may be corrected
+	// by retrying with a backoff.
+	//
+	// See litmus test above for deciding between FAILED_PRECONDITION,
+	// ABORTED, and UNAVAILABLE.
+	Code_UNAVAILABLE Code = 14
+	// DATA_LOSS indicates unrecoverable data loss or corruption.
+	Code_DATA_LOSS Code = 15
+)
+
+var Code_name = map[int32]string{
+	0:  "OK",
+	1:  "CANCELED",
+	2:  "UNKNOWN",
+	3:  "INVALID_ARGUMENT",
+	4:  "DEADLINE_EXCEEDED",
+	5:  "NOT_FOUND",
+	6:  "ALREADY_EXISTS",
+	7:  "PERMISSION_DENIED",
+	16: "UNAUTHENTICATED",
+	8:  "RESOURCE_EXHAUSTED",
+	9:  "FAILED_PRECONDITION",
+	10: "ABORTED",
+	11: "OUT_OF_RANGE",
+	12: "UNIMPLEMENTED",
+	13: "INTERNAL",
+	14: "UNAVAILABLE",
+	15: "DATA_LOSS",
+}
+var Code_value = map[string]int32{
+	"OK":                  0,
+	"CANCELED":            1,
+	"UNKNOWN":             2,
+	"INVALID_ARGUMENT":    3,
+	"DEADLINE_EXCEEDED":   4,
+	"NOT_FOUND":           5,
+	"ALREADY_EXISTS":      6,
+	"PERMISSION_DENIED":   7,
+	"UNAUTHENTICATED":     16,
+	"RESOURCE_EXHAUSTED":  8,
+	"FAILED_PRECONDITION": 9,
+	"ABORTED":             10,
+	"OUT_OF_RANGE":        11,
+	"UNIMPLEMENTED":       12,
+	"INTERNAL":            13,
+	"UNAVAILABLE":         14,
+	"DATA_LOSS":           15,
+}
+
+func (x Code) String() string {
+	return proto.EnumName(Code_name, int32(x))
+}
+func (Code) EnumDescriptor() ([]byte, []int) { return fileDescriptor0, []int{0} }
+
+// ErrorCode is the enum values for Errors. This type is deprecated.
+// Use Code instead. Background: In the initial design, we thought
+// that we may end up with a different list of canonical error codes
+// than the ones defined by grpc. In hindisght, we realize that
+// the grpc error codes are fairly generic and mostly sufficient.
+// In order to avoid confusion, thie type will be deprecated in
+// favor of the new Code that matches exactly what grpc defines.
+// Some names below have a _LEGACY suffix. This is to prevent
+// name collisions with Code.
 type ErrorCode int32
 
 const (
 	// SUCCESS is returned from a successful call.
 	ErrorCode_SUCCESS ErrorCode = 0
-	// CANCELLED means that the context was cancelled (and noticed in the app layer,
+	// CANCELLED_LEGACY means that the context was cancelled (and noticed in the app layer,
 	// as opposed to the RPC layer).
-	ErrorCode_CANCELLED ErrorCode = 1
+	ErrorCode_CANCELLED_LEGACY ErrorCode = 1
 	// UNKNOWN_ERROR includes:
 	// 1. MySQL error codes that we don't explicitly handle.
 	// 2. MySQL response that wasn't as expected. For example, we might expect a MySQL
@@ -49,22 +205,22 @@ const (
 	// BAD_INPUT is returned when an end-user either sends SQL that couldn't be parsed correctly,
 	// or tries a query that isn't supported by Vitess.
 	ErrorCode_BAD_INPUT ErrorCode = 3
-	// DEADLINE_EXCEEDED is returned when an action is taking longer than a given timeout.
-	ErrorCode_DEADLINE_EXCEEDED ErrorCode = 4
+	// DEADLINE_EXCEEDED_LEGACY is returned when an action is taking longer than a given timeout.
+	ErrorCode_DEADLINE_EXCEEDED_LEGACY ErrorCode = 4
 	// INTEGRITY_ERROR is returned on integrity error from MySQL, usually due to
 	// duplicate primary keys.
 	ErrorCode_INTEGRITY_ERROR ErrorCode = 5
-	// PERMISSION_DENIED errors are returned when a user requests access to something
+	// PERMISSION_DENIED_LEGACY errors are returned when a user requests access to something
 	// that they don't have permissions for.
-	ErrorCode_PERMISSION_DENIED ErrorCode = 6
-	// RESOURCE_EXHAUSTED is returned when a query exceeds its quota in some dimension
+	ErrorCode_PERMISSION_DENIED_LEGACY ErrorCode = 6
+	// RESOURCE_EXHAUSTED_LEGACY is returned when a query exceeds its quota in some dimension
 	// and can't be completed due to that. Queries that return RESOURCE_EXHAUSTED
 	// should not be retried, as it could be detrimental to the server's health.
 	// Examples of errors that will cause the RESOURCE_EXHAUSTED code:
 	// 1. TxPoolFull: this is retried server-side, and is only returned as an error
 	//  if the server-side retries failed.
 	// 2. Query is killed due to it taking too long.
-	ErrorCode_RESOURCE_EXHAUSTED ErrorCode = 7
+	ErrorCode_RESOURCE_EXHAUSTED_LEGACY ErrorCode = 7
 	// QUERY_NOT_SERVED means that a query could not be served right now.
 	// Client can interpret it as: "the tablet that you sent this query to cannot
 	// serve the query right now, try a different tablet or try again later."
@@ -98,46 +254,46 @@ const (
 	// 1. Query has been throttled
 	// 2. VtGate could have request backlog
 	ErrorCode_TRANSIENT_ERROR ErrorCode = 11
-	// UNAUTHENTICATED errors are returned when a user requests access to something,
+	// UNAUTHENTICATED_LEGACY errors are returned when a user requests access to something,
 	// and we're unable to verify the user's authentication.
-	ErrorCode_UNAUTHENTICATED ErrorCode = 12
+	ErrorCode_UNAUTHENTICATED_LEGACY ErrorCode = 12
 )
 
 var ErrorCode_name = map[int32]string{
 	0:  "SUCCESS",
-	1:  "CANCELLED",
+	1:  "CANCELLED_LEGACY",
 	2:  "UNKNOWN_ERROR",
 	3:  "BAD_INPUT",
-	4:  "DEADLINE_EXCEEDED",
+	4:  "DEADLINE_EXCEEDED_LEGACY",
 	5:  "INTEGRITY_ERROR",
-	6:  "PERMISSION_DENIED",
-	7:  "RESOURCE_EXHAUSTED",
+	6:  "PERMISSION_DENIED_LEGACY",
+	7:  "RESOURCE_EXHAUSTED_LEGACY",
 	8:  "QUERY_NOT_SERVED",
 	9:  "NOT_IN_TX",
 	10: "INTERNAL_ERROR",
 	11: "TRANSIENT_ERROR",
-	12: "UNAUTHENTICATED",
+	12: "UNAUTHENTICATED_LEGACY",
 }
 var ErrorCode_value = map[string]int32{
-	"SUCCESS":            0,
-	"CANCELLED":          1,
-	"UNKNOWN_ERROR":      2,
-	"BAD_INPUT":          3,
-	"DEADLINE_EXCEEDED":  4,
-	"INTEGRITY_ERROR":    5,
-	"PERMISSION_DENIED":  6,
-	"RESOURCE_EXHAUSTED": 7,
-	"QUERY_NOT_SERVED":   8,
-	"NOT_IN_TX":          9,
-	"INTERNAL_ERROR":     10,
-	"TRANSIENT_ERROR":    11,
-	"UNAUTHENTICATED":    12,
+	"SUCCESS":                   0,
+	"CANCELLED_LEGACY":          1,
+	"UNKNOWN_ERROR":             2,
+	"BAD_INPUT":                 3,
+	"DEADLINE_EXCEEDED_LEGACY":  4,
+	"INTEGRITY_ERROR":           5,
+	"PERMISSION_DENIED_LEGACY":  6,
+	"RESOURCE_EXHAUSTED_LEGACY": 7,
+	"QUERY_NOT_SERVED":          8,
+	"NOT_IN_TX":                 9,
+	"INTERNAL_ERROR":            10,
+	"TRANSIENT_ERROR":           11,
+	"UNAUTHENTICATED_LEGACY":    12,
 }
 
 func (x ErrorCode) String() string {
 	return proto.EnumName(ErrorCode_name, int32(x))
 }
-func (ErrorCode) EnumDescriptor() ([]byte, []int) { return fileDescriptor0, []int{0} }
+func (ErrorCode) EnumDescriptor() ([]byte, []int) { return fileDescriptor0, []int{1} }
 
 // CallerID is passed along RPCs to identify the originating client
 // for a request. It is not meant to be secure, but only
@@ -174,8 +330,8 @@ func (*CallerID) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{0}
 // We use this so the clients don't have to parse the error messages,
 // but instead can depend on the value of the code.
 type RPCError struct {
-	Code    ErrorCode `protobuf:"varint,1,opt,name=code,enum=vtrpc.ErrorCode" json:"code,omitempty"`
-	Message string    `protobuf:"bytes,2,opt,name=message" json:"message,omitempty"`
+	LegacyCode ErrorCode `protobuf:"varint,1,opt,name=legacy_code,json=legacyCode,enum=vtrpc.ErrorCode" json:"legacy_code,omitempty"`
+	Message    string    `protobuf:"bytes,2,opt,name=message" json:"message,omitempty"`
 }
 
 func (m *RPCError) Reset()                    { *m = RPCError{} }
@@ -186,35 +342,48 @@ func (*RPCError) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{1}
 func init() {
 	proto.RegisterType((*CallerID)(nil), "vtrpc.CallerID")
 	proto.RegisterType((*RPCError)(nil), "vtrpc.RPCError")
+	proto.RegisterEnum("vtrpc.Code", Code_name, Code_value)
 	proto.RegisterEnum("vtrpc.ErrorCode", ErrorCode_name, ErrorCode_value)
 }
 
 func init() { proto.RegisterFile("vtrpc.proto", fileDescriptor0) }
 
 var fileDescriptor0 = []byte{
-	// 376 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x09, 0x6e, 0x88, 0x02, 0xff, 0x54, 0x91, 0xcb, 0x6e, 0x13, 0x31,
-	0x14, 0x86, 0x49, 0x7a, 0x49, 0xe6, 0xa4, 0x2d, 0xae, 0xb9, 0x28, 0x42, 0x2c, 0x50, 0xc4, 0x02,
-	0xb1, 0xc8, 0x02, 0x9e, 0xc0, 0xb5, 0x8f, 0xa8, 0x21, 0x9c, 0x09, 0xbe, 0x40, 0xbb, 0x1a, 0x25,
-	0x53, 0x0b, 0x05, 0x25, 0xf1, 0x68, 0x66, 0x52, 0x89, 0x27, 0xe0, 0xb5, 0x91, 0x27, 0xa1, 0x15,
-	0xab, 0xd1, 0xff, 0xff, 0xdf, 0xf8, 0xb3, 0x64, 0x18, 0xdd, 0xb7, 0x75, 0x55, 0x4e, 0xab, 0x3a,
-	0xb6, 0x91, 0x9f, 0x74, 0x61, 0xf2, 0x0b, 0x86, 0x72, 0xb1, 0x5e, 0x87, 0x5a, 0x2b, 0xfe, 0x1a,
-	0xb2, 0xaa, 0x5e, 0x6d, 0xcb, 0x55, 0xb5, 0x58, 0x8f, 0x7b, 0x6f, 0x7a, 0xef, 0x32, 0xf3, 0x58,
-	0xa4, 0xb5, 0x8c, 0x9b, 0x2a, 0x6e, 0xc3, 0xb6, 0x1d, 0xf7, 0xf7, 0xeb, 0x43, 0xc1, 0x27, 0x70,
-	0xd6, 0xec, 0x96, 0x8f, 0xc0, 0x51, 0x07, 0xfc, 0xd7, 0x4d, 0x3e, 0xc3, 0xd0, 0xcc, 0x25, 0xd6,
-	0x75, 0xac, 0xf9, 0x5b, 0x38, 0x2e, 0xe3, 0x5d, 0xe8, 0x34, 0x17, 0x1f, 0xd8, 0x74, 0x7f, 0xb5,
-	0x6e, 0x93, 0xf1, 0x2e, 0x98, 0x6e, 0xe5, 0x63, 0x18, 0x6c, 0x42, 0xd3, 0x2c, 0x7e, 0x86, 0x83,
-	0xf1, 0x5f, 0x7c, 0xff, 0xa7, 0x0f, 0xd9, 0x03, 0xcd, 0x47, 0x30, 0xb0, 0x5e, 0x4a, 0xb4, 0x96,
-	0x3d, 0xe1, 0xe7, 0x90, 0x49, 0x41, 0x12, 0x67, 0x33, 0x54, 0xac, 0xc7, 0x2f, 0xe1, 0xdc, 0xd3,
-	0x17, 0xca, 0x7f, 0x50, 0x81, 0xc6, 0xe4, 0x86, 0xf5, 0x13, 0x71, 0x25, 0x54, 0xa1, 0x69, 0xee,
-	0x1d, 0x3b, 0xe2, 0x2f, 0xe0, 0x52, 0xa1, 0x50, 0x33, 0x4d, 0x58, 0xe0, 0x8d, 0x44, 0x54, 0xa8,
-	0xd8, 0x31, 0x7f, 0x06, 0x4f, 0x35, 0x39, 0xfc, 0x64, 0xb4, 0xbb, 0x3d, 0xfc, 0x7a, 0x92, 0xd8,
-	0x39, 0x9a, 0xaf, 0xda, 0x5a, 0x9d, 0x53, 0xa1, 0x90, 0x34, 0x2a, 0x76, 0xca, 0x5f, 0x02, 0x37,
-	0x68, 0x73, 0x6f, 0x64, 0x3a, 0xe2, 0x5a, 0x78, 0xeb, 0x50, 0xb1, 0x01, 0x7f, 0x0e, 0xec, 0x9b,
-	0x47, 0x73, 0x5b, 0x50, 0xee, 0x0a, 0x8b, 0xe6, 0x3b, 0x2a, 0x36, 0x4c, 0xfe, 0x94, 0x35, 0x15,
-	0xee, 0x86, 0x65, 0x9c, 0xc3, 0x45, 0x12, 0x19, 0x12, 0xb3, 0x83, 0x07, 0x92, 0xdc, 0x19, 0x41,
-	0x56, 0x23, 0xb9, 0x43, 0x39, 0x4a, 0xa5, 0x27, 0xe1, 0xdd, 0x35, 0x92, 0xd3, 0x52, 0x24, 0xc5,
-	0xd9, 0xd5, 0x2b, 0x18, 0x97, 0x71, 0x33, 0xfd, 0x1d, 0x77, 0xed, 0x6e, 0x19, 0xa6, 0xf7, 0xab,
-	0x36, 0x34, 0xcd, 0xfe, 0x91, 0x97, 0xa7, 0xdd, 0xe7, 0xe3, 0xdf, 0x00, 0x00, 0x00, 0xff, 0xff,
-	0x7c, 0x77, 0xfd, 0x16, 0xfa, 0x01, 0x00, 0x00,
+	// 561 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x64, 0x93, 0xdd, 0x4e, 0x1b, 0x3f,
+	0x10, 0xc5, 0x49, 0x80, 0x7c, 0x4c, 0x02, 0x18, 0xf3, 0xff, 0xd3, 0x14, 0x51, 0xa9, 0xe2, 0xaa,
+	0xe2, 0x22, 0x52, 0xdb, 0x27, 0x70, 0xd6, 0x43, 0xb0, 0x58, 0xc6, 0xa9, 0x3f, 0x80, 0x5c, 0x59,
+	0x21, 0xac, 0x10, 0x55, 0x60, 0xa3, 0x4d, 0x40, 0xe2, 0x95, 0xfa, 0x00, 0x7d, 0xbe, 0xca, 0x9b,
+	0x04, 0xd4, 0xe6, 0x2a, 0xf1, 0xf8, 0x8c, 0xcf, 0x99, 0xdf, 0x68, 0xa1, 0xf5, 0x32, 0x2f, 0xa6,
+	0xe3, 0xee, 0xb4, 0xc8, 0xe7, 0x39, 0xdf, 0x2e, 0x0f, 0x27, 0x3f, 0xa1, 0x91, 0x8c, 0x26, 0x93,
+	0xac, 0x50, 0x92, 0x1f, 0x43, 0x73, 0x5a, 0x3c, 0x3c, 0x8d, 0x1f, 0xa6, 0xa3, 0x49, 0xa7, 0xf2,
+	0xb9, 0xf2, 0xa5, 0x69, 0xde, 0x0b, 0xf1, 0x76, 0x9c, 0x3f, 0x4e, 0xf3, 0xa7, 0xec, 0x69, 0xde,
+	0xa9, 0x2e, 0x6e, 0xdf, 0x0a, 0xfc, 0x04, 0xda, 0xb3, 0xe7, 0xdb, 0x77, 0xc1, 0x66, 0x29, 0xf8,
+	0xab, 0x76, 0x72, 0x0d, 0x0d, 0x33, 0x48, 0xb0, 0x28, 0xf2, 0x82, 0x7f, 0x85, 0xd6, 0x24, 0xbb,
+	0x1f, 0x8d, 0x5f, 0xc3, 0x38, 0xbf, 0xcb, 0x4a, 0xb7, 0xdd, 0x6f, 0xac, 0xbb, 0x48, 0x58, 0x4a,
+	0x92, 0xfc, 0x2e, 0x33, 0xb0, 0x10, 0xc5, 0xff, 0xbc, 0x03, 0xf5, 0xc7, 0x6c, 0x36, 0x1b, 0xdd,
+	0x67, 0x4b, 0xfb, 0xd5, 0xf1, 0xf4, 0x77, 0x15, 0xb6, 0x4a, 0x49, 0x0d, 0xaa, 0xfa, 0x82, 0x6d,
+	0xf0, 0x36, 0x34, 0x12, 0x41, 0x09, 0xa6, 0x28, 0x59, 0x85, 0xb7, 0xa0, 0xee, 0xe9, 0x82, 0xf4,
+	0x35, 0xb1, 0x2a, 0xff, 0x0f, 0x98, 0xa2, 0x2b, 0x91, 0x2a, 0x19, 0x84, 0xe9, 0xfb, 0x4b, 0x24,
+	0xc7, 0x36, 0xf9, 0xff, 0xb0, 0x2f, 0x51, 0xc8, 0x54, 0x11, 0x06, 0xbc, 0x49, 0x10, 0x25, 0x4a,
+	0xb6, 0xc5, 0x77, 0xa0, 0x49, 0xda, 0x85, 0x33, 0xed, 0x49, 0xb2, 0x6d, 0xce, 0x61, 0x57, 0xa4,
+	0x06, 0x85, 0x1c, 0x06, 0xbc, 0x51, 0xd6, 0x59, 0x56, 0x8b, 0x9d, 0x03, 0x34, 0x97, 0xca, 0x5a,
+	0xa5, 0x29, 0x48, 0x24, 0x85, 0x92, 0xd5, 0xf9, 0x01, 0xec, 0x79, 0x12, 0xde, 0x9d, 0x23, 0x39,
+	0x95, 0x08, 0x87, 0x92, 0x31, 0x7e, 0x08, 0xdc, 0xa0, 0xd5, 0xde, 0x24, 0xd1, 0xe5, 0x5c, 0x78,
+	0x1b, 0xeb, 0x0d, 0xfe, 0x01, 0x0e, 0xce, 0x84, 0x4a, 0x51, 0x86, 0x81, 0xc1, 0x44, 0x93, 0x54,
+	0x4e, 0x69, 0x62, 0xcd, 0x98, 0x5c, 0xf4, 0xb4, 0x89, 0x2a, 0xe0, 0x0c, 0xda, 0xda, 0xbb, 0xa0,
+	0xcf, 0x82, 0x11, 0xd4, 0x47, 0xd6, 0xe2, 0xfb, 0xb0, 0xe3, 0x49, 0x5d, 0x0e, 0x52, 0x8c, 0x63,
+	0xa0, 0x64, 0xed, 0x38, 0xb9, 0x22, 0x87, 0x86, 0x44, 0xca, 0x76, 0xf8, 0x1e, 0xb4, 0x3c, 0x89,
+	0x2b, 0xa1, 0x52, 0xd1, 0x4b, 0x91, 0xed, 0xc6, 0x81, 0xa4, 0x70, 0x22, 0xa4, 0xda, 0x5a, 0xb6,
+	0x77, 0xfa, 0xab, 0x0a, 0xcd, 0x37, 0xd8, 0xd1, 0xcd, 0xfa, 0x24, 0x41, 0x6b, 0xd9, 0x46, 0xe4,
+	0xb4, 0x40, 0x18, 0x63, 0xa5, 0xd8, 0x17, 0xc9, 0x90, 0x55, 0x16, 0x8e, 0x25, 0xca, 0x80, 0xc6,
+	0x68, 0xc3, 0xaa, 0xf1, 0xc9, 0x9e, 0x90, 0x41, 0xd1, 0xc0, 0x47, 0x92, 0xc7, 0xd0, 0x59, 0x23,
+	0xb9, 0xea, 0xdf, 0x8a, 0x58, 0x62, 0xbc, 0xbe, 0x51, 0x6e, 0xb8, 0x7c, 0x61, 0x3b, 0xb6, 0xac,
+	0x21, 0x5c, 0xb5, 0xd4, 0xf8, 0x27, 0xf8, 0xb8, 0x0e, 0x6d, 0x75, 0x5d, 0x8f, 0x39, 0x7f, 0x78,
+	0x34, 0xc3, 0x10, 0x17, 0x65, 0xd1, 0x5c, 0x95, 0x44, 0x97, 0x8b, 0x53, 0x14, 0xdc, 0x0d, 0x6b,
+	0xc6, 0xc5, 0xad, 0xa8, 0x2c, 0x5d, 0x21, 0x46, 0x71, 0x46, 0x90, 0x55, 0x48, 0x6e, 0x59, 0x6c,
+	0xf1, 0x23, 0x38, 0xfc, 0x67, 0x6d, 0x2b, 0xa7, 0x76, 0xef, 0x08, 0x3a, 0xe3, 0xfc, 0xb1, 0xfb,
+	0x9a, 0x3f, 0xcf, 0x9f, 0x6f, 0xb3, 0xee, 0xcb, 0xc3, 0x3c, 0x9b, 0xcd, 0x16, 0x5f, 0xd3, 0x6d,
+	0xad, 0xfc, 0xf9, 0xfe, 0x27, 0x00, 0x00, 0xff, 0xff, 0xfc, 0xc4, 0x3c, 0x5f, 0x63, 0x03, 0x00,
+	0x00,
 }
