@@ -480,8 +480,8 @@ class TestBaseSplitCloneResiliency(TestBaseSplitClone):
           condition_fn=lambda v: v.get('WorkerRetryCount') >= 2)
       logging.debug('Worker has retried at least twice, starting reparent now')
 
-      # vtworker is blocked at this point. This is a good time to test that its
-      # throttler server is reacting to RPCs.
+      # vtworker is blocked at this point. This is a good time to test that 
+      # it's throttler server is reacting to RPCs.
       self.check_throttler_service('localhost:%d' % worker_rpc_port,
                                    ['test_keyspace/-80', 'test_keyspace/80-'],
                                    9999)
@@ -627,7 +627,7 @@ class TestVtworkerWebinterface(unittest.TestCase):
           'vtworker', self.worker_port,
           'WorkerState == done',
           condition_fn=lambda v: v.get('WorkerState') == 'done')
-      # Verify that the command logged something and its available at /status.
+      # Verify that the command logged something and it's available at /status.
       status = urllib2.urlopen(worker_base_url + '/status').read()
       self.assertIn(
           "Ping command was called with message: 'pong'", status,
