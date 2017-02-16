@@ -24,72 +24,82 @@ import (
 // See: https://github.com/grpc/grpc-go/issues/319
 const GRPCServerErrPrefix = "gRPCServerError:"
 
-// GRPCCodeToErrorCode maps a gRPC codes.Code to a vtrpcpb.ErrorCode.
-func GRPCCodeToErrorCode(code codes.Code) vtrpcpb.ErrorCode {
+// CodeToLegacyErrorCode maps a vtrpcpb.Code to a vtrpcpb.ErrorCode.
+func CodeToLegacyErrorCode(code vtrpcpb.Code) vtrpcpb.ErrorCode {
 	switch code {
-	case codes.OK:
+	case vtrpcpb.Code_OK:
 		return vtrpcpb.ErrorCode_SUCCESS
-	case codes.Canceled:
+	case vtrpcpb.Code_CANCELED:
 		return vtrpcpb.ErrorCode_CANCELLED_LEGACY
-	case codes.Unknown:
+	case vtrpcpb.Code_UNKNOWN:
 		return vtrpcpb.ErrorCode_UNKNOWN_ERROR
-	case codes.InvalidArgument:
+	case vtrpcpb.Code_INVALID_ARGUMENT:
 		return vtrpcpb.ErrorCode_BAD_INPUT
-	case codes.DeadlineExceeded:
+	case vtrpcpb.Code_DEADLINE_EXCEEDED:
 		return vtrpcpb.ErrorCode_DEADLINE_EXCEEDED_LEGACY
-	case codes.AlreadyExists:
+	case vtrpcpb.Code_ALREADY_EXISTS:
 		return vtrpcpb.ErrorCode_INTEGRITY_ERROR
-	case codes.PermissionDenied:
+	case vtrpcpb.Code_PERMISSION_DENIED:
 		return vtrpcpb.ErrorCode_PERMISSION_DENIED_LEGACY
-	case codes.ResourceExhausted:
+	case vtrpcpb.Code_RESOURCE_EXHAUSTED:
 		return vtrpcpb.ErrorCode_RESOURCE_EXHAUSTED_LEGACY
-	case codes.FailedPrecondition:
+	case vtrpcpb.Code_FAILED_PRECONDITION:
 		return vtrpcpb.ErrorCode_QUERY_NOT_SERVED
-	case codes.Aborted:
+	case vtrpcpb.Code_ABORTED:
 		return vtrpcpb.ErrorCode_NOT_IN_TX
-	case codes.Internal:
+	case vtrpcpb.Code_INTERNAL:
 		return vtrpcpb.ErrorCode_INTERNAL_ERROR
-	case codes.Unavailable:
+	case vtrpcpb.Code_UNAVAILABLE:
 		return vtrpcpb.ErrorCode_TRANSIENT_ERROR
-	case codes.Unauthenticated:
+	case vtrpcpb.Code_UNAUTHENTICATED:
 		return vtrpcpb.ErrorCode_UNAUTHENTICATED_LEGACY
 	default:
 		return vtrpcpb.ErrorCode_UNKNOWN_ERROR
 	}
 }
 
-// ErrorCodeToGRPCCode maps a vtrpcpb.ErrorCode to a gRPC codes.Code.
-func ErrorCodeToGRPCCode(code vtrpcpb.ErrorCode) codes.Code {
+// LegacyErrorCodeToCode maps a vtrpcpb.ErrorCode to a gRPC vtrpcpb.Code.
+func LegacyErrorCodeToCode(code vtrpcpb.ErrorCode) vtrpcpb.Code {
 	switch code {
 	case vtrpcpb.ErrorCode_SUCCESS:
-		return codes.OK
+		return vtrpcpb.Code_OK
 	case vtrpcpb.ErrorCode_CANCELLED_LEGACY:
-		return codes.Canceled
+		return vtrpcpb.Code_CANCELED
 	case vtrpcpb.ErrorCode_UNKNOWN_ERROR:
-		return codes.Unknown
+		return vtrpcpb.Code_UNKNOWN
 	case vtrpcpb.ErrorCode_BAD_INPUT:
-		return codes.InvalidArgument
+		return vtrpcpb.Code_INVALID_ARGUMENT
 	case vtrpcpb.ErrorCode_DEADLINE_EXCEEDED_LEGACY:
-		return codes.DeadlineExceeded
+		return vtrpcpb.Code_DEADLINE_EXCEEDED
 	case vtrpcpb.ErrorCode_INTEGRITY_ERROR:
-		return codes.AlreadyExists
+		return vtrpcpb.Code_ALREADY_EXISTS
 	case vtrpcpb.ErrorCode_PERMISSION_DENIED_LEGACY:
-		return codes.PermissionDenied
+		return vtrpcpb.Code_PERMISSION_DENIED
 	case vtrpcpb.ErrorCode_RESOURCE_EXHAUSTED_LEGACY:
-		return codes.ResourceExhausted
+		return vtrpcpb.Code_RESOURCE_EXHAUSTED
 	case vtrpcpb.ErrorCode_QUERY_NOT_SERVED:
-		return codes.FailedPrecondition
+		return vtrpcpb.Code_FAILED_PRECONDITION
 	case vtrpcpb.ErrorCode_NOT_IN_TX:
-		return codes.Aborted
+		return vtrpcpb.Code_ABORTED
 	case vtrpcpb.ErrorCode_INTERNAL_ERROR:
-		return codes.Internal
+		return vtrpcpb.Code_INTERNAL
 	case vtrpcpb.ErrorCode_TRANSIENT_ERROR:
-		return codes.Unavailable
+		return vtrpcpb.Code_UNAVAILABLE
 	case vtrpcpb.ErrorCode_UNAUTHENTICATED_LEGACY:
-		return codes.Unauthenticated
+		return vtrpcpb.Code_UNAUTHENTICATED
 	default:
-		return codes.Unknown
+		return vtrpcpb.Code_UNKNOWN
 	}
+}
+
+// CodeToGRPC maps a vtrpcpb.Code to a grpc Code.
+func CodeToGRPC(code vtrpcpb.Code) codes.Code {
+	return codes.Code(code)
+}
+
+// GRPCToCode maps a grpc Code to a vtrpcpb.Code
+func GRPCToCode(code codes.Code) vtrpcpb.Code {
+	return vtrpcpb.Code(code)
 }
 
 // toGRPCCode will attempt to determine the best gRPC code for a particular error.
@@ -98,7 +108,7 @@ func toGRPCCode(err error) codes.Code {
 		return codes.OK
 	}
 	if vtErr, ok := err.(VtError); ok {
-		return ErrorCodeToGRPCCode(vtErr.VtErrorCode())
+		return CodeToGRPC(vtErr.VtErrorCode())
 	}
 	// Returns the underlying gRPC Code, or codes.Unknown if one doesn't exist.
 	return grpc.Code(err)
@@ -140,7 +150,7 @@ func FromGRPCError(err error) error {
 		return err
 	}
 	return &VitessError{
-		Code: GRPCCodeToErrorCode(grpc.Code(err)),
+		Code: GRPCToCode(grpc.Code(err)),
 		err:  err,
 	}
 }

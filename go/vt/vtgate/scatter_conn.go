@@ -79,10 +79,10 @@ func (stc *ScatterConn) endAction(startTime time.Time, allErrors *concurrency.Al
 		// keys or bad queries, as those errors are caused by
 		// client queries and are not VTGate's fault.
 		ec := vterrors.RecoverVtErrorCode(*err)
-		if ec != vtrpcpb.ErrorCode_INTEGRITY_ERROR && ec != vtrpcpb.ErrorCode_BAD_INPUT {
+		if ec != vtrpcpb.Code_ALREADY_EXISTS && ec != vtrpcpb.Code_INVALID_ARGUMENT {
 			stc.tabletCallErrorCount.Add(statsKey, 1)
 		}
-		if ec == vtrpcpb.ErrorCode_RESOURCE_EXHAUSTED_LEGACY || ec == vtrpcpb.ErrorCode_NOT_IN_TX {
+		if ec == vtrpcpb.Code_RESOURCE_EXHAUSTED || ec == vtrpcpb.Code_ABORTED {
 			session.SetRollback()
 		}
 	}
@@ -554,7 +554,7 @@ type ScatterConnError struct {
 	// Preserve the original errors, so that we don't need to parse the error string.
 	Errs []error
 	// serverCode is the error code to use for all the server errors in aggregate
-	serverCode vtrpcpb.ErrorCode
+	serverCode vtrpcpb.Code
 }
 
 func (e *ScatterConnError) Error() string {
@@ -563,7 +563,7 @@ func (e *ScatterConnError) Error() string {
 
 // VtErrorCode returns the underlying Vitess error code
 // This is part of vterrors.VtError interface.
-func (e *ScatterConnError) VtErrorCode() vtrpcpb.ErrorCode {
+func (e *ScatterConnError) VtErrorCode() vtrpcpb.Code {
 	return e.serverCode
 }
 
@@ -571,7 +571,7 @@ func (stc *ScatterConn) aggregateErrors(errors []error) error {
 	allRetryableError := true
 	for _, e := range errors {
 		connError, ok := e.(*gateway.ShardError)
-		if !ok || (connError.ErrorCode != vtrpcpb.ErrorCode_QUERY_NOT_SERVED && connError.ErrorCode != vtrpcpb.ErrorCode_INTERNAL_ERROR) || connError.InTransaction {
+		if !ok || (connError.Code != vtrpcpb.Code_FAILED_PRECONDITION && connError.Code != vtrpcpb.Code_INTERNAL) || connError.InTransaction {
 			allRetryableError = false
 			break
 		}

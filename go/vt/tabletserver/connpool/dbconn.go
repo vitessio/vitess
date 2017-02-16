@@ -64,12 +64,12 @@ func (dbc *DBConn) Exec(ctx context.Context, query string, maxrows int, wantfiel
 			return r, nil
 		case !tabletenv.IsConnErr(err):
 			// MySQL error that isn't due to a connection issue
-			return nil, tabletenv.NewTabletErrorSQL(vtrpcpb.ErrorCode_UNKNOWN_ERROR, err)
+			return nil, tabletenv.NewTabletErrorSQL(vtrpcpb.Code_UNKNOWN, err)
 		case attempt == 2:
 			// If the MySQL connection is bad, we assume that there is nothing wrong with
 			// the query itself, and retrying it might succeed. The MySQL connection might
 			// fix itself, or the query could succeed on a different VtTablet.
-			return nil, tabletenv.NewTabletErrorSQL(vtrpcpb.ErrorCode_INTERNAL_ERROR, err)
+			return nil, tabletenv.NewTabletErrorSQL(vtrpcpb.Code_INTERNAL, err)
 		}
 
 		// Connection error. Try to reconnect.
@@ -78,7 +78,7 @@ func (dbc *DBConn) Exec(ctx context.Context, query string, maxrows int, wantfiel
 			dbc.pool.checker.CheckMySQL()
 			// Return the error of the reconnect and not the original connection error.
 			// NOTE: We return a tryable error code here.
-			return nil, tabletenv.NewTabletErrorSQL(vtrpcpb.ErrorCode_INTERNAL_ERROR, reconnectErr)
+			return nil, tabletenv.NewTabletErrorSQL(vtrpcpb.Code_INTERNAL, reconnectErr)
 		}
 
 		// Reconnect succeeded. Retry query at second attempt.
@@ -191,7 +191,7 @@ func (dbc *DBConn) Kill(reason string) error {
 	if err != nil {
 		log.Warningf("Failed to get conn from dba pool: %v", err)
 		// TODO(aaijazi): Find the right error code for an internal error that we don't want to retry
-		return tabletenv.NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "Failed to get conn from dba pool: %v", err)
+		return tabletenv.NewTabletError(vtrpcpb.Code_INTERNAL, "Failed to get conn from dba pool: %v", err)
 	}
 	defer killConn.Recycle()
 	sql := fmt.Sprintf("kill %d", dbc.conn.ID())
@@ -199,7 +199,7 @@ func (dbc *DBConn) Kill(reason string) error {
 	if err != nil {
 		log.Errorf("Could not kill query %s: %v", dbc.Current(), err)
 		// TODO(aaijazi): Find the right error code for an internal error that we don't want to retry
-		return tabletenv.NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "Could not kill query %s: %v", dbc.Current(), err)
+		return tabletenv.NewTabletError(vtrpcpb.Code_INTERNAL, "Could not kill query %s: %v", dbc.Current(), err)
 	}
 	return nil
 }

@@ -146,9 +146,9 @@ func (axp *TxPool) Begin(ctx context.Context) (int64, error) {
 			return 0, err
 		case pools.ErrTimeout:
 			axp.LogActive()
-			return 0, tabletenv.NewTabletError(vtrpcpb.ErrorCode_RESOURCE_EXHAUSTED_LEGACY, "Transaction pool connection limit exceeded")
+			return 0, tabletenv.NewTabletError(vtrpcpb.Code_RESOURCE_EXHAUSTED, "Transaction pool connection limit exceeded")
 		}
-		return 0, tabletenv.NewTabletErrorSQL(vtrpcpb.ErrorCode_INTERNAL_ERROR, err)
+		return 0, tabletenv.NewTabletErrorSQL(vtrpcpb.Code_INTERNAL, err)
 	}
 	if _, err := conn.Exec(ctx, "begin", 1, false); err != nil {
 		conn.Recycle()
@@ -157,7 +157,7 @@ func (axp *TxPool) Begin(ctx context.Context) (int64, error) {
 			// TabletError and instead preserve the error code.
 			return 0, err
 		}
-		return 0, tabletenv.NewTabletErrorSQL(vtrpcpb.ErrorCode_UNKNOWN_ERROR, err)
+		return 0, tabletenv.NewTabletErrorSQL(vtrpcpb.Code_UNKNOWN, err)
 	}
 	transactionID := axp.lastID.Add(1)
 	axp.activePool.Register(
@@ -196,7 +196,7 @@ func (axp *TxPool) Rollback(ctx context.Context, transactionID int64) error {
 func (axp *TxPool) Get(transactionID int64, reason string) (*TxConnection, error) {
 	v, err := axp.activePool.Get(transactionID, reason)
 	if err != nil {
-		return nil, tabletenv.NewTabletError(vtrpcpb.ErrorCode_NOT_IN_TX, "Transaction %d: %v", transactionID, err)
+		return nil, tabletenv.NewTabletError(vtrpcpb.Code_ABORTED, "Transaction %d: %v", transactionID, err)
 	}
 	return v.(*TxConnection), nil
 }
@@ -219,7 +219,7 @@ func (axp *TxPool) LocalCommit(ctx context.Context, conn *TxConnection, messager
 	txStats.Add("Completed", time.Now().Sub(conn.StartTime))
 	if _, err := conn.Exec(ctx, "commit", 1, false); err != nil {
 		conn.Close()
-		return tabletenv.NewTabletErrorSQL(vtrpcpb.ErrorCode_UNKNOWN_ERROR, err)
+		return tabletenv.NewTabletErrorSQL(vtrpcpb.Code_UNKNOWN, err)
 	}
 	messager.UpdateCaches(conn.NewMessages, conn.ChangedMessages)
 	return nil
@@ -238,7 +238,7 @@ func (axp *TxPool) localRollback(ctx context.Context, conn *TxConnection) error 
 	txStats.Add("Aborted", time.Now().Sub(conn.StartTime))
 	if _, err := conn.Exec(ctx, "rollback", 1, false); err != nil {
 		conn.Close()
-		return tabletenv.NewTabletErrorSQL(vtrpcpb.ErrorCode_UNKNOWN_ERROR, err)
+		return tabletenv.NewTabletErrorSQL(vtrpcpb.Code_UNKNOWN, err)
 	}
 	return nil
 }
@@ -306,9 +306,9 @@ func (txc *TxConnection) Exec(ctx context.Context, query string, maxrows int, wa
 	if err != nil {
 		if tabletenv.IsConnErr(err) {
 			txc.pool.checker.CheckMySQL()
-			return nil, tabletenv.NewTabletErrorSQL(vtrpcpb.ErrorCode_INTERNAL_ERROR, err)
+			return nil, tabletenv.NewTabletErrorSQL(vtrpcpb.Code_INTERNAL, err)
 		}
-		return nil, tabletenv.NewTabletErrorSQL(vtrpcpb.ErrorCode_UNKNOWN_ERROR, err)
+		return nil, tabletenv.NewTabletErrorSQL(vtrpcpb.Code_UNKNOWN, err)
 	}
 	return r, nil
 }

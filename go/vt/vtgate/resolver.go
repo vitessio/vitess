@@ -58,7 +58,7 @@ func isRetryableError(err error) bool {
 	case *ScatterConnError:
 		return e.Retryable
 	case *gateway.ShardError:
-		return e.ErrorCode == vtrpcpb.ErrorCode_QUERY_NOT_SERVED
+		return e.Code == vtrpcpb.Code_FAILED_PRECONDITION
 	default:
 		return false
 	}
@@ -71,7 +71,7 @@ func isRetryableError(err error) bool {
 func (res *Resolver) ExecuteKeyspaceIds(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyspaceIds [][]byte, tabletType topodatapb.TabletType, session *vtgatepb.Session, notInTransaction bool, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
 	if sqlannotation.IsDML(sql) && len(keyspaceIds) > 1 {
 		return nil, vterrors.FromError(
-			vtrpcpb.ErrorCode_BAD_INPUT,
+			vtrpcpb.Code_INVALID_ARGUMENT,
 			fmt.Errorf("DML should not span multiple keyspace_ids"),
 		)
 	}

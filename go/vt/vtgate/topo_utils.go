@@ -47,7 +47,7 @@ func getAnyShard(ctx context.Context, topoServ topo.SrvTopoServer, cell, keyspac
 		return "", "", err
 	}
 	if len(allShards) == 0 {
-		return "", "", vterrors.FromError(vtrpcpb.ErrorCode_BAD_INPUT,
+		return "", "", vterrors.FromError(vtrpcpb.Code_INVALID_ARGUMENT,
 			fmt.Errorf("No shards found for this tabletType"),
 		)
 	}
@@ -58,7 +58,7 @@ func getKeyspaceShards(ctx context.Context, topoServ topo.SrvTopoServer, cell, k
 	srvKeyspace, err := topoServ.GetSrvKeyspace(ctx, cell, keyspace)
 	if err != nil {
 		return "", nil, nil, vterrors.NewVitessError(
-			vtrpcpb.ErrorCode_INTERNAL_ERROR, err,
+			vtrpcpb.Code_INTERNAL, err,
 			"keyspace %v fetch error: %v", keyspace, err,
 		)
 	}
@@ -70,7 +70,7 @@ func getKeyspaceShards(ctx context.Context, topoServ topo.SrvTopoServer, cell, k
 			srvKeyspace, err = topoServ.GetSrvKeyspace(ctx, cell, keyspace)
 			if err != nil {
 				return "", nil, nil, vterrors.NewVitessError(
-					vtrpcpb.ErrorCode_INTERNAL_ERROR, err,
+					vtrpcpb.Code_INTERNAL, err,
 					"keyspace %v fetch error: %v", keyspace, err,
 				)
 			}
@@ -80,7 +80,7 @@ func getKeyspaceShards(ctx context.Context, topoServ topo.SrvTopoServer, cell, k
 	partition := topoproto.SrvKeyspaceGetPartition(srvKeyspace, tabletType)
 	if partition == nil {
 		return "", nil, nil, vterrors.NewVitessError(
-			vtrpcpb.ErrorCode_INTERNAL_ERROR, err,
+			vtrpcpb.Code_INTERNAL, err,
 			"No partition found for tabletType %v in keyspace %v", topoproto.TabletTypeLString(tabletType), keyspace,
 		)
 	}
@@ -89,7 +89,7 @@ func getKeyspaceShards(ctx context.Context, topoServ topo.SrvTopoServer, cell, k
 
 func getShardForKeyspaceID(allShards []*topodatapb.ShardReference, keyspaceID []byte) (string, error) {
 	if len(allShards) == 0 {
-		return "", vterrors.FromError(vtrpcpb.ErrorCode_BAD_INPUT,
+		return "", vterrors.FromError(vtrpcpb.Code_INVALID_ARGUMENT,
 			fmt.Errorf("No shards found for this tabletType"),
 		)
 	}
@@ -99,7 +99,7 @@ func getShardForKeyspaceID(allShards []*topodatapb.ShardReference, keyspaceID []
 			return shardReference.Name, nil
 		}
 	}
-	return "", vterrors.FromError(vtrpcpb.ErrorCode_BAD_INPUT,
+	return "", vterrors.FromError(vtrpcpb.Code_INVALID_ARGUMENT,
 		fmt.Errorf("KeyspaceId %v didn't match any shards %+v", hex.EncodeToString(keyspaceID), allShards),
 	)
 }
@@ -179,7 +179,7 @@ func mapExactShards(ctx context.Context, topoServ topo.SrvTopoServer, cell, keys
 		}
 		shardnum++
 	}
-	return keyspace, nil, vterrors.FromError(vtrpcpb.ErrorCode_BAD_INPUT,
+	return keyspace, nil, vterrors.FromError(vtrpcpb.Code_INVALID_ARGUMENT,
 		fmt.Errorf("keyrange %v does not exactly match shards", key.KeyRangeString(kr)),
 	)
 }

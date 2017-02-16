@@ -48,7 +48,7 @@ var timeSleep = time.Sleep
 
 // errBufferFull is the error returned a buffer request is rejected because the buffer is full.
 var errBufferFull = vterrors.FromError(
-	vtrpcpb.ErrorCode_TRANSIENT_ERROR,
+	vtrpcpb.Code_UNAVAILABLE,
 	errors.New("master request buffer full, rejecting request"),
 )
 

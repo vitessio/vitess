@@ -259,7 +259,7 @@ func (tsv *TabletServer) InitDBConfig(target querypb.Target, dbconfigs dbconfigs
 	tsv.mu.Lock()
 	defer tsv.mu.Unlock()
 	if tsv.state != StateNotConnected {
-		return tabletenv.NewTabletError(vtrpcpb.ErrorCode_UNKNOWN_ERROR, "InitDBConfig failed, current state: %s", stateName[tsv.state])
+		return tabletenv.NewTabletError(vtrpcpb.Code_UNKNOWN, "InitDBConfig failed, current state: %s", stateName[tsv.state])
 	}
 	tsv.target = target
 	tsv.dbconfigs = dbconfigs
@@ -377,7 +377,7 @@ func (tsv *TabletServer) decideAction(tabletType topodatapb.TabletType, serving 
 		tsv.setState(StateTransitioning)
 		return actionServeNewType, nil
 	case StateTransitioning, StateShuttingDown:
-		return actionNone, tabletenv.NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "cannot SetServingType, current state: %s", stateName[tsv.state])
+		return actionNone, tabletenv.NewTabletError(vtrpcpb.Code_INTERNAL, "cannot SetServingType, current state: %s", stateName[tsv.state])
 	default:
 		panic("unreachable")
 	}
@@ -596,7 +596,7 @@ func (tsv *TabletServer) Begin(ctx context.Context, target *querypb.Target) (tra
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
 			defer tabletenv.QueryStats.Record("BEGIN", time.Now())
 			if tsv.txThrottler.Throttle() {
-				return tabletenv.NewTabletError(vtrpcpb.ErrorCode_TRANSIENT_ERROR, "Transaction throttled")
+				return tabletenv.NewTabletError(vtrpcpb.Code_UNAVAILABLE, "Transaction throttled")
 			}
 			transactionID, err = tsv.te.txPool.Begin(ctx)
 			logStats.TransactionID = transactionID
@@ -857,10 +857,10 @@ func (tsv *TabletServer) StreamExecute(ctx context.Context, target *querypb.Targ
 // transaction. If AsTransaction is true, TransactionId must be 0.
 func (tsv *TabletServer) ExecuteBatch(ctx context.Context, target *querypb.Target, queries []querytypes.BoundQuery, asTransaction bool, transactionID int64, options *querypb.ExecuteOptions) (results []sqltypes.Result, err error) {
 	if len(queries) == 0 {
-		return nil, tabletenv.NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "Empty query list")
+		return nil, tabletenv.NewTabletError(vtrpcpb.Code_INVALID_ARGUMENT, "Empty query list")
 	}
 	if asTransaction && transactionID != 0 {
-		return nil, tabletenv.NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "cannot start a new transaction in the scope of an existing one")
+		return nil, tabletenv.NewTabletError(vtrpcpb.Code_INVALID_ARGUMENT, "cannot start a new transaction in the scope of an existing one")
 	}
 
 	allowOnShutdown := (transactionID != 0)
@@ -955,7 +955,7 @@ func (tsv *TabletServer) MessageAck(ctx context.Context, target *querypb.Target,
 	for _, val := range ids {
 		v, err := sqltypes.BuildConverted(val.Type, val.Value)
 		if err != nil {
-			return 0, tsv.handleError("message_ack", nil, tabletenv.NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "invalid type: %v", err), nil)
+			return 0, tsv.handleError("message_ack", nil, tabletenv.NewTabletError(vtrpcpb.Code_INVALID_ARGUMENT, "invalid type: %v", err), nil)
 		}
 		sids = append(sids, v.String())
 	}
@@ -989,7 +989,7 @@ func (tsv *TabletServer) execDML(ctx context.Context, target *querypb.Target, qu
 
 	query, bv, err := queryGenerator()
 	if err != nil {
-		return 0, tabletenv.NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "%v", err)
+		return 0, tabletenv.NewTabletError(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
 	}
 
 	transactionID, err := tsv.Begin(ctx, target)
@@ -1121,7 +1121,7 @@ func (tsv *TabletServer) handlePanicAndSendLogStats(
 			x,
 			tb.Stack(4) /* Skip the last 4 boiler-plate frames. */)
 		log.Errorf(errorMessage)
-		terr := tabletenv.NewTabletError(vtrpcpb.ErrorCode_UNKNOWN_ERROR, "%s", errorMessage)
+		terr := tabletenv.NewTabletError(vtrpcpb.Code_UNKNOWN, "%s", errorMessage)
 		*err = terr
 		tabletenv.InternalErrors.Add("Panic", 1)
 		if logStats != nil {
@@ -1147,7 +1147,7 @@ func (tsv *TabletServer) handleError(
 	}()
 	terr, ok := err.(*tabletenv.TabletError)
 	if !ok {
-		terr = tabletenv.NewTabletError(vtrpcpb.ErrorCode_UNKNOWN_ERROR, "%v", err)
+		terr = tabletenv.NewTabletError(vtrpcpb.Code_UNKNOWN, "%v", err)
 		// We only want to see TabletError here.
 		tabletenv.InternalErrors.Add("UnknownError", 1)
 	}
@@ -1172,10 +1172,10 @@ func (tsv *TabletServer) handleError(
 		default:
 			// Non-whitelisted error. Strip the error message.
 			myError = &tabletenv.TabletError{
-				SQLError:  terr.SQLError,
-				SQLState:  terr.SQLState,
-				ErrorCode: terr.ErrorCode,
-				Message:   fmt.Sprintf("(errno %d) (sqlstate %s) during query: %s", terr.SQLError, terr.SQLState, sql),
+				SQLError: terr.SQLError,
+				SQLState: terr.SQLState,
+				Code:     terr.Code,
+				Message:  fmt.Sprintf("(errno %d) (sqlstate %s) during query: %s", terr.SQLError, terr.SQLState, sql),
 			}
 		}
 	} else {
@@ -1186,14 +1186,14 @@ func (tsv *TabletServer) handleError(
 
 	logMethod := log.Infof
 	// Suppress or demote some errors in logs.
-	switch terr.ErrorCode {
-	case vtrpcpb.ErrorCode_QUERY_NOT_SERVED:
+	switch terr.Code {
+	case vtrpcpb.Code_FAILED_PRECONDITION:
 		return myError
-	case vtrpcpb.ErrorCode_RESOURCE_EXHAUSTED_LEGACY:
+	case vtrpcpb.Code_RESOURCE_EXHAUSTED:
 		logMethod = logTxPoolFull.Errorf
-	case vtrpcpb.ErrorCode_INTERNAL_ERROR:
+	case vtrpcpb.Code_INTERNAL:
 		logMethod = log.Errorf
-	case vtrpcpb.ErrorCode_NOT_IN_TX:
+	case vtrpcpb.Code_ABORTED:
 		logMethod = log.Warningf
 	default:
 		// We want to suppress/demote some MySQL error codes.
@@ -1232,20 +1232,20 @@ func validateSplitQueryParameters(
 	// Since we're called by VTGate this should not normally be violated.
 	if target.TabletType != topodatapb.TabletType_RDONLY {
 		return tabletenv.NewTabletError(
-			vtrpcpb.ErrorCode_BAD_INPUT,
+			vtrpcpb.Code_INVALID_ARGUMENT,
 			"SplitQuery must be called with a RDONLY tablet. TableType passed is: %v",
 			target.TabletType)
 	}
 	if numRowsPerQueryPart < 0 {
 		return tabletenv.NewTabletError(
-			vtrpcpb.ErrorCode_BAD_INPUT,
+			vtrpcpb.Code_INVALID_ARGUMENT,
 			"splitQuery: numRowsPerQueryPart must be non-negative. Got: %v. SQL: %v",
 			numRowsPerQueryPart,
 			querytypes.QueryAsString(query.Sql, query.BindVariables))
 	}
 	if splitCount < 0 {
 		return tabletenv.NewTabletError(
-			vtrpcpb.ErrorCode_BAD_INPUT,
+			vtrpcpb.Code_INVALID_ARGUMENT,
 			"splitQuery: splitCount must be non-negative. Got: %v. SQL: %v",
 			splitCount,
 			querytypes.QueryAsString(query.Sql, query.BindVariables))
@@ -1253,7 +1253,7 @@ func validateSplitQueryParameters(
 	if (splitCount == 0 && numRowsPerQueryPart == 0) ||
 		(splitCount != 0 && numRowsPerQueryPart != 0) {
 		return tabletenv.NewTabletError(
-			vtrpcpb.ErrorCode_BAD_INPUT,
+			vtrpcpb.Code_INVALID_ARGUMENT,
 			"splitQuery: exactly one of {numRowsPerQueryPart, splitCount} must be"+
 				" non zero. Got: numRowsPerQueryPart=%v, splitCount=%v. SQL: %v",
 			numRowsPerQueryPart,
@@ -1263,7 +1263,7 @@ func validateSplitQueryParameters(
 	if algorithm != querypb.SplitQueryRequest_EQUAL_SPLITS &&
 		algorithm != querypb.SplitQueryRequest_FULL_SCAN {
 		return tabletenv.NewTabletError(
-			vtrpcpb.ErrorCode_BAD_INPUT,
+			vtrpcpb.Code_INVALID_ARGUMENT,
 			"splitquery: unsupported algorithm: %v. SQL: %v",
 			algorithm,
 			querytypes.QueryAsString(query.Sql, query.BindVariables))
@@ -1374,7 +1374,7 @@ func splitQueryToTabletError(err error) error {
 	if err == nil {
 		return nil
 	}
-	return tabletenv.NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "splitquery: %v", err)
+	return tabletenv.NewTabletError(vtrpcpb.Code_INVALID_ARGUMENT, "splitquery: %v", err)
 }
 
 // StreamHealth streams the health status to callback.
@@ -1462,11 +1462,11 @@ func (tsv *TabletServer) UpdateStream(ctx context.Context, target *querypb.Targe
 		if position != "" {
 			p, err = replication.DecodePosition(position)
 			if err != nil {
-				return tabletenv.NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "cannot parse position: %v", err)
+				return tabletenv.NewTabletError(vtrpcpb.Code_INVALID_ARGUMENT, "cannot parse position: %v", err)
 			}
 		}
 	} else if position != "" {
-		return tabletenv.NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "at most one of position and timestamp should be specified")
+		return tabletenv.NewTabletError(vtrpcpb.Code_INVALID_ARGUMENT, "at most one of position and timestamp should be specified")
 	}
 
 	// Validate proper target is used.
@@ -1486,11 +1486,11 @@ func (tsv *TabletServer) UpdateStream(ctx context.Context, target *querypb.Targe
 	err = s.Stream(streamCtx)
 	switch err {
 	case mysqlctl.ErrBinlogUnavailable:
-		return tabletenv.NewTabletError(vtrpcpb.ErrorCode_QUERY_NOT_SERVED, "%v", err)
+		return tabletenv.NewTabletError(vtrpcpb.Code_FAILED_PRECONDITION, "%v", err)
 	case nil, io.EOF:
 		return nil
 	default:
-		return tabletenv.NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "%v", err)
+		return tabletenv.NewTabletError(vtrpcpb.Code_INTERNAL, "%v", err)
 	}
 }
 
@@ -1523,19 +1523,19 @@ func (tsv *TabletServer) startRequest(ctx context.Context, target *querypb.Targe
 	if allowOnShutdown && tsv.state == StateShuttingDown {
 		goto verifyTarget
 	}
-	return tabletenv.NewTabletError(vtrpcpb.ErrorCode_QUERY_NOT_SERVED, "operation not allowed in state %s", stateName[tsv.state])
+	return tabletenv.NewTabletError(vtrpcpb.Code_FAILED_PRECONDITION, "operation not allowed in state %s", stateName[tsv.state])
 
 verifyTarget:
 	if target != nil {
 		// a valid target needs to be used
 		if target.Keyspace != tsv.target.Keyspace {
-			return tabletenv.NewTabletError(vtrpcpb.ErrorCode_QUERY_NOT_SERVED, "Invalid keyspace %v", target.Keyspace)
+			return tabletenv.NewTabletError(vtrpcpb.Code_FAILED_PRECONDITION, "Invalid keyspace %v", target.Keyspace)
 		}
 		if target.Shard != tsv.target.Shard {
-			return tabletenv.NewTabletError(vtrpcpb.ErrorCode_QUERY_NOT_SERVED, "Invalid shard %v", target.Shard)
+			return tabletenv.NewTabletError(vtrpcpb.Code_FAILED_PRECONDITION, "Invalid shard %v", target.Shard)
 		}
 		if isTx && tsv.target.TabletType != topodatapb.TabletType_MASTER {
-			return tabletenv.NewTabletError(vtrpcpb.ErrorCode_QUERY_NOT_SERVED, "transactional statement disallowed on non-master tablet: %v", tsv.target.TabletType)
+			return tabletenv.NewTabletError(vtrpcpb.Code_FAILED_PRECONDITION, "transactional statement disallowed on non-master tablet: %v", tsv.target.TabletType)
 		}
 		if target.TabletType != tsv.target.TabletType {
 			for _, otherType := range tsv.alsoAllow {
@@ -1543,10 +1543,10 @@ verifyTarget:
 					goto ok
 				}
 			}
-			return tabletenv.NewTabletError(vtrpcpb.ErrorCode_QUERY_NOT_SERVED, "Invalid tablet type: %v, want: %v or %v", target.TabletType, tsv.target.TabletType, tsv.alsoAllow)
+			return tabletenv.NewTabletError(vtrpcpb.Code_FAILED_PRECONDITION, "Invalid tablet type: %v, want: %v or %v", target.TabletType, tsv.target.TabletType, tsv.alsoAllow)
 		}
 	} else if !tabletenv.IsLocalContext(ctx) {
-		return tabletenv.NewTabletError(vtrpcpb.ErrorCode_QUERY_NOT_SERVED, "No target")
+		return tabletenv.NewTabletError(vtrpcpb.Code_FAILED_PRECONDITION, "No target")
 	}
 
 ok:

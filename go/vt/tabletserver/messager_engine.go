@@ -77,7 +77,7 @@ func (me *MessagerEngine) Subscribe(name string, rcv *messageReceiver) error {
 	defer me.mu.Unlock()
 	mm := me.managers[name]
 	if mm == nil {
-		return tabletenv.NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "message table %s not found", name)
+		return tabletenv.NewTabletError(vtrpcpb.Code_INVALID_ARGUMENT, "message table %s not found", name)
 	}
 	mm.Subscribe(rcv)
 	return nil

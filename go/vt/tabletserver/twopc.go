@@ -137,7 +137,7 @@ func (tpc *TwoPC) Init(sidecarDBName string, dbaparams *sqldb.ConnParams) error 
 	}
 	for _, s := range statements {
 		if _, err := conn.ExecuteFetch(s, 0, false); err != nil {
-			return tabletenv.NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, err.Error())
+			return tabletenv.NewTabletError(vtrpcpb.Code_INTERNAL, err.Error())
 		}
 	}
 	tpc.insertRedoTx = buildParsedQuery(
@@ -368,7 +368,7 @@ func (tpc *TwoPC) Transition(ctx context.Context, conn *TxConnection, dtid strin
 		return err
 	}
 	if qr.RowsAffected != 1 {
-		return tabletenv.NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "could not transition to %v: %s", state, dtid)
+		return tabletenv.NewTabletError(vtrpcpb.Code_INVALID_ARGUMENT, "could not transition to %v: %s", state, dtid)
 	}
 	return nil
 }

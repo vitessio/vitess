@@ -107,8 +107,8 @@ func TestLogStatsErrorStr(t *testing.T) {
 	}
 	errStr := "unknown error"
 	logStats.Error = &TabletError{
-		ErrorCode: vtrpcpb.ErrorCode_UNKNOWN_ERROR,
-		Message:   errStr,
+		Code:    vtrpcpb.Code_UNKNOWN,
+		Message: errStr,
 	}
 	if !strings.Contains(logStats.ErrorStr(), errStr) {
 		t.Fatalf("expect string '%s' in error message, but got: %s", errStr, logStats.ErrorStr())

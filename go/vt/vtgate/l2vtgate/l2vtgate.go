@@ -98,7 +98,7 @@ func (l *L2VTGate) endAction(startTime time.Time, statsKey []string, err *error)
 		// keys or bad queries, as those errors are caused by
 		// client queries and are not VTGate's fault.
 		ec := vterrors.RecoverVtErrorCode(*err)
-		if ec != vtrpcpb.ErrorCode_INTEGRITY_ERROR && ec != vtrpcpb.ErrorCode_BAD_INPUT {
+		if ec != vtrpcpb.Code_ALREADY_EXISTS && ec != vtrpcpb.Code_INVALID_ARGUMENT {
 			l.tabletCallErrorCount.Add(statsKey, 1)
 		}
 	}

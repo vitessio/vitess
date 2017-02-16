@@ -250,4 +250,5 @@ enum ErrorCode {
 message RPCError {
   ErrorCode legacy_code = 1;
   string message = 2;
+  Code code = 3;
 }

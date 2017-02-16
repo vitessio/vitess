@@ -27,7 +27,7 @@ func New(mmShard *vtgatepb.Session_ShardSession) string {
 func ShardSession(dtid string) (*vtgatepb.Session_ShardSession, error) {
 	splits := strings.Split(dtid, ":")
 	if len(splits) != 3 {
-		return nil, vterrors.FromError(vtrpcpb.ErrorCode_BAD_INPUT, fmt.Errorf("invalid parts in dtid: %s", dtid))
+		return nil, vterrors.FromError(vtrpcpb.Code_INVALID_ARGUMENT, fmt.Errorf("invalid parts in dtid: %s", dtid))
 	}
 	target := &querypb.Target{
 		Keyspace:   splits[0],
@@ -36,7 +36,7 @@ func ShardSession(dtid string) (*vtgatepb.Session_ShardSession, error) {
 	}
 	txid, err := strconv.ParseInt(splits[2], 10, 0)
 	if err != nil {
-		return nil, vterrors.FromError(vtrpcpb.ErrorCode_BAD_INPUT, fmt.Errorf("invalid transaction id in dtid: %s", dtid))
+		return nil, vterrors.FromError(vtrpcpb.Code_INVALID_ARGUMENT, fmt.Errorf("invalid transaction id in dtid: %s", dtid))
 	}
 	return &vtgatepb.Session_ShardSession{
 		Target:        target,
@@ -48,11 +48,11 @@ func ShardSession(dtid string) (*vtgatepb.Session_ShardSession, error) {
 func TransactionID(dtid string) (int64, error) {
 	splits := strings.Split(dtid, ":")
 	if len(splits) != 3 {
-		return 0, vterrors.FromError(vtrpcpb.ErrorCode_BAD_INPUT, fmt.Errorf("invalid parts in dtid: %s", dtid))
+		return 0, vterrors.FromError(vtrpcpb.Code_INVALID_ARGUMENT, fmt.Errorf("invalid parts in dtid: %s", dtid))
 	}
 	txid, err := strconv.ParseInt(splits[2], 10, 0)
 	if err != nil {
-		return 0, vterrors.FromError(vtrpcpb.ErrorCode_BAD_INPUT, fmt.Errorf("invalid transaction id in dtid: %s", dtid))
+		return 0, vterrors.FromError(vtrpcpb.Code_INVALID_ARGUMENT, fmt.Errorf("invalid transaction id in dtid: %s", dtid))
 	}
 	return txid, nil
 }
