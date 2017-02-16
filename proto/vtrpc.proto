@@ -33,8 +33,9 @@ message CallerID {
   string subcomponent = 3;
 }
 
-// Code represnts canonical error codes. The names and numbers must match
-// the ones defined by grpc: https://godoc.org/google.golang.org/grpc/codes.
+// Code represnts canonical error codes. The names, numbers and comments
+// must match the ones defined by grpc:
+// https://godoc.org/google.golang.org/grpc/codes.
 enum Code {
   // OK is returned on success.
   OK = 0;
@@ -136,7 +137,7 @@ enum Code {
   // supported/enabled in this service.
   UNIMPLEMENTED = 12;
 
-  // INTERNAL errors.  Means some invariants expected by underlying
+  // INTERNAL errors. Means some invariants expected by underlying
   // system has been broken.  If you see one of these errors,
   // something is very broken.
   INTERNAL = 13;
@@ -153,7 +154,7 @@ enum Code {
   DATA_LOSS = 15;
 }
 
-// ErrorCode is the enum values for Errors. This type is deprecated.
+// LegacyErrorCode is the enum values for Errors. This type is deprecated.
 // Use Code instead. Background: In the initial design, we thought
 // that we may end up with a different list of canonical error codes
 // than the ones defined by grpc. In hindisght, we realize that
@@ -162,31 +163,31 @@ enum Code {
 // favor of the new Code that matches exactly what grpc defines.
 // Some names below have a _LEGACY suffix. This is to prevent
 // name collisions with Code.
-enum ErrorCode {
-  // SUCCESS is returned from a successful call.
-  SUCCESS = 0;
+enum LegacyErrorCode {
+  // SUCCESS_LEGACY is returned from a successful call.
+  SUCCESS_LEGACY = 0;
 
   // CANCELLED_LEGACY means that the context was cancelled (and noticed in the app layer,
   // as opposed to the RPC layer).
   CANCELLED_LEGACY = 1;
 
-  // UNKNOWN_ERROR includes:
+  // UNKNOWN_ERROR_LEGACY includes:
   // 1. MySQL error codes that we don't explicitly handle.
   // 2. MySQL response that wasn't as expected. For example, we might expect a MySQL
   //  timestamp to be returned in a particular way, but it wasn't.
   // 3. Anything else that doesn't fall into a different bucket.
-  UNKNOWN_ERROR = 2;
+  UNKNOWN_ERROR_LEGACY = 2;
 
-  // BAD_INPUT is returned when an end-user either sends SQL that couldn't be parsed correctly,
+  // BAD_INPUT_LEGACY is returned when an end-user either sends SQL that couldn't be parsed correctly,
   // or tries a query that isn't supported by Vitess.
-  BAD_INPUT = 3;
+  BAD_INPUT_LEGACY = 3;
 
   // DEADLINE_EXCEEDED_LEGACY is returned when an action is taking longer than a given timeout.
   DEADLINE_EXCEEDED_LEGACY = 4;
 
-  // INTEGRITY_ERROR is returned on integrity error from MySQL, usually due to
+  // INTEGRITY_ERROR_LEGACY is returned on integrity error from MySQL, usually due to
   // duplicate primary keys.
-  INTEGRITY_ERROR = 5;
+  INTEGRITY_ERROR_LEGACY = 5;
 
   // PERMISSION_DENIED_LEGACY errors are returned when a user requests access to something
   // that they don't have permissions for.
@@ -201,7 +202,7 @@ enum ErrorCode {
   // 2. Query is killed due to it taking too long.
   RESOURCE_EXHAUSTED_LEGACY = 7;
 
-  // QUERY_NOT_SERVED means that a query could not be served right now.
+  // QUERY_NOT_SERVED_LEGACY means that a query could not be served right now.
   // Client can interpret it as: "the tablet that you sent this query to cannot
   // serve the query right now, try a different tablet or try again later."
   // This could be due to various reasons: QueryService is not serving, should
@@ -209,34 +210,24 @@ enum ErrorCode {
   // Clients that receive this error should usually retry the query, but after taking
   // the appropriate steps to make sure that the query will get sent to the correct
   // tablet.
-  QUERY_NOT_SERVED = 8;
+  QUERY_NOT_SERVED_LEGACY = 8;
 
-  // NOT_IN_TX means that we're not currently in a transaction, but we should be.
-  NOT_IN_TX = 9;
+  // NOT_IN_TX_LEGACY means that we're not currently in a transaction, but we should be.
+  NOT_IN_TX_LEGACY = 9;
 
-  // INTERNAL_ERRORs are problems that only the server can fix, not the client.
-  // These errors are not due to a query itself, but rather due to the state of
-  // the system.
-  // Generally, we don't expect the errors to go away by themselves, but they
-  // may go away after human intervention.
-  // Examples of scenarios where INTERNAL_ERROR is returned:
-  //  1. Something is not configured correctly internally.
-  //  2. A necessary resource is not available, and we don't expect it to become available by itself.
-  //  3. A sanity check fails.
-  //  4. Some other internal error occurs.
-  // Clients should not retry immediately, as there is little chance of success.
-  // However, it's acceptable for retries to happen internally, for example to
-  // multiple backends, in case only a subset of backend are not functional.
-  INTERNAL_ERROR = 10;
+  // INTERNAL_ERROR_LEGACY means some invariants expected by underlying
+  // system has been broken.  If you see one of these errors,
+  // something is very broken.
+  INTERNAL_ERROR_LEGACY = 10;
 
-  // TRANSIENT_ERROR is used for when there is some error that we expect we can
+  // TRANSIENT_ERROR_LEGACY is used for when there is some error that we expect we can
   // recover from automatically - often due to a resource limit temporarily being
   // reached. Retrying this error, with an exponential backoff, should succeed.
   // Clients should be able to successfully retry the query on the same backends.
   // Examples of things that can trigger this error:
   // 1. Query has been throttled
   // 2. VtGate could have request backlog
-  TRANSIENT_ERROR = 11;
+  TRANSIENT_ERROR_LEGACY = 11;
 
   // UNAUTHENTICATED_LEGACY errors are returned when a user requests access to something,
   // and we're unable to verify the user's authentication.
@@ -248,7 +239,7 @@ enum ErrorCode {
 // We use this so the clients don't have to parse the error messages,
 // but instead can depend on the value of the code.
 message RPCError {
-  ErrorCode legacy_code = 1;
+  LegacyErrorCode legacy_code = 1;
   string message = 2;
   Code code = 3;
 }
