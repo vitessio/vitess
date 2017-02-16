@@ -34,15 +34,11 @@ server should ignore it anyway), and then should send a COM_INIT_DB
 message to set the database.
 
 --
-CLIENT_SSL:
-
-SSL is not supported yet, in neither client nor server. It is not a lot to add.
-
---
 PLUGABLE AUTHENTICATION:
 
 We only support mysql_native_password for now, both client and server
-side. It wouldn't be a lot of work to add SHA256 for instance.
+side. It wouldn't be a lot of work to add SHA256 for instance, or clear text
+authentication.
 
 --
 Maximum Packet Size:
