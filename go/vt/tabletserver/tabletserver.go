@@ -36,6 +36,7 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 	"github.com/youtube/vitess/go/vt/tabletserver/splitquery"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletenv"
+	"github.com/youtube/vitess/go/vt/tabletserver/txthrottler"
 	"github.com/youtube/vitess/go/vt/utils"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
@@ -118,7 +119,7 @@ type TabletServer struct {
 	checkMySQLThrottler *sync2.Semaphore
 
 	// txThrottler is used to throttle transactions based on the observed replication lag.
-	txThrottler *TxThrottler
+	txThrottler *txthrottler.TxThrottler
 
 	// streamHealthMutex protects all the following fields
 	streamHealthMutex        sync.Mutex
@@ -167,7 +168,7 @@ func NewTabletServer(config tabletenv.TabletConfig) *TabletServer {
 	tsv.se = schema.NewEngine(tsv, config)
 	tsv.qe = NewQueryEngine(tsv, tsv.se, config)
 	tsv.te = NewTxEngine(tsv, config)
-	tsv.txThrottler = CreateTxThrottlerFromTabletConfig(config)
+	tsv.txThrottler = txthrottler.CreateTxThrottlerFromTabletConfig()
 	tsv.messager = NewMessagerEngine(tsv, config)
 	tsv.watcher = NewReplicationWatcher(tsv.se, config)
 	tsv.updateStreamList = &binlog.StreamList{}
