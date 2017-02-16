@@ -31,14 +31,14 @@ var (
 type ServerError struct {
 	Err string
 	// ServerCode is the error code that we got from the server.
-	ServerCode vtrpcpb.ErrorCode
+	ServerCode vtrpcpb.Code
 }
 
 func (e *ServerError) Error() string { return e.Err }
 
 // VtErrorCode returns the underlying Vitess error code.
 // This makes ServerError implement vterrors.VtError.
-func (e *ServerError) VtErrorCode() vtrpcpb.ErrorCode { return e.ServerCode }
+func (e *ServerError) VtErrorCode() vtrpcpb.Code { return e.ServerCode }
 
 // OperationalError represents an error due to a failure to
 // communicate with vttablet.

@@ -355,7 +355,7 @@ func TestTabletServerAllSchemaFailure(t *testing.T) {
 	err := tsv.StartService(target, dbconfigs, testUtils.newMysqld(&dbconfigs))
 	defer tsv.StopService()
 	// tabletsever shouldn't start if it can't access schema for any tables
-	testUtils.checkTabletError(t, err, vtrpcpb.ErrorCode_UNKNOWN_ERROR, "could not get schema for any tables")
+	testUtils.checkTabletError(t, err, vtrpcpb.Code_UNKNOWN, "could not get schema for any tables")
 }
 
 func TestTabletServerCheckMysql(t *testing.T) {
@@ -1800,7 +1800,7 @@ func TestHandleExecTabletError(t *testing.T) {
 	err := tsv.handleError(
 		"select * from test_table",
 		nil,
-		tabletenv.NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "tablet error"),
+		tabletenv.NewTabletError(vtrpcpb.Code_INTERNAL, "tablet error"),
 		nil,
 	)
 	want := "fatal: tablet error"
@@ -1817,7 +1817,7 @@ func TestTerseErrorsNonSQLError(t *testing.T) {
 	err := tsv.handleError(
 		"select * from test_table",
 		nil,
-		tabletenv.NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "tablet error"),
+		tabletenv.NewTabletError(vtrpcpb.Code_INTERNAL, "tablet error"),
 		nil,
 	)
 	want := "fatal: tablet error"
@@ -1835,10 +1835,10 @@ func TestTerseErrorsBindVars(t *testing.T) {
 		"select * from test_table",
 		map[string]interface{}{"a": 1},
 		&tabletenv.TabletError{
-			ErrorCode: vtrpcpb.ErrorCode_DEADLINE_EXCEEDED_LEGACY,
-			Message:   "msg",
-			SQLError:  10,
-			SQLState:  "HY000",
+			Code:     vtrpcpb.Code_DEADLINE_EXCEEDED,
+			Message:  "msg",
+			SQLError: 10,
+			SQLState: "HY000",
 		},
 		nil,
 	)
@@ -1853,7 +1853,7 @@ func TestTerseErrorsNoBindVars(t *testing.T) {
 	config := testUtils.newQueryServiceConfig()
 	config.TerseErrors = true
 	tsv := NewTabletServer(config)
-	err := tsv.handleError("", nil, tabletenv.NewTabletError(vtrpcpb.ErrorCode_DEADLINE_EXCEEDED_LEGACY, "msg"), nil)
+	err := tsv.handleError("", nil, tabletenv.NewTabletError(vtrpcpb.Code_DEADLINE_EXCEEDED, "msg"), nil)
 	want := "error: msg"
 	if err == nil || err.Error() != want {
 		t.Errorf("Error: %v, want '%s'", err, want)
@@ -1869,10 +1869,10 @@ func TestTerseErrorsIgnoreFailoverInProgress(t *testing.T) {
 	err := tsv.handleError("select * from test_table where id = :a",
 		map[string]interface{}{"a": 1},
 		&tabletenv.TabletError{
-			ErrorCode: vtrpcpb.ErrorCode_INTERNAL_ERROR,
-			Message:   "failover in progress (errno 1227) (sqlstate 42000)",
-			SQLError:  1227,
-			SQLState:  "42000",
+			Code:     vtrpcpb.Code_INTERNAL,
+			Message:  "failover in progress (errno 1227) (sqlstate 42000)",
+			SQLError: 1227,
+			SQLState: "42000",
 		},
 		nil /* logStats */)
 	if got, want := err.Error(), "fatal: failover in progress (errno 1227) (sqlstate 42000)"; got != want {

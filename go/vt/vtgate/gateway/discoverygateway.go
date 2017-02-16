@@ -199,7 +199,7 @@ func (dg *discoveryGateway) withRetry(ctx context.Context, target *querypb.Targe
 		tablets := dg.tsc.GetHealthyTabletStats(target.Keyspace, target.Shard, target.TabletType)
 		if len(tablets) == 0 {
 			// fail fast if there is no tablet
-			err = vterrors.FromError(vtrpcpb.ErrorCode_INTERNAL_ERROR, fmt.Errorf("no valid tablet"))
+			err = vterrors.FromError(vtrpcpb.Code_INTERNAL, fmt.Errorf("no valid tablet"))
 			break
 		}
 		shuffleTablets(tablets)
@@ -215,7 +215,7 @@ func (dg *discoveryGateway) withRetry(ctx context.Context, target *querypb.Targe
 		if ts == nil {
 			if err == nil {
 				// do not override error from last attempt.
-				err = vterrors.FromError(vtrpcpb.ErrorCode_INTERNAL_ERROR, fmt.Errorf("no available connection"))
+				err = vterrors.FromError(vtrpcpb.Code_INTERNAL, fmt.Errorf("no available connection"))
 			}
 			break
 		}
@@ -224,7 +224,7 @@ func (dg *discoveryGateway) withRetry(ctx context.Context, target *querypb.Targe
 		tabletLastUsed = ts.Tablet
 		conn := dg.hc.GetConnection(ts.Key)
 		if conn == nil {
-			err = vterrors.FromError(vtrpcpb.ErrorCode_INTERNAL_ERROR, fmt.Errorf("no connection for key %v tablet %+v", ts.Key, ts.Tablet))
+			err = vterrors.FromError(vtrpcpb.Code_INTERNAL, fmt.Errorf("no connection for key %v tablet %+v", ts.Key, ts.Tablet))
 			invalidTablets[ts.Key] = true
 			continue
 		}
@@ -261,7 +261,7 @@ func (dg *discoveryGateway) canRetry(ctx context.Context, err error, inTransacti
 	}
 	if serverError, ok := err.(*tabletconn.ServerError); ok {
 		switch serverError.ServerCode {
-		case vtrpcpb.ErrorCode_INTERNAL_ERROR:
+		case vtrpcpb.Code_INTERNAL:
 			// Do not retry on fatal error for streaming query.
 			// For streaming query, vttablet sends:
 			// - QUERY_NOT_SERVED, if streaming is not started yet;
@@ -271,7 +271,7 @@ func (dg *discoveryGateway) canRetry(ctx context.Context, err error, inTransacti
 				return false
 			}
 			fallthrough
-		case vtrpcpb.ErrorCode_QUERY_NOT_SERVED:
+		case vtrpcpb.Code_FAILED_PRECONDITION:
 			// Retry on QUERY_NOT_SERVED and
 			// INTERNAL_ERROR if not in a transaction.
 			return !inTransaction

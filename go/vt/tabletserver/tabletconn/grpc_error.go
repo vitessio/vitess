@@ -29,7 +29,7 @@ func TabletErrorFromGRPC(err error) error {
 	// server side error, convert it
 	return &ServerError{
 		Err:        fmt.Sprintf("vttablet: %v", err),
-		ServerCode: vterrors.GRPCCodeToErrorCode(grpc.Code(err)),
+		ServerCode: vterrors.GRPCToCode(grpc.Code(err)),
 	}
 }
 
@@ -38,10 +38,14 @@ func TabletErrorFromRPCError(err *vtrpcpb.RPCError) error {
 	if err == nil {
 		return nil
 	}
+	code := err.Code
+	if code == vtrpcpb.Code_OK {
+		code = vterrors.LegacyErrorCodeToCode(err.LegacyCode)
+	}
 
 	// server side error, convert it
 	return &ServerError{
 		Err:        fmt.Sprintf("vttablet: %v", err),
-		ServerCode: err.LegacyCode,
+		ServerCode: code,
 	}
 }

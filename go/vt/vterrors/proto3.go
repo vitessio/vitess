@@ -21,8 +21,12 @@ func FromVtRPCError(rpcErr *vtrpcpb.RPCError) error {
 	if rpcErr == nil {
 		return nil
 	}
+	code := rpcErr.Code
+	if code == vtrpcpb.Code_OK {
+		code = LegacyErrorCodeToCode(rpcErr.LegacyCode)
+	}
 	return &VitessError{
-		Code: rpcErr.LegacyCode,
+		Code: code,
 		err:  errors.New(rpcErr.Message),
 	}
 }
@@ -32,8 +36,10 @@ func VtRPCErrorFromVtError(err error) *vtrpcpb.RPCError {
 	if err == nil {
 		return nil
 	}
+	code := RecoverVtErrorCode(err)
 	return &vtrpcpb.RPCError{
-		LegacyCode: RecoverVtErrorCode(err),
+		LegacyCode: CodeToLegacyErrorCode(code),
+		Code:       code,
 		Message:    err.Error(),
 	}
 }

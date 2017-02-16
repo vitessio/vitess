@@ -796,8 +796,8 @@ func TestInvalidJSON(t *testing.T) {
 	if !ok {
 		t.Fatalf("invalid json, should get a tablet error")
 	}
-	if terr.ErrorCode != vtrpcpb.ErrorCode_INTERNAL_ERROR {
-		t.Fatalf("got: %v wanted: INTERNAL_ERROR", terr.ErrorCode)
+	if terr.Code != vtrpcpb.Code_INTERNAL {
+		t.Fatalf("got: %v wanted: INTERNAL_ERROR", terr.Code)
 	}
 }
 

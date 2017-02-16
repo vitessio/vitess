@@ -21,21 +21,21 @@ func ConcatenateErrors(errors []error) error {
 
 // VtError is implemented by any type that exposes a vtrpcpb.ErrorCode.
 type VtError interface {
-	VtErrorCode() vtrpcpb.ErrorCode
+	VtErrorCode() vtrpcpb.Code
 }
 
 // RecoverVtErrorCode attempts to recover a vtrpcpb.ErrorCode from an error.
-func RecoverVtErrorCode(err error) vtrpcpb.ErrorCode {
+func RecoverVtErrorCode(err error) vtrpcpb.Code {
 	if vtErr, ok := err.(VtError); ok {
 		return vtErr.VtErrorCode()
 	}
-	return vtrpcpb.ErrorCode_UNKNOWN_ERROR
+	return vtrpcpb.Code_UNKNOWN
 }
 
 // VitessError is the error type that we use internally for passing structured errors.
 type VitessError struct {
 	// Error code of the Vitess error.
-	Code vtrpcpb.ErrorCode
+	Code vtrpcpb.Code
 	// Error message that should be returned. This allows us to change an error message
 	// without losing the underlying error. For example, if you have an error like
 	// context.DeadlikeExceeded, you don't want to modify it - otherwise you would lose
@@ -57,7 +57,7 @@ func (e *VitessError) Error() string {
 }
 
 // VtErrorCode returns the underlying Vitess error code.
-func (e *VitessError) VtErrorCode() vtrpcpb.ErrorCode {
+func (e *VitessError) VtErrorCode() vtrpcpb.Code {
 	return e.Code
 }
 
@@ -73,9 +73,9 @@ func (e *VitessError) AsString() string {
 // existing error.
 // Use this method also when you want to create a VitessError without a custom
 // message. For example:
-//	 err := vterrors.FromError(vtrpcpb.ErrorCode_INTERNAL_ERROR,
+//	 err := vterrors.FromError(vtrpcpb.Code_INTERNAL,
 //     errors.New("no valid endpoint"))
-func FromError(code vtrpcpb.ErrorCode, err error) error {
+func FromError(code vtrpcpb.Code, err error) error {
 	return &VitessError{
 		Code: code,
 		err:  err,
@@ -84,7 +84,7 @@ func FromError(code vtrpcpb.ErrorCode, err error) error {
 
 // NewVitessError returns a VitessError backed error with the given arguments.
 // Useful for preserving an underlying error while creating a new error message.
-func NewVitessError(code vtrpcpb.ErrorCode, err error, format string, args ...interface{}) error {
+func NewVitessError(code vtrpcpb.Code, err error, format string, args ...interface{}) error {
 	return &VitessError{
 		Code:    code,
 		Message: fmt.Sprintf(format, args...),

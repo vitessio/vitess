@@ -8,7 +8,7 @@ import (
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
-// A list of all vtrpcpb.ErrorCodes, ordered by priority. These priorities are
+// A list of all vtrpcpb.Code, ordered by priority. These priorities are
 // used when aggregating multiple errors in VtGate.
 // Higher priority error codes are more urgent for users to see. They are
 // prioritized based on the following question: assuming a scatter query produced multiple
@@ -30,27 +30,27 @@ const (
 	PriorityBadInput
 )
 
-var errorPriorities = map[vtrpcpb.ErrorCode]int{
-	vtrpcpb.ErrorCode_SUCCESS:                   PrioritySuccess,
-	vtrpcpb.ErrorCode_CANCELLED_LEGACY:          PriorityCancelled,
-	vtrpcpb.ErrorCode_UNKNOWN_ERROR:             PriorityUnknownError,
-	vtrpcpb.ErrorCode_BAD_INPUT:                 PriorityBadInput,
-	vtrpcpb.ErrorCode_DEADLINE_EXCEEDED_LEGACY:  PriorityDeadlineExceeded,
-	vtrpcpb.ErrorCode_INTEGRITY_ERROR:           PriorityIntegrityError,
-	vtrpcpb.ErrorCode_PERMISSION_DENIED_LEGACY:  PriorityPermissionDenied,
-	vtrpcpb.ErrorCode_RESOURCE_EXHAUSTED_LEGACY: PriorityResourceExhausted,
-	vtrpcpb.ErrorCode_QUERY_NOT_SERVED:          PriorityQueryNotServed,
-	vtrpcpb.ErrorCode_NOT_IN_TX:                 PriorityNotInTx,
-	vtrpcpb.ErrorCode_INTERNAL_ERROR:            PriorityInternalError,
-	vtrpcpb.ErrorCode_TRANSIENT_ERROR:           PriorityTransientError,
-	vtrpcpb.ErrorCode_UNAUTHENTICATED_LEGACY:    PriorityUnauthenticated,
+var errorPriorities = map[vtrpcpb.Code]int{
+	vtrpcpb.Code_OK:                  PrioritySuccess,
+	vtrpcpb.Code_CANCELED:            PriorityCancelled,
+	vtrpcpb.Code_UNKNOWN:             PriorityUnknownError,
+	vtrpcpb.Code_INVALID_ARGUMENT:    PriorityBadInput,
+	vtrpcpb.Code_DEADLINE_EXCEEDED:   PriorityDeadlineExceeded,
+	vtrpcpb.Code_ALREADY_EXISTS:      PriorityIntegrityError,
+	vtrpcpb.Code_PERMISSION_DENIED:   PriorityPermissionDenied,
+	vtrpcpb.Code_RESOURCE_EXHAUSTED:  PriorityResourceExhausted,
+	vtrpcpb.Code_FAILED_PRECONDITION: PriorityQueryNotServed,
+	vtrpcpb.Code_ABORTED:             PriorityNotInTx,
+	vtrpcpb.Code_INTERNAL:            PriorityInternalError,
+	vtrpcpb.Code_UNAVAILABLE:         PriorityTransientError,
+	vtrpcpb.Code_UNAUTHENTICATED:     PriorityUnauthenticated,
 }
 
 // AggregateVtGateErrorCodes aggregates a list of errors into a single
 // error code.  It does so by finding the highest priority error code
 // in the list.
-func AggregateVtGateErrorCodes(errors []error) vtrpcpb.ErrorCode {
-	highCode := vtrpcpb.ErrorCode_SUCCESS
+func AggregateVtGateErrorCodes(errors []error) vtrpcpb.Code {
+	highCode := vtrpcpb.Code_OK
 	for _, e := range errors {
 		code := RecoverVtErrorCode(e)
 		if errorPriorities[code] > errorPriorities[highCode] {

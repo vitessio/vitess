@@ -43,7 +43,7 @@ func gRPCVtworkerClientFactory(addr string, dialTimeout time.Duration) (vtworker
 	}
 	cc, err := grpc.Dial(addr, opt, grpc.WithBlock(), grpc.WithTimeout(dialTimeout))
 	if err != nil {
-		return nil, vterrors.NewVitessError(vtrpcpb.ErrorCode_DEADLINE_EXCEEDED_LEGACY, err, "grpc.Dial() err: %v", err)
+		return nil, vterrors.NewVitessError(vtrpcpb.Code_DEADLINE_EXCEEDED, err, "grpc.Dial() err: %v", err)
 	}
 	c := vtworkerservicepb.NewVtworkerClient(cc)
 

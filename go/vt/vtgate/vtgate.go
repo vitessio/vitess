@@ -631,7 +631,7 @@ func (vtg *VTGate) StreamExecuteShards(ctx context.Context, sql string, bindVari
 // Begin begins a transaction. It has to be concluded by a Commit or Rollback.
 func (vtg *VTGate) Begin(ctx context.Context, singledb bool) (*vtgatepb.Session, error) {
 	if !singledb && vtg.transactionMode == TxSingle {
-		return nil, vterrors.FromError(vtrpcpb.ErrorCode_BAD_INPUT, errors.New("multi-db transaction disallowed"))
+		return nil, vterrors.FromError(vtrpcpb.Code_INVALID_ARGUMENT, errors.New("multi-db transaction disallowed"))
 	}
 	return &vtgatepb.Session{
 		InTransaction: true,
@@ -644,7 +644,7 @@ func (vtg *VTGate) Commit(ctx context.Context, twopc bool, session *vtgatepb.Ses
 	if twopc && vtg.transactionMode != TxTwoPC {
 		// Rollback the transaction to prevent future deadlocks.
 		vtg.txConn.Rollback(ctx, NewSafeSession(session))
-		return vterrors.FromError(vtrpcpb.ErrorCode_BAD_INPUT, errors.New("2pc transaction disallowed"))
+		return vterrors.FromError(vtrpcpb.Code_INVALID_ARGUMENT, errors.New("2pc transaction disallowed"))
 	}
 	return formatError(vtg.txConn.Commit(ctx, twopc, NewSafeSession(session)))
 }
@@ -955,16 +955,16 @@ func handleExecuteError(err error, statsKey []string, query map[string]interface
 	// First we log in the right category.
 	ec := vterrors.RecoverVtErrorCode(err)
 	switch ec {
-	case vtrpcpb.ErrorCode_INTEGRITY_ERROR:
+	case vtrpcpb.Code_ALREADY_EXISTS:
 		// Duplicate key error, no need to log.
 		infoErrors.Add("DupKey", 1)
-	case vtrpcpb.ErrorCode_RESOURCE_EXHAUSTED_LEGACY, vtrpcpb.ErrorCode_BAD_INPUT:
+	case vtrpcpb.Code_RESOURCE_EXHAUSTED, vtrpcpb.Code_INVALID_ARGUMENT:
 		// Tx pool full error, or bad input, no need to log.
 		normalErrors.Add(statsKey, 1)
-	case vtrpcpb.ErrorCode_PERMISSION_DENIED_LEGACY:
+	case vtrpcpb.Code_PERMISSION_DENIED:
 		// User violated permissions (TableACL), no need to log.
 		infoErrors.Add("PermissionDenied", 1)
-	case vtrpcpb.ErrorCode_TRANSIENT_ERROR:
+	case vtrpcpb.Code_UNAVAILABLE:
 		// Temporary error which should be retried by user. Do not log.
 		// As of 01/2017, only the vttablet transaction throttler and the vtgate
 		// master buffer (if buffer full) return this error.

@@ -26,9 +26,9 @@ const (
 )
 
 var (
-	failoverErr = vterrors.FromError(vtrpcpb.ErrorCode_QUERY_NOT_SERVED,
+	failoverErr = vterrors.FromError(vtrpcpb.Code_FAILED_PRECONDITION,
 		errors.New("vttablet: rpc error: code = 9 desc = gRPCServerError: retry: operation not allowed in state SHUTTING_DOWN"))
-	nonFailoverErr = vterrors.FromError(vtrpcpb.ErrorCode_QUERY_NOT_SERVED,
+	nonFailoverErr = vterrors.FromError(vtrpcpb.Code_FAILED_PRECONDITION,
 		errors.New("vttablet: rpc error: code = 9 desc = gRPCServerError: retry: TODO(mberlin): Insert here any realistic error not caused by a failover"))
 
 	statsKeyJoined = fmt.Sprintf("%s.%s", keyspace, shard)
@@ -517,7 +517,7 @@ func isCanceledError(err error) error {
 	if err == nil {
 		return fmt.Errorf("buffering should have stopped early and returned an error because the request was canceled from the outside")
 	}
-	if got, want := vterrors.RecoverVtErrorCode(err), vtrpcpb.ErrorCode_TRANSIENT_ERROR; got != want {
+	if got, want := vterrors.RecoverVtErrorCode(err), vtrpcpb.Code_UNAVAILABLE; got != want {
 		return fmt.Errorf("wrong error code for canceled buffered request. got = %v, want = %v", got, want)
 	}
 	if got, want := err.Error(), "context was canceled before failover finished: context canceled"; got != want {
@@ -531,7 +531,7 @@ func isEvictedError(err error) error {
 	if err == nil {
 		return errors.New("request should have been evicted because the buffer was full")
 	}
-	if got, want := vterrors.RecoverVtErrorCode(err), vtrpcpb.ErrorCode_TRANSIENT_ERROR; got != want {
+	if got, want := vterrors.RecoverVtErrorCode(err), vtrpcpb.Code_UNAVAILABLE; got != want {
 		return fmt.Errorf("wrong error code for evicted buffered request. got = %v, want = %v full error: %v", got, want, err)
 	}
 	if got, want := err.Error(), entryEvictedError.Error(); !strings.Contains(got, want) {
@@ -568,7 +568,7 @@ func TestEvictionNotPossible(t *testing.T) {
 	if bufferErr == nil || retryDone != nil {
 		t.Fatalf("buffer should have returned an error because it's full: err: %v retryDone: %v", bufferErr, retryDone)
 	}
-	if got, want := vterrors.RecoverVtErrorCode(bufferErr), vtrpcpb.ErrorCode_TRANSIENT_ERROR; got != want {
+	if got, want := vterrors.RecoverVtErrorCode(bufferErr), vtrpcpb.Code_UNAVAILABLE; got != want {
 		t.Fatalf("wrong error code for evicted buffered request. got = %v, want = %v", got, want)
 	}
 	if got, want := bufferErr.Error(), bufferFullError.Error(); !strings.Contains(got, want) {

@@ -560,13 +560,13 @@ func TestIsRetryableError(t *testing.T) {
 		{fmt.Errorf("generic error"), false},
 		{&ScatterConnError{Retryable: true}, true},
 		{&ScatterConnError{Retryable: false}, false},
-		{&gateway.ShardError{ErrorCode: vtrpcpb.ErrorCode_QUERY_NOT_SERVED}, true},
-		{&gateway.ShardError{ErrorCode: vtrpcpb.ErrorCode_INTERNAL_ERROR}, false},
+		{&gateway.ShardError{Code: vtrpcpb.Code_FAILED_PRECONDITION}, true},
+		{&gateway.ShardError{Code: vtrpcpb.Code_INTERNAL}, false},
 		// tabletconn.ServerError will not come directly here,
 		// they'll be wrapped in ScatterConnError or ShardConnError.
 		// So they can't be retried as is.
-		{&tabletconn.ServerError{ServerCode: vtrpcpb.ErrorCode_QUERY_NOT_SERVED}, false},
-		{&tabletconn.ServerError{ServerCode: vtrpcpb.ErrorCode_PERMISSION_DENIED_LEGACY}, false},
+		{&tabletconn.ServerError{ServerCode: vtrpcpb.Code_FAILED_PRECONDITION}, false},
+		{&tabletconn.ServerError{ServerCode: vtrpcpb.Code_PERMISSION_DENIED}, false},
 	}
 
 	for _, tt := range connErrorTests {

@@ -37,10 +37,10 @@ func NewTxConn(gw gateway.Gateway) *TxConn {
 // is used to ensure atomicity.
 func (txc *TxConn) Commit(ctx context.Context, twopc bool, session *SafeSession) error {
 	if session == nil {
-		return vterrors.FromError(vtrpcpb.ErrorCode_BAD_INPUT, errors.New("cannot commit: empty session"))
+		return vterrors.FromError(vtrpcpb.Code_INVALID_ARGUMENT, errors.New("cannot commit: empty session"))
 	}
 	if !session.InTransaction() {
-		return vterrors.FromError(vtrpcpb.ErrorCode_NOT_IN_TX, errors.New("cannot commit: not in transaction"))
+		return vterrors.FromError(vtrpcpb.Code_ABORTED, errors.New("cannot commit: not in transaction"))
 	}
 	if twopc {
 		return txc.commit2PC(ctx, session)
@@ -155,7 +155,7 @@ func (txc *TxConn) Resolve(ctx context.Context, dtid string) error {
 		}
 	default:
 		// Should never happen.
-		return vterrors.FromError(vtrpcpb.ErrorCode_INTERNAL_ERROR, fmt.Errorf("invalid state: %v", transaction.State))
+		return vterrors.FromError(vtrpcpb.Code_INTERNAL, fmt.Errorf("invalid state: %v", transaction.State))
 	}
 	return nil
 }

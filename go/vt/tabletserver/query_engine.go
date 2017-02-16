@@ -270,7 +270,7 @@ func (qe *QueryEngine) GetPlan(ctx context.Context, logStats *tabletenv.LogStats
 	}
 	splan, err := planbuilder.GetExecPlan(sql, GetTable)
 	if err != nil {
-		return nil, tabletenv.PrefixTabletError(vtrpcpb.ErrorCode_UNKNOWN_ERROR, err, "")
+		return nil, tabletenv.PrefixTabletError(vtrpcpb.Code_UNKNOWN, err, "")
 	}
 	plan := &ExecPlan{ExecPlan: splan, Table: table}
 	plan.Rules = qe.queryRuleSources.filterByPlan(sql, plan.PlanID, plan.TableName.String())
@@ -281,7 +281,7 @@ func (qe *QueryEngine) GetPlan(ctx context.Context, logStats *tabletenv.LogStats
 		} else {
 			conn, err := qe.conns.Get(ctx)
 			if err != nil {
-				return nil, tabletenv.NewTabletErrorSQL(vtrpcpb.ErrorCode_INTERNAL_ERROR, err)
+				return nil, tabletenv.NewTabletErrorSQL(vtrpcpb.Code_INTERNAL, err)
 			}
 			defer conn.Recycle()
 
@@ -290,7 +290,7 @@ func (qe *QueryEngine) GetPlan(ctx context.Context, logStats *tabletenv.LogStats
 			r, err := conn.Exec(ctx, sql, 1, true)
 			logStats.AddRewrittenSQL(sql, start)
 			if err != nil {
-				return nil, tabletenv.PrefixTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, err, "Error fetching fields: ")
+				return nil, tabletenv.PrefixTabletError(vtrpcpb.Code_INTERNAL, err, "Error fetching fields: ")
 			}
 			plan.Fields = r.Fields
 		}
@@ -316,7 +316,7 @@ func (qe *QueryEngine) GetStreamPlan(sql string) (*ExecPlan, error) {
 	}
 	splan, err := planbuilder.GetStreamExecPlan(sql, GetTable)
 	if err != nil {
-		return nil, tabletenv.PrefixTabletError(vtrpcpb.ErrorCode_BAD_INPUT, err, "")
+		return nil, tabletenv.PrefixTabletError(vtrpcpb.Code_INVALID_ARGUMENT, err, "")
 	}
 	plan := &ExecPlan{ExecPlan: splan, Table: table}
 	plan.Rules = qe.queryRuleSources.filterByPlan(sql, plan.PlanID, plan.TableName.String())

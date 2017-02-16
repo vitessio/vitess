@@ -1193,7 +1193,7 @@ func TestVTGateSplitQueryUnsharded(t *testing.T) {
 func TestIsErrorCausedByVTGate(t *testing.T) {
 	unknownError := fmt.Errorf("unknown error")
 	serverError := &tabletconn.ServerError{
-		ServerCode: vtrpcpb.ErrorCode_QUERY_NOT_SERVED,
+		ServerCode: vtrpcpb.Code_FAILED_PRECONDITION,
 		Err:        "vttablet: retry: error message",
 	}
 	shardConnUnknownErr := &gateway.ShardError{Err: unknownError}
@@ -1602,7 +1602,7 @@ func verifyBoundQueriesAnnotatedAsUnfriendly(t *testing.T, expectedNumQueries in
 	}
 }
 
-func testErrorPropagation(t *testing.T, sbcs []*sandboxconn.SandboxConn, before func(sbc *sandboxconn.SandboxConn), after func(sbc *sandboxconn.SandboxConn), expected vtrpcpb.ErrorCode) {
+func testErrorPropagation(t *testing.T, sbcs []*sandboxconn.SandboxConn, before func(sbc *sandboxconn.SandboxConn), after func(sbc *sandboxconn.SandboxConn), expected vtrpcpb.Code) {
 
 	// Execute
 	for _, sbc := range sbcs {
@@ -1988,84 +1988,84 @@ func TestErrorPropagation(t *testing.T) {
 		sbc.MustFailCanceled = 20
 	}, func(sbc *sandboxconn.SandboxConn) {
 		sbc.MustFailCanceled = 0
-	}, vtrpcpb.ErrorCode_CANCELLED_LEGACY)
+	}, vtrpcpb.Code_CANCELED)
 
-	// ErrorCode_UNKNOWN_ERROR
+	// Code_UNKNOWN
 	testErrorPropagation(t, sbcs, func(sbc *sandboxconn.SandboxConn) {
 		sbc.MustFailUnknownError = 20
 	}, func(sbc *sandboxconn.SandboxConn) {
 		sbc.MustFailUnknownError = 0
-	}, vtrpcpb.ErrorCode_UNKNOWN_ERROR)
+	}, vtrpcpb.Code_UNKNOWN)
 
-	// ErrorCode_BAD_INPUT
+	// Code_INVALID_ARGUMENT
 	testErrorPropagation(t, sbcs, func(sbc *sandboxconn.SandboxConn) {
 		sbc.MustFailServer = 20
 	}, func(sbc *sandboxconn.SandboxConn) {
 		sbc.MustFailServer = 0
-	}, vtrpcpb.ErrorCode_BAD_INPUT)
+	}, vtrpcpb.Code_INVALID_ARGUMENT)
 
 	// ErrorCode_DEADLINE_EXCEEDED
 	testErrorPropagation(t, sbcs, func(sbc *sandboxconn.SandboxConn) {
 		sbc.MustFailDeadlineExceeded = 20
 	}, func(sbc *sandboxconn.SandboxConn) {
 		sbc.MustFailDeadlineExceeded = 0
-	}, vtrpcpb.ErrorCode_DEADLINE_EXCEEDED_LEGACY)
+	}, vtrpcpb.Code_DEADLINE_EXCEEDED)
 
-	// ErrorCode_INTEGRITY_ERROR
+	// Code_ALREADY_EXISTS
 	testErrorPropagation(t, sbcs, func(sbc *sandboxconn.SandboxConn) {
 		sbc.MustFailIntegrityError = 20
 	}, func(sbc *sandboxconn.SandboxConn) {
 		sbc.MustFailIntegrityError = 0
-	}, vtrpcpb.ErrorCode_INTEGRITY_ERROR)
+	}, vtrpcpb.Code_ALREADY_EXISTS)
 
 	// ErrorCode_PERMISSION_DENIED
 	testErrorPropagation(t, sbcs, func(sbc *sandboxconn.SandboxConn) {
 		sbc.MustFailPermissionDenied = 20
 	}, func(sbc *sandboxconn.SandboxConn) {
 		sbc.MustFailPermissionDenied = 0
-	}, vtrpcpb.ErrorCode_PERMISSION_DENIED_LEGACY)
+	}, vtrpcpb.Code_PERMISSION_DENIED)
 
 	// ErrorCode_RESOURCE_EXHAUSTED
 	testErrorPropagation(t, sbcs, func(sbc *sandboxconn.SandboxConn) {
 		sbc.MustFailTxPool = 20
 	}, func(sbc *sandboxconn.SandboxConn) {
 		sbc.MustFailTxPool = 0
-	}, vtrpcpb.ErrorCode_RESOURCE_EXHAUSTED_LEGACY)
+	}, vtrpcpb.Code_RESOURCE_EXHAUSTED)
 
-	// ErrorCode_QUERY_NOT_SERVED
+	// Code_FAILED_PRECONDITION
 	testErrorPropagation(t, sbcs, func(sbc *sandboxconn.SandboxConn) {
 		sbc.MustFailRetry = 20
 	}, func(sbc *sandboxconn.SandboxConn) {
 		sbc.MustFailRetry = 0
-	}, vtrpcpb.ErrorCode_QUERY_NOT_SERVED)
+	}, vtrpcpb.Code_FAILED_PRECONDITION)
 
-	// ErrorCode_NOT_IN_TX
+	// Code_ABORTED
 	testErrorPropagation(t, sbcs, func(sbc *sandboxconn.SandboxConn) {
 		sbc.MustFailNotTx = 20
 	}, func(sbc *sandboxconn.SandboxConn) {
 		sbc.MustFailNotTx = 0
-	}, vtrpcpb.ErrorCode_NOT_IN_TX)
+	}, vtrpcpb.Code_ABORTED)
 
-	// ErrorCode_INTERNAL_ERROR
+	// Code_INTERNAL
 	testErrorPropagation(t, sbcs, func(sbc *sandboxconn.SandboxConn) {
 		sbc.MustFailFatal = 20
 	}, func(sbc *sandboxconn.SandboxConn) {
 		sbc.MustFailFatal = 0
-	}, vtrpcpb.ErrorCode_INTERNAL_ERROR)
+	}, vtrpcpb.Code_INTERNAL)
 
-	// ErrorCode_TRANSIENT_ERROR
+	// Code_UNAVAILABLE
 	testErrorPropagation(t, sbcs, func(sbc *sandboxconn.SandboxConn) {
 		sbc.MustFailTransientError = 20
 	}, func(sbc *sandboxconn.SandboxConn) {
 		sbc.MustFailTransientError = 0
-	}, vtrpcpb.ErrorCode_TRANSIENT_ERROR)
+	}, vtrpcpb.Code_UNAVAILABLE)
 
 	// ErrorCode_UNAUTHENTICATED
 	testErrorPropagation(t, sbcs, func(sbc *sandboxconn.SandboxConn) {
 		sbc.MustFailUnauthenticated = 20
 	}, func(sbc *sandboxconn.SandboxConn) {
 		sbc.MustFailUnauthenticated = 0
-	}, vtrpcpb.ErrorCode_UNAUTHENTICATED_LEGACY)
+	}, vtrpcpb.Code_UNAUTHENTICATED)
 }
 
 // This test makes sure that if we start a transaction and hit a critical
@@ -2077,7 +2077,7 @@ func TestErrorIssuesRollback(t *testing.T) {
 
 	// Start a transaction, send one statement.
 	// Simulate an error that should trigger a rollback:
-	// vtrpcpb.ErrorCode_NOT_IN_TX case.
+	// vtrpcpb.Code_ABORTED case.
 	session, err := rpcVTGate.Begin(context.Background(), false)
 	if err != nil {
 		t.Fatalf("cannot start a transaction: %v", err)
@@ -2155,7 +2155,7 @@ func TestErrorIssuesRollback(t *testing.T) {
 
 	// Start a transaction, send one statement.
 	// Simulate an error that should *not* trigger a rollback:
-	// vtrpcpb.ErrorCode_INTEGRITY_ERROR case.
+	// vtrpcpb.Code_ALREADY_EXISTS case.
 	session, err = rpcVTGate.Begin(context.Background(), false)
 	if err != nil {
 		t.Fatalf("cannot start a transaction: %v", err)

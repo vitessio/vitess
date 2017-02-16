@@ -98,7 +98,7 @@ func TestScatterConnStreamExecuteMulti(t *testing.T) {
 
 // verifyScatterConnError checks that a returned error has the expected message,
 // type, and error code.
-func verifyScatterConnError(t *testing.T, err error, wantErr string, wantCode vtrpcpb.ErrorCode) {
+func verifyScatterConnError(t *testing.T, err error, wantErr string, wantCode vtrpcpb.Code) {
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("wanted error: %s, got error: %v", wantErr, err)
 	}
@@ -152,7 +152,7 @@ func testScatterConnGeneric(t *testing.T, name string, f func(sc *ScatterConn, s
 	_, err = f(sc, []string{"0", "1"})
 	// Verify server errors are consolidated.
 	want = fmt.Sprintf("target: %v.0.replica, used tablet: (alias:<cell:\"aa\" > hostname:\"0\" port_map:<key:\"vt\" value:1 > keyspace:\"%v\" shard:\"0\" type:REPLICA ), error: err\ntarget: %v.1.replica, used tablet: (alias:<cell:\"aa\" > hostname:\"1\" port_map:<key:\"vt\" value:1 > keyspace:\"%v\" shard:\"1\" type:REPLICA ), error: err", name, name, name, name)
-	verifyScatterConnError(t, err, want, vtrpcpb.ErrorCode_BAD_INPUT)
+	verifyScatterConnError(t, err, want, vtrpcpb.Code_INVALID_ARGUMENT)
 	// Ensure that we tried only once.
 	if execCount := sbc0.ExecCount.Get(); execCount != 1 {
 		t.Errorf("want 1, got %v", execCount)
@@ -173,7 +173,7 @@ func testScatterConnGeneric(t *testing.T, name string, f func(sc *ScatterConn, s
 	// Verify server errors are consolidated.
 	want = fmt.Sprintf("target: %v.0.replica, used tablet: (alias:<cell:\"aa\" > hostname:\"0\" port_map:<key:\"vt\" value:1 > keyspace:\"%v\" shard:\"0\" type:REPLICA ), error: err\ntarget: %v.1.replica, used tablet: (alias:<cell:\"aa\" > hostname:\"1\" port_map:<key:\"vt\" value:1 > keyspace:\"%v\" shard:\"1\" type:REPLICA ), tx_pool_full: err", name, name, name, name)
 	// We should only surface the higher priority error code
-	verifyScatterConnError(t, err, want, vtrpcpb.ErrorCode_BAD_INPUT)
+	verifyScatterConnError(t, err, want, vtrpcpb.Code_INVALID_ARGUMENT)
 	// Ensure that we tried only once.
 	if execCount := sbc0.ExecCount.Get(); execCount != 1 {
 		t.Errorf("want 1, got %v", execCount)
@@ -282,7 +282,7 @@ func TestScatterConnError(t *testing.T) {
 	err := &ScatterConnError{
 		Retryable: false,
 		Errs: []error{
-			&gateway.ShardError{ErrorCode: vtrpcpb.ErrorCode_PERMISSION_DENIED_LEGACY, Err: &tabletconn.ServerError{Err: "tabletconn error"}},
+			&gateway.ShardError{Code: vtrpcpb.Code_PERMISSION_DENIED, Err: &tabletconn.ServerError{Err: "tabletconn error"}},
 			fmt.Errorf("generic error"),
 			tabletconn.ConnClosed,
 		},

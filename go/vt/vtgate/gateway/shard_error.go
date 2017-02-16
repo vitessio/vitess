@@ -24,8 +24,8 @@ type ShardError struct {
 	InTransaction bool
 	// Err preserves the original error, so that we don't need to parse the error string.
 	Err error
-	// ErrorCode is the error code to use for all the tablet errors in aggregate
-	ErrorCode vtrpcpb.ErrorCode
+	// Code is the error code to use for all the tablet errors in aggregate
+	Code vtrpcpb.Code
 }
 
 // Error returns the error string.
@@ -38,8 +38,8 @@ func (e *ShardError) Error() string {
 
 // VtErrorCode returns the underlying Vitess error code.
 // This is part of vterrors.VtError interface.
-func (e *ShardError) VtErrorCode() vtrpcpb.ErrorCode {
-	return e.ErrorCode
+func (e *ShardError) VtErrorCode() vtrpcpb.Code {
+	return e.Code
 }
 
 // NewShardError returns a ShardError which preserves the original
@@ -61,6 +61,6 @@ func NewShardError(in error, target *querypb.Target, tablet *topodatapb.Tablet, 
 		ShardIdentifier: shardIdentifier,
 		InTransaction:   inTransaction,
 		Err:             in,
-		ErrorCode:       vterrors.RecoverVtErrorCode(in),
+		Code:            vterrors.RecoverVtErrorCode(in),
 	}
 }

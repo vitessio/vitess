@@ -27,7 +27,7 @@ const (
 var ErrConnPoolClosed = NewTabletError(
 	// connection pool being closed is not the query's fault, it can be retried on a
 	// different VtTablet.
-	vtrpcpb.ErrorCode_INTERNAL_ERROR,
+	vtrpcpb.Code_INTERNAL,
 	"connection pool is closed")
 
 // TabletError is the error type we use in this library.
@@ -36,20 +36,20 @@ type TabletError struct {
 	Message  string
 	SQLError int
 	SQLState string
-	// ErrorCode will be used to transmit the error across RPC boundaries
-	ErrorCode vtrpcpb.ErrorCode
+	// Code will be used to transmit the error across RPC boundaries
+	Code vtrpcpb.Code
 }
 
 // NewTabletError returns a TabletError of the given type
-func NewTabletError(errCode vtrpcpb.ErrorCode, format string, args ...interface{}) *TabletError {
+func NewTabletError(errCode vtrpcpb.Code, format string, args ...interface{}) *TabletError {
 	return &TabletError{
-		Message:   printable(fmt.Sprintf(format, args...)),
-		ErrorCode: errCode,
+		Message: printable(fmt.Sprintf(format, args...)),
+		Code:    errCode,
 	}
 }
 
 // NewTabletErrorSQL returns a TabletError based on the error
-func NewTabletErrorSQL(errCode vtrpcpb.ErrorCode, err error) *TabletError {
+func NewTabletErrorSQL(errCode vtrpcpb.Code, err error) *TabletError {
 	var errnum int
 	errstr := err.Error()
 	sqlState := sqldb.SQLStateGeneral
@@ -61,29 +61,29 @@ func NewTabletErrorSQL(errCode vtrpcpb.ErrorCode, err error) *TabletError {
 			// Override error type if MySQL is in read-only mode. It's probably because
 			// there was a remaster and there are old clients still connected.
 			if strings.Contains(errstr, "read-only") {
-				errCode = vtrpcpb.ErrorCode_QUERY_NOT_SERVED
+				errCode = vtrpcpb.Code_FAILED_PRECONDITION
 			}
 		case mysqlconn.ERDupEntry:
-			errCode = vtrpcpb.ErrorCode_INTEGRITY_ERROR
+			errCode = vtrpcpb.Code_ALREADY_EXISTS
 		case mysqlconn.ERDataTooLong, mysqlconn.ERDataOutOfRange:
-			errCode = vtrpcpb.ErrorCode_BAD_INPUT
+			errCode = vtrpcpb.Code_INVALID_ARGUMENT
 		default:
 		}
 	}
 	return &TabletError{
-		Message:   printable(errstr),
-		SQLError:  errnum,
-		SQLState:  sqlState,
-		ErrorCode: errCode,
+		Message:  printable(errstr),
+		SQLError: errnum,
+		SQLState: sqlState,
+		Code:     errCode,
 	}
 }
 
 // PrefixTabletError attempts to add a string prefix to a TabletError,
-// while preserving its ErrorCode. If the given error is not a
-// TabletError, a new TabletError is returned with the desired ErrorCode.
-func PrefixTabletError(errCode vtrpcpb.ErrorCode, err error, prefix string) error {
+// while preserving its Code. If the given error is not a
+// TabletError, a new TabletError is returned with the desired Code.
+func PrefixTabletError(errCode vtrpcpb.Code, err error, prefix string) error {
 	if terr, ok := err.(*TabletError); ok {
-		return NewTabletError(terr.ErrorCode, "%s%s", prefix, terr.Message)
+		return NewTabletError(terr.Code, "%s%s", prefix, terr.Message)
 	}
 	return NewTabletError(errCode, "%s%s", prefix, err)
 }
@@ -132,21 +132,21 @@ func (te *TabletError) Error() string {
 }
 
 // VtErrorCode returns the underlying Vitess error code
-func (te *TabletError) VtErrorCode() vtrpcpb.ErrorCode {
-	return te.ErrorCode
+func (te *TabletError) VtErrorCode() vtrpcpb.Code {
+	return te.Code
 }
 
 // Prefix returns the prefix for the error, like error, fatal, etc.
 func (te *TabletError) Prefix() string {
 	prefix := "error: "
-	switch te.ErrorCode {
-	case vtrpcpb.ErrorCode_QUERY_NOT_SERVED:
+	switch te.Code {
+	case vtrpcpb.Code_FAILED_PRECONDITION:
 		prefix = "retry: "
-	case vtrpcpb.ErrorCode_INTERNAL_ERROR:
+	case vtrpcpb.Code_INTERNAL:
 		prefix = "fatal: "
-	case vtrpcpb.ErrorCode_RESOURCE_EXHAUSTED_LEGACY:
+	case vtrpcpb.Code_RESOURCE_EXHAUSTED:
 		prefix = "tx_pool_full: "
-	case vtrpcpb.ErrorCode_NOT_IN_TX:
+	case vtrpcpb.Code_ABORTED:
 		prefix = "not_in_tx: "
 	}
 	// Special case for killed queries.
@@ -158,14 +158,14 @@ func (te *TabletError) Prefix() string {
 
 // RecordStats will record the error in the proper stat bucket
 func (te *TabletError) RecordStats() {
-	switch te.ErrorCode {
-	case vtrpcpb.ErrorCode_QUERY_NOT_SERVED:
+	switch te.Code {
+	case vtrpcpb.Code_FAILED_PRECONDITION:
 		InfoErrors.Add("Retry", 1)
-	case vtrpcpb.ErrorCode_INTERNAL_ERROR:
+	case vtrpcpb.Code_INTERNAL:
 		ErrorStats.Add("Fatal", 1)
-	case vtrpcpb.ErrorCode_RESOURCE_EXHAUSTED_LEGACY:
+	case vtrpcpb.Code_RESOURCE_EXHAUSTED:
 		ErrorStats.Add("TxPoolFull", 1)
-	case vtrpcpb.ErrorCode_NOT_IN_TX:
+	case vtrpcpb.Code_ABORTED:
 		ErrorStats.Add("NotInTx", 1)
 	default:
 		switch te.SQLError {

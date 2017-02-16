@@ -257,7 +257,7 @@ func TestCodexResolvePKValues(t *testing.T) {
 	pkValues = make([]interface{}, 0, 10)
 	pkValues = append(pkValues, sqltypes.MakeString([]byte("type_mismatch")))
 	_, _, err = resolvePKValues(table, pkValues, nil)
-	testUtils.checkTabletError(t, err, vtrpcpb.ErrorCode_BAD_INPUT, "strconv.ParseInt")
+	testUtils.checkTabletError(t, err, vtrpcpb.Code_INVALID_ARGUMENT, "strconv.ParseInt")
 	// pkValues with different length
 	bindVariables = make(map[string]interface{})
 	bindVariables[key] = 1
@@ -269,7 +269,7 @@ func TestCodexResolvePKValues(t *testing.T) {
 	pkValues = append(pkValues, []interface{}{":" + key})
 	pkValues = append(pkValues, []interface{}{":" + key2, ":" + key3})
 	_, _, err = resolvePKValues(table, pkValues, bindVariables)
-	testUtils.checkTabletError(t, err, vtrpcpb.ErrorCode_BAD_INPUT, "mismatched lengths")
+	testUtils.checkTabletError(t, err, vtrpcpb.Code_INVALID_ARGUMENT, "mismatched lengths")
 }
 
 func TestCodexResolveListArg(t *testing.T) {
@@ -284,7 +284,7 @@ func TestCodexResolveListArg(t *testing.T) {
 	bindVariables[key] = []interface{}{fmt.Errorf("error is not supported")}
 
 	_, err := resolveListArg(table.GetPKColumn(0), "::"+key, bindVariables)
-	testUtils.checkTabletError(t, err, vtrpcpb.ErrorCode_BAD_INPUT, "")
+	testUtils.checkTabletError(t, err, vtrpcpb.Code_INVALID_ARGUMENT, "")
 
 	// This should successfully convert.
 	bindVariables[key] = []interface{}{"1"}
@@ -413,10 +413,10 @@ func TestCodexValidateRow(t *testing.T) {
 		[]string{"pk1", "pk2"})
 	// #columns and #rows do not match
 	err := validateRow(table, []int{1}, []sqltypes.Value{})
-	testUtils.checkTabletError(t, err, vtrpcpb.ErrorCode_BAD_INPUT, "data inconsistency")
+	testUtils.checkTabletError(t, err, vtrpcpb.Code_INVALID_ARGUMENT, "data inconsistency")
 	// column 0 is int type but row is in string type
 	err = validateRow(table, []int{0}, []sqltypes.Value{sqltypes.MakeString([]byte("str"))})
-	testUtils.checkTabletError(t, err, vtrpcpb.ErrorCode_BAD_INPUT, "type mismatch")
+	testUtils.checkTabletError(t, err, vtrpcpb.Code_INVALID_ARGUMENT, "type mismatch")
 }
 
 func TestCodexApplyFilterWithPKDefaults(t *testing.T) {
