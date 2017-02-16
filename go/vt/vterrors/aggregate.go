@@ -31,19 +31,19 @@ const (
 )
 
 var errorPriorities = map[vtrpcpb.ErrorCode]int{
-	vtrpcpb.ErrorCode_SUCCESS:            PrioritySuccess,
-	vtrpcpb.ErrorCode_CANCELLED:          PriorityCancelled,
-	vtrpcpb.ErrorCode_UNKNOWN_ERROR:      PriorityUnknownError,
-	vtrpcpb.ErrorCode_BAD_INPUT:          PriorityBadInput,
-	vtrpcpb.ErrorCode_DEADLINE_EXCEEDED:  PriorityDeadlineExceeded,
-	vtrpcpb.ErrorCode_INTEGRITY_ERROR:    PriorityIntegrityError,
-	vtrpcpb.ErrorCode_PERMISSION_DENIED:  PriorityPermissionDenied,
-	vtrpcpb.ErrorCode_RESOURCE_EXHAUSTED: PriorityResourceExhausted,
-	vtrpcpb.ErrorCode_QUERY_NOT_SERVED:   PriorityQueryNotServed,
-	vtrpcpb.ErrorCode_NOT_IN_TX:          PriorityNotInTx,
-	vtrpcpb.ErrorCode_INTERNAL_ERROR:     PriorityInternalError,
-	vtrpcpb.ErrorCode_TRANSIENT_ERROR:    PriorityTransientError,
-	vtrpcpb.ErrorCode_UNAUTHENTICATED:    PriorityUnauthenticated,
+	vtrpcpb.ErrorCode_SUCCESS:                   PrioritySuccess,
+	vtrpcpb.ErrorCode_CANCELLED_LEGACY:          PriorityCancelled,
+	vtrpcpb.ErrorCode_UNKNOWN_ERROR:             PriorityUnknownError,
+	vtrpcpb.ErrorCode_BAD_INPUT:                 PriorityBadInput,
+	vtrpcpb.ErrorCode_DEADLINE_EXCEEDED_LEGACY:  PriorityDeadlineExceeded,
+	vtrpcpb.ErrorCode_INTEGRITY_ERROR:           PriorityIntegrityError,
+	vtrpcpb.ErrorCode_PERMISSION_DENIED_LEGACY:  PriorityPermissionDenied,
+	vtrpcpb.ErrorCode_RESOURCE_EXHAUSTED_LEGACY: PriorityResourceExhausted,
+	vtrpcpb.ErrorCode_QUERY_NOT_SERVED:          PriorityQueryNotServed,
+	vtrpcpb.ErrorCode_NOT_IN_TX:                 PriorityNotInTx,
+	vtrpcpb.ErrorCode_INTERNAL_ERROR:            PriorityInternalError,
+	vtrpcpb.ErrorCode_TRANSIENT_ERROR:           PriorityTransientError,
+	vtrpcpb.ErrorCode_UNAUTHENTICATED_LEGACY:    PriorityUnauthenticated,
 }
 
 // AggregateVtGateErrorCodes aggregates a list of errors into a single

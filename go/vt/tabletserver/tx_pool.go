@@ -146,7 +146,7 @@ func (axp *TxPool) Begin(ctx context.Context) (int64, error) {
 			return 0, err
 		case pools.ErrTimeout:
 			axp.LogActive()
-			return 0, tabletenv.NewTabletError(vtrpcpb.ErrorCode_RESOURCE_EXHAUSTED, "Transaction pool connection limit exceeded")
+			return 0, tabletenv.NewTabletError(vtrpcpb.ErrorCode_RESOURCE_EXHAUSTED_LEGACY, "Transaction pool connection limit exceeded")
 		}
 		return 0, tabletenv.NewTabletErrorSQL(vtrpcpb.ErrorCode_INTERNAL_ERROR, err)
 	}

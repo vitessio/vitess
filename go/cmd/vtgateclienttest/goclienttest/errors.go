@@ -26,10 +26,10 @@ var (
 
 	executeErrors = map[string]vtrpcpb.ErrorCode{
 		"bad input":         vtrpcpb.ErrorCode_BAD_INPUT,
-		"deadline exceeded": vtrpcpb.ErrorCode_DEADLINE_EXCEEDED,
+		"deadline exceeded": vtrpcpb.ErrorCode_DEADLINE_EXCEEDED_LEGACY,
 		"integrity error":   vtrpcpb.ErrorCode_INTEGRITY_ERROR,
 		"transient error":   vtrpcpb.ErrorCode_TRANSIENT_ERROR,
-		"unauthenticated":   vtrpcpb.ErrorCode_UNAUTHENTICATED,
+		"unauthenticated":   vtrpcpb.ErrorCode_UNAUTHENTICATED_LEGACY,
 		"aborted":           vtrpcpb.ErrorCode_NOT_IN_TX,
 		"unknown error":     vtrpcpb.ErrorCode_UNKNOWN_ERROR,
 	}

@@ -129,7 +129,7 @@ func commandErrorsBecauseBusy(t *testing.T, client vtworkerclient.Client, server
 			if _, err := stream.Recv(); err != nil {
 				// We see CANCELED from the RPC client (client side cancelation) or
 				// from vtworker itself (server side cancelation).
-				if vterrors.RecoverVtErrorCode(err) != vtrpcpb.ErrorCode_CANCELLED {
+				if vterrors.RecoverVtErrorCode(err) != vtrpcpb.ErrorCode_CANCELLED_LEGACY {
 					errorCodeCheck = fmt.Errorf("Block command should only error due to canceled context: %v", err)
 				}
 				// Stream has finished.

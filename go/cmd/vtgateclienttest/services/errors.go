@@ -86,7 +86,7 @@ func trimmedRequestToError(received string) error {
 		)
 	case "deadline exceeded":
 		return vterrors.FromError(
-			vtrpcpb.ErrorCode_DEADLINE_EXCEEDED,
+			vtrpcpb.ErrorCode_DEADLINE_EXCEEDED_LEGACY,
 			errors.New("vtgate test client forced error: deadline exceeded"),
 		)
 	case "integrity error":
@@ -107,7 +107,7 @@ func trimmedRequestToError(received string) error {
 		)
 	case "unauthenticated":
 		return vterrors.FromError(
-			vtrpcpb.ErrorCode_UNAUTHENTICATED,
+			vtrpcpb.ErrorCode_UNAUTHENTICATED_LEGACY,
 			errors.New("vtgate test client forced error: unauthenticated"),
 		)
 	case "aborted":

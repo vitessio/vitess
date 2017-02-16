@@ -144,7 +144,7 @@ func (te *TabletError) Prefix() string {
 		prefix = "retry: "
 	case vtrpcpb.ErrorCode_INTERNAL_ERROR:
 		prefix = "fatal: "
-	case vtrpcpb.ErrorCode_RESOURCE_EXHAUSTED:
+	case vtrpcpb.ErrorCode_RESOURCE_EXHAUSTED_LEGACY:
 		prefix = "tx_pool_full: "
 	case vtrpcpb.ErrorCode_NOT_IN_TX:
 		prefix = "not_in_tx: "
@@ -163,7 +163,7 @@ func (te *TabletError) RecordStats() {
 		InfoErrors.Add("Retry", 1)
 	case vtrpcpb.ErrorCode_INTERNAL_ERROR:
 		ErrorStats.Add("Fatal", 1)
-	case vtrpcpb.ErrorCode_RESOURCE_EXHAUSTED:
+	case vtrpcpb.ErrorCode_RESOURCE_EXHAUSTED_LEGACY:
 		ErrorStats.Add("TxPoolFull", 1)
 	case vtrpcpb.ErrorCode_NOT_IN_TX:
 		ErrorStats.Add("NotInTx", 1)
@@ -179,7 +179,7 @@ func (te *TabletError) RecordStats() {
 	}
 }
 
-// LogErrors logs panics and increments InternalErrors.
+// LogError logs panics and increments InternalErrors.
 func LogError() {
 	if x := recover(); x != nil {
 		log.Errorf("Uncaught panic:\n%v\n%s", x, tb.Stack(4))

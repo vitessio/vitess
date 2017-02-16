@@ -30,19 +30,19 @@ func GRPCCodeToErrorCode(code codes.Code) vtrpcpb.ErrorCode {
 	case codes.OK:
 		return vtrpcpb.ErrorCode_SUCCESS
 	case codes.Canceled:
-		return vtrpcpb.ErrorCode_CANCELLED
+		return vtrpcpb.ErrorCode_CANCELLED_LEGACY
 	case codes.Unknown:
 		return vtrpcpb.ErrorCode_UNKNOWN_ERROR
 	case codes.InvalidArgument:
 		return vtrpcpb.ErrorCode_BAD_INPUT
 	case codes.DeadlineExceeded:
-		return vtrpcpb.ErrorCode_DEADLINE_EXCEEDED
+		return vtrpcpb.ErrorCode_DEADLINE_EXCEEDED_LEGACY
 	case codes.AlreadyExists:
 		return vtrpcpb.ErrorCode_INTEGRITY_ERROR
 	case codes.PermissionDenied:
-		return vtrpcpb.ErrorCode_PERMISSION_DENIED
+		return vtrpcpb.ErrorCode_PERMISSION_DENIED_LEGACY
 	case codes.ResourceExhausted:
-		return vtrpcpb.ErrorCode_RESOURCE_EXHAUSTED
+		return vtrpcpb.ErrorCode_RESOURCE_EXHAUSTED_LEGACY
 	case codes.FailedPrecondition:
 		return vtrpcpb.ErrorCode_QUERY_NOT_SERVED
 	case codes.Aborted:
@@ -52,7 +52,7 @@ func GRPCCodeToErrorCode(code codes.Code) vtrpcpb.ErrorCode {
 	case codes.Unavailable:
 		return vtrpcpb.ErrorCode_TRANSIENT_ERROR
 	case codes.Unauthenticated:
-		return vtrpcpb.ErrorCode_UNAUTHENTICATED
+		return vtrpcpb.ErrorCode_UNAUTHENTICATED_LEGACY
 	default:
 		return vtrpcpb.ErrorCode_UNKNOWN_ERROR
 	}
@@ -63,19 +63,19 @@ func ErrorCodeToGRPCCode(code vtrpcpb.ErrorCode) codes.Code {
 	switch code {
 	case vtrpcpb.ErrorCode_SUCCESS:
 		return codes.OK
-	case vtrpcpb.ErrorCode_CANCELLED:
+	case vtrpcpb.ErrorCode_CANCELLED_LEGACY:
 		return codes.Canceled
 	case vtrpcpb.ErrorCode_UNKNOWN_ERROR:
 		return codes.Unknown
 	case vtrpcpb.ErrorCode_BAD_INPUT:
 		return codes.InvalidArgument
-	case vtrpcpb.ErrorCode_DEADLINE_EXCEEDED:
+	case vtrpcpb.ErrorCode_DEADLINE_EXCEEDED_LEGACY:
 		return codes.DeadlineExceeded
 	case vtrpcpb.ErrorCode_INTEGRITY_ERROR:
 		return codes.AlreadyExists
-	case vtrpcpb.ErrorCode_PERMISSION_DENIED:
+	case vtrpcpb.ErrorCode_PERMISSION_DENIED_LEGACY:
 		return codes.PermissionDenied
-	case vtrpcpb.ErrorCode_RESOURCE_EXHAUSTED:
+	case vtrpcpb.ErrorCode_RESOURCE_EXHAUSTED_LEGACY:
 		return codes.ResourceExhausted
 	case vtrpcpb.ErrorCode_QUERY_NOT_SERVED:
 		return codes.FailedPrecondition
@@ -85,7 +85,7 @@ func ErrorCodeToGRPCCode(code vtrpcpb.ErrorCode) codes.Code {
 		return codes.Internal
 	case vtrpcpb.ErrorCode_TRANSIENT_ERROR:
 		return codes.Unavailable
-	case vtrpcpb.ErrorCode_UNAUTHENTICATED:
+	case vtrpcpb.ErrorCode_UNAUTHENTICATED_LEGACY:
 		return codes.Unauthenticated
 	default:
 		return codes.Unknown

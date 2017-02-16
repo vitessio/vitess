@@ -958,10 +958,10 @@ func handleExecuteError(err error, statsKey []string, query map[string]interface
 	case vtrpcpb.ErrorCode_INTEGRITY_ERROR:
 		// Duplicate key error, no need to log.
 		infoErrors.Add("DupKey", 1)
-	case vtrpcpb.ErrorCode_RESOURCE_EXHAUSTED, vtrpcpb.ErrorCode_BAD_INPUT:
+	case vtrpcpb.ErrorCode_RESOURCE_EXHAUSTED_LEGACY, vtrpcpb.ErrorCode_BAD_INPUT:
 		// Tx pool full error, or bad input, no need to log.
 		normalErrors.Add(statsKey, 1)
-	case vtrpcpb.ErrorCode_PERMISSION_DENIED:
+	case vtrpcpb.ErrorCode_PERMISSION_DENIED_LEGACY:
 		// User violated permissions (TableACL), no need to log.
 		infoErrors.Add("PermissionDenied", 1)
 	case vtrpcpb.ErrorCode_TRANSIENT_ERROR:

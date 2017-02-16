@@ -566,7 +566,7 @@ func TestIsRetryableError(t *testing.T) {
 		// they'll be wrapped in ScatterConnError or ShardConnError.
 		// So they can't be retried as is.
 		{&tabletconn.ServerError{ServerCode: vtrpcpb.ErrorCode_QUERY_NOT_SERVED}, false},
-		{&tabletconn.ServerError{ServerCode: vtrpcpb.ErrorCode_PERMISSION_DENIED}, false},
+		{&tabletconn.ServerError{ServerCode: vtrpcpb.ErrorCode_PERMISSION_DENIED_LEGACY}, false},
 	}
 
 	for _, tt := range connErrorTests {

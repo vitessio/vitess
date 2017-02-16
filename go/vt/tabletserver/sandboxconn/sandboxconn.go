@@ -129,7 +129,7 @@ func (sbc *SandboxConn) getError() error {
 		sbc.MustFailTxPool--
 		return &tabletconn.ServerError{
 			Err:        "tx_pool_full: err",
-			ServerCode: vtrpcpb.ErrorCode_RESOURCE_EXHAUSTED,
+			ServerCode: vtrpcpb.ErrorCode_RESOURCE_EXHAUSTED_LEGACY,
 		}
 	}
 	if sbc.MustFailNotTx > 0 {
@@ -143,7 +143,7 @@ func (sbc *SandboxConn) getError() error {
 		sbc.MustFailCanceled--
 		return &tabletconn.ServerError{
 			Err:        "canceled: err",
-			ServerCode: vtrpcpb.ErrorCode_CANCELLED,
+			ServerCode: vtrpcpb.ErrorCode_CANCELLED_LEGACY,
 		}
 	}
 	if sbc.MustFailUnknownError > 0 {
@@ -157,7 +157,7 @@ func (sbc *SandboxConn) getError() error {
 		sbc.MustFailDeadlineExceeded--
 		return &tabletconn.ServerError{
 			Err:        "deadline exceeded: err",
-			ServerCode: vtrpcpb.ErrorCode_DEADLINE_EXCEEDED,
+			ServerCode: vtrpcpb.ErrorCode_DEADLINE_EXCEEDED_LEGACY,
 		}
 	}
 	if sbc.MustFailIntegrityError > 0 {
@@ -171,7 +171,7 @@ func (sbc *SandboxConn) getError() error {
 		sbc.MustFailPermissionDenied--
 		return &tabletconn.ServerError{
 			Err:        "permission denied: err",
-			ServerCode: vtrpcpb.ErrorCode_PERMISSION_DENIED,
+			ServerCode: vtrpcpb.ErrorCode_PERMISSION_DENIED_LEGACY,
 		}
 	}
 	if sbc.MustFailTransientError > 0 {
@@ -185,7 +185,7 @@ func (sbc *SandboxConn) getError() error {
 		sbc.MustFailUnauthenticated--
 		return &tabletconn.ServerError{
 			Err:        "unauthenticated: err",
-			ServerCode: vtrpcpb.ErrorCode_UNAUTHENTICATED,
+			ServerCode: vtrpcpb.ErrorCode_UNAUTHENTICATED_LEGACY,
 		}
 	}
 

@@ -243,7 +243,7 @@ func (qre *QueryExecutor) checkPermissions() error {
 	callerID := callerid.ImmediateCallerIDFromContext(qre.ctx)
 	if callerID == nil {
 		if qre.tsv.qe.strictTableACL {
-			return tabletenv.NewTabletError(vtrpcpb.ErrorCode_UNAUTHENTICATED, "missing caller id")
+			return tabletenv.NewTabletError(vtrpcpb.ErrorCode_UNAUTHENTICATED_LEGACY, "missing caller id")
 		}
 		return nil
 	}
@@ -260,7 +260,7 @@ func (qre *QueryExecutor) checkPermissions() error {
 	}
 
 	if qre.plan.Authorized == nil {
-		return tabletenv.NewTabletError(vtrpcpb.ErrorCode_PERMISSION_DENIED, "table acl error: nil acl")
+		return tabletenv.NewTabletError(vtrpcpb.ErrorCode_PERMISSION_DENIED_LEGACY, "table acl error: nil acl")
 	}
 	tableACLStatsKey := []string{
 		qre.plan.TableName.String(),
@@ -279,7 +279,7 @@ func (qre *QueryExecutor) checkPermissions() error {
 			errStr := fmt.Sprintf("table acl error: %q cannot run %v on table %q", callerID.Username, qre.plan.PlanID, qre.plan.TableName)
 			tabletenv.TableaclDenied.Add(tableACLStatsKey, 1)
 			qre.tsv.qe.accessCheckerLogger.Infof("%s", errStr)
-			return tabletenv.NewTabletError(vtrpcpb.ErrorCode_PERMISSION_DENIED, "%s", errStr)
+			return tabletenv.NewTabletError(vtrpcpb.ErrorCode_PERMISSION_DENIED_LEGACY, "%s", errStr)
 		}
 		return nil
 	}

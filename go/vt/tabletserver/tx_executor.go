@@ -51,7 +51,7 @@ func (txe *TxExecutor) Prepare(transactionID int64, dtid string) error {
 	err = txe.te.preparedPool.Put(conn, dtid)
 	if err != nil {
 		txe.te.txPool.localRollback(txe.ctx, conn)
-		return tabletenv.NewTabletError(vtrpcpb.ErrorCode_RESOURCE_EXHAUSTED, "prepare failed for transaction %d: %v", transactionID, err)
+		return tabletenv.NewTabletError(vtrpcpb.ErrorCode_RESOURCE_EXHAUSTED_LEGACY, "prepare failed for transaction %d: %v", transactionID, err)
 	}
 
 	localConn, err := txe.te.txPool.LocalBegin(txe.ctx)
