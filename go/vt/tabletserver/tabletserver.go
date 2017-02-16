@@ -38,6 +38,7 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver/splitquery"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletenv"
 	"github.com/youtube/vitess/go/vt/tabletserver/txthrottler"
+	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/utils"
 	"github.com/youtube/vitess/go/vt/vterrors"
 
@@ -122,6 +123,7 @@ type TabletServer struct {
 
 	// txThrottler is used to throttle transactions based on the observed replication lag.
 	txThrottler *txthrottler.TxThrottler
+	topoServer  topo.Server
 
 	// streamHealthMutex protects all the following fields
 	streamHealthMutex        sync.Mutex
@@ -150,15 +152,21 @@ type MySQLChecker interface {
 }
 
 // NewServer creates a new TabletServer based on the command line flags.
-func NewServer() *TabletServer {
-	return NewTabletServer(tabletenv.Config)
+func NewServer(topoServer topo.Server) *TabletServer {
+	return NewTabletServer(tabletenv.Config, topoServer)
 }
 
 var tsOnce sync.Once
 
+// NewTabletServerWithNilTopoServer is typically used in tests that don't need a topoSever
+// member.
+func NewTabletServerWithNilTopoServer(config tabletenv.TabletConfig) *TabletServer {
+	return NewTabletServer(config, topo.Server{})
+}
+
 // NewTabletServer creates an instance of TabletServer. Only one instance
 // of TabletServer can be created per process.
-func NewTabletServer(config tabletenv.TabletConfig) *TabletServer {
+func NewTabletServer(config tabletenv.TabletConfig, topoServer topo.Server) *TabletServer {
 	tsv := &TabletServer{
 		QueryTimeout:        sync2.NewAtomicDuration(time.Duration(config.QueryTimeout * 1e9)),
 		BeginTimeout:        sync2.NewAtomicDuration(time.Duration(config.TxPoolTimeout * 1e9)),
@@ -166,11 +174,12 @@ func NewTabletServer(config tabletenv.TabletConfig) *TabletServer {
 		checkMySQLThrottler: sync2.NewSemaphore(1, 0),
 		streamHealthMap:     make(map[int]chan<- *querypb.StreamHealthResponse),
 		history:             history.New(10),
+		topoServer:          topoServer,
 	}
 	tsv.se = schema.NewEngine(tsv, config)
 	tsv.qe = NewQueryEngine(tsv, tsv.se, config)
 	tsv.te = NewTxEngine(tsv, config)
-	tsv.txThrottler = txthrottler.CreateTxThrottlerFromTabletConfig()
+	tsv.txThrottler = txthrottler.CreateTxThrottlerFromTabletConfig(topoServer)
 	tsv.messager = NewMessagerEngine(tsv, config)
 	tsv.watcher = NewReplicationWatcher(tsv.se, config)
 	tsv.updateStreamList = &binlog.StreamList{}

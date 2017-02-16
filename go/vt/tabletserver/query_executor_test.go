@@ -1295,7 +1295,7 @@ func newTestTabletServer(ctx context.Context, flags executorFlags, db *fakesqldb
 	} else {
 		config.TwoPCAbandonAge = 10
 	}
-	tsv := NewTabletServer(config)
+	tsv := NewTabletServerWithNilTopoServer(config)
 	testUtils := newTestUtils()
 	dbconfigs := testUtils.newDBConfigs(db)
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
