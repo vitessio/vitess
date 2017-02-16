@@ -137,8 +137,9 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32) {
 		return
 	}
 
-	// Wait for the client response.
-	response, err := c.readEphemeralPacket()
+	// Wait for the client response. This has to be a direct read,
+	// so we don't buffer the TLS negociation packets.
+	response, err := c.readPacketDirect()
 	if err != nil {
 		log.Errorf("Cannot read client handshake response: %v", err)
 		return

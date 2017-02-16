@@ -40,6 +40,7 @@ var selectRowsResult = &sqltypes.Result{
 			sqltypes.MakeTrusted(querypb.Type_VARCHAR, []byte("nicer name")),
 		},
 	},
+	RowsAffected: 2,
 }
 
 type testHandler struct{}
@@ -219,7 +220,7 @@ func TestTLSServer(t *testing.T) {
 	port := l.Addr().(*net.TCPAddr).Port
 
 	// Create the certs.
-	root, err := ioutil.TempDir("", "tlstest")
+	root, err := ioutil.TempDir("", "TestTLSServer")
 	if err != nil {
 		t.Fatalf("TempDir failed: %v", err)
 	}

@@ -2,6 +2,7 @@ package mysqlconn
 
 import (
 	"crypto/sha1"
+	"crypto/tls"
 	"fmt"
 	"net"
 	"strconv"
@@ -11,6 +12,7 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/sqldb"
+	"github.com/youtube/vitess/go/vt/servenv/grpcutils"
 )
 
 // connectResult is used by Connect.
@@ -193,15 +195,49 @@ func (c *Conn) clientHandshake(characterSet uint8, params *sqldb.ConnParams) err
 		return sqldb.NewSQLError(CRVersionError, SSUnknownSQLState, "cannot connect to servers earlier than 4.1")
 	}
 
-	// If client asked for SSL, but server doesn't support it, stop right here.
-	if capabilities&CapabilityClientSSL == 0 && params.SslCert != "" && params.SslKey != "" {
-		return sqldb.NewSQLError(CRSSLConnectionError, SSUnknownSQLState, "server doesn't support SSL but client asked for it")
-	}
-
-	// Remember a subset of the capabilities, so we can use them later in the protocol.
+	// Remember a subset of the capabilities, so we can use them
+	// later in the protocol.
 	c.Capabilities = capabilities & (CapabilityClientDeprecateEOF)
 
+	// Handle switch to SSL if necessary.
+	if params.Flags&CapabilityClientSSL > 0 {
+		// If client asked for SSL, but server doesn't support it,
+		// stop right here.
+		if capabilities&CapabilityClientSSL == 0 {
+			return sqldb.NewSQLError(CRSSLConnectionError, SSUnknownSQLState, "server doesn't support SSL but client asked for it")
+		}
+
+		// The ServerName to verify depends on what the hostname is.
+		// - If it is an IP address, we need to prefix it with 'IP:'.
+		// - If not, we can just use it as is.
+		// We may need to add a ServerName field to ConnParams to
+		// make this more explicit.
+		serverName := params.Host
+		if net.ParseIP(params.Host) != nil {
+			serverName = "IP:" + params.Host
+		}
+
+		// Build the TLS config.
+		clientConfig, err := grpcutils.TLSClientConfig(params.SslCert, params.SslKey, params.SslCa, serverName)
+		if err != nil {
+			return sqldb.NewSQLError(CRSSLConnectionError, SSUnknownSQLState, "error loading client cert and ca: %v", err)
+		}
+
+		// Send the SSLRequest packet.
+		if err := c.writeSSLRequest(capabilities, characterSet, params); err != nil {
+			return err
+		}
+
+		// Switch to SSL.
+		conn := tls.Client(c.conn, clientConfig)
+		c.conn = conn
+		c.reader.Reset(conn)
+		c.writer.Reset(conn)
+		c.Capabilities |= CapabilityClientSSL
+	}
+
 	// Build and send our handshake response 41.
+	// Note this one will never have SSL flag on.
 	if err := c.writeHandshakeResponse41(capabilities, cipher, characterSet, params); err != nil {
 		return err
 	}
@@ -375,6 +411,55 @@ func (c *Conn) parseInitialHandshakePacket(data []byte) (uint32, []byte, error) 
 	return capabilities, authPluginData, nil
 }
 
+// writeSSLRequest writes the SSLRequest packet. It's just a truncated
+// HandshakeResponse41.
+func (c *Conn) writeSSLRequest(capabilities uint32, characterSet uint8, params *sqldb.ConnParams) error {
+	// Build our flags, with CapabilityClientSSL.
+	var flags uint32 = CapabilityClientLongPassword |
+		CapabilityClientLongFlag |
+		CapabilityClientProtocol41 |
+		CapabilityClientTransactions |
+		CapabilityClientSecureConnection |
+		CapabilityClientPluginAuth |
+		CapabilityClientPluginAuthLenencClientData |
+		CapabilityClientSSL |
+		// If the server supported
+		// CapabilityClientDeprecateEOF, we also support it.
+		c.Capabilities&CapabilityClientDeprecateEOF
+
+	length :=
+		4 + // Client capability flags.
+			4 + // Max-packet size.
+			1 + // Character set.
+			23 // Reserved.
+
+	// Add the DB name if the server supports it.
+	if params.DbName != "" && (capabilities&CapabilityClientConnectWithDB != 0) {
+		flags |= CapabilityClientConnectWithDB
+	}
+
+	data := make([]byte, length)
+	pos := 0
+
+	// Client capability flags.
+	pos = writeUint32(data, pos, flags)
+
+	// Max-packet size, always 0. See doc.go.
+	pos += 4
+
+	// Character set.
+	pos = writeByte(data, pos, characterSet)
+
+	// And send it as is.
+	if err := c.writePacket(data); err != nil {
+		return sqldb.NewSQLError(CRServerLost, SSUnknownSQLState, "cannot send SSLRequest: %v", err)
+	}
+	if err := c.flush(); err != nil {
+		return sqldb.NewSQLError(CRServerLost, SSUnknownSQLState, "cannot flush SSLRequest: %v", err)
+	}
+	return nil
+}
+
 // writeHandshakeResponse41 writes the handshake response.
 // Returns a sqldb.SQLError.
 func (c *Conn) writeHandshakeResponse41(capabilities uint32, cipher []byte, characterSet uint8, params *sqldb.ConnParams) error {
@@ -390,7 +475,7 @@ func (c *Conn) writeHandshakeResponse41(capabilities uint32, cipher []byte, char
 		// CapabilityClientDeprecateEOF, we also support it.
 		c.Capabilities&CapabilityClientDeprecateEOF
 
-	// FIXME(alainjobart) add SSL, multi statement, client found rows.
+	// FIXME(alainjobart) add multi statement, client found rows.
 
 	// Password encryption.
 	scrambledPassword := scramblePassword(cipher, []byte(params.Pass))
@@ -429,12 +514,6 @@ func (c *Conn) writeHandshakeResponse41(capabilities uint32, cipher []byte, char
 
 	// Character set.
 	pos = writeByte(data, pos, characterSet)
-
-	// FIXME(alainjobart): With SSL can send this now.
-	// For now we don't support it.
-	if params.SslCert != "" && params.SslKey != "" {
-		return sqldb.NewSQLError(CRSSLConnectionError, SSUnknownSQLState, "SSL support is not implemented yet in this client")
-	}
 
 	// 23 reserved bytes, all 0.
 	pos += 23
