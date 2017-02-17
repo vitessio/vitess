@@ -295,16 +295,6 @@ type colsym struct {
 	// column, then the base name of the column will be used as the alias.
 	Alias sqlparser.ColIdent
 
-	// QualfiedName will represent the fully qualified column name,
-	// if the expression is a simple column reference. If the column
-	// expression does not reference a table (or alias), a fully
-	// qualified name will be generated based on the table alias
-	// the column references.
-	// Alias or QualifiedName or both could be blank if such names
-	// could not be generated. If so, those expressions cannot be
-	// referenced by other clauses of the SQL statement.
-	QualifiedName *sqlparser.ColName
-
 	route      *route
 	symtab     *symtab
 	Underlying colref
