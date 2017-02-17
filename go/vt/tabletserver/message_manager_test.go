@@ -582,6 +582,12 @@ func TestMessagesPending2(t *testing.T) {
 	if d := time.Now().Sub(start); d > 15*time.Second {
 		t.Errorf("pending work trigger did not happen. Duration: %v", d)
 	}
+	// Consume the rest of the messages asynchronously to
+	// prevent hangs.
+	go func() {
+		for range r1.ch {
+		}
+	}()
 }
 
 func TestMMGenerate(t *testing.T) {
