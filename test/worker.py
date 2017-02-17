@@ -480,8 +480,8 @@ class TestBaseSplitCloneResiliency(TestBaseSplitClone):
           condition_fn=lambda v: v.get('WorkerRetryCount') >= 2)
       logging.debug('Worker has retried at least twice, starting reparent now')
 
-      # vtworker is blocked at this point. This is a good time to test that 
-      # it's throttler server is reacting to RPCs.
+      # vtworker is blocked at this point. This is a good time to test that its
+      # throttler server is reacting to RPCs.
       self.check_throttler_service('localhost:%d' % worker_rpc_port,
                                    ['test_keyspace/-80', 'test_keyspace/80-'],
                                    9999)
