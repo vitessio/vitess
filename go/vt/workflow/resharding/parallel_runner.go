@@ -2,7 +2,6 @@ package resharding
 
 import (
 	"fmt"
-	"path"
 	"sync"
 
 	log "github.com/golang/glog"
@@ -26,8 +25,7 @@ const (
 // Each phase has its own ParallelRunner object.
 type ParallelRunner struct {
 	ctx              context.Context
-	nodeManager      *workflow.NodeManager
-	phaseUINode      *workflow.Node
+	rootUINode       *workflow.Node
 	checkpointWriter *CheckpointWriter
 	// tasks stores selected tasks for the phase with expected execution order.
 	tasks            []*workflowpb.Task
@@ -44,11 +42,11 @@ type ParallelRunner struct {
 	taskFinished map[string]chan struct{}
 }
 
-func NewParallelRunner(ctx context.Context, nodeManager *workflow.NodeManager, phaseUINode *workflow.Node, cp *CheckpointWriter, tasks []*workflowpb.Task, executeFunc func(context.Context, *workflowpb.Task) error, concurrencyLevel level) *ParallelRunner {
+// NewParallelRunner returns a new ParallelRunner.
+func NewParallelRunner(ctx context.Context, rootUINode *workflow.Node, cp *CheckpointWriter, tasks []*workflowpb.Task, executeFunc func(context.Context, *workflowpb.Task) error, concurrencyLevel level) *ParallelRunner {
 	return &ParallelRunner{
 		ctx:                 ctx,
-		nodeManager:         nodeManager,
-		phaseUINode:         phaseUINode,
+		rootUINode:          rootUINode,
 		checkpointWriter:    cp,
 		tasks:               tasks,
 		executeFunc:         executeFunc,
@@ -109,7 +107,7 @@ func (p *ParallelRunner) Run() error {
 
 				fmt.Printf("enabling retry action for task: %v", taskID)
 
-				retryChannel, registerID := p.addRetryAction(taskID)
+				retryChannel, nodePath := p.addRetryAction(taskID)
 
 				// Block the task execution until the retry action is triggered
 				// or the context is canceled.
@@ -117,7 +115,7 @@ func (p *ParallelRunner) Run() error {
 				case <-retryChannel:
 					continue
 				case <-p.ctx.Done():
-					p.unregisterRetryController(registerID)
+					p.unregisterRetryController(nodePath)
 					return
 				}
 			}
@@ -138,26 +136,25 @@ func (p *ParallelRunner) Run() error {
 }
 
 // Action handles the retry action. It implements the interface ActionListener.
-func (p *ParallelRunner) Action(ctx context.Context, pathName, name string) error {
+func (p *ParallelRunner) Action(ctx context.Context, path, name string) error {
 	switch name {
 	case "Retry":
-		return p.triggerRetry(pathName)
+		return p.triggerRetry(path)
 	default:
 		return fmt.Errorf("Unknown action: %v", name)
 	}
 }
 
 func (p *ParallelRunner) addRetryAction(taskID string) (chan struct{}, string) {
-	taskNodePath := path.Join(p.phaseUINode.Path, taskID)
-	node, err := p.nodeManager.GetNodeByPath(taskNodePath)
+	node, err := p.rootUINode.GetChildByPath(taskID)
 	if err != nil {
-		panic(fmt.Errorf("nodepath %v not found", taskNodePath))
+		panic(fmt.Errorf("node on child path %v not found", taskID))
 	}
 
 	retryController := CreateRetryController(node, p /* actionListener */)
 	p.registerRetryController(node.Path, retryController)
 	node.BroadcastChanges(false /* updateChildren */)
-	return retryController.retryChannel, node.PathName
+	return retryController.retryChannel, node.Path
 }
 
 func (p *ParallelRunner) triggerRetry(nodePath string) error {
@@ -165,7 +162,7 @@ func (p *ParallelRunner) triggerRetry(nodePath string) error {
 	c, ok := p.retryActionRegistry[nodePath]
 	if !ok {
 		p.mu.Unlock()
-		return fmt.Errorf("Unknown node path for the action: %v", nodePath)
+		return fmt.Errorf("Unregistered action for node: %v", nodePath)
 	}
 	p.mu.Unlock()
 
@@ -178,7 +175,7 @@ func (p *ParallelRunner) registerRetryController(nodePath string, c *RetryContro
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if _, ok := p.retryActionRegistry[nodePath]; ok {
-		panic(fmt.Errorf("duplicate retry action on node: %v", nodePath))
+		panic(fmt.Errorf("duplicate retry action for node: %v", nodePath))
 	}
 	p.retryActionRegistry[nodePath] = c
 }
@@ -187,7 +184,7 @@ func (p *ParallelRunner) unregisterRetryController(nodePath string) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if _, ok := p.retryActionRegistry[nodePath]; !ok {
-		log.Warningf("retry action on node: %v doesn't exist, cannot unregister it", nodePath)
+		log.Warningf("retry action for node: %v doesn't exist, cannot unregister it", nodePath)
 	} else {
 		delete(p.retryActionRegistry, nodePath)
 	}
@@ -199,10 +196,9 @@ func (p *ParallelRunner) setFinishUIMessage(taskID string) {
 		panic(fmt.Errorf("the finish channl for task %v not found", taskID))
 	}
 
-	taskNodePath := path.Join(p.phaseUINode.Path, taskID)
-	taskNode, err := p.nodeManager.GetNodeByPath(taskNodePath)
+	taskNode, err := p.rootUINode.GetChildByPath(taskID)
 	if err != nil {
-		panic(fmt.Errorf("nodepath %v not found", taskNodePath))
+		panic(fmt.Errorf("nodepath %v not found", taskID))
 	}
 
 	select {

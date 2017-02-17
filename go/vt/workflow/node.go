@@ -191,13 +191,13 @@ func (n *Node) deepCopyFrom(otherNode *Node, copyChildren bool) error {
 	*n = *otherNode
 	n.Children = oldChildren
 
-	/*n.Actions = []*Action{}
+	n.Actions = []*Action{}
 	for _, otherAction := range otherNode.Actions {
 		action := &Action{}
 		*action = *otherAction
 		n.Actions = append(n.Actions, action)
 	}
-	*/
+
 	if !copyChildren {
 		return nil
 	}
@@ -218,6 +218,31 @@ func (n *Node) deepCopyFrom(otherNode *Node, copyChildren bool) error {
 		n.Children = append(n.Children, child)
 	}
 	return nil
+}
+
+// GetChildByPath returns the child node using its path in the sub-tree
+// rooted by the node. The concurrency process on the tree structure is not
+// considered in this implementation.
+func (n *Node) GetChildByPath(subPath string) (*Node, error) {
+	parts := strings.Split(subPath, "/")
+	s := n
+
+	// Find the subnode if needed.
+	for i := 0; i < len(parts); i++ {
+		childPathName := parts[i]
+		found := false
+		for _, sn := range s.Children {
+			if sn.PathName == childPathName {
+				found = true
+				s = sn
+				break
+			}
+		}
+		if !found {
+			return nil, fmt.Errorf("node %v has no children named %v", s.Path, childPathName)
+		}
+	}
+	return s, nil
 }
 
 // ActionParameters describe an action initiated by the user.
@@ -395,10 +420,6 @@ func (m *NodeManager) Action(ctx context.Context, ap *ActionParameters) error {
 		return fmt.Errorf("Action %v is invoked on a node without listener (node path is %v)", ap.Name, ap.Path)
 	}
 	return n.Listener.Action(ctx, ap.Path, ap.Name)
-}
-
-func (m *NodeManager) GetNodeByPath(nodePath string) (*Node, error) {
-	return m.getNodeByPath(nodePath)
 }
 
 func (m *NodeManager) getNodeByPath(nodePath string) (*Node, error) {

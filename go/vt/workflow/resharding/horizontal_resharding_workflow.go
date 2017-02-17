@@ -56,14 +56,7 @@ type HorizontalReshardingWorkflow struct {
 	logger *logutil.MemoryLogger
 
 	// rootUINode is the root node representing the workflow in the UI.
-	rootUINode                       *workflow.Node
-	copySchemaUINode                 *workflow.Node
-	cloneUINode                      *workflow.Node
-	waitForFilteredReplicationUINode *workflow.Node
-	diffUINode                       *workflow.Node
-	migrateRdonlyUINode              *workflow.Node
-	migrateReplicaUINode             *workflow.Node
-	migrateMasterUINode              *workflow.Node
+	rootUINode *workflow.Node
 
 	checkpoint       *workflowpb.WorkflowCheckpoint
 	checkpointWriter *CheckpointWriter
@@ -91,43 +84,43 @@ func (hw *HorizontalReshardingWorkflow) Run(ctx context.Context, manager *workfl
 
 func (hw *HorizontalReshardingWorkflow) runWorkflow() error {
 	copySchemaTasks := hw.GetTasks(hw.checkpoint, phaseCopySchema)
-	copySchemaRunner := NewParallelRunner(hw.ctx, hw.manager.NodeManager(), hw.copySchemaUINode, hw.checkpointWriter, copySchemaTasks, hw.runCopySchema, PARALLEL)
+	copySchemaRunner := NewParallelRunner(hw.ctx, hw.rootUINode, hw.checkpointWriter, copySchemaTasks, hw.runCopySchema, PARALLEL)
 	if err := copySchemaRunner.Run(); err != nil {
 		return err
 	}
 
 	cloneTasks := hw.GetTasks(hw.checkpoint, phaseClone)
-	cloneRunner := NewParallelRunner(hw.ctx, hw.manager.NodeManager(), hw.cloneUINode, hw.checkpointWriter, cloneTasks, hw.runSplitClone, PARALLEL)
+	cloneRunner := NewParallelRunner(hw.ctx, hw.rootUINode, hw.checkpointWriter, cloneTasks, hw.runSplitClone, PARALLEL)
 	if err := cloneRunner.Run(); err != nil {
 		return err
 	}
 
 	waitForFilteredReplicationTasks := hw.GetTasks(hw.checkpoint, phaseWaitForFilteredReplication)
-	waitForFilteredReplicationRunner := NewParallelRunner(hw.ctx, hw.manager.NodeManager(), hw.waitForFilteredReplicationUINode, hw.checkpointWriter, waitForFilteredReplicationTasks, hw.runWaitForFilteredReplication, PARALLEL)
+	waitForFilteredReplicationRunner := NewParallelRunner(hw.ctx, hw.rootUINode, hw.checkpointWriter, waitForFilteredReplicationTasks, hw.runWaitForFilteredReplication, PARALLEL)
 	if err := waitForFilteredReplicationRunner.Run(); err != nil {
 		return err
 	}
 
 	diffTasks := hw.GetTasks(hw.checkpoint, phaseDiff)
-	diffRunner := NewParallelRunner(hw.ctx, hw.manager.NodeManager(), hw.diffUINode, hw.checkpointWriter, diffTasks, hw.runSplitDiff, SEQUENTIAL)
+	diffRunner := NewParallelRunner(hw.ctx, hw.rootUINode, hw.checkpointWriter, diffTasks, hw.runSplitDiff, SEQUENTIAL)
 	if err := diffRunner.Run(); err != nil {
 		return err
 	}
 
 	migrateRdonlyTasks := hw.GetTasks(hw.checkpoint, phaseMigrateRdonly)
-	migrateRdonlyRunner := NewParallelRunner(hw.ctx, hw.manager.NodeManager(), hw.migrateRdonlyUINode, hw.checkpointWriter, migrateRdonlyTasks, hw.runMigrate, SEQUENTIAL)
+	migrateRdonlyRunner := NewParallelRunner(hw.ctx, hw.rootUINode, hw.checkpointWriter, migrateRdonlyTasks, hw.runMigrate, SEQUENTIAL)
 	if err := migrateRdonlyRunner.Run(); err != nil {
 		return err
 	}
 
-	migrateReplicaTasks := hw.GetTasks(hw.checkpoint, phaseMigrateRdonly)
-	migrateReplicaRunner := NewParallelRunner(hw.ctx, hw.manager.NodeManager(), hw.migrateReplicaUINode, hw.checkpointWriter, migrateReplicaTasks, hw.runMigrate, SEQUENTIAL)
+	migrateReplicaTasks := hw.GetTasks(hw.checkpoint, phaseMigrateReplica)
+	migrateReplicaRunner := NewParallelRunner(hw.ctx, hw.rootUINode, hw.checkpointWriter, migrateReplicaTasks, hw.runMigrate, SEQUENTIAL)
 	if err := migrateReplicaRunner.Run(); err != nil {
 		return err
 	}
 
 	migrateMasterTasks := hw.GetTasks(hw.checkpoint, phaseMigrateMaster)
-	migrateMasterRunner := NewParallelRunner(hw.ctx, hw.manager.NodeManager(), hw.migrateMasterUINode, hw.checkpointWriter, migrateMasterTasks, hw.runMigrate, SEQUENTIAL)
+	migrateMasterRunner := NewParallelRunner(hw.ctx, hw.rootUINode, hw.checkpointWriter, migrateMasterTasks, hw.runMigrate, SEQUENTIAL)
 	if err := migrateMasterRunner.Run(); err != nil {
 		return err
 	}
@@ -142,12 +135,14 @@ func (hw *HorizontalReshardingWorkflow) setUIMessage(message string) {
 	hw.rootUINode.BroadcastChanges(false /* updateChildren */)
 }
 
+// Register registers the HorizontalReshardingWorkflowFactory as a factory
+// in the workflow framework.
 func Register() {
 	workflow.Register(horizontalReshardingFactoryName, &HorizontalReshardingWorkflowFactory{})
 }
 
-// HorizontalReshardingWorkflowFactory is the factory to register
-// the HorizontalReshardingWorkflow.
+// HorizontalReshardingWorkflowFactory is the factory to create
+// a horizontal resharding workflow.
 type HorizontalReshardingWorkflowFactory struct{}
 
 // Init is part of the workflow.Factory interface.
@@ -192,69 +187,89 @@ func (*HorizontalReshardingWorkflowFactory) Instantiate(w *workflowpb.Workflow, 
 	hw := &HorizontalReshardingWorkflow{
 		checkpoint: checkpoint,
 		rootUINode: rootNode,
-		copySchemaUINode: &workflow.Node{
-			Name:     "CopySchemaShard",
-			PathName: string(phaseCopySchema),
-		},
-		cloneUINode: &workflow.Node{
-			Name:     "SplitClone",
-			PathName: string(phaseClone),
-		},
-		waitForFilteredReplicationUINode: &workflow.Node{
-			Name:     "WaitForFilteredReplication",
-			PathName: string(phaseWaitForFilteredReplication),
-		},
-		diffUINode: &workflow.Node{
-			Name:     "SplitDiff",
-			PathName: string(phaseDiff),
-		},
-		migrateRdonlyUINode: &workflow.Node{
-			Name:     "MigrateServedTypeRDONLY",
-			PathName: string(phaseMigrateRdonly),
-		},
-		migrateReplicaUINode: &workflow.Node{
-			Name:     "MigrateServedTypeREPLICA",
-			PathName: string(phaseMigrateReplica),
-		},
-		migrateMasterUINode: &workflow.Node{
-			Name:     "MigrateServedTypeMASTER",
-			PathName: string(phaseMigrateMaster),
-		},
-		logger: logutil.NewMemoryLogger(),
+		logger:     logutil.NewMemoryLogger(),
 	}
+	copySchemaUINode := &workflow.Node{
+		Name:     "CopySchemaShard",
+		PathName: string(phaseCopySchema),
+	}
+	cloneUINode := &workflow.Node{
+		Name:     "SplitClone",
+		PathName: string(phaseClone),
+	}
+	waitForFilteredReplicationUINode := &workflow.Node{
+		Name:     "WaitForFilteredReplication",
+		PathName: string(phaseWaitForFilteredReplication),
+	}
+	diffUINode := &workflow.Node{
+		Name:     "SplitDiff",
+		PathName: string(phaseDiff),
+	}
+	migrateRdonlyUINode := &workflow.Node{
+		Name:     "MigrateServedTypeRDONLY",
+		PathName: string(phaseMigrateRdonly),
+	}
+	migrateReplicaUINode := &workflow.Node{
+		Name:     "MigrateServedTypeREPLICA",
+		PathName: string(phaseMigrateReplica),
+	}
+	migrateMasterUINode := &workflow.Node{
+		Name:     "MigrateServedTypeMASTER",
+		PathName: string(phaseMigrateMaster),
+	}
+
 	hw.rootUINode.Children = []*workflow.Node{
-		hw.copySchemaUINode,
-		hw.cloneUINode,
-		hw.waitForFilteredReplicationUINode,
-		hw.diffUINode,
-		hw.migrateRdonlyUINode,
-		hw.migrateReplicaUINode,
-		hw.migrateMasterUINode,
+		copySchemaUINode,
+		cloneUINode,
+		waitForFilteredReplicationUINode,
+		diffUINode,
+		migrateRdonlyUINode,
+		migrateReplicaUINode,
+		migrateMasterUINode,
 	}
 
 	destinationShards := strings.Split(hw.checkpoint.Settings["destination_shards"], ",")
 	sourceShards := strings.Split(hw.checkpoint.Settings["source_shards"], ",")
 
-	createUINodes(phaseCopySchema, destinationShards, hw.copySchemaUINode)
-	createUINodes(phaseClone, sourceShards, hw.cloneUINode)
-	createUINodes(phaseWaitForFilteredReplication, destinationShards, hw.waitForFilteredReplicationUINode)
-	createUINodes(phaseDiff, destinationShards, hw.diffUINode)
-	createUINodes(phaseMigrateRdonly, sourceShards, hw.migrateRdonlyUINode)
-	createUINodes(phaseMigrateReplica, sourceShards, hw.migrateReplicaUINode)
-	createUINodes(phaseMigrateMaster, sourceShards, hw.migrateMasterUINode)
+	if err := createUINodes(hw.rootUINode, phaseCopySchema, destinationShards); err != nil {
+		return hw, err
+	}
+	if err := createUINodes(hw.rootUINode, phaseClone, sourceShards); err != nil {
+		return hw, err
+	}
+	if err := createUINodes(hw.rootUINode, phaseWaitForFilteredReplication, destinationShards); err != nil {
+		return hw, err
+	}
+	if err := createUINodes(hw.rootUINode, phaseDiff, destinationShards); err != nil {
+		return hw, err
+	}
+	if err := createUINodes(hw.rootUINode, phaseMigrateRdonly, sourceShards); err != nil {
+		return hw, err
+	}
+	if err := createUINodes(hw.rootUINode, phaseMigrateReplica, sourceShards); err != nil {
+		return hw, err
+	}
+	if err := createUINodes(hw.rootUINode, phaseMigrateMaster, sourceShards); err != nil {
+		return hw, err
+	}
 
 	return hw, nil
 }
 
-func createUINodes(phaseName PhaseType, shards []string, rootNode *workflow.Node) {
+func createUINodes(rootNode *workflow.Node, phaseName PhaseType, shards []string) error {
+	phaseNode, err := rootNode.GetChildByPath(string(phaseName))
+	if err != nil {
+		return fmt.Errorf("fails to find phase node for: %v", phaseName)
+	}
+
 	for _, shard := range shards {
-		taskID := createTaskID(phaseName, shard)
 		taskUINode := &workflow.Node{
 			Name:     "Shard " + shard,
-			PathName: taskID,
+			PathName: shard,
 		}
-		rootNode.Children = append(rootNode.Children, taskUINode)
+		phaseNode.Children = append(phaseNode.Children, taskUINode)
 	}
+	return nil
 }
 
 // initCheckpoint initialize the checkpoint for the horizontal workflow.

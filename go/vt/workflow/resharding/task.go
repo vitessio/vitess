@@ -15,7 +15,7 @@ import (
 )
 
 func createTaskID(phase PhaseType, shardName string) string {
-	return fmt.Sprintf("%s_%s", phase, shardName)
+	return fmt.Sprintf("%s/%s", phase, shardName)
 }
 
 // GetTasks returns selected tasks for a phase from the checkpoint
