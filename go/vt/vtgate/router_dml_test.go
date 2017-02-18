@@ -15,6 +15,7 @@ import (
 	_ "github.com/youtube/vitess/go/vt/vtgate/vindexes"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 func TestUpdateEqual(t *testing.T) {
@@ -623,14 +624,14 @@ func TestInsertFail(t *testing.T) {
 		t.Errorf("routerExec: %v, want %v", err, want)
 	}
 
-	sbclookup.MustFailServer = 1
+	sbclookup.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
 	_, err = routerExec(router, "insert into user(id, v, name) values (null, 2, 'myname')", nil)
 	want = "execInsertSharded: "
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
 		t.Errorf("routerExec: %v, want prefix %v", err, want)
 	}
 
-	sbclookup.MustFailServer = 1
+	sbclookup.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
 	_, err = routerExec(router, "insert into user(id, v, name) values (1, 2, 'myname')", nil)
 	want = "execInsertSharded: getInsertShardedRoute: lookup.Create: "
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
@@ -643,7 +644,7 @@ func TestInsertFail(t *testing.T) {
 		t.Errorf("routerExec: %v, want %v", err, want)
 	}
 
-	sbclookup.MustFailServer = 1
+	sbclookup.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
 	_, err = routerExec(router, "insert into music_extra_reversed(music_id, user_id) values (1, 1)", nil)
 	want = "execInsertSharded: getInsertShardedRoute: lookup.Map"
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
@@ -672,14 +673,14 @@ func TestInsertFail(t *testing.T) {
 	}
 	getSandbox("TestRouter").ShardSpec = DefaultShardSpec
 
-	sbclookup.MustFailServer = 1
+	sbclookup.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
 	_, err = routerExec(router, "insert into music(user_id, id) values (1, null)", nil)
 	want = "execInsertSharded:"
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
 		t.Errorf("routerExec: %v, want prefix %v", err, want)
 	}
 
-	sbclookup.MustFailServer = 1
+	sbclookup.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
 	_, err = routerExec(router, "insert into music(user_id, id) values (1, 2)", nil)
 	want = "execInsertSharded: getInsertShardedRoute: lookup.Create: execInsertUnsharded: target: TestUnsharded.0.master"
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
@@ -704,7 +705,7 @@ func TestInsertFail(t *testing.T) {
 		t.Errorf("routerExec: %v, want %v", err, want)
 	}
 
-	sbc.MustFailServer = 1
+	sbc.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
 	_, err = routerExec(router, "insert into user(id, v, name) values (1, 2, 'myname')", nil)
 	want = "execInsertSharded: target: TestRouter.-20.master"
 	if err == nil || !strings.HasPrefix(err.Error(), want) {

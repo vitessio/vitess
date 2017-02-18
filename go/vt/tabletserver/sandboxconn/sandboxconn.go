@@ -26,19 +26,7 @@ type SandboxConn struct {
 	tablet *topodatapb.Tablet
 
 	// These errors work for all functions.
-	MustFailRetry            int
-	MustFailFatal            int
-	MustFailServer           int
-	MustFailConn             int
-	MustFailTxPool           int
-	MustFailNotTx            int
-	MustFailCanceled         int
-	MustFailUnknownError     int
-	MustFailDeadlineExceeded int
-	MustFailIntegrityError   int
-	MustFailPermissionDenied int
-	MustFailTransientError   int
-	MustFailUnauthenticated  int
+	MustFailCodes map[vtrpcpb.Code]int
 
 	// These errors are triggered only for specific functions.
 	// For now these are just for the 2PC functions.
@@ -95,100 +83,22 @@ var _ queryservice.QueryService = (*SandboxConn)(nil) // compile-time interface 
 // NewSandboxConn returns a new SandboxConn targeted to the provided tablet.
 func NewSandboxConn(t *topodatapb.Tablet) *SandboxConn {
 	return &SandboxConn{
-		tablet: t,
+		tablet:        t,
+		MustFailCodes: make(map[vtrpcpb.Code]int),
 	}
 }
 
 func (sbc *SandboxConn) getError() error {
-	if sbc.MustFailRetry > 0 {
-		sbc.MustFailRetry--
+	for code, count := range sbc.MustFailCodes {
+		if count == 0 {
+			continue
+		}
+		sbc.MustFailCodes[code] = count - 1
 		return &tabletconn.ServerError{
-			Err:        "retry: err",
-			ServerCode: vtrpcpb.Code_FAILED_PRECONDITION,
+			Err:        fmt.Sprintf("%v error", code),
+			ServerCode: code,
 		}
 	}
-	if sbc.MustFailFatal > 0 {
-		sbc.MustFailFatal--
-		return &tabletconn.ServerError{
-			Err:        "fatal: err",
-			ServerCode: vtrpcpb.Code_INTERNAL,
-		}
-	}
-	if sbc.MustFailServer > 0 {
-		sbc.MustFailServer--
-		return &tabletconn.ServerError{
-			Err:        "error: err",
-			ServerCode: vtrpcpb.Code_INVALID_ARGUMENT,
-		}
-	}
-	if sbc.MustFailConn > 0 {
-		sbc.MustFailConn--
-		return tabletconn.OperationalError(fmt.Sprintf("error: conn"))
-	}
-	if sbc.MustFailTxPool > 0 {
-		sbc.MustFailTxPool--
-		return &tabletconn.ServerError{
-			Err:        "tx_pool_full: err",
-			ServerCode: vtrpcpb.Code_RESOURCE_EXHAUSTED,
-		}
-	}
-	if sbc.MustFailNotTx > 0 {
-		sbc.MustFailNotTx--
-		return &tabletconn.ServerError{
-			Err:        "not_in_tx: err",
-			ServerCode: vtrpcpb.Code_ABORTED,
-		}
-	}
-	if sbc.MustFailCanceled > 0 {
-		sbc.MustFailCanceled--
-		return &tabletconn.ServerError{
-			Err:        "canceled: err",
-			ServerCode: vtrpcpb.Code_CANCELED,
-		}
-	}
-	if sbc.MustFailUnknownError > 0 {
-		sbc.MustFailUnknownError--
-		return &tabletconn.ServerError{
-			Err:        "unknown error: err",
-			ServerCode: vtrpcpb.Code_UNKNOWN,
-		}
-	}
-	if sbc.MustFailDeadlineExceeded > 0 {
-		sbc.MustFailDeadlineExceeded--
-		return &tabletconn.ServerError{
-			Err:        "deadline exceeded: err",
-			ServerCode: vtrpcpb.Code_DEADLINE_EXCEEDED,
-		}
-	}
-	if sbc.MustFailIntegrityError > 0 {
-		sbc.MustFailIntegrityError--
-		return &tabletconn.ServerError{
-			Err:        "integrity error: err",
-			ServerCode: vtrpcpb.Code_ALREADY_EXISTS,
-		}
-	}
-	if sbc.MustFailPermissionDenied > 0 {
-		sbc.MustFailPermissionDenied--
-		return &tabletconn.ServerError{
-			Err:        "permission denied: err",
-			ServerCode: vtrpcpb.Code_PERMISSION_DENIED,
-		}
-	}
-	if sbc.MustFailTransientError > 0 {
-		sbc.MustFailTransientError--
-		return &tabletconn.ServerError{
-			Err:        "transient error: err",
-			ServerCode: vtrpcpb.Code_UNAVAILABLE,
-		}
-	}
-	if sbc.MustFailUnauthenticated > 0 {
-		sbc.MustFailUnauthenticated--
-		return &tabletconn.ServerError{
-			Err:        "unauthenticated: err",
-			ServerCode: vtrpcpb.Code_UNAUTHENTICATED,
-		}
-	}
-
 	return nil
 }
 

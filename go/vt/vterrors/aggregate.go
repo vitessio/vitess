@@ -15,35 +15,47 @@ import (
 // errors, which of the errors is the most likely to give the user useful information
 // about why the query failed and how they should proceed?
 const (
-	PrioritySuccess = iota
-	PriorityTransientError
-	PriorityQueryNotServed
-	PriorityDeadlineExceeded
-	PriorityCancelled
-	PriorityIntegrityError
-	PriorityNotInTx
-	PriorityUnknownError
-	PriorityInternalError
+	// Informational errors.
+	PriorityOK = iota
+	PriorityCanceled
+	PriorityAlreadyExists
+	PriorityOutOfRange
+	// Potentially retryable errors.
+	PriorityUnavailable
+	PriorityFailedPrecondition
 	PriorityResourceExhausted
+	PriorityDeadlineExceeded
+	PriorityAborted
+	// Permanent errors.
+	PriorityUnknown
 	PriorityUnauthenticated
 	PriorityPermissionDenied
-	PriorityBadInput
+	PriorityInvalidArgument
+	PriorityNotFound
+	PriorityUnimplemented
+	// Serious errors.
+	PriorityInternal
+	PriorityDataLoss
 )
 
 var errorPriorities = map[vtrpcpb.Code]int{
-	vtrpcpb.Code_OK:                  PrioritySuccess,
-	vtrpcpb.Code_CANCELED:            PriorityCancelled,
-	vtrpcpb.Code_UNKNOWN:             PriorityUnknownError,
-	vtrpcpb.Code_INVALID_ARGUMENT:    PriorityBadInput,
+	vtrpcpb.Code_OK:                  PriorityOK,
+	vtrpcpb.Code_CANCELED:            PriorityCanceled,
+	vtrpcpb.Code_UNKNOWN:             PriorityUnknown,
+	vtrpcpb.Code_INVALID_ARGUMENT:    PriorityInvalidArgument,
 	vtrpcpb.Code_DEADLINE_EXCEEDED:   PriorityDeadlineExceeded,
-	vtrpcpb.Code_ALREADY_EXISTS:      PriorityIntegrityError,
+	vtrpcpb.Code_NOT_FOUND:           PriorityNotFound,
+	vtrpcpb.Code_ALREADY_EXISTS:      PriorityAlreadyExists,
 	vtrpcpb.Code_PERMISSION_DENIED:   PriorityPermissionDenied,
-	vtrpcpb.Code_RESOURCE_EXHAUSTED:  PriorityResourceExhausted,
-	vtrpcpb.Code_FAILED_PRECONDITION: PriorityQueryNotServed,
-	vtrpcpb.Code_ABORTED:             PriorityNotInTx,
-	vtrpcpb.Code_INTERNAL:            PriorityInternalError,
-	vtrpcpb.Code_UNAVAILABLE:         PriorityTransientError,
 	vtrpcpb.Code_UNAUTHENTICATED:     PriorityUnauthenticated,
+	vtrpcpb.Code_RESOURCE_EXHAUSTED:  PriorityResourceExhausted,
+	vtrpcpb.Code_FAILED_PRECONDITION: PriorityFailedPrecondition,
+	vtrpcpb.Code_ABORTED:             PriorityAborted,
+	vtrpcpb.Code_OUT_OF_RANGE:        PriorityOutOfRange,
+	vtrpcpb.Code_UNIMPLEMENTED:       PriorityUnimplemented,
+	vtrpcpb.Code_INTERNAL:            PriorityInternal,
+	vtrpcpb.Code_UNAVAILABLE:         PriorityUnavailable,
+	vtrpcpb.Code_DATA_LOSS:           PriorityDataLoss,
 }
 
 // AggregateVtGateErrorCodes aggregates a list of errors into a single

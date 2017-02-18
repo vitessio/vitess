@@ -85,9 +85,9 @@ func TestTxConnCommitSuccess(t *testing.T) {
 		t.Errorf("Session:\n%+v, want\n%+v", *session.Session, wantSession)
 	}
 
-	sbc0.MustFailServer = 1
+	sbc0.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
 	err := sc.txConn.Commit(context.Background(), false, session)
-	want := "error: err"
+	want := "INVALID_ARGUMENT error"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("Commit: %v, want %s", err, want)
 	}
@@ -423,9 +423,9 @@ func TestTxConnResolveReadTransactionFail(t *testing.T) {
 	sc, sbc0, _ := newTestTxConnEnv("TestTxConn")
 
 	dtid := "TestTxConn:0:1234"
-	sbc0.MustFailServer = 1
+	sbc0.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
 	err := sc.txConn.Resolve(context.Background(), dtid)
-	want := "error: err"
+	want := "INVALID_ARGUMENT error"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("Resolve: %v, want %s", err, want)
 	}

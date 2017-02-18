@@ -152,13 +152,13 @@ func testDiscoveryGatewayGeneric(t *testing.T, streaming bool, f func(dg Gateway
 	dg.tsc.ResetForTesting()
 	sc1 := hc.AddTestTablet("cell", "1.1.1.1", 1001, keyspace, shard, tabletType, true, 10, nil)
 	sc2 := hc.AddTestTablet("cell", "1.1.1.1", 1002, keyspace, shard, tabletType, true, 10, nil)
-	sc1.MustFailRetry = 1
-	sc2.MustFailRetry = 1
+	sc1.MustFailCodes[vtrpcpb.Code_FAILED_PRECONDITION] = 1
+	sc2.MustFailCodes[vtrpcpb.Code_FAILED_PRECONDITION] = 1
 	ep1 = sc1.Tablet()
 	ep2 := sc2.Tablet()
 	wants := map[string]int{
-		fmt.Sprintf(`target: ks.0.replica, used tablet: (%+v), retry: err`, ep1): 0,
-		fmt.Sprintf(`target: ks.0.replica, used tablet: (%+v), retry: err`, ep2): 0,
+		fmt.Sprintf(`target: ks.0.replica, used tablet: (%+v), FAILED_PRECONDITION error`, ep1): 0,
+		fmt.Sprintf(`target: ks.0.replica, used tablet: (%+v), FAILED_PRECONDITION error`, ep2): 0,
 	}
 	err = f(dg, target)
 	if _, ok := wants[fmt.Sprintf("%v", err)]; !ok {
@@ -170,13 +170,13 @@ func testDiscoveryGatewayGeneric(t *testing.T, streaming bool, f func(dg Gateway
 	dg.tsc.ResetForTesting()
 	sc1 = hc.AddTestTablet("cell", "1.1.1.1", 1001, keyspace, shard, tabletType, true, 10, nil)
 	sc2 = hc.AddTestTablet("cell", "1.1.1.1", 1002, keyspace, shard, tabletType, true, 10, nil)
-	sc1.MustFailFatal = 1
-	sc2.MustFailFatal = 1
+	sc1.MustFailCodes[vtrpcpb.Code_FAILED_PRECONDITION] = 1
+	sc2.MustFailCodes[vtrpcpb.Code_FAILED_PRECONDITION] = 1
 	ep1 = sc1.Tablet()
 	ep2 = sc2.Tablet()
 	wants = map[string]int{
-		fmt.Sprintf(`target: ks.0.replica, used tablet: (%+v), fatal: err`, ep1): 0,
-		fmt.Sprintf(`target: ks.0.replica, used tablet: (%+v), fatal: err`, ep2): 0,
+		fmt.Sprintf(`target: ks.0.replica, used tablet: (%+v), FAILED_PRECONDITION error`, ep1): 0,
+		fmt.Sprintf(`target: ks.0.replica, used tablet: (%+v), FAILED_PRECONDITION error`, ep2): 0,
 	}
 	err = f(dg, target)
 	if _, ok := wants[fmt.Sprintf("%v", err)]; !ok {
@@ -187,21 +187,11 @@ func testDiscoveryGatewayGeneric(t *testing.T, streaming bool, f func(dg Gateway
 	hc.Reset()
 	dg.tsc.ResetForTesting()
 	sc1 = hc.AddTestTablet("cell", "1.1.1.1", 1001, keyspace, shard, tabletType, true, 10, nil)
-	sc1.MustFailServer = 1
+	sc1.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
 	ep1 = sc1.Tablet()
-	want = fmt.Sprintf(`target: ks.0.replica, used tablet: (%+v), error: err`, ep1)
+	want = fmt.Sprintf(`target: ks.0.replica, used tablet: (%+v), INVALID_ARGUMENT error`, ep1)
 	err = f(dg, target)
 	verifyShardError(t, err, want, vtrpcpb.Code_INVALID_ARGUMENT)
-
-	// conn error - no retry
-	hc.Reset()
-	dg.tsc.ResetForTesting()
-	sc1 = hc.AddTestTablet("cell", "1.1.1.1", 1001, keyspace, shard, tabletType, true, 10, nil)
-	sc1.MustFailConn = 1
-	ep1 = sc1.Tablet()
-	want = fmt.Sprintf(`target: ks.0.replica, used tablet: (%+v), error: conn`, ep1)
-	err = f(dg, target)
-	verifyShardError(t, err, want, vtrpcpb.Code_UNKNOWN)
 
 	// no failure
 	hc.Reset()
@@ -230,28 +220,28 @@ func testDiscoveryGatewayTransact(t *testing.T, streaming bool, f func(dg Gatewa
 	dg.tsc.ResetForTesting()
 	sc1 := hc.AddTestTablet("cell", "1.1.1.1", 1001, keyspace, shard, tabletType, true, 10, nil)
 	sc2 := hc.AddTestTablet("cell", "1.1.1.1", 1002, keyspace, shard, tabletType, true, 10, nil)
-	sc1.MustFailRetry = 1
-	sc2.MustFailRetry = 1
+	sc1.MustFailCodes[vtrpcpb.Code_FAILED_PRECONDITION] = 1
+	sc2.MustFailCodes[vtrpcpb.Code_FAILED_PRECONDITION] = 1
 	ep1 := sc1.Tablet()
 	ep2 := sc2.Tablet()
 	wants := map[string]int{
-		fmt.Sprintf(`target: ks.0.replica, used tablet: (%+v), retry: err`, ep1): 0,
-		fmt.Sprintf(`target: ks.0.replica, used tablet: (%+v), retry: err`, ep2): 0,
+		fmt.Sprintf(`target: ks.0.replica, used tablet: (%+v), FAILED_PRECONDITION error`, ep1): 0,
+		fmt.Sprintf(`target: ks.0.replica, used tablet: (%+v), FAILED_PRECONDITION error`, ep2): 0,
 	}
 	err := f(dg, target)
 	if _, ok := wants[fmt.Sprintf("%v", err)]; !ok {
 		t.Errorf("wanted error: %+v, got error: %v", wants, err)
 	}
 
-	// conn error - no retry
+	// server error - no retry
 	hc.Reset()
 	dg.tsc.ResetForTesting()
 	sc1 = hc.AddTestTablet("cell", "1.1.1.1", 1001, keyspace, shard, tabletType, true, 10, nil)
-	sc1.MustFailConn = 1
+	sc1.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
 	ep1 = sc1.Tablet()
-	want := fmt.Sprintf(`target: ks.0.replica, used tablet: (%+v), error: conn`, ep1)
+	want := fmt.Sprintf(`target: ks.0.replica, used tablet: (%+v), INVALID_ARGUMENT error`, ep1)
 	err = f(dg, target)
-	verifyShardError(t, err, want, vtrpcpb.Code_UNKNOWN)
+	verifyShardError(t, err, want, vtrpcpb.Code_INVALID_ARGUMENT)
 }
 
 func verifyShardError(t *testing.T, err error, wantErr string, wantCode vtrpcpb.Code) {
