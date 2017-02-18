@@ -571,7 +571,7 @@ func (stc *ScatterConn) aggregateErrors(errors []error) error {
 	allRetryableError := true
 	for _, e := range errors {
 		connError, ok := e.(*gateway.ShardError)
-		if !ok || (connError.Code != vtrpcpb.Code_FAILED_PRECONDITION && connError.Code != vtrpcpb.Code_INTERNAL) || connError.InTransaction {
+		if !ok || connError.Code != vtrpcpb.Code_FAILED_PRECONDITION || connError.InTransaction {
 			allRetryableError = false
 			break
 		}

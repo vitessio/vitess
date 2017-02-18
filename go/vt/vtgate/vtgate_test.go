@@ -1983,88 +1983,76 @@ func TestErrorPropagation(t *testing.T) {
 		sbcrdonly,
 	}
 
-	// ErrorCode_CANCELLED
 	testErrorPropagation(t, sbcs, func(sbc *sandboxconn.SandboxConn) {
-		sbc.MustFailCanceled = 20
+		sbc.MustFailCodes[vtrpcpb.Code_CANCELED] = 20
 	}, func(sbc *sandboxconn.SandboxConn) {
-		sbc.MustFailCanceled = 0
+		sbc.MustFailCodes[vtrpcpb.Code_CANCELED] = 0
 	}, vtrpcpb.Code_CANCELED)
 
-	// Code_UNKNOWN
 	testErrorPropagation(t, sbcs, func(sbc *sandboxconn.SandboxConn) {
-		sbc.MustFailUnknownError = 20
+		sbc.MustFailCodes[vtrpcpb.Code_UNKNOWN] = 20
 	}, func(sbc *sandboxconn.SandboxConn) {
-		sbc.MustFailUnknownError = 0
+		sbc.MustFailCodes[vtrpcpb.Code_UNKNOWN] = 0
 	}, vtrpcpb.Code_UNKNOWN)
 
-	// Code_INVALID_ARGUMENT
 	testErrorPropagation(t, sbcs, func(sbc *sandboxconn.SandboxConn) {
-		sbc.MustFailServer = 20
+		sbc.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 20
 	}, func(sbc *sandboxconn.SandboxConn) {
-		sbc.MustFailServer = 0
+		sbc.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 0
 	}, vtrpcpb.Code_INVALID_ARGUMENT)
 
-	// ErrorCode_DEADLINE_EXCEEDED
 	testErrorPropagation(t, sbcs, func(sbc *sandboxconn.SandboxConn) {
-		sbc.MustFailDeadlineExceeded = 20
+		sbc.MustFailCodes[vtrpcpb.Code_DEADLINE_EXCEEDED] = 20
 	}, func(sbc *sandboxconn.SandboxConn) {
-		sbc.MustFailDeadlineExceeded = 0
+		sbc.MustFailCodes[vtrpcpb.Code_DEADLINE_EXCEEDED] = 0
 	}, vtrpcpb.Code_DEADLINE_EXCEEDED)
 
-	// Code_ALREADY_EXISTS
 	testErrorPropagation(t, sbcs, func(sbc *sandboxconn.SandboxConn) {
-		sbc.MustFailIntegrityError = 20
+		sbc.MustFailCodes[vtrpcpb.Code_ALREADY_EXISTS] = 20
 	}, func(sbc *sandboxconn.SandboxConn) {
-		sbc.MustFailIntegrityError = 0
+		sbc.MustFailCodes[vtrpcpb.Code_ALREADY_EXISTS] = 0
 	}, vtrpcpb.Code_ALREADY_EXISTS)
 
-	// ErrorCode_PERMISSION_DENIED
 	testErrorPropagation(t, sbcs, func(sbc *sandboxconn.SandboxConn) {
-		sbc.MustFailPermissionDenied = 20
+		sbc.MustFailCodes[vtrpcpb.Code_PERMISSION_DENIED] = 20
 	}, func(sbc *sandboxconn.SandboxConn) {
-		sbc.MustFailPermissionDenied = 0
+		sbc.MustFailCodes[vtrpcpb.Code_PERMISSION_DENIED] = 0
 	}, vtrpcpb.Code_PERMISSION_DENIED)
 
-	// ErrorCode_RESOURCE_EXHAUSTED
 	testErrorPropagation(t, sbcs, func(sbc *sandboxconn.SandboxConn) {
-		sbc.MustFailTxPool = 20
+		sbc.MustFailCodes[vtrpcpb.Code_RESOURCE_EXHAUSTED] = 20
 	}, func(sbc *sandboxconn.SandboxConn) {
-		sbc.MustFailTxPool = 0
+		sbc.MustFailCodes[vtrpcpb.Code_RESOURCE_EXHAUSTED] = 0
 	}, vtrpcpb.Code_RESOURCE_EXHAUSTED)
 
-	// Code_FAILED_PRECONDITION
 	testErrorPropagation(t, sbcs, func(sbc *sandboxconn.SandboxConn) {
-		sbc.MustFailRetry = 20
+		sbc.MustFailCodes[vtrpcpb.Code_FAILED_PRECONDITION] = 20
 	}, func(sbc *sandboxconn.SandboxConn) {
-		sbc.MustFailRetry = 0
+		sbc.MustFailCodes[vtrpcpb.Code_FAILED_PRECONDITION] = 0
 	}, vtrpcpb.Code_FAILED_PRECONDITION)
 
-	// Code_ABORTED
 	testErrorPropagation(t, sbcs, func(sbc *sandboxconn.SandboxConn) {
-		sbc.MustFailNotTx = 20
+		sbc.MustFailCodes[vtrpcpb.Code_ABORTED] = 20
 	}, func(sbc *sandboxconn.SandboxConn) {
-		sbc.MustFailNotTx = 0
+		sbc.MustFailCodes[vtrpcpb.Code_ABORTED] = 0
 	}, vtrpcpb.Code_ABORTED)
 
-	// Code_INTERNAL
 	testErrorPropagation(t, sbcs, func(sbc *sandboxconn.SandboxConn) {
-		sbc.MustFailFatal = 20
+		sbc.MustFailCodes[vtrpcpb.Code_INTERNAL] = 20
 	}, func(sbc *sandboxconn.SandboxConn) {
-		sbc.MustFailFatal = 0
+		sbc.MustFailCodes[vtrpcpb.Code_INTERNAL] = 0
 	}, vtrpcpb.Code_INTERNAL)
 
-	// Code_UNAVAILABLE
 	testErrorPropagation(t, sbcs, func(sbc *sandboxconn.SandboxConn) {
-		sbc.MustFailTransientError = 20
+		sbc.MustFailCodes[vtrpcpb.Code_UNAVAILABLE] = 20
 	}, func(sbc *sandboxconn.SandboxConn) {
-		sbc.MustFailTransientError = 0
+		sbc.MustFailCodes[vtrpcpb.Code_UNAVAILABLE] = 0
 	}, vtrpcpb.Code_UNAVAILABLE)
 
-	// ErrorCode_UNAUTHENTICATED
 	testErrorPropagation(t, sbcs, func(sbc *sandboxconn.SandboxConn) {
-		sbc.MustFailUnauthenticated = 20
+		sbc.MustFailCodes[vtrpcpb.Code_UNAUTHENTICATED] = 20
 	}, func(sbc *sandboxconn.SandboxConn) {
-		sbc.MustFailUnauthenticated = 0
+		sbc.MustFailCodes[vtrpcpb.Code_UNAUTHENTICATED] = 0
 	}, vtrpcpb.Code_UNAUTHENTICATED)
 }
 
@@ -2096,7 +2084,7 @@ func TestErrorIssuesRollback(t *testing.T) {
 	if sbc.RollbackCount.Get() != 0 {
 		t.Errorf("want 0, got %d", sbc.RollbackCount.Get())
 	}
-	sbc.MustFailNotTx = 20
+	sbc.MustFailCodes[vtrpcpb.Code_ABORTED] = 20
 	_, err = rpcVTGate.Execute(context.Background(),
 		"select id from t1",
 		nil,
@@ -2112,7 +2100,7 @@ func TestErrorIssuesRollback(t *testing.T) {
 		t.Errorf("want 1, got %d", sbc.RollbackCount.Get())
 	}
 	sbc.RollbackCount.Set(0)
-	sbc.MustFailNotTx = 0
+	sbc.MustFailCodes[vtrpcpb.Code_ABORTED] = 0
 
 	// Start a transaction, send one statement.
 	// Simulate an error that should trigger a rollback:
@@ -2135,7 +2123,7 @@ func TestErrorIssuesRollback(t *testing.T) {
 	if sbc.RollbackCount.Get() != 0 {
 		t.Errorf("want 0, got %d", sbc.RollbackCount.Get())
 	}
-	sbc.MustFailTxPool = 20
+	sbc.MustFailCodes[vtrpcpb.Code_RESOURCE_EXHAUSTED] = 20
 	_, err = rpcVTGate.Execute(context.Background(),
 		"select id from t1",
 		nil,
@@ -2151,7 +2139,7 @@ func TestErrorIssuesRollback(t *testing.T) {
 		t.Errorf("want 1, got %d", sbc.RollbackCount.Get())
 	}
 	sbc.RollbackCount.Set(0)
-	sbc.MustFailTxPool = 0
+	sbc.MustFailCodes[vtrpcpb.Code_RESOURCE_EXHAUSTED] = 0
 
 	// Start a transaction, send one statement.
 	// Simulate an error that should *not* trigger a rollback:
@@ -2174,7 +2162,7 @@ func TestErrorIssuesRollback(t *testing.T) {
 	if sbc.RollbackCount.Get() != 0 {
 		t.Errorf("want 0, got %d", sbc.RollbackCount.Get())
 	}
-	sbc.MustFailIntegrityError = 20
+	sbc.MustFailCodes[vtrpcpb.Code_ALREADY_EXISTS] = 20
 	_, err = rpcVTGate.Execute(context.Background(),
 		"select id from t1",
 		nil,
@@ -2189,5 +2177,5 @@ func TestErrorIssuesRollback(t *testing.T) {
 	if sbc.RollbackCount.Get() != 0 {
 		t.Errorf("want 0, got %d", sbc.RollbackCount.Get())
 	}
-	sbc.MustFailIntegrityError = 0
+	sbc.MustFailCodes[vtrpcpb.Code_ALREADY_EXISTS] = 0
 }

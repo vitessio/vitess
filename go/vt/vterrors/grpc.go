@@ -50,7 +50,8 @@ func CodeToLegacyErrorCode(code vtrpcpb.Code) vtrpcpb.LegacyErrorCode {
 	case vtrpcpb.Code_INTERNAL:
 		return vtrpcpb.LegacyErrorCode_INTERNAL_ERROR_LEGACY
 	case vtrpcpb.Code_UNAVAILABLE:
-		return vtrpcpb.LegacyErrorCode_TRANSIENT_ERROR_LEGACY
+		// Legacy code assumes Unavailable errors are sent as Internal.
+		return vtrpcpb.LegacyErrorCode_INTERNAL_ERROR_LEGACY
 	case vtrpcpb.Code_UNAUTHENTICATED:
 		return vtrpcpb.LegacyErrorCode_UNAUTHENTICATED_LEGACY
 	default:
@@ -82,7 +83,8 @@ func LegacyErrorCodeToCode(code vtrpcpb.LegacyErrorCode) vtrpcpb.Code {
 	case vtrpcpb.LegacyErrorCode_NOT_IN_TX_LEGACY:
 		return vtrpcpb.Code_ABORTED
 	case vtrpcpb.LegacyErrorCode_INTERNAL_ERROR_LEGACY:
-		return vtrpcpb.Code_INTERNAL
+		// Legacy code sends internal error instead of Unavailable.
+		return vtrpcpb.Code_UNAVAILABLE
 	case vtrpcpb.LegacyErrorCode_TRANSIENT_ERROR_LEGACY:
 		return vtrpcpb.Code_UNAVAILABLE
 	case vtrpcpb.LegacyErrorCode_UNAUTHENTICATED_LEGACY:
