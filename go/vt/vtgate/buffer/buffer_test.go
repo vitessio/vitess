@@ -517,7 +517,7 @@ func isCanceledError(err error) error {
 	if err == nil {
 		return fmt.Errorf("buffering should have stopped early and returned an error because the request was canceled from the outside")
 	}
-	if got, want := vterrors.RecoverVtErrorCode(err), vtrpcpb.Code_UNAVAILABLE; got != want {
+	if got, want := vterrors.Code(err), vtrpcpb.Code_UNAVAILABLE; got != want {
 		return fmt.Errorf("wrong error code for canceled buffered request. got = %v, want = %v", got, want)
 	}
 	if got, want := err.Error(), "context was canceled before failover finished: context canceled"; got != want {
@@ -531,7 +531,7 @@ func isEvictedError(err error) error {
 	if err == nil {
 		return errors.New("request should have been evicted because the buffer was full")
 	}
-	if got, want := vterrors.RecoverVtErrorCode(err), vtrpcpb.Code_UNAVAILABLE; got != want {
+	if got, want := vterrors.Code(err), vtrpcpb.Code_UNAVAILABLE; got != want {
 		return fmt.Errorf("wrong error code for evicted buffered request. got = %v, want = %v full error: %v", got, want, err)
 	}
 	if got, want := err.Error(), entryEvictedError.Error(); !strings.Contains(got, want) {
@@ -568,7 +568,7 @@ func TestEvictionNotPossible(t *testing.T) {
 	if bufferErr == nil || retryDone != nil {
 		t.Fatalf("buffer should have returned an error because it's full: err: %v retryDone: %v", bufferErr, retryDone)
 	}
-	if got, want := vterrors.RecoverVtErrorCode(bufferErr), vtrpcpb.Code_UNAVAILABLE; got != want {
+	if got, want := vterrors.Code(bufferErr), vtrpcpb.Code_UNAVAILABLE; got != want {
 		t.Fatalf("wrong error code for evicted buffered request. got = %v, want = %v", got, want)
 	}
 	if got, want := bufferErr.Error(), bufferFullError.Error(); !strings.Contains(got, want) {

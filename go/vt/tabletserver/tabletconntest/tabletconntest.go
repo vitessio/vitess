@@ -58,18 +58,9 @@ func testErrorHelper(t *testing.T, f *FakeQueryService, name string, ef func(con
 		}
 
 		// First we check the recoverable vtrpc code is right.
-		code := vterrors.RecoverVtErrorCode(err)
+		code := vterrors.Code(err)
 		if code != e.Code {
 			t.Errorf("unexpected server code from %v: got %v, wanted %v", name, code, e.Code)
-		}
-
-		// Double-check we always get a ServerError, although
-		// we don't really care that much.
-		if !f.TestingGateway {
-			if _, ok := err.(*tabletconn.ServerError); !ok {
-				t.Errorf("error wasn't a tabletconn.ServerError for %v?", name)
-				continue
-			}
 		}
 
 		// and last we check we preserve the text, with the right prefix

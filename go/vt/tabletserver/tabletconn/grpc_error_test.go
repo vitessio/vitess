@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
+	"github.com/youtube/vitess/go/vt/vterrors"
 )
 
 func TestTabletErrorFromRPCError(t *testing.T) {
@@ -35,9 +36,9 @@ func TestTabletErrorFromRPCError(t *testing.T) {
 		want: vtrpcpb.Code_INVALID_ARGUMENT,
 	}}
 	for _, tcase := range testcases {
-		got := TabletErrorFromRPCError(tcase.in).(*ServerError)
-		if got.ServerCode != tcase.want {
-			t.Errorf("FromVtRPCError(%v):\n%v, want\n%v", tcase.in, got.ServerCode, tcase.want)
+		got := vterrors.Code(TabletErrorFromRPCError(tcase.in))
+		if got != tcase.want {
+			t.Errorf("FromVtRPCError(%v):\n%v, want\n%v", tcase.in, got, tcase.want)
 		}
 	}
 }

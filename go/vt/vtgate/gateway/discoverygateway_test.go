@@ -2,7 +2,6 @@ package gateway
 
 import (
 	"fmt"
-	"reflect"
 	"testing"
 
 	"golang.org/x/net/context"
@@ -248,11 +247,7 @@ func verifyShardError(t *testing.T, err error, wantErr string, wantCode vtrpcpb.
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("wanted error: %s, got error: %v", wantErr, err)
 	}
-	if _, ok := err.(*ShardError); !ok {
-		t.Errorf("wanted error type *ShardConnError, got error type: %v", reflect.TypeOf(err))
-	}
-	code := vterrors.RecoverVtErrorCode(err)
-	if code != wantCode {
+	if code := vterrors.Code(err); code != wantCode {
 		t.Errorf("wanted error code: %s, got: %v", wantCode, code)
 	}
 }

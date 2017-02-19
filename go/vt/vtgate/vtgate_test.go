@@ -18,10 +18,8 @@ import (
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 	"github.com/youtube/vitess/go/vt/tabletserver/sandboxconn"
-	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vterrors"
-	"github.com/youtube/vitess/go/vt/vtgate/gateway"
 	"golang.org/x/net/context"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
@@ -1190,53 +1188,6 @@ func TestVTGateSplitQueryUnsharded(t *testing.T) {
 	}
 }
 
-func TestIsErrorCausedByVTGate(t *testing.T) {
-	unknownError := fmt.Errorf("unknown error")
-	serverError := &tabletconn.ServerError{
-		ServerCode: vtrpcpb.Code_FAILED_PRECONDITION,
-		Err:        "vttablet: retry: error message",
-	}
-	shardConnUnknownErr := &gateway.ShardError{Err: unknownError}
-	shardConnServerErr := &gateway.ShardError{Err: serverError}
-	shardConnCancelledErr := &gateway.ShardError{Err: context.Canceled}
-	scatterConnErrAllUnknownErrs := &ScatterConnError{
-		Errs: []error{unknownError, unknownError, unknownError},
-	}
-	scatterConnErrMixed := &ScatterConnError{
-		Errs: []error{unknownError, shardConnServerErr, shardConnCancelledErr},
-	}
-	scatterConnErrAllNonVTGateErrs := &ScatterConnError{
-		Errs: []error{shardConnServerErr, shardConnServerErr, shardConnCancelledErr},
-	}
-
-	inputToWant := map[error]bool{
-		unknownError:     true,
-		serverError:      false,
-		context.Canceled: false,
-		// OperationalErrors that are not tabletconn.Cancelled might be from VTGate
-		tabletconn.ConnClosed: true,
-		// Errors wrapped in ShardConnError should get unwrapped
-		shardConnUnknownErr:   true,
-		shardConnServerErr:    false,
-		shardConnCancelledErr: false,
-		// We consider a ScatterConnErr with all unknown errors to be from VTGate
-		scatterConnErrAllUnknownErrs: true,
-		// We consider a ScatterConnErr with a mix of errors to be from VTGate
-		scatterConnErrMixed: true,
-		// If every error in ScatterConnErr list is caused by external components, we shouldn't
-		// consider the error to be from VTGate
-		scatterConnErrAllNonVTGateErrs: false,
-	}
-
-	for input, want := range inputToWant {
-		got := isErrorCausedByVTGate(input)
-		if got != want {
-			t.Errorf("isErrorCausedByVTGate(%v) => %v, want %v",
-				input, got, want)
-		}
-	}
-}
-
 // Functions for testing
 // keyspace_id and 'filtered_replication_unfriendly'
 // annotations.
@@ -1619,7 +1570,7 @@ func testErrorPropagation(t *testing.T, sbcs []*sandboxconn.SandboxConn, before 
 	if err == nil {
 		t.Errorf("error %v not propagated for Execute", expected)
 	} else {
-		ec := vterrors.RecoverVtErrorCode(err)
+		ec := vterrors.Code(err)
 		if ec != expected {
 			t.Errorf("unexpected error, got %v want %v: %v", ec, expected, err)
 		}
@@ -1644,7 +1595,7 @@ func testErrorPropagation(t *testing.T, sbcs []*sandboxconn.SandboxConn, before 
 	if err == nil {
 		t.Errorf("error %v not propagated for ExecuteShards", expected)
 	} else {
-		ec := vterrors.RecoverVtErrorCode(err)
+		ec := vterrors.Code(err)
 		if ec != expected {
 			t.Errorf("unexpected error, got %v want %v: %v", ec, expected, err)
 		}
@@ -1669,7 +1620,7 @@ func testErrorPropagation(t *testing.T, sbcs []*sandboxconn.SandboxConn, before 
 	if err == nil {
 		t.Errorf("error %v not propagated for ExecuteKeyspaceIds", expected)
 	} else {
-		ec := vterrors.RecoverVtErrorCode(err)
+		ec := vterrors.Code(err)
 		if ec != expected {
 			t.Errorf("unexpected error, got %v want %v: %v", ec, expected, err)
 		}
@@ -1694,7 +1645,7 @@ func testErrorPropagation(t *testing.T, sbcs []*sandboxconn.SandboxConn, before 
 	if err == nil {
 		t.Errorf("error %v not propagated for ExecuteKeyRanges", expected)
 	} else {
-		ec := vterrors.RecoverVtErrorCode(err)
+		ec := vterrors.Code(err)
 		if ec != expected {
 			t.Errorf("unexpected error, got %v want %v: %v", ec, expected, err)
 		}
@@ -1726,7 +1677,7 @@ func testErrorPropagation(t *testing.T, sbcs []*sandboxconn.SandboxConn, before 
 	if err == nil {
 		t.Errorf("error %v not propagated for ExecuteEntityIds", expected)
 	} else {
-		ec := vterrors.RecoverVtErrorCode(err)
+		ec := vterrors.Code(err)
 		if ec != expected {
 			t.Errorf("unexpected error, got %v want %v: %v", ec, expected, err)
 		}
@@ -1762,7 +1713,7 @@ func testErrorPropagation(t *testing.T, sbcs []*sandboxconn.SandboxConn, before 
 	if err == nil {
 		t.Errorf("error %v not propagated for ExecuteBatchShards", expected)
 	} else {
-		ec := vterrors.RecoverVtErrorCode(err)
+		ec := vterrors.Code(err)
 		if ec != expected {
 			t.Errorf("unexpected error, got %v want %v: %v", ec, expected, err)
 		}
@@ -1800,7 +1751,7 @@ func testErrorPropagation(t *testing.T, sbcs []*sandboxconn.SandboxConn, before 
 	if err == nil {
 		t.Errorf("error %v not propagated for ExecuteBatchShards", expected)
 	} else {
-		ec := vterrors.RecoverVtErrorCode(err)
+		ec := vterrors.Code(err)
 		if ec != expected {
 			t.Errorf("unexpected error, got %v want %v: %v", ec, expected, err)
 		}
@@ -1825,7 +1776,7 @@ func testErrorPropagation(t *testing.T, sbcs []*sandboxconn.SandboxConn, before 
 	if err == nil {
 		t.Errorf("error %v not propagated for StreamExecute", expected)
 	} else {
-		ec := vterrors.RecoverVtErrorCode(err)
+		ec := vterrors.Code(err)
 		if ec != expected {
 			t.Errorf("unexpected error, got %v want %v: %v", ec, expected, err)
 		}
@@ -1851,7 +1802,7 @@ func testErrorPropagation(t *testing.T, sbcs []*sandboxconn.SandboxConn, before 
 	if err == nil {
 		t.Errorf("error %v not propagated for StreamExecuteShards", expected)
 	} else {
-		ec := vterrors.RecoverVtErrorCode(err)
+		ec := vterrors.Code(err)
 		if ec != expected {
 			t.Errorf("unexpected error, got %v want %v: %v", ec, expected, err)
 		}
@@ -1877,7 +1828,7 @@ func testErrorPropagation(t *testing.T, sbcs []*sandboxconn.SandboxConn, before 
 	if err == nil {
 		t.Errorf("error %v not propagated for StreamExecuteKeyspaceIds", expected)
 	} else {
-		ec := vterrors.RecoverVtErrorCode(err)
+		ec := vterrors.Code(err)
 		if ec != expected {
 			t.Errorf("unexpected error, got %v want %v: %v", ec, expected, err)
 		}
@@ -1903,7 +1854,7 @@ func testErrorPropagation(t *testing.T, sbcs []*sandboxconn.SandboxConn, before 
 	if err == nil {
 		t.Errorf("error %v not propagated for StreamExecuteKeyRanges", expected)
 	} else {
-		ec := vterrors.RecoverVtErrorCode(err)
+		ec := vterrors.Code(err)
 		if ec != expected {
 			t.Errorf("unexpected error, got %v want %v: %v", ec, expected, err)
 		}
@@ -1933,7 +1884,7 @@ func testErrorPropagation(t *testing.T, sbcs []*sandboxconn.SandboxConn, before 
 	if err == nil {
 		t.Errorf("error %v not propagated for Commit", expected)
 	} else {
-		ec := vterrors.RecoverVtErrorCode(err)
+		ec := vterrors.Code(err)
 		if ec != expected {
 			t.Errorf("unexpected error, got %v want %v: %v", ec, expected, err)
 		}
@@ -1959,7 +1910,7 @@ func testErrorPropagation(t *testing.T, sbcs []*sandboxconn.SandboxConn, before 
 	if err == nil {
 		t.Errorf("error %v not propagated for SplitQuery", expected)
 	} else {
-		ec := vterrors.RecoverVtErrorCode(err)
+		ec := vterrors.Code(err)
 		if ec != expected {
 			t.Errorf("unexpected error, got %v want %v: %v", ec, expected, err)
 		}

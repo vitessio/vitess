@@ -64,7 +64,7 @@ var errorPriorities = map[vtrpcpb.Code]int{
 func AggregateVtGateErrorCodes(errors []error) vtrpcpb.Code {
 	highCode := vtrpcpb.Code_OK
 	for _, e := range errors {
-		code := RecoverVtErrorCode(e)
+		code := Code(e)
 		if errorPriorities[code] > errorPriorities[highCode] {
 			highCode = code
 		}

@@ -199,7 +199,7 @@ func (txc *TxConn) runSessions(shardSessions []*vtgatepb.Session_ShardSession, a
 		}(s)
 	}
 	wg.Wait()
-	return allErrors.AggrError(aggregateTxConnErrors)
+	return allErrors.AggrError(vterrors.AggregateVtGateErrors)
 }
 
 // runTargets executes the action for all targets in parallel and returns a consolildated error.
@@ -220,13 +220,5 @@ func (txc *TxConn) runTargets(targets []*querypb.Target, action func(*querypb.Ta
 		}(t)
 	}
 	wg.Wait()
-	return allErrors.AggrError(aggregateTxConnErrors)
-}
-
-func aggregateTxConnErrors(errors []error) error {
-	return &ScatterConnError{
-		Retryable:  false,
-		Errs:       errors,
-		serverCode: vterrors.AggregateVtGateErrorCodes(errors),
-	}
+	return allErrors.AggrError(vterrors.AggregateVtGateErrors)
 }

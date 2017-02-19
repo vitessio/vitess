@@ -12,7 +12,6 @@ import (
 
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/discovery"
-	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vtgate/gateway"
@@ -102,11 +101,7 @@ func verifyScatterConnError(t *testing.T, err error, wantErr string, wantCode vt
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("wanted error: %s, got error: %v", wantErr, err)
 	}
-	if _, ok := err.(*ScatterConnError); !ok {
-		t.Errorf("wanted error type *ScatterConnError, got error type: %v", reflect.TypeOf(err))
-	}
-	code := vterrors.RecoverVtErrorCode(err)
-	if code != wantCode {
+	if code := vterrors.Code(err); code != wantCode {
 		t.Errorf("wanted error code: %s, got: %v", wantCode, code)
 	}
 }
@@ -275,24 +270,6 @@ func TestScatterConnStreamExecuteSendError(t *testing.T) {
 	// Ensure that we handle send errors.
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("got %s, must contain %v", err, want)
-	}
-}
-
-func TestScatterConnError(t *testing.T) {
-	err := &ScatterConnError{
-		Retryable: false,
-		Errs: []error{
-			&gateway.ShardError{Code: vtrpcpb.Code_PERMISSION_DENIED, Err: &tabletconn.ServerError{Err: "tabletconn error"}},
-			fmt.Errorf("generic error"),
-			tabletconn.ConnClosed,
-		},
-	}
-
-	errString := err.Error()
-	wantErrString := "generic error\ntabletconn error\nvttablet: Connection Closed"
-
-	if errString != wantErrString {
-		t.Errorf("got: %v, want: %v", errString, wantErrString)
 	}
 }
 

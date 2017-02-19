@@ -36,7 +36,7 @@ func VtRPCErrorFromVtError(err error) *vtrpcpb.RPCError {
 	if err == nil {
 		return nil
 	}
-	code := RecoverVtErrorCode(err)
+	code := Code(err)
 	return &vtrpcpb.RPCError{
 		LegacyCode: CodeToLegacyErrorCode(code),
 		Code:       code,

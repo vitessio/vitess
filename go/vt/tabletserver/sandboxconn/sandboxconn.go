@@ -13,7 +13,7 @@ import (
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/tabletserver/queryservice"
 	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
-	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
+	"github.com/youtube/vitess/go/vt/vterrors"
 	"golang.org/x/net/context"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
@@ -94,10 +94,7 @@ func (sbc *SandboxConn) getError() error {
 			continue
 		}
 		sbc.MustFailCodes[code] = count - 1
-		return &tabletconn.ServerError{
-			Err:        fmt.Sprintf("%v error", code),
-			ServerCode: code,
-		}
+		return vterrors.New(code, fmt.Sprintf("%v error", code))
 	}
 	return nil
 }
@@ -189,10 +186,7 @@ func (sbc *SandboxConn) Prepare(ctx context.Context, target *querypb.Target, tra
 	sbc.PrepareCount.Add(1)
 	if sbc.MustFailPrepare > 0 {
 		sbc.MustFailPrepare--
-		return &tabletconn.ServerError{
-			Err:        "error: err",
-			ServerCode: vtrpcpb.Code_FAILED_PRECONDITION,
-		}
+		return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "error: err")
 	}
 	return sbc.getError()
 }
@@ -202,10 +196,7 @@ func (sbc *SandboxConn) CommitPrepared(ctx context.Context, target *querypb.Targ
 	sbc.CommitPreparedCount.Add(1)
 	if sbc.MustFailCommitPrepared > 0 {
 		sbc.MustFailCommitPrepared--
-		return &tabletconn.ServerError{
-			Err:        "error: err",
-			ServerCode: vtrpcpb.Code_FAILED_PRECONDITION,
-		}
+		return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "error: err")
 	}
 	return sbc.getError()
 }
@@ -215,10 +206,7 @@ func (sbc *SandboxConn) RollbackPrepared(ctx context.Context, target *querypb.Ta
 	sbc.RollbackPreparedCount.Add(1)
 	if sbc.MustFailRollbackPrepared > 0 {
 		sbc.MustFailRollbackPrepared--
-		return &tabletconn.ServerError{
-			Err:        "error: err",
-			ServerCode: vtrpcpb.Code_FAILED_PRECONDITION,
-		}
+		return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "error: err")
 	}
 	return sbc.getError()
 }
@@ -228,10 +216,7 @@ func (sbc *SandboxConn) CreateTransaction(ctx context.Context, target *querypb.T
 	sbc.CreateTransactionCount.Add(1)
 	if sbc.MustFailCreateTransaction > 0 {
 		sbc.MustFailCreateTransaction--
-		return &tabletconn.ServerError{
-			Err:        "error: err",
-			ServerCode: vtrpcpb.Code_FAILED_PRECONDITION,
-		}
+		return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "error: err")
 	}
 	return sbc.getError()
 }
@@ -242,10 +227,7 @@ func (sbc *SandboxConn) StartCommit(ctx context.Context, target *querypb.Target,
 	sbc.StartCommitCount.Add(1)
 	if sbc.MustFailStartCommit > 0 {
 		sbc.MustFailStartCommit--
-		return &tabletconn.ServerError{
-			Err:        "error: err",
-			ServerCode: vtrpcpb.Code_FAILED_PRECONDITION,
-		}
+		return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "error: err")
 	}
 	return sbc.getError()
 }
@@ -256,10 +238,7 @@ func (sbc *SandboxConn) SetRollback(ctx context.Context, target *querypb.Target,
 	sbc.SetRollbackCount.Add(1)
 	if sbc.MustFailSetRollback > 0 {
 		sbc.MustFailSetRollback--
-		return &tabletconn.ServerError{
-			Err:        "error: err",
-			ServerCode: vtrpcpb.Code_FAILED_PRECONDITION,
-		}
+		return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "error: err")
 	}
 	return sbc.getError()
 }
@@ -270,10 +249,7 @@ func (sbc *SandboxConn) ConcludeTransaction(ctx context.Context, target *querypb
 	sbc.ConcludeTransactionCount.Add(1)
 	if sbc.MustFailConcludeTransaction > 0 {
 		sbc.MustFailConcludeTransaction--
-		return &tabletconn.ServerError{
-			Err:        "error: err",
-			ServerCode: vtrpcpb.Code_FAILED_PRECONDITION,
-		}
+		return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "error: err")
 	}
 	return sbc.getError()
 }

@@ -35,6 +35,7 @@ import (
 	replicationdatapb "github.com/youtube/vitess/go/vt/proto/replicationdata"
 	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 	vttestpb "github.com/youtube/vitess/go/vt/proto/vttest"
 )
 
@@ -252,7 +253,7 @@ func initTabletMap(ts topo.Server, tpb *vttestpb.VTTestTopology, mysqld mysqlctl
 func dialer(tablet *topodatapb.Tablet, timeout time.Duration) (queryservice.QueryService, error) {
 	t, ok := tabletMap[tablet.Alias.Uid]
 	if !ok {
-		return nil, tabletconn.OperationalError("connection refused")
+		return nil, vterrors.New(vtrpcpb.Code_UNAVAILABLE, "connection refused")
 	}
 
 	return &internalTabletConn{
