@@ -65,12 +65,13 @@ func Init(hc discovery.HealthCheck, topoServer topo.Server, serv topo.SrvTopoSer
 	}
 	l2VTGate.QueryService = queryservice.Wrap(
 		gw,
-		func(ctx context.Context, target *querypb.Target, conn queryservice.QueryService, name string, inTransaction, isStreaming bool, inner func(context.Context, *querypb.Target, queryservice.QueryService) error) (err error) {
+		func(ctx context.Context, target *querypb.Target, conn queryservice.QueryService, name string, inTransaction bool, inner func(context.Context, *querypb.Target, queryservice.QueryService) (error, bool)) (err error) {
 			if target != nil {
 				startTime, statsKey := l2VTGate.startAction(name, target)
 				defer l2VTGate.endAction(startTime, statsKey, &err)
 			}
-			return inner(ctx, target, conn)
+			err, _ = inner(ctx, target, conn)
+			return err
 		},
 	)
 	servenv.OnRun(func() {
