@@ -25,7 +25,7 @@ func TestTxConnCommitRollbackIncorrectSession(t *testing.T) {
 	sc, _, _ := newTestTxConnEnv("TestTxConn")
 	// nil session
 	err := sc.txConn.Commit(context.Background(), false, nil)
-	if got := vterrors.RecoverVtErrorCode(err); got != vtrpcpb.Code_INVALID_ARGUMENT {
+	if got := vterrors.Code(err); got != vtrpcpb.Code_INVALID_ARGUMENT {
 		t.Errorf("Commit: %v, want %v", got, vtrpcpb.Code_INVALID_ARGUMENT)
 	}
 
@@ -37,7 +37,7 @@ func TestTxConnCommitRollbackIncorrectSession(t *testing.T) {
 	// not in transaction
 	session := NewSafeSession(&vtgatepb.Session{})
 	err = sc.txConn.Commit(context.Background(), false, session)
-	if got := vterrors.RecoverVtErrorCode(err); got != vtrpcpb.Code_ABORTED {
+	if got := vterrors.Code(err); got != vtrpcpb.Code_ABORTED {
 		t.Errorf("Commit: %v, want %v", got, vtrpcpb.Code_ABORTED)
 	}
 }
@@ -615,10 +615,9 @@ func TestTxConnMultiGoSessions(t *testing.T) {
 	if err == nil || err.Error() != want {
 		t.Errorf("runSessions(2): %v, want %s", err, want)
 	}
-	errCode := err.(*ScatterConnError).VtErrorCode()
 	wantCode := vtrpcpb.Code_INTERNAL
-	if errCode != wantCode {
-		t.Errorf("Error code: %v, want %v", errCode, wantCode)
+	if code := vterrors.Code(err); code != wantCode {
+		t.Errorf("Error code: %v, want %v", code, wantCode)
 	}
 
 	err = txc.runSessions(input, func(s *vtgatepb.Session_ShardSession) error {
@@ -654,10 +653,9 @@ func TestTxConnMultiGoTargets(t *testing.T) {
 	if err == nil || err.Error() != want {
 		t.Errorf("runTargets(2): %v, want %s", err, want)
 	}
-	errCode := err.(*ScatterConnError).VtErrorCode()
 	wantCode := vtrpcpb.Code_INTERNAL
-	if errCode != wantCode {
-		t.Errorf("Error code: %v, want %v", errCode, wantCode)
+	if code := vterrors.Code(err); code != wantCode {
+		t.Errorf("Error code: %v, want %v", code, wantCode)
 	}
 
 	err = txc.runTargets(input, func(t *querypb.Target) error {

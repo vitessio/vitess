@@ -1,6 +1,7 @@
 package vterrors
 
 import (
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -8,28 +9,32 @@ import (
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
+// Code returns the error code if it's a VitessError.
+// Otherwise, it returns unknown.
+func Code(err error) vtrpcpb.Code {
+	if err, ok := err.(*VitessError); ok {
+		return err.Code
+	}
+	if err, ok := err.(VtError); ok {
+		return err.VtErrorCode()
+	}
+	return vtrpcpb.Code_UNKNOWN
+}
+
 // ConcatenateErrors aggregates an array of errors into a single error by string concatenation.
-func ConcatenateErrors(errors []error) error {
-	errStrs := make([]string, 0, len(errors))
-	for _, e := range errors {
+func ConcatenateErrors(errs []error) error {
+	errStrs := make([]string, 0, len(errs))
+	for _, e := range errs {
 		errStrs = append(errStrs, fmt.Sprintf("%v", e))
 	}
 	// sort the error strings so we always have deterministic ordering
 	sort.Strings(errStrs)
-	return fmt.Errorf("%v", strings.Join(errStrs, "\n"))
+	return errors.New(strings.Join(errStrs, "\n"))
 }
 
 // VtError is implemented by any type that exposes a vtrpcpb.ErrorCode.
 type VtError interface {
 	VtErrorCode() vtrpcpb.Code
-}
-
-// RecoverVtErrorCode attempts to recover a vtrpcpb.ErrorCode from an error.
-func RecoverVtErrorCode(err error) vtrpcpb.Code {
-	if vtErr, ok := err.(VtError); ok {
-		return vtErr.VtErrorCode()
-	}
-	return vtrpcpb.Code_UNKNOWN
 }
 
 // VitessError is the error type that we use internally for passing structured errors.
@@ -45,6 +50,14 @@ type VitessError struct {
 	// the error message.
 	Message string
 	err     error
+}
+
+// New creates a new error using the code and input string.
+func New(code vtrpcpb.Code, in string) error {
+	return &VitessError{
+		Code: code,
+		err:  errors.New(in),
+	}
 }
 
 // Error implements the error interface. It will return the redefined error message, if there
@@ -98,21 +111,7 @@ func NewVitessError(code vtrpcpb.Code, err error, format string, args ...interfa
 // doesn't wrap it in a new VitessError instance, but only changes the 'Message' field).
 // Otherwise, it returns a string prefixed with the given prefix.
 func WithPrefix(prefix string, in error) error {
-	if vitessError, ok := in.(*VitessError); ok {
-		return &VitessError{
-			Code:    vitessError.Code,
-			err:     vitessError.err,
-			Message: fmt.Sprintf("%s%s", prefix, in.Error()),
-		}
-	}
-	if vtError, ok := in.(VtError); ok {
-		return &VitessError{
-			Code:    vtError.VtErrorCode(),
-			err:     in,
-			Message: fmt.Sprintf("%s%s", prefix, in.Error()),
-		}
-	}
-	return fmt.Errorf("%s%s", prefix, in)
+	return New(Code(in), fmt.Sprintf("%s%v", prefix, in))
 }
 
 // WithSuffix allows a string to be suffixed to an error.

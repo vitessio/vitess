@@ -54,14 +54,7 @@ func NewResolver(serv topo.SrvTopoServer, cell string, sc *ScatterConn) *Resolve
 
 // isRetryableError will be true if the error should be retried.
 func isRetryableError(err error) bool {
-	switch e := err.(type) {
-	case *ScatterConnError:
-		return e.Retryable
-	case *gateway.ShardError:
-		return e.Code == vtrpcpb.Code_FAILED_PRECONDITION
-	default:
-		return false
-	}
+	return vterrors.Code(err) == vtrpcpb.Code_FAILED_PRECONDITION
 }
 
 // ExecuteKeyspaceIds executes a non-streaming query based on KeyspaceIds.

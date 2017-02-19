@@ -11,46 +11,21 @@ import (
 	log "github.com/golang/glog"
 
 	"github.com/youtube/vitess/go/vt/tabletserver/queryservice"
+	"github.com/youtube/vitess/go/vt/vterrors"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
-const (
+var (
 	// ConnClosed is returned when the underlying connection was closed.
-	ConnClosed = OperationalError("vttablet: Connection Closed")
+	ConnClosed = vterrors.New(vtrpcpb.Code_UNAVAILABLE, "vttablet: Connection Closed")
 )
 
 var (
 	// TabletProtocol is exported for unit tests
 	TabletProtocol = flag.String("tablet_protocol", "grpc", "how to talk to the vttablets")
 )
-
-// ServerError represents an error that was returned from
-// a vttablet server. it implements vterrors.VtError.
-type ServerError struct {
-	Err string
-	// ServerCode is the error code that we got from the server.
-	ServerCode vtrpcpb.Code
-}
-
-func (e *ServerError) Error() string { return e.Err }
-
-// VtErrorCode returns the underlying Vitess error code.
-// This makes ServerError implement vterrors.VtError.
-func (e *ServerError) VtErrorCode() vtrpcpb.Code { return e.ServerCode }
-
-// OperationalError represents an error due to a failure to
-// communicate with vttablet.
-type OperationalError string
-
-func (e OperationalError) Error() string { return string(e) }
-
-// In all the following calls, context is an opaque structure that may
-// carry data related to the call. For instance, if an incoming RPC
-// call is responsible for these outgoing calls, and the incoming
-// protocol and outgoing protocols support forwarding information, use
-// context.
 
 // TabletDialer represents a function that will return a QueryService
 // object that can communicate with a tablet. Only the tablet's

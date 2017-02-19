@@ -5,7 +5,6 @@
 package vtgate
 
 import (
-	"fmt"
 	"math/rand"
 	"sync"
 	"time"
@@ -78,7 +77,7 @@ func (stc *ScatterConn) endAction(startTime time.Time, allErrors *concurrency.Al
 		// Don't increment the error counter for duplicate
 		// keys or bad queries, as those errors are caused by
 		// client queries and are not VTGate's fault.
-		ec := vterrors.RecoverVtErrorCode(*err)
+		ec := vterrors.Code(*err)
 		if ec != vtrpcpb.Code_ALREADY_EXISTS && ec != vtrpcpb.Code_INVALID_ARGUMENT {
 			stc.tabletCallErrorCount.Add(statsKey, 1)
 		}
@@ -322,7 +321,7 @@ func (stc *ScatterConn) ExecuteBatch(
 		stc.txConn.Rollback(ctx, session)
 	}
 	if allErrors.HasErrors() {
-		return nil, allErrors.AggrError(stc.aggregateErrors)
+		return nil, allErrors.AggrError(vterrors.AggregateVtGateErrors)
 	}
 	return results, nil
 }
@@ -359,7 +358,7 @@ func (stc *ScatterConn) StreamExecute(
 			return stc.processOneStreamingResult(&mu, &fieldSent, qr, callback)
 		})
 	})
-	return allErrors.AggrError(stc.aggregateErrors)
+	return allErrors.AggrError(vterrors.AggregateVtGateErrors)
 }
 
 // StreamExecuteMulti is like StreamExecute,
@@ -383,7 +382,7 @@ func (stc *ScatterConn) StreamExecuteMulti(
 			return stc.processOneStreamingResult(&mu, &fieldSent, qr, callback)
 		})
 	})
-	return allErrors.AggrError(stc.aggregateErrors)
+	return allErrors.AggrError(vterrors.AggregateVtGateErrors)
 }
 
 // MessageStream streams messages from the specified shards.
@@ -396,7 +395,7 @@ func (stc *ScatterConn) MessageStream(ctx context.Context, keyspace string, shar
 			return stc.processOneStreamingResult(&mu, &fieldSent, qr, callback)
 		})
 	})
-	return allErrors.AggrError(stc.aggregateErrors)
+	return allErrors.AggrError(vterrors.AggregateVtGateErrors)
 }
 
 // MessageAck acks messages across multiple shards.
@@ -417,7 +416,7 @@ func (stc *ScatterConn) MessageAck(ctx context.Context, keyspace string, shardID
 		mu.Unlock()
 		return nil
 	})
-	return totalCount, allErrors.AggrError(stc.aggregateErrors)
+	return totalCount, allErrors.AggrError(vterrors.AggregateVtGateErrors)
 }
 
 // UpdateStream just sends the query to the gateway,
@@ -489,7 +488,7 @@ func (stc *ScatterConn) SplitQuery(
 	)
 
 	if allErrors.HasErrors() {
-		err := allErrors.AggrError(stc.aggregateErrors)
+		err := allErrors.AggrError(vterrors.AggregateVtGateErrors)
 		return nil, err
 	}
 	// We shuffle the query-parts here. External frameworks like MapReduce may
@@ -545,42 +544,6 @@ func (stc *ScatterConn) Close() error {
 // GetGatewayCacheStatus returns a displayable version of the Gateway cache.
 func (stc *ScatterConn) GetGatewayCacheStatus() gateway.TabletCacheStatusList {
 	return stc.gateway.CacheStatus()
-}
-
-// ScatterConnError is the ScatterConn specific error.
-// It implements vterrors.VtError.
-type ScatterConnError struct {
-	Retryable bool
-	// Preserve the original errors, so that we don't need to parse the error string.
-	Errs []error
-	// serverCode is the error code to use for all the server errors in aggregate
-	serverCode vtrpcpb.Code
-}
-
-func (e *ScatterConnError) Error() string {
-	return fmt.Sprintf("%v", vterrors.ConcatenateErrors(e.Errs))
-}
-
-// VtErrorCode returns the underlying Vitess error code
-// This is part of vterrors.VtError interface.
-func (e *ScatterConnError) VtErrorCode() vtrpcpb.Code {
-	return e.serverCode
-}
-
-func (stc *ScatterConn) aggregateErrors(errors []error) error {
-	allRetryableError := true
-	for _, e := range errors {
-		connError, ok := e.(*gateway.ShardError)
-		if !ok || connError.Code != vtrpcpb.Code_FAILED_PRECONDITION || connError.InTransaction {
-			allRetryableError = false
-			break
-		}
-	}
-	return &ScatterConnError{
-		Retryable:  allRetryableError,
-		Errs:       errors,
-		serverCode: vterrors.AggregateVtGateErrorCodes(errors),
-	}
 }
 
 // multiGo performs the requested 'action' on the specified
@@ -699,7 +662,7 @@ end:
 		stc.txConn.Rollback(ctx, session)
 	}
 	if allErrors.HasErrors() {
-		return allErrors.AggrError(stc.aggregateErrors)
+		return allErrors.AggrError(vterrors.AggregateVtGateErrors)
 	}
 	return nil
 }

@@ -985,7 +985,7 @@ func verifyError(t *testing.T, err error, method string) {
 		return
 	}
 	// verify error code
-	code := vterrors.RecoverVtErrorCode(err)
+	code := vterrors.Code(err)
 	if code != expectedCode {
 		t.Errorf("Unexpected error code from %s: got %v, wanted %v", method, code, expectedCode)
 	}

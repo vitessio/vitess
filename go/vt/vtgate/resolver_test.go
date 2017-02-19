@@ -15,9 +15,7 @@ import (
 
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/discovery"
-	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/vtgate/gateway"
 	"golang.org/x/net/context"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
@@ -549,32 +547,6 @@ func TestResolverExecBatchAsTransaction(t *testing.T) {
 	if count := sbc.AsTransactionCount.Get(); count != 1 {
 		t.Errorf("want 1, got %v", count)
 		return
-	}
-}
-
-func TestIsRetryableError(t *testing.T) {
-	var connErrorTests = []struct {
-		in      error
-		outBool bool
-	}{
-		{fmt.Errorf("generic error"), false},
-		{&ScatterConnError{Retryable: true}, true},
-		{&ScatterConnError{Retryable: false}, false},
-		{&gateway.ShardError{Code: vtrpcpb.Code_FAILED_PRECONDITION}, true},
-		{&gateway.ShardError{Code: vtrpcpb.Code_INTERNAL}, false},
-		// tabletconn.ServerError will not come directly here,
-		// they'll be wrapped in ScatterConnError or ShardConnError.
-		// So they can't be retried as is.
-		{&tabletconn.ServerError{ServerCode: vtrpcpb.Code_FAILED_PRECONDITION}, false},
-		{&tabletconn.ServerError{ServerCode: vtrpcpb.Code_PERMISSION_DENIED}, false},
-	}
-
-	for _, tt := range connErrorTests {
-		gotBool := isRetryableError(tt.in)
-		if gotBool != tt.outBool {
-			t.Errorf("isConnError(%v) => %v, want %v",
-				tt.in, gotBool, tt.outBool)
-		}
 	}
 }
 

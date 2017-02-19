@@ -190,7 +190,7 @@ func TestTxPoolBeginWithPoolConnectionError_Errno2006_Permanent(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "Lost connection to MySQL server") || !strings.Contains(err.Error(), "(errno 2013)") {
 		t.Fatalf("Begin did not return the reconnect error: %v", err)
 	}
-	if got, want := vterrors.RecoverVtErrorCode(err), vtrpcpb.Code_INTERNAL; got != want {
+	if got, want := vterrors.Code(err), vtrpcpb.Code_INTERNAL; got != want {
 		t.Errorf("wrong error code for reconnect error after Begin: got = %v, want = %v", got, want)
 	}
 }
@@ -212,7 +212,7 @@ func TestTxPoolBeginWithPoolConnectionError_Errno2013(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "(errno 2013)") {
 		t.Fatalf("Begin must return connection error with MySQL errno 2013: %v", err)
 	}
-	if got, want := vterrors.RecoverVtErrorCode(err), vtrpcpb.Code_UNKNOWN; got != want {
+	if got, want := vterrors.Code(err), vtrpcpb.Code_UNKNOWN; got != want {
 		t.Errorf("wrong error code for Begin error: got = %v, want = %v", got, want)
 	}
 }
@@ -253,7 +253,7 @@ func TestTxPoolBeginWithError(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("Begin: %v, want %s", err, want)
 	}
-	if got, want := vterrors.RecoverVtErrorCode(err), vtrpcpb.Code_UNKNOWN; got != want {
+	if got, want := vterrors.Code(err), vtrpcpb.Code_UNKNOWN; got != want {
 		t.Errorf("wrong error code for Begin error: got = %v, want = %v", got, want)
 	}
 }
@@ -333,7 +333,7 @@ func TestTxPoolExecFailDueToConnFail_Errno2006(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "(errno 2006)") {
 		t.Fatalf("Exec must return connection error with MySQL errno 2006: %v", err)
 	}
-	if got, want := vterrors.RecoverVtErrorCode(err), vtrpcpb.Code_INTERNAL; got != want {
+	if got, want := vterrors.Code(err), vtrpcpb.Code_INTERNAL; got != want {
 		t.Errorf("wrong error code for Exec error: got = %v, want = %v", got, want)
 	}
 }
@@ -366,7 +366,7 @@ func TestTxPoolExecFailDueToConnFail_Errno2013(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "(errno 2013)") {
 		t.Fatalf("Exec must return connection error with MySQL errno 2013: %v", err)
 	}
-	if got, want := vterrors.RecoverVtErrorCode(err), vtrpcpb.Code_UNKNOWN; got != want {
+	if got, want := vterrors.Code(err), vtrpcpb.Code_UNKNOWN; got != want {
 		t.Errorf("wrong error code for Exec error: got = %v, want = %v", got, want)
 	}
 }
