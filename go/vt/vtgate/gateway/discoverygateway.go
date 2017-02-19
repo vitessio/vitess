@@ -161,7 +161,7 @@ func (dg *discoveryGateway) CacheStatus() TabletCacheStatusList {
 // the middle of a transaction. While returning the error check if it maybe a result of
 // a resharding event, and set the re-resolve bit and let the upper layers
 // re-resolve and retry.
-func (dg *discoveryGateway) withRetry(ctx context.Context, target *querypb.Target, conn queryservice.QueryService, name string, inTransaction, isStreaming bool, inner func(ctx context.Context, target *querypb.Target, conn queryservice.QueryService) error) error {
+func (dg *discoveryGateway) withRetry(ctx context.Context, target *querypb.Target, conn queryservice.QueryService, name string, inTransaction bool, inner func(ctx context.Context, target *querypb.Target, conn queryservice.QueryService) (error, bool)) error {
 	var tabletLastUsed *topodatapb.Tablet
 	var err error
 	invalidTablets := make(map[string]bool)
@@ -234,40 +234,16 @@ func (dg *discoveryGateway) withRetry(ctx context.Context, target *querypb.Targe
 		}
 
 		startTime := time.Now()
-		err = inner(ctx, ts.Target, conn)
+		var canRetry bool
+		err, canRetry = inner(ctx, ts.Target, conn)
 		dg.updateStats(target, startTime, err)
-		if dg.canRetry(ctx, err, inTransaction, isStreaming) {
+		if canRetry {
 			invalidTablets[ts.Key] = true
 			continue
 		}
 		break
 	}
 	return NewShardError(err, target, tabletLastUsed, inTransaction)
-}
-
-// canRetry determines whether a query can be retried or not.
-// OperationalErrors like retry/fatal are retryable if query is not in a txn.
-// All other errors are non-retryable.
-func (dg *discoveryGateway) canRetry(ctx context.Context, err error, inTransaction, isStreaming bool) bool {
-	if err == nil {
-		return false
-	}
-	// Do not retry if ctx.Done() is closed.
-	select {
-	case <-ctx.Done():
-		return false
-	default:
-	}
-	switch vterrors.Code(err) {
-	case vtrpcpb.Code_INTERNAL:
-		if isStreaming {
-			return false
-		}
-		fallthrough
-	case vtrpcpb.Code_FAILED_PRECONDITION:
-		return !inTransaction
-	}
-	return false
 }
 
 func shuffleTablets(tablets []discovery.TabletStats) {

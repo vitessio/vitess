@@ -10,8 +10,11 @@ import (
 )
 
 // Code returns the error code if it's a VitessError.
-// Otherwise, it returns unknown.
+// If err is nil, it returns ok. Otherwise, it returns unknown.
 func Code(err error) vtrpcpb.Code {
+	if err == nil {
+		return vtrpcpb.Code_OK
+	}
 	if err, ok := err.(*VitessError); ok {
 		return err.Code
 	}
