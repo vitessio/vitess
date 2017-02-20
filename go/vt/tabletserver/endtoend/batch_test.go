@@ -182,7 +182,7 @@ func TestBatchTransaction(t *testing.T) {
 		}
 		defer client.Rollback()
 		qrl, err = client.ExecuteBatch(queries, true)
-		want := "error: cannot start a new transaction in the scope of an existing one"
+		want := "cannot start a new transaction in the scope of an existing one"
 		if err == nil || err.Error() != want {
 			t.Errorf("Error: %v, want %s", err, want)
 		}

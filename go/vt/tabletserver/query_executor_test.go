@@ -25,6 +25,7 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver/engines/schema"
 	"github.com/youtube/vitess/go/vt/tabletserver/planbuilder"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletenv"
+	"github.com/youtube/vitess/go/vt/vterrors"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	tableaclpb "github.com/youtube/vitess/go/vt/proto/tableacl"
@@ -85,16 +86,9 @@ func TestQueryExecutorPlanPassDmlStrictMode(t *testing.T) {
 	defer tsv.StopService()
 	defer testCommitHelper(t, tsv, qre)
 	checkPlanID(t, planbuilder.PlanPassDML, qre.plan.PlanID)
-	got, err = qre.Execute()
-	if err == nil {
-		t.Fatal("qre.Execute() = nil, want error")
-	}
-	tabletError, ok := err.(*tabletenv.TabletError)
-	if !ok {
-		t.Fatalf("got: %v, want: a tabletenv.TabletError", tabletError)
-	}
-	if tabletError.Code != vtrpcpb.Code_INVALID_ARGUMENT {
-		t.Fatalf("got: %s, want: BAD_INPUT", tabletError.Code)
+	_, err = qre.Execute()
+	if code := vterrors.Code(err); code != vtrpcpb.Code_INVALID_ARGUMENT {
+		t.Fatalf("qre.Execute: %v, want %v", code, vtrpcpb.Code_INVALID_ARGUMENT)
 	}
 }
 
@@ -125,15 +119,8 @@ func TestQueryExecutorPlanPassDmlStrictModeAutoCommit(t *testing.T) {
 	defer tsv.StopService()
 	checkPlanID(t, planbuilder.PlanPassDML, qre.plan.PlanID)
 	_, err = qre.Execute()
-	if err == nil {
-		t.Fatal("got: nil, want: error")
-	}
-	tabletError, ok := err.(*tabletenv.TabletError)
-	if !ok {
-		t.Fatalf("got: %v, want: *tabletenv.TabletError", tabletError)
-	}
-	if tabletError.Code != vtrpcpb.Code_INVALID_ARGUMENT {
-		t.Fatalf("got: %s, want: BAD_INPUT", tabletError.Code)
+	if code := vterrors.Code(err); code != vtrpcpb.Code_INVALID_ARGUMENT {
+		t.Fatalf("qre.Execute: %v, want %v", code, vtrpcpb.Code_INVALID_ARGUMENT)
 	}
 }
 
@@ -313,6 +300,7 @@ func TestQueryExecutorPlanUpsertPk(t *testing.T) {
 	txid := newTransaction(tsv)
 	qre := newTestQueryExecutor(ctx, tsv, query, txid)
 	defer tsv.StopService()
+	defer testCommitHelper(t, tsv, qre)
 	checkPlanID(t, planbuilder.PlanUpsertPK, qre.plan.PlanID)
 	got, err := qre.Execute()
 	if err != nil {
@@ -326,20 +314,19 @@ func TestQueryExecutorPlanUpsertPk(t *testing.T) {
 	if !reflect.DeepEqual(gotqueries, wantqueries) {
 		t.Errorf("queries: %v, want %v", gotqueries, wantqueries)
 	}
-	testCommitHelper(t, tsv, qre)
 
 	db.AddRejectedQuery("insert into test_table values (1) /* _stream test_table (pk ) (1 ); */", errRejected)
 	txid = newTransaction(tsv)
 	qre = newTestQueryExecutor(ctx, tsv, query, txid)
+	defer testCommitHelper(t, tsv, qre)
 	_, err = qre.Execute()
-	wantErr := "error: rejected"
+	wantErr := "rejected"
 	if err == nil || !strings.Contains(err.Error(), wantErr) {
 		t.Errorf("qre.Execute() = %v, want %v", err, wantErr)
 	}
 	if gotqueries = fetchRecordedQueries(qre); gotqueries != nil {
 		t.Errorf("queries: %v, want nil", gotqueries)
 	}
-	testCommitHelper(t, tsv, qre)
 
 	db.AddRejectedQuery(
 		"insert into test_table values (1) /* _stream test_table (pk ) (1 ); */",
@@ -348,8 +335,9 @@ func TestQueryExecutorPlanUpsertPk(t *testing.T) {
 	db.AddQuery("update test_table set val = 1 where pk in (1) /* _stream test_table (pk ) (1 ); */", &sqltypes.Result{})
 	txid = newTransaction(tsv)
 	qre = newTestQueryExecutor(ctx, tsv, query, txid)
+	defer testCommitHelper(t, tsv, qre)
 	_, err = qre.Execute()
-	wantErr = "error: err (errno 1062) (sqlstate 23000)"
+	wantErr = "err (errno 1062) (sqlstate 23000)"
 	if err == nil || !strings.Contains(err.Error(), wantErr) {
 		t.Errorf("qre.Execute() = %v, want %v", err, wantErr)
 	}
@@ -357,7 +345,6 @@ func TestQueryExecutorPlanUpsertPk(t *testing.T) {
 	if gotqueries = fetchRecordedQueries(qre); gotqueries != nil {
 		t.Errorf("queries: %v, want nil", gotqueries)
 	}
-	testCommitHelper(t, tsv, qre)
 
 	db.AddRejectedQuery(
 		"insert into test_table values (1) /* _stream test_table (pk ) (1 ); */",
@@ -369,6 +356,7 @@ func TestQueryExecutorPlanUpsertPk(t *testing.T) {
 	)
 	txid = newTransaction(tsv)
 	qre = newTestQueryExecutor(ctx, tsv, query, txid)
+	defer testCommitHelper(t, tsv, qre)
 	got, err = qre.Execute()
 	if err != nil {
 		t.Fatalf("qre.Execute() = %v, want nil", err)
@@ -384,7 +372,6 @@ func TestQueryExecutorPlanUpsertPk(t *testing.T) {
 	if !reflect.DeepEqual(gotqueries, wantqueries) {
 		t.Errorf("queries: %v, want %v", gotqueries, wantqueries)
 	}
-	testCommitHelper(t, tsv, qre)
 }
 
 func TestQueryExecutorPlanUpsertPkAutoCommit(t *testing.T) {
@@ -408,7 +395,7 @@ func TestQueryExecutorPlanUpsertPkAutoCommit(t *testing.T) {
 
 	db.AddRejectedQuery("insert into test_table values (1) /* _stream test_table (pk ) (1 ); */", errRejected)
 	_, err = qre.Execute()
-	wantErr := "error: rejected"
+	wantErr := "rejected"
 	if err == nil || !strings.Contains(err.Error(), wantErr) {
 		t.Fatalf("qre.Execute() = %v, want %v", err, wantErr)
 	}
@@ -419,7 +406,7 @@ func TestQueryExecutorPlanUpsertPkAutoCommit(t *testing.T) {
 	)
 	db.AddQuery("update test_table set val = 1 where pk in (1) /* _stream test_table (pk ) (1 ); */", &sqltypes.Result{})
 	_, err = qre.Execute()
-	wantErr = "error: err (errno 1062) (sqlstate 23000)"
+	wantErr = "err (errno 1062) (sqlstate 23000)"
 	if err == nil || !strings.Contains(err.Error(), wantErr) {
 		t.Fatalf("qre.Execute() = %v, want %v", err, wantErr)
 	}
@@ -683,15 +670,8 @@ func TestQueryExecutorPlanPassSelectWithLockOutsideATransaction(t *testing.T) {
 	defer tsv.StopService()
 	checkPlanID(t, planbuilder.PlanSelectLock, qre.plan.PlanID)
 	_, err := qre.Execute()
-	if err == nil {
-		t.Fatal("got: nil, want: error")
-	}
-	got, ok := err.(*tabletenv.TabletError)
-	if !ok {
-		t.Fatalf("got: %v, want: *tabletenv.TabletError", err)
-	}
-	if got.Code != vtrpcpb.Code_INVALID_ARGUMENT {
-		t.Fatalf("got: %s, want: BAD_INPUT", got.Code)
+	if code := vterrors.Code(err); code != vtrpcpb.Code_INVALID_ARGUMENT {
+		t.Fatalf("qre.Execute: %v, want %v", code, vtrpcpb.Code_INVALID_ARGUMENT)
 	}
 }
 
@@ -1031,12 +1011,8 @@ func TestQueryExecutorTableAclNoPermission(t *testing.T) {
 	if err == nil {
 		t.Fatal("got: nil, want: error")
 	}
-	tabletError, ok := err.(*tabletenv.TabletError)
-	if !ok {
-		t.Fatalf("got: %v, want: *tabletenv.TabletError", err)
-	}
-	if tabletError.Code != vtrpcpb.Code_PERMISSION_DENIED {
-		t.Fatalf("got: %s, want: PERMISSION_DENIED", tabletError.Code)
+	if code := vterrors.Code(err); code != vtrpcpb.Code_PERMISSION_DENIED {
+		t.Fatalf("qre.Execute: %v, want %v", code, vtrpcpb.Code_PERMISSION_DENIED)
 	}
 }
 
@@ -1082,18 +1058,12 @@ func TestQueryExecutorTableAclExemptACL(t *testing.T) {
 	checkPlanID(t, planbuilder.PlanPassSelect, qre.plan.PlanID)
 	// query should fail because current user do not have read permissions
 	_, err := qre.Execute()
-	if err == nil {
-		t.Fatal("got: nil, want: error")
+	if code := vterrors.Code(err); code != vtrpcpb.Code_PERMISSION_DENIED {
+		t.Fatalf("qre.Execute: %v, want %v", code, vtrpcpb.Code_PERMISSION_DENIED)
 	}
-	tabletError, ok := err.(*tabletenv.TabletError)
-	if !ok {
-		t.Fatalf("got: %v, want: *tabletenv.TabletError", err)
-	}
-	if tabletError.Code != vtrpcpb.Code_PERMISSION_DENIED {
-		t.Fatalf("got: %s, want: PERMISSION_DENIED", tabletError.Code)
-	}
-	if !strings.Contains(tabletError.Error(), "table acl error") {
-		t.Fatalf("got %s, want tablet errorL table acl error", tabletError.Error())
+	wanterr := "table acl error"
+	if !strings.Contains(err.Error(), wanterr) {
+		t.Fatalf("qre.Execute: %v, want %s", err, wanterr)
 	}
 
 	// table acl should be ignored since this is an exempt user.
@@ -1222,15 +1192,8 @@ func TestQueryExecutorBlacklistQRFail(t *testing.T) {
 	checkPlanID(t, planbuilder.PlanPassSelect, qre.plan.PlanID)
 	// execute should fail because query has been blacklisted
 	_, err := qre.Execute()
-	if err == nil {
-		t.Fatal("got: nil, want: error")
-	}
-	got, ok := err.(*tabletenv.TabletError)
-	if !ok {
-		t.Fatalf("got: %v, want: *tabletenv.TabletError", err)
-	}
-	if got.Code != vtrpcpb.Code_INVALID_ARGUMENT {
-		t.Fatalf("got: %s, want: BAD_INPUT", got.Code)
+	if code := vterrors.Code(err); code != vtrpcpb.Code_INVALID_ARGUMENT {
+		t.Fatalf("qre.Execute: %v, want %v", code, vtrpcpb.Code_INVALID_ARGUMENT)
 	}
 }
 
@@ -1282,15 +1245,8 @@ func TestQueryExecutorBlacklistQRRetry(t *testing.T) {
 
 	checkPlanID(t, planbuilder.PlanPassSelect, qre.plan.PlanID)
 	_, err := qre.Execute()
-	if err == nil {
-		t.Fatal("got: nil, want: error")
-	}
-	got, ok := err.(*tabletenv.TabletError)
-	if !ok {
-		t.Fatalf("got: %v, want: *tabletenv.TabletError", err)
-	}
-	if got.Code != vtrpcpb.Code_FAILED_PRECONDITION {
-		t.Fatalf("got: %s, want: QUERY_NOT_SERVED", got.Code)
+	if code := vterrors.Code(err); code != vtrpcpb.Code_FAILED_PRECONDITION {
+		t.Fatalf("tsv.qe.queryRuleSources.SetRules: %v, want %v", code, vtrpcpb.Code_FAILED_PRECONDITION)
 	}
 }
 

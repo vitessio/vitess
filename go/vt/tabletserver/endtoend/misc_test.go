@@ -157,7 +157,7 @@ func TestNocacheListArgs(t *testing.T) {
 			"list": []interface{}{},
 		},
 	)
-	want := "error: empty list supplied for list"
+	want := "empty list supplied for list"
 	if err == nil || err.Error() != want {
 		t.Errorf("Error: %v, want %s", err, want)
 		return
@@ -168,11 +168,11 @@ func TestIntegrityError(t *testing.T) {
 	vstart := framework.DebugVars()
 	client := framework.NewClient()
 	_, err := client.Execute("insert into vitess_test values(1, null, null, null)", nil)
-	want := "error: Duplicate entry '1'"
+	want := "Duplicate entry '1'"
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
 		t.Errorf("Error: %v, want prefix %s", err, want)
 	}
-	if err := compareIntDiff(framework.DebugVars(), "InfoErrors/DupKey", vstart, 1); err != nil {
+	if err := compareIntDiff(framework.DebugVars(), "Errors/ALREADY_EXISTS", vstart, 1); err != nil {
 		t.Error(err)
 	}
 }
@@ -220,7 +220,7 @@ func TestUpsertNonPKHit(t *testing.T) {
 			"(2, 1) on duplicate key update id2 = 2",
 		nil,
 	)
-	want := "error: Duplicate entry '1' for key 'id2_idx'"
+	want := "Duplicate entry '1' for key 'id2_idx'"
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
 		t.Errorf("Execute: %v, must start with %s", err, want)
 	}
@@ -251,7 +251,7 @@ func TestSchemaReload(t *testing.T) {
 		if err == nil {
 			return
 		}
-		want := "error: table vitess_temp not found in schema"
+		want := "table vitess_temp not found in schema"
 		if err.Error() != want {
 			t.Errorf("Error: %v, want %s", err, want)
 			return

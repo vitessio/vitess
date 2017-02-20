@@ -17,6 +17,7 @@ import (
 
 	"github.com/youtube/vitess/go/acl"
 	"github.com/youtube/vitess/go/cache"
+	"github.com/youtube/vitess/go/mysqlconn"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/trace"
@@ -30,6 +31,7 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver/engines/schema"
 	"github.com/youtube/vitess/go/vt/tabletserver/planbuilder"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletenv"
+	"github.com/youtube/vitess/go/vt/vterrors"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
@@ -270,7 +272,8 @@ func (qe *QueryEngine) GetPlan(ctx context.Context, logStats *tabletenv.LogStats
 	}
 	splan, err := planbuilder.GetExecPlan(sql, GetTable)
 	if err != nil {
-		return nil, tabletenv.PrefixTabletError(vtrpcpb.Code_UNKNOWN, err, "")
+		// TODO(sougou): Inspect to see if GetExecPlan can return coded error.
+		return nil, vterrors.New(vtrpcpb.Code_UNKNOWN, err.Error())
 	}
 	plan := &ExecPlan{ExecPlan: splan, Table: table}
 	plan.Rules = qe.queryRuleSources.filterByPlan(sql, plan.PlanID, plan.TableName.String())
@@ -281,7 +284,7 @@ func (qe *QueryEngine) GetPlan(ctx context.Context, logStats *tabletenv.LogStats
 		} else {
 			conn, err := qe.conns.Get(ctx)
 			if err != nil {
-				return nil, tabletenv.NewTabletErrorSQL(vtrpcpb.Code_INTERNAL, err)
+				return nil, err
 			}
 			defer conn.Recycle()
 
@@ -290,7 +293,7 @@ func (qe *QueryEngine) GetPlan(ctx context.Context, logStats *tabletenv.LogStats
 			r, err := conn.Exec(ctx, sql, 1, true)
 			logStats.AddRewrittenSQL(sql, start)
 			if err != nil {
-				return nil, tabletenv.PrefixTabletError(vtrpcpb.Code_INTERNAL, err, "Error fetching fields: ")
+				return nil, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "error fetching fields: %v", err)
 			}
 			plan.Fields = r.Fields
 		}
@@ -316,7 +319,8 @@ func (qe *QueryEngine) GetStreamPlan(sql string) (*ExecPlan, error) {
 	}
 	splan, err := planbuilder.GetStreamExecPlan(sql, GetTable)
 	if err != nil {
-		return nil, tabletenv.PrefixTabletError(vtrpcpb.Code_INVALID_ARGUMENT, err, "")
+		// TODO(sougou): Inspect to see if GetStreamExecPlan can return coded error.
+		return nil, vterrors.New(vtrpcpb.Code_UNKNOWN, err.Error())
 	}
 	plan := &ExecPlan{ExecPlan: splan, Table: table}
 	plan.Rules = qe.queryRuleSources.filterByPlan(sql, plan.PlanID, plan.TableName.String())
@@ -333,7 +337,7 @@ func (qe *QueryEngine) ClearQueryPlanCache() {
 func (qe *QueryEngine) IsMySQLReachable() bool {
 	conn, err := dbconnpool.NewDBConnection(&qe.dbconfigs.App, tabletenv.MySQLStats)
 	if err != nil {
-		if tabletenv.IsConnErr(err) {
+		if mysqlconn.IsConnErr(err) {
 			return false
 		}
 		log.Warningf("checking MySQL, unexpected error: %v", err)

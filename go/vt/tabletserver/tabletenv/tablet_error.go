@@ -15,6 +15,7 @@ import (
 	"github.com/youtube/vitess/go/mysqlconn"
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/tb"
+	"github.com/youtube/vitess/go/vt/vterrors"
 
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
@@ -23,12 +24,8 @@ const (
 	maxErrLen = 5000
 )
 
-// ErrConnPoolClosed is returned / panicked when the connection pool is closed.
-var ErrConnPoolClosed = NewTabletError(
-	// connection pool being closed is not the query's fault, it can be retried on a
-	// different VtTablet.
-	vtrpcpb.Code_INTERNAL,
-	"connection pool is closed")
+// ErrConnPoolClosed is returned when the connection pool is closed.
+var ErrConnPoolClosed = vterrors.New(vtrpcpb.Code_UNAVAILABLE, "connection pool is closed")
 
 // TabletError is the error type we use in this library.
 // It implements vterrors.VtError interface.

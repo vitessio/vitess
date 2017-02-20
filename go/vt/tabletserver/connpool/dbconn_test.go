@@ -80,7 +80,7 @@ func TestDBConnKill(t *testing.T) {
 	// Kill failed because we are not able to connect to the database
 	db.EnableConnFail()
 	err = dbConn.Kill("test kill")
-	want := "Failed to get conn from dba pool"
+	want := "Lost connection"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("Exec: %v, want %s", err, want)
 	}
@@ -100,7 +100,7 @@ func TestDBConnKill(t *testing.T) {
 	// Kill failed because "kill query_id" failed
 	db.AddRejectedQuery(newKillQuery, errors.New("rejected"))
 	err = dbConn.Kill("test kill")
-	want = "Could not kill query"
+	want = "rejected"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("Exec: %v, want %s", err, want)
 	}

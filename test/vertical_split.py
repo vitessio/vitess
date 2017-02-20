@@ -337,7 +337,7 @@ index by_msg (msg)
                                      'select count(1) from %s' % table],
                                     expect_fail=True)
         self.assertIn(
-            'retry: Query disallowed due to rule: enforce blacklisted tables',
+            'disallowed due to rule: enforce blacklisted tables',
             stderr)
       else:
         # table is not blacklisted, should just work

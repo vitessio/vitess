@@ -8,7 +8,7 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/tabletserver/engines/schema"
-	"github.com/youtube/vitess/go/vt/tabletserver/tabletenv"
+	"github.com/youtube/vitess/go/vt/vterrors"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
@@ -42,7 +42,7 @@ func resolvePKValues(table *schema.Table, pkValues []interface{}, bindVars map[s
 		if length == -1 {
 			length = len(list)
 		} else if len(list) != length {
-			return tabletenv.NewTabletError(vtrpcpb.Code_INVALID_ARGUMENT, "mismatched lengths for values %v", pkValues)
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "mismatched lengths for values %v", pkValues)
 		}
 		return nil
 	}
@@ -93,7 +93,7 @@ func resolvePKValues(table *schema.Table, pkValues []interface{}, bindVars map[s
 func resolveListArg(col *schema.TableColumn, key string, bindVars map[string]interface{}) ([]sqltypes.Value, error) {
 	val, _, err := sqlparser.FetchBindVar(key, bindVars)
 	if err != nil {
-		return nil, tabletenv.NewTabletError(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
 	}
 
 	switch list := val.(type) {
@@ -102,7 +102,7 @@ func resolveListArg(col *schema.TableColumn, key string, bindVars map[string]int
 		for i, v := range list {
 			sqlval, err := sqltypes.BuildConverted(col.Type, v)
 			if err != nil {
-				return nil, tabletenv.NewTabletError(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
+				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
 			}
 			if err = validateValue(col, sqlval); err != nil {
 				return nil, err
@@ -112,7 +112,7 @@ func resolveListArg(col *schema.TableColumn, key string, bindVars map[string]int
 		return resolved, nil
 	case *querypb.BindVariable:
 		if list.Type != querypb.Type_TUPLE {
-			return nil, tabletenv.NewTabletError(vtrpcpb.Code_INVALID_ARGUMENT, "expecting list for bind var %s: %v", key, list)
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "expecting list for bind var %s: %v", key, list)
 		}
 		resolved := make([]sqltypes.Value, len(list.Values))
 		for i, v := range list.Values {
@@ -120,7 +120,7 @@ func resolveListArg(col *schema.TableColumn, key string, bindVars map[string]int
 			sqlval := sqltypes.MakeTrusted(v.Type, v.Value)
 			sqlval, err := sqltypes.BuildConverted(col.Type, sqlval)
 			if err != nil {
-				return nil, tabletenv.NewTabletError(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
+				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
 			}
 			if err = validateValue(col, sqlval); err != nil {
 				return nil, err
@@ -129,7 +129,7 @@ func resolveListArg(col *schema.TableColumn, key string, bindVars map[string]int
 		}
 		return resolved, nil
 	default:
-		return nil, tabletenv.NewTabletError(vtrpcpb.Code_INVALID_ARGUMENT, "unknown type for bind variable %v", key)
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unknown type for bind variable %v", key)
 	}
 }
 
@@ -159,12 +159,12 @@ func resolveValue(col *schema.TableColumn, value interface{}, bindVars map[strin
 	if v, ok := value.(string); ok {
 		value, _, err = sqlparser.FetchBindVar(v, bindVars)
 		if err != nil {
-			return result, tabletenv.NewTabletError(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
+			return result, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
 		}
 	}
 	result, err = sqltypes.BuildConverted(col.Type, value)
 	if err != nil {
-		return result, tabletenv.NewTabletError(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
+		return result, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
 	}
 	if err = validateValue(col, result); err != nil {
 		return result, err
@@ -178,23 +178,23 @@ func resolveNumber(value interface{}, bindVars map[string]interface{}) (int64, e
 	if v, ok := value.(string); ok {
 		value, _, err = sqlparser.FetchBindVar(v, bindVars)
 		if err != nil {
-			return 0, tabletenv.NewTabletError(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
+			return 0, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
 		}
 	}
 	v, err := sqltypes.BuildValue(value)
 	if err != nil {
-		return 0, tabletenv.NewTabletError(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
+		return 0, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
 	}
 	ret, err := v.ParseInt64()
 	if err != nil {
-		return 0, tabletenv.NewTabletError(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
+		return 0, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
 	}
 	return ret, nil
 }
 
 func validateRow(table *schema.Table, columnNumbers []int, row []sqltypes.Value) error {
 	if len(row) != len(columnNumbers) {
-		return tabletenv.NewTabletError(vtrpcpb.Code_INVALID_ARGUMENT, "data inconsistency %d vs %d", len(row), len(columnNumbers))
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "data inconsistency %d vs %d", len(row), len(columnNumbers))
 	}
 	for j, value := range row {
 		if err := validateValue(&table.Columns[columnNumbers[j]], value); err != nil {
@@ -211,11 +211,11 @@ func validateValue(col *schema.TableColumn, value sqltypes.Value) error {
 	}
 	if sqltypes.IsIntegral(col.Type) {
 		if !value.IsIntegral() {
-			return tabletenv.NewTabletError(vtrpcpb.Code_INVALID_ARGUMENT, "type mismatch, expecting numeric type for %v for column: %v", value, col)
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "type mismatch, expecting numeric type for %v for column: %v", value, col)
 		}
 	} else if col.Type == sqltypes.VarBinary {
 		if !value.IsQuoted() {
-			return tabletenv.NewTabletError(vtrpcpb.Code_INVALID_ARGUMENT, "type mismatch, expecting string type for %v for column: %v", value, col)
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "type mismatch, expecting string type for %v for column: %v", value, col)
 		}
 	}
 	return nil

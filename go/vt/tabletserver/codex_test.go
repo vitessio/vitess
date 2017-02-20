@@ -15,6 +15,7 @@ import (
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 	"github.com/youtube/vitess/go/vt/tabletserver/engines/schema"
+	"github.com/youtube/vitess/go/vt/vterrors"
 )
 
 func TestCodexBuildValuesList(t *testing.T) {
@@ -57,7 +58,7 @@ func TestCodexBuildValuesList(t *testing.T) {
 	// invalid value
 	bindVars["pk1"] = struct{}{}
 	pkValues = []interface{}{":pk1"}
-	wantErr := "error: unexpected type struct {}: {}"
+	wantErr := "unexpected type struct {}: {}"
 
 	got, err := buildValueList(table, pkValues, bindVars)
 
@@ -68,7 +69,7 @@ func TestCodexBuildValuesList(t *testing.T) {
 	// type mismatch int
 	bindVars["pk1"] = "str"
 	pkValues = []interface{}{":pk1"}
-	wantErr = "error: strconv.ParseInt"
+	wantErr = "strconv.ParseInt"
 
 	got, err = buildValueList(table, pkValues, bindVars)
 	if err == nil || !strings.Contains(err.Error(), wantErr) {
@@ -79,7 +80,7 @@ func TestCodexBuildValuesList(t *testing.T) {
 	bindVars["pk1"] = 1
 	bindVars["pk2"] = 1
 	pkValues = []interface{}{":pk1", ":pk2"}
-	wantErr = "error: type mismatch, expecting string type for 1"
+	wantErr = "type mismatch, expecting string type for 1"
 
 	got, err = buildValueList(table, pkValues, bindVars)
 	if err == nil || !strings.Contains(err.Error(), wantErr) {
@@ -211,7 +212,7 @@ func TestCodexBuildValuesList(t *testing.T) {
 		pk1Val,
 		"::list",
 	}
-	wantErr = "error: empty list supplied for list"
+	wantErr = "empty list supplied for list"
 	got, err = buildValueList(table, pkValues, bindVars)
 	if err == nil || !strings.Contains(err.Error(), wantErr) {
 		t.Fatalf("got %v, want %v", err, wantErr)
@@ -225,7 +226,7 @@ func TestCodexBuildValuesList(t *testing.T) {
 		pk1Val,
 		":list",
 	}
-	wantErr = "error: unexpected arg type []interface {} for key list"
+	wantErr = "unexpected arg type []interface {} for key list"
 	got, err = buildValueList(table, pkValues, bindVars)
 	if err == nil || !strings.Contains(err.Error(), wantErr) {
 		t.Fatalf("got %v, want %v", err, wantErr)
@@ -233,7 +234,6 @@ func TestCodexBuildValuesList(t *testing.T) {
 }
 
 func TestCodexResolvePKValues(t *testing.T) {
-	testUtils := newTestUtils()
 	table := createTable("Table",
 		[]string{"pk1", "pk2", "col1"},
 		[]querypb.Type{sqltypes.Int64, sqltypes.VarBinary, sqltypes.Int32},
@@ -257,7 +257,9 @@ func TestCodexResolvePKValues(t *testing.T) {
 	pkValues = make([]interface{}, 0, 10)
 	pkValues = append(pkValues, sqltypes.MakeString([]byte("type_mismatch")))
 	_, _, err = resolvePKValues(table, pkValues, nil)
-	testUtils.checkTabletError(t, err, vtrpcpb.Code_INVALID_ARGUMENT, "strconv.ParseInt")
+	if code := vterrors.Code(err); code != vtrpcpb.Code_INVALID_ARGUMENT {
+		t.Errorf("resolvePKValues: %v, want %v", code, vtrpcpb.Code_INVALID_ARGUMENT)
+	}
 	// pkValues with different length
 	bindVariables = make(map[string]interface{})
 	bindVariables[key] = 1
@@ -269,7 +271,9 @@ func TestCodexResolvePKValues(t *testing.T) {
 	pkValues = append(pkValues, []interface{}{":" + key})
 	pkValues = append(pkValues, []interface{}{":" + key2, ":" + key3})
 	_, _, err = resolvePKValues(table, pkValues, bindVariables)
-	testUtils.checkTabletError(t, err, vtrpcpb.Code_INVALID_ARGUMENT, "mismatched lengths")
+	if code := vterrors.Code(err); code != vtrpcpb.Code_INVALID_ARGUMENT {
+		t.Errorf("resolvePKValues: %v, want %v", code, vtrpcpb.Code_INVALID_ARGUMENT)
+	}
 }
 
 func TestCodexResolveListArg(t *testing.T) {
@@ -284,7 +288,9 @@ func TestCodexResolveListArg(t *testing.T) {
 	bindVariables[key] = []interface{}{fmt.Errorf("error is not supported")}
 
 	_, err := resolveListArg(table.GetPKColumn(0), "::"+key, bindVariables)
-	testUtils.checkTabletError(t, err, vtrpcpb.Code_INVALID_ARGUMENT, "")
+	if code := vterrors.Code(err); code != vtrpcpb.Code_INVALID_ARGUMENT {
+		t.Errorf("resolvePKValues: %v, want %v", code, vtrpcpb.Code_INVALID_ARGUMENT)
+	}
 
 	// This should successfully convert.
 	bindVariables[key] = []interface{}{"1"}
@@ -322,19 +328,19 @@ func TestResolveNumber(t *testing.T) {
 		bv: map[string]interface{}{
 			"a": []interface{}{10},
 		},
-		outErr: "error: unexpected type []interface {}: [10]",
+		outErr: "unexpected type []interface {}: [10]",
 	}, {
 		v:      ":a",
-		outErr: "error: missing bind var a",
+		outErr: "missing bind var a",
 	}, {
 		v:      make(chan int),
-		outErr: "error: unexpected type chan int",
+		outErr: "unexpected type chan int",
 	}, {
 		v:   int64(1),
 		out: int64(1),
 	}, {
 		v:      1.2,
-		outErr: "error: strconv.ParseInt",
+		outErr: "strconv.ParseInt",
 	}}
 	for _, tc := range testcases {
 		got, err := resolveNumber(tc.v, tc.bv)
@@ -406,17 +412,20 @@ func TestCodexBuildStreamComment(t *testing.T) {
 }
 
 func TestCodexValidateRow(t *testing.T) {
-	testUtils := newTestUtils()
 	table := createTable("Table",
 		[]string{"pk1", "pk2", "col1"},
 		[]querypb.Type{sqltypes.Int64, sqltypes.VarBinary, sqltypes.Int32},
 		[]string{"pk1", "pk2"})
 	// #columns and #rows do not match
 	err := validateRow(table, []int{1}, []sqltypes.Value{})
-	testUtils.checkTabletError(t, err, vtrpcpb.Code_INVALID_ARGUMENT, "data inconsistency")
+	if code := vterrors.Code(err); code != vtrpcpb.Code_INVALID_ARGUMENT {
+		t.Errorf("validateRow: %v, want %v", code, vtrpcpb.Code_INVALID_ARGUMENT)
+	}
 	// column 0 is int type but row is in string type
 	err = validateRow(table, []int{0}, []sqltypes.Value{sqltypes.MakeString([]byte("str"))})
-	testUtils.checkTabletError(t, err, vtrpcpb.Code_INVALID_ARGUMENT, "type mismatch")
+	if code := vterrors.Code(err); code != vtrpcpb.Code_INVALID_ARGUMENT {
+		t.Errorf("validateRow: %v, want %v", code, vtrpcpb.Code_INVALID_ARGUMENT)
+	}
 }
 
 func TestCodexApplyFilterWithPKDefaults(t *testing.T) {

@@ -191,9 +191,7 @@ func (ws *wrappedService) BeginExecute(ctx context.Context, target *querypb.Targ
 	err = ws.wrapper(ctx, target, ws.impl, "BeginExecute", false, func(ctx context.Context, target *querypb.Target, conn QueryService) (error, bool) {
 		var innerErr error
 		qr, transactionID, innerErr = conn.BeginExecute(ctx, target, query, bindVars, options)
-		// If a transaction was started, we cannot retry.
-		retryable := canRetry(ctx, innerErr) && (transactionID == 0)
-		return innerErr, retryable
+		return innerErr, canRetry(ctx, innerErr)
 	})
 	return qr, transactionID, err
 }
@@ -202,9 +200,7 @@ func (ws *wrappedService) BeginExecuteBatch(ctx context.Context, target *querypb
 	err = ws.wrapper(ctx, target, ws.impl, "BeginExecuteBatch", false, func(ctx context.Context, target *querypb.Target, conn QueryService) (error, bool) {
 		var innerErr error
 		qrs, transactionID, innerErr = conn.BeginExecuteBatch(ctx, target, queries, asTransaction, options)
-		// If a transaction was started, we cannot retry.
-		retryable := canRetry(ctx, innerErr) && (transactionID == 0)
-		return innerErr, retryable
+		return innerErr, canRetry(ctx, innerErr)
 	})
 	return qrs, transactionID, err
 }

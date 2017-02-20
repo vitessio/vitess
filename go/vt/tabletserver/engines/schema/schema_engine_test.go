@@ -36,7 +36,7 @@ func TestStrictMode(t *testing.T) {
 	se := newEngine(10, 1*time.Second, 1*time.Second, true)
 	t.Log(se)
 	err := se.Open(db.ConnParams())
-	want := "error: could not verify mode"
+	want := "could not verify mode"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("se.Open: %v, must contain %s", err, want)
 	}
@@ -57,7 +57,7 @@ func TestOpenFailedDueToMissMySQLTime(t *testing.T) {
 	})
 	se := newEngine(10, 1*time.Second, 1*time.Second, false)
 	err := se.Open(db.ConnParams())
-	want := "Could not get MySQL time"
+	want := "could not get MySQL time"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("se.Open: %v, want %s", err, want)
 	}
@@ -77,7 +77,7 @@ func TestOpenFailedDueToIncorrectMysqlRowNum(t *testing.T) {
 	})
 	se := newEngine(10, 1*time.Second, 1*time.Second, false)
 	err := se.Open(db.ConnParams())
-	want := "Unexpected result for MySQL time"
+	want := "unexpected result for MySQL time"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("se.Open: %v, want %s", err, want)
 	}
@@ -97,7 +97,7 @@ func TestOpenFailedDueToInvalidTimeFormat(t *testing.T) {
 	})
 	se := newEngine(10, 1*time.Second, 1*time.Second, false)
 	err := se.Open(db.ConnParams())
-	want := "Could not parse time"
+	want := "could not parse time"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("se.Open: %v, want %s", err, want)
 	}
@@ -112,7 +112,7 @@ func TestOpenFailedDueToExecErr(t *testing.T) {
 	db.AddRejectedQuery(mysqlconn.BaseShowTables, fmt.Errorf("injected error"))
 	se := newEngine(10, 1*time.Second, 1*time.Second, false)
 	err := se.Open(db.ConnParams())
-	want := "Could not get table list"
+	want := "could not get table list"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("se.Open: %v, want %s", err, want)
 	}

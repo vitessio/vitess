@@ -16,7 +16,7 @@ func Code(err error) vtrpcpb.Code {
 		return vtrpcpb.Code_OK
 	}
 	if err, ok := err.(*VitessError); ok {
-		return err.Code
+		return err.code
 	}
 	if err, ok := err.(VtError); ok {
 		return err.VtErrorCode()
@@ -42,8 +42,7 @@ type VtError interface {
 
 // VitessError is the error type that we use internally for passing structured errors.
 type VitessError struct {
-	// Error code of the Vitess error.
-	Code vtrpcpb.Code
+	code vtrpcpb.Code
 	// Error message that should be returned. This allows us to change an error message
 	// without losing the underlying error. For example, if you have an error like
 	// context.DeadlikeExceeded, you don't want to modify it - otherwise you would lose
@@ -58,8 +57,16 @@ type VitessError struct {
 // New creates a new error using the code and input string.
 func New(code vtrpcpb.Code, in string) error {
 	return &VitessError{
-		Code: code,
+		code: code,
 		err:  errors.New(in),
+	}
+}
+
+// Errorf returns a new error built using Printf style arguments.
+func Errorf(code vtrpcpb.Code, format string, args ...interface{}) error {
+	return &VitessError{
+		code: code,
+		err:  errors.New(fmt.Sprintf(format, args...)),
 	}
 }
 
@@ -74,15 +81,15 @@ func (e *VitessError) Error() string {
 
 // VtErrorCode returns the underlying Vitess error code.
 func (e *VitessError) VtErrorCode() vtrpcpb.Code {
-	return e.Code
+	return e.code
 }
 
 // AsString returns a VitessError as a string, with more detailed information than Error().
 func (e *VitessError) AsString() string {
 	if e.Message != "" {
-		return fmt.Sprintf("Code: %v, Message: %v, err: %v", e.Code, e.Message, e.err)
+		return fmt.Sprintf("Code: %v, Message: %v, err: %v", e.code, e.Message, e.err)
 	}
-	return fmt.Sprintf("Code: %v, err: %v", e.Code, e.err)
+	return fmt.Sprintf("Code: %v, err: %v", e.code, e.err)
 }
 
 // FromError returns a VitessError with the supplied error code by wrapping an
@@ -93,7 +100,7 @@ func (e *VitessError) AsString() string {
 //     errors.New("no valid endpoint"))
 func FromError(code vtrpcpb.Code, err error) error {
 	return &VitessError{
-		Code: code,
+		code: code,
 		err:  err,
 	}
 }
@@ -102,7 +109,7 @@ func FromError(code vtrpcpb.Code, err error) error {
 // Useful for preserving an underlying error while creating a new error message.
 func NewVitessError(code vtrpcpb.Code, err error, format string, args ...interface{}) error {
 	return &VitessError{
-		Code:    code,
+		code:    code,
 		Message: fmt.Sprintf(format, args...),
 		err:     err,
 	}
@@ -125,14 +132,14 @@ func WithPrefix(prefix string, in error) error {
 func WithSuffix(in error, suffix string) error {
 	if vitessError, ok := in.(*VitessError); ok {
 		return &VitessError{
-			Code:    vitessError.Code,
+			code:    vitessError.code,
 			err:     vitessError.err,
 			Message: fmt.Sprintf("%s%s", in.Error(), suffix),
 		}
 	}
 	if vtError, ok := in.(VtError); ok {
 		return &VitessError{
-			Code:    vtError.VtErrorCode(),
+			code:    vtError.VtErrorCode(),
 			err:     in,
 			Message: fmt.Sprintf("%s%s", in.Error(), suffix),
 		}

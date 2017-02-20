@@ -5,8 +5,6 @@
 package vterrors
 
 import (
-	"errors"
-
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
@@ -25,10 +23,7 @@ func FromVtRPCError(rpcErr *vtrpcpb.RPCError) error {
 	if code == vtrpcpb.Code_OK {
 		code = LegacyErrorCodeToCode(rpcErr.LegacyCode)
 	}
-	return &VitessError{
-		Code: code,
-		err:  errors.New(rpcErr.Message),
-	}
+	return New(code, rpcErr.Message)
 }
 
 // VtRPCErrorFromVtError converts from a VtError to a vtrpcpb.RPCError.
