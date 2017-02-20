@@ -5,7 +5,6 @@
 package vterrors
 
 import (
-	"errors"
 	"reflect"
 	"testing"
 
@@ -24,29 +23,20 @@ func TestFromVtRPCError(t *testing.T) {
 			LegacyCode: vtrpcpb.LegacyErrorCode_BAD_INPUT_LEGACY,
 			Message:    "bad input",
 		},
-		want: &VitessError{
-			Code: vtrpcpb.Code_INVALID_ARGUMENT,
-			err:  errors.New("bad input"),
-		},
+		want: New(vtrpcpb.Code_INVALID_ARGUMENT, "bad input"),
 	}, {
 		in: &vtrpcpb.RPCError{
 			LegacyCode: vtrpcpb.LegacyErrorCode_BAD_INPUT_LEGACY,
 			Message:    "bad input",
 			Code:       vtrpcpb.Code_INVALID_ARGUMENT,
 		},
-		want: &VitessError{
-			Code: vtrpcpb.Code_INVALID_ARGUMENT,
-			err:  errors.New("bad input"),
-		},
+		want: New(vtrpcpb.Code_INVALID_ARGUMENT, "bad input"),
 	}, {
 		in: &vtrpcpb.RPCError{
 			Message: "bad input",
 			Code:    vtrpcpb.Code_INVALID_ARGUMENT,
 		},
-		want: &VitessError{
-			Code: vtrpcpb.Code_INVALID_ARGUMENT,
-			err:  errors.New("bad input"),
-		},
+		want: New(vtrpcpb.Code_INVALID_ARGUMENT, "bad input"),
 	}}
 	for _, tcase := range testcases {
 		got := FromVtRPCError(tcase.in)
@@ -64,10 +54,7 @@ func TestVtRPCErrorFromVtError(t *testing.T) {
 		in:   nil,
 		want: nil,
 	}, {
-		in: &VitessError{
-			Code: vtrpcpb.Code_INVALID_ARGUMENT,
-			err:  errors.New("bad input"),
-		},
+		in: New(vtrpcpb.Code_INVALID_ARGUMENT, "bad input"),
 		want: &vtrpcpb.RPCError{
 			LegacyCode: vtrpcpb.LegacyErrorCode_BAD_INPUT_LEGACY,
 			Message:    "bad input",

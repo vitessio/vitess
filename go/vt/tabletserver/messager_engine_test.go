@@ -121,7 +121,7 @@ func TestSubscribe(t *testing.T) {
 	<-r2.ch
 
 	// Error case.
-	want := "error: message table t3 not found"
+	want := "message table t3 not found"
 	err = me.Subscribe("t3", r1.rcv)
 	if err == nil || err.Error() != want {
 		t.Errorf("Subscribe: %v, want %s", err, want)

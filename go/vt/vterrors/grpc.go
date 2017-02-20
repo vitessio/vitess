@@ -152,7 +152,7 @@ func FromGRPCError(err error) error {
 		return err
 	}
 	return &VitessError{
-		Code: GRPCToCode(grpc.Code(err)),
+		code: GRPCToCode(grpc.Code(err)),
 		err:  err,
 	}
 }

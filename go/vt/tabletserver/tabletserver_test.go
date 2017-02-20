@@ -21,9 +21,11 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/youtube/vitess/go/mysqlconn"
 	"github.com/youtube/vitess/go/mysqlconn/fakesqldb"
+	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletenv"
+	"github.com/youtube/vitess/go/vt/vterrors"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -355,7 +357,10 @@ func TestTabletServerAllSchemaFailure(t *testing.T) {
 	err := tsv.StartService(target, dbconfigs, testUtils.newMysqld(&dbconfigs))
 	defer tsv.StopService()
 	// tabletsever shouldn't start if it can't access schema for any tables
-	testUtils.checkTabletError(t, err, vtrpcpb.Code_UNKNOWN, "could not get schema for any tables")
+	wanterr := "could not get schema for any tables"
+	if err == nil || err.Error() != wanterr {
+		t.Errorf("tsv.StartService: %v, want %s", err, wanterr)
+	}
 }
 
 func TestTabletServerCheckMysql(t *testing.T) {
@@ -512,7 +517,7 @@ func TestTabletServerTarget(t *testing.T) {
 	target2 := proto.Clone(&target1).(*querypb.Target)
 	target2.TabletType = topodatapb.TabletType_REPLICA
 	_, err = tsv.Execute(ctx, target2, "select * from test_table limit 1000", nil, 0, nil)
-	want := "Invalid tablet type"
+	want := "invalid tablet type"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("err: %v, must contain %s", err, want)
 	}
@@ -532,7 +537,7 @@ func TestTabletServerTarget(t *testing.T) {
 	target2 = proto.Clone(&target1).(*querypb.Target)
 	target2.Keyspace = "bad"
 	_, err = tsv.Execute(ctx, target2, "select * from test_table limit 1000", nil, 0, nil)
-	want = "Invalid keyspace bad"
+	want = "invalid keyspace bad"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("err: %v, must contain %s", err, want)
 	}
@@ -541,7 +546,7 @@ func TestTabletServerTarget(t *testing.T) {
 	target2 = proto.Clone(&target1).(*querypb.Target)
 	target2.Shard = "bad"
 	_, err = tsv.Execute(ctx, target2, "select * from test_table limit 1000", nil, 0, nil)
-	want = "Invalid shard bad"
+	want = "invalid shard bad"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("err: %v, must contain %s", err, want)
 	}
@@ -786,7 +791,7 @@ func TestTabletServerStartCommit(t *testing.T) {
 	db.AddQuery(commitTransition, &sqltypes.Result{})
 	txid = newTxForPrep(tsv)
 	err = tsv.StartCommit(ctx, &target, txid, "aa")
-	want := "error: could not transition to COMMIT: aa"
+	want := "could not transition to COMMIT: aa"
 	if err == nil || err.Error() != want {
 		t.Errorf("Prepare err: %v, want %s", err, want)
 	}
@@ -810,7 +815,7 @@ func TestTabletserverSetRollback(t *testing.T) {
 	db.AddQuery(rollbackTransition, &sqltypes.Result{})
 	txid = newTxForPrep(tsv)
 	err = tsv.SetRollback(ctx, &target, "aa", txid)
-	want := "error: could not transition to ROLLBACK: aa"
+	want := "could not transition to ROLLBACK: aa"
 	if err == nil || err.Error() != want {
 		t.Errorf("Prepare err: %v, want %s", err, want)
 	}
@@ -959,7 +964,7 @@ func TestTabletServerBeginFail(t *testing.T) {
 	defer cancel()
 	tsv.Begin(ctx, &target)
 	_, err = tsv.Begin(ctx, &target)
-	want := "tx_pool_full: Transaction pool connection limit exceeded"
+	want := "transaction pool connection limit exceeded"
 	if err == nil || err.Error() != want {
 		t.Fatalf("Begin err: %v, want %v", err, want)
 	}
@@ -1018,7 +1023,7 @@ func TestTabletServerCommiRollbacktFail(t *testing.T) {
 	defer tsv.StopService()
 	ctx := context.Background()
 	err = tsv.Commit(ctx, &target, -1)
-	want := "not_in_tx: Transaction -1: not found"
+	want := "transaction -1: not found"
 	if err == nil || err.Error() != want {
 		t.Fatalf("Commit err: %v, want %v", err, want)
 	}
@@ -1455,7 +1460,7 @@ func TestMessageStream(t *testing.T) {
 	ctx := context.Background()
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
 
-	wanterr := "error: message table nomsg not found"
+	wanterr := "message table nomsg not found"
 	if err := tsv.MessageStream(ctx, &target, "nomsg", func(qr *sqltypes.Result) error {
 		return nil
 	}); err == nil || err.Error() != wanterr {
@@ -1525,13 +1530,13 @@ func TestMessageAck(t *testing.T) {
 		Value: []byte("2"),
 	}}
 	_, err := tsv.MessageAck(ctx, &target, "nonmsg", ids)
-	want := "error: message table nonmsg not found in schema"
+	want := "message table nonmsg not found in schema"
 	if err == nil || err.Error() != want {
 		t.Errorf("tsv.MessageAck(invalid): %v, want %s", err, want)
 	}
 
 	_, err = tsv.MessageAck(ctx, &target, "msg", ids)
-	want = "error: query: select time_scheduled, id from msg where id in ('1', '2') and time_acked is null limit 10001 for update is not supported on fakesqldb"
+	want = "query: select time_scheduled, id from msg where id in ('1', '2') and time_acked is null limit 10001 for update is not supported on fakesqldb"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("tsv.MessageAck(invalid): %v, want %s", err, want)
 	}
@@ -1568,13 +1573,13 @@ func TestRescheduleMessages(t *testing.T) {
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
 
 	_, err := tsv.PostponeMessages(ctx, &target, "nonmsg", []string{"1", "2"})
-	want := "error: message table nonmsg not found in schema"
+	want := "message table nonmsg not found in schema"
 	if err == nil || err.Error() != want {
 		t.Errorf("tsv.PostponeMessages(invalid): %v, want %s", err, want)
 	}
 
 	_, err = tsv.PostponeMessages(ctx, &target, "msg", []string{"1", "2"})
-	want = "error: query: select time_scheduled, id from msg where id in ('1', '2') and time_acked is null limit 10001 for update is not supported"
+	want = "query: select time_scheduled, id from msg where id in ('1', '2') and time_acked is null limit 10001 for update is not supported"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("tsv.PostponeMessages(invalid):\n%v, want\n%s", err, want)
 	}
@@ -1611,13 +1616,13 @@ func TestPurgeMessages(t *testing.T) {
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
 
 	_, err := tsv.PurgeMessages(ctx, &target, "nonmsg", 0)
-	want := "error: message table nonmsg not found in schema"
+	want := "message table nonmsg not found in schema"
 	if err == nil || err.Error() != want {
 		t.Errorf("tsv.PurgeMessages(invalid): %v, want %s", err, want)
 	}
 
 	_, err = tsv.PurgeMessages(ctx, &target, "msg", 0)
-	want = "error: query: select time_scheduled, id from msg where time_scheduled < 0 and time_acked is not null limit 500 for update is not supported"
+	want = "query: select time_scheduled, id from msg where time_scheduled < 0 and time_acked is not null limit 500 for update is not supported"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("tsv.PurgeMessages(invalid):\n%v, want\n%s", err, want)
 	}
@@ -1774,7 +1779,7 @@ func TestTabletServerSplitQueryEqualSplitsOnStringColumn(t *testing.T) {
 		0,  /* numRowsPerQueryPart */
 		querypb.SplitQueryRequest_EQUAL_SPLITS)
 	want :=
-		"error: splitquery: using the EQUAL_SPLITS algorithm in SplitQuery" +
+		"splitquery: using the EQUAL_SPLITS algorithm in SplitQuery" +
 			" requires having a numeric (integral or float) split-column." +
 			" Got type: {Name: 'name_string', Type: VARCHAR}"
 	if err.Error() != want {
@@ -1797,15 +1802,14 @@ func TestHandleExecTabletError(t *testing.T) {
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServer(config)
-	err := tsv.handleError(
+	err := tsv.convertError(
 		"select * from test_table",
 		nil,
-		tabletenv.NewTabletError(vtrpcpb.Code_INTERNAL, "tablet error"),
-		nil,
+		vterrors.Errorf(vtrpcpb.Code_INTERNAL, "tablet error"),
 	)
-	want := "fatal: tablet error"
+	want := "tablet error"
 	if err == nil || err.Error() != want {
-		t.Errorf("Error: %v, want '%s'", err, want)
+		t.Errorf("%v, want '%s'", err, want)
 	}
 }
 
@@ -1814,15 +1818,14 @@ func TestTerseErrorsNonSQLError(t *testing.T) {
 	config := testUtils.newQueryServiceConfig()
 	config.TerseErrors = true
 	tsv := NewTabletServer(config)
-	err := tsv.handleError(
+	err := tsv.convertError(
 		"select * from test_table",
 		nil,
-		tabletenv.NewTabletError(vtrpcpb.Code_INTERNAL, "tablet error"),
-		nil,
+		vterrors.Errorf(vtrpcpb.Code_INTERNAL, "tablet error"),
 	)
-	want := "fatal: tablet error"
+	want := "tablet error"
 	if err == nil || err.Error() != want {
-		t.Errorf("Error: %v, want '%s'", err, want)
+		t.Errorf("%v, want '%s'", err, want)
 	}
 }
 
@@ -1831,20 +1834,14 @@ func TestTerseErrorsBindVars(t *testing.T) {
 	config := testUtils.newQueryServiceConfig()
 	config.TerseErrors = true
 	tsv := NewTabletServer(config)
-	err := tsv.handleError(
+	err := tsv.convertError(
 		"select * from test_table",
 		map[string]interface{}{"a": 1},
-		&tabletenv.TabletError{
-			Code:     vtrpcpb.Code_DEADLINE_EXCEEDED,
-			Message:  "msg",
-			SQLError: 10,
-			SQLState: "HY000",
-		},
-		nil,
+		sqldb.NewSQLError(10, "HY000", "msg"),
 	)
-	want := "error: (errno 10) (sqlstate HY000) during query: select * from test_table"
+	want := "(errno 10) (sqlstate HY000) during query: select * from test_table"
 	if err == nil || err.Error() != want {
-		t.Errorf("Error: %v, want '%s'", err, want)
+		t.Errorf("%v, want '%s'", err, want)
 	}
 }
 
@@ -1853,10 +1850,10 @@ func TestTerseErrorsNoBindVars(t *testing.T) {
 	config := testUtils.newQueryServiceConfig()
 	config.TerseErrors = true
 	tsv := NewTabletServer(config)
-	err := tsv.handleError("", nil, tabletenv.NewTabletError(vtrpcpb.Code_DEADLINE_EXCEEDED, "msg"), nil)
-	want := "error: msg"
+	err := tsv.convertError("", nil, vterrors.Errorf(vtrpcpb.Code_DEADLINE_EXCEEDED, "msg"))
+	want := "msg"
 	if err == nil || err.Error() != want {
-		t.Errorf("Error: %v, want '%s'", err, want)
+		t.Errorf("%v, want '%s'", err, want)
 	}
 }
 
@@ -1866,16 +1863,11 @@ func TestTerseErrorsIgnoreFailoverInProgress(t *testing.T) {
 	config.TerseErrors = true
 	tsv := NewTabletServer(config)
 
-	err := tsv.handleError("select * from test_table where id = :a",
+	err := tsv.convertError("select * from test_table where id = :a",
 		map[string]interface{}{"a": 1},
-		&tabletenv.TabletError{
-			Code:     vtrpcpb.Code_INTERNAL,
-			Message:  "failover in progress (errno 1227) (sqlstate 42000)",
-			SQLError: 1227,
-			SQLState: "42000",
-		},
-		nil /* logStats */)
-	if got, want := err.Error(), "fatal: failover in progress (errno 1227) (sqlstate 42000)"; got != want {
+		sqldb.NewSQLError(1227, "42000", "failover in progress"),
+	)
+	if got, want := err.Error(), "failover in progress (errno 1227) (sqlstate 42000)"; got != want {
 		t.Fatalf("'failover in progress' text must never be stripped: got = %v, want = %v", got, want)
 	}
 }

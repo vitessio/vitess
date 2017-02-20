@@ -12,7 +12,6 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/callerid"
 	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
-	"github.com/youtube/vitess/go/vt/tabletserver/tabletenv"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -28,7 +27,7 @@ type FakeQueryService struct {
 	// these fields are used to simulate and synchronize on errors
 	HasError      bool
 	HasBeginError bool
-	TabletError   *tabletenv.TabletError
+	TabletError   error
 	ErrorWait     chan struct{}
 
 	// these fields are used to simulate and synchronize on panics

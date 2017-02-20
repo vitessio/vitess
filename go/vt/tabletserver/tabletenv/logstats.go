@@ -47,7 +47,7 @@ type LogStats struct {
 	QuerySources         byte
 	Rows                 [][]sqltypes.Value
 	TransactionID        int64
-	Error                *TabletError
+	Error                error
 }
 
 // NewLogStats constructs a new LogStats with supplied Method and ctx

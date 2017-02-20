@@ -13,7 +13,9 @@ import (
 
 	"golang.org/x/net/context"
 
+	"github.com/youtube/vitess/go/mysqlconn"
 	"github.com/youtube/vitess/go/mysqlconn/fakesqldb"
+	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletenv"
 	"github.com/youtube/vitess/go/vt/vterrors"
@@ -117,25 +119,6 @@ func TestTxPoolTransactionKiller(t *testing.T) {
 	}
 }
 
-func TestTxPoolBeginAfterConnPoolClosed(t *testing.T) {
-	db := fakesqldb.New(t)
-	defer db.Close()
-	txPool := newTxPool()
-	txPool.SetTimeout(time.Duration(10))
-	txPool.Open(db.ConnParams(), db.ConnParams())
-
-	txPool.Close()
-
-	_, err := txPool.Begin(context.Background())
-	if err == nil {
-		t.Fatalf("expect to get an error")
-	}
-	terr, ok := err.(*tabletenv.TabletError)
-	if !ok || terr != tabletenv.ErrConnPoolClosed {
-		t.Fatalf("get error: %v, but expect: %v", terr, tabletenv.ErrConnPoolClosed)
-	}
-}
-
 // TestTxPoolBeginWithPoolConnectionError_TransientErrno2006 tests the case
 // where we see a transient errno 2006 e.g. because MySQL killed the
 // db connection. DBConn.Exec() is going to reconnect and retry automatically
@@ -190,8 +173,12 @@ func TestTxPoolBeginWithPoolConnectionError_Errno2006_Permanent(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "Lost connection to MySQL server") || !strings.Contains(err.Error(), "(errno 2013)") {
 		t.Fatalf("Begin did not return the reconnect error: %v", err)
 	}
-	if got, want := vterrors.Code(err), vtrpcpb.Code_INTERNAL; got != want {
-		t.Errorf("wrong error code for reconnect error after Begin: got = %v, want = %v", got, want)
+	sqlErr, ok := err.(*sqldb.SQLError)
+	if !ok {
+		t.Fatalf("Unexpected error type: %T, want %T", err, &sqldb.SQLError{})
+	}
+	if num := sqlErr.Number(); num != mysqlconn.CRServerLost {
+		t.Errorf("Unexpected error code: %d, want %d", num, mysqlconn.CRServerLost)
 	}
 }
 
@@ -298,7 +285,7 @@ func TestTxPoolGetConnNonExistentTransaction(t *testing.T) {
 	txPool.Open(db.ConnParams(), db.ConnParams())
 	defer txPool.Close()
 	_, err := txPool.Get(12345, "for query")
-	want := "not_in_tx: Transaction 12345: not found"
+	want := "transaction 12345: not found"
 	if err == nil || err.Error() != want {
 		t.Errorf("Get: %v, want %s", err, want)
 	}
@@ -333,8 +320,12 @@ func TestTxPoolExecFailDueToConnFail_Errno2006(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "(errno 2006)") {
 		t.Fatalf("Exec must return connection error with MySQL errno 2006: %v", err)
 	}
-	if got, want := vterrors.Code(err), vtrpcpb.Code_INTERNAL; got != want {
-		t.Errorf("wrong error code for Exec error: got = %v, want = %v", got, want)
+	sqlErr, ok := err.(*sqldb.SQLError)
+	if !ok {
+		t.Fatalf("Unexpected error type: %T, want %T", err, &sqldb.SQLError{})
+	}
+	if num := sqlErr.Number(); num != mysqlconn.CRServerGone {
+		t.Errorf("Unexpected error code: %d, want %d", num, mysqlconn.CRServerGone)
 	}
 }
 

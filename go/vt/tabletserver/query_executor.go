@@ -14,6 +14,7 @@ import (
 
 	"github.com/youtube/vitess/go/hack"
 	"github.com/youtube/vitess/go/mysqlconn"
+	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/trace"
 	"github.com/youtube/vitess/go/vt/callerid"
@@ -23,6 +24,7 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver/engines/schema"
 	"github.com/youtube/vitess/go/vt/tabletserver/planbuilder"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletenv"
+	"github.com/youtube/vitess/go/vt/vterrors"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
@@ -87,7 +89,7 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 		switch qre.plan.PlanID {
 		case planbuilder.PlanPassDML:
 			if qre.tsv.qe.strictMode.Get() {
-				return nil, tabletenv.NewTabletError(vtrpcpb.Code_INVALID_ARGUMENT, "DML too complex")
+				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "DML too complex")
 			}
 			return qre.txFetch(conn, qre.plan.FullQuery, qre.bindVars, nil, false, true)
 		case planbuilder.PlanInsertPK:
@@ -114,7 +116,7 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 		case planbuilder.PlanPassSelect:
 			return qre.execSelect()
 		case planbuilder.PlanSelectLock:
-			return nil, tabletenv.NewTabletError(vtrpcpb.Code_INVALID_ARGUMENT, "Disallowed outside transaction")
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "disallowed outside transaction")
 		case planbuilder.PlanSet:
 			return qre.execSet()
 		case planbuilder.PlanOther:
@@ -126,7 +128,7 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 			return qre.execSQL(conn, qre.query, true)
 		default:
 			if !qre.tsv.qe.autoCommit.Get() {
-				return nil, tabletenv.NewTabletError(vtrpcpb.Code_INVALID_ARGUMENT, "Disallowed outside transaction")
+				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "disallowed outside transaction")
 			}
 			return qre.execDmlAutoCommit()
 		}
@@ -165,7 +167,7 @@ func (qre *QueryExecutor) execDmlAutoCommit() (reply *sqltypes.Result, err error
 		switch qre.plan.PlanID {
 		case planbuilder.PlanPassDML:
 			if qre.tsv.qe.strictMode.Get() {
-				return nil, tabletenv.NewTabletError(vtrpcpb.Code_INVALID_ARGUMENT, "DML too complex")
+				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "DML too complex")
 			}
 			reply, err = qre.txFetch(conn, qre.plan.FullQuery, qre.bindVars, nil, false, true)
 		case planbuilder.PlanInsertPK:
@@ -181,7 +183,7 @@ func (qre *QueryExecutor) execDmlAutoCommit() (reply *sqltypes.Result, err error
 		case planbuilder.PlanUpsertPK:
 			reply, err = qre.execUpsertPK(conn)
 		default:
-			return nil, tabletenv.NewTabletError(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported query: %s", qre.query)
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported query: %s", qre.query)
 		}
 		return reply, err
 	})
@@ -229,9 +231,9 @@ func (qre *QueryExecutor) checkPermissions() error {
 	action, desc := qre.plan.Rules.getAction(remoteAddr, username, qre.bindVars)
 	switch action {
 	case QRFail:
-		return tabletenv.NewTabletError(vtrpcpb.Code_INVALID_ARGUMENT, "Query disallowed due to rule: %s", desc)
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "disallowed due to rule: %s", desc)
 	case QRFailRetry:
-		return tabletenv.NewTabletError(vtrpcpb.Code_FAILED_PRECONDITION, "Query disallowed due to rule: %s", desc)
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "disallowed due to rule: %s", desc)
 	}
 
 	// Check for SuperUser calling directly to VTTablet (e.g. VTWorker)
@@ -243,7 +245,7 @@ func (qre *QueryExecutor) checkPermissions() error {
 	callerID := callerid.ImmediateCallerIDFromContext(qre.ctx)
 	if callerID == nil {
 		if qre.tsv.qe.strictTableACL {
-			return tabletenv.NewTabletError(vtrpcpb.Code_UNAUTHENTICATED, "missing caller id")
+			return vterrors.Errorf(vtrpcpb.Code_UNAUTHENTICATED, "missing caller id")
 		}
 		return nil
 	}
@@ -260,7 +262,7 @@ func (qre *QueryExecutor) checkPermissions() error {
 	}
 
 	if qre.plan.Authorized == nil {
-		return tabletenv.NewTabletError(vtrpcpb.Code_PERMISSION_DENIED, "table acl error: nil acl")
+		return vterrors.Errorf(vtrpcpb.Code_PERMISSION_DENIED, "table acl error: nil acl")
 	}
 	tableACLStatsKey := []string{
 		qre.plan.TableName.String(),
@@ -279,7 +281,7 @@ func (qre *QueryExecutor) checkPermissions() error {
 			errStr := fmt.Sprintf("table acl error: %q cannot run %v on table %q", callerID.Username, qre.plan.PlanID, qre.plan.TableName)
 			tabletenv.TableaclDenied.Add(tableACLStatsKey, 1)
 			qre.tsv.qe.accessCheckerLogger.Infof("%s", errStr)
-			return tabletenv.NewTabletError(vtrpcpb.Code_PERMISSION_DENIED, "%s", errStr)
+			return vterrors.Errorf(vtrpcpb.Code_PERMISSION_DENIED, "%s", errStr)
 		}
 		return nil
 	}
@@ -290,7 +292,7 @@ func (qre *QueryExecutor) checkPermissions() error {
 func (qre *QueryExecutor) execDDL() (*sqltypes.Result, error) {
 	ddlPlan := planbuilder.DDLParse(qre.query)
 	if ddlPlan.Action == "" {
-		return nil, tabletenv.NewTabletError(vtrpcpb.Code_INVALID_ARGUMENT, "DDL is not understood")
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "DDL is not understood")
 	}
 
 	conn, err := qre.tsv.te.txPool.LocalBegin(qre.ctx)
@@ -464,7 +466,7 @@ func (qre *QueryExecutor) execInsertSubquery(conn *TxConnection) (*sqltypes.Resu
 		return &sqltypes.Result{RowsAffected: 0}, nil
 	}
 	if len(qre.plan.ColumnNumbers) != len(innerRows[0]) {
-		return nil, tabletenv.NewTabletError(vtrpcpb.Code_INVALID_ARGUMENT, "Subquery length does not match column list")
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Subquery length does not match column list")
 	}
 	pkRows := make([][]sqltypes.Value, len(innerRows))
 	for i, innerRow := range innerRows {
@@ -494,15 +496,15 @@ func (qre *QueryExecutor) execUpsertPK(conn *TxConnection) (*sqltypes.Result, er
 	if err == nil {
 		return result, nil
 	}
-	terr, ok := err.(*tabletenv.TabletError)
+	sqlErr, ok := err.(*sqldb.SQLError)
 	if !ok {
 		return result, err
 	}
-	if terr.SQLError != mysqlconn.ERDupEntry {
+	if sqlErr.Number() != mysqlconn.ERDupEntry {
 		return nil, err
 	}
 	// If the error didn't match pk, just return the error without updating.
-	if !strings.Contains(terr.Message, "'PRIMARY'") {
+	if !strings.Contains(sqlErr.Error(), "'PRIMARY'") {
 		return nil, err
 	}
 	// At this point, we know the insert failed due to a duplicate pk row.
@@ -600,7 +602,7 @@ func (qre *QueryExecutor) getConn(pool *connpool.Pool) (*connpool.DBConn, error)
 	case tabletenv.ErrConnPoolClosed:
 		return nil, err
 	}
-	return nil, tabletenv.NewTabletErrorSQL(vtrpcpb.Code_INTERNAL, err)
+	return nil, err
 }
 
 func (qre *QueryExecutor) qFetch(logStats *tabletenv.LogStats, parsedQuery *sqlparser.ParsedQuery, bindVars map[string]interface{}) (*sqltypes.Result, error) {
@@ -615,7 +617,7 @@ func (qre *QueryExecutor) qFetch(logStats *tabletenv.LogStats, parsedQuery *sqlp
 		conn, err := qre.tsv.qe.conns.Get(qre.ctx)
 		logStats.WaitingForConnection += time.Now().Sub(waitingForConnectionStart)
 		if err != nil {
-			q.Err = tabletenv.NewTabletErrorSQL(vtrpcpb.Code_INTERNAL, err)
+			q.Err = err
 		} else {
 			defer conn.Recycle()
 			q.Result, q.Err = qre.execSQL(conn, sql, false)
@@ -671,7 +673,7 @@ func (qre *QueryExecutor) generateFinalSQL(parsedQuery *sqlparser.ParsedQuery, b
 	bindVars["#maxLimit"] = qre.tsv.qe.maxResultSize.Get() + 1
 	sql, err := parsedQuery.GenerateQuery(bindVars)
 	if err != nil {
-		return "", tabletenv.NewTabletError(vtrpcpb.Code_INVALID_ARGUMENT, "%s", err)
+		return "", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%s", err)
 	}
 	if buildStreamComment != nil {
 		sql = append(sql, buildStreamComment...)
@@ -696,7 +698,7 @@ func (qre *QueryExecutor) execStreamSQL(conn *connpool.DBConn, sql string, inclu
 	qre.logStats.AddRewrittenSQL(sql, start)
 	if err != nil {
 		// MySQL error that isn't due to a connection issue
-		return tabletenv.NewTabletErrorSQL(vtrpcpb.Code_UNKNOWN, err)
+		return err
 	}
 	return nil
 }

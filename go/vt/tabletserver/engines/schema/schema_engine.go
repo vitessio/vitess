@@ -27,6 +27,7 @@ import (
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/tabletserver/connpool"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletenv"
+	"github.com/youtube/vitess/go/vt/vterrors"
 
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
@@ -96,7 +97,7 @@ func (se *Engine) Open(dbaParams *sqldb.ConnParams) error {
 
 	conn, err := se.conns.Get(ctx)
 	if err != nil {
-		return tabletenv.NewTabletErrorSQL(vtrpcpb.Code_INTERNAL, err)
+		return err
 	}
 	defer conn.Recycle()
 
@@ -107,13 +108,13 @@ func (se *Engine) Open(dbaParams *sqldb.ConnParams) error {
 
 	if se.strictMode.Get() {
 		if err := conn.VerifyMode(); err != nil {
-			return tabletenv.NewTabletError(vtrpcpb.Code_UNKNOWN, err.Error())
+			return vterrors.Errorf(vtrpcpb.Code_UNKNOWN, err.Error())
 		}
 	}
 
 	tableData, err := conn.Exec(ctx, mysqlconn.BaseShowTables, maxTableCount, false)
 	if err != nil {
-		return tabletenv.PrefixTabletError(vtrpcpb.Code_INTERNAL, err, "Could not get table list: ")
+		return vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "could not get table list: %v", err)
 	}
 
 	tables := make(map[string]*Table, len(tableData.Rows)+1)
@@ -155,7 +156,7 @@ func (se *Engine) Open(dbaParams *sqldb.ConnParams) error {
 
 	// Fail if we can't load the schema for any tables, but we know that some tables exist. This points to a configuration problem.
 	if len(tableData.Rows) != 0 && len(tables) == 1 { // len(tables) is always at least 1 because of the "dual" table
-		return tabletenv.NewTabletError(vtrpcpb.Code_UNKNOWN, "could not get schema for any tables")
+		return vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "could not get schema for any tables")
 	}
 	se.tables = tables
 	se.lastChange = curTime
@@ -198,7 +199,7 @@ func (se *Engine) Reload(ctx context.Context) error {
 	curTime, tableData, err := func() (int64, *sqltypes.Result, error) {
 		conn, err := se.conns.Get(ctx)
 		if err != nil {
-			return 0, nil, tabletenv.NewTabletErrorSQL(vtrpcpb.Code_INTERNAL, err)
+			return 0, nil, err
 		}
 		defer conn.Recycle()
 		curTime, err := se.mysqlTime(ctx, conn)
@@ -264,14 +265,14 @@ func (se *Engine) Reload(ctx context.Context) error {
 func (se *Engine) mysqlTime(ctx context.Context, conn *connpool.DBConn) (int64, error) {
 	tm, err := conn.Exec(ctx, "select unix_timestamp()", 1, false)
 	if err != nil {
-		return 0, tabletenv.PrefixTabletError(vtrpcpb.Code_UNKNOWN, err, "Could not get MySQL time: ")
+		return 0, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "could not get MySQL time: %v", err)
 	}
 	if len(tm.Rows) != 1 || len(tm.Rows[0]) != 1 || tm.Rows[0][0].IsNull() {
-		return 0, tabletenv.NewTabletError(vtrpcpb.Code_UNKNOWN, "Unexpected result for MySQL time: %+v", tm.Rows)
+		return 0, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "unexpected result for MySQL time: %+v", tm.Rows)
 	}
 	t, err := strconv.ParseInt(tm.Rows[0][0].String(), 10, 64)
 	if err != nil {
-		return 0, tabletenv.NewTabletError(vtrpcpb.Code_UNKNOWN, "Could not parse time %+v: %v", tm, err)
+		return 0, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "could not parse time %+v: %v", tm, err)
 	}
 	return t, nil
 }
@@ -281,19 +282,18 @@ func (se *Engine) TableWasCreatedOrAltered(ctx context.Context, tableName string
 	se.mu.Lock()
 	defer se.mu.Unlock()
 	if !se.isOpen {
-		return tabletenv.NewTabletError(vtrpcpb.Code_INTERNAL, "DDL called on closed schema")
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "DDL called on closed schema")
 	}
 
 	conn, err := se.conns.Get(ctx)
 	if err != nil {
-		return tabletenv.NewTabletErrorSQL(vtrpcpb.Code_INTERNAL, err)
+		return err
 	}
 	defer conn.Recycle()
 	tableData, err := conn.Exec(ctx, mysqlconn.BaseShowTablesForTable(tableName), 1, false)
 	if err != nil {
 		tabletenv.InternalErrors.Add("Schema", 1)
-		return tabletenv.PrefixTabletError(vtrpcpb.Code_INTERNAL, err,
-			fmt.Sprintf("TableWasCreatedOrAltered: information_schema query failed for table %s: ", tableName))
+		return vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "TableWasCreatedOrAltered: information_schema query failed for table %s: %v", tableName, err)
 	}
 	if len(tableData.Rows) != 1 {
 		// This can happen if DDLs race with each other.
@@ -308,8 +308,7 @@ func (se *Engine) TableWasCreatedOrAltered(ctx context.Context, tableName string
 	)
 	if err != nil {
 		tabletenv.InternalErrors.Add("Schema", 1)
-		return tabletenv.PrefixTabletError(vtrpcpb.Code_INTERNAL, err,
-			fmt.Sprintf("TableWasCreatedOrAltered: failed to load table %s: ", tableName))
+		return vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "TableWasCreatedOrAltered: failed to load table %s: %v", tableName, err)
 	}
 	// table_rows, data_length, index_length, max_data_length
 	table.SetMysqlStats(row[4], row[5], row[6], row[7], row[8])

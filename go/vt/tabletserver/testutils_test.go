@@ -9,15 +9,12 @@ import (
 	"fmt"
 	"math/rand"
 	"reflect"
-	"strings"
 	"testing"
 
 	"github.com/youtube/vitess/go/mysqlconn/fakesqldb"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletenv"
-
-	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 var errRejected = errors.New("rejected")
@@ -38,19 +35,6 @@ func newTestUtils() *testUtils {
 func (util *testUtils) checkEqual(t *testing.T, expected interface{}, result interface{}) {
 	if !reflect.DeepEqual(expected, result) {
 		t.Fatalf("expect to get: %v, but got: %v", expected, result)
-	}
-}
-
-func (util *testUtils) checkTabletError(t *testing.T, err interface{}, tabletErrCode vtrpcpb.Code, tabletErrStr string) {
-	tabletError, ok := err.(*tabletenv.TabletError)
-	if !ok {
-		t.Fatalf("should return a TabletError, but got err: %v", err)
-	}
-	if tabletError.Code != tabletErrCode {
-		t.Fatalf("got a TabletError with error code %s but wanted: %s", tabletError.Code, tabletErrCode)
-	}
-	if !strings.Contains(tabletError.Error(), tabletErrStr) {
-		t.Fatalf("expect the tablet error should contain string: '%s', but it does not. Got tablet error: '%s'", tabletErrStr, tabletError.Error())
 	}
 }
 

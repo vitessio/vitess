@@ -15,6 +15,7 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver/connpool"
 	"github.com/youtube/vitess/go/vt/tabletserver/engines/schema"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletenv"
+	"github.com/youtube/vitess/go/vt/vterrors"
 
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
@@ -77,7 +78,7 @@ func (me *MessagerEngine) Subscribe(name string, rcv *messageReceiver) error {
 	defer me.mu.Unlock()
 	mm := me.managers[name]
 	if mm == nil {
-		return tabletenv.NewTabletError(vtrpcpb.Code_INVALID_ARGUMENT, "message table %s not found", name)
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "message table %s not found", name)
 	}
 	mm.Subscribe(rcv)
 	return nil

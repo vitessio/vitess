@@ -189,7 +189,7 @@ func (mysqld *Mysqld) GetPrimaryKeyColumns(dbName, table string) ([]string, erro
 		}
 	}
 	if keyNameIndex == -1 || seqInIndexIndex == -1 || columnNameIndex == -1 {
-		return nil, fmt.Errorf("Unknown columns in 'show index' result: %v", qr.Fields)
+		return nil, fmt.Errorf("unknown columns in 'show index' result: %v", qr.Fields)
 	}
 
 	columns := make([]string, 0, 5)
@@ -206,7 +206,7 @@ func (mysqld *Mysqld) GetPrimaryKeyColumns(dbName, table string) ([]string, erro
 			return nil, err
 		}
 		if seqInIndex != expectedIndex {
-			return nil, fmt.Errorf("Unexpected index: %v != %v", seqInIndex, expectedIndex)
+			return nil, fmt.Errorf("unexpected index: %v != %v", seqInIndex, expectedIndex)
 		}
 		expectedIndex++
 
