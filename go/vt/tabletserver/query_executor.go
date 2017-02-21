@@ -204,10 +204,10 @@ func (qre *QueryExecutor) execAsTransaction(f func(conn *TxConnection) (*sqltype
 		return nil, err
 	}
 	err = qre.tsv.te.txPool.LocalCommit(qre.ctx, conn, qre.tsv.messager)
+	qre.logStats.AddRewrittenSQL("commit", start)
 	if err != nil {
 		return nil, err
 	}
-	qre.logStats.AddRewrittenSQL("commit", start)
 	return reply, nil
 }
 
