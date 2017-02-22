@@ -2,7 +2,6 @@ package resharding
 
 import (
 	"context"
-	"fmt"
 	"sync"
 
 	"github.com/golang/protobuf/proto"
@@ -42,9 +41,6 @@ func (c *CheckpointWriter) UpdateTask(taskID string, status workflowpb.TaskState
 	}
 
 	t := c.checkpoint.Tasks[taskID]
-
-	fmt.Printf("error message send to task %v: %v\n", t.Id, errorMessage)
-
 	t.State = status
 	t.Error = errorMessage
 	return c.saveLocked()
