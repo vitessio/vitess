@@ -7,7 +7,6 @@
 package vtgate
 
 import (
-	"errors"
 	"flag"
 	"fmt"
 	"math"
@@ -628,7 +627,7 @@ func (vtg *VTGate) StreamExecuteShards(ctx context.Context, sql string, bindVari
 // Begin begins a transaction. It has to be concluded by a Commit or Rollback.
 func (vtg *VTGate) Begin(ctx context.Context, singledb bool) (*vtgatepb.Session, error) {
 	if !singledb && vtg.transactionMode == TxSingle {
-		return nil, vterrors.FromError(vtrpcpb.Code_INVALID_ARGUMENT, errors.New("multi-db transaction disallowed"))
+		return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "multi-db transaction disallowed")
 	}
 	return &vtgatepb.Session{
 		InTransaction: true,
@@ -641,7 +640,7 @@ func (vtg *VTGate) Commit(ctx context.Context, twopc bool, session *vtgatepb.Ses
 	if twopc && vtg.transactionMode != TxTwoPC {
 		// Rollback the transaction to prevent future deadlocks.
 		vtg.txConn.Rollback(ctx, NewSafeSession(session))
-		return vterrors.FromError(vtrpcpb.Code_INVALID_ARGUMENT, errors.New("2pc transaction disallowed"))
+		return vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "2pc transaction disallowed")
 	}
 	return formatError(vtg.txConn.Commit(ctx, twopc, NewSafeSession(session)))
 }
@@ -898,18 +897,14 @@ func recordAndAnnotateError(err error, statsKey []string, request map[string]int
 	case vtrpcpb.Code_UNKNOWN, vtrpcpb.Code_INTERNAL, vtrpcpb.Code_DATA_LOSS:
 		logger.Errorf("%v, request: %+v", err, request)
 	}
-
-	// Suffix the error with our address.
-	s := fmt.Sprintf(", vtgate: %v", servenv.ListeningURL.String())
-	return vterrors.WithSuffix(err, s)
+	return vterrors.Errorf(vterrors.Code(err), "vtgate: %s: %v", servenv.ListeningURL.String(), err)
 }
 
 func formatError(err error) error {
 	if err == nil {
 		return nil
 	}
-	s := fmt.Sprintf(", vtgate: %v", servenv.ListeningURL.String())
-	return vterrors.WithSuffix(err, s)
+	return vterrors.Errorf(vterrors.Code(err), "vtgate: %s: %v", servenv.ListeningURL.String(), err)
 }
 
 // HandlePanic recovers from panics, and logs / increment counters

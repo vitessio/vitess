@@ -599,7 +599,7 @@ func (qre *QueryExecutor) getConn(pool *connpool.Pool) (*connpool.DBConn, error)
 	case nil:
 		qre.logStats.WaitingForConnection += time.Now().Sub(start)
 		return conn, nil
-	case tabletenv.ErrConnPoolClosed:
+	case connpool.ErrConnPoolClosed:
 		return nil, err
 	}
 	return nil, err

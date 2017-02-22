@@ -43,7 +43,7 @@ func gRPCVtworkerClientFactory(addr string, dialTimeout time.Duration) (vtworker
 	}
 	cc, err := grpc.Dial(addr, opt, grpc.WithBlock(), grpc.WithTimeout(dialTimeout))
 	if err != nil {
-		return nil, vterrors.NewVitessError(vtrpcpb.Code_DEADLINE_EXCEEDED, err, "grpc.Dial() err: %v", err)
+		return nil, vterrors.Errorf(vtrpcpb.Code_DEADLINE_EXCEEDED, "grpc.Dial() err: %v", err)
 	}
 	c := vtworkerservicepb.NewVtworkerClient(cc)
 
@@ -60,7 +60,7 @@ type eventStreamAdapter struct {
 func (e *eventStreamAdapter) Recv() (*logutilpb.Event, error) {
 	le, err := e.stream.Recv()
 	if err != nil {
-		return nil, vterrors.FromGRPCError(err)
+		return nil, vterrors.FromGRPC(err)
 	}
 	return le.Event, nil
 }
@@ -73,7 +73,7 @@ func (client *gRPCVtworkerClient) ExecuteVtworkerCommand(ctx context.Context, ar
 
 	stream, err := client.c.ExecuteVtworkerCommand(ctx, query)
 	if err != nil {
-		return nil, vterrors.FromGRPCError(err)
+		return nil, vterrors.FromGRPC(err)
 	}
 	return &eventStreamAdapter{stream}, nil
 }

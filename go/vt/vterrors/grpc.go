@@ -18,12 +18,6 @@ import (
 // Use these methods to return an error through gRPC and still
 // retain its code.
 
-// GRPCServerErrPrefix is the string we prefix gRPC server errors with. This is
-// necessary because there is currently no good way, in gRPC, to differentiate
-// between an error from a server vs the client.
-// See: https://github.com/grpc/grpc-go/issues/319
-const GRPCServerErrPrefix = "gRPCServerError:"
-
 // CodeToLegacyErrorCode maps a vtrpcpb.Code to a vtrpcpb.LegacyErrorCode.
 func CodeToLegacyErrorCode(code vtrpcpb.Code) vtrpcpb.LegacyErrorCode {
 	switch code {
@@ -94,56 +88,34 @@ func LegacyErrorCodeToCode(code vtrpcpb.LegacyErrorCode) vtrpcpb.Code {
 	}
 }
 
-// CodeToGRPC maps a vtrpcpb.Code to a grpc Code.
-func CodeToGRPC(code vtrpcpb.Code) codes.Code {
-	return codes.Code(code)
-}
-
-// GRPCToCode maps a grpc Code to a vtrpcpb.Code
-func GRPCToCode(code codes.Code) vtrpcpb.Code {
-	return vtrpcpb.Code(code)
-}
-
-// toGRPCCode will attempt to determine the best gRPC code for a particular error.
-func toGRPCCode(err error) codes.Code {
-	if err == nil {
-		return codes.OK
-	}
-	if vtErr, ok := err.(VtError); ok {
-		return CodeToGRPC(vtErr.VtErrorCode())
-	}
-	// Returns the underlying gRPC Code, or codes.Unknown if one doesn't exist.
-	return grpc.Code(err)
-}
-
 // truncateError shortens errors because gRPC has a size restriction on them.
-func truncateError(err error) error {
+func truncateError(err error) string {
 	// For more details see: https://github.com/grpc/grpc-go/issues/443
 	// The gRPC spec says "Clients may limit the size of Response-Headers,
 	// Trailers, and Trailers-Only, with a default of 8 KiB each suggested."
 	// Therefore, we assume 8 KiB minus some headroom.
 	GRPCErrorLimit := 8*1024 - 512
 	if len(err.Error()) <= GRPCErrorLimit {
-		return err
+		return err.Error()
 	}
 	truncateInfo := "[...] [remainder of the error is truncated because gRPC has a size limit on errors.]"
 	truncatedErr := err.Error()[:GRPCErrorLimit]
-	return fmt.Errorf("%v %v", truncatedErr, truncateInfo)
+	return fmt.Sprintf("%v %v", truncatedErr, truncateInfo)
 }
 
-// ToGRPCError returns an error as a gRPC error, with the appropriate error code.
-func ToGRPCError(err error) error {
+// ToGRPC returns an error as a gRPC error, with the appropriate error code.
+func ToGRPC(err error) error {
 	if err == nil {
 		return nil
 	}
-	return grpc.Errorf(toGRPCCode(err), "%v %v", GRPCServerErrPrefix, truncateError(err))
+	return grpc.Errorf(codes.Code(Code(err)), "%v", truncateError(err))
 }
 
-// FromGRPCError returns a gRPC error as a VitessError, translating between error codes.
+// FromGRPC returns a gRPC error as a vtError, translating between error codes.
 // However, there are a few errors which are not translated and passed as they
 // are. For example, io.EOF since our code base checks for this error to find
 // out that a stream has finished.
-func FromGRPCError(err error) error {
+func FromGRPC(err error) error {
 	if err == nil {
 		return nil
 	}
@@ -151,8 +123,5 @@ func FromGRPCError(err error) error {
 		// Do not wrap io.EOF because we compare against it for finished streams.
 		return err
 	}
-	return &VitessError{
-		code: GRPCToCode(grpc.Code(err)),
-		err:  err,
-	}
+	return New(vtrpcpb.Code(grpc.Code(err)), err.Error())
 }

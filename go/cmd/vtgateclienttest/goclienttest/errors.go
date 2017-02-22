@@ -263,14 +263,7 @@ func checkError(t *testing.T, err error, query, errStr string, errCode vtrpcpb.C
 		t.Errorf("[%v] expected error, got nil", query)
 		return
 	}
-	switch vtErr := err.(type) {
-	case *vterrors.VitessError:
-		if got, want := vtErr.VtErrorCode(), errCode; got != want {
-			t.Errorf("[%v] error code = %v, want %v", query, got, want)
-		}
-	default:
-		t.Errorf("[%v] unrecognized error type: %T, error: %#v", query, err, err)
-		return
+	if got, want := vterrors.Code(err), errCode; got != want {
+		t.Errorf("[%v] error code = %v, want %v", query, got, want)
 	}
-
 }

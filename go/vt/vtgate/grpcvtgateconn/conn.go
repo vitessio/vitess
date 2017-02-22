@@ -77,10 +77,10 @@ func (conn *vtgateConn) Execute(ctx context.Context, query string, bindVars map[
 	}
 	response, err := conn.c.Execute(ctx, request)
 	if err != nil {
-		return nil, session, vterrors.FromGRPCError(err)
+		return nil, session, vterrors.FromGRPC(err)
 	}
 	if response.Error != nil {
-		return nil, response.Session, vterrors.FromVtRPCError(response.Error)
+		return nil, response.Session, vterrors.FromVTRPC(response.Error)
 	}
 	return sqltypes.Proto3ToResult(response.Result), response.Session, nil
 }
@@ -105,10 +105,10 @@ func (conn *vtgateConn) ExecuteShards(ctx context.Context, query string, keyspac
 	}
 	response, err := conn.c.ExecuteShards(ctx, request)
 	if err != nil {
-		return nil, session, vterrors.FromGRPCError(err)
+		return nil, session, vterrors.FromGRPC(err)
 	}
 	if response.Error != nil {
-		return nil, response.Session, vterrors.FromVtRPCError(response.Error)
+		return nil, response.Session, vterrors.FromVTRPC(response.Error)
 	}
 	return sqltypes.Proto3ToResult(response.Result), response.Session, nil
 }
@@ -133,10 +133,10 @@ func (conn *vtgateConn) ExecuteKeyspaceIds(ctx context.Context, query string, ke
 	}
 	response, err := conn.c.ExecuteKeyspaceIds(ctx, request)
 	if err != nil {
-		return nil, session, vterrors.FromGRPCError(err)
+		return nil, session, vterrors.FromGRPC(err)
 	}
 	if response.Error != nil {
-		return nil, response.Session, vterrors.FromVtRPCError(response.Error)
+		return nil, response.Session, vterrors.FromVTRPC(response.Error)
 	}
 	return sqltypes.Proto3ToResult(response.Result), response.Session, nil
 }
@@ -161,10 +161,10 @@ func (conn *vtgateConn) ExecuteKeyRanges(ctx context.Context, query string, keys
 	}
 	response, err := conn.c.ExecuteKeyRanges(ctx, request)
 	if err != nil {
-		return nil, session, vterrors.FromGRPCError(err)
+		return nil, session, vterrors.FromGRPC(err)
 	}
 	if response.Error != nil {
-		return nil, response.Session, vterrors.FromVtRPCError(response.Error)
+		return nil, response.Session, vterrors.FromVTRPC(response.Error)
 	}
 	return sqltypes.Proto3ToResult(response.Result), response.Session, nil
 }
@@ -190,10 +190,10 @@ func (conn *vtgateConn) ExecuteEntityIds(ctx context.Context, query string, keys
 	}
 	response, err := conn.c.ExecuteEntityIds(ctx, request)
 	if err != nil {
-		return nil, session, vterrors.FromGRPCError(err)
+		return nil, session, vterrors.FromGRPC(err)
 	}
 	if response.Error != nil {
-		return nil, response.Session, vterrors.FromVtRPCError(response.Error)
+		return nil, response.Session, vterrors.FromVTRPC(response.Error)
 	}
 	return sqltypes.Proto3ToResult(response.Result), response.Session, nil
 }
@@ -218,10 +218,10 @@ func (conn *vtgateConn) ExecuteBatch(ctx context.Context, queryList []string, bi
 	}
 	response, err := conn.c.ExecuteBatch(ctx, request)
 	if err != nil {
-		return nil, session, vterrors.FromGRPCError(err)
+		return nil, session, vterrors.FromGRPC(err)
 	}
 	if response.Error != nil {
-		return nil, response.Session, vterrors.FromVtRPCError(response.Error)
+		return nil, response.Session, vterrors.FromVTRPC(response.Error)
 	}
 	return sqltypes.Proto3ToQueryReponses(response.Results), response.Session, nil
 }
@@ -241,10 +241,10 @@ func (conn *vtgateConn) ExecuteBatchShards(ctx context.Context, queries []*vtgat
 	}
 	response, err := conn.c.ExecuteBatchShards(ctx, request)
 	if err != nil {
-		return nil, session, vterrors.FromGRPCError(err)
+		return nil, session, vterrors.FromGRPC(err)
 	}
 	if response.Error != nil {
-		return nil, response.Session, vterrors.FromVtRPCError(response.Error)
+		return nil, response.Session, vterrors.FromVTRPC(response.Error)
 	}
 	return sqltypes.Proto3ToResults(response.Results), response.Session, nil
 }
@@ -264,10 +264,10 @@ func (conn *vtgateConn) ExecuteBatchKeyspaceIds(ctx context.Context, queries []*
 	}
 	response, err := conn.c.ExecuteBatchKeyspaceIds(ctx, request)
 	if err != nil {
-		return nil, session, vterrors.FromGRPCError(err)
+		return nil, session, vterrors.FromGRPC(err)
 	}
 	if response.Error != nil {
-		return nil, response.Session, vterrors.FromVtRPCError(response.Error)
+		return nil, response.Session, vterrors.FromVTRPC(response.Error)
 	}
 	return sqltypes.Proto3ToResults(response.Results), response.Session, nil
 }
@@ -280,10 +280,7 @@ type streamExecuteAdapter struct {
 func (a *streamExecuteAdapter) Recv() (*sqltypes.Result, error) {
 	qr, err := a.recv()
 	if err != nil {
-		if err != io.EOF {
-			err = vterrors.FromGRPCError(err)
-		}
-		return nil, err
+		return nil, vterrors.FromGRPC(err)
 	}
 	if a.fields == nil {
 		a.fields = qr.Fields
@@ -305,7 +302,7 @@ func (conn *vtgateConn) StreamExecute(ctx context.Context, query string, bindVar
 	}
 	stream, err := conn.c.StreamExecute(ctx, req)
 	if err != nil {
-		return nil, vterrors.FromGRPCError(err)
+		return nil, vterrors.FromGRPC(err)
 	}
 	return &streamExecuteAdapter{
 		recv: func() (*querypb.QueryResult, error) {
@@ -333,7 +330,7 @@ func (conn *vtgateConn) StreamExecuteShards(ctx context.Context, query string, k
 	}
 	stream, err := conn.c.StreamExecuteShards(ctx, req)
 	if err != nil {
-		return nil, vterrors.FromGRPCError(err)
+		return nil, vterrors.FromGRPC(err)
 	}
 	return &streamExecuteAdapter{
 		recv: func() (*querypb.QueryResult, error) {
@@ -361,7 +358,7 @@ func (conn *vtgateConn) StreamExecuteKeyRanges(ctx context.Context, query string
 	}
 	stream, err := conn.c.StreamExecuteKeyRanges(ctx, req)
 	if err != nil {
-		return nil, vterrors.FromGRPCError(err)
+		return nil, vterrors.FromGRPC(err)
 	}
 	return &streamExecuteAdapter{
 		recv: func() (*querypb.QueryResult, error) {
@@ -389,7 +386,7 @@ func (conn *vtgateConn) StreamExecuteKeyspaceIds(ctx context.Context, query stri
 	}
 	stream, err := conn.c.StreamExecuteKeyspaceIds(ctx, req)
 	if err != nil {
-		return nil, vterrors.FromGRPCError(err)
+		return nil, vterrors.FromGRPC(err)
 	}
 	return &streamExecuteAdapter{
 		recv: func() (*querypb.QueryResult, error) {
@@ -409,7 +406,7 @@ func (conn *vtgateConn) Begin(ctx context.Context, singledb bool) (interface{}, 
 	}
 	response, err := conn.c.Begin(ctx, request)
 	if err != nil {
-		return nil, vterrors.FromGRPCError(err)
+		return nil, vterrors.FromGRPC(err)
 	}
 	return response.Session, nil
 }
@@ -421,7 +418,7 @@ func (conn *vtgateConn) Commit(ctx context.Context, session interface{}, twopc b
 		Atomic:   twopc,
 	}
 	_, err := conn.c.Commit(ctx, request)
-	return vterrors.FromGRPCError(err)
+	return vterrors.FromGRPC(err)
 }
 
 func (conn *vtgateConn) Rollback(ctx context.Context, session interface{}) error {
@@ -430,7 +427,7 @@ func (conn *vtgateConn) Rollback(ctx context.Context, session interface{}) error
 		Session:  session.(*vtgatepb.Session),
 	}
 	_, err := conn.c.Rollback(ctx, request)
-	return vterrors.FromGRPCError(err)
+	return vterrors.FromGRPC(err)
 }
 
 func (conn *vtgateConn) ResolveTransaction(ctx context.Context, dtid string) error {
@@ -439,7 +436,7 @@ func (conn *vtgateConn) ResolveTransaction(ctx context.Context, dtid string) err
 		Dtid:     dtid,
 	}
 	_, err := conn.c.ResolveTransaction(ctx, request)
-	return vterrors.FromGRPCError(err)
+	return vterrors.FromGRPC(err)
 }
 
 func (conn *vtgateConn) MessageStream(ctx context.Context, keyspace string, shard string, keyRange *topodatapb.KeyRange, name string, callback func(*sqltypes.Result) error) error {
@@ -452,14 +449,14 @@ func (conn *vtgateConn) MessageStream(ctx context.Context, keyspace string, shar
 	}
 	stream, err := conn.c.MessageStream(ctx, request)
 	if err != nil {
-		return vterrors.FromGRPCError(err)
+		return vterrors.FromGRPC(err)
 	}
 	var fields []*querypb.Field
 	for {
 		r, err := stream.Recv()
 		if err != nil {
 			if err != io.EOF {
-				return vterrors.FromGRPCError(err)
+				return vterrors.FromGRPC(err)
 			}
 			return nil
 		}
@@ -482,7 +479,7 @@ func (conn *vtgateConn) MessageAck(ctx context.Context, keyspace string, name st
 	}
 	r, err := conn.c.MessageAck(ctx, request)
 	if err != nil {
-		return 0, vterrors.FromGRPCError(err)
+		return 0, vterrors.FromGRPC(err)
 	}
 	return int64(r.Result.RowsAffected), nil
 }
@@ -512,7 +509,7 @@ func (conn *vtgateConn) SplitQuery(
 	}
 	response, err := conn.c.SplitQuery(ctx, request)
 	if err != nil {
-		return nil, vterrors.FromGRPCError(err)
+		return nil, vterrors.FromGRPC(err)
 	}
 	return response.Splits, nil
 }
@@ -523,7 +520,7 @@ func (conn *vtgateConn) GetSrvKeyspace(ctx context.Context, keyspace string) (*t
 	}
 	response, err := conn.c.GetSrvKeyspace(ctx, request)
 	if err != nil {
-		return nil, vterrors.FromGRPCError(err)
+		return nil, vterrors.FromGRPC(err)
 	}
 	return response.SrvKeyspace, nil
 }
@@ -535,10 +532,7 @@ type updateStreamAdapter struct {
 func (a *updateStreamAdapter) Recv() (*querypb.StreamEvent, int64, error) {
 	r, err := a.stream.Recv()
 	if err != nil {
-		if err != io.EOF {
-			err = vterrors.FromGRPCError(err)
-		}
-		return nil, 0, err
+		return nil, 0, vterrors.FromGRPC(err)
 	}
 	return r.Event, r.ResumeTimestamp, nil
 }
@@ -555,7 +549,7 @@ func (conn *vtgateConn) UpdateStream(ctx context.Context, keyspace string, shard
 	}
 	stream, err := conn.c.UpdateStream(ctx, req)
 	if err != nil {
-		return nil, vterrors.FromGRPCError(err)
+		return nil, vterrors.FromGRPC(err)
 	}
 	return &updateStreamAdapter{
 		stream: stream,

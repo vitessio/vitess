@@ -39,7 +39,7 @@ func TestFromVtRPCError(t *testing.T) {
 		want: New(vtrpcpb.Code_INVALID_ARGUMENT, "bad input"),
 	}}
 	for _, tcase := range testcases {
-		got := FromVtRPCError(tcase.in)
+		got := FromVTRPC(tcase.in)
 		if !reflect.DeepEqual(got, tcase.want) {
 			t.Errorf("FromVtRPCError(%v): %v, want %v", tcase.in, got, tcase.want)
 		}
@@ -62,7 +62,7 @@ func TestVtRPCErrorFromVtError(t *testing.T) {
 		},
 	}}
 	for _, tcase := range testcases {
-		got := VtRPCErrorFromVtError(tcase.in)
+		got := ToVTRPC(tcase.in)
 		if !reflect.DeepEqual(got, tcase.want) {
 			t.Errorf("VtRPCErrorFromVtError(%v): %v, want %v", tcase.in, got, tcase.want)
 		}

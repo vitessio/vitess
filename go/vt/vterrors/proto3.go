@@ -9,13 +9,13 @@ import (
 )
 
 // This file contains the necessary methods to send and receive errors
-// as payloads of proto3 structures. It converts VitessError to and from
-// vtrpcpb.Error. Use these methods when a RPC call can return both
+// as payloads of proto3 structures. It converts vtError to and from
+// *vtrpcpb.RPCError. Use these methods when a RPC call can return both
 // data and an error.
 
-// FromVtRPCError recovers a VitessError from a *vtrpcpb.RPCError (which is how VitessErrors
-// are transmitted across proto3 RPC boundaries).
-func FromVtRPCError(rpcErr *vtrpcpb.RPCError) error {
+// FromVTRPC recovers a vtError from a *vtrpcpb.RPCError (which is how vtError
+// is transmitted across proto3 RPC boundaries).
+func FromVTRPC(rpcErr *vtrpcpb.RPCError) error {
 	if rpcErr == nil {
 		return nil
 	}
@@ -26,8 +26,8 @@ func FromVtRPCError(rpcErr *vtrpcpb.RPCError) error {
 	return New(code, rpcErr.Message)
 }
 
-// VtRPCErrorFromVtError converts from a VtError to a vtrpcpb.RPCError.
-func VtRPCErrorFromVtError(err error) *vtrpcpb.RPCError {
+// ToVTRPC converts from vtError to a vtrpcpb.RPCError.
+func ToVTRPC(err error) *vtrpcpb.RPCError {
 	if err == nil {
 		return nil
 	}

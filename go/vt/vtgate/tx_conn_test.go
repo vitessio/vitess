@@ -6,7 +6,6 @@ package vtgate
 
 import (
 	"context"
-	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -592,7 +591,7 @@ func TestTxConnMultiGoSessions(t *testing.T) {
 		},
 	}}
 	err := txc.runSessions(input, func(s *vtgatepb.Session_ShardSession) error {
-		return vterrors.FromError(vtrpcpb.Code_INTERNAL, fmt.Errorf("err %s", s.Target.Keyspace))
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "err %s", s.Target.Keyspace)
 	})
 	want := "err 0"
 	if err == nil || err.Error() != want {
@@ -609,7 +608,7 @@ func TestTxConnMultiGoSessions(t *testing.T) {
 		},
 	}}
 	err = txc.runSessions(input, func(s *vtgatepb.Session_ShardSession) error {
-		return vterrors.FromError(vtrpcpb.Code_INTERNAL, fmt.Errorf("err %s", s.Target.Keyspace))
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "err %s", s.Target.Keyspace)
 	})
 	want = "err 0\nerr 1"
 	if err == nil || err.Error() != want {
@@ -634,7 +633,7 @@ func TestTxConnMultiGoTargets(t *testing.T) {
 		Keyspace: "0",
 	}}
 	err := txc.runTargets(input, func(t *querypb.Target) error {
-		return vterrors.FromError(vtrpcpb.Code_INTERNAL, fmt.Errorf("err %s", t.Keyspace))
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "err %s", t.Keyspace)
 	})
 	want := "err 0"
 	if err == nil || err.Error() != want {
@@ -647,7 +646,7 @@ func TestTxConnMultiGoTargets(t *testing.T) {
 		Keyspace: "1",
 	}}
 	err = txc.runTargets(input, func(t *querypb.Target) error {
-		return vterrors.FromError(vtrpcpb.Code_INTERNAL, fmt.Errorf("err %s", t.Keyspace))
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "err %s", t.Keyspace)
 	})
 	want = "err 0\nerr 1"
 	if err == nil || err.Error() != want {

@@ -104,7 +104,7 @@ func (conn *gRPCQueryClient) Execute(ctx context.Context, target *querypb.Target
 	}
 	er, err := conn.c.Execute(ctx, req)
 	if err != nil {
-		return nil, tabletconn.TabletErrorFromGRPC(err)
+		return nil, tabletconn.ErrorFromGRPC(err)
 	}
 	return sqltypes.Proto3ToResult(er.Result), nil
 }
@@ -135,7 +135,7 @@ func (conn *gRPCQueryClient) ExecuteBatch(ctx context.Context, target *querypb.T
 	}
 	ebr, err := conn.c.ExecuteBatch(ctx, req)
 	if err != nil {
-		return nil, tabletconn.TabletErrorFromGRPC(err)
+		return nil, tabletconn.ErrorFromGRPC(err)
 	}
 	return sqltypes.Proto3ToResults(ebr.Results), nil
 }
@@ -173,7 +173,7 @@ func (conn *gRPCQueryClient) StreamExecute(ctx context.Context, target *querypb.
 		}
 		stream, err := conn.c.StreamExecute(ctx, req)
 		if err != nil {
-			return nil, tabletconn.TabletErrorFromGRPC(err)
+			return nil, tabletconn.ErrorFromGRPC(err)
 		}
 		return stream, nil
 	}()
@@ -184,7 +184,7 @@ func (conn *gRPCQueryClient) StreamExecute(ctx context.Context, target *querypb.
 	for {
 		ser, err := stream.Recv()
 		if err != nil {
-			return tabletconn.TabletErrorFromGRPC(err)
+			return tabletconn.ErrorFromGRPC(err)
 		}
 		if fields == nil {
 			fields = ser.Result.Fields
@@ -213,7 +213,7 @@ func (conn *gRPCQueryClient) Begin(ctx context.Context, target *querypb.Target) 
 	}
 	br, err := conn.c.Begin(ctx, req)
 	if err != nil {
-		return 0, tabletconn.TabletErrorFromGRPC(err)
+		return 0, tabletconn.ErrorFromGRPC(err)
 	}
 	return br.TransactionId, nil
 }
@@ -234,7 +234,7 @@ func (conn *gRPCQueryClient) Commit(ctx context.Context, target *querypb.Target,
 	}
 	_, err := conn.c.Commit(ctx, req)
 	if err != nil {
-		return tabletconn.TabletErrorFromGRPC(err)
+		return tabletconn.ErrorFromGRPC(err)
 	}
 	return nil
 }
@@ -255,7 +255,7 @@ func (conn *gRPCQueryClient) Rollback(ctx context.Context, target *querypb.Targe
 	}
 	_, err := conn.c.Rollback(ctx, req)
 	if err != nil {
-		return tabletconn.TabletErrorFromGRPC(err)
+		return tabletconn.ErrorFromGRPC(err)
 	}
 	return nil
 }
@@ -277,7 +277,7 @@ func (conn *gRPCQueryClient) Prepare(ctx context.Context, target *querypb.Target
 	}
 	_, err := conn.c.Prepare(ctx, req)
 	if err != nil {
-		return tabletconn.TabletErrorFromGRPC(err)
+		return tabletconn.ErrorFromGRPC(err)
 	}
 	return nil
 }
@@ -298,7 +298,7 @@ func (conn *gRPCQueryClient) CommitPrepared(ctx context.Context, target *querypb
 	}
 	_, err := conn.c.CommitPrepared(ctx, req)
 	if err != nil {
-		return tabletconn.TabletErrorFromGRPC(err)
+		return tabletconn.ErrorFromGRPC(err)
 	}
 	return nil
 }
@@ -320,7 +320,7 @@ func (conn *gRPCQueryClient) RollbackPrepared(ctx context.Context, target *query
 	}
 	_, err := conn.c.RollbackPrepared(ctx, req)
 	if err != nil {
-		return tabletconn.TabletErrorFromGRPC(err)
+		return tabletconn.ErrorFromGRPC(err)
 	}
 	return nil
 }
@@ -342,7 +342,7 @@ func (conn *gRPCQueryClient) CreateTransaction(ctx context.Context, target *quer
 	}
 	_, err := conn.c.CreateTransaction(ctx, req)
 	if err != nil {
-		return tabletconn.TabletErrorFromGRPC(err)
+		return tabletconn.ErrorFromGRPC(err)
 	}
 	return nil
 }
@@ -365,7 +365,7 @@ func (conn *gRPCQueryClient) StartCommit(ctx context.Context, target *querypb.Ta
 	}
 	_, err := conn.c.StartCommit(ctx, req)
 	if err != nil {
-		return tabletconn.TabletErrorFromGRPC(err)
+		return tabletconn.ErrorFromGRPC(err)
 	}
 	return nil
 }
@@ -388,7 +388,7 @@ func (conn *gRPCQueryClient) SetRollback(ctx context.Context, target *querypb.Ta
 	}
 	_, err := conn.c.SetRollback(ctx, req)
 	if err != nil {
-		return tabletconn.TabletErrorFromGRPC(err)
+		return tabletconn.ErrorFromGRPC(err)
 	}
 	return nil
 }
@@ -410,7 +410,7 @@ func (conn *gRPCQueryClient) ConcludeTransaction(ctx context.Context, target *qu
 	}
 	_, err := conn.c.ConcludeTransaction(ctx, req)
 	if err != nil {
-		return tabletconn.TabletErrorFromGRPC(err)
+		return tabletconn.ErrorFromGRPC(err)
 	}
 	return nil
 }
@@ -431,7 +431,7 @@ func (conn *gRPCQueryClient) ReadTransaction(ctx context.Context, target *queryp
 	}
 	response, err := conn.c.ReadTransaction(ctx, req)
 	if err != nil {
-		return nil, tabletconn.TabletErrorFromGRPC(err)
+		return nil, tabletconn.ErrorFromGRPC(err)
 	}
 	return response.Metadata, nil
 }
@@ -458,10 +458,10 @@ func (conn *gRPCQueryClient) BeginExecute(ctx context.Context, target *querypb.T
 	}
 	reply, err := conn.c.BeginExecute(ctx, req)
 	if err != nil {
-		return nil, 0, tabletconn.TabletErrorFromGRPC(err)
+		return nil, 0, tabletconn.ErrorFromGRPC(err)
 	}
 	if reply.Error != nil {
-		return nil, reply.TransactionId, tabletconn.TabletErrorFromRPCError(reply.Error)
+		return nil, reply.TransactionId, tabletconn.ErrorFromVTRPC(reply.Error)
 	}
 	return sqltypes.Proto3ToResult(reply.Result), reply.TransactionId, nil
 }
@@ -492,10 +492,10 @@ func (conn *gRPCQueryClient) BeginExecuteBatch(ctx context.Context, target *quer
 
 	reply, err := conn.c.BeginExecuteBatch(ctx, req)
 	if err != nil {
-		return nil, 0, tabletconn.TabletErrorFromGRPC(err)
+		return nil, 0, tabletconn.ErrorFromGRPC(err)
 	}
 	if reply.Error != nil {
-		return nil, reply.TransactionId, tabletconn.TabletErrorFromRPCError(reply.Error)
+		return nil, reply.TransactionId, tabletconn.ErrorFromVTRPC(reply.Error)
 	}
 	return sqltypes.Proto3ToResults(reply.Results), reply.TransactionId, nil
 }
@@ -521,7 +521,7 @@ func (conn *gRPCQueryClient) MessageStream(ctx context.Context, target *querypb.
 		}
 		stream, err := conn.c.MessageStream(ctx, req)
 		if err != nil {
-			return nil, tabletconn.TabletErrorFromGRPC(err)
+			return nil, tabletconn.ErrorFromGRPC(err)
 		}
 		return stream, nil
 	}()
@@ -532,7 +532,7 @@ func (conn *gRPCQueryClient) MessageStream(ctx context.Context, target *querypb.
 	for {
 		msr, err := stream.Recv()
 		if err != nil {
-			return tabletconn.TabletErrorFromGRPC(err)
+			return tabletconn.ErrorFromGRPC(err)
 		}
 		if fields == nil {
 			fields = msr.Result.Fields
@@ -562,7 +562,7 @@ func (conn *gRPCQueryClient) MessageAck(ctx context.Context, target *querypb.Tar
 	}
 	reply, err := conn.c.MessageAck(ctx, req)
 	if err != nil {
-		return 0, tabletconn.TabletErrorFromGRPC(err)
+		return 0, tabletconn.ErrorFromGRPC(err)
 	}
 	return int64(reply.Result.RowsAffected), nil
 }
@@ -586,7 +586,7 @@ func (conn *gRPCQueryClient) SplitQuery(
 
 	q, err := querytypes.BoundQueryToProto3(query.Sql, query.BindVariables)
 	if err != nil {
-		return nil, tabletconn.TabletErrorFromGRPC(err)
+		return nil, tabletconn.ErrorFromGRPC(err)
 	}
 	req := &querypb.SplitQueryRequest{
 		Target:              target,
@@ -600,11 +600,11 @@ func (conn *gRPCQueryClient) SplitQuery(
 	}
 	sqr, err := conn.c.SplitQuery(ctx, req)
 	if err != nil {
-		return nil, tabletconn.TabletErrorFromGRPC(err)
+		return nil, tabletconn.ErrorFromGRPC(err)
 	}
 	split, err := querytypes.Proto3ToQuerySplits(sqr.Queries)
 	if err != nil {
-		return nil, tabletconn.TabletErrorFromGRPC(err)
+		return nil, tabletconn.ErrorFromGRPC(err)
 	}
 	return split, nil
 }
@@ -624,7 +624,7 @@ func (conn *gRPCQueryClient) StreamHealth(ctx context.Context, callback func(*qu
 
 		stream, err := conn.c.StreamHealth(ctx, &querypb.StreamHealthRequest{})
 		if err != nil {
-			return nil, tabletconn.TabletErrorFromGRPC(err)
+			return nil, tabletconn.ErrorFromGRPC(err)
 		}
 		return stream, nil
 	}()
@@ -634,7 +634,7 @@ func (conn *gRPCQueryClient) StreamHealth(ctx context.Context, callback func(*qu
 	for {
 		shr, err := stream.Recv()
 		if err != nil {
-			return tabletconn.TabletErrorFromGRPC(err)
+			return tabletconn.ErrorFromGRPC(err)
 		}
 		if err := callback(shr); err != nil {
 			if err == nil || err == io.EOF {
@@ -667,7 +667,7 @@ func (conn *gRPCQueryClient) UpdateStream(ctx context.Context, target *querypb.T
 		}
 		stream, err := conn.c.UpdateStream(ctx, req)
 		if err != nil {
-			return nil, tabletconn.TabletErrorFromGRPC(err)
+			return nil, tabletconn.ErrorFromGRPC(err)
 		}
 		return stream, nil
 	}()
@@ -677,7 +677,7 @@ func (conn *gRPCQueryClient) UpdateStream(ctx context.Context, target *querypb.T
 	for {
 		r, err := stream.Recv()
 		if err != nil {
-			return tabletconn.TabletErrorFromGRPC(err)
+			return tabletconn.ErrorFromGRPC(err)
 		}
 		if err := callback(r.Event); err != nil {
 			if err == nil || err == io.EOF {

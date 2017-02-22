@@ -12,9 +12,14 @@ import (
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/dbconnpool"
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletenv"
+	"github.com/youtube/vitess/go/vt/vterrors"
 	"golang.org/x/net/context"
 )
+
+// ErrConnPoolClosed is returned when the connection pool is closed.
+var ErrConnPoolClosed = vterrors.New(vtrpcpb.Code_UNAVAILABLE, "connection pool is closed")
 
 // usedNames is for preventing expvar from panicking. Tests
 // create pool objects multiple time. If a name was previously
@@ -108,7 +113,7 @@ func (cp *Pool) Close() {
 func (cp *Pool) Get(ctx context.Context) (*DBConn, error) {
 	p := cp.pool()
 	if p == nil {
-		return nil, tabletenv.ErrConnPoolClosed
+		return nil, ErrConnPoolClosed
 	}
 	r, err := p.Get(ctx)
 	if err != nil {
@@ -121,7 +126,7 @@ func (cp *Pool) Get(ctx context.Context) (*DBConn, error) {
 func (cp *Pool) Put(conn *DBConn) {
 	p := cp.pool()
 	if p == nil {
-		panic(tabletenv.ErrConnPoolClosed)
+		panic(ErrConnPoolClosed)
 	}
 	if conn == nil {
 		p.Put(nil)

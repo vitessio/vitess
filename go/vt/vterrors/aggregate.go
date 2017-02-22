@@ -5,6 +5,9 @@
 package vterrors
 
 import (
+	"sort"
+	"strings"
+
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
@@ -58,10 +61,17 @@ var errorPriorities = map[vtrpcpb.Code]int{
 	vtrpcpb.Code_DATA_LOSS:           PriorityDataLoss,
 }
 
-// AggregateVtGateErrorCodes aggregates a list of errors into a single
-// error code.  It does so by finding the highest priority error code
-// in the list.
-func AggregateVtGateErrorCodes(errors []error) vtrpcpb.Code {
+// Aggregate aggregates several errors into a single one.
+// The resulting error code will be the one with the highest
+// priority as defined by the priority constants in this package.
+func Aggregate(errors []error) error {
+	if len(errors) == 0 {
+		return nil
+	}
+	return New(aggregateCodes(errors), aggregateErrors(errors))
+}
+
+func aggregateCodes(errors []error) vtrpcpb.Code {
 	highCode := vtrpcpb.Code_OK
 	for _, e := range errors {
 		code := Code(e)
@@ -72,13 +82,13 @@ func AggregateVtGateErrorCodes(errors []error) vtrpcpb.Code {
 	return highCode
 }
 
-// AggregateVtGateErrors aggregates several errors into a single one.
-func AggregateVtGateErrors(errors []error) error {
-	if len(errors) == 0 {
-		return nil
+// ConcatenateErrors aggregates an array of errors into a single error by string concatenation.
+func aggregateErrors(errs []error) string {
+	errStrs := make([]string, 0, len(errs))
+	for _, e := range errs {
+		errStrs = append(errStrs, e.Error())
 	}
-	return FromError(
-		AggregateVtGateErrorCodes(errors),
-		ConcatenateErrors(errors),
-	)
+	// sort the error strings so we always have deterministic ordering
+	sort.Strings(errStrs)
+	return strings.Join(errStrs, "\n")
 }

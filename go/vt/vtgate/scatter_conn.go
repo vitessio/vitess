@@ -321,7 +321,7 @@ func (stc *ScatterConn) ExecuteBatch(
 		stc.txConn.Rollback(ctx, session)
 	}
 	if allErrors.HasErrors() {
-		return nil, allErrors.AggrError(vterrors.AggregateVtGateErrors)
+		return nil, allErrors.AggrError(vterrors.Aggregate)
 	}
 	return results, nil
 }
@@ -358,7 +358,7 @@ func (stc *ScatterConn) StreamExecute(
 			return stc.processOneStreamingResult(&mu, &fieldSent, qr, callback)
 		})
 	})
-	return allErrors.AggrError(vterrors.AggregateVtGateErrors)
+	return allErrors.AggrError(vterrors.Aggregate)
 }
 
 // StreamExecuteMulti is like StreamExecute,
@@ -382,7 +382,7 @@ func (stc *ScatterConn) StreamExecuteMulti(
 			return stc.processOneStreamingResult(&mu, &fieldSent, qr, callback)
 		})
 	})
-	return allErrors.AggrError(vterrors.AggregateVtGateErrors)
+	return allErrors.AggrError(vterrors.Aggregate)
 }
 
 // MessageStream streams messages from the specified shards.
@@ -395,7 +395,7 @@ func (stc *ScatterConn) MessageStream(ctx context.Context, keyspace string, shar
 			return stc.processOneStreamingResult(&mu, &fieldSent, qr, callback)
 		})
 	})
-	return allErrors.AggrError(vterrors.AggregateVtGateErrors)
+	return allErrors.AggrError(vterrors.Aggregate)
 }
 
 // MessageAck acks messages across multiple shards.
@@ -416,7 +416,7 @@ func (stc *ScatterConn) MessageAck(ctx context.Context, keyspace string, shardID
 		mu.Unlock()
 		return nil
 	})
-	return totalCount, allErrors.AggrError(vterrors.AggregateVtGateErrors)
+	return totalCount, allErrors.AggrError(vterrors.Aggregate)
 }
 
 // UpdateStream just sends the query to the gateway,
@@ -488,7 +488,7 @@ func (stc *ScatterConn) SplitQuery(
 	)
 
 	if allErrors.HasErrors() {
-		err := allErrors.AggrError(vterrors.AggregateVtGateErrors)
+		err := allErrors.AggrError(vterrors.Aggregate)
 		return nil, err
 	}
 	// We shuffle the query-parts here. External frameworks like MapReduce may
@@ -662,7 +662,7 @@ end:
 		stc.txConn.Rollback(ctx, session)
 	}
 	if allErrors.HasErrors() {
-		return allErrors.AggrError(vterrors.AggregateVtGateErrors)
+		return allErrors.AggrError(vterrors.Aggregate)
 	}
 	return nil
 }

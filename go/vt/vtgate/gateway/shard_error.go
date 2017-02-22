@@ -5,8 +5,6 @@
 package gateway
 
 import (
-	"fmt"
-
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/vterrors"
 
@@ -20,7 +18,7 @@ func NewShardError(in error, target *querypb.Target, tablet *topodatapb.Tablet, 
 		return nil
 	}
 	if tablet != nil {
-		return vterrors.WithPrefix(fmt.Sprintf("target: %s.%s.%s, used tablet: (%+v), ", target.Keyspace, target.Shard, topoproto.TabletTypeLString(target.TabletType), tablet), in)
+		return vterrors.Errorf(vterrors.Code(in), "target: %s.%s.%s, used tablet: (%+v), %v", target.Keyspace, target.Shard, topoproto.TabletTypeLString(target.TabletType), tablet, in)
 	}
-	return vterrors.WithPrefix(fmt.Sprintf("target: %s.%s.%s, ", target.Keyspace, target.Shard, topoproto.TabletTypeLString(target.TabletType)), in)
+	return vterrors.Errorf(vterrors.Code(in), "target: %s.%s.%s, %v", target.Keyspace, target.Shard, topoproto.TabletTypeLString(target.TabletType), in)
 }

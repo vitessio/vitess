@@ -5,8 +5,6 @@
 package vtgate
 
 import (
-	"errors"
-	"fmt"
 	"sync"
 
 	"golang.org/x/net/context"
@@ -37,10 +35,10 @@ func NewTxConn(gw gateway.Gateway) *TxConn {
 // is used to ensure atomicity.
 func (txc *TxConn) Commit(ctx context.Context, twopc bool, session *SafeSession) error {
 	if session == nil {
-		return vterrors.FromError(vtrpcpb.Code_INVALID_ARGUMENT, errors.New("cannot commit: empty session"))
+		return vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "cannot commit: empty session")
 	}
 	if !session.InTransaction() {
-		return vterrors.FromError(vtrpcpb.Code_ABORTED, errors.New("cannot commit: not in transaction"))
+		return vterrors.New(vtrpcpb.Code_ABORTED, "cannot commit: not in transaction")
 	}
 	if twopc {
 		return txc.commit2PC(ctx, session)
@@ -155,7 +153,7 @@ func (txc *TxConn) Resolve(ctx context.Context, dtid string) error {
 		}
 	default:
 		// Should never happen.
-		return vterrors.FromError(vtrpcpb.Code_INTERNAL, fmt.Errorf("invalid state: %v", transaction.State))
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid state: %v", transaction.State)
 	}
 	return nil
 }
@@ -199,7 +197,7 @@ func (txc *TxConn) runSessions(shardSessions []*vtgatepb.Session_ShardSession, a
 		}(s)
 	}
 	wg.Wait()
-	return allErrors.AggrError(vterrors.AggregateVtGateErrors)
+	return allErrors.AggrError(vterrors.Aggregate)
 }
 
 // runTargets executes the action for all targets in parallel and returns a consolildated error.
@@ -220,5 +218,5 @@ func (txc *TxConn) runTargets(targets []*querypb.Target, action func(*querypb.Ta
 		}(t)
 	}
 	wg.Wait()
-	return allErrors.AggrError(vterrors.AggregateVtGateErrors)
+	return allErrors.AggrError(vterrors.Aggregate)
 }
