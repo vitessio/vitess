@@ -197,16 +197,17 @@ func (qre *QueryExecutor) execAsTransaction(f func(conn *TxConnection) (*sqltype
 
 	reply, err = f(conn)
 
+	start := time.Now()
 	if err != nil {
 		qre.tsv.te.txPool.LocalConclude(qre.ctx, conn)
-		qre.logStats.AddRewrittenSQL("rollback", time.Now())
+		qre.logStats.AddRewrittenSQL("rollback", start)
 		return nil, err
 	}
 	err = qre.tsv.te.txPool.LocalCommit(qre.ctx, conn, qre.tsv.messager)
+	qre.logStats.AddRewrittenSQL("commit", start)
 	if err != nil {
 		return nil, err
 	}
-	qre.logStats.AddRewrittenSQL("commit", time.Now())
 	return reply, nil
 }
 
