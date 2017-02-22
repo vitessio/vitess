@@ -26,10 +26,10 @@ const (
 )
 
 var (
-	failoverErr = vterrors.FromError(vtrpcpb.Code_FAILED_PRECONDITION,
-		errors.New("vttablet: rpc error: code = 9 desc = gRPCServerError: retry: operation not allowed in state SHUTTING_DOWN"))
-	nonFailoverErr = vterrors.FromError(vtrpcpb.Code_FAILED_PRECONDITION,
-		errors.New("vttablet: rpc error: code = 9 desc = gRPCServerError: retry: TODO(mberlin): Insert here any realistic error not caused by a failover"))
+	failoverErr = vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION,
+		"vttablet: rpc error: code = 9 desc = gRPCServerError: retry: operation not allowed in state SHUTTING_DOWN")
+	nonFailoverErr = vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION,
+		"vttablet: rpc error: code = 9 desc = gRPCServerError: retry: TODO(mberlin): Insert here any realistic error not caused by a failover")
 
 	statsKeyJoined = fmt.Sprintf("%s.%s", keyspace, shard)
 

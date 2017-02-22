@@ -12,7 +12,6 @@ package buffer
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -29,9 +28,9 @@ import (
 )
 
 var (
-	bufferFullError      = vterrors.FromError(vtrpcpb.Code_UNAVAILABLE, errors.New("master buffer is full"))
-	entryEvictedError    = vterrors.FromError(vtrpcpb.Code_UNAVAILABLE, errors.New("buffer full: request evicted for newer request"))
-	contextCanceledError = vterrors.FromError(vtrpcpb.Code_UNAVAILABLE, errors.New("context was canceled before failover finished"))
+	bufferFullError      = vterrors.New(vtrpcpb.Code_UNAVAILABLE, "master buffer is full")
+	entryEvictedError    = vterrors.New(vtrpcpb.Code_UNAVAILABLE, "buffer full: request evicted for newer request")
+	contextCanceledError = vterrors.New(vtrpcpb.Code_UNAVAILABLE, "context was canceled before failover finished")
 )
 
 // bufferMode specifies how the buffer is configured for a given shard.
@@ -215,6 +214,9 @@ func (b *Buffer) StatsUpdate(ts *discovery.TabletStats) {
 // causedByFailover returns true if "err" was supposedly caused by a failover.
 // To simplify things, we've merged the detection for different MySQL flavors
 // in one function. Supported flavors: MariaDB, MySQL, Google internal.
+// TODO(mberlin): This function does not have to check the specific error messages.
+// The previous error revamp ensures that FAILED_PRECONDITION is returned only
+// during failover.
 func causedByFailover(err error) bool {
 	log.V(2).Infof("Checking error (type: %T) if it is caused by a failover. err: %v", err, err)
 

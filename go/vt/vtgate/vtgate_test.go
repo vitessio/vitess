@@ -286,7 +286,7 @@ func TestVTGateExecuteWithKeyspace(t *testing.T) {
 		nil,
 		false,
 		nil)
-	want := "keyspace aa not found in vschema, vtgate: "
+	want := "vtgate: : keyspace aa not found in vschema"
 	if err == nil || err.Error() != want {
 		t.Errorf("Execute: %v, want %s", err, want)
 	}

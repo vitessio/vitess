@@ -13,10 +13,10 @@ import (
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
-var errGeneric = errors.New("generic error")
+var errGeneric = "generic error"
 
 func errFromCode(c vtrpcpb.Code) error {
-	return FromError(c, errGeneric)
+	return New(c, errGeneric)
 }
 
 func TestAggregateVtGateErrorCodes(t *testing.T) {
@@ -60,7 +60,7 @@ func TestAggregateVtGateErrorCodes(t *testing.T) {
 		},
 	}
 	for _, tc := range testcases {
-		out := AggregateVtGateErrorCodes(tc.input)
+		out := aggregateCodes(tc.input)
 		if out != tc.expected {
 			t.Errorf("AggregateVtGateErrorCodes(%v) = %v \nwant: %v",
 				tc.input, out, tc.expected)
@@ -83,14 +83,18 @@ func TestAggregateVtGateErrors(t *testing.T) {
 				errFromCode(vtrpcpb.Code_UNAVAILABLE),
 				errFromCode(vtrpcpb.Code_INVALID_ARGUMENT),
 			},
-			expected: FromError(
+			expected: New(
 				vtrpcpb.Code_INVALID_ARGUMENT,
-				ConcatenateErrors([]error{errGeneric, errGeneric, errGeneric}),
+				aggregateErrors([]error{
+					errors.New(errGeneric),
+					errors.New(errGeneric),
+					errors.New(errGeneric),
+				}),
 			),
 		},
 	}
 	for _, tc := range testcases {
-		out := AggregateVtGateErrors(tc.input)
+		out := Aggregate(tc.input)
 		if !reflect.DeepEqual(out, tc.expected) {
 			t.Errorf("AggregateVtGateErrors(%+v) = %+v \nwant: %+v",
 				tc.input, out, tc.expected)

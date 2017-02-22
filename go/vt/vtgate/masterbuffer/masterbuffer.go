@@ -16,7 +16,6 @@ but will not return transient errors during the buffering time.
 package masterbuffer
 
 import (
-	"errors"
 	"flag"
 	"sync"
 	"time"
@@ -47,10 +46,7 @@ var (
 var timeSleep = time.Sleep
 
 // errBufferFull is the error returned a buffer request is rejected because the buffer is full.
-var errBufferFull = vterrors.FromError(
-	vtrpcpb.Code_UNAVAILABLE,
-	errors.New("master request buffer full, rejecting request"),
-)
+var errBufferFull = vterrors.New(vtrpcpb.Code_UNAVAILABLE, "master request buffer full, rejecting request")
 
 // FakeBuffer will pretend to buffer master requests in VTGate.
 // Requests *will NOT actually be buffered*, they will just be delayed.

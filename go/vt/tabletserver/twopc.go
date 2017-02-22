@@ -368,7 +368,7 @@ func (tpc *TwoPC) Transition(ctx context.Context, conn *TxConnection, dtid strin
 		return err
 	}
 	if qr.RowsAffected != 1 {
-		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "could not transition to %v: %s", state, dtid)
+		return vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "could not transition to %v: %s", state, dtid)
 	}
 	return nil
 }

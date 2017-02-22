@@ -36,7 +36,7 @@ func TestTabletErrorFromRPCError(t *testing.T) {
 		want: vtrpcpb.Code_INVALID_ARGUMENT,
 	}}
 	for _, tcase := range testcases {
-		got := vterrors.Code(TabletErrorFromRPCError(tcase.in))
+		got := vterrors.Code(ErrorFromVTRPC(tcase.in))
 		if got != tcase.want {
 			t.Errorf("FromVtRPCError(%v):\n%v, want\n%v", tcase.in, got, tcase.want)
 		}

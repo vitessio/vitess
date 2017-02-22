@@ -144,7 +144,7 @@ func (axp *TxPool) Begin(ctx context.Context) (int64, error) {
 	conn, err := axp.conns.Get(ctx)
 	if err != nil {
 		switch err {
-		case tabletenv.ErrConnPoolClosed:
+		case connpool.ErrConnPoolClosed:
 			return 0, err
 		case pools.ErrTimeout:
 			axp.LogActive()

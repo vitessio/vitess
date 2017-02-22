@@ -101,7 +101,7 @@ func runVtworkerCommand(client vtworkerclient.Client, args []string) error {
 		case io.EOF:
 			return nil
 		default:
-			return vterrors.WithPrefix("unexpected error when reading the stream: ", err)
+			return vterrors.Errorf(vterrors.Code(err), "unexpected error when reading the stream: %v", err)
 		}
 	}
 }

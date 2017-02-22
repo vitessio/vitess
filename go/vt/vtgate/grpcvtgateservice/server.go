@@ -89,13 +89,13 @@ func (vtg *VTGate) Execute(ctx context.Context, request *vtgatepb.ExecuteRequest
 	ctx = withCallerIDContext(ctx, request.CallerId)
 	bv, err := querytypes.Proto3ToBindVariables(request.Query.BindVariables)
 	if err != nil {
-		return nil, vterrors.ToGRPCError(err)
+		return nil, vterrors.ToGRPC(err)
 	}
 	result, err := vtg.server.Execute(ctx, string(request.Query.Sql), bv, request.Keyspace, request.TabletType, request.Session, request.NotInTransaction, request.Options)
 	return &vtgatepb.ExecuteResponse{
 		Result:  sqltypes.ResultToProto3(result),
 		Session: request.Session,
-		Error:   vterrors.VtRPCErrorFromVtError(err),
+		Error:   vterrors.ToVTRPC(err),
 	}, nil
 }
 
@@ -105,7 +105,7 @@ func (vtg *VTGate) ExecuteShards(ctx context.Context, request *vtgatepb.ExecuteS
 	ctx = withCallerIDContext(ctx, request.CallerId)
 	bv, err := querytypes.Proto3ToBindVariables(request.Query.BindVariables)
 	if err != nil {
-		return nil, vterrors.ToGRPCError(err)
+		return nil, vterrors.ToGRPC(err)
 	}
 	result, err := vtg.server.ExecuteShards(ctx,
 		string(request.Query.Sql),
@@ -119,7 +119,7 @@ func (vtg *VTGate) ExecuteShards(ctx context.Context, request *vtgatepb.ExecuteS
 	return &vtgatepb.ExecuteShardsResponse{
 		Result:  sqltypes.ResultToProto3(result),
 		Session: request.Session,
-		Error:   vterrors.VtRPCErrorFromVtError(err),
+		Error:   vterrors.ToVTRPC(err),
 	}, nil
 }
 
@@ -129,7 +129,7 @@ func (vtg *VTGate) ExecuteKeyspaceIds(ctx context.Context, request *vtgatepb.Exe
 	ctx = withCallerIDContext(ctx, request.CallerId)
 	bv, err := querytypes.Proto3ToBindVariables(request.Query.BindVariables)
 	if err != nil {
-		return nil, vterrors.ToGRPCError(err)
+		return nil, vterrors.ToGRPC(err)
 	}
 	result, err := vtg.server.ExecuteKeyspaceIds(ctx,
 		string(request.Query.Sql),
@@ -143,7 +143,7 @@ func (vtg *VTGate) ExecuteKeyspaceIds(ctx context.Context, request *vtgatepb.Exe
 	return &vtgatepb.ExecuteKeyspaceIdsResponse{
 		Result:  sqltypes.ResultToProto3(result),
 		Session: request.Session,
-		Error:   vterrors.VtRPCErrorFromVtError(err),
+		Error:   vterrors.ToVTRPC(err),
 	}, nil
 }
 
@@ -153,7 +153,7 @@ func (vtg *VTGate) ExecuteKeyRanges(ctx context.Context, request *vtgatepb.Execu
 	ctx = withCallerIDContext(ctx, request.CallerId)
 	bv, err := querytypes.Proto3ToBindVariables(request.Query.BindVariables)
 	if err != nil {
-		return nil, vterrors.ToGRPCError(err)
+		return nil, vterrors.ToGRPC(err)
 	}
 	result, err := vtg.server.ExecuteKeyRanges(ctx,
 		string(request.Query.Sql),
@@ -167,7 +167,7 @@ func (vtg *VTGate) ExecuteKeyRanges(ctx context.Context, request *vtgatepb.Execu
 	return &vtgatepb.ExecuteKeyRangesResponse{
 		Result:  sqltypes.ResultToProto3(result),
 		Session: request.Session,
-		Error:   vterrors.VtRPCErrorFromVtError(err),
+		Error:   vterrors.ToVTRPC(err),
 	}, nil
 }
 
@@ -177,7 +177,7 @@ func (vtg *VTGate) ExecuteEntityIds(ctx context.Context, request *vtgatepb.Execu
 	ctx = withCallerIDContext(ctx, request.CallerId)
 	bv, err := querytypes.Proto3ToBindVariables(request.Query.BindVariables)
 	if err != nil {
-		return nil, vterrors.ToGRPCError(err)
+		return nil, vterrors.ToGRPC(err)
 	}
 	result, err := vtg.server.ExecuteEntityIds(ctx,
 		string(request.Query.Sql),
@@ -192,7 +192,7 @@ func (vtg *VTGate) ExecuteEntityIds(ctx context.Context, request *vtgatepb.Execu
 	return &vtgatepb.ExecuteEntityIdsResponse{
 		Result:  sqltypes.ResultToProto3(result),
 		Session: request.Session,
-		Error:   vterrors.VtRPCErrorFromVtError(err),
+		Error:   vterrors.ToVTRPC(err),
 	}, nil
 }
 
@@ -206,7 +206,7 @@ func (vtg *VTGate) ExecuteBatch(ctx context.Context, request *vtgatepb.ExecuteBa
 	for queryNum, query := range request.Queries {
 		bv, err := querytypes.Proto3ToBindVariables(query.BindVariables)
 		if err != nil {
-			return nil, vterrors.ToGRPCError(err)
+			return nil, vterrors.ToGRPC(err)
 		}
 		sqlQueries[queryNum] = query.Sql
 		bindVars[queryNum] = bv
@@ -215,7 +215,7 @@ func (vtg *VTGate) ExecuteBatch(ctx context.Context, request *vtgatepb.ExecuteBa
 	return &vtgatepb.ExecuteBatchResponse{
 		Results: sqltypes.QueryResponsesToProto3(results),
 		Session: request.Session,
-		Error:   vterrors.VtRPCErrorFromVtError(err),
+		Error:   vterrors.ToVTRPC(err),
 	}, nil
 }
 
@@ -232,7 +232,7 @@ func (vtg *VTGate) ExecuteBatchShards(ctx context.Context, request *vtgatepb.Exe
 	return &vtgatepb.ExecuteBatchShardsResponse{
 		Results: sqltypes.ResultsToProto3(result),
 		Session: request.Session,
-		Error:   vterrors.VtRPCErrorFromVtError(err),
+		Error:   vterrors.ToVTRPC(err),
 	}, nil
 }
 
@@ -250,7 +250,7 @@ func (vtg *VTGate) ExecuteBatchKeyspaceIds(ctx context.Context, request *vtgatep
 	return &vtgatepb.ExecuteBatchKeyspaceIdsResponse{
 		Results: sqltypes.ResultsToProto3(result),
 		Session: request.Session,
-		Error:   vterrors.VtRPCErrorFromVtError(err),
+		Error:   vterrors.ToVTRPC(err),
 	}, nil
 }
 
@@ -260,7 +260,7 @@ func (vtg *VTGate) StreamExecute(request *vtgatepb.StreamExecuteRequest, stream 
 	ctx := withCallerIDContext(stream.Context(), request.CallerId)
 	bv, err := querytypes.Proto3ToBindVariables(request.Query.BindVariables)
 	if err != nil {
-		return vterrors.ToGRPCError(err)
+		return vterrors.ToGRPC(err)
 	}
 	vtgErr := vtg.server.StreamExecute(ctx,
 		string(request.Query.Sql),
@@ -273,7 +273,7 @@ func (vtg *VTGate) StreamExecute(request *vtgatepb.StreamExecuteRequest, stream 
 				Result: sqltypes.ResultToProto3(value),
 			})
 		})
-	return vterrors.ToGRPCError(vtgErr)
+	return vterrors.ToGRPC(vtgErr)
 }
 
 // StreamExecuteShards is the RPC version of vtgateservice.VTGateService method
@@ -282,7 +282,7 @@ func (vtg *VTGate) StreamExecuteShards(request *vtgatepb.StreamExecuteShardsRequ
 	ctx := withCallerIDContext(stream.Context(), request.CallerId)
 	bv, err := querytypes.Proto3ToBindVariables(request.Query.BindVariables)
 	if err != nil {
-		return vterrors.ToGRPCError(err)
+		return vterrors.ToGRPC(err)
 	}
 	vtgErr := vtg.server.StreamExecuteShards(ctx,
 		string(request.Query.Sql),
@@ -296,7 +296,7 @@ func (vtg *VTGate) StreamExecuteShards(request *vtgatepb.StreamExecuteShardsRequ
 				Result: sqltypes.ResultToProto3(value),
 			})
 		})
-	return vterrors.ToGRPCError(vtgErr)
+	return vterrors.ToGRPC(vtgErr)
 }
 
 // StreamExecuteKeyspaceIds is the RPC version of
@@ -306,7 +306,7 @@ func (vtg *VTGate) StreamExecuteKeyspaceIds(request *vtgatepb.StreamExecuteKeysp
 	ctx := withCallerIDContext(stream.Context(), request.CallerId)
 	bv, err := querytypes.Proto3ToBindVariables(request.Query.BindVariables)
 	if err != nil {
-		return vterrors.ToGRPCError(err)
+		return vterrors.ToGRPC(err)
 	}
 	vtgErr := vtg.server.StreamExecuteKeyspaceIds(ctx,
 		string(request.Query.Sql),
@@ -320,7 +320,7 @@ func (vtg *VTGate) StreamExecuteKeyspaceIds(request *vtgatepb.StreamExecuteKeysp
 				Result: sqltypes.ResultToProto3(value),
 			})
 		})
-	return vterrors.ToGRPCError(vtgErr)
+	return vterrors.ToGRPC(vtgErr)
 }
 
 // StreamExecuteKeyRanges is the RPC version of
@@ -330,7 +330,7 @@ func (vtg *VTGate) StreamExecuteKeyRanges(request *vtgatepb.StreamExecuteKeyRang
 	ctx := withCallerIDContext(stream.Context(), request.CallerId)
 	bv, err := querytypes.Proto3ToBindVariables(request.Query.BindVariables)
 	if err != nil {
-		return vterrors.ToGRPCError(err)
+		return vterrors.ToGRPC(err)
 	}
 	vtgErr := vtg.server.StreamExecuteKeyRanges(ctx,
 		string(request.Query.Sql),
@@ -344,7 +344,7 @@ func (vtg *VTGate) StreamExecuteKeyRanges(request *vtgatepb.StreamExecuteKeyRang
 				Result: sqltypes.ResultToProto3(value),
 			})
 		})
-	return vterrors.ToGRPCError(vtgErr)
+	return vterrors.ToGRPC(vtgErr)
 }
 
 // Begin is the RPC version of vtgateservice.VTGateService method
@@ -357,7 +357,7 @@ func (vtg *VTGate) Begin(ctx context.Context, request *vtgatepb.BeginRequest) (r
 			Session: session,
 		}, nil
 	}
-	return nil, vterrors.ToGRPCError(vtgErr)
+	return nil, vterrors.ToGRPC(vtgErr)
 }
 
 // Commit is the RPC version of vtgateservice.VTGateService method
@@ -369,7 +369,7 @@ func (vtg *VTGate) Commit(ctx context.Context, request *vtgatepb.CommitRequest) 
 	if vtgErr == nil {
 		return response, nil
 	}
-	return nil, vterrors.ToGRPCError(vtgErr)
+	return nil, vterrors.ToGRPC(vtgErr)
 }
 
 // Rollback is the RPC version of vtgateservice.VTGateService method
@@ -381,7 +381,7 @@ func (vtg *VTGate) Rollback(ctx context.Context, request *vtgatepb.RollbackReque
 	if vtgErr == nil {
 		return response, nil
 	}
-	return nil, vterrors.ToGRPCError(vtgErr)
+	return nil, vterrors.ToGRPC(vtgErr)
 }
 
 // ResolveTransaction is the RPC version of vtgateservice.VTGateService method
@@ -393,7 +393,7 @@ func (vtg *VTGate) ResolveTransaction(ctx context.Context, request *vtgatepb.Res
 	if vtgErr == nil {
 		return response, nil
 	}
-	return nil, vterrors.ToGRPCError(vtgErr)
+	return nil, vterrors.ToGRPC(vtgErr)
 }
 
 // MessageStream is the RPC version of vtgateservice.VTGateService method
@@ -405,7 +405,7 @@ func (vtg *VTGate) MessageStream(request *vtgatepb.MessageStreamRequest, stream 
 			Result: sqltypes.ResultToProto3(qr),
 		})
 	})
-	return vterrors.ToGRPCError(vtgErr)
+	return vterrors.ToGRPC(vtgErr)
 }
 
 // MessageAck is the RPC version of vtgateservice.VTGateService method
@@ -414,7 +414,7 @@ func (vtg *VTGate) MessageAck(ctx context.Context, request *vtgatepb.MessageAckR
 	ctx = withCallerIDContext(ctx, request.CallerId)
 	count, vtgErr := vtg.server.MessageAck(ctx, request.Keyspace, request.Name, request.Ids)
 	if vtgErr != nil {
-		return nil, vterrors.ToGRPCError(vtgErr)
+		return nil, vterrors.ToGRPC(vtgErr)
 	}
 	return &querypb.MessageAckResponse{
 		Result: &querypb.QueryResult{
@@ -430,7 +430,7 @@ func (vtg *VTGate) SplitQuery(ctx context.Context, request *vtgatepb.SplitQueryR
 	ctx = withCallerIDContext(ctx, request.CallerId)
 	bv, err := querytypes.Proto3ToBindVariables(request.Query.BindVariables)
 	if err != nil {
-		return nil, vterrors.ToGRPCError(err)
+		return nil, vterrors.ToGRPC(err)
 	}
 	splits, vtgErr := vtg.server.SplitQuery(
 		ctx,
@@ -442,7 +442,7 @@ func (vtg *VTGate) SplitQuery(ctx context.Context, request *vtgatepb.SplitQueryR
 		request.NumRowsPerQueryPart,
 		request.Algorithm)
 	if vtgErr != nil {
-		return nil, vterrors.ToGRPCError(vtgErr)
+		return nil, vterrors.ToGRPC(vtgErr)
 	}
 	return &vtgatepb.SplitQueryResponse{
 		Splits: splits,
@@ -454,7 +454,7 @@ func (vtg *VTGate) GetSrvKeyspace(ctx context.Context, request *vtgatepb.GetSrvK
 	defer vtg.server.HandlePanic(&err)
 	sk, vtgErr := vtg.server.GetSrvKeyspace(ctx, request.Keyspace)
 	if vtgErr != nil {
-		return nil, vterrors.ToGRPCError(vtgErr)
+		return nil, vterrors.ToGRPC(vtgErr)
 	}
 	return &vtgatepb.GetSrvKeyspaceResponse{
 		SrvKeyspace: sk,
@@ -478,7 +478,7 @@ func (vtg *VTGate) UpdateStream(request *vtgatepb.UpdateStreamRequest, stream vt
 				ResumeTimestamp: resumeTimestamp,
 			})
 		})
-	return vterrors.ToGRPCError(vtgErr)
+	return vterrors.ToGRPC(vtgErr)
 }
 
 func init() {

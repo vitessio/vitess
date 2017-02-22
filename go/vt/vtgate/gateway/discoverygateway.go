@@ -178,11 +178,10 @@ func (dg *discoveryGateway) withRetry(ctx context.Context, target *querypb.Targe
 			retryDone, bufferErr := dg.buffer.WaitForFailoverEnd(ctx, target.Keyspace, target.Shard, err)
 			if bufferErr != nil {
 				// Buffering failed e.g. buffer is already full. Do not retry.
-				err = vterrors.WithSuffix(
-					vterrors.WithPrefix(
-						"failed to automatically buffer and retry failed request during failover: ",
-						bufferErr),
-					fmt.Sprintf(" original err (type=%T): %v", err, err))
+				err = vterrors.Errorf(
+					vterrors.Code(err),
+					"failed to automatically buffer and retry failed request during failover: %v original err (type=%T): %v",
+					bufferErr, err, err)
 				break
 			}
 
@@ -198,7 +197,7 @@ func (dg *discoveryGateway) withRetry(ctx context.Context, target *querypb.Targe
 		tablets := dg.tsc.GetHealthyTabletStats(target.Keyspace, target.Shard, target.TabletType)
 		if len(tablets) == 0 {
 			// fail fast if there is no tablet
-			err = vterrors.FromError(vtrpcpb.Code_INTERNAL, fmt.Errorf("no valid tablet"))
+			err = vterrors.New(vtrpcpb.Code_UNAVAILABLE, "no valid tablet")
 			break
 		}
 		shuffleTablets(tablets)
@@ -214,7 +213,7 @@ func (dg *discoveryGateway) withRetry(ctx context.Context, target *querypb.Targe
 		if ts == nil {
 			if err == nil {
 				// do not override error from last attempt.
-				err = vterrors.FromError(vtrpcpb.Code_INTERNAL, fmt.Errorf("no available connection"))
+				err = vterrors.New(vtrpcpb.Code_UNAVAILABLE, "no available connection")
 			}
 			break
 		}
@@ -223,7 +222,7 @@ func (dg *discoveryGateway) withRetry(ctx context.Context, target *querypb.Targe
 		tabletLastUsed = ts.Tablet
 		conn := dg.hc.GetConnection(ts.Key)
 		if conn == nil {
-			err = vterrors.FromError(vtrpcpb.Code_INTERNAL, fmt.Errorf("no connection for key %v tablet %+v", ts.Key, ts.Tablet))
+			err = vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "no connection for key %v tablet %+v", ts.Key, ts.Tablet)
 			invalidTablets[ts.Key] = true
 			continue
 		}

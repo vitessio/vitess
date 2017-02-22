@@ -75,8 +75,7 @@ func (wi *Instance) setAndStartWorker(ctx context.Context, wrk Worker, wr *wrang
 	defer wi.currentWorkerMutex.Unlock()
 
 	if wi.currentContext != nil {
-		return nil, vterrors.FromError(vtrpcpb.Code_UNAVAILABLE,
-			fmt.Errorf("A worker job is already in progress: %v", wi.currentWorker.StatusAsText()))
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "A worker job is already in progress: %v", wi.currentWorker.StatusAsText())
 	}
 
 	if wi.currentWorker != nil {
@@ -84,17 +83,14 @@ func (wi *Instance) setAndStartWorker(ctx context.Context, wrk Worker, wr *wrang
 		const gracePeriod = 1 * time.Minute
 		gracePeriodEnd := time.Now().Add(gracePeriod)
 		if wi.lastRunStopTime.Before(gracePeriodEnd) {
-			return nil, vterrors.FromError(vtrpcpb.Code_UNAVAILABLE,
-				fmt.Errorf("A worker job was recently stopped (%f seconds ago): %v",
-					time.Now().Sub(wi.lastRunStopTime).Seconds(),
-					wi.currentWorker))
+			return nil, vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "A worker job was recently stopped (%f seconds ago): %v", time.Now().Sub(wi.lastRunStopTime).Seconds(), wi.currentWorker)
 		}
 
 		// QUERY_NOT_SERVED = FailedPrecondition => manual resolution required.
-		return nil, vterrors.FromError(vtrpcpb.Code_FAILED_PRECONDITION,
-			fmt.Errorf("The worker job was stopped %.1f minutes ago, but not reset. You have to reset it manually. Job: %v",
-				time.Now().Sub(wi.lastRunStopTime).Minutes(),
-				wi.currentWorker))
+		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
+			"The worker job was stopped %.1f minutes ago, but not reset. You have to reset it manually. Job: %v",
+			time.Now().Sub(wi.lastRunStopTime).Minutes(),
+			wi.currentWorker)
 	}
 
 	wi.currentWorker = wrk
@@ -141,7 +137,7 @@ func (wi *Instance) setAndStartWorker(ctx context.Context, wrk Worker, wr *wrang
 		case <-wi.currentContext.Done():
 			// Context is done i.e. probably canceled.
 			if wi.currentContext.Err() == context.Canceled {
-				err = vterrors.NewVitessError(vtrpcpb.Code_CANCELED, err, "vtworker command was canceled: %v", err)
+				err = vterrors.Errorf(vtrpcpb.Code_CANCELED, "vtworker command was canceled: %v", err)
 			}
 		default:
 		}

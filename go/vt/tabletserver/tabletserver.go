@@ -1530,9 +1530,9 @@ verifyTarget:
 		// a valid target needs to be used
 		switch {
 		case target.Keyspace != tsv.target.Keyspace:
-			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "invalid keyspace %v", target.Keyspace)
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid keyspace %v", target.Keyspace)
 		case target.Shard != tsv.target.Shard:
-			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "invalid shard %v", target.Shard)
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid shard %v", target.Shard)
 		case isTx && tsv.target.TabletType != topodatapb.TabletType_MASTER:
 			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "transactional statement disallowed on non-master tablet: %v", tsv.target.TabletType)
 		case target.TabletType != tsv.target.TabletType:
@@ -1544,7 +1544,7 @@ verifyTarget:
 			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "invalid tablet type: %v, want: %v or %v", target.TabletType, tsv.target.TabletType, tsv.alsoAllow)
 		}
 	} else if !tabletenv.IsLocalContext(ctx) {
-		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "No target")
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "No target")
 	}
 
 ok:

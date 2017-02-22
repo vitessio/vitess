@@ -29,7 +29,7 @@ var _ = math.Inf
 // proto package needs to be updated.
 const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
 
-// Code represnts canonical error codes. The names, numbers and comments
+// Code represents canonical error codes. The names, numbers and comments
 // must match the ones defined by grpc:
 // https://godoc.org/google.golang.org/grpc/codes.
 type Code int32
@@ -185,7 +185,7 @@ func (Code) EnumDescriptor() ([]byte, []int) { return fileDescriptor0, []int{0} 
 // that we may end up with a different list of canonical error codes
 // than the ones defined by grpc. In hindisght, we realize that
 // the grpc error codes are fairly generic and mostly sufficient.
-// In order to avoid confusion, thie type will be deprecated in
+// In order to avoid confusion, this type will be deprecated in
 // favor of the new Code that matches exactly what grpc defines.
 // Some names below have a _LEGACY suffix. This is to prevent
 // name collisions with Code.
