@@ -19,29 +19,23 @@ import (
 // Client -> Server.
 // Returns sqldb.SQLError(CRServerGone) if it can't.
 func (c *Conn) writeComQuery(query string) error {
-	data := make([]byte, len(query)+1)
+	data := c.startEphemeralPacket(len(query) + 1)
 	data[0] = ComQuery
-	copy(data[1:], []byte(query))
-	if err := c.writePacket(data); err != nil {
-		return sqldb.NewSQLError(CRServerGone, SSUnknownSQLState, err.Error())
-	}
-	if err := c.flush(); err != nil {
+	copy(data[1:], query)
+	if err := c.writeEphemeralPacket(true); err != nil {
 		return sqldb.NewSQLError(CRServerGone, SSUnknownSQLState, err.Error())
 	}
 	return nil
 }
 
-// writeComQuery changes the default database to use.
+// writeComInitDB changes the default database to use.
 // Client -> Server.
 // Returns sqldb.SQLError(CRServerGone) if it can't.
 func (c *Conn) writeComInitDB(db string) error {
-	data := make([]byte, len(db)+1)
+	data := c.startEphemeralPacket(len(db) + 1)
 	data[0] = ComInitDB
-	copy(data[1:], []byte(db))
-	if err := c.writePacket(data); err != nil {
-		return sqldb.NewSQLError(CRServerGone, SSUnknownSQLState, err.Error())
-	}
-	if err := c.flush(); err != nil {
+	copy(data[1:], db)
+	if err := c.writeEphemeralPacket(true); err != nil {
 		return sqldb.NewSQLError(CRServerGone, SSUnknownSQLState, err.Error())
 	}
 	return nil
@@ -50,9 +44,9 @@ func (c *Conn) writeComInitDB(db string) error {
 // readColumnDefinition reads the next Column Definition packet.
 // Returns a sqldb.SQLError.
 func (c *Conn) readColumnDefinition(field *querypb.Field, index int) error {
-	colDef, err := c.ReadPacket()
+	colDef, err := c.readEphemeralPacket()
 	if err != nil {
-		return err
+		return sqldb.NewSQLError(CRServerLost, SSUnknownSQLState, "%v", err)
 	}
 
 	// Catalog is ignored, always set to "def"
@@ -148,9 +142,9 @@ func (c *Conn) readColumnDefinition(field *querypb.Field, index int) error {
 // readColumnDefinition that only fills in the Type.
 // Returns a sqldb.SQLError.
 func (c *Conn) readColumnDefinitionType(field *querypb.Field, index int) error {
-	colDef, err := c.ReadPacket()
+	colDef, err := c.readEphemeralPacket()
 	if err != nil {
-		return err
+		return sqldb.NewSQLError(CRServerLost, SSUnknownSQLState, "%v", err)
 	}
 
 	// catalog, schema, table, orgTable, name and orgName are
@@ -287,9 +281,9 @@ func (c *Conn) ExecuteFetch(query string, maxrows int, wantfields bool) (*sqltyp
 
 	if c.Capabilities&CapabilityClientDeprecateEOF == 0 {
 		// EOF is only present here if it's not deprecated.
-		data, err := c.ReadPacket()
+		data, err := c.readEphemeralPacket()
 		if err != nil {
-			return nil, err
+			return nil, sqldb.NewSQLError(CRServerLost, SSUnknownSQLState, "%v", err)
 		}
 		switch data[0] {
 		case EOFPacket:
@@ -354,9 +348,9 @@ func (c *Conn) ExecuteFetch(query string, maxrows int, wantfields bool) (*sqltyp
 // drainResults will read all packets for a result set and ignore them.
 func (c *Conn) drainResults() error {
 	for {
-		data, err := c.ReadPacket()
+		data, err := c.readEphemeralPacket()
 		if err != nil {
-			return err
+			return sqldb.NewSQLError(CRServerLost, SSUnknownSQLState, "%v", err)
 		}
 
 		switch data[0] {
@@ -375,9 +369,9 @@ func (c *Conn) drainResults() error {
 }
 
 func (c *Conn) readComQueryResponse() (uint64, uint64, int, error) {
-	data, err := c.ReadPacket()
+	data, err := c.readEphemeralPacket()
 	if err != nil {
-		return 0, 0, 0, err
+		return 0, 0, 0, sqldb.NewSQLError(CRServerLost, SSUnknownSQLState, "%v", err)
 	}
 	if len(data) == 0 {
 		return 0, 0, 0, sqldb.NewSQLError(CRMalformedPacket, SSUnknownSQLState, "invalid empty COM_QUERY response packet")
@@ -419,9 +413,9 @@ func (c *Conn) parseComInitDB(data []byte) string {
 
 func (c *Conn) sendColumnCount(count uint64) error {
 	length := lenEncIntSize(count)
-	data := make([]byte, length)
+	data := c.startEphemeralPacket(length)
 	writeLenEncInt(data, 0, count)
-	return c.writePacket(data)
+	return c.writeEphemeralPacket(false)
 }
 
 func (c *Conn) writeColumnDefinition(field *querypb.Field) error {
@@ -447,7 +441,7 @@ func (c *Conn) writeColumnDefinition(field *querypb.Field) error {
 		flags = int64(field.Flags)
 	}
 
-	data := make([]byte, length)
+	data := c.startEphemeralPacket(length)
 	pos := 0
 
 	pos = writeLenEncString(data, pos, "def") // Always the same.
@@ -468,7 +462,7 @@ func (c *Conn) writeColumnDefinition(field *querypb.Field) error {
 		return fmt.Errorf("internal error: packing of column definition used %v bytes instead of %v", pos, len(data))
 	}
 
-	return c.writePacket(data)
+	return c.writeEphemeralPacket(false)
 }
 
 func (c *Conn) writeRow(row []sqltypes.Value) error {
@@ -482,7 +476,7 @@ func (c *Conn) writeRow(row []sqltypes.Value) error {
 		}
 	}
 
-	data := make([]byte, length)
+	data := c.startEphemeralPacket(length)
 	pos := 0
 	for _, val := range row {
 		if val.IsNull() {
@@ -498,13 +492,14 @@ func (c *Conn) writeRow(row []sqltypes.Value) error {
 		return fmt.Errorf("internal error packet row: got %v bytes but expected %v", pos, length)
 	}
 
-	return c.writePacket(data)
+	return c.writeEphemeralPacket(false)
 }
 
 // writeResult writes a query Result to the wire.
 func (c *Conn) writeResult(result *sqltypes.Result) error {
 	if len(result.Fields) == 0 {
 		// This is just an INSERT result, send an OK packet.
+		// Nothing yet in the buffer, we can use this.
 		return c.writeOKPacket(result.RowsAffected, result.InsertID, c.StatusFlags, 0)
 	}
 

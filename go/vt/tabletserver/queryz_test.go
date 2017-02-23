@@ -20,7 +20,7 @@ import (
 func TestQueryzHandler(t *testing.T) {
 	resp := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", "/schemaz", nil)
-	schemaInfo := newTestSchemaInfo(100, 10*time.Second, 10*time.Second)
+	qe := newTestQueryEngine(100, 10*time.Second, true)
 
 	plan1 := &ExecPlan{
 		ExecPlan: &planbuilder.ExecPlan{
@@ -30,7 +30,7 @@ func TestQueryzHandler(t *testing.T) {
 		},
 	}
 	plan1.AddStats(10, 2*time.Second, 1*time.Second, 2, 0)
-	schemaInfo.queries.Set("select name from test_table", plan1)
+	qe.queries.Set("select name from test_table", plan1)
 
 	plan2 := &ExecPlan{
 		ExecPlan: &planbuilder.ExecPlan{
@@ -40,7 +40,7 @@ func TestQueryzHandler(t *testing.T) {
 		},
 	}
 	plan2.AddStats(1, 2*time.Millisecond, 1*time.Millisecond, 1, 0)
-	schemaInfo.queries.Set("insert into test_table values 1", plan2)
+	qe.queries.Set("insert into test_table values 1", plan2)
 
 	plan3 := &ExecPlan{
 		ExecPlan: &planbuilder.ExecPlan{
@@ -50,10 +50,10 @@ func TestQueryzHandler(t *testing.T) {
 		},
 	}
 	plan3.AddStats(1, 75*time.Millisecond, 50*time.Millisecond, 1, 0)
-	schemaInfo.queries.Set("show tables", plan3)
-	schemaInfo.queries.Set("", (*ExecPlan)(nil))
+	qe.queries.Set("show tables", plan3)
+	qe.queries.Set("", (*ExecPlan)(nil))
 
-	queryzHandler(schemaInfo, resp, req)
+	queryzHandler(qe, resp, req)
 	body, _ := ioutil.ReadAll(resp.Body)
 	planPattern1 := []string{
 		`<tr class="high">`,

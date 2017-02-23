@@ -57,7 +57,7 @@ func (s *VtworkerServer) ExecuteVtworkerCommand(args *vtworkerdatapb.ExecuteVtwo
 		err = s.wi.WaitForCommand(worker, done)
 	}
 
-	return vterrors.ToGRPCError(err)
+	return vterrors.ToGRPC(err)
 }
 
 // StartServer registers the VtworkerServer for RPCs

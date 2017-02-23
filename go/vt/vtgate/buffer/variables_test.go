@@ -6,7 +6,7 @@ import (
 )
 
 func TestVariables(t *testing.T) {
-	flag.Set("vtgate_buffer_size", "23")
+	flag.Set("buffer_size", "23")
 	defer resetFlagsForTesting()
 
 	// Create new buffer which will the flags.

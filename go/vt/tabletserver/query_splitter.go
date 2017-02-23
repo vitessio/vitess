@@ -8,6 +8,7 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	"github.com/youtube/vitess/go/vt/sqlparser"
+	"github.com/youtube/vitess/go/vt/tabletserver/engines/schema"
 	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 )
 
@@ -21,7 +22,7 @@ type QuerySplitter struct {
 	sql           string
 	bindVariables map[string]interface{}
 	splitCount    int64
-	schemaInfo    *SchemaInfo
+	se            *schema.Engine
 	sel           *sqlparser.Select
 	tableName     sqlparser.TableIdent
 	splitColumn   sqlparser.ColIdent
@@ -41,7 +42,7 @@ func NewQuerySplitter(
 	bindVariables map[string]interface{},
 	splitColumn string,
 	splitCount int64,
-	schemaInfo *SchemaInfo) *QuerySplitter {
+	se *schema.Engine) *QuerySplitter {
 	if splitCount < 1 {
 		splitCount = 1
 	}
@@ -49,7 +50,7 @@ func NewQuerySplitter(
 		sql:           sql,
 		bindVariables: bindVariables,
 		splitCount:    splitCount,
-		schemaInfo:    schemaInfo,
+		se:            se,
 		splitColumn:   sqlparser.NewColIdent(splitColumn),
 	}
 }
@@ -81,24 +82,24 @@ func (qs *QuerySplitter) validateQuery() error {
 	if qs.tableName.IsEmpty() {
 		return fmt.Errorf("not a simple table expression")
 	}
-	tableInfo := qs.schemaInfo.GetTable(qs.tableName)
-	if tableInfo == nil {
+	table := qs.se.GetTable(qs.tableName)
+	if table == nil {
 		return fmt.Errorf("can't find table in schema")
 	}
-	if len(tableInfo.PKColumns) == 0 {
+	if len(table.PKColumns) == 0 {
 		return fmt.Errorf("no primary keys")
 	}
 	if !qs.splitColumn.IsEmpty() {
-		for _, index := range tableInfo.Indexes {
+		for _, index := range table.Indexes {
 			for _, column := range index.Columns {
 				if qs.splitColumn.Equal(column) {
 					return nil
 				}
 			}
 		}
-		return fmt.Errorf("split column is not indexed or does not exist in table schema, SplitColumn: %v, TableInfo.Table: %v", qs.splitColumn, tableInfo.Table)
+		return fmt.Errorf("split column is not indexed or does not exist in table schema, SplitColumn: %v, Table: %v", qs.splitColumn, table)
 	}
-	qs.splitColumn = tableInfo.GetPKColumn(0).Name
+	qs.splitColumn = table.GetPKColumn(0).Name
 	return nil
 }
 

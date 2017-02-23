@@ -55,7 +55,7 @@ var (
     </td>
     <td width="25%" border="">
       <a href="/schemaz">Schema</a></br>
-      <a href="/debug/query_plans">Schema&nbsp;Query&nbsp;Plans</a></br>
+      <a href="/debug/tablet_plans">Schema&nbsp;Query&nbsp;Plans</a></br>
       <a href="/debug/query_stats">Schema&nbsp;Query&nbsp;Stats</a></br>
       <a href="/debug/table_stats">Schema&nbsp;Table&nbsp;Stats</a></br>
     </td>

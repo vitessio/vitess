@@ -16,10 +16,12 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver/sandboxconn"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/vterrors"
 	"golang.org/x/net/context"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	vschemapb "github.com/youtube/vitess/go/vt/proto/vschema"
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 // sandbox_test.go provides a sandbox for unit testing VTGate.
@@ -268,12 +270,12 @@ func sandboxDialer(tablet *topodatapb.Tablet, timeout time.Duration) (queryservi
 	sand.DialCounter++
 	if sand.DialMustFail > 0 {
 		sand.DialMustFail--
-		return nil, tabletconn.OperationalError(fmt.Sprintf("conn error"))
+		return nil, vterrors.New(vtrpcpb.Code_UNAVAILABLE, "conn error")
 	}
 	if sand.DialMustTimeout > 0 {
 		time.Sleep(timeout)
 		sand.DialMustTimeout--
-		return nil, tabletconn.OperationalError(fmt.Sprintf("conn unreachable"))
+		return nil, vterrors.New(vtrpcpb.Code_UNAVAILABLE, "conn unreachable")
 	}
 	sbc := sandboxconn.NewSandboxConn(tablet)
 	return sbc, nil

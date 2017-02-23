@@ -133,7 +133,7 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32) {
 	}
 
 	// Wait for the client response.
-	response, err := c.readPacket()
+	response, err := c.readEphemeralPacket()
 	if err != nil {
 		log.Errorf("Cannot read client handshake response: %v", err)
 		return
@@ -168,7 +168,7 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32) {
 
 	for {
 		c.sequence = 0
-		data, err := c.readPacket()
+		data, err := c.readEphemeralPacket()
 		if err != nil {
 			log.Errorf("Error reading packet from client %v: %v", c.ConnectionID, err)
 			return
@@ -176,7 +176,7 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32) {
 
 		switch data[0] {
 		case ComQuit:
-			log.Infof("Client %v disconnected.", c.ConnectionID)
+			log.Infof("Client %v wants to disconnect, closing connection.", c.ConnectionID)
 			return
 		case ComInitDB:
 			db := c.parseComInitDB(data)
@@ -251,7 +251,7 @@ func (c *Conn) writeHandshakeV10(serverVersion string) ([]byte, error) {
 			13 + // auth-plugin-data
 			lenNullString(mysqlNativePassword) // auth-plugin-name
 
-	data := make([]byte, length)
+	data := c.startEphemeralPacket(length)
 	pos := 0
 
 	// Protocol version.
@@ -305,10 +305,7 @@ func (c *Conn) writeHandshakeV10(serverVersion string) ([]byte, error) {
 		return nil, fmt.Errorf("error building Handshake packet: got %v bytes expected %v", pos, len(data))
 	}
 
-	if err := c.writePacket(data); err != nil {
-		return nil, err
-	}
-	if err := c.flush(); err != nil {
+	if err := c.writeEphemeralPacket(true); err != nil {
 		return nil, err
 	}
 

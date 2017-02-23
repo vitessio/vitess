@@ -242,11 +242,11 @@ def tearDownModule():
 
 def start_vtgate():
   utils.VtGate().start(extra_args=[
-      '-enable_vtgate_buffer',
+      '-enable_buffer',
       # Long timeout in case failover is slow.
-      '-vtgate_buffer_window', '10m',
-      '-vtgate_buffer_max_failover_duration', '10m',
-      '-vtgate_buffer_min_time_between_failovers', '20m'],
+      '-buffer_window', '10m',
+      '-buffer_max_failover_duration', '10m',
+      '-buffer_min_time_between_failovers', '20m'],
                        tablets=all_tablets)
 
 
@@ -376,7 +376,7 @@ class TestBuffer(TestBufferBase):
   def setUp(self):
     utils.vtgate.kill()
     # Restart vtgate between each test or the feature
-    # --vtgate_buffer_min_time_between_failovers
+    # --buffer_min_time_between_failovers
     # will ignore subsequent failovers.
     start_vtgate()
 

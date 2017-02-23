@@ -7,7 +7,6 @@
 package vtgate
 
 import (
-	"errors"
 	"flag"
 	"fmt"
 	"math"
@@ -27,7 +26,6 @@ import (
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/sqlannotation"
 	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
-	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/vterrors"
@@ -82,11 +80,10 @@ var (
 	errorsByOperation *stats.Rates
 	errorsByKeyspace  *stats.Rates
 	errorsByDbType    *stats.Rates
+	errorsByCode      *stats.Rates
 
 	// Error counters should be global so they can be set from anywhere
-	normalErrors   *stats.MultiCounters
-	infoErrors     *stats.Counters
-	internalErrors *stats.Counters
+	errorCounts *stats.MultiCounters
 )
 
 // VTGate is the rpc interface to vtgate. Only one instance
@@ -181,17 +178,16 @@ func Init(ctx context.Context, hc discovery.HealthCheck, topoServer topo.Server,
 		logMessageStream:            logutil.NewThrottledLogger("MessageStream", 5*time.Second),
 	}
 
-	normalErrors = stats.NewMultiCounters("VtgateApiErrorCounts", []string{"Operation", "Keyspace", "DbType"})
-	infoErrors = stats.NewCounters("VtgateInfoErrorCounts")
-	internalErrors = stats.NewCounters("VtgateInternalErrorCounts")
+	errorCounts = stats.NewMultiCounters("VtgateApiErrorCounts", []string{"Operation", "Keyspace", "DbType", "Code"})
 
 	qpsByOperation = stats.NewRates("QPSByOperation", stats.CounterForDimension(rpcVTGate.timings, "Operation"), 15, 1*time.Minute)
 	qpsByKeyspace = stats.NewRates("QPSByKeyspace", stats.CounterForDimension(rpcVTGate.timings, "Keyspace"), 15, 1*time.Minute)
 	qpsByDbType = stats.NewRates("QPSByDbType", stats.CounterForDimension(rpcVTGate.timings, "DbType"), 15, 1*time.Minute)
 
-	errorsByOperation = stats.NewRates("ErrorsByOperation", stats.CounterForDimension(normalErrors, "Operation"), 15, 1*time.Minute)
-	errorsByKeyspace = stats.NewRates("ErrorsByKeyspace", stats.CounterForDimension(normalErrors, "Keyspace"), 15, 1*time.Minute)
-	errorsByDbType = stats.NewRates("ErrorsByDbType", stats.CounterForDimension(normalErrors, "DbType"), 15, 1*time.Minute)
+	errorsByOperation = stats.NewRates("ErrorsByOperation", stats.CounterForDimension(errorCounts, "Operation"), 15, 1*time.Minute)
+	errorsByKeyspace = stats.NewRates("ErrorsByKeyspace", stats.CounterForDimension(errorCounts, "Keyspace"), 15, 1*time.Minute)
+	errorsByDbType = stats.NewRates("ErrorsByDbType", stats.CounterForDimension(errorCounts, "DbType"), 15, 1*time.Minute)
+	errorsByCode = stats.NewRates("ErrorsByCode", stats.CounterForDimension(errorCounts, "Code"), 15, 1*time.Minute)
 
 	servenv.OnRun(func() {
 		for _, f := range RegisterVTGates {
@@ -245,7 +241,7 @@ func (vtg *VTGate) Execute(ctx context.Context, sql string, bindVariables map[st
 		"NotInTransaction": notInTransaction,
 		"Options":          options,
 	}
-	err = handleExecuteError(err, statsKey, query, vtg.logExecute)
+	err = recordAndAnnotateError(err, statsKey, query, vtg.logExecute)
 	return nil, err
 }
 
@@ -286,7 +282,7 @@ func (vtg *VTGate) ExecuteShards(ctx context.Context, sql string, bindVariables 
 		"NotInTransaction": notInTransaction,
 		"Options":          options,
 	}
-	err = handleExecuteError(err, statsKey, query, vtg.logExecuteShards)
+	err = recordAndAnnotateError(err, statsKey, query, vtg.logExecuteShards)
 	return nil, err
 }
 
@@ -315,7 +311,7 @@ func (vtg *VTGate) ExecuteKeyspaceIds(ctx context.Context, sql string, bindVaria
 		"NotInTransaction": notInTransaction,
 		"Options":          options,
 	}
-	err = handleExecuteError(err, statsKey, query, vtg.logExecuteKeyspaceIds)
+	err = recordAndAnnotateError(err, statsKey, query, vtg.logExecuteKeyspaceIds)
 	return nil, err
 }
 
@@ -344,7 +340,7 @@ func (vtg *VTGate) ExecuteKeyRanges(ctx context.Context, sql string, bindVariabl
 		"NotInTransaction": notInTransaction,
 		"Options":          options,
 	}
-	err = handleExecuteError(err, statsKey, query, vtg.logExecuteKeyRanges)
+	err = recordAndAnnotateError(err, statsKey, query, vtg.logExecuteKeyRanges)
 	return nil, err
 }
 
@@ -374,7 +370,7 @@ func (vtg *VTGate) ExecuteEntityIds(ctx context.Context, sql string, bindVariabl
 		"NotInTransaction":  notInTransaction,
 		"Options":           options,
 	}
-	err = handleExecuteError(err, statsKey, query, vtg.logExecuteEntityIds)
+	err = recordAndAnnotateError(err, statsKey, query, vtg.logExecuteEntityIds)
 	return nil, err
 }
 
@@ -404,7 +400,7 @@ func (vtg *VTGate) ExecuteBatch(ctx context.Context, sqlList []string, bindVaria
 		"AsTransaction": asTransaction,
 		"Options":       options,
 	}
-	err = handleExecuteError(err, statsKey, query, vtg.logExecute)
+	err = recordAndAnnotateError(err, statsKey, query, vtg.logExecute)
 	return nil, err
 }
 
@@ -442,7 +438,7 @@ func (vtg *VTGate) ExecuteBatchShards(ctx context.Context, queries []*vtgatepb.B
 		"Session":       session,
 		"Options":       options,
 	}
-	err = handleExecuteError(err, statsKey, query, vtg.logExecuteBatchShards)
+	err = recordAndAnnotateError(err, statsKey, query, vtg.logExecuteBatchShards)
 	return nil, err
 }
 
@@ -478,7 +474,7 @@ func (vtg *VTGate) ExecuteBatchKeyspaceIds(ctx context.Context, queries []*vtgat
 		"Session":       session,
 		"Options":       options,
 	}
-	err = handleExecuteError(err, statsKey, query, vtg.logExecuteBatchKeyspaceIds)
+	err = recordAndAnnotateError(err, statsKey, query, vtg.logExecuteBatchKeyspaceIds)
 	return nil, err
 }
 
@@ -509,7 +505,7 @@ func (vtg *VTGate) StreamExecute(ctx context.Context, sql string, bindVariables 
 			"TabletType":    ltt,
 			"Options":       options,
 		}
-		return handleExecuteError(err, statsKey, query, vtg.logStreamExecute)
+		return recordAndAnnotateError(err, statsKey, query, vtg.logStreamExecute)
 	}
 	return nil
 }
@@ -548,7 +544,7 @@ func (vtg *VTGate) StreamExecuteKeyspaceIds(ctx context.Context, sql string, bin
 			"TabletType":    ltt,
 			"Options":       options,
 		}
-		return handleExecuteError(err, statsKey, query, vtg.logStreamExecuteKeyspaceIds)
+		return recordAndAnnotateError(err, statsKey, query, vtg.logStreamExecuteKeyspaceIds)
 	}
 	return nil
 }
@@ -587,7 +583,7 @@ func (vtg *VTGate) StreamExecuteKeyRanges(ctx context.Context, sql string, bindV
 			"TabletType":    ltt,
 			"Options":       options,
 		}
-		return handleExecuteError(err, statsKey, query, vtg.logStreamExecuteKeyRanges)
+		return recordAndAnnotateError(err, statsKey, query, vtg.logStreamExecuteKeyRanges)
 	}
 	return nil
 }
@@ -623,7 +619,7 @@ func (vtg *VTGate) StreamExecuteShards(ctx context.Context, sql string, bindVari
 			"TabletType":    ltt,
 			"Options":       options,
 		}
-		return handleExecuteError(err, statsKey, query, vtg.logStreamExecuteShards)
+		return recordAndAnnotateError(err, statsKey, query, vtg.logStreamExecuteShards)
 	}
 	return nil
 }
@@ -631,7 +627,7 @@ func (vtg *VTGate) StreamExecuteShards(ctx context.Context, sql string, bindVari
 // Begin begins a transaction. It has to be concluded by a Commit or Rollback.
 func (vtg *VTGate) Begin(ctx context.Context, singledb bool) (*vtgatepb.Session, error) {
 	if !singledb && vtg.transactionMode == TxSingle {
-		return nil, vterrors.FromError(vtrpcpb.ErrorCode_BAD_INPUT, errors.New("multi-db transaction disallowed"))
+		return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "multi-db transaction disallowed")
 	}
 	return &vtgatepb.Session{
 		InTransaction: true,
@@ -644,7 +640,7 @@ func (vtg *VTGate) Commit(ctx context.Context, twopc bool, session *vtgatepb.Ses
 	if twopc && vtg.transactionMode != TxTwoPC {
 		// Rollback the transaction to prevent future deadlocks.
 		vtg.txConn.Rollback(ctx, NewSafeSession(session))
-		return vterrors.FromError(vtrpcpb.ErrorCode_BAD_INPUT, errors.New("2pc transaction disallowed"))
+		return vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "2pc transaction disallowed")
 	}
 	return formatError(vtg.txConn.Commit(ctx, twopc, NewSafeSession(session)))
 }
@@ -823,15 +819,14 @@ func (vtg *VTGate) MessageStream(ctx context.Context, keyspace string, shard str
 		callback,
 	)
 	if err != nil {
-		normalErrors.Add(statsKey, 1)
-		query := map[string]interface{}{
+		request := map[string]interface{}{
 			"Keyspace":    keyspace,
 			"Shard":       shard,
 			"KeyRange":    keyRange,
 			"TabletType":  ltt,
 			"MessageName": name,
 		}
-		logError(err, query, vtg.logMessageStream)
+		recordAndAnnotateError(err, statsKey, request, vtg.logMessageStream)
 	}
 	return formatError(err)
 }
@@ -866,15 +861,14 @@ func (vtg *VTGate) UpdateStream(ctx context.Context, keyspace string, shard stri
 		callback,
 	)
 	if err != nil {
-		normalErrors.Add(statsKey, 1)
-		query := map[string]interface{}{
+		request := map[string]interface{}{
 			"Keyspace":   keyspace,
 			"Shard":      shard,
 			"KeyRange":   keyRange,
 			"TabletType": ltt,
 			"Timestamp":  timestamp,
 		}
-		logError(err, query, vtg.logUpdateStream)
+		recordAndAnnotateError(err, statsKey, request, vtg.logUpdateStream)
 	}
 	return formatError(err)
 }
@@ -889,103 +883,28 @@ func (vtg *VTGate) VSchemaStats() *VSchemaStats {
 	return vtg.router.planner.VSchemaStats()
 }
 
-// Any errors that are caused by VTGate dependencies (e.g, VtTablet) should be logged
-// as errors in those components, but logged to Info in VTGate itself.
-func logError(err error, query map[string]interface{}, logger *logutil.ThrottledLogger) {
-	if err == context.DeadlineExceeded {
-		// Count these but don't log them because they are very common and not
-		// likely to indicate a bug in VTGate
-		infoErrors.Add("TimeoutErrors", 1)
-		return
+func recordAndAnnotateError(err error, statsKey []string, request map[string]interface{}, logger *logutil.ThrottledLogger) error {
+	ec := vterrors.Code(err)
+	fullkey := []string{
+		statsKey[0],
+		statsKey[1],
+		statsKey[2],
+		ec.String(),
 	}
-	logMethod := logger.Errorf
-	if !isErrorCausedByVTGate(err) {
-		infoErrors.Add("NonVtgateErrors", 1)
-		// Log non-vtgate errors (e.g. a query failed on vttablet because a failover
-		// is in progress) on INFO only because vttablet already logs them as ERROR.
-		logMethod = logger.Infof
-	}
-	logMethod("%v, query: %+v", err, query)
-}
-
-// Returns true if a given error is caused entirely due to VTGate, and not any
-// of the components that it depends on.
-// If the error is an aggregation of multiple errors e.g. in case of a scatter
-// query, the function returns true if *any* error is caused by vtgate.
-// Consequently, the function returns false if *all* errors are caused by
-// vttablet (actual errors) or the client (e.g. context canceled).
-func isErrorCausedByVTGate(err error) bool {
-	var errQueue []error
-	errQueue = append(errQueue, err)
-	for len(errQueue) > 0 {
-		// pop the first item from the queue
-		e := errQueue[0]
-		errQueue = errQueue[1:]
-
-		switch e := e.(type) {
-		case *ScatterConnError:
-			errQueue = append(errQueue, e.Errs...)
-		case *gateway.ShardError:
-			errQueue = append(errQueue, e.Err)
-		case tabletconn.OperationalError:
-			// Communication with vttablet failed i.e. the error is caused by vtgate.
-			// (For actual vttablet errors, see the next case "ServerError".)
-			return true
-		case *tabletconn.ServerError:
-			// The query failed on vttablet and it returned this error.
-			// Ignore it and check the next error in the queue.
-		default:
-			if e == context.Canceled {
-				// Caused by the client and not vtgate.
-				// Ignore it and check the next error in the queue.
-				continue
-			}
-
-			// Return true if even a single error within
-			// the error queue was caused by VTGate. If
-			// we're not certain what caused the error, we
-			// default to assuming that VTGate was at fault.
-			return true
-		}
-	}
-	return false
-}
-
-func handleExecuteError(err error, statsKey []string, query map[string]interface{}, logger *logutil.ThrottledLogger) error {
-	// First we log in the right category.
-	ec := vterrors.RecoverVtErrorCode(err)
+	errorCounts.Add(fullkey, 1)
+	// Most errors are not logged by vtgate beecause they're either too spammy or logged elsewhere.
 	switch ec {
-	case vtrpcpb.ErrorCode_INTEGRITY_ERROR:
-		// Duplicate key error, no need to log.
-		infoErrors.Add("DupKey", 1)
-	case vtrpcpb.ErrorCode_RESOURCE_EXHAUSTED, vtrpcpb.ErrorCode_BAD_INPUT:
-		// Tx pool full error, or bad input, no need to log.
-		normalErrors.Add(statsKey, 1)
-	case vtrpcpb.ErrorCode_PERMISSION_DENIED:
-		// User violated permissions (TableACL), no need to log.
-		infoErrors.Add("PermissionDenied", 1)
-	case vtrpcpb.ErrorCode_TRANSIENT_ERROR:
-		// Temporary error which should be retried by user. Do not log.
-		// As of 01/2017, only the vttablet transaction throttler and the vtgate
-		// master buffer (if buffer full) return this error.
-		infoErrors.Add("TransientError", 1)
-	default:
-		// Regular error, we will log if caused by vtgate.
-		normalErrors.Add(statsKey, 1)
-		logError(err, query, logger)
+	case vtrpcpb.Code_UNKNOWN, vtrpcpb.Code_INTERNAL, vtrpcpb.Code_DATA_LOSS:
+		logger.Errorf("%v, request: %+v", err, request)
 	}
-
-	// Then we suffix the error with our address.
-	s := fmt.Sprintf(", vtgate: %v", servenv.ListeningURL.String())
-	return vterrors.WithSuffix(err, s)
+	return vterrors.Errorf(vterrors.Code(err), "vtgate: %s: %v", servenv.ListeningURL.String(), err)
 }
 
 func formatError(err error) error {
 	if err == nil {
 		return nil
 	}
-	s := fmt.Sprintf(", vtgate: %v", servenv.ListeningURL.String())
-	return vterrors.WithSuffix(err, s)
+	return vterrors.Errorf(vterrors.Code(err), "vtgate: %s: %v", servenv.ListeningURL.String(), err)
 }
 
 // HandlePanic recovers from panics, and logs / increment counters
@@ -993,7 +912,7 @@ func (vtg *VTGate) HandlePanic(err *error) {
 	if x := recover(); x != nil {
 		log.Errorf("Uncaught panic:\n%v\n%s", x, tb.Stack(4))
 		*err = fmt.Errorf("uncaught panic: %v, vtgate: %v", x, servenv.ListeningURL.String())
-		internalErrors.Add("Panic", 1)
+		errorCounts.Add([]string{"Panic", "Unknown", "Unknown", vtrpcpb.Code_INTERNAL.String()}, 1)
 	}
 }
 

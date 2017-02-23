@@ -60,9 +60,9 @@ func (c *Conn) ExecuteStreamFetch(query string) error {
 	// Read the EOF after the fields if necessary.
 	if c.Capabilities&CapabilityClientDeprecateEOF == 0 {
 		// EOF is only present here if it's not deprecated.
-		data, err := c.ReadPacket()
+		data, err := c.readEphemeralPacket()
 		if err != nil {
-			return err
+			return sqldb.NewSQLError(CRServerLost, SSUnknownSQLState, "%v", err)
 		}
 		switch data[0] {
 		case EOFPacket:

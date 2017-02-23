@@ -1,5 +1,7 @@
 package mysqlconn
 
+import "github.com/youtube/vitess/go/sqldb"
+
 const (
 	// MaxPacketSize is the maximum payload length of a packet
 	// the server supports.
@@ -183,6 +185,10 @@ const (
 	// Sent when the streaming calls are not done in the right order.
 	CRCommandsOutOfSync = 2014
 
+	// CRNamedPipeStateError is CR_NAMEDPIPESETSTATE_ERROR.
+	// This is the highest possible number for a connection error.
+	CRNamedPipeStateError = 2018
+
 	// CRCantReadCharset is CR_CANT_READ_CHARSET
 	CRCantReadCharset = 2019
 
@@ -339,4 +345,17 @@ var CharacterSetMap = map[string]uint8{
 // replication/constants.go, so we are using numerical values here.
 func IsNum(typ uint8) bool {
 	return ((typ <= 9 /* MYSQL_TYPE_INT24 */ && typ != 7 /* MYSQL_TYPE_TIMESTAMP */) || typ == 13 /* MYSQL_TYPE_YEAR */ || typ == 246 /* MYSQL_TYPE_NEWDECIMAL */)
+}
+
+// IsConnErr returns true if the error is a connection error.
+func IsConnErr(err error) bool {
+	if sqlErr, ok := err.(*sqldb.SQLError); ok {
+		num := sqlErr.Number()
+		// Don't count query kill as connection error.
+		if num == CRServerLost {
+			return false
+		}
+		return num >= CRUnknownError && num <= CRNamedPipeStateError
+	}
+	return false
 }

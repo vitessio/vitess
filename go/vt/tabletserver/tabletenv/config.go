@@ -29,6 +29,12 @@ var (
 	StatsLogger = streamlog.New("TabletServer", 50)
 )
 
+// MySQLChecker defines the CheckMySQL interface that lower
+// level objects can use to call back into TabletServer.
+type MySQLChecker interface {
+	CheckMySQL()
+}
+
 func init() {
 	flag.IntVar(&Config.PoolSize, "queryserver-config-pool-size", DefaultQsConfig.PoolSize, "query server connection pool size, connection pool is used by regular queries (non streaming, not in a transaction)")
 	flag.IntVar(&Config.StreamPoolSize, "queryserver-config-stream-pool-size", DefaultQsConfig.StreamPoolSize, "query server stream connection pool size, stream pool is used by stream queries: queries that return results to client in a streaming fashion")
@@ -46,11 +52,10 @@ func init() {
 	flag.Float64Var(&Config.IdleTimeout, "queryserver-config-idle-timeout", DefaultQsConfig.IdleTimeout, "query server idle timeout (in seconds), vttablet manages various mysql connection pools. This config means if a connection has not been used in given idle timeout, this connection will be removed from pool. This effectively manages number of connection objects and optimize the pool performance.")
 	flag.BoolVar(&Config.StrictMode, "queryserver-config-strict-mode", DefaultQsConfig.StrictMode, "allow only predictable DMLs and enforces MySQL's STRICT_TRANS_TABLES")
 	// tableacl related configurations.
-	flag.BoolVar(&Config.StrictTableAcl, "queryserver-config-strict-table-acl", DefaultQsConfig.StrictTableAcl, "only allow queries that pass table acl checks")
-	flag.BoolVar(&Config.EnableTableAclDryRun, "queryserver-config-enable-table-acl-dry-run", DefaultQsConfig.EnableTableAclDryRun, "If this flag is enabled, tabletserver will emit monitoring metrics and let the request pass regardless of table acl check results")
-	flag.StringVar(&Config.TableAclExemptACL, "queryserver-config-acl-exempt-acl", DefaultQsConfig.TableAclExemptACL, "an acl that exempt from table acl checking (this acl is free to access any vitess tables).")
+	flag.BoolVar(&Config.StrictTableACL, "queryserver-config-strict-table-acl", DefaultQsConfig.StrictTableACL, "only allow queries that pass table acl checks")
+	flag.BoolVar(&Config.EnableTableACLDryRun, "queryserver-config-enable-table-acl-dry-run", DefaultQsConfig.EnableTableACLDryRun, "If this flag is enabled, tabletserver will emit monitoring metrics and let the request pass regardless of table acl check results")
+	flag.StringVar(&Config.TableACLExemptACL, "queryserver-config-acl-exempt-acl", DefaultQsConfig.TableACLExemptACL, "an acl that exempt from table acl checking (this acl is free to access any vitess tables).")
 	flag.BoolVar(&Config.TerseErrors, "queryserver-config-terse-errors", DefaultQsConfig.TerseErrors, "prevent bind vars from escaping in returned errors")
-	flag.StringVar(&Config.DebugURLPrefix, "debug-url-prefix", DefaultQsConfig.DebugURLPrefix, "debug url prefix, vttablet will report various system debug pages and this config controls the prefix of these debug urls")
 	flag.StringVar(&Config.PoolNamePrefix, "pool-name-prefix", DefaultQsConfig.PoolNamePrefix, "pool name prefix, vttablet has several pools and each of them has a name. This config specifies the prefix of these pool names")
 	flag.BoolVar(&Config.WatchReplication, "watch_replication_stream", false, "When enabled, vttablet will stream the MySQL replication stream from the local server, and use it to support the include_event_token ExecuteOptions.")
 	flag.BoolVar(&Config.EnableAutoCommit, "enable-autocommit", DefaultQsConfig.EnableAutoCommit, "if the flag is on, a DML outsides a transaction will be auto committed.")
@@ -85,13 +90,12 @@ type TabletConfig struct {
 	TxPoolTimeout           float64
 	IdleTimeout             float64
 	StrictMode              bool
-	StrictTableAcl          bool
+	StrictTableACL          bool
 	TerseErrors             bool
 	EnableAutoCommit        bool
-	EnableTableAclDryRun    bool
-	DebugURLPrefix          string
+	EnableTableACLDryRun    bool
 	PoolNamePrefix          string
-	TableAclExemptACL       string
+	TableACLExemptACL       string
 	WatchReplication        bool
 	TwoPCEnable             bool
 	TwoPCCoordinatorAddress string
@@ -125,13 +129,12 @@ var DefaultQsConfig = TabletConfig{
 	IdleTimeout:             30 * 60,
 	StreamBufferSize:        32 * 1024,
 	StrictMode:              true,
-	StrictTableAcl:          false,
+	StrictTableACL:          false,
 	TerseErrors:             false,
 	EnableAutoCommit:        false,
-	EnableTableAclDryRun:    false,
-	DebugURLPrefix:          "/debug",
+	EnableTableACLDryRun:    false,
 	PoolNamePrefix:          "",
-	TableAclExemptACL:       "",
+	TableACLExemptACL:       "",
 	WatchReplication:        false,
 	TwoPCEnable:             false,
 	TwoPCCoordinatorAddress: "",

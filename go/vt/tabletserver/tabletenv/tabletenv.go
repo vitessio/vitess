@@ -10,7 +10,10 @@ import (
 	"context"
 	"time"
 
+	log "github.com/golang/glog"
+
 	"github.com/youtube/vitess/go/stats"
+	"github.com/youtube/vitess/go/tb"
 	"github.com/youtube/vitess/go/vt/callerid"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 )
@@ -60,4 +63,12 @@ func RecordUserQuery(ctx context.Context, tableName sqlparser.TableIdent, queryT
 	}
 	UserTableQueryCount.Add([]string{tableName.String(), username, queryType}, 1)
 	UserTableQueryTimesNs.Add([]string{tableName.String(), username, queryType}, int64(duration))
+}
+
+// LogError logs panics and increments InternalErrors.
+func LogError() {
+	if x := recover(); x != nil {
+		log.Errorf("Uncaught panic:\n%v\n%s", x, tb.Stack(4))
+		InternalErrors.Add("Panic", 1)
+	}
 }

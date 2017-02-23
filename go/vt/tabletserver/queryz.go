@@ -115,7 +115,7 @@ func (s *queryzSorter) Len() int           { return len(s.rows) }
 func (s *queryzSorter) Swap(i, j int)      { s.rows[i], s.rows[j] = s.rows[j], s.rows[i] }
 func (s *queryzSorter) Less(i, j int) bool { return s.less(s.rows[i], s.rows[j]) }
 
-func queryzHandler(si *SchemaInfo, w http.ResponseWriter, r *http.Request) {
+func queryzHandler(qe *QueryEngine, w http.ResponseWriter, r *http.Request) {
 	if err := acl.CheckAccessHTTP(r, acl.DEBUGGING); err != nil {
 		acl.SendError(w, err)
 		return
@@ -124,15 +124,15 @@ func queryzHandler(si *SchemaInfo, w http.ResponseWriter, r *http.Request) {
 	defer logz.EndHTMLTable(w)
 	w.Write(queryzHeader)
 
-	keys := si.queries.Keys()
+	keys := qe.queries.Keys()
 	sorter := queryzSorter{
 		rows: make([]*queryzRow, 0, len(keys)),
 		less: func(row1, row2 *queryzRow) bool {
 			return row1.timePQ() > row2.timePQ()
 		},
 	}
-	for _, v := range si.queries.Keys() {
-		plan := si.peekQuery(v)
+	for _, v := range qe.queries.Keys() {
+		plan := qe.peekQuery(v)
 		if plan == nil {
 			continue
 		}

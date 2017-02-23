@@ -349,7 +349,7 @@ func (sb *shardBuffer) wait(ctx context.Context, e *entry) error {
 	select {
 	case <-ctx.Done():
 		sb.remove(e)
-		return vterrors.WithSuffix(contextCanceledError, fmt.Sprintf(": %v", ctx.Err()))
+		return vterrors.Errorf(vterrors.Code(contextCanceledError), "%v: %v", contextCanceledError, ctx.Err())
 	case <-e.done:
 		return e.err
 	}

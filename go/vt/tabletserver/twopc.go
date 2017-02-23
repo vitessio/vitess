@@ -20,7 +20,7 @@ import (
 	"github.com/youtube/vitess/go/vt/dbconnpool"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/tabletserver/connpool"
-	"github.com/youtube/vitess/go/vt/tabletserver/tabletenv"
+	"github.com/youtube/vitess/go/vt/vterrors"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -137,7 +137,7 @@ func (tpc *TwoPC) Init(sidecarDBName string, dbaparams *sqldb.ConnParams) error 
 	}
 	for _, s := range statements {
 		if _, err := conn.ExecuteFetch(s, 0, false); err != nil {
-			return tabletenv.NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, err.Error())
+			return err
 		}
 	}
 	tpc.insertRedoTx = buildParsedQuery(
@@ -368,7 +368,7 @@ func (tpc *TwoPC) Transition(ctx context.Context, conn *TxConnection, dtid strin
 		return err
 	}
 	if qr.RowsAffected != 1 {
-		return tabletenv.NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "could not transition to %v: %s", state, dtid)
+		return vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "could not transition to %v: %s", state, dtid)
 	}
 	return nil
 }

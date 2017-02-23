@@ -52,28 +52,82 @@ func createSocketPair(t *testing.T) (net.Listener, *Conn, *Conn) {
 	return listener, sConn, cConn
 }
 
-// Write a packet on one side, read it on the other, check it's correct.
-func verifyPacketComms(t *testing.T, cConn, sConn *Conn, data []byte) {
-	// Have to do it in the background if it cannot be buffered.
-	go func() {
-		defer func() {
-			if x := recover(); x != nil {
-				t.Fatalf("%v", x)
-			}
-		}()
-		if err := cConn.writePacket(data); err != nil {
-			t.Fatalf("writePacket failed: %v", err)
+func useWritePacket(t *testing.T, cConn *Conn, data []byte) {
+	defer func() {
+		if x := recover(); x != nil {
+			t.Fatalf("%v", x)
 		}
-		if err := cConn.flush(); err != nil {
-			t.Fatalf("flush failed: %v", err)
-		}
+	}()
+	if err := cConn.writePacket(data); err != nil {
+		t.Fatalf("writePacket failed: %v", err)
+	}
+	if err := cConn.flush(); err != nil {
+		t.Fatalf("flush failed: %v", err)
+	}
+}
 
+func useWriteEphemeralPacket(t *testing.T, cConn *Conn, data []byte) {
+	defer func() {
+		if x := recover(); x != nil {
+			t.Fatalf("%v", x)
+		}
 	}()
 
-	received, err := sConn.ReadPacket()
+	buf := cConn.startEphemeralPacket(len(data))
+	copy(buf, data)
+	if err := cConn.writeEphemeralPacket(false); err != nil {
+		t.Fatalf("writeEphemeralPacket(false) failed: %v", err)
+	}
+	if err := cConn.flush(); err != nil {
+		t.Fatalf("flush failed: %v", err)
+	}
+}
+
+func useWriteEphemeralPacketDirect(t *testing.T, cConn *Conn, data []byte) {
+	defer func() {
+		if x := recover(); x != nil {
+			t.Fatalf("%v", x)
+		}
+	}()
+
+	buf := cConn.startEphemeralPacket(len(data))
+	copy(buf, data)
+	if err := cConn.writeEphemeralPacket(true); err != nil {
+		t.Fatalf("writeEphemeralPacket(true) failed: %v", err)
+	}
+}
+
+func verifyPacketCommsSpecific(t *testing.T, cConn *Conn, data []byte,
+	write func(t *testing.T, cConn *Conn, data []byte),
+	read func() ([]byte, error)) {
+	// Have to do it in the background if it cannot be buffered.
+	// Note we have to wait for it to finish at the end of the
+	// test, as the write may write all the data to the socket,
+	// and the flush may not be done after we're done with the read.
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	go func() {
+		write(t, cConn, data)
+		wg.Done()
+	}()
+
+	received, err := read()
 	if err != nil || !bytes.Equal(data, received) {
 		t.Fatalf("ReadPacket failed: %v %v", received, err)
 	}
+	wg.Wait()
+}
+
+// Write a packet on one side, read it on the other, check it's
+// correct.  We use all possible read and write methods.
+func verifyPacketComms(t *testing.T, cConn, sConn *Conn, data []byte) {
+	verifyPacketCommsSpecific(t, cConn, data, useWritePacket, sConn.ReadPacket)
+	verifyPacketCommsSpecific(t, cConn, data, useWriteEphemeralPacket, sConn.ReadPacket)
+	verifyPacketCommsSpecific(t, cConn, data, useWriteEphemeralPacketDirect, sConn.ReadPacket)
+
+	verifyPacketCommsSpecific(t, cConn, data, useWritePacket, sConn.readEphemeralPacket)
+	verifyPacketCommsSpecific(t, cConn, data, useWriteEphemeralPacket, sConn.readEphemeralPacket)
+	verifyPacketCommsSpecific(t, cConn, data, useWriteEphemeralPacketDirect, sConn.readEphemeralPacket)
 }
 
 func TestPackets(t *testing.T) {

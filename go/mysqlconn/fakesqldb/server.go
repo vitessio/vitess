@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/youtube/vitess/go/mysqlconn"
 	"github.com/youtube/vitess/go/sqldb"
@@ -15,8 +16,7 @@ import (
 )
 
 // DB is a fake database and all its methods are thread safe.  It
-// creates a mysqlconn.Listener and implements the mysqlconn.Hanlder
-// interface.
+// creates a mysqlconn.Listener and implements the mysqlconn.Handler interface.
 type DB struct {
 	// Fields set at construction time.
 
@@ -26,10 +26,6 @@ type DB struct {
 	// listener is our mysqlconn.Listener.
 	listener *mysqlconn.Listener
 
-	// name is the name of this DB. Set to 'fakesqldb' by default.
-	// Use SetName() to change.
-	name string
-
 	// acceptWG is set when we listen, and can be waited on to
 	// make sure we don't accept any more.
 	acceptWG sync.WaitGroup
@@ -38,8 +34,15 @@ type DB struct {
 
 	// mu protects all the following fields.
 	mu sync.Mutex
+	// name is the name of this DB. Set to 'fakesqldb' by default.
+	// Use SetName() to change.
+	name string
 	// isConnFail trigger a panic in the connection handler.
 	isConnFail bool
+	// shouldClose, if true, tells ComQuery() to close the connection when
+	// processing the next query. This will trigger a MySQL client error with
+	// errno 2013 ("server lost").
+	shouldClose bool
 	// data maps tolower(query) to a result.
 	data map[string]*sqltypes.Result
 	// rejectedData maps tolower(query) to an error.
@@ -48,6 +51,9 @@ type DB struct {
 	patternData []exprResult
 	// queryCalled keeps track of how many times a query was called.
 	queryCalled map[string]int
+	// connections tracks all open connections.
+	// The key for the map is the value of mysql.Conn.ConnectionID.
+	connections map[uint32]*mysqlconn.Conn
 }
 
 type exprResult struct {
@@ -64,6 +70,7 @@ func New(t *testing.T) *DB {
 		data:         make(map[string]*sqltypes.Result),
 		rejectedData: make(map[string]error),
 		queryCalled:  make(map[string]int),
+		connections:  make(map[uint32]*mysqlconn.Conn),
 	}
 
 	// Start listening.
@@ -86,6 +93,9 @@ func New(t *testing.T) *DB {
 
 // SetName sets the name of the DB. to differentiate them in tests if needed.
 func (db *DB) SetName(name string) *DB {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
 	db.name = name
 	return db
 }
@@ -94,6 +104,52 @@ func (db *DB) SetName(name string) *DB {
 func (db *DB) Close() {
 	db.listener.Close()
 	db.acceptWG.Wait()
+
+	db.CloseAllConnections()
+}
+
+// CloseAllConnections can be used to provoke MySQL client errors for open
+// connections.
+// Make sure to call WaitForShutdown() as well.
+func (db *DB) CloseAllConnections() {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	for _, c := range db.connections {
+		c.Close()
+	}
+}
+
+// WaitForClose should be used after CloseAllConnections() is closed and
+// you want to provoke a MySQL client error with errno 2006.
+//
+// If you don't call this function and execute the next query right away, you
+// will very likely see errno 2013 instead due to timing issues.
+// That's because the following can happen:
+//
+// 1. vttablet MySQL client is able to send the query to this fake server.
+// 2. The fake server sees the query and calls the ComQuery() callback.
+// 3. The fake server tries to write the response back on the connection.
+// => This will finally fail because the connection is already closed.
+// In this example, the client would have been able to send off the query and
+// therefore return errno 2013 ("server lost").
+// Instead, if step 1 already fails, the client returns errno 2006 ("gone away").
+// By waiting for the connections to close, you make sure of that.
+func (db *DB) WaitForClose(timeout time.Duration) error {
+	start := time.Now()
+	for {
+		db.mu.Lock()
+		count := len(db.connections)
+		db.mu.Unlock()
+
+		if count == 0 {
+			return nil
+		}
+		if d := time.Since(start); d > timeout {
+			return fmt.Errorf("connections were not correctly closed after %v: %v are left", d, count)
+		}
+		time.Sleep(1 * time.Microsecond)
+	}
 }
 
 // Host returns the host we're listening on.
@@ -123,23 +179,48 @@ func (db *DB) ConnParams() *sqldb.ConnParams {
 
 // NewConnection is part of the mysqlconn.Handler interface.
 func (db *DB) NewConnection(c *mysqlconn.Conn) {
-	if db.IsConnFail() {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	db.t.Logf("NewConnection(%v): client %v", db.name, c.ConnectionID)
+
+	if db.isConnFail {
 		panic(fmt.Errorf("simulating a connection failure"))
 	}
+
+	if conn, ok := db.connections[c.ConnectionID]; ok {
+		db.t.Fatalf("BUG: connection with id: %v is already active. existing conn: %v new conn: %v", c.ConnectionID, conn, c)
+	}
+	db.connections[c.ConnectionID] = c
 }
 
 // ConnectionClosed is part of the mysqlconn.Handler interface.
 func (db *DB) ConnectionClosed(c *mysqlconn.Conn) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	db.t.Logf("ConnectionClosed(%v): client %v", db.name, c.ConnectionID)
+
+	if _, ok := db.connections[c.ConnectionID]; !ok {
+		db.t.Fatalf("BUG: Cannot delete connection from list of open connections because it is not registered. ID: %v Conn: %v", c.ConnectionID, c)
+	}
+	delete(db.connections, c.ConnectionID)
 }
 
 // ComQuery is part of the mysqlconn.Handler interface.
 func (db *DB) ComQuery(c *mysqlconn.Conn, query string) (*sqltypes.Result, error) {
-	db.t.Logf("ComQuery(%v): %v", db.name, query)
+	db.t.Logf("ComQuery(%v): client %v: %v", db.name, c.ConnectionID, query)
 
 	key := strings.ToLower(query)
 	db.mu.Lock()
 	defer db.mu.Unlock()
 	db.queryCalled[key]++
+
+	// Check if we should close the connection and provoke errno 2013.
+	if db.shouldClose {
+		c.Close()
+		return &sqltypes.Result{}, nil
+	}
 
 	// Using special handling for 'SET NAMES utf8'.  The driver
 	// may send this at connection time, and we don't want it to
@@ -251,9 +332,9 @@ func (db *DB) DisableConnFail() {
 	db.isConnFail = false
 }
 
-// IsConnFail tests whether there is a connection failure.
-func (db *DB) IsConnFail() bool {
+// EnableShouldClose closes the connection when processing the next query.
+func (db *DB) EnableShouldClose() {
 	db.mu.Lock()
 	defer db.mu.Unlock()
-	return db.isConnFail
+	db.shouldClose = true
 }

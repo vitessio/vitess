@@ -82,7 +82,7 @@ func (s *Server) Delete(ctx context.Context, cell, filePath string, version topo
 
 func (s *Server) recursiveDeleteParentIfEmpty(ctx context.Context, c Client, filePath string) error {
 	dir := path.Dir(filePath)
-	if dir == "" || dir == "/" {
+	if dir == "" || dir == "/" || dir == "." {
 		// we reached the top
 		return nil
 	}

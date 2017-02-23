@@ -34,30 +34,30 @@ type TxEngine struct {
 }
 
 // NewTxEngine creates a new TxEngine.
-func NewTxEngine(checker MySQLChecker) *TxEngine {
+func NewTxEngine(checker MySQLChecker, config tabletenv.TabletConfig) *TxEngine {
 	te := &TxEngine{
-		shutdownGracePeriod: time.Duration(tabletenv.Config.TxShutDownGracePeriod * 1e9),
+		shutdownGracePeriod: time.Duration(config.TxShutDownGracePeriod * 1e9),
 	}
 	te.txPool = NewTxPool(
-		tabletenv.Config.PoolNamePrefix+"TransactionPool",
-		tabletenv.Config.TransactionCap,
-		time.Duration(tabletenv.Config.TransactionTimeout*1e9),
-		time.Duration(tabletenv.Config.IdleTimeout*1e9),
+		config.PoolNamePrefix+"TransactionPool",
+		config.TransactionCap,
+		time.Duration(config.TransactionTimeout*1e9),
+		time.Duration(config.IdleTimeout*1e9),
 		checker,
 	)
-	te.twopcEnabled = tabletenv.Config.TwoPCEnable
+	te.twopcEnabled = config.TwoPCEnable
 	if te.twopcEnabled {
-		if tabletenv.Config.TwoPCCoordinatorAddress == "" {
+		if config.TwoPCCoordinatorAddress == "" {
 			log.Error("Coordinator address not specified: Disabling 2PC")
 			te.twopcEnabled = false
 		}
-		if tabletenv.Config.TwoPCAbandonAge <= 0 {
+		if config.TwoPCAbandonAge <= 0 {
 			log.Error("2PC abandon age not specified: Disabling 2PC")
 			te.twopcEnabled = false
 		}
 	}
-	te.coordinatorAddress = tabletenv.Config.TwoPCCoordinatorAddress
-	te.abandonAge = time.Duration(tabletenv.Config.TwoPCAbandonAge * 1e9)
+	te.coordinatorAddress = config.TwoPCCoordinatorAddress
+	te.abandonAge = time.Duration(config.TwoPCAbandonAge * 1e9)
 	te.ticks = timer.NewTimer(te.abandonAge / 2)
 
 	// Set the prepared pool capacity to something lower than
@@ -65,11 +65,11 @@ func NewTxEngine(checker MySQLChecker) *TxEngine {
 	// perform metadata state change operations. Without this,
 	// the system can deadlock if all connections get moved to
 	// the TxPreparedPool.
-	te.preparedPool = NewTxPreparedPool(tabletenv.Config.TransactionCap - 2)
+	te.preparedPool = NewTxPreparedPool(config.TransactionCap - 2)
 	readPool := connpool.New(
-		tabletenv.Config.PoolNamePrefix+"TxReadPool",
+		config.PoolNamePrefix+"TxReadPool",
 		3,
-		time.Duration(tabletenv.Config.IdleTimeout*1e9),
+		time.Duration(config.IdleTimeout*1e9),
 		checker,
 	)
 	te.twoPC = NewTwoPC(readPool)
@@ -148,7 +148,7 @@ func (te *TxEngine) Close(immediate bool) {
 		case <-tmr.C:
 			// The grace period has passed. Rollback, but don't touch the 2pc transactions.
 			log.Info("Grace period exceeded: rolling back non-2pc transactions now.")
-			te.txPool.RollbackNonBusy(localContext())
+			te.txPool.RollbackNonBusy(tabletenv.LocalContext())
 		case <-poolEmpty:
 			// The pool cleared before the timer kicked in. Just return.
 			log.Info("Transactions completed before grace period: shutting down.")
@@ -170,7 +170,7 @@ func (te *TxEngine) Close(immediate bool) {
 // into the reserved list, and adjusts the txPool LastID
 // to ensure there are no future collisions.
 func (te *TxEngine) prepareFromRedo() error {
-	ctx := localContext()
+	ctx := tabletenv.LocalContext()
 	var allErr concurrency.AllErrorRecorder
 	prepared, failed, err := te.twoPC.ReadAllRedo(ctx)
 	if err != nil {
@@ -229,7 +229,7 @@ outer:
 // This is used for transitioning from a master to a non-master
 // serving type.
 func (te *TxEngine) rollbackTransactions() {
-	ctx := localContext()
+	ctx := tabletenv.LocalContext()
 	// The order of rollbacks is currently not material because
 	// we don't allow new statements or commits during
 	// this function. In case of any such change, this will
@@ -244,7 +244,7 @@ func (te *TxEngine) rollbackTransactions() {
 // transactions and calls the notifier on them.
 func (te *TxEngine) startWatchdog() {
 	te.ticks.Start(func() {
-		ctx, cancel := context.WithTimeout(localContext(), te.abandonAge/4)
+		ctx, cancel := context.WithTimeout(tabletenv.LocalContext(), te.abandonAge/4)
 		defer cancel()
 
 		// Raise alerts on prepares that have been unresolved for too long.

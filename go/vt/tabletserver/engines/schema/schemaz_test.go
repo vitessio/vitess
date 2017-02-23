@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package tabletserver
+package schema
 
 import (
 	"io/ioutil"
@@ -13,28 +13,27 @@ import (
 	"testing"
 
 	"github.com/youtube/vitess/go/sqltypes"
-	"github.com/youtube/vitess/go/vt/schema"
 )
 
 func TestSchamazHandler(t *testing.T) {
 	resp := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", "/schemaz", nil)
-	tableA := schema.NewTable("a")
-	tableB := schema.NewTable("b")
-	tableC := schema.NewTable("c")
-	tableD := schema.NewTable("c")
+	tableA := NewTable("a")
+	tableB := NewTable("b")
+	tableC := NewTable("c")
+	tableD := NewTable("c")
 
 	tableA.AddColumn("column1", sqltypes.Int64, sqltypes.MakeTrusted(sqltypes.Int32, []byte("0")), "auto_increment")
 	tableA.AddIndex("index1").AddColumn("index_column", 1000)
-	tableA.Type = schema.NoType
+	tableA.Type = NoType
 
 	tableB.AddColumn("column2", sqltypes.VarChar, sqltypes.MakeString([]byte("NULL")), "")
 	tableB.AddIndex("index2").AddColumn("index_column2", 200)
-	tableB.Type = schema.Sequence
+	tableB.Type = Sequence
 
-	tableC.Type = schema.Message
+	tableC.Type = Message
 
-	tables := map[string]*schema.Table{
+	tables := map[string]*Table{
 		"a": tableA,
 		"b": tableB,
 		"c": tableC,

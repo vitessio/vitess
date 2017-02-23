@@ -6,7 +6,6 @@ package vtgate
 
 import (
 	"context"
-	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -25,8 +24,8 @@ func TestTxConnCommitRollbackIncorrectSession(t *testing.T) {
 	sc, _, _ := newTestTxConnEnv("TestTxConn")
 	// nil session
 	err := sc.txConn.Commit(context.Background(), false, nil)
-	if got := vterrors.RecoverVtErrorCode(err); got != vtrpcpb.ErrorCode_BAD_INPUT {
-		t.Errorf("Commit: %v, want %v", got, vtrpcpb.ErrorCode_BAD_INPUT)
+	if got := vterrors.Code(err); got != vtrpcpb.Code_INVALID_ARGUMENT {
+		t.Errorf("Commit: %v, want %v", got, vtrpcpb.Code_INVALID_ARGUMENT)
 	}
 
 	err = sc.txConn.Rollback(context.Background(), nil)
@@ -37,8 +36,8 @@ func TestTxConnCommitRollbackIncorrectSession(t *testing.T) {
 	// not in transaction
 	session := NewSafeSession(&vtgatepb.Session{})
 	err = sc.txConn.Commit(context.Background(), false, session)
-	if got := vterrors.RecoverVtErrorCode(err); got != vtrpcpb.ErrorCode_NOT_IN_TX {
-		t.Errorf("Commit: %v, want %v", got, vtrpcpb.ErrorCode_NOT_IN_TX)
+	if got := vterrors.Code(err); got != vtrpcpb.Code_ABORTED {
+		t.Errorf("Commit: %v, want %v", got, vtrpcpb.Code_ABORTED)
 	}
 }
 
@@ -85,9 +84,9 @@ func TestTxConnCommitSuccess(t *testing.T) {
 		t.Errorf("Session:\n%+v, want\n%+v", *session.Session, wantSession)
 	}
 
-	sbc0.MustFailServer = 1
+	sbc0.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
 	err := sc.txConn.Commit(context.Background(), false, session)
-	want := "error: err"
+	want := "INVALID_ARGUMENT error"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("Commit: %v, want %s", err, want)
 	}
@@ -423,9 +422,9 @@ func TestTxConnResolveReadTransactionFail(t *testing.T) {
 	sc, sbc0, _ := newTestTxConnEnv("TestTxConn")
 
 	dtid := "TestTxConn:0:1234"
-	sbc0.MustFailServer = 1
+	sbc0.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
 	err := sc.txConn.Resolve(context.Background(), dtid)
-	want := "error: err"
+	want := "INVALID_ARGUMENT error"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("Resolve: %v, want %s", err, want)
 	}
@@ -592,7 +591,7 @@ func TestTxConnMultiGoSessions(t *testing.T) {
 		},
 	}}
 	err := txc.runSessions(input, func(s *vtgatepb.Session_ShardSession) error {
-		return vterrors.FromError(vtrpcpb.ErrorCode_INTERNAL_ERROR, fmt.Errorf("err %s", s.Target.Keyspace))
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "err %s", s.Target.Keyspace)
 	})
 	want := "err 0"
 	if err == nil || err.Error() != want {
@@ -609,16 +608,15 @@ func TestTxConnMultiGoSessions(t *testing.T) {
 		},
 	}}
 	err = txc.runSessions(input, func(s *vtgatepb.Session_ShardSession) error {
-		return vterrors.FromError(vtrpcpb.ErrorCode_INTERNAL_ERROR, fmt.Errorf("err %s", s.Target.Keyspace))
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "err %s", s.Target.Keyspace)
 	})
 	want = "err 0\nerr 1"
 	if err == nil || err.Error() != want {
 		t.Errorf("runSessions(2): %v, want %s", err, want)
 	}
-	errCode := err.(*ScatterConnError).VtErrorCode()
-	wantCode := vtrpcpb.ErrorCode_INTERNAL_ERROR
-	if errCode != wantCode {
-		t.Errorf("Error code: %v, want %v", errCode, wantCode)
+	wantCode := vtrpcpb.Code_INTERNAL
+	if code := vterrors.Code(err); code != wantCode {
+		t.Errorf("Error code: %v, want %v", code, wantCode)
 	}
 
 	err = txc.runSessions(input, func(s *vtgatepb.Session_ShardSession) error {
@@ -635,7 +633,7 @@ func TestTxConnMultiGoTargets(t *testing.T) {
 		Keyspace: "0",
 	}}
 	err := txc.runTargets(input, func(t *querypb.Target) error {
-		return vterrors.FromError(vtrpcpb.ErrorCode_INTERNAL_ERROR, fmt.Errorf("err %s", t.Keyspace))
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "err %s", t.Keyspace)
 	})
 	want := "err 0"
 	if err == nil || err.Error() != want {
@@ -648,16 +646,15 @@ func TestTxConnMultiGoTargets(t *testing.T) {
 		Keyspace: "1",
 	}}
 	err = txc.runTargets(input, func(t *querypb.Target) error {
-		return vterrors.FromError(vtrpcpb.ErrorCode_INTERNAL_ERROR, fmt.Errorf("err %s", t.Keyspace))
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "err %s", t.Keyspace)
 	})
 	want = "err 0\nerr 1"
 	if err == nil || err.Error() != want {
 		t.Errorf("runTargets(2): %v, want %s", err, want)
 	}
-	errCode := err.(*ScatterConnError).VtErrorCode()
-	wantCode := vtrpcpb.ErrorCode_INTERNAL_ERROR
-	if errCode != wantCode {
-		t.Errorf("Error code: %v, want %v", errCode, wantCode)
+	wantCode := vtrpcpb.Code_INTERNAL
+	if code := vterrors.Code(err); code != wantCode {
+		t.Errorf("Error code: %v, want %v", code, wantCode)
 	}
 
 	err = txc.runTargets(input, func(t *querypb.Target) error {

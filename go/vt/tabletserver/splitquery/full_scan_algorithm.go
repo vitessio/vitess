@@ -3,8 +3,8 @@ package splitquery
 import (
 	"fmt"
 
-	"github.com/youtube/vitess/go/vt/schema"
 	"github.com/youtube/vitess/go/vt/sqlparser"
+	"github.com/youtube/vitess/go/vt/tabletserver/engines/schema"
 	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 )
 
@@ -14,7 +14,7 @@ import (
 // splitParams.numRowsPerQueryPart rows apart. More precisely, it works as follows:
 // It iteratively executes the following query over the replica’s database (recall that MySQL
 // performs tuple comparisons lexicographically):
-//    SELECT <split_columns> FROM <table>
+//    SELECT <split_columns> FROM <table> FORCE INDEX (PRIMARY)
 //                           WHERE :prev_boundary <= (<split_columns>)
 //                           ORDER BY <split_columns>
 //                           LIMIT <num_rows_per_query_part>, 1
@@ -108,6 +108,7 @@ func (a *FullScanAlgorithm) populatePrevTupleInBindVariables(
 //    "SELECT <select exprs> FROM <table> WHERE <where>",
 // the Sql field of the result will be:
 // "SELECT sc_1,sc_2,...,sc_n FROM <table>
+//                            FORCE INDEX (PRIMARY)
 //                            ORDER BY <split_columns>
 //                            LIMIT splitParams.numRowsPerQueryPart, 1",
 // The BindVariables field of the result will contain a deep-copy of splitParams.BindVariables.
@@ -120,17 +121,18 @@ func buildInitialQuery(splitParams *SplitParams) *querytypes.BoundQuery {
 }
 
 func buildInitialQueryAST(splitParams *SplitParams) *sqlparser.Select {
-	if splitParams.selectAST.Limit != nil {
-		panic(fmt.Sprintf(
-			"splitquery.buildInitialQueryAST(): splitParams query already has a LIMIT clause: %v",
-			*splitParams))
+	return &sqlparser.Select{
+		SelectExprs: convertColumnsToSelectExprs(splitParams.splitColumns),
+		// For the scanning here, we override any specified index hint to be the
+		// PRIMARY index. If we do not override, even if the user doesn't specify a hint, MySQL
+		// sometimes decides to use a different index than the primary key which results with a
+		// significant increase in running time.
+		// Note that we do not override the index for the actual query part since the list of
+		// columns selected there is different; so overriding it there may hurt performance.
+		From:    buildFromClause(splitParams.GetSplitTableName()),
+		Limit:   buildLimitClause(splitParams.numRowsPerQueryPart, 1),
+		OrderBy: buildOrderByClause(splitParams.splitColumns),
 	}
-	resultSelectAST := *splitParams.selectAST
-	resultSelectAST.Where = nil
-	resultSelectAST.SelectExprs = convertColumnsToSelectExprs(splitParams.splitColumns)
-	resultSelectAST.Limit = buildLimitClause(splitParams.numRowsPerQueryPart, 1)
-	resultSelectAST.OrderBy = buildOrderByClause(splitParams.splitColumns)
-	return &resultSelectAST
 }
 
 // buildNonInitialQuery returns the non-initial query to execute to get the
@@ -138,7 +140,7 @@ func buildInitialQueryAST(splitParams *SplitParams) *sqlparser.Select {
 // If the query to split (given in splitParams.sql) is
 //    "SELECT <select exprs> FROM <table> WHERE <where>",
 // the Sql field of the result will be:
-// "SELECT sc_1,sc_2,...,sc_n FROM <table>
+// "SELECT sc_1,sc_2,...,sc_n FROM <table> FORCE INDEX (PRIMARY)
 //                            WHERE :prev_sc_1,...,:prev_sc_n) <= (sc_1,...,sc_n)
 //                            ORDER BY <split_columns>
 //                            LIMIT splitParams.numRowsPerQueryPart, 1",
@@ -172,6 +174,18 @@ func convertColumnsToSelectExprs(columns []*schema.TableColumn) sqlparser.Select
 			})
 	}
 	return result
+}
+
+func buildFromClause(splitTableName sqlparser.TableIdent) sqlparser.TableExprs {
+	return sqlparser.TableExprs{
+		&sqlparser.AliasedTableExpr{
+			Expr: &sqlparser.TableName{Name: splitTableName},
+			Hints: &sqlparser.IndexHints{
+				Type:    sqlparser.ForceStr,
+				Indexes: []sqlparser.ColIdent{sqlparser.NewColIdent("PRIMARY")},
+			},
+		},
+	}
 }
 
 func buildLimitClause(offset, rowcount int64) *sqlparser.Limit {
@@ -218,8 +232,8 @@ func (a *FullScanAlgorithm) executeQuery(boundQuery *querytypes.BoundQuery) (tup
 	}
 	if len(sqlResult.Rows) == 1 {
 		if len(sqlResult.Rows[0]) != len(a.splitParams.splitColumns) {
-			panic(fmt.Sprintf("splitquery.executeQuery: expected a tuple of length %v. Got tuple: %v",
-				len(a.splitParams.splitColumns), sqlResult.Rows[0]))
+			panic(fmt.Sprintf("splitquery.executeQuery: expected a tuple of length %v."+
+				" Got tuple: %v", len(a.splitParams.splitColumns), sqlResult.Rows[0]))
 		}
 		return sqlResult.Rows[0], nil
 	}

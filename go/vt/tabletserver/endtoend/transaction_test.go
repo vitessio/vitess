@@ -15,9 +15,11 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/tabletserver/endtoend/framework"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletenv"
+	"github.com/youtube/vitess/go/vt/vterrors"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 func TestCommit(t *testing.T) {
@@ -290,9 +292,9 @@ func TestAutoCommitOff(t *testing.T) {
 	defer framework.Server.SetAutoCommit(true)
 
 	_, err := framework.NewClient().Execute("insert into vitess_test values(4, null, null, null)", nil)
-	want := "error: Disallowed outside transaction"
+	want := "disallowed outside transaction"
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
-		t.Errorf("Error: %v, must start with %s", err, want)
+		t.Errorf("%v, must start with %s", err, want)
 	}
 }
 
@@ -328,11 +330,11 @@ func TestTxPoolSize(t *testing.T) {
 
 	client2 := framework.NewClient()
 	err = client2.Begin()
-	want := "tx_pool_full"
+	want := "connection limit exceeded"
 	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("Error: %v, must contain %s", err, want)
+		t.Errorf("%v, must contain %s", err, want)
 	}
-	if err := compareIntDiff(framework.DebugVars(), "Errors/TxPoolFull", vstart, 1); err != nil {
+	if err := compareIntDiff(framework.DebugVars(), "Errors/RESOURCE_EXHAUSTED", vstart, 1); err != nil {
 		t.Error(err)
 	}
 }
@@ -368,9 +370,8 @@ func TestTxTimeout(t *testing.T) {
 
 	// Ensure commit fails.
 	err = client.Commit()
-	want := "not_in_tx: Transaction"
-	if err == nil || !strings.HasPrefix(err.Error(), want) {
-		t.Errorf("Error: %v, must contain %s", err, want)
+	if code := vterrors.Code(err); code != vtrpcpb.Code_ABORTED {
+		t.Errorf("Commit code: %v, want %v", code, vtrpcpb.Code_ABORTED)
 	}
 }
 
@@ -379,9 +380,9 @@ func TestForUpdate(t *testing.T) {
 		client := framework.NewClient()
 		query := fmt.Sprintf("select * from vitess_test where intval=2 %s", mode)
 		_, err := client.Execute(query, nil)
-		want := "error: Disallowed"
+		want := "disallowed"
 		if err == nil || !strings.HasPrefix(err.Error(), want) {
-			t.Errorf("Error: %v, must have prefix %s", err, want)
+			t.Errorf("%v, must have prefix %s", err, want)
 		}
 
 		// We should not get errors here
@@ -555,7 +556,7 @@ func TestMMCommitFlow(t *testing.T) {
 	err = client.CreateTransaction("aa", []*querypb.Target{})
 	want := "Duplicate entry"
 	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("Error: %v, must contain %s", err, want)
+		t.Errorf("%v, must contain %s", err, want)
 	}
 
 	err = client.StartCommit("aa")
@@ -564,9 +565,9 @@ func TestMMCommitFlow(t *testing.T) {
 	}
 
 	err = client.SetRollback("aa", 0)
-	want = "error: could not transition to ROLLBACK: aa"
+	want = "could not transition to ROLLBACK: aa"
 	if err == nil || err.Error() != want {
-		t.Errorf("Error: %v, must contain %s", err, want)
+		t.Errorf("%v, must contain %s", err, want)
 	}
 
 	info, err := client.ReadTransaction("aa")

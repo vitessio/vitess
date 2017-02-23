@@ -6,11 +6,14 @@ namespace Vitess\Proto\Vtrpc {
 
   class RPCError extends \DrSlump\Protobuf\Message {
 
-    /**  @var int - \Vitess\Proto\Vtrpc\ErrorCode */
-    public $code = null;
+    /**  @var int - \Vitess\Proto\Vtrpc\LegacyErrorCode */
+    public $legacy_code = null;
     
     /**  @var string */
     public $message = null;
+    
+    /**  @var int - \Vitess\Proto\Vtrpc\Code */
+    public $code = null;
     
 
     /** @var \Closure[] */
@@ -20,13 +23,13 @@ namespace Vitess\Proto\Vtrpc {
     {
       $descriptor = new \DrSlump\Protobuf\Descriptor(__CLASS__, 'vtrpc.RPCError');
 
-      // OPTIONAL ENUM code = 1
+      // OPTIONAL ENUM legacy_code = 1
       $f = new \DrSlump\Protobuf\Field();
       $f->number    = 1;
-      $f->name      = "code";
+      $f->name      = "legacy_code";
       $f->type      = \DrSlump\Protobuf::TYPE_ENUM;
       $f->rule      = \DrSlump\Protobuf::RULE_OPTIONAL;
-      $f->reference = '\Vitess\Proto\Vtrpc\ErrorCode';
+      $f->reference = '\Vitess\Proto\Vtrpc\LegacyErrorCode';
       $descriptor->addField($f);
 
       // OPTIONAL STRING message = 2
@@ -37,6 +40,15 @@ namespace Vitess\Proto\Vtrpc {
       $f->rule      = \DrSlump\Protobuf::RULE_OPTIONAL;
       $descriptor->addField($f);
 
+      // OPTIONAL ENUM code = 3
+      $f = new \DrSlump\Protobuf\Field();
+      $f->number    = 3;
+      $f->name      = "code";
+      $f->type      = \DrSlump\Protobuf::TYPE_ENUM;
+      $f->rule      = \DrSlump\Protobuf::RULE_OPTIONAL;
+      $f->reference = '\Vitess\Proto\Vtrpc\Code';
+      $descriptor->addField($f);
+
       foreach (self::$__extensions as $cb) {
         $descriptor->addField($cb(), true);
       }
@@ -45,39 +57,39 @@ namespace Vitess\Proto\Vtrpc {
     }
 
     /**
-     * Check if <code> has a value
+     * Check if <legacy_code> has a value
      *
      * @return boolean
      */
-    public function hasCode(){
+    public function hasLegacyCode(){
       return $this->_has(1);
     }
     
     /**
-     * Clear <code> value
+     * Clear <legacy_code> value
      *
      * @return \Vitess\Proto\Vtrpc\RPCError
      */
-    public function clearCode(){
+    public function clearLegacyCode(){
       return $this->_clear(1);
     }
     
     /**
-     * Get <code> value
+     * Get <legacy_code> value
      *
-     * @return int - \Vitess\Proto\Vtrpc\ErrorCode
+     * @return int - \Vitess\Proto\Vtrpc\LegacyErrorCode
      */
-    public function getCode(){
+    public function getLegacyCode(){
       return $this->_get(1);
     }
     
     /**
-     * Set <code> value
+     * Set <legacy_code> value
      *
-     * @param int - \Vitess\Proto\Vtrpc\ErrorCode $value
+     * @param int - \Vitess\Proto\Vtrpc\LegacyErrorCode $value
      * @return \Vitess\Proto\Vtrpc\RPCError
      */
-    public function setCode( $value){
+    public function setLegacyCode( $value){
       return $this->_set(1, $value);
     }
     
@@ -116,6 +128,43 @@ namespace Vitess\Proto\Vtrpc {
      */
     public function setMessage( $value){
       return $this->_set(2, $value);
+    }
+    
+    /**
+     * Check if <code> has a value
+     *
+     * @return boolean
+     */
+    public function hasCode(){
+      return $this->_has(3);
+    }
+    
+    /**
+     * Clear <code> value
+     *
+     * @return \Vitess\Proto\Vtrpc\RPCError
+     */
+    public function clearCode(){
+      return $this->_clear(3);
+    }
+    
+    /**
+     * Get <code> value
+     *
+     * @return int - \Vitess\Proto\Vtrpc\Code
+     */
+    public function getCode(){
+      return $this->_get(3);
+    }
+    
+    /**
+     * Set <code> value
+     *
+     * @param int - \Vitess\Proto\Vtrpc\Code $value
+     * @return \Vitess\Proto\Vtrpc\RPCError
+     */
+    public function setCode( $value){
+      return $this->_set(3, $value);
     }
   }
 }

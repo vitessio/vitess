@@ -336,14 +336,6 @@ func (rb *route) PushSelect(expr *sqlparser.NonStarExpr, _ *route) (colsym *cols
 		if colsym.Alias.IsEmpty() {
 			colsym.Alias = col.Name
 		}
-		// We should always allow other parts of the query to reference
-		// the fully qualified name of the column.
-		if tab, ok := col.Metadata.(*tabsym); ok {
-			colsym.QualifiedName = &sqlparser.ColName{
-				Qualifier: tab.Alias,
-				Name:      col.Name,
-			}
-		}
 		colsym.Vindex = rb.Symtab().Vindex(col, rb, true)
 		colsym.Underlying = newColref(col)
 	} else {
@@ -362,21 +354,9 @@ func (rb *route) PushSelect(expr *sqlparser.NonStarExpr, _ *route) (colsym *cols
 
 // PushStar pushes the '*' expression into the route.
 func (rb *route) PushStar(expr *sqlparser.StarExpr) *colsym {
+	// We just create a place-holder colsym. It won't
+	// match anything.
 	colsym := newColsym(rb, rb.Symtab())
-	// This is not perfect, but it should be good enough.
-	// We'll match unqualified column names against Alias
-	// and qualified column names against QualifiedName.
-	// If someone uses 'select *' and then uses table.col
-	// in the HAVING clause, then things won't match. But
-	// such cases are easy to correct in the application.
-	if expr.TableName.IsEmpty() {
-		colsym.Alias = sqlparser.NewColIdent("*")
-	} else {
-		colsym.QualifiedName = &sqlparser.ColName{
-			Qualifier: expr.TableName,
-			Name:      sqlparser.NewColIdent("*"),
-		}
-	}
 	rb.Select.SelectExprs = append(rb.Select.SelectExprs, expr)
 	rb.Colsyms = append(rb.Colsyms, colsym)
 	return colsym

@@ -17,6 +17,7 @@ import (
 	"github.com/youtube/vitess/go/vt/binlog/eventtoken"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
+	"github.com/youtube/vitess/go/vt/tabletserver/engines/schema"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletenv"
 
 	binlogdatapb "github.com/youtube/vitess/go/vt/proto/binlogdata"
@@ -33,7 +34,7 @@ type ReplicationWatcher struct {
 	wg     sync.WaitGroup
 
 	watchReplication bool
-	qe               *QueryEngine
+	se               *schema.Engine
 
 	mu         sync.Mutex
 	eventToken *querypb.EventToken
@@ -42,10 +43,10 @@ type ReplicationWatcher struct {
 var replOnce sync.Once
 
 // NewReplicationWatcher creates a new ReplicationWatcher.
-func NewReplicationWatcher(qe *QueryEngine) *ReplicationWatcher {
+func NewReplicationWatcher(se *schema.Engine, config tabletenv.TabletConfig) *ReplicationWatcher {
 	rpw := &ReplicationWatcher{
-		watchReplication: tabletenv.Config.WatchReplication,
-		qe:               qe,
+		watchReplication: config.WatchReplication,
+		se:               se,
 	}
 	replOnce.Do(func() {
 		stats.Publish("EventTokenPosition", stats.StringFunc(func() string {
@@ -69,7 +70,7 @@ func (rpw *ReplicationWatcher) Open(dbconfigs dbconfigs.DBConfigs, mysqld mysqlc
 	if rpw.isOpen || !rpw.watchReplication {
 		return
 	}
-	ctx, cancel := context.WithCancel(localContext())
+	ctx, cancel := context.WithCancel(tabletenv.LocalContext())
 	rpw.cancel = cancel
 	rpw.wg.Add(1)
 	go rpw.Process(ctx, dbconfigs, mysqld)
@@ -102,7 +103,7 @@ func (rpw *ReplicationWatcher) Process(ctx context.Context, dbconfigs dbconfigs.
 				if statement.Category != binlogdatapb.BinlogTransaction_Statement_BL_DDL {
 					continue
 				}
-				err := rpw.qe.schemaInfo.Reload(ctx)
+				err := rpw.se.Reload(ctx)
 				log.Infof("Streamer triggered a schema reload, with result: %v", err)
 				return nil
 			}
