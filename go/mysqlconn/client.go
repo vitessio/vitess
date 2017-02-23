@@ -208,13 +208,18 @@ func (c *Conn) clientHandshake(characterSet uint8, params *sqldb.ConnParams) err
 		}
 
 		// The ServerName to verify depends on what the hostname is.
+		// - If using a socket, we use "localhost".
 		// - If it is an IP address, we need to prefix it with 'IP:'.
 		// - If not, we can just use it as is.
 		// We may need to add a ServerName field to ConnParams to
 		// make this more explicit.
-		serverName := params.Host
-		if net.ParseIP(params.Host) != nil {
-			serverName = "IP:" + params.Host
+		serverName := "localhost"
+		if params.Host != "" {
+			if net.ParseIP(params.Host) != nil {
+				serverName = "IP:" + params.Host
+			} else {
+				serverName = params.Host
+			}
 		}
 
 		// Build the TLS config.
