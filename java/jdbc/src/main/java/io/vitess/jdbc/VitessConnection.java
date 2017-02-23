@@ -258,6 +258,8 @@ public class VitessConnection extends ConnectionProperties implements Connection
     /**
      * Set ReadOnly for the connection
      *
+     * Note: This is not implemented yet! For now setting read only will simply be ignored.
+     *
      * @param readOnly - true or false
      * @throws SQLException
      */
@@ -269,10 +271,8 @@ public class VitessConnection extends ConnectionProperties implements Connection
                 Constants.SQLExceptionMessages.METHOD_CALLED_ON_OPEN_TRANSACTION);
         }
 
-        if (readOnly) {
-            throw new SQLFeatureNotSupportedException(Constants.SQLExceptionMessages.READ_ONLY);
-        }
-        this.readOnly = false;
+        // TODO implement read only properly
+        this.readOnly = readOnly;
     }
 
     /**
