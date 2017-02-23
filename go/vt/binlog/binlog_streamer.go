@@ -388,8 +388,16 @@ func (bls *Streamer) parseEvents(ctx context.Context, events <-chan replication.
 			}
 			statements = append(statements, setTimestamp)
 			for i := range rows.Rows {
-				identifies := rows.StringIdentifies(tm, i)
-				values := rows.StringValues(tm, i)
+				identifies, err := rows.StringIdentifies(tm, i)
+				if err != nil {
+					log.Warningf("Failed to parse UPDATE due to error %v", err)
+					continue
+				}
+				values, err := rows.StringValues(tm, i)
+				if err != nil {
+					log.Warningf("Failed to parse UPDATE due to error %v", err)
+					continue
+				}
 				update := &binlogdatapb.BinlogTransaction_Statement{
 					Category: binlogdatapb.BinlogTransaction_Statement_BL_UPDATE,
 					Sql:      []byte(fmt.Sprintf("WIP: update table %v set values = %v where identifies = %v", tm.Name, values, identifies)),
