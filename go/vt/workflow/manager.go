@@ -39,6 +39,8 @@ type Factory interface {
 	// variable filled it. This Init method should fill in the
 	// Name and Data attributes, based on the provided args.
 	// This is called during the Manager.Create phase.
+	// TODO(yipeiw): We should extend the interface to pass the topology server
+	// as well. The topology server is needed in the resarding workflow.
 	Init(w *workflowpb.Workflow, args []string) error
 
 	// Instantiate loads a workflow from the proto representation

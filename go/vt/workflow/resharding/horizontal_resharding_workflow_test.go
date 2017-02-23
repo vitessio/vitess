@@ -39,28 +39,10 @@ func TestHorizontalResharding(t *testing.T) {
 		t.Errorf("initialize checkpoint fails: %v", err)
 	}
 
-	// Create the workflow.
-	ts := memorytopo.NewServer("cell")
-	w := &workflowpb.Workflow{
-		Uuid:        "test_hw",
-		FactoryName: horizontalReshardingFactoryName,
-		State:       workflowpb.WorkflowState_NotStarted,
-	}
-	wi, err := ts.CreateWorkflow(ctx, w)
+	hw, err := createWorkflow(ctx, mockWranglerInterface, checkpoint)
 	if err != nil {
-		t.Errorf("initialize WorkflowInfo fails: %v", err)
+		t.Errorf("initialize Workflow fails: %v", err)
 	}
-	hw := &HorizontalReshardingWorkflow{
-		ctx:              ctx,
-		wr:               mockWranglerInterface,
-		manager:          workflow.NewManager(ts),
-		wi:               wi,
-		topoServer:       ts,
-		logger:           logutil.NewMemoryLogger(),
-		checkpoint:       checkpoint,
-		checkpointWriter: NewCheckpointWriter(ts, checkpoint, wi),
-	}
-
 	if err := hw.runWorkflow(); err != nil {
 		t.Errorf("%s: Horizontal resharding workflow should not fail", err)
 	}
@@ -75,7 +57,7 @@ func TestHorizontalReshardingRetry(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	ctx := context.Background()
-	mockWranglerInterface := setupMockWrangler(ctx, ctrl)
+	mockWranglerInterface := setupMockWranglerForRetry(ctx, ctrl)
 
 	// Set up fakeworkerclient. It is used at SplitClone and SplitDiff phase.
 	fakeVtworkerClient := setupFakeVtworker()
@@ -92,19 +74,13 @@ func TestHorizontalReshardingRetry(t *testing.T) {
 	if err != nil {
 		t.Errorf("initialize checkpoint fails: %v", err)
 	}
-	setTaskSuccessOrFailure(checkpoint, createTaskID(PhaseCopySchema, "80-"), true /* isSuccess*/)
-	setTaskSuccessOrFailure(checkpoint, createTaskID(PhaseCopySchema, "-80"), false /* isSuccess*/)
+	setTaskSuccessOrFailure(checkpoint, createTaskID(phaseCopySchema, "80-"), true /* isSuccess*/)
+	setTaskSuccessOrFailure(checkpoint, createTaskID(phaseCopySchema, "-80"), false /* isSuccess*/)
 
-	// Create the workflow.
-	ts := memorytopo.NewServer("cell")
-	hw := &HorizontalReshardingWorkflow{
-		ctx:        ctx,
-		wr:         mockWranglerInterface,
-		topoServer: ts,
-		logger:     logutil.NewMemoryLogger(),
-		checkpoint: checkpoint,
+	hw, err := createWorkflow(ctx, mockWranglerInterface, checkpoint)
+	if err != nil {
+		t.Errorf("initialize Workflow fails: %v", err)
 	}
-
 	// Rerunning the workflow.
 	if err := hw.runWorkflow(); err != nil {
 		t.Errorf("%s: Horizontal resharding workflow should not fail", err)
@@ -121,6 +97,30 @@ func setTaskSuccessOrFailure(checkpoint *workflowpb.WorkflowCheckpoint, taskID s
 	} else {
 		t.Error = ""
 	}
+}
+
+func createWorkflow(ctx context.Context, mockWranglerInterface *MockReshardingWrangler, checkpoint *workflowpb.WorkflowCheckpoint) (*HorizontalReshardingWorkflow, error) {
+	ts := memorytopo.NewServer("cell")
+	w := &workflowpb.Workflow{
+		Uuid:        "test_hw",
+		FactoryName: horizontalReshardingFactoryName,
+		State:       workflowpb.WorkflowState_NotStarted,
+	}
+	wi, err := ts.CreateWorkflow(ctx, w)
+	if err != nil {
+		return nil, err
+	}
+	hw := &HorizontalReshardingWorkflow{
+		ctx:              ctx,
+		wr:               mockWranglerInterface,
+		manager:          workflow.NewManager(ts),
+		wi:               wi,
+		topoServer:       ts,
+		logger:           logutil.NewMemoryLogger(),
+		checkpoint:       checkpoint,
+		checkpointWriter: NewCheckpointWriter(ts, checkpoint, wi),
+	}
+	return hw, nil
 }
 
 func setupFakeVtworker() *fakevtworkerclient.FakeVtworkerClient {
@@ -211,6 +211,7 @@ func setupMockWrangler(ctx context.Context, ctrl *gomock.Controller) *MockReshar
 	}
 	return mockWranglerInterface
 }
+
 func verifySuccess(t *testing.T, checkpoint *workflowpb.WorkflowCheckpoint) {
 	for _, task := range checkpoint.Tasks {
 		if task.State != workflowpb.TaskState_TaskDone || task.Error != "" {
