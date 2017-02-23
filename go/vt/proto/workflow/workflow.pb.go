@@ -123,6 +123,62 @@ func (m *Workflow) String() string            { return proto.CompactTextString(m
 func (*Workflow) ProtoMessage()               {}
 func (*Workflow) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{0} }
 
+func (m *Workflow) GetUuid() string {
+	if m != nil {
+		return m.Uuid
+	}
+	return ""
+}
+
+func (m *Workflow) GetFactoryName() string {
+	if m != nil {
+		return m.FactoryName
+	}
+	return ""
+}
+
+func (m *Workflow) GetName() string {
+	if m != nil {
+		return m.Name
+	}
+	return ""
+}
+
+func (m *Workflow) GetState() WorkflowState {
+	if m != nil {
+		return m.State
+	}
+	return WorkflowState_NotStarted
+}
+
+func (m *Workflow) GetData() []byte {
+	if m != nil {
+		return m.Data
+	}
+	return nil
+}
+
+func (m *Workflow) GetError() string {
+	if m != nil {
+		return m.Error
+	}
+	return ""
+}
+
+func (m *Workflow) GetStartTime() int64 {
+	if m != nil {
+		return m.StartTime
+	}
+	return 0
+}
+
+func (m *Workflow) GetEndTime() int64 {
+	if m != nil {
+		return m.EndTime
+	}
+	return 0
+}
+
 type WorkflowCheckpoint struct {
 	// code_version is used to detect incompabilities between the version of the
 	// running workflow and the one which wrote the checkpoint. If they don't
@@ -141,6 +197,13 @@ func (m *WorkflowCheckpoint) Reset()                    { *m = WorkflowCheckpoin
 func (m *WorkflowCheckpoint) String() string            { return proto.CompactTextString(m) }
 func (*WorkflowCheckpoint) ProtoMessage()               {}
 func (*WorkflowCheckpoint) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{1} }
+
+func (m *WorkflowCheckpoint) GetCodeVersion() int32 {
+	if m != nil {
+		return m.CodeVersion
+	}
+	return 0
+}
 
 func (m *WorkflowCheckpoint) GetTasks() map[string]*Task {
 	if m != nil {
@@ -169,11 +232,32 @@ func (m *Task) String() string            { return proto.CompactTextString(m) }
 func (*Task) ProtoMessage()               {}
 func (*Task) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{2} }
 
+func (m *Task) GetId() string {
+	if m != nil {
+		return m.Id
+	}
+	return ""
+}
+
+func (m *Task) GetState() TaskState {
+	if m != nil {
+		return m.State
+	}
+	return TaskState_TaskNotStarted
+}
+
 func (m *Task) GetAttributes() map[string]string {
 	if m != nil {
 		return m.Attributes
 	}
 	return nil
+}
+
+func (m *Task) GetError() string {
+	if m != nil {
+		return m.Error
+	}
+	return ""
 }
 
 func init() {

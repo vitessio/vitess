@@ -146,6 +146,20 @@ func (m *KeyRange) String() string            { return proto.CompactTextString(m
 func (*KeyRange) ProtoMessage()               {}
 func (*KeyRange) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{0} }
 
+func (m *KeyRange) GetStart() []byte {
+	if m != nil {
+		return m.Start
+	}
+	return nil
+}
+
+func (m *KeyRange) GetEnd() []byte {
+	if m != nil {
+		return m.End
+	}
+	return nil
+}
+
 // TabletAlias is a globally unique tablet identifier.
 type TabletAlias struct {
 	// cell is the cell (or datacenter) the tablet is in
@@ -159,6 +173,20 @@ func (m *TabletAlias) Reset()                    { *m = TabletAlias{} }
 func (m *TabletAlias) String() string            { return proto.CompactTextString(m) }
 func (*TabletAlias) ProtoMessage()               {}
 func (*TabletAlias) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{1} }
+
+func (m *TabletAlias) GetCell() string {
+	if m != nil {
+		return m.Cell
+	}
+	return ""
+}
+
+func (m *TabletAlias) GetUid() uint32 {
+	if m != nil {
+		return m.Uid
+	}
+	return 0
+}
 
 // Tablet represents information about a running instance of vttablet.
 type Tablet struct {
@@ -198,6 +226,20 @@ func (m *Tablet) GetAlias() *TabletAlias {
 	return nil
 }
 
+func (m *Tablet) GetHostname() string {
+	if m != nil {
+		return m.Hostname
+	}
+	return ""
+}
+
+func (m *Tablet) GetIp() string {
+	if m != nil {
+		return m.Ip
+	}
+	return ""
+}
+
 func (m *Tablet) GetPortMap() map[string]int32 {
 	if m != nil {
 		return m.PortMap
@@ -205,11 +247,39 @@ func (m *Tablet) GetPortMap() map[string]int32 {
 	return nil
 }
 
+func (m *Tablet) GetKeyspace() string {
+	if m != nil {
+		return m.Keyspace
+	}
+	return ""
+}
+
+func (m *Tablet) GetShard() string {
+	if m != nil {
+		return m.Shard
+	}
+	return ""
+}
+
 func (m *Tablet) GetKeyRange() *KeyRange {
 	if m != nil {
 		return m.KeyRange
 	}
 	return nil
+}
+
+func (m *Tablet) GetType() TabletType {
+	if m != nil {
+		return m.Type
+	}
+	return TabletType_UNKNOWN
+}
+
+func (m *Tablet) GetDbNameOverride() string {
+	if m != nil {
+		return m.DbNameOverride
+	}
+	return ""
 }
 
 func (m *Tablet) GetTags() map[string]string {
@@ -282,6 +352,13 @@ func (m *Shard) GetSourceShards() []*Shard_SourceShard {
 	return nil
 }
 
+func (m *Shard) GetCells() []string {
+	if m != nil {
+		return m.Cells
+	}
+	return nil
+}
+
 func (m *Shard) GetTabletControls() []*Shard_TabletControl {
 	if m != nil {
 		return m.TabletControls
@@ -299,6 +376,20 @@ func (m *Shard_ServedType) Reset()                    { *m = Shard_ServedType{} 
 func (m *Shard_ServedType) String() string            { return proto.CompactTextString(m) }
 func (*Shard_ServedType) ProtoMessage()               {}
 func (*Shard_ServedType) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{3, 0} }
+
+func (m *Shard_ServedType) GetTabletType() TabletType {
+	if m != nil {
+		return m.TabletType
+	}
+	return TabletType_UNKNOWN
+}
+
+func (m *Shard_ServedType) GetCells() []string {
+	if m != nil {
+		return m.Cells
+	}
+	return nil
+}
 
 // SourceShard represents a data source for filtered replication
 // accross shards. When this is used in a destination shard, the master
@@ -321,9 +412,37 @@ func (m *Shard_SourceShard) String() string            { return proto.CompactTex
 func (*Shard_SourceShard) ProtoMessage()               {}
 func (*Shard_SourceShard) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{3, 1} }
 
+func (m *Shard_SourceShard) GetUid() uint32 {
+	if m != nil {
+		return m.Uid
+	}
+	return 0
+}
+
+func (m *Shard_SourceShard) GetKeyspace() string {
+	if m != nil {
+		return m.Keyspace
+	}
+	return ""
+}
+
+func (m *Shard_SourceShard) GetShard() string {
+	if m != nil {
+		return m.Shard
+	}
+	return ""
+}
+
 func (m *Shard_SourceShard) GetKeyRange() *KeyRange {
 	if m != nil {
 		return m.KeyRange
+	}
+	return nil
+}
+
+func (m *Shard_SourceShard) GetTables() []string {
+	if m != nil {
+		return m.Tables
 	}
 	return nil
 }
@@ -343,6 +462,34 @@ func (m *Shard_TabletControl) String() string            { return proto.CompactT
 func (*Shard_TabletControl) ProtoMessage()               {}
 func (*Shard_TabletControl) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{3, 2} }
 
+func (m *Shard_TabletControl) GetTabletType() TabletType {
+	if m != nil {
+		return m.TabletType
+	}
+	return TabletType_UNKNOWN
+}
+
+func (m *Shard_TabletControl) GetCells() []string {
+	if m != nil {
+		return m.Cells
+	}
+	return nil
+}
+
+func (m *Shard_TabletControl) GetDisableQueryService() bool {
+	if m != nil {
+		return m.DisableQueryService
+	}
+	return false
+}
+
+func (m *Shard_TabletControl) GetBlacklistedTables() []string {
+	if m != nil {
+		return m.BlacklistedTables
+	}
+	return nil
+}
+
 // A Keyspace contains data about a keyspace.
 type Keyspace struct {
 	// name of the column used for sharding
@@ -360,6 +507,20 @@ func (m *Keyspace) Reset()                    { *m = Keyspace{} }
 func (m *Keyspace) String() string            { return proto.CompactTextString(m) }
 func (*Keyspace) ProtoMessage()               {}
 func (*Keyspace) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{4} }
+
+func (m *Keyspace) GetShardingColumnName() string {
+	if m != nil {
+		return m.ShardingColumnName
+	}
+	return ""
+}
+
+func (m *Keyspace) GetShardingColumnType() KeyspaceIdType {
+	if m != nil {
+		return m.ShardingColumnType
+	}
+	return KeyspaceIdType_UNSET
+}
 
 func (m *Keyspace) GetServedFroms() []*Keyspace_ServedFrom {
 	if m != nil {
@@ -383,6 +544,27 @@ func (m *Keyspace_ServedFrom) Reset()                    { *m = Keyspace_ServedF
 func (m *Keyspace_ServedFrom) String() string            { return proto.CompactTextString(m) }
 func (*Keyspace_ServedFrom) ProtoMessage()               {}
 func (*Keyspace_ServedFrom) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{4, 0} }
+
+func (m *Keyspace_ServedFrom) GetTabletType() TabletType {
+	if m != nil {
+		return m.TabletType
+	}
+	return TabletType_UNKNOWN
+}
+
+func (m *Keyspace_ServedFrom) GetCells() []string {
+	if m != nil {
+		return m.Cells
+	}
+	return nil
+}
+
+func (m *Keyspace_ServedFrom) GetKeyspace() string {
+	if m != nil {
+		return m.Keyspace
+	}
+	return ""
+}
 
 // ShardReplication describes the MySQL replication relationships
 // whithin a cell.
@@ -433,6 +615,13 @@ func (m *ShardReference) String() string            { return proto.CompactTextSt
 func (*ShardReference) ProtoMessage()               {}
 func (*ShardReference) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{6} }
 
+func (m *ShardReference) GetName() string {
+	if m != nil {
+		return m.Name
+	}
+	return ""
+}
+
 func (m *ShardReference) GetKeyRange() *KeyRange {
 	if m != nil {
 		return m.KeyRange
@@ -462,6 +651,20 @@ func (m *SrvKeyspace) GetPartitions() []*SrvKeyspace_KeyspacePartition {
 	return nil
 }
 
+func (m *SrvKeyspace) GetShardingColumnName() string {
+	if m != nil {
+		return m.ShardingColumnName
+	}
+	return ""
+}
+
+func (m *SrvKeyspace) GetShardingColumnType() KeyspaceIdType {
+	if m != nil {
+		return m.ShardingColumnType
+	}
+	return KeyspaceIdType_UNSET
+}
+
 func (m *SrvKeyspace) GetServedFrom() []*SrvKeyspace_ServedFrom {
 	if m != nil {
 		return m.ServedFrom
@@ -481,6 +684,13 @@ func (m *SrvKeyspace_KeyspacePartition) String() string { return proto.CompactTe
 func (*SrvKeyspace_KeyspacePartition) ProtoMessage()    {}
 func (*SrvKeyspace_KeyspacePartition) Descriptor() ([]byte, []int) {
 	return fileDescriptor0, []int{7, 0}
+}
+
+func (m *SrvKeyspace_KeyspacePartition) GetServedType() TabletType {
+	if m != nil {
+		return m.ServedType
+	}
+	return TabletType_UNKNOWN
 }
 
 func (m *SrvKeyspace_KeyspacePartition) GetShardReferences() []*ShardReference {
@@ -504,6 +714,20 @@ func (m *SrvKeyspace_ServedFrom) String() string            { return proto.Compa
 func (*SrvKeyspace_ServedFrom) ProtoMessage()               {}
 func (*SrvKeyspace_ServedFrom) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{7, 1} }
 
+func (m *SrvKeyspace_ServedFrom) GetTabletType() TabletType {
+	if m != nil {
+		return m.TabletType
+	}
+	return TabletType_UNKNOWN
+}
+
+func (m *SrvKeyspace_ServedFrom) GetKeyspace() string {
+	if m != nil {
+		return m.Keyspace
+	}
+	return ""
+}
+
 // CellInfo contains information about a cell. CellInfo objects are
 // stored in the global topology server, and describe how to reach
 // local topology servers.
@@ -522,6 +746,20 @@ func (m *CellInfo) Reset()                    { *m = CellInfo{} }
 func (m *CellInfo) String() string            { return proto.CompactTextString(m) }
 func (*CellInfo) ProtoMessage()               {}
 func (*CellInfo) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{8} }
+
+func (m *CellInfo) GetServerAddress() string {
+	if m != nil {
+		return m.ServerAddress
+	}
+	return ""
+}
+
+func (m *CellInfo) GetRoot() string {
+	if m != nil {
+		return m.Root
+	}
+	return ""
+}
 
 func init() {
 	proto.RegisterType((*KeyRange)(nil), "topodata.KeyRange")

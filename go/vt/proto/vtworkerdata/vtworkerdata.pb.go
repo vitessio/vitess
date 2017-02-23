@@ -40,6 +40,13 @@ func (m *ExecuteVtworkerCommandRequest) String() string            { return prot
 func (*ExecuteVtworkerCommandRequest) ProtoMessage()               {}
 func (*ExecuteVtworkerCommandRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{0} }
 
+func (m *ExecuteVtworkerCommandRequest) GetArgs() []string {
+	if m != nil {
+		return m.Args
+	}
+	return nil
+}
+
 // ExecuteVtworkerCommandResponse is streamed back by ExecuteVtworkerCommand.
 type ExecuteVtworkerCommandResponse struct {
 	Event *logutil.Event `protobuf:"bytes,1,opt,name=event" json:"event,omitempty"`
