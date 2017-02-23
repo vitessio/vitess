@@ -42,6 +42,7 @@ func initWorkflowManager(ts topo.Server) {
 
 		// Register the Horizontal Resharding workflow.
 		resharding.Register()
+
 		// Unregister the blacklisted workflows.
 		for _, name := range workflowManagerDisable {
 			workflow.Unregister(name)
