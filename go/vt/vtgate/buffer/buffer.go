@@ -98,13 +98,13 @@ func New() *Buffer {
 		header := "Buffering limited to configured "
 		limited := ""
 		if len(keyspaces) > 0 {
-			limited = "keyspaces: " + setToString(keyspaces)
+			limited += "keyspaces: " + setToString(keyspaces)
 		}
 		if len(shards) > 0 {
 			if limited == "" {
 				limited += " and "
 			}
-			limited = "shards: " + setToString(shards)
+			limited += "shards: " + setToString(shards)
 		}
 		if limited != "" {
 			limited = header + limited
