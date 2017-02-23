@@ -111,7 +111,7 @@ func waitForFilteredReplication(t *testing.T, expectedErr string, initialStats *
 	dest.Agent.BinlogPlayerMap = tabletmanager.NewBinlogPlayerMap(ts, nil, nil)
 
 	// Use real, but trimmed down QueryService.
-	qs := tabletserver.NewTabletServer(tabletenv.DefaultQsConfig)
+	qs := tabletserver.NewTabletServerWithNilTopoServer(tabletenv.DefaultQsConfig)
 	grpcqueryservice.Register(dest.RPCServer, qs)
 
 	qs.BroadcastHealth(42, initialStats)

@@ -23,7 +23,8 @@ import (
 // It uses a discovery.HealthCheck to send replication-lag updates to the wrapped throttler.
 //
 // Intended Usage:
-//   t := CreateTxThrottlerFromTabletConfig()
+//   // Assuming topoServer is a topo.Server variable pointing to a Vitess topology server.
+//   t := CreateTxThrottlerFromTabletConfig(topoServer)
 //
 //   // A transaction throttler must be opened before its first use:
 //   if err := t.Open(keyspace, shard); err != nil {
@@ -59,8 +60,8 @@ type TxThrottler struct {
 // any error occurs.
 // This function calls tryCreateTxThrottler that does the actual creation work
 // and returns an error if one occurred.
-func CreateTxThrottlerFromTabletConfig() *TxThrottler {
-	txThrottler, err := tryCreateTxThrottler()
+func CreateTxThrottlerFromTabletConfig(topoServer topo.Server) *TxThrottler {
+	txThrottler, err := tryCreateTxThrottler(topoServer)
 	if err != nil {
 		log.Errorf("Error creating transaction throttler. Transaction throttling will"+
 			" be disabled. Error: %v", err)
@@ -74,7 +75,7 @@ func CreateTxThrottlerFromTabletConfig() *TxThrottler {
 	return txThrottler
 }
 
-func tryCreateTxThrottler() (*TxThrottler, error) {
+func tryCreateTxThrottler(topoServer topo.Server) (*TxThrottler, error) {
 	if !tabletenv.Config.EnableTxThrottler {
 		return newTxThrottler(&txThrottlerConfig{enabled: false})
 	}
@@ -91,6 +92,7 @@ func tryCreateTxThrottler() (*TxThrottler, error) {
 
 	return newTxThrottler(&txThrottlerConfig{
 		enabled:          true,
+		topoServer:       topoServer,
 		throttlerConfig:  &throttlerConfig,
 		healthCheckCells: healthCheckCells,
 	})
@@ -104,6 +106,7 @@ type txThrottlerConfig struct {
 	// returns false.
 	enabled bool
 
+	topoServer      topo.Server
 	throttlerConfig *throttlerdatapb.Configuration
 	// healthCheckCells stores the cell names in which running vttablets will be monitored for
 	// replication lag.
@@ -139,7 +142,6 @@ type txThrottlerState struct {
 	throttleMu sync.Mutex
 	throttler  ThrottlerInterface
 
-	topoServer       topo.Server
 	healthCheck      discovery.HealthCheck
 	topologyWatchers []TopologyWatcherInterface
 }
@@ -147,13 +149,11 @@ type txThrottlerState struct {
 // These vars store the functions used to create the topo server, healthcheck,
 // topology watchers and go/vt/throttler. These are provided here so that they can be overridden
 // in tests to generate mocks.
-type topoServerFactoryFunc func() topo.Server
 type healthCheckFactoryFunc func() discovery.HealthCheck
 type topologyWatcherFactoryFunc func(topoServer topo.Server, tr discovery.TabletRecorder, cell, keyspace, shard string, refreshInterval time.Duration, topoReadConcurrency int) TopologyWatcherInterface
 type throttlerFactoryFunc func(name, unit string, threadCount int, maxRate, maxReplicationLag int64) (ThrottlerInterface, error)
 
 var (
-	topoServerFactory      topoServerFactoryFunc
 	healthCheckFactory     healthCheckFactoryFunc
 	topologyWatcherFactory topologyWatcherFactoryFunc
 	throttlerFactory       throttlerFactoryFunc
@@ -164,7 +164,6 @@ func init() {
 }
 
 func resetTxThrottlerFactories() {
-	topoServerFactory = topo.Open
 	healthCheckFactory = discovery.NewDefaultHealthCheck
 	topologyWatcherFactory = func(topoServer topo.Server, tr discovery.TabletRecorder, cell, keyspace, shard string, refreshInterval time.Duration, topoReadConcurrency int) TopologyWatcherInterface {
 		return discovery.NewShardReplicationWatcher(
@@ -255,7 +254,6 @@ func newTxThrottlerState(config *txThrottlerConfig, keyspace, shard string,
 	result := &txThrottlerState{
 		throttler: t,
 	}
-	result.topoServer = topoServerFactory()
 	result.healthCheck = healthCheckFactory()
 	result.healthCheck.SetListener(result, false /* sendDownEvents */)
 	result.topologyWatchers = make(
@@ -264,7 +262,7 @@ func newTxThrottlerState(config *txThrottlerConfig, keyspace, shard string,
 		result.topologyWatchers = append(
 			result.topologyWatchers,
 			topologyWatcherFactory(
-				result.topoServer,
+				config.topoServer,
 				result.healthCheck, /* TabletRecorder */
 				cell,
 				keyspace,
@@ -296,8 +294,6 @@ func (ts *txThrottlerState) deallocateResources() {
 
 	ts.healthCheck.Close()
 	ts.healthCheck = nil
-
-	ts.topoServer.Close()
 
 	// After ts.healthCheck is closed txThrottlerState.StatsUpdate() is guaranteed not
 	// to be executing, so we can safely close the throttler.
