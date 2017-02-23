@@ -73,6 +73,20 @@ func (m *Time) String() string            { return proto.CompactTextString(m) }
 func (*Time) ProtoMessage()               {}
 func (*Time) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{0} }
 
+func (m *Time) GetSeconds() int64 {
+	if m != nil {
+		return m.Seconds
+	}
+	return 0
+}
+
+func (m *Time) GetNanoseconds() int32 {
+	if m != nil {
+		return m.Nanoseconds
+	}
+	return 0
+}
+
 // Event is a single logging event
 type Event struct {
 	Time  *Time  `protobuf:"bytes,1,opt,name=time" json:"time,omitempty"`
@@ -92,6 +106,34 @@ func (m *Event) GetTime() *Time {
 		return m.Time
 	}
 	return nil
+}
+
+func (m *Event) GetLevel() Level {
+	if m != nil {
+		return m.Level
+	}
+	return Level_INFO
+}
+
+func (m *Event) GetFile() string {
+	if m != nil {
+		return m.File
+	}
+	return ""
+}
+
+func (m *Event) GetLine() int64 {
+	if m != nil {
+		return m.Line
+	}
+	return 0
+}
+
+func (m *Event) GetValue() string {
+	if m != nil {
+		return m.Value
+	}
+	return ""
 }
 
 func init() {

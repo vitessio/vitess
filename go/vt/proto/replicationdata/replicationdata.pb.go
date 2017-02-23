@@ -45,6 +45,55 @@ func (m *Status) String() string            { return proto.CompactTextString(m) 
 func (*Status) ProtoMessage()               {}
 func (*Status) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{0} }
 
+func (m *Status) GetPosition() string {
+	if m != nil {
+		return m.Position
+	}
+	return ""
+}
+
+func (m *Status) GetSlaveIoRunning() bool {
+	if m != nil {
+		return m.SlaveIoRunning
+	}
+	return false
+}
+
+func (m *Status) GetSlaveSqlRunning() bool {
+	if m != nil {
+		return m.SlaveSqlRunning
+	}
+	return false
+}
+
+func (m *Status) GetSecondsBehindMaster() uint32 {
+	if m != nil {
+		return m.SecondsBehindMaster
+	}
+	return 0
+}
+
+func (m *Status) GetMasterHost() string {
+	if m != nil {
+		return m.MasterHost
+	}
+	return ""
+}
+
+func (m *Status) GetMasterPort() int32 {
+	if m != nil {
+		return m.MasterPort
+	}
+	return 0
+}
+
+func (m *Status) GetMasterConnectRetry() int32 {
+	if m != nil {
+		return m.MasterConnectRetry
+	}
+	return 0
+}
+
 func init() {
 	proto.RegisterType((*Status)(nil), "replicationdata.Status")
 }
