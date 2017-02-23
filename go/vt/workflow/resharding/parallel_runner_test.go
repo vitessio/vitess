@@ -71,17 +71,8 @@ func TestParallelRunnerRetryAction(t *testing.T) {
 	defer m.NodeManager().CloseWatcher(index)
 	go func() {
 		// This goroutine is used to detect and trigger the retry actions.
-		task1ID := createTestTaskID(PhaseSimple, 0)
-		task2ID := createTestTaskID(PhaseSimple, 1)
-
-		task1Node, err := m.NodeManager().GetNodeByPath(path.Join("/"+uuid, task1ID))
-		if err != nil {
-			t.Errorf("fail to find node for task %v: %v", task1ID, err)
-		}
-		task2Node, err := m.NodeManager().GetNodeByPath(path.Join("/"+uuid, task2ID))
-		if err != nil {
-			t.Errorf("fail to find node for task %v: %v", task2ID, err)
-		}
+		task1ID := createTestTaskID(phaseSimple, 0)
+		task2ID := createTestTaskID(phaseSimple, 1)
 
 		retry1 := false
 		retry2 := false
@@ -95,24 +86,22 @@ func TestParallelRunnerRetryAction(t *testing.T) {
 				if strings.Contains(monitorStr, "Retry") {
 					if strings.Contains(monitorStr, task1ID) {
 						verifyTaskSuccessOrFailure(context.Background(), t, ts, uuid, task1ID, false /* isSuccess*/)
-						verifyRetryAction(t, task1Node)
 						retry1 = true
 					}
 					if strings.Contains(monitorStr, task2ID) {
 						verifyTaskSuccessOrFailure(context.Background(), t, ts, uuid, task2ID, false /* isSuccess*/)
-						verifyRetryAction(t, task2Node)
 						retry2 = true
 					}
 				}
 				// After detecting both tasks have enabled retry actions after failure,
 				// retry task1, check its success, then retry task2, check its success.
 				if retry1 && retry2 {
-					clickRetry(ctx, t, m, task1Node.Path)
-					waitForFinished(ctx, t, notifications, task1ID, task1Node)
+					clickRetry(ctx, t, m, path.Join("/"+uuid, task1ID))
+					waitForFinished(ctx, t, notifications, task1ID)
 					verifyTaskSuccessOrFailure(context.Background(), t, ts, uuid, task1ID, true /* isSuccess*/)
 
-					clickRetry(ctx, t, m, task2Node.Path)
-					waitForFinished(ctx, t, notifications, task2ID, task2Node)
+					clickRetry(ctx, t, m, path.Join("/"+uuid, task2ID))
+					waitForFinished(ctx, t, notifications, task2ID)
 					verifyTaskSuccessOrFailure(context.Background(), t, ts, uuid, task2ID, true /* isSuccess*/)
 					return
 				}
@@ -163,18 +152,19 @@ func clickRetry(ctx context.Context, t *testing.T, m *workflow.Manager, nodePath
 	}
 }
 
-func waitForFinished(ctx context.Context, t *testing.T, notifications chan []byte, taskID string, node *workflow.Node) {
+func waitForFinished(ctx context.Context, t *testing.T, notifications chan []byte, taskID string) {
 	for {
 		select {
 		case monitor, ok := <-notifications:
+			monitorStr := string(monitor)
 			if !ok {
-				t.Errorf("unexpected notification: %v, %v", ok, string(monitor))
+				t.Errorf("unexpected notification: %v, %v", ok, monitorStr)
 			}
 
 			finishMessage := fmt.Sprintf(`"message":"task %v finished"`, taskID)
-			if strings.Contains(string(monitor), finishMessage) {
-				if len(node.Actions) != 0 {
-					t.Fatalf("the node actions should be empty after triggering retry: %v", node.Actions)
+			if strings.Contains(monitorStr, finishMessage) {
+				if strings.Contains(monitorStr, `"actions":[{"name:`) {
+					t.Fatalf("the node actions should be empty after triggering retry: %v", monitorStr)
 				}
 				return
 			}
@@ -218,12 +208,6 @@ func verifyTaskSuccessOrFailure(ctx context.Context, t *testing.T, ts topo.Serve
 		taskError = errMessage
 	}
 	if task.State != workflowpb.TaskState_TaskDone || task.Error != taskError {
-		t.Errorf("task: %v should succeed. Task status: %v, %v", task.State, task.Error)
-	}
-}
-
-func verifyRetryAction(t *testing.T, node *workflow.Node) {
-	if len(node.Actions) != 1 || node.Actions[0].Name != "Retry" {
-		t.Errorf("unexpected Ation values: %v", node.Actions)
+		t.Errorf("task: %v should succeed. Task status: %v, %v", task.Id, task.State, task.Error)
 	}
 }
