@@ -268,6 +268,14 @@ func (c *Conn) writeHandshakeV10(serverVersion string) ([]byte, error) {
 	if _, err := rand.Read(cipher); err != nil {
 		return nil, err
 	}
+
+        // Cipher must be a legal UTF8 string.
+	for i := 0; i < len(cipher); i++ {
+		cipher[i] &= 0x7f
+		if cipher[i] == '\x00' || cipher[i] == '$' {
+			cipher[i] += 1
+		}
+	}
 	pos += copy(data[pos:], cipher[:8])
 
 	// One filler byte, always 0.
