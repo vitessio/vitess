@@ -680,39 +680,39 @@ func TestTypeLimits(t *testing.T) {
 	}{{
 		query: "insert into vitess_ints(tiny) values('str')",
 		bv:    nil,
-		out:   "error: strconv.ParseInt",
+		out:   "strconv.ParseInt",
 	}, {
 		query: "insert into vitess_ints(tiny) values(:str)",
 		bv:    map[string]interface{}{"str": "str"},
-		out:   "error: strconv.ParseInt",
+		out:   "strconv.ParseInt",
 	}, {
 		query: "insert into vitess_ints(tiny) values(1.2)",
 		bv:    nil,
-		out:   "error: DML too complex",
+		out:   "DML too complex",
 	}, {
 		query: "insert into vitess_ints(tiny) values(:fl)",
 		bv:    map[string]interface{}{"fl": 1.2},
-		out:   "error: type mismatch",
+		out:   "type mismatch",
 	}, {
 		query: "insert into vitess_strings(vb) values(1)",
 		bv:    nil,
-		out:   "error: type mismatch",
+		out:   "type mismatch",
 	}, {
 		query: "insert into vitess_strings(vb) values(:id)",
 		bv:    map[string]interface{}{"id": 1},
-		out:   "error: type mismatch",
+		out:   "type mismatch",
 	}, {
 		query: "insert into vitess_strings(vb) select tiny from vitess_ints",
 		bv:    nil,
-		out:   "error: type mismatch",
+		out:   "type mismatch",
 	}, {
 		query: "insert into vitess_ints(tiny) select num from vitess_fracts",
 		bv:    nil,
-		out:   "error: type mismatch",
+		out:   "type mismatch",
 	}, {
 		query: "insert into vitess_ints(tiny) select vb from vitess_strings",
 		bv:    nil,
-		out:   "error: type mismatch",
+		out:   "type mismatch",
 	}}
 	for _, tcase := range mismatchCases {
 		_, err := client.Execute(tcase.query, tcase.bv)
@@ -721,7 +721,7 @@ func TestTypeLimits(t *testing.T) {
 		}
 	}
 
-	want := "error: Out of range"
+	want := "Out of range"
 	for _, query := range []string{
 		"insert into vitess_ints(tiny) values(-129)",
 		"insert into vitess_ints(tiny) select medium from vitess_ints",
@@ -732,7 +732,7 @@ func TestTypeLimits(t *testing.T) {
 		}
 	}
 
-	want = "error: Data too long"
+	want = "Data too long"
 	_, err := client.Execute("insert into vitess_strings(vb) values('12345678901234567')", nil)
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
 		t.Errorf("Error: %v, want %s", err, want)

@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package tabletserver
+package schema
 
 import (
 	"errors"
@@ -16,7 +16,6 @@ import (
 	"github.com/youtube/vitess/go/mysqlconn"
 	"github.com/youtube/vitess/go/mysqlconn/fakesqldb"
 	"github.com/youtube/vitess/go/sqltypes"
-	"github.com/youtube/vitess/go/vt/schema"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/tabletserver/connpool"
 
@@ -25,133 +24,80 @@ import (
 
 var errRejected = errors.New("rejected")
 
-func TestTableInfoFailBecauseUnableToRetrieveTableIndex(t *testing.T) {
+func TestLoadTable(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
-	for query, result := range getTestTableInfoQueries() {
+	for query, result := range getTestLoadTableQueries() {
 		db.AddQuery(query, result)
 	}
-	db.AddRejectedQuery("show index from test_table", errRejected)
-	_, err := newTestTableInfo("USER_TABLE", "test table", db)
-	if err == nil {
-		t.Fatalf("table info creation should fail because it is unable to get test_table index")
-	}
-}
-
-func TestTableInfoReplacePKColumn(t *testing.T) {
-	db := fakesqldb.New(t)
-	defer db.Close()
-	for query, result := range getTestTableInfoQueries() {
-		db.AddQuery(query, result)
-	}
-	tableInfo, err := newTestTableInfo("USER_TABLE", "test table", db)
-	if err != nil {
-		t.Fatalf("failed to create a table info")
-	}
-	if len(tableInfo.PKColumns) != 1 {
-		t.Fatalf("table should only have one PK column")
-	}
-	err = tableInfo.SetPK([]string{"name"})
-	if err != nil {
-		t.Fatalf("failed to set primary key: %v", err)
-	}
-	if len(tableInfo.PKColumns) != 1 {
-		t.Fatalf("table should only have one PK column")
-	}
-}
-
-func TestTableInfoSetPKColumn(t *testing.T) {
-	db := fakesqldb.New(t)
-	defer db.Close()
-	for query, result := range getTestTableInfoQueries() {
-		db.AddQuery(query, result)
-	}
-	db.AddQuery("show index from test_table", &sqltypes.Result{
-		Fields:       mysqlconn.ShowIndexFromTableFields,
-		RowsAffected: 1,
-		Rows: [][]sqltypes.Value{
-			mysqlconn.ShowIndexFromTableRow("test_table", false, "index", 1, "name", true),
-		},
-	})
-	tableInfo, err := newTestTableInfo("USER_TABLE", "test table", db)
-	if err != nil {
-		t.Fatalf("failed to create a table info")
-	}
-	if len(tableInfo.PKColumns) != 0 {
-		t.Fatalf("table should not have a PK column")
-	}
-	err = tableInfo.SetPK([]string{"name"})
-	if err != nil {
-		t.Fatalf("failed to set primary key: %v", err)
-	}
-	if len(tableInfo.PKColumns) != 1 {
-		t.Fatalf("table should only have one PK column")
-	}
-}
-
-func TestTableInfoInvalidCardinalityInIndex(t *testing.T) {
-	db := fakesqldb.New(t)
-	defer db.Close()
-	for query, result := range getTestTableInfoQueries() {
-		db.AddQuery(query, result)
-	}
-	row := mysqlconn.ShowIndexFromTableRow("test_table", true, "PRIMARY", 1, "pk", false)
-	row[6] = sqltypes.MakeString([]byte("invalid"))
-	db.AddQuery("show index from test_table", &sqltypes.Result{
-		Fields:       mysqlconn.ShowIndexFromTableFields,
-		RowsAffected: 1,
-		Rows: [][]sqltypes.Value{
-			row,
-		},
-	})
-	tableInfo, err := newTestTableInfo("USER_TABLE", "test table", db)
-	if err != nil {
-		t.Fatalf("failed to create a table info: %v", err)
-	}
-	if len(tableInfo.PKColumns) != 1 {
-		t.Fatalf("table should have one PK column although the cardinality is invalid")
-	}
-}
-
-func TestTableInfoSequence(t *testing.T) {
-	db := fakesqldb.New(t)
-	defer db.Close()
-	for query, result := range getTestTableInfoQueries() {
-		db.AddQuery(query, result)
-	}
-	tableInfo, err := newTestTableInfo("USER_TABLE", "vitess_sequence", db)
-	if err != nil {
-		t.Fatalf("failed to create a test table info")
-	}
-	want := &TableInfo{
-		Table: &schema.Table{
-			Name: sqlparser.NewTableIdent("test_table"),
-			Type: schema.Sequence,
-		},
-	}
-	tableInfo.Columns = nil
-	tableInfo.Indexes = nil
-	tableInfo.PKColumns = nil
-	if !reflect.DeepEqual(tableInfo, want) {
-		t.Errorf("TableInfo:\n%#v, want\n%#v", tableInfo, want)
-	}
-}
-
-func TestTableInfoMessage(t *testing.T) {
-	db := fakesqldb.New(t)
-	defer db.Close()
-	for query, result := range getMessageTableInfoQueries() {
-		db.AddQuery(query, result)
-	}
-	tableInfo, err := newTestTableInfo("USER_TABLE", "vitess_message,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30", db)
+	table, err := newTestLoadTable("USER_TABLE", "test table", db)
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := &TableInfo{
-		Table: &schema.Table{
-			Name: sqlparser.NewTableIdent("test_table"),
-			Type: schema.Message,
-		},
+	if len(table.PKColumns) != 1 {
+		t.Fatalf("table should have one PK column although the cardinality is invalid")
+	}
+	if idx := table.Indexes[0].FindColumn(sqlparser.NewColIdent("pk")); idx != 0 {
+		t.Errorf("table.Indexes[0].FindColumn(pk): %d, want 0", idx)
+	}
+	if idx := table.Indexes[0].FindColumn(sqlparser.NewColIdent("none")); idx != -1 {
+		t.Errorf("table.Indexes[0].FindColumn(none): %d, want 0", idx)
+	}
+	if name := table.GetPKColumn(0).Name.String(); name != "pk" {
+		t.Errorf("table.GetPKColumn(0): %s, want pk", name)
+	}
+}
+
+func TestLoadTableFailBecauseUnableToRetrieveTableIndex(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	for query, result := range getTestLoadTableQueries() {
+		db.AddQuery(query, result)
+	}
+	db.AddRejectedQuery("show index from test_table", errRejected)
+	_, err := newTestLoadTable("USER_TABLE", "test table", db)
+	want := "rejected"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("LoadTable: %v, must contain %s", err, want)
+	}
+}
+
+func TestLoadTableSequence(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	for query, result := range getTestLoadTableQueries() {
+		db.AddQuery(query, result)
+	}
+	table, err := newTestLoadTable("USER_TABLE", "vitess_sequence", db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := &Table{
+		Name:         sqlparser.NewTableIdent("test_table"),
+		Type:         Sequence,
+		SequenceInfo: &SequenceInfo{},
+	}
+	table.Columns = nil
+	table.Indexes = nil
+	table.PKColumns = nil
+	if !reflect.DeepEqual(table, want) {
+		t.Errorf("Table:\n%#v, want\n%#v", table, want)
+	}
+}
+
+func TestLoadTableMessage(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	for query, result := range getMessageTableQueries() {
+		db.AddQuery(query, result)
+	}
+	table, err := newTestLoadTable("USER_TABLE", "vitess_message,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30", db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := &Table{
+		Name: sqlparser.NewTableIdent("test_table"),
+		Type: Message,
 		MessageInfo: &MessageInfo{
 			IDPKIndex: 1,
 			Fields: []*querypb.Field{{
@@ -168,24 +114,23 @@ func TestTableInfoMessage(t *testing.T) {
 			PollInterval:       30 * time.Second,
 		},
 	}
-	tableInfo.Columns = nil
-	tableInfo.Indexes = nil
-	tableInfo.PKColumns = nil
-	if !reflect.DeepEqual(tableInfo, want) {
-		t.Errorf("TableInfo:\n%+v, want\n%+v", tableInfo.Table, want.Table)
-		t.Errorf("TableInfo:\n%+v, want\n%+v", tableInfo.MessageInfo, want.MessageInfo)
-		t.Errorf("TableInfo:\n%+v, want\n%+v", tableInfo, want)
+	table.Columns = nil
+	table.Indexes = nil
+	table.PKColumns = nil
+	if !reflect.DeepEqual(table, want) {
+		t.Errorf("Table:\n%+v, want\n%+v", table, want)
+		t.Errorf("Table:\n%+v, want\n%+v", table.MessageInfo, want.MessageInfo)
 	}
 
 	// Missing property
-	_, err = newTestTableInfo("USER_TABLE", "vitess_message,vt_ack_wait=30", db)
+	_, err = newTestLoadTable("USER_TABLE", "vitess_message,vt_ack_wait=30", db)
 	wanterr := "not specified for message table"
 	if err == nil || !strings.Contains(err.Error(), wanterr) {
-		t.Errorf("newTestTableInfo: %v, want %s", err, wanterr)
+		t.Errorf("newTestLoadTable: %v, want %s", err, wanterr)
 	}
 
 	// id column must be part of primary key.
-	for query, result := range getMessageTableInfoQueries() {
+	for query, result := range getMessageTableQueries() {
 		db.AddQuery(query, result)
 	}
 	db.AddQuery(
@@ -197,23 +142,23 @@ func TestTableInfoMessage(t *testing.T) {
 				mysqlconn.ShowIndexFromTableRow("test_table", true, "PRIMARY", 1, "time_scheduled", false),
 			},
 		})
-	_, err = newTestTableInfo("USER_TABLE", "vitess_message,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30", db)
+	_, err = newTestLoadTable("USER_TABLE", "vitess_message,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30", db)
 	wanterr = "id column is not part of the primary key for message table: test_table"
 	if err == nil || err.Error() != wanterr {
-		t.Errorf("newTestTableInfo: %v, want %s", err, wanterr)
+		t.Errorf("newTestLoadTable: %v, want %s", err, wanterr)
 	}
 
-	for query, result := range getTestTableInfoQueries() {
+	for query, result := range getTestLoadTableQueries() {
 		db.AddQuery(query, result)
 	}
-	_, err = newTestTableInfo("USER_TABLE", "vitess_message,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30", db)
+	_, err = newTestLoadTable("USER_TABLE", "vitess_message,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30", db)
 	wanterr = "time_scheduled missing from message table: test_table"
 	if err == nil || err.Error() != wanterr {
-		t.Errorf("newTestTableInfo: %v, want %s", err, wanterr)
+		t.Errorf("newTestLoadTable: %v, want %s", err, wanterr)
 	}
 }
 
-func newTestTableInfo(tableType string, comment string, db *fakesqldb.DB) (*TableInfo, error) {
+func newTestLoadTable(tableType string, comment string, db *fakesqldb.DB) (*Table, error) {
 	ctx := context.Background()
 	appParams := db.ConnParams()
 	dbaParams := db.ConnParams()
@@ -226,15 +171,10 @@ func newTestTableInfo(tableType string, comment string, db *fakesqldb.DB) (*Tabl
 	}
 	defer conn.Recycle()
 
-	tableName := "test_table"
-	tableInfo, err := NewTableInfo(conn, tableName, tableType, comment)
-	if err != nil {
-		return nil, err
-	}
-	return tableInfo, nil
+	return LoadTable(conn, "test_table", tableType, comment)
 }
 
-func getTestTableInfoQueries() map[string]*sqltypes.Result {
+func getTestLoadTableQueries() map[string]*sqltypes.Result {
 	return map[string]*sqltypes.Result{
 		"select * from test_table where 1 != 1": {
 			Fields: []*querypb.Field{{
@@ -269,7 +209,7 @@ func getTestTableInfoQueries() map[string]*sqltypes.Result {
 	}
 }
 
-func getMessageTableInfoQueries() map[string]*sqltypes.Result {
+func getMessageTableQueries() map[string]*sqltypes.Result {
 	return map[string]*sqltypes.Result{
 		"select * from test_table where 1 != 1": {
 			Fields: []*querypb.Field{{

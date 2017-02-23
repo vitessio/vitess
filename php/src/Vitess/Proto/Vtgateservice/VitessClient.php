@@ -106,6 +106,18 @@ namespace Vitess\Proto\Vtgateservice {
       return $this->_simpleRequest('/vtgateservice.Vitess/ResolveTransaction', $argument, '\Vitess\Proto\Vtgate\ResolveTransactionResponse::deserialize', $metadata, $options);
     }
     /**
+     * @param Vitess\Proto\Vtgate\MessageStreamRequest $input
+     */
+    public function MessageStream($argument, $metadata = array(), $options = array()) {
+      return $this->_serverStreamRequest('/vtgateservice.Vitess/MessageStream', $argument, '\Vitess\Proto\Query\MessageStreamResponse::deserialize', $metadata, $options);
+    }
+    /**
+     * @param Vitess\Proto\Vtgate\MessageAckRequest $input
+     */
+    public function MessageAck(\Vitess\Proto\Vtgate\MessageAckRequest $argument, $metadata = array(), $options = array()) {
+      return $this->_simpleRequest('/vtgateservice.Vitess/MessageAck', $argument, '\Vitess\Proto\Query\MessageAckResponse::deserialize', $metadata, $options);
+    }
+    /**
      * @param Vitess\Proto\Vtgate\SplitQueryRequest $input
      */
     public function SplitQuery(\Vitess\Proto\Vtgate\SplitQueryRequest $argument, $metadata = array(), $options = array()) {

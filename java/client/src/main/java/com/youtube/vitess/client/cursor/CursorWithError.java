@@ -13,7 +13,7 @@ public class CursorWithError {
 
     public CursorWithError(Query.ResultWithError resultWithError) {
       if (!resultWithError.hasError() ||
-          Vtrpc.ErrorCode.SUCCESS == resultWithError.getError().getCode()) {
+          Vtrpc.Code.OK == resultWithError.getError().getCode()) {
             this.cursor = new SimpleCursor(resultWithError.getResult());
             this.error = null;
         } else {

@@ -17,7 +17,7 @@ import (
 func TestTableACLNoAccess(t *testing.T) {
 	client := framework.NewClient()
 
-	aclErr := "error: table acl error"
+	aclErr := "table acl error"
 	execCases := []struct {
 		query string
 		err   string
@@ -163,12 +163,12 @@ func TestQueryRules(t *testing.T) {
 	query := "select * from vitess_test where intval=:asdfg"
 	bv := map[string]interface{}{"asdfg": 1}
 	_, err = client.Execute(query, bv)
-	want = "error: Query disallowed due to rule: disallow bindvar 'asdfg'"
+	want = "disallowed due to rule: disallow bindvar 'asdfg'"
 	if err == nil || err.Error() != want {
 		t.Errorf("Error: %v, want %s", err, want)
 	}
 	_, err = client.StreamExecute(query, bv)
-	want = "error: Query disallowed due to rule: disallow bindvar 'asdfg'"
+	want = "disallowed due to rule: disallow bindvar 'asdfg'"
 	if err == nil || err.Error() != want {
 		t.Errorf("Error: %v, want %s", err, want)
 	}

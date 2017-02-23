@@ -11,53 +11,15 @@ import (
 	"time"
 
 	"github.com/youtube/vitess/go/sqltypes"
+
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
-	"github.com/youtube/vitess/go/vt/schema"
+	"github.com/youtube/vitess/go/vt/tabletserver/engines/schema"
 )
 
-var meTableInfo = &TableInfo{
-	Table: &schema.Table{
-		Type: schema.Message,
-	},
-	MessageInfo: mmTableInfo.MessageInfo,
-}
-
-func TestMEState(t *testing.T) {
-	db := setUpTabletServerTest(t)
-	defer db.Close()
-	testUtils := newTestUtils()
-	config := testUtils.newQueryServiceConfig()
-	config.TransactionCap = 1
-	tsv := NewTabletServer()
-	dbconfigs := testUtils.newDBConfigs(db)
-	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
-	err := tsv.StartService(target, dbconfigs, testUtils.newMysqld(&dbconfigs))
-	if err != nil {
-		t.Fatalf("StartService failed: %v", err)
-	}
-	defer tsv.StopService()
-
-	me := tsv.messager
-	if l := len(tsv.qe.schemaInfo.notifiers); l != 1 {
-		t.Errorf("len(notifiers): %d, want 1", l)
-	}
-	if err := me.Open(dbconfigs); err != nil {
-		t.Fatal(err)
-	}
-	if l := len(tsv.qe.schemaInfo.notifiers); l != 1 {
-		t.Errorf("len(notifiers) after reopen: %d, want 1", l)
-	}
-
-	me.Close()
-	if l := len(tsv.qe.schemaInfo.notifiers); l != 0 {
-		t.Errorf("len(notifiers) after close: %d, want 0", l)
-	}
-
-	me.Close()
-	if l := len(tsv.qe.schemaInfo.notifiers); l != 0 {
-		t.Errorf("len(notifiers) after close: %d, want 0", l)
-	}
+var meTable = &schema.Table{
+	Type:        schema.Message,
+	MessageInfo: mmTable.MessageInfo,
 }
 
 func TestMESchemaChanged(t *testing.T) {
@@ -66,7 +28,7 @@ func TestMESchemaChanged(t *testing.T) {
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	config.TransactionCap = 1
-	tsv := NewTabletServer()
+	tsv := NewTabletServer(config)
 	dbconfigs := testUtils.newDBConfigs(db)
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
 	err := tsv.StartService(target, dbconfigs, testUtils.newMysqld(&dbconfigs))
@@ -76,48 +38,42 @@ func TestMESchemaChanged(t *testing.T) {
 	defer tsv.StopService()
 
 	me := tsv.messager
-	tables := map[string]*TableInfo{
-		"t1": meTableInfo,
+	tables := map[string]*schema.Table{
+		"t1": meTable,
 		"t2": {
-			Table: &schema.Table{
-				Type: schema.NoType,
-			},
+			Type: schema.NoType,
 		},
 	}
-	me.schemaChanged(tables)
+	me.schemaChanged(tables, []string{"t1", "t2"}, nil, nil)
 	got := extractManagerNames(me.managers)
 	want := map[string]bool{"msg": true, "t1": true}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("got: %+v, want %+v", got, want)
 	}
-	tables = map[string]*TableInfo{
-		"t1": meTableInfo,
+	tables = map[string]*schema.Table{
+		"t1": meTable,
 		"t2": {
-			Table: &schema.Table{
-				Type: schema.NoType,
-			},
+			Type: schema.NoType,
 		},
-		"t3": meTableInfo,
+		"t3": meTable,
 	}
-	me.schemaChanged(tables)
+	me.schemaChanged(tables, []string{"t3"}, nil, nil)
 	got = extractManagerNames(me.managers)
 	want = map[string]bool{"msg": true, "t1": true, "t3": true}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("got: %+v, want %+v", got, want)
 	}
-	tables = map[string]*TableInfo{
-		"t1": meTableInfo,
+	tables = map[string]*schema.Table{
+		"t1": meTable,
 		"t2": {
-			Table: &schema.Table{
-				Type: schema.NoType,
-			},
+			Type: schema.NoType,
 		},
-		"t4": meTableInfo,
+		"t4": meTable,
 	}
-	me.schemaChanged(tables)
+	me.schemaChanged(tables, []string{"t4"}, nil, []string{"t3"})
 	got = extractManagerNames(me.managers)
 	// schemaChanged is only additive.
-	want = map[string]bool{"msg": true, "t1": true, "t3": true, "t4": true}
+	want = map[string]bool{"msg": true, "t1": true, "t4": true}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("got: %+v, want %+v", got, want)
 	}
@@ -137,7 +93,7 @@ func TestSubscribe(t *testing.T) {
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	config.TransactionCap = 1
-	tsv := NewTabletServer()
+	tsv := NewTabletServer(config)
 	dbconfigs := testUtils.newDBConfigs(db)
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
 	err := tsv.StartService(target, dbconfigs, testUtils.newMysqld(&dbconfigs))
@@ -147,11 +103,11 @@ func TestSubscribe(t *testing.T) {
 	defer tsv.StopService()
 
 	me := tsv.messager
-	tables := map[string]*TableInfo{
-		"t1": meTableInfo,
-		"t2": meTableInfo,
+	tables := map[string]*schema.Table{
+		"t1": meTable,
+		"t2": meTable,
 	}
-	me.schemaChanged(tables)
+	me.schemaChanged(tables, []string{"t1", "t2"}, nil, nil)
 	r1 := newTestReceiver(1)
 	r2 := newTestReceiver(1)
 	// Each receiver is subscribed to different managers.
@@ -165,7 +121,7 @@ func TestSubscribe(t *testing.T) {
 	<-r2.ch
 
 	// Error case.
-	want := "error: message table t3 not found"
+	want := "message table t3 not found"
 	err = me.Subscribe("t3", r1.rcv)
 	if err == nil || err.Error() != want {
 		t.Errorf("Subscribe: %v, want %s", err, want)
@@ -178,7 +134,7 @@ func TestLockDB(t *testing.T) {
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	config.TransactionCap = 1
-	tsv := NewTabletServer()
+	tsv := NewTabletServer(config)
 	dbconfigs := testUtils.newDBConfigs(db)
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
 	err := tsv.StartService(target, dbconfigs, testUtils.newMysqld(&dbconfigs))
@@ -188,11 +144,11 @@ func TestLockDB(t *testing.T) {
 	defer tsv.StopService()
 
 	me := tsv.messager
-	tables := map[string]*TableInfo{
-		"t1": meTableInfo,
-		"t2": meTableInfo,
+	tables := map[string]*schema.Table{
+		"t1": meTable,
+		"t2": meTable,
 	}
-	me.schemaChanged(tables)
+	me.schemaChanged(tables, []string{"t1", "t2"}, nil, nil)
 	r1 := newTestReceiver(0)
 	me.Subscribe("t1", r1.rcv)
 	<-r1.ch
@@ -250,7 +206,7 @@ func TestMESendDiscard(t *testing.T) {
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	config.TransactionCap = 1
-	tsv := NewTabletServer()
+	tsv := NewTabletServer(config)
 	dbconfigs := testUtils.newDBConfigs(db)
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
 	err := tsv.StartService(target, dbconfigs, testUtils.newMysqld(&dbconfigs))
@@ -297,7 +253,7 @@ func TestMEGenerate(t *testing.T) {
 	testUtils := newTestUtils()
 	config := testUtils.newQueryServiceConfig()
 	config.TransactionCap = 1
-	tsv := NewTabletServer()
+	tsv := NewTabletServer(config)
 	dbconfigs := testUtils.newDBConfigs(db)
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
 	err := tsv.StartService(target, dbconfigs, testUtils.newMysqld(&dbconfigs))
@@ -307,9 +263,9 @@ func TestMEGenerate(t *testing.T) {
 	defer tsv.StopService()
 
 	me := tsv.messager
-	me.schemaChanged(map[string]*TableInfo{
-		"t1": meTableInfo,
-	})
+	me.schemaChanged(map[string]*schema.Table{
+		"t1": meTable,
+	}, []string{"t1"}, nil, nil)
 	if _, _, err := me.GenerateAckQuery("t1", []string{"1"}); err != nil {
 		t.Error(err)
 	}

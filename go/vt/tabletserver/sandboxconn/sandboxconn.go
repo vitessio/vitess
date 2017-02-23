@@ -13,7 +13,7 @@ import (
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/tabletserver/queryservice"
 	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
-	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
+	"github.com/youtube/vitess/go/vt/vterrors"
 	"golang.org/x/net/context"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
@@ -26,19 +26,7 @@ type SandboxConn struct {
 	tablet *topodatapb.Tablet
 
 	// These errors work for all functions.
-	MustFailRetry            int
-	MustFailFatal            int
-	MustFailServer           int
-	MustFailConn             int
-	MustFailTxPool           int
-	MustFailNotTx            int
-	MustFailCanceled         int
-	MustFailUnknownError     int
-	MustFailDeadlineExceeded int
-	MustFailIntegrityError   int
-	MustFailPermissionDenied int
-	MustFailTransientError   int
-	MustFailUnauthenticated  int
+	MustFailCodes map[vtrpcpb.Code]int
 
 	// These errors are triggered only for specific functions.
 	// For now these are just for the 2PC functions.
@@ -95,100 +83,19 @@ var _ queryservice.QueryService = (*SandboxConn)(nil) // compile-time interface 
 // NewSandboxConn returns a new SandboxConn targeted to the provided tablet.
 func NewSandboxConn(t *topodatapb.Tablet) *SandboxConn {
 	return &SandboxConn{
-		tablet: t,
+		tablet:        t,
+		MustFailCodes: make(map[vtrpcpb.Code]int),
 	}
 }
 
 func (sbc *SandboxConn) getError() error {
-	if sbc.MustFailRetry > 0 {
-		sbc.MustFailRetry--
-		return &tabletconn.ServerError{
-			Err:        "retry: err",
-			ServerCode: vtrpcpb.ErrorCode_QUERY_NOT_SERVED,
+	for code, count := range sbc.MustFailCodes {
+		if count == 0 {
+			continue
 		}
+		sbc.MustFailCodes[code] = count - 1
+		return vterrors.New(code, fmt.Sprintf("%v error", code))
 	}
-	if sbc.MustFailFatal > 0 {
-		sbc.MustFailFatal--
-		return &tabletconn.ServerError{
-			Err:        "fatal: err",
-			ServerCode: vtrpcpb.ErrorCode_INTERNAL_ERROR,
-		}
-	}
-	if sbc.MustFailServer > 0 {
-		sbc.MustFailServer--
-		return &tabletconn.ServerError{
-			Err:        "error: err",
-			ServerCode: vtrpcpb.ErrorCode_BAD_INPUT,
-		}
-	}
-	if sbc.MustFailConn > 0 {
-		sbc.MustFailConn--
-		return tabletconn.OperationalError(fmt.Sprintf("error: conn"))
-	}
-	if sbc.MustFailTxPool > 0 {
-		sbc.MustFailTxPool--
-		return &tabletconn.ServerError{
-			Err:        "tx_pool_full: err",
-			ServerCode: vtrpcpb.ErrorCode_RESOURCE_EXHAUSTED,
-		}
-	}
-	if sbc.MustFailNotTx > 0 {
-		sbc.MustFailNotTx--
-		return &tabletconn.ServerError{
-			Err:        "not_in_tx: err",
-			ServerCode: vtrpcpb.ErrorCode_NOT_IN_TX,
-		}
-	}
-	if sbc.MustFailCanceled > 0 {
-		sbc.MustFailCanceled--
-		return &tabletconn.ServerError{
-			Err:        "canceled: err",
-			ServerCode: vtrpcpb.ErrorCode_CANCELLED,
-		}
-	}
-	if sbc.MustFailUnknownError > 0 {
-		sbc.MustFailUnknownError--
-		return &tabletconn.ServerError{
-			Err:        "unknown error: err",
-			ServerCode: vtrpcpb.ErrorCode_UNKNOWN_ERROR,
-		}
-	}
-	if sbc.MustFailDeadlineExceeded > 0 {
-		sbc.MustFailDeadlineExceeded--
-		return &tabletconn.ServerError{
-			Err:        "deadline exceeded: err",
-			ServerCode: vtrpcpb.ErrorCode_DEADLINE_EXCEEDED,
-		}
-	}
-	if sbc.MustFailIntegrityError > 0 {
-		sbc.MustFailIntegrityError--
-		return &tabletconn.ServerError{
-			Err:        "integrity error: err",
-			ServerCode: vtrpcpb.ErrorCode_INTEGRITY_ERROR,
-		}
-	}
-	if sbc.MustFailPermissionDenied > 0 {
-		sbc.MustFailPermissionDenied--
-		return &tabletconn.ServerError{
-			Err:        "permission denied: err",
-			ServerCode: vtrpcpb.ErrorCode_PERMISSION_DENIED,
-		}
-	}
-	if sbc.MustFailTransientError > 0 {
-		sbc.MustFailTransientError--
-		return &tabletconn.ServerError{
-			Err:        "transient error: err",
-			ServerCode: vtrpcpb.ErrorCode_TRANSIENT_ERROR,
-		}
-	}
-	if sbc.MustFailUnauthenticated > 0 {
-		sbc.MustFailUnauthenticated--
-		return &tabletconn.ServerError{
-			Err:        "unauthenticated: err",
-			ServerCode: vtrpcpb.ErrorCode_UNAUTHENTICATED,
-		}
-	}
-
 	return nil
 }
 
@@ -279,10 +186,7 @@ func (sbc *SandboxConn) Prepare(ctx context.Context, target *querypb.Target, tra
 	sbc.PrepareCount.Add(1)
 	if sbc.MustFailPrepare > 0 {
 		sbc.MustFailPrepare--
-		return &tabletconn.ServerError{
-			Err:        "error: err",
-			ServerCode: vtrpcpb.ErrorCode_QUERY_NOT_SERVED,
-		}
+		return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "error: err")
 	}
 	return sbc.getError()
 }
@@ -292,10 +196,7 @@ func (sbc *SandboxConn) CommitPrepared(ctx context.Context, target *querypb.Targ
 	sbc.CommitPreparedCount.Add(1)
 	if sbc.MustFailCommitPrepared > 0 {
 		sbc.MustFailCommitPrepared--
-		return &tabletconn.ServerError{
-			Err:        "error: err",
-			ServerCode: vtrpcpb.ErrorCode_QUERY_NOT_SERVED,
-		}
+		return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "error: err")
 	}
 	return sbc.getError()
 }
@@ -305,10 +206,7 @@ func (sbc *SandboxConn) RollbackPrepared(ctx context.Context, target *querypb.Ta
 	sbc.RollbackPreparedCount.Add(1)
 	if sbc.MustFailRollbackPrepared > 0 {
 		sbc.MustFailRollbackPrepared--
-		return &tabletconn.ServerError{
-			Err:        "error: err",
-			ServerCode: vtrpcpb.ErrorCode_QUERY_NOT_SERVED,
-		}
+		return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "error: err")
 	}
 	return sbc.getError()
 }
@@ -318,10 +216,7 @@ func (sbc *SandboxConn) CreateTransaction(ctx context.Context, target *querypb.T
 	sbc.CreateTransactionCount.Add(1)
 	if sbc.MustFailCreateTransaction > 0 {
 		sbc.MustFailCreateTransaction--
-		return &tabletconn.ServerError{
-			Err:        "error: err",
-			ServerCode: vtrpcpb.ErrorCode_QUERY_NOT_SERVED,
-		}
+		return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "error: err")
 	}
 	return sbc.getError()
 }
@@ -332,10 +227,7 @@ func (sbc *SandboxConn) StartCommit(ctx context.Context, target *querypb.Target,
 	sbc.StartCommitCount.Add(1)
 	if sbc.MustFailStartCommit > 0 {
 		sbc.MustFailStartCommit--
-		return &tabletconn.ServerError{
-			Err:        "error: err",
-			ServerCode: vtrpcpb.ErrorCode_QUERY_NOT_SERVED,
-		}
+		return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "error: err")
 	}
 	return sbc.getError()
 }
@@ -346,10 +238,7 @@ func (sbc *SandboxConn) SetRollback(ctx context.Context, target *querypb.Target,
 	sbc.SetRollbackCount.Add(1)
 	if sbc.MustFailSetRollback > 0 {
 		sbc.MustFailSetRollback--
-		return &tabletconn.ServerError{
-			Err:        "error: err",
-			ServerCode: vtrpcpb.ErrorCode_QUERY_NOT_SERVED,
-		}
+		return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "error: err")
 	}
 	return sbc.getError()
 }
@@ -360,10 +249,7 @@ func (sbc *SandboxConn) ConcludeTransaction(ctx context.Context, target *querypb
 	sbc.ConcludeTransactionCount.Add(1)
 	if sbc.MustFailConcludeTransaction > 0 {
 		sbc.MustFailConcludeTransaction--
-		return &tabletconn.ServerError{
-			Err:        "error: err",
-			ServerCode: vtrpcpb.ErrorCode_QUERY_NOT_SERVED,
-		}
+		return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "error: err")
 	}
 	return sbc.getError()
 }

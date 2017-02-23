@@ -172,6 +172,21 @@
   }
 }
 
+# simple insert, no values
+"insert into unsharded values()"
+{
+  "Original": "insert into unsharded values()",
+  "Instructions": {
+    "Opcode": "InsertUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "insert into unsharded values ()",
+    "Table": "unsharded"
+  }
+}
+
 # simple insert unsharded
 "insert into unsharded values(1, 2)"
 {
@@ -318,6 +333,10 @@
 # insert with mimatched column list
 "insert into user(id) values (1, 2)"
 "column list doesn't match values"
+
+# insert sharded, no values
+"insert into user values()"
+"no column list"
 
 # insert with one vindex
 "insert into user(id) values (1)"

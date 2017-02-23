@@ -6,7 +6,6 @@ package vtgate
 
 import (
 	"encoding/hex"
-	"fmt"
 
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/key"
@@ -47,9 +46,7 @@ func getAnyShard(ctx context.Context, topoServ topo.SrvTopoServer, cell, keyspac
 		return "", "", err
 	}
 	if len(allShards) == 0 {
-		return "", "", vterrors.FromError(vtrpcpb.ErrorCode_BAD_INPUT,
-			fmt.Errorf("No shards found for this tabletType"),
-		)
+		return "", "", vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "No shards found for this tabletType")
 	}
 	return keyspace, allShards[0].Name, nil
 }
@@ -57,10 +54,7 @@ func getAnyShard(ctx context.Context, topoServ topo.SrvTopoServer, cell, keyspac
 func getKeyspaceShards(ctx context.Context, topoServ topo.SrvTopoServer, cell, keyspace string, tabletType topodatapb.TabletType) (string, *topodatapb.SrvKeyspace, []*topodatapb.ShardReference, error) {
 	srvKeyspace, err := topoServ.GetSrvKeyspace(ctx, cell, keyspace)
 	if err != nil {
-		return "", nil, nil, vterrors.NewVitessError(
-			vtrpcpb.ErrorCode_INTERNAL_ERROR, err,
-			"keyspace %v fetch error: %v", keyspace, err,
-		)
+		return "", nil, nil, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "keyspace %v fetch error: %v", keyspace, err)
 	}
 
 	// check if the keyspace has been redirected for this tabletType.
@@ -69,29 +63,21 @@ func getKeyspaceShards(ctx context.Context, topoServ topo.SrvTopoServer, cell, k
 			keyspace = sf.Keyspace
 			srvKeyspace, err = topoServ.GetSrvKeyspace(ctx, cell, keyspace)
 			if err != nil {
-				return "", nil, nil, vterrors.NewVitessError(
-					vtrpcpb.ErrorCode_INTERNAL_ERROR, err,
-					"keyspace %v fetch error: %v", keyspace, err,
-				)
+				return "", nil, nil, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "keyspace %v fetch error: %v", keyspace, err)
 			}
 		}
 	}
 
 	partition := topoproto.SrvKeyspaceGetPartition(srvKeyspace, tabletType)
 	if partition == nil {
-		return "", nil, nil, vterrors.NewVitessError(
-			vtrpcpb.ErrorCode_INTERNAL_ERROR, err,
-			"No partition found for tabletType %v in keyspace %v", topoproto.TabletTypeLString(tabletType), keyspace,
-		)
+		return "", nil, nil, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "No partition found for tabletType %v in keyspace %v", topoproto.TabletTypeLString(tabletType), keyspace)
 	}
 	return keyspace, srvKeyspace, partition.ShardReferences, nil
 }
 
 func getShardForKeyspaceID(allShards []*topodatapb.ShardReference, keyspaceID []byte) (string, error) {
 	if len(allShards) == 0 {
-		return "", vterrors.FromError(vtrpcpb.ErrorCode_BAD_INPUT,
-			fmt.Errorf("No shards found for this tabletType"),
-		)
+		return "", vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "No shards found for this tabletType")
 	}
 
 	for _, shardReference := range allShards {
@@ -99,9 +85,7 @@ func getShardForKeyspaceID(allShards []*topodatapb.ShardReference, keyspaceID []
 			return shardReference.Name, nil
 		}
 	}
-	return "", vterrors.FromError(vtrpcpb.ErrorCode_BAD_INPUT,
-		fmt.Errorf("KeyspaceId %v didn't match any shards %+v", hex.EncodeToString(keyspaceID), allShards),
-	)
+	return "", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "KeyspaceId %v didn't match any shards %+v", hex.EncodeToString(keyspaceID), allShards)
 }
 
 func mapEntityIdsToShards(ctx context.Context, topoServ topo.SrvTopoServer, cell, keyspace string, entityIds []*vtgatepb.ExecuteEntityIdsRequest_EntityId, tabletType topodatapb.TabletType) (string, map[string][]interface{}, error) {
@@ -179,9 +163,7 @@ func mapExactShards(ctx context.Context, topoServ topo.SrvTopoServer, cell, keys
 		}
 		shardnum++
 	}
-	return keyspace, nil, vterrors.FromError(vtrpcpb.ErrorCode_BAD_INPUT,
-		fmt.Errorf("keyrange %v does not exactly match shards", key.KeyRangeString(kr)),
-	)
+	return keyspace, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "keyrange %v does not exactly match shards", key.KeyRangeString(kr))
 }
 
 func boundShardQueriesToScatterBatchRequest(boundQueries []*vtgatepb.BoundShardQuery) (*scatterBatchRequest, error) {

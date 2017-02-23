@@ -12,7 +12,6 @@ package buffer
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -29,9 +28,9 @@ import (
 )
 
 var (
-	bufferFullError      = vterrors.FromError(vtrpcpb.ErrorCode_TRANSIENT_ERROR, errors.New("master buffer is full"))
-	entryEvictedError    = vterrors.FromError(vtrpcpb.ErrorCode_TRANSIENT_ERROR, errors.New("buffer full: request evicted for newer request"))
-	contextCanceledError = vterrors.FromError(vtrpcpb.ErrorCode_TRANSIENT_ERROR, errors.New("context was canceled before failover finished"))
+	bufferFullError      = vterrors.New(vtrpcpb.Code_UNAVAILABLE, "master buffer is full")
+	entryEvictedError    = vterrors.New(vtrpcpb.Code_UNAVAILABLE, "buffer full: request evicted for newer request")
+	contextCanceledError = vterrors.New(vtrpcpb.Code_UNAVAILABLE, "context was canceled before failover finished")
 )
 
 // bufferMode specifies how the buffer is configured for a given shard.
@@ -62,7 +61,7 @@ type Buffer struct {
 	shards map[string]bool
 
 	// bufferSizeSema limits how many requests can be buffered
-	// ("-vtgate_buffer_size") and is shared by all shardBuffer instances.
+	// ("-buffer_size") and is shared by all shardBuffer instances.
 	bufferSizeSema *sync2.Semaphore
 
 	// mu guards all fields in this group.
@@ -70,7 +69,7 @@ type Buffer struct {
 	// - 1. Requests which may buffer (RLock, can be run in parallel)
 	// - 2. Request which starts buffering (based on the seen error)
 	// - 3. HealthCheck listener ("StatsUpdate") which stops buffering
-	// - 4. Timer which may stop buffering after -vtgate_buffer_max_failover_duration
+	// - 4. Timer which may stop buffering after -buffer_max_failover_duration
 	mu sync.RWMutex
 	// buffers holds a shardBuffer object per shard, even if no failover is in
 	// progress.
@@ -99,13 +98,13 @@ func New() *Buffer {
 		header := "Buffering limited to configured "
 		limited := ""
 		if len(keyspaces) > 0 {
-			limited = "keyspaces: " + setToString(keyspaces)
+			limited += "keyspaces: " + setToString(keyspaces)
 		}
 		if len(shards) > 0 {
 			if limited == "" {
 				limited += " and "
 			}
-			limited = "shards: " + setToString(shards)
+			limited += "shards: " + setToString(shards)
 		}
 		if limited != "" {
 			limited = header + limited
@@ -215,34 +214,32 @@ func (b *Buffer) StatsUpdate(ts *discovery.TabletStats) {
 // causedByFailover returns true if "err" was supposedly caused by a failover.
 // To simplify things, we've merged the detection for different MySQL flavors
 // in one function. Supported flavors: MariaDB, MySQL, Google internal.
+// TODO(mberlin): This function does not have to check the specific error messages.
+// The previous error revamp ensures that FAILED_PRECONDITION is returned only
+// during failover.
 func causedByFailover(err error) bool {
 	log.V(2).Infof("Checking error (type: %T) if it is caused by a failover. err: %v", err, err)
 
-	if vtErr, ok := err.(vterrors.VtError); ok {
-		switch vtErr.VtErrorCode() {
-		case vtrpcpb.ErrorCode_QUERY_NOT_SERVED:
-			// All flavors.
-			if strings.Contains(err.Error(), "retry: operation not allowed in state NOT_SERVING") ||
-				strings.Contains(err.Error(), "retry: operation not allowed in state SHUTTING_DOWN") ||
-				// Match 1290 if -queryserver-config-terse-errors explicitly hid the error message
-				// (which it does to avoid logging the original query including any PII).
-				strings.Contains(err.Error(), "retry: (errno 1290) (sqlstate HY000) during query:") {
-				return true
-			}
-			// MariaDB flavor.
-			if strings.Contains(err.Error(), "retry: The MariaDB server is running with the --read-only option so it cannot execute this statement (errno 1290) (sqlstate HY000)") {
-				return true
-			}
-			// MySQL flavor.
-			if strings.Contains(err.Error(), "retry: The MySQL server is running with the --read-only option so it cannot execute this statement (errno 1290) (sqlstate HY000)") {
-				return true
-			}
-		case vtrpcpb.ErrorCode_INTERNAL_ERROR:
-			// Google internal flavor.
-			if strings.Contains(err.Error(), "fatal: failover in progress (errno 1227) (sqlstate 42000)") {
-				return true
-			}
-		}
+	if vterrors.Code(err) != vtrpcpb.Code_FAILED_PRECONDITION {
+		return false
+	}
+	switch {
+	// All flavors.
+	case strings.Contains(err.Error(), "operation not allowed in state NOT_SERVING") ||
+		strings.Contains(err.Error(), "operation not allowed in state SHUTTING_DOWN") ||
+		// Match 1290 if -queryserver-config-terse-errors explicitly hid the error message
+		// (which it does to avoid logging the original query including any PII).
+		strings.Contains(err.Error(), "(errno 1290) (sqlstate HY000) during query:"):
+		return true
+	// MariaDB flavor.
+	case strings.Contains(err.Error(), "The MariaDB server is running with the --read-only option so it cannot execute this statement (errno 1290) (sqlstate HY000)"):
+		return true
+	// MySQL flavor.
+	case strings.Contains(err.Error(), "The MySQL server is running with the --read-only option so it cannot execute this statement (errno 1290) (sqlstate HY000)"):
+		return true
+	// Google internal flavor.
+	case strings.Contains(err.Error(), "failover in progress (errno 1227) (sqlstate 42000)"):
+		return true
 	}
 	return false
 }

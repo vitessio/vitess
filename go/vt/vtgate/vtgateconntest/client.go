@@ -42,9 +42,9 @@ type fakeVTGateService struct {
 }
 
 const expectedErrMatch string = "test vtgate error"
-const expectedCode vtrpcpb.ErrorCode = vtrpcpb.ErrorCode_BAD_INPUT
+const expectedCode vtrpcpb.Code = vtrpcpb.Code_INVALID_ARGUMENT
 
-var errTestVtGateError = vterrors.FromError(expectedCode, errors.New(expectedErrMatch))
+var errTestVtGateError = vterrors.New(expectedCode, expectedErrMatch)
 
 func newContext() context.Context {
 	ctx := context.Background()
@@ -985,13 +985,9 @@ func verifyError(t *testing.T, err error, method string) {
 		return
 	}
 	// verify error code
-	code := vterrors.RecoverVtErrorCode(err)
+	code := vterrors.Code(err)
 	if code != expectedCode {
 		t.Errorf("Unexpected error code from %s: got %v, wanted %v", method, code, expectedCode)
-	}
-	// verify error type
-	if _, ok := err.(*vterrors.VitessError); !ok {
-		t.Errorf("Unexpected error type from %s: got %v, wanted *vterrors.VitessError", method, reflect.TypeOf(err))
 	}
 	verifyErrorString(t, err, method)
 }

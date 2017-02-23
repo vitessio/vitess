@@ -25,7 +25,6 @@ import (
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
-	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 const (
@@ -205,7 +204,7 @@ func (lg *l2VTGateGateway) getConn(keyspace, shard string) (*l2VTGateConn, error
 // the middle of a transaction. While returning the error check if it maybe a result of
 // a resharding event, and set the re-resolve bit and let the upper layers
 // re-resolve and retry.
-func (lg *l2VTGateGateway) withRetry(ctx context.Context, target *querypb.Target, conn queryservice.QueryService, name string, inTransaction, isStreaming bool, inner func(context.Context, *querypb.Target, queryservice.QueryService) error) error {
+func (lg *l2VTGateGateway) withRetry(ctx context.Context, target *querypb.Target, conn queryservice.QueryService, name string, inTransaction bool, inner func(context.Context, *querypb.Target, queryservice.QueryService) (error, bool)) error {
 	l2conn, err := lg.getConn(target.Keyspace, target.Shard)
 	if err != nil {
 		return fmt.Errorf("no configured destination for %v/%v: %v", target.Keyspace, target.Shard, err)
@@ -213,53 +212,15 @@ func (lg *l2VTGateGateway) withRetry(ctx context.Context, target *querypb.Target
 
 	for i := 0; i < lg.retryCount+1; i++ {
 		startTime := time.Now()
-		err = inner(ctx, target, l2conn.conn)
+		var canRetry bool
+		err, canRetry = inner(ctx, target, l2conn.conn)
 		lg.updateStats(l2conn, target.TabletType, startTime, err)
-		if lg.canRetry(ctx, err, inTransaction, isStreaming) {
+		if canRetry {
 			continue
 		}
 		break
 	}
 	return NewShardError(err, target, nil, inTransaction)
-}
-
-// canRetry determines whether a query can be retried or not.
-// OperationalErrors like retry/fatal are retryable if query is not in a txn.
-// All other errors are non-retryable.
-func (lg *l2VTGateGateway) canRetry(ctx context.Context, err error, inTransaction, isStreaming bool) bool {
-	if err == nil {
-		return false
-	}
-	// Do not retry if ctx.Done() is closed.
-	select {
-	case <-ctx.Done():
-		return false
-	default:
-	}
-	if serverError, ok := err.(*tabletconn.ServerError); ok {
-		switch serverError.ServerCode {
-		case vtrpcpb.ErrorCode_INTERNAL_ERROR:
-			// Do not retry on fatal error for streaming query.
-			// For streaming query, vttablet sends:
-			// - QUERY_NOT_SERVED, if streaming is not started yet;
-			// - INTERNAL_ERROR, if streaming is broken halfway.
-			// For non-streaming query, handle as QUERY_NOT_SERVED.
-			if isStreaming {
-				return false
-			}
-			fallthrough
-		case vtrpcpb.ErrorCode_QUERY_NOT_SERVED:
-			// Retry on QUERY_NOT_SERVED and
-			// INTERNAL_ERROR if not in a transaction.
-			return !inTransaction
-		default:
-			// Not retry for RESOURCE_EXHAUSTED and normal
-			// server errors.
-			return false
-		}
-	}
-	// Do not retry on operational error.
-	return false
 }
 
 func (lg *l2VTGateGateway) updateStats(conn *l2VTGateConn, tabletType topodatapb.TabletType, startTime time.Time, err error) {

@@ -9,10 +9,13 @@ import (
 	"sync"
 	"time"
 
+	log "github.com/golang/glog"
+
 	"github.com/youtube/vitess/go/vt/dbconfigs"
-	"github.com/youtube/vitess/go/vt/schema"
 	"github.com/youtube/vitess/go/vt/tabletserver/connpool"
+	"github.com/youtube/vitess/go/vt/tabletserver/engines/schema"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletenv"
+	"github.com/youtube/vitess/go/vt/vterrors"
 
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
@@ -29,13 +32,13 @@ type MessagerEngine struct {
 }
 
 // NewMessagerEngine creates a new MessagerEngine.
-func NewMessagerEngine(tsv *TabletServer) *MessagerEngine {
+func NewMessagerEngine(tsv *TabletServer, config tabletenv.TabletConfig) *MessagerEngine {
 	return &MessagerEngine{
 		tsv: tsv,
 		conns: connpool.New(
-			tabletenv.Config.PoolNamePrefix+"MessagerPool",
-			tabletenv.Config.MessagePoolSize,
-			time.Duration(tabletenv.Config.IdleTimeout*1e9),
+			config.PoolNamePrefix+"MessagerPool",
+			config.MessagePoolSize,
+			time.Duration(config.IdleTimeout*1e9),
 			tsv,
 		),
 		managers: make(map[string]*MessageManager),
@@ -48,7 +51,7 @@ func (me *MessagerEngine) Open(dbconfigs dbconfigs.DBConfigs) error {
 		return nil
 	}
 	me.conns.Open(&dbconfigs.App, &dbconfigs.Dba)
-	me.tsv.qe.schemaInfo.RegisterNotifier("messages", me.schemaChanged)
+	me.tsv.se.RegisterNotifier("messages", me.schemaChanged)
 	me.isOpen = true
 	return nil
 }
@@ -61,7 +64,7 @@ func (me *MessagerEngine) Close() {
 		return
 	}
 	me.isOpen = false
-	me.tsv.qe.schemaInfo.UnregisterNotifier("messages")
+	me.tsv.se.UnregisterNotifier("messages")
 	for _, mm := range me.managers {
 		mm.Close()
 	}
@@ -75,7 +78,7 @@ func (me *MessagerEngine) Subscribe(name string, rcv *messageReceiver) error {
 	defer me.mu.Unlock()
 	mm := me.managers[name]
 	if mm == nil {
-		return tabletenv.NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "message table %s not found", name)
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "message table %s not found", name)
 	}
 	mm.Subscribe(rcv)
 	return nil
@@ -176,19 +179,32 @@ func (me *MessagerEngine) GeneratePurgeQuery(name string, timeCutoff int64) (str
 	return query, bv, nil
 }
 
-func (me *MessagerEngine) schemaChanged(tables map[string]*TableInfo) {
+func (me *MessagerEngine) schemaChanged(tables map[string]*schema.Table, created, altered, dropped []string) {
 	me.mu.Lock()
 	defer me.mu.Unlock()
-	for name, t := range tables {
+	for _, name := range created {
+		t := tables[name]
 		if t.Type != schema.Message {
 			continue
 		}
 		if me.managers[name] != nil {
-			// TODO(sougou): Need to update values instead.
+			// TODO(sougou): Increment internal error counter.
+			log.Errorf("Newly created table alread exists in messages: %s", name)
 			continue
 		}
 		mm := NewMessageManager(me.tsv, t, me.conns)
 		me.managers[name] = mm
 		mm.Open()
+	}
+
+	// TODO(sougou): Update altered tables.
+
+	for _, name := range dropped {
+		mm := me.managers[name]
+		if mm == nil {
+			continue
+		}
+		mm.Close()
+		delete(me.managers, name)
 	}
 }

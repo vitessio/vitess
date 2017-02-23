@@ -7,114 +7,186 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/youtube/vitess/go/mysqlconn"
+	"github.com/youtube/vitess/go/mysqlconn/fakesqldb"
 	"github.com/youtube/vitess/go/sqltypes"
-	querypb "github.com/youtube/vitess/go/vt/proto/query"
-	"github.com/youtube/vitess/go/vt/schema"
 	"github.com/youtube/vitess/go/vt/sqlparser"
+	"github.com/youtube/vitess/go/vt/tabletserver/engines/schema"
 	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
+	"github.com/youtube/vitess/go/vt/tabletserver/tabletenv"
+
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
-func getSchemaInfo() *SchemaInfo {
-	table := &schema.Table{
-		Name: sqlparser.NewTableIdent("test_table"),
+func getSchemaEngine(t *testing.T) *schema.Engine {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	for query, result := range getQueriesForSplitter() {
+		db.AddQuery(query, result)
 	}
-	zero, _ := sqltypes.BuildValue(0)
-	table.AddColumn("id", sqltypes.Int64, zero, "")
-	table.AddColumn("id2", sqltypes.Int64, zero, "")
-	table.AddColumn("count", sqltypes.Int64, zero, "")
-	table.PKColumns = []int{0}
-	primaryIndex := table.AddIndex("PRIMARY")
-	primaryIndex.AddColumn("id", 12345)
+	se := schema.NewEngine(DummyChecker, tabletenv.DefaultQsConfig)
+	se.Open(db.ConnParams())
+	return se
+}
 
-	id2Index := table.AddIndex("idx_id2")
-	id2Index.AddColumn("id2", 1234)
-
-	tables := make(map[string]*TableInfo, 1)
-	tables["test_table"] = &TableInfo{Table: table}
-
-	tableNoPK := &schema.Table{
-		Name: sqlparser.NewTableIdent("test_table_no_pk"),
+func getQueriesForSplitter() map[string]*sqltypes.Result {
+	return map[string]*sqltypes.Result{
+		"select unix_timestamp()": {
+			Fields: []*querypb.Field{{
+				Type: sqltypes.Uint64,
+			}},
+			RowsAffected: 1,
+			Rows: [][]sqltypes.Value{
+				{sqltypes.MakeTrusted(sqltypes.Int32, []byte("1427325875"))},
+			},
+		},
+		"select @@global.sql_mode": {
+			Fields: []*querypb.Field{{
+				Type: sqltypes.VarChar,
+			}},
+			RowsAffected: 1,
+			Rows: [][]sqltypes.Value{
+				{sqltypes.MakeString([]byte("STRICT_TRANS_TABLES"))},
+			},
+		},
+		"select @@autocommit": {
+			Fields: []*querypb.Field{{
+				Type: sqltypes.Uint64,
+			}},
+			RowsAffected: 1,
+			Rows: [][]sqltypes.Value{
+				{sqltypes.MakeString([]byte("1"))},
+			},
+		},
+		mysqlconn.BaseShowTables: {
+			Fields:       mysqlconn.BaseShowTablesFields,
+			RowsAffected: 3,
+			Rows: [][]sqltypes.Value{
+				mysqlconn.BaseShowTablesRow("test_table", false, ""),
+				mysqlconn.BaseShowTablesRow("test_table_no_pk", false, ""),
+			},
+		},
+		"select * from test_table where 1 != 1": {
+			Fields: []*querypb.Field{{
+				Name: "id",
+				Type: sqltypes.Int64,
+			}, {
+				Name: "id2",
+				Type: sqltypes.Int64,
+			}, {
+				Name: "count",
+				Type: sqltypes.Int64,
+			}},
+		},
+		"describe test_table": {
+			Fields:       mysqlconn.DescribeTableFields,
+			RowsAffected: 1,
+			Rows: [][]sqltypes.Value{
+				mysqlconn.DescribeTableRow("id", "int(20)", false, "PRI", "0"),
+				mysqlconn.DescribeTableRow("id2", "int(20)", false, "", "0"),
+				mysqlconn.DescribeTableRow("count", "int(20)", false, "", "0"),
+			},
+		},
+		"show index from test_table": {
+			Fields:       mysqlconn.ShowIndexFromTableFields,
+			RowsAffected: 2,
+			Rows: [][]sqltypes.Value{
+				mysqlconn.ShowIndexFromTableRow("test_table", true, "PRIMARY", 1, "id", false),
+				mysqlconn.ShowIndexFromTableRow("test_table", true, "idx_id2", 1, "id2", false),
+			},
+		},
+		"select * from test_table_no_pk where 1 != 1": {
+			Fields: []*querypb.Field{{
+				Name: "id",
+				Type: sqltypes.Int64,
+			}},
+		},
+		"describe test_table_no_pk": {
+			Fields:       mysqlconn.DescribeTableFields,
+			RowsAffected: 0,
+			Rows:         [][]sqltypes.Value{},
+		},
+		"show index from test_table_no_pk": {
+			Fields:       mysqlconn.ShowIndexFromTableFields,
+			RowsAffected: 0,
+			Rows:         [][]sqltypes.Value{},
+		},
 	}
-	tableNoPK.AddColumn("id", sqltypes.Int64, zero, "")
-	tableNoPK.PKColumns = []int{}
-	tables["test_table_no_pk"] = &TableInfo{Table: tableNoPK}
-
-	return &SchemaInfo{tables: tables}
 }
 
 func TestValidateQuery(t *testing.T) {
-	schemaInfo := getSchemaInfo()
+	se := getSchemaEngine(t)
 
-	splitter := NewQuerySplitter("delete from test_table", nil, "", 3, schemaInfo)
+	splitter := NewQuerySplitter("delete from test_table", nil, "", 3, se)
 	got := splitter.validateQuery()
 	want := fmt.Errorf("not a select statement")
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("non-select validation failed, got:%v, want:%v", got, want)
 	}
 
-	splitter = NewQuerySplitter("select * from test_table order by id", nil, "", 3, schemaInfo)
+	splitter = NewQuerySplitter("select * from test_table order by id", nil, "", 3, se)
 	got = splitter.validateQuery()
 	want = fmt.Errorf("unsupported query")
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("order by query validation failed, got:%v, want:%v", got, want)
 	}
 
-	splitter = NewQuerySplitter("select * from test_table group by id", nil, "", 3, schemaInfo)
+	splitter = NewQuerySplitter("select * from test_table group by id", nil, "", 3, se)
 	got = splitter.validateQuery()
 	want = fmt.Errorf("unsupported query")
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("group by query validation failed, got:%v, want:%v", got, want)
 	}
 
-	splitter = NewQuerySplitter("select A.* from test_table A JOIN test_table B", nil, "", 3, schemaInfo)
+	splitter = NewQuerySplitter("select A.* from test_table A JOIN test_table B", nil, "", 3, se)
 	got = splitter.validateQuery()
 	want = fmt.Errorf("unsupported query")
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("join query validation failed, got:%v, want:%v", got, want)
 	}
 
-	splitter = NewQuerySplitter("select * from test_table_no_pk", nil, "", 3, schemaInfo)
+	splitter = NewQuerySplitter("select * from test_table_no_pk", nil, "", 3, se)
 	got = splitter.validateQuery()
 	want = fmt.Errorf("no primary keys")
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("no PK table validation failed, got:%v, want:%v", got, want)
 	}
 
-	splitter = NewQuerySplitter("select * from unknown_table", nil, "", 3, schemaInfo)
+	splitter = NewQuerySplitter("select * from unknown_table", nil, "", 3, se)
 	got = splitter.validateQuery()
 	want = fmt.Errorf("can't find table in schema")
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("unknown table validation failed, got:%v, want:%v", got, want)
 	}
 
-	splitter = NewQuerySplitter("select * from test_table", nil, "", 3, schemaInfo)
+	splitter = NewQuerySplitter("select * from test_table", nil, "", 3, se)
 	got = splitter.validateQuery()
 	want = nil
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("valid query validation failed, got:%v, want:%v", got, want)
 	}
 
-	splitter = NewQuerySplitter("select * from test_table where count > :count", nil, "", 3, schemaInfo)
+	splitter = NewQuerySplitter("select * from test_table where count > :count", nil, "", 3, se)
 	got = splitter.validateQuery()
 	want = nil
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("valid query validation failed, got:%v, want:%v", got, want)
 	}
 
-	splitter = NewQuerySplitter("select * from test_table where count > :count", nil, "id2", 0, schemaInfo)
+	splitter = NewQuerySplitter("select * from test_table where count > :count", nil, "id2", 0, se)
 	got = splitter.validateQuery()
 	want = nil
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("valid query validation failed, got:%v, want:%v", got, want)
 	}
 
-	splitter = NewQuerySplitter("invalid select * from test_table where count > :count", nil, "id2", 0, schemaInfo)
+	splitter = NewQuerySplitter("invalid select * from test_table where count > :count", nil, "id2", 0, se)
 	if err := splitter.validateQuery(); err == nil {
 		t.Fatalf("validateQuery() = %v, want: nil", err)
 	}
 
 	// column id2 is indexed
-	splitter = NewQuerySplitter("select * from test_table where count > :count", nil, "id2", 3, schemaInfo)
+	splitter = NewQuerySplitter("select * from test_table where count > :count", nil, "id2", 3, se)
 	got = splitter.validateQuery()
 	want = nil
 	if !reflect.DeepEqual(got, want) {
@@ -122,7 +194,7 @@ func TestValidateQuery(t *testing.T) {
 	}
 
 	// column does not exist
-	splitter = NewQuerySplitter("select * from test_table where count > :count", nil, "unknown_column", 3, schemaInfo)
+	splitter = NewQuerySplitter("select * from test_table where count > :count", nil, "unknown_column", 3, se)
 	got = splitter.validateQuery()
 	wantStr := "split column is not indexed or does not exist in table schema"
 	if !strings.Contains(got.Error(), wantStr) {
@@ -130,7 +202,7 @@ func TestValidateQuery(t *testing.T) {
 	}
 
 	// column is not indexed
-	splitter = NewQuerySplitter("select * from test_table where count > :count", nil, "count", 3, schemaInfo)
+	splitter = NewQuerySplitter("select * from test_table where count > :count", nil, "count", 3, se)
 	got = splitter.validateQuery()
 	wantStr = "split column is not indexed or does not exist in table schema"
 	if !strings.Contains(got.Error(), wantStr) {
@@ -309,8 +381,8 @@ func buildVal(val interface{}) sqltypes.Value {
 }
 
 func TestSplitQuery(t *testing.T) {
-	schemaInfo := getSchemaInfo()
-	splitter := NewQuerySplitter("select * from test_table where count > :count", nil, "", 3, schemaInfo)
+	se := getSchemaEngine(t)
+	splitter := NewQuerySplitter("select * from test_table where count > :count", nil, "", 3, se)
 	splitter.validateQuery()
 	min, _ := sqltypes.BuildValue(0)
 	max, _ := sqltypes.BuildValue(300)
@@ -371,8 +443,8 @@ func TestSplitQuery(t *testing.T) {
 }
 
 func TestSplitQueryFractionalColumn(t *testing.T) {
-	schemaInfo := getSchemaInfo()
-	splitter := NewQuerySplitter("select * from test_table where count > :count", nil, "", 3, schemaInfo)
+	se := getSchemaEngine(t)
+	splitter := NewQuerySplitter("select * from test_table where count > :count", nil, "", 3, se)
 	splitter.validateQuery()
 	min, _ := sqltypes.BuildValue(10.5)
 	max, _ := sqltypes.BuildValue(490.5)
@@ -427,8 +499,8 @@ func TestSplitQueryFractionalColumn(t *testing.T) {
 }
 
 func TestSplitQueryVarBinaryColumn(t *testing.T) {
-	schemaInfo := getSchemaInfo()
-	splitter := NewQuerySplitter("select * from test_table where count > :count", nil, "", 3, schemaInfo)
+	se := getSchemaEngine(t)
+	splitter := NewQuerySplitter("select * from test_table where count > :count", nil, "", 3, se)
 	splitter.validateQuery()
 	splits, err := splitter.split(sqltypes.VarBinary, nil)
 	if err != nil {
@@ -464,8 +536,8 @@ func TestSplitQueryVarBinaryColumn(t *testing.T) {
 }
 
 func TestSplitQueryVarCharColumn(t *testing.T) {
-	schemaInfo := getSchemaInfo()
-	splitter := NewQuerySplitter("select * from test_table where count > :count", map[string]interface{}{"count": 123}, "", 3, schemaInfo)
+	se := getSchemaEngine(t)
+	splitter := NewQuerySplitter("select * from test_table where count > :count", map[string]interface{}{"count": 123}, "", 3, se)
 	splitter.validateQuery()
 	splits, err := splitter.split(sqltypes.VarChar, nil)
 	if err != nil {

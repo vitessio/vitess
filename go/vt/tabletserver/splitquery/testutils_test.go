@@ -7,8 +7,8 @@ import (
 	"strconv"
 
 	"github.com/youtube/vitess/go/sqltypes"
-	"github.com/youtube/vitess/go/vt/schema"
 	"github.com/youtube/vitess/go/vt/sqlparser"
+	"github.com/youtube/vitess/go/vt/tabletserver/engines/schema"
 )
 
 // getSchema returns a fake schema object that can be given to SplitParams

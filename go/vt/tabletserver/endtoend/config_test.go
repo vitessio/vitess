@@ -11,8 +11,10 @@ import (
 	"testing"
 	"time"
 
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 	"github.com/youtube/vitess/go/vt/tabletserver/endtoend/framework"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletenv"
+	"github.com/youtube/vitess/go/vt/vterrors"
 )
 
 // compareIntDiff returns an error if end[tag] != start[tag]+diff.
@@ -175,7 +177,7 @@ func TestMexResultSize(t *testing.T) {
 	client := framework.NewClient()
 	query := "select * from vitess_test"
 	_, err := client.Execute(query, nil)
-	want := "error: Row count exceeded"
+	want := "Row count exceeded"
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
 		t.Errorf("Error: %v, must start with %s", err, want)
 	}
@@ -305,14 +307,12 @@ func TestQueryTimeout(t *testing.T) {
 		return
 	}
 	_, err = client.Execute("select sleep(1) from vitess_test", nil)
-	want := "error: the query was killed"
-	if err == nil || !strings.HasPrefix(err.Error(), want) {
-		t.Errorf("Error: %v, must start with %s", err, want)
+	if code := vterrors.Code(err); code != vtrpcpb.Code_DEADLINE_EXCEEDED {
+		t.Errorf("Error code: %v, want %v", code, vtrpcpb.Code_DEADLINE_EXCEEDED)
 	}
 	_, err = client.Execute("select 1 from dual", nil)
-	want = "not_in_tx: Transaction"
-	if err == nil || !strings.HasPrefix(err.Error(), want) {
-		t.Errorf("Error: %v, must start with %s", err, want)
+	if code := vterrors.Code(err); code != vtrpcpb.Code_ABORTED {
+		t.Errorf("Error code: %v, want %v", code, vtrpcpb.Code_ABORTED)
 	}
 	vend := framework.DebugVars()
 	if err := verifyIntValue(vend, "QueryTimeout", int(100*time.Millisecond)); err != nil {
@@ -347,7 +347,7 @@ func TestStrictMode(t *testing.T) {
 		}
 		defer client.Rollback()
 
-		want := "error: DML too complex"
+		want := "DML too complex"
 		for _, query := range queries {
 			_, err = client.Execute(query, nil)
 			if err == nil || err.Error() != want {

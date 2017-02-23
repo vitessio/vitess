@@ -9,6 +9,8 @@ package schema
 
 import (
 	"fmt"
+	"sync"
+	"time"
 
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/sync2"
@@ -48,6 +50,12 @@ type Table struct {
 	PKColumns []int
 	Type      int
 
+	// SequenceInfo contains info for sequence tables.
+	SequenceInfo *SequenceInfo
+
+	// MessageInfo contains info for message tables.
+	MessageInfo *MessageInfo
+
 	// These vars can be accessed concurrently.
 	TableRows     sync2.AtomicInt64
 	DataLength    sync2.AtomicInt64
@@ -56,10 +64,69 @@ type Table struct {
 	MaxDataLength sync2.AtomicInt64
 }
 
+// SequenceInfo contains info specific to sequence tabels.
+// It must be locked before accessing the values inside.
+// If CurVal==LastVal, we have to cache new values.
+// When the schema is first loaded, the values are all 0,
+// which will trigger caching on first use.
+type SequenceInfo struct {
+	sync.Mutex
+	NextVal int64
+	LastVal int64
+}
+
+// MessageInfo contains info specific to message tables.
+type MessageInfo struct {
+	// IDPKIndex is the index of the ID column
+	// in PKvalues. This is used to extract the ID
+	// value for message tables to discard items
+	// from the cache.
+	IDPKIndex int
+
+	// Fields stores the field info to be
+	// returned for subscribers.
+	Fields []*querypb.Field
+
+	// AckWaitDuration specifies how long to wait after
+	// the message was first sent. The back-off doubles
+	// every attempt.
+	AckWaitDuration time.Duration
+
+	// PurgeAfterDuration specifies the time after which
+	// a successfully acked message can be deleted.
+	PurgeAfterDuration time.Duration
+
+	// BatchSize specifies the max number of events to
+	// send per response.
+	BatchSize int
+
+	// CacheSize specifies the number of messages to keep
+	// in cache. Anything that cannot fit in the cache
+	// is sent as best effort.
+	CacheSize int
+
+	// PollInterval specifies the polling frequency to
+	// look for messages to be sent.
+	PollInterval time.Duration
+}
+
 // NewTable creates a new Table.
 func NewTable(name string) *Table {
 	return &Table{
 		Name: sqlparser.NewTableIdent(name),
+	}
+}
+
+// Done must be called after columns and indexes are added to
+// the table. It will build additional metadata like PKColumns.
+func (ta *Table) Done() {
+	if !ta.HasPrimary() {
+		return
+	}
+	pkIndex := ta.Indexes[0]
+	ta.PKColumns = make([]int, len(pkIndex.Columns))
+	for i, pkCol := range pkIndex.Columns {
+		ta.PKColumns[i] = ta.FindColumn(pkCol)
 	}
 }
 
@@ -117,7 +184,7 @@ func (ta *Table) SetMysqlStats(tr, dl, il, df, mdl sqltypes.Value) {
 	ta.MaxDataLength.Set(v)
 }
 
-// HasPrimary returns true if TableInfo has a primary key.
+// HasPrimary returns true if the table has a primary key.
 func (ta *Table) HasPrimary() bool {
 	return len(ta.Indexes) != 0 && ta.Indexes[0].Name.EqualString("primary")
 }
@@ -130,9 +197,6 @@ type Index struct {
 	// Cardinality[i] is the number of distinct values of Columns[i] in the
 	// table.
 	Cardinality []uint64
-	// DataColumns are the primary-key columns for secondary indices and
-	// all the columns for the primary-key index.
-	DataColumns []sqlparser.ColIdent
 }
 
 // NewIndex creates a new Index.
@@ -153,17 +217,6 @@ func (idx *Index) AddColumn(name string, cardinality uint64) {
 // Otherwise, it returns -1.
 func (idx *Index) FindColumn(name sqlparser.ColIdent) int {
 	for i, colName := range idx.Columns {
-		if colName.Equal(name) {
-			return i
-		}
-	}
-	return -1
-}
-
-// FindDataColumn finds a data column in the index. It returns the index if found.
-// Otherwise, it returns -1.
-func (idx *Index) FindDataColumn(name sqlparser.ColIdent) int {
-	for i, colName := range idx.DataColumns {
 		if colName.Equal(name) {
 			return i
 		}

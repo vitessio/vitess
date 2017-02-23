@@ -54,14 +54,7 @@ func NewResolver(serv topo.SrvTopoServer, cell string, sc *ScatterConn) *Resolve
 
 // isRetryableError will be true if the error should be retried.
 func isRetryableError(err error) bool {
-	switch e := err.(type) {
-	case *ScatterConnError:
-		return e.Retryable
-	case *gateway.ShardError:
-		return e.ErrorCode == vtrpcpb.ErrorCode_QUERY_NOT_SERVED
-	default:
-		return false
-	}
+	return vterrors.Code(err) == vtrpcpb.Code_FAILED_PRECONDITION
 }
 
 // ExecuteKeyspaceIds executes a non-streaming query based on KeyspaceIds.
@@ -70,10 +63,7 @@ func isRetryableError(err error) bool {
 // on being able to uniquely route a write.
 func (res *Resolver) ExecuteKeyspaceIds(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyspaceIds [][]byte, tabletType topodatapb.TabletType, session *vtgatepb.Session, notInTransaction bool, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
 	if sqlannotation.IsDML(sql) && len(keyspaceIds) > 1 {
-		return nil, vterrors.FromError(
-			vtrpcpb.ErrorCode_BAD_INPUT,
-			fmt.Errorf("DML should not span multiple keyspace_ids"),
-		)
+		return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "DML should not span multiple keyspace_ids")
 	}
 	mapToShards := func(k string) (string, []string, error) {
 		return mapKeyspaceIdsToShards(

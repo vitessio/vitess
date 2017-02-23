@@ -13,7 +13,9 @@ import (
 	"time"
 
 	"github.com/youtube/vitess/go/sqltypes"
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 	"github.com/youtube/vitess/go/vt/tabletserver/endtoend/framework"
+	"github.com/youtube/vitess/go/vt/vterrors"
 )
 
 func TestStreamUnion(t *testing.T) {
@@ -102,9 +104,8 @@ func TestStreamTerminate(t *testing.T) {
 			return nil
 		},
 	)
-	want := "error: the query was killed"
-	if err == nil || !strings.HasPrefix(err.Error(), want) {
-		t.Errorf("Error: %v, must start with %s", err, want)
+	if code := vterrors.Code(err); code != vtrpcpb.Code_DEADLINE_EXCEEDED {
+		t.Errorf("Errorcode: %v, want %v", code, vtrpcpb.Code_DEADLINE_EXCEEDED)
 	}
 }
 
@@ -140,7 +141,7 @@ func populateBigData(client *framework.QueryClient) error {
 
 func TestStreamError(t *testing.T) {
 	_, err := framework.NewClient().StreamExecute("select count(abcd) from vitess_big", nil)
-	want := "error: Unknown column"
+	want := "Unknown column"
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
 		t.Errorf("Error: %v, must start with %s", err, want)
 	}

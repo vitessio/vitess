@@ -12,7 +12,6 @@ import (
 
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/discovery"
-	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vtgate/gateway"
@@ -98,15 +97,11 @@ func TestScatterConnStreamExecuteMulti(t *testing.T) {
 
 // verifyScatterConnError checks that a returned error has the expected message,
 // type, and error code.
-func verifyScatterConnError(t *testing.T, err error, wantErr string, wantCode vtrpcpb.ErrorCode) {
+func verifyScatterConnError(t *testing.T, err error, wantErr string, wantCode vtrpcpb.Code) {
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("wanted error: %s, got error: %v", wantErr, err)
 	}
-	if _, ok := err.(*ScatterConnError); !ok {
-		t.Errorf("wanted error type *ScatterConnError, got error type: %v", reflect.TypeOf(err))
-	}
-	code := vterrors.RecoverVtErrorCode(err)
-	if code != wantCode {
+	if code := vterrors.Code(err); code != wantCode {
 		t.Errorf("wanted error code: %s, got: %v", wantCode, code)
 	}
 }
@@ -129,9 +124,9 @@ func testScatterConnGeneric(t *testing.T, name string, f func(sc *ScatterConn, s
 	s.Reset()
 	sc = newTestScatterConn(hc, new(sandboxTopo), "aa")
 	sbc := hc.AddTestTablet("aa", "0", 1, name, "0", topodatapb.TabletType_REPLICA, true, 1, nil)
-	sbc.MustFailServer = 1
+	sbc.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
 	qr, err = f(sc, []string{"0"})
-	want := fmt.Sprintf("target: %v.0.replica, used tablet: (alias:<cell:\"aa\" > hostname:\"0\" port_map:<key:\"vt\" value:1 > keyspace:\"%s\" shard:\"0\" type:REPLICA ), error: err", name, name)
+	want := fmt.Sprintf("target: %v.0.replica, used tablet: (alias:<cell:\"aa\" > hostname:\"0\" port_map:<key:\"vt\" value:1 > keyspace:\"%s\" shard:\"0\" type:REPLICA ), INVALID_ARGUMENT error", name, name)
 	// Verify server error string.
 	if err == nil || err.Error() != want {
 		t.Errorf("want %s, got %v", want, err)
@@ -147,12 +142,12 @@ func testScatterConnGeneric(t *testing.T, name string, f func(sc *ScatterConn, s
 	sc = newTestScatterConn(hc, new(sandboxTopo), "aa")
 	sbc0 := hc.AddTestTablet("aa", "0", 1, name, "0", topodatapb.TabletType_REPLICA, true, 1, nil)
 	sbc1 := hc.AddTestTablet("aa", "1", 1, name, "1", topodatapb.TabletType_REPLICA, true, 1, nil)
-	sbc0.MustFailServer = 1
-	sbc1.MustFailServer = 1
+	sbc0.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
+	sbc1.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
 	_, err = f(sc, []string{"0", "1"})
 	// Verify server errors are consolidated.
-	want = fmt.Sprintf("target: %v.0.replica, used tablet: (alias:<cell:\"aa\" > hostname:\"0\" port_map:<key:\"vt\" value:1 > keyspace:\"%v\" shard:\"0\" type:REPLICA ), error: err\ntarget: %v.1.replica, used tablet: (alias:<cell:\"aa\" > hostname:\"1\" port_map:<key:\"vt\" value:1 > keyspace:\"%v\" shard:\"1\" type:REPLICA ), error: err", name, name, name, name)
-	verifyScatterConnError(t, err, want, vtrpcpb.ErrorCode_BAD_INPUT)
+	want = fmt.Sprintf("target: %v.0.replica, used tablet: (alias:<cell:\"aa\" > hostname:\"0\" port_map:<key:\"vt\" value:1 > keyspace:\"%v\" shard:\"0\" type:REPLICA ), INVALID_ARGUMENT error\ntarget: %v.1.replica, used tablet: (alias:<cell:\"aa\" > hostname:\"1\" port_map:<key:\"vt\" value:1 > keyspace:\"%v\" shard:\"1\" type:REPLICA ), INVALID_ARGUMENT error", name, name, name, name)
+	verifyScatterConnError(t, err, want, vtrpcpb.Code_INVALID_ARGUMENT)
 	// Ensure that we tried only once.
 	if execCount := sbc0.ExecCount.Get(); execCount != 1 {
 		t.Errorf("want 1, got %v", execCount)
@@ -167,13 +162,13 @@ func testScatterConnGeneric(t *testing.T, name string, f func(sc *ScatterConn, s
 	sc = newTestScatterConn(hc, new(sandboxTopo), "aa")
 	sbc0 = hc.AddTestTablet("aa", "0", 1, name, "0", topodatapb.TabletType_REPLICA, true, 1, nil)
 	sbc1 = hc.AddTestTablet("aa", "1", 1, name, "1", topodatapb.TabletType_REPLICA, true, 1, nil)
-	sbc0.MustFailServer = 1
-	sbc1.MustFailTxPool = 1
+	sbc0.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
+	sbc1.MustFailCodes[vtrpcpb.Code_RESOURCE_EXHAUSTED] = 1
 	_, err = f(sc, []string{"0", "1"})
 	// Verify server errors are consolidated.
-	want = fmt.Sprintf("target: %v.0.replica, used tablet: (alias:<cell:\"aa\" > hostname:\"0\" port_map:<key:\"vt\" value:1 > keyspace:\"%v\" shard:\"0\" type:REPLICA ), error: err\ntarget: %v.1.replica, used tablet: (alias:<cell:\"aa\" > hostname:\"1\" port_map:<key:\"vt\" value:1 > keyspace:\"%v\" shard:\"1\" type:REPLICA ), tx_pool_full: err", name, name, name, name)
+	want = fmt.Sprintf("target: %v.0.replica, used tablet: (alias:<cell:\"aa\" > hostname:\"0\" port_map:<key:\"vt\" value:1 > keyspace:\"%v\" shard:\"0\" type:REPLICA ), INVALID_ARGUMENT error\ntarget: %v.1.replica, used tablet: (alias:<cell:\"aa\" > hostname:\"1\" port_map:<key:\"vt\" value:1 > keyspace:\"%v\" shard:\"1\" type:REPLICA ), RESOURCE_EXHAUSTED error", name, name, name, name)
 	// We should only surface the higher priority error code
-	verifyScatterConnError(t, err, want, vtrpcpb.ErrorCode_BAD_INPUT)
+	verifyScatterConnError(t, err, want, vtrpcpb.Code_INVALID_ARGUMENT)
 	// Ensure that we tried only once.
 	if execCount := sbc0.ExecCount.Get(); execCount != 1 {
 		t.Errorf("want 1, got %v", execCount)
@@ -275,24 +270,6 @@ func TestScatterConnStreamExecuteSendError(t *testing.T) {
 	// Ensure that we handle send errors.
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("got %s, must contain %v", err, want)
-	}
-}
-
-func TestScatterConnError(t *testing.T) {
-	err := &ScatterConnError{
-		Retryable: false,
-		Errs: []error{
-			&gateway.ShardError{ErrorCode: vtrpcpb.ErrorCode_PERMISSION_DENIED, Err: &tabletconn.ServerError{Err: "tabletconn error"}},
-			fmt.Errorf("generic error"),
-			tabletconn.ConnClosed,
-		},
-	}
-
-	errString := err.Error()
-	wantErrString := "generic error\ntabletconn error\nvttablet: Connection Closed"
-
-	if errString != wantErrString {
-		t.Errorf("got: %v, want: %v", errString, wantErrString)
 	}
 }
 

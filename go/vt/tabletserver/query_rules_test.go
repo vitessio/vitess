@@ -14,7 +14,7 @@ import (
 
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/tabletserver/planbuilder"
-	"github.com/youtube/vitess/go/vt/tabletserver/tabletenv"
+	"github.com/youtube/vitess/go/vt/vterrors"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -792,12 +792,8 @@ func TestInvalidJSON(t *testing.T) {
 	}
 	qrs := NewQueryRules()
 	err := qrs.UnmarshalJSON([]byte(`{`))
-	terr, ok := err.(*tabletenv.TabletError)
-	if !ok {
-		t.Fatalf("invalid json, should get a tablet error")
-	}
-	if terr.ErrorCode != vtrpcpb.ErrorCode_INTERNAL_ERROR {
-		t.Fatalf("got: %v wanted: INTERNAL_ERROR", terr.ErrorCode)
+	if code := vterrors.Code(err); code != vtrpcpb.Code_INVALID_ARGUMENT {
+		t.Errorf("qrs.UnmarshalJSON: %v, want %v", code, vtrpcpb.Code_INVALID_ARGUMENT)
 	}
 }
 

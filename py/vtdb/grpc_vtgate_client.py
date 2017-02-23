@@ -334,7 +334,7 @@ def _convert_exception(exc, *args, **kwargs):
         if vtgate_utils.throttler_err_re.search(details):
           return dbexceptions.ThrottledError(new_args)
         else:
-          return dbexceptions.TransientError(new_args)
+          return dbexceptions.TransientError(details, new_args)
       elif code == grpc.StatusCode.ALREADY_EXISTS:
         new_exc = _prune_integrity_error(details, new_args)
       elif code == grpc.StatusCode.FAILED_PRECONDITION:

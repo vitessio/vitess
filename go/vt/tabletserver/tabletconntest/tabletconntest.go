@@ -17,7 +17,6 @@ import (
 	"github.com/youtube/vitess/go/vt/callerid"
 	"github.com/youtube/vitess/go/vt/tabletserver/queryservice"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
-	"github.com/youtube/vitess/go/vt/tabletserver/tabletenv"
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"golang.org/x/net/context"
 
@@ -29,24 +28,24 @@ import (
 // testErrorHelper will check one instance of each error type,
 // to make sure we propagate the errors properly.
 func testErrorHelper(t *testing.T, f *FakeQueryService, name string, ef func(context.Context) error) {
-	errors := []*tabletenv.TabletError{
+	errors := []error{
 		// A few generic errors
-		tabletenv.NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "generic error"),
-		tabletenv.NewTabletError(vtrpcpb.ErrorCode_UNKNOWN_ERROR, "uncaught panic"),
-		tabletenv.NewTabletError(vtrpcpb.ErrorCode_UNAUTHENTICATED, "missing caller id"),
-		tabletenv.NewTabletError(vtrpcpb.ErrorCode_PERMISSION_DENIED, "table acl error: nil acl"),
+		vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "generic error"),
+		vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "uncaught panic"),
+		vterrors.Errorf(vtrpcpb.Code_UNAUTHENTICATED, "missing caller id"),
+		vterrors.Errorf(vtrpcpb.Code_PERMISSION_DENIED, "table acl error: nil acl"),
 
 		// Client will retry on this specific error
-		tabletenv.NewTabletError(vtrpcpb.ErrorCode_QUERY_NOT_SERVED, "Query disallowed due to rule: %v", "cool rule"),
+		vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "query disallowed due to rule: %v", "cool rule"),
 
 		// Client may retry on another server on this specific error
-		tabletenv.NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "Could not verify strict mode"),
+		vterrors.Errorf(vtrpcpb.Code_INTERNAL, "could not verify strict mode"),
 
 		// This is usually transaction pool full
-		tabletenv.NewTabletError(vtrpcpb.ErrorCode_RESOURCE_EXHAUSTED, "Transaction pool connection limit exceeded"),
+		vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "transaction pool connection limit exceeded"),
 
 		// Transaction expired or was unknown
-		tabletenv.NewTabletError(vtrpcpb.ErrorCode_NOT_IN_TX, "Transaction 12"),
+		vterrors.Errorf(vtrpcpb.Code_ABORTED, "transaction 12"),
 	}
 	for _, e := range errors {
 		f.TabletError = e
@@ -58,23 +57,14 @@ func testErrorHelper(t *testing.T, f *FakeQueryService, name string, ef func(con
 		}
 
 		// First we check the recoverable vtrpc code is right.
-		code := vterrors.RecoverVtErrorCode(err)
-		if code != e.ErrorCode {
-			t.Errorf("unexpected server code from %v: got %v, wanted %v", name, code, e.ErrorCode)
+		code := vterrors.Code(err)
+		wantcode := vterrors.Code(e)
+		if code != wantcode {
+			t.Errorf("unexpected server code from %v: got %v, wanted %v", name, code, wantcode)
 		}
 
-		// Double-check we always get a ServerError, although
-		// we don't really care that much.
-		if !f.TestingGateway {
-			if _, ok := err.(*tabletconn.ServerError); !ok {
-				t.Errorf("error wasn't a tabletconn.ServerError for %v?", name)
-				continue
-			}
-		}
-
-		// and last we check we preserve the text, with the right prefix
-		if !strings.Contains(err.Error(), e.Prefix()+e.Message) {
-			t.Errorf("client error message '%v' for %v doesn't contain expected server text message '%v'", err.Error(), name, e.Prefix()+e.Message)
+		if !strings.Contains(err.Error(), e.Error()) {
+			t.Errorf("client error message '%v' for %v doesn't contain expected server text message '%v'", err.Error(), name, e)
 		}
 	}
 	f.TabletError = nil

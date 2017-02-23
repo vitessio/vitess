@@ -1,9 +1,7 @@
 package tabletconn
 
 import (
-	"fmt"
 	"io"
-	"strings"
 
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"google.golang.org/grpc"
@@ -11,37 +9,25 @@ import (
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
-// TabletErrorFromGRPC returns a ServerError or a
-// OperationalError from the gRPC error.
-func TabletErrorFromGRPC(err error) error {
+// ErrorFromGRPC converts a GRPC error to vtError for
+// tabletserver calls.
+func ErrorFromGRPC(err error) error {
 	// io.EOF is end of stream. Don't treat it as an error.
 	if err == nil || err == io.EOF {
 		return nil
 	}
-
-	// TODO(aaijazi): Unfortunately, there's no better way to check for
-	// a gRPC server error (vs a client error).
-	// See: https://github.com/grpc/grpc-go/issues/319
-	if !strings.Contains(err.Error(), vterrors.GRPCServerErrPrefix) {
-		return OperationalError(fmt.Sprintf("vttablet: %v", err))
-	}
-
-	// server side error, convert it
-	return &ServerError{
-		Err:        fmt.Sprintf("vttablet: %v", err),
-		ServerCode: vterrors.GRPCCodeToErrorCode(grpc.Code(err)),
-	}
+	return vterrors.New(vtrpcpb.Code(grpc.Code(err)), "vttablet: "+err.Error())
 }
 
-// TabletErrorFromRPCError returns a ServerError from a vtrpcpb.ServerError
-func TabletErrorFromRPCError(err *vtrpcpb.RPCError) error {
+// ErrorFromVTRPC converts a *vtrpcpb.RPCError to vtError for
+// tabletserver calls.
+func ErrorFromVTRPC(err *vtrpcpb.RPCError) error {
 	if err == nil {
 		return nil
 	}
-
-	// server side error, convert it
-	return &ServerError{
-		Err:        fmt.Sprintf("vttablet: %v", err),
-		ServerCode: err.Code,
+	code := err.Code
+	if code == vtrpcpb.Code_OK {
+		code = vterrors.LegacyErrorCodeToCode(err.LegacyCode)
 	}
+	return vterrors.New(code, "vttablet: "+err.Message)
 }

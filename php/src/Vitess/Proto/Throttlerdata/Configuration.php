@@ -45,6 +45,9 @@ namespace Vitess\Proto\Throttlerdata {
     /**  @var float */
     public $bad_rate_increase = null;
     
+    /**  @var float */
+    public $max_rate_approach_threshold = null;
+    
 
     /** @var \Closure[] */
     protected static $__extensions = array();
@@ -153,6 +156,14 @@ namespace Vitess\Proto\Throttlerdata {
       $f = new \DrSlump\Protobuf\Field();
       $f->number    = 13;
       $f->name      = "bad_rate_increase";
+      $f->type      = \DrSlump\Protobuf::TYPE_DOUBLE;
+      $f->rule      = \DrSlump\Protobuf::RULE_OPTIONAL;
+      $descriptor->addField($f);
+
+      // OPTIONAL DOUBLE max_rate_approach_threshold = 14
+      $f = new \DrSlump\Protobuf\Field();
+      $f->number    = 14;
+      $f->name      = "max_rate_approach_threshold";
       $f->type      = \DrSlump\Protobuf::TYPE_DOUBLE;
       $f->rule      = \DrSlump\Protobuf::RULE_OPTIONAL;
       $descriptor->addField($f);
@@ -643,6 +654,43 @@ namespace Vitess\Proto\Throttlerdata {
      */
     public function setBadRateIncrease( $value){
       return $this->_set(13, $value);
+    }
+    
+    /**
+     * Check if <max_rate_approach_threshold> has a value
+     *
+     * @return boolean
+     */
+    public function hasMaxRateApproachThreshold(){
+      return $this->_has(14);
+    }
+    
+    /**
+     * Clear <max_rate_approach_threshold> value
+     *
+     * @return \Vitess\Proto\Throttlerdata\Configuration
+     */
+    public function clearMaxRateApproachThreshold(){
+      return $this->_clear(14);
+    }
+    
+    /**
+     * Get <max_rate_approach_threshold> value
+     *
+     * @return float
+     */
+    public function getMaxRateApproachThreshold(){
+      return $this->_get(14);
+    }
+    
+    /**
+     * Set <max_rate_approach_threshold> value
+     *
+     * @param float $value
+     * @return \Vitess\Proto\Throttlerdata\Configuration
+     */
+    public function setMaxRateApproachThreshold( $value){
+      return $this->_set(14, $value);
     }
   }
 }

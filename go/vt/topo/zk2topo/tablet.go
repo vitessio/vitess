@@ -6,7 +6,6 @@ package zk2topo
 
 import (
 	"path"
-	"sort"
 
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
@@ -80,7 +79,6 @@ func (zs *Server) GetTabletsByCell(ctx context.Context, cell string) ([]*topodat
 		return nil, err
 	}
 
-	sort.Strings(children)
 	result := make([]*topodatapb.TabletAlias, len(children))
 	for i, child := range children {
 		result[i], err = topoproto.ParseTabletAlias(child)

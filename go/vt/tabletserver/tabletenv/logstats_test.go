@@ -5,6 +5,7 @@
 package tabletenv
 
 import (
+	"errors"
 	"net/url"
 	"strings"
 	"testing"
@@ -15,8 +16,6 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/callinfo"
 	"github.com/youtube/vitess/go/vt/callinfo/fakecallinfo"
-
-	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 func TestLogStats(t *testing.T) {
@@ -106,10 +105,7 @@ func TestLogStatsErrorStr(t *testing.T) {
 		t.Fatalf("should not get error in stats, but got: %s", logStats.ErrorStr())
 	}
 	errStr := "unknown error"
-	logStats.Error = &TabletError{
-		ErrorCode: vtrpcpb.ErrorCode_UNKNOWN_ERROR,
-		Message:   errStr,
-	}
+	logStats.Error = errors.New(errStr)
 	if !strings.Contains(logStats.ErrorStr(), errStr) {
 		t.Fatalf("expect string '%s' in error message, but got: %s", errStr, logStats.ErrorStr())
 	}

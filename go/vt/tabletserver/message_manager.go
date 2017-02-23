@@ -16,6 +16,8 @@ import (
 	"github.com/youtube/vitess/go/timer"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/tabletserver/connpool"
+	"github.com/youtube/vitess/go/vt/tabletserver/engines/schema"
+	"github.com/youtube/vitess/go/vt/tabletserver/tabletenv"
 )
 
 type messageReceiver struct {
@@ -105,7 +107,7 @@ type MessageManager struct {
 }
 
 // NewMessageManager creates a new message manager.
-func NewMessageManager(tsv *TabletServer, table *TableInfo, conns *connpool.Pool) *MessageManager {
+func NewMessageManager(tsv *TabletServer, table *schema.Table, conns *connpool.Pool) *MessageManager {
 	mm := &MessageManager{
 		tsv:  tsv,
 		name: table.Name,
@@ -333,7 +335,7 @@ func (mm *MessageManager) send(receiver *receiverWithStatus, qr *sqltypes.Result
 }
 
 func (mm *MessageManager) postpone(ids []string) {
-	ctx, cancel := context.WithTimeout(localContext(), mm.ackWaitTime)
+	ctx, cancel := context.WithTimeout(tabletenv.LocalContext(), mm.ackWaitTime)
 	defer cancel()
 	_, err := mm.tsv.PostponeMessages(ctx, nil, mm.name.String(), ids)
 	if err != nil {
@@ -343,7 +345,7 @@ func (mm *MessageManager) postpone(ids []string) {
 }
 
 func (mm *MessageManager) runPoller() {
-	ctx, cancel := context.WithTimeout(localContext(), mm.pollerTicks.Interval())
+	ctx, cancel := context.WithTimeout(tabletenv.LocalContext(), mm.pollerTicks.Interval())
 	defer cancel()
 	conn, err := mm.conns.Get(ctx)
 	if err != nil {
@@ -404,7 +406,7 @@ func (mm *MessageManager) runPoller() {
 }
 
 func (mm *MessageManager) runPurge() {
-	ctx, cancel := context.WithTimeout(localContext(), mm.purgeTicks.Interval())
+	ctx, cancel := context.WithTimeout(tabletenv.LocalContext(), mm.purgeTicks.Interval())
 	defer cancel()
 	for {
 		count, err := mm.tsv.PurgeMessages(ctx, nil, mm.name.String(), time.Now().Add(-mm.purgeAfter).UnixNano())

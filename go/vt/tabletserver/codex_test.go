@@ -11,14 +11,15 @@ import (
 	"testing"
 
 	"github.com/youtube/vitess/go/sqltypes"
-	"github.com/youtube/vitess/go/vt/schema"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
+	"github.com/youtube/vitess/go/vt/tabletserver/engines/schema"
+	"github.com/youtube/vitess/go/vt/vterrors"
 )
 
 func TestCodexBuildValuesList(t *testing.T) {
-	tableInfo := createTableInfo("Table",
+	table := createTable("Table",
 		[]string{"pk1", "pk2", "col1"},
 		[]querypb.Type{sqltypes.Int64, sqltypes.VarBinary, sqltypes.Int32},
 		[]string{"pk1", "pk2"})
@@ -29,7 +30,7 @@ func TestCodexBuildValuesList(t *testing.T) {
 	pkValues := []interface{}{pk1Val}
 	// want [[1]]
 	want := [][]sqltypes.Value{{pk1Val}}
-	got, _ := buildValueList(&tableInfo, pkValues, bindVars)
+	got, _ := buildValueList(table, pkValues, bindVars)
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %v, want %v", got, want)
 	}
@@ -39,7 +40,7 @@ func TestCodexBuildValuesList(t *testing.T) {
 	pkValues = []interface{}{":pk1"}
 	// want [[1]]
 	want = [][]sqltypes.Value{{pk1Val}}
-	got, _ = buildValueList(&tableInfo, pkValues, bindVars)
+	got, _ = buildValueList(table, pkValues, bindVars)
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %v, want %v", got, want)
 	}
@@ -49,7 +50,7 @@ func TestCodexBuildValuesList(t *testing.T) {
 	pkValues = []interface{}{":pk1"}
 	// want [[1]]
 	want = [][]sqltypes.Value{{{}}}
-	got, _ = buildValueList(&tableInfo, pkValues, bindVars)
+	got, _ = buildValueList(table, pkValues, bindVars)
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %v, want %v", got, want)
 	}
@@ -57,9 +58,9 @@ func TestCodexBuildValuesList(t *testing.T) {
 	// invalid value
 	bindVars["pk1"] = struct{}{}
 	pkValues = []interface{}{":pk1"}
-	wantErr := "error: unexpected type struct {}: {}"
+	wantErr := "unexpected type struct {}: {}"
 
-	got, err := buildValueList(&tableInfo, pkValues, bindVars)
+	got, err := buildValueList(table, pkValues, bindVars)
 
 	if err == nil || !strings.Contains(err.Error(), wantErr) {
 		t.Fatalf("got %v, want %v", err, wantErr)
@@ -68,9 +69,9 @@ func TestCodexBuildValuesList(t *testing.T) {
 	// type mismatch int
 	bindVars["pk1"] = "str"
 	pkValues = []interface{}{":pk1"}
-	wantErr = "error: strconv.ParseInt"
+	wantErr = "strconv.ParseInt"
 
-	got, err = buildValueList(&tableInfo, pkValues, bindVars)
+	got, err = buildValueList(table, pkValues, bindVars)
 	if err == nil || !strings.Contains(err.Error(), wantErr) {
 		t.Fatalf("got %v, want %v", err, wantErr)
 	}
@@ -79,9 +80,9 @@ func TestCodexBuildValuesList(t *testing.T) {
 	bindVars["pk1"] = 1
 	bindVars["pk2"] = 1
 	pkValues = []interface{}{":pk1", ":pk2"}
-	wantErr = "error: type mismatch, expecting string type for 1"
+	wantErr = "type mismatch, expecting string type for 1"
 
-	got, err = buildValueList(&tableInfo, pkValues, bindVars)
+	got, err = buildValueList(table, pkValues, bindVars)
 	if err == nil || !strings.Contains(err.Error(), wantErr) {
 		t.Fatalf("got %v, want %v", err, wantErr)
 	}
@@ -91,7 +92,7 @@ func TestCodexBuildValuesList(t *testing.T) {
 	pkValues = []interface{}{pk1Val, pk2Val}
 	// want [[1 abc]]
 	want = [][]sqltypes.Value{{pk1Val, pk2Val}}
-	got, _ = buildValueList(&tableInfo, pkValues, bindVars)
+	got, _ = buildValueList(table, pkValues, bindVars)
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %v, want %v", got, want)
 	}
@@ -108,7 +109,7 @@ func TestCodexBuildValuesList(t *testing.T) {
 	want = [][]sqltypes.Value{
 		{pk1Val, pk2Val},
 		{pk1Val2, pk2Val2}}
-	got, _ = buildValueList(&tableInfo, pkValues, bindVars)
+	got, _ = buildValueList(table, pkValues, bindVars)
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %v, want %v", got, want)
 	}
@@ -125,7 +126,7 @@ func TestCodexBuildValuesList(t *testing.T) {
 		{pk1Val, pk2Val2},
 	}
 
-	got, _ = buildValueList(&tableInfo, pkValues, bindVars)
+	got, _ = buildValueList(table, pkValues, bindVars)
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %v, want %v", got, want)
 	}
@@ -147,7 +148,7 @@ func TestCodexBuildValuesList(t *testing.T) {
 		{pk1Val, pk2Val},
 		{pk1Val, pk2Val2},
 	}
-	got, _ = buildValueList(&tableInfo, pkValues, bindVars)
+	got, _ = buildValueList(table, pkValues, bindVars)
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %v, want %v", got, want)
 	}
@@ -178,7 +179,7 @@ func TestCodexBuildValuesList(t *testing.T) {
 		{pk1Val, pk2Val},
 		{pk1Val, pk2Val2},
 	}
-	got, err = buildValueList(&tableInfo, pkValues, bindVars)
+	got, err = buildValueList(table, pkValues, bindVars)
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %v / %v, want %v", got, err, want)
 	}
@@ -198,7 +199,7 @@ func TestCodexBuildValuesList(t *testing.T) {
 	want = [][]sqltypes.Value{
 		{pk1Val, pk2Val},
 	}
-	got, _ = buildValueList(&tableInfo, pkValues, bindVars)
+	got, _ = buildValueList(table, pkValues, bindVars)
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %v, want %v", got, want)
 	}
@@ -211,8 +212,8 @@ func TestCodexBuildValuesList(t *testing.T) {
 		pk1Val,
 		"::list",
 	}
-	wantErr = "error: empty list supplied for list"
-	got, err = buildValueList(&tableInfo, pkValues, bindVars)
+	wantErr = "empty list supplied for list"
+	got, err = buildValueList(table, pkValues, bindVars)
 	if err == nil || !strings.Contains(err.Error(), wantErr) {
 		t.Fatalf("got %v, want %v", err, wantErr)
 	}
@@ -225,16 +226,15 @@ func TestCodexBuildValuesList(t *testing.T) {
 		pk1Val,
 		":list",
 	}
-	wantErr = "error: unexpected arg type []interface {} for key list"
-	got, err = buildValueList(&tableInfo, pkValues, bindVars)
+	wantErr = "unexpected arg type []interface {} for key list"
+	got, err = buildValueList(table, pkValues, bindVars)
 	if err == nil || !strings.Contains(err.Error(), wantErr) {
 		t.Fatalf("got %v, want %v", err, wantErr)
 	}
 }
 
 func TestCodexResolvePKValues(t *testing.T) {
-	testUtils := newTestUtils()
-	tableInfo := createTableInfo("Table",
+	table := createTable("Table",
 		[]string{"pk1", "pk2", "col1"},
 		[]querypb.Type{sqltypes.Int64, sqltypes.VarBinary, sqltypes.Int32},
 		[]string{"pk1", "pk2"})
@@ -245,7 +245,7 @@ func TestCodexResolvePKValues(t *testing.T) {
 	pkValues := make([]interface{}, 0, 10)
 	pkValues = append(pkValues, []interface{}{":" + key})
 	// resolvePKValues should succeed for strings that can be converted to int.
-	v, _, err := resolvePKValues(&tableInfo, pkValues, bindVariables)
+	v, _, err := resolvePKValues(table, pkValues, bindVariables)
 	if err != nil {
 		t.Error(err)
 	}
@@ -256,8 +256,10 @@ func TestCodexResolvePKValues(t *testing.T) {
 	// resolvePKValues should fail because of conversion error.
 	pkValues = make([]interface{}, 0, 10)
 	pkValues = append(pkValues, sqltypes.MakeString([]byte("type_mismatch")))
-	_, _, err = resolvePKValues(&tableInfo, pkValues, nil)
-	testUtils.checkTabletError(t, err, vtrpcpb.ErrorCode_BAD_INPUT, "strconv.ParseInt")
+	_, _, err = resolvePKValues(table, pkValues, nil)
+	if code := vterrors.Code(err); code != vtrpcpb.Code_INVALID_ARGUMENT {
+		t.Errorf("resolvePKValues: %v, want %v", code, vtrpcpb.Code_INVALID_ARGUMENT)
+	}
 	// pkValues with different length
 	bindVariables = make(map[string]interface{})
 	bindVariables[key] = 1
@@ -268,13 +270,15 @@ func TestCodexResolvePKValues(t *testing.T) {
 	pkValues = make([]interface{}, 0, 10)
 	pkValues = append(pkValues, []interface{}{":" + key})
 	pkValues = append(pkValues, []interface{}{":" + key2, ":" + key3})
-	_, _, err = resolvePKValues(&tableInfo, pkValues, bindVariables)
-	testUtils.checkTabletError(t, err, vtrpcpb.ErrorCode_BAD_INPUT, "mismatched lengths")
+	_, _, err = resolvePKValues(table, pkValues, bindVariables)
+	if code := vterrors.Code(err); code != vtrpcpb.Code_INVALID_ARGUMENT {
+		t.Errorf("resolvePKValues: %v, want %v", code, vtrpcpb.Code_INVALID_ARGUMENT)
+	}
 }
 
 func TestCodexResolveListArg(t *testing.T) {
 	testUtils := newTestUtils()
-	tableInfo := createTableInfo("Table",
+	table := createTable("Table",
 		[]string{"pk1", "pk2", "col1"},
 		[]querypb.Type{sqltypes.Int64, sqltypes.VarBinary, sqltypes.Int32},
 		[]string{"pk1", "pk2"})
@@ -283,12 +287,14 @@ func TestCodexResolveListArg(t *testing.T) {
 	bindVariables := make(map[string]interface{})
 	bindVariables[key] = []interface{}{fmt.Errorf("error is not supported")}
 
-	_, err := resolveListArg(tableInfo.GetPKColumn(0), "::"+key, bindVariables)
-	testUtils.checkTabletError(t, err, vtrpcpb.ErrorCode_BAD_INPUT, "")
+	_, err := resolveListArg(table.GetPKColumn(0), "::"+key, bindVariables)
+	if code := vterrors.Code(err); code != vtrpcpb.Code_INVALID_ARGUMENT {
+		t.Errorf("resolvePKValues: %v, want %v", code, vtrpcpb.Code_INVALID_ARGUMENT)
+	}
 
 	// This should successfully convert.
 	bindVariables[key] = []interface{}{"1"}
-	v, err := resolveListArg(tableInfo.GetPKColumn(0), "::"+key, bindVariables)
+	v, err := resolveListArg(table.GetPKColumn(0), "::"+key, bindVariables)
 	if err != nil {
 		t.Error(err)
 	}
@@ -298,7 +304,7 @@ func TestCodexResolveListArg(t *testing.T) {
 	}
 
 	bindVariables[key] = []interface{}{10}
-	result, err := resolveListArg(tableInfo.GetPKColumn(0), "::"+key, bindVariables)
+	result, err := resolveListArg(table.GetPKColumn(0), "::"+key, bindVariables)
 	if err != nil {
 		t.Fatalf("should not get an error, but got error: %v", err)
 	}
@@ -322,19 +328,19 @@ func TestResolveNumber(t *testing.T) {
 		bv: map[string]interface{}{
 			"a": []interface{}{10},
 		},
-		outErr: "error: unexpected type []interface {}: [10]",
+		outErr: "unexpected type []interface {}: [10]",
 	}, {
 		v:      ":a",
-		outErr: "error: missing bind var a",
+		outErr: "missing bind var a",
 	}, {
 		v:      make(chan int),
-		outErr: "error: unexpected type chan int",
+		outErr: "unexpected type chan int",
 	}, {
 		v:   int64(1),
 		out: int64(1),
 	}, {
 		v:      1.2,
-		outErr: "error: strconv.ParseInt",
+		outErr: "strconv.ParseInt",
 	}}
 	for _, tc := range testcases {
 		got, err := resolveNumber(tc.v, tc.bv)
@@ -353,7 +359,7 @@ func TestResolveNumber(t *testing.T) {
 func TestCodexBuildSecondaryList(t *testing.T) {
 	pk1 := "pk1"
 	pk2 := "pk2"
-	tableInfo := createTableInfo("Table",
+	table := createTable("Table",
 		[]string{"pk1", "pk2", "col1"},
 		[]querypb.Type{sqltypes.Int64, sqltypes.VarBinary, sqltypes.Int32},
 		[]string{pk1, pk2})
@@ -363,19 +369,19 @@ func TestCodexBuildSecondaryList(t *testing.T) {
 	pk1Val, _ := sqltypes.BuildValue(1)
 	pk2Val, _ := sqltypes.BuildValue("abc")
 	pkValues := []interface{}{pk1Val, pk2Val}
-	pkList, _ := buildValueList(&tableInfo, pkValues, bindVars)
+	pkList, _ := buildValueList(table, pkValues, bindVars)
 	pk2SecVal, _ := sqltypes.BuildValue("xyz")
 	secondaryPKValues := []interface{}{nil, pk2SecVal}
 	// want [[1 xyz]]
 	want := [][]sqltypes.Value{
 		{pk1Val, pk2SecVal}}
-	got, _ := buildSecondaryList(&tableInfo, pkList, secondaryPKValues, bindVars)
+	got, _ := buildSecondaryList(table, pkList, secondaryPKValues, bindVars)
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("case 1 failed, got %v, want %v", got, want)
 	}
 
 	secondaryPKValues = []interface{}{"invalid_type", 1}
-	_, err := buildSecondaryList(&tableInfo, pkList, secondaryPKValues, bindVars)
+	_, err := buildSecondaryList(table, pkList, secondaryPKValues, bindVars)
 	if err == nil {
 		t.Fatalf("should get an error, column 0 is int type, but secondary list provides a string")
 	}
@@ -384,7 +390,7 @@ func TestCodexBuildSecondaryList(t *testing.T) {
 func TestCodexBuildStreamComment(t *testing.T) {
 	pk1 := "pk1"
 	pk2 := "pk2"
-	tableInfo := createTableInfo("Table",
+	table := createTable("Table",
 		[]string{"pk1", "pk2", "col1"},
 		[]querypb.Type{sqltypes.Int64, sqltypes.VarBinary, sqltypes.Int32},
 		[]string{pk1, pk2})
@@ -394,38 +400,41 @@ func TestCodexBuildStreamComment(t *testing.T) {
 	pk1Val, _ := sqltypes.BuildValue(1)
 	pk2Val, _ := sqltypes.BuildValue("abc")
 	pkValues := []interface{}{pk1Val, pk2Val}
-	pkList, _ := buildValueList(&tableInfo, pkValues, bindVars)
+	pkList, _ := buildValueList(table, pkValues, bindVars)
 	pk2SecVal, _ := sqltypes.BuildValue("xyz")
 	secondaryPKValues := []interface{}{nil, pk2SecVal}
-	secondaryList, _ := buildSecondaryList(&tableInfo, pkList, secondaryPKValues, bindVars)
+	secondaryList, _ := buildSecondaryList(table, pkList, secondaryPKValues, bindVars)
 	want := []byte(" /* _stream `Table` (pk1 pk2 ) (1 'YWJj' ) (1 'eHl6' ); */")
-	got := buildStreamComment(&tableInfo, pkList, secondaryList)
+	got := buildStreamComment(table, pkList, secondaryList)
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("case 1 failed, got\n%s, want\n%s", got, want)
 	}
 }
 
 func TestCodexValidateRow(t *testing.T) {
-	testUtils := newTestUtils()
-	tableInfo := createTableInfo("Table",
+	table := createTable("Table",
 		[]string{"pk1", "pk2", "col1"},
 		[]querypb.Type{sqltypes.Int64, sqltypes.VarBinary, sqltypes.Int32},
 		[]string{"pk1", "pk2"})
 	// #columns and #rows do not match
-	err := validateRow(&tableInfo, []int{1}, []sqltypes.Value{})
-	testUtils.checkTabletError(t, err, vtrpcpb.ErrorCode_BAD_INPUT, "data inconsistency")
+	err := validateRow(table, []int{1}, []sqltypes.Value{})
+	if code := vterrors.Code(err); code != vtrpcpb.Code_INVALID_ARGUMENT {
+		t.Errorf("validateRow: %v, want %v", code, vtrpcpb.Code_INVALID_ARGUMENT)
+	}
 	// column 0 is int type but row is in string type
-	err = validateRow(&tableInfo, []int{0}, []sqltypes.Value{sqltypes.MakeString([]byte("str"))})
-	testUtils.checkTabletError(t, err, vtrpcpb.ErrorCode_BAD_INPUT, "type mismatch")
+	err = validateRow(table, []int{0}, []sqltypes.Value{sqltypes.MakeString([]byte("str"))})
+	if code := vterrors.Code(err); code != vtrpcpb.Code_INVALID_ARGUMENT {
+		t.Errorf("validateRow: %v, want %v", code, vtrpcpb.Code_INVALID_ARGUMENT)
+	}
 }
 
 func TestCodexApplyFilterWithPKDefaults(t *testing.T) {
 	testUtils := newTestUtils()
-	tableInfo := createTableInfo("Table",
+	table := createTable("Table",
 		[]string{"pk1", "pk2", "col1"},
 		[]querypb.Type{sqltypes.Int64, sqltypes.VarBinary, sqltypes.Int32},
 		[]string{"pk1", "pk2"})
-	output := applyFilterWithPKDefaults(&tableInfo, []int{-1}, []sqltypes.Value{})
+	output := applyFilterWithPKDefaults(table, []int{-1}, []sqltypes.Value{})
 	if len(output) != 1 {
 		t.Fatalf("expect to only one output but got: %v", output)
 	}
@@ -446,7 +455,7 @@ func TestCodexUnicoded(t *testing.T) {
 	testUtils.checkEqual(t, "tes", out)
 }
 
-func createTableInfo(name string, colNames []string, colTypes []querypb.Type, pKeys []string) TableInfo {
+func createTable(name string, colNames []string, colTypes []querypb.Type, pKeys []string) *schema.Table {
 	table := schema.NewTable(name)
 	for i, colName := range colNames {
 		colType := colTypes[i]
@@ -458,7 +467,18 @@ func createTableInfo(name string, colNames []string, colTypes []querypb.Type, pK
 		}
 		table.AddColumn(colName, colType, defaultVal, "")
 	}
-	tableInfo := TableInfo{Table: table}
-	tableInfo.SetPK(pKeys)
-	return tableInfo
+	setPK(table, pKeys)
+	return table
+}
+
+func setPK(ta *schema.Table, colnames []string) error {
+	if len(ta.Indexes) != 0 {
+		panic("setPK must be called before adding other indexes")
+	}
+	pkIndex := ta.AddIndex("PRIMARY")
+	for _, colname := range colnames {
+		pkIndex.AddColumn(colname, 1)
+	}
+	ta.Done()
+	return nil
 }

@@ -19,7 +19,6 @@ import (
 	"github.com/youtube/vitess/go/flagutil"
 	"github.com/youtube/vitess/go/vt/discovery"
 	"github.com/youtube/vitess/go/vt/tabletserver/queryservice"
-	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vtgate/buffer"
@@ -162,7 +161,7 @@ func (dg *discoveryGateway) CacheStatus() TabletCacheStatusList {
 // the middle of a transaction. While returning the error check if it maybe a result of
 // a resharding event, and set the re-resolve bit and let the upper layers
 // re-resolve and retry.
-func (dg *discoveryGateway) withRetry(ctx context.Context, target *querypb.Target, conn queryservice.QueryService, name string, inTransaction, isStreaming bool, inner func(ctx context.Context, target *querypb.Target, conn queryservice.QueryService) error) error {
+func (dg *discoveryGateway) withRetry(ctx context.Context, target *querypb.Target, conn queryservice.QueryService, name string, inTransaction bool, inner func(ctx context.Context, target *querypb.Target, conn queryservice.QueryService) (error, bool)) error {
 	var tabletLastUsed *topodatapb.Tablet
 	var err error
 	invalidTablets := make(map[string]bool)
@@ -179,11 +178,10 @@ func (dg *discoveryGateway) withRetry(ctx context.Context, target *querypb.Targe
 			retryDone, bufferErr := dg.buffer.WaitForFailoverEnd(ctx, target.Keyspace, target.Shard, err)
 			if bufferErr != nil {
 				// Buffering failed e.g. buffer is already full. Do not retry.
-				err = vterrors.WithSuffix(
-					vterrors.WithPrefix(
-						"failed to automatically buffer and retry failed request during failover: ",
-						bufferErr),
-					fmt.Sprintf(" original err (type=%T): %v", err, err))
+				err = vterrors.Errorf(
+					vterrors.Code(err),
+					"failed to automatically buffer and retry failed request during failover: %v original err (type=%T): %v",
+					bufferErr, err, err)
 				break
 			}
 
@@ -199,7 +197,7 @@ func (dg *discoveryGateway) withRetry(ctx context.Context, target *querypb.Targe
 		tablets := dg.tsc.GetHealthyTabletStats(target.Keyspace, target.Shard, target.TabletType)
 		if len(tablets) == 0 {
 			// fail fast if there is no tablet
-			err = vterrors.FromError(vtrpcpb.ErrorCode_INTERNAL_ERROR, fmt.Errorf("no valid tablet"))
+			err = vterrors.New(vtrpcpb.Code_UNAVAILABLE, "no valid tablet")
 			break
 		}
 		shuffleTablets(tablets)
@@ -215,7 +213,7 @@ func (dg *discoveryGateway) withRetry(ctx context.Context, target *querypb.Targe
 		if ts == nil {
 			if err == nil {
 				// do not override error from last attempt.
-				err = vterrors.FromError(vtrpcpb.ErrorCode_INTERNAL_ERROR, fmt.Errorf("no available connection"))
+				err = vterrors.New(vtrpcpb.Code_UNAVAILABLE, "no available connection")
 			}
 			break
 		}
@@ -224,7 +222,7 @@ func (dg *discoveryGateway) withRetry(ctx context.Context, target *querypb.Targe
 		tabletLastUsed = ts.Tablet
 		conn := dg.hc.GetConnection(ts.Key)
 		if conn == nil {
-			err = vterrors.FromError(vtrpcpb.ErrorCode_INTERNAL_ERROR, fmt.Errorf("no connection for key %v tablet %+v", ts.Key, ts.Tablet))
+			err = vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "no connection for key %v tablet %+v", ts.Key, ts.Tablet)
 			invalidTablets[ts.Key] = true
 			continue
 		}
@@ -235,54 +233,16 @@ func (dg *discoveryGateway) withRetry(ctx context.Context, target *querypb.Targe
 		}
 
 		startTime := time.Now()
-		err = inner(ctx, ts.Target, conn)
+		var canRetry bool
+		err, canRetry = inner(ctx, ts.Target, conn)
 		dg.updateStats(target, startTime, err)
-		if dg.canRetry(ctx, err, inTransaction, isStreaming) {
+		if canRetry {
 			invalidTablets[ts.Key] = true
 			continue
 		}
 		break
 	}
 	return NewShardError(err, target, tabletLastUsed, inTransaction)
-}
-
-// canRetry determines whether a query can be retried or not.
-// OperationalErrors like retry/fatal are retryable if query is not in a txn.
-// All other errors are non-retryable.
-func (dg *discoveryGateway) canRetry(ctx context.Context, err error, inTransaction, isStreaming bool) bool {
-	if err == nil {
-		return false
-	}
-	// Do not retry if ctx.Done() is closed.
-	select {
-	case <-ctx.Done():
-		return false
-	default:
-	}
-	if serverError, ok := err.(*tabletconn.ServerError); ok {
-		switch serverError.ServerCode {
-		case vtrpcpb.ErrorCode_INTERNAL_ERROR:
-			// Do not retry on fatal error for streaming query.
-			// For streaming query, vttablet sends:
-			// - QUERY_NOT_SERVED, if streaming is not started yet;
-			// - INTERNAL_ERROR, if streaming is broken halfway.
-			// For non-streaming query, handle as QUERY_NOT_SERVED.
-			if isStreaming {
-				return false
-			}
-			fallthrough
-		case vtrpcpb.ErrorCode_QUERY_NOT_SERVED:
-			// Retry on QUERY_NOT_SERVED and
-			// INTERNAL_ERROR if not in a transaction.
-			return !inTransaction
-		default:
-			// Not retry for RESOURCE_EXHAUSTED and normal
-			// server errors.
-			return false
-		}
-	}
-	// Do not retry on operational error.
-	return false
 }
 
 func shuffleTablets(tablets []discovery.TabletStats) {
