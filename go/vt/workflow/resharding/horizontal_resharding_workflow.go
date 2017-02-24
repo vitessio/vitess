@@ -55,7 +55,7 @@ func Register() {
 type HorizontalReshardingWorkflowFactory struct{}
 
 // Init is part of the workflow.Factory interface.
-func (*HorizontalReshardingWorkflowFactory) Init(w *workflowpb.Workflow, args []string) error {
+func (*HorizontalReshardingWorkflowFactory) Init(m *workflow.Manager, w *workflowpb.Workflow, args []string) error {
 	subFlags := flag.NewFlagSet(horizontalReshardingFactoryName, flag.ContinueOnError)
 	keyspace := subFlags.String("keyspace", "", "Name of keyspace to perform horizontal resharding")
 	vtworkersStr := subFlags.String("vtworkers", "", "A comma-separated list of vtworker addresses")
@@ -70,7 +70,7 @@ func (*HorizontalReshardingWorkflowFactory) Init(w *workflowpb.Workflow, args []
 	vtworkers := strings.Split(*vtworkersStr, ",")
 	w.Name = fmt.Sprintf("Horizontal resharding on keyspace %s", *keyspace)
 
-	checkpoint, err := initCheckpoint(*keyspace, vtworkers)
+	checkpoint, err := initCheckpoint(m.TopoServer(), *keyspace, vtworkers)
 	if err != nil {
 		return err
 	}
@@ -180,18 +180,15 @@ func createUINodes(rootNode *workflow.Node, phaseName PhaseType, shards []string
 }
 
 // initCheckpoint initialize the checkpoint for the horizontal workflow.
-func initCheckpoint(keyspace string, vtworkers []string) (*workflowpb.WorkflowCheckpoint, error) {
-	sourceShards, destinationShards, err := findSourceAndDestinationShards(keyspace)
+func initCheckpoint(ts topo.Server, keyspace string, vtworkers []string) (*workflowpb.WorkflowCheckpoint, error) {
+	sourceShards, destinationShards, err := findSourceAndDestinationShards(ts, keyspace)
 	if err != nil {
 		return nil, err
 	}
 	return initCheckpointFromShards(keyspace, vtworkers, sourceShards, destinationShards)
 }
 
-func findSourceAndDestinationShards(keyspace string) ([]string, []string, error) {
-	ts := topo.Open()
-	defer ts.Close()
-
+func findSourceAndDestinationShards(ts topo.Server, keyspace string) ([]string, []string, error) {
 	overlappingShards, err := topotools.FindOverlappingShards(context.Background(), ts, keyspace)
 	if err != nil {
 		return nil, nil, err

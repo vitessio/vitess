@@ -38,10 +38,11 @@ type Factory interface {
 	// The passed in workflow will have its Uuid, FactoryName and State
 	// variable filled it. This Init method should fill in the
 	// Name and Data attributes, based on the provided args.
-	// This is called during the Manager.Create phase.
-	// TODO(yipeiw): We should extend the interface to pass the topology server
-	// as well. The topology server is needed in the resarding workflow.
-	Init(w *workflowpb.Workflow, args []string) error
+	// This is called during the Manager.Create phase and will initially
+	// checkpoint the workflow in the topology.
+	// The Manager object is passed to Init method since the resharding workflow
+	// will use the topology server in Manager.
+	Init(m *Manager, w *workflowpb.Workflow, args []string) error
 
 	// Instantiate loads a workflow from the proto representation
 	// into an in-memory Workflow object. rootNode is the root UI node
@@ -249,7 +250,7 @@ func (m *Manager) Create(ctx context.Context, factoryName string, args []string)
 
 	// Let the factory parse the parameters and initialize the
 	// object.
-	if err := factory.Init(w, args); err != nil {
+	if err := factory.Init(m, w, args); err != nil {
 		return "", err
 	}
 	rw, err := m.instantiateWorkflow(w)

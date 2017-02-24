@@ -190,7 +190,7 @@ func (sw *SleepWorkflow) checkpointLocked(ctx context.Context) error {
 type SleepWorkflowFactory struct{}
 
 // Init is part of the workflow.Factory interface.
-func (f *SleepWorkflowFactory) Init(w *workflowpb.Workflow, args []string) error {
+func (f *SleepWorkflowFactory) Init(_ *Manager, w *workflowpb.Workflow, args []string) error {
 	// Parse the flags.
 	subFlags := flag.NewFlagSet(sleepFactoryName, flag.ContinueOnError)
 	duration := subFlags.Int("duration", 30, "How long to sleep")

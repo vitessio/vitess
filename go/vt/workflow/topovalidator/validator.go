@@ -193,7 +193,7 @@ func (f *workflowFixer) Action(ctx context.Context, path, name string) error {
 type WorkflowFactory struct{}
 
 // Init is part of the workflow.Factory interface.
-func (f *WorkflowFactory) Init(w *workflowpb.Workflow, args []string) error {
+func (f *WorkflowFactory) Init(_ *workflow.Manager, w *workflowpb.Workflow, args []string) error {
 	// No parameters to parse.
 	if len(args) > 0 {
 		return fmt.Errorf("%v doesn't take any parameter", topoValidatorFactoryName)
