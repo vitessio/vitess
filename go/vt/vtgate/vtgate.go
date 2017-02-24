@@ -885,13 +885,13 @@ func (vtg *VTGate) VSchemaStats() *VSchemaStats {
 
 func recordAndAnnotateError(err error, statsKey []string, request map[string]interface{}, logger *logutil.ThrottledLogger) error {
 	ec := vterrors.Code(err)
-	fullkey := []string{
+	fullKey := []string{
 		statsKey[0],
 		statsKey[1],
 		statsKey[2],
 		ec.String(),
 	}
-	errorCounts.Add(fullkey, 1)
+	errorCounts.Add(fullKey, 1)
 	// Most errors are not logged by vtgate beecause they're either too spammy or logged elsewhere.
 	switch ec {
 	case vtrpcpb.Code_UNKNOWN, vtrpcpb.Code_INTERNAL, vtrpcpb.Code_DATA_LOSS:

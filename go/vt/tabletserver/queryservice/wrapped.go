@@ -50,13 +50,15 @@ func canRetry(ctx context.Context, err error) bool {
 	if err == nil {
 		return false
 	}
+
 	select {
 	case <-ctx.Done():
 		return false
 	default:
 	}
+
 	switch vterrors.Code(err) {
-	case vtrpcpb.Code_UNAVAILABLE, vtrpcpb.Code_FAILED_PRECONDITION, vtrpcpb.Code_RESOURCE_EXHAUSTED:
+	case vtrpcpb.Code_UNAVAILABLE, vtrpcpb.Code_FAILED_PRECONDITION:
 		return true
 	}
 	return false

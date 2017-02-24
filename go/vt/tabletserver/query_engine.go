@@ -293,7 +293,7 @@ func (qe *QueryEngine) GetPlan(ctx context.Context, logStats *tabletenv.LogStats
 			r, err := conn.Exec(ctx, sql, 1, true)
 			logStats.AddRewrittenSQL(sql, start)
 			if err != nil {
-				return nil, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "error fetching fields: %v", err)
+				return nil, err
 			}
 			plan.Fields = r.Fields
 		}
@@ -320,7 +320,7 @@ func (qe *QueryEngine) GetStreamPlan(sql string) (*ExecPlan, error) {
 	splan, err := planbuilder.GetStreamExecPlan(sql, GetTable)
 	if err != nil {
 		// TODO(sougou): Inspect to see if GetStreamExecPlan can return coded error.
-		return nil, vterrors.New(vtrpcpb.Code_UNKNOWN, err.Error())
+		return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, err.Error())
 	}
 	plan := &ExecPlan{ExecPlan: splan, Table: table}
 	plan.Rules = qe.queryRuleSources.filterByPlan(sql, plan.PlanID, plan.TableName.String())

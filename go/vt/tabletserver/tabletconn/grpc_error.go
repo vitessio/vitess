@@ -16,7 +16,7 @@ func ErrorFromGRPC(err error) error {
 	if err == nil || err == io.EOF {
 		return nil
 	}
-	return vterrors.New(vtrpcpb.Code(grpc.Code(err)), "vttablet: "+err.Error())
+	return vterrors.Errorf(vtrpcpb.Code(grpc.Code(err)), "vttablet: %v", err)
 }
 
 // ErrorFromVTRPC converts a *vtrpcpb.RPCError to vtError for
@@ -29,5 +29,5 @@ func ErrorFromVTRPC(err *vtrpcpb.RPCError) error {
 	if code == vtrpcpb.Code_OK {
 		code = vterrors.LegacyErrorCodeToCode(err.LegacyCode)
 	}
-	return vterrors.New(code, "vttablet: "+err.Message)
+	return vterrors.Errorf(code, "vttablet: %s", err.Message)
 }

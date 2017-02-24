@@ -25,11 +25,11 @@ const (
 	PriorityOutOfRange
 	// Potentially retryable errors.
 	PriorityUnavailable
-	PriorityFailedPrecondition
-	PriorityResourceExhausted
 	PriorityDeadlineExceeded
 	PriorityAborted
+	PriorityFailedPrecondition
 	// Permanent errors.
+	PriorityResourceExhausted
 	PriorityUnknown
 	PriorityUnauthenticated
 	PriorityPermissionDenied

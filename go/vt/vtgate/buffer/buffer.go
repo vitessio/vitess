@@ -214,13 +214,11 @@ func (b *Buffer) StatsUpdate(ts *discovery.TabletStats) {
 // causedByFailover returns true if "err" was supposedly caused by a failover.
 // To simplify things, we've merged the detection for different MySQL flavors
 // in one function. Supported flavors: MariaDB, MySQL, Google internal.
-// TODO(mberlin): This function does not have to check the specific error messages.
-// The previous error revamp ensures that FAILED_PRECONDITION is returned only
-// during failover.
 func causedByFailover(err error) bool {
 	log.V(2).Infof("Checking error (type: %T) if it is caused by a failover. err: %v", err, err)
 
-	if vterrors.Code(err) != vtrpcpb.Code_FAILED_PRECONDITION {
+	// TODO(sougou): Remove the INTERNAL check after rollout.
+	if code := vterrors.Code(err); code != vtrpcpb.Code_FAILED_PRECONDITION && code != vtrpcpb.Code_INTERNAL {
 		return false
 	}
 	switch {

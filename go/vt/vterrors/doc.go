@@ -18,8 +18,8 @@ RPCError message that can be used to transmit errors through RPCs, in
 the message payloads. These codes match the names and numbers defined
 by gRPC.
 
-Vitess also defines a VitessError error implementation, that can convert
-any error and add a code to it.
+Vitess also defines a standardized error implementation that allows
+you to build an error with an associated canonical code.
 
 While sending an error through gRPC, these codes are transmitted
 using gRPC's error propagation mechanism and decoded back to

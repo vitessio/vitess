@@ -357,9 +357,9 @@ func TestTabletServerAllSchemaFailure(t *testing.T) {
 	err := tsv.StartService(target, dbconfigs, testUtils.newMysqld(&dbconfigs))
 	defer tsv.StopService()
 	// tabletsever shouldn't start if it can't access schema for any tables
-	wanterr := "could not get schema for any tables"
-	if err == nil || err.Error() != wanterr {
-		t.Errorf("tsv.StartService: %v, want %s", err, wanterr)
+	wantErr := "could not get schema for any tables"
+	if err == nil || err.Error() != wantErr {
+		t.Errorf("tsv.StartService: %v, want %s", err, wantErr)
 	}
 }
 

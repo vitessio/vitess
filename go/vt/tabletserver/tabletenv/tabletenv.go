@@ -15,6 +15,7 @@ import (
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/tb"
 	"github.com/youtube/vitess/go/vt/callerid"
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 )
 
@@ -29,10 +30,27 @@ var (
 	WaitStats = stats.NewTimings("Waits")
 	// KillStats shows number of connections being killed.
 	KillStats = stats.NewCounters("Kills", "Transactions", "Queries")
-	// InfoErrors shows number of various non critical errors happened.
-	InfoErrors = stats.NewCounters("InfoErrors", "Retry", "DupKey")
 	// ErrorStats shows number of critial erros happened.
-	ErrorStats = stats.NewCounters("Errors", "Fail", "TxPoolFull", "NotInTx", "Deadlock", "Fatal")
+	ErrorStats = stats.NewCounters(
+		"Errors",
+		vtrpcpb.Code_OK.String(),
+		vtrpcpb.Code_CANCELED.String(),
+		vtrpcpb.Code_UNKNOWN.String(),
+		vtrpcpb.Code_INVALID_ARGUMENT.String(),
+		vtrpcpb.Code_DEADLINE_EXCEEDED.String(),
+		vtrpcpb.Code_NOT_FOUND.String(),
+		vtrpcpb.Code_ALREADY_EXISTS.String(),
+		vtrpcpb.Code_PERMISSION_DENIED.String(),
+		vtrpcpb.Code_UNAUTHENTICATED.String(),
+		vtrpcpb.Code_RESOURCE_EXHAUSTED.String(),
+		vtrpcpb.Code_FAILED_PRECONDITION.String(),
+		vtrpcpb.Code_ABORTED.String(),
+		vtrpcpb.Code_OUT_OF_RANGE.String(),
+		vtrpcpb.Code_UNIMPLEMENTED.String(),
+		vtrpcpb.Code_INTERNAL.String(),
+		vtrpcpb.Code_UNAVAILABLE.String(),
+		vtrpcpb.Code_DATA_LOSS.String(),
+	)
 	// InternalErrors shows number of errors from internal components.
 	InternalErrors = stats.NewCounters("InternalErrors", "Task", "StrayTransactions", "Panic", "HungQuery", "Schema", "TwopcCommit", "TwopcResurrection", "WatchdogFail")
 	// Unresolved tracks unresolved items. For now it's just Prepares.
