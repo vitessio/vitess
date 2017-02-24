@@ -76,7 +76,11 @@ func (s *Server) Watch(ctx context.Context, cellName, filePath string) (*topo.Wa
 	watchChannel := make(chan *etcd.Response)
 	watchError := make(chan error)
 	go func(stop chan bool) {
-		versionToWatch := initial.Node.ModifiedIndex + 1
+		// We start watching from the etcd version we got
+		// during the get, and not from the ModifiedIndex of
+		// the node, as the node might be older than the
+		// retention period of the server.
+		versionToWatch := initial.EtcdIndex + 1
 		_, err := cell.Client.Watch(filePath, versionToWatch, false /* recursive */, watchChannel, stop)
 		// Watch will only return a non-nil error, otherwise
 		// it keeps on watching. Send the error down.
