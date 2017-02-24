@@ -78,6 +78,9 @@ func TestSSLConnection(t *testing.T) {
 		t.Fatalf("Connect failed: %v", err)
 	}
 	defer conn.Close()
+	if conn.User != "user1" {
+		t.Errorf("Invalid conn.User, got %v was expecting user1", conn.User)
+	}
 
 	// Run a 'select rows' command with results.
 	result, err := conn.ExecuteFetch("select rows", 10000, true)

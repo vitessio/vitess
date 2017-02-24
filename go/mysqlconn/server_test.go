@@ -93,7 +93,6 @@ func (th *testHandler) ComQuery(c *Conn, query string) (*sqltypes.Result, error)
 			value = "ON"
 		}
 		return &sqltypes.Result{
-
 			Fields: []*querypb.Field{
 				{
 					Name: "ssl_flag",
@@ -108,6 +107,27 @@ func (th *testHandler) ComQuery(c *Conn, query string) (*sqltypes.Result, error)
 		}, nil
 	}
 
+	if query == "userData echo" {
+		return &sqltypes.Result{
+			Fields: []*querypb.Field{
+				{
+					Name: "user",
+					Type: querypb.Type_VARCHAR,
+				},
+				{
+					Name: "user_data",
+					Type: querypb.Type_VARCHAR,
+				},
+			},
+			Rows: [][]sqltypes.Value{
+				{
+					sqltypes.MakeTrusted(querypb.Type_VARCHAR, []byte(c.User)),
+					sqltypes.MakeTrusted(querypb.Type_VARCHAR, []byte(c.UserData)),
+				},
+			},
+		}, nil
+	}
+
 	return &sqltypes.Result{}, nil
 }
 
@@ -117,6 +137,7 @@ func TestServer(t *testing.T) {
 	authServer := NewAuthServerConfig()
 	authServer.Entries["user1"] = &AuthServerConfigEntry{
 		Password: "password1",
+		UserData: "userData1",
 	}
 	l, err := NewListener("tcp", ":0", authServer, th)
 	if err != nil {
@@ -198,6 +219,17 @@ func TestServer(t *testing.T) {
 		!strings.Contains(output, "OFF") ||
 		!strings.Contains(output, "1 row in set") {
 		t.Errorf("Unexpected output for 'ssl echo': %v", output)
+	}
+
+	// UserData check: checks the server user data is correct.
+	output, ok = runMysql(t, params, "userData echo")
+	if !ok {
+		t.Fatalf("mysql failed: %v", output)
+	}
+	if !strings.Contains(output, "user1") ||
+		!strings.Contains(output, "user_data") ||
+		!strings.Contains(output, "userData1") {
+		t.Errorf("Unexpected output for 'userData echo': %v", output)
 	}
 
 	// Permissions check: check a bad password is rejected.

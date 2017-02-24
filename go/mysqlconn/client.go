@@ -253,7 +253,8 @@ func (c *Conn) clientHandshake(characterSet uint8, params *sqldb.ConnParams) err
 	}
 	switch response[0] {
 	case OKPacket:
-		// OK packet, we are authenticated. We keep going.
+		// OK packet, we are authenticated. Save the user, keep going.
+		c.User = params.Uname
 	case ErrPacket:
 		return parseErrorPacket(response)
 	default:
