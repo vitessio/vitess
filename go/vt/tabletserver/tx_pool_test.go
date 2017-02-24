@@ -177,8 +177,8 @@ func TestTxPoolBeginWithPoolConnectionError_Errno2006_Permanent(t *testing.T) {
 	if !ok {
 		t.Fatalf("Unexpected error type: %T, want %T", err, &sqldb.SQLError{})
 	}
-	if num := sqlErr.Number(); num != mysqlconn.CRServerLost {
-		t.Errorf("Unexpected error code: %d, want %d", num, mysqlconn.CRServerLost)
+	if got, want := sqlErr.Number(), mysqlconn.CRServerLost; got != want {
+		t.Errorf("Unexpected error code: %d, want %d", got, want)
 	}
 }
 

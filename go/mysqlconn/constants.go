@@ -350,7 +350,10 @@ func IsNum(typ uint8) bool {
 func IsConnErr(err error) bool {
 	if sqlErr, ok := err.(*sqldb.SQLError); ok {
 		num := sqlErr.Number()
-		// Don't count query kill as connection error.
+		// ServerLost means that the query has already been
+		// received by MySQL and may have already been executed.
+		// Since we don't know if the query is idempotent, we don't
+		// count this error as connection error which could be retried.
 		if num == CRServerLost {
 			return false
 		}

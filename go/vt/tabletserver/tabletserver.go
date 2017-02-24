@@ -1190,7 +1190,7 @@ func (tsv *TabletServer) convertError(sql string, bindVariables map[string]inter
 		if strings.Contains(errstr, "read-only") {
 			errCode = vtrpcpb.Code_FAILED_PRECONDITION
 		}
-	case 1227: // Google internal overloaded error code.
+	case 1227: // Google internal failover error code.
 		if strings.Contains(errstr, "failover in progress") {
 			errCode = vtrpcpb.Code_FAILED_PRECONDITION
 		}
@@ -1201,7 +1201,7 @@ func (tsv *TabletServer) convertError(sql string, bindVariables map[string]inter
 	case mysqlconn.ERLockWaitTimeout:
 		errCode = vtrpcpb.Code_DEADLINE_EXCEEDED
 	case mysqlconn.ERLockDeadlock:
-		// A deadlock rollsback the transaction.
+		// A deadlock rolls back the transaction.
 		errCode = vtrpcpb.Code_ABORTED
 	case mysqlconn.CRServerLost:
 		// Query was killed.

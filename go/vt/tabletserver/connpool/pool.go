@@ -19,7 +19,7 @@ import (
 )
 
 // ErrConnPoolClosed is returned when the connection pool is closed.
-var ErrConnPoolClosed = vterrors.New(vtrpcpb.Code_UNAVAILABLE, "connection pool is closed")
+var ErrConnPoolClosed = vterrors.New(vtrpcpb.Code_INTERNAL, "internal error: unexpected: conn pool is closed")
 
 // usedNames is for preventing expvar from panicking. Tests
 // create pool objects multiple time. If a name was previously

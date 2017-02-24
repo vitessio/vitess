@@ -12,16 +12,20 @@ func TestIsConnErr(t *testing.T) {
 		in   error
 		want bool
 	}{{
-		in: errors.New("t"),
+		in:   errors.New("t"),
+		want: false,
 	}, {
-		in: sqldb.NewSQLError(5, "", ""),
+		in:   sqldb.NewSQLError(5, "", ""),
+		want: false,
 	}, {
 		in:   sqldb.NewSQLError(CRServerGone, "", ""),
 		want: true,
 	}, {
-		in: sqldb.NewSQLError(CRServerLost, "", ""),
+		in:   sqldb.NewSQLError(CRServerLost, "", ""),
+		want: false,
 	}, {
-		in: sqldb.NewSQLError(CRCantReadCharset, "", ""),
+		in:   sqldb.NewSQLError(CRCantReadCharset, "", ""),
+		want: false,
 	}}
 	for _, tcase := range testcases {
 		got := IsConnErr(tcase.in)

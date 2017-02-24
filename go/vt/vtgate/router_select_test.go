@@ -412,7 +412,7 @@ func TestSelectEqualFail(t *testing.T) {
 	_, err := routerExec(router, "select id from user where id = (select count(*) from music)", nil)
 	want := "unsupported"
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
-		t.Errorf("routerExec: %v, must contain %v", err, want)
+		t.Errorf("routerExec: %v, must start with %v", err, want)
 	}
 
 	_, err = routerExec(router, "select id from user where id = :aa", nil)
