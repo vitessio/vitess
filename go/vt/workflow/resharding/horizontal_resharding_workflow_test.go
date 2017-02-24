@@ -136,17 +136,7 @@ func setupMockWranglerForRetry(ctx context.Context, ctrl *gomock.Controller) *Mo
 	mockWranglerInterface := NewMockReshardingWrangler(ctrl)
 	// Set the expected behaviors for mock wrangler. copy schema to shard 80-
 	// should not be called.
-	mockWranglerInterface.EXPECT().CopySchemaShardFromShard(
-		ctx,
-		nil,  /* tableArray*/
-		nil,  /* excludeTableArray */
-		true, /*includeViews*/
-		"test_keyspace",
-		"0",
-		"test_keyspace",
-		"-80",
-		wrangler.DefaultWaitSlaveTimeout).Return(nil)
-
+	mockWranglerInterface.EXPECT().CopySchemaShardFromShard(ctx, nil /* tableArray*/, nil /* excludeTableArray */, true /*includeViews*/, "test_keyspace", "0", "test_keyspace", "-80", wrangler.DefaultWaitSlaveTimeout).Return(nil)
 	mockWranglerInterface.EXPECT().WaitForFilteredReplication(ctx, "test_keyspace", "-80", wrangler.DefaultWaitForFilteredReplicationMaxDelay).Return(nil)
 	mockWranglerInterface.EXPECT().WaitForFilteredReplication(ctx, "test_keyspace", "80-", wrangler.DefaultWaitForFilteredReplicationMaxDelay).Return(nil)
 
@@ -154,15 +144,7 @@ func setupMockWranglerForRetry(ctx context.Context, ctrl *gomock.Controller) *Mo
 		topodatapb.TabletType_REPLICA,
 		topodatapb.TabletType_MASTER}
 	for _, servedType := range servedTypeParams {
-		mockWranglerInterface.EXPECT().MigrateServedTypes(
-			ctx,
-			"test_keyspace",
-			"0",
-			nil, /* cells */
-			servedType,
-			false, /* reverse */
-			false, /* skipReFreshState */
-			wrangler.DefaultFilteredReplicationWaitTime).Return(nil)
+		mockWranglerInterface.EXPECT().MigrateServedTypes(ctx, "test_keyspace", "0", nil /* cells */, servedType, false /* reverse */, false /* skipReFreshState */, wrangler.DefaultFilteredReplicationWaitTime).Return(nil)
 	}
 	return mockWranglerInterface
 }
@@ -170,27 +152,8 @@ func setupMockWranglerForRetry(ctx context.Context, ctrl *gomock.Controller) *Mo
 func setupMockWrangler(ctx context.Context, ctrl *gomock.Controller) *MockReshardingWrangler {
 	mockWranglerInterface := NewMockReshardingWrangler(ctrl)
 	// Set the expected behaviors for mock wrangler.
-	mockWranglerInterface.EXPECT().CopySchemaShardFromShard(
-		ctx,
-		nil,  /* tableArray*/
-		nil,  /* excludeTableArray */
-		true, /*includeViews*/
-		"test_keyspace",
-		"0",
-		"test_keyspace",
-		"-80",
-		wrangler.DefaultWaitSlaveTimeout).Return(nil)
-
-	mockWranglerInterface.EXPECT().CopySchemaShardFromShard(
-		ctx,
-		nil,  /* tableArray*/
-		nil,  /* excludeTableArray */
-		true, /*includeViews*/
-		"test_keyspace",
-		"0",
-		"test_keyspace",
-		"80-",
-		wrangler.DefaultWaitSlaveTimeout).Return(nil)
+	mockWranglerInterface.EXPECT().CopySchemaShardFromShard(ctx, nil /* tableArray*/, nil /* excludeTableArray */, true /*includeViews*/, "test_keyspace", "0", "test_keyspace", "-80", wrangler.DefaultWaitSlaveTimeout).Return(nil)
+	mockWranglerInterface.EXPECT().CopySchemaShardFromShard(ctx, nil /* tableArray*/, nil /* excludeTableArray */, true /*includeViews*/, "test_keyspace", "0", "test_keyspace", "80-", wrangler.DefaultWaitSlaveTimeout).Return(nil)
 
 	mockWranglerInterface.EXPECT().WaitForFilteredReplication(ctx, "test_keyspace", "-80", wrangler.DefaultWaitForFilteredReplicationMaxDelay).Return(nil)
 	mockWranglerInterface.EXPECT().WaitForFilteredReplication(ctx, "test_keyspace", "80-", wrangler.DefaultWaitForFilteredReplicationMaxDelay).Return(nil)
@@ -199,15 +162,7 @@ func setupMockWrangler(ctx context.Context, ctrl *gomock.Controller) *MockReshar
 		topodatapb.TabletType_REPLICA,
 		topodatapb.TabletType_MASTER}
 	for _, servedType := range servedTypeParams {
-		mockWranglerInterface.EXPECT().MigrateServedTypes(
-			ctx,
-			"test_keyspace",
-			"0",
-			nil, /* cells */
-			servedType,
-			false, /* reverse */
-			false, /* skipReFreshState */
-			wrangler.DefaultFilteredReplicationWaitTime).Return(nil)
+		mockWranglerInterface.EXPECT().MigrateServedTypes(ctx, "test_keyspace", "0", nil /* cells */, servedType, false /* reverse */, false /* skipReFreshState */, wrangler.DefaultFilteredReplicationWaitTime).Return(nil)
 	}
 	return mockWranglerInterface
 }

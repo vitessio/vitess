@@ -2,6 +2,7 @@ package resharding
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 
 	log "github.com/golang/glog"
@@ -32,11 +33,13 @@ type ParallelRunner struct {
 	concurrencyLevel level
 	executeFunc      func(context.Context, *workflowpb.Task) error
 
-	// mu is used to protect the retryActionRegistry.
+	// mu is used to protect the access to retryActionRegistry and
+	// serialize UI node changes.
 	mu sync.Mutex
-	// retryAtionRegistry stores the data for retry actions.
-	// Each task can retrieve its RetryController through its UI node path.
-	retryActionRegistry map[string]*RetryController
+	// retryActionRegistry stores the data for retry actions.
+	// Each task can retrieve the channel for synchronizing retrying
+	// through its UI node path.
+	retryActionRegistry map[string]chan struct{}
 
 	// reportTaskStatus gives the worklflow debug option to output the task
 	// status through UI.
@@ -55,7 +58,7 @@ func NewParallelRunner(ctx context.Context, rootUINode *workflow.Node, cp *Check
 		tasks:               tasks,
 		executeFunc:         executeFunc,
 		concurrencyLevel:    concurrencyLevel,
-		retryActionRegistry: make(map[string]*RetryController),
+		retryActionRegistry: make(map[string]chan struct{}),
 		reportTaskStatus:    false,
 	}
 }
@@ -111,7 +114,7 @@ func (p *ParallelRunner) Run() error {
 					return
 				default:
 				}
-				retryChannel, nodePath := p.addRetryAction(taskID)
+				retryChannel := p.addRetryAction(taskID)
 
 				// Block the task execution until the retry action is triggered
 				// or the context is canceled.
@@ -119,7 +122,6 @@ func (p *ParallelRunner) Run() error {
 				case <-retryChannel:
 					continue
 				case <-p.ctx.Done():
-					p.unregisterRetryController(nodePath)
 					return
 				}
 			}
@@ -138,57 +140,66 @@ func (p *ParallelRunner) Run() error {
 func (p *ParallelRunner) Action(ctx context.Context, path, name string) error {
 	switch name {
 	case "Retry":
-		return p.triggerRetry(path)
+		// Extract the path relative to the root node.
+		parts := strings.Split(path, "/")
+		taskID := strings.Join(parts[2:], "/")
+		return p.triggerRetry(taskID)
 	default:
 		return fmt.Errorf("Unknown action: %v", name)
 	}
 }
 
-func (p *ParallelRunner) triggerRetry(nodePath string) error {
+func (p *ParallelRunner) triggerRetry(taskID string) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	c, ok := p.retryActionRegistry[nodePath]
+
+	// Unregister the retry channel.
+	retryChannel, ok := p.retryActionRegistry[taskID]
 	if !ok {
-		return fmt.Errorf("Unregistered action for node: %v", nodePath)
+		return fmt.Errorf("Unregistered action for node: %v", taskID)
 	}
-	p.unregisterRetryControllerLocked(nodePath)
-	c.triggerRetry()
+	delete(p.retryActionRegistry, taskID)
+
+	// Disable the retry action and synchronize for retrying the job.
+	node, err := p.rootUINode.GetChildByPath(taskID)
+	if err != nil {
+		panic(fmt.Sprintf("BUG: node on child path %v not found", taskID))
+	}
+	if len(node.Actions) == 0 {
+		panic(fmt.Sprintf("BUG: node actions should not be empty"))
+	}
+	node.Actions = []*workflow.Action{}
+	node.BroadcastChanges(false /* updateChildren */)
+	close(retryChannel)
 	return nil
 }
 
-func (p *ParallelRunner) addRetryAction(taskID string) (chan struct{}, string) {
+func (p *ParallelRunner) addRetryAction(taskID string) chan struct{} {
 	node, err := p.rootUINode.GetChildByPath(taskID)
 	if err != nil {
-		panic(fmt.Errorf("node on child path %v not found", taskID))
+		panic(fmt.Sprintf("BUG: node on child path %v not found", taskID))
 	}
 
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	retryController := CreateRetryController(node, p /* actionListener */)
-	p.registerRetryControllerLocked(node.Path, retryController)
+
+	// Register the channel for synchronizing retrying job.
+	if _, ok := p.retryActionRegistry[taskID]; ok {
+		panic(fmt.Sprintf("BUG: duplicate retry action for node: %v", taskID))
+	}
+	retryChannel := make(chan struct{})
+	p.retryActionRegistry[taskID] = retryChannel
+
+	// Enable retry action on the node.
+	retryAction := &workflow.Action{
+		Name:  "Retry",
+		State: workflow.ActionStateEnabled,
+		Style: workflow.ActionStyleWaiting,
+	}
+	node.Actions = []*workflow.Action{retryAction}
+	node.Listener = p
 	node.BroadcastChanges(false /* updateChildren */)
-	return retryController.retryChannel, node.Path
-}
-
-func (p *ParallelRunner) registerRetryControllerLocked(nodePath string, c *RetryController) {
-	if _, ok := p.retryActionRegistry[nodePath]; ok {
-		panic(fmt.Errorf("duplicate retry action for node: %v", nodePath))
-	}
-	p.retryActionRegistry[nodePath] = c
-}
-
-func (p *ParallelRunner) unregisterRetryController(nodePath string) {
-	p.mu.Lock()
-	p.mu.Unlock()
-	p.unregisterRetryControllerLocked(nodePath)
-}
-
-func (p *ParallelRunner) unregisterRetryControllerLocked(nodePath string) {
-	if _, ok := p.retryActionRegistry[nodePath]; !ok {
-		log.Warningf("retry action for node: %v doesn't exist, cannot unregister it", nodePath)
-	} else {
-		delete(p.retryActionRegistry, nodePath)
-	}
+	return retryChannel
 }
 
 func (p *ParallelRunner) setFinishUIMessage(taskID string) {
