@@ -37,8 +37,10 @@ func (s *Server) Watch(ctx context.Context, cell, filePath string) (*topo.WatchD
 	// Create a context, will be used to cancel the watch.
 	watchCtx, watchCancel := context.WithCancel(context.Background())
 
-	// Create the Watcher.
-	watcher := s.global.cli.Watch(watchCtx, nodePath, clientv3.WithRev(initial.Kvs[0].ModRevision))
+	// Create the Watcher.  We start watching from the response we
+	// got, not from the file original version, as the server may
+	// not have that much history.
+	watcher := s.global.cli.Watch(watchCtx, nodePath, clientv3.WithRev(initial.Header.Revision))
 	if watcher == nil {
 		return &topo.WatchData{Err: fmt.Errorf("Watch failed")}, nil, nil
 	}
