@@ -2,6 +2,7 @@ package mysqlconn
 
 import (
 	"fmt"
+	"io/ioutil"
 	"net"
 	"os"
 	"os/exec"
@@ -12,6 +13,8 @@ import (
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/sqltypes"
 	vtenv "github.com/youtube/vitess/go/vt/env"
+	"github.com/youtube/vitess/go/vt/servenv/grpcutils"
+	"github.com/youtube/vitess/go/vt/tlstest"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
@@ -37,6 +40,7 @@ var selectRowsResult = &sqltypes.Result{
 			sqltypes.MakeTrusted(querypb.Type_VARCHAR, []byte("nicer name")),
 		},
 	},
+	RowsAffected: 2,
 }
 
 type testHandler struct{}
@@ -78,6 +82,27 @@ func (th *testHandler) ComQuery(c *Conn, query string) (*sqltypes.Result, error)
 			Rows: [][]sqltypes.Value{
 				{
 					sqltypes.MakeTrusted(querypb.Type_VARCHAR, []byte(c.SchemaName)),
+				},
+			},
+		}, nil
+	}
+
+	if query == "ssl echo" {
+		value := "OFF"
+		if c.Capabilities&CapabilityClientSSL > 0 {
+			value = "ON"
+		}
+		return &sqltypes.Result{
+
+			Fields: []*querypb.Field{
+				{
+					Name: "ssl_flag",
+					Type: querypb.Type_VARCHAR,
+				},
+			},
+			Rows: [][]sqltypes.Value{
+				{
+					sqltypes.MakeTrusted(querypb.Type_VARCHAR, []byte(value)),
 				},
 			},
 		}, nil
@@ -162,9 +187,96 @@ func TestServer(t *testing.T) {
 		t.Errorf("Unexpected output for 'schema echo'")
 	}
 
+	// Sanity check: make sure this didn't go through SSL
+	output, ok = runMysql(t, params, "ssl echo")
+	if !ok {
+		t.Fatalf("mysql failed: %v", output)
+	}
+	if !strings.Contains(output, "ssl_flag") ||
+		!strings.Contains(output, "OFF") ||
+		!strings.Contains(output, "1 row in set") {
+		t.Errorf("Unexpected output for 'ssl echo': %v", output)
+	}
 	// Uncomment to leave setup up for a while, to run tests manually.
 	//	fmt.Printf("Listening to server on host '%v' port '%v'.\n", host, port)
 	//	time.Sleep(60 * time.Minute)
+}
+
+// TestTLSServer creates a Server with TLS support, then uses mysql
+// client to connect to it.
+func TestTLSServer(t *testing.T) {
+	th := &testHandler{}
+
+	// Create the listener, so we can get its host.
+	// Below, we are enabling --ssl-verify-server-cert, which adds
+	// a check that the common name of the certificate matches the
+	// server host name we connect to.
+	l, err := NewListener("tcp", ":0", th)
+	if err != nil {
+		t.Fatalf("NewListener failed: %v", err)
+	}
+	defer l.Close()
+	host := l.Addr().(*net.TCPAddr).IP.String()
+	port := l.Addr().(*net.TCPAddr).Port
+
+	// Create the certs.
+	root, err := ioutil.TempDir("", "TestTLSServer")
+	if err != nil {
+		t.Fatalf("TempDir failed: %v", err)
+	}
+	defer os.RemoveAll(root)
+	tlstest.CreateCA(root)
+	tlstest.CreateSignedCert(root, tlstest.CA, "01", "server", host)
+	tlstest.CreateSignedCert(root, tlstest.CA, "02", "client", "Client Cert")
+
+	// Create the server with TLS config.
+	serverConfig, err := grpcutils.TLSServerConfig(
+		path.Join(root, "server-cert.pem"),
+		path.Join(root, "server-key.pem"),
+		path.Join(root, "ca-cert.pem"))
+	if err != nil {
+		t.Fatalf("TLSServerConfig failed: %v", err)
+	}
+	l.TLSConfig = serverConfig
+	l.PasswordMap["user1"] = "password1"
+	go func() {
+		l.Accept()
+	}()
+
+	// Setup the right parameters.
+	params := &sqldb.ConnParams{
+		Host:  host,
+		Port:  port,
+		Uname: "user1",
+		Pass:  "password1",
+		// SSL flags.
+		Flags:   CapabilityClientSSL,
+		SslCa:   path.Join(root, "ca-cert.pem"),
+		SslCert: path.Join(root, "client-cert.pem"),
+		SslKey:  path.Join(root, "client-key.pem"),
+	}
+
+	// Run a 'select rows' command with results.
+	output, ok := runMysql(t, params, "select rows")
+	if !ok {
+		t.Fatalf("mysql failed: %v", output)
+	}
+	if !strings.Contains(output, "nice name") ||
+		!strings.Contains(output, "nicer name") ||
+		!strings.Contains(output, "2 rows in set") {
+		t.Errorf("Unexpected output for 'select rows'")
+	}
+
+	// make sure this went through SSL
+	output, ok = runMysql(t, params, "ssl echo")
+	if !ok {
+		t.Fatalf("mysql failed: %v", output)
+	}
+	if !strings.Contains(output, "ssl_flag") ||
+		!strings.Contains(output, "ON") ||
+		!strings.Contains(output, "1 row in set") {
+		t.Errorf("Unexpected output for 'ssl echo': %v", output)
+	}
 }
 
 // runMysql forks a mysql command line process connecting to the provided server.
@@ -205,6 +317,15 @@ func runMysql(t *testing.T, params *sqldb.ConnParams, command string) (string, b
 	if params.DbName != "" {
 		args = append(args, []string{
 			"-D", params.DbName,
+		}...)
+	}
+	if params.Flags&CapabilityClientSSL > 0 {
+		args = append(args, []string{
+			"--ssl",
+			"--ssl-ca", params.SslCa,
+			"--ssl-cert", params.SslCert,
+			"--ssl-key", params.SslKey,
+			"--ssl-verify-server-cert",
 		}...)
 	}
 	env := []string{

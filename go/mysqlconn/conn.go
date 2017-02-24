@@ -145,6 +145,46 @@ func newConn(conn net.Conn) *Conn {
 	}
 }
 
+// readPacketDirect attempts to read a packet from the socket directly.
+// It needs to be used for the first handshake packet the server receives,
+// so we do't buffer the SSL negociation packet. As a shortcut, only
+// packets smaller than MaxPacketSize can be read here.
+func (c *Conn) readPacketDirect() ([]byte, error) {
+	var header [4]byte
+	if _, err := io.ReadFull(c.conn, header[:]); err != nil {
+		return nil, fmt.Errorf("io.ReadFull(header size) failed: %v", err)
+	}
+
+	sequence := uint8(header[3])
+	if sequence != c.sequence {
+		return nil, fmt.Errorf("invalid sequence, expected %v got %v", c.sequence, sequence)
+	}
+
+	c.sequence++
+
+	length := int(uint32(header[0]) | uint32(header[1])<<8 | uint32(header[2])<<16)
+	if length <= cap(c.buffer) {
+		// Fast path: read into buffer, we're good.
+		c.buffer = c.buffer[:length]
+		if _, err := io.ReadFull(c.conn, c.buffer); err != nil {
+			return nil, fmt.Errorf("io.ReadFull(direct packet body of length %v) failed: %v", length, err)
+		}
+		return c.buffer, nil
+	}
+
+	// Sanity check
+	if length == MaxPacketSize {
+		return nil, fmt.Errorf("readPacketDirect doesn't support more than one packet")
+	}
+
+	// Slow path, revert to allocating.
+	data := make([]byte, length)
+	if _, err := io.ReadFull(c.conn, data); err != nil {
+		return nil, fmt.Errorf("io.ReadFull(packet body of length %v) failed: %v", length, err)
+	}
+	return data, nil
+}
+
 // readEphemeralPacket attempts to read a packet into c.buffer.  Do
 // not use this method if the contents of the packet needs to be kept
 // after the next readEphemeralPacket.  If the packet is bigger than

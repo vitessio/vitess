@@ -121,13 +121,22 @@ func verifyPacketCommsSpecific(t *testing.T, cConn *Conn, data []byte,
 // Write a packet on one side, read it on the other, check it's
 // correct.  We use all possible read and write methods.
 func verifyPacketComms(t *testing.T, cConn, sConn *Conn, data []byte) {
+	// All three writes, with ReadPacket.
 	verifyPacketCommsSpecific(t, cConn, data, useWritePacket, sConn.ReadPacket)
 	verifyPacketCommsSpecific(t, cConn, data, useWriteEphemeralPacket, sConn.ReadPacket)
 	verifyPacketCommsSpecific(t, cConn, data, useWriteEphemeralPacketDirect, sConn.ReadPacket)
 
+	// All three writes, with readEphemeralPacket.
 	verifyPacketCommsSpecific(t, cConn, data, useWritePacket, sConn.readEphemeralPacket)
 	verifyPacketCommsSpecific(t, cConn, data, useWriteEphemeralPacket, sConn.readEphemeralPacket)
 	verifyPacketCommsSpecific(t, cConn, data, useWriteEphemeralPacketDirect, sConn.readEphemeralPacket)
+
+	// All three writes, with readPacketDirect, if size allows it.
+	if len(data) < MaxPacketSize {
+		verifyPacketCommsSpecific(t, cConn, data, useWritePacket, sConn.readPacketDirect)
+		verifyPacketCommsSpecific(t, cConn, data, useWriteEphemeralPacket, sConn.readPacketDirect)
+		verifyPacketCommsSpecific(t, cConn, data, useWriteEphemeralPacketDirect, sConn.readPacketDirect)
+	}
 }
 
 func TestPackets(t *testing.T) {

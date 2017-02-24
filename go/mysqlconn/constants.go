@@ -60,7 +60,6 @@ const (
 
 	// CapabilityClientSSL is CLIENT_SSL.
 	// Switch to SSL after handshake.
-	// Not supported yet, but checked.
 	CapabilityClientSSL = 1 << 11
 
 	// CLIENT_IGNORE_SIGPIPE 1 << 12

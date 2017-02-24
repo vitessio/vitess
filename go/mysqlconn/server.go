@@ -3,6 +3,7 @@ package mysqlconn
 import (
 	"bytes"
 	"crypto/rand"
+	"crypto/tls"
 	"fmt"
 	"net"
 
@@ -59,6 +60,10 @@ type Listener struct {
 
 	// ServerVersion is the version we will advertise.
 	ServerVersion string
+
+	// TLSConfig is the server TLS config. If set, we will advertise
+	// that we support SSL.
+	TLSConfig *tls.Config
 
 	// PasswordMap maps users to passwords.
 	PasswordMap map[string]string
@@ -126,22 +131,37 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32) {
 	defer l.handler.ConnectionClosed(c)
 
 	// First build and send the server handshake packet.
-	cipher, err := c.writeHandshakeV10(l.ServerVersion)
+	cipher, err := c.writeHandshakeV10(l.ServerVersion, l.TLSConfig != nil)
 	if err != nil {
 		log.Errorf("Cannot send HandshakeV10 packet: %v", err)
 		return
 	}
 
-	// Wait for the client response.
-	response, err := c.readEphemeralPacket()
+	// Wait for the client response. This has to be a direct read,
+	// so we don't buffer the TLS negociation packets.
+	response, err := c.readPacketDirect()
 	if err != nil {
 		log.Errorf("Cannot read client handshake response: %v", err)
 		return
 	}
-	username, authResponse, err := l.parseClientHandshakePacket(c, response)
+	username, authResponse, err := l.parseClientHandshakePacket(c, true, response)
 	if err != nil {
 		log.Errorf("Cannot parse client handshake response: %v", err)
 		return
+	}
+	if c.Capabilities&CapabilityClientSSL > 0 {
+		// SSL was enabled. We need to re-read the auth packet.
+		response, err = c.readEphemeralPacket()
+		if err != nil {
+			log.Errorf("Cannot read post-SSL client handshake response: %v", err)
+			return
+		}
+
+		username, authResponse, err = l.parseClientHandshakePacket(c, false, response)
+		if err != nil {
+			log.Errorf("Cannot parse post-SSL client handshake response: %v", err)
+			return
+		}
 	}
 
 	// Find the user in our map
@@ -225,7 +245,7 @@ func (l *Listener) Close() {
 
 // writeHandshakeV10 writes the Initial Handshake Packet, server side.
 // It returns the cipher data.
-func (c *Conn) writeHandshakeV10(serverVersion string) ([]byte, error) {
+func (c *Conn) writeHandshakeV10(serverVersion string, enableTLS bool) ([]byte, error) {
 	capabilities := CapabilityClientLongPassword |
 		CapabilityClientLongFlag |
 		CapabilityClientConnectWithDB |
@@ -235,6 +255,9 @@ func (c *Conn) writeHandshakeV10(serverVersion string) ([]byte, error) {
 		CapabilityClientPluginAuth |
 		CapabilityClientPluginAuthLenencClientData |
 		CapabilityClientDeprecateEOF
+	if enableTLS {
+		capabilities |= CapabilityClientSSL
+	}
 
 	length :=
 		1 + // protocol version
@@ -322,7 +345,7 @@ func (c *Conn) writeHandshakeV10(serverVersion string) ([]byte, error) {
 
 // parseClientHandshakePacket parses the handshake sent by the client.
 // Returns the username, auth-data, error.
-func (l *Listener) parseClientHandshakePacket(c *Conn, data []byte) (string, []byte, error) {
+func (l *Listener) parseClientHandshakePacket(c *Conn, firstTime bool, data []byte) (string, []byte, error) {
 	pos := 0
 
 	// Client flags, 4 bytes.
@@ -334,12 +357,15 @@ func (l *Listener) parseClientHandshakePacket(c *Conn, data []byte) (string, []b
 		return "", nil, fmt.Errorf("parseClientHandshakePacket: only support protocol 4.1")
 	}
 
-	// Remember a subset of the capabilities, so we can use them later in the protocol.
-	c.Capabilities = clientFlags & (CapabilityClientDeprecateEOF)
+	// Remember a subset of the capabilities, so we can use them
+	// later in the protocol. If we re-received the handshake packet
+	// after SSL negotiation, do not overwrite capabilities.
+	if firstTime {
+		c.Capabilities = clientFlags & (CapabilityClientDeprecateEOF)
+	}
 
 	// Max packet size. Don't do anything with this now.
 	// See doc.go for more information.
-	/*maxPacketSize*/
 	_, pos, ok = readUint32(data, pos)
 	if !ok {
 		return "", nil, fmt.Errorf("parseClientHandshakePacket: can't read maxPacketSize")
@@ -354,6 +380,17 @@ func (l *Listener) parseClientHandshakePacket(c *Conn, data []byte) (string, []b
 
 	// 23x reserved zero bytes.
 	pos += 23
+
+	// Check for SSL.
+	if firstTime && l.TLSConfig != nil && clientFlags&CapabilityClientSSL > 0 {
+		// Need to switch to TLS, and then re-read the packet.
+		conn := tls.Server(c.conn, l.TLSConfig)
+		c.conn = conn
+		c.reader.Reset(conn)
+		c.writer.Reset(conn)
+		c.Capabilities |= CapabilityClientSSL
+		return "", nil, nil
+	}
 
 	// username
 	username, pos, ok := readNullString(data, pos)
