@@ -723,35 +723,6 @@ func TestInsertFail(t *testing.T) {
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
 		t.Errorf("routerExec: %v, want prefix %v", err, want)
 	}
-
-	sbc.SetResults([]*sqltypes.Result{{RowsAffected: 1, InsertID: 1}})
-	sbclookup.SetResults([]*sqltypes.Result{{
-		Rows: [][]sqltypes.Value{{
-			sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")),
-		}},
-		RowsAffected: 1,
-		InsertID:     1,
-	}})
-	_, err = routerExec(router, "insert into user(id, v, name) values (null, 2, 'myname')", nil)
-	want = "sequence and db generated a value each for insert"
-	if err == nil || !strings.HasPrefix(err.Error(), want) {
-		t.Errorf("routerExec: %v, want prefix %v", err, want)
-	}
-	sbclookup.SetResults([]*sqltypes.Result{{
-		Rows: [][]sqltypes.Value{{
-			sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")),
-		}},
-		RowsAffected: 1,
-		InsertID:     1,
-	}, {
-		RowsAffected: 1,
-		InsertID:     1,
-	}})
-	_, err = routerExec(router, "insert into main1(id, v, name) values (null, 2, 'myname')", nil)
-	want = "sequence and db generated a value each for insert"
-	if err == nil || !strings.HasPrefix(err.Error(), want) {
-		t.Errorf("routerExec: %v, want prefix %v", err, want)
-	}
 }
 
 func TestMultiInsertSharded(t *testing.T) {
