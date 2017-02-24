@@ -73,14 +73,18 @@ func New(t *testing.T) *DB {
 		connections:  make(map[uint32]*mysqlconn.Conn),
 	}
 
+	authServer := mysqlconn.NewAuthServerConfig()
+	authServer.Entries["user1"] = &mysqlconn.AuthServerConfigEntry{
+		Password: "password1",
+	}
+
 	// Start listening.
 	var err error
-	db.listener, err = mysqlconn.NewListener("tcp", ":0", db)
+	db.listener, err = mysqlconn.NewListener("tcp", ":0", authServer, db)
 	if err != nil {
 		t.Fatalf("NewListener failed: %v", err)
 	}
 
-	db.listener.PasswordMap["user1"] = "password1"
 	db.acceptWG.Add(1)
 	go func() {
 		defer db.acceptWG.Done()

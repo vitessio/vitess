@@ -114,13 +114,15 @@ func (th *testHandler) ComQuery(c *Conn, query string) (*sqltypes.Result, error)
 func TestServer(t *testing.T) {
 	th := &testHandler{}
 
-	l, err := NewListener("tcp", ":0", th)
+	authServer := NewAuthServerConfig()
+	authServer.Entries["user1"] = &AuthServerConfigEntry{
+		Password: "password1",
+	}
+	l, err := NewListener("tcp", ":0", authServer, th)
 	if err != nil {
 		t.Fatalf("NewListener failed: %v", err)
 	}
 	defer l.Close()
-	l.PasswordMap["user1"] = "password1"
-
 	go func() {
 		l.Accept()
 	}()
@@ -197,6 +199,32 @@ func TestServer(t *testing.T) {
 		!strings.Contains(output, "1 row in set") {
 		t.Errorf("Unexpected output for 'ssl echo': %v", output)
 	}
+
+	// Permissions check: check a bad password is rejected.
+	params.Pass = "bad"
+	output, ok = runMysql(t, params, "select rows")
+	if ok {
+		t.Fatalf("mysql should have failed: %v", output)
+	}
+	if !strings.Contains(output, "1045") ||
+		!strings.Contains(output, "28000") ||
+		!strings.Contains(output, "Access denied") {
+		t.Errorf("Unexpected output for invalid password: %v", output)
+	}
+
+	// Permissions check: check an unknown user is rejected.
+	params.Pass = "password1"
+	params.Uname = "user2"
+	output, ok = runMysql(t, params, "select rows")
+	if ok {
+		t.Fatalf("mysql should have failed: %v", output)
+	}
+	if !strings.Contains(output, "1045") ||
+		!strings.Contains(output, "28000") ||
+		!strings.Contains(output, "Access denied") {
+		t.Errorf("Unexpected output for invalid password: %v", output)
+	}
+
 	// Uncomment to leave setup up for a while, to run tests manually.
 	//	fmt.Printf("Listening to server on host '%v' port '%v'.\n", host, port)
 	//	time.Sleep(60 * time.Minute)
@@ -207,11 +235,16 @@ func TestServer(t *testing.T) {
 func TestTLSServer(t *testing.T) {
 	th := &testHandler{}
 
+	authServer := NewAuthServerConfig()
+	authServer.Entries["user1"] = &AuthServerConfigEntry{
+		Password: "password1",
+	}
+
 	// Create the listener, so we can get its host.
 	// Below, we are enabling --ssl-verify-server-cert, which adds
 	// a check that the common name of the certificate matches the
 	// server host name we connect to.
-	l, err := NewListener("tcp", ":0", th)
+	l, err := NewListener("tcp", ":0", authServer, th)
 	if err != nil {
 		t.Fatalf("NewListener failed: %v", err)
 	}
@@ -238,7 +271,6 @@ func TestTLSServer(t *testing.T) {
 		t.Fatalf("TLSServerConfig failed: %v", err)
 	}
 	l.TLSConfig = serverConfig
-	l.PasswordMap["user1"] = "password1"
 	go func() {
 		l.Accept()
 	}()

@@ -21,8 +21,13 @@ import (
 func TestSSLConnection(t *testing.T) {
 	th := &testHandler{}
 
+	authServer := NewAuthServerConfig()
+	authServer.Entries["user1"] = &AuthServerConfigEntry{
+		Password: "password1",
+	}
+
 	// Create the listener, so we can get its host.
-	l, err := NewListener("tcp", ":0", th)
+	l, err := NewListener("tcp", ":0", authServer, th)
 	if err != nil {
 		t.Fatalf("NewListener failed: %v", err)
 	}
@@ -49,7 +54,6 @@ func TestSSLConnection(t *testing.T) {
 		t.Fatalf("TLSServerConfig failed: %v", err)
 	}
 	l.TLSConfig = serverConfig
-	l.PasswordMap["user1"] = "password1"
 	go func() {
 		l.Accept()
 	}()

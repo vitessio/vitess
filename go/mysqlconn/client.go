@@ -1,7 +1,6 @@
 package mysqlconn
 
 import (
-	"crypto/sha1"
 	"crypto/tls"
 	"fmt"
 	"net"
@@ -185,7 +184,7 @@ func (c *Conn) clientHandshake(characterSet uint8, params *sqldb.ConnParams) err
 	if err != nil {
 		return sqldb.NewSQLError(CRServerLost, "", "initial packet read failed: %v", err)
 	}
-	capabilities, cipher, err := c.parseInitialHandshakePacket(data)
+	capabilities, salt, err := c.parseInitialHandshakePacket(data)
 	if err != nil {
 		return err
 	}
@@ -243,7 +242,7 @@ func (c *Conn) clientHandshake(characterSet uint8, params *sqldb.ConnParams) err
 
 	// Build and send our handshake response 41.
 	// Note this one will never have SSL flag on.
-	if err := c.writeHandshakeResponse41(capabilities, cipher, characterSet, params); err != nil {
+	if err := c.writeHandshakeResponse41(capabilities, salt, characterSet, params); err != nil {
 		return err
 	}
 
@@ -467,7 +466,7 @@ func (c *Conn) writeSSLRequest(capabilities uint32, characterSet uint8, params *
 
 // writeHandshakeResponse41 writes the handshake response.
 // Returns a sqldb.SQLError.
-func (c *Conn) writeHandshakeResponse41(capabilities uint32, cipher []byte, characterSet uint8, params *sqldb.ConnParams) error {
+func (c *Conn) writeHandshakeResponse41(capabilities uint32, salt []byte, characterSet uint8, params *sqldb.ConnParams) error {
 	// Build our flags.
 	var flags uint32 = CapabilityClientLongPassword |
 		CapabilityClientLongFlag |
@@ -483,7 +482,7 @@ func (c *Conn) writeHandshakeResponse41(capabilities uint32, cipher []byte, char
 	// FIXME(alainjobart) add multi statement, client found rows.
 
 	// Password encryption.
-	scrambledPassword := scramblePassword(cipher, []byte(params.Pass))
+	scrambledPassword := scramblePassword(salt, []byte(params.Pass))
 
 	length :=
 		4 + // Client capability flags.
@@ -557,33 +556,4 @@ func (c *Conn) writeHandshakeResponse41(capabilities uint32, cipher []byte, char
 		return sqldb.NewSQLError(CRServerLost, SSUnknownSQLState, "cannot flush HandshakeResponse41: %v", err)
 	}
 	return nil
-}
-
-// Encrypt password using 4.1+ method
-func scramblePassword(scramble, password []byte) []byte {
-	if len(password) == 0 {
-		return nil
-	}
-
-	// stage1Hash = SHA1(password)
-	crypt := sha1.New()
-	crypt.Write(password)
-	stage1 := crypt.Sum(nil)
-
-	// scrambleHash = SHA1(scramble + SHA1(stage1Hash))
-	// inner Hash
-	crypt.Reset()
-	crypt.Write(stage1)
-	hash := crypt.Sum(nil)
-	// outer Hash
-	crypt.Reset()
-	crypt.Write(scramble)
-	crypt.Write(hash)
-	scramble = crypt.Sum(nil)
-
-	// token = scrambleHash XOR stage1Hash
-	for i := range scramble {
-		scramble[i] ^= stage1[i]
-	}
-	return scramble
 }

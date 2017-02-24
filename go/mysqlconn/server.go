@@ -1,8 +1,6 @@
 package mysqlconn
 
 import (
-	"bytes"
-	"crypto/rand"
 	"crypto/tls"
 	"fmt"
 	"net"
@@ -47,6 +45,9 @@ type Handler interface {
 type Listener struct {
 	// Construction parameters, set by NewListener.
 
+	// authServer is the AuthServer object to use for authentication.
+	authServer AuthServer
+
 	// handler is the data handler.
 	handler Handler
 
@@ -65,9 +66,6 @@ type Listener struct {
 	// that we support SSL.
 	TLSConfig *tls.Config
 
-	// PasswordMap maps users to passwords.
-	PasswordMap map[string]string
-
 	// The following parameters are changed by the Accept routine.
 
 	// Incrementing ID for connection id.
@@ -75,17 +73,18 @@ type Listener struct {
 }
 
 // NewListener creates a new Listener.
-func NewListener(protocol, address string, handler Handler) (*Listener, error) {
+func NewListener(protocol, address string, authServer AuthServer, handler Handler) (*Listener, error) {
 	listener, err := net.Listen(protocol, address)
 	if err != nil {
 		return nil, err
 	}
 
 	return &Listener{
+		authServer: authServer,
+		handler:    handler,
+		listener:   listener,
+
 		ServerVersion: DefaultServerVersion,
-		handler:       handler,
-		PasswordMap:   make(map[string]string),
-		listener:      listener,
 		connectionID:  1,
 	}, nil
 }
@@ -131,7 +130,7 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32) {
 	defer l.handler.ConnectionClosed(c)
 
 	// First build and send the server handshake packet.
-	cipher, err := c.writeHandshakeV10(l.ServerVersion, l.TLSConfig != nil)
+	salt, err := c.writeHandshakeV10(l.ServerVersion, l.authServer, l.TLSConfig != nil)
 	if err != nil {
 		log.Errorf("Cannot send HandshakeV10 packet: %v", err)
 		return
@@ -144,7 +143,7 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32) {
 		log.Errorf("Cannot read client handshake response: %v", err)
 		return
 	}
-	username, authResponse, err := l.parseClientHandshakePacket(c, true, response)
+	user, authResponse, err := l.parseClientHandshakePacket(c, true, response)
 	if err != nil {
 		log.Errorf("Cannot parse client handshake response: %v", err)
 		return
@@ -157,28 +156,21 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32) {
 			return
 		}
 
-		username, authResponse, err = l.parseClientHandshakePacket(c, false, response)
+		user, authResponse, err = l.parseClientHandshakePacket(c, false, response)
 		if err != nil {
 			log.Errorf("Cannot parse post-SSL client handshake response: %v", err)
 			return
 		}
 	}
 
-	// Find the user in our map
-	password, ok := l.PasswordMap[username]
-	if !ok {
-		log.Errorf("Invalid user: %v", username)
-		c.writeErrorPacket(ERAccessDeniedError, SSAccessDeniedError, "Access denied for user '%v'", username)
+	// See if the user is authenticated.
+	userData, err := l.authServer.ValidateHash(salt, user, authResponse)
+	if err != nil {
+		c.writeErrorPacketFromError(err)
 		return
 	}
-
-	// Validate the password.
-	computedAuthResponse := scramblePassword(cipher, []byte(password))
-	if bytes.Compare(authResponse, computedAuthResponse) != 0 {
-		log.Errorf("Invalid password for user %v", username)
-		c.writeErrorPacket(ERAccessDeniedError, SSAccessDeniedError, "Access denied for user '%v'", username)
-		return
-	}
+	c.User = user
+	c.UserData = userData
 
 	// Send an OK packet.
 	if err := c.writeOKPacket(0, 0, c.StatusFlags, 0); err != nil {
@@ -244,8 +236,8 @@ func (l *Listener) Close() {
 }
 
 // writeHandshakeV10 writes the Initial Handshake Packet, server side.
-// It returns the cipher data.
-func (c *Conn) writeHandshakeV10(serverVersion string, enableTLS bool) ([]byte, error) {
+// It returns the salt data.
+func (c *Conn) writeHandshakeV10(serverVersion string, authServer AuthServer, enableTLS bool) ([]byte, error) {
 	capabilities := CapabilityClientLongPassword |
 		CapabilityClientLongFlag |
 		CapabilityClientConnectWithDB |
@@ -263,7 +255,7 @@ func (c *Conn) writeHandshakeV10(serverVersion string, enableTLS bool) ([]byte, 
 		1 + // protocol version
 			lenNullString(serverVersion) +
 			4 + // connection ID
-			8 + // first part of cipher data
+			8 + // first part of salt data
 			1 + // filler byte
 			2 + // capability flags (lower 2 bytes)
 			1 + // character set
@@ -286,20 +278,20 @@ func (c *Conn) writeHandshakeV10(serverVersion string, enableTLS bool) ([]byte, 
 	// Add connectionID in.
 	pos = writeUint32(data, pos, c.ConnectionID)
 
-	// Generate the cipher, put 8 bytes in.
-	cipher := make([]byte, 20)
-	if _, err := rand.Read(cipher); err != nil {
-		return nil, err
-	}
-
-        // Cipher must be a legal UTF8 string.
-	for i := 0; i < len(cipher); i++ {
-		cipher[i] &= 0x7f
-		if cipher[i] == '\x00' || cipher[i] == '$' {
-			cipher[i] += 1
+	// Generate the salt if needed, put 8 bytes in.
+	var salt []byte
+	if authServer.UseClearText() {
+		// salt is unused.
+		salt = make([]byte, 20)
+	} else {
+		var err error
+		salt, err = authServer.Salt()
+		if err != nil {
+			return nil, err
 		}
 	}
-	pos += copy(data[pos:], cipher[:8])
+
+	pos += copy(data[pos:], salt[:8])
 
 	// One filler byte, always 0.
 	pos = writeByte(data, pos, 0)
@@ -324,7 +316,7 @@ func (c *Conn) writeHandshakeV10(serverVersion string, enableTLS bool) ([]byte, 
 	pos += 10
 
 	// Second part of auth plugin data.
-	pos += copy(data[pos:], cipher[8:])
+	pos += copy(data[pos:], salt[8:])
 	data[pos] = 0
 	pos++
 
@@ -340,7 +332,7 @@ func (c *Conn) writeHandshakeV10(serverVersion string, enableTLS bool) ([]byte, 
 		return nil, err
 	}
 
-	return cipher, nil
+	return salt, nil
 }
 
 // parseClientHandshakePacket parses the handshake sent by the client.

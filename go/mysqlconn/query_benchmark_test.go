@@ -128,12 +128,16 @@ func benchmarkOldParallelReads(b *testing.B, params sqldb.ConnParams, parallelCo
 func BenchmarkParallelShortQueries(b *testing.B) {
 	th := &testHandler{}
 
-	l, err := NewListener("tcp", ":0", th)
+	authServer := NewAuthServerConfig()
+	authServer.Entries["user1"] = &AuthServerConfigEntry{
+		Password: "password1",
+	}
+
+	l, err := NewListener("tcp", ":0", authServer, th)
 	if err != nil {
 		b.Fatalf("NewListener failed: %v", err)
 	}
 	defer l.Close()
-	l.PasswordMap["user1"] = "password1"
 
 	go func() {
 		l.Accept()

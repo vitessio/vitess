@@ -1,8 +1,10 @@
 package vtgate
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"net"
 	"strings"
 
@@ -20,8 +22,44 @@ import (
 )
 
 var (
-	mysqlServerPort = flag.Int("mysql_server_port", 0, "If set, also listen for MySQL binary protocol connections on this port.")
+	mysqlServerPort             = flag.Int("mysql_server_port", 0, "If set, also listen for MySQL binary protocol connections on this port.")
+	mysqlAuthServerImpl         = flag.String("mysql_auth_server_impl", "config", "Which auth server implementation to use.")
+	mysqlAuthServerConfigFile   = flag.String("mysql_auth_server_config_file", "", "JSON File to read the users/passwords from.")
+	mysqlAuthServerConfigString = flag.String("mysql_auth_server_config_string", "", "JSON representation of the users/passwords config.")
 )
+
+// Handles initializing the AuthServerConfig if necessary.
+func initAuthServerConfig() {
+	// Check parameters.
+	if *mysqlAuthServerConfigFile == "" && *mysqlAuthServerConfigString == "" {
+		// Not configured, nothing to do.
+		log.Infof("Not configuring AuthServerConfig, as mysql_auth_server_config_file and mysql_auth_server_config_string are empty")
+		return
+	}
+	if *mysqlAuthServerConfigFile != "" && *mysqlAuthServerConfigString != "" {
+		// Both parameters specified, can only use on.
+		log.Fatalf("Both mysql_auth_server_config_file and mysql_auth_server_config_string specified, can only use one.")
+	}
+
+	// Read file if necessary.
+	authServerConfig := mysqlconn.NewAuthServerConfig()
+	jsonConfig := []byte(*mysqlAuthServerConfigString)
+	if *mysqlAuthServerConfigFile != "" {
+		data, err := ioutil.ReadFile(*mysqlAuthServerConfigFile)
+		if err != nil {
+			log.Fatalf("Failed to read mysql_auth_server_config_file file: %v", err)
+		}
+		jsonConfig = data
+	}
+
+	// Parse JSON config.
+	if err := json.Unmarshal(jsonConfig, &authServerConfig.Entries); err != nil {
+		log.Fatalf("Error parsing auth server config: %v", err)
+	}
+
+	// And register the server.
+	mysqlconn.RegisterAuthServerImpl("config", authServerConfig)
+}
 
 // vtgateHandler implements the Listener interface.
 // It stores the Session in the ClientData of a Connection, if a transaction
@@ -146,18 +184,17 @@ func init() {
 			return
 		}
 
+		// Initialize the config AuthServer if necessary.
+		initAuthServerConfig()
+		authServer := mysqlconn.GetAuthServer(*mysqlAuthServerImpl)
+
 		// Create a Listener.
 		var err error
 		vh := newVtgateHandler(rpcVTGate)
-		listener, err = mysqlconn.NewListener("tcp", net.JoinHostPort("", fmt.Sprintf("%v", *mysqlServerPort)), vh)
+		listener, err = mysqlconn.NewListener("tcp", net.JoinHostPort("", fmt.Sprintf("%v", *mysqlServerPort)), authServer, vh)
 		if err != nil {
 			log.Fatalf("mysqlconn.NewListener failed: %v", err)
 		}
-
-		// Add fake users for now.
-		// FIXME(alainjobart): add a config file with users
-		// and passwords.
-		listener.PasswordMap["mysql_user"] = "mysql_password"
 
 		// And starts listening.
 		go func() {

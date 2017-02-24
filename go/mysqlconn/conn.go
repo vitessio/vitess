@@ -60,7 +60,7 @@ type Conn struct {
 	// Capabilities is the current set of features this connection
 	// is using.  It is the features that are both supported by
 	// the client and the server, and currently in use.
-	// It is set after the initial handshake.
+	// It is set during the initial handshake.
 	//
 	// It is only used for CapabilityClientDeprecateEOF.
 	Capabilities uint32
@@ -70,6 +70,14 @@ type Conn struct {
 	// It is set during the initial handshake.
 	// See the values in constants.go.
 	CharacterSet uint8
+
+	// User is the name used by the client to connect.
+	// It is set during the initial handshake.
+	User string
+
+	// UserData is custom data returned by the AuthServer module.
+	// It is set during the initial handshake.
+	UserData string
 
 	// SchemaName is the default database name to use. It is set
 	// during handshake, and by ComInitDb packets. Both client and
