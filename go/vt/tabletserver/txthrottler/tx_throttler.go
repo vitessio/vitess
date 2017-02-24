@@ -247,7 +247,7 @@ func newTxThrottlerState(config *txThrottlerConfig, keyspace, shard string,
 	if err != nil {
 		return nil, err
 	}
-	if t.UpdateConfiguration(config.throttlerConfig, true /* copyZeroValues */); err != nil {
+	if err := t.UpdateConfiguration(config.throttlerConfig, true /* copyZeroValues */); err != nil {
 		t.Close()
 		return nil, err
 	}
