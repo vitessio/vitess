@@ -161,7 +161,7 @@ func RegisterWorkflowFactory() {
 }
 
 // Init is a part of workflow.Factory interface. It initializes a Workflow protobuf object.
-func (*SwapWorkflowFactory) Init(workflowProto *workflowpb.Workflow, args []string) error {
+func (*SwapWorkflowFactory) Init(_ *workflow.Manager, workflowProto *workflowpb.Workflow, args []string) error {
 	subFlags := flag.NewFlagSet(workflowFactoryName, flag.ContinueOnError)
 
 	keyspace := subFlags.String("keyspace", "", "Name of a keyspace to perform schema swap on")

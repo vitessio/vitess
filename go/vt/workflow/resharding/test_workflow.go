@@ -102,7 +102,7 @@ func (tw *TestWorkflow) runSimple(ctx context.Context, t *workflowpb.Task) error
 type TestWorkflowFactory struct{}
 
 // Init is part of the workflow.Factory interface.
-func (*TestWorkflowFactory) Init(w *workflowpb.Workflow, args []string) error {
+func (*TestWorkflowFactory) Init(_ *workflow.Manager, w *workflowpb.Workflow, args []string) error {
 	subFlags := flag.NewFlagSet(testWorkflowFactoryName, flag.ContinueOnError)
 	retryFlag := subFlags.Bool("retry", false, "The retry flag should be true if the retry action need to be tested")
 	count := subFlags.Int("count", 0, "The number of simple tasks")
