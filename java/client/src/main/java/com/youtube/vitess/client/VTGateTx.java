@@ -1,5 +1,9 @@
 package com.youtube.vitess.client;
 
+import static com.google.common.base.Preconditions.checkNotNull;
+import static com.google.common.util.concurrent.Futures.transformAsync;
+import static com.google.common.util.concurrent.MoreExecutors.directExecutor;
+
 import com.google.common.collect.Iterables;
 import com.google.common.util.concurrent.AsyncFunction;
 import com.google.common.util.concurrent.Futures;
@@ -32,37 +36,31 @@ import com.youtube.vitess.proto.Vtgate.ExecuteShardsResponse;
 import com.youtube.vitess.proto.Vtgate.RollbackRequest;
 import com.youtube.vitess.proto.Vtgate.RollbackResponse;
 import com.youtube.vitess.proto.Vtgate.Session;
-
-import javax.annotation.Nullable;
 import java.sql.SQLDataException;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-
-import static com.google.common.base.Preconditions.checkNotNull;
+import javax.annotation.Nullable;
 
 /**
  * An asynchronous VTGate transaction session.
  *
- * <p>
- * Because {@code VTGateTx} manages a session cookie, only one operation can be in flight at a time
- * on a given instance. The methods are {@code synchronized} only because the session cookie is
+ * <p>Because {@code VTGateTx} manages a session cookie, only one operation can be in flight at a
+ * time on a given instance. The methods are {@code synchronized} only because the session cookie is
  * updated asynchronously when the RPC response comes back.
  *
- * <p>
- * After calling any method that returns a {@link SQLFuture}, you must wait for that future to
- * complete before calling any other methods on that {@code VTGateTx} instance. An
- * {@link IllegalStateException} will be thrown if this constraint is violated.
+ * <p>After calling any method that returns a {@link SQLFuture}, you must wait for that future to
+ * complete before calling any other methods on that {@code VTGateTx} instance. An {@link
+ * IllegalStateException} will be thrown if this constraint is violated.
  *
- * <p>
- * All operations on {@code VTGateTx} are asynchronous, including those whose ultimate return type
- * is {@link Void}, such as {@link #commit(Context)} and {@link #rollback(Context)}. You must still
- * wait for the futures returned by these methods to complete and check the error on them (such as
- * by calling {@code checkedGet()} before you can assume the operation has finished successfully.
+ * <p>All operations on {@code VTGateTx} are asynchronous, including those whose ultimate return
+ * type is {@link Void}, such as {@link #commit(Context)} and {@link #rollback(Context)}. You must
+ * still wait for the futures returned by these methods to complete and check the error on them
+ * (such as by calling {@code checkedGet()} before you can assume the operation has finished
+ * successfully.
  *
- * <p>
- * If you prefer a synchronous API, you can use {@link VTGateBlockingConn#begin(Context)}, which
+ * <p>If you prefer a synchronous API, you can use {@link VTGateBlockingConn#begin(Context)}, which
  * returns a {@link VTGateBlockingTx} instead.
  */
 public class VTGateTx {
@@ -94,15 +92,18 @@ public class VTGateTx {
     }
 
     SQLFuture<Cursor> call =
-        new SQLFuture<>(Futures.transformAsync(client.execute(ctx, requestBuilder.build()),
-            new AsyncFunction<ExecuteResponse, Cursor>() {
-              @Override
-              public ListenableFuture<Cursor> apply(ExecuteResponse response) throws Exception {
-                setSession(response.getSession());
-                Proto.checkError(response.getError());
-                return Futures.<Cursor>immediateFuture(new SimpleCursor(response.getResult()));
-              }
-            }));
+        new SQLFuture<>(
+            transformAsync(
+                client.execute(ctx, requestBuilder.build()),
+                new AsyncFunction<ExecuteResponse, Cursor>() {
+                  @Override
+                  public ListenableFuture<Cursor> apply(ExecuteResponse response) throws Exception {
+                    setSession(response.getSession());
+                    Proto.checkError(response.getError());
+                    return Futures.<Cursor>immediateFuture(new SimpleCursor(response.getResult()));
+                  }
+                },
+                directExecutor()));
     lastCall = call;
     return call;
   }
@@ -125,16 +126,19 @@ public class VTGateTx {
     }
 
     SQLFuture<Cursor> call =
-        new SQLFuture<>(Futures.transformAsync(client.executeShards(ctx, requestBuilder.build()),
-            new AsyncFunction<ExecuteShardsResponse, Cursor>() {
-              @Override
-              public ListenableFuture<Cursor> apply(ExecuteShardsResponse response)
-                  throws Exception {
-                setSession(response.getSession());
-                Proto.checkError(response.getError());
-                return Futures.<Cursor>immediateFuture(new SimpleCursor(response.getResult()));
-              }
-            }));
+        new SQLFuture<>(
+            transformAsync(
+                client.executeShards(ctx, requestBuilder.build()),
+                new AsyncFunction<ExecuteShardsResponse, Cursor>() {
+                  @Override
+                  public ListenableFuture<Cursor> apply(ExecuteShardsResponse response)
+                      throws Exception {
+                    setSession(response.getSession());
+                    Proto.checkError(response.getError());
+                    return Futures.<Cursor>immediateFuture(new SimpleCursor(response.getResult()));
+                  }
+                },
+                directExecutor()));
     lastCall = call;
     return call;
   }
@@ -157,17 +161,20 @@ public class VTGateTx {
       requestBuilder.setCallerId(ctx.getCallerId());
     }
 
-    SQLFuture<Cursor> call = new SQLFuture<>(
-        Futures.transformAsync(client.executeKeyspaceIds(ctx, requestBuilder.build()),
-            new AsyncFunction<ExecuteKeyspaceIdsResponse, Cursor>() {
-              @Override
-              public ListenableFuture<Cursor> apply(ExecuteKeyspaceIdsResponse response)
-                  throws Exception {
-                setSession(response.getSession());
-                Proto.checkError(response.getError());
-                return Futures.<Cursor>immediateFuture(new SimpleCursor(response.getResult()));
-              }
-            }));
+    SQLFuture<Cursor> call =
+        new SQLFuture<>(
+            transformAsync(
+                client.executeKeyspaceIds(ctx, requestBuilder.build()),
+                new AsyncFunction<ExecuteKeyspaceIdsResponse, Cursor>() {
+                  @Override
+                  public ListenableFuture<Cursor> apply(ExecuteKeyspaceIdsResponse response)
+                      throws Exception {
+                    setSession(response.getSession());
+                    Proto.checkError(response.getError());
+                    return Futures.<Cursor>immediateFuture(new SimpleCursor(response.getResult()));
+                  }
+                },
+                directExecutor()));
     lastCall = call;
     return call;
   }
@@ -191,16 +198,19 @@ public class VTGateTx {
     }
 
     SQLFuture<Cursor> call =
-        new SQLFuture<>(Futures.transformAsync(client.executeKeyRanges(ctx, requestBuilder.build()),
-            new AsyncFunction<ExecuteKeyRangesResponse, Cursor>() {
-              @Override
-              public ListenableFuture<Cursor> apply(ExecuteKeyRangesResponse response)
-                  throws Exception {
-                setSession(response.getSession());
-                Proto.checkError(response.getError());
-                return Futures.<Cursor>immediateFuture(new SimpleCursor(response.getResult()));
-              }
-            }));
+        new SQLFuture<>(
+            transformAsync(
+                client.executeKeyRanges(ctx, requestBuilder.build()),
+                new AsyncFunction<ExecuteKeyRangesResponse, Cursor>() {
+                  @Override
+                  public ListenableFuture<Cursor> apply(ExecuteKeyRangesResponse response)
+                      throws Exception {
+                    setSession(response.getSession());
+                    Proto.checkError(response.getError());
+                    return Futures.<Cursor>immediateFuture(new SimpleCursor(response.getResult()));
+                  }
+                },
+                directExecutor()));
     lastCall = call;
     return call;
   }
@@ -225,16 +235,19 @@ public class VTGateTx {
     }
 
     SQLFuture<Cursor> call =
-        new SQLFuture<>(Futures.transformAsync(client.executeEntityIds(ctx, requestBuilder.build()),
-            new AsyncFunction<ExecuteEntityIdsResponse, Cursor>() {
-              @Override
-              public ListenableFuture<Cursor> apply(ExecuteEntityIdsResponse response)
-                  throws Exception {
-                setSession(response.getSession());
-                Proto.checkError(response.getError());
-                return Futures.<Cursor>immediateFuture(new SimpleCursor(response.getResult()));
-              }
-            }));
+        new SQLFuture<>(
+            transformAsync(
+                client.executeEntityIds(ctx, requestBuilder.build()),
+                new AsyncFunction<ExecuteEntityIdsResponse, Cursor>() {
+                  @Override
+                  public ListenableFuture<Cursor> apply(ExecuteEntityIdsResponse response)
+                      throws Exception {
+                    setSession(response.getSession());
+                    Proto.checkError(response.getError());
+                    return Futures.<Cursor>immediateFuture(new SimpleCursor(response.getResult()));
+                  }
+                },
+                directExecutor()));
     lastCall = call;
     return call;
   }
@@ -268,17 +281,20 @@ public class VTGateTx {
             requestBuilder.setCallerId(ctx.getCallerId());
         }
 
-        return new SQLFuture<>(Futures
-            .transformAsync(client.executeBatch(ctx, requestBuilder.build()),
-                new AsyncFunction<Vtgate.ExecuteBatchResponse, List<CursorWithError>>() {
-                    @Override public ListenableFuture<List<CursorWithError>> apply(
-                        Vtgate.ExecuteBatchResponse response) throws Exception {
-                        setSession(response.getSession());
-                        Proto.checkError(response.getError());
-                        return Futures.immediateFuture(
-                            Proto.fromQueryResponsesToCursorList(response.getResultsList()));
-                    }
-                }));
+    return new SQLFuture<>(
+        transformAsync(
+            client.executeBatch(ctx, requestBuilder.build()),
+            new AsyncFunction<Vtgate.ExecuteBatchResponse, List<CursorWithError>>() {
+              @Override
+              public ListenableFuture<List<CursorWithError>> apply(
+                  Vtgate.ExecuteBatchResponse response) throws Exception {
+                setSession(response.getSession());
+                Proto.checkError(response.getError());
+                return Futures.immediateFuture(
+                    Proto.fromQueryResponsesToCursorList(response.getResultsList()));
+              }
+            },
+            directExecutor()));
     }
 
   public synchronized SQLFuture<List<Cursor>> executeBatchShards(Context ctx,
@@ -296,18 +312,21 @@ public class VTGateTx {
       requestBuilder.setCallerId(ctx.getCallerId());
     }
 
-    SQLFuture<List<Cursor>> call = new SQLFuture<>(
-        Futures.transformAsync(client.executeBatchShards(ctx, requestBuilder.build()),
-            new AsyncFunction<ExecuteBatchShardsResponse, List<Cursor>>() {
-              @Override
-              public ListenableFuture<List<Cursor>> apply(ExecuteBatchShardsResponse response)
-                  throws Exception {
-                setSession(response.getSession());
-                Proto.checkError(response.getError());
-                return Futures
-                    .<List<Cursor>>immediateFuture(Proto.toCursorList(response.getResultsList()));
-              }
-            }));
+    SQLFuture<List<Cursor>> call =
+        new SQLFuture<>(
+            transformAsync(
+                client.executeBatchShards(ctx, requestBuilder.build()),
+                new AsyncFunction<ExecuteBatchShardsResponse, List<Cursor>>() {
+                  @Override
+                  public ListenableFuture<List<Cursor>> apply(ExecuteBatchShardsResponse response)
+                      throws Exception {
+                    setSession(response.getSession());
+                    Proto.checkError(response.getError());
+                    return Futures.<List<Cursor>>immediateFuture(
+                        Proto.toCursorList(response.getResultsList()));
+                  }
+                },
+                directExecutor()));
     lastCall = call;
     return call;
   }
@@ -328,18 +347,21 @@ public class VTGateTx {
       requestBuilder.setCallerId(ctx.getCallerId());
     }
 
-    SQLFuture<List<Cursor>> call = new SQLFuture<>(
-        Futures.transformAsync(client.executeBatchKeyspaceIds(ctx, requestBuilder.build()),
-            new AsyncFunction<ExecuteBatchKeyspaceIdsResponse, List<Cursor>>() {
-              @Override
-              public ListenableFuture<List<Cursor>> apply(ExecuteBatchKeyspaceIdsResponse response)
-                  throws Exception {
-                setSession(response.getSession());
-                Proto.checkError(response.getError());
-                return Futures
-                    .<List<Cursor>>immediateFuture(Proto.toCursorList(response.getResultsList()));
-              }
-            }));
+    SQLFuture<List<Cursor>> call =
+        new SQLFuture<>(
+            transformAsync(
+                client.executeBatchKeyspaceIds(ctx, requestBuilder.build()),
+                new AsyncFunction<ExecuteBatchKeyspaceIdsResponse, List<Cursor>>() {
+                  @Override
+                  public ListenableFuture<List<Cursor>> apply(
+                      ExecuteBatchKeyspaceIdsResponse response) throws Exception {
+                    setSession(response.getSession());
+                    Proto.checkError(response.getError());
+                    return Futures.<List<Cursor>>immediateFuture(
+                        Proto.toCursorList(response.getResultsList()));
+                  }
+                },
+                directExecutor()));
     lastCall = call;
     return call;
   }
@@ -356,14 +378,17 @@ public class VTGateTx {
       requestBuilder.setCallerId(ctx.getCallerId());
     }
     SQLFuture<Void> call =
-        new SQLFuture<>(Futures.transformAsync(client.commit(ctx, requestBuilder.build()),
-            new AsyncFunction<CommitResponse, Void>() {
-              @Override
-              public ListenableFuture<Void> apply(CommitResponse response) throws Exception {
-                setSession(null);
-                return Futures.<Void>immediateFuture(null);
-              }
-            }));
+        new SQLFuture<>(
+            transformAsync(
+                client.commit(ctx, requestBuilder.build()),
+                new AsyncFunction<CommitResponse, Void>() {
+                  @Override
+                  public ListenableFuture<Void> apply(CommitResponse response) throws Exception {
+                    setSession(null);
+                    return Futures.<Void>immediateFuture(null);
+                  }
+                },
+                directExecutor()));
     lastCall = call;
     return call;
   }
@@ -375,14 +400,17 @@ public class VTGateTx {
       requestBuilder.setCallerId(ctx.getCallerId());
     }
     SQLFuture<Void> call =
-        new SQLFuture<>(Futures.transformAsync(client.rollback(ctx, requestBuilder.build()),
-            new AsyncFunction<RollbackResponse, Void>() {
-              @Override
-              public ListenableFuture<Void> apply(RollbackResponse response) throws Exception {
-                setSession(null);
-                return Futures.<Void>immediateFuture(null);
-              }
-            }));
+        new SQLFuture<>(
+            transformAsync(
+                client.rollback(ctx, requestBuilder.build()),
+                new AsyncFunction<RollbackResponse, Void>() {
+                  @Override
+                  public ListenableFuture<Void> apply(RollbackResponse response) throws Exception {
+                    setSession(null);
+                    return Futures.<Void>immediateFuture(null);
+                  }
+                },
+                directExecutor()));
     lastCall = call;
     return call;
   }
