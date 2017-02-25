@@ -299,6 +299,10 @@ func TestClearTextServer(t *testing.T) {
 	if ok {
 		t.Fatalf("mysql should have failed but returned: %v", output)
 	}
+	if strings.Contains(output, "No such file or directory") {
+		t.Logf("skipping mysql clear text tests, as the clear text plugin cannot be loaded: %v", err)
+		return
+	}
 	if !strings.Contains(output, "plugin not enabled") {
 		t.Errorf("Unexpected output for 'select rows': %v", output)
 	}
