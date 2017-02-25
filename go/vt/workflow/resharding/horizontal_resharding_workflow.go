@@ -44,9 +44,9 @@ const (
 	phaseMigrateMaster              PhaseType = "migrate_master"
 )
 
-// Register registers the HorizontalReshardingWorkflowFactory as a factory
+// init registers the HorizontalReshardingWorkflowFactory as a factory
 // in the workflow framework.
-func Register() {
+func init() {
 	workflow.Register(horizontalReshardingFactoryName, &HorizontalReshardingWorkflowFactory{})
 }
 
@@ -315,7 +315,9 @@ func (hw *HorizontalReshardingWorkflow) Run(ctx context.Context, manager *workfl
 	hw.ctx = ctx
 	hw.topoServer = manager.TopoServer()
 	hw.manager = manager
-	hw.wr = wrangler.New(logutil.NewConsoleLogger(), manager.TopoServer(), tmclient.NewTabletManagerClient())
+	if hw.wr == nil {
+		hw.wr = wrangler.New(logutil.NewConsoleLogger(), manager.TopoServer(), tmclient.NewTabletManagerClient())
+	}
 	hw.wi = wi
 	hw.checkpointWriter = NewCheckpointWriter(hw.topoServer, hw.checkpoint, hw.wi)
 

@@ -459,6 +459,17 @@ func (m *Manager) Wait(ctx context.Context, uuid string) error {
 	return nil
 }
 
+// GetWorkflowForTesting returns the workflow within the runningworkflow
+// by uuid. The method is used when injecting a mock interface into a manager
+// created workflow in unit test.
+func (m *Manager) GetWorkflowForTesting(uuid string) (Workflow, error) {
+	rw, err := m.getRunningWorkflow(uuid)
+	if err != nil {
+		return nil, err
+	}
+	return rw.workflow, nil
+}
+
 // getRunningWorkflow returns a runningWorkflow by uuid.
 func (m *Manager) getRunningWorkflow(uuid string) (*runningWorkflow, error) {
 	m.mu.Lock()
