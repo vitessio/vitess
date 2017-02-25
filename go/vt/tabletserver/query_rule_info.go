@@ -6,11 +6,12 @@ package tabletserver
 
 import (
 	"encoding/json"
-	"errors"
 	"sync"
 
 	log "github.com/golang/glog"
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 	"github.com/youtube/vitess/go/vt/tabletserver/planbuilder"
+	"github.com/youtube/vitess/go/vt/vterrors"
 )
 
 // QueryRuleInfo is the maintainer of QueryRules from multiple sources
@@ -59,7 +60,7 @@ func (qri *QueryRuleInfo) SetRules(ruleSource string, newRules *QueryRules) erro
 		qri.queryRulesMap[ruleSource] = newRules.Copy()
 		return nil
 	}
-	return errors.New("Rule source identifier " + ruleSource + " is not valid")
+	return vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "rule source identifier "+ruleSource+" is not valid")
 }
 
 // GetRules returns the corresponding QueryRules as designated by ruleSource parameter
@@ -69,7 +70,7 @@ func (qri *QueryRuleInfo) GetRules(ruleSource string) (*QueryRules, error) {
 	if ruleset, ok := qri.queryRulesMap[ruleSource]; ok {
 		return ruleset.Copy(), nil
 	}
-	return NewQueryRules(), errors.New("Rule source identifier " + ruleSource + " is not valid")
+	return NewQueryRules(), vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "rule source identifier "+ruleSource+" is not valid")
 }
 
 // filterByPlan creates a new QueryRules by prefiltering on all query rules that are contained in internal

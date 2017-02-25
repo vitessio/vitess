@@ -1347,7 +1347,7 @@ func (se *splitQuerySQLExecuter) SQLExecute(
 	// we don't have to parse the query again here.
 	ast, err := sqlparser.Parse(sql)
 	if err != nil {
-		return nil, fmt.Errorf("splitQuerySQLExecuter: parsing sql failed with: %v", err)
+		return nil, vterrors.Errorf(vterrors.Code(err), "splitQuerySQLExecuter: parsing sql failed with: %v", err)
 	}
 	parsedQuery := sqlparser.GenerateParsedQuery(ast)
 
@@ -1506,7 +1506,7 @@ func (tsv *TabletServer) UpdateStream(ctx context.Context, target *querypb.Targe
 // HandlePanic is part of the queryservice.QueryService interface
 func (tsv *TabletServer) HandlePanic(err *error) {
 	if x := recover(); x != nil {
-		*err = fmt.Errorf("uncaught panic: %v\n. Stack-trace:\n%s", x, tb.Stack(4))
+		*err = vterrors.Errorf(vtrpcpb.Code_INTERNAL, "uncaught panic: %v\n. Stack-trace:\n%s", x, tb.Stack(4))
 	}
 }
 

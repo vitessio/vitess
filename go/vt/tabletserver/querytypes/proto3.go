@@ -5,12 +5,13 @@
 package querytypes
 
 import (
-	"fmt"
 	"strconv"
 
 	"github.com/youtube/vitess/go/sqltypes"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
+	"github.com/youtube/vitess/go/vt/vterrors"
 )
 
 // BoundQueryToProto3 converts internal types to proto3 BoundQuery
@@ -57,7 +58,7 @@ func BindVariablesToProto3(bindVars map[string]interface{}) (map[string]*querypb
 		case []interface{}:
 			// This is how the list variables will normally appear.
 			if len(v) == 0 {
-				return nil, fmt.Errorf("empty list not allowed: %s", k)
+				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "empty list not allowed: %s", k)
 			}
 			bv = &querypb.BindVariable{
 				Type:   sqltypes.Tuple,
@@ -67,7 +68,7 @@ func BindVariablesToProto3(bindVars map[string]interface{}) (map[string]*querypb
 			for i, lv := range v {
 				typ, val, err := bindVariableToValue(lv)
 				if err != nil {
-					return nil, fmt.Errorf("key: %s: %v", k, err)
+					return nil, vterrors.Errorf(vterrors.Code(err), "key: %s: %v", k, err)
 				}
 				if typ != sqltypes.Null {
 					values[i].Type = typ
@@ -77,7 +78,7 @@ func BindVariablesToProto3(bindVars map[string]interface{}) (map[string]*querypb
 			}
 		case []string:
 			if len(v) == 0 {
-				return nil, fmt.Errorf("empty list not allowed: %s", k)
+				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "empty list not allowed: %s", k)
 			}
 			bv = &querypb.BindVariable{
 				Type:   sqltypes.Tuple,
@@ -91,7 +92,7 @@ func BindVariablesToProto3(bindVars map[string]interface{}) (map[string]*querypb
 			}
 		case [][]byte:
 			if len(v) == 0 {
-				return nil, fmt.Errorf("empty list not allowed: %s", k)
+				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "empty list not allowed: %s", k)
 			}
 			bv = &querypb.BindVariable{
 				Type:   sqltypes.Tuple,
@@ -105,7 +106,7 @@ func BindVariablesToProto3(bindVars map[string]interface{}) (map[string]*querypb
 			}
 		case []int:
 			if len(v) == 0 {
-				return nil, fmt.Errorf("empty list not allowed: %s", k)
+				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "empty list not allowed: %s", k)
 			}
 			bv = &querypb.BindVariable{
 				Type:   sqltypes.Tuple,
@@ -119,7 +120,7 @@ func BindVariablesToProto3(bindVars map[string]interface{}) (map[string]*querypb
 			}
 		case []int64:
 			if len(v) == 0 {
-				return nil, fmt.Errorf("empty list not allowed: %s", k)
+				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "empty list not allowed: %s", k)
 			}
 			bv = &querypb.BindVariable{
 				Type:   sqltypes.Tuple,
@@ -133,7 +134,7 @@ func BindVariablesToProto3(bindVars map[string]interface{}) (map[string]*querypb
 			}
 		case []uint64:
 			if len(v) == 0 {
-				return nil, fmt.Errorf("empty list not allowed: %s", k)
+				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "empty list not allowed: %s", k)
 			}
 			bv = &querypb.BindVariable{
 				Type:   sqltypes.Tuple,
@@ -148,7 +149,7 @@ func BindVariablesToProto3(bindVars map[string]interface{}) (map[string]*querypb
 		default:
 			typ, val, err := bindVariableToValue(v)
 			if err != nil {
-				return nil, fmt.Errorf("key: %s: %v", k, err)
+				return nil, vterrors.Errorf(vterrors.Code(err), "key: %s: %v", k, err)
 			}
 			bv = &querypb.BindVariable{
 				Type:  typ,
@@ -197,13 +198,13 @@ func bindVariableToValue(v interface{}) (querypb.Type, []byte, error) {
 	case *querypb.BindVariable:
 		val, err := sqltypes.ValueFromBytes(v.Type, v.Value)
 		if err != nil {
-			return sqltypes.Null, nil, fmt.Errorf("bindVariableToValue: %v", err)
+			return sqltypes.Null, nil, vterrors.Errorf(vterrors.Code(err), "bindVariableToValue: %v", err)
 		}
 		return val.Type(), val.Raw(), nil
 	case nil:
 		return sqltypes.Null, nil, nil
 	}
-	return sqltypes.Null, nil, fmt.Errorf("bindVariableToValue: unexpected type %T", v)
+	return sqltypes.Null, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "bindVariableToValue: unexpected type %T", v)
 }
 
 // Proto3ToBoundQuery converts a proto.BoundQuery to the internal data structure

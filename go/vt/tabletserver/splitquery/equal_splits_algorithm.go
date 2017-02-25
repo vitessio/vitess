@@ -10,8 +10,10 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/tabletserver/engines/schema"
+	"github.com/youtube/vitess/go/vt/vterrors"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 // EqualSplitsAlgorithm implements the SplitAlgorithmInterface and represents the equal-splits
@@ -51,11 +53,11 @@ func NewEqualSplitsAlgorithm(splitParams *SplitParams, sqlExecuter SQLExecuter) 
 	// primary key columns, and there can be more than one primary key column for a table.
 	if !sqltypes.IsFloat(splitParams.splitColumns[0].Type) &&
 		!sqltypes.IsIntegral(splitParams.splitColumns[0].Type) {
-		return nil, fmt.Errorf("using the EQUAL_SPLITS algorithm in SplitQuery requires having"+
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "using the EQUAL_SPLITS algorithm in SplitQuery requires having"+
 			" a numeric (integral or float) split-column. Got type: %v", splitParams.splitColumns[0])
 	}
 	if splitParams.splitCount <= 0 {
-		return nil, fmt.Errorf("using the EQUAL_SPLITS algorithm in SplitQuery requires a positive"+
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "using the EQUAL_SPLITS algorithm in SplitQuery requires a positive"+
 			" splitParams.splitCount. Got: %v", splitParams.splitCount)
 	}
 	result := &EqualSplitsAlgorithm{

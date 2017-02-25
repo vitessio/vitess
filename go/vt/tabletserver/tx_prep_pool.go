@@ -5,14 +5,15 @@
 package tabletserver
 
 import (
-	"errors"
-	"fmt"
 	"sync"
+
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
+	"github.com/youtube/vitess/go/vt/vterrors"
 )
 
 var (
-	errPrepCommiting = errors.New("commiting")
-	errPrepFailed    = errors.New("failed")
+	errPrepCommiting = vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "commiting")
+	errPrepFailed    = vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "failed")
 )
 
 // TxPreparedPool manages connections for prepared transactions.
@@ -44,13 +45,13 @@ func (pp *TxPreparedPool) Put(c *TxConnection, dtid string) error {
 	pp.mu.Lock()
 	defer pp.mu.Unlock()
 	if _, ok := pp.reserved[dtid]; ok {
-		return errors.New("duplicate DTID in Prepare: " + dtid)
+		return vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "duplicate DTID in Prepare: "+dtid)
 	}
 	if _, ok := pp.conns[dtid]; ok {
-		return errors.New("duplicate DTID in Prepare: " + dtid)
+		return vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "duplicate DTID in Prepare: "+dtid)
 	}
 	if len(pp.conns) >= pp.capacity {
-		return fmt.Errorf("prepared transactions exceeded limit: %d", pp.capacity)
+		return vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "prepared transactions exceeded limit: %d", pp.capacity)
 	}
 	pp.conns[dtid] = c
 	return nil

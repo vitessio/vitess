@@ -1,7 +1,6 @@
 package txthrottler
 
 import (
-	"fmt"
 	"sync"
 	"time"
 
@@ -13,9 +12,11 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletenv"
 	"github.com/youtube/vitess/go/vt/throttler"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/vterrors"
 
 	throttlerdatapb "github.com/youtube/vitess/go/vt/proto/throttlerdata"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 // TxThrottler throttles transactions based on replication lag.
@@ -186,7 +187,7 @@ func newTxThrottler(config *txThrottlerConfig) (*TxThrottler, error) {
 			return nil, err
 		}
 		if len(config.healthCheckCells) == 0 {
-			return nil, fmt.Errorf("Empty healthCheckCells given. %+v", config)
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Empty healthCheckCells given. %+v", config)
 		}
 	}
 	return &TxThrottler{
@@ -200,7 +201,7 @@ func (t *TxThrottler) Open(keyspace, shard string) error {
 		return nil
 	}
 	if t.state != nil {
-		return fmt.Errorf("Transaction throttler already opened")
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "Transaction throttler already opened")
 	}
 	var err error
 	t.state, err = newTxThrottlerState(t.config, keyspace, shard)

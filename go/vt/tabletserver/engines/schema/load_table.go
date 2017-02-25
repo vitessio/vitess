@@ -15,8 +15,10 @@ import (
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/tabletserver/connpool"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletenv"
+	"github.com/youtube/vitess/go/vt/vterrors"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 // LoadTable creates a Table from the schema info in the database.
@@ -136,7 +138,7 @@ func loadMessageInfo(ta *Table, comment string) error {
 	for _, col := range findCols {
 		num := ta.FindColumn(sqlparser.NewColIdent(col))
 		if num == -1 {
-			return fmt.Errorf("%s missing from message table: %s", col, ta.Name.String())
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "%s missing from message table: %s", col, ta.Name.String())
 		}
 		switch col {
 		case "id":
@@ -157,13 +159,13 @@ func loadMessageInfo(ta *Table, comment string) error {
 			return nil
 		}
 	}
-	return fmt.Errorf("id column is not part of the primary key for message table: %s", ta.Name.String())
+	return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "id column is not part of the primary key for message table: %s", ta.Name.String())
 }
 
 func getDuration(in map[string]string, key string) (time.Duration, error) {
 	sv := in[key]
 	if sv == "" {
-		return 0, fmt.Errorf("Attribute %s not specified for message table", key)
+		return 0, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "attribute %s not specified for message table", key)
 	}
 	v, err := strconv.ParseFloat(sv, 64)
 	if err != nil {
@@ -175,7 +177,7 @@ func getDuration(in map[string]string, key string) (time.Duration, error) {
 func getNum(in map[string]string, key string) (int, error) {
 	sv := in[key]
 	if sv == "" {
-		return 0, fmt.Errorf("Attribute %s not specified for message table", key)
+		return 0, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "attribute %s not specified for message table", key)
 	}
 	v, err := strconv.Atoi(sv)
 	if err != nil {

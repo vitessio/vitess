@@ -7,7 +7,6 @@ package schema
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"strconv"
 	"sync"
@@ -213,7 +212,7 @@ func (se *Engine) Reload(ctx context.Context) error {
 		return curTime, tableData, nil
 	}()
 	if err != nil {
-		return fmt.Errorf("could not get table list for reload: %v", err)
+		return err
 	}
 
 	// Reload any tables that have changed. We try every table even if some fail,

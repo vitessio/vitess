@@ -14,8 +14,10 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver/engines/schema"
 	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletenv"
+	"github.com/youtube/vitess/go/vt/vterrors"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 func getSchemaEngine(t *testing.T) *schema.Engine {
@@ -119,42 +121,42 @@ func TestValidateQuery(t *testing.T) {
 
 	splitter := NewQuerySplitter("delete from test_table", nil, "", 3, se)
 	got := splitter.validateQuery()
-	want := fmt.Errorf("not a select statement")
+	want := vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "not a select statement")
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("non-select validation failed, got:%v, want:%v", got, want)
 	}
 
 	splitter = NewQuerySplitter("select * from test_table order by id", nil, "", 3, se)
 	got = splitter.validateQuery()
-	want = fmt.Errorf("unsupported query")
+	want = vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported query")
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("order by query validation failed, got:%v, want:%v", got, want)
 	}
 
 	splitter = NewQuerySplitter("select * from test_table group by id", nil, "", 3, se)
 	got = splitter.validateQuery()
-	want = fmt.Errorf("unsupported query")
+	want = vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported query")
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("group by query validation failed, got:%v, want:%v", got, want)
 	}
 
 	splitter = NewQuerySplitter("select A.* from test_table A JOIN test_table B", nil, "", 3, se)
 	got = splitter.validateQuery()
-	want = fmt.Errorf("unsupported query")
+	want = vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported query")
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("join query validation failed, got:%v, want:%v", got, want)
 	}
 
 	splitter = NewQuerySplitter("select * from test_table_no_pk", nil, "", 3, se)
 	got = splitter.validateQuery()
-	want = fmt.Errorf("no primary keys")
+	want = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "no primary keys")
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("no PK table validation failed, got:%v, want:%v", got, want)
 	}
 
 	splitter = NewQuerySplitter("select * from unknown_table", nil, "", 3, se)
 	got = splitter.validateQuery()
-	want = fmt.Errorf("can't find table in schema")
+	want = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "can't find table in schema")
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("unknown table validation failed, got:%v, want:%v", got, want)
 	}
