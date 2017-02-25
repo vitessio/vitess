@@ -255,11 +255,40 @@ func (c *Conn) clientHandshake(characterSet uint8, params *sqldb.ConnParams) err
 	case OKPacket:
 		// OK packet, we are authenticated. Save the user, keep going.
 		c.User = params.Uname
+	case AuthSwitchRequestPacket:
+		// Server is asking to use a different auth method. We
+		// only support cleartext plugin.
+		pluginName, _, err := parseAuthSwitchRequest(response)
+		if err != nil {
+			return sqldb.NewSQLError(CRServerHandshakeErr, SSUnknownSQLState, "cannot parse auth switch request: %v", err)
+		}
+		if pluginName != mysqlClearPassword {
+			return sqldb.NewSQLError(CRServerHandshakeErr, SSUnknownSQLState, "server asked for unsupported auth method: %v", pluginName)
+		}
+
+		// Write the password packet.
+		if err := c.writeClearTextPassword(params); err != nil {
+			return err
+		}
+
+		// Wait for OK packet.
+		response, err = c.readPacket()
+		if err != nil {
+			return sqldb.NewSQLError(CRServerLost, SSUnknownSQLState, "%v", err)
+		}
+		switch response[0] {
+		case OKPacket:
+			// OK packet, we are authenticated. Save the user, keep going.
+			c.User = params.Uname
+		case ErrPacket:
+			return parseErrorPacket(response)
+		default:
+			return sqldb.NewSQLError(CRServerHandshakeErr, SSUnknownSQLState, "initial server response cannot be parsed: %v", response)
+		}
 	case ErrPacket:
 		return parseErrorPacket(response)
 	default:
-		// FIXME(alainjobart) handle extra auth cases and so on.
-		return fmt.Errorf("initial server response is asking for more information, not implemented yet: %v", response)
+		return sqldb.NewSQLError(CRServerHandshakeErr, SSUnknownSQLState, "initial server response cannot be parsed: %v", response)
 	}
 
 	// If the server didn't support DbName in its handshake, set
@@ -555,6 +584,33 @@ func (c *Conn) writeHandshakeResponse41(capabilities uint32, salt []byte, charac
 	}
 	if err := c.flush(); err != nil {
 		return sqldb.NewSQLError(CRServerLost, SSUnknownSQLState, "cannot flush HandshakeResponse41: %v", err)
+	}
+	return nil
+}
+
+func parseAuthSwitchRequest(data []byte) (string, []byte, error) {
+	pos := 1
+	pluginName, pos, ok := readNullString(data, pos)
+	if !ok {
+		return "", nil, fmt.Errorf("cannot get plugin name from AuthSwitchRequest: %v", data)
+	}
+
+	return pluginName, data[pos:], nil
+}
+
+// writeClearTextPassword writes the clear text password.
+// Returns a sqldb.SQLError.
+func (c *Conn) writeClearTextPassword(params *sqldb.ConnParams) error {
+	length := len(params.Pass) + 1
+	data := c.startEphemeralPacket(length)
+	pos := 0
+	pos = writeNullString(data, pos, params.Pass)
+	// Sanity check.
+	if pos != len(data) {
+		return fmt.Errorf("error building ClearTextPassword packet: got %v bytes expected %v", pos, len(data))
+	}
+	if err := c.writeEphemeralPacket(true); err != nil {
+		return err
 	}
 	return nil
 }

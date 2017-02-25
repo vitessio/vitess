@@ -262,6 +262,80 @@ func TestServer(t *testing.T) {
 	//	time.Sleep(60 * time.Minute)
 }
 
+// TestClearTextServer creates a Server that needs clear text passwords from the client.
+func TestClearTextServer(t *testing.T) {
+	th := &testHandler{}
+
+	authServer := NewAuthServerConfig()
+	authServer.Entries["user1"] = &AuthServerConfigEntry{
+		Password: "password1",
+		UserData: "userData1",
+	}
+	authServer.ClearText = true
+	l, err := NewListener("tcp", ":0", authServer, th)
+	if err != nil {
+		t.Fatalf("NewListener failed: %v", err)
+	}
+	defer l.Close()
+	go func() {
+		l.Accept()
+	}()
+
+	host := l.Addr().(*net.TCPAddr).IP.String()
+	port := l.Addr().(*net.TCPAddr).Port
+
+	// Setup the right parameters.
+	params := &sqldb.ConnParams{
+		Host:  host,
+		Port:  port,
+		Uname: "user1",
+		Pass:  "password1",
+	}
+
+	// Run a 'select rows' command with results.
+	// This should fail as clear text is not enabled by default on the client.
+	l.AllowClearTextWithoutTLS = true
+	output, ok := runMysql(t, params, "select rows")
+	if ok {
+		t.Fatalf("mysql should have failed but returned: %v", output)
+	}
+	if !strings.Contains(output, "plugin not enabled") {
+		t.Errorf("Unexpected output for 'select rows': %v", output)
+	}
+
+	// Now enable clear text plugin in client, but server requires SSL.
+	l.AllowClearTextWithoutTLS = false
+	output, ok = runMysql(t, params, enableCleartextPluginPrefix+"select rows")
+	if ok {
+		t.Fatalf("mysql should have failed but returned: %v", output)
+	}
+	if !strings.Contains(output, "Cannot use clear text authentication over non-SSL connections") {
+		t.Errorf("Unexpected output for 'select rows': %v", output)
+	}
+
+	// Now enable clear text plugin, it should now work.
+	l.AllowClearTextWithoutTLS = true
+	output, ok = runMysql(t, params, enableCleartextPluginPrefix+"select rows")
+	if !ok {
+		t.Fatalf("mysql failed: %v", output)
+	}
+	if !strings.Contains(output, "nice name") ||
+		!strings.Contains(output, "nicer name") ||
+		!strings.Contains(output, "2 rows in set") {
+		t.Errorf("Unexpected output for 'select rows'")
+	}
+
+	// Change password, make sure server rejects us.
+	params.Pass = ""
+	output, ok = runMysql(t, params, enableCleartextPluginPrefix+"select rows")
+	if ok {
+		t.Fatalf("mysql should have failed but returned: %v", output)
+	}
+	if !strings.Contains(output, "Access denied for user 'user1'") {
+		t.Errorf("Unexpected output for 'select rows': %v", output)
+	}
+}
+
 // TestTLSServer creates a Server with TLS support, then uses mysql
 // client to connect to it.
 func TestTLSServer(t *testing.T) {
@@ -343,6 +417,8 @@ func TestTLSServer(t *testing.T) {
 	}
 }
 
+const enableCleartextPluginPrefix = "enable-cleartext-plugin: "
+
 // runMysql forks a mysql command line process connecting to the provided server.
 func runMysql(t *testing.T, params *sqldb.ConnParams, command string) (string, bool) {
 	dir, err := vtenv.VtMysqlRoot()
@@ -357,40 +433,36 @@ func runMysql(t *testing.T, params *sqldb.ConnParams, command string) (string, b
 	// In particular, it has the message:
 	// Query OK, 1 row affected (0.00 sec)
 	args := []string{
-		"-e", command,
 		"-v", "-v", "-v",
 	}
+	if strings.HasPrefix(command, enableCleartextPluginPrefix) {
+		command = command[len(enableCleartextPluginPrefix):]
+		args = append(args, "--enable-cleartext-plugin")
+	}
+	args = append(args, "-e", command)
 	if params.UnixSocket != "" {
-		args = append(args, []string{
-			"-S", params.UnixSocket,
-		}...)
+		args = append(args, "-S", params.UnixSocket)
 	} else {
-		args = append(args, []string{
+		args = append(args,
 			"-h", params.Host,
-			"-P", fmt.Sprintf("%v", params.Port),
-		}...)
+			"-P", fmt.Sprintf("%v", params.Port))
 	}
 	if params.Uname != "" {
-		args = append(args, []string{
-			"-u", params.Uname,
-		}...)
+		args = append(args, "-u", params.Uname)
 	}
 	if params.Pass != "" {
 		args = append(args, "-p"+params.Pass)
 	}
 	if params.DbName != "" {
-		args = append(args, []string{
-			"-D", params.DbName,
-		}...)
+		args = append(args, "-D", params.DbName)
 	}
 	if params.Flags&CapabilityClientSSL > 0 {
-		args = append(args, []string{
+		args = append(args,
 			"--ssl",
 			"--ssl-ca", params.SslCa,
 			"--ssl-cert", params.SslCert,
 			"--ssl-key", params.SslKey,
-			"--ssl-verify-server-cert",
-		}...)
+			"--ssl-verify-server-cert")
 	}
 	env := []string{
 		"LD_LIBRARY_PATH=" + path.Join(dir, "lib/mysql"),

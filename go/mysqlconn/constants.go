@@ -147,6 +147,9 @@ const (
 	// EOFPacket is the header of the EOF packet.
 	EOFPacket = 0xfe
 
+	// AuthSwitchRequestPacket is used to switch auth method.
+	AuthSwitchRequestPacket = 0xfe
+
 	// ErrPacket is the header of the error packet.
 	ErrPacket = 0xff
 

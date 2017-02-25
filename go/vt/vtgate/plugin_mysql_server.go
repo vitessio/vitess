@@ -22,10 +22,11 @@ import (
 )
 
 var (
-	mysqlServerPort             = flag.Int("mysql_server_port", 0, "If set, also listen for MySQL binary protocol connections on this port.")
-	mysqlAuthServerImpl         = flag.String("mysql_auth_server_impl", "config", "Which auth server implementation to use.")
-	mysqlAuthServerConfigFile   = flag.String("mysql_auth_server_config_file", "", "JSON File to read the users/passwords from.")
-	mysqlAuthServerConfigString = flag.String("mysql_auth_server_config_string", "", "JSON representation of the users/passwords config.")
+	mysqlServerPort               = flag.Int("mysql_server_port", 0, "If set, also listen for MySQL binary protocol connections on this port.")
+	mysqlAuthServerImpl           = flag.String("mysql_auth_server_impl", "config", "Which auth server implementation to use.")
+	mysqlAuthServerConfigFile     = flag.String("mysql_auth_server_config_file", "", "JSON File to read the users/passwords from.")
+	mysqlAuthServerConfigString   = flag.String("mysql_auth_server_config_string", "", "JSON representation of the users/passwords config.")
+	mysqlAllowClearTextWithoutTLS = flag.Bool("mysql_allow_clear_text_without_tls", false, "If set, the server will allow the use of a clear text password over non-SSL connections.")
 )
 
 // Handles initializing the AuthServerConfig if necessary.
@@ -195,6 +196,7 @@ func init() {
 		if err != nil {
 			log.Fatalf("mysqlconn.NewListener failed: %v", err)
 		}
+		listener.AllowClearTextWithoutTLS = *mysqlAllowClearTextWithoutTLS
 
 		// And starts listening.
 		go func() {
