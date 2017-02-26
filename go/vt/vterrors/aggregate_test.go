@@ -35,16 +35,16 @@ func TestAggregateVtGateErrorCodes(t *testing.T) {
 			expected: vtrpcpb.Code_INVALID_ARGUMENT,
 		},
 		{
-			// aggregate two codes to the highest priority
+			// OK should be converted to INTERNAL
 			input: []error{
 				errFromCode(vtrpcpb.Code_OK),
 				errFromCode(vtrpcpb.Code_UNAVAILABLE),
 			},
-			expected: vtrpcpb.Code_UNAVAILABLE,
+			expected: vtrpcpb.Code_INTERNAL,
 		},
 		{
+			// aggregate two codes to the highest priority
 			input: []error{
-				errFromCode(vtrpcpb.Code_OK),
 				errFromCode(vtrpcpb.Code_UNAVAILABLE),
 				errFromCode(vtrpcpb.Code_INVALID_ARGUMENT),
 			},
@@ -53,7 +53,6 @@ func TestAggregateVtGateErrorCodes(t *testing.T) {
 		{
 			// unknown errors map to the unknown code
 			input: []error{
-				errFromCode(vtrpcpb.Code_OK),
 				fmt.Errorf("unknown error"),
 			},
 			expected: vtrpcpb.Code_UNKNOWN,
@@ -79,14 +78,12 @@ func TestAggregateVtGateErrors(t *testing.T) {
 		},
 		{
 			input: []error{
-				errFromCode(vtrpcpb.Code_OK),
 				errFromCode(vtrpcpb.Code_UNAVAILABLE),
 				errFromCode(vtrpcpb.Code_INVALID_ARGUMENT),
 			},
 			expected: New(
 				vtrpcpb.Code_INVALID_ARGUMENT,
 				aggregateErrors([]error{
-					errors.New(errGeneric),
 					errors.New(errGeneric),
 					errors.New(errGeneric),
 				}),
