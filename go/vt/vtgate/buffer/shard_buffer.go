@@ -197,7 +197,7 @@ func (sb *shardBuffer) waitForFailoverEnd(ctx context.Context, keyspace, shard s
 	if err != nil {
 		return nil, err
 	}
-	return entry.bufferCancel, sb.wait(ctx, entry)
+	return sb.wait(ctx, entry)
 }
 
 // shouldBufferLocked returns true if the current request should be buffered
@@ -311,8 +311,9 @@ func (sb *shardBuffer) bufferRequestLocked(ctx context.Context) (*entry, error) 
 // the request retried and finished.
 // If blockingWait is true, this call will block until the request retried and
 // finished. This mode is used during the drain (to avoid flooding the master)
-// while the non-blocking mode is used when evicting a request e.g. because the
-// buffer is full or it exceeded the buffering window
+// while the non-blocking mode is used when a) evicting a request (e.g. because
+// the buffer is full or it exceeded the buffering window) or b) when the
+// request was canceled from outside and we removed it.
 func (sb *shardBuffer) unblockAndWait(e *entry, err error, releaseSlot, blockingWait bool) {
 	// Set error such that the request will see it.
 	e.err = err
@@ -345,13 +346,14 @@ func (sb *shardBuffer) waitForRequestFinish(e *entry, releaseSlot, async bool) {
 }
 
 // wait blocks while the request is buffered during the failover.
-func (sb *shardBuffer) wait(ctx context.Context, e *entry) error {
+// See Buffer.WaitForFailoverEnd() for the API contract of the return values.
+func (sb *shardBuffer) wait(ctx context.Context, e *entry) (RetryDoneFunc, error) {
 	select {
 	case <-ctx.Done():
 		sb.remove(e)
-		return vterrors.Errorf(vterrors.Code(contextCanceledError), "%v: %v", contextCanceledError, ctx.Err())
+		return nil, vterrors.Errorf(vterrors.Code(contextCanceledError), "%v: %v", contextCanceledError, ctx.Err())
 	case <-e.done:
-		return e.err
+		return e.bufferCancel, e.err
 	}
 }
 
@@ -406,9 +408,21 @@ func (sb *shardBuffer) remove(toRemove *entry) {
 		if e == toRemove {
 			// Delete entry at index "i" from slice.
 			sb.queue = append(sb.queue[:i], sb.queue[i+1:]...)
-			// Entry was not canceled internally yet. Finish it explicitly. This way,
-			// timeoutThread will find out about it as well.
-			close(toRemove.done)
+
+			// Cancel the entry's "bufferCtx".
+			// The usual drain or eviction code would unblock the request and then
+			// wait for the "bufferCtx" to be done.
+			// But this code path is different because it's going to return an error
+			// to the request and not the "e.bufferCancel" function i.e. the request
+			// cannot cancel the "bufferCtx" itself.
+			// Therefore, we call "e.bufferCancel". This also avoids that the
+			// context's Go routine could leak.
+			e.bufferCancel()
+			// Release the buffer slot and close the "e.done" channel.
+			// By closing "e.done", we finish it explicitly and timeoutThread will
+			// find out about it as well.
+			sb.unblockAndWait(e, nil /* err */, true /* releaseSlot */, false /* blockingWait */)
+
 			// Track it as "ContextDone" eviction.
 			statsKeyWithReason := append(sb.statsKey, string(evictedContextDone))
 			requestsEvicted.Add(statsKeyWithReason, 1)
