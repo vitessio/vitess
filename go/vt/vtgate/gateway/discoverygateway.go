@@ -179,7 +179,7 @@ func (dg *discoveryGateway) withRetry(ctx context.Context, target *querypb.Targe
 			if bufferErr != nil {
 				// Buffering failed e.g. buffer is already full. Do not retry.
 				err = vterrors.Errorf(
-					vterrors.Code(err),
+					vterrors.Code(bufferErr),
 					"failed to automatically buffer and retry failed request during failover: %v original err (type=%T): %v",
 					bufferErr, err, err)
 				break
