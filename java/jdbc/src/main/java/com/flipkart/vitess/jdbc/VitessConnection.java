@@ -844,7 +844,7 @@ public class VitessConnection extends ConnectionProperties implements Connection
         return this.vitessJDBCUrl.getUsername();
     }
 
-    public String getEncodingForIndex(int charsetIndex) throws SQLException {
+    public String getEncodingForIndex(int charsetIndex) {
         String javaEncoding = null;
         if (charsetIndex != MysqlDefs.NO_CHARSET_INFO) {
             javaEncoding = CharsetMapping.getJavaEncodingForCollationIndex(charsetIndex, getEncoding());

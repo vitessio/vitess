@@ -757,8 +757,6 @@ public class VitessResultSet implements ResultSet {
             throw new SQLException(Constants.SQLExceptionMessages.CLOSED_RESULT_SET);
     }
 
-    //Unsupported Methods
-
     private void preAccessor(int columnIndex) throws SQLException {
         checkOpen();
 
@@ -774,6 +772,8 @@ public class VitessResultSet implements ResultSet {
     private boolean isNull(int columnIndex) throws SQLException {
         return null == this.row.getObject(columnIndex);
     }
+
+    //Unsupported Methods
 
     public InputStream getAsciiStream(int columnIndex) throws SQLException {
         throw new SQLFeatureNotSupportedException(
@@ -1469,7 +1469,7 @@ public class VitessResultSet implements ResultSet {
         return byteArrayToBoolean(this.row.getObject(columnIndex));
     }
 
-    private boolean byteArrayToBoolean(Object value) throws SQLException {
+    private boolean byteArrayToBoolean(Object value) {
         if (value == null) {
             return false;
         }

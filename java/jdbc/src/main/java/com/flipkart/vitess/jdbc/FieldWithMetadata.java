@@ -33,7 +33,9 @@ public class FieldWithMetadata {
         this.vitessType = field.getType();
         this.collationIndex = field.getCharset();
 
-        // Map MySqlTypes to java.sql Types
+        // Map MySqlTypes to an initial java.sql Type
+        // Afterwards, below we will sometimes re-map the javaType based on other
+        // information we receive from the server, such as flags and encodings.
         if (MysqlDefs.vitesstoMySqlType.containsKey(vitessType)) {
             this.javaType = MysqlDefs.vitesstoMySqlType.get(vitessType);
         } else if (field.getType().equals(Query.Type.TUPLE)) {
@@ -45,7 +47,7 @@ public class FieldWithMetadata {
         // All of the below remapping and metadata fields require the extra
         // fields included when includeFields=IncludedFields.ALL
         if (connection != null && connection.isIncludeAllFields()) {
-            this.isImplicitTempTable = field.getTable().length() > 5 && field.getTable().startsWith("#sql_");
+            this.isImplicitTempTable = checkForImplicitTemporaryTable();
             // Re-map  BLOB to 'real' blob type
             if (this.javaType == Types.BLOB) {
                 boolean isFromFunction = field.getOrgTable().isEmpty();
@@ -79,13 +81,15 @@ public class FieldWithMetadata {
             }
 
             if (!isNativeNumericType() && !isNativeDateTimeType()) {
+                // For non-numeric types, try to pull the encoding from the passed collationIndex
+                // We will do some fixup afterwards
                 this.encoding = connection.getEncodingForIndex(this.collationIndex);
                 // ucs2, utf16, and utf32 cannot be used as a client character set, but if it was received from server
                 // under some circumstances we can parse them as utf16
                 if ("UnicodeBig".equals(this.encoding)) {
                     this.encoding = "UTF-16";
                 }
-                // MySQL encodes JSON data with utf8mb4.
+                // MySQL always encodes JSON data with utf8mb4. Discard whatever else we've found, if the type is JSON
                 if (vitessType == Query.Type.JSON) {
                     this.encoding = "UTF-8";
                 }
@@ -99,6 +103,7 @@ public class FieldWithMetadata {
                 }
             } else {
                 // Default encoding for number-types and date-types
+                // We keep the default javaType as passed from the server, and just set the encoding
                 this.encoding = "US-ASCII";
                 this.isSingleBit = false;
             }
@@ -139,6 +144,15 @@ public class FieldWithMetadata {
             this.isSingleBit = false;
             this.precisionAdjustFactor = 0;
         }
+    }
+
+    /**
+     * Implicit temp tables are temporary tables created internally by MySQL for certain operations.
+     * For those types of tables, the table name is always prefixed with #sql_, typically followed by a numeric
+     * or other unique identifier.
+     */
+    private boolean checkForImplicitTemporaryTable() {
+        return field.getTable().length() > 5 && field.getTable().startsWith("#sql_");
     }
 
     private boolean isNativeNumericType() {
@@ -341,7 +355,7 @@ public class FieldWithMetadata {
     }
 
 
-    public synchronized int getMaxBytesPerCharacter() throws SQLException {
+    public synchronized int getMaxBytesPerCharacter() {
         if (!connection.isIncludeAllFields()) {
             return 0;
         }

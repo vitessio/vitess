@@ -112,15 +112,19 @@ public class ConnectionProperties {
             }
         }
         postInitialization();
+        checkConfiguredEncodingSupport();
     }
 
-    private void postInitialization() throws SQLException {
+    private void postInitialization() {
         this.tabletTypeCache = this.tabletType.getValueAsEnum();
         this.includedFieldsCache = this.includedFields.getValueAsEnum();
         this.includeAllFieldsCache = this.includedFieldsCache == Query.ExecuteOptions.IncludedFields.ALL;
         this.twopcEnabledCache = this.twopcEnabled.getValueAsBoolean();
         this.simpleExecuteTypeCache = this.executeType.getValueAsEnum() == Constants.QueryExecuteType.SIMPLE;
         this.characterEncodingAsString = this.characterEncoding.getValueAsString();
+    }
+
+    private void checkConfiguredEncodingSupport() throws SQLException {
         if (characterEncodingAsString != null) {
             // Attempt to use the encoding, and bail out if it can't be used
             try {

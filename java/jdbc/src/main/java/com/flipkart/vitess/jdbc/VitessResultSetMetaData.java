@@ -103,7 +103,8 @@ public class VitessResultSetMetaData implements ResultSetMetaData {
         if (!field.getConnection().isIncludeAllFields()) {
             return 0;
         }
-        return field.getColumnLength() / field.getMaxBytesPerCharacter();
+        // If we can't find a charset, we'll return 0. In that case assume 1 byte per char
+        return field.getColumnLength() / Math.max(field.getMaxBytesPerCharacter(), 1);
     }
 
     public String getColumnLabel(int column) throws SQLException {
