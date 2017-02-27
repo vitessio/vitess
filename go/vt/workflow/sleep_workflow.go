@@ -215,7 +215,7 @@ func (f *SleepWorkflowFactory) Init(_ *Manager, w *workflowpb.Workflow, args []s
 }
 
 // Instantiate is part of the workflow.Factory interface.
-func (f *SleepWorkflowFactory) Instantiate(w *workflowpb.Workflow, rootNode *Node) (Workflow, error) {
+func (f *SleepWorkflowFactory) Instantiate(_ *Manager, w *workflowpb.Workflow, rootNode *Node) (Workflow, error) {
 	rootNode.Message = "This workflow is a test workflow that just sleeps for the provided amount of time."
 
 	data := &SleepWorkflowData{}

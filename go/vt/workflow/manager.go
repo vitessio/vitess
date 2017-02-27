@@ -47,7 +47,7 @@ type Factory interface {
 	// Instantiate loads a workflow from the proto representation
 	// into an in-memory Workflow object. rootNode is the root UI node
 	// representing the workflow.
-	Instantiate(w *workflowpb.Workflow, rootNode *Node) (Workflow, error)
+	Instantiate(m *Manager, w *workflowpb.Workflow, rootNode *Node) (Workflow, error)
 }
 
 // Manager is the main Workflow manager object.
@@ -287,7 +287,7 @@ func (m *Manager) instantiateWorkflow(w *workflowpb.Workflow) (*runningWorkflow,
 		return nil, fmt.Errorf("no factory named %v is registered", w.FactoryName)
 	}
 	var err error
-	rw.workflow, err = factory.Instantiate(w, rw.rootNode)
+	rw.workflow, err = factory.Instantiate(m, w, rw.rootNode)
 	if err != nil {
 		return nil, err
 	}
@@ -457,6 +457,16 @@ func (m *Manager) Wait(ctx context.Context, uuid string) error {
 		return ctx.Err()
 	}
 	return nil
+}
+
+// GetWorkflowForTesting returns the Workflow object of the running workflow
+// identified by uuid. The method is used in unit tests to inject mocks.
+func (m *Manager) GetWorkflowForTesting(uuid string) (Workflow, error) {
+	rw, err := m.getRunningWorkflow(uuid)
+	if err != nil {
+		return nil, err
+	}
+	return rw.workflow, nil
 }
 
 // getRunningWorkflow returns a runningWorkflow by uuid.

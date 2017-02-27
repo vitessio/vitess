@@ -134,7 +134,7 @@ func (*TestWorkflowFactory) Init(_ *workflow.Manager, w *workflowpb.Workflow, ar
 }
 
 // Instantiate is part the workflow.Factory interface.
-func (*TestWorkflowFactory) Instantiate(w *workflowpb.Workflow, rootNode *workflow.Node) (workflow.Workflow, error) {
+func (*TestWorkflowFactory) Instantiate(_ *workflow.Manager, w *workflowpb.Workflow, rootNode *workflow.Node) (workflow.Workflow, error) {
 	checkpoint := &workflowpb.WorkflowCheckpoint{}
 	if err := proto.Unmarshal(w.Data, checkpoint); err != nil {
 		return nil, err
