@@ -36,10 +36,27 @@ message to set the database.
 --
 PLUGABLE AUTHENTICATION:
 
-We only support mysql_native_password for now, both client and server
-side. It wouldn't be a lot of work to add SHA256 for instance, or clear text
-authentication.
+See https://dev.mysql.com/doc/internals/en/authentication-method-mismatch.html
+for more information on this.
 
+Our server side always starts by using mysql_native_password, like a
+real MySQL server.
+
+Our client will expect the server to always use mysql_native_password
+in its initial handshake. This is what a real server always does, even though
+it's not technically mandatory.
+
+Our server can then use the client's auth methods right away:
+- mysql_native_password
+- mysql_clear_password
+
+If our server's AuthServer UseClearText() returns true, and the
+client's auth method is not mysql_clear_password, we will
+re-negotiate.
+
+If any of these methods doesn't work for the server, it will re-negotiate
+by sending an Authentication Method Switch Request Packet.
+The client will then handle that if it can.
 --
 Maximum Packet Size:
 

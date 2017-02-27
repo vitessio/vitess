@@ -1,7 +1,6 @@
 package mysqlconn
 
 import (
-	"crypto/sha1"
 	"crypto/tls"
 	"fmt"
 	"net"
@@ -185,7 +184,7 @@ func (c *Conn) clientHandshake(characterSet uint8, params *sqldb.ConnParams) err
 	if err != nil {
 		return sqldb.NewSQLError(CRServerLost, "", "initial packet read failed: %v", err)
 	}
-	capabilities, cipher, err := c.parseInitialHandshakePacket(data)
+	capabilities, salt, err := c.parseInitialHandshakePacket(data)
 	if err != nil {
 		return err
 	}
@@ -243,7 +242,7 @@ func (c *Conn) clientHandshake(characterSet uint8, params *sqldb.ConnParams) err
 
 	// Build and send our handshake response 41.
 	// Note this one will never have SSL flag on.
-	if err := c.writeHandshakeResponse41(capabilities, cipher, characterSet, params); err != nil {
+	if err := c.writeHandshakeResponse41(capabilities, salt, characterSet, params); err != nil {
 		return err
 	}
 
@@ -254,12 +253,42 @@ func (c *Conn) clientHandshake(characterSet uint8, params *sqldb.ConnParams) err
 	}
 	switch response[0] {
 	case OKPacket:
-		// OK packet, we are authenticated. We keep going.
+		// OK packet, we are authenticated. Save the user, keep going.
+		c.User = params.Uname
+	case AuthSwitchRequestPacket:
+		// Server is asking to use a different auth method. We
+		// only support cleartext plugin.
+		pluginName, _, err := parseAuthSwitchRequest(response)
+		if err != nil {
+			return sqldb.NewSQLError(CRServerHandshakeErr, SSUnknownSQLState, "cannot parse auth switch request: %v", err)
+		}
+		if pluginName != mysqlClearPassword {
+			return sqldb.NewSQLError(CRServerHandshakeErr, SSUnknownSQLState, "server asked for unsupported auth method: %v", pluginName)
+		}
+
+		// Write the password packet.
+		if err := c.writeClearTextPassword(params); err != nil {
+			return err
+		}
+
+		// Wait for OK packet.
+		response, err = c.readPacket()
+		if err != nil {
+			return sqldb.NewSQLError(CRServerLost, SSUnknownSQLState, "%v", err)
+		}
+		switch response[0] {
+		case OKPacket:
+			// OK packet, we are authenticated. Save the user, keep going.
+			c.User = params.Uname
+		case ErrPacket:
+			return parseErrorPacket(response)
+		default:
+			return sqldb.NewSQLError(CRServerHandshakeErr, SSUnknownSQLState, "initial server response cannot be parsed: %v", response)
+		}
 	case ErrPacket:
 		return parseErrorPacket(response)
 	default:
-		// FIXME(alainjobart) handle extra auth cases and so on.
-		return fmt.Errorf("initial server response is asking for more information, not implemented yet: %v", response)
+		return sqldb.NewSQLError(CRServerHandshakeErr, SSUnknownSQLState, "initial server response cannot be parsed: %v", response)
 	}
 
 	// If the server didn't support DbName in its handshake, set
@@ -467,7 +496,7 @@ func (c *Conn) writeSSLRequest(capabilities uint32, characterSet uint8, params *
 
 // writeHandshakeResponse41 writes the handshake response.
 // Returns a sqldb.SQLError.
-func (c *Conn) writeHandshakeResponse41(capabilities uint32, cipher []byte, characterSet uint8, params *sqldb.ConnParams) error {
+func (c *Conn) writeHandshakeResponse41(capabilities uint32, salt []byte, characterSet uint8, params *sqldb.ConnParams) error {
 	// Build our flags.
 	var flags uint32 = CapabilityClientLongPassword |
 		CapabilityClientLongFlag |
@@ -483,7 +512,7 @@ func (c *Conn) writeHandshakeResponse41(capabilities uint32, cipher []byte, char
 	// FIXME(alainjobart) add multi statement, client found rows.
 
 	// Password encryption.
-	scrambledPassword := scramblePassword(cipher, []byte(params.Pass))
+	scrambledPassword := scramblePassword(salt, []byte(params.Pass))
 
 	length :=
 		4 + // Client capability flags.
@@ -559,31 +588,29 @@ func (c *Conn) writeHandshakeResponse41(capabilities uint32, cipher []byte, char
 	return nil
 }
 
-// Encrypt password using 4.1+ method
-func scramblePassword(scramble, password []byte) []byte {
-	if len(password) == 0 {
-		return nil
+func parseAuthSwitchRequest(data []byte) (string, []byte, error) {
+	pos := 1
+	pluginName, pos, ok := readNullString(data, pos)
+	if !ok {
+		return "", nil, fmt.Errorf("cannot get plugin name from AuthSwitchRequest: %v", data)
 	}
 
-	// stage1Hash = SHA1(password)
-	crypt := sha1.New()
-	crypt.Write(password)
-	stage1 := crypt.Sum(nil)
+	return pluginName, data[pos:], nil
+}
 
-	// scrambleHash = SHA1(scramble + SHA1(stage1Hash))
-	// inner Hash
-	crypt.Reset()
-	crypt.Write(stage1)
-	hash := crypt.Sum(nil)
-	// outer Hash
-	crypt.Reset()
-	crypt.Write(scramble)
-	crypt.Write(hash)
-	scramble = crypt.Sum(nil)
-
-	// token = scrambleHash XOR stage1Hash
-	for i := range scramble {
-		scramble[i] ^= stage1[i]
+// writeClearTextPassword writes the clear text password.
+// Returns a sqldb.SQLError.
+func (c *Conn) writeClearTextPassword(params *sqldb.ConnParams) error {
+	length := len(params.Pass) + 1
+	data := c.startEphemeralPacket(length)
+	pos := 0
+	pos = writeNullString(data, pos, params.Pass)
+	// Sanity check.
+	if pos != len(data) {
+		return fmt.Errorf("error building ClearTextPassword packet: got %v bytes expected %v", pos, len(data))
 	}
-	return scramble
+	if err := c.writeEphemeralPacket(true); err != nil {
+		return err
+	}
+	return nil
 }

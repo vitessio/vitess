@@ -7,6 +7,7 @@ import (
 	"os"
 	"path"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/youtube/vitess/go/sqldb"
@@ -16,13 +17,75 @@ import (
 
 // This file tests the handshake scenarios between our client and our server.
 
+func TestClearTextClientAuth(t *testing.T) {
+	th := &testHandler{}
+
+	authServer := NewAuthServerConfig()
+	authServer.Entries["user1"] = &AuthServerConfigEntry{
+		Password: "password1",
+	}
+	authServer.ClearText = true
+
+	// Create the listener.
+	l, err := NewListener("tcp", ":0", authServer, th)
+	if err != nil {
+		t.Fatalf("NewListener failed: %v", err)
+	}
+	defer l.Close()
+	host := l.Addr().(*net.TCPAddr).IP.String()
+	port := l.Addr().(*net.TCPAddr).Port
+	go func() {
+		l.Accept()
+	}()
+
+	// Setup the right parameters.
+	params := &sqldb.ConnParams{
+		Host:  host,
+		Port:  port,
+		Uname: "user1",
+		Pass:  "password1",
+	}
+
+	// Connection should fail, as server requires SSL for clear text auth.
+	ctx := context.Background()
+	conn, err := Connect(ctx, params)
+	if err == nil || !strings.Contains(err.Error(), "Cannot use clear text authentication over non-SSL connections") {
+		t.Fatalf("unexpected connection error: %v", err)
+	}
+
+	// Change server side to allow clear text without auth.
+	l.AllowClearTextWithoutTLS = true
+	conn, err = Connect(ctx, params)
+	if err != nil {
+		t.Fatalf("unexpected connection error: %v", err)
+	}
+	defer conn.Close()
+
+	// Run a 'select rows' command with results.
+	result, err := conn.ExecuteFetch("select rows", 10000, true)
+	if err != nil {
+		t.Fatalf("ExecuteFetch failed: %v", err)
+	}
+	if !reflect.DeepEqual(result, selectRowsResult) {
+		t.Errorf("Got wrong result from ExecuteFetch(select rows): %v", result)
+	}
+
+	// Send a ComQuit to avoid the error message on the server side.
+	conn.writeComQuit()
+}
+
 // TestSSLConnection creates a server with TLS support, a client that
 // also has SSL support, and connects them.
 func TestSSLConnection(t *testing.T) {
 	th := &testHandler{}
 
+	authServer := NewAuthServerConfig()
+	authServer.Entries["user1"] = &AuthServerConfigEntry{
+		Password: "password1",
+	}
+
 	// Create the listener, so we can get its host.
-	l, err := NewListener("tcp", ":0", th)
+	l, err := NewListener("tcp", ":0", authServer, th)
 	if err != nil {
 		t.Fatalf("NewListener failed: %v", err)
 	}
@@ -49,7 +112,6 @@ func TestSSLConnection(t *testing.T) {
 		t.Fatalf("TLSServerConfig failed: %v", err)
 	}
 	l.TLSConfig = serverConfig
-	l.PasswordMap["user1"] = "password1"
 	go func() {
 		l.Accept()
 	}()
@@ -67,6 +129,18 @@ func TestSSLConnection(t *testing.T) {
 		SslKey:  path.Join(root, "client-key.pem"),
 	}
 
+	t.Run("Basics", func(t *testing.T) {
+		testSSLConnectionBasics(t, params)
+	})
+
+	// Make sure clear text auth works over SSL.
+	t.Run("ClearText", func(t *testing.T) {
+		l.authServer.(*AuthServerConfig).ClearText = true
+		testSSLConnectionClearText(t, params)
+	})
+}
+
+func testSSLConnectionClearText(t *testing.T, params *sqldb.ConnParams) {
 	// Create a client connection, connect.
 	ctx := context.Background()
 	conn, err := Connect(ctx, params)
@@ -74,6 +148,34 @@ func TestSSLConnection(t *testing.T) {
 		t.Fatalf("Connect failed: %v", err)
 	}
 	defer conn.Close()
+	if conn.User != "user1" {
+		t.Errorf("Invalid conn.User, got %v was expecting user1", conn.User)
+	}
+
+	// Make sure this went through SSL.
+	result, err := conn.ExecuteFetch("ssl echo", 10000, true)
+	if err != nil {
+		t.Fatalf("ExecuteFetch failed: %v", err)
+	}
+	if result.Rows[0][0].String() != "ON" {
+		t.Errorf("Got wrong result from ExecuteFetch(ssl echo): %v", result)
+	}
+
+	// Send a ComQuit to avoid the error message on the server side.
+	conn.writeComQuit()
+}
+
+func testSSLConnectionBasics(t *testing.T, params *sqldb.ConnParams) {
+	// Create a client connection, connect.
+	ctx := context.Background()
+	conn, err := Connect(ctx, params)
+	if err != nil {
+		t.Fatalf("Connect failed: %v", err)
+	}
+	defer conn.Close()
+	if conn.User != "user1" {
+		t.Errorf("Invalid conn.User, got %v was expecting user1", conn.User)
+	}
 
 	// Run a 'select rows' command with results.
 	result, err := conn.ExecuteFetch("select rows", 10000, true)

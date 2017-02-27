@@ -60,7 +60,7 @@ type Conn struct {
 	// Capabilities is the current set of features this connection
 	// is using.  It is the features that are both supported by
 	// the client and the server, and currently in use.
-	// It is set after the initial handshake.
+	// It is set during the initial handshake.
 	//
 	// It is only used for CapabilityClientDeprecateEOF.
 	Capabilities uint32
@@ -70,6 +70,14 @@ type Conn struct {
 	// It is set during the initial handshake.
 	// See the values in constants.go.
 	CharacterSet uint8
+
+	// User is the name used by the client to connect.
+	// It is set during the initial handshake.
+	User string
+
+	// UserData is custom data returned by the AuthServer module.
+	// It is set during the initial handshake.
+	UserData string
 
 	// SchemaName is the default database name to use. It is set
 	// during handshake, and by ComInitDb packets. Both client and
@@ -147,7 +155,7 @@ func newConn(conn net.Conn) *Conn {
 
 // readPacketDirect attempts to read a packet from the socket directly.
 // It needs to be used for the first handshake packet the server receives,
-// so we do't buffer the SSL negociation packet. As a shortcut, only
+// so we do't buffer the SSL negotiation packet. As a shortcut, only
 // packets smaller than MaxPacketSize can be read here.
 func (c *Conn) readPacketDirect() ([]byte, error) {
 	var header [4]byte
@@ -495,6 +503,11 @@ func (c *Conn) writeComQuit() error {
 		return sqldb.NewSQLError(CRServerGone, SSUnknownSQLState, err.Error())
 	}
 	return nil
+}
+
+// RemoteAddr returns the underlying socket RemoteAddr().
+func (c *Conn) RemoteAddr() net.Addr {
+	return c.conn.RemoteAddr()
 }
 
 // Close closes the connection. It can be called from a different go

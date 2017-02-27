@@ -10,9 +10,15 @@ const (
 	// protocolVersion is the current version of the protocol.
 	// Always 10.
 	protocolVersion = 10
+)
 
-	// mysqlNativePassword is the auth form we use.
+// Supported auth forms.
+const (
+	// mysqlNativePassword uses a salt and transmits a hash on the wire.
 	mysqlNativePassword = "mysql_native_password"
+
+	// mysqlClearPassword transmits the password in the clear.
+	mysqlClearPassword = "mysql_clear_password"
 )
 
 // Capability flags.
@@ -140,6 +146,9 @@ const (
 
 	// EOFPacket is the header of the EOF packet.
 	EOFPacket = 0xfe
+
+	// AuthSwitchRequestPacket is used to switch auth method.
+	AuthSwitchRequestPacket = 0xfe
 
 	// ErrPacket is the header of the error packet.
 	ErrPacket = 0xff
