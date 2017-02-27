@@ -505,6 +505,11 @@ func (c *Conn) writeComQuit() error {
 	return nil
 }
 
+// RemoteAddr returns the underlying socket RemoteAddr().
+func (c *Conn) RemoteAddr() net.Addr {
+	return c.conn.RemoteAddr()
+}
+
 // Close closes the connection. It can be called from a different go
 // routine to interrupt the current connection.
 func (c *Conn) Close() {

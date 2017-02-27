@@ -12,6 +12,7 @@ import (
 	"github.com/youtube/vitess/go/mysqlconn"
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/vt/callerid"
 	"github.com/youtube/vitess/go/vt/servenv"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
@@ -124,11 +125,23 @@ func (vh *vtgateHandler) rollback(ctx context.Context, c *mysqlconn.Conn) (*sqlt
 }
 
 func (vh *vtgateHandler) ComQuery(c *mysqlconn.Conn, query string) (*sqltypes.Result, error) {
-	// FIXME(alainjobart): do something better for context.
-	// Include some kind of callerid reference, using the
-	// authenticated user.
-	// Add some kind of timeout too.
+	// FIXME(alainjobart): Add some kind of timeout to the context.
 	ctx := context.Background()
+
+	// Fill in the ImmediateCallerID with the UserData returned by
+	// the AuthServer plugin for that user. If nothing was
+	// returned, use the User. This lets the plugin map a MySQL
+	// user used for authentication to a Vitess User used for
+	// Table ACLs and Vitess authentication in general.
+	im := callerid.NewImmediateCallerID(c.UserData)
+	if c.UserData == "" {
+		im.Username = c.User
+	}
+	ef := callerid.NewEffectiveCallerID(
+		c.User,                  /* principal: who */
+		c.RemoteAddr().String(), /* component: running client process */
+		"VTGate MySQL Connector" /* subcomponent: part of the client */)
+	ctx = callerid.NewContext(ctx, ef, im)
 
 	// FIXME(alainjobart) would be good to have the parser understand this.
 	switch {
@@ -138,6 +151,9 @@ func (vh *vtgateHandler) ComQuery(c *mysqlconn.Conn, query string) (*sqltypes.Re
 		return vh.commit(ctx, c)
 	case strings.EqualFold(query, "rollback"):
 		return vh.rollback(ctx, c)
+	case strings.EqualFold(query, "set autocommit=0"):
+		// This is done by the python MySQL connector, we ignore it.
+		return &sqltypes.Result{}, nil
 	default:
 		// Grab the current session, if any.
 		var session *vtgatepb.Session

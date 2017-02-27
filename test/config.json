@@ -219,6 +219,15 @@
 			"RetryMax": 0,
 			"Tags": []
 		},
+		"mysql_server": {
+			"File": "mysql_server_test.py",
+			"Args": [],
+			"Command": [],
+			"Manual": false,
+			"Shard": 1,
+			"RetryMax": 0,
+			"Tags": []
+		},
 		"mysqlctl": {
 			"File": "mysqlctl.py",
 			"Args": [],

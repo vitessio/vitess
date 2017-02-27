@@ -527,12 +527,15 @@ vtgate = None
 class VtGate(object):
   """VtGate object represents a vtgate process."""
 
-  def __init__(self, port=None):
+  def __init__(self, port=None, mysql_server=False):
     """Creates the Vtgate instance and reserve the ports if necessary."""
     self.port = port or environment.reserve_ports(1)
     if protocols_flavor().vtgate_protocol() == 'grpc':
       self.grpc_port = environment.reserve_ports(1)
     self.proc = None
+    self.mysql_port = None
+    if mysql_server:
+      self.mysql_port = environment.reserve_ports(1)
 
   def start(self, cell='test_nj', retry_count=2,
             topo_impl=None, cache_ttl='1s',
@@ -576,6 +579,8 @@ class VtGate(object):
       args.extend(environment.topo_server().flags())
     if extra_args:
       args.extend(extra_args)
+    if self.mysql_port:
+      args.extend(['-mysql_server_port', str(self.mysql_port)])
 
     self.proc = run_bg(args)
     wait_for_vars('vtgate', self.port)
