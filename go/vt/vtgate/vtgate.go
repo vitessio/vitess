@@ -894,8 +894,10 @@ func recordAndAnnotateError(err error, statsKey []string, request map[string]int
 	errorCounts.Add(fullKey, 1)
 	// Most errors are not logged by vtgate beecause they're either too spammy or logged elsewhere.
 	switch ec {
-	case vtrpcpb.Code_UNAVAILABLE, vtrpcpb.Code_UNKNOWN, vtrpcpb.Code_INTERNAL, vtrpcpb.Code_DATA_LOSS:
+	case vtrpcpb.Code_UNKNOWN, vtrpcpb.Code_INTERNAL, vtrpcpb.Code_DATA_LOSS:
 		logger.Errorf("%v, request: %+v", err, request)
+	case vtrpcpb.Code_UNAVAILABLE:
+		logger.Infof("%v, request: %+v", err, request)
 	}
 	return vterrors.Errorf(vterrors.Code(err), "vtgate: %s: %v", servenv.ListeningURL.String(), err)
 }

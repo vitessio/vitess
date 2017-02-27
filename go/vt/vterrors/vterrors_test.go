@@ -2,7 +2,6 @@ package vterrors
 
 import (
 	"errors"
-	"io"
 	"testing"
 
 	"golang.org/x/net/context"
@@ -20,6 +19,7 @@ func TestCreation(t *testing.T) {
 		in:   vtrpcpb.Code_UNKNOWN,
 		want: vtrpcpb.Code_UNKNOWN,
 	}, {
+		// Invalid code OK should be converted to INTERNAL.
 		in:   vtrpcpb.Code_OK,
 		want: vtrpcpb.Code_INTERNAL,
 	}}
@@ -45,9 +45,6 @@ func TestCode(t *testing.T) {
 		want: vtrpcpb.Code_UNKNOWN,
 	}, {
 		in:   New(vtrpcpb.Code_CANCELED, "generic"),
-		want: vtrpcpb.Code_CANCELED,
-	}, {
-		in:   io.EOF,
 		want: vtrpcpb.Code_CANCELED,
 	}, {
 		in:   context.Canceled,

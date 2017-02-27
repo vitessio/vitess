@@ -46,7 +46,7 @@ func (tl *ThrottledLogger) log(logF logFunc, format string, v ...interface{}) {
 	logWaitTime := tl.maxInterval - (now.Sub(tl.lastlogTime))
 	if logWaitTime < 0 {
 		tl.lastlogTime = now
-		logF(2, fmt.Sprintf(tl.name+":"+format, v...))
+		logF(2, fmt.Sprintf(tl.name+": "+format, v...))
 		return
 	}
 	// If this is the first message to be skipped, start a goroutine

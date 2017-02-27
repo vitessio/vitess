@@ -2,11 +2,11 @@ package vterrors
 
 import (
 	"fmt"
-	"io"
 	"time"
 
 	"golang.org/x/net/context"
 
+	"github.com/youtube/vitess/go/tb"
 	"github.com/youtube/vitess/go/vt/logutil"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
@@ -21,7 +21,7 @@ type vtError struct {
 // New creates a new error using the code and input string.
 func New(code vtrpcpb.Code, in string) error {
 	if code == vtrpcpb.Code_OK {
-		logger.Errorf("Converting invalid code OK to INTERNAL error: %s", in)
+		logger.Errorf("OK is an invalid code, using INTERNAL instead: %s\n%s", in, tb.Stack(2))
 		code = vtrpcpb.Code_INTERNAL
 	}
 	return &vtError{
@@ -49,10 +49,10 @@ func Code(err error) vtrpcpb.Code {
 		return err.code
 	}
 	// Handle some special cases.
-	switch {
-	case err == io.EOF || err == context.Canceled:
+	switch err {
+	case context.Canceled:
 		return vtrpcpb.Code_CANCELED
-	case err == context.DeadlineExceeded:
+	case context.DeadlineExceeded:
 		return vtrpcpb.Code_DEADLINE_EXCEEDED
 	}
 	return vtrpcpb.Code_UNKNOWN
