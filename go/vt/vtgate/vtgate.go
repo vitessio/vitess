@@ -896,6 +896,8 @@ func recordAndAnnotateError(err error, statsKey []string, request map[string]int
 	switch ec {
 	case vtrpcpb.Code_UNKNOWN, vtrpcpb.Code_INTERNAL, vtrpcpb.Code_DATA_LOSS:
 		logger.Errorf("%v, request: %+v", err, request)
+	case vtrpcpb.Code_UNAVAILABLE:
+		logger.Infof("%v, request: %+v", err, request)
 	}
 	return vterrors.Errorf(vterrors.Code(err), "vtgate: %s: %v", servenv.ListeningURL.String(), err)
 }

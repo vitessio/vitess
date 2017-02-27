@@ -2,9 +2,16 @@ package vterrors
 
 import (
 	"fmt"
+	"time"
 
+	"golang.org/x/net/context"
+
+	"github.com/youtube/vitess/go/tb"
+	"github.com/youtube/vitess/go/vt/logutil"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
+
+var logger = logutil.NewThrottledLogger("vterror", 5*time.Second)
 
 type vtError struct {
 	code vtrpcpb.Code
@@ -13,6 +20,10 @@ type vtError struct {
 
 // New creates a new error using the code and input string.
 func New(code vtrpcpb.Code, in string) error {
+	if code == vtrpcpb.Code_OK {
+		logger.Errorf("OK is an invalid code, using INTERNAL instead: %s\n%s", in, tb.Stack(2))
+		code = vtrpcpb.Code_INTERNAL
+	}
 	return &vtError{
 		code: code,
 		err:  in,
@@ -21,10 +32,7 @@ func New(code vtrpcpb.Code, in string) error {
 
 // Errorf returns a new error built using Printf style arguments.
 func Errorf(code vtrpcpb.Code, format string, args ...interface{}) error {
-	return &vtError{
-		code: code,
-		err:  fmt.Sprintf(format, args...),
-	}
+	return New(code, fmt.Sprintf(format, args...))
 }
 
 func (e *vtError) Error() string {
@@ -39,6 +47,13 @@ func Code(err error) vtrpcpb.Code {
 	}
 	if err, ok := err.(*vtError); ok {
 		return err.code
+	}
+	// Handle some special cases.
+	switch err {
+	case context.Canceled:
+		return vtrpcpb.Code_CANCELED
+	case context.DeadlineExceeded:
+		return vtrpcpb.Code_DEADLINE_EXCEEDED
 	}
 	return vtrpcpb.Code_UNKNOWN
 }
