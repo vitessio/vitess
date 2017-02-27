@@ -142,7 +142,7 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32) {
 	}
 
 	// Wait for the client response. This has to be a direct read,
-	// so we don't buffer the TLS negociation packets.
+	// so we don't buffer the TLS negotiation packets.
 	response, err := c.readPacketDirect()
 	if err != nil {
 		log.Errorf("Cannot read client handshake response: %v", err)
@@ -208,7 +208,7 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32) {
 		renegotiateWithClearText = true
 	}
 
-	// If we need to re-negociate with clear text, do it.
+	// If we need to re-negotiate with clear text, do it.
 	if renegotiateWithClearText {
 		// Check error conditions.
 		if !l.AllowClearTextWithoutTLS && c.Capabilities&CapabilityClientSSL == 0 {

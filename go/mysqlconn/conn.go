@@ -155,7 +155,7 @@ func newConn(conn net.Conn) *Conn {
 
 // readPacketDirect attempts to read a packet from the socket directly.
 // It needs to be used for the first handshake packet the server receives,
-// so we do't buffer the SSL negociation packet. As a shortcut, only
+// so we do't buffer the SSL negotiation packet. As a shortcut, only
 // packets smaller than MaxPacketSize can be read here.
 func (c *Conn) readPacketDirect() ([]byte, error) {
 	var header [4]byte

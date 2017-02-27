@@ -54,7 +54,7 @@ If our server's AuthServer UseClearText() returns true, and the
 client's auth method is not mysql_clear_password, we will
 re-negotiate.
 
-If any of these methods doesn't work for the server, it will re-negociate
+If any of these methods doesn't work for the server, it will re-negotiate
 by sending an Authentication Method Switch Request Packet.
 The client will then handle that if it can.
 --

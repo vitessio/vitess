@@ -1,10 +1,8 @@
 package vtgate
 
 import (
-	"encoding/json"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"net"
 	"strings"
 
@@ -42,24 +40,8 @@ func initAuthServerConfig() {
 		log.Fatalf("Both mysql_auth_server_config_file and mysql_auth_server_config_string specified, can only use one.")
 	}
 
-	// Read file if necessary.
-	authServerConfig := mysqlconn.NewAuthServerConfig()
-	jsonConfig := []byte(*mysqlAuthServerConfigString)
-	if *mysqlAuthServerConfigFile != "" {
-		data, err := ioutil.ReadFile(*mysqlAuthServerConfigFile)
-		if err != nil {
-			log.Fatalf("Failed to read mysql_auth_server_config_file file: %v", err)
-		}
-		jsonConfig = data
-	}
-
-	// Parse JSON config.
-	if err := json.Unmarshal(jsonConfig, &authServerConfig.Entries); err != nil {
-		log.Fatalf("Error parsing auth server config: %v", err)
-	}
-
-	// And register the server.
-	mysqlconn.RegisterAuthServerImpl("config", authServerConfig)
+	// Create and register auth server.
+	mysqlconn.RegisterAuthServerConfigFromParams(*mysqlAuthServerConfigFile, *mysqlAuthServerConfigString)
 }
 
 // vtgateHandler implements the Listener interface.
