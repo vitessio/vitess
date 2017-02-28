@@ -2,8 +2,6 @@
 
 # This is an example script that stops guestbook.
 
-set -e
-
 script_root=`dirname "${BASH_SOURCE}"`
 source $script_root/env.sh
 
