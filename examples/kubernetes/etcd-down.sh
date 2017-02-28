@@ -13,10 +13,10 @@ cells=`echo $CELLS | tr ',' ' '`
 # Delete replication controllers
 for cell in 'global' $cells; do
   echo "Stopping etcd replicationcontroller for $cell cell..."
-  $KUBECTL delete replicationcontroller etcd-$cell --namespace=$VITESS_NAME
+  $KUBECTL --server=$KUBERENETAPI delete replicationcontroller etcd-$cell  --namespace=$VITESS_NAME
 
   echo "Deleting etcd service for $cell cell..."
-  $KUBECTL delete service etcd-$cell --namespace=$VITESS_NAME
-  $KUBECTL delete service etcd-$cell-srv --namespace=$VITESS_NAME
+  $KUBECTL --server=$KUBERENETAPI delete service etcd-$cell --namespace=$VITESS_NAME
+  $KUBECTL --server=$KUBERENETAPI delete service etcd-$cell-srv --namespace=$VITESS_NAME
 done
 

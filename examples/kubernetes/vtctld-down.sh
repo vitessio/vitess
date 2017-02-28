@@ -8,7 +8,7 @@ script_root=`dirname "${BASH_SOURCE}"`
 source $script_root/env.sh
 
 echo "Stopping vtctld replicationcontroller..."
-$KUBECTL delete replicationcontroller vtctld --namespace=$VITESS_NAME
+$KUBECTL --server=$KUBERENETAPI delete replicationcontroller vtctld --namespace=$VITESS_NAME
 
 echo "Deleting vtctld service..."
-$KUBECTL delete service vtctld --namespace=$VITESS_NAME
+$KUBECTL --server=$KUBERENETAPI delete service vtctld --namespace=$VITESS_NAME
