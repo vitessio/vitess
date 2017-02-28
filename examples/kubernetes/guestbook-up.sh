@@ -8,7 +8,7 @@ script_root=`dirname "${BASH_SOURCE}"`
 source $script_root/env.sh
 
 echo "Creating guestbook service..."
-$KUBECTL create --namespace=$VITESS_NAME -f guestbook-service.yaml
+$KUBECTL --server=$KUBERENETAPI create --namespace=$VITESS_NAME -f guestbook-service.yaml
 
 echo "Creating guestbook replicationcontroller..."
-$KUBECTL create --namespace=$VITESS_NAME -f guestbook-controller.yaml
+$KUBECTL --server=$KUBERENETAPI create --namespace=$VITESS_NAME -f guestbook-controller.yaml
