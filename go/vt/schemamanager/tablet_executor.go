@@ -143,7 +143,7 @@ func (exec *TabletExecutor) detectBigSchemaChanges(ctx context.Context, parsedDD
 		if ddl.Action == sqlparser.DropStr {
 			continue
 		}
-		tableName := ddl.Table.String()
+		tableName := ddl.Table.Name.String()
 		if rowCount, ok := tableWithCount[tableName]; ok {
 			if rowCount > 100000 && ddl.Action == sqlparser.AlterStr {
 				return true, fmt.Errorf(

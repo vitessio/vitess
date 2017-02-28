@@ -299,21 +299,22 @@ func (qre *QueryExecutor) execDDL() (*sqltypes.Result, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer qre.tsv.te.txPool.LocalCommit(qre.ctx, conn, qre.tsv.messager)
 
 	result, err := qre.execSQL(conn, qre.query, false)
 	if err != nil {
 		return nil, err
 	}
-	if !ddlPlan.TableName.IsEmpty() && ddlPlan.TableName != ddlPlan.NewName {
-		// It's a drop or rename.
-		qre.tsv.se.TableWasDropped(ddlPlan.TableName)
+
+	err = qre.tsv.te.txPool.LocalCommit(qre.ctx, conn, qre.tsv.messager)
+	if err != nil {
+		return nil, err
 	}
-	if !ddlPlan.NewName.IsEmpty() {
-		if err := qre.tsv.se.TableWasCreatedOrAltered(qre.ctx, ddlPlan.NewName.String()); err != nil {
-			return nil, err
-		}
+
+	err = qre.tsv.se.Reload(qre.ctx)
+	if err != nil {
+		return nil, err
 	}
+
 	return result, nil
 }
 

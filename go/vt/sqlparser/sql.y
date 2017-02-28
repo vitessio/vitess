@@ -269,43 +269,43 @@ set_statement:
   }
 
 create_statement:
-  CREATE TABLE not_exists_opt table_id force_eof
+  CREATE TABLE not_exists_opt table_name force_eof
   {
     $$ = &DDL{Action: CreateStr, NewName: $4}
   }
-| CREATE constraint_opt INDEX ID using_opt ON table_id force_eof
+| CREATE constraint_opt INDEX ID using_opt ON table_name force_eof
   {
     // Change this to an alter statement
     $$ = &DDL{Action: AlterStr, Table: $7, NewName: $7}
   }
 | CREATE VIEW sql_id force_eof
   {
-    $$ = &DDL{Action: CreateStr, NewName: NewTableIdent($3.Lowered())}
+    $$ = &DDL{Action: CreateStr, NewName: &TableName{Name: NewTableIdent($3.Lowered())}}
   }
 
 alter_statement:
-  ALTER ignore_opt TABLE table_id non_rename_operation force_eof
+  ALTER ignore_opt TABLE table_name non_rename_operation force_eof
   {
     $$ = &DDL{Action: AlterStr, Table: $4, NewName: $4}
   }
-| ALTER ignore_opt TABLE table_id RENAME to_opt table_id
+| ALTER ignore_opt TABLE table_name RENAME to_opt table_name
   {
     // Change this to a rename statement
     $$ = &DDL{Action: RenameStr, Table: $4, NewName: $7}
   }
 | ALTER VIEW sql_id force_eof
   {
-    $$ = &DDL{Action: AlterStr, Table: NewTableIdent($3.Lowered()), NewName: NewTableIdent($3.Lowered())}
+    $$ = &DDL{Action: AlterStr, Table: &TableName{Name: NewTableIdent($3.Lowered())}, NewName: &TableName{Name: NewTableIdent($3.Lowered())}}
   }
 
 rename_statement:
-  RENAME TABLE table_id TO table_id
+  RENAME TABLE table_name TO table_name
   {
     $$ = &DDL{Action: RenameStr, Table: $3, NewName: $5}
   }
 
 drop_statement:
-  DROP TABLE exists_opt table_id
+  DROP TABLE exists_opt table_name
   {
     var exists bool
     if $3 != 0 {
@@ -313,7 +313,7 @@ drop_statement:
     }
     $$ = &DDL{Action: DropStr, Table: $4, IfExists: exists}
   }
-| DROP INDEX ID ON table_id
+| DROP INDEX ID ON table_name
   {
     // Change this to an alter statement
     $$ = &DDL{Action: AlterStr, Table: $5, NewName: $5}
@@ -324,11 +324,11 @@ drop_statement:
         if $3 != 0 {
           exists = true
         }
-    $$ = &DDL{Action: DropStr, Table: NewTableIdent($4.Lowered()), IfExists: exists}
+    $$ = &DDL{Action: DropStr, Table: &TableName{Name: NewTableIdent($4.Lowered())}, IfExists: exists}
   }
 
 analyze_statement:
-  ANALYZE TABLE table_id
+  ANALYZE TABLE table_name
   {
     $$ = &DDL{Action: AlterStr, Table: $3, NewName: $3}
   }

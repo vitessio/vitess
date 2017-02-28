@@ -9,8 +9,8 @@ import "github.com/youtube/vitess/go/vt/sqlparser"
 // DDLPlan provides a plan for DDLs.
 type DDLPlan struct {
 	Action    string
-	TableName sqlparser.TableIdent
-	NewName   sqlparser.TableIdent
+	TableName *sqlparser.TableName
+	NewName   *sqlparser.TableName
 }
 
 // DDLParse parses a DDL and produces a DDLPlan.
@@ -36,7 +36,7 @@ func analyzeDDL(ddl *sqlparser.DDL, getTable TableGetter) *ExecPlan {
 	tableName := ddl.Table
 	// Skip TableName if table is empty (create statements) or not found in schema
 	if !tableName.IsEmpty() {
-		table, ok := getTable(tableName)
+		table, ok := getTable(tableName.Name)
 		if ok {
 			plan.TableName = table.Name
 		}

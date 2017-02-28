@@ -392,8 +392,8 @@ func (node *Set) WalkSubtree(visit Visit) error {
 // NewName is set for AlterStr, CreateStr, RenameStr.
 type DDL struct {
 	Action   string
-	Table    TableIdent
-	NewName  TableIdent
+	Table    *TableName
+	NewName  *TableName
 	IfExists bool
 }
 

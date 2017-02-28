@@ -325,7 +325,6 @@ func TestDropTable(t *testing.T) {
 		}
 		i++
 	})
-	se.TableWasDropped(existingTable)
 	table = se.GetTable(existingTable)
 	if table != nil {
 		t.Fatalf("table: %s should not exist", existingTable)
