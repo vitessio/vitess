@@ -20,4 +20,4 @@ for var in port cell vtgate_port; do
 done
 
 echo "Creating guestbook replicationcontroller..."
-cat guestbook-controller-template.yaml | sed -e "$sed_script" | $KUBECTL create --namespace=$VITESS_NAME -f -
+sed -e "$sed_script" guestbook-controller-template.yaml | $KUBECTL create --namespace=$VITESS_NAME -f -
