@@ -444,7 +444,7 @@ func (m *Manager) Delete(ctx context.Context, uuid string) error {
 // Wait waits for the provided workflow to end.
 func (m *Manager) Wait(ctx context.Context, uuid string) error {
 	// Find the workflow.
-	rw, err := m.getRunningWorkflow(uuid)
+	rw, err := m.runningWorkflow(uuid)
 	if err != nil {
 		return err
 	}
@@ -459,18 +459,18 @@ func (m *Manager) Wait(ctx context.Context, uuid string) error {
 	return nil
 }
 
-// GetWorkflowForTesting returns the Workflow object of the running workflow
+// WorkflowForTesting returns the Workflow object of the running workflow
 // identified by uuid. The method is used in unit tests to inject mocks.
-func (m *Manager) GetWorkflowForTesting(uuid string) (Workflow, error) {
-	rw, err := m.getRunningWorkflow(uuid)
+func (m *Manager) WorkflowForTesting(uuid string) (Workflow, error) {
+	rw, err := m.runningWorkflow(uuid)
 	if err != nil {
 		return nil, err
 	}
 	return rw.workflow, nil
 }
 
-// getRunningWorkflow returns a runningWorkflow by uuid.
-func (m *Manager) getRunningWorkflow(uuid string) (*runningWorkflow, error) {
+// runningWorkflow returns a runningWorkflow by uuid.
+func (m *Manager) runningWorkflow(uuid string) (*runningWorkflow, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 

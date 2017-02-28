@@ -54,7 +54,7 @@ func TestHorizontalResharding(t *testing.T) {
 		t.Fatalf("cannot create resharding workflow: %v", err)
 	}
 	// Inject the mock wranger into the workflow.
-	w, err := m.GetWorkflowForTesting(uuid)
+	w, err := m.WorkflowForTesting(uuid)
 	if err != nil {
 		t.Fatalf("fail to get workflow from manager: %v", err)
 	}
