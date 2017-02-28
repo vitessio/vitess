@@ -71,7 +71,7 @@ public class VitessResultSet implements ResultSet {
         this.cursor = cursor;
         this.vitessStatement = vitessStatement;
         try {
-            this.fields = enhancedFieldsFromCursor();
+            this.fields = enhancedFieldsFromCursor(vitessStatement == null ? null : vitessStatement.getConnection());
         } catch (SQLException e) {
             throw new SQLException(Constants.SQLExceptionMessages.RESULT_SET_INIT_ERROR, e);
         }
@@ -82,7 +82,7 @@ public class VitessResultSet implements ResultSet {
         }
     }
 
-    public VitessResultSet(String[] columnNames, Query.Type[] columnTypes, String[][] data)
+    public VitessResultSet(String[] columnNames, Query.Type[] columnTypes, String[][] data, VitessConnection connection)
         throws SQLException {
 
         if (columnNames.length != columnTypes.length) {
@@ -112,7 +112,7 @@ public class VitessResultSet implements ResultSet {
         this.cursor = new SimpleCursor(queryResultBuilder.build());
         this.vitessStatement = null;
         try {
-            this.fields = enhancedFieldsFromCursor();
+            this.fields = enhancedFieldsFromCursor(connection);
         } catch (SQLException e) {
             throw new SQLException(Constants.SQLExceptionMessages.RESULT_SET_INIT_ERROR, e);
         }
@@ -120,7 +120,7 @@ public class VitessResultSet implements ResultSet {
     }
 
     public VitessResultSet(String[] columnNames, Query.Type[] columnTypes,
-        ArrayList<ArrayList<String>> data) throws SQLException {
+        ArrayList<ArrayList<String>> data, VitessConnection connection) throws SQLException {
 
         if (columnNames.length != columnTypes.length) {
             throw new SQLException(Constants.SQLExceptionMessages.INVALID_RESULT_SET);
@@ -151,18 +151,17 @@ public class VitessResultSet implements ResultSet {
         this.cursor = new SimpleCursor(queryResultBuilder.build());
         this.vitessStatement = null;
         try {
-            this.fields = enhancedFieldsFromCursor();
+            this.fields = enhancedFieldsFromCursor(connection);
         } catch (SQLException e) {
             throw new SQLException(Constants.SQLExceptionMessages.RESULT_SET_INIT_ERROR, e);
         }
         this.currentRow = 0;
     }
 
-    private List<FieldWithMetadata> enhancedFieldsFromCursor() throws SQLException {
+    private List<FieldWithMetadata> enhancedFieldsFromCursor(VitessConnection connection) throws SQLException {
         if (cursor == null|| cursor.getFields() == null) {
             throw new SQLException(Constants.SQLExceptionMessages.CURSOR_NULL);
         }
-        VitessConnection connection = vitessStatement == null ? null : vitessStatement.getConnection();
         List<Query.Field> rawFields = cursor.getFields();
         List<FieldWithMetadata> fields = new ArrayList<>(rawFields.size());
         for (Query.Field field : rawFields) {

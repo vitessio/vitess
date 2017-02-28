@@ -418,7 +418,7 @@ public class VitessMariaDBDatabaseMetadata extends VitessDatabaseMetaData
                 {"TIMESTAMP", "93", "27", "'", "'", "[(M)]", "1", "0", "3", "0", "0", "0",
                     "TIMESTAMP", "0", "0", "0", "0", "10"}};
 
-        return new VitessResultSet(columnNames, columnTypes, data);
+        return new VitessResultSet(columnNames, columnTypes, data, this.connection);
     }
 
     public ResultSet getIndexInfo(String catalog, String schema, String table, boolean unique,
