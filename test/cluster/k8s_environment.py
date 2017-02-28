@@ -31,9 +31,9 @@ class K8sEnvironment(base_environment.BaseEnvironment):
           'kubectl not found, please install by visiting kubernetes.io or '
           'running gcloud components update kubectl if using compute engine.')
 
-    vtctld_addr = kubernetes_components.get_forwarded_ip(
+    vtctld_ip = kubernetes_components.get_forwarded_ip(
         'vtctld', instance_name)
-    self.vtctl_addr = '%s:15999' % vtctld_addr
+    self.vtctl_addr = '%s:15999' % vtctld_ip
 
     self.vtctl_helper = vtctl_helper.VtctlHelper('grpc', self.vtctl_addr)
     self.cluster_name = instance_name
@@ -92,9 +92,9 @@ class K8sEnvironment(base_environment.BaseEnvironment):
 
     self.vtgate_addrs = {}
     for cell in self.cells:
-      vtgate_addr = kubernetes_components.get_forwarded_ip(
+      vtgate_ip = kubernetes_components.get_forwarded_ip(
           'vtgate-%s' % cell, instance_name)
-      self.vtgate_addrs[cell] = '%s:15991' % vtgate_addr
+      self.vtgate_addrs[cell] = '%s:15991' % vtgate_ip
     super(K8sEnvironment, self).use_named(instance_name)
 
   def create(self, **kwargs):

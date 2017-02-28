@@ -47,11 +47,11 @@ class HelmComponent(sandlet.SandletComponent):
     except subprocess.CalledProcessError as e:
       raise sandbox.SandboxError('Failed to initialize helm: %s', e.output)
 
-    start_time = time.time()
 
     # helm init on a fresh cluster takes a while to be ready.
     # Wait until 'helm list' returns cleanly.
     with open(os.devnull, 'w') as devnull:
+      start_time = time.time()
       while time.time() - start_time < 120:
         try:
           subprocess.check_call(['helm', 'list'], stdout=devnull,
@@ -63,6 +63,7 @@ class HelmComponent(sandlet.SandletComponent):
       else:
         raise sandbox.SandboxError(
             'Timed out waiting for helm to become ready.')
+
     logging.info('Installing helm.')
     try:
       subprocess.check_output(
