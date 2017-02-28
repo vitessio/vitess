@@ -4,6 +4,7 @@
 import json
 import logging
 import optparse
+import time
 from vtproto import topodata_pb2
 from vttest import sharding_utils
 import sandbox_utils
@@ -36,7 +37,8 @@ def initial_reparent(keyspace, master_cell, num_shards, namespace):
       if potential_masters:
         master_tablets[shard_name] = potential_masters[0]
 
-  while len(successfully_reparented) < num_shards:
+  start_time = time.time()
+  while time.time() - start_time < 300:
     for shard_name in sharding_utils.get_shard_names(num_shards):
       shard_name = sandbox_utils.fix_shard_name(shard_name)
       master_tablet_id = master_tablets[shard_name]
@@ -51,6 +53,10 @@ def initial_reparent(keyspace, master_cell, num_shards, namespace):
       vtctl_sandbox.execute_vtctl_command(
           ['InitShardMaster', '-force', '%s/%s' % (keyspace, shard_name),
            master_tablet_id], namespace=namespace, timeout_s=5)
+    if len(successfully_reparented) == num_shards:
+      break
+  else:
+    logging.fatal('Timed out waiting for initial reparent.')
   logging.info('Done with initial reparent.')
 
 
