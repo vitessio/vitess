@@ -18,8 +18,9 @@ from vttest.mysql_flavor import mysql_flavor
 class MySqlDBMysqlctl(mysql_db.MySqlDB):
   """Contains data and methods to manage a MySQL instance using mysqlctl."""
 
-  def __init__(self, directory, port, extra_my_cnf):
-    super(MySqlDBMysqlctl, self).__init__(directory, port, extra_my_cnf)
+  def __init__(self, directory, port, extra_my_cnf, snapshot_file=None):
+    super(MySqlDBMysqlctl, self).__init__(
+        directory, port, extra_my_cnf, snapshot_file)
 
   def setup(self):
     cmd = [
