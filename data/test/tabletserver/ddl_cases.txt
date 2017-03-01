@@ -68,7 +68,7 @@
   "Action": "create", "NewName": "a"
 }
 
-"alter view c alter foo"
+"alter view c as foo"
 {
   "Action": "alter", "TableName": "c", "NewTable": "c"
 }

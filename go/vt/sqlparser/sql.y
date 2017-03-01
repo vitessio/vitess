@@ -186,7 +186,7 @@ func forceEOF(yylex interface{}) {
 %type <colIdent> sql_id reserved_sql_id col_alias as_ci_opt
 %type <tableIdent> table_id reserved_table_id table_alias as_opt_id
 %type <empty> as_opt
-%type <empty> force_eof
+%type <empty> force_eof ddl_force_eof
 %type <str> charset
 %type <convertType> convert_type
 
@@ -269,18 +269,18 @@ set_statement:
   }
 
 create_statement:
-  CREATE TABLE not_exists_opt table_id force_eof
+  CREATE TABLE not_exists_opt table_name ddl_force_eof
   {
-    $$ = &DDL{Action: CreateStr, NewName: &TableName{Name: $4}}
+    $$ = &DDL{Action: CreateStr, NewName: $4}
   }
-| CREATE constraint_opt INDEX ID using_opt ON table_id force_eof
+| CREATE constraint_opt INDEX ID using_opt ON table_name ddl_force_eof
   {
     // Change this to an alter statement
-    $$ = &DDL{Action: AlterStr, Table: &TableName{Name: $7}, NewName: &TableName{Name: $7}}
+    $$ = &DDL{Action: AlterStr, Table: $7, NewName:$7}
   }
-| CREATE VIEW sql_id force_eof
+| CREATE VIEW table_name ddl_force_eof
   {
-    $$ = &DDL{Action: CreateStr, NewName: &TableName{Name: NewTableIdent($3.Lowered())}}
+    $$ = &DDL{Action: CreateStr, NewName: $3.Lowered()}
   }
 
 alter_statement:
@@ -293,9 +293,9 @@ alter_statement:
     // Change this to a rename statement
     $$ = &DDL{Action: RenameStr, Table: $4, NewName: $7}
   }
-| ALTER VIEW sql_id force_eof
+| ALTER VIEW table_name ddl_force_eof
   {
-    $$ = &DDL{Action: AlterStr, Table: &TableName{Name: NewTableIdent($3.Lowered())}, NewName: &TableName{Name: NewTableIdent($3.Lowered())}}
+    $$ = &DDL{Action: AlterStr, Table: $3.Lowered(), NewName: $3.Lowered()}
   }
 
 rename_statement:
@@ -318,13 +318,13 @@ drop_statement:
     // Change this to an alter statement
     $$ = &DDL{Action: AlterStr, Table: $5, NewName: $5}
   }
-| DROP VIEW exists_opt sql_id force_eof
+| DROP VIEW exists_opt table_name ddl_force_eof
   {
     var exists bool
         if $3 != 0 {
           exists = true
         }
-    $$ = &DDL{Action: DropStr, Table: &TableName{Name: NewTableIdent($4.Lowered())}, IfExists: exists}
+    $$ = &DDL{Action: DropStr, Table: $4.Lowered(), IfExists: exists}
   }
 
 analyze_statement:
@@ -1692,3 +1692,16 @@ force_eof:
 {
   forceEOF(yylex)
 }
+
+ddl_force_eof:
+  {
+    forceEOF(yylex)
+  }
+| openb
+  {
+    forceEOF(yylex)
+  }
+| reserved_sql_id
+  {
+    forceEOF(yylex)
+  }

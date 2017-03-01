@@ -725,6 +725,12 @@ func (node *TableName) Equal(t *TableName) bool {
 	return node.Name == t.Name && node.Qualifier == t.Qualifier
 }
 
+// Lowered returns a new TableName where the Name and Qualifier have been converted
+// to lower case
+func (node *TableName) Lowered() *TableName {
+	return &TableName{Name: node.Name.Lowered(), Qualifier: node.Qualifier.Lowered()}
+}
+
 // ParenTableExpr represents a parenthesized list of TableExpr.
 type ParenTableExpr struct {
 	Exprs TableExprs
@@ -2063,6 +2069,12 @@ func (node *TableIdent) UnmarshalJSON(b []byte) error {
 	}
 	node.v = result
 	return nil
+}
+
+// Lowered returns a new TableIdent where the backing string has been
+// converted to lowercase
+func (node TableIdent) Lowered() TableIdent {
+	return NewTableIdent(strings.ToLower(node.v))
 }
 
 // Backtick produces a backticked literal given an input string.
