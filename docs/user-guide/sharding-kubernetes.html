@@ -315,18 +315,18 @@ confirming that the Vitess cluster continues to serve without downtime.</p>
 <p>The first step is to tell Vitess how we want to partition the data.
 We do this by providing a VSchema definition as follows:</p>
 <div class="highlight"><pre><code class="language-json" data-lang="json"><span class="p">{</span>
-  <span class="nt">&quot;Sharded&quot;</span><span class="p">:</span> <span class="kc">true</span><span class="p">,</span>
-  <span class="nt">&quot;Vindexes&quot;</span><span class="p">:</span> <span class="p">{</span>
+  <span class="nt">&quot;sharded&quot;</span><span class="p">:</span> <span class="kc">true</span><span class="p">,</span>
+  <span class="nt">&quot;vindexes&quot;</span><span class="p">:</span> <span class="p">{</span>
     <span class="nt">&quot;hash&quot;</span><span class="p">:</span> <span class="p">{</span>
-      <span class="nt">&quot;Type&quot;</span><span class="p">:</span> <span class="s2">&quot;hash&quot;</span>
+      <span class="nt">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;hash&quot;</span>
     <span class="p">}</span>
   <span class="p">},</span>
-  <span class="nt">&quot;Tables&quot;</span><span class="p">:</span> <span class="p">{</span>
+  <span class="nt">&quot;tables&quot;</span><span class="p">:</span> <span class="p">{</span>
     <span class="nt">&quot;messages&quot;</span><span class="p">:</span> <span class="p">{</span>
-      <span class="nt">&quot;ColVindexes&quot;</span><span class="p">:</span> <span class="p">[</span>
+      <span class="nt">&quot;column_vindexes&quot;</span><span class="p">:</span> <span class="p">[</span>
         <span class="p">{</span>
-          <span class="nt">&quot;Col&quot;</span><span class="p">:</span> <span class="s2">&quot;page&quot;</span><span class="p">,</span>
-          <span class="nt">&quot;Name&quot;</span><span class="p">:</span> <span class="s2">&quot;hash&quot;</span>
+          <span class="nt">&quot;column&quot;</span><span class="p">:</span> <span class="s2">&quot;page&quot;</span><span class="p">,</span>
+          <span class="nt">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;hash&quot;</span>
         <span class="p">}</span>
       <span class="p">]</span>
     <span class="p">}</span>
