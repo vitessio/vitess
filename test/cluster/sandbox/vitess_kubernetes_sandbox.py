@@ -67,7 +67,8 @@ class VitessKubernetesSandbox(sandbox.Sandbox):
         kubernetes_components.KubernetesResource(
             'guestbook-controller', self.name,
             os.path.join(template_dir, 'guestbook-controller-template.yaml'),
-            port=8080, cell=self.app_options.cells[0], vtgate_port=15991))
+            port=8080, cell=self.app_options.cells[0], vtgate_port=15991,
+            keyspace=self.app_options.keyspaces[0]['name']))
     self.sandlets.add_component(guestbook_sandlet)
 
   def _generate_helm_keyspaces(self):

@@ -47,7 +47,6 @@ class HelmComponent(sandlet.SandletComponent):
     except subprocess.CalledProcessError as e:
       raise sandbox.SandboxError('Failed to initialize helm: %s', e.output)
 
-
     # helm init on a fresh cluster takes a while to be ready.
     # Wait until 'helm list' returns cleanly.
     with open(os.devnull, 'w') as devnull:
