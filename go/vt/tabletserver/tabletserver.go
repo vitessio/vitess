@@ -164,8 +164,8 @@ func NewTabletServerWithNilTopoServer(config tabletenv.TabletConfig) *TabletServ
 	return NewTabletServer(config, topo.Server{})
 }
 
-// NewTabletServer creates an instance of TabletServer. Only one instance
-// of TabletServer can be created per process.
+// NewTabletServer creates an instance of TabletServer. Only the first
+// instance of TabletServer will expose its state variables.
 func NewTabletServer(config tabletenv.TabletConfig, topoServer topo.Server) *TabletServer {
 	tsv := &TabletServer{
 		QueryTimeout:        sync2.NewAtomicDuration(time.Duration(config.QueryTimeout * 1e9)),
@@ -183,6 +183,9 @@ func NewTabletServer(config tabletenv.TabletConfig, topoServer topo.Server) *Tab
 	tsv.messager = NewMessagerEngine(tsv, config)
 	tsv.watcher = NewReplicationWatcher(tsv.se, config)
 	tsv.updateStreamList = &binlog.StreamList{}
+	// FIXME(alainjobart) could we move this to the Register method below?
+	// So that vtcombo doesn't even call it once, on the first tablet.
+	// And we can remove the tsOnce variable.
 	tsOnce.Do(func() {
 		stats.Publish("TabletState", stats.IntFunc(func() int64 {
 			tsv.mu.Lock()
@@ -1484,7 +1487,7 @@ func (tsv *TabletServer) UpdateStream(ctx context.Context, target *querypb.Targe
 	}
 	defer tsv.endRequest(false)
 
-	s := binlog.NewEventStreamer(tsv.dbconfigs.App.DbName, tsv.mysqld, p, timestamp, callback)
+	s := binlog.NewEventStreamer(tsv.dbconfigs.App.DbName, tsv.mysqld, tsv.se, p, timestamp, callback)
 
 	// Create a cancelable wrapping context.
 	streamCtx, streamCancel := context.WithCancel(ctx)

@@ -100,7 +100,7 @@ func TestStreamerParseRBRUpdateEvent(t *testing.T) {
 		got = append(got, *trans)
 		return nil
 	}
-	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.Position{}, 0, sendTransaction)
+	bls := NewStreamer("vt_test_keyspace", nil, nil, nil, replication.Position{}, 0, sendTransaction)
 
 	go sendTestEvents(events, input)
 	_, err := bls.parseEvents(context.Background(), events)
