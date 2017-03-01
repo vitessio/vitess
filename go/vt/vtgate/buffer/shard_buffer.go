@@ -459,14 +459,14 @@ func (sb *shardBuffer) recordExternallyReparentedTimestamp(timestamp int64) {
 		// First non-zero value after startup. Remember it.
 		sb.externallyReparentedAfterStart = timestamp
 	}
-	sb.stopBufferingLocked(stopReasonFailoverEndDetected, "failover end detected")
+	sb.stopBufferingLocked(stopFailoverEndDetected, "failover end detected")
 }
 
 func (sb *shardBuffer) stopBufferingDueToMaxDuration() {
 	sb.mu.Lock()
 	defer sb.mu.Unlock()
 
-	sb.stopBufferingLocked(stopReasonMaxFailoverDurationExceeded,
+	sb.stopBufferingLocked(stopMaxFailoverDurationExceeded,
 		fmt.Sprintf("stopping buffering because failover did not finish in time (%v)", *maxFailoverDuration))
 }
 

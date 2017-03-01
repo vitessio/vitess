@@ -58,9 +58,9 @@ var (
 type stopReason string
 
 const (
-	stopReasonFailoverEndDetected         stopReason = "NewMasterSeen"
-	stopReasonMaxFailoverDurationExceeded            = "MaxDurationExceeded"
-	stopShutdown                                     = "Shutdown"
+	stopFailoverEndDetected         stopReason = "NewMasterSeen"
+	stopMaxFailoverDurationExceeded            = "MaxDurationExceeded"
+	stopShutdown                               = "Shutdown"
 )
 
 // evictedReason is used in "requestsEvicted" as "Reason" label.

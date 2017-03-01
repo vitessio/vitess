@@ -33,7 +33,7 @@ var (
 
 	statsKeyJoined = fmt.Sprintf("%s.%s", keyspace, shard)
 
-	statsKeyJoinedFailoverEndDetected = statsKeyJoined + "." + string(stopReasonFailoverEndDetected)
+	statsKeyJoinedFailoverEndDetected = statsKeyJoined + "." + string(stopFailoverEndDetected)
 
 	statsKeyJoinedWindowExceeded = statsKeyJoined + "." + string(evictedWindowExceeded)
 
