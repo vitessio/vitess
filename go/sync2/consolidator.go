@@ -29,6 +29,9 @@ func NewConsolidator() *Consolidator {
 
 // Result is a wrapper for result of a query.
 type Result struct {
+	// executing is used to block additional requests.
+	// The original request holds a write lock while additional ones are blocked
+	// on acquiring a read lock (see Wait() below.)
 	executing    sync.RWMutex
 	consolidator *Consolidator
 	query        string
@@ -64,13 +67,13 @@ func (co *Consolidator) ServeHTTP(response http.ResponseWriter, request *http.Re
 	}
 	response.Write([]byte(fmt.Sprintf("Length: %d\n", len(items))))
 	for _, v := range items {
-		response.Write([]byte(fmt.Sprintf("%v: %s\n", v.Value.(*ccount).Get(), v.Key)))
+		response.Write([]byte(fmt.Sprintf("%v: %s\n", v.Value.(*ccount).get(), v.Key)))
 	}
 }
 
 func (co *Consolidator) record(query string) {
 	if v, ok := co.consolidations.Get(query); ok {
-		v.(*ccount).Add(1)
+		v.(*ccount).add(1)
 	} else {
 		c := ccount(1)
 		co.consolidations.Set(query, &c)
@@ -94,20 +97,21 @@ func (rs *Result) Wait() {
 	rs.executing.RLock()
 }
 
+// ccount elements are used with a cache.LRUCache object to track if another
+// request for the same query is already in progress.
 type ccount int64
 
+// Size always returns 1 because we use the cache only to track queries,
+// independent of the number of requests waiting for them.
+// This implements the cache.Value interface.
 func (cc *ccount) Size() int {
 	return 1
 }
 
-func (cc *ccount) Add(n int64) int64 {
+func (cc *ccount) add(n int64) int64 {
 	return atomic.AddInt64((*int64)(cc), n)
 }
 
-func (cc *ccount) Set(n int64) {
-	atomic.StoreInt64((*int64)(cc), n)
-}
-
-func (cc *ccount) Get() int64 {
+func (cc *ccount) get() int64 {
 	return atomic.LoadInt64((*int64)(cc))
 }
