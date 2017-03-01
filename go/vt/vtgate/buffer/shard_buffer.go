@@ -97,12 +97,15 @@ type entry struct {
 }
 
 func newShardBuffer(mode bufferMode, keyspace, shard string, bufferSizeSema *sync2.Semaphore) *shardBuffer {
+	statsKey := []string{keyspace, shard}
+	initVariablesForShard(statsKey)
+
 	return &shardBuffer{
 		mode:           mode,
 		keyspace:       keyspace,
 		shard:          shard,
 		bufferSizeSema: bufferSizeSema,
-		statsKey:       []string{keyspace, shard},
+		statsKey:       statsKey,
 		statsKeyJoined: fmt.Sprintf("%s.%s", keyspace, shard),
 		logTooRecent:   logutil.NewThrottledLogger(fmt.Sprintf("FailoverTooRecent-%v", topoproto.KeyspaceShardString(keyspace, shard)), 5*time.Second),
 		state:          stateIdle,

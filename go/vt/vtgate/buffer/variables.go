@@ -57,6 +57,8 @@ var (
 // stopReason is used in "stopsByReason" as "Reason" label.
 type stopReason string
 
+var stopReasons = []stopReason{stopFailoverEndDetected, stopMaxFailoverDurationExceeded, stopShutdown}
+
 const (
 	stopFailoverEndDetected         stopReason = "NewMasterSeen"
 	stopMaxFailoverDurationExceeded            = "MaxDurationExceeded"
@@ -66,6 +68,8 @@ const (
 // evictedReason is used in "requestsEvicted" as "Reason" label.
 type evictedReason string
 
+var evictReasons = []evictedReason{evictedContextDone, evictedBufferFull, evictedWindowExceeded}
+
 const (
 	evictedContextDone    evictedReason = "ContextDone"
 	evictedBufferFull                   = "BufferFull"
@@ -74,6 +78,8 @@ const (
 
 // skippedReason is used in "requestsSkipped" as "Reason" label.
 type skippedReason string
+
+var skippedReasons = []skippedReason{skippedBufferFull, skippedDisabled, skippedShutdown, skippedLastReparentTooRecent, skippedLastFailoverTooRecent}
 
 const (
 	// skippedBufferFull occurs when all slots in the buffer are occupied by one
@@ -87,6 +93,36 @@ const (
 	skippedLastReparentTooRecent = "LastReparentTooRecent"
 	skippedLastFailoverTooRecent = "LastFailoverTooRecent"
 )
+
+// initVariablesForShard is used to initialize all shard variables to 0.
+// If we don't do this, monitoring frameworks may not correctly calculate rates
+// for the first failover of the shard because they see a transition from
+// "no value for this label set (NaN)" to "a value".
+// "statsKey" should have two members for keyspace and shard.
+func initVariablesForShard(statsKey []string) {
+	starts.Set(statsKey, 0)
+	for _, reason := range stopReasons {
+		key := append(statsKey, string(reason))
+		stops.Set(key, 0)
+	}
+
+	failoverDurationSumMs.Set(statsKey, 0)
+
+	utilizationSum.Set(statsKey, 0)
+	utilizationDryRunSum.Set(statsKey, 0)
+
+	requestsBuffered.Set(statsKey, 0)
+	requestsBufferedDryRun.Set(statsKey, 0)
+	requestsDrained.Set(statsKey, 0)
+	for _, reason := range evictReasons {
+		key := append(statsKey, string(reason))
+		requestsEvicted.Set(key, 0)
+	}
+	for _, reason := range skippedReasons {
+		key := append(statsKey, string(reason))
+		requestsSkipped.Set(key, 0)
+	}
+}
 
 // TODO(mberlin): Remove the gauge values below once we store them
 // internally and have a /bufferz page where we can show this.
