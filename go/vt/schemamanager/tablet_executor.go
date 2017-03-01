@@ -140,7 +140,8 @@ func (exec *TabletExecutor) detectBigSchemaChanges(ctx context.Context, parsedDD
 		tableWithCount[tableSchema.Name] = tableSchema.RowCount
 	}
 	for _, ddl := range parsedDDLs {
-		if ddl.Action == sqlparser.DropStr {
+		switch ddl.Action {
+		case sqlparser.DropStr, sqlparser.CreateStr:
 			continue
 		}
 		tableName := ddl.Table.Name.String()
