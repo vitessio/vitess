@@ -269,14 +269,14 @@ set_statement:
   }
 
 create_statement:
-  CREATE TABLE not_exists_opt table_name force_eof
+  CREATE TABLE not_exists_opt table_id force_eof
   {
-    $$ = &DDL{Action: CreateStr, NewName: $4}
+    $$ = &DDL{Action: CreateStr, NewName: &TableName{Name: $4}}
   }
-| CREATE constraint_opt INDEX ID using_opt ON table_name force_eof
+| CREATE constraint_opt INDEX ID using_opt ON table_id force_eof
   {
     // Change this to an alter statement
-    $$ = &DDL{Action: AlterStr, Table: $7, NewName: $7}
+    $$ = &DDL{Action: AlterStr, Table: &TableName{Name: $7}, NewName: &TableName{Name: $7}}
   }
 | CREATE VIEW sql_id force_eof
   {

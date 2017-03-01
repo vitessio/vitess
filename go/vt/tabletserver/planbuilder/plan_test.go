@@ -128,9 +128,15 @@ func TestDDLPlan(t *testing.T) {
 			t.Fatalf("Error marshalling %v", plan)
 		}
 		matchString(t, tcase.lineno, expected["Action"], plan.Action)
-		matchString(t, tcase.lineno, expected["TableName"], plan.TableName.String())
-		matchString(t, tcase.lineno, expected["NewName"], plan.NewName.String())
+		matchString(t, tcase.lineno, expected["TableName"], renderTableName(plan.TableName))
+		matchString(t, tcase.lineno, expected["NewName"], renderTableName(plan.NewName))
 	}
+}
+
+func renderTableName(name *sqlparser.TableName) string {
+	buf := sqlparser.NewTrackedBuffer(nil)
+	name.Format(buf)
+	return buf.String()
 }
 
 func matchString(t *testing.T, line int, expected interface{}, actual string) {
