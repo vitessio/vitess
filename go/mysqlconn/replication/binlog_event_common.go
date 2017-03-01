@@ -348,77 +348,392 @@ func (ev binlogEvent) TableMap(f BinlogFormat) (*TableMap, error) {
 
 	// FIXME(alainjobart) this is varlength encoded.
 	columnCount := int(data[pos])
+	pos++
 
-	result.Columns = make([]TableMapColumn, columnCount)
-	for i := 0; i < columnCount; i++ {
-		result.Columns[i].Type = data[pos+1+i]
-	}
-	pos += 1 + columnCount
+	result.Types = data[pos : pos+columnCount]
+	pos += columnCount
 
 	// FIXME(alainjobart) this is a var-len-string.
-	// These are type-specific meta-data per field. Not sure what's in
-	// there.
 	l = int(data[pos])
-	pos += 1 + l
+	pos++
+
+	// Allocate and parse / copy Metadata.
+	result.Metadata = make([]uint16, columnCount)
+	expectedEnd := pos + l
+	for c := 0; c < columnCount; c++ {
+		var err error
+		result.Metadata[c], pos, err = metadataRead(data, pos, result.Types[c])
+		if err != nil {
+			return nil, err
+		}
+	}
+	if pos != expectedEnd {
+		return nil, fmt.Errorf("unexpected metadata end: got %v was expecting %v (data=%v)", pos, expectedEnd, data)
+	}
 
 	// A bit array that says if each colum can be NULL.
-	nullBitmap, _ := newBitmap(data, pos, columnCount)
-	for i := 0; i < columnCount; i++ {
-		result.Columns[i].CanBeNull = nullBitmap.Bit(i)
-	}
+	result.CanBeNull, _ = newBitmap(data, pos, columnCount)
 
 	return result, nil
 }
 
-// cellLength returns the new position after the field with the given type is read.
-func cellLength(data []byte, pos int, tmc *TableMapColumn) (int, error) {
-	switch tmc.Type {
-	case TypeTiny:
-		return 1, nil
-	case TypeShort, TypeYear:
-		return 2, nil
-	case TypeLong, TypeInt24:
-		return 4, nil
-	case TypeLongLong:
-		return 8, nil
-	case TypeTimestamp, TypeDate, TypeTime, TypeDateTime:
-		// first byte has the length.
-		l := int(data[pos])
-		return 1 + l, nil
-	case TypeVarchar:
-		// Length is encoded in 2 bytes.
-		l := int(uint64(data[pos]) |
-			uint64(data[pos+1])<<8)
-		return 2 + l, nil
+// metadataLength returns how many bytes are used for metadata, based on a type.
+func metadataLength(typ byte) int {
+	switch typ {
+	case TypeDecimal, TypeTiny, TypeShort, TypeLong, TypeNull, TypeTimestamp, TypeLongLong, TypeInt24, TypeDate, TypeTime, TypeDateTime, TypeYear, TypeNewDate, TypeVarString:
+		// No data here.
+		return 0
+
+	case TypeFloat, TypeDouble, TypeTimestamp2, TypeDateTime2, TypeTime2, TypeJSON, TypeTinyBlob, TypeMediumBlob, TypeLongBlob, TypeBlob, TypeGeometry:
+		// One byte.
+		return 1
+
+	case TypeNewDecimal, TypeEnum, TypeSet, TypeString:
+		// Two bytes, Big Endian because of crazy encoding.
+		return 2
+
+	case TypeVarchar, TypeBit:
+		// Two bytes, Little Endian
+		return 2
+
 	default:
-		return 0, fmt.Errorf("Unsupported type %v (data: %v pos: %v)", tmc.Type, data, pos)
+		// Unknown type. This is used in tests only, so panic.
+		panic(fmt.Errorf("metadataLength: unhandled data type: %v", typ))
 	}
 }
 
-// FIXME(alainjobart) are the ints signed? It seems Tiny is unsigned,
-// but the others are.
-func cellData(data []byte, pos int, tmc *TableMapColumn) (string, int, error) {
-	switch tmc.Type {
+// metadataTotalLength returns the total size of the metadata for an
+// array of types.
+func metadataTotalLength(types []byte) int {
+	sum := 0
+	for _, t := range types {
+		sum += metadataLength(t)
+	}
+	return sum
+}
+
+// metadataRead reads a single value from the metadata string.
+func metadataRead(data []byte, pos int, typ byte) (uint16, int, error) {
+	switch typ {
+
+	case TypeDecimal, TypeTiny, TypeShort, TypeLong, TypeNull, TypeTimestamp, TypeLongLong, TypeInt24, TypeDate, TypeTime, TypeDateTime, TypeYear, TypeNewDate, TypeVarString:
+		// No data here.
+		return 0, pos, nil
+
+	case TypeFloat, TypeDouble, TypeTimestamp2, TypeDateTime2, TypeTime2, TypeJSON, TypeTinyBlob, TypeMediumBlob, TypeLongBlob, TypeBlob, TypeGeometry:
+		// One byte.
+		return uint16(data[pos]), pos + 1, nil
+
+	case TypeNewDecimal, TypeEnum, TypeSet, TypeString:
+		// Two bytes, Big Endian because of crazy encoding.
+		return uint16(data[pos])<<8 + uint16(data[pos+1]), pos + 2, nil
+
+	case TypeVarchar, TypeBit:
+		// Two bytes, Little Endian
+		return uint16(data[pos]) + uint16(data[pos+1])<<8, pos + 2, nil
+
+	default:
+		// Unknown types, we can't go on.
+		return 0, 0, fmt.Errorf("metadataRead: unhandled data type: %v", typ)
+	}
+}
+
+// metadataWrite writes a single value into the metadata string.
+func metadataWrite(data []byte, pos int, typ byte, value uint16) int {
+	switch typ {
+
+	case TypeDecimal, TypeTiny, TypeShort, TypeLong, TypeNull, TypeTimestamp, TypeLongLong, TypeInt24, TypeDate, TypeTime, TypeDateTime, TypeYear, TypeNewDate, TypeVarString:
+		// No data here.
+		return pos
+
+	case TypeFloat, TypeDouble, TypeTimestamp2, TypeDateTime2, TypeTime2, TypeJSON, TypeTinyBlob, TypeMediumBlob, TypeLongBlob, TypeBlob, TypeGeometry:
+		// One byte.
+		data[pos] = byte(value)
+		return pos + 1
+
+	case TypeNewDecimal, TypeEnum, TypeSet, TypeString:
+		// Two bytes, Big Endian because of crazy encoding.
+		data[pos] = byte(value >> 8)
+		data[pos+1] = byte(value)
+		return pos + 2
+
+	case TypeVarchar, TypeBit:
+		// Two bytes, Little Endian
+		data[pos] = byte(value)
+		data[pos+1] = byte(value >> 8)
+		return pos + 2
+
+	default:
+		// Unknown type. This is used in tests only, so panic.
+		panic(fmt.Errorf("metadataRead: unhandled data type: %v", typ))
+	}
+}
+
+// cellLength returns the new position after the field with the given
+// type is read.
+func cellLength(data []byte, pos int, typ byte, metadata uint16) (int, error) {
+	switch typ {
+	case TypeNull:
+		return 0, nil
+	case TypeTiny, TypeYear:
+		return 1, nil
+	case TypeShort:
+		return 2, nil
+	case TypeInt24:
+		return 3, nil
+	case TypeLong, TypeTimestamp:
+		return 4, nil
+	case TypeLongLong:
+		return 8, nil
+	case TypeDate, TypeNewDate:
+		return 3, nil
+	case TypeTime:
+		return 4, nil
+	case TypeDateTime:
+		return 8, nil
+	case TypeVarchar:
+		// Length is encoded in 1 or 2 bytes.
+		if metadata > 255 {
+			l := int(uint64(data[pos]) |
+				uint64(data[pos+1])<<8)
+			return l + 2, nil
+		}
+		l := int(data[pos])
+		return l + 1, nil
+	case TypeBit:
+		// bitmap length is in metadata, as:
+		// upper 8 bits: bytes length
+		// lower 8 bits: bit length
+		nbits := ((metadata >> 8) * 8) + (metadata & 0xFF)
+		return (int(nbits) + 7) / 8, nil
+	case TypeTimestamp2:
+		// metadata has number of decimals. One byte encodes
+		// two decimals.
+		return 4 + (int(metadata)+1)/2, nil
+	case TypeDateTime2:
+		// metadata has number of decimals. One byte encodes
+		// two decimals.
+		return 5 + (int(metadata)+1)/2, nil
+	case TypeTime2:
+		// metadata has number of decimals. One byte encodes
+		// two decimals.
+		return 3 + (int(metadata)+1)/2, nil
+
+	default:
+		return 0, fmt.Errorf("Unsupported type %v (data: %v pos: %v)", typ, data, pos)
+	}
+}
+
+// cellData returns the data for a cell as a string. This is meant to
+// be used in tests only, as it is missing the type flags to interpret
+// the data correctly.
+func cellData(data []byte, pos int, typ byte, metadata uint16) (string, int, error) {
+	switch typ {
 	case TypeTiny:
 		return fmt.Sprintf("%v", data[pos]), 1, nil
-	case TypeShort, TypeYear:
+	case TypeYear:
+		return fmt.Sprintf("%v", 1900+int(data[pos])), 1, nil
+	case TypeShort:
 		val := binary.LittleEndian.Uint16(data[pos : pos+2])
 		return fmt.Sprintf("%v", val), 2, nil
-	case TypeLong, TypeInt24:
+	case TypeInt24:
+		val := uint32(data[pos]) +
+			uint32(data[pos+1])<<8 +
+			uint32(data[pos+2])<<16
+		return fmt.Sprintf("%v", val), 3, nil
+	case TypeLong, TypeTimestamp:
 		val := binary.LittleEndian.Uint32(data[pos : pos+4])
 		return fmt.Sprintf("%v", val), 4, nil
 	case TypeLongLong:
 		val := binary.LittleEndian.Uint64(data[pos : pos+8])
 		return fmt.Sprintf("%v", val), 8, nil
-	case TypeTimestamp, TypeDate, TypeTime, TypeDateTime:
-		panic(fmt.Errorf("Not yet implemented type %v", tmc.Type))
+	case TypeDate, TypeNewDate:
+		val := uint32(data[pos]) +
+			uint32(data[pos+1])<<8 +
+			uint32(data[pos+2])<<16
+		day := val & 31
+		month := val >> 5 & 15
+		year := val >> 9
+		return fmt.Sprintf("%04d-%02d-%02d", year, month, day), 3, nil
+	case TypeTime:
+		val := binary.LittleEndian.Uint32(data[pos : pos+4])
+		hour := val / 10000
+		minute := (val % 10000) / 100
+		second := val % 100
+		return fmt.Sprintf("%02d:%02d:%02d", hour, minute, second), 4, nil
+	case TypeDateTime:
+		val := binary.LittleEndian.Uint64(data[pos : pos+8])
+		d := val / 1000000
+		t := val % 1000000
+		year := d / 10000
+		month := (d % 10000) / 100
+		day := d % 100
+		hour := t / 10000
+		minute := (t % 10000) / 100
+		second := t % 100
+		return fmt.Sprintf("%04d-%02d-%02d %02d:%02d:%02d", year, month, day, hour, minute, second), 8, nil
 	case TypeVarchar:
-		// Varchar length is two bytes here.
-		l := int(uint64(data[pos]) |
-			uint64(data[pos+1])<<8)
-		return string(data[pos+2 : pos+2+l]), 2 + l, nil
+		// Length is encoded in 1 or 2 bytes.
+		if metadata > 255 {
+			l := int(uint64(data[pos]) |
+				uint64(data[pos+1])<<8)
+			return string(data[pos+2 : pos+2+l]), l + 2, nil
+		}
+		l := int(data[pos])
+		return string(data[pos+1 : pos+1+l]), l + 1, nil
+	case TypeBit:
+		nbits := ((metadata >> 8) * 8) + (metadata & 0xFF)
+		l := (int(nbits) + 7) / 8
+		var buf bytes.Buffer
+		for i := 0; i < l; i++ {
+			buf.WriteString(fmt.Sprintf("%08b", data[pos+i]))
+		}
+		return buf.String(), l, nil
+	case TypeTimestamp2:
+		second := binary.LittleEndian.Uint32(data[pos : pos+4])
+		switch metadata {
+		case 1:
+			decimals := int(data[pos+4])
+			return fmt.Sprintf("%v.%01d", second, decimals), 5, nil
+		case 2:
+			decimals := int(data[pos+4])
+			return fmt.Sprintf("%v.%02d", second, decimals), 5, nil
+		case 3:
+			decimals := int(data[pos+4]) +
+				int(data[pos+5])<<8
+			return fmt.Sprintf("%v.%03d", second, decimals), 6, nil
+		case 4:
+			decimals := int(data[pos+4]) +
+				int(data[pos+5])<<8
+			return fmt.Sprintf("%v.%04d", second, decimals), 6, nil
+		case 5:
+			decimals := int(data[pos+4]) +
+				int(data[pos+5])<<8 +
+				int(data[pos+6])<<16
+			return fmt.Sprintf("%v.%05d", second, decimals), 7, nil
+		case 6:
+			decimals := int(data[pos+4]) +
+				int(data[pos+5])<<8 +
+				int(data[pos+6])<<16
+			return fmt.Sprintf("%v.%.6d", second, decimals), 7, nil
+		}
+		return fmt.Sprintf("%v", second), 4, nil
+	case TypeDateTime2:
+		ymdhms := (uint64(data[pos]) |
+			uint64(data[pos+1])<<8 |
+			uint64(data[pos+2])<<16 |
+			uint64(data[pos+3])<<24 |
+			uint64(data[pos+4])<<32) - uint64(0x8000000000)
+		ymd := ymdhms >> 17
+		ym := ymd >> 5
+		hms := ymdhms % (1 << 17)
+
+		day := ymd % (1 << 5)
+		month := ym % 13
+		year := ym / 13
+
+		second := hms % (1 << 6)
+		minute := (hms >> 6) % (1 << 6)
+		hour := hms >> 12
+
+		datetime := fmt.Sprintf("%04d-%02d-%02d %02d:%02d:%02d", year, month, day, hour, minute, second)
+
+		switch metadata {
+		case 1:
+			decimals := int(data[pos+5])
+			return fmt.Sprintf("%v.%01d", datetime, decimals), 6, nil
+		case 2:
+			decimals := int(data[pos+5])
+			return fmt.Sprintf("%v.%02d", datetime, decimals), 6, nil
+		case 3:
+			decimals := int(data[pos+5]) +
+				int(data[pos+6])<<8
+			return fmt.Sprintf("%v.%03d", datetime, decimals), 7, nil
+		case 4:
+			decimals := int(data[pos+5]) +
+				int(data[pos+6])<<8
+			return fmt.Sprintf("%v.%04d", datetime, decimals), 7, nil
+		case 5:
+			decimals := int(data[pos+5]) +
+				int(data[pos+6])<<8 +
+				int(data[pos+7])<<16
+			return fmt.Sprintf("%v.%05d", datetime, decimals), 8, nil
+		case 6:
+			decimals := int(data[pos+5]) +
+				int(data[pos+6])<<8 +
+				int(data[pos+7])<<16
+			return fmt.Sprintf("%v.%.6d", datetime, decimals), 8, nil
+		}
+		return datetime, 5, nil
+	case TypeTime2:
+		hms := (int64(data[pos]) |
+			int64(data[pos+1])<<8 |
+			int64(data[pos+2])<<16) - 0x800000
+		sign := ""
+		if hms < 0 {
+			hms = -hms
+			sign = "-"
+		}
+
+		fracStr := ""
+		switch metadata {
+		case 1:
+			frac := int(data[pos+3])
+			if sign == "-" && frac != 0 {
+				hms--
+				frac = 0x100 - frac
+			}
+			fracStr = fmt.Sprintf(".%.1d", frac/10)
+		case 2:
+			frac := int(data[pos+3])
+			if sign == "-" && frac != 0 {
+				hms--
+				frac = 0x100 - frac
+			}
+			fracStr = fmt.Sprintf(".%.2d", frac)
+		case 3:
+			frac := int(data[pos+3]) |
+				int(data[pos+4])<<8
+			if sign == "-" && frac != 0 {
+				hms--
+				frac = 0x10000 - frac
+			}
+			fracStr = fmt.Sprintf(".%.3d", frac/10)
+		case 4:
+			frac := int(data[pos+3]) |
+				int(data[pos+4])<<8
+			if sign == "-" && frac != 0 {
+				hms--
+				frac = 0x10000 - frac
+			}
+			fracStr = fmt.Sprintf(".%.4d", frac)
+		case 5:
+			frac := int(data[pos+3]) |
+				int(data[pos+4])<<8 |
+				int(data[pos+5])<<16
+			if sign == "-" && frac != 0 {
+				hms--
+				frac = 0x1000000 - frac
+			}
+			fracStr = fmt.Sprintf(".%.5d", frac/10)
+		case 6:
+			frac := int(data[pos+3]) |
+				int(data[pos+4])<<8 |
+				int(data[pos+5])<<16
+			if sign == "-" && frac != 0 {
+				hms--
+				frac = 0x1000000 - frac
+			}
+			fracStr = fmt.Sprintf(".%.6d", frac)
+		}
+
+		hour := (hms >> 12) % (1 << 10)
+		minute := (hms >> 6) % (1 << 6)
+		second := hms % (1 << 6)
+		return fmt.Sprintf("%v%02d:%02d:%02d%v", sign, hour, minute, second, fracStr), 3 + (int(metadata)+1)/2, nil
+
 	default:
-		return "", 0, fmt.Errorf("Unsupported type %v", tmc.Type)
+		return "", 0, fmt.Errorf("Unsupported type %v", typ)
 	}
 }
 
@@ -507,7 +822,7 @@ func (ev binlogEvent) Rows(f BinlogFormat, tm *TableMap) (Rows, error) {
 				}
 
 				// This column is represented now. We need to skip its length.
-				l, err := cellLength(data, pos, &tm.Columns[c])
+				l, err := cellLength(data, pos, tm.Types[c], tm.Metadata[c])
 				if err != nil {
 					return result, err
 				}
@@ -537,7 +852,7 @@ func (ev binlogEvent) Rows(f BinlogFormat, tm *TableMap) (Rows, error) {
 				}
 
 				// This column is represented now. We need to skip its length.
-				l, err := cellLength(data, pos, &tm.Columns[c])
+				l, err := cellLength(data, pos, tm.Types[c], tm.Metadata[c])
 				if err != nil {
 					return result, err
 				}
@@ -553,8 +868,10 @@ func (ev binlogEvent) Rows(f BinlogFormat, tm *TableMap) (Rows, error) {
 	return result, nil
 }
 
-// StringValues is a helper method to return the string value of all columns in a row in a Row.
-func (rs *Rows) StringValues(tm *TableMap, rowIndex int) ([]string, error) {
+// StringValuesForTests is a helper method to return the string value
+// of all columns in a row in a Row. Only use it in tests, as the
+// returned values cannot be interpreted correctly without the schema.
+func (rs *Rows) StringValuesForTests(tm *TableMap, rowIndex int) ([]string, error) {
 	var result []string
 
 	valueIndex := 0
@@ -573,7 +890,7 @@ func (rs *Rows) StringValues(tm *TableMap, rowIndex int) ([]string, error) {
 		}
 
 		// We have real data
-		value, l, err := cellData(data, pos, &tm.Columns[c])
+		value, l, err := cellData(data, pos, tm.Types[c], tm.Metadata[c])
 		if err != nil {
 			return nil, err
 		}
@@ -585,8 +902,10 @@ func (rs *Rows) StringValues(tm *TableMap, rowIndex int) ([]string, error) {
 	return result, nil
 }
 
-// StringIdentifies is a helper method to return the string identify of all columns in a row in a Row.
-func (rs *Rows) StringIdentifies(tm *TableMap, rowIndex int) ([]string, error) {
+// StringIdentifiesForTests is a helper method to return the string
+// identify of all columns in a row in a Row. Only use it in tests, as the
+// returned values cannot be interpreted correctly without the schema.
+func (rs *Rows) StringIdentifiesForTests(tm *TableMap, rowIndex int) ([]string, error) {
 	var result []string
 
 	valueIndex := 0
@@ -605,7 +924,7 @@ func (rs *Rows) StringIdentifies(tm *TableMap, rowIndex int) ([]string, error) {
 		}
 
 		// We have real data
-		value, l, err := cellData(data, pos, &tm.Columns[c])
+		value, l, err := cellData(data, pos, tm.Types[c], tm.Metadata[c])
 		if err != nil {
 			return nil, err
 		}

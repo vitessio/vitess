@@ -1,6 +1,7 @@
 package replication
 
 import (
+	"fmt"
 	"reflect"
 	"testing"
 
@@ -331,5 +332,302 @@ func TestBinlogEventIntVarBadID(t *testing.T) {
 	}
 	if got := err.Error(); got != want {
 		t.Errorf("wrong error, got %#v, want %#v", got, want)
+	}
+}
+
+func TestCellLengthAndData(t *testing.T) {
+	testcases := []struct {
+		typ      byte
+		metadata uint16
+		data     []byte
+		out      string
+	}{{
+		typ:  TypeTiny,
+		data: []byte{0x82},
+		out:  "130",
+	}, {
+		typ:  TypeYear,
+		data: []byte{0x82},
+		out:  "2030",
+	}, {
+		typ:  TypeShort,
+		data: []byte{0x02, 0x01},
+		out:  fmt.Sprintf("%v", 0x0102),
+	}, {
+		typ:  TypeInt24,
+		data: []byte{0x03, 0x02, 0x01},
+		out:  fmt.Sprintf("%v", 0x010203),
+	}, {
+		typ:  TypeLong,
+		data: []byte{0x04, 0x03, 0x02, 0x01},
+		out:  fmt.Sprintf("%v", 0x01020304),
+	}, {
+		typ:  TypeTimestamp,
+		data: []byte{0x84, 0x83, 0x82, 0x81},
+		out:  fmt.Sprintf("%v", 0x81828384),
+	}, {
+		typ:  TypeLongLong,
+		data: []byte{0x08, 0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01},
+		out:  fmt.Sprintf("%v", 0x0102030405060708),
+	}, {
+		typ: TypeDate,
+		// 2010 << 9 + 10 << 5 + 3 = 1029443 = 0x0fb543
+		data: []byte{0x43, 0xb5, 0x0f},
+		out:  "2010-10-03",
+	}, {
+		typ: TypeNewDate,
+		// 2010 << 9 + 10 << 5 + 3 = 1029443 = 0x0fb543
+		data: []byte{0x43, 0xb5, 0x0f},
+		out:  "2010-10-03",
+	}, {
+		typ: TypeTime,
+		// 154532 = 0x00025ba4
+		data: []byte{0xa4, 0x5b, 0x02, 0x00},
+		out:  "15:45:32",
+	}, {
+		typ: TypeDateTime,
+		// 19840304154532 = 0x120b6e4807a4
+		data: []byte{0xa4, 0x07, 0x48, 0x6e, 0x0b, 0x12, 0x00, 0x00},
+		out:  "1984-03-04 15:45:32",
+	}, {
+		typ:      TypeVarchar,
+		metadata: 20, // one byte length encoding
+		data:     []byte{3, 'a', 'b', 'c'},
+		out:      "abc",
+	}, {
+		typ:      TypeVarchar,
+		metadata: 384, // two bytes length encoding
+		data:     []byte{3, 0, 'a', 'b', 'c'},
+		out:      "abc",
+	}, {
+		typ:      TypeBit,
+		metadata: 0x0107,
+		data:     []byte{0x3, 0x1},
+		out:      "0000001100000001",
+	}, {
+		typ:      TypeTimestamp2,
+		metadata: 0,
+		data:     []byte{0x84, 0x83, 0x82, 0x81},
+		out:      fmt.Sprintf("%v", 0x81828384),
+	}, {
+		typ:      TypeTimestamp2,
+		metadata: 1,
+		data:     []byte{0x84, 0x83, 0x82, 0x81, 7},
+		out:      fmt.Sprintf("%v.7", 0x81828384),
+	}, {
+		typ:      TypeTimestamp2,
+		metadata: 2,
+		data:     []byte{0x84, 0x83, 0x82, 0x81, 76},
+		out:      fmt.Sprintf("%v.76", 0x81828384),
+	}, {
+		typ:      TypeTimestamp2,
+		metadata: 3,
+		// 765 = 0x02fd
+		data: []byte{0x84, 0x83, 0x82, 0x81, 0xfd, 0x02},
+		out:  fmt.Sprintf("%v.765", 0x81828384),
+	}, {
+		typ:      TypeTimestamp2,
+		metadata: 4,
+		// 7654 = 0x1de6
+		data: []byte{0x84, 0x83, 0x82, 0x81, 0xe6, 0x1d},
+		out:  fmt.Sprintf("%v.7654", 0x81828384),
+	}, {
+		typ:      TypeTimestamp2,
+		metadata: 5,
+		// 76543 = 0x012aff
+		data: []byte{0x84, 0x83, 0x82, 0x81, 0xff, 0x2a, 0x01},
+		out:  fmt.Sprintf("%v.76543", 0x81828384),
+	}, {
+		typ:      TypeTimestamp2,
+		metadata: 6,
+		// 765432 = 0x0badf8
+		data: []byte{0x84, 0x83, 0x82, 0x81, 0xf8, 0xad, 0x0b},
+		out:  fmt.Sprintf("%v.765432", 0x81828384),
+	}, {
+		typ:      TypeDateTime2,
+		metadata: 0,
+		// (2012 * 13 + 6) << 22 + 21 << 17 + 15 << 12 + 45 << 6 + 17)
+		// = 109734198097 = 0x198caafb51
+		// Then have to add 0x8000000000 = 0x998caafb51
+		data: []byte{0x51, 0xfb, 0xaa, 0x8c, 0x99},
+		out:  "2012-06-21 15:45:17",
+	}, {
+		typ:      TypeDateTime2,
+		metadata: 1,
+		data:     []byte{0x51, 0xfb, 0xaa, 0x8c, 0x99, 7},
+		out:      "2012-06-21 15:45:17.7",
+	}, {
+		typ:      TypeDateTime2,
+		metadata: 2,
+		data:     []byte{0x51, 0xfb, 0xaa, 0x8c, 0x99, 76},
+		out:      "2012-06-21 15:45:17.76",
+	}, {
+		typ:      TypeDateTime2,
+		metadata: 3,
+		// 765 = 0x02fd
+		data: []byte{0x51, 0xfb, 0xaa, 0x8c, 0x99, 0xfd, 0x02},
+		out:  "2012-06-21 15:45:17.765",
+	}, {
+		typ:      TypeDateTime2,
+		metadata: 4,
+		// 7654 = 0x1de6
+		data: []byte{0x51, 0xfb, 0xaa, 0x8c, 0x99, 0xe6, 0x1d},
+		out:  "2012-06-21 15:45:17.7654",
+	}, {
+		typ:      TypeDateTime2,
+		metadata: 5,
+		// 76543 = 0x012aff
+		data: []byte{0x51, 0xfb, 0xaa, 0x8c, 0x99, 0xff, 0x2a, 0x01},
+		out:  "2012-06-21 15:45:17.76543",
+	}, {
+		typ:      TypeDateTime2,
+		metadata: 6,
+		// 765432 = 0x0badf8
+		data: []byte{0x51, 0xfb, 0xaa, 0x8c, 0x99, 0xf8, 0xad, 0x0b},
+		out:  "2012-06-21 15:45:17.765432",
+	}, {
+		// This first set of tests is from a comment in
+		//  sql-common/my_time.c:
+		//
+		// Disk value  intpart frac   Time value   Memory value
+		// 800000.00    0      0      00:00:00.00  0000000000.000000
+		// 7FFFFF.FF   -1      255   -00:00:00.01  FFFFFFFFFF.FFD8F0
+		// 7FFFFF.9D   -1      99    -00:00:00.99  FFFFFFFFFF.F0E4D0
+		// 7FFFFF.00   -1      0     -00:00:01.00  FFFFFFFFFF.000000
+		// 7FFFFE.FF   -1      255   -00:00:01.01  FFFFFFFFFE.FFD8F0
+		// 7FFFFE.F6   -2      246   -00:00:01.10  FFFFFFFFFE.FE7960
+		typ:      TypeTime2,
+		metadata: 2,
+		data:     []byte{0x00, 0x00, 0x80, 0x00},
+		out:      "00:00:00.00",
+	}, {
+		typ:      TypeTime2,
+		metadata: 2,
+		data:     []byte{0xff, 0xff, 0x7f, 0xff},
+		out:      "-00:00:00.01",
+	}, {
+		typ:      TypeTime2,
+		metadata: 2,
+		data:     []byte{0xff, 0xff, 0x7f, 0x9d},
+		out:      "-00:00:00.99",
+	}, {
+		typ:      TypeTime2,
+		metadata: 2,
+		data:     []byte{0xff, 0xff, 0x7f, 0x00},
+		out:      "-00:00:01.00",
+	}, {
+		typ:      TypeTime2,
+		metadata: 2,
+		data:     []byte{0xfe, 0xff, 0x7f, 0xff},
+		out:      "-00:00:01.01",
+	}, {
+		typ:      TypeTime2,
+		metadata: 2,
+		data:     []byte{0xfe, 0xff, 0x7f, 0xf6},
+		out:      "-00:00:01.10",
+	}, {
+		// Similar tests for 4 decimals.
+		typ:      TypeTime2,
+		metadata: 4,
+		data:     []byte{0x00, 0x00, 0x80, 0x00, 0x00},
+		out:      "00:00:00.0000",
+	}, {
+		typ:      TypeTime2,
+		metadata: 4,
+		data:     []byte{0xff, 0xff, 0x7f, 0xff, 0xff},
+		out:      "-00:00:00.0001",
+	}, {
+		typ:      TypeTime2,
+		metadata: 4,
+		data:     []byte{0xff, 0xff, 0x7f, 0x9d, 0xff},
+		out:      "-00:00:00.0099",
+	}, {
+		typ:      TypeTime2,
+		metadata: 4,
+		data:     []byte{0xff, 0xff, 0x7f, 0x00, 0x00},
+		out:      "-00:00:01.0000",
+	}, {
+		typ:      TypeTime2,
+		metadata: 4,
+		data:     []byte{0xfe, 0xff, 0x7f, 0xff, 0xff},
+		out:      "-00:00:01.0001",
+	}, {
+		typ:      TypeTime2,
+		metadata: 4,
+		data:     []byte{0xfe, 0xff, 0x7f, 0xf6, 0xff},
+		out:      "-00:00:01.0010",
+	}, {
+		// Similar tests for 6 decimals.
+		typ:      TypeTime2,
+		metadata: 6,
+		data:     []byte{0x00, 0x00, 0x80, 0x00, 0x00, 0x00},
+		out:      "00:00:00.000000",
+	}, {
+		typ:      TypeTime2,
+		metadata: 6,
+		data:     []byte{0xff, 0xff, 0x7f, 0xff, 0xff, 0xff},
+		out:      "-00:00:00.000001",
+	}, {
+		typ:      TypeTime2,
+		metadata: 6,
+		data:     []byte{0xff, 0xff, 0x7f, 0x9d, 0xff, 0xff},
+		out:      "-00:00:00.000099",
+	}, {
+		typ:      TypeTime2,
+		metadata: 6,
+		data:     []byte{0xff, 0xff, 0x7f, 0x00, 0x00, 0x00},
+		out:      "-00:00:01.000000",
+	}, {
+		typ:      TypeTime2,
+		metadata: 6,
+		data:     []byte{0xfe, 0xff, 0x7f, 0xff, 0xff, 0xff},
+		out:      "-00:00:01.000001",
+	}, {
+		typ:      TypeTime2,
+		metadata: 6,
+		data:     []byte{0xfe, 0xff, 0x7f, 0xf6, 0xff, 0xff},
+		out:      "-00:00:01.000010",
+	}, {
+		// Few more tests.
+		typ:      TypeTime2,
+		metadata: 0,
+		data:     []byte{0x00, 0x00, 0x80},
+		out:      "00:00:00",
+	}, {
+		typ:      TypeTime2,
+		metadata: 1,
+		data:     []byte{0x01, 0x00, 0x80, 0x0a},
+		out:      "00:00:01.1",
+	}, {
+		typ:      TypeTime2,
+		metadata: 2,
+		data:     []byte{0x01, 0x00, 0x80, 0x0a},
+		out:      "00:00:01.10",
+	}, {
+		typ:      TypeTime2,
+		metadata: 0,
+		// 15 << 12 + 34 << 6 + 54 = 63670 = 0x00f8b6
+		// and need to add 0x800000
+		data: []byte{0xb6, 0xf8, 0x80},
+		out:  "15:34:54",
+	}}
+
+	for _, tcase := range testcases {
+		// Copy the data into a larger buffer (one extra byte
+		// on both sides), so we make sure the 'pos' field works.
+		padded := make([]byte, len(tcase.data)+2)
+		copy(padded[1:], tcase.data)
+
+		// Test cellLength.
+		l, err := cellLength(padded, 1, tcase.typ, tcase.metadata)
+		if err != nil || l != len(tcase.data) {
+			t.Errorf("testcase cellLength(%v,%v) returned unexpected result: %v %v", tcase.typ, tcase.data, l, err)
+		}
+
+		// Test cellData (only used for tests, but might as well).
+		out, l, err := cellData(padded, 1, tcase.typ, tcase.metadata)
+		if err != nil || l != len(tcase.data) || out != tcase.out {
+			t.Errorf("testcase cellData(%v,%v) returned unexpected result: %v %v %v, was expecting %v %v <nil>", tcase.typ, tcase.data, out, l, err, tcase.out, len(tcase.data))
+		}
 	}
 }
