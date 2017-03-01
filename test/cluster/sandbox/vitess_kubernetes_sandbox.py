@@ -109,7 +109,9 @@ class VitessKubernetesSandbox(sandbox.Sandbox):
           shard['tablets'].append(dict(
               type='rdonly',
               uidBase=uid_base + ks['replica_count'],
-              replicas=ks['rdonly_count']))
+              vttablet=dict(
+                  replicas=ks['rdonly_count'],
+              )))
         keyspace['shards'].append(shard)
     return keyspaces
 
@@ -248,20 +250,19 @@ class VitessKubernetesSandbox(sandbox.Sandbox):
   def print_banner(self):
     logging.info('Fetching forwarded ports.')
     banner = '\nVitess Sandbox Info:\n'
-    vtctld_addr = ''
     vtctld_port = self.app_options.port_forwarding['vtctld']
     vtgate_port = self.app_options.port_forwarding['vtgate']
-    vtctld_addr = kubernetes_components.get_forwarded_ip(
+    vtctld_ip = kubernetes_components.get_forwarded_ip(
         'vtctld', self.name)
-    banner += '  vtctld: http://%s:%d\n' % (vtctld_addr, vtctld_port)
+    banner += '  vtctld: http://%s:%d\n' % (vtctld_ip, vtctld_port)
     for cell in self.app_options.cells:
-      vtgate_addr = kubernetes_components.get_forwarded_ip(
+      vtgate_ip = kubernetes_components.get_forwarded_ip(
           'vtgate-%s' % cell, self.name)
-      banner += '  vtgate-%s: http://%s:%d\n' % (cell, vtgate_addr, vtgate_port)
+      banner += '  vtgate-%s: http://%s:%d\n' % (cell, vtgate_ip, vtgate_port)
     if 'guestbook' in self.app_options.port_forwarding:
-      guestbook_addr = kubernetes_components.get_forwarded_ip(
+      guestbook_ip = kubernetes_components.get_forwarded_ip(
           'guestbook', self.name)
-      banner += '  guestbook: http://%s:80\n' % guestbook_addr
+      banner += '  guestbook: http://%s:80\n' % guestbook_ip
     banner += '  logs dir: %s\n' % self.log_dir
     logging.info(banner)
 
