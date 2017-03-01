@@ -32,7 +32,7 @@ for shard in `seq 1 $num_shards`; do
       printf -v alias '%s-%010d' $cell $uid
 
       echo "Deleting pod for tablet $alias..."
-      $KUBECTL delete pod vttablet-$uid --namespace=$VITESS_NAME
+      $KUBECTL $KUBECTL_OPTIONS delete pod vttablet-$uid
     done
     let cell_index=cell_index+100000000
   done

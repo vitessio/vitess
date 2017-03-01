@@ -10,4 +10,4 @@ source $script_root/env.sh
 namespace=${VITESS_NAME:-'vitess'}
 
 echo "Deleting namespace $namespace..."
-$KUBECTL delete namespace $namespace
+$KUBECTL $KUBECTL_OPTIONS delete namespace $namespace
