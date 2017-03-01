@@ -83,7 +83,7 @@ func (*HorizontalReshardingWorkflowFactory) Init(m *workflow.Manager, w *workflo
 }
 
 // Instantiate is part the workflow.Factory interface.
-func (*HorizontalReshardingWorkflowFactory) Instantiate(w *workflowpb.Workflow, rootNode *workflow.Node) (workflow.Workflow, error) {
+func (*HorizontalReshardingWorkflowFactory) Instantiate(m *workflow.Manager, w *workflowpb.Workflow, rootNode *workflow.Node) (workflow.Workflow, error) {
 	rootNode.Message = "This is a workflow to execute horizontal resharding automatically."
 
 	checkpoint := &workflowpb.WorkflowCheckpoint{}
@@ -95,6 +95,9 @@ func (*HorizontalReshardingWorkflowFactory) Instantiate(w *workflowpb.Workflow, 
 		checkpoint: checkpoint,
 		rootUINode: rootNode,
 		logger:     logutil.NewMemoryLogger(),
+		wr:         wrangler.New(logutil.NewConsoleLogger(), m.TopoServer(), tmclient.NewTabletManagerClient()),
+		topoServer: m.TopoServer(),
+		manager:    m,
 	}
 	copySchemaUINode := &workflow.Node{
 		Name:     "CopySchemaShard",
@@ -313,12 +316,8 @@ type HorizontalReshardingWorkflow struct {
 // It implements the workflow.Workflow interface.
 func (hw *HorizontalReshardingWorkflow) Run(ctx context.Context, manager *workflow.Manager, wi *topo.WorkflowInfo) error {
 	hw.ctx = ctx
-	hw.topoServer = manager.TopoServer()
-	hw.manager = manager
-	hw.wr = wrangler.New(logutil.NewConsoleLogger(), manager.TopoServer(), tmclient.NewTabletManagerClient())
 	hw.wi = wi
 	hw.checkpointWriter = NewCheckpointWriter(hw.topoServer, hw.checkpoint, hw.wi)
-
 	hw.rootUINode.Display = workflow.NodeDisplayDeterminate
 	hw.rootUINode.BroadcastChanges(true /* updateChildren */)
 

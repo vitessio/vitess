@@ -19,28 +19,30 @@ import (
 func TestParallelRunner(t *testing.T) {
 	ts := memorytopo.NewServer("cell")
 	m := workflow.NewManager(ts)
+	ctx := context.Background()
 
 	// Run the manager in the background.
-	wg, cancel, _ := startManager(t, m)
+	wg, _, cancel := startManager(m)
 
 	// Create a testworkflow.
-	uuid, err := m.Create(context.Background(), testWorkflowFactoryName, []string{"-retry=false", "-count=2"})
+	uuid, err := m.Create(ctx, testWorkflowFactoryName, []string{"-retry=false", "-count=2"})
 	if err != nil {
 		t.Fatalf("cannot create testworkflow: %v", err)
 	}
 
 	// Start the job
-	if err := m.Start(context.Background(), uuid); err != nil {
+	if err := m.Start(ctx, uuid); err != nil {
 		t.Fatalf("cannot start testworkflow: %v", err)
 	}
 
 	// Wait for the workflow to end.
-	m.Wait(context.Background(), uuid)
+	m.Wait(ctx, uuid)
 
-	verifyWorkflowSuccess(context.Background(), t, ts, uuid)
-
+	if err := verifyAllTasksDone(ctx, ts, uuid); err != nil {
+		t.Fatal(err)
+	}
 	// Stop the manager.
-	if err := m.Stop(context.Background(), uuid); err != nil {
+	if err := m.Stop(ctx, uuid); err != nil {
 		t.Fatalf("cannot stop testworkflow: %v", err)
 	}
 	cancel()
@@ -52,12 +54,12 @@ func TestParallelRunnerRetryAction(t *testing.T) {
 	// retry task1, after it is finished successfully, we retry task2.
 	ts := memorytopo.NewServer("cell")
 	m := workflow.NewManager(ts)
-
+	ctx := context.Background()
 	// Run the manager in the background.
-	wg, cancel, ctx := startManager(t, m)
+	wg, _, cancel := startManager(m)
 
 	// Create a testworkflow.
-	uuid, err := m.Create(context.Background(), testWorkflowFactoryName, []string{"-retry=true", "-count=2"})
+	uuid, err := m.Create(ctx, testWorkflowFactoryName, []string{"-retry=true", "-count=2"})
 	if err != nil {
 		t.Fatalf("cannot create testworkflow: %v", err)
 	}
@@ -85,11 +87,11 @@ func TestParallelRunnerRetryAction(t *testing.T) {
 				}
 				if strings.Contains(monitorStr, "Retry") {
 					if strings.Contains(monitorStr, task1ID) {
-						verifyTaskSuccessOrFailure(context.Background(), t, ts, uuid, task1ID, false /* isSuccess*/)
+						verifyTaskSuccessOrFailure(context.Background(), ts, uuid, task1ID, false /* isSuccess*/)
 						retry1 = true
 					}
 					if strings.Contains(monitorStr, task2ID) {
-						verifyTaskSuccessOrFailure(context.Background(), t, ts, uuid, task2ID, false /* isSuccess*/)
+						verifyTaskSuccessOrFailure(context.Background(), ts, uuid, task2ID, false /* isSuccess*/)
 						retry2 = true
 					}
 				}
@@ -98,11 +100,15 @@ func TestParallelRunnerRetryAction(t *testing.T) {
 				if retry1 && retry2 {
 					clickRetry(ctx, t, m, path.Join("/"+uuid, task1ID))
 					waitForFinished(ctx, t, notifications, task1ID)
-					verifyTaskSuccessOrFailure(context.Background(), t, ts, uuid, task1ID, true /* isSuccess*/)
+					if err := verifyTaskSuccessOrFailure(context.Background(), ts, uuid, task1ID, true /* isSuccess*/); err != nil {
+						t.Errorf("verify task %v success failed: %v", task1ID, err)
+					}
 
 					clickRetry(ctx, t, m, path.Join("/"+uuid, task2ID))
 					waitForFinished(ctx, t, notifications, task2ID)
-					verifyTaskSuccessOrFailure(context.Background(), t, ts, uuid, task2ID, true /* isSuccess*/)
+					if err := verifyTaskSuccessOrFailure(context.Background(), ts, uuid, task2ID, true /* isSuccess*/); err != nil {
+						t.Errorf("verify task %v success failed: %v", task2ID, err)
+					}
 					return
 				}
 			case <-ctx.Done():
@@ -113,33 +119,35 @@ func TestParallelRunnerRetryAction(t *testing.T) {
 	}()
 
 	// Start the job
-	if err := m.Start(context.Background(), uuid); err != nil {
+	if err := m.Start(ctx, uuid); err != nil {
 		t.Fatalf("cannot start testworkflow: %v", err)
 	}
 	// Wait for the workflow to end.
-	m.Wait(context.Background(), uuid)
+	m.Wait(ctx, uuid)
 
-	verifyWorkflowSuccess(context.Background(), t, ts, uuid)
+	if err := verifyAllTasksDone(ctx, ts, uuid); err != nil {
+		t.Fatal(err)
+	}
 	// Stop the manager.
-	if err := m.Stop(context.Background(), uuid); err != nil {
+	if err := m.Stop(ctx, uuid); err != nil {
 		t.Fatalf("cannot stop testworkflow: %v", err)
 	}
 	cancel()
 	wg.Wait()
 }
 
-func startManager(t *testing.T, m *workflow.Manager) (*sync.WaitGroup, context.CancelFunc, context.Context) {
+func startManager(m *workflow.Manager) (*sync.WaitGroup, context.Context, context.CancelFunc) {
 	// Run the manager in the background.
 	ctx, cancel := context.WithCancel(context.Background())
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		m.Run(ctx)
-		wg.Done()
 	}()
 
 	m.WaitUntilRunning()
-	return wg, cancel, ctx
+	return wg, ctx, cancel
 }
 
 func clickRetry(ctx context.Context, t *testing.T, m *workflow.Manager, nodePath string) {
@@ -174,32 +182,33 @@ func waitForFinished(ctx context.Context, t *testing.T, notifications chan []byt
 	}
 }
 
-func verifyWorkflowSuccess(ctx context.Context, t *testing.T, ts topo.Server, uuid string) {
+func verifyAllTasksDone(ctx context.Context, ts topo.Server, uuid string) error {
 	wi, err := ts.GetWorkflow(ctx, uuid)
 	if err != nil {
-		t.Errorf("fail to get workflow for: %v", uuid)
+		return fmt.Errorf("fail to get workflow for: %v", uuid)
 	}
 	checkpoint := &workflowpb.WorkflowCheckpoint{}
 	if err := proto.Unmarshal(wi.Workflow.Data, checkpoint); err != nil {
-		t.Errorf("fails to get checkpoint for the workflow: %v", err)
+		return fmt.Errorf("fails to get checkpoint for the workflow: %v", err)
 	}
 
 	for _, task := range checkpoint.Tasks {
 		if task.State != workflowpb.TaskState_TaskDone || task.Error != "" {
-			t.Fatalf("task: %v should succeed: task status: %v, %v", task.Id, task.State, task.Attributes)
+			return fmt.Errorf("task: %v should succeed: task status: %v, %v", task.Id, task.State, task.Attributes)
 		}
 	}
+	return nil
 }
 
-func verifyTaskSuccessOrFailure(ctx context.Context, t *testing.T, ts topo.Server, uuid, taskID string, isSuccess bool) {
+func verifyTaskSuccessOrFailure(ctx context.Context, ts topo.Server, uuid, taskID string, isSuccess bool) error {
 	wi, err := ts.GetWorkflow(ctx, uuid)
 	if err != nil {
-		t.Errorf("fail to get workflow for: %v", uuid)
+		return fmt.Errorf("fail to get workflow for: %v", uuid)
 	}
 
 	checkpoint := &workflowpb.WorkflowCheckpoint{}
 	if err := proto.Unmarshal(wi.Workflow.Data, checkpoint); err != nil {
-		t.Errorf("fails to get checkpoint for the workflow: %v", err)
+		return fmt.Errorf("fails to get checkpoint for the workflow: %v", err)
 	}
 	task := checkpoint.Tasks[taskID]
 
@@ -208,6 +217,7 @@ func verifyTaskSuccessOrFailure(ctx context.Context, t *testing.T, ts topo.Serve
 		taskError = errMessage
 	}
 	if task.State != workflowpb.TaskState_TaskDone || task.Error != taskError {
-		t.Errorf("task: %v should succeed. Task status: %v, %v", task.Id, task.State, task.Error)
+		return fmt.Errorf("task: %v should succeed. Task status: %v, %v", task.Id, task.State, task.Error)
 	}
+	return nil
 }

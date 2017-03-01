@@ -203,7 +203,7 @@ func (f *WorkflowFactory) Init(_ *workflow.Manager, w *workflowpb.Workflow, args
 }
 
 // Instantiate is part of the workflow.Factory interface.
-func (f *WorkflowFactory) Instantiate(w *workflowpb.Workflow, rootNode *workflow.Node) (workflow.Workflow, error) {
+func (f *WorkflowFactory) Instantiate(_ *workflow.Manager, w *workflowpb.Workflow, rootNode *workflow.Node) (workflow.Workflow, error) {
 	rootNode.Message = "Validates the Topology and proposes fixes for known issues."
 
 	return &Workflow{
