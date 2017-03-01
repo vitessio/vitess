@@ -97,12 +97,15 @@ type entry struct {
 }
 
 func newShardBuffer(mode bufferMode, keyspace, shard string, bufferSizeSema *sync2.Semaphore) *shardBuffer {
+	statsKey := []string{keyspace, shard}
+	initVariablesForShard(statsKey)
+
 	return &shardBuffer{
 		mode:           mode,
 		keyspace:       keyspace,
 		shard:          shard,
 		bufferSizeSema: bufferSizeSema,
-		statsKey:       []string{keyspace, shard},
+		statsKey:       statsKey,
 		statsKeyJoined: fmt.Sprintf("%s.%s", keyspace, shard),
 		logTooRecent:   logutil.NewThrottledLogger(fmt.Sprintf("FailoverTooRecent-%v", topoproto.KeyspaceShardString(keyspace, shard)), 5*time.Second),
 		state:          stateIdle,
@@ -459,14 +462,14 @@ func (sb *shardBuffer) recordExternallyReparentedTimestamp(timestamp int64) {
 		// First non-zero value after startup. Remember it.
 		sb.externallyReparentedAfterStart = timestamp
 	}
-	sb.stopBufferingLocked(stopReasonFailoverEndDetected, "failover end detected")
+	sb.stopBufferingLocked(stopFailoverEndDetected, "failover end detected")
 }
 
 func (sb *shardBuffer) stopBufferingDueToMaxDuration() {
 	sb.mu.Lock()
 	defer sb.mu.Unlock()
 
-	sb.stopBufferingLocked(stopReasonMaxFailoverDurationExceeded,
+	sb.stopBufferingLocked(stopMaxFailoverDurationExceeded,
 		fmt.Sprintf("stopping buffering because failover did not finish in time (%v)", *maxFailoverDuration))
 }
 
