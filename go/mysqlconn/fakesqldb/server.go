@@ -44,7 +44,7 @@ type DB struct {
 	// errno 2013 ("server lost").
 	shouldClose bool
 	// data maps tolower(query) to a result.
-	data map[string]*sqltypes.Result
+	data map[string]*ExpectedResult
 	// rejectedData maps tolower(query) to an error.
 	rejectedData map[string]error
 	// patternData is a list of regexp to results.
@@ -54,6 +54,13 @@ type DB struct {
 	// connections tracks all open connections.
 	// The key for the map is the value of mysql.Conn.ConnectionID.
 	connections map[uint32]*mysqlconn.Conn
+}
+
+// ExpectedResult holds the data for a matched query.
+type ExpectedResult struct {
+	*sqltypes.Result
+	// BeforeFunc() is synchronously called before the server returns the result.
+	BeforeFunc func()
 }
 
 type exprResult struct {
@@ -67,7 +74,7 @@ func New(t *testing.T) *DB {
 	db := &DB{
 		t:            t,
 		name:         "fakesqldb",
-		data:         make(map[string]*sqltypes.Result),
+		data:         make(map[string]*ExpectedResult),
 		rejectedData: make(map[string]error),
 		queryCalled:  make(map[string]int),
 		connections:  make(map[uint32]*mysqlconn.Conn),
@@ -241,7 +248,10 @@ func (db *DB) ComQuery(c *mysqlconn.Conn, query string) (*sqltypes.Result, error
 	// Check explicit queries from AddQuery().
 	result, ok := db.data[key]
 	if ok {
-		return result, nil
+		if f := result.BeforeFunc; f != nil {
+			f()
+		}
+		return result.Result, nil
 	}
 
 	// Check query patterns from AddQueryPattern().
@@ -252,7 +262,7 @@ func (db *DB) ComQuery(c *mysqlconn.Conn, query string) (*sqltypes.Result, error
 	}
 
 	// Nothing matched.
-	return nil, fmt.Errorf("query: %s is not supported on %v", query, db.name)
+	return nil, fmt.Errorf("query: '%s' is not supported on %v", query, db.name)
 }
 
 //
@@ -260,17 +270,32 @@ func (db *DB) ComQuery(c *mysqlconn.Conn, query string) (*sqltypes.Result, error
 //
 
 // AddQuery adds a query and its expected result.
-func (db *DB) AddQuery(query string, expectedResult *sqltypes.Result) {
+func (db *DB) AddQuery(query string, expectedResult *sqltypes.Result) *ExpectedResult {
 	if len(expectedResult.Rows) > 0 && len(expectedResult.Fields) == 0 {
 		panic(fmt.Errorf("Please add Fields to this Result so it's valid: %v", query))
 	}
-	result := &sqltypes.Result{}
-	*result = *expectedResult
+	resultCopy := &sqltypes.Result{}
+	*resultCopy = *expectedResult
 	db.mu.Lock()
 	defer db.mu.Unlock()
 	key := strings.ToLower(query)
-	db.data[key] = result
+	r := &ExpectedResult{resultCopy, nil}
+	db.data[key] = r
 	db.queryCalled[key] = 0
+	return r
+}
+
+// SetBeforeFunc sets the BeforeFunc field for the previously registered "query".
+func (db *DB) SetBeforeFunc(query string, f func()) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	key := strings.ToLower(query)
+	r, ok := db.data[key]
+	if !ok {
+		db.t.Fatalf("BUG: no query registered for: %v", query)
+	}
+
+	r.BeforeFunc = f
 }
 
 // AddQueryPattern adds an expected result for a set of queries.

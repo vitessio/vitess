@@ -13,6 +13,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -1454,6 +1455,348 @@ func TestExecuteBatchNestedTransaction(t *testing.T) {
 	tsv.te.txPool.SetTimeout(10)
 }
 
+func TestSerializeTransactionsSameRow(t *testing.T) {
+	// This test runs three transaction in parallel:
+	// tx1 | tx2 | tx3
+	// However, tx1 and tx2 have the same WHERE clause (i.e. target the same row)
+	// and therefore tx2 cannot start until the first query of tx1 has finished.
+	// The actual execution looks like this:
+	// tx1 | tx3
+	// tx2
+	db := setUpTabletServerTest(t)
+	defer db.Close()
+	testUtils := newTestUtils()
+	config := testUtils.newQueryServiceConfig()
+	config.EnableHotRowProtection = true
+	// Reduce the txpool to 2 because we should never consume more than two slots.
+	config.TransactionCap = 2
+	tsv := NewTabletServerWithNilTopoServer(config)
+	dbconfigs := testUtils.newDBConfigs(db)
+	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+	if err := tsv.StartService(target, dbconfigs, testUtils.newMysqld(&dbconfigs)); err != nil {
+		t.Fatalf("StartService failed: %v", err)
+	}
+	defer tsv.StopService()
+	countStart := tabletenv.WaitStats.Counts()["TxSerializer"]
+
+	// Fake data.
+	q1 := "update test_table set name_string = 'tx1' where pk = :pk and name = :name"
+	q2 := "update test_table set name_string = 'tx2' where pk = :pk and name = :name"
+	q3 := "update test_table set name_string = 'tx3' where pk = :pk and name = :name"
+	// Every request needs their own bind variables to avoid data races.
+	bvTx1 := map[string]interface{}{
+		"pk":   1,
+		"name": 1,
+	}
+	bvTx2 := map[string]interface{}{
+		"pk":   1,
+		"name": 1,
+	}
+	bvTx3 := map[string]interface{}{
+		"pk":   2,
+		"name": 1,
+	}
+
+	// Make sure that tx2 and tx3 start only after tx1 is running its Execute().
+	tx1Started := make(chan struct{})
+	// Make sure that tx3 could finish while tx2 could not.
+	tx3Finished := make(chan struct{})
+
+	db.SetBeforeFunc("update test_table set name_string = 'tx1' where pk in (1) /* _stream test_table (pk ) (1 ); */",
+		func() {
+			close(tx1Started)
+			if err := waitForTxSerializationCount(tsv, "test_table where pk = 1 and name = 1", 2); err != nil {
+				t.Fatal(err)
+			}
+		})
+
+	// Run all three transactions.
+	ctx := context.Background()
+	wg := sync.WaitGroup{}
+
+	// tx1.
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+
+		_, tx1, err := tsv.BeginExecute(ctx, &target, q1, bvTx1, nil)
+		if err != nil {
+			t.Fatalf("failed to execute query: %s: %s", q1, err)
+		}
+		if err := tsv.Commit(ctx, &target, tx1); err != nil {
+			t.Fatalf("call TabletServer.Commit failed: %v", err)
+		}
+	}()
+
+	// tx2.
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+
+		<-tx1Started
+		_, tx2, err := tsv.BeginExecute(ctx, &target, q2, bvTx2, nil)
+		if err != nil {
+			t.Fatalf("failed to execute query: %s: %s", q2, err)
+		}
+		// TODO(mberlin): This should actually be in the BeforeFunc() of tx1 but
+		// then the test is hanging. It looks like the MySQL C client library cannot
+		// open a second connection while the request of the first connection is
+		// still pending.
+		<-tx3Finished
+		if err := tsv.Commit(ctx, &target, tx2); err != nil {
+			t.Fatalf("call TabletServer.Commit failed: %v", err)
+		}
+	}()
+
+	// tx3.
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+
+		<-tx1Started
+		_, tx3, err := tsv.BeginExecute(ctx, &target, q3, bvTx3, nil)
+		if err != nil {
+			t.Fatalf("failed to execute query: %s: %s", q3, err)
+		}
+		if err := tsv.Commit(ctx, &target, tx3); err != nil {
+			t.Fatalf("call TabletServer.Commit failed: %v", err)
+		}
+		close(tx3Finished)
+	}()
+
+	wg.Wait()
+
+	got, ok := tabletenv.WaitStats.Counts()["TxSerializer"]
+	want := countStart + 1
+	if !ok || got != want {
+		t.Fatalf("only tx2 should have been serialized: ok? %v got: %v want: %v", ok, got, want)
+	}
+}
+
+func waitForTxSerializationCount(tsv *TabletServer, key string, i int) error {
+	start := time.Now()
+	for {
+		got, want := tsv.qe.txSerializer.Pending(key), i
+		if got == want {
+			return nil
+		}
+
+		if time.Since(start) > 10*time.Second {
+			return fmt.Errorf("wait for query count increase in TxSerializer timed out: got = %v, want = %v", got, want)
+		}
+		time.Sleep(1 * time.Millisecond)
+	}
+}
+
+func TestSerializeTransactionsSameRow_TooManyPendingRequests(t *testing.T) {
+	// This test is similar to TestSerializeTransactionsSameRow, but tests only
+	// that there must not be too many pending BeginExecute() requests which are
+	// serialized.
+	// Since we start to queue before the transaction pool would queue, we need
+	// to enforce an upper limit as well to protect vttablet.
+	db := setUpTabletServerTest(t)
+	defer db.Close()
+	testUtils := newTestUtils()
+	config := testUtils.newQueryServiceConfig()
+	config.EnableHotRowProtection = true
+	config.HotRowProtectionMaxQueueSize = 1
+	tsv := NewTabletServerWithNilTopoServer(config)
+	dbconfigs := testUtils.newDBConfigs(db)
+	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+	if err := tsv.StartService(target, dbconfigs, testUtils.newMysqld(&dbconfigs)); err != nil {
+		t.Fatalf("StartService failed: %v", err)
+	}
+	defer tsv.StopService()
+	countStart := tabletenv.WaitStats.Counts()["TxSerializer"]
+
+	// Fake data.
+	q1 := "update test_table set name_string = 'tx1' where pk = :pk and name = :name"
+	q2 := "update test_table set name_string = 'tx2' where pk = :pk and name = :name"
+	// Every request needs their own bind variables to avoid data races.
+	bvTx1 := map[string]interface{}{
+		"pk":   1,
+		"name": 1,
+	}
+	bvTx2 := map[string]interface{}{
+		"pk":   1,
+		"name": 1,
+	}
+
+	// Make sure that tx2 starts only after tx1 is running its Execute().
+	tx1Started := make(chan struct{})
+	// Signal when tx2 is done.
+	tx2Failed := make(chan struct{})
+
+	db.SetBeforeFunc("update test_table set name_string = 'tx1' where pk in (1) /* _stream test_table (pk ) (1 ); */",
+		func() {
+			close(tx1Started)
+			<-tx2Failed
+		})
+
+	// Run the two transactions.
+	ctx := context.Background()
+	wg := sync.WaitGroup{}
+
+	// tx1.
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+
+		_, tx1, err := tsv.BeginExecute(ctx, &target, q1, bvTx1, nil)
+		if err != nil {
+			t.Fatalf("failed to execute query: %s: %s", q1, err)
+		}
+		if err := tsv.Commit(ctx, &target, tx1); err != nil {
+			t.Fatalf("call TabletServer.Commit failed: %v", err)
+		}
+	}()
+
+	// tx2.
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		defer close(tx2Failed)
+
+		<-tx1Started
+		_, _, err := tsv.BeginExecute(ctx, &target, q2, bvTx2, nil)
+		if err == nil || vterrors.Code(err) != vtrpcpb.Code_RESOURCE_EXHAUSTED || err.Error() != "hot row protection: too many queued transactions (1 >= 1) for the same row (table + WHERE clause: 'test_table where pk = 1 and name = 1')" {
+			t.Fatalf("tx2 should have failed because there are too many pending requests: %v", err)
+		}
+		// No commit necessary because the Begin failed.
+	}()
+
+	wg.Wait()
+
+	got, _ := tabletenv.WaitStats.Counts()["TxSerializer"]
+	want := countStart + 0
+	if got != want {
+		t.Fatalf("tx2 should have failed early and not tracked as serialized: got: %v want: %v", got, want)
+	}
+}
+
+func TestSerializeTransactionsSameRow_RequestCanceled(t *testing.T) {
+	// This test is similar to TestSerializeTransactionsSameRow, but tests only
+	// that a queued request unblocks itself when its context is done.
+	//
+	// tx1 and tx2 run against the same row.
+	// tx2 is blocked on tx1. Eventually, tx2 is canceled and its request fails.
+	// Only after that tx1 commits and finishes.
+	db := setUpTabletServerTest(t)
+	defer db.Close()
+	testUtils := newTestUtils()
+	config := testUtils.newQueryServiceConfig()
+	config.EnableHotRowProtection = true
+	tsv := NewTabletServerWithNilTopoServer(config)
+	dbconfigs := testUtils.newDBConfigs(db)
+	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+	if err := tsv.StartService(target, dbconfigs, testUtils.newMysqld(&dbconfigs)); err != nil {
+		t.Fatalf("StartService failed: %v", err)
+	}
+	defer tsv.StopService()
+	countStart := tabletenv.WaitStats.Counts()["TxSerializer"]
+
+	// Fake data.
+	q1 := "update test_table set name_string = 'tx1' where pk = :pk and name = :name"
+	q2 := "update test_table set name_string = 'tx2' where pk = :pk and name = :name"
+	q3 := "update test_table set name_string = 'tx3' where pk = :pk and name = :name"
+	// Every request needs their own bind variables to avoid data races.
+	bvTx1 := map[string]interface{}{
+		"pk":   1,
+		"name": 1,
+	}
+	bvTx2 := map[string]interface{}{
+		"pk":   1,
+		"name": 1,
+	}
+	bvTx3 := map[string]interface{}{
+		"pk":   1,
+		"name": 1,
+	}
+
+	// Make sure that tx2 starts only after tx1 is running its Execute().
+	tx1Started := make(chan struct{})
+	// Signal when tx2 is done.
+	tx2Done := make(chan struct{})
+
+	db.SetBeforeFunc("update test_table set name_string = 'tx1' where pk in (1) /* _stream test_table (pk ) (1 ); */",
+		func() {
+			close(tx1Started)
+			// Keep blocking until tx2 was canceled.
+			<-tx2Done
+		})
+
+	// Run the two transactions.
+	ctx := context.Background()
+	wg := sync.WaitGroup{}
+
+	// tx1.
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+
+		_, tx1, err := tsv.BeginExecute(ctx, &target, q1, bvTx1, nil)
+		if err != nil {
+			t.Fatalf("failed to execute query: %s: %s", q1, err)
+		}
+
+		if err := tsv.Commit(ctx, &target, tx1); err != nil {
+			t.Fatalf("call TabletServer.Commit failed: %v", err)
+		}
+	}()
+
+	// tx2.
+	ctxTx2, cancelTx2 := context.WithCancel(ctx)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		defer close(tx2Done)
+
+		// Wait until tx1 has started to make the test deterministic.
+		<-tx1Started
+
+		_, _, err := tsv.BeginExecute(ctxTx2, &target, q2, bvTx2, nil)
+		if err == nil || vterrors.Code(err) != vtrpcpb.Code_CANCELED || err.Error() != "context canceled" {
+			t.Fatalf("tx2 should have failed because the context was canceled: %v", err)
+		}
+		// No commit necessary because the Begin failed.
+	}()
+
+	// tx3.
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+
+		// Wait until tx1 and tx2 are pending to make the test deterministic.
+		if err := waitForTxSerializationCount(tsv, "test_table where pk = 1 and name = 1", 2); err != nil {
+			t.Fatal(err)
+		}
+
+		_, tx3, err := tsv.BeginExecute(ctx, &target, q3, bvTx3, nil)
+		if err != nil {
+			t.Fatalf("failed to execute query: %s: %s", q3, err)
+		}
+
+		if err := tsv.Commit(ctx, &target, tx3); err != nil {
+			t.Fatalf("call TabletServer.Commit failed: %v", err)
+		}
+	}()
+
+	// Wait until tx1, 2 and 3 are pending.
+	if err := waitForTxSerializationCount(tsv, "test_table where pk = 1 and name = 1", 3); err != nil {
+		t.Fatal(err)
+	}
+	// Now unblock tx2 and cancel it.
+	cancelTx2()
+
+	wg.Wait()
+
+	got, ok := tabletenv.WaitStats.Counts()["TxSerializer"]
+	want := countStart + 2
+	if got != want {
+		t.Fatalf("tx2 and tx3 should have been serialized: ok? %v got: %v want: %v", ok, got, want)
+	}
+}
+
 func TestMessageStream(t *testing.T) {
 	_, tsv, db := newTestTxExecutor(t)
 	defer db.Close()
@@ -1537,7 +1880,7 @@ func TestMessageAck(t *testing.T) {
 	}
 
 	_, err = tsv.MessageAck(ctx, &target, "msg", ids)
-	want = "query: select time_scheduled, id from msg where id in ('1', '2') and time_acked is null limit 10001 for update is not supported on fakesqldb"
+	want = "query: 'select time_scheduled, id from msg where id in ('1', '2') and time_acked is null limit 10001 for update' is not supported on fakesqldb"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("tsv.MessageAck(invalid): %v, want %s", err, want)
 	}
@@ -1580,7 +1923,7 @@ func TestRescheduleMessages(t *testing.T) {
 	}
 
 	_, err = tsv.PostponeMessages(ctx, &target, "msg", []string{"1", "2"})
-	want = "query: select time_scheduled, id from msg where id in ('1', '2') and time_acked is null limit 10001 for update is not supported"
+	want = "query: 'select time_scheduled, id from msg where id in ('1', '2') and time_acked is null limit 10001 for update' is not supported"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("tsv.PostponeMessages(invalid):\n%v, want\n%s", err, want)
 	}
@@ -1623,7 +1966,7 @@ func TestPurgeMessages(t *testing.T) {
 	}
 
 	_, err = tsv.PurgeMessages(ctx, &target, "msg", 0)
-	want = "query: select time_scheduled, id from msg where time_scheduled < 0 and time_acked is not null limit 500 for update is not supported"
+	want = "query: 'select time_scheduled, id from msg where time_scheduled < 0 and time_acked is not null limit 500 for update' is not supported"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("tsv.PurgeMessages(invalid):\n%v, want\n%s", err, want)
 	}
@@ -1976,6 +2319,40 @@ func checkTabletServerState(t *testing.T, tsv *TabletServer, expectState int64) 
 
 func getSupportedQueries() map[string]*sqltypes.Result {
 	return map[string]*sqltypes.Result{
+		// Queries for how row protection test (txserializer).
+		"update test_table set name_string = 'tx1' where pk in (1) /* _stream test_table (pk ) (1 ); */": {
+			RowsAffected: 1,
+		},
+		"update test_table set name_string = 'tx2' where pk in (1) /* _stream test_table (pk ) (1 ); */": {
+			RowsAffected: 1,
+		},
+		"update test_table set name_string = 'tx3' where pk in (1) /* _stream test_table (pk ) (1 ); */": {
+			RowsAffected: 1,
+		},
+		// tx3, but with different primary key.
+		"update test_table set name_string = 'tx3' where pk in (2) /* _stream test_table (pk ) (2 ); */": {
+			RowsAffected: 1,
+		},
+		// Complex WHERE clause requires SELECT of primary key first.
+		"select pk from test_table where pk = 1 and name = 1 limit 10001 for update": {
+			Fields: []*querypb.Field{
+				{Type: sqltypes.Int64},
+			},
+			RowsAffected: 1,
+			Rows: [][]sqltypes.Value{{
+				sqltypes.MakeString([]byte("1")),
+			}},
+		},
+		// Complex WHERE clause requires SELECT of primary key first.
+		"select pk from test_table where pk = 2 and name = 1 limit 10001 for update": {
+			Fields: []*querypb.Field{
+				{Type: sqltypes.Int64},
+			},
+			RowsAffected: 1,
+			Rows: [][]sqltypes.Value{{
+				sqltypes.MakeString([]byte("2")),
+			}},
+		},
 		// queries for twopc
 		sqlTurnoffBinlog:                                  {},
 		fmt.Sprintf(sqlCreateSidecarDB, "`_vt`"):          {},

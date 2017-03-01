@@ -37,6 +37,7 @@ func (ep *Plan) MarshalJSON() ([]byte, error) {
 		ColumnNumbers        []int                  `json:",omitempty"`
 		PKValues             []interface{}          `json:",omitempty"`
 		SecondaryPKValues    []interface{}          `json:",omitempty"`
+		WhereClause          *sqlparser.ParsedQuery `json:",omitempty"`
 		SubqueryPKColumns    []int                  `json:",omitempty"`
 		MessageReloaderQuery *sqlparser.ParsedQuery `json:",omitempty"`
 	}{
@@ -51,6 +52,7 @@ func (ep *Plan) MarshalJSON() ([]byte, error) {
 		ColumnNumbers:        ep.ColumnNumbers,
 		PKValues:             ep.PKValues,
 		SecondaryPKValues:    ep.SecondaryPKValues,
+		WhereClause:          ep.WhereClause,
 		SubqueryPKColumns:    ep.SubqueryPKColumns,
 		MessageReloaderQuery: ep.MessageReloaderQuery,
 	}

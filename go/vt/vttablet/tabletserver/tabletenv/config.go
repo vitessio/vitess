@@ -5,6 +5,7 @@
 package tabletenv
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"net/url"
@@ -65,6 +66,11 @@ func init() {
 	flag.BoolVar(&Config.EnableTxThrottler, "enable-tx-throttler", DefaultQsConfig.EnableTxThrottler, "If true replication-lag-based throttling on transactions will be enabled.")
 	flag.StringVar(&Config.TxThrottlerConfig, "tx-throttler-config", DefaultQsConfig.TxThrottlerConfig, "The configuration of the transaction throttler as a text formatted throttlerdata.Configuration protocol buffer message")
 	flagutil.StringListVar(&Config.TxThrottlerHealthCheckCells, "tx-throttler-healthcheck-cells", DefaultQsConfig.TxThrottlerHealthCheckCells, "A comma-separated list of cells. Only tabletservers running in these cells will be monitored for replication lag by the transaction throttler.")
+
+	flag.BoolVar(&Config.EnableHotRowProtection, "enable_hot_row_protection", DefaultQsConfig.EnableHotRowProtection, "If true, incoming transactions for the same row (range) will be queued and cannot consume all txpool slots.")
+	flag.BoolVar(&Config.EnableHotRowProtectionDryRun, "enable_hot_row_protection_dry_run", DefaultQsConfig.EnableHotRowProtectionDryRun, "If true, hot row protection is not enforced but logs if transactions would have been queued.")
+	flag.IntVar(&Config.HotRowProtectionMaxQueueSize, "hot_row_protection_max_queue_size", DefaultQsConfig.HotRowProtectionMaxQueueSize, "Maximum number of BeginExecute RPCs which will be queued for the same row (range).")
+	flag.IntVar(&Config.HotRowProtectionMaxGlobalQueueSize, "hot_row_protection_max_global_queue_size", DefaultQsConfig.HotRowProtectionMaxGlobalQueueSize, "Global queue limit across all row (ranges). Useful to prevent that the queue can grow unbounded.")
 }
 
 // Init must be called after flag.Parse, and before doing any other operations.
@@ -104,6 +110,11 @@ type TabletConfig struct {
 	EnableTxThrottler           bool
 	TxThrottlerConfig           string
 	TxThrottlerHealthCheckCells []string
+
+	EnableHotRowProtection             bool
+	EnableHotRowProtectionDryRun       bool
+	HotRowProtectionMaxQueueSize       int
+	HotRowProtectionMaxGlobalQueueSize int
 }
 
 // DefaultQsConfig is the default value for the query service config.
@@ -140,10 +151,15 @@ var DefaultQsConfig = TabletConfig{
 	TwoPCCoordinatorAddress: "",
 	TwoPCAbandonAge:         0,
 
-	EnableTxThrottler: false,
-	TxThrottlerConfig: defaultTxThrottlerConfig(),
-
+	EnableTxThrottler:           false,
+	TxThrottlerConfig:           defaultTxThrottlerConfig(),
 	TxThrottlerHealthCheckCells: []string{},
+
+	EnableHotRowProtection:       false,
+	EnableHotRowProtectionDryRun: false,
+	// Default value is the same as TransactionCap.
+	HotRowProtectionMaxQueueSize:       20,
+	HotRowProtectionMaxGlobalQueueSize: 1000,
 }
 
 // defaultTxThrottlerConfig formats the default throttlerdata.Configuration
@@ -162,6 +178,23 @@ func defaultTxThrottlerConfig() string {
 // Config contains all the current config values. It's read-only,
 // except for tests.
 var Config TabletConfig
+
+// VerifyConfig checks "Config" for contradicting flags.
+func VerifyConfig() error {
+	if actual, dryRun := Config.EnableHotRowProtection, Config.EnableHotRowProtectionDryRun; actual && dryRun {
+		return errors.New("only one of two flags allowed: -enable_hot_row_protection or -enable_hot_row_protection_dry_run")
+	}
+	if v := Config.HotRowProtectionMaxQueueSize; v <= 0 {
+		return fmt.Errorf("-hot_row_protection_max_queue_size must be > 0 (specified value: %v)", v)
+	}
+	if v := Config.HotRowProtectionMaxGlobalQueueSize; v <= 0 {
+		return fmt.Errorf("-hot_row_protection_max_global_queue_size must be > 0 (specified value: %v)", v)
+	}
+	if globalSize, size := Config.HotRowProtectionMaxGlobalQueueSize, Config.HotRowProtectionMaxQueueSize; globalSize < size {
+		return fmt.Errorf("global queue size must be >= per row (range) queue size: -hot_row_protection_max_global_queue_size < hot_row_protection_max_queue_size (%v < %v)", globalSize, size)
+	}
+	return nil
+}
 
 func buildFmter(logger *streamlog.StreamLogger) func(url.Values, interface{}) string {
 	type formatter interface {

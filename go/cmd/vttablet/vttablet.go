@@ -43,12 +43,17 @@ func main() {
 	dbconfigs.RegisterFlags(dbconfigFlags)
 	mysqlctl.RegisterFlags()
 	flag.Parse()
-	tabletenv.Init()
 	if len(flag.Args()) > 0 {
 		flag.Usage()
 		log.Errorf("vttablet doesn't take any positional arguments")
 		exit.Return(1)
 	}
+	if err := tabletenv.VerifyConfig(); err != nil {
+		log.Errorf("invalid config: %v", err)
+		exit.Return(1)
+	}
+
+	tabletenv.Init()
 
 	servenv.Init()
 
