@@ -22,25 +22,25 @@
     <loc>http://vitess.io/user-guide/horizontal-sharding.html</loc>
   </url>
   <url>
-    <loc>http://vitess.io/overview/</loc>
-  </url>
-  <url>
     <loc>http://vitess.io/about/</loc>
   </url>
   <url>
-    <loc>http://vitess.io/terms/</loc>
-  </url>
-  <url>
-    <loc>http://vitess.io/</loc>
-  </url>
-  <url>
     <loc>http://vitess.io/search/</loc>
+  </url>
+  <url>
+    <loc>http://vitess.io/overview/</loc>
   </url>
   <url>
     <loc>http://vitess.io/getting-started/</loc>
   </url>
   <url>
     <loc>http://vitess.io/contributing/</loc>
+  </url>
+  <url>
+    <loc>http://vitess.io/terms/</loc>
+  </url>
+  <url>
+    <loc>http://vitess.io/</loc>
   </url>
   <url>
     <loc>http://vitess.io/user-guide/introduction.html</loc>
