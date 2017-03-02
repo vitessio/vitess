@@ -304,6 +304,7 @@ func (qre *QueryExecutor) execDDL() (*sqltypes.Result, error) {
 		if err != nil {
 			return nil, err
 		}
+		conn.ReloadSchemaOnCommit = true
 		return result, nil
 	}
 

@@ -28,6 +28,7 @@ import (
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
+	"github.com/youtube/vitess/go/vt/tabletserver/engines/schema"
 )
 
 // These consts identify how a transaction was resolved.
@@ -171,12 +172,24 @@ func (axp *TxPool) Begin(ctx context.Context) (int64, error) {
 }
 
 // Commit commits the specified transaction.
-func (axp *TxPool) Commit(ctx context.Context, transactionID int64, messager *MessagerEngine) error {
+func (axp *TxPool) Commit(ctx context.Context, transactionID int64, messager *MessagerEngine, schemaEngine *schema.Engine) error {
 	conn, err := axp.Get(transactionID, "for commit")
 	if err != nil {
 		return err
 	}
-	return axp.LocalCommit(ctx, conn, messager)
+	err = axp.LocalCommit(ctx, conn, messager)
+	if err != nil {
+		return err
+	}
+
+	if conn.ReloadSchemaOnCommit {
+		err = schemaEngine.Reload(ctx)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // Rollback rolls back the specified transaction.
@@ -271,17 +284,18 @@ func (axp *TxPool) SetTimeout(timeout time.Duration) {
 // are failures.
 type TxConnection struct {
 	*connpool.DBConn
-	TransactionID     int64
-	pool              *TxPool
-	StartTime         time.Time
-	EndTime           time.Time
-	Queries           []string
-	NewMessages       map[string][]*MessageRow
-	ChangedMessages   map[string][]string
-	Conclusion        string
-	LogToFile         sync2.AtomicInt32
-	ImmediateCallerID *querypb.VTGateCallerID
-	EffectiveCallerID *vtrpcpb.CallerID
+	TransactionID        int64
+	ReloadSchemaOnCommit bool
+	pool                 *TxPool
+	StartTime            time.Time
+	EndTime              time.Time
+	Queries              []string
+	NewMessages          map[string][]*MessageRow
+	ChangedMessages      map[string][]string
+	Conclusion           string
+	LogToFile            sync2.AtomicInt32
+	ImmediateCallerID    *querypb.VTGateCallerID
+	EffectiveCallerID    *vtrpcpb.CallerID
 }
 
 func newTxConnection(conn *connpool.DBConn, transactionID int64, pool *TxPool, immediate *querypb.VTGateCallerID, effective *vtrpcpb.CallerID) *TxConnection {
