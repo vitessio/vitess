@@ -1,13 +1,21 @@
 package com.flipkart.vitess.util;
 
 import java.io.StringReader;
+import java.io.UnsupportedEncodingException;
+import java.nio.ByteBuffer;
+import java.nio.CharBuffer;
+import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Created by naveen.nahata on 05/02/16.
  */
 public class StringUtils {
+
+    private static final String platformEncoding = System.getProperty("file.encoding");
+    private static final ConcurrentHashMap<String, Charset> charsetsByAlias = new ConcurrentHashMap<String, Charset>();
 
     private StringUtils() {
     }
@@ -351,7 +359,6 @@ public class StringUtils {
      */
     public static int findStartOfStatement(String sql) {
         int statementStartPos = 0;
-
         if (StringUtils.startsWithIgnoreCaseAndWs(sql, "/*")) {
             statementStartPos = sql.indexOf("*/");
 
@@ -371,7 +378,71 @@ public class StringUtils {
                 }
             }
         }
-
         return statementStartPos;
+    }
+
+    public static String toString(byte[] value, int offset, int length, String encoding) throws UnsupportedEncodingException {
+        Charset cs = findCharset(encoding);
+        return cs.decode(ByteBuffer.wrap(value, offset, length)).toString();
+    }
+
+    public static String toString(byte[] value, String encoding) throws UnsupportedEncodingException {
+        return findCharset(encoding)
+            .decode(ByteBuffer.wrap(value))
+            .toString();
+    }
+
+    public static String toString(byte[] value, int offset, int length) {
+        try {
+            return findCharset(platformEncoding)
+                .decode(ByteBuffer.wrap(value, offset, length))
+                .toString();
+        } catch (UnsupportedEncodingException e) {
+            // can't happen, emulating new String(byte[])
+        }
+        return null;
+    }
+
+    public static String toString(byte[] value) {
+        try {
+            return findCharset(platformEncoding)
+                .decode(ByteBuffer.wrap(value))
+                .toString();
+        } catch (UnsupportedEncodingException e) {
+            // can't happen, emulating new String(byte[])
+        }
+        return null;
+    }
+
+    public static byte[] getBytes(String value, String encoding) throws UnsupportedEncodingException {
+        return getBytes(value, 0, value.length(), encoding);
+    }
+
+    public static byte[] getBytes(String value, int offset, int length, String encoding) throws UnsupportedEncodingException {
+        Charset cs = findCharset(encoding);
+        ByteBuffer buf = cs.encode(CharBuffer.wrap(value.toCharArray(), offset, length));
+        // can't simply .array() this to get the bytes especially with variable-length charsets the buffer is sometimes larger than the actual encoded data
+        int encodedLen = buf.limit();
+        byte[] asBytes = new byte[encodedLen];
+        buf.get(asBytes, 0, encodedLen);
+        return asBytes;
+    }
+
+    private static Charset findCharset(String alias) throws UnsupportedEncodingException {
+        try {
+            Charset cs = charsetsByAlias.get(alias);
+            if (cs == null) {
+                cs = Charset.forName(alias);
+                Charset oldCs = charsetsByAlias.putIfAbsent(alias, cs);
+                if (oldCs != null) {
+                    // if the previous value was recently set by another thread we return it instead of value we found here
+                    cs = oldCs;
+                }
+            }
+            return cs;
+            // We re-throw these runtimes for compatibility with java.io
+        } catch (IllegalArgumentException iae) {
+            throw new UnsupportedEncodingException(alias);
+        }
     }
 }

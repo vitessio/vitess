@@ -1,6 +1,7 @@
 package com.flipkart.vitess.jdbc;
 
 import com.flipkart.vitess.util.Constants;
+import com.flipkart.vitess.util.charset.CharsetMapping;
 import com.youtube.vitess.proto.Query;
 
 import org.junit.Assert;
@@ -22,49 +23,50 @@ public class VitessResultSetMetadataTest extends BaseTest {
     private List<Query.Field> generateFieldList() {
         List<Query.Field> fieldList = new ArrayList<>();
 
-        fieldList.add(field("col1", "tbl", Query.Type.INT8, 4)
+        fieldList.add(field("col1", "tbl", Query.Type.INT8, 4, CharsetMapping.MYSQL_COLLATION_INDEX_binary)
             .setFlags(Query.MySqlFlag.NOT_NULL_FLAG_VALUE).setOrgName("foo").setOrgTable("foo").build());
-        fieldList.add(field("col2", "tbl", Query.Type.UINT8, 3).setFlags(Query.MySqlFlag.UNSIGNED_FLAG_VALUE).build());
-        fieldList.add(field("col3", "tbl", Query.Type.INT16, 6).build());
-        fieldList.add(field("col4", "tbl", Query.Type.UINT16, 5).setFlags(Query.MySqlFlag.UNSIGNED_FLAG_VALUE).build());
-        fieldList.add(field("col5", "tbl", Query.Type.INT24, 9).build());
-        fieldList.add(field("col6", "tbl", Query.Type.UINT24, 8).setFlags(Query.MySqlFlag.UNSIGNED_FLAG_VALUE).build());
-        fieldList.add(field("col7", "tbl", Query.Type.INT32, 11).build());
-        fieldList.add(field("col8", "tbl", Query.Type.UINT32, 10).setFlags(Query.MySqlFlag.UNSIGNED_FLAG_VALUE).build());
-        fieldList.add(field("col9", "tbl", Query.Type.INT64, 20).build());
-        fieldList.add(field("col10", "tbl", Query.Type.UINT64, 20).setFlags(Query.MySqlFlag.UNSIGNED_FLAG_VALUE).build());
-        fieldList.add(field("col11", "tbl", Query.Type.FLOAT32, 12).setDecimals(31).build());
-        fieldList.add(field("col12", "tbl", Query.Type.FLOAT64, 22).setDecimals(31).build());
-        fieldList.add(field("col13", "tbl", Query.Type.TIMESTAMP, 10).build());
-        fieldList.add(field("col14", "tbl", Query.Type.DATE, 10).build());
-        fieldList.add(field("col15", "tbl", Query.Type.TIME, 10).build());
-        fieldList.add(field("col16", "tbl", Query.Type.DATETIME, 19).build());
-        fieldList.add(field("col17", "tbl", Query.Type.YEAR, 4).build());
-        fieldList.add(field("col18", "tbl", Query.Type.DECIMAL, 7).setDecimals(2).build());
-        fieldList.add(field("col19", "tbl", Query.Type.TEXT, 765).build());
-        fieldList.add(field("col20", "tbl", Query.Type.BLOB, 65535)
+        fieldList.add(field("col2", "tbl", Query.Type.UINT8, 3, CharsetMapping.MYSQL_COLLATION_INDEX_binary).setFlags(Query.MySqlFlag.UNSIGNED_FLAG_VALUE).build());
+        fieldList.add(field("col3", "tbl", Query.Type.INT16, 6, CharsetMapping.MYSQL_COLLATION_INDEX_binary).build());
+        fieldList.add(field("col4", "tbl", Query.Type.UINT16, 5, CharsetMapping.MYSQL_COLLATION_INDEX_binary).setFlags(Query.MySqlFlag.UNSIGNED_FLAG_VALUE).build());
+        fieldList.add(field("col5", "tbl", Query.Type.INT24, 9, CharsetMapping.MYSQL_COLLATION_INDEX_binary).build());
+        fieldList.add(field("col6", "tbl", Query.Type.UINT24, 8, CharsetMapping.MYSQL_COLLATION_INDEX_binary).setFlags(Query.MySqlFlag.UNSIGNED_FLAG_VALUE).build());
+        fieldList.add(field("col7", "tbl", Query.Type.INT32, 11, CharsetMapping.MYSQL_COLLATION_INDEX_binary).build());
+        fieldList.add(field("col8", "tbl", Query.Type.UINT32, 10, CharsetMapping.MYSQL_COLLATION_INDEX_binary).setFlags(Query.MySqlFlag.UNSIGNED_FLAG_VALUE).build());
+        fieldList.add(field("col9", "tbl", Query.Type.INT64, 20, CharsetMapping.MYSQL_COLLATION_INDEX_binary).build());
+        fieldList.add(field("col10", "tbl", Query.Type.UINT64, 20, CharsetMapping.MYSQL_COLLATION_INDEX_binary).setFlags(Query.MySqlFlag.UNSIGNED_FLAG_VALUE).build());
+        fieldList.add(field("col11", "tbl", Query.Type.FLOAT32, 12, CharsetMapping.MYSQL_COLLATION_INDEX_binary).setDecimals(31).build());
+        fieldList.add(field("col12", "tbl", Query.Type.FLOAT64, 22, CharsetMapping.MYSQL_COLLATION_INDEX_binary).setDecimals(31).build());
+        fieldList.add(field("col13", "tbl", Query.Type.TIMESTAMP, 10, CharsetMapping.MYSQL_COLLATION_INDEX_binary).build());
+        fieldList.add(field("col14", "tbl", Query.Type.DATE, 10, CharsetMapping.MYSQL_COLLATION_INDEX_binary).build());
+        fieldList.add(field("col15", "tbl", Query.Type.TIME, 10, CharsetMapping.MYSQL_COLLATION_INDEX_binary).build());
+        fieldList.add(field("col16", "tbl", Query.Type.DATETIME, 19, CharsetMapping.MYSQL_COLLATION_INDEX_binary).build());
+        fieldList.add(field("col17", "tbl", Query.Type.YEAR, 4, CharsetMapping.MYSQL_COLLATION_INDEX_binary).build());
+        fieldList.add(field("col18", "tbl", Query.Type.DECIMAL, 7, CharsetMapping.MYSQL_COLLATION_INDEX_binary).setDecimals(2).build());
+        fieldList.add(field("col19", "tbl", Query.Type.TEXT, 765, /* utf8_bin -- not case insensitive */ 83).build());
+        fieldList.add(field("col20", "tbl", Query.Type.BLOB, 65535, CharsetMapping.MYSQL_COLLATION_INDEX_binary)
             .setFlags(Query.MySqlFlag.BINARY_FLAG_VALUE | Query.MySqlFlag.BLOB_FLAG_VALUE)
             .setDecimals(/* this is set to facilitate testing of getScale, since this is non-numeric */2).build());
-        fieldList.add(field("col21", "tbl", Query.Type.VARCHAR, 768).build());
-        fieldList.add(field("col22", "tbl", Query.Type.VARBINARY, 256).setFlags(Query.MySqlFlag.BINARY_FLAG_VALUE).build());
-        fieldList.add(field("col23", "tbl", Query.Type.CHAR, 48).build());
-        fieldList.add(field("col24", "tbl", Query.Type.BINARY, 4).setFlags(Query.MySqlFlag.BINARY_FLAG_VALUE).build());
-        fieldList.add(field("col25", "tbl", Query.Type.BIT, 8).build());
-        fieldList.add(field("col26", "tbl", Query.Type.ENUM, 3).build());
-        fieldList.add(field("col27", "tbl", Query.Type.SET, 9).build());
-        fieldList.add(field("col28", "tbl", Query.Type.TUPLE, 0).build());
-        fieldList.add(field("col29", "tbl", Query.Type.VARBINARY, 256).setFlags(Query.MySqlFlag.BINARY_FLAG_VALUE).build());
-        fieldList.add(field("col30", "tbl", Query.Type.BLOB, 65535)
+        fieldList.add(field("col21", "tbl", Query.Type.VARCHAR, 768, CharsetMapping.MYSQL_COLLATION_INDEX_utf8).build());
+        fieldList.add(field("col22", "tbl", Query.Type.VARBINARY, 256, CharsetMapping.MYSQL_COLLATION_INDEX_binary).setFlags(Query.MySqlFlag.BINARY_FLAG_VALUE).build());
+        fieldList.add(field("col23", "tbl", Query.Type.CHAR, 48, CharsetMapping.MYSQL_COLLATION_INDEX_utf8).build());
+        fieldList.add(field("col24", "tbl", Query.Type.BINARY, 4, CharsetMapping.MYSQL_COLLATION_INDEX_binary).setFlags(Query.MySqlFlag.BINARY_FLAG_VALUE).build());
+        fieldList.add(field("col25", "tbl", Query.Type.BIT, 8, CharsetMapping.MYSQL_COLLATION_INDEX_binary).build());
+        fieldList.add(field("col26", "tbl", Query.Type.ENUM, 3, CharsetMapping.MYSQL_COLLATION_INDEX_utf8).build());
+        fieldList.add(field("col27", "tbl", Query.Type.SET, 9, CharsetMapping.MYSQL_COLLATION_INDEX_utf8).build());
+        fieldList.add(field("col28", "tbl", Query.Type.TUPLE, 0, CharsetMapping.MYSQL_COLLATION_INDEX_utf8).build());
+        fieldList.add(field("col29", "tbl", Query.Type.VARBINARY, 256, CharsetMapping.MYSQL_COLLATION_INDEX_binary).setFlags(Query.MySqlFlag.BINARY_FLAG_VALUE).build());
+        fieldList.add(field("col30", "tbl", Query.Type.BLOB, 65535, CharsetMapping.MYSQL_COLLATION_INDEX_utf8)
             .setFlags(Query.MySqlFlag.BLOB_FLAG_VALUE).build());
         return fieldList;
     }
 
-    private Query.Field.Builder field(String name, String table, Query.Type type, int length) {
+    private Query.Field.Builder field(String name, String table, Query.Type type, int length, int charset) {
         return Query.Field.newBuilder()
             .setName(name)
             .setTable(table)
             .setType(type)
-            .setColumnLength(length);
+            .setColumnLength(length)
+            .setCharset(charset);
     }
 
     private void initializeFieldList(VitessConnection connection) throws SQLException {
@@ -159,7 +161,7 @@ public class VitessResultSetMetadataTest extends BaseTest {
         Assert.assertEquals("SMALLINT", Types.SMALLINT, vitessResultSetMetadata.getColumnType(17));
         Assert.assertEquals("DECIMAL", Types.DECIMAL, vitessResultSetMetadata.getColumnType(18));
         Assert.assertEquals("VARCHAR", Types.VARCHAR, vitessResultSetMetadata.getColumnType(19));
-        Assert.assertEquals("BLOB", Types.BLOB, vitessResultSetMetadata.getColumnType(20));
+        Assert.assertEquals("LONGVARBINARY", Types.LONGVARBINARY, vitessResultSetMetadata.getColumnType(20));
         Assert.assertEquals("VARCHAR", Types.VARCHAR, vitessResultSetMetadata.getColumnType(21));
         Assert.assertEquals("VARBINARY", Types.VARBINARY, vitessResultSetMetadata.getColumnType(22));
         Assert.assertEquals("CHAR", Types.CHAR, vitessResultSetMetadata.getColumnType(23));
@@ -168,7 +170,7 @@ public class VitessResultSetMetadataTest extends BaseTest {
         Assert.assertEquals("CHAR", Types.CHAR, vitessResultSetMetadata.getColumnType(26));
         Assert.assertEquals("CHAR", Types.CHAR, vitessResultSetMetadata.getColumnType(27));
         Assert.assertEquals("VARBINARY", Types.VARBINARY, vitessResultSetMetadata.getColumnType(29));
-        Assert.assertEquals("BLOB", Types.BLOB, vitessResultSetMetadata.getColumnType(30));
+        Assert.assertEquals("LONGVARCHAR", Types.LONGVARCHAR, vitessResultSetMetadata.getColumnType(30));
         try {
             int type = vitessResultSetMetadata.getColumnType(28);
         } catch (SQLException ex) {
@@ -252,9 +254,9 @@ public class VitessResultSetMetadataTest extends BaseTest {
         VitessResultSetMetaData vitessResultSetMetaData = new VitessResultSetMetaData(fieldList);
         Assert.assertEquals(vitessResultSetMetaData.getSchemaName(1), "");
         Assert.assertEquals(vitessResultSetMetaData.getCatalogName(1), "");
-        Assert.assertEquals(vitessResultSetMetaData.getPrecision(1), 0);
+        Assert.assertEquals(vitessResultSetMetaData.getPrecision(1), 3);
         Assert.assertEquals(vitessResultSetMetaData.getScale(1), 0);
-        Assert.assertEquals(vitessResultSetMetaData.getColumnDisplaySize(1), 0);
+        Assert.assertEquals(vitessResultSetMetaData.getColumnDisplaySize(1), 4);
         Assert.assertEquals(vitessResultSetMetaData.isCurrency(1), false);
     }
 
@@ -282,9 +284,20 @@ public class VitessResultSetMetadataTest extends BaseTest {
         Assert.assertEquals("datetime case sensitivity", false, md.isCaseSensitive(16));
         Assert.assertEquals("year case sensitivity", false, md.isCaseSensitive(17));
         Assert.assertEquals("decimal case sensitivity", false, md.isCaseSensitive(18));
-        for (int i = 18; i < fieldList.size(); i++) {
-            Assert.assertEquals(fieldList.get(i).getName() + " - non-numeric case insensitive", i != 24, md.isCaseSensitive(i + 1));
-        }
+
+        // These are handled on a case-by-case basis
+        Assert.assertEquals("text cases sensitivity", /* due to binary */true, md.isCaseSensitive(19));
+        Assert.assertEquals("blob case sensitivity", /* due to binary */true, md.isCaseSensitive(20));
+        Assert.assertEquals("varchar case sensitivity", /* due to utf-8_ci */ false, md.isCaseSensitive(21));
+        Assert.assertEquals("varbinary case sensitivity", /* due to binary */true, md.isCaseSensitive(22));
+        Assert.assertEquals("char case sensitivity", /* due to utf-8_ci */ false, md.isCaseSensitive(23));
+        Assert.assertEquals("binary case sensitivity", /* due to binary */true, md.isCaseSensitive(24));
+        Assert.assertEquals("bit case sensitivity", /* due to numeric type */false, md.isCaseSensitive(25));
+        Assert.assertEquals("enum case sensitivity", /* due to utf-8_ci */ false, md.isCaseSensitive(26));
+        Assert.assertEquals("set case sensitivity", /* due to utf-8_ci, SET == CHAR */ false, md.isCaseSensitive(27));
+        Assert.assertEquals("tuple case sensitivity", /* due to default case */ true, md.isCaseSensitive(28));
+        Assert.assertEquals("varbinary case sensitivity", /* due to binary */ true, md.isCaseSensitive(29));
+        Assert.assertEquals("text cases sensitivity", /* due to utf8_bin (not case insensitive) encoding */false, md.isCaseSensitive(30));
 
         connection.setIncludedFields(Query.ExecuteOptions.IncludedFields.TYPE_AND_NAME);
         // with limited included fields, we can really only know about numeric types -- those should return false.  the rest should return true
@@ -305,6 +318,89 @@ public class VitessResultSetMetadataTest extends BaseTest {
         conn.setIncludedFields(Query.ExecuteOptions.IncludedFields.TYPE_AND_NAME);
         for (int i = 0; i < fieldList.size(); i++) {
             Assert.assertEquals(fieldList.get(i).getName() + " - isNullable is columnNullableUnknown (2) for all when lack of included fields", 2, md.isNullable(i + 1));
+        }
+    }
+
+    @Test public void testDisplaySize() throws SQLException {
+        VitessConnection conn = getVitessConnection();
+        List<FieldWithMetadata> fieldList = getFieldList(conn);
+        VitessResultSetMetaData md = new VitessResultSetMetaData(fieldList);
+
+        Assert.assertEquals("int8 display size", 4, md.getColumnDisplaySize(1));
+        Assert.assertEquals("uint8 display size", 3, md.getColumnDisplaySize(2));
+        Assert.assertEquals("int16 display size", 6, md.getColumnDisplaySize(3));
+        Assert.assertEquals("uint16 display size", 5, md.getColumnDisplaySize(4));
+        Assert.assertEquals("int24 display size", 9, md.getColumnDisplaySize(5));
+        Assert.assertEquals("uint24 display size", 8, md.getColumnDisplaySize(6));
+        Assert.assertEquals("int32 display size", 11, md.getColumnDisplaySize(7));
+        Assert.assertEquals("uint32 display size", 10, md.getColumnDisplaySize(8));
+        Assert.assertEquals("int64 display size", 20, md.getColumnDisplaySize(9));
+        // unsigned long gets an extra digit of precision over signed, so display sizes are the same
+        Assert.assertEquals("uint64 display size", 20, md.getColumnDisplaySize(10));
+        Assert.assertEquals("float32 display size", 12, md.getColumnDisplaySize(11));
+        Assert.assertEquals("float64 display size", 22, md.getColumnDisplaySize(12));
+        Assert.assertEquals("timestamp display size", 10, md.getColumnDisplaySize(13));
+        Assert.assertEquals("date display size", 10, md.getColumnDisplaySize(14));
+        Assert.assertEquals("time display size", 10, md.getColumnDisplaySize(15));
+        Assert.assertEquals("datetime display size", 19, md.getColumnDisplaySize(16));
+        Assert.assertEquals("year display size", 4, md.getColumnDisplaySize(17));
+        Assert.assertEquals("decimal display size", 7, md.getColumnDisplaySize(18));
+        Assert.assertEquals("text display size", 255, md.getColumnDisplaySize(19));
+        Assert.assertEquals("blob display size", 65535, md.getColumnDisplaySize(20));
+        Assert.assertEquals("varchar display size", 256, md.getColumnDisplaySize(21));
+        Assert.assertEquals("varbinary display size", 256, md.getColumnDisplaySize(22));
+        Assert.assertEquals("char display size", 16, md.getColumnDisplaySize(23));
+        Assert.assertEquals("binary display size", 4, md.getColumnDisplaySize(24));
+        Assert.assertEquals("bit display size", 8, md.getColumnDisplaySize(25));
+        Assert.assertEquals("enum display size", 1, md.getColumnDisplaySize(26));
+        Assert.assertEquals("set display size", 3, md.getColumnDisplaySize(27));
+        Assert.assertEquals("tuple display size", 0, md.getColumnDisplaySize(28));
+        Assert.assertEquals("varbinary display size", 256, md.getColumnDisplaySize(29));
+
+        conn.setIncludedFields(Query.ExecuteOptions.IncludedFields.TYPE_AND_NAME);
+        for (int i = 0; i < fieldList.size(); i++) {
+            Assert.assertEquals(fieldList.get(i).getName() + " - getColumnDisplaySize is 0 for all when lack of included fields", 0, md.getColumnDisplaySize(i + 1));
+        }
+    }
+
+    @Test public void testGetPrecision() throws SQLException {
+        VitessConnection conn = getVitessConnection();
+        List<FieldWithMetadata> fieldList = getFieldList(conn);
+        VitessResultSetMetaData md = new VitessResultSetMetaData(fieldList);
+
+        Assert.assertEquals("int8 precision", 3, md.getPrecision(1));
+        Assert.assertEquals("uint8 precision", 3, md.getPrecision(2));
+        Assert.assertEquals("int16 precision", 5, md.getPrecision(3));
+        Assert.assertEquals("uint16 precision", 5, md.getPrecision(4));
+        Assert.assertEquals("int24 precision", 8, md.getPrecision(5));
+        Assert.assertEquals("uint24 precision", 8, md.getPrecision(6));
+        Assert.assertEquals("int32 precision", 10, md.getPrecision(7));
+        Assert.assertEquals("uint32 precision", 10, md.getPrecision(8));
+        Assert.assertEquals("int64 precision", 19, md.getPrecision(9));
+        Assert.assertEquals("uint64 precision", 20, md.getPrecision(10));
+        Assert.assertEquals("float32 precision", 12, md.getPrecision(11));
+        Assert.assertEquals("float64 precision", 22, md.getPrecision(12));
+        Assert.assertEquals("timestamp precision", 10, md.getPrecision(13));
+        Assert.assertEquals("date precision", 10, md.getPrecision(14));
+        Assert.assertEquals("time precision", 10, md.getPrecision(15));
+        Assert.assertEquals("datetime precision", 19, md.getPrecision(16));
+        Assert.assertEquals("year precision", 4, md.getPrecision(17));
+        Assert.assertEquals("decimal precision", 5, md.getPrecision(18)); // 7 - decimal - sign
+        Assert.assertEquals("text precision", 255, md.getPrecision(19));
+        Assert.assertEquals("blob precision", 65535, md.getPrecision(20));
+        Assert.assertEquals("varchar precision", 256, md.getPrecision(21));
+        Assert.assertEquals("varbinary precision", 256, md.getPrecision(22));
+        Assert.assertEquals("char precision", 16, md.getPrecision(23));
+        Assert.assertEquals("binary precision", 4, md.getPrecision(24));
+        Assert.assertEquals("bit precision", 8, md.getPrecision(25));
+        Assert.assertEquals("enum precision", 1, md.getPrecision(26));
+        Assert.assertEquals("set precision", 3, md.getPrecision(27));
+        Assert.assertEquals("tuple precision", 0, md.getPrecision(28));
+        Assert.assertEquals("varbinary precision", 256, md.getPrecision(29));
+
+        conn.setIncludedFields(Query.ExecuteOptions.IncludedFields.TYPE_AND_NAME);
+        for (int i = 0; i < fieldList.size(); i++) {
+            Assert.assertEquals(fieldList.get(i).getName() + " - getPrecision is 0 for all when lack of included fields", 0, md.getPrecision(i + 1));
         }
     }
 
@@ -372,7 +468,7 @@ public class VitessResultSetMetadataTest extends BaseTest {
         Assert.assertEquals("java.sql.Date", md.getColumnClassName(17));
         Assert.assertEquals("java.math.BigDecimal", md.getColumnClassName(18));
         Assert.assertEquals("java.lang.String", md.getColumnClassName(19));
-        Assert.assertEquals("java.lang.Object", md.getColumnClassName(20));
+        Assert.assertEquals("[B", md.getColumnClassName(20));
         Assert.assertEquals("java.lang.String", md.getColumnClassName(21));
         Assert.assertEquals("[B", md.getColumnClassName(22));
         Assert.assertEquals("java.lang.String", md.getColumnClassName(23));
