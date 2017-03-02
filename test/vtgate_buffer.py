@@ -320,10 +320,10 @@ class TestBufferBase(unittest.TestCase):
     master_promoted_count = v['HealthcheckMasterPromoted'].get(labels, 0)
     self.assertGreater(master_promoted_count, 0)
 
-    if labels in v['BufferFailoverDurationSumMs']:
+    duration_ms = v['BufferFailoverDurationSumMs'].get(labels, 0)
+    if duration_ms > 0:
       # Buffering was actually started.
-      logging.debug('Failover was buffered for %d milliseconds.',
-                    v['BufferFailoverDurationSumMs'][labels])
+      logging.debug('Failover was buffered for %d milliseconds.', duration_ms)
       # Number of buffering stops must be equal to the number of seen failovers.
       buffering_stops = v['BufferStops'].get('%s.NewMasterSeen' % labels, 0)
       self.assertEqual(master_promoted_count, buffering_stops)
