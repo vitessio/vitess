@@ -295,6 +295,18 @@ func (qre *QueryExecutor) execDDL() (*sqltypes.Result, error) {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "DDL is not understood")
 	}
 
+	if qre.transactionID != 0 {
+		conn, err := qre.tsv.te.txPool.Get(qre.transactionID, "for query")
+		if err != nil {
+			return nil, err
+		}
+		result, err := qre.execSQL(conn, qre.query, false)
+		if err != nil {
+			return nil, err
+		}
+		return result, nil
+	}
+
 	conn, err := qre.tsv.te.txPool.LocalBegin(qre.ctx)
 	if err != nil {
 		return nil, err
