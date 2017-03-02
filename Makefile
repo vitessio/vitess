@@ -176,7 +176,7 @@ docker_base:
 
 docker_base_mysql56:
 	chmod -R o=g *
-	docker build -f Dockerfile.percona -t vitess/base:mysql56 .
+	docker build -f Dockerfile.mysql56 -t vitess/base:mysql56 .
 
 docker_base_mariadb:
 	chmod -R o=g *
