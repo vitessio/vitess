@@ -323,7 +323,7 @@ func (qre *QueryExecutor) execNextval() (*sqltypes.Result, error) {
 		return nil, err
 	}
 	if inc < 1 {
-		return nil, fmt.Errorf("invalid increment for sequence %s: %d", qre.plan.TableName, inc)
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid increment for sequence %s: %d", qre.plan.TableName, inc)
 	}
 
 	t := qre.plan.Table
@@ -337,11 +337,11 @@ func (qre *QueryExecutor) execNextval() (*sqltypes.Result, error) {
 				return nil, err
 			}
 			if len(qr.Rows) != 1 {
-				return nil, fmt.Errorf("unexpected rows from reading sequence %s (possible mis-route): %d", qre.plan.TableName, len(qr.Rows))
+				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected rows from reading sequence %s (possible mis-route): %d", qre.plan.TableName, len(qr.Rows))
 			}
 			nextID, err := qr.Rows[0][0].ParseInt64()
 			if err != nil {
-				return nil, fmt.Errorf("error loading sequence %s: %v", qre.plan.TableName, err)
+				return nil, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "error loading sequence %s: %v", qre.plan.TableName, err)
 			}
 			// Initialize SequenceInfo.NextVal if it wasn't already.
 			if t.SequenceInfo.NextVal == 0 {
@@ -349,10 +349,10 @@ func (qre *QueryExecutor) execNextval() (*sqltypes.Result, error) {
 			}
 			cache, err := qr.Rows[0][1].ParseInt64()
 			if err != nil {
-				return nil, fmt.Errorf("error loading sequence %s: %v", qre.plan.TableName, err)
+				return nil, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "error loading sequence %s: %v", qre.plan.TableName, err)
 			}
 			if cache < 1 {
-				return nil, fmt.Errorf("invalid cache value for sequence %s: %d", qre.plan.TableName, cache)
+				return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "invalid cache value for sequence %s: %d", qre.plan.TableName, cache)
 			}
 			newLast := nextID + cache
 			for newLast <= t.SequenceInfo.NextVal+inc {

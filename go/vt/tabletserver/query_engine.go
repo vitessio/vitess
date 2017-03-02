@@ -31,10 +31,8 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver/engines/schema"
 	"github.com/youtube/vitess/go/vt/tabletserver/planbuilder"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletenv"
-	"github.com/youtube/vitess/go/vt/vterrors"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
-	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 //_______________________________________________
@@ -272,8 +270,7 @@ func (qe *QueryEngine) GetPlan(ctx context.Context, logStats *tabletenv.LogStats
 	}
 	splan, err := planbuilder.GetExecPlan(sql, GetTable)
 	if err != nil {
-		// TODO(sougou): Inspect to see if GetExecPlan can return coded error.
-		return nil, vterrors.New(vtrpcpb.Code_UNKNOWN, err.Error())
+		return nil, err
 	}
 	plan := &ExecPlan{ExecPlan: splan, Table: table}
 	plan.Rules = qe.queryRuleSources.filterByPlan(sql, plan.PlanID, plan.TableName.String())
@@ -319,8 +316,7 @@ func (qe *QueryEngine) GetStreamPlan(sql string) (*ExecPlan, error) {
 	}
 	splan, err := planbuilder.GetStreamExecPlan(sql, GetTable)
 	if err != nil {
-		// TODO(sougou): Inspect to see if GetStreamExecPlan can return coded error.
-		return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, err.Error())
+		return nil, err
 	}
 	plan := &ExecPlan{ExecPlan: splan, Table: table}
 	plan.Rules = qe.queryRuleSources.filterByPlan(sql, plan.PlanID, plan.TableName.String())

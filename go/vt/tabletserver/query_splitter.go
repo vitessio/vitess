@@ -2,14 +2,15 @@ package tabletserver
 
 import (
 	"encoding/binary"
-	"fmt"
 	"strconv"
 
 	"github.com/youtube/vitess/go/sqltypes"
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/tabletserver/engines/schema"
 	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
+	"github.com/youtube/vitess/go/vt/vterrors"
 )
 
 // QuerySplitter splits a BoundQuery into equally sized smaller queries.
@@ -66,28 +67,28 @@ func (qs *QuerySplitter) validateQuery() error {
 	var ok bool
 	qs.sel, ok = statement.(*sqlparser.Select)
 	if !ok {
-		return fmt.Errorf("not a select statement")
+		return vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "not a select statement")
 	}
 	if qs.sel.Distinct != "" || qs.sel.GroupBy != nil ||
 		qs.sel.Having != nil || len(qs.sel.From) != 1 ||
 		qs.sel.OrderBy != nil || qs.sel.Limit != nil ||
 		qs.sel.Lock != "" {
-		return fmt.Errorf("unsupported query")
+		return vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported query")
 	}
 	node, ok := qs.sel.From[0].(*sqlparser.AliasedTableExpr)
 	if !ok {
-		return fmt.Errorf("unsupported query")
+		return vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported query")
 	}
 	qs.tableName = sqlparser.GetTableName(node.Expr)
 	if qs.tableName.IsEmpty() {
-		return fmt.Errorf("not a simple table expression")
+		return vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "not a simple table expression")
 	}
 	table := qs.se.GetTable(qs.tableName)
 	if table == nil {
-		return fmt.Errorf("can't find table in schema")
+		return vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "can't find table in schema")
 	}
 	if len(table.PKColumns) == 0 {
-		return fmt.Errorf("no primary keys")
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "no primary keys")
 	}
 	if !qs.splitColumn.IsEmpty() {
 		for _, index := range table.Indexes {
@@ -97,7 +98,7 @@ func (qs *QuerySplitter) validateQuery() error {
 				}
 			}
 		}
-		return fmt.Errorf("split column is not indexed or does not exist in table schema, SplitColumn: %v, Table: %v", qs.splitColumn, table)
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "split column is not indexed or does not exist in table schema, SplitColumn: %v, Table: %v", qs.splitColumn, table)
 	}
 	qs.splitColumn = table.GetPKColumn(0).Name
 	return nil

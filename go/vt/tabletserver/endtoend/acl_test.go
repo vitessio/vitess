@@ -129,7 +129,7 @@ func TestQueryRules(t *testing.T) {
 		return
 	}
 	err = framework.Server.SetQueryRules("endtoend", rules)
-	want := "Rule source identifier endtoend is not valid"
+	want := "rule source identifier endtoend is not valid"
 	if err == nil || err.Error() != want {
 		t.Errorf("Error: %v, want %s", err, want)
 	}

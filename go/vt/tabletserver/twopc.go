@@ -408,11 +408,11 @@ func (tpc *TwoPC) ReadTransaction(ctx context.Context, dtid string) (*querypb.Tr
 	result.Dtid = qr.Rows[0][0].String()
 	st, err := qr.Rows[0][1].ParseInt64()
 	if err != nil {
-		return nil, fmt.Errorf("Error parsing state for dtid %s: %v", dtid, err)
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Error parsing state for dtid %s: %v", dtid, err)
 	}
 	result.State = querypb.TransactionState(st)
 	if result.State < querypb.TransactionState_PREPARE || result.State > querypb.TransactionState_ROLLBACK {
-		return nil, fmt.Errorf("Unexpected state for dtid %s: %v", dtid, result.State)
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Unexpected state for dtid %s: %v", dtid, result.State)
 	}
 	// A failure in time parsing will show up as a very old time,
 	// which is harmless.

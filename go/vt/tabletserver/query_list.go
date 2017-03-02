@@ -1,14 +1,16 @@
 package tabletserver
 
 import (
-	"fmt"
 	"html/template"
 	"sort"
 	"sync"
 	"time"
 
 	"github.com/youtube/vitess/go/vt/callinfo"
+	"github.com/youtube/vitess/go/vt/vterrors"
 	"golang.org/x/net/context"
+
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 // QueryDetail is a simple wrapper for Query, Context and a killable conn.
@@ -61,7 +63,7 @@ func (ql *QueryList) Terminate(connID int64) error {
 	defer ql.mu.Unlock()
 	qd := ql.queryDetails[connID]
 	if qd == nil {
-		return fmt.Errorf("query %v not found", connID)
+		return vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "query %v not found", connID)
 	}
 	qd.conn.Kill("QueryList.Terminate()")
 	return nil

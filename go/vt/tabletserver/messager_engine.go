@@ -5,7 +5,6 @@
 package tabletserver
 
 import (
-	"fmt"
 	"sync"
 	"time"
 
@@ -149,7 +148,7 @@ func (me *MessagerEngine) GenerateAckQuery(name string, ids []string) (string, m
 	defer me.mu.Unlock()
 	mm := me.managers[name]
 	if mm == nil {
-		return "", nil, fmt.Errorf("message table %s not found in schema", name)
+		return "", nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "message table %s not found in schema", name)
 	}
 	query, bv := mm.GenerateAckQuery(ids)
 	return query, bv, nil
@@ -161,7 +160,7 @@ func (me *MessagerEngine) GeneratePostponeQuery(name string, ids []string) (stri
 	defer me.mu.Unlock()
 	mm := me.managers[name]
 	if mm == nil {
-		return "", nil, fmt.Errorf("message table %s not found in schema", name)
+		return "", nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "message table %s not found in schema", name)
 	}
 	query, bv := mm.GeneratePostponeQuery(ids)
 	return query, bv, nil
@@ -173,7 +172,7 @@ func (me *MessagerEngine) GeneratePurgeQuery(name string, timeCutoff int64) (str
 	defer me.mu.Unlock()
 	mm := me.managers[name]
 	if mm == nil {
-		return "", nil, fmt.Errorf("message table %s not found in schema", name)
+		return "", nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "message table %s not found in schema", name)
 	}
 	query, bv := mm.GeneratePurgeQuery(timeCutoff)
 	return query, bv, nil

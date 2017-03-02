@@ -6,17 +6,18 @@ package planbuilder
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/tableacl"
 	"github.com/youtube/vitess/go/vt/tabletserver/engines/schema"
+	"github.com/youtube/vitess/go/vt/vterrors"
 )
 
 var (
 	// ErrTooComplex indicates given sql query is too complex.
-	ErrTooComplex = errors.New("Complex")
+	ErrTooComplex = vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "Complex")
 	execLimit     = &sqlparser.Limit{Rowcount: sqlparser.NewValArg([]byte(":#maxLimit"))}
 )
 
@@ -222,7 +223,7 @@ type ExecPlan struct {
 func (plan *ExecPlan) setTable(tableName sqlparser.TableIdent, getTable TableGetter) (*schema.Table, error) {
 	table, ok := getTable(tableName)
 	if !ok {
-		return nil, fmt.Errorf("table %s not found in schema", tableName)
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "table %s not found in schema", tableName)
 	}
 	plan.TableName = table.Name
 	return table, nil
@@ -259,7 +260,7 @@ func GetExecPlan(sql string, getTable TableGetter) (plan *ExecPlan, err error) {
 	case *sqlparser.Other:
 		return &ExecPlan{PlanID: PlanOther}, nil
 	}
-	return nil, errors.New("invalid SQL")
+	return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "invalid SQL")
 }
 
 // GetStreamExecPlan generates a ExecPlan given a sql query and a TableGetter.
@@ -277,7 +278,7 @@ func GetStreamExecPlan(sql string, getTable TableGetter) (plan *ExecPlan, err er
 	switch stmt := statement.(type) {
 	case *sqlparser.Select:
 		if stmt.Lock != "" {
-			return nil, errors.New("select with lock not allowed for streaming")
+			return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "select with lock not allowed for streaming")
 		}
 		if tableName := analyzeFrom(stmt.From); !tableName.IsEmpty() {
 			plan.setTable(tableName, getTable)
@@ -285,7 +286,7 @@ func GetStreamExecPlan(sql string, getTable TableGetter) (plan *ExecPlan, err er
 	case *sqlparser.Union:
 		// pass
 	default:
-		return nil, fmt.Errorf("'%v' not allowed for streaming", sqlparser.String(stmt))
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "'%v' not allowed for streaming", sqlparser.String(stmt))
 	}
 
 	return plan, nil

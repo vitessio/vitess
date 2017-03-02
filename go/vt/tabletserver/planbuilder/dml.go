@@ -5,12 +5,11 @@
 package planbuilder
 
 import (
-	"errors"
-	"fmt"
-
 	log "github.com/golang/glog"
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/tabletserver/engines/schema"
+	"github.com/youtube/vitess/go/vt/vterrors"
 )
 
 func analyzeUpdate(upd *sqlparser.Update, getTable TableGetter) (plan *ExecPlan, err error) {
@@ -142,7 +141,7 @@ func analyzeSelect(sel *sqlparser.Select, getTable TableGetter) (plan *ExecPlan,
 	// Check if it's a NEXT VALUE statement.
 	if nextVal, ok := sel.SelectExprs[0].(sqlparser.Nextval); ok {
 		if table.Type != schema.Sequence {
-			return nil, fmt.Errorf("%s is not a sequence", tableName)
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%s is not a sequence", tableName)
 		}
 		plan.PlanID = PlanNextval
 		v, err := sqlparser.AsInterface(nextVal.Expr)
@@ -285,7 +284,7 @@ func analyzeInsertNoType(ins *sqlparser.Insert, plan *ExecPlan, table *schema.Ta
 			for _, col := range ins.Columns {
 				colIndex := table.FindColumn(col)
 				if colIndex == -1 {
-					return nil, fmt.Errorf("column %v not found in table %s", col, table.Name)
+					return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "column %v not found in table %s", col, table.Name)
 				}
 				plan.ColumnNumbers = append(plan.ColumnNumbers, colIndex)
 			}
@@ -352,7 +351,7 @@ func resolveUpsertUpdateValues(rowList sqlparser.ValTuple, columns sqlparser.Col
 		if cast, ok := node.(*sqlparser.ValuesFuncExpr); ok {
 			colID := columns.FindColumn(cast.Name)
 			if colID == -1 {
-				return false, fmt.Errorf("Could not find column %v", cast.Name)
+				return false, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Could not find column %v", cast.Name)
 			}
 			cast.Resolved = rowList[colID]
 		}
@@ -363,20 +362,20 @@ func resolveUpsertUpdateValues(rowList sqlparser.ValTuple, columns sqlparser.Col
 
 func analyzeInsertMessage(ins *sqlparser.Insert, plan *ExecPlan, table *schema.Table) (*ExecPlan, error) {
 	if _, ok := ins.Rows.(sqlparser.SelectStatement); ok {
-		return nil, fmt.Errorf("subquery not allowed for message table: %s", table.Name.String())
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "subquery not allowed for message table: %s", table.Name.String())
 	}
 	if ins.OnDup != nil {
-		return nil, fmt.Errorf("'on duplicate key' construct not allowed for message table: %s", table.Name.String())
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "'on duplicate key' construct not allowed for message table: %s", table.Name.String())
 	}
 	if len(ins.Columns) == 0 {
-		return nil, fmt.Errorf("column list must be specified for message table insert: %s", table.Name.String())
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "column list must be specified for message table insert: %s", table.Name.String())
 	}
 
 	// Sanity check first so we don't have to repeat this.
 	rowList := ins.Rows.(sqlparser.Values)
 	for _, row := range rowList {
 		if len(row) != len(ins.Columns) {
-			return nil, errors.New("column count doesn't match value count")
+			return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "column count doesn't match value count")
 		}
 	}
 
@@ -394,40 +393,40 @@ func analyzeInsertMessage(ins *sqlparser.Insert, plan *ExecPlan, table *schema.T
 	col = sqlparser.NewColIdent("time_next")
 	num := findCol(col, ins.Columns)
 	if num != -1 {
-		return nil, fmt.Errorf("%s must not be specified for message insert", col.String())
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%s must not be specified for message insert", col.String())
 	}
 	_ = copyVal(ins, col, scheduleIndex)
 
 	// time_created should always be now.
 	col = sqlparser.NewColIdent("time_created")
 	if num := findCol(col, ins.Columns); num >= 0 {
-		return nil, fmt.Errorf("%s must not be specified for message insert", col.String())
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%s must not be specified for message insert", col.String())
 	}
 	_ = addVal(ins, col, timeNow)
 
 	// epoch should always be 0.
 	col = sqlparser.NewColIdent("epoch")
 	if num := findCol(col, ins.Columns); num >= 0 {
-		return nil, fmt.Errorf("%s must not be specified for message insert", col.String())
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%s must not be specified for message insert", col.String())
 	}
 	_ = addVal(ins, col, sqlparser.NewIntVal([]byte("0")))
 
 	// time_acked should must not be specified.
 	col = sqlparser.NewColIdent("time_acked")
 	if num := findCol(col, ins.Columns); num >= 0 {
-		return nil, fmt.Errorf("%s must not be specified for message insert", col.String())
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%s must not be specified for message insert", col.String())
 	}
 
 	col = sqlparser.NewColIdent("id")
 	num = findCol(col, ins.Columns)
 	if num < 0 {
-		return nil, fmt.Errorf("%s must be specified for message insert", col.String())
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%s must be specified for message insert", col.String())
 	}
 
 	col = sqlparser.NewColIdent("message")
 	num = findCol(col, ins.Columns)
 	if num < 0 {
-		return nil, fmt.Errorf("%s must be specified for message insert", col.String())
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%s must be specified for message insert", col.String())
 	}
 
 	pkColumnNumbers := getInsertPKColumns(ins.Columns, table)
@@ -505,7 +504,7 @@ func getInsertPKValues(pkColumnNumbers []int, rowList sqlparser.Values, table *s
 		for j := 0; j < len(rowList); j++ {
 			row := rowList[j]
 			if columnNumber >= len(row) {
-				return nil, errors.New("column count doesn't match value count")
+				return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "column count doesn't match value count")
 			}
 			node := row[columnNumber]
 			if !sqlparser.IsNull(node) && !sqlparser.IsValue(node) {

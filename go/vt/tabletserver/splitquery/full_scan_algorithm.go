@@ -3,9 +3,11 @@ package splitquery
 import (
 	"fmt"
 
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/tabletserver/engines/schema"
 	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
+	"github.com/youtube/vitess/go/vt/vterrors"
 )
 
 // FullScanAlgorithm implements the SplitAlgorithmInterface and represents the full-scan algorithm
@@ -48,7 +50,7 @@ func NewFullScanAlgorithm(
 	splitParams *SplitParams, sqlExecuter SQLExecuter) (*FullScanAlgorithm, error) {
 
 	if !splitParams.areSplitColumnsPrimaryKey() {
-		return nil, fmt.Errorf("Using the FULL_SCAN algorithm requires split columns to be"+
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Using the FULL_SCAN algorithm requires split columns to be"+
 			" the primary key. Got: %+v", splitParams)
 	}
 	result := &FullScanAlgorithm{
