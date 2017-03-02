@@ -124,9 +124,12 @@ public class ConnectionProperties {
         this.characterEncodingAsString = this.characterEncoding.getValueAsString();
     }
 
+    /**
+     * Attempt to use the encoding, and bail out if it can't be used
+     * @throws SQLException if exception occurs while attempting to use the encoding
+     */
     private void checkConfiguredEncodingSupport() throws SQLException {
         if (characterEncodingAsString != null) {
-            // Attempt to use the encoding, and bail out if it can't be used
             try {
                 String testString = "abc";
                 StringUtils.getBytes(testString, characterEncodingAsString);
@@ -140,7 +143,7 @@ public class ConnectionProperties {
         return new ConnectionProperties().exposeAsDriverPropertyInfoInternal(info, slotsToReserve);
     }
 
-    protected DriverPropertyInfo[] exposeAsDriverPropertyInfoInternal(Properties info, int slotsToReserve) throws SQLException {
+    private DriverPropertyInfo[] exposeAsDriverPropertyInfoInternal(Properties info, int slotsToReserve) throws SQLException {
         initializeProperties(info);
         int numProperties = PROPERTY_LIST.size();
         int listSize = numProperties + slotsToReserve;

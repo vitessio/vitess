@@ -359,7 +359,6 @@ public class StringUtils {
      */
     public static int findStartOfStatement(String sql) {
         int statementStartPos = 0;
-
         if (StringUtils.startsWithIgnoreCaseAndWs(sql, "/*")) {
             statementStartPos = sql.indexOf("*/");
 
@@ -379,13 +378,11 @@ public class StringUtils {
                 }
             }
         }
-
         return statementStartPos;
     }
 
     public static String toString(byte[] value, int offset, int length, String encoding) throws UnsupportedEncodingException {
         Charset cs = findCharset(encoding);
-
         return cs.decode(ByteBuffer.wrap(value, offset, length)).toString();
     }
 
@@ -403,7 +400,6 @@ public class StringUtils {
         } catch (UnsupportedEncodingException e) {
             // can't happen, emulating new String(byte[])
         }
-
         return null;
     }
 
@@ -415,7 +411,6 @@ public class StringUtils {
         } catch (UnsupportedEncodingException e) {
             // can't happen, emulating new String(byte[])
         }
-
         return null;
     }
 
@@ -425,21 +420,17 @@ public class StringUtils {
 
     public static byte[] getBytes(String value, int offset, int length, String encoding) throws UnsupportedEncodingException {
         Charset cs = findCharset(encoding);
-
         ByteBuffer buf = cs.encode(CharBuffer.wrap(value.toCharArray(), offset, length));
-
         // can't simply .array() this to get the bytes especially with variable-length charsets the buffer is sometimes larger than the actual encoded data
         int encodedLen = buf.limit();
         byte[] asBytes = new byte[encodedLen];
         buf.get(asBytes, 0, encodedLen);
-
         return asBytes;
     }
 
     private static Charset findCharset(String alias) throws UnsupportedEncodingException {
         try {
             Charset cs = charsetsByAlias.get(alias);
-
             if (cs == null) {
                 cs = Charset.forName(alias);
                 Charset oldCs = charsetsByAlias.putIfAbsent(alias, cs);
@@ -448,9 +439,7 @@ public class StringUtils {
                     cs = oldCs;
                 }
             }
-
             return cs;
-
             // We re-throw these runtimes for compatibility with java.io
         } catch (IllegalArgumentException iae) {
             throw new UnsupportedEncodingException(alias);

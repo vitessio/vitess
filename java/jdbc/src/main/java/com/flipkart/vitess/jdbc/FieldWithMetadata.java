@@ -422,7 +422,7 @@ public class FieldWithMetadata {
         return javaType;
     }
 
-    public Query.Type getVitessType() {
+    private Query.Type getVitessType() {
         return vitessType;
     }
 
@@ -430,7 +430,7 @@ public class FieldWithMetadata {
         return field.getTypeValue();
     }
 
-    public boolean isImplicitTemporaryTable() {
+    boolean isImplicitTemporaryTable() {
         if (!connection.isIncludeAllFields()) {
             return false;
         }
