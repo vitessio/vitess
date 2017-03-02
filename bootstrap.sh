@@ -137,8 +137,6 @@ gotools=" \
        honnef.co/go/unused/cmd/unused \
 "
 
-# Tools for uploading code coverage to coveralls.io (used by Travis CI).
-gotools+=" github.com/modocache/gover github.com/mattn/goveralls"
 # The cover tool needs to be installed into the Go toolchain, so it will fail
 # if Go is installed somewhere that requires root access.
 source tools/shell_functions.inc
