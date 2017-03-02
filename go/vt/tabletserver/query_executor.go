@@ -300,6 +300,7 @@ func (qre *QueryExecutor) execDDL() (*sqltypes.Result, error) {
 		if err != nil {
 			return nil, err
 		}
+		defer conn.Recycle()
 		result, err := qre.execSQL(conn, qre.query, false)
 		if err != nil {
 			return nil, err
