@@ -64,7 +64,7 @@ def run_test_config():
           '-e', environment_config['application_type'], '-n', name]
       if 'params' in test:
         test_args += ['-t', ':'.join(
-            ['%s=%s' % (k, v) for (k, v) in test['params'].iteritems()])]
+            '%s=%s' % (k, v) for (k, v) in test['params'].iteritems())]
       testlog = '/tmp/testlogs/%s_%s.log' % (keytar_args.timestamp, test_name)
       logging.info('Saving log to %s', testlog)
       test_results[test_name] = 'RUNNING'

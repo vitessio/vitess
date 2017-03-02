@@ -48,7 +48,7 @@ class TestKeytarWeb(unittest.TestCase):
 
   @classmethod
   def tearDownClass(cls):
-    os.killpg(cls.flask_process.pid, signal.SIGKILL)
+    os.killpg(cls.flask_process.pid, signal.SIGTERM)
     cls.driver.quit()
 
   def _wait_for_complete_status(self, timeout_s=180):

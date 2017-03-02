@@ -191,13 +191,12 @@ def process_config(config):
 if __name__ == '__main__':
   logging.getLogger().setLevel(logging.INFO)
   parser = argparse.ArgumentParser(description='Run keytar')
-  parser.add_argument('--config_file', help='Keytar config file')
+  parser.add_argument('--config_file', help='Keytar config file', required=True)
   parser.add_argument('--key', help='Key', default=None)
   parser.add_argument('--port', help='Port', default=8080, type=int)
   keytar_args = parser.parse_args()
-  if keytar_args.config_file:
-    with open(keytar_args.config_file, 'r') as yaml_file:
-      yaml_config = yaml_file.read()
+  with open(keytar_args.config_file, 'r') as yaml_file:
+    yaml_config = yaml_file.read()
   if not yaml_config:
     raise ValueError('No valid yaml config!')
   process_config(yaml.load(yaml_config))
