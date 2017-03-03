@@ -490,6 +490,27 @@ func (m *Target) String() string            { return proto.CompactTextString(m) 
 func (*Target) ProtoMessage()               {}
 func (*Target) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{0} }
 
+func (m *Target) GetKeyspace() string {
+	if m != nil {
+		return m.Keyspace
+	}
+	return ""
+}
+
+func (m *Target) GetShard() string {
+	if m != nil {
+		return m.Shard
+	}
+	return ""
+}
+
+func (m *Target) GetTabletType() topodata.TabletType {
+	if m != nil {
+		return m.TabletType
+	}
+	return topodata.TabletType_UNKNOWN
+}
+
 // VTGateCallerID is sent by VTGate to VTTablet to describe the
 // caller. If possible, this information is secure. For instance,
 // if using unique certificates that guarantee that VTGate->VTTablet
@@ -506,6 +527,13 @@ func (m *VTGateCallerID) Reset()                    { *m = VTGateCallerID{} }
 func (m *VTGateCallerID) String() string            { return proto.CompactTextString(m) }
 func (*VTGateCallerID) ProtoMessage()               {}
 func (*VTGateCallerID) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{1} }
+
+func (m *VTGateCallerID) GetUsername() string {
+	if m != nil {
+		return m.Username
+	}
+	return ""
+}
 
 // EventToken is a structure that describes a point in time in a
 // replication stream on one shard. The most recent known replication
@@ -527,6 +555,27 @@ func (m *EventToken) String() string            { return proto.CompactTextString
 func (*EventToken) ProtoMessage()               {}
 func (*EventToken) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{2} }
 
+func (m *EventToken) GetTimestamp() int64 {
+	if m != nil {
+		return m.Timestamp
+	}
+	return 0
+}
+
+func (m *EventToken) GetShard() string {
+	if m != nil {
+		return m.Shard
+	}
+	return ""
+}
+
+func (m *EventToken) GetPosition() string {
+	if m != nil {
+		return m.Position
+	}
+	return ""
+}
+
 // Value represents a typed value.
 type Value struct {
 	Type  Type   `protobuf:"varint,1,opt,name=type,enum=query.Type" json:"type,omitempty"`
@@ -537,6 +586,20 @@ func (m *Value) Reset()                    { *m = Value{} }
 func (m *Value) String() string            { return proto.CompactTextString(m) }
 func (*Value) ProtoMessage()               {}
 func (*Value) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{3} }
+
+func (m *Value) GetType() Type {
+	if m != nil {
+		return m.Type
+	}
+	return Type_NULL_TYPE
+}
+
+func (m *Value) GetValue() []byte {
+	if m != nil {
+		return m.Value
+	}
+	return nil
+}
 
 // BindVariable represents a single bind variable in a Query.
 type BindVariable struct {
@@ -550,6 +613,20 @@ func (m *BindVariable) Reset()                    { *m = BindVariable{} }
 func (m *BindVariable) String() string            { return proto.CompactTextString(m) }
 func (*BindVariable) ProtoMessage()               {}
 func (*BindVariable) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{4} }
+
+func (m *BindVariable) GetType() Type {
+	if m != nil {
+		return m.Type
+	}
+	return Type_NULL_TYPE
+}
+
+func (m *BindVariable) GetValue() []byte {
+	if m != nil {
+		return m.Value
+	}
+	return nil
+}
 
 func (m *BindVariable) GetValues() []*Value {
 	if m != nil {
@@ -570,6 +647,13 @@ func (m *BoundQuery) Reset()                    { *m = BoundQuery{} }
 func (m *BoundQuery) String() string            { return proto.CompactTextString(m) }
 func (*BoundQuery) ProtoMessage()               {}
 func (*BoundQuery) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{5} }
+
+func (m *BoundQuery) GetSql() string {
+	if m != nil {
+		return m.Sql
+	}
+	return ""
+}
 
 func (m *BoundQuery) GetBindVariables() map[string]*BindVariable {
 	if m != nil {
@@ -597,11 +681,25 @@ func (m *ExecuteOptions) String() string            { return proto.CompactTextSt
 func (*ExecuteOptions) ProtoMessage()               {}
 func (*ExecuteOptions) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{6} }
 
+func (m *ExecuteOptions) GetIncludeEventToken() bool {
+	if m != nil {
+		return m.IncludeEventToken
+	}
+	return false
+}
+
 func (m *ExecuteOptions) GetCompareEventToken() *EventToken {
 	if m != nil {
 		return m.CompareEventToken
 	}
 	return nil
+}
+
+func (m *ExecuteOptions) GetIncludedFields() ExecuteOptions_IncludedFields {
+	if m != nil {
+		return m.IncludedFields
+	}
+	return ExecuteOptions_TYPE_AND_NAME
 }
 
 // Field describes a single column returned by a query
@@ -632,6 +730,76 @@ func (m *Field) String() string            { return proto.CompactTextString(m) }
 func (*Field) ProtoMessage()               {}
 func (*Field) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{7} }
 
+func (m *Field) GetName() string {
+	if m != nil {
+		return m.Name
+	}
+	return ""
+}
+
+func (m *Field) GetType() Type {
+	if m != nil {
+		return m.Type
+	}
+	return Type_NULL_TYPE
+}
+
+func (m *Field) GetTable() string {
+	if m != nil {
+		return m.Table
+	}
+	return ""
+}
+
+func (m *Field) GetOrgTable() string {
+	if m != nil {
+		return m.OrgTable
+	}
+	return ""
+}
+
+func (m *Field) GetDatabase() string {
+	if m != nil {
+		return m.Database
+	}
+	return ""
+}
+
+func (m *Field) GetOrgName() string {
+	if m != nil {
+		return m.OrgName
+	}
+	return ""
+}
+
+func (m *Field) GetColumnLength() uint32 {
+	if m != nil {
+		return m.ColumnLength
+	}
+	return 0
+}
+
+func (m *Field) GetCharset() uint32 {
+	if m != nil {
+		return m.Charset
+	}
+	return 0
+}
+
+func (m *Field) GetDecimals() uint32 {
+	if m != nil {
+		return m.Decimals
+	}
+	return 0
+}
+
+func (m *Field) GetFlags() uint32 {
+	if m != nil {
+		return m.Flags
+	}
+	return 0
+}
+
 // Row is a database row.
 type Row struct {
 	// lengths contains the length of each value in values.
@@ -647,6 +815,20 @@ func (m *Row) Reset()                    { *m = Row{} }
 func (m *Row) String() string            { return proto.CompactTextString(m) }
 func (*Row) ProtoMessage()               {}
 func (*Row) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{8} }
+
+func (m *Row) GetLengths() []int64 {
+	if m != nil {
+		return m.Lengths
+	}
+	return nil
+}
+
+func (m *Row) GetValues() []byte {
+	if m != nil {
+		return m.Values
+	}
+	return nil
+}
 
 // ResultExtras contains optional out-of-band information. Usually the
 // extras are requested by adding ExecuteOptions flags.
@@ -669,6 +851,13 @@ func (m *ResultExtras) GetEventToken() *EventToken {
 		return m.EventToken
 	}
 	return nil
+}
+
+func (m *ResultExtras) GetFresher() bool {
+	if m != nil {
+		return m.Fresher
+	}
+	return false
 }
 
 // QueryResult is returned by Execute and ExecuteStream.
@@ -698,6 +887,20 @@ func (m *QueryResult) GetFields() []*Field {
 		return m.Fields
 	}
 	return nil
+}
+
+func (m *QueryResult) GetRowsAffected() uint64 {
+	if m != nil {
+		return m.RowsAffected
+	}
+	return 0
+}
+
+func (m *QueryResult) GetInsertId() uint64 {
+	if m != nil {
+		return m.InsertId
+	}
+	return 0
 }
 
 func (m *QueryResult) GetRows() []*Row {
@@ -760,6 +963,20 @@ func (m *StreamEvent_Statement) String() string            { return proto.Compac
 func (*StreamEvent_Statement) ProtoMessage()               {}
 func (*StreamEvent_Statement) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{11, 0} }
 
+func (m *StreamEvent_Statement) GetCategory() StreamEvent_Statement_Category {
+	if m != nil {
+		return m.Category
+	}
+	return StreamEvent_Statement_Error
+}
+
+func (m *StreamEvent_Statement) GetTableName() string {
+	if m != nil {
+		return m.TableName
+	}
+	return ""
+}
+
 func (m *StreamEvent_Statement) GetPrimaryKeyFields() []*Field {
 	if m != nil {
 		return m.PrimaryKeyFields
@@ -770,6 +987,13 @@ func (m *StreamEvent_Statement) GetPrimaryKeyFields() []*Field {
 func (m *StreamEvent_Statement) GetPrimaryKeyValues() []*Row {
 	if m != nil {
 		return m.PrimaryKeyValues
+	}
+	return nil
+}
+
+func (m *StreamEvent_Statement) GetSql() []byte {
+	if m != nil {
+		return m.Sql
 	}
 	return nil
 }
@@ -815,6 +1039,13 @@ func (m *ExecuteRequest) GetQuery() *BoundQuery {
 		return m.Query
 	}
 	return nil
+}
+
+func (m *ExecuteRequest) GetTransactionId() int64 {
+	if m != nil {
+		return m.TransactionId
+	}
+	return 0
 }
 
 func (m *ExecuteRequest) GetOptions() *ExecuteOptions {
@@ -912,6 +1143,20 @@ func (m *ExecuteBatchRequest) GetQueries() []*BoundQuery {
 		return m.Queries
 	}
 	return nil
+}
+
+func (m *ExecuteBatchRequest) GetAsTransaction() bool {
+	if m != nil {
+		return m.AsTransaction
+	}
+	return false
+}
+
+func (m *ExecuteBatchRequest) GetTransactionId() int64 {
+	if m != nil {
+		return m.TransactionId
+	}
+	return 0
 }
 
 func (m *ExecuteBatchRequest) GetOptions() *ExecuteOptions {
@@ -1047,6 +1292,13 @@ func (m *BeginResponse) String() string            { return proto.CompactTextStr
 func (*BeginResponse) ProtoMessage()               {}
 func (*BeginResponse) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{20} }
 
+func (m *BeginResponse) GetTransactionId() int64 {
+	if m != nil {
+		return m.TransactionId
+	}
+	return 0
+}
+
 // CommitRequest is the payload to Commit
 type CommitRequest struct {
 	EffectiveCallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=effective_caller_id,json=effectiveCallerId" json:"effective_caller_id,omitempty"`
@@ -1079,6 +1331,13 @@ func (m *CommitRequest) GetTarget() *Target {
 		return m.Target
 	}
 	return nil
+}
+
+func (m *CommitRequest) GetTransactionId() int64 {
+	if m != nil {
+		return m.TransactionId
+	}
+	return 0
 }
 
 // CommitResponse is the returned value from Commit
@@ -1122,6 +1381,13 @@ func (m *RollbackRequest) GetTarget() *Target {
 		return m.Target
 	}
 	return nil
+}
+
+func (m *RollbackRequest) GetTransactionId() int64 {
+	if m != nil {
+		return m.TransactionId
+	}
+	return 0
 }
 
 // RollbackResponse is the returned value from Rollback
@@ -1168,6 +1434,20 @@ func (m *PrepareRequest) GetTarget() *Target {
 	return nil
 }
 
+func (m *PrepareRequest) GetTransactionId() int64 {
+	if m != nil {
+		return m.TransactionId
+	}
+	return 0
+}
+
+func (m *PrepareRequest) GetDtid() string {
+	if m != nil {
+		return m.Dtid
+	}
+	return ""
+}
+
 // PrepareResponse is the returned value from Prepare
 type PrepareResponse struct {
 }
@@ -1209,6 +1489,13 @@ func (m *CommitPreparedRequest) GetTarget() *Target {
 		return m.Target
 	}
 	return nil
+}
+
+func (m *CommitPreparedRequest) GetDtid() string {
+	if m != nil {
+		return m.Dtid
+	}
+	return ""
 }
 
 // CommitPreparedResponse is the returned value from CommitPrepared
@@ -1255,6 +1542,20 @@ func (m *RollbackPreparedRequest) GetTarget() *Target {
 	return nil
 }
 
+func (m *RollbackPreparedRequest) GetTransactionId() int64 {
+	if m != nil {
+		return m.TransactionId
+	}
+	return 0
+}
+
+func (m *RollbackPreparedRequest) GetDtid() string {
+	if m != nil {
+		return m.Dtid
+	}
+	return ""
+}
+
 // RollbackPreparedResponse is the returned value from RollbackPrepared
 type RollbackPreparedResponse struct {
 }
@@ -1297,6 +1598,13 @@ func (m *CreateTransactionRequest) GetTarget() *Target {
 		return m.Target
 	}
 	return nil
+}
+
+func (m *CreateTransactionRequest) GetDtid() string {
+	if m != nil {
+		return m.Dtid
+	}
+	return ""
 }
 
 func (m *CreateTransactionRequest) GetParticipants() []*Target {
@@ -1350,6 +1658,20 @@ func (m *StartCommitRequest) GetTarget() *Target {
 	return nil
 }
 
+func (m *StartCommitRequest) GetTransactionId() int64 {
+	if m != nil {
+		return m.TransactionId
+	}
+	return 0
+}
+
+func (m *StartCommitRequest) GetDtid() string {
+	if m != nil {
+		return m.Dtid
+	}
+	return ""
+}
+
 // StartCommitResponse is the returned value from StartCommit
 type StartCommitResponse struct {
 }
@@ -1392,6 +1714,20 @@ func (m *SetRollbackRequest) GetTarget() *Target {
 		return m.Target
 	}
 	return nil
+}
+
+func (m *SetRollbackRequest) GetTransactionId() int64 {
+	if m != nil {
+		return m.TransactionId
+	}
+	return 0
+}
+
+func (m *SetRollbackRequest) GetDtid() string {
+	if m != nil {
+		return m.Dtid
+	}
+	return ""
 }
 
 // SetRollbackResponse is the returned value from SetRollback
@@ -1437,6 +1773,13 @@ func (m *ConcludeTransactionRequest) GetTarget() *Target {
 	return nil
 }
 
+func (m *ConcludeTransactionRequest) GetDtid() string {
+	if m != nil {
+		return m.Dtid
+	}
+	return ""
+}
+
 // ConcludeTransactionResponse is the returned value from ConcludeTransaction
 type ConcludeTransactionResponse struct {
 }
@@ -1478,6 +1821,13 @@ func (m *ReadTransactionRequest) GetTarget() *Target {
 		return m.Target
 	}
 	return nil
+}
+
+func (m *ReadTransactionRequest) GetDtid() string {
+	if m != nil {
+		return m.Dtid
+	}
+	return ""
 }
 
 // ReadTransactionResponse is the returned value from ReadTransaction
@@ -1576,6 +1926,13 @@ func (m *BeginExecuteResponse) GetResult() *QueryResult {
 	return nil
 }
 
+func (m *BeginExecuteResponse) GetTransactionId() int64 {
+	if m != nil {
+		return m.TransactionId
+	}
+	return 0
+}
+
 // BeginExecuteBatchRequest is the payload to BeginExecuteBatch
 type BeginExecuteBatchRequest struct {
 	EffectiveCallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=effective_caller_id,json=effectiveCallerId" json:"effective_caller_id,omitempty"`
@@ -1619,6 +1976,13 @@ func (m *BeginExecuteBatchRequest) GetQueries() []*BoundQuery {
 	return nil
 }
 
+func (m *BeginExecuteBatchRequest) GetAsTransaction() bool {
+	if m != nil {
+		return m.AsTransaction
+	}
+	return false
+}
+
 func (m *BeginExecuteBatchRequest) GetOptions() *ExecuteOptions {
 	if m != nil {
 		return m.Options
@@ -1656,6 +2020,13 @@ func (m *BeginExecuteBatchResponse) GetResults() []*QueryResult {
 	return nil
 }
 
+func (m *BeginExecuteBatchResponse) GetTransactionId() int64 {
+	if m != nil {
+		return m.TransactionId
+	}
+	return 0
+}
+
 // MessageStreamRequest is the request payload for MessageStream.
 type MessageStreamRequest struct {
 	EffectiveCallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=effective_caller_id,json=effectiveCallerId" json:"effective_caller_id,omitempty"`
@@ -1689,6 +2060,13 @@ func (m *MessageStreamRequest) GetTarget() *Target {
 		return m.Target
 	}
 	return nil
+}
+
+func (m *MessageStreamRequest) GetName() string {
+	if m != nil {
+		return m.Name
+	}
+	return ""
 }
 
 // MessageStreamResponse is a response for MessageStream.
@@ -1742,6 +2120,13 @@ func (m *MessageAckRequest) GetTarget() *Target {
 		return m.Target
 	}
 	return nil
+}
+
+func (m *MessageAckRequest) GetName() string {
+	if m != nil {
+		return m.Name
+	}
+	return ""
 }
 
 func (m *MessageAckRequest) GetIds() []*Value {
@@ -1818,6 +2203,34 @@ func (m *SplitQueryRequest) GetQuery() *BoundQuery {
 	return nil
 }
 
+func (m *SplitQueryRequest) GetSplitColumn() []string {
+	if m != nil {
+		return m.SplitColumn
+	}
+	return nil
+}
+
+func (m *SplitQueryRequest) GetSplitCount() int64 {
+	if m != nil {
+		return m.SplitCount
+	}
+	return 0
+}
+
+func (m *SplitQueryRequest) GetNumRowsPerQueryPart() int64 {
+	if m != nil {
+		return m.NumRowsPerQueryPart
+	}
+	return 0
+}
+
+func (m *SplitQueryRequest) GetAlgorithm() SplitQueryRequest_Algorithm {
+	if m != nil {
+		return m.Algorithm
+	}
+	return SplitQueryRequest_EQUAL_SPLITS
+}
+
 // QuerySplit represents one query to execute on the tablet
 type QuerySplit struct {
 	// query is the query to execute
@@ -1836,6 +2249,13 @@ func (m *QuerySplit) GetQuery() *BoundQuery {
 		return m.Query
 	}
 	return nil
+}
+
+func (m *QuerySplit) GetRowCount() int64 {
+	if m != nil {
+		return m.RowCount
+	}
+	return 0
 }
 
 // SplitQueryResponse is returned by SplitQuery and represents all the queries
@@ -1901,6 +2321,48 @@ func (m *RealtimeStats) String() string            { return proto.CompactTextStr
 func (*RealtimeStats) ProtoMessage()               {}
 func (*RealtimeStats) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{53} }
 
+func (m *RealtimeStats) GetHealthError() string {
+	if m != nil {
+		return m.HealthError
+	}
+	return ""
+}
+
+func (m *RealtimeStats) GetSecondsBehindMaster() uint32 {
+	if m != nil {
+		return m.SecondsBehindMaster
+	}
+	return 0
+}
+
+func (m *RealtimeStats) GetBinlogPlayersCount() int32 {
+	if m != nil {
+		return m.BinlogPlayersCount
+	}
+	return 0
+}
+
+func (m *RealtimeStats) GetSecondsBehindMasterFilteredReplication() int64 {
+	if m != nil {
+		return m.SecondsBehindMasterFilteredReplication
+	}
+	return 0
+}
+
+func (m *RealtimeStats) GetCpuUsage() float64 {
+	if m != nil {
+		return m.CpuUsage
+	}
+	return 0
+}
+
+func (m *RealtimeStats) GetQps() float64 {
+	if m != nil {
+		return m.Qps
+	}
+	return 0
+}
+
 // StreamHealthResponse is streamed by StreamHealth on a regular basis
 type StreamHealthResponse struct {
 	// target is the current server type. Only queries with that exact Target
@@ -1930,6 +2392,20 @@ func (m *StreamHealthResponse) GetTarget() *Target {
 		return m.Target
 	}
 	return nil
+}
+
+func (m *StreamHealthResponse) GetServing() bool {
+	if m != nil {
+		return m.Serving
+	}
+	return false
+}
+
+func (m *StreamHealthResponse) GetTabletExternallyReparentedTimestamp() int64 {
+	if m != nil {
+		return m.TabletExternallyReparentedTimestamp
+	}
+	return 0
 }
 
 func (m *StreamHealthResponse) GetRealtimeStats() *RealtimeStats {
@@ -1980,6 +2456,20 @@ func (m *UpdateStreamRequest) GetTarget() *Target {
 	return nil
 }
 
+func (m *UpdateStreamRequest) GetPosition() string {
+	if m != nil {
+		return m.Position
+	}
+	return ""
+}
+
+func (m *UpdateStreamRequest) GetTimestamp() int64 {
+	if m != nil {
+		return m.Timestamp
+	}
+	return 0
+}
+
 // UpdateStreamResponse is returned by UpdateStream
 type UpdateStreamResponse struct {
 	Event *StreamEvent `protobuf:"bytes,1,opt,name=event" json:"event,omitempty"`
@@ -2009,6 +2499,27 @@ func (m *TransactionMetadata) Reset()                    { *m = TransactionMetad
 func (m *TransactionMetadata) String() string            { return proto.CompactTextString(m) }
 func (*TransactionMetadata) ProtoMessage()               {}
 func (*TransactionMetadata) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{57} }
+
+func (m *TransactionMetadata) GetDtid() string {
+	if m != nil {
+		return m.Dtid
+	}
+	return ""
+}
+
+func (m *TransactionMetadata) GetState() TransactionState {
+	if m != nil {
+		return m.State
+	}
+	return TransactionState_UNKNOWN
+}
+
+func (m *TransactionMetadata) GetTimeCreated() int64 {
+	if m != nil {
+		return m.TimeCreated
+	}
+	return 0
+}
 
 func (m *TransactionMetadata) GetParticipants() []*Target {
 	if m != nil {

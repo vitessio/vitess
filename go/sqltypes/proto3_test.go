@@ -8,10 +8,8 @@ import (
 	"reflect"
 	"testing"
 
-	"errors"
-
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
-	"github.com/youtube/vitess/go/vt/proto/vtrpc"
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 	"github.com/youtube/vitess/go/vt/vterrors"
 )
 
@@ -244,7 +242,7 @@ func TestQueryReponses(t *testing.T) {
 			QueryError: nil,
 		}, {
 			QueryResult: nil,
-			QueryError:  vterrors.FromError(vtrpc.ErrorCode_DEADLINE_EXCEEDED, errors.New("deadline exceeded")),
+			QueryError:  vterrors.New(vtrpcpb.Code_DEADLINE_EXCEEDED, "deadline exceeded"),
 		},
 	}
 
@@ -286,9 +284,10 @@ func TestQueryReponses(t *testing.T) {
 				},
 			},
 		}, {
-			Error: &vtrpc.RPCError{
-				Code:    vtrpc.ErrorCode_DEADLINE_EXCEEDED,
-				Message: "deadline exceeded",
+			Error: &vtrpcpb.RPCError{
+				LegacyCode: vtrpcpb.LegacyErrorCode_DEADLINE_EXCEEDED_LEGACY,
+				Message:    "deadline exceeded",
+				Code:       vtrpcpb.Code_DEADLINE_EXCEEDED,
 			},
 			Result: nil,
 		},

@@ -397,28 +397,28 @@ func cellLength(data []byte, pos int, tmc *TableMapColumn) (int, error) {
 
 // FIXME(alainjobart) are the ints signed? It seems Tiny is unsigned,
 // but the others are.
-func cellData(data []byte, pos int, tmc *TableMapColumn) (string, int) {
+func cellData(data []byte, pos int, tmc *TableMapColumn) (string, int, error) {
 	switch tmc.Type {
 	case TypeTiny:
-		return fmt.Sprintf("%v", data[pos]), 1
+		return fmt.Sprintf("%v", data[pos]), 1, nil
 	case TypeShort, TypeYear:
 		val := binary.LittleEndian.Uint16(data[pos : pos+2])
-		return fmt.Sprintf("%v", val), 2
+		return fmt.Sprintf("%v", val), 2, nil
 	case TypeLong, TypeInt24:
 		val := binary.LittleEndian.Uint32(data[pos : pos+4])
-		return fmt.Sprintf("%v", val), 4
+		return fmt.Sprintf("%v", val), 4, nil
 	case TypeLongLong:
 		val := binary.LittleEndian.Uint64(data[pos : pos+8])
-		return fmt.Sprintf("%v", val), 8
+		return fmt.Sprintf("%v", val), 8, nil
 	case TypeTimestamp, TypeDate, TypeTime, TypeDateTime:
-		panic(fmt.Errorf("NYI"))
+		panic(fmt.Errorf("Not yet implemented type %v", tmc.Type))
 	case TypeVarchar:
 		// Varchar length is two bytes here.
 		l := int(uint64(data[pos]) |
 			uint64(data[pos+1])<<8)
-		return string(data[pos+2 : pos+2+l]), 2 + l
+		return string(data[pos+2 : pos+2+l]), 2 + l, nil
 	default:
-		panic(fmt.Errorf("Unsupported type %v", tmc.Type))
+		return "", 0, fmt.Errorf("Unsupported type %v", tmc.Type)
 	}
 }
 
@@ -554,8 +554,7 @@ func (ev binlogEvent) Rows(f BinlogFormat, tm *TableMap) (Rows, error) {
 }
 
 // StringValues is a helper method to return the string value of all columns in a row in a Row.
-// Will panic if anything goes wrong, this is meant for tests for now.
-func (rs *Rows) StringValues(tm *TableMap, rowIndex int) []string {
+func (rs *Rows) StringValues(tm *TableMap, rowIndex int) ([]string, error) {
 	var result []string
 
 	valueIndex := 0
@@ -574,18 +573,20 @@ func (rs *Rows) StringValues(tm *TableMap, rowIndex int) []string {
 		}
 
 		// We have real data
-		value, l := cellData(data, pos, &tm.Columns[c])
+		value, l, err := cellData(data, pos, &tm.Columns[c])
+		if err != nil {
+			return nil, err
+		}
 		result = append(result, value)
 		pos += l
 		valueIndex++
 	}
 
-	return result
+	return result, nil
 }
 
 // StringIdentifies is a helper method to return the string identify of all columns in a row in a Row.
-// Will panic if anything goes wrong, this is meant for tests for now.
-func (rs *Rows) StringIdentifies(tm *TableMap, rowIndex int) []string {
+func (rs *Rows) StringIdentifies(tm *TableMap, rowIndex int) ([]string, error) {
 	var result []string
 
 	valueIndex := 0
@@ -604,11 +605,14 @@ func (rs *Rows) StringIdentifies(tm *TableMap, rowIndex int) []string {
 		}
 
 		// We have real data
-		value, l := cellData(data, pos, &tm.Columns[c])
+		value, l, err := cellData(data, pos, &tm.Columns[c])
+		if err != nil {
+			return nil, err
+		}
 		result = append(result, value)
 		pos += l
 		valueIndex++
 	}
 
-	return result
+	return result, nil
 }

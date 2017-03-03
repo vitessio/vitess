@@ -43,21 +43,24 @@ var (
 	appPoolSize    = flag.Int("app_pool_size", 40, "Size of the connection pool for app connections")
 	appIdleTimeout = flag.Duration("app_idle_timeout", time.Minute, "Idle timeout for app connections")
 
-	socketFile = flag.String("mysqlctl_socket", "", "socket file to use for remote mysqlctl actions (empty for local actions)")
+	socketFile        = flag.String("mysqlctl_socket", "", "socket file to use for remote mysqlctl actions (empty for local actions)")
+	mycnfTemplateFile = flag.String("mysqlctl_mycnf_template", "", "template file to use for generating the my.cnf file during server init")
 
 	// masterConnectRetry is used in 'SET MASTER' commands
 	masterConnectRetry = flag.Duration("master_connect_retry", 10*time.Second, "how long to wait in between slave -> connection attempts. Only precise to the second.")
+
+	dbaMysqlStats      = stats.NewTimings("MysqlDba")
+	allprivsMysqlStats = stats.NewTimings("MysqlAllPrivs")
+	appMysqlStats      = stats.NewTimings("MysqlApp")
 )
 
 // Mysqld is the object that represents a mysqld daemon running on this server.
 type Mysqld struct {
-	config             *Mycnf
-	dbcfgs             *dbconfigs.DBConfigs
-	dbaPool            *dbconnpool.ConnectionPool
-	appPool            *dbconnpool.ConnectionPool
-	dbaMysqlStats      *stats.Timings
-	allprivsMysqlStats *stats.Timings
-	tabletDir          string
+	config    *Mycnf
+	dbcfgs    *dbconfigs.DBConfigs
+	dbaPool   *dbconnpool.ConnectionPool
+	appPool   *dbconnpool.ConnectionPool
+	tabletDir string
 
 	// mutex protects the fields below.
 	mutex         sync.Mutex
@@ -68,7 +71,7 @@ type Mysqld struct {
 
 // NewMysqld creates a Mysqld object based on the provided configuration
 // and connection parameters.
-func NewMysqld(config *Mycnf, dbcfgs *dbconfigs.DBConfigs, dbconfigsFlags dbconfigs.DBConfigFlag, enablePublishStats bool) *Mysqld {
+func NewMysqld(config *Mycnf, dbcfgs *dbconfigs.DBConfigs, dbconfigsFlags dbconfigs.DBConfigFlag) *Mysqld {
 	result := &Mysqld{
 		config:    config,
 		dbcfgs:    dbcfgs,
@@ -77,36 +80,13 @@ func NewMysqld(config *Mycnf, dbcfgs *dbconfigs.DBConfigs, dbconfigsFlags dbconf
 
 	// Create and open the connection pool for dba access.
 	if dbconfigs.DbaConfig&dbconfigsFlags != 0 {
-		dbaMysqlStatsName := ""
-		dbaPoolName := ""
-		if enablePublishStats {
-			dbaMysqlStatsName = "MysqlDba"
-			dbaPoolName = "DbaConnPool"
-		}
-		result.dbaMysqlStats = stats.NewTimings(dbaMysqlStatsName)
-		result.dbaPool = dbconnpool.NewConnectionPool(dbaPoolName, *dbaPoolSize, *dbaIdleTimeout)
-		result.dbaPool.Open(dbconnpool.DBConnectionCreator(&dbcfgs.Dba, result.dbaMysqlStats))
-	}
-
-	// Configure the stats for the AllPrivs connections.
-	if dbconfigs.AllPrivsConfig&dbconfigsFlags != 0 {
-		allprivsMysqlStatsName := ""
-		if enablePublishStats {
-			allprivsMysqlStatsName = "MysqlAllPrivs"
-		}
-		result.allprivsMysqlStats = stats.NewTimings(allprivsMysqlStatsName)
+		result.dbaPool = dbconnpool.NewConnectionPool("DbaConnPool", *dbaPoolSize, *dbaIdleTimeout)
+		result.dbaPool.Open(dbconnpool.DBConnectionCreator(&dbcfgs.Dba, dbaMysqlStats))
 	}
 
 	// Create and open the connection pool for app access.
 	if dbconfigs.AppConfig&dbconfigsFlags != 0 {
-		appMysqlStatsName := ""
-		appPoolName := ""
-		if enablePublishStats {
-			appMysqlStatsName = "MysqlApp"
-			appPoolName = "AppConnPool"
-		}
-		appMysqlStats := stats.NewTimings(appMysqlStatsName)
-		result.appPool = dbconnpool.NewConnectionPool(appPoolName, *appPoolSize, *appIdleTimeout)
+		result.appPool = dbconnpool.NewConnectionPool("AppConnPool", *appPoolSize, *appIdleTimeout)
 		result.appPool.Open(dbconnpool.DBConnectionCreator(&dbcfgs.App, appMysqlStats))
 	}
 
@@ -582,19 +562,8 @@ func (mysqld *Mysqld) initConfig(root string) error {
 
 	switch hr := hook.NewSimpleHook("make_mycnf").Execute(); hr.ExitStatus {
 	case hook.HOOK_DOES_NOT_EXIST:
-		log.Infof("make_mycnf hook doesn't exist, reading default template files")
-		cnfTemplatePaths := []string{
-			path.Join(root, "config/mycnf/default.cnf"),
-			path.Join(root, "config/mycnf/master.cnf"),
-			path.Join(root, "config/mycnf/replica.cnf"),
-		}
-
-		if extraCnf := os.Getenv("EXTRA_MY_CNF"); extraCnf != "" {
-			parts := strings.Split(extraCnf, ":")
-			cnfTemplatePaths = append(cnfTemplatePaths, parts...)
-		}
-
-		configData, err = mysqld.config.makeMycnf(cnfTemplatePaths)
+		log.Infof("make_mycnf hook doesn't exist, reading template files")
+		configData, err = mysqld.config.makeMycnf(getMycnfTemplates(root))
 	case hook.HOOK_SUCCESS:
 		configData, err = mysqld.config.fillMycnfTemplate(hr.Stdout)
 	default:
@@ -605,6 +574,25 @@ func (mysqld *Mysqld) initConfig(root string) error {
 	}
 
 	return ioutil.WriteFile(mysqld.config.path, []byte(configData), 0664)
+}
+
+func getMycnfTemplates(root string) []string {
+	if *mycnfTemplateFile != "" {
+		return []string{*mycnfTemplateFile}
+	}
+
+	cnfTemplatePaths := []string{
+		path.Join(root, "config/mycnf/default.cnf"),
+		path.Join(root, "config/mycnf/master.cnf"),
+		path.Join(root, "config/mycnf/replica.cnf"),
+	}
+
+	if extraCnf := os.Getenv("EXTRA_MY_CNF"); extraCnf != "" {
+		parts := strings.Split(extraCnf, ":")
+		cnfTemplatePaths = append(cnfTemplatePaths, parts...)
+	}
+
+	return cnfTemplatePaths
 }
 
 // ReinitConfig updates the config file as if Mysqld is initializing. At the
@@ -799,12 +787,12 @@ func (mysqld *Mysqld) GetAppConnection(ctx context.Context) (dbconnpool.PoolConn
 
 // GetDbaConnection creates a new DBConnection.
 func (mysqld *Mysqld) GetDbaConnection() (*dbconnpool.DBConnection, error) {
-	return dbconnpool.NewDBConnection(&mysqld.dbcfgs.Dba, mysqld.dbaMysqlStats)
+	return dbconnpool.NewDBConnection(&mysqld.dbcfgs.Dba, dbaMysqlStats)
 }
 
 // GetAllPrivsConnection creates a new DBConnection.
 func (mysqld *Mysqld) GetAllPrivsConnection() (*dbconnpool.DBConnection, error) {
-	return dbconnpool.NewDBConnection(&mysqld.dbcfgs.AllPrivs, mysqld.allprivsMysqlStats)
+	return dbconnpool.NewDBConnection(&mysqld.dbcfgs.AllPrivs, allprivsMysqlStats)
 }
 
 // Close will close this instance of Mysqld. It will wait for all dba

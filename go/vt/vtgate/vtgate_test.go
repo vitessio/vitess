@@ -18,10 +18,8 @@ import (
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 	"github.com/youtube/vitess/go/vt/tabletserver/sandboxconn"
-	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vterrors"
-	"github.com/youtube/vitess/go/vt/vtgate/gateway"
 	"golang.org/x/net/context"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
@@ -288,7 +286,7 @@ func TestVTGateExecuteWithKeyspace(t *testing.T) {
 		nil,
 		false,
 		nil)
-	want := "keyspace aa not found in vschema, vtgate: "
+	want := "vtgate: : keyspace aa not found in vschema"
 	if err == nil || err.Error() != want {
 		t.Errorf("Execute: %v, want %s", err, want)
 	}
@@ -1190,53 +1188,6 @@ func TestVTGateSplitQueryUnsharded(t *testing.T) {
 	}
 }
 
-func TestIsErrorCausedByVTGate(t *testing.T) {
-	unknownError := fmt.Errorf("unknown error")
-	serverError := &tabletconn.ServerError{
-		ServerCode: vtrpcpb.ErrorCode_QUERY_NOT_SERVED,
-		Err:        "vttablet: retry: error message",
-	}
-	shardConnUnknownErr := &gateway.ShardError{Err: unknownError}
-	shardConnServerErr := &gateway.ShardError{Err: serverError}
-	shardConnCancelledErr := &gateway.ShardError{Err: context.Canceled}
-	scatterConnErrAllUnknownErrs := &ScatterConnError{
-		Errs: []error{unknownError, unknownError, unknownError},
-	}
-	scatterConnErrMixed := &ScatterConnError{
-		Errs: []error{unknownError, shardConnServerErr, shardConnCancelledErr},
-	}
-	scatterConnErrAllNonVTGateErrs := &ScatterConnError{
-		Errs: []error{shardConnServerErr, shardConnServerErr, shardConnCancelledErr},
-	}
-
-	inputToWant := map[error]bool{
-		unknownError:     true,
-		serverError:      false,
-		context.Canceled: false,
-		// OperationalErrors that are not tabletconn.Cancelled might be from VTGate
-		tabletconn.ConnClosed: true,
-		// Errors wrapped in ShardConnError should get unwrapped
-		shardConnUnknownErr:   true,
-		shardConnServerErr:    false,
-		shardConnCancelledErr: false,
-		// We consider a ScatterConnErr with all unknown errors to be from VTGate
-		scatterConnErrAllUnknownErrs: true,
-		// We consider a ScatterConnErr with a mix of errors to be from VTGate
-		scatterConnErrMixed: true,
-		// If every error in ScatterConnErr list is caused by external components, we shouldn't
-		// consider the error to be from VTGate
-		scatterConnErrAllNonVTGateErrs: false,
-	}
-
-	for input, want := range inputToWant {
-		got := isErrorCausedByVTGate(input)
-		if got != want {
-			t.Errorf("isErrorCausedByVTGate(%v) => %v, want %v",
-				input, got, want)
-		}
-	}
-}
-
 // Functions for testing
 // keyspace_id and 'filtered_replication_unfriendly'
 // annotations.
@@ -1602,7 +1553,7 @@ func verifyBoundQueriesAnnotatedAsUnfriendly(t *testing.T, expectedNumQueries in
 	}
 }
 
-func testErrorPropagation(t *testing.T, sbcs []*sandboxconn.SandboxConn, before func(sbc *sandboxconn.SandboxConn), after func(sbc *sandboxconn.SandboxConn), expected vtrpcpb.ErrorCode) {
+func testErrorPropagation(t *testing.T, sbcs []*sandboxconn.SandboxConn, before func(sbc *sandboxconn.SandboxConn), after func(sbc *sandboxconn.SandboxConn), expected vtrpcpb.Code) {
 
 	// Execute
 	for _, sbc := range sbcs {
@@ -1619,7 +1570,7 @@ func testErrorPropagation(t *testing.T, sbcs []*sandboxconn.SandboxConn, before 
 	if err == nil {
 		t.Errorf("error %v not propagated for Execute", expected)
 	} else {
-		ec := vterrors.RecoverVtErrorCode(err)
+		ec := vterrors.Code(err)
 		if ec != expected {
 			t.Errorf("unexpected error, got %v want %v: %v", ec, expected, err)
 		}
@@ -1644,7 +1595,7 @@ func testErrorPropagation(t *testing.T, sbcs []*sandboxconn.SandboxConn, before 
 	if err == nil {
 		t.Errorf("error %v not propagated for ExecuteShards", expected)
 	} else {
-		ec := vterrors.RecoverVtErrorCode(err)
+		ec := vterrors.Code(err)
 		if ec != expected {
 			t.Errorf("unexpected error, got %v want %v: %v", ec, expected, err)
 		}
@@ -1669,7 +1620,7 @@ func testErrorPropagation(t *testing.T, sbcs []*sandboxconn.SandboxConn, before 
 	if err == nil {
 		t.Errorf("error %v not propagated for ExecuteKeyspaceIds", expected)
 	} else {
-		ec := vterrors.RecoverVtErrorCode(err)
+		ec := vterrors.Code(err)
 		if ec != expected {
 			t.Errorf("unexpected error, got %v want %v: %v", ec, expected, err)
 		}
@@ -1694,7 +1645,7 @@ func testErrorPropagation(t *testing.T, sbcs []*sandboxconn.SandboxConn, before 
 	if err == nil {
 		t.Errorf("error %v not propagated for ExecuteKeyRanges", expected)
 	} else {
-		ec := vterrors.RecoverVtErrorCode(err)
+		ec := vterrors.Code(err)
 		if ec != expected {
 			t.Errorf("unexpected error, got %v want %v: %v", ec, expected, err)
 		}
@@ -1726,7 +1677,7 @@ func testErrorPropagation(t *testing.T, sbcs []*sandboxconn.SandboxConn, before 
 	if err == nil {
 		t.Errorf("error %v not propagated for ExecuteEntityIds", expected)
 	} else {
-		ec := vterrors.RecoverVtErrorCode(err)
+		ec := vterrors.Code(err)
 		if ec != expected {
 			t.Errorf("unexpected error, got %v want %v: %v", ec, expected, err)
 		}
@@ -1762,7 +1713,7 @@ func testErrorPropagation(t *testing.T, sbcs []*sandboxconn.SandboxConn, before 
 	if err == nil {
 		t.Errorf("error %v not propagated for ExecuteBatchShards", expected)
 	} else {
-		ec := vterrors.RecoverVtErrorCode(err)
+		ec := vterrors.Code(err)
 		if ec != expected {
 			t.Errorf("unexpected error, got %v want %v: %v", ec, expected, err)
 		}
@@ -1800,7 +1751,7 @@ func testErrorPropagation(t *testing.T, sbcs []*sandboxconn.SandboxConn, before 
 	if err == nil {
 		t.Errorf("error %v not propagated for ExecuteBatchShards", expected)
 	} else {
-		ec := vterrors.RecoverVtErrorCode(err)
+		ec := vterrors.Code(err)
 		if ec != expected {
 			t.Errorf("unexpected error, got %v want %v: %v", ec, expected, err)
 		}
@@ -1825,7 +1776,7 @@ func testErrorPropagation(t *testing.T, sbcs []*sandboxconn.SandboxConn, before 
 	if err == nil {
 		t.Errorf("error %v not propagated for StreamExecute", expected)
 	} else {
-		ec := vterrors.RecoverVtErrorCode(err)
+		ec := vterrors.Code(err)
 		if ec != expected {
 			t.Errorf("unexpected error, got %v want %v: %v", ec, expected, err)
 		}
@@ -1851,7 +1802,7 @@ func testErrorPropagation(t *testing.T, sbcs []*sandboxconn.SandboxConn, before 
 	if err == nil {
 		t.Errorf("error %v not propagated for StreamExecuteShards", expected)
 	} else {
-		ec := vterrors.RecoverVtErrorCode(err)
+		ec := vterrors.Code(err)
 		if ec != expected {
 			t.Errorf("unexpected error, got %v want %v: %v", ec, expected, err)
 		}
@@ -1877,7 +1828,7 @@ func testErrorPropagation(t *testing.T, sbcs []*sandboxconn.SandboxConn, before 
 	if err == nil {
 		t.Errorf("error %v not propagated for StreamExecuteKeyspaceIds", expected)
 	} else {
-		ec := vterrors.RecoverVtErrorCode(err)
+		ec := vterrors.Code(err)
 		if ec != expected {
 			t.Errorf("unexpected error, got %v want %v: %v", ec, expected, err)
 		}
@@ -1903,7 +1854,7 @@ func testErrorPropagation(t *testing.T, sbcs []*sandboxconn.SandboxConn, before 
 	if err == nil {
 		t.Errorf("error %v not propagated for StreamExecuteKeyRanges", expected)
 	} else {
-		ec := vterrors.RecoverVtErrorCode(err)
+		ec := vterrors.Code(err)
 		if ec != expected {
 			t.Errorf("unexpected error, got %v want %v: %v", ec, expected, err)
 		}
@@ -1933,7 +1884,7 @@ func testErrorPropagation(t *testing.T, sbcs []*sandboxconn.SandboxConn, before 
 	if err == nil {
 		t.Errorf("error %v not propagated for Commit", expected)
 	} else {
-		ec := vterrors.RecoverVtErrorCode(err)
+		ec := vterrors.Code(err)
 		if ec != expected {
 			t.Errorf("unexpected error, got %v want %v: %v", ec, expected, err)
 		}
@@ -1959,7 +1910,7 @@ func testErrorPropagation(t *testing.T, sbcs []*sandboxconn.SandboxConn, before 
 	if err == nil {
 		t.Errorf("error %v not propagated for SplitQuery", expected)
 	} else {
-		ec := vterrors.RecoverVtErrorCode(err)
+		ec := vterrors.Code(err)
 		if ec != expected {
 			t.Errorf("unexpected error, got %v want %v: %v", ec, expected, err)
 		}
@@ -1983,89 +1934,77 @@ func TestErrorPropagation(t *testing.T) {
 		sbcrdonly,
 	}
 
-	// ErrorCode_CANCELLED
 	testErrorPropagation(t, sbcs, func(sbc *sandboxconn.SandboxConn) {
-		sbc.MustFailCanceled = 20
+		sbc.MustFailCodes[vtrpcpb.Code_CANCELED] = 20
 	}, func(sbc *sandboxconn.SandboxConn) {
-		sbc.MustFailCanceled = 0
-	}, vtrpcpb.ErrorCode_CANCELLED)
+		sbc.MustFailCodes[vtrpcpb.Code_CANCELED] = 0
+	}, vtrpcpb.Code_CANCELED)
 
-	// ErrorCode_UNKNOWN_ERROR
 	testErrorPropagation(t, sbcs, func(sbc *sandboxconn.SandboxConn) {
-		sbc.MustFailUnknownError = 20
+		sbc.MustFailCodes[vtrpcpb.Code_UNKNOWN] = 20
 	}, func(sbc *sandboxconn.SandboxConn) {
-		sbc.MustFailUnknownError = 0
-	}, vtrpcpb.ErrorCode_UNKNOWN_ERROR)
+		sbc.MustFailCodes[vtrpcpb.Code_UNKNOWN] = 0
+	}, vtrpcpb.Code_UNKNOWN)
 
-	// ErrorCode_BAD_INPUT
 	testErrorPropagation(t, sbcs, func(sbc *sandboxconn.SandboxConn) {
-		sbc.MustFailServer = 20
+		sbc.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 20
 	}, func(sbc *sandboxconn.SandboxConn) {
-		sbc.MustFailServer = 0
-	}, vtrpcpb.ErrorCode_BAD_INPUT)
+		sbc.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 0
+	}, vtrpcpb.Code_INVALID_ARGUMENT)
 
-	// ErrorCode_DEADLINE_EXCEEDED
 	testErrorPropagation(t, sbcs, func(sbc *sandboxconn.SandboxConn) {
-		sbc.MustFailDeadlineExceeded = 20
+		sbc.MustFailCodes[vtrpcpb.Code_DEADLINE_EXCEEDED] = 20
 	}, func(sbc *sandboxconn.SandboxConn) {
-		sbc.MustFailDeadlineExceeded = 0
-	}, vtrpcpb.ErrorCode_DEADLINE_EXCEEDED)
+		sbc.MustFailCodes[vtrpcpb.Code_DEADLINE_EXCEEDED] = 0
+	}, vtrpcpb.Code_DEADLINE_EXCEEDED)
 
-	// ErrorCode_INTEGRITY_ERROR
 	testErrorPropagation(t, sbcs, func(sbc *sandboxconn.SandboxConn) {
-		sbc.MustFailIntegrityError = 20
+		sbc.MustFailCodes[vtrpcpb.Code_ALREADY_EXISTS] = 20
 	}, func(sbc *sandboxconn.SandboxConn) {
-		sbc.MustFailIntegrityError = 0
-	}, vtrpcpb.ErrorCode_INTEGRITY_ERROR)
+		sbc.MustFailCodes[vtrpcpb.Code_ALREADY_EXISTS] = 0
+	}, vtrpcpb.Code_ALREADY_EXISTS)
 
-	// ErrorCode_PERMISSION_DENIED
 	testErrorPropagation(t, sbcs, func(sbc *sandboxconn.SandboxConn) {
-		sbc.MustFailPermissionDenied = 20
+		sbc.MustFailCodes[vtrpcpb.Code_PERMISSION_DENIED] = 20
 	}, func(sbc *sandboxconn.SandboxConn) {
-		sbc.MustFailPermissionDenied = 0
-	}, vtrpcpb.ErrorCode_PERMISSION_DENIED)
+		sbc.MustFailCodes[vtrpcpb.Code_PERMISSION_DENIED] = 0
+	}, vtrpcpb.Code_PERMISSION_DENIED)
 
-	// ErrorCode_RESOURCE_EXHAUSTED
 	testErrorPropagation(t, sbcs, func(sbc *sandboxconn.SandboxConn) {
-		sbc.MustFailTxPool = 20
+		sbc.MustFailCodes[vtrpcpb.Code_RESOURCE_EXHAUSTED] = 20
 	}, func(sbc *sandboxconn.SandboxConn) {
-		sbc.MustFailTxPool = 0
-	}, vtrpcpb.ErrorCode_RESOURCE_EXHAUSTED)
+		sbc.MustFailCodes[vtrpcpb.Code_RESOURCE_EXHAUSTED] = 0
+	}, vtrpcpb.Code_RESOURCE_EXHAUSTED)
 
-	// ErrorCode_QUERY_NOT_SERVED
 	testErrorPropagation(t, sbcs, func(sbc *sandboxconn.SandboxConn) {
-		sbc.MustFailRetry = 20
+		sbc.MustFailCodes[vtrpcpb.Code_FAILED_PRECONDITION] = 20
 	}, func(sbc *sandboxconn.SandboxConn) {
-		sbc.MustFailRetry = 0
-	}, vtrpcpb.ErrorCode_QUERY_NOT_SERVED)
+		sbc.MustFailCodes[vtrpcpb.Code_FAILED_PRECONDITION] = 0
+	}, vtrpcpb.Code_FAILED_PRECONDITION)
 
-	// ErrorCode_NOT_IN_TX
 	testErrorPropagation(t, sbcs, func(sbc *sandboxconn.SandboxConn) {
-		sbc.MustFailNotTx = 20
+		sbc.MustFailCodes[vtrpcpb.Code_ABORTED] = 20
 	}, func(sbc *sandboxconn.SandboxConn) {
-		sbc.MustFailNotTx = 0
-	}, vtrpcpb.ErrorCode_NOT_IN_TX)
+		sbc.MustFailCodes[vtrpcpb.Code_ABORTED] = 0
+	}, vtrpcpb.Code_ABORTED)
 
-	// ErrorCode_INTERNAL_ERROR
 	testErrorPropagation(t, sbcs, func(sbc *sandboxconn.SandboxConn) {
-		sbc.MustFailFatal = 20
+		sbc.MustFailCodes[vtrpcpb.Code_INTERNAL] = 20
 	}, func(sbc *sandboxconn.SandboxConn) {
-		sbc.MustFailFatal = 0
-	}, vtrpcpb.ErrorCode_INTERNAL_ERROR)
+		sbc.MustFailCodes[vtrpcpb.Code_INTERNAL] = 0
+	}, vtrpcpb.Code_INTERNAL)
 
-	// ErrorCode_TRANSIENT_ERROR
 	testErrorPropagation(t, sbcs, func(sbc *sandboxconn.SandboxConn) {
-		sbc.MustFailTransientError = 20
+		sbc.MustFailCodes[vtrpcpb.Code_UNAVAILABLE] = 20
 	}, func(sbc *sandboxconn.SandboxConn) {
-		sbc.MustFailTransientError = 0
-	}, vtrpcpb.ErrorCode_TRANSIENT_ERROR)
+		sbc.MustFailCodes[vtrpcpb.Code_UNAVAILABLE] = 0
+	}, vtrpcpb.Code_UNAVAILABLE)
 
-	// ErrorCode_UNAUTHENTICATED
 	testErrorPropagation(t, sbcs, func(sbc *sandboxconn.SandboxConn) {
-		sbc.MustFailUnauthenticated = 20
+		sbc.MustFailCodes[vtrpcpb.Code_UNAUTHENTICATED] = 20
 	}, func(sbc *sandboxconn.SandboxConn) {
-		sbc.MustFailUnauthenticated = 0
-	}, vtrpcpb.ErrorCode_UNAUTHENTICATED)
+		sbc.MustFailCodes[vtrpcpb.Code_UNAUTHENTICATED] = 0
+	}, vtrpcpb.Code_UNAUTHENTICATED)
 }
 
 // This test makes sure that if we start a transaction and hit a critical
@@ -2077,7 +2016,7 @@ func TestErrorIssuesRollback(t *testing.T) {
 
 	// Start a transaction, send one statement.
 	// Simulate an error that should trigger a rollback:
-	// vtrpcpb.ErrorCode_NOT_IN_TX case.
+	// vtrpcpb.Code_ABORTED case.
 	session, err := rpcVTGate.Begin(context.Background(), false)
 	if err != nil {
 		t.Fatalf("cannot start a transaction: %v", err)
@@ -2096,7 +2035,7 @@ func TestErrorIssuesRollback(t *testing.T) {
 	if sbc.RollbackCount.Get() != 0 {
 		t.Errorf("want 0, got %d", sbc.RollbackCount.Get())
 	}
-	sbc.MustFailNotTx = 20
+	sbc.MustFailCodes[vtrpcpb.Code_ABORTED] = 20
 	_, err = rpcVTGate.Execute(context.Background(),
 		"select id from t1",
 		nil,
@@ -2112,7 +2051,7 @@ func TestErrorIssuesRollback(t *testing.T) {
 		t.Errorf("want 1, got %d", sbc.RollbackCount.Get())
 	}
 	sbc.RollbackCount.Set(0)
-	sbc.MustFailNotTx = 0
+	sbc.MustFailCodes[vtrpcpb.Code_ABORTED] = 0
 
 	// Start a transaction, send one statement.
 	// Simulate an error that should trigger a rollback:
@@ -2135,7 +2074,7 @@ func TestErrorIssuesRollback(t *testing.T) {
 	if sbc.RollbackCount.Get() != 0 {
 		t.Errorf("want 0, got %d", sbc.RollbackCount.Get())
 	}
-	sbc.MustFailTxPool = 20
+	sbc.MustFailCodes[vtrpcpb.Code_RESOURCE_EXHAUSTED] = 20
 	_, err = rpcVTGate.Execute(context.Background(),
 		"select id from t1",
 		nil,
@@ -2151,11 +2090,11 @@ func TestErrorIssuesRollback(t *testing.T) {
 		t.Errorf("want 1, got %d", sbc.RollbackCount.Get())
 	}
 	sbc.RollbackCount.Set(0)
-	sbc.MustFailTxPool = 0
+	sbc.MustFailCodes[vtrpcpb.Code_RESOURCE_EXHAUSTED] = 0
 
 	// Start a transaction, send one statement.
 	// Simulate an error that should *not* trigger a rollback:
-	// vtrpcpb.ErrorCode_INTEGRITY_ERROR case.
+	// vtrpcpb.Code_ALREADY_EXISTS case.
 	session, err = rpcVTGate.Begin(context.Background(), false)
 	if err != nil {
 		t.Fatalf("cannot start a transaction: %v", err)
@@ -2174,7 +2113,7 @@ func TestErrorIssuesRollback(t *testing.T) {
 	if sbc.RollbackCount.Get() != 0 {
 		t.Errorf("want 0, got %d", sbc.RollbackCount.Get())
 	}
-	sbc.MustFailIntegrityError = 20
+	sbc.MustFailCodes[vtrpcpb.Code_ALREADY_EXISTS] = 20
 	_, err = rpcVTGate.Execute(context.Background(),
 		"select id from t1",
 		nil,
@@ -2189,5 +2128,5 @@ func TestErrorIssuesRollback(t *testing.T) {
 	if sbc.RollbackCount.Get() != 0 {
 		t.Errorf("want 0, got %d", sbc.RollbackCount.Get())
 	}
-	sbc.MustFailIntegrityError = 0
+	sbc.MustFailCodes[vtrpcpb.Code_ALREADY_EXISTS] = 0
 }

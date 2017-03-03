@@ -6,6 +6,7 @@ import logging
 import os
 import re
 import subprocess
+import tempfile
 import time
 
 import sandbox
@@ -32,15 +33,24 @@ class HelmComponent(sandlet.SandletComponent):
   def __init__(self, name, sandbox_name, helm_config):
     super(HelmComponent, self).__init__(name, sandbox_name)
     self.helm_config = helm_config
+    try:
+      subprocess.check_output(['helm'], stderr=subprocess.STDOUT)
+    except OSError:
+      raise sandbox.SandboxError(
+          'Could not find helm binary. Please visit '
+          'https://github.com/kubernetes/helm to download helm.')
 
   def start(self):
     logging.info('Initializing helm.')
-    with open(os.devnull, 'w') as devnull:
-      subprocess.call(['helm', 'init'], stdout=devnull)
-      start_time = time.time()
+    try:
+      subprocess.check_output(['helm', 'init'], stderr=subprocess.STDOUT)
+    except subprocess.CalledProcessError as e:
+      raise sandbox.SandboxError('Failed to initialize helm: %s', e.output)
 
-      # helm init on a fresh cluster takes a while to be ready.
-      # Wait until 'helm list' returns cleanly.
+    # helm init on a fresh cluster takes a while to be ready.
+    # Wait until 'helm list' returns cleanly.
+    with open(os.devnull, 'w') as devnull:
+      start_time = time.time()
       while time.time() - start_time < 120:
         try:
           subprocess.check_call(['helm', 'list'], stdout=devnull,
@@ -52,12 +62,17 @@ class HelmComponent(sandlet.SandletComponent):
       else:
         raise sandbox.SandboxError(
             'Timed out waiting for helm to become ready.')
-      logging.info('Installing helm.')
-      subprocess.call(
+
+    logging.info('Installing helm.')
+    try:
+      subprocess.check_output(
           ['helm', 'install', os.path.join(os.environ['VTTOP'], 'helm/vitess'),
            '-n', self.sandbox_name, '--namespace', self.sandbox_name,
-           '--replace', '--values', self.helm_config], stdout=devnull)
-      logging.info('Finished installing helm.')
+           '--replace', '--values', self.helm_config],
+          stderr=subprocess.STDOUT)
+    except subprocess.CalledProcessError as e:
+      raise sandbox.SandboxError('Failed to install helm: %s' % e.output)
+    logging.info('Finished installing helm.')
 
   def stop(self):
     subprocess.call(['helm', 'delete', self.sandbox_name, '--purge'])
@@ -83,17 +98,23 @@ class KubernetesResource(sandlet.SandletComponent):
     with open(self.template_file, 'r') as template_file:
       template = template_file.read()
     for name, value in self.template_params.items():
-      template = re.sub('{{%s}}' % name, value, template)
-    os.system('echo "%s" | kubectl create -f - --namespace %s' % (
-        template, self.sandbox_name))
+      template = re.sub('{{%s}}' % name, str(value), template)
+    with tempfile.NamedTemporaryFile() as f:
+      f.write(template)
+      f.flush()
+      os.system('kubectl create --namespace %s -f %s' % (
+          self.sandbox_name, f.name))
 
   def stop(self):
     with open(self.template_file, 'r') as template_file:
       template = template_file.read()
     for name, value in self.template_params.items():
-      template = re.sub('{{%s}}' % name, value, template)
-    os.system('echo "%s" | kubectl delete -f - --namespace %s' % (
-        template, self.sandbox_name))
+      template = re.sub('{{%s}}' % name, str(value), template)
+    with tempfile.NamedTemporaryFile() as f:
+      f.write(template)
+      f.flush()
+      os.system('kubectl delete --namespace %s -f %s' % (
+          self.sandbox_name, f.name))
 
     super(KubernetesResource, self).stop()
 

@@ -65,12 +65,13 @@ func Init(hc discovery.HealthCheck, topoServer topo.Server, serv topo.SrvTopoSer
 	}
 	l2VTGate.QueryService = queryservice.Wrap(
 		gw,
-		func(ctx context.Context, target *querypb.Target, conn queryservice.QueryService, name string, inTransaction, isStreaming bool, inner func(context.Context, *querypb.Target, queryservice.QueryService) error) (err error) {
+		func(ctx context.Context, target *querypb.Target, conn queryservice.QueryService, name string, inTransaction bool, inner func(context.Context, *querypb.Target, queryservice.QueryService) (error, bool)) (err error) {
 			if target != nil {
 				startTime, statsKey := l2VTGate.startAction(name, target)
 				defer l2VTGate.endAction(startTime, statsKey, &err)
 			}
-			return inner(ctx, target, conn)
+			err, _ = inner(ctx, target, conn)
+			return err
 		},
 	)
 	servenv.OnRun(func() {
@@ -97,8 +98,8 @@ func (l *L2VTGate) endAction(startTime time.Time, statsKey []string, err *error)
 		// Don't increment the error counter for duplicate
 		// keys or bad queries, as those errors are caused by
 		// client queries and are not VTGate's fault.
-		ec := vterrors.RecoverVtErrorCode(*err)
-		if ec != vtrpcpb.ErrorCode_INTEGRITY_ERROR && ec != vtrpcpb.ErrorCode_BAD_INPUT {
+		ec := vterrors.Code(*err)
+		if ec != vtrpcpb.Code_ALREADY_EXISTS && ec != vtrpcpb.Code_INVALID_ARGUMENT {
 			l.tabletCallErrorCount.Add(statsKey, 1)
 		}
 	}

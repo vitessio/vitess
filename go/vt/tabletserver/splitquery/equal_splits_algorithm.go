@@ -6,10 +6,12 @@ import (
 	"strconv"
 
 	log "github.com/golang/glog"
+
 	"github.com/youtube/vitess/go/sqltypes"
-	querypb "github.com/youtube/vitess/go/vt/proto/query"
-	"github.com/youtube/vitess/go/vt/schema"
 	"github.com/youtube/vitess/go/vt/sqlparser"
+	"github.com/youtube/vitess/go/vt/tabletserver/engines/schema"
+
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
 // EqualSplitsAlgorithm implements the SplitAlgorithmInterface and represents the equal-splits

@@ -45,7 +45,7 @@ if [ -f $zk_dist/.build_finished ]; then
 else
   rm -rf $zk_dist
   (cd $VTROOT/dist && \
-    wget http://archive.apache.org/dist/zookeeper/zookeeper-$zk_ver/zookeeper-$zk_ver.tar.gz && \
+    wget http://apache.org/dist/zookeeper/zookeeper-$zk_ver/zookeeper-$zk_ver.tar.gz && \
     tar -xzf zookeeper-$zk_ver.tar.gz && \
     mkdir -p $zk_dist/lib && \
     cp zookeeper-$zk_ver/contrib/fatjar/zookeeper-$zk_ver-fatjar.jar $zk_dist/lib && \
@@ -137,8 +137,6 @@ gotools=" \
        honnef.co/go/unused/cmd/unused \
 "
 
-# Tools for uploading code coverage to coveralls.io (used by Travis CI).
-gotools+=" github.com/modocache/gover github.com/mattn/goveralls"
 # The cover tool needs to be installed into the Go toolchain, so it will fail
 # if Go is installed somewhere that requires root access.
 source tools/shell_functions.inc
@@ -235,7 +233,7 @@ else
   cd $VTTOP/third_party/py && \
     tar -xzf mock-1.0.1.tar.gz && \
     cd mock-1.0.1 && \
-    python ./setup.py install --prefix=$mock_dist && \
+    $PYTHON ./setup.py install --prefix=$mock_dist && \
     touch $mock_dist/.build_finished && \
     cd .. && \
     rm -r mock-1.0.1
@@ -253,8 +251,9 @@ ln -sf $VTTOP/misc/git/commit-msg.bugnumber $VTTOP/.git/hooks/commit-msg
 echo "Installing selenium and chromedriver"
 selenium_dist=$VTROOT/dist/selenium
 mkdir -p $selenium_dist
-virtualenv $selenium_dist
-$selenium_dist/bin/pip install selenium
+$VIRTUALENV $selenium_dist
+PIP=$selenium_dist/bin/pip
+$PIP install selenium
 mkdir -p $VTROOT/dist/chromedriver
 curl -sL http://chromedriver.storage.googleapis.com/2.25/chromedriver_linux64.zip > chromedriver_linux64.zip
 unzip -o -q chromedriver_linux64.zip -d $VTROOT/dist/chromedriver

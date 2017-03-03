@@ -176,6 +176,17 @@ func Schema(schema string) VitessOption {
 	}
 }
 
+// ExtraMyCnf adds one or more 'my.cnf'-style config files to MySQL.
+// (if more than one, the ':' separator should be used).
+func ExtraMyCnf(extraMyCnf string) VitessOption {
+	return VitessOption{
+		beforeRun: func(hdl *Handle) error {
+			hdl.cmd.Args = append(hdl.cmd.Args, "--extra_my_cnf", extraMyCnf)
+			return nil
+		},
+	}
+}
+
 // InitDataOptions contain the command line arguments that configure
 // initialization of vttest with random data. See the documentation of
 // the corresponding command line flags in py/vttest/run_local_database.py

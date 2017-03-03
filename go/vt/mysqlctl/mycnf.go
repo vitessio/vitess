@@ -47,6 +47,11 @@ type Mycnf struct {
 	// (used by vt software to check server is running)
 	SocketFile string
 
+	// GeneralLogPath is the path to store general logs at,
+	// if general-log is enabled.
+	// (unused by vt software for now)
+	GeneralLogPath string
+
 	// ErrorLogPath is the path to store error logs at.
 	// (unused by vt software for now)
 	ErrorLogPath string
@@ -91,9 +96,13 @@ type Mycnf struct {
 	path     string // the actual path that represents this mycnf
 }
 
-func (cnf *Mycnf) lookupAndCheck(key string) string {
+func (cnf *Mycnf) lookup(key string) string {
 	key = normKey([]byte(key))
-	val := cnf.mycnfMap[key]
+	return cnf.mycnfMap[key]
+}
+
+func (cnf *Mycnf) lookupAndCheck(key string) string {
+	val := cnf.lookup(key)
 	if val == "" {
 		panic(fmt.Errorf("Value for key '%v' not set", key))
 	}
@@ -158,11 +167,13 @@ func ReadMycnf(cnfFile string) (mycnf *Mycnf, err error) {
 	if err != nil {
 		return nil, fmt.Errorf("Failed: failed to convert port %v", err)
 	}
+
 	mycnf.MysqlPort = int32(port)
 	mycnf.DataDir = mycnf.lookupAndCheck("datadir")
 	mycnf.InnodbDataHomeDir = mycnf.lookupAndCheck("innodb_data_home_dir")
 	mycnf.InnodbLogGroupHomeDir = mycnf.lookupAndCheck("innodb_log_group_home_dir")
 	mycnf.SocketFile = mycnf.lookupAndCheck("socket")
+	mycnf.GeneralLogPath = mycnf.lookup("general_log_file")
 	mycnf.ErrorLogPath = mycnf.lookupAndCheck("log-error")
 	mycnf.SlowLogPath = mycnf.lookupAndCheck("slow-query-log-file")
 	mycnf.RelayLogPath = mycnf.lookupAndCheck("relay-log")

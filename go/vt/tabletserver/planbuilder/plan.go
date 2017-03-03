@@ -9,9 +9,9 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/youtube/vitess/go/vt/schema"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/tableacl"
+	"github.com/youtube/vitess/go/vt/tabletserver/engines/schema"
 )
 
 var (
@@ -219,13 +219,13 @@ type ExecPlan struct {
 	MessageReloaderQuery *sqlparser.ParsedQuery `json:",omitempty"`
 }
 
-func (plan *ExecPlan) setTableInfo(tableName sqlparser.TableIdent, getTable TableGetter) (*schema.Table, error) {
-	tableInfo, ok := getTable(tableName)
+func (plan *ExecPlan) setTable(tableName sqlparser.TableIdent, getTable TableGetter) (*schema.Table, error) {
+	table, ok := getTable(tableName)
 	if !ok {
 		return nil, fmt.Errorf("table %s not found in schema", tableName)
 	}
-	plan.TableName = tableInfo.Name
-	return tableInfo, nil
+	plan.TableName = table.Name
+	return table, nil
 }
 
 // TableGetter returns a schema.Table given the table name.
@@ -280,7 +280,7 @@ func GetStreamExecPlan(sql string, getTable TableGetter) (plan *ExecPlan, err er
 			return nil, errors.New("select with lock not allowed for streaming")
 		}
 		if tableName := analyzeFrom(stmt.From); !tableName.IsEmpty() {
-			plan.setTableInfo(tableName, getTable)
+			plan.setTable(tableName, getTable)
 		}
 	case *sqlparser.Union:
 		// pass

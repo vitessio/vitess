@@ -26,14 +26,14 @@ const (
 )
 
 var (
-	failoverErr = vterrors.FromError(vtrpcpb.ErrorCode_QUERY_NOT_SERVED,
-		errors.New("vttablet: rpc error: code = 9 desc = gRPCServerError: retry: operation not allowed in state SHUTTING_DOWN"))
-	nonFailoverErr = vterrors.FromError(vtrpcpb.ErrorCode_QUERY_NOT_SERVED,
-		errors.New("vttablet: rpc error: code = 9 desc = gRPCServerError: retry: TODO(mberlin): Insert here any realistic error not caused by a failover"))
+	failoverErr = vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION,
+		"vttablet: rpc error: code = 9 desc = gRPCServerError: retry: operation not allowed in state SHUTTING_DOWN")
+	nonFailoverErr = vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION,
+		"vttablet: rpc error: code = 9 desc = gRPCServerError: retry: TODO(mberlin): Insert here any realistic error not caused by a failover")
 
 	statsKeyJoined = fmt.Sprintf("%s.%s", keyspace, shard)
 
-	statsKeyJoinedFailoverEndDetected = statsKeyJoined + "." + string(stopReasonFailoverEndDetected)
+	statsKeyJoinedFailoverEndDetected = statsKeyJoined + "." + string(stopFailoverEndDetected)
 
 	statsKeyJoinedWindowExceeded = statsKeyJoined + "." + string(evictedWindowExceeded)
 
@@ -46,10 +46,10 @@ func TestBuffer(t *testing.T) {
 	defer checkVariables(t)
 
 	// Enable the buffer.
-	flag.Set("enable_vtgate_buffer", "true")
-	flag.Set("vtgate_buffer_keyspace_shards", topoproto.KeyspaceShardString(keyspace, shard))
+	flag.Set("enable_buffer", "true")
+	flag.Set("buffer_keyspace_shards", topoproto.KeyspaceShardString(keyspace, shard))
 	// Dry-run mode will apply to other keyspaces and shards. Not tested here.
-	flag.Set("enable_vtgate_buffer_dry_run", "true")
+	flag.Set("enable_buffer_dry_run", "true")
 	defer resetFlagsForTesting()
 
 	// Create the buffer.
@@ -117,14 +117,14 @@ func TestBuffer(t *testing.T) {
 
 	// Second failover: Buffering is skipped because last failover is too recent.
 	if retryDone, err := b.WaitForFailoverEnd(context.Background(), keyspace, shard, failoverErr); err != nil || retryDone != nil {
-		t.Fatalf("subsequent failovers must be skipped due to -vtgate_buffer_min_time_between_failovers setting. err: %v retryDone: %v", err, retryDone)
+		t.Fatalf("subsequent failovers must be skipped due to -buffer_min_time_between_failovers setting. err: %v retryDone: %v", err, retryDone)
 	}
 	if got, want := requestsSkipped.Counts()[statsKeyJoinedLastFailoverTooRecent], int64(1); got != want {
 		t.Fatalf("skipped request was not tracked: got = %v, want = %v", got, want)
 	}
 
 	// Second failover is buffered if we reduce the limit.
-	flag.Set("vtgate_buffer_min_time_between_failovers", "0s")
+	flag.Set("buffer_min_time_between_failovers", "0s")
 	stopped4 := issueRequest(context.Background(), t, b, failoverErr)
 	if err := waitForRequestsInFlight(b, 1); err != nil {
 		t.Fatal(err)
@@ -146,6 +146,9 @@ func TestBuffer(t *testing.T) {
 		t.Fatalf("request should have been buffered and not returned an error: %v", err)
 	}
 	if err := waitForState(b, stateIdle); err != nil {
+		t.Fatal(err)
+	}
+	if err := waitForPoolSlots(b, *size); err != nil {
 		t.Fatal(err)
 	}
 
@@ -180,7 +183,9 @@ func issueRequestAndBlockRetry(ctx context.Context, t *testing.T, b *Buffer, err
 			// Wait for the test's signal before we tell the buffer that we retried.
 			<-markRetryDone
 		}
-		defer retryDone()
+		if retryDone != nil {
+			defer retryDone()
+		}
 		defer close(bufferingStopped)
 	}()
 
@@ -188,7 +193,7 @@ func issueRequestAndBlockRetry(ctx context.Context, t *testing.T, b *Buffer, err
 }
 
 // waitForRequestsInFlight blocks until the buffer queue has reached "count".
-// This check is potentially racy and therefore retried up to a timeout of 2s.
+// This check is potentially racy and therefore retried up to a timeout of 10s.
 func waitForRequestsInFlight(b *Buffer, count int) error {
 	start := time.Now()
 	sb := b.getOrCreateBuffer(keyspace, shard)
@@ -204,7 +209,7 @@ func waitForRequestsInFlight(b *Buffer, count int) error {
 	}
 }
 
-// waitForState polls the buffer data for up to 2 seconds and returns an error
+// waitForState polls the buffer data for up to 10 seconds and returns an error
 // if shardBuffer doesn't have the wanted state by then.
 func waitForState(b *Buffer, want bufferState) error {
 	sb := b.getOrCreateBuffer(keyspace, shard)
@@ -221,11 +226,29 @@ func waitForState(b *Buffer, want bufferState) error {
 	}
 }
 
+// waitForPoolSlots waits up to 10s that all buffer pool slots have been
+// returned. The wait is necessary because in some cases the buffer code
+// does not block itself on the wait. But in any case, the slot should be
+// returned when the request has finished. See also shardBuffer.unblockAndWait().
+func waitForPoolSlots(b *Buffer, want int) error {
+	start := time.Now()
+	for {
+		got := b.bufferSizeSema.Size()
+		if got == want {
+			return nil
+		}
+
+		if time.Since(start) > 10*time.Second {
+			return fmt.Errorf("not all pool slots were returned: got = %v, want = %v", got, want)
+		}
+	}
+}
+
 // TestDryRun tests the case when only the dry-run mode is enabled globally.
 func TestDryRun(t *testing.T) {
 	resetVariables()
 
-	flag.Set("enable_vtgate_buffer_dry_run", "true")
+	flag.Set("enable_buffer_dry_run", "true")
 	defer resetFlagsForTesting()
 	b := New()
 
@@ -235,6 +258,9 @@ func TestDryRun(t *testing.T) {
 	}
 	// But the internal state changes though.
 	if err := waitForState(b, stateBuffering); err != nil {
+		t.Fatal(err)
+	}
+	if err := waitForPoolSlots(b, *size); err != nil {
 		t.Fatal(err)
 	}
 	if got, want := starts.Counts()[statsKeyJoined], int64(1); got != want {
@@ -263,8 +289,8 @@ func TestDryRun(t *testing.T) {
 // TestPassthrough tests the case when no failover is in progress and
 // requests have no failover related error.
 func TestPassthrough(t *testing.T) {
-	flag.Set("enable_vtgate_buffer", "true")
-	flag.Set("vtgate_buffer_keyspace_shards", topoproto.KeyspaceShardString(keyspace, shard))
+	flag.Set("enable_buffer", "true")
+	flag.Set("buffer_keyspace_shards", topoproto.KeyspaceShardString(keyspace, shard))
 	defer resetFlagsForTesting()
 	b := New()
 
@@ -274,6 +300,10 @@ func TestPassthrough(t *testing.T) {
 	if retryDone, err := b.WaitForFailoverEnd(context.Background(), keyspace, shard, nonFailoverErr); err != nil || retryDone != nil {
 		t.Fatalf("requests with non-failover errors must never be buffered. err: %v retryDone: %v", err, retryDone)
 	}
+
+	if err := waitForPoolSlots(b, *size); err != nil {
+		t.Fatal(err)
+	}
 }
 
 // TestPassThroughLastReparentTooRecent tests that buffering is skipped if
@@ -281,7 +311,7 @@ func TestPassthrough(t *testing.T) {
 func TestPassThroughLastReparentTooRecent(t *testing.T) {
 	resetVariables()
 
-	flag.Set("enable_vtgate_buffer", "true")
+	flag.Set("enable_buffer", "true")
 	// Enable the buffer (no explicit whitelist i.e. it applies to everything).
 	defer resetFlagsForTesting()
 	b := New()
@@ -305,6 +335,9 @@ func TestPassThroughLastReparentTooRecent(t *testing.T) {
 	if retryDone, err := b.WaitForFailoverEnd(context.Background(), keyspace, shard, failoverErr); err != nil || retryDone != nil {
 		t.Fatalf("requests where the failover end was recently detected before the start must not be buffered. err: %v retryDone: %v", err, retryDone)
 	}
+	if err := waitForPoolSlots(b, *size); err != nil {
+		t.Fatal(err)
+	}
 	if got, want := requestsSkipped.Counts()[statsKeyJoinedLastReparentTooRecent], int64(1); got != want {
 		t.Fatalf("skipped request was not tracked: got = %v, want = %v", got, want)
 	}
@@ -316,8 +349,8 @@ func TestPassThroughLastReparentTooRecent(t *testing.T) {
 // TestPassthroughDuringDrain tests the behavior of requests while the buffer is
 // in the drain phase: They should not be buffered and passed through instead.
 func TestPassthroughDuringDrain(t *testing.T) {
-	flag.Set("enable_vtgate_buffer", "true")
-	flag.Set("vtgate_buffer_keyspace_shards", topoproto.KeyspaceShardString(keyspace, shard))
+	flag.Set("enable_buffer", "true")
+	flag.Set("buffer_keyspace_shards", topoproto.KeyspaceShardString(keyspace, shard))
 	defer resetFlagsForTesting()
 	b := New()
 
@@ -353,13 +386,16 @@ func TestPassthroughDuringDrain(t *testing.T) {
 	if err := waitForState(b, stateIdle); err != nil {
 		t.Fatal(err)
 	}
+	if err := waitForPoolSlots(b, *size); err != nil {
+		t.Fatal(err)
+	}
 }
 
 // TestPassthroughIgnoredKeyspaceOrShard tests that the explicit whitelisting
 // of keyspaces (and optionally shards) ignores entries which are not listed.
 func TestPassthroughIgnoredKeyspaceOrShard(t *testing.T) {
-	flag.Set("enable_vtgate_buffer", "true")
-	flag.Set("vtgate_buffer_keyspace_shards", topoproto.KeyspaceShardString(keyspace, shard))
+	flag.Set("enable_buffer", "true")
+	flag.Set("buffer_keyspace_shards", topoproto.KeyspaceShardString(keyspace, shard))
 	defer resetFlagsForTesting()
 	b := New()
 
@@ -375,6 +411,9 @@ func TestPassthroughIgnoredKeyspaceOrShard(t *testing.T) {
 	ignoredShard := "ff-"
 	if retryDone, err := b.WaitForFailoverEnd(context.Background(), keyspace, ignoredShard, failoverErr); err != nil || retryDone != nil {
 		t.Fatalf("requests for ignored shards must not be buffered. err: %v retryDone: %v", err, retryDone)
+	}
+	if err := waitForPoolSlots(b, *size); err != nil {
+		t.Fatal(err)
 	}
 	statsKeyJoined = strings.Join([]string{keyspace, ignoredShard, skippedDisabled}, ".")
 	if got, want := requestsSkipped.Counts()[statsKeyJoined], int64(1); got != want {
@@ -400,15 +439,15 @@ func testRequestCanceled(t *testing.T, explicitEnd bool) {
 	resetVariables()
 	defer checkVariables(t)
 
-	flag.Set("enable_vtgate_buffer", "true")
+	flag.Set("enable_buffer", "true")
 	// Enable buffering for the complete keyspace and not just a specific shard.
-	flag.Set("vtgate_buffer_keyspace_shards", keyspace)
+	flag.Set("buffer_keyspace_shards", keyspace)
 	defer resetFlagsForTesting()
 	b := New()
 	if !explicitEnd {
 		// Set value after constructor to work-around hardcoded minimum values.
-		flag.Set("vtgate_buffer_window", "100ms")
-		flag.Set("vtgate_buffer_max_failover_duration", "100ms")
+		flag.Set("buffer_window", "100ms")
+		flag.Set("buffer_max_failover_duration", "100ms")
 	}
 
 	// Buffer 2 requests. The second will be canceled and the first will be drained.
@@ -463,15 +502,18 @@ func testRequestCanceled(t *testing.T, explicitEnd bool) {
 	if err := waitForState(b, stateIdle); err != nil {
 		t.Fatal(err)
 	}
+	if err := waitForPoolSlots(b, *size); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestEviction(t *testing.T) {
 	resetVariables()
 	defer checkVariables(t)
 
-	flag.Set("enable_vtgate_buffer", "true")
-	flag.Set("vtgate_buffer_keyspace_shards", topoproto.KeyspaceShardString(keyspace, shard))
-	flag.Set("vtgate_buffer_size", "2")
+	flag.Set("enable_buffer", "true")
+	flag.Set("buffer_keyspace_shards", topoproto.KeyspaceShardString(keyspace, shard))
+	flag.Set("buffer_size", "2")
 	defer resetFlagsForTesting()
 	b := New()
 
@@ -511,13 +553,16 @@ func TestEviction(t *testing.T) {
 	if err := waitForState(b, stateIdle); err != nil {
 		t.Fatal(err)
 	}
+	if err := waitForPoolSlots(b, 2); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func isCanceledError(err error) error {
 	if err == nil {
 		return fmt.Errorf("buffering should have stopped early and returned an error because the request was canceled from the outside")
 	}
-	if got, want := vterrors.RecoverVtErrorCode(err), vtrpcpb.ErrorCode_TRANSIENT_ERROR; got != want {
+	if got, want := vterrors.Code(err), vtrpcpb.Code_UNAVAILABLE; got != want {
 		return fmt.Errorf("wrong error code for canceled buffered request. got = %v, want = %v", got, want)
 	}
 	if got, want := err.Error(), "context was canceled before failover finished: context canceled"; got != want {
@@ -531,7 +576,7 @@ func isEvictedError(err error) error {
 	if err == nil {
 		return errors.New("request should have been evicted because the buffer was full")
 	}
-	if got, want := vterrors.RecoverVtErrorCode(err), vtrpcpb.ErrorCode_TRANSIENT_ERROR; got != want {
+	if got, want := vterrors.Code(err), vtrpcpb.Code_UNAVAILABLE; got != want {
 		return fmt.Errorf("wrong error code for evicted buffered request. got = %v, want = %v full error: %v", got, want, err)
 	}
 	if got, want := err.Error(), entryEvictedError.Error(); !strings.Contains(got, want) {
@@ -547,11 +592,11 @@ func TestEvictionNotPossible(t *testing.T) {
 	resetVariables()
 	defer checkVariables(t)
 
-	flag.Set("enable_vtgate_buffer", "true")
-	flag.Set("vtgate_buffer_keyspace_shards", fmt.Sprintf("%v,%v",
+	flag.Set("enable_buffer", "true")
+	flag.Set("buffer_keyspace_shards", fmt.Sprintf("%v,%v",
 		topoproto.KeyspaceShardString(keyspace, shard),
 		topoproto.KeyspaceShardString(keyspace, shard2)))
-	flag.Set("vtgate_buffer_size", "1")
+	flag.Set("buffer_size", "1")
 	defer resetFlagsForTesting()
 	b := New()
 
@@ -568,7 +613,7 @@ func TestEvictionNotPossible(t *testing.T) {
 	if bufferErr == nil || retryDone != nil {
 		t.Fatalf("buffer should have returned an error because it's full: err: %v retryDone: %v", bufferErr, retryDone)
 	}
-	if got, want := vterrors.RecoverVtErrorCode(bufferErr), vtrpcpb.ErrorCode_TRANSIENT_ERROR; got != want {
+	if got, want := vterrors.Code(bufferErr), vtrpcpb.Code_UNAVAILABLE; got != want {
 		t.Fatalf("wrong error code for evicted buffered request. got = %v, want = %v", got, want)
 	}
 	if got, want := bufferErr.Error(), bufferFullError.Error(); !strings.Contains(got, want) {
@@ -587,6 +632,9 @@ func TestEvictionNotPossible(t *testing.T) {
 	if err := waitForState(b, stateIdle); err != nil {
 		t.Fatal(err)
 	}
+	if err := waitForPoolSlots(b, 1); err != nil {
+		t.Fatal(err)
+	}
 	statsKeyJoined := strings.Join([]string{keyspace, shard2, string(skippedBufferFull)}, ".")
 	if got, want := requestsSkipped.Counts()[statsKeyJoined], int64(1); got != want {
 		t.Fatalf("skipped request was not tracked: got = %v, want = %v", got, want)
@@ -597,15 +645,15 @@ func TestWindow(t *testing.T) {
 	resetVariables()
 	defer checkVariables(t)
 
-	flag.Set("enable_vtgate_buffer", "true")
-	flag.Set("vtgate_buffer_keyspace_shards", fmt.Sprintf("%v,%v",
+	flag.Set("enable_buffer", "true")
+	flag.Set("buffer_keyspace_shards", fmt.Sprintf("%v,%v",
 		topoproto.KeyspaceShardString(keyspace, shard),
 		topoproto.KeyspaceShardString(keyspace, shard2)))
-	flag.Set("vtgate_buffer_size", "1")
+	flag.Set("buffer_size", "1")
 	defer resetFlagsForTesting()
 	b := New()
 	// Set value after constructor to work-around hardcoded minimum values.
-	flag.Set("vtgate_buffer_window", "1ms")
+	flag.Set("buffer_window", "1ms")
 
 	// Buffer one request.
 	t.Logf("first request exceeds its window")
@@ -622,7 +670,7 @@ func TestWindow(t *testing.T) {
 
 	// Increase the window and buffer a request again
 	// (queue becomes not empty a second time).
-	flag.Set("vtgate_buffer_window", "10m")
+	flag.Set("buffer_window", "10m")
 
 	// This time the request does not go out of window and gets evicted by a third
 	// request instead.
@@ -651,7 +699,7 @@ func TestWindow(t *testing.T) {
 	}
 
 	// Reduce the window again.
-	flag.Set("vtgate_buffer_window", "100ms")
+	flag.Set("buffer_window", "100ms")
 
 	// Fourth request evicts the third
 	t.Logf("fourth request exceeds its window (and evicts the third)")
@@ -676,6 +724,9 @@ func TestWindow(t *testing.T) {
 	if err := waitForState(b, stateIdle); err != nil {
 		t.Fatal(err)
 	}
+	if err := waitForPoolSlots(b, 1); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func waitForRequestsExceededWindow(count int) error {
@@ -698,7 +749,7 @@ func TestShutdown(t *testing.T) {
 	resetVariables()
 	defer checkVariables(t)
 
-	flag.Set("enable_vtgate_buffer", "true")
+	flag.Set("enable_buffer", "true")
 	defer resetFlagsForTesting()
 	b := New()
 
@@ -714,6 +765,10 @@ func TestShutdown(t *testing.T) {
 	// Request must have been drained without an error.
 	if err := <-stopped1; err != nil {
 		t.Fatalf("request should have been buffered and not returned an error: %v", err)
+	}
+
+	if err := waitForPoolSlots(b, *size); err != nil {
+		t.Fatal(err)
 	}
 }
 

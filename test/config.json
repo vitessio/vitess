@@ -86,17 +86,6 @@
 			"RetryMax": 0,
 			"Tags": []
 		},
-		"goveralls": {
-			"File": "",
-			"Args": [],
-			"Command": [
-				"travis/goveralls.sh"
-			],
-			"Manual": true,
-			"Shard": 0,
-			"RetryMax": 0,
-			"Tags": []
-		},
 		"initial_sharding": {
 			"File": "initial_sharding.py",
 			"Args": [],
@@ -216,6 +205,15 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": 4,
+			"RetryMax": 0,
+			"Tags": []
+		},
+		"mysql_server": {
+			"File": "mysql_server_test.py",
+			"Args": [],
+			"Command": [],
+			"Manual": false,
+			"Shard": 1,
 			"RetryMax": 0,
 			"Tags": []
 		},

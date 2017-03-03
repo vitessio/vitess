@@ -17,6 +17,7 @@ import (
 	"github.com/youtube/vitess/go/vt/tableacl/simpleacl"
 	"github.com/youtube/vitess/go/vt/tabletmanager"
 	"github.com/youtube/vitess/go/vt/tabletserver"
+	"github.com/youtube/vitess/go/vt/tabletserver/tabletenv"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"golang.org/x/net/context"
@@ -42,7 +43,7 @@ func main() {
 	dbconfigs.RegisterFlags(dbconfigFlags)
 	mysqlctl.RegisterFlags()
 	flag.Parse()
-	tabletserver.Init()
+	tabletenv.Init()
 	if len(flag.Args()) > 0 {
 		flag.Usage()
 		log.Errorf("vttablet doesn't take any positional arguments")
@@ -73,7 +74,8 @@ func main() {
 	}
 
 	// creates and registers the query service
-	qsc := tabletserver.NewServer()
+	ts := topo.Open()
+	qsc := tabletserver.NewServer(ts)
 	servenv.OnRun(func() {
 		qsc.Register()
 		addStatusParts(qsc)
@@ -109,7 +111,7 @@ func main() {
 	// Create mysqld and register the health reporter (needs to be done
 	// before initializing the agent, so the initial health check
 	// done by the agent has the right reporter)
-	mysqld := mysqlctl.NewMysqld(mycnf, dbcfgs, dbconfigFlags, true /* enablePublishStats */)
+	mysqld := mysqlctl.NewMysqld(mycnf, dbcfgs, dbconfigFlags)
 	servenv.OnClose(mysqld.Close)
 
 	// Depends on both query and updateStream.
@@ -117,7 +119,6 @@ func main() {
 	if servenv.GRPCPort != nil {
 		gRPCPort = int32(*servenv.GRPCPort)
 	}
-	ts := topo.Open()
 	agent, err = tabletmanager.NewActionAgent(context.Background(), ts, mysqld, qsc, tabletAlias, *dbcfgs, mycnf, int32(*servenv.Port), gRPCPort)
 	if err != nil {
 		log.Error(err)

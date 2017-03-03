@@ -23,7 +23,7 @@ public class DateTimeTest {
   private static final Calendar PST = Calendar.getInstance(TimeZone.getTimeZone("GMT-8"));
   private static final Calendar IST = Calendar.getInstance(TimeZone.getTimeZone("GMT+0530"));
 
-  private static final Map<String, Date> TEST_DATES =
+  private static final ImmutableMap<String, Date> TEST_DATES =
       new ImmutableMap.Builder<String, Date>()
           .put("1970-01-01", new Date(0L))
           .put("2008-01-02", new Date(1199232000000L))

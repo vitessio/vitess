@@ -44,6 +44,41 @@ func (m *TableGroupSpec) String() string            { return proto.CompactTextSt
 func (*TableGroupSpec) ProtoMessage()               {}
 func (*TableGroupSpec) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{0} }
 
+func (m *TableGroupSpec) GetName() string {
+	if m != nil {
+		return m.Name
+	}
+	return ""
+}
+
+func (m *TableGroupSpec) GetTableNamesOrPrefixes() []string {
+	if m != nil {
+		return m.TableNamesOrPrefixes
+	}
+	return nil
+}
+
+func (m *TableGroupSpec) GetReaders() []string {
+	if m != nil {
+		return m.Readers
+	}
+	return nil
+}
+
+func (m *TableGroupSpec) GetWriters() []string {
+	if m != nil {
+		return m.Writers
+	}
+	return nil
+}
+
+func (m *TableGroupSpec) GetAdmins() []string {
+	if m != nil {
+		return m.Admins
+	}
+	return nil
+}
+
 type Config struct {
 	TableGroups []*TableGroupSpec `protobuf:"bytes,1,rep,name=table_groups,json=tableGroups" json:"table_groups,omitempty"`
 }

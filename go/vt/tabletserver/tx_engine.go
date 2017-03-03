@@ -15,6 +15,8 @@ import (
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/dtids"
+	"github.com/youtube/vitess/go/vt/tabletserver/connpool"
+	"github.com/youtube/vitess/go/vt/tabletserver/tabletenv"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateconn"
 )
 
@@ -29,26 +31,20 @@ type TxEngine struct {
 	txPool       *TxPool
 	preparedPool *TxPreparedPool
 	twoPC        *TwoPC
-
-	queryServiceStats *QueryServiceStats
 }
 
 // NewTxEngine creates a new TxEngine.
-func NewTxEngine(checker MySQLChecker, config Config, queryServiceStats *QueryServiceStats) *TxEngine {
+func NewTxEngine(checker MySQLChecker, config tabletenv.TabletConfig) *TxEngine {
 	te := &TxEngine{
 		shutdownGracePeriod: time.Duration(config.TxShutDownGracePeriod * 1e9),
 	}
 	te.txPool = NewTxPool(
 		config.PoolNamePrefix+"TransactionPool",
-		config.StatsPrefix,
 		config.TransactionCap,
 		time.Duration(config.TransactionTimeout*1e9),
 		time.Duration(config.IdleTimeout*1e9),
-		config.EnablePublishStats,
-		queryServiceStats,
 		checker,
 	)
-	te.queryServiceStats = queryServiceStats
 	te.twopcEnabled = config.TwoPCEnable
 	if te.twopcEnabled {
 		if config.TwoPCCoordinatorAddress == "" {
@@ -70,12 +66,10 @@ func NewTxEngine(checker MySQLChecker, config Config, queryServiceStats *QuerySe
 	// the system can deadlock if all connections get moved to
 	// the TxPreparedPool.
 	te.preparedPool = NewTxPreparedPool(config.TransactionCap - 2)
-	readPool := NewConnPool(
+	readPool := connpool.New(
 		config.PoolNamePrefix+"TxReadPool",
 		3,
 		time.Duration(config.IdleTimeout*1e9),
-		config.EnablePublishStats,
-		queryServiceStats,
 		checker,
 	)
 	te.twoPC = NewTwoPC(readPool)
@@ -108,7 +102,7 @@ func (te *TxEngine) Open(dbconfigs dbconfigs.DBConfigs) {
 		// If this operation fails, we choose to raise an alert and
 		// continue anyway. Serving traffic is considered more important
 		// than blocking everything for the sake of a few transactions.
-		te.queryServiceStats.InternalErrors.Add("TwopcResurrection", 1)
+		tabletenv.InternalErrors.Add("TwopcResurrection", 1)
 		log.Errorf("Could not prepare transactions: %v", err)
 	}
 	te.startWatchdog()
@@ -154,7 +148,7 @@ func (te *TxEngine) Close(immediate bool) {
 		case <-tmr.C:
 			// The grace period has passed. Rollback, but don't touch the 2pc transactions.
 			log.Info("Grace period exceeded: rolling back non-2pc transactions now.")
-			te.txPool.RollbackNonBusy(localContext())
+			te.txPool.RollbackNonBusy(tabletenv.LocalContext())
 		case <-poolEmpty:
 			// The pool cleared before the timer kicked in. Just return.
 			log.Info("Transactions completed before grace period: shutting down.")
@@ -176,7 +170,7 @@ func (te *TxEngine) Close(immediate bool) {
 // into the reserved list, and adjusts the txPool LastID
 // to ensure there are no future collisions.
 func (te *TxEngine) prepareFromRedo() error {
-	ctx := localContext()
+	ctx := tabletenv.LocalContext()
 	var allErr concurrency.AllErrorRecorder
 	prepared, failed, err := te.twoPC.ReadAllRedo(ctx)
 	if err != nil {
@@ -235,7 +229,7 @@ outer:
 // This is used for transitioning from a master to a non-master
 // serving type.
 func (te *TxEngine) rollbackTransactions() {
-	ctx := localContext()
+	ctx := tabletenv.LocalContext()
 	// The order of rollbacks is currently not material because
 	// we don't allow new statements or commits during
 	// this function. In case of any such change, this will
@@ -250,22 +244,22 @@ func (te *TxEngine) rollbackTransactions() {
 // transactions and calls the notifier on them.
 func (te *TxEngine) startWatchdog() {
 	te.ticks.Start(func() {
-		ctx, cancel := context.WithTimeout(localContext(), te.abandonAge/4)
+		ctx, cancel := context.WithTimeout(tabletenv.LocalContext(), te.abandonAge/4)
 		defer cancel()
 
 		// Raise alerts on prepares that have been unresolved for too long.
 		// Use 5x abandonAge to give opportunity for watchdog to resolve these.
 		count, err := te.twoPC.CountUnresolvedRedo(ctx, time.Now().Add(-te.abandonAge*5))
 		if err != nil {
-			te.queryServiceStats.InternalErrors.Add("WatchdogFail", 1)
+			tabletenv.InternalErrors.Add("WatchdogFail", 1)
 			log.Errorf("Error reading unresolved prepares: '%v': %v", te.coordinatorAddress, err)
 		}
-		te.queryServiceStats.Unresolved.Set("Prepares", count)
+		tabletenv.Unresolved.Set("Prepares", count)
 
 		// Resolve lingering distributed transactions.
 		txs, err := te.twoPC.ReadAbandoned(ctx, time.Now().Add(-te.abandonAge))
 		if err != nil {
-			te.queryServiceStats.InternalErrors.Add("WatchdogFail", 1)
+			tabletenv.InternalErrors.Add("WatchdogFail", 1)
 			log.Errorf("Error reading transactions for 2pc watchdog: %v", err)
 			return
 		}
@@ -275,7 +269,7 @@ func (te *TxEngine) startWatchdog() {
 
 		coordConn, err := vtgateconn.Dial(ctx, te.coordinatorAddress, te.abandonAge/4, "")
 		if err != nil {
-			te.queryServiceStats.InternalErrors.Add("WatchdogFail", 1)
+			tabletenv.InternalErrors.Add("WatchdogFail", 1)
 			log.Errorf("Error connecting to coordinator '%v': %v", te.coordinatorAddress, err)
 			return
 		}
@@ -287,7 +281,7 @@ func (te *TxEngine) startWatchdog() {
 			go func(dtid string) {
 				defer wg.Done()
 				if err := coordConn.ResolveTransaction(ctx, dtid); err != nil {
-					te.queryServiceStats.InternalErrors.Add("WatchdogFail", 1)
+					tabletenv.InternalErrors.Add("WatchdogFail", 1)
 					log.Errorf("Error notifying for dtid %s: %v", dtid, err)
 				}
 			}(tx)

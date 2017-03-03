@@ -17,6 +17,8 @@ import (
 	"github.com/youtube/vitess/go/vt/binlog/eventtoken"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
+	"github.com/youtube/vitess/go/vt/tabletserver/engines/schema"
+	"github.com/youtube/vitess/go/vt/tabletserver/tabletenv"
 
 	binlogdatapb "github.com/youtube/vitess/go/vt/proto/binlogdata"
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
@@ -32,46 +34,47 @@ type ReplicationWatcher struct {
 	wg     sync.WaitGroup
 
 	watchReplication bool
-	qe               *QueryEngine
+	se               *schema.Engine
 
 	mu         sync.Mutex
 	eventToken *querypb.EventToken
 }
 
+var replOnce sync.Once
+
 // NewReplicationWatcher creates a new ReplicationWatcher.
-func NewReplicationWatcher(config Config, qe *QueryEngine) *ReplicationWatcher {
+func NewReplicationWatcher(se *schema.Engine, config tabletenv.TabletConfig) *ReplicationWatcher {
 	rpw := &ReplicationWatcher{
 		watchReplication: config.WatchReplication,
-		qe:               qe,
+		se:               se,
 	}
-	if config.EnablePublishStats {
-		stats.Publish(config.StatsPrefix+"EventTokenPosition", stats.StringFunc(func() string {
+	replOnce.Do(func() {
+		stats.Publish("EventTokenPosition", stats.StringFunc(func() string {
 			if e := rpw.EventToken(); e != nil {
 				return e.Position
 			}
 			return ""
 		}))
-		stats.Publish(config.StatsPrefix+"EventTokenTimestamp", stats.IntFunc(func() int64 {
+		stats.Publish("EventTokenTimestamp", stats.IntFunc(func() int64 {
 			if e := rpw.EventToken(); e != nil {
 				return e.Timestamp
 			}
 			return 0
 		}))
-	}
+	})
 	return rpw
 }
 
 // Open starts the ReplicationWatcher service.
-func (rpw *ReplicationWatcher) Open(dbconfigs dbconfigs.DBConfigs, mysqld mysqlctl.MysqlDaemon) error {
+func (rpw *ReplicationWatcher) Open(dbconfigs dbconfigs.DBConfigs, mysqld mysqlctl.MysqlDaemon) {
 	if rpw.isOpen || !rpw.watchReplication {
-		return nil
+		return
 	}
-	ctx, cancel := context.WithCancel(localContext())
+	ctx, cancel := context.WithCancel(tabletenv.LocalContext())
 	rpw.cancel = cancel
 	rpw.wg.Add(1)
 	go rpw.Process(ctx, dbconfigs, mysqld)
 	rpw.isOpen = true
-	return nil
 }
 
 // Close stops the ReplicationWatcher service.
@@ -100,7 +103,7 @@ func (rpw *ReplicationWatcher) Process(ctx context.Context, dbconfigs dbconfigs.
 				if statement.Category != binlogdatapb.BinlogTransaction_Statement_BL_DDL {
 					continue
 				}
-				err := rpw.qe.schemaInfo.Reload(ctx)
+				err := rpw.se.Reload(ctx)
 				log.Infof("Streamer triggered a schema reload, with result: %v", err)
 				return nil
 			}

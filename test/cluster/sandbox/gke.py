@@ -5,6 +5,7 @@ import logging
 import os
 import subprocess
 
+import sandbox
 import sandlet
 
 
@@ -19,14 +20,22 @@ class Cluster(object):
     self.params = params
 
   def start(self):
+    """Start the GKE cluster."""
     zone = self.params.get('gke_zone', self._DEFAULT_ZONE)
     machine_type = self.params.get('machine_type', self._DEFAULT_MACHINE_TYPE)
     node_count = str(self.params.get('node_count', self._DEFAULT_NODE_COUNT))
     subprocess.call(['gcloud', 'config', 'set', 'compute/zone', zone])
-    subprocess.call(
-        ['gcloud', 'container', 'clusters', 'create', self.params['name'],
-         '--machine-type', machine_type, '--num-nodes', node_count, '--scopes',
-         'storage-rw'])
+    cluster_create_args = [
+        'gcloud', 'container', 'clusters', 'create', self.params['name'],
+        '--machine-type', machine_type, '--num-nodes', node_count, '--scopes',
+        'storage-rw']
+    if 'cluster_version' in self.params:
+      cluster_create_args += [
+          '--cluster-version=%s' % self.params['cluster_version']]
+    try:
+      subprocess.check_call(cluster_create_args)
+    except subprocess.CalledProcessError as e:
+      raise sandbox.SandboxError('Failed to create GKE cluster: %s', e.output)
 
   def stop(self):
     zone = self.params.get('gke_zone', self._DEFAULT_ZONE)

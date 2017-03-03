@@ -33,10 +33,6 @@
 			"revisionTime": "2016-12-16T21:27:53Z"
 		},
 		{
-			"path": "context",
-			"revision": ""
-		},
-		{
 			"checksumSHA1": "L4I+Spyy1yw6GbDjnx+Qyj+q9kw=",
 			"path": "github.com/aws/aws-sdk-go/aws",
 			"revision": "2e1a49c71fb7d8f6b7e8cca2259ed9b68d9b97ce",
@@ -389,32 +385,32 @@
 		{
 			"checksumSHA1": "ZIqcmeEc/EU9HsKJHuJ1Iy+ZNgE=",
 			"path": "github.com/golang/protobuf/protoc-gen-go",
-			"revision": "2bc9827a78f95c6665b5fe0abd1fd66b496ae2d8",
-			"revisionTime": "2016-11-03T22:44:32Z"
+			"revision": "69b215d01a5606c843240eab4937eab3acee6530",
+			"revisionTime": "2017-02-17T23:44:32Z"
 		},
 		{
-			"checksumSHA1": "juNiTc9bfhQYo4BkWc83sW4Z5gw=",
+			"checksumSHA1": "AjyXQ5eohrCPS/jSWZFPn5E8wnQ=",
 			"path": "github.com/golang/protobuf/protoc-gen-go/descriptor",
-			"revision": "2bc9827a78f95c6665b5fe0abd1fd66b496ae2d8",
-			"revisionTime": "2016-11-03T22:44:32Z"
+			"revision": "69b215d01a5606c843240eab4937eab3acee6530",
+			"revisionTime": "2017-02-17T23:44:32Z"
 		},
 		{
-			"checksumSHA1": "lPJ5a2uV2CPHch++4zKkJ1au0sw=",
+			"checksumSHA1": "T/EqMkqzvjQUL1c+yN32kketgfE=",
 			"path": "github.com/golang/protobuf/protoc-gen-go/generator",
-			"revision": "2bc9827a78f95c6665b5fe0abd1fd66b496ae2d8",
-			"revisionTime": "2016-11-03T22:44:32Z"
+			"revision": "69b215d01a5606c843240eab4937eab3acee6530",
+			"revisionTime": "2017-02-17T23:44:32Z"
 		},
 		{
 			"checksumSHA1": "u5V5OglAZoibucYHK3OtIFYM+w0=",
 			"path": "github.com/golang/protobuf/protoc-gen-go/grpc",
-			"revision": "2bc9827a78f95c6665b5fe0abd1fd66b496ae2d8",
-			"revisionTime": "2016-11-03T22:44:32Z"
+			"revision": "69b215d01a5606c843240eab4937eab3acee6530",
+			"revisionTime": "2017-02-17T23:44:32Z"
 		},
 		{
 			"checksumSHA1": "zps2+aJoFhpFf2F8TsU9zCGXL2c=",
 			"path": "github.com/golang/protobuf/protoc-gen-go/plugin",
-			"revision": "2bc9827a78f95c6665b5fe0abd1fd66b496ae2d8",
-			"revisionTime": "2016-11-03T22:44:32Z"
+			"revision": "69b215d01a5606c843240eab4937eab3acee6530",
+			"revisionTime": "2017-02-17T23:44:32Z"
 		},
 		{
 			"checksumSHA1": "/vLtyN6HK5twSZIFerD199YTmjk=",

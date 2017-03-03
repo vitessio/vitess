@@ -172,7 +172,7 @@ func (s *server) ExecuteFetchAsDba(ctx context.Context, request *tabletmanagerda
 	response = &tabletmanagerdatapb.ExecuteFetchAsDbaResponse{}
 	qr, err := s.agent.ExecuteFetchAsDba(ctx, request.Query, request.DbName, int(request.MaxRows), request.DisableBinlogs, request.ReloadSchema)
 	if err != nil {
-		return nil, vterrors.ToGRPCError(err)
+		return nil, vterrors.ToGRPC(err)
 	}
 	response.Result = qr
 	return response, nil
@@ -184,7 +184,7 @@ func (s *server) ExecuteFetchAsAllPrivs(ctx context.Context, request *tabletmana
 	response = &tabletmanagerdatapb.ExecuteFetchAsAllPrivsResponse{}
 	qr, err := s.agent.ExecuteFetchAsAllPrivs(ctx, request.Query, request.DbName, int(request.MaxRows), request.ReloadSchema)
 	if err != nil {
-		return nil, vterrors.ToGRPCError(err)
+		return nil, vterrors.ToGRPC(err)
 	}
 	response.Result = qr
 	return response, nil
@@ -196,7 +196,7 @@ func (s *server) ExecuteFetchAsApp(ctx context.Context, request *tabletmanagerda
 	response = &tabletmanagerdatapb.ExecuteFetchAsAppResponse{}
 	qr, err := s.agent.ExecuteFetchAsApp(ctx, request.Query, int(request.MaxRows))
 	if err != nil {
-		return nil, vterrors.ToGRPCError(err)
+		return nil, vterrors.ToGRPC(err)
 	}
 	response.Result = qr
 	return response, nil

@@ -10,6 +10,7 @@ import (
 
 	"github.com/youtube/vitess/go/streamlog"
 	"github.com/youtube/vitess/go/vt/tabletserver"
+	"github.com/youtube/vitess/go/vt/tabletserver/tabletenv"
 )
 
 // TxCatcher allows you to capture and fetch transactions that are being
@@ -21,7 +22,7 @@ type TxCatcher struct {
 // NewTxCatcher sets up the capture and returns a new TxCatcher.
 // You must call Close when done.
 func NewTxCatcher() TxCatcher {
-	return TxCatcher{catcher: newEventCatcher(tabletserver.TxLogger)}
+	return TxCatcher{catcher: newEventCatcher(tabletenv.TxLogger)}
 }
 
 // Close closes the TxCatcher.
@@ -48,7 +49,7 @@ type QueryCatcher struct {
 // NewQueryCatcher sets up the capture and retuns a QueryCatcher.
 // You must call Close when done.
 func NewQueryCatcher() QueryCatcher {
-	return QueryCatcher{catcher: newEventCatcher(tabletserver.StatsLogger)}
+	return QueryCatcher{catcher: newEventCatcher(tabletenv.StatsLogger)}
 }
 
 // Close closes the QueryCatcher.
@@ -58,12 +59,12 @@ func (qc *QueryCatcher) Close() {
 
 // Next fetches the next captured query.
 // If the wait is longer than one second, it returns an error.
-func (qc *QueryCatcher) Next() (*tabletserver.LogStats, error) {
+func (qc *QueryCatcher) Next() (*tabletenv.LogStats, error) {
 	event, err := qc.catcher.next()
 	if err != nil {
 		return nil, err
 	}
-	return event.(*tabletserver.LogStats), nil
+	return event.(*tabletenv.LogStats), nil
 }
 
 type eventCatcher struct {

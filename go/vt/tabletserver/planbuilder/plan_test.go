@@ -19,8 +19,8 @@ import (
 	"testing"
 
 	"github.com/youtube/vitess/go/testfiles"
-	"github.com/youtube/vitess/go/vt/schema"
 	"github.com/youtube/vitess/go/vt/sqlparser"
+	"github.com/youtube/vitess/go/vt/tabletserver/engines/schema"
 )
 
 func TestPlan(t *testing.T) {
@@ -36,7 +36,7 @@ func TestPlan(t *testing.T) {
 		} else {
 			bout, err := json.Marshal(plan)
 			if err != nil {
-				panic(fmt.Sprintf("Error marshalling %v: %v", plan, err))
+				t.Fatalf("Error marshalling %v: %v", plan, err)
 			}
 			out = string(bout)
 		}
@@ -83,7 +83,7 @@ func TestCustom(t *testing.T) {
 				} else {
 					bout, err := json.Marshal(plan)
 					if err != nil {
-						panic(fmt.Sprintf("Error marshalling %v: %v", plan, err))
+						t.Fatalf("Error marshalling %v: %v", plan, err)
 					}
 					out = string(bout)
 				}
@@ -108,7 +108,7 @@ func TestStreamPlan(t *testing.T) {
 		} else {
 			bout, err := json.Marshal(plan)
 			if err != nil {
-				panic(fmt.Sprintf("Error marshalling %v: %v", plan, err))
+				t.Fatalf("Error marshalling %v: %v", plan, err)
 			}
 			out = string(bout)
 		}
@@ -125,7 +125,7 @@ func TestDDLPlan(t *testing.T) {
 		expected := make(map[string]interface{})
 		err := json.Unmarshal([]byte(tcase.output), &expected)
 		if err != nil {
-			panic(fmt.Sprintf("Error marshalling %v", plan))
+			t.Fatalf("Error marshalling %v", plan)
 		}
 		matchString(t, tcase.lineno, expected["Action"], plan.Action)
 		matchString(t, tcase.lineno, expected["TableName"], plan.TableName.String())

@@ -14,9 +14,12 @@ import (
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/tabletserver/endtoend/framework"
+	"github.com/youtube/vitess/go/vt/tabletserver/tabletenv"
+	"github.com/youtube/vitess/go/vt/vterrors"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 func TestCommit(t *testing.T) {
@@ -210,7 +213,10 @@ func TestAutoCommit(t *testing.T) {
 		return
 	}
 	want := []string{"insert into vitess_test(intval, floatval, charval, binval) values (4, null, null, null) /* _stream vitess_test (intval ) (4 ); */"}
-	if !reflect.DeepEqual(tx.Queries, want) {
+	// Sometimes, no queries will be returned by the querylog because reliability
+	// is not guaranteed. If so, just move on without verifying. The subsequent
+	// rowcount check will anyway verify that the insert succeeded.
+	if len(tx.Queries) != 0 && !reflect.DeepEqual(tx.Queries, want) {
 		t.Errorf("queries: %v, want %v", tx.Queries, want)
 	}
 	if !reflect.DeepEqual(tx.Conclusion, "commit") {
@@ -271,8 +277,12 @@ func TestAutoCommit(t *testing.T) {
 	}}
 	vend := framework.DebugVars()
 	for _, expected := range expectedDiffs {
-		if err := compareIntDiff(vend, expected.tag, vstart, expected.diff); err != nil {
-			t.Error(err)
+		got := framework.FetchInt(vend, expected.tag)
+		want := framework.FetchInt(vstart, expected.tag) + expected.diff
+		// It's possible that other house-keeping transactions (like messaging)
+		// can happen during this test. So, don't perform equality comparisons.
+		if got < want {
+			t.Errorf("%s: %d, must be at least %d", expected.tag, got, want)
 		}
 	}
 }
@@ -282,9 +292,9 @@ func TestAutoCommitOff(t *testing.T) {
 	defer framework.Server.SetAutoCommit(true)
 
 	_, err := framework.NewClient().Execute("insert into vitess_test values(4, null, null, null)", nil)
-	want := "error: unsupported query"
+	want := "disallowed outside transaction"
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
-		t.Errorf("Error: %v, must start with %s", err, want)
+		t.Errorf("%v, must start with %s", err, want)
 	}
 }
 
@@ -298,7 +308,7 @@ func TestTxPoolSize(t *testing.T) {
 		return
 	}
 	defer client1.Rollback()
-	if err := verifyIntValue(framework.DebugVars(), "TransactionPoolAvailable", framework.BaseConfig.TransactionCap-1); err != nil {
+	if err := verifyIntValue(framework.DebugVars(), "TransactionPoolAvailable", tabletenv.Config.TransactionCap-1); err != nil {
 		t.Error(err)
 	}
 
@@ -320,11 +330,11 @@ func TestTxPoolSize(t *testing.T) {
 
 	client2 := framework.NewClient()
 	err = client2.Begin()
-	want := "tx_pool_full"
+	want := "connection limit exceeded"
 	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("Error: %v, must contain %s", err, want)
+		t.Errorf("%v, must contain %s", err, want)
 	}
-	if err := compareIntDiff(framework.DebugVars(), "Errors/TxPoolFull", vstart, 1); err != nil {
+	if err := compareIntDiff(framework.DebugVars(), "Errors/RESOURCE_EXHAUSTED", vstart, 1); err != nil {
 		t.Error(err)
 	}
 }
@@ -360,9 +370,8 @@ func TestTxTimeout(t *testing.T) {
 
 	// Ensure commit fails.
 	err = client.Commit()
-	want := "not_in_tx: Transaction"
-	if err == nil || !strings.HasPrefix(err.Error(), want) {
-		t.Errorf("Error: %v, must contain %s", err, want)
+	if code := vterrors.Code(err); code != vtrpcpb.Code_ABORTED {
+		t.Errorf("Commit code: %v, want %v", code, vtrpcpb.Code_ABORTED)
 	}
 }
 
@@ -371,9 +380,9 @@ func TestForUpdate(t *testing.T) {
 		client := framework.NewClient()
 		query := fmt.Sprintf("select * from vitess_test where intval=2 %s", mode)
 		_, err := client.Execute(query, nil)
-		want := "error: Disallowed"
+		want := "disallowed"
 		if err == nil || !strings.HasPrefix(err.Error(), want) {
-			t.Errorf("Error: %v, must have prefix %s", err, want)
+			t.Errorf("%v, must have prefix %s", err, want)
 		}
 
 		// We should not get errors here
@@ -547,7 +556,7 @@ func TestMMCommitFlow(t *testing.T) {
 	err = client.CreateTransaction("aa", []*querypb.Target{})
 	want := "Duplicate entry"
 	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("Error: %v, must contain %s", err, want)
+		t.Errorf("%v, must contain %s", err, want)
 	}
 
 	err = client.StartCommit("aa")
@@ -556,9 +565,9 @@ func TestMMCommitFlow(t *testing.T) {
 	}
 
 	err = client.SetRollback("aa", 0)
-	want = "error: could not transition to ROLLBACK: aa"
+	want = "could not transition to ROLLBACK: aa"
 	if err == nil || err.Error() != want {
-		t.Errorf("Error: %v, must contain %s", err, want)
+		t.Errorf("%v, must contain %s", err, want)
 	}
 
 	info, err := client.ReadTransaction("aa")
@@ -703,12 +712,19 @@ func TestWatchdog(t *testing.T) {
 		t.Error(err)
 	}
 
-	// Make sure the watchdog doesn't kick in any more.
-	select {
-	case dtid = <-framework.ResolveChan:
-		t.Errorf("Unexpected message: %s", dtid)
-	case <-time.After(2 * time.Second):
+	// Make sure the watchdog stops sending messages.
+	// Check twice. Sometimes, a race can still cause
+	// a stray message.
+	dtid = ""
+	for i := 0; i < 2; i++ {
+		select {
+		case dtid = <-framework.ResolveChan:
+			continue
+		case <-time.After(2 * time.Second):
+			return
+		}
 	}
+	t.Errorf("Unexpected message: %s", dtid)
 }
 
 func TestUnresolvedTracking(t *testing.T) {

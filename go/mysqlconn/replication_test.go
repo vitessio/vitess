@@ -543,7 +543,7 @@ func testRowReplicationWithRealDatabase(t *testing.T, params *sqldb.ConnParams) 
 			}
 
 			// Check it has 2 rows, and first value is '10', second value is 'nice name'.
-			values := wr.StringValues(tableMap, 0)
+			values, _ := wr.StringValues(tableMap, 0)
 			t.Logf("Got WriteRows event data: %v %v", wr, values)
 			if expected := []string{"10", "nice name"}; !reflect.DeepEqual(values, expected) {
 				t.Fatalf("StringValues returned %v, expected %v", values, expected)
@@ -560,14 +560,14 @@ func testRowReplicationWithRealDatabase(t *testing.T, params *sqldb.ConnParams) 
 			}
 
 			// Check it has 2 identify rows, and first value is '10', second value is 'nice name'.
-			values := ur.StringIdentifies(tableMap, 0)
+			values, _ := ur.StringIdentifies(tableMap, 0)
 			t.Logf("Got UpdateRows event identify: %v %v", ur, values)
 			if expected := []string{"10", "nice name"}; !reflect.DeepEqual(values, expected) {
 				t.Fatalf("StringIdentifies returned %v, expected %v", values, expected)
 			}
 
 			// Check it has 2 values rows, and first value is '10', second value is 'nicer name'.
-			values = ur.StringValues(tableMap, 0)
+			values, _ = ur.StringValues(tableMap, 0)
 			t.Logf("Got UpdateRows event data: %v %v", ur, values)
 			if expected := []string{"10", "nicer name"}; !reflect.DeepEqual(values, expected) {
 				t.Fatalf("StringValues returned %v, expected %v", values, expected)
@@ -584,7 +584,7 @@ func testRowReplicationWithRealDatabase(t *testing.T, params *sqldb.ConnParams) 
 			}
 
 			// Check it has 2 rows, and first value is '10', second value is 'nicer name'.
-			values := dr.StringIdentifies(tableMap, 0)
+			values, _ := dr.StringIdentifies(tableMap, 0)
 			t.Logf("Got DeleteRows event identify: %v %v", dr, values)
 			if expected := []string{"10", "nicer name"}; !reflect.DeepEqual(values, expected) {
 				t.Fatalf("StringIdentifies returned %v, expected %v", values, expected)

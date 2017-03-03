@@ -34,11 +34,11 @@ func (q *query) Execute(ctx context.Context, request *querypb.ExecuteRequest) (r
 	)
 	bv, err := querytypes.Proto3ToBindVariables(request.Query.BindVariables)
 	if err != nil {
-		return nil, vterrors.ToGRPCError(err)
+		return nil, vterrors.ToGRPC(err)
 	}
 	result, err := q.server.Execute(ctx, request.Target, request.Query.Sql, bv, request.TransactionId, request.Options)
 	if err != nil {
-		return nil, vterrors.ToGRPCError(err)
+		return nil, vterrors.ToGRPC(err)
 	}
 	return &querypb.ExecuteResponse{
 		Result: sqltypes.ResultToProto3(result),
@@ -54,11 +54,11 @@ func (q *query) ExecuteBatch(ctx context.Context, request *querypb.ExecuteBatchR
 	)
 	bql, err := querytypes.Proto3ToBoundQueryList(request.Queries)
 	if err != nil {
-		return nil, vterrors.ToGRPCError(err)
+		return nil, vterrors.ToGRPC(err)
 	}
 	results, err := q.server.ExecuteBatch(ctx, request.Target, bql, request.AsTransaction, request.TransactionId, request.Options)
 	if err != nil {
-		return nil, vterrors.ToGRPCError(err)
+		return nil, vterrors.ToGRPC(err)
 	}
 	return &querypb.ExecuteBatchResponse{
 		Results: sqltypes.ResultsToProto3(results),
@@ -74,14 +74,14 @@ func (q *query) StreamExecute(request *querypb.StreamExecuteRequest, stream quer
 	)
 	bv, err := querytypes.Proto3ToBindVariables(request.Query.BindVariables)
 	if err != nil {
-		return vterrors.ToGRPCError(err)
+		return vterrors.ToGRPC(err)
 	}
 	if err := q.server.StreamExecute(ctx, request.Target, request.Query.Sql, bv, request.Options, func(reply *sqltypes.Result) error {
 		return stream.Send(&querypb.StreamExecuteResponse{
 			Result: sqltypes.ResultToProto3(reply),
 		})
 	}); err != nil {
-		return vterrors.ToGRPCError(err)
+		return vterrors.ToGRPC(err)
 	}
 	return nil
 }
@@ -95,7 +95,7 @@ func (q *query) Begin(ctx context.Context, request *querypb.BeginRequest) (respo
 	)
 	transactionID, err := q.server.Begin(ctx, request.Target)
 	if err != nil {
-		return nil, vterrors.ToGRPCError(err)
+		return nil, vterrors.ToGRPC(err)
 	}
 
 	return &querypb.BeginResponse{
@@ -111,7 +111,7 @@ func (q *query) Commit(ctx context.Context, request *querypb.CommitRequest) (res
 		request.ImmediateCallerId,
 	)
 	if err := q.server.Commit(ctx, request.Target, request.TransactionId); err != nil {
-		return nil, vterrors.ToGRPCError(err)
+		return nil, vterrors.ToGRPC(err)
 	}
 	return &querypb.CommitResponse{}, nil
 }
@@ -124,7 +124,7 @@ func (q *query) Rollback(ctx context.Context, request *querypb.RollbackRequest) 
 		request.ImmediateCallerId,
 	)
 	if err := q.server.Rollback(ctx, request.Target, request.TransactionId); err != nil {
-		return nil, vterrors.ToGRPCError(err)
+		return nil, vterrors.ToGRPC(err)
 	}
 
 	return &querypb.RollbackResponse{}, nil
@@ -138,7 +138,7 @@ func (q *query) Prepare(ctx context.Context, request *querypb.PrepareRequest) (r
 		request.ImmediateCallerId,
 	)
 	if err := q.server.Prepare(ctx, request.Target, request.TransactionId, request.Dtid); err != nil {
-		return nil, vterrors.ToGRPCError(err)
+		return nil, vterrors.ToGRPC(err)
 	}
 
 	return &querypb.PrepareResponse{}, nil
@@ -152,7 +152,7 @@ func (q *query) CommitPrepared(ctx context.Context, request *querypb.CommitPrepa
 		request.ImmediateCallerId,
 	)
 	if err := q.server.CommitPrepared(ctx, request.Target, request.Dtid); err != nil {
-		return nil, vterrors.ToGRPCError(err)
+		return nil, vterrors.ToGRPC(err)
 	}
 
 	return &querypb.CommitPreparedResponse{}, nil
@@ -166,7 +166,7 @@ func (q *query) RollbackPrepared(ctx context.Context, request *querypb.RollbackP
 		request.ImmediateCallerId,
 	)
 	if err := q.server.RollbackPrepared(ctx, request.Target, request.Dtid, request.TransactionId); err != nil {
-		return nil, vterrors.ToGRPCError(err)
+		return nil, vterrors.ToGRPC(err)
 	}
 
 	return &querypb.RollbackPreparedResponse{}, nil
@@ -180,7 +180,7 @@ func (q *query) CreateTransaction(ctx context.Context, request *querypb.CreateTr
 		request.ImmediateCallerId,
 	)
 	if err := q.server.CreateTransaction(ctx, request.Target, request.Dtid, request.Participants); err != nil {
-		return nil, vterrors.ToGRPCError(err)
+		return nil, vterrors.ToGRPC(err)
 	}
 
 	return &querypb.CreateTransactionResponse{}, nil
@@ -194,7 +194,7 @@ func (q *query) StartCommit(ctx context.Context, request *querypb.StartCommitReq
 		request.ImmediateCallerId,
 	)
 	if err := q.server.StartCommit(ctx, request.Target, request.TransactionId, request.Dtid); err != nil {
-		return nil, vterrors.ToGRPCError(err)
+		return nil, vterrors.ToGRPC(err)
 	}
 
 	return &querypb.StartCommitResponse{}, nil
@@ -208,7 +208,7 @@ func (q *query) SetRollback(ctx context.Context, request *querypb.SetRollbackReq
 		request.ImmediateCallerId,
 	)
 	if err := q.server.SetRollback(ctx, request.Target, request.Dtid, request.TransactionId); err != nil {
-		return nil, vterrors.ToGRPCError(err)
+		return nil, vterrors.ToGRPC(err)
 	}
 
 	return &querypb.SetRollbackResponse{}, nil
@@ -222,7 +222,7 @@ func (q *query) ConcludeTransaction(ctx context.Context, request *querypb.Conclu
 		request.ImmediateCallerId,
 	)
 	if err := q.server.ConcludeTransaction(ctx, request.Target, request.Dtid); err != nil {
-		return nil, vterrors.ToGRPCError(err)
+		return nil, vterrors.ToGRPC(err)
 	}
 
 	return &querypb.ConcludeTransactionResponse{}, nil
@@ -237,7 +237,7 @@ func (q *query) ReadTransaction(ctx context.Context, request *querypb.ReadTransa
 	)
 	result, err := q.server.ReadTransaction(ctx, request.Target, request.Dtid)
 	if err != nil {
-		return nil, vterrors.ToGRPCError(err)
+		return nil, vterrors.ToGRPC(err)
 	}
 
 	return &querypb.ReadTransactionResponse{Metadata: result}, nil
@@ -252,7 +252,7 @@ func (q *query) BeginExecute(ctx context.Context, request *querypb.BeginExecuteR
 	)
 	bv, err := querytypes.Proto3ToBindVariables(request.Query.BindVariables)
 	if err != nil {
-		return nil, vterrors.ToGRPCError(err)
+		return nil, vterrors.ToGRPC(err)
 	}
 
 	result, transactionID, err := q.server.BeginExecute(ctx, request.Target, request.Query.Sql, bv, request.Options)
@@ -260,11 +260,11 @@ func (q *query) BeginExecute(ctx context.Context, request *querypb.BeginExecuteR
 		// if we have a valid transactionID, return the error in-band
 		if transactionID != 0 {
 			return &querypb.BeginExecuteResponse{
-				Error:         vterrors.VtRPCErrorFromVtError(err),
+				Error:         vterrors.ToVTRPC(err),
 				TransactionId: transactionID,
 			}, nil
 		}
-		return nil, vterrors.ToGRPCError(err)
+		return nil, vterrors.ToGRPC(err)
 	}
 	return &querypb.BeginExecuteResponse{
 		Result:        sqltypes.ResultToProto3(result),
@@ -281,7 +281,7 @@ func (q *query) BeginExecuteBatch(ctx context.Context, request *querypb.BeginExe
 	)
 	bql, err := querytypes.Proto3ToBoundQueryList(request.Queries)
 	if err != nil {
-		return nil, vterrors.ToGRPCError(err)
+		return nil, vterrors.ToGRPC(err)
 	}
 
 	results, transactionID, err := q.server.BeginExecuteBatch(ctx, request.Target, bql, request.AsTransaction, request.Options)
@@ -289,11 +289,11 @@ func (q *query) BeginExecuteBatch(ctx context.Context, request *querypb.BeginExe
 		// if we have a valid transactionID, return the error in-band
 		if transactionID != 0 {
 			return &querypb.BeginExecuteBatchResponse{
-				Error:         vterrors.VtRPCErrorFromVtError(err),
+				Error:         vterrors.ToVTRPC(err),
 				TransactionId: transactionID,
 			}, nil
 		}
-		return nil, vterrors.ToGRPCError(err)
+		return nil, vterrors.ToGRPC(err)
 	}
 	return &querypb.BeginExecuteBatchResponse{
 		Results:       sqltypes.ResultsToProto3(results),
@@ -313,7 +313,7 @@ func (q *query) MessageStream(request *querypb.MessageStreamRequest, stream quer
 			Result: sqltypes.ResultToProto3(qr),
 		})
 	}); err != nil {
-		return vterrors.ToGRPCError(err)
+		return vterrors.ToGRPC(err)
 	}
 	return nil
 }
@@ -327,7 +327,7 @@ func (q *query) MessageAck(ctx context.Context, request *querypb.MessageAckReque
 	)
 	count, err := q.server.MessageAck(ctx, request.Target, request.Name, request.Ids)
 	if err != nil {
-		return nil, vterrors.ToGRPCError(err)
+		return nil, vterrors.ToGRPC(err)
 	}
 	return &querypb.MessageAckResponse{
 		Result: &querypb.QueryResult{
@@ -346,7 +346,7 @@ func (q *query) SplitQuery(ctx context.Context, request *querypb.SplitQueryReque
 
 	bq, err := querytypes.Proto3ToBoundQuery(request.Query)
 	if err != nil {
-		return nil, vterrors.ToGRPCError(err)
+		return nil, vterrors.ToGRPC(err)
 	}
 	splits := []querytypes.QuerySplit{}
 	splits, err = q.server.SplitQuery(
@@ -358,11 +358,11 @@ func (q *query) SplitQuery(ctx context.Context, request *querypb.SplitQueryReque
 		request.NumRowsPerQueryPart,
 		request.Algorithm)
 	if err != nil {
-		return nil, vterrors.ToGRPCError(err)
+		return nil, vterrors.ToGRPC(err)
 	}
 	qs, err := querytypes.QuerySplitsToProto3(splits)
 	if err != nil {
-		return nil, vterrors.ToGRPCError(err)
+		return nil, vterrors.ToGRPC(err)
 	}
 	return &querypb.SplitQueryResponse{Queries: qs}, nil
 }
@@ -371,7 +371,7 @@ func (q *query) SplitQuery(ctx context.Context, request *querypb.SplitQueryReque
 func (q *query) StreamHealth(request *querypb.StreamHealthRequest, stream queryservicepb.Query_StreamHealthServer) (err error) {
 	defer q.server.HandlePanic(&err)
 	if err = q.server.StreamHealth(stream.Context(), stream.Send); err != nil {
-		return vterrors.ToGRPCError(err)
+		return vterrors.ToGRPC(err)
 	}
 	return nil
 }
@@ -388,7 +388,7 @@ func (q *query) UpdateStream(request *querypb.UpdateStreamRequest, stream querys
 			Event: reply,
 		})
 	}); err != nil {
-		return vterrors.ToGRPCError(err)
+		return vterrors.ToGRPC(err)
 	}
 	return nil
 }

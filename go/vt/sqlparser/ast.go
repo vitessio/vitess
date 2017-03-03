@@ -123,6 +123,7 @@ func (*Union) iSelectStatement()  {}
 
 // Select represents a SELECT statement.
 type Select struct {
+	Cache       string
 	Comments    Comments
 	Distinct    string
 	Hints       string
@@ -148,10 +149,16 @@ const (
 	ShareModeStr = " lock in share mode"
 )
 
+// Select.Cache
+const (
+	SQLCacheStr   = "sql_cache "
+	SQLNoCacheStr = "sql_no_cache "
+)
+
 // Format formats the node.
 func (node *Select) Format(buf *TrackedBuffer) {
-	buf.Myprintf("select %v%s%s%v from %v%v%v%v%v%v%s",
-		node.Comments, node.Distinct, node.Hints, node.SelectExprs,
+	buf.Myprintf("select %v%s%s%s%v from %v%v%v%v%v%v%s",
+		node.Comments, node.Cache, node.Distinct, node.Hints, node.SelectExprs,
 		node.From, node.Where,
 		node.GroupBy, node.Having, node.OrderBy,
 		node.Limit, node.Lock)
@@ -296,7 +303,7 @@ func (Values) iInsertRows()  {}
 // Update represents an UPDATE statement.
 type Update struct {
 	Comments Comments
-	Table    *TableName
+	Table    *AliasedTableExpr
 	Exprs    UpdateExprs
 	Where    *Where
 	OrderBy  OrderBy
@@ -862,28 +869,31 @@ type Expr interface {
 	SQLNode
 }
 
-func (*AndExpr) iExpr()        {}
-func (*OrExpr) iExpr()         {}
-func (*NotExpr) iExpr()        {}
-func (*ParenExpr) iExpr()      {}
-func (*ComparisonExpr) iExpr() {}
-func (*RangeCond) iExpr()      {}
-func (*IsExpr) iExpr()         {}
-func (*ExistsExpr) iExpr()     {}
-func (*SQLVal) iExpr()         {}
-func (*NullVal) iExpr()        {}
-func (BoolVal) iExpr()         {}
-func (*ColName) iExpr()        {}
-func (ValTuple) iExpr()        {}
-func (*Subquery) iExpr()       {}
-func (ListArg) iExpr()         {}
-func (*BinaryExpr) iExpr()     {}
-func (*UnaryExpr) iExpr()      {}
-func (*IntervalExpr) iExpr()   {}
-func (*CollateExpr) iExpr()    {}
-func (*FuncExpr) iExpr()       {}
-func (*CaseExpr) iExpr()       {}
-func (*ValuesFuncExpr) iExpr() {}
+func (*AndExpr) iExpr()         {}
+func (*OrExpr) iExpr()          {}
+func (*NotExpr) iExpr()         {}
+func (*ParenExpr) iExpr()       {}
+func (*ComparisonExpr) iExpr()  {}
+func (*RangeCond) iExpr()       {}
+func (*IsExpr) iExpr()          {}
+func (*ExistsExpr) iExpr()      {}
+func (*SQLVal) iExpr()          {}
+func (*NullVal) iExpr()         {}
+func (BoolVal) iExpr()          {}
+func (*ColName) iExpr()         {}
+func (ValTuple) iExpr()         {}
+func (*Subquery) iExpr()        {}
+func (ListArg) iExpr()          {}
+func (*BinaryExpr) iExpr()      {}
+func (*UnaryExpr) iExpr()       {}
+func (*IntervalExpr) iExpr()    {}
+func (*CollateExpr) iExpr()     {}
+func (*FuncExpr) iExpr()        {}
+func (*CaseExpr) iExpr()        {}
+func (*ValuesFuncExpr) iExpr()  {}
+func (*ConvertExpr) iExpr()     {}
+func (*MatchExpr) iExpr()       {}
+func (*GroupConcatExpr) iExpr() {}
 
 // Exprs represents a list of value expressions.
 // It's not a valid expression because it's not parenthesized.
@@ -998,6 +1008,7 @@ func (node *ParenExpr) WalkSubtree(visit Visit) error {
 type ComparisonExpr struct {
 	Operator    string
 	Left, Right Expr
+	Escape      Expr
 }
 
 // ComparisonExpr.Operator
@@ -1017,12 +1028,14 @@ const (
 	NotRegexpStr         = "not regexp"
 	JSONExtractOp        = "->"
 	JSONUnquoteExtractOp = "->>"
-	CollateStr           = "collate"
 )
 
 // Format formats the node.
 func (node *ComparisonExpr) Format(buf *TrackedBuffer) {
 	buf.Myprintf("%v %s %v", node.Left, node.Operator, node.Right)
+	if node.Escape != nil {
+		buf.Myprintf(" escape %v", node.Escape)
+	}
 }
 
 // WalkSubtree walks the nodes of the subtree.
@@ -1034,6 +1047,7 @@ func (node *ComparisonExpr) WalkSubtree(visit Visit) error {
 		visit,
 		node.Left,
 		node.Right,
+		node.Escape,
 	)
 }
 
@@ -1349,6 +1363,7 @@ const (
 	MinusStr      = "-"
 	MultStr       = "*"
 	DivStr        = "/"
+	IntDivStr     = "div"
 	ModStr        = "%"
 	ShiftLeftStr  = "<<"
 	ShiftRightStr = ">>"
@@ -1373,24 +1388,26 @@ func (node *BinaryExpr) WalkSubtree(visit Visit) error {
 
 // UnaryExpr represents a unary value expression.
 type UnaryExpr struct {
-	Operator byte
+	Operator string
 	Expr     Expr
 }
 
 // UnaryExpr.Operator
 const (
-	UPlusStr  = '+'
-	UMinusStr = '-'
-	TildaStr  = '~'
+	UPlusStr  = "+"
+	UMinusStr = "-"
+	TildaStr  = "~"
+	BangStr   = "!"
+	BinaryStr = "binary "
 )
 
 // Format formats the node.
 func (node *UnaryExpr) Format(buf *TrackedBuffer) {
 	if _, unary := node.Expr.(*UnaryExpr); unary {
-		buf.Myprintf("%c %v", node.Operator, node.Expr)
+		buf.Myprintf("%s %v", node.Operator, node.Expr)
 		return
 	}
-	buf.Myprintf("%c%v", node.Operator, node.Expr)
+	buf.Myprintf("%s%v", node.Operator, node.Expr)
 }
 
 // WalkSubtree walks the nodes of the subtree.
@@ -1451,9 +1468,10 @@ func (node *CollateExpr) WalkSubtree(visit Visit) error {
 
 // FuncExpr represents a function call.
 type FuncExpr struct {
-	Name     ColIdent
-	Distinct bool
-	Exprs    SelectExprs
+	Qualifier TableIdent
+	Name      ColIdent
+	Distinct  bool
+	Exprs     SelectExprs
 }
 
 // Format formats the node.
@@ -1461,6 +1479,9 @@ func (node *FuncExpr) Format(buf *TrackedBuffer) {
 	var distinct string
 	if node.Distinct {
 		distinct = "distinct "
+	}
+	if !node.Qualifier.IsEmpty() {
+		buf.Myprintf("%v.", node.Qualifier)
 	}
 	// Function names should not be back-quoted even
 	// if they match a reserved word. So, print the
@@ -1475,6 +1496,8 @@ func (node *FuncExpr) WalkSubtree(visit Visit) error {
 	}
 	return Walk(
 		visit,
+		node.Qualifier,
+		node.Name,
 		node.Exprs,
 	)
 }
@@ -1504,6 +1527,31 @@ func (node *FuncExpr) IsAggregate() bool {
 	return Aggregates[node.Name.Lowered()]
 }
 
+// GroupConcatExpr represents a call to GROUP_CONCAT
+type GroupConcatExpr struct {
+	Distinct  string
+	Exprs     SelectExprs
+	OrderBy   OrderBy
+	Separator string
+}
+
+// Format formats the node
+func (node *GroupConcatExpr) Format(buf *TrackedBuffer) {
+	buf.Myprintf("group_concat(%s%v%v%s)", node.Distinct, node.Exprs, node.OrderBy, node.Separator)
+}
+
+// WalkSubtree walks the nodes of the subtree.
+func (node *GroupConcatExpr) WalkSubtree(visit Visit) error {
+	if node == nil {
+		return nil
+	}
+	return Walk(
+		visit,
+		node.Exprs,
+		node.OrderBy,
+	)
+}
+
 // ValuesFuncExpr represents a function call.
 type ValuesFuncExpr struct {
 	Name     ColIdent
@@ -1531,6 +1579,96 @@ func (node *ValuesFuncExpr) WalkSubtree(visit Visit) error {
 		visit,
 		node.Name,
 		node.Resolved,
+	)
+}
+
+// ConvertExpr represents a call to CONVERT(expr, type)
+// CONVERT(expr USING transcoding_name) it not supported
+type ConvertExpr struct {
+	Expr Expr
+	Type *ConvertType
+}
+
+// Format formats the node.
+func (node *ConvertExpr) Format(buf *TrackedBuffer) {
+	buf.Myprintf("convert(%v, %v)", node.Expr, node.Type)
+}
+
+// WalkSubtree walks the nodes of the subtree.
+func (node *ConvertExpr) WalkSubtree(visit Visit) error {
+	if node == nil {
+		return nil
+	}
+	return Walk(
+		visit,
+		node.Expr,
+		node.Type,
+	)
+}
+
+// ConvertType represents the type in call to CONVERT(expr, type)
+type ConvertType struct {
+	Type     string
+	Length   *SQLVal
+	Scale    *SQLVal
+	Operator string
+	Charset  string
+}
+
+// this string is "character set" and this comment is required
+const (
+	CharacterSetStr = " character set"
+)
+
+// Format formats the node.
+func (node *ConvertType) Format(buf *TrackedBuffer) {
+	buf.Myprintf("%s", node.Type)
+	if node.Length != nil {
+		buf.Myprintf("(%v", node.Length)
+		if node.Scale != nil {
+			buf.Myprintf(", %v", node.Scale)
+		}
+		buf.Myprintf(")")
+	}
+	if node.Charset != "" {
+		buf.Myprintf("%s %s", node.Operator, node.Charset)
+	}
+}
+
+// WalkSubtree walks the nodes of the subtree.
+func (node *ConvertType) WalkSubtree(visit Visit) error {
+	return nil
+}
+
+// MatchExpr represents a call to the MATCH function
+type MatchExpr struct {
+	Columns Columns
+	Expr    Expr
+	Option  string
+}
+
+// MatchExpr.Option
+const (
+	BooleanModeStr                           = " in boolean mode"
+	NaturalLanguageModeStr                   = " in natural language mode"
+	NaturalLanguageModeWithQueryExpansionStr = " in natural language mode with query expansion"
+	QueryExpansionStr                        = " with query expansion"
+)
+
+// Format formats the node
+func (node *MatchExpr) Format(buf *TrackedBuffer) {
+	buf.Myprintf("match%v against (%v%s)", node.Columns, node.Expr, node.Option)
+}
+
+// WalkSubtree walks the nodes of the subtree.
+func (node *MatchExpr) WalkSubtree(visit Visit) error {
+	if node == nil {
+		return nil
+	}
+	return Walk(
+		visit,
+		node.Columns,
+		node.Expr,
 	)
 }
 
@@ -1749,7 +1887,7 @@ func (node UpdateExprs) WalkSubtree(visit Visit) error {
 
 // UpdateExpr represents an update expression.
 type UpdateExpr struct {
-	Name ColIdent
+	Name *ColName
 	Expr Expr
 }
 

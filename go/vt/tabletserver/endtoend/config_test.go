@@ -11,7 +11,10 @@ import (
 	"testing"
 	"time"
 
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 	"github.com/youtube/vitess/go/vt/tabletserver/endtoend/framework"
+	"github.com/youtube/vitess/go/vt/tabletserver/tabletenv"
+	"github.com/youtube/vitess/go/vt/vterrors"
 )
 
 // compareIntDiff returns an error if end[tag] != start[tag]+diff.
@@ -35,64 +38,64 @@ func TestConfigVars(t *testing.T) {
 		val int
 	}{{
 		tag: "BeginTimeout",
-		val: int(framework.BaseConfig.TxPoolTimeout * 1e9),
+		val: int(tabletenv.Config.TxPoolTimeout * 1e9),
 	}, {
 		tag: "ConnPoolAvailable",
-		val: framework.BaseConfig.PoolSize,
+		val: tabletenv.Config.PoolSize,
 	}, {
 		tag: "ConnPoolCapacity",
-		val: framework.BaseConfig.PoolSize,
+		val: tabletenv.Config.PoolSize,
 	}, {
 		tag: "ConnPoolIdleTimeout",
-		val: int(framework.BaseConfig.IdleTimeout * 1e9),
+		val: int(tabletenv.Config.IdleTimeout * 1e9),
 	}, {
 		tag: "ConnPoolMaxCap",
-		val: framework.BaseConfig.PoolSize,
+		val: tabletenv.Config.PoolSize,
 	}, {
 		tag: "MaxDMLRows",
-		val: framework.BaseConfig.MaxDMLRows,
+		val: tabletenv.Config.MaxDMLRows,
 	}, {
 		tag: "MaxResultSize",
-		val: framework.BaseConfig.MaxResultSize,
+		val: tabletenv.Config.MaxResultSize,
 	}, {
 		tag: "QueryCacheCapacity",
-		val: framework.BaseConfig.QueryCacheSize,
+		val: tabletenv.Config.QueryCacheSize,
 	}, {
 		tag: "QueryTimeout",
-		val: int(framework.BaseConfig.QueryTimeout * 1e9),
+		val: int(tabletenv.Config.QueryTimeout * 1e9),
 	}, {
 		tag: "SchemaReloadTime",
-		val: int(framework.BaseConfig.SchemaReloadTime * 1e9),
+		val: int(tabletenv.Config.SchemaReloadTime * 1e9),
 	}, {
 		tag: "StreamBufferSize",
-		val: framework.BaseConfig.StreamBufferSize,
+		val: tabletenv.Config.StreamBufferSize,
 	}, {
 		tag: "StreamConnPoolAvailable",
-		val: framework.BaseConfig.StreamPoolSize,
+		val: tabletenv.Config.StreamPoolSize,
 	}, {
 		tag: "StreamConnPoolCapacity",
-		val: framework.BaseConfig.StreamPoolSize,
+		val: tabletenv.Config.StreamPoolSize,
 	}, {
 		tag: "StreamConnPoolIdleTimeout",
-		val: int(framework.BaseConfig.IdleTimeout * 1e9),
+		val: int(tabletenv.Config.IdleTimeout * 1e9),
 	}, {
 		tag: "StreamConnPoolMaxCap",
-		val: framework.BaseConfig.StreamPoolSize,
+		val: tabletenv.Config.StreamPoolSize,
 	}, {
 		tag: "TransactionPoolAvailable",
-		val: framework.BaseConfig.TransactionCap,
+		val: tabletenv.Config.TransactionCap,
 	}, {
 		tag: "TransactionPoolCapacity",
-		val: framework.BaseConfig.TransactionCap,
+		val: tabletenv.Config.TransactionCap,
 	}, {
 		tag: "TransactionPoolIdleTimeout",
-		val: int(framework.BaseConfig.IdleTimeout * 1e9),
+		val: int(tabletenv.Config.IdleTimeout * 1e9),
 	}, {
 		tag: "TransactionPoolMaxCap",
-		val: framework.BaseConfig.TransactionCap,
+		val: tabletenv.Config.TransactionCap,
 	}, {
 		tag: "TransactionPoolTimeout",
-		val: int(framework.BaseConfig.TransactionTimeout * 1e9),
+		val: int(tabletenv.Config.TransactionTimeout * 1e9),
 	}}
 	for _, tcase := range cases {
 		if err := verifyIntValue(vars, tcase.tag, tcase.val); err != nil {
@@ -174,7 +177,7 @@ func TestMexResultSize(t *testing.T) {
 	client := framework.NewClient()
 	query := "select * from vitess_test"
 	_, err := client.Execute(query, nil)
-	want := "error: Row count exceeded"
+	want := "Row count exceeded"
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
 		t.Errorf("Error: %v, must start with %s", err, want)
 	}
@@ -304,14 +307,12 @@ func TestQueryTimeout(t *testing.T) {
 		return
 	}
 	_, err = client.Execute("select sleep(1) from vitess_test", nil)
-	want := "error: the query was killed"
-	if err == nil || !strings.HasPrefix(err.Error(), want) {
-		t.Errorf("Error: %v, must start with %s", err, want)
+	if code := vterrors.Code(err); code != vtrpcpb.Code_DEADLINE_EXCEEDED {
+		t.Errorf("Error code: %v, want %v", code, vtrpcpb.Code_DEADLINE_EXCEEDED)
 	}
 	_, err = client.Execute("select 1 from dual", nil)
-	want = "not_in_tx: Transaction"
-	if err == nil || !strings.HasPrefix(err.Error(), want) {
-		t.Errorf("Error: %v, must start with %s", err, want)
+	if code := vterrors.Code(err); code != vtrpcpb.Code_ABORTED {
+		t.Errorf("Error code: %v, want %v", code, vtrpcpb.Code_ABORTED)
 	}
 	vend := framework.DebugVars()
 	if err := verifyIntValue(vend, "QueryTimeout", int(100*time.Millisecond)); err != nil {
@@ -346,7 +347,7 @@ func TestStrictMode(t *testing.T) {
 		}
 		defer client.Rollback()
 
-		want := "error: DML too complex"
+		want := "DML too complex"
 		for _, query := range queries {
 			_, err = client.Execute(query, nil)
 			if err == nil || err.Error() != want {

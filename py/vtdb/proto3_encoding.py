@@ -14,6 +14,7 @@ from decimal import Decimal
 from vtproto import query_pb2
 from vtproto import topodata_pb2
 from vtproto import vtgate_pb2
+from vtproto import vtrpc_pb2
 
 from vtdb import field_types
 from vtdb import keyrange_constants
@@ -54,6 +55,24 @@ conversions = {
     # query_pb2.ENUM: no conversion
     # query_pb2.SET: no conversion
     # query_pb2.TUPLE: no conversion
+}
+
+# legacy_code_to_code_map maps legacy error codes
+# to the new code that matches grpc's cannonical error codes.
+legacy_code_to_code_map = {
+    vtrpc_pb2.SUCCESS_LEGACY: vtrpc_pb2.OK,
+    vtrpc_pb2.CANCELLED_LEGACY: vtrpc_pb2.CANCELED,
+    vtrpc_pb2.UNKNOWN_ERROR_LEGACY: vtrpc_pb2.UNKNOWN,
+    vtrpc_pb2.BAD_INPUT_LEGACY: vtrpc_pb2.INVALID_ARGUMENT,
+    vtrpc_pb2.DEADLINE_EXCEEDED_LEGACY: vtrpc_pb2.DEADLINE_EXCEEDED,
+    vtrpc_pb2.INTEGRITY_ERROR_LEGACY: vtrpc_pb2.ALREADY_EXISTS,
+    vtrpc_pb2.PERMISSION_DENIED_LEGACY: vtrpc_pb2.PERMISSION_DENIED,
+    vtrpc_pb2.RESOURCE_EXHAUSTED_LEGACY: vtrpc_pb2.RESOURCE_EXHAUSTED,
+    vtrpc_pb2.QUERY_NOT_SERVED_LEGACY: vtrpc_pb2.FAILED_PRECONDITION,
+    vtrpc_pb2.NOT_IN_TX_LEGACY: vtrpc_pb2.ABORTED,
+    vtrpc_pb2.INTERNAL_ERROR_LEGACY: vtrpc_pb2.INTERNAL,
+    vtrpc_pb2.TRANSIENT_ERROR_LEGACY: vtrpc_pb2.UNAVAILABLE,
+    vtrpc_pb2.UNAUTHENTICATED_LEGACY: vtrpc_pb2.UNAUTHENTICATED,
 }
 
 
@@ -257,6 +276,11 @@ class Proto3Connection(object):
     """
     if error.code:
       raise vtgate_utils.VitessError(exec_method, error.code, error.message)
+    elif error.legacy_code:
+      raise vtgate_utils.VitessError(
+          exec_method,
+          legacy_code_to_code_map[error.legacy_code],
+          error.message)
 
   def build_conversions(self, qr_fields):
     """Builds an array of fields and conversions from a result fields.

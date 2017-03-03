@@ -65,13 +65,13 @@ func lenNullString(value string) int {
 }
 
 func writeNullString(data []byte, pos int, value string) int {
-	pos += copy(data[pos:], []byte(value))
+	pos += copy(data[pos:], value)
 	data[pos] = 0
 	return pos + 1
 }
 
 func writeEOFString(data []byte, pos int, value string) int {
-	pos += copy(data[pos:], []byte(value))
+	pos += copy(data[pos:], value)
 	return pos
 }
 

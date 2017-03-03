@@ -12,7 +12,6 @@ import org.junit.runners.JUnit4;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.util.Arrays;
-import java.util.concurrent.TimeUnit;
 
 /**
  * This tests GrpcClient with a mock vtgate server (go/cmd/vtgateclienttest).

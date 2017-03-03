@@ -19,6 +19,7 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	"github.com/youtube/vitess/go/vt/tabletserver/tabletenv"
 	"github.com/youtube/vitess/go/vt/vtgate/fakerpcvtgateconn"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateconn"
 )
@@ -68,7 +69,7 @@ func TestTxExecutorPrepareNotInTx(t *testing.T) {
 	defer db.Close()
 	defer tsv.StopService()
 	err := txe.Prepare(0, "aa")
-	want := "not_in_tx: Transaction 0: not found"
+	want := "transaction 0: not found"
 	if err == nil || err.Error() != want {
 		t.Errorf("Prepare err: %v, want %s", err, want)
 	}
@@ -100,7 +101,7 @@ func TestTxExecutorPrepareRedoBeginFail(t *testing.T) {
 	db.AddRejectedQuery("begin", errors.New("begin fail"))
 	err := txe.Prepare(txid, "aa")
 	defer txe.RollbackPrepared("aa", 0)
-	want := "error: begin fail"
+	want := "begin fail"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("Prepare err: %v, want %s", err, want)
 	}
@@ -127,7 +128,7 @@ func TestTxExecutorPrepareRedoCommitFail(t *testing.T) {
 	db.AddRejectedQuery("commit", errors.New("commit fail"))
 	err := txe.Prepare(txid, "aa")
 	defer txe.RollbackPrepared("aa", 0)
-	want := "error: commit fail"
+	want := "commit fail"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("Prepare err: %v, want %s", err, want)
 	}
@@ -191,7 +192,7 @@ func TestTxExecutorCommitRedoCommitFail(t *testing.T) {
 	defer txe.RollbackPrepared("aa", 0)
 	db.AddRejectedQuery("commit", errors.New("commit fail"))
 	err = txe.CommitPrepared("aa")
-	want := "error: commit fail"
+	want := "commit fail"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("Prepare err: %v, want %s", err, want)
 	}
@@ -208,7 +209,7 @@ func TestTxExecutorRollbackBeginFail(t *testing.T) {
 	}
 	db.AddRejectedQuery("begin", errors.New("begin fail"))
 	err = txe.RollbackPrepared("aa", txid)
-	want := "error: begin fail"
+	want := "begin fail"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("Prepare err: %v, want %s", err, want)
 	}
@@ -264,7 +265,7 @@ func TestExecutorStartCommit(t *testing.T) {
 	db.AddQuery(commitTransition, &sqltypes.Result{})
 	txid = newTxForPrep(tsv)
 	err = txe.StartCommit(txid, "aa")
-	want := "error: could not transition to COMMIT: aa"
+	want := "could not transition to COMMIT: aa"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("Prepare err: %v, want %s", err, want)
 	}
@@ -286,7 +287,7 @@ func TestExecutorSetRollback(t *testing.T) {
 	db.AddQuery(rollbackTransition, &sqltypes.Result{})
 	txid = newTxForPrep(tsv)
 	err = txe.SetRollback("aa", txid)
-	want := "error: could not transition to ROLLBACK: aa"
+	want := "could not transition to ROLLBACK: aa"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("Prepare err: %v, want %s", err, want)
 	}
@@ -540,7 +541,7 @@ func TestNoTwopc(t *testing.T) {
 		},
 	}}
 
-	want := "error: 2pc is not enabled"
+	want := "2pc is not enabled"
 	for _, tc := range testcases {
 		err := tc.fun()
 		if err == nil || err.Error() != want {
@@ -552,7 +553,7 @@ func TestNoTwopc(t *testing.T) {
 func newTestTxExecutor(t *testing.T) (txe *TxExecutor, tsv *TabletServer, db *fakesqldb.DB) {
 	db = setUpQueryExecutorTest(t)
 	ctx := context.Background()
-	logStats := NewLogStats(ctx, "TestTxExecutor")
+	logStats := tabletenv.NewLogStats(ctx, "TestTxExecutor")
 	tsv = newTestTabletServer(ctx, smallTxPool, db)
 	db.AddQueryPattern("insert into `_vt`\\.redo_state\\(dtid, state, time_created\\) values \\('aa', 1,.*", &sqltypes.Result{})
 	db.AddQueryPattern("insert into `_vt`\\.redo_statement.*", &sqltypes.Result{})
@@ -571,7 +572,7 @@ func newTestTxExecutor(t *testing.T) (txe *TxExecutor, tsv *TabletServer, db *fa
 func newShortAgeExecutor(t *testing.T) (txe *TxExecutor, tsv *TabletServer, db *fakesqldb.DB) {
 	db = setUpQueryExecutorTest(t)
 	ctx := context.Background()
-	logStats := NewLogStats(ctx, "TestTxExecutor")
+	logStats := tabletenv.NewLogStats(ctx, "TestTxExecutor")
 	tsv = newTestTabletServer(ctx, smallTxPool|shortTwopcAge, db)
 	db.AddQueryPattern("insert into `_vt`\\.redo_state\\(dtid, state, time_created\\) values \\('aa', 1,.*", &sqltypes.Result{})
 	db.AddQueryPattern("insert into `_vt`\\.redo_statement.*", &sqltypes.Result{})
@@ -590,7 +591,7 @@ func newShortAgeExecutor(t *testing.T) (txe *TxExecutor, tsv *TabletServer, db *
 func newNoTwopcExecutor(t *testing.T) (txe *TxExecutor, tsv *TabletServer, db *fakesqldb.DB) {
 	db = setUpQueryExecutorTest(t)
 	ctx := context.Background()
-	logStats := NewLogStats(ctx, "TestTxExecutor")
+	logStats := tabletenv.NewLogStats(ctx, "TestTxExecutor")
 	tsv = newTestTabletServer(ctx, noTwopc, db)
 	return &TxExecutor{
 		ctx:      ctx,

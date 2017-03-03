@@ -10,17 +10,12 @@ import (
 	"google.golang.org/grpc/credentials"
 )
 
-// ClientSecureDialOption returns the gRPC dial option to use for the given client
-// connection. It is either using TLS, or Insecure if nothing is set.
-func ClientSecureDialOption(cert, key, ca, name string) (grpc.DialOption, error) {
-	// no secuirty options set, just return
-	if (cert == "" || key == "") && ca == "" {
-		return grpc.WithInsecure(), nil
-	}
-
+// TLSClientConfig returns the TLS config to use for a client to
+// connect to a server with the provided parameters.
+func TLSClientConfig(cert, key, ca, name string) (*tls.Config, error) {
 	config := &tls.Config{}
 
-	// load the client-side cert & key if any
+	// Load the client-side cert & key if any.
 	if cert != "" && key != "" {
 		crt, err := tls.LoadX509KeyPair(cert, key)
 		if err != nil {
@@ -29,7 +24,7 @@ func ClientSecureDialOption(cert, key, ca, name string) (grpc.DialOption, error)
 		config.Certificates = []tls.Certificate{crt}
 	}
 
-	// load the server ca if any
+	// Load the server CA if any.
 	if ca != "" {
 		b, err := ioutil.ReadFile(ca)
 		if err != nil {
@@ -42,12 +37,30 @@ func ClientSecureDialOption(cert, key, ca, name string) (grpc.DialOption, error)
 		config.RootCAs = cp
 	}
 
-	// set the server name if any
+	// Set the server name if any.
 	if name != "" {
 		config.ServerName = name
 	}
 
-	// create the creds server options
+	return config, nil
+}
+
+// ClientSecureDialOption returns the gRPC dial option to use for the
+// given client connection. It is either using TLS, or Insecure if
+// nothing is set.
+func ClientSecureDialOption(cert, key, ca, name string) (grpc.DialOption, error) {
+	// No security options set, just return.
+	if (cert == "" || key == "") && ca == "" {
+		return grpc.WithInsecure(), nil
+	}
+
+	// Load the config.
+	config, err := TLSClientConfig(cert, key, ca, name)
+	if err != nil {
+		return nil, err
+	}
+
+	// Create the creds server options.
 	creds := credentials.NewTLS(config)
 	return grpc.WithTransportCredentials(creds), nil
 }

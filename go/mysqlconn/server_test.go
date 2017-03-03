@@ -2,6 +2,7 @@ package mysqlconn
 
 import (
 	"fmt"
+	"io/ioutil"
 	"net"
 	"os"
 	"os/exec"
@@ -12,13 +13,37 @@ import (
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/sqltypes"
 	vtenv "github.com/youtube/vitess/go/vt/env"
+	"github.com/youtube/vitess/go/vt/servenv/grpcutils"
+	"github.com/youtube/vitess/go/vt/tlstest"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
-type testHandler struct {
-	t *testing.T
+var selectRowsResult = &sqltypes.Result{
+	Fields: []*querypb.Field{
+		{
+			Name: "id",
+			Type: querypb.Type_INT32,
+		},
+		{
+			Name: "name",
+			Type: querypb.Type_VARCHAR,
+		},
+	},
+	Rows: [][]sqltypes.Value{
+		{
+			sqltypes.MakeTrusted(querypb.Type_INT32, []byte("10")),
+			sqltypes.MakeTrusted(querypb.Type_VARCHAR, []byte("nice name")),
+		},
+		{
+			sqltypes.MakeTrusted(querypb.Type_INT32, []byte("20")),
+			sqltypes.MakeTrusted(querypb.Type_VARCHAR, []byte("nicer name")),
+		},
+	},
+	RowsAffected: 2,
 }
+
+type testHandler struct{}
 
 func (th *testHandler) NewConnection(c *Conn) {
 }
@@ -27,8 +52,6 @@ func (th *testHandler) ConnectionClosed(c *Conn) {
 }
 
 func (th *testHandler) ComQuery(c *Conn, query string) (*sqltypes.Result, error) {
-	th.t.Logf("ComQuery(id=%v,schemaName=%v): %v", c.ConnectionID, c.SchemaName, query)
-
 	if query == "error" {
 		return nil, sqldb.NewSQLError(ERUnknownComError, SSUnknownComError, "forced query handling error for: %v", query)
 	}
@@ -38,28 +61,7 @@ func (th *testHandler) ComQuery(c *Conn, query string) (*sqltypes.Result, error)
 	}
 
 	if query == "select rows" {
-		return &sqltypes.Result{
-			Fields: []*querypb.Field{
-				{
-					Name: "id",
-					Type: querypb.Type_INT32,
-				},
-				{
-					Name: "name",
-					Type: querypb.Type_VARCHAR,
-				},
-			},
-			Rows: [][]sqltypes.Value{
-				{
-					sqltypes.MakeTrusted(querypb.Type_INT32, []byte("10")),
-					sqltypes.MakeTrusted(querypb.Type_VARCHAR, []byte("nice name")),
-				},
-				{
-					sqltypes.MakeTrusted(querypb.Type_INT32, []byte("20")),
-					sqltypes.MakeTrusted(querypb.Type_VARCHAR, []byte("nicer name")),
-				},
-			},
-		}, nil
+		return selectRowsResult, nil
 	}
 
 	if query == "insert" {
@@ -85,19 +87,63 @@ func (th *testHandler) ComQuery(c *Conn, query string) (*sqltypes.Result, error)
 		}, nil
 	}
 
+	if query == "ssl echo" {
+		value := "OFF"
+		if c.Capabilities&CapabilityClientSSL > 0 {
+			value = "ON"
+		}
+		return &sqltypes.Result{
+			Fields: []*querypb.Field{
+				{
+					Name: "ssl_flag",
+					Type: querypb.Type_VARCHAR,
+				},
+			},
+			Rows: [][]sqltypes.Value{
+				{
+					sqltypes.MakeTrusted(querypb.Type_VARCHAR, []byte(value)),
+				},
+			},
+		}, nil
+	}
+
+	if query == "userData echo" {
+		return &sqltypes.Result{
+			Fields: []*querypb.Field{
+				{
+					Name: "user",
+					Type: querypb.Type_VARCHAR,
+				},
+				{
+					Name: "user_data",
+					Type: querypb.Type_VARCHAR,
+				},
+			},
+			Rows: [][]sqltypes.Value{
+				{
+					sqltypes.MakeTrusted(querypb.Type_VARCHAR, []byte(c.User)),
+					sqltypes.MakeTrusted(querypb.Type_VARCHAR, []byte(c.UserData)),
+				},
+			},
+		}, nil
+	}
+
 	return &sqltypes.Result{}, nil
 }
 
 func TestServer(t *testing.T) {
-	th := &testHandler{t: t}
+	th := &testHandler{}
 
-	l, err := NewListener("tcp", ":0", th)
+	authServer := NewAuthServerConfig()
+	authServer.Entries["user1"] = &AuthServerConfigEntry{
+		Password: "password1",
+		UserData: "userData1",
+	}
+	l, err := NewListener("tcp", ":0", authServer, th)
 	if err != nil {
 		t.Fatalf("NewListener failed: %v", err)
 	}
 	defer l.Close()
-	l.PasswordMap["user1"] = "password1"
-
 	go func() {
 		l.Accept()
 	}()
@@ -164,10 +210,218 @@ func TestServer(t *testing.T) {
 		t.Errorf("Unexpected output for 'schema echo'")
 	}
 
+	// Sanity check: make sure this didn't go through SSL
+	output, ok = runMysql(t, params, "ssl echo")
+	if !ok {
+		t.Fatalf("mysql failed: %v", output)
+	}
+	if !strings.Contains(output, "ssl_flag") ||
+		!strings.Contains(output, "OFF") ||
+		!strings.Contains(output, "1 row in set") {
+		t.Errorf("Unexpected output for 'ssl echo': %v", output)
+	}
+
+	// UserData check: checks the server user data is correct.
+	output, ok = runMysql(t, params, "userData echo")
+	if !ok {
+		t.Fatalf("mysql failed: %v", output)
+	}
+	if !strings.Contains(output, "user1") ||
+		!strings.Contains(output, "user_data") ||
+		!strings.Contains(output, "userData1") {
+		t.Errorf("Unexpected output for 'userData echo': %v", output)
+	}
+
+	// Permissions check: check a bad password is rejected.
+	params.Pass = "bad"
+	output, ok = runMysql(t, params, "select rows")
+	if ok {
+		t.Fatalf("mysql should have failed: %v", output)
+	}
+	if !strings.Contains(output, "1045") ||
+		!strings.Contains(output, "28000") ||
+		!strings.Contains(output, "Access denied") {
+		t.Errorf("Unexpected output for invalid password: %v", output)
+	}
+
+	// Permissions check: check an unknown user is rejected.
+	params.Pass = "password1"
+	params.Uname = "user2"
+	output, ok = runMysql(t, params, "select rows")
+	if ok {
+		t.Fatalf("mysql should have failed: %v", output)
+	}
+	if !strings.Contains(output, "1045") ||
+		!strings.Contains(output, "28000") ||
+		!strings.Contains(output, "Access denied") {
+		t.Errorf("Unexpected output for invalid password: %v", output)
+	}
+
 	// Uncomment to leave setup up for a while, to run tests manually.
 	//	fmt.Printf("Listening to server on host '%v' port '%v'.\n", host, port)
 	//	time.Sleep(60 * time.Minute)
 }
+
+// TestClearTextServer creates a Server that needs clear text passwords from the client.
+func TestClearTextServer(t *testing.T) {
+	th := &testHandler{}
+
+	authServer := NewAuthServerConfig()
+	authServer.Entries["user1"] = &AuthServerConfigEntry{
+		Password: "password1",
+		UserData: "userData1",
+	}
+	authServer.ClearText = true
+	l, err := NewListener("tcp", ":0", authServer, th)
+	if err != nil {
+		t.Fatalf("NewListener failed: %v", err)
+	}
+	defer l.Close()
+	go func() {
+		l.Accept()
+	}()
+
+	host := l.Addr().(*net.TCPAddr).IP.String()
+	port := l.Addr().(*net.TCPAddr).Port
+
+	// Setup the right parameters.
+	params := &sqldb.ConnParams{
+		Host:  host,
+		Port:  port,
+		Uname: "user1",
+		Pass:  "password1",
+	}
+
+	// Run a 'select rows' command with results.
+	// This should fail as clear text is not enabled by default on the client.
+	l.AllowClearTextWithoutTLS = true
+	output, ok := runMysql(t, params, "select rows")
+	if ok {
+		t.Fatalf("mysql should have failed but returned: %v", output)
+	}
+	if strings.Contains(output, "No such file or directory") {
+		t.Logf("skipping mysql clear text tests, as the clear text plugin cannot be loaded: %v", err)
+		return
+	}
+	if !strings.Contains(output, "plugin not enabled") {
+		t.Errorf("Unexpected output for 'select rows': %v", output)
+	}
+
+	// Now enable clear text plugin in client, but server requires SSL.
+	l.AllowClearTextWithoutTLS = false
+	output, ok = runMysql(t, params, enableCleartextPluginPrefix+"select rows")
+	if ok {
+		t.Fatalf("mysql should have failed but returned: %v", output)
+	}
+	if !strings.Contains(output, "Cannot use clear text authentication over non-SSL connections") {
+		t.Errorf("Unexpected output for 'select rows': %v", output)
+	}
+
+	// Now enable clear text plugin, it should now work.
+	l.AllowClearTextWithoutTLS = true
+	output, ok = runMysql(t, params, enableCleartextPluginPrefix+"select rows")
+	if !ok {
+		t.Fatalf("mysql failed: %v", output)
+	}
+	if !strings.Contains(output, "nice name") ||
+		!strings.Contains(output, "nicer name") ||
+		!strings.Contains(output, "2 rows in set") {
+		t.Errorf("Unexpected output for 'select rows'")
+	}
+
+	// Change password, make sure server rejects us.
+	params.Pass = ""
+	output, ok = runMysql(t, params, enableCleartextPluginPrefix+"select rows")
+	if ok {
+		t.Fatalf("mysql should have failed but returned: %v", output)
+	}
+	if !strings.Contains(output, "Access denied for user 'user1'") {
+		t.Errorf("Unexpected output for 'select rows': %v", output)
+	}
+}
+
+// TestTLSServer creates a Server with TLS support, then uses mysql
+// client to connect to it.
+func TestTLSServer(t *testing.T) {
+	th := &testHandler{}
+
+	authServer := NewAuthServerConfig()
+	authServer.Entries["user1"] = &AuthServerConfigEntry{
+		Password: "password1",
+	}
+
+	// Create the listener, so we can get its host.
+	// Below, we are enabling --ssl-verify-server-cert, which adds
+	// a check that the common name of the certificate matches the
+	// server host name we connect to.
+	l, err := NewListener("tcp", ":0", authServer, th)
+	if err != nil {
+		t.Fatalf("NewListener failed: %v", err)
+	}
+	defer l.Close()
+	host := l.Addr().(*net.TCPAddr).IP.String()
+	port := l.Addr().(*net.TCPAddr).Port
+
+	// Create the certs.
+	root, err := ioutil.TempDir("", "TestTLSServer")
+	if err != nil {
+		t.Fatalf("TempDir failed: %v", err)
+	}
+	defer os.RemoveAll(root)
+	tlstest.CreateCA(root)
+	tlstest.CreateSignedCert(root, tlstest.CA, "01", "server", host)
+	tlstest.CreateSignedCert(root, tlstest.CA, "02", "client", "Client Cert")
+
+	// Create the server with TLS config.
+	serverConfig, err := grpcutils.TLSServerConfig(
+		path.Join(root, "server-cert.pem"),
+		path.Join(root, "server-key.pem"),
+		path.Join(root, "ca-cert.pem"))
+	if err != nil {
+		t.Fatalf("TLSServerConfig failed: %v", err)
+	}
+	l.TLSConfig = serverConfig
+	go func() {
+		l.Accept()
+	}()
+
+	// Setup the right parameters.
+	params := &sqldb.ConnParams{
+		Host:  host,
+		Port:  port,
+		Uname: "user1",
+		Pass:  "password1",
+		// SSL flags.
+		Flags:   CapabilityClientSSL,
+		SslCa:   path.Join(root, "ca-cert.pem"),
+		SslCert: path.Join(root, "client-cert.pem"),
+		SslKey:  path.Join(root, "client-key.pem"),
+	}
+
+	// Run a 'select rows' command with results.
+	output, ok := runMysql(t, params, "select rows")
+	if !ok {
+		t.Fatalf("mysql failed: %v", output)
+	}
+	if !strings.Contains(output, "nice name") ||
+		!strings.Contains(output, "nicer name") ||
+		!strings.Contains(output, "2 rows in set") {
+		t.Errorf("Unexpected output for 'select rows'")
+	}
+
+	// make sure this went through SSL
+	output, ok = runMysql(t, params, "ssl echo")
+	if !ok {
+		t.Fatalf("mysql failed: %v", output)
+	}
+	if !strings.Contains(output, "ssl_flag") ||
+		!strings.Contains(output, "ON") ||
+		!strings.Contains(output, "1 row in set") {
+		t.Errorf("Unexpected output for 'ssl echo': %v", output)
+	}
+}
+
+const enableCleartextPluginPrefix = "enable-cleartext-plugin: "
 
 // runMysql forks a mysql command line process connecting to the provided server.
 func runMysql(t *testing.T, params *sqldb.ConnParams, command string) (string, bool) {
@@ -183,31 +437,36 @@ func runMysql(t *testing.T, params *sqldb.ConnParams, command string) (string, b
 	// In particular, it has the message:
 	// Query OK, 1 row affected (0.00 sec)
 	args := []string{
-		"-e", command,
 		"-v", "-v", "-v",
 	}
+	if strings.HasPrefix(command, enableCleartextPluginPrefix) {
+		command = command[len(enableCleartextPluginPrefix):]
+		args = append(args, "--enable-cleartext-plugin")
+	}
+	args = append(args, "-e", command)
 	if params.UnixSocket != "" {
-		args = append(args, []string{
-			"-S", params.UnixSocket,
-		}...)
+		args = append(args, "-S", params.UnixSocket)
 	} else {
-		args = append(args, []string{
+		args = append(args,
 			"-h", params.Host,
-			"-P", fmt.Sprintf("%v", params.Port),
-		}...)
+			"-P", fmt.Sprintf("%v", params.Port))
 	}
 	if params.Uname != "" {
-		args = append(args, []string{
-			"-u", params.Uname,
-		}...)
+		args = append(args, "-u", params.Uname)
 	}
 	if params.Pass != "" {
 		args = append(args, "-p"+params.Pass)
 	}
 	if params.DbName != "" {
-		args = append(args, []string{
-			"-D", params.DbName,
-		}...)
+		args = append(args, "-D", params.DbName)
+	}
+	if params.Flags&CapabilityClientSSL > 0 {
+		args = append(args,
+			"--ssl",
+			"--ssl-ca", params.SslCa,
+			"--ssl-cert", params.SslCert,
+			"--ssl-key", params.SslKey,
+			"--ssl-verify-server-cert")
 	}
 	env := []string{
 		"LD_LIBRARY_PATH=" + path.Join(dir, "lib/mysql"),

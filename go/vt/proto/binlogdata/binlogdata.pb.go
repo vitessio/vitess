@@ -98,6 +98,27 @@ func (m *Charset) String() string            { return proto.CompactTextString(m)
 func (*Charset) ProtoMessage()               {}
 func (*Charset) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{0} }
 
+func (m *Charset) GetClient() int32 {
+	if m != nil {
+		return m.Client
+	}
+	return 0
+}
+
+func (m *Charset) GetConn() int32 {
+	if m != nil {
+		return m.Conn
+	}
+	return 0
+}
+
+func (m *Charset) GetServer() int32 {
+	if m != nil {
+		return m.Server
+	}
+	return 0
+}
+
 // BinlogTransaction describes a transaction inside the binlogs.
 // It is streamed by vttablet for filtered replication, used during resharding.
 type BinlogTransaction struct {
@@ -140,9 +161,23 @@ func (m *BinlogTransaction_Statement) String() string            { return proto.
 func (*BinlogTransaction_Statement) ProtoMessage()               {}
 func (*BinlogTransaction_Statement) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{1, 0} }
 
+func (m *BinlogTransaction_Statement) GetCategory() BinlogTransaction_Statement_Category {
+	if m != nil {
+		return m.Category
+	}
+	return BinlogTransaction_Statement_BL_UNRECOGNIZED
+}
+
 func (m *BinlogTransaction_Statement) GetCharset() *Charset {
 	if m != nil {
 		return m.Charset
+	}
+	return nil
+}
+
+func (m *BinlogTransaction_Statement) GetSql() []byte {
+	if m != nil {
+		return m.Sql
 	}
 	return nil
 }
@@ -161,6 +196,13 @@ func (m *StreamKeyRangeRequest) Reset()                    { *m = StreamKeyRange
 func (m *StreamKeyRangeRequest) String() string            { return proto.CompactTextString(m) }
 func (*StreamKeyRangeRequest) ProtoMessage()               {}
 func (*StreamKeyRangeRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{2} }
+
+func (m *StreamKeyRangeRequest) GetPosition() string {
+	if m != nil {
+		return m.Position
+	}
+	return ""
+}
 
 func (m *StreamKeyRangeRequest) GetKeyRange() *topodata.KeyRange {
 	if m != nil {
@@ -207,6 +249,20 @@ func (m *StreamTablesRequest) Reset()                    { *m = StreamTablesRequ
 func (m *StreamTablesRequest) String() string            { return proto.CompactTextString(m) }
 func (*StreamTablesRequest) ProtoMessage()               {}
 func (*StreamTablesRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{4} }
+
+func (m *StreamTablesRequest) GetPosition() string {
+	if m != nil {
+		return m.Position
+	}
+	return ""
+}
+
+func (m *StreamTablesRequest) GetTables() []string {
+	if m != nil {
+		return m.Tables
+	}
+	return nil
+}
 
 func (m *StreamTablesRequest) GetCharset() *Charset {
 	if m != nil {

@@ -627,7 +627,7 @@ class TestVtworkerWebinterface(unittest.TestCase):
           'vtworker', self.worker_port,
           'WorkerState == done',
           condition_fn=lambda v: v.get('WorkerState') == 'done')
-      # Verify that the command logged something and its available at /status.
+      # Verify that the command logged something and it's available at /status.
       status = urllib2.urlopen(worker_base_url + '/status').read()
       self.assertIn(
           "Ping command was called with message: 'pong'", status,

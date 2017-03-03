@@ -15,9 +15,7 @@ import (
 
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/discovery"
-	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/vtgate/gateway"
 	"golang.org/x/net/context"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
@@ -201,11 +199,11 @@ func testResolverGeneric(t *testing.T, name string, action func(res *Resolver) (
 	hc.Reset()
 	sbc0 = hc.AddTestTablet("aa", "-20", 1, name, "-20", topodatapb.TabletType_MASTER, true, 1, nil)
 	sbc1 = hc.AddTestTablet("aa", "20-40", 1, name, "20-40", topodatapb.TabletType_MASTER, true, 1, nil)
-	sbc0.MustFailServer = 1
-	sbc1.MustFailRetry = 1
+	sbc0.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
+	sbc1.MustFailCodes[vtrpcpb.Code_INTERNAL] = 1
 	_, err = action(res)
-	want1 := fmt.Sprintf("target: %s.-20.master, used tablet: (alias:<cell:\"aa\" > hostname:\"-20\" port_map:<key:\"vt\" value:1 > keyspace:\"%s\" shard:\"-20\" type:MASTER ), error: err", name, name)
-	want2 := fmt.Sprintf("target: %s.20-40.master, used tablet: (alias:<cell:\"aa\" > hostname:\"20-40\" port_map:<key:\"vt\" value:1 > keyspace:\"%s\" shard:\"20-40\" type:MASTER ), retry: err", name, name)
+	want1 := fmt.Sprintf("target: %s.-20.master, used tablet: (alias:<cell:\"aa\" > hostname:\"-20\" port_map:<key:\"vt\" value:1 > keyspace:\"%s\" shard:\"-20\" type:MASTER ), INVALID_ARGUMENT error", name, name)
+	want2 := fmt.Sprintf("target: %s.20-40.master, used tablet: (alias:<cell:\"aa\" > hostname:\"20-40\" port_map:<key:\"vt\" value:1 > keyspace:\"%s\" shard:\"20-40\" type:MASTER ), INTERNAL error", name, name)
 	want := []string{want1, want2}
 	sort.Strings(want)
 	if err == nil {
@@ -234,11 +232,11 @@ func testResolverGeneric(t *testing.T, name string, action func(res *Resolver) (
 	hc.Reset()
 	sbc0 = hc.AddTestTablet("aa", "-20", 1, name, "-20", topodatapb.TabletType_MASTER, true, 1, nil)
 	sbc1 = hc.AddTestTablet("aa", "20-40", 1, name, "20-40", topodatapb.TabletType_MASTER, true, 1, nil)
-	sbc0.MustFailRetry = 1
-	sbc1.MustFailFatal = 1
+	sbc0.MustFailCodes[vtrpcpb.Code_FAILED_PRECONDITION] = 1
+	sbc1.MustFailCodes[vtrpcpb.Code_FAILED_PRECONDITION] = 1
 	_, err = action(res)
-	want1 = fmt.Sprintf("target: %s.-20.master, used tablet: (alias:<cell:\"aa\" > hostname:\"-20\" port_map:<key:\"vt\" value:1 > keyspace:\"%s\" shard:\"-20\" type:MASTER ), retry: err", name, name)
-	want2 = fmt.Sprintf("target: %s.20-40.master, used tablet: (alias:<cell:\"aa\" > hostname:\"20-40\" port_map:<key:\"vt\" value:1 > keyspace:\"%s\" shard:\"20-40\" type:MASTER ), fatal: err", name, name)
+	want1 = fmt.Sprintf("target: %s.-20.master, used tablet: (alias:<cell:\"aa\" > hostname:\"-20\" port_map:<key:\"vt\" value:1 > keyspace:\"%s\" shard:\"-20\" type:MASTER ), FAILED_PRECONDITION error", name, name)
+	want2 = fmt.Sprintf("target: %s.20-40.master, used tablet: (alias:<cell:\"aa\" > hostname:\"20-40\" port_map:<key:\"vt\" value:1 > keyspace:\"%s\" shard:\"20-40\" type:MASTER ), FAILED_PRECONDITION error", name, name)
 	want = []string{want1, want2}
 	sort.Strings(want)
 	if err == nil {
@@ -300,7 +298,7 @@ func testResolverGeneric(t *testing.T, name string, action func(res *Resolver) (
 	hc.Reset()
 	sbc0 = hc.AddTestTablet("aa", "1.1.1.1", 1001, name, "-20", topodatapb.TabletType_MASTER, true, 1, nil)
 	sbc1 = hc.AddTestTablet("aa", "1.1.1.1", 1002, name, "20-40", topodatapb.TabletType_MASTER, true, 1, nil)
-	sbc1.MustFailFatal = 1
+	sbc1.MustFailCodes[vtrpcpb.Code_FAILED_PRECONDITION] = 1
 	i := 0
 	s.SrvKeyspaceCallback = func() {
 		if i == 1 {
@@ -332,7 +330,7 @@ func testResolverGeneric(t *testing.T, name string, action func(res *Resolver) (
 	hc.Reset()
 	sbc0 = hc.AddTestTablet("aa", "1.1.1.1", 1001, name, "-20", topodatapb.TabletType_MASTER, true, 1, nil)
 	sbc1 = hc.AddTestTablet("aa", "1.1.1.1", 1002, name, "20-40", topodatapb.TabletType_MASTER, true, 1, nil)
-	sbc1.MustFailRetry = 1
+	sbc1.MustFailCodes[vtrpcpb.Code_FAILED_PRECONDITION] = 1
 	i = 0
 	s.SrvKeyspaceCallback = func() {
 		if i == 1 {
@@ -380,9 +378,9 @@ func testResolverStreamGeneric(t *testing.T, name string, action func(res *Resol
 	hc.Reset()
 	sbc0 = hc.AddTestTablet("aa", "-20", 1, name, "-20", topodatapb.TabletType_MASTER, true, 1, nil)
 	hc.AddTestTablet("aa", "20-40", 1, name, "20-40", topodatapb.TabletType_MASTER, true, 1, nil)
-	sbc0.MustFailRetry = 1
+	sbc0.MustFailCodes[vtrpcpb.Code_INTERNAL] = 1
 	_, err = action(res)
-	want := fmt.Sprintf("target: %s.-20.master, used tablet: (alias:<cell:\"aa\" > hostname:\"-20\" port_map:<key:\"vt\" value:1 > keyspace:\"%s\" shard:\"-20\" type:MASTER ), retry: err", name, name)
+	want := fmt.Sprintf("target: %s.-20.master, used tablet: (alias:<cell:\"aa\" > hostname:\"-20\" port_map:<key:\"vt\" value:1 > keyspace:\"%s\" shard:\"-20\" type:MASTER ), INTERNAL error", name, name)
 	if err == nil || err.Error() != want {
 		t.Errorf("want\n%s\ngot\n%v", want, err)
 	}
@@ -484,7 +482,7 @@ func TestResolverExecBatchReresolve(t *testing.T) {
 	res := newTestResolver(hc, new(sandboxTopo), "aa")
 
 	sbc := hc.AddTestTablet("aa", "0", 1, keyspace, "0", topodatapb.TabletType_MASTER, true, 1, nil)
-	sbc.MustFailRetry = 20
+	sbc.MustFailCodes[vtrpcpb.Code_FAILED_PRECONDITION] = 20
 
 	callcount := 0
 	buildBatchRequest := func() (*scatterBatchRequest, error) {
@@ -501,7 +499,7 @@ func TestResolverExecBatchReresolve(t *testing.T) {
 	}
 
 	_, err := res.ExecuteBatch(context.Background(), topodatapb.TabletType_MASTER, false, nil, nil, buildBatchRequest)
-	want := "target: TestResolverExecBatchReresolve.0.master, used tablet: (alias:<cell:\"aa\" > hostname:\"0\" port_map:<key:\"vt\" value:1 > keyspace:\"TestResolverExecBatchReresolve\" shard:\"0\" type:MASTER ), retry: err"
+	want := "target: TestResolverExecBatchReresolve.0.master, used tablet: (alias:<cell:\"aa\" > hostname:\"0\" port_map:<key:\"vt\" value:1 > keyspace:\"TestResolverExecBatchReresolve\" shard:\"0\" type:MASTER ), FAILED_PRECONDITION error"
 	if err == nil || err.Error() != want {
 		t.Errorf("want %s, got %v", want, err)
 	}
@@ -521,7 +519,7 @@ func TestResolverExecBatchAsTransaction(t *testing.T) {
 	res := newTestResolver(hc, new(sandboxTopo), "aa")
 
 	sbc := hc.AddTestTablet("aa", "0", 1, keyspace, "0", topodatapb.TabletType_MASTER, true, 1, nil)
-	sbc.MustFailRetry = 20
+	sbc.MustFailCodes[vtrpcpb.Code_INTERNAL] = 20
 
 	callcount := 0
 	buildBatchRequest := func() (*scatterBatchRequest, error) {
@@ -538,7 +536,7 @@ func TestResolverExecBatchAsTransaction(t *testing.T) {
 	}
 
 	_, err := res.ExecuteBatch(context.Background(), topodatapb.TabletType_MASTER, true, nil, nil, buildBatchRequest)
-	want := "target: TestResolverExecBatchAsTransaction.0.master, used tablet: (alias:<cell:\"aa\" > hostname:\"0\" port_map:<key:\"vt\" value:1 > keyspace:\"TestResolverExecBatchAsTransaction\" shard:\"0\" type:MASTER ), retry: err"
+	want := "target: TestResolverExecBatchAsTransaction.0.master, used tablet: (alias:<cell:\"aa\" > hostname:\"0\" port_map:<key:\"vt\" value:1 > keyspace:\"TestResolverExecBatchAsTransaction\" shard:\"0\" type:MASTER ), INTERNAL error"
 	if err == nil || err.Error() != want {
 		t.Errorf("want %v, got %v", want, err)
 	}
@@ -549,32 +547,6 @@ func TestResolverExecBatchAsTransaction(t *testing.T) {
 	if count := sbc.AsTransactionCount.Get(); count != 1 {
 		t.Errorf("want 1, got %v", count)
 		return
-	}
-}
-
-func TestIsRetryableError(t *testing.T) {
-	var connErrorTests = []struct {
-		in      error
-		outBool bool
-	}{
-		{fmt.Errorf("generic error"), false},
-		{&ScatterConnError{Retryable: true}, true},
-		{&ScatterConnError{Retryable: false}, false},
-		{&gateway.ShardError{ErrorCode: vtrpcpb.ErrorCode_QUERY_NOT_SERVED}, true},
-		{&gateway.ShardError{ErrorCode: vtrpcpb.ErrorCode_INTERNAL_ERROR}, false},
-		// tabletconn.ServerError will not come directly here,
-		// they'll be wrapped in ScatterConnError or ShardConnError.
-		// So they can't be retried as is.
-		{&tabletconn.ServerError{ServerCode: vtrpcpb.ErrorCode_QUERY_NOT_SERVED}, false},
-		{&tabletconn.ServerError{ServerCode: vtrpcpb.ErrorCode_PERMISSION_DENIED}, false},
-	}
-
-	for _, tt := range connErrorTests {
-		gotBool := isRetryableError(tt.in)
-		if gotBool != tt.outBool {
-			t.Errorf("isConnError(%v) => %v, want %v",
-				tt.in, gotBool, tt.outBool)
-		}
 	}
 }
 

@@ -54,7 +54,6 @@ func forceEOF(yylex interface{}) {
   values      Values
   valTuple    ValTuple
   subquery    *Subquery
-  caseExpr    *CaseExpr
   whens       []*When
   when        *When
   orderBy     OrderBy
@@ -66,39 +65,43 @@ func forceEOF(yylex interface{}) {
   colIdent    ColIdent
   colIdents   []ColIdent
   tableIdent  TableIdent
+  convertType *ConvertType
+  aliasedTableName *AliasedTableExpr
 }
 
 %token LEX_ERROR
-%left <empty> UNION
-%token <empty> SELECT INSERT UPDATE DELETE FROM WHERE GROUP HAVING ORDER BY LIMIT OFFSET FOR
-%token <empty> ALL DISTINCT AS EXISTS ASC DESC INTO DUPLICATE KEY DEFAULT SET LOCK
-%token <empty> VALUES LAST_INSERT_ID
-%token <empty> NEXT VALUE
-%left <empty> JOIN STRAIGHT_JOIN LEFT RIGHT INNER OUTER CROSS NATURAL USE FORCE
-%left <empty> ON
+%left <bytes> UNION
+%token <bytes> SELECT INSERT UPDATE DELETE FROM WHERE GROUP HAVING ORDER BY LIMIT OFFSET FOR
+%token <bytes> ALL DISTINCT AS EXISTS ASC DESC INTO DUPLICATE KEY DEFAULT SET LOCK
+%token <bytes> VALUES LAST_INSERT_ID
+%token <bytes> NEXT VALUE SHARE MODE
+%token <bytes> SQL_NO_CACHE SQL_CACHE
+%left <bytes> JOIN STRAIGHT_JOIN LEFT RIGHT INNER OUTER CROSS NATURAL USE FORCE
+%left <bytes> ON
 %token <empty> '(' ',' ')'
 %token <bytes> ID HEX STRING INTEGRAL FLOAT HEXNUM VALUE_ARG LIST_ARG COMMENT
-%token <empty> NULL TRUE FALSE
+%token <bytes> NULL TRUE FALSE
 
 // Precedence dictated by mysql. But the vitess grammar is simplified.
 // Some of these operators don't conflict in our situation. Nevertheless,
 // it's better to have these listed in the correct order. Also, we don't
 // support all operators yet.
-%left <empty> OR
-%left <empty> AND
-%right <empty> NOT
-%left <empty> BETWEEN CASE WHEN THEN ELSE END
-%left <empty> '=' '<' '>' LE GE NE NULL_SAFE_EQUAL IS LIKE REGEXP IN
-%left <empty> '|'
-%left <empty> '&'
-%left <empty> SHIFT_LEFT SHIFT_RIGHT
-%left <empty> '+' '-'
-%left <empty> '*' '/' '%' MOD
-%left <empty> '^'
-%right <empty> '~' UNARY
-%left <empty> COLLATE
-%right <empty> INTERVAL
-%nonassoc <empty> '.'
+%left <bytes> OR
+%left <bytes> AND
+%right <bytes> NOT '!'
+%left <bytes> BETWEEN CASE WHEN THEN ELSE END
+%left <bytes> '=' '<' '>' LE GE NE NULL_SAFE_EQUAL IS LIKE REGEXP IN
+%left <bytes> '|'
+%left <bytes> '&'
+%left <bytes> SHIFT_LEFT SHIFT_RIGHT
+%left <bytes> '+' '-'
+%left <bytes> '*' '/' DIV '%' MOD
+%left <bytes> '^'
+%right <bytes> '~' UNARY
+%left <bytes> COLLATE
+%right <bytes> BINARY
+%right <bytes> INTERVAL
+%nonassoc <bytes> '.'
 
 // There is no need to define precedence for the JSON
 // operators because the syntax is restricted enough that
@@ -106,18 +109,26 @@ func forceEOF(yylex interface{}) {
 %token <empty> JSON_EXTRACT_OP JSON_UNQUOTE_EXTRACT_OP
 
 // DDL Tokens
-%token <empty> CREATE ALTER DROP RENAME ANALYZE
-%token <empty> TABLE INDEX VIEW TO IGNORE IF UNIQUE USING
-%token <empty> SHOW DESCRIBE EXPLAIN
+%token <bytes> CREATE ALTER DROP RENAME ANALYZE
+%token <bytes> TABLE INDEX VIEW TO IGNORE IF UNIQUE USING
+%token <bytes> SHOW DESCRIBE EXPLAIN DATE ESCAPE
+
+// Convert Type Tokens
+%token <bytes> INTEGER CHARACTER
 
 // Functions
-%token <empty> CURRENT_TIMESTAMP DATABASE CURRENT_DATE
-%token <empty> UNIX_TIMESTAMP CURRENT_TIME LOCALTIME LOCALTIMESTAMP
-%token <empty> UTC_DATE UTC_TIME UTC_TIMESTAMP
-%token <empty> REPLACE
+%token <bytes> CURRENT_TIMESTAMP DATABASE CURRENT_DATE
+%token <bytes> CURRENT_TIME LOCALTIME LOCALTIMESTAMP
+%token <bytes> UTC_DATE UTC_TIME UTC_TIMESTAMP
+%token <bytes> REPLACE
+%token <bytes> CONVERT CAST
+%token <bytes> GROUP_CONCAT SEPARATOR
+
+// Match
+%token <bytes> MATCH AGAINST BOOLEAN LANGUAGE WITH QUERY EXPANSION
 
 // MySQL reserved words that are unused by this grammar will map to this token.
-%token <empty> UNUSED
+%token <bytes> UNUSED
 
 %type <statement> command
 %type <selStmt> select_statement
@@ -126,14 +137,16 @@ func forceEOF(yylex interface{}) {
 %type <statement> analyze_statement other_statement
 %type <bytes2> comment_opt comment_list
 %type <str> union_op
-%type <str> distinct_opt straight_join_opt
-%type <selectExprs> select_expression_list
+%type <str> distinct_opt straight_join_opt cache_opt match_option separator_opt
+%type <expr> like_escape_opt
+%type <selectExprs> select_expression_list select_expression_list_opt
 %type <selectExpr> select_expression
 %type <expr> expression
 %type <tableExprs> from_opt table_references
 %type <tableExpr> table_reference table_factor join_table
 %type <str> inner_join outer_join natural_join
 %type <tableName> table_name into_table_name
+%type <aliasedTableName> aliased_table_name
 %type <indexHints> index_hint_list
 %type <colIdents> index_list
 %type <expr> where_expression_opt
@@ -142,49 +155,54 @@ func forceEOF(yylex interface{}) {
 %type <str> compare
 %type <insRows> row_list
 %type <expr> value value_expression num_val
+%type <expr> function_call_keyword function_call_nonkeyword function_call_generic function_call_conflict
 %type <str> is_suffix
 %type <colTuple> col_tuple
-%type <exprs> value_expression_list
+%type <exprs> expression_list
 %type <values> tuple_list
-%type <valTuple> row_tuple
+%type <valTuple> row_tuple tuple_or_empty
 %type <expr> tuple_expression
 %type <subquery> subquery
 %type <colName> column_name
-%type <caseExpr> case_expression
 %type <whens> when_expression_list
 %type <when> when_expression
-%type <expr> value_expression_opt else_expression_opt
+%type <expr> expression_opt else_expression_opt
 %type <exprs> group_by_opt
 %type <expr> having_opt
-%type <colIdent> keyword_func keyword
 %type <orderBy> order_by_opt order_list
 %type <order> order
 %type <str> asc_desc_opt
 %type <limit> limit_opt
 %type <str> lock_opt
-%type <columns> column_list_opt column_list
+%type <columns> column_list ins_column_list ins_column_list_opt
 %type <updateExprs> on_dup_opt
 %type <updateExprs> update_list
 %type <updateExpr> update_expression
-%type <empty> for_from
+%type <bytes> for_from
 %type <str> ignore_opt
 %type <byt> exists_opt
 %type <empty> not_exists_opt non_rename_operation to_opt constraint_opt using_opt
-%type <colIdent> sql_id col_alias as_ci_opt
-%type <tableIdent> table_id table_alias as_opt_id
+%type <bytes> reserved_keyword non_reserved_keyword
+%type <colIdent> sql_id reserved_sql_id col_alias as_ci_opt
+%type <tableIdent> table_id reserved_table_id table_alias as_opt_id
 %type <empty> as_opt
 %type <empty> force_eof
 %type <str> charset
+%type <convertType> convert_type
 
 %start any_command
 
 %%
 
 any_command:
-  command
+  command semicolon_opt
   {
     setParseTree(yylex, $1)
   }
+
+semicolon_opt:
+/*empty*/ {}
+| ';' {}
 
 command:
   select_statement
@@ -203,13 +221,13 @@ command:
 | other_statement
 
 select_statement:
-  SELECT comment_opt distinct_opt straight_join_opt select_expression_list from_opt where_expression_opt group_by_opt having_opt order_by_opt limit_opt lock_opt
+  SELECT comment_opt cache_opt distinct_opt straight_join_opt select_expression_list from_opt where_expression_opt group_by_opt having_opt order_by_opt limit_opt lock_opt
   {
-    $$ = &Select{Comments: Comments($2), Distinct: $3, Hints: $4, SelectExprs: $5, From: $6, Where: NewWhere(WhereStr, $7), GroupBy: GroupBy($8), Having: NewWhere(HavingStr, $9), OrderBy: $10, Limit: $11, Lock: $12}
+    $$ = &Select{Comments: Comments($2), Cache: $3, Distinct: $4, Hints: $5, SelectExprs: $6, From: $7, Where: NewWhere(WhereStr, $8), GroupBy: GroupBy($9), Having: NewWhere(HavingStr, $10), OrderBy: $11, Limit: $12, Lock: $13}
   }
-| SELECT comment_opt NEXT num_val for_from table_name
+| SELECT comment_opt cache_opt NEXT num_val for_from table_name
   {
-    $$ = &Select{Comments: Comments($2), SelectExprs: SelectExprs{Nextval{Expr: $4}}, From: TableExprs{&AliasedTableExpr{Expr: $6}}}
+    $$ = &Select{Comments: Comments($2), Cache: $3, SelectExprs: SelectExprs{Nextval{Expr: $5}}, From: TableExprs{&AliasedTableExpr{Expr: $7}}}
   }
 | select_statement union_op select_statement %prec UNION
   {
@@ -217,7 +235,7 @@ select_statement:
   }
 
 insert_statement:
-  INSERT comment_opt ignore_opt into_table_name column_list_opt row_list on_dup_opt
+  INSERT comment_opt ignore_opt into_table_name ins_column_list_opt row_list on_dup_opt
   {
     $$ = &Insert{Comments: Comments($2), Ignore: $3, Table: $4, Columns: $5, Rows: $6, OnDup: OnDup($7)}
   }
@@ -226,14 +244,14 @@ insert_statement:
     cols := make(Columns, 0, len($6))
     vals := make(ValTuple, 0, len($7))
     for _, updateList := range $6 {
-      cols = append(cols, updateList.Name)
+      cols = append(cols, updateList.Name.Name)
       vals = append(vals, updateList.Expr)
     }
     $$ = &Insert{Comments: Comments($2), Ignore: $3, Table: $4, Columns: cols, Rows: Values{vals}, OnDup: OnDup($7)}
   }
 
 update_statement:
-  UPDATE comment_opt table_name SET update_list where_expression_opt order_by_opt limit_opt
+  UPDATE comment_opt aliased_table_name SET update_list where_expression_opt order_by_opt limit_opt
   {
     $$ = &Update{Comments: Comments($2), Table: $3, Exprs: $5, Where: NewWhere(WhereStr, $6), OrderBy: $7, Limit: $8}
   }
@@ -362,6 +380,19 @@ union_op:
     $$ = UnionDistinctStr
   }
 
+cache_opt:
+{
+  $$ = ""
+}
+| SQL_NO_CACHE
+{
+  $$ = SQLNoCacheStr
+}
+| SQL_CACHE
+{
+  $$ = SQLCacheStr
+}
+
 distinct_opt:
   {
     $$ = ""
@@ -378,6 +409,15 @@ straight_join_opt:
 | STRAIGHT_JOIN
   {
     $$ = StraightJoinHint
+  }
+
+select_expression_list_opt:
+  {
+    $$ = nil
+  }
+| select_expression_list
+  {
+    $$ = $1
   }
 
 select_expression_list:
@@ -403,7 +443,7 @@ select_expression:
   {
     $$ = &StarExpr{TableName: &TableName{Name: $1}}
   }
-| table_id '.' table_id '.' '*'
+| table_id '.' reserved_table_id '.' '*'
   {
     $$ = &StarExpr{TableName: &TableName{Qualifier: $1, Name: $3}}
   }
@@ -452,9 +492,9 @@ table_reference:
 | join_table
 
 table_factor:
-  table_name as_opt_id index_hint_list
+  aliased_table_name
   {
-    $$ = &AliasedTableExpr{Expr:$1, As: $2, Hints: $3}
+    $$ = $1
   }
 | subquery as_opt table_id
   {
@@ -463,6 +503,12 @@ table_factor:
 | openb table_references closeb
   {
     $$ = &ParenTableExpr{Exprs: $2}
+  }
+
+aliased_table_name:
+table_name as_opt_id index_hint_list
+  {
+    $$ = &AliasedTableExpr{Expr:$1, As: $2, Hints: $3}
   }
 
 // There is a grammar conflict here:
@@ -580,7 +626,7 @@ table_name:
   {
     $$ = &TableName{Name: $1}
   }
-| table_id '.' table_id
+| table_id '.' reserved_table_id
   {
     $$ = &TableName{Qualifier: $1, Name: $3}
   }
@@ -678,13 +724,13 @@ condition:
   {
     $$ = &ComparisonExpr{Left: $1, Operator: NotInStr, Right: $4}
   }
-| value_expression LIKE value_expression
+| value_expression LIKE value_expression like_escape_opt
   {
-    $$ = &ComparisonExpr{Left: $1, Operator: LikeStr, Right: $3}
+    $$ = &ComparisonExpr{Left: $1, Operator: LikeStr, Right: $3, Escape: $4}
   }
-| value_expression NOT LIKE value_expression
+| value_expression NOT LIKE value_expression like_escape_opt
   {
-    $$ = &ComparisonExpr{Left: $1, Operator: NotLikeStr, Right: $4}
+    $$ = &ComparisonExpr{Left: $1, Operator: NotLikeStr, Right: $4, Escape: $5}
   }
 | value_expression REGEXP value_expression
   {
@@ -763,6 +809,15 @@ compare:
     $$ = NullSafeEqualStr
   }
 
+like_escape_opt:
+  {
+    $$ = nil
+  }
+| ESCAPE value_expression
+  {
+    $$ = $2
+  }
+
 col_tuple:
   row_tuple
   {
@@ -783,25 +838,33 @@ subquery:
     $$ = &Subquery{$2}
   }
 
-value_expression_list:
+expression_list:
   expression
   {
     $$ = Exprs{$1}
   }
-| value_expression_list ',' expression
+| expression_list ',' expression
   {
     $$ = append($1, $3)
   }
 
 charset:
   ID
-    {
-      $$ = string($1)
-    }
+  {
+    $$ = string($1)
+  }
 | STRING
-    {
-      $$ = string($1)
-    }
+  {
+    $$ = string($1)
+  }
+| BINARY
+  {
+    $$ = string($1)
+  }
+| DATE
+  {
+    $$ = string($1)
+  }
 
 value_expression:
   value
@@ -848,6 +911,10 @@ value_expression:
   {
     $$ = &BinaryExpr{Left: $1, Operator: DivStr, Right: $3}
   }
+| value_expression DIV value_expression
+  {
+    $$ = &BinaryExpr{Left: $1, Operator: IntDivStr, Right: $3}
+  }
 | value_expression '%' value_expression
   {
     $$ = &BinaryExpr{Left: $1, Operator: ModStr, Right: $3}
@@ -876,6 +943,10 @@ value_expression:
   {
     $$ = &CollateExpr{Expr: $1, Charset: $3}
   }
+| BINARY value_expression %prec UNARY
+  {
+    $$ = &UnaryExpr{Operator: BinaryStr, Expr: $2}
+  }
 | '+'  value_expression %prec UNARY
   {
     if num, ok := $2.(*SQLVal); ok && num.Type == IntVal {
@@ -902,6 +973,10 @@ value_expression:
   {
     $$ = &UnaryExpr{Operator: TildaStr, Expr: $2}
   }
+| '!' value_expression %prec UNARY
+  {
+    $$ = &UnaryExpr{Operator: BangStr, Expr: $2}
+  }
 | INTERVAL value_expression sql_id
   {
     // This rule prevents the usage of INTERVAL
@@ -910,11 +985,17 @@ value_expression:
     // will be non-trivial because of grammar conflicts.
     $$ = &IntervalExpr{Expr: $2, Unit: $3}
   }
-| sql_id openb closeb
-  {
-    $$ = &FuncExpr{Name: $1}
-  }
-| sql_id openb select_expression_list closeb
+| function_call_generic
+| function_call_keyword
+| function_call_nonkeyword
+| function_call_conflict
+
+/*
+  Regular function calls without special token or syntax, guaranteed to not
+  introduce side effects due to being a simple identifier
+*/
+function_call_generic:
+  sql_id openb select_expression_list_opt closeb
   {
     $$ = &FuncExpr{Name: $1, Exprs: $3}
   }
@@ -922,105 +1003,194 @@ value_expression:
   {
     $$ = &FuncExpr{Name: $1, Distinct: true, Exprs: $4}
   }
-| keyword_func openb closeb
+| table_id '.' reserved_sql_id openb select_expression_list_opt closeb
   {
-    $$ = &FuncExpr{Name: $1}
+    $$ = &FuncExpr{Qualifier: $1, Name: $3, Exprs: $5}
   }
-| keyword_func openb select_expression_list closeb
+
+/*
+  Function calls using reserved keywords, with dedicated grammar rules
+  as a result
+*/
+function_call_keyword:
+  LEFT openb select_expression_list closeb
   {
-    $$ = &FuncExpr{Name: $1, Exprs: $3}
+    $$ = &FuncExpr{Name: NewColIdent("left"), Exprs: $3}
   }
-| keyword
+| RIGHT openb select_expression_list closeb
   {
-    $$ = &FuncExpr{Name: $1}
+    $$ = &FuncExpr{Name: NewColIdent("right"), Exprs: $3}
   }
-| case_expression
+| CONVERT openb expression ',' convert_type closeb
   {
-    $$ = $1
+    $$ = &ConvertExpr{Expr: $3, Type: $5}
+  }
+| CONVERT openb expression USING convert_type closeb
+  {
+    $$ = &ConvertExpr{Expr: $3, Type: $5}
+  }
+| CAST openb expression AS convert_type closeb
+  {
+    $$ = &ConvertExpr{Expr: $3, Type: $5}
+  }
+| MATCH openb column_list closeb AGAINST openb value_expression match_option closeb
+  {
+  $$ = &MatchExpr{Columns: $3, Expr: $7, Option: $8}
+  }
+| GROUP_CONCAT openb distinct_opt select_expression_list order_by_opt separator_opt closeb
+  {
+    $$ = &GroupConcatExpr{Distinct: $3, Exprs: $4, OrderBy: $5, Separator: $6}
+  }
+| CASE expression_opt when_expression_list else_expression_opt END
+  {
+    $$ = &CaseExpr{Expr: $2, Whens: $3, Else: $4}
   }
 | VALUES openb sql_id closeb
   {
     $$ = &ValuesFuncExpr{Name: $3}
   }
 
-// These keywords can be used as functions, with parenthesis, or
-// as standalone keywords -- i.e. CURRENT_DATE and CURRENT_DATE()
-keyword:
-  CURRENT_TIMESTAMP
+/*
+  Function calls using non reserved keywords but with special syntax forms.
+  Dedicated grammar rules are needed because of the special syntax
+*/
+function_call_nonkeyword:
+  CURRENT_TIMESTAMP func_datetime_precision_opt
   {
-    $$ = NewColIdent("current_timestamp")
+    $$ = &FuncExpr{Name:NewColIdent("current_timestamp")}
   }
-| CURRENT_DATE
+| UTC_TIMESTAMP func_datetime_precision_opt
   {
-    $$ = NewColIdent("current_date")
+    $$ = &FuncExpr{Name:NewColIdent("utc_timestamp")}
   }
-| CURRENT_TIME
+| UTC_TIME func_datetime_precision_opt
   {
-    $$ = NewColIdent("current_time")
+    $$ = &FuncExpr{Name:NewColIdent("utc_time")}
   }
-| UTC_TIMESTAMP
+| UTC_DATE func_datetime_precision_opt
   {
-    $$ = NewColIdent("utc_timestamp")
+    $$ = &FuncExpr{Name:NewColIdent("utc_date")}
   }
-| UTC_TIME
+  // now
+| LOCALTIME func_datetime_precision_opt
   {
-    $$ = NewColIdent("utc_time")
+    $$ = &FuncExpr{Name:NewColIdent("localtime")}
   }
-| UTC_DATE
+  // now
+| LOCALTIMESTAMP func_datetime_precision_opt
   {
-    $$ = NewColIdent("utc_date")
+    $$ = &FuncExpr{Name:NewColIdent("localtimestamp")}
   }
-| LOCALTIME
+  // curdate
+| CURRENT_DATE func_datetime_precision_opt
   {
-    $$ = NewColIdent("localtime")
+    $$ = &FuncExpr{Name:NewColIdent("current_date")}
   }
-| LOCALTIMESTAMP
+  // curtime
+| CURRENT_TIME func_datetime_precision_opt
   {
-    $$ = NewColIdent("localtimestamp")
-  }
-
-// These keywords require parenthesis, and possibly arguments,
-// to be considered functions -- i.e. DATABASE(), or LEFT('foo', 1)
-keyword_func:
-  keyword
-| IF
-  {
-    $$ = NewColIdent("if")
-  }
-| DATABASE
-  {
-    $$ = NewColIdent("database")
-  }
-| UNIX_TIMESTAMP
-  {
-    $$ = NewColIdent("unix_timestamp")
-  }
-| MOD
-  {
-    $$ = NewColIdent("mod")
-  }
-| REPLACE
-  {
-    $$ = NewColIdent("replace")
-  }
-| LEFT
-  {
-    $$ = NewColIdent("left")
+    $$ = &FuncExpr{Name:NewColIdent("current_time")}
   }
 
-case_expression:
-  CASE value_expression_opt when_expression_list else_expression_opt END
+func_datetime_precision_opt:
+  /* empty */
+| openb closeb
+
+/*
+  Function calls using non reserved keywords with *normal* syntax forms. Because
+  the names are non-reserved, they need a dedicated rule so as not to conflict
+*/
+function_call_conflict:
+  IF openb select_expression_list closeb
   {
-    $$ = &CaseExpr{Expr: $2, Whens: $3, Else: $4}
+    $$ = &FuncExpr{Name: NewColIdent("if"), Exprs: $3}
+  }
+| DATABASE openb select_expression_list_opt closeb
+  {
+    $$ = &FuncExpr{Name: NewColIdent("database"), Exprs: $3}
+  }
+| MOD openb select_expression_list closeb
+  {
+    $$ = &FuncExpr{Name: NewColIdent("mod"), Exprs: $3}
+  }
+| REPLACE openb select_expression_list closeb
+  {
+    $$ = &FuncExpr{Name: NewColIdent("replace"), Exprs: $3}
   }
 
-value_expression_opt:
+match_option:
+/*empty*/
+  {
+    $$ = ""
+  }
+| IN BOOLEAN MODE
+  {
+    $$ = BooleanModeStr
+  }
+| IN NATURAL LANGUAGE MODE
+ {
+    $$ = NaturalLanguageModeStr
+ }
+| IN NATURAL LANGUAGE MODE WITH QUERY EXPANSION
+ {
+    $$ = NaturalLanguageModeWithQueryExpansionStr
+ }
+| WITH QUERY EXPANSION
+ {
+    $$ = QueryExpansionStr
+ }
+
+
+convert_type:
+  charset
+  {
+    $$ = &ConvertType{Type: $1}
+  }
+|  charset INTEGER
+  {
+    $$ = &ConvertType{Type: $1}
+  }
+| charset openb INTEGRAL closeb
+  {
+    $$ = &ConvertType{Type: $1, Length: NewIntVal($3)}
+  }
+| charset openb INTEGRAL closeb charset
+  {
+    $$ = &ConvertType{Type: $1, Length: NewIntVal($3), Charset: $5}
+  }
+| charset openb INTEGRAL closeb CHARACTER SET charset
+  {
+    $$ = &ConvertType{Type: $1, Length: NewIntVal($3), Charset: $7, Operator: CharacterSetStr}
+  }
+| charset charset
+  {
+    $$ = &ConvertType{Type: $1, Charset: $2}
+  }
+| charset CHARACTER SET charset
+  {
+    $$ = &ConvertType{Type: $1, Charset: $4, Operator: CharacterSetStr}
+  }
+| charset openb INTEGRAL ',' INTEGRAL closeb
+  {
+    $$ = &ConvertType{Type: $1, Length: NewIntVal($3), Scale: NewIntVal($5)}
+  }
+
+expression_opt:
   {
     $$ = nil
   }
 | expression
   {
     $$ = $1
+  }
+
+separator_opt:
+  {
+    $$ = string("")
+  }
+| SEPARATOR STRING
+  {
+    $$ = " separator '"+string($2)+"'"
   }
 
 when_expression_list:
@@ -1053,11 +1223,11 @@ column_name:
   {
     $$ = &ColName{Name: $1}
   }
-| table_id '.' sql_id
+| table_id '.' reserved_sql_id
   {
     $$ = &ColName{Qualifier: &TableName{Name: $1}, Name: $3}
   }
-| table_id '.' table_id '.' sql_id
+| table_id '.' reserved_table_id '.' reserved_sql_id
   {
     $$ = &ColName{Qualifier: &TableName{Qualifier: $1, Name: $3}, Name: $5}
   }
@@ -1115,7 +1285,7 @@ group_by_opt:
   {
     $$ = nil
   }
-| GROUP BY value_expression_list
+| GROUP BY expression_list
   {
     $$ = $3
   }
@@ -1192,26 +1362,9 @@ lock_opt:
   {
     $$ = ForUpdateStr
   }
-| LOCK IN sql_id sql_id
+| LOCK IN SHARE MODE
   {
-    if $3.Lowered() != "share" {
-      yylex.Error("expecting share")
-      return 1
-    }
-    if $4.Lowered() != "mode" {
-      yylex.Error("expecting mode")
-      return 1
-    }
     $$ = ShareModeStr
-  }
-
-column_list_opt:
-  {
-    $$ = nil
-  }
-| openb column_list closeb
-  {
-    $$ = $2
   }
 
 column_list:
@@ -1222,6 +1375,33 @@ column_list:
 | column_list ',' sql_id
   {
     $$ = append($$, $3)
+  }
+
+ins_column_list_opt:
+  {
+    $$ = nil
+  }
+| openb ins_column_list closeb
+  {
+    $$ = $2
+  }
+
+ins_column_list:
+  sql_id
+  {
+    $$ = Columns{$1}
+  }
+| sql_id '.' sql_id
+  {
+    $$ = Columns{$3}
+  }
+| ins_column_list ',' sql_id
+  {
+    $$ = append($$, $3)
+  }
+| ins_column_list ',' sql_id '.' sql_id
+  {
+    $$ = append($$, $5)
   }
 
 on_dup_opt:
@@ -1244,17 +1424,27 @@ row_list:
   }
 
 tuple_list:
-  row_tuple
+  tuple_or_empty
   {
     $$ = Values{$1}
   }
-| tuple_list ',' row_tuple
+| tuple_list ',' tuple_or_empty
   {
     $$ = append($1, $3)
   }
 
+tuple_or_empty:
+  row_tuple
+  {
+    $$ = $1
+  }
+| openb closeb
+  {
+    $$ = ValTuple{}
+  }
+
 row_tuple:
-  openb value_expression_list closeb
+  openb expression_list closeb
   {
     $$ = ValTuple($2)
   }
@@ -1280,7 +1470,7 @@ update_list:
   }
 
 update_expression:
-  sql_id '=' expression
+  column_name '=' expression
   {
     $$ = &UpdateExpr{Name: $1, Expr: $3}
   }
@@ -1338,12 +1528,150 @@ sql_id:
   {
     $$ = NewColIdent(string($1))
   }
+| non_reserved_keyword
+  {
+    $$ = NewColIdent(string($1))
+  }
+
+reserved_sql_id:
+  sql_id
+| reserved_keyword
+  {
+    $$ = NewColIdent(string($1))
+  }
 
 table_id:
   ID
   {
     $$ = NewTableIdent(string($1))
   }
+| non_reserved_keyword
+  {
+    $$ = NewTableIdent(string($1))
+  }
+
+reserved_table_id:
+  table_id
+| reserved_keyword
+  {
+    $$ = NewTableIdent(string($1))
+  }
+
+/*
+  These are not all necessarily reserved in MySQL, but some are.
+  These are more importantly reserved because they may conflict with our grammar.
+  If you want to move one that is not reserved in MySQL (i.e. ESCAPE) to the
+  non_reserved_keywords, you'll need to deal with any conflicts.
+
+  Sorted alphabetically
+*/
+reserved_keyword:
+  AND
+| AS
+| ASC
+| BETWEEN
+| BINARY
+| BY
+| CASE
+| COLLATE
+| CONVERT
+| CREATE
+| CROSS
+| CURRENT_DATE
+| CURRENT_TIME
+| CURRENT_TIMESTAMP
+| DATABASE
+| DEFAULT
+| DELETE
+| DESC
+| DESCRIBE
+| DISTINCT
+| DIV
+| DROP
+| ELSE
+| END
+| ESCAPE
+| EXISTS
+| EXPLAIN
+| FALSE
+| FOR
+| FORCE
+| FROM
+| GROUP
+| HAVING
+| IF
+| IGNORE
+| IN
+| INDEX
+| INNER
+| INSERT
+| INTERVAL
+| INTO
+| IS
+| JOIN
+| KEY
+| LEFT
+| LIKE
+| LIMIT
+| LOCALTIME
+| LOCALTIMESTAMP
+| LOCK
+| MATCH
+| MOD
+| NATURAL
+| NEXT // next should be doable as non-reserved, but is not due to the special `select next num_val` query that vitess supports
+| NOT
+| NULL
+| ON
+| OR
+| ORDER
+| OUTER
+| REGEXP
+| RENAME
+| REPLACE
+| RIGHT
+| SELECT
+| SEPARATOR
+| SET
+| SHOW
+| STRAIGHT_JOIN
+| TABLE
+| THEN
+| TO
+| TRUE
+| UNION
+| UNIQUE
+| UPDATE
+| USE
+| USING
+| UTC_DATE
+| UTC_TIME
+| UTC_TIMESTAMP
+| VALUES
+| WHEN
+| WHERE
+
+/*
+  These are non-reserved Vitess, because they don't cause conflicts in the grammar.
+  Some of them may be reserved in MySQL. The good news is we backtick quote them
+  when we rewrite the query, so no issue should arise.
+
+  Sorted alphabetically
+*/
+non_reserved_keyword:
+  AGAINST
+| DATE
+| DUPLICATE
+| EXPANSION
+| INTEGER
+| LANGUAGE
+| MODE
+| OFFSET
+| QUERY
+| SHARE
+| UNUSED
+| VIEW
+| WITH
 
 openb:
   '('

@@ -47,6 +47,20 @@ func (m *Shard) String() string            { return proto.CompactTextString(m) }
 func (*Shard) ProtoMessage()               {}
 func (*Shard) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{0} }
 
+func (m *Shard) GetName() string {
+	if m != nil {
+		return m.Name
+	}
+	return ""
+}
+
+func (m *Shard) GetDbNameOverride() string {
+	if m != nil {
+		return m.DbNameOverride
+	}
+	return ""
+}
+
 // Keyspace describes a single keyspace.
 type Keyspace struct {
 	// name has to be unique in a VTTestTopology.
@@ -70,11 +84,53 @@ func (m *Keyspace) String() string            { return proto.CompactTextString(m
 func (*Keyspace) ProtoMessage()               {}
 func (*Keyspace) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{1} }
 
+func (m *Keyspace) GetName() string {
+	if m != nil {
+		return m.Name
+	}
+	return ""
+}
+
 func (m *Keyspace) GetShards() []*Shard {
 	if m != nil {
 		return m.Shards
 	}
 	return nil
+}
+
+func (m *Keyspace) GetShardingColumnName() string {
+	if m != nil {
+		return m.ShardingColumnName
+	}
+	return ""
+}
+
+func (m *Keyspace) GetShardingColumnType() string {
+	if m != nil {
+		return m.ShardingColumnType
+	}
+	return ""
+}
+
+func (m *Keyspace) GetServedFrom() string {
+	if m != nil {
+		return m.ServedFrom
+	}
+	return ""
+}
+
+func (m *Keyspace) GetReplicaCount() int32 {
+	if m != nil {
+		return m.ReplicaCount
+	}
+	return 0
+}
+
+func (m *Keyspace) GetRdonlyCount() int32 {
+	if m != nil {
+		return m.RdonlyCount
+	}
+	return 0
 }
 
 // VTTestTopology describes the keyspaces in the topology.
@@ -93,6 +149,13 @@ func (*VTTestTopology) Descriptor() ([]byte, []int) { return fileDescriptor0, []
 func (m *VTTestTopology) GetKeyspaces() []*Keyspace {
 	if m != nil {
 		return m.Keyspaces
+	}
+	return nil
+}
+
+func (m *VTTestTopology) GetCells() []string {
+	if m != nil {
+		return m.Cells
 	}
 	return nil
 }

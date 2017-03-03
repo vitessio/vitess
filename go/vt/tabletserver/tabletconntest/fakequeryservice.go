@@ -11,7 +11,6 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/callerid"
-	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
@@ -28,7 +27,7 @@ type FakeQueryService struct {
 	// these fields are used to simulate and synchronize on errors
 	HasError      bool
 	HasBeginError bool
-	TabletError   *tabletserver.TabletError
+	TabletError   error
 	ErrorWait     chan struct{}
 
 	// these fields are used to simulate and synchronize on panics

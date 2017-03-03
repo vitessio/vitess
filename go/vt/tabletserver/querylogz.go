@@ -16,6 +16,7 @@ import (
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/acl"
 	"github.com/youtube/vitess/go/vt/logz"
+	"github.com/youtube/vitess/go/vt/tabletserver/tabletenv"
 )
 
 var (
@@ -72,8 +73,8 @@ var (
 
 func init() {
 	http.HandleFunc("/querylogz", func(w http.ResponseWriter, r *http.Request) {
-		ch := StatsLogger.Subscribe("querylogz")
-		defer StatsLogger.Unsubscribe(ch)
+		ch := tabletenv.StatsLogger.Subscribe("querylogz")
+		defer tabletenv.StatsLogger.Unsubscribe(ch)
 		querylogzHandler(ch, w, r)
 	})
 }
@@ -100,9 +101,9 @@ func querylogzHandler(ch chan interface{}, w http.ResponseWriter, r *http.Reques
 				return
 			default:
 			}
-			stats, ok := out.(*LogStats)
+			stats, ok := out.(*tabletenv.LogStats)
 			if !ok {
-				err := fmt.Errorf("Unexpected value in %s: %#v (expecting value of type %T)", TxLogger.Name(), out, &LogStats{})
+				err := fmt.Errorf("Unexpected value in %s: %#v (expecting value of type %T)", tabletenv.TxLogger.Name(), out, &tabletenv.LogStats{})
 				io.WriteString(w, `<tr class="error">`)
 				io.WriteString(w, err.Error())
 				io.WriteString(w, "</tr>")
@@ -118,7 +119,7 @@ func querylogzHandler(ch chan interface{}, w http.ResponseWriter, r *http.Reques
 				level = "high"
 			}
 			tmplData := struct {
-				*LogStats
+				*tabletenv.LogStats
 				ColorLevel string
 			}{stats, level}
 			if err := querylogzTmpl.Execute(w, tmplData); err != nil {

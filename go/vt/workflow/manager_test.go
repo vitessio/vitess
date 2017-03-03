@@ -22,24 +22,27 @@ func startManager(t *testing.T, m *Manager) (*sync.WaitGroup, context.CancelFunc
 		wg.Done()
 	}()
 
-	// Wait for the manager to start, by watching its ctx object.
-	timeout := 0
-	for {
-		m.mu.Lock()
-		running := m.ctx != nil
-		m.mu.Unlock()
-
-		if running {
-			break
-		}
-		timeout++
-		if timeout == 1000 {
-			t.Fatalf("failed to wait for running manager")
-		}
-		time.Sleep(time.Millisecond)
-	}
+	m.WaitUntilRunning()
 
 	return wg, cancel
+}
+
+// TestWaitUntilRunning verifies that WaitUntilRunning() works as expected
+// (blocking until Run() has advanced far enough), even across multiple Manager
+// starts and stops.
+func TestWaitUntilRunning(t *testing.T) {
+	ts := memorytopo.NewServer("cell1")
+	m := NewManager(ts)
+
+	// Start it 3 times i.e. restart it 2 times.
+	for i := 1; i <= 3; i++ {
+		// Run the manager in the background.
+		wg, cancel := startManager(t, m)
+
+		// Shut it down and wait for the shutdown to complete.
+		cancel()
+		wg.Wait()
+	}
 }
 
 // TestManagerSimpleRun starts and stops a job within a Manager.

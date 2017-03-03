@@ -14,9 +14,9 @@ for var in service_type; do
 done
 
 # Create configmap from orchestrator docker config file
-$KUBECTL create --namespace=$VITESS_NAME configmap orchestrator-conf --from-file="${script_root}/../../docker/orchestrator/orchestrator.conf.json"
+$KUBECTL $KUBECTL_OPTIONS create configmap orchestrator-conf --from-file="${script_root}/../../docker/orchestrator/orchestrator.conf.json"
 
-cat orchestrator-template.yaml | sed -e "$sed_script" | $KUBECTL create --namespace=$VITESS_NAME -f -
+cat orchestrator-template.yaml | sed -e "$sed_script" | $KUBECTL $KUBECTL_OPTIONS create -f -
 
 echo
 echo "To access orchestrator web UI, start kubectl proxy in another terminal:"

@@ -15,6 +15,9 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/timer"
 	"github.com/youtube/vitess/go/vt/sqlparser"
+	"github.com/youtube/vitess/go/vt/tabletserver/connpool"
+	"github.com/youtube/vitess/go/vt/tabletserver/engines/schema"
+	"github.com/youtube/vitess/go/vt/tabletserver/tabletenv"
 )
 
 type messageReceiver struct {
@@ -79,7 +82,7 @@ type MessageManager struct {
 	batchSize   int
 	pollerTicks *timer.Timer
 	purgeTicks  *timer.Timer
-	connpool    *ConnPool
+	conns       *connpool.Pool
 
 	mu sync.Mutex
 	// cond gets triggered if a receiver becomes available (curReceiver != -1),
@@ -92,7 +95,9 @@ type MessageManager struct {
 	messagesPending bool
 
 	// wg is for ensuring all running goroutines have returned
-	// before we can close the manager.
+	// before we can close the manager. You need to Add before
+	// launching any gorooutine while holding a lock on mu.
+	// The goroutine must in turn defer on Done.
 	wg sync.WaitGroup
 
 	readByTimeNext *sqlparser.ParsedQuery
@@ -102,7 +107,9 @@ type MessageManager struct {
 }
 
 // NewMessageManager creates a new message manager.
-func NewMessageManager(tsv *TabletServer, table *TableInfo, connpool *ConnPool) *MessageManager {
+// Calls into tsv have to be made asynchronously. Otherwise,
+// it can lead to deadlocks.
+func NewMessageManager(tsv *TabletServer, table *schema.Table, conns *connpool.Pool) *MessageManager {
 	mm := &MessageManager{
 		tsv:  tsv,
 		name: table.Name,
@@ -115,7 +122,7 @@ func NewMessageManager(tsv *TabletServer, table *TableInfo, connpool *ConnPool) 
 		cache:       NewMessagerCache(table.MessageInfo.CacheSize),
 		pollerTicks: timer.NewTimer(table.MessageInfo.PollInterval),
 		purgeTicks:  timer.NewTimer(table.MessageInfo.PollInterval),
-		connpool:    connpool,
+		conns:       conns,
 	}
 	mm.cond.L = &mm.mu
 
@@ -186,6 +193,9 @@ func (mm *MessageManager) Subscribe(receiver *messageReceiver) {
 		busy:     true,
 	}
 	mm.receivers = append(mm.receivers, withStatus)
+
+	// Send the message asynchronously.
+	mm.wg.Add(1)
 	go mm.send(withStatus, mm.fieldResult)
 }
 
@@ -283,13 +293,16 @@ func (mm *MessageManager) runSend() {
 		receiver := mm.receivers[mm.curReceiver]
 		receiver.busy = true
 		mm.rescanReceivers(mm.curReceiver)
-		mm.mu.Unlock()
+
 		// Send the message asynchronously.
+		mm.wg.Add(1)
 		go mm.send(receiver, &sqltypes.Result{Rows: rows})
+		mm.mu.Unlock()
 	}
 }
 
 func (mm *MessageManager) send(receiver *receiverWithStatus, qr *sqltypes.Result) {
+	defer mm.wg.Done()
 	if err := receiver.receiver.Send(qr); err != nil {
 		if err == io.EOF {
 			// No need to call Cancel. MessageReceiver already
@@ -315,18 +328,18 @@ func (mm *MessageManager) send(receiver *receiverWithStatus, qr *sqltypes.Result
 	for i, row := range qr.Rows {
 		ids[i] = row[0].String()
 	}
-	// Postpone the messages for resend before discarding
-	// from cache. If no timely ack is received, it will be resent.
-	mm.postpone(ids)
 	// postpone should discard, but this is a safety measure
 	// in case it fails.
 	mm.cache.Discard(ids)
+	go postpone(mm.tsv, mm.name.String(), mm.ackWaitTime, ids)
 }
 
-func (mm *MessageManager) postpone(ids []string) {
-	ctx, cancel := context.WithTimeout(localContext(), mm.ackWaitTime)
+// postpone is a non-member because it should be called asynchronously and should
+// not rely on members of MessageManager.
+func postpone(tsv *TabletServer, name string, ackWaitTime time.Duration, ids []string) {
+	ctx, cancel := context.WithTimeout(tabletenv.LocalContext(), ackWaitTime)
 	defer cancel()
-	_, err := mm.tsv.PostponeMessages(ctx, nil, mm.name.String(), ids)
+	_, err := tsv.PostponeMessages(ctx, nil, name, ids)
 	if err != nil {
 		// TODO(sougou): increment internal error.
 		log.Errorf("Unable to postpone messages %v: %v", ids, err)
@@ -334,9 +347,9 @@ func (mm *MessageManager) postpone(ids []string) {
 }
 
 func (mm *MessageManager) runPoller() {
-	ctx, cancel := context.WithTimeout(localContext(), mm.pollerTicks.Interval())
+	ctx, cancel := context.WithTimeout(tabletenv.LocalContext(), mm.pollerTicks.Interval())
 	defer cancel()
-	conn, err := mm.connpool.Get(ctx)
+	conn, err := mm.conns.Get(ctx)
 	if err != nil {
 		// TODO(sougou): increment internal error.
 		log.Errorf("Error getting connection: %v", err)
@@ -395,10 +408,16 @@ func (mm *MessageManager) runPoller() {
 }
 
 func (mm *MessageManager) runPurge() {
-	ctx, cancel := context.WithTimeout(localContext(), mm.purgeTicks.Interval())
+	go purge(mm.tsv, mm.name.String(), mm.purgeAfter, mm.purgeTicks.Interval())
+}
+
+// purge is a non-member because it should be called asynchronously and should
+// not rely on members of MessageManager.
+func purge(tsv *TabletServer, name string, purgeAfter, purgeInterval time.Duration) {
+	ctx, cancel := context.WithTimeout(tabletenv.LocalContext(), purgeInterval)
 	defer cancel()
 	for {
-		count, err := mm.tsv.PurgeMessages(ctx, nil, mm.name.String(), time.Now().Add(-mm.purgeAfter).UnixNano())
+		count, err := tsv.PurgeMessages(ctx, nil, name, time.Now().Add(-purgeAfter).UnixNano())
 		if err != nil {
 			// TODO(sougou): increment internal error.
 			log.Errorf("Unable to delete messages: %v", err)
@@ -466,7 +485,7 @@ func (mm *MessageManager) receiverCount() int {
 	return len(mm.receivers)
 }
 
-func (mm *MessageManager) read(ctx context.Context, conn *DBConn, pq *sqlparser.ParsedQuery, bindVars map[string]interface{}) (*sqltypes.Result, error) {
+func (mm *MessageManager) read(ctx context.Context, conn *connpool.DBConn, pq *sqlparser.ParsedQuery, bindVars map[string]interface{}) (*sqltypes.Result, error) {
 	b, err := pq.GenerateQuery(bindVars)
 	if err != nil {
 		// TODO(sougou): increment internal error.

@@ -70,11 +70,6 @@ unit_test_cover: build
 unit_test_race: build
 	tools/unit_test_race.sh
 
-# Run coverage and upload to coveralls.io.
-# Requires the secret COVERALLS_TOKEN env variable to be set.
-unit_test_goveralls: build
-	travis/goveralls.sh
-
 .ONESHELL:
 SHELL = /bin/bash
 
@@ -176,7 +171,7 @@ docker_base:
 
 docker_base_mysql56:
 	chmod -R o=g *
-	docker build -f Dockerfile.percona -t vitess/base:mysql56 .
+	docker build -f Dockerfile.mysql56 -t vitess/base:mysql56 .
 
 docker_base_mariadb:
 	chmod -R o=g *

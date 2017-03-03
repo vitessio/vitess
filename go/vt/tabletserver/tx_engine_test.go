@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/youtube/vitess/go/vt/tabletserver/tabletenv"
+
 	"golang.org/x/net/context"
 )
 
@@ -17,11 +19,11 @@ func TestTxEngineClose(t *testing.T) {
 	testUtils := newTestUtils()
 	dbconfigs := testUtils.newDBConfigs(db)
 	ctx := context.Background()
-	config := DefaultQsConfig
+	config := tabletenv.DefaultQsConfig
 	config.TransactionCap = 10
 	config.TransactionTimeout = 0.5
 	config.TxShutDownGracePeriod = 0
-	te := NewTxEngine(nil, config, NewQueryServiceStats("", false))
+	te := NewTxEngine(nil, config)
 
 	// Normal close.
 	te.Open(dbconfigs)

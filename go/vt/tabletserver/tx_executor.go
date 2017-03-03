@@ -14,13 +14,15 @@ import (
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
+	"github.com/youtube/vitess/go/vt/tabletserver/tabletenv"
+	"github.com/youtube/vitess/go/vt/vterrors"
 )
 
 // TxExecutor is used for executing a transactional request.
 type TxExecutor struct {
 	// TODO(sougou): Parameterize this.
 	ctx      context.Context
-	logStats *LogStats
+	logStats *tabletenv.LogStats
 	te       *TxEngine
 	messager *MessagerEngine
 }
@@ -31,9 +33,9 @@ type TxExecutor struct {
 // protocol, will perform all the cleanup.
 func (txe *TxExecutor) Prepare(transactionID int64, dtid string) error {
 	if !txe.te.twopcEnabled {
-		return NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "2pc is not enabled")
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "2pc is not enabled")
 	}
-	defer txe.te.queryServiceStats.QueryStats.Record("PREPARE", time.Now())
+	defer tabletenv.QueryStats.Record("PREPARE", time.Now())
 	txe.logStats.TransactionID = transactionID
 
 	conn, err := txe.te.txPool.Get(transactionID, "for prepare")
@@ -50,7 +52,7 @@ func (txe *TxExecutor) Prepare(transactionID int64, dtid string) error {
 	err = txe.te.preparedPool.Put(conn, dtid)
 	if err != nil {
 		txe.te.txPool.localRollback(txe.ctx, conn)
-		return NewTabletError(vtrpcpb.ErrorCode_RESOURCE_EXHAUSTED, "prepare failed for transaction %d: %v", transactionID, err)
+		return vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "prepare failed for transaction %d: %v", transactionID, err)
 	}
 
 	localConn, err := txe.te.txPool.LocalBegin(txe.ctx)
@@ -77,12 +79,12 @@ func (txe *TxExecutor) Prepare(transactionID int64, dtid string) error {
 // marked as failed in the redo log.
 func (txe *TxExecutor) CommitPrepared(dtid string) error {
 	if !txe.te.twopcEnabled {
-		return NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "2pc is not enabled")
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "2pc is not enabled")
 	}
-	defer txe.te.queryServiceStats.QueryStats.Record("COMMIT_PREPARED", time.Now())
+	defer tabletenv.QueryStats.Record("COMMIT_PREPARED", time.Now())
 	conn, err := txe.te.preparedPool.FetchForCommit(dtid)
 	if err != nil {
-		return NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "cannot commit dtid %s, state: %v", dtid, err)
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "cannot commit dtid %s, state: %v", dtid, err)
 	}
 	if conn == nil {
 		return nil
@@ -113,7 +115,7 @@ func (txe *TxExecutor) CommitPrepared(dtid string) error {
 // The function uses the passed in context that has no timeout
 // instead of TxExecutor's context.
 func (txe *TxExecutor) markFailed(ctx context.Context, dtid string) {
-	txe.te.queryServiceStats.InternalErrors.Add("TwopcCommit", 1)
+	tabletenv.InternalErrors.Add("TwopcCommit", 1)
 	txe.te.preparedPool.SetFailed(dtid)
 	conn, err := txe.te.txPool.LocalBegin(ctx)
 	if err != nil {
@@ -152,9 +154,9 @@ func (txe *TxExecutor) markFailed(ctx context.Context, dtid string) {
 // killer will be the one to eventually roll it back.
 func (txe *TxExecutor) RollbackPrepared(dtid string, originalID int64) error {
 	if !txe.te.twopcEnabled {
-		return NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "2pc is not enabled")
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "2pc is not enabled")
 	}
-	defer txe.te.queryServiceStats.QueryStats.Record("ROLLBACK_PREPARED", time.Now())
+	defer tabletenv.QueryStats.Record("ROLLBACK_PREPARED", time.Now())
 	conn, err := txe.te.txPool.LocalBegin(txe.ctx)
 	if err != nil {
 		goto returnConn
@@ -182,9 +184,9 @@ returnConn:
 // CreateTransaction creates the metadata for a 2PC transaction.
 func (txe *TxExecutor) CreateTransaction(dtid string, participants []*querypb.Target) error {
 	if !txe.te.twopcEnabled {
-		return NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "2pc is not enabled")
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "2pc is not enabled")
 	}
-	defer txe.te.queryServiceStats.QueryStats.Record("CREATE_TRANSACTION", time.Now())
+	defer tabletenv.QueryStats.Record("CREATE_TRANSACTION", time.Now())
 	conn, err := txe.te.txPool.LocalBegin(txe.ctx)
 	if err != nil {
 		return err
@@ -202,9 +204,9 @@ func (txe *TxExecutor) CreateTransaction(dtid string, participants []*querypb.Ta
 // decision to commit the associated 2pc transaction.
 func (txe *TxExecutor) StartCommit(transactionID int64, dtid string) error {
 	if !txe.te.twopcEnabled {
-		return NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "2pc is not enabled")
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "2pc is not enabled")
 	}
-	defer txe.te.queryServiceStats.QueryStats.Record("START_COMMIT", time.Now())
+	defer tabletenv.QueryStats.Record("START_COMMIT", time.Now())
 	txe.logStats.TransactionID = transactionID
 
 	conn, err := txe.te.txPool.Get(transactionID, "for 2pc commit")
@@ -224,9 +226,9 @@ func (txe *TxExecutor) StartCommit(transactionID int64, dtid string) error {
 // If a transaction id is provided, that transaction is also rolled back.
 func (txe *TxExecutor) SetRollback(dtid string, transactionID int64) error {
 	if !txe.te.twopcEnabled {
-		return NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "2pc is not enabled")
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "2pc is not enabled")
 	}
-	defer txe.te.queryServiceStats.QueryStats.Record("SET_ROLLBACK", time.Now())
+	defer tabletenv.QueryStats.Record("SET_ROLLBACK", time.Now())
 	txe.logStats.TransactionID = transactionID
 
 	if transactionID != 0 {
@@ -256,9 +258,9 @@ func (txe *TxExecutor) SetRollback(dtid string, transactionID int64) error {
 // essentially resolving it.
 func (txe *TxExecutor) ConcludeTransaction(dtid string) error {
 	if !txe.te.twopcEnabled {
-		return NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "2pc is not enabled")
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "2pc is not enabled")
 	}
-	defer txe.te.queryServiceStats.QueryStats.Record("RESOLVE", time.Now())
+	defer tabletenv.QueryStats.Record("RESOLVE", time.Now())
 
 	conn, err := txe.te.txPool.LocalBegin(txe.ctx)
 	if err != nil {
@@ -276,7 +278,7 @@ func (txe *TxExecutor) ConcludeTransaction(dtid string) error {
 // ReadTransaction returns the metadata for the sepcified dtid.
 func (txe *TxExecutor) ReadTransaction(dtid string) (*querypb.TransactionMetadata, error) {
 	if !txe.te.twopcEnabled {
-		return nil, NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "2pc is not enabled")
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "2pc is not enabled")
 	}
 	return txe.te.twoPC.ReadTransaction(txe.ctx, dtid)
 }
@@ -284,15 +286,15 @@ func (txe *TxExecutor) ReadTransaction(dtid string) (*querypb.TransactionMetadat
 // ReadTwopcInflight returns info about all in-flight 2pc transactions.
 func (txe *TxExecutor) ReadTwopcInflight() (distributed []*DistributedTx, prepared, failed []*PreparedTx, err error) {
 	if !txe.te.twopcEnabled {
-		return nil, nil, nil, NewTabletError(vtrpcpb.ErrorCode_BAD_INPUT, "2pc is not enabled")
+		return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "2pc is not enabled")
 	}
 	prepared, failed, err = txe.te.twoPC.ReadAllRedo(txe.ctx)
 	if err != nil {
-		return nil, nil, nil, NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "Could not read redo: %v", err)
+		return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "Could not read redo: %v", err)
 	}
 	distributed, err = txe.te.twoPC.ReadAllTransactions(txe.ctx)
 	if err != nil {
-		return nil, nil, nil, NewTabletError(vtrpcpb.ErrorCode_INTERNAL_ERROR, "Could not read redo: %v", err)
+		return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "Could not read redo: %v", err)
 	}
 	return distributed, prepared, failed, nil
 }

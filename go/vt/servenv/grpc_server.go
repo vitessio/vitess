@@ -5,17 +5,15 @@
 package servenv
 
 import (
-	"crypto/tls"
-	"crypto/x509"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"net"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 
 	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/vt/servenv/grpcutils"
 )
 
 // This file handles gRPC server, on its own port.
@@ -76,28 +74,9 @@ func createGRPCServer() {
 
 	var opts []grpc.ServerOption
 	if GRPCPort != nil && *GRPCCert != "" && *GRPCKey != "" {
-		config := &tls.Config{}
-
-		// load the server cert and key
-		cert, err := tls.LoadX509KeyPair(*GRPCCert, *GRPCKey)
+		config, err := grpcutils.TLSServerConfig(*GRPCCert, *GRPCKey, *GRPCCA)
 		if err != nil {
-			log.Fatalf("Failed to load cert/key: %v", err)
-		}
-		config.Certificates = []tls.Certificate{cert}
-
-		// if specified, load ca to validate client,
-		// and enforce clients present valid certs.
-		if *GRPCCA != "" {
-			b, err := ioutil.ReadFile(*GRPCCA)
-			if err != nil {
-				log.Fatalf("Failed to read ca file: %v", err)
-			}
-			cp := x509.NewCertPool()
-			if !cp.AppendCertsFromPEM(b) {
-				log.Fatalf("Failed to append certificates")
-			}
-			config.ClientCAs = cp
-			config.ClientAuth = tls.RequireAndVerifyClientCert
+			log.Fatalf("Failed to log gRPC cert/key/ca: %v", err)
 		}
 
 		// create the creds server options

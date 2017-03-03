@@ -242,11 +242,11 @@ def tearDownModule():
 
 def start_vtgate():
   utils.VtGate().start(extra_args=[
-      '-enable_vtgate_buffer',
+      '-enable_buffer',
       # Long timeout in case failover is slow.
-      '-vtgate_buffer_window', '10m',
-      '-vtgate_buffer_max_failover_duration', '10m',
-      '-vtgate_buffer_min_time_between_failovers', '20m'],
+      '-buffer_window', '10m',
+      '-buffer_max_failover_duration', '10m',
+      '-buffer_min_time_between_failovers', '20m'],
                        tablets=all_tablets)
 
 
@@ -320,10 +320,10 @@ class TestBufferBase(unittest.TestCase):
     master_promoted_count = v['HealthcheckMasterPromoted'].get(labels, 0)
     self.assertGreater(master_promoted_count, 0)
 
-    if labels in v['BufferFailoverDurationSumMs']:
+    duration_ms = v['BufferFailoverDurationSumMs'].get(labels, 0)
+    if duration_ms > 0:
       # Buffering was actually started.
-      logging.debug('Failover was buffered for %d milliseconds.',
-                    v['BufferFailoverDurationSumMs'][labels])
+      logging.debug('Failover was buffered for %d milliseconds.', duration_ms)
       # Number of buffering stops must be equal to the number of seen failovers.
       buffering_stops = v['BufferStops'].get('%s.NewMasterSeen' % labels, 0)
       self.assertEqual(master_promoted_count, buffering_stops)
@@ -376,7 +376,7 @@ class TestBuffer(TestBufferBase):
   def setUp(self):
     utils.vtgate.kill()
     # Restart vtgate between each test or the feature
-    # --vtgate_buffer_min_time_between_failovers
+    # --buffer_min_time_between_failovers
     # will ignore subsequent failovers.
     start_vtgate()
 

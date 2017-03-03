@@ -100,6 +100,33 @@ func (d *AtomicDuration) CompareAndSwap(oldval, newval time.Duration) (swapped b
 	return atomic.CompareAndSwapInt64(&d.int64, int64(oldval), int64(newval))
 }
 
+// AtomicBool gives an atomic boolean variable.
+type AtomicBool struct {
+	int32
+}
+
+// NewAtomicBool initializes a new AtomicBool with a given value.
+func NewAtomicBool(n bool) AtomicBool {
+	if n {
+		return AtomicBool{1}
+	}
+	return AtomicBool{0}
+}
+
+// Set atomically sets n as new value.
+func (i *AtomicBool) Set(n bool) {
+	if n {
+		atomic.StoreInt32(&i.int32, 1)
+	} else {
+		atomic.StoreInt32(&i.int32, 0)
+	}
+}
+
+// Get atomically returns the current value.
+func (i *AtomicBool) Get() bool {
+	return atomic.LoadInt32(&i.int32) != 0
+}
+
 // AtomicString gives you atomic-style APIs for string, but
 // it's only a convenience wrapper that uses a mutex. So, it's
 // not as efficient as the rest of the atomic types.

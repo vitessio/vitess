@@ -5,8 +5,6 @@
 package testlib
 
 import (
-	"fmt"
-	"math/rand"
 	"strings"
 	"testing"
 	"time"
@@ -18,6 +16,7 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/tabletserver/grpcqueryservice"
+	"github.com/youtube/vitess/go/vt/tabletserver/tabletenv"
 	"github.com/youtube/vitess/go/vt/topo/memorytopo"
 	"github.com/youtube/vitess/go/vt/wrangler"
 
@@ -112,10 +111,7 @@ func waitForFilteredReplication(t *testing.T, expectedErr string, initialStats *
 	dest.Agent.BinlogPlayerMap = tabletmanager.NewBinlogPlayerMap(ts, nil, nil)
 
 	// Use real, but trimmed down QueryService.
-	testConfig := tabletserver.DefaultQsConfig
-	testConfig.EnablePublishStats = false
-	testConfig.DebugURLPrefix = fmt.Sprintf("TestWaitForFilteredReplication-%d-", rand.Int63())
-	qs := tabletserver.NewTabletServer(testConfig)
+	qs := tabletserver.NewTabletServerWithNilTopoServer(tabletenv.DefaultQsConfig)
 	grpcqueryservice.Register(dest.RPCServer, qs)
 
 	qs.BroadcastHealth(42, initialStats)

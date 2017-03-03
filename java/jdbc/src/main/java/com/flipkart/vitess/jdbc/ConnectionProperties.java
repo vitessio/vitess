@@ -1,9 +1,11 @@
 package com.flipkart.vitess.jdbc;
 
 import com.flipkart.vitess.util.Constants;
+import com.flipkart.vitess.util.StringUtils;
 import com.youtube.vitess.proto.Query;
 import com.youtube.vitess.proto.Topodata;
 
+import java.io.UnsupportedEncodingException;
 import java.lang.reflect.Field;
 import java.sql.DriverPropertyInfo;
 import java.sql.SQLException;
@@ -29,6 +31,49 @@ public class ConnectionProperties {
             throw new RuntimeException(ex);
         }
     }
+
+    // Configs for handling deserialization of blobs
+    private BooleanConnectionProperty blobsAreStrings = new BooleanConnectionProperty(
+        "blobsAreStrings",
+        "Should the driver always treat BLOBs as Strings - specifically to work around dubious metadata returned by the server for GROUP BY clauses?",
+        false);
+    private BooleanConnectionProperty functionsNeverReturnBlobs = new BooleanConnectionProperty(
+        "functionsNeverReturnBlobs",
+        "Should the driver always treat data from functions returning BLOBs as Strings - specifically to work around dubious metadata returned by the server for GROUP BY clauses?",
+        false);
+
+    // Configs for handing tinyint(1)
+    private BooleanConnectionProperty tinyInt1isBit = new BooleanConnectionProperty(
+        "tinyInt1isBit",
+        "Should the driver treat the datatype TINYINT(1) as the BIT type (because the server silently converts BIT -> TINYINT(1) when creating tables)?",
+        true);
+    private BooleanConnectionProperty yearIsDateType = new BooleanConnectionProperty(
+        "yearIsDateType",
+        "Should the JDBC driver treat the MySQL type \"YEAR\" as a java.sql.Date, or as a SHORT?",
+        true);
+
+    // Configs for handling irregular blobs, those with characters outside the typical 4-byte encodings
+    private BooleanConnectionProperty useBlobToStoreUTF8OutsideBMP = new BooleanConnectionProperty(
+        "useBlobToStoreUTF8OutsideBMP",
+        "Tells the driver to treat [MEDIUM/LONG]BLOB columns as [LONG]VARCHAR columns holding text encoded in UTF-8 that has characters outside the BMP (4-byte encodings), which MySQL server can't handle natively.",
+        false);
+    private StringConnectionProperty utf8OutsideBmpIncludedColumnNamePattern = new StringConnectionProperty(
+        "utf8OutsideBmpIncludedColumnNamePattern",
+        "Used to specify exclusion rules to \"utf8OutsideBmpExcludedColumnNamePattern\". The regex must follow the patterns used for the java.util.regex package.",
+        null,
+        null);
+    private StringConnectionProperty utf8OutsideBmpExcludedColumnNamePattern = new StringConnectionProperty(
+        "utf8OutsideBmpExcludedColumnNamePattern",
+        "When \"useBlobToStoreUTF8OutsideBMP\" is set to \"true\", column names matching the given regex will still be treated as BLOBs unless they match the regex specified for \"utf8OutsideBmpIncludedColumnNamePattern\". The regex must follow the patterns used for the java.util.regex package.",
+        null,
+        null);
+
+    // Default encodings, for when one cannot be determined from field metadata
+    private StringConnectionProperty characterEncoding = new StringConnectionProperty(
+        "characterEncoding",
+        "If a character encoding cannot be detected, which fallback should be used when dealing with strings? (defaults is to 'autodetect')",
+        null,
+        null);
 
     // Vitess-specific configs
     private EnumConnectionProperty<Constants.QueryExecuteType> executeType = new EnumConnectionProperty<>(
@@ -98,6 +143,7 @@ public class ConnectionProperties {
     private boolean includeAllFieldsCache = true;
     private boolean twopcEnabledCache = false;
     private boolean simpleExecuteTypeCache = true;
+    private String characterEncodingAsString = null;
 
     void initializeProperties(Properties props) throws SQLException {
         Properties propsCopy = (Properties) props.clone();
@@ -110,21 +156,38 @@ public class ConnectionProperties {
             }
         }
         postInitialization();
+        checkConfiguredEncodingSupport();
     }
 
-    private void postInitialization() throws SQLException {
+    private void postInitialization() {
         this.tabletTypeCache = this.tabletType.getValueAsEnum();
         this.includedFieldsCache = this.includedFields.getValueAsEnum();
         this.includeAllFieldsCache = this.includedFieldsCache == Query.ExecuteOptions.IncludedFields.ALL;
         this.twopcEnabledCache = this.twopcEnabled.getValueAsBoolean();
         this.simpleExecuteTypeCache = this.executeType.getValueAsEnum() == Constants.QueryExecuteType.SIMPLE;
+        this.characterEncodingAsString = this.characterEncoding.getValueAsString();
+    }
+
+    /**
+     * Attempt to use the encoding, and bail out if it can't be used
+     * @throws SQLException if exception occurs while attempting to use the encoding
+     */
+    private void checkConfiguredEncodingSupport() throws SQLException {
+        if (characterEncodingAsString != null) {
+            try {
+                String testString = "abc";
+                StringUtils.getBytes(testString, characterEncodingAsString);
+            } catch (UnsupportedEncodingException UE) {
+                throw new SQLException("Unsupported character encoding: " + characterEncodingAsString);
+            }
+        }
     }
 
     static DriverPropertyInfo[] exposeAsDriverPropertyInfo(Properties info, int slotsToReserve) throws SQLException {
         return new ConnectionProperties().exposeAsDriverPropertyInfoInternal(info, slotsToReserve);
     }
 
-    protected DriverPropertyInfo[] exposeAsDriverPropertyInfoInternal(Properties info, int slotsToReserve) throws SQLException {
+    private DriverPropertyInfo[] exposeAsDriverPropertyInfoInternal(Properties info, int slotsToReserve) throws SQLException {
         initializeProperties(info);
         int numProperties = PROPERTY_LIST.size();
         int listSize = numProperties + slotsToReserve;
@@ -143,6 +206,71 @@ public class ConnectionProperties {
             }
         }
         return driverProperties;
+    }
+
+    public boolean getBlobsAreStrings() {
+        return blobsAreStrings.getValueAsBoolean();
+    }
+
+    public void setBlobsAreStrings(boolean blobsAreStrings) {
+        this.blobsAreStrings.setValue(blobsAreStrings);
+    }
+
+    public boolean getUseBlobToStoreUTF8OutsideBMP() {
+        return useBlobToStoreUTF8OutsideBMP.getValueAsBoolean();
+    }
+
+    public void setUseBlobToStoreUTF8OutsideBMP(boolean useBlobToStoreUTF8OutsideBMP) {
+        this.useBlobToStoreUTF8OutsideBMP.setValue(useBlobToStoreUTF8OutsideBMP);
+    }
+
+    public boolean getTinyInt1isBit() {
+        return tinyInt1isBit.getValueAsBoolean();
+    }
+
+    public void setTinyInt1isBit(boolean tinyInt1isBit) {
+        this.tinyInt1isBit.setValue(tinyInt1isBit);
+    }
+
+    public boolean getFunctionsNeverReturnBlobs() {
+        return functionsNeverReturnBlobs.getValueAsBoolean();
+    }
+
+    public void setFunctionsNeverReturnBlobs(boolean functionsNeverReturnBlobs) {
+        this.functionsNeverReturnBlobs.setValue(functionsNeverReturnBlobs);
+    }
+
+    public String getUtf8OutsideBmpIncludedColumnNamePattern() {
+        return utf8OutsideBmpIncludedColumnNamePattern.getValueAsString();
+    }
+
+    public void setUtf8OutsideBmpIncludedColumnNamePattern(String pattern) {
+        this.utf8OutsideBmpIncludedColumnNamePattern.setValue(pattern);
+    }
+
+    public String getUtf8OutsideBmpExcludedColumnNamePattern() {
+        return utf8OutsideBmpExcludedColumnNamePattern.getValueAsString();
+    }
+
+    public void setUtf8OutsideBmpExcludedColumnNamePattern(String pattern) {
+        this.utf8OutsideBmpExcludedColumnNamePattern.setValue(pattern);
+    }
+
+    public boolean getYearIsDateType() {
+        return yearIsDateType.getValueAsBoolean();
+    }
+
+    public void setYearIsDateType(boolean yearIsDateType) {
+        this.yearIsDateType.setValue(yearIsDateType);
+    }
+
+    public String getEncoding() {
+        return characterEncodingAsString;
+    }
+
+    public void setEncoding(String encoding) {
+        this.characterEncoding.setValue(encoding);
+        this.characterEncodingAsString = this.characterEncoding.getValueAsString();
     }
 
     public Query.ExecuteOptions.IncludedFields getIncludedFields() {
@@ -315,6 +443,10 @@ public class ConnectionProperties {
             } else {
                 this.valueAsObject = this.defaultValue;
             }
+        }
+
+        public String getValueAsString() {
+            return (String) valueAsObject;
         }
 
         @Override

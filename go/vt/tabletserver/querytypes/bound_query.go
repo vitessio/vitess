@@ -7,9 +7,8 @@
 package querytypes
 
 import (
+	"bytes"
 	"fmt"
-
-	"github.com/youtube/vitess/go/bytes2"
 )
 
 // This file defines the BoundQuery type.
@@ -34,14 +33,14 @@ type BoundQuery struct {
 // QueryAsString prints a readable version of query+bind variables,
 // and also truncates data if it's too long
 func QueryAsString(sql string, bindVariables map[string]interface{}) string {
-	buf := bytes2.NewChunkedWriter(1024)
-	fmt.Fprintf(buf, "Sql: %#v, BindVars: {", sql)
+	buf := &bytes.Buffer{}
+	fmt.Fprintf(buf, "Sql: %q, BindVars: {", slimit(sql, 5000))
 	for k, v := range bindVariables {
 		switch val := v.(type) {
 		case []byte:
-			fmt.Fprintf(buf, "%s: %#v, ", k, slimit(string(val)))
+			fmt.Fprintf(buf, "%s: %q, ", k, slimit(string(val), 256))
 		case string:
-			fmt.Fprintf(buf, "%s: %#v, ", k, slimit(val))
+			fmt.Fprintf(buf, "%s: %q, ", k, slimit(val, 256))
 		default:
 			fmt.Fprintf(buf, "%s: %v, ", k, v)
 		}
@@ -50,10 +49,9 @@ func QueryAsString(sql string, bindVariables map[string]interface{}) string {
 	return string(buf.Bytes())
 }
 
-func slimit(s string) string {
-	l := len(s)
-	if l > 256 {
-		l = 256
+func slimit(s string, max int) string {
+	if l := len(s); l > max {
+		return s[:max]
 	}
-	return s[:l]
+	return s
 }

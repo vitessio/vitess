@@ -2,7 +2,6 @@ package gateway
 
 import (
 	"fmt"
-	"reflect"
 	"testing"
 
 	"golang.org/x/net/context"
@@ -129,7 +128,7 @@ func testDiscoveryGatewayGeneric(t *testing.T, streaming bool, f func(dg Gateway
 	dg.tsc.ResetForTesting()
 	want := "target: ks.0.replica, no valid tablet"
 	err := f(dg, target)
-	verifyShardError(t, err, want, vtrpcpb.ErrorCode_INTERNAL_ERROR)
+	verifyShardError(t, err, want, vtrpcpb.Code_UNAVAILABLE)
 
 	// tablet with error
 	hc.Reset()
@@ -137,7 +136,7 @@ func testDiscoveryGatewayGeneric(t *testing.T, streaming bool, f func(dg Gateway
 	hc.AddTestTablet("cell", "1.1.1.1", 1001, keyspace, shard, tabletType, false, 10, fmt.Errorf("no connection"))
 	want = "target: ks.0.replica, no valid tablet"
 	err = f(dg, target)
-	verifyShardError(t, err, want, vtrpcpb.ErrorCode_INTERNAL_ERROR)
+	verifyShardError(t, err, want, vtrpcpb.Code_UNAVAILABLE)
 
 	// tablet without connection
 	hc.Reset()
@@ -145,20 +144,20 @@ func testDiscoveryGatewayGeneric(t *testing.T, streaming bool, f func(dg Gateway
 	ep1 := hc.AddTestTablet("cell", "1.1.1.1", 1001, keyspace, shard, tabletType, false, 10, nil).Tablet()
 	want = fmt.Sprintf(`target: ks.0.replica, no valid tablet`)
 	err = f(dg, target)
-	verifyShardError(t, err, want, vtrpcpb.ErrorCode_INTERNAL_ERROR)
+	verifyShardError(t, err, want, vtrpcpb.Code_UNAVAILABLE)
 
 	// retry error
 	hc.Reset()
 	dg.tsc.ResetForTesting()
 	sc1 := hc.AddTestTablet("cell", "1.1.1.1", 1001, keyspace, shard, tabletType, true, 10, nil)
 	sc2 := hc.AddTestTablet("cell", "1.1.1.1", 1002, keyspace, shard, tabletType, true, 10, nil)
-	sc1.MustFailRetry = 1
-	sc2.MustFailRetry = 1
+	sc1.MustFailCodes[vtrpcpb.Code_FAILED_PRECONDITION] = 1
+	sc2.MustFailCodes[vtrpcpb.Code_FAILED_PRECONDITION] = 1
 	ep1 = sc1.Tablet()
 	ep2 := sc2.Tablet()
 	wants := map[string]int{
-		fmt.Sprintf(`target: ks.0.replica, used tablet: (%+v), retry: err`, ep1): 0,
-		fmt.Sprintf(`target: ks.0.replica, used tablet: (%+v), retry: err`, ep2): 0,
+		fmt.Sprintf(`target: ks.0.replica, used tablet: (%+v), FAILED_PRECONDITION error`, ep1): 0,
+		fmt.Sprintf(`target: ks.0.replica, used tablet: (%+v), FAILED_PRECONDITION error`, ep2): 0,
 	}
 	err = f(dg, target)
 	if _, ok := wants[fmt.Sprintf("%v", err)]; !ok {
@@ -170,13 +169,13 @@ func testDiscoveryGatewayGeneric(t *testing.T, streaming bool, f func(dg Gateway
 	dg.tsc.ResetForTesting()
 	sc1 = hc.AddTestTablet("cell", "1.1.1.1", 1001, keyspace, shard, tabletType, true, 10, nil)
 	sc2 = hc.AddTestTablet("cell", "1.1.1.1", 1002, keyspace, shard, tabletType, true, 10, nil)
-	sc1.MustFailFatal = 1
-	sc2.MustFailFatal = 1
+	sc1.MustFailCodes[vtrpcpb.Code_FAILED_PRECONDITION] = 1
+	sc2.MustFailCodes[vtrpcpb.Code_FAILED_PRECONDITION] = 1
 	ep1 = sc1.Tablet()
 	ep2 = sc2.Tablet()
 	wants = map[string]int{
-		fmt.Sprintf(`target: ks.0.replica, used tablet: (%+v), fatal: err`, ep1): 0,
-		fmt.Sprintf(`target: ks.0.replica, used tablet: (%+v), fatal: err`, ep2): 0,
+		fmt.Sprintf(`target: ks.0.replica, used tablet: (%+v), FAILED_PRECONDITION error`, ep1): 0,
+		fmt.Sprintf(`target: ks.0.replica, used tablet: (%+v), FAILED_PRECONDITION error`, ep2): 0,
 	}
 	err = f(dg, target)
 	if _, ok := wants[fmt.Sprintf("%v", err)]; !ok {
@@ -187,21 +186,11 @@ func testDiscoveryGatewayGeneric(t *testing.T, streaming bool, f func(dg Gateway
 	hc.Reset()
 	dg.tsc.ResetForTesting()
 	sc1 = hc.AddTestTablet("cell", "1.1.1.1", 1001, keyspace, shard, tabletType, true, 10, nil)
-	sc1.MustFailServer = 1
+	sc1.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
 	ep1 = sc1.Tablet()
-	want = fmt.Sprintf(`target: ks.0.replica, used tablet: (%+v), error: err`, ep1)
+	want = fmt.Sprintf(`target: ks.0.replica, used tablet: (%+v), INVALID_ARGUMENT error`, ep1)
 	err = f(dg, target)
-	verifyShardError(t, err, want, vtrpcpb.ErrorCode_BAD_INPUT)
-
-	// conn error - no retry
-	hc.Reset()
-	dg.tsc.ResetForTesting()
-	sc1 = hc.AddTestTablet("cell", "1.1.1.1", 1001, keyspace, shard, tabletType, true, 10, nil)
-	sc1.MustFailConn = 1
-	ep1 = sc1.Tablet()
-	want = fmt.Sprintf(`target: ks.0.replica, used tablet: (%+v), error: conn`, ep1)
-	err = f(dg, target)
-	verifyShardError(t, err, want, vtrpcpb.ErrorCode_UNKNOWN_ERROR)
+	verifyShardError(t, err, want, vtrpcpb.Code_INVALID_ARGUMENT)
 
 	// no failure
 	hc.Reset()
@@ -230,39 +219,35 @@ func testDiscoveryGatewayTransact(t *testing.T, streaming bool, f func(dg Gatewa
 	dg.tsc.ResetForTesting()
 	sc1 := hc.AddTestTablet("cell", "1.1.1.1", 1001, keyspace, shard, tabletType, true, 10, nil)
 	sc2 := hc.AddTestTablet("cell", "1.1.1.1", 1002, keyspace, shard, tabletType, true, 10, nil)
-	sc1.MustFailRetry = 1
-	sc2.MustFailRetry = 1
+	sc1.MustFailCodes[vtrpcpb.Code_FAILED_PRECONDITION] = 1
+	sc2.MustFailCodes[vtrpcpb.Code_FAILED_PRECONDITION] = 1
 	ep1 := sc1.Tablet()
 	ep2 := sc2.Tablet()
 	wants := map[string]int{
-		fmt.Sprintf(`target: ks.0.replica, used tablet: (%+v), retry: err`, ep1): 0,
-		fmt.Sprintf(`target: ks.0.replica, used tablet: (%+v), retry: err`, ep2): 0,
+		fmt.Sprintf(`target: ks.0.replica, used tablet: (%+v), FAILED_PRECONDITION error`, ep1): 0,
+		fmt.Sprintf(`target: ks.0.replica, used tablet: (%+v), FAILED_PRECONDITION error`, ep2): 0,
 	}
 	err := f(dg, target)
 	if _, ok := wants[fmt.Sprintf("%v", err)]; !ok {
 		t.Errorf("wanted error: %+v, got error: %v", wants, err)
 	}
 
-	// conn error - no retry
+	// server error - no retry
 	hc.Reset()
 	dg.tsc.ResetForTesting()
 	sc1 = hc.AddTestTablet("cell", "1.1.1.1", 1001, keyspace, shard, tabletType, true, 10, nil)
-	sc1.MustFailConn = 1
+	sc1.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
 	ep1 = sc1.Tablet()
-	want := fmt.Sprintf(`target: ks.0.replica, used tablet: (%+v), error: conn`, ep1)
+	want := fmt.Sprintf(`target: ks.0.replica, used tablet: (%+v), INVALID_ARGUMENT error`, ep1)
 	err = f(dg, target)
-	verifyShardError(t, err, want, vtrpcpb.ErrorCode_UNKNOWN_ERROR)
+	verifyShardError(t, err, want, vtrpcpb.Code_INVALID_ARGUMENT)
 }
 
-func verifyShardError(t *testing.T, err error, wantErr string, wantCode vtrpcpb.ErrorCode) {
+func verifyShardError(t *testing.T, err error, wantErr string, wantCode vtrpcpb.Code) {
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("wanted error: %s, got error: %v", wantErr, err)
 	}
-	if _, ok := err.(*ShardError); !ok {
-		t.Errorf("wanted error type *ShardConnError, got error type: %v", reflect.TypeOf(err))
-	}
-	code := vterrors.RecoverVtErrorCode(err)
-	if code != wantCode {
+	if code := vterrors.Code(err); code != wantCode {
 		t.Errorf("wanted error code: %s, got: %v", wantCode, code)
 	}
 }

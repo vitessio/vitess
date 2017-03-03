@@ -23,7 +23,7 @@ import (
 	"github.com/youtube/vitess/go/vt/discovery"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/servenv"
-	"github.com/youtube/vitess/go/vt/tabletserver"
+	"github.com/youtube/vitess/go/vt/tabletserver/tabletenv"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/memorytopo"
 	"github.com/youtube/vitess/go/vt/vtctld"
@@ -83,7 +83,7 @@ func main() {
 	// Create topo server. We use a 'memorytopo' implementation.
 	ts = memorytopo.NewServer(tpb.Cells...)
 	servenv.Init()
-	tabletserver.Init()
+	tabletenv.Init()
 
 	// database configs
 	mycnf, err := mysqlctl.NewMycnfFromFlags(0)
@@ -95,7 +95,7 @@ func main() {
 	if err != nil {
 		log.Warning(err)
 	}
-	mysqld := mysqlctl.NewMysqld(mycnf, dbcfgs, dbconfigFlags, true /* enablePublishStats */)
+	mysqld := mysqlctl.NewMysqld(mycnf, dbcfgs, dbconfigFlags)
 	servenv.OnClose(mysqld.Close)
 
 	// tablets configuration and init

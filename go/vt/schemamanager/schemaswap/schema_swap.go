@@ -161,7 +161,7 @@ func RegisterWorkflowFactory() {
 }
 
 // Init is a part of workflow.Factory interface. It initializes a Workflow protobuf object.
-func (*SwapWorkflowFactory) Init(workflowProto *workflowpb.Workflow, args []string) error {
+func (*SwapWorkflowFactory) Init(_ *workflow.Manager, workflowProto *workflowpb.Workflow, args []string) error {
 	subFlags := flag.NewFlagSet(workflowFactoryName, flag.ContinueOnError)
 
 	keyspace := subFlags.String("keyspace", "", "Name of a keyspace to perform schema swap on")
@@ -188,7 +188,7 @@ func (*SwapWorkflowFactory) Init(workflowProto *workflowpb.Workflow, args []stri
 
 // Instantiate is a part of workflow.Factory interface. It instantiates workflow.Workflow object from
 // workflowpb.Workflow protobuf object.
-func (*SwapWorkflowFactory) Instantiate(workflowProto *workflowpb.Workflow, rootNode *workflow.Node) (workflow.Workflow, error) {
+func (*SwapWorkflowFactory) Instantiate(_ *workflow.Manager, workflowProto *workflowpb.Workflow, rootNode *workflow.Node) (workflow.Workflow, error) {
 	data := &swapWorkflowData{}
 	if err := json.Unmarshal(workflowProto.Data, data); err != nil {
 		return nil, err

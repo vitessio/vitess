@@ -1,8 +1,7 @@
 package mysqlconn
 
 import (
-	"bytes"
-	"crypto/rand"
+	"crypto/tls"
 	"fmt"
 	"net"
 
@@ -46,6 +45,9 @@ type Handler interface {
 type Listener struct {
 	// Construction parameters, set by NewListener.
 
+	// authServer is the AuthServer object to use for authentication.
+	authServer AuthServer
+
 	// handler is the data handler.
 	handler Handler
 
@@ -60,8 +62,14 @@ type Listener struct {
 	// ServerVersion is the version we will advertise.
 	ServerVersion string
 
-	// PasswordMap maps users to passwords.
-	PasswordMap map[string]string
+	// TLSConfig is the server TLS config. If set, we will advertise
+	// that we support SSL.
+	TLSConfig *tls.Config
+
+	// AllowClearTextWithoutTLS needs to be set for the
+	// mysql_clear_password authentication method to be accepted
+	// by the server when TLS is not in use.
+	AllowClearTextWithoutTLS bool
 
 	// The following parameters are changed by the Accept routine.
 
@@ -70,17 +78,18 @@ type Listener struct {
 }
 
 // NewListener creates a new Listener.
-func NewListener(protocol, address string, handler Handler) (*Listener, error) {
+func NewListener(protocol, address string, authServer AuthServer, handler Handler) (*Listener, error) {
 	listener, err := net.Listen(protocol, address)
 	if err != nil {
 		return nil, err
 	}
 
 	return &Listener{
+		authServer: authServer,
+		handler:    handler,
+		listener:   listener,
+
 		ServerVersion: DefaultServerVersion,
-		handler:       handler,
-		PasswordMap:   make(map[string]string),
-		listener:      listener,
 		connectionID:  1,
 	}, nil
 }
@@ -126,38 +135,111 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32) {
 	defer l.handler.ConnectionClosed(c)
 
 	// First build and send the server handshake packet.
-	cipher, err := c.writeHandshakeV10(l.ServerVersion)
+	salt, err := c.writeHandshakeV10(l.ServerVersion, l.authServer, l.TLSConfig != nil)
 	if err != nil {
 		log.Errorf("Cannot send HandshakeV10 packet: %v", err)
 		return
 	}
 
-	// Wait for the client response.
-	response, err := c.readPacket()
+	// Wait for the client response. This has to be a direct read,
+	// so we don't buffer the TLS negotiation packets.
+	response, err := c.readPacketDirect()
 	if err != nil {
 		log.Errorf("Cannot read client handshake response: %v", err)
 		return
 	}
-	username, authResponse, err := l.parseClientHandshakePacket(c, response)
+	user, authMethod, authResponse, err := l.parseClientHandshakePacket(c, true, response)
 	if err != nil {
 		log.Errorf("Cannot parse client handshake response: %v", err)
 		return
 	}
+	if c.Capabilities&CapabilityClientSSL > 0 {
+		// SSL was enabled. We need to re-read the auth packet.
+		response, err = c.readEphemeralPacket()
+		if err != nil {
+			log.Errorf("Cannot read post-SSL client handshake response: %v", err)
+			return
+		}
 
-	// Find the user in our map
-	password, ok := l.PasswordMap[username]
-	if !ok {
-		log.Errorf("Invalid user: %v", username)
-		c.writeErrorPacket(ERAccessDeniedError, SSAccessDeniedError, "Access denied for user '%v'", username)
-		return
+		user, authMethod, authResponse, err = l.parseClientHandshakePacket(c, false, response)
+		if err != nil {
+			log.Errorf("Cannot parse post-SSL client handshake response: %v", err)
+			return
+		}
 	}
 
-	// Validate the password.
-	computedAuthResponse := scramblePassword(cipher, []byte(password))
-	if bytes.Compare(authResponse, computedAuthResponse) != 0 {
-		log.Errorf("Invalid password for user %v", username)
-		c.writeErrorPacket(ERAccessDeniedError, SSAccessDeniedError, "Access denied for user '%v'", username)
-		return
+	// See what method the client used.
+	renegotiateWithClearText := false
+	switch authMethod {
+	case mysqlNativePassword:
+		// This is what the server started with. Let's use it if we can.
+		if !l.authServer.UseClearText() {
+			userData, err := l.authServer.ValidateHash(salt, user, authResponse)
+			if err != nil {
+				c.writeErrorPacketFromError(err)
+				return
+			}
+			c.User = user
+			c.UserData = userData
+			// We're good.
+			break
+		}
+
+		// Our AuthServer cannot use mysql_native_password, it
+		// needs the real password.  Let's request that.
+		renegotiateWithClearText = true
+	case mysqlClearPassword:
+		// Client sent us a clear text password. Let's use it if we can.
+		if !l.AllowClearTextWithoutTLS && c.Capabilities&CapabilityClientSSL == 0 {
+			c.writeErrorPacket(CRServerHandshakeErr, SSUnknownSQLState, "Cannot use clear text authentication over non-SSL connections.")
+			return
+		}
+		userData, err := l.authServer.ValidateClearText(user, string(authResponse))
+		if err != nil {
+			c.writeErrorPacketFromError(err)
+			return
+		}
+		c.User = user
+		c.UserData = userData
+		break
+	default:
+		// Client decided to use something we don't understand.
+		// Let's try again with clear text password.
+		renegotiateWithClearText = true
+	}
+
+	// If we need to re-negotiate with clear text, do it.
+	if renegotiateWithClearText {
+		// Check error conditions.
+		if !l.AllowClearTextWithoutTLS && c.Capabilities&CapabilityClientSSL == 0 {
+			c.writeErrorPacket(CRServerHandshakeErr, SSUnknownSQLState, "Cannot use clear text authentication over non-SSL connections.")
+			return
+		}
+
+		if err := c.writeAuthSwitchRequest(mysqlClearPassword, nil); err != nil {
+			log.Errorf("Error write auth switch packet for client %v: %v", c.ConnectionID, err)
+			return
+		}
+
+		// The client is supposed to just send the data in a single packet.
+		// It is a zero-terminated string.
+		data, err := c.readEphemeralPacket()
+		if err != nil {
+			log.Warningf("Error reading auth switch response packet from client %v: %v", c.ConnectionID, err)
+			return
+		}
+		password, pos, ok := readNullString(data, 0)
+		if !ok || pos != len(data) {
+			c.writeErrorPacket(CRServerHandshakeErr, SSUnknownSQLState, "Error parsing packet with password: %v", data)
+			return
+		}
+		userData, err := l.authServer.ValidateClearText(user, password)
+		if err != nil {
+			c.writeErrorPacketFromError(err)
+			return
+		}
+		c.User = user
+		c.UserData = userData
 	}
 
 	// Send an OK packet.
@@ -168,7 +250,7 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32) {
 
 	for {
 		c.sequence = 0
-		data, err := c.readPacket()
+		data, err := c.readEphemeralPacket()
 		if err != nil {
 			log.Errorf("Error reading packet from client %v: %v", c.ConnectionID, err)
 			return
@@ -176,7 +258,7 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32) {
 
 		switch data[0] {
 		case ComQuit:
-			log.Infof("Client %v disconnected.", c.ConnectionID)
+			log.Infof("Client %v wants to disconnect, closing connection.", c.ConnectionID)
 			return
 		case ComInitDB:
 			db := c.parseComInitDB(data)
@@ -224,8 +306,8 @@ func (l *Listener) Close() {
 }
 
 // writeHandshakeV10 writes the Initial Handshake Packet, server side.
-// It returns the cipher data.
-func (c *Conn) writeHandshakeV10(serverVersion string) ([]byte, error) {
+// It returns the salt data.
+func (c *Conn) writeHandshakeV10(serverVersion string, authServer AuthServer, enableTLS bool) ([]byte, error) {
 	capabilities := CapabilityClientLongPassword |
 		CapabilityClientLongFlag |
 		CapabilityClientConnectWithDB |
@@ -235,12 +317,15 @@ func (c *Conn) writeHandshakeV10(serverVersion string) ([]byte, error) {
 		CapabilityClientPluginAuth |
 		CapabilityClientPluginAuthLenencClientData |
 		CapabilityClientDeprecateEOF
+	if enableTLS {
+		capabilities |= CapabilityClientSSL
+	}
 
 	length :=
 		1 + // protocol version
 			lenNullString(serverVersion) +
 			4 + // connection ID
-			8 + // first part of cipher data
+			8 + // first part of salt data
 			1 + // filler byte
 			2 + // capability flags (lower 2 bytes)
 			1 + // character set
@@ -251,7 +336,7 @@ func (c *Conn) writeHandshakeV10(serverVersion string) ([]byte, error) {
 			13 + // auth-plugin-data
 			lenNullString(mysqlNativePassword) // auth-plugin-name
 
-	data := make([]byte, length)
+	data := c.startEphemeralPacket(length)
 	pos := 0
 
 	// Protocol version.
@@ -263,12 +348,22 @@ func (c *Conn) writeHandshakeV10(serverVersion string) ([]byte, error) {
 	// Add connectionID in.
 	pos = writeUint32(data, pos, c.ConnectionID)
 
-	// Generate the cipher, put 8 bytes in.
-	cipher := make([]byte, 20)
-	if _, err := rand.Read(cipher); err != nil {
+	// Generate the salt if needed, put 8 bytes in.
+	var salt []byte
+	var err error
+	if authServer.UseClearText() {
+		// salt will end up being unused, but we can't send
+		// just zero, as the client will still use it, and
+		// that may leak crypto information.
+		salt, err = newSalt()
+	} else {
+		salt, err = authServer.Salt()
+	}
+	if err != nil {
 		return nil, err
 	}
-	pos += copy(data[pos:], cipher[:8])
+
+	pos += copy(data[pos:], salt[:8])
 
 	// One filler byte, always 0.
 	pos = writeByte(data, pos, 0)
@@ -293,11 +388,11 @@ func (c *Conn) writeHandshakeV10(serverVersion string) ([]byte, error) {
 	pos += 10
 
 	// Second part of auth plugin data.
-	pos += copy(data[pos:], cipher[8:])
+	pos += copy(data[pos:], salt[8:])
 	data[pos] = 0
 	pos++
 
-	// Copy authPluginName.
+	// Copy authPluginName. We always start with mysql_native_password.
 	pos = writeNullString(data, pos, mysqlNativePassword)
 
 	// Sanity check.
@@ -305,55 +400,66 @@ func (c *Conn) writeHandshakeV10(serverVersion string) ([]byte, error) {
 		return nil, fmt.Errorf("error building Handshake packet: got %v bytes expected %v", pos, len(data))
 	}
 
-	if err := c.writePacket(data); err != nil {
-		return nil, err
-	}
-	if err := c.flush(); err != nil {
+	if err := c.writeEphemeralPacket(true); err != nil {
 		return nil, err
 	}
 
-	return cipher, nil
+	return salt, nil
 }
 
 // parseClientHandshakePacket parses the handshake sent by the client.
-// Returns the username, auth-data, error.
-func (l *Listener) parseClientHandshakePacket(c *Conn, data []byte) (string, []byte, error) {
+// Returns the username, auth method, auth data, error.
+func (l *Listener) parseClientHandshakePacket(c *Conn, firstTime bool, data []byte) (string, string, []byte, error) {
 	pos := 0
 
 	// Client flags, 4 bytes.
 	clientFlags, pos, ok := readUint32(data, pos)
 	if !ok {
-		return "", nil, fmt.Errorf("parseClientHandshakePacket: can't read client flags")
+		return "", "", nil, fmt.Errorf("parseClientHandshakePacket: can't read client flags")
 	}
 	if clientFlags&CapabilityClientProtocol41 == 0 {
-		return "", nil, fmt.Errorf("parseClientHandshakePacket: only support protocol 4.1")
+		return "", "", nil, fmt.Errorf("parseClientHandshakePacket: only support protocol 4.1")
 	}
 
-	// Remember a subset of the capabilities, so we can use them later in the protocol.
-	c.Capabilities = clientFlags & (CapabilityClientDeprecateEOF)
+	// Remember a subset of the capabilities, so we can use them
+	// later in the protocol. If we re-received the handshake packet
+	// after SSL negotiation, do not overwrite capabilities.
+	if firstTime {
+		c.Capabilities = clientFlags & (CapabilityClientDeprecateEOF)
+	}
 
 	// Max packet size. Don't do anything with this now.
 	// See doc.go for more information.
-	/*maxPacketSize*/
 	_, pos, ok = readUint32(data, pos)
 	if !ok {
-		return "", nil, fmt.Errorf("parseClientHandshakePacket: can't read maxPacketSize")
+		return "", "", nil, fmt.Errorf("parseClientHandshakePacket: can't read maxPacketSize")
 	}
 
 	// Character set. Need to handle it.
 	characterSet, pos, ok := readByte(data, pos)
 	if !ok {
-		return "", nil, fmt.Errorf("parseClientHandshakePacket: can't read characterSet")
+		return "", "", nil, fmt.Errorf("parseClientHandshakePacket: can't read characterSet")
 	}
 	c.CharacterSet = characterSet
 
 	// 23x reserved zero bytes.
 	pos += 23
 
+	// Check for SSL.
+	if firstTime && l.TLSConfig != nil && clientFlags&CapabilityClientSSL > 0 {
+		// Need to switch to TLS, and then re-read the packet.
+		conn := tls.Server(c.conn, l.TLSConfig)
+		c.conn = conn
+		c.reader.Reset(conn)
+		c.writer.Reset(conn)
+		c.Capabilities |= CapabilityClientSSL
+		return "", "", nil, nil
+	}
+
 	// username
 	username, pos, ok := readNullString(data, pos)
 	if !ok {
-		return "", nil, fmt.Errorf("parseClientHandshakePacket: can't read username")
+		return "", "", nil, fmt.Errorf("parseClientHandshakePacket: can't read username")
 	}
 
 	// auth-response can have three forms.
@@ -362,29 +468,29 @@ func (l *Listener) parseClientHandshakePacket(c *Conn, data []byte) (string, []b
 		var l uint64
 		l, pos, ok = readLenEncInt(data, pos)
 		if !ok {
-			return "", nil, fmt.Errorf("parseClientHandshakePacket: can't read auth-response variable length")
+			return "", "", nil, fmt.Errorf("parseClientHandshakePacket: can't read auth-response variable length")
 		}
 		authResponse, pos, ok = readBytes(data, pos, int(l))
 		if !ok {
-			return "", nil, fmt.Errorf("parseClientHandshakePacket: can't read auth-response")
+			return "", "", nil, fmt.Errorf("parseClientHandshakePacket: can't read auth-response")
 		}
 
 	} else if clientFlags&CapabilityClientSecureConnection != 0 {
 		var l byte
 		l, pos, ok = readByte(data, pos)
 		if !ok {
-			return "", nil, fmt.Errorf("parseClientHandshakePacket: can't read auth-response length")
+			return "", "", nil, fmt.Errorf("parseClientHandshakePacket: can't read auth-response length")
 		}
 
 		authResponse, pos, ok = readBytes(data, pos, int(l))
 		if !ok {
-			return "", nil, fmt.Errorf("parseClientHandshakePacket: can't read auth-response")
+			return "", "", nil, fmt.Errorf("parseClientHandshakePacket: can't read auth-response")
 		}
 	} else {
 		a := ""
 		a, pos, ok = readNullString(data, pos)
 		if !ok {
-			return "", nil, fmt.Errorf("parseClientHandshakePacket: can't read auth-response")
+			return "", "", nil, fmt.Errorf("parseClientHandshakePacket: can't read auth-response")
 		}
 		authResponse = []byte(a)
 	}
@@ -394,24 +500,49 @@ func (l *Listener) parseClientHandshakePacket(c *Conn, data []byte) (string, []b
 		dbname := ""
 		dbname, pos, ok = readNullString(data, pos)
 		if !ok {
-			return "", nil, fmt.Errorf("parseClientHandshakePacket: can't read dbname")
+			return "", "", nil, fmt.Errorf("parseClientHandshakePacket: can't read dbname")
 		}
 		c.SchemaName = dbname
 	}
 
-	// auth plugin name
-	authPluginName := "mysql_native_password"
+	// authMethod (with default)
+	authMethod := mysqlNativePassword
 	if clientFlags&CapabilityClientPluginAuth != 0 {
-		authPluginName, pos, ok = readNullString(data, pos)
+		authMethod, pos, ok = readNullString(data, pos)
 		if !ok {
-			return "", nil, fmt.Errorf("parseClientHandshakePacket: can't read authPluginName")
+			return "", "", nil, fmt.Errorf("parseClientHandshakePacket: can't read authMethod")
 		}
-	}
-	if authPluginName != mysqlNativePassword {
-		return "", nil, fmt.Errorf("invalid authPluginName, got %v but only support %v", authPluginName, mysqlNativePassword)
 	}
 
 	// FIXME(alainjobart) Add CLIENT_CONNECT_ATTRS parsing if we need it.
 
-	return username, authResponse, nil
+	return username, authMethod, authResponse, nil
+}
+
+// writeAuthSwitchRequest writes an auth switch request packet.
+func (c *Conn) writeAuthSwitchRequest(pluginName string, pluginData []byte) error {
+	length := 1 + // AuthSwitchRequestPacket
+		len(pluginName) + 1 + // 0-terminated pluginName
+		len(pluginData)
+
+	data := c.startEphemeralPacket(length)
+	pos := 0
+
+	// Packet header.
+	pos = writeByte(data, pos, AuthSwitchRequestPacket)
+
+	// Copy server version.
+	pos = writeNullString(data, pos, pluginName)
+
+	// Copy auth data.
+	pos += copy(data[pos:], pluginData)
+
+	// Sanity check.
+	if pos != len(data) {
+		return fmt.Errorf("error building AuthSwitchRequestPacket packet: got %v bytes expected %v", pos, len(data))
+	}
+	if err := c.writeEphemeralPacket(true); err != nil {
+		return err
+	}
+	return nil
 }
