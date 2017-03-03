@@ -309,17 +309,10 @@ func (qre *QueryExecutor) execDDL() (*sqltypes.Result, error) {
 		return result, nil
 	}
 
-	conn, err := qre.tsv.te.txPool.LocalBegin(qre.ctx)
-	if err != nil {
-		return nil, err
-	}
+	result, err := qre.execAsTransaction(func(conn *TxConnection) (*sqltypes.Result, error) {
+		return qre.execSQL(conn, qre.query, false)
+	})
 
-	result, err := qre.execSQL(conn, qre.query, false)
-	if err != nil {
-		return nil, err
-	}
-
-	err = qre.tsv.te.txPool.LocalCommit(qre.ctx, conn, qre.tsv.messager)
 	if err != nil {
 		return nil, err
 	}
