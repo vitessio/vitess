@@ -445,10 +445,6 @@ public class ConnectionProperties {
             }
         }
 
-        public String getValueAsString() {
-            return (String) valueAsObject;
-        }
-
         @Override
         String[] getAllowableValues() {
             return allowableValues;
