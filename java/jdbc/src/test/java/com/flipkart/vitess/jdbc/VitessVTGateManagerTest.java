@@ -36,18 +36,18 @@ public class VitessVTGateManagerTest {
         VitessVTGateManager.close();
         Properties info = new Properties();
         info.setProperty("username", "user");
-        VitessJDBCUrl vitessJDBCUrl = new VitessJDBCUrl(
-            "jdbc:vitess://10.33.17.231:15991:xyz,10.33.17.232:15991:xyz,10.33.17"
-                + ".233:15991/shipment/shipment?tabletType=master", info);
+        VitessConnection connection = new VitessConnection(
+                "jdbc:vitess://10.33.17.231:15991:xyz,10.33.17.232:15991:xyz,10.33.17"
+                        + ".233:15991/shipment/shipment?tabletType=master", info);
         VitessVTGateManager.VTGateConnections vtGateConnections =
-            new VitessVTGateManager.VTGateConnections(vitessJDBCUrl);
+            new VitessVTGateManager.VTGateConnections(connection);
 
         info.setProperty("username", "user");
-        VitessJDBCUrl vitessJDBCUrl1 = new VitessJDBCUrl(
+        VitessConnection connection1 = new VitessConnection(
             "jdbc:vitess://10.33.17.231:15991:xyz,10.33.17.232:15991:xyz,11.33.17"
                 + ".233:15991/shipment/shipment?tabletType=master", info);
         VitessVTGateManager.VTGateConnections vtGateConnections1 =
-            new VitessVTGateManager.VTGateConnections(vitessJDBCUrl1);
+            new VitessVTGateManager.VTGateConnections(connection1);
 
         Field privateMapField = VitessVTGateManager.class.
             getDeclaredField("vtGateConnHashMap");
@@ -63,11 +63,11 @@ public class VitessVTGateManagerTest {
         VitessVTGateManager.close();
         Properties info = new Properties();
         info.setProperty("username", "user");
-        VitessJDBCUrl vitessJDBCUrl = new VitessJDBCUrl(
+        VitessConnection connection = new VitessConnection(
             "jdbc:vitess://10.33.17.231:15991:xyz,10.33.17.232:15991:xyz,10.33.17"
                 + ".233:15991/shipment/shipment?tabletType=master", info);
         VitessVTGateManager.VTGateConnections vtGateConnections =
-            new VitessVTGateManager.VTGateConnections(vitessJDBCUrl);
+            new VitessVTGateManager.VTGateConnections(connection);
         Assert.assertEquals(vtGateConnections.getVtGateConnInstance() instanceof VTGateConn, true);
         VTGateConn vtGateConn = vtGateConnections.getVtGateConnInstance();
         Field privateMapField = VitessVTGateManager.class.

@@ -15,7 +15,7 @@ import java.util.Properties;
 
 public class ConnectionPropertiesTest {
 
-    private static final int NUM_PROPS = 12;
+    private static final int NUM_PROPS = 20;
 
     @Test
     public void testReflection() throws Exception {
@@ -49,6 +49,7 @@ public class ConnectionPropertiesTest {
         Assert.assertEquals("includedFields", Constants.DEFAULT_INCLUDED_FIELDS, props.getIncludedFields());
         Assert.assertEquals("includedFieldsCache", true, props.isIncludeAllFields());
         Assert.assertEquals("tabletType", Constants.DEFAULT_TABLET_TYPE, props.getTabletType());
+        Assert.assertEquals("useSSL", false, props.getUseSSL());
     }
 
     @Test

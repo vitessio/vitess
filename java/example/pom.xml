@@ -5,7 +5,7 @@
   <parent>
     <groupId>com.youtube.vitess</groupId>
     <artifactId>vitess-parent</artifactId>
-    <version>1.0-SNAPSHOT</version>
+    <version>1.1.0-SNAPSHOT</version>
     <relativePath>../pom.xml</relativePath>
   </parent>
   <artifactId>example</artifactId>
@@ -14,17 +14,17 @@
     <dependency>
       <groupId>com.flipkart.vitess</groupId>
       <artifactId>vitess-connector-java</artifactId>
-      <version>1.0-SNAPSHOT</version>
+      <version>1.1.0-SNAPSHOT</version>
     </dependency>
     <dependency>
       <groupId>com.youtube.vitess</groupId>
       <artifactId>client</artifactId>
-      <version>1.0-SNAPSHOT</version>
+      <version>1.1.0-SNAPSHOT</version>
     </dependency>
     <dependency>
       <groupId>com.youtube.vitess</groupId>
       <artifactId>grpc-client</artifactId>
-      <version>1.0-SNAPSHOT</version>
+      <version>1.1.0-SNAPSHOT</version>
     </dependency>
     <dependency>
       <groupId>io.grpc</groupId>
