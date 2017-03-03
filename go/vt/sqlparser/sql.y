@@ -280,7 +280,7 @@ create_statement:
   }
 | CREATE VIEW table_name ddl_force_eof
   {
-    $$ = &DDL{Action: CreateStr, NewName: $3.Lowered()}
+    $$ = &DDL{Action: CreateStr, NewName: $3.ToViewName()}
   }
 
 alter_statement:
@@ -295,7 +295,7 @@ alter_statement:
   }
 | ALTER VIEW table_name ddl_force_eof
   {
-    $$ = &DDL{Action: AlterStr, Table: $3.Lowered(), NewName: $3.Lowered()}
+    $$ = &DDL{Action: AlterStr, Table: $3.ToViewName(), NewName: $3.ToViewName()}
   }
 
 rename_statement:
@@ -324,7 +324,7 @@ drop_statement:
         if $3 != 0 {
           exists = true
         }
-    $$ = &DDL{Action: DropStr, Table: $4.Lowered(), IfExists: exists}
+    $$ = &DDL{Action: DropStr, Table: $4.ToViewName(), IfExists: exists}
   }
 
 analyze_statement:

@@ -1479,7 +1479,7 @@ yydefault:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		//line ./go/vt/sqlparser/sql.y:282
 		{
-			yyVAL.statement = &DDL{Action: CreateStr, NewName: yyDollar[3].tableName.Lowered()}
+			yyVAL.statement = &DDL{Action: CreateStr, NewName: yyDollar[3].tableName.ToViewName()}
 		}
 	case 26:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -1498,7 +1498,7 @@ yydefault:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		//line ./go/vt/sqlparser/sql.y:297
 		{
-			yyVAL.statement = &DDL{Action: AlterStr, Table: yyDollar[3].tableName.Lowered(), NewName: yyDollar[3].tableName.Lowered()}
+			yyVAL.statement = &DDL{Action: AlterStr, Table: yyDollar[3].tableName.ToViewName(), NewName: yyDollar[3].tableName.ToViewName()}
 		}
 	case 29:
 		yyDollar = yyS[yypt-5 : yypt+1]
@@ -1531,7 +1531,7 @@ yydefault:
 			if yyDollar[3].byt != 0 {
 				exists = true
 			}
-			yyVAL.statement = &DDL{Action: DropStr, Table: yyDollar[4].tableName.Lowered(), IfExists: exists}
+			yyVAL.statement = &DDL{Action: DropStr, Table: yyDollar[4].tableName.ToViewName(), IfExists: exists}
 		}
 	case 33:
 		yyDollar = yyS[yypt-3 : yypt+1]
