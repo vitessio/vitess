@@ -296,17 +296,14 @@ func (qre *QueryExecutor) execDDL() (*sqltypes.Result, error) {
 	}
 
 	if qre.transactionID != 0 {
-		conn, err := qre.tsv.te.txPool.Get(qre.transactionID, "for query")
+		conn, err := qre.tsv.te.txPool.Get(qre.transactionID, "DDL implicit commit")
 		if err != nil {
 			return nil, err
 		}
-		defer conn.Recycle()
-		result, err := qre.execSQL(conn, qre.query, false)
+		err = qre.tsv.te.txPool.LocalCommit(qre.ctx, conn, qre.tsv.messager)
 		if err != nil {
 			return nil, err
 		}
-		conn.ReloadSchemaOnCommit = true
-		return result, nil
 	}
 
 	result, err := qre.execAsTransaction(func(conn *TxConnection) (*sqltypes.Result, error) {
