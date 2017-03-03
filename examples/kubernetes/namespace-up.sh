@@ -14,5 +14,5 @@ sed_script=""
 for var in namespace; do
   sed_script+="s,{{$var}},${!var},g;"
 done
-cat namespace-template.yaml | sed -e "$sed_script" | $KUBECTL create -f -
+cat namespace-template.yaml | sed -e "$sed_script" | $KUBECTL $KUBECTL_OPTIONS create -f -
 

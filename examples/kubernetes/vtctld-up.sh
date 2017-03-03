@@ -18,7 +18,7 @@ sed_script=""
 for var in service_type; do
   sed_script+="s,{{$var}},${!var},g;"
 done
-cat vtctld-service-template.yaml | sed -e "$sed_script" | $KUBECTL create --namespace=$VITESS_NAME -f -
+cat vtctld-service-template.yaml | sed -e "$sed_script" | $KUBECTL $KUBECTL_OPTIONS create -f -
 
 echo "Creating vtctld replicationcontroller..."
 # Expand template variables
@@ -28,7 +28,7 @@ for var in vitess_image backup_flags test_flags cell; do
 done
 
 # Instantiate template and send to kubectl.
-cat vtctld-controller-template.yaml | sed -e "$sed_script" | $KUBECTL create --namespace=$VITESS_NAME -f -
+cat vtctld-controller-template.yaml | sed -e "$sed_script" | $KUBECTL $KUBECTL_OPTIONS create -f -
 
 echo
 echo "To access vtctld web UI, start kubectl proxy in another terminal:"

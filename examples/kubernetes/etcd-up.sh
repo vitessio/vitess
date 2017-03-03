@@ -21,7 +21,7 @@ for cell in 'global' $cells; do
   echo "Creating etcd service for $cell cell..."
   cat etcd-service-template.yaml | \
     sed -e "s/{{cell}}/$cell/g" | \
-    $KUBECTL create --namespace=$VITESS_NAME -f -
+    $KUBECTL $KUBECTL_OPTIONS create -f -
 
   # Expand template variables
   sed_script=""
@@ -31,6 +31,6 @@ for cell in 'global' $cells; do
 
   # Create the replication controller.
   echo "Creating etcd replicationcontroller for $cell cell..."
-  cat etcd-controller-template.yaml | sed -e "$sed_script" | $KUBECTL create --namespace=$VITESS_NAME -f -
+  cat etcd-controller-template.yaml | sed -e "$sed_script" | $KUBECTL $KUBECTL_OPTIONS create -f -
 done
 
