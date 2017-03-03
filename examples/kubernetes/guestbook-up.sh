@@ -13,7 +13,7 @@ script_root=`dirname "${BASH_SOURCE}"`
 source $script_root/env.sh
 
 echo "Creating guestbook service..."
-$KUBECTL create --namespace=$VITESS_NAME -f guestbook-service.yaml
+$KUBECTL $KUBECTL_OPTIONS create -f guestbook-service.yaml
 
 sed_script=""
 for var in port cell keyspace vtgate_port; do
@@ -21,4 +21,4 @@ for var in port cell keyspace vtgate_port; do
 done
 
 echo "Creating guestbook replicationcontroller..."
-sed -e "$sed_script" guestbook-controller-template.yaml | $KUBECTL create --namespace=$VITESS_NAME -f -
+sed -e "$sed_script" guestbook-controller-template.yaml | $KUBECTL $KUBECTL_OPTIONS create -f -

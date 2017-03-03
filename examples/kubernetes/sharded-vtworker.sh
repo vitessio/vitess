@@ -19,29 +19,29 @@ done
 
 # Instantiate template and send to kubectl.
 echo "Creating vtworker pod in cell $cell..."
-cat vtworker-pod-template.yaml | sed -e "$sed_script" | $KUBECTL create -f -
+cat vtworker-pod-template.yaml | sed -e "$sed_script" | $KUBECTL $KUBECTL_OPTIONS create -f -
 
 set +e
 
 # Wait for vtworker pod to show up.
-until [ $($KUBECTL get pod -o template --template '{{.status.phase}}' vtworker 2> /dev/null) = "Running" ]; do
+until [ $($KUBECTL $KUBECTL_OPTIONS get pod -o template --template '{{.status.phase}}' vtworker 2> /dev/null) = "Running" ]; do
   echo "Waiting for vtworker pod to be created..."
 	sleep 1
 done
 
 echo "Following vtworker logs until termination..."
-$KUBECTL logs -f vtworker
+$KUBECTL $KUBECTL_OPTIONS logs -f vtworker
 
 # Get vtworker exit code. Wait for complete shutdown.
 # (Although logs -f exited, the pod isn't fully shutdown yet and the exit code is not available yet.)
-until [ $($KUBECTL get pod -o template --template '{{.status.phase}}' vtworker 2> /dev/null) != "Running" ]; do
+until [ $($KUBECTL $KUBECTL_OPTIONS get pod -o template --template '{{.status.phase}}' vtworker 2> /dev/null) != "Running" ]; do
   echo "Waiting for vtworker pod to shutdown completely..."
   sleep 1
 done
-exit_code=$($KUBECTL get -o template --template '{{(index .status.containerStatuses 0).state.terminated.exitCode}}' pods vtworker)
+exit_code=$($KUBECTL $KUBECTL_OPTIONS get -o template --template '{{(index .status.containerStatuses 0).state.terminated.exitCode}}' pods vtworker)
 
 echo "Deleting vtworker pod..."
-$KUBECTL delete pod vtworker
+$KUBECTL $KUBECTL_OPTIONS delete pod vtworker
 
 if [ "$exit_code" != "0" ]; then
   echo

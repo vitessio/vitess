@@ -6,8 +6,16 @@
 # use cases just need KUBECTL=kubectl, we'll make that the default.
 KUBECTL=${KUBECTL:-kubectl}
 
-# Kuberentes namespace for Vitess and components.
+# Kubernetes api address for $KUBECTL 
+# The default value is 127.0.0.1:8080
+# When the Kubernetes api server is not local, We can easily access the api by edit KUBERNETES_API_SERVER's value
+KUBERNETES_API_SERVER=${KUBERNETES_API_SERVER:-'127.0.0.1:8080'}
+
+# Kubernetes namespace for Vitess and components.
 VITESS_NAME=${VITESS_NAME:-'default'}
+
+# Kubernetes options config
+KUBECTL_OPTIONS="--namespace=$VITESS_NAME --server=$KUBERNETES_API_SERVER"
 
 # CELLS should be a comma separated list of cells
 # the first cell listed will become local to vtctld.
@@ -18,7 +26,7 @@ VTCTLD_PORT=${VTCTLD_PORT:-30001}
 
 # Get the ExternalIP of any node.
 get_node_ip() {
-  $KUBECTL get -o template --template '{{range (index .items 0).status.addresses}}{{if eq .type "ExternalIP" "LegacyHostIP"}}{{.address}}{{end}}{{end}}' nodes --namespace=$VITESS_NAME
+  $KUBECTL $KUBECTL_OPTIONS get -o template --template '{{range (index .items 0).status.addresses}}{{if eq .type "ExternalIP" "LegacyHostIP"}}{{.address}}{{end}}{{end}}' nodes
 }
 
 # Try to find vtctld address if not provided.
@@ -33,7 +41,7 @@ get_vtctld_addr() {
 
 # Find the name of a vtctld pod.
 get_vtctld_pod() {
-  $KUBECTL get -o template --template "{{if ge (len .items) 1 }}{{(index .items 0).metadata.name}}{{end}}" -l 'app=vitess,component=vtctld' pods --namespace=$VITESS_NAME
+  $KUBECTL $KUBECTL_OPTIONS get -o template --template "{{if ge (len .items) 1 }}{{(index .items 0).metadata.name}}{{end}}" -l 'app=vitess,component=vtctld' pods
 }
 
 start_vtctld_forward() {
@@ -44,7 +52,7 @@ start_vtctld_forward() {
   fi
 
   tmpfile=`mktemp`
-  $KUBECTL port-forward -p $pod 0:15999 --namespace=$VITESS_NAME &> $tmpfile &
+  $KUBECTL $KUBECTL_OPTIONS port-forward -p $pod 0:15999 &> $tmpfile &
   vtctld_forward_pid=$!
 
   until [[ `cat $tmpfile` =~ :([0-9]+)\ -\> ]]; do :; done

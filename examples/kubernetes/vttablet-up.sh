@@ -55,7 +55,7 @@ for shard in $(echo $SHARDS | tr "," " "); do
       done
 
       # Instantiate template and send to kubectl.
-      cat $VTTABLET_TEMPLATE | sed -e "$sed_script" | $KUBECTL create --namespace=$VITESS_NAME -f -
+      cat $VTTABLET_TEMPLATE | sed -e "$sed_script" | $KUBECTL $KUBECTL_OPTIONS create -f -
     done
     let cell_index=cell_index+100000000
   done

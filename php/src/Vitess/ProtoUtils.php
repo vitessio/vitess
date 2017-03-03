@@ -55,7 +55,7 @@ class ProtoUtils
                     throw new Exception($error->getCode() . ': ' . $error->getMessage());
             }
             switch ($error->getLegacyCode()) {
-                case LegacyErrorCode::SUCCESS:
+                case LegacyErrorCode::SUCCESS_LEGACY:
                     break;
                 case LegacyErrorCode::BAD_INPUT_LEGACY:
                     throw new Error\BadInput($error->getMessage());
