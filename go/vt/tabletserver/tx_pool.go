@@ -141,22 +141,6 @@ func (axp *TxPool) WaitForEmpty() {
 // Begin begins a transaction, and returns the associated transaction id.
 // Subsequent statements can access the connection through the transaction id.
 func (axp *TxPool) Begin(ctx context.Context) (int64, error) {
-	return axp.internalBegin(ctx, func() int64 {
-		return axp.lastID.Add(1)
-	})
-}
-
-// BeginAgain begins a transaction with a transactionID that we already know. The previously
-// closed transactionId will now be available again for statements and must be committed when done
-func (axp *TxPool) BeginAgain(ctx context.Context, transactionID int64) (int64, error) {
-	return axp.internalBegin(ctx, func() int64 {
-		return transactionID
-	})
-}
-
-// internalBegin is used by Begin and BeginAgain to begin a transaction. The txIdGenerator argument
-// is used to generate a transactionID which is used to register the transaction for subsequent statements.
-func (axp *TxPool) internalBegin(ctx context.Context, txIDGenerator func() int64) (int64, error) {
 	conn, err := axp.conns.Get(ctx)
 	if err != nil {
 		switch err {
@@ -172,7 +156,7 @@ func (axp *TxPool) internalBegin(ctx context.Context, txIDGenerator func() int64
 		conn.Recycle()
 		return 0, err
 	}
-	transactionID := txIDGenerator()
+	transactionID := axp.lastID.Add(1)
 	axp.activePool.Register(
 		transactionID,
 		newTxConnection(
@@ -323,6 +307,17 @@ func (txc *TxConnection) Exec(ctx context.Context, query string, maxrows int, wa
 		return nil, err
 	}
 	return r, nil
+}
+
+// BeginAgain commits the existing transaction and begins a new one
+func (txc *TxConnection) BeginAgain(ctx context.Context) error {
+	if _, err := txc.DBConn.Exec(ctx, "commit", 1, false); err != nil {
+		return err
+	}
+	if _, err := txc.DBConn.Exec(ctx, "begin", 1, false); err != nil {
+		return err
+	}
+	return nil
 }
 
 // Recycle returns the connection to the pool. The transaction remains

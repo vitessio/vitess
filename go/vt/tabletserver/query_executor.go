@@ -295,23 +295,29 @@ func (qre *QueryExecutor) execDDL() (*sqltypes.Result, error) {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "DDL is not understood")
 	}
 
+	defer qre.tsv.se.Reload(qre.ctx)
+
 	if qre.transactionID != 0 {
-		err := qre.tsv.te.txPool.Commit(qre.ctx, qre.transactionID, qre.tsv.messager)
+		conn, err := qre.tsv.te.txPool.Get(qre.transactionID, "DDL begin again")
 		if err != nil {
 			return nil, err
 		}
-		defer qre.tsv.te.txPool.BeginAgain(qre.ctx, qre.transactionID)
+		defer conn.Recycle()
+		result, err := qre.execSQL(conn, qre.query, false)
+		if err != nil {
+			return nil, err
+		}
+		err = conn.BeginAgain(qre.ctx)
+		if err != nil {
+			return nil, err
+		}
+		return result, nil
 	}
 
 	result, err := qre.execAsTransaction(func(conn *TxConnection) (*sqltypes.Result, error) {
 		return qre.execSQL(conn, qre.query, false)
 	})
 
-	if err != nil {
-		return nil, err
-	}
-
-	err = qre.tsv.se.Reload(qre.ctx)
 	if err != nil {
 		return nil, err
 	}
