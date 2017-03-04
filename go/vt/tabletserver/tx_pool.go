@@ -309,6 +309,17 @@ func (txc *TxConnection) Exec(ctx context.Context, query string, maxrows int, wa
 	return r, nil
 }
 
+// BeginAgain commits the existing transaction and begins a new one
+func (txc *TxConnection) BeginAgain(ctx context.Context) error {
+	if _, err := txc.DBConn.Exec(ctx, "commit", 1, false); err != nil {
+		return err
+	}
+	if _, err := txc.DBConn.Exec(ctx, "begin", 1, false); err != nil {
+		return err
+	}
+	return nil
+}
+
 // Recycle returns the connection to the pool. The transaction remains
 // active.
 func (txc *TxConnection) Recycle() {

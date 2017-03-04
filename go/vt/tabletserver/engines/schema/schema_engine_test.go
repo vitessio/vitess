@@ -296,45 +296,6 @@ func TestCreateOrUpdateTable(t *testing.T) {
 	}
 }
 
-func TestDropTable(t *testing.T) {
-	db := fakesqldb.New(t)
-	defer db.Close()
-	for query, result := range schematest.Queries() {
-		db.AddQuery(query, result)
-	}
-	existingTable := sqlparser.NewTableIdent("test_table_01")
-	se := newEngine(10, 1*time.Second, 1*time.Second, false)
-	se.Open(db.ConnParams())
-	defer se.Close()
-	table := se.GetTable(existingTable)
-	if table == nil {
-		t.Fatalf("table: %s should exist", existingTable)
-	}
-	i := 0
-	se.RegisterNotifier("test", func(schema map[string]*Table, created, altered, dropped []string) {
-		switch i {
-		case 0:
-			// Ignore.
-		case 1:
-			want := []string{"test_table_01"}
-			if !reflect.DeepEqual(dropped, want) {
-				t.Errorf("callback 1: %v, want %v\n", dropped, want)
-			}
-		default:
-			t.Fatal("unexpected")
-		}
-		i++
-	})
-	se.TableWasDropped(existingTable)
-	table = se.GetTable(existingTable)
-	if table != nil {
-		t.Fatalf("table: %s should not exist", existingTable)
-	}
-	if i < 2 {
-		t.Error("Notifier did not get called")
-	}
-}
-
 func TestExportVars(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()

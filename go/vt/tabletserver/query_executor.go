@@ -295,25 +295,33 @@ func (qre *QueryExecutor) execDDL() (*sqltypes.Result, error) {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "DDL is not understood")
 	}
 
-	conn, err := qre.tsv.te.txPool.LocalBegin(qre.ctx)
-	if err != nil {
-		return nil, err
-	}
-	defer qre.tsv.te.txPool.LocalCommit(qre.ctx, conn, qre.tsv.messager)
+	defer qre.tsv.se.Reload(qre.ctx)
 
-	result, err := qre.execSQL(conn, qre.query, false)
-	if err != nil {
-		return nil, err
-	}
-	if !ddlPlan.TableName.IsEmpty() && ddlPlan.TableName != ddlPlan.NewName {
-		// It's a drop or rename.
-		qre.tsv.se.TableWasDropped(ddlPlan.TableName)
-	}
-	if !ddlPlan.NewName.IsEmpty() {
-		if err := qre.tsv.se.TableWasCreatedOrAltered(qre.ctx, ddlPlan.NewName.String()); err != nil {
+	if qre.transactionID != 0 {
+		conn, err := qre.tsv.te.txPool.Get(qre.transactionID, "DDL begin again")
+		if err != nil {
 			return nil, err
 		}
+		defer conn.Recycle()
+		result, err := qre.execSQL(conn, qre.query, false)
+		if err != nil {
+			return nil, err
+		}
+		err = conn.BeginAgain(qre.ctx)
+		if err != nil {
+			return nil, err
+		}
+		return result, nil
 	}
+
+	result, err := qre.execAsTransaction(func(conn *TxConnection) (*sqltypes.Result, error) {
+		return qre.execSQL(conn, qre.query, false)
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
 	return result, nil
 }
 

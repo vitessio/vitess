@@ -329,19 +329,6 @@ func (se *Engine) TableWasCreatedOrAltered(ctx context.Context, tableName string
 	return nil
 }
 
-// TableWasDropped must be called if a table was dropped.
-func (se *Engine) TableWasDropped(tableName sqlparser.TableIdent) {
-	se.mu.Lock()
-	defer se.mu.Unlock()
-	if !se.isOpen {
-		return
-	}
-
-	delete(se.tables, tableName.String())
-	log.Infof("Table %s forgotten", tableName)
-	se.broadcast(nil, nil, []string{tableName.String()})
-}
-
 // RegisterNotifier registers the function for schema change notification.
 // It also causes an immediate notification to the caller. The notified
 // function must not change the map or its contents. The only exception
