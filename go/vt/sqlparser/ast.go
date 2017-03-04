@@ -726,11 +726,12 @@ func (node *TableName) Equal(t *TableName) bool {
 }
 
 // ToViewName returns a TableName acceptable for use as a VIEW. VIEW names are
-// always lowercase, so ToViewName lowercasese the name and qualifier.
+// always lowercase, so ToViewName lowercasese the name. Databases are case-sensitive
+// so Qualifier is left untouched.
 func (node *TableName) ToViewName() *TableName {
 	return &TableName{
+		Qualifier: node.Qualifier,
 		Name:      NewTableIdent(strings.ToLower(node.Name.v)),
-		Qualifier: NewTableIdent(strings.ToLower(node.Qualifier.v)),
 	}
 }
 
