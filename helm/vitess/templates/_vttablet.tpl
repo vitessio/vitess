@@ -176,9 +176,9 @@ volumes:
 {{- $tablet := index . 4 -}}
 {{- with $tablet.vttablet -}}
 {{- $0 := $.Values.vttablet -}}
-{{- $cellClean := $cell.name | replace "_" "-" -}}
-{{- $keyspaceClean := $keyspace.name | replace "_" "-" -}}
-{{- $shardClean := include "format-shard-name" $shard.name -}}
+{{- $cellClean := include "clean-label" $cell.name -}}
+{{- $keyspaceClean := include "clean-label" $keyspace.name -}}
+{{- $shardClean := include "clean-label" $shard.name -}}
 {{- $setName := printf "%s-%s-%s-%s" $cellClean $keyspaceClean $shardClean $tablet.type | lower -}}
 {{- $uid := "$(cat $VTDATAROOT/init/tablet-uid)" }}
 # vttablet StatefulSet
@@ -224,7 +224,7 @@ spec:
 {{- $cell := index . 1 -}}
 {{- $keyspace := index . 2 -}}
 {{- $shard := index . 3 -}}
-{{- $shardClean := include "format-shard-name" $shard.name -}}
+{{- $shardClean := include "clean-label" $shard.name -}}
 {{- $tablet := index . 4 -}}
 {{- $uid := index . 5 -}}
 {{- with $tablet.vttablet -}}
