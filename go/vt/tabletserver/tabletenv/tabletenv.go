@@ -21,7 +21,7 @@ import (
 
 var (
 	// MySQLStats shows the time histogram for operations spent on mysql side.
-	MySQLStats = stats.NewTimings("MySQL")
+	MySQLStats = stats.NewTimings("Mysql")
 	// QueryStats shows the time histogram for each type of queries.
 	QueryStats = stats.NewTimings("Queries")
 	// QPSRates shows the qps of QueryStats. Sample every 5 seconds and keep samples for up to 15 mins.
