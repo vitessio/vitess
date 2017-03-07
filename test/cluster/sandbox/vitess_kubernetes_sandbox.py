@@ -215,24 +215,31 @@ class VitessKubernetesSandbox(sandbox.Sandbox):
     helm_sandlet = sandlet.Sandlet('helm')
     helm_sandlet.components.add_component(kubernetes_components.HelmComponent(
         'helm', self.name, self._generate_helm_values_config()))
+
+    # Add a subprocess task to wait for all mysql instances to be healthy.
+    tablet_count = 0
+    for keyspace in self.app_options.keyspaces:
+      tablet_count += (keyspace['shard_count'] * len(self.app_options.cells) * (
+          keyspace['replica_count'] + keyspace['rdonly_count']))
+    wait_for_mysql_subprocess = subprocess_component.Subprocess(
+        'wait_for_mysql', self.name, 'wait_for_mysql.py',
+        self.log_dir, namespace=self.name,
+        cells=','.join(self.app_options.cells),
+        tablet_count=tablet_count)
+    wait_for_mysql_subprocess.dependencies = ['helm']
+    helm_sandlet.components.add_component(wait_for_mysql_subprocess)
+
+    # Add a subprocess task for each keyspace to perform the initial reparent.
     for keyspace in self.app_options.keyspaces:
       name = keyspace['name']
       shard_count = keyspace['shard_count']
-      wait_for_mysql_subprocess = subprocess_component.Subprocess(
-          'wait_for_mysql_%s' % name, self.name, 'wait_for_mysql.py',
-          self.log_dir, namespace=self.name,
-          cells=','.join(self.app_options.cells),
-          tablet_count=(shard_count * len(self.app_options.cells) * (
-              keyspace['replica_count'] + keyspace['rdonly_count'])))
-      wait_for_mysql_subprocess.dependencies = ['helm']
       initial_reparent_subprocess = subprocess_component.Subprocess(
-          'initial_reparent_%s' % name, self.name,
+          'initial_reparent_%s_%d' % (name, shard_count), self.name,
           'initial_reparent.py', self.log_dir, namespace=self.name,
           keyspace=name, shard_count=shard_count,
           master_cell=self.app_options.cells[0])
       initial_reparent_subprocess.dependencies = [
           wait_for_mysql_subprocess.name]
-      helm_sandlet.components.add_component(wait_for_mysql_subprocess)
       helm_sandlet.components.add_component(initial_reparent_subprocess)
     self.sandlets.add_component(helm_sandlet)
 
