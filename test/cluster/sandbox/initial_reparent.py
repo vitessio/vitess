@@ -27,7 +27,7 @@ def initial_reparent(keyspace, master_cell, num_shards, namespace, timeout_s):
   logging.info('Finding tablets to reparent to.')
   while len(master_tablets) < num_shards:
     if time.time() - start_time > timeout_s:
-      logging.fatal('Timed out waiting to find a replica tablet')
+      logging.error('Timed out waiting to find a replica tablet')
       return 1
     for shard_name in sharding_utils.get_shard_names(num_shards):
       if shard_name in master_tablets:
@@ -61,7 +61,7 @@ def initial_reparent(keyspace, master_cell, num_shards, namespace, timeout_s):
     if len(successfully_reparented) == num_shards:
       logging.info('Done with initial reparent.')
       return 0
-  logging.fatal('Timed out waiting for initial reparent.')
+  logging.error('Timed out waiting for initial reparent.')
   return 1
 
 
