@@ -185,12 +185,15 @@ class VitessKubernetesSandbox(sandbox.Sandbox):
           keyspaces=copy.deepcopy(keyspaces),
       )
       # Each tablet's UID must be unique, so increment the uidBase for tablets
-      # by the cell epsilon value to ensure uniqueness. This logic will go away
-      # once StatefulSet is available.
+      # by the cell epsilon value to ensure uniqueness. Also convert the UID to
+      # a string, or else the parser will attempt to parse UID as a float, which
+      # causes issues when UID's are large. This logic will go away once
+      # StatefulSet is available.
       for keyspace in cell_dict['keyspaces']:
         for shard in keyspace['shards']:
           for tablets in shard['tablets']:
-            tablets['uidBase'] += index * self.cell_epsilon
+            tablets['uidBase'] = str(
+                tablets['uidBase'] + index * self.cell_epsilon)
       yaml_values['topology']['cells'].append(cell_dict)
 
       if index == 0:
