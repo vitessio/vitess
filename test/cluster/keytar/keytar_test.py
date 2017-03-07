@@ -19,10 +19,10 @@ class KeytarTest(unittest.TestCase):
       testlog.write('foo')
 
   def test_validate_request(self):
-    self.assertFalse(keytar._validate_request('foo', {'key': 'foo'}))
-    self.assertFalse(keytar._validate_request(None, {'key': 'foo'}))
+    self.assertFalse(keytar._validate_request('foo', {'password': 'foo'}))
+    self.assertFalse(keytar._validate_request(None, {'password': 'foo'}))
     self.assertFalse(keytar._validate_request(None, {}))
-    self.assertTrue(keytar._validate_request('foo', {'key': 'foo2'}))
+    self.assertTrue(keytar._validate_request('foo', {'password': 'foo2'}))
     self.assertTrue(keytar._validate_request('foo', {}))
 
   def test_get_download_github_repo_args(self):

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Dummy no-op test."""
+"""Dummy no-op test to be used in the webdriver test."""
 
 import logging
 import sys

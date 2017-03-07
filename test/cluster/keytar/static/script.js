@@ -3,7 +3,19 @@ $(document).ready(function() {
 
   var appendTestResults = function(data) {
     resultsElement.empty();
-    var html = "<table align='center' id='results' border='1'><thead><tr><th>Time</th><th>Docker Image</th><th>Sandbox Name</th><th>Status</th><th>Tests</th><th>Results</th></thead><tbody>";
+    var html = " \
+        <table align='center' id='results' border='1'> \
+        <thead> \
+          <tr> \
+            <th>Time</th> \
+            <th>Docker Image</th> \
+            <th>Sandbox Name</th> \
+            <th>Status</th> \
+            <th>Tests</th> \
+            <th>Results</th> \
+          </tr> \
+        </thead> \
+        <tbody>";
     $.each(data, function(key, value) {
       html += "<tr><td>" + value.time + "</td><td><a href=https://hub.docker.com/r/" + value.docker_image + ">" + value.docker_image + "</a></td><td>" + value.name + "</td><td>" + value.status + "</td><td><table>";
       $.each(value.tests, function(key, val) {

@@ -4,13 +4,13 @@ set -e
 
 KUBECTL=${KUBECTL:-kubectl}
 
-config_path=${KEYTAR_CONFIG_PATH:-"$VTTOP/test/cluster/keytar/config"}
+config_path=${KEYTAR_CONFIG_PATH:-"./config"}
 port=${KEYTAR_PORT:-8080}
-key=${KEYTAR_KEY:-"defaultkey"}
-config=${KEYTAR_CONFIG:-"/config/vitess_p0_config.yaml"}
+password=${KEYTAR_PASSWORD:-"defaultkey"}
+config=${KEYTAR_CONFIG:-"/config/vitess_config.yaml"}
 
 sed_script=""
-for var in config_path port config key; do
+for var in config_path port config password; do
   sed_script+="s,{{$var}},${!var},g;"
 done
 
@@ -29,11 +29,11 @@ echo "Creating firewall-rule"
 gcloud compute firewall-rules create keytar --allow tcp:80
 
 for i in `seq 1 20`; do
-  addr=`$KUBECTL get service keytar -o template --template '{{if ge (len .status.loadBalancer) 1}}{{index (index .status.loadBalancer.ingress 0) "ip"}}{{end}}'`
-  if [[ -n $addr ]]; then
-    echo Keytar address: http://${addr}:80
+  ip=`$KUBECTL get service keytar -o template --template '{{if ge (len .status.loadBalancer) 1}}{{index (index .status.loadBalancer.ingress 0) "ip"}}{{end}}'`
+  if [[ -n "$ip" ]]; then
+    echo "Keytar address: http://${ip}:80"
     break
   fi
-  echo Waiting for keytar external IP
+  echo "Waiting for keytar external IP"
   sleep 10
 done

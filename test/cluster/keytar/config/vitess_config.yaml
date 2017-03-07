@@ -46,7 +46,6 @@ install:
     - /app/linux-amd64/
   cluster_setup:
     - type: gke
-      project_name: e-sunlight-726
       keyfile: /config/keyfile.json
 config:
   - docker_image: vitess/root
