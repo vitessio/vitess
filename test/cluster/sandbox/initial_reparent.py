@@ -4,10 +4,10 @@
 import json
 import logging
 import optparse
+import sys
 import time
 from vtproto import topodata_pb2
 from vttest import sharding_utils
-import sandbox_utils
 import vtctl_sandbox
 
 
@@ -23,12 +23,17 @@ def initial_reparent(keyspace, master_cell, num_shards, namespace, timeout_s):
   """Performs the first reparent."""
   successfully_reparented = []
   master_tablets = {}
+  start_time = time.time()
+  logging.info('Finding tablets to reparent to.')
   while len(master_tablets) < num_shards:
+    if time.time() - start_time > timeout_s:
+      logging.fatal('Timed out waiting to find a replica tablet')
+      return 1
     for shard_name in sharding_utils.get_shard_names(num_shards):
-      shard_name = sandbox_utils.fix_shard_name(shard_name)
+      if shard_name in master_tablets:
+        continue
       tablets = vtctl_sandbox.execute_vtctl_command(
-          ['ListShardTablets', '%s/%s' % (
-              keyspace, sandbox_utils.fix_shard_name(shard_name))],
+          ['ListShardTablets', '%s/%s' % (keyspace, shard_name)],
           namespace=namespace)[0].split('\n')
       tablets = [x.split(' ') for x in tablets if x]
       potential_masters = [
@@ -36,11 +41,11 @@ def initial_reparent(keyspace, master_cell, num_shards, namespace, timeout_s):
           and x[0].split('-')[0] == master_cell]
       if potential_masters:
         master_tablets[shard_name] = potential_masters[0]
+        logging.info(
+            '%s selected for shard %s', potential_masters[0], shard_name)
 
-  start_time = time.time()
   while time.time() - start_time < timeout_s:
     for shard_name in sharding_utils.get_shard_names(num_shards):
-      shard_name = sandbox_utils.fix_shard_name(shard_name)
       master_tablet_id = master_tablets[shard_name]
       if is_master(master_tablet_id, namespace):
         logging.info('Tablet %s is the master of %s/%s.',
@@ -55,8 +60,9 @@ def initial_reparent(keyspace, master_cell, num_shards, namespace, timeout_s):
            master_tablet_id], namespace=namespace, timeout_s=5)
     if len(successfully_reparented) == num_shards:
       logging.info('Done with initial reparent.')
-      return
+      return 0
   logging.fatal('Timed out waiting for initial reparent.')
+  return 1
 
 
 def main():
@@ -73,9 +79,9 @@ def main():
   logging.getLogger().setLevel(logging.INFO)
 
   options, _ = parser.parse_args()
-  initial_reparent(options.keyspace, options.master_cell,
-                   options.shard_count, options.namespace,
-                   options.timeout)
+  sys.exit(initial_reparent(options.keyspace, options.master_cell,
+                            options.shard_count, options.namespace,
+                            options.timeout))
 
 
 if __name__ == '__main__':

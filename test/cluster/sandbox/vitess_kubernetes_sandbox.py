@@ -11,7 +11,6 @@ import yaml
 from vttest import sharding_utils
 
 import sandbox
-import sandbox_utils
 import sandlet
 import subprocess_component
 
@@ -92,7 +91,6 @@ class VitessKubernetesSandbox(sandbox.Sandbox):
 
       for shard_index, shard_name in enumerate(
           sharding_utils.get_shard_names(ks['shard_count'])):
-        shard_name = sandbox_utils.fix_shard_name(shard_name)
         shard = dict(
             name=shard_name,
             tablets=[dict(
@@ -221,7 +219,7 @@ class VitessKubernetesSandbox(sandbox.Sandbox):
           'wait_for_mysql_%s' % name, self.name, 'wait_for_mysql.py',
           self.log_dir, namespace=self.name,
           cells=','.join(self.app_options.cells),
-          tablet_count=(shard_count * (
+          tablet_count=(shard_count * len(self.app_options.cells) * (
               keyspace['replica_count'] + keyspace['rdonly_count'])))
       wait_for_mysql_subprocess.dependencies = ['helm']
       initial_reparent_subprocess = subprocess_component.Subprocess(

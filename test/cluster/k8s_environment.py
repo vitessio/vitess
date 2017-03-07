@@ -184,7 +184,8 @@ class K8sEnvironment(base_environment.BaseEnvironment):
     time.sleep(60)
 
     # Create the pod again.
-    os.system('cat %s | kubectl create -f -' % tmpfile.name)
+    os.system('cat %s | kubectl create --namespace=%s -f -' % (
+        tmpfile.name, self.cluster_name))
     while time.time() - start_time < 120:
       logging.info('Waiting for pod %s to be running', vttablet_pod_name)
       pod = subprocess.check_output(
