@@ -6,7 +6,6 @@ package binlog
 
 import (
 	"bytes"
-	"encoding/binary"
 	"fmt"
 	"io"
 	"strings"
@@ -16,7 +15,6 @@ import (
 
 	"github.com/youtube/vitess/go/mysqlconn/replication"
 	"github.com/youtube/vitess/go/sqldb"
-	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/sqlparser"
@@ -466,11 +464,11 @@ func writeValuesAsSQL(sql *bytes.Buffer, rs *replication.Rows, tm *replication.T
 		}
 
 		// We have real data
-		value, l, err := cellAsSQL(data, pos, tm.Types[c], tm.Metadata[c], ti.Columns[c].Type)
+		value, l, err := replication.CellValue(data, pos, tm.Types[c], tm.Metadata[c], ti.Columns[c].Type)
 		if err != nil {
 			return err
 		}
-		sql.WriteString(value)
+		value.EncodeSQL(sql)
 		pos += l
 		valueIndex++
 	}
@@ -504,256 +502,14 @@ func writeIdentifiesAsSQL(sql *bytes.Buffer, rs *replication.Rows, tm *replicati
 		}
 
 		// We have real data
-		value, l, err := cellAsSQL(data, pos, tm.Types[c], tm.Metadata[c], ti.Columns[c].Type)
+		value, l, err := replication.CellValue(data, pos, tm.Types[c], tm.Metadata[c], ti.Columns[c].Type)
 		if err != nil {
 			return err
 		}
-		sql.WriteString(value)
+		value.EncodeSQL(sql)
 		pos += l
 		valueIndex++
 	}
 
 	return nil
-}
-
-// cellAsSQL parses the data for a cell inside a RBR event, and returns
-// the SQL representation of that cell, given its RBR type, and schema type.
-func cellAsSQL(data []byte, pos int, typ byte, metadata uint16, styp querypb.Type) (string, int, error) {
-	switch typ {
-	case replication.TypeTiny:
-		if sqltypes.IsSigned(styp) {
-			return fmt.Sprintf("%v", int8(data[pos])), 1, nil
-		}
-		return fmt.Sprintf("%v", uint8(data[pos])), 1, nil
-	case replication.TypeYear:
-		return fmt.Sprintf("%v", 1900+int(data[pos])), 1, nil
-	case replication.TypeShort:
-		val := binary.LittleEndian.Uint16(data[pos : pos+2])
-		if sqltypes.IsSigned(styp) {
-			return fmt.Sprintf("%v", int16(val)), 2, nil
-		}
-		return fmt.Sprintf("%v", val), 2, nil
-	case replication.TypeInt24:
-		if sqltypes.IsSigned(styp) && data[pos+2]&128 > 0 {
-			// Negative number, have to extend the sign.
-			val := int32(uint32(data[pos]) +
-				uint32(data[pos+1])<<8 +
-				uint32(data[pos+2])<<16 +
-				uint32(255)<<24)
-			return fmt.Sprintf("%v", val), 3, nil
-		}
-		// Positive number.
-		val := uint32(data[pos]) +
-			uint32(data[pos+1])<<8 +
-			uint32(data[pos+2])<<16
-		return fmt.Sprintf("%v", val), 3, nil
-	case replication.TypeLong:
-		val := binary.LittleEndian.Uint32(data[pos : pos+4])
-		if sqltypes.IsSigned(styp) {
-			return fmt.Sprintf("%v", int32(val)), 4, nil
-		}
-		return fmt.Sprintf("%v", val), 4, nil
-	case replication.TypeTimestamp:
-		val := binary.LittleEndian.Uint32(data[pos : pos+4])
-		return fmt.Sprintf("%v", val), 4, nil
-	case replication.TypeLongLong:
-		val := binary.LittleEndian.Uint64(data[pos : pos+8])
-		if sqltypes.IsSigned(styp) {
-			return fmt.Sprintf("%v", int64(val)), 8, nil
-		}
-		return fmt.Sprintf("%v", val), 8, nil
-	case replication.TypeDate, replication.TypeNewDate:
-		val := uint32(data[pos]) +
-			uint32(data[pos+1])<<8 +
-			uint32(data[pos+2])<<16
-		day := val & 31
-		month := val >> 5 & 15
-		year := val >> 9
-		return fmt.Sprintf("'%04d-%02d-%02d'", year, month, day), 3, nil
-	case replication.TypeTime:
-		val := binary.LittleEndian.Uint32(data[pos : pos+4])
-		hour := val / 10000
-		minute := (val % 10000) / 100
-		second := val % 100
-		return fmt.Sprintf("'%02d:%02d:%02d'", hour, minute, second), 4, nil
-	case replication.TypeDateTime:
-		val := binary.LittleEndian.Uint64(data[pos : pos+8])
-		d := val / 1000000
-		t := val % 1000000
-		year := d / 10000
-		month := (d % 10000) / 100
-		day := d % 100
-		hour := t / 10000
-		minute := (t % 10000) / 100
-		second := t % 100
-		return fmt.Sprintf("'%04d-%02d-%02d %02d:%02d:%02d'", year, month, day, hour, minute, second), 8, nil
-	case replication.TypeVarchar:
-		// Length is encoded in 1 or 2 bytes.
-		l := int(data[pos])
-		headerSize := 1
-		if metadata > 255 {
-			l += int(data[pos+1]) << 8
-			headerSize = 2
-		}
-		v := sqltypes.MakeTrusted(querypb.Type_VARCHAR, data[pos+headerSize:pos+headerSize+l])
-		var buf bytes.Buffer
-		v.EncodeSQL(&buf)
-		return buf.String(), l + headerSize, nil
-	case replication.TypeBit:
-		nbits := ((metadata >> 8) * 8) + (metadata & 0xFF)
-		l := (int(nbits) + 7) / 8
-		var buf bytes.Buffer
-		buf.WriteString("b'")
-		for i := 0; i < l; i++ {
-			buf.WriteString(fmt.Sprintf("%08b", data[pos+i]))
-		}
-		buf.WriteByte('\'')
-		return buf.String(), l, nil
-	case replication.TypeTimestamp2:
-		second := binary.LittleEndian.Uint32(data[pos : pos+4])
-		switch metadata {
-		case 1:
-			decimals := int(data[pos+4])
-			return fmt.Sprintf("%v.%01d", second, decimals), 5, nil
-		case 2:
-			decimals := int(data[pos+4])
-			return fmt.Sprintf("%v.%02d", second, decimals), 5, nil
-		case 3:
-			decimals := int(data[pos+4]) +
-				int(data[pos+5])<<8
-			return fmt.Sprintf("%v.%03d", second, decimals), 6, nil
-		case 4:
-			decimals := int(data[pos+4]) +
-				int(data[pos+5])<<8
-			return fmt.Sprintf("%v.%04d", second, decimals), 6, nil
-		case 5:
-			decimals := int(data[pos+4]) +
-				int(data[pos+5])<<8 +
-				int(data[pos+6])<<16
-			return fmt.Sprintf("%v.%05d", second, decimals), 7, nil
-		case 6:
-			decimals := int(data[pos+4]) +
-				int(data[pos+5])<<8 +
-				int(data[pos+6])<<16
-			return fmt.Sprintf("%v.%.6d", second, decimals), 7, nil
-		}
-		return fmt.Sprintf("%v", second), 4, nil
-	case replication.TypeDateTime2:
-		ymdhms := (uint64(data[pos]) |
-			uint64(data[pos+1])<<8 |
-			uint64(data[pos+2])<<16 |
-			uint64(data[pos+3])<<24 |
-			uint64(data[pos+4])<<32) - uint64(0x8000000000)
-		ymd := ymdhms >> 17
-		ym := ymd >> 5
-		hms := ymdhms % (1 << 17)
-
-		day := ymd % (1 << 5)
-		month := ym % 13
-		year := ym / 13
-
-		second := hms % (1 << 6)
-		minute := (hms >> 6) % (1 << 6)
-		hour := hms >> 12
-
-		datetime := fmt.Sprintf("%04d-%02d-%02d %02d:%02d:%02d", year, month, day, hour, minute, second)
-
-		switch metadata {
-		case 1:
-			decimals := int(data[pos+5])
-			return fmt.Sprintf("'%v.%01d'", datetime, decimals), 6, nil
-		case 2:
-			decimals := int(data[pos+5])
-			return fmt.Sprintf("'%v.%02d'", datetime, decimals), 6, nil
-		case 3:
-			decimals := int(data[pos+5]) +
-				int(data[pos+6])<<8
-			return fmt.Sprintf("'%v.%03d'", datetime, decimals), 7, nil
-		case 4:
-			decimals := int(data[pos+5]) +
-				int(data[pos+6])<<8
-			return fmt.Sprintf("'%v.%04d'", datetime, decimals), 7, nil
-		case 5:
-			decimals := int(data[pos+5]) +
-				int(data[pos+6])<<8 +
-				int(data[pos+7])<<16
-			return fmt.Sprintf("'%v.%05d'", datetime, decimals), 8, nil
-		case 6:
-			decimals := int(data[pos+5]) +
-				int(data[pos+6])<<8 +
-				int(data[pos+7])<<16
-			return fmt.Sprintf("'%v.%.6d'", datetime, decimals), 8, nil
-		}
-		return fmt.Sprintf("'%v'", datetime), 5, nil
-
-	case replication.TypeTime2:
-		hms := (int64(data[pos]) |
-			int64(data[pos+1])<<8 |
-			int64(data[pos+2])<<16) - 0x800000
-		sign := ""
-		if hms < 0 {
-			hms = -hms
-			sign = "-"
-		}
-
-		fracStr := ""
-		switch metadata {
-		case 1:
-			frac := int(data[pos+3])
-			if sign == "-" && frac != 0 {
-				hms--
-				frac = 0x100 - frac
-			}
-			fracStr = fmt.Sprintf(".%.1d", frac/10)
-		case 2:
-			frac := int(data[pos+3])
-			if sign == "-" && frac != 0 {
-				hms--
-				frac = 0x100 - frac
-			}
-			fracStr = fmt.Sprintf(".%.2d", frac)
-		case 3:
-			frac := int(data[pos+3]) |
-				int(data[pos+4])<<8
-			if sign == "-" && frac != 0 {
-				hms--
-				frac = 0x10000 - frac
-			}
-			fracStr = fmt.Sprintf(".%.3d", frac/10)
-		case 4:
-			frac := int(data[pos+3]) |
-				int(data[pos+4])<<8
-			if sign == "-" && frac != 0 {
-				hms--
-				frac = 0x10000 - frac
-			}
-			fracStr = fmt.Sprintf(".%.4d", frac)
-		case 5:
-			frac := int(data[pos+3]) |
-				int(data[pos+4])<<8 |
-				int(data[pos+5])<<16
-			if sign == "-" && frac != 0 {
-				hms--
-				frac = 0x1000000 - frac
-			}
-			fracStr = fmt.Sprintf(".%.5d", frac/10)
-		case 6:
-			frac := int(data[pos+3]) |
-				int(data[pos+4])<<8 |
-				int(data[pos+5])<<16
-			if sign == "-" && frac != 0 {
-				hms--
-				frac = 0x1000000 - frac
-			}
-			fracStr = fmt.Sprintf(".%.6d", frac)
-		}
-
-		hour := (hms >> 12) % (1 << 10)
-		minute := (hms >> 6) % (1 << 6)
-		second := hms % (1 << 6)
-		return fmt.Sprintf("'%v%02d:%02d:%02d%v'", sign, hour, minute, second, fracStr), 3 + (int(metadata)+1)/2, nil
-
-	default:
-		return "", 0, fmt.Errorf("Unsupported type %v", typ)
-	}
 }

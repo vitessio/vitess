@@ -1,11 +1,14 @@
 package replication
 
 import (
+	"bytes"
 	"fmt"
 	"reflect"
 	"testing"
 
+	"github.com/youtube/vitess/go/sqltypes"
 	binlogdatapb "github.com/youtube/vitess/go/vt/proto/binlogdata"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
 // sample event data
@@ -339,110 +342,167 @@ func TestCellLengthAndData(t *testing.T) {
 	testcases := []struct {
 		typ      byte
 		metadata uint16
+		styp     querypb.Type
 		data     []byte
-		out      string
+		out      sqltypes.Value
 	}{{
 		typ:  TypeTiny,
+		styp: querypb.Type_UINT8,
 		data: []byte{0x82},
-		out:  "130",
+		out: sqltypes.MakeTrusted(querypb.Type_UINT8,
+			[]byte("130")),
+	}, {
+		typ:  TypeTiny,
+		styp: querypb.Type_INT8,
+		data: []byte{0xfe},
+		out: sqltypes.MakeTrusted(querypb.Type_INT8,
+			[]byte("-2")),
 	}, {
 		typ:  TypeYear,
 		data: []byte{0x82},
-		out:  "2030",
+		out: sqltypes.MakeTrusted(querypb.Type_YEAR,
+			[]byte("2030")),
 	}, {
 		typ:  TypeShort,
-		data: []byte{0x02, 0x01},
-		out:  fmt.Sprintf("%v", 0x0102),
+		styp: querypb.Type_UINT16,
+		data: []byte{0x82, 0x81},
+		out: sqltypes.MakeTrusted(querypb.Type_UINT16,
+			[]byte(fmt.Sprintf("%v", 0x8182))),
+	}, {
+		typ:  TypeShort,
+		styp: querypb.Type_INT16,
+		data: []byte{0xfe, 0xff},
+		out: sqltypes.MakeTrusted(querypb.Type_INT16,
+			[]byte(fmt.Sprintf("%v", -1-int32(0x0001)))),
 	}, {
 		typ:  TypeInt24,
-		data: []byte{0x03, 0x02, 0x01},
-		out:  fmt.Sprintf("%v", 0x010203),
+		styp: querypb.Type_UINT24,
+		data: []byte{0x83, 0x82, 0x81},
+		out: sqltypes.MakeTrusted(querypb.Type_UINT24,
+			[]byte(fmt.Sprintf("%v", 0x818283))),
+	}, {
+		typ:  TypeInt24,
+		styp: querypb.Type_INT24,
+		data: []byte{0xfd, 0xfe, 0xff},
+		out: sqltypes.MakeTrusted(querypb.Type_INT24,
+			[]byte(fmt.Sprintf("%v", -1-int32(0x000102)))),
 	}, {
 		typ:  TypeLong,
-		data: []byte{0x04, 0x03, 0x02, 0x01},
-		out:  fmt.Sprintf("%v", 0x01020304),
+		styp: querypb.Type_UINT32,
+		data: []byte{0x84, 0x83, 0x82, 0x81},
+		out: sqltypes.MakeTrusted(querypb.Type_UINT32,
+			[]byte(fmt.Sprintf("%v", 0x81828384))),
+	}, {
+		typ:  TypeLong,
+		styp: querypb.Type_INT32,
+		data: []byte{0xfc, 0xfd, 0xfe, 0xff},
+		out: sqltypes.MakeTrusted(querypb.Type_INT32,
+			[]byte(fmt.Sprintf("%v", -1-int32(0x00010203)))),
 	}, {
 		typ:  TypeTimestamp,
 		data: []byte{0x84, 0x83, 0x82, 0x81},
-		out:  fmt.Sprintf("%v", 0x81828384),
+		out: sqltypes.MakeTrusted(querypb.Type_TIMESTAMP,
+			[]byte(fmt.Sprintf("%v", 0x81828384))),
 	}, {
 		typ:  TypeLongLong,
-		data: []byte{0x08, 0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01},
-		out:  fmt.Sprintf("%v", 0x0102030405060708),
+		styp: querypb.Type_UINT64,
+		data: []byte{0x88, 0x87, 0x86, 0x85, 0x84, 0x83, 0x82, 0x81},
+		out: sqltypes.MakeTrusted(querypb.Type_UINT64,
+			[]byte(fmt.Sprintf("%v", uint64(0x8182838485868788)))),
+	}, {
+		typ:  TypeLongLong,
+		styp: querypb.Type_INT64,
+		data: []byte{0xf8, 0xf9, 0xfa, 0xfb, 0xfc, 0xfd, 0xfe, 0xff},
+		out: sqltypes.MakeTrusted(querypb.Type_INT64,
+			[]byte(fmt.Sprintf("%v", -1-int64(0x0001020304050607)))),
 	}, {
 		typ: TypeDate,
 		// 2010 << 9 + 10 << 5 + 3 = 1029443 = 0x0fb543
 		data: []byte{0x43, 0xb5, 0x0f},
-		out:  "2010-10-03",
+		out: sqltypes.MakeTrusted(querypb.Type_DATE,
+			[]byte("2010-10-03")),
 	}, {
 		typ: TypeNewDate,
 		// 2010 << 9 + 10 << 5 + 3 = 1029443 = 0x0fb543
 		data: []byte{0x43, 0xb5, 0x0f},
-		out:  "2010-10-03",
+		out: sqltypes.MakeTrusted(querypb.Type_DATE,
+			[]byte("2010-10-03")),
 	}, {
 		typ: TypeTime,
 		// 154532 = 0x00025ba4
 		data: []byte{0xa4, 0x5b, 0x02, 0x00},
-		out:  "15:45:32",
+		out: sqltypes.MakeTrusted(querypb.Type_TIME,
+			[]byte("15:45:32")),
 	}, {
 		typ: TypeDateTime,
 		// 19840304154532 = 0x120b6e4807a4
 		data: []byte{0xa4, 0x07, 0x48, 0x6e, 0x0b, 0x12, 0x00, 0x00},
-		out:  "1984-03-04 15:45:32",
+		out: sqltypes.MakeTrusted(querypb.Type_DATETIME,
+			[]byte("1984-03-04 15:45:32")),
 	}, {
 		typ:      TypeVarchar,
 		metadata: 20, // one byte length encoding
 		data:     []byte{3, 'a', 'b', 'c'},
-		out:      "abc",
+		out: sqltypes.MakeTrusted(querypb.Type_VARCHAR,
+			[]byte("abc")),
 	}, {
 		typ:      TypeVarchar,
 		metadata: 384, // two bytes length encoding
 		data:     []byte{3, 0, 'a', 'b', 'c'},
-		out:      "abc",
+		out: sqltypes.MakeTrusted(querypb.Type_VARCHAR,
+			[]byte("abc")),
 	}, {
 		typ:      TypeBit,
 		metadata: 0x0107,
 		data:     []byte{0x3, 0x1},
-		out:      "0000001100000001",
+		out: sqltypes.MakeTrusted(querypb.Type_BIT,
+			[]byte{3, 1}),
 	}, {
 		typ:      TypeTimestamp2,
 		metadata: 0,
 		data:     []byte{0x84, 0x83, 0x82, 0x81},
-		out:      fmt.Sprintf("%v", 0x81828384),
+		out: sqltypes.MakeTrusted(querypb.Type_TIMESTAMP,
+			[]byte(fmt.Sprintf("%v", 0x81828384))),
 	}, {
 		typ:      TypeTimestamp2,
 		metadata: 1,
 		data:     []byte{0x84, 0x83, 0x82, 0x81, 7},
-		out:      fmt.Sprintf("%v.7", 0x81828384),
+		out: sqltypes.MakeTrusted(querypb.Type_TIMESTAMP,
+			[]byte(fmt.Sprintf("%v.7", 0x81828384))),
 	}, {
 		typ:      TypeTimestamp2,
 		metadata: 2,
 		data:     []byte{0x84, 0x83, 0x82, 0x81, 76},
-		out:      fmt.Sprintf("%v.76", 0x81828384),
+		out: sqltypes.MakeTrusted(querypb.Type_TIMESTAMP,
+			[]byte(fmt.Sprintf("%v.76", 0x81828384))),
 	}, {
 		typ:      TypeTimestamp2,
 		metadata: 3,
 		// 765 = 0x02fd
 		data: []byte{0x84, 0x83, 0x82, 0x81, 0xfd, 0x02},
-		out:  fmt.Sprintf("%v.765", 0x81828384),
+		out: sqltypes.MakeTrusted(querypb.Type_TIMESTAMP,
+			[]byte(fmt.Sprintf("%v.765", 0x81828384))),
 	}, {
 		typ:      TypeTimestamp2,
 		metadata: 4,
 		// 7654 = 0x1de6
 		data: []byte{0x84, 0x83, 0x82, 0x81, 0xe6, 0x1d},
-		out:  fmt.Sprintf("%v.7654", 0x81828384),
+		out: sqltypes.MakeTrusted(querypb.Type_TIMESTAMP,
+			[]byte(fmt.Sprintf("%v.7654", 0x81828384))),
 	}, {
 		typ:      TypeTimestamp2,
 		metadata: 5,
 		// 76543 = 0x012aff
 		data: []byte{0x84, 0x83, 0x82, 0x81, 0xff, 0x2a, 0x01},
-		out:  fmt.Sprintf("%v.76543", 0x81828384),
+		out: sqltypes.MakeTrusted(querypb.Type_TIMESTAMP,
+			[]byte(fmt.Sprintf("%v.76543", 0x81828384))),
 	}, {
 		typ:      TypeTimestamp2,
 		metadata: 6,
 		// 765432 = 0x0badf8
 		data: []byte{0x84, 0x83, 0x82, 0x81, 0xf8, 0xad, 0x0b},
-		out:  fmt.Sprintf("%v.765432", 0x81828384),
+		out: sqltypes.MakeTrusted(querypb.Type_TIMESTAMP,
+			[]byte(fmt.Sprintf("%v.765432", 0x81828384))),
 	}, {
 		typ:      TypeDateTime2,
 		metadata: 0,
@@ -450,41 +510,48 @@ func TestCellLengthAndData(t *testing.T) {
 		// = 109734198097 = 0x198caafb51
 		// Then have to add 0x8000000000 = 0x998caafb51
 		data: []byte{0x51, 0xfb, 0xaa, 0x8c, 0x99},
-		out:  "2012-06-21 15:45:17",
+		out: sqltypes.MakeTrusted(querypb.Type_DATETIME,
+			[]byte("2012-06-21 15:45:17")),
 	}, {
 		typ:      TypeDateTime2,
 		metadata: 1,
 		data:     []byte{0x51, 0xfb, 0xaa, 0x8c, 0x99, 7},
-		out:      "2012-06-21 15:45:17.7",
+		out: sqltypes.MakeTrusted(querypb.Type_DATETIME,
+			[]byte("2012-06-21 15:45:17.7")),
 	}, {
 		typ:      TypeDateTime2,
 		metadata: 2,
 		data:     []byte{0x51, 0xfb, 0xaa, 0x8c, 0x99, 76},
-		out:      "2012-06-21 15:45:17.76",
+		out: sqltypes.MakeTrusted(querypb.Type_DATETIME,
+			[]byte("2012-06-21 15:45:17.76")),
 	}, {
 		typ:      TypeDateTime2,
 		metadata: 3,
 		// 765 = 0x02fd
 		data: []byte{0x51, 0xfb, 0xaa, 0x8c, 0x99, 0xfd, 0x02},
-		out:  "2012-06-21 15:45:17.765",
+		out: sqltypes.MakeTrusted(querypb.Type_DATETIME,
+			[]byte("2012-06-21 15:45:17.765")),
 	}, {
 		typ:      TypeDateTime2,
 		metadata: 4,
 		// 7654 = 0x1de6
 		data: []byte{0x51, 0xfb, 0xaa, 0x8c, 0x99, 0xe6, 0x1d},
-		out:  "2012-06-21 15:45:17.7654",
+		out: sqltypes.MakeTrusted(querypb.Type_DATETIME,
+			[]byte("2012-06-21 15:45:17.7654")),
 	}, {
 		typ:      TypeDateTime2,
 		metadata: 5,
 		// 76543 = 0x012aff
 		data: []byte{0x51, 0xfb, 0xaa, 0x8c, 0x99, 0xff, 0x2a, 0x01},
-		out:  "2012-06-21 15:45:17.76543",
+		out: sqltypes.MakeTrusted(querypb.Type_DATETIME,
+			[]byte("2012-06-21 15:45:17.76543")),
 	}, {
 		typ:      TypeDateTime2,
 		metadata: 6,
 		// 765432 = 0x0badf8
 		data: []byte{0x51, 0xfb, 0xaa, 0x8c, 0x99, 0xf8, 0xad, 0x0b},
-		out:  "2012-06-21 15:45:17.765432",
+		out: sqltypes.MakeTrusted(querypb.Type_DATETIME,
+			[]byte("2012-06-21 15:45:17.765432")),
 	}, {
 		// This first set of tests is from a comment in
 		//  sql-common/my_time.c:
@@ -499,117 +566,139 @@ func TestCellLengthAndData(t *testing.T) {
 		typ:      TypeTime2,
 		metadata: 2,
 		data:     []byte{0x00, 0x00, 0x80, 0x00},
-		out:      "00:00:00.00",
+		out: sqltypes.MakeTrusted(querypb.Type_TIME,
+			[]byte("00:00:00.00")),
 	}, {
 		typ:      TypeTime2,
 		metadata: 2,
 		data:     []byte{0xff, 0xff, 0x7f, 0xff},
-		out:      "-00:00:00.01",
+		out: sqltypes.MakeTrusted(querypb.Type_TIME,
+			[]byte("-00:00:00.01")),
 	}, {
 		typ:      TypeTime2,
 		metadata: 2,
 		data:     []byte{0xff, 0xff, 0x7f, 0x9d},
-		out:      "-00:00:00.99",
+		out: sqltypes.MakeTrusted(querypb.Type_TIME,
+			[]byte("-00:00:00.99")),
 	}, {
 		typ:      TypeTime2,
 		metadata: 2,
 		data:     []byte{0xff, 0xff, 0x7f, 0x00},
-		out:      "-00:00:01.00",
+		out: sqltypes.MakeTrusted(querypb.Type_TIME,
+			[]byte("-00:00:01.00")),
 	}, {
 		typ:      TypeTime2,
 		metadata: 2,
 		data:     []byte{0xfe, 0xff, 0x7f, 0xff},
-		out:      "-00:00:01.01",
+		out: sqltypes.MakeTrusted(querypb.Type_TIME,
+			[]byte("-00:00:01.01")),
 	}, {
 		typ:      TypeTime2,
 		metadata: 2,
 		data:     []byte{0xfe, 0xff, 0x7f, 0xf6},
-		out:      "-00:00:01.10",
+		out: sqltypes.MakeTrusted(querypb.Type_TIME,
+			[]byte("-00:00:01.10")),
 	}, {
 		// Similar tests for 4 decimals.
 		typ:      TypeTime2,
 		metadata: 4,
 		data:     []byte{0x00, 0x00, 0x80, 0x00, 0x00},
-		out:      "00:00:00.0000",
+		out: sqltypes.MakeTrusted(querypb.Type_TIME,
+			[]byte("00:00:00.0000")),
 	}, {
 		typ:      TypeTime2,
 		metadata: 4,
 		data:     []byte{0xff, 0xff, 0x7f, 0xff, 0xff},
-		out:      "-00:00:00.0001",
+		out: sqltypes.MakeTrusted(querypb.Type_TIME,
+			[]byte("-00:00:00.0001")),
 	}, {
 		typ:      TypeTime2,
 		metadata: 4,
 		data:     []byte{0xff, 0xff, 0x7f, 0x9d, 0xff},
-		out:      "-00:00:00.0099",
+		out: sqltypes.MakeTrusted(querypb.Type_TIME,
+			[]byte("-00:00:00.0099")),
 	}, {
 		typ:      TypeTime2,
 		metadata: 4,
 		data:     []byte{0xff, 0xff, 0x7f, 0x00, 0x00},
-		out:      "-00:00:01.0000",
+		out: sqltypes.MakeTrusted(querypb.Type_TIME,
+			[]byte("-00:00:01.0000")),
 	}, {
 		typ:      TypeTime2,
 		metadata: 4,
 		data:     []byte{0xfe, 0xff, 0x7f, 0xff, 0xff},
-		out:      "-00:00:01.0001",
+		out: sqltypes.MakeTrusted(querypb.Type_TIME,
+			[]byte("-00:00:01.0001")),
 	}, {
 		typ:      TypeTime2,
 		metadata: 4,
 		data:     []byte{0xfe, 0xff, 0x7f, 0xf6, 0xff},
-		out:      "-00:00:01.0010",
+		out: sqltypes.MakeTrusted(querypb.Type_TIME,
+			[]byte("-00:00:01.0010")),
 	}, {
 		// Similar tests for 6 decimals.
 		typ:      TypeTime2,
 		metadata: 6,
 		data:     []byte{0x00, 0x00, 0x80, 0x00, 0x00, 0x00},
-		out:      "00:00:00.000000",
+		out: sqltypes.MakeTrusted(querypb.Type_TIME,
+			[]byte("00:00:00.000000")),
 	}, {
 		typ:      TypeTime2,
 		metadata: 6,
 		data:     []byte{0xff, 0xff, 0x7f, 0xff, 0xff, 0xff},
-		out:      "-00:00:00.000001",
+		out: sqltypes.MakeTrusted(querypb.Type_TIME,
+			[]byte("-00:00:00.000001")),
 	}, {
 		typ:      TypeTime2,
 		metadata: 6,
 		data:     []byte{0xff, 0xff, 0x7f, 0x9d, 0xff, 0xff},
-		out:      "-00:00:00.000099",
+		out: sqltypes.MakeTrusted(querypb.Type_TIME,
+			[]byte("-00:00:00.000099")),
 	}, {
 		typ:      TypeTime2,
 		metadata: 6,
 		data:     []byte{0xff, 0xff, 0x7f, 0x00, 0x00, 0x00},
-		out:      "-00:00:01.000000",
+		out: sqltypes.MakeTrusted(querypb.Type_TIME,
+			[]byte("-00:00:01.000000")),
 	}, {
 		typ:      TypeTime2,
 		metadata: 6,
 		data:     []byte{0xfe, 0xff, 0x7f, 0xff, 0xff, 0xff},
-		out:      "-00:00:01.000001",
+		out: sqltypes.MakeTrusted(querypb.Type_TIME,
+			[]byte("-00:00:01.000001")),
 	}, {
 		typ:      TypeTime2,
 		metadata: 6,
 		data:     []byte{0xfe, 0xff, 0x7f, 0xf6, 0xff, 0xff},
-		out:      "-00:00:01.000010",
+		out: sqltypes.MakeTrusted(querypb.Type_TIME,
+			[]byte("-00:00:01.000010")),
 	}, {
 		// Few more tests.
 		typ:      TypeTime2,
 		metadata: 0,
 		data:     []byte{0x00, 0x00, 0x80},
-		out:      "00:00:00",
+		out: sqltypes.MakeTrusted(querypb.Type_TIME,
+			[]byte("00:00:00")),
 	}, {
 		typ:      TypeTime2,
 		metadata: 1,
 		data:     []byte{0x01, 0x00, 0x80, 0x0a},
-		out:      "00:00:01.1",
+		out: sqltypes.MakeTrusted(querypb.Type_TIME,
+			[]byte("00:00:01.1")),
 	}, {
 		typ:      TypeTime2,
 		metadata: 2,
 		data:     []byte{0x01, 0x00, 0x80, 0x0a},
-		out:      "00:00:01.10",
+		out: sqltypes.MakeTrusted(querypb.Type_TIME,
+			[]byte("00:00:01.10")),
 	}, {
 		typ:      TypeTime2,
 		metadata: 0,
 		// 15 << 12 + 34 << 6 + 54 = 63670 = 0x00f8b6
 		// and need to add 0x800000
 		data: []byte{0xb6, 0xf8, 0x80},
-		out:  "15:34:54",
+		out: sqltypes.MakeTrusted(querypb.Type_TIME,
+			[]byte("15:34:54")),
 	}}
 
 	for _, tcase := range testcases {
@@ -624,10 +713,10 @@ func TestCellLengthAndData(t *testing.T) {
 			t.Errorf("testcase cellLength(%v,%v) returned unexpected result: %v %v", tcase.typ, tcase.data, l, err)
 		}
 
-		// Test cellData (only used for tests, but might as well).
-		out, l, err := cellData(padded, 1, tcase.typ, tcase.metadata)
-		if err != nil || l != len(tcase.data) || out != tcase.out {
-			t.Errorf("testcase cellData(%v,%v) returned unexpected result: %v %v %v, was expecting %v %v <nil>", tcase.typ, tcase.data, out, l, err, tcase.out, len(tcase.data))
+		// Test CellValue.
+		out, l, err := CellValue(padded, 1, tcase.typ, tcase.metadata, tcase.styp)
+		if err != nil || l != len(tcase.data) || out.Type() != tcase.out.Type() || bytes.Compare(out.Raw(), tcase.out.Raw()) != 0 {
+			t.Errorf("testcase cellData(%v,%v) returned unexpected result: %v(%v) %v %v, was expecting %v(%v) %v <nil>", tcase.typ, tcase.data, out, out.Type(), l, err, tcase.out, tcase.out.Type(), len(tcase.data))
 		}
 	}
 }

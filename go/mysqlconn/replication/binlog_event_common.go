@@ -4,8 +4,12 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"strconv"
+
+	"github.com/youtube/vitess/go/sqltypes"
 
 	binlogdatapb "github.com/youtube/vitess/go/vt/proto/binlogdata"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
 // binlogEvent wraps a raw packet buffer and provides methods to examine it
@@ -524,29 +528,65 @@ func cellLength(data []byte, pos int, typ byte, metadata uint16) (int, error) {
 	}
 }
 
-// cellData returns the data for a cell as a string. This is meant to
-// be used in tests only, as it is missing the type flags to interpret
-// the data correctly.
-func cellData(data []byte, pos int, typ byte, metadata uint16) (string, int, error) {
+// CellValue returns the data for a cell as a sqltypes.Value, and how
+// many bytes it takes. It only uses the querypb.Type value for the
+// signed flag.
+func CellValue(data []byte, pos int, typ byte, metadata uint16, styp querypb.Type) (sqltypes.Value, int, error) {
 	switch typ {
 	case TypeTiny:
-		return fmt.Sprintf("%v", data[pos]), 1, nil
+		if sqltypes.IsSigned(styp) {
+			return sqltypes.MakeTrusted(querypb.Type_INT8,
+				strconv.AppendInt(nil, int64(int8(data[pos])), 10)), 1, nil
+		}
+		return sqltypes.MakeTrusted(querypb.Type_UINT8,
+			strconv.AppendUint(nil, uint64(data[pos]), 10)), 1, nil
 	case TypeYear:
-		return fmt.Sprintf("%v", 1900+int(data[pos])), 1, nil
+		return sqltypes.MakeTrusted(querypb.Type_YEAR,
+			strconv.AppendUint(nil, uint64(data[pos])+1900, 10)), 1, nil
 	case TypeShort:
 		val := binary.LittleEndian.Uint16(data[pos : pos+2])
-		return fmt.Sprintf("%v", val), 2, nil
+		if sqltypes.IsSigned(styp) {
+			return sqltypes.MakeTrusted(querypb.Type_INT16,
+				strconv.AppendInt(nil, int64(int16(val)), 10)), 2, nil
+		}
+		return sqltypes.MakeTrusted(querypb.Type_UINT16,
+			strconv.AppendUint(nil, uint64(val), 10)), 2, nil
 	case TypeInt24:
-		val := uint32(data[pos]) +
-			uint32(data[pos+1])<<8 +
-			uint32(data[pos+2])<<16
-		return fmt.Sprintf("%v", val), 3, nil
-	case TypeLong, TypeTimestamp:
+		if sqltypes.IsSigned(styp) && data[pos+2]&128 > 0 {
+			// Negative number, have to extend the sign.
+			val := int32(uint32(data[pos]) +
+				uint32(data[pos+1])<<8 +
+				uint32(data[pos+2])<<16 +
+				uint32(255)<<24)
+			return sqltypes.MakeTrusted(querypb.Type_INT24,
+				strconv.AppendInt(nil, int64(val), 10)), 3, nil
+		}
+		// Positive number.
+		val := uint64(data[pos]) +
+			uint64(data[pos+1])<<8 +
+			uint64(data[pos+2])<<16
+		return sqltypes.MakeTrusted(querypb.Type_UINT24,
+			strconv.AppendUint(nil, val, 10)), 3, nil
+	case TypeLong:
 		val := binary.LittleEndian.Uint32(data[pos : pos+4])
-		return fmt.Sprintf("%v", val), 4, nil
+		if sqltypes.IsSigned(styp) {
+			return sqltypes.MakeTrusted(querypb.Type_INT32,
+				strconv.AppendInt(nil, int64(int32(val)), 10)), 4, nil
+		}
+		return sqltypes.MakeTrusted(querypb.Type_UINT32,
+			strconv.AppendUint(nil, uint64(val), 10)), 4, nil
+	case TypeTimestamp:
+		val := binary.LittleEndian.Uint32(data[pos : pos+4])
+		return sqltypes.MakeTrusted(querypb.Type_TIMESTAMP,
+			strconv.AppendUint(nil, uint64(val), 10)), 4, nil
 	case TypeLongLong:
 		val := binary.LittleEndian.Uint64(data[pos : pos+8])
-		return fmt.Sprintf("%v", val), 8, nil
+		if sqltypes.IsSigned(styp) {
+			return sqltypes.MakeTrusted(querypb.Type_INT64,
+				strconv.AppendInt(nil, int64(val), 10)), 8, nil
+		}
+		return sqltypes.MakeTrusted(querypb.Type_UINT64,
+			strconv.AppendUint(nil, val, 10)), 8, nil
 	case TypeDate, TypeNewDate:
 		val := uint32(data[pos]) +
 			uint32(data[pos+1])<<8 +
@@ -554,13 +594,15 @@ func cellData(data []byte, pos int, typ byte, metadata uint16) (string, int, err
 		day := val & 31
 		month := val >> 5 & 15
 		year := val >> 9
-		return fmt.Sprintf("%04d-%02d-%02d", year, month, day), 3, nil
+		return sqltypes.MakeTrusted(querypb.Type_DATE,
+			[]byte(fmt.Sprintf("%04d-%02d-%02d", year, month, day))), 3, nil
 	case TypeTime:
 		val := binary.LittleEndian.Uint32(data[pos : pos+4])
 		hour := val / 10000
 		minute := (val % 10000) / 100
 		second := val % 100
-		return fmt.Sprintf("%02d:%02d:%02d", hour, minute, second), 4, nil
+		return sqltypes.MakeTrusted(querypb.Type_TIME,
+			[]byte(fmt.Sprintf("%02d:%02d:%02d", hour, minute, second))), 4, nil
 	case TypeDateTime:
 		val := binary.LittleEndian.Uint64(data[pos : pos+8])
 		d := val / 1000000
@@ -571,53 +613,61 @@ func cellData(data []byte, pos int, typ byte, metadata uint16) (string, int, err
 		hour := t / 10000
 		minute := (t % 10000) / 100
 		second := t % 100
-		return fmt.Sprintf("%04d-%02d-%02d %02d:%02d:%02d", year, month, day, hour, minute, second), 8, nil
+		return sqltypes.MakeTrusted(querypb.Type_DATETIME,
+			[]byte(fmt.Sprintf("%04d-%02d-%02d %02d:%02d:%02d", year, month, day, hour, minute, second))), 8, nil
 	case TypeVarchar:
 		// Length is encoded in 1 or 2 bytes.
 		if metadata > 255 {
 			l := int(uint64(data[pos]) |
 				uint64(data[pos+1])<<8)
-			return string(data[pos+2 : pos+2+l]), l + 2, nil
+			return sqltypes.MakeTrusted(querypb.Type_VARCHAR,
+				data[pos+2:pos+2+l]), l + 2, nil
 		}
 		l := int(data[pos])
-		return string(data[pos+1 : pos+1+l]), l + 1, nil
+		return sqltypes.MakeTrusted(querypb.Type_VARCHAR,
+			data[pos+1:pos+1+l]), l + 1, nil
 	case TypeBit:
+		// The contents is just the bytes, quoted.
 		nbits := ((metadata >> 8) * 8) + (metadata & 0xFF)
 		l := (int(nbits) + 7) / 8
-		var buf bytes.Buffer
-		for i := 0; i < l; i++ {
-			buf.WriteString(fmt.Sprintf("%08b", data[pos+i]))
-		}
-		return buf.String(), l, nil
+		return sqltypes.MakeTrusted(querypb.Type_BIT,
+			data[pos:pos+l]), l, nil
 	case TypeTimestamp2:
 		second := binary.LittleEndian.Uint32(data[pos : pos+4])
 		switch metadata {
 		case 1:
 			decimals := int(data[pos+4])
-			return fmt.Sprintf("%v.%01d", second, decimals), 5, nil
+			return sqltypes.MakeTrusted(querypb.Type_TIMESTAMP,
+				[]byte(fmt.Sprintf("%v.%01d", second, decimals))), 5, nil
 		case 2:
 			decimals := int(data[pos+4])
-			return fmt.Sprintf("%v.%02d", second, decimals), 5, nil
+			return sqltypes.MakeTrusted(querypb.Type_TIMESTAMP,
+				[]byte(fmt.Sprintf("%v.%02d", second, decimals))), 5, nil
 		case 3:
 			decimals := int(data[pos+4]) +
 				int(data[pos+5])<<8
-			return fmt.Sprintf("%v.%03d", second, decimals), 6, nil
+			return sqltypes.MakeTrusted(querypb.Type_TIMESTAMP,
+				[]byte(fmt.Sprintf("%v.%03d", second, decimals))), 6, nil
 		case 4:
 			decimals := int(data[pos+4]) +
 				int(data[pos+5])<<8
-			return fmt.Sprintf("%v.%04d", second, decimals), 6, nil
+			return sqltypes.MakeTrusted(querypb.Type_TIMESTAMP,
+				[]byte(fmt.Sprintf("%v.%04d", second, decimals))), 6, nil
 		case 5:
 			decimals := int(data[pos+4]) +
 				int(data[pos+5])<<8 +
 				int(data[pos+6])<<16
-			return fmt.Sprintf("%v.%05d", second, decimals), 7, nil
+			return sqltypes.MakeTrusted(querypb.Type_TIMESTAMP,
+				[]byte(fmt.Sprintf("%v.%05d", second, decimals))), 7, nil
 		case 6:
 			decimals := int(data[pos+4]) +
 				int(data[pos+5])<<8 +
 				int(data[pos+6])<<16
-			return fmt.Sprintf("%v.%.6d", second, decimals), 7, nil
+			return sqltypes.MakeTrusted(querypb.Type_TIMESTAMP,
+				[]byte(fmt.Sprintf("%v.%.6d", second, decimals))), 7, nil
 		}
-		return fmt.Sprintf("%v", second), 4, nil
+		return sqltypes.MakeTrusted(querypb.Type_TIMESTAMP,
+			strconv.AppendUint(nil, uint64(second), 10)), 4, nil
 	case TypeDateTime2:
 		ymdhms := (uint64(data[pos]) |
 			uint64(data[pos+1])<<8 |
@@ -641,30 +691,37 @@ func cellData(data []byte, pos int, typ byte, metadata uint16) (string, int, err
 		switch metadata {
 		case 1:
 			decimals := int(data[pos+5])
-			return fmt.Sprintf("%v.%01d", datetime, decimals), 6, nil
+			return sqltypes.MakeTrusted(querypb.Type_DATETIME,
+				[]byte(fmt.Sprintf("%v.%01d", datetime, decimals))), 6, nil
 		case 2:
 			decimals := int(data[pos+5])
-			return fmt.Sprintf("%v.%02d", datetime, decimals), 6, nil
+			return sqltypes.MakeTrusted(querypb.Type_DATETIME,
+				[]byte(fmt.Sprintf("%v.%02d", datetime, decimals))), 6, nil
 		case 3:
 			decimals := int(data[pos+5]) +
 				int(data[pos+6])<<8
-			return fmt.Sprintf("%v.%03d", datetime, decimals), 7, nil
+			return sqltypes.MakeTrusted(querypb.Type_DATETIME,
+				[]byte(fmt.Sprintf("%v.%03d", datetime, decimals))), 7, nil
 		case 4:
 			decimals := int(data[pos+5]) +
 				int(data[pos+6])<<8
-			return fmt.Sprintf("%v.%04d", datetime, decimals), 7, nil
+			return sqltypes.MakeTrusted(querypb.Type_DATETIME,
+				[]byte(fmt.Sprintf("%v.%04d", datetime, decimals))), 7, nil
 		case 5:
 			decimals := int(data[pos+5]) +
 				int(data[pos+6])<<8 +
 				int(data[pos+7])<<16
-			return fmt.Sprintf("%v.%05d", datetime, decimals), 8, nil
+			return sqltypes.MakeTrusted(querypb.Type_DATETIME,
+				[]byte(fmt.Sprintf("%v.%05d", datetime, decimals))), 8, nil
 		case 6:
 			decimals := int(data[pos+5]) +
 				int(data[pos+6])<<8 +
 				int(data[pos+7])<<16
-			return fmt.Sprintf("%v.%.6d", datetime, decimals), 8, nil
+			return sqltypes.MakeTrusted(querypb.Type_DATETIME,
+				[]byte(fmt.Sprintf("%v.%.6d", datetime, decimals))), 8, nil
 		}
-		return datetime, 5, nil
+		return sqltypes.MakeTrusted(querypb.Type_DATETIME,
+			[]byte(datetime)), 5, nil
 	case TypeTime2:
 		hms := (int64(data[pos]) |
 			int64(data[pos+1])<<8 |
@@ -730,10 +787,11 @@ func cellData(data []byte, pos int, typ byte, metadata uint16) (string, int, err
 		hour := (hms >> 12) % (1 << 10)
 		minute := (hms >> 6) % (1 << 6)
 		second := hms % (1 << 6)
-		return fmt.Sprintf("%v%02d:%02d:%02d%v", sign, hour, minute, second, fracStr), 3 + (int(metadata)+1)/2, nil
+		return sqltypes.MakeTrusted(querypb.Type_TIME,
+			[]byte(fmt.Sprintf("%v%02d:%02d:%02d%v", sign, hour, minute, second, fracStr))), 3 + (int(metadata)+1)/2, nil
 
 	default:
-		return "", 0, fmt.Errorf("Unsupported type %v", typ)
+		return sqltypes.NULL, 0, fmt.Errorf("Unsupported type %v", typ)
 	}
 }
 
@@ -871,6 +929,7 @@ func (ev binlogEvent) Rows(f BinlogFormat, tm *TableMap) (Rows, error) {
 // StringValuesForTests is a helper method to return the string value
 // of all columns in a row in a Row. Only use it in tests, as the
 // returned values cannot be interpreted correctly without the schema.
+// We assume everything is unsigned in this method.
 func (rs *Rows) StringValuesForTests(tm *TableMap, rowIndex int) ([]string, error) {
 	var result []string
 
@@ -890,11 +949,11 @@ func (rs *Rows) StringValuesForTests(tm *TableMap, rowIndex int) ([]string, erro
 		}
 
 		// We have real data
-		value, l, err := cellData(data, pos, tm.Types[c], tm.Metadata[c])
+		value, l, err := CellValue(data, pos, tm.Types[c], tm.Metadata[c], querypb.Type_UINT64)
 		if err != nil {
 			return nil, err
 		}
-		result = append(result, value)
+		result = append(result, value.String())
 		pos += l
 		valueIndex++
 	}
@@ -905,6 +964,7 @@ func (rs *Rows) StringValuesForTests(tm *TableMap, rowIndex int) ([]string, erro
 // StringIdentifiesForTests is a helper method to return the string
 // identify of all columns in a row in a Row. Only use it in tests, as the
 // returned values cannot be interpreted correctly without the schema.
+// We assume everything is unsigned in this method.
 func (rs *Rows) StringIdentifiesForTests(tm *TableMap, rowIndex int) ([]string, error) {
 	var result []string
 
@@ -924,11 +984,11 @@ func (rs *Rows) StringIdentifiesForTests(tm *TableMap, rowIndex int) ([]string, 
 		}
 
 		// We have real data
-		value, l, err := cellData(data, pos, tm.Types[c], tm.Metadata[c])
+		value, l, err := CellValue(data, pos, tm.Types[c], tm.Metadata[c], querypb.Type_UINT64)
 		if err != nil {
 			return nil, err
 		}
-		result = append(result, value)
+		result = append(result, value.String())
 		pos += l
 		valueIndex++
 	}
