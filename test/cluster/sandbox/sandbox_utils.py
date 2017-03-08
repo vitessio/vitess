@@ -5,26 +5,6 @@ import os
 import random
 
 
-def fix_shard_name(shard_name):
-  """Kubernetes doesn't allow '-' in the beginning or end of attributes.
-
-  Instead, replace them with an x.
-
-  Example: -80 becomes x80, 80- becomes 80x.
-
-  Args:
-    shard_name: string, A standard shard name (like -80).
-
-  Returns:
-    A fixed shard name suitable for kubernetes (string).
-  """
-  if shard_name.startswith('-'):
-    return 'x%s' % shard_name[1:]
-  if shard_name.endswith('-'):
-    return '%sx' % shard_name[:-1]
-  return shard_name
-
-
 def create_log_file(log_dir, filename):
   """Create a log file.
 
