@@ -186,7 +186,7 @@ class TestWorker(object):
     self.worker_thread.daemon = True
 
   def worker_loop(self):
-    # Run forever, executing tests as they are added to the queue
+    # Run forever, executing tests as they are added to the queue.
     while True:
       item = self.test_queue.get()
       run_test_config(item)
