@@ -141,9 +141,23 @@ def process_config(config):
                        cluster_setup['keyfile'])
           subprocess.call(gcloud_args)
           if 'project_name' in cluster_setup:
+            logging.info('Setting gcloud project to %s',
+                         cluster_setup['project_name'])
             subprocess.call(
                 ['gcloud', 'config', 'set', 'project',
                  cluster_setup['project_name']])
+          else:
+            config = subprocess.check_output(
+                ['gcloud', 'config', 'list', '--format', 'json'])
+            project_name = json.loads(config)['core']['project']
+            if not project_name:
+              projects = subprocess.check_output(
+                  ['gcloud', 'projects', 'list'])
+              first_project = projects[0]['projectId']
+              logging.info('gcloud project is unset, setting it to %s',
+                           first_project)
+              subprocess.check_output(
+                  ['gcloud', 'config', 'set', 'project', first_project])
           os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = (
               cluster_setup['keyfile'])
     if 'dependencies' in install_config:
