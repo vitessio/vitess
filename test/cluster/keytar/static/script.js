@@ -29,7 +29,7 @@ $(document).ready(function() {
     });
     html += "</tbody></table>";
     resultsElement.append(html);
-  }
+  };
 
   // Poll every second.
   var fetchTestResults = function() {

@@ -43,7 +43,7 @@ class TestKeytarWeb(unittest.TestCase):
     cls.driver = create_webdriver()
     cls.flask_process = subprocess.Popen(
         ['./keytar.py', '--config_file=test_config.yaml',
-         '--port=8080', '--key=foo'],
+         '--port=8080', '--password=foo'],
         preexec_fn=os.setsid)
 
   @classmethod
@@ -63,7 +63,7 @@ class TestKeytarWeb(unittest.TestCase):
 
   def test_keytar_web(self):
     self.driver.get('http://localhost:8080')
-    req = urllib2.Request('http://localhost:8080/test_request?key=foo')
+    req = urllib2.Request('http://localhost:8080/test_request?password=foo')
     req.add_header('Content-Type', 'application/json')
     urllib2.urlopen(
         req, json.dumps({'repository': {'repo_name': 'test/image'}}))
