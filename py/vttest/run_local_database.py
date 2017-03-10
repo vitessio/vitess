@@ -34,17 +34,16 @@ import optparse
 import os
 import sys
 
-from vtdb import prefer_vtroot_imports  # pylint: disable=unused-import
 
 from google.protobuf import text_format
 
+from vtproto import vttest_pb2
+from vtdb import prefer_vtroot_imports  # pylint: disable=unused-import
 from vttest import environment
+from vttest import init_data_options
 from vttest import local_database
 from vttest import mysql_flavor
-from vttest import init_data_options
 from vttest import sharding_utils
-
-from vtproto import vttest_pb2
 
 
 def main(cmdline_options):
@@ -96,7 +95,9 @@ def main(cmdline_options):
       web_dir=cmdline_options.web_dir,
       web_dir2=cmdline_options.web_dir2,
       default_schema_dir=cmdline_options.default_schema_dir,
-      extra_my_cnf=extra_my_cnf) as local_db:
+      extra_my_cnf=extra_my_cnf,
+      charset=cmdline_options.charset,
+      snapshot_file=cmdline_options.snapshot_file) as local_db:
     print json.dumps(local_db.config())
     sys.stdout.flush()
     try:
@@ -186,6 +187,9 @@ if __name__ == '__main__':
                     help='Replica tablets per shard (includes master)')
   parser.add_option('--rdonly_count', type='int', default=1,
                     help='Rdonly tablets per shard')
+  parser.add_option('--charset', default='utf8', help='MySQL charset')
+  parser.add_option(
+      '--snapshot_file', default=None, help='A MySQL DB snapshot file')
   (options, args) = parser.parse_args()
   if options.verbose:
     logging.getLogger().setLevel(logging.DEBUG)
