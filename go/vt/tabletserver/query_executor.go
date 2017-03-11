@@ -35,7 +35,7 @@ type QueryExecutor struct {
 	query         string
 	bindVars      map[string]interface{}
 	transactionID int64
-	plan          *ExecPlan
+	plan          *TabletPlan
 	ctx           context.Context
 	logStats      *tabletenv.LogStats
 	tsv           *TabletServer
@@ -56,7 +56,7 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 	defer func(start time.Time) {
 		duration := time.Now().Sub(start)
 		tabletenv.QueryStats.Add(planName, duration)
-		tabletenv.RecordUserQuery(qre.ctx, qre.plan.TableName, "Execute", int64(duration))
+		tabletenv.RecordUserQuery(qre.ctx, qre.plan.TableName(), "Execute", int64(duration))
 
 		if reply == nil {
 			qre.plan.AddStats(1, duration, qre.logStats.MysqlResponseTime, 0, 1)
@@ -142,7 +142,7 @@ func (qre *QueryExecutor) Stream(includedFields querypb.ExecuteOptions_IncludedF
 
 	defer func(start time.Time) {
 		tabletenv.QueryStats.Record(qre.plan.PlanID.String(), start)
-		tabletenv.RecordUserQuery(qre.ctx, qre.plan.TableName, "Stream", int64(time.Now().Sub(start)))
+		tabletenv.RecordUserQuery(qre.ctx, qre.plan.TableName(), "Stream", int64(time.Now().Sub(start)))
 	}(time.Now())
 
 	if err := qre.checkPermissions(); err != nil {
@@ -257,7 +257,7 @@ func (qre *QueryExecutor) checkPermissions() error {
 	}
 
 	// empty table name, do not need a table ACL check.
-	if qre.plan.TableName.IsEmpty() {
+	if qre.plan.TableName().IsEmpty() {
 		return nil
 	}
 
@@ -265,7 +265,7 @@ func (qre *QueryExecutor) checkPermissions() error {
 		return vterrors.Errorf(vtrpcpb.Code_PERMISSION_DENIED, "table acl error: nil acl")
 	}
 	tableACLStatsKey := []string{
-		qre.plan.TableName.String(),
+		qre.plan.TableName().String(),
 		qre.plan.Authorized.GroupName,
 		qre.plan.PlanID.String(),
 		callerID.Username,
@@ -278,7 +278,7 @@ func (qre *QueryExecutor) checkPermissions() error {
 		}
 		// raise error if in strictTableAcl mode, else just log an error.
 		if qre.tsv.qe.strictTableACL {
-			errStr := fmt.Sprintf("table acl error: %q cannot run %v on table %q", callerID.Username, qre.plan.PlanID, qre.plan.TableName)
+			errStr := fmt.Sprintf("table acl error: %q cannot run %v on table %q", callerID.Username, qre.plan.PlanID, qre.plan.TableName())
 			tabletenv.TableaclDenied.Add(tableACLStatsKey, 1)
 			qre.tsv.qe.accessCheckerLogger.Infof("%s", errStr)
 			return vterrors.Errorf(vtrpcpb.Code_PERMISSION_DENIED, "%s", errStr)
@@ -330,8 +330,9 @@ func (qre *QueryExecutor) execNextval() (*sqltypes.Result, error) {
 	if err != nil {
 		return nil, err
 	}
+	tableName := qre.plan.TableName()
 	if inc < 1 {
-		return nil, fmt.Errorf("invalid increment for sequence %s: %d", qre.plan.TableName, inc)
+		return nil, fmt.Errorf("invalid increment for sequence %s: %d", tableName, inc)
 	}
 
 	t := qre.plan.Table
@@ -339,17 +340,17 @@ func (qre *QueryExecutor) execNextval() (*sqltypes.Result, error) {
 	defer t.SequenceInfo.Unlock()
 	if t.SequenceInfo.NextVal == 0 || t.SequenceInfo.NextVal+inc > t.SequenceInfo.LastVal {
 		_, err := qre.execAsTransaction(func(conn *TxConnection) (*sqltypes.Result, error) {
-			query := fmt.Sprintf("select next_id, cache from %s where id = 0 for update", sqlparser.String(qre.plan.TableName))
+			query := fmt.Sprintf("select next_id, cache from %s where id = 0 for update", sqlparser.String(tableName))
 			qr, err := qre.execSQL(conn, query, false)
 			if err != nil {
 				return nil, err
 			}
 			if len(qr.Rows) != 1 {
-				return nil, fmt.Errorf("unexpected rows from reading sequence %s (possible mis-route): %d", qre.plan.TableName, len(qr.Rows))
+				return nil, fmt.Errorf("unexpected rows from reading sequence %s (possible mis-route): %d", tableName, len(qr.Rows))
 			}
 			nextID, err := qr.Rows[0][0].ParseInt64()
 			if err != nil {
-				return nil, fmt.Errorf("error loading sequence %s: %v", qre.plan.TableName, err)
+				return nil, fmt.Errorf("error loading sequence %s: %v", tableName, err)
 			}
 			// Initialize SequenceInfo.NextVal if it wasn't already.
 			if t.SequenceInfo.NextVal == 0 {
@@ -357,16 +358,16 @@ func (qre *QueryExecutor) execNextval() (*sqltypes.Result, error) {
 			}
 			cache, err := qr.Rows[0][1].ParseInt64()
 			if err != nil {
-				return nil, fmt.Errorf("error loading sequence %s: %v", qre.plan.TableName, err)
+				return nil, fmt.Errorf("error loading sequence %s: %v", tableName, err)
 			}
 			if cache < 1 {
-				return nil, fmt.Errorf("invalid cache value for sequence %s: %d", qre.plan.TableName, cache)
+				return nil, fmt.Errorf("invalid cache value for sequence %s: %d", tableName, cache)
 			}
 			newLast := nextID + cache
 			for newLast <= t.SequenceInfo.NextVal+inc {
 				newLast += cache
 			}
-			query = fmt.Sprintf("update %s set next_id = %d where id = 0", sqlparser.String(qre.plan.TableName), newLast)
+			query = fmt.Sprintf("update %s set next_id = %d where id = 0", sqlparser.String(tableName), newLast)
 			conn.RecordQuery(query)
 			_, err = qre.execSQL(conn, query, false)
 			if err != nil {

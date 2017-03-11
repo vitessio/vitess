@@ -105,9 +105,13 @@ func TestConfigVars(t *testing.T) {
 }
 
 func TestPoolSize(t *testing.T) {
-	vstart := framework.DebugVars()
 	defer framework.Server.SetPoolSize(framework.Server.PoolSize())
 	framework.Server.SetPoolSize(1)
+
+	vstart := framework.DebugVars()
+	if err := verifyIntValue(vstart, "ConnPoolCapacity", 1); err != nil {
+		t.Error(err)
+	}
 
 	var wg sync.WaitGroup
 	wg.Add(2)
@@ -122,12 +126,14 @@ func TestPoolSize(t *testing.T) {
 	}()
 	wg.Wait()
 
-	vend := framework.DebugVars()
-	if err := verifyIntValue(vend, "ConnPoolCapacity", 1); err != nil {
-		t.Error(err)
-	}
-	if err := compareIntDiff(vend, "ConnPoolWaitCount", vstart, 1); err != nil {
-		t.Error(err)
+	// Parallel plan building can cause multiple conn pool waits.
+	// Check that the wait count was at least incremented once so
+	// we know it's working.
+	tag := "ConnPoolWaitCount"
+	got := framework.FetchInt(framework.DebugVars(), tag)
+	want := framework.FetchInt(vstart, tag)
+	if got <= want {
+		t.Errorf("%s: %d, must be greater than %d", tag, got, want)
 	}
 }
 

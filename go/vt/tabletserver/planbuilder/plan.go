@@ -179,97 +179,100 @@ type MessageRowValues struct {
 
 //_______________________________________________
 
-// ExecPlan is built for selects and DMLs.
-// PK Values values within ExecPlan can be:
-// sqltypes.Value: sourced form the query, or
-// string: bind variable name starting with ':', or
-// nil if no value was specified
-type ExecPlan struct {
-	PlanID    PlanType
-	Reason    ReasonType           `json:",omitempty"`
-	TableName sqlparser.TableIdent `json:",omitempty"`
+// Plan is built for selects and DMLs.
+type Plan struct {
+	PlanID PlanType
+	Reason ReasonType
+	Table  *schema.Table
 
 	// FieldQuery is used to fetch field info
-	FieldQuery *sqlparser.ParsedQuery `json:",omitempty"`
+	FieldQuery *sqlparser.ParsedQuery
 
 	// FullQuery will be set for all plans.
-	FullQuery *sqlparser.ParsedQuery `json:",omitempty"`
+	FullQuery *sqlparser.ParsedQuery
 
 	// For PK plans, only OuterQuery is set.
 	// For SUBQUERY plans, Subquery is also set.
-	OuterQuery  *sqlparser.ParsedQuery `json:",omitempty"`
-	Subquery    *sqlparser.ParsedQuery `json:",omitempty"`
-	UpsertQuery *sqlparser.ParsedQuery `json:",omitempty"`
+	OuterQuery  *sqlparser.ParsedQuery
+	Subquery    *sqlparser.ParsedQuery
+	UpsertQuery *sqlparser.ParsedQuery
 
 	// PlanInsertSubquery: columns to be inserted.
-	ColumnNumbers []int `json:",omitempty"`
+	ColumnNumbers []int
 
+	// PKValues is an sqltypes.Value if it's sourced
+	// from the query. If it's a bind var then it's
+	// a string including the ':' prefix(es).
 	// PlanDMLPK: where clause values.
 	// PlanInsertPK: values clause.
 	// PlanNextVal: increment.
-	PKValues []interface{} `json:",omitempty"`
+	PKValues []interface{}
 
 	// For update: set clause if pk is changing.
-	SecondaryPKValues []interface{} `json:",omitempty"`
+	SecondaryPKValues []interface{}
 
 	// For PlanInsertSubquery: pk columns in the subquery result.
-	SubqueryPKColumns []int `json:",omitempty"`
+	SubqueryPKColumns []int
 
 	// For PlanInsertMessage. Query used to reload inserted messages.
-	MessageReloaderQuery *sqlparser.ParsedQuery `json:",omitempty"`
+	MessageReloaderQuery *sqlparser.ParsedQuery
 }
 
-func (plan *ExecPlan) setTable(tableName sqlparser.TableIdent, getTable TableGetter) (*schema.Table, error) {
-	table, ok := getTable(tableName)
-	if !ok {
+// TableName returns the table name for the plan.
+func (plan *Plan) TableName() sqlparser.TableIdent {
+	var tableName sqlparser.TableIdent
+	if plan.Table != nil {
+		tableName = plan.Table.Name
+	}
+	return tableName
+}
+
+func (plan *Plan) setTable(tableName sqlparser.TableIdent, tables map[string]*schema.Table) (*schema.Table, error) {
+	if plan.Table = tables[tableName.String()]; plan.Table == nil {
 		return nil, fmt.Errorf("table %s not found in schema", tableName)
 	}
-	plan.TableName = table.Name
-	return table, nil
+	return plan.Table, nil
 }
 
-// TableGetter returns a schema.Table given the table name.
-type TableGetter func(tableName sqlparser.TableIdent) (*schema.Table, bool)
-
-// GetExecPlan generates a ExecPlan given a sql query and a TableGetter.
-func GetExecPlan(sql string, getTable TableGetter) (plan *ExecPlan, err error) {
+// Build builds a plan based on the schema.
+func Build(sql string, tables map[string]*schema.Table) (plan *Plan, err error) {
 	statement, err := sqlparser.Parse(sql)
 	if err != nil {
 		return nil, err
 	}
 	switch stmt := statement.(type) {
 	case *sqlparser.Union:
-		return &ExecPlan{
+		return &Plan{
 			PlanID:     PlanPassSelect,
 			FieldQuery: GenerateFieldQuery(stmt),
 			FullQuery:  GenerateFullQuery(stmt),
 		}, nil
 	case *sqlparser.Select:
-		return analyzeSelect(stmt, getTable)
+		return analyzeSelect(stmt, tables)
 	case *sqlparser.Insert:
-		return analyzeInsert(stmt, getTable)
+		return analyzeInsert(stmt, tables)
 	case *sqlparser.Update:
-		return analyzeUpdate(stmt, getTable)
+		return analyzeUpdate(stmt, tables)
 	case *sqlparser.Delete:
-		return analyzeDelete(stmt, getTable)
+		return analyzeDelete(stmt, tables)
 	case *sqlparser.Set:
 		return analyzeSet(stmt), nil
 	case *sqlparser.DDL:
-		return analyzeDDL(stmt, getTable), nil
+		return analyzeDDL(stmt, tables), nil
 	case *sqlparser.Other:
-		return &ExecPlan{PlanID: PlanOther}, nil
+		return &Plan{PlanID: PlanOther}, nil
 	}
 	return nil, errors.New("invalid SQL")
 }
 
-// GetStreamExecPlan generates a ExecPlan given a sql query and a TableGetter.
-func GetStreamExecPlan(sql string, getTable TableGetter) (plan *ExecPlan, err error) {
+// BuildStreaming builds a streaming plan based on the schema.
+func BuildStreaming(sql string, tables map[string]*schema.Table) (plan *Plan, err error) {
 	statement, err := sqlparser.Parse(sql)
 	if err != nil {
 		return nil, err
 	}
 
-	plan = &ExecPlan{
+	plan = &Plan{
 		PlanID:    PlanSelectStream,
 		FullQuery: GenerateFullQuery(statement),
 	}
@@ -280,7 +283,7 @@ func GetStreamExecPlan(sql string, getTable TableGetter) (plan *ExecPlan, err er
 			return nil, errors.New("select with lock not allowed for streaming")
 		}
 		if tableName := analyzeFrom(stmt.From); !tableName.IsEmpty() {
-			plan.setTable(tableName, getTable)
+			plan.setTable(tableName, tables)
 		}
 	case *sqlparser.Union:
 		// pass

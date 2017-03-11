@@ -39,11 +39,10 @@ import (
 
 //_______________________________________________
 
-// ExecPlan wraps the planbuilder's exec plan to enforce additional rules
+// TabletPlan wraps the planbuilder's exec plan to enforce additional rules
 // and track stats.
-type ExecPlan struct {
-	*planbuilder.ExecPlan
-	Table      *schema.Table
+type TabletPlan struct {
+	*planbuilder.Plan
 	Fields     []*querypb.Field
 	Rules      *QueryRules
 	Authorized *tableacl.ACLResult
@@ -56,13 +55,13 @@ type ExecPlan struct {
 	ErrorCount int64
 }
 
-// Size allows ExecPlan to be in cache.LRUCache.
-func (*ExecPlan) Size() int {
+// Size allows TabletPlan to be in cache.LRUCache.
+func (*TabletPlan) Size() int {
 	return 1
 }
 
-// AddStats updates the stats for the current ExecPlan.
-func (ep *ExecPlan) AddStats(queryCount int64, duration, mysqlTime time.Duration, rowCount, errorCount int64) {
+// AddStats updates the stats for the current TabletPlan.
+func (ep *TabletPlan) AddStats(queryCount int64, duration, mysqlTime time.Duration, rowCount, errorCount int64) {
 	ep.mu.Lock()
 	ep.QueryCount += queryCount
 	ep.Time += duration
@@ -72,8 +71,8 @@ func (ep *ExecPlan) AddStats(queryCount int64, duration, mysqlTime time.Duration
 	ep.mu.Unlock()
 }
 
-// Stats returns the current stats of ExecPlan.
-func (ep *ExecPlan) Stats() (queryCount int64, duration, mysqlTime time.Duration, rowCount, errorCount int64) {
+// Stats returns the current stats of TabletPlan.
+func (ep *TabletPlan) Stats() (queryCount int64, duration, mysqlTime time.Duration, rowCount, errorCount int64) {
 	ep.mu.Lock()
 	queryCount = ep.QueryCount
 	duration = ep.Time
@@ -98,7 +97,7 @@ type QueryEngine struct {
 	dbconfigs dbconfigs.DBConfigs
 
 	// mu protects the following fields.
-	mu               sync.Mutex
+	mu               sync.RWMutex
 	tables           map[string]*schema.Table
 	queries          *cache.LRUCache
 	queryRuleSources *QueryRuleInfo
@@ -237,47 +236,32 @@ func (qe *QueryEngine) Close() {
 	qe.conns.Close()
 }
 
-// GetPlan returns the ExecPlan that for the query. Plans are cached in a cache.LRUCache.
-func (qe *QueryEngine) GetPlan(ctx context.Context, logStats *tabletenv.LogStats, sql string) (*ExecPlan, error) {
+// GetPlan returns the TabletPlan that for the query. Plans are cached in a cache.LRUCache.
+func (qe *QueryEngine) GetPlan(ctx context.Context, logStats *tabletenv.LogStats, sql string) (*TabletPlan, error) {
 	span := trace.NewSpanFromContext(ctx)
 	span.StartLocal("QueryEngine.GetPlan")
 	defer span.Finish()
 
-	// Fastpath if plan already exists.
 	if plan := qe.getQuery(sql); plan != nil {
 		return plan, nil
 	}
 
-	// TODO(sougou): It's not correct to hold this lock here because the code
-	// below runs queries against MySQL. But if we don't hold the lock, there
-	// are other race conditions where identical queries will end up building
-	// plans and compete with populating the query cache. In other words, we
-	// need a more elaborate scheme that blocks less, but still prevents these
-	// race conditions.
-	qe.mu.Lock()
-	defer qe.mu.Unlock()
-	// Recheck. A plan might have been built by someone elqe.
-	if plan := qe.getQuery(sql); plan != nil {
-		return plan, nil
-	}
-
-	var table *schema.Table
-	GetTable := func(tableName sqlparser.TableIdent) (*schema.Table, bool) {
-		var ok bool
-		table, ok = qe.tables[tableName.String()]
-		if !ok {
-			return nil, false
-		}
-		return table, true
-	}
-	splan, err := planbuilder.GetExecPlan(sql, GetTable)
+	// Obtain read lock to prevent schema from changing while
+	// we build a plan. The read lock allows multiple identical
+	// queries to build the same plan. One of them will win by
+	// updating the query cache and prevent future races. Due to
+	// this, query stats reporting may not be accurate, but it's
+	// acceptable because those numbers are best effort.
+	qe.mu.RLock()
+	defer qe.mu.RUnlock()
+	splan, err := planbuilder.Build(sql, qe.tables)
 	if err != nil {
-		// TODO(sougou): Inspect to see if GetExecPlan can return coded error.
+		// TODO(sougou): Inspect to see if Build can return coded error.
 		return nil, vterrors.New(vtrpcpb.Code_UNKNOWN, err.Error())
 	}
-	plan := &ExecPlan{ExecPlan: splan, Table: table}
-	plan.Rules = qe.queryRuleSources.filterByPlan(sql, plan.PlanID, plan.TableName.String())
-	plan.Authorized = tableacl.Authorized(plan.TableName.String(), plan.PlanID.MinRole())
+	plan := &TabletPlan{Plan: splan}
+	plan.Rules = qe.queryRuleSources.filterByPlan(sql, plan.PlanID, plan.TableName().String())
+	plan.Authorized = tableacl.Authorized(plan.TableName().String(), plan.PlanID.MinRole())
 	if plan.PlanID.IsSelect() {
 		if plan.FieldQuery == nil {
 			log.Warningf("Cannot cache field info: %s", sql)
@@ -306,25 +290,17 @@ func (qe *QueryEngine) GetPlan(ctx context.Context, logStats *tabletenv.LogStats
 
 // GetStreamPlan is similar to GetPlan, but doesn't use the cache
 // and doesn't enforce a limit. It just returns the parsed query.
-func (qe *QueryEngine) GetStreamPlan(sql string) (*ExecPlan, error) {
-	var table *schema.Table
-	GetTable := func(tableName sqlparser.TableIdent) (table *schema.Table, ok bool) {
-		qe.mu.Lock()
-		defer qe.mu.Unlock()
-		table, ok = qe.tables[tableName.String()]
-		if !ok {
-			return nil, false
-		}
-		return table, true
-	}
-	splan, err := planbuilder.GetStreamExecPlan(sql, GetTable)
+func (qe *QueryEngine) GetStreamPlan(sql string) (*TabletPlan, error) {
+	qe.mu.RLock()
+	defer qe.mu.RUnlock()
+	splan, err := planbuilder.BuildStreaming(sql, qe.tables)
 	if err != nil {
-		// TODO(sougou): Inspect to see if GetStreamExecPlan can return coded error.
+		// TODO(sougou): Inspect to see if BuildStreaming can return coded error.
 		return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, err.Error())
 	}
-	plan := &ExecPlan{ExecPlan: splan, Table: table}
-	plan.Rules = qe.queryRuleSources.filterByPlan(sql, plan.PlanID, plan.TableName.String())
-	plan.Authorized = tableacl.Authorized(plan.TableName.String(), plan.PlanID.MinRole())
+	plan := &TabletPlan{Plan: splan}
+	plan.Rules = qe.queryRuleSources.filterByPlan(sql, plan.PlanID, plan.TableName().String())
+	plan.Authorized = tableacl.Authorized(plan.TableName().String(), plan.PlanID.MinRole())
 	return plan, nil
 }
 
@@ -357,17 +333,17 @@ func (qe *QueryEngine) schemaChanged(tables map[string]*schema.Table, created, a
 }
 
 // getQuery fetches the plan and makes it the most recent.
-func (qe *QueryEngine) getQuery(sql string) *ExecPlan {
+func (qe *QueryEngine) getQuery(sql string) *TabletPlan {
 	if cacheResult, ok := qe.queries.Get(sql); ok {
-		return cacheResult.(*ExecPlan)
+		return cacheResult.(*TabletPlan)
 	}
 	return nil
 }
 
 // peekQuery fetches the plan without changing the LRU order.
-func (qe *QueryEngine) peekQuery(sql string) *ExecPlan {
+func (qe *QueryEngine) peekQuery(sql string) *TabletPlan {
 	if cacheResult, ok := qe.queries.Peek(sql); ok {
-		return cacheResult.(*ExecPlan)
+		return cacheResult.(*TabletPlan)
 	}
 	return nil
 }
@@ -386,7 +362,7 @@ func (qe *QueryEngine) QueryCacheCap() int {
 }
 
 func (qe *QueryEngine) getQueryCount() map[string]int64 {
-	f := func(plan *ExecPlan) int64 {
+	f := func(plan *TabletPlan) int64 {
 		queryCount, _, _, _, _ := plan.Stats()
 		return queryCount
 	}
@@ -394,7 +370,7 @@ func (qe *QueryEngine) getQueryCount() map[string]int64 {
 }
 
 func (qe *QueryEngine) getQueryTime() map[string]int64 {
-	f := func(plan *ExecPlan) int64 {
+	f := func(plan *TabletPlan) int64 {
 		_, time, _, _, _ := plan.Stats()
 		return int64(time)
 	}
@@ -402,7 +378,7 @@ func (qe *QueryEngine) getQueryTime() map[string]int64 {
 }
 
 func (qe *QueryEngine) getQueryRowCount() map[string]int64 {
-	f := func(plan *ExecPlan) int64 {
+	f := func(plan *TabletPlan) int64 {
 		_, _, _, rowCount, _ := plan.Stats()
 		return rowCount
 	}
@@ -410,21 +386,21 @@ func (qe *QueryEngine) getQueryRowCount() map[string]int64 {
 }
 
 func (qe *QueryEngine) getQueryErrorCount() map[string]int64 {
-	f := func(plan *ExecPlan) int64 {
+	f := func(plan *TabletPlan) int64 {
 		_, _, _, _, errorCount := plan.Stats()
 		return errorCount
 	}
 	return qe.getQueryStats(f)
 }
 
-type queryStatsFunc func(*ExecPlan) int64
+type queryStatsFunc func(*TabletPlan) int64
 
 func (qe *QueryEngine) getQueryStats(f queryStatsFunc) map[string]int64 {
 	keys := qe.queries.Keys()
 	qstats := make(map[string]int64)
 	for _, v := range keys {
 		if plan := qe.peekQuery(v); plan != nil {
-			table := plan.TableName
+			table := plan.TableName()
 			if table.IsEmpty() {
 				table = sqlparser.NewTableIdent("Join")
 			}
@@ -471,7 +447,7 @@ func (qe *QueryEngine) handleHTTPQueryPlans(response http.ResponseWriter, reques
 	for _, v := range keys {
 		response.Write([]byte(fmt.Sprintf("%#v\n", v)))
 		if plan := qe.peekQuery(v); plan != nil {
-			if b, err := json.MarshalIndent(plan.ExecPlan, "", "  "); err != nil {
+			if b, err := json.MarshalIndent(plan.Plan, "", "  "); err != nil {
 				response.Write([]byte(err.Error()))
 			} else {
 				response.Write(b)
@@ -489,7 +465,7 @@ func (qe *QueryEngine) handleHTTPQueryStats(response http.ResponseWriter, reques
 		if plan := qe.peekQuery(v); plan != nil {
 			var pqstats perQueryStats
 			pqstats.Query = unicoded(v)
-			pqstats.Table = plan.TableName.String()
+			pqstats.Table = plan.TableName().String()
 			pqstats.Plan = plan.PlanID
 			pqstats.QueryCount, pqstats.Time, pqstats.MysqlTime, pqstats.RowCount, pqstats.ErrorCount = plan.Stats()
 			qstats = append(qstats, pqstats)
