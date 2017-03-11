@@ -26,22 +26,6 @@ import (
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
-func TestStrictMode(t *testing.T) {
-	db := fakesqldb.New(t)
-	defer db.Close()
-	for query, result := range schematest.Queries() {
-		db.AddQuery(query, result)
-	}
-	db.AddRejectedQuery("select @@global.sql_mode", errRejected)
-	se := newEngine(10, 1*time.Second, 1*time.Second, true)
-	t.Log(se)
-	err := se.Open(db.ConnParams())
-	want := "could not verify mode"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("se.Open: %v, must contain %s", err, want)
-	}
-}
-
 func TestOpenFailedDueToMissMySQLTime(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
