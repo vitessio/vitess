@@ -169,6 +169,8 @@ func metadataWrite(data []byte, pos int, typ byte, value uint16) int {
 	}
 }
 
+var dig2bytes = []int{0, 1, 1, 2, 2, 3, 3, 4, 4, 4}
+
 // cellLength returns the new position after the field with the given
 // type is read.
 func cellLength(data []byte, pos int, typ byte, metadata uint16) (int, error) {
@@ -226,6 +228,32 @@ func cellLength(data []byte, pos int, typ byte, metadata uint16) (int, error) {
 		l := int(uint64(data[pos]) |
 			uint64(data[pos+1])<<8)
 		return l + int(metadata), nil
+	case TypeNewDecimal:
+		precision := int(metadata >> 8)
+		scale := int(metadata & 0xff)
+		// Example:
+		//   NNNNNNNNNNNN.MMMMMM
+		//     12 bytes     6 bytes
+		// precision is 18
+		// scale is 6
+		// storage is done by groups of 9 digits:
+		// - 32 bits are used to store groups of 9 digits.
+		// - any leftover digit is stored in:
+		//   - 1 byte for 1 and 2 digits
+		//   - 2 bytes for 3 and 4 digits
+		//   - 3 bytes for 5 and 6 digits
+		//   - 4 bytes for 7 and 8 digits (would also work for 9)
+		// both sides of the dot are stored separately.
+		// In this example, we'd have:
+		// - 2 bytes to store the first 3 full digits.
+		// - 4 bytes to store the next 9 full digits.
+		// - 3 bytes to store the 6 fractional digits.
+		intg := precision - scale
+		intg0 := intg / 9
+		frac0 := scale / 9
+		intg0x := intg - intg0*9
+		frac0x := scale - frac0*9
+		return intg0*4 + dig2bytes[intg0x] + frac0*4 + dig2bytes[frac0x], nil
 	case TypeEnum, TypeSet:
 		return int(metadata & 0xff), nil
 	case TypeString:
@@ -523,6 +551,136 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, styp querypb.Typ
 			uint64(data[pos+1])<<8)
 		return sqltypes.MakeTrusted(querypb.Type_JSON,
 			data[pos+int(metadata):pos+int(metadata)+l]), l + int(metadata), nil
+
+	case TypeNewDecimal:
+		precision := int(metadata >> 8) // total digits number
+		scale := int(metadata & 0xff)   // number of fractional digits
+		intg := precision - scale       // number of full digits
+		intg0 := intg / 9               // number of 32-bits digits
+		intg0x := intg - intg0*9        // leftover full digits
+		frac0 := scale / 9              // number of 32 bits fractionals
+		frac0x := scale - frac0*9       // leftover fractionals
+
+		l := intg0*4 + dig2bytes[intg0x] + frac0*4 + dig2bytes[frac0x]
+
+		// Copy the data so we can change it. Otherwise
+		// decoding is just too hard.
+		d := make([]byte, l)
+		copy(d, data[pos:pos+l])
+
+		result := []byte{}
+		isNegative := (d[0] & 0x80) == 0
+		d[0] ^= 0x80 // First bit is inverted.
+		if isNegative {
+			// Negative numbers are just inverted bytes.
+			result = append(result, '-')
+			for i := range d {
+				d[i] ^= 0xff
+			}
+		}
+
+		// first we have the leftover full digits
+		var val uint32
+		switch dig2bytes[intg0x] {
+		case 0:
+			// nothing to do
+		case 1:
+			// one byte, up to two digits
+			val = uint32(d[0])
+		case 2:
+			// two bytes, up to 4 digits
+			val = uint32(d[0])<<8 +
+				uint32(d[1])
+		case 3:
+			// 3 bytes, up to 6 digits
+			val = uint32(d[0])<<16 +
+				uint32(d[1])<<8 +
+				uint32(d[2])
+		case 4:
+			// 4 bytes, up to 8 digits (9 digits would be a full)
+			val = uint32(d[0])<<24 +
+				uint32(d[1])<<16 +
+				uint32(d[2])<<8 +
+				uint32(d[3])
+		}
+		pos = dig2bytes[intg0x]
+		if val > 0 {
+			result = strconv.AppendUint(result, uint64(val), 10)
+		}
+
+		// now the full digits, 32 bits each, 9 digits
+		for i := 0; i < intg0; i++ {
+			val = binary.BigEndian.Uint32(d[pos : pos+4])
+			t := fmt.Sprintf("%9d", val)
+			result = append(result, []byte(t)...)
+			pos += 4
+		}
+
+		// now see if we have a fraction
+		if scale == 0 {
+			return sqltypes.MakeTrusted(querypb.Type_DECIMAL,
+				result), l, nil
+		}
+		result = append(result, '.')
+
+		// now the full fractional digits
+		for i := 0; i < frac0; i++ {
+			val = binary.BigEndian.Uint32(d[pos : pos+4])
+			t := fmt.Sprintf("%9d", val)
+			result = append(result, []byte(t)...)
+			pos += 4
+		}
+
+		// then the partial fractional digits
+		t := ""
+		switch dig2bytes[frac0x] {
+		case 0:
+			// Nothing to do
+			return sqltypes.MakeTrusted(querypb.Type_DECIMAL,
+				result), l, nil
+		case 1:
+			// one byte, 1 or 2 digits
+			val = uint32(d[pos])
+			if frac0x == 1 {
+				t = fmt.Sprintf("%1d", val)
+			} else {
+				t = fmt.Sprintf("%2d", val)
+			}
+		case 2:
+			// two bytes, 3 or 4 digits
+			val = uint32(d[pos])<<8 +
+				uint32(d[pos+1])
+			if frac0x == 3 {
+				t = fmt.Sprintf("%3d", val)
+			} else {
+				t = fmt.Sprintf("%4d", val)
+			}
+		case 3:
+			// 3 bytes, 5 or 6 digits
+			val = uint32(d[pos])<<16 +
+				uint32(d[pos+1])<<8 +
+				uint32(d[pos+2])
+			if frac0x == 5 {
+				t = fmt.Sprintf("%5d", val)
+			} else {
+				t = fmt.Sprintf("%6d", val)
+			}
+		case 4:
+			// 4 bytes, 7 or 8 digits (9 digits would be a full)
+			val = uint32(d[pos])<<24 +
+				uint32(d[pos+1])<<16 +
+				uint32(d[pos+2])<<8 +
+				uint32(d[pos+3])
+			if frac0x == 7 {
+				t = fmt.Sprintf("%7d", val)
+			} else {
+				t = fmt.Sprintf("%8d", val)
+			}
+		}
+		result = append(result, []byte(t)...)
+
+		return sqltypes.MakeTrusted(querypb.Type_DECIMAL,
+			result), l, nil
 
 	case TypeEnum:
 		switch metadata & 0xff {

@@ -412,6 +412,20 @@ func TestCellLengthAndData(t *testing.T) {
 		data:     []byte{0x01, 0x02, 0x03, 0x04, 0x05},
 		out: sqltypes.MakeTrusted(querypb.Type_VARCHAR,
 			[]byte{0x01, 0x02, 0x03, 0x04, 0x05}),
+	}, {
+		// See strings/decimal.c function decimal2bin for why these
+		// values are here.
+		typ:      TypeNewDecimal,
+		metadata: 14<<8 | 4,
+		data:     []byte{0x81, 0x0D, 0xFB, 0x38, 0xD2, 0x04, 0xD2},
+		out: sqltypes.MakeTrusted(querypb.Type_DECIMAL,
+			[]byte("1234567890.1234")),
+	}, {
+		typ:      TypeNewDecimal,
+		metadata: 14<<8 | 4,
+		data:     []byte{0x7E, 0xF2, 0x04, 0xC7, 0x2D, 0xFB, 0x2D},
+		out: sqltypes.MakeTrusted(querypb.Type_DECIMAL,
+			[]byte("-1234567890.1234")),
 	}}
 
 	for _, tcase := range testcases {
