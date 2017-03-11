@@ -80,7 +80,7 @@ func (ev binlogEvent) TableMap(f BinlogFormat) (*TableMap, error) {
 // metadataLength returns how many bytes are used for metadata, based on a type.
 func metadataLength(typ byte) int {
 	switch typ {
-	case TypeDecimal, TypeTiny, TypeShort, TypeLong, TypeNull, TypeTimestamp, TypeLongLong, TypeInt24, TypeDate, TypeTime, TypeDateTime, TypeYear, TypeNewDate, TypeVarString:
+	case TypeDecimal, TypeTiny, TypeShort, TypeLong, TypeNull, TypeTimestamp, TypeLongLong, TypeInt24, TypeDate, TypeTime, TypeDateTime, TypeYear, TypeNewDate:
 		// No data here.
 		return 0
 
@@ -92,7 +92,7 @@ func metadataLength(typ byte) int {
 		// Two bytes, Big Endian because of crazy encoding.
 		return 2
 
-	case TypeVarchar, TypeBit:
+	case TypeVarchar, TypeBit, TypeVarString:
 		// Two bytes, Little Endian
 		return 2
 
@@ -116,7 +116,7 @@ func metadataTotalLength(types []byte) int {
 func metadataRead(data []byte, pos int, typ byte) (uint16, int, error) {
 	switch typ {
 
-	case TypeDecimal, TypeTiny, TypeShort, TypeLong, TypeNull, TypeTimestamp, TypeLongLong, TypeInt24, TypeDate, TypeTime, TypeDateTime, TypeYear, TypeNewDate, TypeVarString:
+	case TypeDecimal, TypeTiny, TypeShort, TypeLong, TypeNull, TypeTimestamp, TypeLongLong, TypeInt24, TypeDate, TypeTime, TypeDateTime, TypeYear, TypeNewDate:
 		// No data here.
 		return 0, pos, nil
 
@@ -128,7 +128,7 @@ func metadataRead(data []byte, pos int, typ byte) (uint16, int, error) {
 		// Two bytes, Big Endian because of crazy encoding.
 		return uint16(data[pos])<<8 + uint16(data[pos+1]), pos + 2, nil
 
-	case TypeVarchar, TypeBit:
+	case TypeVarchar, TypeBit, TypeVarString:
 		// Two bytes, Little Endian
 		return uint16(data[pos]) + uint16(data[pos+1])<<8, pos + 2, nil
 
@@ -142,7 +142,7 @@ func metadataRead(data []byte, pos int, typ byte) (uint16, int, error) {
 func metadataWrite(data []byte, pos int, typ byte, value uint16) int {
 	switch typ {
 
-	case TypeDecimal, TypeTiny, TypeShort, TypeLong, TypeNull, TypeTimestamp, TypeLongLong, TypeInt24, TypeDate, TypeTime, TypeDateTime, TypeYear, TypeNewDate, TypeVarString:
+	case TypeDecimal, TypeTiny, TypeShort, TypeLong, TypeNull, TypeTimestamp, TypeLongLong, TypeInt24, TypeDate, TypeTime, TypeDateTime, TypeYear, TypeNewDate:
 		// No data here.
 		return pos
 
@@ -157,7 +157,7 @@ func metadataWrite(data []byte, pos int, typ byte, value uint16) int {
 		data[pos+1] = byte(value)
 		return pos + 2
 
-	case TypeVarchar, TypeBit:
+	case TypeVarchar, TypeBit, TypeVarString:
 		// Two bytes, Little Endian
 		data[pos] = byte(value)
 		data[pos+1] = byte(value >> 8)
@@ -193,7 +193,7 @@ func cellLength(data []byte, pos int, typ byte, metadata uint16) (int, error) {
 		return 4, nil
 	case TypeDateTime:
 		return 8, nil
-	case TypeVarchar:
+	case TypeVarchar, TypeVarString:
 		// Length is encoded in 1 or 2 bytes.
 		if metadata > 255 {
 			l := int(uint64(data[pos]) |
@@ -256,17 +256,50 @@ func cellLength(data []byte, pos int, typ byte, metadata uint16) (int, error) {
 		return intg0*4 + dig2bytes[intg0x] + frac0*4 + dig2bytes[frac0x], nil
 	case TypeEnum, TypeSet:
 		return int(metadata & 0xff), nil
+	case TypeTinyBlob, TypeMediumBlob, TypeLongBlob, TypeBlob:
+		// Only TypeBlob is used in binary logs,
+		// but supports others just in case.
+		switch metadata {
+		case 1:
+			return 1 + int(uint32(data[pos])), nil
+		case 2:
+			return 2 + int(uint32(data[pos])|
+				uint32(data[pos+1])<<8), nil
+		case 3:
+			return 3 + int(uint32(data[pos])|
+				uint32(data[pos+1])<<8|
+				uint32(data[pos+2])<<16), nil
+		case 4:
+			return 4 + int(uint32(data[pos])|
+				uint32(data[pos+1])<<8|
+				uint32(data[pos+2])<<16|
+				uint32(data[pos+3])<<24), nil
+		default:
+			return 0, fmt.Errorf("unsupported blob metadata value %v (data: %v pos: %v)", metadata, data, pos)
+		}
 	case TypeString:
 		// This may do String, Enum, and Set. The type is in
 		// metadata. If it's a string, then there will be more bits.
+		// This will give us the maximum length of the field.
+		max := 0
 		t := metadata >> 8
 		if t == TypeEnum || t == TypeSet {
-			return int(metadata & 0xff), nil
+			max = int(metadata & 0xff)
+		} else {
+			max = int((((metadata >> 4) & 0x300) ^ 0x300) + (metadata & 0xff))
 		}
-		return int((((metadata >> 4) & 0x300) ^ 0x300) + (metadata & 0xff)), nil
+
+		// Length is encoded in 1 or 2 bytes.
+		if max > 255 {
+			l := int(uint64(data[pos]) |
+				uint64(data[pos+1])<<8)
+			return l + 2, nil
+		}
+		l := int(data[pos])
+		return l + 1, nil
 
 	default:
-		return 0, fmt.Errorf("Unsupported type %v (data: %v pos: %v)", typ, data, pos)
+		return 0, fmt.Errorf("unsupported type %v (data: %v pos: %v)", typ, data, pos)
 	}
 }
 
@@ -367,7 +400,7 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, styp querypb.Typ
 		second := t % 100
 		return sqltypes.MakeTrusted(querypb.Type_DATETIME,
 			[]byte(fmt.Sprintf("%04d-%02d-%02d %02d:%02d:%02d", year, month, day, hour, minute, second))), 8, nil
-	case TypeVarchar:
+	case TypeVarchar, TypeVarString:
 		// Length is encoded in 1 or 2 bytes.
 		if metadata > 255 {
 			l := int(uint64(data[pos]) |
@@ -702,6 +735,32 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, styp querypb.Typ
 		return sqltypes.MakeTrusted(querypb.Type_SET,
 			data[pos:pos+l]), l, nil
 
+	case TypeTinyBlob, TypeMediumBlob, TypeLongBlob, TypeBlob:
+		// Only TypeBlob is used in binary logs,
+		// but supports others just in case.
+		l := 0
+		switch metadata {
+		case 1:
+			l = int(uint32(data[pos]))
+		case 2:
+			l = int(uint32(data[pos]) |
+				uint32(data[pos+1])<<8)
+		case 3:
+			l = int(uint32(data[pos]) |
+				uint32(data[pos+1])<<8 |
+				uint32(data[pos+2])<<16)
+		case 4:
+			l = int(uint32(data[pos]) |
+				uint32(data[pos+1])<<8 |
+				uint32(data[pos+2])<<16 |
+				uint32(data[pos+3])<<24)
+		default:
+			return sqltypes.NULL, 0, fmt.Errorf("unsupported blob metadata value %v (data: %v pos: %v)", metadata, data, pos)
+		}
+		pos += int(metadata)
+		return sqltypes.MakeTrusted(querypb.Type_VARBINARY,
+			data[pos:pos+l]), l + int(metadata), nil
+
 	case TypeString:
 		// This may do String, Enum, and Set. The type is in
 		// metadata. If it's a string, then there will be more bits.
@@ -727,10 +786,17 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, styp querypb.Typ
 				data[pos:pos+l]), l, nil
 		}
 		// This is a real string. The length is weird.
-		l := int((((metadata >> 4) & 0x300) ^ 0x300) + (metadata & 0xff))
+		max := int((((metadata >> 4) & 0x300) ^ 0x300) + (metadata & 0xff))
+		// Length is encoded in 1 or 2 bytes.
+		if max > 255 {
+			l := int(uint64(data[pos]) |
+				uint64(data[pos+1])<<8)
+			return sqltypes.MakeTrusted(querypb.Type_VARCHAR,
+				data[pos+2:pos+2+l]), l + 2, nil
+		}
+		l := int(data[pos])
 		return sqltypes.MakeTrusted(querypb.Type_VARCHAR,
-			data[pos:pos+l]), l, nil
-
+			data[pos+1:pos+1+l]), l + 1, nil
 	default:
 		return sqltypes.NULL, 0, fmt.Errorf("unsupported type %v", typ)
 	}

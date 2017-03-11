@@ -408,10 +408,20 @@ func TestCellLengthAndData(t *testing.T) {
 			[]byte{0x01, 0x02}),
 	}, {
 		typ:      TypeString,
-		metadata: TypeString<<8 | 5,
-		data:     []byte{0x01, 0x02, 0x03, 0x04, 0x05},
+		metadata: TypeString<<8 | 5, // maximum length = 5
+		data:     []byte{0x04, 0x01, 0x02, 0x03, 0x04},
 		out: sqltypes.MakeTrusted(querypb.Type_VARCHAR,
-			[]byte{0x01, 0x02, 0x03, 0x04, 0x05}),
+			[]byte{0x01, 0x02, 0x03, 0x04}),
+	}, {
+		// Length is encoded in 10 bits, 2 of them are in a weird place.
+		// In this test, we set the two high bits.
+		// 773 = 512 + 256 + 5
+		// This requires 2 bytes to store the length.
+		typ:      TypeString,
+		metadata: (TypeString<<8 ^ 0x3000) | 5, // maximum length = 773
+		data:     []byte{0x04, 0x00, 0x01, 0x02, 0x03, 0x04},
+		out: sqltypes.MakeTrusted(querypb.Type_VARCHAR,
+			[]byte{0x01, 0x02, 0x03, 0x04}),
 	}, {
 		// See strings/decimal.c function decimal2bin for why these
 		// values are here.
@@ -426,6 +436,42 @@ func TestCellLengthAndData(t *testing.T) {
 		data:     []byte{0x7E, 0xF2, 0x04, 0xC7, 0x2D, 0xFB, 0x2D},
 		out: sqltypes.MakeTrusted(querypb.Type_DECIMAL,
 			[]byte("-1234567890.1234")),
+	}, {
+		typ:      TypeBlob,
+		metadata: 1,
+		data:     []byte{0x3, 'a', 'b', 'c'},
+		out: sqltypes.MakeTrusted(querypb.Type_VARBINARY,
+			[]byte("abc")),
+	}, {
+		typ:      TypeBlob,
+		metadata: 2,
+		data:     []byte{0x3, 0x00, 'a', 'b', 'c'},
+		out: sqltypes.MakeTrusted(querypb.Type_VARBINARY,
+			[]byte("abc")),
+	}, {
+		typ:      TypeBlob,
+		metadata: 3,
+		data:     []byte{0x3, 0x00, 0x00, 'a', 'b', 'c'},
+		out: sqltypes.MakeTrusted(querypb.Type_VARBINARY,
+			[]byte("abc")),
+	}, {
+		typ:      TypeBlob,
+		metadata: 4,
+		data:     []byte{0x3, 0x00, 0x00, 0x00, 'a', 'b', 'c'},
+		out: sqltypes.MakeTrusted(querypb.Type_VARBINARY,
+			[]byte("abc")),
+	}, {
+		typ:      TypeVarString,
+		metadata: 20, // one byte length encoding
+		data:     []byte{3, 'a', 'b', 'c'},
+		out: sqltypes.MakeTrusted(querypb.Type_VARCHAR,
+			[]byte("abc")),
+	}, {
+		typ:      TypeVarString,
+		metadata: 384, // two bytes length encoding
+		data:     []byte{3, 0, 'a', 'b', 'c'},
+		out: sqltypes.MakeTrusted(querypb.Type_VARCHAR,
+			[]byte("abc")),
 	}}
 
 	for _, tcase := range testcases {
@@ -437,7 +483,7 @@ func TestCellLengthAndData(t *testing.T) {
 		// Test cellLength.
 		l, err := cellLength(padded, 1, tcase.typ, tcase.metadata)
 		if err != nil || l != len(tcase.data) {
-			t.Errorf("testcase cellLength(%v,%v) returned unexpected result: %v %v", tcase.typ, tcase.data, l, err)
+			t.Errorf("testcase cellLength(%v,%v) returned unexpected result: %v %v was expected %v <nil>", tcase.typ, tcase.data, l, err, len(tcase.data))
 		}
 
 		// Test CellValue.
