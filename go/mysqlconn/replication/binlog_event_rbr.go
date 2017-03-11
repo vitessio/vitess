@@ -256,8 +256,8 @@ func cellLength(data []byte, pos int, typ byte, metadata uint16) (int, error) {
 		return intg0*4 + dig2bytes[intg0x] + frac0*4 + dig2bytes[frac0x], nil
 	case TypeEnum, TypeSet:
 		return int(metadata & 0xff), nil
-	case TypeTinyBlob, TypeMediumBlob, TypeLongBlob, TypeBlob:
-		// Only TypeBlob is used in binary logs,
+	case TypeTinyBlob, TypeMediumBlob, TypeLongBlob, TypeBlob, TypeGeometry:
+		// of the Blobs, only TypeBlob is used in binary logs,
 		// but supports others just in case.
 		switch metadata {
 		case 1:
@@ -275,7 +275,7 @@ func cellLength(data []byte, pos int, typ byte, metadata uint16) (int, error) {
 				uint32(data[pos+2])<<16|
 				uint32(data[pos+3])<<24), nil
 		default:
-			return 0, fmt.Errorf("unsupported blob metadata value %v (data: %v pos: %v)", metadata, data, pos)
+			return 0, fmt.Errorf("unsupported blob/geometry metadata value %v (data: %v pos: %v)", metadata, data, pos)
 		}
 	case TypeString:
 		// This may do String, Enum, and Set. The type is in
@@ -797,6 +797,31 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, styp querypb.Typ
 		l := int(data[pos])
 		return sqltypes.MakeTrusted(querypb.Type_VARCHAR,
 			data[pos+1:pos+1+l]), l + 1, nil
+
+	case TypeGeometry:
+		l := 0
+		switch metadata {
+		case 1:
+			l = int(uint32(data[pos]))
+		case 2:
+			l = int(uint32(data[pos]) |
+				uint32(data[pos+1])<<8)
+		case 3:
+			l = int(uint32(data[pos]) |
+				uint32(data[pos+1])<<8 |
+				uint32(data[pos+2])<<16)
+		case 4:
+			l = int(uint32(data[pos]) |
+				uint32(data[pos+1])<<8 |
+				uint32(data[pos+2])<<16 |
+				uint32(data[pos+3])<<24)
+		default:
+			return sqltypes.NULL, 0, fmt.Errorf("unsupported geometry metadata value %v (data: %v pos: %v)", metadata, data, pos)
+		}
+		pos += int(metadata)
+		return sqltypes.MakeTrusted(querypb.Type_GEOMETRY,
+			data[pos:pos+l]), l + int(metadata), nil
+
 	default:
 		return sqltypes.NULL, 0, fmt.Errorf("unsupported type %v", typ)
 	}

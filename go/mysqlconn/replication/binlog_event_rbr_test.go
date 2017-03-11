@@ -472,6 +472,30 @@ func TestCellLengthAndData(t *testing.T) {
 		data:     []byte{3, 0, 'a', 'b', 'c'},
 		out: sqltypes.MakeTrusted(querypb.Type_VARCHAR,
 			[]byte("abc")),
+	}, {
+		typ:      TypeGeometry,
+		metadata: 1,
+		data:     []byte{0x3, 'a', 'b', 'c'},
+		out: sqltypes.MakeTrusted(querypb.Type_GEOMETRY,
+			[]byte("abc")),
+	}, {
+		typ:      TypeGeometry,
+		metadata: 2,
+		data:     []byte{0x3, 0x00, 'a', 'b', 'c'},
+		out: sqltypes.MakeTrusted(querypb.Type_GEOMETRY,
+			[]byte("abc")),
+	}, {
+		typ:      TypeGeometry,
+		metadata: 3,
+		data:     []byte{0x3, 0x00, 0x00, 'a', 'b', 'c'},
+		out: sqltypes.MakeTrusted(querypb.Type_GEOMETRY,
+			[]byte("abc")),
+	}, {
+		typ:      TypeGeometry,
+		metadata: 4,
+		data:     []byte{0x3, 0x00, 0x00, 0x00, 'a', 'b', 'c'},
+		out: sqltypes.MakeTrusted(querypb.Type_GEOMETRY,
+			[]byte("abc")),
 	}}
 
 	for _, tcase := range testcases {
