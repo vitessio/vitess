@@ -4,7 +4,10 @@
 
 package planbuilder
 
-import "github.com/youtube/vitess/go/vt/sqlparser"
+import (
+	"github.com/youtube/vitess/go/vt/sqlparser"
+	"github.com/youtube/vitess/go/vt/tabletserver/engines/schema"
+)
 
 // DDLPlan provides a plan for DDLs.
 type DDLPlan struct {
@@ -30,16 +33,11 @@ func DDLParse(sql string) (plan *DDLPlan) {
 	}
 }
 
-func analyzeDDL(ddl *sqlparser.DDL, getTable TableGetter) *ExecPlan {
+func analyzeDDL(ddl *sqlparser.DDL, tables map[string]*schema.Table) *Plan {
 	// TODO(sougou): Add support for sequences.
-	plan := &ExecPlan{PlanID: PlanDDL}
-	tableName := ddl.Table
-	// Skip TableName if table is empty (create statements) or not found in schema
-	if !tableName.IsEmpty() {
-		table, ok := getTable(tableName.Name)
-		if ok {
-			plan.TableName = table.Name
-		}
+	plan := &Plan{PlanID: PlanDDL}
+	if ddl.Table != nil {
+		plan.Table = tables[ddl.Table.Name.String()]
 	}
 	return plan
 }

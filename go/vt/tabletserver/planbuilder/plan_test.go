@@ -23,13 +23,44 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver/engines/schema"
 )
 
+// MarshalJSON is only used for testing.
+func (ep *Plan) MarshalJSON() ([]byte, error) {
+	mplan := struct {
+		PlanID               PlanType
+		Reason               ReasonType             `json:",omitempty"`
+		TableName            sqlparser.TableIdent   `json:",omitempty"`
+		FieldQuery           *sqlparser.ParsedQuery `json:",omitempty"`
+		FullQuery            *sqlparser.ParsedQuery `json:",omitempty"`
+		OuterQuery           *sqlparser.ParsedQuery `json:",omitempty"`
+		Subquery             *sqlparser.ParsedQuery `json:",omitempty"`
+		UpsertQuery          *sqlparser.ParsedQuery `json:",omitempty"`
+		ColumnNumbers        []int                  `json:",omitempty"`
+		PKValues             []interface{}          `json:",omitempty"`
+		SecondaryPKValues    []interface{}          `json:",omitempty"`
+		SubqueryPKColumns    []int                  `json:",omitempty"`
+		MessageReloaderQuery *sqlparser.ParsedQuery `json:",omitempty"`
+	}{
+		PlanID:               ep.PlanID,
+		Reason:               ep.Reason,
+		TableName:            ep.TableName(),
+		FieldQuery:           ep.FieldQuery,
+		FullQuery:            ep.FullQuery,
+		OuterQuery:           ep.OuterQuery,
+		Subquery:             ep.Subquery,
+		UpsertQuery:          ep.UpsertQuery,
+		ColumnNumbers:        ep.ColumnNumbers,
+		PKValues:             ep.PKValues,
+		SecondaryPKValues:    ep.SecondaryPKValues,
+		SubqueryPKColumns:    ep.SubqueryPKColumns,
+		MessageReloaderQuery: ep.MessageReloaderQuery,
+	}
+	return json.Marshal(&mplan)
+}
+
 func TestPlan(t *testing.T) {
 	testSchema := loadSchema("schema_test.json")
 	for tcase := range iterateExecFile("exec_cases.txt") {
-		plan, err := GetExecPlan(tcase.input, func(name sqlparser.TableIdent) (*schema.Table, bool) {
-			r, ok := testSchema[name.String()]
-			return r, ok
-		})
+		plan, err := Build(tcase.input, testSchema)
 		var out string
 		if err != nil {
 			out = err.Error()
@@ -69,14 +100,10 @@ func TestCustom(t *testing.T) {
 		if len(files) == 0 {
 			t.Fatalf("No test files for %s", schemFile)
 		}
-		getter := func(name sqlparser.TableIdent) (*schema.Table, bool) {
-			r, ok := schem[name.String()]
-			return r, ok
-		}
 		for _, file := range files {
 			t.Logf("Testing file %s", file)
 			for tcase := range iterateExecFile(file) {
-				plan, err := GetExecPlan(tcase.input, getter)
+				plan, err := Build(tcase.input, schem)
 				var out string
 				if err != nil {
 					out = err.Error()
@@ -98,10 +125,7 @@ func TestCustom(t *testing.T) {
 func TestStreamPlan(t *testing.T) {
 	testSchema := loadSchema("schema_test.json")
 	for tcase := range iterateExecFile("stream_cases.txt") {
-		plan, err := GetStreamExecPlan(tcase.input, func(name sqlparser.TableIdent) (*schema.Table, bool) {
-			r, ok := testSchema[name.String()]
-			return r, ok
-		})
+		plan, err := BuildStreaming(tcase.input, testSchema)
 		var out string
 		if err != nil {
 			out = err.Error()

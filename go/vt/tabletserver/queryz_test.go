@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/youtube/vitess/go/vt/sqlparser"
+	"github.com/youtube/vitess/go/vt/tabletserver/engines/schema"
 	"github.com/youtube/vitess/go/vt/tabletserver/planbuilder"
 )
 
@@ -22,36 +23,36 @@ func TestQueryzHandler(t *testing.T) {
 	req, _ := http.NewRequest("GET", "/schemaz", nil)
 	qe := newTestQueryEngine(100, 10*time.Second, true)
 
-	plan1 := &ExecPlan{
-		ExecPlan: &planbuilder.ExecPlan{
-			TableName: sqlparser.NewTableIdent("test_table"),
-			PlanID:    planbuilder.PlanPassSelect,
-			Reason:    planbuilder.ReasonTable,
+	plan1 := &TabletPlan{
+		Plan: &planbuilder.Plan{
+			Table:  &schema.Table{Name: sqlparser.NewTableIdent("test_table")},
+			PlanID: planbuilder.PlanPassSelect,
+			Reason: planbuilder.ReasonTable,
 		},
 	}
 	plan1.AddStats(10, 2*time.Second, 1*time.Second, 2, 0)
 	qe.queries.Set("select name from test_table", plan1)
 
-	plan2 := &ExecPlan{
-		ExecPlan: &planbuilder.ExecPlan{
-			TableName: sqlparser.NewTableIdent("test_table"),
-			PlanID:    planbuilder.PlanDDL,
-			Reason:    planbuilder.ReasonDefault,
+	plan2 := &TabletPlan{
+		Plan: &planbuilder.Plan{
+			Table:  &schema.Table{Name: sqlparser.NewTableIdent("test_table")},
+			PlanID: planbuilder.PlanDDL,
+			Reason: planbuilder.ReasonDefault,
 		},
 	}
 	plan2.AddStats(1, 2*time.Millisecond, 1*time.Millisecond, 1, 0)
 	qe.queries.Set("insert into test_table values 1", plan2)
 
-	plan3 := &ExecPlan{
-		ExecPlan: &planbuilder.ExecPlan{
-			TableName: sqlparser.NewTableIdent(""),
-			PlanID:    planbuilder.PlanOther,
-			Reason:    planbuilder.ReasonDefault,
+	plan3 := &TabletPlan{
+		Plan: &planbuilder.Plan{
+			Table:  &schema.Table{Name: sqlparser.NewTableIdent("")},
+			PlanID: planbuilder.PlanOther,
+			Reason: planbuilder.ReasonDefault,
 		},
 	}
 	plan3.AddStats(1, 75*time.Millisecond, 50*time.Millisecond, 1, 0)
 	qe.queries.Set("show tables", plan3)
-	qe.queries.Set("", (*ExecPlan)(nil))
+	qe.queries.Set("", (*TabletPlan)(nil))
 
 	queryzHandler(qe, resp, req)
 	body, _ := ioutil.ReadAll(resp.Body)
@@ -108,7 +109,7 @@ func TestQueryzHandler(t *testing.T) {
 	checkQueryzHasPlan(t, planPattern3, plan3, body)
 }
 
-func checkQueryzHasPlan(t *testing.T, planPattern []string, plan *ExecPlan, page []byte) {
+func checkQueryzHasPlan(t *testing.T, planPattern []string, plan *TabletPlan, page []byte) {
 	matcher := regexp.MustCompile(strings.Join(planPattern, `\s*`))
 	if !matcher.Match(page) {
 		t.Fatalf("queryz page does not contain plan: %v, page: %s", plan, string(page))

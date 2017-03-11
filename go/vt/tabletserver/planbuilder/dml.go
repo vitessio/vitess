@@ -13,8 +13,8 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver/engines/schema"
 )
 
-func analyzeUpdate(upd *sqlparser.Update, getTable TableGetter) (plan *ExecPlan, err error) {
-	plan = &ExecPlan{
+func analyzeUpdate(upd *sqlparser.Update, tables map[string]*schema.Table) (plan *Plan, err error) {
+	plan = &Plan{
 		PlanID:    PlanPassDML,
 		FullQuery: GenerateFullQuery(upd),
 	}
@@ -24,7 +24,7 @@ func analyzeUpdate(upd *sqlparser.Update, getTable TableGetter) (plan *ExecPlan,
 		plan.Reason = ReasonTable
 		return plan, nil
 	}
-	table, err := plan.setTable(tableName, getTable)
+	table, err := plan.setTable(tableName, tables)
 	if err != nil {
 		return nil, err
 	}
@@ -57,8 +57,8 @@ func analyzeUpdate(upd *sqlparser.Update, getTable TableGetter) (plan *ExecPlan,
 	return plan, nil
 }
 
-func analyzeDelete(del *sqlparser.Delete, getTable TableGetter) (plan *ExecPlan, err error) {
-	plan = &ExecPlan{
+func analyzeDelete(del *sqlparser.Delete, tables map[string]*schema.Table) (plan *Plan, err error) {
+	plan = &Plan{
 		PlanID:    PlanPassDML,
 		FullQuery: GenerateFullQuery(del),
 	}
@@ -68,7 +68,7 @@ func analyzeDelete(del *sqlparser.Delete, getTable TableGetter) (plan *ExecPlan,
 		plan.Reason = ReasonTable
 		return plan, nil
 	}
-	table, err := plan.setTable(tableName, getTable)
+	table, err := plan.setTable(tableName, tables)
 	if err != nil {
 		return nil, err
 	}
@@ -92,8 +92,8 @@ func analyzeDelete(del *sqlparser.Delete, getTable TableGetter) (plan *ExecPlan,
 	return plan, nil
 }
 
-func analyzeSet(set *sqlparser.Set) (plan *ExecPlan) {
-	return &ExecPlan{
+func analyzeSet(set *sqlparser.Set) (plan *Plan) {
+	return &Plan{
 		PlanID:    PlanSet,
 		FullQuery: GenerateFullQuery(set),
 	}
@@ -120,8 +120,8 @@ func analyzeUpdateExpressions(exprs sqlparser.UpdateExprs, pkIndex *schema.Index
 	return pkValues, nil
 }
 
-func analyzeSelect(sel *sqlparser.Select, getTable TableGetter) (plan *ExecPlan, err error) {
-	plan = &ExecPlan{
+func analyzeSelect(sel *sqlparser.Select, tables map[string]*schema.Table) (plan *Plan, err error) {
+	plan = &Plan{
 		PlanID:     PlanPassSelect,
 		FieldQuery: GenerateFieldQuery(sel),
 		FullQuery:  GenerateSelectLimitQuery(sel),
@@ -134,7 +134,7 @@ func analyzeSelect(sel *sqlparser.Select, getTable TableGetter) (plan *ExecPlan,
 	if tableName.IsEmpty() {
 		return plan, nil
 	}
-	table, err := plan.setTable(tableName, getTable)
+	table, err := plan.setTable(tableName, tables)
 	if err != nil {
 		return nil, err
 	}
@@ -238,8 +238,8 @@ func getPKValues(conditions []*sqlparser.ComparisonExpr, pkIndex *schema.Index) 
 	return pkValues
 }
 
-func analyzeInsert(ins *sqlparser.Insert, getTable TableGetter) (plan *ExecPlan, err error) {
-	plan = &ExecPlan{
+func analyzeInsert(ins *sqlparser.Insert, tables map[string]*schema.Table) (plan *Plan, err error) {
+	plan = &Plan{
 		PlanID:    PlanPassDML,
 		FullQuery: GenerateFullQuery(ins),
 	}
@@ -248,7 +248,7 @@ func analyzeInsert(ins *sqlparser.Insert, getTable TableGetter) (plan *ExecPlan,
 		plan.Reason = ReasonTable
 		return plan, nil
 	}
-	table, err := plan.setTable(tableName, getTable)
+	table, err := plan.setTable(tableName, tables)
 	if err != nil {
 		return nil, err
 	}
@@ -268,7 +268,7 @@ func analyzeInsert(ins *sqlparser.Insert, getTable TableGetter) (plan *ExecPlan,
 	panic("unreachable")
 }
 
-func analyzeInsertNoType(ins *sqlparser.Insert, plan *ExecPlan, table *schema.Table) (*ExecPlan, error) {
+func analyzeInsertNoType(ins *sqlparser.Insert, plan *Plan, table *schema.Table) (*Plan, error) {
 	pkColumnNumbers := getInsertPKColumns(ins.Columns, table)
 
 	if sel, ok := ins.Rows.(sqlparser.SelectStatement); ok {
@@ -361,7 +361,7 @@ func resolveUpsertUpdateValues(rowList sqlparser.ValTuple, columns sqlparser.Col
 	return sqlparser.UpdateExprs(dup), err
 }
 
-func analyzeInsertMessage(ins *sqlparser.Insert, plan *ExecPlan, table *schema.Table) (*ExecPlan, error) {
+func analyzeInsertMessage(ins *sqlparser.Insert, plan *Plan, table *schema.Table) (*Plan, error) {
 	if _, ok := ins.Rows.(sqlparser.SelectStatement); ok {
 		return nil, fmt.Errorf("subquery not allowed for message table: %s", table.Name.String())
 	}
