@@ -218,6 +218,24 @@ func cellLength(data []byte, pos int, typ byte, metadata uint16) (int, error) {
 		// metadata has number of decimals. One byte encodes
 		// two decimals.
 		return 3 + (int(metadata)+1)/2, nil
+	case TypeJSON:
+		// length in encoded in 'meta' bytes, but at least 2,
+		// and the value cannot be > 64k, so just read 2 bytes.
+		// (meta also should have '2' as value).
+		// (this weird logic is what event printing does).
+		l := int(uint64(data[pos]) |
+			uint64(data[pos+1])<<8)
+		return l + int(metadata), nil
+	case TypeEnum, TypeSet:
+		return int(metadata & 0xff), nil
+	case TypeString:
+		// This may do String, Enum, and Set. The type is in
+		// metadata. If it's a string, then there will be more bits.
+		t := metadata >> 8
+		if t == TypeEnum || t == TypeSet {
+			return int(metadata & 0xff), nil
+		}
+		return int((((metadata >> 4) & 0x300) ^ 0x300) + (metadata & 0xff)), nil
 
 	default:
 		return 0, fmt.Errorf("Unsupported type %v (data: %v pos: %v)", typ, data, pos)
@@ -496,8 +514,67 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, styp querypb.Typ
 		return sqltypes.MakeTrusted(querypb.Type_TIME,
 			[]byte(fmt.Sprintf("%v%02d:%02d:%02d%v", sign, hour, minute, second, fracStr))), 3 + (int(metadata)+1)/2, nil
 
+	case TypeJSON:
+		// length in encoded in 'meta' bytes, but at least 2,
+		// and the value cannot be > 64k, so just read 2 bytes.
+		// (meta also should have '2' as value).
+		// (this weird logic is what event printing does).
+		l := int(uint64(data[pos]) |
+			uint64(data[pos+1])<<8)
+		return sqltypes.MakeTrusted(querypb.Type_JSON,
+			data[pos+int(metadata):pos+int(metadata)+l]), l + int(metadata), nil
+
+	case TypeEnum:
+		switch metadata & 0xff {
+		case 1:
+			// One byte storage.
+			return sqltypes.MakeTrusted(querypb.Type_ENUM,
+				strconv.AppendUint(nil, uint64(data[pos]), 10)), 1, nil
+		case 2:
+			// Two bytes storage.
+			val := binary.LittleEndian.Uint16(data[pos : pos+2])
+			return sqltypes.MakeTrusted(querypb.Type_ENUM,
+				strconv.AppendUint(nil, uint64(val), 10)), 2, nil
+		default:
+			return sqltypes.NULL, 0, fmt.Errorf("unexpected enum size: %v", metadata&0xff)
+		}
+
+	case TypeSet:
+		l := int(metadata & 0xff)
+		return sqltypes.MakeTrusted(querypb.Type_SET,
+			data[pos:pos+l]), l, nil
+
+	case TypeString:
+		// This may do String, Enum, and Set. The type is in
+		// metadata. If it's a string, then there will be more bits.
+		t := metadata >> 8
+		if t == TypeEnum {
+			switch metadata & 0xff {
+			case 1:
+				// One byte storage.
+				return sqltypes.MakeTrusted(querypb.Type_ENUM,
+					strconv.AppendUint(nil, uint64(data[pos]), 10)), 1, nil
+			case 2:
+				// Two bytes storage.
+				val := binary.LittleEndian.Uint16(data[pos : pos+2])
+				return sqltypes.MakeTrusted(querypb.Type_ENUM,
+					strconv.AppendUint(nil, uint64(val), 10)), 2, nil
+			default:
+				return sqltypes.NULL, 0, fmt.Errorf("unexpected enum size: %v", metadata&0xff)
+			}
+		}
+		if t == TypeSet {
+			l := int(metadata & 0xff)
+			return sqltypes.MakeTrusted(querypb.Type_BIT,
+				data[pos:pos+l]), l, nil
+		}
+		// This is a real string. The length is weird.
+		l := int((((metadata >> 4) & 0x300) ^ 0x300) + (metadata & 0xff))
+		return sqltypes.MakeTrusted(querypb.Type_VARCHAR,
+			data[pos:pos+l]), l, nil
+
 	default:
-		return sqltypes.NULL, 0, fmt.Errorf("Unsupported type %v", typ)
+		return sqltypes.NULL, 0, fmt.Errorf("unsupported type %v", typ)
 	}
 }
 

@@ -382,6 +382,36 @@ func TestCellLengthAndData(t *testing.T) {
 		data: []byte{0xb6, 0xf8, 0x80},
 		out: sqltypes.MakeTrusted(querypb.Type_TIME,
 			[]byte("15:34:54")),
+	}, {
+		typ:      TypeJSON,
+		metadata: 2,
+		data:     []byte{0x03, 0x00, 'a', 'b', 'c'},
+		out: sqltypes.MakeTrusted(querypb.Type_JSON,
+			[]byte("abc")),
+	}, {
+		typ:      TypeEnum,
+		metadata: 1,
+		data:     []byte{0x03},
+		out: sqltypes.MakeTrusted(querypb.Type_ENUM,
+			[]byte("3")),
+	}, {
+		typ:      TypeEnum,
+		metadata: 2,
+		data:     []byte{0x01, 0x02},
+		out: sqltypes.MakeTrusted(querypb.Type_ENUM,
+			[]byte(fmt.Sprintf("%v", 0x0201))),
+	}, {
+		typ:      TypeSet,
+		metadata: 2,
+		data:     []byte{0x01, 0x02},
+		out: sqltypes.MakeTrusted(querypb.Type_SET,
+			[]byte{0x01, 0x02}),
+	}, {
+		typ:      TypeString,
+		metadata: TypeString<<8 | 5,
+		data:     []byte{0x01, 0x02, 0x03, 0x04, 0x05},
+		out: sqltypes.MakeTrusted(querypb.Type_VARCHAR,
+			[]byte{0x01, 0x02, 0x03, 0x04, 0x05}),
 	}}
 
 	for _, tcase := range testcases {
