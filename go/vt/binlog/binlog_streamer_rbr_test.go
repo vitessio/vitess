@@ -7,6 +7,8 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/mysqlconn/replication"
+	"github.com/youtube/vitess/go/vt/sqlparser"
+	"github.com/youtube/vitess/go/vt/tabletserver/engines/schema"
 
 	binlogdatapb "github.com/youtube/vitess/go/vt/proto/binlogdata"
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
@@ -19,16 +21,40 @@ func TestStreamerParseRBRUpdateEvent(t *testing.T) {
 	s := replication.NewFakeBinlogStream()
 	s.ServerID = 62344
 
+	// Create a schema.Engine for this test, with just one table.
+	// We only use the Columns.
+	se := schema.NewEngineForTests()
+	se.SetTableForTests(&schema.Table{
+		Name: sqlparser.NewTableIdent("vt_a"),
+		Columns: []schema.TableColumn{
+			{
+				Name: sqlparser.NewColIdent("id"),
+				Type: querypb.Type_INT64,
+			},
+			{
+				Name: sqlparser.NewColIdent("message"),
+				Type: querypb.Type_VARCHAR,
+			},
+		},
+	})
+
+	// Create a tableMap event on the table.
 	tableID := uint64(0x102030405060)
 	tm := &replication.TableMap{
 		Flags:    0x8090,
 		Database: "vt_test_keyspace",
 		Name:     "vt_a",
-		Columns: []replication.TableMapColumn{
-			{Type: replication.TypeLong, CanBeNull: false},
-			{Type: replication.TypeVarchar, CanBeNull: true},
+		Types: []byte{
+			replication.TypeLong,
+			replication.TypeVarchar,
+		},
+		CanBeNull: replication.NewServerBitmap(2),
+		Metadata: []uint16{
+			0,
+			384, // A VARCHAR(128) in utf8 would result in 384.
 		},
 	}
+	tm.CanBeNull.Set(1, true)
 
 	// Do an update packet with all fields set.
 	rows := replication.Rows{
@@ -80,7 +106,7 @@ func TestStreamerParseRBRUpdateEvent(t *testing.T) {
 				},
 				{
 					Category: binlogdatapb.BinlogTransaction_Statement_BL_UPDATE,
-					Sql:      []byte("WIP: update table vt_a set values = [1076895760 abcd] where identifies = [1076895760 abc]"),
+					Sql:      []byte("UPDATE vt_a SET id=1076895760, message='abcd' WHERE id=1076895760 AND message='abc'"),
 				},
 			},
 			EventToken: &querypb.EventToken{
@@ -100,7 +126,7 @@ func TestStreamerParseRBRUpdateEvent(t *testing.T) {
 		got = append(got, *trans)
 		return nil
 	}
-	bls := NewStreamer("vt_test_keyspace", nil, nil, replication.Position{}, 0, sendTransaction)
+	bls := NewStreamer("vt_test_keyspace", nil, se, nil, replication.Position{}, 0, sendTransaction)
 
 	go sendTestEvents(events, input)
 	_, err := bls.parseEvents(context.Background(), events)

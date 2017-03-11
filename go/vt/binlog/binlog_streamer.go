@@ -5,6 +5,7 @@
 package binlog
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"strings"
@@ -16,6 +17,8 @@ import (
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
+	"github.com/youtube/vitess/go/vt/sqlparser"
+	"github.com/youtube/vitess/go/vt/tabletserver/engines/schema"
 
 	binlogdatapb "github.com/youtube/vitess/go/vt/proto/binlogdata"
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
@@ -65,9 +68,10 @@ func getStatementCategory(sql string) binlogdatapb.BinlogTransaction_Statement_C
 // A Streamer should only be used once. To start another stream, call
 // NewStreamer() again.
 type Streamer struct {
-	// dbname and mysqld are set at creation and immutable.
+	// The following fields at set at creation and immutable.
 	dbname string
 	mysqld mysqlctl.MysqlDaemon
+	se     *schema.Engine
 
 	clientCharset    *binlogdatapb.Charset
 	startPos         replication.Position
@@ -86,10 +90,11 @@ type Streamer struct {
 // startPos is the position to start streaming at. Incompatible with timestamp.
 // timestamp is the timestamp to start streaming at. Incompatible with startPos.
 // sendTransaction is called each time a transaction is committed or rolled back.
-func NewStreamer(dbname string, mysqld mysqlctl.MysqlDaemon, clientCharset *binlogdatapb.Charset, startPos replication.Position, timestamp int64, sendTransaction sendTransactionFunc) *Streamer {
+func NewStreamer(dbname string, mysqld mysqlctl.MysqlDaemon, se *schema.Engine, clientCharset *binlogdatapb.Charset, startPos replication.Position, timestamp int64, sendTransaction sendTransactionFunc) *Streamer {
 	return &Streamer{
 		dbname:          dbname,
 		mysqld:          mysqld,
+		se:              se,
 		clientCharset:   clientCharset,
 		startPos:        startPos,
 		timestamp:       timestamp,
@@ -378,32 +383,22 @@ func (bls *Streamer) parseEvents(ctx context.Context, events <-chan replication.
 				// Skip cross-db statements.
 				continue
 			}
-			rows, err := ev.Rows(format, tm)
-			if err != nil {
-				return pos, err
+			ti := bls.se.GetTable(sqlparser.NewTableIdent(tm.Name))
+			if ti == nil {
+				return pos, fmt.Errorf("unknown table %v in schema", tm.Name)
 			}
 			setTimestamp := &binlogdatapb.BinlogTransaction_Statement{
 				Category: binlogdatapb.BinlogTransaction_Statement_BL_SET,
 				Sql:      []byte(fmt.Sprintf("SET TIMESTAMP=%d", ev.Timestamp())),
 			}
 			statements = append(statements, setTimestamp)
-			for i := range rows.Rows {
-				identifies, err := rows.StringIdentifies(tm, i)
-				if err != nil {
-					log.Warningf("Failed to parse UPDATE due to error %v", err)
-					continue
-				}
-				values, err := rows.StringValues(tm, i)
-				if err != nil {
-					log.Warningf("Failed to parse UPDATE due to error %v", err)
-					continue
-				}
-				update := &binlogdatapb.BinlogTransaction_Statement{
-					Category: binlogdatapb.BinlogTransaction_Statement_BL_UPDATE,
-					Sql:      []byte(fmt.Sprintf("WIP: update table %v set values = %v where identifies = %v", tm.Name, values, identifies)),
-				}
-				statements = append(statements, update)
+
+			rows, err := ev.Rows(format, tm)
+			if err != nil {
+				return pos, err
 			}
+
+			statements = appendUpdates(statements, &rows, tm, ti)
 
 			if autocommit {
 				if err = commit(ev.Timestamp()); err != nil {
@@ -412,4 +407,109 @@ func (bls *Streamer) parseEvents(ctx context.Context, events <-chan replication.
 			}
 		}
 	}
+}
+
+func appendUpdates(statements []*binlogdatapb.BinlogTransaction_Statement, rows *replication.Rows, tm *replication.TableMap, ti *schema.Table) []*binlogdatapb.BinlogTransaction_Statement {
+	for i := range rows.Rows {
+		var sql bytes.Buffer
+
+		sql.WriteString("UPDATE ")
+		sql.WriteString(tm.Name)
+		sql.WriteString(" SET ")
+
+		if err := writeValuesAsSQL(&sql, rows, tm, ti, i); err != nil {
+			log.Warningf("writeValuesAsSQL(%v) failed: %v", i, err)
+			continue
+		}
+
+		sql.WriteString(" WHERE ")
+
+		if err := writeIdentifiesAsSQL(&sql, rows, tm, ti, i); err != nil {
+			log.Warningf("writeIdentifiesAsSQL(%v) failed: %v", i, err)
+			continue
+		}
+
+		update := &binlogdatapb.BinlogTransaction_Statement{
+			Category: binlogdatapb.BinlogTransaction_Statement_BL_UPDATE,
+			Sql:      sql.Bytes(),
+		}
+		statements = append(statements, update)
+	}
+	return statements
+}
+
+// writeValuesAsSQL is a helper method to print the values as SQL in the
+// provided bytes.Buffer.
+func writeValuesAsSQL(sql *bytes.Buffer, rs *replication.Rows, tm *replication.TableMap, ti *schema.Table, rowIndex int) error {
+	valueIndex := 0
+	data := rs.Rows[rowIndex].Data
+	pos := 0
+	for c := 0; c < rs.DataColumns.Count(); c++ {
+		if !rs.DataColumns.Bit(c) {
+			continue
+		}
+
+		// Print a separator if needed, then print the name.
+		if valueIndex > 0 {
+			sql.WriteString(", ")
+		}
+		sql.WriteString(ti.Columns[c].Name.String())
+		sql.WriteByte('=')
+
+		if rs.Rows[rowIndex].NullColumns.Bit(valueIndex) {
+			// This column is represented, but its value is NULL.
+			sql.WriteString("NULL")
+			valueIndex++
+			continue
+		}
+
+		// We have real data
+		value, l, err := replication.CellValue(data, pos, tm.Types[c], tm.Metadata[c], ti.Columns[c].Type)
+		if err != nil {
+			return err
+		}
+		value.EncodeSQL(sql)
+		pos += l
+		valueIndex++
+	}
+
+	return nil
+}
+
+// writeIdentifiesAsSQL is a helper method to print the identifies as SQL in the
+// provided bytes.Buffer.
+func writeIdentifiesAsSQL(sql *bytes.Buffer, rs *replication.Rows, tm *replication.TableMap, ti *schema.Table, rowIndex int) error {
+	valueIndex := 0
+	data := rs.Rows[rowIndex].Identify
+	pos := 0
+	for c := 0; c < rs.IdentifyColumns.Count(); c++ {
+		if !rs.IdentifyColumns.Bit(c) {
+			continue
+		}
+
+		// Print a separator if needed, then print the name.
+		if valueIndex > 0 {
+			sql.WriteString(" AND ")
+		}
+		sql.WriteString(ti.Columns[c].Name.String())
+		sql.WriteByte('=')
+
+		if rs.Rows[rowIndex].NullIdentifyColumns.Bit(valueIndex) {
+			// This column is represented, but its value is NULL.
+			sql.WriteString("NULL")
+			valueIndex++
+			continue
+		}
+
+		// We have real data
+		value, l, err := replication.CellValue(data, pos, tm.Types[c], tm.Metadata[c], ti.Columns[c].Type)
+		if err != nil {
+			return err
+		}
+		value.EncodeSQL(sql)
+		pos += l
+		valueIndex++
+	}
+
+	return nil
 }

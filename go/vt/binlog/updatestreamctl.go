@@ -16,6 +16,7 @@ import (
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/tb"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
+	"github.com/youtube/vitess/go/vt/tabletserver/engines/schema"
 
 	binlogdatapb "github.com/youtube/vitess/go/vt/proto/binlogdata"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -95,6 +96,7 @@ type UpdateStreamImpl struct {
 
 	mysqld mysqlctl.MysqlDaemon
 	dbname string
+	se     *schema.Engine
 
 	// actionLock protects the following variables
 	actionLock     sync.Mutex
@@ -242,7 +244,7 @@ func (updateStream *UpdateStreamImpl) StreamKeyRange(ctx context.Context, positi
 		keyrangeTransactions.Add(1)
 		return callback(reply)
 	})
-	bls := NewStreamer(updateStream.dbname, updateStream.mysqld, charset, pos, 0, f)
+	bls := NewStreamer(updateStream.dbname, updateStream.mysqld, updateStream.se, charset, pos, 0, f)
 
 	streamCtx, cancel := context.WithCancel(ctx)
 	i := updateStream.streams.Add(cancel)
@@ -278,7 +280,7 @@ func (updateStream *UpdateStreamImpl) StreamTables(ctx context.Context, position
 		tablesTransactions.Add(1)
 		return callback(reply)
 	})
-	bls := NewStreamer(updateStream.dbname, updateStream.mysqld, charset, pos, 0, f)
+	bls := NewStreamer(updateStream.dbname, updateStream.mysqld, updateStream.se, charset, pos, 0, f)
 
 	streamCtx, cancel := context.WithCancel(ctx)
 	i := updateStream.streams.Add(cancel)

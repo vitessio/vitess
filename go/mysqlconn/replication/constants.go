@@ -59,6 +59,18 @@ const (
 	// TypeBit is MYSQL_TYPE_BIT
 	TypeBit = 16
 
+	// TypeTimestamp2 is MYSQL_TYPE_TIMESTAMP2
+	TypeTimestamp2 = 17
+
+	// TypeDateTime2 is MYSQL_TYPE_DATETIME2
+	TypeDateTime2 = 18
+
+	// TypeTime2 is MYSQL_TYPE_TIME2
+	TypeTime2 = 19
+
+	// TypeJSON is MYSQL_TYPE_JSON
+	TypeJSON = 245
+
 	// TypeNewDecimal is MYSQL_TYPE_NEWDECIMAL
 	TypeNewDecimal = 246
 

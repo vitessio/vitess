@@ -4,10 +4,7 @@
 
 package sqltypes
 
-import (
-	"github.com/youtube/vitess/go/vt/binlog/eventtoken"
-	querypb "github.com/youtube/vitess/go/vt/proto/query"
-)
+import querypb "github.com/youtube/vitess/go/vt/proto/query"
 
 // Result represents a query result.
 type Result struct {
@@ -167,7 +164,7 @@ func (result *Result) AppendResult(src *Result) {
 			// discard the new one.
 			if result.Extras != nil {
 				// Note if any of the two is nil, we get nil.
-				result.Extras.EventToken = eventtoken.Minimum(result.Extras.EventToken, src.Extras.EventToken)
+				result.Extras.EventToken = EventTokenMinimum(result.Extras.EventToken, src.Extras.EventToken)
 
 				result.Extras.Fresher = result.Extras.Fresher && src.Extras.Fresher
 			}

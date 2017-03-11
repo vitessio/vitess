@@ -475,3 +475,23 @@ func (se *Engine) handleHTTPSchema(response http.ResponseWriter, request *http.R
 	json.HTMLEscape(buf, b)
 	response.Write(buf.Bytes())
 }
+
+// Test methods. Do not use in non-test code.
+
+// NewEngineForTests creates a new engine, that can't query the
+// database, and will not send notifications. It starts opened, and
+// doesn't reload.  Use SetTableForTests to set table schema.
+func NewEngineForTests() *Engine {
+	se := &Engine{
+		isOpen: true,
+		tables: make(map[string]*Table),
+	}
+	return se
+}
+
+// SetTableForTests puts a Table in the map directly.
+func (se *Engine) SetTableForTests(table *Table) {
+	se.mu.Lock()
+	defer se.mu.Unlock()
+	se.tables[table.Name.String()] = table
+}
