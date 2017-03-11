@@ -21,7 +21,6 @@ import (
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/stats"
-	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/timer"
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/sqlparser"
@@ -49,9 +48,8 @@ type Engine struct {
 
 	// The following fields have their own synchronization
 	// and do not require locking mu.
-	strictMode sync2.AtomicBool
-	conns      *connpool.Pool
-	ticks      *timer.Timer
+	conns *connpool.Pool
+	ticks *timer.Timer
 }
 
 var schemaOnce sync.Once
@@ -64,7 +62,6 @@ func NewEngine(checker tabletenv.MySQLChecker, config tabletenv.TabletConfig) *E
 		conns:      connpool.New("", 3, idleTimeout, checker),
 		ticks:      timer.NewTimer(reloadTime),
 		reloadTime: reloadTime,
-		strictMode: sync2.NewAtomicBool(config.StrictMode),
 	}
 	schemaOnce.Do(func() {
 		stats.Publish("SchemaReloadTime", stats.DurationFunc(se.ticks.Interval))
@@ -104,12 +101,6 @@ func (se *Engine) Open(dbaParams *sqldb.ConnParams) error {
 	curTime, err := se.mysqlTime(ctx, conn)
 	if err != nil {
 		return err
-	}
-
-	if se.strictMode.Get() {
-		if err := conn.VerifyMode(); err != nil {
-			return vterrors.Errorf(vtrpcpb.Code_UNKNOWN, err.Error())
-		}
 	}
 
 	tableData, err := conn.Exec(ctx, mysqlconn.BaseShowTables, maxTableCount, false)

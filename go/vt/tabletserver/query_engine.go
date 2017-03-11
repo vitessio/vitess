@@ -219,6 +219,22 @@ func NewQueryEngine(checker MySQLChecker, se *schema.Engine, config tabletenv.Ta
 func (qe *QueryEngine) Open(dbconfigs dbconfigs.DBConfigs) error {
 	qe.dbconfigs = dbconfigs
 	qe.conns.Open(&qe.dbconfigs.App, &qe.dbconfigs.Dba)
+
+	if qe.strictMode.Get() {
+		conn, err := qe.conns.Get(tabletenv.LocalContext())
+		if err != nil {
+			qe.conns.Close()
+			return err
+		}
+		err = conn.VerifyMode()
+		conn.Recycle()
+
+		if err != nil {
+			qe.conns.Close()
+			return err
+		}
+	}
+
 	qe.streamConns.Open(&qe.dbconfigs.App, &qe.dbconfigs.Dba)
 	qe.se.RegisterNotifier("qe", qe.schemaChanged)
 	return nil
