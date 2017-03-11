@@ -70,6 +70,18 @@ func TestCellLengthAndData(t *testing.T) {
 		out: sqltypes.MakeTrusted(querypb.Type_INT32,
 			[]byte(fmt.Sprintf("%v", -1-int32(0x00010203)))),
 	}, {
+		// 3.1415927E+00 = 0x40490fdb
+		typ:  TypeFloat,
+		data: []byte{0xdb, 0x0f, 0x49, 0x40},
+		out: sqltypes.MakeTrusted(querypb.Type_FLOAT32,
+			[]byte("3.1415927E+00")),
+	}, {
+		// 3.1415926535E+00 = 0x400921fb54411744
+		typ:  TypeDouble,
+		data: []byte{0x44, 0x17, 0x41, 0x54, 0xfb, 0x21, 0x09, 0x40},
+		out: sqltypes.MakeTrusted(querypb.Type_FLOAT64,
+			[]byte("3.1415926535E+00")),
+	}, {
 		typ:  TypeTimestamp,
 		data: []byte{0x84, 0x83, 0x82, 0x81},
 		out: sqltypes.MakeTrusted(querypb.Type_TIMESTAMP,

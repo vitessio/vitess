@@ -3,6 +3,7 @@ package replication
 import (
 	"encoding/binary"
 	"fmt"
+	"math"
 	"strconv"
 
 	"github.com/youtube/vitess/go/sqltypes"
@@ -180,9 +181,9 @@ func cellLength(data []byte, pos int, typ byte, metadata uint16) (int, error) {
 		return 2, nil
 	case TypeInt24:
 		return 3, nil
-	case TypeLong, TypeTimestamp:
+	case TypeLong, TypeFloat, TypeTimestamp:
 		return 4, nil
-	case TypeLongLong:
+	case TypeLongLong, TypeDouble:
 		return 8, nil
 	case TypeDate, TypeNewDate:
 		return 3, nil
@@ -270,6 +271,16 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, styp querypb.Typ
 		}
 		return sqltypes.MakeTrusted(querypb.Type_UINT32,
 			strconv.AppendUint(nil, uint64(val), 10)), 4, nil
+	case TypeFloat:
+		val := binary.LittleEndian.Uint32(data[pos : pos+4])
+		fval := math.Float32frombits(val)
+		return sqltypes.MakeTrusted(querypb.Type_FLOAT32,
+			strconv.AppendFloat(nil, float64(fval), 'E', -1, 32)), 4, nil
+	case TypeDouble:
+		val := binary.LittleEndian.Uint64(data[pos : pos+8])
+		fval := math.Float64frombits(val)
+		return sqltypes.MakeTrusted(querypb.Type_FLOAT64,
+			strconv.AppendFloat(nil, fval, 'E', -1, 64)), 8, nil
 	case TypeTimestamp:
 		val := binary.LittleEndian.Uint32(data[pos : pos+4])
 		return sqltypes.MakeTrusted(querypb.Type_TIMESTAMP,
