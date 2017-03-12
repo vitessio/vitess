@@ -108,7 +108,7 @@ func (tr *testReceiver) WaitForDone() {
 func TestReceiverEOF(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
-	mm := NewMessageManager(newFakeTabletServer(), mmTable, newMMConnPool(db))
+	mm := newMessageManager(newFakeTabletServer(), mmTable, newMMConnPool(db))
 	mm.Open()
 	defer mm.Close()
 	r1 := newTestReceiver(0)
@@ -133,7 +133,7 @@ func TestReceiverEOF(t *testing.T) {
 func TestMessageManagerState(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
-	mm := NewMessageManager(newFakeTabletServer(), mmTable, newMMConnPool(db))
+	mm := newMessageManager(newFakeTabletServer(), mmTable, newMMConnPool(db))
 	// Do it twice
 	for i := 0; i < 2; i++ {
 		mm.Open()
@@ -162,7 +162,7 @@ func TestMessageManagerAdd(t *testing.T) {
 	defer db.Close()
 	ti := newMMTable()
 	ti.MessageInfo.CacheSize = 1
-	mm := NewMessageManager(newFakeTabletServer(), ti, newMMConnPool(db))
+	mm := newMessageManager(newFakeTabletServer(), ti, newMMConnPool(db))
 	mm.Open()
 	defer mm.Close()
 
@@ -199,7 +199,7 @@ func TestMessageManagerSend(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 	tsv := newFakeTabletServer()
-	mm := NewMessageManager(tsv, mmTable, newMMConnPool(db))
+	mm := newMessageManager(tsv, mmTable, newMMConnPool(db))
 	mm.Open()
 	defer mm.Close()
 	r1 := newTestReceiver(1)
@@ -261,7 +261,7 @@ func TestMessageManagerBatchSend(t *testing.T) {
 	defer db.Close()
 	ti := newMMTable()
 	ti.MessageInfo.BatchSize = 2
-	mm := NewMessageManager(newFakeTabletServer(), ti, newMMConnPool(db))
+	mm := newMessageManager(newFakeTabletServer(), ti, newMMConnPool(db))
 	mm.Open()
 	defer mm.Close()
 	r1 := newTestReceiver(1)
@@ -332,7 +332,7 @@ func TestMessageManagerPoller(t *testing.T) {
 	ti := newMMTable()
 	ti.MessageInfo.BatchSize = 2
 	ti.MessageInfo.PollInterval = 20 * time.Second
-	mm := NewMessageManager(newFakeTabletServer(), ti, newMMConnPool(db))
+	mm := newMessageManager(newFakeTabletServer(), ti, newMMConnPool(db))
 	mm.Open()
 	defer mm.Close()
 	r1 := newTestReceiver(1)
@@ -397,7 +397,7 @@ func TestMessagesPending1(t *testing.T) {
 	ti := newMMTable()
 	ti.MessageInfo.CacheSize = 2
 	ti.MessageInfo.PollInterval = 30 * time.Second
-	mm := NewMessageManager(newFakeTabletServer(), ti, newMMConnPool(db))
+	mm := newMessageManager(newFakeTabletServer(), ti, newMMConnPool(db))
 	mm.Open()
 	defer mm.Close()
 	r1 := newTestReceiver(0)
@@ -462,7 +462,7 @@ func TestMessagesPending2(t *testing.T) {
 	ti := newMMTable()
 	ti.MessageInfo.CacheSize = 1
 	ti.MessageInfo.PollInterval = 30 * time.Second
-	mm := NewMessageManager(newFakeTabletServer(), ti, newMMConnPool(db))
+	mm := newMessageManager(newFakeTabletServer(), ti, newMMConnPool(db))
 	mm.Open()
 	defer mm.Close()
 	r1 := newTestReceiver(0)
@@ -495,7 +495,7 @@ func TestMessageManagerPurge(t *testing.T) {
 	tsv := newFakeTabletServer()
 	ti := newMMTable()
 	ti.MessageInfo.PollInterval = 1 * time.Millisecond
-	mm := NewMessageManager(tsv, ti, newMMConnPool(db))
+	mm := newMessageManager(tsv, ti, newMMConnPool(db))
 	mm.Open()
 	defer mm.Close()
 	ch := make(chan string)
@@ -510,7 +510,7 @@ func TestMessageManagerPurge(t *testing.T) {
 func TestMMGenerate(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
-	mm := NewMessageManager(newFakeTabletServer(), mmTable, newMMConnPool(db))
+	mm := newMessageManager(newFakeTabletServer(), mmTable, newMMConnPool(db))
 	mm.Open()
 	defer mm.Close()
 	query, bv := mm.GenerateAckQuery([]string{"1", "2"})

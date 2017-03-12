@@ -71,7 +71,7 @@ func TestEngineSchemaChanged(t *testing.T) {
 	}
 }
 
-func extractManagerNames(in map[string]*MessageManager) map[string]bool {
+func extractManagerNames(in map[string]*messageManager) map[string]bool {
 	out := make(map[string]bool)
 	for k := range in {
 		out[k] = true
@@ -209,13 +209,13 @@ func TestEngineGenerate(t *testing.T) {
 	}
 }
 
-func newTestEngine(db *fakesqldb.DB) *MessagerEngine {
+func newTestEngine(db *fakesqldb.DB) *Engine {
 	randID := rand.Int63()
 	config := tabletenv.DefaultQsConfig
 	config.PoolNamePrefix = fmt.Sprintf("Pool-%d-", randID)
 	tsv := newFakeTabletServer()
 	se := schema.NewEngine(tsv, config)
-	te := NewMessagerEngine(tsv, se, config)
+	te := NewEngine(tsv, se, config)
 	dbconfigs := dbconfigs.DBConfigs{
 		App:           *db.ConnParams(),
 		SidecarDBName: "_vt",

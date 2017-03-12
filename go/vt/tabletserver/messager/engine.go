@@ -31,20 +31,20 @@ type TabletService interface {
 	PurgeMessages(ctx context.Context, target *querypb.Target, name string, timeCutoff int64) (count int64, err error)
 }
 
-// MessagerEngine is the engine for handling messages.
-type MessagerEngine struct {
+// Engine is the engine for handling messages.
+type Engine struct {
 	mu       sync.Mutex
 	isOpen   bool
-	managers map[string]*MessageManager
+	managers map[string]*messageManager
 
 	tsv   TabletService
 	se    *schema.Engine
 	conns *connpool.Pool
 }
 
-// NewMessagerEngine creates a new MessagerEngine.
-func NewMessagerEngine(tsv TabletService, se *schema.Engine, config tabletenv.TabletConfig) *MessagerEngine {
-	return &MessagerEngine{
+// NewEngine creates a new Engine.
+func NewEngine(tsv TabletService, se *schema.Engine, config tabletenv.TabletConfig) *Engine {
+	return &Engine{
 		tsv: tsv,
 		se:  se,
 		conns: connpool.New(
@@ -53,12 +53,12 @@ func NewMessagerEngine(tsv TabletService, se *schema.Engine, config tabletenv.Ta
 			time.Duration(config.IdleTimeout*1e9),
 			tsv,
 		),
-		managers: make(map[string]*MessageManager),
+		managers: make(map[string]*messageManager),
 	}
 }
 
-// Open starts the MessagerEngine service.
-func (me *MessagerEngine) Open(dbconfigs dbconfigs.DBConfigs) error {
+// Open starts the Engine service.
+func (me *Engine) Open(dbconfigs dbconfigs.DBConfigs) error {
 	if me.isOpen {
 		return nil
 	}
@@ -68,8 +68,8 @@ func (me *MessagerEngine) Open(dbconfigs dbconfigs.DBConfigs) error {
 	return nil
 }
 
-// Close closes the MessagerEngine service.
-func (me *MessagerEngine) Close() {
+// Close closes the Engine service.
+func (me *Engine) Close() {
 	me.mu.Lock()
 	defer me.mu.Unlock()
 	if !me.isOpen {
@@ -80,7 +80,7 @@ func (me *MessagerEngine) Close() {
 	for _, mm := range me.managers {
 		mm.Close()
 	}
-	me.managers = make(map[string]*MessageManager)
+	me.managers = make(map[string]*messageManager)
 	me.conns.Close()
 }
 
@@ -91,7 +91,7 @@ func (me *MessagerEngine) Close() {
 // usually triggered by Close. It's the responsibility of the send
 // function to promptly return if the done channel is closed. Otherwise,
 // the engine's Close function will hang indefinitely.
-func (me *MessagerEngine) Subscribe(name string, send func(*sqltypes.Result) error) (done chan struct{}, err error) {
+func (me *Engine) Subscribe(name string, send func(*sqltypes.Result) error) (done chan struct{}, err error) {
 	me.mu.Lock()
 	defer me.mu.Unlock()
 	mm := me.managers[name]
@@ -105,7 +105,7 @@ func (me *MessagerEngine) Subscribe(name string, send func(*sqltypes.Result) err
 
 // LockDB obtains db locks for all messages that need to
 // be updated and returns the counterpart unlock function.
-func (me *MessagerEngine) LockDB(newMessages map[string][]*MessageRow, changedMessages map[string][]string) func() {
+func (me *Engine) LockDB(newMessages map[string][]*MessageRow, changedMessages map[string][]string) func() {
 	combined := make(map[string]struct{})
 	for name := range newMessages {
 		combined[name] = struct{}{}
@@ -113,7 +113,7 @@ func (me *MessagerEngine) LockDB(newMessages map[string][]*MessageRow, changedMe
 	for name := range changedMessages {
 		combined[name] = struct{}{}
 	}
-	var mms []*MessageManager
+	var mms []*messageManager
 	// Don't do DBLock while holding lock on mu.
 	// It causes deadlocks.
 	func() {
@@ -136,7 +136,7 @@ func (me *MessagerEngine) LockDB(newMessages map[string][]*MessageRow, changedMe
 }
 
 // UpdateCaches updates the caches for the committed changes.
-func (me *MessagerEngine) UpdateCaches(newMessages map[string][]*MessageRow, changedMessages map[string][]string) {
+func (me *Engine) UpdateCaches(newMessages map[string][]*MessageRow, changedMessages map[string][]string) {
 	me.mu.Lock()
 	defer me.mu.Unlock()
 	now := time.Now().UnixNano()
@@ -163,7 +163,7 @@ func (me *MessagerEngine) UpdateCaches(newMessages map[string][]*MessageRow, cha
 }
 
 // GenerateAckQuery returns the query and bind vars for acking a message.
-func (me *MessagerEngine) GenerateAckQuery(name string, ids []string) (string, map[string]interface{}, error) {
+func (me *Engine) GenerateAckQuery(name string, ids []string) (string, map[string]interface{}, error) {
 	me.mu.Lock()
 	defer me.mu.Unlock()
 	mm := me.managers[name]
@@ -175,7 +175,7 @@ func (me *MessagerEngine) GenerateAckQuery(name string, ids []string) (string, m
 }
 
 // GeneratePostponeQuery returns the query and bind vars for postponing a message.
-func (me *MessagerEngine) GeneratePostponeQuery(name string, ids []string) (string, map[string]interface{}, error) {
+func (me *Engine) GeneratePostponeQuery(name string, ids []string) (string, map[string]interface{}, error) {
 	me.mu.Lock()
 	defer me.mu.Unlock()
 	mm := me.managers[name]
@@ -187,7 +187,7 @@ func (me *MessagerEngine) GeneratePostponeQuery(name string, ids []string) (stri
 }
 
 // GeneratePurgeQuery returns the query and bind vars for purging messages.
-func (me *MessagerEngine) GeneratePurgeQuery(name string, timeCutoff int64) (string, map[string]interface{}, error) {
+func (me *Engine) GeneratePurgeQuery(name string, timeCutoff int64) (string, map[string]interface{}, error) {
 	me.mu.Lock()
 	defer me.mu.Unlock()
 	mm := me.managers[name]
@@ -198,7 +198,7 @@ func (me *MessagerEngine) GeneratePurgeQuery(name string, timeCutoff int64) (str
 	return query, bv, nil
 }
 
-func (me *MessagerEngine) schemaChanged(tables map[string]*schema.Table, created, altered, dropped []string) {
+func (me *Engine) schemaChanged(tables map[string]*schema.Table, created, altered, dropped []string) {
 	me.mu.Lock()
 	defer me.mu.Unlock()
 	for _, name := range created {
@@ -211,7 +211,7 @@ func (me *MessagerEngine) schemaChanged(tables map[string]*schema.Table, created
 			log.Errorf("Newly created table alread exists in messages: %s", name)
 			continue
 		}
-		mm := NewMessageManager(me.tsv, t, me.conns)
+		mm := newMessageManager(me.tsv, t, me.conns)
 		me.managers[name] = mm
 		mm.Open()
 	}

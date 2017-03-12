@@ -52,17 +52,17 @@ func (mh *messageHeap) Pop() interface{} {
 
 //_______________________________________________
 
-// MessagerCache is the cache for the messager.
-type MessagerCache struct {
+// cache is the cache for the messager.
+type cache struct {
 	mu        sync.Mutex
 	size      int
 	sendQueue messageHeap
 	messages  map[string]*MessageRow
 }
 
-// NewMessagerCache creates a new MessagerCache.
-func NewMessagerCache(size int) *MessagerCache {
-	mc := &MessagerCache{
+// NewMessagerCache creates a new cache.
+func newCache(size int) *cache {
+	mc := &cache{
 		size:     size,
 		messages: make(map[string]*MessageRow),
 	}
@@ -70,7 +70,7 @@ func NewMessagerCache(size int) *MessagerCache {
 }
 
 // Clear clears the cache.
-func (mc *MessagerCache) Clear() {
+func (mc *cache) Clear() {
 	mc.mu.Lock()
 	defer mc.mu.Unlock()
 	mc.sendQueue = nil
@@ -79,7 +79,7 @@ func (mc *MessagerCache) Clear() {
 
 // Add adds a MessageRow to the cache. It returns
 // false if the cache is full.
-func (mc *MessagerCache) Add(mr *MessageRow) bool {
+func (mc *cache) Add(mr *MessageRow) bool {
 	mc.mu.Lock()
 	defer mc.mu.Unlock()
 	if len(mc.sendQueue) >= mc.size {
@@ -102,7 +102,7 @@ func (mc *MessagerCache) Add(mr *MessageRow) bool {
 // to prevent the poller thread from repopulating the
 // message while it's being sent.
 // If the Cache is empty Pop returns nil.
-func (mc *MessagerCache) Pop() *MessageRow {
+func (mc *cache) Pop() *MessageRow {
 	mc.mu.Lock()
 	defer mc.mu.Unlock()
 	for {
@@ -125,7 +125,7 @@ func (mc *MessagerCache) Pop() *MessageRow {
 }
 
 // Discard forgets the specified id.
-func (mc *MessagerCache) Discard(ids []string) {
+func (mc *cache) Discard(ids []string) {
 	mc.mu.Lock()
 	defer mc.mu.Unlock()
 	for _, id := range ids {
@@ -140,8 +140,8 @@ func (mc *MessagerCache) Discard(ids []string) {
 	}
 }
 
-// Size returns the max size of MessagerCache.
-func (mc *MessagerCache) Size() int {
+// Size returns the max size of cache.
+func (mc *cache) Size() int {
 	mc.mu.Lock()
 	defer mc.mu.Unlock()
 	return mc.size
