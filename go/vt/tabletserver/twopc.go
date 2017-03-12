@@ -140,48 +140,48 @@ func (tpc *TwoPC) Init(sidecarDBName string, dbaparams *sqldb.ConnParams) error 
 			return err
 		}
 	}
-	tpc.insertRedoTx = buildParsedQuery(
+	tpc.insertRedoTx = sqlparser.BuildParsedQuery(
 		"insert into %s.redo_state(dtid, state, time_created) values (%a, %a, %a)",
 		dbname, ":dtid", ":state", ":time_created")
-	tpc.insertRedoStmt = buildParsedQuery(
+	tpc.insertRedoStmt = sqlparser.BuildParsedQuery(
 		"insert into %s.redo_statement(dtid, id, statement) values %a",
 		dbname, ":vals")
-	tpc.updateRedoTx = buildParsedQuery(
+	tpc.updateRedoTx = sqlparser.BuildParsedQuery(
 		"update %s.redo_state set state = %a where dtid = %a",
 		dbname, ":state", ":dtid")
-	tpc.deleteRedoTx = buildParsedQuery(
+	tpc.deleteRedoTx = sqlparser.BuildParsedQuery(
 		"delete from %s.redo_state where dtid = %a",
 		dbname, ":dtid")
-	tpc.deleteRedoStmt = buildParsedQuery(
+	tpc.deleteRedoStmt = sqlparser.BuildParsedQuery(
 		"delete from %s.redo_statement where dtid = %a",
 		dbname, ":dtid")
 	tpc.readAllRedo = fmt.Sprintf(sqlReadAllRedo, dbname, dbname)
-	tpc.countUnresolvedRedo = buildParsedQuery(
+	tpc.countUnresolvedRedo = sqlparser.BuildParsedQuery(
 		"select count(*) from %s.redo_state where time_created < %a",
 		dbname, ":time_created")
 
-	tpc.insertTransaction = buildParsedQuery(
+	tpc.insertTransaction = sqlparser.BuildParsedQuery(
 		"insert into %s.dt_state(dtid, state, time_created) values (%a, %a, %a)",
 		dbname, ":dtid", ":state", ":cur_time")
-	tpc.insertParticipants = buildParsedQuery(
+	tpc.insertParticipants = sqlparser.BuildParsedQuery(
 		"insert into %s.dt_participant(dtid, id, keyspace, shard) values %a",
 		dbname, ":vals")
-	tpc.transition = buildParsedQuery(
+	tpc.transition = sqlparser.BuildParsedQuery(
 		"update %s.dt_state set state = %a where dtid = %a and state = %a",
 		dbname, ":state", ":dtid", ":prepare")
-	tpc.deleteTransaction = buildParsedQuery(
+	tpc.deleteTransaction = sqlparser.BuildParsedQuery(
 		"delete from %s.dt_state where dtid = %a",
 		dbname, ":dtid")
-	tpc.deleteParticipants = buildParsedQuery(
+	tpc.deleteParticipants = sqlparser.BuildParsedQuery(
 		"delete from %s.dt_participant where dtid = %a",
 		dbname, ":dtid")
-	tpc.readTransaction = buildParsedQuery(
+	tpc.readTransaction = sqlparser.BuildParsedQuery(
 		"select dtid, state, time_created from %s.dt_state where dtid = %a",
 		dbname, ":dtid")
-	tpc.readParticipants = buildParsedQuery(
+	tpc.readParticipants = sqlparser.BuildParsedQuery(
 		"select keyspace, shard from %s.dt_participant where dtid = %a",
 		dbname, ":dtid")
-	tpc.readAbandoned = buildParsedQuery(
+	tpc.readAbandoned = sqlparser.BuildParsedQuery(
 		"select dtid, time_created from %s.dt_state where time_created < %a",
 		dbname, ":time_created")
 	tpc.readAllTransactions = fmt.Sprintf(sqlReadAllTransactions, dbname, dbname)
@@ -196,12 +196,6 @@ func (tpc *TwoPC) Open(dbconfigs dbconfigs.DBConfigs) {
 // Close closes the TwoPC service.
 func (tpc *TwoPC) Close() {
 	tpc.readPool.Close()
-}
-
-func buildParsedQuery(in string, vars ...interface{}) *sqlparser.ParsedQuery {
-	buf := sqlparser.NewTrackedBuffer(nil)
-	buf.Myprintf(in, vars...)
-	return buf.ParsedQuery()
 }
 
 // SaveRedo saves the statements in the redo log using the supplied connection.

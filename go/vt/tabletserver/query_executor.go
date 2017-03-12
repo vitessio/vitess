@@ -22,6 +22,7 @@ import (
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/tabletserver/connpool"
 	"github.com/youtube/vitess/go/vt/tabletserver/engines/schema"
+	"github.com/youtube/vitess/go/vt/tabletserver/messager"
 	"github.com/youtube/vitess/go/vt/tabletserver/planbuilder"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletenv"
 	"github.com/youtube/vitess/go/vt/vterrors"
@@ -455,7 +456,7 @@ func (qre *QueryExecutor) execInsertMessage(conn *TxConnection) (*sqltypes.Resul
 	}
 	mrs := conn.NewMessages[qre.plan.Table.Name.String()]
 	for _, row := range readback.Rows {
-		mr, err := BuildMessageRow(row)
+		mr, err := messager.BuildMessageRow(row)
 		if err != nil {
 			return nil, err
 		}

@@ -33,6 +33,7 @@ import (
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/tabletserver/connpool"
 	"github.com/youtube/vitess/go/vt/tabletserver/engines/schema"
+	"github.com/youtube/vitess/go/vt/tabletserver/messager"
 	"github.com/youtube/vitess/go/vt/tabletserver/queryservice"
 	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 	"github.com/youtube/vitess/go/vt/tabletserver/splitquery"
@@ -113,7 +114,7 @@ type TabletServer struct {
 	se               *schema.Engine
 	qe               *QueryEngine
 	te               *TxEngine
-	messager         *MessagerEngine
+	messager         *messager.MessagerEngine
 	watcher          *ReplicationWatcher
 	updateStreamList *binlog.StreamList
 
@@ -180,7 +181,7 @@ func NewTabletServer(config tabletenv.TabletConfig, topoServer topo.Server) *Tab
 	tsv.qe = NewQueryEngine(tsv, tsv.se, config)
 	tsv.te = NewTxEngine(tsv, config)
 	tsv.txThrottler = txthrottler.CreateTxThrottlerFromTabletConfig(topoServer)
-	tsv.messager = NewMessagerEngine(tsv, config)
+	tsv.messager = messager.NewMessagerEngine(tsv, tsv.se, config)
 	tsv.watcher = NewReplicationWatcher(tsv.se, config)
 	tsv.updateStreamList = &binlog.StreamList{}
 	// FIXME(alainjobart) could we move this to the Register method below?
@@ -946,7 +947,7 @@ func (tsv *TabletServer) MessageStream(ctx context.Context, target *querypb.Targ
 		target, false, false,
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
 			// TODO(sougou): perform ACL checks.
-			rcv, done := newMessageReceiver(func(r *sqltypes.Result) error {
+			done, err := tsv.messager.Subscribe(name, func(r *sqltypes.Result) error {
 				select {
 				case <-ctx.Done():
 					return io.EOF
@@ -954,7 +955,7 @@ func (tsv *TabletServer) MessageStream(ctx context.Context, target *querypb.Targ
 				}
 				return callback(r)
 			})
-			if err := tsv.messager.Subscribe(name, rcv); err != nil {
+			if err != nil {
 				return err
 			}
 			<-done
