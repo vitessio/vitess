@@ -114,7 +114,7 @@ type TabletServer struct {
 	se               *schema.Engine
 	qe               *QueryEngine
 	te               *TxEngine
-	messager         *messager.MessagerEngine
+	messager         *messager.Engine
 	watcher          *ReplicationWatcher
 	updateStreamList *binlog.StreamList
 
@@ -181,7 +181,7 @@ func NewTabletServer(config tabletenv.TabletConfig, topoServer topo.Server) *Tab
 	tsv.qe = NewQueryEngine(tsv, tsv.se, config)
 	tsv.te = NewTxEngine(tsv, config)
 	tsv.txThrottler = txthrottler.CreateTxThrottlerFromTabletConfig(topoServer)
-	tsv.messager = messager.NewMessagerEngine(tsv, tsv.se, config)
+	tsv.messager = messager.NewEngine(tsv, tsv.se, config)
 	tsv.watcher = NewReplicationWatcher(tsv.se, config)
 	tsv.updateStreamList = &binlog.StreamList{}
 	// FIXME(alainjobart) could we move this to the Register method below?

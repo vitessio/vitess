@@ -172,7 +172,7 @@ func (axp *TxPool) Begin(ctx context.Context) (int64, error) {
 }
 
 // Commit commits the specified transaction.
-func (axp *TxPool) Commit(ctx context.Context, transactionID int64, messager *messager.MessagerEngine) error {
+func (axp *TxPool) Commit(ctx context.Context, transactionID int64, messager *messager.Engine) error {
 	conn, err := axp.Get(transactionID, "for commit")
 	if err != nil {
 		return err
@@ -211,7 +211,7 @@ func (axp *TxPool) LocalBegin(ctx context.Context) (*TxConnection, error) {
 }
 
 // LocalCommit is the commit function for LocalBegin.
-func (axp *TxPool) LocalCommit(ctx context.Context, conn *TxConnection, messager *messager.MessagerEngine) error {
+func (axp *TxPool) LocalCommit(ctx context.Context, conn *TxConnection, messager *messager.Engine) error {
 	defer conn.conclude(TxCommit)
 	defer messager.LockDB(conn.NewMessages, conn.ChangedMessages)()
 	txStats.Add("Completed", time.Now().Sub(conn.StartTime))

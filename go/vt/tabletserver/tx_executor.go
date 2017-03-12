@@ -25,7 +25,7 @@ type TxExecutor struct {
 	ctx      context.Context
 	logStats *tabletenv.LogStats
 	te       *TxEngine
-	messager *messager.MessagerEngine
+	messager *messager.Engine
 }
 
 // Prepare performs a prepare on a connection including the redo log work.

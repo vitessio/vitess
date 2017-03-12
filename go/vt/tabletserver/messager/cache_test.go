@@ -12,7 +12,7 @@ import (
 )
 
 func TestMessagerCacheOrder(t *testing.T) {
-	mc := NewMessagerCache(10)
+	mc := newCache(10)
 	if !mc.Add(&MessageRow{
 		TimeNext: 1,
 		Epoch:    0,
@@ -65,7 +65,7 @@ func TestMessagerCacheOrder(t *testing.T) {
 }
 
 func TestMessagerCacheDupKey(t *testing.T) {
-	mc := NewMessagerCache(10)
+	mc := newCache(10)
 	if !mc.Add(&MessageRow{
 		TimeNext: 1,
 		Epoch:    0,
@@ -99,7 +99,7 @@ func TestMessagerCacheDupKey(t *testing.T) {
 }
 
 func TestMessagerCacheDiscard(t *testing.T) {
-	mc := NewMessagerCache(10)
+	mc := newCache(10)
 	if !mc.Add(&MessageRow{
 		TimeNext: 1,
 		Epoch:    0,
@@ -149,7 +149,7 @@ func TestMessagerCacheDiscard(t *testing.T) {
 }
 
 func TestMessagerCacheFull(t *testing.T) {
-	mc := NewMessagerCache(2)
+	mc := newCache(2)
 	if !mc.Add(&MessageRow{
 		TimeNext: 1,
 		Epoch:    0,
@@ -174,7 +174,7 @@ func TestMessagerCacheFull(t *testing.T) {
 }
 
 func TestMessagerCacheEmpty(t *testing.T) {
-	mc := NewMessagerCache(2)
+	mc := newCache(2)
 	if !mc.Add(&MessageRow{
 		TimeNext: 1,
 		Epoch:    0,

@@ -61,15 +61,15 @@ func (rcv *messageReceiver) Cancel() {
 }
 
 // receiverWithStatus is a separate struct to signify
-// that the busy flag is controlled by the MessageManager
+// that the busy flag is controlled by the messageManager
 // mutex.
 type receiverWithStatus struct {
 	receiver *messageReceiver
 	busy     bool
 }
 
-// MessageManager manages messages for a message table.
-type MessageManager struct {
+// messageManager manages messages for a message table.
+type messageManager struct {
 	DBLock sync.Mutex
 	tsv    TabletService
 
@@ -89,7 +89,7 @@ type MessageManager struct {
 	// an item gets added to the cache, or if the manager is closed.
 	// The trigger wakes up the runSend thread.
 	cond            sync.Cond
-	cache           *MessagerCache
+	cache           *cache
 	receivers       []*receiverWithStatus
 	curReceiver     int
 	messagesPending bool
@@ -106,11 +106,11 @@ type MessageManager struct {
 	purgeQuery     *sqlparser.ParsedQuery
 }
 
-// NewMessageManager creates a new message manager.
+// newMessageManager creates a new message manager.
 // Calls into tsv have to be made asynchronously. Otherwise,
 // it can lead to deadlocks.
-func NewMessageManager(tsv TabletService, table *schema.Table, conns *connpool.Pool) *MessageManager {
-	mm := &MessageManager{
+func newMessageManager(tsv TabletService, table *schema.Table, conns *connpool.Pool) *messageManager {
+	mm := &messageManager{
 		tsv:  tsv,
 		name: table.Name,
 		fieldResult: &sqltypes.Result{
@@ -119,7 +119,7 @@ func NewMessageManager(tsv TabletService, table *schema.Table, conns *connpool.P
 		ackWaitTime: table.MessageInfo.AckWaitDuration,
 		purgeAfter:  table.MessageInfo.PurgeAfterDuration,
 		batchSize:   table.MessageInfo.BatchSize,
-		cache:       NewMessagerCache(table.MessageInfo.CacheSize),
+		cache:       newCache(table.MessageInfo.CacheSize),
 		pollerTicks: timer.NewTimer(table.MessageInfo.PollInterval),
 		purgeTicks:  timer.NewTimer(table.MessageInfo.PollInterval),
 		conns:       conns,
@@ -141,8 +141,8 @@ func NewMessageManager(tsv TabletService, table *schema.Table, conns *connpool.P
 	return mm
 }
 
-// Open starts the MessageManager service.
-func (mm *MessageManager) Open() {
+// Open starts the messageManager service.
+func (mm *messageManager) Open() {
 	mm.mu.Lock()
 	defer mm.mu.Unlock()
 	if mm.isOpen {
@@ -157,8 +157,8 @@ func (mm *MessageManager) Open() {
 	mm.purgeTicks.Start(mm.runPurge)
 }
 
-// Close stops the MessageManager service.
-func (mm *MessageManager) Close() {
+// Close stops the messageManager service.
+func (mm *messageManager) Close() {
 	mm.pollerTicks.Stop()
 	mm.purgeTicks.Stop()
 
@@ -180,7 +180,7 @@ func (mm *MessageManager) Close() {
 }
 
 // Subscribe adds the receiver to the list of subsribers.
-func (mm *MessageManager) Subscribe(receiver *messageReceiver) {
+func (mm *messageManager) Subscribe(receiver *messageReceiver) {
 	mm.mu.Lock()
 	defer mm.mu.Unlock()
 	withStatus := &receiverWithStatus{
@@ -194,7 +194,7 @@ func (mm *MessageManager) Subscribe(receiver *messageReceiver) {
 	go mm.send(withStatus, mm.fieldResult)
 }
 
-func (mm *MessageManager) unsubscribe(receiver *messageReceiver) {
+func (mm *messageManager) unsubscribe(receiver *messageReceiver) {
 	mm.mu.Lock()
 	defer mm.mu.Unlock()
 	for i, rcv := range mm.receivers {
@@ -221,7 +221,7 @@ func (mm *MessageManager) unsubscribe(receiver *messageReceiver) {
 // was previously -1, it broadcasts. If none was found,
 // curReceiver is set to -1. If there's no starting point,
 // it must be specified as -1.
-func (mm *MessageManager) rescanReceivers(start int) {
+func (mm *messageManager) rescanReceivers(start int) {
 	cur := start
 	for range mm.receivers {
 		cur = (cur + 1) % len(mm.receivers)
@@ -240,7 +240,7 @@ func (mm *MessageManager) rescanReceivers(start int) {
 // Add adds the message to the cache. It returns true
 // if successful. If the message is already present,
 // it still returns true.
-func (mm *MessageManager) Add(mr *MessageRow) bool {
+func (mm *messageManager) Add(mr *MessageRow) bool {
 	mm.mu.Lock()
 	defer mm.mu.Unlock()
 	if len(mm.receivers) == 0 {
@@ -253,7 +253,7 @@ func (mm *MessageManager) Add(mr *MessageRow) bool {
 	return true
 }
 
-func (mm *MessageManager) runSend() {
+func (mm *messageManager) runSend() {
 	defer mm.wg.Done()
 	for {
 		var rows [][]sqltypes.Value
@@ -296,7 +296,7 @@ func (mm *MessageManager) runSend() {
 	}
 }
 
-func (mm *MessageManager) send(receiver *receiverWithStatus, qr *sqltypes.Result) {
+func (mm *messageManager) send(receiver *receiverWithStatus, qr *sqltypes.Result) {
 	defer mm.wg.Done()
 	if err := receiver.receiver.Send(qr); err != nil {
 		if err == io.EOF {
@@ -330,7 +330,7 @@ func (mm *MessageManager) send(receiver *receiverWithStatus, qr *sqltypes.Result
 }
 
 // postpone is a non-member because it should be called asynchronously and should
-// not rely on members of MessageManager.
+// not rely on members of messageManager.
 func postpone(tsv TabletService, name string, ackWaitTime time.Duration, ids []string) {
 	ctx, cancel := context.WithTimeout(tabletenv.LocalContext(), ackWaitTime)
 	defer cancel()
@@ -341,7 +341,7 @@ func postpone(tsv TabletService, name string, ackWaitTime time.Duration, ids []s
 	}
 }
 
-func (mm *MessageManager) runPoller() {
+func (mm *messageManager) runPoller() {
 	ctx, cancel := context.WithTimeout(tabletenv.LocalContext(), mm.pollerTicks.Interval())
 	defer cancel()
 	conn, err := mm.conns.Get(ctx)
@@ -402,12 +402,12 @@ func (mm *MessageManager) runPoller() {
 	}()
 }
 
-func (mm *MessageManager) runPurge() {
+func (mm *messageManager) runPurge() {
 	go purge(mm.tsv, mm.name.String(), mm.purgeAfter, mm.purgeTicks.Interval())
 }
 
 // purge is a non-member because it should be called asynchronously and should
-// not rely on members of MessageManager.
+// not rely on members of messageManager.
 func purge(tsv TabletService, name string, purgeAfter, purgeInterval time.Duration) {
 	ctx, cancel := context.WithTimeout(tabletenv.LocalContext(), purgeInterval)
 	defer cancel()
@@ -425,7 +425,7 @@ func purge(tsv TabletService, name string, purgeAfter, purgeInterval time.Durati
 }
 
 // GenerateAckQuery returns the query and bind vars for acking a message.
-func (mm *MessageManager) GenerateAckQuery(ids []string) (string, map[string]interface{}) {
+func (mm *messageManager) GenerateAckQuery(ids []string) (string, map[string]interface{}) {
 	idbvs := make([]interface{}, len(ids))
 	for i, id := range ids {
 		idbvs[i] = id
@@ -437,7 +437,7 @@ func (mm *MessageManager) GenerateAckQuery(ids []string) (string, map[string]int
 }
 
 // GeneratePostponeQuery returns the query and bind vars for postponing a message.
-func (mm *MessageManager) GeneratePostponeQuery(ids []string) (string, map[string]interface{}) {
+func (mm *messageManager) GeneratePostponeQuery(ids []string) (string, map[string]interface{}) {
 	idbvs := make([]interface{}, len(ids))
 	for i, id := range ids {
 		idbvs[i] = id
@@ -450,7 +450,7 @@ func (mm *MessageManager) GeneratePostponeQuery(ids []string) (string, map[strin
 }
 
 // GeneratePurgeQuery returns the query and bind vars for purging messages.
-func (mm *MessageManager) GeneratePurgeQuery(timeCutoff int64) (string, map[string]interface{}) {
+func (mm *messageManager) GeneratePurgeQuery(timeCutoff int64) (string, map[string]interface{}) {
 	return mm.purgeQuery.Query, map[string]interface{}{
 		"time_scheduled": timeCutoff,
 	}
@@ -474,13 +474,13 @@ func BuildMessageRow(row []sqltypes.Value) (*MessageRow, error) {
 	}, nil
 }
 
-func (mm *MessageManager) receiverCount() int {
+func (mm *messageManager) receiverCount() int {
 	mm.mu.Lock()
 	defer mm.mu.Unlock()
 	return len(mm.receivers)
 }
 
-func (mm *MessageManager) read(ctx context.Context, conn *connpool.DBConn, pq *sqlparser.ParsedQuery, bindVars map[string]interface{}) (*sqltypes.Result, error) {
+func (mm *messageManager) read(ctx context.Context, conn *connpool.DBConn, pq *sqlparser.ParsedQuery, bindVars map[string]interface{}) (*sqltypes.Result, error) {
 	b, err := pq.GenerateQuery(bindVars)
 	if err != nil {
 		// TODO(sougou): increment internal error.
