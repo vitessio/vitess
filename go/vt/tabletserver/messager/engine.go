@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package tabletserver
+package messager
 
 import (
 	"fmt"
@@ -10,15 +10,26 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
+	"golang.org/x/net/context"
 
+	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/tabletserver/connpool"
 	"github.com/youtube/vitess/go/vt/tabletserver/engines/schema"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletenv"
 	"github.com/youtube/vitess/go/vt/vterrors"
 
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
+
+// TabletService defines the functions of TabletServer
+// that the messager needs for callback.
+type TabletService interface {
+	CheckMySQL()
+	PostponeMessages(ctx context.Context, target *querypb.Target, name string, ids []string) (count int64, err error)
+	PurgeMessages(ctx context.Context, target *querypb.Target, name string, timeCutoff int64) (count int64, err error)
+}
 
 // MessagerEngine is the engine for handling messages.
 type MessagerEngine struct {
@@ -26,15 +37,16 @@ type MessagerEngine struct {
 	isOpen   bool
 	managers map[string]*MessageManager
 
-	// TODO(sougou): This depndency should be cleaned up.
-	tsv   *TabletServer
+	tsv   TabletService
+	se    *schema.Engine
 	conns *connpool.Pool
 }
 
 // NewMessagerEngine creates a new MessagerEngine.
-func NewMessagerEngine(tsv *TabletServer, config tabletenv.TabletConfig) *MessagerEngine {
+func NewMessagerEngine(tsv TabletService, se *schema.Engine, config tabletenv.TabletConfig) *MessagerEngine {
 	return &MessagerEngine{
 		tsv: tsv,
+		se:  se,
 		conns: connpool.New(
 			config.PoolNamePrefix+"MessagerPool",
 			config.MessagePoolSize,
@@ -51,7 +63,7 @@ func (me *MessagerEngine) Open(dbconfigs dbconfigs.DBConfigs) error {
 		return nil
 	}
 	me.conns.Open(&dbconfigs.App, &dbconfigs.Dba)
-	me.tsv.se.RegisterNotifier("messages", me.schemaChanged)
+	me.se.RegisterNotifier("messages", me.schemaChanged)
 	me.isOpen = true
 	return nil
 }
@@ -64,7 +76,7 @@ func (me *MessagerEngine) Close() {
 		return
 	}
 	me.isOpen = false
-	me.tsv.se.UnregisterNotifier("messages")
+	me.se.UnregisterNotifier("messages")
 	for _, mm := range me.managers {
 		mm.Close()
 	}
@@ -73,15 +85,22 @@ func (me *MessagerEngine) Close() {
 }
 
 // Subscribe subscribes to messages from the requested table.
-func (me *MessagerEngine) Subscribe(name string, rcv *messageReceiver) error {
+// The function returns a done channel that will be closed when
+// the subscription ends, which can be initiated by the send function
+// returning io.EOF. The engine can also end a subscription which is
+// usually triggered by Close. It's the responsibility of the send
+// function to promptly return if the done channel is closed. Otherwise,
+// the engine's Close function will hang indefinitely.
+func (me *MessagerEngine) Subscribe(name string, send func(*sqltypes.Result) error) (done chan struct{}, err error) {
 	me.mu.Lock()
 	defer me.mu.Unlock()
 	mm := me.managers[name]
 	if mm == nil {
-		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "message table %s not found", name)
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "message table %s not found", name)
 	}
+	rcv, done := newMessageReceiver(send)
 	mm.Subscribe(rcv)
-	return nil
+	return done, nil
 }
 
 // LockDB obtains db locks for all messages that need to

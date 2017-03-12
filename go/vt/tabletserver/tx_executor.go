@@ -14,6 +14,7 @@ import (
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
+	"github.com/youtube/vitess/go/vt/tabletserver/messager"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletenv"
 	"github.com/youtube/vitess/go/vt/vterrors"
 )
@@ -24,7 +25,7 @@ type TxExecutor struct {
 	ctx      context.Context
 	logStats *tabletenv.LogStats
 	te       *TxEngine
-	messager *MessagerEngine
+	messager *messager.MessagerEngine
 }
 
 // Prepare performs a prepare on a connection including the redo log work.

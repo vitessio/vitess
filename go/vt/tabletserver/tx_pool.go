@@ -23,6 +23,7 @@ import (
 	"github.com/youtube/vitess/go/timer"
 	"github.com/youtube/vitess/go/vt/callerid"
 	"github.com/youtube/vitess/go/vt/tabletserver/connpool"
+	"github.com/youtube/vitess/go/vt/tabletserver/messager"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletenv"
 	"github.com/youtube/vitess/go/vt/vterrors"
 
@@ -171,7 +172,7 @@ func (axp *TxPool) Begin(ctx context.Context) (int64, error) {
 }
 
 // Commit commits the specified transaction.
-func (axp *TxPool) Commit(ctx context.Context, transactionID int64, messager *MessagerEngine) error {
+func (axp *TxPool) Commit(ctx context.Context, transactionID int64, messager *messager.MessagerEngine) error {
 	conn, err := axp.Get(transactionID, "for commit")
 	if err != nil {
 		return err
@@ -210,7 +211,7 @@ func (axp *TxPool) LocalBegin(ctx context.Context) (*TxConnection, error) {
 }
 
 // LocalCommit is the commit function for LocalBegin.
-func (axp *TxPool) LocalCommit(ctx context.Context, conn *TxConnection, messager *MessagerEngine) error {
+func (axp *TxPool) LocalCommit(ctx context.Context, conn *TxConnection, messager *messager.MessagerEngine) error {
 	defer conn.conclude(TxCommit)
 	defer messager.LockDB(conn.NewMessages, conn.ChangedMessages)()
 	txStats.Add("Completed", time.Now().Sub(conn.StartTime))
@@ -276,7 +277,7 @@ type TxConnection struct {
 	StartTime         time.Time
 	EndTime           time.Time
 	Queries           []string
-	NewMessages       map[string][]*MessageRow
+	NewMessages       map[string][]*messager.MessageRow
 	ChangedMessages   map[string][]string
 	Conclusion        string
 	LogToFile         sync2.AtomicInt32
@@ -290,7 +291,7 @@ func newTxConnection(conn *connpool.DBConn, transactionID int64, pool *TxPool, i
 		TransactionID:     transactionID,
 		pool:              pool,
 		StartTime:         time.Now(),
-		NewMessages:       make(map[string][]*MessageRow),
+		NewMessages:       make(map[string][]*messager.MessageRow),
 		ChangedMessages:   make(map[string][]string),
 		ImmediateCallerID: immediate,
 		EffectiveCallerID: effective,

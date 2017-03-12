@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package tabletserver
+package messager
 
 import (
 	"io"
@@ -11,15 +11,17 @@ import (
 	"testing"
 	"time"
 
+	"golang.org/x/net/context"
+
 	"github.com/youtube/vitess/go/mysqlconn/fakesqldb"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/sync2"
+	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/tabletserver/connpool"
 	"github.com/youtube/vitess/go/vt/tabletserver/engines/schema"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 var (
@@ -103,28 +105,12 @@ func (tr *testReceiver) WaitForDone() {
 	}
 }
 
-// TODO(sougou): Use a fake TabletServer for all these tests.
 func TestReceiverEOF(t *testing.T) {
-	db := setUpTabletServerTest(t)
+	db := fakesqldb.New(t)
 	defer db.Close()
-	testUtils := newTestUtils()
-	config := testUtils.newQueryServiceConfig()
-	config.TransactionCap = 1
-	tsv := NewTabletServerWithNilTopoServer(config)
-	dbconfigs := testUtils.newDBConfigs(db)
-	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
-	err := tsv.StartService(target, dbconfigs, testUtils.newMysqld(&dbconfigs))
-	if err != nil {
-		t.Fatalf("StartService failed: %v", err)
-	}
-	mm := NewMessageManager(tsv, mmTable, newMMConnPool(db))
+	mm := NewMessageManager(newFakeTabletServer(), mmTable, newMMConnPool(db))
 	mm.Open()
-	defer func() {
-		// tsv should stop service first. Otherwise, there's
-		// a race between postone and close.
-		tsv.StopService()
-		mm.Close()
-	}()
+	defer mm.Close()
 	r1 := newTestReceiver(0)
 	r1.done = make(chan struct{})
 	mm.Subscribe(r1.rcv)
@@ -145,20 +131,9 @@ func TestReceiverEOF(t *testing.T) {
 }
 
 func TestMessageManagerState(t *testing.T) {
-	db := setUpTabletServerTest(t)
+	db := fakesqldb.New(t)
 	defer db.Close()
-	testUtils := newTestUtils()
-	config := testUtils.newQueryServiceConfig()
-	config.TransactionCap = 1
-	tsv := NewTabletServerWithNilTopoServer(config)
-	dbconfigs := testUtils.newDBConfigs(db)
-	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
-	err := tsv.StartService(target, dbconfigs, testUtils.newMysqld(&dbconfigs))
-	if err != nil {
-		t.Fatalf("StartService failed: %v", err)
-	}
-	defer tsv.StopService()
-	mm := NewMessageManager(tsv, mmTable, newMMConnPool(db))
+	mm := NewMessageManager(newFakeTabletServer(), mmTable, newMMConnPool(db))
 	// Do it twice
 	for i := 0; i < 2; i++ {
 		mm.Open()
@@ -183,28 +158,13 @@ func TestMessageManagerState(t *testing.T) {
 }
 
 func TestMessageManagerAdd(t *testing.T) {
-	db := setUpTabletServerTest(t)
+	db := fakesqldb.New(t)
 	defer db.Close()
-	testUtils := newTestUtils()
-	config := testUtils.newQueryServiceConfig()
-	config.TransactionCap = 1
-	tsv := NewTabletServerWithNilTopoServer(config)
-	dbconfigs := testUtils.newDBConfigs(db)
-	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
-	err := tsv.StartService(target, dbconfigs, testUtils.newMysqld(&dbconfigs))
-	if err != nil {
-		t.Fatalf("StartService failed: %v", err)
-	}
 	ti := newMMTable()
 	ti.MessageInfo.CacheSize = 1
-	mm := NewMessageManager(tsv, ti, newMMConnPool(db))
+	mm := NewMessageManager(newFakeTabletServer(), ti, newMMConnPool(db))
 	mm.Open()
-	defer func() {
-		// tsv should stop service first. Otherwise, there's
-		// a race between postone and close.
-		tsv.StopService()
-		mm.Close()
-	}()
+	defer mm.Close()
 
 	row1 := &MessageRow{
 		ID: sqltypes.MakeString([]byte("1")),
@@ -236,26 +196,12 @@ func TestMessageManagerAdd(t *testing.T) {
 }
 
 func TestMessageManagerSend(t *testing.T) {
-	db := setUpTabletServerTest(t)
+	db := fakesqldb.New(t)
 	defer db.Close()
-	testUtils := newTestUtils()
-	config := testUtils.newQueryServiceConfig()
-	config.TransactionCap = 1
-	tsv := NewTabletServerWithNilTopoServer(config)
-	dbconfigs := testUtils.newDBConfigs(db)
-	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
-	err := tsv.StartService(target, dbconfigs, testUtils.newMysqld(&dbconfigs))
-	if err != nil {
-		t.Fatalf("StartService failed: %v", err)
-	}
+	tsv := newFakeTabletServer()
 	mm := NewMessageManager(tsv, mmTable, newMMConnPool(db))
 	mm.Open()
-	defer func() {
-		// tsv should stop service first. Otherwise, there's
-		// a race between postone and close.
-		tsv.StopService()
-		mm.Close()
-	}()
+	defer mm.Close()
 	r1 := newTestReceiver(1)
 	mm.Subscribe(r1.rcv)
 	want := &sqltypes.Result{
@@ -264,10 +210,10 @@ func TestMessageManagerSend(t *testing.T) {
 	if got := <-r1.ch; !reflect.DeepEqual(got, want) {
 		t.Errorf("Received: %v, want %v", got, want)
 	}
-	row1 := &MessageRow{
-		ID: sqltypes.MakeString([]byte("1")),
-	}
-	mm.Add(row1)
+	// Set the channel to verify call to Postpone.
+	ch := make(chan string)
+	tsv.SetChannel(ch)
+	mm.Add(&MessageRow{ID: sqltypes.MakeString([]byte("1"))})
 	want = &sqltypes.Result{
 		Rows: [][]sqltypes.Value{{
 			sqltypes.MakeString([]byte("1")),
@@ -277,6 +223,19 @@ func TestMessageManagerSend(t *testing.T) {
 	if got := <-r1.ch; !reflect.DeepEqual(got, want) {
 		t.Errorf("Received: %v, want %v", got, want)
 	}
+
+	// Ensure Postpone got called.
+	if got := <-ch; got != mmTable.Name.String() {
+		t.Errorf("Postpone: %s, want %v", got, mmTable.Name)
+	}
+	// Set the channel back to nil so we don't block any more.
+	tsv.SetChannel(nil)
+
+	// Verify item has been removed from cache.
+	if _, ok := mm.cache.messages["1"]; ok {
+		t.Error("Message 1 is still present in cache")
+	}
+
 	r2 := newTestReceiver(1)
 	mm.Subscribe(r2.rcv)
 	<-r2.ch
@@ -292,34 +251,19 @@ func TestMessageManagerSend(t *testing.T) {
 	mm.Add(&MessageRow{ID: sqltypes.MakeString([]byte("4"))})
 	mm.Add(&MessageRow{ID: sqltypes.MakeString([]byte("5"))})
 	mm.Add(&MessageRow{ID: sqltypes.MakeString([]byte("6"))})
-	// Only r2 should be receiving.
+	// Only r1 should be receiving.
 	<-r1.ch
 	<-r1.ch
 }
 
 func TestMessageManagerBatchSend(t *testing.T) {
-	db := setUpTabletServerTest(t)
+	db := fakesqldb.New(t)
 	defer db.Close()
-	testUtils := newTestUtils()
-	config := testUtils.newQueryServiceConfig()
-	config.TransactionCap = 1
-	tsv := NewTabletServerWithNilTopoServer(config)
-	dbconfigs := testUtils.newDBConfigs(db)
-	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
-	err := tsv.StartService(target, dbconfigs, testUtils.newMysqld(&dbconfigs))
-	if err != nil {
-		t.Fatalf("StartService failed: %v", err)
-	}
 	ti := newMMTable()
 	ti.MessageInfo.BatchSize = 2
-	mm := NewMessageManager(tsv, ti, newMMConnPool(db))
+	mm := NewMessageManager(newFakeTabletServer(), ti, newMMConnPool(db))
 	mm.Open()
-	defer func() {
-		// tsv should stop service first. Otherwise, there's
-		// a race between postone and close.
-		tsv.StopService()
-		mm.Close()
-	}()
+	defer mm.Close()
 	r1 := newTestReceiver(1)
 	mm.Subscribe(r1.rcv)
 	<-r1.ch
@@ -356,18 +300,8 @@ func TestMessageManagerBatchSend(t *testing.T) {
 }
 
 func TestMessageManagerPoller(t *testing.T) {
-	db := setUpTabletServerTest(t)
+	db := fakesqldb.New(t)
 	defer db.Close()
-	testUtils := newTestUtils()
-	config := testUtils.newQueryServiceConfig()
-	config.TransactionCap = 1
-	tsv := NewTabletServerWithNilTopoServer(config)
-	dbconfigs := testUtils.newDBConfigs(db)
-	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
-	err := tsv.StartService(target, dbconfigs, testUtils.newMysqld(&dbconfigs))
-	if err != nil {
-		t.Fatalf("StartService failed: %v", err)
-	}
 	db.AddQueryPattern(
 		"select time_next, epoch, id, message from foo.*",
 		&sqltypes.Result{
@@ -398,14 +332,9 @@ func TestMessageManagerPoller(t *testing.T) {
 	ti := newMMTable()
 	ti.MessageInfo.BatchSize = 2
 	ti.MessageInfo.PollInterval = 20 * time.Second
-	mm := NewMessageManager(tsv, ti, newMMConnPool(db))
+	mm := NewMessageManager(newFakeTabletServer(), ti, newMMConnPool(db))
 	mm.Open()
-	defer func() {
-		// tsv should stop service first. Otherwise, there's
-		// a race between postone and close.
-		tsv.StopService()
-		mm.Close()
-	}()
+	defer mm.Close()
 	r1 := newTestReceiver(1)
 	mm.Subscribe(r1.rcv)
 	<-r1.ch
@@ -445,18 +374,8 @@ func TestMessageManagerPoller(t *testing.T) {
 // TestMessagesPending1 tests for the case where you can't
 // add items because the cache is full.
 func TestMessagesPending1(t *testing.T) {
-	db := setUpTabletServerTest(t)
+	db := fakesqldb.New(t)
 	defer db.Close()
-	testUtils := newTestUtils()
-	config := testUtils.newQueryServiceConfig()
-	config.TransactionCap = 1
-	tsv := NewTabletServerWithNilTopoServer(config)
-	dbconfigs := testUtils.newDBConfigs(db)
-	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
-	err := tsv.StartService(target, dbconfigs, testUtils.newMysqld(&dbconfigs))
-	if err != nil {
-		t.Fatalf("StartService failed: %v", err)
-	}
 	db.AddQueryPattern(
 		"select time_next, epoch, id, message from foo.*",
 		&sqltypes.Result{
@@ -478,14 +397,9 @@ func TestMessagesPending1(t *testing.T) {
 	ti := newMMTable()
 	ti.MessageInfo.CacheSize = 2
 	ti.MessageInfo.PollInterval = 30 * time.Second
-	mm := NewMessageManager(tsv, ti, newMMConnPool(db))
+	mm := NewMessageManager(newFakeTabletServer(), ti, newMMConnPool(db))
 	mm.Open()
-	defer func() {
-		// tsv should stop service first. Otherwise, there's
-		// a race between postone and close.
-		tsv.StopService()
-		mm.Close()
-	}()
+	defer mm.Close()
 	r1 := newTestReceiver(0)
 	mm.Subscribe(r1.rcv)
 	<-r1.ch
@@ -525,18 +439,8 @@ func TestMessagesPending1(t *testing.T) {
 // TestMessagesPending2 tests for the case where
 // there are more pending items than the cache size.
 func TestMessagesPending2(t *testing.T) {
-	db := setUpTabletServerTest(t)
+	db := fakesqldb.New(t)
 	defer db.Close()
-	testUtils := newTestUtils()
-	config := testUtils.newQueryServiceConfig()
-	config.TransactionCap = 1
-	tsv := NewTabletServerWithNilTopoServer(config)
-	dbconfigs := testUtils.newDBConfigs(db)
-	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
-	err := tsv.StartService(target, dbconfigs, testUtils.newMysqld(&dbconfigs))
-	if err != nil {
-		t.Fatalf("StartService failed: %v", err)
-	}
 	db.AddQueryPattern(
 		"select time_next, epoch, id, message from foo.*",
 		&sqltypes.Result{
@@ -558,14 +462,9 @@ func TestMessagesPending2(t *testing.T) {
 	ti := newMMTable()
 	ti.MessageInfo.CacheSize = 1
 	ti.MessageInfo.PollInterval = 30 * time.Second
-	mm := NewMessageManager(tsv, ti, newMMConnPool(db))
+	mm := NewMessageManager(newFakeTabletServer(), ti, newMMConnPool(db))
 	mm.Open()
-	defer func() {
-		// tsv should stop service first. Otherwise, there's
-		// a race between postone and close.
-		tsv.StopService()
-		mm.Close()
-	}()
+	defer mm.Close()
 	r1 := newTestReceiver(0)
 	mm.Subscribe(r1.rcv)
 	<-r1.ch
@@ -590,27 +489,30 @@ func TestMessagesPending2(t *testing.T) {
 	}()
 }
 
-func TestMMGenerate(t *testing.T) {
-	db := setUpTabletServerTest(t)
+func TestMessageManagerPurge(t *testing.T) {
+	db := fakesqldb.New(t)
 	defer db.Close()
-	testUtils := newTestUtils()
-	config := testUtils.newQueryServiceConfig()
-	config.TransactionCap = 1
-	tsv := NewTabletServerWithNilTopoServer(config)
-	dbconfigs := testUtils.newDBConfigs(db)
-	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
-	err := tsv.StartService(target, dbconfigs, testUtils.newMysqld(&dbconfigs))
-	if err != nil {
-		t.Fatalf("StartService failed: %v", err)
-	}
-	mm := NewMessageManager(tsv, mmTable, newMMConnPool(db))
+	tsv := newFakeTabletServer()
+	ti := newMMTable()
+	ti.MessageInfo.PollInterval = 1 * time.Millisecond
+	mm := NewMessageManager(tsv, ti, newMMConnPool(db))
 	mm.Open()
-	defer func() {
-		// tsv should stop service first. Otherwise, there's
-		// a race between postone and close.
-		tsv.StopService()
-		mm.Close()
-	}()
+	defer mm.Close()
+	ch := make(chan string)
+	tsv.SetChannel(ch)
+	// Ensure Purge got called.
+	if got := <-ch; got != mmTable.Name.String() {
+		t.Errorf("Postpone: %s, want %v", got, mmTable.Name)
+	}
+	tsv.SetChannel(nil)
+}
+
+func TestMMGenerate(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	mm := NewMessageManager(newFakeTabletServer(), mmTable, newMMConnPool(db))
+	mm.Open()
+	defer mm.Close()
 	query, bv := mm.GenerateAckQuery([]string{"1", "2"})
 	wantQuery := "update foo set time_acked = :time_acked, time_next = null where id in ::ids and time_acked is null"
 	if query != wantQuery {
@@ -659,17 +561,38 @@ func TestMMGenerate(t *testing.T) {
 	}
 }
 
+type fakeTabletServer struct {
+	ch chan string
+}
+
+func newFakeTabletServer() *fakeTabletServer { return &fakeTabletServer{} }
+
+func (fts *fakeTabletServer) CheckMySQL() {}
+
+func (fts *fakeTabletServer) SetChannel(ch chan string) {
+	fts.ch = ch
+}
+
+func (fts *fakeTabletServer) PostponeMessages(ctx context.Context, target *querypb.Target, name string, ids []string) (count int64, err error) {
+	if fts.ch != nil {
+		fts.ch <- name
+	}
+	return 0, nil
+}
+
+func (fts *fakeTabletServer) PurgeMessages(ctx context.Context, target *querypb.Target, name string, timeCutoff int64) (count int64, err error) {
+	if fts.ch != nil {
+		fts.ch <- name
+	}
+	return 0, nil
+}
+
 func newMMConnPool(db *fakesqldb.DB) *connpool.Pool {
-	testUtils := newTestUtils()
-	config := testUtils.newQueryServiceConfig()
-	tsv := NewTabletServerWithNilTopoServer(config)
-	dbconfigs := testUtils.newDBConfigs(db)
-	pool := connpool.New(
-		config.PoolNamePrefix+"MesasgeConnPool",
-		20,
-		time.Duration(config.IdleTimeout*1e9),
-		tsv,
-	)
+	pool := connpool.New("", 20, time.Duration(10*time.Minute), newFakeTabletServer())
+	dbconfigs := dbconfigs.DBConfigs{
+		App:           *db.ConnParams(),
+		SidecarDBName: "_vt",
+	}
 	pool.Open(&dbconfigs.App, &dbconfigs.Dba)
 	return pool
 }

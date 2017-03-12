@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package tabletserver
+package messager
 
 import (
 	"io"
@@ -71,7 +71,7 @@ type receiverWithStatus struct {
 // MessageManager manages messages for a message table.
 type MessageManager struct {
 	DBLock sync.Mutex
-	tsv    *TabletServer
+	tsv    TabletService
 
 	isOpen bool
 
@@ -109,7 +109,7 @@ type MessageManager struct {
 // NewMessageManager creates a new message manager.
 // Calls into tsv have to be made asynchronously. Otherwise,
 // it can lead to deadlocks.
-func NewMessageManager(tsv *TabletServer, table *schema.Table, conns *connpool.Pool) *MessageManager {
+func NewMessageManager(tsv TabletService, table *schema.Table, conns *connpool.Pool) *MessageManager {
 	mm := &MessageManager{
 		tsv:  tsv,
 		name: table.Name,
@@ -126,16 +126,16 @@ func NewMessageManager(tsv *TabletServer, table *schema.Table, conns *connpool.P
 	}
 	mm.cond.L = &mm.mu
 
-	mm.readByTimeNext = buildParsedQuery(
+	mm.readByTimeNext = sqlparser.BuildParsedQuery(
 		"select time_next, epoch, id, message from %v where time_next < %a order by time_next desc limit %a",
 		mm.name, ":time_next", ":max")
-	mm.ackQuery = buildParsedQuery(
+	mm.ackQuery = sqlparser.BuildParsedQuery(
 		"update %v set time_acked = %a, time_next = null where id in %a and time_acked is null",
 		mm.name, ":time_acked", "::ids")
-	mm.postponeQuery = buildParsedQuery(
+	mm.postponeQuery = sqlparser.BuildParsedQuery(
 		"update %v set time_next = %a+(%a<<epoch), epoch = epoch+1 where id in %a and time_acked is null",
 		mm.name, ":time_now", ":wait_time", "::ids")
-	mm.purgeQuery = buildParsedQuery(
+	mm.purgeQuery = sqlparser.BuildParsedQuery(
 		"delete from %v where time_scheduled < %a and time_acked is not null limit 500",
 		mm.name, ":time_scheduled")
 	return mm
@@ -183,11 +183,6 @@ func (mm *MessageManager) Close() {
 func (mm *MessageManager) Subscribe(receiver *messageReceiver) {
 	mm.mu.Lock()
 	defer mm.mu.Unlock()
-	for _, rcv := range mm.receivers {
-		if rcv.receiver == receiver {
-			return
-		}
-	}
 	withStatus := &receiverWithStatus{
 		receiver: receiver,
 		busy:     true,
@@ -305,7 +300,7 @@ func (mm *MessageManager) send(receiver *receiverWithStatus, qr *sqltypes.Result
 	defer mm.wg.Done()
 	if err := receiver.receiver.Send(qr); err != nil {
 		if err == io.EOF {
-			// No need to call Cancel. MessageReceiver already
+			// No need to call Cancel. messageReceiver already
 			// does that before returning this error.
 			mm.unsubscribe(receiver.receiver)
 		} else {
@@ -336,7 +331,7 @@ func (mm *MessageManager) send(receiver *receiverWithStatus, qr *sqltypes.Result
 
 // postpone is a non-member because it should be called asynchronously and should
 // not rely on members of MessageManager.
-func postpone(tsv *TabletServer, name string, ackWaitTime time.Duration, ids []string) {
+func postpone(tsv TabletService, name string, ackWaitTime time.Duration, ids []string) {
 	ctx, cancel := context.WithTimeout(tabletenv.LocalContext(), ackWaitTime)
 	defer cancel()
 	_, err := tsv.PostponeMessages(ctx, nil, name, ids)
@@ -413,7 +408,7 @@ func (mm *MessageManager) runPurge() {
 
 // purge is a non-member because it should be called asynchronously and should
 // not rely on members of MessageManager.
-func purge(tsv *TabletServer, name string, purgeAfter, purgeInterval time.Duration) {
+func purge(tsv TabletService, name string, purgeAfter, purgeInterval time.Duration) {
 	ctx, cancel := context.WithTimeout(tabletenv.LocalContext(), purgeInterval)
 	defer cancel()
 	for {

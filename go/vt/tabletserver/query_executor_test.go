@@ -6,6 +6,7 @@ package tabletserver
 
 import (
 	"fmt"
+	"io"
 	"math/rand"
 	"reflect"
 	"strings"
@@ -22,7 +23,6 @@ import (
 	"github.com/youtube/vitess/go/vt/callinfo/fakecallinfo"
 	"github.com/youtube/vitess/go/vt/tableacl"
 	"github.com/youtube/vitess/go/vt/tableacl/simpleacl"
-	"github.com/youtube/vitess/go/vt/tabletserver/engines/schema"
 	"github.com/youtube/vitess/go/vt/tabletserver/planbuilder"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletenv"
 	"github.com/youtube/vitess/go/vt/vterrors"
@@ -173,14 +173,17 @@ func TestQueryExecutorPlanInsertMessage(t *testing.T) {
 	qre := newTestQueryExecutor(ctx, tsv, query, 0)
 	defer tsv.StopService()
 	checkPlanID(t, planbuilder.PlanInsertMessage, qre.plan.PlanID)
-	r1 := newTestReceiver(1)
-	tsv.messager.schemaChanged(map[string]*schema.Table{
-		"msg": {
-			Type: schema.Message,
-		},
-	}, []string{"msg"}, nil, nil)
-	tsv.messager.Subscribe("msg", r1.rcv)
-	<-r1.ch
+	ch1 := make(chan *sqltypes.Result)
+	count := 0
+	tsv.messager.Subscribe("msg", func(qr *sqltypes.Result) error {
+		if count > 1 {
+			return io.EOF
+		}
+		count++
+		ch1 <- qr
+		return nil
+	})
+	<-ch1
 	got, err := qre.Execute()
 	if err != nil {
 		t.Fatalf("qre.Execute() = %v, want nil", err)
@@ -188,7 +191,7 @@ func TestQueryExecutorPlanInsertMessage(t *testing.T) {
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got: %v, want: %v", got, want)
 	}
-	mr := <-r1.ch
+	mr := <-ch1
 	wantqr := &sqltypes.Result{
 		Rows: [][]sqltypes.Value{{
 			sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")),

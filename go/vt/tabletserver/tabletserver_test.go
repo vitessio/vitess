@@ -23,6 +23,7 @@ import (
 	"github.com/youtube/vitess/go/mysqlconn/fakesqldb"
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/vt/tabletserver/messager"
 	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletenv"
 	"github.com/youtube/vitess/go/vt/vterrors"
@@ -1483,9 +1484,9 @@ func TestMessageStream(t *testing.T) {
 		close(done)
 	}()
 	// Skip first result (field info).
-	newMessages := map[string][]*MessageRow{
+	newMessages := map[string][]*messager.MessageRow{
 		"msg": {
-			&MessageRow{ID: sqltypes.MakeString([]byte("1"))},
+			&messager.MessageRow{ID: sqltypes.MakeString([]byte("1"))},
 		},
 	}
 	// We may have to iterate a few times before the stream kicks in.
