@@ -115,7 +115,10 @@ func (se *Engine) Open(dbaParams *sqldb.ConnParams) error {
 	for _, row := range tableData.Rows {
 		wg.Add(1)
 		go func(row []sqltypes.Value) {
-			defer wg.Done()
+			defer func() {
+				tabletenv.LogError()
+				wg.Done()
+			}()
 
 			tableName := row[0].String()
 			conn, err := se.conns.Get(ctx)
