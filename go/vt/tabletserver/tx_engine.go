@@ -130,7 +130,10 @@ func (te *TxEngine) Close(immediate bool) {
 	// the function closes rollbackDone, which can be
 	// verified to make sure it won't kick in later.
 	go func() {
-		defer close(rollbackDone)
+		defer func() {
+			tabletenv.LogError()
+			close(rollbackDone)
+		}()
 		if immediate {
 			// Immediately rollback everything and return.
 			log.Info("Immediate shutdown: rolling back now.")

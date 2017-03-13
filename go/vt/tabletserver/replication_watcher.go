@@ -89,7 +89,10 @@ func (rpw *ReplicationWatcher) Close() {
 
 // Process processes the replication stream.
 func (rpw *ReplicationWatcher) Process(ctx context.Context, dbconfigs dbconfigs.DBConfigs, mysqld mysqlctl.MysqlDaemon) {
-	defer rpw.wg.Done()
+	defer func() {
+		tabletenv.LogError()
+		rpw.wg.Done()
+	}()
 	for {
 		log.Infof("Starting a binlog Streamer from current replication position to monitor binlogs")
 		streamer := binlog.NewStreamer(dbconfigs.App.DbName, mysqld, rpw.se, nil /*clientCharset*/, replication.Position{}, 0 /*timestamp*/, func(trans *binlogdatapb.BinlogTransaction) error {

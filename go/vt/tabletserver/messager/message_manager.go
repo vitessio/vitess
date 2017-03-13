@@ -254,7 +254,10 @@ func (mm *messageManager) Add(mr *MessageRow) bool {
 }
 
 func (mm *messageManager) runSend() {
-	defer mm.wg.Done()
+	defer func() {
+		tabletenv.LogError()
+		mm.wg.Done()
+	}()
 	for {
 		var rows [][]sqltypes.Value
 		mm.mu.Lock()
@@ -297,7 +300,10 @@ func (mm *messageManager) runSend() {
 }
 
 func (mm *messageManager) send(receiver *receiverWithStatus, qr *sqltypes.Result) {
-	defer mm.wg.Done()
+	defer func() {
+		tabletenv.LogError()
+		mm.wg.Done()
+	}()
 	if err := receiver.receiver.Send(qr); err != nil {
 		if err == io.EOF {
 			// No need to call Cancel. messageReceiver already
@@ -333,7 +339,10 @@ func (mm *messageManager) send(receiver *receiverWithStatus, qr *sqltypes.Result
 // not rely on members of messageManager.
 func postpone(tsv TabletService, name string, ackWaitTime time.Duration, ids []string) {
 	ctx, cancel := context.WithTimeout(tabletenv.LocalContext(), ackWaitTime)
-	defer cancel()
+	defer func() {
+		tabletenv.LogError()
+		cancel()
+	}()
 	_, err := tsv.PostponeMessages(ctx, nil, name, ids)
 	if err != nil {
 		// TODO(sougou): increment internal error.
@@ -343,7 +352,10 @@ func postpone(tsv TabletService, name string, ackWaitTime time.Duration, ids []s
 
 func (mm *messageManager) runPoller() {
 	ctx, cancel := context.WithTimeout(tabletenv.LocalContext(), mm.pollerTicks.Interval())
-	defer cancel()
+	defer func() {
+		tabletenv.LogError()
+		cancel()
+	}()
 	conn, err := mm.conns.Get(ctx)
 	if err != nil {
 		// TODO(sougou): increment internal error.
@@ -410,7 +422,10 @@ func (mm *messageManager) runPurge() {
 // not rely on members of messageManager.
 func purge(tsv TabletService, name string, purgeAfter, purgeInterval time.Duration) {
 	ctx, cancel := context.WithTimeout(tabletenv.LocalContext(), purgeInterval)
-	defer cancel()
+	defer func() {
+		tabletenv.LogError()
+		cancel()
+	}()
 	for {
 		count, err := tsv.PurgeMessages(ctx, nil, name, time.Now().Add(-purgeAfter).UnixNano())
 		if err != nil {
