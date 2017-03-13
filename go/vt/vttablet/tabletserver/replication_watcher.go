@@ -95,15 +95,15 @@ func (rpw *ReplicationWatcher) Process(ctx context.Context, dbconfigs dbconfigs.
 	}()
 	for {
 		log.Infof("Starting a binlog Streamer from current replication position to monitor binlogs")
-		streamer := binlog.NewStreamer(dbconfigs.App.DbName, mysqld, rpw.se, nil /*clientCharset*/, replication.Position{}, 0 /*timestamp*/, func(trans *binlogdatapb.BinlogTransaction) error {
+		streamer := binlog.NewStreamer(dbconfigs.App.DbName, mysqld, rpw.se, nil /*clientCharset*/, replication.Position{}, 0 /*timestamp*/, func(eventToken *querypb.EventToken, statements []binlog.FullBinlogStatement) error {
 			// Save the event token.
 			rpw.mu.Lock()
-			rpw.eventToken = trans.EventToken
+			rpw.eventToken = eventToken
 			rpw.mu.Unlock()
 
 			// If it's a DDL, trigger a schema reload.
-			for _, statement := range trans.Statements {
-				if statement.Category != binlogdatapb.BinlogTransaction_Statement_BL_DDL {
+			for _, statement := range statements {
+				if statement.Statement.Category != binlogdatapb.BinlogTransaction_Statement_BL_DDL {
 					continue
 				}
 				err := rpw.se.Reload(ctx)

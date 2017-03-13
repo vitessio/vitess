@@ -97,19 +97,24 @@ func TestStreamerParseRBRUpdateEvent(t *testing.T) {
 
 	events := make(chan replication.BinlogEvent)
 
-	want := []binlogdatapb.BinlogTransaction{
+	want := []fullBinlogTransaction{
 		{
-			Statements: []*binlogdatapb.BinlogTransaction_Statement{
+			statements: []FullBinlogStatement{
 				{
-					Category: binlogdatapb.BinlogTransaction_Statement_BL_SET,
-					Sql:      []byte("SET TIMESTAMP=1407805592"),
+					Statement: &binlogdatapb.BinlogTransaction_Statement{
+						Category: binlogdatapb.BinlogTransaction_Statement_BL_SET,
+						Sql:      []byte("SET TIMESTAMP=1407805592"),
+					},
 				},
 				{
-					Category: binlogdatapb.BinlogTransaction_Statement_BL_UPDATE,
-					Sql:      []byte("UPDATE vt_a SET id=1076895760, message='abcd' WHERE id=1076895760 AND message='abc'"),
+					Statement: &binlogdatapb.BinlogTransaction_Statement{
+						Category: binlogdatapb.BinlogTransaction_Statement_BL_UPDATE,
+						Sql:      []byte("UPDATE vt_a SET id=1076895760, message='abcd' WHERE id=1076895760 AND message='abc'"),
+					},
+					Table: "vt_a",
 				},
 			},
-			EventToken: &querypb.EventToken{
+			eventToken: &querypb.EventToken{
 				Timestamp: 1407805592,
 				Position: replication.EncodePosition(replication.Position{
 					GTIDSet: replication.MariadbGTID{
@@ -121,9 +126,12 @@ func TestStreamerParseRBRUpdateEvent(t *testing.T) {
 			},
 		},
 	}
-	var got []binlogdatapb.BinlogTransaction
-	sendTransaction := func(trans *binlogdatapb.BinlogTransaction) error {
-		got = append(got, *trans)
+	var got []fullBinlogTransaction
+	sendTransaction := func(eventToken *querypb.EventToken, statements []FullBinlogStatement) error {
+		got = append(got, fullBinlogTransaction{
+			eventToken: eventToken,
+			statements: statements,
+		})
 		return nil
 	}
 	bls := NewStreamer("vt_test_keyspace", nil, se, nil, replication.Position{}, 0, sendTransaction)

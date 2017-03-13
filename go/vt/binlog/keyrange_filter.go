@@ -12,41 +12,43 @@ import (
 	"errors"
 	"fmt"
 
-	binlogdatapb "github.com/youtube/vitess/go/vt/proto/binlogdata"
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	"github.com/youtube/vitess/go/vt/sqlparser"
+
+	binlogdatapb "github.com/youtube/vitess/go/vt/proto/binlogdata"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // KeyRangeFilterFunc returns a function that calls callback only if statements
 // in the transaction match the specified keyrange. The resulting function can be
 // passed into the Streamer: bls.Stream(file, pos, sendTransaction) ->
 // bls.Stream(file, pos, KeyRangeFilterFunc(keyrange, sendTransaction))
-func KeyRangeFilterFunc(keyrange *topodatapb.KeyRange, callback sendTransactionFunc) sendTransactionFunc {
-	return func(reply *binlogdatapb.BinlogTransaction) error {
+func KeyRangeFilterFunc(keyrange *topodatapb.KeyRange, callback func(*binlogdatapb.BinlogTransaction) error) sendTransactionFunc {
+	return func(eventToken *querypb.EventToken, statements []FullBinlogStatement) error {
 		matched := false
-		filtered := make([]*binlogdatapb.BinlogTransaction_Statement, 0, len(reply.Statements))
-		for _, statement := range reply.Statements {
-			switch statement.Category {
+		filtered := make([]*binlogdatapb.BinlogTransaction_Statement, 0, len(statements))
+		for _, statement := range statements {
+			switch statement.Statement.Category {
 			case binlogdatapb.BinlogTransaction_Statement_BL_SET:
-				filtered = append(filtered, statement)
+				filtered = append(filtered, statement.Statement)
 			case binlogdatapb.BinlogTransaction_Statement_BL_DDL:
-				log.Warningf("Not forwarding DDL: %s", statement.Sql)
+				log.Warningf("Not forwarding DDL: %s", statement.Statement.Sql)
 				continue
 			case binlogdatapb.BinlogTransaction_Statement_BL_INSERT,
 				binlogdatapb.BinlogTransaction_Statement_BL_UPDATE,
 				binlogdatapb.BinlogTransaction_Statement_BL_DELETE:
-				keyspaceIDS, err := sqlannotation.ExtractKeyspaceIDS(string(statement.Sql))
+				keyspaceIDS, err := sqlannotation.ExtractKeyspaceIDS(string(statement.Statement.Sql))
 				if err != nil {
-					if statement.Category == binlogdatapb.BinlogTransaction_Statement_BL_INSERT {
+					if statement.Statement.Category == binlogdatapb.BinlogTransaction_Statement_BL_INSERT {
 						// TODO(erez): Stop filtered-replication here, and alert.
 						logExtractKeySpaceIDError(err)
 						continue
 					}
-					// If no keyspace IDs are found, we replicate to all tarrgets.
+					// If no keyspace IDs are found, we replicate to all targets.
 					// This is safe for UPDATE and DELETE because vttablet rewrites queries to
 					// include the primary key and the query will only affect the shards that
 					// have the rows.
-					filtered = append(filtered, statement)
+					filtered = append(filtered, statement.Statement)
 					matched = true
 					continue
 				}
@@ -55,37 +57,38 @@ func KeyRangeFilterFunc(keyrange *topodatapb.KeyRange, callback sendTransactionF
 						// Skip keyspace ids that don't belong to the destination shard.
 						continue
 					}
-					filtered = append(filtered, statement)
+					filtered = append(filtered, statement.Statement)
 					matched = true
 					continue
 				}
-				query, err := getValidRangeQuery(string(statement.Sql), keyspaceIDS, keyrange)
+				query, err := getValidRangeQuery(string(statement.Statement.Sql), keyspaceIDS, keyrange)
 				if err != nil {
-					log.Errorf("Error parsing statement (%s). Got %v", string(statement.Sql), err)
+					log.Errorf("Error parsing statement (%s). Got %v", string(statement.Statement.Sql), err)
 					continue
 				}
 				if query == "" {
 					continue
 				}
 				splitStatement := &binlogdatapb.BinlogTransaction_Statement{
-					Category: statement.Category,
-					Charset:  statement.Charset,
+					Category: statement.Statement.Category,
+					Charset:  statement.Statement.Charset,
 					Sql:      []byte(query),
 				}
 				filtered = append(filtered, splitStatement)
 				matched = true
 			case binlogdatapb.BinlogTransaction_Statement_BL_UNRECOGNIZED:
 				updateStreamErrors.Add("KeyRangeStream", 1)
-				log.Errorf("Error parsing keyspace id: %s", statement.Sql)
+				log.Errorf("Error parsing keyspace id: %s", statement.Statement.Sql)
 				continue
 			}
 		}
-		if matched {
-			reply.Statements = filtered
-		} else {
-			reply.Statements = nil
+		trans := &binlogdatapb.BinlogTransaction{
+			EventToken: eventToken,
 		}
-		return callback(reply)
+		if matched {
+			trans.Statements = filtered
+		}
+		return callback(trans)
 	}
 }
 
