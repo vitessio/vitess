@@ -14,7 +14,7 @@ import (
 	"github.com/youtube/vitess/go/vt/wrangler"
 
 	// import the gRPC client implementation for tablet manager
-	_ "github.com/youtube/vitess/go/vt/tabletmanager/grpctmclient"
+	_ "github.com/youtube/vitess/go/vt/vttablet/grpctmclient"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
