@@ -24,6 +24,7 @@ import (
 	"github.com/youtube/vitess/go/vt/tableacl"
 	"github.com/youtube/vitess/go/vt/tableacl/simpleacl"
 	"github.com/youtube/vitess/go/vt/tabletserver/planbuilder"
+	"github.com/youtube/vitess/go/vt/tabletserver/rules"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletenv"
 	"github.com/youtube/vitess/go/vt/vterrors"
 
@@ -1164,7 +1165,7 @@ func TestQueryExecutorBlacklistQRFail(t *testing.T) {
 	bannedAddr := "127.0.0.1"
 	bannedUser := "u2"
 
-	alterRule := NewQueryRule("disable update", "disable update", QRFail)
+	alterRule := rules.NewQueryRule("disable update", "disable update", rules.QRFail)
 	alterRule.SetIPCond(bannedAddr)
 	alterRule.SetUserCond(bannedUser)
 	alterRule.SetQueryCond("select.*")
@@ -1172,7 +1173,7 @@ func TestQueryExecutorBlacklistQRFail(t *testing.T) {
 	alterRule.AddTableCond("test_table")
 
 	rulesName := "blacklistedRulesQRFail"
-	rules := NewQueryRules()
+	rules := rules.New()
 	rules.Add(alterRule)
 
 	callInfo := &fakecallinfo.FakeCallInfo{
@@ -1181,9 +1182,9 @@ func TestQueryExecutorBlacklistQRFail(t *testing.T) {
 	}
 	ctx := callinfo.NewContext(context.Background(), callInfo)
 	tsv := newTestTabletServer(ctx, enableStrict, db)
-	tsv.qe.queryRuleSources.UnRegisterQueryRuleSource(rulesName)
-	tsv.qe.queryRuleSources.RegisterQueryRuleSource(rulesName)
-	defer tsv.qe.queryRuleSources.UnRegisterQueryRuleSource(rulesName)
+	tsv.qe.queryRuleSources.UnRegisterSource(rulesName)
+	tsv.qe.queryRuleSources.RegisterSource(rulesName)
+	defer tsv.qe.queryRuleSources.UnRegisterSource(rulesName)
 
 	if err := tsv.qe.queryRuleSources.SetRules(rulesName, rules); err != nil {
 		t.Fatalf("failed to set rule, error: %v", err)
@@ -1218,7 +1219,7 @@ func TestQueryExecutorBlacklistQRRetry(t *testing.T) {
 	bannedAddr := "127.0.0.1"
 	bannedUser := "x"
 
-	alterRule := NewQueryRule("disable update", "disable update", QRFailRetry)
+	alterRule := rules.NewQueryRule("disable update", "disable update", rules.QRFailRetry)
 	alterRule.SetIPCond(bannedAddr)
 	alterRule.SetUserCond(bannedUser)
 	alterRule.SetQueryCond("select.*")
@@ -1226,7 +1227,7 @@ func TestQueryExecutorBlacklistQRRetry(t *testing.T) {
 	alterRule.AddTableCond("test_table")
 
 	rulesName := "blacklistedRulesQRRetry"
-	rules := NewQueryRules()
+	rules := rules.New()
 	rules.Add(alterRule)
 
 	callInfo := &fakecallinfo.FakeCallInfo{
@@ -1235,9 +1236,9 @@ func TestQueryExecutorBlacklistQRRetry(t *testing.T) {
 	}
 	ctx := callinfo.NewContext(context.Background(), callInfo)
 	tsv := newTestTabletServer(ctx, enableStrict, db)
-	tsv.qe.queryRuleSources.UnRegisterQueryRuleSource(rulesName)
-	tsv.qe.queryRuleSources.RegisterQueryRuleSource(rulesName)
-	defer tsv.qe.queryRuleSources.UnRegisterQueryRuleSource(rulesName)
+	tsv.qe.queryRuleSources.UnRegisterSource(rulesName)
+	tsv.qe.queryRuleSources.RegisterSource(rulesName)
+	defer tsv.qe.queryRuleSources.UnRegisterSource(rulesName)
 
 	if err := tsv.qe.queryRuleSources.SetRules(rulesName, rules); err != nil {
 		t.Fatalf("failed to set rule, error: %v", err)

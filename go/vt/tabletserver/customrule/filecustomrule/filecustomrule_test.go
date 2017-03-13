@@ -10,7 +10,7 @@ import (
 	"path"
 	"testing"
 
-	"github.com/youtube/vitess/go/vt/tabletserver"
+	"github.com/youtube/vitess/go/vt/tabletserver/rules"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletservermock"
 )
 
@@ -29,7 +29,7 @@ var customRule1 = `[
 func TestFileCustomRule(t *testing.T) {
 	tqsc := tabletservermock.NewController()
 
-	var qrs *tabletserver.QueryRules
+	var qrs *rules.Rules
 	rulepath := path.Join(os.TempDir(), ".customrule.json")
 	// Set r1 and try to get it back
 	err := ioutil.WriteFile(rulepath, []byte(customRule1), os.FileMode(0644))

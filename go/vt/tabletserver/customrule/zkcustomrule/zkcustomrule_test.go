@@ -13,7 +13,7 @@ import (
 	"github.com/samuel/go-zookeeper/zk"
 
 	"github.com/youtube/vitess/go/testfiles"
-	"github.com/youtube/vitess/go/vt/tabletserver"
+	"github.com/youtube/vitess/go/vt/tabletserver/rules"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletservermock"
 	"github.com/youtube/vitess/go/vt/topo/zk2topo"
 	"github.com/youtube/vitess/go/zk/zkctl"
@@ -67,7 +67,7 @@ func TestZkCustomRule(t *testing.T) {
 	}
 	defer zkcr.Stop()
 
-	var qrs *tabletserver.QueryRules
+	var qrs *rules.Rules
 	// Test if we can successfully fetch the original rule (test GetRules)
 	qrs, _, err = zkcr.GetRules()
 	if err != nil {
@@ -101,7 +101,7 @@ func TestZkCustomRule(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetRules of ZkCustomRule should always return nil error, but we receive %v", err)
 	}
-	if reflect.DeepEqual(qrs, tabletserver.NewQueryRules()) {
+	if reflect.DeepEqual(qrs, rules.New()) {
 		t.Fatalf("Expect empty rule at this point")
 	}
 

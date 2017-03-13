@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package tabletserver
+package rules
 
 import (
 	"bytes"
@@ -22,7 +22,7 @@ import (
 )
 
 func TestQueryRules(t *testing.T) {
-	qrs := NewQueryRules()
+	qrs := New()
 	qr1 := NewQueryRule("rule 1", "r1", QRFail)
 	qr2 := NewQueryRule("rule 2", "r2", QRFail)
 	qrs.Add(qr1)
@@ -68,7 +68,7 @@ func TestQueryRules(t *testing.T) {
 
 // TestCopy tests for deep copy
 func TestCopy(t *testing.T) {
-	qrs1 := NewQueryRules()
+	qrs1 := New()
 	qr1 := NewQueryRule("rule 1", "r1", QRFail)
 	qr1.AddPlanCond(planbuilder.PlanPassSelect)
 	qr1.AddTableCond("aa")
@@ -83,7 +83,7 @@ func TestCopy(t *testing.T) {
 		t.Errorf("qrs1: %+v, not equal to %+v", qrs2, qrs1)
 	}
 
-	qrs1 = NewQueryRules()
+	qrs1 = New()
 	qrs2 = qrs1.Copy()
 	if !reflect.DeepEqual(qrs2, qrs1) {
 		t.Errorf("qrs1: %+v, not equal to %+v", qrs2, qrs1)
@@ -91,7 +91,7 @@ func TestCopy(t *testing.T) {
 }
 
 func TestFilterByPlan(t *testing.T) {
-	qrs := NewQueryRules()
+	qrs := New()
 
 	qr1 := NewQueryRule("rule 1", "r1", QRFail)
 	qr1.SetIPCond("123")
@@ -117,7 +117,7 @@ func TestFilterByPlan(t *testing.T) {
 	qrs.Add(qr3)
 	qrs.Add(qr4)
 
-	qrs1 := qrs.filterByPlan("select", planbuilder.PlanPassSelect, "a")
+	qrs1 := qrs.FilterByPlan("select", planbuilder.PlanPassSelect, "a")
 	want := compacted(`[{
 		"Description":"rule 1",
 		"Name":"r1",
@@ -152,7 +152,7 @@ func TestFilterByPlan(t *testing.T) {
 		t.Errorf("qrs1:\n%s, want\n%s", got, want)
 	}
 
-	qrs1 = qrs.filterByPlan("insert", planbuilder.PlanPassSelect, "a")
+	qrs1 = qrs.FilterByPlan("insert", planbuilder.PlanPassSelect, "a")
 	want = compacted(`[{
 		"Description":"rule 2",
 		"Name":"r2",
@@ -168,13 +168,13 @@ func TestFilterByPlan(t *testing.T) {
 		t.Errorf("qrs1:\n%s, want\n%s", got, want)
 	}
 
-	qrs1 = qrs.filterByPlan("insert", planbuilder.PlanSelectLock, "a")
+	qrs1 = qrs.FilterByPlan("insert", planbuilder.PlanSelectLock, "a")
 	got = marshalled(qrs1)
 	if got != want {
 		t.Errorf("qrs1:\n%s, want\n%s", got, want)
 	}
 
-	qrs1 = qrs.filterByPlan("select", planbuilder.PlanInsertPK, "a")
+	qrs1 = qrs.FilterByPlan("select", planbuilder.PlanInsertPK, "a")
 	want = compacted(`[{
 		"Description":"rule 3",
 		"Name":"r3",
@@ -190,12 +190,12 @@ func TestFilterByPlan(t *testing.T) {
 		t.Errorf("qrs1:\n%s, want\n%s", got, want)
 	}
 
-	qrs1 = qrs.filterByPlan("sel", planbuilder.PlanInsertPK, "a")
+	qrs1 = qrs.FilterByPlan("sel", planbuilder.PlanInsertPK, "a")
 	if qrs1.rules != nil {
 		t.Errorf("want nil, got non-nil")
 	}
 
-	qrs1 = qrs.filterByPlan("table", planbuilder.PlanPassDML, "b")
+	qrs1 = qrs.FilterByPlan("table", planbuilder.PlanPassDML, "b")
 	want = compacted(`[{
 		"Description":"rule 4",
 		"Name":"r4",
@@ -209,7 +209,7 @@ func TestFilterByPlan(t *testing.T) {
 	qr5 := NewQueryRule("rule 5", "r5", QRFail)
 	qrs.Add(qr5)
 
-	qrs1 = qrs.filterByPlan("sel", planbuilder.PlanInsertPK, "a")
+	qrs1 = qrs.FilterByPlan("sel", planbuilder.PlanInsertPK, "a")
 	want = compacted(`[{
 		"Description":"rule 5",
 		"Name":"r5",
@@ -220,8 +220,8 @@ func TestFilterByPlan(t *testing.T) {
 		t.Errorf("qrs1:\n%s, want\n%s", got, want)
 	}
 
-	qrsnil1 := NewQueryRules()
-	if qrsnil2 := qrsnil1.filterByPlan("", planbuilder.PlanPassSelect, "a"); qrsnil2.rules != nil {
+	qrsnil1 := New()
+	if qrsnil2 := qrsnil1.FilterByPlan("", planbuilder.PlanPassSelect, "a"); qrsnil2.rules != nil {
 		t.Errorf("want nil, got non-nil")
 	}
 }
@@ -574,7 +574,7 @@ func TestBVConditions(t *testing.T) {
 }
 
 func TestAction(t *testing.T) {
-	qrs := NewQueryRules()
+	qrs := New()
 
 	qr1 := NewQueryRule("rule 1", "r1", QRFail)
 	qr1.SetIPCond("123")
@@ -591,26 +591,26 @@ func TestAction(t *testing.T) {
 
 	bv := make(map[string]interface{})
 	bv["a"] = uint64(0)
-	action, desc := qrs.getAction("123", "user1", bv)
+	action, desc := qrs.GetAction("123", "user1", bv)
 	if action != QRFail {
 		t.Errorf("want fail")
 	}
 	if desc != "rule 1" {
 		t.Errorf("want rule 1, got %s", desc)
 	}
-	action, desc = qrs.getAction("1234", "user", bv)
+	action, desc = qrs.GetAction("1234", "user", bv)
 	if action != QRFailRetry {
 		t.Errorf("want fail_retry")
 	}
 	if desc != "rule 2" {
 		t.Errorf("want rule 2, got %s", desc)
 	}
-	action, desc = qrs.getAction("1234", "user1", bv)
+	action, desc = qrs.GetAction("1234", "user1", bv)
 	if action != QRContinue {
 		t.Errorf("want continue")
 	}
 	bv["a"] = uint64(1)
-	action, desc = qrs.getAction("1234", "user1", bv)
+	action, desc = qrs.GetAction("1234", "user1", bv)
 	if action != QRFail {
 		t.Errorf("want fail")
 	}
@@ -620,7 +620,7 @@ func TestAction(t *testing.T) {
 }
 
 func TestImport(t *testing.T) {
-	var qrs = NewQueryRules()
+	var qrs = New()
 	jsondata := `[{
 		"Description": "desc1",
 		"Name": "name1",
@@ -703,7 +703,7 @@ var validjsons = []ValidJSONCase{
 
 func TestValidJSON(t *testing.T) {
 	for i, tcase := range validjsons {
-		qrs := NewQueryRules()
+		qrs := New()
 		err := qrs.UnmarshalJSON([]byte(tcase.input))
 		if err != nil {
 			t.Fatalf("Unexpected error for case %d: %v", i, err)
@@ -779,7 +779,7 @@ var invalidjsons = []InvalidJSONCase{
 
 func TestInvalidJSON(t *testing.T) {
 	for _, tcase := range invalidjsons {
-		qrs := NewQueryRules()
+		qrs := New()
 		err := qrs.UnmarshalJSON([]byte(tcase.input))
 		if err == nil {
 			t.Errorf("want error for case %q", tcase.input)
@@ -790,7 +790,7 @@ func TestInvalidJSON(t *testing.T) {
 			t.Errorf("invalid json: %s, want '%v', got '%v'", tcase.input, tcase.err, recvd)
 		}
 	}
-	qrs := NewQueryRules()
+	qrs := New()
 	err := qrs.UnmarshalJSON([]byte(`{`))
 	if code := vterrors.Code(err); code != vtrpcpb.Code_INVALID_ARGUMENT {
 		t.Errorf("qrs.UnmarshalJSON: %v, want %v", code, vtrpcpb.Code_INVALID_ARGUMENT)

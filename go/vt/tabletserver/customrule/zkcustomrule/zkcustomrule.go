@@ -16,6 +16,7 @@ import (
 
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/tabletserver"
+	"github.com/youtube/vitess/go/vt/tabletserver/rules"
 	"github.com/youtube/vitess/go/vt/topo/zk2topo"
 )
 
@@ -42,7 +43,7 @@ type ZkCustomRule struct {
 	// mu protects all the following fields.
 	mu                    sync.Mutex
 	watch                 <-chan zk.Event // Zookeeper watch for listenning data change notifications
-	currentRuleSet        *tabletserver.QueryRules
+	currentRuleSet        *rules.Rules
 	currentRuleSetVersion int64 // implemented with Zookeeper modification version
 	done                  chan struct{}
 }
@@ -52,13 +53,13 @@ func NewZkCustomRule(server, path string) *ZkCustomRule {
 	return &ZkCustomRule{
 		zconn:                 zk2topo.Connect(server),
 		path:                  path,
-		currentRuleSet:        tabletserver.NewQueryRules(),
+		currentRuleSet:        rules.New(),
 		currentRuleSetVersion: invalidQueryRulesVersion,
 		done: make(chan struct{}),
 	}
 }
 
-// Start registers Zookeeper watch, gets inital QueryRules and starts
+// Start registers Zookeeper watch, gets inital Rules and starts
 // polling routine.
 func (zkcr *ZkCustomRule) Start(qsc tabletserver.Controller) (err error) {
 	err = zkcr.refreshWatch()
@@ -86,8 +87,8 @@ func (zkcr *ZkCustomRule) refreshWatch() error {
 	return nil
 }
 
-// refreshData gets query rules from Zookeeper and refresh internal QueryRules cache
-// this function will also call TabletServer.SetQueryRules to propagate rule changes to query service
+// refreshData gets query rules from Zookeeper and refresh internal Rules cache
+// this function will also call rules.SetQueryRules to propagate rule changes to query service
 func (zkcr *ZkCustomRule) refreshData(qsc tabletserver.Controller, nodeRemoval bool) error {
 	ctx := context.Background()
 	data, stat, err := zkcr.zconn.Get(ctx, zkcr.path)
@@ -96,7 +97,7 @@ func (zkcr *ZkCustomRule) refreshData(qsc tabletserver.Controller, nodeRemoval b
 		return err
 	}
 
-	qrs := tabletserver.NewQueryRules()
+	qrs := rules.New()
 	if !nodeRemoval {
 		if err = qrs.UnmarshalJSON([]byte(data)); err != nil {
 			log.Warningf("Error unmarshaling query rules %v, original data '%s'", err, data)
@@ -154,7 +155,7 @@ func (zkcr *ZkCustomRule) Stop() {
 }
 
 // GetRules retrives cached rules.
-func (zkcr *ZkCustomRule) GetRules() (qrs *tabletserver.QueryRules, version int64, err error) {
+func (zkcr *ZkCustomRule) GetRules() (qrs *rules.Rules, version int64, err error) {
 	zkcr.mu.Lock()
 	defer zkcr.mu.Unlock()
 	return zkcr.currentRuleSet.Copy(), zkcr.currentRuleSetVersion, nil

@@ -30,6 +30,7 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver/connpool"
 	"github.com/youtube/vitess/go/vt/tabletserver/engines/schema"
 	"github.com/youtube/vitess/go/vt/tabletserver/planbuilder"
+	"github.com/youtube/vitess/go/vt/tabletserver/rules"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletenv"
 	"github.com/youtube/vitess/go/vt/vterrors"
 
@@ -44,7 +45,7 @@ import (
 type TabletPlan struct {
 	*planbuilder.Plan
 	Fields     []*querypb.Field
-	Rules      *QueryRules
+	Rules      *rules.Rules
 	Authorized *tableacl.ACLResult
 
 	mu         sync.Mutex
@@ -100,7 +101,7 @@ type QueryEngine struct {
 	mu               sync.RWMutex
 	tables           map[string]*schema.Table
 	queries          *cache.LRUCache
-	queryRuleSources *QueryRuleInfo
+	queryRuleSources *rules.Map
 
 	// Pools
 	conns       *connpool.Pool
@@ -140,7 +141,7 @@ func NewQueryEngine(checker MySQLChecker, se *schema.Engine, config tabletenv.Ta
 		se:               se,
 		tables:           make(map[string]*schema.Table),
 		queries:          cache.NewLRUCache(int64(config.QueryCacheSize)),
-		queryRuleSources: NewQueryRuleInfo(),
+		queryRuleSources: rules.NewMap(),
 	}
 
 	qe.conns = connpool.New(
@@ -276,7 +277,7 @@ func (qe *QueryEngine) GetPlan(ctx context.Context, logStats *tabletenv.LogStats
 		return nil, vterrors.New(vtrpcpb.Code_UNKNOWN, err.Error())
 	}
 	plan := &TabletPlan{Plan: splan}
-	plan.Rules = qe.queryRuleSources.filterByPlan(sql, plan.PlanID, plan.TableName().String())
+	plan.Rules = qe.queryRuleSources.FilterByPlan(sql, plan.PlanID, plan.TableName().String())
 	plan.Authorized = tableacl.Authorized(plan.TableName().String(), plan.PlanID.MinRole())
 	if plan.PlanID.IsSelect() {
 		if plan.FieldQuery == nil {
@@ -315,7 +316,7 @@ func (qe *QueryEngine) GetStreamPlan(sql string) (*TabletPlan, error) {
 		return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, err.Error())
 	}
 	plan := &TabletPlan{Plan: splan}
-	plan.Rules = qe.queryRuleSources.filterByPlan(sql, plan.PlanID, plan.TableName().String())
+	plan.Rules = qe.queryRuleSources.FilterByPlan(sql, plan.PlanID, plan.TableName().String())
 	plan.Authorized = tableacl.Authorized(plan.TableName().String(), plan.PlanID.MinRole())
 	return plan, nil
 }

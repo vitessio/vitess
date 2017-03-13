@@ -12,6 +12,7 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/tabletserver"
+	"github.com/youtube/vitess/go/vt/tabletserver/rules"
 )
 
 var (
@@ -24,9 +25,9 @@ var (
 // FileCustomRule is an implementation of CustomRuleManager, it reads custom query
 // rules from local file for once and push it to vttablet
 type FileCustomRule struct {
-	path                    string                   // Path to the file containing custom query rules
-	currentRuleSet          *tabletserver.QueryRules // Query rules built from local file
-	currentRuleSetTimestamp int64                    // Unix timestamp when currentRuleSet is built from local file
+	path                    string       // Path to the file containing custom query rules
+	currentRuleSet          *rules.Rules // Query rules built from local file
+	currentRuleSetTimestamp int64        // Unix timestamp when currentRuleSet is built from local file
 }
 
 // FileCustomRuleSource is the name of the file based custom rule source
@@ -36,7 +37,7 @@ const FileCustomRuleSource string = "FILE_CUSTOM_RULE"
 func NewFileCustomRule() (fcr *FileCustomRule) {
 	fcr = new(FileCustomRule)
 	fcr.path = ""
-	fcr.currentRuleSet = tabletserver.NewQueryRules()
+	fcr.currentRuleSet = rules.New()
 	return fcr
 }
 
@@ -53,7 +54,7 @@ func (fcr *FileCustomRule) Open(qsc tabletserver.Controller, rulePath string) er
 		// Don't update any internal cache, just return error
 		return err
 	}
-	qrs := tabletserver.NewQueryRules()
+	qrs := rules.New()
 	err = qrs.UnmarshalJSON(data)
 	if err != nil {
 		log.Warningf("Error unmarshaling query rules %v", err)
@@ -68,7 +69,7 @@ func (fcr *FileCustomRule) Open(qsc tabletserver.Controller, rulePath string) er
 }
 
 // GetRules returns query rules built from local file
-func (fcr *FileCustomRule) GetRules() (qrs *tabletserver.QueryRules, version int64, err error) {
+func (fcr *FileCustomRule) GetRules() (qrs *rules.Rules, version int64, err error) {
 	return fcr.currentRuleSet.Copy(), fcr.currentRuleSetTimestamp, nil
 }
 
