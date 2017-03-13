@@ -493,13 +493,14 @@ func TestMessageManagerPurge(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 	tsv := newFakeTabletServer()
+	ch := make(chan string)
+	tsv.SetChannel(ch)
+
 	ti := newMMTable()
 	ti.MessageInfo.PollInterval = 1 * time.Millisecond
 	mm := newMessageManager(tsv, ti, newMMConnPool(db))
 	mm.Open()
 	defer mm.Close()
-	ch := make(chan string)
-	tsv.SetChannel(ch)
 	// Ensure Purge got called.
 	if got := <-ch; got != mmTable.Name.String() {
 		t.Errorf("Postpone: %s, want %v", got, mmTable.Name)
