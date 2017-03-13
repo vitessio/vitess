@@ -10,8 +10,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/tabletserver/endtoend/framework"
+	"github.com/youtube/vitess/go/vt/tabletserver/rules"
 )
 
 func TestTableACLNoAccess(t *testing.T) {
@@ -122,7 +122,7 @@ var rulesJSON = []byte(`[{
 }]`)
 
 func TestQueryRules(t *testing.T) {
-	rules := tabletserver.NewQueryRules()
+	rules := rules.New()
 	err := rules.UnmarshalJSON(rulesJSON)
 	if err != nil {
 		t.Error(err)

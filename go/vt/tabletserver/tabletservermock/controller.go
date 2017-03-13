@@ -14,8 +14,8 @@ import (
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
-	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/tabletserver/queryservice"
+	"github.com/youtube/vitess/go/vt/tabletserver/rules"
 )
 
 // BroadcastData is used by the mock Controller to send data
@@ -146,7 +146,7 @@ func (tqsc *Controller) UnRegisterQueryRuleSource(ruleSource string) {
 }
 
 // SetQueryRules is part of the tabletserver.Controller interface
-func (tqsc *Controller) SetQueryRules(ruleSource string, qrs *tabletserver.QueryRules) error {
+func (tqsc *Controller) SetQueryRules(ruleSource string, qrs *rules.Rules) error {
 	return nil
 }
 

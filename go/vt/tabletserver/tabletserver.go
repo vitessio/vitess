@@ -36,6 +36,7 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver/messager"
 	"github.com/youtube/vitess/go/vt/tabletserver/queryservice"
 	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
+	"github.com/youtube/vitess/go/vt/tabletserver/rules"
 	"github.com/youtube/vitess/go/vt/tabletserver/splitquery"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletenv"
 	"github.com/youtube/vitess/go/vt/tabletserver/txthrottler"
@@ -215,16 +216,16 @@ func (tsv *TabletServer) Register() {
 
 // RegisterQueryRuleSource registers ruleSource for setting query rules.
 func (tsv *TabletServer) RegisterQueryRuleSource(ruleSource string) {
-	tsv.qe.queryRuleSources.RegisterQueryRuleSource(ruleSource)
+	tsv.qe.queryRuleSources.RegisterSource(ruleSource)
 }
 
 // UnRegisterQueryRuleSource unregisters ruleSource from query rules.
 func (tsv *TabletServer) UnRegisterQueryRuleSource(ruleSource string) {
-	tsv.qe.queryRuleSources.UnRegisterQueryRuleSource(ruleSource)
+	tsv.qe.queryRuleSources.UnRegisterSource(ruleSource)
 }
 
 // SetQueryRules sets the query rules for a registered ruleSource.
-func (tsv *TabletServer) SetQueryRules(ruleSource string, qrs *QueryRules) error {
+func (tsv *TabletServer) SetQueryRules(ruleSource string, qrs *rules.Rules) error {
 	err := tsv.qe.queryRuleSources.SetRules(ruleSource, qrs)
 	if err != nil {
 		return err

@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package tabletserver
+package rules
 
 import (
 	"bytes"
@@ -23,22 +23,22 @@ import (
 
 //-----------------------------------------------
 
-// QueryRules is used to store and execute rules for the tabletserver.
-type QueryRules struct {
-	rules []*QueryRule
+// Rules is used to store and execute rules for the tabletserver.
+type Rules struct {
+	rules []*Rule
 }
 
-// NewQueryRules creates a new QueryRules.
-func NewQueryRules() *QueryRules {
-	return &QueryRules{}
+// New creates a new Rules.
+func New() *Rules {
+	return &Rules{}
 }
 
-// Copy performs a deep copy of QueryRules.
+// Copy performs a deep copy of Rules.
 // A nil input produces a nil output.
-func (qrs *QueryRules) Copy() (newqrs *QueryRules) {
-	newqrs = NewQueryRules()
+func (qrs *Rules) Copy() (newqrs *Rules) {
+	newqrs = New()
 	if qrs.rules != nil {
-		newqrs.rules = make([]*QueryRule, 0, len(qrs.rules))
+		newqrs.rules = make([]*Rule, 0, len(qrs.rules))
 		for _, qr := range qrs.rules {
 			newqrs.rules = append(newqrs.rules, qr.Copy())
 		}
@@ -46,22 +46,22 @@ func (qrs *QueryRules) Copy() (newqrs *QueryRules) {
 	return newqrs
 }
 
-// Append merges the rules from another QueryRules into the receiver
-func (qrs *QueryRules) Append(otherqrs *QueryRules) {
+// Append merges the rules from another Rules into the receiver
+func (qrs *Rules) Append(otherqrs *Rules) {
 	for _, qr := range otherqrs.rules {
 		qrs.rules = append(qrs.rules, qr)
 	}
 }
 
-// Add adds a QueryRule to QueryRules. It does not check
+// Add adds a Rule to Rules. It does not check
 // for duplicates.
-func (qrs *QueryRules) Add(qr *QueryRule) {
+func (qrs *Rules) Add(qr *Rule) {
 	qrs.rules = append(qrs.rules, qr)
 }
 
-// Find finds the first occurrence of a QueryRule by matching
+// Find finds the first occurrence of a Rule by matching
 // the Name field. It returns nil if the rule was not found.
-func (qrs *QueryRules) Find(name string) (qr *QueryRule) {
+func (qrs *Rules) Find(name string) (qr *Rule) {
 	for _, qr = range qrs.rules {
 		if qr.Name == name {
 			return qr
@@ -70,9 +70,9 @@ func (qrs *QueryRules) Find(name string) (qr *QueryRule) {
 	return nil
 }
 
-// Delete deletes a QueryRule by name and returns the rule
+// Delete deletes a Rule by name and returns the rule
 // that was deleted. It returns nil if the rule was not found.
-func (qrs *QueryRules) Delete(name string) (qr *QueryRule) {
+func (qrs *Rules) Delete(name string) (qr *Rule) {
 	for i, qr := range qrs.rules {
 		if qr.Name == name {
 			for j := i; j < len(qrs.rules)-i-1; j++ {
@@ -85,8 +85,8 @@ func (qrs *QueryRules) Delete(name string) (qr *QueryRule) {
 	return nil
 }
 
-// UnmarshalJSON unmarshals QueryRules.
-func (qrs *QueryRules) UnmarshalJSON(data []byte) (err error) {
+// UnmarshalJSON unmarshals Rules.
+func (qrs *Rules) UnmarshalJSON(data []byte) (err error) {
 	var rulesInfo []map[string]interface{}
 	dec := json.NewDecoder(bytes.NewReader(data))
 	dec.UseNumber()
@@ -105,7 +105,7 @@ func (qrs *QueryRules) UnmarshalJSON(data []byte) (err error) {
 }
 
 // MarshalJSON marshals to JSON.
-func (qrs *QueryRules) MarshalJSON() ([]byte, error) {
+func (qrs *Rules) MarshalJSON() ([]byte, error) {
 	b := bytes.NewBuffer(nil)
 	_, _ = b.WriteString("[")
 	for i, rule := range qrs.rules {
@@ -118,22 +118,22 @@ func (qrs *QueryRules) MarshalJSON() ([]byte, error) {
 	return b.Bytes(), nil
 }
 
-// filterByPlan creates a new QueryRules by prefiltering on the query and planId. This allows
-// us to create query plan specific QueryRules out of the original QueryRules. In the new rules,
+// FilterByPlan creates a new Rules by prefiltering on the query and planId. This allows
+// us to create query plan specific Rules out of the original Rules. In the new rules,
 // query, plans and tableNames predicates are empty.
-func (qrs *QueryRules) filterByPlan(query string, planid planbuilder.PlanType, tableName string) (newqrs *QueryRules) {
-	var newrules []*QueryRule
+func (qrs *Rules) FilterByPlan(query string, planid planbuilder.PlanType, tableName string) (newqrs *Rules) {
+	var newrules []*Rule
 	for _, qr := range qrs.rules {
-		if newrule := qr.filterByPlan(query, planid, tableName); newrule != nil {
+		if newrule := qr.FilterByPlan(query, planid, tableName); newrule != nil {
 			newrules = append(newrules, newrule)
 		}
 	}
-	return &QueryRules{newrules}
+	return &Rules{newrules}
 }
 
-func (qrs *QueryRules) getAction(ip, user string, bindVars map[string]interface{}) (action Action, desc string) {
+func (qrs *Rules) GetAction(ip, user string, bindVars map[string]interface{}) (action Action, desc string) {
 	for _, qr := range qrs.rules {
-		if act := qr.getAction(ip, user, bindVars); act != QRContinue {
+		if act := qr.GetAction(ip, user, bindVars); act != QRContinue {
 			return act, qr.Description
 		}
 	}
@@ -142,15 +142,15 @@ func (qrs *QueryRules) getAction(ip, user string, bindVars map[string]interface{
 
 //-----------------------------------------------
 
-// QueryRule represents one rule (conditions-action).
+// Rule represents one rule (conditions-action).
 // Name is meant to uniquely identify a rule.
 // Description is a human readable comment that describes the rule.
-// For a QueryRule to fire, all conditions of the QueryRule
-// have to match. For example, an empty QueryRule will match
+// For a Rule to fire, all conditions of the Rule
+// have to match. For example, an empty Rule will match
 // all requests.
-// Every QueryRule has an associated Action. If all the conditions
-// of the QueryRule are met, then the Action is triggerred.
-type QueryRule struct {
+// Every Rule has an associated Action. If all the conditions
+// of the Rule are met, then the Action is triggerred.
+type Rule struct {
 	Description string
 	Name        string
 
@@ -182,15 +182,15 @@ func (nr namedRegexp) MarshalJSON() ([]byte, error) {
 	return json.Marshal(nr.name)
 }
 
-// NewQueryRule creates a new QueryRule.
-func NewQueryRule(description, name string, act Action) (qr *QueryRule) {
+// NewQueryRule creates a new Rule.
+func NewQueryRule(description, name string, act Action) (qr *Rule) {
 	// We ignore act because there's only one action right now
-	return &QueryRule{Description: description, Name: name, act: act}
+	return &Rule{Description: description, Name: name, act: act}
 }
 
-// Copy performs a deep copy of a QueryRule.
-func (qr *QueryRule) Copy() (newqr *QueryRule) {
-	newqr = &QueryRule{
+// Copy performs a deep copy of a Rule.
+func (qr *Rule) Copy() (newqr *Rule) {
+	newqr = &Rule{
 		Description: qr.Description,
 		Name:        qr.Name,
 		requestIP:   qr.requestIP,
@@ -214,7 +214,7 @@ func (qr *QueryRule) Copy() (newqr *QueryRule) {
 }
 
 // MarshalJSON marshals to JSON.
-func (qr *QueryRule) MarshalJSON() ([]byte, error) {
+func (qr *Rule) MarshalJSON() ([]byte, error) {
 	b := bytes.NewBuffer(nil)
 	safeEncode(b, `{"Description":`, qr.Description)
 	safeEncode(b, `,"Name":`, qr.Name)
@@ -245,7 +245,7 @@ func (qr *QueryRule) MarshalJSON() ([]byte, error) {
 
 // SetIPCond adds a regular expression condition for the client IP.
 // It has to be a full match (not substring).
-func (qr *QueryRule) SetIPCond(pattern string) (err error) {
+func (qr *Rule) SetIPCond(pattern string) (err error) {
 	qr.requestIP.name = pattern
 	qr.requestIP.Regexp, err = regexp.Compile(makeExact(pattern))
 	return err
@@ -253,7 +253,7 @@ func (qr *QueryRule) SetIPCond(pattern string) (err error) {
 
 // SetUserCond adds a regular expression condition for the user name
 // used by the client.
-func (qr *QueryRule) SetUserCond(pattern string) (err error) {
+func (qr *Rule) SetUserCond(pattern string) (err error) {
 	qr.user.name = pattern
 	qr.user.Regexp, err = regexp.Compile(makeExact(pattern))
 	return
@@ -262,19 +262,19 @@ func (qr *QueryRule) SetUserCond(pattern string) (err error) {
 // AddPlanCond adds to the list of plans that can be matched for
 // the rule to fire.
 // This function acts as an OR: Any plan id match is considered a match.
-func (qr *QueryRule) AddPlanCond(planType planbuilder.PlanType) {
+func (qr *Rule) AddPlanCond(planType planbuilder.PlanType) {
 	qr.plans = append(qr.plans, planType)
 }
 
 // AddTableCond adds to the list of tableNames that can be matched for
 // the rule to fire.
 // This function acts as an OR: Any tableName match is considered a match.
-func (qr *QueryRule) AddTableCond(tableName string) {
+func (qr *Rule) AddTableCond(tableName string) {
 	qr.tableNames = append(qr.tableNames, tableName)
 }
 
 // SetQueryCond adds a regular expression condition for the query.
-func (qr *QueryRule) SetQueryCond(pattern string) (err error) {
+func (qr *Rule) SetQueryCond(pattern string) (err error) {
 	qr.query.name = pattern
 	qr.query.Regexp, err = regexp.Compile(makeExact(pattern))
 	return
@@ -285,8 +285,8 @@ func makeExact(pattern string) string {
 	return fmt.Sprintf("^%s$", pattern)
 }
 
-// AddBindVarCond adds a bind variable restriction to the QueryRule.
-// All bind var conditions have to be satisfied for the QueryRule
+// AddBindVarCond adds a bind variable restriction to the Rule.
+// All bind var conditions have to be satisfied for the Rule
 // to be a match.
 // name represents the name (not regexp) of the bind variable.
 // onAbsent specifies the value of the condition if the
@@ -303,7 +303,7 @@ func makeExact(pattern string) string {
 // string   ==, !=, <, >=, >, <=, MATCH, NOMATCH   []byte, string
 // KeyRange IN, NOTIN                              whole numbers
 // whole numbers can be: int, int8, int16, int32, int64, uint64
-func (qr *QueryRule) AddBindVarCond(name string, onAbsent, onMismatch bool, op Operator, value interface{}) error {
+func (qr *Rule) AddBindVarCond(name string, onAbsent, onMismatch bool, op Operator, value interface{}) error {
 	var converted bvcValue
 	if op == QRNoOp {
 		qr.bindVarConds = append(qr.bindVarConds, BindVarCond{name, onAbsent, onMismatch, op, nil})
@@ -350,11 +350,11 @@ Error:
 	return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid operator %v for type %T (%v)", op, value, value)
 }
 
-// filterByPlan returns a new QueryRule if the query and planid match.
-// The new QueryRule will contain all the original constraints other
-// than the plan and query. If the plan and query don't match the QueryRule,
+// FilterByPlan returns a new Rule if the query and planid match.
+// The new Rule will contain all the original constraints other
+// than the plan and query. If the plan and query don't match the Rule,
 // then it returns nil.
-func (qr *QueryRule) filterByPlan(query string, planid planbuilder.PlanType, tableName string) (newqr *QueryRule) {
+func (qr *Rule) FilterByPlan(query string, planid planbuilder.PlanType, tableName string) (newqr *Rule) {
 	if !reMatch(qr.query.Regexp, query) {
 		return nil
 	}
@@ -371,7 +371,7 @@ func (qr *QueryRule) filterByPlan(query string, planid planbuilder.PlanType, tab
 	return newqr
 }
 
-func (qr *QueryRule) getAction(ip, user string, bindVars map[string]interface{}) Action {
+func (qr *Rule) GetAction(ip, user string, bindVars map[string]interface{}) Action {
 	if !reMatch(qr.requestIP.Regexp, ip) {
 		return QRContinue
 	}
@@ -426,10 +426,10 @@ func bvMatch(bvcond BindVarCond, bindVars map[string]interface{}) bool {
 }
 
 //-----------------------------------------------
-// Support types for QueryRule
+// Support types for Rule
 
 // Action speficies the list of actions to perform
-// when a QueryRule is triggered.
+// when a Rule is triggered.
 type Action int
 
 // These are actions.
@@ -884,7 +884,7 @@ func MapStrOperator(strop string) (op Operator, err error) {
 }
 
 // BuildQueryRule builds a query rule from a ruleInfo.
-func BuildQueryRule(ruleInfo map[string]interface{}) (qr *QueryRule, err error) {
+func BuildQueryRule(ruleInfo map[string]interface{}) (qr *Rule, err error) {
 	qr = NewQueryRule("", "", QRFail)
 	for k, v := range ruleInfo {
 		var sv string

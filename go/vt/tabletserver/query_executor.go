@@ -24,6 +24,7 @@ import (
 	"github.com/youtube/vitess/go/vt/tabletserver/engines/schema"
 	"github.com/youtube/vitess/go/vt/tabletserver/messager"
 	"github.com/youtube/vitess/go/vt/tabletserver/planbuilder"
+	"github.com/youtube/vitess/go/vt/tabletserver/rules"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletenv"
 	"github.com/youtube/vitess/go/vt/vterrors"
 
@@ -229,11 +230,11 @@ func (qre *QueryExecutor) checkPermissions() error {
 		remoteAddr = ci.RemoteAddr()
 		username = ci.Username()
 	}
-	action, desc := qre.plan.Rules.getAction(remoteAddr, username, qre.bindVars)
+	action, desc := qre.plan.Rules.GetAction(remoteAddr, username, qre.bindVars)
 	switch action {
-	case QRFail:
+	case rules.QRFail:
 		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "disallowed due to rule: %s", desc)
-	case QRFailRetry:
+	case rules.QRFailRetry:
 		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "disallowed due to rule: %s", desc)
 	}
 

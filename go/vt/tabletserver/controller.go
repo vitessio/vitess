@@ -10,6 +10,7 @@ import (
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/tabletserver/queryservice"
+	"github.com/youtube/vitess/go/vt/tabletserver/rules"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -51,7 +52,7 @@ type Controller interface {
 	UnRegisterQueryRuleSource(ruleSource string)
 
 	// SetQueryRules sets the query rules for this QueryService
-	SetQueryRules(ruleSource string, qrs *QueryRules) error
+	SetQueryRules(ruleSource string, qrs *rules.Rules) error
 
 	// QueryService returns the QueryService object used by this Controller
 	QueryService() queryservice.QueryService

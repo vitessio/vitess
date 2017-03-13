@@ -19,7 +19,7 @@ import (
 	"github.com/youtube/vitess/go/trace"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/tabletmanager/events"
-	"github.com/youtube/vitess/go/vt/tabletserver"
+	"github.com/youtube/vitess/go/vt/tabletserver/rules"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletenv"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
@@ -45,7 +45,7 @@ const blacklistQueryRules string = "BlacklistQueryRules"
 
 // loadBlacklistRules loads and builds the blacklist query rules
 func (agent *ActionAgent) loadBlacklistRules(tablet *topodatapb.Tablet, blacklistedTables []string) (err error) {
-	blacklistRules := tabletserver.NewQueryRules()
+	blacklistRules := rules.New()
 	if len(blacklistedTables) > 0 {
 		// tables, first resolve wildcards
 		tables, err := mysqlctl.ResolveTables(agent.MysqlDaemon, topoproto.TabletDbName(tablet), blacklistedTables)
@@ -57,7 +57,7 @@ func (agent *ActionAgent) loadBlacklistRules(tablet *topodatapb.Tablet, blacklis
 		// that we don't add a rule to blacklist all tables
 		if len(tables) > 0 {
 			log.Infof("Blacklisting tables %v", strings.Join(tables, ", "))
-			qr := tabletserver.NewQueryRule("enforce blacklisted tables", "blacklisted_table", tabletserver.QRFailRetry)
+			qr := rules.NewQueryRule("enforce blacklisted tables", "blacklisted_table", rules.QRFailRetry)
 			for _, t := range tables {
 				qr.AddTableCond(t)
 			}
