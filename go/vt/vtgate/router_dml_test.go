@@ -10,9 +10,9 @@ import (
 	"testing"
 
 	"github.com/youtube/vitess/go/sqltypes"
-	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
-	"github.com/youtube/vitess/go/vt/tabletserver/sandboxconn"
 	_ "github.com/youtube/vitess/go/vt/vtgate/vindexes"
+	"github.com/youtube/vitess/go/vt/vttablet/sandboxconn"
+	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/querytypes"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"

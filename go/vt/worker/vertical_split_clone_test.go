@@ -12,10 +12,10 @@ import (
 
 	"github.com/youtube/vitess/go/mysqlconn/replication"
 	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
-	"github.com/youtube/vitess/go/vt/tabletserver/grpcqueryservice"
-	"github.com/youtube/vitess/go/vt/tabletserver/queryservice/fakes"
 	"github.com/youtube/vitess/go/vt/topo/memorytopo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
+	"github.com/youtube/vitess/go/vt/vttablet/grpcqueryservice"
+	"github.com/youtube/vitess/go/vt/vttablet/queryservice/fakes"
 	"github.com/youtube/vitess/go/vt/wrangler/testlib"
 
 	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"

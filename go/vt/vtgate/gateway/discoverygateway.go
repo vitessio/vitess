@@ -18,11 +18,11 @@ import (
 
 	"github.com/youtube/vitess/go/flagutil"
 	"github.com/youtube/vitess/go/vt/discovery"
-	"github.com/youtube/vitess/go/vt/tabletserver/queryservice"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vtgate/buffer"
 	"github.com/youtube/vitess/go/vt/vtgate/masterbuffer"
+	"github.com/youtube/vitess/go/vt/vttablet/queryservice"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"

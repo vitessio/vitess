@@ -21,9 +21,9 @@ import (
 	"github.com/youtube/vitess/go/vt/logutil"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	workflowpb "github.com/youtube/vitess/go/vt/proto/workflow"
-	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtctl"
+	"github.com/youtube/vitess/go/vt/vttablet/tmclient"
 	"github.com/youtube/vitess/go/vt/workflow"
 	"github.com/youtube/vitess/go/vt/wrangler"
 )

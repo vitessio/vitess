@@ -21,13 +21,13 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/vt/logutil"
-	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/memorytopo"
 	"github.com/youtube/vitess/go/vt/vtctl/vtctlclient"
+	"github.com/youtube/vitess/go/vt/vttablet/tmclient"
 
 	// import the gRPC client implementation for tablet manager
-	_ "github.com/youtube/vitess/go/vt/tabletmanager/grpctmclient"
+	_ "github.com/youtube/vitess/go/vt/vttablet/grpctmclient"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )

@@ -12,13 +12,13 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/youtube/vitess/go/vt/discovery"
-	"github.com/youtube/vitess/go/vt/tabletserver/grpcqueryservice"
-	"github.com/youtube/vitess/go/vt/tabletserver/tabletconntest"
 	"github.com/youtube/vitess/go/vt/vtgate/gateway"
 	"github.com/youtube/vitess/go/vt/vtgate/l2vtgate"
+	"github.com/youtube/vitess/go/vt/vttablet/grpcqueryservice"
+	"github.com/youtube/vitess/go/vt/vttablet/tabletconntest"
 
 	// We will use gRPC to connect, register the dialer
-	_ "github.com/youtube/vitess/go/vt/tabletserver/grpctabletconn"
+	_ "github.com/youtube/vitess/go/vt/vttablet/grpctabletconn"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )

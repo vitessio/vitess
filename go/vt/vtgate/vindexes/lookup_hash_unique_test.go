@@ -8,7 +8,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
+	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/querytypes"
 )
 
 var lhu Vindex

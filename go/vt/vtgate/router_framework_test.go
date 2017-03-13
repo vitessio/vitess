@@ -7,7 +7,7 @@ package vtgate
 import (
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/discovery"
-	"github.com/youtube/vitess/go/vt/tabletserver/sandboxconn"
+	"github.com/youtube/vitess/go/vt/vttablet/sandboxconn"
 	"golang.org/x/net/context"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"

@@ -11,11 +11,11 @@ import (
 
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
-	"github.com/youtube/vitess/go/vt/tabletmanager/faketmclient"
-	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/test/faketopo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
+	"github.com/youtube/vitess/go/vt/vttablet/faketmclient"
+	"github.com/youtube/vitess/go/vt/vttablet/tmclient"
 	"github.com/youtube/vitess/go/vt/wrangler"
 	"golang.org/x/net/context"
 
@@ -24,7 +24,7 @@ import (
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 
 	// import the gRPC client implementation for tablet manager
-	_ "github.com/youtube/vitess/go/vt/tabletmanager/grpctmclient"
+	_ "github.com/youtube/vitess/go/vt/vttablet/grpctmclient"
 )
 
 var (

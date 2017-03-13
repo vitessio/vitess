@@ -14,9 +14,9 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	"github.com/youtube/vitess/go/vt/sqlannotation"
-	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 	"github.com/youtube/vitess/go/vt/vtgate/queryinfo"
 	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
+	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/querytypes"
 )
 
 // Route represents the instructions to route a query to

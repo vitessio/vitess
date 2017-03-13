@@ -14,8 +14,8 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/vt/logutil"
-	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/vttablet/tmclient"
 
 	"github.com/youtube/vitess/go/vt/topotools"
 	"github.com/youtube/vitess/go/vt/workflow"

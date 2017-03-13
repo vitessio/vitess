@@ -21,7 +21,7 @@ import (
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	vtgatepb "github.com/youtube/vitess/go/vt/proto/vtgate"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
-	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
+	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/querytypes"
 )
 
 // This file uses the sandbox_test framework.

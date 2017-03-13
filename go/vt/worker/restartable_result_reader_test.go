@@ -16,10 +16,10 @@ import (
 
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/logutil"
-	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
-	"github.com/youtube/vitess/go/vt/tabletserver/queryservice"
-	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo/memorytopo"
+	"github.com/youtube/vitess/go/vt/vttablet/queryservice"
+	"github.com/youtube/vitess/go/vt/vttablet/tabletconn"
+	"github.com/youtube/vitess/go/vt/vttablet/tmclient"
 	"github.com/youtube/vitess/go/vt/wrangler"
 
 	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"

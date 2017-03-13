@@ -12,12 +12,12 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/vt/logutil"
-	"github.com/youtube/vitess/go/vt/tabletmanager"
-	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
-	"github.com/youtube/vitess/go/vt/tabletserver"
-	"github.com/youtube/vitess/go/vt/tabletserver/grpcqueryservice"
-	"github.com/youtube/vitess/go/vt/tabletserver/tabletenv"
 	"github.com/youtube/vitess/go/vt/topo/memorytopo"
+	"github.com/youtube/vitess/go/vt/vttablet/grpcqueryservice"
+	"github.com/youtube/vitess/go/vt/vttablet/tabletmanager"
+	"github.com/youtube/vitess/go/vt/vttablet/tabletserver"
+	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
+	"github.com/youtube/vitess/go/vt/vttablet/tmclient"
 	"github.com/youtube/vitess/go/vt/wrangler"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"

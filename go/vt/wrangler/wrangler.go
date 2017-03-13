@@ -8,8 +8,8 @@ package wrangler
 
 import (
 	"github.com/youtube/vitess/go/vt/logutil"
-	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/vttablet/tmclient"
 )
 
 var (

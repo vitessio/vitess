@@ -20,9 +20,9 @@ import (
 	"github.com/youtube/vitess/go/tb"
 	"github.com/youtube/vitess/go/vt/logutil"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
-	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vterrors"
+	"github.com/youtube/vitess/go/vt/vttablet/tmclient"
 	"github.com/youtube/vitess/go/vt/wrangler"
 )
 
