@@ -389,6 +389,40 @@ func (bls *Streamer) parseEvents(ctx context.Context, events <-chan replication.
 				return pos, err
 			}
 			tableMaps[tableID] = tm
+		case ev.IsWriteRows():
+			tableID := ev.TableID(format)
+			tm, ok := tableMaps[tableID]
+			if !ok {
+				return pos, fmt.Errorf("unknown tableID %v in WriteRows event", tableID)
+			}
+			if tm.Database != "" && tm.Database != bls.dbname {
+				// Skip cross-db statements.
+				continue
+			}
+			ti := bls.se.GetTable(sqlparser.NewTableIdent(tm.Name))
+			if ti == nil {
+				return pos, fmt.Errorf("unknown table %v in schema", tm.Name)
+			}
+			setTimestamp := &binlogdatapb.BinlogTransaction_Statement{
+				Category: binlogdatapb.BinlogTransaction_Statement_BL_SET,
+				Sql:      []byte(fmt.Sprintf("SET TIMESTAMP=%d", ev.Timestamp())),
+			}
+			statements = append(statements, FullBinlogStatement{
+				Statement: setTimestamp,
+			})
+
+			rows, err := ev.Rows(format, tm)
+			if err != nil {
+				return pos, err
+			}
+
+			statements = appendInserts(statements, &rows, tm, ti)
+
+			if autocommit {
+				if err = commit(ev.Timestamp()); err != nil {
+					return pos, err
+				}
+			}
 		case ev.IsUpdateRows():
 			tableID := ev.TableID(format)
 			tm, ok := tableMaps[tableID]
@@ -423,8 +457,69 @@ func (bls *Streamer) parseEvents(ctx context.Context, events <-chan replication.
 					return pos, err
 				}
 			}
+		case ev.IsDeleteRows():
+			tableID := ev.TableID(format)
+			tm, ok := tableMaps[tableID]
+			if !ok {
+				return pos, fmt.Errorf("unknown tableID %v in DeleteRows event", tableID)
+			}
+			if tm.Database != "" && tm.Database != bls.dbname {
+				// Skip cross-db statements.
+				continue
+			}
+			ti := bls.se.GetTable(sqlparser.NewTableIdent(tm.Name))
+			if ti == nil {
+				return pos, fmt.Errorf("unknown table %v in schema", tm.Name)
+			}
+			setTimestamp := &binlogdatapb.BinlogTransaction_Statement{
+				Category: binlogdatapb.BinlogTransaction_Statement_BL_SET,
+				Sql:      []byte(fmt.Sprintf("SET TIMESTAMP=%d", ev.Timestamp())),
+			}
+			statements = append(statements, FullBinlogStatement{
+				Statement: setTimestamp,
+			})
+
+			rows, err := ev.Rows(format, tm)
+			if err != nil {
+				return pos, err
+			}
+
+			statements = appendDeletes(statements, &rows, tm, ti)
+
+			if autocommit {
+				if err = commit(ev.Timestamp()); err != nil {
+					return pos, err
+				}
+			}
 		}
 	}
+}
+
+func appendInserts(statements []FullBinlogStatement, rows *replication.Rows, tm *replication.TableMap, ti *schema.Table) []FullBinlogStatement {
+	for i := range rows.Rows {
+		var sql bytes.Buffer
+
+		sql.WriteString("INSERT INTO ")
+		sql.WriteString(tm.Name)
+		sql.WriteString(" SET ")
+
+		if err := writeValuesAsSQL(&sql, rows, tm, ti, i); err != nil {
+			log.Warningf("writeValuesAsSQL(%v) failed: %v", i, err)
+			continue
+		}
+
+		statement := &binlogdatapb.BinlogTransaction_Statement{
+			Category: binlogdatapb.BinlogTransaction_Statement_BL_INSERT,
+			Sql:      sql.Bytes(),
+		}
+		statements = append(statements, FullBinlogStatement{
+			Statement: statement,
+			Table:     tm.Name,
+		})
+		// TODO(alainjobart): fill in keyspaceID, pkNames, pkRows
+		// if necessary.
+	}
+	return statements
 }
 
 func appendUpdates(statements []FullBinlogStatement, rows *replication.Rows, tm *replication.TableMap, ti *schema.Table) []FullBinlogStatement {
@@ -453,6 +548,33 @@ func appendUpdates(statements []FullBinlogStatement, rows *replication.Rows, tm 
 		}
 		statements = append(statements, FullBinlogStatement{
 			Statement: update,
+			Table:     tm.Name,
+		})
+		// TODO(alainjobart): fill in keyspaceID, pkNames, pkRows
+		// if necessary.
+	}
+	return statements
+}
+
+func appendDeletes(statements []FullBinlogStatement, rows *replication.Rows, tm *replication.TableMap, ti *schema.Table) []FullBinlogStatement {
+	for i := range rows.Rows {
+		var sql bytes.Buffer
+
+		sql.WriteString("DELETE FROM ")
+		sql.WriteString(tm.Name)
+		sql.WriteString(" WHERE ")
+
+		if err := writeIdentifiesAsSQL(&sql, rows, tm, ti, i); err != nil {
+			log.Warningf("writeIdentifiesAsSQL(%v) failed: %v", i, err)
+			continue
+		}
+
+		statement := &binlogdatapb.BinlogTransaction_Statement{
+			Category: binlogdatapb.BinlogTransaction_Statement_BL_DELETE,
+			Sql:      sql.Bytes(),
+		}
+		statements = append(statements, FullBinlogStatement{
+			Statement: statement,
 			Table:     tm.Name,
 		})
 		// TODO(alainjobart): fill in keyspaceID, pkNames, pkRows

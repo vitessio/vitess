@@ -378,7 +378,11 @@ func newRowsEvent(f BinlogFormat, s *FakeBinlogStream, typ byte, tableID uint64,
 	data[8] = 0x02
 	data[9] = 0x00
 
-	data[10] = byte(rows.IdentifyColumns.Count()) // FIXME(alainjobart) len
+	if hasIdentify {
+		data[10] = byte(rows.IdentifyColumns.Count()) // FIXME(alainjobart) len
+	} else {
+		data[10] = byte(rows.DataColumns.Count()) // FIXME(alainjobart) len
+	}
 	pos := 11
 
 	if hasIdentify {
