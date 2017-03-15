@@ -30,6 +30,10 @@ export class NewWorkflowFlags {
     this.flags['horizontal_resharding_vtworkers'] = new HorizontalReshardingVtworkerFlag(6, 'horizontal_resharding_vtworkers');
     this.flags['horizontal_resharding_vtworkers'].positional = true;
     this.flags['horizontal_resharding_vtworkers'].namedPositional = 'vtworkers';
+    this.flags['horizontal_resharding_enable_approvals'] = new HorizontalReshardingEnableApprovalsFlag(7, 'horizontal_resharding_enable_approvals');
+    this.flags['horizontal_resharding_enable_approvals'].positional = true;
+    this.flags['horizontal_resharding_enable_approvals'].namedPositional = 'enable_approvals';
+
   }
 }
 
@@ -103,6 +107,13 @@ export class HorizontalReshardingKeyspaceFlag extends InputFlag {
 export class HorizontalReshardingVtworkerFlag extends InputFlag {
   constructor(position: number, id: string, value= '') {
     super(position, id, 'vtworker Addresses', 'Comma-separated list of vtworker addresses.', value);
+    this.setDisplayOn('factory_name', 'horizontal_resharding');
+  }
+}
+
+export class HorizontalReshardingEnableApprovalsFlag extends CheckBoxFlag {
+  constructor(position: number, id: string, value= true) {
+    super(position, id, 'enable approvals', 'Set true if use user approvals of task execution.', value);
     this.setDisplayOn('factory_name', 'horizontal_resharding');
   }
 }
