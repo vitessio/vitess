@@ -9,7 +9,6 @@ import (
 	"flag"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/exit"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/servenv"
@@ -36,8 +35,6 @@ func init() {
 }
 
 func main() {
-	defer exit.Recover()
-
 	dbconfigFlags := dbconfigs.AppConfig | dbconfigs.AllPrivsConfig | dbconfigs.DbaConfig |
 		dbconfigs.FilteredConfig | dbconfigs.ReplConfig
 	dbconfigs.RegisterFlags(dbconfigFlags)
@@ -45,12 +42,10 @@ func main() {
 	flag.Parse()
 	if len(flag.Args()) > 0 {
 		flag.Usage()
-		log.Errorf("vttablet doesn't take any positional arguments")
-		exit.Return(1)
+		log.Exit("vttablet doesn't take any positional arguments")
 	}
 	if err := tabletenv.VerifyConfig(); err != nil {
-		log.Errorf("invalid config: %v", err)
-		exit.Return(1)
+		log.Exitf("invalid config: %v", err)
 	}
 
 	tabletenv.Init()
@@ -58,19 +53,16 @@ func main() {
 	servenv.Init()
 
 	if *tabletPath == "" {
-		log.Errorf("tabletPath required")
-		exit.Return(1)
+		log.Exit("tabletPath required")
 	}
 	tabletAlias, err := topoproto.ParseTabletAlias(*tabletPath)
 	if err != nil {
-		log.Error(err)
-		exit.Return(1)
+		log.Exitf("failed to parse -tablet-path: %v", err)
 	}
 
 	mycnf, err := mysqlctl.NewMycnfFromFlags(tabletAlias.Uid)
 	if err != nil {
-		log.Errorf("mycnf read failed: %v", err)
-		exit.Return(1)
+		log.Exitf("mycnf read failed: %v", err)
 	}
 
 	dbcfgs, err := dbconfigs.Init(mycnf.SocketFile, dbconfigFlags)
@@ -95,8 +87,7 @@ func main() {
 		// To override default simpleacl, other ACL plugins must set themselves to be default ACL factory
 		tableacl.Register("simpleacl", &simpleacl.Factory{})
 	} else if *enforceTableACLConfig {
-		log.Error("table acl config has to be specified with table-acl-config flag because enforce-tableacl-config is set.")
-		exit.Return(1)
+		log.Exit("table acl config has to be specified with table-acl-config flag because enforce-tableacl-config is set.")
 	}
 	// tabletacl.Init loads ACL from file if *tableACLConfig is not empty
 	err = tableacl.Init(
@@ -108,8 +99,7 @@ func main() {
 	if err != nil {
 		log.Errorf("Fail to initialize Table ACL: %v", err)
 		if *enforceTableACLConfig {
-			log.Error("Need a valid initial Table ACL when enforce-tableacl-config is set, exiting.")
-			exit.Return(1)
+			log.Exit("Need a valid initial Table ACL when enforce-tableacl-config is set, exiting.")
 		}
 	}
 
@@ -126,8 +116,7 @@ func main() {
 	}
 	agent, err = tabletmanager.NewActionAgent(context.Background(), ts, mysqld, qsc, tabletAlias, *dbcfgs, mycnf, int32(*servenv.Port), gRPCPort)
 	if err != nil {
-		log.Error(err)
-		exit.Return(1)
+		log.Exitf("NewActionAgent() failed: %v", err)
 	}
 
 	servenv.OnClose(func() {
