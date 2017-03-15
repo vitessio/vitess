@@ -4,8 +4,11 @@ import (
 	"fmt"
 
 	"github.com/youtube/vitess/go/vt/sqlparser"
-	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/schema"
+	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/querytypes"
+	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/schema"
+
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 // SplitParams stores the context for a splitquery computation. It is used by
@@ -63,8 +66,8 @@ func NewSplitParamsGivenNumRowsPerQueryPart(
 	schema map[string]*schema.Table,
 ) (*SplitParams, error) {
 	if numRowsPerQueryPart <= 0 {
-		return nil, fmt.Errorf("numRowsPerQueryPart must be positive. Got: %v",
-			numRowsPerQueryPart)
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+			"numRowsPerQueryPart must be positive. Got: %v", numRowsPerQueryPart)
 	}
 	result, err := newSplitParams(query, splitColumnNames, schema)
 	if err != nil {
@@ -104,8 +107,8 @@ func NewSplitParamsGivenSplitCount(
 	schema map[string]*schema.Table,
 ) (*SplitParams, error) {
 	if splitCount <= 0 {
-		return nil, fmt.Errorf("splitCount must be positive. Got: %v",
-			splitCount)
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+			"splitCount must be positive. Got: %v", splitCount)
 	}
 	result, err := newSplitParams(query, splitColumnNames, schema)
 	if err != nil {
@@ -130,31 +133,33 @@ func newSplitParams(
 ) (*SplitParams, error) {
 	statement, err := sqlparser.Parse(query.Sql)
 	if err != nil {
-		return nil, fmt.Errorf("failed parsing query: '%v', err: '%v'", query.Sql, err)
+		return nil, vterrors.Errorf(
+			vtrpcpb.Code_INVALID_ARGUMENT, "failed parsing query: '%v', err: '%v'", query.Sql, err)
 	}
 	selectAST, ok := statement.(*sqlparser.Select)
 	if !ok {
-		return nil, fmt.Errorf("not a select statement")
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "not a select statement")
 	}
 	if selectAST.Distinct != "" || selectAST.GroupBy != nil ||
 		selectAST.Having != nil || len(selectAST.From) != 1 ||
 		selectAST.OrderBy != nil || selectAST.Limit != nil ||
 		selectAST.Lock != "" {
-		return nil, fmt.Errorf("unsupported query: %v", query.Sql)
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported query: %v", query.Sql)
 	}
 	var aliasedTableExpr *sqlparser.AliasedTableExpr
 	aliasedTableExpr, ok = selectAST.From[0].(*sqlparser.AliasedTableExpr)
 	if !ok {
-		return nil, fmt.Errorf("unsupported FROM clause in query: %v", query.Sql)
+		return nil, vterrors.Errorf(
+			vtrpcpb.Code_INVALID_ARGUMENT, "unsupported FROM clause in query: %v", query.Sql)
 	}
 	tableName := sqlparser.GetTableName(aliasedTableExpr.Expr)
 	if tableName.IsEmpty() {
-		return nil, fmt.Errorf("unsupported FROM clause in query"+
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported FROM clause in query"+
 			" (must be a simple table expression): %v", query.Sql)
 	}
 	tableSchema, ok := schemaMap[tableName.String()]
 	if tableSchema == nil {
-		return nil, fmt.Errorf("can't find table in schema")
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "can't find table in schema")
 	}
 
 	// Get the schema.TableColumn representation of each splitColumnName.
@@ -162,9 +167,10 @@ func newSplitParams(
 	if len(splitColumnNames) == 0 {
 		splitColumns = getPrimaryKeyColumns(tableSchema)
 		if len(splitColumns) == 0 {
-			return nil, fmt.Errorf("no split columns where given and the queried table has"+
-				" no primary key columns (is the table a view? Running SplitQuery on a view"+
-				" is not supported). query: %v", query.Sql)
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+				"no split columns where given and the queried table has"+
+					" no primary key columns (is the table a view? Running SplitQuery on a view"+
+					" is not supported). query: %v", query.Sql)
 		}
 	} else {
 		splitColumns, err = findSplitColumnsInSchema(splitColumnNames, tableSchema)
@@ -172,8 +178,10 @@ func newSplitParams(
 			return nil, err
 		}
 		if !areColumnsAPrefixOfAnIndex(splitColumns, tableSchema) {
-			return nil, fmt.Errorf("split-columns must be a prefix of the columns composing"+
-				" an index. Sql: %v, split-columns: %v", query.Sql, splitColumns)
+			return nil, vterrors.Errorf(
+				vtrpcpb.Code_INVALID_ARGUMENT,
+				"split-columns must be a prefix of the columns composing"+
+					" an index. Sql: %v, split-columns: %v", query.Sql, splitColumns)
 		}
 	}
 
@@ -199,7 +207,9 @@ func findSplitColumnsInSchema(
 	for _, splitColumnName := range splitColumnNames {
 		i := tableSchema.FindColumn(splitColumnName)
 		if i == -1 {
-			return nil, fmt.Errorf("can't find split column: %v", splitColumnName)
+			return nil, vterrors.Errorf(
+				vtrpcpb.Code_INVALID_ARGUMENT,
+				"can't find split column: %v", splitColumnName)
 		}
 		result = append(result, &tableSchema.Columns[i])
 	}
