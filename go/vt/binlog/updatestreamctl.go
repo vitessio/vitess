@@ -93,7 +93,6 @@ func (m *UpdateStreamControlMock) IsEnabled() bool {
 // and UpdateStreamControl
 type UpdateStreamImpl struct {
 	// the following variables are set at construction time
-
 	mysqld mysqlctl.MysqlDaemon
 	dbname string
 	se     *schema.Engine
@@ -156,9 +155,10 @@ type RegisterUpdateStreamServiceFunc func(UpdateStream)
 var RegisterUpdateStreamServices []RegisterUpdateStreamServiceFunc
 
 // NewUpdateStream returns a new UpdateStreamImpl object
-func NewUpdateStream(mysqld mysqlctl.MysqlDaemon, dbname string) *UpdateStreamImpl {
+func NewUpdateStream(mysqld mysqlctl.MysqlDaemon, se *schema.Engine, dbname string) *UpdateStreamImpl {
 	return &UpdateStreamImpl{
 		mysqld: mysqld,
+		se:     se,
 		dbname: dbname,
 	}
 }
