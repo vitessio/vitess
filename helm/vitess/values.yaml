@@ -25,6 +25,8 @@ topology:
         replicas: 3
       vtctld:
         replicas: 1
+      vtworker:
+        replicas: 1
       vtgate:
         replicas: 3
       keyspaces:
@@ -167,6 +169,16 @@ vttablet:
     resources:
       requests:
         storage: "10Gi"
+
+
+# Default values for vtworker resources defined in 'topology'.
+vtworker:
+  serviceType: "ClusterIP"
+  image: "vitess/lite:latest"
+  resources:
+    limits:
+      memory: "1Gi"
+      cpu: "500m"
 
 # Uncomment one of the following lines to configure the location
 # of the root certificates file on your host OS.

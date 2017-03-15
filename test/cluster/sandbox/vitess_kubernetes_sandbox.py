@@ -40,6 +40,10 @@ class VitessKubernetesSandbox(sandbox.Sandbox):
         firewall_sandlet.components.add_component(
             self.cluster_env.Port('%s-vtgate-%s' % (self.name, cell),
                                   self.app_options.port_forwarding['vtgate']))
+    if 'vtworker' in self.app_options.port_forwarding:
+      firewall_sandlet.components.add_component(
+          self.cluster_env.Port('%s-vtworker' % self.name,
+                                self.app_options.port_forwarding['vtworker']))
     if 'guestbook' in self.app_options.port_forwarding:
       firewall_sandlet.components.add_component(
           self.cluster_env.Port('%s-guestbook' % self.name,
@@ -130,6 +134,10 @@ class VitessKubernetesSandbox(sandbox.Sandbox):
             image=self.app_options.vtctld_image,
             extraFlags={'enable_queries': True},
         ),
+        vtworker=dict(
+            serviceType='LoadBalancer',
+            image=self.app_options.vtworker_image,
+        ),
         vttablet=dict(
             image=self.app_options.vttablet_image,
             resources=dict(
@@ -198,6 +206,9 @@ class VitessKubernetesSandbox(sandbox.Sandbox):
 
       if index == 0:
         yaml_values['topology']['cells'][-1]['vtctld'] = dict(replicas=1)
+        yaml_values['topology']['cells'][-1]['vtworker'] = dict(
+            replicas=self.app_options.vtworker_count
+        )
 
     # Create the file and return the filename
     with tempfile.NamedTemporaryFile(delete=False) as f:
@@ -250,7 +261,7 @@ class VitessKubernetesSandbox(sandbox.Sandbox):
             *self.sandbox_options['application'].values())
 
     if any(k in self.app_options.port_forwarding
-           for k in ['vtgate', 'vtctld', 'guestbook']):
+           for k in ['vtgate', 'vtctld', 'vtworker', 'guestbook']):
       self.generate_firewall_sandlet()
     self.generate_helm_sandlet()
     if 'guestbook' in self.app_options.port_forwarding:
@@ -268,6 +279,11 @@ class VitessKubernetesSandbox(sandbox.Sandbox):
       vtgate_ip = kubernetes_components.get_forwarded_ip(
           'vtgate-%s' % cell, self.name)
       banner += '  vtgate-%s: http://%s:%d\n' % (cell, vtgate_ip, vtgate_port)
+    if 'vtworker' in self.app_options.port_forwarding:
+      vtworker_ip = kubernetes_components.get_forwarded_ip(
+          'vtworker', self.name)
+      vtworker_port = self.app_options.port_forwarding['vtworker']
+      banner += '  vtworker: http://%s:%d\n' % (vtworker_ip, vtworker_port)
     if 'guestbook' in self.app_options.port_forwarding:
       guestbook_ip = kubernetes_components.get_forwarded_ip(
           'guestbook', self.name)

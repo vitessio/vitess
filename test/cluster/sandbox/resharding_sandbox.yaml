@@ -23,15 +23,20 @@ sandbox:
     vtgate_count: 1
     enable_orchestrator: True
     etcd_count: 3
+    vtworker_count: 1
     cells:
-      - test1
-      - test2
+      - test
     keyspaces:
       - name: {{sandbox_name}}
         shard_count: 1
         replica_count: 3
         rdonly_count: 0
+      - name: {{sandbox_name}}
+        shard_count: 2
+        replica_count: 3
+        rdonly_count: 0
     vtctld_image: vitess/root
+    vtworker_image: vitess/root
     vttablet_image: vitess/root
     vtgate_image: vitess/root
     vttablet_ram: 1Gi
