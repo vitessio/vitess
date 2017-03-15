@@ -23,10 +23,10 @@ import (
 	"github.com/youtube/vitess/go/mysqlconn/fakesqldb"
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/messager"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/querytypes"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
-	"github.com/youtube/vitess/go/vt/vterrors"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -1780,7 +1780,7 @@ func TestTabletServerSplitQueryEqualSplitsOnStringColumn(t *testing.T) {
 		0,  /* numRowsPerQueryPart */
 		querypb.SplitQueryRequest_EQUAL_SPLITS)
 	want :=
-		"splitquery: using the EQUAL_SPLITS algorithm in SplitQuery" +
+		"using the EQUAL_SPLITS algorithm in SplitQuery" +
 			" requires having a numeric (integral or float) split-column." +
 			" Got type: {Name: 'name_string', Type: VARCHAR}"
 	if err.Error() != want {

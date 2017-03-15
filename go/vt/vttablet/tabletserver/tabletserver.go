@@ -1089,11 +1089,11 @@ func (tsv *TabletServer) SplitQuery(
 			defer sqlExecuter.done()
 			algorithmObject, err := createSplitQueryAlgorithmObject(algorithm, splitParams, sqlExecuter)
 			if err != nil {
-				return splitQueryToTabletError(err)
+				return err
 			}
 			splits, err = splitquery.NewSplitter(splitParams, algorithmObject).Split()
 			if err != nil {
-				return splitQueryToTabletError(err)
+				return err
 			}
 			return nil
 		},
@@ -1299,13 +1299,11 @@ func createSplitParams(
 ) (*splitquery.SplitParams, error) {
 	switch {
 	case numRowsPerQueryPart != 0 && splitCount == 0:
-		splitParams, err := splitquery.NewSplitParamsGivenNumRowsPerQueryPart(
+		return splitquery.NewSplitParamsGivenNumRowsPerQueryPart(
 			query, splitColumns, numRowsPerQueryPart, schema)
-		return splitParams, splitQueryToTabletError(err)
 	case numRowsPerQueryPart == 0 && splitCount != 0:
-		splitParams, err := splitquery.NewSplitParamsGivenSplitCount(
+		return splitquery.NewSplitParamsGivenSplitCount(
 			query, splitColumns, splitCount, schema)
-		return splitParams, splitQueryToTabletError(err)
 	default:
 		panic(fmt.Errorf("Exactly one of {numRowsPerQueryPart, splitCount} must be"+
 			" non zero. This should have already been caught by 'validateSplitQueryParameters' and "+
@@ -1384,16 +1382,6 @@ func createSplitQueryAlgorithmObject(
 	default:
 		panic(fmt.Errorf("Unknown algorithm enum: %+v", algorithm))
 	}
-}
-
-// splitQueryToTabletError converts the given error assumed to be returned from the
-// splitquery-package into a TabletError suitable to be returned to the caller.
-// It returns nil if 'err' is nil.
-func splitQueryToTabletError(err error) error {
-	if err == nil {
-		return nil
-	}
-	return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "splitquery: %v", err)
 }
 
 // StreamHealth streams the health status to callback.
