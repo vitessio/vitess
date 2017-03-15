@@ -43,7 +43,8 @@ class TestHorizontalReshardingWorkflow(worker.TestBaseSplitClone):
 
     stdout = utils.run_vtctl(['WorkflowCreate', 'horizontal_resharding',
                               '-keyspace=test_keyspace',
-                              '-vtworkers=%s' % vtworker_endpoint],
+                              '-vtworkers=%s' % vtworker_endpoint,
+                              '-enable_approvals=false'],
                              auto_log=True)
     workflow_uuid = re.match(r'^uuid: (.*)$', stdout[0]).group(1)
 

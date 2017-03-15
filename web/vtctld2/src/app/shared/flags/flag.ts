@@ -88,7 +88,7 @@ export class Flag {
   }
 
   public getArgs() {
-    if (this.getValue() === false || this.getStrValue() === '' || !this.positional) {
+    if (this.getStrValue() === '' || !this.positional) {
       return [];
     }
     if (this.namedPositional !== undefined) {
@@ -103,7 +103,7 @@ export class Flag {
   }
 
   public getFlags() {
-    if (this.getValue() === false || this.getStrValue() === '' || this.positional) {
+    if (this.getStrValue() === '' || this.positional) {
       return [];
     }
     // Non-positional arguments need a key value pair.
