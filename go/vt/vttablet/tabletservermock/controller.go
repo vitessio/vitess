@@ -16,6 +16,7 @@ import (
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	"github.com/youtube/vitess/go/vt/vttablet/queryservice"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/rules"
+	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/schema"
 )
 
 // BroadcastData is used by the mock Controller to send data
@@ -152,6 +153,11 @@ func (tqsc *Controller) SetQueryRules(ruleSource string, qrs *rules.Rules) error
 
 // QueryService is part of the tabletserver.Controller interface
 func (tqsc *Controller) QueryService() queryservice.QueryService {
+	return nil
+}
+
+// SchemaEngine is part of the tabletserver.Controller interface
+func (tqsc *Controller) SchemaEngine() *schema.Engine {
 	return nil
 }
 

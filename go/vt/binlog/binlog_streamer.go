@@ -52,9 +52,20 @@ var (
 	}
 )
 
+// FullBinlogStatement has all the information we can gather for an event.
+// Some fields are only set if asked for, and if RBR is used.
+// Otherwise we'll revert back to using the SQL comments, for SBR.
+type FullBinlogStatement struct {
+	Statement  *binlogdatapb.BinlogTransaction_Statement
+	Table      string
+	KeyspaceID []byte
+	PKNames    []*querypb.Field
+	PKRow      *querypb.Row
+}
+
 // sendTransactionFunc is used to send binlog events.
 // reply is of type binlogdatapb.BinlogTransaction.
-type sendTransactionFunc func(trans *binlogdatapb.BinlogTransaction) error
+type sendTransactionFunc func(eventToken *querypb.EventToken, statements []FullBinlogStatement) error
 
 // getStatementCategory returns the binlogdatapb.BL_* category for a SQL statement.
 func getStatementCategory(sql string) binlogdatapb.BinlogTransaction_Statement_Category {
@@ -173,7 +184,7 @@ func (bls *Streamer) Stream(ctx context.Context) (err error) {
 // If the events channel is closed, parseEvents returns ErrServerEOF.
 // If the context is done, returns ctx.Err().
 func (bls *Streamer) parseEvents(ctx context.Context, events <-chan replication.BinlogEvent) (replication.Position, error) {
-	var statements []*binlogdatapb.BinlogTransaction_Statement
+	var statements []FullBinlogStatement
 	var format replication.BinlogFormat
 	var gtid replication.GTID
 	var pos = bls.startPos
@@ -191,21 +202,18 @@ func (bls *Streamer) parseEvents(ctx context.Context, events <-chan replication.
 			log.Errorf("BEGIN in binlog stream while still in another transaction; dropping %d statements: %v", len(statements), statements)
 			binlogStreamerErrors.Add("ParseEvents", 1)
 		}
-		statements = make([]*binlogdatapb.BinlogTransaction_Statement, 0, 10)
+		statements = make([]FullBinlogStatement, 0, 10)
 		autocommit = false
 	}
 	// A commit can be triggered either by a COMMIT query, or by an XID_EVENT.
 	// Statements that aren't wrapped in BEGIN/COMMIT are committed immediately.
 	commit := func(timestamp uint32) error {
 		if int64(timestamp) >= bls.timestamp {
-			trans := &binlogdatapb.BinlogTransaction{
-				Statements: statements,
-				EventToken: &querypb.EventToken{
-					Timestamp: int64(timestamp),
-					Position:  replication.EncodePosition(pos),
-				},
+			eventToken := &querypb.EventToken{
+				Timestamp: int64(timestamp),
+				Position:  replication.EncodePosition(pos),
 			}
-			if err = bls.sendTransaction(trans); err != nil {
+			if err = bls.sendTransaction(eventToken, statements); err != nil {
 				if err == io.EOF {
 					return ErrClientEOF
 				}
@@ -288,18 +296,22 @@ func (bls *Streamer) parseEvents(ctx context.Context, events <-chan replication.
 			if err != nil {
 				return pos, fmt.Errorf("can't parse INTVAR_EVENT: %v, event data: %#v", err, ev)
 			}
-			statements = append(statements, &binlogdatapb.BinlogTransaction_Statement{
-				Category: binlogdatapb.BinlogTransaction_Statement_BL_SET,
-				Sql:      []byte(fmt.Sprintf("SET %s=%d", replication.IntVarNames[typ], value)),
+			statements = append(statements, FullBinlogStatement{
+				Statement: &binlogdatapb.BinlogTransaction_Statement{
+					Category: binlogdatapb.BinlogTransaction_Statement_BL_SET,
+					Sql:      []byte(fmt.Sprintf("SET %s=%d", replication.IntVarNames[typ], value)),
+				},
 			})
 		case ev.IsRand(): // RAND_EVENT
 			seed1, seed2, err := ev.Rand(format)
 			if err != nil {
 				return pos, fmt.Errorf("can't parse RAND_EVENT: %v, event data: %#v", err, ev)
 			}
-			statements = append(statements, &binlogdatapb.BinlogTransaction_Statement{
-				Category: binlogdatapb.BinlogTransaction_Statement_BL_SET,
-				Sql:      []byte(fmt.Sprintf("SET @@RAND_SEED1=%d, @@RAND_SEED2=%d", seed1, seed2)),
+			statements = append(statements, FullBinlogStatement{
+				Statement: &binlogdatapb.BinlogTransaction_Statement{
+					Category: binlogdatapb.BinlogTransaction_Statement_BL_SET,
+					Sql:      []byte(fmt.Sprintf("SET @@RAND_SEED1=%d, @@RAND_SEED2=%d", seed1, seed2)),
+				},
 			})
 		case ev.IsQuery(): // QUERY_EVENT
 			// Extract the query string and group into transactions.
@@ -341,7 +353,11 @@ func (bls *Streamer) parseEvents(ctx context.Context, events <-chan replication.
 					setTimestamp.Charset = q.Charset
 					statement.Charset = q.Charset
 				}
-				statements = append(statements, setTimestamp, statement)
+				statements = append(statements, FullBinlogStatement{
+					Statement: setTimestamp,
+				}, FullBinlogStatement{
+					Statement: statement,
+				})
 				if autocommit {
 					if err = commit(ev.Timestamp()); err != nil {
 						return pos, err
@@ -373,6 +389,40 @@ func (bls *Streamer) parseEvents(ctx context.Context, events <-chan replication.
 				return pos, err
 			}
 			tableMaps[tableID] = tm
+		case ev.IsWriteRows():
+			tableID := ev.TableID(format)
+			tm, ok := tableMaps[tableID]
+			if !ok {
+				return pos, fmt.Errorf("unknown tableID %v in WriteRows event", tableID)
+			}
+			if tm.Database != "" && tm.Database != bls.dbname {
+				// Skip cross-db statements.
+				continue
+			}
+			ti := bls.se.GetTable(sqlparser.NewTableIdent(tm.Name))
+			if ti == nil {
+				return pos, fmt.Errorf("unknown table %v in schema", tm.Name)
+			}
+			setTimestamp := &binlogdatapb.BinlogTransaction_Statement{
+				Category: binlogdatapb.BinlogTransaction_Statement_BL_SET,
+				Sql:      []byte(fmt.Sprintf("SET TIMESTAMP=%d", ev.Timestamp())),
+			}
+			statements = append(statements, FullBinlogStatement{
+				Statement: setTimestamp,
+			})
+
+			rows, err := ev.Rows(format, tm)
+			if err != nil {
+				return pos, err
+			}
+
+			statements = appendInserts(statements, &rows, tm, ti)
+
+			if autocommit {
+				if err = commit(ev.Timestamp()); err != nil {
+					return pos, err
+				}
+			}
 		case ev.IsUpdateRows():
 			tableID := ev.TableID(format)
 			tm, ok := tableMaps[tableID]
@@ -391,7 +441,9 @@ func (bls *Streamer) parseEvents(ctx context.Context, events <-chan replication.
 				Category: binlogdatapb.BinlogTransaction_Statement_BL_SET,
 				Sql:      []byte(fmt.Sprintf("SET TIMESTAMP=%d", ev.Timestamp())),
 			}
-			statements = append(statements, setTimestamp)
+			statements = append(statements, FullBinlogStatement{
+				Statement: setTimestamp,
+			})
 
 			rows, err := ev.Rows(format, tm)
 			if err != nil {
@@ -405,11 +457,72 @@ func (bls *Streamer) parseEvents(ctx context.Context, events <-chan replication.
 					return pos, err
 				}
 			}
+		case ev.IsDeleteRows():
+			tableID := ev.TableID(format)
+			tm, ok := tableMaps[tableID]
+			if !ok {
+				return pos, fmt.Errorf("unknown tableID %v in DeleteRows event", tableID)
+			}
+			if tm.Database != "" && tm.Database != bls.dbname {
+				// Skip cross-db statements.
+				continue
+			}
+			ti := bls.se.GetTable(sqlparser.NewTableIdent(tm.Name))
+			if ti == nil {
+				return pos, fmt.Errorf("unknown table %v in schema", tm.Name)
+			}
+			setTimestamp := &binlogdatapb.BinlogTransaction_Statement{
+				Category: binlogdatapb.BinlogTransaction_Statement_BL_SET,
+				Sql:      []byte(fmt.Sprintf("SET TIMESTAMP=%d", ev.Timestamp())),
+			}
+			statements = append(statements, FullBinlogStatement{
+				Statement: setTimestamp,
+			})
+
+			rows, err := ev.Rows(format, tm)
+			if err != nil {
+				return pos, err
+			}
+
+			statements = appendDeletes(statements, &rows, tm, ti)
+
+			if autocommit {
+				if err = commit(ev.Timestamp()); err != nil {
+					return pos, err
+				}
+			}
 		}
 	}
 }
 
-func appendUpdates(statements []*binlogdatapb.BinlogTransaction_Statement, rows *replication.Rows, tm *replication.TableMap, ti *schema.Table) []*binlogdatapb.BinlogTransaction_Statement {
+func appendInserts(statements []FullBinlogStatement, rows *replication.Rows, tm *replication.TableMap, ti *schema.Table) []FullBinlogStatement {
+	for i := range rows.Rows {
+		var sql bytes.Buffer
+
+		sql.WriteString("INSERT INTO ")
+		sql.WriteString(tm.Name)
+		sql.WriteString(" SET ")
+
+		if err := writeValuesAsSQL(&sql, rows, tm, ti, i); err != nil {
+			log.Warningf("writeValuesAsSQL(%v) failed: %v", i, err)
+			continue
+		}
+
+		statement := &binlogdatapb.BinlogTransaction_Statement{
+			Category: binlogdatapb.BinlogTransaction_Statement_BL_INSERT,
+			Sql:      sql.Bytes(),
+		}
+		statements = append(statements, FullBinlogStatement{
+			Statement: statement,
+			Table:     tm.Name,
+		})
+		// TODO(alainjobart): fill in keyspaceID, pkNames, pkRows
+		// if necessary.
+	}
+	return statements
+}
+
+func appendUpdates(statements []FullBinlogStatement, rows *replication.Rows, tm *replication.TableMap, ti *schema.Table) []FullBinlogStatement {
 	for i := range rows.Rows {
 		var sql bytes.Buffer
 
@@ -433,7 +546,39 @@ func appendUpdates(statements []*binlogdatapb.BinlogTransaction_Statement, rows 
 			Category: binlogdatapb.BinlogTransaction_Statement_BL_UPDATE,
 			Sql:      sql.Bytes(),
 		}
-		statements = append(statements, update)
+		statements = append(statements, FullBinlogStatement{
+			Statement: update,
+			Table:     tm.Name,
+		})
+		// TODO(alainjobart): fill in keyspaceID, pkNames, pkRows
+		// if necessary.
+	}
+	return statements
+}
+
+func appendDeletes(statements []FullBinlogStatement, rows *replication.Rows, tm *replication.TableMap, ti *schema.Table) []FullBinlogStatement {
+	for i := range rows.Rows {
+		var sql bytes.Buffer
+
+		sql.WriteString("DELETE FROM ")
+		sql.WriteString(tm.Name)
+		sql.WriteString(" WHERE ")
+
+		if err := writeIdentifiesAsSQL(&sql, rows, tm, ti, i); err != nil {
+			log.Warningf("writeIdentifiesAsSQL(%v) failed: %v", i, err)
+			continue
+		}
+
+		statement := &binlogdatapb.BinlogTransaction_Statement{
+			Category: binlogdatapb.BinlogTransaction_Statement_BL_DELETE,
+			Sql:      sql.Bytes(),
+		}
+		statements = append(statements, FullBinlogStatement{
+			Statement: statement,
+			Table:     tm.Name,
+		})
+		// TODO(alainjobart): fill in keyspaceID, pkNames, pkRows
+		// if necessary.
 	}
 	return statements
 }

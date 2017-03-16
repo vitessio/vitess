@@ -53,16 +53,16 @@ func (evs *EventStreamer) Stream(ctx context.Context) error {
 	return evs.bls.Stream(ctx)
 }
 
-func (evs *EventStreamer) transactionToEvent(trans *binlogdatapb.BinlogTransaction) error {
+func (evs *EventStreamer) transactionToEvent(eventToken *querypb.EventToken, statements []FullBinlogStatement) error {
 	event := &querypb.StreamEvent{
-		EventToken: trans.EventToken,
+		EventToken: eventToken,
 	}
 	var err error
 	var insertid int64
-	for _, stmt := range trans.Statements {
-		switch stmt.Category {
+	for _, stmt := range statements {
+		switch stmt.Statement.Category {
 		case binlogdatapb.BinlogTransaction_Statement_BL_SET:
-			sql := string(stmt.Sql)
+			sql := string(stmt.Statement.Sql)
 			if strings.HasPrefix(sql, binlogSetInsertID) {
 				insertid, err = strconv.ParseInt(sql[binlogSetInsertIDLen:], 10, 64)
 				if err != nil {
@@ -74,29 +74,29 @@ func (evs *EventStreamer) transactionToEvent(trans *binlogdatapb.BinlogTransacti
 			binlogdatapb.BinlogTransaction_Statement_BL_UPDATE,
 			binlogdatapb.BinlogTransaction_Statement_BL_DELETE:
 			var dmlStatement *querypb.StreamEvent_Statement
-			dmlStatement, insertid, err = evs.buildDMLStatement(string(stmt.Sql), insertid)
+			dmlStatement, insertid, err = evs.buildDMLStatement(string(stmt.Statement.Sql), insertid)
 			if err != nil {
 				dmlStatement = &querypb.StreamEvent_Statement{
 					Category: querypb.StreamEvent_Statement_Error,
-					Sql:      stmt.Sql,
+					Sql:      stmt.Statement.Sql,
 				}
 			}
 			event.Statements = append(event.Statements, dmlStatement)
 		case binlogdatapb.BinlogTransaction_Statement_BL_DDL:
 			ddlStatement := &querypb.StreamEvent_Statement{
 				Category: querypb.StreamEvent_Statement_DDL,
-				Sql:      stmt.Sql,
+				Sql:      stmt.Statement.Sql,
 			}
 			event.Statements = append(event.Statements, ddlStatement)
 		case binlogdatapb.BinlogTransaction_Statement_BL_UNRECOGNIZED:
 			unrecognized := &querypb.StreamEvent_Statement{
 				Category: querypb.StreamEvent_Statement_Error,
-				Sql:      stmt.Sql,
+				Sql:      stmt.Statement.Sql,
 			}
 			event.Statements = append(event.Statements, unrecognized)
 		default:
 			binlogStreamerErrors.Add("EventStreamer", 1)
-			log.Errorf("Unrecognized event: %v: %s", stmt.Category, stmt.Sql)
+			log.Errorf("Unrecognized event: %v: %s", stmt.Statement.Category, stmt.Statement.Sql)
 		}
 	}
 	return evs.sendEvent(event)

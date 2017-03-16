@@ -396,6 +396,17 @@
 				"worker_test"
 			]
 		},
+		"vertical_split_rbr": {
+			"File": "vertical_split_rbr.py",
+			"Args": [],
+			"Command": [],
+			"Manual": false,
+			"Shard": 1,
+			"RetryMax": 0,
+			"Tags": [
+				"worker_test"
+			]
+		},
 		"vtctld": {
 			"File": "vtctld_test.py",
 			"Args": [],

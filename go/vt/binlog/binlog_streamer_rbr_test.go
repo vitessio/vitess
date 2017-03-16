@@ -56,8 +56,26 @@ func TestStreamerParseRBRUpdateEvent(t *testing.T) {
 	}
 	tm.CanBeNull.Set(1, true)
 
+	// Do an insert packet with all fields set.
+	insertRows := replication.Rows{
+		Flags:       0x1234,
+		DataColumns: replication.NewServerBitmap(2),
+		Rows: []replication.Row{
+			{
+				NullColumns: replication.NewServerBitmap(2),
+				Data: []byte{
+					0x10, 0x20, 0x30, 0x40, // long
+					0x04, 0x00, // len('abcd')
+					'a', 'b', 'c', 'd', // 'abcd'
+				},
+			},
+		},
+	}
+	insertRows.DataColumns.Set(0, true)
+	insertRows.DataColumns.Set(1, true)
+
 	// Do an update packet with all fields set.
-	rows := replication.Rows{
+	updateRows := replication.Rows{
 		Flags:           0x1234,
 		IdentifyColumns: replication.NewServerBitmap(2),
 		DataColumns:     replication.NewServerBitmap(2),
@@ -78,10 +96,28 @@ func TestStreamerParseRBRUpdateEvent(t *testing.T) {
 			},
 		},
 	}
-	rows.IdentifyColumns.Set(0, true)
-	rows.IdentifyColumns.Set(1, true)
-	rows.DataColumns.Set(0, true)
-	rows.DataColumns.Set(1, true)
+	updateRows.IdentifyColumns.Set(0, true)
+	updateRows.IdentifyColumns.Set(1, true)
+	updateRows.DataColumns.Set(0, true)
+	updateRows.DataColumns.Set(1, true)
+
+	// Do a delete packet with all fields set.
+	deleteRows := replication.Rows{
+		Flags:           0x1234,
+		IdentifyColumns: replication.NewServerBitmap(2),
+		Rows: []replication.Row{
+			{
+				NullIdentifyColumns: replication.NewServerBitmap(2),
+				Identify: []byte{
+					0x10, 0x20, 0x30, 0x40, // long
+					0x03, 0x00, // len('abc')
+					'a', 'b', 'c', // 'abc'
+				},
+			},
+		},
+	}
+	deleteRows.IdentifyColumns.Set(0, true)
+	deleteRows.IdentifyColumns.Set(1, true)
 
 	input := []replication.BinlogEvent{
 		replication.NewRotateEvent(f, s, 0, ""),
@@ -91,25 +127,58 @@ func TestStreamerParseRBRUpdateEvent(t *testing.T) {
 		replication.NewQueryEvent(f, s, replication.Query{
 			Database: "vt_test_keyspace",
 			SQL:      "BEGIN"}),
-		replication.NewUpdateRowsEvent(f, s, tableID, rows),
+		replication.NewWriteRowsEvent(f, s, tableID, insertRows),
+		replication.NewUpdateRowsEvent(f, s, tableID, updateRows),
+		replication.NewDeleteRowsEvent(f, s, tableID, deleteRows),
 		replication.NewXIDEvent(f, s),
 	}
 
 	events := make(chan replication.BinlogEvent)
 
-	want := []binlogdatapb.BinlogTransaction{
+	want := []fullBinlogTransaction{
 		{
-			Statements: []*binlogdatapb.BinlogTransaction_Statement{
+			statements: []FullBinlogStatement{
 				{
-					Category: binlogdatapb.BinlogTransaction_Statement_BL_SET,
-					Sql:      []byte("SET TIMESTAMP=1407805592"),
+					Statement: &binlogdatapb.BinlogTransaction_Statement{
+						Category: binlogdatapb.BinlogTransaction_Statement_BL_SET,
+						Sql:      []byte("SET TIMESTAMP=1407805592"),
+					},
 				},
 				{
-					Category: binlogdatapb.BinlogTransaction_Statement_BL_UPDATE,
-					Sql:      []byte("UPDATE vt_a SET id=1076895760, message='abcd' WHERE id=1076895760 AND message='abc'"),
+					Statement: &binlogdatapb.BinlogTransaction_Statement{
+						Category: binlogdatapb.BinlogTransaction_Statement_BL_INSERT,
+						Sql:      []byte("INSERT INTO vt_a SET id=1076895760, message='abcd'"),
+					},
+					Table: "vt_a",
+				},
+				{
+					Statement: &binlogdatapb.BinlogTransaction_Statement{
+						Category: binlogdatapb.BinlogTransaction_Statement_BL_SET,
+						Sql:      []byte("SET TIMESTAMP=1407805592"),
+					},
+				},
+				{
+					Statement: &binlogdatapb.BinlogTransaction_Statement{
+						Category: binlogdatapb.BinlogTransaction_Statement_BL_UPDATE,
+						Sql:      []byte("UPDATE vt_a SET id=1076895760, message='abcd' WHERE id=1076895760 AND message='abc'"),
+					},
+					Table: "vt_a",
+				},
+				{
+					Statement: &binlogdatapb.BinlogTransaction_Statement{
+						Category: binlogdatapb.BinlogTransaction_Statement_BL_SET,
+						Sql:      []byte("SET TIMESTAMP=1407805592"),
+					},
+				},
+				{
+					Statement: &binlogdatapb.BinlogTransaction_Statement{
+						Category: binlogdatapb.BinlogTransaction_Statement_BL_DELETE,
+						Sql:      []byte("DELETE FROM vt_a WHERE id=1076895760 AND message='abc'"),
+					},
+					Table: "vt_a",
 				},
 			},
-			EventToken: &querypb.EventToken{
+			eventToken: &querypb.EventToken{
 				Timestamp: 1407805592,
 				Position: replication.EncodePosition(replication.Position{
 					GTIDSet: replication.MariadbGTID{
@@ -121,9 +190,12 @@ func TestStreamerParseRBRUpdateEvent(t *testing.T) {
 			},
 		},
 	}
-	var got []binlogdatapb.BinlogTransaction
-	sendTransaction := func(trans *binlogdatapb.BinlogTransaction) error {
-		got = append(got, *trans)
+	var got []fullBinlogTransaction
+	sendTransaction := func(eventToken *querypb.EventToken, statements []FullBinlogStatement) error {
+		got = append(got, fullBinlogTransaction{
+			eventToken: eventToken,
+			statements: statements,
+		})
 		return nil
 	}
 	bls := NewStreamer("vt_test_keyspace", nil, se, nil, replication.Position{}, 0, sendTransaction)
@@ -135,6 +207,12 @@ func TestStreamerParseRBRUpdateEvent(t *testing.T) {
 	}
 
 	if !reflect.DeepEqual(got, want) {
-		t.Errorf("binlogConnStreamer.parseEvents(): got:\n%v\nwant:\n%v", got, want)
+		t.Errorf("binlogConnStreamer.parseEvents(): got:\n%+v\nwant:\n%+v", got, want)
+		for i, fbt := range got {
+			t.Errorf("Got (%v)=%v", i, fbt.statements)
+		}
+		for i, fbt := range want {
+			t.Errorf("Want(%v)=%v", i, fbt.statements)
+		}
 	}
 }
