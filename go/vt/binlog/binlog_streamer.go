@@ -15,6 +15,7 @@ import (
 
 	"github.com/youtube/vitess/go/mysqlconn/replication"
 	"github.com/youtube/vitess/go/sqldb"
+	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/sqlparser"
@@ -75,14 +76,32 @@ func getStatementCategory(sql string) binlogdatapb.BinlogTransaction_Statement_C
 	return statementPrefixes[strings.ToLower(sql)]
 }
 
+// tableCacheEntry contains everything we know about a table.
+// It is created when we get a TableMap event.
+type tableCacheEntry struct {
+	// tm is what we get from a TableMap event.
+	tm *replication.TableMap
+
+	// ti is the table descriptor we get from the schema engine.
+	ti *schema.Table
+
+	// resolver is only set if Streamer.resolverFactory is set.
+	resolver keyspaceIDResolver
+
+	// keyspaceIDIndex is the index of the field that can be used
+	// to compute the keyspaceID. Set to -1 if no resolver is in used.
+	keyspaceIDIndex int
+}
+
 // Streamer streams binlog events from MySQL by connecting as a slave.
 // A Streamer should only be used once. To start another stream, call
 // NewStreamer() again.
 type Streamer struct {
 	// The following fields at set at creation and immutable.
-	dbname string
-	mysqld mysqlctl.MysqlDaemon
-	se     *schema.Engine
+	dbname          string
+	mysqld          mysqlctl.MysqlDaemon
+	se              *schema.Engine
+	resolverFactory keyspaceIDResolverFactory
 
 	clientCharset    *binlogdatapb.Charset
 	startPos         replication.Position
@@ -193,7 +212,7 @@ func (bls *Streamer) parseEvents(ctx context.Context, events <-chan replication.
 
 	// Remember the RBR state.
 	// tableMaps is indexed by tableID.
-	tableMaps := make(map[uint64]*replication.TableMap)
+	tableMaps := make(map[uint64]*tableCacheEntry)
 
 	// A begin can be triggered either by a BEGIN query, or by a GTID_EVENT.
 	begin := func() {
@@ -388,20 +407,43 @@ func (bls *Streamer) parseEvents(ctx context.Context, events <-chan replication.
 			if err != nil {
 				return pos, err
 			}
-			tableMaps[tableID] = tm
+			// TODO(alainjobart) if table is already in map,
+			// just use it.
+
+			tce := &tableCacheEntry{
+				tm:              tm,
+				keyspaceIDIndex: -1,
+			}
+			tableMaps[tableID] = tce
+
+			// Check we're in the right database, and if so, fill
+			// in more data.
+			if tm.Database != "" && tm.Database != bls.dbname {
+				continue
+			}
+
+			// Find and fill in the table schema.
+			tce.ti = bls.se.GetTable(sqlparser.NewTableIdent(tm.Name))
+			if tce.ti == nil {
+				return pos, fmt.Errorf("unknown table %v in schema", tm.Name)
+			}
+
+			// Fill in the resolver if needed.
+			if bls.resolverFactory != nil {
+				tce.keyspaceIDIndex, tce.resolver, err = bls.resolverFactory(tce.ti)
+				if err != nil {
+					return pos, fmt.Errorf("cannot find column to use to find keyspace_id for table %v", tm.Name)
+				}
+			}
 		case ev.IsWriteRows():
 			tableID := ev.TableID(format)
-			tm, ok := tableMaps[tableID]
+			tce, ok := tableMaps[tableID]
 			if !ok {
 				return pos, fmt.Errorf("unknown tableID %v in WriteRows event", tableID)
 			}
-			if tm.Database != "" && tm.Database != bls.dbname {
+			if tce.ti == nil {
 				// Skip cross-db statements.
 				continue
-			}
-			ti := bls.se.GetTable(sqlparser.NewTableIdent(tm.Name))
-			if ti == nil {
-				return pos, fmt.Errorf("unknown table %v in schema", tm.Name)
 			}
 			setTimestamp := &binlogdatapb.BinlogTransaction_Statement{
 				Category: binlogdatapb.BinlogTransaction_Statement_BL_SET,
@@ -411,12 +453,12 @@ func (bls *Streamer) parseEvents(ctx context.Context, events <-chan replication.
 				Statement: setTimestamp,
 			})
 
-			rows, err := ev.Rows(format, tm)
+			rows, err := ev.Rows(format, tce.tm)
 			if err != nil {
 				return pos, err
 			}
 
-			statements = appendInserts(statements, &rows, tm, ti)
+			statements = bls.appendInserts(statements, tce, &rows)
 
 			if autocommit {
 				if err = commit(ev.Timestamp()); err != nil {
@@ -425,17 +467,13 @@ func (bls *Streamer) parseEvents(ctx context.Context, events <-chan replication.
 			}
 		case ev.IsUpdateRows():
 			tableID := ev.TableID(format)
-			tm, ok := tableMaps[tableID]
+			tce, ok := tableMaps[tableID]
 			if !ok {
 				return pos, fmt.Errorf("unknown tableID %v in UpdateRows event", tableID)
 			}
-			if tm.Database != "" && tm.Database != bls.dbname {
+			if tce.ti == nil {
 				// Skip cross-db statements.
 				continue
-			}
-			ti := bls.se.GetTable(sqlparser.NewTableIdent(tm.Name))
-			if ti == nil {
-				return pos, fmt.Errorf("unknown table %v in schema", tm.Name)
 			}
 			setTimestamp := &binlogdatapb.BinlogTransaction_Statement{
 				Category: binlogdatapb.BinlogTransaction_Statement_BL_SET,
@@ -445,12 +483,12 @@ func (bls *Streamer) parseEvents(ctx context.Context, events <-chan replication.
 				Statement: setTimestamp,
 			})
 
-			rows, err := ev.Rows(format, tm)
+			rows, err := ev.Rows(format, tce.tm)
 			if err != nil {
 				return pos, err
 			}
 
-			statements = appendUpdates(statements, &rows, tm, ti)
+			statements = bls.appendUpdates(statements, tce, &rows)
 
 			if autocommit {
 				if err = commit(ev.Timestamp()); err != nil {
@@ -459,17 +497,13 @@ func (bls *Streamer) parseEvents(ctx context.Context, events <-chan replication.
 			}
 		case ev.IsDeleteRows():
 			tableID := ev.TableID(format)
-			tm, ok := tableMaps[tableID]
+			tce, ok := tableMaps[tableID]
 			if !ok {
 				return pos, fmt.Errorf("unknown tableID %v in DeleteRows event", tableID)
 			}
-			if tm.Database != "" && tm.Database != bls.dbname {
+			if tce.ti == nil {
 				// Skip cross-db statements.
 				continue
-			}
-			ti := bls.se.GetTable(sqlparser.NewTableIdent(tm.Name))
-			if ti == nil {
-				return pos, fmt.Errorf("unknown table %v in schema", tm.Name)
 			}
 			setTimestamp := &binlogdatapb.BinlogTransaction_Statement{
 				Category: binlogdatapb.BinlogTransaction_Statement_BL_SET,
@@ -479,12 +513,12 @@ func (bls *Streamer) parseEvents(ctx context.Context, events <-chan replication.
 				Statement: setTimestamp,
 			})
 
-			rows, err := ev.Rows(format, tm)
+			rows, err := ev.Rows(format, tce.tm)
 			if err != nil {
 				return pos, err
 			}
 
-			statements = appendDeletes(statements, &rows, tm, ti)
+			statements = bls.appendDeletes(statements, tce, &rows)
 
 			if autocommit {
 				if err = commit(ev.Timestamp()); err != nil {
@@ -495,17 +529,28 @@ func (bls *Streamer) parseEvents(ctx context.Context, events <-chan replication.
 	}
 }
 
-func appendInserts(statements []FullBinlogStatement, rows *replication.Rows, tm *replication.TableMap, ti *schema.Table) []FullBinlogStatement {
+func (bls *Streamer) appendInserts(statements []FullBinlogStatement, tce *tableCacheEntry, rows *replication.Rows) []FullBinlogStatement {
 	for i := range rows.Rows {
 		var sql bytes.Buffer
 
 		sql.WriteString("INSERT INTO ")
-		sql.WriteString(tm.Name)
+		sql.WriteString(tce.tm.Name)
 		sql.WriteString(" SET ")
 
-		if err := writeValuesAsSQL(&sql, rows, tm, ti, i); err != nil {
+		keyspaceIDCell, err := writeValuesAsSQL(&sql, tce, rows, i)
+		if err != nil {
 			log.Warningf("writeValuesAsSQL(%v) failed: %v", i, err)
 			continue
+		}
+
+		// Fill in keyspace id if needed.
+		var ksid []byte
+		if tce.resolver != nil {
+			var err error
+			ksid, err = tce.resolver.keyspaceID(keyspaceIDCell)
+			if err != nil {
+				log.Warningf("resolver(%v) failed: %v", err)
+			}
 		}
 
 		statement := &binlogdatapb.BinlogTransaction_Statement{
@@ -513,33 +558,46 @@ func appendInserts(statements []FullBinlogStatement, rows *replication.Rows, tm 
 			Sql:      sql.Bytes(),
 		}
 		statements = append(statements, FullBinlogStatement{
-			Statement: statement,
-			Table:     tm.Name,
+			Statement:  statement,
+			Table:      tce.tm.Name,
+			KeyspaceID: ksid,
 		})
-		// TODO(alainjobart): fill in keyspaceID, pkNames, pkRows
+
+		// TODO(alainjobart): fill in pkNames, pkRows
 		// if necessary.
 	}
 	return statements
 }
 
-func appendUpdates(statements []FullBinlogStatement, rows *replication.Rows, tm *replication.TableMap, ti *schema.Table) []FullBinlogStatement {
+func (bls *Streamer) appendUpdates(statements []FullBinlogStatement, tce *tableCacheEntry, rows *replication.Rows) []FullBinlogStatement {
 	for i := range rows.Rows {
 		var sql bytes.Buffer
 
 		sql.WriteString("UPDATE ")
-		sql.WriteString(tm.Name)
+		sql.WriteString(tce.tm.Name)
 		sql.WriteString(" SET ")
 
-		if err := writeValuesAsSQL(&sql, rows, tm, ti, i); err != nil {
+		keyspaceIDCell, err := writeValuesAsSQL(&sql, tce, rows, i)
+		if err != nil {
 			log.Warningf("writeValuesAsSQL(%v) failed: %v", i, err)
 			continue
 		}
 
 		sql.WriteString(" WHERE ")
 
-		if err := writeIdentifiesAsSQL(&sql, rows, tm, ti, i); err != nil {
+		if _, err := writeIdentifiesAsSQL(&sql, tce, rows, i); err != nil {
 			log.Warningf("writeIdentifiesAsSQL(%v) failed: %v", i, err)
 			continue
+		}
+
+		// Fill in keyspace id if needed.
+		var ksid []byte
+		if tce.resolver != nil {
+			var err error
+			ksid, err = tce.resolver.keyspaceID(keyspaceIDCell)
+			if err != nil {
+				log.Warningf("resolver(%v) failed: %v", err)
+			}
 		}
 
 		update := &binlogdatapb.BinlogTransaction_Statement{
@@ -547,26 +605,38 @@ func appendUpdates(statements []FullBinlogStatement, rows *replication.Rows, tm 
 			Sql:      sql.Bytes(),
 		}
 		statements = append(statements, FullBinlogStatement{
-			Statement: update,
-			Table:     tm.Name,
+			Statement:  update,
+			Table:      tce.tm.Name,
+			KeyspaceID: ksid,
 		})
-		// TODO(alainjobart): fill in keyspaceID, pkNames, pkRows
+		// TODO(alainjobart): fill in pkNames, pkRows
 		// if necessary.
 	}
 	return statements
 }
 
-func appendDeletes(statements []FullBinlogStatement, rows *replication.Rows, tm *replication.TableMap, ti *schema.Table) []FullBinlogStatement {
+func (bls *Streamer) appendDeletes(statements []FullBinlogStatement, tce *tableCacheEntry, rows *replication.Rows) []FullBinlogStatement {
 	for i := range rows.Rows {
 		var sql bytes.Buffer
 
 		sql.WriteString("DELETE FROM ")
-		sql.WriteString(tm.Name)
+		sql.WriteString(tce.tm.Name)
 		sql.WriteString(" WHERE ")
 
-		if err := writeIdentifiesAsSQL(&sql, rows, tm, ti, i); err != nil {
+		keyspaceIDCell, err := writeIdentifiesAsSQL(&sql, tce, rows, i)
+		if err != nil {
 			log.Warningf("writeIdentifiesAsSQL(%v) failed: %v", i, err)
 			continue
+		}
+
+		// Fill in keyspace id if needed.
+		var ksid []byte
+		if tce.resolver != nil {
+			var err error
+			ksid, err = tce.resolver.keyspaceID(keyspaceIDCell)
+			if err != nil {
+				log.Warningf("resolver(%v) failed: %v", err)
+			}
 		}
 
 		statement := &binlogdatapb.BinlogTransaction_Statement{
@@ -574,21 +644,23 @@ func appendDeletes(statements []FullBinlogStatement, rows *replication.Rows, tm 
 			Sql:      sql.Bytes(),
 		}
 		statements = append(statements, FullBinlogStatement{
-			Statement: statement,
-			Table:     tm.Name,
+			Statement:  statement,
+			Table:      tce.tm.Name,
+			KeyspaceID: ksid,
 		})
-		// TODO(alainjobart): fill in keyspaceID, pkNames, pkRows
+		// TODO(alainjobart): fill in pkNames, pkRows
 		// if necessary.
 	}
 	return statements
 }
 
 // writeValuesAsSQL is a helper method to print the values as SQL in the
-// provided bytes.Buffer.
-func writeValuesAsSQL(sql *bytes.Buffer, rs *replication.Rows, tm *replication.TableMap, ti *schema.Table, rowIndex int) error {
+// provided bytes.Buffer. It also returns the value for the keyspaceIDColumn.
+func writeValuesAsSQL(sql *bytes.Buffer, tce *tableCacheEntry, rs *replication.Rows, rowIndex int) (sqltypes.Value, error) {
 	valueIndex := 0
 	data := rs.Rows[rowIndex].Data
 	pos := 0
+	var keyspaceIDCell sqltypes.Value
 	for c := 0; c < rs.DataColumns.Count(); c++ {
 		if !rs.DataColumns.Bit(c) {
 			continue
@@ -598,7 +670,7 @@ func writeValuesAsSQL(sql *bytes.Buffer, rs *replication.Rows, tm *replication.T
 		if valueIndex > 0 {
 			sql.WriteString(", ")
 		}
-		sql.WriteString(ti.Columns[c].Name.String())
+		sql.WriteString(tce.ti.Columns[c].Name.String())
 		sql.WriteByte('=')
 
 		if rs.Rows[rowIndex].NullColumns.Bit(valueIndex) {
@@ -608,25 +680,29 @@ func writeValuesAsSQL(sql *bytes.Buffer, rs *replication.Rows, tm *replication.T
 			continue
 		}
 
-		// We have real data
-		value, l, err := replication.CellValue(data, pos, tm.Types[c], tm.Metadata[c], ti.Columns[c].Type)
+		// We have real data.
+		value, l, err := replication.CellValue(data, pos, tce.tm.Types[c], tce.tm.Metadata[c], tce.ti.Columns[c].Type)
 		if err != nil {
-			return err
+			return keyspaceIDCell, err
 		}
 		value.EncodeSQL(sql)
+		if c == tce.keyspaceIDIndex {
+			keyspaceIDCell = value
+		}
 		pos += l
 		valueIndex++
 	}
 
-	return nil
+	return keyspaceIDCell, nil
 }
 
 // writeIdentifiesAsSQL is a helper method to print the identifies as SQL in the
-// provided bytes.Buffer.
-func writeIdentifiesAsSQL(sql *bytes.Buffer, rs *replication.Rows, tm *replication.TableMap, ti *schema.Table, rowIndex int) error {
+// provided bytes.Buffer. It also returns the value for the keyspaceIDColumn.
+func writeIdentifiesAsSQL(sql *bytes.Buffer, tce *tableCacheEntry, rs *replication.Rows, rowIndex int) (sqltypes.Value, error) {
 	valueIndex := 0
 	data := rs.Rows[rowIndex].Identify
 	pos := 0
+	var keyspaceIDCell sqltypes.Value
 	for c := 0; c < rs.IdentifyColumns.Count(); c++ {
 		if !rs.IdentifyColumns.Bit(c) {
 			continue
@@ -636,7 +712,7 @@ func writeIdentifiesAsSQL(sql *bytes.Buffer, rs *replication.Rows, tm *replicati
 		if valueIndex > 0 {
 			sql.WriteString(" AND ")
 		}
-		sql.WriteString(ti.Columns[c].Name.String())
+		sql.WriteString(tce.ti.Columns[c].Name.String())
 		sql.WriteByte('=')
 
 		if rs.Rows[rowIndex].NullIdentifyColumns.Bit(valueIndex) {
@@ -646,15 +722,18 @@ func writeIdentifiesAsSQL(sql *bytes.Buffer, rs *replication.Rows, tm *replicati
 			continue
 		}
 
-		// We have real data
-		value, l, err := replication.CellValue(data, pos, tm.Types[c], tm.Metadata[c], ti.Columns[c].Type)
+		// We have real data.
+		value, l, err := replication.CellValue(data, pos, tce.tm.Types[c], tce.tm.Metadata[c], tce.ti.Columns[c].Type)
 		if err != nil {
-			return err
+			return keyspaceIDCell, err
 		}
 		value.EncodeSQL(sql)
+		if c == tce.keyspaceIDIndex {
+			keyspaceIDCell = value
+		}
 		pos += l
 		valueIndex++
 	}
 
-	return nil
+	return keyspaceIDCell, nil
 }
