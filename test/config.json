@@ -280,6 +280,17 @@
 				"worker_test"
 			]
 		},
+		"resharding_rbr": {
+			"File": "resharding_rbr.py",
+			"Args": [],
+			"Command": [],
+			"Manual": false,
+			"Shard": 0,
+			"RetryMax": 0,
+			"Tags": [
+				"worker_test"
+			]
+		},
 		"schema": {
 			"File": "schema.py",
 			"Args": [],

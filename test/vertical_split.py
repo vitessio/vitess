@@ -18,9 +18,6 @@ from vtdb import keyrange
 from vtdb import keyrange_constants
 from vtdb import vtgate_client
 
-# Global variables, for tests flavors.
-use_rbr = False
-
 # source keyspace, with 4 tables
 source_master = tablet.Tablet()
 source_replica = tablet.Tablet()
@@ -42,7 +39,7 @@ def setUpModule():
   try:
     environment.topo_server().setup()
     extra_my_cnf = None
-    if use_rbr:
+    if base_sharding.use_rbr:
       extra_my_cnf = environment.vttop + '/config/mycnf/rbr.cnf'
     setup_procs = [t.init_mysql(extra_my_cnf=extra_my_cnf) for t in all_tablets]
     utils.Vtctld().start()
