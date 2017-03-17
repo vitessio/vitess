@@ -15,7 +15,7 @@ import (
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
-var useV3ReshardingMode = flag.Bool("use_v3_resharding_mode", false, "True iff the binlog streamer should use V3-style sharding, which doesn't require a preset sharding key column.")
+var useV3ReshardingMode = flag.Bool("binlog_use_v3_resharding_mode", false, "True iff the binlog streamer should use V3-style sharding, which doesn't require a preset sharding key column.")
 
 // keyspaceIDResolver is constructed for a tableMap entry in RBR.  It
 // is used for each row, and passed in the value used for figuring out
