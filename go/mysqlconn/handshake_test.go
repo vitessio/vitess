@@ -20,8 +20,8 @@ import (
 func TestClearTextClientAuth(t *testing.T) {
 	th := &testHandler{}
 
-	authServer := NewAuthServerConfig()
-	authServer.Entries["user1"] = &AuthServerConfigEntry{
+	authServer := NewAuthServerStatic()
+	authServer.Entries["user1"] = &AuthServerStaticEntry{
 		Password: "password1",
 	}
 	authServer.ClearText = true
@@ -79,8 +79,8 @@ func TestClearTextClientAuth(t *testing.T) {
 func TestSSLConnection(t *testing.T) {
 	th := &testHandler{}
 
-	authServer := NewAuthServerConfig()
-	authServer.Entries["user1"] = &AuthServerConfigEntry{
+	authServer := NewAuthServerStatic()
+	authServer.Entries["user1"] = &AuthServerStaticEntry{
 		Password: "password1",
 	}
 
@@ -135,7 +135,7 @@ func TestSSLConnection(t *testing.T) {
 
 	// Make sure clear text auth works over SSL.
 	t.Run("ClearText", func(t *testing.T) {
-		l.authServer.(*AuthServerConfig).ClearText = true
+		l.authServer.(*AuthServerStatic).ClearText = true
 		testSSLConnectionClearText(t, params)
 	})
 }

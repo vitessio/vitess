@@ -134,8 +134,8 @@ func (th *testHandler) ComQuery(c *Conn, query string) (*sqltypes.Result, error)
 func TestServer(t *testing.T) {
 	th := &testHandler{}
 
-	authServer := NewAuthServerConfig()
-	authServer.Entries["user1"] = &AuthServerConfigEntry{
+	authServer := NewAuthServerStatic()
+	authServer.Entries["user1"] = &AuthServerStaticEntry{
 		Password: "password1",
 		UserData: "userData1",
 	}
@@ -271,8 +271,8 @@ func TestClearTextServer(t *testing.T) {
 
 	th := &testHandler{}
 
-	authServer := NewAuthServerConfig()
-	authServer.Entries["user1"] = &AuthServerConfigEntry{
+	authServer := NewAuthServerStatic()
+	authServer.Entries["user1"] = &AuthServerStaticEntry{
 		Password: "password1",
 		UserData: "userData1",
 	}
@@ -360,8 +360,8 @@ func TestClearTextServer(t *testing.T) {
 func TestTLSServer(t *testing.T) {
 	th := &testHandler{}
 
-	authServer := NewAuthServerConfig()
-	authServer.Entries["user1"] = &AuthServerConfigEntry{
+	authServer := NewAuthServerStatic()
+	authServer.Entries["user1"] = &AuthServerStaticEntry{
 		Password: "password1",
 	}
 

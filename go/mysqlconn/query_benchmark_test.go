@@ -128,8 +128,8 @@ func benchmarkOldParallelReads(b *testing.B, params sqldb.ConnParams, parallelCo
 func BenchmarkParallelShortQueries(b *testing.B) {
 	th := &testHandler{}
 
-	authServer := NewAuthServerConfig()
-	authServer.Entries["user1"] = &AuthServerConfigEntry{
+	authServer := NewAuthServerStatic()
+	authServer.Entries["user1"] = &AuthServerStaticEntry{
 		Password: "password1",
 	}
 

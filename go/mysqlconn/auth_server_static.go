@@ -10,65 +10,65 @@ import (
 	"github.com/youtube/vitess/go/sqldb"
 )
 
-// AuthServerConfig implements AuthServer using a static configuration.
-type AuthServerConfig struct {
+// AuthServerStatic implements AuthServer using a static configuration.
+type AuthServerStatic struct {
 	// ClearText can be set to force the use of ClearText auth.
 	ClearText bool
 
 	// Entries contains the users, passwords and user data.
-	Entries map[string]*AuthServerConfigEntry
+	Entries map[string]*AuthServerStaticEntry
 }
 
-// AuthServerConfigEntry stores the values for a given user.
-type AuthServerConfigEntry struct {
+// AuthServerStaticEntry stores the values for a given user.
+type AuthServerStaticEntry struct {
 	Password string
 	UserData string
 }
 
-// NewAuthServerConfig returns a new empty AuthServerConfig.
-func NewAuthServerConfig() *AuthServerConfig {
-	return &AuthServerConfig{
+// NewAuthServerStatic returns a new empty AuthServerStatic.
+func NewAuthServerStatic() *AuthServerStatic {
+	return &AuthServerStatic{
 		ClearText: false,
-		Entries:   make(map[string]*AuthServerConfigEntry),
+		Entries:   make(map[string]*AuthServerStaticEntry),
 	}
 }
 
-// RegisterAuthServerConfigFromParams creates and registers a new
-// AuthServerConfig, loaded for a JSON file or string. If file is set,
+// RegisterAuthServerStaticFromParams creates and registers a new
+// AuthServerStatic, loaded for a JSON file or string. If file is set,
 // it uses file. Otherwise, load the string. It log.Fatals out in case
 // of error.
-func RegisterAuthServerConfigFromParams(file, str string) {
-	authServerConfig := NewAuthServerConfig()
+func RegisterAuthServerStaticFromParams(file, str string) {
+	authServerStatic := NewAuthServerStatic()
 	jsonConfig := []byte(str)
 	if file != "" {
 		data, err := ioutil.ReadFile(file)
 		if err != nil {
-			log.Fatalf("Failed to read mysql_auth_server_config_file file: %v", err)
+			log.Fatalf("Failed to read mysql_auth_server_static_file file: %v", err)
 		}
 		jsonConfig = data
 	}
 
 	// Parse JSON config.
-	if err := json.Unmarshal(jsonConfig, &authServerConfig.Entries); err != nil {
+	if err := json.Unmarshal(jsonConfig, &authServerStatic.Entries); err != nil {
 		log.Fatalf("Error parsing auth server config: %v", err)
 	}
 
 	// And register the server.
-	RegisterAuthServerImpl("config", authServerConfig)
+	RegisterAuthServerImpl("static", authServerStatic)
 }
 
 // UseClearText is part of the AuthServer interface.
-func (a *AuthServerConfig) UseClearText() bool {
+func (a *AuthServerStatic) UseClearText() bool {
 	return a.ClearText
 }
 
 // Salt is part of the AuthServer interface.
-func (a *AuthServerConfig) Salt() ([]byte, error) {
+func (a *AuthServerStatic) Salt() ([]byte, error) {
 	return newSalt()
 }
 
 // ValidateHash is part of the AuthServer interface.
-func (a *AuthServerConfig) ValidateHash(salt []byte, user string, authResponse []byte) (string, error) {
+func (a *AuthServerStatic) ValidateHash(salt []byte, user string, authResponse []byte) (string, error) {
 	// Find the entry.
 	entry, ok := a.Entries[user]
 	if !ok {
@@ -85,7 +85,7 @@ func (a *AuthServerConfig) ValidateHash(salt []byte, user string, authResponse [
 }
 
 // ValidateClearText is part of the AuthServer interface.
-func (a *AuthServerConfig) ValidateClearText(user, password string) (string, error) {
+func (a *AuthServerStatic) ValidateClearText(user, password string) (string, error) {
 	// Find the entry.
 	entry, ok := a.Entries[user]
 	if !ok {

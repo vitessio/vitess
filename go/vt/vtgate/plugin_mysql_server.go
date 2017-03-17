@@ -21,27 +21,27 @@ import (
 
 var (
 	mysqlServerPort               = flag.Int("mysql_server_port", 0, "If set, also listen for MySQL binary protocol connections on this port.")
-	mysqlAuthServerImpl           = flag.String("mysql_auth_server_impl", "config", "Which auth server implementation to use.")
-	mysqlAuthServerConfigFile     = flag.String("mysql_auth_server_config_file", "", "JSON File to read the users/passwords from.")
-	mysqlAuthServerConfigString   = flag.String("mysql_auth_server_config_string", "", "JSON representation of the users/passwords config.")
+	mysqlAuthServerImpl           = flag.String("mysql_auth_server_impl", "static", "Which auth server implementation to use.")
+	mysqlAuthServerStaticFile     = flag.String("mysql_auth_server_static_file", "", "JSON File to read the users/passwords from.")
+	mysqlAuthServerStaticString   = flag.String("mysql_auth_server_static_string", "", "JSON representation of the users/passwords config.")
 	mysqlAllowClearTextWithoutTLS = flag.Bool("mysql_allow_clear_text_without_tls", false, "If set, the server will allow the use of a clear text password over non-SSL connections.")
 )
 
-// Handles initializing the AuthServerConfig if necessary.
-func initAuthServerConfig() {
+// Handles initializing the AuthServerStatic if necessary.
+func initAuthServerStatic() {
 	// Check parameters.
-	if *mysqlAuthServerConfigFile == "" && *mysqlAuthServerConfigString == "" {
+	if *mysqlAuthServerStaticFile == "" && *mysqlAuthServerStaticString == "" {
 		// Not configured, nothing to do.
-		log.Infof("Not configuring AuthServerConfig, as mysql_auth_server_config_file and mysql_auth_server_config_string are empty")
+		log.Infof("Not configuring AuthServerStatic, as mysql_auth_server_static_file and mysql_auth_server_static_string are empty")
 		return
 	}
-	if *mysqlAuthServerConfigFile != "" && *mysqlAuthServerConfigString != "" {
-		// Both parameters specified, can only use on.
-		log.Fatalf("Both mysql_auth_server_config_file and mysql_auth_server_config_string specified, can only use one.")
+	if *mysqlAuthServerStaticFile != "" && *mysqlAuthServerStaticString != "" {
+		// Both parameters specified, can only use one.
+		log.Fatalf("Both mysql_auth_server_static_file and mysql_auth_server_static_string specified, can only use one.")
 	}
 
 	// Create and register auth server.
-	mysqlconn.RegisterAuthServerConfigFromParams(*mysqlAuthServerConfigFile, *mysqlAuthServerConfigString)
+	mysqlconn.RegisterAuthServerStaticFromParams(*mysqlAuthServerStaticFile, *mysqlAuthServerStaticString)
 }
 
 // vtgateHandler implements the Listener interface.
@@ -111,8 +111,8 @@ func init() {
 			return
 		}
 
-		// Initialize the config AuthServer if necessary.
-		initAuthServerConfig()
+		// Initialize the static config AuthServer if necessary.
+		initAuthServerStatic()
 		authServer := mysqlconn.GetAuthServer(*mysqlAuthServerImpl)
 
 		// Create a Listener.

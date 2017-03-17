@@ -98,8 +98,8 @@ func New(t *testing.T) *DB {
 		connections:  make(map[uint32]*mysqlconn.Conn),
 	}
 
-	authServer := mysqlconn.NewAuthServerConfig()
-	authServer.Entries["user1"] = &mysqlconn.AuthServerConfigEntry{
+	authServer := mysqlconn.NewAuthServerStatic()
+	authServer.Entries["user1"] = &mysqlconn.AuthServerStaticEntry{
 		Password: "password1",
 	}
 
