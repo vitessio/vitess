@@ -82,7 +82,7 @@ func (asl *AuthServerLdap) ValidateHash(salt []byte, user string, authResponse [
 // searches for the user, attempts to bind as that user with the supplied password,
 // and, if so configured, queries for the user's groups, returning them in a
 // comma-separated string.
-// In reality, it runs whatever queries are supplied. See TODO(acharis) for an example.
+// In reality, it runs whatever queries are supplied. See data/test/mysql_ldap_auth_config.json for an example.
 // It is recommended that queryUser have read-only privileges on ldapServer
 func (asl *AuthServerLdap) ValidateClearText(username, password string) (string, error) {
 	conn, err := ldap.Dial("tcp", asl.ldapServer)
