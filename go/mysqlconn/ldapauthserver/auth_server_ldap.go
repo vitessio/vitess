@@ -2,43 +2,56 @@ package ldapauthserver
 
 import (
 	"bytes"
-	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
 	"io/ioutil"
+	"strings"
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/mysqlconn"
+	"github.com/youtube/vitess/go/vt/servenv/grpcutils"
 	"gopkg.in/ldap.v2"
 )
 
 var (
-	ldapAuthConfigFile = flag.String("mysql_ldap_auth_config_file", "", "JSON File to read LDAP server config from.")
+	ldapAuthConfigFile   = flag.String("mysql_ldap_auth_config_file", "", "JSON File from which to read LDAP server config.")
+	ldapAuthConfigString = flag.String("mysql_ldap_auth_config_string", "", "JSON representation of LDAP server config.")
 )
 
 // AuthServerLdap implements AuthServer with an LDAP backend
+// * include port in ldapServer, "ldap.example.com:386"
 type AuthServerLdap struct {
+	ldapServer    string
+	ldapCert      string
+	ldapKey       string
+	ldapCA        string
 	queryUser     string
 	queryPassword string
-	ldapServer    string
-	ldapPort      int
 	queryStr      string
 	getGroups     bool
 	groupQueryStr string
 }
 
 func init() {
-	if *ldapAuthConfigFile == "" {
-		log.Infof("Not configuring AuthServerLdap because mysql_ldap_auth_config_file is empty")
+	if *ldapAuthConfigFile == "" && *ldapAuthConfigString == "" {
+		log.Infof("Not configuring AuthServerLdap because mysql_ldap_auth_config_file and mysql_ldap_auth_config_string are empty")
+		return
+	}
+	if *ldapAuthConfigFile != "" && *ldapAuthConfigString != "" {
+		log.Infof("Both mysql_ldap_auth_config_file and mysql_ldap_auth_config_string are non-empty, can only use one.")
 		return
 	}
 	ldapAuthServer := newAuthServerLdap()
 
-	data, err := ioutil.ReadFile(*ldapAuthConfigFile)
-	if err != nil {
-		log.Fatalf("Failed to read mysql_ldap_auth_config_file: %v", err)
+	data := []byte(*ldapAuthConfigString)
+	if *ldapAuthConfigFile != "" {
+		var err error
+		data, err = ioutil.ReadFile(*ldapAuthConfigFile)
+		if err != nil {
+			log.Fatalf("Failed to read mysql_ldap_auth_config_file: %v", err)
+		}
 	}
 	if err := json.Unmarshal(data, &ldapAuthServer); err != nil {
 		log.Fatalf("Error parsing AuthServerLdap config: %v", err)
@@ -72,13 +85,20 @@ func (asl *AuthServerLdap) ValidateHash(salt []byte, user string, authResponse [
 // In reality, it runs whatever queries are supplied. See TODO(acharis) for an example.
 // It is recommended that queryUser have read-only privileges on ldapServer
 func (asl *AuthServerLdap) ValidateClearText(username, password string) (string, error) {
-	conn, err := ldap.Dial("tcp", fmt.Sprintf("%s:%d", asl.ldapServer, asl.ldapPort))
+	conn, err := ldap.Dial("tcp", asl.ldapServer)
 	defer conn.Close()
 	if err != nil {
 		return "", err
 	}
+
 	// Reconnect with TLS
-	err = conn.StartTLS(&tls.Config{})
+	idx := strings.LastIndex(asl.ldapServer, ":") // allow users to (incorrectly) specify ipv6 without []
+	serverName := asl.ldapServer[:idx]
+	tlsConfig, err := grpcutils.TLSClientConfig(asl.ldapCert, asl.ldapKey, asl.ldapCA, serverName)
+	if err != nil {
+		return "", err
+	}
+	err = conn.StartTLS(tlsConfig)
 	if err != nil {
 		return "", err
 	}
