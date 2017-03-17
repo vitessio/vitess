@@ -38,13 +38,16 @@ type Factory interface {
 	// The passed in workflow will have its Uuid, FactoryName and State
 	// variable filled it. This Init method should fill in the
 	// Name and Data attributes, based on the provided args.
-	// This is called during the Manager.Create phase.
-	Init(w *workflowpb.Workflow, args []string) error
+	// This is called during the Manager.Create phase and will initially
+	// checkpoint the workflow in the topology.
+	// The Manager object is passed to Init method since the resharding workflow
+	// will use the topology server in Manager.
+	Init(m *Manager, w *workflowpb.Workflow, args []string) error
 
 	// Instantiate loads a workflow from the proto representation
 	// into an in-memory Workflow object. rootNode is the root UI node
 	// representing the workflow.
-	Instantiate(w *workflowpb.Workflow, rootNode *Node) (Workflow, error)
+	Instantiate(m *Manager, w *workflowpb.Workflow, rootNode *Node) (Workflow, error)
 }
 
 // Manager is the main Workflow manager object.
@@ -247,7 +250,7 @@ func (m *Manager) Create(ctx context.Context, factoryName string, args []string)
 
 	// Let the factory parse the parameters and initialize the
 	// object.
-	if err := factory.Init(w, args); err != nil {
+	if err := factory.Init(m, w, args); err != nil {
 		return "", err
 	}
 	rw, err := m.instantiateWorkflow(w)
@@ -284,7 +287,7 @@ func (m *Manager) instantiateWorkflow(w *workflowpb.Workflow) (*runningWorkflow,
 		return nil, fmt.Errorf("no factory named %v is registered", w.FactoryName)
 	}
 	var err error
-	rw.workflow, err = factory.Instantiate(w, rw.rootNode)
+	rw.workflow, err = factory.Instantiate(m, w, rw.rootNode)
 	if err != nil {
 		return nil, err
 	}
@@ -441,7 +444,7 @@ func (m *Manager) Delete(ctx context.Context, uuid string) error {
 // Wait waits for the provided workflow to end.
 func (m *Manager) Wait(ctx context.Context, uuid string) error {
 	// Find the workflow.
-	rw, err := m.getRunningWorkflow(uuid)
+	rw, err := m.runningWorkflow(uuid)
 	if err != nil {
 		return err
 	}
@@ -456,8 +459,29 @@ func (m *Manager) Wait(ctx context.Context, uuid string) error {
 	return nil
 }
 
-// getRunningWorkflow returns a runningWorkflow by uuid.
-func (m *Manager) getRunningWorkflow(uuid string) (*runningWorkflow, error) {
+// WorkflowForTesting returns the Workflow object of the running workflow
+// identified by uuid. The method is used in unit tests to inject mocks.
+func (m *Manager) WorkflowForTesting(uuid string) (Workflow, error) {
+	rw, err := m.runningWorkflow(uuid)
+	if err != nil {
+		return nil, err
+	}
+	return rw.workflow, nil
+}
+
+// WorkflowInfoForTesting returns the WorkflowInfo object of the running
+// workflow identified by uuid. The method is used in unit tests to manipulate
+// checkpoint.
+func (m *Manager) WorkflowInfoForTesting(uuid string) (*topo.WorkflowInfo, error) {
+	rw, err := m.runningWorkflow(uuid)
+	if err != nil {
+		return nil, err
+	}
+	return rw.wi, nil
+}
+
+// runningWorkflow returns a runningWorkflow by uuid.
+func (m *Manager) runningWorkflow(uuid string) (*runningWorkflow, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 

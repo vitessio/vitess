@@ -11,7 +11,6 @@ import yaml
 from vttest import sharding_utils
 
 import sandbox
-import sandbox_utils
 import sandlet
 import subprocess_component
 
@@ -62,13 +61,13 @@ class VitessKubernetesSandbox(sandbox.Sandbox):
     guestbook_sandlet.components.add_component(
         kubernetes_components.KubernetesResource(
             'guestbook-service', self.name,
-            os.path.join(template_dir, 'guestbook-service.yaml'),
-            namespace=self.name))
+            os.path.join(template_dir, 'guestbook-service.yaml')))
     guestbook_sandlet.components.add_component(
         kubernetes_components.KubernetesResource(
             'guestbook-controller', self.name,
-            os.path.join(template_dir, 'guestbook-controller.yaml'),
-            namespace=self.name))
+            os.path.join(template_dir, 'guestbook-controller-template.yaml'),
+            port=8080, cell=self.app_options.cells[0], vtgate_port=15991,
+            keyspace=self.app_options.keyspaces[0]['name']))
     self.sandlets.add_component(guestbook_sandlet)
 
   def _generate_helm_keyspaces(self):
@@ -92,7 +91,6 @@ class VitessKubernetesSandbox(sandbox.Sandbox):
 
       for shard_index, shard_name in enumerate(
           sharding_utils.get_shard_names(ks['shard_count'])):
-        shard_name = sandbox_utils.fix_shard_name(shard_name)
         shard = dict(
             name=shard_name,
             tablets=[dict(
@@ -110,7 +108,9 @@ class VitessKubernetesSandbox(sandbox.Sandbox):
           shard['tablets'].append(dict(
               type='rdonly',
               uidBase=uid_base + ks['replica_count'],
-              replicas=ks['rdonly_count']))
+              vttablet=dict(
+                  replicas=ks['rdonly_count'],
+              )))
         keyspace['shards'].append(shard)
     return keyspaces
 
@@ -144,6 +144,7 @@ class VitessKubernetesSandbox(sandbox.Sandbox):
                     cpu=self.app_options.mysql_cpu,
                 ),
             ),
+            controllerType='None',
         ),
         vtgate=dict(
             serviceType='LoadBalancer',  # Allows port forwarding.
@@ -184,12 +185,15 @@ class VitessKubernetesSandbox(sandbox.Sandbox):
           keyspaces=copy.deepcopy(keyspaces),
       )
       # Each tablet's UID must be unique, so increment the uidBase for tablets
-      # by the cell epsilon value to ensure uniqueness. This logic will go away
-      # once StatefulSet is available.
+      # by the cell epsilon value to ensure uniqueness. Also convert the UID to
+      # a string, or else the parser will attempt to parse UID as a float, which
+      # causes issues when UID's are large. This logic will go away once
+      # StatefulSet is available.
       for keyspace in cell_dict['keyspaces']:
         for shard in keyspace['shards']:
           for tablets in shard['tablets']:
-            tablets['uidBase'] += index * self.cell_epsilon
+            tablets['uidBase'] = str(
+                tablets['uidBase'] + index * self.cell_epsilon)
       yaml_values['topology']['cells'].append(cell_dict)
 
       if index == 0:
@@ -199,6 +203,7 @@ class VitessKubernetesSandbox(sandbox.Sandbox):
     with tempfile.NamedTemporaryFile(delete=False) as f:
       f.write(yaml.dump(yaml_values, default_flow_style=False))
       yaml_filename = f.name
+    logging.info('Helm config generated at %s', yaml_filename)
     return yaml_filename
 
   def generate_helm_sandlet(self):
@@ -210,22 +215,31 @@ class VitessKubernetesSandbox(sandbox.Sandbox):
     helm_sandlet = sandlet.Sandlet('helm')
     helm_sandlet.components.add_component(kubernetes_components.HelmComponent(
         'helm', self.name, self._generate_helm_values_config()))
+
+    # Add a subprocess task to wait for all mysql instances to be healthy.
+    tablet_count = 0
+    for keyspace in self.app_options.keyspaces:
+      tablet_count += (keyspace['shard_count'] * len(self.app_options.cells) * (
+          keyspace['replica_count'] + keyspace['rdonly_count']))
+    wait_for_mysql_subprocess = subprocess_component.Subprocess(
+        'wait_for_mysql', self.name, 'wait_for_mysql.py',
+        self.log_dir, namespace=self.name,
+        cells=','.join(self.app_options.cells),
+        tablet_count=tablet_count)
+    wait_for_mysql_subprocess.dependencies = ['helm']
+    helm_sandlet.components.add_component(wait_for_mysql_subprocess)
+
+    # Add a subprocess task for each keyspace to perform the initial reparent.
     for keyspace in self.app_options.keyspaces:
       name = keyspace['name']
       shard_count = keyspace['shard_count']
-      wait_for_mysql_subprocess = subprocess_component.Subprocess(
-          'wait_for_mysql_%s' % name, self.name, 'wait_for_mysql.py',
-          self.log_dir, namespace=self.name,
-          cells=','.join(self.app_options.cells))
-      wait_for_mysql_subprocess.dependencies = ['helm']
       initial_reparent_subprocess = subprocess_component.Subprocess(
-          'initial_reparent_%s' % name, self.name,
+          'initial_reparent_%s_%d' % (name, shard_count), self.name,
           'initial_reparent.py', self.log_dir, namespace=self.name,
           keyspace=name, shard_count=shard_count,
           master_cell=self.app_options.cells[0])
       initial_reparent_subprocess.dependencies = [
           wait_for_mysql_subprocess.name]
-      helm_sandlet.components.add_component(wait_for_mysql_subprocess)
       helm_sandlet.components.add_component(initial_reparent_subprocess)
     self.sandlets.add_component(helm_sandlet)
 
@@ -244,23 +258,21 @@ class VitessKubernetesSandbox(sandbox.Sandbox):
 
   def print_banner(self):
     logging.info('Fetching forwarded ports.')
-    vtctld_addr = ''
+    banner = '\nVitess Sandbox Info:\n'
     vtctld_port = self.app_options.port_forwarding['vtctld']
     vtgate_port = self.app_options.port_forwarding['vtgate']
-    vtgate_addrs = []
-    vtctld_addr = kubernetes_components.get_forwarded_ip(
+    vtctld_ip = kubernetes_components.get_forwarded_ip(
         'vtctld', self.name)
+    banner += '  vtctld: http://%s:%d\n' % (vtctld_ip, vtctld_port)
     for cell in self.app_options.cells:
-      vtgate_addr = kubernetes_components.get_forwarded_ip(
+      vtgate_ip = kubernetes_components.get_forwarded_ip(
           'vtgate-%s' % cell, self.name)
-      vtgate_addrs.append('%s %s:%d' % (cell, vtgate_addr, vtgate_port))
-    banner = """
-        Vitess Sandbox Info:
-          vtctld: %s:%d
-          vtgate: %s
-          logs dir: %s""" % (
-              vtctld_addr, vtctld_port, ', '.join(vtgate_addrs),
-              self.log_dir)
+      banner += '  vtgate-%s: http://%s:%d\n' % (cell, vtgate_ip, vtgate_port)
+    if 'guestbook' in self.app_options.port_forwarding:
+      guestbook_ip = kubernetes_components.get_forwarded_ip(
+          'guestbook', self.name)
+      banner += '  guestbook: http://%s:80\n' % guestbook_ip
+    banner += '  logs dir: %s\n' % self.log_dir
     logging.info(banner)
 
 

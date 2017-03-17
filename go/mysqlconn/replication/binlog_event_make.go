@@ -268,11 +268,7 @@ func NewTableMapEvent(f BinlogFormat, s *FakeBinlogStream, tableID uint64, tm *T
 		panic("Not implemented, post_header_length!=8")
 	}
 
-	// Build the NullBitmap first.
-	nullBitmap := NewServerBitmap(len(tm.Columns))
-	for i, tmc := range tm.Columns {
-		nullBitmap.Set(i, tmc.CanBeNull)
-	}
+	metadataLength := metadataTotalLength(tm.Types)
 
 	length := 6 + // table_id
 		2 + // flags
@@ -283,9 +279,10 @@ func NewTableMapEvent(f BinlogFormat, s *FakeBinlogStream, tableID uint64, tm *T
 		len(tm.Name) +
 		1 + // [00]
 		1 + // column-count FIXME(alainjobart) len enc
-		len(tm.Columns) +
-		1 + // lenenc-str column-meta-def, see below.
-		len(nullBitmap.data)
+		len(tm.Types) +
+		1 + // lenenc-str column-meta-def FIXME(alainjobart) len enc
+		metadataLength +
+		len(tm.CanBeNull.data)
 	data := make([]byte, length)
 
 	data[0] = byte(tableID)
@@ -305,20 +302,20 @@ func NewTableMapEvent(f BinlogFormat, s *FakeBinlogStream, tableID uint64, tm *T
 	data[pos] = 0
 	pos++
 
-	data[pos] = byte(len(tm.Columns)) // FIXME(alainjobart) lenenc
+	data[pos] = byte(len(tm.Types)) // FIXME(alainjobart) lenenc
 	pos++
 
-	for i, tmc := range tm.Columns {
-		data[pos+i] = tmc.Type
+	pos += copy(data[pos:], tm.Types)
+
+	// Per-column meta data. Starting with len-enc length.
+	// FIXME(alainjobart) lenenc
+	data[pos] = byte(metadataLength)
+	pos++
+	for c, typ := range tm.Types {
+		pos = metadataWrite(data, pos, typ, tm.Metadata[c])
 	}
-	pos += len(tm.Columns)
 
-	// FIXME(alainjobart) per-column meta data. Starting with
-	// len-enc length, so 0 for now.
-	data[pos] = 0
-	pos++
-
-	pos += copy(data[pos:], nullBitmap.data)
+	pos += copy(data[pos:], tm.CanBeNull.data)
 	if pos != len(data) {
 		panic("bad encoding")
 	}
@@ -381,7 +378,11 @@ func newRowsEvent(f BinlogFormat, s *FakeBinlogStream, typ byte, tableID uint64,
 	data[8] = 0x02
 	data[9] = 0x00
 
-	data[10] = byte(rows.IdentifyColumns.Count()) // FIXME(alainjobart) len
+	if hasIdentify {
+		data[10] = byte(rows.IdentifyColumns.Count()) // FIXME(alainjobart) len
+	} else {
+		data[10] = byte(rows.DataColumns.Count()) // FIXME(alainjobart) len
+	}
 	pos := 11
 
 	if hasIdentify {

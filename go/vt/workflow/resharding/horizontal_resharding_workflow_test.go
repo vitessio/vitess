@@ -1,95 +1,119 @@
 package resharding
 
 import (
+	"context"
 	"flag"
 	"testing"
 
 	"github.com/golang/mock/gomock"
-	"github.com/youtube/vitess/go/vt/logutil"
+	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topo/memorytopo"
 	"github.com/youtube/vitess/go/vt/worker/fakevtworkerclient"
 	"github.com/youtube/vitess/go/vt/worker/vtworkerclient"
+	"github.com/youtube/vitess/go/vt/workflow"
 	"github.com/youtube/vitess/go/vt/wrangler"
+
+	// import the gRPC client implementation for tablet manager
+	_ "github.com/youtube/vitess/go/vt/vttablet/grpctmclient"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
+var (
+	testKeyspace  = "test_keyspace"
+	testVtworkers = "localhost:15032"
+)
+
+func init() {
+	Register()
+}
+
+// TestHorizontalResharding runs the happy path of HorizontalReshardingWorkflow.
 func TestHorizontalResharding(t *testing.T) {
-	// Create fake wrangler using mock interface, which is used for the unit test in steps CopySchema and MigratedServedType.
+	ctx := context.Background()
+
+	// Set up the mock wrangler. It is used for the CopySchema,
+	// WaitforFilteredReplication and Migrate phase.
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
+	mockWranglerInterface := setupMockWrangler(ctrl, testKeyspace)
+
+	// Set up the fakeworkerclient. It is used at SplitClone and SplitDiff phase.
+	fakeVtworkerClient := setupFakeVtworker(testKeyspace, testVtworkers)
+	vtworkerclient.RegisterFactory("fake", fakeVtworkerClient.FakeVtworkerClientFactory)
+	defer vtworkerclient.UnregisterFactoryForTest("fake")
+
+	// Initialize the topology.
+	ts := setupTopology(ctx, t, testKeyspace)
+	m := workflow.NewManager(ts)
+	// Run the manager in the background.
+	wg, _, cancel := startManager(m)
+	// Create the workflow.
+	uuid, err := m.Create(ctx, horizontalReshardingFactoryName, []string{"-keyspace=" + testKeyspace, "-vtworkers=" + testVtworkers, "-enable_approvals=false"})
+	if err != nil {
+		t.Fatalf("cannot create resharding workflow: %v", err)
+	}
+	// Inject the mock wranger into the workflow.
+	w, err := m.WorkflowForTesting(uuid)
+	if err != nil {
+		t.Fatalf("fail to get workflow from manager: %v", err)
+	}
+	hw := w.(*HorizontalReshardingWorkflow)
+	hw.wr = mockWranglerInterface
+
+	// Start the job.
+	if err := m.Start(ctx, uuid); err != nil {
+		t.Fatalf("cannot start resharding workflow: %v", err)
+	}
+
+	// Wait for the workflow to end.
+	m.Wait(ctx, uuid)
+	if err := verifyAllTasksDone(ctx, ts, uuid); err != nil {
+		t.Fatal(err)
+	}
+
+	// Stop the manager.
+	if err := m.Stop(ctx, uuid); err != nil {
+		t.Fatalf("cannot stop resharding workflow: %v", err)
+	}
+	cancel()
+	wg.Wait()
+}
+
+func setupFakeVtworker(keyspace, vtworkers string) *fakevtworkerclient.FakeVtworkerClient {
+	flag.Set("vtworker_client_protocol", "fake")
+	fakeVtworkerClient := fakevtworkerclient.NewFakeVtworkerClient()
+	fakeVtworkerClient.RegisterResultForAddr(vtworkers, []string{"SplitClone", "--min_healthy_rdonly_tablets=1", keyspace + "/0"}, "", nil)
+	fakeVtworkerClient.RegisterResultForAddr(vtworkers, []string{"SplitDiff", "--min_healthy_rdonly_tablets=1", keyspace + "/-80"}, "", nil)
+	fakeVtworkerClient.RegisterResultForAddr(vtworkers, []string{"SplitDiff", "--min_healthy_rdonly_tablets=1", keyspace + "/80-"}, "", nil)
+	return fakeVtworkerClient
+}
+
+func setupMockWrangler(ctrl *gomock.Controller, keyspace string) *MockReshardingWrangler {
 	mockWranglerInterface := NewMockReshardingWrangler(ctrl)
-
-	// Create the workflow (ignore the node construction since we don't test the front-end part in this unit test).
-	hw := &HorizontalReshardingWorkflow{
-		keyspace:  "test_keyspace",
-		vtworkers: []string{"localhost:15032"},
-		wr:        mockWranglerInterface,
-		logger:    logutil.NewMemoryLogger(),
-	}
-
-	perShard := &PerShardHorizontalResharding{
-		PerShardHorizontalReshardingData: PerShardHorizontalReshardingData{
-			Keyspace:          "test_keyspace",
-			SourceShard:       "0",
-			DestinationShards: []string{"-80", "80-"},
-			Vtworker:          "localhost:15032",
-		},
-	}
-	perShard.parent = hw
-	hw.subWorkflows = append(hw.subWorkflows, perShard)
-
 	// Set the expected behaviors for mock wrangler.
-	mockWranglerInterface.EXPECT().CopySchemaShardFromShard(
-		hw.ctx,
-		nil,  /* tableArray*/
-		nil,  /* excludeTableArray */
-		true, /*includeViews*/
-		"test_keyspace",
-		"0",
-		"test_keyspace",
-		"-80",
-		wrangler.DefaultWaitSlaveTimeout).Return(nil)
+	mockWranglerInterface.EXPECT().CopySchemaShardFromShard(gomock.Any(), nil /* tableArray*/, nil /* excludeTableArray */, true /*includeViews*/, keyspace, "0", keyspace, "-80", wrangler.DefaultWaitSlaveTimeout).Return(nil)
+	mockWranglerInterface.EXPECT().CopySchemaShardFromShard(gomock.Any(), nil /* tableArray*/, nil /* excludeTableArray */, true /*includeViews*/, keyspace, "0", keyspace, "80-", wrangler.DefaultWaitSlaveTimeout).Return(nil)
 
-	mockWranglerInterface.EXPECT().CopySchemaShardFromShard(
-		hw.ctx,
-		nil,  /* tableArray*/
-		nil,  /* excludeTableArray */
-		true, /*includeViews*/
-		"test_keyspace",
-		"0",
-		"test_keyspace",
-		"80-",
-		wrangler.DefaultWaitSlaveTimeout).Return(nil)
-
-	mockWranglerInterface.EXPECT().WaitForFilteredReplication(hw.ctx, "test_keyspace", "-80", wrangler.DefaultWaitForFilteredReplicationMaxDelay).Return(nil)
-	mockWranglerInterface.EXPECT().WaitForFilteredReplication(hw.ctx, "test_keyspace", "80-", wrangler.DefaultWaitForFilteredReplicationMaxDelay).Return(nil)
+	mockWranglerInterface.EXPECT().WaitForFilteredReplication(gomock.Any(), keyspace, "-80", wrangler.DefaultWaitForFilteredReplicationMaxDelay).Return(nil)
+	mockWranglerInterface.EXPECT().WaitForFilteredReplication(gomock.Any(), keyspace, "80-", wrangler.DefaultWaitForFilteredReplicationMaxDelay).Return(nil)
 
 	servedTypeParams := []topodatapb.TabletType{topodatapb.TabletType_RDONLY,
 		topodatapb.TabletType_REPLICA,
 		topodatapb.TabletType_MASTER}
 	for _, servedType := range servedTypeParams {
-		mockWranglerInterface.EXPECT().MigrateServedTypes(
-			hw.ctx,
-			"test_keyspace",
-			"0",
-			nil, /* cells */
-			servedType,
-			false, /* reverse */
-			false, /* skipReFreshState */
-			wrangler.DefaultFilteredReplicationWaitTime).Return(nil)
+		mockWranglerInterface.EXPECT().MigrateServedTypes(gomock.Any(), keyspace, "0", nil /* cells */, servedType, false /* reverse */, false /* skipReFreshState */, wrangler.DefaultFilteredReplicationWaitTime).Return(nil)
 	}
+	return mockWranglerInterface
+}
 
-	// Create fakeworkerclient, which is used for the unit test in steps SplitClone and SplitDiff.
-	fakeVtworkerClient := fakevtworkerclient.NewFakeVtworkerClient()
-	vtworkerclient.RegisterFactory("fake", fakeVtworkerClient.FakeVtworkerClientFactory)
-	defer vtworkerclient.UnregisterFactoryForTest("fake")
-	flag.Set("vtworker_client_protocol", "fake")
-	fakeVtworkerClient.RegisterResultForAddr("localhost:15032", []string{"SplitClone", "--min_healthy_rdonly_tablets=1", "test_keyspace/0"}, "", nil)
-	fakeVtworkerClient.RegisterResultForAddr("localhost:15032", []string{"SplitDiff", "--min_healthy_rdonly_tablets=1", "test_keyspace/-80"}, "", nil)
-	fakeVtworkerClient.RegisterResultForAddr("localhost:15032", []string{"SplitDiff", "--min_healthy_rdonly_tablets=1", "test_keyspace/80-"}, "", nil)
-
-	// Test the execution of horizontal resharding.
-	if err := hw.executeWorkflow(); err != nil {
-		t.Errorf("%s: Horizontal resharding workflow should not fail", err)
+func setupTopology(ctx context.Context, t *testing.T, keyspace string) topo.Server {
+	ts := memorytopo.NewServer("cell")
+	if err := ts.CreateKeyspace(ctx, keyspace, &topodatapb.Keyspace{}); err != nil {
+		t.Fatalf("CreateKeyspace: %v", err)
 	}
+	ts.CreateShard(ctx, keyspace, "0")
+	ts.CreateShard(ctx, keyspace, "-80")
+	ts.CreateShard(ctx, keyspace, "80-")
+	return ts
 }

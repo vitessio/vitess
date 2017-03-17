@@ -17,29 +17,35 @@ var testTables = []string{
 }
 
 func TestTablesFilterPass(t *testing.T) {
-	input := binlogdatapb.BinlogTransaction{
-		Statements: []*binlogdatapb.BinlogTransaction_Statement{
-			{
+	statements := []FullBinlogStatement{
+		{
+			Statement: &binlogdatapb.BinlogTransaction_Statement{
 				Category: binlogdatapb.BinlogTransaction_Statement_BL_SET,
 				Sql:      []byte("set1"),
-			}, {
+			},
+		},
+		{
+			Statement: &binlogdatapb.BinlogTransaction_Statement{
 				Category: binlogdatapb.BinlogTransaction_Statement_BL_INSERT,
 				Sql:      []byte("dml1 /* _stream included1 (id ) (500 ); */"),
-			}, {
+			},
+		},
+		{
+			Statement: &binlogdatapb.BinlogTransaction_Statement{
 				Category: binlogdatapb.BinlogTransaction_Statement_BL_INSERT,
 				Sql:      []byte("dml2 /* _stream included2 (id ) (500 ); */"),
 			},
 		},
-		EventToken: &querypb.EventToken{
-			Position: "MariaDB/0-41983-1",
-		},
+	}
+	eventToken := &querypb.EventToken{
+		Position: "MariaDB/0-41983-1",
 	}
 	var got string
 	f := TablesFilterFunc(testTables, func(reply *binlogdatapb.BinlogTransaction) error {
 		got = bltToString(reply)
 		return nil
 	})
-	f(&input)
+	f(eventToken, statements)
 	want := `statement: <6, "set1"> statement: <7, "dml1 /* _stream included1 (id ) (500 ); */"> statement: <7, "dml2 /* _stream included2 (id ) (500 ); */"> position: "MariaDB/0-41983-1" `
 	if want != got {
 		t.Errorf("want\n%s, got\n%s", want, got)
@@ -47,26 +53,29 @@ func TestTablesFilterPass(t *testing.T) {
 }
 
 func TestTablesFilterSkip(t *testing.T) {
-	input := binlogdatapb.BinlogTransaction{
-		Statements: []*binlogdatapb.BinlogTransaction_Statement{
-			{
+	statements := []FullBinlogStatement{
+		{
+			Statement: &binlogdatapb.BinlogTransaction_Statement{
 				Category: binlogdatapb.BinlogTransaction_Statement_BL_SET,
 				Sql:      []byte("set1"),
-			}, {
+			},
+		},
+		{
+			Statement: &binlogdatapb.BinlogTransaction_Statement{
 				Category: binlogdatapb.BinlogTransaction_Statement_BL_INSERT,
 				Sql:      []byte("dml1 /* _stream excluded1 (id ) (500 ); */"),
 			},
 		},
-		EventToken: &querypb.EventToken{
-			Position: "MariaDB/0-41983-1",
-		},
+	}
+	eventToken := &querypb.EventToken{
+		Position: "MariaDB/0-41983-1",
 	}
 	var got string
 	f := TablesFilterFunc(testTables, func(reply *binlogdatapb.BinlogTransaction) error {
 		got = bltToString(reply)
 		return nil
 	})
-	f(&input)
+	f(eventToken, statements)
 	want := `position: "MariaDB/0-41983-1" `
 	if want != got {
 		t.Errorf("want %s, got %s", want, got)
@@ -74,26 +83,29 @@ func TestTablesFilterSkip(t *testing.T) {
 }
 
 func TestTablesFilterDDL(t *testing.T) {
-	input := binlogdatapb.BinlogTransaction{
-		Statements: []*binlogdatapb.BinlogTransaction_Statement{
-			{
+	statements := []FullBinlogStatement{
+		{
+			Statement: &binlogdatapb.BinlogTransaction_Statement{
 				Category: binlogdatapb.BinlogTransaction_Statement_BL_SET,
 				Sql:      []byte("set1"),
-			}, {
+			},
+		},
+		{
+			Statement: &binlogdatapb.BinlogTransaction_Statement{
 				Category: binlogdatapb.BinlogTransaction_Statement_BL_DDL,
 				Sql:      []byte("ddl"),
 			},
 		},
-		EventToken: &querypb.EventToken{
-			Position: "MariaDB/0-41983-1",
-		},
+	}
+	eventToken := &querypb.EventToken{
+		Position: "MariaDB/0-41983-1",
 	}
 	var got string
 	f := TablesFilterFunc(testTables, func(reply *binlogdatapb.BinlogTransaction) error {
 		got = bltToString(reply)
 		return nil
 	})
-	f(&input)
+	f(eventToken, statements)
 	want := `position: "MariaDB/0-41983-1" `
 	if want != got {
 		t.Errorf("want %s, got %s", want, got)
@@ -101,29 +113,35 @@ func TestTablesFilterDDL(t *testing.T) {
 }
 
 func TestTablesFilterMalformed(t *testing.T) {
-	input := binlogdatapb.BinlogTransaction{
-		Statements: []*binlogdatapb.BinlogTransaction_Statement{
-			{
+	statements := []FullBinlogStatement{
+		{
+			Statement: &binlogdatapb.BinlogTransaction_Statement{
 				Category: binlogdatapb.BinlogTransaction_Statement_BL_SET,
 				Sql:      []byte("set1"),
-			}, {
+			},
+		},
+		{
+			Statement: &binlogdatapb.BinlogTransaction_Statement{
 				Category: binlogdatapb.BinlogTransaction_Statement_BL_INSERT,
 				Sql:      []byte("ddl"),
-			}, {
+			},
+		},
+		{
+			Statement: &binlogdatapb.BinlogTransaction_Statement{
 				Category: binlogdatapb.BinlogTransaction_Statement_BL_INSERT,
 				Sql:      []byte("dml1 /* _stream excluded1*/"),
 			},
 		},
-		EventToken: &querypb.EventToken{
-			Position: "MariaDB/0-41983-1",
-		},
+	}
+	eventToken := &querypb.EventToken{
+		Position: "MariaDB/0-41983-1",
 	}
 	var got string
 	f := TablesFilterFunc(testTables, func(reply *binlogdatapb.BinlogTransaction) error {
 		got = bltToString(reply)
 		return nil
 	})
-	f(&input)
+	f(eventToken, statements)
 	want := `position: "MariaDB/0-41983-1" `
 	if want != got {
 		t.Errorf("want %s, got %s", want, got)

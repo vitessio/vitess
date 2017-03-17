@@ -28,13 +28,14 @@ class Subprocess(sandlet.SandletComponent):
           self.log_dir, '%s.INFO' % self.name)
       errorfile = sandbox_utils.create_log_file(
           self.log_dir, '%s.ERROR' % self.name)
-      subprocess.call(['./%s' % self.script] + script_args, stdout=infofile,
-                      stderr=errorfile)
+      subprocess.check_call(
+          ['./%s' % self.script] + script_args, stdout=infofile,
+          stderr=errorfile)
       logging.info('Done.')
     except subprocess.CalledProcessError as error:
       raise sandbox.SandboxError(
-          'Subprocess %s returned errorcode %d, result %s.' % (
-              self.script, error.returncode, error.output))
+          'Subprocess %s returned errorcode %d, find log at %s.' % (
+              self.script, error.returncode, errorfile.name))
     finally:
       if infofile:
         infofile.close()

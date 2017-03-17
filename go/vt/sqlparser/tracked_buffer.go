@@ -115,3 +115,10 @@ func (buf *TrackedBuffer) ParsedQuery() *ParsedQuery {
 func (buf *TrackedBuffer) HasBindVars() bool {
 	return len(buf.bindLocations) != 0
 }
+
+// BuildParsedQuery builds a ParsedQuery from the input.
+func BuildParsedQuery(in string, vars ...interface{}) *ParsedQuery {
+	buf := NewTrackedBuffer(nil)
+	buf.Myprintf(in, vars...)
+	return buf.ParsedQuery()
+}

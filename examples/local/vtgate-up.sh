@@ -46,6 +46,7 @@ $VTROOT/bin/vtgate \
   -port $web_port \
   -grpc_port $grpc_port \
   -mysql_server_port $mysql_server_port \
+  -mysql_auth_server_config_string '{"mysql_user":{"Password":"mysql_password"}}' \
   -cell $cell \
   -cells_to_watch $cell \
   -tablet_types_to_wait MASTER,REPLICA \

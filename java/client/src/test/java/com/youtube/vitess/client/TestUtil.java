@@ -47,10 +47,10 @@ public class TestUtil {
         continue;
       }
       try {
-        Type mapType = new TypeToken<Map<String, Integer>>() {}.getType();
-        Map<String, Integer> map = new Gson().fromJson(line, mapType);
+        Type mapType = new TypeToken<Map<String, Object>>() {}.getType();
+        Map<String, Object> map = new Gson().fromJson(line, mapType);
         testEnv.setPythonScriptProcess(p);
-        testEnv.setPort(map.get(System.getProperty(PROPERTY_KEY_CLIENT_TEST_PORT)));
+        testEnv.setPort(((Double)map.get(System.getProperty(PROPERTY_KEY_CLIENT_TEST_PORT))).intValue());
         return;
       } catch (JsonSyntaxException e) {
         logger.error("JsonSyntaxException parsing setup command output: " + line, e);

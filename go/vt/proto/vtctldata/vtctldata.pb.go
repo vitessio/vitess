@@ -42,6 +42,20 @@ func (m *ExecuteVtctlCommandRequest) String() string            { return proto.C
 func (*ExecuteVtctlCommandRequest) ProtoMessage()               {}
 func (*ExecuteVtctlCommandRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{0} }
 
+func (m *ExecuteVtctlCommandRequest) GetArgs() []string {
+	if m != nil {
+		return m.Args
+	}
+	return nil
+}
+
+func (m *ExecuteVtctlCommandRequest) GetActionTimeout() int64 {
+	if m != nil {
+		return m.ActionTimeout
+	}
+	return 0
+}
+
 // ExecuteVtctlCommandResponse is streamed back by ExecuteVtctlCommand.
 type ExecuteVtctlCommandResponse struct {
 	Event *logutil.Event `protobuf:"bytes,1,opt,name=event" json:"event,omitempty"`

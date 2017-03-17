@@ -1,7 +1,8 @@
 <?php
 namespace Vitess;
 
-use Vitess\Proto\Vtrpc\ErrorCode;
+use Vitess\Proto\Vtrpc\Code;
+use Vitess\Proto\Vtrpc\LegacyErrorCode;
 use Vitess\Proto\Query;
 use Vitess\Proto\Query\Type;
 use Vitess\Proto\Query\BoundQuery;
@@ -36,19 +37,37 @@ class ProtoUtils
         $error = $response->getError();
         if ($error) {
             switch ($error->getCode()) {
-                case ErrorCode::SUCCESS:
+                case Code::OK:
                     break;
-                case ErrorCode::BAD_INPUT:
+                case Code::INVALID_ARGUMENT:
                     throw new Error\BadInput($error->getMessage());
-                case ErrorCode::DEADLINE_EXCEEDED:
+                case Code::DEADLINE_EXCEEDED:
                     throw new Error\DeadlineExceeded($error->getMessage());
-                case ErrorCode::INTEGRITY_ERROR:
+                case Code::ALREADY_EXISTS:
                     throw new Error\Integrity($error->getMessage());
-                case ErrorCode::TRANSIENT_ERROR:
+                case Code::UNAVAILABLE:
                     throw new Error\Transient($error->getMessage());
-                case ErrorCode::UNAUTHENTICATED:
+                case Code::UNAUTHENTICATED:
                     throw new Error\Unauthenticated($error->getMessage());
-                case ErrorCode::NOT_IN_TX:
+                case Code::ABORTED:
+                    throw new Error\Aborted($error->getMessage());
+                default:
+                    throw new Exception($error->getCode() . ': ' . $error->getMessage());
+            }
+            switch ($error->getLegacyCode()) {
+                case LegacyErrorCode::SUCCESS_LEGACY:
+                    break;
+                case LegacyErrorCode::BAD_INPUT_LEGACY:
+                    throw new Error\BadInput($error->getMessage());
+                case LegacyErrorCode::DEADLINE_EXCEEDED_LEGACY:
+                    throw new Error\DeadlineExceeded($error->getMessage());
+                case LegacyErrorCode::INTEGRITY_ERROR_LEGACY:
+                    throw new Error\Integrity($error->getMessage());
+                case LegacyErrorCode::TRANSIENT_ERROR_LEGACY:
+                    throw new Error\Transient($error->getMessage());
+                case LegacyErrorCode::UNAUTHENTICATED_LEGACY:
+                    throw new Error\Unauthenticated($error->getMessage());
+                case LegacyErrorCode::NOT_IN_TX_LEGACY:
                     throw new Error\Aborted($error->getMessage());
                 default:
                     throw new Exception($error->getCode() . ': ' . $error->getMessage());

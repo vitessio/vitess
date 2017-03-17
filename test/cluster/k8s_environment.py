@@ -8,6 +8,7 @@ import subprocess
 import tempfile
 import time
 
+from sandbox import kubernetes_components
 from vtproto import topodata_pb2
 from vtdb import vtgate_client
 import base_environment
@@ -30,21 +31,9 @@ class K8sEnvironment(base_environment.BaseEnvironment):
           'kubectl not found, please install by visiting kubernetes.io or '
           'running gcloud components update kubectl if using compute engine.')
 
-    get_address_template = (
-        '{{if ge (len .status.loadBalancer) 1}}'
-        '{{index (index .status.loadBalancer.ingress 0) "ip"}}'
-        '{{end}}')
-
-    get_address_params = ['kubectl', 'get', '-o', 'template', '--template',
-                          get_address_template, 'service', '--namespace',
-                          instance_name]
-
-    start_time = time.time()
-    vtctld_addr = ''
-    while time.time() - start_time < 60 and not vtctld_addr:
-      vtctld_addr = subprocess.check_output(
-          get_address_params + ['vtctld'], stderr=subprocess.STDOUT)
-    self.vtctl_addr = '%s:15999' % vtctld_addr
+    vtctld_ip = kubernetes_components.get_forwarded_ip(
+        'vtctld', instance_name)
+    self.vtctl_addr = '%s:15999' % vtctld_ip
 
     self.vtctl_helper = vtctl_helper.VtctlHelper('grpc', self.vtctl_addr)
     self.cluster_name = instance_name
@@ -101,14 +90,11 @@ class K8sEnvironment(base_environment.BaseEnvironment):
           'rdonly': int(self.rdonly_instances[index])
       }
 
-    start_time = time.time()
     self.vtgate_addrs = {}
     for cell in self.cells:
-      vtgate_addr = ''
-      while time.time() - start_time < 60 and not vtgate_addr:
-        vtgate_addr = subprocess.check_output(
-            get_address_params + ['vtgate-%s' % cell], stderr=subprocess.STDOUT)
-      self.vtgate_addrs[cell] = '%s:15991' % vtgate_addr
+      vtgate_ip = kubernetes_components.get_forwarded_ip(
+          'vtgate-%s' % cell, instance_name)
+      self.vtgate_addrs[cell] = '%s:15991' % vtgate_ip
     super(K8sEnvironment, self).use_named(instance_name)
 
   def create(self, **kwargs):
@@ -198,7 +184,8 @@ class K8sEnvironment(base_environment.BaseEnvironment):
     time.sleep(60)
 
     # Create the pod again.
-    os.system('cat %s | kubectl create -f -' % tmpfile.name)
+    os.system('cat %s | kubectl create --namespace=%s -f -' % (
+        tmpfile.name, self.cluster_name))
     while time.time() - start_time < 120:
       logging.info('Waiting for pod %s to be running', vttablet_pod_name)
       pod = subprocess.check_output(

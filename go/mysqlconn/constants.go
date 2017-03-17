@@ -1,5 +1,7 @@
 package mysqlconn
 
+import "github.com/youtube/vitess/go/sqldb"
+
 const (
 	// MaxPacketSize is the maximum payload length of a packet
 	// the server supports.
@@ -8,9 +10,15 @@ const (
 	// protocolVersion is the current version of the protocol.
 	// Always 10.
 	protocolVersion = 10
+)
 
-	// mysqlNativePassword is the auth form we use.
+// Supported auth forms.
+const (
+	// mysqlNativePassword uses a salt and transmits a hash on the wire.
 	mysqlNativePassword = "mysql_native_password"
+
+	// mysqlClearPassword transmits the password in the clear.
+	mysqlClearPassword = "mysql_clear_password"
 )
 
 // Capability flags.
@@ -58,7 +66,6 @@ const (
 
 	// CapabilityClientSSL is CLIENT_SSL.
 	// Switch to SSL after handshake.
-	// Not supported yet, but checked.
 	CapabilityClientSSL = 1 << 11
 
 	// CLIENT_IGNORE_SIGPIPE 1 << 12
@@ -140,6 +147,9 @@ const (
 	// EOFPacket is the header of the EOF packet.
 	EOFPacket = 0xfe
 
+	// AuthSwitchRequestPacket is used to switch auth method.
+	AuthSwitchRequestPacket = 0xfe
+
 	// ErrPacket is the header of the error packet.
 	ErrPacket = 0xff
 
@@ -182,6 +192,10 @@ const (
 	// CRCommandsOutOfSync is CR_COMMANDS_OUT_OF_SYNC
 	// Sent when the streaming calls are not done in the right order.
 	CRCommandsOutOfSync = 2014
+
+	// CRNamedPipeStateError is CR_NAMEDPIPESETSTATE_ERROR.
+	// This is the highest possible number for a connection error.
+	CRNamedPipeStateError = 2018
 
 	// CRCantReadCharset is CR_CANT_READ_CHARSET
 	CRCantReadCharset = 2019
@@ -339,4 +353,20 @@ var CharacterSetMap = map[string]uint8{
 // replication/constants.go, so we are using numerical values here.
 func IsNum(typ uint8) bool {
 	return ((typ <= 9 /* MYSQL_TYPE_INT24 */ && typ != 7 /* MYSQL_TYPE_TIMESTAMP */) || typ == 13 /* MYSQL_TYPE_YEAR */ || typ == 246 /* MYSQL_TYPE_NEWDECIMAL */)
+}
+
+// IsConnErr returns true if the error is a connection error.
+func IsConnErr(err error) bool {
+	if sqlErr, ok := err.(*sqldb.SQLError); ok {
+		num := sqlErr.Number()
+		// ServerLost means that the query has already been
+		// received by MySQL and may have already been executed.
+		// Since we don't know if the query is idempotent, we don't
+		// count this error as connection error which could be retried.
+		if num == CRServerLost {
+			return false
+		}
+		return num >= CRUnknownError && num <= CRNamedPipeStateError
+	}
+	return false
 }

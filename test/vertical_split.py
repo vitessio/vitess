@@ -18,6 +18,9 @@ from vtdb import keyrange
 from vtdb import keyrange_constants
 from vtdb import vtgate_client
 
+# Global variables, for tests flavors.
+use_rbr = False
+
 # source keyspace, with 4 tables
 source_master = tablet.Tablet()
 source_replica = tablet.Tablet()
@@ -38,7 +41,10 @@ all_tablets = [source_master, source_replica, source_rdonly1, source_rdonly2,
 def setUpModule():
   try:
     environment.topo_server().setup()
-    setup_procs = [t.init_mysql() for t in all_tablets]
+    extra_my_cnf = None
+    if use_rbr:
+      extra_my_cnf = environment.vttop + '/config/mycnf/rbr.cnf'
+    setup_procs = [t.init_mysql(extra_my_cnf=extra_my_cnf) for t in all_tablets]
     utils.Vtctld().start()
     utils.wait_procs(setup_procs)
   except:
@@ -337,7 +343,7 @@ index by_msg (msg)
                                      'select count(1) from %s' % table],
                                     expect_fail=True)
         self.assertIn(
-            'retry: Query disallowed due to rule: enforce blacklisted tables',
+            'disallowed due to rule: enforce blacklisted tables',
             stderr)
       else:
         # table is not blacklisted, should just work

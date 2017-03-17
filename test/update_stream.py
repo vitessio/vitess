@@ -636,7 +636,7 @@ class TestUpdateStream(unittest.TestCase):
           shard='0'):
         self.assertFail('got an event: %s %d' % (str(event), resume_timestamp))
     except dbexceptions.QueryNotServed as e:
-      self.assertIn('retry: cannot find relevant binlogs on this server',
+      self.assertIn('cannot find relevant binlogs on this server',
                     str(e))
 
 

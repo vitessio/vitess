@@ -14,12 +14,13 @@ import (
 
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/discovery"
-	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
-	"github.com/youtube/vitess/go/vt/tabletserver/sandboxconn"
 	_ "github.com/youtube/vitess/go/vt/vtgate/vindexes"
+	"github.com/youtube/vitess/go/vt/vttablet/sandboxconn"
+	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/querytypes"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 func TestUnsharded(t *testing.T) {
@@ -427,7 +428,7 @@ func TestSelectEqualFail(t *testing.T) {
 		t.Errorf("routerExec: %v, want %v", err, want)
 	}
 
-	sbclookup.MustFailServer = 1
+	sbclookup.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
 	_, err = routerExec(router, "select id from music where id = 1", nil)
 	want = "paramsSelectEqual: lookup.Map"
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
@@ -442,7 +443,7 @@ func TestSelectEqualFail(t *testing.T) {
 	}
 	s.ShardSpec = DefaultShardSpec
 
-	sbclookup.MustFailServer = 1
+	sbclookup.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
 	_, err = routerExec(router, "select id from user where name = 'foo'", nil)
 	want = "paramsSelectEqual: lookup.Map"
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
@@ -1254,11 +1255,11 @@ func TestJoinErrors(t *testing.T) {
 	router, sbc1, sbc2, _ := createRouterEnv()
 
 	// First query fails
-	sbc1.MustFailServer = 1
+	sbc1.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
 	_, err := routerExec(router, "select u1.id, u2.id from user u1 join user u2 on u2.id = u1.col where u1.id = 1", nil)
-	want := "error: err"
+	want := "INVALID_ARGUMENT error"
 	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("err: %v, must start with %s", err, want)
+		t.Errorf("err: %v, must contain %s", err, want)
 	}
 
 	// Field query fails
@@ -1267,11 +1268,11 @@ func TestJoinErrors(t *testing.T) {
 			{Name: "id", Type: sqltypes.Int32},
 		},
 	}})
-	sbc1.MustFailServer = 1
+	sbc1.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
 	_, err = routerExec(router, "select u1.id, u2.id from user u1 join user u2 on u2.id = u1.col where u1.id = 3", nil)
-	want = "error: err"
+	want = "INVALID_ARGUMENT error"
 	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("err: %v, must start with %s", err, want)
+		t.Errorf("err: %v, must contain %s", err, want)
 	}
 
 	// Second query fails
@@ -1285,11 +1286,11 @@ func TestJoinErrors(t *testing.T) {
 			sqltypes.MakeTrusted(sqltypes.Int32, []byte("3")),
 		}},
 	}})
-	sbc2.MustFailServer = 1
+	sbc2.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
 	_, err = routerExec(router, "select u1.id, u2.id from user u1 join user u2 on u2.id = u1.col where u1.id = 1", nil)
-	want = "error: err"
+	want = "INVALID_ARGUMENT error"
 	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("err: %v, must start with %s", err, want)
+		t.Errorf("err: %v, must contain %s", err, want)
 	}
 
 	// Nested join query fails on get fields
@@ -1299,11 +1300,11 @@ func TestJoinErrors(t *testing.T) {
 			{Name: "col", Type: sqltypes.Int32},
 		},
 	}})
-	sbc1.MustFailServer = 1
+	sbc1.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
 	_, err = routerExec(router, "select u1.id, u2.id from user u1 join (user u2 join user u3 on u3.id = u2.col) where u1.id = 3", nil)
-	want = "error: err"
+	want = "INVALID_ARGUMENT error"
 	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("err: %v, must start with %s", err, want)
+		t.Errorf("err: %v, must contain %s", err, want)
 	}
 
 	// Field query fails on stream join
@@ -1312,11 +1313,11 @@ func TestJoinErrors(t *testing.T) {
 			{Name: "id", Type: sqltypes.Int32},
 		},
 	}})
-	sbc1.MustFailServer = 1
+	sbc1.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
 	_, err = routerStream(router, "select u1.id, u2.id from user u1 join user u2 on u2.id = u1.col where u1.id = 3")
-	want = "error: err"
+	want = "INVALID_ARGUMENT error"
 	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("err: %v, must start with %s", err, want)
+		t.Errorf("err: %v, must contain %s", err, want)
 	}
 
 	// Second query fails on stream join
@@ -1330,10 +1331,10 @@ func TestJoinErrors(t *testing.T) {
 			sqltypes.MakeTrusted(sqltypes.Int32, []byte("3")),
 		}},
 	}})
-	sbc2.MustFailServer = 1
+	sbc2.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
 	_, err = routerStream(router, "select u1.id, u2.id from user u1 join user u2 on u2.id = u1.col where u1.id = 1")
-	want = "error: err"
+	want = "INVALID_ARGUMENT error"
 	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("err: %v, must start with %s", err, want)
+		t.Errorf("err: %v, must contain %s", err, want)
 	}
 }

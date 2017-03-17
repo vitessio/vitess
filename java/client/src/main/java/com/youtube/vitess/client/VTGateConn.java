@@ -1,5 +1,9 @@
 package com.youtube.vitess.client;
 
+import static com.google.common.base.Preconditions.checkNotNull;
+import static com.google.common.util.concurrent.Futures.transformAsync;
+import static com.google.common.util.concurrent.MoreExecutors.directExecutor;
+
 import com.google.common.collect.Iterables;
 import com.google.common.util.concurrent.AsyncFunction;
 import com.google.common.util.concurrent.Futures;
@@ -39,8 +43,6 @@ import com.youtube.vitess.proto.Vtgate.StreamExecuteKeyRangesRequest;
 import com.youtube.vitess.proto.Vtgate.StreamExecuteKeyspaceIdsRequest;
 import com.youtube.vitess.proto.Vtgate.StreamExecuteRequest;
 import com.youtube.vitess.proto.Vtgate.StreamExecuteShardsRequest;
-
-import javax.annotation.Nullable;
 import java.io.Closeable;
 import java.io.IOException;
 import java.sql.SQLDataException;
@@ -48,8 +50,7 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-
-import static com.google.common.base.Preconditions.checkNotNull;
+import javax.annotation.Nullable;
 
 /**
  * An asynchronous VTGate connection.
@@ -108,14 +109,17 @@ public final class VTGateConn implements Closeable {
       requestBuilder.setCallerId(ctx.getCallerId());
     }
 
-    return new SQLFuture<Cursor>(Futures.transformAsync(client.execute(ctx, requestBuilder.build()),
-        new AsyncFunction<ExecuteResponse, Cursor>() {
-          @Override
-          public ListenableFuture<Cursor> apply(ExecuteResponse response) throws Exception {
-            Proto.checkError(response.getError());
-            return Futures.<Cursor>immediateFuture(new SimpleCursor(response.getResult()));
-          }
-        }));
+    return new SQLFuture<Cursor>(
+        transformAsync(
+            client.execute(ctx, requestBuilder.build()),
+            new AsyncFunction<ExecuteResponse, Cursor>() {
+              @Override
+              public ListenableFuture<Cursor> apply(ExecuteResponse response) throws Exception {
+                Proto.checkError(response.getError());
+                return Futures.<Cursor>immediateFuture(new SimpleCursor(response.getResult()));
+              }
+            },
+            directExecutor()));
   }
 
   public SQLFuture<Cursor> executeShards(Context ctx, String query, String keyspace,
@@ -136,7 +140,8 @@ public final class VTGateConn implements Closeable {
     }
 
     return new SQLFuture<Cursor>(
-        Futures.transformAsync(client.executeShards(ctx, requestBuilder.build()),
+        transformAsync(
+            client.executeShards(ctx, requestBuilder.build()),
             new AsyncFunction<ExecuteShardsResponse, Cursor>() {
               @Override
               public ListenableFuture<Cursor> apply(ExecuteShardsResponse response)
@@ -144,7 +149,8 @@ public final class VTGateConn implements Closeable {
                 Proto.checkError(response.getError());
                 return Futures.<Cursor>immediateFuture(new SimpleCursor(response.getResult()));
               }
-            }));
+            },
+            directExecutor()));
   }
 
   public SQLFuture<Cursor> executeKeyspaceIds(Context ctx, String query, String keyspace,
@@ -165,7 +171,8 @@ public final class VTGateConn implements Closeable {
     }
 
     return new SQLFuture<Cursor>(
-        Futures.transformAsync(client.executeKeyspaceIds(ctx, requestBuilder.build()),
+        transformAsync(
+            client.executeKeyspaceIds(ctx, requestBuilder.build()),
             new AsyncFunction<ExecuteKeyspaceIdsResponse, Cursor>() {
               @Override
               public ListenableFuture<Cursor> apply(ExecuteKeyspaceIdsResponse response)
@@ -173,7 +180,8 @@ public final class VTGateConn implements Closeable {
                 Proto.checkError(response.getError());
                 return Futures.<Cursor>immediateFuture(new SimpleCursor(response.getResult()));
               }
-            }));
+            },
+            directExecutor()));
   }
 
   public SQLFuture<Cursor> executeKeyRanges(Context ctx, String query, String keyspace,
@@ -192,7 +200,8 @@ public final class VTGateConn implements Closeable {
     }
 
     return new SQLFuture<Cursor>(
-        Futures.transformAsync(client.executeKeyRanges(ctx, requestBuilder.build()),
+        transformAsync(
+            client.executeKeyRanges(ctx, requestBuilder.build()),
             new AsyncFunction<ExecuteKeyRangesResponse, Cursor>() {
               @Override
               public ListenableFuture<Cursor> apply(ExecuteKeyRangesResponse response)
@@ -200,7 +209,8 @@ public final class VTGateConn implements Closeable {
                 Proto.checkError(response.getError());
                 return Futures.<Cursor>immediateFuture(new SimpleCursor(response.getResult()));
               }
-            }));
+            },
+            directExecutor()));
   }
 
   public SQLFuture<Cursor> executeEntityIds(Context ctx, String query, String keyspace,
@@ -221,7 +231,8 @@ public final class VTGateConn implements Closeable {
     }
 
     return new SQLFuture<Cursor>(
-        Futures.transformAsync(client.executeEntityIds(ctx, requestBuilder.build()),
+        transformAsync(
+            client.executeEntityIds(ctx, requestBuilder.build()),
             new AsyncFunction<ExecuteEntityIdsResponse, Cursor>() {
               @Override
               public ListenableFuture<Cursor> apply(ExecuteEntityIdsResponse response)
@@ -229,7 +240,8 @@ public final class VTGateConn implements Closeable {
                 Proto.checkError(response.getError());
                 return Futures.<Cursor>immediateFuture(new SimpleCursor(response.getResult()));
               }
-            }));
+            },
+            directExecutor()));
   }
 
     public SQLFuture<List<CursorWithError>> executeBatch(Context ctx, List<String> queryList,
@@ -266,16 +278,19 @@ public final class VTGateConn implements Closeable {
             requestBuilder.setCallerId(ctx.getCallerId());
         }
 
-        return new SQLFuture<>(Futures
-            .transformAsync(client.executeBatch(ctx, requestBuilder.build()),
-                new AsyncFunction<Vtgate.ExecuteBatchResponse, List<CursorWithError>>() {
-                    @Override public ListenableFuture<List<CursorWithError>> apply(
-                        Vtgate.ExecuteBatchResponse response) throws Exception {
-                        Proto.checkError(response.getError());
-                        return Futures.immediateFuture(
-                            Proto.fromQueryResponsesToCursorList(response.getResultsList()));
-                    }
-                }));
+    return new SQLFuture<>(
+        transformAsync(
+            client.executeBatch(ctx, requestBuilder.build()),
+            new AsyncFunction<Vtgate.ExecuteBatchResponse, List<CursorWithError>>() {
+              @Override
+              public ListenableFuture<List<CursorWithError>> apply(
+                  Vtgate.ExecuteBatchResponse response) throws Exception {
+                Proto.checkError(response.getError());
+                return Futures.immediateFuture(
+                    Proto.fromQueryResponsesToCursorList(response.getResultsList()));
+              }
+            },
+            directExecutor()));
     }
 
     /**
@@ -301,16 +316,18 @@ public final class VTGateConn implements Closeable {
     }
 
     return new SQLFuture<List<Cursor>>(
-        Futures.transformAsync(client.executeBatchShards(ctx, requestBuilder.build()),
+        transformAsync(
+            client.executeBatchShards(ctx, requestBuilder.build()),
             new AsyncFunction<ExecuteBatchShardsResponse, List<Cursor>>() {
               @Override
               public ListenableFuture<List<Cursor>> apply(ExecuteBatchShardsResponse response)
                   throws Exception {
                 Proto.checkError(response.getError());
-                return Futures
-                    .<List<Cursor>>immediateFuture(Proto.toCursorList(response.getResultsList()));
+                return Futures.<List<Cursor>>immediateFuture(
+                    Proto.toCursorList(response.getResultsList()));
               }
-            }));
+            },
+            directExecutor()));
   }
 
   /**
@@ -335,16 +352,18 @@ public final class VTGateConn implements Closeable {
     }
 
     return new SQLFuture<List<Cursor>>(
-        Futures.transformAsync(client.executeBatchKeyspaceIds(ctx, requestBuilder.build()),
+        transformAsync(
+            client.executeBatchKeyspaceIds(ctx, requestBuilder.build()),
             new AsyncFunction<ExecuteBatchKeyspaceIdsResponse, List<Cursor>>() {
               @Override
               public ListenableFuture<List<Cursor>> apply(ExecuteBatchKeyspaceIdsResponse response)
                   throws Exception {
                 Proto.checkError(response.getError());
-                return Futures
-                    .<List<Cursor>>immediateFuture(Proto.toCursorList(response.getResultsList()));
+                return Futures.<List<Cursor>>immediateFuture(
+                    Proto.toCursorList(response.getResultsList()));
               }
-            }));
+            },
+            directExecutor()));
   }
 
   public Cursor streamExecute(Context ctx, String query, @Nullable Map<String, ?> bindVars,
@@ -432,14 +451,17 @@ public final class VTGateConn implements Closeable {
     if (ctx.getCallerId() != null) {
       requestBuilder.setCallerId(ctx.getCallerId());
     }
-    return new SQLFuture<VTGateTx>(Futures.transformAsync(client.begin(ctx, requestBuilder.build()),
-        new AsyncFunction<BeginResponse, VTGateTx>() {
-          @Override
-          public ListenableFuture<VTGateTx> apply(BeginResponse response) throws Exception {
-            return Futures
-                .<VTGateTx>immediateFuture(new VTGateTx(client, response.getSession(), keyspace));
-          }
-        }));
+    return new SQLFuture<VTGateTx>(
+        transformAsync(
+            client.begin(ctx, requestBuilder.build()),
+            new AsyncFunction<BeginResponse, VTGateTx>() {
+              @Override
+              public ListenableFuture<VTGateTx> apply(BeginResponse response) throws Exception {
+                return Futures.<VTGateTx>immediateFuture(
+                    new VTGateTx(client, response.getSession(), keyspace));
+              }
+            },
+            directExecutor()));
   }
 
   public SQLFuture<List<SplitQueryResponse.Part>> splitQuery(Context ctx, String keyspace,
@@ -458,7 +480,8 @@ public final class VTGateConn implements Closeable {
       requestBuilder.setCallerId(ctx.getCallerId());
     }
     return new SQLFuture<List<SplitQueryResponse.Part>>(
-        Futures.transformAsync(client.splitQuery(ctx, requestBuilder.build()),
+        transformAsync(
+            client.splitQuery(ctx, requestBuilder.build()),
             new AsyncFunction<SplitQueryResponse, List<SplitQueryResponse.Part>>() {
               @Override
               public ListenableFuture<List<SplitQueryResponse.Part>> apply(
@@ -466,21 +489,24 @@ public final class VTGateConn implements Closeable {
                 return Futures.<List<SplitQueryResponse.Part>>immediateFuture(
                     response.getSplitsList());
               }
-            }));
+            },
+            directExecutor()));
   }
 
   public SQLFuture<SrvKeyspace> getSrvKeyspace(Context ctx, String keyspace) throws SQLException {
     GetSrvKeyspaceRequest.Builder requestBuilder =
         GetSrvKeyspaceRequest.newBuilder().setKeyspace(checkNotNull(keyspace));
     return new SQLFuture<SrvKeyspace>(
-        Futures.transformAsync(client.getSrvKeyspace(ctx, requestBuilder.build()),
+        transformAsync(
+            client.getSrvKeyspace(ctx, requestBuilder.build()),
             new AsyncFunction<GetSrvKeyspaceResponse, SrvKeyspace>() {
               @Override
               public ListenableFuture<SrvKeyspace> apply(GetSrvKeyspaceResponse response)
                   throws Exception {
                 return Futures.<SrvKeyspace>immediateFuture(response.getSrvKeyspace());
               }
-            }));
+            },
+            directExecutor()));
   }
 
   @Override

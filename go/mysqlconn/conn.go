@@ -60,7 +60,7 @@ type Conn struct {
 	// Capabilities is the current set of features this connection
 	// is using.  It is the features that are both supported by
 	// the client and the server, and currently in use.
-	// It is set after the initial handshake.
+	// It is set during the initial handshake.
 	//
 	// It is only used for CapabilityClientDeprecateEOF.
 	Capabilities uint32
@@ -70,6 +70,14 @@ type Conn struct {
 	// It is set during the initial handshake.
 	// See the values in constants.go.
 	CharacterSet uint8
+
+	// User is the name used by the client to connect.
+	// It is set during the initial handshake.
+	User string
+
+	// UserData is custom data returned by the AuthServer module.
+	// It is set during the initial handshake.
+	UserData string
 
 	// SchemaName is the default database name to use. It is set
 	// during handshake, and by ComInitDb packets. Both client and
@@ -143,6 +151,46 @@ func newConn(conn net.Conn) *Conn {
 		sequence: 0,
 		buffer:   make([]byte, connBufferSize),
 	}
+}
+
+// readPacketDirect attempts to read a packet from the socket directly.
+// It needs to be used for the first handshake packet the server receives,
+// so we do't buffer the SSL negotiation packet. As a shortcut, only
+// packets smaller than MaxPacketSize can be read here.
+func (c *Conn) readPacketDirect() ([]byte, error) {
+	var header [4]byte
+	if _, err := io.ReadFull(c.conn, header[:]); err != nil {
+		return nil, fmt.Errorf("io.ReadFull(header size) failed: %v", err)
+	}
+
+	sequence := uint8(header[3])
+	if sequence != c.sequence {
+		return nil, fmt.Errorf("invalid sequence, expected %v got %v", c.sequence, sequence)
+	}
+
+	c.sequence++
+
+	length := int(uint32(header[0]) | uint32(header[1])<<8 | uint32(header[2])<<16)
+	if length <= cap(c.buffer) {
+		// Fast path: read into buffer, we're good.
+		c.buffer = c.buffer[:length]
+		if _, err := io.ReadFull(c.conn, c.buffer); err != nil {
+			return nil, fmt.Errorf("io.ReadFull(direct packet body of length %v) failed: %v", length, err)
+		}
+		return c.buffer, nil
+	}
+
+	// Sanity check
+	if length == MaxPacketSize {
+		return nil, fmt.Errorf("readPacketDirect doesn't support more than one packet")
+	}
+
+	// Slow path, revert to allocating.
+	data := make([]byte, length)
+	if _, err := io.ReadFull(c.conn, data); err != nil {
+		return nil, fmt.Errorf("io.ReadFull(packet body of length %v) failed: %v", length, err)
+	}
+	return data, nil
 }
 
 // readEphemeralPacket attempts to read a packet into c.buffer.  Do
@@ -455,6 +503,11 @@ func (c *Conn) writeComQuit() error {
 		return sqldb.NewSQLError(CRServerGone, SSUnknownSQLState, err.Error())
 	}
 	return nil
+}
+
+// RemoteAddr returns the underlying socket RemoteAddr().
+func (c *Conn) RemoteAddr() net.Addr {
+	return c.conn.RemoteAddr()
 }
 
 // Close closes the connection. It can be called from a different go

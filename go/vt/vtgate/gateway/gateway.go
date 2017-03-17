@@ -14,8 +14,8 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/vt/discovery"
-	"github.com/youtube/vitess/go/vt/tabletserver/queryservice"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/vttablet/queryservice"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )

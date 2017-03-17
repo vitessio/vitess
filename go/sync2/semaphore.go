@@ -66,3 +66,8 @@ func (sem *Semaphore) TryAcquire() bool {
 func (sem *Semaphore) Release() {
 	sem.slots <- struct{}{}
 }
+
+// Size returns the current number of available slots.
+func (sem *Semaphore) Size() int {
+	return len(sem.slots)
+}

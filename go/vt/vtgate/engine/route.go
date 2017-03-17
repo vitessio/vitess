@@ -14,9 +14,9 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	"github.com/youtube/vitess/go/vt/sqlannotation"
-	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 	"github.com/youtube/vitess/go/vt/vtgate/queryinfo"
 	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
+	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/querytypes"
 )
 
 // Route represents the instructions to route a query to
@@ -446,12 +446,7 @@ func (route *Route) execInsertUnsharded(vcursor VCursor, queryConstruct *queryin
 	if err != nil {
 		return nil, fmt.Errorf("execInsertUnsharded: %v", err)
 	}
-	if insertid != 0 {
-		if result.InsertID != 0 {
-			return nil, fmt.Errorf("sequence and db generated a value each for insert")
-		}
-		result.InsertID = uint64(insertid)
-	}
+	result.InsertID = uint64(insertid)
 	return result, nil
 }
 
@@ -472,9 +467,6 @@ func (route *Route) execInsertSharded(vcursor VCursor, queryConstruct *queryinfo
 	}
 
 	if insertid != 0 {
-		if result.InsertID != 0 {
-			return nil, fmt.Errorf("sequence and db generated a value each for insert")
-		}
 		result.InsertID = uint64(insertid)
 	}
 

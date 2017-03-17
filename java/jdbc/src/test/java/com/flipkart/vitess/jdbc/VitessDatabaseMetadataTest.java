@@ -745,11 +745,14 @@ import java.util.Properties;
     }
 
     @Test public void getUrlTest() throws SQLException {
-        VitessConnection mockConn = PowerMockito.mock(VitessConnection.class);
         String connectionUrl = "jdbc:vitess://<vtGateHostname>:<vtGatePort>/<keyspace>/<dbName>";
-        PowerMockito.when(mockConn.getUrl()).thenReturn(connectionUrl);
-        Assert.assertEquals(connectionUrl, mockConn.getUrl());
+        VitessJDBCUrl mockUrl = PowerMockito.mock(VitessJDBCUrl.class);
+        PowerMockito.when(mockUrl.getUrl()).thenReturn(connectionUrl);
 
+        VitessConnection mockConn = PowerMockito.mock(VitessConnection.class);
+        PowerMockito.when(mockConn.getUrl()).thenReturn(mockUrl);
+
+        Assert.assertEquals(connectionUrl, mockConn.getUrl().getUrl());
     }
 
     @Test public void isReadOnlyTest() throws SQLException {

@@ -15,11 +15,11 @@ import (
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/tableacl"
 	"github.com/youtube/vitess/go/vt/tableacl/simpleacl"
-	"github.com/youtube/vitess/go/vt/tabletmanager"
-	"github.com/youtube/vitess/go/vt/tabletserver"
-	"github.com/youtube/vitess/go/vt/tabletserver/tabletenv"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
+	"github.com/youtube/vitess/go/vt/vttablet/tabletmanager"
+	"github.com/youtube/vitess/go/vt/vttablet/tabletserver"
+	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"golang.org/x/net/context"
 )
 
@@ -74,7 +74,8 @@ func main() {
 	}
 
 	// creates and registers the query service
-	qsc := tabletserver.NewServer()
+	ts := topo.Open()
+	qsc := tabletserver.NewServer(ts)
 	servenv.OnRun(func() {
 		qsc.Register()
 		addStatusParts(qsc)
@@ -118,7 +119,6 @@ func main() {
 	if servenv.GRPCPort != nil {
 		gRPCPort = int32(*servenv.GRPCPort)
 	}
-	ts := topo.Open()
 	agent, err = tabletmanager.NewActionAgent(context.Background(), ts, mysqld, qsc, tabletAlias, *dbcfgs, mycnf, int32(*servenv.Port), gRPCPort)
 	if err != nil {
 		log.Error(err)

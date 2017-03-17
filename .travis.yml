@@ -115,11 +115,6 @@ before_script:
 script:
   # Log GOMAXPROCS (should be 2 as of 07/2015).
   - go run travis/log_gomaxprocs.go
-  # Shard 0: Run unit tests and post coverage to coveralls.io (will show up on pull request).
-  - |
-    if [[ $TEST_MATRIX = *"-shard 0"* ]]; then
-      go run test.go $TEST_FLAGS goveralls
-    fi
   - |
     if [[ $TRAVIS_PULL_REQUEST = "false" ]]; then
       go run test.go $TEST_FLAGS $TEST_MATRIX

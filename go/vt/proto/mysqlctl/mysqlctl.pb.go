@@ -49,6 +49,13 @@ func (m *StartRequest) String() string            { return proto.CompactTextStri
 func (*StartRequest) ProtoMessage()               {}
 func (*StartRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{0} }
 
+func (m *StartRequest) GetMysqldArgs() []string {
+	if m != nil {
+		return m.MysqldArgs
+	}
+	return nil
+}
+
 type StartResponse struct {
 }
 
@@ -65,6 +72,13 @@ func (m *ShutdownRequest) Reset()                    { *m = ShutdownRequest{} }
 func (m *ShutdownRequest) String() string            { return proto.CompactTextString(m) }
 func (*ShutdownRequest) ProtoMessage()               {}
 func (*ShutdownRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{2} }
+
+func (m *ShutdownRequest) GetWaitForMysqld() bool {
+	if m != nil {
+		return m.WaitForMysqld
+	}
+	return false
+}
 
 type ShutdownResponse struct {
 }

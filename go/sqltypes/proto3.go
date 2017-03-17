@@ -136,7 +136,7 @@ func QueryResponsesToProto3(qr []QueryResponse) []*querypb.ResultWithError {
 	for i, q := range qr {
 		result[i] = &querypb.ResultWithError{
 			Result: ResultToProto3(q.QueryResult),
-			Error:  vterrors.VtRPCErrorFromVtError(q.QueryError),
+			Error:  vterrors.ToVTRPC(q.QueryError),
 		}
 	}
 	return result
@@ -151,7 +151,7 @@ func Proto3ToQueryReponses(qr []*querypb.ResultWithError) []QueryResponse {
 	for i, q := range qr {
 		result[i] = QueryResponse{
 			QueryResult: Proto3ToResult(q.Result),
-			QueryError:  vterrors.FromVtRPCError(q.Error),
+			QueryError:  vterrors.FromVTRPC(q.Error),
 		}
 	}
 	return result

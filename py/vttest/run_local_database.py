@@ -34,17 +34,16 @@ import optparse
 import os
 import sys
 
-from vtdb import prefer_vtroot_imports  # pylint: disable=unused-import
 
 from google.protobuf import text_format
 
+from vtproto import vttest_pb2
+from vtdb import prefer_vtroot_imports  # pylint: disable=unused-import
 from vttest import environment
+from vttest import init_data_options
 from vttest import local_database
 from vttest import mysql_flavor
-from vttest import init_data_options
 from vttest import sharding_utils
-
-from vtproto import vttest_pb2
 
 
 def main(cmdline_options):
@@ -84,6 +83,10 @@ def main(cmdline_options):
     init_data_opts.max_table_shard_size = cmdline_options.max_table_shard_size
     init_data_opts.null_probability = cmdline_options.null_probability
 
+  extra_my_cnf = os.path.join(os.environ['VTTOP'], 'config/mycnf/vtcombo.cnf')
+  if cmdline_options.extra_my_cnf:
+    extra_my_cnf += ':' + cmdline_options.extra_my_cnf
+
   with local_database.LocalDatabase(
       topology,
       cmdline_options.schema_dir,
@@ -92,8 +95,9 @@ def main(cmdline_options):
       web_dir=cmdline_options.web_dir,
       web_dir2=cmdline_options.web_dir2,
       default_schema_dir=cmdline_options.default_schema_dir,
-      extra_my_cnf=os.path.join(
-          os.environ['VTTOP'], 'config/mycnf/vtcombo.cnf')) as local_db:
+      extra_my_cnf=extra_my_cnf,
+      charset=cmdline_options.charset,
+      snapshot_file=cmdline_options.snapshot_file) as local_db:
     print json.dumps(local_db.config())
     sys.stdout.flush()
     try:
@@ -168,6 +172,9 @@ if __name__ == '__main__':
       '--web_dir2',
       help='location of the vtctld2 web server files.')
   parser.add_option(
+      '-f', '--extra_my_cnf',
+      help='extra files to add to the config, separated by ":"')
+  parser.add_option(
       '-v', '--verbose', action='store_true',
       help='Display extra error messages.')
   parser.add_option('-c', '--cells', default='test',
@@ -180,6 +187,9 @@ if __name__ == '__main__':
                     help='Replica tablets per shard (includes master)')
   parser.add_option('--rdonly_count', type='int', default=1,
                     help='Rdonly tablets per shard')
+  parser.add_option('--charset', default='utf8', help='MySQL charset')
+  parser.add_option(
+      '--snapshot_file', default=None, help='A MySQL DB snapshot file')
   (options, args) = parser.parse_args()
   if options.verbose:
     logging.getLogger().setLevel(logging.DEBUG)

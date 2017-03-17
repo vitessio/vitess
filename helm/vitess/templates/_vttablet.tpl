@@ -176,9 +176,10 @@ volumes:
 {{- $tablet := index . 4 -}}
 {{- with $tablet.vttablet -}}
 {{- $0 := $.Values.vttablet -}}
-{{- $keyspaceClean := $keyspace.name | replace "_" "-" -}}
-{{- $shardClean := include "format-shard-name" $shard.name -}}
-{{- $setName := printf "%s-%s-%s" $keyspaceClean $shardClean $tablet.type | lower -}}
+{{- $cellClean := include "clean-label" $cell.name -}}
+{{- $keyspaceClean := include "clean-label" $keyspace.name -}}
+{{- $shardClean := include "clean-label" $shard.name -}}
+{{- $setName := printf "%s-%s-%s-%s" $cellClean $keyspaceClean $shardClean $tablet.type | lower -}}
 {{- $uid := "$(cat $VTDATAROOT/init/tablet-uid)" }}
 # vttablet StatefulSet
 apiVersion: apps/v1beta1
@@ -193,6 +194,7 @@ spec:
       labels:
         app: vitess
         component: vttablet
+        cell: {{$cellClean | quote}}
         keyspace: {{$keyspace.name | quote}}
         shard: {{$shardClean | quote}}
         type: {{$tablet.type | quote}}
@@ -222,6 +224,7 @@ spec:
 {{- $cell := index . 1 -}}
 {{- $keyspace := index . 2 -}}
 {{- $shard := index . 3 -}}
+{{- $shardClean := include "clean-label" $shard.name -}}
 {{- $tablet := index . 4 -}}
 {{- $uid := index . 5 -}}
 {{- with $tablet.vttablet -}}
@@ -235,7 +238,7 @@ metadata:
     app: vitess
     component: vttablet
     keyspace: {{$keyspace.name | quote}}
-    shard: {{$shard.name | quote}}
+    shard: {{$shardClean | quote}}
     type: {{$tablet.type | quote}}
   annotations:
     pod.beta.kubernetes.io/init-containers: '[

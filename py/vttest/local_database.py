@@ -21,7 +21,9 @@ class LocalDatabase(object):
                web_dir=None,
                default_schema_dir=None,
                extra_my_cnf=None,
-               web_dir2=None):
+               web_dir2=None,
+               snapshot_file=None,
+               charset='utf8'):
     """Initializes an object of this class.
 
     Args:
@@ -41,6 +43,8 @@ class LocalDatabase(object):
       extra_my_cnf: additional cnf file to use for the EXTRA_MY_CNF var.
       web_dir2: see the documentation for the corresponding command line
           flag in run_local_database.py
+      snapshot_file: A MySQL DB snapshot file.
+      charset: MySQL charset.
     """
 
     self.topology = topology
@@ -51,17 +55,20 @@ class LocalDatabase(object):
     self.default_schema_dir = default_schema_dir
     self.extra_my_cnf = extra_my_cnf
     self.web_dir2 = web_dir2
+    self.snapshot_file = snapshot_file
+    self.charset = charset
 
   def setup(self):
     """Create a MySQL instance and all Vitess processes."""
     mysql_port = environment.get_port('mysql')
     self.directory = environment.get_test_directory()
     self.mysql_db = environment.mysql_db_class(
-        self.directory, mysql_port, self.extra_my_cnf)
+        self.directory, mysql_port, self.extra_my_cnf, self.snapshot_file)
 
     self.mysql_db.setup()
-    self.create_databases()
-    self.load_schema()
+    if not self.snapshot_file:
+      self.create_databases()
+      self.load_schema()
     if self.init_data_options is not None:
       self.rng = random.Random(self.init_data_options.rng_seed)
       self.populate_with_random_data()
@@ -70,7 +77,7 @@ class LocalDatabase(object):
 
     vt_processes.start_vt_processes(self.directory, self.topology,
                                     self.mysql_db, self.schema_dir,
-                                    web_dir=self.web_dir,
+                                    charset=self.charset, web_dir=self.web_dir,
                                     web_dir2=self.web_dir2)
 
   def teardown(self):
@@ -105,7 +112,9 @@ class LocalDatabase(object):
 
     result = {
         'port': vt_processes.vtcombo_process.port,
-        }
+        'socket': self.mysql_db.unix_socket(),
+    }
+
     if environment.get_protocol() == 'grpc':
       result['grpc_port'] = vt_processes.vtcombo_process.grpc_port
     return result
