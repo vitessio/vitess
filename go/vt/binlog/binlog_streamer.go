@@ -61,7 +61,7 @@ type FullBinlogStatement struct {
 	Table      string
 	KeyspaceID []byte
 	PKNames    []*querypb.Field
-	PKRow      *querypb.Row
+	PKValues   []sqltypes.Value
 }
 
 // sendTransactionFunc is used to send binlog events.
@@ -85,12 +85,36 @@ type tableCacheEntry struct {
 	// ti is the table descriptor we get from the schema engine.
 	ti *schema.Table
 
+	// The following fields are used if we want to extract the
+	// keyspace_id of a row.
+
 	// resolver is only set if Streamer.resolverFactory is set.
 	resolver keyspaceIDResolver
 
 	// keyspaceIDIndex is the index of the field that can be used
 	// to compute the keyspaceID. Set to -1 if no resolver is in used.
 	keyspaceIDIndex int
+
+	// The following fields are used if we want to extract the
+	// primary key of a row.
+
+	// pkNames contains an array of fields for the PK.
+	pkNames []*querypb.Field
+
+	// pkIndexes contains the index of a given column in the
+	// PK. It is -1 f the column is not in any PK. It contains as
+	// many fields as there are columns in the table.
+	// For instance, in a table defined like this:
+	//   field1 varchar()
+	//   pkpart2 int
+	//   pkpart1 int
+	// pkIndexes would contain: [
+	// -1      // field1 is not in the pk
+	// 1       // pkpart2 is the second part of the PK
+	// 0       // pkpart1 is the first part of the PK
+	// This array is built this way so when we extract the columns
+	// in a row, we can just save them in the PK array easily.
+	pkIndexes []int
 }
 
 // Streamer streams binlog events from MySQL by connecting as a slave.
@@ -102,6 +126,7 @@ type Streamer struct {
 	mysqld          mysqlctl.MysqlDaemon
 	se              *schema.Engine
 	resolverFactory keyspaceIDResolverFactory
+	extractPK       bool
 
 	clientCharset    *binlogdatapb.Charset
 	startPos         replication.Position
@@ -435,6 +460,24 @@ func (bls *Streamer) parseEvents(ctx context.Context, events <-chan replication.
 					return pos, fmt.Errorf("cannot find column to use to find keyspace_id for table %v", tm.Name)
 				}
 			}
+
+			// Fill in PK indexes if necessary.
+			if bls.extractPK {
+				tce.pkNames = make([]*querypb.Field, len(tce.ti.PKColumns))
+				tce.pkIndexes = make([]int, len(tce.ti.Columns))
+				for i := range tce.pkIndexes {
+					// Put -1 as default in here.
+					tce.pkIndexes[i] = -1
+				}
+				for i, c := range tce.ti.PKColumns {
+					// Patch in every PK column index.
+					tce.pkIndexes[c] = i
+					// Fill in pknames
+					tce.pkNames[i] = &querypb.Field{
+						Name: tce.ti.Columns[c].Name.String(),
+					}
+				}
+			}
 		case ev.IsWriteRows():
 			tableID := ev.TableID(format)
 			tce, ok := tableMaps[tableID]
@@ -537,7 +580,7 @@ func (bls *Streamer) appendInserts(statements []FullBinlogStatement, tce *tableC
 		sql.WriteString(tce.tm.Name)
 		sql.WriteString(" SET ")
 
-		keyspaceIDCell, err := writeValuesAsSQL(&sql, tce, rows, i)
+		keyspaceIDCell, pkValues, err := writeValuesAsSQL(&sql, tce, rows, i, tce.pkNames != nil)
 		if err != nil {
 			log.Warningf("writeValuesAsSQL(%v) failed: %v", i, err)
 			continue
@@ -561,10 +604,9 @@ func (bls *Streamer) appendInserts(statements []FullBinlogStatement, tce *tableC
 			Statement:  statement,
 			Table:      tce.tm.Name,
 			KeyspaceID: ksid,
+			PKNames:    tce.pkNames,
+			PKValues:   pkValues,
 		})
-
-		// TODO(alainjobart): fill in pkNames, pkRows
-		// if necessary.
 	}
 	return statements
 }
@@ -577,7 +619,7 @@ func (bls *Streamer) appendUpdates(statements []FullBinlogStatement, tce *tableC
 		sql.WriteString(tce.tm.Name)
 		sql.WriteString(" SET ")
 
-		keyspaceIDCell, err := writeValuesAsSQL(&sql, tce, rows, i)
+		keyspaceIDCell, pkValues, err := writeValuesAsSQL(&sql, tce, rows, i, tce.pkNames != nil)
 		if err != nil {
 			log.Warningf("writeValuesAsSQL(%v) failed: %v", i, err)
 			continue
@@ -585,7 +627,7 @@ func (bls *Streamer) appendUpdates(statements []FullBinlogStatement, tce *tableC
 
 		sql.WriteString(" WHERE ")
 
-		if _, err := writeIdentifiesAsSQL(&sql, tce, rows, i); err != nil {
+		if _, _, err := writeIdentifiesAsSQL(&sql, tce, rows, i, false); err != nil {
 			log.Warningf("writeIdentifiesAsSQL(%v) failed: %v", i, err)
 			continue
 		}
@@ -608,9 +650,9 @@ func (bls *Streamer) appendUpdates(statements []FullBinlogStatement, tce *tableC
 			Statement:  update,
 			Table:      tce.tm.Name,
 			KeyspaceID: ksid,
+			PKNames:    tce.pkNames,
+			PKValues:   pkValues,
 		})
-		// TODO(alainjobart): fill in pkNames, pkRows
-		// if necessary.
 	}
 	return statements
 }
@@ -623,7 +665,7 @@ func (bls *Streamer) appendDeletes(statements []FullBinlogStatement, tce *tableC
 		sql.WriteString(tce.tm.Name)
 		sql.WriteString(" WHERE ")
 
-		keyspaceIDCell, err := writeIdentifiesAsSQL(&sql, tce, rows, i)
+		keyspaceIDCell, pkValues, err := writeIdentifiesAsSQL(&sql, tce, rows, i, tce.pkNames != nil)
 		if err != nil {
 			log.Warningf("writeIdentifiesAsSQL(%v) failed: %v", i, err)
 			continue
@@ -647,20 +689,25 @@ func (bls *Streamer) appendDeletes(statements []FullBinlogStatement, tce *tableC
 			Statement:  statement,
 			Table:      tce.tm.Name,
 			KeyspaceID: ksid,
+			PKNames:    tce.pkNames,
+			PKValues:   pkValues,
 		})
-		// TODO(alainjobart): fill in pkNames, pkRows
-		// if necessary.
 	}
 	return statements
 }
 
 // writeValuesAsSQL is a helper method to print the values as SQL in the
-// provided bytes.Buffer. It also returns the value for the keyspaceIDColumn.
-func writeValuesAsSQL(sql *bytes.Buffer, tce *tableCacheEntry, rs *replication.Rows, rowIndex int) (sqltypes.Value, error) {
+// provided bytes.Buffer. It also returns the value for the keyspaceIDColumn,
+// and the array of values for the PK, if necessary.
+func writeValuesAsSQL(sql *bytes.Buffer, tce *tableCacheEntry, rs *replication.Rows, rowIndex int, getPK bool) (sqltypes.Value, []sqltypes.Value, error) {
 	valueIndex := 0
 	data := rs.Rows[rowIndex].Data
 	pos := 0
 	var keyspaceIDCell sqltypes.Value
+	var pkValues []sqltypes.Value
+	if getPK {
+		pkValues = make([]sqltypes.Value, len(tce.pkNames))
+	}
 	for c := 0; c < rs.DataColumns.Count(); c++ {
 		if !rs.DataColumns.Bit(c) {
 			continue
@@ -683,26 +730,36 @@ func writeValuesAsSQL(sql *bytes.Buffer, tce *tableCacheEntry, rs *replication.R
 		// We have real data.
 		value, l, err := replication.CellValue(data, pos, tce.tm.Types[c], tce.tm.Metadata[c], tce.ti.Columns[c].Type)
 		if err != nil {
-			return keyspaceIDCell, err
+			return keyspaceIDCell, nil, err
 		}
 		value.EncodeSQL(sql)
 		if c == tce.keyspaceIDIndex {
 			keyspaceIDCell = value
 		}
+		if getPK {
+			if tce.pkIndexes[c] != -1 {
+				pkValues[tce.pkIndexes[c]] = value
+			}
+		}
 		pos += l
 		valueIndex++
 	}
 
-	return keyspaceIDCell, nil
+	return keyspaceIDCell, pkValues, nil
 }
 
 // writeIdentifiesAsSQL is a helper method to print the identifies as SQL in the
-// provided bytes.Buffer. It also returns the value for the keyspaceIDColumn.
-func writeIdentifiesAsSQL(sql *bytes.Buffer, tce *tableCacheEntry, rs *replication.Rows, rowIndex int) (sqltypes.Value, error) {
+// provided bytes.Buffer. It also returns the value for the keyspaceIDColumn,
+// and the array of values for the PK, if necessary.
+func writeIdentifiesAsSQL(sql *bytes.Buffer, tce *tableCacheEntry, rs *replication.Rows, rowIndex int, getPK bool) (sqltypes.Value, []sqltypes.Value, error) {
 	valueIndex := 0
 	data := rs.Rows[rowIndex].Identify
 	pos := 0
 	var keyspaceIDCell sqltypes.Value
+	var pkValues []sqltypes.Value
+	if getPK {
+		pkValues = make([]sqltypes.Value, len(tce.pkNames))
+	}
 	for c := 0; c < rs.IdentifyColumns.Count(); c++ {
 		if !rs.IdentifyColumns.Bit(c) {
 			continue
@@ -725,15 +782,20 @@ func writeIdentifiesAsSQL(sql *bytes.Buffer, tce *tableCacheEntry, rs *replicati
 		// We have real data.
 		value, l, err := replication.CellValue(data, pos, tce.tm.Types[c], tce.tm.Metadata[c], tce.ti.Columns[c].Type)
 		if err != nil {
-			return keyspaceIDCell, err
+			return keyspaceIDCell, nil, err
 		}
 		value.EncodeSQL(sql)
 		if c == tce.keyspaceIDIndex {
 			keyspaceIDCell = value
 		}
+		if getPK {
+			if tce.pkIndexes[c] != -1 {
+				pkValues[tce.pkIndexes[c]] = value
+			}
+		}
 		pos += l
 		valueIndex++
 	}
 
-	return keyspaceIDCell, nil
+	return keyspaceIDCell, pkValues, nil
 }
