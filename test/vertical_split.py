@@ -38,10 +38,8 @@ all_tablets = [source_master, source_replica, source_rdonly1, source_rdonly2,
 def setUpModule():
   try:
     environment.topo_server().setup()
-    extra_my_cnf = None
-    if base_sharding.use_rbr:
-      extra_my_cnf = environment.vttop + '/config/mycnf/rbr.cnf'
-    setup_procs = [t.init_mysql(extra_my_cnf=extra_my_cnf) for t in all_tablets]
+    setup_procs = [t.init_mysql(use_rbr=base_sharding.use_rbr)
+                   for t in all_tablets]
     utils.Vtctld().start()
     utils.wait_procs(setup_procs)
   except:

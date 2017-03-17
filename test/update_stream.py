@@ -62,11 +62,8 @@ def setUpModule():
     environment.topo_server().setup()
 
     # start mysql instance external to the test
-    extra_my_cnf = None
-    if use_rbr:
-      extra_my_cnf = environment.vttop + '/config/mycnf/rbr.cnf'
-    setup_procs = [master_tablet.init_mysql(extra_my_cnf=extra_my_cnf),
-                   replica_tablet.init_mysql(extra_my_cnf=extra_my_cnf)]
+    setup_procs = [master_tablet.init_mysql(use_rbr=use_rbr),
+                   replica_tablet.init_mysql(use_rbr=use_rbr)]
     utils.wait_procs(setup_procs)
 
     # start a vtctld so the vtctl insert commands are just RPCs, not forks
