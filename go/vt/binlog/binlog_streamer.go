@@ -475,6 +475,7 @@ func (bls *Streamer) parseEvents(ctx context.Context, events <-chan replication.
 					// Fill in pknames
 					tce.pkNames[i] = &querypb.Field{
 						Name: tce.ti.Columns[c].Name.String(),
+						Type: tce.ti.Columns[c].Type,
 					}
 				}
 			}

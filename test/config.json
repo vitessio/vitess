@@ -396,6 +396,15 @@
 			"RetryMax": 0,
 			"Tags": []
 		},
+		"update_stream_rbr": {
+			"File": "update_stream_rbr.py",
+			"Args": [],
+			"Command": [],
+			"Manual": false,
+			"Shard": 4,
+			"RetryMax": 0,
+			"Tags": []
+		},
 		"vertical_split": {
 			"File": "vertical_split.py",
 			"Args": [],
