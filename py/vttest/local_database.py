@@ -113,6 +113,7 @@ class LocalDatabase(object):
     result = {
         'port': vt_processes.vtcombo_process.port,
         'socket': self.mysql_db.unix_socket(),
+        'vtcombo_mysql_port': vt_processes.vtcombo_process.vtcombo_mysql_port,
     }
 
     if environment.get_protocol() == 'grpc':
