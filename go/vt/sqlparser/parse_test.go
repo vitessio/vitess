@@ -648,8 +648,22 @@ func TestValid(t *testing.T) {
 		input:  "analyze table a",
 		output: "alter table a",
 	}, {
-		input:  "show foobar",
-		output: "other",
+		input:  "show databases",
+		output: "show databases",
+	}, {
+		input:  "show tables",
+		output: "show tables",
+	}, {
+		input:  "show vitess_shards",
+		output: "show shards",
+	}, {
+		input:  "show create database",
+		output: "show unsupported",
+
+		//	This is now a syntax error.
+		//	}, {
+		//		input:  "show foobar",
+		//		output: "show unsupported",
 	}, {
 		input:  "describe foobar",
 		output: "other",
