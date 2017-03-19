@@ -113,6 +113,9 @@ func forceEOF(yylex interface{}) {
 %token <bytes> TABLE INDEX VIEW TO IGNORE IF UNIQUE USING
 %token <bytes> SHOW DESCRIBE EXPLAIN DATE ESCAPE
 
+// Supported SHOW tokens
+%token <bytes> DATABASES TABLES VITESS_SHARDS
+
 // Convert Type Tokens
 %token <bytes> INTEGER CHARACTER
 
@@ -134,7 +137,7 @@ func forceEOF(yylex interface{}) {
 %type <selStmt> select_statement
 %type <statement> insert_statement update_statement delete_statement set_statement
 %type <statement> create_statement alter_statement rename_statement drop_statement
-%type <statement> analyze_statement other_statement
+%type <statement> analyze_statement show_statement other_statement
 %type <bytes2> comment_opt comment_list
 %type <str> union_op
 %type <str> distinct_opt straight_join_opt cache_opt match_option separator_opt
@@ -218,6 +221,7 @@ command:
 | rename_statement
 | drop_statement
 | analyze_statement
+| show_statement
 | other_statement
 
 select_statement:
@@ -333,12 +337,26 @@ analyze_statement:
     $$ = &DDL{Action: AlterStr, Table: $3, NewName: $3}
   }
 
-other_statement:
-  SHOW force_eof
+show_statement:
+  SHOW DATABASES
   {
-    $$ = &Other{}
+    $$ = &Show{Type: ShowDatabasesStr}
   }
-| DESCRIBE force_eof
+| SHOW TABLES
+  {
+    $$ = &Show{Type: ShowTablesStr}
+  }
+| SHOW VITESS_SHARDS
+  {
+    $$ = &Show{Type: ShowShardsStr}
+  }
+| SHOW CREATE DATABASE
+{
+  $$ = &Show{Type: ShowUnsupportedStr}
+}
+
+other_statement:
+  DESCRIBE force_eof
   {
     $$ = &Other{}
   }
@@ -1581,6 +1599,7 @@ reserved_keyword:
 | CURRENT_TIME
 | CURRENT_TIMESTAMP
 | DATABASE
+| DATABASES
 | DEFAULT
 | DELETE
 | DESC
@@ -1633,9 +1652,11 @@ reserved_keyword:
 | SELECT
 | SEPARATOR
 | SET
+| VITESS_SHARDS
 | SHOW
 | STRAIGHT_JOIN
 | TABLE
+| TABLES
 | THEN
 | TO
 | TRUE
