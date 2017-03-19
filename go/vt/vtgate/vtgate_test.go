@@ -260,10 +260,12 @@ func TestVTGateExecute(t *testing.T) {
 	}
 }
 
-func TestVTGateExecuteWithKeyspace(t *testing.T) {
+func TestVTGateExecuteWithScope(t *testing.T) {
 	createSandbox(KsTestUnsharded)
 	hcVTGateTest.Reset()
 	hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, KsTestUnsharded, "0", topodatapb.TabletType_MASTER, true, 1, nil)
+
+	// Valid keyspace.
 	qr, err := rpcVTGate.Execute(context.Background(),
 		"select id from none",
 		nil,
@@ -278,15 +280,47 @@ func TestVTGateExecuteWithKeyspace(t *testing.T) {
 	if !reflect.DeepEqual(sandboxconn.SingleRowResult, qr) {
 		t.Errorf("want \n%+v, got \n%+v", sandboxconn.SingleRowResult, qr)
 	}
+
+	// Invalid keyspace.
 	_, err = rpcVTGate.Execute(context.Background(),
 		"select id from none",
 		nil,
-		"aa",
+		"noks",
 		topodatapb.TabletType_MASTER,
 		nil,
 		false,
 		nil)
-	want := "vtgate: : keyspace aa not found in vschema"
+	want := "vtgate: : keyspace noks not found in vschema"
+	if err == nil || err.Error() != want {
+		t.Errorf("Execute: %v, want %s", err, want)
+	}
+
+	// Valid keyspace:shard.
+	qr, err = rpcVTGate.Execute(context.Background(),
+		"random statement",
+		nil,
+		KsTestUnsharded+":0",
+		topodatapb.TabletType_MASTER,
+		nil,
+		false,
+		nil)
+	if err != nil {
+		t.Errorf("want nil, got %v", err)
+	}
+	if !reflect.DeepEqual(sandboxconn.SingleRowResult, qr) {
+		t.Errorf("want \n%+v, got \n%+v", sandboxconn.SingleRowResult, qr)
+	}
+
+	// Invalid keyspace:shard.
+	_, err = rpcVTGate.Execute(context.Background(),
+		"select id from none",
+		nil,
+		KsTestUnsharded+":noshard",
+		topodatapb.TabletType_MASTER,
+		nil,
+		false,
+		nil)
+	want = "vtgate: : target: TestUnsharded.noshard.master, no valid tablet"
 	if err == nil || err.Error() != want {
 		t.Errorf("Execute: %v, want %s", err, want)
 	}
@@ -781,6 +815,35 @@ func TestVTGateStreamExecute(t *testing.T) {
 		"select id from t1",
 		nil,
 		"",
+		topodatapb.TabletType_MASTER,
+		executeOptions,
+		func(r *sqltypes.Result) error {
+			qrs = append(qrs, r)
+			return nil
+		})
+	if err != nil {
+		t.Errorf("want nil, got %v", err)
+	}
+	want := []*sqltypes.Result{sandboxconn.SingleRowResult}
+	if !reflect.DeepEqual(want, qrs) {
+		t.Errorf("want \n%+v, got \n%+v", want, qrs)
+	}
+	if !proto.Equal(sbc.Options[0], executeOptions) {
+		t.Errorf("got ExecuteOptions \n%+v, want \n%+v", sbc.Options[0], executeOptions)
+	}
+}
+
+func TestVTGateStreamExecuteScope(t *testing.T) {
+	ks := KsTestUnsharded
+	shard := "0"
+	createSandbox(ks)
+	hcVTGateTest.Reset()
+	sbc := hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, ks, shard, topodatapb.TabletType_MASTER, true, 1, nil)
+	var qrs []*sqltypes.Result
+	err := rpcVTGate.StreamExecute(context.Background(),
+		"random statement",
+		nil,
+		ks+":"+shard,
 		topodatapb.TabletType_MASTER,
 		executeOptions,
 		func(r *sqltypes.Result) error {
@@ -2236,7 +2299,7 @@ func TestVTGateShowMetadataUnsharded(t *testing.T) {
 		false,
 		executeOptions)
 
-	expected := "vtgate: : No keyspace selected";
+	expected := "vtgate: : No keyspace selected"
 	if err == nil || err.Error() != expected {
 		t.Errorf("wanted %s, got %v", expected, err)
 	}
@@ -2250,7 +2313,7 @@ func TestVTGateShowMetadataUnsharded(t *testing.T) {
 		false,
 		executeOptions)
 
-	expected = "vtgate: : keyspace no_such_keyspace not found in vschema";
+	expected = "vtgate: : keyspace no_such_keyspace not found in vschema"
 	if err == nil || err.Error() != expected {
 		t.Errorf("wanted %s, got %v", expected, err)
 	}
@@ -2290,7 +2353,7 @@ func TestVTGateShowMetadataUnsharded(t *testing.T) {
 		false,
 		executeOptions)
 
-	expected = "vtgate: : unsupported show statement";
+	expected = "vtgate: : unsupported show statement"
 	if err == nil || err.Error() != expected {
 		t.Errorf("wanted %s, got %v", expected, err)
 	}
@@ -2303,7 +2366,7 @@ func TestVTGateShowMetadataUnsharded(t *testing.T) {
 		false,
 		executeOptions)
 
-	expected = "vtgate: : unimplemented metadata query: show tables";
+	expected = "vtgate: : unimplemented metadata query: show tables"
 	if err == nil || err.Error() != expected {
 		t.Errorf("wanted %s, got %v", expected, err)
 	}
