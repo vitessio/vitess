@@ -51,7 +51,7 @@ func (rtr *Router) Execute(ctx context.Context, sql string, bindVars map[string]
 	return plan.Instructions.Execute(vcursor, queryConstruct, make(map[string]interface{}), true)
 }
 
-func (rtr *Router) ExecuteMetadata(ctx context.Context, sql string, bindVars map[string]interface{}, keyspace string, tabletType topodatapb.TabletType, session *vtgatepb.Session, notInTransaction bool, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
+func (rtr *Router) ExecuteShow(ctx context.Context, sql string, bindVars map[string]interface{}, keyspace string, tabletType topodatapb.TabletType, session *vtgatepb.Session, notInTransaction bool, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
 	if bindVars == nil {
 		bindVars = make(map[string]interface{})
 	}

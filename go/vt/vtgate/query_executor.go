@@ -77,7 +77,7 @@ func (vc *queryExecutor) ExecuteShard(keyspace string, shardQueries map[string]q
 	return vc.router.scatterConn.ExecuteMultiShard(vc.ctx, keyspace, shardQueries, vc.tabletType, NewSafeSession(nil), false, vc.options)
 }
 
-func (vc *queryExecutor) ExecuteMetadata(query string, bindvars map[string]interface{}) (*sqltypes.Result, error) {
+func (vc *queryExecutor) ExecuteShow(query string, bindvars map[string]interface{}) (*sqltypes.Result, error) {
 	if query == sqlparser.ShowDatabasesStr {
 		keyspaces, err := getAllKeyspaces(vc.ctx, vc.router.serv, vc.router.cell)
 		if err != nil {
