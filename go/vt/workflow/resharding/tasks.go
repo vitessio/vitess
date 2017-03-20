@@ -2,6 +2,7 @@ package resharding
 
 import (
 	"fmt"
+	"log"
 	"strings"
 
 	"golang.org/x/net/context"
@@ -28,7 +29,7 @@ func (hw *HorizontalReshardingWorkflow) GetTasks(phase PhaseType) []*workflowpb.
 	case phaseClone, phaseMigrateRdonly, phaseMigrateReplica, phaseMigrateMaster:
 		shards = strings.Split(hw.checkpoint.Settings["source_shards"], ",")
 	default:
-		panic(fmt.Sprintf("BUG: unknown phase type: %v", phase))
+		log.Fatalf("BUG: unknown phase type: %v", phase)
 	}
 
 	var tasks []*workflowpb.Task
