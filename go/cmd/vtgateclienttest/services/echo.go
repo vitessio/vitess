@@ -96,9 +96,9 @@ func echoQueryResult(vals map[string]interface{}) *sqltypes.Result {
 	return qr
 }
 
-func (c *echoClient) Execute(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, tabletType topodatapb.TabletType, session *vtgatepb.Session, notInTransaction bool, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
+func (c *echoClient) Execute(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, tabletType topodatapb.TabletType, session *vtgatepb.Session, notInTransaction bool, options *querypb.ExecuteOptions) (*vtgatepb.Session, *sqltypes.Result, error) {
 	if strings.HasPrefix(sql, EchoPrefix) {
-		return echoQueryResult(map[string]interface{}{
+		return session, echoQueryResult(map[string]interface{}{
 			"callerId":         callerid.EffectiveCallerIDFromContext(ctx),
 			"query":            sql,
 			"bindVars":         bindVariables,
@@ -181,7 +181,7 @@ func (c *echoClient) ExecuteEntityIds(ctx context.Context, sql string, bindVaria
 	return c.fallbackClient.ExecuteEntityIds(ctx, sql, bindVariables, keyspace, entityColumnName, entityKeyspaceIDs, tabletType, session, notInTransaction, options)
 }
 
-func (c *echoClient) ExecuteBatch(ctx context.Context, sqlList []string, bindVariablesList []map[string]interface{}, keyspace string, tabletType topodatapb.TabletType, asTransaction bool, session *vtgatepb.Session, options *querypb.ExecuteOptions) ([]sqltypes.QueryResponse, error) {
+func (c *echoClient) ExecuteBatch(ctx context.Context, sqlList []string, bindVariablesList []map[string]interface{}, keyspace string, tabletType topodatapb.TabletType, session *vtgatepb.Session, options *querypb.ExecuteOptions) (*vtgatepb.Session, []sqltypes.QueryResponse, error) {
 	if len(sqlList) > 0 && strings.HasPrefix(sqlList[0], EchoPrefix) {
 		var queryResponse []sqltypes.QueryResponse
 		if bindVariablesList == nil {
@@ -189,20 +189,19 @@ func (c *echoClient) ExecuteBatch(ctx context.Context, sqlList []string, bindVar
 		}
 		for queryNum, query := range sqlList {
 			result := echoQueryResult(map[string]interface{}{
-				"callerId":      callerid.EffectiveCallerIDFromContext(ctx),
-				"query":         query,
-				"bindVars":      bindVariablesList[queryNum],
-				"keyspace":      keyspace,
-				"tabletType":    tabletType,
-				"session":       session,
-				"asTransaction": asTransaction,
-				"options":       options,
+				"callerId":   callerid.EffectiveCallerIDFromContext(ctx),
+				"query":      query,
+				"bindVars":   bindVariablesList[queryNum],
+				"keyspace":   keyspace,
+				"tabletType": tabletType,
+				"session":    session,
+				"options":    options,
 			})
 			queryResponse = append(queryResponse, sqltypes.QueryResponse{QueryResult: result, QueryError: nil})
 		}
-		return queryResponse, nil
+		return session, queryResponse, nil
 	}
-	return c.fallbackClient.ExecuteBatch(ctx, sqlList, bindVariablesList, keyspace, tabletType, asTransaction, session, options)
+	return c.fallbackClient.ExecuteBatch(ctx, sqlList, bindVariablesList, keyspace, tabletType, session, options)
 }
 
 func (c *echoClient) ExecuteBatchShards(ctx context.Context, queries []*vtgatepb.BoundShardQuery, tabletType topodatapb.TabletType, asTransaction bool, session *vtgatepb.Session, options *querypb.ExecuteOptions) ([]sqltypes.Result, error) {

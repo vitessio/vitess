@@ -74,9 +74,9 @@ type queryExecute struct {
 }
 
 // Execute is part of the VTGateService interface
-func (f *fakeVTGateService) Execute(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, tabletType topodatapb.TabletType, session *vtgatepb.Session, notInTransaction bool, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
+func (f *fakeVTGateService) Execute(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, tabletType topodatapb.TabletType, session *vtgatepb.Session, notInTransaction bool, options *querypb.ExecuteOptions) (*vtgatepb.Session, *sqltypes.Result, error) {
 	if f.hasError {
-		return nil, errTestVtGateError
+		return session, nil, errTestVtGateError
 	}
 	if f.panics {
 		panic(fmt.Errorf("test forced panic"))
@@ -87,7 +87,7 @@ func (f *fakeVTGateService) Execute(ctx context.Context, sql string, bindVariabl
 	}
 	execCase, ok := execMap[sql]
 	if !ok {
-		return nil, fmt.Errorf("no match for: %s", sql)
+		return session, nil, fmt.Errorf("no match for: %s", sql)
 	}
 	query := &queryExecute{
 		SQL:              sql,
@@ -99,12 +99,12 @@ func (f *fakeVTGateService) Execute(ctx context.Context, sql string, bindVariabl
 	}
 	if !reflect.DeepEqual(query, execCase.execQuery) {
 		f.t.Errorf("Execute: %+v, want %+v", query, execCase.execQuery)
-		return nil, nil
+		return session, nil, nil
 	}
 	if execCase.outSession != nil {
 		*session = *execCase.outSession
 	}
-	return execCase.result, nil
+	return session, execCase.result, nil
 }
 
 // queryExecuteBatch contains all the fields we use to test ExecuteBatch
@@ -118,9 +118,9 @@ type queryExecuteBatch struct {
 }
 
 // ExecuteBatch is part of the VTGateService interface
-func (f *fakeVTGateService) ExecuteBatch(ctx context.Context, sqlList []string, bindVariablesList []map[string]interface{}, keyspace string, tabletType topodatapb.TabletType, asTransaction bool, session *vtgatepb.Session, options *querypb.ExecuteOptions) ([]sqltypes.QueryResponse, error) {
+func (f *fakeVTGateService) ExecuteBatch(ctx context.Context, sqlList []string, bindVariablesList []map[string]interface{}, keyspace string, tabletType topodatapb.TabletType, session *vtgatepb.Session, options *querypb.ExecuteOptions) (*vtgatepb.Session, []sqltypes.QueryResponse, error) {
 	if f.hasError {
-		return nil, errTestVtGateError
+		return session, nil, errTestVtGateError
 	}
 	if f.panics {
 		panic(fmt.Errorf("test forced panic"))
@@ -131,7 +131,7 @@ func (f *fakeVTGateService) ExecuteBatch(ctx context.Context, sqlList []string, 
 	}
 	execCase, ok := execMap[sqlList[0]]
 	if !ok {
-		return nil, fmt.Errorf("no match for: %s", sqlList)
+		return session, nil, fmt.Errorf("no match for: %s", sqlList)
 	}
 	query := &queryExecuteBatch{
 		SQLList:           sqlList,
@@ -139,16 +139,15 @@ func (f *fakeVTGateService) ExecuteBatch(ctx context.Context, sqlList []string, 
 		Keyspace:          keyspace,
 		TabletType:        tabletType,
 		Session:           session,
-		AsTransaction:     asTransaction,
 	}
 	if !reflect.DeepEqual(query, execCase.execQuery) {
 		f.t.Errorf("Execute: %+v, want %+v", query, execCase.execQuery)
-		return nil, nil
+		return session, nil, nil
 	}
 	if execCase.outSession != nil {
 		*session = *execCase.outSession
 	}
-	return []sqltypes.QueryResponse{{
+	return session, []sqltypes.QueryResponse{{
 		QueryResult: execCase.result,
 		QueryError:  nil,
 	}}, nil
