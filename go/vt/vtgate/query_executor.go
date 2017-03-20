@@ -8,10 +8,13 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/vt/sqlparser"
+	"github.com/youtube/vitess/go/vt/vterrors"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	vtgatepb "github.com/youtube/vitess/go/vt/proto/vtgate"
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/querytypes"
 )
 
@@ -72,4 +75,69 @@ func (vc *queryExecutor) GetShardForKeyspaceID(allShards []*topodatapb.ShardRefe
 
 func (vc *queryExecutor) ExecuteShard(keyspace string, shardQueries map[string]querytypes.BoundQuery) (*sqltypes.Result, error) {
 	return vc.router.scatterConn.ExecuteMultiShard(vc.ctx, keyspace, shardQueries, vc.tabletType, NewSafeSession(nil), false, vc.options)
+}
+
+func (vc *queryExecutor) ExecuteMetadata(query string, bindvars map[string]interface{}) (*sqltypes.Result, error) {
+	if query == sqlparser.ShowDatabasesStr {
+		keyspaces, err := getAllKeyspaces(vc.ctx, vc.router.serv, vc.router.cell)
+		if err != nil {
+			return nil, err
+		}
+
+		rows := make([][]sqltypes.Value, len(keyspaces))
+		for i, v := range keyspaces {
+			rows[i] = []sqltypes.Value{sqltypes.MakeString([]byte(v))}
+		}
+
+		result := &sqltypes.Result{
+			Fields: []*querypb.Field{{
+				Name: "Databases",
+				Type: sqltypes.VarChar,
+			}},
+			RowsAffected: uint64(len(keyspaces)),
+			InsertID:     0,
+			Rows:         rows,
+		}
+
+		return result, nil
+	}
+
+	if query == sqlparser.ShowShardsStr {
+		keyspaces, err := getAllKeyspaces(vc.ctx, vc.router.serv, vc.router.cell)
+		if err != nil {
+			return nil, err
+		}
+
+		var shards []string
+
+		for _, keyspace := range keyspaces {
+			_, _, ks_shards, err := getKeyspaceShards(vc.ctx, vc.router.serv, vc.router.cell, keyspace, vc.tabletType)
+			if err != nil {
+				return nil, err
+			}
+
+			for _, shard := range ks_shards {
+				shards = append(shards, keyspace+":"+shard.Name)
+			}
+		}
+
+		rows := make([][]sqltypes.Value, len(shards))
+		for i, v := range shards {
+			rows[i] = []sqltypes.Value{sqltypes.MakeString([]byte(v))}
+		}
+
+		result := &sqltypes.Result{
+			Fields: []*querypb.Field{{
+				Name: "Shards",
+				Type: sqltypes.VarChar,
+			}},
+			RowsAffected: uint64(len(shards)),
+			InsertID:     0,
+			Rows:         rows,
+		}
+
+		return result, nil
+	}
+
+	return nil, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "unimplemented metadata query: "+query)
 }

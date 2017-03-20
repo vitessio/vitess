@@ -51,6 +51,15 @@ func getAnyShard(ctx context.Context, topoServ topo.SrvTopoServer, cell, keyspac
 	return keyspace, allShards[0].Name, nil
 }
 
+func getAllKeyspaces(ctx context.Context, topoServ topo.SrvTopoServer, cell string) ([]string, error) {
+	keyspaces, err := topoServ.GetSrvKeyspaceNames(ctx, cell)
+	if err != nil {
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "keyspace names fetch error: %v", err)
+	}
+
+	return keyspaces, nil
+}
+
 func getKeyspaceShards(ctx context.Context, topoServ topo.SrvTopoServer, cell, keyspace string, tabletType topodatapb.TabletType) (string, *topodatapb.SrvKeyspace, []*topodatapb.ShardReference, error) {
 	srvKeyspace, err := topoServ.GetSrvKeyspace(ctx, cell, keyspace)
 	if err != nil {

@@ -2130,3 +2130,137 @@ func TestErrorIssuesRollback(t *testing.T) {
 	}
 	sbc.MustFailCodes[vtrpcpb.Code_ALREADY_EXISTS] = 0
 }
+
+func valuesContain(rows [][]sqltypes.Value, ks string) bool {
+	for _, v := range rows {
+		if len(v) != 1 {
+			return false
+		}
+		if v[0].String() == ks {
+			return true
+		}
+	}
+	return false
+}
+
+func TestVTGateShowMetadataUnsharded(t *testing.T) {
+	createSandbox(KsTestUnsharded)
+	hcVTGateTest.Reset()
+	hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, KsTestUnsharded, "0", topodatapb.TabletType_MASTER, true, 1, nil)
+
+	qr, err := rpcVTGate.Execute(context.Background(),
+		"show databases",
+		nil,
+		"",
+		topodatapb.TabletType_MASTER,
+		nil,
+		false,
+		executeOptions)
+
+	if err != nil {
+		t.Errorf("want nil, got %v", err)
+	}
+
+	wantFields := []*querypb.Field{{
+		Name: "Databases",
+		Type: sqltypes.VarChar,
+	}}
+
+	if !reflect.DeepEqual(wantFields, qr.Fields) {
+		t.Errorf("want \n%+v, got \n%+v", wantFields, qr.Fields)
+	}
+
+	if !valuesContain(qr.Rows, KsTestUnsharded) {
+		t.Errorf("ks %s not found in Values \n%+v", KsTestUnsharded, qr.Rows)
+	}
+
+	qr, err = rpcVTGate.Execute(context.Background(),
+		"show vitess_shards",
+		nil,
+		"",
+		topodatapb.TabletType_MASTER,
+		nil,
+		false,
+		executeOptions)
+
+	if err != nil {
+		t.Errorf("want nil, got %v", err)
+	}
+
+	wantFields = []*querypb.Field{{
+		Name: "Shards",
+		Type: sqltypes.VarChar,
+	}}
+
+	if !reflect.DeepEqual(wantFields, qr.Fields) {
+		t.Errorf("want \n%+v, got \n%+v", wantFields, qr.Fields)
+	}
+
+	shard := KsTestUnsharded + ":0"
+	if !valuesContain(qr.Rows, shard) {
+		t.Errorf("shard %s not found in Values \n%+v", shard, qr.Rows)
+	}
+}
+
+func TestVTGateShowMetadataTwoShards(t *testing.T) {
+	keyspace := "TestShowMetadataTwoShards"
+	setUpSandboxWithTwoShards(keyspace)
+
+	qr, err := rpcVTGate.Execute(context.Background(),
+		"show databases",
+		nil,
+		"",
+		topodatapb.TabletType_MASTER,
+		nil,
+		false,
+		executeOptions)
+
+	if err != nil {
+		t.Errorf("want nil, got %v", err)
+	}
+
+	wantFields := []*querypb.Field{{
+		Name: "Databases",
+		Type: sqltypes.VarChar,
+	}}
+
+	if !reflect.DeepEqual(wantFields, qr.Fields) {
+		t.Errorf("want \n%+v, got \n%+v", wantFields, qr.Fields)
+	}
+
+	if !valuesContain(qr.Rows, keyspace) {
+		t.Errorf("ks %s not found in Values \n%+v", keyspace, qr.Rows)
+	}
+
+	qr, err = rpcVTGate.Execute(context.Background(),
+		"show vitess_shards",
+		nil,
+		"",
+		topodatapb.TabletType_MASTER,
+		nil,
+		false,
+		executeOptions)
+
+	if err != nil {
+		t.Errorf("want nil, got %v", err)
+	}
+
+	wantFields = []*querypb.Field{{
+		Name: "Shards",
+		Type: sqltypes.VarChar,
+	}}
+
+	if !reflect.DeepEqual(wantFields, qr.Fields) {
+		t.Errorf("want \n%+v, got \n%+v", wantFields, qr.Fields)
+	}
+
+	shard0 := keyspace + ":-20"
+	if !valuesContain(qr.Rows, shard0) {
+		t.Errorf("shard %s not found in Values \n%+v", shard0, qr.Rows)
+	}
+
+	shard1 := keyspace + ":20-40"
+	if !valuesContain(qr.Rows, shard1) {
+		t.Errorf("shard %s not found in Values \n%+v", shard1, qr.Rows)
+	}
+}
