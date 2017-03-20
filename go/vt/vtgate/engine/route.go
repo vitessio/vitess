@@ -191,6 +191,8 @@ const (
 	// for each ColVindex. If the table has an Autoinc column,
 	// A Generate subplan must be created.
 	InsertSharded
+	// Metadata is a pseudo-opcode used for SHOW commands
+	Metadata
 	// NumCodes is the total number of opcodes for routes.
 	NumCodes
 )
@@ -209,6 +211,7 @@ var routeName = [NumCodes]string{
 	"DeleteEqual",
 	"InsertUnsharded",
 	"InsertSharded",
+	"Metadata",
 }
 
 func (code RouteOpcode) String() string {
@@ -257,6 +260,8 @@ func (route *Route) Execute(vcursor VCursor, queryConstruct *queryinfo.QueryCons
 		return route.execInsertSharded(vcursor, queryConstruct)
 	case InsertUnsharded:
 		return route.execInsertUnsharded(vcursor, queryConstruct)
+	case Metadata:
+		return route.execMetadata(vcursor, queryConstruct)
 	}
 
 	var err error
@@ -407,6 +412,10 @@ func (route *Route) execUpdateEqual(vcursor VCursor, queryConstruct *queryinfo.Q
 	}
 	rewritten := sqlannotation.AddKeyspaceIDs(route.Query, [][]byte{ksid}, queryConstruct.Comments)
 	return vcursor.ScatterConnExecute(rewritten, queryConstruct.BindVars, ks, []string{shard}, queryConstruct.NotInTransaction)
+}
+
+func (route *Route) execMetadata(vcursor VCursor, queryConstruct *queryinfo.QueryConstruct) (*sqltypes.Result, error) {
+	return vcursor.ExecuteMetadata(route.Query, queryConstruct.BindVars)
 }
 
 func (route *Route) execDeleteEqual(vcursor VCursor, queryConstruct *queryinfo.QueryConstruct) (*sqltypes.Result, error) {
