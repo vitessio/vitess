@@ -18,7 +18,7 @@ func buildShowPlan(node *sqlparser.Show, vschema VSchema) (primitive engine.Prim
 	}
 
 	route := &engine.Route{
-		Opcode: engine.Metadata,
+		Opcode: engine.Show,
 		Query: node.Type,
 	}
 
