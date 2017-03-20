@@ -192,7 +192,7 @@ func forceEOF(yylex interface{}) {
 %type <empty> force_eof ddl_force_eof
 %type <str> charset
 %type <convertType> convert_type
-
+%type <str> show_statement_type
 %start any_command
 
 %%
@@ -337,22 +337,32 @@ analyze_statement:
     $$ = &DDL{Action: AlterStr, Table: $3, NewName: $3}
   }
 
-show_statement:
-  SHOW DATABASES
+show_statement_type:
+  ID
   {
-    $$ = &Show{Type: ShowDatabasesStr}
+    $$ = ShowUnsupportedStr
   }
-| SHOW TABLES
+| reserved_keyword
   {
-    $$ = &Show{Type: ShowTablesStr}
+    if (string($1) == "databases"){
+      $$ = ShowDatabasesStr
+    } else if (string($1) == "tables"){
+      $$ = ShowTablesStr
+    } else if (string($1) == "vitess_shards"){
+      $$ = ShowShardsStr
+    } else {
+      $$ = ShowUnsupportedStr
+    }
   }
-| SHOW VITESS_SHARDS
-  {
-    $$ = &Show{Type: ShowShardsStr}
-  }
-| SHOW CREATE DATABASE
+| non_reserved_keyword
 {
-  $$ = &Show{Type: ShowUnsupportedStr}
+  $$ = ShowUnsupportedStr
+}
+
+show_statement:
+SHOW show_statement_type force_eof
+{
+  $$ = &Show{Type: $2}
 }
 
 other_statement:
