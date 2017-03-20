@@ -695,18 +695,283 @@ func testRowReplicationTypesWithRealDatabase(t *testing.T, params *sqldb.ConnPar
 		createType:  "BIGINT UNSIGNED",
 		createValue: "10000000000000000000",
 	}, {
-		// VARCHAR
+		// MEDIUMINT
+		name:        "mediumish",
+		createType:  "MEDIUMINT UNSIGNED",
+		createValue: "10000000",
+	}, {
+		// DATE
+		name:        "date_regular",
+		createType:  "DATE",
+		createValue: "'1920-10-24'",
+	}, {
+		// TIME
+		name:        "time_regular",
+		createType:  "TIME",
+		createValue: "'-212:44:58'",
+	}, {
+		// TIME
+		name:        "time_100milli",
+		createType:  "TIME(1)",
+		createValue: "'12:44:58.3'",
+	}, {
+		// TIME
+		name:        "time_10milli",
+		createType:  "TIME(2)",
+		createValue: "'412:44:58.01'",
+	}, {
+		// TIME
+		name:        "time_milli",
+		createType:  "TIME(3)",
+		createValue: "'-12:44:58.012'",
+	}, {
+		// TIME
+		name:        "time_100micro",
+		createType:  "TIME(4)",
+		createValue: "'12:44:58.0123'",
+	}, {
+		// TIME
+		name:        "time_10micro",
+		createType:  "TIME(5)",
+		createValue: "'12:44:58.01234'",
+	}, {
+		// TIME
+		name:        "time_micro",
+		createType:  "TIME(6)",
+		createValue: "'-12:44:58.012345'",
+	}, {
+		// DATETIME
+		name:        "datetime0",
+		createType:  "DATETIME",
+		createValue: "'1020-08-23 12:44:58'",
+	}, {
+		// DATETIME
+		name:        "datetime1",
+		createType:  "DATETIME(1)",
+		createValue: "'1020-08-23 12:44:58.8'",
+	}, {
+		// DATETIME
+		name:        "datetime2",
+		createType:  "DATETIME(2)",
+		createValue: "'1020-08-23 12:44:58.01'",
+	}, {
+		// DATETIME
+		name:        "datetime3",
+		createType:  "DATETIME(3)",
+		createValue: "'1020-08-23 12:44:58.012'",
+	}, {
+		// DATETIME
+		name:        "datetime4",
+		createType:  "DATETIME(4)",
+		createValue: "'1020-08-23 12:44:58.0123'",
+	}, {
+		// DATETIME
+		name:        "datetime5",
+		createType:  "DATETIME(5)",
+		createValue: "'1020-08-23 12:44:58.01234'",
+	}, {
+		// DATETIME
+		name:        "datetime6",
+		createType:  "DATETIME(6)",
+		createValue: "'1020-08-23 12:44:58.012345'",
+	}, {
+		// YEAR zero
+		name:        "year0",
+		createType:  "YEAR",
+		createValue: "0",
+	}, {
+		// YEAR
+		name:        "year_nonzero",
+		createType:  "YEAR",
+		createValue: "2052",
+	}, {
+		// VARCHAR 8 bits
 		name:        "shortvc",
 		createType:  "VARCHAR(30)",
 		createValue: "'short varchar'",
 	}, {
+		// VARCHAR 16 bits
 		name:        "longvc",
 		createType:  "VARCHAR(1000)",
 		createValue: "'long varchar'",
+	}, {
+		// BIT
+		name:        "bit1",
+		createType:  "BIT",
+		createValue: "b'1'",
+	}, {
+		// BIT
+		name:        "bit6",
+		createType:  "BIT(6)",
+		createValue: "b'100101'",
+	}, {
+		// BIT
+		name:        "bit8",
+		createType:  "BIT(8)",
+		createValue: "b'10100101'",
+	}, {
+		// BIT
+		name:        "bit14",
+		createType:  "BIT(14)",
+		createValue: "b'10100101000111'",
+	}, {
+		// BIT
+		name:        "bit55",
+		createType:  "BIT(55)",
+		createValue: "b'1010010100110100101001101001010011010010100110100101001'",
+	}, {
+		// BIT
+		name:        "bit64",
+		createType:  "BIT(64)",
+		createValue: "b'1111111111010010100110100101001101001010011010010100110100101001'",
+	}, {
+		// DECIMAL
+		name:        "decimal2_1",
+		createType:  "DECIMAL(2,1)",
+		createValue: "1.2",
+	}, {
+		// DECIMAL neg
+		name:        "decimal2_1_neg",
+		createType:  "DECIMAL(2,1)",
+		createValue: "-5.6",
+	}, {
+		// DECIMAL
+		name:        "decimal4_2",
+		createType:  "DECIMAL(4,2)",
+		createValue: "61.52",
+	}, {
+		// DECIMAL neg
+		name:        "decimal4_2_neg",
+		createType:  "DECIMAL(4,2)",
+		createValue: "-78.94",
+	}, {
+		// DECIMAL
+		name:        "decimal6_3",
+		createType:  "DECIMAL(6,3)",
+		createValue: "611.542",
+	}, {
+		// DECIMAL neg
+		name:        "decimal6_3_neg",
+		createType:  "DECIMAL(6,3)",
+		createValue: "-478.394",
+	}, {
+		// DECIMAL
+		name:        "decimal8_4",
+		createType:  "DECIMAL(8,4)",
+		createValue: "6311.5742",
+	}, {
+		// DECIMAL neg
+		name:        "decimal8_4_neg",
+		createType:  "DECIMAL(8,4)",
+		createValue: "-4778.3894",
+	}, {
+		// DECIMAL
+		name:        "decimal10_5",
+		createType:  "DECIMAL(10,5)",
+		createValue: "63711.57342",
+	}, {
+		// DECIMAL neg
+		name:        "decimal10_5_neg",
+		createType:  "DECIMAL(10,5)",
+		createValue: "-47378.38594",
+	}, {
+		// DECIMAL
+		name:        "decimal12_6",
+		createType:  "DECIMAL(12,6)",
+		createValue: "637311.557342",
+	}, {
+		// DECIMAL neg
+		name:        "decimal12_6_neg",
+		createType:  "DECIMAL(12,6)",
+		createValue: "-473788.385794",
+	}, {
+		// DECIMAL
+		name:        "decimal14_7",
+		createType:  "DECIMAL(14,7)",
+		createValue: "6375311.5574342",
+	}, {
+		// DECIMAL neg
+		name:        "decimal14_7_neg",
+		createType:  "DECIMAL(14,7)",
+		createValue: "-4732788.3853794",
+	}, {
+		// DECIMAL
+		name:        "decimal16_8",
+		createType:  "DECIMAL(16,8)",
+		createValue: "63375311.54574342",
+	}, {
+		// DECIMAL neg
+		name:        "decimal16_8_neg",
+		createType:  "DECIMAL(16,8)",
+		createValue: "-47327788.38533794",
+	}, {
+		// DECIMAL
+		name:        "decimal18_9",
+		createType:  "DECIMAL(18,9)",
+		createValue: "633075311.545714342",
+	}, {
+		// DECIMAL neg
+		name:        "decimal18_9_neg",
+		createType:  "DECIMAL(18,9)",
+		createValue: "-473327788.385033794",
+	}, {
+		// DECIMAL
+		name:        "decimal20_10",
+		createType:  "DECIMAL(20,10)",
+		createValue: "6330375311.5405714342",
+	}, {
+		// DECIMAL neg
+		name:        "decimal20_10_neg",
+		createType:  "DECIMAL(20,10)",
+		createValue: "-4731327788.3850337294",
+	}, {
+		// DECIMAL lots of left digits
+		name:        "decimal34_0",
+		createType:  "DECIMAL(34,0)",
+		createValue: "8765432345678987654345432123456786",
+	}, {
+		// DECIMAL lots of left digits neg
+		name:        "decimal34_0_neg",
+		createType:  "DECIMAL(34,0)",
+		createValue: "-8765432345678987654345432123456786",
+	}, {
+		// DECIMAL lots of right digits
+		name:        "decimal34_30",
+		createType:  "DECIMAL(34,30)",
+		createValue: "8765.432345678987654345432123456786",
+	}, {
+		// DECIMAL lots of right digits neg
+		name:        "decimal34_30_neg",
+		createType:  "DECIMAL(34,30)",
+		createValue: "-8765.432345678987654345432123456786",
+	}, {
+		// ENUM
+		name:        "tshirtsize",
+		createType:  "ENUM('x-small', 'small', 'medium', 'large', 'x-larg')",
+		createValue: "'large'",
+	}, {
+		// SET
+		name:        "setnumbers",
+		createType:  "SET('one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten')",
+		createValue: "'two,three,ten'",
 	}}
 
 	conn, isMariaDB, f := connectForReplication(t, params, true /* rbr */)
 	defer conn.Close()
+
+	// JSON is only supported by MySQL 5.7+
+	if strings.HasPrefix(conn.ServerVersion, "5.7") {
+		testcases = append(testcases, struct {
+			name        string
+			createType  string
+			createValue string
+		}{
+			// JSON
+			name:        "json1",
+			createType:  "JSON",
+			createValue: "{\"a\":\"b\"}",
+		})
+	}
 
 	ctx := context.Background()
 	dConn, err := Connect(ctx, params)
@@ -826,6 +1091,7 @@ func testRowReplicationTypesWithRealDatabase(t *testing.T, params *sqldb.ConnPar
 	if result.RowsAffected != 1 || len(result.Rows) != 0 {
 		t.Errorf("unexpected result for insert: %v", result)
 	}
+	t.Logf("Insert after getting event is: %v", sql.String())
 
 	// Re-select both rows, make sure all columns are the same.
 	stmt := "select id"

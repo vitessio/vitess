@@ -282,14 +282,11 @@ func cellLength(data []byte, pos int, typ byte, metadata uint16) (int, error) {
 		// This may do String, Enum, and Set. The type is in
 		// metadata. If it's a string, then there will be more bits.
 		// This will give us the maximum length of the field.
-		max := 0
 		t := metadata >> 8
 		if t == TypeEnum || t == TypeSet {
-			max = int(metadata & 0xff)
-		} else {
-			max = int((((metadata >> 4) & 0x300) ^ 0x300) + (metadata & 0xff))
+			return int(metadata & 0xff), nil
 		}
-
+		max := int((((metadata >> 4) & 0x300) ^ 0x300) + (metadata & 0xff))
 		// Length is encoded in 1 or 2 bytes.
 		if max > 255 {
 			l := int(uint64(data[pos]) |
@@ -328,6 +325,11 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, styp querypb.Typ
 		return sqltypes.MakeTrusted(querypb.Type_UINT8,
 			strconv.AppendUint(nil, uint64(data[pos]), 10)), 1, nil
 	case TypeYear:
+		val := data[pos]
+		if val == 0 {
+			return sqltypes.MakeTrusted(querypb.Type_YEAR,
+				[]byte{'0', '0', '0', '0'}), 1, nil
+		}
 		return sqltypes.MakeTrusted(querypb.Type_YEAR,
 			strconv.AppendUint(nil, uint64(data[pos])+1900, 10)), 1, nil
 	case TypeShort:
@@ -467,11 +469,11 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, styp querypb.Typ
 		return sqltypes.MakeTrusted(querypb.Type_TIMESTAMP,
 			[]byte(date)), 4, nil
 	case TypeDateTime2:
-		ymdhms := (uint64(data[pos]) |
-			uint64(data[pos+1])<<8 |
+		ymdhms := (uint64(data[pos])<<32 |
+			uint64(data[pos+1])<<24 |
 			uint64(data[pos+2])<<16 |
-			uint64(data[pos+3])<<24 |
-			uint64(data[pos+4])<<32) - uint64(0x8000000000)
+			uint64(data[pos+3])<<8 |
+			uint64(data[pos+4])) - uint64(0x8000000000)
 		ymd := ymdhms >> 17
 		ym := ymd >> 5
 		hms := ymdhms % (1 << 17)
@@ -490,40 +492,40 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, styp querypb.Typ
 		case 1:
 			decimals := int(data[pos+5])
 			return sqltypes.MakeTrusted(querypb.Type_DATETIME,
-				[]byte(fmt.Sprintf("%v.%01d", datetime, decimals))), 6, nil
+				[]byte(fmt.Sprintf("%v.%01d", datetime, decimals/10))), 6, nil
 		case 2:
 			decimals := int(data[pos+5])
 			return sqltypes.MakeTrusted(querypb.Type_DATETIME,
 				[]byte(fmt.Sprintf("%v.%02d", datetime, decimals))), 6, nil
 		case 3:
-			decimals := int(data[pos+5]) +
-				int(data[pos+6])<<8
+			decimals := int(data[pos+5])<<8 +
+				int(data[pos+6])
 			return sqltypes.MakeTrusted(querypb.Type_DATETIME,
-				[]byte(fmt.Sprintf("%v.%03d", datetime, decimals))), 7, nil
+				[]byte(fmt.Sprintf("%v.%03d", datetime, decimals/10))), 7, nil
 		case 4:
-			decimals := int(data[pos+5]) +
-				int(data[pos+6])<<8
+			decimals := int(data[pos+5])<<8 +
+				int(data[pos+6])
 			return sqltypes.MakeTrusted(querypb.Type_DATETIME,
 				[]byte(fmt.Sprintf("%v.%04d", datetime, decimals))), 7, nil
 		case 5:
-			decimals := int(data[pos+5]) +
+			decimals := int(data[pos+5])<<16 +
 				int(data[pos+6])<<8 +
-				int(data[pos+7])<<16
+				int(data[pos+7])
 			return sqltypes.MakeTrusted(querypb.Type_DATETIME,
-				[]byte(fmt.Sprintf("%v.%05d", datetime, decimals))), 8, nil
+				[]byte(fmt.Sprintf("%v.%05d", datetime, decimals/10))), 8, nil
 		case 6:
-			decimals := int(data[pos+5]) +
+			decimals := int(data[pos+5])<<16 +
 				int(data[pos+6])<<8 +
-				int(data[pos+7])<<16
+				int(data[pos+7])
 			return sqltypes.MakeTrusted(querypb.Type_DATETIME,
 				[]byte(fmt.Sprintf("%v.%.6d", datetime, decimals))), 8, nil
 		}
 		return sqltypes.MakeTrusted(querypb.Type_DATETIME,
 			[]byte(datetime)), 5, nil
 	case TypeTime2:
-		hms := (int64(data[pos]) |
+		hms := (int64(data[pos])<<16 |
 			int64(data[pos+1])<<8 |
-			int64(data[pos+2])<<16) - 0x800000
+			int64(data[pos+2])) - 0x800000
 		sign := ""
 		if hms < 0 {
 			hms = -hms
@@ -547,34 +549,34 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, styp querypb.Typ
 			}
 			fracStr = fmt.Sprintf(".%.2d", frac)
 		case 3:
-			frac := int(data[pos+3]) |
-				int(data[pos+4])<<8
+			frac := int(data[pos+3])<<8 |
+				int(data[pos+4])
 			if sign == "-" && frac != 0 {
 				hms--
 				frac = 0x10000 - frac
 			}
 			fracStr = fmt.Sprintf(".%.3d", frac/10)
 		case 4:
-			frac := int(data[pos+3]) |
-				int(data[pos+4])<<8
+			frac := int(data[pos+3])<<8 |
+				int(data[pos+4])
 			if sign == "-" && frac != 0 {
 				hms--
 				frac = 0x10000 - frac
 			}
 			fracStr = fmt.Sprintf(".%.4d", frac)
 		case 5:
-			frac := int(data[pos+3]) |
+			frac := int(data[pos+3])<<16 |
 				int(data[pos+4])<<8 |
-				int(data[pos+5])<<16
+				int(data[pos+5])
 			if sign == "-" && frac != 0 {
 				hms--
 				frac = 0x1000000 - frac
 			}
 			fracStr = fmt.Sprintf(".%.5d", frac/10)
 		case 6:
-			frac := int(data[pos+3]) |
+			frac := int(data[pos+3])<<16 |
 				int(data[pos+4])<<8 |
-				int(data[pos+5])<<16
+				int(data[pos+5])
 			if sign == "-" && frac != 0 {
 				hms--
 				frac = 0x1000000 - frac
@@ -779,24 +781,32 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, styp querypb.Typ
 		// metadata. If it's a string, then there will be more bits.
 		t := metadata >> 8
 		if t == TypeEnum {
+			// We don't know the string values. So just use the
+			// numbers.
 			switch metadata & 0xff {
 			case 1:
 				// One byte storage.
-				return sqltypes.MakeTrusted(querypb.Type_ENUM,
+				return sqltypes.MakeTrusted(querypb.Type_UINT8,
 					strconv.AppendUint(nil, uint64(data[pos]), 10)), 1, nil
 			case 2:
 				// Two bytes storage.
 				val := binary.LittleEndian.Uint16(data[pos : pos+2])
-				return sqltypes.MakeTrusted(querypb.Type_ENUM,
+				return sqltypes.MakeTrusted(querypb.Type_UINT16,
 					strconv.AppendUint(nil, uint64(val), 10)), 2, nil
 			default:
 				return sqltypes.NULL, 0, fmt.Errorf("unexpected enum size: %v", metadata&0xff)
 			}
 		}
 		if t == TypeSet {
+			// We don't know the set values. So just use the
+			// numbers.
 			l := int(metadata & 0xff)
-			return sqltypes.MakeTrusted(querypb.Type_BIT,
-				data[pos:pos+l]), l, nil
+			var val uint64
+			for i := 0; i < l; i++ {
+				val += uint64(data[pos+i]) << (uint(i) * 8)
+			}
+			return sqltypes.MakeTrusted(querypb.Type_UINT64,
+				strconv.AppendUint(nil, uint64(val), 10)), l, nil
 		}
 		// This is a real string. The length is weird.
 		max := int((((metadata >> 4) & 0x300) ^ 0x300) + (metadata & 0xff))
