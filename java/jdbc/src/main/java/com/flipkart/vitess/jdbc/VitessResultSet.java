@@ -82,7 +82,7 @@ public class VitessResultSet implements ResultSet {
         }
     }
 
-    public VitessResultSet(String[] columnNames, Query.Type[] columnTypes, String[][] data, VitessConnection connection)
+    public VitessResultSet(String[] columnNames, Query.Type[] columnTypes, String[][] data, ConnectionProperties connection)
         throws SQLException {
 
         if (columnNames.length != columnTypes.length) {
@@ -158,7 +158,7 @@ public class VitessResultSet implements ResultSet {
         this.currentRow = 0;
     }
 
-    private List<FieldWithMetadata> enhancedFieldsFromCursor(VitessConnection connection) throws SQLException {
+    private List<FieldWithMetadata> enhancedFieldsFromCursor(ConnectionProperties connection) throws SQLException {
         if (cursor == null|| cursor.getFields() == null) {
             throw new SQLException(Constants.SQLExceptionMessages.CURSOR_NULL);
         }
