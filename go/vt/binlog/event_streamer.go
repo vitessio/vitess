@@ -45,6 +45,7 @@ func NewEventStreamer(dbname string, mysqld mysqlctl.MysqlDaemon, se *schema.Eng
 		sendEvent: sendEvent,
 	}
 	evs.bls = NewStreamer(dbname, mysqld, se, nil, startPos, timestamp, evs.transactionToEvent)
+	evs.bls.extractPK = true
 	return evs
 }
 
@@ -74,7 +75,7 @@ func (evs *EventStreamer) transactionToEvent(eventToken *querypb.EventToken, sta
 			binlogdatapb.BinlogTransaction_Statement_BL_UPDATE,
 			binlogdatapb.BinlogTransaction_Statement_BL_DELETE:
 			var dmlStatement *querypb.StreamEvent_Statement
-			dmlStatement, insertid, err = evs.buildDMLStatement(string(stmt.Statement.Sql), insertid)
+			dmlStatement, insertid, err = evs.buildDMLStatement(stmt, insertid)
 			if err != nil {
 				dmlStatement = &querypb.StreamEvent_Statement{
 					Category: querypb.StreamEvent_Statement_Error,
@@ -103,12 +104,30 @@ func (evs *EventStreamer) transactionToEvent(eventToken *querypb.EventToken, sta
 }
 
 /*
-buildDMLStatement parses the tuples of the full stream comment.
+buildDMLStatement recovers the PK from a FullBinlogStatement.
+For RBR, the values are already in there, just need to be translated.
+For SBR, parses the tuples of the full stream comment.
 The _stream comment is extracted into a StreamEvent.Statement.
 */
 // Example query: insert into _table_(foo) values ('foo') /* _stream _table_ (eid id name ) (null 1 'bmFtZQ==' ); */
 // the "null" value is used for auto-increment columns.
-func (evs *EventStreamer) buildDMLStatement(sql string, insertid int64) (*querypb.StreamEvent_Statement, int64, error) {
+func (evs *EventStreamer) buildDMLStatement(stmt FullBinlogStatement, insertid int64) (*querypb.StreamEvent_Statement, int64, error) {
+	// For RBR events, we know all this already, just extract it.
+	if stmt.PKNames != nil {
+		// We get an array of []sqltypes.Value, need to convert to querypb.Row.
+		dmlStatement := &querypb.StreamEvent_Statement{
+			Category:         querypb.StreamEvent_Statement_DML,
+			TableName:        stmt.Table,
+			PrimaryKeyFields: stmt.PKNames,
+			PrimaryKeyValues: []*querypb.Row{sqltypes.RowToProto3(stmt.PKValues)},
+		}
+		// InsertID is only needed to fill in the ID on next queries,
+		// but if we use RBR, it's already in the values, so just return 0.
+		return dmlStatement, 0, nil
+	}
+
+	sql := string(stmt.Statement.Sql)
+
 	// first extract the comment
 	commentIndex := strings.LastIndex(sql, streamCommentStart)
 	if commentIndex == -1 {
@@ -116,7 +135,7 @@ func (evs *EventStreamer) buildDMLStatement(sql string, insertid int64) (*queryp
 	}
 	dmlComment := sql[commentIndex+streamCommentStartLen:]
 
-	// then strat building the response
+	// then start building the response
 	dmlStatement := &querypb.StreamEvent_Statement{
 		Category: querypb.StreamEvent_Statement_DML,
 	}

@@ -37,6 +37,18 @@ func KeyRangeFilterFunc(keyrange *topodatapb.KeyRange, callback func(*binlogdata
 			case binlogdatapb.BinlogTransaction_Statement_BL_INSERT,
 				binlogdatapb.BinlogTransaction_Statement_BL_UPDATE,
 				binlogdatapb.BinlogTransaction_Statement_BL_DELETE:
+				// Handle RBR case first.
+				if statement.KeyspaceID != nil {
+					if !key.KeyRangeContains(keyrange, statement.KeyspaceID) {
+						// Skip keyspace ids that don't belong to the destination shard.
+						continue
+					}
+					filtered = append(filtered, statement.Statement)
+					matched = true
+					continue
+				}
+
+				// SBR case.
 				keyspaceIDS, err := sqlannotation.ExtractKeyspaceIDS(string(statement.Statement.Sql))
 				if err != nil {
 					if statement.Statement.Category == binlogdatapb.BinlogTransaction_Statement_BL_INSERT {
