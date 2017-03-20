@@ -3,9 +3,5 @@
 		"ldapCert": "path/to/ldap-client-cert.pem",
 		"ldapKey": "path/to/ldap-client-key.pem",
 		"ldapCA": "path/to/ldap-client-ca.pem",
-		"queryUser": "vitessLdapROUser",
-		"queryPassword": "vitessLdapROUserPassword",
-		"queryStr": "uid=%s,ou=users,ou=people,dc=example,dc=com",
-		"getGroups": true,
-		"groupQueryStr": "ou=groups,ou=people,dc=example,dc=com"
+		"userDnPattern": "uid=%s,ou=users,ou=people,dc=example,dc=com"
 }
