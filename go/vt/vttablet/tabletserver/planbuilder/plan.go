@@ -263,6 +263,8 @@ func Build(sql string, tables map[string]*schema.Table) (plan *Plan, err error) 
 		return analyzeSet(stmt), nil
 	case *sqlparser.DDL:
 		return analyzeDDL(stmt, tables), nil
+	case *sqlparser.Show:
+		return &Plan{PlanID: PlanOther}, nil
 	case *sqlparser.Other:
 		return &Plan{PlanID: PlanOther}, nil
 	}
