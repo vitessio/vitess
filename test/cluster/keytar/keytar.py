@@ -22,8 +22,6 @@ import flask
 
 
 app = flask.Flask(__name__)
-keytar_args = None
-keytar_config = None
 results = {}
 
 
@@ -62,7 +60,7 @@ def run_test_config(config):
         'python %s/test_runner.py -c "%s" -t %s -d %s -s '
         'http://localhost:%d' % (
             current_dir, yaml.dump(config), timestamp, tempdir,
-            keytar_args.port))
+            app.config['port']))
   os.chmod(tempscript, 0775)
 
   try:
@@ -108,11 +106,22 @@ def update_results():
 
 
 def _validate_request(keytar_password, request_values):
+  """Checks a request against the password provided to the service at startup.
+
+  Raises an exception on errors, otherwise returns None.
+
+  Args:
+    keytar_password: password provided to the service at startup.
+    request_values: dict of POST request values provided to Flask.
+
+  Raises:
+    KeytarError: raised if the password is invalid.
+  """
   if keytar_password:
     if 'password' not in request_values:
-      return 'Expected password not provided in test_request!'
+      raise KeytarError('Expected password not provided in test_request!')
     elif request_values['password'] != keytar_password:
-      return 'Incorrect password passed to test_request!'
+      raise KeytarError('Incorrect password passed to test_request!')
 
 
 @app.route('/test_request', methods=['POST'])
@@ -126,14 +135,14 @@ def test_request():
   Returns:
     HTML response.
   """
-  validation_error = _validate_request(
-      keytar_args.password, flask.request.values)
-  if validation_error:
-    flask.abort(400, validation_error)
+  try:
+    _validate_request(app.config['password'], flask.request.values)
+  except KeytarError as e:
+    flask.abort(400, str(e))
   webhook_data = flask.request.get_json()
   repo_name = webhook_data['repository']['repo_name']
-  test_configs = [
-      c for c in keytar_config['config'] if c['docker_image'] == repo_name]
+  test_configs = [c for c in app.config['keytar_config']['config']
+                  if c['docker_image'] == repo_name]
   if not test_configs:
     return 'No config found for repo_name: %s' % repo_name
   for test_config in test_configs:
@@ -141,47 +150,67 @@ def test_request():
   return 'OK'
 
 
-def handle_install_steps():
-  """Runs all config installation/setup steps."""
+def handle_cluster_setup(cluster_setup):
+  """Setups up a cluster.
+
+  Currently only GKE is supported. This step handles setting up credentials and
+  ensuring a valid project name is used.
+
+  Args:
+    cluster_setup: YAML cluster configuration.
+
+  Raises:
+    KeytarError: raised on invalid setup configurations.
+  """
+  if cluster_setup['type'] != 'gke':
+    return
+
+  if 'keyfile' not in cluster_setup:
+    raise KeytarError('No keyfile found in GKE cluster setup!')
+  # Add authentication steps to allow keytar to start clusters on GKE.
+  gcloud_args = ['gcloud', 'auth', 'activate-service-account',
+                 '--key-file', cluster_setup['keyfile']]
+  logging.info('authenticating using keyfile: %s',
+               cluster_setup['keyfile'])
+  subprocess.call(gcloud_args)
+  os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = (
+      cluster_setup['keyfile'])
+
+  # Ensure that a project name is correctly set. Use the name if provided
+  # in the configuration, otherwise use the current project name, or else
+  # the first available project name.
+  if 'project_name' in cluster_setup:
+    logging.info('Setting gcloud project to %s',
+                 cluster_setup['project_name'])
+    subprocess.call(
+        ['gcloud', 'config', 'set', 'project',
+         cluster_setup['project_name']])
+  else:
+    config = subprocess.check_output(
+        ['gcloud', 'config', 'list', '--format', 'json'])
+    project_name = json.loads(config)['core']['project']
+    if not project_name:
+      projects = subprocess.check_output(
+          ['gcloud', 'projects', 'list'])
+      first_project = projects[0]['projectId']
+      logging.info('gcloud project is unset, setting it to %s',
+                   first_project)
+      subprocess.check_output(
+          ['gcloud', 'config', 'set', 'project', first_project])
+
+
+def handle_install_steps(keytar_config):
+  """Runs all config installation/setup steps.
+
+  Args:
+    keytar_config: YAML keytar configuration.
+  """
   if 'install' not in keytar_config:
     return
   install_config = keytar_config['install']
   if 'cluster_setup' in install_config:
-    # Handle any cluster setup steps, currently only GKE is supported.
     for cluster_setup in install_config['cluster_setup']:
-      if cluster_setup['type'] == 'gke':
-        if 'keyfile' not in cluster_setup:
-          raise KeytarError('No keyfile found in GKE cluster setup!')
-        # Add authentication steps to allow keytar to start clusters on GKE.
-        gcloud_args = ['gcloud', 'auth', 'activate-service-account',
-                       '--key-file', cluster_setup['keyfile']]
-        logging.info('authenticating using keyfile: %s',
-                     cluster_setup['keyfile'])
-        subprocess.call(gcloud_args)
-        os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = (
-            cluster_setup['keyfile'])
-
-        # Ensure that a project name is correctly set. Use the name if provided
-        # in the configuration, otherwise use the current project name, or else
-        # the first available project name.
-        if 'project_name' in cluster_setup:
-          logging.info('Setting gcloud project to %s',
-                       cluster_setup['project_name'])
-          subprocess.call(
-              ['gcloud', 'config', 'set', 'project',
-               cluster_setup['project_name']])
-        else:
-          config = subprocess.check_output(
-              ['gcloud', 'config', 'list', '--format', 'json'])
-          project_name = json.loads(config)['core']['project']
-          if not project_name:
-            projects = subprocess.check_output(
-                ['gcloud', 'projects', 'list'])
-            first_project = projects[0]['projectId']
-            logging.info('gcloud project is unset, setting it to %s',
-                         first_project)
-            subprocess.check_output(
-                ['gcloud', 'config', 'set', 'project', first_project])
+      handle_cluster_setup(cluster_setup)
 
   # Install any dependencies using apt-get.
   if 'dependencies' in install_config:
@@ -218,9 +247,7 @@ def _get_download_github_repo_args(tempdir, github_config):
     ([string], string) for arguments to pass to git, and the directory to
     clone into.
   """
-  repo_prefix = 'github'
-  if 'repo_prefix' in github_config:
-    repo_prefix = github_config['repo_prefix']
+  repo_prefix = github_config.get('repo_prefix', 'github')
   repo_dir = os.path.join(tempdir, repo_prefix)
   git_args = ['git', 'clone', 'https://github.com/%s' % github_config['repo'],
               repo_dir]
@@ -253,7 +280,7 @@ class TestWorker(object):
 test_worker = TestWorker()
 
 
-if __name__ == '__main__':
+def main():
   logging.getLogger().setLevel(logging.INFO)
   parser = argparse.ArgumentParser(description='Run keytar')
   parser.add_argument('--config_file', help='Keytar config file', required=True)
@@ -265,11 +292,20 @@ if __name__ == '__main__':
   if not yaml_config:
     raise ValueError('No valid yaml config!')
   keytar_config = yaml.load(yaml_config)
-  handle_install_steps()
+  handle_install_steps(keytar_config)
 
   if not os.path.isdir('/tmp/testlogs'):
     os.mkdir('/tmp/testlogs')
 
   test_worker.start()
 
+  app.config['port'] = keytar_args.port
+  app.config['password'] = keytar_args.password
+  app.config['keytar_config'] = keytar_config
+
   app.run(host='0.0.0.0', port=keytar_args.port, debug=True)
+
+
+if __name__ == '__main__':
+  main()
+

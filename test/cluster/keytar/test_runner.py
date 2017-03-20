@@ -47,6 +47,7 @@ def run_sandbox_action(environment_config, name, action):
   update_result('status', 'Running sandbox action: %s' % action)
   try:
     subprocess.check_call(sandbox_args)
+    update_result('status', 'Finished sandbox action: %s' % action)
   except subprocess.CalledProcessError as e:
     logging.info('Failed to run sandbox action %s: %s', (action, e.output))
     update_result('status', 'Sandbox failure')

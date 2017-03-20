@@ -11,40 +11,20 @@ from selenium import webdriver
 import unittest
 import urllib2
 
-
-def create_webdriver():
-  """Creates a webdriver object (local or remote for Travis)."""
-  if os.environ.get('CI') == 'true' and os.environ.get('TRAVIS') == 'true':
-    username = os.environ['SAUCE_USERNAME']
-    access_key = os.environ['SAUCE_ACCESS_KEY']
-    capabilities = {}
-    capabilities['tunnel-identifier'] = os.environ['TRAVIS_JOB_NUMBER']
-    capabilities['build'] = os.environ['TRAVIS_BUILD_NUMBER']
-    capabilities['platform'] = 'Linux'
-    capabilities['browserName'] = 'chrome'
-    hub_url = '%s:%s@localhost:4445' % (username, access_key)
-    driver = webdriver.Remote(
-        desired_capabilities=capabilities,
-        command_executor='http://%s/wd/hub' % hub_url)
-  else:
-    os.environ['webdriver.chrome.driver'] = os.path.join(
-        os.environ['VTROOT'], 'dist')
-    # Only testing against Chrome for now
-    driver = webdriver.Chrome()
-    driver.set_window_position(0, 0)
-    driver.set_window_size(1280, 1024)
-  return driver
+import environment
 
 
 class TestKeytarWeb(unittest.TestCase):
 
   @classmethod
   def setUpClass(cls):
-    cls.driver = create_webdriver()
+    cls.driver = environment.create_webdriver()
     cls.flask_process = subprocess.Popen(
-        ['./keytar.py', '--config_file=test_config.yaml',
-         '--port=8080', '--password=foo'],
+        [os.path.join(environment.vttop, 'test/cluster/keytar/keytar.py'),
+         '--config_file=test_config.yaml', '--port=%d' % port,
+         '--password=foo'],
         preexec_fn=os.setsid)
+    cls.flask_addr = 'http://localhost:%d' % port
 
   @classmethod
   def tearDownClass(cls):
@@ -62,8 +42,8 @@ class TestKeytarWeb(unittest.TestCase):
       self.fail('Timed out waiting for test to finish.')
 
   def test_keytar_web(self):
-    self.driver.get('http://localhost:8080')
-    req = urllib2.Request('http://localhost:8080/test_request?password=foo')
+    self.driver.get(self.flask_addr)
+    req = urllib2.Request('%s/test_request?password=foo' % self.flask_addr)
     req.add_header('Content-Type', 'application/json')
     urllib2.urlopen(
         req, json.dumps({'repository': {'repo_name': 'test/image'}}))

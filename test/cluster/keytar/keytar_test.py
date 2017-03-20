@@ -19,11 +19,13 @@ class KeytarTest(unittest.TestCase):
       testlog.write('foo')
 
   def test_validate_request(self):
-    self.assertFalse(keytar._validate_request('foo', {'password': 'foo'}))
-    self.assertFalse(keytar._validate_request(None, {'password': 'foo'}))
-    self.assertFalse(keytar._validate_request(None, {}))
-    self.assertTrue(keytar._validate_request('foo', {'password': 'foo2'}))
-    self.assertTrue(keytar._validate_request('foo', {}))
+    keytar._validate_request('foo', {'password': 'foo'})
+    keytar._validate_request(None, {'password': 'foo'})
+    keytar._validate_request(None, {})
+    with self.assertRaises(keytar.KeytarError):
+      keytar._validate_request('foo', {'password': 'foo2'})
+    with self.assertRaises(keytar.KeytarError):
+      keytar._validate_request('foo', {})
 
   def test_get_download_github_repo_args(self):
     github_config = {'repo': 'youtube/vitess', 'repo_prefix': 'foo'}
