@@ -221,7 +221,7 @@ public class VitessResultSet implements ResultSet {
         object = this.row.getObject(columnIndex);
         if (object instanceof byte[]) {
             FieldWithMetadata field = this.fields.get(columnIndex - 1);
-            if (field.hasConnection() && field.getConnection().isIncludeAllFields()) {
+            if (field.hasConnectionProperties() && field.getConnectionProperties().isIncludeAllFields()) {
                 columnValue = convertBytesToString((byte[]) object, field.getEncoding());
             } else {
                 columnValue = new String((byte[]) object);
@@ -557,7 +557,7 @@ public class VitessResultSet implements ResultSet {
         Object retVal = this.row.getObject(columnIndex);
 
         FieldWithMetadata field = this.fields.get(columnIndex - 1);
-        if (field.hasConnection() && field.getConnection().isIncludeAllFields() && retVal instanceof byte[]) {
+        if (field.hasConnectionProperties() && field.getConnectionProperties().isIncludeAllFields() && retVal instanceof byte[]) {
             retVal = convertBytesIfPossible((byte[]) retVal, field);
         }
 
