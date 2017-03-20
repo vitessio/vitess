@@ -2196,7 +2196,7 @@ func TestVTGateShowMetadataUnsharded(t *testing.T) {
 		t.Errorf("want \n%+v, got \n%+v", wantFields, qr.Fields)
 	}
 
-	shard := KsTestUnsharded + ":0"
+	shard := KsTestUnsharded + "/0"
 	if !valuesContain(qr.Rows, shard) {
 		t.Errorf("shard %s not found in Values \n%+v", shard, qr.Rows)
 	}
@@ -2254,12 +2254,12 @@ func TestVTGateShowMetadataTwoShards(t *testing.T) {
 		t.Errorf("want \n%+v, got \n%+v", wantFields, qr.Fields)
 	}
 
-	shard0 := keyspace + ":-20"
+	shard0 := keyspace + "/-20"
 	if !valuesContain(qr.Rows, shard0) {
 		t.Errorf("shard %s not found in Values \n%+v", shard0, qr.Rows)
 	}
 
-	shard1 := keyspace + ":20-40"
+	shard1 := keyspace + "/20-40"
 	if !valuesContain(qr.Rows, shard1) {
 		t.Errorf("shard %s not found in Values \n%+v", shard1, qr.Rows)
 	}

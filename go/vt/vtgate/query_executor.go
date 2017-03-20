@@ -117,7 +117,7 @@ func (vc *queryExecutor) ExecuteShow(query string, bindvars map[string]interface
 			}
 
 			for _, shard := range ks_shards {
-				shards = append(shards, keyspace+":"+shard.Name)
+				shards = append(shards, keyspace+"/"+shard.Name)
 			}
 		}
 
