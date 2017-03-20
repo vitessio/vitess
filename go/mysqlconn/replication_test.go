@@ -1,6 +1,8 @@
 package mysqlconn
 
 import (
+	"bytes"
+	"fmt"
 	"reflect"
 	"strings"
 	"sync"
@@ -11,6 +13,9 @@ import (
 
 	"github.com/youtube/vitess/go/mysqlconn/replication"
 	"github.com/youtube/vitess/go/sqldb"
+	"github.com/youtube/vitess/go/sqltypes"
+
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
 func TestComBinlogDump(t *testing.T) {
@@ -601,4 +606,285 @@ func testRowReplicationWithRealDatabase(t *testing.T, params *sqldb.ConnParams) 
 		t.Fatal(err)
 	}
 
+}
+
+// testRowReplicationTypesWithRealDatabase creates a table wih all
+// supported data types. Then we insert a row in it. then we re-build
+// the SQL for the values, re-insert these. Then we select from the
+// database and make sure both rows are identical.
+func testRowReplicationTypesWithRealDatabase(t *testing.T, params *sqldb.ConnParams) {
+	// testcases are ordered by the types numbers in constants.go.
+	// Number are always unsigned, as we don't pass in sqltypes.Type.
+	testcases := []struct {
+		name        string
+		createType  string
+		createValue string
+	}{{
+		// TINYINT
+		name:        "tinytiny",
+		createType:  "TINYINT UNSIGNED",
+		createValue: "145",
+	}, {
+		// SMALLINT
+		name:        "smallish",
+		createType:  "SMALLINT UNSIGNED",
+		createValue: "40000",
+	}, {
+		// INT
+		name:        "regular_int",
+		createType:  "INT UNSIGNED",
+		createValue: "4000000000",
+	}, {
+		// FLOAT
+		name:        "floating",
+		createType:  "FLOAT",
+		createValue: "-3.14159E-22",
+	}, {
+		// DOUBLE
+		name:        "doubling",
+		createType:  "DOUBLE",
+		createValue: "-3.14159265359E+12",
+	}, {
+		// TIMESTAMP (zero value)
+		name:        "timestamp_zero",
+		createType:  "TIMESTAMP",
+		createValue: "'0000-00-00 00:00:00'",
+	}, {
+		// TIMESTAMP (day precision)
+		name:        "timestamp_day",
+		createType:  "TIMESTAMP",
+		createValue: "'2012-11-10 00:00:00'",
+	}, {
+		// TIMESTAMP (second precision)
+		name:        "timestamp_second",
+		createType:  "TIMESTAMP",
+		createValue: "'2012-11-10 15:34:56'",
+	}, {
+		// TIMESTAMP (100 millisecond precision)
+		name:        "timestamp_100millisecond",
+		createType:  "TIMESTAMP(1)",
+		createValue: "'2012-11-10 15:34:56.6'",
+	}, {
+		// TIMESTAMP (10 millisecond precision)
+		name:        "timestamp_10millisecond",
+		createType:  "TIMESTAMP(2)",
+		createValue: "'2012-11-10 15:34:56.01'",
+	}, {
+		// TIMESTAMP (millisecond precision)
+		name:        "timestamp_millisecond",
+		createType:  "TIMESTAMP(3)",
+		createValue: "'2012-11-10 15:34:56.012'",
+	}, {
+		// TIMESTAMP (100 microsecond precision)
+		name:        "timestamp_100microsecond",
+		createType:  "TIMESTAMP(4)",
+		createValue: "'2012-11-10 15:34:56.0123'",
+	}, {
+		// TIMESTAMP (10 microsecond precision)
+		name:        "timestamp_10microsecond",
+		createType:  "TIMESTAMP(5)",
+		createValue: "'2012-11-10 15:34:56.01234'",
+	}, {
+		// TIMESTAMP (microsecond precision)
+		name:        "timestamp_microsecond",
+		createType:  "TIMESTAMP(6)",
+		createValue: "'2012-11-10 15:34:56.012345'",
+	}, {
+		// BIGINT
+		name:        "big_int",
+		createType:  "BIGINT UNSIGNED",
+		createValue: "10000000000000000000",
+	}, {
+		// VARCHAR
+		name:        "shortvc",
+		createType:  "VARCHAR(30)",
+		createValue: "'short varchar'",
+	}, {
+		name:        "longvc",
+		createType:  "VARCHAR(1000)",
+		createValue: "'long varchar'",
+	}}
+
+	conn, isMariaDB, f := connectForReplication(t, params, true /* rbr */)
+	defer conn.Close()
+
+	ctx := context.Background()
+	dConn, err := Connect(ctx, params)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer dConn.Close()
+
+	// Create the table with all fields.
+	createTable := "create table replicationtypes(id int"
+	for _, tcase := range testcases {
+		createTable += fmt.Sprintf(", %v %v", tcase.name, tcase.createType)
+	}
+	createTable += ", primary key(id))"
+	if _, err := dConn.ExecuteFetch(createTable, 0, false); err != nil {
+		t.Fatal(err)
+	}
+
+	// Insert the value with all fields.
+	insert := "insert into replicationtypes set id=1"
+	for _, tcase := range testcases {
+		insert += fmt.Sprintf(", %v=%v", tcase.name, tcase.createValue)
+	}
+	result, err := dConn.ExecuteFetch(insert, 0, false)
+	if err != nil {
+		t.Fatalf("insert failed: %v", err)
+	}
+	if result.RowsAffected != 1 || len(result.Rows) != 0 {
+		t.Errorf("unexpected result for insert: %v", result)
+	}
+
+	// Get the new events from the binlogs.
+	// Only care about the Write event.
+	var tableID uint64
+	var tableMap *replication.TableMap
+	var values []sqltypes.Value
+
+	for values == nil {
+		data, err := conn.ReadPacket()
+		if err != nil {
+			t.Fatalf("ReadPacket failed: %v", err)
+		}
+
+		// Make sure it's a replication packet.
+		switch data[0] {
+		case OKPacket:
+			// What we expect, handled below.
+		case ErrPacket:
+			err := parseErrorPacket(data)
+			t.Fatalf("ReadPacket returned an error packet: %v", err)
+		default:
+			// Very unexpected.
+			t.Fatalf("ReadPacket returned a weird packet: %v", data)
+		}
+
+		// See what we got, strip the checksum.
+		be := newBinlogEvent(isMariaDB, data)
+		if !be.IsValid() {
+			t.Fatalf("read an invalid packet: %v", be)
+		}
+		be, _, err = be.StripChecksum(f)
+		if err != nil {
+			t.Fatalf("StripChecksum failed: %v", err)
+		}
+		switch {
+		case be.IsTableMap():
+			tableID = be.TableID(f) // This would be 0x00ffffff for an event to clear all table map entries.
+			var err error
+			tableMap, err = be.TableMap(f)
+			if err != nil {
+				t.Fatalf("TableMap event is broken: %v", err)
+			}
+			t.Logf("Got Table Map event: %v %v", tableID, tableMap)
+			if tableMap.Database != "vttest" ||
+				tableMap.Name != "replicationtypes" ||
+				len(tableMap.Types) != len(testcases)+1 ||
+				tableMap.CanBeNull.Bit(0) {
+				t.Errorf("got wrong TableMap: %v", tableMap)
+			}
+		case be.IsWriteRows():
+			if got := be.TableID(f); got != tableID {
+				t.Fatalf("WriteRows event got table ID %v but was expecting %v", got, tableID)
+			}
+			wr, err := be.Rows(f, tableMap)
+			if err != nil {
+				t.Fatalf("Rows event is broken: %v", err)
+			}
+
+			// Check it has the right values
+			values, err = valuesForTests(t, &wr, tableMap, 0)
+			if err != nil {
+				t.Fatalf("valuesForTests is broken: %v", err)
+			}
+			t.Logf("Got WriteRows event data: %v %v", wr, values)
+			if len(values) != len(testcases)+1 {
+				t.Fatalf("Got wrong length %v for values, was expecting %v", len(values), len(testcases)+1)
+			}
+
+		default:
+			t.Logf("Got unrelated event: %v", be)
+		}
+	}
+
+	// Insert a second row with the same data.
+	var sql bytes.Buffer
+	sql.WriteString("insert into replicationtypes set id=2")
+	for i, tcase := range testcases {
+		sql.WriteString(", ")
+		sql.WriteString(tcase.name)
+		sql.WriteString(" = ")
+		values[i+1].EncodeSQL(&sql)
+	}
+	result, err = dConn.ExecuteFetch(sql.String(), 0, false)
+	if err != nil {
+		t.Fatalf("insert '%v' failed: %v", sql.String(), err)
+	}
+	if result.RowsAffected != 1 || len(result.Rows) != 0 {
+		t.Errorf("unexpected result for insert: %v", result)
+	}
+
+	// Re-select both rows, make sure all columns are the same.
+	stmt := "select id"
+	for _, tcase := range testcases {
+		stmt += ", " + tcase.name
+	}
+	stmt += " from replicationtypes"
+	result, err = dConn.ExecuteFetch(stmt, 2, false)
+	if err != nil {
+		t.Fatalf("select failed: %v", err)
+	}
+	if len(result.Rows) != 2 {
+		t.Fatalf("unexpected result for select: %v", result)
+	}
+	for i, tcase := range testcases {
+		if !reflect.DeepEqual(result.Rows[0][i+1], result.Rows[1][i+1]) {
+			t.Errorf("Field %v is not the same, got %v(%v) and %v(%v)", tcase.name, result.Rows[0][i+1], result.Rows[0][i+1].Type, result.Rows[1][i+1], result.Rows[1][i+1].Type)
+		}
+	}
+
+	// Drop the table, we're done.
+	if _, err := dConn.ExecuteFetch("drop table replicationtypes", 0, false); err != nil {
+		t.Fatal(err)
+	}
+
+}
+
+// valuesForTests is a helper method to return the sqltypes.Value
+// of all columns in a row in a Row. Only use it in tests, as the
+// returned values cannot be interpreted correctly without the schema.
+// We assume everything is unsigned in this method.
+func valuesForTests(t *testing.T, rs *replication.Rows, tm *replication.TableMap, rowIndex int) ([]sqltypes.Value, error) {
+	var result []sqltypes.Value
+
+	valueIndex := 0
+	data := rs.Rows[rowIndex].Data
+	pos := 0
+	for c := 0; c < rs.DataColumns.Count(); c++ {
+		if !rs.DataColumns.Bit(c) {
+			continue
+		}
+
+		if rs.Rows[rowIndex].NullColumns.Bit(valueIndex) {
+			// This column is represented, but its value is NULL.
+			result = append(result, sqltypes.NULL)
+			valueIndex++
+			continue
+		}
+
+		// We have real data
+		value, l, err := replication.CellValue(data, pos, tm.Types[c], tm.Metadata[c], querypb.Type_UINT64)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, value)
+		t.Logf("  %v: type=%v data=%v metadata=%v -> %v", c, tm.Types[c], data[pos:pos+l], tm.Metadata[c], value)
+		pos += l
+		valueIndex++
+	}
+
+	return result, nil
 }

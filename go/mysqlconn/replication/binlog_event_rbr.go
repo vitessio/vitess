@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"strconv"
+	"time"
 
 	"github.com/youtube/vitess/go/sqltypes"
 
@@ -303,6 +304,17 @@ func cellLength(data []byte, pos int, typ byte, metadata uint16) (int, error) {
 	}
 }
 
+// printTimestamp is a helper method to print a timestamp.
+func printTimestamp(v uint32) string {
+	if v == 0 {
+		return "0000-00-00 00:00:00"
+	}
+	t := time.Unix(int64(v), 0)
+	year, month, day := t.Date()
+	hour, minute, second := t.Clock()
+	return fmt.Sprintf("%04v-%02v-%02v %02v:%02v:%02v", year, int(month), day, hour, minute, second)
+}
+
 // CellValue returns the data for a cell as a sqltypes.Value, and how
 // many bytes it takes. It only uses the querypb.Type value for the
 // signed flag.
@@ -361,9 +373,9 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, styp querypb.Typ
 		return sqltypes.MakeTrusted(querypb.Type_FLOAT64,
 			strconv.AppendFloat(nil, fval, 'E', -1, 64)), 8, nil
 	case TypeTimestamp:
-		val := binary.LittleEndian.Uint32(data[pos : pos+4])
+		val := binary.BigEndian.Uint32(data[pos : pos+4])
 		return sqltypes.MakeTrusted(querypb.Type_TIMESTAMP,
-			strconv.AppendUint(nil, uint64(val), 10)), 4, nil
+			[]byte(printTimestamp(val))), 4, nil
 	case TypeLongLong:
 		val := binary.LittleEndian.Uint64(data[pos : pos+8])
 		if sqltypes.IsSigned(styp) {
@@ -418,41 +430,42 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, styp querypb.Typ
 		return sqltypes.MakeTrusted(querypb.Type_BIT,
 			data[pos:pos+l]), l, nil
 	case TypeTimestamp2:
-		second := binary.LittleEndian.Uint32(data[pos : pos+4])
+		second := binary.BigEndian.Uint32(data[pos : pos+4])
+		date := printTimestamp(second)
 		switch metadata {
 		case 1:
 			decimals := int(data[pos+4])
 			return sqltypes.MakeTrusted(querypb.Type_TIMESTAMP,
-				[]byte(fmt.Sprintf("%v.%01d", second, decimals))), 5, nil
+				[]byte(fmt.Sprintf("%v.%01d", date, decimals/10))), 5, nil
 		case 2:
 			decimals := int(data[pos+4])
 			return sqltypes.MakeTrusted(querypb.Type_TIMESTAMP,
-				[]byte(fmt.Sprintf("%v.%02d", second, decimals))), 5, nil
+				[]byte(fmt.Sprintf("%v.%02d", date, decimals))), 5, nil
 		case 3:
-			decimals := int(data[pos+4]) +
-				int(data[pos+5])<<8
+			decimals := int(data[pos+4])<<8 +
+				int(data[pos+5])
 			return sqltypes.MakeTrusted(querypb.Type_TIMESTAMP,
-				[]byte(fmt.Sprintf("%v.%03d", second, decimals))), 6, nil
+				[]byte(fmt.Sprintf("%v.%03d", date, decimals/10))), 6, nil
 		case 4:
-			decimals := int(data[pos+4]) +
-				int(data[pos+5])<<8
+			decimals := int(data[pos+4])<<8 +
+				int(data[pos+5])
 			return sqltypes.MakeTrusted(querypb.Type_TIMESTAMP,
-				[]byte(fmt.Sprintf("%v.%04d", second, decimals))), 6, nil
+				[]byte(fmt.Sprintf("%v.%04d", date, decimals))), 6, nil
 		case 5:
-			decimals := int(data[pos+4]) +
+			decimals := int(data[pos+4])<<16 +
 				int(data[pos+5])<<8 +
-				int(data[pos+6])<<16
+				int(data[pos+6])
 			return sqltypes.MakeTrusted(querypb.Type_TIMESTAMP,
-				[]byte(fmt.Sprintf("%v.%05d", second, decimals))), 7, nil
+				[]byte(fmt.Sprintf("%v.%05d", date, decimals/10))), 7, nil
 		case 6:
-			decimals := int(data[pos+4]) +
+			decimals := int(data[pos+4])<<16 +
 				int(data[pos+5])<<8 +
-				int(data[pos+6])<<16
+				int(data[pos+6])
 			return sqltypes.MakeTrusted(querypb.Type_TIMESTAMP,
-				[]byte(fmt.Sprintf("%v.%.6d", second, decimals))), 7, nil
+				[]byte(fmt.Sprintf("%v.%06d", date, decimals))), 7, nil
 		}
 		return sqltypes.MakeTrusted(querypb.Type_TIMESTAMP,
-			strconv.AppendUint(nil, uint64(second), 10)), 4, nil
+			[]byte(date)), 4, nil
 	case TypeDateTime2:
 		ymdhms := (uint64(data[pos]) |
 			uint64(data[pos+1])<<8 |
