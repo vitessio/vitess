@@ -659,11 +659,9 @@ func TestValid(t *testing.T) {
 	}, {
 		input:  "show create database",
 		output: "show unsupported",
-
-		//	This is now a syntax error.
-		//	}, {
-		//		input:  "show foobar",
-		//		output: "show unsupported",
+	}, {
+		input:  "show foobar",
+		output: "show unsupported",
 	}, {
 		input:  "describe foobar",
 		output: "other",
