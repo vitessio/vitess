@@ -2,7 +2,6 @@ package vtctld
 
 import (
 	"fmt"
-	"reflect"
 	"testing"
 	"time"
 
@@ -106,7 +105,7 @@ func checkStats(realtimeStats *realtimeStats, tablet *testlib.FakeTablet, want *
 		if err != nil {
 			continue
 		}
-		if reflect.DeepEqual(result, discovery.TabletStats{}) {
+		if result.DeepEqual(&discovery.TabletStats{}) {
 			continue
 		}
 		got := result.Stats
