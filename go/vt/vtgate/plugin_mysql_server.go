@@ -64,64 +64,13 @@ func (vh *vtgateHandler) NewConnection(c *mysqlconn.Conn) {
 func (vh *vtgateHandler) ConnectionClosed(c *mysqlconn.Conn) {
 	// Rollback if there is an ongoing transaction. Ignore error.
 	ctx := context.Background()
-	vh.rollback(ctx, c)
-}
-
-func (vh *vtgateHandler) begin(ctx context.Context, c *mysqlconn.Conn) (*sqltypes.Result, error) {
-	// Check we're not inside a transaction already.
-	if c.ClientData != nil {
-		return nil, sqldb.NewSQLError(mysqlconn.ERCantDoThisDuringAnTransaction, mysqlconn.SSCantDoThisDuringAnTransaction, "already in a transaction")
+	session, _ := c.ClientData.(*vtgatepb.Session)
+	if session == nil || !session.InTransaction {
+		return
 	}
-
-	// Do the begin.
-	session, err := vh.vtg.Begin(ctx, false /* singledb */)
-	if err != nil {
-		return nil, sqldb.NewSQLError(mysqlconn.ERUnknownError, mysqlconn.SSUnknownSQLState, "vtgate.Begin failed: %v", err)
-	}
-
-	// Save the session.
-	c.ClientData = session
-	return &sqltypes.Result{}, nil
-}
-
-func (vh *vtgateHandler) commit(ctx context.Context, c *mysqlconn.Conn) (*sqltypes.Result, error) {
-	// Check we're inside a transaction already.
-	if c.ClientData == nil {
-		return nil, sqldb.NewSQLError(mysqlconn.ERUnknownError, mysqlconn.SSUnknownSQLState, "not in a transaction")
-	}
-	session, ok := c.ClientData.(*vtgatepb.Session)
-	if !ok || session == nil {
-		return nil, sqldb.NewSQLError(mysqlconn.ERUnknownError, mysqlconn.SSUnknownSQLState, "internal error: got a weird ClientData of type %T: %v %v", c.ClientData, session, ok)
-	}
-
-	// Commit using vtgate's transaction mode.
-	if err := vh.vtg.Commit(ctx, vh.vtg.transactionMode == TxTwoPC, session); err != nil {
-		return nil, sqldb.NewSQLError(mysqlconn.ERUnknownError, mysqlconn.SSUnknownSQLState, "vtgate.Commit failed: %v", err)
-	}
-
-	// Clear the Session.
-	c.ClientData = nil
-	return &sqltypes.Result{}, nil
-}
-
-func (vh *vtgateHandler) rollback(ctx context.Context, c *mysqlconn.Conn) (*sqltypes.Result, error) {
-	// Check we're inside a transaction already.
-	if c.ClientData == nil {
-		return nil, sqldb.NewSQLError(mysqlconn.ERUnknownError, mysqlconn.SSUnknownSQLState, "not in a transaction")
-	}
-	session, ok := c.ClientData.(*vtgatepb.Session)
-	if !ok || session == nil {
-		return nil, sqldb.NewSQLError(mysqlconn.ERUnknownError, mysqlconn.SSUnknownSQLState, "internal error: got a weird ClientData of type %T: %v %v", c.ClientData, session, ok)
-	}
-
-	// Rollback.
-	if err := vh.vtg.Rollback(ctx, session); err != nil {
-		return nil, sqldb.NewSQLError(mysqlconn.ERUnknownError, mysqlconn.SSUnknownSQLState, "vtgate.Rollback failed: %v", err)
-	}
-
-	// Clear the Session.
-	c.ClientData = nil
-	return &sqltypes.Result{}, nil
+	_, _, _ = vh.vtg.Execute(ctx, "rollback", make(map[string]interface{}), "", topodatapb.TabletType_MASTER, session, false, &querypb.ExecuteOptions{
+		IncludedFields: querypb.ExecuteOptions_ALL,
+	})
 }
 
 func (vh *vtgateHandler) ComQuery(c *mysqlconn.Conn, query string) (*sqltypes.Result, error) {
@@ -145,12 +94,6 @@ func (vh *vtgateHandler) ComQuery(c *mysqlconn.Conn, query string) (*sqltypes.Re
 
 	// FIXME(alainjobart) would be good to have the parser understand this.
 	switch {
-	case strings.EqualFold(query, "begin"):
-		return vh.begin(ctx, c)
-	case strings.EqualFold(query, "commit"):
-		return vh.commit(ctx, c)
-	case strings.EqualFold(query, "rollback"):
-		return vh.rollback(ctx, c)
 	case strings.EqualFold(query, "set autocommit=0"):
 		// This is done by the python MySQL connector, we ignore it.
 		return &sqltypes.Result{}, nil
@@ -162,9 +105,10 @@ func (vh *vtgateHandler) ComQuery(c *mysqlconn.Conn, query string) (*sqltypes.Re
 		}
 
 		// And just go to v3.
-		result, err := vh.vtg.Execute(ctx, query, make(map[string]interface{}), c.SchemaName, topodatapb.TabletType_MASTER, session, false /* notInTransaction */, &querypb.ExecuteOptions{
+		session, result, err := vh.vtg.Execute(ctx, query, make(map[string]interface{}), c.SchemaName, topodatapb.TabletType_MASTER, session, false /* notInTransaction */, &querypb.ExecuteOptions{
 			IncludedFields: querypb.ExecuteOptions_ALL,
 		})
+		c.ClientData = session
 		return result, sqldb.NewSQLErrorFromError(err)
 	}
 }

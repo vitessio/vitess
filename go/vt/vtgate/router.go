@@ -65,35 +65,6 @@ func (rtr *Router) StreamExecute(ctx context.Context, sql string, bindVars map[s
 	return plan.Instructions.StreamExecute(vcursor, queryConstruct, make(map[string]interface{}), true, callback)
 }
 
-// ExecuteBatch routes a non-streaming queries.
-func (rtr *Router) ExecuteBatch(ctx context.Context, sqlList []string, bindVarsList []map[string]interface{}, keyspace string, tabletType topodatapb.TabletType, asTransaction bool, session *vtgatepb.Session, options *querypb.ExecuteOptions) ([]sqltypes.QueryResponse, error) {
-	if bindVarsList == nil {
-		bindVarsList = make([]map[string]interface{}, len(sqlList))
-	}
-	queryResponseList := make([]sqltypes.QueryResponse, 0, len(sqlList))
-	for sqlNum, query := range sqlList {
-		var queryResponse sqltypes.QueryResponse
-
-		bindVars := bindVarsList[sqlNum]
-		if bindVars == nil {
-			bindVars = make(map[string]interface{})
-		}
-		//Using same QueryExecutor -> marking notInTransaction as false and not using asTransaction flag
-		vcursor := newQueryExecutor(ctx, tabletType, session, options, rtr)
-		queryConstruct := queryinfo.NewQueryConstruct(query, keyspace, bindVars, false)
-		plan, err := rtr.planner.GetPlan(query, keyspace, bindVars)
-		if err != nil {
-			queryResponse.QueryError = err
-		} else {
-			result, err := plan.Instructions.Execute(vcursor, queryConstruct, make(map[string]interface{}), true)
-			queryResponse.QueryResult = result
-			queryResponse.QueryError = err
-		}
-		queryResponseList = append(queryResponseList, queryResponse)
-	}
-	return queryResponseList, nil
-}
-
 // MessageAck acks messages.
 func (rtr *Router) MessageAck(ctx context.Context, keyspace, name string, ids []*querypb.Value) (int64, error) {
 	vschema := rtr.planner.VSchema()
