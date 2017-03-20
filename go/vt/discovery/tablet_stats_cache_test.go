@@ -1,7 +1,6 @@
 package discovery
 
 import (
-	"reflect"
 	"testing"
 
 	"github.com/youtube/vitess/go/vt/topo"
@@ -40,11 +39,11 @@ func TestTabletStatsCache(t *testing.T) {
 
 	// check it's there
 	a = tsc.GetTabletStats("k", "s", topodatapb.TabletType_REPLICA)
-	if len(a) != 1 || !reflect.DeepEqual(*ts1, a[0]) {
+	if len(a) != 1 || !ts1.DeepEqual(&a[0]) {
 		t.Errorf("unexpected result: %v", a)
 	}
 	a = tsc.GetHealthyTabletStats("k", "s", topodatapb.TabletType_REPLICA)
-	if len(a) != 1 || !reflect.DeepEqual(*ts1, a[0]) {
+	if len(a) != 1 || !ts1.DeepEqual(&a[0]) {
 		t.Errorf("unexpected result: %v", a)
 	}
 
@@ -61,11 +60,11 @@ func TestTabletStatsCache(t *testing.T) {
 
 	// check the previous ts1 is still there, as the new one is ignored.
 	a = tsc.GetTabletStats("k", "s", topodatapb.TabletType_REPLICA)
-	if len(a) != 1 || !reflect.DeepEqual(*ts1, a[0]) {
+	if len(a) != 1 || !ts1.DeepEqual(&a[0]) {
 		t.Errorf("unexpected result: %v", a)
 	}
 	a = tsc.GetHealthyTabletStats("k", "s", topodatapb.TabletType_REPLICA)
-	if len(a) != 1 || !reflect.DeepEqual(*ts1, a[0]) {
+	if len(a) != 1 || !ts1.DeepEqual(&a[0]) {
 		t.Errorf("unexpected result: %v", a)
 	}
 
@@ -82,11 +81,11 @@ func TestTabletStatsCache(t *testing.T) {
 
 	// check it's there
 	a = tsc.GetTabletStats("k", "s", topodatapb.TabletType_REPLICA)
-	if len(a) != 1 || !reflect.DeepEqual(*notHealthyTs1, a[0]) {
+	if len(a) != 1 || !notHealthyTs1.DeepEqual(&a[0]) {
 		t.Errorf("unexpected result: %v", a)
 	}
 	a = tsc.GetHealthyTabletStats("k", "s", topodatapb.TabletType_REPLICA)
-	if len(a) != 1 || !reflect.DeepEqual(*notHealthyTs1, a[0]) {
+	if len(a) != 1 || !notHealthyTs1.DeepEqual(&a[0]) {
 		t.Errorf("unexpected result: %v", a)
 	}
 
@@ -110,7 +109,7 @@ func TestTabletStatsCache(t *testing.T) {
 		if a[0].Tablet.Alias.Uid == 11 {
 			a[0], a[1] = a[1], a[0]
 		}
-		if !reflect.DeepEqual(*ts1, a[0]) || !reflect.DeepEqual(*ts2, a[1]) {
+		if !ts1.DeepEqual(&a[0]) || !ts2.DeepEqual(&a[1]) {
 			t.Errorf("unexpected result: %v", a)
 		}
 	}
@@ -121,7 +120,7 @@ func TestTabletStatsCache(t *testing.T) {
 		if a[0].Tablet.Alias.Uid == 11 {
 			a[0], a[1] = a[1], a[0]
 		}
-		if !reflect.DeepEqual(*ts1, a[0]) || !reflect.DeepEqual(*ts2, a[1]) {
+		if !ts1.DeepEqual(&a[0]) || !ts2.DeepEqual(&a[1]) {
 			t.Errorf("unexpected result: %v", a)
 		}
 	}
@@ -138,12 +137,12 @@ func TestTabletStatsCache(t *testing.T) {
 		if a[0].Tablet.Alias.Uid == 11 {
 			a[0], a[1] = a[1], a[0]
 		}
-		if !reflect.DeepEqual(*ts1, a[0]) || !reflect.DeepEqual(*ts2, a[1]) {
+		if !ts1.DeepEqual(&a[0]) || !ts2.DeepEqual(&a[1]) {
 			t.Errorf("unexpected result: %v", a)
 		}
 	}
 	a = tsc.GetHealthyTabletStats("k", "s", topodatapb.TabletType_REPLICA)
-	if len(a) != 1 || !reflect.DeepEqual(*ts1, a[0]) {
+	if len(a) != 1 || !ts1.DeepEqual(&a[0]) {
 		t.Errorf("unexpected result: %v", a)
 	}
 
@@ -158,13 +157,13 @@ func TestTabletStatsCache(t *testing.T) {
 
 	// check we only have one replica left
 	a = tsc.GetTabletStats("k", "s", topodatapb.TabletType_REPLICA)
-	if len(a) != 1 || !reflect.DeepEqual(*ts1, a[0]) {
+	if len(a) != 1 || !ts1.DeepEqual(&a[0]) {
 		t.Errorf("unexpected result: %v", a)
 	}
 
 	// check we have a master now
 	a = tsc.GetTabletStats("k", "s", topodatapb.TabletType_MASTER)
-	if len(a) != 1 || !reflect.DeepEqual(*ts2, a[0]) {
+	if len(a) != 1 || !ts2.DeepEqual(&a[0]) {
 		t.Errorf("unexpected result: %v", a)
 	}
 
@@ -182,14 +181,14 @@ func TestTabletStatsCache(t *testing.T) {
 		t.Errorf("unexpected result: %v", a)
 	}
 	a = tsc.GetHealthyTabletStats("k", "s", topodatapb.TabletType_MASTER)
-	if len(a) != 1 || !reflect.DeepEqual(*ts1, a[0]) {
+	if len(a) != 1 || !ts1.DeepEqual(&a[0]) {
 		t.Errorf("unexpected result: %v", a)
 	}
 
 	// old master sending an old ping should be ignored
 	tsc.StatsUpdate(ts2)
 	a = tsc.GetHealthyTabletStats("k", "s", topodatapb.TabletType_MASTER)
-	if len(a) != 1 || !reflect.DeepEqual(*ts1, a[0]) {
+	if len(a) != 1 || !ts1.DeepEqual(&a[0]) {
 		t.Errorf("unexpected result: %v", a)
 	}
 }
