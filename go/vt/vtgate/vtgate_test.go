@@ -2264,3 +2264,52 @@ func TestVTGateShowMetadataTwoShards(t *testing.T) {
 		t.Errorf("shard %s not found in Values \n%+v", shard1, qr.Rows)
 	}
 }
+
+func TestVTGateShowTables(t *testing.T) {
+	createSandbox(KsTestUnsharded)
+	hcVTGateTest.Reset()
+	hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, KsTestUnsharded, "0", topodatapb.TabletType_MASTER, true, 1, nil)
+
+	KsSharded := "TestShowTablesTwoShards"
+	setUpSandboxWithTwoShards(KsSharded)
+
+	qr, err := rpcVTGate.Execute(context.Background(),
+		"show tables",
+		nil,
+		"",
+		topodatapb.TabletType_MASTER,
+		nil,
+		false,
+		executeOptions)
+
+	expected := "vtgate: : No keyspace selected";
+	if err == nil || err.Error() != expected {
+		t.Errorf("wanted %s, got %v", expected, err)
+	}
+
+	qr, err = rpcVTGate.Execute(context.Background(),
+		"show tables",
+		nil,
+		KsTestUnsharded,
+		topodatapb.TabletType_MASTER,
+		nil,
+		false,
+		executeOptions)
+
+	if err != nil {
+		t.Errorf("wanted nil, got %v", err)
+	}
+
+	wantFields := []*querypb.Field{{
+		Name: "Tables",
+		Type: sqltypes.VarChar,
+	}}
+
+	if !reflect.DeepEqual(wantFields, qr.Fields) {
+		t.Errorf("want \n%+v, got \n%+v", wantFields, qr.Fields)
+	}
+
+	if !valuesContain(qr.Rows, "t1") {
+		t.Errorf("table %s not found in Values \n%+v", "t1", qr.Rows)
+	}
+}
