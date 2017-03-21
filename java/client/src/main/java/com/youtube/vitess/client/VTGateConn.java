@@ -100,7 +100,7 @@ public final class VTGateConn implements Closeable {
     TabletType tabletType, Query.ExecuteOptions.IncludedFields includedFields) throws SQLException {
     ExecuteRequest.Builder requestBuilder = ExecuteRequest.newBuilder()
             .setQuery(Proto.bindQuery(checkNotNull(query), bindVars))
-            .setKeyspace(keyspace)
+            .setKeyspaceShard(keyspace)
             .setTabletType(checkNotNull(tabletType))
             .setOptions(Query.ExecuteOptions.newBuilder()
                 .setIncludedFields(includedFields));
@@ -268,7 +268,7 @@ public final class VTGateConn implements Closeable {
         Vtgate.ExecuteBatchRequest.Builder requestBuilder =
             Vtgate.ExecuteBatchRequest.newBuilder()
                 .addAllQueries(checkNotNull(queries))
-                .setKeyspace(keyspace)
+                .setKeyspaceShard(keyspace)
                 .setTabletType(checkNotNull(tabletType))
                 .setAsTransaction(asTransaction)
                 .setOptions(Query.ExecuteOptions.newBuilder()
@@ -371,7 +371,7 @@ public final class VTGateConn implements Closeable {
     StreamExecuteRequest.Builder requestBuilder =
         StreamExecuteRequest.newBuilder()
             .setQuery(Proto.bindQuery(checkNotNull(query), bindVars))
-            .setKeyspace(keyspace)
+            .setKeyspaceShard(keyspace)
             .setTabletType(checkNotNull(tabletType))
             .setOptions(Query.ExecuteOptions.newBuilder()
                 .setIncludedFields(includedFields));

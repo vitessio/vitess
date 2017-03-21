@@ -222,7 +222,7 @@ func (vtg *VTGate) IsHealthy() error {
 }
 
 // Execute executes a non-streaming query by routing based on the values in the query.
-func (vtg *VTGate) Execute(ctx context.Context, sql string, bindVariables map[string]interface{}, scope string, tabletType topodatapb.TabletType, session *vtgatepb.Session, notInTransaction bool, options *querypb.ExecuteOptions) (newSession *vtgatepb.Session, qr *sqltypes.Result, err error) {
+func (vtg *VTGate) Execute(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspaceShard string, tabletType topodatapb.TabletType, session *vtgatepb.Session, notInTransaction bool, options *querypb.ExecuteOptions) (newSession *vtgatepb.Session, qr *sqltypes.Result, err error) {
 	// We'll always return a non-nil session.
 	if session == nil {
 		session = &vtgatepb.Session{}
@@ -249,7 +249,7 @@ func (vtg *VTGate) Execute(ctx context.Context, sql string, bindVariables map[st
 		vtg.localBegin(session)
 	}
 
-	keyspace, shard := parseScope(scope)
+	keyspace, shard := parseKeyspaceShard(keyspaceShard)
 	if shard != "" {
 		sql = sqlannotation.AnnotateIfDML(sql, nil)
 		f := func(keyspace string) (string, []string, error) {
@@ -275,7 +275,7 @@ func (vtg *VTGate) Execute(ctx context.Context, sql string, bindVariables map[st
 	query := map[string]interface{}{
 		"Sql":              sql,
 		"BindVariables":    bindVariables,
-		"Scope":            scope,
+		"KeyspaceShard":    keyspaceShard,
 		"TabletType":       ltt,
 		"Session":          session,
 		"NotInTransaction": notInTransaction,
@@ -465,7 +465,7 @@ func (vtg *VTGate) ExecuteEntityIds(ctx context.Context, sql string, bindVariabl
 }
 
 // ExecuteBatch executes a non-streaming queries by routing based on the values in the query.
-func (vtg *VTGate) ExecuteBatch(ctx context.Context, sqlList []string, bindVariablesList []map[string]interface{}, scope string, tabletType topodatapb.TabletType, session *vtgatepb.Session, options *querypb.ExecuteOptions) (*vtgatepb.Session, []sqltypes.QueryResponse, error) {
+func (vtg *VTGate) ExecuteBatch(ctx context.Context, sqlList []string, bindVariablesList []map[string]interface{}, keyspaceShard string, tabletType topodatapb.TabletType, session *vtgatepb.Session, options *querypb.ExecuteOptions) (*vtgatepb.Session, []sqltypes.QueryResponse, error) {
 	// We'll always return a non-nil session.
 	if session == nil {
 		session = &vtgatepb.Session{}
@@ -482,7 +482,7 @@ func (vtg *VTGate) ExecuteBatch(ctx context.Context, sqlList []string, bindVaria
 		if len(bindVariablesList) != 0 {
 			bv = bindVariablesList[i]
 		}
-		session, qrl[i].QueryResult, qrl[i].QueryError = vtg.Execute(ctx, sql, bv, scope, tabletType, session, false, options)
+		session, qrl[i].QueryResult, qrl[i].QueryError = vtg.Execute(ctx, sql, bv, keyspaceShard, tabletType, session, false, options)
 		if qr := qrl[i].QueryResult; qr != nil {
 			vtg.rowsReturned.Add(statsKey, int64(len(qr.Rows)))
 		}
@@ -565,15 +565,15 @@ func (vtg *VTGate) ExecuteBatchKeyspaceIds(ctx context.Context, queries []*vtgat
 }
 
 // StreamExecute executes a streaming query by routing based on the values in the query.
-func (vtg *VTGate) StreamExecute(ctx context.Context, sql string, bindVariables map[string]interface{}, scope string, tabletType topodatapb.TabletType, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
+func (vtg *VTGate) StreamExecute(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspaceShard string, tabletType topodatapb.TabletType, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
 	startTime := time.Now()
 	ltt := topoproto.TabletTypeLString(tabletType)
 	statsKey := []string{"StreamExecute", "Any", ltt}
 	defer vtg.timings.Record(statsKey, startTime)
 
-	keyspace, shard := parseScope(scope)
+	keyspace, shard := parseKeyspaceShard(keyspaceShard)
 	var err error
-	if scope != "" {
+	if shard != "" {
 		err = vtg.resolver.streamExecute(
 			ctx,
 			sql,
@@ -606,7 +606,7 @@ func (vtg *VTGate) StreamExecute(ctx context.Context, sql string, bindVariables 
 		query := map[string]interface{}{
 			"Sql":           sql,
 			"BindVariables": bindVariables,
-			"Scope":         scope,
+			"KeyspaceShard": keyspaceShard,
 			"TabletType":    ltt,
 			"Options":       options,
 		}
@@ -1037,11 +1037,11 @@ func annotateBoundShardQueriesAsUnfriendly(queries []*vtgatepb.BoundShardQuery) 
 	}
 }
 
-// parseScope parses the keyspace and shard from the scope.
-func parseScope(scope string) (string, string) {
-	last := strings.LastIndex(scope, ":")
+// parseKeyspaceShard parses the keyspace and shard from the KeyspaceShard.
+func parseKeyspaceShard(keyspaceShard string) (string, string) {
+	last := strings.LastIndex(keyspaceShard, ":")
 	if last == -1 {
-		return scope, ""
+		return keyspaceShard, ""
 	}
-	return scope[:last], scope[last+1:]
+	return keyspaceShard[:last], keyspaceShard[last+1:]
 }

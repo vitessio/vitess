@@ -16,7 +16,7 @@ namespace Vitess\Proto\Vtgate {
     public $tablet_type = null;
     
     /**  @var string */
-    public $keyspace = null;
+    public $keyspace_shard = null;
     
     /**  @var \Vitess\Proto\Query\ExecuteOptions */
     public $options = null;
@@ -56,10 +56,10 @@ namespace Vitess\Proto\Vtgate {
       $f->reference = '\Vitess\Proto\Topodata\TabletType';
       $descriptor->addField($f);
 
-      // OPTIONAL STRING keyspace = 4
+      // OPTIONAL STRING keyspace_shard = 4
       $f = new \DrSlump\Protobuf\Field();
       $f->number    = 4;
-      $f->name      = "keyspace";
+      $f->name      = "keyspace_shard";
       $f->type      = \DrSlump\Protobuf::TYPE_STRING;
       $f->rule      = \DrSlump\Protobuf::RULE_OPTIONAL;
       $descriptor->addField($f);
@@ -192,39 +192,39 @@ namespace Vitess\Proto\Vtgate {
     }
     
     /**
-     * Check if <keyspace> has a value
+     * Check if <keyspace_shard> has a value
      *
      * @return boolean
      */
-    public function hasKeyspace(){
+    public function hasKeyspaceShard(){
       return $this->_has(4);
     }
     
     /**
-     * Clear <keyspace> value
+     * Clear <keyspace_shard> value
      *
      * @return \Vitess\Proto\Vtgate\StreamExecuteRequest
      */
-    public function clearKeyspace(){
+    public function clearKeyspaceShard(){
       return $this->_clear(4);
     }
     
     /**
-     * Get <keyspace> value
+     * Get <keyspace_shard> value
      *
      * @return string
      */
-    public function getKeyspace(){
+    public function getKeyspaceShard(){
       return $this->_get(4);
     }
     
     /**
-     * Set <keyspace> value
+     * Set <keyspace_shard> value
      *
      * @param string $value
      * @return \Vitess\Proto\Vtgate\StreamExecuteRequest
      */
-    public function setKeyspace( $value){
+    public function setKeyspaceShard( $value){
       return $this->_set(4, $value);
     }
     

@@ -81,7 +81,7 @@ public class VTGateTx {
     ExecuteRequest.Builder requestBuilder =
         ExecuteRequest.newBuilder()
             .setQuery(Proto.bindQuery(query, bindVars))
-            .setKeyspace(keyspace)
+            .setKeyspaceShard(keyspace)
             .setTabletType(tabletType)
             .setSession(session)
             .setOptions(Query.ExecuteOptions.newBuilder()
@@ -271,7 +271,7 @@ public class VTGateTx {
         Vtgate.ExecuteBatchRequest.Builder requestBuilder =
             Vtgate.ExecuteBatchRequest.newBuilder()
                 .addAllQueries(checkNotNull(queries))
-                .setKeyspace(keyspace)
+                .setKeyspaceShard(keyspace)
                 .setTabletType(checkNotNull(tabletType))
                 .setSession(session)
                 .setOptions(Query.ExecuteOptions.newBuilder()

@@ -91,7 +91,7 @@ func (vtg *VTGate) Execute(ctx context.Context, request *vtgatepb.ExecuteRequest
 	if err != nil {
 		return nil, vterrors.ToGRPC(err)
 	}
-	session, result, err := vtg.server.Execute(ctx, string(request.Query.Sql), bv, request.Keyspace, request.TabletType, request.Session, request.NotInTransaction, request.Options)
+	session, result, err := vtg.server.Execute(ctx, string(request.Query.Sql), bv, request.KeyspaceShard, request.TabletType, request.Session, request.NotInTransaction, request.Options)
 	return &vtgatepb.ExecuteResponse{
 		Result:  sqltypes.ResultToProto3(result),
 		Session: session,
@@ -211,7 +211,7 @@ func (vtg *VTGate) ExecuteBatch(ctx context.Context, request *vtgatepb.ExecuteBa
 		sqlQueries[queryNum] = query.Sql
 		bindVars[queryNum] = bv
 	}
-	session, results, err := vtg.server.ExecuteBatch(ctx, sqlQueries, bindVars, request.Keyspace, request.TabletType, request.Session, request.Options)
+	session, results, err := vtg.server.ExecuteBatch(ctx, sqlQueries, bindVars, request.KeyspaceShard, request.TabletType, request.Session, request.Options)
 	return &vtgatepb.ExecuteBatchResponse{
 		Results: sqltypes.QueryResponsesToProto3(results),
 		Session: session,
@@ -265,7 +265,7 @@ func (vtg *VTGate) StreamExecute(request *vtgatepb.StreamExecuteRequest, stream 
 	vtgErr := vtg.server.StreamExecute(ctx,
 		string(request.Query.Sql),
 		bv,
-		request.Keyspace,
+		request.KeyspaceShard,
 		request.TabletType,
 		request.Options,
 		func(value *sqltypes.Result) error {
