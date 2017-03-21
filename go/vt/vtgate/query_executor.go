@@ -80,7 +80,7 @@ func (vc *queryExecutor) ExecuteShard(keyspace string, shardQueries map[string]q
 }
 
 func (vc *queryExecutor) ExecuteShow(query string, bindvars map[string]interface{}, keyspace string) (*sqltypes.Result, error) {
-	if query == sqlparser.ShowDatabasesStr {
+	if query == sqlparser.ShowDatabasesStr || query == sqlparser.ShowKeyspacesStr {
 		keyspaces, err := getAllKeyspaces(vc.ctx, vc.router.serv, vc.router.cell)
 		if err != nil {
 			return nil, err
@@ -141,7 +141,7 @@ func (vc *queryExecutor) ExecuteShow(query string, bindvars map[string]interface
 		return result, nil
 	}
 
-	if query == sqlparser.ShowTablesStr {
+	if query == sqlparser.ShowVSchemaTablesStr {
 		if keyspace == "" {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "No keyspace selected")
 		}
