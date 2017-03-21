@@ -285,9 +285,12 @@ func (vtg *VTGate) Execute(ctx context.Context, sql string, bindVariables map[st
 	return session, nil, err
 }
 
+// intercept checks for transactional or set statements. If they match then it performs the
+// necessary operation and returns a new session and true indicating that it's intercepted
+// the call. If so, the caller (Execute) should just return without proceeding further.
 func (vtg *VTGate) intercept(ctx context.Context, sql string, session *vtgatepb.Session) (*vtgatepb.Session, bool, error) {
 	switch {
-	case sqlparser.HasPrefix(sql, "begin"):
+	case sqlparser.IsStatement(sql, "begin"):
 		if session.InTransaction {
 			// If we're in a transaction, commit and start a new one.
 			if err := vtg.Commit(ctx, vtg.transactionMode == TxTwoPC, session); err != nil {
@@ -296,13 +299,13 @@ func (vtg *VTGate) intercept(ctx context.Context, sql string, session *vtgatepb.
 		}
 		vtg.localBegin(session)
 		return session, true, nil
-	case sqlparser.HasPrefix(sql, "commit"):
+	case sqlparser.IsStatement(sql, "commit"):
 		if !session.InTransaction {
 			return session, true, nil
 		}
 		err := vtg.Commit(ctx, vtg.transactionMode == TxTwoPC, session)
 		return session, true, err
-	case sqlparser.HasPrefix(sql, "rollback"):
+	case sqlparser.IsStatement(sql, "rollback"):
 		if !session.InTransaction {
 			return session, true, nil
 		}

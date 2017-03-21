@@ -190,3 +190,10 @@ func HasPrefix(sql string, values ...string) bool {
 func IsDML(sql string) bool {
 	return HasPrefix(sql, "insert", "update", "delete")
 }
+
+// IsStatement returns true if the sql represents one of the transactional statements
+// begin, commit or rollback.
+func IsStatement(sql, statement string) bool {
+	sql = strings.TrimFunc(sql, unicode.IsSpace)
+	return strings.EqualFold(sql, statement)
+}

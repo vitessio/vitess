@@ -285,12 +285,12 @@ func TestVTGateExecuteWithKeyspaceShard(t *testing.T) {
 	_, _, err = rpcVTGate.Execute(context.Background(),
 		"select id from none",
 		nil,
-		"noks",
+		"invalid_keyspace",
 		topodatapb.TabletType_MASTER,
 		nil,
 		false,
 		nil)
-	want := "vtgate: : keyspace noks not found in vschema"
+	want := "vtgate: : keyspace invalid_keyspace not found in vschema"
 	if err == nil || err.Error() != want {
 		t.Errorf("Execute: %v, want %s", err, want)
 	}
@@ -346,6 +346,9 @@ func TestVTGateIntercept(t *testing.T) {
 
 	// Begin again should cause a commit and a new begin.
 	session, _, err = rpcVTGate.Execute(context.Background(), "select id from t1", nil, "", topodatapb.TabletType_MASTER, session, false, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
 	session, _, err = rpcVTGate.Execute(context.Background(), "begin", nil, "", topodatapb.TabletType_MASTER, session, false, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -360,6 +363,9 @@ func TestVTGateIntercept(t *testing.T) {
 
 	// commit.
 	session, _, err = rpcVTGate.Execute(context.Background(), "select id from t1", nil, "", topodatapb.TabletType_MASTER, session, false, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
 	session, _, err = rpcVTGate.Execute(context.Background(), "commit", nil, "", topodatapb.TabletType_MASTER, session, false, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -374,6 +380,9 @@ func TestVTGateIntercept(t *testing.T) {
 
 	// Commit again should be a no-op.
 	session, _, err = rpcVTGate.Execute(context.Background(), "select id from t1", nil, "", topodatapb.TabletType_MASTER, session, false, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
 	session, _, err = rpcVTGate.Execute(context.Background(), "Commit", nil, "", topodatapb.TabletType_MASTER, session, false, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -388,7 +397,13 @@ func TestVTGateIntercept(t *testing.T) {
 
 	// rollback
 	session, _, err = rpcVTGate.Execute(context.Background(), "begin", nil, "", topodatapb.TabletType_MASTER, session, false, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
 	session, _, err = rpcVTGate.Execute(context.Background(), "select id from t1", nil, "", topodatapb.TabletType_MASTER, session, false, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
 	session, _, err = rpcVTGate.Execute(context.Background(), "rollback", nil, "", topodatapb.TabletType_MASTER, session, false, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -472,6 +487,9 @@ func TestVTGateAutocommit(t *testing.T) {
 
 	// autocommit = 1
 	session, _, err = rpcVTGate.Execute(context.Background(), "set autocommit=1", nil, "", topodatapb.TabletType_MASTER, session, false, executeOptions)
+	if err != nil {
+		t.Fatal(err)
+	}
 	session, _, err = rpcVTGate.Execute(context.Background(), "update t1 set id=1", nil, "", topodatapb.TabletType_MASTER, session, false, executeOptions)
 	if err != nil {
 		t.Fatal(err)
@@ -486,6 +504,9 @@ func TestVTGateAutocommit(t *testing.T) {
 
 	// autocommit = 1, "begin"
 	session, _, err = rpcVTGate.Execute(context.Background(), "begin", nil, "", topodatapb.TabletType_MASTER, session, false, executeOptions)
+	if err != nil {
+		t.Fatal(err)
+	}
 	session, _, err = rpcVTGate.Execute(context.Background(), "update t1 set id=1", nil, "", topodatapb.TabletType_MASTER, session, false, executeOptions)
 	if err != nil {
 		t.Fatal(err)
@@ -500,6 +521,9 @@ func TestVTGateAutocommit(t *testing.T) {
 		t.Errorf("want 1, got %d", commitCount)
 	}
 	session, _, err = rpcVTGate.Execute(context.Background(), "commit", nil, "", topodatapb.TabletType_MASTER, session, false, executeOptions)
+	if err != nil {
+		t.Fatal(err)
+	}
 	wantSession = &vtgatepb.Session{Autocommit: true}
 	if !reflect.DeepEqual(session, wantSession) {
 		t.Errorf("autocommit=0: %v, want %v", session, wantSession)
