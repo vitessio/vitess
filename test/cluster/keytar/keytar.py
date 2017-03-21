@@ -23,6 +23,9 @@ import flask
 
 app = flask.Flask(__name__)
 results = {}
+_TEMPLATE = (
+    'python {directory}/test_runner.py -c "{config}" -t {timestamp} '
+    '-d {tempdir} -s {server}')
 
 
 class KeytarError(Exception):
@@ -44,8 +47,12 @@ def run_test_config(config):
   current_dir = os.getcwd()
 
   timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M')
-  _add_new_result(timestamp)
-  results[timestamp]['docker_image'] = config['docker_image']
+  results[timestamp] = {
+      'timestamp': timestamp,
+      'status': 'Start',
+      'tests': {},
+      'docker_image': config['docker_image']
+  }
 
   # Generate a test script with the steps described in the configuration,
   # as well as the command to execute the test_runner.
@@ -53,14 +60,15 @@ def run_test_config(config):
     tempscript = f.name
     f.write('#!/bin/bash\n')
     if 'before_test' in config:
+      # Change to the github repo directory, any steps to be run before the
+      # tests should be executed from there.
       os.chdir(github_repo_dir)
       for before_step in config['before_test']:
         f.write('%s\n' % before_step)
-    f.write(
-        'python %s/test_runner.py -c "%s" -t %s -d %s -s '
-        'http://localhost:%d' % (
-            current_dir, yaml.dump(config), timestamp, tempdir,
-            app.config['port']))
+    server = 'http://localhost:%d' % app.config['port']
+    f.write(_TEMPLATE.format(
+        directory=current_dir, config=yaml.dump(config), timestamp=timestamp,
+        tempdir=tempdir, server=server))
   os.chmod(tempscript, 0775)
 
   try:
@@ -79,12 +87,7 @@ def index():
 
 @app.route('/test_results')
 def test_results():
-  # Get all test results or a specific test result in JSON.
-  if 'name' not in flask.request.args:
-    return json.dumps([results[x] for x in sorted(results)])
-  else:
-    return json.dumps(
-        [x for x in results.itervalues() if x == flask.request.args['name']])
+  return json.dumps([results[x] for x in sorted(results)])
 
 
 @app.route('/test_log')
@@ -99,9 +102,8 @@ def test_log():
 def update_results():
   # Update the results dict, called from the test_runner.
   update_args = flask.request.get_json()
-  time = update_args['time']
-  for k, v in update_args.iteritems():
-    results[time][k] = v
+  timestamp = update_args['timestamp']
+  results[timestamp].update(update_args)
   return 'OK'
 
 
@@ -170,31 +172,25 @@ def handle_cluster_setup(cluster_setup):
   # Add authentication steps to allow keytar to start clusters on GKE.
   gcloud_args = ['gcloud', 'auth', 'activate-service-account',
                  '--key-file', cluster_setup['keyfile']]
-  logging.info('authenticating using keyfile: %s',
-               cluster_setup['keyfile'])
+  logging.info('authenticating using keyfile: %s', cluster_setup['keyfile'])
   subprocess.call(gcloud_args)
-  os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = (
-      cluster_setup['keyfile'])
+  os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = cluster_setup['keyfile']
 
   # Ensure that a project name is correctly set. Use the name if provided
   # in the configuration, otherwise use the current project name, or else
   # the first available project name.
   if 'project_name' in cluster_setup:
-    logging.info('Setting gcloud project to %s',
-                 cluster_setup['project_name'])
+    logging.info('Setting gcloud project to %s', cluster_setup['project_name'])
     subprocess.call(
-        ['gcloud', 'config', 'set', 'project',
-         cluster_setup['project_name']])
+        ['gcloud', 'config', 'set', 'project', cluster_setup['project_name']])
   else:
     config = subprocess.check_output(
         ['gcloud', 'config', 'list', '--format', 'json'])
     project_name = json.loads(config)['core']['project']
     if not project_name:
-      projects = subprocess.check_output(
-          ['gcloud', 'projects', 'list'])
+      projects = subprocess.check_output(['gcloud', 'projects', 'list'])
       first_project = projects[0]['projectId']
-      logging.info('gcloud project is unset, setting it to %s',
-                   first_project)
+      logging.info('gcloud project is unset, setting it to %s', first_project)
       subprocess.check_output(
           ['gcloud', 'config', 'set', 'project', first_project])
 
@@ -208,9 +204,8 @@ def handle_install_steps(keytar_config):
   if 'install' not in keytar_config:
     return
   install_config = keytar_config['install']
-  if 'cluster_setup' in install_config:
-    for cluster_setup in install_config['cluster_setup']:
-      handle_cluster_setup(cluster_setup)
+  for cluster_setup in install_config.get('cluster_setup', []):
+    handle_cluster_setup(cluster_setup)
 
   # Install any dependencies using apt-get.
   if 'dependencies' in install_config:
@@ -221,19 +216,12 @@ def handle_install_steps(keytar_config):
           ['apt-get', 'install', '-y', '--no-install-recommends', dep])
 
   # Run any additional commands if provided.
-  if 'extra' in install_config:
-    for step in install_config['extra']:
-      os.system(step)
+  for step in install_config.get('extra', []):
+    os.system(step)
 
   # Update path environment variable.
-  if 'path' in install_config:
-    for path in install_config['path']:
-      os.environ['PATH'] = '%s:%s' % (path, os.environ['PATH'])
-
-
-def _add_new_result(timestamp):
-  result = {'time': timestamp, 'status': 'Start', 'tests': {}}
-  results[timestamp] = result
+  for path in install_config.get('path', []):
+    os.environ['PATH'] = '%s:%s' % (path, os.environ['PATH'])
 
 
 def _get_download_github_repo_args(tempdir, github_config):
@@ -308,4 +296,3 @@ def main():
 
 if __name__ == '__main__':
   main()
-

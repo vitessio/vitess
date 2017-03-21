@@ -62,23 +62,27 @@ class KeytarTest(unittest.TestCase):
     self.assertEqual(json.loads(test_results.data), [])
 
     # Create a test_result, GET test_results should return an entry now.
-    keytar._add_new_result(self.timestamp)
+    keytar.results[self.timestamp] = {
+        'timestamp': self.timestamp,
+        'status': 'Start',
+        'tests': {},
+    }
     test_results = tester.get('/test_results')
     self.assertEqual(test_results.status_code, 200)
     self.assertEqual(
         json.loads(test_results.data),
-        [{'time': self.timestamp, 'status': 'Start', 'tests': {}}])
+        [{'timestamp': self.timestamp, 'status': 'Start', 'tests': {}}])
 
     # Call POST update_results, GET test_results should return a changed entry.
     tester.post(
         '/update_results', data=json.dumps(dict(
-            time='20160101_0000', status='Complete')),
+            timestamp='20160101_0000', status='Complete')),
         follow_redirects=True, content_type='application/json')
     test_results = tester.get('/test_results')
     self.assertEqual(test_results.status_code, 200)
     self.assertEqual(
         json.loads(test_results.data),
-        [{'time': self.timestamp, 'status': 'Complete', 'tests': {}}])
+        [{'timestamp': self.timestamp, 'status': 'Complete', 'tests': {}}])
 
 
 if __name__ == '__main__':

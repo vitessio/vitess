@@ -90,7 +90,7 @@ def run_test_config():
         if subprocess.call(test_args, stdout=results_file, stderr=results_file):
           test_results[test_name] = 'FAILED'
         else:
-          test_results[os.path.basename(test_file)] = 'PASSED'
+          test_results[test_name] = 'PASSED'
       update_result('tests', test_results)
     update_result('status', 'Tests Complete')
   except Exception as e:  # pylint: disable=broad-except
@@ -109,9 +109,7 @@ if __name__ == '__main__':
   parser.add_argument('-s', '--server', help='keytar server address')
   keytar_args = parser.parse_args()
   config = yaml.load(keytar_args.config)
-  repo_prefix = 'github'
-  if 'repo_prefix' in config['github']:
-    repo_prefix = config['github']['repo_prefix']
+  repo_prefix = config['github'].get('repo_prefix', 'github')
   repo_dir = os.path.join(keytar_args.dir, repo_prefix)
 
   run_test_config()

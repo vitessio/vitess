@@ -19,8 +19,11 @@ class TestKeytarWeb(unittest.TestCase):
   @classmethod
   def setUpClass(cls):
     cls.driver = environment.create_webdriver()
+    port = environment.reserve_ports(1)
+    keytar_folder = os.path.join(environment.vttop, 'test/cluster/keytar')
     cls.flask_process = subprocess.Popen(
-        [os.path.join(environment.vttop, 'test/cluster/keytar/keytar.py'),
+        [os.path.join(keytar_folder, 'keytar.py'),
+         os.path.join(keytar_folder, 'test_config.yaml'),
          '--config_file=test_config.yaml', '--port=%d' % port,
          '--password=foo'],
         preexec_fn=os.setsid)
@@ -35,11 +38,10 @@ class TestKeytarWeb(unittest.TestCase):
     start_time = time.time()
     while time.time() - start_time < timeout_s:
       if 'Complete' in self.driver.find_element_by_id('results').text:
-        break
+        return
       self.driver.refresh()
       time.sleep(5)
-    else:
-      self.fail('Timed out waiting for test to finish.')
+    self.fail('Timed out waiting for test to finish.')
 
   def test_keytar_web(self):
     self.driver.get(self.flask_addr)
