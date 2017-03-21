@@ -261,6 +261,26 @@ func TestHasPrefix(t *testing.T) {
 	}
 }
 
+func TestIsStatement(t *testing.T) {
+	testcases := []struct {
+		sql  string
+		want bool
+	}{
+		{"begin", true},
+		{" begin", true},
+		{" begin ", true},
+		{"begin ", true},
+		{"\n\t    begin ", true},
+		{"... begin", false},
+		{"begin ...", false},
+	}
+	for _, tcase := range testcases {
+		if got := IsStatement(tcase.sql, "begin"); got != tcase.want {
+			t.Errorf("IsStatement(%s): %v, want %v", tcase.sql, got, tcase.want)
+		}
+	}
+}
+
 func newStrVal(in string) *SQLVal {
 	return NewStrVal([]byte(in))
 }
