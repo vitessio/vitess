@@ -654,8 +654,14 @@ func TestValid(t *testing.T) {
 		input:  "show tables",
 		output: "show tables",
 	}, {
+		input:  "show vitess_keyspaces",
+		output: "show vitess_keyspaces",
+	}, {
 		input:  "show vitess_shards",
-		output: "show shards",
+		output: "show vitess_shards",
+	}, {
+		input:  "show vschema_tables",
+		output: "show vschema_tables",
 	}, {
 		input:  "show create database",
 		output: "show unsupported",
