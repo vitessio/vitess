@@ -16,7 +16,6 @@ import (
 	"fmt"
 	"log"
 	"strings"
-	"unicode"
 
 	"bytes"
 
@@ -39,7 +38,7 @@ var (
 //    it is used to annotate 'sql'
 // Otherwise 'sql' is annotated as replication-unfriendly.
 func AnnotateIfDML(sql string, keyspaceIDs [][]byte) string {
-	if !IsDML(sql) {
+	if !sqlparser.IsDML(sql) {
 		return sql
 	}
 	if len(keyspaceIDs) == 1 {
@@ -60,19 +59,6 @@ func AddKeyspaceIDs(sql string, keyspaceIDs [][]byte, trailingComments string) s
 	}
 	return fmt.Sprintf("%s /* vtgate:: keyspace_id:%s */%s",
 		sql, bytes.Join(encodedIDs, []byte(",")), trailingComments)
-}
-
-// IsDML returns true if 'querySQL' is an INSERT, UPDATE or DELETE statement.
-func IsDML(sql string) bool {
-	sql = strings.TrimLeftFunc(sql, unicode.IsSpace)
-	end := strings.IndexFunc(sql, unicode.IsSpace)
-	if end == -1 {
-		return false
-	}
-	word := sql[:end]
-	return strings.EqualFold(word, "insert") ||
-		strings.EqualFold(word, "update") ||
-		strings.EqualFold(word, "delete")
 }
 
 // ExtractKeyspaceIDS parses the annotation of the given statement and tries

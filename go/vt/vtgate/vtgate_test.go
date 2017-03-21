@@ -414,6 +414,99 @@ func TestVTGateIntercept(t *testing.T) {
 	if rollbackCount := sbc.RollbackCount.Get(); rollbackCount != 1 {
 		t.Errorf("want 1, got %d", rollbackCount)
 	}
+
+	// set.
+	session, _, err = rpcVTGate.Execute(context.Background(), "set autocommit=1", nil, "", topodatapb.TabletType_MASTER, session, false, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantSession = &vtgatepb.Session{Autocommit: true}
+	if !reflect.DeepEqual(session, wantSession) {
+		t.Errorf("begin: %v, want %v", session, wantSession)
+	}
+	session, _, err = rpcVTGate.Execute(context.Background(), "set AUTOCOMMIT = 0", nil, "", topodatapb.TabletType_MASTER, session, false, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantSession = &vtgatepb.Session{}
+	if !reflect.DeepEqual(session, wantSession) {
+		t.Errorf("begin: %v, want %v", session, wantSession)
+	}
+
+	// complex set
+	_, _, err = rpcVTGate.Execute(context.Background(), "set autocommit=1+1", nil, "", topodatapb.TabletType_MASTER, session, false, nil)
+	wantErr := "invalid syntax: 1 + 1"
+	if err == nil || err.Error() != wantErr {
+		t.Errorf("Execute: %v, want %s", err, wantErr)
+	}
+
+	// multi-set
+	_, _, err = rpcVTGate.Execute(context.Background(), "set autocommit=1, a = 2", nil, "", topodatapb.TabletType_MASTER, session, false, nil)
+	wantErr = "too many set values: set autocommit=1, a = 2"
+	if err == nil || err.Error() != wantErr {
+		t.Errorf("Execute: %v, want %s", err, wantErr)
+	}
+
+	// unsupported set
+	_, _, err = rpcVTGate.Execute(context.Background(), "set a = 2", nil, "", topodatapb.TabletType_MASTER, session, false, nil)
+	wantErr = "unsupport construct: set a = 2"
+	if err == nil || err.Error() != wantErr {
+		t.Errorf("Execute: %v, want %s", err, wantErr)
+	}
+}
+
+func TestVTGateAutocommit(t *testing.T) {
+	createSandbox(KsTestUnsharded)
+	hcVTGateTest.Reset()
+	sbc := hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, KsTestUnsharded, "0", topodatapb.TabletType_MASTER, true, 1, nil)
+
+	// autocommit = 0
+	session, _, err := rpcVTGate.Execute(context.Background(), "select id from t1", nil, "", topodatapb.TabletType_MASTER, nil, false, executeOptions)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantSession := &vtgatepb.Session{}
+	if !reflect.DeepEqual(session, wantSession) {
+		t.Errorf("autocommit=0: %v, want %v", session, wantSession)
+	}
+
+	// autocommit = 1
+	session, _, err = rpcVTGate.Execute(context.Background(), "set autocommit=1", nil, "", topodatapb.TabletType_MASTER, session, false, executeOptions)
+	session, _, err = rpcVTGate.Execute(context.Background(), "update t1 set id=1", nil, "", topodatapb.TabletType_MASTER, session, false, executeOptions)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantSession = &vtgatepb.Session{Autocommit: true}
+	if !reflect.DeepEqual(session, wantSession) {
+		t.Errorf("autocommit=0: %v, want %v", session, wantSession)
+	}
+	if commitCount := sbc.CommitCount.Get(); commitCount != 1 {
+		t.Errorf("want 1, got %d", commitCount)
+	}
+
+	// autocommit = 1, "begin"
+	session, _, err = rpcVTGate.Execute(context.Background(), "begin", nil, "", topodatapb.TabletType_MASTER, session, false, executeOptions)
+	session, _, err = rpcVTGate.Execute(context.Background(), "update t1 set id=1", nil, "", topodatapb.TabletType_MASTER, session, false, executeOptions)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantSession = &vtgatepb.Session{InTransaction: true, Autocommit: true}
+	testSession := *session
+	testSession.ShardSessions = nil
+	if !reflect.DeepEqual(&testSession, wantSession) {
+		t.Errorf("autocommit=0: %v, want %v", &testSession, wantSession)
+	}
+	if commitCount := sbc.CommitCount.Get(); commitCount != 1 {
+		t.Errorf("want 1, got %d", commitCount)
+	}
+	session, _, err = rpcVTGate.Execute(context.Background(), "commit", nil, "", topodatapb.TabletType_MASTER, session, false, executeOptions)
+	wantSession = &vtgatepb.Session{Autocommit: true}
+	if !reflect.DeepEqual(session, wantSession) {
+		t.Errorf("autocommit=0: %v, want %v", session, wantSession)
+	}
+	if commitCount := sbc.CommitCount.Get(); commitCount != 2 {
+		t.Errorf("want 2, got %d", commitCount)
+	}
 }
 
 func TestVTGateExecuteShards(t *testing.T) {

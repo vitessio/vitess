@@ -26,6 +26,7 @@ import (
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/sqlannotation"
+	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/vterrors"
@@ -222,6 +223,11 @@ func (vtg *VTGate) IsHealthy() error {
 
 // Execute executes a non-streaming query by routing based on the values in the query.
 func (vtg *VTGate) Execute(ctx context.Context, sql string, bindVariables map[string]interface{}, scope string, tabletType topodatapb.TabletType, session *vtgatepb.Session, notInTransaction bool, options *querypb.ExecuteOptions) (newSession *vtgatepb.Session, qr *sqltypes.Result, err error) {
+	// We'll always return a non-nil session.
+	if session == nil {
+		session = &vtgatepb.Session{}
+	}
+
 	session, intercepted, err := vtg.intercept(ctx, sql, session)
 	if err != nil {
 		return session, nil, err
@@ -236,6 +242,13 @@ func (vtg *VTGate) Execute(ctx context.Context, sql string, bindVariables map[st
 	statsKey := []string{"Execute", "Any", ltt}
 	defer vtg.timings.Record(statsKey, startTime)
 
+	// Autocommit handling
+	autocommit := false
+	if session.Autocommit && !session.InTransaction && sqlparser.IsDML(sql) {
+		autocommit = true
+		vtg.localBegin(session)
+	}
+
 	keyspace, shard := parseScope(scope)
 	if shard != "" {
 		sql = sqlannotation.AnnotateIfDML(sql, nil)
@@ -246,10 +259,17 @@ func (vtg *VTGate) Execute(ctx context.Context, sql string, bindVariables map[st
 	} else {
 		qr, err = vtg.router.Execute(ctx, sql, bindVariables, keyspace, tabletType, session, notInTransaction, options)
 	}
-
+	if err == nil && autocommit {
+		err = vtg.Commit(ctx, vtg.transactionMode == TxTwoPC, session)
+	}
 	if err == nil {
 		vtg.rowsReturned.Add(statsKey, int64(len(qr.Rows)))
 		return session, qr, nil
+	}
+
+	if autocommit {
+		// Don't error-check.
+		vtg.Rollback(ctx, session)
 	}
 
 	query := map[string]interface{}{
@@ -266,41 +286,53 @@ func (vtg *VTGate) Execute(ctx context.Context, sql string, bindVariables map[st
 }
 
 func (vtg *VTGate) intercept(ctx context.Context, sql string, session *vtgatepb.Session) (*vtgatepb.Session, bool, error) {
-	// We'll always return a non-nil session.
-	newSession := session
-	if newSession == nil {
-		newSession = &vtgatepb.Session{}
-	}
 	switch {
-	case strings.EqualFold(sql, "begin"):
-		if newSession.InTransaction {
+	case sqlparser.HasPrefix(sql, "begin"):
+		if session.InTransaction {
 			// If we're in a transaction, commit and start a new one.
-			if err := vtg.Commit(ctx, vtg.transactionMode == TxTwoPC, newSession); err != nil {
-				return newSession, true, err
+			if err := vtg.Commit(ctx, vtg.transactionMode == TxTwoPC, session); err != nil {
+				return session, true, err
 			}
-			newSession.ShardSessions = nil
 		}
-		newSession.InTransaction = true
-		newSession.SingleDb = vtg.transactionMode == TxSingle
-		return newSession, true, nil
-	case strings.EqualFold(sql, "commit"):
-		if !newSession.InTransaction {
-			return newSession, true, nil
+		vtg.localBegin(session)
+		return session, true, nil
+	case sqlparser.HasPrefix(sql, "commit"):
+		if !session.InTransaction {
+			return session, true, nil
 		}
-		err := vtg.Commit(ctx, vtg.transactionMode == TxTwoPC, newSession)
+		err := vtg.Commit(ctx, vtg.transactionMode == TxTwoPC, session)
+		return session, true, err
+	case sqlparser.HasPrefix(sql, "rollback"):
+		if !session.InTransaction {
+			return session, true, nil
+		}
+		err := vtg.Rollback(ctx, session)
+		return session, true, err
+	case sqlparser.HasPrefix(sql, "set"):
+		vals, err := sqlparser.ExtractSetNums(sql)
 		if err != nil {
-			newSession.InTransaction = false
+			return session, true, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, err.Error())
 		}
-		return newSession, true, err
-	case strings.EqualFold(sql, "rollback"):
-		if !newSession.InTransaction {
-			return newSession, true, nil
+		if len(vals) != 1 {
+			return session, true, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "too many set values: %s", sql)
 		}
-		err := vtg.Rollback(ctx, newSession)
-		newSession.InTransaction = false
-		return newSession, true, err
+		val, ok := vals["autocommit"]
+		if !ok {
+			return session, true, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupport construct: %s", sql)
+		}
+		if val != 0 {
+			session.Autocommit = true
+		} else {
+			session.Autocommit = false
+		}
+		return session, true, nil
 	}
-	return newSession, false, nil
+	return session, false, nil
+}
+
+func (vtg *VTGate) localBegin(session *vtgatepb.Session) {
+	session.InTransaction = true
+	session.SingleDb = vtg.transactionMode == TxSingle
 }
 
 // ExecuteShards executes a non-streaming query on the specified shards.
@@ -434,6 +466,11 @@ func (vtg *VTGate) ExecuteEntityIds(ctx context.Context, sql string, bindVariabl
 
 // ExecuteBatch executes a non-streaming queries by routing based on the values in the query.
 func (vtg *VTGate) ExecuteBatch(ctx context.Context, sqlList []string, bindVariablesList []map[string]interface{}, scope string, tabletType topodatapb.TabletType, session *vtgatepb.Session, options *querypb.ExecuteOptions) (*vtgatepb.Session, []sqltypes.QueryResponse, error) {
+	// We'll always return a non-nil session.
+	if session == nil {
+		session = &vtgatepb.Session{}
+	}
+
 	startTime := time.Now()
 	ltt := topoproto.TabletTypeLString(tabletType)
 	statsKey := []string{"ExecuteBatch", "Any", ltt}

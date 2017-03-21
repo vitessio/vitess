@@ -8,6 +8,9 @@ package sqlparser
 
 import (
 	"fmt"
+	"strconv"
+	"strings"
+	"unicode"
 
 	"github.com/youtube/vitess/go/sqltypes"
 )
@@ -128,4 +131,62 @@ func StringIn(str string, values ...string) bool {
 		}
 	}
 	return false
+}
+
+// ExtractSetNums returns a map of key-num pairs
+// if the query is a SET statement. Otherwise, it returns an
+// error.
+func ExtractSetNums(sql string) (map[string]int64, error) {
+	stmt, err := Parse(sql)
+	if err != nil {
+		return nil, err
+	}
+	setStmt, ok := stmt.(*Set)
+	if !ok {
+		return nil, fmt.Errorf("ast did not yield *sqlparser.Set: %T", stmt)
+	}
+	result := make(map[string]int64)
+	for _, expr := range setStmt.Exprs {
+		if expr.Name.Qualifier != nil {
+			return nil, fmt.Errorf("invalid syntax: %v", String(expr.Name))
+		}
+		key := expr.Name.Name.Lowered()
+
+		sqlval, ok := expr.Expr.(*SQLVal)
+		if !ok {
+			return nil, fmt.Errorf("invalid syntax: %s", String(expr.Expr))
+		}
+		if sqlval.Type != IntVal {
+			return nil, fmt.Errorf("invalid value type: %v", String(expr.Expr))
+		}
+		num, err := strconv.ParseInt(string(sqlval.Val), 0, 64)
+		if err != nil {
+			return nil, err
+		}
+		result[key] = num
+	}
+	return result, nil
+}
+
+// HasPrefix returns true if the query has one of the specified
+// statement prefixes. For example, you can find out if a query
+// is a DML with HasPrefix(sql, "insert", "update", "delete").
+func HasPrefix(sql string, values ...string) bool {
+	sql = strings.TrimLeftFunc(sql, unicode.IsSpace)
+	end := strings.IndexFunc(sql, unicode.IsSpace)
+	word := sql
+	if end != -1 {
+		word = sql[:end]
+	}
+	for _, val := range values {
+		if strings.EqualFold(word, val) {
+			return true
+		}
+	}
+	return false
+}
+
+// IsDML returns true if the query is an INSERT, UPDATE or DELETE statement.
+func IsDML(sql string) bool {
+	return HasPrefix(sql, "insert", "update", "delete")
 }

@@ -40,6 +40,8 @@ func (txc *TxConn) Commit(ctx context.Context, twopc bool, session *SafeSession)
 	if !session.InTransaction() {
 		return vterrors.New(vtrpcpb.Code_ABORTED, "cannot commit: not in transaction")
 	}
+	defer session.Reset()
+
 	if twopc {
 		return txc.commit2PC(ctx, session)
 	}
@@ -58,7 +60,6 @@ func (txc *TxConn) commitNormal(ctx context.Context, session *SafeSession) error
 			committing = false
 		}
 	}
-	session.Reset()
 	return err
 }
 
@@ -115,6 +116,7 @@ func (txc *TxConn) Rollback(ctx context.Context, session *SafeSession) error {
 		return nil
 	}
 	defer session.Reset()
+
 	return txc.runSessions(session.ShardSessions, func(s *vtgatepb.Session_ShardSession) error {
 		return txc.gateway.Rollback(ctx, s.Target, s.TransactionId)
 	})

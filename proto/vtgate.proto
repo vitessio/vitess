@@ -25,6 +25,9 @@ message Session {
   // single_db specifies if the transaction should be restricted
   // to a single database.
   bool single_db = 3;
+
+  // autocommit specifies if the session is in autocommit mode.
+  bool autocommit = 4;
 }
 
 // ExecuteRequest is the payload to Execute.
