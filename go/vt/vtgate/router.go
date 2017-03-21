@@ -51,19 +51,6 @@ func (rtr *Router) Execute(ctx context.Context, sql string, bindVars map[string]
 	return plan.Instructions.Execute(vcursor, queryConstruct, make(map[string]interface{}), true)
 }
 
-func (rtr *Router) ExecuteShow(ctx context.Context, sql string, bindVars map[string]interface{}, keyspace string, tabletType topodatapb.TabletType, session *vtgatepb.Session, notInTransaction bool, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
-	if bindVars == nil {
-		bindVars = make(map[string]interface{})
-	}
-	vcursor := newQueryExecutor(ctx, tabletType, session, options, rtr)
-	queryConstruct := queryinfo.NewQueryConstruct(sql, keyspace, bindVars, notInTransaction)
-	plan, err := rtr.planner.GetPlan(sql, keyspace, bindVars)
-	if err != nil {
-		return nil, err
-	}
-	return plan.Instructions.Execute(vcursor, queryConstruct, make(map[string]interface{}), true)
-}
-
 // StreamExecute executes a streaming query.
 func (rtr *Router) StreamExecute(ctx context.Context, sql string, bindVars map[string]interface{}, keyspace string, tabletType topodatapb.TabletType, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
 	if bindVars == nil {
