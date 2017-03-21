@@ -1047,7 +1047,7 @@ func annotateBoundShardQueriesAsUnfriendly(queries []*vtgatepb.BoundShardQuery) 
 
 // parseKeyspaceShard parses the keyspace and shard from the KeyspaceShard.
 func parseKeyspaceShard(keyspaceShard string) (string, string) {
-	last := strings.LastIndex(keyspaceShard, ":")
+	last := strings.LastIndex(keyspaceShard, "/")
 	if last == -1 {
 		return keyspaceShard, ""
 	}
