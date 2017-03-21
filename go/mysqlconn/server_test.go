@@ -264,6 +264,11 @@ func TestServer(t *testing.T) {
 
 // TestClearTextServer creates a Server that needs clear text passwords from the client.
 func TestClearTextServer(t *testing.T) {
+	// If the database we're using is MariaDB, the client
+	// is also the MariaDB client, that does support
+	// clear text by default.
+	isMariaDB := os.Getenv("MYSQL_FLAVOR") == "MariaDB"
+
 	th := &testHandler{}
 
 	authServer := NewAuthServerConfig()
@@ -292,24 +297,34 @@ func TestClearTextServer(t *testing.T) {
 		Pass:  "password1",
 	}
 
-	// Run a 'select rows' command with results.
-	// This should fail as clear text is not enabled by default on the client.
+	// Run a 'select rows' command with results.  This should fail
+	// as clear text is not enabled by default on the client
+	// (except MariaDB).
 	l.AllowClearTextWithoutTLS = true
-	output, ok := runMysql(t, params, "select rows")
+	sql := "select rows"
+	output, ok := runMysql(t, params, sql)
 	if ok {
-		t.Fatalf("mysql should have failed but returned: %v", output)
-	}
-	if strings.Contains(output, "No such file or directory") {
-		t.Logf("skipping mysql clear text tests, as the clear text plugin cannot be loaded: %v", err)
-		return
-	}
-	if !strings.Contains(output, "plugin not enabled") {
-		t.Errorf("Unexpected output for 'select rows': %v", output)
+		if isMariaDB {
+			t.Logf("mysql should have failed but returned: %v\nbut letting it go on MariaDB", output)
+		} else {
+			t.Fatalf("mysql should have failed but returned: %v", output)
+		}
+	} else {
+		if strings.Contains(output, "No such file or directory") {
+			t.Logf("skipping mysql clear text tests, as the clear text plugin cannot be loaded: %v", err)
+			return
+		}
+		if !strings.Contains(output, "plugin not enabled") {
+			t.Errorf("Unexpected output for 'select rows': %v", output)
+		}
 	}
 
 	// Now enable clear text plugin in client, but server requires SSL.
 	l.AllowClearTextWithoutTLS = false
-	output, ok = runMysql(t, params, enableCleartextPluginPrefix+"select rows")
+	if !isMariaDB {
+		sql = enableCleartextPluginPrefix + sql
+	}
+	output, ok = runMysql(t, params, sql)
 	if ok {
 		t.Fatalf("mysql should have failed but returned: %v", output)
 	}
@@ -319,7 +334,7 @@ func TestClearTextServer(t *testing.T) {
 
 	// Now enable clear text plugin, it should now work.
 	l.AllowClearTextWithoutTLS = true
-	output, ok = runMysql(t, params, enableCleartextPluginPrefix+"select rows")
+	output, ok = runMysql(t, params, sql)
 	if !ok {
 		t.Fatalf("mysql failed: %v", output)
 	}
@@ -331,7 +346,7 @@ func TestClearTextServer(t *testing.T) {
 
 	// Change password, make sure server rejects us.
 	params.Pass = ""
-	output, ok = runMysql(t, params, enableCleartextPluginPrefix+"select rows")
+	output, ok = runMysql(t, params, sql)
 	if ok {
 		t.Fatalf("mysql should have failed but returned: %v", output)
 	}
