@@ -22,12 +22,32 @@
   }
 }
 
+# show vitess_keyspaces
+"show vitess_keyspaces"
+{
+  "Original": "show vitess_keyspaces",
+  "Instructions": {
+    "Opcode": "Metadata",
+    "Query": "show vitess_keyspaces"
+    }
+}
+
 # show vitess_shards
 "show vitess_shards"
 {
   "Original": "show vitess_shards",
   "Instructions": {
     "Opcode": "Metadata",
-    "Query": "show shards"
+    "Query": "show vitess_shards"
+  }
+}
+
+# show vschema_tables
+"show vschema_tables"
+{
+  "Original": "show vschema_tables",
+  "Instructions": {
+    "Opcode": "Metadata",
+    "Query": "show vschema_tables"
   }
 }
