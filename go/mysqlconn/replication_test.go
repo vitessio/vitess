@@ -1019,6 +1019,9 @@ func testRowReplicationTypesWithRealDatabase(t *testing.T, params *sqldb.ConnPar
 		t.Fatal(err)
 	}
 	defer dConn.Close()
+	if _, err := dConn.ExecuteFetch("SET time_zone = '+00:00'", 0, false); err != nil {
+		t.Fatal(err)
+	}
 
 	// Create the table with all fields.
 	createTable := "create table replicationtypes(id int"
