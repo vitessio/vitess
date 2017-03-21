@@ -954,6 +954,46 @@ func testRowReplicationTypesWithRealDatabase(t *testing.T, params *sqldb.ConnPar
 		name:        "setnumbers",
 		createType:  "SET('one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten')",
 		createValue: "'two,three,ten'",
+	}, {
+		// TINYBLOB
+		name:        "tiny_blob",
+		createType:  "TINYBLOB",
+		createValue: "'ab\\'cd'",
+	}, {
+		// BLOB
+		name:        "bloby",
+		createType:  "BLOB",
+		createValue: "'ab\\'cd'",
+	}, {
+		// MEDIUMBLOB
+		name:        "medium_blob",
+		createType:  "MEDIUMBLOB",
+		createValue: "'ab\\'cd'",
+	}, {
+		// LONGBLOB
+		name:        "long_blob",
+		createType:  "LONGBLOB",
+		createValue: "'ab\\'cd'",
+	}, {
+		// CHAR 8 bits
+		name:        "shortchar",
+		createType:  "CHAR(30)",
+		createValue: "'short char'",
+	}, {
+		// CHAR 9 bits (100 * 3 = 300, 256<=300<512)
+		name:        "mediumchar",
+		createType:  "CHAR(100)",
+		createValue: "'medium char'",
+	}, {
+		// CHAR 10 bits (250 * 3 = 750, 512<=750<124)
+		name:        "longchar",
+		createType:  "CHAR(250)",
+		createValue: "'long char'",
+	}, {
+		// GEOMETRY
+		name:        "geo_stuff",
+		createType:  "GEOMETRY",
+		createValue: "ST_GeomFromText('POINT(1 1)')",
 	}}
 
 	conn, isMariaDB, f := connectForReplication(t, params, true /* rbr */)
