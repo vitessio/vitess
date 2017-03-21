@@ -50,28 +50,6 @@ func verifyParseError(t *testing.T, sql string) {
 	}
 }
 
-var IsDMLTests = []struct {
-	sql   string
-	isDML bool
-}{
-	{"   update ...", true},
-	{"UPDATE ...", true},
-	{"\n\t    delete ...", true},
-	{"insert ...", true},
-	{"select ...", false},
-	{"    select ...", false},
-	{"", false},
-	{" ", false},
-}
-
-func TestIsDML(t *testing.T) {
-	for _, test := range IsDMLTests {
-		if dml := IsDML(test.sql); dml != test.isDML {
-			t.Errorf("IsDML(%q) = %t, got %t", test.sql, dml, test.isDML)
-		}
-	}
-}
-
 func BenchmarkExtractKeyspaceIDKeyspaceID(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		ExtractKeyspaceIDS("DML /* vtgate:: keyspace_id:25AF */")
@@ -93,12 +71,6 @@ func BenchmarkExtractKeySpaceIDReplicationUnfriendly(b *testing.B) {
 func BenchmarkExtractKeySpaceIDNothing(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		ExtractKeyspaceIDS("DML")
-	}
-}
-
-func BenchmarkIsDML(b *testing.B) {
-	for i := 0; i < b.N; i++ {
-		IsDML("UPDATE ultimatequestion set answer=42 where question = 'What do you get if you multiply six by nine?'")
 	}
 }
 

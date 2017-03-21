@@ -198,6 +198,69 @@ func TestStringIn(t *testing.T) {
 	}
 }
 
+func TestExtractSetNums(t *testing.T) {
+	testcases := []struct {
+		sql string
+		out map[string]int64
+		err string
+	}{{
+		sql: "invalid",
+		err: "syntax error at position 8 near 'invalid'",
+	}, {
+		sql: "select * from t",
+		err: "ast did not yield *sqlparser.Set: *sqlparser.Select",
+	}, {
+		sql: "set a.autoinc=1",
+		err: "invalid syntax: a.autoinc",
+	}, {
+		sql: "set autoinc=1+1",
+		err: "invalid syntax: 1 + 1",
+	}, {
+		sql: "set autoinc='aa'",
+		err: "invalid value type: 'aa'",
+	}, {
+		sql: "set autoinc=1",
+		out: map[string]int64{"autoinc": 1},
+	}, {
+		sql: "set AUTOINC=1",
+		out: map[string]int64{"autoinc": 1},
+	}}
+	for _, tcase := range testcases {
+		out, err := ExtractSetNums(tcase.sql)
+		if err != nil && err.Error() != tcase.err {
+			t.Errorf("ExtractSetNums(%s): %v, want '%s'", tcase.sql, err, tcase.err)
+		}
+		if !reflect.DeepEqual(out, tcase.out) {
+			t.Errorf("ExtractSetNums(%s): %v, want '%v'", tcase.sql, out, tcase.out)
+		}
+	}
+}
+
+func TestHasPrefix(t *testing.T) {
+	testcases := []struct {
+		sql  string
+		want bool
+	}{
+		{"   update ...", true},
+		{"Update", true},
+		{"UPDATE ...", true},
+		{"\n\t    delete ...", true},
+		{"insert ...", true},
+		{"select ...", false},
+		{"    select ...", false},
+		{"", false},
+		{" ", false},
+	}
+	for _, tcase := range testcases {
+		if got := HasPrefix(tcase.sql, "insert", "update", "delete"); got != tcase.want {
+			t.Errorf("HasPrefix(%s): %v, want %v", tcase.sql, got, tcase.want)
+		}
+		if got := IsDML(tcase.sql); got != tcase.want {
+			t.Errorf("IsDML(%s): %v, want %v", tcase.sql, got, tcase.want)
+		}
+	}
+}
+
 func newStrVal(in string) *SQLVal {
 	return NewStrVal([]byte(in))
 }

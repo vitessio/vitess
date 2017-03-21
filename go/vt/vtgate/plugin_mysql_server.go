@@ -4,7 +4,6 @@ import (
 	"flag"
 	"fmt"
 	"net"
-	"strings"
 
 	log "github.com/golang/glog"
 	"golang.org/x/net/context"
@@ -68,9 +67,7 @@ func (vh *vtgateHandler) ConnectionClosed(c *mysqlconn.Conn) {
 	if session == nil || !session.InTransaction {
 		return
 	}
-	_, _, _ = vh.vtg.Execute(ctx, "rollback", make(map[string]interface{}), "", topodatapb.TabletType_MASTER, session, false, &querypb.ExecuteOptions{
-		IncludedFields: querypb.ExecuteOptions_ALL,
-	})
+	_, _, _ = vh.vtg.Execute(ctx, "rollback", make(map[string]interface{}), "", topodatapb.TabletType_MASTER, session, false, &querypb.ExecuteOptions{})
 }
 
 func (vh *vtgateHandler) ComQuery(c *mysqlconn.Conn, query string) (*sqltypes.Result, error) {
@@ -92,25 +89,12 @@ func (vh *vtgateHandler) ComQuery(c *mysqlconn.Conn, query string) (*sqltypes.Re
 		"VTGate MySQL Connector" /* subcomponent: part of the client */)
 	ctx = callerid.NewContext(ctx, ef, im)
 
-	// FIXME(alainjobart) would be good to have the parser understand this.
-	switch {
-	case strings.EqualFold(query, "set autocommit=0"):
-		// This is done by the python MySQL connector, we ignore it.
-		return &sqltypes.Result{}, nil
-	default:
-		// Grab the current session, if any.
-		var session *vtgatepb.Session
-		if c.ClientData != nil {
-			session, _ = c.ClientData.(*vtgatepb.Session)
-		}
-
-		// And just go to v3.
-		session, result, err := vh.vtg.Execute(ctx, query, make(map[string]interface{}), c.SchemaName, topodatapb.TabletType_MASTER, session, false /* notInTransaction */, &querypb.ExecuteOptions{
-			IncludedFields: querypb.ExecuteOptions_ALL,
-		})
-		c.ClientData = session
-		return result, sqldb.NewSQLErrorFromError(err)
-	}
+	session, _ := c.ClientData.(*vtgatepb.Session)
+	session, result, err := vh.vtg.Execute(ctx, query, make(map[string]interface{}), c.SchemaName, topodatapb.TabletType_MASTER, session, false /* notInTransaction */, &querypb.ExecuteOptions{
+		IncludedFields: querypb.ExecuteOptions_ALL,
+	})
+	c.ClientData = session
+	return result, sqldb.NewSQLErrorFromError(err)
 }
 
 func init() {
