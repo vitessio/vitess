@@ -82,11 +82,11 @@ func TestCellLengthAndData(t *testing.T) {
 		out: sqltypes.MakeTrusted(querypb.Type_FLOAT64,
 			[]byte("3.1415926535E+00")),
 	}, {
-		// 0x58d137c5 = 1490106309 = 2017-03-21 07:25:09
+		// 0x58d137c5 = 1490106309 = 2017-03-21 14:25:09
 		typ:  TypeTimestamp,
 		data: []byte{0x58, 0xd1, 0x37, 0xc5},
 		out: sqltypes.MakeTrusted(querypb.Type_TIMESTAMP,
-			[]byte("2017-03-21 07:25:09")),
+			[]byte("2017-03-21 14:25:09")),
 	}, {
 		typ:  TypeLongLong,
 		styp: querypb.Type_UINT64,
@@ -142,52 +142,52 @@ func TestCellLengthAndData(t *testing.T) {
 		out: sqltypes.MakeTrusted(querypb.Type_BIT,
 			[]byte{3, 1}),
 	}, {
-		// 0x58d137c5 = 1490106309 = 2017-03-21 07:25:09
+		// 0x58d137c5 = 1490106309 = 2017-03-21 14:25:09
 		typ:      TypeTimestamp2,
 		metadata: 0,
 		data:     []byte{0x58, 0xd1, 0x37, 0xc5},
 		out: sqltypes.MakeTrusted(querypb.Type_TIMESTAMP,
-			[]byte("2017-03-21 07:25:09")),
+			[]byte("2017-03-21 14:25:09")),
 	}, {
 		typ:      TypeTimestamp2,
 		metadata: 1,
 		data:     []byte{0x58, 0xd1, 0x37, 0xc5, 70},
 		out: sqltypes.MakeTrusted(querypb.Type_TIMESTAMP,
-			[]byte("2017-03-21 07:25:09.7")),
+			[]byte("2017-03-21 14:25:09.7")),
 	}, {
 		typ:      TypeTimestamp2,
 		metadata: 2,
 		data:     []byte{0x58, 0xd1, 0x37, 0xc5, 76},
 		out: sqltypes.MakeTrusted(querypb.Type_TIMESTAMP,
-			[]byte("2017-03-21 07:25:09.76")),
+			[]byte("2017-03-21 14:25:09.76")),
 	}, {
 		typ:      TypeTimestamp2,
 		metadata: 3,
 		// 7650 = 0x1de2
 		data: []byte{0x58, 0xd1, 0x37, 0xc5, 0x1d, 0xe2},
 		out: sqltypes.MakeTrusted(querypb.Type_TIMESTAMP,
-			[]byte("2017-03-21 07:25:09.765")),
+			[]byte("2017-03-21 14:25:09.765")),
 	}, {
 		typ:      TypeTimestamp2,
 		metadata: 4,
 		// 7654 = 0x1de6
 		data: []byte{0x58, 0xd1, 0x37, 0xc5, 0x1d, 0xe6},
 		out: sqltypes.MakeTrusted(querypb.Type_TIMESTAMP,
-			[]byte("2017-03-21 07:25:09.7654")),
+			[]byte("2017-03-21 14:25:09.7654")),
 	}, {
 		typ:      TypeTimestamp2,
 		metadata: 5,
 		// 76540 = 0x0badf6
 		data: []byte{0x58, 0xd1, 0x37, 0xc5, 0x0b, 0xad, 0xf6},
 		out: sqltypes.MakeTrusted(querypb.Type_TIMESTAMP,
-			[]byte("2017-03-21 07:25:09.76543")),
+			[]byte("2017-03-21 14:25:09.76543")),
 	}, {
 		typ:      TypeTimestamp2,
 		metadata: 6,
 		// 765432 = 0x0badf8
 		data: []byte{0x58, 0xd1, 0x37, 0xc5, 0x0b, 0xad, 0xf8},
 		out: sqltypes.MakeTrusted(querypb.Type_TIMESTAMP,
-			[]byte("2017-03-21 07:25:09.765432")),
+			[]byte("2017-03-21 14:25:09.765432")),
 	}, {
 		typ:      TypeDateTime2,
 		metadata: 0,

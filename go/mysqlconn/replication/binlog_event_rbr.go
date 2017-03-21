@@ -306,7 +306,7 @@ func printTimestamp(v uint32) string {
 	if v == 0 {
 		return "0000-00-00 00:00:00"
 	}
-	t := time.Unix(int64(v), 0)
+	t := time.Unix(int64(v), 0).UTC()
 	year, month, day := t.Date()
 	hour, minute, second := t.Clock()
 	return fmt.Sprintf("%04v-%02v-%02v %02v:%02v:%02v", year, int(month), day, hour, minute, second)
