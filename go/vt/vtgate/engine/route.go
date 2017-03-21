@@ -415,7 +415,7 @@ func (route *Route) execUpdateEqual(vcursor VCursor, queryConstruct *queryinfo.Q
 }
 
 func (route *Route) execShow(vcursor VCursor, queryConstruct *queryinfo.QueryConstruct) (*sqltypes.Result, error) {
-	return vcursor.ExecuteShow(route.Query, queryConstruct.BindVars)
+	return vcursor.ExecuteShow(route.Query, queryConstruct.BindVars, queryConstruct.Keyspace)
 }
 
 func (route *Route) execDeleteEqual(vcursor VCursor, queryConstruct *queryinfo.QueryConstruct) (*sqltypes.Result, error) {

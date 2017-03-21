@@ -5,6 +5,8 @@
 package vtgate
 
 import (
+	"sort"
+
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/sqltypes"
@@ -77,7 +79,7 @@ func (vc *queryExecutor) ExecuteShard(keyspace string, shardQueries map[string]q
 	return vc.router.scatterConn.ExecuteMultiShard(vc.ctx, keyspace, shardQueries, vc.tabletType, NewSafeSession(nil), false, vc.options)
 }
 
-func (vc *queryExecutor) ExecuteShow(query string, bindvars map[string]interface{}) (*sqltypes.Result, error) {
+func (vc *queryExecutor) ExecuteShow(query string, bindvars map[string]interface{}, keyspace string) (*sqltypes.Result, error) {
 	if query == sqlparser.ShowDatabasesStr {
 		keyspaces, err := getAllKeyspaces(vc.ctx, vc.router.serv, vc.router.cell)
 		if err != nil {
@@ -139,5 +141,42 @@ func (vc *queryExecutor) ExecuteShow(query string, bindvars map[string]interface
 		return result, nil
 	}
 
-	return nil, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "unimplemented metadata query: "+query)
+	if query == sqlparser.ShowTablesStr {
+		if keyspace == "" {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "No keyspace selected")
+		}
+		vschema := vc.router.planner.VSchema()
+		if vschema == nil {
+			return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vschema not initialized")
+		}
+		ks, ok := vschema.Keyspaces[keyspace]
+		if !ok {
+			return nil, vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "keyspace %s not found in vschema", keyspace)
+		}
+
+		var tables []string;
+		for name := range ks.Tables {
+			tables = append(tables, name)
+		}
+		sort.Strings(tables)
+
+		rows := make([][]sqltypes.Value, len(tables))
+		for i, v := range tables {
+			rows[i] = []sqltypes.Value{sqltypes.MakeString([]byte(v))}
+		}
+
+		result := &sqltypes.Result{
+			Fields: []*querypb.Field{{
+				Name: "Tables",
+				Type: sqltypes.VarChar,
+			}},
+			RowsAffected: uint64(len(rows)),
+			InsertID:     0,
+			Rows:         rows,
+		}
+
+		return result, nil
+	}
+
+	return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unimplemented metadata query: "+query)
 }
