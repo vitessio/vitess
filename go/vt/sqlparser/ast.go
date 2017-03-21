@@ -437,18 +437,17 @@ func (node *DDL) WalkSubtree(visit Visit) error {
 }
 
 // Show represents a show statement.
-// Currently supported constructs include 'show databases' (i.e. keyspaces),
-// 'show tables', and the non-standard 'show vitess_shards', which lists the known
-// keyspace:shard pairs.
 type Show struct {
 	Type string
 }
 
 const (
-	ShowDatabasesStr   = "show databases"
-	ShowShardsStr      = "show shards"
-	ShowTablesStr      = "show tables"
-	ShowUnsupportedStr = "show unsupported"
+	ShowDatabasesStr     = "show databases"
+	ShowKeyspacesStr     = "show vitess_keyspaces"
+	ShowShardsStr        = "show vitess_shards"
+	ShowTablesStr        = "show tables"
+	ShowVSchemaTablesStr = "show vschema_tables"
+	ShowUnsupportedStr   = "show unsupported"
 )
 
 // Format formats the node.

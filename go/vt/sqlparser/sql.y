@@ -114,7 +114,7 @@ func forceEOF(yylex interface{}) {
 %token <bytes> SHOW DESCRIBE EXPLAIN DATE ESCAPE
 
 // Supported SHOW tokens
-%token <bytes> DATABASES TABLES VITESS_SHARDS
+%token <bytes> DATABASES TABLES VITESS_KEYSPACES VITESS_SHARDS VSCHEMA_TABLES
 
 // Convert Type Tokens
 %token <bytes> INTEGER CHARACTER
@@ -348,8 +348,12 @@ show_statement_type:
       $$ = ShowDatabasesStr
     } else if (string($1) == "tables"){
       $$ = ShowTablesStr
+    } else if (string($1) == "vitess_keyspaces"){
+      $$ = ShowKeyspacesStr
     } else if (string($1) == "vitess_shards"){
       $$ = ShowShardsStr
+    } else if (string($1) == "vschema_tables"){
+      $$ = ShowVSchemaTablesStr
     } else {
       $$ = ShowUnsupportedStr
     }
@@ -1662,7 +1666,9 @@ reserved_keyword:
 | SELECT
 | SEPARATOR
 | SET
+| VITESS_KEYSPACES
 | VITESS_SHARDS
+| VSCHEMA_TABLES
 | SHOW
 | STRAIGHT_JOIN
 | TABLE
