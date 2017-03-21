@@ -7,6 +7,7 @@ application in order to trigger tests upon pushing new docker images.
 """
 
 import argparse
+import collections
 import datetime
 import json
 import logging
@@ -22,7 +23,7 @@ import flask
 
 
 app = flask.Flask(__name__)
-results = {}
+results = collections.OrderedDict()
 _TEMPLATE = (
     'python {directory}/test_runner.py -c "{config}" -t {timestamp} '
     '-d {tempdir} -s {server}')

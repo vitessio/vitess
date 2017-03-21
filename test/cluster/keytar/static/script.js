@@ -17,13 +17,13 @@ $(document).ready(function() {
         </thead> \
         <tbody>";
     $.each(data, function(key, value) {
-      html += "<tr><td>" + value.time + "</td><td><a href=https://hub.docker.com/r/" + value.docker_image + ">" + value.docker_image + "</a></td><td>" + value.name + "</td><td>" + value.status + "</td><td><table>";
+      html += "<tr><td>" + value.timestamp + "</td><td><a href=https://hub.docker.com/r/" + value.docker_image + ">" + value.docker_image + "</a></td><td>" + value.name + "</td><td>" + value.status + "</td><td><table>";
       $.each(value.tests, function(key, val) {
         html += "<tr><td>" + key + "</td></tr>";
       });
       html += "</table></td><td><table>";
       $.each(value.tests, function(key, val) {
-        html += "<tr><td><a href='test_log?log_name=" + value.time + "_" + key + "'>" + val + "</a></td></tr>";
+        html += "<tr><td><a href='test_log?log_name=" + value.timestamp + "_" + key + "'>" + val + "</a></td></tr>";
       });
       html += "</table></td></tr>";
     });

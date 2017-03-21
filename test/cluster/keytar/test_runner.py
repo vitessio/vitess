@@ -23,7 +23,7 @@ def update_result(k, v):
   url = '%s/update_results' % keytar_args.server
   req = urllib2.Request(url)
   req.add_header('Content-Type', 'application/json')
-  urllib2.urlopen(req, json.dumps({k: v, 'time': keytar_args.timestamp}))
+  urllib2.urlopen(req, json.dumps({k: v, 'timestamp': keytar_args.timestamp}))
 
 
 def run_sandbox_action(environment_config, name, action):

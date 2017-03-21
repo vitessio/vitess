@@ -23,9 +23,8 @@ class TestKeytarWeb(unittest.TestCase):
     keytar_folder = os.path.join(environment.vttop, 'test/cluster/keytar')
     cls.flask_process = subprocess.Popen(
         [os.path.join(keytar_folder, 'keytar.py'),
-         os.path.join(keytar_folder, 'test_config.yaml'),
-         '--config_file=test_config.yaml', '--port=%d' % port,
-         '--password=foo'],
+         '--config_file=%s' % os.path.join(keytar_folder, 'test_config.yaml'),
+         '--port=%d' % port, '--password=foo'],
         preexec_fn=os.setsid)
     cls.flask_addr = 'http://localhost:%d' % port
 
