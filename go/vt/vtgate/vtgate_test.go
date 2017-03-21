@@ -464,7 +464,7 @@ func TestVTGateIntercept(t *testing.T) {
 
 	// unsupported set
 	_, _, err = rpcVTGate.Execute(context.Background(), "set a = 2", nil, "", topodatapb.TabletType_MASTER, session, false, nil)
-	wantErr = "unsupport construct: set a = 2"
+	wantErr = "unsupported construct: set a = 2"
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("Execute: %v, want %s", err, wantErr)
 	}
@@ -496,7 +496,7 @@ func TestVTGateAutocommit(t *testing.T) {
 	}
 	wantSession = &vtgatepb.Session{Autocommit: true}
 	if !reflect.DeepEqual(session, wantSession) {
-		t.Errorf("autocommit=0: %v, want %v", session, wantSession)
+		t.Errorf("autocommit=1: %v, want %v", session, wantSession)
 	}
 	if commitCount := sbc.CommitCount.Get(); commitCount != 1 {
 		t.Errorf("want 1, got %d", commitCount)
@@ -515,7 +515,7 @@ func TestVTGateAutocommit(t *testing.T) {
 	testSession := *session
 	testSession.ShardSessions = nil
 	if !reflect.DeepEqual(&testSession, wantSession) {
-		t.Errorf("autocommit=0: %v, want %v", &testSession, wantSession)
+		t.Errorf("autocommit=1: %v, want %v", &testSession, wantSession)
 	}
 	if commitCount := sbc.CommitCount.Get(); commitCount != 1 {
 		t.Errorf("want 1, got %d", commitCount)
@@ -526,7 +526,7 @@ func TestVTGateAutocommit(t *testing.T) {
 	}
 	wantSession = &vtgatepb.Session{Autocommit: true}
 	if !reflect.DeepEqual(session, wantSession) {
-		t.Errorf("autocommit=0: %v, want %v", session, wantSession)
+		t.Errorf("autocommit=1: %v, want %v", session, wantSession)
 	}
 	if commitCount := sbc.CommitCount.Get(); commitCount != 2 {
 		t.Errorf("want 2, got %d", commitCount)

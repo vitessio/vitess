@@ -260,6 +260,7 @@ func (vtg *VTGate) Execute(ctx context.Context, sql string, bindVariables map[st
 		qr, err = vtg.router.Execute(ctx, sql, bindVariables, keyspace, tabletType, session, notInTransaction, options)
 	}
 	if err == nil && autocommit {
+		// Set the error if commit fails.
 		err = vtg.Commit(ctx, vtg.transactionMode == TxTwoPC, session)
 	}
 	if err == nil {
@@ -267,8 +268,9 @@ func (vtg *VTGate) Execute(ctx context.Context, sql string, bindVariables map[st
 		return session, qr, nil
 	}
 
+	// Error handling: Execute or Commit failed.
 	if autocommit {
-		// Don't error-check.
+		// Rollback the transaction and ignore errors.
 		vtg.Rollback(ctx, session)
 	}
 
@@ -321,7 +323,7 @@ func (vtg *VTGate) intercept(ctx context.Context, sql string, session *vtgatepb.
 		}
 		val, ok := vals["autocommit"]
 		if !ok {
-			return session, true, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupport construct: %s", sql)
+			return session, true, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported construct: %s", sql)
 		}
 		if val != 0 {
 			session.Autocommit = true
@@ -333,6 +335,9 @@ func (vtg *VTGate) intercept(ctx context.Context, sql string, session *vtgatepb.
 	return session, false, nil
 }
 
+// localBegin starts a transaction using the default settings of VTGate.
+// This is different from the exported Begin because there is no explicit
+// transaction mode when we implicitly begin a transaction.
 func (vtg *VTGate) localBegin(session *vtgatepb.Session) {
 	session.InTransaction = true
 	session.SingleDb = vtg.transactionMode == TxSingle

@@ -210,25 +210,29 @@ func TestExtractSetNums(t *testing.T) {
 		sql: "select * from t",
 		err: "ast did not yield *sqlparser.Set: *sqlparser.Select",
 	}, {
-		sql: "set a.autoinc=1",
-		err: "invalid syntax: a.autoinc",
+		sql: "set a.autocommit=1",
+		err: "invalid syntax: a.autocommit",
 	}, {
-		sql: "set autoinc=1+1",
+		sql: "set autocommit=1+1",
 		err: "invalid syntax: 1 + 1",
 	}, {
-		sql: "set autoinc='aa'",
+		sql: "set autocommit='aa'",
 		err: "invalid value type: 'aa'",
 	}, {
-		sql: "set autoinc=1",
-		out: map[string]int64{"autoinc": 1},
+		sql: "set autocommit=1",
+		out: map[string]int64{"autocommit": 1},
 	}, {
-		sql: "set AUTOINC=1",
-		out: map[string]int64{"autoinc": 1},
+		sql: "set AUTOCOMMIT=1",
+		out: map[string]int64{"autocommit": 1},
 	}}
 	for _, tcase := range testcases {
 		out, err := ExtractSetNums(tcase.sql)
-		if err != nil && err.Error() != tcase.err {
-			t.Errorf("ExtractSetNums(%s): %v, want '%s'", tcase.sql, err, tcase.err)
+		if tcase.err != "" {
+			if err == nil || err.Error() != tcase.err {
+				t.Errorf("ExtractSetNums(%s): %v, want '%s'", tcase.sql, err, tcase.err)
+			}
+		} else if err != nil {
+			t.Errorf("ExtractSetNums(%s): %v, want no error", tcase.sql, err)
 		}
 		if !reflect.DeepEqual(out, tcase.out) {
 			t.Errorf("ExtractSetNums(%s): %v, want '%v'", tcase.sql, out, tcase.out)
