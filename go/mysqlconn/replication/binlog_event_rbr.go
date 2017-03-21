@@ -188,10 +188,8 @@ func cellLength(data []byte, pos int, typ byte, metadata uint16) (int, error) {
 		return 4, nil
 	case TypeLongLong, TypeDouble:
 		return 8, nil
-	case TypeDate, TypeNewDate:
+	case TypeDate, TypeTime, TypeNewDate:
 		return 3, nil
-	case TypeTime:
-		return 4, nil
 	case TypeDateTime:
 		return 8, nil
 	case TypeVarchar, TypeVarString:
@@ -375,7 +373,7 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, styp querypb.Typ
 		return sqltypes.MakeTrusted(querypb.Type_FLOAT64,
 			strconv.AppendFloat(nil, fval, 'E', -1, 64)), 8, nil
 	case TypeTimestamp:
-		val := binary.BigEndian.Uint32(data[pos : pos+4])
+		val := binary.LittleEndian.Uint32(data[pos : pos+4])
 		return sqltypes.MakeTrusted(querypb.Type_TIMESTAMP,
 			[]byte(printTimestamp(val))), 4, nil
 	case TypeLongLong:
@@ -396,12 +394,26 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, styp querypb.Typ
 		return sqltypes.MakeTrusted(querypb.Type_DATE,
 			[]byte(fmt.Sprintf("%04d-%02d-%02d", year, month, day))), 3, nil
 	case TypeTime:
-		val := binary.LittleEndian.Uint32(data[pos : pos+4])
-		hour := val / 10000
-		minute := (val % 10000) / 100
-		second := val % 100
+		var hour, minute, second int32
+		if data[pos+2]&128 > 0 {
+			// Negative number, have to extend the sign.
+			val := int32(uint32(data[pos]) +
+				uint32(data[pos+1])<<8 +
+				uint32(data[pos+2])<<16 +
+				uint32(255)<<24)
+			hour = val / 10000
+			minute = -((val % 10000) / 100)
+			second = -(val % 100)
+		} else {
+			val := int32(data[pos]) +
+				int32(data[pos+1])<<8 +
+				int32(data[pos+2])<<16
+			hour = val / 10000
+			minute = (val % 10000) / 100
+			second = val % 100
+		}
 		return sqltypes.MakeTrusted(querypb.Type_TIME,
-			[]byte(fmt.Sprintf("%02d:%02d:%02d", hour, minute, second))), 4, nil
+			[]byte(fmt.Sprintf("%02d:%02d:%02d", hour, minute, second))), 3, nil
 	case TypeDateTime:
 		val := binary.LittleEndian.Uint64(data[pos : pos+8])
 		d := val / 1000000
@@ -591,14 +603,18 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, styp querypb.Typ
 			[]byte(fmt.Sprintf("%v%02d:%02d:%02d%v", sign, hour, minute, second, fracStr))), 3 + (int(metadata)+1)/2, nil
 
 	case TypeJSON:
+		l := int(uint64(data[pos]) |
+			uint64(data[pos+1])<<8)
 		// length in encoded in 'meta' bytes, but at least 2,
 		// and the value cannot be > 64k, so just read 2 bytes.
 		// (meta also should have '2' as value).
 		// (this weird logic is what event printing does).
-		l := int(uint64(data[pos]) |
-			uint64(data[pos+1])<<8)
-		return sqltypes.MakeTrusted(querypb.Type_JSON,
-			data[pos+int(metadata):pos+int(metadata)+l]), l + int(metadata), nil
+
+		// TODO(alainjobart) the binary data for JSON should
+		// be parsed, and re-printed as JSON. This is a large
+		// project, as the binary version of the data is
+		// somewhat complex. For now, just return NULL.
+		return sqltypes.NULL, l + int(metadata), nil
 
 	case TypeNewDecimal:
 		precision := int(metadata >> 8) // total digits number

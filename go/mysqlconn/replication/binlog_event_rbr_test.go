@@ -84,7 +84,7 @@ func TestCellLengthAndData(t *testing.T) {
 	}, {
 		// 0x58d137c5 = 1490106309 = 2017-03-21 14:25:09
 		typ:  TypeTimestamp,
-		data: []byte{0x58, 0xd1, 0x37, 0xc5},
+		data: []byte{0xc5, 0x37, 0xd1, 0x58},
 		out: sqltypes.MakeTrusted(querypb.Type_TIMESTAMP,
 			[]byte("2017-03-21 14:25:09")),
 	}, {
@@ -113,8 +113,8 @@ func TestCellLengthAndData(t *testing.T) {
 			[]byte("2010-10-03")),
 	}, {
 		typ: TypeTime,
-		// 154532 = 0x00025ba4
-		data: []byte{0xa4, 0x5b, 0x02, 0x00},
+		// 154532 = 0x025ba4
+		data: []byte{0xa4, 0x5b, 0x02},
 		out: sqltypes.MakeTrusted(querypb.Type_TIME,
 			[]byte("15:45:32")),
 	}, {
@@ -388,8 +388,7 @@ func TestCellLengthAndData(t *testing.T) {
 		typ:      TypeJSON,
 		metadata: 2,
 		data:     []byte{0x03, 0x00, 'a', 'b', 'c'},
-		out: sqltypes.MakeTrusted(querypb.Type_JSON,
-			[]byte("abc")),
+		out:      sqltypes.NULL,
 	}, {
 		typ:      TypeEnum,
 		metadata: 1,
