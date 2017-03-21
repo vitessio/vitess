@@ -260,7 +260,7 @@ func TestVTGateExecute(t *testing.T) {
 	}
 }
 
-func TestVTGateExecuteWithScope(t *testing.T) {
+func TestVTGateExecuteWithKeyspaceShard(t *testing.T) {
 	createSandbox(KsTestUnsharded)
 	hcVTGateTest.Reset()
 	hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, KsTestUnsharded, "0", topodatapb.TabletType_MASTER, true, 1, nil)
@@ -1058,7 +1058,7 @@ func TestVTGateStreamExecute(t *testing.T) {
 	}
 }
 
-func TestVTGateStreamExecuteScope(t *testing.T) {
+func TestVTGateStreamExecuteKeyspaceShard(t *testing.T) {
 	ks := KsTestUnsharded
 	shard := "0"
 	createSandbox(ks)
@@ -2436,7 +2436,7 @@ func TestVTGateShowMetadataUnsharded(t *testing.T) {
 	hcVTGateTest.Reset()
 	hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, KsTestUnsharded, "0", topodatapb.TabletType_MASTER, true, 1, nil)
 
-	qr, err := rpcVTGate.Execute(context.Background(),
+	_, qr, err := rpcVTGate.Execute(context.Background(),
 		"show databases",
 		nil,
 		"",
@@ -2462,7 +2462,7 @@ func TestVTGateShowMetadataUnsharded(t *testing.T) {
 		t.Errorf("ks %s not found in Values \n%+v", KsTestUnsharded, qr.Rows)
 	}
 
-	qr, err = rpcVTGate.Execute(context.Background(),
+	_, qr, err = rpcVTGate.Execute(context.Background(),
 		"show vitess_keyspaces",
 		nil,
 		"",
@@ -2488,7 +2488,7 @@ func TestVTGateShowMetadataUnsharded(t *testing.T) {
 		t.Errorf("ks %s not found in Values \n%+v", KsTestUnsharded, qr.Rows)
 	}
 
-	qr, err = rpcVTGate.Execute(context.Background(),
+	_, qr, err = rpcVTGate.Execute(context.Background(),
 		"show vitess_shards",
 		nil,
 		"",
@@ -2515,7 +2515,7 @@ func TestVTGateShowMetadataUnsharded(t *testing.T) {
 		t.Errorf("shard %s not found in Values \n%+v", shard, qr.Rows)
 	}
 
-	qr, err = rpcVTGate.Execute(context.Background(),
+	_, qr, err = rpcVTGate.Execute(context.Background(),
 		"show vschema_tables",
 		nil,
 		"",
@@ -2529,7 +2529,7 @@ func TestVTGateShowMetadataUnsharded(t *testing.T) {
 		t.Errorf("wanted %s, got %v", expected, err)
 	}
 
-	qr, err = rpcVTGate.Execute(context.Background(),
+	_, qr, err = rpcVTGate.Execute(context.Background(),
 		"show vschema_tables",
 		nil,
 		"no_such_keyspace",
@@ -2543,7 +2543,7 @@ func TestVTGateShowMetadataUnsharded(t *testing.T) {
 		t.Errorf("wanted %s, got %v", expected, err)
 	}
 
-	qr, err = rpcVTGate.Execute(context.Background(),
+	_, qr, err = rpcVTGate.Execute(context.Background(),
 		"show vschema_tables",
 		nil,
 		KsTestUnsharded,
@@ -2569,7 +2569,7 @@ func TestVTGateShowMetadataUnsharded(t *testing.T) {
 		t.Errorf("table %s not found in Values \n%+v", "t1", qr.Rows)
 	}
 
-	qr, err = rpcVTGate.Execute(context.Background(),
+	_, qr, err = rpcVTGate.Execute(context.Background(),
 		"show create databases",
 		nil,
 		"",
@@ -2582,7 +2582,7 @@ func TestVTGateShowMetadataUnsharded(t *testing.T) {
 	if err == nil || err.Error() != expected {
 		t.Errorf("wanted %s, got %v", expected, err)
 	}
-	qr, err = rpcVTGate.Execute(context.Background(),
+	_, qr, err = rpcVTGate.Execute(context.Background(),
 		"show tables",
 		nil,
 		"",
@@ -2601,7 +2601,7 @@ func TestVTGateShowMetadataTwoShards(t *testing.T) {
 	keyspace := "TestShowMetadataTwoShards"
 	setUpSandboxWithTwoShards(keyspace)
 
-	qr, err := rpcVTGate.Execute(context.Background(),
+	_, qr, err := rpcVTGate.Execute(context.Background(),
 		"show databases",
 		nil,
 		"",
@@ -2627,7 +2627,7 @@ func TestVTGateShowMetadataTwoShards(t *testing.T) {
 		t.Errorf("ks %s not found in Values \n%+v", keyspace, qr.Rows)
 	}
 
-	qr, err = rpcVTGate.Execute(context.Background(),
+	_, qr, err = rpcVTGate.Execute(context.Background(),
 		"show vitess_shards",
 		nil,
 		"",
