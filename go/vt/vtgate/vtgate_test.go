@@ -2244,6 +2244,20 @@ func TestVTGateShowMetadataUnsharded(t *testing.T) {
 	qr, err = rpcVTGate.Execute(context.Background(),
 		"show vschema_tables",
 		nil,
+		"no_such_keyspace",
+		topodatapb.TabletType_MASTER,
+		nil,
+		false,
+		executeOptions)
+
+	expected = "vtgate: : keyspace no_such_keyspace not found in vschema";
+	if err == nil || err.Error() != expected {
+		t.Errorf("wanted %s, got %v", expected, err)
+	}
+
+	qr, err = rpcVTGate.Execute(context.Background(),
+		"show vschema_tables",
+		nil,
 		KsTestUnsharded,
 		topodatapb.TabletType_MASTER,
 		nil,
@@ -2265,6 +2279,33 @@ func TestVTGateShowMetadataUnsharded(t *testing.T) {
 
 	if !valuesContain(qr.Rows, "t1") {
 		t.Errorf("table %s not found in Values \n%+v", "t1", qr.Rows)
+	}
+
+	qr, err = rpcVTGate.Execute(context.Background(),
+		"show create databases",
+		nil,
+		"",
+		topodatapb.TabletType_MASTER,
+		nil,
+		false,
+		executeOptions)
+
+	expected = "vtgate: : unsupported show statement";
+	if err == nil || err.Error() != expected {
+		t.Errorf("wanted %s, got %v", expected, err)
+	}
+	qr, err = rpcVTGate.Execute(context.Background(),
+		"show tables",
+		nil,
+		"",
+		topodatapb.TabletType_MASTER,
+		nil,
+		false,
+		executeOptions)
+
+	expected = "vtgate: : unimplemented metadata query: show tables";
+	if err == nil || err.Error() != expected {
+		t.Errorf("wanted %s, got %v", expected, err)
 	}
 }
 
