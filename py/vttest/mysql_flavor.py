@@ -4,7 +4,6 @@ This module is used by mysql_db_mysqlctl.py to handle differences
 between various flavors of mysql.
 """
 
-import environment
 import logging
 import os
 import sys
