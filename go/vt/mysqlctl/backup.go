@@ -507,7 +507,7 @@ func backupFile(ctx context.Context, mysqld MysqlDaemon, logger logutil.Logger, 
 // checkNoDB makes sure there is no user data already there.
 // Used by Restore, as we do not want to destroy an existing DB.
 // The user's database name must be given since we ignore all others.
-// Returns true iff the specified DB either doesn't exist, or has no tables.
+// Returns true if the specified DB either doesn't exist, or has no tables.
 // Returns (false, nil) if the check succeeds but the condition is not
 // satisfied (there is a DB with tables).
 // Returns non-nil error if one occurs while trying to perform the check.
