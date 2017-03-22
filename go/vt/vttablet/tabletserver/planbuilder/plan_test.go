@@ -23,8 +23,11 @@ import (
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/schema"
 )
 
-// MarshalJSON is only used for testing.
-func (ep *Plan) MarshalJSON() ([]byte, error) {
+// toJSON returns a JSON of the given Plan.
+// Except for "TableName", it's a 1:1 copy of the fields of "Plan".
+// (The JSON output is used in the tests to compare it against the data in the
+// golden files e.g. data/test/tabletserver/exec_cases.txt.)
+func toJSON(p *Plan) ([]byte, error) {
 	mplan := struct {
 		PlanID               PlanType
 		Reason               ReasonType             `json:",omitempty"`
@@ -41,20 +44,20 @@ func (ep *Plan) MarshalJSON() ([]byte, error) {
 		SubqueryPKColumns    []int                  `json:",omitempty"`
 		MessageReloaderQuery *sqlparser.ParsedQuery `json:",omitempty"`
 	}{
-		PlanID:               ep.PlanID,
-		Reason:               ep.Reason,
-		TableName:            ep.TableName(),
-		FieldQuery:           ep.FieldQuery,
-		FullQuery:            ep.FullQuery,
-		OuterQuery:           ep.OuterQuery,
-		Subquery:             ep.Subquery,
-		UpsertQuery:          ep.UpsertQuery,
-		ColumnNumbers:        ep.ColumnNumbers,
-		PKValues:             ep.PKValues,
-		SecondaryPKValues:    ep.SecondaryPKValues,
-		WhereClause:          ep.WhereClause,
-		SubqueryPKColumns:    ep.SubqueryPKColumns,
-		MessageReloaderQuery: ep.MessageReloaderQuery,
+		PlanID:               p.PlanID,
+		Reason:               p.Reason,
+		TableName:            p.TableName(),
+		FieldQuery:           p.FieldQuery,
+		FullQuery:            p.FullQuery,
+		OuterQuery:           p.OuterQuery,
+		Subquery:             p.Subquery,
+		UpsertQuery:          p.UpsertQuery,
+		ColumnNumbers:        p.ColumnNumbers,
+		PKValues:             p.PKValues,
+		SecondaryPKValues:    p.SecondaryPKValues,
+		WhereClause:          p.WhereClause,
+		SubqueryPKColumns:    p.SubqueryPKColumns,
+		MessageReloaderQuery: p.MessageReloaderQuery,
 	}
 	return json.Marshal(&mplan)
 }
@@ -67,7 +70,7 @@ func TestPlan(t *testing.T) {
 		if err != nil {
 			out = err.Error()
 		} else {
-			bout, err := json.Marshal(plan)
+			bout, err := toJSON(plan)
 			if err != nil {
 				t.Fatalf("Error marshalling %v: %v", plan, err)
 			}
@@ -110,7 +113,7 @@ func TestCustom(t *testing.T) {
 				if err != nil {
 					out = err.Error()
 				} else {
-					bout, err := json.Marshal(plan)
+					bout, err := toJSON(plan)
 					if err != nil {
 						t.Fatalf("Error marshalling %v: %v", plan, err)
 					}
@@ -132,7 +135,7 @@ func TestStreamPlan(t *testing.T) {
 		if err != nil {
 			out = err.Error()
 		} else {
-			bout, err := json.Marshal(plan)
+			bout, err := toJSON(plan)
 			if err != nil {
 				t.Fatalf("Error marshalling %v: %v", plan, err)
 			}
