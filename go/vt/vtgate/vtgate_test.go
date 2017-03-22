@@ -295,7 +295,7 @@ func TestVTGateExecuteWithKeyspaceShard(t *testing.T) {
 		t.Errorf("Execute: %v, want %s", err, want)
 	}
 
-	// Valid keyspace:shard.
+	// Valid keyspace/shard.
 	_, qr, err = rpcVTGate.Execute(context.Background(),
 		"random statement",
 		nil,
@@ -311,7 +311,7 @@ func TestVTGateExecuteWithKeyspaceShard(t *testing.T) {
 		t.Errorf("want \n%+v, got \n%+v", sandboxconn.SingleRowResult, qr)
 	}
 
-	// Invalid keyspace:shard.
+	// Invalid keyspace/shard.
 	_, _, err = rpcVTGate.Execute(context.Background(),
 		"select id from none",
 		nil,
