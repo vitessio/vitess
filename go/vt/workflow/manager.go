@@ -469,6 +469,17 @@ func (m *Manager) WorkflowForTesting(uuid string) (Workflow, error) {
 	return rw.workflow, nil
 }
 
+// WorkflowInfoForTesting returns the WorkflowInfo object of the running
+// workflow identified by uuid. The method is used in unit tests to manipulate
+// checkpoint.
+func (m *Manager) WorkflowInfoForTesting(uuid string) (*topo.WorkflowInfo, error) {
+	rw, err := m.runningWorkflow(uuid)
+	if err != nil {
+		return nil, err
+	}
+	return rw.wi, nil
+}
+
 // runningWorkflow returns a runningWorkflow by uuid.
 func (m *Manager) runningWorkflow(uuid string) (*runningWorkflow, error) {
 	m.mu.Lock()

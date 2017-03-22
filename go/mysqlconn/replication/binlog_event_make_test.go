@@ -230,19 +230,36 @@ func TestTableMapEvent(t *testing.T) {
 		Flags:    0x8090,
 		Database: "my_database",
 		Name:     "my_table",
-		Columns: []TableMapColumn{
-			{Type: TypeLongLong, CanBeNull: false},
-			{Type: TypeLongLong, CanBeNull: true},
-			{Type: TypeLongLong, CanBeNull: true},
-			{Type: TypeLongLong, CanBeNull: false},
-			{Type: TypeLongLong, CanBeNull: false},
-			{Type: TypeTime, CanBeNull: true},
-			{Type: TypeLongLong, CanBeNull: false},
-			{Type: TypeLongLong, CanBeNull: false},
-			{Type: TypeLongLong, CanBeNull: false},
-			{Type: TypeVarchar, CanBeNull: true},
+		Types: []byte{
+			TypeLongLong,
+			TypeLongLong,
+			TypeLongLong,
+			TypeLongLong,
+			TypeLongLong,
+			TypeTime,
+			TypeLongLong,
+			TypeLongLong,
+			TypeLongLong,
+			TypeVarchar,
+		},
+		CanBeNull: NewServerBitmap(10),
+		Metadata: []uint16{
+			0,
+			0,
+			0,
+			0,
+			0,
+			0,
+			0,
+			0,
+			0,
+			384, // Length of the varchar field.
 		},
 	}
+	tm.CanBeNull.Set(1, true)
+	tm.CanBeNull.Set(2, true)
+	tm.CanBeNull.Set(5, true)
+	tm.CanBeNull.Set(9, true)
 
 	event := NewTableMapEvent(f, s, 0x102030405060, tm)
 	if !event.IsValid() {
@@ -280,11 +297,17 @@ func TestRowsEvent(t *testing.T) {
 		Flags:    0x8090,
 		Database: "my_database",
 		Name:     "my_table",
-		Columns: []TableMapColumn{
-			{Type: TypeLong, CanBeNull: false},
-			{Type: TypeVarchar, CanBeNull: true},
+		Types: []byte{
+			TypeLong,
+			TypeVarchar,
+		},
+		CanBeNull: NewServerBitmap(2),
+		Metadata: []uint16{
+			0,
+			384,
 		},
 	}
+	tm.CanBeNull.Set(1, true)
 
 	// Do an update packet with all fields set.
 	rows := Rows{
@@ -317,11 +340,11 @@ func TestRowsEvent(t *testing.T) {
 
 	// Test the Rows we just created, to be sure.
 	// 1076895760 is 0x40302010.
-	identifies, err := rows.StringIdentifies(tm, 0)
+	identifies, err := rows.StringIdentifiesForTests(tm, 0)
 	if expected := []string{"1076895760", "abc"}; !reflect.DeepEqual(identifies, expected) {
 		t.Fatalf("bad Rows idenfity, got %v expected %v", identifies, expected)
 	}
-	values, err := rows.StringValues(tm, 0)
+	values, err := rows.StringValuesForTests(tm, 0)
 	if expected := []string{"1076895760", "abcd"}; !reflect.DeepEqual(values, expected) {
 		t.Fatalf("bad Rows data, got %v expected %v", values, expected)
 	}

@@ -1,6 +1,8 @@
 package com.flipkart.vitess.jdbc;
 
 import com.flipkart.vitess.util.Constants;
+import com.flipkart.vitess.util.MysqlDefs;
+import com.flipkart.vitess.util.charset.CharsetMapping;
 import com.google.common.util.concurrent.Futures;
 import com.youtube.vitess.client.Context;
 import com.youtube.vitess.client.SQLFuture;
@@ -194,12 +196,55 @@ public class VitessConnectionTest extends BaseTest {
     }
 
     @Test public void testPropertiesFromJdbcUrl() throws SQLException {
-        String url = "jdbc:vitess://locahost:9000/vt_keyspace/keyspace?TABLET_TYPE=replica&includedFields=type_and_name";
+        String url = "jdbc:vitess://locahost:9000/vt_keyspace/keyspace?TABLET_TYPE=replica&includedFields=type_and_name&blobsAreStrings=yes";
         VitessConnection conn = new VitessConnection(url, new Properties());
 
         // Properties from the url should be passed into the connection properties, and override whatever defaults we've defined
         Assert.assertEquals(Query.ExecuteOptions.IncludedFields.TYPE_AND_NAME, conn.getIncludedFields());
         Assert.assertEquals(false, conn.isIncludeAllFields());
         Assert.assertEquals(Topodata.TabletType.REPLICA, conn.getTabletType());
+        Assert.assertEquals(true, conn.getBlobsAreStrings());
+    }
+
+    @Test public void testGetEncodingForIndex() throws SQLException {
+        VitessConnection conn = getVitessConnection();
+
+        // No default encoding configured, and passing NO_CHARSET_INFO basically says "mysql doesn't know"
+        // which means don't try looking it up
+        Assert.assertEquals(null, conn.getEncodingForIndex(MysqlDefs.NO_CHARSET_INFO));
+        // Similarly, a null index or one landing out of bounds for the charset index should return null
+        Assert.assertEquals(null, conn.getEncodingForIndex(Integer.MAX_VALUE));
+        Assert.assertEquals(null, conn.getEncodingForIndex(-123));
+
+        // charsetIndex 25 is MYSQL_CHARSET_NAME_greek, which is a charset with multiple names, ISO8859_7 and greek
+        // Without an encoding configured in the connection, we should return the first (default) encoding for a charset,
+        // in this case ISO8859_7
+        Assert.assertEquals("ISO-8859-7", conn.getEncodingForIndex(25));
+        conn.setEncoding("greek");
+        // With an encoding configured, we should return that because it matches one of the names for the charset
+        Assert.assertEquals("greek", conn.getEncodingForIndex(25));
+
+        conn.setEncoding(null);
+        Assert.assertEquals("UTF-8", conn.getEncodingForIndex(33));
+        Assert.assertEquals("ISO-8859-1", conn.getEncodingForIndex(63));
+
+        conn.setEncoding("NOT_REAL");
+        // Same tests as the first one, but testing that when there is a default configured, it falls back to that regardless
+        Assert.assertEquals("NOT_REAL", conn.getEncodingForIndex(MysqlDefs.NO_CHARSET_INFO));
+        Assert.assertEquals("NOT_REAL", conn.getEncodingForIndex(Integer.MAX_VALUE));
+        Assert.assertEquals("NOT_REAL", conn.getEncodingForIndex(-123));
+    }
+
+    @Test public void testGetMaxBytesPerChar() throws SQLException {
+        VitessConnection conn = getVitessConnection();
+
+        // Default state when no good info is passed in
+        Assert.assertEquals(0, conn.getMaxBytesPerChar(MysqlDefs.NO_CHARSET_INFO, null));
+        // use passed collation index
+        Assert.assertEquals(3, conn.getMaxBytesPerChar(CharsetMapping.MYSQL_COLLATION_INDEX_utf8, null));
+        // use first, if both are passed and valid
+        Assert.assertEquals(3, conn.getMaxBytesPerChar(CharsetMapping.MYSQL_COLLATION_INDEX_utf8, "UnicodeBig"));
+        // use passed default charset
+        Assert.assertEquals(2, conn.getMaxBytesPerChar(MysqlDefs.NO_CHARSET_INFO, "UnicodeBig"));
     }
 }

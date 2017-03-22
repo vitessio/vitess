@@ -36,16 +36,6 @@ public class VitessJDBCUrl {
     private final Properties info;
     private String catalog;
 
-    private final boolean useSSL;
-    private final String keyStore;
-    private final String keyStorePassword;
-    private final String keyAlias;
-    private final String keyPassword;
-    private final String trustStore;
-    private final String trustStorePassword;
-    private final String trustAlias;
-
-
     /*
      Assuming List of vtGate ips could be given in url, separated by ","
     */
@@ -152,16 +142,6 @@ public class VitessJDBCUrl {
         this.catalog =
             StringUtils.isNullOrEmptyWithoutWS(m.group(10)) ? this.keyspace : m.group(10);
         this.hostInfos = getURLHostInfos(postUrl);
-
-        this.useSSL = "true".equalsIgnoreCase(caseInsensitiveKeyLookup(info, Constants.Property.USE_SSL));
-        this.keyStore = caseInsensitiveKeyLookup(info, Constants.Property.KEYSTORE);
-        this.keyStorePassword = caseInsensitiveKeyLookup(info, Constants.Property.KEYSTORE_PASSWORD);
-        this.keyAlias = caseInsensitiveKeyLookup(info, Constants.Property.KEY_ALIAS);
-        this.keyPassword = caseInsensitiveKeyLookup(info, Constants.Property.KEY_PASSWORD);
-        this.trustStore = caseInsensitiveKeyLookup(info, Constants.Property.TRUSTSTORE);
-        this.trustStorePassword = caseInsensitiveKeyLookup(info, Constants.Property.TRUSTSTORE_PASSWORD);
-        this.trustAlias = caseInsensitiveKeyLookup(info, Constants.Property.TRUSTSTORE_ALIAS);
-
         this.url = url;
         this.info = info;
     }
@@ -188,38 +168,6 @@ public class VitessJDBCUrl {
 
     public void setCatalog(String catalog) {
         this.catalog = catalog;
-    }
-
-    public boolean isUseSSL() {
-        return useSSL;
-    }
-
-    public String getKeyStore() {
-        return keyStore;
-    }
-
-    public String getKeyStorePassword() {
-        return keyStorePassword;
-    }
-
-    public String getKeyAlias() {
-        return keyAlias;
-    }
-
-    public String getKeyPassword() {
-        return keyPassword;
-    }
-
-    public String getTrustStore() {
-        return trustStore;
-    }
-
-    public String getTrustStorePassword() {
-        return trustStorePassword;
-    }
-
-    public String getTrustAlias() {
-        return trustAlias;
     }
 
     /**

@@ -154,16 +154,28 @@ func (q Query) String() string {
 
 // TableMap contains data from a TABLE_MAP_EVENT.
 type TableMap struct {
-	Flags    uint16
-	Database string
-	Name     string
-	Columns  []TableMapColumn
-}
+	// Flags is the table's flags.
+	Flags uint16
 
-// TableMapColumn describes a table column inside a TABLE_MAP_EVENT.
-type TableMapColumn struct {
-	Type      byte
-	CanBeNull bool
+	// Database is the database name.
+	Database string
+
+	// Name is the name of the table.
+	Name string
+
+	// Types is an array of MySQL types for the fields.
+	Types []byte
+
+	// CanBeNull's bits are set if the column can be NULL.
+	CanBeNull Bitmap
+
+	// Metadata is an array of uint16, one per column.
+	// It contains a few extra information about each column,
+	// that is dependent on the type.
+	// - If the metadata is not present, this is zero.
+	// - If the metadata is one byte, only the lower 8 bits are used.
+	// - If the metadata is two bytes, all 16 bits are used.
+	Metadata []uint16
 }
 
 // Rows contains data from a {WRITE,UPDATE,DELETE}_ROWS_EVENT.
@@ -179,10 +191,10 @@ type Rows struct {
 
 	// DataColumns describes which columns are included. It is
 	// a bitmap indexed by the TableMap list of columns.
-	// Set for WRITE and UPDATE
+	// Set for WRITE and UPDATE.
 	DataColumns Bitmap
 
-	// Rows is an array of UpdateRow in the event.
+	// Rows is an array of Row in the event.
 	Rows []Row
 }
 

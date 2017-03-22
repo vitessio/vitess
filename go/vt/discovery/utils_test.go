@@ -1,7 +1,6 @@
 package discovery
 
 import (
-	"reflect"
 	"testing"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
@@ -47,8 +46,15 @@ func TestRemoveUnhealthyTablets(t *testing.T) {
 	}
 
 	for _, tc := range testcases {
-		if got := RemoveUnhealthyTablets(tc.input); !reflect.DeepEqual(got, tc.want) {
+		got := RemoveUnhealthyTablets(tc.input)
+		if len(got) != len(tc.want) {
 			t.Errorf("test case '%v' failed: RemoveUnhealthyTablets(%v) = %#v, want: %#v", tc.desc, tc.input, got, tc.want)
+		} else {
+			for i := range tc.want {
+				if !got[i].DeepEqual(&tc.want[i]) {
+					t.Errorf("test case '%v' failed: RemoveUnhealthyTablets(%v) = %#v, want: %#v", tc.desc, tc.input, got, tc.want)
+				}
+			}
 		}
 	}
 }

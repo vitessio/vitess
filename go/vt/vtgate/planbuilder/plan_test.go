@@ -211,8 +211,11 @@ func iterateExecFile(name string) (testCaseIterator chan testCase) {
 				if l[0] == '}' {
 					output = output[:len(output)-1]
 					b := bytes.NewBuffer(make([]byte, 0, 64))
-					if err := json.Compact(b, output); err == nil {
+					err := json.Compact(b, output)
+					if err == nil {
 						output = b.Bytes()
+					} else {
+						panic("Invalid JSON " + string(output) + err.Error())
 					}
 					break
 				}

@@ -14,14 +14,17 @@
 {{- range . }}{{template "format-flags" .}}{{end -}}
 {{- end -}}
 
-# Format a shard name, making sure it starts and ends with [A-Za-z0-9].
-{{- define "format-shard-name" -}}
+# Clean labels, making sure it starts and ends with [A-Za-z0-9].
+# This is especially important for shard names, which can start or end with
+# '-' (like -80 or 80-), which would be an invalid kubernetes label.
+{{- define "clean-label" -}}
+{{- $replaced_label := . | replace "_" "-"}}
 {{- if hasPrefix "-" . -}}
-x{{.}}
+x{{$replaced_label}}
 {{- else if hasSuffix "-" . -}}
-{{.}}x
+{{$replaced_label}}x
 {{- else -}}
-{{.}}
+{{$replaced_label}}
 {{- end -}}
 {{- end -}}
 

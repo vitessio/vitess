@@ -180,7 +180,8 @@ class Tablet(object):
     args.extend(cmd)
     return utils.run_bg(args, extra_env=extra_env)
 
-  def init_mysql(self, extra_my_cnf=None, init_db=None, extra_args=None):
+  def init_mysql(self, extra_my_cnf=None, init_db=None, extra_args=None,
+                 use_rbr=False):
     """Init the mysql tablet directory, starts mysqld.
 
     Either runs 'mysqlctl init', or starts a mysqlctld process.
@@ -189,10 +190,17 @@ class Tablet(object):
       extra_my_cnf: to pass to mysqlctl.
       init_db: if set, use this init_db script instead of the default.
       extra_args: passed to mysqlctld / mysqlctl.
+      use_rbr: configure the MySQL daemon to use RBR.
 
     Returns:
       The forked process.
     """
+    if use_rbr:
+      if extra_my_cnf:
+        extra_my_cnf += ':' + environment.vttop + '/config/mycnf/rbr.cnf'
+      else:
+        extra_my_cnf = environment.vttop + '/config/mycnf/rbr.cnf'
+
     if not init_db:
       init_db = environment.vttop + '/config/init_db.sql'
 

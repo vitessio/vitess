@@ -16,6 +16,8 @@ import (
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/tb"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
+	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/schema"
 
 	binlogdatapb "github.com/youtube/vitess/go/vt/proto/binlogdata"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -92,9 +94,12 @@ func (m *UpdateStreamControlMock) IsEnabled() bool {
 // and UpdateStreamControl
 type UpdateStreamImpl struct {
 	// the following variables are set at construction time
-
-	mysqld mysqlctl.MysqlDaemon
-	dbname string
+	ts       topo.Server
+	keyspace string
+	cell     string
+	mysqld   mysqlctl.MysqlDaemon
+	dbname   string
+	se       *schema.Engine
 
 	// actionLock protects the following variables
 	actionLock     sync.Mutex
@@ -154,10 +159,14 @@ type RegisterUpdateStreamServiceFunc func(UpdateStream)
 var RegisterUpdateStreamServices []RegisterUpdateStreamServiceFunc
 
 // NewUpdateStream returns a new UpdateStreamImpl object
-func NewUpdateStream(mysqld mysqlctl.MysqlDaemon, dbname string) *UpdateStreamImpl {
+func NewUpdateStream(ts topo.Server, keyspace string, cell string, mysqld mysqlctl.MysqlDaemon, se *schema.Engine, dbname string) *UpdateStreamImpl {
 	return &UpdateStreamImpl{
-		mysqld: mysqld,
-		dbname: dbname,
+		ts:       ts,
+		keyspace: keyspace,
+		cell:     cell,
+		mysqld:   mysqld,
+		se:       se,
+		dbname:   dbname,
 	}
 }
 
@@ -216,7 +225,7 @@ func (updateStream *UpdateStreamImpl) IsEnabled() bool {
 }
 
 // StreamKeyRange is part of the UpdateStream interface
-func (updateStream *UpdateStreamImpl) StreamKeyRange(ctx context.Context, position string, keyRange *topodatapb.KeyRange, charset *binlogdatapb.Charset, callback func(reply *binlogdatapb.BinlogTransaction) error) (err error) {
+func (updateStream *UpdateStreamImpl) StreamKeyRange(ctx context.Context, position string, keyRange *topodatapb.KeyRange, charset *binlogdatapb.Charset, callback func(trans *binlogdatapb.BinlogTransaction) error) (err error) {
 	pos, err := replication.DecodePosition(position)
 	if err != nil {
 		return err
@@ -237,12 +246,16 @@ func (updateStream *UpdateStreamImpl) StreamKeyRange(ctx context.Context, positi
 	log.Infof("ServeUpdateStream starting @ %#v", pos)
 
 	// Calls cascade like this: binlog.Streamer->KeyRangeFilterFunc->func(*binlogdatapb.BinlogTransaction)->callback
-	f := KeyRangeFilterFunc(keyRange, func(reply *binlogdatapb.BinlogTransaction) error {
-		keyrangeStatements.Add(int64(len(reply.Statements)))
+	f := KeyRangeFilterFunc(keyRange, func(trans *binlogdatapb.BinlogTransaction) error {
+		keyrangeStatements.Add(int64(len(trans.Statements)))
 		keyrangeTransactions.Add(1)
-		return callback(reply)
+		return callback(trans)
 	})
-	bls := NewStreamer(updateStream.dbname, updateStream.mysqld, charset, pos, 0, f)
+	bls := NewStreamer(updateStream.dbname, updateStream.mysqld, updateStream.se, charset, pos, 0, f)
+	bls.resolverFactory, err = newKeyspaceIDResolverFactory(ctx, updateStream.ts, updateStream.keyspace, updateStream.cell)
+	if err != nil {
+		return fmt.Errorf("newKeyspaceIDResolverFactory failed: %v", err)
+	}
 
 	streamCtx, cancel := context.WithCancel(ctx)
 	i := updateStream.streams.Add(cancel)
@@ -252,7 +265,7 @@ func (updateStream *UpdateStreamImpl) StreamKeyRange(ctx context.Context, positi
 }
 
 // StreamTables is part of the UpdateStream interface
-func (updateStream *UpdateStreamImpl) StreamTables(ctx context.Context, position string, tables []string, charset *binlogdatapb.Charset, callback func(reply *binlogdatapb.BinlogTransaction) error) (err error) {
+func (updateStream *UpdateStreamImpl) StreamTables(ctx context.Context, position string, tables []string, charset *binlogdatapb.Charset, callback func(trans *binlogdatapb.BinlogTransaction) error) (err error) {
 	pos, err := replication.DecodePosition(position)
 	if err != nil {
 		return err
@@ -273,12 +286,12 @@ func (updateStream *UpdateStreamImpl) StreamTables(ctx context.Context, position
 	log.Infof("ServeUpdateStream starting @ %#v", pos)
 
 	// Calls cascade like this: binlog.Streamer->TablesFilterFunc->func(*binlogdatapb.BinlogTransaction)->callback
-	f := TablesFilterFunc(tables, func(reply *binlogdatapb.BinlogTransaction) error {
-		tablesStatements.Add(int64(len(reply.Statements)))
+	f := TablesFilterFunc(tables, func(trans *binlogdatapb.BinlogTransaction) error {
+		tablesStatements.Add(int64(len(trans.Statements)))
 		tablesTransactions.Add(1)
-		return callback(reply)
+		return callback(trans)
 	})
-	bls := NewStreamer(updateStream.dbname, updateStream.mysqld, charset, pos, 0, f)
+	bls := NewStreamer(updateStream.dbname, updateStream.mysqld, updateStream.se, charset, pos, 0, f)
 
 	streamCtx, cancel := context.WithCancel(ctx)
 	i := updateStream.streams.Add(cancel)

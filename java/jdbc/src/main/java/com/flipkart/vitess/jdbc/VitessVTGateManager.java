@@ -37,16 +37,14 @@ public class VitessVTGateManager {
         /**
          * Constructor
          *
-         * @param vitessJDBCUrl
+         * @param connection
          */
-        public VTGateConnections(VitessJDBCUrl vitessJDBCUrl) {
-            for (VitessJDBCUrl.HostInfo hostInfo : vitessJDBCUrl.getHostInfos()) {
-                String identifier = getIdentifer(hostInfo.getHostname(), hostInfo.getPort(),
-                    vitessJDBCUrl.getUsername());
+        public VTGateConnections(VitessConnection connection) {
+            for (VitessJDBCUrl.HostInfo hostInfo : connection.getUrl().getHostInfos()) {
+                String identifier = getIdentifer(hostInfo.getHostname(), hostInfo.getPort(), connection.getUsername());
                 synchronized (VitessVTGateManager.class) {
                     if (!vtGateConnHashMap.containsKey(identifier)) {
-                        updateVtGateConnHashMap(identifier, hostInfo.getHostname(),
-                            hostInfo.getPort(), vitessJDBCUrl);
+                        updateVtGateConnHashMap(identifier, hostInfo.getHostname(), hostInfo.getPort(), connection);
                     }
                 }
                 vtGateIdentifiers.add(identifier);
@@ -78,11 +76,11 @@ public class VitessVTGateManager {
      * @param identifier
      * @param hostname
      * @param port
-     * @param jdbcUrl
+     * @param connection
      */
     private static void updateVtGateConnHashMap(String identifier, String hostname, int port,
-                                                VitessJDBCUrl jdbcUrl) {
-        vtGateConnHashMap.put(identifier, getVtGateConn(hostname, port, jdbcUrl));
+                                                VitessConnection connection) {
+        vtGateConnHashMap.put(identifier, getVtGateConn(hostname, port, connection));
     }
 
     /**
@@ -105,30 +103,30 @@ public class VitessVTGateManager {
      *
      * @param hostname
      * @param port
-     * @param jdbcUrl
+     * @param connection
      * @return
      */
-    private static VTGateConn getVtGateConn(String hostname, int port, VitessJDBCUrl jdbcUrl) {
-        final String username = jdbcUrl.getUsername();
-        final String keyspace = jdbcUrl.getKeyspace();
+    private static VTGateConn getVtGateConn(String hostname, int port, VitessConnection connection) {
+        final String username = connection.getUsername();
+        final String keyspace = connection.getKeyspace();
         final Context context = CommonUtils.createContext(username, Constants.CONNECTION_TIMEOUT);
         final InetSocketAddress inetSocketAddress = new InetSocketAddress(hostname, port);
         RpcClient client;
-        if (jdbcUrl.isUseSSL()) {
-            final String keyStorePath = jdbcUrl.getKeyStore() != null
-                    ? jdbcUrl.getKeyStore() : System.getProperty(Constants.Property.KEYSTORE_FULL);
-            final String keyStorePassword = jdbcUrl.getKeyStorePassword() != null
-                    ? jdbcUrl.getKeyStorePassword() : System.getProperty(Constants.Property.KEYSTORE_PASSWORD_FULL);
-            final String keyAlias = jdbcUrl.getKeyAlias() != null
-                    ? jdbcUrl.getKeyAlias() : System.getProperty(Constants.Property.KEY_ALIAS_FULL);
-            final String keyPassword = jdbcUrl.getKeyPassword() != null
-                    ? jdbcUrl.getKeyPassword() : System.getProperty(Constants.Property.KEY_PASSWORD_FULL);
-            final String trustStorePath = jdbcUrl.getTrustStore() != null
-                    ? jdbcUrl.getTrustStore() : System.getProperty(Constants.Property.TRUSTSTORE_FULL);
-            final String trustStorePassword = jdbcUrl.getTrustStorePassword() != null
-                    ? jdbcUrl.getTrustStorePassword() : System.getProperty(Constants.Property.TRUSTSTORE_PASSWORD_FULL);
-            final String trustAlias = jdbcUrl.getTrustAlias() != null
-                    ? jdbcUrl.getTrustAlias() : System.getProperty(Constants.Property.TRUSTSTORE_ALIAS_FULL);
+        if (connection.getUseSSL()) {
+            final String keyStorePath = connection.getKeyStore() != null
+                    ? connection.getKeyStore() : System.getProperty(Constants.Property.KEYSTORE_FULL);
+            final String keyStorePassword = connection.getKeyStorePassword() != null
+                    ? connection.getKeyStorePassword() : System.getProperty(Constants.Property.KEYSTORE_PASSWORD_FULL);
+            final String keyAlias = connection.getKeyAlias() != null
+                    ? connection.getKeyAlias() : System.getProperty(Constants.Property.KEY_ALIAS_FULL);
+            final String keyPassword = connection.getKeyPassword() != null
+                    ? connection.getKeyPassword() : System.getProperty(Constants.Property.KEY_PASSWORD_FULL);
+            final String trustStorePath = connection.getTrustStore() != null
+                    ? connection.getTrustStore() : System.getProperty(Constants.Property.TRUSTSTORE_FULL);
+            final String trustStorePassword = connection.getTrustStorePassword() != null
+                    ? connection.getTrustStorePassword() : System.getProperty(Constants.Property.TRUSTSTORE_PASSWORD_FULL);
+            final String trustAlias = connection.getTrustAlias() != null
+                    ? connection.getTrustAlias() : System.getProperty(Constants.Property.TRUST_ALIAS_FULL);
 
             final TlsOptions tlsOptions = new TlsOptions()
                     .keyStorePath(keyStorePath)

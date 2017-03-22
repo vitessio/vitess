@@ -392,8 +392,8 @@ func (node *Set) WalkSubtree(visit Visit) error {
 // NewName is set for AlterStr, CreateStr, RenameStr.
 type DDL struct {
 	Action   string
-	Table    TableIdent
-	NewName  TableIdent
+	Table    *TableName
+	NewName  *TableName
 	IfExists bool
 }
 
@@ -723,6 +723,16 @@ func (node *TableName) Equal(t *TableName) bool {
 		return false
 	}
 	return node.Name == t.Name && node.Qualifier == t.Qualifier
+}
+
+// ToViewName returns a TableName acceptable for use as a VIEW. VIEW names are
+// always lowercase, so ToViewName lowercasese the name. Databases are case-sensitive
+// so Qualifier is left untouched.
+func (node *TableName) ToViewName() *TableName {
+	return &TableName{
+		Qualifier: node.Qualifier,
+		Name:      NewTableIdent(strings.ToLower(node.Name.v)),
+	}
 }
 
 // ParenTableExpr represents a parenthesized list of TableExpr.

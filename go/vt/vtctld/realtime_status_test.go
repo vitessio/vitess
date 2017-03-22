@@ -2,7 +2,6 @@ package vtctld
 
 import (
 	"fmt"
-	"reflect"
 	"testing"
 	"time"
 
@@ -11,10 +10,10 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/youtube/vitess/go/vt/discovery"
 	"github.com/youtube/vitess/go/vt/logutil"
-	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
-	"github.com/youtube/vitess/go/vt/tabletserver/grpcqueryservice"
-	"github.com/youtube/vitess/go/vt/tabletserver/queryservice/fakes"
 	"github.com/youtube/vitess/go/vt/topo/memorytopo"
+	"github.com/youtube/vitess/go/vt/vttablet/grpcqueryservice"
+	"github.com/youtube/vitess/go/vt/vttablet/queryservice/fakes"
+	"github.com/youtube/vitess/go/vt/vttablet/tmclient"
 	"github.com/youtube/vitess/go/vt/wrangler"
 	"github.com/youtube/vitess/go/vt/wrangler/testlib"
 
@@ -106,7 +105,7 @@ func checkStats(realtimeStats *realtimeStats, tablet *testlib.FakeTablet, want *
 		if err != nil {
 			continue
 		}
-		if reflect.DeepEqual(result, discovery.TabletStats{}) {
+		if result.DeepEqual(&discovery.TabletStats{}) {
 			continue
 		}
 		got := result.Stats

@@ -38,7 +38,8 @@ all_tablets = [source_master, source_replica, source_rdonly1, source_rdonly2,
 def setUpModule():
   try:
     environment.topo_server().setup()
-    setup_procs = [t.init_mysql() for t in all_tablets]
+    setup_procs = [t.init_mysql(use_rbr=base_sharding.use_rbr)
+                   for t in all_tablets]
     utils.Vtctld().start()
     utils.wait_procs(setup_procs)
   except:

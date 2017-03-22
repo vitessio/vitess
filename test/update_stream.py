@@ -16,6 +16,9 @@ from mysql_flavor import mysql_flavor
 from protocols_flavor import protocols_flavor
 from vtgate_gateway_flavor.gateway import vtgate_gateway_flavor
 
+# global flag to control which type of replication we use.
+use_rbr = False
+
 master_tablet = tablet.Tablet()
 replica_tablet = tablet.Tablet()
 
@@ -59,8 +62,8 @@ def setUpModule():
     environment.topo_server().setup()
 
     # start mysql instance external to the test
-    setup_procs = [master_tablet.init_mysql(),
-                   replica_tablet.init_mysql()]
+    setup_procs = [master_tablet.init_mysql(use_rbr=use_rbr),
+                   replica_tablet.init_mysql(use_rbr=use_rbr)]
     utils.wait_procs(setup_procs)
 
     # start a vtctld so the vtctl insert commands are just RPCs, not forks

@@ -17,6 +17,7 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/sqlparser"
+	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/schema"
 
 	binlogdatapb "github.com/youtube/vitess/go/vt/proto/binlogdata"
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
@@ -39,11 +40,12 @@ type EventStreamer struct {
 }
 
 // NewEventStreamer returns a new EventStreamer on top of a Streamer
-func NewEventStreamer(dbname string, mysqld mysqlctl.MysqlDaemon, startPos replication.Position, timestamp int64, sendEvent sendEventFunc) *EventStreamer {
+func NewEventStreamer(dbname string, mysqld mysqlctl.MysqlDaemon, se *schema.Engine, startPos replication.Position, timestamp int64, sendEvent sendEventFunc) *EventStreamer {
 	evs := &EventStreamer{
 		sendEvent: sendEvent,
 	}
-	evs.bls = NewStreamer(dbname, mysqld, nil, startPos, timestamp, evs.transactionToEvent)
+	evs.bls = NewStreamer(dbname, mysqld, se, nil, startPos, timestamp, evs.transactionToEvent)
+	evs.bls.extractPK = true
 	return evs
 }
 
@@ -52,16 +54,16 @@ func (evs *EventStreamer) Stream(ctx context.Context) error {
 	return evs.bls.Stream(ctx)
 }
 
-func (evs *EventStreamer) transactionToEvent(trans *binlogdatapb.BinlogTransaction) error {
+func (evs *EventStreamer) transactionToEvent(eventToken *querypb.EventToken, statements []FullBinlogStatement) error {
 	event := &querypb.StreamEvent{
-		EventToken: trans.EventToken,
+		EventToken: eventToken,
 	}
 	var err error
 	var insertid int64
-	for _, stmt := range trans.Statements {
-		switch stmt.Category {
+	for _, stmt := range statements {
+		switch stmt.Statement.Category {
 		case binlogdatapb.BinlogTransaction_Statement_BL_SET:
-			sql := string(stmt.Sql)
+			sql := string(stmt.Statement.Sql)
 			if strings.HasPrefix(sql, binlogSetInsertID) {
 				insertid, err = strconv.ParseInt(sql[binlogSetInsertIDLen:], 10, 64)
 				if err != nil {
@@ -73,41 +75,59 @@ func (evs *EventStreamer) transactionToEvent(trans *binlogdatapb.BinlogTransacti
 			binlogdatapb.BinlogTransaction_Statement_BL_UPDATE,
 			binlogdatapb.BinlogTransaction_Statement_BL_DELETE:
 			var dmlStatement *querypb.StreamEvent_Statement
-			dmlStatement, insertid, err = evs.buildDMLStatement(string(stmt.Sql), insertid)
+			dmlStatement, insertid, err = evs.buildDMLStatement(stmt, insertid)
 			if err != nil {
 				dmlStatement = &querypb.StreamEvent_Statement{
 					Category: querypb.StreamEvent_Statement_Error,
-					Sql:      stmt.Sql,
+					Sql:      stmt.Statement.Sql,
 				}
 			}
 			event.Statements = append(event.Statements, dmlStatement)
 		case binlogdatapb.BinlogTransaction_Statement_BL_DDL:
 			ddlStatement := &querypb.StreamEvent_Statement{
 				Category: querypb.StreamEvent_Statement_DDL,
-				Sql:      stmt.Sql,
+				Sql:      stmt.Statement.Sql,
 			}
 			event.Statements = append(event.Statements, ddlStatement)
 		case binlogdatapb.BinlogTransaction_Statement_BL_UNRECOGNIZED:
 			unrecognized := &querypb.StreamEvent_Statement{
 				Category: querypb.StreamEvent_Statement_Error,
-				Sql:      stmt.Sql,
+				Sql:      stmt.Statement.Sql,
 			}
 			event.Statements = append(event.Statements, unrecognized)
 		default:
 			binlogStreamerErrors.Add("EventStreamer", 1)
-			log.Errorf("Unrecognized event: %v: %s", stmt.Category, stmt.Sql)
+			log.Errorf("Unrecognized event: %v: %s", stmt.Statement.Category, stmt.Statement.Sql)
 		}
 	}
 	return evs.sendEvent(event)
 }
 
 /*
-buildDMLStatement parses the tuples of the full stream comment.
+buildDMLStatement recovers the PK from a FullBinlogStatement.
+For RBR, the values are already in there, just need to be translated.
+For SBR, parses the tuples of the full stream comment.
 The _stream comment is extracted into a StreamEvent.Statement.
 */
 // Example query: insert into _table_(foo) values ('foo') /* _stream _table_ (eid id name ) (null 1 'bmFtZQ==' ); */
 // the "null" value is used for auto-increment columns.
-func (evs *EventStreamer) buildDMLStatement(sql string, insertid int64) (*querypb.StreamEvent_Statement, int64, error) {
+func (evs *EventStreamer) buildDMLStatement(stmt FullBinlogStatement, insertid int64) (*querypb.StreamEvent_Statement, int64, error) {
+	// For RBR events, we know all this already, just extract it.
+	if stmt.PKNames != nil {
+		// We get an array of []sqltypes.Value, need to convert to querypb.Row.
+		dmlStatement := &querypb.StreamEvent_Statement{
+			Category:         querypb.StreamEvent_Statement_DML,
+			TableName:        stmt.Table,
+			PrimaryKeyFields: stmt.PKNames,
+			PrimaryKeyValues: []*querypb.Row{sqltypes.RowToProto3(stmt.PKValues)},
+		}
+		// InsertID is only needed to fill in the ID on next queries,
+		// but if we use RBR, it's already in the values, so just return 0.
+		return dmlStatement, 0, nil
+	}
+
+	sql := string(stmt.Statement.Sql)
+
 	// first extract the comment
 	commentIndex := strings.LastIndex(sql, streamCommentStart)
 	if commentIndex == -1 {
@@ -115,7 +135,7 @@ func (evs *EventStreamer) buildDMLStatement(sql string, insertid int64) (*queryp
 	}
 	dmlComment := sql[commentIndex+streamCommentStartLen:]
 
-	// then strat building the response
+	// then start building the response
 	dmlStatement := &querypb.StreamEvent_Statement{
 		Category: querypb.StreamEvent_Statement_DML,
 	}

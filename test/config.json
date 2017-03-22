@@ -86,17 +86,6 @@
 			"RetryMax": 0,
 			"Tags": []
 		},
-		"goveralls": {
-			"File": "",
-			"Args": [],
-			"Command": [
-				"travis/goveralls.sh"
-			],
-			"Manual": true,
-			"Shard": 0,
-			"RetryMax": 0,
-			"Tags": []
-		},
 		"initial_sharding": {
 			"File": "initial_sharding.py",
 			"Args": [],
@@ -291,6 +280,17 @@
 				"worker_test"
 			]
 		},
+		"resharding_rbr": {
+			"File": "resharding_rbr.py",
+			"Args": [],
+			"Command": [],
+			"Manual": false,
+			"Shard": 0,
+			"RetryMax": 0,
+			"Tags": [
+				"worker_test"
+			]
+		},
 		"schema": {
 			"File": "schema.py",
 			"Args": [],
@@ -396,8 +396,28 @@
 			"RetryMax": 0,
 			"Tags": []
 		},
+		"update_stream_rbr": {
+			"File": "update_stream_rbr.py",
+			"Args": [],
+			"Command": [],
+			"Manual": false,
+			"Shard": 4,
+			"RetryMax": 0,
+			"Tags": []
+		},
 		"vertical_split": {
 			"File": "vertical_split.py",
+			"Args": [],
+			"Command": [],
+			"Manual": false,
+			"Shard": 1,
+			"RetryMax": 0,
+			"Tags": [
+				"worker_test"
+			]
+		},
+		"vertical_split_rbr": {
+			"File": "vertical_split_rbr.py",
 			"Args": [],
 			"Command": [],
 			"Manual": false,

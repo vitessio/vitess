@@ -26,4 +26,4 @@ spec:
             limits:
               memory: "128Mi"
               cpu: "100m"
-          args: ["--port", "{{port}}", "--cell", "{{cell}}", "--vtgate_port", "{{vtgate_port}}"]
+          args: ["--port", "{{port}}", "--cell", "{{cell}}", "--keyspace", "{{keyspace}}", "--vtgate_port", "{{vtgate_port}}"]

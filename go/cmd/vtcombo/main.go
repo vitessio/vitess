@@ -23,11 +23,11 @@ import (
 	"github.com/youtube/vitess/go/vt/discovery"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/servenv"
-	"github.com/youtube/vitess/go/vt/tabletserver/tabletenv"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/memorytopo"
 	"github.com/youtube/vitess/go/vt/vtctld"
 	"github.com/youtube/vitess/go/vt/vtgate"
+	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	vttestpb "github.com/youtube/vitess/go/vt/proto/vttest"
