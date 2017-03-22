@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"math"
 	"net/http"
-	"strings"
 	"sync"
 	"time"
 
@@ -249,7 +248,7 @@ func (vtg *VTGate) Execute(ctx context.Context, sql string, bindVariables map[st
 		vtg.localBegin(session)
 	}
 
-	keyspace, shard := parseKeyspaceShard(keyspaceShard)
+	keyspace, shard := topoproto.ParseKeyspaceOptionalShard(keyspaceShard)
 	if shard != "" {
 		sql = sqlannotation.AnnotateIfDML(sql, nil)
 		f := func(keyspace string) (string, []string, error) {
@@ -579,7 +578,7 @@ func (vtg *VTGate) StreamExecute(ctx context.Context, sql string, bindVariables 
 	statsKey := []string{"StreamExecute", "Any", ltt}
 	defer vtg.timings.Record(statsKey, startTime)
 
-	keyspace, shard := parseKeyspaceShard(keyspaceShard)
+	keyspace, shard := topoproto.ParseKeyspaceOptionalShard(keyspaceShard)
 	var err error
 	if shard != "" {
 		err = vtg.resolver.streamExecute(
@@ -1043,13 +1042,4 @@ func annotateBoundShardQueriesAsUnfriendly(queries []*vtgatepb.BoundShardQuery) 
 	for i, q := range queries {
 		queries[i].Query.Sql = sqlannotation.AnnotateIfDML(q.Query.Sql, nil)
 	}
-}
-
-// parseKeyspaceShard parses the keyspace and shard from the KeyspaceShard.
-func parseKeyspaceShard(keyspaceShard string) (string, string) {
-	last := strings.LastIndex(keyspaceShard, "/")
-	if last == -1 {
-		return keyspaceShard, ""
-	}
-	return keyspaceShard[:last], keyspaceShard[last+1:]
 }
