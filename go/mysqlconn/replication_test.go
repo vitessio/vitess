@@ -951,6 +951,11 @@ func testRowReplicationTypesWithRealDatabase(t *testing.T, params *sqldb.ConnPar
 			createType:  "TIMESTAMP(6)",
 			createValue: "'2012-11-10 15:34:56.012345'",
 		}, {
+			// TIMESTAMP (0 with microsecond precision)
+			name:        "timestamp_microsecond_z",
+			createType:  "TIMESTAMP(6)",
+			createValue: "'0000-00-00 00:00:00.000000'",
+		}, {
 			// TIME
 			name:        "time_100milli",
 			createType:  "TIME(1)",
@@ -1035,7 +1040,11 @@ func testRowReplicationTypesWithRealDatabase(t *testing.T, params *sqldb.ConnPar
 		t.Fatal(err)
 	}
 	defer dConn.Close()
-	if _, err := dConn.ExecuteFetch("SET time_zone = '+00:00'", 0, false); err != nil {
+
+	// Set the connection time zone for execution of the
+	// statements to PST. That way we're sure to test the
+	// conversion for the TIMESTAMP types.
+	if _, err := dConn.ExecuteFetch("SET time_zone = '+08:00'", 0, false); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1141,7 +1150,16 @@ func testRowReplicationTypesWithRealDatabase(t *testing.T, params *sqldb.ConnPar
 		sql.WriteString(", ")
 		sql.WriteString(tcase.name)
 		sql.WriteString(" = ")
-		values[i+1].EncodeSQL(&sql)
+		if values[i+1].Type() == querypb.Type_TIMESTAMP && !strings.HasPrefix(values[i+1].String(), "0000-00-00 00:00:00") {
+			// Values in the binary log are UTC. Let's convert them
+			// to whatever timezone the connection is using,
+			// so MySQL properly converts them back to UTC.
+			sql.WriteString("convert_tz(")
+			values[i+1].EncodeSQL(&sql)
+			sql.WriteString(", '+00:00', @@session.time_zone)")
+		} else {
+			values[i+1].EncodeSQL(&sql)
+		}
 	}
 	result, err = dConn.ExecuteFetch(sql.String(), 0, false)
 	if err != nil {
