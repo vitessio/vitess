@@ -17,6 +17,7 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/acl"
+	"github.com/youtube/vitess/go/hack"
 	"github.com/youtube/vitess/go/history"
 	"github.com/youtube/vitess/go/mysqlconn"
 	"github.com/youtube/vitess/go/mysqlconn/replication"
@@ -37,11 +38,13 @@ import (
 	"github.com/youtube/vitess/go/vt/vttablet/queryservice"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/connpool"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/messager"
+	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/planbuilder"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/querytypes"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/rules"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/schema"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/splitquery"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
+	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/txserializer"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/txthrottler"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
@@ -72,6 +75,8 @@ const (
 // logTxPoolFull is for throttling txpool full messages in the log.
 var logTxPoolFull = logutil.NewThrottledLogger("TxPoolFull", 1*time.Minute)
 
+var logComputeRowSerializerKey = logutil.NewThrottledLogger("ComputeRowSerializerKey", 1*time.Minute)
+
 // stateName names every state. The number of elements must
 // match the number of states. Names can overlap.
 var stateName = []string{
@@ -84,9 +89,10 @@ var stateName = []string{
 
 // TabletServer implements the RPC interface for the query service.
 type TabletServer struct {
-	QueryTimeout sync2.AtomicDuration
-	BeginTimeout sync2.AtomicDuration
-	TerseErrors  bool
+	QueryTimeout           sync2.AtomicDuration
+	BeginTimeout           sync2.AtomicDuration
+	TerseErrors            bool
+	enableHotRowProtection bool
 
 	// mu is used to access state. The lock should only be held
 	// for short periods. For longer periods, you have to transition
@@ -170,13 +176,14 @@ func NewTabletServerWithNilTopoServer(config tabletenv.TabletConfig) *TabletServ
 // instance of TabletServer will expose its state variables.
 func NewTabletServer(config tabletenv.TabletConfig, topoServer topo.Server) *TabletServer {
 	tsv := &TabletServer{
-		QueryTimeout:        sync2.NewAtomicDuration(time.Duration(config.QueryTimeout * 1e9)),
-		BeginTimeout:        sync2.NewAtomicDuration(time.Duration(config.TxPoolTimeout * 1e9)),
-		TerseErrors:         config.TerseErrors,
-		checkMySQLThrottler: sync2.NewSemaphore(1, 0),
-		streamHealthMap:     make(map[int]chan<- *querypb.StreamHealthResponse),
-		history:             history.New(10),
-		topoServer:          topoServer,
+		QueryTimeout:           sync2.NewAtomicDuration(time.Duration(config.QueryTimeout * 1e9)),
+		BeginTimeout:           sync2.NewAtomicDuration(time.Duration(config.TxPoolTimeout * 1e9)),
+		TerseErrors:            config.TerseErrors,
+		enableHotRowProtection: config.EnableHotRowProtection || config.EnableHotRowProtectionDryRun,
+		checkMySQLThrottler:    sync2.NewSemaphore(1, 0),
+		streamHealthMap:        make(map[int]chan<- *querypb.StreamHealthResponse),
+		history:                history.New(10),
+		topoServer:             topoServer,
 	}
 	tsv.se = schema.NewEngine(tsv, config)
 	tsv.qe = NewQueryEngine(tsv, tsv.se, config)
@@ -925,6 +932,16 @@ func (tsv *TabletServer) ExecuteBatch(ctx context.Context, target *querypb.Targe
 
 // BeginExecute combines Begin and Execute.
 func (tsv *TabletServer) BeginExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, error) {
+	if tsv.enableHotRowProtection {
+		txDone, err := tsv.beginWaitForSameRangeTransactions(ctx, target, sql, bindVariables)
+		if err != nil {
+			return nil, 0, err
+		}
+		if txDone != nil {
+			defer txDone()
+		}
+	}
+
 	transactionID, err := tsv.Begin(ctx, target)
 	if err != nil {
 		return nil, 0, err
@@ -932,6 +949,77 @@ func (tsv *TabletServer) BeginExecute(ctx context.Context, target *querypb.Targe
 
 	result, err := tsv.Execute(ctx, target, sql, bindVariables, transactionID, options)
 	return result, transactionID, err
+}
+
+func (tsv *TabletServer) beginWaitForSameRangeTransactions(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}) (txserializer.DoneFunc, error) {
+	// Serialize the creation of new transactions *if* the first
+	// UPDATE or DELETE query has the same WHERE clause as a query which is
+	// already running in a transaction (only other BeginExecute() calls are
+	// considered). This avoids exhausting all txpool slots due to a hot row.
+	//
+	// Known Issue: There can be more than one transaction pool slot in use for
+	// the same row because the next transaction is unblocked after this
+	// BeginExecute() call is done and before Commit() on this transaction has
+	// been called. Due to the additional MySQL locking, this should result into
+	// two transaction pool slots per row at most. (This transaction pending on
+	// COMMIT, the next one waiting for MySQL in BEGIN+EXECUTE.)
+	var txDone txserializer.DoneFunc
+
+	err := tsv.execRequest(
+		ctx, tsv.BeginTimeout.Get(),
+		"waitForSameRangeTransactions", "waitForSameRangeTransactions", nil,
+		target, true /* isTx */, false, /* allowOnShutdown */
+		func(ctx context.Context, logStats *tabletenv.LogStats) error {
+			k, table := tsv.computeTxSerializerKey(ctx, logStats, sql, bindVariables)
+			if k == "" {
+				// Query is not subject to tx serialization/hot row protection.
+				return nil
+			}
+
+			startTime := time.Now()
+			done, waited, waitErr := tsv.qe.txSerializer.Wait(ctx, k, table)
+			txDone = done
+			if waited {
+				tabletenv.WaitStats.Record("TxSerializer", startTime)
+			}
+
+			return waitErr
+		})
+	return txDone, err
+}
+
+// computeTxSerializerKey returns a unique string ("key") used to determine
+// whether two queries would update the same row (range).
+// Additionally, it returns the table name (needed for updating stats vars).
+// It returns an empty string as key if the row (range) cannot be parsed from
+// the query and bind variables or the table name is empty.
+func (tsv *TabletServer) computeTxSerializerKey(ctx context.Context, logStats *tabletenv.LogStats, sql string, bindVariables map[string]interface{}) (string, string) {
+	plan, err := tsv.qe.GetPlan(ctx, logStats, sql)
+	if err != nil {
+		logComputeRowSerializerKey.Errorf("failed to get plan for query: %v err: %v", sql, err)
+		return "", ""
+	}
+
+	if plan.PlanID != planbuilder.PlanDMLPK && plan.PlanID != planbuilder.PlanDMLSubquery {
+		// Serialize only UPDATE or DELETE queries.
+		return "", ""
+	}
+
+	tableName := plan.TableName()
+	if tableName.IsEmpty() {
+		// Do not serialize any queries without a table name.
+		return "", ""
+	}
+
+	where, err := plan.WhereClause.GenerateQuery(bindVariables)
+	if err != nil {
+		logComputeRowSerializerKey.Errorf("failed to substitute bind vars in where clause: %v query: %v bind vars: %v", err, sql, bindVariables)
+		return "", ""
+	}
+
+	// Example: table1 where id = 1 and sub_id = 2
+	key := fmt.Sprintf("%s%s", tableName, hack.String(where))
+	return key, tableName.String()
 }
 
 // BeginExecuteBatch combines Begin and ExecuteBatch.
