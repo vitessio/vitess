@@ -12,6 +12,9 @@ import (
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
+// ZeroTimestamp is the special value 0 for a timestamp.
+const ZeroTimestamp = "0000-00-00 00:00:00"
+
 // TableMap implements BinlogEvent.TableMap().
 //
 // Expected format (L = total length of event data):
@@ -302,7 +305,7 @@ func cellLength(data []byte, pos int, typ byte, metadata uint16) (int, error) {
 // printTimestamp is a helper method to print a timestamp.
 func printTimestamp(v uint32) string {
 	if v == 0 {
-		return "0000-00-00 00:00:00"
+		return ZeroTimestamp
 	}
 	t := time.Unix(int64(v), 0).UTC()
 	year, month, day := t.Date()
