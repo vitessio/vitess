@@ -152,6 +152,34 @@ func testKillWithRealDatabase(t *testing.T, params *sqldb.ConnParams) {
 	assertSQLError(t, err, CRServerLost, SSUnknownSQLState, "EOF")
 }
 
+// testKill2006WithRealDatabase opens a connection, kills the
+// connection from the server side, then waits a bit, and tries to
+// execute a command. We make sure we get the right error code.
+func testKill2006WithRealDatabase(t *testing.T, params *sqldb.ConnParams) {
+	ctx := context.Background()
+	conn, err := Connect(ctx, params)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Kill the connection from the server side.
+	killConn, err := Connect(ctx, params)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer killConn.Close()
+
+	if _, err := killConn.ExecuteFetch(fmt.Sprintf("kill %v", conn.ConnectionID), 1000, false); err != nil {
+		t.Fatalf("Kill(%v) failed: %v", conn.ConnectionID, err)
+	}
+
+	// Now we should get a CRServerGone.  Since we are using a
+	// unix socket, we will get a broken pipe when the server
+	// closes the connection and we are trying to write the command.
+	_, err = conn.ExecuteFetch("select sleep(10) from dual", 1000, false)
+	assertSQLError(t, err, CRServerGone, SSUnknownSQLState, "broken pipe")
+}
+
 // testDupEntryWithRealDatabase tests a duplicate key is properly raised.
 func testDupEntryWithRealDatabase(t *testing.T, params *sqldb.ConnParams) {
 	ctx := context.Background()
@@ -244,9 +272,15 @@ ssl-key=%v/server-key.pem
 		t.Error(err)
 	}
 
-	// Kill tests the query part of the API.
+	// Kill tests killing a running query returns the right error.
 	t.Run("Kill", func(t *testing.T) {
 		testKillWithRealDatabase(t, &params)
+	})
+
+	// Kill2006 tests killing a connection with no running query
+	// returns the right error.
+	t.Run("Kill2006", func(t *testing.T) {
+		testKill2006WithRealDatabase(t, &params)
 	})
 
 	// DupEntry tests a duplicate key returns the right error.

@@ -3,7 +3,9 @@ package fakesqldb
 
 import (
 	"fmt"
-	"net"
+	"io/ioutil"
+	"os"
+	"path"
 	"regexp"
 	"strings"
 	"sync"
@@ -16,7 +18,12 @@ import (
 )
 
 // DB is a fake database and all its methods are thread safe.  It
-// creates a mysqlconn.Listener and implements the mysqlconn.Handler interface.
+// creates a mysqlconn.Listener and implements the mysqlconn.Handler
+// interface.  We use a Unix socket to connect to the database, as
+// this is the most common way for clients to connect to MySQL. This
+// impacts the error codes we're getting back: when the server side is
+// closed, the client queries will return CRServerGone(2006) when sending
+// the data, as opposed to CRServerLost(2013) when reading the response.
 type DB struct {
 	// Fields set at construction time.
 
@@ -25,6 +32,9 @@ type DB struct {
 
 	// listener is our mysqlconn.Listener.
 	listener *mysqlconn.Listener
+
+	// socketFile is the path to the unix socket file.
+	socketFile string
 
 	// acceptWG is set when we listen, and can be waited on to
 	// make sure we don't accept any more.
@@ -63,9 +73,17 @@ type exprResult struct {
 
 // New creates a server, and starts listening.
 func New(t *testing.T) *DB {
+	// Pick a path for our socket.
+	socketDir, err := ioutil.TempDir("", "fakesqldb")
+	if err != nil {
+		t.Fatalf("ioutil.TempDir failed: %v", err)
+	}
+	socketFile := path.Join(socketDir, "fakesqldb.sock")
+
 	// Create our DB.
 	db := &DB{
 		t:            t,
+		socketFile:   socketFile,
 		name:         "fakesqldb",
 		data:         make(map[string]*sqltypes.Result),
 		rejectedData: make(map[string]error),
@@ -79,8 +97,7 @@ func New(t *testing.T) *DB {
 	}
 
 	// Start listening.
-	var err error
-	db.listener, err = mysqlconn.NewListener("tcp", ":0", authServer, db)
+	db.listener, err = mysqlconn.NewListener("unix", socketFile, authServer, db)
 	if err != nil {
 		t.Fatalf("NewListener failed: %v", err)
 	}
@@ -91,7 +108,7 @@ func New(t *testing.T) *DB {
 		db.listener.Accept()
 	}()
 
-	// Return the db and connection parameters.
+	// Return the db.
 	return db
 }
 
@@ -105,11 +122,15 @@ func (db *DB) SetName(name string) *DB {
 }
 
 // Close closes the Listener and waits for it to stop accepting.
+// It then closes all connections, and cleans up the temporary directory.
 func (db *DB) Close() {
 	db.listener.Close()
 	db.acceptWG.Wait()
 
 	db.CloseAllConnections()
+
+	tmpDir := path.Dir(db.socketFile)
+	os.RemoveAll(tmpDir)
 }
 
 // CloseAllConnections can be used to provoke MySQL client errors for open
@@ -156,24 +177,13 @@ func (db *DB) WaitForClose(timeout time.Duration) error {
 	}
 }
 
-// Host returns the host we're listening on.
-func (db *DB) Host() string {
-	return db.listener.Addr().(*net.TCPAddr).IP.String()
-}
-
-// Port returns the port we're listening on.
-func (db *DB) Port() int {
-	return db.listener.Addr().(*net.TCPAddr).Port
-}
-
 // ConnParams returns the ConnParams to connect to the DB.
 func (db *DB) ConnParams() *sqldb.ConnParams {
 	return &sqldb.ConnParams{
-		Host:    db.Host(),
-		Port:    db.Port(),
-		Uname:   "user1",
-		Pass:    "password1",
-		Charset: "utf8",
+		UnixSocket: db.socketFile,
+		Uname:      "user1",
+		Pass:       "password1",
+		Charset:    "utf8",
 	}
 }
 
