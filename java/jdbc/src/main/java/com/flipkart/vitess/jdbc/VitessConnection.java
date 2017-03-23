@@ -795,12 +795,13 @@ public class VitessConnection extends ConnectionProperties implements Connection
             VitessStatement vitessStatement = new VitessStatement(this);
             try {
                 resultSet = vitessStatement.executeQuery(
-                    "SHOW VARIABLES WHERE VARIABLE_NAME IN (\'tx_isolation\',\'INNODB_VERSION\')");
+                    "SHOW VARIABLES WHERE VARIABLE_NAME IN (\'tx_isolation\',\'INNODB_VERSION\', \'lower_case_table_names\')");
                 while (resultSet.next()) {
                     dbVariables.put(resultSet.getString(1), resultSet.getString(2));
                 }
                 versionValue = dbVariables.get("innodb_version");
                 String transactionIsolation = dbVariables.get("tx_isolation");
+                String lowerCaseTables = dbVariables.get("lower_case_table_names");
                 String productVersion = "";
                 String majorVersion = "";
                 String minorVersion = "";
@@ -826,7 +827,7 @@ public class VitessConnection extends ConnectionProperties implements Connection
                     minorVersion = dbVersions[1];
                 }
                 this.dbProperties =
-                    new DBProperties(productVersion, majorVersion, minorVersion, isolationLevel);
+                    new DBProperties(productVersion, majorVersion, minorVersion, isolationLevel, lowerCaseTables);
             } finally {
                 if (null != resultSet) {
                     resultSet.close();
