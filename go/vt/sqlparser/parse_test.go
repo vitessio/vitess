@@ -798,6 +798,9 @@ func TestCaseSensitivity(t *testing.T) {
 		input:  "alter table A foo",
 		output: "alter table A",
 	}, {
+		input:  "alter table A convert",
+		output: "alter table A",
+	}, {
 		// View names get lower-cased.
 		input:  "alter view A foo",
 		output: "alter table a",

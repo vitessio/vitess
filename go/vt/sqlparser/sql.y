@@ -1595,6 +1595,8 @@ non_rename_operation:
   { $$ = struct{}{} }
 | ORDER
   { $$ = struct{}{} }
+| CONVERT
+  { $$ = struct{}{} }
 | UNUSED
   { $$ = struct{}{} }
 | ID
