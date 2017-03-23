@@ -34,7 +34,7 @@ be used to control which rows are used to identify the columns for the Update
 and Delete Rows events. The default setting for that option is to log all
 columns.
 
-## Vitess Use of Replication Stream
+## Vitess Use of MySQL Replication Stream
 
 Vitess uses the Replication Stream in a number of places. This part explains how
 we use RBR for these.
@@ -122,7 +122,8 @@ We have future plans to:
 
 ## Unsupported Features
 
-This part describes the features that are not supported for RBR in Vitess:
+This part describes the features that are not supported for RBR in Vitess as of
+March 2017:
 
 * *Fractional timestamps for MariaDB*: not supported. This affects the objects
   of type `TIMESTAMP`, `TIME` and `DATETIME`. The way that feature is
