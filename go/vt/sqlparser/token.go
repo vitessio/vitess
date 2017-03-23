@@ -222,6 +222,7 @@ var keywords = map[string]int{
 	"regexp":              REGEXP,
 	"release":             UNUSED,
 	"rename":              RENAME,
+	"repair":              REPAIR,
 	"repeat":              UNUSED,
 	"replace":             REPLACE,
 	"require":             UNUSED,
