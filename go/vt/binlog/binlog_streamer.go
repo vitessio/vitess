@@ -733,7 +733,7 @@ func writeValuesAsSQL(sql *bytes.Buffer, tce *tableCacheEntry, rs *replication.R
 		if err != nil {
 			return keyspaceIDCell, nil, err
 		}
-		if value.Type() == querypb.Type_TIMESTAMP && !strings.HasPrefix(value.String(), replication.ZeroTimestamp) {
+		if value.Type() == querypb.Type_TIMESTAMP && !bytes.HasPrefix(value.Raw(), replication.ZeroTimestamp) {
 			// Values in the binary log are UTC. Let's convert them
 			// to whatever timezone the connection is using,
 			// so MySQL properly converts them back to UTC.
@@ -794,7 +794,7 @@ func writeIdentifiesAsSQL(sql *bytes.Buffer, tce *tableCacheEntry, rs *replicati
 		if err != nil {
 			return keyspaceIDCell, nil, err
 		}
-		if value.Type() == querypb.Type_TIMESTAMP && !strings.HasPrefix(value.String(), replication.ZeroTimestamp) {
+		if value.Type() == querypb.Type_TIMESTAMP && !bytes.HasPrefix(value.Raw(), replication.ZeroTimestamp) {
 			// Values in the binary log are UTC. Let's convert them
 			// to whatever timezone the connection is using,
 			// so MySQL properly converts them back to UTC.
