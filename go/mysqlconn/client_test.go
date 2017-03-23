@@ -308,6 +308,11 @@ ssl-key=%v/server-key.pem
 		testRowReplicationWithRealDatabase(t, &params)
 	})
 
+	// Test RBR types are working properly.
+	t.Run("RBRTypes", func(t *testing.T) {
+		testRowReplicationTypesWithRealDatabase(t, &params)
+	})
+
 	// Test Schema queries work as intended.
 	t.Run("Schema", func(t *testing.T) {
 		testSchema(t, &params)

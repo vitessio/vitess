@@ -1,15 +1,20 @@
 package replication
 
 import (
+	"bytes"
 	"encoding/binary"
 	"fmt"
 	"math"
 	"strconv"
+	"time"
 
 	"github.com/youtube/vitess/go/sqltypes"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
+
+// ZeroTimestamp is the special value 0 for a timestamp.
+var ZeroTimestamp = []byte("0000-00-00 00:00:00")
 
 // TableMap implements BinlogEvent.TableMap().
 //
@@ -187,10 +192,8 @@ func cellLength(data []byte, pos int, typ byte, metadata uint16) (int, error) {
 		return 4, nil
 	case TypeLongLong, TypeDouble:
 		return 8, nil
-	case TypeDate, TypeNewDate:
+	case TypeDate, TypeTime, TypeNewDate:
 		return 3, nil
-	case TypeTime:
-		return 4, nil
 	case TypeDateTime:
 		return 8, nil
 	case TypeVarchar, TypeVarString:
@@ -281,14 +284,11 @@ func cellLength(data []byte, pos int, typ byte, metadata uint16) (int, error) {
 		// This may do String, Enum, and Set. The type is in
 		// metadata. If it's a string, then there will be more bits.
 		// This will give us the maximum length of the field.
-		max := 0
 		t := metadata >> 8
 		if t == TypeEnum || t == TypeSet {
-			max = int(metadata & 0xff)
-		} else {
-			max = int((((metadata >> 4) & 0x300) ^ 0x300) + (metadata & 0xff))
+			return int(metadata & 0xff), nil
 		}
-
+		max := int((((metadata >> 4) & 0x300) ^ 0x300) + (metadata & 0xff))
 		// Length is encoded in 1 or 2 bytes.
 		if max > 255 {
 			l := int(uint64(data[pos]) |
@@ -301,6 +301,22 @@ func cellLength(data []byte, pos int, typ byte, metadata uint16) (int, error) {
 	default:
 		return 0, fmt.Errorf("unsupported type %v (data: %v pos: %v)", typ, data, pos)
 	}
+}
+
+// printTimestamp is a helper method to append a timestamp into a bytes.Buffer,
+// and return the Buffer.
+func printTimestamp(v uint32) *bytes.Buffer {
+	if v == 0 {
+		return bytes.NewBuffer(ZeroTimestamp)
+	}
+
+	t := time.Unix(int64(v), 0).UTC()
+	year, month, day := t.Date()
+	hour, minute, second := t.Clock()
+
+	result := &bytes.Buffer{}
+	fmt.Fprintf(result, "%04d-%02d-%02d %02d:%02d:%02d", year, int(month), day, hour, minute, second)
+	return result
 }
 
 // CellValue returns the data for a cell as a sqltypes.Value, and how
@@ -316,6 +332,11 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, styp querypb.Typ
 		return sqltypes.MakeTrusted(querypb.Type_UINT8,
 			strconv.AppendUint(nil, uint64(data[pos]), 10)), 1, nil
 	case TypeYear:
+		val := data[pos]
+		if val == 0 {
+			return sqltypes.MakeTrusted(querypb.Type_YEAR,
+				[]byte{'0', '0', '0', '0'}), 1, nil
+		}
 		return sqltypes.MakeTrusted(querypb.Type_YEAR,
 			strconv.AppendUint(nil, uint64(data[pos])+1900, 10)), 1, nil
 	case TypeShort:
@@ -362,8 +383,9 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, styp querypb.Typ
 			strconv.AppendFloat(nil, fval, 'E', -1, 64)), 8, nil
 	case TypeTimestamp:
 		val := binary.LittleEndian.Uint32(data[pos : pos+4])
+		txt := printTimestamp(val)
 		return sqltypes.MakeTrusted(querypb.Type_TIMESTAMP,
-			strconv.AppendUint(nil, uint64(val), 10)), 4, nil
+			txt.Bytes()), 4, nil
 	case TypeLongLong:
 		val := binary.LittleEndian.Uint64(data[pos : pos+8])
 		if sqltypes.IsSigned(styp) {
@@ -382,12 +404,26 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, styp querypb.Typ
 		return sqltypes.MakeTrusted(querypb.Type_DATE,
 			[]byte(fmt.Sprintf("%04d-%02d-%02d", year, month, day))), 3, nil
 	case TypeTime:
-		val := binary.LittleEndian.Uint32(data[pos : pos+4])
-		hour := val / 10000
-		minute := (val % 10000) / 100
-		second := val % 100
+		var hour, minute, second int32
+		if data[pos+2]&128 > 0 {
+			// Negative number, have to extend the sign.
+			val := int32(uint32(data[pos]) +
+				uint32(data[pos+1])<<8 +
+				uint32(data[pos+2])<<16 +
+				uint32(255)<<24)
+			hour = val / 10000
+			minute = -((val % 10000) / 100)
+			second = -(val % 100)
+		} else {
+			val := int32(data[pos]) +
+				int32(data[pos+1])<<8 +
+				int32(data[pos+2])<<16
+			hour = val / 10000
+			minute = (val % 10000) / 100
+			second = val % 100
+		}
 		return sqltypes.MakeTrusted(querypb.Type_TIME,
-			[]byte(fmt.Sprintf("%02d:%02d:%02d", hour, minute, second))), 4, nil
+			[]byte(fmt.Sprintf("%02d:%02d:%02d", hour, minute, second))), 3, nil
 	case TypeDateTime:
 		val := binary.LittleEndian.Uint64(data[pos : pos+8])
 		d := val / 1000000
@@ -418,47 +454,54 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, styp querypb.Typ
 		return sqltypes.MakeTrusted(querypb.Type_BIT,
 			data[pos:pos+l]), l, nil
 	case TypeTimestamp2:
-		second := binary.LittleEndian.Uint32(data[pos : pos+4])
+		second := binary.BigEndian.Uint32(data[pos : pos+4])
+		txt := printTimestamp(second)
 		switch metadata {
 		case 1:
 			decimals := int(data[pos+4])
+			fmt.Fprintf(txt, ".%01d", decimals/10)
 			return sqltypes.MakeTrusted(querypb.Type_TIMESTAMP,
-				[]byte(fmt.Sprintf("%v.%01d", second, decimals))), 5, nil
+				txt.Bytes()), 5, nil
 		case 2:
 			decimals := int(data[pos+4])
+			fmt.Fprintf(txt, ".%02d", decimals)
 			return sqltypes.MakeTrusted(querypb.Type_TIMESTAMP,
-				[]byte(fmt.Sprintf("%v.%02d", second, decimals))), 5, nil
+				txt.Bytes()), 5, nil
 		case 3:
-			decimals := int(data[pos+4]) +
-				int(data[pos+5])<<8
+			decimals := int(data[pos+4])<<8 +
+				int(data[pos+5])
+			fmt.Fprintf(txt, ".%03d", decimals/10)
 			return sqltypes.MakeTrusted(querypb.Type_TIMESTAMP,
-				[]byte(fmt.Sprintf("%v.%03d", second, decimals))), 6, nil
+				txt.Bytes()), 6, nil
 		case 4:
-			decimals := int(data[pos+4]) +
-				int(data[pos+5])<<8
+			decimals := int(data[pos+4])<<8 +
+				int(data[pos+5])
+			fmt.Fprintf(txt, ".%04d", decimals)
 			return sqltypes.MakeTrusted(querypb.Type_TIMESTAMP,
-				[]byte(fmt.Sprintf("%v.%04d", second, decimals))), 6, nil
+				txt.Bytes()), 6, nil
 		case 5:
-			decimals := int(data[pos+4]) +
+			decimals := int(data[pos+4])<<16 +
 				int(data[pos+5])<<8 +
-				int(data[pos+6])<<16
+				int(data[pos+6])
+			fmt.Fprintf(txt, ".%05d", decimals/10)
 			return sqltypes.MakeTrusted(querypb.Type_TIMESTAMP,
-				[]byte(fmt.Sprintf("%v.%05d", second, decimals))), 7, nil
+				txt.Bytes()), 7, nil
 		case 6:
-			decimals := int(data[pos+4]) +
+			decimals := int(data[pos+4])<<16 +
 				int(data[pos+5])<<8 +
-				int(data[pos+6])<<16
+				int(data[pos+6])
+			fmt.Fprintf(txt, ".%06d", decimals)
 			return sqltypes.MakeTrusted(querypb.Type_TIMESTAMP,
-				[]byte(fmt.Sprintf("%v.%.6d", second, decimals))), 7, nil
+				txt.Bytes()), 7, nil
 		}
 		return sqltypes.MakeTrusted(querypb.Type_TIMESTAMP,
-			strconv.AppendUint(nil, uint64(second), 10)), 4, nil
+			txt.Bytes()), 4, nil
 	case TypeDateTime2:
-		ymdhms := (uint64(data[pos]) |
-			uint64(data[pos+1])<<8 |
+		ymdhms := (uint64(data[pos])<<32 |
+			uint64(data[pos+1])<<24 |
 			uint64(data[pos+2])<<16 |
-			uint64(data[pos+3])<<24 |
-			uint64(data[pos+4])<<32) - uint64(0x8000000000)
+			uint64(data[pos+3])<<8 |
+			uint64(data[pos+4])) - uint64(0x8000000000)
 		ymd := ymdhms >> 17
 		ym := ymd >> 5
 		hms := ymdhms % (1 << 17)
@@ -471,46 +514,53 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, styp querypb.Typ
 		minute := (hms >> 6) % (1 << 6)
 		hour := hms >> 12
 
-		datetime := fmt.Sprintf("%04d-%02d-%02d %02d:%02d:%02d", year, month, day, hour, minute, second)
+		txt := &bytes.Buffer{}
+		fmt.Fprintf(txt, "%04d-%02d-%02d %02d:%02d:%02d", year, month, day, hour, minute, second)
 
 		switch metadata {
 		case 1:
 			decimals := int(data[pos+5])
+			fmt.Fprintf(txt, ".%01d", decimals/10)
 			return sqltypes.MakeTrusted(querypb.Type_DATETIME,
-				[]byte(fmt.Sprintf("%v.%01d", datetime, decimals))), 6, nil
+				txt.Bytes()), 6, nil
 		case 2:
 			decimals := int(data[pos+5])
+			fmt.Fprintf(txt, ".%02d", decimals)
 			return sqltypes.MakeTrusted(querypb.Type_DATETIME,
-				[]byte(fmt.Sprintf("%v.%02d", datetime, decimals))), 6, nil
+				txt.Bytes()), 6, nil
 		case 3:
-			decimals := int(data[pos+5]) +
-				int(data[pos+6])<<8
+			decimals := int(data[pos+5])<<8 +
+				int(data[pos+6])
+			fmt.Fprintf(txt, ".%03d", decimals/10)
 			return sqltypes.MakeTrusted(querypb.Type_DATETIME,
-				[]byte(fmt.Sprintf("%v.%03d", datetime, decimals))), 7, nil
+				txt.Bytes()), 7, nil
 		case 4:
-			decimals := int(data[pos+5]) +
-				int(data[pos+6])<<8
+			decimals := int(data[pos+5])<<8 +
+				int(data[pos+6])
+			fmt.Fprintf(txt, ".%04d", decimals)
 			return sqltypes.MakeTrusted(querypb.Type_DATETIME,
-				[]byte(fmt.Sprintf("%v.%04d", datetime, decimals))), 7, nil
+				txt.Bytes()), 7, nil
 		case 5:
-			decimals := int(data[pos+5]) +
+			decimals := int(data[pos+5])<<16 +
 				int(data[pos+6])<<8 +
-				int(data[pos+7])<<16
+				int(data[pos+7])
+			fmt.Fprintf(txt, ".%05d", decimals/10)
 			return sqltypes.MakeTrusted(querypb.Type_DATETIME,
-				[]byte(fmt.Sprintf("%v.%05d", datetime, decimals))), 8, nil
+				txt.Bytes()), 8, nil
 		case 6:
-			decimals := int(data[pos+5]) +
+			decimals := int(data[pos+5])<<16 +
 				int(data[pos+6])<<8 +
-				int(data[pos+7])<<16
+				int(data[pos+7])
+			fmt.Fprintf(txt, ".%06d", decimals)
 			return sqltypes.MakeTrusted(querypb.Type_DATETIME,
-				[]byte(fmt.Sprintf("%v.%.6d", datetime, decimals))), 8, nil
+				txt.Bytes()), 8, nil
 		}
 		return sqltypes.MakeTrusted(querypb.Type_DATETIME,
-			[]byte(datetime)), 5, nil
+			txt.Bytes()), 5, nil
 	case TypeTime2:
-		hms := (int64(data[pos]) |
+		hms := (int64(data[pos])<<16 |
 			int64(data[pos+1])<<8 |
-			int64(data[pos+2])<<16) - 0x800000
+			int64(data[pos+2])) - 0x800000
 		sign := ""
 		if hms < 0 {
 			hms = -hms
@@ -534,34 +584,34 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, styp querypb.Typ
 			}
 			fracStr = fmt.Sprintf(".%.2d", frac)
 		case 3:
-			frac := int(data[pos+3]) |
-				int(data[pos+4])<<8
+			frac := int(data[pos+3])<<8 |
+				int(data[pos+4])
 			if sign == "-" && frac != 0 {
 				hms--
 				frac = 0x10000 - frac
 			}
 			fracStr = fmt.Sprintf(".%.3d", frac/10)
 		case 4:
-			frac := int(data[pos+3]) |
-				int(data[pos+4])<<8
+			frac := int(data[pos+3])<<8 |
+				int(data[pos+4])
 			if sign == "-" && frac != 0 {
 				hms--
 				frac = 0x10000 - frac
 			}
 			fracStr = fmt.Sprintf(".%.4d", frac)
 		case 5:
-			frac := int(data[pos+3]) |
+			frac := int(data[pos+3])<<16 |
 				int(data[pos+4])<<8 |
-				int(data[pos+5])<<16
+				int(data[pos+5])
 			if sign == "-" && frac != 0 {
 				hms--
 				frac = 0x1000000 - frac
 			}
 			fracStr = fmt.Sprintf(".%.5d", frac/10)
 		case 6:
-			frac := int(data[pos+3]) |
+			frac := int(data[pos+3])<<16 |
 				int(data[pos+4])<<8 |
-				int(data[pos+5])<<16
+				int(data[pos+5])
 			if sign == "-" && frac != 0 {
 				hms--
 				frac = 0x1000000 - frac
@@ -576,14 +626,18 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, styp querypb.Typ
 			[]byte(fmt.Sprintf("%v%02d:%02d:%02d%v", sign, hour, minute, second, fracStr))), 3 + (int(metadata)+1)/2, nil
 
 	case TypeJSON:
+		l := int(uint64(data[pos]) |
+			uint64(data[pos+1])<<8)
 		// length in encoded in 'meta' bytes, but at least 2,
 		// and the value cannot be > 64k, so just read 2 bytes.
 		// (meta also should have '2' as value).
 		// (this weird logic is what event printing does).
-		l := int(uint64(data[pos]) |
-			uint64(data[pos+1])<<8)
-		return sqltypes.MakeTrusted(querypb.Type_JSON,
-			data[pos+int(metadata):pos+int(metadata)+l]), l + int(metadata), nil
+
+		// TODO(alainjobart) the binary data for JSON should
+		// be parsed, and re-printed as JSON. This is a large
+		// project, as the binary version of the data is
+		// somewhat complex. For now, just return NULL.
+		return sqltypes.NULL, l + int(metadata), nil
 
 	case TypeNewDecimal:
 		precision := int(metadata >> 8) // total digits number
@@ -601,12 +655,13 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, styp querypb.Typ
 		d := make([]byte, l)
 		copy(d, data[pos:pos+l])
 
-		result := []byte{}
+		txt := &bytes.Buffer{}
+
 		isNegative := (d[0] & 0x80) == 0
 		d[0] ^= 0x80 // First bit is inverted.
 		if isNegative {
 			// Negative numbers are just inverted bytes.
-			result = append(result, '-')
+			txt.WriteByte('-')
 			for i := range d {
 				d[i] ^= 0xff
 			}
@@ -638,55 +693,52 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, styp querypb.Typ
 		}
 		pos = dig2bytes[intg0x]
 		if val > 0 {
-			result = strconv.AppendUint(result, uint64(val), 10)
+			txt.Write(strconv.AppendUint(nil, uint64(val), 10))
 		}
 
 		// now the full digits, 32 bits each, 9 digits
 		for i := 0; i < intg0; i++ {
 			val = binary.BigEndian.Uint32(d[pos : pos+4])
-			t := fmt.Sprintf("%9d", val)
-			result = append(result, []byte(t)...)
+			fmt.Fprintf(txt, "%9d", val)
 			pos += 4
 		}
 
 		// now see if we have a fraction
 		if scale == 0 {
 			return sqltypes.MakeTrusted(querypb.Type_DECIMAL,
-				result), l, nil
+				txt.Bytes()), l, nil
 		}
-		result = append(result, '.')
+		txt.WriteByte('.')
 
 		// now the full fractional digits
 		for i := 0; i < frac0; i++ {
 			val = binary.BigEndian.Uint32(d[pos : pos+4])
-			t := fmt.Sprintf("%9d", val)
-			result = append(result, []byte(t)...)
+			fmt.Fprintf(txt, "%9d", val)
 			pos += 4
 		}
 
 		// then the partial fractional digits
-		t := ""
 		switch dig2bytes[frac0x] {
 		case 0:
 			// Nothing to do
 			return sqltypes.MakeTrusted(querypb.Type_DECIMAL,
-				result), l, nil
+				txt.Bytes()), l, nil
 		case 1:
 			// one byte, 1 or 2 digits
 			val = uint32(d[pos])
 			if frac0x == 1 {
-				t = fmt.Sprintf("%1d", val)
+				fmt.Fprintf(txt, "%1d", val)
 			} else {
-				t = fmt.Sprintf("%2d", val)
+				fmt.Fprintf(txt, "%2d", val)
 			}
 		case 2:
 			// two bytes, 3 or 4 digits
 			val = uint32(d[pos])<<8 +
 				uint32(d[pos+1])
 			if frac0x == 3 {
-				t = fmt.Sprintf("%3d", val)
+				fmt.Fprintf(txt, "%3d", val)
 			} else {
-				t = fmt.Sprintf("%4d", val)
+				fmt.Fprintf(txt, "%4d", val)
 			}
 		case 3:
 			// 3 bytes, 5 or 6 digits
@@ -694,9 +746,9 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, styp querypb.Typ
 				uint32(d[pos+1])<<8 +
 				uint32(d[pos+2])
 			if frac0x == 5 {
-				t = fmt.Sprintf("%5d", val)
+				fmt.Fprintf(txt, "%5d", val)
 			} else {
-				t = fmt.Sprintf("%6d", val)
+				fmt.Fprintf(txt, "%6d", val)
 			}
 		case 4:
 			// 4 bytes, 7 or 8 digits (9 digits would be a full)
@@ -705,15 +757,14 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, styp querypb.Typ
 				uint32(d[pos+2])<<8 +
 				uint32(d[pos+3])
 			if frac0x == 7 {
-				t = fmt.Sprintf("%7d", val)
+				fmt.Fprintf(txt, "%7d", val)
 			} else {
-				t = fmt.Sprintf("%8d", val)
+				fmt.Fprintf(txt, "%8d", val)
 			}
 		}
-		result = append(result, []byte(t)...)
 
 		return sqltypes.MakeTrusted(querypb.Type_DECIMAL,
-			result), l, nil
+			txt.Bytes()), l, nil
 
 	case TypeEnum:
 		switch metadata & 0xff {
@@ -766,24 +817,32 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, styp querypb.Typ
 		// metadata. If it's a string, then there will be more bits.
 		t := metadata >> 8
 		if t == TypeEnum {
+			// We don't know the string values. So just use the
+			// numbers.
 			switch metadata & 0xff {
 			case 1:
 				// One byte storage.
-				return sqltypes.MakeTrusted(querypb.Type_ENUM,
+				return sqltypes.MakeTrusted(querypb.Type_UINT8,
 					strconv.AppendUint(nil, uint64(data[pos]), 10)), 1, nil
 			case 2:
 				// Two bytes storage.
 				val := binary.LittleEndian.Uint16(data[pos : pos+2])
-				return sqltypes.MakeTrusted(querypb.Type_ENUM,
+				return sqltypes.MakeTrusted(querypb.Type_UINT16,
 					strconv.AppendUint(nil, uint64(val), 10)), 2, nil
 			default:
 				return sqltypes.NULL, 0, fmt.Errorf("unexpected enum size: %v", metadata&0xff)
 			}
 		}
 		if t == TypeSet {
+			// We don't know the set values. So just use the
+			// numbers.
 			l := int(metadata & 0xff)
-			return sqltypes.MakeTrusted(querypb.Type_BIT,
-				data[pos:pos+l]), l, nil
+			var val uint64
+			for i := 0; i < l; i++ {
+				val += uint64(data[pos+i]) << (uint(i) * 8)
+			}
+			return sqltypes.MakeTrusted(querypb.Type_UINT64,
+				strconv.AppendUint(nil, uint64(val), 10)), l, nil
 		}
 		// This is a real string. The length is weird.
 		max := int((((metadata >> 4) & 0x300) ^ 0x300) + (metadata & 0xff))
