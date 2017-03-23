@@ -7,10 +7,8 @@ import (
 	"io/ioutil"
 
 	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/ldap"
 	"github.com/youtube/vitess/go/mysqlconn"
-	"github.com/youtube/vitess/go/netutil"
-	"github.com/youtube/vitess/go/vt/servenv/grpcutils"
-	"gopkg.in/ldap.v2"
 )
 
 var (
@@ -20,31 +18,9 @@ var (
 
 // AuthServerLdap implements AuthServer with an LDAP backend
 type AuthServerLdap struct {
-	Config *AuthServerLdapConfig
-	Client LdapClient
-}
-
-// AuthServerLdapConfig holds the config for AuthServerLdap
-// * include port in ldapServer, "ldap.example.com:386"
-type AuthServerLdapConfig struct {
-	ldapServer    string
-	ldapCert      string
-	ldapKey       string
-	ldapCA        string
-	userDnPattern string
-}
-
-// LdapClient abstracts the call to Dial so we can mock it
-type LdapClient interface {
-	Dial(network, server string) (ldap.Client, error)
-}
-
-// LdapClientImpl is the real implementation of LdapClient
-type LdapClientImpl struct{}
-
-// Dial calls the ldap.v2 library's Dial
-func (lci *LdapClientImpl) Dial(network, server string) (ldap.Client, error) {
-	return ldap.Dial(network, server)
+	ldap.Client
+	ldap.ServerConfig
+	UserDnPattern string
 }
 
 func init() {
@@ -56,7 +32,7 @@ func init() {
 		log.Infof("Both mysql_ldap_auth_config_file and mysql_ldap_auth_config_string are non-empty, can only use one.")
 		return
 	}
-	ldapAuthServer := &AuthServerLdap{Config: &AuthServerLdapConfig{}, Client: &LdapClientImpl{}}
+	ldapAuthServer := &AuthServerLdap{&ldap.ClientImpl{}, ldap.ServerConfig{}, ""}
 
 	data := []byte(*ldapAuthConfigString)
 	if *ldapAuthConfigFile != "" {
@@ -66,7 +42,7 @@ func init() {
 			log.Fatalf("Failed to read mysql_ldap_auth_config_file: %v", err)
 		}
 	}
-	if err := json.Unmarshal(data, ldapAuthServer.Config); err != nil {
+	if err := json.Unmarshal(data, ldapAuthServer); err != nil {
 		log.Fatalf("Error parsing AuthServerLdap config: %v", err)
 	}
 	mysqlconn.RegisterAuthServerImpl("ldap", ldapAuthServer)
@@ -91,28 +67,12 @@ func (asl *AuthServerLdap) ValidateHash(salt []byte, user string, authResponse [
 // and attempts to bind as that user with the supplied password.
 // It returns the supplied username.
 func (asl *AuthServerLdap) ValidateClearText(username, password string) (string, error) {
-	conn, err := asl.Client.Dial("tcp", asl.Config.ldapServer)
-	defer conn.Close()
+	err := asl.Client.Connect("tcp", &asl.ServerConfig)
+	defer asl.Client.Close()
 	if err != nil {
 		return "", err
 	}
-
-	// Reconnect with TLS ... why don't we simply DialTLS directly?
-	serverName, _, err := netutil.SplitHostPort(asl.Config.ldapServer)
-	if err != nil {
-		return "", err
-	}
-	tlsConfig, err := grpcutils.TLSClientConfig(asl.Config.ldapCert, asl.Config.ldapKey, asl.Config.ldapCA, serverName)
-	if err != nil {
-		return "", err
-	}
-	err = conn.StartTLS(tlsConfig)
-	if err != nil {
-		return "", err
-	}
-
-	// queryUser can be read-only
-	err = conn.Bind(fmt.Sprintf(asl.Config.userDnPattern, username), password)
+	err = asl.Client.Bind(fmt.Sprintf(asl.UserDnPattern, username), password)
 	if err != nil {
 		return "", err
 	}
