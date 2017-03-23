@@ -56,16 +56,21 @@ func (zs *Server) UpdateShardReplicationFields(ctx context.Context, cell, keyspa
 		if version == nil {
 			// We have to create, and we catch ErrNodeExists.
 			_, err = zs.Create(ctx, cell, zkPath, data)
-			if err != topo.ErrNodeExists {
-				return err
+			if err == topo.ErrNodeExists {
+				// Node was created by another process, try
+				// again.
+				continue
 			}
-		} else {
-			// We have to update, and we catch ErrBadVersion.
-			_, err = zs.Update(ctx, cell, zkPath, data, version)
-			if err != topo.ErrBadVersion {
-				return err
-			}
+			return err
 		}
+
+		// We have to update, and we catch ErrBadVersion.
+		_, err = zs.Update(ctx, cell, zkPath, data, version)
+		if err == topo.ErrBadVersion {
+			// Node was updated by another process, try again.
+			continue
+		}
+		return err
 	}
 }
 
