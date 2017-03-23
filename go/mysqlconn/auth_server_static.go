@@ -8,6 +8,7 @@ import (
 	log "github.com/golang/glog"
 
 	"github.com/youtube/vitess/go/sqldb"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
 // AuthServerStatic implements AuthServer using a static configuration.
@@ -68,34 +69,44 @@ func (a *AuthServerStatic) Salt() ([]byte, error) {
 }
 
 // ValidateHash is part of the AuthServer interface.
-func (a *AuthServerStatic) ValidateHash(salt []byte, user string, authResponse []byte) (string, error) {
+func (a *AuthServerStatic) ValidateHash(salt []byte, user string, authResponse []byte) (Getter, error) {
 	// Find the entry.
 	entry, ok := a.Entries[user]
 	if !ok {
-		return "", sqldb.NewSQLError(ERAccessDeniedError, SSAccessDeniedError, "Access denied for user '%v'", user)
+		return &StaticUserData{""}, sqldb.NewSQLError(ERAccessDeniedError, SSAccessDeniedError, "Access denied for user '%v'", user)
 	}
 
 	// Validate the password.
 	computedAuthResponse := scramblePassword(salt, []byte(entry.Password))
 	if bytes.Compare(authResponse, computedAuthResponse) != 0 {
-		return "", sqldb.NewSQLError(ERAccessDeniedError, SSAccessDeniedError, "Access denied for user '%v'", user)
+		return &StaticUserData{""}, sqldb.NewSQLError(ERAccessDeniedError, SSAccessDeniedError, "Access denied for user '%v'", user)
 	}
 
-	return entry.UserData, nil
+	return &StaticUserData{entry.UserData}, nil
 }
 
 // ValidateClearText is part of the AuthServer interface.
-func (a *AuthServerStatic) ValidateClearText(user, password string) (string, error) {
+func (a *AuthServerStatic) ValidateClearText(user, password string) (Getter, error) {
 	// Find the entry.
 	entry, ok := a.Entries[user]
 	if !ok {
-		return "", sqldb.NewSQLError(ERAccessDeniedError, SSAccessDeniedError, "Access denied for user '%v'", user)
+		return &StaticUserData{""}, sqldb.NewSQLError(ERAccessDeniedError, SSAccessDeniedError, "Access denied for user '%v'", user)
 	}
 
 	// Validate the password.
 	if entry.Password != password {
-		return "", sqldb.NewSQLError(ERAccessDeniedError, SSAccessDeniedError, "Access denied for user '%v'", user)
+		return &StaticUserData{""}, sqldb.NewSQLError(ERAccessDeniedError, SSAccessDeniedError, "Access denied for user '%v'", user)
 	}
 
-	return entry.UserData, nil
+	return &StaticUserData{entry.UserData}, nil
+}
+
+// StaticUserData holds the username
+type StaticUserData struct {
+	value string
+}
+
+// Get returns the wrapped username
+func (sud *StaticUserData) Get() *querypb.VTGateCallerID {
+	return &querypb.VTGateCallerID{Username: sud.value}
 }

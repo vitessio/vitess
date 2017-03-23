@@ -123,62 +123,6 @@ func (m *Workflow) String() string            { return proto.CompactTextString(m
 func (*Workflow) ProtoMessage()               {}
 func (*Workflow) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{0} }
 
-func (m *Workflow) GetUuid() string {
-	if m != nil {
-		return m.Uuid
-	}
-	return ""
-}
-
-func (m *Workflow) GetFactoryName() string {
-	if m != nil {
-		return m.FactoryName
-	}
-	return ""
-}
-
-func (m *Workflow) GetName() string {
-	if m != nil {
-		return m.Name
-	}
-	return ""
-}
-
-func (m *Workflow) GetState() WorkflowState {
-	if m != nil {
-		return m.State
-	}
-	return WorkflowState_NotStarted
-}
-
-func (m *Workflow) GetData() []byte {
-	if m != nil {
-		return m.Data
-	}
-	return nil
-}
-
-func (m *Workflow) GetError() string {
-	if m != nil {
-		return m.Error
-	}
-	return ""
-}
-
-func (m *Workflow) GetStartTime() int64 {
-	if m != nil {
-		return m.StartTime
-	}
-	return 0
-}
-
-func (m *Workflow) GetEndTime() int64 {
-	if m != nil {
-		return m.EndTime
-	}
-	return 0
-}
-
 type WorkflowCheckpoint struct {
 	// code_version is used to detect incompabilities between the version of the
 	// running workflow and the one which wrote the checkpoint. If they don't
@@ -197,13 +141,6 @@ func (m *WorkflowCheckpoint) Reset()                    { *m = WorkflowCheckpoin
 func (m *WorkflowCheckpoint) String() string            { return proto.CompactTextString(m) }
 func (*WorkflowCheckpoint) ProtoMessage()               {}
 func (*WorkflowCheckpoint) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{1} }
-
-func (m *WorkflowCheckpoint) GetCodeVersion() int32 {
-	if m != nil {
-		return m.CodeVersion
-	}
-	return 0
-}
 
 func (m *WorkflowCheckpoint) GetTasks() map[string]*Task {
 	if m != nil {
@@ -232,32 +169,11 @@ func (m *Task) String() string            { return proto.CompactTextString(m) }
 func (*Task) ProtoMessage()               {}
 func (*Task) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{2} }
 
-func (m *Task) GetId() string {
-	if m != nil {
-		return m.Id
-	}
-	return ""
-}
-
-func (m *Task) GetState() TaskState {
-	if m != nil {
-		return m.State
-	}
-	return TaskState_TaskNotStarted
-}
-
 func (m *Task) GetAttributes() map[string]string {
 	if m != nil {
 		return m.Attributes
 	}
 	return nil
-}
-
-func (m *Task) GetError() string {
-	if m != nil {
-		return m.Error
-	}
-	return ""
 }
 
 func init() {
@@ -272,7 +188,7 @@ func init() { proto.RegisterFile("workflow.proto", fileDescriptor0) }
 
 var fileDescriptor0 = []byte{
 	// 477 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x94, 0x53, 0xdb, 0x6e, 0xd3, 0x40,
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x09, 0x6e, 0x88, 0x02, 0xff, 0x94, 0x53, 0xdb, 0x6e, 0xd3, 0x40,
 	0x10, 0x65, 0x7d, 0x69, 0x9c, 0x71, 0xea, 0x46, 0x43, 0x25, 0x4c, 0x24, 0x90, 0x89, 0x90, 0x30,
 	0x91, 0xc8, 0x43, 0x90, 0x10, 0x02, 0xb5, 0x12, 0xe2, 0x22, 0x9e, 0xfa, 0xe0, 0x54, 0xf0, 0x18,
 	0x6d, 0xe3, 0x6d, 0x59, 0xa5, 0xd9, 0xad, 0xd6, 0xeb, 0x56, 0xf9, 0x40, 0x7e, 0x81, 0x6f, 0xe0,

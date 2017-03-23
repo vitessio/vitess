@@ -76,13 +76,6 @@ func (m *SetMaxRateRequest) String() string            { return proto.CompactTex
 func (*SetMaxRateRequest) ProtoMessage()               {}
 func (*SetMaxRateRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{2} }
 
-func (m *SetMaxRateRequest) GetRate() int64 {
-	if m != nil {
-		return m.Rate
-	}
-	return 0
-}
-
 // SetMaxRateResponse is returned by the SetMaxRate RPC.
 type SetMaxRateResponse struct {
 	// names is the list of throttler names which were updated.
@@ -93,13 +86,6 @@ func (m *SetMaxRateResponse) Reset()                    { *m = SetMaxRateRespons
 func (m *SetMaxRateResponse) String() string            { return proto.CompactTextString(m) }
 func (*SetMaxRateResponse) ProtoMessage()               {}
 func (*SetMaxRateResponse) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{3} }
-
-func (m *SetMaxRateResponse) GetNames() []string {
-	if m != nil {
-		return m.Names
-	}
-	return nil
-}
 
 // Configuration holds the configuration parameters for the
 // MaxReplicationLagModule which adaptively adjusts the throttling rate based on
@@ -189,104 +175,6 @@ func (m *Configuration) String() string            { return proto.CompactTextStr
 func (*Configuration) ProtoMessage()               {}
 func (*Configuration) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{4} }
 
-func (m *Configuration) GetTargetReplicationLagSec() int64 {
-	if m != nil {
-		return m.TargetReplicationLagSec
-	}
-	return 0
-}
-
-func (m *Configuration) GetMaxReplicationLagSec() int64 {
-	if m != nil {
-		return m.MaxReplicationLagSec
-	}
-	return 0
-}
-
-func (m *Configuration) GetInitialRate() int64 {
-	if m != nil {
-		return m.InitialRate
-	}
-	return 0
-}
-
-func (m *Configuration) GetMaxIncrease() float64 {
-	if m != nil {
-		return m.MaxIncrease
-	}
-	return 0
-}
-
-func (m *Configuration) GetEmergencyDecrease() float64 {
-	if m != nil {
-		return m.EmergencyDecrease
-	}
-	return 0
-}
-
-func (m *Configuration) GetMinDurationBetweenIncreasesSec() int64 {
-	if m != nil {
-		return m.MinDurationBetweenIncreasesSec
-	}
-	return 0
-}
-
-func (m *Configuration) GetMaxDurationBetweenIncreasesSec() int64 {
-	if m != nil {
-		return m.MaxDurationBetweenIncreasesSec
-	}
-	return 0
-}
-
-func (m *Configuration) GetMinDurationBetweenDecreasesSec() int64 {
-	if m != nil {
-		return m.MinDurationBetweenDecreasesSec
-	}
-	return 0
-}
-
-func (m *Configuration) GetSpreadBacklogAcrossSec() int64 {
-	if m != nil {
-		return m.SpreadBacklogAcrossSec
-	}
-	return 0
-}
-
-func (m *Configuration) GetIgnoreNSlowestReplicas() int32 {
-	if m != nil {
-		return m.IgnoreNSlowestReplicas
-	}
-	return 0
-}
-
-func (m *Configuration) GetIgnoreNSlowestRdonlys() int32 {
-	if m != nil {
-		return m.IgnoreNSlowestRdonlys
-	}
-	return 0
-}
-
-func (m *Configuration) GetAgeBadRateAfterSec() int64 {
-	if m != nil {
-		return m.AgeBadRateAfterSec
-	}
-	return 0
-}
-
-func (m *Configuration) GetBadRateIncrease() float64 {
-	if m != nil {
-		return m.BadRateIncrease
-	}
-	return 0
-}
-
-func (m *Configuration) GetMaxRateApproachThreshold() float64 {
-	if m != nil {
-		return m.MaxRateApproachThreshold
-	}
-	return 0
-}
-
 // GetConfigurationRequest is the payload for the GetConfiguration RPC.
 type GetConfigurationRequest struct {
 	// throttler_name specifies which throttler to select. If empty, all active
@@ -298,13 +186,6 @@ func (m *GetConfigurationRequest) Reset()                    { *m = GetConfigura
 func (m *GetConfigurationRequest) String() string            { return proto.CompactTextString(m) }
 func (*GetConfigurationRequest) ProtoMessage()               {}
 func (*GetConfigurationRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{5} }
-
-func (m *GetConfigurationRequest) GetThrottlerName() string {
-	if m != nil {
-		return m.ThrottlerName
-	}
-	return ""
-}
 
 // GetConfigurationResponse is returned by the GetConfiguration RPC.
 type GetConfigurationResponse struct {
@@ -342,25 +223,11 @@ func (m *UpdateConfigurationRequest) String() string            { return proto.C
 func (*UpdateConfigurationRequest) ProtoMessage()               {}
 func (*UpdateConfigurationRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{7} }
 
-func (m *UpdateConfigurationRequest) GetThrottlerName() string {
-	if m != nil {
-		return m.ThrottlerName
-	}
-	return ""
-}
-
 func (m *UpdateConfigurationRequest) GetConfiguration() *Configuration {
 	if m != nil {
 		return m.Configuration
 	}
 	return nil
-}
-
-func (m *UpdateConfigurationRequest) GetCopyZeroValues() bool {
-	if m != nil {
-		return m.CopyZeroValues
-	}
-	return false
 }
 
 // UpdateConfigurationResponse is returned by the UpdateConfiguration RPC.
@@ -374,13 +241,6 @@ func (m *UpdateConfigurationResponse) String() string            { return proto.
 func (*UpdateConfigurationResponse) ProtoMessage()               {}
 func (*UpdateConfigurationResponse) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{8} }
 
-func (m *UpdateConfigurationResponse) GetNames() []string {
-	if m != nil {
-		return m.Names
-	}
-	return nil
-}
-
 // ResetConfigurationRequest is the payload for the ResetConfiguration RPC.
 type ResetConfigurationRequest struct {
 	// throttler_name specifies which throttler to reset. If empty, all active
@@ -393,13 +253,6 @@ func (m *ResetConfigurationRequest) String() string            { return proto.Co
 func (*ResetConfigurationRequest) ProtoMessage()               {}
 func (*ResetConfigurationRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{9} }
 
-func (m *ResetConfigurationRequest) GetThrottlerName() string {
-	if m != nil {
-		return m.ThrottlerName
-	}
-	return ""
-}
-
 // ResetConfigurationResponse is returned by the ResetConfiguration RPC.
 type ResetConfigurationResponse struct {
 	// names is the list of throttler names which were updated.
@@ -410,13 +263,6 @@ func (m *ResetConfigurationResponse) Reset()                    { *m = ResetConf
 func (m *ResetConfigurationResponse) String() string            { return proto.CompactTextString(m) }
 func (*ResetConfigurationResponse) ProtoMessage()               {}
 func (*ResetConfigurationResponse) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{10} }
-
-func (m *ResetConfigurationResponse) GetNames() []string {
-	if m != nil {
-		return m.Names
-	}
-	return nil
-}
 
 func init() {
 	proto.RegisterType((*MaxRatesRequest)(nil), "throttlerdata.MaxRatesRequest")
@@ -436,7 +282,7 @@ func init() { proto.RegisterFile("throttlerdata.proto", fileDescriptor0) }
 
 var fileDescriptor0 = []byte{
 	// 711 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xa4, 0x55, 0xdd, 0x4e, 0xdb, 0x4a,
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x09, 0x6e, 0x88, 0x02, 0xff, 0xa4, 0x55, 0xdd, 0x4e, 0xdb, 0x4a,
 	0x10, 0x96, 0x09, 0xe1, 0xc0, 0x84, 0x00, 0x59, 0x38, 0x60, 0xc2, 0xd1, 0x51, 0x8e, 0xa5, 0xa3,
 	0x46, 0x48, 0xcd, 0x45, 0x50, 0x55, 0x5a, 0x54, 0x09, 0x52, 0xaa, 0xaa, 0x55, 0xcb, 0x85, 0x69,
 	0x7b, 0xd1, 0x9b, 0xd5, 0xc6, 0x1e, 0x1c, 0x0b, 0xdb, 0xeb, 0xee, 0x2e, 0x25, 0xe9, 0x43, 0xf4,

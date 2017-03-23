@@ -47,20 +47,6 @@ func (m *Shard) String() string            { return proto.CompactTextString(m) }
 func (*Shard) ProtoMessage()               {}
 func (*Shard) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{0} }
 
-func (m *Shard) GetName() string {
-	if m != nil {
-		return m.Name
-	}
-	return ""
-}
-
-func (m *Shard) GetDbNameOverride() string {
-	if m != nil {
-		return m.DbNameOverride
-	}
-	return ""
-}
-
 // Keyspace describes a single keyspace.
 type Keyspace struct {
 	// name has to be unique in a VTTestTopology.
@@ -84,53 +70,11 @@ func (m *Keyspace) String() string            { return proto.CompactTextString(m
 func (*Keyspace) ProtoMessage()               {}
 func (*Keyspace) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{1} }
 
-func (m *Keyspace) GetName() string {
-	if m != nil {
-		return m.Name
-	}
-	return ""
-}
-
 func (m *Keyspace) GetShards() []*Shard {
 	if m != nil {
 		return m.Shards
 	}
 	return nil
-}
-
-func (m *Keyspace) GetShardingColumnName() string {
-	if m != nil {
-		return m.ShardingColumnName
-	}
-	return ""
-}
-
-func (m *Keyspace) GetShardingColumnType() string {
-	if m != nil {
-		return m.ShardingColumnType
-	}
-	return ""
-}
-
-func (m *Keyspace) GetServedFrom() string {
-	if m != nil {
-		return m.ServedFrom
-	}
-	return ""
-}
-
-func (m *Keyspace) GetReplicaCount() int32 {
-	if m != nil {
-		return m.ReplicaCount
-	}
-	return 0
-}
-
-func (m *Keyspace) GetRdonlyCount() int32 {
-	if m != nil {
-		return m.RdonlyCount
-	}
-	return 0
 }
 
 // VTTestTopology describes the keyspaces in the topology.
@@ -153,13 +97,6 @@ func (m *VTTestTopology) GetKeyspaces() []*Keyspace {
 	return nil
 }
 
-func (m *VTTestTopology) GetCells() []string {
-	if m != nil {
-		return m.Cells
-	}
-	return nil
-}
-
 func init() {
 	proto.RegisterType((*Shard)(nil), "vttest.Shard")
 	proto.RegisterType((*Keyspace)(nil), "vttest.Keyspace")
@@ -170,7 +107,7 @@ func init() { proto.RegisterFile("vttest.proto", fileDescriptor0) }
 
 var fileDescriptor0 = []byte{
 	// 297 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x6c, 0x51, 0xcd, 0x6a, 0xf3, 0x30,
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x09, 0x6e, 0x88, 0x02, 0xff, 0x6c, 0x51, 0xcd, 0x6a, 0xf3, 0x30,
 	0x10, 0xc4, 0x49, 0xec, 0xef, 0xcb, 0xe6, 0x87, 0x20, 0x72, 0xd0, 0xad, 0x69, 0x4a, 0xc1, 0xa7,
 	0x50, 0xda, 0x47, 0x08, 0xed, 0xa5, 0xd0, 0x82, 0x6b, 0x72, 0x35, 0x8e, 0xb5, 0x4d, 0x4d, 0x65,
 	0x4b, 0x48, 0x8a, 0xc1, 0xaf, 0xd1, 0x27, 0x2e, 0x5e, 0xcb, 0xf4, 0xe2, 0xdb, 0x68, 0x66, 0x76,

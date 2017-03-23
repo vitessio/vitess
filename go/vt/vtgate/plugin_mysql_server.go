@@ -79,10 +79,7 @@ func (vh *vtgateHandler) ComQuery(c *mysqlconn.Conn, query string) (*sqltypes.Re
 	// returned, use the User. This lets the plugin map a MySQL
 	// user used for authentication to a Vitess User used for
 	// Table ACLs and Vitess authentication in general.
-	im := callerid.NewImmediateCallerID(c.UserData)
-	if c.UserData == "" {
-		im.Username = c.User
-	}
+	im := c.UserData.Get()
 	ef := callerid.NewEffectiveCallerID(
 		c.User,                  /* principal: who */
 		c.RemoteAddr().String(), /* component: running client process */

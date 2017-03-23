@@ -105,32 +105,11 @@ func (m *ClusterOperation) String() string            { return proto.CompactText
 func (*ClusterOperation) ProtoMessage()               {}
 func (*ClusterOperation) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{0} }
 
-func (m *ClusterOperation) GetId() string {
-	if m != nil {
-		return m.Id
-	}
-	return ""
-}
-
 func (m *ClusterOperation) GetSerialTasks() []*TaskContainer {
 	if m != nil {
 		return m.SerialTasks
 	}
 	return nil
-}
-
-func (m *ClusterOperation) GetState() ClusterOperationState {
-	if m != nil {
-		return m.State
-	}
-	return ClusterOperationState_UNKNOWN_CLUSTER_OPERATION_STATE
-}
-
-func (m *ClusterOperation) GetError() string {
-	if m != nil {
-		return m.Error
-	}
-	return ""
 }
 
 // TaskContainer holds one or more task which may be executed in parallel.
@@ -152,13 +131,6 @@ func (m *TaskContainer) GetParallelTasks() []*Task {
 	return nil
 }
 
-func (m *TaskContainer) GetConcurrency() int32 {
-	if m != nil {
-		return m.Concurrency
-	}
-	return 0
-}
-
 // Task represents a specific task which should be automatically executed.
 type Task struct {
 	// Task specification.
@@ -178,46 +150,11 @@ func (m *Task) String() string            { return proto.CompactTextString(m) }
 func (*Task) ProtoMessage()               {}
 func (*Task) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{2} }
 
-func (m *Task) GetName() string {
-	if m != nil {
-		return m.Name
-	}
-	return ""
-}
-
 func (m *Task) GetParameters() map[string]string {
 	if m != nil {
 		return m.Parameters
 	}
 	return nil
-}
-
-func (m *Task) GetId() string {
-	if m != nil {
-		return m.Id
-	}
-	return ""
-}
-
-func (m *Task) GetState() TaskState {
-	if m != nil {
-		return m.State
-	}
-	return TaskState_UNKNOWN_TASK_STATE
-}
-
-func (m *Task) GetOutput() string {
-	if m != nil {
-		return m.Output
-	}
-	return ""
-}
-
-func (m *Task) GetError() string {
-	if m != nil {
-		return m.Error
-	}
-	return ""
 }
 
 type EnqueueClusterOperationRequest struct {
@@ -229,13 +166,6 @@ func (m *EnqueueClusterOperationRequest) Reset()                    { *m = Enque
 func (m *EnqueueClusterOperationRequest) String() string            { return proto.CompactTextString(m) }
 func (*EnqueueClusterOperationRequest) ProtoMessage()               {}
 func (*EnqueueClusterOperationRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{3} }
-
-func (m *EnqueueClusterOperationRequest) GetName() string {
-	if m != nil {
-		return m.Name
-	}
-	return ""
-}
 
 func (m *EnqueueClusterOperationRequest) GetParameters() map[string]string {
 	if m != nil {
@@ -253,13 +183,6 @@ func (m *EnqueueClusterOperationResponse) String() string            { return pr
 func (*EnqueueClusterOperationResponse) ProtoMessage()               {}
 func (*EnqueueClusterOperationResponse) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{4} }
 
-func (m *EnqueueClusterOperationResponse) GetId() string {
-	if m != nil {
-		return m.Id
-	}
-	return ""
-}
-
 type GetClusterOperationStateRequest struct {
 	Id string `protobuf:"bytes,1,opt,name=id" json:"id,omitempty"`
 }
@@ -268,13 +191,6 @@ func (m *GetClusterOperationStateRequest) Reset()                    { *m = GetC
 func (m *GetClusterOperationStateRequest) String() string            { return proto.CompactTextString(m) }
 func (*GetClusterOperationStateRequest) ProtoMessage()               {}
 func (*GetClusterOperationStateRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{5} }
-
-func (m *GetClusterOperationStateRequest) GetId() string {
-	if m != nil {
-		return m.Id
-	}
-	return ""
-}
 
 type GetClusterOperationStateResponse struct {
 	State ClusterOperationState `protobuf:"varint,1,opt,name=state,enum=automation.ClusterOperationState" json:"state,omitempty"`
@@ -287,13 +203,6 @@ func (*GetClusterOperationStateResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor0, []int{6}
 }
 
-func (m *GetClusterOperationStateResponse) GetState() ClusterOperationState {
-	if m != nil {
-		return m.State
-	}
-	return ClusterOperationState_UNKNOWN_CLUSTER_OPERATION_STATE
-}
-
 type GetClusterOperationDetailsRequest struct {
 	Id string `protobuf:"bytes,1,opt,name=id" json:"id,omitempty"`
 }
@@ -303,13 +212,6 @@ func (m *GetClusterOperationDetailsRequest) String() string { return proto.Compa
 func (*GetClusterOperationDetailsRequest) ProtoMessage()    {}
 func (*GetClusterOperationDetailsRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor0, []int{7}
-}
-
-func (m *GetClusterOperationDetailsRequest) GetId() string {
-	if m != nil {
-		return m.Id
-	}
-	return ""
 }
 
 type GetClusterOperationDetailsResponse struct {
@@ -349,7 +251,7 @@ func init() { proto.RegisterFile("automation.proto", fileDescriptor0) }
 
 var fileDescriptor0 = []byte{
 	// 562 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xa4, 0x94, 0xdb, 0x6a, 0xdb, 0x4c,
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x09, 0x6e, 0x88, 0x02, 0xff, 0xa4, 0x94, 0xdb, 0x6a, 0xdb, 0x4c,
 	0x14, 0x85, 0x7f, 0xc9, 0x87, 0xbf, 0xde, 0x6a, 0x1c, 0x31, 0x34, 0x46, 0x09, 0x4d, 0x23, 0xab,
 	0x37, 0x26, 0x05, 0x43, 0x9d, 0x8b, 0x94, 0xb4, 0x85, 0x1a, 0x5b, 0x84, 0xe0, 0x22, 0x85, 0xb1,
 	0x4c, 0xa1, 0xbd, 0x30, 0x53, 0x67, 0x2e, 0x54, 0xcb, 0x92, 0x32, 0x33, 0x2a, 0xf8, 0x05, 0xfa,

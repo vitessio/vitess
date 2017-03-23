@@ -44,41 +44,6 @@ func (m *TableGroupSpec) String() string            { return proto.CompactTextSt
 func (*TableGroupSpec) ProtoMessage()               {}
 func (*TableGroupSpec) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{0} }
 
-func (m *TableGroupSpec) GetName() string {
-	if m != nil {
-		return m.Name
-	}
-	return ""
-}
-
-func (m *TableGroupSpec) GetTableNamesOrPrefixes() []string {
-	if m != nil {
-		return m.TableNamesOrPrefixes
-	}
-	return nil
-}
-
-func (m *TableGroupSpec) GetReaders() []string {
-	if m != nil {
-		return m.Readers
-	}
-	return nil
-}
-
-func (m *TableGroupSpec) GetWriters() []string {
-	if m != nil {
-		return m.Writers
-	}
-	return nil
-}
-
-func (m *TableGroupSpec) GetAdmins() []string {
-	if m != nil {
-		return m.Admins
-	}
-	return nil
-}
-
 type Config struct {
 	TableGroups []*TableGroupSpec `protobuf:"bytes,1,rep,name=table_groups,json=tableGroups" json:"table_groups,omitempty"`
 }
@@ -104,7 +69,7 @@ func init() { proto.RegisterFile("tableacl.proto", fileDescriptor0) }
 
 var fileDescriptor0 = []byte{
 	// 207 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xe2, 0xe2, 0x2b, 0x49, 0x4c, 0xca,
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x09, 0x6e, 0x88, 0x02, 0xff, 0xe2, 0xe2, 0x2b, 0x49, 0x4c, 0xca,
 	0x49, 0x4d, 0x4c, 0xce, 0xd1, 0x2b, 0x28, 0xca, 0x2f, 0xc9, 0x17, 0xe2, 0x80, 0xf1, 0x95, 0x96,
 	0x33, 0x72, 0xf1, 0x85, 0x80, 0x38, 0xee, 0x45, 0xf9, 0xa5, 0x05, 0xc1, 0x05, 0xa9, 0xc9, 0x42,
 	0x42, 0x5c, 0x2c, 0x79, 0x89, 0xb9, 0xa9, 0x12, 0x8c, 0x0a, 0x8c, 0x1a, 0x9c, 0x41, 0x60, 0xb6,

@@ -98,27 +98,6 @@ func (m *Charset) String() string            { return proto.CompactTextString(m)
 func (*Charset) ProtoMessage()               {}
 func (*Charset) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{0} }
 
-func (m *Charset) GetClient() int32 {
-	if m != nil {
-		return m.Client
-	}
-	return 0
-}
-
-func (m *Charset) GetConn() int32 {
-	if m != nil {
-		return m.Conn
-	}
-	return 0
-}
-
-func (m *Charset) GetServer() int32 {
-	if m != nil {
-		return m.Server
-	}
-	return 0
-}
-
 // BinlogTransaction describes a transaction inside the binlogs.
 // It is streamed by vttablet for filtered replication, used during resharding.
 type BinlogTransaction struct {
@@ -161,23 +140,9 @@ func (m *BinlogTransaction_Statement) String() string            { return proto.
 func (*BinlogTransaction_Statement) ProtoMessage()               {}
 func (*BinlogTransaction_Statement) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{1, 0} }
 
-func (m *BinlogTransaction_Statement) GetCategory() BinlogTransaction_Statement_Category {
-	if m != nil {
-		return m.Category
-	}
-	return BinlogTransaction_Statement_BL_UNRECOGNIZED
-}
-
 func (m *BinlogTransaction_Statement) GetCharset() *Charset {
 	if m != nil {
 		return m.Charset
-	}
-	return nil
-}
-
-func (m *BinlogTransaction_Statement) GetSql() []byte {
-	if m != nil {
-		return m.Sql
 	}
 	return nil
 }
@@ -196,13 +161,6 @@ func (m *StreamKeyRangeRequest) Reset()                    { *m = StreamKeyRange
 func (m *StreamKeyRangeRequest) String() string            { return proto.CompactTextString(m) }
 func (*StreamKeyRangeRequest) ProtoMessage()               {}
 func (*StreamKeyRangeRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{2} }
-
-func (m *StreamKeyRangeRequest) GetPosition() string {
-	if m != nil {
-		return m.Position
-	}
-	return ""
-}
 
 func (m *StreamKeyRangeRequest) GetKeyRange() *topodata.KeyRange {
 	if m != nil {
@@ -250,20 +208,6 @@ func (m *StreamTablesRequest) String() string            { return proto.CompactT
 func (*StreamTablesRequest) ProtoMessage()               {}
 func (*StreamTablesRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{4} }
 
-func (m *StreamTablesRequest) GetPosition() string {
-	if m != nil {
-		return m.Position
-	}
-	return ""
-}
-
-func (m *StreamTablesRequest) GetTables() []string {
-	if m != nil {
-		return m.Tables
-	}
-	return nil
-}
-
 func (m *StreamTablesRequest) GetCharset() *Charset {
 	if m != nil {
 		return m.Charset
@@ -303,7 +247,7 @@ func init() { proto.RegisterFile("binlogdata.proto", fileDescriptor0) }
 
 var fileDescriptor0 = []byte{
 	// 540 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xb4, 0x54, 0x5d, 0x6e, 0xda, 0x40,
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x09, 0x6e, 0x88, 0x02, 0xff, 0xb4, 0x54, 0x5d, 0x6e, 0xda, 0x40,
 	0x10, 0xae, 0xb1, 0x43, 0xec, 0x71, 0x9a, 0x2c, 0x9b, 0x26, 0xb2, 0x90, 0x2a, 0x21, 0xbf, 0x94,
 	0x97, 0xba, 0x95, 0x7b, 0x02, 0x6c, 0xaf, 0x10, 0xc9, 0x02, 0xd1, 0xe2, 0xbc, 0xf4, 0xc5, 0x32,
 	0x64, 0x4b, 0x11, 0xc4, 0x06, 0xef, 0x26, 0x2a, 0xe7, 0xe8, 0x29, 0x7a, 0x91, 0xde, 0xa4, 0xf7,

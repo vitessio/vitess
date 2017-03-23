@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	tableaclpb "github.com/youtube/vitess/go/vt/proto/tableacl"
 	"github.com/youtube/vitess/go/vt/tableacl"
 	"github.com/youtube/vitess/go/vt/tableacl/acl"
@@ -108,7 +109,7 @@ func checkAccess(config *tableaclpb.Config, tableName string, role tableacl.Role
 	if err := checkLoad(config, true); err != nil {
 		return err
 	}
-	got := tableacl.Authorized(tableName, role).IsMember(currentUser)
+	got := tableacl.Authorized(tableName, role).IsMember(&querypb.VTGateCallerID{Username: currentUser})
 	if want != got {
 		return fmt.Errorf("got %v, want %v", got, want)
 	}

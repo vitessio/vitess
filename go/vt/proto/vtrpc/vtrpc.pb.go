@@ -316,27 +316,6 @@ func (m *CallerID) String() string            { return proto.CompactTextString(m
 func (*CallerID) ProtoMessage()               {}
 func (*CallerID) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{0} }
 
-func (m *CallerID) GetPrincipal() string {
-	if m != nil {
-		return m.Principal
-	}
-	return ""
-}
-
-func (m *CallerID) GetComponent() string {
-	if m != nil {
-		return m.Component
-	}
-	return ""
-}
-
-func (m *CallerID) GetSubcomponent() string {
-	if m != nil {
-		return m.Subcomponent
-	}
-	return ""
-}
-
 // RPCError is an application-level error structure returned by
 // VtTablet (and passed along by VtGate if appropriate).
 // We use this so the clients don't have to parse the error messages,
@@ -352,27 +331,6 @@ func (m *RPCError) String() string            { return proto.CompactTextString(m
 func (*RPCError) ProtoMessage()               {}
 func (*RPCError) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{1} }
 
-func (m *RPCError) GetLegacyCode() LegacyErrorCode {
-	if m != nil {
-		return m.LegacyCode
-	}
-	return LegacyErrorCode_SUCCESS_LEGACY
-}
-
-func (m *RPCError) GetMessage() string {
-	if m != nil {
-		return m.Message
-	}
-	return ""
-}
-
-func (m *RPCError) GetCode() Code {
-	if m != nil {
-		return m.Code
-	}
-	return Code_OK
-}
-
 func init() {
 	proto.RegisterType((*CallerID)(nil), "vtrpc.CallerID")
 	proto.RegisterType((*RPCError)(nil), "vtrpc.RPCError")
@@ -384,7 +342,7 @@ func init() { proto.RegisterFile("vtrpc.proto", fileDescriptor0) }
 
 var fileDescriptor0 = []byte{
 	// 590 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x64, 0x93, 0x4d, 0x4f, 0xdb, 0x40,
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x09, 0x6e, 0x88, 0x02, 0xff, 0x64, 0x93, 0x4d, 0x4f, 0xdb, 0x40,
 	0x10, 0x86, 0xc9, 0x07, 0xf9, 0x18, 0x07, 0xb2, 0x0c, 0x5f, 0x81, 0x52, 0xb5, 0xe2, 0x54, 0x71,
 	0xc8, 0xa1, 0x3d, 0xf4, 0xbc, 0xf1, 0x0e, 0x61, 0x85, 0x59, 0xa7, 0xeb, 0x35, 0x25, 0xa7, 0x55,
 	0x08, 0x16, 0xa2, 0x0a, 0x38, 0x72, 0x02, 0x12, 0x97, 0xfe, 0xac, 0xfe, 0xa6, 0xfe, 0x8c, 0x6a,

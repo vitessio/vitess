@@ -39,6 +39,11 @@ const (
 	ephemeralBigBuffer
 )
 
+// A Getter has a Get()
+type Getter interface {
+	Get() *querypb.VTGateCallerID
+}
+
 // Conn is a connection between a client and a server, using the MySQL
 // binary protocol. It is built on top of an existing net.Conn, that
 // has already been established.
@@ -77,7 +82,7 @@ type Conn struct {
 
 	// UserData is custom data returned by the AuthServer module.
 	// It is set during the initial handshake.
-	UserData string
+	UserData Getter
 
 	// SchemaName is the default database name to use. It is set
 	// during handshake, and by ComInitDb packets. Both client and

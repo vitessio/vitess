@@ -1,7 +1,0 @@
-{
-		"LdapServer": "ldap.example.com:386",
-		"LdapCert": "path/to/ldap-client-cert.pem",
-		"LdapKey": "path/to/ldap-client-key.pem",
-		"LdapCA": "path/to/ldap-client-ca.pem",
-		"UserDnPattern": "uid=%s,ou=users,ou=people,dc=example,dc=com"
-}

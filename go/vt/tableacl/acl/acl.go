@@ -4,10 +4,14 @@
 
 package acl
 
+import (
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
+)
+
 // ACL is an interface for Access Control List.
 type ACL interface {
 	// IsMember checks the membership of a principal in this ACL.
-	IsMember(principal string) bool
+	IsMember(principal *querypb.VTGateCallerID) bool
 }
 
 // Factory is responsible to create new ACL instance.
@@ -20,7 +24,7 @@ type Factory interface {
 type DenyAllACL struct{}
 
 // IsMember implements ACL.IsMember and always return fasle.
-func (acl DenyAllACL) IsMember(principal string) bool {
+func (acl DenyAllACL) IsMember(principal *querypb.VTGateCallerID) bool {
 	return false
 }
 
@@ -28,6 +32,6 @@ func (acl DenyAllACL) IsMember(principal string) bool {
 type AcceptAllACL struct{}
 
 // IsMember implements ACL.IsMember and always return true.
-func (acl AcceptAllACL) IsMember(principal string) bool {
+func (acl AcceptAllACL) IsMember(principal *querypb.VTGateCallerID) bool {
 	return true
 }

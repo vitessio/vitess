@@ -122,7 +122,7 @@ func (th *testHandler) ComQuery(c *Conn, query string) (*sqltypes.Result, error)
 			Rows: [][]sqltypes.Value{
 				{
 					sqltypes.MakeTrusted(querypb.Type_VARCHAR, []byte(c.User)),
-					sqltypes.MakeTrusted(querypb.Type_VARCHAR, []byte(c.UserData)),
+					sqltypes.MakeTrusted(querypb.Type_VARCHAR, []byte(c.UserData.Get().Username)),
 				},
 			},
 		}, nil

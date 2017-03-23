@@ -91,32 +91,11 @@ func (m *Session) String() string            { return proto.CompactTextString(m)
 func (*Session) ProtoMessage()               {}
 func (*Session) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{0} }
 
-func (m *Session) GetInTransaction() bool {
-	if m != nil {
-		return m.InTransaction
-	}
-	return false
-}
-
 func (m *Session) GetShardSessions() []*Session_ShardSession {
 	if m != nil {
 		return m.ShardSessions
 	}
 	return nil
-}
-
-func (m *Session) GetSingleDb() bool {
-	if m != nil {
-		return m.SingleDb
-	}
-	return false
-}
-
-func (m *Session) GetAutocommit() bool {
-	if m != nil {
-		return m.Autocommit
-	}
-	return false
 }
 
 type Session_ShardSession struct {
@@ -134,13 +113,6 @@ func (m *Session_ShardSession) GetTarget() *query.Target {
 		return m.Target
 	}
 	return nil
-}
-
-func (m *Session_ShardSession) GetTransactionId() int64 {
-	if m != nil {
-		return m.TransactionId
-	}
-	return 0
 }
 
 // ExecuteRequest is the payload to Execute.
@@ -187,27 +159,6 @@ func (m *ExecuteRequest) GetQuery() *query.BoundQuery {
 		return m.Query
 	}
 	return nil
-}
-
-func (m *ExecuteRequest) GetTabletType() topodata.TabletType {
-	if m != nil {
-		return m.TabletType
-	}
-	return topodata.TabletType_UNKNOWN
-}
-
-func (m *ExecuteRequest) GetNotInTransaction() bool {
-	if m != nil {
-		return m.NotInTransaction
-	}
-	return false
-}
-
-func (m *ExecuteRequest) GetKeyspaceShard() string {
-	if m != nil {
-		return m.KeyspaceShard
-	}
-	return ""
 }
 
 func (m *ExecuteRequest) GetOptions() *query.ExecuteOptions {
@@ -301,34 +252,6 @@ func (m *ExecuteShardsRequest) GetQuery() *query.BoundQuery {
 		return m.Query
 	}
 	return nil
-}
-
-func (m *ExecuteShardsRequest) GetKeyspace() string {
-	if m != nil {
-		return m.Keyspace
-	}
-	return ""
-}
-
-func (m *ExecuteShardsRequest) GetShards() []string {
-	if m != nil {
-		return m.Shards
-	}
-	return nil
-}
-
-func (m *ExecuteShardsRequest) GetTabletType() topodata.TabletType {
-	if m != nil {
-		return m.TabletType
-	}
-	return topodata.TabletType_UNKNOWN
-}
-
-func (m *ExecuteShardsRequest) GetNotInTransaction() bool {
-	if m != nil {
-		return m.NotInTransaction
-	}
-	return false
 }
 
 func (m *ExecuteShardsRequest) GetOptions() *query.ExecuteOptions {
@@ -425,34 +348,6 @@ func (m *ExecuteKeyspaceIdsRequest) GetQuery() *query.BoundQuery {
 	return nil
 }
 
-func (m *ExecuteKeyspaceIdsRequest) GetKeyspace() string {
-	if m != nil {
-		return m.Keyspace
-	}
-	return ""
-}
-
-func (m *ExecuteKeyspaceIdsRequest) GetKeyspaceIds() [][]byte {
-	if m != nil {
-		return m.KeyspaceIds
-	}
-	return nil
-}
-
-func (m *ExecuteKeyspaceIdsRequest) GetTabletType() topodata.TabletType {
-	if m != nil {
-		return m.TabletType
-	}
-	return topodata.TabletType_UNKNOWN
-}
-
-func (m *ExecuteKeyspaceIdsRequest) GetNotInTransaction() bool {
-	if m != nil {
-		return m.NotInTransaction
-	}
-	return false
-}
-
 func (m *ExecuteKeyspaceIdsRequest) GetOptions() *query.ExecuteOptions {
 	if m != nil {
 		return m.Options
@@ -547,32 +442,11 @@ func (m *ExecuteKeyRangesRequest) GetQuery() *query.BoundQuery {
 	return nil
 }
 
-func (m *ExecuteKeyRangesRequest) GetKeyspace() string {
-	if m != nil {
-		return m.Keyspace
-	}
-	return ""
-}
-
 func (m *ExecuteKeyRangesRequest) GetKeyRanges() []*topodata.KeyRange {
 	if m != nil {
 		return m.KeyRanges
 	}
 	return nil
-}
-
-func (m *ExecuteKeyRangesRequest) GetTabletType() topodata.TabletType {
-	if m != nil {
-		return m.TabletType
-	}
-	return topodata.TabletType_UNKNOWN
-}
-
-func (m *ExecuteKeyRangesRequest) GetNotInTransaction() bool {
-	if m != nil {
-		return m.NotInTransaction
-	}
-	return false
 }
 
 func (m *ExecuteKeyRangesRequest) GetOptions() *query.ExecuteOptions {
@@ -671,39 +545,11 @@ func (m *ExecuteEntityIdsRequest) GetQuery() *query.BoundQuery {
 	return nil
 }
 
-func (m *ExecuteEntityIdsRequest) GetKeyspace() string {
-	if m != nil {
-		return m.Keyspace
-	}
-	return ""
-}
-
-func (m *ExecuteEntityIdsRequest) GetEntityColumnName() string {
-	if m != nil {
-		return m.EntityColumnName
-	}
-	return ""
-}
-
 func (m *ExecuteEntityIdsRequest) GetEntityKeyspaceIds() []*ExecuteEntityIdsRequest_EntityId {
 	if m != nil {
 		return m.EntityKeyspaceIds
 	}
 	return nil
-}
-
-func (m *ExecuteEntityIdsRequest) GetTabletType() topodata.TabletType {
-	if m != nil {
-		return m.TabletType
-	}
-	return topodata.TabletType_UNKNOWN
-}
-
-func (m *ExecuteEntityIdsRequest) GetNotInTransaction() bool {
-	if m != nil {
-		return m.NotInTransaction
-	}
-	return false
 }
 
 func (m *ExecuteEntityIdsRequest) GetOptions() *query.ExecuteOptions {
@@ -727,27 +573,6 @@ func (m *ExecuteEntityIdsRequest_EntityId) String() string { return proto.Compac
 func (*ExecuteEntityIdsRequest_EntityId) ProtoMessage()    {}
 func (*ExecuteEntityIdsRequest_EntityId) Descriptor() ([]byte, []int) {
 	return fileDescriptor0, []int{9, 0}
-}
-
-func (m *ExecuteEntityIdsRequest_EntityId) GetType() query.Type {
-	if m != nil {
-		return m.Type
-	}
-	return query.Type_NULL_TYPE
-}
-
-func (m *ExecuteEntityIdsRequest_EntityId) GetValue() []byte {
-	if m != nil {
-		return m.Value
-	}
-	return nil
-}
-
-func (m *ExecuteEntityIdsRequest_EntityId) GetKeyspaceId() []byte {
-	if m != nil {
-		return m.KeyspaceId
-	}
-	return nil
 }
 
 // ExecuteEntityIdsResponse is the returned value from ExecuteEntityIds.
@@ -836,27 +661,6 @@ func (m *ExecuteBatchRequest) GetQueries() []*query.BoundQuery {
 	return nil
 }
 
-func (m *ExecuteBatchRequest) GetTabletType() topodata.TabletType {
-	if m != nil {
-		return m.TabletType
-	}
-	return topodata.TabletType_UNKNOWN
-}
-
-func (m *ExecuteBatchRequest) GetAsTransaction() bool {
-	if m != nil {
-		return m.AsTransaction
-	}
-	return false
-}
-
-func (m *ExecuteBatchRequest) GetKeyspaceShard() string {
-	if m != nil {
-		return m.KeyspaceShard
-	}
-	return ""
-}
-
 func (m *ExecuteBatchRequest) GetOptions() *query.ExecuteOptions {
 	if m != nil {
 		return m.Options
@@ -926,20 +730,6 @@ func (m *BoundShardQuery) GetQuery() *query.BoundQuery {
 	return nil
 }
 
-func (m *BoundShardQuery) GetKeyspace() string {
-	if m != nil {
-		return m.Keyspace
-	}
-	return ""
-}
-
-func (m *BoundShardQuery) GetShards() []string {
-	if m != nil {
-		return m.Shards
-	}
-	return nil
-}
-
 // ExecuteBatchShardsRequest is the payload to ExecuteBatchShards
 type ExecuteBatchShardsRequest struct {
 	// caller_id identifies the caller. This is the effective caller ID,
@@ -984,20 +774,6 @@ func (m *ExecuteBatchShardsRequest) GetQueries() []*BoundShardQuery {
 		return m.Queries
 	}
 	return nil
-}
-
-func (m *ExecuteBatchShardsRequest) GetTabletType() topodata.TabletType {
-	if m != nil {
-		return m.TabletType
-	}
-	return topodata.TabletType_UNKNOWN
-}
-
-func (m *ExecuteBatchShardsRequest) GetAsTransaction() bool {
-	if m != nil {
-		return m.AsTransaction
-	}
-	return false
 }
 
 func (m *ExecuteBatchShardsRequest) GetOptions() *query.ExecuteOptions {
@@ -1070,20 +846,6 @@ func (m *BoundKeyspaceIdQuery) GetQuery() *query.BoundQuery {
 	return nil
 }
 
-func (m *BoundKeyspaceIdQuery) GetKeyspace() string {
-	if m != nil {
-		return m.Keyspace
-	}
-	return ""
-}
-
-func (m *BoundKeyspaceIdQuery) GetKeyspaceIds() [][]byte {
-	if m != nil {
-		return m.KeyspaceIds
-	}
-	return nil
-}
-
 // ExecuteBatchKeyspaceIdsRequest is the payload to ExecuteBatchKeyspaceId.
 type ExecuteBatchKeyspaceIdsRequest struct {
 	// caller_id identifies the caller. This is the effective caller ID,
@@ -1127,20 +889,6 @@ func (m *ExecuteBatchKeyspaceIdsRequest) GetQueries() []*BoundKeyspaceIdQuery {
 		return m.Queries
 	}
 	return nil
-}
-
-func (m *ExecuteBatchKeyspaceIdsRequest) GetTabletType() topodata.TabletType {
-	if m != nil {
-		return m.TabletType
-	}
-	return topodata.TabletType_UNKNOWN
-}
-
-func (m *ExecuteBatchKeyspaceIdsRequest) GetAsTransaction() bool {
-	if m != nil {
-		return m.AsTransaction
-	}
-	return false
 }
 
 func (m *ExecuteBatchKeyspaceIdsRequest) GetOptions() *query.ExecuteOptions {
@@ -1224,20 +972,6 @@ func (m *StreamExecuteRequest) GetQuery() *query.BoundQuery {
 	return nil
 }
 
-func (m *StreamExecuteRequest) GetTabletType() topodata.TabletType {
-	if m != nil {
-		return m.TabletType
-	}
-	return topodata.TabletType_UNKNOWN
-}
-
-func (m *StreamExecuteRequest) GetKeyspaceShard() string {
-	if m != nil {
-		return m.KeyspaceShard
-	}
-	return ""
-}
-
 func (m *StreamExecuteRequest) GetOptions() *query.ExecuteOptions {
 	if m != nil {
 		return m.Options
@@ -1299,27 +1033,6 @@ func (m *StreamExecuteShardsRequest) GetQuery() *query.BoundQuery {
 		return m.Query
 	}
 	return nil
-}
-
-func (m *StreamExecuteShardsRequest) GetKeyspace() string {
-	if m != nil {
-		return m.Keyspace
-	}
-	return ""
-}
-
-func (m *StreamExecuteShardsRequest) GetShards() []string {
-	if m != nil {
-		return m.Shards
-	}
-	return nil
-}
-
-func (m *StreamExecuteShardsRequest) GetTabletType() topodata.TabletType {
-	if m != nil {
-		return m.TabletType
-	}
-	return topodata.TabletType_UNKNOWN
 }
 
 func (m *StreamExecuteShardsRequest) GetOptions() *query.ExecuteOptions {
@@ -1388,27 +1101,6 @@ func (m *StreamExecuteKeyspaceIdsRequest) GetQuery() *query.BoundQuery {
 	return nil
 }
 
-func (m *StreamExecuteKeyspaceIdsRequest) GetKeyspace() string {
-	if m != nil {
-		return m.Keyspace
-	}
-	return ""
-}
-
-func (m *StreamExecuteKeyspaceIdsRequest) GetKeyspaceIds() [][]byte {
-	if m != nil {
-		return m.KeyspaceIds
-	}
-	return nil
-}
-
-func (m *StreamExecuteKeyspaceIdsRequest) GetTabletType() topodata.TabletType {
-	if m != nil {
-		return m.TabletType
-	}
-	return topodata.TabletType_UNKNOWN
-}
-
 func (m *StreamExecuteKeyspaceIdsRequest) GetOptions() *query.ExecuteOptions {
 	if m != nil {
 		return m.Options
@@ -1475,25 +1167,11 @@ func (m *StreamExecuteKeyRangesRequest) GetQuery() *query.BoundQuery {
 	return nil
 }
 
-func (m *StreamExecuteKeyRangesRequest) GetKeyspace() string {
-	if m != nil {
-		return m.Keyspace
-	}
-	return ""
-}
-
 func (m *StreamExecuteKeyRangesRequest) GetKeyRanges() []*topodata.KeyRange {
 	if m != nil {
 		return m.KeyRanges
 	}
 	return nil
-}
-
-func (m *StreamExecuteKeyRangesRequest) GetTabletType() topodata.TabletType {
-	if m != nil {
-		return m.TabletType
-	}
-	return topodata.TabletType_UNKNOWN
 }
 
 func (m *StreamExecuteKeyRangesRequest) GetOptions() *query.ExecuteOptions {
@@ -1545,13 +1223,6 @@ func (m *BeginRequest) GetCallerId() *vtrpc.CallerID {
 	return nil
 }
 
-func (m *BeginRequest) GetSingleDb() bool {
-	if m != nil {
-		return m.SingleDb
-	}
-	return false
-}
-
 // BeginResponse is the returned value from Begin.
 type BeginResponse struct {
 	// session is the initial session information to use for subsequent queries.
@@ -1599,13 +1270,6 @@ func (m *CommitRequest) GetSession() *Session {
 		return m.Session
 	}
 	return nil
-}
-
-func (m *CommitRequest) GetAtomic() bool {
-	if m != nil {
-		return m.Atomic
-	}
-	return false
 }
 
 // CommitResponse is the returned value from Commit.
@@ -1675,13 +1339,6 @@ func (m *ResolveTransactionRequest) GetCallerId() *vtrpc.CallerID {
 	return nil
 }
 
-func (m *ResolveTransactionRequest) GetDtid() string {
-	if m != nil {
-		return m.Dtid
-	}
-	return ""
-}
-
 // MessageStreamRequest is the request payload for MessageStream.
 type MessageStreamRequest struct {
 	// caller_id identifies the caller. This is the effective caller ID,
@@ -1709,32 +1366,11 @@ func (m *MessageStreamRequest) GetCallerId() *vtrpc.CallerID {
 	return nil
 }
 
-func (m *MessageStreamRequest) GetKeyspace() string {
-	if m != nil {
-		return m.Keyspace
-	}
-	return ""
-}
-
-func (m *MessageStreamRequest) GetShard() string {
-	if m != nil {
-		return m.Shard
-	}
-	return ""
-}
-
 func (m *MessageStreamRequest) GetKeyRange() *topodata.KeyRange {
 	if m != nil {
 		return m.KeyRange
 	}
 	return nil
-}
-
-func (m *MessageStreamRequest) GetName() string {
-	if m != nil {
-		return m.Name
-	}
-	return ""
 }
 
 // MessageAckRequest is the request payload for MessageAck.
@@ -1760,20 +1396,6 @@ func (m *MessageAckRequest) GetCallerId() *vtrpc.CallerID {
 		return m.CallerId
 	}
 	return nil
-}
-
-func (m *MessageAckRequest) GetKeyspace() string {
-	if m != nil {
-		return m.Keyspace
-	}
-	return ""
-}
-
-func (m *MessageAckRequest) GetName() string {
-	if m != nil {
-		return m.Name
-	}
-	return ""
 }
 
 func (m *MessageAckRequest) GetIds() []*query.Value {
@@ -1895,53 +1517,11 @@ func (m *SplitQueryRequest) GetCallerId() *vtrpc.CallerID {
 	return nil
 }
 
-func (m *SplitQueryRequest) GetKeyspace() string {
-	if m != nil {
-		return m.Keyspace
-	}
-	return ""
-}
-
 func (m *SplitQueryRequest) GetQuery() *query.BoundQuery {
 	if m != nil {
 		return m.Query
 	}
 	return nil
-}
-
-func (m *SplitQueryRequest) GetSplitColumn() []string {
-	if m != nil {
-		return m.SplitColumn
-	}
-	return nil
-}
-
-func (m *SplitQueryRequest) GetSplitCount() int64 {
-	if m != nil {
-		return m.SplitCount
-	}
-	return 0
-}
-
-func (m *SplitQueryRequest) GetNumRowsPerQueryPart() int64 {
-	if m != nil {
-		return m.NumRowsPerQueryPart
-	}
-	return 0
-}
-
-func (m *SplitQueryRequest) GetAlgorithm() query.SplitQueryRequest_Algorithm {
-	if m != nil {
-		return m.Algorithm
-	}
-	return query.SplitQueryRequest_EQUAL_SPLITS
-}
-
-func (m *SplitQueryRequest) GetUseSplitQueryV2() bool {
-	if m != nil {
-		return m.UseSplitQueryV2
-	}
-	return false
 }
 
 // SplitQueryResponse is the returned value from SplitQuery.
@@ -1976,13 +1556,6 @@ func (*SplitQueryResponse_KeyRangePart) Descriptor() ([]byte, []int) {
 	return fileDescriptor0, []int{38, 0}
 }
 
-func (m *SplitQueryResponse_KeyRangePart) GetKeyspace() string {
-	if m != nil {
-		return m.Keyspace
-	}
-	return ""
-}
-
 func (m *SplitQueryResponse_KeyRangePart) GetKeyRanges() []*topodata.KeyRange {
 	if m != nil {
 		return m.KeyRanges
@@ -2002,20 +1575,6 @@ func (m *SplitQueryResponse_ShardPart) String() string { return proto.CompactTex
 func (*SplitQueryResponse_ShardPart) ProtoMessage()    {}
 func (*SplitQueryResponse_ShardPart) Descriptor() ([]byte, []int) {
 	return fileDescriptor0, []int{38, 1}
-}
-
-func (m *SplitQueryResponse_ShardPart) GetKeyspace() string {
-	if m != nil {
-		return m.Keyspace
-	}
-	return ""
-}
-
-func (m *SplitQueryResponse_ShardPart) GetShards() []string {
-	if m != nil {
-		return m.Shards
-	}
-	return nil
 }
 
 type SplitQueryResponse_Part struct {
@@ -2056,13 +1615,6 @@ func (m *SplitQueryResponse_Part) GetShardPart() *SplitQueryResponse_ShardPart {
 	return nil
 }
 
-func (m *SplitQueryResponse_Part) GetSize() int64 {
-	if m != nil {
-		return m.Size
-	}
-	return 0
-}
-
 // GetSrvKeyspaceRequest is the payload to GetSrvKeyspace.
 type GetSrvKeyspaceRequest struct {
 	// keyspace name to fetch.
@@ -2073,13 +1625,6 @@ func (m *GetSrvKeyspaceRequest) Reset()                    { *m = GetSrvKeyspace
 func (m *GetSrvKeyspaceRequest) String() string            { return proto.CompactTextString(m) }
 func (*GetSrvKeyspaceRequest) ProtoMessage()               {}
 func (*GetSrvKeyspaceRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{39} }
-
-func (m *GetSrvKeyspaceRequest) GetKeyspace() string {
-	if m != nil {
-		return m.Keyspace
-	}
-	return ""
-}
 
 // GetSrvKeyspaceResponse is the returned value from GetSrvKeyspace.
 type GetSrvKeyspaceResponse struct {
@@ -2135,39 +1680,11 @@ func (m *UpdateStreamRequest) GetCallerId() *vtrpc.CallerID {
 	return nil
 }
 
-func (m *UpdateStreamRequest) GetKeyspace() string {
-	if m != nil {
-		return m.Keyspace
-	}
-	return ""
-}
-
-func (m *UpdateStreamRequest) GetShard() string {
-	if m != nil {
-		return m.Shard
-	}
-	return ""
-}
-
 func (m *UpdateStreamRequest) GetKeyRange() *topodata.KeyRange {
 	if m != nil {
 		return m.KeyRange
 	}
 	return nil
-}
-
-func (m *UpdateStreamRequest) GetTabletType() topodata.TabletType {
-	if m != nil {
-		return m.TabletType
-	}
-	return topodata.TabletType_UNKNOWN
-}
-
-func (m *UpdateStreamRequest) GetTimestamp() int64 {
-	if m != nil {
-		return m.Timestamp
-	}
-	return 0
 }
 
 func (m *UpdateStreamRequest) GetEvent() *query.EventToken {
@@ -2199,13 +1716,6 @@ func (m *UpdateStreamResponse) GetEvent() *query.StreamEvent {
 		return m.Event
 	}
 	return nil
-}
-
-func (m *UpdateStreamResponse) GetResumeTimestamp() int64 {
-	if m != nil {
-		return m.ResumeTimestamp
-	}
-	return 0
 }
 
 func init() {
@@ -2263,7 +1773,7 @@ func init() { proto.RegisterFile("vtgate.proto", fileDescriptor0) }
 
 var fileDescriptor0 = []byte{
 	// 1678 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xd4, 0x5a, 0x4b, 0x6f, 0xdb, 0xc6,
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x09, 0x6e, 0x88, 0x02, 0xff, 0xd4, 0x5a, 0x4b, 0x6f, 0xdb, 0xc6,
 	0x16, 0x06, 0x49, 0x3d, 0x8f, 0x1e, 0xb6, 0xc7, 0xb2, 0xa3, 0x28, 0xbe, 0xb6, 0x43, 0x5c, 0x23,
 	0xce, 0x8d, 0xa1, 0xdc, 0x38, 0xf7, 0x85, 0xbb, 0xb9, 0x37, 0x76, 0x8c, 0x0b, 0x23, 0x37, 0x69,
 	0x3a, 0x76, 0xd3, 0x16, 0x68, 0x40, 0xd0, 0xd2, 0xc0, 0x66, 0x25, 0x91, 0x0a, 0x67, 0xa8, 0xd4,
