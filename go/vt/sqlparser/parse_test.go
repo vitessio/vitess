@@ -624,6 +624,12 @@ func TestValid(t *testing.T) {
 		input:  "create unique index a using foo on b",
 		output: "alter table b",
 	}, {
+		input:  "create fulltext index a using foo on b",
+		output: "alter table b",
+	}, {
+		input:  "create spatial index a using foo on b",
+		output: "alter table b",
+	}, {
 		input:  "create view a",
 		output: "create table a",
 	}, {

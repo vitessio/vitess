@@ -1549,6 +1549,8 @@ constraint_opt:
   { $$ = struct{}{} }
 | UNIQUE
   { $$ = struct{}{} }
+| sql_id
+  { $$ = struct{}{} }
 
 using_opt:
   { $$ = struct{}{} }
