@@ -53,6 +53,15 @@ func TestMessage(t *testing.T) {
 			t.Fatal(err)
 		}
 	}()
+	// Once the test is done, consume any left-over pending
+	// messages. Some could make it into the pipeline and get
+	// stuck forever causing vttablet shutdown to hang.
+	defer func() {
+		go func() {
+			for range ch {
+			}
+		}()
+	}()
 	got := <-ch
 	want := &sqltypes.Result{
 		Fields: []*querypb.Field{{
