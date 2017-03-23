@@ -74,7 +74,7 @@ func TestPlan(t *testing.T) {
 			out = string(bout)
 		}
 		if out != tcase.output {
-			t.Errorf("Line:%v\n%s\n%s", tcase.lineno, tcase.output, out)
+			t.Errorf("Line:%v\ngot  = %s\nwant = %s", tcase.lineno, out, tcase.output)
 			if err != nil {
 				out = fmt.Sprintf("\"%s\"", out)
 			} else {
@@ -117,7 +117,7 @@ func TestCustom(t *testing.T) {
 					out = string(bout)
 				}
 				if out != tcase.output {
-					t.Errorf("File: %s: Line:%v\n%s\n%s", file, tcase.lineno, tcase.output, out)
+					t.Errorf("File: %s: Line:%v\ngot  = %s\nwant = %s", file, tcase.lineno, out, tcase.output)
 				}
 			}
 		}
@@ -139,7 +139,7 @@ func TestStreamPlan(t *testing.T) {
 			out = string(bout)
 		}
 		if out != tcase.output {
-			t.Errorf("Line:%v\n%s\n%s", tcase.lineno, tcase.output, out)
+			t.Errorf("Line:%v\ngot  = %s\nwant = %s", tcase.lineno, out, tcase.output)
 		}
 		//fmt.Printf("%s\n%s\n\n", tcase.input, out)
 	}
