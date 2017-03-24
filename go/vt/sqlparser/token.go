@@ -199,7 +199,7 @@ var keywords = map[string]int{
 	"numeric":             UNUSED,
 	"offset":              OFFSET,
 	"on":                  ON,
-	"optimize":            UNUSED,
+	"optimize":            OPTIMIZE,
 	"optimizer_costs":     UNUSED,
 	"option":              UNUSED,
 	"optionally":          UNUSED,
