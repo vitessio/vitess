@@ -111,7 +111,7 @@ func forceEOF(yylex interface{}) {
 // DDL Tokens
 %token <bytes> CREATE ALTER DROP RENAME ANALYZE
 %token <bytes> TABLE INDEX VIEW TO IGNORE IF UNIQUE USING
-%token <bytes> SHOW DESCRIBE EXPLAIN DATE ESCAPE REPAIR OPTIMIZE
+%token <bytes> SHOW DESCRIBE EXPLAIN DATE ESCAPE REPAIR OPTIMIZE TRUNCATE
 
 // Supported SHOW tokens
 %token <bytes> DATABASES TABLES VITESS_KEYSPACES VITESS_SHARDS VSCHEMA_TABLES
@@ -388,6 +388,10 @@ other_statement:
     $$ = &Other{}
   }
 | OPTIMIZE force_eof
+  {
+    $$ = &Other{}
+  }
+| TRUNCATE force_eof
   {
     $$ = &Other{}
   }
@@ -1733,6 +1737,7 @@ non_reserved_keyword:
 | QUERY
 | REPAIR
 | SHARE
+| TRUNCATE
 | UNUSED
 | VIEW
 | WITH
