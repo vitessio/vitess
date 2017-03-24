@@ -617,8 +617,6 @@ func TestValid(t *testing.T) {
 		input:  "alter table a rename key foo to bar",
 		output: "alter table a",
 	}, {
-		input: "truncate foo",
-	}, {
 		input: "create table a",
 	}, {
 		input: "create table `by`",
@@ -642,6 +640,9 @@ func TestValid(t *testing.T) {
 		output: "alter table b",
 	}, {
 		input:  "create view a",
+		output: "create table a",
+	}, {
+		input:  "create or replace view a",
 		output: "create table a",
 	}, {
 		input:  "alter view a",
@@ -690,6 +691,9 @@ func TestValid(t *testing.T) {
 		output: "other",
 	}, {
 		input:  "explain foobar",
+		output: "other",
+	}, {
+		input:  "truncate foo",
 		output: "other",
 	}, {
 		input: "select /* EQ true */ 1 from t where a = true",
