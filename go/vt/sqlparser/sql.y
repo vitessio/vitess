@@ -330,6 +330,10 @@ create_statement:
   {
     $$ = &DDL{Action: CreateStr, NewName: $3.ToViewName()}
   }
+| CREATE OR REPLACE VIEW table_name ddl_force_eof
+  {
+    $$ = &DDL{Action: CreateStr, NewName: $5.ToViewName()}
+  }
 
 alter_statement:
   ALTER ignore_opt TABLE table_name non_rename_operation force_eof
