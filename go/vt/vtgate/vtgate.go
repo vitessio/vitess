@@ -42,7 +42,7 @@ import (
 
 var (
 	transactionMode  = flag.String("transaction_mode", "multi", "single: disallow multi-db transactions, multi: allow multi-db transactions with best effort commit, twopc: allow multi-db transactions with 2pc commit")
-	normalizeQueries = flag.Bool("normalize_queries", false, "Turning this flag on will cause vtgate to rewrite queries with bind vars. This is beneficial if the app doesn't itself send normalized queries.")
+	normalizeQueries = flag.Bool("normalize_queries", true, "Rewrite queries with bind vars. Turn this off if the app itself sends normalized queries with bind vars.")
 )
 
 // Transaction modes. The value specifies what's allowed.
