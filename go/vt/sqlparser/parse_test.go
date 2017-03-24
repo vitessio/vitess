@@ -627,6 +627,15 @@ func TestValid(t *testing.T) {
 		input:  "alter table a rename to b",
 		output: "rename table a b",
 	}, {
+		input:  "alter table a rename as b",
+		output: "rename table a b",
+	}, {
+		input:  "alter table a rename index foo to bar",
+		output: "alter table a",
+	}, {
+		input:  "alter table a rename key foo to bar",
+		output: "alter table a",
+	}, {
 		input: "create table a",
 	}, {
 		input: "create table `by`",
