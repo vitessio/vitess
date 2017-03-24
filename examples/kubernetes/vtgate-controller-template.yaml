@@ -43,7 +43,7 @@ spec:
               -port 15001
               -grpc_port 15991
               -mysql_server_port {{mysql_server_port}}
-              -mysql_auth_server_config_string '{\"mysql_user\":{\"Password\":\"mysql_password\"}}'
+              -mysql_auth_server_static_string '{\"mysql_user\":{\"Password\":\"mysql_password\"}}'
               -service_map 'grpc-vtgateservice'
               -cells_to_watch {{cell}}
               -tablet_types_to_wait MASTER,REPLICA
