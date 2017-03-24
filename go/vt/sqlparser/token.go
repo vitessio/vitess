@@ -269,6 +269,7 @@ var keywords = map[string]int{
 	"trailing":            UNUSED,
 	"trigger":             UNUSED,
 	"true":                TRUE,
+	"truncate":            TRUNCATE,
 	"undo":                UNUSED,
 	"union":               UNION,
 	"unique":              UNIQUE,
