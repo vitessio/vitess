@@ -1,13 +1,28 @@
 package com.flipkart.vitess.jdbc;
 
+import java.sql.Connection;
+import java.sql.DatabaseMetaData;
+import java.sql.ResultSet;
+import java.sql.RowIdLifetime;
+import java.sql.SQLException;
+import java.sql.SQLFeatureNotSupportedException;
+import java.sql.Types;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.Locale;
+import java.util.Map;
+import java.util.SortedMap;
+import java.util.StringTokenizer;
+import java.util.TreeMap;
+import java.util.logging.Logger;
+
+import org.apache.commons.lang.StringUtils;
+
 import com.flipkart.vitess.util.Constants;
 import com.flipkart.vitess.util.MysqlDefs;
 import com.youtube.vitess.proto.Query;
-import org.apache.commons.lang.StringUtils;
-
-import java.sql.*;
-import java.util.*;
-import java.util.logging.Logger;
 
 /**
  * Created by ashudeep.sharma on 15/02/16.
@@ -131,30 +146,6 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
 
     public String getDriverName() throws SQLException {
         return DRIVER_NAME;
-    }
-
-    public boolean storesLowerCaseIdentifiers() throws SQLException {
-        return false;
-    }
-
-    public boolean storesMixedCaseIdentifiers() throws SQLException {
-        return false;
-    }
-
-    public boolean supportsMixedCaseQuotedIdentifiers() throws SQLException {
-        return false;
-    }
-
-    public boolean storesUpperCaseQuotedIdentifiers() throws SQLException {
-        return false;
-    }
-
-    public boolean storesLowerCaseQuotedIdentifiers() throws SQLException {
-        return false;
-    }
-
-    public boolean storesMixedCaseQuotedIdentifiers() throws SQLException {
-        return false;
     }
 
     public String getSQLKeywords() throws SQLException {
