@@ -215,11 +215,11 @@ public class VitessConnection extends ConnectionProperties implements Connection
 
     public DatabaseMetaData getMetaData() throws SQLException {
         checkOpen();
-        if (!metadataNullOrDefunct()) {
+        if (!metadataNullOrClosed()) {
             return databaseMetaData;
         } else {
             synchronized (VitessConnection.class) {
-                if (metadataNullOrDefunct()) {
+                if (metadataNullOrClosed()) {
                     String dbEngine = initializeDBProperties();
                     if (dbEngine.equals("mariadb")) {
                         databaseMetaData = new VitessMariaDBDatabaseMetadata(this);
@@ -232,7 +232,7 @@ public class VitessConnection extends ConnectionProperties implements Connection
         }
     }
 
-    private boolean metadataNullOrDefunct() throws SQLException {
+    private boolean metadataNullOrClosed() throws SQLException {
         return null == databaseMetaData || null == databaseMetaData.getConnection() || databaseMetaData.getConnection().isClosed();
     }
 
@@ -790,7 +790,7 @@ public class VitessConnection extends ConnectionProperties implements Connection
         HashMap<String, String> dbVariables = new HashMap<>();
         String dbEngine = null;
 
-        if (metadataNullOrDefunct()) {
+        if (metadataNullOrClosed()) {
             String versionValue;
             ResultSet resultSet = null;
             VitessStatement vitessStatement = new VitessStatement(this);
