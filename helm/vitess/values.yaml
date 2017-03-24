@@ -25,8 +25,6 @@ topology:
         replicas: 3
       vtctld:
         replicas: 1
-      vtworker:
-        replicas: 1
       vtgate:
         replicas: 3
       keyspaces:
@@ -42,6 +40,9 @@ topology:
                   uidBase: 103
                   vttablet:
                     replicas: 2
+      vtworker:
+        replicas: 1
+
 
 # Backup flags will be applied to components that need them.
 # These are defined globally since all components should agree.

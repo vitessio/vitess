@@ -29,12 +29,12 @@ sandbox:
     keyspaces:
       - name: {{sandbox_name}}
         shard_count: 1
-        replica_count: 3
-        rdonly_count: 0
+        replica_count: 2
+        rdonly_count: 1
       - name: {{sandbox_name}}
         shard_count: 2
-        replica_count: 3
-        rdonly_count: 0
+        replica_count: 2
+        rdonly_count: 1
     vtctld_image: vitess/root
     vtworker_image: vitess/root
     vttablet_image: vitess/root
@@ -48,6 +48,7 @@ sandbox:
     port_forwarding:
       vtgate: 15001
       vtctld: 15000
+      vtworker: 17032
       guestbook: 80
     backup_flags:
       backup_storage_implementation: gcs

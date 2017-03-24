@@ -31,8 +31,6 @@ spec:
 {{ with $cell.vtgate }}{{ include "vtgate" (tuple $ $cell .) }}{{ end }}
 ---
 {{ with $cell.orchestrator }}{{ include "orchestrator" (tuple $ $cell .) }}{{ end }}
----
-{{ with $cell.vtworker }}{{ include "vtworker" (tuple $ $cell .) }}{{ end }}
 
 # Tablets for keyspaces
 {{ range $keyspace := $cell.keyspaces }}
@@ -57,6 +55,8 @@ spec:
 {{ end }} # range $tablet
 {{ end }} # range $shard
 {{ end }} # range $keyspace
+
+{{ with $cell.vtworker }}{{ include "vtworker" (tuple $ $cell .) }}{{ end }}
 
 {{ end }} # range $cell
 

@@ -16,7 +16,7 @@ spec:
     - name: web
       port: 17032
     - name: grpc
-      port 17033
+      port: 17033
   selector:
     component: vtworker
     app: vitess

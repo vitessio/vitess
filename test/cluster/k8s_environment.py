@@ -34,6 +34,7 @@ class K8sEnvironment(base_environment.BaseEnvironment):
     vtctld_ip = kubernetes_components.get_forwarded_ip(
         'vtctld', instance_name)
     self.vtctl_addr = '%s:15999' % vtctld_ip
+    print self.vtctl_addr
 
     self.vtctl_helper = vtctl_helper.VtctlHelper('grpc', self.vtctl_addr)
     self.cluster_name = instance_name
