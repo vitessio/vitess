@@ -52,7 +52,7 @@ public class VitessResultSetMetaData implements ResultSetMetaData {
             case Types.CHAR:
             case Types.VARCHAR:
             case Types.LONGVARCHAR:
-                if (field.isBinary() || !field.getConnection().isIncludeAllFields()) {
+                if (field.isBinary() || !field.getConnectionProperties().isIncludeAllFields()) {
                     return true;
                 }
                 try {
@@ -88,7 +88,7 @@ public class VitessResultSetMetaData implements ResultSetMetaData {
      */
     public int isNullable(int column) throws SQLException {
         FieldWithMetadata field = getField(column);
-        if (!field.getConnection().isIncludeAllFields()) {
+        if (!field.getConnectionProperties().isIncludeAllFields()) {
             return ResultSetMetaData.columnNullableUnknown;
         }
         return field.isNotNull() ? ResultSetMetaData.columnNoNulls : ResultSetMetaData.columnNullable;
@@ -100,7 +100,7 @@ public class VitessResultSetMetaData implements ResultSetMetaData {
 
     public int getColumnDisplaySize(int column) throws SQLException {
         FieldWithMetadata field = getField(column);
-        if (!field.getConnection().isIncludeAllFields()) {
+        if (!field.getConnectionProperties().isIncludeAllFields()) {
             return 0;
         }
         // If we can't find a charset, we'll return 0. In that case assume 1 byte per char
@@ -121,7 +121,7 @@ public class VitessResultSetMetaData implements ResultSetMetaData {
 
     public int getPrecision(int column) throws SQLException {
         FieldWithMetadata field = getField(column);
-        if (!field.getConnection().isIncludeAllFields()) {
+        if (!field.getConnectionProperties().isIncludeAllFields()) {
             return 0;
         }
         if (isDecimalType(field.getJavaType(), field.getVitessTypeValue())) {
@@ -289,11 +289,11 @@ public class VitessResultSetMetaData implements ResultSetMetaData {
 
     public String getColumnClassName(int column) throws SQLException {
         FieldWithMetadata field = getField(column);
-        if (!field.getConnection().isIncludeAllFields()) {
+        if (!field.getConnectionProperties().isIncludeAllFields()) {
             return null;
         }
         return getClassNameForJavaType(field.getJavaType(), field.getVitessTypeValue(), field.isUnsigned(),
-            field.isBinary() || field.isBlob(), field.isOpaqueBinary(), field.getConnection().getYearIsDateType());
+            field.isBinary() || field.isBlob(), field.isOpaqueBinary(), field.getConnectionProperties().getYearIsDateType());
     }
 
     public <T> T unwrap(Class<T> iface) throws SQLException {

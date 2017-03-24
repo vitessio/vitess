@@ -4,6 +4,7 @@ import com.flipkart.vitess.util.Constants;
 import com.flipkart.vitess.util.MysqlDefs;
 import com.flipkart.vitess.util.StringUtils;
 import com.flipkart.vitess.util.charset.CharsetMapping;
+import com.google.common.annotations.VisibleForTesting;
 import com.youtube.vitess.proto.Query;
 
 import java.sql.SQLException;
@@ -12,7 +13,7 @@ import java.util.regex.PatternSyntaxException;
 
 public class FieldWithMetadata {
 
-    private final VitessConnection connection;
+    private final ConnectionProperties connectionProperties;
     private final Query.Field field;
     private final Query.Type vitessType;
     private final boolean isImplicitTempTable;
@@ -26,8 +27,8 @@ public class FieldWithMetadata {
     private int collationIndex;
     private int maxBytesPerChar;
 
-    public FieldWithMetadata(VitessConnection connection, Query.Field field) throws SQLException {
-        this.connection = connection;
+    public FieldWithMetadata(ConnectionProperties connectionProperties, Query.Field field) throws SQLException {
+        this.connectionProperties = connectionProperties;
         this.field = field;
         this.colFlag = field.getFlags();
         this.vitessType = field.getType();
@@ -46,15 +47,15 @@ public class FieldWithMetadata {
 
         // All of the below remapping and metadata fields require the extra
         // fields included when includeFields=IncludedFields.ALL
-        if (connection != null && connection.isIncludeAllFields()) {
+        if (connectionProperties != null && connectionProperties.isIncludeAllFields()) {
             this.isImplicitTempTable = checkForImplicitTemporaryTable();
             // Re-map  BLOB to 'real' blob type
             if (this.javaType == Types.BLOB) {
                 boolean isFromFunction = field.getOrgTable().isEmpty();
-                if (connection.getBlobsAreStrings() || (connection.getFunctionsNeverReturnBlobs() && isFromFunction)) {
+                if (connectionProperties.getBlobsAreStrings() || (connectionProperties.getFunctionsNeverReturnBlobs() && isFromFunction)) {
                     this.javaType = Types.VARCHAR;
                 } else if (collationIndex == CharsetMapping.MYSQL_COLLATION_INDEX_binary) {
-                    if (connection.getUseBlobToStoreUTF8OutsideBMP() && shouldSetupForUtf8StringInBlob()) {
+                    if (connectionProperties.getUseBlobToStoreUTF8OutsideBMP() && shouldSetupForUtf8StringInBlob()) {
                         if (this.getColumnLength() == MysqlDefs.LENGTH_TINYBLOB || this.getColumnLength() == MysqlDefs.LENGTH_BLOB) {
                             this.javaType = Types.VARCHAR;
                         } else {
@@ -76,14 +77,14 @@ public class FieldWithMetadata {
             }
 
             // Re-map TINYINT(1) as bit or pseudo-boolean
-            if (this.javaType == Types.TINYINT && this.field.getColumnLength() == 1 && connection.getTinyInt1isBit()) {
+            if (this.javaType == Types.TINYINT && this.field.getColumnLength() == 1 && connectionProperties.getTinyInt1isBit()) {
                 this.javaType = Types.BIT;
             }
 
             if (!isNativeNumericType() && !isNativeDateTimeType()) {
                 // For non-numeric types, try to pull the encoding from the passed collationIndex
                 // We will do some fixup afterwards
-                this.encoding = connection.getEncodingForIndex(this.collationIndex);
+                this.encoding = getEncodingForIndex(this.collationIndex);
                 // ucs2, utf16, and utf32 cannot be used as a client character set, but if it was received from server
                 // under some circumstances we can parse them as utf16
                 if ("UnicodeBig".equals(this.encoding)) {
@@ -182,24 +183,37 @@ public class FieldWithMetadata {
         }
     }
 
-    public VitessConnection getConnection() throws SQLException {
-        checkConnection();
-        return connection;
+    @VisibleForTesting
+    String getEncodingForIndex(int charsetIndex) {
+        String javaEncoding = null;
+        if (charsetIndex != MysqlDefs.NO_CHARSET_INFO) {
+            javaEncoding = CharsetMapping.getJavaEncodingForCollationIndex(charsetIndex, connectionProperties.getEncoding());
+        }
+        // If nothing, get default based on configuration, may still be null
+        if (javaEncoding == null) {
+            javaEncoding = connectionProperties.getEncoding();
+        }
+        return javaEncoding;
     }
 
-    public boolean hasConnection() {
-        return connection != null;
+    public ConnectionProperties getConnectionProperties() throws SQLException {
+        checkConnectionProperties();
+        return connectionProperties;
     }
 
-    private void checkConnection() throws SQLException {
-        if (!hasConnection()) {
+    public boolean hasConnectionProperties() {
+        return connectionProperties != null;
+    }
+
+    private void checkConnectionProperties() throws SQLException {
+        if (!hasConnectionProperties()) {
             throw new SQLException(Constants.SQLExceptionMessages.CONN_UNAVAILABLE);
         }
     }
 
     private boolean shouldSetupForUtf8StringInBlob() throws SQLException {
-        String includePattern = connection.getUtf8OutsideBmpIncludedColumnNamePattern();
-        String excludePattern = connection.getUtf8OutsideBmpExcludedColumnNamePattern();
+        String includePattern = connectionProperties.getUtf8OutsideBmpIncludedColumnNamePattern();
+        String excludePattern = connectionProperties.getUtf8OutsideBmpExcludedColumnNamePattern();
 
         // When UseBlobToStoreUTF8OutsideBMP is set, we by default set blobs to UTF-8. So we first
         // look for fields to exclude from that remapping (blacklist)
@@ -228,85 +242,85 @@ public class FieldWithMetadata {
     }
 
     public boolean isAutoIncrement() throws SQLException {
-        checkConnection();
-        if (!connection.isIncludeAllFields()) {
+        checkConnectionProperties();
+        if (!connectionProperties.isIncludeAllFields()) {
             return false;
         }
         return ((this.colFlag & Query.MySqlFlag.AUTO_INCREMENT_FLAG_VALUE) > 0);
     }
 
     public boolean isBinary() throws SQLException {
-        checkConnection();
-        if (!connection.isIncludeAllFields()) {
+        checkConnectionProperties();
+        if (!connectionProperties.isIncludeAllFields()) {
             return false;
         }
         return ((this.colFlag & Query.MySqlFlag.BINARY_FLAG_VALUE) > 0);
     }
 
     public boolean isBlob() throws SQLException {
-        checkConnection();
-        if (!connection.isIncludeAllFields()) {
+        checkConnectionProperties();
+        if (!connectionProperties.isIncludeAllFields()) {
             return false;
         }
         return ((this.colFlag & Query.MySqlFlag.BLOB_FLAG_VALUE) > 0);
     }
 
     public boolean isMultipleKey() throws SQLException {
-        checkConnection();
-        if (!connection.isIncludeAllFields()) {
+        checkConnectionProperties();
+        if (!connectionProperties.isIncludeAllFields()) {
             return false;
         }
         return ((this.colFlag & Query.MySqlFlag.MULTIPLE_KEY_FLAG_VALUE) > 0);
     }
 
     boolean isNotNull() throws SQLException {
-        checkConnection();
-        if (!connection.isIncludeAllFields()) {
+        checkConnectionProperties();
+        if (!connectionProperties.isIncludeAllFields()) {
             return true;
         }
         return ((this.colFlag & Query.MySqlFlag.NOT_NULL_FLAG_VALUE) > 0);
     }
 
     public boolean isZeroFill() throws SQLException {
-        checkConnection();
-        if (!connection.isIncludeAllFields()) {
+        checkConnectionProperties();
+        if (!connectionProperties.isIncludeAllFields()) {
             return false;
         }
         return ((this.colFlag & Query.MySqlFlag.ZEROFILL_FLAG_VALUE) > 0);
     }
 
     public boolean isPrimaryKey() throws SQLException {
-        checkConnection();
-        if (!connection.isIncludeAllFields()) {
+        checkConnectionProperties();
+        if (!connectionProperties.isIncludeAllFields()) {
             return false;
         }
         return ((this.colFlag & Query.MySqlFlag.PRI_KEY_FLAG_VALUE) > 0);
     }
 
     public boolean isUniqueKey() throws SQLException {
-        checkConnection();
-        if (!connection.isIncludeAllFields()) {
+        checkConnectionProperties();
+        if (!connectionProperties.isIncludeAllFields()) {
             return false;
         }
         return ((this.colFlag & Query.MySqlFlag.UNIQUE_KEY_FLAG_VALUE) > 0);
     }
 
     public boolean isUnsigned() throws SQLException {
-        checkConnection();
-        if (!connection.isIncludeAllFields()) {
+        checkConnectionProperties();
+        if (!connectionProperties.isIncludeAllFields()) {
             return true;
         }
         return ((this.colFlag & Query.MySqlFlag.UNSIGNED_FLAG_VALUE) > 0);
     }
 
     public boolean isSigned() throws SQLException {
-        checkConnection();
+        checkConnectionProperties();
         return !isUnsigned();
     }
 
     boolean isOpaqueBinary() throws SQLException {
-        checkConnection();
-        if (!connection.isIncludeAllFields()) {
+        checkConnectionProperties();
+        if (!connectionProperties.isIncludeAllFields()) {
             return false;
         }
 
@@ -329,8 +343,8 @@ public class FieldWithMetadata {
      * statement.
      */
     boolean isReadOnly() throws SQLException {
-        checkConnection();
-        if (!connection.isIncludeAllFields()) {
+        checkConnectionProperties();
+        if (!connectionProperties.isIncludeAllFields()) {
             return false;
         }
         String orgColumnName = getOrgName();
@@ -339,7 +353,7 @@ public class FieldWithMetadata {
     }
 
     public synchronized String getCollation() throws SQLException {
-        if (!connection.isIncludeAllFields()) {
+        if (!connectionProperties.isIncludeAllFields()) {
             return null;
         }
 
@@ -356,14 +370,26 @@ public class FieldWithMetadata {
 
 
     public synchronized int getMaxBytesPerCharacter() {
-        if (!connection.isIncludeAllFields()) {
+        if (!connectionProperties.isIncludeAllFields()) {
             return 0;
         }
 
         if (this.maxBytesPerChar == 0) {
-            this.maxBytesPerChar = this.connection.getMaxBytesPerChar(getCollationIndex(), getEncoding());
+            this.maxBytesPerChar = getMaxBytesPerChar(getCollationIndex(), getEncoding());
         }
         return this.maxBytesPerChar;
+    }
+
+    @VisibleForTesting
+    int getMaxBytesPerChar(Integer charsetIndex, String javaCharsetName) {
+        // if we can get it by charsetIndex just doing it
+        String charset = CharsetMapping.getMysqlCharsetNameForCollationIndex(charsetIndex);
+        // if we didn't find charset name by its full name
+        if (charset == null) {
+            charset = CharsetMapping.getMysqlCharsetForJavaEncoding(javaCharsetName);
+        }
+        // checking against static maps
+        return CharsetMapping.getMblen(charset);
     }
 
     public String getName() {
@@ -371,48 +397,48 @@ public class FieldWithMetadata {
     }
 
     public String getTable() throws SQLException {
-        checkConnection();
-        if (!connection.isIncludeAllFields()) {
+        checkConnectionProperties();
+        if (!connectionProperties.isIncludeAllFields()) {
             return null;
         }
         return field.getTable();
     }
 
     public String getOrgTable() throws SQLException {
-        checkConnection();
-        if (!connection.isIncludeAllFields()) {
+        checkConnectionProperties();
+        if (!connectionProperties.isIncludeAllFields()) {
             return null;
         }
         return field.getOrgTable();
     }
 
     public String getDatabase() throws SQLException {
-        checkConnection();
-        if (!connection.isIncludeAllFields()) {
+        checkConnectionProperties();
+        if (!connectionProperties.isIncludeAllFields()) {
             return null;
         }
         return field.getDatabase();
     }
 
     public String getOrgName() throws SQLException {
-        checkConnection();
-        if (!connection.isIncludeAllFields()) {
+        checkConnectionProperties();
+        if (!connectionProperties.isIncludeAllFields()) {
             return null;
         }
         return field.getOrgName();
     }
 
     public int getColumnLength() throws SQLException {
-        checkConnection();
-        if (!connection.isIncludeAllFields()) {
+        checkConnectionProperties();
+        if (!connectionProperties.isIncludeAllFields()) {
             return 0;
         }
         return field.getColumnLength();
     }
 
     public int getDecimals() throws SQLException {
-        checkConnection();
-        if (!connection.isIncludeAllFields()) {
+        checkConnectionProperties();
+        if (!connectionProperties.isIncludeAllFields()) {
             return 0;
         }
         return field.getDecimals();
@@ -431,14 +457,14 @@ public class FieldWithMetadata {
     }
 
     boolean isImplicitTemporaryTable() {
-        if (!connection.isIncludeAllFields()) {
+        if (!connectionProperties.isIncludeAllFields()) {
             return false;
         }
         return isImplicitTempTable;
     }
 
     public String getEncoding() {
-        if (!connection.isIncludeAllFields()) {
+        if (!connectionProperties.isIncludeAllFields()) {
             return null;
         }
         return encoding;
@@ -450,16 +476,16 @@ public class FieldWithMetadata {
      * numeric types
      */
     public int getPrecisionAdjustFactor() throws SQLException {
-        checkConnection();
-        if (!connection.isIncludeAllFields()) {
+        checkConnectionProperties();
+        if (!connectionProperties.isIncludeAllFields()) {
             return 0;
         }
         return precisionAdjustFactor;
     }
 
     public boolean isSingleBit() throws SQLException {
-        checkConnection();
-        if (!connection.isIncludeAllFields()) {
+        checkConnectionProperties();
+        if (!connectionProperties.isIncludeAllFields()) {
             return false;
         }
         return isSingleBit;
