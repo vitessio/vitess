@@ -316,6 +316,27 @@ func (m *CallerID) String() string            { return proto.CompactTextString(m
 func (*CallerID) ProtoMessage()               {}
 func (*CallerID) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{0} }
 
+func (m *CallerID) GetPrincipal() string {
+	if m != nil {
+		return m.Principal
+	}
+	return ""
+}
+
+func (m *CallerID) GetComponent() string {
+	if m != nil {
+		return m.Component
+	}
+	return ""
+}
+
+func (m *CallerID) GetSubcomponent() string {
+	if m != nil {
+		return m.Subcomponent
+	}
+	return ""
+}
+
 // RPCError is an application-level error structure returned by
 // VtTablet (and passed along by VtGate if appropriate).
 // We use this so the clients don't have to parse the error messages,
@@ -330,6 +351,27 @@ func (m *RPCError) Reset()                    { *m = RPCError{} }
 func (m *RPCError) String() string            { return proto.CompactTextString(m) }
 func (*RPCError) ProtoMessage()               {}
 func (*RPCError) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{1} }
+
+func (m *RPCError) GetLegacyCode() LegacyErrorCode {
+	if m != nil {
+		return m.LegacyCode
+	}
+	return LegacyErrorCode_SUCCESS_LEGACY
+}
+
+func (m *RPCError) GetMessage() string {
+	if m != nil {
+		return m.Message
+	}
+	return ""
+}
+
+func (m *RPCError) GetCode() Code {
+	if m != nil {
+		return m.Code
+	}
+	return Code_OK
+}
 
 func init() {
 	proto.RegisterType((*CallerID)(nil), "vtrpc.CallerID")

@@ -144,6 +144,55 @@ func (m *TableDefinition) String() string            { return proto.CompactTextS
 func (*TableDefinition) ProtoMessage()               {}
 func (*TableDefinition) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{0} }
 
+func (m *TableDefinition) GetName() string {
+	if m != nil {
+		return m.Name
+	}
+	return ""
+}
+
+func (m *TableDefinition) GetSchema() string {
+	if m != nil {
+		return m.Schema
+	}
+	return ""
+}
+
+func (m *TableDefinition) GetColumns() []string {
+	if m != nil {
+		return m.Columns
+	}
+	return nil
+}
+
+func (m *TableDefinition) GetPrimaryKeyColumns() []string {
+	if m != nil {
+		return m.PrimaryKeyColumns
+	}
+	return nil
+}
+
+func (m *TableDefinition) GetType() string {
+	if m != nil {
+		return m.Type
+	}
+	return ""
+}
+
+func (m *TableDefinition) GetDataLength() uint64 {
+	if m != nil {
+		return m.DataLength
+	}
+	return 0
+}
+
+func (m *TableDefinition) GetRowCount() uint64 {
+	if m != nil {
+		return m.RowCount
+	}
+	return 0
+}
+
 type SchemaDefinition struct {
 	DatabaseSchema   string             `protobuf:"bytes,1,opt,name=database_schema,json=databaseSchema" json:"database_schema,omitempty"`
 	TableDefinitions []*TableDefinition `protobuf:"bytes,2,rep,name=table_definitions,json=tableDefinitions" json:"table_definitions,omitempty"`
@@ -155,11 +204,25 @@ func (m *SchemaDefinition) String() string            { return proto.CompactText
 func (*SchemaDefinition) ProtoMessage()               {}
 func (*SchemaDefinition) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{1} }
 
+func (m *SchemaDefinition) GetDatabaseSchema() string {
+	if m != nil {
+		return m.DatabaseSchema
+	}
+	return ""
+}
+
 func (m *SchemaDefinition) GetTableDefinitions() []*TableDefinition {
 	if m != nil {
 		return m.TableDefinitions
 	}
 	return nil
+}
+
+func (m *SchemaDefinition) GetVersion() string {
+	if m != nil {
+		return m.Version
+	}
+	return ""
 }
 
 type SchemaChangeResult struct {
@@ -203,6 +266,27 @@ func (m *UserPermission) String() string            { return proto.CompactTextSt
 func (*UserPermission) ProtoMessage()               {}
 func (*UserPermission) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{3} }
 
+func (m *UserPermission) GetHost() string {
+	if m != nil {
+		return m.Host
+	}
+	return ""
+}
+
+func (m *UserPermission) GetUser() string {
+	if m != nil {
+		return m.User
+	}
+	return ""
+}
+
+func (m *UserPermission) GetPasswordChecksum() uint64 {
+	if m != nil {
+		return m.PasswordChecksum
+	}
+	return 0
+}
+
 func (m *UserPermission) GetPrivileges() map[string]string {
 	if m != nil {
 		return m.Privileges
@@ -223,6 +307,27 @@ func (m *DbPermission) Reset()                    { *m = DbPermission{} }
 func (m *DbPermission) String() string            { return proto.CompactTextString(m) }
 func (*DbPermission) ProtoMessage()               {}
 func (*DbPermission) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{4} }
+
+func (m *DbPermission) GetHost() string {
+	if m != nil {
+		return m.Host
+	}
+	return ""
+}
+
+func (m *DbPermission) GetDb() string {
+	if m != nil {
+		return m.Db
+	}
+	return ""
+}
+
+func (m *DbPermission) GetUser() string {
+	if m != nil {
+		return m.User
+	}
+	return ""
+}
 
 func (m *DbPermission) GetPrivileges() map[string]string {
 	if m != nil {
@@ -268,6 +373,20 @@ func (m *BlpPosition) String() string            { return proto.CompactTextStrin
 func (*BlpPosition) ProtoMessage()               {}
 func (*BlpPosition) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{6} }
 
+func (m *BlpPosition) GetUid() uint32 {
+	if m != nil {
+		return m.Uid
+	}
+	return 0
+}
+
+func (m *BlpPosition) GetPosition() string {
+	if m != nil {
+		return m.Position
+	}
+	return ""
+}
+
 type PingRequest struct {
 	Payload string `protobuf:"bytes,1,opt,name=payload" json:"payload,omitempty"`
 }
@@ -276,6 +395,13 @@ func (m *PingRequest) Reset()                    { *m = PingRequest{} }
 func (m *PingRequest) String() string            { return proto.CompactTextString(m) }
 func (*PingRequest) ProtoMessage()               {}
 func (*PingRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{7} }
+
+func (m *PingRequest) GetPayload() string {
+	if m != nil {
+		return m.Payload
+	}
+	return ""
+}
 
 type PingResponse struct {
 	Payload string `protobuf:"bytes,1,opt,name=payload" json:"payload,omitempty"`
@@ -286,6 +412,13 @@ func (m *PingResponse) String() string            { return proto.CompactTextStri
 func (*PingResponse) ProtoMessage()               {}
 func (*PingResponse) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{8} }
 
+func (m *PingResponse) GetPayload() string {
+	if m != nil {
+		return m.Payload
+	}
+	return ""
+}
+
 type SleepRequest struct {
 	// duration is in nanoseconds
 	Duration int64 `protobuf:"varint,1,opt,name=duration" json:"duration,omitempty"`
@@ -295,6 +428,13 @@ func (m *SleepRequest) Reset()                    { *m = SleepRequest{} }
 func (m *SleepRequest) String() string            { return proto.CompactTextString(m) }
 func (*SleepRequest) ProtoMessage()               {}
 func (*SleepRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{9} }
+
+func (m *SleepRequest) GetDuration() int64 {
+	if m != nil {
+		return m.Duration
+	}
+	return 0
+}
 
 type SleepResponse struct {
 }
@@ -315,6 +455,20 @@ func (m *ExecuteHookRequest) String() string            { return proto.CompactTe
 func (*ExecuteHookRequest) ProtoMessage()               {}
 func (*ExecuteHookRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{11} }
 
+func (m *ExecuteHookRequest) GetName() string {
+	if m != nil {
+		return m.Name
+	}
+	return ""
+}
+
+func (m *ExecuteHookRequest) GetParameters() []string {
+	if m != nil {
+		return m.Parameters
+	}
+	return nil
+}
+
 func (m *ExecuteHookRequest) GetExtraEnv() map[string]string {
 	if m != nil {
 		return m.ExtraEnv
@@ -333,6 +487,27 @@ func (m *ExecuteHookResponse) String() string            { return proto.CompactT
 func (*ExecuteHookResponse) ProtoMessage()               {}
 func (*ExecuteHookResponse) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{12} }
 
+func (m *ExecuteHookResponse) GetExitStatus() int64 {
+	if m != nil {
+		return m.ExitStatus
+	}
+	return 0
+}
+
+func (m *ExecuteHookResponse) GetStdout() string {
+	if m != nil {
+		return m.Stdout
+	}
+	return ""
+}
+
+func (m *ExecuteHookResponse) GetStderr() string {
+	if m != nil {
+		return m.Stderr
+	}
+	return ""
+}
+
 type GetSchemaRequest struct {
 	Tables        []string `protobuf:"bytes,1,rep,name=tables" json:"tables,omitempty"`
 	IncludeViews  bool     `protobuf:"varint,2,opt,name=include_views,json=includeViews" json:"include_views,omitempty"`
@@ -343,6 +518,27 @@ func (m *GetSchemaRequest) Reset()                    { *m = GetSchemaRequest{} 
 func (m *GetSchemaRequest) String() string            { return proto.CompactTextString(m) }
 func (*GetSchemaRequest) ProtoMessage()               {}
 func (*GetSchemaRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{13} }
+
+func (m *GetSchemaRequest) GetTables() []string {
+	if m != nil {
+		return m.Tables
+	}
+	return nil
+}
+
+func (m *GetSchemaRequest) GetIncludeViews() bool {
+	if m != nil {
+		return m.IncludeViews
+	}
+	return false
+}
+
+func (m *GetSchemaRequest) GetExcludeTables() []string {
+	if m != nil {
+		return m.ExcludeTables
+	}
+	return nil
+}
 
 type GetSchemaResponse struct {
 	SchemaDefinition *SchemaDefinition `protobuf:"bytes,1,opt,name=schema_definition,json=schemaDefinition" json:"schema_definition,omitempty"`
@@ -425,6 +621,13 @@ func (m *ChangeTypeRequest) String() string            { return proto.CompactTex
 func (*ChangeTypeRequest) ProtoMessage()               {}
 func (*ChangeTypeRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{21} }
 
+func (m *ChangeTypeRequest) GetTabletType() topodata.TabletType {
+	if m != nil {
+		return m.TabletType
+	}
+	return topodata.TabletType_UNKNOWN
+}
+
 type ChangeTypeResponse struct {
 }
 
@@ -474,6 +677,13 @@ func (m *IgnoreHealthErrorRequest) String() string            { return proto.Com
 func (*IgnoreHealthErrorRequest) ProtoMessage()               {}
 func (*IgnoreHealthErrorRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{27} }
 
+func (m *IgnoreHealthErrorRequest) GetPattern() string {
+	if m != nil {
+		return m.Pattern
+	}
+	return ""
+}
+
 type IgnoreHealthErrorResponse struct {
 }
 
@@ -494,6 +704,13 @@ func (m *ReloadSchemaRequest) String() string            { return proto.CompactT
 func (*ReloadSchemaRequest) ProtoMessage()               {}
 func (*ReloadSchemaRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{29} }
 
+func (m *ReloadSchemaRequest) GetWaitPosition() string {
+	if m != nil {
+		return m.WaitPosition
+	}
+	return ""
+}
+
 type ReloadSchemaResponse struct {
 }
 
@@ -510,6 +727,13 @@ func (m *PreflightSchemaRequest) Reset()                    { *m = PreflightSche
 func (m *PreflightSchemaRequest) String() string            { return proto.CompactTextString(m) }
 func (*PreflightSchemaRequest) ProtoMessage()               {}
 func (*PreflightSchemaRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{31} }
+
+func (m *PreflightSchemaRequest) GetChanges() []string {
+	if m != nil {
+		return m.Changes
+	}
+	return nil
+}
 
 type PreflightSchemaResponse struct {
 	// change_results has for each change the schema before and after it.
@@ -541,6 +765,27 @@ func (m *ApplySchemaRequest) Reset()                    { *m = ApplySchemaReques
 func (m *ApplySchemaRequest) String() string            { return proto.CompactTextString(m) }
 func (*ApplySchemaRequest) ProtoMessage()               {}
 func (*ApplySchemaRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{33} }
+
+func (m *ApplySchemaRequest) GetSql() string {
+	if m != nil {
+		return m.Sql
+	}
+	return ""
+}
+
+func (m *ApplySchemaRequest) GetForce() bool {
+	if m != nil {
+		return m.Force
+	}
+	return false
+}
+
+func (m *ApplySchemaRequest) GetAllowReplication() bool {
+	if m != nil {
+		return m.AllowReplication
+	}
+	return false
+}
 
 func (m *ApplySchemaRequest) GetBeforeSchema() *SchemaDefinition {
 	if m != nil {
@@ -593,6 +838,41 @@ func (m *ExecuteFetchAsDbaRequest) String() string            { return proto.Com
 func (*ExecuteFetchAsDbaRequest) ProtoMessage()               {}
 func (*ExecuteFetchAsDbaRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{35} }
 
+func (m *ExecuteFetchAsDbaRequest) GetQuery() []byte {
+	if m != nil {
+		return m.Query
+	}
+	return nil
+}
+
+func (m *ExecuteFetchAsDbaRequest) GetDbName() string {
+	if m != nil {
+		return m.DbName
+	}
+	return ""
+}
+
+func (m *ExecuteFetchAsDbaRequest) GetMaxRows() uint64 {
+	if m != nil {
+		return m.MaxRows
+	}
+	return 0
+}
+
+func (m *ExecuteFetchAsDbaRequest) GetDisableBinlogs() bool {
+	if m != nil {
+		return m.DisableBinlogs
+	}
+	return false
+}
+
+func (m *ExecuteFetchAsDbaRequest) GetReloadSchema() bool {
+	if m != nil {
+		return m.ReloadSchema
+	}
+	return false
+}
+
 type ExecuteFetchAsDbaResponse struct {
 	Result *query.QueryResult `protobuf:"bytes,1,opt,name=result" json:"result,omitempty"`
 }
@@ -621,6 +901,34 @@ func (m *ExecuteFetchAsAllPrivsRequest) String() string            { return prot
 func (*ExecuteFetchAsAllPrivsRequest) ProtoMessage()               {}
 func (*ExecuteFetchAsAllPrivsRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{37} }
 
+func (m *ExecuteFetchAsAllPrivsRequest) GetQuery() []byte {
+	if m != nil {
+		return m.Query
+	}
+	return nil
+}
+
+func (m *ExecuteFetchAsAllPrivsRequest) GetDbName() string {
+	if m != nil {
+		return m.DbName
+	}
+	return ""
+}
+
+func (m *ExecuteFetchAsAllPrivsRequest) GetMaxRows() uint64 {
+	if m != nil {
+		return m.MaxRows
+	}
+	return 0
+}
+
+func (m *ExecuteFetchAsAllPrivsRequest) GetReloadSchema() bool {
+	if m != nil {
+		return m.ReloadSchema
+	}
+	return false
+}
+
 type ExecuteFetchAsAllPrivsResponse struct {
 	Result *query.QueryResult `protobuf:"bytes,1,opt,name=result" json:"result,omitempty"`
 }
@@ -646,6 +954,20 @@ func (m *ExecuteFetchAsAppRequest) Reset()                    { *m = ExecuteFetc
 func (m *ExecuteFetchAsAppRequest) String() string            { return proto.CompactTextString(m) }
 func (*ExecuteFetchAsAppRequest) ProtoMessage()               {}
 func (*ExecuteFetchAsAppRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{39} }
+
+func (m *ExecuteFetchAsAppRequest) GetQuery() []byte {
+	if m != nil {
+		return m.Query
+	}
+	return nil
+}
+
+func (m *ExecuteFetchAsAppRequest) GetMaxRows() uint64 {
+	if m != nil {
+		return m.MaxRows
+	}
+	return 0
+}
 
 type ExecuteFetchAsAppResponse struct {
 	Result *query.QueryResult `protobuf:"bytes,1,opt,name=result" json:"result,omitempty"`
@@ -704,6 +1026,13 @@ func (m *MasterPositionResponse) String() string            { return proto.Compa
 func (*MasterPositionResponse) ProtoMessage()               {}
 func (*MasterPositionResponse) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{44} }
 
+func (m *MasterPositionResponse) GetPosition() string {
+	if m != nil {
+		return m.Position
+	}
+	return ""
+}
+
 type StopSlaveRequest struct {
 }
 
@@ -730,6 +1059,20 @@ func (m *StopSlaveMinimumRequest) String() string            { return proto.Comp
 func (*StopSlaveMinimumRequest) ProtoMessage()               {}
 func (*StopSlaveMinimumRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{47} }
 
+func (m *StopSlaveMinimumRequest) GetPosition() string {
+	if m != nil {
+		return m.Position
+	}
+	return ""
+}
+
+func (m *StopSlaveMinimumRequest) GetWaitTimeout() int64 {
+	if m != nil {
+		return m.WaitTimeout
+	}
+	return 0
+}
+
 type StopSlaveMinimumResponse struct {
 	Position string `protobuf:"bytes,1,opt,name=position" json:"position,omitempty"`
 }
@@ -738,6 +1081,13 @@ func (m *StopSlaveMinimumResponse) Reset()                    { *m = StopSlaveMi
 func (m *StopSlaveMinimumResponse) String() string            { return proto.CompactTextString(m) }
 func (*StopSlaveMinimumResponse) ProtoMessage()               {}
 func (*StopSlaveMinimumResponse) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{48} }
+
+func (m *StopSlaveMinimumResponse) GetPosition() string {
+	if m != nil {
+		return m.Position
+	}
+	return ""
+}
 
 type StartSlaveRequest struct {
 }
@@ -767,6 +1117,13 @@ func (m *TabletExternallyReparentedRequest) String() string { return proto.Compa
 func (*TabletExternallyReparentedRequest) ProtoMessage()    {}
 func (*TabletExternallyReparentedRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor0, []int{51}
+}
+
+func (m *TabletExternallyReparentedRequest) GetExternalId() string {
+	if m != nil {
+		return m.ExternalId
+	}
+	return ""
 }
 
 type TabletExternallyReparentedResponse struct {
@@ -814,6 +1171,13 @@ func (m *GetSlavesResponse) String() string            { return proto.CompactTex
 func (*GetSlavesResponse) ProtoMessage()               {}
 func (*GetSlavesResponse) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{56} }
 
+func (m *GetSlavesResponse) GetAddrs() []string {
+	if m != nil {
+		return m.Addrs
+	}
+	return nil
+}
+
 type WaitBlpPositionRequest struct {
 	BlpPosition *BlpPosition `protobuf:"bytes,1,opt,name=blp_position,json=blpPosition" json:"blp_position,omitempty"`
 	WaitTimeout int64        `protobuf:"varint,2,opt,name=wait_timeout,json=waitTimeout" json:"wait_timeout,omitempty"`
@@ -829,6 +1193,13 @@ func (m *WaitBlpPositionRequest) GetBlpPosition() *BlpPosition {
 		return m.BlpPosition
 	}
 	return nil
+}
+
+func (m *WaitBlpPositionRequest) GetWaitTimeout() int64 {
+	if m != nil {
+		return m.WaitTimeout
+	}
+	return 0
 }
 
 type WaitBlpPositionResponse struct {
@@ -896,6 +1267,13 @@ func (m *RunBlpUntilRequest) GetBlpPositions() []*BlpPosition {
 	return nil
 }
 
+func (m *RunBlpUntilRequest) GetWaitTimeout() int64 {
+	if m != nil {
+		return m.WaitTimeout
+	}
+	return 0
+}
+
 type RunBlpUntilResponse struct {
 	Position string `protobuf:"bytes,1,opt,name=position" json:"position,omitempty"`
 }
@@ -904,6 +1282,13 @@ func (m *RunBlpUntilResponse) Reset()                    { *m = RunBlpUntilRespo
 func (m *RunBlpUntilResponse) String() string            { return proto.CompactTextString(m) }
 func (*RunBlpUntilResponse) ProtoMessage()               {}
 func (*RunBlpUntilResponse) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{64} }
+
+func (m *RunBlpUntilResponse) GetPosition() string {
+	if m != nil {
+		return m.Position
+	}
+	return ""
+}
 
 type ResetReplicationRequest struct {
 }
@@ -938,6 +1323,13 @@ func (m *InitMasterResponse) String() string            { return proto.CompactTe
 func (*InitMasterResponse) ProtoMessage()               {}
 func (*InitMasterResponse) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{68} }
 
+func (m *InitMasterResponse) GetPosition() string {
+	if m != nil {
+		return m.Position
+	}
+	return ""
+}
+
 type PopulateReparentJournalRequest struct {
 	TimeCreatedNs       int64                 `protobuf:"varint,1,opt,name=time_created_ns,json=timeCreatedNs" json:"time_created_ns,omitempty"`
 	ActionName          string                `protobuf:"bytes,2,opt,name=action_name,json=actionName" json:"action_name,omitempty"`
@@ -950,11 +1342,32 @@ func (m *PopulateReparentJournalRequest) String() string            { return pro
 func (*PopulateReparentJournalRequest) ProtoMessage()               {}
 func (*PopulateReparentJournalRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{69} }
 
+func (m *PopulateReparentJournalRequest) GetTimeCreatedNs() int64 {
+	if m != nil {
+		return m.TimeCreatedNs
+	}
+	return 0
+}
+
+func (m *PopulateReparentJournalRequest) GetActionName() string {
+	if m != nil {
+		return m.ActionName
+	}
+	return ""
+}
+
 func (m *PopulateReparentJournalRequest) GetMasterAlias() *topodata.TabletAlias {
 	if m != nil {
 		return m.MasterAlias
 	}
 	return nil
+}
+
+func (m *PopulateReparentJournalRequest) GetReplicationPosition() string {
+	if m != nil {
+		return m.ReplicationPosition
+	}
+	return ""
 }
 
 type PopulateReparentJournalResponse struct {
@@ -985,6 +1398,20 @@ func (m *InitSlaveRequest) GetParent() *topodata.TabletAlias {
 	return nil
 }
 
+func (m *InitSlaveRequest) GetReplicationPosition() string {
+	if m != nil {
+		return m.ReplicationPosition
+	}
+	return ""
+}
+
+func (m *InitSlaveRequest) GetTimeCreatedNs() int64 {
+	if m != nil {
+		return m.TimeCreatedNs
+	}
+	return 0
+}
+
 type InitSlaveResponse struct {
 }
 
@@ -1010,6 +1437,13 @@ func (m *DemoteMasterResponse) String() string            { return proto.Compact
 func (*DemoteMasterResponse) ProtoMessage()               {}
 func (*DemoteMasterResponse) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{74} }
 
+func (m *DemoteMasterResponse) GetPosition() string {
+	if m != nil {
+		return m.Position
+	}
+	return ""
+}
+
 type PromoteSlaveWhenCaughtUpRequest struct {
 	Position string `protobuf:"bytes,1,opt,name=position" json:"position,omitempty"`
 }
@@ -1021,6 +1455,13 @@ func (*PromoteSlaveWhenCaughtUpRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor0, []int{75}
 }
 
+func (m *PromoteSlaveWhenCaughtUpRequest) GetPosition() string {
+	if m != nil {
+		return m.Position
+	}
+	return ""
+}
+
 type PromoteSlaveWhenCaughtUpResponse struct {
 	Position string `protobuf:"bytes,1,opt,name=position" json:"position,omitempty"`
 }
@@ -1030,6 +1471,13 @@ func (m *PromoteSlaveWhenCaughtUpResponse) String() string { return proto.Compac
 func (*PromoteSlaveWhenCaughtUpResponse) ProtoMessage()    {}
 func (*PromoteSlaveWhenCaughtUpResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor0, []int{76}
+}
+
+func (m *PromoteSlaveWhenCaughtUpResponse) GetPosition() string {
+	if m != nil {
+		return m.Position
+	}
+	return ""
 }
 
 type SlaveWasPromotedRequest struct {
@@ -1064,6 +1512,20 @@ func (m *SetMasterRequest) GetParent() *topodata.TabletAlias {
 		return m.Parent
 	}
 	return nil
+}
+
+func (m *SetMasterRequest) GetTimeCreatedNs() int64 {
+	if m != nil {
+		return m.TimeCreatedNs
+	}
+	return 0
+}
+
+func (m *SetMasterRequest) GetForceStartSlave() bool {
+	if m != nil {
+		return m.ForceStartSlave
+	}
+	return false
 }
 
 type SetMasterResponse struct {
@@ -1144,6 +1606,13 @@ func (m *PromoteSlaveResponse) String() string            { return proto.Compact
 func (*PromoteSlaveResponse) ProtoMessage()               {}
 func (*PromoteSlaveResponse) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{86} }
 
+func (m *PromoteSlaveResponse) GetPosition() string {
+	if m != nil {
+		return m.Position
+	}
+	return ""
+}
+
 type BackupRequest struct {
 	Concurrency int64 `protobuf:"varint,1,opt,name=concurrency" json:"concurrency,omitempty"`
 }
@@ -1152,6 +1621,13 @@ func (m *BackupRequest) Reset()                    { *m = BackupRequest{} }
 func (m *BackupRequest) String() string            { return proto.CompactTextString(m) }
 func (*BackupRequest) ProtoMessage()               {}
 func (*BackupRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{87} }
+
+func (m *BackupRequest) GetConcurrency() int64 {
+	if m != nil {
+		return m.Concurrency
+	}
+	return 0
+}
 
 type BackupResponse struct {
 	Event *logutil.Event `protobuf:"bytes,1,opt,name=event" json:"event,omitempty"`
