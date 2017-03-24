@@ -184,7 +184,7 @@ func forceEOF(yylex interface{}) {
 %type <bytes> for_from
 %type <str> ignore_opt
 %type <byt> exists_opt
-%type <empty> not_exists_opt non_rename_operation to_opt constraint_opt using_opt
+%type <empty> not_exists_opt non_rename_operation to_opt index_opt constraint_opt using_opt
 %type <bytes> reserved_keyword non_reserved_keyword
 %type <colIdent> sql_id reserved_sql_id col_alias as_ci_opt
 %type <tableIdent> table_id reserved_table_id table_alias as_opt_id
@@ -340,6 +340,11 @@ alter_statement:
   {
     // Change this to a rename statement
     $$ = &DDL{Action: RenameStr, Table: $4, NewName: $7}
+  }
+| ALTER ignore_opt TABLE table_name RENAME index_opt force_eof
+  {
+    // Rename an index can just be an alter
+    $$ = &DDL{Action: AlterStr, Table: $4, NewName: $4}
   }
 | ALTER VIEW table_name ddl_force_eof
   {
@@ -1613,6 +1618,14 @@ non_rename_operation:
 to_opt:
   { $$ = struct{}{} }
 | TO
+  { $$ = struct{}{} }
+| AS
+  { $$ = struct{}{} }
+
+index_opt:
+  INDEX
+  { $$ = struct{}{} }
+| KEY
   { $$ = struct{}{} }
 
 constraint_opt:
