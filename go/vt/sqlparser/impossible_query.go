@@ -15,6 +15,8 @@ func FormatImpossibleQuery(buf *TrackedBuffer, node SQLNode) {
 		if node.GroupBy != nil {
 			node.GroupBy.Format(buf)
 		}
+	case *Union:
+		buf.Myprintf("%v %s %v", node.Left, node.Type, node.Right)
 	default:
 		node.Format(buf)
 	}

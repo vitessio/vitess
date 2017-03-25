@@ -249,7 +249,7 @@ func Build(sql string, tables map[string]*schema.Table) (plan *Plan, err error) 
 		return &Plan{
 			PlanID:     PlanPassSelect,
 			FieldQuery: GenerateFieldQuery(stmt),
-			FullQuery:  GenerateFullQuery(stmt),
+			FullQuery:  GenerateLimitQuery(stmt),
 		}, nil
 	case *sqlparser.Select:
 		return analyzeSelect(stmt, tables)

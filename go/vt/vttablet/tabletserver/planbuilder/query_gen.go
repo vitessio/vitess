@@ -28,11 +28,20 @@ func GenerateFieldQuery(statement sqlparser.Statement) *sqlparser.ParsedQuery {
 	return buf.ParsedQuery()
 }
 
-// GenerateSelectLimitQuery generates a select query with a limit clause.
-func GenerateSelectLimitQuery(selStmt sqlparser.SelectStatement) *sqlparser.ParsedQuery {
+// GenerateLimitQuery generates a select query with a limit clause.
+func GenerateLimitQuery(selStmt sqlparser.SelectStatement) *sqlparser.ParsedQuery {
 	buf := sqlparser.NewTrackedBuffer(nil)
-	sel, ok := selStmt.(*sqlparser.Select)
-	if ok {
+	switch sel := selStmt.(type) {
+	case *sqlparser.Select:
+		limit := sel.Limit
+		if limit == nil {
+			sel.Limit = execLimit
+			defer func() {
+				sel.Limit = nil
+			}()
+		}
+	case *sqlparser.Union:
+		// Code is identical to *Select, but this one is a *Union.
 		limit := sel.Limit
 		if limit == nil {
 			sel.Limit = execLimit

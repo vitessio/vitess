@@ -81,6 +81,17 @@ func TestValid(t *testing.T) {
 	}, {
 		input: "select /* union distinct */ 1 from t union distinct select 1 from t",
 	}, {
+		input:  "(select /* union parenthesized select */ 1 from t order by a) union select 1 from t",
+		output: "(select /* union parenthesized select */ 1 from t order by a asc) union select 1 from t",
+	}, {
+		input: "select /* union parenthesized select 2 */ 1 from t union (select 1 from t)",
+	}, {
+		input:  "select /* union order by */ 1 from t union select 1 from t order by a",
+		output: "select /* union order by */ 1 from t union select 1 from t order by a asc",
+	}, {
+		input:  "select /* union order by limit lock */ 1 from t union select 1 from t order by a limit 1 for update",
+		output: "select /* union order by limit lock */ 1 from t union select 1 from t order by a asc limit 1 for update",
+	}, {
 		input: "select /* distinct */ distinct 1 from t",
 	}, {
 		input: "select /* straight_join */ straight_join 1 from t",
@@ -1151,6 +1162,21 @@ func TestErrors(t *testing.T) {
 	}, {
 		input:  "select /* vitess-reserved keyword as unqualified column */ * from t where escape = 'test'",
 		output: "syntax error at position 81 near 'escape'",
+	}, {
+		input:  "(select /* parenthesized select */ * from t)",
+		output: "syntax error at position 46",
+	}, {
+		// This will become legal in the next commit.
+		input:  "insert into a(select * from t)",
+		output: "syntax error at position 21 near 'select'",
+	}, {
+		// This will become legal in the next commit.
+		input:  "insert into a(a,b,c) (select * from t)",
+		output: "syntax error at position 40",
+	}, {
+		// Can't use order by in select of a union without parenthesis.
+		input:  "select /* union parenthesized select */ 1 from t order by a union select 1 from t",
+		output: "syntax error at position 66 near 'union'",
 	}}
 	for _, tcase := range invalidSQL {
 		if tcase.output == "" {
