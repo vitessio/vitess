@@ -35,6 +35,7 @@ func forceEOF(yylex interface{}) {
   empty       struct{}
   statement   Statement
   selStmt     SelectStatement
+  ins         *Insert
   byt         byte
   bytes       []byte
   bytes2      [][]byte
@@ -59,7 +60,6 @@ func forceEOF(yylex interface{}) {
   orderBy     OrderBy
   order       *Order
   limit       *Limit
-  insRows     InsertRows
   updateExprs UpdateExprs
   updateExpr  *UpdateExpr
   colIdent    ColIdent
@@ -156,7 +156,7 @@ func forceEOF(yylex interface{}) {
 %type <expr> condition
 %type <boolVal> boolean_value
 %type <str> compare
-%type <insRows> row_list
+%type <ins> insert_data
 %type <expr> value value_expression num_val
 %type <expr> function_call_keyword function_call_nonkeyword function_call_generic function_call_conflict
 %type <str> is_suffix
@@ -177,7 +177,7 @@ func forceEOF(yylex interface{}) {
 %type <str> asc_desc_opt
 %type <limit> limit_opt
 %type <str> lock_opt
-%type <columns> column_list ins_column_list ins_column_list_opt
+%type <columns> column_list ins_column_list
 %type <updateExprs> on_dup_opt
 %type <updateExprs> update_list
 %type <updateExpr> update_expression
@@ -277,9 +277,15 @@ union_select:
 
 
 insert_statement:
-  INSERT comment_opt ignore_opt into_table_name ins_column_list_opt row_list on_dup_opt
+  INSERT comment_opt ignore_opt into_table_name insert_data on_dup_opt
   {
-    $$ = &Insert{Comments: Comments($2), Ignore: $3, Table: $4, Columns: $5, Rows: $6, OnDup: OnDup($7)}
+    // insert_data returns a *Insert pre-filled with Columns & Values
+    ins := $5
+    ins.Comments = $2
+    ins.Ignore = $3
+    ins.Table = $4
+    ins.OnDup = OnDup($6)
+    $$ = ins
   }
 | INSERT comment_opt ignore_opt into_table_name SET update_list on_dup_opt
   {
@@ -1447,13 +1453,39 @@ column_list:
     $$ = append($$, $3)
   }
 
-ins_column_list_opt:
+// insert_data expands all combinations into a single rule.
+// This avoids a shift/reduce conflict while encountering the
+// following two possible constructs:
+// insert into t1(a, b) (select * from t2)
+// insert into t1(select * from t2)
+// Because the rules are together, the parser can keep shifting
+// the tokens until it disambiguates a as sql_id and select as keyword.
+insert_data:
+  VALUES tuple_list
   {
-    $$ = nil
+    $$ = &Insert{Rows: $2}
   }
-| openb ins_column_list closeb
+| select_statement
   {
-    $$ = $2
+    $$ = &Insert{Rows: $1}
+  }
+| openb select_statement closeb
+  {
+    // Drop the redundant parenthesis.
+    $$ = &Insert{Rows: $2}
+  }
+| openb ins_column_list closeb VALUES tuple_list
+  {
+    $$ = &Insert{Columns: $2, Rows: $5}
+  }
+| openb ins_column_list closeb select_statement
+  {
+    $$ = &Insert{Columns: $2, Rows: $4}
+  }
+| openb ins_column_list closeb openb select_statement closeb
+  {
+    // Drop the redundant parenthesis.
+    $$ = &Insert{Columns: $2, Rows: $5}
   }
 
 ins_column_list:
@@ -1481,16 +1513,6 @@ on_dup_opt:
 | ON DUPLICATE KEY UPDATE update_list
   {
     $$ = $5
-  }
-
-row_list:
-  VALUES tuple_list
-  {
-    $$ = $2
-  }
-| select_statement
-  {
-    $$ = $1
   }
 
 tuple_list:
