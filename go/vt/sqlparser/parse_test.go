@@ -522,6 +522,14 @@ func TestValid(t *testing.T) {
 	}, {
 		input: "insert /* select */ into a select b, c from d",
 	}, {
+		input:  "insert /* no cols & paren select */ into a(select * from t)",
+		output: "insert /* no cols & paren select */ into a select * from t",
+	}, {
+		input:  "insert /* cols & paren select */ into a(a,b,c) (select * from t)",
+		output: "insert /* cols & paren select */ into a(a, b, c) select * from t",
+	}, {
+		input: "insert /* cols & union with paren select */ into a(b, c) (select d, e from f) union (select g from h)",
+	}, {
 		input: "insert /* on duplicate */ into a values (1, 2) on duplicate key update b = func(a), c = d",
 	}, {
 		input: "insert /* bool in insert value */ into a values (1, true, false)",
@@ -1165,14 +1173,6 @@ func TestErrors(t *testing.T) {
 	}, {
 		input:  "(select /* parenthesized select */ * from t)",
 		output: "syntax error at position 46",
-	}, {
-		// This will become legal in the next commit.
-		input:  "insert into a(select * from t)",
-		output: "syntax error at position 21 near 'select'",
-	}, {
-		// This will become legal in the next commit.
-		input:  "insert into a(a,b,c) (select * from t)",
-		output: "syntax error at position 40",
 	}, {
 		// Can't use order by in select of a union without parenthesis.
 		input:  "select /* union parenthesized select */ 1 from t order by a union select 1 from t",
