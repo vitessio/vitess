@@ -111,6 +111,11 @@ func (*DDL) iStatement()    {}
 func (*Show) iStatement()   {}
 func (*Other) iStatement()  {}
 
+// ParenSelect can actually not be a top level statement,
+// but we have to allow it because it's a requirement
+// of SelectStatement.
+func (*ParenSelect) iStatement() {}
+
 // SelectStatement any SELECT statement.
 type SelectStatement interface {
 	iSelectStatement()
@@ -119,8 +124,9 @@ type SelectStatement interface {
 	SQLNode
 }
 
-func (*Select) iSelectStatement() {}
-func (*Union) iSelectStatement()  {}
+func (*Select) iSelectStatement()      {}
+func (*Union) iSelectStatement()       {}
+func (*ParenSelect) iSelectStatement() {}
 
 // Select represents a SELECT statement.
 type Select struct {
@@ -229,10 +235,34 @@ func (node *Select) AddHaving(expr Expr) {
 	return
 }
 
+// ParenSelect is a parenthesized SELECT statement.
+type ParenSelect struct {
+	Select SelectStatement
+}
+
+// Format formats the node.
+func (node *ParenSelect) Format(buf *TrackedBuffer) {
+	buf.Myprintf("(%v)", node.Select)
+}
+
+// WalkSubtree walks the nodes of the subtree.
+func (node *ParenSelect) WalkSubtree(visit Visit) error {
+	if node == nil {
+		return nil
+	}
+	return Walk(
+		visit,
+		node.Select,
+	)
+}
+
 // Union represents a UNION statement.
 type Union struct {
 	Type        string
 	Left, Right SelectStatement
+	OrderBy     OrderBy
+	Limit       *Limit
+	Lock        string
 }
 
 // Union.Type
@@ -244,7 +274,8 @@ const (
 
 // Format formats the node.
 func (node *Union) Format(buf *TrackedBuffer) {
-	buf.Myprintf("%v %s %v", node.Left, node.Type, node.Right)
+	buf.Myprintf("%v %s %v%v%v%s", node.Left, node.Type, node.Right,
+		node.OrderBy, node.Limit, node.Lock)
 }
 
 // WalkSubtree walks the nodes of the subtree.
@@ -297,9 +328,10 @@ type InsertRows interface {
 	SQLNode
 }
 
-func (*Select) iInsertRows() {}
-func (*Union) iInsertRows()  {}
-func (Values) iInsertRows()  {}
+func (*Select) iInsertRows()      {}
+func (*Union) iInsertRows()       {}
+func (Values) iInsertRows()       {}
+func (*ParenSelect) iInsertRows() {}
 
 // Update represents an UPDATE statement.
 type Update struct {
@@ -441,6 +473,7 @@ type Show struct {
 	Type string
 }
 
+// The frollowing constants represent SHOW statements.
 const (
 	ShowDatabasesStr     = "show databases"
 	ShowKeyspacesStr     = "show vitess_keyspaces"

@@ -134,7 +134,7 @@ func forceEOF(yylex interface{}) {
 %token <bytes> UNUSED
 
 %type <statement> command
-%type <selStmt> select_statement
+%type <selStmt> select_statement base_select union union_select
 %type <statement> insert_statement update_statement delete_statement set_statement
 %type <statement> create_statement alter_statement rename_statement drop_statement
 %type <statement> analyze_statement show_statement other_statement
@@ -225,18 +225,56 @@ command:
 | other_statement
 
 select_statement:
-  SELECT comment_opt cache_opt distinct_opt straight_join_opt select_expression_list from_opt where_expression_opt group_by_opt having_opt order_by_opt limit_opt lock_opt
+  base_select order_by_opt limit_opt lock_opt
   {
-    $$ = &Select{Comments: Comments($2), Cache: $3, Distinct: $4, Hints: $5, SelectExprs: $6, From: $7, Where: NewWhere(WhereStr, $8), GroupBy: GroupBy($9), Having: NewWhere(HavingStr, $10), OrderBy: $11, Limit: $12, Lock: $13}
+    sel := $1.(*Select)
+    sel.OrderBy = $2
+    sel.Limit = $3
+    sel.Lock = $4
+    $$ = sel
+  }
+| union order_by_opt limit_opt lock_opt
+  {
+    uni := $1.(*Union)
+    uni.OrderBy = $2
+    uni.Limit = $3
+    uni.Lock = $4
+    $$ = uni
   }
 | SELECT comment_opt cache_opt NEXT num_val for_from table_name
   {
     $$ = &Select{Comments: Comments($2), Cache: $3, SelectExprs: SelectExprs{Nextval{Expr: $5}}, From: TableExprs{&AliasedTableExpr{Expr: $7}}}
   }
-| select_statement union_op select_statement %prec UNION
+
+// base_select is an unparenthesized SELECT with no order by clause or beyond.
+base_select:
+  SELECT comment_opt cache_opt distinct_opt straight_join_opt select_expression_list from_opt where_expression_opt group_by_opt having_opt
+  {
+    $$ = &Select{Comments: Comments($2), Cache: $3, Distinct: $4, Hints: $5, SelectExprs: $6, From: $7, Where: NewWhere(WhereStr, $8), GroupBy: GroupBy($9), Having: NewWhere(HavingStr, $10)}
+  }
+
+union:
+  union_select union_op union_select
   {
     $$ = &Union{Type: $2, Left: $1, Right: $3}
   }
+| union union_op union_select
+  {
+    $$ = &Union{Type: $2, Left: $1, Right: $3}
+  }
+
+// union_select is a select that's part of a union. If unparenthesized,
+// it cannot have an order by clause or beyond.
+union_select:
+  base_select
+  {
+    $$ = $1
+  }
+| openb select_statement closeb
+  {
+    $$ = &ParenSelect{Select: $2}
+  }
+
 
 insert_statement:
   INSERT comment_opt ignore_opt into_table_name ins_column_list_opt row_list on_dup_opt
