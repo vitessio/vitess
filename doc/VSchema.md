@@ -14,18 +14,35 @@ If one were to draw an analogy, the indexes in a database would be the equivalen
 
 #### The Primary Vindex
 
-All relational tables must have a primary key. If the app doesn't specify one, the database engine usually creates a hidden primary key. The primary key can be used to uniquely identify a row and its location in storage.
+In a relational database, all tables must have a primary key. If the app doesn't specify one, the database engine usually creates a hidden primary key. The primary key can be used to uniquely identify a row and its location in storage.
 
-In Vitess, every sharded table must have a Primary Vindex. Just like the primary key, this can be used to uniquely identify the shard where a row lives. For all practical purposes, this is the Sharding Key of the table. Functionally, a Vitess Primary Vindex is more versatile. Those flexibilities will be covered later.
-
-Every sharded table must have a Primary Vindex.
+In Vitess, every sharded table must have a Primary Vindex. Just like the primary key, this can be used to uniquely identify the shard where a row lives. Conceptually, this is equivalent to the NoSQL Sharding Key, and we often refer to the Primary Vindex as the Sharding Key. Functionally, a Primary Vindex is more versatile. Those flexibilities will be covered later.
 
 #### Unique and NonUnique Vindex
 
-Relational databases allow you to create additional indexes that may or may not be unique. Vindexes provide the same flexibility. You can create unique Vindexes beyond the primary Vindex.
+Relational databases allow you to create additional indexes that may or may not be unique. Vindexes provide the same flexibility. This means that you can designage other columns to have a Unique Vindex beyond the Primary Vindex.
 
 During creation of a row, a database uses the primary key to decide where to store the row. In some cases, the primary key itself acts as the street address. In other cases, there is a mapping from the primary key to the physical location of the row. For Vitess, this street address is called the `keyspace id`. The Primary Vindex is mapped to a keyspace id and this mapping function is user-configurable. Just like the street address, a row can have only one keyspace id. If a table has another unique Vindex, then they must yield the same keyspace id for any given row. In database terms, this is called a constraint.
 
-If a Vindex is NonUniqe, and input value can yield multiple keyspace ids. At the time of creation of a row, Vitess ensures that at least one of those values corresponds to the row being created. In other words, the Primary Vindex is used to compute the keyspace id, and the id is validated against the rest of the vindexes on the table.
+If a Vindex is NonUniqe, an input value can yield multiple keyspace ids. At the time of creation of a row, Vitess ensures that at least one of those values corresponds to the row being created. In other words, the Primary Vindex is used to compute the keyspace id, and the id is validated against the rest of the vindexes on the table.
 
-While performing a select, if one of the vindex columns is in the where clause, the vindex is used to compute the keyspace ids, and the query is routed to the shards that contain it.
+While performing a select, if one of the vindex columns is in the where clause, its mapping function is used to compute the keyspace ids, and the query is routed to the shards that contain those ids.
+
+#### Functional and Lookup Vindex
+
+Vindexes can be Functional or Lookup. For this concept, there is no direct analogy with respect to a relational database.
+
+A Functional Vindex is one where the keyspace id can be computed by just looking at the input value. In contrast, a Lookup Vindex is one where the keyspace id can only be computed based on a stored association between the value and the keyspace id.
+
+Typically, the Primary Vindex is Functional. In some cases, it's the identity function where the input value is also the kesypace id. However, one could also choose other algorithms like hashing or mod functions. At the time of insert, the keyspace id will be computed based on the mapping function and this allows us to route the insert to the appropriate shard. The separation of the mapping function from the sharding scheme makes Vitess uniquely versatile.
+
+A Lookup Vindex is usually against a different column than the Primary Vindex, and is usually backed by a lookup table. This is analogous to the traditional database index, except that it's cross-shard. At the time of insert, the computed keyspace id of the row is stored in the lookup table against the input value of that column. If a select is issued using the secondary index column as the where clause, then Vitess will first read the lookup table to identify the keyspace id and then route the query to the appropriate shard.
+
+#### Orthogonal concepts
+
+A Vindex being Unique or NonUnique is orthogonal to its being Functional or Lookup. This essentially yields four types of vindexes:
+
+* **Functional Unique**: This is the most common vindex because most sharding keys use this. In most storage systems, this is predefined. However, Vitess lets you choose a functional Vindex that best suits your needs. If necessary, you can also define your own.
+* **Funcional NonUnique**: This is a less common use case. However, bloom filters fall in this category.
+* **Lookup Unique**: This is typically a lookup table. However, you could choose to define your own Lookup Vindex that's backed by a different data store. It is also possible to fake a Lookup Vindex into a Functional one, as long as you create the necessary associations upfront. With this trick, you could define a sharding key that's lookup-based. However, it may not be practical for resharding.
+* **Lookup NonUnique**: This is the extension of a non-unique database index.
