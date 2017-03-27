@@ -104,6 +104,10 @@ func main() {
 		flag.Usage()
 		exit.Return(1)
 	}
+	if len(args) > 1 {
+		fmt.Fprintln(os.Stderr, "ERROR: No additional arguments after the query allowed.")
+		exit.Return(1)
+	}
 
 	c := vitessdriver.Configuration{
 		Protocol:   *vtgateconn.VtgateProtocol,
