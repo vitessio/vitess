@@ -19,7 +19,7 @@ Mapping to a `keyspace id`, and then to a shard, gives us the flexibility to res
 
 ### Vindex
 
-The Sharding Key is a concept that was introduced by NoSQL datastores. It's based on the fact that there's only one access path to the data, which is tke Key. However, relational databases are more rich about the data and their relationships. So, sharding a database by only designating a sharding key is often insufficient.
+The Sharding Key is a concept that was introduced by NoSQL datastores. It's based on the fact that there's only one access path to the data, which is the Key. However, relational databases are more rich about the data and their relationships. So, sharding a database by only designating a sharding key is often insufficient.
 
 If one were to draw an analogy, the indexes in a database would be the equivalent of the key in a NoSQL datastore, except that databases allow you to define multiple indexes per table, and there are many types of indexes. Extending this analogy to a sharded database results in different types of cross-shard indexes. In Vitess, these are called Vindexes.
 
@@ -37,17 +37,15 @@ Vindexes offer many flexibilities:
 
 The Primary Vindex is analogous to a database primary key. Every sharded table must have one defined. A Primary Vindex must be unique: given an input value, it must produce a single keyspace id. This unique mapping will be used at the time of insert to decide the target shard for a row. Conceptually, this is also equivalent to the NoSQL Sharding Key, and we often refer to the Primary Vindex as the Sharding Key.
 
-However, there is a subtle difference: NoSQL datastores usually let you choose the Sharding Key, but the Sharding Scheme is generally hardcoded in the engine. In Vitess, the choice of Vindex lets you control how a column value maps to a keyspace id. In other words, a Primary Vindex in Vitess not only defines the Sharding Key, it also decides the Sharding Scheme.
+However, there is a subtle difference: NoSQL datastores let you choose the Sharding Key, but the Sharding Scheme is generally hardcoded in the engine. In Vitess, the choice of Vindex lets you control how a column value maps to a keyspace id. In other words, a Primary Vindex in Vitess not only defines the Sharding Key, it also decides the Sharding Scheme.
 
 Vindexes come in many varieties. Some of them can be used as Primary Vindex, and others have different purposes. The following sections will describe their properties.
 
 #### Unique and NonUnique Vindex
 
-Relational databases allow you to create additional indexes that may or may not be unique. Vindexes provide the same flexibility, except that it works across shards. Beyond the Primary Vindex (that must be unique), you can define Vindexes against other columns of a table. Those may or may not be unique.
+A Unique Vindex is one that yields at most one keyspace id for a given input. This means that a Unique Vindex can also be designated as the Primary Vindex. If used as a Primary Vindex, the Unique Vindex should be able to produce a keyspace id for any input. Otherwise, inserts will fail.
 
-If a table has multiple Unique Vindexes, only one of them can be the Primary: At the time of insert, the Primary Vindex is used to compute the `keyspace id`, which determines the target shard. A given row can have only one keyspace id. If a table has multiple vindexes, Vitess ensures that all of them map to the computed `keyspace id`. For NonUnique vindexes, at least one of the outputs must produce the computed `keyspace id`. In some cases, the enforcement happens by creating a lookup entry that maps the column value to the keyspace id. In other cases, it's a verification through a mapping function.
-
-While performing a select, if one of the vindex columns is in the where clause, its mapping function is used to compute the keyspace ids, and the query is routed to the shards that contain those ids.
+A NonUnique Vindex is analogous to a database non-unique index. It's a secondary index for searching by an alternate where clause. An input value could yield multiple keyspace ids, and rows could be matched from multiple shards. For example, if a table has a `name` colmun that allows duplicates, you can define a cross-shard NonUnique Vindex for it, and this will let you efficiently search for users that match a certain `name`.
 
 #### Functional and Lookup Vindex
 
