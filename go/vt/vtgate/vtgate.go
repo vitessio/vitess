@@ -291,7 +291,7 @@ func (vtg *VTGate) Execute(ctx context.Context, sql string, bindVariables map[st
 // the call. If so, the caller (Execute) should just return without proceeding further.
 func (vtg *VTGate) intercept(ctx context.Context, sql string, session *vtgatepb.Session) (*vtgatepb.Session, bool, error) {
 	switch {
-	case sqlparser.IsStatement(sql, "begin"):
+	case sqlparser.IsStatement(sql, "begin"), sqlparser.IsStatement(sql, "start transaction"):
 		if session.InTransaction {
 			// If we're in a transaction, commit and start a new one.
 			if err := vtg.Commit(ctx, vtg.transactionMode == TxTwoPC, session); err != nil {
