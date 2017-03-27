@@ -8,15 +8,19 @@ For example, the VSchema will contain the information about the sharding key for
 
 ### Vindex
 
-The Sharding Key is a concept that was introduced by NoSQL datastores that only provide key-based access to the data. However, relational databases are more rich about data relationships. So, sharding a database by only designating a sharding is often insufficient.
+The Sharding Key is a concept that was introduced by NoSQL datastores that provide a single key based access to the data. However, relational databases are more rich about data relationships. So, sharding a database by only designating a sharding key is often insufficient.
 
-If one were to draw an analogy, the indexes in a database would be the equivalent of the key in a NoSQL datastore, except that databases allow you to define multiple indexes per table. If this analogy is extended to a sharded database, we end up with cross-shard indexes. In Vitess, this is called a Vindex.
+If one were to draw an analogy, the indexes in a database would be the equivalent of the key in a NoSQL datastore, except that databases allow you to define multiple indexes per table, and there are many types of indexes. Extending this analogy to a sharded database results in different types of cross-shard indexes. In Vitess, these are called a Vindexes.
+
+A Vindex provides a way to map a column value to one or more `keyspace ids`, which can then be used to identify the shards where the data should be. The reason why we map to keyspace ids instead of shard is in order to be resharding agnostic. The keyspace id of a row is guaranteed to be the same, but resharding events can move it from one shard to another.
 
 #### The Primary Vindex
 
-In a relational database, all tables must have a primary key. The main purpose of the primary key is to uniquely identify a row and its location in storage.
+The Primary Vindex is analogous to a database primary key. Every sharded table must have one defined. A Primary Vindex must be unique: given an input value, it must produce a single keyspace id. This unique mapping will be used at the time of insert to decide the target shard for a row. Conceptually, this is also equivalent to the NoSQL Sharding Key, and we often refer to the Primary Vindex as the Sharding Key.
 
-In Vitess, every sharded table must have a Primary Vindex. Analogous to the database primary key, the Primary Vindex can be used to uniquely identify the shard where a row lives (or must live). Conceptually, this is equivalent to the NoSQL Sharding Key, and we often refer to the Primary Vindex as the Sharding Key. Functionally, a Vindex is more versatile. The details are be covered below.
+The Primary Vindex can also be used to route read queries and DMLs if the WHERE clause references the Primary Vindex column.
+
+Vindexes are very versatile. Some of them can be used as Primary Vindex, and others have different purposes. The following sections will describe their properties.
 
 #### Unique and NonUnique Vindex
 
