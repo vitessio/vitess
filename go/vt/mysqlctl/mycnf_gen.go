@@ -53,7 +53,7 @@ var (
 // mysqldPort needs to be unique per instance per machine.
 func NewMycnf(tabletUID uint32, mysqlPort int32) *Mycnf {
 	cnf := new(Mycnf)
-	cnf.path = mycnfFile(tabletUID)
+	cnf.path = MycnfFile(tabletUID)
 	tabletDir := TabletDir(tabletUID)
 	cnf.ServerID = tabletUID
 	cnf.MysqlPort = mysqlPort
@@ -85,8 +85,8 @@ func TabletDir(uid uint32) string {
 	return fmt.Sprintf("%s/vt_%010d", env.VtDataRoot(), uid)
 }
 
-// mycnfFile returns the default location of the my.cnf file.
-func mycnfFile(uid uint32) string {
+// MycnfFile returns the default location of the my.cnf file.
+func MycnfFile(uid uint32) string {
 	return path.Join(TabletDir(uid), "my.cnf")
 }
 
