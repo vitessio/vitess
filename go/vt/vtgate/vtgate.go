@@ -34,6 +34,8 @@ import (
 	"github.com/youtube/vitess/go/vt/vtgate/gateway"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateservice"
 
+	"strings"
+
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	vtgatepb "github.com/youtube/vitess/go/vt/proto/vtgate"
@@ -248,7 +250,7 @@ func (vtg *VTGate) Execute(ctx context.Context, sql string, bindVariables map[st
 		vtg.localBegin(session)
 	}
 
-	keyspace, shard := topoproto.ParseKeyspaceOptionalShard(keyspaceShard)
+	keyspace, shard := parseKeyspaceOptionalShard(keyspaceShard)
 	if shard != "" {
 		sql = sqlannotation.AnnotateIfDML(sql, nil)
 		f := func(keyspace string) (string, []string, error) {
@@ -578,7 +580,7 @@ func (vtg *VTGate) StreamExecute(ctx context.Context, sql string, bindVariables 
 	statsKey := []string{"StreamExecute", "Any", ltt}
 	defer vtg.timings.Record(statsKey, startTime)
 
-	keyspace, shard := topoproto.ParseKeyspaceOptionalShard(keyspaceShard)
+	keyspace, shard := parseKeyspaceOptionalShard(keyspaceShard)
 	var err error
 	if shard != "" {
 		err = vtg.resolver.streamExecute(
@@ -1042,4 +1044,16 @@ func annotateBoundShardQueriesAsUnfriendly(queries []*vtgatepb.BoundShardQuery) 
 	for i, q := range queries {
 		queries[i].Query.Sql = sqlannotation.AnnotateIfDML(q.Query.Sql, nil)
 	}
+}
+
+// parseKeyspaceOptionalShard parses a "keyspace/shard" or "keyspace:shard" string
+// and extracts the parts. If a shard is not specified, it's
+// returned as empty string. We need to support : and / in vtgate because some clients
+// can't support our default of /. Everywhere else we only support /.
+func parseKeyspaceOptionalShard(keyspaceShard string) (string, string) {
+	last := strings.LastIndexAny(keyspaceShard, "/:")
+	if last == -1 {
+		return keyspaceShard, ""
+	}
+	return keyspaceShard[:last], keyspaceShard[last+1:]
 }
