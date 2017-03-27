@@ -130,7 +130,7 @@ func main() {
 			exit.Return(1)
 		}
 
-		result, err := db.Exec(args[0], []interface{}(*bindVariables)...)
+		result, err := tx.Exec(args[0], []interface{}(*bindVariables)...)
 		if err != nil {
 			log.Errorf("exec failed: %v", err)
 			exit.Return(1)
