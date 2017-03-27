@@ -2694,28 +2694,12 @@ func TestParseKeyspaceOptionalShard(t *testing.T) {
 		keyspace:      "ks",
 		shard:         "",
 	}, {
-		keyspaceShard: "/-80",
-		keyspace:      "",
-		shard:         "-80",
-	}, {
 		keyspaceShard: "ks/-80",
 		keyspace:      "ks",
 		shard:         "-80",
 	}, {
-		keyspaceShard: "ks/",
-		keyspace:      "ks",
-		shard:         "",
-	}, {
-		keyspaceShard: "ks:",
-		keyspace:      "ks",
-		shard:         "",
-	}, {
 		keyspaceShard: "ks:-80",
 		keyspace:      "ks",
-		shard:         "-80",
-	}, {
-		keyspaceShard: ":-80",
-		keyspace:      "",
 		shard:         "-80",
 	}}
 

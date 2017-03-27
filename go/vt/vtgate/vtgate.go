@@ -1049,7 +1049,7 @@ func annotateBoundShardQueriesAsUnfriendly(queries []*vtgatepb.BoundShardQuery) 
 // parseKeyspaceOptionalShard parses a "keyspace/shard" or "keyspace:shard" string
 // and extracts the parts. If a shard is not specified, it's
 // returned as empty string. We need to support : and / in vtgate because some clients
-// can't support our default of slash. Everywhere else we only support /
+// can't support our default of /. Everywhere else we only support /.
 func parseKeyspaceOptionalShard(keyspaceShard string) (string, string) {
 	last := strings.LastIndexAny(keyspaceShard, "/:")
 	if last == -1 {
