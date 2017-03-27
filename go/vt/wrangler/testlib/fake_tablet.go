@@ -109,10 +109,6 @@ func NewFakeTablet(t *testing.T, wr *wrangler.Wrangler, cell string, uid uint32,
 		t.Fatalf("uid has to be between 0 and 99: %v", uid)
 	}
 	mysqlPort := int32(3300 + uid)
-	if db != nil {
-		mysqlPort = int32(db.Port())
-	}
-
 	tablet := &topodatapb.Tablet{
 		Alias:    &topodatapb.TabletAlias{Cell: cell, Uid: uid},
 		Hostname: fmt.Sprintf("%vhost", cell),
@@ -139,7 +135,7 @@ func NewFakeTablet(t *testing.T, wr *wrangler.Wrangler, cell string, uid uint32,
 
 	// create a FakeMysqlDaemon with the right information by default
 	fakeMysqlDaemon := mysqlctl.NewFakeMysqlDaemon(db)
-	fakeMysqlDaemon.MysqlPort = 3300 + int32(uid)
+	fakeMysqlDaemon.MysqlPort = mysqlPort
 
 	return &FakeTablet{
 		Tablet:          tablet,

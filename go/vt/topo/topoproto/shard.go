@@ -30,6 +30,17 @@ func ParseKeyspaceShard(param string) (string, string, error) {
 	return keySpaceShard[0], keySpaceShard[1], nil
 }
 
+// ParseKeyspaceOptionalShard parses a "keyspace/shard" string
+// and extracts the parts. If a shard is not specified, it's
+// returned as empty string.
+func ParseKeyspaceOptionalShard(keyspaceShard string) (string, string) {
+	last := strings.LastIndex(keyspaceShard, "/")
+	if last == -1 {
+		return keyspaceShard, ""
+	}
+	return keyspaceShard[:last], keyspaceShard[last+1:]
+}
+
 // SourceShardString returns a printable view of a SourceShard.
 func SourceShardString(source *topodatapb.Shard_SourceShard) string {
 	return fmt.Sprintf("SourceShard(%v,%v/%v)", source.Uid, source.Keyspace, source.Shard)

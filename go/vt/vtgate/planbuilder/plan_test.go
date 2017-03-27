@@ -100,6 +100,7 @@ func TestPlan(t *testing.T) {
 	testFile(t, "postprocess_cases.txt", vschema)
 	testFile(t, "wireup_cases.txt", vschema)
 	testFile(t, "dml_cases.txt", vschema)
+	testFile(t, "show_cases.txt", vschema)
 	testFile(t, "unsupported_cases.txt", vschema)
 }
 
@@ -141,7 +142,7 @@ func testFile(t *testing.T, filename string, vschema *vindexes.VSchema) {
 			out = string(bout)
 		}
 		if out != tcase.output {
-			t.Errorf("File: %s, Line:%v\n%s\n%s", filename, tcase.lineno, tcase.output, out)
+			t.Errorf("File: %s, Line:%v\ngot  = %s\nwant = %s", filename, tcase.lineno, out, tcase.output)
 			// Uncomment these lines to re-generate input files
 			if err != nil {
 				out = fmt.Sprintf("\"%s\"", out)
@@ -211,8 +212,11 @@ func iterateExecFile(name string) (testCaseIterator chan testCase) {
 				if l[0] == '}' {
 					output = output[:len(output)-1]
 					b := bytes.NewBuffer(make([]byte, 0, 64))
-					if err := json.Compact(b, output); err == nil {
+					err := json.Compact(b, output)
+					if err == nil {
 						output = b.Bytes()
+					} else {
+						panic("Invalid JSON " + string(output) + err.Error())
 					}
 					break
 				}

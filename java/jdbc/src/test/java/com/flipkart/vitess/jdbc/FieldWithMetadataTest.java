@@ -7,6 +7,7 @@ import com.youtube.vitess.proto.Query;
 import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.mockito.Mockito;
 import org.mockito.internal.verification.VerificationModeFactory;
 import org.powermock.api.mockito.PowerMockito;
 import org.powermock.core.classloader.annotations.PrepareForTest;
@@ -610,20 +611,75 @@ public class FieldWithMetadataTest extends BaseTest {
         int second = fieldWithMetadata.getMaxBytesPerCharacter();
 
         Assert.assertEquals("cached response is same as first", first, second);
+        // We called getMaxBytesPerCharacter 2 times above, but should only have made 1 call to fieldWithMetadata.getMaxBytesPerChar:
+        // first - call conn
+        // second - return cached
+        Mockito.verify(fieldWithMetadata, VerificationModeFactory.times(1)).getMaxBytesPerChar(33, "UTF-8");
         PowerMockito.verifyPrivate(fieldWithMetadata, VerificationModeFactory.times(1)).invoke("getCollationIndex");
 
         conn.setIncludedFields(Query.ExecuteOptions.IncludedFields.TYPE_AND_NAME);
         fieldWithMetadata = PowerMockito.spy(new FieldWithMetadata(conn, raw));
         Assert.assertEquals("0 return value when not including all fields", 0, fieldWithMetadata.getMaxBytesPerCharacter());
 
-        // We called getMaxBytesPerCharacter 3 times above, but should only have made 1 call to conn.getMaxBytesPerChar:
-        // first - call conn
-        // second - returne cached
-        // third - short circuit because not including all fields
-        // Will test the actual implementation/return value in VitessConnection
-        PowerMockito.verifyPrivate(conn, VerificationModeFactory.times(1)).invoke("getMaxBytesPerChar", 33, "UTF-8");
-
+        // We should not call this function because we short circuited due to not including all fields.
+        Mockito.verify(fieldWithMetadata, VerificationModeFactory.times(0)).getMaxBytesPerChar(33, "UTF-8");
         // Should not be called at all, because it's new for just this test
         PowerMockito.verifyPrivate(fieldWithMetadata, VerificationModeFactory.times(0)).invoke("getCollationIndex");
+    }
+
+    @Test public void testGetEncodingForIndex() throws SQLException {
+        Query.Field raw = Query.Field.newBuilder()
+          .setTable("foo")
+          .setType(Query.Type.CHAR)
+          .setName("foo")
+          .setOrgName("foo")
+          .setCharset(33)
+          .build();
+        FieldWithMetadata field = new FieldWithMetadata(getVitessConnection(), raw);
+
+        // No default encoding configured, and passing NO_CHARSET_INFO basically says "mysql doesn't know"
+        // which means don't try looking it up
+        Assert.assertEquals(null, field.getEncodingForIndex(MysqlDefs.NO_CHARSET_INFO));
+        // Similarly, a null index or one landing out of bounds for the charset index should return null
+        Assert.assertEquals(null, field.getEncodingForIndex(Integer.MAX_VALUE));
+        Assert.assertEquals(null, field.getEncodingForIndex(-123));
+
+        // charsetIndex 25 is MYSQL_CHARSET_NAME_greek, which is a charset with multiple names, ISO8859_7 and greek
+        // Without an encoding configured in the connection, we should return the first (default) encoding for a charset,
+        // in this case ISO8859_7
+        Assert.assertEquals("ISO-8859-7", field.getEncodingForIndex(25));
+        field.getConnectionProperties().setEncoding("greek");
+        // With an encoding configured, we should return that because it matches one of the names for the charset
+        Assert.assertEquals("greek", field.getEncodingForIndex(25));
+
+        field.getConnectionProperties().setEncoding(null);
+        Assert.assertEquals("UTF-8", field.getEncodingForIndex(33));
+        Assert.assertEquals("ISO-8859-1", field.getEncodingForIndex(63));
+
+        field.getConnectionProperties().setEncoding("NOT_REAL");
+        // Same tests as the first one, but testing that when there is a default configured, it falls back to that regardless
+        Assert.assertEquals("NOT_REAL", field.getEncodingForIndex(MysqlDefs.NO_CHARSET_INFO));
+        Assert.assertEquals("NOT_REAL", field.getEncodingForIndex(Integer.MAX_VALUE));
+        Assert.assertEquals("NOT_REAL", field.getEncodingForIndex(-123));
+    }
+
+    @Test public void testGetMaxBytesPerChar() throws SQLException {
+        Query.Field raw = Query.Field.newBuilder()
+          .setTable("foo")
+          .setType(Query.Type.CHAR)
+          .setName("foo")
+          .setOrgName("foo")
+          .setCharset(33)
+          .build();
+        FieldWithMetadata field = new FieldWithMetadata(getVitessConnection(), raw);
+
+        // Default state when no good info is passed in
+        Assert.assertEquals(0, field.getMaxBytesPerChar(MysqlDefs.NO_CHARSET_INFO, null));
+        // use passed collation index
+        Assert.assertEquals(3, field.getMaxBytesPerChar(CharsetMapping.MYSQL_COLLATION_INDEX_utf8, null));
+        // use first, if both are passed and valid
+        Assert.assertEquals(3, field.getMaxBytesPerChar(CharsetMapping.MYSQL_COLLATION_INDEX_utf8, "UnicodeBig"));
+        // use passed default charset
+        Assert.assertEquals(2, field.getMaxBytesPerChar(MysqlDefs.NO_CHARSET_INFO, "UnicodeBig"));
     }
 }

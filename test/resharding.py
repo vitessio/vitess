@@ -70,7 +70,8 @@ all_tablets = [shard_0_master, shard_0_replica, shard_0_ny_rdonly,
 def setUpModule():
   try:
     environment.topo_server().setup()
-    setup_procs = [t.init_mysql() for t in all_tablets]
+    setup_procs = [t.init_mysql(use_rbr=base_sharding.use_rbr)
+                   for t in all_tablets]
     utils.Vtctld().start()
     utils.wait_procs(setup_procs)
   except:
@@ -728,8 +729,17 @@ primary key (name)
     utils.pause('Good time to test vtworker for diffs')
 
     # get status for destination master tablets, make sure we have it all
-    self.check_running_binlog_player(shard_2_master, 4022, 2008)
-    self.check_running_binlog_player(shard_3_master, 4024, 2008)
+    if base_sharding.use_rbr:
+      # We submitted non-annotated DMLs, that are properly routed
+      # with RBR, but not with SBR. So the first shard counts
+      # are smaller. In the second shard, we submitted statements
+      # that affect more than one keyspace id. These will result
+      # in two queries with RBR. So the count there is higher.
+      self.check_running_binlog_player(shard_2_master, 4018, 2008)
+      self.check_running_binlog_player(shard_3_master, 4028, 2008)
+    else:
+      self.check_running_binlog_player(shard_2_master, 4022, 2008)
+      self.check_running_binlog_player(shard_3_master, 4024, 2008)
 
     # start a thread to insert data into shard_1 in the background
     # with current time, and monitor the delay

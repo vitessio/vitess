@@ -1,0 +1,30 @@
+kind: ReplicationController
+apiVersion: v1
+metadata:
+  name: keytar
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        component: frontend
+        app: keytar
+    spec:
+      containers:
+        - name: keytar
+          image: vitess/keytar
+          ports:
+            - name: http-server
+              containerPort: {{port}}
+          resources:
+            limits:
+              memory: "4Gi"
+              cpu: "500m"
+          args: ["--config_file", "{{config}}", "--port", "{{port}}", "--password", "{{password}}"]
+          volumeMounts:
+            - name: config
+              mountPath: /config
+      volumes:
+        - name: config
+          configMap:
+            name: config

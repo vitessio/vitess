@@ -546,7 +546,7 @@ func (agent *ActionAgent) Start(ctx context.Context, mysqlPort, vtPort, gRPCPort
 	// (it needs the dbname, so it has to be delayed up to here,
 	// but it has to be before updateState below that may use it)
 	if initUpdateStream {
-		us := binlog.NewUpdateStream(agent.MysqlDaemon, agent.QueryServiceControl.SchemaEngine(), agent.DBConfigs.App.DbName)
+		us := binlog.NewUpdateStream(agent.TopoServer, agent.initialTablet.Keyspace, agent.TabletAlias.Cell, agent.MysqlDaemon, agent.QueryServiceControl.SchemaEngine(), agent.DBConfigs.App.DbName)
 		agent.UpdateStream = us
 		servenv.OnRun(func() {
 			us.RegisterService()

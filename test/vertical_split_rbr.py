@@ -6,9 +6,10 @@
 
 """Re-runs resharding.py with RBR on."""
 
+import base_sharding
 import vertical_split
 import utils
 
 if __name__ == '__main__':
-  vertical_split.use_rbr = True
+  base_sharding.use_rbr = True
   utils.main(vertical_split)

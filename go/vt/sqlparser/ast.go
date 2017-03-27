@@ -108,6 +108,7 @@ func (*Update) iStatement() {}
 func (*Delete) iStatement() {}
 func (*Set) iStatement()    {}
 func (*DDL) iStatement()    {}
+func (*Show) iStatement()   {}
 func (*Other) iStatement()  {}
 
 // SelectStatement any SELECT statement.
@@ -435,7 +436,31 @@ func (node *DDL) WalkSubtree(visit Visit) error {
 	)
 }
 
-// Other represents a SHOW, DESCRIBE, or EXPLAIN statement.
+// Show represents a show statement.
+type Show struct {
+	Type string
+}
+
+const (
+	ShowDatabasesStr     = "show databases"
+	ShowKeyspacesStr     = "show vitess_keyspaces"
+	ShowShardsStr        = "show vitess_shards"
+	ShowTablesStr        = "show tables"
+	ShowVSchemaTablesStr = "show vschema_tables"
+	ShowUnsupportedStr   = "show unsupported"
+)
+
+// Format formats the node.
+func (node *Show) Format(buf *TrackedBuffer) {
+	buf.Myprintf("%s", node.Type)
+}
+
+// WalkSubtree walks the nodes of the subtree.
+func (node *Show) WalkSubtree(visit Visit) error {
+	return nil
+}
+
+// Other represents a DESCRIBE, or EXPLAIN statement.
 // It should be used only as an indicator. It does not contain
 // the full AST for the statement.
 type Other struct{}

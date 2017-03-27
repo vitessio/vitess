@@ -106,7 +106,9 @@ func BuildFromStmt(query string, stmt sqlparser.Statement, vschema VSchema) (*en
 		plan.Instructions, err = buildUpdatePlan(stmt, vschema)
 	case *sqlparser.Delete:
 		plan.Instructions, err = buildDeletePlan(stmt, vschema)
-	case *sqlparser.Union, *sqlparser.Set, *sqlparser.DDL, *sqlparser.Other:
+	case *sqlparser.Show:
+		plan.Instructions, err = buildShowPlan(stmt, vschema)
+	case *sqlparser.Union, *sqlparser.DDL, *sqlparser.Set, *sqlparser.Other:
 		return nil, errors.New("unsupported construct")
 	default:
 		panic("unexpected statement type")

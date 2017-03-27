@@ -25,6 +25,9 @@ message Session {
   // single_db specifies if the transaction should be restricted
   // to a single database.
   bool single_db = 3;
+
+  // autocommit specifies if the session is in autocommit mode.
+  bool autocommit = 4;
 }
 
 // ExecuteRequest is the payload to Execute.
@@ -46,8 +49,8 @@ message ExecuteRequest {
   // not_in_transaction is deprecated and should not be used.
   bool not_in_transaction = 5;
 
-  // keyspace to target the query to.
-  string keyspace = 6;
+  // keyspace_shard can be 'keyspace' or 'keyspace/shard'.
+  string keyspace_shard = 6;
 
   // options
   query.ExecuteOptions options = 7;
@@ -272,14 +275,13 @@ message ExecuteBatchRequest {
   // tablet_type is the type of tablets that these queries is targeted to.
   topodata.TabletType tablet_type = 4;
 
-  // as_transaction will execute the queries in this batch in a single transaction per shard,
-  // created for this purpose.
-  // (this can be seen as adding a 'begin' before and 'commit' after the queries).
-  // Only makes sense if tablet_type is master. If set, the Session is ignored.
+  // as_transaction is deprecated.
+  // We cannot use the proto3 deprecated feature yet because
+  // the php compiler doesn't recognize that construct.
   bool as_transaction = 5;
 
-  // keyspace to target the queries to.
-  string keyspace = 6;
+  // keyspace_shard can be 'keyspace' or 'keyspace/shard'.
+  string keyspace_shard = 6;
 
   // options
   query.ExecuteOptions options = 7;
@@ -418,8 +420,8 @@ message StreamExecuteRequest {
   // tablet_type is the type of tablets that this query is targeted to.
   topodata.TabletType tablet_type = 3;
 
-  // keyspace to target the query to.
-  string keyspace = 4;
+  // keyspace_shard can be 'keyspace' or 'keyspace/shard'.
+  string keyspace_shard = 4;
 
   // options
   query.ExecuteOptions options = 5;

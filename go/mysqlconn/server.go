@@ -258,7 +258,6 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32) {
 
 		switch data[0] {
 		case ComQuit:
-			log.Infof("Client %v wants to disconnect, closing connection.", c.ConnectionID)
 			return
 		case ComInitDB:
 			db := c.parseComInitDB(data)
@@ -269,7 +268,6 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32) {
 			}
 		case ComQuery:
 			query := c.parseComQuery(data)
-			log.Infof("Received command from client %v: %v", c.ConnectionID, query)
 			result, err := l.handler.ComQuery(c, query)
 			if err != nil {
 				if werr := c.writeErrorPacketFromError(err); werr != nil {

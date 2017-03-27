@@ -29,6 +29,11 @@ func analyzeUpdate(upd *sqlparser.Update, tables map[string]*schema.Table) (plan
 		return nil, err
 	}
 
+	// Store the WHERE clause as string for the hot row protection (txserializer).
+	buf := sqlparser.NewTrackedBuffer(nil)
+	buf.Myprintf("%v", upd.Where)
+	plan.WhereClause = buf.ParsedQuery()
+
 	if !table.HasPrimary() {
 		log.Warningf("no primary key for table %s", tableName)
 		plan.Reason = ReasonTableNoIndex
@@ -72,6 +77,11 @@ func analyzeDelete(del *sqlparser.Delete, tables map[string]*schema.Table) (plan
 	if err != nil {
 		return nil, err
 	}
+
+	// Store the WHERE clause as string for the hot row protection (txserializer).
+	buf := sqlparser.NewTrackedBuffer(nil)
+	buf.Myprintf("%v", del.Where)
+	plan.WhereClause = buf.ParsedQuery()
 
 	if !table.HasPrimary() {
 		log.Warningf("no primary key for table %s", tableName)

@@ -29,6 +29,7 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
+	"github.com/golang/protobuf/proto"
 	"github.com/youtube/vitess/go/netutil"
 	"github.com/youtube/vitess/go/stats"
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
@@ -146,6 +147,21 @@ type TabletStats struct {
 // String is defined because we want to print a []*TabletStats array nicely.
 func (e *TabletStats) String() string {
 	return fmt.Sprint(*e)
+}
+
+// DeepEqual compares two TabletStats. Since we include protos, we
+// need to use proto.Equal on these.
+func (e *TabletStats) DeepEqual(f *TabletStats) bool {
+	return e.Key == f.Key &&
+		proto.Equal(e.Tablet, f.Tablet) &&
+		e.Name == f.Name &&
+		proto.Equal(e.Target, f.Target) &&
+		e.Up == f.Up &&
+		e.Serving == f.Serving &&
+		e.TabletExternallyReparentedTimestamp == f.TabletExternallyReparentedTimestamp &&
+		proto.Equal(e.Stats, f.Stats) &&
+		((e.LastError == nil && f.LastError == nil) ||
+			(e.LastError != nil && f.LastError != nil && e.LastError.Error() == f.LastError.Error()))
 }
 
 // HealthCheck defines the interface of health checking module.

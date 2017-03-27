@@ -17,18 +17,25 @@ import (
 // Consolidator consolidates duplicate queries from executing simulaneously
 // and shares results between them.
 type Consolidator struct {
-	mu             sync.Mutex
-	queries        map[string]*Result
-	consolidations *cache.LRUCache
+	*ConsolidatorCache
+
+	mu      sync.Mutex
+	queries map[string]*Result
 }
 
 // NewConsolidator creates a new Consolidator
 func NewConsolidator() *Consolidator {
-	return &Consolidator{queries: make(map[string]*Result), consolidations: cache.NewLRUCache(1000)}
+	return &Consolidator{
+		queries:           make(map[string]*Result),
+		ConsolidatorCache: NewConsolidatorCache(1000),
+	}
 }
 
 // Result is a wrapper for result of a query.
 type Result struct {
+	// executing is used to block additional requests.
+	// The original request holds a write lock while additional ones are blocked
+	// on acquiring a read lock (see Wait() below.)
 	executing    sync.RWMutex
 	consolidator *Consolidator
 	query        string
@@ -51,32 +58,6 @@ func (co *Consolidator) Create(query string) (r *Result, created bool) {
 	return r, true
 }
 
-func (co *Consolidator) ServeHTTP(response http.ResponseWriter, request *http.Request) {
-	if err := acl.CheckAccessHTTP(request, acl.DEBUGGING); err != nil {
-		acl.SendError(response, err)
-		return
-	}
-	items := co.consolidations.Items()
-	response.Header().Set("Content-Type", "text/plain")
-	if items == nil {
-		response.Write([]byte("empty\n"))
-		return
-	}
-	response.Write([]byte(fmt.Sprintf("Length: %d\n", len(items))))
-	for _, v := range items {
-		response.Write([]byte(fmt.Sprintf("%v: %s\n", v.Value.(*ccount).Get(), v.Key)))
-	}
-}
-
-func (co *Consolidator) record(query string) {
-	if v, ok := co.consolidations.Get(query); ok {
-		v.(*ccount).Add(1)
-	} else {
-		c := ccount(1)
-		co.consolidations.Set(query, &c)
-	}
-}
-
 // Broadcast removes the entry from current queries and releases the
 // lock on its Result. Broadcast should be invoked when original
 // query completes execution.
@@ -90,24 +71,67 @@ func (rs *Result) Broadcast() {
 // Wait waits for the original query to complete execution. Wait should
 // be invoked for duplicate queries.
 func (rs *Result) Wait() {
-	rs.consolidator.record(rs.query)
+	rs.consolidator.Record(rs.query)
 	rs.executing.RLock()
 }
 
+// ConsolidatorCache is a thread-safe object used for counting how often recent
+// queries have been consolidated.
+// It is also used by the txserializer package to count how often transactions
+// have been queued and had to wait because they targeted the same row (range).
+type ConsolidatorCache struct {
+	*cache.LRUCache
+}
+
+// NewConsolidatorCache creates a new cache with the given capacity.
+func NewConsolidatorCache(capacity int64) *ConsolidatorCache {
+	return &ConsolidatorCache{cache.NewLRUCache(capacity)}
+}
+
+// ServeHTTP lists the most recent, cached queries and their count.
+func (cc *ConsolidatorCache) ServeHTTP(response http.ResponseWriter, request *http.Request) {
+	if err := acl.CheckAccessHTTP(request, acl.DEBUGGING); err != nil {
+		acl.SendError(response, err)
+		return
+	}
+	items := cc.Items()
+	response.Header().Set("Content-Type", "text/plain")
+	if items == nil {
+		response.Write([]byte("empty\n"))
+		return
+	}
+	response.Write([]byte(fmt.Sprintf("Length: %d\n", len(items))))
+	for _, v := range items {
+		response.Write([]byte(fmt.Sprintf("%v: %s\n", v.Value.(*ccount).get(), v.Key)))
+	}
+}
+
+// Record increments the count for "query" by 1.
+// If it's not in the cache yet, it will be added.
+func (cc *ConsolidatorCache) Record(query string) {
+	if v, ok := cc.Get(query); ok {
+		v.(*ccount).add(1)
+	} else {
+		c := ccount(1)
+		cc.Set(query, &c)
+	}
+}
+
+// ccount elements are used with a cache.LRUCache object to track if another
+// request for the same query is already in progress.
 type ccount int64
 
+// Size always returns 1 because we use the cache only to track queries,
+// independent of the number of requests waiting for them.
+// This implements the cache.Value interface.
 func (cc *ccount) Size() int {
 	return 1
 }
 
-func (cc *ccount) Add(n int64) int64 {
+func (cc *ccount) add(n int64) int64 {
 	return atomic.AddInt64((*int64)(cc), n)
 }
 
-func (cc *ccount) Set(n int64) {
-	atomic.StoreInt64((*int64)(cc), n)
-}
-
-func (cc *ccount) Get() int64 {
+func (cc *ccount) get() int64 {
 	return atomic.LoadInt64((*int64)(cc))
 }

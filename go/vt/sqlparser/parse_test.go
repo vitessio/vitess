@@ -624,6 +624,12 @@ func TestValid(t *testing.T) {
 		input:  "create unique index a using foo on b",
 		output: "alter table b",
 	}, {
+		input:  "create fulltext index a using foo on b",
+		output: "alter table b",
+	}, {
+		input:  "create spatial index a using foo on b",
+		output: "alter table b",
+	}, {
 		input:  "create view a",
 		output: "create table a",
 	}, {
@@ -648,8 +654,26 @@ func TestValid(t *testing.T) {
 		input:  "analyze table a",
 		output: "alter table a",
 	}, {
+		input:  "show databases",
+		output: "show databases",
+	}, {
+		input:  "show tables",
+		output: "show tables",
+	}, {
+		input:  "show vitess_keyspaces",
+		output: "show vitess_keyspaces",
+	}, {
+		input:  "show vitess_shards",
+		output: "show vitess_shards",
+	}, {
+		input:  "show vschema_tables",
+		output: "show vschema_tables",
+	}, {
+		input:  "show create database",
+		output: "show unsupported",
+	}, {
 		input:  "show foobar",
-		output: "other",
+		output: "show unsupported",
 	}, {
 		input:  "describe foobar",
 		output: "other",

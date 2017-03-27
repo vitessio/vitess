@@ -211,6 +211,10 @@ type Plan struct {
 	// For update: set clause if pk is changing.
 	SecondaryPKValues []interface{}
 
+	// WhereClause is set for DMLs. It is used by the hot row protection
+	// to serialize e.g. UPDATEs going to the same row.
+	WhereClause *sqlparser.ParsedQuery
+
 	// For PlanInsertSubquery: pk columns in the subquery result.
 	SubqueryPKColumns []int
 
@@ -259,6 +263,8 @@ func Build(sql string, tables map[string]*schema.Table) (plan *Plan, err error) 
 		return analyzeSet(stmt), nil
 	case *sqlparser.DDL:
 		return analyzeDDL(stmt, tables), nil
+	case *sqlparser.Show:
+		return &Plan{PlanID: PlanOther}, nil
 	case *sqlparser.Other:
 		return &Plan{PlanID: PlanOther}, nil
 	}

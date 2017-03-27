@@ -51,7 +51,7 @@ def start_vitess():
   sp = subprocess.Popen(args, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
 
   # This load will make us wait for vitess to come up.
-  json.loads(sp.stdout.readline())
+  print json.loads(sp.stdout.readline())
   return sp
 
 

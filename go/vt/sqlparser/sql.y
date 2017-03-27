@@ -113,6 +113,9 @@ func forceEOF(yylex interface{}) {
 %token <bytes> TABLE INDEX VIEW TO IGNORE IF UNIQUE USING
 %token <bytes> SHOW DESCRIBE EXPLAIN DATE ESCAPE
 
+// Supported SHOW tokens
+%token <bytes> DATABASES TABLES VITESS_KEYSPACES VITESS_SHARDS VSCHEMA_TABLES
+
 // Convert Type Tokens
 %token <bytes> INTEGER CHARACTER
 
@@ -134,7 +137,7 @@ func forceEOF(yylex interface{}) {
 %type <selStmt> select_statement
 %type <statement> insert_statement update_statement delete_statement set_statement
 %type <statement> create_statement alter_statement rename_statement drop_statement
-%type <statement> analyze_statement other_statement
+%type <statement> analyze_statement show_statement other_statement
 %type <bytes2> comment_opt comment_list
 %type <str> union_op
 %type <str> distinct_opt straight_join_opt cache_opt match_option separator_opt
@@ -189,7 +192,7 @@ func forceEOF(yylex interface{}) {
 %type <empty> force_eof ddl_force_eof
 %type <str> charset
 %type <convertType> convert_type
-
+%type <str> show_statement_type
 %start any_command
 
 %%
@@ -218,6 +221,7 @@ command:
 | rename_statement
 | drop_statement
 | analyze_statement
+| show_statement
 | other_statement
 
 select_statement:
@@ -333,12 +337,40 @@ analyze_statement:
     $$ = &DDL{Action: AlterStr, Table: $3, NewName: $3}
   }
 
-other_statement:
-  SHOW force_eof
+show_statement_type:
+  ID
   {
-    $$ = &Other{}
+    $$ = ShowUnsupportedStr
   }
-| DESCRIBE force_eof
+| reserved_keyword
+  {
+    if (string($1) == "databases"){
+      $$ = ShowDatabasesStr
+    } else if (string($1) == "tables"){
+      $$ = ShowTablesStr
+    } else if (string($1) == "vitess_keyspaces"){
+      $$ = ShowKeyspacesStr
+    } else if (string($1) == "vitess_shards"){
+      $$ = ShowShardsStr
+    } else if (string($1) == "vschema_tables"){
+      $$ = ShowVSchemaTablesStr
+    } else {
+      $$ = ShowUnsupportedStr
+    }
+  }
+| non_reserved_keyword
+{
+  $$ = ShowUnsupportedStr
+}
+
+show_statement:
+SHOW show_statement_type force_eof
+{
+  $$ = &Show{Type: $2}
+}
+
+other_statement:
+  DESCRIBE force_eof
   {
     $$ = &Other{}
   }
@@ -1517,6 +1549,8 @@ constraint_opt:
   { $$ = struct{}{} }
 | UNIQUE
   { $$ = struct{}{} }
+| sql_id
+  { $$ = struct{}{} }
 
 using_opt:
   { $$ = struct{}{} }
@@ -1581,6 +1615,7 @@ reserved_keyword:
 | CURRENT_TIME
 | CURRENT_TIMESTAMP
 | DATABASE
+| DATABASES
 | DEFAULT
 | DELETE
 | DESC
@@ -1633,9 +1668,13 @@ reserved_keyword:
 | SELECT
 | SEPARATOR
 | SET
+| VITESS_KEYSPACES
+| VITESS_SHARDS
+| VSCHEMA_TABLES
 | SHOW
 | STRAIGHT_JOIN
 | TABLE
+| TABLES
 | THEN
 | TO
 | TRUE

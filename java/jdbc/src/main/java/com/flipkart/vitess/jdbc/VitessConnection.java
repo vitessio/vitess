@@ -3,7 +3,6 @@ package com.flipkart.vitess.jdbc;
 import com.flipkart.vitess.util.CommonUtils;
 import com.flipkart.vitess.util.Constants;
 import com.flipkart.vitess.util.MysqlDefs;
-import com.flipkart.vitess.util.charset.CharsetMapping;
 import com.youtube.vitess.client.Context;
 import com.youtube.vitess.client.VTGateConn;
 import com.youtube.vitess.client.VTGateTx;
@@ -215,11 +214,11 @@ public class VitessConnection extends ConnectionProperties implements Connection
 
     public DatabaseMetaData getMetaData() throws SQLException {
         checkOpen();
-        if (null != databaseMetaData) {
+        if (!metadataNullOrClosed()) {
             return databaseMetaData;
         } else {
             synchronized (VitessConnection.class) {
-                if (null == databaseMetaData) {
+                if (metadataNullOrClosed()) {
                     String dbEngine = initializeDBProperties();
                     if (dbEngine.equals("mariadb")) {
                         databaseMetaData = new VitessMariaDBDatabaseMetadata(this);
@@ -230,6 +229,10 @@ public class VitessConnection extends ConnectionProperties implements Connection
             }
             return databaseMetaData;
         }
+    }
+
+    private boolean metadataNullOrClosed() throws SQLException {
+        return null == databaseMetaData || null == databaseMetaData.getConnection() || databaseMetaData.getConnection().isClosed();
     }
 
     public boolean isReadOnly() throws SQLException {
@@ -786,7 +789,7 @@ public class VitessConnection extends ConnectionProperties implements Connection
         HashMap<String, String> dbVariables = new HashMap<>();
         String dbEngine = null;
 
-        if (null == databaseMetaData) {
+        if (metadataNullOrClosed()) {
             String versionValue;
             ResultSet resultSet = null;
             VitessStatement vitessStatement = new VitessStatement(this);
@@ -845,28 +848,5 @@ public class VitessConnection extends ConnectionProperties implements Connection
 
     public String getUsername() {
         return this.vitessJDBCUrl.getUsername();
-    }
-
-    public String getEncodingForIndex(int charsetIndex) {
-        String javaEncoding = null;
-        if (charsetIndex != MysqlDefs.NO_CHARSET_INFO) {
-            javaEncoding = CharsetMapping.getJavaEncodingForCollationIndex(charsetIndex, getEncoding());
-        }
-        // If nothing, get default based on configuration, may still be null
-        if (javaEncoding == null) {
-            javaEncoding = getEncoding();
-        }
-        return javaEncoding;
-    }
-
-    public int getMaxBytesPerChar(Integer charsetIndex, String javaCharsetName) {
-        // if we can get it by charsetIndex just doing it
-        String charset = CharsetMapping.getMysqlCharsetNameForCollationIndex(charsetIndex);
-        // if we didn't find charset name by its full name
-        if (charset == null) {
-            charset = CharsetMapping.getMysqlCharsetForJavaEncoding(javaCharsetName);
-        }
-        // checking against static maps
-        return CharsetMapping.getMblen(charset);
     }
 }

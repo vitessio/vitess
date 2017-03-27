@@ -280,6 +280,17 @@
 				"worker_test"
 			]
 		},
+		"resharding_rbr": {
+			"File": "resharding_rbr.py",
+			"Args": [],
+			"Command": [],
+			"Manual": false,
+			"Shard": 0,
+			"RetryMax": 0,
+			"Tags": [
+				"worker_test"
+			]
+		},
 		"schema": {
 			"File": "schema.py",
 			"Args": [],
@@ -378,6 +389,15 @@
 		},
 		"update_stream": {
 			"File": "update_stream.py",
+			"Args": [],
+			"Command": [],
+			"Manual": false,
+			"Shard": 4,
+			"RetryMax": 0,
+			"Tags": []
+		},
+		"update_stream_rbr": {
+			"File": "update_stream_rbr.py",
 			"Args": [],
 			"Command": [],
 			"Manual": false,

@@ -22,26 +22,26 @@ func TestStatsUpdate(t *testing.T) {
 	// Insert tablet1.
 	tabletStatsCache.StatsUpdate(tablet1Stats1)
 	results1 := tabletStatsCache.statuses["ks1"]["-80"]["cell1"][topodatapb.TabletType_REPLICA]
-	if got, want := results1[0], tablet1Stats1; !reflect.DeepEqual(got, want) {
+	if got, want := results1[0], tablet1Stats1; !got.DeepEqual(want) {
 		t.Errorf("got: %v, want: %v", got, want)
 	}
 
 	// Update tablet1.
 	tabletStatsCache.StatsUpdate(tablet1Stats2)
 	results2 := tabletStatsCache.statuses["ks1"]["-80"]["cell1"][topodatapb.TabletType_REPLICA]
-	if got, want := results2[0], tablet1Stats2; !reflect.DeepEqual(got, want) {
+	if got, want := results2[0], tablet1Stats2; !got.DeepEqual(want) {
 		t.Errorf("got: %v, want: %v", got, want)
 	}
 
 	// Insert tablet. List of tablets will be resorted.
 	tabletStatsCache.StatsUpdate(tablet2Stats1)
 	results3 := tabletStatsCache.statuses["ks1"]["-80"]["cell1"][topodatapb.TabletType_REPLICA]
-	if got, want := results3[0], tablet2Stats1; !reflect.DeepEqual(got, want) {
+	if got, want := results3[0], tablet2Stats1; !got.DeepEqual(want) {
 		t.Errorf("got: %v, want: %v", got, want)
 	}
 
 	results4 := tabletStatsCache.statuses["ks1"]["-80"]["cell1"][topodatapb.TabletType_REPLICA]
-	if got, want := results4[1], tablet1Stats2; !reflect.DeepEqual(got, want) {
+	if got, want := results4[1], tablet1Stats2; !got.DeepEqual(want) {
 		t.Errorf("got: %v, want: %v", got, want)
 	}
 
@@ -50,7 +50,7 @@ func TestStatsUpdate(t *testing.T) {
 	tabletStatsCache.StatsUpdate(tablet2Stats1)
 	results5 := tabletStatsCache.statuses["ks1"]["-80"]["cell1"][topodatapb.TabletType_REPLICA]
 	for _, stat := range results5 {
-		if reflect.DeepEqual(stat, tablet2Stats1) {
+		if stat.DeepEqual(tablet2Stats1) {
 			t.Errorf("not deleleted from statusesByAliases")
 		}
 	}
@@ -329,14 +329,14 @@ func TestTabletStats(t *testing.T) {
 
 	// Test 1: tablet1 and tablet2 are updated with the stats received by the HealthCheck module.
 	got1, err := tabletStatsCache.tabletStats(ts1.Tablet.Alias)
-	want1 := *ts1
-	if err != nil || !reflect.DeepEqual(got1, want1) {
+	want1 := ts1
+	if err != nil || !got1.DeepEqual(want1) {
 		t.Errorf("got: %v, want: %v", got1, want1)
 	}
 
 	got2, err := tabletStatsCache.tabletStats(ts2.Tablet.Alias)
-	want2 := *ts2
-	if err != nil || !reflect.DeepEqual(got2, want2) {
+	want2 := ts2
+	if err != nil || !got2.DeepEqual(want2) {
 		t.Errorf("got: %v, want: %v", got2, want2)
 	}
 

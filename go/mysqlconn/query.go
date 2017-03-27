@@ -235,7 +235,28 @@ func (c *Conn) parseRow(data []byte, fields []*querypb.Field) ([]sqltypes.Value,
 }
 
 // ExecuteFetch is the same as sqldb.Conn.ExecuteFetch.
-// Returns a sqldb.SQLError.
+// Returns a sqldb.SQLError. Depending on the transport used, the error
+// returned might be different for the same condition:
+//
+// 1. if the server closes the connection when no command is in flight:
+//
+//   1.1 unix: writeComQuery will fail with a 'broken pipe', and we'll
+//       return CRServerGone(2006).
+//
+//   1.2 tcp: writeComQuery will most likely work, but readComQueryResponse
+//       will fail, and we'll return CRServerLost(2013).
+//
+//       This is because closing a TCP socket on the server side sends
+//       a FIN to the client (telling the client the server is done
+//       writing), but on most platforms doesn't send a RST.  So the
+//       client has no idea it can't write. So it succeeds writing data, which
+//       *then* triggers the server to send a RST back, received a bit
+//       later. By then, the client has already started waiting for
+//       the response, and will just return a CRServerLost(2013).
+//       So CRServerGone(2006) will almost never be seen with TCP.
+//
+// 2. if the server closes the connection when a command is in flight,
+//    readComQueryResponse will fail, and we'll return CRServerLost(2013).
 func (c *Conn) ExecuteFetch(query string, maxrows int, wantfields bool) (*sqltypes.Result, error) {
 	// This is a new command, need to reset the sequence.
 	c.sequence = 0

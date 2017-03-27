@@ -156,6 +156,10 @@ class VtcomboProcess(VtProcess):
            '-db-config-app-port', str(mysql_db.port()),
            '-db-config-dba-host', mysql_db.hostname(),
            '-db-config-dba-port', str(mysql_db.port())])
+    self.vtcombo_mysql_port = environment.get_port('vtcombo_mysql_port')
+    self.extraparams.extend(
+        ['-mysql_auth_server_impl', 'none',
+         '-mysql_server_port', str(self.vtcombo_mysql_port)])
 
 
 vtcombo_process = None

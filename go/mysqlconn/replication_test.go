@@ -1,6 +1,8 @@
 package mysqlconn
 
 import (
+	"bytes"
+	"fmt"
 	"reflect"
 	"strings"
 	"sync"
@@ -11,6 +13,9 @@ import (
 
 	"github.com/youtube/vitess/go/mysqlconn/replication"
 	"github.com/youtube/vitess/go/sqldb"
+	"github.com/youtube/vitess/go/sqltypes"
+
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
 func TestComBinlogDump(t *testing.T) {
@@ -601,4 +606,628 @@ func testRowReplicationWithRealDatabase(t *testing.T, params *sqldb.ConnParams) 
 		t.Fatal(err)
 	}
 
+}
+
+// testRowReplicationTypesWithRealDatabase creates a table wih all
+// supported data types. Then we insert a row in it. then we re-build
+// the SQL for the values, re-insert these. Then we select from the
+// database and make sure both rows are identical.
+func testRowReplicationTypesWithRealDatabase(t *testing.T, params *sqldb.ConnParams) {
+	// testcases are ordered by the types numbers in constants.go.
+	// Number are always unsigned, as we don't pass in sqltypes.Type.
+	testcases := []struct {
+		name        string
+		createType  string
+		createValue string
+	}{{
+		// TINYINT
+		name:        "tinytiny",
+		createType:  "TINYINT UNSIGNED",
+		createValue: "145",
+	}, {
+		// SMALLINT
+		name:        "smallish",
+		createType:  "SMALLINT UNSIGNED",
+		createValue: "40000",
+	}, {
+		// INT
+		name:        "regular_int",
+		createType:  "INT UNSIGNED",
+		createValue: "4000000000",
+	}, {
+		// FLOAT
+		name:        "floating",
+		createType:  "FLOAT",
+		createValue: "-3.14159E-22",
+	}, {
+		// DOUBLE
+		name:        "doubling",
+		createType:  "DOUBLE",
+		createValue: "-3.14159265359E+12",
+	}, {
+		// TIMESTAMP (zero value)
+		name:        "timestamp_zero",
+		createType:  "TIMESTAMP",
+		createValue: "'0000-00-00 00:00:00'",
+	}, {
+		// TIMESTAMP (day precision)
+		name:        "timestamp_day",
+		createType:  "TIMESTAMP",
+		createValue: "'2012-11-10 00:00:00'",
+	}, {
+		// BIGINT
+		name:        "big_int",
+		createType:  "BIGINT UNSIGNED",
+		createValue: "10000000000000000000",
+	}, {
+		// MEDIUMINT
+		name:        "mediumish",
+		createType:  "MEDIUMINT UNSIGNED",
+		createValue: "10000000",
+	}, {
+		// DATE
+		name:        "date_regular",
+		createType:  "DATE",
+		createValue: "'1920-10-24'",
+	}, {
+		// TIME
+		name:        "time_regular",
+		createType:  "TIME",
+		createValue: "'120:44:58'",
+	}, {
+		// TIME
+		name:        "time_neg",
+		createType:  "TIME",
+		createValue: "'-212:44:58'",
+	}, {
+		// DATETIME
+		name:        "datetime0",
+		createType:  "DATETIME",
+		createValue: "'1020-08-23 12:44:58'",
+	}, {
+		// YEAR zero
+		name:        "year0",
+		createType:  "YEAR",
+		createValue: "0",
+	}, {
+		// YEAR
+		name:        "year_nonzero",
+		createType:  "YEAR",
+		createValue: "2052",
+	}, {
+		// VARCHAR 8 bits
+		name:        "shortvc",
+		createType:  "VARCHAR(30)",
+		createValue: "'short varchar'",
+	}, {
+		// VARCHAR 16 bits
+		name:        "longvc",
+		createType:  "VARCHAR(1000)",
+		createValue: "'long varchar'",
+	}, {
+		// BIT
+		name:        "bit1",
+		createType:  "BIT",
+		createValue: "b'1'",
+	}, {
+		// BIT
+		name:        "bit6",
+		createType:  "BIT(6)",
+		createValue: "b'100101'",
+	}, {
+		// BIT
+		name:        "bit8",
+		createType:  "BIT(8)",
+		createValue: "b'10100101'",
+	}, {
+		// BIT
+		name:        "bit14",
+		createType:  "BIT(14)",
+		createValue: "b'10100101000111'",
+	}, {
+		// BIT
+		name:        "bit55",
+		createType:  "BIT(55)",
+		createValue: "b'1010010100110100101001101001010011010010100110100101001'",
+	}, {
+		// BIT
+		name:        "bit64",
+		createType:  "BIT(64)",
+		createValue: "b'1111111111010010100110100101001101001010011010010100110100101001'",
+	}, {
+		// DECIMAL
+		name:        "decimal2_1",
+		createType:  "DECIMAL(2,1)",
+		createValue: "1.2",
+	}, {
+		// DECIMAL neg
+		name:        "decimal2_1_neg",
+		createType:  "DECIMAL(2,1)",
+		createValue: "-5.6",
+	}, {
+		// DECIMAL
+		name:        "decimal4_2",
+		createType:  "DECIMAL(4,2)",
+		createValue: "61.52",
+	}, {
+		// DECIMAL neg
+		name:        "decimal4_2_neg",
+		createType:  "DECIMAL(4,2)",
+		createValue: "-78.94",
+	}, {
+		// DECIMAL
+		name:        "decimal6_3",
+		createType:  "DECIMAL(6,3)",
+		createValue: "611.542",
+	}, {
+		// DECIMAL neg
+		name:        "decimal6_3_neg",
+		createType:  "DECIMAL(6,3)",
+		createValue: "-478.394",
+	}, {
+		// DECIMAL
+		name:        "decimal8_4",
+		createType:  "DECIMAL(8,4)",
+		createValue: "6311.5742",
+	}, {
+		// DECIMAL neg
+		name:        "decimal8_4_neg",
+		createType:  "DECIMAL(8,4)",
+		createValue: "-4778.3894",
+	}, {
+		// DECIMAL
+		name:        "decimal10_5",
+		createType:  "DECIMAL(10,5)",
+		createValue: "63711.57342",
+	}, {
+		// DECIMAL neg
+		name:        "decimal10_5_neg",
+		createType:  "DECIMAL(10,5)",
+		createValue: "-47378.38594",
+	}, {
+		// DECIMAL
+		name:        "decimal12_6",
+		createType:  "DECIMAL(12,6)",
+		createValue: "637311.557342",
+	}, {
+		// DECIMAL neg
+		name:        "decimal12_6_neg",
+		createType:  "DECIMAL(12,6)",
+		createValue: "-473788.385794",
+	}, {
+		// DECIMAL
+		name:        "decimal14_7",
+		createType:  "DECIMAL(14,7)",
+		createValue: "6375311.5574342",
+	}, {
+		// DECIMAL neg
+		name:        "decimal14_7_neg",
+		createType:  "DECIMAL(14,7)",
+		createValue: "-4732788.3853794",
+	}, {
+		// DECIMAL
+		name:        "decimal16_8",
+		createType:  "DECIMAL(16,8)",
+		createValue: "63375311.54574342",
+	}, {
+		// DECIMAL neg
+		name:        "decimal16_8_neg",
+		createType:  "DECIMAL(16,8)",
+		createValue: "-47327788.38533794",
+	}, {
+		// DECIMAL
+		name:        "decimal18_9",
+		createType:  "DECIMAL(18,9)",
+		createValue: "633075311.545714342",
+	}, {
+		// DECIMAL neg
+		name:        "decimal18_9_neg",
+		createType:  "DECIMAL(18,9)",
+		createValue: "-473327788.385033794",
+	}, {
+		// DECIMAL
+		name:        "decimal20_10",
+		createType:  "DECIMAL(20,10)",
+		createValue: "6330375311.5405714342",
+	}, {
+		// DECIMAL neg
+		name:        "decimal20_10_neg",
+		createType:  "DECIMAL(20,10)",
+		createValue: "-4731327788.3850337294",
+	}, {
+		// DECIMAL lots of left digits
+		name:        "decimal34_0",
+		createType:  "DECIMAL(34,0)",
+		createValue: "8765432345678987654345432123456786",
+	}, {
+		// DECIMAL lots of left digits neg
+		name:        "decimal34_0_neg",
+		createType:  "DECIMAL(34,0)",
+		createValue: "-8765432345678987654345432123456786",
+	}, {
+		// DECIMAL lots of right digits
+		name:        "decimal34_30",
+		createType:  "DECIMAL(34,30)",
+		createValue: "8765.432345678987654345432123456786",
+	}, {
+		// DECIMAL lots of right digits neg
+		name:        "decimal34_30_neg",
+		createType:  "DECIMAL(34,30)",
+		createValue: "-8765.432345678987654345432123456786",
+	}, {
+		// ENUM
+		name:        "tshirtsize",
+		createType:  "ENUM('x-small', 'small', 'medium', 'large', 'x-larg')",
+		createValue: "'large'",
+	}, {
+		// SET
+		name:        "setnumbers",
+		createType:  "SET('one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten')",
+		createValue: "'two,three,ten'",
+	}, {
+		// TINYBLOB
+		name:        "tiny_blob",
+		createType:  "TINYBLOB",
+		createValue: "'ab\\'cd'",
+	}, {
+		// BLOB
+		name:        "bloby",
+		createType:  "BLOB",
+		createValue: "'ab\\'cd'",
+	}, {
+		// MEDIUMBLOB
+		name:        "medium_blob",
+		createType:  "MEDIUMBLOB",
+		createValue: "'ab\\'cd'",
+	}, {
+		// LONGBLOB
+		name:        "long_blob",
+		createType:  "LONGBLOB",
+		createValue: "'ab\\'cd'",
+	}, {
+		// CHAR 8 bits
+		name:        "shortchar",
+		createType:  "CHAR(30)",
+		createValue: "'short char'",
+	}, {
+		// CHAR 9 bits (100 * 3 = 300, 256<=300<512)
+		name:        "mediumchar",
+		createType:  "CHAR(100)",
+		createValue: "'medium char'",
+	}, {
+		// CHAR 10 bits (250 * 3 = 750, 512<=750<124)
+		name:        "longchar",
+		createType:  "CHAR(250)",
+		createValue: "'long char'",
+	}, {
+		// GEOMETRY
+		name:        "geo_stuff",
+		createType:  "GEOMETRY",
+		createValue: "ST_GeomFromText('POINT(1 1)')",
+	}}
+
+	conn, isMariaDB, f := connectForReplication(t, params, true /* rbr */)
+	defer conn.Close()
+
+	// MariaDB timestamp(N) is not supported by our RBR. See doc.go.
+	if !isMariaDB {
+		testcases = append(testcases, []struct {
+			name        string
+			createType  string
+			createValue string
+		}{{
+			// TIMESTAMP (second precision)
+			name:        "timestamp_second",
+			createType:  "TIMESTAMP",
+			createValue: "'2012-11-10 15:34:56'",
+		}, {
+			// TIMESTAMP (100 millisecond precision)
+			name:        "timestamp_100millisecond",
+			createType:  "TIMESTAMP(1)",
+			createValue: "'2012-11-10 15:34:56.6'",
+		}, {
+			// TIMESTAMP (10 millisecond precision)
+			name:        "timestamp_10millisecond",
+			createType:  "TIMESTAMP(2)",
+			createValue: "'2012-11-10 15:34:56.01'",
+		}, {
+			// TIMESTAMP (millisecond precision)
+			name:        "timestamp_millisecond",
+			createType:  "TIMESTAMP(3)",
+			createValue: "'2012-11-10 15:34:56.012'",
+		}, {
+			// TIMESTAMP (100 microsecond precision)
+			name:        "timestamp_100microsecond",
+			createType:  "TIMESTAMP(4)",
+			createValue: "'2012-11-10 15:34:56.0123'",
+		}, {
+			// TIMESTAMP (10 microsecond precision)
+			name:        "timestamp_10microsecond",
+			createType:  "TIMESTAMP(5)",
+			createValue: "'2012-11-10 15:34:56.01234'",
+		}, {
+			// TIMESTAMP (microsecond precision)
+			name:        "timestamp_microsecond",
+			createType:  "TIMESTAMP(6)",
+			createValue: "'2012-11-10 15:34:56.012345'",
+		}, {
+			// TIMESTAMP (0 with microsecond precision)
+			name:        "timestamp_microsecond_z",
+			createType:  "TIMESTAMP(6)",
+			createValue: "'0000-00-00 00:00:00.000000'",
+		}, {
+			// TIME
+			name:        "time_100milli",
+			createType:  "TIME(1)",
+			createValue: "'12:44:58.3'",
+		}, {
+			// TIME
+			name:        "time_10milli",
+			createType:  "TIME(2)",
+			createValue: "'412:44:58.01'",
+		}, {
+			// TIME
+			name:        "time_milli",
+			createType:  "TIME(3)",
+			createValue: "'-12:44:58.012'",
+		}, {
+			// TIME
+			name:        "time_100micro",
+			createType:  "TIME(4)",
+			createValue: "'12:44:58.0123'",
+		}, {
+			// TIME
+			name:        "time_10micro",
+			createType:  "TIME(5)",
+			createValue: "'12:44:58.01234'",
+		}, {
+			// TIME
+			name:        "time_micro",
+			createType:  "TIME(6)",
+			createValue: "'-12:44:58.012345'",
+		}, {
+			// DATETIME
+			name:        "datetime1",
+			createType:  "DATETIME(1)",
+			createValue: "'1020-08-23 12:44:58.8'",
+		}, {
+			// DATETIME
+			name:        "datetime2",
+			createType:  "DATETIME(2)",
+			createValue: "'1020-08-23 12:44:58.01'",
+		}, {
+			// DATETIME
+			name:        "datetime3",
+			createType:  "DATETIME(3)",
+			createValue: "'1020-08-23 12:44:58.012'",
+		}, {
+			// DATETIME
+			name:        "datetime4",
+			createType:  "DATETIME(4)",
+			createValue: "'1020-08-23 12:44:58.0123'",
+		}, {
+			// DATETIME
+			name:        "datetime5",
+			createType:  "DATETIME(5)",
+			createValue: "'1020-08-23 12:44:58.01234'",
+		}, {
+			// DATETIME
+			name:        "datetime6",
+			createType:  "DATETIME(6)",
+			createValue: "'1020-08-23 12:44:58.012345'",
+		}}...)
+	}
+
+	// JSON is only supported by MySQL 5.7+
+	// However the binary format is not just the text version.
+	// So it doesn't work as expected.
+	if false && strings.HasPrefix(conn.ServerVersion, "5.7") {
+		testcases = append(testcases, struct {
+			name        string
+			createType  string
+			createValue string
+		}{
+			// JSON
+			name:        "json1",
+			createType:  "JSON",
+			createValue: "'{\"a\":\"b\"}'",
+		})
+	}
+
+	ctx := context.Background()
+	dConn, err := Connect(ctx, params)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer dConn.Close()
+
+	// Set the connection time zone for execution of the
+	// statements to PST. That way we're sure to test the
+	// conversion for the TIMESTAMP types.
+	if _, err := dConn.ExecuteFetch("SET time_zone = '+08:00'", 0, false); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create the table with all fields.
+	createTable := "create table replicationtypes(id int"
+	for _, tcase := range testcases {
+		createTable += fmt.Sprintf(", %v %v", tcase.name, tcase.createType)
+	}
+	createTable += ", primary key(id))"
+	if _, err := dConn.ExecuteFetch(createTable, 0, false); err != nil {
+		t.Fatal(err)
+	}
+
+	// Insert the value with all fields.
+	insert := "insert into replicationtypes set id=1"
+	for _, tcase := range testcases {
+		insert += fmt.Sprintf(", %v=%v", tcase.name, tcase.createValue)
+	}
+	result, err := dConn.ExecuteFetch(insert, 0, false)
+	if err != nil {
+		t.Fatalf("insert failed: %v", err)
+	}
+	if result.RowsAffected != 1 || len(result.Rows) != 0 {
+		t.Errorf("unexpected result for insert: %v", result)
+	}
+
+	// Get the new events from the binlogs.
+	// Only care about the Write event.
+	var tableID uint64
+	var tableMap *replication.TableMap
+	var values []sqltypes.Value
+
+	for values == nil {
+		data, err := conn.ReadPacket()
+		if err != nil {
+			t.Fatalf("ReadPacket failed: %v", err)
+		}
+
+		// Make sure it's a replication packet.
+		switch data[0] {
+		case OKPacket:
+			// What we expect, handled below.
+		case ErrPacket:
+			err := parseErrorPacket(data)
+			t.Fatalf("ReadPacket returned an error packet: %v", err)
+		default:
+			// Very unexpected.
+			t.Fatalf("ReadPacket returned a weird packet: %v", data)
+		}
+
+		// See what we got, strip the checksum.
+		be := newBinlogEvent(isMariaDB, data)
+		if !be.IsValid() {
+			t.Fatalf("read an invalid packet: %v", be)
+		}
+		be, _, err = be.StripChecksum(f)
+		if err != nil {
+			t.Fatalf("StripChecksum failed: %v", err)
+		}
+		switch {
+		case be.IsTableMap():
+			tableID = be.TableID(f) // This would be 0x00ffffff for an event to clear all table map entries.
+			var err error
+			tableMap, err = be.TableMap(f)
+			if err != nil {
+				t.Fatalf("TableMap event is broken: %v", err)
+			}
+			t.Logf("Got Table Map event: %v %v", tableID, tableMap)
+			if tableMap.Database != "vttest" ||
+				tableMap.Name != "replicationtypes" ||
+				len(tableMap.Types) != len(testcases)+1 ||
+				tableMap.CanBeNull.Bit(0) {
+				t.Errorf("got wrong TableMap: %v", tableMap)
+			}
+		case be.IsWriteRows():
+			if got := be.TableID(f); got != tableID {
+				t.Fatalf("WriteRows event got table ID %v but was expecting %v", got, tableID)
+			}
+			wr, err := be.Rows(f, tableMap)
+			if err != nil {
+				t.Fatalf("Rows event is broken: %v", err)
+			}
+
+			// Check it has the right values
+			values, err = valuesForTests(t, &wr, tableMap, 0)
+			if err != nil {
+				t.Fatalf("valuesForTests is broken: %v", err)
+			}
+			t.Logf("Got WriteRows event data: %v %v", wr, values)
+			if len(values) != len(testcases)+1 {
+				t.Fatalf("Got wrong length %v for values, was expecting %v", len(values), len(testcases)+1)
+			}
+
+		default:
+			t.Logf("Got unrelated event: %v", be)
+		}
+	}
+
+	// Insert a second row with the same data.
+	var sql bytes.Buffer
+	sql.WriteString("insert into replicationtypes set id=2")
+	for i, tcase := range testcases {
+		sql.WriteString(", ")
+		sql.WriteString(tcase.name)
+		sql.WriteString(" = ")
+		if values[i+1].Type() == querypb.Type_TIMESTAMP && !bytes.HasPrefix(values[i+1].Raw(), replication.ZeroTimestamp) {
+			// Values in the binary log are UTC. Let's convert them
+			// to whatever timezone the connection is using,
+			// so MySQL properly converts them back to UTC.
+			sql.WriteString("convert_tz(")
+			values[i+1].EncodeSQL(&sql)
+			sql.WriteString(", '+00:00', @@session.time_zone)")
+		} else {
+			values[i+1].EncodeSQL(&sql)
+		}
+	}
+	result, err = dConn.ExecuteFetch(sql.String(), 0, false)
+	if err != nil {
+		t.Fatalf("insert '%v' failed: %v", sql.String(), err)
+	}
+	if result.RowsAffected != 1 || len(result.Rows) != 0 {
+		t.Errorf("unexpected result for insert: %v", result)
+	}
+	t.Logf("Insert after getting event is: %v", sql.String())
+
+	// Re-select both rows, make sure all columns are the same.
+	stmt := "select id"
+	for _, tcase := range testcases {
+		stmt += ", " + tcase.name
+	}
+	stmt += " from replicationtypes"
+	result, err = dConn.ExecuteFetch(stmt, 2, false)
+	if err != nil {
+		t.Fatalf("select failed: %v", err)
+	}
+	if len(result.Rows) != 2 {
+		t.Fatalf("unexpected result for select: %v", result)
+	}
+	for i, tcase := range testcases {
+		if !reflect.DeepEqual(result.Rows[0][i+1], result.Rows[1][i+1]) {
+			t.Errorf("Field %v is not the same, got %v(%v) and %v(%v)", tcase.name, result.Rows[0][i+1], result.Rows[0][i+1].Type, result.Rows[1][i+1], result.Rows[1][i+1].Type)
+		}
+	}
+
+	// Drop the table, we're done.
+	if _, err := dConn.ExecuteFetch("drop table replicationtypes", 0, false); err != nil {
+		t.Fatal(err)
+	}
+
+}
+
+// valuesForTests is a helper method to return the sqltypes.Value
+// of all columns in a row in a Row. Only use it in tests, as the
+// returned values cannot be interpreted correctly without the schema.
+// We assume everything is unsigned in this method.
+func valuesForTests(t *testing.T, rs *replication.Rows, tm *replication.TableMap, rowIndex int) ([]sqltypes.Value, error) {
+	var result []sqltypes.Value
+
+	valueIndex := 0
+	data := rs.Rows[rowIndex].Data
+	pos := 0
+	for c := 0; c < rs.DataColumns.Count(); c++ {
+		if !rs.DataColumns.Bit(c) {
+			continue
+		}
+
+		if rs.Rows[rowIndex].NullColumns.Bit(valueIndex) {
+			// This column is represented, but its value is NULL.
+			result = append(result, sqltypes.NULL)
+			valueIndex++
+			continue
+		}
+
+		// We have real data
+		value, l, err := replication.CellValue(data, pos, tm.Types[c], tm.Metadata[c], querypb.Type_UINT64)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, value)
+		t.Logf("  %v: type=%v data=%v metadata=%v -> %v", c, tm.Types[c], data[pos:pos+l], tm.Metadata[c], value)
+		pos += l
+		valueIndex++
+	}
+
+	return result, nil
 }

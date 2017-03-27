@@ -27,12 +27,13 @@ import (
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/tableacl"
 	tacl "github.com/youtube/vitess/go/vt/tableacl/acl"
+	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/connpool"
-	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/schema"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/planbuilder"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/rules"
+	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/schema"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
-	"github.com/youtube/vitess/go/vt/vterrors"
+	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/txserializer"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
@@ -109,6 +110,12 @@ type QueryEngine struct {
 
 	// Services
 	consolidator *sync2.Consolidator
+	// txSerializer protects vttablet from applications which try to concurrently
+	// UPDATE (or DELETE) a "hot" row (or range of rows).
+	// Such queries would be serialized by MySQL anyway. This serializer prevents
+	// that we start more than one transaction per hot row (range).
+	// For implementation details, please see BeginExecute() in tabletserver.go.
+	txSerializer *txserializer.TxSerializer
 	streamQList  *QueryList
 
 	// Vars
@@ -158,6 +165,8 @@ func NewQueryEngine(checker MySQLChecker, se *schema.Engine, config tabletenv.Ta
 	)
 
 	qe.consolidator = sync2.NewConsolidator()
+	qe.txSerializer = txserializer.New(config.EnableHotRowProtectionDryRun,
+		config.HotRowProtectionMaxQueueSize, config.HotRowProtectionMaxGlobalQueueSize)
 	qe.streamQList = NewQueryList()
 
 	qe.strictMode.Set(config.StrictMode)
@@ -202,6 +211,7 @@ func NewQueryEngine(checker MySQLChecker, se *schema.Engine, config tabletenv.Ta
 		_ = stats.NewMultiCountersFunc("QueryErrorCounts", []string{"Table", "Plan"}, qe.getQueryErrorCount)
 
 		http.Handle("/debug/consolidations", qe.consolidator)
+		http.Handle("/debug/hotrows", qe.txSerializer)
 
 		endpoints := []string{
 			"/debug/tablet_plans",
