@@ -11,72 +11,23 @@ import (
 )
 
 func TestParseKeyspaceShard(t *testing.T) {
-	testcases := []struct {
-		keyspaceShard string
-		keyspace      string
-		shard         string
-	}{{
-		keyspaceShard: "key01/shard0",
-		keyspace:      "key01",
-		shard:         "shard0",
-	}, {
-		keyspaceShard: "key01:shard0",
-		keyspace:      "key01",
-		shard:         "shard0",
-	}}
-	for _, tcase := range testcases {
-		k, s, err := ParseKeyspaceShard(tcase.keyspaceShard)
-		if err != nil {
-			t.Fatalf("Failed to parse valid keyspace/shard pair: %s", tcase.keyspaceShard)
-		}
-		if k != tcase.keyspace {
-			t.Errorf("keyspace parsed from keyspace/shard pair %s is %s, but expect %s", tcase.keyspaceShard, k, tcase.keyspace)
-		}
-		if s != tcase.shard {
-			t.Errorf("shard parsed from keyspace/shard pair %s is %s, but expect %s", tcase.keyspaceShard, s, tcase.shard)
-		}
+	zkPath := "/zk/global/ks/sh"
+	keyspace := "key01"
+	shard := "shard0"
+	keyspaceShard := keyspace + "/" + shard
+
+	if _, _, err := ParseKeyspaceShard(zkPath); err == nil {
+		t.Errorf("zk path: %s should cause error.", zkPath)
 	}
-}
-
-func TestParseKeyspaceOptionalShard(t *testing.T) {
-	testcases := []struct {
-		keyspaceShard string
-		keyspace      string
-		shard         string
-	}{{
-		keyspaceShard: "ks",
-		keyspace:      "ks",
-		shard:         "",
-	}, {
-		keyspaceShard: "/-80",
-		keyspace:      "",
-		shard:         "-80",
-	}, {
-		keyspaceShard: "ks/-80",
-		keyspace:      "ks",
-		shard:         "-80",
-	}, {
-		keyspaceShard: "ks/",
-		keyspace:      "ks",
-		shard:         "",
-	}, {
-		keyspaceShard: "ks:",
-		keyspace:      "ks",
-		shard:         "",
-	}, {
-		keyspaceShard: "ks:-80",
-		keyspace:      "ks",
-		shard:         "-80",
-	}, {
-		keyspaceShard: ":-80",
-		keyspace:      "",
-		shard:         "-80",
-	}}
-
-	for _, tcase := range testcases {
-		if keyspace, shard := ParseKeyspaceOptionalShard(tcase.keyspaceShard); keyspace != tcase.keyspace || shard != tcase.shard {
-			t.Errorf("parseKeyspaceShard(%s): %s:%s, want %s:%s", tcase.keyspaceShard, keyspace, shard, tcase.keyspace, tcase.shard)
-		}
+	k, s, err := ParseKeyspaceShard(keyspaceShard)
+	if err != nil {
+		t.Fatalf("Failed to parse valid keyspace/shard pair: %s", keyspaceShard)
+	}
+	if k != keyspace {
+		t.Errorf("keyspace parsed from keyspace/shard pair %s is %s, but expect %s", keyspaceShard, k, keyspace)
+	}
+	if s != shard {
+		t.Errorf("shard parsed from keyspace/shard pair %s is %s, but expect %s", keyspaceShard, s, shard)
 	}
 }
 

@@ -14,10 +14,6 @@ import (
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
-const (
-	keyspaceShardSeparators = ":/"
-)
-
 // KeyspaceShardString returns a "keyspace/shard" string taking
 // keyspace and shard as separate inputs.
 func KeyspaceShardString(keyspace, shard string) string {
@@ -27,22 +23,11 @@ func KeyspaceShardString(keyspace, shard string) string {
 // ParseKeyspaceShard parse a "keyspace/shard" string and extract
 // both keyspace and shard
 func ParseKeyspaceShard(param string) (string, string, error) {
-	last := strings.LastIndexAny(param, keyspaceShardSeparators)
-	if last == -1 {
+	keySpaceShard := strings.Split(param, "/")
+	if len(keySpaceShard) != 2 {
 		return "", "", fmt.Errorf("Invalid shard path: %v", param)
 	}
-	return param[:last], param[last+1:], nil
-}
-
-// ParseKeyspaceOptionalShard parses a "keyspace/shard" string
-// and extracts the parts. If a shard is not specified, it's
-// returned as empty string.
-func ParseKeyspaceOptionalShard(param string) (string, string) {
-	last := strings.LastIndexAny(param, keyspaceShardSeparators)
-	if last == -1 {
-		return param, ""
-	}
-	return param[:last], param[last+1:]
+	return keySpaceShard[0], keySpaceShard[1], nil
 }
 
 // SourceShardString returns a printable view of a SourceShard.
