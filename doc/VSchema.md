@@ -8,7 +8,7 @@ For example, the VSchema will contain the information about the sharding key for
 
 ### Sharding model
 
-In Vitess, a `keyspace` is sharded by ranges of `keyspace ids`. Each row is assigned a keyspace id, which acts like a street addres, and it determines the shard where the row lives. In some respect, one could say that the `keyspace id` is the equivalent of a NoSQL sharding key. However, there are some differences:
+In Vitess, a `keyspace` is sharded by `keyspace id` ranges. Each row is assigned a keyspace id, which acts like a street addres, and it determines the shard where the row lives. In some respect, one could say that the `keyspace id` is the equivalent of a NoSQL sharding key. However, there are some differences:
 
 1. The `keyspace id` is a concept that's internal to Vitess. The application does not need to know anything about it.
 2. There is no physical column that stores the actual `keyspace id`. This value is computed as needed.
@@ -23,21 +23,21 @@ The Sharding Key is a concept that was introduced by NoSQL datastores. It's base
 
 If one were to draw an analogy, the indexes in a database would be the equivalent of the key in a NoSQL datastore, except that databases allow you to define multiple indexes per table, and there are many types of indexes. Extending this analogy to a sharded database results in different types of cross-shard indexes. In Vitess, these are called Vindexes.
 
-Simplistically stated, a Vindex provides a way to map a column value to a `keyspace id`. This mapping can be used to identify the location of a row. A variety of vindexes are available to choose from, with different trade-offs, and you can choose one that best suits your needs.
+Simplistically stated, a Vindex provides a way to map a column value to a `keyspace id`. This mapping can be used to identify the location of a row. A variety of vindexes are available to choose from with different trade-offs, and you can choose one that best suits your needs.
 
-Vindexes are actually quite versatile:
+Vindexes offer many flexibilities:
 
 * A table can have multiple Vindexes.
 * Vindexes could be NonUnique, which allows a column value to yield multiple keyspace ids.
-* They could be based on on a lookup table.
+* They could be a simple function or be based on a lookup table.
 * They could be shared across multiple tables.
-* Custom vindexes can be plugged in, and Vitess will still know how to reshard using the such Vindexes. In fact, Vitess doesn't differentiate between a custom Vindex and a predefined one.
+* Custom Vindexes can be plugged in, and Vitess will still know how to reshard using such Vindexes.
 
 #### The Primary Vindex
 
 The Primary Vindex is analogous to a database primary key. Every sharded table must have one defined. A Primary Vindex must be unique: given an input value, it must produce a single keyspace id. This unique mapping will be used at the time of insert to decide the target shard for a row. Conceptually, this is also equivalent to the NoSQL Sharding Key, and we often refer to the Primary Vindex as the Sharding Key.
 
-However, there is a subtle difference: NoSQL datastores usually let you choose the Sharding Key, but the Sharding Scheme is generally hardcoded in the engine. In Vitess, the databases are range-sharded by keyspace ids. However, they do not dictate how a Primary Vindex column maps to a keyspace id. The user has a variety of vindexes to choose from based on their needs. In other words, a Primary Vindex in Vitess not only defines the Sharding Key, it also decides the Sharding Scheme. The low level sharding key, which is the keyspace id, is something that's invisible and may not physically exist in the data.
+However, there is a subtle difference: NoSQL datastores usually let you choose the Sharding Key, but the Sharding Scheme is generally hardcoded in the engine. In Vitess, the choice of Vindex lets you control how a column value maps to a keyspace id. In other words, a Primary Vindex in Vitess not only defines the Sharding Key, it also decides the Sharding Scheme.
 
 Vindexes come in many varieties. Some of them can be used as Primary Vindex, and others have different purposes. The following sections will describe their properties.
 
