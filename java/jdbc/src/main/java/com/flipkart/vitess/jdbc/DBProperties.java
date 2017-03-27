@@ -8,7 +8,7 @@ public class DBProperties {
     private final String majorVersion;
     private final String minorVersion;
     private final int isolationLevel;
-    private final boolean lowerCaseTableNames;
+    private final boolean caseInsensitiveComparison;
     private final boolean storesLowerCaseTableName;
 
     public DBProperties(String productversion, String majorVersion, String minorVersion,
@@ -18,7 +18,7 @@ public class DBProperties {
         this.majorVersion = majorVersion;
         this.minorVersion = minorVersion;
         this.isolationLevel = isolationLevel;
-        this.lowerCaseTableNames = "1".equalsIgnoreCase(lowerCaseTableNames) || "2".equalsIgnoreCase(lowerCaseTableNames);
+        this.caseInsensitiveComparison = "1".equalsIgnoreCase(lowerCaseTableNames) || "2".equalsIgnoreCase(lowerCaseTableNames);
         this.storesLowerCaseTableName = "1".equalsIgnoreCase(lowerCaseTableNames);
     }
 
@@ -38,8 +38,8 @@ public class DBProperties {
         return this.isolationLevel;
     }
 
-    public boolean getLowerCaseTableNames() {
-        return lowerCaseTableNames;
+    public boolean getUseCaseInsensitiveComparisons() {
+        return caseInsensitiveComparison;
     }
 
     public boolean getStoresLowerCaseTableName() {

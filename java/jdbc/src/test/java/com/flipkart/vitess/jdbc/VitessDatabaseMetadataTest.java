@@ -1330,9 +1330,17 @@ import com.youtube.vitess.proto.Query;
         }
     }
 
-    @Test public void testCaseSensitivityIdentifierFuncs() throws Exception {
+    @Test public void testCaseSensitivityIdentifierFuncsMySql() throws Exception {
+        assertCaseSensitivityForDatabaseType(false);
+    }
+
+    @Test public void testCaseSensitivityIdentifierFuncsMariaDb() throws Exception {
+        assertCaseSensitivityForDatabaseType(true);
+    }
+
+    private void assertCaseSensitivityForDatabaseType(boolean useMariaDb) throws Exception {
         VitessConnection connection = new VitessConnection("jdbc:vitess://username@ip1:port1/keyspace", null);
-        mockStatementForLowercaseTablesValue("0");
+        mockStatementForLowercaseTablesValue("0", useMariaDb);
         Assert.assertEquals(true, connection.getMetaData().supportsMixedCaseIdentifiers());
         Assert.assertEquals(true, connection.getMetaData().supportsMixedCaseQuotedIdentifiers());
         Assert.assertEquals(false, connection.getMetaData().storesLowerCaseIdentifiers());
@@ -1342,7 +1350,7 @@ import com.youtube.vitess.proto.Query;
         connection.close();
 
         connection = new VitessConnection("jdbc:vitess://username@ip1:port1/keyspace", null);
-        mockStatementForLowercaseTablesValue("1");
+        mockStatementForLowercaseTablesValue("1", useMariaDb);
         Assert.assertEquals(false, connection.getMetaData().supportsMixedCaseIdentifiers());
         Assert.assertEquals(false, connection.getMetaData().supportsMixedCaseQuotedIdentifiers());
         Assert.assertEquals(true, connection.getMetaData().storesLowerCaseIdentifiers());
@@ -1352,7 +1360,7 @@ import com.youtube.vitess.proto.Query;
         connection.close();
 
         connection = new VitessConnection("jdbc:vitess://username@ip1:port1/keyspace", null);
-        mockStatementForLowercaseTablesValue("2");
+        mockStatementForLowercaseTablesValue("2", useMariaDb);
         Assert.assertEquals(false, connection.getMetaData().supportsMixedCaseIdentifiers());
         Assert.assertEquals(false, connection.getMetaData().supportsMixedCaseQuotedIdentifiers());
         Assert.assertEquals(false, connection.getMetaData().storesLowerCaseIdentifiers());
@@ -1362,7 +1370,7 @@ import com.youtube.vitess.proto.Query;
         connection.close();
 
         connection = new VitessConnection("jdbc:vitess://username@ip1:port1/keyspace", null);
-        mockStatementForLowercaseTablesValue("something random");
+        mockStatementForLowercaseTablesValue("something random", useMariaDb);
         Assert.assertEquals(true, connection.getMetaData().supportsMixedCaseIdentifiers());
         Assert.assertEquals(true, connection.getMetaData().supportsMixedCaseQuotedIdentifiers());
         Assert.assertEquals(false, connection.getMetaData().storesLowerCaseIdentifiers());
@@ -1372,10 +1380,13 @@ import com.youtube.vitess.proto.Query;
         connection.close();
     }
 
-    private void mockStatementForLowercaseTablesValue(String lcTablesValue) throws Exception {
+    private void mockStatementForLowercaseTablesValue(String lcTablesValue, boolean useMariaDb) throws Exception {
         String sql = "SHOW VARIABLES WHERE VARIABLE_NAME IN (\'tx_isolation\',\'INNODB_VERSION\', \'lower_case_table_names\')";
         String versionName = "innodb_version";
         String versionValue = "5.7.16-10";
+        if (useMariaDb) {
+            versionValue = versionValue + "-mariadb";
+        }
         String txIsoName = "tx_isolation";
         String txIsoValue = "REPEATABLE-READ";
         String lcTablesName = "lower_case_table_names";
