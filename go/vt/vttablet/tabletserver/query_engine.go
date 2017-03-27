@@ -34,6 +34,7 @@ import (
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/schema"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/txserializer"
+	"github.com/youtube/vitess/go/vt/utils"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
@@ -472,7 +473,7 @@ func (qe *QueryEngine) handleHTTPQueryPlans(response http.ResponseWriter, reques
 	response.Header().Set("Content-Type", "text/plain")
 	response.Write([]byte(fmt.Sprintf("Length: %d\n", len(keys))))
 	for _, v := range keys {
-		response.Write([]byte(fmt.Sprintf("%#v\n", v)))
+		response.Write([]byte(fmt.Sprintf("%#v\n", utils.TruncateQuery(v))))
 		if plan := qe.peekQuery(v); plan != nil {
 			if b, err := json.MarshalIndent(plan.Plan, "", "  "); err != nil {
 				response.Write([]byte(err.Error()))
@@ -491,7 +492,7 @@ func (qe *QueryEngine) handleHTTPQueryStats(response http.ResponseWriter, reques
 	for _, v := range keys {
 		if plan := qe.peekQuery(v); plan != nil {
 			var pqstats perQueryStats
-			pqstats.Query = unicoded(v)
+			pqstats.Query = unicoded(utils.TruncateQuery(v))
 			pqstats.Table = plan.TableName().String()
 			pqstats.Plan = plan.PlanID
 			pqstats.QueryCount, pqstats.Time, pqstats.MysqlTime, pqstats.RowCount, pqstats.ErrorCount = plan.Stats()
