@@ -10,10 +10,12 @@ import (
 	"html/template"
 	"strings"
 
-	"regexp"
-
 	"github.com/youtube/vitess/go/vt/key"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+)
+
+const (
+	keyspaceShardSeparators = ":/"
 )
 
 // KeyspaceShardString returns a "keyspace/shard" string taking
@@ -25,27 +27,22 @@ func KeyspaceShardString(keyspace, shard string) string {
 // ParseKeyspaceShard parse a "keyspace/shard" string and extract
 // both keyspace and shard
 func ParseKeyspaceShard(param string) (string, string, error) {
-	keySpaceShard := parseKeyspaceShard(param)
-	if len(keySpaceShard) != 2 {
+	last := strings.LastIndexAny(param, keyspaceShardSeparators)
+	if last == -1 {
 		return "", "", fmt.Errorf("Invalid shard path: %v", param)
 	}
-	return keySpaceShard[0], keySpaceShard[1], nil
+	return param[:last], param[last+1:], nil
 }
 
 // ParseKeyspaceOptionalShard parses a "keyspace/shard" string
 // and extracts the parts. If a shard is not specified, it's
 // returned as empty string.
-func ParseKeyspaceOptionalShard(keyspaceShard string) (string, string) {
-	parts := parseKeyspaceShard(keyspaceShard)
-	if len(parts) != 2 {
-		return parts[0], ""
+func ParseKeyspaceOptionalShard(param string) (string, string) {
+	last := strings.LastIndexAny(param, keyspaceShardSeparators)
+	if last == -1 {
+		return param, ""
 	}
-	return parts[0], parts[1]
-}
-
-func parseKeyspaceShard(param string) []string {
-	rp := regexp.MustCompile("[:/]")
-	return rp.Split(param, -1)
+	return param[:last], param[last+1:]
 }
 
 // SourceShardString returns a printable view of a SourceShard.

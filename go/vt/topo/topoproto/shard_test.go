@@ -11,10 +11,6 @@ import (
 )
 
 func TestParseKeyspaceShard(t *testing.T) {
-	zkPath := "/zk/global/ks/sh"
-	if _, _, err := ParseKeyspaceShard(zkPath); err == nil {
-		t.Errorf("zk path: %s should cause error.", zkPath)
-	}
 	testcases := []struct {
 		keyspaceShard string
 		keyspace      string
