@@ -147,7 +147,9 @@ Vitess servers are written in Go. There are a few Vitess-specific knobs that app
 
 ### Go version
 
-Go, being a young language, tends to add major improvements over each version. So, the latest Go version is almost always recommended. The current version to use Go 1.6.
+Go, being a young language, tends to add major improvements over each version.
+So, the latest Go version is almost always recommended.
+Note that the latest Go version may be higher than the minimum version we require for compiling the binaries (see ["Prerequisites" section in the Getting Started guide](/getting-started/#prerequisites)).
 
 ### GOMAXPROCS
 
