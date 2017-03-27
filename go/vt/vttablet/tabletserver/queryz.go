@@ -15,6 +15,7 @@ import (
 	"github.com/youtube/vitess/go/acl"
 	"github.com/youtube/vitess/go/vt/logz"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/planbuilder"
+	"github.com/youtube/vitess/go/vt/utils"
 )
 
 var (
@@ -137,7 +138,7 @@ func queryzHandler(qe *QueryEngine, w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		Value := &queryzRow{
-			Query:  logz.Wrappable(v),
+			Query:  logz.Wrappable(utils.TruncateQuery(v)),
 			Table:  plan.TableName().String(),
 			Plan:   plan.PlanID,
 			Reason: plan.Reason,
