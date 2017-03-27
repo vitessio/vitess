@@ -6,13 +6,32 @@ For example, the VSchema will contain the information about the sharding key for
 
 ## Concepts
 
+### Sharding model
+
+In Vitess, a `keyspace` is sharded by ranges of `keyspace ids`. Each row is assigned a keyspace id, which acts like a street addres, and it determines the shard where the row lives. In some respect, one could say that the `keyspace id` is the equivalent of a NoSQL sharding key. However, there are some differences:
+
+1. The `keyspace id` is a concept that's internal to Vitess. The application does not need to know anything about it.
+2. There is no physical column that stores the actual `keyspace id`. This value is computed as needed.
+
+This difference is significant enough that we don't refer to the keyspace id as the sharding key. We'll later introduce the concept of a Primary Vindex which more closely ressembles the NoSQL sharding key.
+
+Mapping to a `keyspace id`, and then to a shard, gives us the flexibility to reshard the data with minimal disruption because the `keyspace id` of each row remains unchanged through the process.
+
 ### Vindex
 
-The Sharding Key is a concept that was introduced by NoSQL datastores. It's based on the fact that there's only one access path to the data, which is tke Key. However, relational databases are more rich about data relationships. So, sharding a database by only designating a sharding key is often insufficient.
+The Sharding Key is a concept that was introduced by NoSQL datastores. It's based on the fact that there's only one access path to the data, which is tke Key. However, relational databases are more rich about the data and their relationships. So, sharding a database by only designating a sharding key is often insufficient.
 
 If one were to draw an analogy, the indexes in a database would be the equivalent of the key in a NoSQL datastore, except that databases allow you to define multiple indexes per table, and there are many types of indexes. Extending this analogy to a sharded database results in different types of cross-shard indexes. In Vitess, these are called Vindexes.
 
-A Vindex provides a way to map a column value to one or more `keyspace ids`. The keyspace id is something like the street address of a row, which can be used to identify the shard where it's located. The reason why we map to keyspace ids instead of shards is so that we can reshard without changing the mapping. A table can define multiple Vindexes. If so, they should all point to the same keyspace id for a given row.
+Simplistically stated, a Vindex provides a way to map a column value to a `keyspace id`. This mapping can be used to identify the location of a row. A variety of vindexes are available to choose from, with different trade-offs, and you can choose one that best suits your needs.
+
+Vindexes are actually quite versatile:
+
+* A table can have multiple Vindexes.
+* Vindexes could be NonUnique, which allows a column value to yield multiple keyspace ids.
+* They could be based on on a lookup table.
+* They could be shared across multiple tables.
+* Custom vindexes can be plugged in, and Vitess will still know how to reshard using the such Vindexes. In fact, Vitess doesn't differentiate between a custom Vindex and a predefined one.
 
 #### The Primary Vindex
 
