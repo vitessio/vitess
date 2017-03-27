@@ -57,10 +57,10 @@ func main() {
 
 	// Start or Init mysqld as needed.
 	ctx, cancel := context.WithTimeout(context.Background(), *waitTime)
-	tabletDir := mysqlctl.TabletDir(uint32(*tabletUID))
-	if _, statErr := os.Stat(tabletDir); os.IsNotExist(statErr) {
+	mycnfFile := mysqlctl.MycnfFile(uint32(*tabletUID))
+	if _, statErr := os.Stat(mycnfFile); os.IsNotExist(statErr) {
 		// Generate my.cnf from scratch and use it to find mysqld.
-		log.Infof("tablet dir (%s) doesn't exist, initializing", tabletDir)
+		log.Infof("mycnf file (%s) doesn't exist, initializing", mycnfFile)
 
 		var err error
 		mysqld, err = mysqlctl.CreateMysqld(uint32(*tabletUID), *mysqlSocket, int32(*mysqlPort), dbconfigFlags)
@@ -76,7 +76,7 @@ func main() {
 		}
 	} else {
 		// There ought to be an existing my.cnf, so use it to find mysqld.
-		log.Infof("tablet dir (%s) already exists, starting without init", tabletDir)
+		log.Infof("mycnf file (%s) already exists, starting without init", mycnfFile)
 
 		var err error
 		mysqld, err = mysqlctl.OpenMysqld(uint32(*tabletUID), dbconfigFlags)
