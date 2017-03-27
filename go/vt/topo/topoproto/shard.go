@@ -10,6 +10,8 @@ import (
 	"html/template"
 	"strings"
 
+	"regexp"
+
 	"github.com/youtube/vitess/go/vt/key"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
@@ -23,7 +25,7 @@ func KeyspaceShardString(keyspace, shard string) string {
 // ParseKeyspaceShard parse a "keyspace/shard" string and extract
 // both keyspace and shard
 func ParseKeyspaceShard(param string) (string, string, error) {
-	keySpaceShard := strings.Split(param, "/")
+	keySpaceShard := parseKeyspaceShard(param)
 	if len(keySpaceShard) != 2 {
 		return "", "", fmt.Errorf("Invalid shard path: %v", param)
 	}
@@ -34,11 +36,16 @@ func ParseKeyspaceShard(param string) (string, string, error) {
 // and extracts the parts. If a shard is not specified, it's
 // returned as empty string.
 func ParseKeyspaceOptionalShard(keyspaceShard string) (string, string) {
-	last := strings.LastIndex(keyspaceShard, "/")
-	if last == -1 {
-		return keyspaceShard, ""
+	parts := parseKeyspaceShard(keyspaceShard)
+	if len(parts) != 2 {
+		return parts[0], ""
 	}
-	return keyspaceShard[:last], keyspaceShard[last+1:]
+	return parts[0], parts[1]
+}
+
+func parseKeyspaceShard(param string) []string {
+	rp := regexp.MustCompile("[:/]")
+	return rp.Split(param, -1)
 }
 
 // SourceShardString returns a printable view of a SourceShard.
