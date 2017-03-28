@@ -9,13 +9,13 @@ The `kubectl` steps will apply to any Kubernetes cluster.
 
 ## Prerequisites
 
-To complete the exercise in this guide, you must locally install Go 1.7+,
+To complete the exercise in this guide, you must locally install Go 1.8+,
 Vitess' `vtctlclient` tool, and Google Cloud SDK. The
 following sections explain how to set these up in your environment.
 
-### Install Go 1.7+
+### Install Go 1.8+
 
-You need to install [Go 1.7+](http://golang.org/doc/install) to build the
+You need to install [Go 1.8+](http://golang.org/doc/install) to build the
 `vtctlclient` tool, which issues commands to Vitess.
 
 After installing Go, make sure your `GOPATH` environment
