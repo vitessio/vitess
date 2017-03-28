@@ -293,3 +293,19 @@ Check list:
 * Specify that `name` uses the Vindex.
 
 These steps have to be currently performed manually. However, extended DDLs backed by improved automation will simplify these tasks in the future.
+
+### Advanced usage
+
+The examples/demo also shows more tricks you can perform:
+* The `music` table uses a secondary lookup vindex `music_user_idx`. However, this lookup vindex is itself a sharded table.
+* `music_extra` shares `music_user_idx` with `music`, and uses it as Primary Vindex.
+* `music_extra` defines an additional Functional Vindex called `keyspace_id` which the demo auto-populates using the reverse mapping capability.
+* There is also a `name_info` table that showcases a case-insensitive Vindex `unicode_loose_md5`.
+
+## Roadmap
+
+VSchema is still evolving. Features are mostly added on demand. The following features are currently on our roadmap:
+
+* DDL support
+* Lookup Vindex backfill
+* Pinned tables
