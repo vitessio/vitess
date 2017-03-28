@@ -143,7 +143,7 @@ If you have multiple unsharded keyspaces, you can still avoid defining a VSchema
 1. Connect to a keyspace and all queries are sent to it.
 2. Connect to Vitess without specifying a keyspace, but use qualifed names for tables, like `keyspace.table` in your queries.
 
-However, if you can specify a VSchema for an unsharded keyspace like this:
+However, you can specify a VSchema for an unsharded keyspace like this:
 
 ``` json
 // unsharded keyspace
@@ -156,8 +156,21 @@ However, if you can specify a VSchema for an unsharded keyspace like this:
 }
 ```
 
-Once you decide to shard a keyspace, a VSchema is necessary because you'll need to specify a Primary Vindex for those tables at the minimum. Here is a a simple example.
+Once you decide to shard a keyspace, a VSchema is necessary because you'll need to specify a Primary Vindex for those tables at the minimum.
 
+### examples/demo explained
+
+Vitess has a [working demo](https://github.com/youtube/vitess/tree/master/examples/demo) of Vindexes and Sequences. This section documents the various features highlighted.
+
+We start of with a simple table with a simple Primary Vindex.
+
+Schema:
+``` sql
+# user keyspace
+create table user(user_id bigint, name varchar(128), primary key(user_id));
+```
+
+VSchema:
 ``` json
 // user keyspace
 {
@@ -179,11 +192,20 @@ Once you decide to shard a keyspace, a VSchema is necessary because you'll need 
 }
 ```
 
-Because Vindexes can be shared, the JSON requires them to be specified in a separte `vindexes` section, and then referenced by name from the `tables` section.
+Because Vindexes can be shared, the JSON requires them to be specified in a separte `vindexes` section, and then referenced by name from the `tables` section. The VSchema above simply states that `user_id` uses `hash` as Primary Vindex.
 
-To the above example, we can now add a sequence. However, the sequence must be defined in the lookup (unsharded) keyspace.
-It's then referred from the user (sharded) keyspace. In this example, we're designating the user_id (Primary Vindex) column as the auto-increment.
+Since user is a sharded table, it will be beneficial to tie it to a sequence. However, the sequence must be defined in the lookup (unsharded) keyspace. It's then referred from the user (sharded) keyspace. In this example, we're designating the user_id (Primary Vindex) column as the auto-increment.
 
+Schema:
+``` sql
+# lookup keyspace
+create table user_seq(id int, next_id bigint, cache bigint, primary key(id)) comment 'vitess_sequence';
+insert into user_seq(id, next_id, cache) values(0, 1, 3);
+```
+
+For the sequence table, `id` is always 0. `next_id` starts off as 1, and the cache is usually a medium-sized number like 100. In our example, we're using a small number to showcase how it works.
+
+VSchema:
 ``` json
 // lookup keyspace
 {
