@@ -129,12 +129,14 @@ fi
 #
 # DO NOT ADD LIBRARY DEPENDENCIES HERE. Instead use govendor as described below.
 #
+# Note: We explicitly do not vendor the tools below because a) we want to stay
+# their latest version and b) it's easier to "go install" them this way.
 gotools=" \
        github.com/golang/lint/golint \
        github.com/golang/mock/mockgen \
        github.com/kardianos/govendor \
        golang.org/x/tools/cmd/goimports \
-       honnef.co/go/unused/cmd/unused \
+       honnef.co/go/tools/cmd/unused \
 "
 
 # The cover tool needs to be installed into the Go toolchain, so it will fail
