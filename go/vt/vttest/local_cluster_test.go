@@ -5,6 +5,9 @@
 package vttest
 
 import (
+	"io/ioutil"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -18,6 +21,7 @@ import (
 	_ "github.com/youtube/vitess/go/mysql"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	vschemapb "github.com/youtube/vitess/go/vt/proto/vschema"
 	vttestpb "github.com/youtube/vitess/go/vt/proto/vttest"
 )
 
@@ -34,8 +38,32 @@ func TestVitess(t *testing.T) {
 			},
 		},
 	}
+	schema := `CREATE TABLE messages (
+	  page BIGINT(20) UNSIGNED,
+	  time_created_ns BIGINT(20) UNSIGNED,
+	  message VARCHAR(10000),
+	  PRIMARY KEY (page, time_created_ns)
+	) ENGINE=InnoDB`
+	vschema := &vschemapb.Keyspace{
+		Sharded: true,
+		Vindexes: map[string]*vschemapb.Vindex{
+			"hash": {
+				Type: "hash",
+			},
+		},
+		Tables: map[string]*vschemapb.Table{
+			"messages": {
+				ColumnVindexes: []*vschemapb.ColumnVindex{
+					{
+						Column: "page",
+						Name:   "hash",
+					},
+				},
+			},
+		},
+	}
 
-	hdl, err := LaunchVitess(ProtoTopo(topology))
+	hdl, err := LaunchVitess(ProtoTopo(topology), Schema(schema), VSchema(vschema))
 	if err != nil {
 		t.Error(err)
 		return
@@ -63,10 +91,34 @@ func TestVitess(t *testing.T) {
 		t.Error(err)
 		return
 	}
+	// Test that vtgate can use the VSchema to route the query to the keyspace.
+	// TODO(mberlin): This also works without a vschema for the table. How to fix?
+	_, err = conn.Execute(ctx, "select * from messages", nil, topodatapb.TabletType_MASTER, nil)
+	if err != nil {
+		t.Error(err)
+		return
+	}
 }
 
 func TestMySQL(t *testing.T) {
-	hdl, err := LaunchVitess(MySQLOnly("vttest"), Schema("create table a(id int, name varchar(128), primary key(id))"))
+	// Load schema from file to verify the SchemaDirectory() option.
+	dbName := "vttest"
+	schema := "create table a(id int, name varchar(128), primary key(id))"
+	schemaDir, err := ioutil.TempDir("", "vt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(schemaDir)
+	ksDir := filepath.Join(schemaDir, dbName)
+	if err := os.Mkdir(ksDir, os.ModeDir|0775); err != nil {
+		t.Fatal(err)
+	}
+	schemaFile := filepath.Join(ksDir, "table.sql")
+	if err := ioutil.WriteFile(schemaFile, []byte(schema), 0666); err != nil {
+		t.Fatal(err)
+	}
+
+	hdl, err := LaunchVitess(MySQLOnly(dbName), SchemaDirectory(schemaDir))
 	if err != nil {
 		t.Error(err)
 		return
