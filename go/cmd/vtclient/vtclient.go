@@ -5,15 +5,18 @@
 package main
 
 import (
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
+	"sync"
 	"time"
 
 	log "github.com/golang/glog"
 	"github.com/olekukonko/tablewriter"
-	"github.com/youtube/vitess/go/exit"
+	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vitessdriver"
@@ -33,6 +36,7 @@ Examples:
   $ vtclient -server vtgate:15991 "SELECT * FROM messages"
 
   $ vtclient -server vtgate:15991 -tablet_type master -bind_variables '[ 12345, 1, "msg 12345" ]' "INSERT INTO messages (page,time_created_ns,message) VALUES (:v1, :v2, :v3)"
+
 `
 	server        = flag.String("server", "", "vtgate server to connect to")
 	tabletType    = flag.String("tablet_type", "rdonly", "tablet type to direct queries to")
@@ -93,19 +97,35 @@ func newBindvars(name, usage string) *bindvars {
 }
 
 func main() {
-	defer exit.Recover()
 	defer logutil.Flush()
 
+	qr, err := run()
+	if err != nil {
+		log.Exit(err)
+	}
+
+	if *jsonOutput {
+		data, err := json.MarshalIndent(qr, "", "  ")
+		if err != nil {
+			log.Exitf("cannot marshal data: %v", err)
+		}
+		fmt.Print(string(data))
+		return
+	}
+
+	qr.print()
+}
+
+func run() (*results, error) {
 	flag.Parse()
 	args := flag.Args()
 
 	if len(args) == 0 {
 		flag.Usage()
-		exit.Return(1)
+		return nil, errors.New("no arguments provided. See usage above")
 	}
 	if len(args) > 1 {
-		fmt.Fprintln(os.Stderr, "ERROR: No additional arguments after the query allowed.")
-		exit.Return(1)
+		return nil, errors.New("no additional arguments after the query allowed")
 	}
 
 	c := vitessdriver.Configuration{
@@ -118,101 +138,106 @@ func main() {
 	}
 	db, err := vitessdriver.OpenWithConfiguration(c)
 	if err != nil {
-		log.Errorf("client error: %v", err)
-		exit.Return(1)
+		return nil, fmt.Errorf("client error: %v", err)
 	}
 
 	log.Infof("Sending the query...")
-	startTime := time.Now()
 
-	// handle dml
 	if sqlparser.IsDML(args[0]) {
-		tx, err := db.Begin()
-		if err != nil {
-			log.Errorf("begin failed: %v", err)
-			exit.Return(1)
-		}
-
-		result, err := tx.Exec(args[0], []interface{}(*bindVariables)...)
-		if err != nil {
-			log.Errorf("exec failed: %v", err)
-			exit.Return(1)
-		}
-
-		err = tx.Commit()
-		if err != nil {
-			log.Errorf("commit failed: %v", err)
-			exit.Return(1)
-		}
-
-		rowsAffected, err := result.RowsAffected()
-		lastInsertID, err := result.LastInsertId()
-		log.Infof("Total time: %v / Row affected: %v / Last Insert Id: %v", time.Since(startTime), rowsAffected, lastInsertID)
-	} else {
-		// launch the query
-		rows, err := db.Query(args[0], []interface{}(*bindVariables)...)
-		if err != nil {
-			log.Errorf("client error: %v", err)
-			exit.Return(1)
-		}
-		defer rows.Close()
-
-		// get the headers
-		var qr results
-		cols, err := rows.Columns()
-		if err != nil {
-			log.Errorf("client error: %v", err)
-			exit.Return(1)
-		}
-		qr.Fields = cols
-
-		// get the rows
-		for rows.Next() {
-			row := make([]interface{}, len(cols))
-			for i := range row {
-				var col string
-				row[i] = &col
-			}
-			if err := rows.Scan(row...); err != nil {
-				log.Errorf("client error: %v", err)
-				exit.Return(1)
-			}
-
-			// unpack []*string into []string
-			vals := make([]string, 0, len(row))
-			for _, value := range row {
-				vals = append(vals, *(value.(*string)))
-			}
-			qr.Rows = append(qr.Rows, vals)
-		}
-		if err := rows.Err(); err != nil {
-			log.Errorf("Error %v\n", err)
-			exit.Return(1)
-		}
-
-		if *jsonOutput {
-			data, err := json.MarshalIndent(qr, "", "  ")
-			if err != nil {
-				log.Errorf("cannot marshal data: %v", err)
-				exit.Return(1)
-			}
-			fmt.Print(string(data))
-		} else {
-			printTable(qr, time.Since(startTime))
-		}
+		return execDml(db, args[0])
 	}
+
+	return execNonDml(db, args[0])
+}
+
+func execDml(db *sql.DB, sql string) (*results, error) {
+	start := time.Now()
+	tx, err := db.Begin()
+	if err != nil {
+		return nil, fmt.Errorf("BEGIN failed: %v", err)
+	}
+
+	result, err := tx.Exec(sql, []interface{}(*bindVariables)...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute DML: %v", err)
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		return nil, fmt.Errorf("COMMIT failed: %v", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	lastInsertID, err := result.LastInsertId()
+	return &results{
+		rowsAffected: rowsAffected,
+		lastInsertID: lastInsertID,
+		duration:     time.Since(start),
+	}, nil
+}
+
+func execNonDml(db *sql.DB, sql string) (*results, error) {
+	start := time.Now()
+	rows, err := db.Query(sql, []interface{}(*bindVariables)...)
+	if err != nil {
+		return nil, fmt.Errorf("client error: %v", err)
+	}
+	defer rows.Close()
+
+	// get the headers
+	var qr results
+	cols, err := rows.Columns()
+	if err != nil {
+		return nil, fmt.Errorf("client error: %v", err)
+	}
+	qr.Fields = cols
+
+	// get the rows
+	for rows.Next() {
+		row := make([]interface{}, len(cols))
+		for i := range row {
+			var col string
+			row[i] = &col
+		}
+		if err := rows.Scan(row...); err != nil {
+			return nil, fmt.Errorf("client error: %v", err)
+		}
+
+		// unpack []*string into []string
+		vals := make([]string, 0, len(row))
+		for _, value := range row {
+			vals = append(vals, *(value.(*string)))
+		}
+		qr.Rows = append(qr.Rows, vals)
+	}
+	qr.rowsAffected = int64(len(qr.Rows))
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("Vitess returned an error: %v", err)
+	}
+
+	qr.duration = time.Since(start)
+	return &qr, nil
 }
 
 type results struct {
-	Fields []string   `json:"fields"`
-	Rows   [][]string `json:"rows"`
+	mu                 sync.Mutex
+	Fields             []string   `json:"fields"`
+	Rows               [][]string `json:"rows"`
+	rowsAffected       int64
+	lastInsertID       int64
+	duration           time.Duration
+	cumulativeDuration time.Duration
 }
 
-func printTable(qr results, dur time.Duration) {
+func (r *results) print() {
 	table := tablewriter.NewWriter(os.Stdout)
-	table.SetHeader(qr.Fields)
+	table.SetHeader(r.Fields)
 	table.SetAutoFormatHeaders(false)
-	table.AppendBulk(qr.Rows)
+	table.AppendBulk(r.Rows)
 	table.Render()
-	fmt.Printf("%v rows in set (%v)\n", len(qr.Rows), dur)
+	fmt.Printf("%v row(s) affected (%v, cum: %v)\n", r.rowsAffected, r.duration, r.cumulativeDuration)
+	if r.lastInsertID != 0 {
+		fmt.Printf("Last insert ID: %v\n", r.lastInsertID)
+	}
 }
