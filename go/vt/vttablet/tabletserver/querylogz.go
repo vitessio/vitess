@@ -17,6 +17,7 @@ import (
 	"github.com/youtube/vitess/go/acl"
 	"github.com/youtube/vitess/go/vt/logz"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
+	"github.com/youtube/vitess/go/vt/utils"
 )
 
 var (
@@ -46,6 +47,7 @@ var (
 	querylogzFuncMap = template.FuncMap{
 		"stampMicro":   func(t time.Time) string { return t.Format(time.StampMicro) },
 		"cssWrappable": logz.Wrappable,
+		"truncateQuery": utils.TruncateQuery,
 		"unquote":      func(s string) string { return strings.Trim(s, "\"") },
 	}
 	querylogzTmpl = template.Must(template.New("example").Funcs(querylogzFuncMap).Parse(`
@@ -60,7 +62,7 @@ var (
 			<td>{{.MysqlResponseTime.Seconds}}</td>
 			<td>{{.WaitingForConnection.Seconds}}</td>
 			<td>{{.PlanType}}</td>
-			<td>{{.OriginalSQL | unquote | cssWrappable}}</td>
+			<td>{{.OriginalSQL | truncateQuery | unquote | cssWrappable}}</td>
 			<td>{{.NumberOfQueries}}</td>
 			<td>{{.FmtQuerySources}}</td>
 			<td>{{.RowsAffected}}</td>
