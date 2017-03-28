@@ -30,8 +30,9 @@ var (
 	mysqlSocket = flag.String("mysql_socket", "", "path to the mysql socket")
 
 	// mysqlctl init flags
-	waitTime      = flag.Duration("wait_time", 5*time.Minute, "how long to wait for mysqld startup or shutdown")
-	initDBSQLFile = flag.String("init_db_sql_file", "", "path to .sql file to run after mysql_install_db")
+	waitTime           = flag.Duration("wait_time", 5*time.Minute, "how long to wait for mysqld startup or shutdown")
+	initDBSQLFile      = flag.String("init_db_sql_file", "", "path to .sql file to run after mysql_install_db")
+	allowRefreshConfig = flag.Bool("allow_refresh_config", false, "if enabled, try to update existing my.cnf from template on start")
 )
 
 func init() {
@@ -85,6 +86,14 @@ func main() {
 			exit.Return(1)
 		}
 		mysqld.OnTerm(onTermFunc)
+
+		if *allowRefreshConfig {
+			err = mysqld.RefreshConfig()
+			if err != nil {
+				log.Errorf("failed to refresh config: %v", err)
+				exit.Return(1)
+			}
+		}
 
 		if err := mysqld.Start(ctx); err != nil {
 			log.Errorf("failed to start mysqld: %v", err)

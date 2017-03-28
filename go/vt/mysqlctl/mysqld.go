@@ -26,6 +26,9 @@ import (
 	"sync"
 	"time"
 
+	"bytes"
+	"crypto/sha256"
+
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/stats"
@@ -465,7 +468,7 @@ func (mysqld *Mysqld) Init(ctx context.Context, initDBSQLFile string) error {
 	}
 
 	// Set up config files.
-	if err = mysqld.initConfig(root); err != nil {
+	if err = mysqld.initConfig(root, mysqld.config.path); err != nil {
 		log.Errorf("failed creating %v: %v", mysqld.config.path, err)
 		return err
 	}
@@ -556,7 +559,7 @@ func (mysqld *Mysqld) installDataDir() error {
 	return nil
 }
 
-func (mysqld *Mysqld) initConfig(root string) error {
+func (mysqld *Mysqld) initConfig(root, outFile string) error {
 	var err error
 	var configData string
 
@@ -573,7 +576,7 @@ func (mysqld *Mysqld) initConfig(root string) error {
 		return err
 	}
 
-	return ioutil.WriteFile(mysqld.config.path, []byte(configData), 0664)
+	return ioutil.WriteFile(outFile, []byte(configData), 0664)
 }
 
 func getMycnfTemplates(root string) []string {
@@ -593,6 +596,68 @@ func getMycnfTemplates(root string) []string {
 	}
 
 	return cnfTemplatePaths
+}
+
+// RefreshConfig attempts to recreate the my.cnf from templates, and log and
+// swap in to place if it's updated. It keeps a copy of the last version in case fallback is required.
+// Should be called from a stable replica, server_id is not regenerated.
+func (mysqld *Mysqld) RefreshConfig() error {
+	log.Info("Checking for updates to my.cnf")
+	root, err := vtenv.VtRoot()
+	if err != nil {
+		return err
+	}
+	f, err := ioutil.TempFile(path.Dir(mysqld.config.path), "my.cnf")
+	if err != nil {
+		return fmt.Errorf("Could not create temp file: %v", err)
+	}
+
+	defer os.Remove(f.Name())
+	err = mysqld.initConfig(root, f.Name())
+	if err != nil {
+		return fmt.Errorf("Could not initConfig in %v: %v", f.Name(), err)
+	}
+
+	existing, err := hashFile(mysqld.config.path)
+	if err != nil {
+		return fmt.Errorf("Could not hash existing file %v: %v", mysqld.config.path, err)
+	}
+	updated, err := hashFile(f.Name())
+	if err != nil {
+		return fmt.Errorf("Could not hash updated file %v: %v", f.Name(), err)
+	}
+
+	if res := bytes.Compare(existing, updated); res == 0 {
+		log.Infof("No changes to my.cnf. Continuing.")
+		return nil
+	}
+
+	backupPath := mysqld.config.path + ".last"
+	err = os.Rename(mysqld.config.path, backupPath)
+	if err != nil {
+		return fmt.Errorf("Could not back up existing %v: %v", mysqld.config.path, err)
+	}
+	err = os.Rename(f.Name(), mysqld.config.path)
+	if err != nil {
+		return fmt.Errorf("Could not move %v to %v: %v", f.Name(), mysqld.config.path, err)
+	}
+	log.Infof("Updated my.cnf. Back of previous version available in %v", backupPath)
+
+	return nil
+}
+
+func hashFile(path string) ([]byte, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	hasher := sha256.New()
+	if _, err := io.Copy(hasher, f); err != nil {
+		return nil, err
+	}
+	var res []byte
+	return hasher.Sum(res), nil
 }
 
 // ReinitConfig updates the config file as if Mysqld is initializing. At the
@@ -620,7 +685,7 @@ func (mysqld *Mysqld) ReinitConfig(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	return mysqld.initConfig(root)
+	return mysqld.initConfig(root, mysqld.config.path)
 }
 
 func (mysqld *Mysqld) createDirs() error {
