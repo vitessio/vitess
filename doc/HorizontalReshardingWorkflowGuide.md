@@ -1,3 +1,4 @@
+
 This guide shows you an example about how to apply range-based sharding
 process in an existing unsharded Vitess [keyspace](http://vitess.io/overview/concepts.html#keyspace)
 using the horizontal resharding workflow. In this example, we will reshard

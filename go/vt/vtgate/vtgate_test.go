@@ -2683,3 +2683,29 @@ func TestVTGateShowMetadataTwoShards(t *testing.T) {
 		t.Errorf("shard %s not found in Values \n%+v", shard1, qr.Rows)
 	}
 }
+
+func TestParseKeyspaceOptionalShard(t *testing.T) {
+	testcases := []struct {
+		keyspaceShard string
+		keyspace      string
+		shard         string
+	}{{
+		keyspaceShard: "ks",
+		keyspace:      "ks",
+		shard:         "",
+	}, {
+		keyspaceShard: "ks/-80",
+		keyspace:      "ks",
+		shard:         "-80",
+	}, {
+		keyspaceShard: "ks:-80",
+		keyspace:      "ks",
+		shard:         "-80",
+	}}
+
+	for _, tcase := range testcases {
+		if keyspace, shard := parseKeyspaceOptionalShard(tcase.keyspaceShard); keyspace != tcase.keyspace || shard != tcase.shard {
+			t.Errorf("parseKeyspaceShard(%s): %s:%s, want %s:%s", tcase.keyspaceShard, keyspace, shard, tcase.keyspace, tcase.shard)
+		}
+	}
+}
