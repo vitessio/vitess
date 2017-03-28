@@ -9,13 +9,13 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"strings"
 	"time"
 
 	log "github.com/golang/glog"
 	"github.com/olekukonko/tablewriter"
 	"github.com/youtube/vitess/go/exit"
 	"github.com/youtube/vitess/go/vt/logutil"
+	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vitessdriver"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateconn"
 )
@@ -92,13 +92,6 @@ func newBindvars(name, usage string) *bindvars {
 	return &bv
 }
 
-// FIXME(alainjobart) this is a cheap trick. Should probably use the
-// query parser if we needed this to be 100% reliable.
-func isDml(sql string) bool {
-	lower := strings.TrimSpace(strings.ToLower(sql))
-	return strings.HasPrefix(lower, "insert") || strings.HasPrefix(lower, "update") || strings.HasPrefix(lower, "delete")
-}
-
 func main() {
 	defer exit.Recover()
 	defer logutil.Flush()
@@ -133,7 +126,7 @@ func main() {
 	startTime := time.Now()
 
 	// handle dml
-	if isDml(args[0]) {
+	if sqlparser.IsDML(args[0]) {
 		tx, err := db.Begin()
 		if err != nil {
 			log.Errorf("begin failed: %v", err)
