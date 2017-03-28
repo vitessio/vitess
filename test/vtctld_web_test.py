@@ -411,8 +411,8 @@ class TestVtctldWeb(unittest.TestCase):
     dialog = dashboard_content.find_element_by_tag_name('vt-dialog')
     dialog_command = self._get_dialog_cmd(dialog)
     logging.info('Validate command: %s', ', '.join(dialog_command))
-    self.assertEqual(1, len(dialog_command))
-    self.assertListEqual(['Validate'], dialog_command)
+    self.assertEqual(2, len(dialog_command))
+    self.assertListEqual(['Validate', '-ping-tablets=false'], dialog_command)
 
     # Validate Dialog Checkbox is working
     self._toggle_dialog_checkbox(dialog, 0)
@@ -447,17 +447,19 @@ class TestVtctldWeb(unittest.TestCase):
     dialog_command = [
         cmd.text for cmd  in dialog.find_elements_by_class_name('vt-sheet')]
     logging.info('Create keyspace command: %s', ', '.join(dialog_command))
-    self.assertEqual(2, len(dialog_command))
-    self.assertListEqual(['CreateKeyspace', 'test_keyspace3'], dialog_command)
+    self.assertEqual(3, len(dialog_command))
+    self.assertListEqual(['CreateKeyspace', '-force=false', 'test_keyspace3'],
+                         dialog_command)
 
     # Create Keyspace autopopulates sharding_column type
     sharding_col_name_field.send_keys('test_id')
     dialog_command = [
         cmd.text for cmd  in dialog.find_elements_by_class_name('vt-sheet')]
     logging.info('Create keyspace command: %s', ', '.join(dialog_command))
-    self.assertEqual(4, len(dialog_command))
+    self.assertEqual(5, len(dialog_command))
     self.assertListEqual(['CreateKeyspace', '-sharding_column_name=test_id',
-                          '-sharding_column_type=UINT64', 'test_keyspace3'],
+                          '-sharding_column_type=UINT64', '-force=false',
+                          'test_keyspace3'],
                          dialog_command)
 
     # Dropdown works
@@ -468,9 +470,10 @@ class TestVtctldWeb(unittest.TestCase):
     dialog_command = [
         cmd.text for cmd  in dialog.find_elements_by_class_name('vt-sheet')]
     logging.info('Create keyspace command: %s', ', '.join(dialog_command))
-    self.assertEqual(4, len(dialog_command))
+    self.assertEqual(5, len(dialog_command))
     self.assertListEqual(['CreateKeyspace', '-sharding_column_name=test_id',
-                          '-sharding_column_type=BYTES', 'test_keyspace3'],
+                          '-sharding_column_type=BYTES', '-force=false',
+                          'test_keyspace3'],
                          dialog_command)
 
     create = dialog.find_element_by_id('vt-action')
