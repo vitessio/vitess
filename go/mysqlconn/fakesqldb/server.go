@@ -98,10 +98,7 @@ func New(t *testing.T) *DB {
 		connections:  make(map[uint32]*mysqlconn.Conn),
 	}
 
-	authServer := mysqlconn.NewAuthServerStatic()
-	authServer.Entries["user1"] = &mysqlconn.AuthServerStaticEntry{
-		Password: "password1",
-	}
+	authServer := &mysqlconn.AuthServerNone{}
 
 	// Start listening.
 	db.listener, err = mysqlconn.NewListener("unix", socketFile, authServer, db)

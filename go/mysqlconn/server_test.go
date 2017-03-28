@@ -134,11 +134,7 @@ func (th *testHandler) ComQuery(c *Conn, query string) (*sqltypes.Result, error)
 func TestServer(t *testing.T) {
 	th := &testHandler{}
 
-	authServer := NewAuthServerStatic()
-	authServer.Entries["user1"] = &AuthServerStaticEntry{
-		Password: "password1",
-		UserData: "userData1",
-	}
+	authServer := &AuthServerNone{ClearText: false}
 	l, err := NewListener("tcp", ":0", authServer, th)
 	if err != nil {
 		t.Fatalf("NewListener failed: %v", err)
@@ -271,12 +267,7 @@ func TestClearTextServer(t *testing.T) {
 
 	th := &testHandler{}
 
-	authServer := NewAuthServerStatic()
-	authServer.Entries["user1"] = &AuthServerStaticEntry{
-		Password: "password1",
-		UserData: "userData1",
-	}
-	authServer.ClearText = true
+	authServer := &AuthServerNone{ClearText: true}
 	l, err := NewListener("tcp", ":0", authServer, th)
 	if err != nil {
 		t.Fatalf("NewListener failed: %v", err)
@@ -360,10 +351,7 @@ func TestClearTextServer(t *testing.T) {
 func TestTLSServer(t *testing.T) {
 	th := &testHandler{}
 
-	authServer := NewAuthServerStatic()
-	authServer.Entries["user1"] = &AuthServerStaticEntry{
-		Password: "password1",
-	}
+	authServer := &AuthServerNone{ClearText: false}
 
 	// Create the listener, so we can get its host.
 	// Below, we are enabling --ssl-verify-server-cert, which adds

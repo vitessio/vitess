@@ -63,8 +63,8 @@ func GetAuthServer(name string) AuthServer {
 	return authServer
 }
 
-// newSalt returns a 20 character salt.
-func newSalt() ([]byte, error) {
+// NewSalt returns a 20 character salt.
+func NewSalt() ([]byte, error) {
 	salt := make([]byte, 20)
 	if _, err := rand.Read(salt); err != nil {
 		return nil, err
@@ -81,8 +81,8 @@ func newSalt() ([]byte, error) {
 	return salt, nil
 }
 
-// scramblePassword computes the hash of the password using 4.1+ method.
-func scramblePassword(salt, password []byte) []byte {
+// ScramblePassword computes the hash of the password using 4.1+ method.
+func ScramblePassword(salt, password []byte) []byte {
 	if len(password) == 0 {
 		return nil
 	}

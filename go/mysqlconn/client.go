@@ -512,7 +512,7 @@ func (c *Conn) writeHandshakeResponse41(capabilities uint32, salt []byte, charac
 	// FIXME(alainjobart) add multi statement, client found rows.
 
 	// Password encryption.
-	scrambledPassword := scramblePassword(salt, []byte(params.Pass))
+	scrambledPassword := ScramblePassword(salt, []byte(params.Pass))
 
 	length :=
 		4 + // Client capability flags.

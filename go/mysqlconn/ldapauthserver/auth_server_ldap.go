@@ -32,7 +32,8 @@ type AuthServerLdap struct {
 	RefreshSeconds time.Duration
 }
 
-func init() {
+// Init is public so it can be called from plugin_auth_ldap.go (go/cmd/vtgate)
+func Init() {
 	if *ldapAuthConfigFile == "" && *ldapAuthConfigString == "" {
 		log.Infof("Not configuring AuthServerLdap because mysql_ldap_auth_config_file and mysql_ldap_auth_config_string are empty")
 		return

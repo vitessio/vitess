@@ -22,27 +22,8 @@ import (
 var (
 	mysqlServerPort               = flag.Int("mysql_server_port", 0, "If set, also listen for MySQL binary protocol connections on this port.")
 	mysqlAuthServerImpl           = flag.String("mysql_auth_server_impl", "static", "Which auth server implementation to use.")
-	mysqlAuthServerStaticFile     = flag.String("mysql_auth_server_static_file", "", "JSON File to read the users/passwords from.")
-	mysqlAuthServerStaticString   = flag.String("mysql_auth_server_static_string", "", "JSON representation of the users/passwords config.")
 	mysqlAllowClearTextWithoutTLS = flag.Bool("mysql_allow_clear_text_without_tls", false, "If set, the server will allow the use of a clear text password over non-SSL connections.")
 )
-
-// Handles initializing the AuthServerStatic if necessary.
-func initAuthServerStatic() {
-	// Check parameters.
-	if *mysqlAuthServerStaticFile == "" && *mysqlAuthServerStaticString == "" {
-		// Not configured, nothing to do.
-		log.Infof("Not configuring AuthServerStatic, as mysql_auth_server_static_file and mysql_auth_server_static_string are empty")
-		return
-	}
-	if *mysqlAuthServerStaticFile != "" && *mysqlAuthServerStaticString != "" {
-		// Both parameters specified, can only use one.
-		log.Fatalf("Both mysql_auth_server_static_file and mysql_auth_server_static_string specified, can only use one.")
-	}
-
-	// Create and register auth server.
-	mysqlconn.RegisterAuthServerStaticFromParams(*mysqlAuthServerStaticFile, *mysqlAuthServerStaticString)
-}
 
 // vtgateHandler implements the Listener interface.
 // It stores the Session in the ClientData of a Connection, if a transaction
@@ -108,8 +89,10 @@ func init() {
 			return
 		}
 
-		// Initialize the static config AuthServer if necessary.
-		initAuthServerStatic()
+		// Initialize registered AuthServer implementations (or other plugins)
+		for _, initFn := range pluginInitializers {
+			initFn()
+		}
 		authServer := mysqlconn.GetAuthServer(*mysqlAuthServerImpl)
 
 		// Create a Listener.
@@ -132,4 +115,11 @@ func init() {
 			listener.Close()
 		}
 	})
+}
+
+var pluginInitializers []func()
+
+// RegisterPluginInitializer lets plugins register themselves to be init'ed at servenv.OnRun-time
+func RegisterPluginInitializer(initializer func()) {
+	pluginInitializers = append(pluginInitializers, initializer)
 }

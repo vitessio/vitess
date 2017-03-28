@@ -355,7 +355,7 @@ func (c *Conn) writeHandshakeV10(serverVersion string, authServer AuthServer, en
 		// salt will end up being unused, but we can't send
 		// just zero, as the client will still use it, and
 		// that may leak crypto information.
-		salt, err = newSalt()
+		salt, err = NewSalt()
 	} else {
 		salt, err = authServer.Salt()
 	}
