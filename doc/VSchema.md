@@ -76,6 +76,8 @@ The previously described properties are mostly orthogonal. Combining them gives 
 
 Of the above categories, `Functional Unique` and `Lookup Unique Unowned` Vindexes can be Primary. This is because those are the only ones that are unique and have the column to keyspace id mapping pre-established. This is required because the Primary Vindex is responsible for assigning the keyspace id for a row when it's created. However, it's generally not recommended to use a Lookup vindex as Primary because it's too slow for resharding.
 
+*If absolutely unavoidable, you can use a Lookup Vindex as Primary. In such cases, it's recommended that you add a `keyspace id` column to such tables. While resharding, Vitess can use that column to efficiently compute the target shard. You can even configure Vitess to auto-populate that column on inserts. This is done using the reverse map feature explained below.*
+
 ### How vindexes are used
 
 #### Cost
@@ -88,28 +90,22 @@ Vindexes have costs. For routing a query, the Vindex with the lowest cost is cho
 
 While analyzing a query, if multiple vindexes qualify, the one with the lowest cost is chosen to determine the route.
 
-#### Selects
+#### Select
 
 In the case of a simple select, Vitess scans the where clause to match references to Vindex columns and chooses the best one to use. If there's no match and the query is simple wihtout complex constructs like aggreates, etc, it's sent to all shards.
 
 Vitess can handle more complex queries. For now, you can refer to the [design doc](https://github.com/youtube/vitess/blob/master/doc/V3HighLevelDesign.md) on how it handles them.
 
-#### Inserts
+#### Insert
 
 * The Primary Vindex is used to generate a keyspace id.
 * The keyspace id is validated against the rest of the Vindexes on the table. There must exist a mapping from the column value to the keyspace id.
 * If a column value was not provided for a Vindex and the Vindex is capable of reverse mapping a keyspace id to an input value, that function is used to auto-fill the column. If there is no reverse map, it's an error.
 
-#### Updates
+#### Update
 
 The where clause is used to route the update. Changing the value of a Vindex column is unsupported because this may result in a row being migrated from one shard to another.
 
 #### Delete
 
 If the table owns lookup vindexes, then the rows to be deleted are first read and the associated Vindex entries are deleted. Following this, DML is routed according to the where clause.
-
-## Advanced topics
-
-A Unique Vindex yields at the most one `keyspace id` per input. The reverse is not necessary. Different inputs are allowed to yield the same keyspace id. This is slightly different from a database UNIQUE index that requires input values to also be unique. One can create vindexes that are unique both ways. If so, Vitess can exploit this property to auto-fill values during inserts.
-
-For tables that don't own a Lookup Vindex, the entries must first be created by inserting the corresponding row in the owner table. This also means that a Lookup Vindex can be the Primary Vindex for a table that does not own it. However, this is not practical for resharding. So, there's a soft enforcement against this usage.
