@@ -115,7 +115,7 @@ If the table owns lookup vindexes, then the rows to be deleted are first read an
 
 ### Predefined Vindexes
 
-Vitess provides the following predefined Vindexs:
+Vitess provides the following predefined Vindexes:
 
 Name | Type | Description | Primary | Reversible | Cost
 ---- | ---- | ----------- | ------- | ---------- | ----
@@ -124,3 +124,8 @@ binary_md5 | Functional Unique | md5 hash | Yes | No | 1
 hash | Functional Unique | 3DES null-key hash | Yes | Yes | 1
 lookup | Lookup NonUnique | Lookup table non-unique values | No | Yes | 20
 lookup_unique | Lookup Unique | Lookup table unique values | If unowned | Yes | 10
+numeric | Functional Unique | Identity | Yes | Yes | 0
+mumeric_static_map | Functional Unique | A JSON file that maps input values to keyspace ids | Yes | No | 1
+unicode_loose_md5 | Functional Unique | Case-insensitive (UCA level 1) md5 hash | Yes | No | 1
+
+Custom vindexes can also be plugged in as needed.
