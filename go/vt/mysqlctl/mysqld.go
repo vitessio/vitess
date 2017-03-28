@@ -626,7 +626,7 @@ func (mysqld *Mysqld) RefreshConfig() error {
 		return fmt.Errorf("Could not read updated file %v: %v", f.Name(), err)
 	}
 
-	if res := bytes.Compare(existing, updated); res == 0 {
+	if bytes.Equal(existing, updated) {
 		log.Infof("No changes to my.cnf. Continuing.")
 		return nil
 	}
