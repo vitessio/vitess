@@ -70,9 +70,9 @@ Functional Vindexes can be also be shared. However, there's no concept of owners
 The previously described properties are mostly orthogonal. Combining them gives rise to the following valid categories:
 
 * **Functional Unique**: This is the most popular category because it's the one best suited to be a Primary Vindex.
-* **Functional NonUnique**: This is the least popular category. A bloom filter would likely fall in this category.
-* **Lookup Unique Owned**: This gets used for optimizing high QPS queries that don't use the Primary Vindex columns in their where clause. There is a price to pay: An extra write to the lookup table for insert and delete operations, and an extra lookup for read operations. However, it's worth it if you don't want these high QPS queries to hit all shards.
-* **Lookup Unique Unowned**: This category is used as an optimization if there are multiple tables that share the same foreign key. This category is similar to a `Functional Unique` Vindex because the mapping is pre-established.
+* **Functional NonUnique**: There are currently no use cases that need this category.
+* **Lookup Unique Owned**: This gets used for optimizing high QPS queries that don't use the Primary Vindex columns in their where clause. There is a price to pay: You incur an extra write to the lookup table for insert and delete operations, and an extra lookup for read operations. However, it's worth it if you don't want these high QPS queries to hit all shards.
+* **Lookup Unique Unowned**: This category is used as an optimization as described in the Shared Vindexes section.
 * **Lookup NonUnique Owned**: This gets used for high QPS queries on columns that are non-unique.
 * **Lookup NonUnique Unowned**: You would rarely have to use this category because it's unlikely that you'll be using a column as foreign key that's not unique within a shard. But it's theoretically possible.
 
