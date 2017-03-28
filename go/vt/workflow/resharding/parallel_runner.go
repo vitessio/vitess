@@ -1,7 +1,6 @@
 package resharding
 
 import (
-	"errors"
 	"fmt"
 	"path"
 	"strings"
@@ -63,13 +62,13 @@ type ParallelRunner struct {
 // NewParallelRunner returns a new ParallelRunner.
 func NewParallelRunner(ctx context.Context, rootUINode *workflow.Node, cp *CheckpointWriter, tasks []*workflowpb.Task, executeFunc func(context.Context, *workflowpb.Task) error, concurrencyLevel level, enableApprovals bool) *ParallelRunner {
 	if len(tasks) < 1 {
-		log.Fatal(errors.New("BUG: No tasks passed into ParallelRunner"))
+		log.Fatal("BUG: No tasks passed into ParallelRunner")
 	}
 
 	phaseID := path.Dir(tasks[0].Id)
 	phaseUINode, err := rootUINode.GetChildByPath(phaseID)
 	if err != nil {
-		panic(fmt.Errorf("BUG: nodepath %v not found", phaseID))
+		log.Fatalf("BUG: nodepath %v not found", phaseID)
 	}
 
 	p := &ParallelRunner{
@@ -102,7 +101,7 @@ func (p *ParallelRunner) Run() error {
 	case Parallel:
 		parallelNum = len(p.tasks)
 	default:
-		panic(fmt.Sprintf("BUG: Invalid concurrency level: %v", p.concurrencyLevel))
+		log.Fatalf("BUG: Invalid concurrency level: %v", p.concurrencyLevel)
 	}
 	// sem is a channel used to control the level of concurrency.
 	sem := make(chan bool, parallelNum)
@@ -113,15 +112,14 @@ func (p *ParallelRunner) Run() error {
 		}
 
 		sem <- true
-		wg.Add(1)
 		if p.enableApprovals && !isTaskRunning(task) {
 			p.waitForApproval(i)
 		}
-
+		wg.Add(1)
 		go func(t *workflowpb.Task) {
+			defer wg.Done()
 			p.setUIMessage(fmt.Sprintf("Launch task: %v.", t.Id))
 			defer func() { <-sem }()
-			defer wg.Done()
 			p.executeTask(t)
 		}(task)
 	}
@@ -225,10 +223,10 @@ func (p *ParallelRunner) triggerRetry(taskID string) error {
 	// Disable the retry action and synchronize for retrying the job.
 	node, err := p.rootUINode.GetChildByPath(taskID)
 	if err != nil {
-		panic(fmt.Sprintf("BUG: node on child path %v not found", taskID))
+		log.Fatalf("BUG: node on child path %v not found", taskID)
 	}
 	if len(node.Actions) == 0 {
-		panic(fmt.Sprintf("BUG: node actions should not be empty"))
+		log.Fatal("BUG: node actions should not be empty")
 	}
 	node.Actions = []*workflow.Action{}
 	node.BroadcastChanges(false /* updateChildren */)
@@ -239,7 +237,7 @@ func (p *ParallelRunner) triggerRetry(taskID string) error {
 func (p *ParallelRunner) addRetryAction(taskID string) chan struct{} {
 	node, err := p.rootUINode.GetChildByPath(taskID)
 	if err != nil {
-		panic(fmt.Sprintf("BUG: node on child path %v not found", taskID))
+		log.Fatalf("BUG: node on child path %v not found", taskID)
 	}
 
 	p.mu.Lock()
@@ -247,7 +245,7 @@ func (p *ParallelRunner) addRetryAction(taskID string) chan struct{} {
 
 	// Register the channel for synchronizing retrying job.
 	if _, ok := p.retryActionRegistry[taskID]; ok {
-		panic(fmt.Sprintf("BUG: duplicate retry action for node: %v", taskID))
+		log.Fatalf("BUG: duplicate retry action for node: %v", taskID)
 	}
 	retryChannel := make(chan struct{})
 	p.retryActionRegistry[taskID] = retryChannel
@@ -383,7 +381,7 @@ func (p *ParallelRunner) clearPhaseActions() {
 func (p *ParallelRunner) setFinishUIMessage(taskID string) {
 	taskNode, err := p.rootUINode.GetChildByPath(taskID)
 	if err != nil {
-		panic(fmt.Errorf("BUG: nodepath %v not found", taskID))
+		log.Fatalf("BUG: nodepath %v not found", taskID)
 	}
 
 	p.mu.Lock()

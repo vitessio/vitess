@@ -16,7 +16,7 @@ Result mismatch:
 '[[2 1] [1 2]]'
 RowsAffected mismatch: 2, want 1
 Rewritten mismatch:
-'[select eid, id from vitess_a where 1 != 1 union select eid, id from vitess_b where 1 != 1 select /* fail */ eid, id from vitess_a union select eid, id from vitess_b]' does not match
+'[select eid, id from vitess_a where 1 != 1 union select eid, id from vitess_b where 1 != 1 select /* fail */ eid, id from vitess_a union select eid, id from vitess_b limit 10001]' does not match
 '[select eid id from vitess_a where 1 != 1 union select eid, id from vitess_b where 1 != 1 select /* fail */ eid, id from vitess_a union select eid, id from vitess_b]'
 Plan mismatch: PASS_SELECT, want aa`
 
@@ -57,7 +57,7 @@ func TestNocacheCases(t *testing.T) {
 			},
 			Rewritten: []string{
 				"select eid, id from vitess_a where 1 != 1 union select eid, id from vitess_b where 1 != 1",
-				"select /* union */ eid, id from vitess_a union select eid, id from vitess_b",
+				"select /* union */ eid, id from vitess_a union select eid, id from vitess_b limit 10001",
 			},
 			RowsAffected: 2,
 		},
@@ -70,7 +70,7 @@ func TestNocacheCases(t *testing.T) {
 			},
 			Rewritten: []string{
 				"select eid, id from vitess_a where 1 != 1 union select eid, id from vitess_b where 1 != 1 union select eid, id from vitess_d where 1 != 1",
-				"select /* double union */ eid, id from vitess_a union select eid, id from vitess_b union select eid, id from vitess_d",
+				"select /* double union */ eid, id from vitess_a union select eid, id from vitess_b union select eid, id from vitess_d limit 10001",
 			},
 			RowsAffected: 2,
 		},

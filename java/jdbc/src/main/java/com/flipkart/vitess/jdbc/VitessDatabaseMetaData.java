@@ -1,12 +1,12 @@
 package com.flipkart.vitess.jdbc;
 
-import com.flipkart.vitess.util.Constants;
-
 import java.sql.DatabaseMetaData;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.SQLFeatureNotSupportedException;
 import java.util.logging.Logger;
+
+import com.flipkart.vitess.util.Constants;
 
 /**
  * Created by harshit.gangal on 25/01/16.
@@ -85,7 +85,7 @@ public abstract class VitessDatabaseMetaData implements DatabaseMetaData {
     }
 
     public boolean supportsMixedCaseIdentifiers() throws SQLException {
-        return false;
+        return !connection.getDbProperties().getUseCaseInsensitiveComparisons();
     }
 
     public boolean storesUpperCaseIdentifiers() throws SQLException {
@@ -93,15 +93,15 @@ public abstract class VitessDatabaseMetaData implements DatabaseMetaData {
     }
 
     public boolean storesLowerCaseIdentifiers() throws SQLException {
-        return false;
+        return connection.getDbProperties().getStoresLowerCaseTableName();
     }
 
     public boolean storesMixedCaseIdentifiers() throws SQLException {
-        return false;
+        return !connection.getDbProperties().getStoresLowerCaseTableName();
     }
 
     public boolean supportsMixedCaseQuotedIdentifiers() throws SQLException {
-        return false;
+        return !connection.getDbProperties().getUseCaseInsensitiveComparisons();
     }
 
     public boolean storesUpperCaseQuotedIdentifiers() throws SQLException {
@@ -109,11 +109,11 @@ public abstract class VitessDatabaseMetaData implements DatabaseMetaData {
     }
 
     public boolean storesLowerCaseQuotedIdentifiers() throws SQLException {
-        return false;
+        return connection.getDbProperties().getStoresLowerCaseTableName();
     }
 
     public boolean storesMixedCaseQuotedIdentifiers() throws SQLException {
-        return false;
+        return !connection.getDbProperties().getStoresLowerCaseTableName();
     }
 
     public String getNumericFunctions() throws SQLException {
