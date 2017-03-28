@@ -27,7 +27,6 @@ import (
 	"time"
 
 	"bytes"
-	"crypto/sha256"
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/sqldb"
@@ -618,13 +617,13 @@ func (mysqld *Mysqld) RefreshConfig() error {
 		return fmt.Errorf("Could not initConfig in %v: %v", f.Name(), err)
 	}
 
-	existing, err := hashFile(mysqld.config.path)
+	existing, err := ioutil.ReadFile(mysqld.config.path)
 	if err != nil {
-		return fmt.Errorf("Could not hash existing file %v: %v", mysqld.config.path, err)
+		return fmt.Errorf("Could not read existing file %v: %v", mysqld.config.path, err)
 	}
-	updated, err := hashFile(f.Name())
+	updated, err := ioutil.ReadFile(f.Name())
 	if err != nil {
-		return fmt.Errorf("Could not hash updated file %v: %v", f.Name(), err)
+		return fmt.Errorf("Could not read updated file %v: %v", f.Name(), err)
 	}
 
 	if res := bytes.Compare(existing, updated); res == 0 {
@@ -632,7 +631,7 @@ func (mysqld *Mysqld) RefreshConfig() error {
 		return nil
 	}
 
-	backupPath := mysqld.config.path + ".last"
+	backupPath := mysqld.config.path + ".previous"
 	err = os.Rename(mysqld.config.path, backupPath)
 	if err != nil {
 		return fmt.Errorf("Could not back up existing %v: %v", mysqld.config.path, err)
@@ -641,23 +640,9 @@ func (mysqld *Mysqld) RefreshConfig() error {
 	if err != nil {
 		return fmt.Errorf("Could not move %v to %v: %v", f.Name(), mysqld.config.path, err)
 	}
-	log.Infof("Updated my.cnf. Back of previous version available in %v", backupPath)
+	log.Infof("Updated my.cnf. Backup of previous version available in %v", backupPath)
 
 	return nil
-}
-
-func hashFile(path string) ([]byte, error) {
-	f, err := os.Open(path)
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
-	hasher := sha256.New()
-	if _, err := io.Copy(hasher, f); err != nil {
-		return nil, err
-	}
-	var res []byte
-	return hasher.Sum(res), nil
 }
 
 // ReinitConfig updates the config file as if Mysqld is initializing. At the
