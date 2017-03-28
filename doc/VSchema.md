@@ -240,3 +240,56 @@ VSchema:
   }
 }
 ```
+
+Let's add a secondary vindex on the `name` column of user. This requires a backing table, which we'll also add as unsharded table to the lookup database:
+
+Schema:
+``` sql
+# lookup keyspace
+create table name_user_idx(name varchar(128), user_id bigint, primary key(name, user_id));
+```
+
+VSchema:
+``` json
+// lookup keyspace
+{
+  "sharded": false,
+  "tables": {
+    "name_user_idx": {}
+  }
+}
+
+// user keyspace
+{
+  "sharded": true,
+  "vindexes": {
+    "name_user_idx": {
+      "type": "lookup_hash",
+      "params": {
+        "table": "name_user_idx",
+        "from": "name",
+        "to": "user_id"
+      },
+      "owner": "user"
+    },
+  "tables": {
+    "user": {
+      "column_vindexes": [
+        {
+          "column": "name",
+          "name": "name_user_idx"
+        }
+      ]
+    }
+  }
+}
+```
+
+Check list:
+* Create physical `name_user_idx` table in lookup database.
+* Define a routing for it in the lookup VSchema.
+* Define a Vindex as type `lookup_hash` that points to it. Note that the `params` match the table name and columns.
+* Define the owner for the Vindex as the `user` table.
+* Specify that `name` uses the Vindex.
+
+These steps have to be currently performed manually. However, extended DDLs backed by improved automation will simplify these tasks in the future.
