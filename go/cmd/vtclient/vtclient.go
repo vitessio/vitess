@@ -11,6 +11,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"sort"
 	"sync"
 	"time"
 
@@ -20,7 +21,10 @@ import (
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vitessdriver"
+	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateconn"
+
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 var (
@@ -102,11 +106,7 @@ func main() {
 	defer logutil.Flush()
 
 	qr, err := run()
-	if err != nil {
-		log.Exit(err)
-	}
-
-	if *jsonOutput {
+	if *jsonOutput && qr != nil {
 		data, err := json.MarshalIndent(qr, "", "  ")
 		if err != nil {
 			log.Exitf("cannot marshal data: %v", err)
@@ -116,6 +116,10 @@ func main() {
 	}
 
 	qr.print()
+
+	if err != nil {
+		log.Exit(err)
+	}
 }
 
 func run() (*results, error) {
@@ -153,7 +157,7 @@ func run() (*results, error) {
 }
 
 func execMultiDml(db *sql.DB, sql string) (*results, error) {
-	all := &results{}
+	all := newResults()
 	ec := concurrency.FirstErrorRecorder{}
 	wg := sync.WaitGroup{}
 
@@ -169,7 +173,8 @@ func execMultiDml(db *sql.DB, sql string) (*results, error) {
 				all.merge(qr)
 				if err != nil {
 					ec.RecordError(err)
-					break
+					all.recordError(err)
+					// We keep going and do not return early purpose.
 				}
 			}
 		}()
@@ -184,17 +189,17 @@ func execDml(db *sql.DB, sql string) (*results, error) {
 	start := time.Now()
 	tx, err := db.Begin()
 	if err != nil {
-		return nil, fmt.Errorf("BEGIN failed: %v", err)
+		return nil, vterrors.Errorf(vterrors.Code(err), "BEGIN failed: %v", err)
 	}
 
 	result, err := tx.Exec(sql, []interface{}(*bindVariables)...)
 	if err != nil {
-		return nil, fmt.Errorf("failed to execute DML: %v", err)
+		return nil, vterrors.Errorf(vterrors.Code(err), "failed to execute DML: %v", err)
 	}
 
 	err = tx.Commit()
 	if err != nil {
-		return nil, fmt.Errorf("COMMIT failed: %v", err)
+		return nil, vterrors.Errorf(vterrors.Code(err), "COMMIT failed: %v", err)
 	}
 
 	rowsAffected, err := result.RowsAffected()
@@ -210,7 +215,7 @@ func execNonDml(db *sql.DB, sql string) (*results, error) {
 	start := time.Now()
 	rows, err := db.Query(sql, []interface{}(*bindVariables)...)
 	if err != nil {
-		return nil, fmt.Errorf("client error: %v", err)
+		return nil, vterrors.Errorf(vterrors.Code(err), "client error: %v", err)
 	}
 	defer rows.Close()
 
@@ -258,6 +263,18 @@ type results struct {
 	lastInsertID       int64
 	duration           time.Duration
 	cumulativeDuration time.Duration
+
+	// Multi DML mode: Track total error count, error count per code and the first error.
+	totalErrorCount int
+	errorCount      map[vtrpcpb.Code]int
+	firstError      map[vtrpcpb.Code]error
+}
+
+func newResults() *results {
+	return &results{
+		errorCount: make(map[vtrpcpb.Code]int),
+		firstError: make(map[vtrpcpb.Code]error),
+	}
 }
 
 // merge aggregates "other" into "r".
@@ -278,7 +295,24 @@ func (r *results) merge(other *results) {
 	r.cumulativeDuration += other.duration
 }
 
+func (r *results) recordError(err error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	r.totalErrorCount++
+	code := vterrors.Code(err)
+	r.errorCount[code]++
+
+	if r.errorCount[code] == 1 {
+		r.firstError[code] = err
+	}
+}
+
 func (r *results) print() {
+	if r == nil {
+		return
+	}
+
 	table := tablewriter.NewWriter(os.Stdout)
 	table.SetHeader(r.Fields)
 	table.SetAutoFormatHeaders(false)
@@ -287,5 +321,29 @@ func (r *results) print() {
 	fmt.Printf("%v row(s) affected (%v, cum: %v)\n", r.rowsAffected, r.duration, r.cumulativeDuration)
 	if r.lastInsertID != 0 {
 		fmt.Printf("Last insert ID: %v\n", r.lastInsertID)
+	}
+
+	if r.totalErrorCount == 0 {
+		return
+	}
+
+	fmt.Printf("%d error(s) were returned. Number of errors by error code:\n\n", r.totalErrorCount)
+	// Sort different error codes by count (descending).
+	type errorCounts struct {
+		code  vtrpcpb.Code
+		count int
+	}
+	var counts []errorCounts
+	for code, count := range r.errorCount {
+		counts = append(counts, errorCounts{code, count})
+	}
+	sort.Slice(counts, func(i, j int) bool { return counts[i].count >= counts[j].count })
+	for _, c := range counts {
+		fmt.Printf("%- 30v= % 5d\n", c.code, c.count)
+	}
+
+	fmt.Printf("\nFirst error per code:\n\n")
+	for code, err := range r.firstError {
+		fmt.Printf("Code:  %v\nError: %v\n\n", code, err)
 	}
 }

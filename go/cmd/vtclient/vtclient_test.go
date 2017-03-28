@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/youtube/vitess/go/vt/vttest"
@@ -67,6 +68,7 @@ func TestVtclient(t *testing.T) {
 	queries := []struct {
 		args         []string
 		rowsAffected int64
+		errMsg       string
 	}{
 		{
 			args: []string{"SELECT * FROM table1"},
@@ -96,6 +98,10 @@ func TestVtclient(t *testing.T) {
 				"SELECT * FROM table1"},
 			rowsAffected: 0,
 		},
+		{
+			args:   []string{"SELECT * FROM nonexistent"},
+			errMsg: "table nonexistent not found in schema",
+		},
 	}
 
 	// Change ErrorHandling from ExitOnError to panicking.
@@ -107,10 +113,16 @@ func TestVtclient(t *testing.T) {
 		os.Args = append(os.Args, q.args...)
 
 		results, err := run()
+		if q.errMsg != "" {
+			if got, want := err.Error(), q.errMsg; !strings.Contains(got, want) {
+				t.Fatalf("vtclient %v returned wrong error: got = %v, want contains = %v", os.Args[1:], got, want)
+			}
+			return
+		}
+
 		if err != nil {
 			t.Fatalf("vtclient %v failed: %v", os.Args[1:], err)
 		}
-
 		if got, want := results.rowsAffected, q.rowsAffected; got != want {
 			t.Fatalf("wrong rows affected for query: %v got = %v, want = %v", os.Args[1:], got, want)
 		}
