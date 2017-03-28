@@ -5,7 +5,6 @@
 package vttest
 
 import (
-	"fmt"
 	"testing"
 	"time"
 
@@ -48,22 +47,13 @@ func TestVitess(t *testing.T) {
 			return
 		}
 	}()
-	if hdl.Data == nil {
-		t.Error("map is nil")
-		return
-	}
-	portName := "port"
-	if vtgateProtocol() == "grpc" {
-		portName = "grpc_port"
-	}
-	fport, ok := hdl.Data[portName]
-	if !ok {
-		t.Errorf("port %v not found in map", portName)
-		return
-	}
-	port := int(fport.(float64))
 	ctx := context.Background()
-	conn, err := vtgateconn.DialProtocol(ctx, vtgateProtocol(), fmt.Sprintf("localhost:%d", port), 5*time.Second, "")
+	vtgateAddr, err := hdl.VtgateAddress()
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	conn, err := vtgateconn.DialProtocol(ctx, vtgateProtocol(), vtgateAddr, 5*time.Second, "")
 	if err != nil {
 		t.Error(err)
 		return

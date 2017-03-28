@@ -38,6 +38,25 @@ type Handle struct {
 	dbname string
 }
 
+// VtgateAddress returns the address under which vtgate is reachable e.g.
+// "localhost:15991".
+// An error is returned if the data is not available.
+func (hdl *Handle) VtgateAddress() (string, error) {
+	if hdl.Data == nil {
+		return "", errors.New("Data field in Handle is empty")
+	}
+	portName := "port"
+	if vtgateProtocol() == "grpc" {
+		portName = "grpc_port"
+	}
+	fport, ok := hdl.Data[portName]
+	if !ok {
+		return "", fmt.Errorf("port %v not found in map", portName)
+	}
+	port := int(fport.(float64))
+	return fmt.Sprintf("localhost:%d", port), nil
+}
+
 // VitessOption is the type for generic options to be passed in to LaunchVitess.
 type VitessOption struct {
 	// beforeRun is executed before we start run_local_database.py.
