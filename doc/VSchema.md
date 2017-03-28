@@ -86,9 +86,10 @@ Vindexes have costs. For routing a query, the Vindex with the lowest cost is cho
 
 Vindex Type | Cost
 ----------- | ----
-Indentity Vindex | 0
-Functional Vindex | 1
-Lookup Vindex | 2
+Indentity | 0
+Functional | 1
+Lookup Unique | 10
+Lookup NonUnique | 20
 
 While analyzing a query, if multiple vindexes qualify, the one with the lowest cost is chosen to determine the route.
 
@@ -111,3 +112,15 @@ The where clause is used to route the update. Changing the value of a Vindex col
 #### Delete
 
 If the table owns lookup vindexes, then the rows to be deleted are first read and the associated Vindex entries are deleted. Following this, DML is routed according to the where clause.
+
+### Predefined Vindexes
+
+Vitess provides the following predefined Vindexs:
+
+Name | Type | Description | Primary | Reversible | Cost
+---- | ---- | ----------- | ------- | ---------- | ----
+binary | Functional Unique | Identity | Yes | Yes | 0
+binary_md5 | Functional Unique | md5 hash | Yes | No | 1
+hash | Functional Unique | 3DES null-key hash | Yes | Yes | 1
+lookup | Lookup NonUnique | Lookup table non-unique values | No | Yes | 20
+lookup_unique | Lookup Unique | Lookup table unique values | If unowned | Yes | 10
