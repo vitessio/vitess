@@ -49,22 +49,11 @@ A NonUnique Vindex is analogous to a database non-unique index. It's a secondary
 
 #### Functional and Lookup Vindex
 
-Vindexes can be Functional or Lookup. For this concept, there is no direct analogy with respect to a relational database.
-
 A Functional Vindex is one where the keyspace id can be computed by just looking at the input value. In contrast, a Lookup Vindex is one that gives you the ability to create an association between the input value and a keyspace id, and recall it later when needed.
 
-Typically, the Primary Vindex is Functional. In some cases, it's the identity function where the input value is also the kesypace id. However, one could also choose other algorithms like hashing or mod functions. The separation of the mapping function from the sharding scheme makes Vitess uniquely versatile.
+Typically, the Primary Vindex is Functional. In some cases, it's the identity function where the input value is also the kesypace id. However, one could also choose other algorithms like hashing or mod functions.
 
-A Lookup Vindex is typically defined against a different column than the Primary Vindex, and is usually backed by a lookup table. This is analogous to the traditional database index, except that it's cross-shard. At the time of insert, the computed keyspace id of the row is stored in the lookup table against the input value of that column.
-
-#### Orthogonal concepts
-
-A Vindex being Unique or NonUnique is orthogonal to its being Functional or Lookup. This essentially yields four types of vindexes:
-
-* **Functional Unique**: This is the most common vindex because most sharding keys use this. In most storage systems, this is predefined. However, Vitess lets you choose a functional Vindex that best suits your needs. If necessary, you can also define your own. A Primary Vindex must be of this category.
-* **Functional NonUnique**: This is a less common use case. Bloom filters fall in this category.
-* **Lookup Unique**: This is typically a lookup table which can be sharded or unsharded. However, you could choose to define your own Lookup Vindex that's backed by a different data store.
-* **Lookup NonUnique**: This is the extension of a non-unique database index.
+A Lookup Vindex is usually backed by a lookup table. This is analogous to the traditional database index, except that it's cross-shard. At the time of insert, the computed keyspace id of the row is stored in the lookup table against the input value of that column.
 
 #### Shared Vindexes
 
@@ -73,6 +62,16 @@ Relational databases encourage normalization, which lets you split data into dif
 In a sharded environment, it's often beneficial to keep those rows in the same shard. If a cross-shard Lookup Vindex was created for each of those tables, you'd find that the backing tables would actually be identical. In such cases, Vitess lets you share a single Lookup Vindex for multiple tables. Of these, one of them is designated as the owner: A row created on the owner table results in the lookup entry created, and a delete causes the entry to be deleted. Vitess currently does not support cascading deletes. This is because the application is capable of performing this more efficiently.
 
 If a table has a Lookup Vindex it does not own, it's treated like a Functional Vindex: the keysapce id is instead used to verify integrity.
+
+#### Orthogonal concepts
+
+The previously described properties are mostly orthogonal. Combining them gives rise to the following categories:
+
+* **Functional Unique**: This is the most common vindex because most sharding keys use this. In most storage systems, this is predefined. However, Vitess lets you choose a functional Vindex that best suits your needs. If necessary, you can also define your own. A Primary Vindex must be of this category.
+* **Functional NonUnique**: This is a less common use case. Bloom filters fall in this category.
+* **Lookup Unique Owned**: This is typically a lookup table which can be sharded or unsharded. However, you could choose to define your own Lookup Vindex that's backed by a different data store. If a Vindex is owned by a table, an insert causes an association to be created between the column value and the keyspace id. This implies that the keyspace id for the row is already known. Since the Primary Vindex is responsible for computing this, an Owned Lookup Vindex cannot be a Primary Vindex.
+* **Lookup Unique Unowned**: For an unowned lookup Vindex, the association from column value to keyspace id was supposed to be created by the owner table and is expected to already exist at the time of insertion. This means that a Unique Lookup Vindex that's not owned by a table can be the Primary Vindex. Although this is possible, it's generally not recommend as it may not perform well during resharding. If you must, then it's recommended that you also create a column with a Functional Vindex. This could be the identity function, and since Vitess knows the keyspace id, it's capable of auto-populating the value, which can then be efficiently used during resharding.
+* **Lookup NonUnique Owned/Unowned**: This is the extension of a non-unique database index. Most NonUnique Lookup Vindexes are owned. It's generally rare to see tables sharing such Vindexes.
 
 ## Advanced concepts
 
