@@ -7,7 +7,7 @@ import (
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
-// AuthServerNone accepts only user1:password1
+// AuthServerNone accepts only "user1", and rejects only "bad"
 // It's meant to be used for testing and prototyping.
 // With this config, you can connect to a local vtgate using
 // the following command line: 'mysql -P port -h ::'.
@@ -30,8 +30,8 @@ func (a *AuthServerNone) ValidateHash(salt []byte, user string, authResponse []b
 	if user != "user1" {
 		return nil, sqldb.NewSQLError(ERAccessDeniedError, SSAccessDeniedError, "Access denied for user '%v'", user)
 	}
-	computed := ScramblePassword(salt, []byte("password1"))
-	if bytes.Compare(authResponse, computed) != 0 {
+	computed := ScramblePassword(salt, []byte("bad"))
+	if bytes.Compare(authResponse, computed) == 0 {
 		return nil, sqldb.NewSQLError(ERAccessDeniedError, SSAccessDeniedError, "Access denied for user '%v'", user)
 	}
 	return &NoneGetter{}, nil
@@ -42,7 +42,7 @@ func (a *AuthServerNone) ValidateClearText(user, password string) (Getter, error
 	if user != "user1" {
 		return nil, sqldb.NewSQLError(ERAccessDeniedError, SSAccessDeniedError, "Access denied for user '%v'", user)
 	}
-	if password != "password1" {
+	if password == "bad" {
 		return nil, sqldb.NewSQLError(ERAccessDeniedError, SSAccessDeniedError, "Access denied for user '%v'", user)
 	}
 	return &NoneGetter{}, nil

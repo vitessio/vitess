@@ -336,7 +336,7 @@ func TestClearTextServer(t *testing.T) {
 	}
 
 	// Change password, make sure server rejects us.
-	params.Pass = ""
+	params.Pass = "bad"
 	output, ok = runMysql(t, params, sql)
 	if ok {
 		t.Fatalf("mysql should have failed but returned: %v", output)
