@@ -1,4 +1,5 @@
-This guide shows you an example about how to apply range-based resharding
+
+This guide shows you an example about how to apply range-based sharding
 process in an existing unsharded Vitess [keyspace](http://vitess.io/overview/concepts.html#keyspace)
 using the horizontal resharding workflow. In this example, we will reshard
 from 1 shard "0" into 2 shards "-80" and "80-".
@@ -16,7 +17,7 @@ The horizontal resharding process mainly contains the following steps
     [more details](horizontal-sharding-workflow.html#details-in-waitforfilteredreplication-phase) 
 1.  Check copied data integrity using *vtworker* batch process in the mode
     to compare the source and destination data. (**Phase: SplitDiff**)
-1.  Migrate all the serving rdonly tablets in the orginal shards.
+1.  Migrate all the serving rdonly tablets in the original shards.
     (**Phase: MigrateServedTypeRdonly**)
 1.  Migrate all the serving replica tablets in the original shards.
     (**Phase: MigrateServedTypeReplica**)
@@ -219,7 +220,7 @@ vitess/examples/local$ ./zk-down.sh
 
 ## Reference
 You can checkout the old version tutorial [here](http://vitess.io/user-guide/horizontal-sharding.html).
-It walks you through the resharding proccess by manually executing commands.
+It walks you through the resharding process by manually executing commands.
 
 ### Details in SplitClone phase
 *vtworker* copies data from a paused snapshot. It will pause replication on
