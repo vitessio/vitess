@@ -84,9 +84,11 @@ Of the above categories, `Functional Unique` and `Lookup Unique Unowned` Vindexe
 
 Vindexes have costs. For routing a query, the Vindex with the lowest cost is chosen. The current costs are:
 
-* Indentity Vindex: 0
-* Functional Vindex: 1
-* Lookup Vindex: 2
+Vindex Type | Cost
+----------- | ----
+Indentity Vindex | 0
+Functional Vindex | 1
+Lookup Vindex | 2
 
 While analyzing a query, if multiple vindexes qualify, the one with the lowest cost is chosen to determine the route.
 
