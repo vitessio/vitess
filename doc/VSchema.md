@@ -192,7 +192,7 @@ VSchema:
 }
 ```
 
-Because Vindexes can be shared, the JSON requires them to be specified in a separte `vindexes` section, and then referenced by name from the `tables` section. The VSchema above simply states that `user_id` uses `hash` as Primary Vindex.
+Because Vindexes can be shared, the JSON requires them to be specified in a separte `vindexes` section, and then referenced by name from the `tables` section. The VSchema above simply states that `user_id` uses `hash` as Primary Vindex. The first Vindex of every table must be the Primary Vindex.
 
 Since user is a sharded table, it will be beneficial to tie it to a sequence. However, the sequence must be defined in the lookup (unsharded) keyspace. It's then referred from the user (sharded) keyspace. In this example, we're designating the user_id (Primary Vindex) column as the auto-increment.
 
