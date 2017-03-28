@@ -43,7 +43,7 @@ Vindexes come in many varieties. Some of them can be used as Primary Vindex, and
 
 #### Unique and NonUnique Vindex
 
-A Unique Vindex is one that yields at most one keyspace id for a given input. Knowing that a Vindex is Unique is useful because VTGate can push down some complex queries into VTTablet if it knows that the scope of that query cannot exceed a shard.
+A Unique Vindex is one that yields at most one keyspace id for a given input. Knowing that a Vindex is Unique is useful because VTGate can push down some complex queries into VTTablet if it knows that the scope of that query cannot exceed a shard. Uniqueness is also a prerequisite for a Vindex to be used as Primary Vindex.
 
 A NonUnique Vindex is analogous to a database non-unique index. It's a secondary index for searching by an alternate where clause. An input value could yield multiple keyspace ids, and rows could be matched from multiple shards. For example, if a table has a `name` colmun that allows duplicates, you can define a cross-shard NonUnique Vindex for it, and this will let you efficiently search for users that match a certain `name`.
 
@@ -65,9 +65,9 @@ Functional Vindexes can be also be shared. However, there's no concept of owners
 
 #### Orthogonal concepts
 
-The previously described properties are mostly orthogonal. Combining them gives rise to the following categories:
+The previously described properties are mostly orthogonal. Combining them gives rise to the following valid categories:
 
-* **Functional Unique**: This is the most common vindex because most sharding keys use this. In most storage systems, this is predefined. However, Vitess lets you choose a functional Vindex that best suits your needs. If necessary, you can also define your own. A Primary Vindex is usually of this type.
+* **Functional Unique**: This is the most common vindex because most sharding keys use this. In most storage systems, this is a preset algorithm. However, Vitess lets you choose a functional Vindex that best suits your needs. If necessary, you can also define your own. A Primary Vindex is usually of this type.
 * **Functional NonUnique**: This is a less common use case. Bloom filters fall in this category.
 * **Lookup Unique Owned**: This is typically a lookup table which can be sharded or unsharded. However, you could choose to define your own Lookup Vindex that's backed by a different data store. If a Vindex is owned by a table, an insert causes an association to be created between the column value and the keyspace id. This automatically implies that the mapping is not pre-established, which precludes this category from being a Primary Vindex.
 * **Lookup Unique Unowned**: For an unowned lookup Vindex, the association from column value to keyspace id was supposed to be created by the owner table and is expected to already exist at the time of insertion. This means that a Unique Lookup Vindex that's not owned by a table can be the Primary Vindex. Although this is possible, it's generally not recommend as it may not perform well during resharding. If you must, then it's recommended that you also create a column with a Functional Vindex. This could be the identity function, and since Vitess knows the keyspace id, it's capable of auto-populating the value, which can then be efficiently used during resharding.
