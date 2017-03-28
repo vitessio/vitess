@@ -45,6 +45,8 @@ Examples:
 	bindVariables = newBindvars("bind_variables", "bind variables as a json list")
 	keyspace      = flag.String("keyspace", "", "Keyspace of a specific keyspace/shard to target. If shard is also specified, disables v3. Otherwise it's the default keyspace to use.")
 	jsonOutput    = flag.Bool("json", false, "Output JSON instead of human-readable table")
+	parallel      = flag.Int("parallel", 1, "DMLs only: Number of threads executing the same query in parallel. Useful for simple load testing.")
+	count         = flag.Int("count", 1, "DMLs only: Number of times each thread executes the query. Useful for simple, sustained load testing.")
 )
 
 func init() {
@@ -144,10 +146,38 @@ func run() (*results, error) {
 	log.Infof("Sending the query...")
 
 	if sqlparser.IsDML(args[0]) {
-		return execDml(db, args[0])
+		return execMultiDml(db, args[0])
 	}
 
 	return execNonDml(db, args[0])
+}
+
+func execMultiDml(db *sql.DB, sql string) (*results, error) {
+	all := &results{}
+	ec := concurrency.FirstErrorRecorder{}
+	wg := sync.WaitGroup{}
+
+	start := time.Now()
+	for i := 0; i < *parallel; i++ {
+		wg.Add(1)
+
+		go func() {
+			defer wg.Done()
+
+			for j := 0; j < *count; j++ {
+				qr, err := execDml(db, sql)
+				all.merge(qr)
+				if err != nil {
+					ec.RecordError(err)
+					break
+				}
+			}
+		}()
+	}
+	wg.Wait()
+	all.duration = time.Since(start)
+
+	return all, ec.Error()
 }
 
 func execDml(db *sql.DB, sql string) (*results, error) {
@@ -228,6 +258,24 @@ type results struct {
 	lastInsertID       int64
 	duration           time.Duration
 	cumulativeDuration time.Duration
+}
+
+// merge aggregates "other" into "r".
+// This is only used for executing DMLs concurrently and repeatedly.
+// Therefore, "Fields" and "Rows" are not merged.
+func (r *results) merge(other *results) {
+	if other == nil {
+		return
+	}
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	r.rowsAffected += other.rowsAffected
+	if other.lastInsertID > r.lastInsertID {
+		r.lastInsertID = other.lastInsertID
+	}
+	r.cumulativeDuration += other.duration
 }
 
 func (r *results) print() {

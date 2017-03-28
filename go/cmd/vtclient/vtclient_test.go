@@ -82,11 +82,6 @@ func TestVtclient(t *testing.T) {
 			rowsAffected: 1,
 		},
 		{
-			args: []string{"-tablet_type", "master", "-parallel", "10", "-count", "10",
-				"UPDATE table1 SET i = (i + 1)"},
-			rowsAffected: 100,
-		},
-		{
 			args: []string{"-tablet_type", "master",
 				"SELECT * FROM table1"},
 			rowsAffected: 1,
