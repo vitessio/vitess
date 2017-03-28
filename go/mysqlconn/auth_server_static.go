@@ -1,4 +1,4 @@
-package staticauthserver
+package mysqlconn
 
 import (
 	"bytes"
@@ -8,7 +8,6 @@ import (
 
 	log "github.com/golang/glog"
 
-	"github.com/youtube/vitess/go/mysqlconn"
 	"github.com/youtube/vitess/go/sqldb"
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
@@ -34,7 +33,7 @@ type AuthServerStaticEntry struct {
 }
 
 // Init Handles initializing the AuthServerStatic if necessary.
-func Init() {
+func InitAuthServerStatic() {
 	// Check parameters.
 	if *mysqlAuthServerStaticFile == "" && *mysqlAuthServerStaticString == "" {
 		// Not configured, nothing to do.
@@ -79,7 +78,7 @@ func RegisterAuthServerStaticFromParams(file, str string) {
 	}
 
 	// And register the server.
-	mysqlconn.RegisterAuthServerImpl("static", authServerStatic)
+	RegisterAuthServerImpl("static", authServerStatic)
 }
 
 // UseClearText is part of the AuthServer interface.
@@ -89,37 +88,37 @@ func (a *AuthServerStatic) UseClearText() bool {
 
 // Salt is part of the AuthServer interface.
 func (a *AuthServerStatic) Salt() ([]byte, error) {
-	return mysqlconn.NewSalt()
+	return newSalt()
 }
 
 // ValidateHash is part of the AuthServer interface.
-func (a *AuthServerStatic) ValidateHash(salt []byte, user string, authResponse []byte) (mysqlconn.Getter, error) {
+func (a *AuthServerStatic) ValidateHash(salt []byte, user string, authResponse []byte) (Getter, error) {
 	// Find the entry.
 	entry, ok := a.Entries[user]
 	if !ok {
-		return &StaticUserData{""}, sqldb.NewSQLError(mysqlconn.ERAccessDeniedError, mysqlconn.SSAccessDeniedError, "Access denied for user '%v'", user)
+		return &StaticUserData{""}, sqldb.NewSQLError(ERAccessDeniedError, SSAccessDeniedError, "Access denied for user '%v'", user)
 	}
 
 	// Validate the password.
-	computedAuthResponse := mysqlconn.ScramblePassword(salt, []byte(entry.Password))
+	computedAuthResponse := scramblePassword(salt, []byte(entry.Password))
 	if bytes.Compare(authResponse, computedAuthResponse) != 0 {
-		return &StaticUserData{""}, sqldb.NewSQLError(mysqlconn.ERAccessDeniedError, mysqlconn.SSAccessDeniedError, "Access denied for user '%v'", user)
+		return &StaticUserData{""}, sqldb.NewSQLError(ERAccessDeniedError, SSAccessDeniedError, "Access denied for user '%v'", user)
 	}
 
 	return &StaticUserData{entry.UserData}, nil
 }
 
 // ValidateClearText is part of the AuthServer interface.
-func (a *AuthServerStatic) ValidateClearText(user, password string) (mysqlconn.Getter, error) {
+func (a *AuthServerStatic) ValidateClearText(user, password string) (Getter, error) {
 	// Find the entry.
 	entry, ok := a.Entries[user]
 	if !ok {
-		return &StaticUserData{""}, sqldb.NewSQLError(mysqlconn.ERAccessDeniedError, mysqlconn.SSAccessDeniedError, "Access denied for user '%v'", user)
+		return &StaticUserData{""}, sqldb.NewSQLError(ERAccessDeniedError, SSAccessDeniedError, "Access denied for user '%v'", user)
 	}
 
 	// Validate the password.
 	if entry.Password != password {
-		return &StaticUserData{""}, sqldb.NewSQLError(mysqlconn.ERAccessDeniedError, mysqlconn.SSAccessDeniedError, "Access denied for user '%v'", user)
+		return &StaticUserData{""}, sqldb.NewSQLError(ERAccessDeniedError, SSAccessDeniedError, "Access denied for user '%v'", user)
 	}
 
 	return &StaticUserData{entry.UserData}, nil
