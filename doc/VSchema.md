@@ -129,3 +129,92 @@ mumeric_static_map | Functional Unique | A JSON file that maps input values to k
 unicode_loose_md5 | Functional Unique | Case-insensitive (UCA level 1) md5 hash | Yes | No | 1
 
 Custom vindexes can also be plugged in as needed.
+
+## Sequences
+
+Auto-increment columns don't work very well for sharded tables. [Vitess sequences](/user-guide/vitess-sequences.html) solve this problem. Sequence tables must be specified in the VSchema, and then tied to table columns. At the time of insert, if no value is specified for such a column, VTGate will generate a number for it using the sequence table.
+
+## VSchema
+
+As mentioned in the beginning of the document, a VSchema is needed to tie together all the databases that Vitess manages. For a very trivial setup where there is only one unsharded keyspace, there is no need to specify a VSchema because Vitess will know that there is no other place to route a query.
+
+If you have multiple unsharded keyspaces, you can still avoid defining a VSchema in one of two ways:
+
+1. Connect to a keyspace and all queries are sent to it.
+2. Connect to Vitess without specifying a keyspace, but use qualifed names for tables, like `keyspace.table` in your queries.
+
+However, if you can specify a VSchema for an unsharded keyspace like this:
+
+``` json
+// unsharded keyspace
+{
+  "sharded": false,
+  "tables": {
+    "t1": {},
+    "t2": {}
+  }
+}
+```
+
+Once you decide to shard a keyspace, a VSchema is necessary because you'll need to specify a Primary Vindex for those tables at the minimum. Here is a a simple example.
+
+``` json
+// user keyspace
+{
+  "sharded": true,
+  "vindexes": {
+    "hash": {
+      "type": "hash"
+    },
+  "tables": {
+    "user": {
+      "column_vindexes": [
+        {
+          "column": "user_id",
+          "name": "hash"
+        }
+      ]
+    }
+  }
+}
+```
+
+Because Vindexes can be shared, the JSON requires them to be specified in a separte `vindexes` section, and then referenced by name from the `tables` section.
+
+To the above example, we can now add a sequence. However, the sequence must be defined in the lookup (unsharded) keyspace.
+It's then referred from the user (sharded) keyspace. In this example, we're designating the user_id (Primary Vindex) column as the auto-increment.
+
+``` json
+// lookup keyspace
+{
+  "sharded": false,
+  "tables": {
+    "user_seq": {
+      "type": "sequence"
+    }
+  }
+}
+
+// user keyspace
+{
+  "sharded": true,
+  "vindexes": {
+    "hash": {
+      "type": "hash"
+    },
+  "tables": {
+    "user": {
+      "column_vindexes": [
+        {
+          "column": "user_id",
+          "name": "hash"
+        }
+      ],
+      "auto_increment": {
+        "column": "user_id",
+        "sequence": "user_seq"
+      }
+    }
+  }
+}
+```
