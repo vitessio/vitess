@@ -76,7 +76,7 @@ The previously described properties are mostly orthogonal. Combining them gives 
 * **Lookup NonUnique Owned**: This gets used for high QPS queries on columns that are non-unique.
 * **Lookup NonUnique Unowned**: You would rarely have to use this category because it's unlikely that you'll be using a column as foreign key that's not unique within a shard. But it's theoretically possible.
 
-Of the above categories, `Functional Unique` and `Lookup Unique Unowned` Vindexes can be Primary. This is because those are the only ones that are unique and have the column to keyspace id mapping pre-established. So, a keyspace id is computable based on the input value. However, it's generally not recommended to use a Lookup vindex as Primary because it's too slow for resharding.
+Of the above categories, `Functional Unique` and `Lookup Unique Unowned` Vindexes can be Primary. This is because those are the only ones that are unique and have the column to keyspace id mapping pre-established. This is required because the Primary Vindex is responsible for assigning the keyspace id for a row when it's created. However, it's generally not recommended to use a Lookup vindex as Primary because it's too slow for resharding.
 
 ## Advanced concepts
 
