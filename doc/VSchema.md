@@ -59,7 +59,9 @@ A Lookup Vindex is usually backed by a lookup table. This is analogous to the tr
 
 Relational databases encourage normalization, which lets you split data into different tables to avoid duplication in the case of one-to-many relationships. In such cases, a key is shared between the two tables to indicate that the rows are related, aka `Foreign Key`.
 
-In a sharded environment, it's often beneficial to keep those rows in the same shard. If a cross-shard Lookup Vindex was created for each of those tables, you'd find that the backing tables would actually be identical. In such cases, Vitess lets you share a single Lookup Vindex for multiple tables. Of these, one of them is designated as the owner, which is responsible for creating and deleting these associations. The other tables just reuse these associations. This behavior is very similar to foreign keys, except that Vitess currently does not support cascading deletes. This is mainly for efficiency reasons; The application is likely capable of performing this more efficiently.
+In a sharded environment, it's often beneficial to keep those rows in the same shard. If a Lookup Vindex was created on the foreign key column of each of those tables, you'd find that the backing tables would actually be identical. In such cases, Vitess lets you share a single Lookup Vindex for multiple tables. Of these, one of them is designated as the owner, which is responsible for creating and deleting these associations. The other tables just reuse these associations.
+
+Caveat: If you delete a row from the owner table, Vitess will not perform cascading deletes. This is mainly for efficiency reasons; The application is likely capable of doing this more efficiently.
 
 Functional Vindexes can be also be shared. However, there's no concept of ownership because the column to keyspace id mapping is pre-established.
 
@@ -67,11 +69,14 @@ Functional Vindexes can be also be shared. However, there's no concept of owners
 
 The previously described properties are mostly orthogonal. Combining them gives rise to the following valid categories:
 
-* **Functional Unique**: This is the most common vindex because most sharding keys use this. In most storage systems, this is a preset algorithm. However, Vitess lets you choose a functional Vindex that best suits your needs. If necessary, you can also define your own. A Primary Vindex is usually of this type.
-* **Functional NonUnique**: This is a less common use case. Bloom filters fall in this category.
-* **Lookup Unique Owned**: This is typically a lookup table which can be sharded or unsharded. However, you could choose to define your own Lookup Vindex that's backed by a different data store. If a Vindex is owned by a table, an insert causes an association to be created between the column value and the keyspace id. This automatically implies that the mapping is not pre-established, which precludes this category from being a Primary Vindex.
-* **Lookup Unique Unowned**: For an unowned lookup Vindex, the association from column value to keyspace id was supposed to be created by the owner table and is expected to already exist at the time of insertion. This means that a Unique Lookup Vindex that's not owned by a table can be the Primary Vindex. Although this is possible, it's generally not recommend as it may not perform well during resharding. If you must, then it's recommended that you also create a column with a Functional Vindex. This could be the identity function, and since Vitess knows the keyspace id, it's capable of auto-populating the value, which can then be efficiently used during resharding.
-* **Lookup NonUnique Owned/Unowned**: This is the extension of a non-unique database index. Most NonUnique Lookup Vindexes are owned. It's generally rare to see tables sharing such Vindexes.
+* **Functional Unique**: This is the most popular category because it's the one best suited to be a Primary Vindex.
+* **Functional NonUnique**: This is the least popular category. A bloom filter would likely fall in this category.
+* **Lookup Unique Owned**: This gets used for optimizing high QPS queries that don't use the Primary Vindex columns in their where clause. There is a price to pay: An extra write to the lookup table for insert and delete operations, and an extra lookup for read operations. However, it's worth it if you don't want these high QPS queries to hit all shards.
+* **Lookup Unique Unowned**: This category is used as an optimization if there are multiple tables that share the same foreign key. This category is similar to a `Functional Unique` Vindex because the mapping is pre-established.
+* **Lookup NonUnique Owned**: This gets used for high QPS queries on columns that are non-unique.
+* **Lookup NonUnique Unowned**: You would rarely have to use this category because it's unlikely that you'll be using a column as foreign key that's not unique within a shard. But it's theoretically possible.
+
+Of the above categories, `Functional Unique` and `Lookup Unique Unowned` Vindexes can be Primary. This is because those are the only ones that are unique and have the column to keyspace id mapping pre-established. So, a keyspace id is computable based on the input value. However, it's generally not recommended to use a Lookup vindex as Primary because it's too slow for resharding.
 
 ## Advanced concepts
 
