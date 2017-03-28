@@ -27,6 +27,12 @@ Version 3 of the API is used, we do not send any hint to the server.
 
 For query bound variables, we assume place-holders in the query string
 in the form of :v1, :v2, etc.
+
+Examples:
+
+  $ vtclient -server vtgate:15991 "SELECT * FROM messages"
+
+  $ vtclient -server vtgate:15991 -tablet_type master -bind_variables '[ 12345, 1, "msg 12345" ]' "INSERT INTO messages (page,time_created_ns,message) VALUES (:v1, :v2, :v3)"
 `
 	server        = flag.String("server", "", "vtgate server to connect to")
 	tabletType    = flag.String("tablet_type", "rdonly", "tablet type to direct queries to")
