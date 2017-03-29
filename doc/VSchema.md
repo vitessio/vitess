@@ -39,6 +39,12 @@ However, there is a subtle difference: NoSQL datastores let you choose the Shard
 
 Vindexes come in many varieties. Some of them can be used as Primary Vindex, and others have different purposes. The following sections will describe their properties.
 
+### Secondary Vindexes
+
+Secondary Vindexes are additional vindexes you can define against other columns of a table offering you optimizations for WHERE clauses that do not use the Primary Vindex. Secondary Vindexes return a single or a limited set of `keyspace IDs` which will allow VTGate to only target shards where the relevant data is present. In the absence of a secondary vindex, VTGate would have to send the query to all shards.
+
+Secondary Vindexes are also commonly known as cross-shard indexes. It's important to note that Secondary Vindexes are only for making routing decisions. The underlying database shards will most likely need traditional indexes on those same columns.
+
 ### Unique and NonUnique Vindex
 
 A Unique Vindex is one that yields at most one keyspace ID for a given input. Knowing that a Vindex is Unique is useful because VTGate can push down some complex queries into VTTablet if it knows that the scope of that query cannot exceed a shard. Uniqueness is also a prerequisite for a Vindex to be used as Primary Vindex.
@@ -69,7 +75,7 @@ The previously described properties are mostly orthogonal. Combining them gives 
 
 * **Functional Unique**: This is the most popular category because it is the one best suited to be a Primary Vindex.
 * **Functional NonUnique**: There are currently no use cases that need this category.
-* **Lookup Unique Owned**: This gets used for optimizing high QPS queries that do not use the Primary Vindex columns in their WHERE clause. There is a price to pay: You incur an extra write to the lookup table for insert and delete operations, and an extra lookup for read operations. However, it is worth it if you do not want these high QPS queries to hit all shards.
+* **Lookup Unique Owned**: This gets used for optimizing high QPS queries that do not use the Primary Vindex columns in their WHERE clause. There is a price to pay: You incur an extra write to the lookup table for insert and delete operations, and an extra lookup for read operations. However, it is worth it if you do not want these high QPS queries to be sent to all shards.
 * **Lookup Unique Unowned**: This category is used as an optimization as described in the Shared Vindexes section.
 * **Lookup NonUnique Owned**: This gets used for high QPS queries on columns that are non-unique.
 * **Lookup NonUnique Unowned**: You would rarely have to use this category because it is unlikely that you will be using a column as foreign key that is not unique within a shard. But it is theoretically possible.
@@ -141,26 +147,34 @@ If you have multiple unsharded keyspaces, you can still avoid defining a VSchema
 1. Connect to a keyspace and all queries are sent to it.
 2. Connect to Vitess without specifying a keyspace, but use qualifed names for tables, like `keyspace.table` in your queries.
 
-However, you can specify a VSchema for an unsharded keyspace like this:
+However, once the setup exceeds the above complexity, VSchemas become a necessity. Vitess has a [working demo](https://github.com/youtube/vitess/tree/master/examples/demo) of VSchemas. This section documents the various features highlighted with snippets pulled from the demo.
 
+### Unsharded Table
+
+The following snippets show the necessary configs for creating a table in an unsharded keyspace:
+
+Schema:
+``` sql
+lookup keyspace
+create table name_user_idx(name varchar(128), user_id bigint, primary key(name, user_id));
+```
+
+VSchema:
 ``` json
-// unsharded keyspace
+// lookup keyspace
 {
   "sharded": false,
   "tables": {
-    "t1": {},
-    "t2": {}
+    "name_user_idx": {}
   }
 }
 ```
 
-Once you decide to shard a keyspace, a VSchema is necessary because you will need to specify a Primary Vindex for those tables at the minimum.
+For a normal unsharded table, the VSchema only needs to know the table name.  No additional metadata is needed.
 
-### examples/demo explained
+### Sharded Table With Simple Primary Vindex
 
-Vitess has a [working demo](https://github.com/youtube/vitess/tree/master/examples/demo) of Vindexes and Sequences. This section documents the various features highlighted.
-
-We start with a simple table with a simple Primary Vindex.
+To create a sharded table with a simple Primary Vindex, the VSchema requires more information:
 
 Schema:
 ``` sql
@@ -190,9 +204,11 @@ VSchema:
 }
 ```
 
-Because Vindexes can be shared, the JSON requires them to be specified in a separte `vindexes` section, and then referenced by name from the `tables` section. The VSchema above simply states that `user_id` uses `hash` as Primary Vindex. The first Vindex of every table must be the Primary Vindex.
+Because Vindexes can be shared, the JSON requires them to be specified in a separate `vindexes` section, and then referenced by name from the `tables` section. The VSchema above simply states that `user_id` uses `hash` as Primary Vindex. The first Vindex of every table must be the Primary Vindex.
 
-Since user is a sharded table, it will be beneficial to tie it to a sequence. However, the sequence must be defined in the lookup (unsharded) keyspace. It is then referred from the user (sharded) keyspace. In this example, we are designating the user_id (Primary Vindex) column as the auto-increment.
+### Specifying A Sequence
+
+Since user is a sharded table, it will be beneficial to tie it to a Sequence. However, the sequence must be defined in the lookup (unsharded) keyspace. It is then referred from the user (sharded) keyspace. In this example, we are designating the user_id (Primary Vindex) column as the auto-increment.
 
 Schema:
 ``` sql
@@ -201,7 +217,7 @@ create table user_seq(id int, next_id bigint, cache bigint, primary key(id)) com
 insert into user_seq(id, next_id, cache) values(0, 1, 3);
 ```
 
-For the sequence table, `id` is always 0. `next_id` starts off as 1, and the cache is usually a medium-sized number like 100. In our example, we are using a small number to showcase how it works.
+For the sequence table, `id` is always 0. `next_id` starts off as 1, and the cache is usually a medium-sized number like 1000. In our example, we are using a small number to showcase how it works.
 
 VSchema:
 ``` json
@@ -239,7 +255,9 @@ VSchema:
 }
 ```
 
-Let us add a secondary vindex on the `name` column of user. This requires a backing table, which we will also add as unsharded table to the lookup database:
+### Specifying A Secondary Vindex
+
+The following snippet shows how to configure a Secondary Vindex that's backed by a lookup table. In this case, the lookup table is configured to be in the unsharded lookup keyspace:
 
 Schema:
 ``` sql
