@@ -182,6 +182,8 @@ func ReadMycnf(cnfFile string) (mycnf *Mycnf, err error) {
 	mycnf.BinLogPath = mycnf.lookupAndCheck("log-bin")
 	mycnf.MasterInfoFile = mycnf.lookupAndCheck("master-info-file")
 	mycnf.PidFile = mycnf.lookupAndCheck("pid-file")
+	mycnf.TmpDir = mycnf.lookupAndCheck("tmpdir")
+	mycnf.SlaveLoadTmpDir = mycnf.lookupAndCheck("slave_load_tmpdir")
 
 	return mycnf, nil
 }

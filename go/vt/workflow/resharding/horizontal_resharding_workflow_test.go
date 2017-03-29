@@ -83,8 +83,11 @@ func TestHorizontalResharding(t *testing.T) {
 func setupFakeVtworker(keyspace, vtworkers string) *fakevtworkerclient.FakeVtworkerClient {
 	flag.Set("vtworker_client_protocol", "fake")
 	fakeVtworkerClient := fakevtworkerclient.NewFakeVtworkerClient()
+	fakeVtworkerClient.RegisterResultForAddr(vtworkers, []string{"Reset"}, "", nil)
 	fakeVtworkerClient.RegisterResultForAddr(vtworkers, []string{"SplitClone", "--min_healthy_rdonly_tablets=1", keyspace + "/0"}, "", nil)
+	fakeVtworkerClient.RegisterResultForAddr(vtworkers, []string{"Reset"}, "", nil)
 	fakeVtworkerClient.RegisterResultForAddr(vtworkers, []string{"SplitDiff", "--min_healthy_rdonly_tablets=1", keyspace + "/-80"}, "", nil)
+	fakeVtworkerClient.RegisterResultForAddr(vtworkers, []string{"Reset"}, "", nil)
 	fakeVtworkerClient.RegisterResultForAddr(vtworkers, []string{"SplitDiff", "--min_healthy_rdonly_tablets=1", keyspace + "/80-"}, "", nil)
 	return fakeVtworkerClient
 }

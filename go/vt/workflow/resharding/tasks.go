@@ -56,7 +56,9 @@ func (hw *HorizontalReshardingWorkflow) runSplitClone(ctx context.Context, t *wo
 	sourceKeyspaceShard := topoproto.KeyspaceShardString(keyspace, sourceShard)
 	// Reset the vtworker to avoid error if vtworker command has been called elsewhere.
 	// This is because vtworker class doesn't cleanup the environment after execution.
-	automation.ExecuteVtworker(ctx, worker, []string{"Reset"})
+	if _, err := automation.ExecuteVtworker(ctx, worker, []string{"Reset"}); err != nil {
+		return err
+	}
 	// The flag min_healthy_rdonly_tablets is set to 1 (default value is 2).
 	// Therefore, we can reuse the normal end to end test setting, which has only 1 rdonly tablet.
 	// TODO(yipeiw): Add min_healthy_rdonly_tablets as an input argument in UI.
@@ -76,7 +78,9 @@ func (hw *HorizontalReshardingWorkflow) runSplitDiff(ctx context.Context, t *wor
 	destShard := t.Attributes["destination_shard"]
 	worker := t.Attributes["vtworker"]
 
-	automation.ExecuteVtworker(hw.ctx, worker, []string{"Reset"})
+	if _, err := automation.ExecuteVtworker(hw.ctx, worker, []string{"Reset"}); err != nil {
+		return err
+	}
 	args := []string{"SplitDiff", "--min_healthy_rdonly_tablets=1", topoproto.KeyspaceShardString(keyspace, destShard)}
 	_, err := automation.ExecuteVtworker(ctx, worker, args)
 	return err

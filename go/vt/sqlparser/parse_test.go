@@ -92,6 +92,8 @@ func TestValid(t *testing.T) {
 		input:  "select /* union order by limit lock */ 1 from t union select 1 from t order by a limit 1 for update",
 		output: "select /* union order by limit lock */ 1 from t union select 1 from t order by a asc limit 1 for update",
 	}, {
+		input: "select /* union with limit on lhs */ 1 from t limit 1 union select 1 from t",
+	}, {
 		input: "select /* distinct */ distinct 1 from t",
 	}, {
 		input: "select /* straight_join */ straight_join 1 from t",
@@ -1191,10 +1193,6 @@ func TestErrors(t *testing.T) {
 	}, {
 		input:  "(select /* parenthesized select */ * from t)",
 		output: "syntax error at position 46",
-	}, {
-		// Can't use order by in select of a union without parenthesis.
-		input:  "select /* union parenthesized select */ 1 from t order by a union select 1 from t",
-		output: "syntax error at position 66 near 'union'",
 	}}
 	for _, tcase := range invalidSQL {
 		if tcase.output == "" {

@@ -26,6 +26,8 @@ import (
 	"sync"
 	"time"
 
+	"bytes"
+
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/stats"
@@ -465,7 +467,7 @@ func (mysqld *Mysqld) Init(ctx context.Context, initDBSQLFile string) error {
 	}
 
 	// Set up config files.
-	if err = mysqld.initConfig(root); err != nil {
+	if err = mysqld.initConfig(root, mysqld.config.path); err != nil {
 		log.Errorf("failed creating %v: %v", mysqld.config.path, err)
 		return err
 	}
@@ -556,7 +558,7 @@ func (mysqld *Mysqld) installDataDir() error {
 	return nil
 }
 
-func (mysqld *Mysqld) initConfig(root string) error {
+func (mysqld *Mysqld) initConfig(root, outFile string) error {
 	var err error
 	var configData string
 
@@ -573,7 +575,7 @@ func (mysqld *Mysqld) initConfig(root string) error {
 		return err
 	}
 
-	return ioutil.WriteFile(mysqld.config.path, []byte(configData), 0664)
+	return ioutil.WriteFile(outFile, []byte(configData), 0664)
 }
 
 func getMycnfTemplates(root string) []string {
@@ -593,6 +595,54 @@ func getMycnfTemplates(root string) []string {
 	}
 
 	return cnfTemplatePaths
+}
+
+// RefreshConfig attempts to recreate the my.cnf from templates, and log and
+// swap in to place if it's updated. It keeps a copy of the last version in case fallback is required.
+// Should be called from a stable replica, server_id is not regenerated.
+func (mysqld *Mysqld) RefreshConfig() error {
+	log.Info("Checking for updates to my.cnf")
+	root, err := vtenv.VtRoot()
+	if err != nil {
+		return err
+	}
+	f, err := ioutil.TempFile(path.Dir(mysqld.config.path), "my.cnf")
+	if err != nil {
+		return fmt.Errorf("Could not create temp file: %v", err)
+	}
+
+	defer os.Remove(f.Name())
+	err = mysqld.initConfig(root, f.Name())
+	if err != nil {
+		return fmt.Errorf("Could not initConfig in %v: %v", f.Name(), err)
+	}
+
+	existing, err := ioutil.ReadFile(mysqld.config.path)
+	if err != nil {
+		return fmt.Errorf("Could not read existing file %v: %v", mysqld.config.path, err)
+	}
+	updated, err := ioutil.ReadFile(f.Name())
+	if err != nil {
+		return fmt.Errorf("Could not read updated file %v: %v", f.Name(), err)
+	}
+
+	if bytes.Equal(existing, updated) {
+		log.Infof("No changes to my.cnf. Continuing.")
+		return nil
+	}
+
+	backupPath := mysqld.config.path + ".previous"
+	err = os.Rename(mysqld.config.path, backupPath)
+	if err != nil {
+		return fmt.Errorf("Could not back up existing %v: %v", mysqld.config.path, err)
+	}
+	err = os.Rename(f.Name(), mysqld.config.path)
+	if err != nil {
+		return fmt.Errorf("Could not move %v to %v: %v", f.Name(), mysqld.config.path, err)
+	}
+	log.Infof("Updated my.cnf. Backup of previous version available in %v", backupPath)
+
+	return nil
 }
 
 // ReinitConfig updates the config file as if Mysqld is initializing. At the
@@ -620,7 +670,7 @@ func (mysqld *Mysqld) ReinitConfig(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	return mysqld.initConfig(root)
+	return mysqld.initConfig(root, mysqld.config.path)
 }
 
 func (mysqld *Mysqld) createDirs() error {
