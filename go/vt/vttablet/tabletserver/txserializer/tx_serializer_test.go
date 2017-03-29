@@ -95,7 +95,7 @@ func waitForPending(txs *TxSerializer, key string, i int) error {
 }
 
 func testHTTPHandler(txs *TxSerializer, count int) error {
-	req, err := http.NewRequest("GET", "/hotrows", nil)
+	req, err := http.NewRequest("GET", "/path-is-ignored-in-test", nil)
 	if err != nil {
 		return err
 	}
