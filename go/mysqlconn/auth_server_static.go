@@ -13,14 +13,18 @@ import (
 )
 
 var (
-	mysqlAuthServerStaticFile     = flag.String("mysql_auth_server_static_file", "", "JSON File to read the users/passwords from.")
-	mysqlAuthServerStaticString   = flag.String("mysql_auth_server_static_string", "", "JSON representation of the users/passwords config.")
+	mysqlAuthServerStaticFile   = flag.String("mysql_auth_server_static_file", "", "JSON File to read the users/passwords from.")
+	mysqlAuthServerStaticString = flag.String("mysql_auth_server_static_string", "", "JSON representation of the users/passwords config.")
 )
 
 // AuthServerStatic implements AuthServer using a static configuration.
 type AuthServerStatic struct {
-	// ClearText can be set to force the use of ClearText auth.
-	ClearText bool
+	// Method can be set to:
+	// - MysqlNativePassword
+	// - MysqlClearPassword
+	// - MysqlDialog
+	// It defaults to MysqlNativePassword.
+	Method string
 
 	// Entries contains the users, passwords and user data.
 	Entries map[string]*AuthServerStaticEntry
@@ -32,7 +36,7 @@ type AuthServerStaticEntry struct {
 	UserData string
 }
 
-// Init Handles initializing the AuthServerStatic if necessary.
+// InitAuthServerStatic Handles initializing the AuthServerStatic if necessary.
 func InitAuthServerStatic() {
 	// Check parameters.
 	if *mysqlAuthServerStaticFile == "" && *mysqlAuthServerStaticString == "" {
@@ -52,8 +56,8 @@ func InitAuthServerStatic() {
 // NewAuthServerStatic returns a new empty AuthServerStatic.
 func NewAuthServerStatic() *AuthServerStatic {
 	return &AuthServerStatic{
-		ClearText: false,
-		Entries:   make(map[string]*AuthServerStaticEntry),
+		Method:  MysqlNativePassword,
+		Entries: make(map[string]*AuthServerStaticEntry),
 	}
 }
 
@@ -81,14 +85,14 @@ func RegisterAuthServerStaticFromParams(file, str string) {
 	RegisterAuthServerImpl("static", authServerStatic)
 }
 
-// UseClearText is part of the AuthServer interface.
-func (a *AuthServerStatic) UseClearText() bool {
-	return a.ClearText
+// AuthMethod is part of the AuthServer interface.
+func (a *AuthServerStatic) AuthMethod(user string) (string, error) {
+	return a.Method, nil
 }
 
 // Salt is part of the AuthServer interface.
 func (a *AuthServerStatic) Salt() ([]byte, error) {
-	return newSalt()
+	return NewSalt()
 }
 
 // ValidateHash is part of the AuthServer interface.
@@ -108,8 +112,16 @@ func (a *AuthServerStatic) ValidateHash(salt []byte, user string, authResponse [
 	return &StaticUserData{entry.UserData}, nil
 }
 
-// ValidateClearText is part of the AuthServer interface.
-func (a *AuthServerStatic) ValidateClearText(user, password string) (Getter, error) {
+// Negotiate is part of the AuthServer interface.
+// It will be called if Method is anything else than MysqlNativePassword.
+// We only recognize MysqlClearPassword and MysqlDialog here.
+func (a *AuthServerStatic) Negotiate(c *Conn, user string) (Getter, error) {
+	// Finish the negotiation.
+	password, err := AuthServerNegotiateClearOrDialog(c, a.Method)
+	if err != nil {
+		return nil, err
+	}
+
 	// Find the entry.
 	entry, ok := a.Entries[user]
 	if !ok {

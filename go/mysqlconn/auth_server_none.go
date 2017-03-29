@@ -8,18 +8,18 @@ import (
 // It's meant to be used for testing and prototyping.
 // With this config, you can connect to a local vtgate using
 // the following command line: 'mysql -P port -h ::'.
-type AuthServerNone struct {
-	ClearText bool
-}
+// It only uses MysqlNativePassword method.
+type AuthServerNone struct{}
 
-// UseClearText reports clear text status
-func (a *AuthServerNone) UseClearText() bool {
-	return a.ClearText
+// AuthMethod is part of the AuthServer interface.
+// We always return MysqlNativePassword.
+func (a *AuthServerNone) AuthMethod(user string) (string, error) {
+	return MysqlNativePassword, nil
 }
 
 // Salt makes salt
 func (a *AuthServerNone) Salt() ([]byte, error) {
-	return make([]byte, 20), nil
+	return NewSalt()
 }
 
 // ValidateHash validates hash
@@ -27,9 +27,10 @@ func (a *AuthServerNone) ValidateHash(salt []byte, user string, authResponse []b
 	return &NoneGetter{}, nil
 }
 
-// ValidateClearText validates clear text
-func (a *AuthServerNone) ValidateClearText(user, password string) (Getter, error) {
-	return &NoneGetter{}, nil
+// Negotiate is part of the AuthServer interface.
+// It will never be called.
+func (a *AuthServerNone) Negotiate(c *Conn, user string) (Getter, error) {
+	panic("Negotiate should not be called as AuthMethod returned mysql_native_password")
 }
 
 func init() {

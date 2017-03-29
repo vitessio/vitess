@@ -22,13 +22,18 @@ func (mlc *MockLdapClient) Search(searchRequest *ldap.SearchRequest) (*ldap.Sear
 }
 
 func TestValidateClearText(t *testing.T) {
-	asl := &AuthServerLdap{Client: &MockLdapClient{}, UserDnPattern: "%s", User: "testuser", Password: "testpass"}
-	_, err := asl.ValidateClearText("testuser", "testpass")
+	asl := &AuthServerLdap{
+		Client:        &MockLdapClient{},
+		User:          "testuser",
+		Password:      "testpass",
+		UserDnPattern: "%s",
+	}
+	_, err := asl.validate("testuser", "testpass")
 	if err != nil {
 		t.Fatalf("AuthServerLdap failed to validate valid credentials. Got: %v", err)
 	}
 
-	_, err = asl.ValidateClearText("invaliduser", "invalidpass")
+	_, err = asl.validate("invaliduser", "invalidpass")
 	if err == nil {
 		t.Fatalf("AuthServerLdap validated invalid credentials.")
 	}
