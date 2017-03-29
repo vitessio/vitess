@@ -23,7 +23,7 @@ log() {
   return 0
 }
 
-for java in /usr/local/bin/java /usr/bin/java; do
+for java in /usr/local/bin/java /usr/bin/java $JAVA_HOME/bin/java; do
   if [ -x "$java" ]; then
     break
   fi

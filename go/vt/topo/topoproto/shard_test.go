@@ -31,36 +31,6 @@ func TestParseKeyspaceShard(t *testing.T) {
 	}
 }
 
-func TestParseKeyspaceOptionalShard(t *testing.T) {
-	testcases := []struct {
-		keyspaceShard string
-		keyspace      string
-		shard         string
-	}{{
-		keyspaceShard: "ks",
-		keyspace:      "ks",
-		shard:         "",
-	}, {
-		keyspaceShard: "/-80",
-		keyspace:      "",
-		shard:         "-80",
-	}, {
-		keyspaceShard: "ks/-80",
-		keyspace:      "ks",
-		shard:         "-80",
-	}, {
-		keyspaceShard: "ks/",
-		keyspace:      "ks",
-		shard:         "",
-	}}
-
-	for _, tcase := range testcases {
-		if keyspace, shard := ParseKeyspaceOptionalShard(tcase.keyspaceShard); keyspace != tcase.keyspace || shard != tcase.shard {
-			t.Errorf("parseKeyspaceShard(%s): %s:%s, want %s:%s", tcase.keyspaceShard, keyspace, shard, tcase.keyspace, tcase.shard)
-		}
-	}
-}
-
 func TestSourceShardAsHTML(t *testing.T) {
 	s := &topodatapb.Shard_SourceShard{
 		Uid:      123,
