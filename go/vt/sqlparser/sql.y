@@ -134,7 +134,7 @@ func forceEOF(yylex interface{}) {
 %token <bytes> UNUSED
 
 %type <statement> command
-%type <selStmt> select_statement base_select union union_select
+%type <selStmt> select_statement base_select union_lhs union_rhs
 %type <statement> insert_statement update_statement delete_statement set_statement
 %type <statement> create_statement alter_statement rename_statement drop_statement
 %type <statement> analyze_statement show_statement other_statement
@@ -233,13 +233,9 @@ select_statement:
     sel.Lock = $4
     $$ = sel
   }
-| union order_by_opt limit_opt lock_opt
+| union_lhs union_op union_rhs order_by_opt limit_opt lock_opt
   {
-    uni := $1.(*Union)
-    uni.OrderBy = $2
-    uni.Limit = $3
-    uni.Lock = $4
-    $$ = uni
+    $$ = &Union{Type: $2, Left: $1, Right: $3, OrderBy: $4, Limit: $5, Lock: $6}
   }
 | SELECT comment_opt cache_opt NEXT num_val for_from table_name
   {
@@ -253,19 +249,17 @@ base_select:
     $$ = &Select{Comments: Comments($2), Cache: $3, Distinct: $4, Hints: $5, SelectExprs: $6, From: $7, Where: NewWhere(WhereStr, $8), GroupBy: GroupBy($9), Having: NewWhere(HavingStr, $10)}
   }
 
-union:
-  union_select union_op union_select
+union_lhs:
+  select_statement
   {
-    $$ = &Union{Type: $2, Left: $1, Right: $3}
+    $$ = $1
   }
-| union union_op union_select
+| openb select_statement closeb
   {
-    $$ = &Union{Type: $2, Left: $1, Right: $3}
+    $$ = &ParenSelect{Select: $2}
   }
 
-// union_select is a select that's part of a union. If unparenthesized,
-// it cannot have an order by clause or beyond.
-union_select:
+union_rhs:
   base_select
   {
     $$ = $1
