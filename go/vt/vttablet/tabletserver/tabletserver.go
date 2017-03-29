@@ -966,7 +966,9 @@ func (tsv *TabletServer) beginWaitForSameRangeTransactions(ctx context.Context, 
 	var txDone txserializer.DoneFunc
 
 	err := tsv.execRequest(
-		ctx, tsv.BeginTimeout.Get(),
+		// Use (potentially longer) -queryserver-config-query-timeout and not
+		// -queryserver-config-txpool-timeout (defaults to 1s) to limit the waiting.
+		ctx, tsv.QueryTimeout.Get(),
 		"waitForSameRangeTransactions", "waitForSameRangeTransactions", nil,
 		target, true /* isTx */, false, /* allowOnShutdown */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
