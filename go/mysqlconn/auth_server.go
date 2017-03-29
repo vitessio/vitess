@@ -36,11 +36,11 @@ type AuthServer interface {
 
 	// ValidateHash validates the data sent by the client matches
 	// what the server computes.  It also returns the user data.
-	ValidateHash(salt []byte, user string, authResponse []byte) (string, error)
+	ValidateHash(salt []byte, user string, authResponse []byte) (Getter, error)
 
 	// ValidateClearText validates a user / password is correct.
 	// It also returns the user data.
-	ValidateClearText(user, password string) (string, error)
+	ValidateClearText(user, password string) (Getter, error)
 }
 
 // authServers is a registry of AuthServer implementations.

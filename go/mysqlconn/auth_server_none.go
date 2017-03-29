@@ -1,28 +1,45 @@
 package mysqlconn
 
-// authServerNone accepts any username/password as valid.
+import (
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
+)
+
+// AuthServerNone takes all comers.
 // It's meant to be used for testing and prototyping.
 // With this config, you can connect to a local vtgate using
 // the following command line: 'mysql -P port -h ::'.
-type authServerNone struct {
+type AuthServerNone struct {
+	ClearText bool
 }
 
-func (a *authServerNone) UseClearText() bool {
-	return false
+// UseClearText reports clear text status
+func (a *AuthServerNone) UseClearText() bool {
+	return a.ClearText
 }
 
-func (a *authServerNone) Salt() ([]byte, error) {
+// Salt makes salt
+func (a *AuthServerNone) Salt() ([]byte, error) {
 	return make([]byte, 20), nil
 }
 
-func (a *authServerNone) ValidateHash(salt []byte, user string, authResponse []byte) (string, error) {
-	return "", nil
+// ValidateHash validates hash
+func (a *AuthServerNone) ValidateHash(salt []byte, user string, authResponse []byte) (Getter, error) {
+	return &NoneGetter{}, nil
 }
 
-func (a *authServerNone) ValidateClearText(user, password string) (string, error) {
-	panic("unimplemented")
+// ValidateClearText validates clear text
+func (a *AuthServerNone) ValidateClearText(user, password string) (Getter, error) {
+	return &NoneGetter{}, nil
 }
 
 func init() {
-	RegisterAuthServerImpl("none", &authServerNone{})
+	RegisterAuthServerImpl("none", &AuthServerNone{})
+}
+
+// NoneGetter holds the empty string
+type NoneGetter struct{}
+
+// Get returns the empty string
+func (ng *NoneGetter) Get() *querypb.VTGateCallerID {
+	return &querypb.VTGateCallerID{Username: "userData1"}
 }

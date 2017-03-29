@@ -20,13 +20,13 @@ import (
 	"github.com/youtube/vitess/go/vt/callerid"
 	"github.com/youtube/vitess/go/vt/callinfo"
 	"github.com/youtube/vitess/go/vt/sqlparser"
+	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/connpool"
-	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/schema"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/messager"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/planbuilder"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/rules"
+	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/schema"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
-	"github.com/youtube/vitess/go/vt/vterrors"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
@@ -239,7 +239,7 @@ func (qre *QueryExecutor) checkPermissions() error {
 	}
 
 	// Check for SuperUser calling directly to VTTablet (e.g. VTWorker)
-	if qre.tsv.qe.exemptACL != nil && qre.tsv.qe.exemptACL.IsMember(username) {
+	if qre.tsv.qe.exemptACL != nil && qre.tsv.qe.exemptACL.IsMember(&querypb.VTGateCallerID{Username: username}) {
 		qre.tsv.qe.tableaclExemptCount.Add(1)
 		return nil
 	}
@@ -253,7 +253,7 @@ func (qre *QueryExecutor) checkPermissions() error {
 	}
 
 	// a superuser that exempts from table ACL checking.
-	if qre.tsv.qe.exemptACL != nil && qre.tsv.qe.exemptACL.IsMember(callerID.Username) {
+	if qre.tsv.qe.exemptACL != nil && qre.tsv.qe.exemptACL.IsMember(callerID) {
 		qre.tsv.qe.tableaclExemptCount.Add(1)
 		return nil
 	}
@@ -273,7 +273,7 @@ func (qre *QueryExecutor) checkPermissions() error {
 		callerID.Username,
 	}
 	// perform table ACL check if it is enabled.
-	if !qre.plan.Authorized.IsMember(callerID.Username) {
+	if !qre.plan.Authorized.IsMember(callerID) {
 		if qre.tsv.qe.enableTableACLDryRun {
 			tabletenv.TableaclPseudoDenied.Add(tableACLStatsKey, 1)
 			return nil

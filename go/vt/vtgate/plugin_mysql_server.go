@@ -21,28 +21,9 @@ import (
 
 var (
 	mysqlServerPort               = flag.Int("mysql_server_port", 0, "If set, also listen for MySQL binary protocol connections on this port.")
-	mysqlAuthServerImpl           = flag.String("mysql_auth_server_impl", "config", "Which auth server implementation to use.")
-	mysqlAuthServerConfigFile     = flag.String("mysql_auth_server_config_file", "", "JSON File to read the users/passwords from.")
-	mysqlAuthServerConfigString   = flag.String("mysql_auth_server_config_string", "", "JSON representation of the users/passwords config.")
+	mysqlAuthServerImpl           = flag.String("mysql_auth_server_impl", "static", "Which auth server implementation to use.")
 	mysqlAllowClearTextWithoutTLS = flag.Bool("mysql_allow_clear_text_without_tls", false, "If set, the server will allow the use of a clear text password over non-SSL connections.")
 )
-
-// Handles initializing the AuthServerConfig if necessary.
-func initAuthServerConfig() {
-	// Check parameters.
-	if *mysqlAuthServerConfigFile == "" && *mysqlAuthServerConfigString == "" {
-		// Not configured, nothing to do.
-		log.Infof("Not configuring AuthServerConfig, as mysql_auth_server_config_file and mysql_auth_server_config_string are empty")
-		return
-	}
-	if *mysqlAuthServerConfigFile != "" && *mysqlAuthServerConfigString != "" {
-		// Both parameters specified, can only use on.
-		log.Fatalf("Both mysql_auth_server_config_file and mysql_auth_server_config_string specified, can only use one.")
-	}
-
-	// Create and register auth server.
-	mysqlconn.RegisterAuthServerConfigFromParams(*mysqlAuthServerConfigFile, *mysqlAuthServerConfigString)
-}
 
 // vtgateHandler implements the Listener interface.
 // It stores the Session in the ClientData of a Connection, if a transaction
@@ -79,10 +60,7 @@ func (vh *vtgateHandler) ComQuery(c *mysqlconn.Conn, query string) (*sqltypes.Re
 	// returned, use the User. This lets the plugin map a MySQL
 	// user used for authentication to a Vitess User used for
 	// Table ACLs and Vitess authentication in general.
-	im := callerid.NewImmediateCallerID(c.UserData)
-	if c.UserData == "" {
-		im.Username = c.User
-	}
+	im := c.UserData.Get()
 	ef := callerid.NewEffectiveCallerID(
 		c.User,                  /* principal: who */
 		c.RemoteAddr().String(), /* component: running client process */
@@ -111,8 +89,10 @@ func init() {
 			return
 		}
 
-		// Initialize the config AuthServer if necessary.
-		initAuthServerConfig()
+		// Initialize registered AuthServer implementations (or other plugins)
+		for _, initFn := range pluginInitializers {
+			initFn()
+		}
 		authServer := mysqlconn.GetAuthServer(*mysqlAuthServerImpl)
 
 		// Create a Listener.
@@ -135,4 +115,11 @@ func init() {
 			listener.Close()
 		}
 	})
+}
+
+var pluginInitializers []func()
+
+// RegisterPluginInitializer lets plugins register themselves to be init'ed at servenv.OnRun-time
+func RegisterPluginInitializer(initializer func()) {
+	pluginInitializers = append(pluginInitializers, initializer)
 }

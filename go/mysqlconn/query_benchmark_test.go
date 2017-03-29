@@ -128,10 +128,7 @@ func benchmarkOldParallelReads(b *testing.B, params sqldb.ConnParams, parallelCo
 func BenchmarkParallelShortQueries(b *testing.B) {
 	th := &testHandler{}
 
-	authServer := NewAuthServerConfig()
-	authServer.Entries["user1"] = &AuthServerConfigEntry{
-		Password: "password1",
-	}
+	authServer := &AuthServerNone{ClearText: false}
 
 	l, err := NewListener("tcp", ":0", authServer, th)
 	if err != nil {
