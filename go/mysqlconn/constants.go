@@ -14,11 +14,16 @@ const (
 
 // Supported auth forms.
 const (
-	// mysqlNativePassword uses a salt and transmits a hash on the wire.
-	mysqlNativePassword = "mysql_native_password"
+	// MysqlNativePassword uses a salt and transmits a hash on the wire.
+	MysqlNativePassword = "mysql_native_password"
 
-	// mysqlClearPassword transmits the password in the clear.
-	mysqlClearPassword = "mysql_clear_password"
+	// MysqlClearPassword transmits the password in the clear.
+	MysqlClearPassword = "mysql_clear_password"
+
+	// MysqlDialog uses the dialog plugin on the client side.
+	// It transmits data in the clear.
+	MysqlDialog        = "dialog"
+	MysqlDialogMessage = "Enter password: "
 )
 
 // Capability flags.
@@ -131,6 +136,8 @@ const (
 
 	// ComQuery is COM_QUERY.
 	ComQuery = 0x03
+
+	AskPassword = 0x04
 
 	// ComPing is COM_PING.
 	ComPing = 0x0e

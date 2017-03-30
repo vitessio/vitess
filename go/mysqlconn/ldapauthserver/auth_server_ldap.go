@@ -19,12 +19,14 @@ import (
 var (
 	ldapAuthConfigFile   = flag.String("mysql_ldap_auth_config_file", "", "JSON File from which to read LDAP server config.")
 	ldapAuthConfigString = flag.String("mysql_ldap_auth_config_string", "", "JSON representation of LDAP server config.")
+	ldapAuthMethod       = flag.String("mysql_ldap_auth_method", mysqlconn.MysqlClearPassword, "client-side authentication method to use. Supported values: mysql_clear_password, dialog.")
 )
 
 // AuthServerLdap implements AuthServer with an LDAP backend
 type AuthServerLdap struct {
 	Client
 	ServerConfig
+	Method         string
 	User           string
 	Password       string
 	GroupQuery     string
@@ -42,7 +44,14 @@ func Init() {
 		log.Infof("Both mysql_ldap_auth_config_file and mysql_ldap_auth_config_string are non-empty, can only use one.")
 		return
 	}
-	ldapAuthServer := &AuthServerLdap{Client: &ClientImpl{}, ServerConfig: ServerConfig{}}
+	if *ldapAuthMethod != mysqlconn.MysqlClearPassword && *ldapAuthMethod != mysqlconn.MysqlDialog {
+		log.Fatalf("Invalid mysql_ldap_auth_method value: only support mysql_clear_password or dialog")
+	}
+	ldapAuthServer := &AuthServerLdap{
+		Client:       &ClientImpl{},
+		ServerConfig: ServerConfig{},
+		Method:       *ldapAuthMethod,
+	}
 
 	data := []byte(*ldapAuthConfigString)
 	if *ldapAuthConfigFile != "" {
@@ -58,32 +67,37 @@ func Init() {
 	mysqlconn.RegisterAuthServerImpl("ldap", ldapAuthServer)
 }
 
-// UseClearText is always true for AuthServerLdap
-func (asl *AuthServerLdap) UseClearText() bool {
-	return true
+// AuthMethod is part of the AuthServer interface.
+func (asl *AuthServerLdap) AuthMethod(user string) (string, error) {
+	return asl.Method, nil
 }
 
-// Salt is unimplemented for AuthServerLdap
+// Salt will be unused in AuthServerLdap.
 func (asl *AuthServerLdap) Salt() ([]byte, error) {
-	panic("unimplemented")
+	return mysqlconn.NewSalt()
 }
 
-// ValidateHash is unimplemented for AuthServerLdap
+// ValidateHash is unimplemented for AuthServerLdap.
 func (asl *AuthServerLdap) ValidateHash(salt []byte, user string, authResponse []byte) (mysqlconn.Getter, error) {
 	panic("unimplemented")
 }
 
-// ValidateClearText connects to the LDAP server over TLS
-// and attempts to bind as that user with the supplied password.
-// It returns the supplied username.
-func (asl *AuthServerLdap) ValidateClearText(username, password string) (mysqlconn.Getter, error) {
-	err := asl.Client.Connect("tcp", &asl.ServerConfig)
+// Negotiate is part of the AuthServer interface.
+func (asl *AuthServerLdap) Negotiate(c *mysqlconn.Conn, user string) (mysqlconn.Getter, error) {
+	// Finish the negotiation.
+	password, err := mysqlconn.AuthServerNegotiateClearOrDialog(c, asl.Method)
 	if err != nil {
 		return nil, err
 	}
+	return asl.validate(user, password)
+}
+
+func (asl *AuthServerLdap) validate(username, password string) (mysqlconn.Getter, error) {
+	if err := asl.Client.Connect("tcp", &asl.ServerConfig); err != nil {
+		return nil, err
+	}
 	defer asl.Client.Close()
-	err = asl.Client.Bind(fmt.Sprintf(asl.UserDnPattern, username), password)
-	if err != nil {
+	if err := asl.Client.Bind(fmt.Sprintf(asl.UserDnPattern, username), password); err != nil {
 		return nil, err
 	}
 	groups, err := asl.getGroups(username)

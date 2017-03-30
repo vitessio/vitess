@@ -46,17 +46,13 @@ Our client will expect the server to always use mysql_native_password
 in its initial handshake. This is what a real server always does, even though
 it's not technically mandatory.
 
-Our server can then use the client's auth methods right away:
-- mysql_native_password
-- mysql_clear_password
-
-If our server's AuthServer UseClearText() returns true, and the
-client's auth method is not mysql_clear_password, we will
+The server's AuthServer plugin method AuthMethod() will then return
+what auth method the server wants to use. If it is
+mysql_native_password, and the client already returned the data, we
+use it. Otherwise we switch the auth to what the server wants (by
+sending an Authentication Method Switch Request packet) and
 re-negotiate.
 
-If any of these methods doesn't work for the server, it will re-negotiate
-by sending an Authentication Method Switch Request Packet.
-The client will then handle that if it can.
 --
 Maximum Packet Size:
 

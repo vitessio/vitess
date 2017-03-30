@@ -168,72 +168,60 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32) {
 		}
 	}
 
-	// See what method the client used.
-	renegotiateWithClearText := false
-	switch authMethod {
-	case mysqlNativePassword:
-		// This is what the server started with. Let's use it if we can.
-		if !l.authServer.UseClearText() {
-			userData, err := l.authServer.ValidateHash(salt, user, authResponse)
-			if err != nil {
-				c.writeErrorPacketFromError(err)
-				return
-			}
-			c.User = user
-			c.UserData = userData
-			// We're good.
-			break
-		}
+	// See what auth method the AuthServer wants to use for that user.
+	authServerMethod, err := l.authServer.AuthMethod(user)
+	if err != nil {
+		c.writeErrorPacketFromError(err)
+		return
+	}
 
-		// Our AuthServer cannot use mysql_native_password, it
-		// needs the real password.  Let's request that.
-		renegotiateWithClearText = true
-	case mysqlClearPassword:
-		// Client sent us a clear text password. Let's use it if we can.
-		if !l.AllowClearTextWithoutTLS && c.Capabilities&CapabilityClientSSL == 0 {
-			c.writeErrorPacket(CRServerHandshakeErr, SSUnknownSQLState, "Cannot use clear text authentication over non-SSL connections.")
-			return
-		}
-		userData, err := l.authServer.ValidateClearText(user, string(authResponse))
+	// Compare with what the client sent back.
+	switch {
+	case authServerMethod == MysqlNativePassword && authMethod == MysqlNativePassword:
+		// Both server and client want to use MysqlNativePassword:
+		// the negotiation can be completed right away, using the
+		// ValidateHash() method.
+		userData, err := l.authServer.ValidateHash(salt, user, authResponse)
 		if err != nil {
 			c.writeErrorPacketFromError(err)
 			return
 		}
 		c.User = user
 		c.UserData = userData
-		break
-	default:
-		// Client decided to use something we don't understand.
-		// Let's try again with clear text password.
-		renegotiateWithClearText = true
-	}
 
-	// If we need to re-negotiate with clear text, do it.
-	if renegotiateWithClearText {
-		// Check error conditions.
+	case authServerMethod == MysqlNativePassword:
+		// The server really wants to use MysqlNativePassword,
+		// but the client returned a result for something else:
+		// not sure this can happen, so not supporting this now.
+		c.writeErrorPacket(CRServerHandshakeErr, SSUnknownSQLState, "Client asked for auth %v, but server wants auth mysql_native_password", authMethod)
+		return
+
+	default:
+		// The server wants to use something else, re-negotiate.
+
+		// The negotiation happens in clear text. Let's check we can.
 		if !l.AllowClearTextWithoutTLS && c.Capabilities&CapabilityClientSSL == 0 {
 			c.writeErrorPacket(CRServerHandshakeErr, SSUnknownSQLState, "Cannot use clear text authentication over non-SSL connections.")
 			return
 		}
 
-		if err := c.writeAuthSwitchRequest(mysqlClearPassword, nil); err != nil {
+		// Switch our auth method to what the server wants.
+		// Dialog plugin expects an AskPassword prompt
+		var data []byte
+		if authServerMethod == MysqlDialog {
+			data = make([]byte, len(MysqlDialogMessage)+2)
+			data[0] = AskPassword
+			writeNullString(data, 1, MysqlDialogMessage)
+		}
+
+		if err := c.writeAuthSwitchRequest(authServerMethod, data); err != nil {
 			log.Errorf("Error write auth switch packet for client %v: %v", c.ConnectionID, err)
 			return
 		}
 
-		// The client is supposed to just send the data in a single packet.
-		// It is a zero-terminated string.
-		data, err := c.readEphemeralPacket()
-		if err != nil {
-			log.Warningf("Error reading auth switch response packet from client %v: %v", c.ConnectionID, err)
-			return
-		}
-		password, pos, ok := readNullString(data, 0)
-		if !ok || pos != len(data) {
-			c.writeErrorPacket(CRServerHandshakeErr, SSUnknownSQLState, "Error parsing packet with password: %v", data)
-			return
-		}
-		userData, err := l.authServer.ValidateClearText(user, password)
+		// Then hand over the rest of the negotiation to the
+		// auth server.
+		userData, err := l.authServer.Negotiate(c, user)
 		if err != nil {
 			c.writeErrorPacketFromError(err)
 			return
@@ -242,7 +230,7 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32) {
 		c.UserData = userData
 	}
 
-	// Send an OK packet.
+	// Negotiation worked, send OK packet.
 	if err := c.writeOKPacket(0, 0, c.StatusFlags, 0); err != nil {
 		log.Errorf("Cannot write OK packet: %v", err)
 		return
@@ -332,7 +320,7 @@ func (c *Conn) writeHandshakeV10(serverVersion string, authServer AuthServer, en
 			1 + // length of auth plugin data
 			10 + // reserved (0)
 			13 + // auth-plugin-data
-			lenNullString(mysqlNativePassword) // auth-plugin-name
+			lenNullString(MysqlNativePassword) // auth-plugin-name
 
 	data := c.startEphemeralPacket(length)
 	pos := 0
@@ -346,17 +334,8 @@ func (c *Conn) writeHandshakeV10(serverVersion string, authServer AuthServer, en
 	// Add connectionID in.
 	pos = writeUint32(data, pos, c.ConnectionID)
 
-	// Generate the salt if needed, put 8 bytes in.
-	var salt []byte
-	var err error
-	if authServer.UseClearText() {
-		// salt will end up being unused, but we can't send
-		// just zero, as the client will still use it, and
-		// that may leak crypto information.
-		salt, err = newSalt()
-	} else {
-		salt, err = authServer.Salt()
-	}
+	// Generate the salt, put 8 bytes in.
+	salt, err := authServer.Salt()
 	if err != nil {
 		return nil, err
 	}
@@ -391,7 +370,7 @@ func (c *Conn) writeHandshakeV10(serverVersion string, authServer AuthServer, en
 	pos++
 
 	// Copy authPluginName. We always start with mysql_native_password.
-	pos = writeNullString(data, pos, mysqlNativePassword)
+	pos = writeNullString(data, pos, MysqlNativePassword)
 
 	// Sanity check.
 	if pos != len(data) {
@@ -504,7 +483,7 @@ func (l *Listener) parseClientHandshakePacket(c *Conn, firstTime bool, data []by
 	}
 
 	// authMethod (with default)
-	authMethod := mysqlNativePassword
+	authMethod := MysqlNativePassword
 	if clientFlags&CapabilityClientPluginAuth != 0 {
 		authMethod, pos, ok = readNullString(data, pos)
 		if !ok {

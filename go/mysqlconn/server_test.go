@@ -276,7 +276,7 @@ func TestClearTextServer(t *testing.T) {
 		Password: "password1",
 		UserData: "userData1",
 	}
-	authServer.ClearText = true
+	authServer.Method = MysqlClearPassword
 	l, err := NewListener("tcp", ":0", authServer, th)
 	if err != nil {
 		t.Fatalf("NewListener failed: %v", err)
