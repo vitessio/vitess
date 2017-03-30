@@ -262,7 +262,8 @@ func TestServer(t *testing.T) {
 	//	time.Sleep(60 * time.Minute)
 }
 
-// TestClearTextServer creates a Server that needs clear text passwords from the client.
+// TestClearTextServer creates a Server that needs clear text
+// passwords from the client.
 func TestClearTextServer(t *testing.T) {
 	// If the database we're using is MariaDB, the client
 	// is also the MariaDB client, that does support
@@ -351,6 +352,52 @@ func TestClearTextServer(t *testing.T) {
 		t.Fatalf("mysql should have failed but returned: %v", output)
 	}
 	if !strings.Contains(output, "Access denied for user 'user1'") {
+		t.Errorf("Unexpected output for 'select rows': %v", output)
+	}
+}
+
+// TestDialogServer creates a Server that uses the dialog plugin on the client.
+func TestDialogServer(t *testing.T) {
+	th := &testHandler{}
+
+	authServer := NewAuthServerStatic()
+	authServer.Entries["user1"] = &AuthServerStaticEntry{
+		Password: "password1",
+		UserData: "userData1",
+	}
+	authServer.Method = MysqlDialog
+	l, err := NewListener("tcp", ":0", authServer, th)
+	if err != nil {
+		t.Fatalf("NewListener failed: %v", err)
+	}
+	l.AllowClearTextWithoutTLS = true
+	defer l.Close()
+	go func() {
+		l.Accept()
+	}()
+
+	host := l.Addr().(*net.TCPAddr).IP.String()
+	port := l.Addr().(*net.TCPAddr).Port
+
+	// Setup the right parameters.
+	params := &sqldb.ConnParams{
+		Host:  host,
+		Port:  port,
+		Uname: "user1",
+		Pass:  "password1",
+	}
+	sql := "select rows"
+	output, ok := runMysql(t, params, sql)
+	if strings.Contains(output, "No such file or directory") {
+		t.Logf("skipping dialog plugin tests, as the dialog plugin cannot be loaded: %v", err)
+		return
+	}
+	if !ok {
+		t.Fatalf("mysql failed: %v", output)
+	}
+	if !strings.Contains(output, "nice name") ||
+		!strings.Contains(output, "nicer name") ||
+		!strings.Contains(output, "2 rows in set") {
 		t.Errorf("Unexpected output for 'select rows': %v", output)
 	}
 }

@@ -125,6 +125,30 @@ func scramblePassword(salt, password []byte) []byte {
 	return scramble
 }
 
+// Constants for the dialog plugin.
+const (
+	mysqlDialogMessage = "Enter password: "
+
+	// Dialog plugin is similar to clear text, but can respond to multiple
+	// prompts in a row. This is not yet implemented.
+	// Follow questions should be prepended with a `cmd` byte:
+	// 0x02 - ordinary question
+	// 0x03 - last question
+	// 0x04 - password question
+	// 0x05 - last password
+	mysqlDialogAskPassword = 0x04
+)
+
+// authServerDialogSwitchData is a helper method to return the data
+// needed in the AuthSwitchRequest packet for the dialog plugin
+// to ask for a password.
+func authServerDialogSwitchData() []byte {
+	result := make([]byte, len(mysqlDialogMessage)+2)
+	result[0] = mysqlDialogAskPassword
+	writeNullString(result, 1, mysqlDialogMessage)
+	return result
+}
+
 // AuthServerReadPacketString is a helper method to read a packet
 // as a null terminated string. It is used by the mysql_clear_password
 // and dialog plugins.
@@ -151,13 +175,6 @@ func AuthServerNegotiateClearOrDialog(c *Conn, method string) (string, error) {
 		return AuthServerReadPacketString(c)
 
 	case MysqlDialog:
-		// Dialog plugin is similar to clear text, but can respond to multiple
-		// prompts in a row. This is not yet implemented.
-		// Follow questions should be prepended with a `cmd` byte:
-		// 0x02 - ordinary question
-		// 0x03 - last question
-		// 0x04 - password question
-		// 0x05 - last password
 		return AuthServerReadPacketString(c)
 
 	default:
