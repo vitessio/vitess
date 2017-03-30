@@ -23,27 +23,11 @@ func buildUnionPlan(union *sqlparser.Union, vschema VSchema) (primitive engine.P
 }
 
 func processUnion(union *sqlparser.Union, vschema VSchema, outer builder) (builder, error) {
-	var err error
-	var lbldr, rbldr builder
-	switch lhs := union.Left.(type) {
-	case *sqlparser.Union:
-		lbldr, err = processUnion(lhs, vschema, outer)
-	case *sqlparser.Select:
-		lbldr, err = processSelect(lhs, vschema, outer)
-	default:
-		panic("unreachable")
-	}
+	lbldr, err := processPart(union.Left, vschema, outer)
 	if err != nil {
 		return nil, err
 	}
-	switch rhs := union.Right.(type) {
-	case *sqlparser.Union:
-		rbldr, err = processUnion(rhs, vschema, outer)
-	case *sqlparser.Select:
-		rbldr, err = processSelect(rhs, vschema, outer)
-	default:
-		panic("unreachable")
-	}
+	rbldr, err := processPart(union.Right, vschema, outer)
 	if err != nil {
 		return nil, err
 	}
@@ -58,14 +42,33 @@ func processUnion(union *sqlparser.Union, vschema VSchema, outer builder) (build
 	return newUnionBuilder(lbldr, rbldr)
 }
 
+func processPart(part sqlparser.SelectStatement, vschema VSchema, outer builder) (builder, error) {
+	var err error
+	var bldr builder
+	switch part := part.(type) {
+	case *sqlparser.Union:
+		bldr, err = processUnion(part, vschema, outer)
+	case *sqlparser.Select:
+		bldr, err = processSelect(part, vschema, outer)
+	case *sqlparser.ParenSelect:
+		bldr, err = processPart(part.Select, vschema, outer)
+	default:
+		panic("unreachable")
+	}
+	if err != nil {
+		return nil, err
+	}
+	return bldr, nil
+}
+
 func unionRouteMerge(union *sqlparser.Union, left, right builder, vschema VSchema) (builder, error) {
 	lroute, ok := left.(*route)
 	if !ok {
-		return nil, errors.New("can't merge")
+		return nil, errors.New("unused message")
 	}
 	rroute, ok := right.(*route)
 	if !ok {
-		return nil, errors.New("can't merge")
+		return nil, errors.New("unused message")
 	}
 	if err := subqueryCanMerge(lroute, rroute); err != nil {
 		return nil, err

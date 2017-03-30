@@ -458,7 +458,7 @@
   }
 }
 
-# index hints, make sure they're not stripped.
+# index hints, make sure they are not stripped.
 "select user.col from user use index(a)"
 {
   "Original": "select user.col from user use index(a)",
