@@ -15,7 +15,8 @@ KUBERNETES_API_SERVER=${KUBERNETES_API_SERVER:-'127.0.0.1:8080'}
 VITESS_NAME=${VITESS_NAME:-'default'}
 
 # Kubernetes options config
-KUBECTL_OPTIONS="--namespace=$VITESS_NAME --server=$KUBERNETES_API_SERVER"
+#KUBECTL_OPTIONS="--namespace=$VITESS_NAME --server=$KUBERNETES_API_SERVER"
+KUBECTL_OPTIONS="--namespace=$VITESS_NAME"
 
 # CELLS should be a comma separated list of cells
 # the first cell listed will become local to vtctld.
@@ -73,5 +74,5 @@ fi
 source $config_file
 
 # Fill in defaults for new variables, so old config.sh files still work.
-vitess_image=${vitess_image:-vitess/lite}
+vitess_image=${vitess_image:-vitess/root}
 
