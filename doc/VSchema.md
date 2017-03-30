@@ -41,9 +41,9 @@ Vindexes come in many varieties. Some of them can be used as Primary Vindex, and
 
 ### Secondary Vindexes
 
-Secondary Vindexes are additional vindexes you can define against other columns of a table offering you optimizations for WHERE clauses that do not use the Primary Vindex. Secondary Vindexes return a single or a limited set of `keyspace IDs` which will allow VTGate to only target shards where the relevant data is present. In the absence of a secondary vindex, VTGate would have to send the query to all shards.
+Secondary Vindexes are additional vindexes you can define against other columns of a table offering you optimizations for WHERE clauses that do not use the Primary Vindex. Secondary Vindexes return a single or a limited set of `keyspace IDs` which will allow VTGate to only target shards where the relevant data is present. In the absence of a Secondary Vindex, VTGate would have to send the query to all shards.
 
-Secondary Vindexes are also commonly known as cross-shard indexes. It's important to note that Secondary Vindexes are only for making routing decisions. The underlying database shards will most likely need traditional indexes on those same columns.
+Secondary Vindexes are also commonly known as cross-shard indexes. It is important to note that Secondary Vindexes are only for making routing decisions. The underlying database shards will most likely need traditional indexes on those same columns.
 
 ### Unique and NonUnique Vindex
 
@@ -257,7 +257,7 @@ VSchema:
 
 ### Specifying A Secondary Vindex
 
-The following snippet shows how to configure a Secondary Vindex that's backed by a lookup table. In this case, the lookup table is configured to be in the unsharded lookup keyspace:
+The following snippet shows how to configure a Secondary Vindex that is backed by a lookup table. In this case, the lookup table is configured to be in the unsharded lookup keyspace:
 
 Schema:
 ``` sql
@@ -301,7 +301,7 @@ VSchema:
 }
 ```
 
-To recap, a checklist for creating the shared secondary vindex is:
+To recap, a checklist for creating the shared Secondary Vindex is:
 
 * Create physical `name_user_idx` table in lookup database.
 * Define a routing for it in the lookup VSchema.
