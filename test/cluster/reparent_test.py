@@ -35,7 +35,7 @@ class ReparentTest(base_cluster_test.BaseClusterTest):
 
     # seconds to wait for reparent to result in a new master
     cls.reparent_timeout_threshold = int(cls.test_params.get(
-        'reparent_timeout_threshold', '30'))
+        'reparent_timeout_threshold', '60'))
 
     for keyspace, num_shards in zip(cls.env.keyspaces, cls.env.num_shards):
       for shard in xrange(num_shards):
