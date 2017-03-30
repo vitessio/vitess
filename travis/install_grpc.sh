@@ -33,6 +33,7 @@ if [ -n "$grpc_dist" ]; then
   $PIP install --upgrade pip
   $PIP install --upgrade --ignore-installed virtualenv
 else
+  PIP=pip
   $PIP install --upgrade pip
   # System wide installations require an explicit upgrade of
   # certain gRPC Python dependencies e.g. "six" on Debian Jessie.
