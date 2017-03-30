@@ -154,12 +154,14 @@ However, once the setup exceeds the above complexity, VSchemas become a necessit
 The following snippets show the necessary configs for creating a table in an unsharded keyspace:
 
 Schema:
+
 ``` sql
-lookup keyspace
+# lookup keyspace
 create table name_user_idx(name varchar(128), user_id bigint, primary key(name, user_id));
 ```
 
 VSchema:
+
 ``` json
 // lookup keyspace
 {
@@ -177,12 +179,14 @@ For a normal unsharded table, the VSchema only needs to know the table name.  No
 To create a sharded table with a simple Primary Vindex, the VSchema requires more information:
 
 Schema:
+
 ``` sql
 # user keyspace
 create table user(user_id bigint, name varchar(128), primary key(user_id));
 ```
 
 VSchema:
+
 ``` json
 // user keyspace
 {
@@ -211,6 +215,7 @@ Because Vindexes can be shared, the JSON requires them to be specified in a sepa
 Since user is a sharded table, it will be beneficial to tie it to a Sequence. However, the sequence must be defined in the lookup (unsharded) keyspace. It is then referred from the user (sharded) keyspace. In this example, we are designating the user_id (Primary Vindex) column as the auto-increment.
 
 Schema:
+
 ``` sql
 # lookup keyspace
 create table user_seq(id int, next_id bigint, cache bigint, primary key(id)) comment 'vitess_sequence';
@@ -220,6 +225,7 @@ insert into user_seq(id, next_id, cache) values(0, 1, 3);
 For the sequence table, `id` is always 0. `next_id` starts off as 1, and the cache is usually a medium-sized number like 1000. In our example, we are using a small number to showcase how it works.
 
 VSchema:
+
 ``` json
 // lookup keyspace
 {
@@ -260,12 +266,14 @@ VSchema:
 The following snippet shows how to configure a Secondary Vindex that is backed by a lookup table. In this case, the lookup table is configured to be in the unsharded lookup keyspace:
 
 Schema:
+
 ``` sql
 # lookup keyspace
 create table name_user_idx(name varchar(128), user_id bigint, primary key(name, user_id));
 ```
 
 VSchema:
+
 ``` json
 // lookup keyspace
 {
