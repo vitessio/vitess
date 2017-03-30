@@ -5,7 +5,6 @@ import getpass
 import logging
 import os
 import subprocess
-import tempfile
 import time
 
 from sandbox import kubernetes_components
@@ -152,54 +151,9 @@ class K8sEnvironment(base_environment.BaseEnvironment):
         self.vtgate_addrs[cell], 60)
 
   def restart_mysql_task(self, tablet_name, task_name, is_alloc=False):
-    # Kubernetes strips leading 0s from uid when creating pod names
-    uid = str(self.get_tablet_uid(tablet_name)).lstrip('0')
-    vttablet_pod_name = 'vttablet-%s' % uid
-
-    # Generate temp file with current k8s pod config. Many of these steps
-    # can be deleted once StatefulSet is implemented and vttablets are
-    # controlled via replication controller.
-    tmpfile = None
-    tmpfile = tempfile.NamedTemporaryFile()
-    subprocess.Popen(['kubectl', 'get', 'pod', vttablet_pod_name,
-                      '--namespace=%s' % self.cluster_name, '-o', 'json'],
-                     stdout=tmpfile)
-    tmpfile.flush()
-    tmpfile.seek(0)
-
-    # Actually delete the pod and wait for it to be deleted.
+    # Delete the whole pod, which deletes mysql + vttablet tasks.
     os.system('kubectl delete pod %s --namespace=%s' % (
-        vttablet_pod_name, self.cluster_name))
-    start_time = time.time()
-    while time.time() - start_time < 120:
-      logging.info('Waiting for pod %s to be deleted', vttablet_pod_name)
-      pods = subprocess.check_output(
-          ['kubectl', 'get', 'pods', '--namespace=%s' % self.cluster_name])
-      if vttablet_pod_name not in pods:
-        logging.info('Pod deleted.')
-        break
-      time.sleep(5)
-
-    logging.info('Sleeping...')
-    time.sleep(60)
-
-    # Create the pod again.
-    os.system('cat %s | kubectl create --namespace=%s -f -' % (
-        tmpfile.name, self.cluster_name))
-    while time.time() - start_time < 120:
-      logging.info('Waiting for pod %s to be running', vttablet_pod_name)
-      pod = subprocess.check_output(
-          ['kubectl', 'get', 'pod', '--namespace=%s' % self.cluster_name,
-           vttablet_pod_name, '-o', 'json'])
-      try:
-        if json.loads(pod)['status']['phase'] == 'Running':
-          logging.info('Pod is running')
-          break
-      except ValueError:
-        pass
-      time.sleep(5)
-
-    self.vtctl_helper.execute_vtctl_command(['RefreshState', tablet_name])
+        self.get_tablet_pod_name(tablet_name), self.cluster_name))
     return 0
 
   def wait_for_good_failover_status(
@@ -235,9 +189,8 @@ class K8sEnvironment(base_environment.BaseEnvironment):
           timeout_error_msg += ' Condition "%s" not met.' % condition_msg
         raise base_environment.VitessEnvironmentError(timeout_error_msg)
       hostname = self.get_tablet_ip_port(tablet_name)
-      tablet_pod = 'vttablet-%s' % self.get_tablet_uid(tablet_name)
       host_varz = subprocess.check_output([
-          'kubectl', 'exec', '-ti', tablet_pod,
+          'kubectl', 'exec', '-ti', self.get_tablet_pod_name(tablet_name),
           '--namespace=%s' % self.cluster_name,
           'curl', '%s/debug/vars' % hostname])
       if not host_varz:
@@ -249,10 +202,17 @@ class K8sEnvironment(base_environment.BaseEnvironment):
   def wait_for_healthy_tablets(self):
     return 0
 
-  def get_tablet_task_number(self, tablet_name):
+  def get_tablet_pod_name(self, tablet_name):
     tablet_info = json.loads(self.vtctl_helper.execute_vtctl_command(
         ['GetTablet', tablet_name]))
-    return tablet_info['alias']['uid'] % 100
+    # Hostname is <pod_name>.vttablet
+    return tablet_info['hostname'].split('.')[0]
+
+  def get_tablet_task_number(self, tablet_name):
+    # Tablet pod name under StatefulSet is
+    # "<cell>-<keyspace>-<shard_number>-<tablet_type>-<task_number>"
+    # Example: test1-foo-0-replica-0.
+    return int(self.get_tablet_pod_name(tablet_name).split('-')[-1])
 
   def automatic_reparent_available(self):
     """Checks if the environment can automatically reparent."""

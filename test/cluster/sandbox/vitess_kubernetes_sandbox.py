@@ -144,7 +144,7 @@ class VitessKubernetesSandbox(sandbox.Sandbox):
                     cpu=self.app_options.mysql_cpu,
                 ),
             ),
-            controllerType='None',
+            controllerType='StatefulSet',
         ),
         vtgate=dict(
             serviceType='LoadBalancer',  # Allows port forwarding.

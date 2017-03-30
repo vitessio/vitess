@@ -35,7 +35,7 @@ class ReparentTest(base_cluster_test.BaseClusterTest):
 
     # seconds to wait for reparent to result in a new master
     cls.reparent_timeout_threshold = int(cls.test_params.get(
-        'reparent_timeout_threshold', '30'))
+        'reparent_timeout_threshold', '60'))
 
     for keyspace, num_shards in zip(cls.env.keyspaces, cls.env.num_shards):
       for shard in xrange(num_shards):
@@ -187,7 +187,7 @@ class ReparentTest(base_cluster_test.BaseClusterTest):
 
   def _test_explicit_emergency_reparent(self):
     # This test is currently disabled until the emergency reparent can be
-    # fleshed fleshed out better. If a master tablet is killed and there is no
+    # fleshed out better. If a master tablet is killed and there is no
     # tool performing automatic reparents (like Orchestrator), then there may be
     # a race condition between restarting the tablet (in which it would resume
     # being the master), and the EmergencyReparentShard call. This can sometimes
