@@ -11,6 +11,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.SortedMap;
@@ -22,6 +23,7 @@ import org.apache.commons.lang.StringUtils;
 
 import com.flipkart.vitess.util.Constants;
 import com.flipkart.vitess.util.MysqlDefs;
+import com.google.common.annotations.VisibleForTesting;
 import com.youtube.vitess.proto.Query;
 
 /**
@@ -898,8 +900,196 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData
 
     public ResultSet getImportedKeys(String catalog, String schema, String table)
         throws SQLException {
-        throw new SQLFeatureNotSupportedException(
-            Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
+        if (null == table) {
+            throw new SQLException("Table Name Cannot be Null");
+        }
+        ResultSet resultSet = null;
+        VitessStatement vitessStatement = new VitessStatement(this.connection);
+        ArrayList<ArrayList<String>> rows = new ArrayList<>();
+        try {
+            resultSet = vitessStatement.executeQuery("SHOW CREATE TABLE " + this.quotedId + table + this.quotedId);
+            while (resultSet.next()) {
+                extractForeignKeyForTable(rows, resultSet.getString(2), catalog, table);
+            }
+        } finally {
+            if (resultSet != null) {
+                resultSet.close();
+            }
+        }
+        String[] columnNames =
+          new String[] {"PKTABLE_CAT", "PKTABLE_SCHEM", "PKTABLE_NAME", "PKCOLUMN_NAME", "FKTABLE_CAT",
+            "FKTABLE_SCHEM", "FKTABLE_NAME", "FKCOLUMN_NAME", "KEY_SEQ", "UPDATE_RULE", "DELETE_RULE",
+            "FK_NAME", "PK_NAME", "DEFERRABILITY"};
+        Query.Type[] columnType =
+          new Query.Type[] {Query.Type.CHAR, Query.Type.CHAR, Query.Type.CHAR, Query.Type.CHAR,
+            Query.Type.CHAR, Query.Type.CHAR, Query.Type.CHAR, Query.Type.CHAR, Query.Type.INT16,
+            Query.Type.INT16, Query.Type.INT16, Query.Type.CHAR, Query.Type.CHAR, Query.Type.INT16};
+        return new VitessResultSet(columnNames, columnType, rows, this.connection);
+    }
+
+    @VisibleForTesting
+    void extractForeignKeyForTable(List<ArrayList<String>> rows, String createTableString, String catalog, String table) throws SQLException {
+        StringTokenizer lineTokenizer = new StringTokenizer(createTableString, "\n");
+
+        while (lineTokenizer.hasMoreTokens()) {
+            String line = lineTokenizer.nextToken().trim();
+            String constraintName = null;
+            if (StringUtils.startsWithIgnoreCase(line, "CONSTRAINT")) {
+                boolean usingBackTicks = true;
+                int beginPos = com.flipkart.vitess.util.StringUtils.indexOfQuoteDoubleAware(line, this.quotedId, 0);
+                if (beginPos == -1) {
+                    beginPos = line.indexOf("\"");
+                    usingBackTicks = false;
+                }
+                if (beginPos != -1) {
+                    int endPos;
+                    if (usingBackTicks) {
+                        endPos = com.flipkart.vitess.util.StringUtils.indexOfQuoteDoubleAware(line, this.quotedId, beginPos + 1);
+                    } else {
+                        endPos = com.flipkart.vitess.util.StringUtils.indexOfQuoteDoubleAware(line, "\"", beginPos + 1);
+                    }
+                    if (endPos != -1) {
+                        constraintName = line.substring(beginPos + 1, endPos);
+                        line = line.substring(endPos + 1, line.length()).trim();
+                    }
+                }
+            }
+
+            if (line.startsWith("FOREIGN KEY")) {
+                if (line.endsWith(",")) {
+                    line = line.substring(0, line.length() - 1);
+                }
+                int indexOfFK = line.indexOf("FOREIGN KEY");
+                String localColumnName = null;
+                String referencedCatalogName = com.flipkart.vitess.util.StringUtils.quoteIdentifier(catalog, this.quotedId);
+                String referencedTableName = null;
+                String referencedColumnName = null;
+                if (indexOfFK != -1) {
+                    int afterFk = indexOfFK + "FOREIGN KEY".length();
+
+                    int indexOfRef = com.flipkart.vitess.util.StringUtils.indexOfIgnoreCase(afterFk, line, "REFERENCES", this.quotedId, this.quotedId);
+                    if (indexOfRef != -1) {
+                        int indexOfParenOpen = line.indexOf('(', afterFk);
+                        int indexOfParenClose = com.flipkart.vitess.util.StringUtils.indexOfIgnoreCase(indexOfParenOpen, line, ")", this.quotedId, this.quotedId);
+                        localColumnName = line.substring(indexOfParenOpen + 1, indexOfParenClose);
+
+                        int afterRef = indexOfRef + "REFERENCES".length();
+                        int referencedColumnBegin = com.flipkart.vitess.util.StringUtils.indexOfIgnoreCase(afterRef, line, "(", this.quotedId, this.quotedId);
+
+                        if (referencedColumnBegin != -1) {
+                            referencedTableName = line.substring(afterRef, referencedColumnBegin);
+                            int referencedColumnEnd = com.flipkart.vitess.util.StringUtils.indexOfIgnoreCase(referencedColumnBegin + 1, line, ")", this.quotedId, this.quotedId);
+                            if (referencedColumnEnd != -1) {
+                                referencedColumnName = line.substring(referencedColumnBegin + 1, referencedColumnEnd);
+                            }
+                            int indexOfCatalogSep = com.flipkart.vitess.util.StringUtils.indexOfIgnoreCase(0, referencedTableName, ".", this.quotedId, this.quotedId);
+                            if (indexOfCatalogSep != -1) {
+                                referencedCatalogName = referencedTableName.substring(0, indexOfCatalogSep);
+                                referencedTableName = referencedTableName.substring(indexOfCatalogSep + 1);
+                            }
+                        }
+                    }
+                }
+                if (constraintName == null) {
+                    constraintName = "not_available";
+                }
+                List<String> localColumnsList = com.flipkart.vitess.util.StringUtils.split(localColumnName, ",", this.quotedId, this.quotedId);
+                List<String> referColumnsList = com.flipkart.vitess.util.StringUtils.split(referencedColumnName, ",", this.quotedId, this.quotedId);
+                if (localColumnsList.size() != referColumnsList.size()) {
+                    throw new SQLException("Mismatch columns list for foreign key local and reference columns");
+                }
+                // Report a separate row for each column in the foreign key. All values the same except the column name.
+                for (int i = 0; i < localColumnsList.size(); i++) {
+                    String localColumn = localColumnsList.get(i);
+                    String referColumn = referColumnsList.get(i);
+                    ArrayList<String> row = new ArrayList<>(14);
+                    row.add(com.flipkart.vitess.util.StringUtils.unQuoteIdentifier(referencedCatalogName, this.quotedId)); // PKTABLE_CAT
+                    row.add(null); // PKTABLE_SCHEM
+                    row.add(com.flipkart.vitess.util.StringUtils.unQuoteIdentifier(referencedTableName, this.quotedId)); // PKTABLE_NAME
+                    row.add(com.flipkart.vitess.util.StringUtils.unQuoteIdentifier(referColumn, this.quotedId)); // PKCOLUMN_NAME
+                    row.add(catalog); // FKTABLE_CAT
+                    row.add(null); // FKTABLE_SCHEM
+                    row.add(table); // FKTABLE_NAME
+                    row.add(com.flipkart.vitess.util.StringUtils.unQuoteIdentifier(localColumn, this.quotedId)); // FKCOLUMN_NAME
+                    row.add(Integer.toString(i + 1)); // KEY_SEQ
+                    int[] actions = getForeignKeyActions(line);
+                    row.add(Integer.toString(actions[1])); // UPDATE_RULE
+                    row.add(Integer.toString(actions[0])); // DELETE_RULE
+                    row.add(constraintName); // FK_NAME
+                    row.add(null); // PK_NAME
+                    row.add(Integer.toString(java.sql.DatabaseMetaData.importedKeyNotDeferrable)); // DEFERRABILITY
+                    rows.add(row);
+                }
+            }
+        }
+    }
+
+
+    /**
+     * Parses the constraint to see what actions are taking for update and delete, such as cascade.
+     * @param constraint
+     *              the constraint to parse
+     * @return  the code from {@link DatabaseMetaData} corresponding to the foreign actions for the constraint
+     */
+    private int[] getForeignKeyActions(String constraint) {
+        int[] actions = new int[] { java.sql.DatabaseMetaData.importedKeyNoAction, java.sql.DatabaseMetaData.importedKeyNoAction };
+        int lastParenIndex = constraint.lastIndexOf(")");
+        if (lastParenIndex != (constraint.length() - 1)) {
+            String cascadeOptions = constraint.substring(lastParenIndex + 1).trim().toUpperCase(Locale.ENGLISH);
+            actions[0] = getCascadeDeleteOption(cascadeOptions);
+            actions[1] = getCascadeUpdateOption(cascadeOptions);
+        }
+        return actions;
+    }
+
+    /**
+     * Parses the cascade option string and returns the DBMD constant that
+     * represents it (for deletes)
+     *
+     * @param cascadeOptions
+     *            the comment from 'SHOW TABLE STATUS'
+     * @return the DBMD constant that represents the cascade option
+     */
+    private int getCascadeDeleteOption(String cascadeOptions) {
+        int onDeletePos = cascadeOptions.indexOf("ON DELETE");
+        if (onDeletePos != -1) {
+            String deleteOptions = cascadeOptions.substring(onDeletePos, cascadeOptions.length());
+            if (deleteOptions.startsWith("ON DELETE CASCADE")) {
+                return java.sql.DatabaseMetaData.importedKeyCascade;
+            } else if (deleteOptions.startsWith("ON DELETE SET NULL")) {
+                return java.sql.DatabaseMetaData.importedKeySetNull;
+            } else if (deleteOptions.startsWith("ON DELETE RESTRICT")) {
+                return java.sql.DatabaseMetaData.importedKeyRestrict;
+            } else if (deleteOptions.startsWith("ON DELETE NO ACTION")) {
+                return java.sql.DatabaseMetaData.importedKeyNoAction;
+            }
+        }
+        return java.sql.DatabaseMetaData.importedKeyNoAction;
+    }
+
+    /**
+     * Parses the cascade option string and returns the DBMD constant that
+     * represents it (for Updates)
+     *
+     * @param cascadeOptions
+     *            the comment from 'SHOW TABLE STATUS'
+     * @return the DBMD constant that represents the cascade option
+     */
+    private int getCascadeUpdateOption(String cascadeOptions) {
+        int onUpdatePos = cascadeOptions.indexOf("ON UPDATE");
+        if (onUpdatePos != -1) {
+            String updateOptions = cascadeOptions.substring(onUpdatePos, cascadeOptions.length());
+            if (updateOptions.startsWith("ON UPDATE CASCADE")) {
+                return java.sql.DatabaseMetaData.importedKeyCascade;
+            } else if (updateOptions.startsWith("ON UPDATE SET NULL")) {
+                return java.sql.DatabaseMetaData.importedKeySetNull;
+            } else if (updateOptions.startsWith("ON UPDATE RESTRICT")) {
+                return java.sql.DatabaseMetaData.importedKeyRestrict;
+            } else if (updateOptions.startsWith("ON UPDATE NO ACTION")) {
+                return java.sql.DatabaseMetaData.importedKeyNoAction;
+            }
+        }
+        return java.sql.DatabaseMetaData.importedKeyNoAction;
     }
 
     public ResultSet getExportedKeys(String catalog, String schema, String table)

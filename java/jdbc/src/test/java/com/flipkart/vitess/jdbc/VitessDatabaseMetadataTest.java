@@ -1,12 +1,17 @@
 package com.flipkart.vitess.jdbc;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.sql.Types;
 import java.util.ArrayList;
+import java.util.List;
 import java.util.Properties;
+import java.util.Scanner;
 
 import org.junit.Assert;
 import org.junit.Test;
@@ -16,6 +21,8 @@ import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.modules.junit4.PowerMockRunner;
 
 import com.flipkart.vitess.util.Constants;
+import com.google.common.base.Charsets;
+import com.google.common.io.CharStreams;
 import com.google.protobuf.ByteString;
 import com.youtube.vitess.client.cursor.Cursor;
 import com.youtube.vitess.client.cursor.SimpleCursor;
@@ -1403,5 +1410,101 @@ import com.youtube.vitess.proto.Query;
         PowerMockito.whenNew(VitessStatement.class).withAnyArguments().thenReturn(vitessStatement);
         PowerMockito.when(vitessStatement.executeQuery(sql))
             .thenReturn(new VitessResultSet(mockedCursor));
+    }
+
+    /**
+     * Tests that we're properly stitching together the results of SHOW CREATE TABLE. See {@link #extractForeignKeyForTableTest()}
+     * for more thorough testing of the actual parsing
+     */
+    @Test public void getImportedKeysTest() throws Exception {
+        try (InputStream resourceAsStream = this.getClass().getResourceAsStream("/getImportedKeysTestCase.sql")) {
+            String table = "testA";
+            String showCreate = CharStreams.toString(new InputStreamReader(resourceAsStream, Charsets.UTF_8));
+
+            Query.QueryResult queryResult = Query.QueryResult.newBuilder()
+              .addFields(Query.Field.newBuilder().setName("Table").setType(Query.Type.CHAR))
+              .addFields(Query.Field.newBuilder().setName("Create Table").setType(Query.Type.CHAR))
+              .addRows(Query.Row.newBuilder()
+                .addLengths(table.length())
+                .addLengths(showCreate.length())
+                .setValues(ByteString.copyFromUtf8(table + showCreate)))
+              .build();
+
+            String sql = "SHOW CREATE TABLE `testA`";
+            VitessConnection vitessConnection =
+              new VitessConnection("jdbc:vitess://username@ip1:port1/keyspace", null);
+            VitessStatement vitessStatement = PowerMockito.spy(new VitessStatement(vitessConnection));
+            PowerMockito.whenNew(VitessStatement.class).withAnyArguments().thenReturn(vitessStatement);
+            PowerMockito.doReturn(new VitessResultSet(new SimpleCursor(queryResult), vitessStatement))
+              .when(vitessStatement).executeQuery(sql);
+
+            VitessDatabaseMetaData vitessDatabaseMetaData = new VitessMySQLDatabaseMetadata(vitessConnection);
+            ResultSet importedKeys = vitessDatabaseMetaData.getImportedKeys("test", "test", "testA");
+            importedKeys.next();
+            Assert.assertEquals("test", importedKeys.getString("PKTABLE_CAT"));
+            Assert.assertEquals(null, importedKeys.getString("PKTABLE_SCHEM"));
+            Assert.assertEquals("fTable", importedKeys.getString("PKTABLE_NAME"));
+            Assert.assertEquals("id", importedKeys.getString("PKCOLUMN_NAME"));
+            Assert.assertEquals("test", importedKeys.getString("FKTABLE_CAT"));
+            Assert.assertEquals(null, importedKeys.getString("FKTABLE_SCHEM"));
+            Assert.assertEquals("testA", importedKeys.getString("FKTABLE_NAME"));
+            Assert.assertEquals("fIdOne", importedKeys.getString("FKCOLUMN_NAME"));
+            Assert.assertEquals(1, importedKeys.getInt("KEY_SEQ"));
+            Assert.assertEquals(3, importedKeys.getInt("UPDATE_RULE"));
+            Assert.assertEquals(3, importedKeys.getInt("DELETE_RULE"));
+            Assert.assertEquals("fk_testA", importedKeys.getString("FK_NAME"));
+            Assert.assertEquals(null, importedKeys.getString("PK_NAME"));
+            Assert.assertEquals(7, importedKeys.getInt("DEFERRABILITY"));
+        }
+    }
+
+    /**
+     * Tests parsing all the various outputs of SHOW CREATE TABLE for the foreign key constraints.
+     */
+    @Test public void extractForeignKeyForTableTest() throws SQLException, IOException {
+        VitessConnection vitessConnection =
+          new VitessConnection("jdbc:vitess://username@ip1:port1/keyspace", null);
+        VitessMySQLDatabaseMetadata vitessDatabaseMetaData =
+          new VitessMySQLDatabaseMetadata(vitessConnection);
+
+        try (InputStream resourceAsStream = this.getClass().getResourceAsStream("/extractForeignKeyForTableTestCases.sql")) {
+            Scanner scanner = new Scanner(resourceAsStream);
+            List<ArrayList<String>> rows = new ArrayList<>();
+            String testName = null;
+            String testExpected = null;
+            String testInput = "";
+            String startTag = "-- name: ";
+            String expectedTag = "-- expected: ";
+            while (scanner.hasNextLine()) {
+                String line = scanner.nextLine();
+                if (line.startsWith(startTag)) {
+                    if (testName != null) {
+                        rows.clear();
+                        vitessDatabaseMetaData.extractForeignKeyForTable(rows, testInput, "test", "testA");
+                        assertForeignKeysOutput(testName, testExpected, rows);
+                        testInput = "";
+                    }
+                    testName = line.substring(startTag.length());
+                } else if (line.startsWith(expectedTag)) {
+                    testExpected = line.substring(expectedTag.length());
+                } else if (line.startsWith("--") || line.trim().isEmpty()) {
+                    // Just general comment or whitespace, we can ignore
+                } else {
+                    testInput += line + "\n";
+                }
+            }
+
+            rows.clear();
+            vitessDatabaseMetaData.extractForeignKeyForTable(rows, testExpected, "test", "testA");
+            assertForeignKeysOutput(testName, testExpected, rows);
+        }
+    }
+
+    private void assertForeignKeysOutput(String testName, String expected, List<ArrayList<String>> output) {
+        // Uncomment below for debugging
+        //System.out.println("Name: " + testName);
+        //System.out.println("Expected: " + expected);
+        //System.out.println("Output: " + String.valueOf(output));
+        Assert.assertEquals(testName, expected, String.valueOf(output));
     }
 }
