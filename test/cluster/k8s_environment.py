@@ -209,6 +209,9 @@ class K8sEnvironment(base_environment.BaseEnvironment):
     return tablet_info['hostname'].split('.')[0]
 
   def get_tablet_task_number(self, tablet_name):
+    # Tablet pod name under StatefulSet is
+    # "<cell>-<keyspace>-<shard_number>-<tablet_type>-<task_number>"
+    # Example: test1-foo-0-replica-0.
     return int(self.get_tablet_pod_name(tablet_name).split('-')[-1])
 
   def automatic_reparent_available(self):
