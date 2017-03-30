@@ -22,8 +22,7 @@ const (
 
 	// MysqlDialog uses the dialog plugin on the client side.
 	// It transmits data in the clear.
-	MysqlDialog        = "dialog"
-	MysqlDialogMessage = "Enter password: "
+	MysqlDialog = "dialog"
 )
 
 // Capability flags.
@@ -136,8 +135,6 @@ const (
 
 	// ComQuery is COM_QUERY.
 	ComQuery = 0x03
-
-	AskPassword = 0x04
 
 	// ComPing is COM_PING.
 	ComPing = 0x0e

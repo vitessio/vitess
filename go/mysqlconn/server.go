@@ -206,14 +206,11 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32) {
 		}
 
 		// Switch our auth method to what the server wants.
-		// Dialog plugin expects an AskPassword prompt
+		// Dialog plugin expects an AskPassword prompt.
 		var data []byte
 		if authServerMethod == MysqlDialog {
-			data = make([]byte, len(MysqlDialogMessage)+2)
-			data[0] = AskPassword
-			writeNullString(data, 1, MysqlDialogMessage)
+			data = authServerDialogSwitchData()
 		}
-
 		if err := c.writeAuthSwitchRequest(authServerMethod, data); err != nil {
 			log.Errorf("Error write auth switch packet for client %v: %v", c.ConnectionID, err)
 			return
