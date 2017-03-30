@@ -19,7 +19,16 @@
     <loc>http://vitess.io/contributing/github-workflow.html</loc>
   </url>
   <url>
+    <loc>http://vitess.io/user-guide/horizontal-sharding-workflow.html</loc>
+  </url>
+  <url>
     <loc>http://vitess.io/user-guide/horizontal-sharding.html</loc>
+  </url>
+  <url>
+    <loc>http://vitess.io/getting-started/</loc>
+  </url>
+  <url>
+    <loc>http://vitess.io/terms/</loc>
   </url>
   <url>
     <loc>http://vitess.io/about/</loc>
@@ -31,13 +40,7 @@
     <loc>http://vitess.io/overview/</loc>
   </url>
   <url>
-    <loc>http://vitess.io/getting-started/</loc>
-  </url>
-  <url>
     <loc>http://vitess.io/contributing/</loc>
-  </url>
-  <url>
-    <loc>http://vitess.io/terms/</loc>
   </url>
   <url>
     <loc>http://vitess.io/</loc>
@@ -116,6 +119,9 @@
   </url>
   <url>
     <loc>http://vitess.io/user-guide/vitess-sequences.html</loc>
+  </url>
+  <url>
+    <loc>http://vitess.io/user-guide/vschema.html</loc>
   </url>
   <url>
     <loc>http://vitess.io/reference/vtctl.html</loc>
