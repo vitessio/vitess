@@ -129,7 +129,7 @@ hash | Functional Unique | 3DES null-key hash | Yes | Yes | 1
 lookup | Lookup NonUnique | Lookup table non-unique values | No | Yes | 20
 lookup_unique | Lookup Unique | Lookup table unique values | If unowned | Yes | 10
 numeric | Functional Unique | Identity | Yes | Yes | 0
-mumeric_static_map | Functional Unique | A JSON file that maps input values to keyspace IDs | Yes | No | 1
+numeric_static_map | Functional Unique | A JSON file that maps input values to keyspace IDs | Yes | No | 1
 unicode_loose_md5 | Functional Unique | Case-insensitive (UCA level 1) md5 hash | Yes | No | 1
 
 Custom vindexes can also be plugged in as needed.
@@ -314,6 +314,7 @@ Currently, these steps have to be currently performed manually. However, extende
 ### Advanced usage
 
 The examples/demo also shows more tricks you can perform:
+
 * The `music` table uses a secondary lookup vindex `music_user_idx`. However, this lookup vindex is itself a sharded table.
 * `music_extra` shares `music_user_idx` with `music`, and uses it as Primary Vindex.
 * `music_extra` defines an additional Functional Vindex called `keyspace_id` which the demo auto-populates using the reverse mapping capability.

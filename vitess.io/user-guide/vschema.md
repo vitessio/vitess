@@ -1,6 +1,6 @@
 ---
 layout: doc
-title: "Sharding in Kubernetes Using Workflow"
+title: "VSchema User Guide"
 description:
 modified:
 excerpt:
@@ -13,4 +13,4 @@ toc: true
 share: false
 ---
 
-{% include doc/ShardingKubernetesWorkflow.md %}
+{% include doc/VSchema.md %}
