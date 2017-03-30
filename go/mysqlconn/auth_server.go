@@ -6,7 +6,6 @@ import (
 	"fmt"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/sqldb"
 )
 
 // AuthServer is the interface that servers must implement to validate
@@ -126,21 +125,6 @@ func scramblePassword(salt, password []byte) []byte {
 	return scramble
 }
 
-// AuthServerWritePacketString is a helper method to write a null
-// terminated string into a packet, mainly to be used with the dialog
-// client plugin.
-func AuthServerWritePacketString(c *Conn, message string) error {
-	data := c.startEphemeralPacket(len(message) + 1)
-	pos := writeNullString(data, 0, message)
-	if pos != len(data) {
-		return fmt.Errorf("error building AuthServerWritePacketString: got %v bytes expected %v", pos, len(data))
-	}
-	if err := c.writeEphemeralPacket(true); err != nil {
-		return sqldb.NewSQLError(CRServerGone, SSUnknownSQLState, err.Error())
-	}
-	return nil
-}
-
 // AuthServerReadPacketString is a helper method to read a packet
 // as a null terminated string. It is used by the mysql_clear_password
 // and dialog plugins.
@@ -152,7 +136,7 @@ func AuthServerReadPacketString(c *Conn) (string, error) {
 		return "", err
 	}
 	if len(data) == 0 || data[len(data)-1] != 0 {
-		return "", fmt.Errorf("received invalid response packet")
+		return "", fmt.Errorf("received invalid response packet, datalen=%v", len(data))
 	}
 	return string(data[:len(data)-1]), nil
 }
@@ -167,13 +151,15 @@ func AuthServerNegotiateClearOrDialog(c *Conn, method string) (string, error) {
 		return AuthServerReadPacketString(c)
 
 	case MysqlDialog:
-		// Send a question packet.
-		if err := AuthServerWritePacketString(c, "Enter Password:"); err != nil {
-			return "", err
-		}
-
-		// Read the password as the response.
+		// Dialog plugin is similar to clear text, but can respond to multiple
+		// prompts in a row. This is not yet implemented.
+		// Follow questions should be prepended with a `cmd` byte:
+		// 0x02 - ordinary question
+		// 0x03 - last question
+		// 0x04 - password question
+		// 0x05 - last password
 		return AuthServerReadPacketString(c)
+
 	default:
 		return "", fmt.Errorf("unrecognized method: %v", method)
 	}
