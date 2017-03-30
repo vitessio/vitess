@@ -597,3 +597,79 @@
     "FieldQuery": "select id, name from unsharded where 1 != 1"
   }
 }
+
+"(select id from unsharded) union (select id from unsharded_auto) order by 1 limit 5"
+{
+  "Original": "(select id from unsharded) union (select id from unsharded_auto) order by 1 limit 5",
+  "Instructions": {
+    "Opcode": "SelectUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "(select id from unsharded) union (select id from unsharded_auto) order by 1 asc limit 5",
+    "FieldQuery": "(select id from unsharded where 1 != 1) union (select id from unsharded_auto where 1 != 1)"
+  }
+}
+
+"select id from unsharded union select id from unsharded_auto union select id from unsharded_auto where id in (132)"
+{
+  "Original": "select id from unsharded union select id from unsharded_auto union select id from unsharded_auto where id in (132)",
+  "Instructions": {
+    "Opcode": "SelectUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "select id from unsharded union select id from unsharded_auto union select id from unsharded_auto where id in (132)",
+    "FieldQuery": "select id from unsharded where 1 != 1 union select id from unsharded_auto where 1 != 1 union select id from unsharded_auto where 1 != 1"
+  }
+}
+
+"(select id from unsharded union select id from unsharded_auto) union (select id from unsharded_auto union select name from unsharded)"
+{
+  "Original": "(select id from unsharded union select id from unsharded_auto) union (select id from unsharded_auto union select name from unsharded)",
+  "Instructions": {
+    "Opcode": "SelectUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "(select id from unsharded union select id from unsharded_auto) union (select id from unsharded_auto union select name from unsharded)",
+    "FieldQuery": "(select id from unsharded where 1 != 1 union select id from unsharded_auto where 1 != 1) union (select id from unsharded_auto where 1 != 1 union select name from unsharded where 1 != 1)"
+  }
+}
+
+"(select id from user union select id from music) union select 1 from dual"
+"unsupported: multi-shard union without ALL"
+
+"select 1 from music union (select id from user union all select name from unsharded)"
+"unsupported: multi-shard union without ALL"
+
+"select 1 from music union (select id from user union select name from unsharded)"
+"unsupported: multi-shard union without ALL"
+
+"select id from user union all select id from music"
+{
+  "Original": "select id from user union all select id from music",
+  "Instructions": {
+    "Left": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select id from user",
+      "FieldQuery": "select id from user where 1 != 1"
+    },
+    "Right": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select id from music",
+      "FieldQuery": "select id from music where 1 != 1"
+    }
+  }
+}

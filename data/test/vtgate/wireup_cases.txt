@@ -458,3 +458,11 @@
 # Invalid value in IN clause from RHS of join
 "select u1.id from user u1 join user u2 where u2.id = 18446744073709551616"
 "strconv.ParseUint: parsing "18446744073709551616": value out of range"
+
+# put it in a union on the left
+"select u1.id from user u1 join user u2 where u2.id = 18446744073709551616 union all select id from user"
+"strconv.ParseUint: parsing "18446744073709551616": value out of range"
+
+# put it in a union on the right
+"select id from user union all select u1.id from user u1 join user u2 where u2.id = 18446744073709551616"
+"strconv.ParseUint: parsing "18446744073709551616": value out of range"

@@ -1371,3 +1371,58 @@ func TestSimpleUnion(t *testing.T) {
 		t.Errorf("result: %+v, want %+v", result, wantResult)
 	}
 }
+
+func TestSimpleUnionStream(t *testing.T) {
+	router, sbc1, sbc2, _ := createRouterEnv()
+	result, err := routerStream(router, "select id, name from user where id = 1 union all select id, name from user_extra where user_id = 3")
+	if err != nil {
+		t.Error(err)
+	}
+	wantQueries := []querytypes.BoundQuery{{
+		Sql:           "select id, name from user where id = 1",
+		BindVariables: map[string]interface{}{},
+	}}
+	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
+		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, wantQueries)
+	}
+	wantQueries = []querytypes.BoundQuery{{
+		Sql:           "select id, name from user_extra where user_id = 3",
+		BindVariables: map[string]interface{}{},
+	}}
+	if !reflect.DeepEqual(sbc2.Queries, wantQueries) {
+		t.Errorf("sbc2.Queries: %+v, want %+v\n", sbc2.Queries, wantQueries)
+	}
+	wantResult := &sqltypes.Result{
+		Fields: sandboxconn.SingleRowResult.Fields,
+		Rows: [][]sqltypes.Value{
+			sandboxconn.SingleRowResult.Rows[0],
+			sandboxconn.SingleRowResult.Rows[0],
+		},
+		RowsAffected: 2,
+	}
+	if !reflect.DeepEqual(result, wantResult) {
+		t.Errorf("result: %+v, want %+v", result, wantResult)
+	}
+}
+
+func TestUnionErrors(t *testing.T) {
+	router, sbc1, _, _ := createRouterEnv()
+	// First query fails
+	sbc1.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
+	_, err := routerExec(router, "select id from user union all select id from user_extra", nil)
+	want := "INVALID_ARGUMENT error"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("err: %v, must contain %s", err, want)
+	}
+}
+
+func TestStreamUnionErrors(t *testing.T) {
+	router, sbc1, _, _ := createRouterEnv()
+	// First query fails
+	sbc1.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
+	_, err := routerStream(router, "select id from user union all select id from user_extra")
+	want := "INVALID_ARGUMENT error"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("err: %v, must contain %s", err, want)
+	}
+}

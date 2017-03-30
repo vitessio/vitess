@@ -4,6 +4,8 @@ import (
 	"sync"
 
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/vt/concurrency"
+	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vtgate/queryinfo"
 )
 
@@ -15,25 +17,25 @@ type UnionAll struct {
 // Execute performs an execute
 func (union *UnionAll) Execute(vcursor VCursor, queryConstruct *queryinfo.QueryConstruct, joinvars map[string]interface{}, wantfields bool) (*sqltypes.Result, error) {
 	var lres, rres *sqltypes.Result
-	var lerr, rerr error
+	allErrors := new(concurrency.AllErrorRecorder)
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func(vc *VCursor, qc *queryinfo.QueryConstruct, jv map[string]interface{}, wf bool) {
 		defer wg.Done()
-		lres, lerr = union.Left.Execute(*vc, qc, jv, wf)
+		var err error
+		lres, err = union.Left.Execute(*vc, qc, jv, wf)
+		allErrors.RecordError(err)
 	}(&vcursor, queryConstruct, joinvars, wantfields)
 	wg.Add(1)
 	go func(vc *VCursor, qc *queryinfo.QueryConstruct, jv map[string]interface{}, wf bool) {
 		defer wg.Done()
-		rres, rerr = union.Right.Execute(*vc, qc, jv, wf)
+		var err error
+		rres, err = union.Right.Execute(*vc, qc, jv, wf)
+		allErrors.RecordError(err)
 	}(&vcursor, queryConstruct, joinvars, wantfields)
 	wg.Wait()
-	// TODO(acharis): possibly better to aggregate errors as in ScatterConn
-	if lerr != nil {
-		return nil, lerr
-	}
-	if rerr != nil {
-		return nil, rerr
+	if allErrors.HasErrors() {
+		return nil, allErrors.AggrError(vterrors.Aggregate)
 	}
 	// TODO(acharis): deal with column type mismatch
 	lres.AppendResult(rres)
@@ -42,25 +44,23 @@ func (union *UnionAll) Execute(vcursor VCursor, queryConstruct *queryinfo.QueryC
 
 // StreamExecute performs a streaming execute
 func (union *UnionAll) StreamExecute(vcursor VCursor, queryConstruct *queryinfo.QueryConstruct, joinvars map[string]interface{}, wantfields bool, callback func(*sqltypes.Result) error) error {
-	var lerr, rerr error
+	allErrors := new(concurrency.AllErrorRecorder)
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func(vc *VCursor, qc *queryinfo.QueryConstruct, jv map[string]interface{}, wf bool, cb func(*sqltypes.Result) error) {
 		defer wg.Done()
-		lerr = union.Left.StreamExecute(*vc, qc, jv, wf, cb)
+		err := union.Left.StreamExecute(*vc, qc, jv, wf, cb)
+		allErrors.RecordError(err)
 	}(&vcursor, queryConstruct, joinvars, wantfields, callback)
 	wg.Add(1)
 	go func(vc *VCursor, qc *queryinfo.QueryConstruct, jv map[string]interface{}, wf bool, cb func(*sqltypes.Result) error) {
 		defer wg.Done()
-		rerr = union.Right.StreamExecute(*vc, qc, jv, wf, cb)
+		err := union.Right.StreamExecute(*vc, qc, jv, wf, cb)
+		allErrors.RecordError(err)
 	}(&vcursor, queryConstruct, joinvars, wantfields, callback)
 	wg.Wait()
-	// TODO(acharis): possibly better to aggregate errors as in ScatterConn
-	if lerr != nil {
-		return lerr
-	}
-	if rerr != nil {
-		return rerr
+	if allErrors.HasErrors() {
+		return allErrors.AggrError(vterrors.Aggregate)
 	}
 	return nil
 }
