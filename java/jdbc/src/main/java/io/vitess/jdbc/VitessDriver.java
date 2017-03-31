@@ -11,6 +11,12 @@ import java.util.Properties;
 import java.util.logging.Logger;
 
 /**
+ * VitessDriver is the official JDBC driver for Vitess.
+ *
+ * It was initially contributed by Flipkart.
+ *
+ * Before April 2017, the code was located in the package "com.flipkart.vitess.jdbc".
+ *
  * Created by harshit.gangal on 23/01/16.
  */
 public class VitessDriver implements Driver {
