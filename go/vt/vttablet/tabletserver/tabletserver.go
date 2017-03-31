@@ -969,7 +969,7 @@ func (tsv *TabletServer) beginWaitForSameRangeTransactions(ctx context.Context, 
 		// Use (potentially longer) -queryserver-config-query-timeout and not
 		// -queryserver-config-txpool-timeout (defaults to 1s) to limit the waiting.
 		ctx, tsv.QueryTimeout.Get(),
-		"waitForSameRangeTransactions", "waitForSameRangeTransactions", nil,
+		"", "waitForSameRangeTransactions", nil,
 		target, true /* isTx */, false, /* allowOnShutdown */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
 			k, table := tsv.computeTxSerializerKey(ctx, logStats, sql, bindVariables)
@@ -1240,7 +1240,10 @@ func (tsv *TabletServer) handlePanicAndSendLogStats(
 			logStats.Error = terr
 		}
 	}
-	if logStats != nil {
+	// Examples where we don't send the log stats:
+	// - ExecuteBatch() (logStats == nil)
+	// - beginWaitForSameRangeTransactions() (Method == "")
+	if logStats != nil && logStats.Method != "" {
 		logStats.Send()
 	}
 }
