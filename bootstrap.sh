@@ -136,6 +136,7 @@ gotools=" \
        github.com/golang/mock/mockgen \
        github.com/kardianos/govendor \
        golang.org/x/tools/cmd/goimports \
+       golang.org/x/tools/cmd/goyacc \
        honnef.co/go/tools/cmd/unused \
 "
 
