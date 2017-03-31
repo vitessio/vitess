@@ -1,4 +1,4 @@
-package com.youtube.vitess.example;
+package io.vitess.example;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.common.net.HostAndPort;

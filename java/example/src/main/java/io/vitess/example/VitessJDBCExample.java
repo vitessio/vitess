@@ -1,4 +1,4 @@
-package com.youtube.vitess.example;
+package io.vitess.example;
 
 import org.joda.time.Instant;
 

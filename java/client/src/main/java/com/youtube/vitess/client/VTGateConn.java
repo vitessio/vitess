@@ -58,7 +58,7 @@ import javax.annotation.Nullable;
  *
  * <p>
  * See the <a href=
- * "https://github.com/youtube/vitess/blob/master/java/example/src/main/java/com/youtube/vitess/example/VitessClientExample.java">VitessClientExample</a>
+ * "https://github.com/youtube/vitess/blob/master/java/example/src/main/java/io/vitess/example/VitessClientExample.java">VitessClientExample</a>
  * for a usage example.
  *
  * <p>
