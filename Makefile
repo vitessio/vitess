@@ -39,7 +39,7 @@ endif
 	go install $(VT_GO_PARALLEL) -ldflags "$(tools/build_version_flags.sh)" ./go/...
 
 parser:
-	goyacc -o ./go/vt/sqlparser/sql.go -v ./go/vt/sqlparser/sql.output ./go/vt/sqlparser/sql.y
+	make -C go/vt/sqlparser
 
 # To pass extra flags, run test.go manually.
 # For example: go run test.go -docker=false -- --extra-flag
