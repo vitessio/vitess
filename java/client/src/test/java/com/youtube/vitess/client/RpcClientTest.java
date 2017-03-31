@@ -7,6 +7,7 @@ import com.youtube.vitess.client.cursor.Cursor;
 import com.youtube.vitess.client.cursor.Row;
 import io.vitess.proto.Query;
 import io.vitess.proto.Query.Field;
+import io.vitess.proto.Query.SplitQueryRequest.Algorithm;
 import io.vitess.proto.Topodata.KeyRange;
 import io.vitess.proto.Topodata.KeyspaceIdType;
 import io.vitess.proto.Topodata.ShardReference;
@@ -374,7 +375,7 @@ public abstract class RpcClientTest {
             ImmutableList.of("split_column1", "split_column2"),
             123,
             1000,
-            io.vitess.proto.Query.SplitQueryRequest.Algorithm.FULL_SCAN)
+            Algorithm.FULL_SCAN)
         .get(0);
     Assert.assertEquals(expected, actual);
   }

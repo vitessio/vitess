@@ -13,6 +13,7 @@ import com.youtube.vitess.client.cursor.CursorWithError;
 import com.youtube.vitess.client.cursor.SimpleCursor;
 import com.youtube.vitess.client.cursor.StreamCursor;
 import io.vitess.proto.Query;
+import io.vitess.proto.Query.SplitQueryRequest.Algorithm;
 import io.vitess.proto.Topodata.KeyRange;
 import io.vitess.proto.Topodata.SrvKeyspace;
 import io.vitess.proto.Topodata.TabletType;
@@ -70,7 +71,7 @@ public final class VTGateConn implements Closeable {
 
   /**
    * Creates a VTGateConn with no default keyspace.
-   * 
+   *
    * <p>
    * In this mode, methods like {@code execute()} and {@code streamExecute()} that don't have a
    * per-call {@code keyspace} parameter will use VSchema to resolve the keyspace for any unprefixed
@@ -83,7 +84,7 @@ public final class VTGateConn implements Closeable {
 
   /**
    * Creates a VTGateConn with a default keyspace.
-   * 
+   *
    * <p>
    * The given {@code keyspace} will be used as the connection-wide default for {@code execute()}
    * and {@code streamExecute()} calls, since those do not specify the keyspace for each call. Like
@@ -465,9 +466,8 @@ public final class VTGateConn implements Closeable {
   }
 
   public SQLFuture<List<SplitQueryResponse.Part>> splitQuery(Context ctx, String keyspace,
-      String query, @Nullable Map<String, ?> bindVars, Iterable<String> splitColumns, 
-      int splitCount, int numRowsPerQueryPart, 
-      io.vitess.proto.Query.SplitQueryRequest.Algorithm algorithm) throws SQLException {
+      String query, @Nullable Map<String, ?> bindVars, Iterable<String> splitColumns,
+      int splitCount, int numRowsPerQueryPart, Algorithm algorithm) throws SQLException {
     SplitQueryRequest.Builder requestBuilder =
         SplitQueryRequest.newBuilder()
             .setKeyspace(checkNotNull(keyspace))

@@ -3,6 +3,7 @@ package com.youtube.vitess.client;
 import com.youtube.vitess.client.cursor.Cursor;
 import com.youtube.vitess.client.cursor.CursorWithError;
 import io.vitess.proto.Query;
+import io.vitess.proto.Query.SplitQueryRequest.Algorithm;
 import io.vitess.proto.Topodata.KeyRange;
 import io.vitess.proto.Topodata.SrvKeyspace;
 import io.vitess.proto.Topodata.TabletType;
@@ -163,7 +164,7 @@ public class VTGateBlockingConn implements Closeable {
       Iterable<String> splitColumns,
       int splitCount,
       int numRowsPerQueryPart,
-      io.vitess.proto.Query.SplitQueryRequest.Algorithm algorithm) throws SQLException {
+      Algorithm algorithm) throws SQLException {
     return conn.splitQuery(
         ctx, keyspace, query, bindVars, splitColumns, splitCount, numRowsPerQueryPart, algorithm)
         .checkedGet();
