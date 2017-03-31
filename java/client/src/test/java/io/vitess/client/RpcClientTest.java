@@ -140,6 +140,8 @@ public abstract class RpcClientTest {
 
   @Test
   public void testEchoExecute() throws Exception {
+    System.out.format("using client %s\n", client);
+
     Map<String, String> echo;
 
     echo = getEcho(conn.execute(ctx, ECHO_PREFIX + QUERY, BIND_VARS, TABLET_TYPE, ALL_FIELDS));
