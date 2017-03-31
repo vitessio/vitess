@@ -125,11 +125,12 @@ public class GrpcClientTlsTest extends RpcClientTest {
         final String cert = certDirectory.getCanonicalPath() + File.separatorChar + "server-cert.pem";
         final String key = certDirectory.getCanonicalPath() + File.separatorChar + "server-key.pem";
 
-        final String vtgate = String.format("%s -grpc_cert %s -grpc_key %s -logtostderr -grpc_port %d -service_map grpc-vtgateservice",
+        final String vtgate = String.format("%s -grpc_cert %s -grpc_key %s -logtostderr -grpc_port %s -service_map grpc-vtgateservice",
                 vtRoot + "/bin/vtgateclienttest",
                 cert,
                 key,
-                port);
+                Integer.toString(port)
+        );
         System.out.println(vtgate);
         vtgateclienttest = new ProcessBuilder().inheritIO().command(vtgate.split(" ")).start();
         Thread.sleep(TimeUnit.SECONDS.toMillis(10));
@@ -147,7 +148,6 @@ public class GrpcClientTlsTest extends RpcClientTest {
                         new InetSocketAddress("localhost", port),
                         tlsOptions
                 );
-        System.out.format("Creating GrpcClient %s with port: %d\n", client, port);
     }
 
 }
