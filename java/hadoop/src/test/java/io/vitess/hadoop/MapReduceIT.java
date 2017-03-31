@@ -1,4 +1,4 @@
-package com.youtube.vitess.hadoop;
+package io.vitess.hadoop;
 
 import com.google.common.collect.ImmutableList;
 import com.google.gson.Gson;

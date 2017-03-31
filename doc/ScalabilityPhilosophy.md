@@ -84,7 +84,7 @@ traffic.
 
 Vitess supports MapReduce access to the data. Vitess provides a Hadoop
 connector, that can also be used with Apache Spark. See the [Hadoop package
-documentation](https://github.com/youtube/vitess/tree/master/java/hadoop/src/main/java/com/youtube/vitess/hadoop)
+documentation](https://github.com/youtube/vitess/tree/master/java/hadoop/src/main/java/io/vitess/hadoop)
 for more information.
 
 With a MapReduce framework, Vitess does not support very complicated

@@ -1,4 +1,4 @@
-package com.youtube.vitess.hadoop;
+package io.vitess.hadoop;
 
 import com.google.common.collect.Lists;
 import com.google.common.io.BaseEncoding;

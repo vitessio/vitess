@@ -1,4 +1,4 @@
-package com.youtube.vitess.hadoop;
+package io.vitess.hadoop;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 

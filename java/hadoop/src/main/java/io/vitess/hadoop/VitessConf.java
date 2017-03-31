@@ -1,4 +1,4 @@
-package com.youtube.vitess.hadoop;
+package io.vitess.hadoop;
 
 import com.youtube.vitess.client.RpcClientFactory;
 import io.vitess.proto.Query;
