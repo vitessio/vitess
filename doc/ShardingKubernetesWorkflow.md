@@ -173,19 +173,25 @@ $ gcloud compute firewall-rules delete vtctld guestbook
 You can checkout the old version tutorial [here](http://vitess.io/user-guide/sharding-kubernetes.html).
 It walks you through the resharding process by manually executing commands.
 
+For the kubectl command line interface, which helps you interact with the
+kubernetes cluster, you can check out more information
+[here](https://kubernetes.io/docs/user-guide/kubectl-overview).
+
 ## Troubleshooting
-1.  Checking status of your setup. To get status of pods and services you've
-    setup, you can use the commands (all pods should be in Running status,
-    guestbook and vtworker services should have assign external IP):
+### Checking status of your setup. 
+    To get status of pods and services you've setup, you can use the commands
+    (all pods should be in Running status, guestbook and vtworker services
+    should have assign external IP):
 
     ``` sh
     $kubectl get pods
     $kubectl get services
     ```
 
-1.  Debugging pods. If you find out a component (e.g. vttablet, vtgate) doesn't
-    respond as expected, you can surface the log using this command (the pod
-    name can be found out using the command mentioned above):
+### Debugging pods.
+    If you find out a component (e.g. vttablet, vtgate) doesn't respond as
+    expected, you can surface the log using this command (the pod name can be
+    found out using the command mentioned above):
 
     ``` sh
     $kubectl logs <pod name> [-c <container>]
@@ -194,15 +200,11 @@ It walks you through the resharding process by manually executing commands.
     # $kubectl logs vttablet-XXXX -c vttablet
     ```
 
-1.  Debugging pending external IP issue. If you found that your service has a
-    pending external IP for long time, it maybe because you've reached the
-    limitation of networking resource. Please go to your project console on
-    gcloud (cloud.google.com), then go to *Load balancing* page (you can search
-    "Load balancing" in the search bar to get to the page) under Networking
-    section. Then, click "advanced menu" for editing load balancing resources.
-    Check the forwarding rules you have and delete the unused ones if there are
-    too many.
-
-1.  For the kubectl command line interface, which helps you interact
-    with the kubernetes cluster, you can check out more information
-    [here](https://kubernetes.io/docs/user-guide/kubectl-overview).
+### Debugging pending external IP issue.
+    If you found that your service has a pending external IP for long time, it
+    maybe because you've reached the limitation of networking resource. Please
+    go to your project console on gcloud (cloud.google.com), then go to *Load
+    balancing* page (you can search "Load balancing" in the search bar to get
+    to the page) under Networking section. Then, click "advanced menu" for
+    editing load balancing resources. Check the forwarding rules you have and
+    delete the unused ones if there are too many.
