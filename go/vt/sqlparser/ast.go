@@ -1358,6 +1358,32 @@ func (node *ColName) Equal(c *ColName) bool {
 	return node.Name.Equal(c.Name) && node.Qualifier.Equal(c.Qualifier)
 }
 
+// ColumnNames represents a list of qualified column identifiers
+type ColumnNames []*ColName
+
+// Format formats the node.
+func (node ColumnNames) Format(buf *TrackedBuffer) {
+	if node == nil {
+		return
+	}
+	prefix := "("
+	for _, n := range node {
+		buf.Myprintf("%s%v", prefix, n)
+		prefix = ", "
+	}
+	buf.WriteString(")")
+}
+
+// WalkSubtree walks the nodes of the subtree.
+func (node ColumnNames) WalkSubtree(visit Visit) error {
+	for _, n := range node {
+		if err := Walk(visit, n); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // ColTuple represents a list of column values.
 // It can be ValTuple, Subquery, ListArg.
 type ColTuple interface {
@@ -1710,7 +1736,7 @@ func (node *ConvertType) WalkSubtree(visit Visit) error {
 
 // MatchExpr represents a call to the MATCH function
 type MatchExpr struct {
-	Columns Columns
+	Columns ColumnNames
 	Expr    Expr
 	Option  string
 }

@@ -774,6 +774,8 @@ func TestValid(t *testing.T) {
 	}, {
 		input: "select match(a1, a2) against ('foo' in natural language mode with query expansion) from t",
 	}, {
+		input: "select title from video as v where match(v.title, v.tag) against ('DEMO' in boolean mode)",
+	}, {
 		input: "select name, group_concat(score) from t group by name",
 	}, {
 		input: "select name, group_concat(distinct id, score order by id desc separator ':') from t group by name",
