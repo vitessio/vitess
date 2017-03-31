@@ -4,29 +4,28 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <parent>
         <artifactId>vitess-parent</artifactId>
-        <groupId>com.youtube.vitess</groupId>
+        <groupId>io.vitess</groupId>
         <version>1.1.0-SNAPSHOT</version>
     </parent>
     <modelVersion>4.0.0</modelVersion>
 
-    <groupId>io.vitess</groupId>
     <artifactId>hadoop</artifactId>
 
     <dependencies>
       <dependency>
-        <groupId>com.youtube.vitess</groupId>
+        <groupId>io.vitess</groupId>
         <artifactId>client</artifactId>
         <version>1.1.0-SNAPSHOT</version>
       </dependency>
       <dependency>
-        <groupId>com.youtube.vitess</groupId>
+        <groupId>io.vitess</groupId>
         <artifactId>client</artifactId>
         <version>1.1.0-SNAPSHOT</version>
         <type>test-jar</type>
         <scope>test</scope>
       </dependency>
       <dependency>
-        <groupId>com.youtube.vitess</groupId>
+        <groupId>io.vitess</groupId>
         <artifactId>grpc-client</artifactId>
         <version>1.1.0-SNAPSHOT</version>
       </dependency>
@@ -65,9 +64,9 @@
           </executions>
           <configuration>
             <systemPropertyVariables>
-              <vitess.client.testEnv>com.youtube.vitess.client.TestEnv</vitess.client.testEnv>
+              <vitess.client.testEnv>io.vitess.client.TestEnv</vitess.client.testEnv>
               <vitess.client.testEnv.portName>grpc_port</vitess.client.testEnv.portName>
-              <vitess.client.factory>com.youtube.vitess.client.grpc.GrpcClientFactory</vitess.client.factory>
+              <vitess.client.factory>io.vitess.client.grpc.GrpcClientFactory</vitess.client.factory>
             </systemPropertyVariables>
           </configuration>
         </plugin>

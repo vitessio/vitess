@@ -1,11 +1,11 @@
 package io.vitess.jdbc;
 
-import com.youtube.vitess.client.Context;
-import com.youtube.vitess.client.VTGateConn;
-import com.youtube.vitess.client.VTGateTx;
-import com.youtube.vitess.client.cursor.Cursor;
-import com.youtube.vitess.client.cursor.CursorWithError;
-import com.youtube.vitess.mysql.DateTime;
+import io.vitess.client.Context;
+import io.vitess.client.VTGateConn;
+import io.vitess.client.VTGateTx;
+import io.vitess.client.cursor.Cursor;
+import io.vitess.client.cursor.CursorWithError;
+import io.vitess.mysql.DateTime;
 import io.vitess.proto.Topodata;
 import io.vitess.util.Constants;
 import io.vitess.util.StringUtils;

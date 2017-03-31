@@ -1,9 +1,9 @@
 package io.vitess.jdbc;
 
-import com.youtube.vitess.client.Context;
-import com.youtube.vitess.client.RpcClient;
-import com.youtube.vitess.client.VTGateConn;
-import com.youtube.vitess.client.grpc.GrpcClientFactory;
+import io.vitess.client.Context;
+import io.vitess.client.RpcClient;
+import io.vitess.client.VTGateConn;
+import io.vitess.client.grpc.GrpcClientFactory;
 import io.vitess.proto.Vtrpc;
 import org.joda.time.Duration;
 import org.junit.Assert;

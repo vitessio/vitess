@@ -3,9 +3,8 @@ package io.vitess.hadoop;
 import com.google.common.collect.ImmutableList;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
-
-import com.youtube.vitess.client.TestEnv;
-import com.youtube.vitess.client.TestUtil;
+import io.vitess.client.TestEnv;
+import io.vitess.client.TestUtil;
 import io.vitess.proto.Query.SplitQueryRequest.Algorithm;
 import junit.extensions.TestSetup;
 import junit.framework.TestSuite;

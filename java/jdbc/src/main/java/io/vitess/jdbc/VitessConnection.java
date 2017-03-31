@@ -1,8 +1,8 @@
 package io.vitess.jdbc;
 
-import com.youtube.vitess.client.Context;
-import com.youtube.vitess.client.VTGateConn;
-import com.youtube.vitess.client.VTGateTx;
+import io.vitess.client.Context;
+import io.vitess.client.VTGateConn;
+import io.vitess.client.VTGateTx;
 import io.vitess.util.CommonUtils;
 import io.vitess.util.Constants;
 import io.vitess.util.MysqlDefs;

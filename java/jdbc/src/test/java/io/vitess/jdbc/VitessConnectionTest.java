@@ -1,9 +1,9 @@
 package io.vitess.jdbc;
 
 import com.google.common.util.concurrent.Futures;
-import com.youtube.vitess.client.Context;
-import com.youtube.vitess.client.SQLFuture;
-import com.youtube.vitess.client.VTGateTx;
+import io.vitess.client.Context;
+import io.vitess.client.SQLFuture;
+import io.vitess.client.VTGateTx;
 import io.vitess.proto.Query;
 import io.vitess.proto.Topodata;
 import io.vitess.util.Constants;

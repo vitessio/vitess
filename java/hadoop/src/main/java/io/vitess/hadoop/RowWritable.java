@@ -3,8 +3,7 @@ package io.vitess.hadoop;
 import com.google.common.collect.Lists;
 import com.google.common.io.BaseEncoding;
 import com.google.gson.Gson;
-
-import com.youtube.vitess.client.cursor.Row;
+import io.vitess.client.cursor.Row;
 import io.vitess.proto.Query;
 import io.vitess.proto.Query.Field;
 

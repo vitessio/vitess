@@ -3,14 +3,13 @@ package io.vitess.example;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.net.HostAndPort;
 import com.google.common.primitives.UnsignedLong;
-
-import com.youtube.vitess.client.Context;
-import com.youtube.vitess.client.RpcClient;
-import com.youtube.vitess.client.VTGateBlockingConn;
-import com.youtube.vitess.client.VTGateBlockingTx;
-import com.youtube.vitess.client.cursor.Cursor;
-import com.youtube.vitess.client.cursor.Row;
-import com.youtube.vitess.client.grpc.GrpcClientFactory;
+import io.vitess.client.Context;
+import io.vitess.client.RpcClient;
+import io.vitess.client.VTGateBlockingConn;
+import io.vitess.client.VTGateBlockingTx;
+import io.vitess.client.cursor.Cursor;
+import io.vitess.client.cursor.Row;
+import io.vitess.client.grpc.GrpcClientFactory;
 import io.vitess.proto.Query;
 import io.vitess.proto.Topodata.TabletType;
 

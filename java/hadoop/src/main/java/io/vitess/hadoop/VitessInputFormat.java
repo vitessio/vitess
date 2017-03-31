@@ -4,11 +4,10 @@ import static com.google.common.base.Preconditions.checkNotNull;
 
 import com.google.common.collect.Lists;
 import com.google.common.net.HostAndPort;
-
-import com.youtube.vitess.client.Context;
-import com.youtube.vitess.client.RpcClient;
-import com.youtube.vitess.client.RpcClientFactory;
-import com.youtube.vitess.client.VTGateBlockingConn;
+import io.vitess.client.Context;
+import io.vitess.client.RpcClient;
+import io.vitess.client.RpcClientFactory;
+import io.vitess.client.VTGateBlockingConn;
 import io.vitess.proto.Query.SplitQueryRequest.Algorithm;
 import io.vitess.proto.Vtgate.SplitQueryResponse;
 

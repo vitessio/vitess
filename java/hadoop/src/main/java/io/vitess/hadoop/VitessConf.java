@@ -1,6 +1,6 @@
 package io.vitess.hadoop;
 
-import com.youtube.vitess.client.RpcClientFactory;
+import io.vitess.client.RpcClientFactory;
 import io.vitess.proto.Query;
 import io.vitess.proto.Query.SplitQueryRequest;
 
