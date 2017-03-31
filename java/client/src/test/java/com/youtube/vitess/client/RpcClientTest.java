@@ -5,16 +5,16 @@ import com.google.common.collect.ImmutableMap;
 import com.google.protobuf.ByteString;
 import com.youtube.vitess.client.cursor.Cursor;
 import com.youtube.vitess.client.cursor.Row;
-import com.youtube.vitess.proto.Query;
-import com.youtube.vitess.proto.Query.Field;
-import com.youtube.vitess.proto.Topodata.KeyRange;
-import com.youtube.vitess.proto.Topodata.KeyspaceIdType;
-import com.youtube.vitess.proto.Topodata.ShardReference;
-import com.youtube.vitess.proto.Topodata.SrvKeyspace;
-import com.youtube.vitess.proto.Topodata.SrvKeyspace.KeyspacePartition;
-import com.youtube.vitess.proto.Topodata.TabletType;
-import com.youtube.vitess.proto.Vtgate.SplitQueryResponse;
-import com.youtube.vitess.proto.Vtrpc.CallerID;
+import io.vitess.proto.Query;
+import io.vitess.proto.Query.Field;
+import io.vitess.proto.Topodata.KeyRange;
+import io.vitess.proto.Topodata.KeyspaceIdType;
+import io.vitess.proto.Topodata.ShardReference;
+import io.vitess.proto.Topodata.SrvKeyspace;
+import io.vitess.proto.Topodata.SrvKeyspace.KeyspacePartition;
+import io.vitess.proto.Topodata.TabletType;
+import io.vitess.proto.Vtgate.SplitQueryResponse;
+import io.vitess.proto.Vtrpc.CallerID;
 
 import org.joda.time.Duration;
 import org.junit.Assert;
@@ -374,7 +374,7 @@ public abstract class RpcClientTest {
             ImmutableList.of("split_column1", "split_column2"),
             123,
             1000,
-            com.youtube.vitess.proto.Query.SplitQueryRequest.Algorithm.FULL_SCAN)
+            io.vitess.proto.Query.SplitQueryRequest.Algorithm.FULL_SCAN)
         .get(0);
     Assert.assertEquals(expected, actual);
   }

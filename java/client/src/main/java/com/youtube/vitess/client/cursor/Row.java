@@ -6,9 +6,9 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.primitives.UnsignedLong;
 import com.google.protobuf.ByteString;
 import com.youtube.vitess.mysql.DateTime;
-import com.youtube.vitess.proto.Query;
-import com.youtube.vitess.proto.Query.Field;
-import com.youtube.vitess.proto.Query.Type;
+import io.vitess.proto.Query;
+import io.vitess.proto.Query.Field;
+import io.vitess.proto.Query.Type;
 import java.math.BigDecimal;
 import java.sql.Date;
 import java.sql.SQLDataException;
@@ -22,12 +22,12 @@ import java.util.List;
 import javax.annotation.concurrent.NotThreadSafe;
 
 /**
- * Type-converting wrapper around raw {@link com.youtube.vitess.proto.Query.Row} proto.
+ * Type-converting wrapper around raw {@link io.vitess.proto.Query.Row} proto.
  *
  * <p>
  * Usually you get Row objects from a {@link Cursor}, which builds them by combining
- * {@link com.youtube.vitess.proto.Query.Row} with the list of {@link Field}s from the corresponding
- * {@link com.youtube.vitess.proto.Query.QueryResult}.
+ * {@link io.vitess.proto.Query.Row} with the list of {@link Field}s from the corresponding
+ * {@link io.vitess.proto.Query.QueryResult}.
  *
  * <p>
  * Methods on {@code Row} are intended to be compatible with those on {@link java.sql.ResultSet}
@@ -51,7 +51,7 @@ public class Row {
   private volatile boolean lastGetWasNull;
 
   /**
-   * Construct a Row from {@link com.youtube.vitess.proto.Query.Row} proto with a pre-built
+   * Construct a Row from {@link io.vitess.proto.Query.Row} proto with a pre-built
    * {@link FieldMap}.
    *
    * <p>
@@ -64,7 +64,7 @@ public class Row {
   }
 
   /**
-   * Construct a Row from {@link com.youtube.vitess.proto.Query.Row} proto.
+   * Construct a Row from {@link io.vitess.proto.Query.Row} proto.
    */
   public Row(List<Field> fields, Query.Row rawRow) {
     this.fieldMap = new FieldMap(fields);
@@ -76,7 +76,7 @@ public class Row {
    * Construct a Row manually (not from proto).
    *
    * <p>
-   * The primary purpose of this Row class is to wrap the {@link com.youtube.vitess.proto.Query.Row}
+   * The primary purpose of this Row class is to wrap the {@link io.vitess.proto.Query.Row}
    * proto, which stores values in a packed format. However, when writing tests you may want to
    * create a Row from unpacked data.
    *

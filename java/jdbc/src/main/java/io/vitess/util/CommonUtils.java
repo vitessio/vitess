@@ -1,7 +1,7 @@
 package io.vitess.util;
 
 import com.youtube.vitess.client.Context;
-import com.youtube.vitess.proto.Vtrpc;
+import io.vitess.proto.Vtrpc;
 import org.joda.time.Duration;
 
 /**

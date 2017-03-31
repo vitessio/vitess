@@ -5,8 +5,8 @@ import static org.junit.Assert.assertEquals;
 import com.google.common.primitives.UnsignedLong;
 import com.google.protobuf.ByteString;
 
-import com.youtube.vitess.proto.Query;
-import com.youtube.vitess.proto.Vtgate.ExecuteEntityIdsRequest.EntityId;
+import io.vitess.proto.Query;
+import io.vitess.proto.Vtgate.ExecuteEntityIdsRequest.EntityId;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;

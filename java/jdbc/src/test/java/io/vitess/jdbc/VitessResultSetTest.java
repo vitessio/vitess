@@ -3,7 +3,7 @@ package io.vitess.jdbc;
 import com.google.protobuf.ByteString;
 import com.youtube.vitess.client.cursor.Cursor;
 import com.youtube.vitess.client.cursor.SimpleCursor;
-import com.youtube.vitess.proto.Query;
+import io.vitess.proto.Query;
 import io.vitess.util.MysqlDefs;
 import io.vitess.util.StringUtils;
 import io.vitess.util.charset.CharsetMapping;

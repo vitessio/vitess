@@ -2,11 +2,11 @@ package com.youtube.vitess.client;
 
 import com.youtube.vitess.client.cursor.Cursor;
 import com.youtube.vitess.client.cursor.CursorWithError;
-import com.youtube.vitess.proto.Query;
-import com.youtube.vitess.proto.Topodata.KeyRange;
-import com.youtube.vitess.proto.Topodata.TabletType;
-import com.youtube.vitess.proto.Vtgate.BoundKeyspaceIdQuery;
-import com.youtube.vitess.proto.Vtgate.BoundShardQuery;
+import io.vitess.proto.Query;
+import io.vitess.proto.Topodata.KeyRange;
+import io.vitess.proto.Topodata.TabletType;
+import io.vitess.proto.Vtgate.BoundKeyspaceIdQuery;
+import io.vitess.proto.Vtgate.BoundShardQuery;
 
 import javax.annotation.Nullable;
 import java.sql.SQLException;

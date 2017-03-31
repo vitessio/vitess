@@ -8,10 +8,10 @@ import com.youtube.vitess.client.RpcClientFactory;
 import com.youtube.vitess.client.VTGateBlockingConn;
 import com.youtube.vitess.client.cursor.Cursor;
 import com.youtube.vitess.client.cursor.Row;
-import com.youtube.vitess.proto.Query;
-import com.youtube.vitess.proto.Query.BoundQuery;
-import com.youtube.vitess.proto.Topodata.TabletType;
-import com.youtube.vitess.proto.Vtgate.SplitQueryResponse;
+import io.vitess.proto.Query;
+import io.vitess.proto.Query.BoundQuery;
+import io.vitess.proto.Topodata.TabletType;
+import io.vitess.proto.Vtgate.SplitQueryResponse;
 
 import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.mapreduce.InputSplit;

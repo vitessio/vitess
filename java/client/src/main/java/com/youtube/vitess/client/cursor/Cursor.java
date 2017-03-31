@@ -2,8 +2,8 @@ package com.youtube.vitess.client.cursor;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 
-import com.youtube.vitess.proto.Query.Field;
-import com.youtube.vitess.proto.Query.QueryResult;
+import io.vitess.proto.Query.Field;
+import io.vitess.proto.Query.QueryResult;
 
 import java.sql.SQLDataException;
 import java.sql.SQLException;

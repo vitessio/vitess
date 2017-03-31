@@ -1,7 +1,7 @@
 package io.vitess.util;
 
-import com.youtube.vitess.proto.Query;
-import com.youtube.vitess.proto.Topodata;
+import io.vitess.proto.Query;
+import io.vitess.proto.Topodata;
 
 /**
  * Created by harshit.gangal on 25/01/16.

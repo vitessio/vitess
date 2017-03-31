@@ -1,6 +1,6 @@
 package io.vitess.util;
 
-import com.youtube.vitess.proto.Query;
+import io.vitess.proto.Query;
 
 import java.sql.Connection;
 import java.sql.Types;

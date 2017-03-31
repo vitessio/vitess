@@ -1,7 +1,7 @@
 package com.youtube.vitess.hadoop;
 
 import static com.google.common.base.Preconditions.checkNotNull;
-import static com.youtube.vitess.proto.Query.SplitQueryRequest.Algorithm;
+import static io.vitess.proto.Query.SplitQueryRequest.Algorithm;
 
 import com.google.common.collect.Lists;
 import com.google.common.net.HostAndPort;
@@ -10,7 +10,7 @@ import com.youtube.vitess.client.Context;
 import com.youtube.vitess.client.RpcClient;
 import com.youtube.vitess.client.RpcClientFactory;
 import com.youtube.vitess.client.VTGateBlockingConn;
-import com.youtube.vitess.proto.Vtgate.SplitQueryResponse;
+import io.vitess.proto.Vtgate.SplitQueryResponse;
 
 import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.mapreduce.InputFormat;

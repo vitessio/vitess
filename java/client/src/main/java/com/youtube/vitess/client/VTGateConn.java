@@ -12,37 +12,37 @@ import com.youtube.vitess.client.cursor.Cursor;
 import com.youtube.vitess.client.cursor.CursorWithError;
 import com.youtube.vitess.client.cursor.SimpleCursor;
 import com.youtube.vitess.client.cursor.StreamCursor;
-import com.youtube.vitess.proto.Query;
-import com.youtube.vitess.proto.Topodata.KeyRange;
-import com.youtube.vitess.proto.Topodata.SrvKeyspace;
-import com.youtube.vitess.proto.Topodata.TabletType;
-import com.youtube.vitess.proto.Vtgate;
-import com.youtube.vitess.proto.Vtgate.BeginRequest;
-import com.youtube.vitess.proto.Vtgate.BeginResponse;
-import com.youtube.vitess.proto.Vtgate.BoundKeyspaceIdQuery;
-import com.youtube.vitess.proto.Vtgate.BoundShardQuery;
-import com.youtube.vitess.proto.Vtgate.ExecuteBatchKeyspaceIdsRequest;
-import com.youtube.vitess.proto.Vtgate.ExecuteBatchKeyspaceIdsResponse;
-import com.youtube.vitess.proto.Vtgate.ExecuteBatchShardsRequest;
-import com.youtube.vitess.proto.Vtgate.ExecuteBatchShardsResponse;
-import com.youtube.vitess.proto.Vtgate.ExecuteEntityIdsRequest;
-import com.youtube.vitess.proto.Vtgate.ExecuteEntityIdsResponse;
-import com.youtube.vitess.proto.Vtgate.ExecuteKeyRangesRequest;
-import com.youtube.vitess.proto.Vtgate.ExecuteKeyRangesResponse;
-import com.youtube.vitess.proto.Vtgate.ExecuteKeyspaceIdsRequest;
-import com.youtube.vitess.proto.Vtgate.ExecuteKeyspaceIdsResponse;
-import com.youtube.vitess.proto.Vtgate.ExecuteRequest;
-import com.youtube.vitess.proto.Vtgate.ExecuteResponse;
-import com.youtube.vitess.proto.Vtgate.ExecuteShardsRequest;
-import com.youtube.vitess.proto.Vtgate.ExecuteShardsResponse;
-import com.youtube.vitess.proto.Vtgate.GetSrvKeyspaceRequest;
-import com.youtube.vitess.proto.Vtgate.GetSrvKeyspaceResponse;
-import com.youtube.vitess.proto.Vtgate.SplitQueryRequest;
-import com.youtube.vitess.proto.Vtgate.SplitQueryResponse;
-import com.youtube.vitess.proto.Vtgate.StreamExecuteKeyRangesRequest;
-import com.youtube.vitess.proto.Vtgate.StreamExecuteKeyspaceIdsRequest;
-import com.youtube.vitess.proto.Vtgate.StreamExecuteRequest;
-import com.youtube.vitess.proto.Vtgate.StreamExecuteShardsRequest;
+import io.vitess.proto.Query;
+import io.vitess.proto.Topodata.KeyRange;
+import io.vitess.proto.Topodata.SrvKeyspace;
+import io.vitess.proto.Topodata.TabletType;
+import io.vitess.proto.Vtgate;
+import io.vitess.proto.Vtgate.BeginRequest;
+import io.vitess.proto.Vtgate.BeginResponse;
+import io.vitess.proto.Vtgate.BoundKeyspaceIdQuery;
+import io.vitess.proto.Vtgate.BoundShardQuery;
+import io.vitess.proto.Vtgate.ExecuteBatchKeyspaceIdsRequest;
+import io.vitess.proto.Vtgate.ExecuteBatchKeyspaceIdsResponse;
+import io.vitess.proto.Vtgate.ExecuteBatchShardsRequest;
+import io.vitess.proto.Vtgate.ExecuteBatchShardsResponse;
+import io.vitess.proto.Vtgate.ExecuteEntityIdsRequest;
+import io.vitess.proto.Vtgate.ExecuteEntityIdsResponse;
+import io.vitess.proto.Vtgate.ExecuteKeyRangesRequest;
+import io.vitess.proto.Vtgate.ExecuteKeyRangesResponse;
+import io.vitess.proto.Vtgate.ExecuteKeyspaceIdsRequest;
+import io.vitess.proto.Vtgate.ExecuteKeyspaceIdsResponse;
+import io.vitess.proto.Vtgate.ExecuteRequest;
+import io.vitess.proto.Vtgate.ExecuteResponse;
+import io.vitess.proto.Vtgate.ExecuteShardsRequest;
+import io.vitess.proto.Vtgate.ExecuteShardsResponse;
+import io.vitess.proto.Vtgate.GetSrvKeyspaceRequest;
+import io.vitess.proto.Vtgate.GetSrvKeyspaceResponse;
+import io.vitess.proto.Vtgate.SplitQueryRequest;
+import io.vitess.proto.Vtgate.SplitQueryResponse;
+import io.vitess.proto.Vtgate.StreamExecuteKeyRangesRequest;
+import io.vitess.proto.Vtgate.StreamExecuteKeyspaceIdsRequest;
+import io.vitess.proto.Vtgate.StreamExecuteRequest;
+import io.vitess.proto.Vtgate.StreamExecuteShardsRequest;
 import java.io.Closeable;
 import java.io.IOException;
 import java.sql.SQLDataException;
@@ -467,7 +467,7 @@ public final class VTGateConn implements Closeable {
   public SQLFuture<List<SplitQueryResponse.Part>> splitQuery(Context ctx, String keyspace,
       String query, @Nullable Map<String, ?> bindVars, Iterable<String> splitColumns, 
       int splitCount, int numRowsPerQueryPart, 
-      com.youtube.vitess.proto.Query.SplitQueryRequest.Algorithm algorithm) throws SQLException {
+      io.vitess.proto.Query.SplitQueryRequest.Algorithm algorithm) throws SQLException {
     SplitQueryRequest.Builder requestBuilder =
         SplitQueryRequest.newBuilder()
             .setKeyspace(checkNotNull(keyspace))

@@ -1,7 +1,7 @@
 package com.youtube.vitess.hadoop;
 
 import com.google.common.io.BaseEncoding;
-import com.youtube.vitess.proto.Vtgate.SplitQueryResponse;
+import io.vitess.proto.Vtgate.SplitQueryResponse;
 import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.mapreduce.InputSplit;
 

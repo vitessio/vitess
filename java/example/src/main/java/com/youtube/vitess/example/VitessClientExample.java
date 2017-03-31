@@ -11,8 +11,8 @@ import com.youtube.vitess.client.VTGateBlockingTx;
 import com.youtube.vitess.client.cursor.Cursor;
 import com.youtube.vitess.client.cursor.Row;
 import com.youtube.vitess.client.grpc.GrpcClientFactory;
-import com.youtube.vitess.proto.Query;
-import com.youtube.vitess.proto.Topodata.TabletType;
+import io.vitess.proto.Query;
+import io.vitess.proto.Topodata.TabletType;
 
 import org.joda.time.Duration;
 import org.joda.time.Instant;

@@ -1,8 +1,8 @@
 package com.youtube.vitess.client.cursor;
 
-import com.youtube.vitess.proto.Query;
-import com.youtube.vitess.proto.Query.Field;
-import com.youtube.vitess.proto.Query.QueryResult;
+import io.vitess.proto.Query;
+import io.vitess.proto.Query.Field;
+import io.vitess.proto.Query.QueryResult;
 
 import java.sql.SQLException;
 import java.util.Iterator;

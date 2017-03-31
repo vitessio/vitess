@@ -21,7 +21,7 @@ import java.util.logging.Logger;
 
 import org.apache.commons.lang.StringUtils;
 import com.google.common.annotations.VisibleForTesting;
-import com.youtube.vitess.proto.Query;
+import io.vitess.proto.Query;
 import io.vitess.util.Constants;
 import io.vitess.util.MysqlDefs;
 

@@ -5,8 +5,8 @@ import com.google.common.io.BaseEncoding;
 import com.google.gson.Gson;
 
 import com.youtube.vitess.client.cursor.Row;
-import com.youtube.vitess.proto.Query;
-import com.youtube.vitess.proto.Query.Field;
+import io.vitess.proto.Query;
+import io.vitess.proto.Query.Field;
 
 import org.apache.hadoop.io.Writable;
 

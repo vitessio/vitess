@@ -24,7 +24,7 @@ import com.google.common.io.CharStreams;
 import com.google.protobuf.ByteString;
 import com.youtube.vitess.client.cursor.Cursor;
 import com.youtube.vitess.client.cursor.SimpleCursor;
-import com.youtube.vitess.proto.Query;
+import io.vitess.proto.Query;
 import io.vitess.util.Constants;
 
 /**

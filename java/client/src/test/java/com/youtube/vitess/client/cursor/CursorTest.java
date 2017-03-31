@@ -2,9 +2,9 @@ package com.youtube.vitess.client.cursor;
 
 import com.google.common.primitives.UnsignedLong;
 import com.google.protobuf.ByteString;
-import com.youtube.vitess.proto.Query;
-import com.youtube.vitess.proto.Query.Field;
-import com.youtube.vitess.proto.Query.QueryResult;
+import io.vitess.proto.Query;
+import io.vitess.proto.Query.Field;
+import io.vitess.proto.Query.QueryResult;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.sql.Date;

@@ -5,7 +5,7 @@ import com.google.protobuf.ByteString;
 import com.youtube.vitess.client.cursor.Cursor;
 import com.youtube.vitess.client.cursor.Row;
 import com.youtube.vitess.client.cursor.SimpleCursor;
-import com.youtube.vitess.proto.Query;
+import io.vitess.proto.Query;
 import io.vitess.util.Constants;
 import io.vitess.util.StringUtils;
 import java.io.InputStream;

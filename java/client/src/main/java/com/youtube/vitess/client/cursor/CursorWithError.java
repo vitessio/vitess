@@ -1,7 +1,7 @@
 package com.youtube.vitess.client.cursor;
 
-import com.youtube.vitess.proto.Query;
-import com.youtube.vitess.proto.Vtrpc;
+import io.vitess.proto.Query;
+import io.vitess.proto.Vtrpc;
 
 /**
  * Created by harshit.gangal on 22/12/16.

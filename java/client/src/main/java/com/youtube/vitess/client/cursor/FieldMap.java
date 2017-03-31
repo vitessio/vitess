@@ -5,7 +5,7 @@ import static com.google.common.base.Preconditions.checkNotNull;
 
 import com.google.common.collect.ImmutableList;
 
-import com.youtube.vitess.proto.Query.Field;
+import io.vitess.proto.Query.Field;
 
 import org.apache.commons.collections4.map.CaseInsensitiveMap;
 

@@ -4,7 +4,7 @@ import com.youtube.vitess.client.Context;
 import com.youtube.vitess.client.RpcClient;
 import com.youtube.vitess.client.VTGateConn;
 import com.youtube.vitess.client.grpc.GrpcClientFactory;
-import com.youtube.vitess.proto.Vtrpc;
+import io.vitess.proto.Vtrpc;
 import org.joda.time.Duration;
 import org.junit.Assert;
 import org.junit.Test;

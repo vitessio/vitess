@@ -1,6 +1,6 @@
 package com.youtube.vitess.hadoop;
 
-import static com.youtube.vitess.proto.Query.SplitQueryRequest.Algorithm;
+import static io.vitess.proto.Query.SplitQueryRequest.Algorithm;
 
 import com.google.common.collect.ImmutableList;
 import com.google.gson.Gson;

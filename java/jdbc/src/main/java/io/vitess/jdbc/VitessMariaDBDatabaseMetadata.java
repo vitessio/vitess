@@ -7,7 +7,7 @@ import java.sql.RowIdLifetime;
 import java.sql.SQLException;
 import java.sql.SQLFeatureNotSupportedException;
 import java.util.logging.Logger;
-import com.youtube.vitess.proto.Query;
+import io.vitess.proto.Query;
 import io.vitess.util.Constants;
 
 /**

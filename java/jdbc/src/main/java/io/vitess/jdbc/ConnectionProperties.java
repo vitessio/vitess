@@ -1,7 +1,7 @@
 package io.vitess.jdbc;
 
-import com.youtube.vitess.proto.Query;
-import com.youtube.vitess.proto.Topodata;
+import io.vitess.proto.Query;
+import io.vitess.proto.Topodata;
 import io.vitess.util.Constants;
 import io.vitess.util.StringUtils;
 import java.io.UnsupportedEncodingException;

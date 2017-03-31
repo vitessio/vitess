@@ -16,7 +16,7 @@ import java.util.NoSuchElementException;
  * on the streaming connection.
  *
  * @param <E> the type of result returned by the iterator,
- *     e.g. {@link com.youtube.vitess.proto.Query.QueryResult QueryResult}
+ *     e.g. {@link io.vitess.proto.Query.QueryResult QueryResult}
  */
 public interface StreamIterator<E> extends AutoCloseable {
   /**

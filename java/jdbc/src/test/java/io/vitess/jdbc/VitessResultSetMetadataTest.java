@@ -1,6 +1,6 @@
 package io.vitess.jdbc;
 
-import com.youtube.vitess.proto.Query;
+import io.vitess.proto.Query;
 import io.vitess.util.Constants;
 import io.vitess.util.charset.CharsetMapping;
 import org.junit.Assert;

@@ -1,6 +1,6 @@
 package com.youtube.vitess.client;
 
-import com.youtube.vitess.proto.Vtrpc.CallerID;
+import io.vitess.proto.Vtrpc.CallerID;
 
 import org.joda.time.Duration;
 import org.joda.time.Instant;

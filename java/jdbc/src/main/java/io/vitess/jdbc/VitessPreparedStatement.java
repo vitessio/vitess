@@ -6,7 +6,7 @@ import com.youtube.vitess.client.VTGateTx;
 import com.youtube.vitess.client.cursor.Cursor;
 import com.youtube.vitess.client.cursor.CursorWithError;
 import com.youtube.vitess.mysql.DateTime;
-import com.youtube.vitess.proto.Topodata;
+import io.vitess.proto.Topodata;
 import io.vitess.util.Constants;
 import io.vitess.util.StringUtils;
 import java.io.InputStream;

@@ -1,7 +1,7 @@
 package io.vitess.jdbc;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.youtube.vitess.proto.Query;
+import io.vitess.proto.Query;
 import io.vitess.util.Constants;
 import io.vitess.util.MysqlDefs;
 import io.vitess.util.StringUtils;

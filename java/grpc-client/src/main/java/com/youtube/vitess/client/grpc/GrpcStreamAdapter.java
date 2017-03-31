@@ -15,8 +15,8 @@ import java.util.NoSuchElementException;
  * gRPC {@code StreamObserver} interface.
  *
  * <p>This class is abstract because it needs to be told how to extract the result
- * (e.g. {@link com.youtube.vitess.proto.Query.QueryResult QueryResult}) from a given RPC response
- * (e.g. {@link com.youtube.vitess.proto.Vtgate.StreamExecuteResponse StreamExecuteResponse}).
+ * (e.g. {@link io.vitess.proto.Query.QueryResult QueryResult}) from a given RPC response
+ * (e.g. {@link io.vitess.proto.Vtgate.StreamExecuteResponse StreamExecuteResponse}).
  * Callers must therefore implement {@link #getResult(Object)} when instantiating this class.
  *
  * <p>The {@code StreamObserver} side will block until the result has been returned to the consumer
