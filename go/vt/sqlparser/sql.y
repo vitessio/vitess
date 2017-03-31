@@ -43,7 +43,6 @@ func forceEOF(yylex interface{}) {
   selectExprs SelectExprs
   selectExpr  SelectExpr
   columns     Columns
-  columnNames ColumnNames
   colName     *ColName
   tableExprs  TableExprs
   tableExpr   TableExpr
@@ -179,7 +178,6 @@ func forceEOF(yylex interface{}) {
 %type <limit> limit_opt
 %type <str> lock_opt
 %type <columns> ins_column_list
-%type <columnNames> column_name_list
 %type <updateExprs> on_dup_opt
 %type <updateExprs> update_list
 %type <updateExpr> update_expression
@@ -1126,7 +1124,7 @@ function_call_keyword:
   {
     $$ = &ConvertExpr{Expr: $3, Type: $5}
   }
-| MATCH openb column_name_list closeb AGAINST openb value_expression match_option closeb
+| MATCH openb select_expression_list closeb AGAINST openb value_expression match_option closeb
   {
   $$ = &MatchExpr{Columns: $3, Expr: $7, Option: $8}
   }
@@ -1309,16 +1307,6 @@ else_expression_opt:
 | ELSE expression
   {
     $$ = $2
-  }
-
-column_name_list:
-  column_name
-  {
-    $$ = ColumnNames{$1}
-  }
-| column_name_list ',' column_name
-  {
-    $$ = append($$, $3)
   }
 
 column_name:
