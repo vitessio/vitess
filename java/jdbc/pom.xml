@@ -10,7 +10,7 @@
     </parent>
     <modelVersion>4.0.0</modelVersion>
 
-    <groupId>com.flipkart.vitess</groupId>
+    <groupId>io.vitess</groupId>
     <artifactId>vitess-connector-java</artifactId>
 
     <dependencies>
