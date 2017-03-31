@@ -1,14 +1,12 @@
 package com.youtube.vitess.hadoop;
 
-import static io.vitess.proto.Query.SplitQueryRequest.Algorithm;
-
 import com.google.common.collect.ImmutableList;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 
 import com.youtube.vitess.client.TestEnv;
 import com.youtube.vitess.client.TestUtil;
-
+import io.vitess.proto.Query.SplitQueryRequest.Algorithm;
 import junit.extensions.TestSetup;
 import junit.framework.TestSuite;
 
@@ -36,6 +34,8 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
+
+
 
 /**
  * Integration tests for MapReductions in Vitess. These tests use an in-process Hadoop cluster via
