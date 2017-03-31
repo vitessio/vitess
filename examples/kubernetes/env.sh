@@ -6,8 +6,8 @@
 # use cases just need KUBECTL=kubectl, we'll make that the default.
 KUBECTL=${KUBECTL:-kubectl}
 
-# Kubernetes api address for $KUBECTL. When the Kubernetes api server is not
-# local, We can easily access the api by editing KUBERNETES_API_SERVER's value
+# Kubernetes API address for $KUBECTL. When the Kubernetes API server is not
+# local, We can easily access the API by editing KUBERNETES_API_SERVER's value
 KUBERNETES_API_SERVER=${KUBERNETES_API_SERVER:-""}
 
 # Kubernetes namespace for Vitess and components.
@@ -15,7 +15,7 @@ VITESS_NAME=${VITESS_NAME:-'default'}
 
 # Kubernetes options config
 KUBECTL_OPTIONS="--namespace=$VITESS_NAME"
-if [[ -n $KUBERNETES_API_SERVER ]]; then
+if [[ -n "$KUBERNETES_API_SERVER" ]]; then
   KUBECTL_OPTIONS+=" --server=$KUBERNETES_API_SERVER"
 fi
 
