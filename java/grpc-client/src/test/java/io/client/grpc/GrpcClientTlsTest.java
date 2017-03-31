@@ -132,7 +132,6 @@ public class GrpcClientTlsTest extends RpcClientTest {
         );
         System.out.println(vtgate);
         vtgateclienttest = new ProcessBuilder().inheritIO().command(vtgate.split(" ")).start();
-        Thread.sleep(TimeUnit.SECONDS.toMillis(10));
     }
 
     private static void createClientConnection() throws Exception {
