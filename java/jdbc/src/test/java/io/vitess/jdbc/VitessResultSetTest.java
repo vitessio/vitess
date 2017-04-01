@@ -7,6 +7,12 @@ import io.vitess.proto.Query;
 import io.vitess.util.MysqlDefs;
 import io.vitess.util.StringUtils;
 import io.vitess.util.charset.CharsetMapping;
+import java.io.UnsupportedEncodingException;
+import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.sql.SQLException;
+import java.sql.Time;
+import java.sql.Timestamp;
 import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -15,13 +21,6 @@ import org.mockito.internal.verification.VerificationModeFactory;
 import org.powermock.api.mockito.PowerMockito;
 import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.modules.junit4.PowerMockRunner;
-
-import java.io.UnsupportedEncodingException;
-import java.math.BigDecimal;
-import java.math.BigInteger;
-import java.sql.SQLException;
-import java.sql.Time;
-import java.sql.Timestamp;
 
 /**
  * Created by harshit.gangal on 19/01/16.

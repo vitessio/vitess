@@ -1,7 +1,6 @@
 package io.vitess.client;
 
 import com.google.common.util.concurrent.ListenableFuture;
-
 import io.vitess.proto.Query.QueryResult;
 import io.vitess.proto.Vtgate;
 import io.vitess.proto.Vtgate.BeginRequest;
@@ -32,7 +31,6 @@ import io.vitess.proto.Vtgate.StreamExecuteKeyRangesRequest;
 import io.vitess.proto.Vtgate.StreamExecuteKeyspaceIdsRequest;
 import io.vitess.proto.Vtgate.StreamExecuteRequest;
 import io.vitess.proto.Vtgate.StreamExecuteShardsRequest;
-
 import java.io.Closeable;
 import java.sql.SQLException;
 

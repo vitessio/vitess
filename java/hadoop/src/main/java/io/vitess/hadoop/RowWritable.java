@@ -6,9 +6,6 @@ import com.google.gson.Gson;
 import io.vitess.client.cursor.Row;
 import io.vitess.proto.Query;
 import io.vitess.proto.Query.Field;
-
-import org.apache.hadoop.io.Writable;
-
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
@@ -16,6 +13,7 @@ import java.sql.SQLException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import org.apache.hadoop.io.Writable;
 
 public class RowWritable implements Writable {
   private Row row;

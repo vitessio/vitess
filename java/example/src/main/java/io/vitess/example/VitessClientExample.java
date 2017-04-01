@@ -12,13 +12,11 @@ import io.vitess.client.cursor.Row;
 import io.vitess.client.grpc.GrpcClientFactory;
 import io.vitess.proto.Query;
 import io.vitess.proto.Topodata.TabletType;
-
-import org.joda.time.Duration;
-import org.joda.time.Instant;
-
 import java.net.InetSocketAddress;
 import java.util.Map;
 import java.util.Random;
+import org.joda.time.Duration;
+import org.joda.time.Instant;
 
 /**
  * VitessClientExample.java is a sample for using the Vitess low-level Java Client.

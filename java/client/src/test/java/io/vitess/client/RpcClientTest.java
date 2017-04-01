@@ -16,12 +16,6 @@ import io.vitess.proto.Topodata.SrvKeyspace.KeyspacePartition;
 import io.vitess.proto.Topodata.TabletType;
 import io.vitess.proto.Vtgate.SplitQueryResponse;
 import io.vitess.proto.Vtrpc.CallerID;
-
-import org.joda.time.Duration;
-import org.junit.Assert;
-import org.junit.Before;
-import org.junit.Test;
-
 import java.nio.charset.StandardCharsets;
 import java.sql.SQLDataException;
 import java.sql.SQLException;
@@ -36,6 +30,10 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import org.joda.time.Duration;
+import org.junit.Assert;
+import org.junit.Before;
+import org.junit.Test;
 
 /**
  * RpcClientTest tests a given implementation of RpcClient against a mock vtgate server

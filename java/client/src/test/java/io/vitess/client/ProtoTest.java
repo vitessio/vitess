@@ -1,12 +1,11 @@
 package io.vitess.client;
 
 import com.google.common.collect.ImmutableMap;
+import java.util.Map;
 import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
-
-import java.util.Map;
 
 @RunWith(JUnit4.class)
 public class ProtoTest {

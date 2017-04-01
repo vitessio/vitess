@@ -2,12 +2,11 @@ package io.vitess.hadoop;
 
 import com.google.common.io.BaseEncoding;
 import io.vitess.proto.Vtgate.SplitQueryResponse;
-import org.apache.hadoop.io.Writable;
-import org.apache.hadoop.mapreduce.InputSplit;
-
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
+import org.apache.hadoop.io.Writable;
+import org.apache.hadoop.mapreduce.InputSplit;
 
 public class VitessInputSplit extends InputSplit implements Writable {
   private String[] locations;

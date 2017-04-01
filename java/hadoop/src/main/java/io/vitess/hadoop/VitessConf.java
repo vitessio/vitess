@@ -3,10 +3,8 @@ package io.vitess.hadoop;
 import io.vitess.client.RpcClientFactory;
 import io.vitess.proto.Query;
 import io.vitess.proto.Query.SplitQueryRequest;
-
-import org.apache.hadoop.conf.Configuration;
-
 import java.util.Collection;
+import org.apache.hadoop.conf.Configuration;
 
 /**
  * Collection of configuration properties used for {@link VitessInputFormat}

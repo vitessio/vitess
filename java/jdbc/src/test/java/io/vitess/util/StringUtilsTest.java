@@ -1,9 +1,8 @@
 package io.vitess.util;
 
+import com.google.common.collect.Lists;
 import org.junit.Assert;
 import org.junit.Test;
-
-import com.google.common.collect.Lists;
 
 public class StringUtilsTest {
 

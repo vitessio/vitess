@@ -7,15 +7,14 @@ import io.vitess.client.VTGateTx;
 import io.vitess.proto.Query;
 import io.vitess.proto.Topodata;
 import io.vitess.util.Constants;
-import org.junit.Assert;
-import org.junit.Test;
-import org.mockito.Matchers;
-import org.powermock.api.mockito.PowerMockito;
-
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.Properties;
+import org.junit.Assert;
+import org.junit.Test;
+import org.mockito.Matchers;
+import org.powermock.api.mockito.PowerMockito;
 
 /**
  * Created by harshit.gangal on 19/01/16.

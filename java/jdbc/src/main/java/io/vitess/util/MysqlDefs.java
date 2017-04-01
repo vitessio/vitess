@@ -1,7 +1,6 @@
 package io.vitess.util;
 
 import io.vitess.proto.Query;
-
 import java.sql.Connection;
 import java.sql.Types;
 import java.util.HashMap;

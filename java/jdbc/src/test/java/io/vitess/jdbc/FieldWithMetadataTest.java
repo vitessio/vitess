@@ -3,6 +3,8 @@ package io.vitess.jdbc;
 import io.vitess.proto.Query;
 import io.vitess.util.MysqlDefs;
 import io.vitess.util.charset.CharsetMapping;
+import java.sql.SQLException;
+import java.sql.Types;
 import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -11,9 +13,6 @@ import org.mockito.internal.verification.VerificationModeFactory;
 import org.powermock.api.mockito.PowerMockito;
 import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.modules.junit4.PowerMockRunner;
-
-import java.sql.SQLException;
-import java.sql.Types;
 
 @PrepareForTest(FieldWithMetadata.class)
 @RunWith(PowerMockRunner.class)

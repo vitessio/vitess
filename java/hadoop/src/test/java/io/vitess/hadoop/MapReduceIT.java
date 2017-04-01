@@ -6,9 +6,15 @@ import com.google.gson.reflect.TypeToken;
 import io.vitess.client.TestEnv;
 import io.vitess.client.TestUtil;
 import io.vitess.proto.Query.SplitQueryRequest.Algorithm;
+import java.io.IOException;
+import java.lang.reflect.Type;
+import java.sql.SQLException;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.Set;
 import junit.extensions.TestSetup;
 import junit.framework.TestSuite;
-
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -21,18 +27,9 @@ import org.apache.hadoop.mapreduce.Mapper;
 import org.apache.hadoop.mapreduce.Reducer;
 import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
 import org.apache.hadoop.mapreduce.lib.output.TextOutputFormat;
-
 import vttest.Vttest.Keyspace;
 import vttest.Vttest.Shard;
 import vttest.Vttest.VTTestTopology;
-
-import java.io.IOException;
-import java.lang.reflect.Type;
-import java.sql.SQLException;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.Map;
-import java.util.Set;
 
 
 

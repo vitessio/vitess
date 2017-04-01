@@ -10,14 +10,13 @@ import io.vitess.proto.Topodata.TabletType;
 import io.vitess.proto.Vtgate.BoundKeyspaceIdQuery;
 import io.vitess.proto.Vtgate.BoundShardQuery;
 import io.vitess.proto.Vtgate.SplitQueryResponse;
-
-import javax.annotation.Nullable;
 import java.io.Closeable;
 import java.io.IOException;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import javax.annotation.Nullable;
 
 /**
  * A synchronous wrapper around a VTGate connection.

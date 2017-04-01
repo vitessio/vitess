@@ -16,8 +16,6 @@ import io.vitess.proto.Vtgate.BoundKeyspaceIdQuery;
 import io.vitess.proto.Vtgate.BoundShardQuery;
 import io.vitess.proto.Vtgate.ExecuteEntityIdsRequest.EntityId;
 import io.vitess.proto.Vtrpc.RPCError;
-
-import javax.annotation.Nullable;
 import java.math.BigDecimal;
 import java.sql.SQLException;
 import java.sql.SQLIntegrityConstraintViolationException;
@@ -30,6 +28,7 @@ import java.sql.SQLTransientException;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import javax.annotation.Nullable;
 
 /**
  * Proto contains methods for working with Vitess protobuf messages.

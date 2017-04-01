@@ -1,14 +1,12 @@
 package io.vitess.client;
 
-import org.apache.commons.io.FileUtils;
-
-import vttest.Vttest.VTTestTopology;
-
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.List;
+import org.apache.commons.io.FileUtils;
+import vttest.Vttest.VTTestTopology;
 
 /**
  * Helper class to hold the configurations for VtGate setup used in integration tests
