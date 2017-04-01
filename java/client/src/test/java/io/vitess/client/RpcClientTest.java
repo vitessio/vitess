@@ -61,14 +61,16 @@ public abstract class RpcClientTest {
   private static final String ERROR_PREFIX = "error://";
   private static final String PARTIAL_ERROR_PREFIX = "partialerror://";
 
-  private static final Map<String, Class<?>> EXECUTE_ERRORS =
-      new ImmutableMap.Builder<String, Class<?>>().put("bad input", SQLSyntaxErrorException.class)
+  private static final ImmutableMap<String, Class<?>> EXECUTE_ERRORS =
+      new ImmutableMap.Builder<String, Class<?>>()
+          .put("bad input", SQLSyntaxErrorException.class)
           .put("deadline exceeded", SQLTimeoutException.class)
           .put("integrity error", SQLIntegrityConstraintViolationException.class)
           .put("transient error", SQLTransientException.class)
           .put("unauthenticated", SQLInvalidAuthorizationSpecException.class)
           .put("aborted", SQLRecoverableException.class)
-          .put("unknown error", SQLNonTransientException.class).build();
+          .put("unknown error", SQLNonTransientException.class)
+          .build();
 
   private static final String QUERY = "test query with unicode: \u6211\u80fd\u541e\u4e0b\u73bb\u7483\u800c\u4e0d\u50b7\u8eab\u9ad4";
   private static final String KEYSPACE = "test_keyspace";
@@ -86,9 +88,12 @@ public abstract class RpcClientTest {
   private static final String KEY_RANGES_ECHO =
       "[start:\"\\001\\002\\003\\004\" end:\"\\005\\006\\007\\010\" ]";
 
-  private static final Map<byte[], Object> ENTITY_KEYSPACE_IDS =
-      new ImmutableMap.Builder<byte[], Object>().put(new byte[] {1, 2, 3}, 123)
-          .put(new byte[] {4, 5, 6}, 2.5).put(new byte[] {7, 8, 9}, new byte[] {1, 2, 3}).build();
+  private static final ImmutableMap<byte[], Object> ENTITY_KEYSPACE_IDS =
+      new ImmutableMap.Builder<byte[], Object>()
+          .put(new byte[] {1, 2, 3}, 123)
+          .put(new byte[] {4, 5, 6}, 2.5)
+          .put(new byte[] {7, 8, 9}, new byte[] {1, 2, 3})
+          .build();
   private static final String ENTITY_KEYSPACE_IDS_ECHO =
       "[type:INT64 value:\"123\" keyspace_id:\"\\001\\002\\003\"  type:FLOAT64 value:\"2.5\" keyspace_id:\"\\004\\005\\006\"  type:VARBINARY value:\"\\001\\002\\003\" keyspace_id:\"\\007\\010\\t\" ]";
 
@@ -97,8 +102,11 @@ public abstract class RpcClientTest {
   private static final Query.ExecuteOptions.IncludedFields ALL_FIELDS = Query.ExecuteOptions.IncludedFields.ALL;
   private static final String OPTIONS_ALL_FIELDS_ECHO = "included_fields:" + ALL_FIELDS.toString() + " ";
 
-  private static final Map<String, Object> BIND_VARS = new ImmutableMap.Builder<String, Object>()
-      .put("int", 123).put("float", 2.5).put("bytes", new byte[] {1, 2, 3}).build();
+  private static final ImmutableMap<String, Object> BIND_VARS = new ImmutableMap.Builder<String, Object>()
+      .put("int", 123)
+      .put("float", 2.5)
+      .put("bytes", new byte[] {1, 2, 3})
+      .build();
   private static final String BIND_VARS_ECHO =
       "map[bytes:type:VARBINARY value:\"\\001\\002\\003\"  float:type:FLOAT64 value:\"2.5\"  int:type:INT64 value:\"123\" ]";
 
