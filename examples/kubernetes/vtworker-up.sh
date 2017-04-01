@@ -5,7 +5,7 @@ set -e
 script_root=`dirname "${BASH_SOURCE}"`
 source $script_root/env.sh
 
-cells=`echo $CELLS | tr ',' ' '`
+cell=(`echo $CELLS | tr ',' ' '`) # ref to cell will get first element
 port=15032
 grpc_port=15033
 

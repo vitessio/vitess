@@ -60,7 +60,7 @@ resharding process:
     the resharding workflow):
 
     ``` sh
-    $kubectl get service vtworker
+    $ kubectl get service vtworker
     ```
 
     You can verify this *vtworker* process set up through http://<EXTERNAL-IP>:15032/Debugging.
@@ -184,8 +184,8 @@ kubernetes cluster, you can check out more information
     should have assign external IP):
 
     ``` sh
-    $kubectl get pods
-    $kubectl get services
+    $ kubectl get pods
+    $ kubectl get services
     ```
 
 ### Debugging pods.
@@ -194,10 +194,10 @@ kubernetes cluster, you can check out more information
     found out using the command mentioned above):
 
     ``` sh
-    $kubectl logs <pod name> [-c <container>]
+    $ kubectl logs <pod name> [-c <container>]
     ### example
-    # $kubectl logs vtworker
-    # $kubectl logs vttablet-XXXX -c vttablet
+    # $ kubectl logs vtworker
+    # $ kubectl logs vttablet-XXXX -c vttablet
     ```
 
 ### Debugging pending external IP issue.
