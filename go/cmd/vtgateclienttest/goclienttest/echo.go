@@ -121,15 +121,11 @@ func testEchoExecute(t *testing.T, conn *vtgateconn.VTGateConn) {
 
 	ctx := callerid.NewContext(context.Background(), callerID, nil)
 
-	qr, err = conn.Execute(ctx, echoPrefix+query, bindVars, tabletType, options)
+	qr, err = conn.Execute(ctx, echoPrefix+query, bindVars)
 	checkEcho(t, "Execute", qr, err, map[string]string{
-		"callerId":   callerIDEcho,
-		"query":      echoPrefix + query,
-		"bindVars":   bindVarsP3Echo,
-		"keyspace":   connectionKeyspace,
-		"tabletType": tabletTypeEcho,
-		"options":    optionsEcho,
-		"extras":     extrasEcho,
+		"callerId": callerIDEcho,
+		"query":    echoPrefix + query,
+		"bindVars": bindVarsP3Echo,
 	})
 
 	qr, err = conn.ExecuteShards(ctx, echoPrefix+query, keyspace, shards, bindVars, tabletType, options)
@@ -233,18 +229,15 @@ func testEchoStreamExecute(t *testing.T, conn *vtgateconn.VTGateConn) {
 
 	ctx := callerid.NewContext(context.Background(), callerID, nil)
 
-	stream, err = conn.StreamExecute(ctx, echoPrefix+query, bindVars, tabletType, options)
+	stream, err = conn.StreamExecute(ctx, echoPrefix+query, bindVars)
 	if err != nil {
 		t.Fatal(err)
 	}
 	qr, err = stream.Recv()
 	checkEcho(t, "StreamExecute", qr, err, map[string]string{
-		"callerId":   callerIDEcho,
-		"query":      echoPrefix + query,
-		"bindVars":   bindVarsP3Echo,
-		"keyspace":   connectionKeyspace,
-		"tabletType": tabletTypeEcho,
-		"options":    optionsEcho,
+		"callerId": callerIDEcho,
+		"query":    echoPrefix + query,
+		"bindVars": bindVarsP3Echo,
 	})
 
 	stream, err = conn.StreamExecuteShards(ctx, echoPrefix+query, keyspace, shards, bindVars, tabletType, options)
@@ -304,16 +297,12 @@ func testEchoTransactionExecute(t *testing.T, conn *vtgateconn.VTGateConn) {
 		t.Fatalf("Begin error: %v", err)
 	}
 
-	qr, err = tx.Execute(ctx, echoPrefix+query, bindVars, tabletType, options)
+	qr, err = tx.Execute(ctx, echoPrefix+query, bindVars)
 	checkEcho(t, "Execute", qr, err, map[string]string{
-		"callerId":         callerIDEcho,
-		"query":            echoPrefix + query,
-		"bindVars":         bindVarsP3Echo,
-		"keyspace":         connectionKeyspace,
-		"tabletType":       tabletTypeEcho,
-		"session":          sessionEcho,
-		"notInTransaction": "false",
-		"options":          optionsEcho,
+		"callerId": callerIDEcho,
+		"query":    echoPrefix + query,
+		"bindVars": bindVarsP3Echo,
+		"session":  sessionEcho,
 	})
 
 	qr, err = tx.ExecuteShards(ctx, echoPrefix+query, keyspace, shards, bindVars, tabletType, options)
@@ -451,7 +440,7 @@ func testEchoUpdateStream(t *testing.T, conn *vtgateconn.VTGateConn) {
 
 	ctx := callerid.NewContext(context.Background(), callerID, nil)
 
-	stream, err = conn.UpdateStream(ctx, echoPrefix+query, keyRanges[0], tabletType, 0, eventToken)
+	stream, err = conn.UpdateStream(ctx, "conn_ks", echoPrefix+query, keyRanges[0], tabletType, 0, eventToken)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -460,7 +449,7 @@ func testEchoUpdateStream(t *testing.T, conn *vtgateconn.VTGateConn) {
 		t.Fatal(err)
 	}
 	if se.EventToken.Position != updateStreamEcho {
-		t.Errorf("UpdateStream(0) = %v, want %v", se.EventToken.Position, updateStreamEcho)
+		t.Errorf("UpdateStream(0) =\n%v, want\n%v", se.EventToken.Position, updateStreamEcho)
 	}
 }
 

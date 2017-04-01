@@ -54,18 +54,11 @@ func AtomicityFromContext(ctx context.Context) vtgateconn.Atomicity {
 }
 
 func (c *conn) BeginTx(ctx context.Context, opts driver.TxOptions) (driver.Tx, error) {
-	if c.Streaming {
-		return nil, errors.New("transaction not allowed for streaming connection")
-	}
 	if opts.Isolation != driver.IsolationLevel(0) || opts.ReadOnly {
 		return nil, errIsolationUnsupported
 	}
-	tx, err := c.vtgateConn.Begin(ctx)
-	if err != nil {
-		return nil, err
-	}
-	c.tx = tx
-	return c, nil
+	// Do not pass ctx down to the call. It's only used for rollbacks.
+	return c.Begin()
 }
 
 func (c *conn) ExecContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Result, error) {
@@ -77,7 +70,7 @@ func (c *conn) ExecContext(ctx context.Context, query string, args []driver.Name
 	if err != nil {
 		return nil, err
 	}
-	qr, err := c.exec(ctx, query, bv)
+	qr, err := c.vtgateConn.Execute(ctx, query, bv)
 	if err != nil {
 		return nil, err
 	}
@@ -91,14 +84,14 @@ func (c *conn) QueryContext(ctx context.Context, query string, args []driver.Nam
 	}
 
 	if c.Streaming {
-		stream, err := c.vtgateConn.StreamExecute(ctx, query, bv, c.tabletTypeProto, nil)
+		stream, err := c.vtgateConn.StreamExecute(ctx, query, bv)
 		if err != nil {
 			return nil, err
 		}
 		return newStreamingRows(stream, nil), nil
 	}
 
-	qr, err := c.exec(ctx, query, bv)
+	qr, err := c.vtgateConn.Execute(ctx, query, bv)
 	if err != nil {
 		return nil, err
 	}

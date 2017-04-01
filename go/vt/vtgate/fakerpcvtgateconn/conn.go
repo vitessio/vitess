@@ -28,12 +28,9 @@ import (
 
 // queryExecute contains all the fields we use to test Execute
 type queryExecute struct {
-	SQL              string
-	BindVariables    map[string]interface{}
-	Keyspace         string
-	TabletType       topodatapb.TabletType
-	Session          *vtgatepb.Session
-	NotInTransaction bool
+	SQL           string
+	BindVariables map[string]interface{}
+	Session       *vtgatepb.Session
 }
 
 // queryExecuteShards contains all the fields we use to test ExecuteShards
@@ -96,17 +93,13 @@ func RegisterFakeVTGateConnDialer() (*FakeVTGateConn, string) {
 func (conn *FakeVTGateConn) AddQuery(
 	sql string,
 	bindVariables map[string]interface{},
-	tabletType topodatapb.TabletType,
 	session *vtgatepb.Session,
-	notInTransaction bool,
 	expectedResult *sqltypes.Result) {
 	conn.execMap[sql] = &queryResponse{
 		execQuery: &queryExecute{
-			SQL:              sql,
-			BindVariables:    bindVariables,
-			TabletType:       tabletType,
-			Session:          session,
-			NotInTransaction: notInTransaction,
+			SQL:           sql,
+			BindVariables: bindVariables,
+			Session:       session,
 		},
 		reply: expectedResult,
 	}
@@ -166,11 +159,7 @@ func (conn *FakeVTGateConn) AddSplitQuery(
 }
 
 // Execute please see vtgateconn.Impl.Execute
-func (conn *FakeVTGateConn) Execute(ctx context.Context, sql string, bindVars map[string]interface{}, keyspace string, tabletType topodatapb.TabletType, session interface{}, options *querypb.ExecuteOptions) (*sqltypes.Result, interface{}, error) {
-	var s *vtgatepb.Session
-	if session != nil {
-		s = session.(*vtgatepb.Session)
-	}
+func (conn *FakeVTGateConn) Execute(ctx context.Context, sql string, bindVars map[string]interface{}, session interface{}) (*sqltypes.Result, interface{}, error) {
 	response, ok := conn.execMap[sql]
 	if !ok {
 		return nil, nil, fmt.Errorf("no match for: %s", sql)
@@ -178,9 +167,7 @@ func (conn *FakeVTGateConn) Execute(ctx context.Context, sql string, bindVars ma
 	query := &queryExecute{
 		SQL:           sql,
 		BindVariables: bindVars,
-		Keyspace:      keyspace,
-		TabletType:    tabletType,
-		Session:       s,
+		Session:       session.(*vtgatepb.Session),
 	}
 	if !reflect.DeepEqual(query, response.execQuery) {
 		return nil, nil, fmt.Errorf(
@@ -188,9 +175,7 @@ func (conn *FakeVTGateConn) Execute(ctx context.Context, sql string, bindVars ma
 	}
 	var reply sqltypes.Result
 	reply = *response.reply
-	if s != nil {
-		s = newSession(true, "test_keyspace", []string{}, topodatapb.TabletType_MASTER)
-	}
+	s := newSession(true, "test_keyspace", []string{}, topodatapb.TabletType_MASTER)
 	return &reply, s, nil
 }
 
@@ -240,7 +225,7 @@ func (conn *FakeVTGateConn) ExecuteEntityIds(ctx context.Context, query string, 
 }
 
 // ExecuteBatch please see vtgateconn.Impl.ExecuteBatch
-func (conn *FakeVTGateConn) ExecuteBatch(ctx context.Context, sqlList []string, bindVarsList []map[string]interface{}, keyspace string, tabletType topodatapb.TabletType, asTransaction bool, session interface{}, options *querypb.ExecuteOptions) ([]sqltypes.QueryResponse, interface{}, error) {
+func (conn *FakeVTGateConn) ExecuteBatch(ctx context.Context, sqlList []string, bindVarsList []map[string]interface{}, session interface{}) ([]sqltypes.QueryResponse, interface{}, error) {
 	panic("not implemented")
 }
 
@@ -267,7 +252,7 @@ func (a *streamExecuteAdapter) Recv() (*sqltypes.Result, error) {
 }
 
 // StreamExecute please see vtgateconn.Impl.StreamExecute
-func (conn *FakeVTGateConn) StreamExecute(ctx context.Context, sql string, bindVars map[string]interface{}, keyspace string, tabletType topodatapb.TabletType, options *querypb.ExecuteOptions) (sqltypes.ResultStream, error) {
+func (conn *FakeVTGateConn) StreamExecute(ctx context.Context, sql string, bindVars map[string]interface{}, session interface{}) (sqltypes.ResultStream, error) {
 	response, ok := conn.execMap[sql]
 	if !ok {
 		return nil, fmt.Errorf("no match for: %s", sql)
@@ -275,8 +260,7 @@ func (conn *FakeVTGateConn) StreamExecute(ctx context.Context, sql string, bindV
 	query := &queryExecute{
 		SQL:           sql,
 		BindVariables: bindVars,
-		Keyspace:      keyspace,
-		TabletType:    tabletType,
+		Session:       session.(*vtgatepb.Session),
 	}
 	if !reflect.DeepEqual(query, response.execQuery) {
 		return nil, fmt.Errorf("StreamExecute: %+v, want %+v", sql, response.execQuery)

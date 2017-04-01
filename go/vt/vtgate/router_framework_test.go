@@ -189,14 +189,12 @@ func routerExec(router *Router, sql string, bv map[string]interface{}) (*sqltype
 		bv,
 		"",
 		topodatapb.TabletType_MASTER,
-		nil,
-		false,
-		nil)
+		masterSession)
 }
 
 func routerStream(router *Router, sql string) (qr *sqltypes.Result, err error) {
 	results := make(chan *sqltypes.Result, 10)
-	err = router.StreamExecute(context.Background(), sql, nil, "", topodatapb.TabletType_MASTER, nil, func(qr *sqltypes.Result) error {
+	err = router.StreamExecute(context.Background(), sql, nil, "", topodatapb.TabletType_MASTER, masterSession, func(qr *sqltypes.Result) error {
 		results <- qr
 		return nil
 	})

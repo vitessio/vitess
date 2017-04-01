@@ -21,6 +21,9 @@ namespace Vitess\Proto\Vtgate {
     /**  @var \Vitess\Proto\Query\ExecuteOptions */
     public $options = null;
     
+    /**  @var \Vitess\Proto\Vtgate\Session */
+    public $session = null;
+    
 
     /** @var \Closure[] */
     protected static $__extensions = array();
@@ -71,6 +74,15 @@ namespace Vitess\Proto\Vtgate {
       $f->type      = \DrSlump\Protobuf::TYPE_MESSAGE;
       $f->rule      = \DrSlump\Protobuf::RULE_OPTIONAL;
       $f->reference = '\Vitess\Proto\Query\ExecuteOptions';
+      $descriptor->addField($f);
+
+      // OPTIONAL MESSAGE session = 6
+      $f = new \DrSlump\Protobuf\Field();
+      $f->number    = 6;
+      $f->name      = "session";
+      $f->type      = \DrSlump\Protobuf::TYPE_MESSAGE;
+      $f->rule      = \DrSlump\Protobuf::RULE_OPTIONAL;
+      $f->reference = '\Vitess\Proto\Vtgate\Session';
       $descriptor->addField($f);
 
       foreach (self::$__extensions as $cb) {
@@ -263,6 +275,43 @@ namespace Vitess\Proto\Vtgate {
      */
     public function setOptions(\Vitess\Proto\Query\ExecuteOptions $value){
       return $this->_set(5, $value);
+    }
+    
+    /**
+     * Check if <session> has a value
+     *
+     * @return boolean
+     */
+    public function hasSession(){
+      return $this->_has(6);
+    }
+    
+    /**
+     * Clear <session> value
+     *
+     * @return \Vitess\Proto\Vtgate\StreamExecuteRequest
+     */
+    public function clearSession(){
+      return $this->_clear(6);
+    }
+    
+    /**
+     * Get <session> value
+     *
+     * @return \Vitess\Proto\Vtgate\Session
+     */
+    public function getSession(){
+      return $this->_get(6);
+    }
+    
+    /**
+     * Set <session> value
+     *
+     * @param \Vitess\Proto\Vtgate\Session $value
+     * @return \Vitess\Proto\Vtgate\StreamExecuteRequest
+     */
+    public function setSession(\Vitess\Proto\Vtgate\Session $value){
+      return $this->_set(6, $value);
     }
   }
 }

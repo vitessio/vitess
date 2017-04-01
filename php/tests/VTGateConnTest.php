@@ -66,6 +66,11 @@ class VTGateConnTest extends \PHPUnit_Framework_TestCase
 
     private static $SESSION_ECHO = 'in_transaction:true ';
 
+    private static $V3_SESSION_ECHO = 'in_transaction:true target_string:"test_keyspace@replica" ';
+
+    private static $NONTX_V3_SESSION_ECHO = 'target_string:"test_keyspace@replica" ';
+
+
     public static function setUpBeforeClass()
     {
         $VTROOT = getenv('VTROOT');
@@ -184,9 +189,8 @@ class VTGateConnTest extends \PHPUnit_Framework_TestCase
         $echo = $this->getEcho($conn->execute($ctx, self::$ECHO_QUERY, self::$BIND_VARS, self::$TABLET_TYPE));
         $this->assertEquals(self::$CALLER_ID_ECHO, $echo['callerId']);
         $this->assertEquals(self::$ECHO_QUERY, $echo['query']);
-        $this->assertEquals(self::$KEYSPACE, $echo['keyspace']);
         $this->assertEquals(self::$BIND_VARS_ECHO_P3, $echo['bindVars']);
-        $this->assertEquals(self::$TABLET_TYPE_ECHO, $echo['tabletType']);
+        $this->assertEquals(self::$NONTX_V3_SESSION_ECHO, $echo['session']);
 
         // Check NULL vs. empty string.
         $this->assertEquals(true, is_null($echo['null']));
@@ -259,9 +263,8 @@ class VTGateConnTest extends \PHPUnit_Framework_TestCase
         $echo = $this->getEcho($conn->streamExecute($ctx, self::$ECHO_QUERY, self::$BIND_VARS, self::$TABLET_TYPE));
         $this->assertEquals(self::$CALLER_ID_ECHO, $echo['callerId']);
         $this->assertEquals(self::$ECHO_QUERY, $echo['query']);
-        $this->assertEquals(self::$KEYSPACE, $echo['keyspace']);
         $this->assertEquals(self::$BIND_VARS_ECHO_P3, $echo['bindVars']);
-        $this->assertEquals(self::$TABLET_TYPE_ECHO, $echo['tabletType']);
+        $this->assertEquals(self::$NONTX_V3_SESSION_ECHO, $echo['session']);
 
         $echo = $this->getEcho($conn->streamExecuteShards($ctx, self::$ECHO_QUERY, self::$KEYSPACE, self::$SHARDS, self::$BIND_VARS, self::$TABLET_TYPE));
         $this->assertEquals(self::$CALLER_ID_ECHO, $echo['callerId']);
@@ -298,11 +301,12 @@ class VTGateConnTest extends \PHPUnit_Framework_TestCase
         $echo = $this->getEcho($tx->execute($ctx, self::$ECHO_QUERY, self::$BIND_VARS, self::$TABLET_TYPE));
         $this->assertEquals(self::$CALLER_ID_ECHO, $echo['callerId']);
         $this->assertEquals(self::$ECHO_QUERY, $echo['query']);
-        $this->assertEquals(self::$KEYSPACE, $echo['keyspace']);
         $this->assertEquals(self::$BIND_VARS_ECHO_P3, $echo['bindVars']);
-        $this->assertEquals(self::$TABLET_TYPE_ECHO, $echo['tabletType']);
-        $this->assertEquals(self::$SESSION_ECHO, $echo['session']);
-        $this->assertEquals('false', $echo['notInTransaction']);
+        $this->assertEquals(self::$V3_SESSION_ECHO, $echo['session']);
+
+        // V2 tests should be independent of V3.
+        $tx->rollback($ctx);
+        $tx = $conn->begin($ctx);
 
         $echo = $this->getEcho($tx->executeShards($ctx, self::$ECHO_QUERY, self::$KEYSPACE, self::$SHARDS, self::$BIND_VARS, self::$TABLET_TYPE));
         $this->assertEquals(self::$CALLER_ID_ECHO, $echo['callerId']);

@@ -39,15 +39,14 @@ Examples:
 
   $ vtclient -server vtgate:15991 "SELECT * FROM messages"
 
-  $ vtclient -server vtgate:15991 -tablet_type master -bind_variables '[ 12345, 1, "msg 12345" ]' "INSERT INTO messages (page,time_created_ns,message) VALUES (:v1, :v2, :v3)"
+  $ vtclient -server vtgate:15991 -target '@master' -bind_variables '[ 12345, 1, "msg 12345" ]' "INSERT INTO messages (page,time_created_ns,message) VALUES (:v1, :v2, :v3)"
 
 `
 	server        = flag.String("server", "", "vtgate server to connect to")
-	tabletType    = flag.String("tablet_type", "rdonly", "tablet type to direct queries to")
 	timeout       = flag.Duration("timeout", 30*time.Second, "timeout for queries")
 	streaming     = flag.Bool("streaming", false, "use a streaming query")
 	bindVariables = newBindvars("bind_variables", "bind variables as a json list")
-	keyspace      = flag.String("keyspace", "", "Keyspace of a specific keyspace/shard to target. If shard is also specified, disables v3. Otherwise it's the default keyspace to use.")
+	targetString  = flag.String("target", "", "keyspace:shard@tablet_type")
 	jsonOutput    = flag.Bool("json", false, "Output JSON instead of human-readable table")
 	parallel      = flag.Int("parallel", 1, "DMLs only: Number of threads executing the same query in parallel. Useful for simple load testing.")
 	count         = flag.Int("count", 1, "DMLs only: Number of times each thread executes the query. Useful for simple, sustained load testing.")
@@ -135,12 +134,11 @@ func run() (*results, error) {
 	}
 
 	c := vitessdriver.Configuration{
-		Protocol:   *vtgateconn.VtgateProtocol,
-		Address:    *server,
-		Keyspace:   *keyspace,
-		TabletType: *tabletType,
-		Timeout:    *timeout,
-		Streaming:  *streaming,
+		Protocol:  *vtgateconn.VtgateProtocol,
+		Address:   *server,
+		Target:    *targetString,
+		Timeout:   *timeout,
+		Streaming: *streaming,
 	}
 	db, err := vitessdriver.OpenWithConfiguration(c)
 	if err != nil {

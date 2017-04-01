@@ -47,7 +47,7 @@ func testExecuteErrors(t *testing.T, conn *vtgateconn.VTGateConn) {
 	ctx := context.Background()
 
 	checkExecuteErrors(t, func(query string) error {
-		_, err := conn.Execute(ctx, query, bindVars, tabletType, nil)
+		_, err := conn.Execute(ctx, query, bindVars)
 		return err
 	})
 	checkExecuteErrors(t, func(query string) error {
@@ -98,7 +98,7 @@ func testStreamExecuteErrors(t *testing.T, conn *vtgateconn.VTGateConn) {
 	ctx := context.Background()
 
 	checkStreamExecuteErrors(t, func(query string) error {
-		return getStreamError(conn.StreamExecute(ctx, query, bindVars, tabletType, nil))
+		return getStreamError(conn.StreamExecute(ctx, query, bindVars))
 	})
 	checkStreamExecuteErrors(t, func(query string) error {
 		return getStreamError(conn.StreamExecuteShards(ctx, query, keyspace, shards, bindVars, tabletType, nil))
@@ -115,7 +115,7 @@ func testUpdateStreamErrors(t *testing.T, conn *vtgateconn.VTGateConn) {
 	ctx := context.Background()
 
 	checkStreamExecuteErrors(t, func(query string) error {
-		return getUpdateStreamError(conn.UpdateStream(ctx, query, nil, tabletType, 0, nil))
+		return getUpdateStreamError(conn.UpdateStream(ctx, "", query, nil, tabletType, 0, nil))
 	})
 }
 
@@ -123,7 +123,7 @@ func testTransactionExecuteErrors(t *testing.T, conn *vtgateconn.VTGateConn) {
 	ctx := context.Background()
 
 	checkTransactionExecuteErrors(t, conn, func(tx *vtgateconn.VTGateTx, query string) error {
-		_, err := tx.Execute(ctx, query, bindVars, tabletType, nil)
+		_, err := tx.Execute(ctx, query, bindVars)
 		return err
 	})
 	checkTransactionExecuteErrors(t, conn, func(tx *vtgateconn.VTGateTx, query string) error {
