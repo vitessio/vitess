@@ -11,14 +11,6 @@ import io.vitess.proto.Query;
 import io.vitess.proto.Topodata;
 import io.vitess.proto.Vtrpc;
 import io.vitess.util.Constants;
-import org.junit.Assert;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.Matchers;
-import org.powermock.api.mockito.PowerMockito;
-import org.powermock.core.classloader.annotations.PrepareForTest;
-import org.powermock.modules.junit4.PowerMockRunner;
-
 import java.lang.reflect.Field;
 import java.math.BigDecimal;
 import java.sql.BatchUpdateException;
@@ -34,6 +26,13 @@ import java.util.Calendar;
 import java.util.List;
 import java.util.Map;
 import java.util.TimeZone;
+import org.junit.Assert;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.mockito.Matchers;
+import org.powermock.api.mockito.PowerMockito;
+import org.powermock.core.classloader.annotations.PrepareForTest;
+import org.powermock.modules.junit4.PowerMockRunner;
 
 
 /**

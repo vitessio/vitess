@@ -1,9 +1,9 @@
 package io.vitess.jdbc;
 
-import org.junit.Assert;
-import org.junit.BeforeClass;
 import java.sql.SQLException;
 import java.util.Properties;
+import org.junit.Assert;
+import org.junit.BeforeClass;
 
 public class BaseTest {
     String dbURL = "jdbc:vitess://locahost:9000/vt_keyspace/keyspace";

@@ -9,7 +9,6 @@ import io.vitess.client.Context;
 import io.vitess.client.RpcClient;
 import io.vitess.client.RpcClientFactory;
 import io.vitess.client.grpc.tls.TlsOptions;
-import javax.net.ssl.SSLException;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -24,6 +23,7 @@ import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
 import java.util.Arrays;
 import java.util.Enumeration;
+import javax.net.ssl.SSLException;
 
 /**
  * GrpcClientFactory creates RpcClients with the gRPC implementation.

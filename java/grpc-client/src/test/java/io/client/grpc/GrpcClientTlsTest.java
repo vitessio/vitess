@@ -5,18 +5,17 @@ import io.vitess.client.Context;
 import io.vitess.client.RpcClientTest;
 import io.vitess.client.grpc.GrpcClientFactory;
 import io.vitess.client.grpc.tls.TlsOptions;
-import org.joda.time.Duration;
-import org.junit.AfterClass;
-import org.junit.BeforeClass;
-import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
-
 import java.io.File;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.nio.file.Paths;
 import java.util.concurrent.TimeUnit;
+import org.joda.time.Duration;
+import org.junit.AfterClass;
+import org.junit.BeforeClass;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 
 /**
  * This tests GrpcClient with a mock vtgate server (go/cmd/vtgateclienttest), over an SSL connection.

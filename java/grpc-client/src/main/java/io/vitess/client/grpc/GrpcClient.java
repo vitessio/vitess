@@ -3,11 +3,13 @@ package io.vitess.client.grpc;
 import com.google.common.util.concurrent.AsyncFunction;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
-import io.vitess.proto.Query.QueryResult;
+import io.grpc.ManagedChannel;
+import io.grpc.StatusRuntimeException;
 import io.vitess.client.Context;
 import io.vitess.client.Proto;
 import io.vitess.client.RpcClient;
 import io.vitess.client.StreamIterator;
+import io.vitess.proto.Query.QueryResult;
 import io.vitess.proto.Vtgate;
 import io.vitess.proto.Vtgate.BeginRequest;
 import io.vitess.proto.Vtgate.BeginResponse;
@@ -44,10 +46,6 @@ import io.vitess.proto.Vtgate.StreamExecuteShardsResponse;
 import io.vitess.proto.grpc.VitessGrpc;
 import io.vitess.proto.grpc.VitessGrpc.VitessFutureStub;
 import io.vitess.proto.grpc.VitessGrpc.VitessStub;
-import io.grpc.ManagedChannel;
-import io.grpc.StatusRuntimeException;
-import org.joda.time.Duration;
-
 import java.io.IOException;
 import java.sql.SQLException;
 import java.sql.SQLIntegrityConstraintViolationException;
@@ -58,6 +56,7 @@ import java.sql.SQLSyntaxErrorException;
 import java.sql.SQLTimeoutException;
 import java.sql.SQLTransientException;
 import java.util.concurrent.TimeUnit;
+import org.joda.time.Duration;
 
 /**
  * GrpcClient is a gRPC-based implementation of Vitess Rpcclient.

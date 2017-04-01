@@ -3,14 +3,13 @@ package io.vitess.jdbc;
 import io.vitess.proto.Query;
 import io.vitess.util.Constants;
 import io.vitess.util.charset.CharsetMapping;
-import org.junit.Assert;
-import org.junit.Test;
-
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.sql.Types;
 import java.util.ArrayList;
 import java.util.List;
+import org.junit.Assert;
+import org.junit.Test;
 
 /**
  * Created by ashudeep.sharma on 08/02/16.

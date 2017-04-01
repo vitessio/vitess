@@ -145,7 +145,7 @@ public class Row {
 
   /**
    * Returns the raw {@link ByteString} for a column.
-   * 
+   *
    * @param columnLabel case-insensitive column label
    */
   public ByteString getRawValue(String columnLabel) throws SQLException {
@@ -513,14 +513,14 @@ public class Row {
    * distinguish between 0 and SQL NULL. For example:
    *
    * <blockquote>
-   * 
+   *
    * <pre>
    * Long value = row.getObject(0, Long.class);
    * if (value == null) {
    *   // The value was SQL NULL, not 0.
    * }
    * </pre>
-   * 
+   *
    * </blockquote>
    *
    * @param columnIndex 1-based column number (0 is invalid)
@@ -544,14 +544,14 @@ public class Row {
    * distinguish between 0 and SQL NULL. For example:
    *
    * <blockquote>
-   * 
+   *
    * <pre>
    * Long value = row.getObject("col0", Long.class);
    * if (value == null) {
    *   // The value was SQL NULL, not 0.
    * }
    * </pre>
-   * 
+   *
    * </blockquote>
    *
    * @param columnLabel case-insensitive column label

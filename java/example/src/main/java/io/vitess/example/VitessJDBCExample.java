@@ -1,7 +1,5 @@
 package io.vitess.example;
 
-import org.joda.time.Instant;
-
 import java.sql.BatchUpdateException;
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -10,6 +8,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.Random;
+import org.joda.time.Instant;
 
 /**
  * Created by harshit.gangal on 10/03/16.

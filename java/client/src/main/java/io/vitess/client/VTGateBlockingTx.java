@@ -7,11 +7,10 @@ import io.vitess.proto.Topodata.KeyRange;
 import io.vitess.proto.Topodata.TabletType;
 import io.vitess.proto.Vtgate.BoundKeyspaceIdQuery;
 import io.vitess.proto.Vtgate.BoundShardQuery;
-
-import javax.annotation.Nullable;
 import java.sql.SQLException;
 import java.util.List;
 import java.util.Map;
+import javax.annotation.Nullable;
 
 /**
  * A synchronous wrapper around a VTGate transaction.

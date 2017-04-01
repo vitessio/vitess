@@ -3,15 +3,14 @@ package io.client.grpc;
 import io.vitess.client.Context;
 import io.vitess.client.RpcClientTest;
 import io.vitess.client.grpc.GrpcClientFactory;
+import java.net.InetSocketAddress;
+import java.net.ServerSocket;
+import java.util.Arrays;
 import org.joda.time.Duration;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
-
-import java.net.InetSocketAddress;
-import java.net.ServerSocket;
-import java.util.Arrays;
 
 /**
  * This tests GrpcClient with a mock vtgate server (go/cmd/vtgateclienttest).

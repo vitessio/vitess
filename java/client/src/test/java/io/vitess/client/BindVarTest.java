@@ -6,15 +6,13 @@ import com.google.common.primitives.UnsignedLong;
 import com.google.protobuf.ByteString;
 import io.vitess.proto.Query;
 import io.vitess.proto.Query.BindVariable;
-
+import java.math.BigDecimal;
+import java.util.Arrays;
+import java.util.Collection;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 import org.junit.runners.Parameterized.Parameters;
-
-import java.math.BigDecimal;
-import java.util.Arrays;
-import java.util.Collection;
 
 @RunWith(value = Parameterized.class)
 public class BindVarTest {
