@@ -10,6 +10,8 @@
     <url>https://github.com/youtube/vitess/</url>
     <description>Umbrella project for all Java activities for Vitess</description>
     <inceptionYear>2014</inceptionYear>
+    <!-- NOTE: The artifactId of each module has the prefix "vitess-".
+         For example, for the JDBC driver it is "vitess-jdbc". -->
     <modules>
         <module>client</module>
         <module>example</module>
