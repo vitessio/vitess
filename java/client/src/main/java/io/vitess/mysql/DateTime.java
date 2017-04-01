@@ -84,7 +84,10 @@ public class DateTime {
     // MySQL TIME can be negative and have hours > 24,
     // because it can also represent elapsed time.
     // So we just parse the integers rather than using DateFormat.
-    long hours = 0, minutes = 0, seconds = 0, millis = 0;
+    long hours = 0;
+    long minutes = 0;
+    long seconds = 0;
+    long millis = 0;
 
     try {
       // Hours
