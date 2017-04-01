@@ -38,12 +38,12 @@ func NewRouter(ctx context.Context, serv topo.SrvTopoServer, cell, statsName str
 }
 
 // Execute routes a non-streaming query.
-func (rtr *Router) Execute(ctx context.Context, sql string, bindVars map[string]interface{}, keyspace string, tabletType topodatapb.TabletType, session *vtgatepb.Session, notInTransaction bool, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
+func (rtr *Router) Execute(ctx context.Context, sql string, bindVars map[string]interface{}, keyspace string, tabletType topodatapb.TabletType, session *vtgatepb.Session) (*sqltypes.Result, error) {
 	if bindVars == nil {
 		bindVars = make(map[string]interface{})
 	}
-	vcursor := newQueryExecutor(ctx, tabletType, session, options, rtr)
-	queryConstruct := queryinfo.NewQueryConstruct(sql, keyspace, bindVars, notInTransaction)
+	vcursor := newQueryExecutor(ctx, tabletType, session, rtr)
+	queryConstruct := queryinfo.NewQueryConstruct(sql, keyspace, bindVars)
 	plan, err := rtr.planner.GetPlan(sql, keyspace, bindVars)
 	if err != nil {
 		return nil, err
@@ -52,12 +52,12 @@ func (rtr *Router) Execute(ctx context.Context, sql string, bindVars map[string]
 }
 
 // StreamExecute executes a streaming query.
-func (rtr *Router) StreamExecute(ctx context.Context, sql string, bindVars map[string]interface{}, keyspace string, tabletType topodatapb.TabletType, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
+func (rtr *Router) StreamExecute(ctx context.Context, sql string, bindVars map[string]interface{}, keyspace string, tabletType topodatapb.TabletType, session *vtgatepb.Session, callback func(*sqltypes.Result) error) error {
 	if bindVars == nil {
 		bindVars = make(map[string]interface{})
 	}
-	vcursor := newQueryExecutor(ctx, tabletType, nil, options, rtr)
-	queryConstruct := queryinfo.NewQueryConstruct(sql, keyspace, bindVars, false)
+	vcursor := newQueryExecutor(ctx, tabletType, session, rtr)
+	queryConstruct := queryinfo.NewQueryConstruct(sql, keyspace, bindVars)
 	plan, err := rtr.planner.GetPlan(sql, keyspace, bindVars)
 	if err != nil {
 		return err
@@ -75,7 +75,8 @@ func (rtr *Router) MessageAck(ctx context.Context, keyspace, name string, ids []
 	if err != nil {
 		return 0, err
 	}
-	vcursor := newQueryExecutor(ctx, topodatapb.TabletType_MASTER, nil, nil, rtr)
+	// TODO(sougou): Change this to use Session.
+	vcursor := newQueryExecutor(ctx, topodatapb.TabletType_MASTER, &vtgatepb.Session{}, rtr)
 	newKeyspace, _, allShards, err := getKeyspaceShards(ctx, rtr.serv, rtr.cell, table.Keyspace.Name, topodatapb.TabletType_MASTER)
 	shardIDs := make(map[string][]*querypb.Value)
 	if table.Keyspace.Sharded {

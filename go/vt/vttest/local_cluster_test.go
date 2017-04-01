@@ -81,7 +81,7 @@ func TestVitess(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	conn, err := vtgateconn.DialProtocol(ctx, vtgateProtocol(), vtgateAddr, 5*time.Second, "")
+	conn, err := vtgateconn.DialProtocol(ctx, vtgateProtocol(), vtgateAddr, 5*time.Second, "", nil)
 	if err != nil {
 		t.Error(err)
 		return
@@ -93,7 +93,7 @@ func TestVitess(t *testing.T) {
 	}
 	// Test that vtgate can use the VSchema to route the query to the keyspace.
 	// TODO(mberlin): This also works without a vschema for the table. How to fix?
-	_, err = conn.Execute(ctx, "select * from messages", nil, topodatapb.TabletType_MASTER, nil)
+	_, err = conn.Execute(ctx, "select * from messages", nil)
 	if err != nil {
 		t.Error(err)
 		return

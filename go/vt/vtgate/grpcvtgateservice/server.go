@@ -16,6 +16,7 @@ import (
 	"github.com/youtube/vitess/go/vt/callerid"
 	"github.com/youtube/vitess/go/vt/callinfo"
 	"github.com/youtube/vitess/go/vt/servenv"
+	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vtgate"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateservice"
@@ -23,6 +24,7 @@ import (
 	"golang.org/x/net/context"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	vtgatepb "github.com/youtube/vitess/go/vt/proto/vtgate"
 	vtgateservicepb "github.com/youtube/vitess/go/vt/proto/vtgateservice"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
@@ -91,7 +93,18 @@ func (vtg *VTGate) Execute(ctx context.Context, request *vtgatepb.ExecuteRequest
 	if err != nil {
 		return nil, vterrors.ToGRPC(err)
 	}
-	session, result, err := vtg.server.Execute(ctx, string(request.Query.Sql), bv, request.KeyspaceShard, request.TabletType, request.Session, request.NotInTransaction, request.Options)
+	// Handle backward compatibility.
+	session := request.Session
+	if session == nil {
+		session = &vtgatepb.Session{}
+	}
+	if session.TargetString == "" && request.TabletType != topodatapb.TabletType_UNKNOWN {
+		session.TargetString = request.KeyspaceShard + "@" + topoproto.TabletTypeLString(request.TabletType)
+	}
+	if session.Options == nil {
+		session.Options = request.Options
+	}
+	session, result, err := vtg.server.Execute(ctx, string(request.Query.Sql), bv, session)
 	return &vtgatepb.ExecuteResponse{
 		Result:  sqltypes.ResultToProto3(result),
 		Session: session,
@@ -211,7 +224,18 @@ func (vtg *VTGate) ExecuteBatch(ctx context.Context, request *vtgatepb.ExecuteBa
 		sqlQueries[queryNum] = query.Sql
 		bindVars[queryNum] = bv
 	}
-	session, results, err := vtg.server.ExecuteBatch(ctx, sqlQueries, bindVars, request.KeyspaceShard, request.TabletType, request.Session, request.Options)
+	// Handle backward compatibility.
+	session := request.Session
+	if session == nil {
+		session = &vtgatepb.Session{}
+	}
+	if session.TargetString == "" {
+		session.TargetString = request.KeyspaceShard + "@" + topoproto.TabletTypeLString(request.TabletType)
+	}
+	if session.Options == nil {
+		session.Options = request.Options
+	}
+	session, results, err = vtg.server.ExecuteBatch(ctx, sqlQueries, bindVars, session)
 	return &vtgatepb.ExecuteBatchResponse{
 		Results: sqltypes.QueryResponsesToProto3(results),
 		Session: session,
@@ -262,17 +286,22 @@ func (vtg *VTGate) StreamExecute(request *vtgatepb.StreamExecuteRequest, stream 
 	if err != nil {
 		return vterrors.ToGRPC(err)
 	}
-	vtgErr := vtg.server.StreamExecute(ctx,
-		string(request.Query.Sql),
-		bv,
-		request.KeyspaceShard,
-		request.TabletType,
-		request.Options,
-		func(value *sqltypes.Result) error {
-			return stream.Send(&vtgatepb.StreamExecuteResponse{
-				Result: sqltypes.ResultToProto3(value),
-			})
+	// Handle backward compatibility.
+	session := request.Session
+	if session == nil {
+		session = &vtgatepb.Session{}
+	}
+	if session.TargetString == "" {
+		session.TargetString = request.KeyspaceShard + "@" + topoproto.TabletTypeLString(request.TabletType)
+	}
+	if session.Options == nil {
+		session.Options = request.Options
+	}
+	vtgErr := vtg.server.StreamExecute(ctx, string(request.Query.Sql), bv, session, func(value *sqltypes.Result) error {
+		return stream.Send(&vtgatepb.StreamExecuteResponse{
+			Result: sqltypes.ResultToProto3(value),
 		})
+	})
 	return vterrors.ToGRPC(vtgErr)
 }
 

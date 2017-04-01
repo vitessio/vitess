@@ -127,6 +127,10 @@ public abstract class RpcClientTest {
 
   private static final String SESSION_ECHO = "in_transaction:true ";
 
+  private static final String NONTX_V3_SESSION_ECHO = "target_string:\"test_keyspace@replica\" options:<included_fields:ALL > ";
+
+  private static final String V3_SESSION_ECHO = "in_transaction:true target_string:\"test_keyspace@replica\" options:<included_fields:ALL > ";
+
   private static final CallerID CALLER_ID = CallerID.newBuilder().setPrincipal("test_principal")
       .setComponent("test_component").setSubcomponent("test_subcomponent").build();
   private static final String CALLER_ID_ECHO =
@@ -212,10 +216,8 @@ public abstract class RpcClientTest {
     echo = getEcho(conn.execute(ctx, ECHO_PREFIX + QUERY, BIND_VARS, TABLET_TYPE, ALL_FIELDS));
     Assert.assertEquals(CALLER_ID_ECHO, echo.get("callerId"));
     Assert.assertEquals(ECHO_PREFIX + QUERY, echo.get("query"));
-    Assert.assertEquals(KEYSPACE, echo.get("keyspace"));
     Assert.assertEquals(BIND_VARS_ECHO, echo.get("bindVars"));
-    Assert.assertEquals(TABLET_TYPE_ECHO, echo.get("tabletType"));
-    Assert.assertEquals(OPTIONS_ALL_FIELDS_ECHO, echo.get("options"));
+    Assert.assertEquals(NONTX_V3_SESSION_ECHO, echo.get("session"));
 
     echo = getEcho(
         conn.executeShards(ctx, ECHO_PREFIX + QUERY, KEYSPACE, SHARDS, BIND_VARS, TABLET_TYPE, ALL_FIELDS));
@@ -291,10 +293,8 @@ public abstract class RpcClientTest {
     echo = getEcho(conn.streamExecute(ctx, ECHO_PREFIX + QUERY, BIND_VARS, TABLET_TYPE, ALL_FIELDS));
     Assert.assertEquals(CALLER_ID_ECHO, echo.get("callerId"));
     Assert.assertEquals(ECHO_PREFIX + QUERY, echo.get("query"));
-    Assert.assertEquals(KEYSPACE, echo.get("keyspace"));
     Assert.assertEquals(BIND_VARS_ECHO, echo.get("bindVars"));
-    Assert.assertEquals(TABLET_TYPE_ECHO, echo.get("tabletType"));
-    Assert.assertEquals(OPTIONS_ALL_FIELDS_ECHO, echo.get("options"));
+    Assert.assertEquals(NONTX_V3_SESSION_ECHO, echo.get("session"));
 
     echo = getEcho(conn.streamExecuteShards(ctx, ECHO_PREFIX + QUERY, KEYSPACE, SHARDS, BIND_VARS,
         TABLET_TYPE, ALL_FIELDS));
@@ -336,12 +336,12 @@ public abstract class RpcClientTest {
     echo = getEcho(tx.execute(ctx, ECHO_PREFIX + QUERY, BIND_VARS, TABLET_TYPE, ALL_FIELDS));
     Assert.assertEquals(CALLER_ID_ECHO, echo.get("callerId"));
     Assert.assertEquals(ECHO_PREFIX + QUERY, echo.get("query"));
-    Assert.assertEquals(KEYSPACE, echo.get("keyspace"));
     Assert.assertEquals(BIND_VARS_ECHO, echo.get("bindVars"));
-    Assert.assertEquals(TABLET_TYPE_ECHO, echo.get("tabletType"));
-    Assert.assertEquals(SESSION_ECHO, echo.get("session"));
-    Assert.assertEquals("false", echo.get("notInTransaction"));
-    Assert.assertEquals(OPTIONS_ALL_FIELDS_ECHO, echo.get("options"));
+    Assert.assertEquals(V3_SESSION_ECHO, echo.get("session"));
+
+    // Test V2 functionality independent of V3
+    tx.rollback(ctx);
+    tx = conn.begin(ctx);
 
     echo = getEcho(
         tx.executeShards(ctx, ECHO_PREFIX + QUERY, KEYSPACE, SHARDS, BIND_VARS, TABLET_TYPE, ALL_FIELDS));

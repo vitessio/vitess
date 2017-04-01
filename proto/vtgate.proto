@@ -12,7 +12,13 @@ import "vtrpc.proto";
 
 // Session objects are session cookies and are invalidated on
 // use. Query results will contain updated session values.
-// Their content should be opaque to the user.
+// For V2 APIs and below, Session only contains transaction
+// info. The rest of the parameters are exchanged through
+// request and response objects. For the V3 APIs: Execute,
+// ExecuteBatch and StreamExecute, target_string is used
+// instead of keyspace, shard and tablet_type, and options
+// is used instead of the one in the request. In the V3 API,
+// any Execute or ExecuteBatch request can update the session.
 message Session {
   bool in_transaction = 1;
 
@@ -28,6 +34,13 @@ message Session {
 
   // autocommit specifies if the session is in autocommit mode.
   bool autocommit = 4;
+
+  // target_string is the target expressed as a string. Valid
+  // names are: keyspace:shard@target, keyspace@target or @target.
+  string target_string = 5;
+
+  // options
+  query.ExecuteOptions options = 6;
 }
 
 // ExecuteRequest is the payload to Execute.
@@ -36,23 +49,16 @@ message ExecuteRequest {
   // set by the application to further identify the caller.
   vtrpc.CallerID caller_id = 1;
 
-  // session carries the current transaction data. It is returned by Begin.
-  // Do not fill it in if outside of a transaction.
+  // session carries the session state.
   Session session = 2;
 
   // query is the query and bind variables to execute.
   query.BoundQuery query = 3;
 
-  // tablet_type is the type of tablets that this query is targeted to.
+  // These values are deprecated. Use session instead.
   topodata.TabletType tablet_type = 4;
-
-  // not_in_transaction is deprecated and should not be used.
   bool not_in_transaction = 5;
-
-  // keyspace_shard can be 'keyspace' or 'keyspace/shard'.
   string keyspace_shard = 6;
-
-  // options
   query.ExecuteOptions options = 7;
 }
 
@@ -63,7 +69,7 @@ message ExecuteResponse {
   // instance if a database integrity error happened).
   vtrpc.RPCError error = 1;
 
-  // session is the updated session information (only returned inside a transaction).
+  // session is the updated session information.
   Session session = 2;
 
   // result contains the query result, only set if error is unset.
@@ -92,7 +98,7 @@ message ExecuteShardsRequest {
   // tablet_type is the type of tablets that this query is targeted to.
   topodata.TabletType tablet_type = 6;
 
-  // not_in_transaction is deprecated and should not be used.
+  // not_in_transaction is deprecated.
   bool not_in_transaction = 7;
 
   // options
@@ -136,7 +142,7 @@ message ExecuteKeyspaceIdsRequest {
   // tablet_type is the type of tablets that this query is targeted to.
   topodata.TabletType tablet_type = 6;
 
-  // not_in_transaction is deprecated and should not be used.
+  // not_in_transaction is deprecated.
   bool not_in_transaction = 7;
 
   // options
@@ -180,7 +186,7 @@ message ExecuteKeyRangesRequest {
   // tablet_type is the type of tablets that this query is targeted to.
   topodata.TabletType tablet_type = 6;
 
-  // not_in_transaction is deprecated and should not be used.
+  // not_in_transaction is deprecated.
   bool not_in_transaction = 7;
 
   // options
@@ -238,7 +244,7 @@ message ExecuteEntityIdsRequest {
   // tablet_type is the type of tablets that this query is targeted to.
   topodata.TabletType tablet_type = 7;
 
-  // not_in_transaction is deprecated and should not be used.
+  // not_in_transaction is deprecated.
   bool not_in_transaction = 8;
 
   // options
@@ -265,25 +271,16 @@ message ExecuteBatchRequest {
   // set by the application to further identify the caller.
   vtrpc.CallerID caller_id = 1;
 
-  // session carries the current transaction data. It is returned by Begin.
-  // Do not fill it in if outside of a transaction.
+  // session carries the session state.
   Session session = 2;
 
   // queries is a list of query and bind variables to execute.
   repeated query.BoundQuery queries = 3;
 
-  // tablet_type is the type of tablets that these queries is targeted to.
+  // These values are deprecated. Use session instead.
   topodata.TabletType tablet_type = 4;
-
-  // as_transaction is deprecated.
-  // We cannot use the proto3 deprecated feature yet because
-  // the php compiler doesn't recognize that construct.
   bool as_transaction = 5;
-
-  // keyspace_shard can be 'keyspace' or 'keyspace/shard'.
   string keyspace_shard = 6;
-
-  // options
   query.ExecuteOptions options = 7;
 }
 
@@ -295,7 +292,7 @@ message ExecuteBatchResponse {
   // instance if a database integrity error happened).
   vtrpc.RPCError error = 1;
 
-  // session is the updated session information (only returned inside a transaction).
+  // session is the updated session information.
   Session session = 2;
 
   // results contains the query results, only set if application level error is unset.
@@ -417,17 +414,18 @@ message StreamExecuteRequest {
   // query is the query and bind variables to execute.
   query.BoundQuery query = 2;
 
-  // tablet_type is the type of tablets that this query is targeted to.
+  // These values are deprecated. Use session instead.
   topodata.TabletType tablet_type = 3;
-
-  // keyspace_shard can be 'keyspace' or 'keyspace/shard'.
   string keyspace_shard = 4;
-
-  // options
   query.ExecuteOptions options = 5;
+
+  // session carries the session state.
+  Session session = 6;
 }
 
 // StreamExecuteResponse is the returned value from StreamExecute.
+// The session is currently not returned because StreamExecute is
+// not expected to modify it.
 message StreamExecuteResponse {
   // result contains the result data.
   // The first value contains only Fields information.

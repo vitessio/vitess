@@ -497,6 +497,10 @@ class TestEcho(TestPythonClientBase):
   options_echo = ('include_event_token:true compare_event_token:'
                   '<timestamp:123 shard:"-80" position:"test_pos" > ')
 
+  session_echo = ('target_string:"@replica" options:<include_event_token:'
+                  'true compare_event_token:<timestamp:123 shard:'
+                  '"-80" position:"test_pos" > > ')
+
   def test_echo_execute(self):
     """This test calls the echo method."""
 
@@ -511,10 +515,7 @@ class TestEcho(TestPythonClientBase):
         # FIXME(alainjobart) change this to query_echo once v3 understand binds
         'query': self.echo_prefix+self.query,
         'bindVars': self.bind_variables_echo,
-        'tabletType': self.tablet_type_echo,
-        'options': self.options_echo,
-        'fresher': True,
-        'eventToken': self.event_token,
+        'session': self.session_echo,
     })
     cursor.close()
 

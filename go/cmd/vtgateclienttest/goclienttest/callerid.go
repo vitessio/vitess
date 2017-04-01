@@ -22,7 +22,6 @@ import (
 // testCallerID adds a caller ID to a context, and makes sure the server
 // gets it.
 func testCallerID(t *testing.T, conn *vtgateconn.VTGateConn) {
-	t.Log("testCallerID")
 	ctx := context.Background()
 	callerID := callerid.NewEffectiveCallerID("test_principal", "test_component", "test_subcomponent")
 	ctx = callerid.NewContext(ctx, callerID, nil)
@@ -35,7 +34,7 @@ func testCallerID(t *testing.T, conn *vtgateconn.VTGateConn) {
 	query := services.CallerIDPrefix + string(data)
 
 	// test Execute calls forward the callerID
-	_, err = conn.Execute(ctx, query, nil, topodatapb.TabletType_MASTER, nil)
+	_, err = conn.Execute(ctx, query, nil)
 	checkCallerIDError(t, "Execute", err)
 
 	_, err = conn.ExecuteShards(ctx, query, "", nil, nil, topodatapb.TabletType_MASTER, nil)
@@ -70,7 +69,7 @@ func testCallerID(t *testing.T, conn *vtgateconn.VTGateConn) {
 	checkCallerIDError(t, "ExecuteBatchKeyspaceIds", err)
 
 	// test StreamExecute calls forward the callerID
-	err = getStreamError(conn.StreamExecute(ctx, query, nil, topodatapb.TabletType_MASTER, nil))
+	err = getStreamError(conn.StreamExecute(ctx, query, nil))
 	checkCallerIDError(t, "StreamExecute", err)
 
 	err = getStreamError(conn.StreamExecuteShards(ctx, query, "", nil, nil, topodatapb.TabletType_MASTER, nil))
@@ -83,7 +82,7 @@ func testCallerID(t *testing.T, conn *vtgateconn.VTGateConn) {
 	checkCallerIDError(t, "StreamExecuteKeyRanges", err)
 
 	// test UpdateStream forwards the callerID
-	err = getUpdateStreamError(conn.UpdateStream(ctx, query, nil, topodatapb.TabletType_MASTER, 0, nil))
+	err = getUpdateStreamError(conn.UpdateStream(ctx, "", query, nil, topodatapb.TabletType_MASTER, 0, nil))
 	checkCallerIDError(t, "UpdateStream", err)
 }
 
