@@ -50,6 +50,7 @@ import (
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
+	"github.com/youtube/vitess/go/vt/vttablet/heartbeat"
 )
 
 const (
@@ -122,6 +123,7 @@ type TabletServer struct {
 	qe               *QueryEngine
 	te               *TxEngine
 	messager         *messager.Engine
+	heartbeat        *heartbeat.Engine
 	watcher          *ReplicationWatcher
 	updateStreamList *binlog.StreamList
 
@@ -160,8 +162,8 @@ type MySQLChecker interface {
 }
 
 // NewServer creates a new TabletServer based on the command line flags.
-func NewServer(topoServer topo.Server) *TabletServer {
-	return NewTabletServer(tabletenv.Config, topoServer)
+func NewServer(topoServer topo.Server, alias topodatapb.TabletAlias) *TabletServer {
+	return NewTabletServer(tabletenv.Config, topoServer, alias)
 }
 
 var tsOnce sync.Once
@@ -169,12 +171,12 @@ var tsOnce sync.Once
 // NewTabletServerWithNilTopoServer is typically used in tests that don't need a topoSever
 // member.
 func NewTabletServerWithNilTopoServer(config tabletenv.TabletConfig) *TabletServer {
-	return NewTabletServer(config, topo.Server{})
+	return NewTabletServer(config, topo.Server{}, topodatapb.TabletAlias{})
 }
 
 // NewTabletServer creates an instance of TabletServer. Only the first
 // instance of TabletServer will expose its state variables.
-func NewTabletServer(config tabletenv.TabletConfig, topoServer topo.Server) *TabletServer {
+func NewTabletServer(config tabletenv.TabletConfig, topoServer topo.Server, alias topodatapb.TabletAlias) *TabletServer {
 	tsv := &TabletServer{
 		QueryTimeout:           sync2.NewAtomicDuration(time.Duration(config.QueryTimeout * 1e9)),
 		BeginTimeout:           sync2.NewAtomicDuration(time.Duration(config.TxPoolTimeout * 1e9)),
@@ -190,6 +192,7 @@ func NewTabletServer(config tabletenv.TabletConfig, topoServer topo.Server) *Tab
 	tsv.te = NewTxEngine(tsv, config)
 	tsv.txThrottler = txthrottler.CreateTxThrottlerFromTabletConfig(topoServer)
 	tsv.messager = messager.NewEngine(tsv, tsv.se, config)
+	tsv.heartbeat = heartbeat.NewEngine(tsv.topoServer, alias)
 	tsv.watcher = NewReplicationWatcher(tsv.se, config)
 	tsv.updateStreamList = &binlog.StreamList{}
 	// FIXME(alainjobart) could we move this to the Register method below?
@@ -447,7 +450,9 @@ func (tsv *TabletServer) serveNewType() (err error) {
 		tsv.txThrottler.Close()
 	}
 	tsv.transition(StateServing)
-	return nil
+	tsv.heartbeat.ChangeTabletType(tsv.target.TabletType)
+	err = tsv.heartbeat.Open(tsv.dbconfigs, tsv.target)
+	return
 }
 
 func (tsv *TabletServer) gracefulStop() {
@@ -490,6 +495,7 @@ func (tsv *TabletServer) waitForShutdown() {
 	// transactions.
 	tsv.txRequests.Wait()
 	tsv.messager.Close()
+	tsv.heartbeat.Close()
 	tsv.te.Close(false)
 	tsv.qe.streamQList.TerminateAll()
 	tsv.updateStreamList.Stop()
@@ -502,6 +508,7 @@ func (tsv *TabletServer) waitForShutdown() {
 // It forcibly shuts down everything.
 func (tsv *TabletServer) closeAll() {
 	tsv.messager.Close()
+	tsv.heartbeat.Close()
 	tsv.te.Close(true)
 	tsv.watcher.Close()
 	tsv.updateStreamList.Stop()
