@@ -14,7 +14,7 @@ primary key (id)) Engine=InnoDB;
 
 Let's say we want to write a MapReduce job that imports this table from Vitess to HDFS where each row is turned into a CSV record in HDFS. 
 
-We can use [VitessInputFormat](https://github.com/youtube/vitess/blob/090830a29c10ae813a2edae18ad780067fb46c05/java/vtgate-client/src/main/java/com/youtube/vitess/vtgate/hadoop/VitessInputFormat.java), an implementation of Hadoop's [InputFormat](http://hadoop.apache.org/docs/stable/api/org/apache/hadoop/mapred/InputFormat.html), for that. With VitessInputFormat, rows from the source table are streamed to the mapper task. Each input record has a [NullWritable](https://hadoop.apache.org/docs/r2.2.0/api/org/apache/hadoop/io/NullWritable.html) key (no key, really), and [RowWritable](https://github.com/youtube/vitess/blob/090830a29c10ae813a2edae18ad780067fb46c05/java/vtgate-client/src/main/java/com/youtube/vitess/vtgate/hadoop/writables/RowWritable.java) as value, which is a writable implementation for the entire row's contents.
+We can use [VitessInputFormat](https://github.com/youtube/vitess/blob/master/java/hadoop/src/main/java/io/vitess/hadoop/VitessInputFormat.java), an implementation of Hadoop's [InputFormat](http://hadoop.apache.org/docs/stable/api/org/apache/hadoop/mapred/InputFormat.html), for that. With VitessInputFormat, rows from the source table are streamed to the mapper task. Each input record has a [NullWritable](https://hadoop.apache.org/docs/r2.2.0/api/org/apache/hadoop/io/NullWritable.html) key (no key, really), and [RowWritable](https://github.com/youtube/vitess/blob/master/java/hadoop/src/main/java/io/vitess/hadoop/RowWritable.java) as value, which is a writable implementation for the entire row's contents.
 
 Here is an example implementation of our mapper, which transforms each row into a CSV Text. 
 
@@ -55,11 +55,11 @@ public static void main(String[] args) {
 }
 ```
 
-Refer [this integration test](https://github.com/youtube/vitess/blob/090830a29c10ae813a2edae18ad780067fb46c05/java/vtgate-client/src/test/java/com/youtube/vitess/vtgate/integration/hadoop/MapReduceIT.java) for a working example a MapReduce job on Vitess.
+Refer [this integration test](https://github.com/youtube/vitess/blob/master/java/hadoop/src/test/java/io/vitess/hadoop/MapReduceIT.java) for a working example a MapReduce job on Vitess.
 
 ## How it Works
 
-VitessInputFormat relies on VtGate's [SplitQuery](https://github.com/youtube/vitess/blob/c680b39852662739a4f5f539ad3ff48ae83d26d1/go/vt/vtgate/vtgateservice/interface.go#L38) service to obtain the input splits. This service accepts a SplitQueryRequest which consists of an input query and the desired number of splits (splitCount). SplitQuery returns SplitQueryResult, which has a list of SplitQueryParts. SplitQueryPart consists of a KeyRangeQuery and a size estimate of how many rows this sub-query might return. SplitQueryParts return rows that are mutually exclusive and collectively exhaustive - all rows belonging to the original input query will be returned by one and exactly one SplitQueryPart. 
+VitessInputFormat relies on VtGate's [SplitQuery](https://github.com/youtube/vitess/blob/21515f5c1a85c0054ddf7d2ff068702670ab93b5/proto/vtgateservice.proto#L98) RPC to obtain the input splits. This RPC method accepts a SplitQueryRequest which consists of an input query and the desired number of splits (splitCount). SplitQuery returns SplitQueryResult, which has a list of SplitQueryParts. SplitQueryPart consists of a KeyRangeQuery and a size estimate of how many rows this sub-query might return. SplitQueryParts return rows that are mutually exclusive and collectively exhaustive - all rows belonging to the original input query will be returned by one and exactly one SplitQueryPart.
 
 VitessInputFormat turns each SplitQueryPart into a mapper task. The number of splits generated may not be exactly equal to the desired split count specified in the input. Specifically, if the desired split count is not a multiple of the number of shards, then VtGate will round it up to the next bigger multiple of number of shards.
 
@@ -78,7 +78,7 @@ VT_TINY, VT_SHORT,  VT_LONG,  VT_LONGLONG,  VT_INT24,  VT_FLOAT,  VT_DOUBLE
 
 Here's how SplitQuery works. VtGate forwards the input query to randomly chosen ‘rdonly’ vttablets in each shard with a split count, M = original split count / N, where N is the number of shards. Each vttablet parses the query and rejects it if it does not meet the constraints. If it is a valid query, the tablet fetches the min and max value for the leading primary key column from MySQL. Split the [min, max] range of into M intervals. Construct subqueries by appending where clauses corresponding to PK range intervals to the original query and return it to VtGate. VtGate aggregates the splits received from tablets and constructs KeyRangeQueries by appending KeyRange corresponding to that shard. The following diagram depicts this flow for a sample request of split size 6 on a cluster with two shards.
 
-![Image](https://raw.githubusercontent.com/youtube/vitess/090830a29c10ae813a2edae18ad780067fb46c05/java/vtgate-client/src/main/java/com/youtube/vitess/vtgate/hadoop/SplitQuery.png)
+![Image](SplitQuery.png)
 
 ## Other Considerations
 
