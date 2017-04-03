@@ -59,7 +59,7 @@ import java.util.concurrent.TimeUnit;
 import org.joda.time.Duration;
 
 /**
- * GrpcClient is a gRPC-based implementation of Vitess Rpcclient.
+ * GrpcClient is a gRPC-based implementation of Vitess RpcClient.
  */
 public class GrpcClient implements RpcClient {
   private final ManagedChannel channel;
