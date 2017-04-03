@@ -123,7 +123,7 @@ type TabletServer struct {
 	qe               *QueryEngine
 	te               *TxEngine
 	messager         *messager.Engine
-	heartbeat        *heartbeat.Engine
+	heartbeat        *heartbeat.Writer
 	watcher          *ReplicationWatcher
 	updateStreamList *binlog.StreamList
 
@@ -192,7 +192,7 @@ func NewTabletServer(config tabletenv.TabletConfig, topoServer topo.Server, alia
 	tsv.te = NewTxEngine(tsv, config)
 	tsv.txThrottler = txthrottler.CreateTxThrottlerFromTabletConfig(topoServer)
 	tsv.messager = messager.NewEngine(tsv, tsv.se, config)
-	tsv.heartbeat = heartbeat.NewEngine(tsv.topoServer, alias)
+	tsv.heartbeat = heartbeat.NewWriter(tsv.topoServer, alias)
 	tsv.watcher = NewReplicationWatcher(tsv.se, config)
 	tsv.updateStreamList = &binlog.StreamList{}
 	// FIXME(alainjobart) could we move this to the Register method below?
@@ -438,8 +438,12 @@ func (tsv *TabletServer) serveNewType() (err error) {
 		tsv.watcher.Close()
 		tsv.te.Open(tsv.dbconfigs)
 		tsv.messager.Open(tsv.dbconfigs)
+		if err = tsv.heartbeat.Open(tsv.dbconfigs); err != nil {
+			return err
+		}
 	} else {
 		tsv.messager.Close()
+		tsv.heartbeat.Close()
 		// Wait for in-flight transactional requests to complete
 		// before rolling back everything. In this state new
 		// transactional requests are not allowed. So, we can
@@ -450,8 +454,6 @@ func (tsv *TabletServer) serveNewType() (err error) {
 		tsv.txThrottler.Close()
 	}
 	tsv.transition(StateServing)
-	tsv.heartbeat.ChangeTabletType(tsv.target.TabletType)
-	err = tsv.heartbeat.Open(tsv.dbconfigs, tsv.target)
 	return
 }
 
