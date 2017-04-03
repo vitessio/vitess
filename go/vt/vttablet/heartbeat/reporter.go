@@ -8,10 +8,12 @@ import (
 	"time"
 
 	"github.com/golang/glog"
+	"github.com/youtube/vitess/go/event"
 	"github.com/youtube/vitess/go/vt/health"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/proto/topodata"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/vttablet/tabletmanager/events"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
@@ -38,18 +40,14 @@ func (r *reporter) HTMLName() template.HTML {
 // Report is part of the health.Reporter interface. It simply polls
 // the last reported values from the watchHeartbeat routine
 func (r *reporter) Report(isSlaveType, shouldQueryServiceBeRunning bool) (time.Duration, error) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	r.isSlaveType = isSlaveType
 	if !isSlaveType {
 		return 0, nil
 	}
-
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	if r.lastKnownError != nil {
 		return 0, r.lastKnownError
 	}
-
 	return r.lastKnownLag, nil
 }
 
@@ -60,6 +58,12 @@ func (r *reporter) watchHeartbeat(ctx context.Context) {
 		tabletenv.LogError()
 		r.wg.Done()
 	}()
+
+	event.AddListener(func(change *events.StateChange) {
+		r.mu.Lock()
+		r.isSlaveType = change.NewTablet.Type == topodata.TabletType_MASTER
+		r.mu.Unlock()
+	})
 
 	for {
 		r.mu.Lock()
@@ -112,7 +116,7 @@ func (r *reporter) readHeartbeat(ctx context.Context) {
 	// because it only happens here.
 	masterUID := uint32(rawUID)
 	if masterUID != r.lastKnownMaster {
-		info, err := r.topoServer.GetShard(context.Background(), r.tablet.Keyspace, r.tablet.Shard)
+		info, err := r.topoServer.GetShard(ctx, r.tablet.Keyspace, r.tablet.Shard)
 		if err != nil {
 			r.recordError("Could not get current master: %v", err)
 			return
