@@ -2,12 +2,12 @@
   xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
   <parent>
-    <groupId>com.youtube.vitess</groupId>
+    <groupId>io.vitess</groupId>
     <artifactId>vitess-parent</artifactId>
     <version>1.1.0-SNAPSHOT</version>
     <relativePath>../pom.xml</relativePath>
   </parent>
-  <artifactId>client</artifactId>
+  <artifactId>vitess-client</artifactId>
 
   <dependencies>
     <dependency>
@@ -36,20 +36,6 @@
       <version>2.8.0</version>
     </dependency>
   </dependencies>
-
-  <pluginRepositories>
-    <pluginRepository>
-      <releases>
-        <updatePolicy>never</updatePolicy>
-      </releases>
-      <snapshots>
-        <enabled>false</enabled>
-      </snapshots>
-      <id>central</id>
-      <name>Central Repository</name>
-      <url>https://repo.maven.apache.org/maven2</url>
-    </pluginRepository>
-  </pluginRepositories>
 
   <build>
     <extensions>

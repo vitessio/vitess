@@ -62,3 +62,6 @@ _test/
 
 # generated protobuf files
 /go/vt/.proto.tmp
+
+# Eclipse Java CheckStyle plugin configuration.
+/java/*/.checkstyle
