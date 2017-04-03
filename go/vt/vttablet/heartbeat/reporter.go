@@ -83,12 +83,11 @@ func (r *reporter) watchHeartbeat(ctx context.Context) {
 // readHeartbeat reads from the heartbeat table exactly once.
 func (r *reporter) readHeartbeat(ctx context.Context) {
 	conn, err := r.mysqld.GetAppConnection(ctx)
-	defer conn.Recycle()
-
 	if err != nil {
 		r.recordError("Failed to get mysql connection: %v", err)
 		return
 	}
+	defer conn.Recycle()
 	res, err := conn.ExecuteFetch("SELECT ts, master_uid FROM _vt.heartbeat ORDER BY ts DESC LIMIT 1", 1, false)
 	if err != nil {
 		r.recordError("Failed to read heartbeat: %v", err)
