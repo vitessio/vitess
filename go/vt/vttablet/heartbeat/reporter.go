@@ -26,7 +26,7 @@ type reporter struct {
 	now        func() time.Time
 	wg         *sync.WaitGroup
 
-	isSlaveType     bool
+	isMaster        bool
 	lastKnownLag    time.Duration
 	lastKnownMaster uint32
 	lastKnownError  error
@@ -61,16 +61,16 @@ func (r *reporter) watchHeartbeat(ctx context.Context) {
 
 	event.AddListener(func(change *events.StateChange) {
 		r.mu.Lock()
-		r.isSlaveType = change.NewTablet.Type == topodata.TabletType_MASTER
+		r.isMaster = change.NewTablet.Type == topodata.TabletType_MASTER
 		r.mu.Unlock()
 	})
 
 	for {
 		r.mu.Lock()
-		isSlaveType := r.isSlaveType
+		isMaster := r.isMaster
 		r.mu.Unlock()
 
-		if isSlaveType {
+		if !isMaster {
 			r.readHeartbeat(ctx)
 		}
 
