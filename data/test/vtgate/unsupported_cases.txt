@@ -1,6 +1,6 @@
 # Unions
 "select * from user union select * from user_extra"
-"unsupported: multi-shard union"
+"unsupported: scatter subquery"
 
 # SET
 "set a=1"
@@ -25,11 +25,11 @@
 
 # union operations in subqueries (FROM)
 "select * from (select * from user union all select * from user_extra) as t"
-"unsupported: multi-shard union"
+"unsupported: scatter subquery"
 
 # union operations in subqueries (expressions)
 "select * from user where id in (select * from user union select * from user_extra)"
-"unsupported: multi-shard union"
+"unsupported: scatter subquery"
 
 # subquery with join primitive (FROM)
 "select * from (select user.id from user join user_extra) as t"

@@ -382,14 +382,13 @@ func (rb *route) AddOrder(order *sqlparser.Order) error {
 	if rb.IsRHS {
 		return errors.New("unsupported: complex left join and order by")
 	}
-	sel := rb.Select.(*sqlparser.Select)
-	sel.OrderBy = append(sel.OrderBy, order)
+	rb.Select.AddOrder(order)
 	return nil
 }
 
 // SetLimit adds a LIMIT clause to the route.
 func (rb *route) SetLimit(limit *sqlparser.Limit) {
-	rb.Select.(*sqlparser.Select).Limit = limit
+	rb.Select.SetLimit(limit)
 }
 
 // PushOrderByNull updates the comments & 'for update' sections of the route.
