@@ -118,7 +118,7 @@ func (me *Writer) initHeartbeatTable() error {
 	if err != nil {
 		return err
 	}
-	_, err = me.conn.ExecuteFetch(fmt.Sprintf("INSERT INTO _vt.heartbeat (ts, master_uid) VALUES (%d, %d) ON DUPLICATE KEY UPDATE ts=VALUES(ts)", time.Now().UnixNano(), me.tabletAlias.Uid), 0, false)
+	_, err = me.conn.ExecuteFetch(fmt.Sprintf("INSERT INTO _vt.heartbeat (ts, master_uid) VALUES (%d, %d) ON DUPLICATE KEY UPDATE ts=VALUES(ts)", me.now().UnixNano(), me.tabletAlias.Uid), 0, false)
 	return err
 }
 
