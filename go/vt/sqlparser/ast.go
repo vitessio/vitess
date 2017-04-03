@@ -254,12 +254,12 @@ type ParenSelect struct {
 
 // AddOrder adds an order by element
 func (node *ParenSelect) AddOrder(order *Order) {
-	node.Select.AddOrder(order)
+	panic("unreachable")
 }
 
 // SetLimit sets the limit clause
 func (node *ParenSelect) SetLimit(limit *Limit) {
-	node.Select.SetLimit(limit)
+	panic("unreachable")
 }
 
 // Format formats the node.

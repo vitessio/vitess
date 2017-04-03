@@ -71,13 +71,13 @@ func processPart(part sqlparser.SelectStatement, vschema VSchema, outer builder)
 func unionRouteMerge(union *sqlparser.Union, left, right builder, vschema VSchema) (builder, error) {
 	lroute, ok := left.(*route)
 	if !ok {
-		return nil, errors.New("unused message")
+		return nil, errors.New("unsupported construct: SELECT of UNION is non-trivial")
 	}
 	rroute, ok := right.(*route)
 	if !ok {
-		return nil, errors.New("unused message")
+		return nil, errors.New("unsupported construct: SELECT of UNION is non-trivial")
 	}
-	if err := subqueryCanMerge(lroute, rroute); err != nil {
+	if err := routesCanMerge(lroute, rroute); err != nil {
 		return nil, err
 	}
 	table := &vindexes.Table{
