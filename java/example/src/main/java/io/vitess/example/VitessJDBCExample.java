@@ -11,7 +11,10 @@ import java.util.Random;
 import org.joda.time.Instant;
 
 /**
- * Created by harshit.gangal on 10/03/16.
+ * VitessJDBCExample.java is a sample for using the Vitess JDBC driver.
+ *
+ * Before running this, start up a local example cluster as described in the
+ * examples/local/README.md file.
  */
 public class VitessJDBCExample {
     public static void main(String[] args) throws Exception {
