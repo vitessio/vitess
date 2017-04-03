@@ -106,6 +106,7 @@ func (me *Writer) waitForHeartbeatTable(ctx context.Context) {
 				return
 			}
 		}
+		return
 	}
 }
 
