@@ -50,11 +50,11 @@ before_cache:
   - rm $HOME/gopath/bin/zksrv.sh
   # Delete these files because they keep changing (having the latest timestamp
   # of an update) and trigger a lengthy update of the cache (~25 seconds).
-  - rm $HOME/.m2/repository/com/youtube/vitess/*/maven-metadata-local.xml
-  - rm $HOME/.m2/repository/com/youtube/vitess/*/*-SNAPSHOT/*-SNAPSHOT.jar
-  - rm $HOME/.m2/repository/com/youtube/vitess/*/*-SNAPSHOT/_remote.repositories
-  - rm $HOME/.m2/repository/com/youtube/vitess/*/*-SNAPSHOT/maven-metadata-local.xml
-  - rm $HOME/.m2/repository/com/youtube/vitess/*/*-SNAPSHOT/resolver-status.properties
+  - rm $HOME/.m2/repository/io/vitess/*/maven-metadata-local.xml
+  - rm $HOME/.m2/repository/io/vitess/*/*-SNAPSHOT/*-SNAPSHOT.jar
+  - rm $HOME/.m2/repository/io/vitess/*/*-SNAPSHOT/_remote.repositories
+  - rm $HOME/.m2/repository/io/vitess/*/*-SNAPSHOT/maven-metadata-local.xml
+  - rm $HOME/.m2/repository/io/vitess/*/*-SNAPSHOT/resolver-status.properties
   - rm $HOME/.m2/repository/io/grpc/protoc-gen-grpc-java/*/protoc-gen-grpc-java-*.pom.lastUpdated
   # Don't cache unnecessary PHP files.
   - rm $HOME/.phpenv/versions/*/sbin/*
