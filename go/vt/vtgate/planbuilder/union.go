@@ -35,11 +35,7 @@ func processUnion(union *sqlparser.Union, vschema VSchema, outer builder) (build
 	if err == nil {
 		return bldr, nil
 	}
-	if union.Type != sqlparser.UnionAllStr {
-		return nil, errors.New("unsupported: multi-shard union without ALL")
-	}
-	//TODO(acharis): need to check that lhs and rhs have same number of columns
-	return newUnionBuilder(lbldr, rbldr)
+	return nil, errors.New("unsupported: multi-shard union")
 }
 
 func processPart(part sqlparser.SelectStatement, vschema VSchema, outer builder) (builder, error) {
@@ -76,28 +72,6 @@ func unionRouteMerge(union *sqlparser.Union, left, right builder, vschema VSchem
 	table := &vindexes.Table{
 		Keyspace: lroute.ERoute.Keyspace,
 	}
-	// TODO: If we can identify common colsyms from both sides
-	// as being same, we can make this union inherit those properties
-	// like we do in the from clause handling. Code is commented out
-	// for now:
-	/*
-		for _, colsyms := range lroute.Colsyms {
-			if colsyms.Vindex == nil {
-				continue
-			}
-			// Check if a colvindex of the same name already exists.
-			// Dups are not allowed in subqueries in this situation.
-			for _, colVindex := range table.ColumnVindexes {
-				if colVindex.Column.Equal(colsyms.Alias) {
-					return nil, fmt.Errorf("duplicate column aliases: %v", colsyms.Alias)
-				}
-			}
-			table.ColumnVindexes = append(table.ColumnVindexes, &vindexes.ColumnVindex{
-				Column: colsyms.Alias,
-				Vindex: colsyms.Vindex,
-			})
-		}
-	*/
 	rtb := newRoute(
 		union,
 		lroute.ERoute,

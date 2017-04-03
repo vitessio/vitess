@@ -1,6 +1,6 @@
 # Unions
 "select * from user union select * from user_extra"
-"unsupported: multi-shard union without ALL"
+"unsupported: multi-shard union"
 
 # SET
 "set a=1"
@@ -25,11 +25,11 @@
 
 # union operations in subqueries (FROM)
 "select * from (select * from user union all select * from user_extra) as t"
-"unsupported: complex join in subqueries"
+"unsupported: multi-shard union"
 
 # union operations in subqueries (expressions)
 "select * from user where id in (select * from user union select * from user_extra)"
-"unsupported: multi-shard union without ALL"
+"unsupported: multi-shard union"
 
 # subquery with join primitive (FROM)
 "select * from (select user.id from user join user_extra) as t"
