@@ -30,6 +30,7 @@ import (
 	"github.com/youtube/vitess/go/vt/topotools"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	"github.com/youtube/vitess/go/vt/vttablet/heartbeat"
 )
 
 const (
@@ -128,6 +129,7 @@ func ConfigHTML() template.HTML {
 // for real vttablet agents (not by tests, nor vtcombo).
 func (agent *ActionAgent) initHealthCheck() {
 	registerReplicationReporter(agent)
+	wg, cancel := heartbeat.RegisterReporter(agent.TopoServer, agent.MysqlDaemon, agent.Tablet())
 
 	log.Infof("Starting periodic health check every %v", *healthCheckInterval)
 	t := timer.NewTimer(*healthCheckInterval)
@@ -140,6 +142,8 @@ func (agent *ActionAgent) initHealthCheck() {
 
 		// Now we can finish up and force ourselves to not healthy.
 		agent.terminateHealthChecks()
+		cancel()
+		wg.Wait()
 	})
 	t.Start(func() {
 		agent.runHealthCheck()
