@@ -125,7 +125,7 @@ func (me *Writer) initHeartbeatTable() error {
 
 func (me *Writer) writeHeartbeat() {
 	updateQuery := "UPDATE _vt.heartbeat SET ts=%d WHERE master_uid=%d"
-	_, err := me.conn.ExecuteFetch(fmt.Sprintf(updateQuery, me.now().Nanosecond(), me.tabletAlias.Uid), 0, false)
+	_, err := me.conn.ExecuteFetch(fmt.Sprintf(updateQuery, me.now().UnixNano(), me.tabletAlias.Uid), 0, false)
 	if err != nil {
 		me.recordError("Failed to update heartbeat: %v", err)
 		return
