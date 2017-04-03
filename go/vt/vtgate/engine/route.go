@@ -243,38 +243,25 @@ func newScatterParams(ks string, bv map[string]interface{}, shards []string) *sc
 	}
 }
 
-func skewCopyQueryConstruct(queryConstruct *queryinfo.QueryConstruct, joinvars map[string]interface{}) *queryinfo.QueryConstruct {
-	qc := &queryinfo.QueryConstruct{
-		SQL:              queryConstruct.SQL,
-		Comments:         queryConstruct.Comments,
-		Keyspace:         queryConstruct.Keyspace,
-		BindVars:         make(map[string]interface{}),
-		NotInTransaction: queryConstruct.NotInTransaction,
-	}
-	for k, v := range queryConstruct.BindVars {
-		qc.BindVars[k] = v
-	}
-	for k, v := range joinvars {
-		qc.BindVars[k] = v
-	}
-	return qc
-}
-
 // Execute performs a non-streaming exec.
 func (route *Route) Execute(vcursor VCursor, queryConstruct *queryinfo.QueryConstruct, joinvars map[string]interface{}, wantfields bool) (*sqltypes.Result, error) {
-	qc := skewCopyQueryConstruct(queryConstruct, joinvars)
+	saved := copyBindVars(queryConstruct.BindVars)
+	defer func() { queryConstruct.BindVars = saved }()
+	for k, v := range joinvars {
+		queryConstruct.BindVars[k] = v
+	}
 
 	switch route.Opcode {
 	case UpdateEqual:
-		return route.execUpdateEqual(vcursor, qc)
+		return route.execUpdateEqual(vcursor, queryConstruct)
 	case DeleteEqual:
-		return route.execDeleteEqual(vcursor, qc)
+		return route.execDeleteEqual(vcursor, queryConstruct)
 	case InsertSharded:
-		return route.execInsertSharded(vcursor, qc)
+		return route.execInsertSharded(vcursor, queryConstruct)
 	case InsertUnsharded:
-		return route.execInsertUnsharded(vcursor, qc)
+		return route.execInsertUnsharded(vcursor, queryConstruct)
 	case Show:
-		return route.execShow(vcursor, qc)
+		return route.execShow(vcursor, queryConstruct)
 	}
 
 	var err error
@@ -282,13 +269,13 @@ func (route *Route) Execute(vcursor VCursor, queryConstruct *queryinfo.QueryCons
 	switch route.Opcode {
 	case SelectUnsharded, UpdateUnsharded,
 		DeleteUnsharded:
-		params, err = route.paramsUnsharded(vcursor, qc)
+		params, err = route.paramsUnsharded(vcursor, queryConstruct)
 	case SelectEqual, SelectEqualUnique:
-		params, err = route.paramsSelectEqual(vcursor, qc)
+		params, err = route.paramsSelectEqual(vcursor, queryConstruct)
 	case SelectIN:
-		params, err = route.paramsSelectIN(vcursor, qc)
+		params, err = route.paramsSelectIN(vcursor, queryConstruct)
 	case SelectScatter:
-		params, err = route.paramsSelectScatter(vcursor, qc)
+		params, err = route.paramsSelectScatter(vcursor, queryConstruct)
 	default:
 		// TODO(sougou): improve error.
 		return nil, fmt.Errorf("unsupported query route: %v", route)
@@ -297,25 +284,29 @@ func (route *Route) Execute(vcursor VCursor, queryConstruct *queryinfo.QueryCons
 		return nil, err
 	}
 
-	shardQueries := route.getShardQueries(route.Query+qc.Comments, params)
-	return vcursor.ExecuteMultiShard(params.ks, shardQueries, qc.NotInTransaction)
+	shardQueries := route.getShardQueries(route.Query+queryConstruct.Comments, params)
+	return vcursor.ExecuteMultiShard(params.ks, shardQueries, queryConstruct.NotInTransaction)
 }
 
 // StreamExecute performs a streaming exec.
 func (route *Route) StreamExecute(vcursor VCursor, queryConstruct *queryinfo.QueryConstruct, joinvars map[string]interface{}, wantfields bool, callback func(*sqltypes.Result) error) error {
-	qc := skewCopyQueryConstruct(queryConstruct, joinvars)
+	saved := copyBindVars(queryConstruct.BindVars)
+	defer func() { queryConstruct.BindVars = saved }()
+	for k, v := range joinvars {
+		queryConstruct.BindVars[k] = v
+	}
 
 	var err error
 	var params *scatterParams
 	switch route.Opcode {
 	case SelectUnsharded:
-		params, err = route.paramsUnsharded(vcursor, qc)
+		params, err = route.paramsUnsharded(vcursor, queryConstruct)
 	case SelectEqual, SelectEqualUnique:
-		params, err = route.paramsSelectEqual(vcursor, qc)
+		params, err = route.paramsSelectEqual(vcursor, queryConstruct)
 	case SelectIN:
-		params, err = route.paramsSelectIN(vcursor, qc)
+		params, err = route.paramsSelectIN(vcursor, queryConstruct)
 	case SelectScatter:
-		params, err = route.paramsSelectScatter(vcursor, qc)
+		params, err = route.paramsSelectScatter(vcursor, queryConstruct)
 	default:
 		return fmt.Errorf("query %q cannot be used for streaming", route.Query)
 	}
@@ -323,7 +314,7 @@ func (route *Route) StreamExecute(vcursor VCursor, queryConstruct *queryinfo.Que
 		return err
 	}
 	return vcursor.StreamExecuteMulti(
-		route.Query+qc.Comments,
+		route.Query+queryConstruct.Comments,
 		params.ks,
 		params.shardVars,
 		callback,
@@ -332,13 +323,25 @@ func (route *Route) StreamExecute(vcursor VCursor, queryConstruct *queryinfo.Que
 
 // GetFields fetches the field info.
 func (route *Route) GetFields(vcursor VCursor, queryConstruct *queryinfo.QueryConstruct, joinvars map[string]interface{}) (*sqltypes.Result, error) {
-	qc := skewCopyQueryConstruct(queryConstruct, joinvars)
+	saved := copyBindVars(queryConstruct.BindVars)
+	defer func() { queryConstruct.BindVars = saved }()
+	for k := range joinvars {
+		queryConstruct.BindVars[k] = nil
+	}
 	ks, shard, err := vcursor.GetAnyShard(route.Keyspace.Name)
 	if err != nil {
 		return nil, err
 	}
 
-	return vcursor.ScatterConnExecute(route.FieldQuery, qc.BindVars, ks, []string{shard}, qc.NotInTransaction)
+	return vcursor.ScatterConnExecute(route.FieldQuery, queryConstruct.BindVars, ks, []string{shard}, queryConstruct.NotInTransaction)
+}
+
+func copyBindVars(bindVars map[string]interface{}) map[string]interface{} {
+	out := make(map[string]interface{})
+	for k, v := range bindVars {
+		out[k] = v
+	}
+	return out
 }
 
 func (route *Route) paramsUnsharded(vcursor VCursor, queryConstruct *queryinfo.QueryConstruct) (*scatterParams, error) {
