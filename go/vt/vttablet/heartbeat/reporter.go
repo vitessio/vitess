@@ -122,7 +122,7 @@ func (r *reporter) readHeartbeat(ctx context.Context) {
 			return
 		}
 		if info.MasterAlias.Uid != masterUID {
-			r.recordError("", fmt.Errorf("Latest heartbeat is not from known master %v, with ts=%v, master_uid=%v", info.MasterAlias, ts, masterUID))
+			r.recordError("%v", fmt.Errorf("Latest heartbeat is not from known master %v, with ts=%v, master_uid=%v", info.MasterAlias, ts, masterUID))
 			return
 		}
 		r.lastKnownMaster = masterUID
@@ -130,6 +130,7 @@ func (r *reporter) readHeartbeat(ctx context.Context) {
 
 	lag := r.now().Sub(time.Unix(0, ts))
 	counters.Add("LagNs", lag.Nanoseconds())
+	counters.Add("Reads", 1)
 
 	r.mu.Lock()
 	r.lastKnownLag = lag
