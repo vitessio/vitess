@@ -51,11 +51,13 @@ before_cache:
   # Delete these files because they keep changing (having the latest timestamp
   # of an update) and trigger a lengthy update of the cache (~25 seconds).
   - rm $HOME/.m2/repository/io/vitess/*/maven-metadata-local.xml
-  - rm $HOME/.m2/repository/io/vitess/*/*-SNAPSHOT/*-SNAPSHOT.jar
+  - rm $HOME/.m2/repository/io/vitess/*/*-SNAPSHOT/*-SNAPSHOT*.jar
   - rm $HOME/.m2/repository/io/vitess/*/*-SNAPSHOT/_remote.repositories
   - rm $HOME/.m2/repository/io/vitess/*/*-SNAPSHOT/maven-metadata-local.xml
   - rm $HOME/.m2/repository/io/vitess/*/*-SNAPSHOT/resolver-status.properties
+  - rm $HOME/.m2/repository/io/grpc/grpc-core/resolver-status.properties
   - rm $HOME/.m2/repository/io/grpc/protoc-gen-grpc-java/*/protoc-gen-grpc-java-*.pom.lastUpdated
+  - rm $HOME/.m2/repository/io/netty/netty-codec-http2/resolver-status.properties
   # Don't cache unnecessary PHP files.
   - rm $HOME/.phpenv/versions/*/sbin/*
   - rm $HOME/.phpenv/versions/*/bin/php-cgi
