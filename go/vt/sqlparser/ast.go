@@ -121,6 +121,8 @@ type SelectStatement interface {
 	iSelectStatement()
 	iStatement()
 	iInsertRows()
+	AddOrder(*Order)
+	SetLimit(*Limit)
 	SQLNode
 }
 
@@ -161,6 +163,16 @@ const (
 	SQLCacheStr   = "sql_cache "
 	SQLNoCacheStr = "sql_no_cache "
 )
+
+// AddOrder adds an order by element
+func (node *Select) AddOrder(order *Order) {
+	node.OrderBy = append(node.OrderBy, order)
+}
+
+// SetLimit sets the limit clause
+func (node *Select) SetLimit(limit *Limit) {
+	node.Limit = limit
+}
 
 // Format formats the node.
 func (node *Select) Format(buf *TrackedBuffer) {
@@ -240,6 +252,16 @@ type ParenSelect struct {
 	Select SelectStatement
 }
 
+// AddOrder adds an order by element
+func (node *ParenSelect) AddOrder(order *Order) {
+	node.Select.AddOrder(order)
+}
+
+// SetLimit sets the limit clause
+func (node *ParenSelect) SetLimit(limit *Limit) {
+	node.Select.SetLimit(limit)
+}
+
 // Format formats the node.
 func (node *ParenSelect) Format(buf *TrackedBuffer) {
 	buf.Myprintf("(%v)", node.Select)
@@ -271,6 +293,16 @@ const (
 	UnionAllStr      = "union all"
 	UnionDistinctStr = "union distinct"
 )
+
+// AddOrder adds an order by element
+func (node *Union) AddOrder(order *Order) {
+	node.OrderBy = append(node.OrderBy, order)
+}
+
+// SetLimit sets the limit clause
+func (node *Union) SetLimit(limit *Limit) {
+	node.Limit = limit
+}
 
 // Format formats the node.
 func (node *Union) Format(buf *TrackedBuffer) {

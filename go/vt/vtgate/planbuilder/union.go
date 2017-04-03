@@ -32,10 +32,21 @@ func processUnion(union *sqlparser.Union, vschema VSchema, outer builder) (build
 		return nil, err
 	}
 	bldr, err := unionRouteMerge(union, lbldr, rbldr, vschema)
-	if err == nil {
-		return bldr, nil
+	if err != nil {
+		return nil, err
 	}
-	return nil, errors.New("unsupported: multi-shard union")
+	if outer != nil {
+		bldr.Symtab().Outer = outer.Symtab()
+	}
+	err = pushOrderBy(union.OrderBy, bldr)
+	if err != nil {
+		return nil, err
+	}
+	err = pushLimit(union.Limit, bldr)
+	if err != nil {
+		return nil, err
+	}
+	return bldr, nil
 }
 
 func processPart(part sqlparser.SelectStatement, vschema VSchema, outer builder) (builder, error) {
@@ -73,7 +84,7 @@ func unionRouteMerge(union *sqlparser.Union, left, right builder, vschema VSchem
 		Keyspace: lroute.ERoute.Keyspace,
 	}
 	rtb := newRoute(
-		union,
+		&sqlparser.Union{Type: union.Type, Left: union.Left, Right: union.Right, Lock: union.Lock},
 		lroute.ERoute,
 		table,
 		vschema,

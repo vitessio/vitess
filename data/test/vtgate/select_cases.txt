@@ -546,7 +546,7 @@
 
 # Union all
 "select col1, col2 from user union all select col1, col2 from user_extra"
-"unsupported: multi-shard union"
+"unsupported: scatter subquery"
 
 "select * from (select col1, col2 from unsharded where id = 1 union select col1, col2 from unsharded where id = 3) a"
 {
@@ -576,16 +576,16 @@
   }
 }
 
-"(select id from unsharded) union (select id from unsharded_auto) order by 1 limit 5"
+"(select id from unsharded) union (select id from unsharded_auto) order by id limit 5"
 {
-  "Original": "(select id from unsharded) union (select id from unsharded_auto) order by 1 limit 5",
+  "Original": "(select id from unsharded) union (select id from unsharded_auto) order by id limit 5",
   "Instructions": {
     "Opcode": "SelectUnsharded",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
-    "Query": "(select id from unsharded) union (select id from unsharded_auto) order by 1 asc limit 5",
+    "Query": "(select id from unsharded) union (select id from unsharded_auto) order by id asc limit 5",
     "FieldQuery": "(select id from unsharded where 1 != 1) union (select id from unsharded_auto where 1 != 1)"
   }
 }
@@ -619,13 +619,27 @@
 }
 
 "(select id from user union select id from music) union select 1 from dual"
-"unsupported: multi-shard union"
+"unsupported: scatter subquery"
 
 "select 1 from music union (select id from user union all select name from unsharded)"
-"unsupported: multi-shard union"
+"unsupported: subquery keyspace different from outer query"
 
 "select 1 from music union (select id from user union select name from unsharded)"
-"unsupported: multi-shard union"
+"unsupported: subquery keyspace different from outer query"
 
 "select id from user union all select id from music"
-"unsupported: multi-shard union"
+"unsupported: scatter subquery"
+
+"(select id from unsharded order by id asc limit 1) union (select id from unsharded order by id desc limit 1) order by id asc limit 1"
+{
+  "Original": "(select id from unsharded order by id asc limit 1) union (select id from unsharded order by id desc limit 1) order by id asc limit 1",
+  "Instructions": {
+    "Opcode": "SelectUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "(select id from unsharded order by id asc limit 1) union (select id from unsharded order by id desc limit 1) order by id asc limit 1",
+    "FieldQuery": "(select id from unsharded where 1 != 1) union (select id from unsharded where 1 != 1)"
+  }
+}

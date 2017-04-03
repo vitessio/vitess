@@ -94,6 +94,9 @@ func TestValid(t *testing.T) {
 	}, {
 		input: "select /* union with limit on lhs */ 1 from t limit 1 union select 1 from t",
 	}, {
+		input:  "(select id, a from t order by id limit 1) union (select id, b as a from s order by id limit 1) order by a limit 1",
+		output: "(select id, a from t order by id asc limit 1) union (select id, b as a from s order by id asc limit 1) order by a asc limit 1",
+	}, {
 		input: "select a from (select 1 as a from tbl1 union select 2 from tbl2) as t",
 	}, {
 		input: "select * from t1 join (select * from t2 union select * from t3) as t",
