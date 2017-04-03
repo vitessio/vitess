@@ -546,29 +546,7 @@
 
 # Union all
 "select col1, col2 from user union all select col1, col2 from user_extra"
-{
-  "Original": "select col1, col2 from user union all select col1, col2 from user_extra",
-  "Instructions": {
-    "Left": {
-      "Opcode": "SelectScatter",
-      "Keyspace": {
-        "Name": "user",
-        "Sharded": true
-      },
-      "Query": "select col1, col2 from user",
-      "FieldQuery": "select col1, col2 from user where 1 != 1"
-    },
-    "Right": {
-      "Opcode": "SelectScatter",
-      "Keyspace": {
-        "Name": "user",
-        "Sharded": true
-      },
-      "Query": "select col1, col2 from user_extra",
-      "FieldQuery": "select col1, col2 from user_extra where 1 != 1"
-    }
-  }
-}
+"unsupported: multi-shard union"
 
 "select * from (select col1, col2 from unsharded where id = 1 union select col1, col2 from unsharded where id = 3) a"
 {
@@ -641,35 +619,13 @@
 }
 
 "(select id from user union select id from music) union select 1 from dual"
-"unsupported: multi-shard union without ALL"
+"unsupported: multi-shard union"
 
 "select 1 from music union (select id from user union all select name from unsharded)"
-"unsupported: multi-shard union without ALL"
+"unsupported: multi-shard union"
 
 "select 1 from music union (select id from user union select name from unsharded)"
-"unsupported: multi-shard union without ALL"
+"unsupported: multi-shard union"
 
 "select id from user union all select id from music"
-{
-  "Original": "select id from user union all select id from music",
-  "Instructions": {
-    "Left": {
-      "Opcode": "SelectScatter",
-      "Keyspace": {
-        "Name": "user",
-        "Sharded": true
-      },
-      "Query": "select id from user",
-      "FieldQuery": "select id from user where 1 != 1"
-    },
-    "Right": {
-      "Opcode": "SelectScatter",
-      "Keyspace": {
-        "Name": "user",
-        "Sharded": true
-      },
-      "Query": "select id from music",
-      "FieldQuery": "select id from music where 1 != 1"
-    }
-  }
-}
+"unsupported: multi-shard union"
