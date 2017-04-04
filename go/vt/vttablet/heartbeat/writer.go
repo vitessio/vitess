@@ -37,18 +37,17 @@ type mySQLChecker interface {
 // Writer runs on master tablets and writes heartbeats to the _vt.heartbeat
 // table at a regular interval, defined by heartbeat_interval.
 type Writer struct {
-	mu      sync.Mutex
-	isOpen  bool
-	cancel  context.CancelFunc
-	wg      sync.WaitGroup
-	inError bool
-
 	topoServer  topo.Server
 	tabletAlias topodata.TabletAlias
 	now         func() time.Time
-	pool        *connpool.Pool
 	errorLog    *logutil.ThrottledLogger
-	dbName      string
+
+	mu     sync.Mutex
+	isOpen bool
+	cancel context.CancelFunc
+	wg     sync.WaitGroup
+	pool   *connpool.Pool
+	dbName string
 }
 
 // NewWriter creates a new Writer.
@@ -58,15 +57,11 @@ func NewWriter(topoServer topo.Server, alias topodata.TabletAlias, checker mySQL
 		tabletAlias: alias,
 		now:         time.Now,
 		errorLog:    logutil.NewThrottledLogger("HeartbeatWriter", 60*time.Second),
-		pool: connpool.New(
-			config.PoolNamePrefix+"HeartbeatWritePool",
-			1,
-			time.Duration(config.IdleTimeout*1e9),
-			checker),
+		pool:        connpool.New(config.PoolNamePrefix+"HeartbeatWritePool", 1, time.Duration(config.IdleTimeout*1e9), checker),
 	}
 }
 
-// Open sets up the Writer's connections and launches the goroutine
+// Open sets up the Writer's db connection and launches the goroutine
 // responsible for periodically writing to the heartbeat table.
 func (w *Writer) Open(dbc dbconfigs.DBConfigs) error {
 	if !*enableHeartbeat {
@@ -90,7 +85,7 @@ func (w *Writer) Open(dbc dbconfigs.DBConfigs) error {
 	return nil
 }
 
-// Close closes the Writer's connections, cancels the goroutine, and
+// Close closes the Writer's db connection, cancels the goroutine, and
 // waits for the goroutine to finish.
 func (w *Writer) Close() {
 	w.mu.Lock()
@@ -127,7 +122,7 @@ func (w *Writer) run(ctx context.Context, initParams *sqldb.ConnParams) {
 }
 
 // waitForTables continually attempts to create the heartbeat tables, until
-// success or cancellation
+// success or cancellation.
 func (w *Writer) waitForTables(ctx context.Context, cp *sqldb.ConnParams) {
 	log.Info("Initializing heartbeat table")
 	for {
@@ -143,7 +138,7 @@ func (w *Writer) waitForTables(ctx context.Context, cp *sqldb.ConnParams) {
 	}
 }
 
-// initializeTables attempts to create the heartbeat tables exactly once
+// initializeTables attempts to create the heartbeat tables exactly once.
 func (w *Writer) initializeTables(cp *sqldb.ConnParams) error {
 	conn, err := dbconnpool.NewDBConnection(cp, stats.NewTimings(""))
 	if err != nil {
@@ -169,8 +164,7 @@ func (w *Writer) writeHeartbeat(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("Failed to execute update query: %v", err)
 	}
-	w.inError = false
-	counters.Add("Writes", 1)
+	writes.Add(1)
 	return nil
 }
 
@@ -189,5 +183,5 @@ func (w *Writer) exec(ctx context.Context, query string) error {
 
 func (w *Writer) recordError(err error) {
 	w.errorLog.Errorf("%v", err)
-	counters.Add("Errors", 1)
+	errors.Add(1)
 }
