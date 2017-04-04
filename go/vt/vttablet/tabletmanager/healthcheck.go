@@ -129,7 +129,7 @@ func ConfigHTML() template.HTML {
 // for real vttablet agents (not by tests, nor vtcombo).
 func (agent *ActionAgent) initHealthCheck() {
 	registerReplicationReporter(agent)
-	reporter := heartbeat.RegisterReporter(agent.TopoServer, agent.MysqlDaemon, agent.Tablet())
+	reporter := heartbeat.RegisterReporter(agent.TopoServer, agent.MysqlDaemon, agent.Tablet(), agent.DBConfigs)
 
 	log.Infof("Starting periodic health check every %v", *healthCheckInterval)
 	t := timer.NewTimer(*healthCheckInterval)

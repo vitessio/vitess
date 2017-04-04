@@ -8,10 +8,13 @@ import (
 	"time"
 
 	"github.com/youtube/vitess/go/event"
+	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/health"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/proto/topodata"
+	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletmanager/events"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
@@ -30,6 +33,7 @@ type Reporter struct {
 	wg              *sync.WaitGroup
 	cancel          context.CancelFunc
 	errorLog        *logutil.ThrottledLogger
+	dbName          string
 	lastKnownMaster uint32
 
 	mu             sync.Mutex
@@ -40,7 +44,7 @@ type Reporter struct {
 
 // RegisterReporter registers the heartbeat reporter so that its
 // measurements will be picked up in healthchecks.
-func RegisterReporter(topoServer topo.Server, mysqld mysqlctl.MysqlDaemon, tablet *topodata.Tablet) *Reporter {
+func RegisterReporter(topoServer topo.Server, mysqld mysqlctl.MysqlDaemon, tablet *topodata.Tablet, dbc dbconfigs.DBConfigs) *Reporter {
 	if !*enableHeartbeat {
 		return nil
 	}
@@ -54,6 +58,7 @@ func RegisterReporter(topoServer topo.Server, mysqld mysqlctl.MysqlDaemon, table
 		wg:         wg,
 		cancel:     cancel,
 		errorLog:   logutil.NewThrottledLogger("HeartbeatReporter", 60*time.Second),
+		dbName:     sqlparser.Backtick(dbc.SidecarDBName),
 	}
 	wg.Add(1)
 	go reader.watchHeartbeat(ctx)
@@ -121,26 +126,15 @@ func (r *Reporter) readHeartbeat(ctx context.Context) {
 		return
 	}
 	defer conn.Recycle()
-	res, err := conn.ExecuteFetch("SELECT ts, master_uid FROM _vt.heartbeat ORDER BY ts DESC LIMIT 1", 1, false)
+	res, err := conn.ExecuteFetch(fmt.Sprintf("SELECT ts, master_uid FROM %s.heartbeat ORDER BY ts DESC LIMIT 1", r.dbName), 1, false)
 	if err != nil {
 		r.recordError(fmt.Errorf("Failed to read heartbeat: %v", err))
 		return
 	}
 
-	if len(res.Rows) != 1 {
-		r.recordError(fmt.Errorf("Failed to read heartbeat: writer query did not result in 1 row. Got %v", len(res.Rows)))
-		return
-	}
-
-	ts, err := res.Rows[0][0].ParseInt64()
+	ts, rawUID, err := parseHeartbeatResult(res)
 	if err != nil {
-		r.recordError(fmt.Errorf("Failed to parse heartbeat timestamp: %v", err))
-		return
-	}
-
-	rawUID, err := res.Rows[0][1].ParseUint64()
-	if err != nil {
-		r.recordError(fmt.Errorf("Failed to parse heartbeat master uid: %v", err))
+		r.recordError(fmt.Errorf("Failed to parse heartbeat result: %v", err))
 		return
 	}
 
@@ -168,6 +162,21 @@ func (r *Reporter) readHeartbeat(ctx context.Context) {
 	r.lastKnownLag = lag
 	r.lastKnownError = nil
 	r.mu.Unlock()
+}
+
+func parseHeartbeatResult(res *sqltypes.Result) (int64, uint64, error) {
+	if len(res.Rows) != 1 {
+		return 0, 0, fmt.Errorf("Failed to read heartbeat: writer query did not result in 1 row. Got %v", len(res.Rows))
+	}
+	ts, err := res.Rows[0][0].ParseInt64()
+	if err != nil {
+		return 0, 0, err
+	}
+	rawUID, err := res.Rows[0][1].ParseUint64()
+	if err != nil {
+		return 0, 0, err
+	}
+	return ts, rawUID, nil
 }
 
 // recordError keeps track of the lastKnown error for reporting to the healthcheck.
