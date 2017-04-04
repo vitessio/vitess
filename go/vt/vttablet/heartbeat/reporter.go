@@ -92,7 +92,7 @@ func (r *Reporter) Close() {
 }
 
 // watchHeartbeat is meant to be called as a goroutine, and calls
-// readHeartbeat repeatedly until told to exit by Close.
+// fetchMostRecentHeartbeat repeatedly until told to exit by Close.
 func (r *Reporter) watchHeartbeat(ctx context.Context) {
 	defer r.wg.Done()
 	defer tabletenv.LogError()
@@ -109,7 +109,7 @@ func (r *Reporter) watchHeartbeat(ctx context.Context) {
 		r.mu.Unlock()
 
 		if !isMaster {
-			r.readHeartbeat(ctx)
+			r.processHeartbeat(ctx)
 		}
 
 		if waitOrExit(ctx, *interval) {
@@ -118,38 +118,25 @@ func (r *Reporter) watchHeartbeat(ctx context.Context) {
 	}
 }
 
-// readHeartbeat reads from the heartbeat table exactly once.
-func (r *Reporter) readHeartbeat(ctx context.Context) {
-	conn, err := r.mysqld.GetAppConnection(ctx)
+// processHeartbeat reads from the heartbeat table exactly once.
+func (r *Reporter) processHeartbeat(ctx context.Context) error {
+	res, err := r.fetchMostRecentHeartbeat(ctx)
 	if err != nil {
-		r.recordError(fmt.Errorf("Failed to get mysql connection: %v", err))
-		return
+		return fmt.Errorf("Failed to read most recent heartbeat: %v", err)
 	}
-	defer conn.Recycle()
-	res, err := conn.ExecuteFetch(fmt.Sprintf("SELECT ts, master_uid FROM %s.heartbeat ORDER BY ts DESC LIMIT 1", r.dbName), 1, false)
+	ts, masterUID, err := parseHeartbeatResult(res)
 	if err != nil {
-		r.recordError(fmt.Errorf("Failed to read heartbeat: %v", err))
-		return
+		return fmt.Errorf("Failed to parse heartbeat result: %v", err)
 	}
-
-	ts, rawUID, err := parseHeartbeatResult(res)
-	if err != nil {
-		r.recordError(fmt.Errorf("Failed to parse heartbeat result: %v", err))
-		return
-	}
-
 	// Validate that we're reading from the right master. This is not synchronized
 	// because it only happens here.
-	masterUID := uint32(rawUID)
 	if masterUID != r.lastKnownMaster {
 		info, err := r.topoServer.GetShard(ctx, r.tablet.Keyspace, r.tablet.Shard)
 		if err != nil {
-			r.recordError(fmt.Errorf("Could not get current master: %v", err))
-			return
+			return fmt.Errorf("Could not get current master: %v", err)
 		}
 		if info.MasterAlias.Uid != masterUID {
-			r.recordError(fmt.Errorf("Latest heartbeat is not from known master %v, with ts=%v, master_uid=%v", info.MasterAlias, ts, masterUID))
-			return
+			return fmt.Errorf("Latest heartbeat is not from known master %v, with ts=%v, master_uid=%v", info.MasterAlias, ts, masterUID)
 		}
 		r.lastKnownMaster = masterUID
 	}
@@ -162,9 +149,27 @@ func (r *Reporter) readHeartbeat(ctx context.Context) {
 	r.lastKnownLag = lag
 	r.lastKnownError = nil
 	r.mu.Unlock()
+	return nil
 }
 
-func parseHeartbeatResult(res *sqltypes.Result) (int64, uint64, error) {
+// fetchMostRecentHeartbeat fetches the most recently recorded heartbeat from the heartbeat table,
+// returning a result with the timestamp and master_uid that the heartbeat came from
+func (r *Reporter) fetchMostRecentHeartbeat(ctx context.Context) (*sqltypes.Result, error) {
+	conn, err := r.mysqld.GetAppConnection(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Recycle()
+	res, err := conn.ExecuteFetch(fmt.Sprintf("SELECT ts, master_uid FROM %s.heartbeat ORDER BY ts DESC LIMIT 1", r.dbName), 1, false)
+	if err != nil {
+		return nil, err
+	}
+	return res, nil
+}
+
+// parseHeartbeatResult turns a raw result into the timestamp and master uid values
+// for processing.
+func parseHeartbeatResult(res *sqltypes.Result) (int64, uint32, error) {
 	if len(res.Rows) != 1 {
 		return 0, 0, fmt.Errorf("Failed to read heartbeat: writer query did not result in 1 row. Got %v", len(res.Rows))
 	}
@@ -176,7 +181,7 @@ func parseHeartbeatResult(res *sqltypes.Result) (int64, uint64, error) {
 	if err != nil {
 		return 0, 0, err
 	}
-	return ts, rawUID, nil
+	return ts, uint32(rawUID), nil
 }
 
 // recordError keeps track of the lastKnown error for reporting to the healthcheck.
