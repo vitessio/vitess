@@ -44,6 +44,7 @@ type Reader struct {
 	isMaster       bool
 	lastKnownLag   time.Duration
 	lastKnownError error
+	isOpen         bool
 }
 
 // NewReader returns a new heartbeat reader.
@@ -59,6 +60,15 @@ func NewReader(topoServer topo.Server, mysqld mysqlctl.MysqlDaemon, tablet *topo
 
 // Open starts the heartbeat goroutine.
 func (r *Reader) Open(dbc dbconfigs.DBConfigs) {
+	if !*enableHeartbeat {
+		return
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.isOpen {
+		return
+	}
+
 	wg := &sync.WaitGroup{}
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -68,12 +78,19 @@ func (r *Reader) Open(dbc dbconfigs.DBConfigs) {
 
 	wg.Add(1)
 	go r.watchHeartbeat(ctx)
+	r.isOpen = true
 }
 
 // Close cancels the watchHeartbeat goroutine and waits for it to finish.
 func (r *Reader) Close() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if !r.isOpen {
+		return
+	}
 	r.cancel()
 	r.wg.Wait()
+	r.isOpen = false
 }
 
 // GetLatest returns the most recent lag measurement or error encountered.
