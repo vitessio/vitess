@@ -14,7 +14,24 @@ import (
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
 	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/stats"
+	"github.com/youtube/vitess/go/vt/sqlparser"
+	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/connpool"
 )
+
+const (
+	sqlCreateSidecarDB      = "create database if not exists %s"
+	sqlCreateHeartbeatTable = `CREATE TABLE IF NOT EXISTS %s.heartbeat (
+  ts bigint NOT NULL,
+  master_uid int unsigned NOT NULL PRIMARY KEY
+        ) engine=InnoDB`
+	sqlInsertInitialRow = "INSERT INTO %s.heartbeat (ts, master_uid) VALUES (%d, %d) ON DUPLICATE KEY UPDATE ts=VALUES(ts)"
+	sqlUpdateHeartbeat  = "UPDATE %v.heartbeat SET ts=%d WHERE master_uid=%d"
+)
+
+type mySQLChecker interface {
+	CheckMySQL()
+}
 
 // Writer runs on master tablets and writes heartbeats to the _vt.heartbeat
 // table at a regular interval, defined by heartbeat_interval.
@@ -28,17 +45,23 @@ type Writer struct {
 	topoServer  topo.Server
 	tabletAlias topodata.TabletAlias
 	now         func() time.Time
-	conn        *dbconnpool.DBConnection
+	pool        *connpool.Pool
 	errorLog    *logutil.ThrottledLogger
+	dbName      string
 }
 
 // NewWriter creates a new Writer.
-func NewWriter(topoServer topo.Server, alias topodata.TabletAlias) *Writer {
+func NewWriter(topoServer topo.Server, alias topodata.TabletAlias, checker mySQLChecker, config tabletenv.TabletConfig) *Writer {
 	return &Writer{
 		topoServer:  topoServer,
 		tabletAlias: alias,
 		now:         time.Now,
 		errorLog:    logutil.NewThrottledLogger("HeartbeatWriter", 60*time.Second),
+		pool: connpool.New(
+			config.PoolNamePrefix+"HeartbeatWritePool",
+			1,
+			time.Duration(config.IdleTimeout*1e9),
+			checker),
 	}
 }
 
@@ -48,27 +71,32 @@ func (w *Writer) Open(dbc dbconfigs.DBConfigs) error {
 	if !*enableHeartbeat {
 		return nil
 	}
-
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	if w.isOpen {
 		return nil
 	}
-
-	allPrivs, err := dbconfigs.WithCredentials(&dbc.AllPrivs)
-	if err != nil {
-		return fmt.Errorf("Failed to get credentials for heartbeat: %v", err)
-	}
-	conn, err := dbconnpool.NewDBConnection(&allPrivs, tabletenv.MySQLStats)
+	log.Info("Initializing heartbeat table")
+	w.dbName = sqlparser.Backtick(dbc.SidecarDBName)
+	conn, err := dbconnpool.NewDBConnection(&dbc.AllPrivs, stats.NewTimings(""))
 	if err != nil {
 		return fmt.Errorf("Failed to create connection for heartbeat: %v", err)
 	}
-	w.conn = conn
+	defer conn.Close()
+	statements := []string{
+		fmt.Sprintf(sqlCreateSidecarDB, w.dbName),
+		fmt.Sprintf(sqlCreateHeartbeatTable, w.dbName),
+		fmt.Sprintf(sqlInsertInitialRow, w.dbName, w.now().UnixNano(), w.tabletAlias.Uid),
+	}
+	for _, s := range statements {
+		if _, err := conn.ExecuteFetch(s, 0, false); err != nil {
+			return fmt.Errorf("Failed to execute heartbeat init query: %v", err)
+		}
+	}
 	ctx, cancel := context.WithCancel(tabletenv.LocalContext())
 	w.cancel = cancel
 	w.wg.Add(1)
 	go w.run(ctx)
-
 	w.isOpen = true
 	return nil
 }
@@ -83,23 +111,20 @@ func (w *Writer) Close() {
 	}
 	w.cancel()
 	w.wg.Wait()
-	w.conn.Close()
+	w.pool.Close()
 	w.isOpen = false
 }
 
 // run is the main goroutine of the Writer. It initializes
 // the heartbeat table then writes heartbeat at the heartbeat_interval
-// until cancelled
+// until cancelled.
 func (w *Writer) run(ctx context.Context) {
 	defer w.wg.Done()
 	defer tabletenv.LogError()
 
-	log.Info("Initializing heartbeat table")
-	w.waitForHeartbeatTable(ctx)
-
 	log.Info("Beginning heartbeat writes")
 	for {
-		w.writeHeartbeat()
+		w.writeHeartbeat(ctx)
 		if waitOrExit(ctx, *interval) {
 			log.Info("Stopped heartbeat writes.")
 			return
@@ -107,45 +132,28 @@ func (w *Writer) run(ctx context.Context) {
 	}
 }
 
-// waitForHeartbeatTable continually retries initializing of
-// _vt.heartbeat table, until success or cancellation by the Context
-func (w *Writer) waitForHeartbeatTable(ctx context.Context) {
-	for {
-		err := w.initHeartbeatTable()
-		if err != nil {
-			w.recordError(fmt.Errorf("Failed to initialize heartbeat table: %v", err))
-			if waitOrExit(ctx, 10*time.Second) {
-				return
-			}
-		}
-		return
-	}
-}
-
-// initHeartbeatTable attempts to create the _vt.heartbeat table exactly once.
-func (w *Writer) initHeartbeatTable() error {
-	_, err := w.conn.ExecuteFetch("CREATE DATABASE IF NOT EXISTS _vt", 0, false)
+// writeHeartbeat writes exactly one heartbeat record to _vt.heartbeat.
+func (w *Writer) writeHeartbeat(ctx context.Context) {
+	err := w.exec(ctx, fmt.Sprintf(sqlUpdateHeartbeat, w.dbName, w.now().UnixNano(), w.tabletAlias.Uid))
 	if err != nil {
-		return err
-	}
-	_, err = w.conn.ExecuteFetch("CREATE TABLE IF NOT EXISTS _vt.heartbeat (ts bigint NOT NULL, master_uid int unsigned NOT NULL PRIMARY KEY)", 0, false)
-	if err != nil {
-		return err
-	}
-	_, err = w.conn.ExecuteFetch(fmt.Sprintf("INSERT INTO _vt.heartbeat (ts, master_uid) VALUES (%d, %d) ON DUPLICATE KEY UPDATE ts=VALUES(ts)", w.now().UnixNano(), w.tabletAlias.Uid), 0, false)
-	return err
-}
-
-// writeHeartbeat writes exactly one heartbeat record to _vt.heartbeat
-func (w *Writer) writeHeartbeat() {
-	updateQuery := "UPDATE _vt.heartbeat SET ts=%d WHERE master_uid=%d"
-	_, err := w.conn.ExecuteFetch(fmt.Sprintf(updateQuery, w.now().UnixNano(), w.tabletAlias.Uid), 0, false)
-	if err != nil {
-		w.recordError(fmt.Errorf("Failed to update heartbeat: %v", err))
+		w.recordError(fmt.Errorf("Failed to execute update query: %v", err))
 		return
 	}
 	w.inError = false
 	counters.Add("Writes", 1)
+}
+
+func (w *Writer) exec(ctx context.Context, query string) error {
+	conn, err := w.pool.Get(ctx)
+	if err != nil {
+		return err
+	}
+	defer conn.Recycle()
+	_, err = conn.Exec(ctx, query, 0, false)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func (w *Writer) recordError(err error) {
