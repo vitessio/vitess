@@ -31,21 +31,16 @@ func RegisterReporter(topoServer topo.Server, mysqld mysqlctl.MysqlDaemon, table
 	return reporter
 }
 
-// HTMLName is part of the health.Reader interface.
+// HTMLName is part of the health.Reporter interface.
 func (r *Reporter) HTMLName() template.HTML {
 	return template.HTML("MySQLHeartbeat")
 }
 
-// Report is part of the health.Reader interface. It returns the last reported value
+// Report is part of the health.Reporter interface. It returns the last reported value
 // written by the watchHeartbeat goroutine. If we're the master, it just returns 0.
 func (r *Reporter) Report(isSlaveType, shouldQueryServiceBeRunning bool) (time.Duration, error) {
 	if !isSlaveType {
 		return 0, nil
 	}
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if r.lastKnownError != nil {
-		return 0, r.lastKnownError
-	}
-	return r.lastKnownLag, nil
+	return r.GetLatest()
 }
