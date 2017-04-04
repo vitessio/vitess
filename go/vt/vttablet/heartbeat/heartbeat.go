@@ -32,9 +32,9 @@ var (
 	readCount = stats.NewInt("HeartbeatReadCount")
 	// HeartbeatReadErrorCount keeps a count of errors encountered while reading heartbeats
 	readErrorCount = stats.NewInt("HeartbeatReadErrorCount")
-	// HeartbeatLagNs is incremented by the current lag at each heartbeat read interval. Plotting this
+	// HeartbeatLagNsCount is incremented by the current lag at each heartbeat read interval. Plotting this
 	// over time allows calculating of a rolling average lag.
-	lagNs = stats.NewInt("HeartbeatLagNs")
+	lagNsCount = stats.NewInt("HeartbeatLagNsCount")
 )
 
 // waitOrExit will wait until the interval is finished or the context is cancelled.
