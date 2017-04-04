@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Vitess / Client Libraries</title>
+    <title>Vitess / Sharding Workflow in Kubernetes</title>
 
         <!-- Webfont -->
     <link href='http://fonts.googleapis.com/css?family=Roboto:400,100,100italic,300,300italic,400italic,500,500italic,700,700italic,900,900italic' rel='stylesheet' type='text/css'>
@@ -35,7 +35,7 @@
 
 
     <!-- metadata -->
-    <meta name="og:title" content="Vitess / Client Libraries"/>
+    <meta name="og:title" content="Vitess / Sharding Workflow in Kubernetes"/>
     <meta name="og:image" content="/images/vitess_logo_with_border.svg"/>
     <meta name="og:description" content="Vitess is a database clustering system for horizontal scaling of MySQL."/>
 
@@ -184,7 +184,7 @@
   <div class="container">
     <div class="row">
       <div class="col-md-9">
-        <h1>Client Libraries</h1>
+        <h1>Sharding Workflow in Kubernetes</h1>
       </div>
     </div>
   </div>
@@ -292,129 +292,191 @@
     </div>
     <div class="col-md-7" id="centerCol">
       <div id="centerTextCol">
-        <p>You can access your Vitess cluster using a variety of clients and
-programming languages. Vitess client libraries help your client
-application to more easily talk to your storage system to query data.</p>
+        <p>This guide shows you an example about how to apply range-based sharding
+process in an existing unsharded Vitess <a href="http://vitess.io/overview/concepts.html#keyspace">keyspace</a>
+in <a href="http://kubernetes.io/">Kubernetes</a> using the horizontal resharding workflow.
+In this example, we will reshard from 1 shard &quot;0&quot; into 2 shards &quot;-80&quot; and &quot;80-&quot;.
+We will follow a process similar to the general
+<a href="http://vitess.io/user-guide/horizontal-sharding-workflow.html">Horizontal Sharding guide</a>
+except that here we&#39;ll give you the commands you&#39;ll need in the kubernetes
+environment.</p>
 
-<p>Vitess&#39; service is exposed through a
-<a href="https://developers.google.com/protocol-buffers/docs/proto3">proto3</a>
-service definition. Vitess supports <a href="http://www.grpc.io/">gRPC</a>,
-and you can use the 
-<a href="https://developers.google.com/protocol-buffers/docs/proto?hl=en#generating">proto compiler</a>
-to generate stubs that can call the API in any language that the
-gRPC framework supports.</p>
+<h2 id="overview">Overview</h2>
 
-<p>This document explains the client library strategy for Vitess.</p>
+<p>The horizontal resharding process overview can be found
+<a href="http://vitess.io/user-guide/horizontal-sharding-workflow.html#overview">here</a> </p>
 
-<h2 id="core-principles">Core Principles</h2>
+<h2 id="prerequisites">Prerequisites</h2>
 
-<p>Vitess client libraries follow these core principles:</p>
+<p>You should complete the <a href="http://vitess.io/getting-started/">Getting Started on Kubernetes</a>
+guide (please finish all the steps before Try Vitess resharding) and have left
+the cluster running. Then, please follow these steps before running the
+resharding process:</p>
 
-<ul>
-<li>Libraries fully implement the server API and provide access to all
-API methods, which support the following types of functions:
-
-<ul>
-<li>Transactions (begin, commit, rollback)</li>
-<li>Queries targeted to a specific shards or groups of shards</li>
-<li>Queries targeted based on sharding key values</li>
-<li>Queries that monitor sharding configurations<br></li>
-<li>MapReduce operations</li>
-</ul></li>
-<li>Libraries expose an identical set of well-documented error codes.</li>
-<li>Libraries provide a single-connection abstraction to the
-<code>vtgate</code> service. The connection object should be
-thread-safe, if applicable, and should support multiplexing for
-streaming queries, transactions, and other operations that rely
-on multiple queries.</li>
-<li>A low-level plug-in abstraction enables the transport to be plugged
-in so that the application can use different RPC frameworks. For
-instance, within Google, we use proto2 objects with an internal
-RPC system.<br class="bigbreak"><strong>Note:</strong> If the proto3 library is available in
-your language, we recommend that your API calls use the data types
-generated from our .proto files.</li>
-<li>A high-level object abstraction allows the user to execute transactions
-without having to keep track of the database session.</li>
-<li>Libraries support <code>vtgateclienttest</code>, enabling you to
-fully unit-test all API calls. <code>vtgateclienttest</code> is
-a small server that simulates a real <code>vtgate</code> server
-and returns specific responses to allow for full client feature
-coverage.</li>
-</ul>
-
-<h2 id="language-specific-considerations">Language-specific considerations</h2>
-
-<ul>
-<li>Each client library should support language-specific, idiomatic
-constructs to simplify application development in that language.</li>
-<li>Client libraries should integrate with the following language-specific
-database drivers. For example, current languages implement the following:
-
-<ul>
-<li>Go: <a href="http://golang.org/pkg/database/sql/">database/sql package</a></li>
-<li>Java: <a href="https://docs.oracle.com/javase/tutorial/jdbc/index.html">JDBC</a></li>
-<li>PHP: <a href="http://php.net/manual/en/intro.pdo.php">PHP Data Objects (PDO)</a></li>
-<li>Python: <a href="https://www.python.org/dev/peps/pep-0249/">PEP 0249 DB API</a></li>
-</ul></li>
-<li>Libraries provide a thin wrapper around the proto3 service definitions.
-Those wrappers could be extended with adapters to higher level libraries
-like SQLAlchemy (Python) or JDBC (Java), with other object-based helper
-classes in the relevant language, or both.</li>
-<li>If a well-known MapReduce framework exists for the language, the client
-library should provide a data source and a data sink. For example, you
-can read data from Vitess inside a Hadoop MapReduce job and save the
-output into Vitess.</li>
-</ul>
-
-<h2 id="available-libraries">Available libraries</h2>
-
-<h3 id="go">Go</h3>
-
-<p>The Go client interface is in the
-<a href="https://godoc.org/github.com/youtube/vitess/go/vt/vtgate/vtgateconn">&quot;vtgateconn&quot; package</a>.</p>
-
-<p>There are multiple implementations available. We recommend to use the
-<a href="https://godoc.org/github.com/youtube/vitess/go/vt/vtgate/grpcvtgateconn">&quot;grpc&quot; implementation</a>.
-Load it by importing its package:</p>
-<div class="highlight"><pre><code class="language-go" data-lang="go"><span class="kn">import</span> <span class="s">&quot;github.com/youtube/vitess/go/vt/vtgate/grpcvtgateconn&quot;</span>
+<ol>
+<li><p>Configure sharding information. By running the command below, we tell
+Vitess to shard the data using the page column through the provided VSchema.</p>
+<div class="highlight"><pre><code class="language-sh" data-lang="sh">vitess/examples/kubernetes<span class="nv">$ </span>./kvtctl.sh ApplyVSchema -vschema <span class="s2">&quot;$(cat vschema.json)&quot;</span> test_keyspace
+</code></pre></div></li>
+<li><p>Bring up tablets for 2 additional shards:  <em>test_keyspace/-80</em> and
+<em>test_keyspace/80-</em> (you can learn more about sharding key range
+<a href="http://vitess.io/user-guide/sharding.html#key-ranges-and-partitions">here</a>):</p>
+<div class="highlight"><pre><code class="language-sh" data-lang="sh">vitess/examples/kubernetes<span class="nv">$ </span>./sharded-vttablet-up.sh
 </code></pre></div>
-<p>When you connect to vtgate, use the
-<a href="https://godoc.org/github.com/youtube/vitess/go/vt/vtgate/vtgateconn#DialProtocol"><code class="prettyprint">DialProtocol</code> method</a>
-and specify &quot;grpc&quot; as protocol.
-Alternatively, you can set the
-<a href="https://github.com/youtube/vitess/blob/ff800b2a1801f0bb8b0c29a701d9c0988bf827e2/go/vt/vtgate/vtgateconn/vtgateconn.go#L27">command line flag &quot;vtgate_protocol&quot;</a>
-to &quot;grpc&quot;.</p>
+<p>Initialize replication by electing the first master for each of the new shards:</p>
+<div class="highlight"><pre><code class="language-sh" data-lang="sh">vitess/examples/kubernetes<span class="nv">$ </span>./kvtctl.sh InitShardMaster -force test_keyspace/-80 <span class="nb">test</span>-200
+vitess/examples/kubernetes<span class="nv">$ </span>./kvtctl.sh InitShardMaster -force test_keyspace/80- <span class="nb">test</span>-300
+</code></pre></div>
+<p>After this set up, you should see the shards on Dashboard page of vtctld UI
+(<a href="http://localhost:8001/api/v1/proxy/namespaces/default/services/vtctld:web">http://localhost:8001/api/v1/proxy/namespaces/default/services/vtctld:web</a>).
+There should be 1 serving shard named &quot;0&quot; and 2 non-serving shards named
+&quot;-80&quot; and &quot;80-&quot;. Click the shard node, you can inspect all its tablets
+information.</p></li>
+<li><p>Bring up a <em>vtworker</em> process (a pod in kubernetes) and a <em>vtworker</em> service
+which is used by the workflow to connect with the <em>vtworker</em> pod. (The
+number of <em>vtworker</em> should be the same of original shards, we start one
+vtworker process here since we have only one original shard in this example.)</p>
+<div class="highlight"><pre><code class="language-sh" data-lang="sh">vitess/examples/kubernetes<span class="nv">$ </span>./vtworker-up.sh
+</code></pre></div>
+<p>You can check out the external IP for the vtworker service (please take note
+of this external IP, it will be used for the vtworker address in creating
+the resharding workflow):</p>
+<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span class="nv">$ </span>kubectl get service vtworker
+</code></pre></div>
+<p>You can verify this <em>vtworker</em> process set up through http://<EXTERNAL-IP>:15032/Debugging.
+It should be pinged successfully. After you ping the vtworker, please click
+&quot;Reset Job&quot;. Otherwise, the vtworker is not ready for executing other tasks.</p></li>
+</ol>
 
-<p>The Go client interface has multiple <code class="prettyprint">Execute*()</code> methods for different use-cases
-and sharding configurations. When you start off with an unsharded database, we
-recommend to use the
-<a href="https://godoc.org/github.com/youtube/vitess/go/vt/vtgate/vtgateconn#VTGateConn.ExecuteShards">ExecuteShards method</a>
-and pass &quot;0&quot; as only shard.</p>
+<h2 id="horizontal-resharding-workflow">Horizontal Resharding Workflow</h2>
 
-<p>For an example how to use the Go client, see the end-to-end test
-<a href="https://github.com/youtube/vitess/blob/master/go/vt/vttest/local_cluster_test.go">local_cluster_test.go</a>.
-From this test file, you can also reuse the &quot;LaunchVitess&quot; call to
-instantiate a minimal Vitess setup (including a MySQL server). This way you can
-test your application against an actual instance.</p>
+<h3 id="create-the-workflow">Create the Workflow</h3>
 
-<h3 id="java">Java</h3>
+<p>Using the web vtctld UI to create the workflow is the same with <a href="http://vitess.io/user-guide/horizontal-sharding-workflow.html#create-the-workflow">steps in local
+environment</a>
+except for filling the &quot;vtworker Addresses&quot; slot. You need to get the external
+IP for vtworker service (mentioned in
+<a href="sharding-kubernetes-workflow.html#prerequisites">Prerequisites</a>) and use
+&lt;EXTERNAL-IP&gt;:15033 as the vtworker addresses.</p>
 
-<ul>
-<li><a href="https://github.com/youtube/vitess/blob/master/java/client/src/main/java/io/vitess/client/VTGateConn.java">Java client</a></li>
-</ul>
+<p>Another way to start the workflow is through the vtctlclient command:</p>
+<div class="highlight"><pre><code class="language-sh" data-lang="sh">vitess/examples/kubernetes<span class="nv">$ </span>./kvtctl.sh WorkflowCreate -skip_start<span class="o">=</span><span class="nb">false </span>horizontal_resharding -keyspace<span class="o">=</span>test_keyspace -vtworkers<span class="o">=</span>&lt;EXTERNAL-IP&gt;:15033 -enable_approvals<span class="o">=</span><span class="nb">true</span>
+</code></pre></div>
+<h3 id="approvals-of-tasks-execution-canary-feature">Approvals of Tasks Execution (Canary feature)</h3>
 
-<h3 id="php">PHP</h3>
+<p>Please check the content in general 
+<a href="http://vitess.io/user-guide/horizontal-sharding-workflow.html#approvals-of-tasks-execution-canary-feature">Horizontal Sharding guide</a></p>
 
-<ul>
-<li><a href="https://github.com/youtube/vitess/tree/master/php">PHP client</a></li>
-</ul>
+<h3 id="retry">Retry</h3>
 
-<h3 id="python">Python</h3>
+<p>Please check the content in general 
+<a href="http://vitess.io/user-guide/horizontal-sharding-workflow.html#retry">Horizontal Sharding guide</a></p>
 
-<ul>
-<li><a href="https://github.com/youtube/vitess/blob/master/py/vtdb/vtgate_client.py">Python client</a></li>
-</ul>
+<h3 id="checkpoint-and-recovery">Checkpoint and Recovery</h3>
 
+<p>Please check the content in general 
+<a href="http://vitess.io/user-guide/horizontal-sharding-workflow.html#checkpoint-and-recovery">Horizontal Sharding guide</a></p>
+
+<h2 id="verify-results-and-clean-up">Verify Results and Clean up</h2>
+
+<p>After the resharding process, data in the original shard is identically copied
+to new shards. Data updates will be visible on the new shards, but not on the
+original shard. You should then see in the vtctld UI <em>Dashboard</em> page that shard
+<em>0</em> becomes non-serving and shard <em>-80</em> and shard <em>80-</em> are serving shards.
+Verify this for yourself: inspect the database content,
+then add messages to the guestbook page and inspect again. You can use
+http://&lt;EXTERNAL-IP&gt; (EXTERNAL-IP refers to the external IP of the guest book
+service) to visit the guestbook webpage in your browser and choose any random
+page for inserting information. Details can be found
+<a href="http://vitess.io/getting-started/#test-your-cluster-with-a-client-app">here</a>)
+You can inspect the database content using the following commands:</p>
+<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span class="c"># See what&#39;s on shard test_keyspace/0</span>
+<span class="c"># (no updates visible since we migrated away from it):</span>
+vitess/examples/kubernetes<span class="nv">$ </span>./kvtctl.sh ExecuteFetchAsDba <span class="nb">test</span>-100 <span class="s2">&quot;SELECT * FROM messages&quot;</span>
+<span class="c"># See what&#39;s on shard test_keyspace/-80:</span>
+vitess/examples/kubernetes<span class="nv">$ </span>./kvtctl.sh ExecuteFetchAsDba <span class="nb">test</span>-200 <span class="s2">&quot;SELECT * FROM messages&quot;</span>
+<span class="c"># See what&#39;s on shard test_keyspace/80-:</span>
+vitess/examples/kubernetes<span class="nv">$ </span>./kvtctl.sh ExecuteFetchAsDba <span class="nb">test</span>-300 <span class="s2">&quot;SELECT * FROM messages&quot;</span>
+</code></pre></div>
+<p>You can also checkout the <em>Topology</em> browser on vtctl UI. It shows you the
+information of the keyrange of shard and their serving status. Each shard
+should look like this</p>
+
+<p><a href="https://cloud.githubusercontent.com/assets/23492389/24313876/072f61e6-109c-11e7-938a-23b8398958aa.png">shard 0</a></p>
+
+<p><a href="https://cloud.githubusercontent.com/assets/23492389/24313813/bd11c824-109b-11e7-83d4-cca3f6093360.png">shard -80</a></p>
+
+<p><a href="https://cloud.githubusercontent.com/assets/23492389/24313743/7f9ae1c4-109b-11e7-997a-774f4f16e473.png">shard 80-</a></p>
+
+<p>After you verify the result, we can remove the
+original shard since all traffic is being served from the new shards:</p>
+<div class="highlight"><pre><code class="language-sh" data-lang="sh">vitess/examples/kubernetes<span class="nv">$ </span>./vttablet-down.sh
+</code></pre></div>
+<p>Then we can delete the now-empty shard:</p>
+<div class="highlight"><pre><code class="language-sh" data-lang="sh">vitess/examples/local<span class="nv">$ </span>./kvtctl.sh DeleteShard -recursive test_keyspace/0
+</code></pre></div>
+<p>You should then see in the vtctld UI <em>Dashboard</em> page that shard <em>0</em> is gone.</p>
+
+<h2 id="tear-down-and-clean-up">Tear down and Clean up</h2>
+
+<p>Since you already cleaned up the tablets from the original unsharded example by
+running <code class="prettyprint">./vttablet-down.sh</code>, that step has been replaced with
+<code class="prettyprint">./sharded-vttablet-down.sh</code> to clean up the new sharded tablets.</p>
+<div class="highlight"><pre><code class="language-sh" data-lang="sh">vitess/examples/kubernetes<span class="nv">$ </span>./guestbook-down.sh
+vitess/examples/kubernetes<span class="nv">$ </span>./vtworker-down.sh
+vitess/examples/kubernetes<span class="nv">$ </span>./vtgate-down.sh
+vitess/examples/kubernetes<span class="nv">$ </span>./sharded-vttablet-down.sh
+vitess/examples/kubernetes<span class="nv">$ </span>./vtctld-down.sh
+vitess/examples/kubernetes<span class="nv">$ </span>./etcd-down.sh
+</code></pre></div>
+<p>Then tear down the Container Engine cluster itself, which will stop the virtual machines running on Compute Engine:</p>
+<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span class="nv">$ </span>gcloud container clusters delete example
+</code></pre></div>
+<p>It&#39;s also a good idea to remove the firewall rules you created, unless you plan to use them again soon:</p>
+<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span class="nv">$ </span>gcloud compute firewall-rules delete vtctld guestbook
+</code></pre></div>
+<h2 id="reference">Reference</h2>
+
+<p>You can checkout the old version tutorial <a href="http://vitess.io/user-guide/sharding-kubernetes.html">here</a>.
+It walks you through the resharding process by manually executing commands.</p>
+
+<p>For the kubectl command line interface, which helps you interact with the
+kubernetes cluster, you can check out more information
+<a href="https://kubernetes.io/docs/user-guide/kubectl-overview">here</a>.</p>
+
+<h2 id="troubleshooting">Troubleshooting</h2>
+
+<h3 id="checking-status-of-your-setup">Checking status of your setup.</h3>
+<div class="highlight"><pre><code class="language-text" data-lang="text">To get status of pods and services you&#39;ve setup, you can use the commands
+(all pods should be in Running status, guestbook and vtworker services
+should have assign external IP):
+
+``` sh
+$ kubectl get pods
+$ kubectl get services
+```
+</code></pre></div>
+<h3 id="debugging-pods">Debugging pods.</h3>
+<div class="highlight"><pre><code class="language-text" data-lang="text">If you find out a component (e.g. vttablet, vtgate) doesn&#39;t respond as
+expected, you can surface the log using this command (the pod name can be
+found out using the command mentioned above):
+
+``` sh
+$ kubectl logs &lt;pod name&gt; [-c &lt;container&gt;]
+### example
+# $ kubectl logs vtworker
+# $ kubectl logs vttablet-XXXX -c vttablet
+```
+</code></pre></div>
+<h3 id="debugging-pending-external-ip-issue">Debugging pending external IP issue.</h3>
+<div class="highlight"><pre><code class="language-text" data-lang="text">If you found that your service has a pending external IP for long time, it
+maybe because you&#39;ve reached the limitation of networking resource. Please
+go to your project console on gcloud (cloud.google.com), then go to *Load
+balancing* page (you can search &quot;Load balancing&quot; in the search bar to get
+to the page) under Networking section. Then, click &quot;advanced menu&quot; for
+editing load balancing resources. Check the forwarding rules you have and
+delete the unused ones if there are too many.
+</code></pre></div>
       </div>
     </div>
   </div>

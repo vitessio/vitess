@@ -25,10 +25,7 @@
     <loc>http://vitess.io/user-guide/horizontal-sharding.html</loc>
   </url>
   <url>
-    <loc>http://vitess.io/overview/</loc>
-  </url>
-  <url>
-    <loc>http://vitess.io/about/</loc>
+    <loc>http://vitess.io/search/</loc>
   </url>
   <url>
     <loc>http://vitess.io/getting-started/</loc>
@@ -40,10 +37,13 @@
     <loc>http://vitess.io/about/</loc>
   </url>
   <url>
-    <loc>http://vitess.io/getting-started/</loc>
+    <loc>http://vitess.io/contributing/</loc>
   </url>
   <url>
     <loc>http://vitess.io/terms/</loc>
+  </url>
+  <url>
+    <loc>http://vitess.io/overview/</loc>
   </url>
   <url>
     <loc>http://vitess.io/user-guide/introduction.html</loc>
@@ -86,6 +86,9 @@
   </url>
   <url>
     <loc>http://vitess.io/user-guide/server-configuration.html</loc>
+  </url>
+  <url>
+    <loc>http://vitess.io/user-guide/sharding-kubernetes-workflow.html</loc>
   </url>
   <url>
     <loc>http://vitess.io/user-guide/sharding-kubernetes.html</loc>
