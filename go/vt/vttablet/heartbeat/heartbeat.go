@@ -24,17 +24,15 @@ var (
 	enableHeartbeat = flag.Bool("enable_heartbeat", false, "If true, vttablet records (if master) or checks (if replica) the current time of a replication heartbeat in the table _vt.heartbeat. The result is used to inform the serving state of the vttablet via healthchecks.")
 	interval        = flag.Duration("heartbeat_interval", 1*time.Second, "How frequently to read and write replication heartbeat.")
 
-	// HeartbeatCounters and HeartbeatRates provide information on the processing of heartbeats, when enabled.
-	// For masters, we increment a Writes counter for every write.
-	// For replicas, we increment a Reads counter for every read, and a LagNs counter. LagNs represents the
-	//      time in nanoseconds that a replica is lagged at each report interval, by comparing the timestamp
-	//      in the heartbeat table against the current time when reporting
-	// Both masters and replicas will increment an Errors counter if any errors occur.
-	counters = stats.NewCounters("HeartbeatCounters")
-	// HeartbeatRates turns each counter in HeartbeatCounters into a rate. This allows
-	// reporting on the moving average change in lag or validate that the reads/writes
-	// are happening at the expected intervals over time.
-	_ = stats.NewRates("HeartbeatRates", counters, 15, 60*time.Second)
+	// HeartbeatWrites keeps a count of the number of heartbeats written over time.
+	writes = stats.NewInt("HeartbeatWrites")
+	// HeartbeatReads keeps a count of the number of heartbeats read over time.
+	reads = stats.NewInt("HeartbeatReads")
+	// HeartbeatErrors keeps a count of the number of errors encountered while reading or writing heartbeats.
+	errors = stats.NewInt("HeartbeatErrors")
+	// HeartbeatLagNs is incremented by the current lag at each heartbeat read interval. Plotting this
+	// over time allows calculating of a rolling average lag.
+	lagNs = stats.NewInt("HeartbeatLagNs")
 )
 
 // waitOrExit will wait until the interval is finished or the context is cancelled.
