@@ -144,7 +144,6 @@ public class GrpcClientTlsClientAuthTest extends RpcClientTest {
                 vtRoot + "/bin/vtgateclienttest", cert, key, caCert, Integer.toString(port));
         System.out.println(vtgateCommand);
         vtgateclienttest = new ProcessBuilder(vtgateCommand.split(" ")).inheritIO().start();
-        Thread.sleep(TimeUnit.SECONDS.toMillis(10));
     }
 
     private static void createClientConnection() throws Exception {

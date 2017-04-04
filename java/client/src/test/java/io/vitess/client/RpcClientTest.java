@@ -1,5 +1,6 @@
 package io.vitess.client;
 
+import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.protobuf.ByteString;
@@ -30,29 +31,45 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
+import org.joda.time.DateTime;
 import org.joda.time.Duration;
 import org.junit.Assert;
 import org.junit.Before;
+import org.junit.BeforeClass;
 import org.junit.Test;
 
 /**
  * RpcClientTest tests a given implementation of RpcClient against a mock vtgate server
  * (go/cmd/vtgateclienttest).
  *
- * Each implementation should extend this class and add a @BeforeClass method that starts the
- * vtgateclienttest server with the necessary parameters, and then sets 'client'.
+ * Each implementation should extend this class, add a @BeforeClass method that starts the
+ * vtgateclienttest server with the necessary parameters and then set 'client'.
  */
 public abstract class RpcClientTest {
   protected static RpcClient client;
+  // ready is true when "vtgateclienttest" can accept RPCs. It is set by "waitForVtgateclienttest"
+  // and reset to "false" at the start of each test class by "resetReady".
+  private static boolean ready;
 
   private Context ctx;
   private VTGateBlockingConn conn;
 
+  @BeforeClass
+  public static void resetReady() throws Exception {
+    ready = false;
+  }
+
   @Before
-  public void setUp() {
-    ctx = Context.getDefault().withDeadlineAfter(Duration.millis(5000)).withCallerId(CALLER_ID);
+  public void setUp() throws SQLException, InterruptedException {
     // Test VTGateConn via the synchronous VTGateBlockingConn wrapper.
     conn = new VTGateBlockingConn(client, KEYSPACE);
+
+    waitForVtgateclienttest();
+
+    // ctx is used by all RPCs within one test method. A deadline is set to cap test execution.
+    // (RPCs will fail with DEADLINE_EXCEEDED if they keep using "ctx" 5 seconds from now.)
+    ctx = Context.getDefault().withDeadlineAfter(Duration.standardSeconds(5)).withCallerId(CALLER_ID);
   }
 
   private static final String ECHO_PREFIX = "echo://";
@@ -142,6 +159,50 @@ public abstract class RpcClientTest {
     Assert.assertEquals("", values.get("emptyString"));
 
     return values;
+  }
+
+  /**
+   * waitForVtgateclienttest blocks until the "vtgateclienttest" binary is reachable via RPC.
+   *
+   * We will constantly execute the "GetSrvKeyspace" RPC and return when the binary responded
+   * successfully.
+   *
+   * @throws SQLException
+   * @throws InterruptedException
+   */
+  private void waitForVtgateclienttest() throws SQLException, InterruptedException {
+    if (ready) {
+      return;
+    }
+
+    DateTime start = DateTime.now();
+    DateTime deadline = start.plusSeconds(60);
+
+    boolean waited = false;
+    while (DateTime.now().isBefore(deadline)) {
+      try {
+        ctx = Context.getDefault().withDeadlineAfter(Duration.standardSeconds(4));
+        conn.getSrvKeyspace(ctx, "small");
+        // RPC succeeded. Stop testing.
+        break;
+      } catch (SQLTransientException e) {
+        Throwable rootCause = Throwables.getRootCause(e);
+        if (!rootCause.getMessage().contains("Connection refused: ")) {
+          // Non-retryable exception. Fail for good.
+          throw e;
+        }
+
+        System.out.format("Waiting until vtgateclienttest is ready and responds (got exception: %s)\n", rootCause);
+        Thread.sleep(TimeUnit.MILLISECONDS.toMillis(100));
+        waited = true;
+      }
+    }
+
+    if (waited) {
+      double waitTimeSeconds = (DateTime.now().getMillis() - start.getMillis()) / 1000.0;
+      System.out.format("Had to wait %.1f second(s) until vtgateclienttest was ready.\n", waitTimeSeconds);
+    }
+    ready = true;
   }
 
   @Test
