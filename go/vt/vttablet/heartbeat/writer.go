@@ -14,6 +14,7 @@ import (
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
 	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/connpool"
@@ -76,27 +77,15 @@ func (w *Writer) Open(dbc dbconfigs.DBConfigs) error {
 	if w.isOpen {
 		return nil
 	}
-	log.Info("Initializing heartbeat table")
+
 	w.dbName = sqlparser.Backtick(dbc.SidecarDBName)
-	conn, err := dbconnpool.NewDBConnection(&dbc.AllPrivs, stats.NewTimings(""))
-	if err != nil {
-		return fmt.Errorf("Failed to create connection for heartbeat: %v", err)
-	}
-	defer conn.Close()
-	statements := []string{
-		fmt.Sprintf(sqlCreateSidecarDB, w.dbName),
-		fmt.Sprintf(sqlCreateHeartbeatTable, w.dbName),
-		fmt.Sprintf(sqlInsertInitialRow, w.dbName, w.now().UnixNano(), w.tabletAlias.Uid),
-	}
-	for _, s := range statements {
-		if _, err := conn.ExecuteFetch(s, 0, false); err != nil {
-			return fmt.Errorf("Failed to execute heartbeat init query: %v", err)
-		}
-	}
+	w.pool.Open(&dbc.App, &dbc.Dba)
+
 	ctx, cancel := context.WithCancel(tabletenv.LocalContext())
 	w.cancel = cancel
 	w.wg.Add(1)
-	go w.run(ctx)
+	go w.run(ctx, &dbc.Dba)
+
 	w.isOpen = true
 	return nil
 }
@@ -118,13 +107,18 @@ func (w *Writer) Close() {
 // run is the main goroutine of the Writer. It initializes
 // the heartbeat table then writes heartbeat at the heartbeat_interval
 // until cancelled.
-func (w *Writer) run(ctx context.Context) {
+func (w *Writer) run(ctx context.Context, initParams *sqldb.ConnParams) {
 	defer w.wg.Done()
 	defer tabletenv.LogError()
 
+	w.waitForTables(ctx, initParams)
+
 	log.Info("Beginning heartbeat writes")
 	for {
-		w.writeHeartbeat(ctx)
+		if err := w.writeHeartbeat(ctx); err != nil {
+			w.recordError(err)
+		}
+
 		if waitOrExit(ctx, *interval) {
 			log.Info("Stopped heartbeat writes.")
 			return
@@ -132,15 +126,52 @@ func (w *Writer) run(ctx context.Context) {
 	}
 }
 
+// waitForTables continually attempts to create the heartbeat tables, until
+// success or cancellation
+func (w *Writer) waitForTables(ctx context.Context, cp *sqldb.ConnParams) {
+	log.Info("Initializing heartbeat table")
+	for {
+		err := w.initializeTables(cp)
+		if err == nil {
+			return
+		}
+
+		w.recordError(err)
+		if waitOrExit(ctx, 10*time.Second) {
+			return
+		}
+	}
+}
+
+// initializeTables attempts to create the heartbeat tables exactly once
+func (w *Writer) initializeTables(cp *sqldb.ConnParams) error {
+	conn, err := dbconnpool.NewDBConnection(cp, stats.NewTimings(""))
+	if err != nil {
+		return fmt.Errorf("Failed to create connection for heartbeat: %v", err)
+	}
+	defer conn.Close()
+	statements := []string{
+		fmt.Sprintf(sqlCreateSidecarDB, w.dbName),
+		fmt.Sprintf(sqlCreateHeartbeatTable, w.dbName),
+		fmt.Sprintf(sqlInsertInitialRow, w.dbName, w.now().UnixNano(), w.tabletAlias.Uid),
+	}
+	for _, s := range statements {
+		if _, err := conn.ExecuteFetch(s, 0, false); err != nil {
+			return fmt.Errorf("Failed to execute heartbeat init query: %v", err)
+		}
+	}
+	return nil
+}
+
 // writeHeartbeat writes exactly one heartbeat record to _vt.heartbeat.
-func (w *Writer) writeHeartbeat(ctx context.Context) {
+func (w *Writer) writeHeartbeat(ctx context.Context) error {
 	err := w.exec(ctx, fmt.Sprintf(sqlUpdateHeartbeat, w.dbName, w.now().UnixNano(), w.tabletAlias.Uid))
 	if err != nil {
-		w.recordError(fmt.Errorf("Failed to execute update query: %v", err))
-		return
+		return fmt.Errorf("Failed to execute update query: %v", err)
 	}
 	w.inError = false
 	counters.Add("Writes", 1)
+	return nil
 }
 
 func (w *Writer) exec(ctx context.Context, query string) error {
