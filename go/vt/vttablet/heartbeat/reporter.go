@@ -108,8 +108,8 @@ func (r *Reporter) watchHeartbeat(ctx context.Context) {
 		isMaster := r.isMaster
 		r.mu.Unlock()
 
-		if !isMaster {
-			r.processHeartbeat(ctx)
+		if err := r.readHeartbeatUnlessMaster(ctx, isMaster); err != nil {
+			r.recordError(err)
 		}
 
 		if waitOrExit(ctx, *interval) {
@@ -118,8 +118,12 @@ func (r *Reporter) watchHeartbeat(ctx context.Context) {
 	}
 }
 
-// processHeartbeat reads from the heartbeat table exactly once.
-func (r *Reporter) processHeartbeat(ctx context.Context) error {
+// readHeartbeatUnlessMaster reads from the heartbeat table exactly once.
+func (r *Reporter) readHeartbeatUnlessMaster(ctx context.Context, isMaster bool) error {
+	if isMaster {
+		return nil
+	}
+
 	res, err := r.fetchMostRecentHeartbeat(ctx)
 	if err != nil {
 		return fmt.Errorf("Failed to read most recent heartbeat: %v", err)
