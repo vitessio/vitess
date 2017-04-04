@@ -18,6 +18,10 @@ import (
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
+const (
+	sqlFetchMostRecentHeartbeat = "SELECT ts, master_uid FROM %s.heartbeat ORDER BY ts DESC LIMIT 1"
+)
+
 // Reader reads the heartbeat table at a configured interval in order
 // to calculate replication lag. It is meant to be run on a slave, and paired
 // with a Writer on a master. It's primarily created and launched from Reporter.
@@ -25,11 +29,11 @@ import (
 // table against the current time at read time. This value isreported in metrics and
 // also to the healthchecks.
 type Reader struct {
-	topoServer      topo.Server
-	mysqld          mysqlctl.MysqlDaemon
-	tablet          *topodata.Tablet
-	now             func() time.Time
-	errorLog        *logutil.ThrottledLogger
+	topoServer topo.Server
+	mysqld     mysqlctl.MysqlDaemon
+	tablet     *topodata.Tablet
+	now        func() time.Time
+	errorLog   *logutil.ThrottledLogger
 
 	wg              *sync.WaitGroup
 	cancel          context.CancelFunc
@@ -59,7 +63,7 @@ func (r *Reader) Open(dbc dbconfigs.DBConfigs) {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	r.dbName = sqlparser.Backtick(dbc.SidecarDBName)
-	r.wg     = wg
+	r.wg = wg
 	r.cancel = cancel
 
 	wg.Add(1)
@@ -70,6 +74,16 @@ func (r *Reader) Open(dbc dbconfigs.DBConfigs) {
 func (r *Reader) Close() {
 	r.cancel()
 	r.wg.Wait()
+}
+
+// GetLatest returns the most recent lag measurement or error encountered
+func (r *Reader) GetLatest() (time.Duration, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.lastKnownError != nil {
+		return 0, r.lastKnownError
+	}
+	return r.lastKnownLag, nil
 }
 
 // watchHeartbeat is meant to be called as a goroutine, and calls
@@ -126,7 +140,7 @@ func (r *Reader) readHeartbeat(ctx context.Context) error {
 
 	lag := r.now().Sub(time.Unix(0, ts))
 	lagNs.Add(lag.Nanoseconds())
-	reads.Add(1)
+	readCount.Add(1)
 
 	r.mu.Lock()
 	r.lastKnownLag = lag
@@ -143,7 +157,7 @@ func (r *Reader) fetchMostRecentHeartbeat(ctx context.Context) (*sqltypes.Result
 		return nil, err
 	}
 	defer conn.Recycle()
-	return conn.ExecuteFetch(fmt.Sprintf("SELECT ts, master_uid FROM %s.heartbeat ORDER BY ts DESC LIMIT 1", r.dbName), 1, false)
+	return conn.ExecuteFetch(fmt.Sprintf(sqlFetchMostRecentHeartbeat, r.dbName), 1, false)
 }
 
 // parseHeartbeatResult turns a raw result into the timestamp and master uid values
@@ -171,5 +185,5 @@ func (r *Reader) recordError(err error) {
 	r.lastKnownError = err
 	r.mu.Unlock()
 	r.errorLog.Errorf("%v", err)
-	errors.Add(1)
+	readErrorCount.Add(1)
 }

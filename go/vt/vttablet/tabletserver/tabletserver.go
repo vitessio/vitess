@@ -192,7 +192,7 @@ func NewTabletServer(config tabletenv.TabletConfig, topoServer topo.Server, alia
 	tsv.te = NewTxEngine(tsv, config)
 	tsv.txThrottler = txthrottler.CreateTxThrottlerFromTabletConfig(topoServer)
 	tsv.messager = messager.NewEngine(tsv, tsv.se, config)
-	tsv.heartbeat = heartbeat.NewWriter(tsv.topoServer, alias, tsv, config)
+	tsv.heartbeat = heartbeat.NewWriter(tsv, alias, config)
 	tsv.watcher = NewReplicationWatcher(tsv.se, config)
 	tsv.updateStreamList = &binlog.StreamList{}
 	// FIXME(alainjobart) could we move this to the Register method below?

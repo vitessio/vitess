@@ -10,7 +10,6 @@ import (
 	"github.com/youtube/vitess/go/vt/dbconnpool"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/proto/topodata"
-	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
 	log "github.com/golang/glog"
@@ -30,6 +29,12 @@ const (
 	sqlUpdateHeartbeat  = "UPDATE %v.heartbeat SET ts=%d WHERE master_uid=%d"
 )
 
+var (
+	// initTableRetryInterval is the default retry interval for initialize table attempts. It's non-constant
+	// to allow overriding in tests.
+	initTableRetryInterval = 10 * time.Second
+)
+
 type mySQLChecker interface {
 	CheckMySQL()
 }
@@ -37,7 +42,6 @@ type mySQLChecker interface {
 // Writer runs on master tablets and writes heartbeats to the _vt.heartbeat
 // table at a regular interval, defined by heartbeat_interval.
 type Writer struct {
-	topoServer  topo.Server
 	tabletAlias topodata.TabletAlias
 	now         func() time.Time
 	errorLog    *logutil.ThrottledLogger
@@ -51,9 +55,8 @@ type Writer struct {
 }
 
 // NewWriter creates a new Writer.
-func NewWriter(topoServer topo.Server, alias topodata.TabletAlias, checker mySQLChecker, config tabletenv.TabletConfig) *Writer {
+func NewWriter(checker mySQLChecker, alias topodata.TabletAlias, config tabletenv.TabletConfig) *Writer {
 	return &Writer{
-		topoServer:  topoServer,
 		tabletAlias: alias,
 		now:         time.Now,
 		errorLog:    logutil.NewThrottledLogger("HeartbeatWriter", 60*time.Second),
@@ -106,7 +109,12 @@ func (w *Writer) run(ctx context.Context, initParams *sqldb.ConnParams) {
 	defer w.wg.Done()
 	defer tabletenv.LogError()
 
-	w.waitForTables(ctx, initParams)
+	// We would only exit here if we were in error and had been canceled.
+	// In this case, end the routine.
+	if err := w.waitForTables(ctx, initParams); err != nil {
+		w.recordError(err)
+		return
+	}
 
 	log.Info("Beginning heartbeat writes")
 	for {
@@ -123,17 +131,17 @@ func (w *Writer) run(ctx context.Context, initParams *sqldb.ConnParams) {
 
 // waitForTables continually attempts to create the heartbeat tables, until
 // success or cancellation.
-func (w *Writer) waitForTables(ctx context.Context, cp *sqldb.ConnParams) {
+func (w *Writer) waitForTables(ctx context.Context, cp *sqldb.ConnParams) error {
 	log.Info("Initializing heartbeat table")
 	for {
 		err := w.initializeTables(cp)
 		if err == nil {
-			return
+			return nil
 		}
 
 		w.recordError(err)
-		if waitOrExit(ctx, 10*time.Second) {
-			return
+		if waitOrExit(ctx, initTableRetryInterval) {
+			return err
 		}
 	}
 }
@@ -164,7 +172,7 @@ func (w *Writer) writeHeartbeat(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("Failed to execute update query: %v", err)
 	}
-	writes.Add(1)
+	writeCount.Add(1)
 	return nil
 }
 
@@ -183,5 +191,5 @@ func (w *Writer) exec(ctx context.Context, query string) error {
 
 func (w *Writer) recordError(err error) {
 	w.errorLog.Errorf("%v", err)
-	errors.Add(1)
+	writeErrorCount.Add(1)
 }
