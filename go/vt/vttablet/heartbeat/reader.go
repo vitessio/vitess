@@ -26,7 +26,7 @@ const (
 // to calculate replication lag. It is meant to be run on a slave, and paired
 // with a Writer on a master. It's primarily created and launched from Reporter.
 // Lag is calculated by comparing the most recent timestamp in the heartbeat
-// table against the current time at read time. This value isreported in metrics and
+// table against the current time at read time. This value is reported in metrics and
 // also to the healthchecks.
 type Reader struct {
 	topoServer topo.Server
@@ -57,7 +57,7 @@ func NewReader(topoServer topo.Server, mysqld mysqlctl.MysqlDaemon, tablet *topo
 	}
 }
 
-// Open starts the heartbeat goroutine
+// Open starts the heartbeat goroutine.
 func (r *Reader) Open(dbc dbconfigs.DBConfigs) {
 	wg := &sync.WaitGroup{}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -76,7 +76,7 @@ func (r *Reader) Close() {
 	r.wg.Wait()
 }
 
-// GetLatest returns the most recent lag measurement or error encountered
+// GetLatest returns the most recent lag measurement or error encountered.
 func (r *Reader) GetLatest() (time.Duration, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
