@@ -139,7 +139,7 @@ func (r *Reader) readHeartbeat(ctx context.Context) error {
 	}
 
 	lag := r.now().Sub(time.Unix(0, ts))
-	lagNs.Add(lag.Nanoseconds())
+	lagNsCount.Add(lag.Nanoseconds())
 	readCount.Add(1)
 
 	r.mu.Lock()
