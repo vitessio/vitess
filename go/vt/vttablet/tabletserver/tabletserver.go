@@ -454,7 +454,7 @@ func (tsv *TabletServer) serveNewType() (err error) {
 		tsv.txThrottler.Close()
 	}
 	tsv.transition(StateServing)
-	return
+	return nil
 }
 
 func (tsv *TabletServer) gracefulStop() {
