@@ -7,9 +7,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/golang/glog"
 	"github.com/youtube/vitess/go/event"
 	"github.com/youtube/vitess/go/vt/health"
+	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/proto/topodata"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -17,29 +17,58 @@ import (
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
-// reporter implements health.Reporter
-type reporter struct {
-	mu         sync.Mutex
-	topoServer topo.Server
-	mysqld     mysqlctl.MysqlDaemon
-	tablet     *topodata.Tablet
-	now        func() time.Time
-	wg         *sync.WaitGroup
-
-	isMaster        bool
-	lastKnownLag    time.Duration
+// Reporter implements health.Reporter. It includes
+// a goroutine which reads from the _vt.hearbeat table at
+// heartbeat_interval, comparing the time their against the current
+// time to create a lag value. This lag is reported in metrics and
+// also to the healthchecks.
+type Reporter struct {
+	topoServer      topo.Server
+	mysqld          mysqlctl.MysqlDaemon
+	tablet          *topodata.Tablet
+	now             func() time.Time
+	wg              *sync.WaitGroup
+	cancel          context.CancelFunc
+	errorLog        *logutil.ThrottledLogger
 	lastKnownMaster uint32
-	lastKnownError  error
+
+	mu             sync.Mutex
+	isMaster       bool
+	lastKnownLag   time.Duration
+	lastKnownError error
 }
 
-// HTMLName is part of the health.Reporter interface
-func (r *reporter) HTMLName() template.HTML {
+// RegisterReporter registers the heartbeat reporter so that its
+// measurements will be picked up in healthchecks.
+func RegisterReporter(topoServer topo.Server, mysqld mysqlctl.MysqlDaemon, tablet *topodata.Tablet) *Reporter {
+	if !*enableHeartbeat {
+		return nil
+	}
+	wg := &sync.WaitGroup{}
+	ctx, cancel := context.WithCancel(context.Background())
+	reader := &Reporter{
+		topoServer: topoServer,
+		mysqld:     mysqld,
+		tablet:     tablet,
+		now:        time.Now,
+		wg:         wg,
+		cancel:     cancel,
+		errorLog:   logutil.NewThrottledLogger("HeartbeatReporter", 60*time.Second),
+	}
+	wg.Add(1)
+	go reader.watchHeartbeat(ctx)
+	health.DefaultAggregator.Register("heartbeat_reporter", reader)
+	return reader
+}
+
+// HTMLName is part of the health.Reporter interface.
+func (r *Reporter) HTMLName() template.HTML {
 	return template.HTML("MySQLHeartbeat")
 }
 
-// Report is part of the health.Reporter interface. It simply polls
-// the last reported values from the watchHeartbeat routine
-func (r *reporter) Report(isSlaveType, shouldQueryServiceBeRunning bool) (time.Duration, error) {
+// Report is part of the health.Reporter interface. It returns the last reported value
+// written by the watchHeartbeat goroutine. If we're the master, it just returns 0.
+func (r *Reporter) Report(isSlaveType, shouldQueryServiceBeRunning bool) (time.Duration, error) {
 	if !isSlaveType {
 		return 0, nil
 	}
@@ -51,13 +80,17 @@ func (r *reporter) Report(isSlaveType, shouldQueryServiceBeRunning bool) (time.D
 	return r.lastKnownLag, nil
 }
 
+// Close cancels the watchHeartbeat goroutine and waits for it to finish.
+func (r *Reporter) Close() {
+	r.cancel()
+	r.wg.Wait()
+}
+
 // watchHeartbeat is meant to be called as a goroutine, and calls
-// readHeartbeat repeatedly until told to exit by cancelling the Context
-func (r *reporter) watchHeartbeat(ctx context.Context) {
-	defer func() {
-		tabletenv.LogError()
-		r.wg.Done()
-	}()
+// readHeartbeat repeatedly until told to exit by Close.
+func (r *Reporter) watchHeartbeat(ctx context.Context) {
+	defer r.wg.Done()
+	defer tabletenv.LogError()
 
 	event.AddListener(func(change *events.StateChange) {
 		r.mu.Lock()
@@ -81,33 +114,33 @@ func (r *reporter) watchHeartbeat(ctx context.Context) {
 }
 
 // readHeartbeat reads from the heartbeat table exactly once.
-func (r *reporter) readHeartbeat(ctx context.Context) {
+func (r *Reporter) readHeartbeat(ctx context.Context) {
 	conn, err := r.mysqld.GetAppConnection(ctx)
 	if err != nil {
-		r.recordError("Failed to get mysql connection: %v", err)
+		r.recordError(fmt.Errorf("Failed to get mysql connection: %v", err))
 		return
 	}
 	defer conn.Recycle()
 	res, err := conn.ExecuteFetch("SELECT ts, master_uid FROM _vt.heartbeat ORDER BY ts DESC LIMIT 1", 1, false)
 	if err != nil {
-		r.recordError("Failed to read heartbeat: %v", err)
+		r.recordError(fmt.Errorf("Failed to read heartbeat: %v", err))
 		return
 	}
 
 	if len(res.Rows) != 1 {
-		r.recordError("Failed to read heartbeat: %v", fmt.Errorf("writer query did not result in 1 row. Got %v", len(res.Rows)))
+		r.recordError(fmt.Errorf("Failed to read heartbeat: writer query did not result in 1 row. Got %v", len(res.Rows)))
 		return
 	}
 
 	ts, err := res.Rows[0][0].ParseInt64()
 	if err != nil {
-		r.recordError("Failed to parse heartbeat timestamp: %v", err)
+		r.recordError(fmt.Errorf("Failed to parse heartbeat timestamp: %v", err))
 		return
 	}
 
 	rawUID, err := res.Rows[0][1].ParseUint64()
 	if err != nil {
-		r.recordError("Failed to parse heartbeat master uid: %v", err)
+		r.recordError(fmt.Errorf("Failed to parse heartbeat master uid: %v", err))
 		return
 	}
 
@@ -117,11 +150,11 @@ func (r *reporter) readHeartbeat(ctx context.Context) {
 	if masterUID != r.lastKnownMaster {
 		info, err := r.topoServer.GetShard(ctx, r.tablet.Keyspace, r.tablet.Shard)
 		if err != nil {
-			r.recordError("Could not get current master: %v", err)
+			r.recordError(fmt.Errorf("Could not get current master: %v", err))
 			return
 		}
 		if info.MasterAlias.Uid != masterUID {
-			r.recordError("%v", fmt.Errorf("Latest heartbeat is not from known master %v, with ts=%v, master_uid=%v", info.MasterAlias, ts, masterUID))
+			r.recordError(fmt.Errorf("Latest heartbeat is not from known master %v, with ts=%v, master_uid=%v", info.MasterAlias, ts, masterUID))
 			return
 		}
 		r.lastKnownMaster = masterUID
@@ -137,37 +170,13 @@ func (r *reporter) readHeartbeat(ctx context.Context) {
 	r.mu.Unlock()
 }
 
-// recordError ensures we only log once when in an error state. It keeps
-// track of the last error, which will be reported to the health check
-// next time it checks in.
-func (r *reporter) recordError(formatString string, err error) {
+// recordError keeps track of the lastKnown error for reporting to the healthcheck.
+// Errors tracked here are logged with throttling to cut down on log spam since
+// operations can happen very frequently in this package.
+func (r *Reporter) recordError(err error) {
 	r.mu.Lock()
-	lastKnownError := r.lastKnownError
 	r.lastKnownError = err
 	r.mu.Unlock()
-
-	if lastKnownError == nil {
-		glog.Errorf(formatString, err)
-	}
+	r.errorLog.Errorf("%v", err)
 	counters.Add("Errors", 1)
-}
-
-// RegisterReporter registers the heartbeat reporter so that its
-// measurements will be picked up in healthchecks
-func RegisterReporter(topoServer topo.Server, mysqld mysqlctl.MysqlDaemon, tablet *topodata.Tablet) (*sync.WaitGroup, context.CancelFunc) {
-	var wg sync.WaitGroup
-	ctx, cancel := context.WithCancel(context.Background())
-	if *enableHeartbeat {
-		reporter := &reporter{
-			topoServer: topoServer,
-			mysqld:     mysqld,
-			tablet:     tablet,
-			now:        time.Now,
-			wg:         &wg,
-		}
-		wg.Add(1)
-		go reporter.watchHeartbeat(ctx)
-		health.DefaultAggregator.Register("heartbeat_reporter", reporter)
-	}
-	return &wg, cancel
 }
