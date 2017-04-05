@@ -1,6 +1,6 @@
 ---
 layout: doc
-title: "Sharding in Kubernetes"
+title: "Sharding in Kubernetes (Tutorial, manual)"
 description:
 modified:
 excerpt:
