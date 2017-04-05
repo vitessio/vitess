@@ -25,16 +25,16 @@ var (
 	interval        = flag.Duration("heartbeat_interval", 1*time.Second, "How frequently to read and write replication heartbeat.")
 
 	// HeartbeatWriteCount keeps a count of the number of heartbeats written over time.
-	writeCount = stats.NewInt("HeartbeatWriteCount")
+	writes = stats.NewInt("HeartbeatWriteCount")
 	// HeartbeatWriteErrorCount keeps a count of errors encountered while writing heartbeats
-	writeErrorCount = stats.NewInt("HeartbeatWriteErrorCount")
+	writeErrors = stats.NewInt("HeartbeatWriteErrorCount")
 	// HeartbeatReadCount keeps a count of the number of heartbeats read over time.
-	readCount = stats.NewInt("HeartbeatReadCount")
+	reads = stats.NewInt("HeartbeatReadCount")
 	// HeartbeatReadErrorCount keeps a count of errors encountered while reading heartbeats
-	readErrorCount = stats.NewInt("HeartbeatReadErrorCount")
-	// HeartbeatLagNsCount is incremented by the current lag at each heartbeat read interval. Plotting this
+	readErrors = stats.NewInt("HeartbeatReadErrorCount")
+	// HeartbeatCumulativeLagNs is incremented by the current lag at each heartbeat read interval. Plotting this
 	// over time allows calculating of a rolling average lag.
-	lagNsCount = stats.NewInt("HeartbeatLagNsCount")
+	lagNs = stats.NewInt("HeartbeatCumulativeLagNs")
 )
 
 // waitOrExit will wait until the interval is finished or the context is cancelled.
