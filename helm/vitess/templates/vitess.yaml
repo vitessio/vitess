@@ -56,5 +56,7 @@ spec:
 {{ end }} # range $shard
 {{ end }} # range $keyspace
 
+{{ with $cell.vtworker }}{{ include "vtworker" (tuple $ $cell .) }}{{ end }}
+
 {{ end }} # range $cell
 
