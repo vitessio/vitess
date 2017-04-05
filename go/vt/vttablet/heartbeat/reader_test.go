@@ -2,9 +2,10 @@ package heartbeat
 
 import (
 	"fmt"
-	"sync"
 	"testing"
 	"time"
+
+	"reflect"
 
 	"github.com/youtube/vitess/go/event"
 	"github.com/youtube/vitess/go/mysqlconn/fakesqldb"
@@ -23,6 +24,8 @@ import (
 
 var defaultUID = uint32(1111)
 
+// TestReaderReadHeartbeat tests that reading a heartbeat sets the appropriate
+// fields on the object.
 func TestReaderReadHeartbeat(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
@@ -39,28 +42,26 @@ func TestReaderReadHeartbeat(t *testing.T) {
 		}},
 	})
 
-	ctx := context.Background()
-	err := r.readHeartbeat(ctx)
-
-	if err != nil {
-		t.Errorf("Should not be in error: %v", err)
+	lagNs.Set(0)
+	if err := r.readHeartbeat(context.Background()); err != nil {
+		t.Fatalf("Should not be in error: %v", err)
 	}
 
 	if r.lastKnownError != nil {
-		t.Errorf("Should not be in error: %v", r.lastKnownError)
+		t.Fatalf("Should not be in error: %v", r.lastKnownError)
 	}
 
-	if r.lastKnownMaster != 1111 {
-		t.Errorf("Expected lastKnownMaster of 1111, got %v", r.lastKnownError)
+	if want := uint32(1111); r.lastKnownMaster != want {
+		t.Fatalf("wrong lastKnownMaster: got = %v, want = %v", r.lastKnownMaster, want)
 	}
 
-	if r.lastKnownLag != 10*time.Second {
-		t.Errorf("Expected lag of 10s, got %v", r.lastKnownLag)
+	if want := 10 * time.Second; r.lastKnownLag != want {
+		t.Fatalf("wrong lastKnownLag: got = %v, want = %v", r.lastKnownLag, want)
 	}
 }
 
 // TestReaderTabletTypeChange tests that we can respond to a StateChange event,
-// and that we do not check lag
+// and that we do not check lag when running as a master.
 func TestReaderTabletTypeChange(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
@@ -78,59 +79,81 @@ func TestReaderTabletTypeChange(t *testing.T) {
 		}},
 	})
 
-	r.wg = &sync.WaitGroup{}
+	// Run twice to ensure we're accumulating appropriately
+	lagNs.Set(0)
+	ctx := context.Background()
+	if err := r.readHeartbeat(ctx); err != nil {
+		t.Fatalf("Should not be in error: %v", err)
+	}
+	if err := r.readHeartbeat(ctx); err != nil {
+		t.Fatalf("Should not be in error: %v", err)
+	}
 
-	setInterval(time.Duration(5 * time.Millisecond))
-	ctx, cancel := context.WithCancel(context.Background())
-	var lagAtSwitch int64
-
-	r.wg.Add(1)
-	go func() {
-		defer r.wg.Done()
-		time.Sleep(50 * time.Millisecond)
-		event.Dispatch(&events.StateChange{NewTablet: topodatapb.Tablet{Type: topodatapb.TabletType_MASTER}})
-		// Brief wait to account for already running loops
-		time.Sleep(5 * time.Millisecond)
-		// Record the lag and reject future fetch queries. At this point we should be no-oping because we're a master
-		lagAtSwitch = lagNsCount.Get()
-		db.AddRejectedQuery(fetchQuery, fmt.Errorf("Should not execute queries while tablet type is MASTER. Reader thinks it's master: %v", r.isMaster))
-		time.Sleep(50 * time.Millisecond)
-		cancel()
-	}()
-
-	r.wg.Add(1)
-	r.watchHeartbeat(ctx)
-
-	r.wg.Wait()
 	lastKnownLag, lastKnownErr := r.GetLatest()
-	cumulativeLagAtEnd := lagNsCount.Get()
 
+	if got, want := lagNs.Get(), 20*time.Second; got != want.Nanoseconds() {
+		t.Fatalf("wrong cumulative lagNs: got = %v, want = %v", got, want.Nanoseconds())
+	}
 	if lastKnownErr != nil {
-		t.Errorf("Should not be in error: %v", lastKnownErr)
+		t.Fatalf("Should not be in error: %v", lastKnownErr)
 	}
-	if lastKnownLag != 10*time.Second {
-		t.Errorf("Expected 10s lag, but got %d", lagAtSwitch)
+	if want := 10 * time.Second; lastKnownLag != want {
+		t.Fatalf("wrong last known lag: got = %v, want = %v", lastKnownLag, want)
 	}
-	if cumulativeLagAtEnd != lagAtSwitch {
-		t.Errorf("Expected %d cumulative lag at end, but got %d", lagAtSwitch, cumulativeLagAtEnd)
+
+	r.registerTabletStateListener()
+	event.Dispatch(&events.StateChange{NewTablet: topodatapb.Tablet{Type: topodatapb.TabletType_MASTER}})
+
+	// Wait for master to switch on object
+	maxWait, _ := context.WithDeadline(ctx, time.Now().Add(5*time.Second))
+	for {
+		if isMaster := func() bool {
+			r.mu.Lock()
+			defer r.mu.Unlock()
+			return r.isMaster
+		}(); isMaster {
+			break
+		}
+
+		if maxWait.Done() {
+			t.Fatal("Master state failed to change after event dispatch")
+		}
+	}
+
+	// All values should be unchanged from before
+	if err := r.readHeartbeat(ctx); err != nil {
+		t.Fatalf("Should not be in error: %v", err)
+	}
+
+	lastKnownLag, lastKnownErr = r.GetLatest()
+
+	if got, want := lagNs.Get(), 20*time.Second; got != want.Nanoseconds() {
+		t.Fatalf("wrong cumulative lagNs: got = %v, want = %v", got, want)
+	}
+	if lastKnownErr != nil {
+		t.Fatalf("Should not be in error: %v", lastKnownErr)
+	}
+	if want := 10 * time.Second; lastKnownLag != want {
+		t.Fatalf("wrong last known lag: got = %v, want = %v", lastKnownLag, want)
 	}
 }
 
 // TestReaderWrongMasterError tests that we throw an error
 // when the most recent lag value is associated with a master uid that
-// doesn't match what the TopoServer expects
+// doesn't match what the TopoServer expects.
 func TestReaderWrongMasterError(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 	r := newReader(db, mockNowFunc)
 
+	laggedValue := now.Add(-10 * time.Second).UnixNano()
 	db.AddQuery(fmt.Sprintf(sqlFetchMostRecentHeartbeat, r.dbName), &sqltypes.Result{
 		Fields: []*querypb.Field{
 			{Name: "ts", Type: sqltypes.Int64},
 			{Name: "master_uid", Type: sqltypes.Uint32},
 		},
 		Rows: [][]sqltypes.Value{{
-			sqltypes.MakeTrusted(sqltypes.Int64, []byte(fmt.Sprintf("%d", now.Add(-10*time.Second).UnixNano()))),
+			sqltypes.MakeTrusted(sqltypes.Int64, []byte(fmt.Sprintf("%d", laggedValue))),
 			sqltypes.MakeTrusted(sqltypes.Int64, []byte(fmt.Sprintf("%d", defaultUID))),
 		}},
 	})
@@ -141,30 +164,30 @@ func TestReaderWrongMasterError(t *testing.T) {
 	err := r.readHeartbeat(ctx)
 
 	if err != nil {
-		t.Errorf("Should not be in error: %v", err)
+		t.Fatalf("Should not be in error: %v", err)
 	}
-	if r.lastKnownMaster != 1111 {
-		t.Errorf("Expected 1111 for lastKnownMaster, but got %d", r.lastKnownMaster)
+	if want := uint32(1111); r.lastKnownMaster != want {
+		t.Fatalf("wrong lastKnownMaster: got = %v, want = %v", r.lastKnownMaster, want)
 	}
 
 	if fake, ok := r.topoServer.Impl.(*fakeTopo); ok {
 		fake.fakeUID = uint32(2222)
 	}
 
+	// readHeartbeat only checks the topo server if the query
+	// result has a different masterUID than we currently know of.
+	// Setting this to a different UID forces a call to GetShard,
+	// at which point we will see that GetShard result 2222 does not
+	// match query result 1111.
 	r.lastKnownMaster = 3333
 
-	err = r.readHeartbeat(ctx)
-
-	if err == nil {
-		t.Errorf("Should be in error: %v", err)
+	err, want := r.readHeartbeat(ctx), fmt.Errorf("Latest heartbeat is not from known master %v, with ts=%v, master_uid=%v", 2222, laggedValue, 1111)
+	if err == nil || !reflect.DeepEqual(err, want) {
+		t.Fatalf("Should be in error: got = %v; want = %v", err, want)
 	}
-	if r.lastKnownMaster != 3333 {
-		t.Errorf("Expected 1111 for lastKnownMaster, but got %d", r.lastKnownMaster)
+	if got, want := r.lastKnownMaster, uint32(3333); got != want {
+		t.Fatalf("wrong lastKnownMaster: got = %v, want = %v", got, want)
 	}
-}
-
-func setInterval(duration time.Duration) {
-	interval = &duration
 }
 
 func newReader(db *fakesqldb.DB, nowFunc func() time.Time) *Reader {

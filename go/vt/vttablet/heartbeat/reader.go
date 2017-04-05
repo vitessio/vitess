@@ -6,6 +6,8 @@ import (
 	"sync"
 	"time"
 
+	"log"
+
 	"github.com/youtube/vitess/go/event"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
@@ -44,7 +46,6 @@ type Reader struct {
 	isMaster       bool
 	lastKnownLag   time.Duration
 	lastKnownError error
-	isOpen         bool
 }
 
 // NewReader returns a new heartbeat reader.
@@ -58,39 +59,35 @@ func NewReader(topoServer topo.Server, mysqld mysqlctl.MysqlDaemon, tablet *topo
 	}
 }
 
-// Open starts the heartbeat goroutine.
+// Open starts the heartbeat goroutine. It can only
+// be called once and further invocations will raise a
+// fatal error.
 func (r *Reader) Open(dbc dbconfigs.DBConfigs) {
 	if !*enableHeartbeat {
 		return
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if r.isOpen {
-		return
+	if r.wg != nil {
+		log.Fatalf("BUG: Reader object cannot be initialized twice: %v", r)
 	}
 
-	wg := &sync.WaitGroup{}
-	ctx, cancel := context.WithCancel(context.Background())
-
 	r.dbName = sqlparser.Backtick(dbc.SidecarDBName)
-	r.wg = wg
-	r.cancel = cancel
+	r.wg = &sync.WaitGroup{}
 
-	wg.Add(1)
+	ctx, cancel := context.WithCancel(context.Background())
+	r.cancel = cancel
+	r.wg.Add(1)
 	go r.watchHeartbeat(ctx)
-	r.isOpen = true
 }
 
 // Close cancels the watchHeartbeat goroutine and waits for it to finish.
+// A Reader may not be re-opened once closed.
 func (r *Reader) Close() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if !r.isOpen {
-		return
-	}
 	r.cancel()
 	r.wg.Wait()
-	r.isOpen = false
 }
 
 // GetLatest returns the most recent lag measurement or error encountered.
@@ -109,21 +106,11 @@ func (r *Reader) watchHeartbeat(ctx context.Context) {
 	defer r.wg.Done()
 	defer tabletenv.LogError()
 
-	event.AddListener(func(change *events.StateChange) {
-		r.mu.Lock()
-		r.isMaster = change.NewTablet.Type == topodata.TabletType_MASTER
-		r.mu.Unlock()
-	})
+	r.registerTabletStateListener()
 
 	for {
-		r.mu.Lock()
-		isMaster := r.isMaster
-		r.mu.Unlock()
-
-		if !isMaster {
-			if err := r.readHeartbeat(ctx); err != nil {
-				r.recordError(err)
-			}
+		if err := r.readHeartbeat(ctx); err != nil {
+			r.recordError(err)
 		}
 
 		if waitOrExit(ctx, *interval) {
@@ -132,8 +119,27 @@ func (r *Reader) watchHeartbeat(ctx context.Context) {
 	}
 }
 
-// readHeartbeat reads from the heartbeat table exactly once.
+// registerTabletStateListener registers an event listener which
+// can alert us to when the tablet becomes a master. In that case
+// we want to halt reads, which we handle in readHeartbeat.
+func (r *Reader) registerTabletStateListener() {
+	event.AddListener(func(change *events.StateChange) {
+		r.mu.Lock()
+		r.isMaster = change.NewTablet.Type == topodata.TabletType_MASTER
+		r.mu.Unlock()
+	})
+}
+
+// readHeartbeat reads from the heartbeat table exactly once, if we're a replica.
+// If we're a master, it exits without doing work.
 func (r *Reader) readHeartbeat(ctx context.Context) error {
+	r.mu.Lock()
+	isMaster := r.isMaster
+	r.mu.Unlock()
+	if isMaster {
+		return nil
+	}
+
 	res, err := r.fetchMostRecentHeartbeat(ctx)
 	if err != nil {
 		return fmt.Errorf("Failed to read most recent heartbeat: %v", err)
@@ -142,6 +148,7 @@ func (r *Reader) readHeartbeat(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("Failed to parse heartbeat result: %v", err)
 	}
+
 	// Validate that we're reading from the right master. This is not synchronized
 	// because it only happens here.
 	if masterUID != r.lastKnownMaster {
@@ -150,14 +157,14 @@ func (r *Reader) readHeartbeat(ctx context.Context) error {
 			return fmt.Errorf("Could not get current master: %v", err)
 		}
 		if info.MasterAlias.Uid != masterUID {
-			return fmt.Errorf("Latest heartbeat is not from known master %v, with ts=%v, master_uid=%v", info.MasterAlias, ts, masterUID)
+			return fmt.Errorf("Latest heartbeat is not from known master %v, with ts=%v, master_uid=%v", info.MasterAlias.Uid, ts, masterUID)
 		}
 		r.lastKnownMaster = masterUID
 	}
 
 	lag := r.now().Sub(time.Unix(0, ts))
-	lagNsCount.Add(lag.Nanoseconds())
-	readCount.Add(1)
+	lagNs.Add(lag.Nanoseconds())
+	reads.Add(1)
 
 	r.mu.Lock()
 	r.lastKnownLag = lag
@@ -202,5 +209,5 @@ func (r *Reader) recordError(err error) {
 	r.lastKnownError = err
 	r.mu.Unlock()
 	r.errorLog.Errorf("%v", err)
-	readErrorCount.Add(1)
+	readErrors.Add(1)
 }
