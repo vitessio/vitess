@@ -1309,7 +1309,7 @@ func (tsv *TabletServer) convertError(sql string, bindVariables map[string]inter
 	case mysqlconn.CRServerLost:
 		// Query was killed.
 		errCode = vtrpcpb.Code_DEADLINE_EXCEEDED
-	case mysqlconn.CRServerGone:
+	case mysqlconn.CRServerGone, mysqlconn.ERServerShutdown:
 		errCode = vtrpcpb.Code_UNAVAILABLE
 	}
 

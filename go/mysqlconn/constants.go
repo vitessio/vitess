@@ -223,6 +223,9 @@ const (
 	// ERBadNullError is ER_BAD_NULL_ERROR
 	ERBadNullError = 1048
 
+	// ERServerShutdown is ER_SERVER_SHUTDOWN
+	ERServerShutdown = 1053
+
 	// ERDupEntry is ER_DUP_ENTRY
 	ERDupEntry = 1062
 
