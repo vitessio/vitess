@@ -1,6 +1,6 @@
 ---
 layout: doc
-title: "Sharding in Kubernetes (Tutorial, manual)"
+title: "Sharding in Kubernetes (Tutorial, automated)"
 description:
 modified:
 excerpt:
@@ -13,4 +13,4 @@ toc: true
 share: false
 ---
 
-{% include doc/ShardingKubernetes.md %}
+{% include doc/ShardingKubernetesWorkflow.md %}
