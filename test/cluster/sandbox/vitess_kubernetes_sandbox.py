@@ -229,6 +229,15 @@ class VitessKubernetesSandbox(sandbox.Sandbox):
     wait_for_mysql_subprocess.dependencies = ['helm']
     helm_sandlet.components.add_component(wait_for_mysql_subprocess)
 
+    # Add a subprocess task to ensure serving types are correct. This is useful
+    # for resharding sandboxes where multiple keyspaces share a name.
+    fix_served_types_subprocess = subprocess_component.Subprocess(
+        'fix_served_types', self.name, 'fix_served_types.py', self.log_dir,
+        namespace=self.name,
+        keyspaces=','.join(ks['name'] for ks in self.app_options.keyspaces))
+    fix_served_types_subprocess.dependencies = ['wait_for_mysql']
+    helm_sandlet.components.add_component(fix_served_types_subprocess)
+
     # Add a subprocess task for each keyspace to perform the initial reparent.
     for keyspace in self.app_options.keyspaces:
       name = keyspace['name']
@@ -239,7 +248,9 @@ class VitessKubernetesSandbox(sandbox.Sandbox):
           keyspace=name, shard_count=shard_count,
           master_cell=self.app_options.cells[0])
       initial_reparent_subprocess.dependencies = [
-          wait_for_mysql_subprocess.name]
+          wait_for_mysql_subprocess.name,
+          fix_served_types_subprocess.name,
+      ]
       helm_sandlet.components.add_component(initial_reparent_subprocess)
     self.sandlets.add_component(helm_sandlet)
 
