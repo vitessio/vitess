@@ -35,10 +35,6 @@ var (
 	initTableRetryInterval = 10 * time.Second
 )
 
-type mySQLChecker interface {
-	CheckMySQL()
-}
-
 // Writer runs on master tablets and writes heartbeats to the _vt.heartbeat
 // table at a regular interval, defined by heartbeat_interval.
 type Writer struct {
@@ -55,7 +51,7 @@ type Writer struct {
 }
 
 // NewWriter creates a new Writer.
-func NewWriter(checker mySQLChecker, alias topodata.TabletAlias, config tabletenv.TabletConfig) *Writer {
+func NewWriter(checker connpool.MySQLChecker, alias topodata.TabletAlias, config tabletenv.TabletConfig) *Writer {
 	return &Writer{
 		tabletAlias: alias,
 		now:         time.Now,
