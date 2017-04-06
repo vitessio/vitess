@@ -12,7 +12,7 @@ import (
 )
 
 // Reporter is a wrapper around a heartbeat Reader, to be used as an interface from
-// the health check system
+// the health check system.
 type Reporter struct {
 	*Reader
 }
