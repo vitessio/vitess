@@ -8,14 +8,12 @@ import (
 
 	log "github.com/golang/glog"
 
-	"github.com/youtube/vitess/go/event"
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/timer"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
-	"github.com/youtube/vitess/go/vt/proto/topodata"
 	"github.com/youtube/vitess/go/vt/sqlparser"
-	"github.com/youtube/vitess/go/vt/vttablet/tabletmanager/events"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
@@ -31,34 +29,30 @@ const (
 // also to the healthchecks.
 type Reader struct {
 	mysqld   mysqlctl.MysqlDaemon
-	tablet   *topodata.Tablet
+	dbName   string
 	now      func() time.Time
 	errorLog *logutil.ThrottledLogger
 
-	wg     sync.WaitGroup
-	cancel context.CancelFunc
-	dbName string
-
 	mu             sync.Mutex
-	tabletType     topodata.TabletType
+	isOpen         bool
+	ticks          *timer.Timer
 	lastKnownLag   time.Duration
 	lastKnownError error
-	isOpen         bool
 }
 
 // NewReader returns a new heartbeat reader.
-func NewReader(mysqld mysqlctl.MysqlDaemon, tablet *topodata.Tablet) *Reader {
+func NewReader(mysqld mysqlctl.MysqlDaemon, dbName string) *Reader {
 	return &Reader{
 		mysqld:   mysqld,
-		tablet:   tablet,
+		dbName:   sqlparser.Backtick(dbName),
 		now:      time.Now,
+		ticks:    timer.NewTimer(*interval),
 		errorLog: logutil.NewThrottledLogger("HeartbeatReporter", 60*time.Second),
 	}
 }
 
-// Open starts the heartbeat goroutine. It can only
-// be called once and further invocations will raise a
-// fatal error.
+// Open starts the heartbeat ticker. It may be called multiple
+// times, as long as it was closed since last invocation.
 func (r *Reader) Open(dbc dbconfigs.DBConfigs) {
 	if !*enableHeartbeat {
 		return
@@ -66,25 +60,26 @@ func (r *Reader) Open(dbc dbconfigs.DBConfigs) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.isOpen {
-		log.Fatalf("BUG: Reader object cannot be initialized twice: %v", r)
+		log.Fatalf("BUG: Reader object cannot be initialized twice without closing in between: %v", r)
+		return
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	r.cancel = cancel
-	r.dbName = sqlparser.Backtick(dbc.SidecarDBName)
-
-	r.wg.Add(1)
-	go r.watchHeartbeat(ctx)
+	log.Info("Beginning heartbeat reads")
+	r.ticks.Start(func() { r.readHeartbeat() })
 	r.isOpen = true
 }
 
-// Close cancels the watchHeartbeat goroutine and waits for it to finish.
-// A Reader may not be re-opened once closed.
+// Close cancels the watchHeartbeat periodic ticker.
+// A reader object can be re-opened after closing.
 func (r *Reader) Close() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.cancel()
-	r.wg.Wait()
+	if !r.isOpen {
+		return
+	}
+	r.ticks.Stop()
+	log.Info("Stopped heartbeat reads")
+	r.isOpen = false
 }
 
 // GetLatest returns the most recent lag measurement or error encountered.
@@ -97,50 +92,23 @@ func (r *Reader) GetLatest() (time.Duration, error) {
 	return r.lastKnownLag, nil
 }
 
-// watchHeartbeat is meant to be called as a goroutine, and calls
-// fetchMostRecentHeartbeat repeatedly until told to exit by Close.
-func (r *Reader) watchHeartbeat(ctx context.Context) {
-	defer r.wg.Done()
+// readHeartbeat reads from the heartbeat table exactly once, updating
+// the last known lag and/or error, and incrementing counters.
+func (r *Reader) readHeartbeat() {
 	defer tabletenv.LogError()
 
-	r.registerTabletStateListener()
-
-	for {
-		if err := r.readHeartbeat(ctx); err != nil {
-			r.recordError(err)
-		}
-
-		if waitOrExit(ctx, *interval) {
-			return
-		}
-	}
-}
-
-// registerTabletStateListener registers an event listener which
-// can alert us to when the tablet becomes a master. In that case
-// we want to halt reads, which we handle in readHeartbeat.
-func (r *Reader) registerTabletStateListener() {
-	event.AddListener(func(change *events.StateChange) {
-		r.mu.Lock()
-		r.tabletType = change.NewTablet.Type
-		r.mu.Unlock()
-	})
-}
-
-// readHeartbeat reads from the heartbeat table exactly once, if we're a replica.
-// If we're a master, it exits without doing work.
-func (r *Reader) readHeartbeat(ctx context.Context) error {
-	if r.isMaster() {
-		return nil
-	}
+	ctx, cancel := context.WithDeadline(context.Background(), r.now().Add(*interval))
+	defer cancel()
 
 	res, err := r.fetchMostRecentHeartbeat(ctx)
 	if err != nil {
-		return fmt.Errorf("Failed to read most recent heartbeat: %v", err)
+		r.recordError(fmt.Errorf("Failed to read most recent heartbeat: %v", err))
+		return
 	}
 	ts, err := parseHeartbeatResult(res)
 	if err != nil {
-		return fmt.Errorf("Failed to parse heartbeat result: %v", err)
+		r.recordError(fmt.Errorf("Failed to parse heartbeat result: %v", err))
+		return
 	}
 
 	lag := r.now().Sub(time.Unix(0, ts))
@@ -151,13 +119,6 @@ func (r *Reader) readHeartbeat(ctx context.Context) error {
 	r.lastKnownLag = lag
 	r.lastKnownError = nil
 	r.mu.Unlock()
-	return nil
-}
-
-func (r *Reader) isMaster() bool {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	return r.tabletType == topodata.TabletType_MASTER
 }
 
 // fetchMostRecentHeartbeat fetches the most recently recorded heartbeat from the heartbeat table,
