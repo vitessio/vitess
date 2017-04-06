@@ -3,17 +3,16 @@
 // returned from SHOW SLAVE STATUS. In some circumstances, lag returned from SHOW SLAVE STATUS
 // is incorrect and is at best only at 1 second resolution. The heartbeat package directly
 // tests replication by writing a record with a timestamp on the master, and comparing that
-// timestamp after reading it on the slave. This happens at the interval defined by heartbeat_interval
+// timestamp after reading it on the slave. This happens at the interval defined by heartbeat_interval.
+// Note: the lag reported will be affected by clock drift, so it is recommended to run ntpd or similar.
 //
-// The data collected by the heartbeat package is made available in /debug/vars in HeartbeatCounters
-// and HeartbeatRates. It's additionally used as a source for healthchecks and will impact the serving
-// state of a tablet, if enabled. The heartbeat interval is purposefully kept distinct from the health check
-// interval because lag measurement requires more frequent polling that the healthcheck typically is
-// configured for.
+// The data collected by the heartbeat package is made available in /debug/vars in counters prefixed by Heartbeat*.
+// It's additionally used as a source for healthchecks and will impact the serving state of a tablet, if enabled.
+// The heartbeat interval is purposefully kept distinct from the health check interval because lag measurement
+// requires more frequent polling that the healthcheck typically is configured for.
 package heartbeat
 
 import (
-	"context"
 	"flag"
 	"time"
 
@@ -36,13 +35,3 @@ var (
 	// over time allows calculating of a rolling average lag.
 	lagNs = stats.NewInt("HeartbeatCumulativeLagNs")
 )
-
-// waitOrExit will wait until the interval is finished or the context is cancelled.
-func waitOrExit(ctx context.Context, interval time.Duration) bool {
-	select {
-	case <-ctx.Done():
-		return true
-	case <-time.After(interval):
-		return false
-	}
-}
