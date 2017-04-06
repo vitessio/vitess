@@ -68,7 +68,7 @@ func TestWriteHeartbeat(t *testing.T) {
 	}
 }
 
-// TestWriteHeartbeatError ensures that we properly account for write errors
+// TestWriteHeartbeatError ensures that we properly account for write errors.
 func TestWriteHeartbeatError(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()

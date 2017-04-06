@@ -57,6 +57,8 @@ func TestReaderReadHeartbeat(t *testing.T) {
 	}
 }
 
+// TestReaderReadHeartbeatError tests that we properly account for errors
+// encountered in the reading of heartbeat.
 func TestReaderReadHeartbeatError(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()

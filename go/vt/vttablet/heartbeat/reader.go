@@ -51,7 +51,7 @@ func NewReader(checker connpool.MySQLChecker, config tabletenv.TabletConfig, dbN
 	}
 }
 
-// Open starts the heartbeat ticker. It may be called multiple
+// Open starts the heartbeat ticker and opens the db pool. It may be called multiple
 // times, as long as it was closed since last invocation.
 func (r *Reader) Open(dbc dbconfigs.DBConfigs) {
 	if !*enableHeartbeat {
@@ -70,7 +70,7 @@ func (r *Reader) Open(dbc dbconfigs.DBConfigs) {
 	r.isOpen = true
 }
 
-// Close cancels the watchHeartbeat periodic ticker.
+// Close cancels the watchHeartbeat periodic ticker and closes the db pool.
 // A reader object can be re-opened after closing.
 func (r *Reader) Close() {
 	r.mu.Lock()
@@ -84,7 +84,7 @@ func (r *Reader) Close() {
 	r.isOpen = false
 }
 
-// GetLatest returns the most recent lag measurement or error encountered.
+// GetLatest returns the most recently recorded lag measurement or error encountered.
 func (r *Reader) GetLatest() (time.Duration, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
