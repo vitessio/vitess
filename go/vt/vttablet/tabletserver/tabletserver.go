@@ -155,12 +155,6 @@ type RegisterFunction func(Controller)
 // Register() on a TabletServer
 var RegisterFunctions []RegisterFunction
 
-// MySQLChecker defines the CheckMySQL interface that lower
-// level objects can use to call back into TabletServer.
-type MySQLChecker interface {
-	CheckMySQL()
-}
-
 // NewServer creates a new TabletServer based on the command line flags.
 func NewServer(topoServer topo.Server, alias topodatapb.TabletAlias) *TabletServer {
 	return NewTabletServer(tabletenv.Config, topoServer, alias)
