@@ -497,8 +497,8 @@ func (tsv *TabletServer) waitForShutdown() {
 	// transactions.
 	tsv.txRequests.Wait()
 	tsv.messager.Close()
-	tsv.hw.Close()
 	tsv.hr.Close()
+	tsv.hw.Close()
 	tsv.te.Close(false)
 	tsv.qe.streamQList.TerminateAll()
 	tsv.updateStreamList.Stop()
@@ -511,8 +511,8 @@ func (tsv *TabletServer) waitForShutdown() {
 // It forcibly shuts down everything.
 func (tsv *TabletServer) closeAll() {
 	tsv.messager.Close()
-	tsv.hw.Close()
 	tsv.hr.Close()
+	tsv.hw.Close()
 	tsv.te.Close(true)
 	tsv.watcher.Close()
 	tsv.updateStreamList.Stop()
