@@ -14,13 +14,9 @@ import (
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	"github.com/youtube/vitess/go/vt/sqlparser"
-	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/topo/test/faketopo"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletmanager/events"
 	"golang.org/x/net/context"
 )
-
-var defaultUID = uint32(1111)
 
 // TestReaderReadHeartbeat tests that reading a heartbeat sets the appropriate
 // fields on the object.
@@ -65,11 +61,9 @@ func TestReaderTabletTypeChange(t *testing.T) {
 	db.AddQuery(fetchQuery, &sqltypes.Result{
 		Fields: []*querypb.Field{
 			{Name: "ts", Type: sqltypes.Int64},
-			{Name: "master_uid", Type: sqltypes.Uint32},
 		},
 		Rows: [][]sqltypes.Value{{
 			sqltypes.MakeTrusted(sqltypes.Int64, []byte(fmt.Sprintf("%d", now.Add(-10*time.Second).UnixNano()))),
-			sqltypes.MakeTrusted(sqltypes.Int64, []byte(fmt.Sprintf("%d", defaultUID))),
 		}},
 	})
 
@@ -137,23 +131,8 @@ func newReader(db *fakesqldb.DB, nowFunc func() time.Time) *Reader {
 		return pool.Get(context.Background())
 	}
 
-	r := NewReader(newFakeTopo(), fakeMysql, &topodatapb.Tablet{Keyspace: "test", Shard: "0"})
+	r := NewReader(fakeMysql, &topodatapb.Tablet{Keyspace: "test", Shard: "0"})
 	r.now = nowFunc
 	r.dbName = sqlparser.Backtick("_vt")
 	return r
-}
-
-func newFakeTopo() topo.Server {
-	return topo.Server{
-		Impl: &fakeTopo{fakeUID: defaultUID},
-	}
-}
-
-type fakeTopo struct {
-	faketopo.FakeTopo
-	fakeUID uint32
-}
-
-func (f fakeTopo) GetShard(ctx context.Context, keyspace string, shard string) (*topodatapb.Shard, int64, error) {
-	return &topodatapb.Shard{MasterAlias: &topodatapb.TabletAlias{Cell: "test", Uid: f.fakeUID}}, 0, nil
 }
