@@ -185,8 +185,8 @@ func NewTabletServer(config tabletenv.TabletConfig, topoServer topo.Server, alia
 	tsv.se = schema.NewEngine(tsv, config)
 	tsv.qe = NewQueryEngine(tsv, tsv.se, config)
 	tsv.te = NewTxEngine(tsv, config)
-	tsv.hw = heartbeat.NewWriter(tsv, alias, config, tsv.dbconfigs.SidecarDBName)
-	tsv.hr = heartbeat.RegisterReporter(tsv, config, tsv.dbconfigs)
+	tsv.hw = heartbeat.NewWriter(tsv, alias, config)
+	tsv.hr = heartbeat.RegisterReporter(tsv, config)
 	tsv.txThrottler = txthrottler.CreateTxThrottlerFromTabletConfig(topoServer)
 	tsv.messager = messager.NewEngine(tsv, tsv.se, config)
 	tsv.watcher = NewReplicationWatcher(tsv.se, config)
@@ -425,6 +425,7 @@ func (tsv *TabletServer) fullStart() (err error) {
 	if err := tsv.hw.Init(tsv.dbconfigs); err != nil {
 		return err
 	}
+	tsv.hr.Init(tsv.dbconfigs)
 	tsv.updateStreamList.Init()
 	return tsv.serveNewType()
 }

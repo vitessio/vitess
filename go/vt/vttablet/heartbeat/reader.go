@@ -41,14 +41,18 @@ type Reader struct {
 }
 
 // NewReader returns a new heartbeat reader.
-func NewReader(checker connpool.MySQLChecker, config tabletenv.TabletConfig, dbName string) *Reader {
+func NewReader(checker connpool.MySQLChecker, config tabletenv.TabletConfig) *Reader {
 	return &Reader{
-		dbName:   sqlparser.Backtick(dbName),
 		now:      time.Now,
 		ticks:    timer.NewTimer(*interval),
 		errorLog: logutil.NewThrottledLogger("HeartbeatReporter", 60*time.Second),
 		pool:     connpool.New(config.PoolNamePrefix+"HeartbeatReadPool", 1, time.Duration(config.IdleTimeout*1e9), checker),
 	}
+}
+
+// Init does last minute initialization of db settings, such as dbName
+func (r *Reader) Init(dbc dbconfigs.DBConfigs) {
+	r.dbName = sqlparser.Backtick(dbc.SidecarDBName)
 }
 
 // Open starts the heartbeat ticker and opens the db pool. It may be called multiple

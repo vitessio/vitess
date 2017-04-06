@@ -45,10 +45,9 @@ type Writer struct {
 }
 
 // NewWriter creates a new Writer.
-func NewWriter(checker connpool.MySQLChecker, alias topodata.TabletAlias, config tabletenv.TabletConfig, dbName string) *Writer {
+func NewWriter(checker connpool.MySQLChecker, alias topodata.TabletAlias, config tabletenv.TabletConfig) *Writer {
 	return &Writer{
 		tabletAlias: alias,
-		dbName:      sqlparser.Backtick(dbName),
 		now:         time.Now,
 		ticks:       timer.NewTimer(*interval),
 		errorLog:    logutil.NewThrottledLogger("HeartbeatWriter", 60*time.Second),
@@ -64,6 +63,7 @@ func (w *Writer) Init(dbc dbconfigs.DBConfigs) error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	log.Info("Initializing heartbeat table.")
+	w.dbName = sqlparser.Backtick(dbc.SidecarDBName)
 	err := w.initializeTables(&dbc.Dba)
 	if err != nil {
 		w.recordError(err)
