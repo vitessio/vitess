@@ -6,7 +6,8 @@ import (
 
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/health"
-	"github.com/youtube/vitess/go/vt/mysqlctl"
+	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/connpool"
+	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
 // Reporter is a wrapper around a heartbeat Reader, to be used as an interface from
@@ -17,12 +18,12 @@ type Reporter struct {
 
 // RegisterReporter registers the heartbeat reader as a healthcheck reporter so that its
 // measurements will be picked up in healthchecks.
-func RegisterReporter(mysqld mysqlctl.MysqlDaemon, dbc dbconfigs.DBConfigs) *Reporter {
+func RegisterReporter(checker connpool.MySQLChecker, config tabletenv.TabletConfig, dbc dbconfigs.DBConfigs) *Reporter {
 	if !*enableHeartbeat {
 		return nil
 	}
 
-	reporter := &Reporter{NewReader(mysqld, dbc.SidecarDBName)}
+	reporter := &Reporter{NewReader(checker, config, dbc.SidecarDBName)}
 	reporter.Open(dbc)
 	health.DefaultAggregator.Register("heartbeat_reporter", reporter)
 

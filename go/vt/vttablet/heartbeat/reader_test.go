@@ -5,13 +5,13 @@ import (
 	"testing"
 	"time"
 
+	"math/rand"
+
 	"github.com/youtube/vitess/go/mysqlconn/fakesqldb"
 	"github.com/youtube/vitess/go/sqltypes"
-	"github.com/youtube/vitess/go/stats"
-	"github.com/youtube/vitess/go/vt/dbconnpool"
-	"github.com/youtube/vitess/go/vt/mysqlctl"
+	"github.com/youtube/vitess/go/vt/dbconfigs"
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
-	"golang.org/x/net/context"
+	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
 // TestReaderReadHeartbeat tests that reading a heartbeat sets the appropriate
@@ -19,9 +19,10 @@ import (
 func TestReaderReadHeartbeat(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
-	r := newReader(db, mockNowFunc)
+	tr := newReader(db, mockNowFunc)
+	defer tr.Close()
 
-	db.AddQuery(fmt.Sprintf(sqlFetchMostRecentHeartbeat, r.dbName), &sqltypes.Result{
+	db.AddQuery(fmt.Sprintf(sqlFetchMostRecentHeartbeat, tr.dbName), &sqltypes.Result{
 		Fields: []*querypb.Field{
 			{Name: "ts", Type: sqltypes.Int64},
 			{Name: "master_uid", Type: sqltypes.Uint32},
@@ -36,14 +37,14 @@ func TestReaderReadHeartbeat(t *testing.T) {
 	readErrors.Set(0)
 	reads.Set(0)
 
-	r.readHeartbeat()
-	lag, err := r.GetLatest()
+	tr.readHeartbeat()
+	lag, err := tr.GetLatest()
 
 	if err != nil {
-		t.Fatalf("Should not be in error: %v", r.lastKnownError)
+		t.Fatalf("Should not be in error: %v", tr.lastKnownError)
 	}
 	if got, want := lag, 10*time.Second; got != want {
-		t.Fatalf("wrong latest lag: got = %v, want = %v", r.lastKnownLag, want)
+		t.Fatalf("wrong latest lag: got = %v, want = %v", tr.lastKnownLag, want)
 	}
 	if got, want := lagNs.Get(), 10*time.Second.Nanoseconds(); got != want {
 		t.Fatalf("wrong cumulative lag: got = %v, want = %v", got, want)
@@ -59,16 +60,17 @@ func TestReaderReadHeartbeat(t *testing.T) {
 func TestReaderReadHeartbeatError(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
-	r := newReader(db, mockNowFunc)
+	tr := newReader(db, mockNowFunc)
+	defer tr.Close()
 
 	lagNs.Set(0)
 	readErrors.Set(0)
 
-	r.readHeartbeat()
-	lag, err := r.GetLatest()
+	tr.readHeartbeat()
+	lag, err := tr.GetLatest()
 
 	if err == nil {
-		t.Fatalf("Should be in error: %v", r.lastKnownError)
+		t.Fatalf("Should be in error: %v", tr.lastKnownError)
 	}
 	if got, want := lag, 0*time.Second; got != want {
 		t.Fatalf("wrong lastKnownLag: got = %v, want = %v", got, want)
@@ -82,14 +84,19 @@ func TestReaderReadHeartbeatError(t *testing.T) {
 }
 
 func newReader(db *fakesqldb.DB, nowFunc func() time.Time) *Reader {
-	pool := dbconnpool.NewConnectionPool("HeartbeatPool", 1, 30*time.Second)
-	pool.Open(dbconnpool.DBConnectionCreator(db.ConnParams(), stats.NewTimings("")))
-	fakeMysql := mysqlctl.NewFakeMysqlDaemon(db)
-	fakeMysql.DbAppConnectionFactory = func() (dbconnpool.PoolConnection, error) {
-		return pool.Get(context.Background())
+	*enableHeartbeat = true
+	randID := rand.Int63()
+	config := tabletenv.DefaultQsConfig
+	config.PoolNamePrefix = fmt.Sprintf("Pool-%d-", randID)
+	dbc := dbconfigs.DBConfigs{
+		App:           *db.ConnParams(),
+		Dba:           *db.ConnParams(),
+		SidecarDBName: "_vt",
 	}
 
-	r := NewReader(fakeMysql, "_vt")
-	r.now = nowFunc
-	return r
+	tr := NewReader(&fakeMysqlChecker{}, config, dbc.SidecarDBName)
+	tr.now = nowFunc
+	tr.pool.Open(&dbc.App, &dbc.Dba)
+
+	return tr
 }

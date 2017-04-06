@@ -12,8 +12,8 @@ import (
 	"github.com/youtube/vitess/go/timer"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/logutil"
-	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/sqlparser"
+	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/connpool"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
@@ -28,26 +28,26 @@ const (
 // table against the current time at read time. This value is reported in metrics and
 // also to the healthchecks.
 type Reader struct {
-	mysqld   mysqlctl.MysqlDaemon
 	dbName   string
 	now      func() time.Time
 	errorLog *logutil.ThrottledLogger
 
 	mu             sync.Mutex
 	isOpen         bool
+	pool           *connpool.Pool
 	ticks          *timer.Timer
 	lastKnownLag   time.Duration
 	lastKnownError error
 }
 
 // NewReader returns a new heartbeat reader.
-func NewReader(mysqld mysqlctl.MysqlDaemon, dbName string) *Reader {
+func NewReader(checker connpool.MySQLChecker, config tabletenv.TabletConfig, dbName string) *Reader {
 	return &Reader{
-		mysqld:   mysqld,
 		dbName:   sqlparser.Backtick(dbName),
 		now:      time.Now,
 		ticks:    timer.NewTimer(*interval),
 		errorLog: logutil.NewThrottledLogger("HeartbeatReporter", 60*time.Second),
+		pool:     connpool.New(config.PoolNamePrefix+"HeartbeatReadPool", 1, time.Duration(config.IdleTimeout*1e9), checker),
 	}
 }
 
@@ -65,6 +65,7 @@ func (r *Reader) Open(dbc dbconfigs.DBConfigs) {
 	}
 
 	log.Info("Beginning heartbeat reads")
+	r.pool.Open(&dbc.App, &dbc.Dba)
 	r.ticks.Start(func() { r.readHeartbeat() })
 	r.isOpen = true
 }
@@ -78,6 +79,7 @@ func (r *Reader) Close() {
 		return
 	}
 	r.ticks.Stop()
+	r.pool.Close()
 	log.Info("Stopped heartbeat reads")
 	r.isOpen = false
 }
@@ -124,12 +126,12 @@ func (r *Reader) readHeartbeat() {
 // fetchMostRecentHeartbeat fetches the most recently recorded heartbeat from the heartbeat table,
 // returning a result with the timestamp of the heartbeat.
 func (r *Reader) fetchMostRecentHeartbeat(ctx context.Context) (*sqltypes.Result, error) {
-	conn, err := r.mysqld.GetAppConnection(ctx)
+	conn, err := r.pool.Get(ctx)
 	if err != nil {
 		return nil, err
 	}
 	defer conn.Recycle()
-	return conn.ExecuteFetch(fmt.Sprintf(sqlFetchMostRecentHeartbeat, r.dbName), 1, false)
+	return conn.Exec(ctx, fmt.Sprintf(sqlFetchMostRecentHeartbeat, r.dbName), 1, false)
 }
 
 // parseHeartbeatResult turns a raw result into the timestamp for processing.
