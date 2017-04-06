@@ -11,6 +11,7 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
@@ -96,7 +97,8 @@ func newReader(db *fakesqldb.DB, nowFunc func() time.Time) *Reader {
 		SidecarDBName: "_vt",
 	}
 
-	tr := NewReader(&fakeMysqlChecker{}, config, dbc.SidecarDBName)
+	tr := NewReader(&fakeMysqlChecker{}, config)
+	tr.dbName = sqlparser.Backtick(dbc.SidecarDBName)
 	tr.now = nowFunc
 	tr.pool.Open(&dbc.App, &dbc.Dba)
 

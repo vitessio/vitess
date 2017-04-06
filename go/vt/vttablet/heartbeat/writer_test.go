@@ -10,6 +10,7 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
@@ -99,7 +100,8 @@ func newTestWriter(db *fakesqldb.DB, nowFunc func() time.Time) *Writer {
 		SidecarDBName: "_vt",
 	}
 
-	tw := NewWriter(&fakeMysqlChecker{}, topodatapb.TabletAlias{Cell: "test", Uid: 1111}, config, dbc.SidecarDBName)
+	tw := NewWriter(&fakeMysqlChecker{}, topodatapb.TabletAlias{Cell: "test", Uid: 1111}, config)
+	tw.dbName = sqlparser.Backtick(dbc.SidecarDBName)
 	tw.now = nowFunc
 	tw.pool.Open(&dbc.App, &dbc.Dba)
 

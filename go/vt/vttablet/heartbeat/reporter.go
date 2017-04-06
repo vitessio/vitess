@@ -4,7 +4,6 @@ import (
 	"html/template"
 	"time"
 
-	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/health"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/connpool"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
@@ -18,13 +17,12 @@ type Reporter struct {
 
 // RegisterReporter registers the heartbeat reader as a healthcheck reporter so that its
 // measurements will be picked up in healthchecks.
-func RegisterReporter(checker connpool.MySQLChecker, config tabletenv.TabletConfig, dbc dbconfigs.DBConfigs) *Reporter {
+func RegisterReporter(checker connpool.MySQLChecker, config tabletenv.TabletConfig) *Reporter {
 	if !*enableHeartbeat {
 		return nil
 	}
 
-	reporter := &Reporter{NewReader(checker, config, dbc.SidecarDBName)}
-	reporter.Open(dbc)
+	reporter := &Reporter{NewReader(checker, config)}
 	health.DefaultAggregator.Register("heartbeat_reporter", reporter)
 
 	return reporter
