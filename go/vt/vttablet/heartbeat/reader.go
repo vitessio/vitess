@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"log"
+	log "github.com/golang/glog"
 
 	"github.com/youtube/vitess/go/event"
 	"github.com/youtube/vitess/go/sqltypes"
@@ -37,15 +37,15 @@ type Reader struct {
 	now        func() time.Time
 	errorLog   *logutil.ThrottledLogger
 
-	wg              *sync.WaitGroup
-	cancel          context.CancelFunc
-	dbName          string
-	lastKnownMaster uint32
+	wg     sync.WaitGroup
+	cancel context.CancelFunc
+	dbName string
 
 	mu             sync.Mutex
-	isMaster       bool
+	tabletType     topodata.TabletType
 	lastKnownLag   time.Duration
 	lastKnownError error
+	isOpen         bool
 }
 
 // NewReader returns a new heartbeat reader.
@@ -68,17 +68,17 @@ func (r *Reader) Open(dbc dbconfigs.DBConfigs) {
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if r.wg != nil {
+	if r.isOpen {
 		log.Fatalf("BUG: Reader object cannot be initialized twice: %v", r)
 	}
 
-	r.dbName = sqlparser.Backtick(dbc.SidecarDBName)
-	r.wg = &sync.WaitGroup{}
-
 	ctx, cancel := context.WithCancel(context.Background())
 	r.cancel = cancel
+	r.dbName = sqlparser.Backtick(dbc.SidecarDBName)
+
 	r.wg.Add(1)
 	go r.watchHeartbeat(ctx)
+	r.isOpen = true
 }
 
 // Close cancels the watchHeartbeat goroutine and waits for it to finish.
@@ -125,7 +125,7 @@ func (r *Reader) watchHeartbeat(ctx context.Context) {
 func (r *Reader) registerTabletStateListener() {
 	event.AddListener(func(change *events.StateChange) {
 		r.mu.Lock()
-		r.isMaster = change.NewTablet.Type == topodata.TabletType_MASTER
+		r.tabletType = change.NewTablet.Type
 		r.mu.Unlock()
 	})
 }
@@ -133,10 +133,7 @@ func (r *Reader) registerTabletStateListener() {
 // readHeartbeat reads from the heartbeat table exactly once, if we're a replica.
 // If we're a master, it exits without doing work.
 func (r *Reader) readHeartbeat(ctx context.Context) error {
-	r.mu.Lock()
-	isMaster := r.isMaster
-	r.mu.Unlock()
-	if isMaster {
+	if r.isMaster() {
 		return nil
 	}
 
@@ -144,22 +141,9 @@ func (r *Reader) readHeartbeat(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("Failed to read most recent heartbeat: %v", err)
 	}
-	ts, masterUID, err := parseHeartbeatResult(res)
+	ts, err := parseHeartbeatResult(res)
 	if err != nil {
 		return fmt.Errorf("Failed to parse heartbeat result: %v", err)
-	}
-
-	// Validate that we're reading from the right master. This is not synchronized
-	// because it only happens here.
-	if masterUID != r.lastKnownMaster {
-		info, err := r.topoServer.GetShard(ctx, r.tablet.Keyspace, r.tablet.Shard)
-		if err != nil {
-			return fmt.Errorf("Could not get current master: %v", err)
-		}
-		if info.MasterAlias.Uid != masterUID {
-			return fmt.Errorf("Latest heartbeat is not from known master %v, with ts=%v, master_uid=%v", info.MasterAlias.Uid, ts, masterUID)
-		}
-		r.lastKnownMaster = masterUID
 	}
 
 	lag := r.now().Sub(time.Unix(0, ts))
@@ -171,6 +155,12 @@ func (r *Reader) readHeartbeat(ctx context.Context) error {
 	r.lastKnownError = nil
 	r.mu.Unlock()
 	return nil
+}
+
+func (r *Reader) isMaster() bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.tabletType == topodata.TabletType_MASTER
 }
 
 // fetchMostRecentHeartbeat fetches the most recently recorded heartbeat from the heartbeat table,
@@ -186,19 +176,15 @@ func (r *Reader) fetchMostRecentHeartbeat(ctx context.Context) (*sqltypes.Result
 
 // parseHeartbeatResult turns a raw result into the timestamp and master uid values
 // for processing.
-func parseHeartbeatResult(res *sqltypes.Result) (int64, uint32, error) {
+func parseHeartbeatResult(res *sqltypes.Result) (int64, error) {
 	if len(res.Rows) != 1 {
-		return 0, 0, fmt.Errorf("Failed to read heartbeat: writer query did not result in 1 row. Got %v", len(res.Rows))
+		return 0, fmt.Errorf("Failed to read heartbeat: writer query did not result in 1 row. Got %v", len(res.Rows))
 	}
 	ts, err := res.Rows[0][0].ParseInt64()
 	if err != nil {
-		return 0, 0, err
+		return 0, err
 	}
-	rawUID, err := res.Rows[0][1].ParseUint64()
-	if err != nil {
-		return 0, 0, err
-	}
-	return ts, uint32(rawUID), nil
+	return ts, nil
 }
 
 // recordError keeps track of the lastKnown error for reporting to the healthcheck.

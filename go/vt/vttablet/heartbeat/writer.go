@@ -22,10 +22,10 @@ import (
 const (
 	sqlCreateSidecarDB      = "create database if not exists %s"
 	sqlCreateHeartbeatTable = `CREATE TABLE IF NOT EXISTS %s.heartbeat (
-  ts bigint NOT NULL,
-  master_uid int unsigned NOT NULL PRIMARY KEY
+  master_uid INT UNSIGNED NOT NULL PRIMARY KEY,
+  ts BIGINT UNSIGNED NOT NULL
         ) engine=InnoDB`
-	sqlInsertInitialRow = "INSERT INTO %s.heartbeat (ts, master_uid) VALUES (%d, %d) ON DUPLICATE KEY UPDATE ts=VALUES(ts)"
+	sqlInsertInitialRow = "INSERT INTO %s.heartbeat (master_uid, ts) VALUES (%d, %d) ON DUPLICATE KEY UPDATE ts=VALUES(ts)"
 	sqlUpdateHeartbeat  = "UPDATE %v.heartbeat SET ts=%d WHERE master_uid=%d"
 )
 
@@ -49,7 +49,7 @@ type Writer struct {
 	mu     sync.Mutex
 	isOpen bool
 	cancel context.CancelFunc
-	wg     *sync.WaitGroup
+	wg     sync.WaitGroup
 	pool   *connpool.Pool
 	dbName string
 }
@@ -68,28 +68,24 @@ func NewWriter(checker mySQLChecker, alias topodata.TabletAlias, config tableten
 // responsible for periodically writing to the heartbeat table.
 // Open may be called multiple times, as long as it was closed since
 // last invocation.
-func (w *Writer) Open(dbc dbconfigs.DBConfigs) error {
+func (w *Writer) Open(dbc dbconfigs.DBConfigs) {
 	if !*enableHeartbeat {
-		return nil
+		return
 	}
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	if w.isOpen {
 		log.Fatalf("BUG: Writer object cannot be initialized twice without closing in between: %v", w)
-		return nil
 	}
 
 	w.dbName = sqlparser.Backtick(dbc.SidecarDBName)
-	w.wg = &sync.WaitGroup{}
 	w.pool.Open(&dbc.App, &dbc.Dba)
 
 	ctx, cancel := context.WithCancel(tabletenv.LocalContext())
 	w.cancel = cancel
 	w.wg.Add(1)
 	go w.run(ctx, &dbc.Dba)
-
 	w.isOpen = true
-	return nil
 }
 
 // Close closes the Writer's db connection, cancels the goroutine, and
@@ -151,7 +147,7 @@ func (w *Writer) initializeTables(cp *sqldb.ConnParams) error {
 	statements := []string{
 		fmt.Sprintf(sqlCreateSidecarDB, w.dbName),
 		fmt.Sprintf(sqlCreateHeartbeatTable, w.dbName),
-		fmt.Sprintf(sqlInsertInitialRow, w.dbName, w.now().UnixNano(), w.tabletAlias.Uid),
+		fmt.Sprintf(sqlInsertInitialRow, w.dbName, w.tabletAlias.Uid, w.now().UnixNano()),
 	}
 	for _, s := range statements {
 		if _, err := conn.ExecuteFetch(s, 0, false); err != nil {
