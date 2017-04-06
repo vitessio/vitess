@@ -22,10 +22,10 @@ import (
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/timer"
 	"github.com/youtube/vitess/go/vt/callerid"
+	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/connpool"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/messager"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
-	"github.com/youtube/vitess/go/vt/vterrors"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
@@ -54,7 +54,7 @@ type TxPool struct {
 	lastID     sync2.AtomicInt64
 	timeout    sync2.AtomicDuration
 	ticks      *timer.Timer
-	checker    MySQLChecker
+	checker    connpool.MySQLChecker
 	// Tracking culprits that cause tx pool full errors.
 	logMu   sync.Mutex
 	lastLog time.Time
@@ -66,7 +66,7 @@ func NewTxPool(
 	capacity int,
 	timeout time.Duration,
 	idleTimeout time.Duration,
-	checker MySQLChecker) *TxPool {
+	checker connpool.MySQLChecker) *TxPool {
 	axp := &TxPool{
 		conns:      connpool.New(name, capacity, idleTimeout, checker),
 		activePool: pools.NewNumbered(),

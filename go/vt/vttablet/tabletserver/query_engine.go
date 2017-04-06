@@ -27,6 +27,7 @@ import (
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/tableacl"
 	tacl "github.com/youtube/vitess/go/vt/tableacl/acl"
+	"github.com/youtube/vitess/go/vt/utils"
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/connpool"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/planbuilder"
@@ -34,7 +35,6 @@ import (
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/schema"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/txserializer"
-	"github.com/youtube/vitess/go/vt/utils"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
@@ -144,7 +144,7 @@ var (
 // NewQueryEngine creates a new QueryEngine.
 // This is a singleton class.
 // You must call this only once.
-func NewQueryEngine(checker MySQLChecker, se *schema.Engine, config tabletenv.TabletConfig) *QueryEngine {
+func NewQueryEngine(checker connpool.MySQLChecker, se *schema.Engine, config tabletenv.TabletConfig) *QueryEngine {
 	qe := &QueryEngine{
 		se:               se,
 		tables:           make(map[string]*schema.Table),
