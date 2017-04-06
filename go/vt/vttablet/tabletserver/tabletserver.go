@@ -122,8 +122,9 @@ type TabletServer struct {
 	se               *schema.Engine
 	qe               *QueryEngine
 	te               *TxEngine
+	hw               *heartbeat.Writer
+	hr               *heartbeat.Reporter
 	messager         *messager.Engine
-	heartbeat        *heartbeat.Writer
 	watcher          *ReplicationWatcher
 	updateStreamList *binlog.StreamList
 
@@ -184,9 +185,10 @@ func NewTabletServer(config tabletenv.TabletConfig, topoServer topo.Server, alia
 	tsv.se = schema.NewEngine(tsv, config)
 	tsv.qe = NewQueryEngine(tsv, tsv.se, config)
 	tsv.te = NewTxEngine(tsv, config)
+	tsv.hw = heartbeat.NewWriter(tsv, alias, config, tsv.dbconfigs.SidecarDBName)
+	tsv.hr = heartbeat.RegisterReporter(tsv.mysqld, tsv.dbconfigs)
 	tsv.txThrottler = txthrottler.CreateTxThrottlerFromTabletConfig(topoServer)
 	tsv.messager = messager.NewEngine(tsv, tsv.se, config)
-	tsv.heartbeat = heartbeat.NewWriter(tsv, alias, config)
 	tsv.watcher = NewReplicationWatcher(tsv.se, config)
 	tsv.updateStreamList = &binlog.StreamList{}
 	// FIXME(alainjobart) could we move this to the Register method below?
@@ -420,6 +422,9 @@ func (tsv *TabletServer) fullStart() (err error) {
 	if err := tsv.te.Init(tsv.dbconfigs); err != nil {
 		return err
 	}
+	if err := tsv.hw.Init(tsv.dbconfigs); err != nil {
+		return err
+	}
 	tsv.updateStreamList.Init()
 	return tsv.serveNewType()
 }
@@ -432,10 +437,13 @@ func (tsv *TabletServer) serveNewType() (err error) {
 		tsv.watcher.Close()
 		tsv.te.Open(tsv.dbconfigs)
 		tsv.messager.Open(tsv.dbconfigs)
-		tsv.heartbeat.Open(tsv.dbconfigs)
+		tsv.hr.Close()
+		tsv.hw.Open(tsv.dbconfigs)
 	} else {
 		tsv.messager.Close()
-		tsv.heartbeat.Close()
+		tsv.hr.Open(tsv.dbconfigs)
+		tsv.hw.Close()
+
 		// Wait for in-flight transactional requests to complete
 		// before rolling back everything. In this state new
 		// transactional requests are not allowed. So, we can
@@ -489,7 +497,8 @@ func (tsv *TabletServer) waitForShutdown() {
 	// transactions.
 	tsv.txRequests.Wait()
 	tsv.messager.Close()
-	tsv.heartbeat.Close()
+	tsv.hw.Close()
+	tsv.hr.Close()
 	tsv.te.Close(false)
 	tsv.qe.streamQList.TerminateAll()
 	tsv.updateStreamList.Stop()
@@ -502,7 +511,8 @@ func (tsv *TabletServer) waitForShutdown() {
 // It forcibly shuts down everything.
 func (tsv *TabletServer) closeAll() {
 	tsv.messager.Close()
-	tsv.heartbeat.Close()
+	tsv.hw.Close()
+	tsv.hr.Close()
 	tsv.te.Close(true)
 	tsv.watcher.Close()
 	tsv.updateStreamList.Stop()

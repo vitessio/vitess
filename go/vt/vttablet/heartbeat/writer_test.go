@@ -11,9 +11,7 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
-	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
-	"golang.org/x/net/context"
 )
 
 var (
@@ -60,13 +58,33 @@ func TestWriteHeartbeat(t *testing.T) {
 	db.AddQuery(fmt.Sprintf(sqlUpdateHeartbeat, te.dbName, now.UnixNano(), 1111), &sqltypes.Result{})
 
 	writes.Set(0)
-	err := te.writeHeartbeat(context.Background())
-	if err != nil {
-		t.Fatalf("Should not be in error: %v", err)
-	}
+	writeErrors.Set(0)
 
+	te.writeHeartbeat()
 	if got, want := writes.Get(), int64(1); got != want {
 		t.Fatalf("wrong writes count: got = %v; want = %v", got, want)
+	}
+	if got, want := writeErrors.Get(), int64(0); got != want {
+		t.Fatalf("wrong write errors count: got = %v; want = %v", got, want)
+	}
+}
+
+// TestWriteHeartbeatError ensures that we properly account for write errors
+func TestWriteHeartbeatError(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+
+	te := newTestWriter(db, mockNowFunc)
+
+	writes.Set(0)
+	writeErrors.Set(0)
+
+	te.writeHeartbeat()
+	if got, want := writes.Get(), int64(0); got != want {
+		t.Fatalf("wrong writes count: got = %v; want = %v", got, want)
+	}
+	if got, want := writeErrors.Get(), int64(1); got != want {
+		t.Fatalf("wrong write errors count: got = %v; want = %v", got, want)
 	}
 }
 
@@ -76,16 +94,14 @@ func newTestWriter(db *fakesqldb.DB, nowFunc func() time.Time) *Writer {
 	config := tabletenv.DefaultQsConfig
 	config.PoolNamePrefix = fmt.Sprintf("Pool-%d-", randID)
 
-	tw := NewWriter(&fakeMysqlChecker{}, topodatapb.TabletAlias{Cell: "test", Uid: 1111}, config)
-	tw.now = nowFunc
-
 	dbc := dbconfigs.DBConfigs{
 		App:           *db.ConnParams(),
 		Dba:           *db.ConnParams(),
 		SidecarDBName: "_vt",
 	}
 
-	tw.dbName = sqlparser.Backtick(dbc.SidecarDBName)
+	tw := NewWriter(&fakeMysqlChecker{}, topodatapb.TabletAlias{Cell: "test", Uid: 1111}, config, dbc.SidecarDBName)
+	tw.now = nowFunc
 	tw.pool.Open(&dbc.App, &dbc.Dba)
 
 	return tw

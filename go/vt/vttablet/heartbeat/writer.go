@@ -15,6 +15,7 @@ import (
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/stats"
+	"github.com/youtube/vitess/go/timer"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/connpool"
 )
@@ -29,38 +30,50 @@ const (
 	sqlUpdateHeartbeat  = "UPDATE %v.heartbeat SET ts=%d WHERE master_uid=%d"
 )
 
-var (
-	// initTableRetryInterval is the default retry interval for initialize table attempts. It's non-constant
-	// to allow overriding in tests.
-	initTableRetryInterval = 10 * time.Second
-)
-
 // Writer runs on master tablets and writes heartbeats to the _vt.heartbeat
 // table at a regular interval, defined by heartbeat_interval.
 type Writer struct {
 	tabletAlias topodata.TabletAlias
+	dbName      string
 	now         func() time.Time
 	errorLog    *logutil.ThrottledLogger
 
 	mu     sync.Mutex
 	isOpen bool
-	cancel context.CancelFunc
-	wg     sync.WaitGroup
 	pool   *connpool.Pool
-	dbName string
+	ticks  *timer.Timer
 }
 
 // NewWriter creates a new Writer.
-func NewWriter(checker connpool.MySQLChecker, alias topodata.TabletAlias, config tabletenv.TabletConfig) *Writer {
+func NewWriter(checker connpool.MySQLChecker, alias topodata.TabletAlias, config tabletenv.TabletConfig, dbName string) *Writer {
 	return &Writer{
 		tabletAlias: alias,
+		dbName:      sqlparser.Backtick(dbName),
 		now:         time.Now,
+		ticks:       timer.NewTimer(*interval),
 		errorLog:    logutil.NewThrottledLogger("HeartbeatWriter", 60*time.Second),
 		pool:        connpool.New(config.PoolNamePrefix+"HeartbeatWritePool", 1, time.Duration(config.IdleTimeout*1e9), checker),
 	}
 }
 
-// Open sets up the Writer's db connection and launches the goroutine
+// Init runs at tablet startup and creates the necessary tables for heartbeat.
+func (w *Writer) Init(dbc dbconfigs.DBConfigs) error {
+	if !*enableHeartbeat {
+		return nil
+	}
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	log.Info("Initializing heartbeat table.")
+	err := w.initializeTables(&dbc.Dba)
+	if err != nil {
+		w.recordError(err)
+		return err
+	}
+
+	return nil
+}
+
+// Open sets up the Writer's db connection and launches the ticker
 // responsible for periodically writing to the heartbeat table.
 // Open may be called multiple times, as long as it was closed since
 // last invocation.
@@ -72,68 +85,30 @@ func (w *Writer) Open(dbc dbconfigs.DBConfigs) {
 	defer w.mu.Unlock()
 	if w.isOpen {
 		log.Fatalf("BUG: Writer object cannot be initialized twice without closing in between: %v", w)
+		return
 	}
-
-	w.dbName = sqlparser.Backtick(dbc.SidecarDBName)
+	log.Info("Beginning heartbeat writes")
 	w.pool.Open(&dbc.App, &dbc.Dba)
-
-	ctx, cancel := context.WithCancel(tabletenv.LocalContext())
-	w.cancel = cancel
-	w.wg.Add(1)
-	go w.run(ctx, &dbc.Dba)
+	w.ticks.Start(func() { w.writeHeartbeat() })
 	w.isOpen = true
 }
 
-// Close closes the Writer's db connection, cancels the goroutine, and
-// waits for the goroutine to finish. A writer object can be re-opened
-// after closing.
+// Close closes the Writer's db connection and stops the periodic ticker. A writer
+// object can be re-opened after closing.
 func (w *Writer) Close() {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	if !w.isOpen {
 		return
 	}
-	w.cancel()
-	w.wg.Wait()
+	w.ticks.Stop()
 	w.pool.Close()
+	log.Info("Stopped heartbeat writes.")
 	w.isOpen = false
 }
 
-// run is the main goroutine of the Writer. It initializes
-// the heartbeat table then writes heartbeat at the heartbeat_interval
-// until cancelled.
-func (w *Writer) run(ctx context.Context, initParams *sqldb.ConnParams) {
-	defer w.wg.Done()
-	defer tabletenv.LogError()
-
-	log.Info("Initializing heartbeat table.")
-	for {
-		err := w.initializeTables(initParams)
-		if err == nil {
-			break
-		}
-
-		w.recordError(err)
-		if waitOrExit(ctx, initTableRetryInterval) {
-			log.Info("Stopped trying to initialize heartbeat table.")
-			return
-		}
-	}
-
-	log.Info("Beginning heartbeat writes")
-	for {
-		if err := w.writeHeartbeat(ctx); err != nil {
-			w.recordError(err)
-		}
-
-		if waitOrExit(ctx, *interval) {
-			log.Info("Stopped heartbeat writes.")
-			return
-		}
-	}
-}
-
-// initializeTables attempts to create the heartbeat tables exactly once.
+// initializeTables attempts to create the heartbeat tables and record an
+// initial row.
 func (w *Writer) initializeTables(cp *sqldb.ConnParams) error {
 	conn, err := dbconnpool.NewDBConnection(cp, stats.NewTimings(""))
 	if err != nil {
@@ -154,14 +129,17 @@ func (w *Writer) initializeTables(cp *sqldb.ConnParams) error {
 	return nil
 }
 
-// writeHeartbeat writes exactly one heartbeat record to _vt.heartbeat.
-func (w *Writer) writeHeartbeat(ctx context.Context) error {
+// writeHeartbeat updates the heartbeat row for this tablet with the current time in nanoseconds.
+func (w *Writer) writeHeartbeat() {
+	defer tabletenv.LogError()
+	ctx, cancel := context.WithDeadline(context.Background(), w.now().Add(*interval))
+	defer cancel()
 	err := w.exec(ctx, fmt.Sprintf(sqlUpdateHeartbeat, w.dbName, w.now().UnixNano(), w.tabletAlias.Uid))
 	if err != nil {
-		return fmt.Errorf("Failed to execute update query: %v", err)
+		w.recordError(err)
+		return
 	}
 	writes.Add(1)
-	return nil
 }
 
 func (w *Writer) exec(ctx context.Context, query string) error {
