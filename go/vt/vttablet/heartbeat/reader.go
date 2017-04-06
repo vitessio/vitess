@@ -15,13 +15,12 @@ import (
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/proto/topodata"
 	"github.com/youtube/vitess/go/vt/sqlparser"
-	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletmanager/events"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
 const (
-	sqlFetchMostRecentHeartbeat = "SELECT ts, master_uid FROM %s.heartbeat ORDER BY ts DESC LIMIT 1"
+	sqlFetchMostRecentHeartbeat = "SELECT ts FROM %s.heartbeat ORDER BY ts DESC LIMIT 1"
 )
 
 // Reader reads the heartbeat table at a configured interval in order
@@ -31,11 +30,10 @@ const (
 // table against the current time at read time. This value is reported in metrics and
 // also to the healthchecks.
 type Reader struct {
-	topoServer topo.Server
-	mysqld     mysqlctl.MysqlDaemon
-	tablet     *topodata.Tablet
-	now        func() time.Time
-	errorLog   *logutil.ThrottledLogger
+	mysqld   mysqlctl.MysqlDaemon
+	tablet   *topodata.Tablet
+	now      func() time.Time
+	errorLog *logutil.ThrottledLogger
 
 	wg     sync.WaitGroup
 	cancel context.CancelFunc
@@ -49,13 +47,12 @@ type Reader struct {
 }
 
 // NewReader returns a new heartbeat reader.
-func NewReader(topoServer topo.Server, mysqld mysqlctl.MysqlDaemon, tablet *topodata.Tablet) *Reader {
+func NewReader(mysqld mysqlctl.MysqlDaemon, tablet *topodata.Tablet) *Reader {
 	return &Reader{
-		topoServer: topoServer,
-		mysqld:     mysqld,
-		tablet:     tablet,
-		now:        time.Now,
-		errorLog:   logutil.NewThrottledLogger("HeartbeatReporter", 60*time.Second),
+		mysqld:   mysqld,
+		tablet:   tablet,
+		now:      time.Now,
+		errorLog: logutil.NewThrottledLogger("HeartbeatReporter", 60*time.Second),
 	}
 }
 
@@ -164,7 +161,7 @@ func (r *Reader) isMaster() bool {
 }
 
 // fetchMostRecentHeartbeat fetches the most recently recorded heartbeat from the heartbeat table,
-// returning a result with the timestamp and master_uid that the heartbeat came from.
+// returning a result with the timestamp of the heartbeat.
 func (r *Reader) fetchMostRecentHeartbeat(ctx context.Context) (*sqltypes.Result, error) {
 	conn, err := r.mysqld.GetAppConnection(ctx)
 	if err != nil {
@@ -174,8 +171,7 @@ func (r *Reader) fetchMostRecentHeartbeat(ctx context.Context) (*sqltypes.Result
 	return conn.ExecuteFetch(fmt.Sprintf(sqlFetchMostRecentHeartbeat, r.dbName), 1, false)
 }
 
-// parseHeartbeatResult turns a raw result into the timestamp and master uid values
-// for processing.
+// parseHeartbeatResult turns a raw result into the timestamp for processing.
 func parseHeartbeatResult(res *sqltypes.Result) (int64, error) {
 	if len(res.Rows) != 1 {
 		return 0, fmt.Errorf("Failed to read heartbeat: writer query did not result in 1 row. Got %v", len(res.Rows))

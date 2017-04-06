@@ -24,7 +24,7 @@ func RegisterReporter(topoServer topo.Server, mysqld mysqlctl.MysqlDaemon, table
 		return nil
 	}
 
-	reporter := &Reporter{NewReader(topoServer, mysqld, tablet)}
+	reporter := &Reporter{NewReader(mysqld, tablet)}
 	reporter.Open(dbc)
 	health.DefaultAggregator.Register("heartbeat_reporter", reporter)
 
