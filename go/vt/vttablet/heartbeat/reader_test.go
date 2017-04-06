@@ -5,8 +5,6 @@ import (
 	"testing"
 	"time"
 
-	"reflect"
-
 	"github.com/youtube/vitess/go/event"
 	"github.com/youtube/vitess/go/mysqlconn/fakesqldb"
 	"github.com/youtube/vitess/go/sqltypes"
@@ -49,10 +47,6 @@ func TestReaderReadHeartbeat(t *testing.T) {
 
 	if r.lastKnownError != nil {
 		t.Fatalf("Should not be in error: %v", r.lastKnownError)
-	}
-
-	if want := uint32(1111); r.lastKnownMaster != want {
-		t.Fatalf("wrong lastKnownMaster: got = %v, want = %v", r.lastKnownMaster, want)
 	}
 
 	if want := 10 * time.Second; r.lastKnownLag != want {
@@ -105,19 +99,16 @@ func TestReaderTabletTypeChange(t *testing.T) {
 	event.Dispatch(&events.StateChange{NewTablet: topodatapb.Tablet{Type: topodatapb.TabletType_MASTER}})
 
 	// Wait for master to switch on object
-	maxWait, _ := context.WithDeadline(ctx, time.Now().Add(5*time.Second))
+	start := time.Now()
 	for {
-		if isMaster := func() bool {
-			r.mu.Lock()
-			defer r.mu.Unlock()
-			return r.isMaster
-		}(); isMaster {
+		if r.isMaster() {
 			break
 		}
 
-		if maxWait.Done() {
-			t.Fatal("Master state failed to change after event dispatch")
+		if time.Since(start) > 5*time.Second {
+			t.Fatal("Reader did not update its isMaster state after event dispatch")
 		}
+		time.Sleep(1 * time.Millisecond)
 	}
 
 	// All values should be unchanged from before
@@ -127,7 +118,7 @@ func TestReaderTabletTypeChange(t *testing.T) {
 
 	lastKnownLag, lastKnownErr = r.GetLatest()
 
-	if got, want := lagNs.Get(), 20*time.Second; got != want.Nanoseconds() {
+	if got, want := lagNs.Get(), 20*time.Second.Nanoseconds(); got != want {
 		t.Fatalf("wrong cumulative lagNs: got = %v, want = %v", got, want)
 	}
 	if lastKnownErr != nil {
@@ -135,58 +126,6 @@ func TestReaderTabletTypeChange(t *testing.T) {
 	}
 	if want := 10 * time.Second; lastKnownLag != want {
 		t.Fatalf("wrong last known lag: got = %v, want = %v", lastKnownLag, want)
-	}
-}
-
-// TestReaderWrongMasterError tests that we throw an error
-// when the most recent lag value is associated with a master uid that
-// doesn't match what the TopoServer expects.
-func TestReaderWrongMasterError(t *testing.T) {
-	db := fakesqldb.New(t)
-	defer db.Close()
-	r := newReader(db, mockNowFunc)
-
-	laggedValue := now.Add(-10 * time.Second).UnixNano()
-	db.AddQuery(fmt.Sprintf(sqlFetchMostRecentHeartbeat, r.dbName), &sqltypes.Result{
-		Fields: []*querypb.Field{
-			{Name: "ts", Type: sqltypes.Int64},
-			{Name: "master_uid", Type: sqltypes.Uint32},
-		},
-		Rows: [][]sqltypes.Value{{
-			sqltypes.MakeTrusted(sqltypes.Int64, []byte(fmt.Sprintf("%d", laggedValue))),
-			sqltypes.MakeTrusted(sqltypes.Int64, []byte(fmt.Sprintf("%d", defaultUID))),
-		}},
-	})
-
-	r.lastKnownMaster = 0
-
-	ctx := context.Background()
-	err := r.readHeartbeat(ctx)
-
-	if err != nil {
-		t.Fatalf("Should not be in error: %v", err)
-	}
-	if want := uint32(1111); r.lastKnownMaster != want {
-		t.Fatalf("wrong lastKnownMaster: got = %v, want = %v", r.lastKnownMaster, want)
-	}
-
-	if fake, ok := r.topoServer.Impl.(*fakeTopo); ok {
-		fake.fakeUID = uint32(2222)
-	}
-
-	// readHeartbeat only checks the topo server if the query
-	// result has a different masterUID than we currently know of.
-	// Setting this to a different UID forces a call to GetShard,
-	// at which point we will see that GetShard result 2222 does not
-	// match query result 1111.
-	r.lastKnownMaster = 3333
-
-	err, want := r.readHeartbeat(ctx), fmt.Errorf("Latest heartbeat is not from known master %v, with ts=%v, master_uid=%v", 2222, laggedValue, 1111)
-	if err == nil || !reflect.DeepEqual(err, want) {
-		t.Fatalf("Should be in error: got = %v; want = %v", err, want)
-	}
-	if got, want := r.lastKnownMaster, uint32(3333); got != want {
-		t.Fatalf("wrong lastKnownMaster: got = %v, want = %v", got, want)
 	}
 }
 
