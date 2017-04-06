@@ -438,9 +438,7 @@ func (tsv *TabletServer) serveNewType() (err error) {
 		tsv.watcher.Close()
 		tsv.te.Open(tsv.dbconfigs)
 		tsv.messager.Open(tsv.dbconfigs)
-		if err = tsv.heartbeat.Open(tsv.dbconfigs); err != nil {
-			return err
-		}
+		tsv.heartbeat.Open(tsv.dbconfigs)
 	} else {
 		tsv.messager.Close()
 		tsv.heartbeat.Close()
