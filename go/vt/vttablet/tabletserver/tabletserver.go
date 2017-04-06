@@ -186,7 +186,7 @@ func NewTabletServer(config tabletenv.TabletConfig, topoServer topo.Server, alia
 	tsv.qe = NewQueryEngine(tsv, tsv.se, config)
 	tsv.te = NewTxEngine(tsv, config)
 	tsv.hw = heartbeat.NewWriter(tsv, alias, config, tsv.dbconfigs.SidecarDBName)
-	tsv.hr = heartbeat.RegisterReporter(tsv.mysqld, tsv.dbconfigs)
+	tsv.hr = heartbeat.RegisterReporter(tsv, config, tsv.dbconfigs)
 	tsv.txThrottler = txthrottler.CreateTxThrottlerFromTabletConfig(topoServer)
 	tsv.messager = messager.NewEngine(tsv, tsv.se, config)
 	tsv.watcher = NewReplicationWatcher(tsv.se, config)
