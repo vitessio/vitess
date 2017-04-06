@@ -80,27 +80,6 @@ class TestAutomationHorizontalResharding(worker.TestBaseSplitClone):
 
     # Check that query service is disabled (source shard) or enabled (dest).
 
-    # The 'rdonly' tablet requires an explicit healthcheck first because
-    # the following sequence of events is happening in this test:
-    # - SplitDiff returns 'rdonly' as 'spare' tablet (NOT_SERVING)
-    # - MigrateServedTypes runs and does not refresh then 'spare' tablet
-    #   (still NOT_SERVING)
-    #   Shard_TabletControl.DisableQueryService=true will be set in the topology
-    # - explicit or periodic healthcheck runs:
-    #   a) tablet seen as caught up, change type from 'spare' to 'rdonly'
-    #      (change to SERVING)
-    #   b) post-action callback agent.refreshTablet() reads the topology
-    #      and finds out that DisableQueryService=true is set.
-    #      (change to NOT_SERVING)
-    #
-    # We must run an explicit healthcheck or we can see one of the two states:
-    # - NOT_SERVING, DisableQueryService=false, tablet type 'spare'
-    #   (immediately after SplitDiff returned)
-    # - SERVING, DisableQueryService=false, tablet type 'rdonly'
-    #   (during healthcheck before post-action callback is called)
-    utils.run_vtctl(['RunHealthCheck', worker.shard_rdonly1.tablet_alias],
-                    auto_log=True)
-
     # source shard: query service must be disabled after MigrateServedTypes.
     utils.check_tablet_query_service(
         self, worker.shard_rdonly1,
@@ -112,10 +91,7 @@ class TestAutomationHorizontalResharding(worker.TestBaseSplitClone):
         self, worker.shard_master,
         serving=False, tablet_control_disabled=True)
 
-    # dest shard -80: query service must be disabled after MigrateServedTypes.
-    # Run explicit healthcheck because 'rdonly' tablet may still be 'spare'.
-    utils.run_vtctl(['RunHealthCheck', worker.shard_0_rdonly1.tablet_alias],
-                    auto_log=True)
+    # dest shard -80: query service must be enabled after MigrateServedTypes.
     utils.check_tablet_query_service(
         self, worker.shard_0_rdonly1,
         serving=True, tablet_control_disabled=False)
@@ -126,10 +102,7 @@ class TestAutomationHorizontalResharding(worker.TestBaseSplitClone):
         self, worker.shard_0_master,
         serving=True, tablet_control_disabled=False)
 
-    # dest shard 80-: query service must be disabled after MigrateServedTypes.
-    # Run explicit healthcheck because 'rdonly' tablet is still 'spare'.
-    utils.run_vtctl(['RunHealthCheck', worker.shard_1_rdonly1.tablet_alias],
-                    auto_log=True)
+    # dest shard 80-: query service must be enabled after MigrateServedTypes.
     utils.check_tablet_query_service(
         self, worker.shard_1_rdonly1,
         serving=True, tablet_control_disabled=False)

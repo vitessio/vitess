@@ -12,13 +12,16 @@ import (
 	"time"
 
 	"github.com/youtube/vitess/go/vt/key"
-	"github.com/youtube/vitess/go/vt/tabletserver/sandboxconn"
-	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/vterrors"
+	"github.com/youtube/vitess/go/vt/vttablet/queryservice"
+	"github.com/youtube/vitess/go/vt/vttablet/sandboxconn"
+	"github.com/youtube/vitess/go/vt/vttablet/tabletconn"
 	"golang.org/x/net/context"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	vschemapb "github.com/youtube/vitess/go/vt/proto/vschema"
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 // sandbox_test.go provides a sandbox for unit testing VTGate.
@@ -221,6 +224,8 @@ func (sct *sandboxTopo) GetSrvKeyspaceNames(ctx context.Context, cell string) ([
 // GetSrvKeyspace is part of SrvTopoServer.
 func (sct *sandboxTopo) GetSrvKeyspace(ctx context.Context, cell, keyspace string) (*topodatapb.SrvKeyspace, error) {
 	sand := getSandbox(keyspace)
+	sand.sandmu.Lock()
+	defer sand.sandmu.Unlock()
 	if sand.SrvKeyspaceCallback != nil {
 		sand.SrvKeyspaceCallback()
 	}
@@ -260,19 +265,19 @@ func (sct *sandboxTopo) WatchSrvVSchema(ctx context.Context, cell string) (*topo
 	}, make(chan *topo.WatchSrvVSchemaData), func() {}
 }
 
-func sandboxDialer(tablet *topodatapb.Tablet, timeout time.Duration) (tabletconn.TabletConn, error) {
+func sandboxDialer(tablet *topodatapb.Tablet, timeout time.Duration) (queryservice.QueryService, error) {
 	sand := getSandbox(tablet.Keyspace)
 	sand.sandmu.Lock()
 	defer sand.sandmu.Unlock()
 	sand.DialCounter++
 	if sand.DialMustFail > 0 {
 		sand.DialMustFail--
-		return nil, tabletconn.OperationalError(fmt.Sprintf("conn error"))
+		return nil, vterrors.New(vtrpcpb.Code_UNAVAILABLE, "conn error")
 	}
 	if sand.DialMustTimeout > 0 {
 		time.Sleep(timeout)
 		sand.DialMustTimeout--
-		return nil, tabletconn.OperationalError(fmt.Sprintf("conn unreachable"))
+		return nil, vterrors.New(vtrpcpb.Code_UNAVAILABLE, "conn unreachable")
 	}
 	sbc := sandboxconn.NewSandboxConn(tablet)
 	return sbc, nil

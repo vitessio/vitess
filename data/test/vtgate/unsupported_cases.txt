@@ -1,30 +1,35 @@
 # Unions
 "select * from user union select * from user_extra"
-"unsupported construct"
+"unsupported: scatter subquery"
 
 # SET
 "set a=1"
-"unsupported construct"
+"unsupported construct: set"
 
 # DDL
 "create table a(id int)"
-"unsupported construct"
+"unsupported construct: ddl"
+
+"create table a.b(id int)"
+"unsupported construct: ddl"
+
+"alter table a ADD id int"
+"unsupported construct: ddl"
+
+"alter table a.b ADD id int"
+"unsupported construct: ddl"
 
 # DBA statements
 "explain select * from user"
-"unsupported construct"
-
-# ',' operator for joins
-"select * from user, user_extra"
-"unsupported: ',' join operator"
+"unsupported construct: other"
 
 # union operations in subqueries (FROM)
-"select * from (select * from user union select * from user_extra) as t"
-"unsupported: union operator in subqueries"
+"select * from (select * from user union all select * from user_extra) as t"
+"unsupported: scatter subquery"
 
 # union operations in subqueries (expressions)
 "select * from user where id in (select * from user union select * from user_extra)"
-"unsupported: union operator in subqueries"
+"unsupported: scatter subquery"
 
 # subquery with join primitive (FROM)
 "select * from (select user.id from user join user_extra) as t"
@@ -35,7 +40,7 @@
 "unsupported: complex join in subqueries"
 
 # subquery keyspace different from outer query
-"select * from user where id in (select m from main1)"
+"select * from user where id in (select m from unsharded)"
 "unsupported: subquery keyspace different from outer query"
 
 # scatter subquery
@@ -80,7 +85,7 @@
 
 # left join where clauses
 "select user.id from user left join user_extra on user.col = user_extra.col where user_extra.col = 5"
-"unsupported: complex left join and where claused"
+"unsupported: complex left join and where clause"
 
 # * expresson not allowed for complex joins
 "select * from user join user_extra"
@@ -98,9 +103,9 @@
 "select user.id from user join user_extra group by id"
 "unsupported: complex join and group by"
 
-# Group by references outer query
-"select aa, id from user where id = 5 having id in (select u.id from user u join user_extra e on u.id = e.user_id where u.id = 5 group by aa)"
-"unsupported: subquery references outer query in group by"
+# group by and ',' joins
+"select user.id from user, user_extra group by id"
+"unsupported: complex join and group by"
 
 # Group by and scatter
 "select col from user group by col"
@@ -110,13 +115,9 @@
 "select id from user group by (select id from user_extra)"
 "unsupported: subqueries in group by expression"
 
-# Order by references outer query
-"select aa, id from user where id = 5 having id in (select u.id from user u join user_extra e on u.id = e.user_id where u.id = 5 order by aa)"
-"unsupported: subquery references outer query in order by"
-
 # Order by uses complex expression
 "select id from user order by id+1"
-"unsupported: complex expression in order by"
+"unsupported: scatter and order by"
 
 # Order by for join, but sequce is too complex
 "select user.col1 as a, user.col2, music.col3 from user join music on user.id = music.id where user.id = 1 order by 1 asc, 3 desc, 2 asc"
@@ -130,6 +131,14 @@
 "select user.col1 as a, user_extra.col2 as b from user left join user_extra on user_extra.user_id = 5 where user.id = 5 order by 1, 2"
 "unsupported: complex left join and order by"
 
+# Order by column number with collate
+"select user.col1 as a from user order by 1 collate utf8_general_ci"
+"unsupported: complex order by"
+
+#Order by for join, but order by is complex
+"select user.col1 as a, user_extra.col2 as b from user join user_extra on user_extra.user_id = 5 where user.id = 5 order by a+b"
+"unsupported: complex join and complex order by"
+
 # limit for joins
 "select user.col from user join user_extra limit 1"
 "unsupported: limits with complex joins"
@@ -139,11 +148,11 @@
 "unsupported: limits with scatter"
 
 # subqueries in update
-"update user set col = (select id from main1)"
+"update user set col = (select id from unsharded)"
 "unsupported: subqueries in DML"
 
 # subqueries in delete
-"delete from user where col = (select id from main1)"
+"delete from user where col = (select id from unsharded)"
 "unsupported: subqueries in DML"
 
 # update with no where clause
@@ -152,6 +161,14 @@
 
 # delete from with no where clause
 "delete from user"
+"unsupported: multi-shard where clause in DML"
+
+# update with non-comparison expr
+"update user set val = 1 where id between 1 and 2"
+"unsupported: multi-shard where clause in DML"
+
+# delete with non-comparison expr
+"delete from user where id between 1 and 2"
 "unsupported: multi-shard where clause in DML"
 
 # update with primary id through IN clause
@@ -190,17 +207,49 @@
 "update music set id = 1 where id = 1"
 "unsupported: DML cannot change vindex column"
 
-# insert from select
+# unsharded insert from union
+"insert into unsharded select 1 from dual union select 1 from dual"
+"unsupported: union in insert"
+
+# unsharded insert with complex select
+"insert into unsharded select col from user limit 1"
+"unsupported: limits with scatter"
+
+# unsharded insert with complex join"
+"insert into unsharded select u.col from user u join user u1"
+"unsupported: complex join in insert"
+
+# unsharded insert with mismatched keyspaces"
+"insert into unsharded select col from user where id=1"
+"unsupported: cross-keyspace select in insert"
+
+# unsharded insert, unqualified names and auto-inc combined
+"insert into unsharded_auto select col from unsharded"
+"unsupported: auto-inc and select in insert"
+
+# unsharded inssert subquery in insert value
+"insert into unsharded values((select 1 from dual), 1)"
+"unsupported: subquery in insert values"
+
+# unsharded insert, no col list with auto-inc
+"insert into unsharded_auto values(1,1)"
+"column list required for tables with auto-inc columns"
+
+# unsharded insert, col list does not match values
+"insert into unsharded_auto(id, val) values(1)"
+"column list doesn't match values"
+
+# sharded insert from select
 "insert into user(id) select 1 from dual"
 "unsupported: insert into select"
 
-# insert with subquery as value
-"insert into user(id) values (select 1 from dual)"
-"unsupported: subqueries in insert"
+# sharded insert subquery in insert value
+"insert into user(id, val) values((select 1), 1)"
+"unsupported: subquery in insert values"
 
 # nextval not supported yet
 "select next value from user"
-"unsupported: NEXT VALUE construct"
+"unsupported: NEXT VALUES construct"
 
 # complex expression in parenthesis with limit not supported yet
 "select * from user where (id = 4 AND name ='abc') limit 5"
@@ -209,3 +258,29 @@
 # complex expression in parenthesis with order by not supported yet
 "select * from user where (id = 4 AND name ='abc') order by id"
 "unsupported: scatter and order by"
+
+# multi-shard union
+"(select id from user union select id from music) union select 1 from dual"
+"unsupported: scatter subquery"
+
+# multi-shard union
+"select 1 from music union (select id from user union all select name from unsharded)"
+"unsupported: subquery keyspace different from outer query"
+
+# multi-shard union
+"select 1 from music union (select id from user union select name from unsharded)"
+"unsupported: subquery keyspace different from outer query"
+
+# multi-shard union
+"select id from user union all select id from music"
+"unsupported: scatter subquery"
+
+# Union all
+"select col1, col2 from user union all select col1, col2 from user_extra"
+"unsupported: scatter subquery"
+
+"(select user.id, user.name from user join user_extra where user_extra.extra = 'asdf') union select 'b','c' from user"
+"unsupported construct: SELECT of UNION is non-trivial"
+
+"select 'b','c' from user union (select user.id, user.name from user join user_extra where user_extra.extra = 'asdf')"
+"unsupported construct: SELECT of UNION is non-trivial"

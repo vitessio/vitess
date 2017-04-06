@@ -49,7 +49,7 @@ func factory(addr string) (throttlerclient.Client, error) {
 func (c *client) MaxRates(ctx context.Context) (map[string]int64, error) {
 	response, err := c.gRPCClient.MaxRates(ctx, &throttlerdata.MaxRatesRequest{})
 	if err != nil {
-		return nil, vterrors.FromGRPCError(err)
+		return nil, vterrors.FromGRPC(err)
 	}
 	return response.Rates, nil
 }
@@ -63,7 +63,7 @@ func (c *client) SetMaxRate(ctx context.Context, rate int64) ([]string, error) {
 
 	response, err := c.gRPCClient.SetMaxRate(ctx, request)
 	if err != nil {
-		return nil, vterrors.FromGRPCError(err)
+		return nil, vterrors.FromGRPC(err)
 	}
 	return response.Names, nil
 }
@@ -74,7 +74,7 @@ func (c *client) GetConfiguration(ctx context.Context, throttlerName string) (ma
 		ThrottlerName: throttlerName,
 	})
 	if err != nil {
-		return nil, vterrors.FromGRPCError(err)
+		return nil, vterrors.FromGRPC(err)
 	}
 	return response.Configurations, nil
 }
@@ -87,7 +87,7 @@ func (c *client) UpdateConfiguration(ctx context.Context, throttlerName string, 
 		CopyZeroValues: copyZeroValues,
 	})
 	if err != nil {
-		return nil, vterrors.FromGRPCError(err)
+		return nil, vterrors.FromGRPC(err)
 	}
 	return response.Names, nil
 }
@@ -98,7 +98,7 @@ func (c *client) ResetConfiguration(ctx context.Context, throttlerName string) (
 		ThrottlerName: throttlerName,
 	})
 	if err != nil {
-		return nil, vterrors.FromGRPCError(err)
+		return nil, vterrors.FromGRPC(err)
 	}
 	return response.Names, nil
 }

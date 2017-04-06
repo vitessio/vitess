@@ -134,6 +134,13 @@ func TestBuildConverted(t *testing.T) {
 		typ: Int64,
 		val: testVal(Float32, "123"),
 		out: testVal(Float32, "123"),
+	}, {
+		typ: Int64,
+		val: &querypb.BindVariable{
+			Type:  querypb.Type_VARCHAR,
+			Value: []byte("123"),
+		},
+		out: testVal(Int64, "123"),
 	}}
 	for _, tcase := range testcases {
 		v, err := BuildConverted(tcase.typ, tcase.val)
@@ -485,6 +492,17 @@ func TestToNative(t *testing.T) {
 		if !reflect.DeepEqual(v, tcase.out) {
 			t.Errorf("%v.ToNative = %#v, want %#v", makePretty(tcase.in), v, tcase.out)
 		}
+	}
+}
+
+func TestToProtoValue(t *testing.T) {
+	got := testVal(Int64, "1").ToProtoValue()
+	want := &querypb.Value{
+		Type:  Int64,
+		Value: []byte("1"),
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("bindvar: %v, want %v", got, want)
 	}
 }
 

@@ -13,9 +13,9 @@ import (
 
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/dbconnpool"
-	"github.com/youtube/vitess/go/vt/tabletmanager/faketmclient"
-	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/vttablet/faketmclient"
+	"github.com/youtube/vitess/go/vt/vttablet/tmclient"
 	"github.com/youtube/vitess/go/vt/wrangler"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
@@ -25,7 +25,12 @@ import (
 // This file contains common test helper.
 
 func runCommand(t *testing.T, wi *Instance, wr *wrangler.Wrangler, args []string) error {
-	worker, done, err := wi.RunCommand(context.Background(), args, wr, false /* runFromCli */)
+	// Limit the scope of the context e.g. to implicitly terminate stray Go
+	// routines.
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	worker, done, err := wi.RunCommand(ctx, args, wr, false /* runFromCli */)
 	if err != nil {
 		return fmt.Errorf("Worker creation failed: %v", err)
 	}
@@ -46,13 +51,13 @@ func expectBlpCheckpointCreationQueries(f *FakePoolConnection) {
 	f.addExpectedQuery("CREATE DATABASE IF NOT EXISTS _vt", nil)
 	f.addExpectedQuery("CREATE TABLE IF NOT EXISTS _vt.blp_checkpoint (\n"+
 		"  source_shard_uid INT(10) UNSIGNED NOT NULL,\n"+
-		"  pos VARCHAR(250) DEFAULT NULL,\n"+
+		"  pos VARBINARY(64000) DEFAULT NULL,\n"+
 		"  max_tps BIGINT(20) NOT NULL,\n"+
 		"  max_replication_lag BIGINT(20) NOT NULL,\n"+
 		"  time_updated BIGINT(20) UNSIGNED NOT NULL,\n"+
 		"  transaction_timestamp BIGINT(20) UNSIGNED NOT NULL,\n"+
-		"  flags VARCHAR(250) DEFAULT NULL,\n"+
-		"  PRIMARY KEY (source_shard_uid)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8", nil)
+		"  flags VARBINARY(250) DEFAULT NULL,\n"+
+		"  PRIMARY KEY (source_shard_uid)\n) ENGINE=InnoDB", nil)
 	f.addExpectedQuery("INSERT INTO _vt.blp_checkpoint (source_shard_uid, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, flags) VALUES (0, 'MariaDB/12-34-5678', *", nil)
 }
 

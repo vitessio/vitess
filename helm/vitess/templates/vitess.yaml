@@ -1,0 +1,60 @@
+# Create global resources.
+---
+# Headless service for vttablets.
+# This is only required when using StatefulSet, but it doesn't hurt otherwise.
+apiVersion: v1
+kind: Service
+metadata:
+  name: vttablet
+  labels:
+    app: vitess
+  annotations:
+    service.alpha.kubernetes.io/tolerate-unready-endpoints: "true"
+spec:
+  ports:
+    - port: 15002
+      name: web
+    - port: 16002
+      name: grpc
+  clusterIP: None
+  selector:
+    app: vitess
+    component: vttablet
+
+# Create requested resources in each cell.
+{{ range $cell := $.Values.topology.cells }}
+---
+{{ with $cell.etcd }}{{ include "etcd" (tuple $ $cell .) }}{{ end }}
+---
+{{ with $cell.vtctld }}{{ include "vtctld" (tuple $ $cell .) }}{{ end }}
+---
+{{ with $cell.vtgate }}{{ include "vtgate" (tuple $ $cell .) }}{{ end }}
+---
+{{ with $cell.orchestrator }}{{ include "orchestrator" (tuple $ $cell .) }}{{ end }}
+
+# Tablets for keyspaces
+{{ range $keyspace := $cell.keyspaces }}
+{{ range $shard := $keyspace.shards }}
+{{ range $tablet := $shard.tablets }}
+{{ with $tablet.vttablet }}
+{{- $0 := $.Values.vttablet -}}
+
+{{- $controllerType := .controllerType | default $0.controllerType -}}
+{{ if eq $controllerType "StatefulSet" }}
+---
+{{ include "vttablet-stateful-set" (tuple $ $cell $keyspace $shard $tablet) }}
+{{ else if eq $controllerType "None" }}
+{{ range $index := until (atoi (print $tablet.vttablet.replicas)) }}
+{{- $uid := add $tablet.uidBase $index -}}
+---
+{{ include "vttablet-pod" (tuple $ $cell $keyspace $shard $tablet $uid) }}
+{{ end }} # range $index
+{{ end }} # if eq $controllerType
+
+{{ end }} # with $tablet.vttablet
+{{ end }} # range $tablet
+{{ end }} # range $shard
+{{ end }} # range $keyspace
+
+{{ end }} # range $cell
+

@@ -1,0 +1,180 @@
+# This file contains default values for vitess.
+#
+# You can override these defaults when installing:
+#   helm install -f site-values.yaml .
+#
+# The contents of site-values.yaml will be merged into this default config.
+# It's not necessary to copy the defaults into site-values.yaml.
+#
+# For command-line flag maps like backupFlags or extraFlags,
+# use 'flag_name: true|false' to enable or disable a boolean flag.
+
+# The main topology map declares what resources should be created.
+# Values for each component (etcd, vtctld, ...) that are not specified here
+# will be taken from defaults defined below.
+topology:
+  cells:
+    - name: "global"
+      etcd:
+        replicas: 3
+      orchestrator:
+        # NOTE: Our config currently only supports 1 orchestrator replica.
+        replicas: 1
+    - name: "test"
+      etcd:
+        replicas: 3
+      vtctld:
+        replicas: 1
+      vtgate:
+        replicas: 3
+      keyspaces:
+        - name: "test_keyspace"
+          shards:
+            - name: "0"
+              tablets:
+                - type: "replica"
+                  uidBase: 100
+                  vttablet:
+                    replicas: 3
+                - type: "rdonly"
+                  uidBase: 103
+                  vttablet:
+                    replicas: 2
+
+# Backup flags will be applied to components that need them.
+# These are defined globally since all components should agree.
+backupFlags:
+  backup_storage_implementation: "gcs"
+  gcs_backup_storage_bucket: ""
+
+# Default values for etcd resources defined in 'topology'.
+etcd:
+  image: "vitess/etcd:v2.0.13-lite"
+  resources:
+    limits:
+      memory: "128Mi"
+      cpu: "100m"
+
+# Default values for orchestrator resources defined in 'topology'.
+orchestrator:
+  image: "vitess/orchestrator:latest"
+  resources:
+    limits:
+      memory: "512Mi"
+      cpu: "100m"
+  mysqlResources:
+    limits:
+      memory: "1Gi"
+      cpu: "100m"
+
+  # Currently supported data volume types:
+  #
+  # EmptyDir
+  #   Use local storage for Orchestrator data. If the Orchestrator pod gets
+  #   deleted (or its Node dies), it will start from scratch and repopulate
+  #   as tablets periodically self-register.
+  #
+  # PersistentVolume
+  #   Use PersistentVolume for Orchestrator data. These volumes survive pod
+  #   deletion and recreation, so most pod rescheduling events don't cause an
+  #   Orchestrator reset. The underlying storage used depends on your Kubernetes
+  #   cluster and your "storage-class" setting, but usually it is some kind of
+  #   network volume like EBS or PD.
+  dataVolumeType: EmptyDir
+
+  # The following are only used if dataVolumeType is "PersistentVolume".
+  dataVolumeClaimAnnotations:
+    volume.alpha.kubernetes.io/storage-class: anything
+  dataVolumeClaimSpec:
+    accessModes: ["ReadWriteOnce"]
+    resources:
+      requests:
+        storage: "1Gi"
+
+# Default values for vtctld resources defined in 'topology'.
+vtctld:
+  serviceType: "ClusterIP"
+  image: "vitess/lite:latest"
+  resources:
+    limits:
+      memory: "128Mi"
+      cpu: "100m"
+
+# Default values for vtgate resources defined in 'topology'.
+vtgate:
+  serviceType: "ClusterIP"
+  image: "vitess/lite:latest"
+  resources:
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
+
+# Default values for vttablet resources defined in 'topology'.
+vttablet:
+  image: "vitess/lite:latest"
+  resources:
+    limits:
+      memory: "1Gi"
+      cpu: "500m"
+  mysqlResources:
+    limits:
+      memory: "1Gi"
+      cpu: "500m"
+  extraMyCnf: "/vt/config/mycnf/master_mysql56.cnf"
+
+  # Currently supported pod controller types:
+  #
+  # StatefulSet
+  #   Use StatefulSet to manage vttablet pods.
+  #
+  #   This is the recommended way to run vttablets, but some Kubernetes
+  #   clusters may not have StatefulSet enabled yet during the feature's
+  #   beta phase.
+  #
+  #   NOTE: The "uidBase" setting in the topology map is ignored when using
+  #     StatefulSet. Instead, the tablet UID is generated based on a hash
+  #     of the cell name and stateful pod name. This takes advantage of the
+  #     unique, stable identity provided by StatefulSet to ensure that
+  #     tablet UIDs have the same properties.
+  #
+  # None
+  #   Create naked vttablet pods without any controller.
+  #
+  #   NOTE: This is a temporary hack for when StatefulSet is unavailable.
+  controllerType: None
+
+  # Currently supported data volume types:
+  #
+  # EmptyDir
+  #   Tablets use local storage for MySQL data. When a pod is recreated after
+  #   being deleted (or if its Node died), it must first restore from backup.
+  #
+  # PersistentVolume
+  #   NOTE: This only works if controllerType is "StatefulSet".
+  #
+  #   Tablets use PersistentVolume for MySQL data. These volumes survive pod
+  #   deletion and recreation, so most pod rescheduling events don't trigger
+  #   a fresh restore. The underlying storage used depends on your Kubernetes
+  #   cluster and your "storage-class" setting, but usually it is some kind of
+  #   network volume like EBS or PD.
+  dataVolumeType: EmptyDir
+
+  # The following are only used if dataVolumeType is "PersistentVolume".
+  dataVolumeClaimAnnotations:
+    volume.alpha.kubernetes.io/storage-class: anything
+  dataVolumeClaimSpec:
+    accessModes: ["ReadWriteOnce"]
+    resources:
+      requests:
+        storage: "10Gi"
+
+# Uncomment one of the following lines to configure the location
+# of the root certificates file on your host OS.
+# We need this so we can import it into the container OS.
+#
+# If your host OS is Fedora/RHEL:
+#certsPath: "/etc/pki/tls/certs/ca-bundle.crt"
+#
+# If your host OS is Debian/Ubuntu/Gentoo:
+certsPath: "/etc/ssl/certs/ca-certificates.crt"
+

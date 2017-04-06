@@ -10,28 +10,24 @@
 package main
 
 import (
-	"encoding/json"
 	"flag"
-	"os"
-	"path"
 	"strings"
 	"time"
 
-	"golang.org/x/net/context"
-
 	log "github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
+	"golang.org/x/net/context"
+
 	"github.com/youtube/vitess/go/exit"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/discovery"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/servenv"
-	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topo/memorytopo"
 	"github.com/youtube/vitess/go/vt/vtctld"
 	"github.com/youtube/vitess/go/vt/vtgate"
-	"github.com/youtube/vitess/go/vt/zktopo"
-	"github.com/youtube/vitess/go/zk/fakezk"
+	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	vttestpb "github.com/youtube/vitess/go/vt/proto/vttest"
@@ -53,9 +49,9 @@ func main() {
 	defer exit.Recover()
 
 	// flag parsing
-	flags := dbconfigs.AppConfig | dbconfigs.AllPrivsConfig | dbconfigs.DbaConfig |
+	dbconfigFlags := dbconfigs.AppConfig | dbconfigs.AllPrivsConfig | dbconfigs.DbaConfig |
 		dbconfigs.FilteredConfig | dbconfigs.ReplConfig
-	dbconfigs.RegisterFlags(flags)
+	dbconfigs.RegisterFlags(dbconfigFlags)
 	mysqlctl.RegisterFlags()
 	flag.Parse()
 	if len(flag.Args()) > 0 {
@@ -84,35 +80,10 @@ func main() {
 	flag.Set("enable_realtime_stats", "true")
 	flag.Set("log_dir", "$VTDATAROOT/tmp")
 
-	// create zk client config file
-	config := path.Join(os.Getenv("VTDATAROOT"), "vt_0000000001/tmp/test-zk-client-conf.json")
-	cellmap := make(map[string]string)
-	for _, cell := range tpb.Cells {
-		cellmap[cell] = "localhost"
-	}
-	b, err := json.Marshal(cellmap)
-	if err != nil {
-		log.Errorf("failed to marshal json: %v", err)
-	}
-
-	f, err := os.Create(config)
-	if err != nil {
-		log.Errorf("failed to create zk config file: %v", err)
-	}
-	defer f.Close()
-	_, err = f.WriteString(string(b[:]))
-	if err != nil {
-		log.Errorf("failed to write to zk config file: %v", err)
-	}
-	os.Setenv("ZK_CLIENT_CONFIG", config)
-
-	// register topo server
-	zkconn := fakezk.NewConn()
-	topo.RegisterServer("fakezk", zktopo.NewServer(zkconn))
-	ts = topo.GetServerByName("fakezk")
-
+	// Create topo server. We use a 'memorytopo' implementation.
+	ts = memorytopo.NewServer(tpb.Cells...)
 	servenv.Init()
-	tabletserver.Init()
+	tabletenv.Init()
 
 	// database configs
 	mycnf, err := mysqlctl.NewMycnfFromFlags(0)
@@ -120,15 +91,15 @@ func main() {
 		log.Errorf("mycnf read failed: %v", err)
 		exit.Return(1)
 	}
-	dbcfgs, err := dbconfigs.Init(mycnf.SocketFile, flags)
+	dbcfgs, err := dbconfigs.Init(mycnf.SocketFile, dbconfigFlags)
 	if err != nil {
 		log.Warning(err)
 	}
-	mysqld := mysqlctl.NewMysqld(mycnf, &dbcfgs.Dba, &dbcfgs.AllPrivs, &dbcfgs.App, &dbcfgs.Repl, true /* enablePublishStats */)
+	mysqld := mysqlctl.NewMysqld(mycnf, dbcfgs, dbconfigFlags)
 	servenv.OnClose(mysqld.Close)
 
 	// tablets configuration and init
-	if err := initTabletMap(ts, tpb, mysqld, dbcfgs, *schemaDir, mycnf); err != nil {
+	if err := initTabletMap(ts, tpb, mysqld, *dbcfgs, *schemaDir, mycnf); err != nil {
 		log.Errorf("initTabletMapProto failed: %v", err)
 		exit.Return(1)
 	}
@@ -145,7 +116,7 @@ func main() {
 
 	// vtctld configuration and init
 	vtctld.InitVtctld(ts)
-	vtctld.HandleExplorer("zk", zktopo.NewZkExplorer(zkconn))
+	vtctld.HandleExplorer("memorytopo", vtctld.NewBackendExplorer(ts.Impl))
 
 	servenv.OnTerm(func() {
 		// FIXME(alainjobart): stop vtgate
@@ -153,7 +124,7 @@ func main() {
 	servenv.OnClose(func() {
 		// We will still use the topo server during lameduck period
 		// to update our state, so closing it in OnClose()
-		topo.CloseServers()
+		ts.Close()
 	})
 	servenv.RunDefault()
 }

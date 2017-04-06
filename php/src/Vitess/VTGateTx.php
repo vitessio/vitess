@@ -32,7 +32,7 @@ class VTGateTx
         $request->setSession($this->session);
         $request->setQuery(ProtoUtils::BoundQuery($query, $bind_vars));
         $request->setTabletType($tablet_type);
-        $request->setKeyspace($this->keyspace);
+        $request->setKeyspaceShard($this->keyspace);
         if ($ctx->getCallerId()) {
             $request->setCallerId($ctx->getCallerId());
         }

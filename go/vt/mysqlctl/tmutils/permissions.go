@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"hash/crc64"
 	"sort"
+	"strings"
 
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/concurrency"
@@ -49,13 +50,16 @@ func NewUserPermission(fields []*querypb.Field, values []sqltypes.Value) *tablet
 		Privileges: make(map[string]string),
 	}
 	for i, field := range fields {
-		switch field.Name {
-		case "Host":
+		switch strings.ToLower(field.Name) {
+		case "host":
 			up.Host = values[i].String()
-		case "User":
+		case "user":
 			up.User = values[i].String()
-		case "Password":
+		case "password":
 			up.PasswordChecksum = crc64.Checksum(([]byte)(values[i].String()), hashTable)
+		case "password_last_changed":
+			// we skip this one, as the value may be
+			// different on master and slaves.
 		default:
 			up.Privileges[field.Name] = values[i].String()
 		}

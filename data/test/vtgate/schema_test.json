@@ -76,12 +76,26 @@
               "name": "music_user_map"
             }
           ]
+        },
+        "weird`name": {
+          "column_vindexes": [
+            {
+              "column": "a`b*c",
+              "name": "user_index"
+            }
+          ]
         }
       }
     },
     "main": {
       "tables": {
-        "main1": {},
+        "unsharded": {},
+        "unsharded_auto": {
+          "auto_increment": {
+            "column": "id",
+            "sequence": "seq"
+          }
+        },
         "seq": {
           "type": "sequence"
         }

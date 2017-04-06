@@ -3,7 +3,6 @@
 // license that can be found in the LICENSE file.
 
 #include "vtmysql.h"
-#include "vtmysql_internals.h"
 
 // All functions must call mysql_thread_init before calling mysql. This is
 // because the go runtime controls thread creation, and we don't control
@@ -145,39 +144,4 @@ const char *vt_error(VT_CONN *conn) {
 const char *vt_sqlstate(VT_CONN *conn) {
   mysql_thread_init();
   return mysql_sqlstate(conn->mysql);
-}
-
-my_bool vt_simple_command(
-    VT_CONN *conn,
-    enum enum_server_command command,
-    const unsigned char *arg,
-    unsigned long arg_length,
-    my_bool skip_check)
-{
-  mysql_thread_init();
-  return simple_command(conn->mysql, command, arg, arg_length, skip_check);
-}
-
-unsigned long vt_cli_safe_read(VT_CONN *conn) {
-  unsigned long len;
-
-  mysql_thread_init();
-
-#if MYSQL_VERSION_ID >= 50700 && MYSQL_VERSION_ID < 100000
-  // MySQL 5.7
-  len = cli_safe_read(conn->mysql, NULL);
-#else
-  // MySQL 5.6 and MariaDB
-  len = cli_safe_read(conn->mysql);
-#endif // MYSQL_VERSION_ID >= 50700 && MYSQL_VERSION_ID < 100000
-
-  return len == packet_error ? 0 : len;
-}
-
-void vt_shutdown(VT_CONN *conn) {
-  mysql_thread_init();
-
-  // Shut down the underlying socket of a MYSQL connection object.
-  if (conn->mysql && conn->mysql->net.vio)
-    vio_socket_shutdown(conn->mysql->net.vio, 2 /* SHUT_RDWR */);
 }

@@ -24,7 +24,7 @@
             <span class="vt-workflow-action">
               <button md-raised-button *ngIf="workflow.isNotStarted()" (click)="startClicked($event); false">Start</button>
               <button md-raised-button *ngIf="workflow.isRunning()" (click)="stopClicked($event); false">Stop</button>
-              <button md-raised-button *ngIf="workflow.isDone()" (click)="deleteClicked($event); false">Delete</button>
+              <button md-raised-button *ngIf="!workflow.isRunning()" (click)="deleteClicked($event); false">Delete</button>
             </span>
           </div>
         </header>
@@ -53,13 +53,8 @@
             </span>
           </div>
         </div>
-        <vt-workflow *ngFor="let child of workflow.children; let i = index" [workflow]="workflow.children[i]" [workflowService]="workflowService"></vt-workflow>
+        <vt-workflow *ngFor="let child of workflow.children; let i = index" [workflow]="workflow.children[i]" [workflowListComponent]="workflowListComponent"></vt-workflow>
       </p-accordionTab>
     </span>
   </p-accordion>
-  <p-dialog [(header)]="dialogSettings.dialogTitle" [(visible)]="dialogSettings.open" draggable="" resizable="" width="800">
-    <vt-dialog [(dialogContent)]="dialogContent" [(dialogSettings)]="dialogSettings"></vt-dialog>
-  </p-dialog>
-  <div *ngIf="dialogSettings.open" class="vt-popUpContainer" >
-  </div>
 </div>

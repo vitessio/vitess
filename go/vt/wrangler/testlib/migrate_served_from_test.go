@@ -8,32 +8,31 @@ import (
 	"reflect"
 	"testing"
 
+	"golang.org/x/net/context"
+
+	"github.com/youtube/vitess/go/mysqlconn/replication"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/logutil"
-	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
-	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
-	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
+	"github.com/youtube/vitess/go/vt/topo/memorytopo"
+	"github.com/youtube/vitess/go/vt/vttablet/tmclient"
 	"github.com/youtube/vitess/go/vt/wrangler"
-	"github.com/youtube/vitess/go/vt/zktopo/zktestserver"
-	"golang.org/x/net/context"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 func TestMigrateServedFrom(t *testing.T) {
 	ctx := context.Background()
-	db := fakesqldb.Register()
-	ts := zktestserver.New(t, []string{"cell1", "cell2"})
+	ts := memorytopo.NewServer("cell1", "cell2")
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 	vp := NewVtctlPipe(t, ts)
 	defer vp.Close()
 
 	// create the source keyspace tablets
-	sourceMaster := NewFakeTablet(t, wr, "cell1", 10, topodatapb.TabletType_MASTER, db,
+	sourceMaster := NewFakeTablet(t, wr, "cell1", 10, topodatapb.TabletType_MASTER, nil,
 		TabletKeyspaceShard(t, "source", "0"))
-	sourceReplica := NewFakeTablet(t, wr, "cell1", 11, topodatapb.TabletType_REPLICA, db,
+	sourceReplica := NewFakeTablet(t, wr, "cell1", 11, topodatapb.TabletType_REPLICA, nil,
 		TabletKeyspaceShard(t, "source", "0"))
-	sourceRdonly := NewFakeTablet(t, wr, "cell1", 12, topodatapb.TabletType_RDONLY, db,
+	sourceRdonly := NewFakeTablet(t, wr, "cell1", 12, topodatapb.TabletType_RDONLY, nil,
 		TabletKeyspaceShard(t, "source", "0"))
 
 	// create the destination keyspace, served form source
@@ -50,11 +49,11 @@ func TestMigrateServedFrom(t *testing.T) {
 	}
 
 	// create the destination keyspace tablets
-	destMaster := NewFakeTablet(t, wr, "cell1", 20, topodatapb.TabletType_MASTER, db,
+	destMaster := NewFakeTablet(t, wr, "cell1", 20, topodatapb.TabletType_MASTER, nil,
 		TabletKeyspaceShard(t, "dest", "0"))
-	destReplica := NewFakeTablet(t, wr, "cell1", 21, topodatapb.TabletType_REPLICA, db,
+	destReplica := NewFakeTablet(t, wr, "cell1", 21, topodatapb.TabletType_REPLICA, nil,
 		TabletKeyspaceShard(t, "dest", "0"))
-	destRdonly := NewFakeTablet(t, wr, "cell1", 22, topodatapb.TabletType_RDONLY, db,
+	destRdonly := NewFakeTablet(t, wr, "cell1", 22, topodatapb.TabletType_RDONLY, nil,
 		TabletKeyspaceShard(t, "dest", "0"))
 
 	// sourceRdonly will see the refresh

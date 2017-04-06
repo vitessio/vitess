@@ -12,6 +12,9 @@ namespace Vitess\Proto\Vtgate {
     /**  @var \Vitess\Proto\Vtgate\Session */
     public $session = null;
     
+    /**  @var boolean */
+    public $atomic = null;
+    
 
     /** @var \Closure[] */
     protected static $__extensions = array();
@@ -36,6 +39,14 @@ namespace Vitess\Proto\Vtgate {
       $f->type      = \DrSlump\Protobuf::TYPE_MESSAGE;
       $f->rule      = \DrSlump\Protobuf::RULE_OPTIONAL;
       $f->reference = '\Vitess\Proto\Vtgate\Session';
+      $descriptor->addField($f);
+
+      // OPTIONAL BOOL atomic = 3
+      $f = new \DrSlump\Protobuf\Field();
+      $f->number    = 3;
+      $f->name      = "atomic";
+      $f->type      = \DrSlump\Protobuf::TYPE_BOOL;
+      $f->rule      = \DrSlump\Protobuf::RULE_OPTIONAL;
       $descriptor->addField($f);
 
       foreach (self::$__extensions as $cb) {
@@ -117,6 +128,43 @@ namespace Vitess\Proto\Vtgate {
      */
     public function setSession(\Vitess\Proto\Vtgate\Session $value){
       return $this->_set(2, $value);
+    }
+    
+    /**
+     * Check if <atomic> has a value
+     *
+     * @return boolean
+     */
+    public function hasAtomic(){
+      return $this->_has(3);
+    }
+    
+    /**
+     * Clear <atomic> value
+     *
+     * @return \Vitess\Proto\Vtgate\CommitRequest
+     */
+    public function clearAtomic(){
+      return $this->_clear(3);
+    }
+    
+    /**
+     * Get <atomic> value
+     *
+     * @return boolean
+     */
+    public function getAtomic(){
+      return $this->_get(3);
+    }
+    
+    /**
+     * Set <atomic> value
+     *
+     * @param boolean $value
+     * @return \Vitess\Proto\Vtgate\CommitRequest
+     */
+    public function setAtomic( $value){
+      return $this->_set(3, $value);
     }
   }
 }

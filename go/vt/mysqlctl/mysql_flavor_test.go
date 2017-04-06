@@ -10,8 +10,8 @@ import (
 
 	"golang.org/x/net/context"
 
+	"github.com/youtube/vitess/go/mysqlconn/replication"
 	"github.com/youtube/vitess/go/sqldb"
-	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
 )
 
 type fakeMysqlFlavor string
@@ -33,8 +33,8 @@ func (fakeMysqlFlavor) WaitMasterPos(ctx context.Context, mysqld *Mysqld, target
 func (fakeMysqlFlavor) MasterPosition(mysqld *Mysqld) (replication.Position, error) {
 	return replication.Position{}, nil
 }
-func (fakeMysqlFlavor) SlaveStatus(mysqld *Mysqld) (replication.Status, error) {
-	return replication.Status{}, nil
+func (fakeMysqlFlavor) SlaveStatus(mysqld *Mysqld) (Status, error) {
+	return Status{}, nil
 }
 func (fakeMysqlFlavor) SetSlavePositionCommands(pos replication.Position) ([]string, error) {
 	return nil, nil

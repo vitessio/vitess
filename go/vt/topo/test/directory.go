@@ -16,11 +16,23 @@ func checkDirectory(t *testing.T, ts topo.Impl) {
 	ctx := context.Background()
 
 	// global cell
-	checkDirectoryInCell(t, ts, "global")
+	checkDirectoryInCell(t, ts, topo.GlobalCell)
 
 	// local cell
 	cell := getLocalCell(ctx, t, ts)
 	checkDirectoryInCell(t, ts, cell)
+}
+
+// entriesWithoutCells removes 'cells' from the global directory.
+// 'cells' may be present on some topo implementations but not in others.
+func entriesWithoutCells(entries []string) []string {
+	var result []string
+	for _, e := range entries {
+		if e != "cells" {
+			result = append(result, e)
+		}
+	}
+	return result
 }
 
 func checkListDir(ctx context.Context, t *testing.T, ts topo.Impl, cell string, dirPath string, expected []string) {
@@ -31,6 +43,11 @@ func checkListDir(ctx context.Context, t *testing.T, ts topo.Impl, cell string, 
 			t.Errorf("ListDir(%v) returned ErrNoNode but was expecting %v", dirPath, expected)
 		}
 	case nil:
+		// The 'cells' directory may be present in some implementations
+		// but not others. It will eventually be in all of them,
+		// as it is where CellInfo records are stored, but for now,
+		// 'zookeeper' doesn't have it.
+		entries = entriesWithoutCells(entries)
 		if !reflect.DeepEqual(entries, expected) {
 			t.Errorf("ListDir(%v) returned %v but was expecting %v", dirPath, entries, expected)
 		}

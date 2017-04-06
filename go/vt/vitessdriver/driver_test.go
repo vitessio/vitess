@@ -54,41 +54,37 @@ func TestOpen(t *testing.T) {
 		conn    *conn
 	}{
 		{
-			desc:    "Open() vtgate v3",
+			desc:    "Open()",
 			connStr: fmt.Sprintf(`{"address": "%s", "tablet_type": "replica", "timeout": %d}`, testAddress, int64(30*time.Second)),
 			conn: &conn{
 				Configuration: Configuration{
 					Protocol:   "grpc",
 					TabletType: "replica",
-					Streaming:  false,
 					Timeout:    30 * time.Second,
 				},
 				tabletTypeProto: topodatapb.TabletType_REPLICA,
 			},
 		},
 		{
-			desc:    "Open() vtgate v3 (defaults omitted)",
+			desc:    "Open() (defaults omitted)",
 			connStr: fmt.Sprintf(`{"address": "%s", "timeout": %d}`, testAddress, int64(30*time.Second)),
 			conn: &conn{
 				Configuration: Configuration{
 					Protocol:   "grpc",
 					TabletType: "master",
-					Streaming:  false,
 					Timeout:    30 * time.Second,
 				},
 				tabletTypeProto: topodatapb.TabletType_MASTER,
 			},
 		},
 		{
-			desc:    "Open() vtgate v1 (per-shard)",
-			connStr: fmt.Sprintf(`{"address": "%s", "keyspace": "ks1", "shard": "0", "tablet_type": "replica", "timeout": %d}`, testAddress, int64(30*time.Second)),
+			desc:    "Open() with keyspace",
+			connStr: fmt.Sprintf(`{"address": "%s", "keyspace": "ks", "shard": "0", "tablet_type": "replica", "timeout": %d}`, testAddress, int64(30*time.Second)),
 			conn: &conn{
 				Configuration: Configuration{
 					Protocol:   "grpc",
-					Keyspace:   "ks1",
-					Shard:      "0",
+					Keyspace:   "ks",
 					TabletType: "replica",
-					Streaming:  false,
 					Timeout:    30 * time.Second,
 				},
 				tabletTypeProto: topodatapb.TabletType_REPLICA,
@@ -129,14 +125,6 @@ func TestOpen_InvalidJson(t *testing.T) {
 	}
 }
 
-func TestOpen_ShardRequiresKeyspace(t *testing.T) {
-	_, err := drv{}.Open(`{"shard": "0"}`)
-	want := "the shard parameter requires a keyspace parameter. shard: 0"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("err: %v, want %s", err, want)
-	}
-}
-
 func TestOpen_ValidTabletTypeRequired(t *testing.T) {
 	_, err := drv{}.Open(`{"tablet_type": "foobar"}`)
 	want := "unknown TabletType foobar"
@@ -152,56 +140,51 @@ func TestExec(t *testing.T) {
 		requestName string
 	}{
 		{
-			desc: "vtgate v3",
+			desc: "vtgate",
 			config: Configuration{
-				Protocol:   "grpc",
-				Address:    testAddress,
 				TabletType: "rdonly",
 				Timeout:    30 * time.Second,
 			},
-			requestName: "request1",
+			requestName: "request",
 		},
 		{
-			desc: "vtgate v1",
+			desc: "vtgate with keyspace",
 			config: Configuration{
-				Protocol:   "grpc",
-				Address:    testAddress,
-				Keyspace:   "ks1",
-				Shard:      "0",
+				Keyspace:   "ks",
 				TabletType: "rdonly",
 				Timeout:    30 * time.Second,
 			},
-			requestName: "request1SpecificShard",
+			requestName: "requestKeyspace",
 		},
 	}
 
 	for _, tc := range testcases {
-		db, err := OpenWithConfiguration(tc.config)
+		db, err := Open(testAddress, tc.config.Keyspace, tc.config.TabletType, tc.config.Timeout)
 		if err != nil {
-			t.Fatalf("%v: %v", tc.desc, err)
+			t.Errorf("%v: %v", tc.desc, err)
 		}
 		defer db.Close()
 
 		s, err := db.Prepare(tc.requestName)
 		if err != nil {
-			t.Fatalf("%v: %v", tc.desc, err)
+			t.Errorf("%v: %v", tc.desc, err)
 		}
 		defer s.Close()
 
 		r, err := s.Exec(int64(0))
 		if err != nil {
-			t.Fatalf("%v: %v", tc.desc, err)
+			t.Errorf("%v: %v", tc.desc, err)
 		}
 		if v, _ := r.LastInsertId(); v != 72 {
-			t.Fatalf("%v: insert id: %d, want 72", tc.desc, v)
+			t.Errorf("%v: insert id: %d, want 72", tc.desc, v)
 		}
 		if v, _ := r.RowsAffected(); v != 123 {
-			t.Fatalf("%v: rows affected: %d, want 123", tc.desc, v)
+			t.Errorf("%v: rows affected: %d, want 123", tc.desc, v)
 		}
 
 		s2, err := db.Prepare("none")
 		if err != nil {
-			t.Fatalf("%v: %v", tc.desc, err)
+			t.Errorf("%v: %v", tc.desc, err)
 		}
 		defer s2.Close()
 
@@ -224,21 +207,19 @@ func TestConfigurationToJSON(t *testing.T) {
 			config: Configuration{
 				Protocol:   "some-invalid-protocol",
 				Keyspace:   "ks2",
-				Shard:      "-80",
 				TabletType: "replica",
 				Streaming:  true,
 				Timeout:    1 * time.Second,
 			},
-			json: `{"Protocol":"some-invalid-protocol","Address":"","Keyspace":"ks2","Shard":"-80","tablet_type":"replica","Streaming":true,"Timeout":1000000000}`,
+			json: `{"Protocol":"some-invalid-protocol","Address":"","Keyspace":"ks2","tablet_type":"replica","Streaming":true,"Timeout":1000000000}`,
 		},
 		{
 			desc: "default fields are empty",
 			config: Configuration{
 				Keyspace: "ks2",
-				Shard:    "-80",
 				Timeout:  1 * time.Second,
 			},
-			json: `{"Protocol":"grpc","Address":"","Keyspace":"ks2","Shard":"-80","tablet_type":"master","Streaming":false,"Timeout":1000000000}`,
+			json: `{"Protocol":"grpc","Address":"","Keyspace":"ks2","tablet_type":"master","Streaming":false,"Timeout":1000000000}`,
 		},
 	}
 
@@ -254,12 +235,12 @@ func TestConfigurationToJSON(t *testing.T) {
 }
 
 func TestExecStreamingNotAllowed(t *testing.T) {
-	db, err := OpenForStreaming(testAddress, "rdonly", 30*time.Second)
+	db, err := OpenForStreaming(testAddress, "", "rdonly", 30*time.Second)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	s, err := db.Prepare("request1")
+	s, err := db.Prepare("request")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -279,29 +260,28 @@ func TestQuery(t *testing.T) {
 		requestName string
 	}{
 		{
-			desc: "non-streaming, vtgate v3",
+			desc: "non-streaming, vtgate",
 			config: Configuration{
 				Protocol:   "grpc",
 				Address:    testAddress,
 				TabletType: "rdonly",
 				Timeout:    30 * time.Second,
 			},
-			requestName: "request1",
+			requestName: "request",
 		},
 		{
-			desc: "non-streaming, vtgate v1",
+			desc: "non-streaming, vtgate with keyspace",
 			config: Configuration{
 				Protocol:   "grpc",
 				Address:    testAddress,
-				Keyspace:   "ks1",
-				Shard:      "0",
+				Keyspace:   "ks",
 				TabletType: "rdonly",
 				Timeout:    30 * time.Second,
 			},
-			requestName: "request1SpecificShard",
+			requestName: "requestKeyspace",
 		},
 		{
-			desc: "streaming, vtgate v3",
+			desc: "streaming, vtgate",
 			config: Configuration{
 				Protocol:   "grpc",
 				Address:    testAddress,
@@ -309,50 +289,50 @@ func TestQuery(t *testing.T) {
 				Timeout:    30 * time.Second,
 				Streaming:  true,
 			},
-			requestName: "request1",
+			requestName: "request",
 		},
 		{
-			desc: "streaming, vtgate v1",
+			desc: "streaming, vtgate with keyspace",
 			config: Configuration{
 				Protocol:   "grpc",
 				Address:    testAddress,
-				Keyspace:   "ks1",
-				Shard:      "0",
+				Keyspace:   "ks",
 				TabletType: "rdonly",
 				Timeout:    30 * time.Second,
 				Streaming:  true,
 			},
-			requestName: "request1SpecificShard",
+			requestName: "requestKeyspace",
 		},
 	}
 
 	for _, tc := range testcases {
 		db, err := OpenWithConfiguration(tc.config)
 		if err != nil {
-			t.Fatalf("%v: %v", tc.desc, err)
+			t.Errorf("%v: %v", tc.desc, err)
 		}
 		defer db.Close()
 
 		s, err := db.Prepare(tc.requestName)
 		if err != nil {
-			t.Fatalf("%v: %v", tc.desc, err)
+			t.Errorf("%v: %v", tc.desc, err)
 		}
 		defer s.Close()
 
 		r, err := s.Query(int64(0))
 		if err != nil {
-			t.Fatalf("%v: %v", tc.desc, err)
+			t.Errorf("%v: %v", tc.desc, err)
 		}
+		defer r.Close()
 		cols, err := r.Columns()
 		if err != nil {
-			t.Fatalf("%v: %v", tc.desc, err)
+			t.Errorf("%v: %v", tc.desc, err)
 		}
 		wantCols := []string{
 			"field1",
 			"field2",
 		}
 		if !reflect.DeepEqual(cols, wantCols) {
-			t.Fatalf("%v: cols: %v, want %v", tc.desc, cols, wantCols)
+			t.Errorf("%v: cols: %v, want %v", tc.desc, cols, wantCols)
 		}
 		count := 0
 		wantValues := []struct {
@@ -364,13 +344,13 @@ func TestQuery(t *testing.T) {
 			var field2 string
 			err := r.Scan(&field1, &field2)
 			if err != nil {
-				t.Fatalf("%v: %v", tc.desc, err)
+				t.Errorf("%v: %v", tc.desc, err)
 			}
 			if want := wantValues[count].field1; field1 != want {
-				t.Fatalf("%v: wrong value for field1: got: %v want: %v", tc.desc, field1, want)
+				t.Errorf("%v: wrong value for field1: got: %v want: %v", tc.desc, field1, want)
 			}
 			if want := wantValues[count].field2; field2 != want {
-				t.Fatalf("%v: wrong value for field2: got: %v want: %v", tc.desc, field2, want)
+				t.Errorf("%v: wrong value for field2: got: %v want: %v", tc.desc, field2, want)
 			}
 			count++
 		}
@@ -380,21 +360,22 @@ func TestQuery(t *testing.T) {
 
 		s2, err := db.Prepare("none")
 		if err != nil {
-			t.Fatalf("%v: %v", tc.desc, err)
+			t.Errorf("%v: %v", tc.desc, err)
 		}
 		defer s2.Close()
 
 		rows, err := s2.Query(nil)
 		want := "no match for: none"
 		if tc.config.Streaming && err == nil {
+			defer rows.Close()
 			// gRPC requires to consume the stream first before the error becomes visible.
 			if rows.Next() {
-				t.Fatalf("%v: query should not have returned anything but did.", tc.desc)
+				t.Errorf("%v: query should not have returned anything but did.", tc.desc)
 			}
 			err = rows.Err()
 		}
 		if err == nil || !strings.Contains(err.Error(), want) {
-			t.Fatalf("%v: err: %v, does not contain %s", tc.desc, err, want)
+			t.Errorf("%v: err: %v, does not contain %s", tc.desc, err, want)
 		}
 	}
 }
@@ -406,7 +387,7 @@ func TestTx(t *testing.T) {
 		requestName string
 	}{
 		{
-			desc: "vtgate v3",
+			desc: "vtgate",
 			config: Configuration{
 				Protocol:   "grpc",
 				Address:    testAddress,
@@ -416,16 +397,15 @@ func TestTx(t *testing.T) {
 			requestName: "txRequest",
 		},
 		{
-			desc: "vtgate v1",
+			desc: "vtgate with keyspace",
 			config: Configuration{
 				Protocol:   "grpc",
 				Address:    testAddress,
-				Keyspace:   "ks1",
-				Shard:      "0",
+				Keyspace:   "ks",
 				TabletType: "master",
 				Timeout:    30 * time.Second,
 			},
-			requestName: "txRequestSpecificShard",
+			requestName: "txRequestKeyspace",
 		},
 	}
 
@@ -439,71 +419,71 @@ func TestTx(t *testing.T) {
 func testTxCommit(t *testing.T, c Configuration, desc, requestName string) {
 	db, err := OpenWithConfiguration(c)
 	if err != nil {
-		t.Fatalf("%v: %v", desc, err)
+		t.Errorf("%v: %v", desc, err)
 	}
 	defer db.Close()
 
 	tx, err := db.Begin()
 	if err != nil {
-		t.Fatalf("%v: %v", desc, err)
+		t.Errorf("%v: %v", desc, err)
 	}
 
 	s, err := tx.Prepare(requestName)
 	if err != nil {
-		t.Fatalf("%v: %v", desc, err)
+		t.Errorf("%v: %v", desc, err)
 	}
 
 	_, err = s.Exec(int64(0))
 	if err != nil {
-		t.Fatalf("%v: %v", desc, err)
+		t.Errorf("%v: %v", desc, err)
 	}
 	err = tx.Commit()
 	if err != nil {
-		t.Fatalf("%v: %v", desc, err)
+		t.Errorf("%v: %v", desc, err)
 	}
 	// Commit on committed transaction is caught by Golang sql package.
 	// We actually don't have to cover this in our code.
 	err = tx.Commit()
 	want := "sql: Transaction has already been committed or rolled back"
 	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Fatalf("%v: err: %v, does not contain %s", desc, err, want)
+		t.Errorf("%v: err: %v, does not contain %s", desc, err, want)
 	}
 }
 
 func testTxRollback(t *testing.T, c Configuration, desc, requestName string) {
 	db, err := OpenWithConfiguration(c)
 	if err != nil {
-		t.Fatalf("%v: %v", desc, err)
+		t.Errorf("%v: %v", desc, err)
 	}
 	defer db.Close()
 
 	tx, err := db.Begin()
 	if err != nil {
-		t.Fatalf("%v: %v", desc, err)
+		t.Errorf("%v: %v", desc, err)
 	}
 	s, err := tx.Prepare(requestName)
 	if err != nil {
-		t.Fatalf("%v: %v", desc, err)
+		t.Errorf("%v: %v", desc, err)
 	}
 	_, err = s.Query(int64(0))
 	if err != nil {
-		t.Fatalf("%v: %v", desc, err)
+		t.Errorf("%v: %v", desc, err)
 	}
 	err = tx.Rollback()
 	if err != nil {
-		t.Fatalf("%v: %v", desc, err)
+		t.Errorf("%v: %v", desc, err)
 	}
 	// Rollback on rolled back transaction is caught by Golang sql package.
 	// We actually don't have to cover this in our code.
 	err = tx.Rollback()
 	want := "sql: Transaction has already been committed or rolled back"
 	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Fatalf("%v: err: %v, does not contain %s", desc, err, want)
+		t.Errorf("%v: err: %v, does not contain %s", desc, err, want)
 	}
 }
 
 func TestTxExecStreamingNotAllowed(t *testing.T) {
-	db, err := OpenForStreaming(testAddress, "rdonly", 30*time.Second)
+	db, err := OpenForStreaming(testAddress, "", "rdonly", 30*time.Second)
 	if err != nil {
 		t.Fatal(err)
 	}

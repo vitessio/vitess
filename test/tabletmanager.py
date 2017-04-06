@@ -28,9 +28,10 @@ healthy_expr = re.compile(r'Current status: <span.+?>healthy')
 
 def setUpModule():
   try:
-    if environment.topo_server().flavor() == 'zookeeper':
-      # this is a one-off test to make sure our zookeeper implementation
-      # behaves with a server that is not DNS-resolveable
+    topo_flavor = environment.topo_server().flavor()
+    if topo_flavor == 'zookeeper' or topo_flavor == 'zk2':
+      # This is a one-off test to make sure our zookeeper implementations
+      # behave with a server that is not DNS-resolveable.
       environment.topo_server().setup(add_bad_host=True)
     else:
       environment.topo_server().setup()
@@ -106,7 +107,7 @@ class TestTabletManager(unittest.TestCase):
 
     # test exclude_field_names to vttablet works as expected.
     qr = tablet_62344.execute('select id, msg from vt_select_test',
-                              execute_options='exclude_field_names:true ')
+                              execute_options='included_fields:TYPE_ONLY ')
     self.assertEqual(len(qr['rows']), 4,
                      'expected 4 rows in vt_select_test: %s' % str(qr))
     self.assertNotIn('name', qr['fields'][0])
@@ -136,9 +137,6 @@ class TestTabletManager(unittest.TestCase):
 
     utils.run_vtctl(['SetReadWrite', tablet_62344.tablet_alias])
     utils.check_db_read_write(62344)
-
-    utils.run_vtctl(['DemoteMaster', tablet_62344.tablet_alias])
-    utils.wait_db_read_only(62344)
 
     utils.validate_topology()
     utils.run_vtctl(['ValidateKeyspace', 'test_keyspace'])
@@ -217,12 +215,7 @@ class TestTabletManager(unittest.TestCase):
                               params)
     self.assertEqual(hr['ExitStatus'], expected_status)
     if isinstance(expected_stdout, basestring):
-      if expected_stdout[-1:] == '%':
-        self.assertEqual(
-            hr['Stdout'][:len(expected_stdout)-1],
-            expected_stdout[:len(expected_stdout)-1])
-      else:
-        self.assertEqual(hr['Stdout'], expected_stdout)
+      self.assertEqual(hr['Stdout'], expected_stdout)
     else:
       found = False
       for exp in expected_stdout:
@@ -233,7 +226,12 @@ class TestTabletManager(unittest.TestCase):
         self.assertFail(
             'cannot find expected %s in %s' %
             (str(expected_stdout), hr['Stdout']))
-    self.assertEqual(hr['Stderr'], expected_stderr)
+    if expected_stderr[-1:] == '%':
+      self.assertEqual(
+          hr['Stderr'][:len(expected_stderr)-1],
+          expected_stderr[:len(expected_stderr)-1])
+    else:
+      self.assertEqual(hr['Stderr'], expected_stderr)
 
   def test_hook(self):
     utils.run_vtctl(['CreateKeyspace', 'test_keyspace'])
@@ -267,8 +265,8 @@ class TestTabletManager(unittest.TestCase):
 
     # test hook that is not present
     self._run_hook(['not_here.sh'], -1,
-                   'Skipping missing hook: /%',  # cannot go further, local path
-                   '')
+                   '',
+                   'missing hook /%')  # cannot go further, local path
 
     # test hook with invalid name
     _, err = utils.run_vtctl(['--alsologtostderr', 'ExecuteHook',
@@ -279,44 +277,6 @@ class TestTabletManager(unittest.TestCase):
     expected = "action failed: ExecuteHook hook name cannot have a '/' in it"
     self.assertIn(expected, err)
 
-    tablet_62344.kill_vttablet()
-
-  def test_restart(self):
-    """Test restart behavior of vttablet.
-
-    Tests that when starting a second vttablet with the same configuration as
-    another one, it will kill the previous process and take over listening on
-    the socket.
-
-    If vttablet listens to other ports (like gRPC), this feature will
-    break. We believe it is not widely used, so we're OK with this for now.
-    (container based installations usually handle tablet restarts
-    by using a different set of servers, and do not rely on this feature
-    at all).
-    """
-    if environment.topo_server().flavor() != 'zookeeper':
-      logging.info('Skipping this test in non-github tree')
-      return
-    if tablet_62344.grpc_enabled():
-      logging.info('Skipping this test as second gRPC port interferes')
-      return
-
-    utils.run_vtctl(['CreateKeyspace', 'test_keyspace'])
-
-    # create the database so vttablets start, as it is serving
-    tablet_62344.create_db('vt_test_keyspace')
-
-    tablet_62344.init_tablet('master', 'test_keyspace', '0')
-    proc1 = tablet_62344.start_vttablet()
-    tablet_62344.start_vttablet()
-    for _ in xrange(20):
-      logging.debug('Sleeping waiting for first process to die')
-      time.sleep(1.0)
-      proc1.poll()
-      if proc1.returncode is not None:
-        break
-    if proc1.returncode is None:
-      self.fail('proc1 still running')
     tablet_62344.kill_vttablet()
 
   def test_shard_replication_fix(self):

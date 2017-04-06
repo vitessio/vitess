@@ -3,6 +3,7 @@
 """Common import for all tests."""
 
 import base64
+import contextlib
 import json
 import logging
 import optparse
@@ -18,6 +19,7 @@ import unittest
 import urllib2
 
 from vtdb import prefer_vtroot_imports  # pylint: disable=unused-import
+from vtdb import vtgate_client
 
 import environment
 from mysql_flavor import mysql_flavor
@@ -89,7 +91,7 @@ def add_options(parser):
       help='Leave the global processes running after the test is done.')
   parser.add_option('--mysql-flavor')
   parser.add_option('--protocols-flavor', default='grpc')
-  parser.add_option('--topo-server-flavor', default='zookeeper')
+  parser.add_option('--topo-server-flavor', default='zk2')
   parser.add_option('--vtgate-gateway-flavor', default='discoverygateway')
 
 
@@ -525,12 +527,15 @@ vtgate = None
 class VtGate(object):
   """VtGate object represents a vtgate process."""
 
-  def __init__(self, port=None):
+  def __init__(self, port=None, mysql_server=False):
     """Creates the Vtgate instance and reserve the ports if necessary."""
     self.port = port or environment.reserve_ports(1)
     if protocols_flavor().vtgate_protocol() == 'grpc':
       self.grpc_port = environment.reserve_ports(1)
     self.proc = None
+    self.mysql_port = None
+    if mysql_server:
+      self.mysql_port = environment.reserve_ports(1)
 
   def start(self, cell='test_nj', retry_count=2,
             topo_impl=None, cache_ttl='1s',
@@ -547,7 +552,8 @@ class VtGate(object):
         '-log_dir', environment.vtlogroot,
         '-srv_topo_cache_ttl', cache_ttl,
         '-tablet_protocol', protocols_flavor().tabletconn_protocol(),
-        '-tablet_grpc_combine_begin_execute',
+        '-stderrthreshold', get_log_level(),
+        '-normalize_queries',
     ]
     if l2vtgates:
       args.extend([
@@ -573,6 +579,8 @@ class VtGate(object):
       args.extend(environment.topo_server().flags())
     if extra_args:
       args.extend(extra_args)
+    if self.mysql_port:
+      args.extend(['-mysql_server_port', str(self.mysql_port)])
 
     self.proc = run_bg(args)
     wait_for_vars('vtgate', self.port)
@@ -625,7 +633,53 @@ class VtGate(object):
     """Returns the vars for this process."""
     return get_vars(self.port)
 
-  def vtclient(self, sql, keyspace=None, shard=None, tablet_type='master',
+  @contextlib.contextmanager
+  def create_connection(self):
+    """Connects to vtgate and allows to create a cursor to execute queries.
+
+    This method is preferred over the two other methods ("vtclient", "execute")
+    to execute a query in tests.
+
+    Yields:
+      A vtgate connection object.
+
+    Example:
+      with self.vtgate.create_connection() as conn:
+        c = conn.cursor(keyspace=KEYSPACE, shards=[SHARD], tablet_type='master',
+                        writable=self.writable)
+        c.execute('SELECT * FROM buffer WHERE id = :id', {'id': 1})
+    """
+    protocol, endpoint = self.rpc_endpoint(python=True)
+    # Use a very long timeout to account for slow tests.
+    conn = vtgate_client.connect(protocol, endpoint, 600.0)
+    yield conn
+    conn.close()
+
+  @contextlib.contextmanager
+  def write_transaction(self, **kwargs):
+    """Begins a write transaction and commits automatically.
+
+    Note that each transaction contextmanager will create a new connection.
+
+    Args:
+      **kwargs: vtgate cursor args. See vtgate_cursor.VTGateCursor.
+
+    Yields:
+      A writable vtgate cursor.
+
+    Example:
+      with utils.vtgate.write_transaction(keyspace=KEYSPACE, shards=[SHARD],
+                                          tablet_type='master') as tx:
+        tx.execute('INSERT INTO table1 (id, msg) VALUES (:id, :msg)',
+                   {'id': 1, 'msg': 'msg1'})
+    """
+    with self.create_connection() as conn:
+      cursor = conn.cursor(writable=True, **kwargs)
+      cursor.begin()
+      yield cursor
+      cursor.commit()
+
+  def vtclient(self, sql, keyspace=None, tablet_type='master',
                bindvars=None, streaming=False,
                verbose=False, raise_on_error=True, json_output=False):
     """Uses the vtclient binary to send a query to vtgate."""
@@ -638,8 +692,6 @@ class VtGate(object):
       args.append('-json')
     if keyspace:
       args.extend(['-keyspace', keyspace])
-    if shard:
-      args.extend(['-shard', shard])
     if bindvars:
       args.extend(['-bind_variables', json.dumps(bindvars)])
     if streaming:
@@ -743,7 +795,6 @@ class L2VtGate(object):
         '-healthcheck_conn_timeout', healthcheck_conn_timeout,
         '-tablet_protocol', protocols_flavor().tabletconn_protocol(),
         '-gateway_implementation', vtgate_gateway_flavor().flavor(),
-        '-tablet_grpc_combine_begin_execute',
     ]
     args.extend(vtgate_gateway_flavor().flags(cell=cell, tablets=tablets))
     if tablet_types_to_wait:
@@ -1227,7 +1278,7 @@ class Vtctld(object):
     if protocols_flavor().vtctl_client_protocol() == 'grpc':
       self.grpc_port = environment.reserve_ports(1)
 
-  def start(self, enable_schema_change_dir=False):
+  def start(self, enable_schema_change_dir=False, extra_flags=None):
     # Note the vtctld2 web dir is set to 'dist', which is populated
     # when a toplevel 'make build_web' is run. This is meant to test
     # the development version of the UI. The real checked-in app is in
@@ -1247,7 +1298,10 @@ class Vtctld(object):
         '-vtgate_protocol', protocols_flavor().vtgate_protocol(),
         '-workflow_manager_init',
         '-workflow_manager_use_election',
+        '-schema_swap_delay_between_errors', '1s',
     ] + environment.topo_server().flags()
+    if extra_flags:
+      args += extra_flags
     # TODO(b/26388813): Remove the next two lines once vtctl WaitForDrain is
     #                   integrated in the vtctl MigrateServed* commands.
     args.extend(['--wait_for_drain_sleep_rdonly', '0s'])

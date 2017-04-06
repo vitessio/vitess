@@ -11,18 +11,19 @@ import (
 	"path"
 	"testing"
 
+	"golang.org/x/net/context"
+
+	"github.com/youtube/vitess/go/mysqlconn/fakesqldb"
+	"github.com/youtube/vitess/go/mysqlconn/replication"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/mysqlctl/backupstorage"
 	"github.com/youtube/vitess/go/vt/mysqlctl/filebackupstorage"
-	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
-	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
+	"github.com/youtube/vitess/go/vt/topo/memorytopo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
-	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
+	"github.com/youtube/vitess/go/vt/vttablet/tmclient"
 	"github.com/youtube/vitess/go/vt/wrangler"
-	"github.com/youtube/vitess/go/vt/zktopo/zktestserver"
-	"golang.org/x/net/context"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
@@ -30,8 +31,9 @@ import (
 func TestBackupRestore(t *testing.T) {
 	// Initialize our environment
 	ctx := context.Background()
-	db := fakesqldb.Register()
-	ts := zktestserver.New(t, []string{"cell1", "cell2"})
+	db := fakesqldb.New(t)
+	defer db.Close()
+	ts := memorytopo.NewServer("cell1", "cell2")
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 	vp := NewVtctlPipe(t, ts)
 	defer vp.Close()

@@ -14,15 +14,15 @@ import (
 	"sync"
 	"time"
 
+	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
-	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/mysqlconn/replication"
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/sync2"
 
-	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
 	binlogdatapb "github.com/youtube/vitess/go/vt/proto/binlogdata"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	"github.com/youtube/vitess/go/vt/throttler"
@@ -455,16 +455,16 @@ func (blp *BinlogPlayer) ApplyBinlogEvents(ctx context.Context) error {
 func CreateBlpCheckpoint() []string {
 	return []string{
 		"CREATE DATABASE IF NOT EXISTS _vt",
-		`CREATE TABLE IF NOT EXISTS _vt.blp_checkpoint (
+		fmt.Sprintf(`CREATE TABLE IF NOT EXISTS _vt.blp_checkpoint (
   source_shard_uid INT(10) UNSIGNED NOT NULL,
-  pos VARCHAR(250) DEFAULT NULL,
+  pos VARBINARY(%v) DEFAULT NULL,
   max_tps BIGINT(20) NOT NULL,
   max_replication_lag BIGINT(20) NOT NULL,
   time_updated BIGINT(20) UNSIGNED NOT NULL,
   transaction_timestamp BIGINT(20) UNSIGNED NOT NULL,
-  flags VARCHAR(250) DEFAULT NULL,
+  flags VARBINARY(250) DEFAULT NULL,
   PRIMARY KEY (source_shard_uid)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8`}
+) ENGINE=InnoDB`, replication.MaximumPositionSize)}
 }
 
 // PopulateBlpCheckpoint returns a statement to populate the first value into

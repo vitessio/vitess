@@ -58,3 +58,35 @@ message Workflow {
   // This field only makes sense if 'state' is Done.
   int64 end_time = 8;
 }
+
+message WorkflowCheckpoint {
+  // code_version is used to detect incompabilities between the version of the
+  // running workflow and the one which wrote the checkpoint. If they don't
+  // match, the workflow must not continue. The author of workflow must update
+  // this variable in their implementation when incompabilities are introduced.
+  int32 code_version = 1;
+  // tasks stores all tasks of the workflow in a map. The key is a unique name
+  // to identify the task, e.g. clone/-80.
+  
+  // Task is the data structure that stores the execution status and the
+  // attributes of a task.
+  map<string, Task> tasks = 2;
+  // settings includes workflow specific data, e.g. the resharding workflow
+  // would store the source shards and destination shards.
+  map<string, string> settings = 3;
+}
+
+enum TaskState {
+  TaskNotStarted = 0;
+  TaskRunning = 1;
+  TaskDone = 2;
+}
+
+message Task {
+  string id = 1;
+  TaskState state = 2;
+  // attributes includes the parameters the task needs.
+  map<string, string> attributes = 3;
+  string error = 4;
+}
+

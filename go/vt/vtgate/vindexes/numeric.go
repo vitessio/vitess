@@ -31,18 +31,26 @@ func (*Numeric) Cost() int {
 	return 0
 }
 
-// Verify returns true if id and ksid match.
-func (*Numeric) Verify(_ VCursor, id interface{}, ksid []byte) (bool, error) {
-	var keybytes [8]byte
-	num, err := getNumber(id)
-	if err != nil {
-		return false, fmt.Errorf("Numeric.Verify: %v", err)
+// Verify returns true if ids and ksids match.
+func (*Numeric) Verify(_ VCursor, ids []interface{}, ksids [][]byte) (bool, error) {
+	if len(ids) != len(ksids) {
+		return false, fmt.Errorf("Numeric.Verify: length of ids %v doesn't match length of ksids %v", len(ids), len(ksids))
 	}
-	binary.BigEndian.PutUint64(keybytes[:], uint64(num))
-	return bytes.Compare(keybytes[:], ksid) == 0, nil
+	for rowNum := range ids {
+		var keybytes [8]byte
+		num, err := getNumber(ids[rowNum])
+		if err != nil {
+			return false, fmt.Errorf("Numeric.Verify: %v", err)
+		}
+		binary.BigEndian.PutUint64(keybytes[:], uint64(num))
+		if bytes.Compare(keybytes[:], ksids[rowNum]) != 0 {
+			return false, nil
+		}
+	}
+	return true, nil
 }
 
-// Map returns the associated keyspae ids for the given ids.
+// Map returns the associated keyspace ids for the given ids.
 func (*Numeric) Map(_ VCursor, ids []interface{}) ([][]byte, error) {
 	out := make([][]byte, 0, len(ids))
 	for _, id := range ids {
@@ -57,12 +65,16 @@ func (*Numeric) Map(_ VCursor, ids []interface{}) ([][]byte, error) {
 	return out, nil
 }
 
-// ReverseMap returns the associated id for the ksid.
-func (*Numeric) ReverseMap(_ VCursor, ksid []byte) (interface{}, error) {
-	if len(ksid) != 8 {
-		return nil, fmt.Errorf("Numeric.ReverseMap: length of keyspace is not 8: %d", len(ksid))
+// ReverseMap returns the associated ids for the ksids.
+func (*Numeric) ReverseMap(_ VCursor, ksids [][]byte) ([]interface{}, error) {
+	var reverseIds = make([]interface{}, len(ksids))
+	for rownum, keyspaceID := range ksids {
+		if len(keyspaceID) != 8 {
+			return nil, fmt.Errorf("Numeric.ReverseMap: length of keyspaceId is not 8: %d", len(keyspaceID))
+		}
+		reverseIds[rownum] = binary.BigEndian.Uint64([]byte(keyspaceID))
 	}
-	return binary.BigEndian.Uint64([]byte(ksid)), nil
+	return reverseIds, nil
 }
 
 func init() {

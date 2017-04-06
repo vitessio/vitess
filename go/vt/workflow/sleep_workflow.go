@@ -69,11 +69,9 @@ func (sw *SleepWorkflow) Run(ctx context.Context, manager *Manager, wi *topo.Wor
 	sw.mu.Lock()
 	sw.manager = manager
 	sw.wi = wi
-	sw.node = NewNode()
-	sw.node.AttachToWorkflow(wi, sw)
-	sw.node.State = workflowpb.WorkflowState_Running
+
+	sw.node.Listener = sw
 	sw.node.Display = NodeDisplayDeterminate
-	sw.node.Message = "This workflow is a test workflow that just sleeps for the provided amount of time."
 	sw.node.Actions = []*Action{
 		{
 			Name:  pauseAction,
@@ -87,10 +85,7 @@ func (sw *SleepWorkflow) Run(ctx context.Context, manager *Manager, wi *topo.Wor
 		},
 	}
 	sw.uiUpdateLocked()
-	if err := manager.NodeManager().AddRootNode(sw.node); err != nil {
-		return err
-	}
-	defer manager.NodeManager().RemoveRootNode(sw.node)
+	sw.node.BroadcastChanges(false /* updateChildren */)
 	sw.mu.Unlock()
 
 	for {
@@ -127,7 +122,7 @@ func (sw *SleepWorkflow) Run(ctx context.Context, manager *Manager, wi *topo.Wor
 	return nil
 }
 
-// Action is part of the workflow.Workflow interface.
+// Action is part of the workflow.ActionListener interface.
 func (sw *SleepWorkflow) Action(ctx context.Context, path, name string) error {
 	sw.mu.Lock()
 	defer sw.mu.Unlock()
@@ -195,7 +190,7 @@ func (sw *SleepWorkflow) checkpointLocked(ctx context.Context) error {
 type SleepWorkflowFactory struct{}
 
 // Init is part of the workflow.Factory interface.
-func (f *SleepWorkflowFactory) Init(w *workflowpb.Workflow, args []string) error {
+func (f *SleepWorkflowFactory) Init(_ *Manager, w *workflowpb.Workflow, args []string) error {
 	// Parse the flags.
 	subFlags := flag.NewFlagSet(sleepFactoryName, flag.ContinueOnError)
 	duration := subFlags.Int("duration", 30, "How long to sleep")
@@ -220,13 +215,16 @@ func (f *SleepWorkflowFactory) Init(w *workflowpb.Workflow, args []string) error
 }
 
 // Instantiate is part of the workflow.Factory interface.
-func (f *SleepWorkflowFactory) Instantiate(w *workflowpb.Workflow) (Workflow, error) {
+func (f *SleepWorkflowFactory) Instantiate(_ *Manager, w *workflowpb.Workflow, rootNode *Node) (Workflow, error) {
+	rootNode.Message = "This workflow is a test workflow that just sleeps for the provided amount of time."
+
 	data := &SleepWorkflowData{}
 	if err := json.Unmarshal(w.Data, data); err != nil {
 		return nil, err
 	}
 	return &SleepWorkflow{
 		data:   data,
+		node:   rootNode,
 		logger: logutil.NewMemoryLogger(),
 	}, nil
 }

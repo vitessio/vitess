@@ -59,16 +59,13 @@ type SplitCloneWorker struct {
 	// verticalSplit only: List of tables which should be split out.
 	tables []string
 	// horizontalResharding only: List of tables which will be skipped.
-	excludeTables     []string
-	strategy          *splitStrategy
-	chunkCount        int
-	minRowsPerChunk   int
-	sourceReaderCount int
-	writeQueryMaxRows int
-	writeQueryMaxSize int
-	// TODO(mberlin): Delete this when our testing found out that an extra flag
-	// for this is not necessary.
-	writeQueryMaxRowsDelete int
+	excludeTables           []string
+	strategy                *splitStrategy
+	chunkCount              int
+	minRowsPerChunk         int
+	sourceReaderCount       int
+	writeQueryMaxRows       int
+	writeQueryMaxSize       int
 	destinationWriterCount  int
 	minHealthyRdonlyTablets int
 	maxTPS                  int64
@@ -129,20 +126,20 @@ type SplitCloneWorker struct {
 }
 
 // newSplitCloneWorker returns a new worker object for the SplitClone command.
-func newSplitCloneWorker(wr *wrangler.Wrangler, cell, keyspace, shard string, online, offline bool, excludeTables []string, strategyStr string, chunkCount, minRowsPerChunk, sourceReaderCount, writeQueryMaxRows, writeQueryMaxSize, writeQueryMaxRowsDelete, destinationWriterCount, minHealthyRdonlyTablets int, maxTPS, maxReplicationLag int64) (Worker, error) {
-	return newCloneWorker(wr, horizontalResharding, cell, keyspace, shard, online, offline, nil /* tables */, excludeTables, strategyStr, chunkCount, minRowsPerChunk, sourceReaderCount, writeQueryMaxRows, writeQueryMaxSize, writeQueryMaxRowsDelete, destinationWriterCount, minHealthyRdonlyTablets, maxTPS, maxReplicationLag)
+func newSplitCloneWorker(wr *wrangler.Wrangler, cell, keyspace, shard string, online, offline bool, excludeTables []string, strategyStr string, chunkCount, minRowsPerChunk, sourceReaderCount, writeQueryMaxRows, writeQueryMaxSize, destinationWriterCount, minHealthyRdonlyTablets int, maxTPS, maxReplicationLag int64) (Worker, error) {
+	return newCloneWorker(wr, horizontalResharding, cell, keyspace, shard, online, offline, nil /* tables */, excludeTables, strategyStr, chunkCount, minRowsPerChunk, sourceReaderCount, writeQueryMaxRows, writeQueryMaxSize, destinationWriterCount, minHealthyRdonlyTablets, maxTPS, maxReplicationLag)
 }
 
 // newVerticalSplitCloneWorker returns a new worker object for the
 // VerticalSplitClone command.
-func newVerticalSplitCloneWorker(wr *wrangler.Wrangler, cell, keyspace, shard string, online, offline bool, tables []string, strategyStr string, chunkCount, minRowsPerChunk, sourceReaderCount, writeQueryMaxRows, writeQueryMaxSize, writeQueryMaxRowsDelete, destinationWriterCount, minHealthyRdonlyTablets int, maxTPS, maxReplicationLag int64) (Worker, error) {
-	return newCloneWorker(wr, verticalSplit, cell, keyspace, shard, online, offline, tables, nil /* excludeTables */, strategyStr, chunkCount, minRowsPerChunk, sourceReaderCount, writeQueryMaxRows, writeQueryMaxSize, writeQueryMaxRowsDelete, destinationWriterCount, minHealthyRdonlyTablets, maxTPS, maxReplicationLag)
+func newVerticalSplitCloneWorker(wr *wrangler.Wrangler, cell, keyspace, shard string, online, offline bool, tables []string, strategyStr string, chunkCount, minRowsPerChunk, sourceReaderCount, writeQueryMaxRows, writeQueryMaxSize, destinationWriterCount, minHealthyRdonlyTablets int, maxTPS, maxReplicationLag int64) (Worker, error) {
+	return newCloneWorker(wr, verticalSplit, cell, keyspace, shard, online, offline, tables, nil /* excludeTables */, strategyStr, chunkCount, minRowsPerChunk, sourceReaderCount, writeQueryMaxRows, writeQueryMaxSize, destinationWriterCount, minHealthyRdonlyTablets, maxTPS, maxReplicationLag)
 }
 
 // newCloneWorker returns a new SplitCloneWorker object which is used both by
 // the SplitClone and VerticalSplitClone command.
 // TODO(mberlin): Rename SplitCloneWorker to cloneWorker.
-func newCloneWorker(wr *wrangler.Wrangler, cloneType cloneType, cell, keyspace, shard string, online, offline bool, tables, excludeTables []string, strategyStr string, chunkCount, minRowsPerChunk, sourceReaderCount, writeQueryMaxRows, writeQueryMaxSize, writeQueryMaxRowsDelete, destinationWriterCount, minHealthyRdonlyTablets int, maxTPS, maxReplicationLag int64) (Worker, error) {
+func newCloneWorker(wr *wrangler.Wrangler, cloneType cloneType, cell, keyspace, shard string, online, offline bool, tables, excludeTables []string, strategyStr string, chunkCount, minRowsPerChunk, sourceReaderCount, writeQueryMaxRows, writeQueryMaxSize, destinationWriterCount, minHealthyRdonlyTablets int, maxTPS, maxReplicationLag int64) (Worker, error) {
 	if cloneType != horizontalResharding && cloneType != verticalSplit {
 		return nil, fmt.Errorf("unknown cloneType: %v This is a bug. Please report", cloneType)
 	}
@@ -206,7 +203,6 @@ func newCloneWorker(wr *wrangler.Wrangler, cloneType cloneType, cell, keyspace, 
 		sourceReaderCount:       sourceReaderCount,
 		writeQueryMaxRows:       writeQueryMaxRows,
 		writeQueryMaxSize:       writeQueryMaxSize,
-		writeQueryMaxRowsDelete: writeQueryMaxRowsDelete,
 		destinationWriterCount:  destinationWriterCount,
 		minHealthyRdonlyTablets: minHealthyRdonlyTablets,
 		maxTPS:                  maxTPS,
@@ -856,6 +852,16 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 		mu.Unlock()
 	}
 
+	// NOTE: Code below this point must *not* use "return" to exit this Go routine
+	// early. Instead, "processError" must be called to cancel the context. This
+	// way all launched Go routines will terminate as well.
+	// (However, "return" in a new Go routine, i.e. not this one, is fine.)
+	// If Go routines have already been started, make sure that Wait() on the
+	// respective WaitGroup is called as well e.g. "destinationWaitGroup.Wait()"
+	// must always be reached. Waiting for the Go routines is important to avoid
+	// races between "defer throttler.ThreadFinished()" (must be executed first)
+	// and "defer scw.closeThrottlers()". Otherwise, vtworker will panic.
+
 	insertChannels := make([]chan string, len(scw.destinationShards))
 	destinationWaitGroup := sync.WaitGroup{}
 	for shardIndex, si := range scw.destinationShards {
@@ -888,14 +894,16 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 
 		keyResolver, err := scw.createKeyResolver(td)
 		if err != nil {
-			return fmt.Errorf("cannot resolve sharding keys for keyspace %v: %v", scw.destinationKeyspace, err)
+			processError("cannot resolve sharding keys for keyspace %v: %v", scw.destinationKeyspace, err)
+			break
 		}
 
 		// TODO(mberlin): We're going to chunk *all* source shards based on the MIN
 		// and MAX values of the *first* source shard. Is this going to be a problem?
 		chunks, err := generateChunks(ctx, scw.wr, firstSourceTablet, td, scw.chunkCount, scw.minRowsPerChunk)
 		if err != nil {
-			return err
+			processError("failed to split table into chunks: %v", err)
+			break
 		}
 		tableStatusList.setThreadCount(tableIndex, len(chunks))
 
@@ -997,7 +1005,7 @@ func (scw *SplitCloneWorker) clone(ctx context.Context, state StatusWorkerState)
 				// Compare the data and reconcile any differences.
 				differ, err := NewRowDiffer2(ctx, sourceReader, destReader, td, tableStatusList, tableIndex,
 					scw.destinationShards, keyResolver,
-					insertChannels, ctx.Done(), dbNames, scw.writeQueryMaxRows, scw.writeQueryMaxSize, scw.writeQueryMaxRowsDelete, statsCounters)
+					insertChannels, ctx.Done(), dbNames, scw.writeQueryMaxRows, scw.writeQueryMaxSize, statsCounters)
 				if err != nil {
 					processError("%v: NewRowDiffer2 failed: %v", errPrefix, err)
 					return
@@ -1162,6 +1170,7 @@ func (scw *SplitCloneWorker) createKeyResolver(td *tabletmanagerdatapb.TableDefi
 
 // StatsUpdate receives replication lag updates for each destination master
 // and forwards them to the respective throttler instance.
+// It also forwards any update to the TabletStatsCache to keep it up to date.
 // It is part of the discovery.HealthCheckStatsListener interface.
 func (scw *SplitCloneWorker) StatsUpdate(ts *discovery.TabletStats) {
 	scw.tsc.StatsUpdate(ts)

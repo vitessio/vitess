@@ -33,6 +33,11 @@ func checkShard(t *testing.T, ts topo.Impl) {
 		t.Fatalf("CreateKeyspace: %v", err)
 	}
 
+	// Check GetShardNames returns [], nil for existing keyspace with no shards.
+	if names, err := ts.GetShardNames(ctx, "test_keyspace"); err != nil || len(names) != 0 {
+		t.Errorf("GetShardNames(keyspace with no shards) didn't return [] nil: %v %v", names, err)
+	}
+
 	shard := &topodatapb.Shard{
 		KeyRange: newKeyRange("b0-c0"),
 	}
@@ -46,6 +51,9 @@ func checkShard(t *testing.T, ts topo.Impl) {
 	// Delete shard and see if we can re-create it.
 	if err := ts.DeleteShard(ctx, "test_keyspace", "b0-c0"); err != nil {
 		t.Fatalf("DeleteShard: %v", err)
+	}
+	if err := ts.DeleteShard(ctx, "test_keyspace", "b0-c0"); err != topo.ErrNoNode {
+		t.Errorf("DeleteShard(again): %v", err)
 	}
 	if err := ts.CreateShard(ctx, "test_keyspace", "b0-c0", shard); err != nil {
 		t.Fatalf("CreateShard: %v", err)
@@ -147,10 +155,5 @@ func checkShard(t *testing.T, ts topo.Impl) {
 
 	if _, err := ts.GetShardNames(ctx, "test_keyspace666"); err != topo.ErrNoNode {
 		t.Errorf("GetShardNames(666): %v", err)
-	}
-
-	// test ValidateShard
-	if err := ts.ValidateShard(ctx, "test_keyspace", "b0-c0"); err != nil {
-		t.Errorf("ValidateShard(test_keyspace, b0-c0) failed: %v", err)
 	}
 }

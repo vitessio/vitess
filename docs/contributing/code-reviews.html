@@ -36,10 +36,10 @@
 
     <!-- metadata -->
     <meta name="og:title" content="Vitess / Code Reviews"/>
-    <meta name="og:image" content="/images/vitess_logomark_cropped.svg"/>
+    <meta name="og:image" content="/images/vitess_logo_with_border.svg"/>
     <meta name="og:description" content="Vitess is a database clustering system for horizontal scaling of MySQL."/>
 
-    <link rel="icon" href="/images/vitess_icon.png" type="image/png">
+    <link rel="icon" href="/images/vitess_logo_icon_size.png" type="image/png">
 
     
     <script>
@@ -69,7 +69,7 @@
         <span class="icon-bar"></span>
       </button>
       <a class="navbar-brand" href="/">
-        <img class="logo" src="/images/vitess_logomark_cropped.svg" alt="Vitess">
+        <img class="logo" src="/images/vitess_logo_with_border.svg" alt="Vitess">
       </a>
     </div>
 
@@ -113,15 +113,22 @@
             <li><a href="/user-guide/reparenting.html">Reparenting</a></li>
             <li style="padding-bottom: 0"><a href="/user-guide/schema-management.html">Schema Management</a></li>
               <ul style="display: block">
-                <li style="padding-bottom: 0"><a href="/user-guide/pivot-schema-changes.html">Pivot Schema Changes (Tutorial)</a></li>
+                <li style="padding-bottom: 0"><a href="/user-guide/vschema.html">VSchema Guide</a></li>
+                <li style="padding-bottom: 0"><a href="/user-guide/schema-swap.html">Schema Swap (Tutorial)</a></li>
               </ul>
             <li style="padding-bottom: 0"><a href="/user-guide/sharding.html">Sharding</a>
               <ul style="display: block">
-                <li><a href="/user-guide/horizontal-sharding.html">Horizontal Sharding (Codelab)</a></li>
-                <li style="padding-bottom: 0"><a href="/user-guide/sharding-kubernetes.html">Sharding in Kubernetes (Codelab)</a></li>
+                <li><a href="/user-guide/horizontal-sharding-workflow.html">Horizontal Sharding (Tutorial, automated)</a></li>
+                <li><a href="/user-guide/horizontal-sharding.html">Horizontal Sharding (Tutorial, manual)</a></li>
+                <li><a href="/user-guide/sharding-kubernetes-workflow.html">Sharding in Kubernetes (Tutorial, automated)</a></li>
+                <li style="padding-bottom: 0"><a href="/user-guide/sharding-kubernetes.html">Sharding in Kubernetes (Tutorial, manual)</a></li>
               </ul>
             </li>
+            <li><a href="/user-guide/vitess-sequences.html">Vitess Sequences</a></li>
+            <li><a href="/user-guide/mysql-server-protocol.html">MySQL Server Protocol</a></li>
             <li><a href="/user-guide/vitess-replication.html">Vitess and Replication</a></li>
+            <li><a href="/user-guide/update-stream.html">Update Stream</a></li>
+            <li><a href="/user-guide/row-based-replication.html">Row Based Replication</a></li>
             <li><a href="/user-guide/topology-service.html">Topology Service</a></li>
             <li><a href="/user-guide/transport-security-model.html">Transport Security Model</a></li>
             <li style="padding-bottom: 0"><a href="/user-guide/launching.html">Launching</a>
@@ -129,6 +136,7 @@
                 <li><a href="/user-guide/scalability-philosophy.html">Scalability Philosophy</a></li>
                 <li><a href="/user-guide/production-planning.html">Production Planning</a></li>
                 <li><a href="/user-guide/server-configuration.html">Server Configuration</a></li>
+                <li><a href="/user-guide/twopc.html">2PC Guide</a></li>
                 <li style="padding-bottom: 0"><a href="/user-guide/troubleshooting.html">Troubleshooting</a></li>
               </ul>
             </li>
@@ -147,6 +155,7 @@
           <ul style="display: none">
             <li><a href="/resources/presentations.html">Presentations</a>
             <li><a href="http://blog.vitess.io/">Blog</a>
+            <li><a href="/resources/roadmap.html">Roadmap</a>
           </ul>
         </li>
         <li class="submenu">
@@ -214,15 +223,22 @@
             <li><a href="/user-guide/reparenting.html">Reparenting</a></li>
             <li style="padding-bottom: 0"><a href="/user-guide/schema-management.html">Schema Management</a></li>
               <ul style="display: block">
-                <li style="padding-bottom: 0"><a href="/user-guide/pivot-schema-changes.html">Pivot Schema Changes (Tutorial)</a></li>
+                <li style="padding-bottom: 0"><a href="/user-guide/vschema.html">VSchema Guide</a></li>
+                <li style="padding-bottom: 0"><a href="/user-guide/schema-swap.html">Schema Swap (Tutorial)</a></li>
               </ul>
             <li style="padding-bottom: 0"><a href="/user-guide/sharding.html">Sharding</a>
               <ul style="display: block">
-                <li><a href="/user-guide/horizontal-sharding.html">Horizontal Sharding (Codelab)</a></li>
-                <li style="padding-bottom: 0"><a href="/user-guide/sharding-kubernetes.html">Sharding in Kubernetes (Codelab)</a></li>
+                <li><a href="/user-guide/horizontal-sharding-workflow.html">Horizontal Sharding (Tutorial, automated)</a></li>
+                <li><a href="/user-guide/horizontal-sharding.html">Horizontal Sharding (Tutorial, manual)</a></li>
+                <li><a href="/user-guide/sharding-kubernetes-workflow.html">Sharding in Kubernetes (Tutorial, automated)</a></li>
+                <li style="padding-bottom: 0"><a href="/user-guide/sharding-kubernetes.html">Sharding in Kubernetes (Tutorial, manual)</a></li>
               </ul>
             </li>
+            <li><a href="/user-guide/vitess-sequences.html">Vitess Sequences</a></li>
+            <li><a href="/user-guide/mysql-server-protocol.html">MySQL Server Protocol</a></li>
             <li><a href="/user-guide/vitess-replication.html">Vitess and Replication</a></li>
+            <li><a href="/user-guide/update-stream.html">Update Stream</a></li>
+            <li><a href="/user-guide/row-based-replication.html">Row Based Replication</a></li>
             <li><a href="/user-guide/topology-service.html">Topology Service</a></li>
             <li><a href="/user-guide/transport-security-model.html">Transport Security Model</a></li>
             <li style="padding-bottom: 0"><a href="/user-guide/launching.html">Launching</a>
@@ -230,6 +246,7 @@
                 <li><a href="/user-guide/scalability-philosophy.html">Scalability Philosophy</a></li>
                 <li><a href="/user-guide/production-planning.html">Production Planning</a></li>
                 <li><a href="/user-guide/server-configuration.html">Server Configuration</a></li>
+                <li><a href="/user-guide/twopc.html">2PC Guide</a></li>
                 <li style="padding-bottom: 0"><a href="/user-guide/troubleshooting.html">Troubleshooting</a></li>
               </ul>
             </li>
@@ -248,6 +265,7 @@
           <ul style="display: none">
             <li><a href="/resources/presentations.html">Presentations</a>
             <li><a href="http://blog.vitess.io/">Blog</a>
+            <li><a href="/resources/roadmap.html">Roadmap</a>
           </ul>
         </li>
         <li class="submenu">
@@ -276,7 +294,66 @@
       <div id="centerTextCol">
         <h1 id="code-reviews">Code Reviews</h1>
 
-<p>Every GitHub pull request must go through a code review and approved before it will be merged into the master branch.</p>
+<p>Every GitHub pull request must go through a code review and get approved before it will be merged into the master branch.</p>
+
+<h2 id="what-to-look-for-in-a-review">What to look for in a Review</h2>
+
+<p>Both authors and reviewers need to answer these general questions:</p>
+
+<ul>
+<li>  Does this change match an existing design / bug?</li>
+<li>  Is there proper unit test coverage for this change? All changes should
+increase coverage. We need at least integration test coverage when unit test
+coverage is not possible.</li>
+<li>  Is this change going to log too much? (Error logs should only happen when
+the component is in bad shape, not because of bad transient state or bad
+user queries)</li>
+<li>  Does this change match our coding conventions / style? Linter was run and is
+happy?</li>
+<li>  Does this match our current patterns? Example include RPC patterns,
+Retries / Waits / Timeouts patterns using Context, ...</li>
+</ul>
+
+<p>Additionally, we recommend every author to look over your own reviews just before committing them and check if you are following the recommendations below.
+We usually check these kinds of things while skimming through <code class="prettyprint">git diff --cached</code> just before committing.</p>
+
+<ul>
+<li>  Scan the diffs as if you&#39;re the reviewer.
+
+<ul>
+<li>  Look for files that shouldn&#39;t be checked in (temporary/generated files).</li>
+<li>  Googlers only: Remove Google confidential info (e.g. internal URLs).</li>
+<li>  Look for temporary code/comments you added while debugging.
+
+<ul>
+<li>  Example: fmt.Println(&quot;AAAAAAAAAAAAAAAAAA&quot;)</li>
+</ul></li>
+<li>  Look for inconsistencies in indentation.
+
+<ul>
+<li>  Use 2 spaces in everything except Go.</li>
+<li>  In Go, just use goimports.</li>
+</ul></li>
+</ul></li>
+<li><p>Commit message format:</p>
+
+<ul>
+<li><div class="highlight"><pre><code class="language-text" data-lang="text">&lt;component&gt;: This is a short description of the change.
+
+If necessary, more sentences follow e.g. to explain the intent of the change, how it fits into the bigger picture or which implications it has (e.g. other parts in the system have to be adapted.)
+
+Sometimes this message can also contain more material for reference e.g. benchmark numbers to justify why the change was implemented in this way.
+</code></pre></div></li>
+</ul></li>
+<li><p>Comments</p>
+
+<ul>
+<li>  <code class="prettyprint">// Prefer complete sentences when possible.</code></li>
+<li>  Leave a space after the comment marker <code class="prettyprint">//</code>.</li>
+</ul></li>
+</ul>
+
+<p>During the review make sure you address all comments. Click Done (reviewable.io) or reply with &quot;Done.&quot; (GitHub Review) to mark comments as addressed. There should be 0 unresolved discussions when it&#39;s ready to merge.</p>
 
 <h2 id="assigning-a-pull-request">Assigning a Pull Request</h2>
 
@@ -299,32 +376,13 @@ They&#39;ll receive an email.</p>
 <h2 id="merging-a-pull-request">Merging a Pull Request</h2>
 
 <p>Pull requests can be merged after they were approved and the Travis tests have passed.
-External contributions will be merged a team member.
+External contributions will be merged by a team member.
 Internal team members can merge their <strong>own</strong> pull requests.</p>
-
-<h2 id="what-reviewers-should-look-for">What reviewers should look for</h2>
-
-<p>Here are a few questions reviewers need to answer.
-As the author of the pull request, you should also check for these before creating the pull request.</p>
-
-<ul>
-<li>  Does this change match an existing design / bug?</li>
-<li>  Is there proper unit test coverage for this change? All changes should
-increase coverage. We need at least integration test coverage when unit test
-coverage is not possible.</li>
-<li>  Is this change going to log too much? (Error logs should only happen when
-the component is in bad shape, not because of bad transient state or bad
-user queries)</li>
-<li>  Does this change match our coding conventions / style? Linter was run and is
-happy?</li>
-<li>  Does this match our current patterns? Example include RPC patterns,
-Retries / Waits / Timeouts patterns using Context, ...</li>
-</ul>
 
 <h2 id="internal-bug-numbers">Internal Bug Numbers</h2>
 
 <p>Most of the bugs the team is working on are tracked internally.
-We reference to them as <code class="prettyprint">b/########</code> or <code class="prettyprint">B=########</code> in commit messages and comments.
+We reference to them as <code class="prettyprint">b/########</code> or <code class="prettyprint">BUG=########</code> in commit messages and comments.
 External users can ignore these.</p>
 
       </div>
@@ -339,7 +397,7 @@ External users can ignore these.</p>
     
     <a href="https://groups.google.com/forum/#!forum/vitess" target="_blank">Contact: vitess@googlegroups.com</a>&nbsp;&nbsp;<b>·</b>&nbsp;&nbsp;
     <a href="https://groups.google.com/forum/#!forum/vitess-announce" target="_blank">Announcements</a>&nbsp;&nbsp;<b>·</b>&nbsp;&nbsp;
-    &#169; 2016 <a href="/">Vitess</a> powered by <a href="https://developers.google.com/open-source/">Google Inc</a>
+    &#169; 2017 <a href="/">Vitess</a> powered by <a href="https://developers.google.com/open-source/">Google Inc</a>
   </nav>
 </footer>
 

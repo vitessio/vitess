@@ -7,13 +7,13 @@ namespace Vitess\Proto\Query {
   class ExecuteOptions extends \DrSlump\Protobuf\Message {
 
     /**  @var boolean */
-    public $exclude_field_names = null;
-    
-    /**  @var boolean */
     public $include_event_token = null;
     
     /**  @var \Vitess\Proto\Query\EventToken */
     public $compare_event_token = null;
+    
+    /**  @var int - \Vitess\Proto\Query\ExecuteOptions\IncludedFields */
+    public $included_fields = null;
     
 
     /** @var \Closure[] */
@@ -22,14 +22,6 @@ namespace Vitess\Proto\Query {
     public static function descriptor()
     {
       $descriptor = new \DrSlump\Protobuf\Descriptor(__CLASS__, 'query.ExecuteOptions');
-
-      // OPTIONAL BOOL exclude_field_names = 1
-      $f = new \DrSlump\Protobuf\Field();
-      $f->number    = 1;
-      $f->name      = "exclude_field_names";
-      $f->type      = \DrSlump\Protobuf::TYPE_BOOL;
-      $f->rule      = \DrSlump\Protobuf::RULE_OPTIONAL;
-      $descriptor->addField($f);
 
       // OPTIONAL BOOL include_event_token = 2
       $f = new \DrSlump\Protobuf\Field();
@@ -48,6 +40,15 @@ namespace Vitess\Proto\Query {
       $f->reference = '\Vitess\Proto\Query\EventToken';
       $descriptor->addField($f);
 
+      // OPTIONAL ENUM included_fields = 4
+      $f = new \DrSlump\Protobuf\Field();
+      $f->number    = 4;
+      $f->name      = "included_fields";
+      $f->type      = \DrSlump\Protobuf::TYPE_ENUM;
+      $f->rule      = \DrSlump\Protobuf::RULE_OPTIONAL;
+      $f->reference = '\Vitess\Proto\Query\ExecuteOptions\IncludedFields';
+      $descriptor->addField($f);
+
       foreach (self::$__extensions as $cb) {
         $descriptor->addField($cb(), true);
       }
@@ -55,43 +56,6 @@ namespace Vitess\Proto\Query {
       return $descriptor;
     }
 
-    /**
-     * Check if <exclude_field_names> has a value
-     *
-     * @return boolean
-     */
-    public function hasExcludeFieldNames(){
-      return $this->_has(1);
-    }
-    
-    /**
-     * Clear <exclude_field_names> value
-     *
-     * @return \Vitess\Proto\Query\ExecuteOptions
-     */
-    public function clearExcludeFieldNames(){
-      return $this->_clear(1);
-    }
-    
-    /**
-     * Get <exclude_field_names> value
-     *
-     * @return boolean
-     */
-    public function getExcludeFieldNames(){
-      return $this->_get(1);
-    }
-    
-    /**
-     * Set <exclude_field_names> value
-     *
-     * @param boolean $value
-     * @return \Vitess\Proto\Query\ExecuteOptions
-     */
-    public function setExcludeFieldNames( $value){
-      return $this->_set(1, $value);
-    }
-    
     /**
      * Check if <include_event_token> has a value
      *
@@ -164,6 +128,43 @@ namespace Vitess\Proto\Query {
      */
     public function setCompareEventToken(\Vitess\Proto\Query\EventToken $value){
       return $this->_set(3, $value);
+    }
+    
+    /**
+     * Check if <included_fields> has a value
+     *
+     * @return boolean
+     */
+    public function hasIncludedFields(){
+      return $this->_has(4);
+    }
+    
+    /**
+     * Clear <included_fields> value
+     *
+     * @return \Vitess\Proto\Query\ExecuteOptions
+     */
+    public function clearIncludedFields(){
+      return $this->_clear(4);
+    }
+    
+    /**
+     * Get <included_fields> value
+     *
+     * @return int - \Vitess\Proto\Query\ExecuteOptions\IncludedFields
+     */
+    public function getIncludedFields(){
+      return $this->_get(4);
+    }
+    
+    /**
+     * Set <included_fields> value
+     *
+     * @param int - \Vitess\Proto\Query\ExecuteOptions\IncludedFields $value
+     * @return \Vitess\Proto\Query\ExecuteOptions
+     */
+    public function setIncludedFields( $value){
+      return $this->_set(4, $value);
     }
   }
 }

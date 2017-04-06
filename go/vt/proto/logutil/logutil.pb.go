@@ -73,6 +73,20 @@ func (m *Time) String() string            { return proto.CompactTextString(m) }
 func (*Time) ProtoMessage()               {}
 func (*Time) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{0} }
 
+func (m *Time) GetSeconds() int64 {
+	if m != nil {
+		return m.Seconds
+	}
+	return 0
+}
+
+func (m *Time) GetNanoseconds() int32 {
+	if m != nil {
+		return m.Nanoseconds
+	}
+	return 0
+}
+
 // Event is a single logging event
 type Event struct {
 	Time  *Time  `protobuf:"bytes,1,opt,name=time" json:"time,omitempty"`
@@ -94,6 +108,34 @@ func (m *Event) GetTime() *Time {
 	return nil
 }
 
+func (m *Event) GetLevel() Level {
+	if m != nil {
+		return m.Level
+	}
+	return Level_INFO
+}
+
+func (m *Event) GetFile() string {
+	if m != nil {
+		return m.File
+	}
+	return ""
+}
+
+func (m *Event) GetLine() int64 {
+	if m != nil {
+		return m.Line
+	}
+	return 0
+}
+
+func (m *Event) GetValue() string {
+	if m != nil {
+		return m.Value
+	}
+	return ""
+}
+
 func init() {
 	proto.RegisterType((*Time)(nil), "logutil.Time")
 	proto.RegisterType((*Event)(nil), "logutil.Event")
@@ -104,7 +146,7 @@ func init() { proto.RegisterFile("logutil.proto", fileDescriptor0) }
 
 var fileDescriptor0 = []byte{
 	// 235 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x09, 0x6e, 0x88, 0x02, 0xff, 0x4c, 0x90, 0x41, 0x4b, 0xc3, 0x40,
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x4c, 0x90, 0x41, 0x4b, 0xc3, 0x40,
 	0x10, 0x85, 0xdd, 0x66, 0xd7, 0xd8, 0x09, 0x2d, 0x61, 0xf0, 0xb0, 0xc7, 0x58, 0x3c, 0x04, 0x0f,
 	0x3d, 0x54, 0xf0, 0xae, 0x12, 0xa5, 0x50, 0x12, 0x18, 0x05, 0xcf, 0x55, 0x47, 0x59, 0xd8, 0xee,
 	0x8a, 0x4d, 0xf3, 0x33, 0xfc, 0xcd, 0x92, 0x89, 0x91, 0xde, 0xe6, 0x7d, 0xef, 0xf1, 0xde, 0xb2,

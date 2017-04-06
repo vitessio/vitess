@@ -13,14 +13,15 @@ import (
 	"testing"
 	"time"
 
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	tableaclpb "github.com/youtube/vitess/go/vt/proto/tableacl"
 	"github.com/youtube/vitess/go/vt/tableacl/acl"
 	"github.com/youtube/vitess/go/vt/tableacl/simpleacl"
 )
 
-type fakeAclFactory struct{}
+type fakeACLFactory struct{}
 
-func (factory *fakeAclFactory) New(entries []string) (acl.ACL, error) {
+func (factory *fakeACLFactory) New(entries []string) (acl.ACL, error) {
 	return nil, fmt.Errorf("unable to create a new ACL")
 }
 
@@ -95,7 +96,7 @@ func TestInitFromProto(t *testing.T) {
 	}
 
 	readerACL = Authorized("test_table", READER)
-	if !readerACL.IsMember("vt") {
+	if !readerACL.IsMember(&querypb.VTGateCallerID{Username: "vt"}) {
 		t.Fatalf("user: vt should have reader permission to table: test_table")
 	}
 }
@@ -173,16 +174,16 @@ func TestTableACLAuthorize(t *testing.T) {
 	}
 
 	readerACL := Authorized("test_data_any", READER)
-	if !readerACL.IsMember("u1") {
+	if !readerACL.IsMember(&querypb.VTGateCallerID{Username: "u1"}) {
 		t.Fatalf("user u1 should have reader permission to table test_data_any")
 	}
-	if !readerACL.IsMember("u2") {
+	if !readerACL.IsMember(&querypb.VTGateCallerID{Username: "u2"}) {
 		t.Fatalf("user u2 should have reader permission to table test_data_any")
 	}
 }
 
 func TestFailedToCreateACL(t *testing.T) {
-	setUpTableACL(&fakeAclFactory{})
+	setUpTableACL(&fakeACLFactory{})
 	config := &tableaclpb.Config{
 		TableGroups: []*tableaclpb.TableGroupSpec{{
 			Name:                 "group01",

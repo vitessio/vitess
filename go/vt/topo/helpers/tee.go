@@ -350,20 +350,6 @@ func (tee *Tee) UpdateShard(ctx context.Context, keyspace, shard string, value *
 	return
 }
 
-// ValidateShard is part of the topo.Server interface
-func (tee *Tee) ValidateShard(ctx context.Context, keyspace, shard string) error {
-	err := tee.primary.ValidateShard(ctx, keyspace, shard)
-	if err != nil {
-		return err
-	}
-
-	if err := tee.secondary.ValidateShard(ctx, keyspace, shard); err != nil {
-		// not critical enough to fail
-		log.Warningf("secondary.ValidateShard(%v,%v) failed: %v", keyspace, shard, err)
-	}
-	return nil
-}
-
 // GetShard is part of the topo.Server interface
 func (tee *Tee) GetShard(ctx context.Context, keyspace, shard string) (*topodatapb.Shard, int64, error) {
 	s, v, err := tee.readFrom.GetShard(ctx, keyspace, shard)

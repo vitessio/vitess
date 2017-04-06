@@ -82,10 +82,10 @@ namespace Vitess\Proto\Queryservice {
       return $this->_simpleRequest('/queryservice.Query/SetRollback', $argument, '\Vitess\Proto\Query\SetRollbackResponse::deserialize', $metadata, $options);
     }
     /**
-     * @param Vitess\Proto\Query\ResolveTransactionRequest $input
+     * @param Vitess\Proto\Query\ConcludeTransactionRequest $input
      */
-    public function ResolveTransaction(\Vitess\Proto\Query\ResolveTransactionRequest $argument, $metadata = array(), $options = array()) {
-      return $this->_simpleRequest('/queryservice.Query/ResolveTransaction', $argument, '\Vitess\Proto\Query\ResolveTransactionResponse::deserialize', $metadata, $options);
+    public function ConcludeTransaction(\Vitess\Proto\Query\ConcludeTransactionRequest $argument, $metadata = array(), $options = array()) {
+      return $this->_simpleRequest('/queryservice.Query/ConcludeTransaction', $argument, '\Vitess\Proto\Query\ConcludeTransactionResponse::deserialize', $metadata, $options);
     }
     /**
      * @param Vitess\Proto\Query\ReadTransactionRequest $input
@@ -104,6 +104,18 @@ namespace Vitess\Proto\Queryservice {
      */
     public function BeginExecuteBatch(\Vitess\Proto\Query\BeginExecuteBatchRequest $argument, $metadata = array(), $options = array()) {
       return $this->_simpleRequest('/queryservice.Query/BeginExecuteBatch', $argument, '\Vitess\Proto\Query\BeginExecuteBatchResponse::deserialize', $metadata, $options);
+    }
+    /**
+     * @param Vitess\Proto\Query\MessageStreamRequest $input
+     */
+    public function MessageStream($argument, $metadata = array(), $options = array()) {
+      return $this->_serverStreamRequest('/queryservice.Query/MessageStream', $argument, '\Vitess\Proto\Query\MessageStreamResponse::deserialize', $metadata, $options);
+    }
+    /**
+     * @param Vitess\Proto\Query\MessageAckRequest $input
+     */
+    public function MessageAck(\Vitess\Proto\Query\MessageAckRequest $argument, $metadata = array(), $options = array()) {
+      return $this->_simpleRequest('/queryservice.Query/MessageAck', $argument, '\Vitess\Proto\Query\MessageAckResponse::deserialize', $metadata, $options);
     }
     /**
      * @param Vitess\Proto\Query\SplitQueryRequest $input

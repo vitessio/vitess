@@ -12,6 +12,12 @@ namespace Vitess\Proto\Vtgate {
     /**  @var \Vitess\Proto\Vtgate\Session\ShardSession[]  */
     public $shard_sessions = array();
     
+    /**  @var boolean */
+    public $single_db = null;
+    
+    /**  @var boolean */
+    public $autocommit = null;
+    
 
     /** @var \Closure[] */
     protected static $__extensions = array();
@@ -35,6 +41,22 @@ namespace Vitess\Proto\Vtgate {
       $f->type      = \DrSlump\Protobuf::TYPE_MESSAGE;
       $f->rule      = \DrSlump\Protobuf::RULE_REPEATED;
       $f->reference = '\Vitess\Proto\Vtgate\Session\ShardSession';
+      $descriptor->addField($f);
+
+      // OPTIONAL BOOL single_db = 3
+      $f = new \DrSlump\Protobuf\Field();
+      $f->number    = 3;
+      $f->name      = "single_db";
+      $f->type      = \DrSlump\Protobuf::TYPE_BOOL;
+      $f->rule      = \DrSlump\Protobuf::RULE_OPTIONAL;
+      $descriptor->addField($f);
+
+      // OPTIONAL BOOL autocommit = 4
+      $f = new \DrSlump\Protobuf\Field();
+      $f->number    = 4;
+      $f->name      = "autocommit";
+      $f->type      = \DrSlump\Protobuf::TYPE_BOOL;
+      $f->rule      = \DrSlump\Protobuf::RULE_OPTIONAL;
       $descriptor->addField($f);
 
       foreach (self::$__extensions as $cb) {
@@ -136,6 +158,80 @@ namespace Vitess\Proto\Vtgate {
      */
     public function addShardSessions(\Vitess\Proto\Vtgate\Session\ShardSession $value){
      return $this->_add(2, $value);
+    }
+    
+    /**
+     * Check if <single_db> has a value
+     *
+     * @return boolean
+     */
+    public function hasSingleDb(){
+      return $this->_has(3);
+    }
+    
+    /**
+     * Clear <single_db> value
+     *
+     * @return \Vitess\Proto\Vtgate\Session
+     */
+    public function clearSingleDb(){
+      return $this->_clear(3);
+    }
+    
+    /**
+     * Get <single_db> value
+     *
+     * @return boolean
+     */
+    public function getSingleDb(){
+      return $this->_get(3);
+    }
+    
+    /**
+     * Set <single_db> value
+     *
+     * @param boolean $value
+     * @return \Vitess\Proto\Vtgate\Session
+     */
+    public function setSingleDb( $value){
+      return $this->_set(3, $value);
+    }
+    
+    /**
+     * Check if <autocommit> has a value
+     *
+     * @return boolean
+     */
+    public function hasAutocommit(){
+      return $this->_has(4);
+    }
+    
+    /**
+     * Clear <autocommit> value
+     *
+     * @return \Vitess\Proto\Vtgate\Session
+     */
+    public function clearAutocommit(){
+      return $this->_clear(4);
+    }
+    
+    /**
+     * Get <autocommit> value
+     *
+     * @return boolean
+     */
+    public function getAutocommit(){
+      return $this->_get(4);
+    }
+    
+    /**
+     * Set <autocommit> value
+     *
+     * @param boolean $value
+     * @return \Vitess\Proto\Vtgate\Session
+     */
+    public function setAutocommit( $value){
+      return $this->_set(4, $value);
     }
   }
 }

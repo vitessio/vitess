@@ -132,16 +132,16 @@
 }
 
 # Single table equality route with unsigned value
-"select id from user where name = 0xFFFFFFFFFFFFFFFF"
+"select id from user where name = 18446744073709551615"
 {
-  "Original": "select id from user where name = 0xFFFFFFFFFFFFFFFF",
+  "Original": "select id from user where name = 18446744073709551615",
   "Instructions": {
     "Opcode": "SelectEqual",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
-    "Query": "select id from user where name = 0xFFFFFFFFFFFFFFFF",
+    "Query": "select id from user where name = 18446744073709551615",
     "FieldQuery": "select id from user where 1 != 1",
     "Vindex": "name_user_map",
     "Values": 18446744073709551615
@@ -176,7 +176,7 @@
       "Sharded": true
     },
     "Query": "select user_extra.id from user join user_extra on user.id = user_extra.user_id where user.id = 5",
-    "FieldQuery": "select user_extra.id from user join user_extra where 1 != 1",
+    "FieldQuery": "select user_extra.id from user join user_extra on user.id = user_extra.user_id where 1 != 1",
     "Vindex": "user_index",
     "Values": 5
   }
@@ -193,7 +193,7 @@
       "Sharded": true
     },
     "Query": "select user_extra.id from user join user_extra on user.id = user_extra.user_id where user_extra.user_id = 5",
-    "FieldQuery": "select user_extra.id from user join user_extra where 1 != 1",
+    "FieldQuery": "select user_extra.id from user join user_extra on user.id = user_extra.user_id where 1 != 1",
     "Vindex": "user_index",
     "Values": 5
   }
@@ -210,7 +210,7 @@
       "Sharded": true
     },
     "Query": "select user_extra.id from user left join user_extra on user.id = user_extra.user_id where user.id = 5",
-    "FieldQuery": "select user_extra.id from user left join user_extra on 1 != 1 where 1 != 1",
+    "FieldQuery": "select user_extra.id from user left join user_extra on user.id = user_extra.user_id where 1 != 1",
     "Vindex": "user_index",
     "Values": 5
   }
@@ -227,7 +227,7 @@
       "Sharded": true
     },
     "Query": "select user_extra.id from user left join user_extra on user.id = user_extra.user_id where user_extra.user_id = 5",
-    "FieldQuery": "select user_extra.id from user left join user_extra on 1 != 1 where 1 != 1"
+    "FieldQuery": "select user_extra.id from user left join user_extra on user.id = user_extra.user_id where 1 != 1"
   }
 }
 
@@ -403,17 +403,54 @@
   }
 }
 
-# Route with multiple route constraints, SelectEqual is the best constraint.
-"select id from user where user.col = 5 and user.id in (1, 2) and user.name = 'aa'"
+# Route with multiple route constraints and boolean, SelectIN is the best constraint.
+"select id from user where user.col = case user.col when 'foo' then true else false end and user.id in (1, 2)"
 {
-  "Original": "select id from user where user.col = 5 and user.id in (1, 2) and user.name = 'aa'",
+  "Original": "select id from user where user.col = case user.col when 'foo' then true else false end and user.id in (1, 2)",
+  "Instructions": {
+    "Opcode": "SelectIN",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select id from user where user.col = case user.col when 'foo' then true else false end and user.id in ::__vals",
+    "FieldQuery": "select id from user where 1 != 1",
+    "Vindex": "user_index",
+    "Values": [
+      1,
+      2
+    ]
+  }
+}
+
+# Route with multiple route constraints and boolean, SelectEqual is the best constraint.
+"select (id or col) as val from user where user.col = 5 and user.id in (1, 2) and user.name = 'aa'"
+{
+  "Original": "select (id or col) as val from user where user.col = 5 and user.id in (1, 2) and user.name = 'aa'",
   "Instructions": {
     "Opcode": "SelectEqual",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
-    "Query": "select id from user where user.col = 5 and user.id in (1, 2) and user.name = 'aa'",
+    "Query": "select (id or col) as val from user where user.col = 5 and user.id in (1, 2) and user.name = 'aa'",
+    "FieldQuery": "select (id or col) as val from user where 1 != 1",
+    "Vindex": "name_user_map",
+    "Values": "aa"
+  }
+}
+
+# Route with multiple route constraints, SelectEqual is the best constraint.
+"select id from user where user.col = false and user.id in (1, 2) and user.name = 'aa'"
+{
+  "Original": "select id from user where user.col = false and user.id in (1, 2) and user.name = 'aa'",
+  "Instructions": {
+    "Opcode": "SelectEqual",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select id from user where user.col = false and user.id in (1, 2) and user.name = 'aa'",
     "FieldQuery": "select id from user where 1 != 1",
     "Vindex": "name_user_map",
     "Values": "aa"
@@ -470,9 +507,9 @@
 }
 
 # Unsharded route
-"select main1.id from user join main1 where main1.id = user.id"
+"select unsharded.id from user join unsharded where unsharded.id = user.id"
 {
-  "Original": "select main1.id from user join main1 where main1.id = user.id",
+  "Original": "select unsharded.id from user join unsharded where unsharded.id = user.id",
   "Instructions": {
     "Opcode": "Join",
     "Left": {
@@ -490,8 +527,8 @@
         "Name": "main",
         "Sharded": false
       },
-      "Query": "select main1.id from main1 where main1.id = :user_id",
-      "FieldQuery": "select main1.id from main1 where 1 != 1",
+      "Query": "select unsharded.id from unsharded where unsharded.id = :user_id",
+      "FieldQuery": "select unsharded.id from unsharded where 1 != 1",
       "JoinVars": {
         "user_id": {}
       }
@@ -685,6 +722,10 @@
   }
 }
 
+# unresolved symbol in inner subquery.
+"select id from user where id = :a and user.col in (select user_extra.col from user_extra where user_extra.user_id = :a and foo.id = 1)"
+"symbol foo.id not found"
+
 # outer and inner subquery route by same outermost column value
 "select id2 from user uu where id in (select id from user where id = uu.id and user.col in (select user_extra.col from user_extra where user_extra.user_id = uu.id))"
 {
@@ -711,7 +752,7 @@
       "Sharded": true
     },
     "Query": "select user_extra.Id from user join user_extra on user.iD = user_extra.User_Id where user.Id = 5",
-    "FieldQuery": "select user_extra.Id from user join user_extra where 1 != 1",
+    "FieldQuery": "select user_extra.Id from user join user_extra on user.iD = user_extra.User_Id where 1 != 1",
     "Vindex": "user_index",
     "Values": 5
   }

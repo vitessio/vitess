@@ -23,6 +23,31 @@ var (
 	VtgateProtocol = flag.String("vtgate_protocol", "grpc", "how to talk to vtgate")
 )
 
+// Atomicity specifies atomicity level of a transaction.
+type Atomicity int
+
+const (
+	// AtomicityMulti is the default level. It allows distributed transactions
+	// with best effort commits. Partial commits are possible.
+	AtomicityMulti = Atomicity(iota)
+	// AtomicitySingle prevents a transaction from crossing the boundary of
+	// a single database.
+	AtomicitySingle
+	// Atomicity2PC allows distributed transactions, and performs 2PC commits.
+	Atomicity2PC
+)
+
+// WithAtomicity returns a context with the atomicity level set.
+func WithAtomicity(ctx context.Context, level Atomicity) context.Context {
+	return context.WithValue(ctx, Atomicity(0), level)
+}
+
+// AtomicityFromContext returns the atomicity of the context.
+func AtomicityFromContext(ctx context.Context) Atomicity {
+	v, _ := ctx.Value(Atomicity(0)).(Atomicity)
+	return v
+}
+
 // VTGateConn is the client API object to talk to vtgate.
 // It is constructed using the Dial method.
 // It can be used concurrently across goroutines.
@@ -61,6 +86,13 @@ func (conn *VTGateConn) ExecuteKeyRanges(ctx context.Context, query string, keys
 // ExecuteEntityIds executes a non-streaming query for multiple entities.
 func (conn *VTGateConn) ExecuteEntityIds(ctx context.Context, query string, keyspace string, entityColumnName string, entityKeyspaceIDs []*vtgatepb.ExecuteEntityIdsRequest_EntityId, bindVars map[string]interface{}, tabletType topodatapb.TabletType, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
 	res, _, err := conn.impl.ExecuteEntityIds(ctx, query, keyspace, entityColumnName, entityKeyspaceIDs, bindVars, tabletType, nil, options)
+	return res, err
+}
+
+// ExecuteBatch executes a non-streaming list of queries on vtgate.
+// This is using v3 API.
+func (conn *VTGateConn) ExecuteBatch(ctx context.Context, queryList []string, bindVarsList []map[string]interface{}, tabletType topodatapb.TabletType, asTransaction bool, options *querypb.ExecuteOptions) ([]sqltypes.QueryResponse, error) {
+	res, _, err := conn.impl.ExecuteBatch(ctx, queryList, bindVarsList, conn.keyspace, tabletType, asTransaction, nil, options)
 	return res, err
 }
 
@@ -111,16 +143,33 @@ func (conn *VTGateConn) StreamExecuteKeyspaceIds(ctx context.Context, query stri
 	return conn.impl.StreamExecuteKeyspaceIds(ctx, query, keyspace, keyspaceIds, bindVars, tabletType, options)
 }
 
+// ResolveTransaction resolves the 2pc transaction.
+func (conn *VTGateConn) ResolveTransaction(ctx context.Context, dtid string) error {
+	return conn.impl.ResolveTransaction(ctx, dtid)
+}
+
+// MessageStream streams messages.
+func (conn *VTGateConn) MessageStream(ctx context.Context, keyspace string, shard string, keyRange *topodatapb.KeyRange, name string, callback func(*sqltypes.Result) error) error {
+	return conn.impl.MessageStream(ctx, keyspace, shard, keyRange, name, callback)
+}
+
+// MessageAck acks messages.
+func (conn *VTGateConn) MessageAck(ctx context.Context, keyspace string, name string, ids []*querypb.Value) (int64, error) {
+	return conn.impl.MessageAck(ctx, keyspace, name, ids)
+}
+
 // Begin starts a transaction and returns a VTGateTX.
 func (conn *VTGateConn) Begin(ctx context.Context) (*VTGateTx, error) {
-	session, err := conn.impl.Begin(ctx)
+	atomicity := AtomicityFromContext(ctx)
+	session, err := conn.impl.Begin(ctx, atomicity == AtomicitySingle)
 	if err != nil {
 		return nil, err
 	}
 
 	return &VTGateTx{
-		conn:    conn,
-		session: session,
+		conn:      conn,
+		session:   session,
+		atomicity: atomicity,
 	}, nil
 }
 
@@ -171,8 +220,9 @@ func (conn *VTGateConn) UpdateStream(ctx context.Context, shard string, keyRange
 // VTGateTx defines an ongoing transaction.
 // It should not be concurrently used across goroutines.
 type VTGateTx struct {
-	conn    *VTGateConn
-	session interface{}
+	conn      *VTGateConn
+	session   interface{}
+	atomicity Atomicity
 }
 
 // Execute executes a query on vtgate within the current transaction.
@@ -225,6 +275,16 @@ func (tx *VTGateTx) ExecuteEntityIds(ctx context.Context, query string, keyspace
 	return res, err
 }
 
+// ExecuteBatch executes a list of queries on vtgate within the current transaction.
+func (tx *VTGateTx) ExecuteBatch(ctx context.Context, query []string, bindVars []map[string]interface{}, tabletType topodatapb.TabletType, asTransaction bool, options *querypb.ExecuteOptions) ([]sqltypes.QueryResponse, error) {
+	if tx.session == nil {
+		return nil, fmt.Errorf("execute: not in transaction")
+	}
+	res, session, errs := tx.conn.impl.ExecuteBatch(ctx, query, bindVars, tx.conn.keyspace, tabletType, asTransaction, tx.session, options)
+	tx.session = session
+	return res, errs
+}
+
 // ExecuteBatchShards executes a set of non-streaming queries for multiple shards.
 func (tx *VTGateTx) ExecuteBatchShards(ctx context.Context, queries []*vtgatepb.BoundShardQuery, tabletType topodatapb.TabletType, options *querypb.ExecuteOptions) ([]sqltypes.Result, error) {
 	if tx.session == nil {
@@ -250,7 +310,7 @@ func (tx *VTGateTx) Commit(ctx context.Context) error {
 	if tx.session == nil {
 		return fmt.Errorf("commit: not in transaction")
 	}
-	err := tx.conn.impl.Commit(ctx, tx.session)
+	err := tx.conn.impl.Commit(ctx, tx.session, tx.atomicity == Atomicity2PC)
 	tx.session = nil
 	return err
 }
@@ -287,6 +347,9 @@ type Impl interface {
 	// ExecuteEntityIds executes a non-streaming query for multiple entities.
 	ExecuteEntityIds(ctx context.Context, query string, keyspace string, entityColumnName string, entityKeyspaceIDs []*vtgatepb.ExecuteEntityIdsRequest_EntityId, bindVars map[string]interface{}, tabletType topodatapb.TabletType, session interface{}, options *querypb.ExecuteOptions) (*sqltypes.Result, interface{}, error)
 
+	// ExecuteBatch executes a non-streaming queries on vtgate.
+	ExecuteBatch(ctx context.Context, queryList []string, bindVarsList []map[string]interface{}, keyspace string, tabletType topodatapb.TabletType, asTransaction bool, session interface{}, options *querypb.ExecuteOptions) ([]sqltypes.QueryResponse, interface{}, error)
+
 	// ExecuteBatchShards executes a set of non-streaming queries for multiple shards.
 	ExecuteBatchShards(ctx context.Context, queries []*vtgatepb.BoundShardQuery, tabletType topodatapb.TabletType, asTransaction bool, session interface{}, options *querypb.ExecuteOptions) ([]sqltypes.Result, interface{}, error)
 
@@ -306,11 +369,17 @@ type Impl interface {
 	StreamExecuteKeyspaceIds(ctx context.Context, query string, keyspace string, keyspaceIds [][]byte, bindVars map[string]interface{}, tabletType topodatapb.TabletType, options *querypb.ExecuteOptions) (sqltypes.ResultStream, error)
 
 	// Begin starts a transaction and returns a VTGateTX.
-	Begin(ctx context.Context) (interface{}, error)
+	Begin(ctx context.Context, singledb bool) (interface{}, error)
 	// Commit commits the current transaction.
-	Commit(ctx context.Context, session interface{}) error
+	Commit(ctx context.Context, session interface{}, twopc bool) error
 	// Rollback rolls back the current transaction.
 	Rollback(ctx context.Context, session interface{}) error
+	// ResolveTransaction resolves the specified 2pc transaction.
+	ResolveTransaction(ctx context.Context, dtid string) error
+
+	// Messaging functions.
+	MessageStream(ctx context.Context, keyspace string, shard string, keyRange *topodatapb.KeyRange, name string, callback func(*sqltypes.Result) error) error
+	MessageAck(ctx context.Context, keyspace string, name string, ids []*querypb.Value) (int64, error)
 
 	// SplitQuery splits a query into smaller queries. It is mostly used by batch job frameworks
 	// such as MapReduce. See the documentation for the vtgate.SplitQueryRequest protocol buffer

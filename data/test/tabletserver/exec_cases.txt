@@ -2,8 +2,18 @@
 "select * from a union select * from b"
 {
   "PlanID": "PASS_SELECT",
+  "TableName": "",
   "FieldQuery": "select * from a where 1 != 1 union select * from b where 1 != 1",
-  "FullQuery": "select * from a union select * from b"
+  "FullQuery": "select * from a union select * from b limit :#maxLimit"
+}
+
+# union with limit
+"select * from a union select * from b limit 10"
+{
+  "PlanID": "PASS_SELECT",
+  "TableName": "",
+  "FieldQuery": "select * from a where 1 != 1 union select * from b where 1 != 1",
+  "FullQuery": "select * from a union select * from b limit 10"
 }
 
 # distinct
@@ -20,7 +30,7 @@
 {
   "PlanID": "PASS_SELECT",
   "TableName": "a",
-  "FieldQuery": "select * from a where 1 != 1",
+  "FieldQuery": "select * from a where 1 != 1 group by b",
   "FullQuery": "select * from a group by b limit :#maxLimit"
 }
 
@@ -42,10 +52,29 @@
   "FullQuery": "select * from a limit 5"
 }
 
+# limit with offset arg
+"select * from a limit 10, 5"
+{
+  "PlanID": "PASS_SELECT",
+  "TableName": "a",
+  "FieldQuery": "select * from a where 1 != 1",
+  "FullQuery": "select * from a limit 10, 5"
+}
+
+# limit with offset keyword
+"select * from a limit 5 offset 10"
+{
+  "PlanID": "PASS_SELECT",
+  "TableName": "a",
+  "FieldQuery": "select * from a where 1 != 1",
+  "FullQuery": "select * from a limit 10, 5"
+}
+
 # cross-db
 "select * from a.b"
 {
   "PlanID": "PASS_SELECT",
+  "TableName": "",
   "FieldQuery": "select * from a.b where 1 != 1",
   "FullQuery": "select * from a.b limit :#maxLimit"
 }
@@ -54,6 +83,7 @@
 "select * from a,b"
 {
   "PlanID": "PASS_SELECT",
+  "TableName": "",
   "FieldQuery": "select * from a, b where 1 != 1",
   "FullQuery": "select * from a, b limit :#maxLimit"
 }
@@ -62,6 +92,7 @@
 "select * from a join b"
 {
   "PlanID": "PASS_SELECT",
+  "TableName": "",
   "FieldQuery": "select * from a join b where 1 != 1",
   "FullQuery": "select * from a join b limit :#maxLimit"
 }
@@ -70,7 +101,8 @@
 "select * from a right join b on c = d"
 {
   "PlanID": "PASS_SELECT",
-  "FieldQuery": "select * from a right join b on 1 != 1 where 1 != 1",
+  "TableName": "",
+  "FieldQuery": "select * from a right join b on c = d where 1 != 1",
   "FullQuery": "select * from a right join b on c = d limit :#maxLimit"
 }
 
@@ -78,6 +110,7 @@
 "select * from (b)"
 {
   "PlanID": "PASS_SELECT",
+  "TableName": "",
   "FieldQuery": "select * from (b) where 1 != 1",
   "FullQuery": "select * from (b) limit :#maxLimit"
 }
@@ -149,12 +182,9 @@
 {
   "PlanID": "PASS_DML",
   "Reason": "TABLE",
+  "TableName": "",
   "FullQuery": "insert into b.a(eid, id) values (1, :a)"
 }
-
-# insert sub-select
-"insert into a (eid, id) values (select * from b)"
-"row subquery not supported for inserts"
 
 # insert with bind value
 "insert into a (eid, id) values (1, :a)"
@@ -178,6 +208,16 @@
 
 # default string
 "insert into d(id) values(1)"
+{
+  "PlanID": "INSERT_PK",
+  "TableName": "d",
+  "FullQuery": "insert into d(id) values (1)",
+  "OuterQuery": "insert into d(id) values (1)",
+  "PKValues": ["0"]
+}
+
+# default without INTO
+"insert d(id) values(1)"
 {
   "PlanID": "INSERT_PK",
   "TableName": "d",
@@ -228,6 +268,15 @@
   "FullQuery": "insert into a(eid, id) values (1 + 1, 2)"
 }
 
+# complex
+"insert into a (eid, id) values (0x04, 2)"
+{
+  "PlanID": "PASS_DML",
+  "Reason": "COMPLEX_EXPR",
+  "TableName": "a",
+  "FullQuery": "insert into a(eid, id) values (0x04, 2)"
+}
+
 # no index
 "insert into c (eid, id) values (1, 2)"
 {
@@ -268,6 +317,106 @@
   "UpsertQuery": "update b set eid = 2 where :#pk",
   "PKValues": [1, 2],
   "SecondaryPKValues": [2, null]
+}
+
+# on dup, with values() func
+"insert into a (eid, id, name) values (1, 2, 'foo') on duplicate key update name = values(name)"
+{
+  "PlanID": "UPSERT_PK",
+  "TableName": "a",
+  "FullQuery": "insert into a(eid, id, name) values (1, 2, 'foo') on duplicate key update name = values(name)",
+  "OuterQuery": "insert into a(eid, id, name) values (1, 2, 'foo')",
+  "UpsertQuery": "update a set name = 'foo' where :#pk",
+  "PKValues": [1, 2]
+}
+
+# on dup, with values() inside another func
+"insert into a (eid, id, name) values (1, 2, 'foo') on duplicate key update name = concat(values(name), 'foo')"
+{
+  "PlanID": "UPSERT_PK",
+  "TableName": "a",
+  "FullQuery": "insert into a(eid, id, name) values (1, 2, 'foo') on duplicate key update name = concat(values(name), 'foo')",
+  "OuterQuery": "insert into a(eid, id, name) values (1, 2, 'foo')",
+  "UpsertQuery": "update a set name = concat('foo', 'foo') where :#pk",
+  "PKValues": [1, 2]
+}
+
+# on dup, with values() and simple expression
+"insert into a (eid, id, name) values (1, 2, 3) on duplicate key update name = values(name) + 5"
+{
+  "PlanID": "UPSERT_PK",
+  "TableName": "a",
+  "FullQuery": "insert into a(eid, id, name) values (1, 2, 3) on duplicate key update name = values(name) + 5",
+  "OuterQuery": "insert into a(eid, id, name) values (1, 2, 3)",
+  "UpsertQuery": "update a set name = 3 + 5 where :#pk",
+  "PKValues": [1, 2]
+}
+
+# on dup, with values() and case expression
+"insert into a (eid, id, name) values (1, 2, 3) on duplicate key update name = case when values(eid) < values(id) then values(name) + 5 else 3 end"
+{
+  "PlanID": "UPSERT_PK",
+  "TableName": "a",
+  "FullQuery": "insert into a(eid, id, name) values (1, 2, 3) on duplicate key update name = case when values(eid) \u003c values(id) then values(name) + 5 else 3 end",
+  "OuterQuery": "insert into a(eid, id, name) values (1, 2, 3)",
+  "UpsertQuery": "update a set name = case when 1 \u003c 2 then 3 + 5 else 3 end where :#pk",
+  "PKValues": [1, 2]
+}
+
+# on dup, with bindvars in values()
+"insert into a (eid, id, name) values (1, :id, :name) on duplicate key update name = values(name), id = values(id)"
+{
+  "PlanID": "UPSERT_PK",
+  "TableName": "a",
+  "FullQuery": "insert into a(eid, id, name) values (1, :id, :name) on duplicate key update name = values(name), id = values(id)",
+  "OuterQuery": "insert into a(eid, id, name) values (1, :id, :name)",
+  "UpsertQuery": "update a set name = :name, id = :id where :#pk",
+  "PKValues": [1, ":id"],
+  "SecondaryPKValues": [null, ":id"]
+}
+
+# complex upsert with values()
+"insert into a (eid, id) values (1+1, 2) on duplicate key update eid = values(eid) + 1"
+{
+  "PlanID": "PASS_DML",
+  "Reason": "COMPLEX_EXPR",
+  "TableName": "a",
+  "FullQuery": "insert into a(eid, id) values (1 + 1, 2) on duplicate key update eid = values(eid) + 1"
+}
+
+
+# upsert with mismatch values()
+"insert into a (eid, id) values (1, 2) on duplicate key update eid  = values(eid), name = values(name)"
+{
+  "PlanID": "PASS_DML",
+  "Reason": "UPSERT_COL_MISMATCH",
+  "TableName": "a",
+  "FullQuery": "insert into a(eid, id) values (1, 2) on duplicate key update eid = values(eid), name = values(name)",
+  "PKValues": [1, 2]
+}
+
+# on dup pk change, with values() func
+"insert into b (eid, id) values (1, 2) on duplicate key update eid = values(eid), id = values(id)"
+{
+  "PlanID": "UPSERT_PK",
+  "TableName": "b",
+  "FullQuery": "insert into b(eid, id) values (1, 2) on duplicate key update eid = values(eid), id = values(id)",
+  "OuterQuery": "insert into b(eid, id) values (1, 2)",
+  "UpsertQuery": "update b set eid = 1, id = 2 where :#pk",
+  "PKValues": [1, 2],
+  "SecondaryPKValues": [1, 2]
+}
+
+# on dup pk change, with mixed expr and values() func
+"insert into a (eid, id, name) values (1, 2, 'foo') on duplicate key update eid = 2, id = values(id), name = func()"
+{
+  "PlanID": "UPSERT_PK",
+  "TableName": "a",
+  "FullQuery": "insert into a(eid, id, name) values (1, 2, 'foo') on duplicate key update eid = 2, id = values(id), name = func()",
+  "OuterQuery": "insert into a(eid, id, name) values (1, 2, 'foo')",
+  "UpsertQuery": "update a set eid = 2, id = 2, name = func() where :#pk",
+  "PKValues": [1, 2],
+  "SecondaryPKValues": [2, 2]
 }
 
 # on dup complex pk change
@@ -333,11 +482,100 @@
   "PKValues": [[1, 3], [2, 4]]
 }
 
+# message insert with time_scheduled specified
+"insert into msg(time_scheduled, id, message) values(1, 2, 'aa')"
+{
+  "PlanID": "INSERT_MESSAGE",
+  "TableName": "msg",
+  "FullQuery": "insert into msg(time_scheduled, id, message) values (1, 2, 'aa')",
+  "OuterQuery": "insert into msg(time_scheduled, id, message, time_next, time_created, epoch) values (1, 2, 'aa', 1, :#time_now, 0)",
+  "PKValues": [
+    1,
+    2
+  ],
+  "MessageReloaderQuery": "select time_next, epoch, id, message from msg where :#pk"
+}
+
+# message insert with no time_schedule
+"insert into msg(id, message) values(2, 'aa')"
+{
+  "PlanID": "INSERT_MESSAGE",
+  "TableName": "msg",
+  "FullQuery": "insert into msg(id, message) values (2, 'aa')",
+  "OuterQuery": "insert into msg(id, message, time_scheduled, time_next, time_created, epoch) values (2, 'aa', :#time_now, :#time_now, :#time_now, 0)",
+  "PKValues": [
+    ":#time_now",
+    2
+  ],
+  "MessageReloaderQuery": "select time_next, epoch, id, message from msg where :#pk"
+}
+
+# message multi-value insert
+"insert into msg(time_scheduled, id, message) values(1, 2, 'aa'), (3, 4, 'bb')"
+{
+  "PlanID": "INSERT_MESSAGE",
+  "TableName": "msg",
+  "FullQuery": "insert into msg(time_scheduled, id, message) values (1, 2, 'aa'), (3, 4, 'bb')",
+  "OuterQuery": "insert into msg(time_scheduled, id, message, time_next, time_created, epoch) values (1, 2, 'aa', 1, :#time_now, 0), (3, 4, 'bb', 3, :#time_now, 0)",
+  "PKValues": [
+    [
+      1,
+      3
+    ],
+    [
+      2,
+      4
+    ]
+  ],
+  "MessageReloaderQuery": "select time_next, epoch, id, message from msg where :#pk"
+}
+
+# message insert subquery
+"insert into msg(time_scheduled, id, message) select * from a"
+"subquery not allowed for message table: msg"
+
+# message insert on dup key
+"insert into msg(time_scheduled, id, message) Values(1, 2, 'aa') on duplicate key update message='bb'"
+"'on duplicate key' construct not allowed for message table: msg"
+
+# message insert without column list
+"insert into msg values(1)"
+"column list must be specified for message table insert: msg"
+
+# message column count mismatch
+"insert into msg(id, message) values(1)"
+"column count doesn't match value count"
+
+# message insert time_next
+"insert into msg(id, message, time_next) values(2, 'aa', 3)"
+"time_next must not be specified for message insert"
+
+# message insert time_created
+"insert into msg(id, message, time_created) values(2, 'aa', 3)"
+"time_created must not be specified for message insert"
+
+# message insert epoch
+"insert into msg(id, message, epoch) values(2, 'aa', 3)"
+"epoch must not be specified for message insert"
+
+# message insert time_acked
+"insert into msg(id, message, time_acked) values(2, 'aa', 3)"
+"time_acked must not be specified for message insert"
+
+# message insert id missing
+"insert into msg(message) values('aa')"
+"id must be specified for message insert"
+
+# message insert message missing
+"insert into msg(id) values(1)"
+"message must be specified for message insert"
+
 # update cross-db
 "update b.a set name='foo' where eid=1 and id=1"
 {
   "PlanID": "PASS_DML",
   "Reason": "TABLE",
+  "TableName": "",
   "FullQuery": "update b.a set name = 'foo' where eid = 1 and id = 1"
 }
 
@@ -349,12 +587,13 @@
   "FullQuery": "update b set eid = 1",
   "OuterQuery": "update b set eid = 1 where :#pk",
   "Subquery": "select eid, id from b limit :#maxLimit for update",
-  "SecondaryPKValues": [1, null]
+  "SecondaryPKValues": [1, null],
+  "WhereClause": ""
 }
 
 # type mismatch
-"update b set eid=1.2"
-"type mismatch: strconv.ParseUint: parsing "1.2": invalid syntax"
+"update b set eid=18446744073709551616"
+"type mismatch: strconv.ParseUint: parsing "18446744073709551616": value out of range"
 
 # complex pk change
 "update b set eid=foo()"
@@ -362,7 +601,8 @@
   "PlanID": "PASS_DML",
   "Reason": "PK_CHANGE",
   "TableName": "b",
-  "FullQuery": "update b set eid = foo()"
+  "FullQuery": "update b set eid = foo()",
+  "WhereClause": ""
 }
 
 # update subquery
@@ -372,7 +612,8 @@
   "TableName": "a",
   "FullQuery": "update a set name = 'foo'",
   "OuterQuery": "update a set name = 'foo' where :#pk",
-  "Subquery": "select eid, id from a limit :#maxLimit for update"
+  "Subquery": "select eid, id from a limit :#maxLimit for update",
+  "WhereClause": ""
 }
 
 # update complex where clause
@@ -382,7 +623,8 @@
   "TableName": "a",
   "FullQuery": "update a set name = 'foo' where eid + 1 = 1",
   "OuterQuery": "update a set name = 'foo' where :#pk",
-  "Subquery": "select eid, id from a where eid + 1 = 1 limit :#maxLimit for update"
+  "Subquery": "select eid, id from a where eid + 1 = 1 limit :#maxLimit for update",
+  "WhereClause": " where eid + 1 = 1"
 }
 
 # pk
@@ -392,7 +634,8 @@
   "TableName": "a",
   "FullQuery": "update a set name = 'foo' where eid = 1 and id = 1",
   "OuterQuery": "update a set name = 'foo' where :#pk",
-  "PKValues": [1, 1]
+  "PKValues": [1, 1],
+  "WhereClause": " where eid = 1 and id = 1"
 }
 
 # partial pk
@@ -402,7 +645,8 @@
   "TableName": "a",
   "FullQuery": "update a set name = 'foo' where eid = 1",
   "OuterQuery": "update a set name = 'foo' where :#pk",
-  "Subquery": "select eid, id from a where eid = 1 limit :#maxLimit for update"
+  "Subquery": "select eid, id from a where eid = 1 limit :#maxLimit for update",
+  "WhereClause": " where eid = 1"
 }
 
 # bad pk
@@ -412,7 +656,8 @@
   "TableName": "a",
   "FullQuery": "update a set name = 'foo' where eid = 1.0 and id = 1",
   "OuterQuery": "update a set name = 'foo' where :#pk",
-  "Subquery": "select eid, id from a where eid = 1.0 and id = 1 limit :#maxLimit for update"
+  "Subquery": "select eid, id from a where eid = 1.0 and id = 1 limit :#maxLimit for update",
+  "WhereClause": " where eid = 1.0 and id = 1"
 }
 
 # partial pk with limit
@@ -422,7 +667,8 @@
   "TableName": "a",
   "FullQuery": "update a set name = 'foo' where eid = 1 limit 10",
   "OuterQuery": "update a set name = 'foo' where :#pk",
-  "Subquery": "select eid, id from a where eid = 1 limit 10 for update"
+  "Subquery": "select eid, id from a where eid = 1 limit 10 for update",
+  "WhereClause": " where eid = 1"
 }
 
 # non-pk
@@ -432,7 +678,8 @@
   "TableName": "a",
   "FullQuery": "update a set name = 'foo' where eid = 1 and name = 'foo'",
   "OuterQuery": "update a set name = 'foo' where :#pk",
-  "Subquery": "select eid, id from a where eid = 1 and name = 'foo' limit :#maxLimit for update"
+  "Subquery": "select eid, id from a where eid = 1 and name = 'foo' limit :#maxLimit for update",
+  "WhereClause": " where eid = 1 and name = 'foo'"
 }
 
 # no index
@@ -441,7 +688,8 @@
   "PlanID": "PASS_DML",
   "Reason": "TABLE_NOINDEX",
   "TableName": "c",
-  "FullQuery": "update c set eid = 1"
+  "FullQuery": "update c set eid = 1",
+  "WhereClause": ""
 }
 
 # complex expression in where
@@ -451,7 +699,8 @@
   "TableName":"a",
   "FullQuery":"update a set name = 'foo' where eid + 1 = 1 and id = 1",
   "OuterQuery":"update a set name = 'foo' where :#pk",
-  "Subquery":"select eid, id from a where eid + 1 = 1 and id = 1 limit :#maxLimit for update"
+  "Subquery":"select eid, id from a where eid + 1 = 1 and id = 1 limit :#maxLimit for update",
+  "WhereClause": " where eid + 1 = 1 and id = 1"
 }
 
 # parenthesized expressions in where
@@ -461,7 +710,8 @@
   "TableName": "a",
   "FullQuery": "update a set name = 'foo' where (eid = 1) and id = 1",
   "OuterQuery": "update a set name = 'foo' where :#pk",
-  "PKValues": [1, 1]
+  "PKValues": [1, 1],
+  "WhereClause": " where (eid = 1) and id = 1"
 }
 
 # in clause expression in where
@@ -471,7 +721,8 @@
   "TableName":"a",
   "FullQuery":"update a set name = 'foo' where eid in (1, 2) and id = 1",
   "OuterQuery":"update a set name = 'foo' where :#pk",
-  "PKValues":[[1,2],1]
+  "PKValues":[[1,2],1],
+  "WhereClause": " where eid in (1, 2) and id = 1"
 }
 
 # double in clause
@@ -481,7 +732,8 @@
   "TableName":"a",
   "FullQuery":"update a set name = 'foo' where eid in (1, 2) and id in (1, 2)",
   "OuterQuery":"update a set name = 'foo' where :#pk",
-  "Subquery":"select eid, id from a where eid in (1, 2) and id in (1, 2) limit :#maxLimit for update"
+  "Subquery":"select eid, id from a where eid in (1, 2) and id in (1, 2) limit :#maxLimit for update",
+  "WhereClause": " where eid in (1, 2) and id in (1, 2)"
 }
 
 # double use of pk
@@ -491,7 +743,8 @@
   "TableName":"a",
   "FullQuery":"update a set name = 'foo' where eid = 1 and eid = 2",
   "OuterQuery":"update a set name = 'foo' where :#pk",
-  "Subquery":"select eid, id from a where eid = 1 and eid = 2 limit :#maxLimit for update"
+  "Subquery":"select eid, id from a where eid = 1 and eid = 2 limit :#maxLimit for update",
+  "WhereClause": " where eid = 1 and eid = 2"
 }
 
 # delete cross-db
@@ -499,6 +752,7 @@
 {
   "PlanID": "PASS_DML",
   "Reason": "TABLE",
+  "TableName": "",
   "FullQuery": "delete from b.a where eid = 1 and id = 1"
 }
 
@@ -509,7 +763,8 @@
   "TableName": "a",
   "FullQuery": "delete from a",
   "OuterQuery": "delete from a where :#pk",
-  "Subquery": "select eid, id from a limit :#maxLimit for update"
+  "Subquery": "select eid, id from a limit :#maxLimit for update",
+  "WhereClause": ""
 }
 
 # delete complex where clause
@@ -519,7 +774,8 @@
   "TableName": "a",
   "FullQuery": "delete from a where eid + 1 = 1",
   "OuterQuery": "delete from a where :#pk",
-  "Subquery": "select eid, id from a where eid + 1 = 1 limit :#maxLimit for update"
+  "Subquery": "select eid, id from a where eid + 1 = 1 limit :#maxLimit for update",
+  "WhereClause": " where eid + 1 = 1"
 }
 
 # pk
@@ -529,7 +785,8 @@
   "TableName": "a",
   "FullQuery": "delete from a where eid = 1 and id = 1",
   "OuterQuery": "delete from a where :#pk",
-  "PKValues": [1, 1]
+  "PKValues": [1, 1],
+  "WhereClause": " where eid = 1 and id = 1"
 }
 
 # partial pk
@@ -539,7 +796,8 @@
   "TableName": "a",
   "FullQuery": "delete from a where eid = 1",
   "OuterQuery": "delete from a where :#pk",
-  "Subquery": "select eid, id from a where eid = 1 limit :#maxLimit for update"
+  "Subquery": "select eid, id from a where eid = 1 limit :#maxLimit for update",
+  "WhereClause": " where eid = 1"
 }
 
 # bad pk value delete
@@ -549,7 +807,8 @@
   "TableName": "a",
   "FullQuery": "delete from a where eid = 1.0 and id = 1",
   "OuterQuery": "delete from a where :#pk",
-  "Subquery": "select eid, id from a where eid = 1.0 and id = 1 limit :#maxLimit for update"
+  "Subquery": "select eid, id from a where eid = 1.0 and id = 1 limit :#maxLimit for update",
+  "WhereClause": " where eid = 1.0 and id = 1"
 }
 
 # non-pk
@@ -559,7 +818,8 @@
   "TableName": "a",
   "FullQuery": "delete from a where eid = 1 and name = 'foo'",
   "OuterQuery": "delete from a where :#pk",
-  "Subquery": "select eid, id from a where eid = 1 and name = 'foo' limit :#maxLimit for update"
+  "Subquery": "select eid, id from a where eid = 1 and name = 'foo' limit :#maxLimit for update",
+  "WhereClause": " where eid = 1 and name = 'foo'"
 }
 
 # no index
@@ -568,7 +828,8 @@
   "PlanID": "PASS_DML",
   "Reason": "TABLE_NOINDEX",
   "TableName": "c",
-  "FullQuery": "delete from c"
+  "FullQuery": "delete from c",
+  "WhereClause": ""
 }
 
 # delete complex expression in where
@@ -578,7 +839,8 @@
   "TableName":"a",
   "FullQuery":"delete from a where eid + 1 = 1 and id = 1",
   "OuterQuery":"delete from a where :#pk",
-  "Subquery":"select eid, id from a where eid + 1 = 1 and id = 1 limit :#maxLimit for update"
+  "Subquery":"select eid, id from a where eid + 1 = 1 and id = 1 limit :#maxLimit for update",
+  "WhereClause": " where eid + 1 = 1 and id = 1"
 }
 
 # parenthesized expressions in where
@@ -588,7 +850,8 @@
   "TableName": "a",
   "FullQuery": "delete from a where (eid = 1) and id = 1",
   "OuterQuery": "delete from a where :#pk",
-  "PKValues": [1, 1]
+  "PKValues": [1, 1],
+  "WhereClause": " where (eid = 1) and id = 1"
 }
 
 # delete in clause expression in where
@@ -598,7 +861,8 @@
   "TableName":"a",
   "FullQuery":"delete from a where eid in (1, 2) and id = 1",
   "OuterQuery":"delete from a where :#pk",
-  "PKValues":[[1,2],1]
+  "PKValues":[[1,2],1],
+  "WhereClause": " where eid in (1, 2) and id = 1"
 }
 
 # delete double in clause
@@ -608,7 +872,8 @@
   "TableName":"a",
   "FullQuery":"delete from a where eid in (1, 2) and id in (1, 2)",
   "OuterQuery":"delete from a where :#pk",
-  "Subquery":"select eid, id from a where eid in (1, 2) and id in (1, 2) limit :#maxLimit for update"
+  "Subquery":"select eid, id from a where eid in (1, 2) and id in (1, 2) limit :#maxLimit for update",
+  "WhereClause": " where eid in (1, 2) and id in (1, 2)"
 }
 
 # delete double use of pk
@@ -618,14 +883,32 @@
   "TableName":"a",
   "FullQuery":"delete from a where eid = 1 and eid = 2",
   "OuterQuery":"delete from a where :#pk",
-  "Subquery":"select eid, id from a where eid = 1 and eid = 2 limit :#maxLimit for update"
+  "Subquery":"select eid, id from a where eid = 1 and eid = 2 limit :#maxLimit for update",
+  "WhereClause": " where eid = 1 and eid = 2"
 }
 
-# sequence
+# single value sequence
 "select next value from seq"
 {
   "PlanID": "NEXTVAL",
-  "TableName": "seq"
+  "TableName": "seq",
+  "PKValues":[1]
+}
+
+# sequence with number
+"select next 10 values from seq"
+{
+  "PlanID": "NEXTVAL",
+  "TableName": "seq",
+  "PKValues":[10]
+}
+
+# sequence with bindvar
+"select next :a values from seq"
+{
+  "PlanID": "NEXTVAL",
+  "TableName": "seq",
+  "PKValues":[":a"]
 }
 
 # nextval on non-sequence table
@@ -640,6 +923,7 @@
 "set  a=1"
 {
   "PlanID": "SET",
+  "TableName": "",
   "FullQuery": "set a = 1"
 }
 
@@ -647,6 +931,7 @@
 "set  a=1.2"
 {
   "PlanID": "SET",
+  "TableName": "",
   "FullQuery": "set a = 1.2"
 }
 
@@ -654,6 +939,7 @@
 "set a='b'"
 {
   "PlanID": "SET",
+  "TableName": "",
   "FullQuery": "set a = 'b'"
 }
 
@@ -661,13 +947,15 @@
 "set a=1, b=2"
 {
   "PlanID": "SET",
+  "TableName": "",
   "FullQuery": "set a = 1, b = 2"
 }
 
 # create
 "create table a(a int, b varchar(8))"
 {
-  "PlanID": "DDL"
+  "PlanID": "DDL",
+  "TableName": ""
 }
 
 # alter
@@ -708,19 +996,22 @@
 # show
 "show a"
 {
-  "PlanID": "OTHER"
+  "PlanID": "OTHER",
+  "TableName": ""
 }
 
 # describe
 "describe a"
 {
-  "PlanID": "OTHER"
+  "PlanID": "OTHER",
+  "TableName": ""
 }
 
 # explain
 "explain a"
 {
-  "PlanID": "OTHER"
+  "PlanID": "OTHER",
+  "TableName": ""
 }
 
 # table not found select

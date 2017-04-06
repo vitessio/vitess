@@ -6,32 +6,31 @@ package testlib
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 
+	"github.com/youtube/vitess/go/mysqlconn/replication"
 	"github.com/youtube/vitess/go/vt/logutil"
-	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
-	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
-	"github.com/youtube/vitess/go/vt/tabletserver/tabletservermock"
+	"github.com/youtube/vitess/go/vt/topo/memorytopo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
-	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
+	"github.com/youtube/vitess/go/vt/vttablet/tabletservermock"
+	"github.com/youtube/vitess/go/vt/vttablet/tmclient"
 	"github.com/youtube/vitess/go/vt/wrangler"
-	"github.com/youtube/vitess/go/vt/zktopo/zktestserver"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 func TestPlannedReparentShard(t *testing.T) {
-	db := fakesqldb.Register()
-	ts := zktestserver.New(t, []string{"cell1", "cell2"})
+	ts := memorytopo.NewServer("cell1", "cell2")
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 	vp := NewVtctlPipe(t, ts)
 	defer vp.Close()
 
 	// Create a master, a couple good slaves
-	oldMaster := NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_MASTER, db)
-	newMaster := NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_REPLICA, db)
-	goodSlave1 := NewFakeTablet(t, wr, "cell1", 2, topodatapb.TabletType_REPLICA, db)
-	goodSlave2 := NewFakeTablet(t, wr, "cell2", 3, topodatapb.TabletType_REPLICA, db)
+	oldMaster := NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_MASTER, nil)
+	newMaster := NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_REPLICA, nil)
+	goodSlave1 := NewFakeTablet(t, wr, "cell1", 2, topodatapb.TabletType_REPLICA, nil)
+	goodSlave2 := NewFakeTablet(t, wr, "cell2", 3, topodatapb.TabletType_REPLICA, nil)
 
 	// new master
 	newMaster.FakeMysqlDaemon.ReadOnly = true
@@ -144,4 +143,24 @@ func TestPlannedReparentShard(t *testing.T) {
 
 	checkSemiSyncEnabled(t, true, true, newMaster)
 	checkSemiSyncEnabled(t, false, true, goodSlave1, goodSlave2, oldMaster)
+}
+
+func TestPlannedReparentNoMaster(t *testing.T) {
+	ts := memorytopo.NewServer("cell1", "cell2")
+	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
+	vp := NewVtctlPipe(t, ts)
+	defer vp.Close()
+
+	// Create a few replicas.
+	replica1 := NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_REPLICA, nil)
+	NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_REPLICA, nil)
+	NewFakeTablet(t, wr, "cell1", 2, topodatapb.TabletType_REPLICA, nil)
+
+	err := vp.Run([]string{"PlannedReparentShard", "-wait_slave_timeout", "10s", "-keyspace_shard", replica1.Tablet.Keyspace + "/" + replica1.Tablet.Shard, "-new_master", topoproto.TabletAliasString(replica1.Tablet.Alias)})
+	if err == nil {
+		t.Fatalf("PlannedReparentShard succeeded: %v", err)
+	}
+	if !strings.Contains(err.Error(), "the shard has no master") {
+		t.Fatalf("PlannedReparentShard failed with the wrong error: %v", err)
+	}
 }

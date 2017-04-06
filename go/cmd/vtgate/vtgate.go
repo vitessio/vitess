@@ -52,8 +52,8 @@ func main() {
 	if initFakeZK != nil {
 		initFakeZK()
 	}
-	ts := topo.GetServer()
-	defer topo.CloseServers()
+	ts := topo.Open()
+	defer ts.Close()
 
 	resilientSrvTopoServer = vtgate.NewResilientSrvTopoServer(ts, "ResilientSrvTopoServer")
 
@@ -71,6 +71,7 @@ func main() {
 			tabletTypes = append(tabletTypes, tt)
 		}
 	}
+
 	vtg := vtgate.Init(context.Background(), healthCheck, ts, resilientSrvTopoServer, *cell, *retryCount, tabletTypes)
 
 	servenv.OnRun(func() {

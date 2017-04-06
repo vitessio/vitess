@@ -28,9 +28,13 @@ message BinlogTransaction {
       BL_BEGIN = 1;
       BL_COMMIT = 2;
       BL_ROLLBACK = 3;
-      BL_DML = 4;
+      // BL_DML is deprecated.
+      BL_DML_DEPRECATED = 4;
       BL_DDL = 5;
       BL_SET = 6;
+      BL_INSERT = 7;
+      BL_UPDATE = 8;
+      BL_DELETE = 9;
     }
 
     // what type of statement is this?

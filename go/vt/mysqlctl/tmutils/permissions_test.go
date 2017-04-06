@@ -50,8 +50,22 @@ func testPermissionsDiff(t *testing.T, left, right *tabletmanagerdatapb.Permissi
 func TestPermissionsDiff(t *testing.T) {
 
 	p1 := &tabletmanagerdatapb.Permissions{}
-	p1.UserPermissions = append(p1.UserPermissions, NewUserPermission(mapToSQLResults(map[string]string{"Host": "%", "User": "vt", "Password": "p1", "Select_priv": "Y", "Insert_priv": "N"})))
-	p1.DbPermissions = append(p1.DbPermissions, NewDbPermission(mapToSQLResults(map[string]string{"Host": "%", "Db": "vt_live", "User": "vt", "Select_priv": "N", "Insert_priv": "Y"})))
+	p1.UserPermissions = append(p1.UserPermissions, NewUserPermission(mapToSQLResults(map[string]string{
+		"Host":        "%",
+		"User":        "vt",
+		"Password":    "p1",
+		"Select_priv": "Y",
+		"Insert_priv": "N",
+		// Test the next field is skipped (to avoid date drifts).
+		"password_last_changed": "2016-11-08 02:56:23",
+	})))
+	p1.DbPermissions = append(p1.DbPermissions, NewDbPermission(mapToSQLResults(map[string]string{
+		"Host":        "%",
+		"Db":          "vt_live",
+		"User":        "vt",
+		"Select_priv": "N",
+		"Insert_priv": "Y",
+	})))
 
 	if PermissionsString(p1) !=
 		"User Permissions:\n"+
@@ -77,8 +91,20 @@ func TestPermissionsDiff(t *testing.T) {
 		"p2 has an extra db %:vt_live:vt",
 	})
 
-	p2.UserPermissions = append(p2.UserPermissions, NewUserPermission(mapToSQLResults(map[string]string{"Host": "%", "User": "vt", "Password": "p1", "Select_priv": "Y", "Insert_priv": "Y"})))
-	p1.DbPermissions = append(p1.DbPermissions, NewDbPermission(mapToSQLResults(map[string]string{"Host": "%", "Db": "vt_live", "User": "vt", "Select_priv": "Y", "Insert_priv": "N"})))
+	p2.UserPermissions = append(p2.UserPermissions, NewUserPermission(mapToSQLResults(map[string]string{
+		"Host":        "%",
+		"User":        "vt",
+		"Password":    "p1",
+		"Select_priv": "Y",
+		"Insert_priv": "Y",
+	})))
+	p1.DbPermissions = append(p1.DbPermissions, NewDbPermission(mapToSQLResults(map[string]string{
+		"Host":        "%",
+		"Db":          "vt_live",
+		"User":        "vt",
+		"Select_priv": "Y",
+		"Insert_priv": "N",
+	})))
 	testPermissionsDiff(t, p1, p2, "p1", "p2", []string{
 		"p1 and p2 disagree on user %:vt:\n" +
 			"UserPermission PasswordChecksum(4831957779889520640) Insert_priv(N) Select_priv(Y)\n" +

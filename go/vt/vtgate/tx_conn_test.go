@@ -6,14 +6,13 @@ package vtgate
 
 import (
 	"context"
-	"fmt"
 	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/youtube/vitess/go/vt/discovery"
-	"github.com/youtube/vitess/go/vt/tabletserver/sandboxconn"
 	"github.com/youtube/vitess/go/vt/vterrors"
+	"github.com/youtube/vitess/go/vt/vttablet/sandboxconn"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -25,8 +24,8 @@ func TestTxConnCommitRollbackIncorrectSession(t *testing.T) {
 	sc, _, _ := newTestTxConnEnv("TestTxConn")
 	// nil session
 	err := sc.txConn.Commit(context.Background(), false, nil)
-	if got := vterrors.RecoverVtErrorCode(err); got != vtrpcpb.ErrorCode_BAD_INPUT {
-		t.Errorf("Commit: %v, want %v", got, vtrpcpb.ErrorCode_BAD_INPUT)
+	if got := vterrors.Code(err); got != vtrpcpb.Code_INVALID_ARGUMENT {
+		t.Errorf("Commit: %v, want %v", got, vtrpcpb.Code_INVALID_ARGUMENT)
 	}
 
 	err = sc.txConn.Rollback(context.Background(), nil)
@@ -37,8 +36,8 @@ func TestTxConnCommitRollbackIncorrectSession(t *testing.T) {
 	// not in transaction
 	session := NewSafeSession(&vtgatepb.Session{})
 	err = sc.txConn.Commit(context.Background(), false, session)
-	if got := vterrors.RecoverVtErrorCode(err); got != vtrpcpb.ErrorCode_NOT_IN_TX {
-		t.Errorf("Commit: %v, want %v", got, vtrpcpb.ErrorCode_NOT_IN_TX)
+	if got := vterrors.Code(err); got != vtrpcpb.Code_ABORTED {
+		t.Errorf("Commit: %v, want %v", got, vtrpcpb.Code_ABORTED)
 	}
 }
 
@@ -85,9 +84,9 @@ func TestTxConnCommitSuccess(t *testing.T) {
 		t.Errorf("Session:\n%+v, want\n%+v", *session.Session, wantSession)
 	}
 
-	sbc0.MustFailServer = 1
+	sbc0.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
 	err := sc.txConn.Commit(context.Background(), false, session)
-	want := "error: err"
+	want := "INVALID_ARGUMENT error"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("Commit: %v, want %s", err, want)
 	}
@@ -124,8 +123,8 @@ func TestTxConnCommit2PC(t *testing.T) {
 	if c := sbc1.CommitPreparedCount.Get(); c != 1 {
 		t.Errorf("sbc1.CommitPreparedCount: %d, want 1", c)
 	}
-	if c := sbc0.ResolveTransactionCount.Get(); c != 1 {
-		t.Errorf("sbc0.ResolveTransactionCount: %d, want 1", c)
+	if c := sbc0.ConcludeTransactionCount.Get(); c != 1 {
+		t.Errorf("sbc0.ConcludeTransactionCount: %d, want 1", c)
 	}
 }
 
@@ -172,8 +171,8 @@ func TestTxConnCommit2PCCreateTransactionFail(t *testing.T) {
 	if c := sbc1.CommitPreparedCount.Get(); c != 0 {
 		t.Errorf("sbc1.CommitPreparedCount: %d, want 0", c)
 	}
-	if c := sbc0.ResolveTransactionCount.Get(); c != 0 {
-		t.Errorf("sbc0.ResolveTransactionCount: %d, want 0", c)
+	if c := sbc0.ConcludeTransactionCount.Get(); c != 0 {
+		t.Errorf("sbc0.ConcludeTransactionCount: %d, want 0", c)
 	}
 }
 
@@ -202,8 +201,8 @@ func TestTxConnCommit2PCPrepareFail(t *testing.T) {
 	if c := sbc1.CommitPreparedCount.Get(); c != 0 {
 		t.Errorf("sbc1.CommitPreparedCount: %d, want 0", c)
 	}
-	if c := sbc0.ResolveTransactionCount.Get(); c != 0 {
-		t.Errorf("sbc0.ResolveTransactionCount: %d, want 0", c)
+	if c := sbc0.ConcludeTransactionCount.Get(); c != 0 {
+		t.Errorf("sbc0.ConcludeTransactionCount: %d, want 0", c)
 	}
 }
 
@@ -232,8 +231,8 @@ func TestTxConnCommit2PCStartCommitFail(t *testing.T) {
 	if c := sbc1.CommitPreparedCount.Get(); c != 0 {
 		t.Errorf("sbc1.CommitPreparedCount: %d, want 0", c)
 	}
-	if c := sbc0.ResolveTransactionCount.Get(); c != 0 {
-		t.Errorf("sbc0.ResolveTransactionCount: %d, want 0", c)
+	if c := sbc0.ConcludeTransactionCount.Get(); c != 0 {
+		t.Errorf("sbc0.ConcludeTransactionCount: %d, want 0", c)
 	}
 }
 
@@ -262,19 +261,19 @@ func TestTxConnCommit2PCCommitPreparedFail(t *testing.T) {
 	if c := sbc1.CommitPreparedCount.Get(); c != 1 {
 		t.Errorf("sbc1.CommitPreparedCount: %d, want 1", c)
 	}
-	if c := sbc0.ResolveTransactionCount.Get(); c != 0 {
-		t.Errorf("sbc0.ResolveTransactionCount: %d, want 0", c)
+	if c := sbc0.ConcludeTransactionCount.Get(); c != 0 {
+		t.Errorf("sbc0.ConcludeTransactionCount: %d, want 0", c)
 	}
 }
 
-func TestTxConnCommit2PCResolveTransactionFail(t *testing.T) {
-	sc, sbc0, sbc1 := newTestTxConnEnv("TestTxConnCommit2PCResolveTransactionFail")
+func TestTxConnCommit2PCConcludeTransactionFail(t *testing.T) {
+	sc, sbc0, sbc1 := newTestTxConnEnv("TestTxConnCommit2PCConcludeTransactionFail")
 
 	session := NewSafeSession(&vtgatepb.Session{InTransaction: true})
-	sc.Execute(context.Background(), "query1", nil, "TestTxConnCommit2PCResolveTransactionFail", []string{"0"}, topodatapb.TabletType_MASTER, session, false, nil)
-	sc.Execute(context.Background(), "query1", nil, "TestTxConnCommit2PCResolveTransactionFail", []string{"0", "1"}, topodatapb.TabletType_MASTER, session, false, nil)
+	sc.Execute(context.Background(), "query1", nil, "TestTxConnCommit2PCConcludeTransactionFail", []string{"0"}, topodatapb.TabletType_MASTER, session, false, nil)
+	sc.Execute(context.Background(), "query1", nil, "TestTxConnCommit2PCConcludeTransactionFail", []string{"0", "1"}, topodatapb.TabletType_MASTER, session, false, nil)
 
-	sbc0.MustFailResolveTransaction = 1
+	sbc0.MustFailConcludeTransaction = 1
 	err := sc.txConn.Commit(context.Background(), true, session)
 	want := "error: err"
 	if err == nil || !strings.Contains(err.Error(), want) {
@@ -292,8 +291,8 @@ func TestTxConnCommit2PCResolveTransactionFail(t *testing.T) {
 	if c := sbc1.CommitPreparedCount.Get(); c != 1 {
 		t.Errorf("sbc1.CommitPreparedCount: %d, want 1", c)
 	}
-	if c := sbc0.ResolveTransactionCount.Get(); c != 1 {
-		t.Errorf("sbc0.ResolveTransactionCount: %d, want 1", c)
+	if c := sbc0.ConcludeTransactionCount.Get(); c != 1 {
+		t.Errorf("sbc0.ConcludeTransactionCount: %d, want 1", c)
 	}
 }
 
@@ -318,10 +317,10 @@ func TestTxConnRollback(t *testing.T) {
 	}
 }
 
-func TestTxConnResumeOnPrepare(t *testing.T) {
+func TestTxConnResolveOnPrepare(t *testing.T) {
 	sc, sbc0, sbc1 := newTestTxConnEnv("TestTxConn")
 
-	dtid := "TestTxConn:0:0:1234"
+	dtid := "TestTxConn:0:1234"
 	sbc0.ReadTransactionResults = []*querypb.TransactionMetadata{{
 		Dtid:  dtid,
 		State: querypb.TransactionState_PREPARE,
@@ -331,7 +330,7 @@ func TestTxConnResumeOnPrepare(t *testing.T) {
 			TabletType: topodatapb.TabletType_MASTER,
 		}},
 	}}
-	err := sc.txConn.Resume(context.Background(), dtid)
+	err := sc.txConn.Resolve(context.Background(), dtid)
 	if err != nil {
 		t.Error(err)
 	}
@@ -344,15 +343,15 @@ func TestTxConnResumeOnPrepare(t *testing.T) {
 	if c := sbc1.CommitPreparedCount.Get(); c != 0 {
 		t.Errorf("sbc1.CommitPreparedCount: %d, want 0", c)
 	}
-	if c := sbc0.ResolveTransactionCount.Get(); c != 1 {
-		t.Errorf("sbc0.ResolveTransactionCount: %d, want 1", c)
+	if c := sbc0.ConcludeTransactionCount.Get(); c != 1 {
+		t.Errorf("sbc0.ConcludeTransactionCount: %d, want 1", c)
 	}
 }
 
-func TestTxConnResumeOnRollback(t *testing.T) {
+func TestTxConnResolveOnRollback(t *testing.T) {
 	sc, sbc0, sbc1 := newTestTxConnEnv("TestTxConn")
 
-	dtid := "TestTxConn:0:0:1234"
+	dtid := "TestTxConn:0:1234"
 	sbc0.ReadTransactionResults = []*querypb.TransactionMetadata{{
 		Dtid:  dtid,
 		State: querypb.TransactionState_ROLLBACK,
@@ -362,7 +361,7 @@ func TestTxConnResumeOnRollback(t *testing.T) {
 			TabletType: topodatapb.TabletType_MASTER,
 		}},
 	}}
-	if err := sc.txConn.Resume(context.Background(), dtid); err != nil {
+	if err := sc.txConn.Resolve(context.Background(), dtid); err != nil {
 		t.Error(err)
 	}
 	if c := sbc0.SetRollbackCount.Get(); c != 0 {
@@ -374,15 +373,15 @@ func TestTxConnResumeOnRollback(t *testing.T) {
 	if c := sbc1.CommitPreparedCount.Get(); c != 0 {
 		t.Errorf("sbc1.CommitPreparedCount: %d, want 0", c)
 	}
-	if c := sbc0.ResolveTransactionCount.Get(); c != 1 {
-		t.Errorf("sbc0.ResolveTransactionCount: %d, want 1", c)
+	if c := sbc0.ConcludeTransactionCount.Get(); c != 1 {
+		t.Errorf("sbc0.ConcludeTransactionCount: %d, want 1", c)
 	}
 }
 
-func TestTxConnResumeOnCommit(t *testing.T) {
+func TestTxConnResolveOnCommit(t *testing.T) {
 	sc, sbc0, sbc1 := newTestTxConnEnv("TestTxConn")
 
-	dtid := "TestTxConn:0:0:1234"
+	dtid := "TestTxConn:0:1234"
 	sbc0.ReadTransactionResults = []*querypb.TransactionMetadata{{
 		Dtid:  dtid,
 		State: querypb.TransactionState_COMMIT,
@@ -392,7 +391,7 @@ func TestTxConnResumeOnCommit(t *testing.T) {
 			TabletType: topodatapb.TabletType_MASTER,
 		}},
 	}}
-	if err := sc.txConn.Resume(context.Background(), dtid); err != nil {
+	if err := sc.txConn.Resolve(context.Background(), dtid); err != nil {
 		t.Error(err)
 	}
 	if c := sbc0.SetRollbackCount.Get(); c != 0 {
@@ -404,37 +403,37 @@ func TestTxConnResumeOnCommit(t *testing.T) {
 	if c := sbc1.CommitPreparedCount.Get(); c != 1 {
 		t.Errorf("sbc1.CommitPreparedCount: %d, want 1", c)
 	}
-	if c := sbc0.ResolveTransactionCount.Get(); c != 1 {
-		t.Errorf("sbc0.ResolveTransactionCount: %d, want 1", c)
+	if c := sbc0.ConcludeTransactionCount.Get(); c != 1 {
+		t.Errorf("sbc0.ConcludeTransactionCount: %d, want 1", c)
 	}
 }
 
-func TestTxConnResumeInvalidDTID(t *testing.T) {
+func TestTxConnResolveInvalidDTID(t *testing.T) {
 	sc, _, _ := newTestTxConnEnv("TestTxConn")
 
-	err := sc.txConn.Resume(context.Background(), "abcd")
+	err := sc.txConn.Resolve(context.Background(), "abcd")
 	want := "invalid parts in dtid: abcd"
 	if err == nil || err.Error() != want {
-		t.Errorf("Resume: %v, want %s", err, want)
+		t.Errorf("Resolve: %v, want %s", err, want)
 	}
 }
 
-func TestTxConnResumeReadTransactionFail(t *testing.T) {
+func TestTxConnResolveReadTransactionFail(t *testing.T) {
 	sc, sbc0, _ := newTestTxConnEnv("TestTxConn")
 
-	dtid := "TestTxConn:0:0:1234"
-	sbc0.MustFailServer = 1
-	err := sc.txConn.Resume(context.Background(), dtid)
-	want := "error: err"
+	dtid := "TestTxConn:0:1234"
+	sbc0.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
+	err := sc.txConn.Resolve(context.Background(), dtid)
+	want := "INVALID_ARGUMENT error"
 	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("Resume: %v, want %s", err, want)
+		t.Errorf("Resolve: %v, want %s", err, want)
 	}
 }
 
-func TestTxConnResumeInternalError(t *testing.T) {
+func TestTxConnResolveInternalError(t *testing.T) {
 	sc, sbc0, _ := newTestTxConnEnv("TestTxConn")
 
-	dtid := "TestTxConn:0:0:1234"
+	dtid := "TestTxConn:0:1234"
 	sbc0.ReadTransactionResults = []*querypb.TransactionMetadata{{
 		Dtid:  dtid,
 		State: querypb.TransactionState_UNKNOWN,
@@ -444,17 +443,17 @@ func TestTxConnResumeInternalError(t *testing.T) {
 			TabletType: topodatapb.TabletType_MASTER,
 		}},
 	}}
-	err := sc.txConn.Resume(context.Background(), dtid)
+	err := sc.txConn.Resolve(context.Background(), dtid)
 	want := "invalid state: UNKNOWN"
 	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("Resume: %v, want %s", err, want)
+		t.Errorf("Resolve: %v, want %s", err, want)
 	}
 }
 
-func TestTxConnResumeSetRollbackFail(t *testing.T) {
+func TestTxConnResolveSetRollbackFail(t *testing.T) {
 	sc, sbc0, sbc1 := newTestTxConnEnv("TestTxConn")
 
-	dtid := "TestTxConn:0:0:1234"
+	dtid := "TestTxConn:0:1234"
 	sbc0.ReadTransactionResults = []*querypb.TransactionMetadata{{
 		Dtid:  dtid,
 		State: querypb.TransactionState_PREPARE,
@@ -465,10 +464,10 @@ func TestTxConnResumeSetRollbackFail(t *testing.T) {
 		}},
 	}}
 	sbc0.MustFailSetRollback = 1
-	err := sc.txConn.Resume(context.Background(), dtid)
+	err := sc.txConn.Resolve(context.Background(), dtid)
 	want := "error: err"
 	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("Resume: %v, want %s", err, want)
+		t.Errorf("Resolve: %v, want %s", err, want)
 	}
 	if c := sbc0.SetRollbackCount.Get(); c != 1 {
 		t.Errorf("sbc0.SetRollbackCount: %d, want 1", c)
@@ -479,15 +478,15 @@ func TestTxConnResumeSetRollbackFail(t *testing.T) {
 	if c := sbc1.CommitPreparedCount.Get(); c != 0 {
 		t.Errorf("sbc1.CommitPreparedCount: %d, want 0", c)
 	}
-	if c := sbc0.ResolveTransactionCount.Get(); c != 0 {
-		t.Errorf("sbc0.ResolveTransactionCount: %d, want 0", c)
+	if c := sbc0.ConcludeTransactionCount.Get(); c != 0 {
+		t.Errorf("sbc0.ConcludeTransactionCount: %d, want 0", c)
 	}
 }
 
-func TestTxConnResumeRollbackPreparedFail(t *testing.T) {
+func TestTxConnResolveRollbackPreparedFail(t *testing.T) {
 	sc, sbc0, sbc1 := newTestTxConnEnv("TestTxConn")
 
-	dtid := "TestTxConn:0:0:1234"
+	dtid := "TestTxConn:0:1234"
 	sbc0.ReadTransactionResults = []*querypb.TransactionMetadata{{
 		Dtid:  dtid,
 		State: querypb.TransactionState_ROLLBACK,
@@ -498,10 +497,10 @@ func TestTxConnResumeRollbackPreparedFail(t *testing.T) {
 		}},
 	}}
 	sbc1.MustFailRollbackPrepared = 1
-	err := sc.txConn.Resume(context.Background(), dtid)
+	err := sc.txConn.Resolve(context.Background(), dtid)
 	want := "error: err"
 	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("Resume: %v, want %s", err, want)
+		t.Errorf("Resolve: %v, want %s", err, want)
 	}
 	if c := sbc0.SetRollbackCount.Get(); c != 0 {
 		t.Errorf("sbc0.SetRollbackCount: %d, want 0", c)
@@ -512,15 +511,15 @@ func TestTxConnResumeRollbackPreparedFail(t *testing.T) {
 	if c := sbc1.CommitPreparedCount.Get(); c != 0 {
 		t.Errorf("sbc1.CommitPreparedCount: %d, want 0", c)
 	}
-	if c := sbc0.ResolveTransactionCount.Get(); c != 0 {
-		t.Errorf("sbc0.ResolveTransactionCount: %d, want 0", c)
+	if c := sbc0.ConcludeTransactionCount.Get(); c != 0 {
+		t.Errorf("sbc0.ConcludeTransactionCount: %d, want 0", c)
 	}
 }
 
-func TestTxConnResumeCommitPreparedFail(t *testing.T) {
+func TestTxConnResolveCommitPreparedFail(t *testing.T) {
 	sc, sbc0, sbc1 := newTestTxConnEnv("TestTxConn")
 
-	dtid := "TestTxConn:0:0:1234"
+	dtid := "TestTxConn:0:1234"
 	sbc0.ReadTransactionResults = []*querypb.TransactionMetadata{{
 		Dtid:  dtid,
 		State: querypb.TransactionState_COMMIT,
@@ -531,10 +530,10 @@ func TestTxConnResumeCommitPreparedFail(t *testing.T) {
 		}},
 	}}
 	sbc1.MustFailCommitPrepared = 1
-	err := sc.txConn.Resume(context.Background(), dtid)
+	err := sc.txConn.Resolve(context.Background(), dtid)
 	want := "error: err"
 	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("Resume: %v, want %s", err, want)
+		t.Errorf("Resolve: %v, want %s", err, want)
 	}
 	if c := sbc0.SetRollbackCount.Get(); c != 0 {
 		t.Errorf("sbc0.SetRollbackCount: %d, want 0", c)
@@ -545,15 +544,15 @@ func TestTxConnResumeCommitPreparedFail(t *testing.T) {
 	if c := sbc1.CommitPreparedCount.Get(); c != 1 {
 		t.Errorf("sbc1.CommitPreparedCount: %d, want 1", c)
 	}
-	if c := sbc0.ResolveTransactionCount.Get(); c != 0 {
-		t.Errorf("sbc0.ResolveTransactionCount: %d, want 0", c)
+	if c := sbc0.ConcludeTransactionCount.Get(); c != 0 {
+		t.Errorf("sbc0.ConcludeTransactionCount: %d, want 0", c)
 	}
 }
 
-func TestTxConnResumeResolveTransactionFail(t *testing.T) {
+func TestTxConnResolveConcludeTransactionFail(t *testing.T) {
 	sc, sbc0, sbc1 := newTestTxConnEnv("TestTxConn")
 
-	dtid := "TestTxConn:0:0:1234"
+	dtid := "TestTxConn:0:1234"
 	sbc0.ReadTransactionResults = []*querypb.TransactionMetadata{{
 		Dtid:  dtid,
 		State: querypb.TransactionState_COMMIT,
@@ -563,11 +562,11 @@ func TestTxConnResumeResolveTransactionFail(t *testing.T) {
 			TabletType: topodatapb.TabletType_MASTER,
 		}},
 	}}
-	sbc0.MustFailResolveTransaction = 1
-	err := sc.txConn.Resume(context.Background(), dtid)
+	sbc0.MustFailConcludeTransaction = 1
+	err := sc.txConn.Resolve(context.Background(), dtid)
 	want := "error: err"
 	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("Resume: %v, want %s", err, want)
+		t.Errorf("Resolve: %v, want %s", err, want)
 	}
 	if c := sbc0.SetRollbackCount.Get(); c != 0 {
 		t.Errorf("sbc0.SetRollbackCount: %d, want 0", c)
@@ -578,8 +577,8 @@ func TestTxConnResumeResolveTransactionFail(t *testing.T) {
 	if c := sbc1.CommitPreparedCount.Get(); c != 1 {
 		t.Errorf("sbc1.CommitPreparedCount: %d, want 1", c)
 	}
-	if c := sbc0.ResolveTransactionCount.Get(); c != 1 {
-		t.Errorf("sbc0.ResolveTransactionCount: %d, want 1", c)
+	if c := sbc0.ConcludeTransactionCount.Get(); c != 1 {
+		t.Errorf("sbc0.ConcludeTransactionCount: %d, want 1", c)
 	}
 }
 
@@ -592,7 +591,7 @@ func TestTxConnMultiGoSessions(t *testing.T) {
 		},
 	}}
 	err := txc.runSessions(input, func(s *vtgatepb.Session_ShardSession) error {
-		return vterrors.FromError(vtrpcpb.ErrorCode_INTERNAL_ERROR, fmt.Errorf("err %s", s.Target.Keyspace))
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "err %s", s.Target.Keyspace)
 	})
 	want := "err 0"
 	if err == nil || err.Error() != want {
@@ -609,16 +608,15 @@ func TestTxConnMultiGoSessions(t *testing.T) {
 		},
 	}}
 	err = txc.runSessions(input, func(s *vtgatepb.Session_ShardSession) error {
-		return vterrors.FromError(vtrpcpb.ErrorCode_INTERNAL_ERROR, fmt.Errorf("err %s", s.Target.Keyspace))
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "err %s", s.Target.Keyspace)
 	})
 	want = "err 0\nerr 1"
 	if err == nil || err.Error() != want {
 		t.Errorf("runSessions(2): %v, want %s", err, want)
 	}
-	errCode := err.(*ScatterConnError).VtErrorCode()
-	wantCode := vtrpcpb.ErrorCode_INTERNAL_ERROR
-	if errCode != wantCode {
-		t.Errorf("Error code: %v, want %v", errCode, wantCode)
+	wantCode := vtrpcpb.Code_INTERNAL
+	if code := vterrors.Code(err); code != wantCode {
+		t.Errorf("Error code: %v, want %v", code, wantCode)
 	}
 
 	err = txc.runSessions(input, func(s *vtgatepb.Session_ShardSession) error {
@@ -635,7 +633,7 @@ func TestTxConnMultiGoTargets(t *testing.T) {
 		Keyspace: "0",
 	}}
 	err := txc.runTargets(input, func(t *querypb.Target) error {
-		return vterrors.FromError(vtrpcpb.ErrorCode_INTERNAL_ERROR, fmt.Errorf("err %s", t.Keyspace))
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "err %s", t.Keyspace)
 	})
 	want := "err 0"
 	if err == nil || err.Error() != want {
@@ -648,16 +646,15 @@ func TestTxConnMultiGoTargets(t *testing.T) {
 		Keyspace: "1",
 	}}
 	err = txc.runTargets(input, func(t *querypb.Target) error {
-		return vterrors.FromError(vtrpcpb.ErrorCode_INTERNAL_ERROR, fmt.Errorf("err %s", t.Keyspace))
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "err %s", t.Keyspace)
 	})
 	want = "err 0\nerr 1"
 	if err == nil || err.Error() != want {
 		t.Errorf("runTargets(2): %v, want %s", err, want)
 	}
-	errCode := err.(*ScatterConnError).VtErrorCode()
-	wantCode := vtrpcpb.ErrorCode_INTERNAL_ERROR
-	if errCode != wantCode {
-		t.Errorf("Error code: %v, want %v", errCode, wantCode)
+	wantCode := vtrpcpb.Code_INTERNAL
+	if code := vterrors.Code(err); code != wantCode {
+		t.Errorf("Error code: %v, want %v", code, wantCode)
 	}
 
 	err = txc.runTargets(input, func(t *querypb.Target) error {
@@ -665,40 +662,6 @@ func TestTxConnMultiGoTargets(t *testing.T) {
 	})
 	if err != nil {
 		t.Error(err)
-	}
-}
-
-func TestDTID(t *testing.T) {
-	in := &vtgatepb.Session_ShardSession{
-		Target: &querypb.Target{
-			Keyspace:   "aa",
-			Shard:      "0",
-			TabletType: topodatapb.TabletType_MASTER,
-		},
-		TransactionId: 1,
-	}
-	txc := &TxConn{}
-	dtid := txc.generateDTID(in)
-	want := "aa:0:0:1"
-	if dtid != want {
-		t.Errorf("generateDTID: %s, want %s", dtid, want)
-	}
-	out, err := txc.dtidToShardSession(dtid)
-	if err != nil {
-		t.Error(err)
-	}
-	if !reflect.DeepEqual(in, out) {
-		t.Errorf("dtidToShardSession: %+v, want %+v", out, in)
-	}
-	_, err = txc.dtidToShardSession("badParts")
-	want = "invalid parts in dtid: badParts"
-	if err == nil || err.Error() != want {
-		t.Errorf("dtidToShardSession(\"badParts\"): %v, want %s", err, want)
-	}
-	_, err = txc.dtidToShardSession("a:b:0:badid")
-	want = "invalid transaction id in dtid: a:b:0:badid"
-	if err == nil || err.Error() != want {
-		t.Errorf("dtidToShardSession(\"a:b:0:badid\"): %v, want %s", err, want)
 	}
 }
 

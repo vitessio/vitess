@@ -1,7 +1,6 @@
 package vtctld
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -13,17 +12,16 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
-	"github.com/golang/protobuf/jsonpb"
-	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/acl"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/schemamanager"
-	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/vtctl"
+	"github.com/youtube/vitess/go/vt/vttablet/tmclient"
+	"github.com/youtube/vitess/go/vt/workflow"
 	"github.com/youtube/vitess/go/vt/wrangler"
 
 	logutilpb "github.com/youtube/vitess/go/vt/proto/logutil"
@@ -31,7 +29,8 @@ import (
 )
 
 var (
-	localCell = flag.String("cell", "", "cell to use")
+	localCell        = flag.String("cell", "", "cell to use")
+	showTopologyCRUD = flag.Bool("vtctld_show_topology_crud", true, "Controls the display of the CRUD topology actions in the vtctld UI.")
 )
 
 // This file implements a REST-style API for the vtctld web interface.
@@ -81,33 +80,9 @@ func handleCollection(collection string, getFunc func(*http.Request) (interface{
 		}
 
 		// JSON encode response.
-		var data []byte
-		switch obj := obj.(type) {
-		case proto.Message:
-			// We use jsonpb for protobuf messages because it is the only supported
-			// way to marshal protobuf messages to JSON.
-			// In addition to that, it's the only way to emit zero values in the JSON
-			// output.
-			// Unfortunately, it works only for protobuf messages. Therefore, we use
-			// the default marshaler for the remaining structs (which are possibly
-			// mixed protobuf and non-protobuf).
-			// TODO(mberlin): Switch "EnumAsInts" to "false" once the frontend is
-			//                updated and mixed types will use jsonpb as well.
-			// Note: jsonpb may panic if the "proto.Message" is an embedded field
-			// of "obj" and "obj" has non-exported fields.
-
-			// Marshal the protobuf message.
-			var b bytes.Buffer
-			m := jsonpb.Marshaler{EnumsAsInts: true, EmitDefaults: true, Indent: "  ", OrigName: true}
-			if err := m.Marshal(&b, obj); err != nil {
-				return fmt.Errorf("jsonpb error: %v", err)
-			}
-			data = b.Bytes()
-		default:
-			data, err = json.MarshalIndent(obj, "", "  ")
-			if err != nil {
-				return fmt.Errorf("json error: %v", err)
-			}
+		data, err := vtctl.MarshalJSON(obj)
+		if err != nil {
+			return fmt.Errorf("cannot marshal data: %v", err)
 		}
 		w.Header().Set("Content-Type", jsonContentType)
 		w.Write(data)
@@ -515,5 +490,27 @@ func initAPI(ctx context.Context, ts topo.Server, actions *ActionRepository, rea
 
 		return schemamanager.Run(ctx,
 			schemamanager.NewUIController(req.SQL, req.Keyspace, w), executor)
+	})
+
+	// Features
+	handleAPI("features", func(w http.ResponseWriter, r *http.Request) error {
+		if err := acl.CheckAccessHTTP(r, acl.ADMIN); err != nil {
+			http.Error(w, "403 Forbidden", http.StatusForbidden)
+			return nil
+		}
+
+		resp := make(map[string]interface{})
+		resp["activeReparents"] = !*vtctl.DisableActiveReparents
+		resp["showStatus"] = *enableRealtimeStats
+		resp["showTopologyCRUD"] = *showTopologyCRUD
+		resp["showWorkflows"] = *workflowManagerInit
+		resp["workflows"] = workflow.AvailableFactories()
+		data, err := json.MarshalIndent(resp, "", "  ")
+		if err != nil {
+			return fmt.Errorf("json error: %v", err)
+		}
+		w.Header().Set("Content-Type", jsonContentType)
+		w.Write(data)
+		return nil
 	})
 }

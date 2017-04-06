@@ -1,0 +1,818 @@
+<!DOCTYPE html>
+<html lang="en" itemscope itemtype="https://schema.org/WebPage">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Vitess / Update Stream</title>
+
+        <!-- Webfont -->
+    <link href='http://fonts.googleapis.com/css?family=Roboto:400,100,100italic,300,300italic,400italic,500,500italic,700,700italic,900,900italic' rel='stylesheet' type='text/css'>
+    
+    <!--<link rel="shortcut icon" type="image/png" href="/favicon.png">-->
+
+    <!-- Bootstrap -->
+    <link href="/libs/bootstrap/css/bootstrap.min.css" rel="stylesheet">
+
+    <!-- HTML5 shim and Respond.js for IE8 support of HTML5 elements and media queries -->
+    <!-- WARNING: Respond.js doesn't work if you view the page via file:// -->
+    <!--[if lt IE 9]>
+      <script src="https://oss.maxcdn.com/html5shiv/3.7.2/html5shiv.min.js"></script>
+      <script src="https://oss.maxcdn.com/respond/1.4.2/respond.min.js"></script>
+    <![endif]-->
+
+    <!-- Styles -->
+    <link rel="stylesheet" type="text/css" href="/css/site.css" />
+    <!-- Font Awesome icons -->
+    <link href="/libs/font-awesome-4.4.0/css/font-awesome.min.css"
+          rel="stylesheet"
+          type="text/css">
+    
+    <!-- jQuery (necessary for Bootstrap's JavaScript plugins) -->
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.2/jquery.min.js"></script>
+    <!-- Include all compiled plugins (below), or include individual files as needed -->
+    <script src="/libs/bootstrap/js/bootstrap.min.js"></script>
+
+
+    <!-- metadata -->
+    <meta name="og:title" content="Vitess / Update Stream"/>
+    <meta name="og:image" content="/images/vitess_logo_with_border.svg"/>
+    <meta name="og:description" content="Vitess is a database clustering system for horizontal scaling of MySQL."/>
+
+    <link rel="icon" href="/images/vitess_logo_icon_size.png" type="image/png">
+
+    
+    <script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+  ga('create', 'UA-60219601-1', 'auto');
+  ga('send', 'pageview');
+</script>
+
+    
+  </head>
+  <body class="docs" id="top_of_page">
+
+    <span id="toc-depth" data-toc-depth="h2,h3"></span>
+
+
+    <nav id="common-nav" class="navbar navbar-fixed-top inverse">
+  <div class="container">
+    <!-- Brand and toggle get grouped for better mobile display -->
+    <div class="navbar-header">
+      <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#navbar-collapse-1">
+        <span class="sr-only">Toggle navigation</span>
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+      </button>
+      <a class="navbar-brand" href="/">
+        <img class="logo" src="/images/vitess_logo_with_border.svg" alt="Vitess">
+      </a>
+    </div>
+
+    <!-- Collect the nav links, forms, and other content for toggling -->
+    <div class="collapse navbar-collapse" id="navbar-collapse-1">
+      <ul class="nav navbar-nav navbar-right" id="standard-menu-links">
+        <li><a href="/overview/">Overview</a></li>
+        <li><a href="/user-guide/introduction.html">Guides</a></li>
+        <li><a href="/reference/vitess-api.html">Reference</a></li>
+        <li><a href="http://blog.vitess.io">Blog</a></li>
+        <li><a href="https://github.com/youtube/vitess"><i class="fa fa-github"></i> GitHub</a></li>
+        <!-- Hide link to blog unless we have actual posts -->
+        <!-- <li><a href="/blog/" title="">Blog</a></li> -->
+      </ul>
+      <ul class="nav nav-stacked mobile-left-nav-menu" id="collapsed-left-menu">
+                <li class="submenu">
+          <h4 class="arrow-r no-top-margin">Overview</h4>
+          <ul style="display: none">
+            <li><a href="/overview/">What is Vitess</a></li>
+            <li><a href="/overview/scaling-mysql.html">Scaling MySQL with Vitess</a></li>
+            <li><a href="/overview/concepts.html">Key Concepts</a></li>
+          </ul>
+        </li>
+        <li class="submenu">
+          <h4 class="arrow-r">Getting Started</h4>
+          <ul style="display: none">
+            <li style="padding-bottom: 0"><a href="/getting-started/">Run Vitess on Kubernetes</a>
+              <ul style="display: block">
+                <li style="padding-bottom: 0"><a href="/getting-started/docker-build.html">Custom Docker Build</a></li>
+              </ul>
+            </li>
+            <li><a href="/getting-started/local-instance.html">Run Vitess Locally</a></li>
+          </ul>
+        </li>
+        <li class="submenu">
+          <h4 class="arrow-r">User Guide</h4>
+          <ul style="display: none">
+            <li><a href="/user-guide/introduction.html">Introduction</a>
+            <li><a href="/user-guide/client-libraries.html">Client Libraries</a>
+            <li><a href="/user-guide/backup-and-restore.html">Backing Up Data</a>
+            <li><a href="/user-guide/reparenting.html">Reparenting</a></li>
+            <li style="padding-bottom: 0"><a href="/user-guide/schema-management.html">Schema Management</a></li>
+              <ul style="display: block">
+                <li style="padding-bottom: 0"><a href="/user-guide/vschema.html">VSchema Guide</a></li>
+                <li style="padding-bottom: 0"><a href="/user-guide/schema-swap.html">Schema Swap (Tutorial)</a></li>
+              </ul>
+            <li style="padding-bottom: 0"><a href="/user-guide/sharding.html">Sharding</a>
+              <ul style="display: block">
+                <li><a href="/user-guide/horizontal-sharding-workflow.html">Horizontal Sharding (Tutorial, automated)</a></li>
+                <li><a href="/user-guide/horizontal-sharding.html">Horizontal Sharding (Tutorial, manual)</a></li>
+                <li><a href="/user-guide/sharding-kubernetes-workflow.html">Sharding in Kubernetes (Tutorial, automated)</a></li>
+                <li style="padding-bottom: 0"><a href="/user-guide/sharding-kubernetes.html">Sharding in Kubernetes (Tutorial, manual)</a></li>
+              </ul>
+            </li>
+            <li><a href="/user-guide/vitess-sequences.html">Vitess Sequences</a></li>
+            <li><a href="/user-guide/mysql-server-protocol.html">MySQL Server Protocol</a></li>
+            <li><a href="/user-guide/vitess-replication.html">Vitess and Replication</a></li>
+            <li><a href="/user-guide/update-stream.html">Update Stream</a></li>
+            <li><a href="/user-guide/row-based-replication.html">Row Based Replication</a></li>
+            <li><a href="/user-guide/topology-service.html">Topology Service</a></li>
+            <li><a href="/user-guide/transport-security-model.html">Transport Security Model</a></li>
+            <li style="padding-bottom: 0"><a href="/user-guide/launching.html">Launching</a>
+              <ul style="display: block">
+                <li><a href="/user-guide/scalability-philosophy.html">Scalability Philosophy</a></li>
+                <li><a href="/user-guide/production-planning.html">Production Planning</a></li>
+                <li><a href="/user-guide/server-configuration.html">Server Configuration</a></li>
+                <li><a href="/user-guide/twopc.html">2PC Guide</a></li>
+                <li style="padding-bottom: 0"><a href="/user-guide/troubleshooting.html">Troubleshooting</a></li>
+              </ul>
+            </li>
+            <li><a href="/user-guide/upgrading.html">Upgrading</a></li>
+          </ul>
+        </li>
+        <li class="submenu">
+          <h4 class="arrow-r">Reference Guides</h4>
+          <ul style="display: none">
+            <li><a href="/reference/vitess-api.html">Vitess API</a>
+            <li><a href="/reference/vtctl.html">vtctl Commands</a>
+          </ul>
+        </li>
+        <li class="submenu">
+          <h4 class="arrow-r">Other Resources</h4>
+          <ul style="display: none">
+            <li><a href="/resources/presentations.html">Presentations</a>
+            <li><a href="http://blog.vitess.io/">Blog</a>
+            <li><a href="/resources/roadmap.html">Roadmap</a>
+          </ul>
+        </li>
+        <li class="submenu">
+          <h4 class="arrow-r">Contributing</h4>
+          <ul style="display: none">
+            <li><a href="/contributing/">Contributing to Vitess</a>
+            <li><a href="/contributing/github-workflow.html">GitHub Workflow</a>
+            <li><a href="/contributing/code-reviews.html">Code Reviews</a>
+          </ul>
+        </li>
+
+        <div>
+          <form method="get" action="/search/">
+            <input id="search-form" name="q" type="text" placeholder="Search">
+          </form>
+        </div>
+
+        <li><a href="https://github.com/youtube/vitess" id="collapsed-left-menu-repo-link"><i class="fa fa-github"></i> GitHub</a></li>
+      </ul>
+    </div><!-- /.navbar-collapse -->
+  </div><!-- /.container-fluid -->
+</nav>
+
+    
+<div id="masthead">
+  <div class="container">
+    <div class="row">
+      <div class="col-md-9">
+        <h1>Update Stream</h1>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<div class="container">
+    <div class="row scroll-margin" id="toc-content-row">
+    <div class="col-md-2" id="leftCol">
+      <ul class="nav nav-stacked mobile-left-nav-menu" id="sidebar">
+                <li class="submenu">
+          <h4 class="arrow-r no-top-margin">Overview</h4>
+          <ul style="display: none">
+            <li><a href="/overview/">What is Vitess</a></li>
+            <li><a href="/overview/scaling-mysql.html">Scaling MySQL with Vitess</a></li>
+            <li><a href="/overview/concepts.html">Key Concepts</a></li>
+          </ul>
+        </li>
+        <li class="submenu">
+          <h4 class="arrow-r">Getting Started</h4>
+          <ul style="display: none">
+            <li style="padding-bottom: 0"><a href="/getting-started/">Run Vitess on Kubernetes</a>
+              <ul style="display: block">
+                <li style="padding-bottom: 0"><a href="/getting-started/docker-build.html">Custom Docker Build</a></li>
+              </ul>
+            </li>
+            <li><a href="/getting-started/local-instance.html">Run Vitess Locally</a></li>
+          </ul>
+        </li>
+        <li class="submenu">
+          <h4 class="arrow-r">User Guide</h4>
+          <ul style="display: none">
+            <li><a href="/user-guide/introduction.html">Introduction</a>
+            <li><a href="/user-guide/client-libraries.html">Client Libraries</a>
+            <li><a href="/user-guide/backup-and-restore.html">Backing Up Data</a>
+            <li><a href="/user-guide/reparenting.html">Reparenting</a></li>
+            <li style="padding-bottom: 0"><a href="/user-guide/schema-management.html">Schema Management</a></li>
+              <ul style="display: block">
+                <li style="padding-bottom: 0"><a href="/user-guide/vschema.html">VSchema Guide</a></li>
+                <li style="padding-bottom: 0"><a href="/user-guide/schema-swap.html">Schema Swap (Tutorial)</a></li>
+              </ul>
+            <li style="padding-bottom: 0"><a href="/user-guide/sharding.html">Sharding</a>
+              <ul style="display: block">
+                <li><a href="/user-guide/horizontal-sharding-workflow.html">Horizontal Sharding (Tutorial, automated)</a></li>
+                <li><a href="/user-guide/horizontal-sharding.html">Horizontal Sharding (Tutorial, manual)</a></li>
+                <li><a href="/user-guide/sharding-kubernetes-workflow.html">Sharding in Kubernetes (Tutorial, automated)</a></li>
+                <li style="padding-bottom: 0"><a href="/user-guide/sharding-kubernetes.html">Sharding in Kubernetes (Tutorial, manual)</a></li>
+              </ul>
+            </li>
+            <li><a href="/user-guide/vitess-sequences.html">Vitess Sequences</a></li>
+            <li><a href="/user-guide/mysql-server-protocol.html">MySQL Server Protocol</a></li>
+            <li><a href="/user-guide/vitess-replication.html">Vitess and Replication</a></li>
+            <li><a href="/user-guide/update-stream.html">Update Stream</a></li>
+            <li><a href="/user-guide/row-based-replication.html">Row Based Replication</a></li>
+            <li><a href="/user-guide/topology-service.html">Topology Service</a></li>
+            <li><a href="/user-guide/transport-security-model.html">Transport Security Model</a></li>
+            <li style="padding-bottom: 0"><a href="/user-guide/launching.html">Launching</a>
+              <ul style="display: block">
+                <li><a href="/user-guide/scalability-philosophy.html">Scalability Philosophy</a></li>
+                <li><a href="/user-guide/production-planning.html">Production Planning</a></li>
+                <li><a href="/user-guide/server-configuration.html">Server Configuration</a></li>
+                <li><a href="/user-guide/twopc.html">2PC Guide</a></li>
+                <li style="padding-bottom: 0"><a href="/user-guide/troubleshooting.html">Troubleshooting</a></li>
+              </ul>
+            </li>
+            <li><a href="/user-guide/upgrading.html">Upgrading</a></li>
+          </ul>
+        </li>
+        <li class="submenu">
+          <h4 class="arrow-r">Reference Guides</h4>
+          <ul style="display: none">
+            <li><a href="/reference/vitess-api.html">Vitess API</a>
+            <li><a href="/reference/vtctl.html">vtctl Commands</a>
+          </ul>
+        </li>
+        <li class="submenu">
+          <h4 class="arrow-r">Other Resources</h4>
+          <ul style="display: none">
+            <li><a href="/resources/presentations.html">Presentations</a>
+            <li><a href="http://blog.vitess.io/">Blog</a>
+            <li><a href="/resources/roadmap.html">Roadmap</a>
+          </ul>
+        </li>
+        <li class="submenu">
+          <h4 class="arrow-r">Contributing</h4>
+          <ul style="display: none">
+            <li><a href="/contributing/">Contributing to Vitess</a>
+            <li><a href="/contributing/github-workflow.html">GitHub Workflow</a>
+            <li><a href="/contributing/code-reviews.html">Code Reviews</a>
+          </ul>
+        </li>
+
+        <div>
+          <form method="get" action="/search/">
+            <input id="search-form" name="q" type="text" placeholder="Search">
+          </form>
+        </div>
+
+      </ul>
+    </div>
+    <div class="col-md-3" id="rightCol">
+      <div class="nav nav-stacked" id="tocSidebar">
+        <div id="toc"></div>
+      </div>
+    </div>
+    <div class="col-md-7" id="centerCol">
+      <div id="centerTextCol">
+        <h1 id="update-stream">Update Stream</h1>
+
+<p>Update Stream is a Vitess service that provides a change stream for any keyspace.
+The use cases for this service include:</p>
+
+<ul>
+<li><p>Providing an <em>invalidation stream</em>, that an application can use to maintain a cache.</p></li>
+<li><p>Maintain an external copy of the data in another system, that is only updated
+when the data changes.</p></li>
+<li><p>Maintain a change record of all the transactions that have been applied to the data.</p></li>
+</ul>
+
+<p>A good understanding
+of <a href="/user-guide/vitess-replication.html">Vitess Replication</a> is required to
+understand this document better. We will go through the use cases in a bit more
+details, then introduce the EventToken notion, and finally explain the service.</p>
+
+<h2 id="use-cases">Use Cases</h2>
+
+<h3 id="maintaining-cache-consistency">Maintaining Cache Consistency</h3>
+
+<p>The first use case we’re trying to address is to maintain a consistent cache of
+the data. The problem here has two parts:</p>
+
+<ul>
+<li><p>When data changes, we need to invalidate the cache.</p></li>
+<li><p>When we want to re-populate the cache after an invalidation, we need to make
+sure we get data that is more recent than the data change. For instance, we
+can’t just re-query any replica, as it might be behind on replication.</p></li>
+</ul>
+
+<p>This process can be somewhat resilient to some stream anomalies. For instance,
+invalidating the same record twice in some corner cases is fine, as long as we
+don’t poison the cache with an old value.</p>
+
+<p>Note the location / ownership of the cache is not set in stone:</p>
+
+<ul>
+<li><p>Application-layer cache: the app servers maintain the cache. It’s very early
+in the serving chain, so in case of a cache hit, it’s lower latency. However,
+an invalidation process needs to run and is probably also owned by the
+application layer, which is somewhat annoying.</p></li>
+<li><p>vtgate-layer cache: it would be a row cache accessed by vtgate, transparent to
+the app. It requires vtgate to do a lot of extra heavy-lifting, depending on
+what we want to support. Cache invalidation is still required, at a row level.</p></li>
+<li><p>vttablet-layer cache: this is the old rowcache. Since the cache is not shared
+across instances, and the app still needs a cache, we abandoned this one.</p></li>
+</ul>
+
+<p>Since the vtgate-layer cache is much harder to work on (because of the query
+implications), and will probably require similar components as the app-layer
+cache, we decided to work on the app-layer cache for now, with possibly an
+invalidation process that is somewhat tied to the app.</p>
+
+<p>The <em>composite object cache</em> is an interesting use case: if the application is
+in charge of the cache, it would seem possible to put in the cache higher level
+composite objects, that are built from multiple table records. They would be
+invalidated any time one of the composing table record is changed. They need to
+be addressed by a part of the primary key, so they’re easy to find.</p>
+
+<h3 id="change-log">Change Log</h3>
+
+<p>A Change Log provides a stream of all data changes, so an external application
+can either record these changes, or keep an external database up to date with
+the latest data.</p>
+
+<p>Unlike the Cache Invalidation use case, this is not as forgiving. If we have
+duplicate updates, they will need to be handled.</p>
+
+<h2 id="design-considerations">Design Considerations</h2>
+
+<h3 id="single-shard-update-stream">Single Shard Update Stream</h3>
+
+<p>This has been supported in Vitess for a while, but not exposed. It works as follows:</p>
+
+<ul>
+<li><p>vttablet adds an SQL comment to every DML, that contains the Primary Key of
+the modified row.</p></li>
+<li><p>vttablet provides a streaming service that can connect to the local MySQL
+replication stream, extract the comment, and stream events to the client.</p></li>
+<li><p>Use the GTID as the start / restart position. It is sent back with each
+update, and an Update Stream can be started from it.</p></li>
+</ul>
+
+<p>Note Vitess supports both the MariaDB GTIDs (domain:server:sequence) and the
+MySQL 5.6 GTID Sets (encoded in SID blocks).</p>
+
+<h3 id="surviving-resharding-problem">Surviving Resharding: Problem</h3>
+
+<p>The Vitess tools are supposed to provide transparent sharding for the user’s
+data. Most of the trouble we run into is surviving resharding events, when we
+hop over from one set of shards to another set of shards.</p>
+
+<p>Two strategies then come to mind:</p>
+
+<ul>
+<li><p>Provide a per-shard update stream. Let the user handle the hop when resharding
+happens. If we were to do this for the Cache use case, we would also need to
+provide some way of preventing bad corner cases, like a full cache flush, or
+no cache update for a while, or lost cache invalidations. Simple for us, but
+the app can be a lot more complicated. And the Change Log use case is also
+hard to do.</p></li>
+<li><p>Provide a per-keyrange update stream. Vtgate would connect to the right
+shards, and resolve all conflicts. We can add the restriction that the client
+only asks for keyranges that are exactly matching to one or more shards. For
+instance, if a keyspace is sharded four ways, -40, 40-80, 80-c0, c0-, we can
+support clients asking for -40, -80, -, but not for 60-a0 for instance.</p></li>
+</ul>
+
+<p>As a reminder, the resharding process is somewhat simple:</p>
+
+<ul>
+<li><p>Let’s say we want to split a shard 20-40 into two shards, 20-30 and 30-40. At
+first, only 20-40 exists and has a GTID stream.</p></li>
+<li><p>We create 20-30 and 30-40, each has its own GTID stream. We copy the schema,
+and the data.</p></li>
+<li><p>Filtered replication is enabled. A transaction in 20-40 is replayed on both
+20-30 and 30-40, with an extra blp_checkpoint statement, that saves the 20-40
+GTID.</p></li>
+<li><p>At some point, we migrate the read-only traffic from 20-40 replicas to 20-30
+and 30-40 replicas. (Note: this is probably when we want to migrate any
+invalidation process as well).</p></li>
+<li><p>Then as a final step, the writes are migrated from 20-40 to 20-30 and 30-40.</p></li>
+</ul>
+
+<p>So we have a window of time when both streams are available simultaneously. For
+the resharding process to be operationally better, that window should be as
+small as possible (so we don&#39;t run with two copies of the data for too long). So
+we will make sure an Update Stream can hop from the source shards to the
+destination shards quickly.</p>
+
+<h3 id="surviving-resharding-first-try">Surviving Resharding: First Try</h3>
+
+<p>To solve the shard hop problem during resharding, we tried to explore adding
+good timing information to the replication stream. However:</p>
+
+<ul>
+<li><p>Since the time is added by vttablet, not MySQL, it is not accurate, not
+monotonic, and provides no guarantees.</p></li>
+<li><p>Which such loose guarantees, it is no better than the second-accurate
+timestamp added by MySQL to each transaction.</p></li>
+</ul>
+
+<p>So this idea was abandoned.</p>
+
+<p>The GTID stream maintained by MySQL is the only true source of IDs for
+changes. It’s the only one we can trivially seek on, and get binlogs. The main
+issue with it is that it’s not maintained across shards when resharding.</p>
+
+<p>However, it is worth noting that a transaction replicated by the binlog streamer
+using Filtered Replication also saves the original GTID and the source
+transaction timestamp in the blp_checkpoint table. So we could extract the
+original GTID and timestamp from at least that statement (and if not, from an
+added comment).</p>
+
+<h3 id="change-log-and-sbr">Change Log and SBR</h3>
+
+<p>If all we have is Statement Based Replication (SBR), we cannot get an accurate
+Change Log. SBR only provides the SQL statements, there is no easy way for us to
+parse them to get the final values of the columns (OK, there is, it’s just too
+complicated). And we cannot just query MySQL, as it may have already applied
+more transactions related to that record. So for Change Log, we need Row Based
+Replication (or a more advanced replication system).</p>
+
+<p>Note we can use the following setup:</p>
+
+<ul>
+<li><p>Master and replicas use SBR.</p></li>
+<li><p>Rdonly use SBR to connect to master, but log RBR logs locally.</p></li>
+<li><p>We get the replication stream from rdonly servers.</p></li>
+</ul>
+
+<p>This is a bit awkward, and the main question is: what happens if a rdonly server
+is the only server that has replicated and semi-sync-acked a transaction, while
+the master is dying? Then to get that change, the other servers would get the
+RBR version of the change.</p>
+
+<p>Vitess support for RBR is coming. We will then explore these use cases further.</p>
+
+<h2 id="detailed-design">Detailed Design</h2>
+
+<p>In the rest of this document, we’ll explore using the GTID when tracking a
+single shard, and revert to the timestamp when we hop across shards.</p>
+
+<p>As we do not want the application layer to understand / parse / compare the
+GTIDs, we’ll use an opaque token, and just pass it around the various
+layers. Vtgate / vttablet will understand it. The invalidation process should
+not have to, but will as there is no better solution.</p>
+
+<p>This approach can be made to work for the cache invalidation use case, but it
+might be difficult to provide an exact point in time for recovery / switching
+over to a different set of shards during resharding.</p>
+
+<p>For the Change Log, we’ll see what we can provide.</p>
+
+<h3 id="event-token">Event Token</h3>
+
+<p>We define an Event Token structure that contains:</p>
+
+<ul>
+<li><p>a MySQL replication timestamp (int64, seconds since Epoch).</p></li>
+<li><p>a shard name</p></li>
+<li><p>A GTIDSet position.</p></li>
+</ul>
+
+<p>It basically describes a position in a replication stream.</p>
+
+<p>An Event Token is always constructed from reading a transaction from the
+binlogs. If filtered replication is running, we use the source shard timestamp.</p>
+
+<p>Event Token comparison:</p>
+
+<ul>
+<li><p>First, if the timestamps are different, just use that.</p></li>
+<li><p>Then, if both use the same shard name, compare the GTIDs.</p></li>
+<li><p>Otherwise we do not know for sure. It will depend on the usage to figure out
+what we do.</p></li>
+</ul>
+
+<p><em>Possible Extension</em>: when filtered replication is running, we also update
+blp_checkpoint with the source GTID. We could add that information to the Event
+Token. Let’s try to go without in the first version, to remain simple. More on
+this later in the ‘Data Dump, Keeping it up to Date’ section.</p>
+
+<h3 id="vttablet-changes">Vttablet Changes</h3>
+
+<h4 id="watching-the-replication-stream">Watching the Replication Stream</h4>
+
+<p>Replicas are changed to add a background routine that reads the binlogs
+(controlled by the <code class="prettyprint">watch_replication_stream</code> flag). When a tablet’s type is set
+to <code class="prettyprint">replica</code>, the routine starts. It stops when the tablet is not <code class="prettyprint">replica</code> any
+more (goes to <code class="prettyprint">master</code>, <code class="prettyprint">worker</code>, …).</p>
+
+<p>The routine starts reading the binlog from the current position. It then remembers:</p>
+
+<ul>
+<li><p>The Event Token of the last seen transaction.</p></li>
+<li><p><em>Possible Optimization</em>: A map of the first time a timestamp is seen to the
+corresponding GTID position and filename / position. This would be a value per
+second. Let’s age these out: we keep the values for the last N seconds, then
+we keep a value for every minute for the last M hours. We forget values older
+than 3 days (or whatever the binlog retention time is).</p></li>
+</ul>
+
+<h4 id="include_event_token-option"><code class="prettyprint">include_event_token</code> Option</h4>
+
+<p>We added an option to the Query Service API for Execute calls, called
+<code class="prettyprint">include_event_token</code>. If set, vttablet will get the last seen Event Token right
+before issuing the query to MySQL, and include it in the response. This
+essentially represents the last known replication position that we’re sure the
+data we’re returning is fresher than.</p>
+
+<h4 id="compare_event_token-option"><code class="prettyprint">compare_event_token</code> Option</h4>
+
+<p>We added an option to the Query Service API for Execute calls, called
+<code class="prettyprint">compare_event_token</code>. The provided event token is sent along with the call, and
+vttablet compares that token with the one its current replication stream watcher
+has. It returns the result of the comparison in ResultExtras.</p>
+
+<h4 id="update-stream-api-change">Update Stream API Change</h4>
+
+<p>The Update Stream API in vttablet right now can only start from a GTID. We added a
+new API that can start from a timestamp as well. It will look for the right
+binlog file to start with, and start streaming events, discarding events until
+it finds the provided timestamp. <em>Optimization</em>: It can also look in the map to
+find the closest value it can start with, and then read from the binlogs until
+it finds the first timestamp. If it doesn’t have old enough values in its map,
+it errors out (the goal is to have vtgate then try another tablet to start
+from). For each event, we will also return the corresponding Event Token.</p>
+
+<p><em>Optimization</em>: if an Update Stream client is caught up to the current binlog
+reading thread, we can just tee the binlog stream to that client. We won’t do
+that in the first version, as we don’t expect that many clients.</p>
+
+<p>Note that when filtered replication is running, we need to have the timestamp of
+the source transaction on the source shard, not the local timestamp of the
+applied transaction. Which also means that timestamps will not be always
+linearly increasing in the stream, in the case of a shard merge (although they
+will be linearly increasing for a given keyspace_id).</p>
+
+<h3 id="vtgate-changes">Vtgate Changes</h3>
+
+<p>We added a new Update Stream service to vtgate. It takes as input a keyspace and
+an optional KeyRange (for sharded keyspaces). As a starting point, it takes a
+timestamp.</p>
+
+<p><em>Caveat</em>: As previously mentioned, at first, we can add the restriction that the
+client only asks for KeyRanges that are exactly matching to one or more
+shards. For instance, if a keyspace is sharded four ways, -40, 40-80, 80-c0,
+c0-, we can support clients asking for -40, -80, -, but not for 60-a0 for
+instance. Lifting that restriction is somewhat easy, we’d just have to filter
+the returned keyspace_ids by KeyRange, but that’s extra work for not much gain
+in the short term (and we don’t parse keyspace_id in Binlog Streamer right now,
+just the PK).</p>
+
+<p>After using the partition map in SrvKeyspace, vtgate will have a list of shards
+to query. It will need to create a connection for every shard that overlaps with
+the input KeyRange. For every shard, it will pick an up-to-date replica and use
+the Update Stream API mentioned above. If the vttablet cannot provide the
+stream, it will failover to another one. It will then start an Update Stream on
+all sources, and just merge and stream the results back to the source. For each
+Event Token that is read from a source, vtgate will also send the smallest
+timestamp of all Events it’s seen in all sources. That way the client has a
+value to start back from in case it needs to restart.</p>
+
+<p>In case of resharding event, the list of shards to connect to may change. Vtgate
+will build a map of overlapping shards, to know which source shards are mapped
+to which destination shards. It will then stop reading from all the source
+shards, find the minimum timestamp of the last event it got from each source,
+and use that to restart the stream on the destination shards.</p>
+
+<p><em>Alternate Simpler Solution</em>: when vtgate notices a SrvKeyspace change in the
+serving shards, it just aborts the invalidation stream. The client is
+responsible for reconnecting with the last timestamp it’s seen. The client will
+need to handle this error case anyway (when vtgates get upgraded at least).</p>
+
+<p><em>Caveat</em>: this will produce duplicate Event Tokens, with the same timestamp but
+with GTID positions from two different streams. More on this later, but for a
+Cache Invalidation scenario, no issue, and for a Change Log application, we’ll
+see how we can deal with it.</p>
+
+<p>We also add the same <code class="prettyprint">include_event_token</code> flag to vtgate query service. It just
+passes it along to the underlying vttablet. It’s only supported for
+single-keyspace_id queries. The resulting EventToken is just returned back as
+is.</p>
+
+<h2 id="use-cases-how-to">Use Cases How To</h2>
+
+<p>Let&#39;s revisit our use cases and see how this addresses them.</p>
+
+<h3 id="cache-invalidation">Cache Invalidation</h3>
+
+<p>The idea is to use the Event Token coming from both the Execute results and the
+Update Stream to maintain cache consistency.</p>
+
+<p>The cache contains entries with both:</p>
+
+<ul>
+<li><p>An Event Token. It describes either the invalidation, or the last population.</p></li>
+<li><p>An optional value.</p></li>
+</ul>
+
+<p>The invalidation process works as follows:</p>
+
+<ul>
+<li><p>It asks vtgate for an Update Stream for a provided keyspace / KeyRange,
+starting at the current timestamp (or from a few seconds/minutes/hours in the
+past, or from the last checkpointed timestamp it had saved).</p></li>
+<li><p>Vtgate resolves the keyrange into shards. It starts an invalidation stream
+with a healthy replica in each shard from the provided timestamp.</p></li>
+<li><p>Vtgate sends back all Event Tokens it collects, with all of timestamp, shard
+name and GTID.</p></li>
+<li><p>For each change it gets, the invalidation process reads the cache record. Two cases:</p>
+
+<ul>
+<li>No entry in the cache: it stores the Event Token (to indicate the cache
+should not be populated unless the value is greater) with no value.</li>
+<li>An entry in the cache exists, with an Event Token:</li>
+<li>If the cached Event Token is strictly older, update it with the new Event
+Token, clear the value.</li>
+<li>If the cached Event Token is strictly more recent, discard the new Event.</li>
+<li>If we don’t know which Event Token is the most recent (meaning they have
+the same timestamp, and are read from different invalidation stream), we
+need to do the safest thing: invalidate the cache with the current Event
+Token. This is the safest because we’re guaranteed to get duplicate
+events, and not miss events.</li>
+<li>In any case the invalidation process only updates the cache if it still
+contains the value it read (CAS). Otherwise it rereads and tries again
+(means an appserver or another invalidator somehow also updated the cache).</li>
+</ul></li>
+</ul>
+
+<p>A regular appserver will query the cache for the value it wants. It will get either:</p>
+
+<ul>
+<li><p>No entry: asks vtgate for the Event Token when querying the database, use a
+CAS operation to set the value the returned Event Token + Value.</p></li>
+<li><p>An entry with both an Event Token and a Value: Just use the value.</p></li>
+<li><p>An entry with just an Event Token and no Value:</p>
+
+<ul>
+<li>Send the Event Token along with the query to vtgate as
+<code class="prettyprint">compare_event_token</code>, and also asking for Event Token using <code class="prettyprint">include_event_token</code>.</li>
+<li>Vtgate will query vttablet as usual, but also passing both flags.</li>
+<li>Vttablet will then compare the provided Event Token with the one that was
+included. It will include in the response the knowledge of the Event Token
+comparison as a boolean, only set if the data read is <code class="prettyprint">fresher</code>.</li>
+<li>Depending on the <code class="prettyprint">fresher</code> boolean flag, the app will:</li>
+<li>Data read is more recent: Update the cache with new Event Token / Value.</li>
+<li>Data read is not more recent (or we don&#39;t know for sure): don’t update the cache.</li>
+</ul></li>
+</ul>
+
+<p><em>Constraints</em>:</p>
+
+<ul>
+<li><p>When restarting the invalidation process, we start from a point back in time,
+let’s say N seconds behind now. Since we can ask destination shards at this
+point for events that are N seconds old, filtered replication has to have been
+running for at least N seconds. (Alternatively, the invalidators can
+checkpoint their current position from time to time, and restart from that
+when starting up, and revert back to N seconds behind now).</p></li>
+<li><p>As mentioned before, the shard range queried by the invalidation process
+should cover a round number of actual shards.</p></li>
+<li><p>The invalidation process needs to know how to compare tokens. This is a
+bummer, I don’t see any way around it. We could simplify and only do the
+timestamp comparison part, but that would mean the cache is unused for up to
+an entire second upon changes. The appserver doesn’t need to compare, it gives
+the value to vtgate and let it do the work.</p></li>
+</ul>
+
+<p>To see a sample use of the Update Stream feature, look at
+the
+<a href="https://github.com/youtube/vitess/blob/master/test/cache_invalidation.py">cache_invalidation.py</a> integration
+test. It shows how to do the invalidaiton in python, and the application
+component.</p>
+
+<h3 id="extension-removing-duplicate-events">Extension: Removing Duplicate Events</h3>
+
+<p>In the previous section, we use timestamps to easily seek on replication
+streams. If we added the ability to seek on any source GTID that appears in the
+destination stream, we should be able to precisely seek at the right spot. That
+would make exact transitions from one stream to the next possible. Again, as
+long as the destination shard in a resharding event has been running filtered
+replication for as long as we want to go back.</p>
+
+<p>However, describing a position on a replication stream becomes tricky: it needs
+one Event Token per replication stream. When resharding the Event Tokens would
+jump around. When restarting a stream from an Event Token list, we may need to
+restart earlier in some cases and skip some items.</p>
+
+<p><em>Bottom Line</em>:</p>
+
+<ul>
+<li><p>This would require a bunch of non-trivial code.</p></li>
+<li><p>This requires that filtered replication would be running for at least as long
+as we want to go back in time for the starting point.</p></li>
+</ul>
+
+<p>If there is no use case for it, let’s not do it.</p>
+
+<h3 id="extension-adding-update-data-to-the-stream-towards-change-log">Extension: Adding Update Data to the Stream, Towards Change Log</h3>
+
+<p>Let’s add a flag to the streaming query, that, if specified, asks for the
+changed columns as well as the PK.</p>
+
+<ul>
+<li><p>If using SBR, and the flag is present, vttablet can just query the row at the
+time we get the event, and send it along. As already mentioned, the data may
+not be exactly up to date. It is however guaranteed to be newer than the Event
+Token, which might be good enough to put in a cache for instance.</p></li>
+<li><p>If using RBR, we just get the data for free, just send it along.</p></li>
+</ul>
+
+<p><em>Bottom Line</em>: Let’s try to go without this extension and see how it goes. We
+can implement the additional data when we fully support RBR.</p>
+
+<h3 id="extension-data-dump-keeping-it-up-to-date">Extension: Data Dump, Keeping It Up To Date</h3>
+
+<p><em>Use Case</em>: keep a secondary database (like a HBase database) up to date.
+<em>Requirements</em>: RBR replication, plus Data included in the Stream (previous extension).</p>
+
+<p>It’s simple:</p>
+
+<ul>
+<li><p>The external database has the same schema as MySQL. Each row is indexed by
+PK. It also has an extra field, for the last Event Token.</p></li>
+<li><p>Remember start time of the process, let’s call it StartTime</p></li>
+<li><p>Dump the data to other database. Using Map/Reduce, whatever. Do not populate
+the Event Tokens.</p></li>
+<li><p>Start an invalidation process, asking for changes from StartTime. When getting
+updates, read the current external database row and its Event Token:</p>
+
+<ul>
+<li>If there is no existing row / no Event token, save the new value.</li>
+<li>If there is an existing row with a strictly more recent Event Token, ignore
+the event.</li>
+<li>Otherwise (when the existing Event Token is older or we don’t know), store
+the new Value / Event Token.</li>
+</ul></li>
+</ul>
+
+<p>Note this again means the dumping process needs to be able to compare Event
+Tokens, as the invalidator does.</p>
+
+<p><em>Caveat</em>: As described, the values in the secondary storage will converge, but
+they may go back in time for a bit, as we will process duplicate events during
+resharding, and we may not know how to compare them.</p>
+
+<p><em>Extension</em>: if we also add the source GTID in Event Tokens read from a
+destination shard during filtered replication, we can break the tie easily on
+duplicate events, and guarantee we only move forward. This seems like the
+easiest solution, and we can then use only timestamps as starting times for
+restarting the sync process.</p>
+
+      </div>
+    </div>
+  </div>
+
+</div>
+
+    <div class="page-spacer"></div>
+    <footer role="contentinfo" id="site-footer">
+  <nav role="navigation" class="menu bottom-menu">
+    
+    <a href="https://groups.google.com/forum/#!forum/vitess" target="_blank">Contact: vitess@googlegroups.com</a>&nbsp;&nbsp;<b>·</b>&nbsp;&nbsp;
+    <a href="https://groups.google.com/forum/#!forum/vitess-announce" target="_blank">Announcements</a>&nbsp;&nbsp;<b>·</b>&nbsp;&nbsp;
+    &#169; 2017 <a href="/">Vitess</a> powered by <a href="https://developers.google.com/open-source/">Google Inc</a>
+  </nav>
+</footer>
+
+
+        <!-- jQuery (necessary for Bootstrap's JavaScript plugins) -->
+<!--    <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.2/jquery.min.js"></script>   -->
+    <!-- Include all compiled plugins (below), or include individual files as needed -->
+<!--
+    <script src="/libs/bootstrap/js/bootstrap.min.js"></script>
+-->
+    <!-- Include the common site javascript -->
+    <script src="/js/common.js" type="text/javascript" charset="utf-8"></script>
+
+
+  </body>
+</html>

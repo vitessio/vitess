@@ -12,10 +12,11 @@ import (
 
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
-	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
+
+	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 // This file defines the interface and implementations of sharding key resolvers.
@@ -107,7 +108,7 @@ func newV3ResolverFromTableDefinition(keyspaceSchema *vindexes.KeyspaceSchema, t
 	}
 
 	// Find the sharding key column index.
-	columnIndex, ok := tmutils.TableDefinitionGetColumn(td, colVindex.Column.Original())
+	columnIndex, ok := tmutils.TableDefinitionGetColumn(td, colVindex.Column.String())
 	if !ok {
 		return nil, fmt.Errorf("table %v has a Vindex on unknown column %v", td.Name, colVindex.Column)
 	}

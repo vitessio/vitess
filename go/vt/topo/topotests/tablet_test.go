@@ -7,14 +7,12 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/zktopo/zktestserver"
+	"github.com/youtube/vitess/go/vt/topo/memorytopo"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
-// This file contains tests for the tablet.go file.  Note we use a
-// zktestserver, because memorytopo doesn't support all topo server
-// methods yet.
+// This file contains tests for the tablet.go file.
 
 // TestCreateTablet tests all the logic in the topo.CreateTablet method.
 func TestCreateTablet(t *testing.T) {
@@ -22,7 +20,7 @@ func TestCreateTablet(t *testing.T) {
 	keyspace := "ks1"
 	shard := "shard1"
 	ctx := context.Background()
-	ts := zktestserver.New(t, []string{cell})
+	ts := topo.Server{Impl: memorytopo.New(cell)}
 
 	// Create a tablet.
 	alias := &topodatapb.TabletAlias{

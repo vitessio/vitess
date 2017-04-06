@@ -1,6 +1,7 @@
 package vtctld
 
 import (
+	"io"
 	"sync"
 	"testing"
 	"time"
@@ -9,13 +10,13 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"github.com/youtube/vitess/go/vt/logutil"
-	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
-	"github.com/youtube/vitess/go/vt/tabletserver/grpcqueryservice"
-	"github.com/youtube/vitess/go/vt/tabletserver/queryservice/fakes"
-	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
+	"github.com/youtube/vitess/go/vt/topo/memorytopo"
+	"github.com/youtube/vitess/go/vt/vttablet/grpcqueryservice"
+	"github.com/youtube/vitess/go/vt/vttablet/queryservice"
+	"github.com/youtube/vitess/go/vt/vttablet/queryservice/fakes"
+	"github.com/youtube/vitess/go/vt/vttablet/tmclient"
 	"github.com/youtube/vitess/go/vt/wrangler"
 	"github.com/youtube/vitess/go/vt/wrangler/testlib"
-	"github.com/youtube/vitess/go/vt/zktopo/zktestserver"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -23,7 +24,7 @@ import (
 
 // streamHealthTabletServer is a local QueryService implementation to support the tests
 type streamHealthTabletServer struct {
-	fakes.ErrorQueryService
+	queryservice.QueryService
 	t *testing.T
 
 	// streamHealthMutex protects all the following fields
@@ -34,22 +35,38 @@ type streamHealthTabletServer struct {
 
 func newStreamHealthTabletServer(t *testing.T) *streamHealthTabletServer {
 	return &streamHealthTabletServer{
+		QueryService:    fakes.ErrorQueryService,
 		t:               t,
 		streamHealthMap: make(map[int]chan<- *querypb.StreamHealthResponse),
 	}
 }
 
-func (s *streamHealthTabletServer) StreamHealthRegister(c chan<- *querypb.StreamHealthResponse) (int, error) {
+func (s *streamHealthTabletServer) StreamHealth(ctx context.Context, callback func(*querypb.StreamHealthResponse) error) error {
+	id, ch := s.streamHealthRegister()
+	defer s.streamHealthUnregister(id)
+	for shr := range ch {
+		if err := callback(shr); err != nil {
+			if err == io.EOF {
+				return nil
+			}
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *streamHealthTabletServer) streamHealthRegister() (id int, ch chan *querypb.StreamHealthResponse) {
 	s.streamHealthMutex.Lock()
 	defer s.streamHealthMutex.Unlock()
 
-	id := s.streamHealthIndex
+	id = s.streamHealthIndex
 	s.streamHealthIndex++
-	s.streamHealthMap[id] = c
-	return id, nil
+	ch = make(chan *querypb.StreamHealthResponse, 10)
+	s.streamHealthMap[id] = ch
+	return id, ch
 }
 
-func (s *streamHealthTabletServer) StreamHealthUnregister(id int) error {
+func (s *streamHealthTabletServer) streamHealthUnregister(id int) error {
 	s.streamHealthMutex.Lock()
 	defer s.streamHealthMutex.Unlock()
 
@@ -72,8 +89,7 @@ func (s *streamHealthTabletServer) BroadcastHealth(terTimestamp int64, stats *qu
 }
 
 func TestTabletData(t *testing.T) {
-	db := fakesqldb.Register()
-	ts := zktestserver.New(t, []string{"cell1", "cell2"})
+	ts := memorytopo.NewServer("cell1", "cell2")
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 
 	if err := ts.CreateKeyspace(context.Background(), "ks", &topodatapb.Keyspace{
@@ -83,7 +99,7 @@ func TestTabletData(t *testing.T) {
 		t.Fatalf("CreateKeyspace failed: %v", err)
 	}
 
-	tablet1 := testlib.NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_MASTER, db, testlib.TabletKeyspaceShard(t, "ks", "-80"))
+	tablet1 := testlib.NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_MASTER, nil, testlib.TabletKeyspaceShard(t, "ks", "-80"))
 	tablet1.StartActionLoop(t, wr)
 	defer tablet1.StopActionLoop(t)
 	shsq := newStreamHealthTabletServer(t)

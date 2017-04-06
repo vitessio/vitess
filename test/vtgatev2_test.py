@@ -83,11 +83,10 @@ CREATE_VT_SEQ = '''create table vt_seq (
   id int,
   next_id bigint,
   cache bigint,
-  increment bigint,
   primary key(id)
 ) comment 'vitess_sequence' Engine=InnoDB'''
 
-INIT_VT_SEQ = 'insert into vt_seq values(0, 1, 2, 2)'
+INIT_VT_SEQ = 'insert into vt_seq values(0, 1, 2)'
 
 
 create_tables = [
@@ -784,7 +783,7 @@ class TestCoreVTGateFunctions(BaseTestCase):
       want = 1
       for _ in xrange(10):
         result, _, _, _ = vtgate_conn._execute(
-            'select next value for vt_seq', {},
+            'select next :n values for vt_seq', {'n': 2},
             tablet_type=tablet_type, keyspace_name=KEYSPACE_NAME,
             keyspace_ids=[pack_kid(0)])
         self.assertEqual(result[0][0], want)
@@ -1103,30 +1102,6 @@ class TestFailures(BaseTestCase):
     if 'NonVtgateErrors' not in v['VtgateInfoErrorCounts']:
       return 0
     return v['VtgateInfoErrorCounts']['NonVtgateErrors']
-
-  def test_vttablet_errors_not_logged(self):
-    """Verifies that errors from VtTablet aren't logged as such in VTGate.
-
-    Instead of making assertions by reading the log stream, we read a debug
-    vars that is incremented by VTGate whenever it chooses to log exceptions
-    to Infof instead of Errorf.
-    """
-    before = self._get_non_vtgate_errors()
-
-    vtgate_conn = get_connection()
-    keyspace_id = SHARD_KID_MAP[SHARD_NAMES[self.shard_index]][0]
-    cursor = vtgate_conn.cursor(
-        tablet_type='master', keyspace=KEYSPACE_NAME,
-        keyspace_ids=[pack_kid(keyspace_id)],
-        writable=True)
-    with self.assertRaises(dbexceptions.DatabaseError):
-      cursor.execute('this is not valid syntax, throw an error', {})
-
-    after = self._get_non_vtgate_errors()
-    self.assertEqual(after - before, 1,
-                     'No errors in VTGate that were not logged as exceptions'
-                     ' (%d to %d)' % (before, after))
-    vtgate_conn.close()
 
   def test_error_on_dml(self):
     vtgate_conn = get_connection()

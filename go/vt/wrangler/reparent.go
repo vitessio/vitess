@@ -14,8 +14,9 @@ import (
 	"time"
 
 	"github.com/youtube/vitess/go/event"
+	"github.com/youtube/vitess/go/mysqlconn/replication"
 	"github.com/youtube/vitess/go/vt/concurrency"
-	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
+	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/topotools"
@@ -216,6 +217,11 @@ func (wr *Wrangler) initShardMasterLocked(ctx context.Context, ev *events.Repare
 		return err
 	}
 
+	// Create a cancelable context for the following RPCs.
+	// If error conditions happen, we can cancel all outgoing RPCs.
+	replCtx, replCancel := context.WithCancel(ctx)
+	defer replCancel()
+
 	// Now tell the new master to insert the reparent_journal row,
 	// and tell everybody else to become a slave of the new master,
 	// and wait for the row in the reparent_journal table.
@@ -233,14 +239,14 @@ func (wr *Wrangler) initShardMasterLocked(ctx context.Context, ev *events.Repare
 			go func(alias topodatapb.TabletAlias, tabletInfo *topo.TabletInfo) {
 				defer wgMaster.Done()
 				wr.logger.Infof("populating reparent journal on new master %v", topoproto.TabletAliasString(&alias))
-				masterErr = wr.tmc.PopulateReparentJournal(ctx, tabletInfo.Tablet, now, initShardMasterOperation, &alias, rp)
+				masterErr = wr.tmc.PopulateReparentJournal(replCtx, tabletInfo.Tablet, now, initShardMasterOperation, &alias, rp)
 			}(alias, tabletInfo)
 		} else {
 			wgSlaves.Add(1)
 			go func(alias topodatapb.TabletAlias, tabletInfo *topo.TabletInfo) {
 				defer wgSlaves.Done()
 				wr.logger.Infof("initializing slave %v", topoproto.TabletAliasString(&alias))
-				if err := wr.tmc.InitSlave(ctx, tabletInfo.Tablet, masterElectTabletAlias, rp, now); err != nil {
+				if err := wr.tmc.InitSlave(replCtx, tabletInfo.Tablet, masterElectTabletAlias, rp, now); err != nil {
 					rec.RecordError(fmt.Errorf("Tablet %v InitSlave failed: %v", topoproto.TabletAliasString(&alias), err))
 				}
 			}(alias, tabletInfo)
@@ -248,9 +254,13 @@ func (wr *Wrangler) initShardMasterLocked(ctx context.Context, ev *events.Repare
 	}
 
 	// After the master is done, we can update the shard record
-	// (note with semi-sync, it also means at least one slave is done)
+	// (note with semi-sync, it also means at least one slave is done).
 	wgMaster.Wait()
 	if masterErr != nil {
+		// The master failed, there is no way the
+		// slaves will work.  So we cancel them all.
+		wr.logger.Warningf("master failed to PopulateReparentJournal, canceling slaves")
+		replCancel()
 		wgSlaves.Wait()
 		return fmt.Errorf("failed to PopulateReparentJournal on master: %v", masterErr)
 	}
@@ -278,7 +288,7 @@ func (wr *Wrangler) initShardMasterLocked(ctx context.Context, ev *events.Repare
 	// assume that whatever data is on all the slaves is what they intended.
 	// If the database doesn't exist, it means the user intends for these tablets
 	// to begin serving with no data (i.e. first time initialization).
-	createDB := fmt.Sprintf("CREATE DATABASE IF NOT EXISTS `%s`", topoproto.TabletDbName(masterElectTabletInfo.Tablet))
+	createDB := fmt.Sprintf("CREATE DATABASE IF NOT EXISTS %s", sqlparser.Backtick(topoproto.TabletDbName(masterElectTabletInfo.Tablet)))
 	if _, err := wr.tmc.ExecuteFetchAsDba(ctx, masterElectTabletInfo.Tablet, false, []byte(createDB), 1, false, true); err != nil {
 		return fmt.Errorf("failed to create database: %v", err)
 	}
@@ -354,6 +364,9 @@ func (wr *Wrangler) plannedReparentShardLocked(ctx context.Context, ev *events.R
 	if topoproto.TabletAliasEqual(shardInfo.MasterAlias, masterElectTabletAlias) {
 		return fmt.Errorf("master-elect tablet %v is already the master", topoproto.TabletAliasString(masterElectTabletAlias))
 	}
+	if topoproto.TabletAliasIsZero(shardInfo.MasterAlias) {
+		return fmt.Errorf("the shard has no master, use EmergencyReparentShard")
+	}
 	oldMasterTabletInfo, ok := tabletMap[*shardInfo.MasterAlias]
 	if !ok {
 		return fmt.Errorf("old master tablet %v is not in the shard", topoproto.TabletAliasString(shardInfo.MasterAlias))
@@ -377,6 +390,11 @@ func (wr *Wrangler) plannedReparentShardLocked(ctx context.Context, ev *events.R
 		return fmt.Errorf("master-elect tablet %v failed to catch up with replication or be upgraded to master: %v", topoproto.TabletAliasString(masterElectTabletAlias), err)
 	}
 
+	// Create a cancelable context for the following RPCs.
+	// If error conditions happen, we can cancel all outgoing RPCs.
+	replCtx, replCancel := context.WithCancel(ctx)
+	defer replCancel()
+
 	// Go through all the tablets:
 	// - new master: populate the reparent journal
 	// - everybody else: reparent to new master, wait for row
@@ -392,7 +410,7 @@ func (wr *Wrangler) plannedReparentShardLocked(ctx context.Context, ev *events.R
 			go func(alias topodatapb.TabletAlias, tabletInfo *topo.TabletInfo) {
 				defer wgMaster.Done()
 				wr.logger.Infof("populating reparent journal on new master %v", topoproto.TabletAliasString(&alias))
-				masterErr = wr.tmc.PopulateReparentJournal(ctx, tabletInfo.Tablet, now, plannedReparentShardOperation, &alias, rp)
+				masterErr = wr.tmc.PopulateReparentJournal(replCtx, tabletInfo.Tablet, now, plannedReparentShardOperation, &alias, rp)
 			}(alias, tabletInfo)
 		} else {
 			wgSlaves.Add(1)
@@ -401,7 +419,7 @@ func (wr *Wrangler) plannedReparentShardLocked(ctx context.Context, ev *events.R
 				wr.logger.Infof("setting new master on slave %v", topoproto.TabletAliasString(&alias))
 				// also restart replication on old master
 				forceStartSlave := topoproto.TabletAliasEqual(&alias, oldMasterTabletInfo.Alias)
-				if err := wr.tmc.SetMaster(ctx, tabletInfo.Tablet, masterElectTabletAlias, now, forceStartSlave); err != nil {
+				if err := wr.tmc.SetMaster(replCtx, tabletInfo.Tablet, masterElectTabletAlias, now, forceStartSlave); err != nil {
 					rec.RecordError(fmt.Errorf("Tablet %v SetMaster failed: %v", topoproto.TabletAliasString(&alias), err))
 					return
 				}
@@ -413,6 +431,10 @@ func (wr *Wrangler) plannedReparentShardLocked(ctx context.Context, ev *events.R
 	// (note with semi-sync, it also means at least one slave is done)
 	wgMaster.Wait()
 	if masterErr != nil {
+		// The master failed, there is no way the
+		// slaves will work.  So we cancel them all.
+		wr.logger.Warningf("master failed to PopulateReparentJournal, canceling slaves")
+		replCancel()
 		wgSlaves.Wait()
 		return fmt.Errorf("failed to PopulateReparentJournal on master: %v", masterErr)
 	}
@@ -425,8 +447,7 @@ func (wr *Wrangler) plannedReparentShardLocked(ctx context.Context, ev *events.R
 		return fmt.Errorf("failed to update shard master record: %v", err)
 	}
 
-	// Wait for the slaves to complete. If some of them fail, we
-	// will rebuild the shard serving graph anyway
+	// Wait for the slaves to complete.
 	wgSlaves.Wait()
 	if err := rec.Error(); err != nil {
 		wr.Logger().Errorf("Some slaves failed to reparent: %v", err)
@@ -649,6 +670,11 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events
 		return fmt.Errorf("master-elect tablet %v failed to be upgraded to master: %v", topoproto.TabletAliasString(masterElectTabletAlias), err)
 	}
 
+	// Create a cancelable context for the following RPCs.
+	// If error conditions happen, we can cancel all outgoing RPCs.
+	replCtx, replCancel := context.WithCancel(ctx)
+	defer replCancel()
+
 	// Reset replication on all slaves to point to the new master, and
 	// insert test row in the new master.
 	// Go through all the tablets:
@@ -666,7 +692,7 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events
 			go func(alias topodatapb.TabletAlias, tabletInfo *topo.TabletInfo) {
 				defer wgMaster.Done()
 				wr.logger.Infof("populating reparent journal on new master %v", topoproto.TabletAliasString(&alias))
-				masterErr = wr.tmc.PopulateReparentJournal(ctx, tabletInfo.Tablet, now, emergencyReparentShardOperation, &alias, rp)
+				masterErr = wr.tmc.PopulateReparentJournal(replCtx, tabletInfo.Tablet, now, emergencyReparentShardOperation, &alias, rp)
 			}(alias, tabletInfo)
 		} else {
 			wgSlaves.Add(1)
@@ -677,7 +703,7 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events
 				if status, ok := statusMap[alias]; ok {
 					forceStartSlave = status.SlaveIoRunning || status.SlaveSqlRunning
 				}
-				if err := wr.tmc.SetMaster(ctx, tabletInfo.Tablet, masterElectTabletAlias, now, forceStartSlave); err != nil {
+				if err := wr.tmc.SetMaster(replCtx, tabletInfo.Tablet, masterElectTabletAlias, now, forceStartSlave); err != nil {
 					rec.RecordError(fmt.Errorf("Tablet %v SetMaster failed: %v", topoproto.TabletAliasString(&alias), err))
 				}
 			}(alias, tabletInfo)
@@ -688,6 +714,10 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events
 	// (note with semi-sync, it also means at least one slave is done)
 	wgMaster.Wait()
 	if masterErr != nil {
+		// The master failed, there is no way the
+		// slaves will work.  So we cancel them all.
+		wr.logger.Warningf("master failed to PopulateReparentJournal, canceling slaves")
+		replCancel()
 		wgSlaves.Wait()
 		return fmt.Errorf("failed to PopulateReparentJournal on master: %v", masterErr)
 	}

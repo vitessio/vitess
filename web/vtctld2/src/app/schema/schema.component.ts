@@ -102,28 +102,40 @@ export class SchemaComponent implements OnInit {
 
       if (!vSchemaResp.Error) {
         vSchemaResp = JSON.parse(vSchemaResp.Output);
-        let vSchemas = Object.keys(vSchemaResp.vindexes).map(vname => {
-          let vtype = vSchemaResp.vindexes[vname].type;
-          let vparams = vSchemaResp.vindexes[vname].params ? vSchemaResp.vindexes[vname].params : '';
-          let vowner = vSchemaResp.vindexes[vname].owner ? vSchemaResp.vindexes[vname].owner : '';
-          return {name: vname, type: vtype, params: vparams, owner: vowner};
-        });
-        this.vSchemas = vSchemas;
+        if ('vindexes' in vSchemaResp) {
+          let vSchemas = Object.keys(vSchemaResp.vindexes).map(vname => {
+            let vtype = vSchemaResp.vindexes[vname].type;
+            let vparams = vSchemaResp.vindexes[vname].params ? vSchemaResp.vindexes[vname].params : '';
+            let vowner = vSchemaResp.vindexes[vname].owner ? vSchemaResp.vindexes[vname].owner : '';
+            return {name: vname, type: vtype, params: vparams, owner: vowner};
+          });
+          this.vSchemas = vSchemas;
+        } else {
+          this.vSchemas = [];
+        }
       }
 
       if (!schemaResp.Error) {
         schemaResp = JSON.parse(schemaResp.Output);
-        if (!vSchemaResp.Error) {
-          let vindexes = this.createVindexMap(vSchemaResp.tables);
-          this.schemas = schemaResp.table_definitions.map(table => {
-            return this.parseColumns(table, vindexes);
-          });
+        if ('table_definitions' in schemaResp) {
+          if (!vSchemaResp.Error && 'tables' in vSchemaResp) {
+            let vindexes = this.createVindexMap(vSchemaResp.tables);
+            this.schemas = schemaResp.table_definitions.map(table => {
+              return this.parseColumns(table, vindexes);
+            });
+          } else {
+            this.schemas = schemaResp.table_definitions.map(table => {
+              return this.parseColumns(table);
+            });
+          }
         } else {
-          this.schemas = schemaResp.table_definitions.map(table => {
-            return this.parseColumns(table);
-          });
+          this.schemas = [];
         }
       }
+
+      // We just reloaded the data, clear the selected value.
+      this.selectedSchema = undefined;
+      this.selectedVSchema = undefined;
     });
   }
 
@@ -159,18 +171,25 @@ export class SchemaComponent implements OnInit {
     return vindexes;
   }
 
-  parseColumns(table, vindexes= undefined) {
-    let pks = {};
-    let i = 1;
-    for (let pk of table.primary_key_columns) {
-      pks[pk] = i;
-      i++;
+  parseColumns(table, vindexes = undefined) {
+    // For each primary key column, store its index (position) within the
+    // primary key because we show this in the schema popup.
+    let pkColumnIndexes = {};
+    if ('primary_key_columns' in table) {
+      let i = 1;
+      for (let pkColumn of table.primary_key_columns) {
+        pkColumnIndexes[pkColumn] = i;
+        i++;
+      }
     }
+
+    // Generate column entries for schema popup.
     let columnIndex = 1;
     table['columns'] = table.columns.map(column => {
-      let pk_index = column in pks ?  pks[column].toString() : '~';
-      let newColumn = {name: column, pk: pk_index, index: columnIndex};
+      let pkColumnIndex = column in pkColumnIndexes ? pkColumnIndexes[column].toString() : '~';
+      let newColumn = {name: column, index: columnIndex, pk: pkColumnIndex};
       columnIndex++;
+
       if (vindexes) {
         if (vindexes[table.name]) {
           if (vindexes[table.name][column]) {
@@ -185,6 +204,7 @@ export class SchemaComponent implements OnInit {
       }
       return newColumn;
     });
+
     return table;
   }
 }

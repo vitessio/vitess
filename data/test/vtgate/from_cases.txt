@@ -14,32 +14,32 @@
 }
 
 # Single table unsharded
-"select col from main1"
+"select col from unsharded"
 {
-  "Original": "select col from main1",
+  "Original": "select col from unsharded",
   "Instructions": {
     "Opcode": "SelectUnsharded",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
-    "Query": "select col from main1",
-    "FieldQuery": "select col from main1 where 1 != 1"
+    "Query": "select col from unsharded",
+    "FieldQuery": "select col from unsharded where 1 != 1"
   }
 }
 
 # Multi-table unsharded
-"select m1.col from main1 as m1 join main1 as m2"
+"select m1.col from unsharded as m1 join unsharded as m2"
 {
-  "Original": "select m1.col from main1 as m1 join main1 as m2",
+  "Original": "select m1.col from unsharded as m1 join unsharded as m2",
   "Instructions": {
     "Opcode": "SelectUnsharded",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
-    "Query": "select m1.col from main1 as m1 join main1 as m2",
-    "FieldQuery": "select m1.col from main1 as m1 join main1 as m2 where 1 != 1"
+    "Query": "select m1.col from unsharded as m1 join unsharded as m2",
+    "FieldQuery": "select m1.col from unsharded as m1 join unsharded as m2 where 1 != 1"
   }
 }
 
@@ -73,25 +73,85 @@
   }
 }
 
-# Left join, single chunk
-"select m1.col from main1 as m1 left join main1 as m2 on m1.a=m2.b"
+# ',' join
+"select music.col from user, music"
 {
-  "Original": "select m1.col from main1 as m1 left join main1 as m2 on m1.a=m2.b",
+  "Original": "select music.col from user, music",
+  "Instructions": {
+    "Opcode": "Join",
+    "Left": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select 1 from user",
+      "FieldQuery": "select 1 from user where 1 != 1"
+    },
+    "Right": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select music.col from music",
+      "FieldQuery": "select music.col from music where 1 != 1"
+    },
+    "Cols": [
+      1
+    ]
+  }
+}
+
+# ',' join unsharded
+"select u1.a, u2.a from unsharded u1, unsharded u2"
+{
+  "Original": "select u1.a, u2.a from unsharded u1, unsharded u2",
   "Instructions": {
     "Opcode": "SelectUnsharded",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
-    "Query": "select m1.col from main1 as m1 left join main1 as m2 on m1.a = m2.b",
-    "FieldQuery": "select m1.col from main1 as m1 left join main1 as m2 on 1 != 1 where 1 != 1"
+    "Query": "select u1.a, u2.a from unsharded as u1, unsharded as u2",
+    "FieldQuery": "select u1.a, u2.a from unsharded as u1, unsharded as u2 where 1 != 1"
+  }
+}
+
+# ',' 3-way join unsharded
+"select u1.a, u2.a from unsharded u1, unsharded u2, unsharded u3"
+{
+  "Original": "select u1.a, u2.a from unsharded u1, unsharded u2, unsharded u3",
+  "Instructions": {
+    "Opcode": "SelectUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "select u1.a, u2.a from unsharded as u1, unsharded as u2, unsharded as u3",
+    "FieldQuery": "select u1.a, u2.a from unsharded as u1, unsharded as u2, unsharded as u3 where 1 != 1"
+  }
+}
+
+# Left join, single chunk
+"select m1.col from unsharded as m1 left join unsharded as m2 on m1.a=m2.b"
+{
+  "Original": "select m1.col from unsharded as m1 left join unsharded as m2 on m1.a=m2.b",
+  "Instructions": {
+    "Opcode": "SelectUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "select m1.col from unsharded as m1 left join unsharded as m2 on m1.a = m2.b",
+    "FieldQuery": "select m1.col from unsharded as m1 left join unsharded as m2 on m1.a = m2.b where 1 != 1"
   }
 }
 
 # Left join, multi-chunk
-"select u.col from user u left join main1 m on u.a = m.b"
+"select u.col from user u left join unsharded m on u.a = m.b"
 {
-  "Original": "select u.col from user u left join main1 m on u.a = m.b",
+  "Original": "select u.col from user u left join unsharded m on u.a = m.b",
   "Instructions": {
     "Opcode": "LeftJoin",
     "Left": {
@@ -109,8 +169,8 @@
         "Name": "main",
         "Sharded": false
       },
-      "Query": "select 1 from main1 as m where m.b = :u_a",
-      "FieldQuery": "select 1 from main1 as m where 1 != 1",
+      "Query": "select 1 from unsharded as m where m.b = :u_a",
+      "FieldQuery": "select 1 from unsharded as m where 1 != 1",
       "JoinVars": {
         "u_a": {}
       }
@@ -125,9 +185,9 @@
 }
 
 # Three-way left join
-"select user.col from user left join main1 as m1 on user.col = m1.co left join main1 as m2 on m1.col = m2.col"
+"select user.col from user left join unsharded as m1 on user.col = m1.co left join unsharded as m2 on m1.col = m2.col"
 {
-  "Original": "select user.col from user left join main1 as m1 on user.col = m1.co left join main1 as m2 on m1.col = m2.col",
+  "Original": "select user.col from user left join unsharded as m1 on user.col = m1.co left join unsharded as m2 on m1.col = m2.col",
   "Instructions": {
     "Opcode": "LeftJoin",
     "Left": {
@@ -147,8 +207,8 @@
           "Name": "main",
           "Sharded": false
         },
-        "Query": "select m1.col from main1 as m1 where m1.co = :user_col",
-        "FieldQuery": "select m1.col from main1 as m1 where 1 != 1",
+        "Query": "select m1.col from unsharded as m1 where m1.co = :user_col",
+        "FieldQuery": "select m1.col from unsharded as m1 where 1 != 1",
         "JoinVars": {
           "user_col": {}
         }
@@ -167,8 +227,8 @@
         "Name": "main",
         "Sharded": false
       },
-      "Query": "select 1 from main1 as m2 where m2.col = :m1_col",
-      "FieldQuery": "select 1 from main1 as m2 where 1 != 1",
+      "Query": "select 1 from unsharded as m2 where m2.col = :m1_col",
+      "FieldQuery": "select 1 from unsharded as m2 where 1 != 1",
       "JoinVars": {
         "m1_col": {}
       }
@@ -183,9 +243,9 @@
 }
 
 # Three-way left join, right-associated
-"select user.col from user left join user_extra as e left join main1 as m1 on m1.col = e.col on user.col = e.col"
+"select user.col from user left join user_extra as e left join unsharded as m1 on m1.col = e.col on user.col = e.col"
 {
-  "Original": "select user.col from user left join user_extra as e left join main1 as m1 on m1.col = e.col on user.col = e.col",
+  "Original": "select user.col from user left join user_extra as e left join unsharded as m1 on m1.col = e.col on user.col = e.col",
   "Instructions": {
     "Opcode": "LeftJoin",
     "Left": {
@@ -217,8 +277,8 @@
           "Name": "main",
           "Sharded": false
         },
-        "Query": "select 1 from main1 as m1 where m1.col = :e_col",
-        "FieldQuery": "select 1 from main1 as m1 where 1 != 1",
+        "Query": "select 1 from unsharded as m1 where m1.col = :e_col",
+        "FieldQuery": "select 1 from unsharded as m1 where 1 != 1",
         "JoinVars": {
           "e_col": {}
         }
@@ -237,54 +297,54 @@
 }
 
 # Right join
-"select m1.col from main1 as m1 right join main1 as m2 on m1.a=m2.b"
+"select m1.col from unsharded as m1 right join unsharded as m2 on m1.a=m2.b"
 {
-  "Original": "select m1.col from main1 as m1 right join main1 as m2 on m1.a=m2.b",
+  "Original": "select m1.col from unsharded as m1 right join unsharded as m2 on m1.a=m2.b",
   "Instructions": {
     "Opcode": "SelectUnsharded",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
-    "Query": "select m1.col from main1 as m2 left join main1 as m1 on m1.a = m2.b",
-    "FieldQuery": "select m1.col from main1 as m2 left join main1 as m1 on 1 != 1 where 1 != 1"
+    "Query": "select m1.col from unsharded as m2 left join unsharded as m1 on m1.a = m2.b",
+    "FieldQuery": "select m1.col from unsharded as m2 left join unsharded as m1 on m1.a = m2.b where 1 != 1"
   }
 }
 
 # Right join with a join LHS
-"select m1.col from main1 as m1 join main1 as m2 right join main1 as m3 on m1.a=m2.b"
+"select m1.col from unsharded as m1 join unsharded as m2 right join unsharded as m3 on m1.a=m2.b"
 {
-  "Original": "select m1.col from main1 as m1 join main1 as m2 right join main1 as m3 on m1.a=m2.b",
+  "Original": "select m1.col from unsharded as m1 join unsharded as m2 right join unsharded as m3 on m1.a=m2.b",
   "Instructions": {
     "Opcode": "SelectUnsharded",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
-    "Query": "select m1.col from main1 as m3 left join (main1 as m1 join main1 as m2) on m1.a = m2.b",
-    "FieldQuery": "select m1.col from main1 as m3 left join (main1 as m1 join main1 as m2) on 1 != 1 where 1 != 1"
+    "Query": "select m1.col from unsharded as m3 left join (unsharded as m1 join unsharded as m2) on m1.a = m2.b",
+    "FieldQuery": "select m1.col from unsharded as m3 left join (unsharded as m1 join unsharded as m2) on m1.a = m2.b where 1 != 1"
   }
 }
 
 # Straight-join
-"select m1.col from main1 as m1 straight_join main1 as m2"
+"select m1.col from unsharded as m1 straight_join unsharded as m2"
 {
-  "Original": "select m1.col from main1 as m1 straight_join main1 as m2",
+  "Original": "select m1.col from unsharded as m1 straight_join unsharded as m2",
   "Instructions": {
     "Opcode": "SelectUnsharded",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
-    "Query": "select m1.col from main1 as m1 straight_join main1 as m2",
-    "FieldQuery": "select m1.col from main1 as m1 straight_join main1 as m2 where 1 != 1"
+    "Query": "select m1.col from unsharded as m1 straight_join unsharded as m2",
+    "FieldQuery": "select m1.col from unsharded as m1 straight_join unsharded as m2 where 1 != 1"
   }
 }
 
 # Three-way join
-"select user.col from user join main1 as m1 join main1 as m2"
+"select user.col from user join unsharded as m1 join unsharded as m2"
 {
-  "Original": "select user.col from user join main1 as m1 join main1 as m2",
+  "Original": "select user.col from user join unsharded as m1 join unsharded as m2",
   "Instructions": {
     "Opcode": "Join",
     "Left": {
@@ -304,8 +364,8 @@
           "Name": "main",
           "Sharded": false
         },
-        "Query": "select 1 from main1 as m1",
-        "FieldQuery": "select 1 from main1 as m1 where 1 != 1"
+        "Query": "select 1 from unsharded as m1",
+        "FieldQuery": "select 1 from unsharded as m1 where 1 != 1"
       },
       "Cols": [
         -1
@@ -317,8 +377,8 @@
         "Name": "main",
         "Sharded": false
       },
-      "Query": "select 1 from main1 as m2",
-      "FieldQuery": "select 1 from main1 as m2 where 1 != 1"
+      "Query": "select 1 from unsharded as m2",
+      "FieldQuery": "select 1 from unsharded as m2 where 1 != 1"
     },
     "Cols": [
       -1
@@ -327,9 +387,9 @@
 }
 
 # Parenthesized, single chunk
-"select user.col from user join (main1 as m1 join main1 as m2)"
+"select user.col from user join (unsharded as m1 join unsharded as m2)"
 {
-  "Original": "select user.col from user join (main1 as m1 join main1 as m2)",
+  "Original": "select user.col from user join (unsharded as m1 join unsharded as m2)",
   "Instructions": {
     "Opcode": "Join",
     "Left": {
@@ -347,8 +407,8 @@
         "Name": "main",
         "Sharded": false
       },
-      "Query": "select 1 from (main1 as m1 join main1 as m2)",
-      "FieldQuery": "select 1 from (main1 as m1 join main1 as m2) where 1 != 1"
+      "Query": "select 1 from (unsharded as m1 join unsharded as m2)",
+      "FieldQuery": "select 1 from (unsharded as m1 join unsharded as m2) where 1 != 1"
     },
     "Cols": [
       -1
@@ -357,9 +417,9 @@
 }
 
 # Parenthesized, multi-chunk
-"select user.col from user join (user as u1 join main1)"
+"select user.col from user join (user as u1 join unsharded)"
 {
-  "Original": "select user.col from user join (user as u1 join main1)",
+  "Original": "select user.col from user join (user as u1 join unsharded)",
   "Instructions": {
     "Opcode": "Join",
     "Left": {
@@ -388,8 +448,8 @@
           "Name": "main",
           "Sharded": false
         },
-        "Query": "select 1 from main1",
-        "FieldQuery": "select 1 from main1 where 1 != 1"
+        "Query": "select 1 from unsharded",
+        "FieldQuery": "select 1 from unsharded where 1 != 1"
       }
     },
     "Cols": [
@@ -398,7 +458,7 @@
   }
 }
 
-# index hints, make sure they're not stripped.
+# index hints, make sure they are not stripped.
 "select user.col from user use index(a)"
 {
   "Original": "select user.col from user use index(a)",
@@ -424,7 +484,7 @@
       "Sharded": true
     },
     "Query": "select user.col from user join user_extra on user.id = user_extra.user_id",
-    "FieldQuery": "select user.col from user join user_extra where 1 != 1"
+    "FieldQuery": "select user.col from user join user_extra on user.id = user_extra.user_id where 1 != 1"
   }
 }
 
@@ -439,7 +499,7 @@
       "Sharded": true
     },
     "Query": "select user.col from user join user_extra on user.col between 1 and 2 and user.id = user_extra.user_id",
-    "FieldQuery": "select user.col from user join user_extra where 1 != 1"
+    "FieldQuery": "select user.col from user join user_extra on user.col between 1 and 2 and user.id = user_extra.user_id where 1 != 1"
   }
 }
 
@@ -454,7 +514,7 @@
       "Sharded": true
     },
     "Query": "select user.col from user join user_extra on user_extra.user_id = user.id",
-    "FieldQuery": "select user.col from user join user_extra where 1 != 1"
+    "FieldQuery": "select user.col from user join user_extra on user_extra.user_id = user.id where 1 != 1"
   }
 }
 
@@ -469,7 +529,7 @@
       "Sharded": true
     },
     "Query": "select user.col from user join user_extra on user.id = 5 and user.id = user_extra.user_id",
-    "FieldQuery": "select user.col from user join user_extra where 1 != 1",
+    "FieldQuery": "select user.col from user join user_extra on user.id = 5 and user.id = user_extra.user_id where 1 != 1",
     "Vindex": "user_index",
     "Values": 5
   }
@@ -677,7 +737,7 @@
       "Sharded": true
     },
     "Query": "select t.id from (select id from user where id = 5) as t join user_extra on t.id = user_extra.user_id",
-    "FieldQuery": "select t.id from (select id from user where 1 != 1) as t join user_extra where 1 != 1",
+    "FieldQuery": "select t.id from (select id from user where 1 != 1) as t join user_extra on t.id = user_extra.user_id where 1 != 1",
     "Vindex": "user_index",
     "Values": 5
   }
@@ -694,7 +754,7 @@
       "Sharded": true
     },
     "Query": "select t.id from (select user.id from user where user.id = 5) as t join user_extra on t.id = user_extra.user_id",
-    "FieldQuery": "select t.id from (select user.id from user where 1 != 1) as t join user_extra where 1 != 1",
+    "FieldQuery": "select t.id from (select user.id from user where 1 != 1) as t join user_extra on t.id = user_extra.user_id where 1 != 1",
     "Vindex": "user_index",
     "Values": 5
   }
@@ -715,7 +775,7 @@
       "Sharded": true
     },
     "Query": "select t.id from user_extra join (select id from user where id = 5) as t on t.id = user_extra.user_id",
-    "FieldQuery": "select t.id from user_extra join (select id from user where 1 != 1) as t where 1 != 1"
+    "FieldQuery": "select t.id from user_extra join (select id from user where 1 != 1) as t on t.id = user_extra.user_id where 1 != 1"
   }
 }
 
@@ -775,9 +835,9 @@
 }
 
 # keyspace-qualified queries
-"select user.user.col1, main.main1.col1 from user.user join main.main1 where main.main1.col2 = user.user.col2"
+"select user.user.col1, main.unsharded.col1 from user.user join main.unsharded where main.unsharded.col2 = user.user.col2"
 {
-  "Original": "select user.user.col1, main.main1.col1 from user.user join main.main1 where main.main1.col2 = user.user.col2",
+  "Original": "select user.user.col1, main.unsharded.col1 from user.user join main.unsharded where main.unsharded.col2 = user.user.col2",
   "Instructions": {
     "Opcode": "Join",
     "Left": {
@@ -795,8 +855,8 @@
         "Name": "main",
         "Sharded": false
       },
-      "Query": "select main1.col1 from main1 where main1.col2 = :user_col2",
-      "FieldQuery": "select main1.col1 from main1 where 1 != 1",
+      "Query": "select unsharded.col1 from unsharded where unsharded.col2 = :user_col2",
+      "FieldQuery": "select unsharded.col1 from unsharded where 1 != 1",
       "JoinVars": {
         "user_col2": {}
       }
@@ -825,6 +885,33 @@
     "FieldQuery": "select foo.col from foo where 1 != 1"
   }
 }
+
+# col refs should be case-insensitive
+"select user.col from user join user_extra on user.ID = user_extra.User_Id"
+{
+  "Original": "select user.col from user join user_extra on user.ID = user_extra.User_Id",
+  "Instructions": {
+    "Opcode": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select user.col from user join user_extra on user.ID = user_extra.User_Id",
+    "FieldQuery": "select user.col from user join user_extra on user.ID = user_extra.User_Id where 1 != 1"
+  }
+}
+
+# verify ',' vs JOIN precedence
+"select u1.a from unsharded u1, unsharded u2 join unsharded u3 on u1.a = u2.a"
+"symbol u1.a not found"
+
+# first expression fails for ',' join (code coverage: ensure error is returned)
+"select user.foo.col from user.foo, user"
+"table foo not found"
+
+# table names should be case-sensitive
+"select unsharded.id from unsharded where Unsharded.val = 1"
+"symbol Unsharded.val not found"
 
 # implicit table reference for sharded keyspace
 "select user.foo.col from user.foo"

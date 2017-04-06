@@ -45,6 +45,15 @@ export class RebuildKeyspaceGraphFlags {
   }
 }
 
+export class ReloadSchemaKeyspaceFlags {
+  flags= {};
+  constructor(keyspaceName) {
+    this.flags['keyspace_name'] = new KeyspaceNameFlag(0, 'keyspace_name', keyspaceName, false);
+    this.flags['keyspace_name']['positional'] = true;
+    this.flags['concurrency'] = new ConcurrencyFlag(1, 'concurrency', '10');
+  }
+}
+
 export class RemoveKeyspaceCellFlags {
   flags= {};
   constructor(keyspaceName) {
@@ -102,6 +111,12 @@ export class CellNameFlag extends InputFlag {
   }
 }
 
+export class ConcurrencyFlag extends InputFlag {
+  constructor(position: number, id: string, value= '', show= true) {
+    super(position, id, 'Concurrency', 'How many tablets to work on concurrently.', value, show);
+  }
+}
+
 export class ForceFlag extends CheckBoxFlag {
   constructor(position: number, id: string, value= false) {
     super(position, id, 'Force', 'Updates fields even if they are already set. Use caution before calling this command.', value);
@@ -110,7 +125,7 @@ export class ForceFlag extends CheckBoxFlag {
 
 export class KeyspaceNameFlag extends InputFlag {
   constructor(position: number, id: string, value= '', show= true) {
-    super(position, id, 'Keyspace Name', 'Required. The name of a database that contains one or more tables.', value, show);
+    super(position, id, 'Keyspace Name', 'The name of a database that contains one or more tables.', value, show);
   }
 }
 

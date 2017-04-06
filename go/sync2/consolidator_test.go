@@ -8,12 +8,12 @@ func TestConsolidator(t *testing.T) {
 
 	orig, added := con.Create(sql)
 	if !added {
-		t.Errorf("expected consolidator to register a new entry")
+		t.Fatalf("expected consolidator to register a new entry")
 	}
 
 	dup, added := con.Create(sql)
 	if added {
-		t.Errorf("did not expect consolidator to register a new entry")
+		t.Fatalf("did not expect consolidator to register a new entry")
 	}
 
 	result := 1
@@ -27,13 +27,13 @@ func TestConsolidator(t *testing.T) {
 		t.Errorf("failed to pass result")
 	}
 	if *orig.Result.(*int) != *dup.Result.(*int) {
-		t.Errorf("failed to share the result")
+		t.Fatalf("failed to share the result")
 	}
 
 	// Running the query again should add a new entry since the original
 	// query execution completed
 	_, added = con.Create(sql)
 	if !added {
-		t.Errorf("expected consolidator to register a new entry")
+		t.Fatalf("expected consolidator to register a new entry")
 	}
 }

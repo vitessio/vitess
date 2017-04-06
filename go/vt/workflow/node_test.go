@@ -50,7 +50,7 @@ func TestNodeManagerWithRoot(t *testing.T) {
 
 	// Add a root level node, make sure we get notified.
 	n := &Node{
-		workflow: tw,
+		Listener: tw,
 
 		Name:        "name",
 		PathName:    "uuid1",
@@ -85,7 +85,7 @@ func TestNodeManagerWithRoot(t *testing.T) {
 		t.Errorf("unexpected Action error: %v", err)
 	}
 	if len(tw.actions) != 1 || tw.actions[0].Path != n.Path || tw.actions[0].Name != "action" {
-		t.Errorf("unexpected Ation callback values: %v", tw.actions)
+		t.Errorf("unexpected Action callback values: %v", tw.actions)
 	}
 
 	// Delete root node, make sure we get notified.

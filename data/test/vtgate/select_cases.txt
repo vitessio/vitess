@@ -43,6 +43,40 @@
   }
 }
 
+# qualified '*' expression for simple route
+"select user.* from user"
+{
+  "Original": "select user.* from user",
+  "Instructions": {
+    "Opcode": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select user.* from user",
+    "FieldQuery": "select user.* from user where 1 != 1"
+  }
+}
+
+# fully qualified '*' expression for simple route
+"select user.user.* from user"
+{
+  "Original": "select user.user.* from user",
+  "Instructions": {
+    "Opcode": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select user.* from user",
+    "FieldQuery": "select user.* from user where 1 != 1"
+  }
+}
+
+# invalid keyspace for '*' expression for simple route
+"select a.user.* from user"
+"cannot resolve a.user.* to keyspace user"
+
 # RHS route referenced
 "select user_extra.id from user join user_extra"
 {
@@ -168,17 +202,17 @@
 }
 
 # Aggregate on unsharded
-"select count(*), col from main1"
+"select count(*), col from unsharded"
 {
-  "Original": "select count(*), col from main1",
+  "Original": "select count(*), col from unsharded",
   "Instructions": {
     "Opcode": "SelectUnsharded",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
-    "Query": "select count(*), col from main1",
-    "FieldQuery": "select count(*), col from main1 where 1 != 1"
+    "Query": "select count(*), col from unsharded",
+    "FieldQuery": "select count(*), col from unsharded where 1 != 1"
   }
 }
 
@@ -305,9 +339,9 @@
 }
 
 # Field query should work for joins select bind vars
-"select user.id, (select user.id+outm.m+main1.m from main1) from user join main1 outm"
+"select user.id, (select user.id+outm.m+unsharded.m from unsharded) from user join unsharded outm"
 {
-  "Original": "select user.id, (select user.id+outm.m+main1.m from main1) from user join main1 outm",
+  "Original": "select user.id, (select user.id+outm.m+unsharded.m from unsharded) from user join unsharded outm",
   "Instructions": {
     "Opcode": "Join",
     "Left": {
@@ -325,8 +359,8 @@
         "Name": "main",
         "Sharded": false
       },
-      "Query": "select (select :user_id + outm.m + main1.m from main1) from main1 as outm",
-      "FieldQuery": "select (select :user_id + outm.m + main1.m from main1 where 1 != 1) from main1 as outm where 1 != 1",
+      "Query": "select (select :user_id + outm.m + unsharded.m from unsharded) from unsharded as outm",
+      "FieldQuery": "select (select :user_id + outm.m + unsharded.m from unsharded where 1 != 1) from unsharded as outm where 1 != 1",
       "JoinVars": {
         "user_id": {}
       }
@@ -376,6 +410,21 @@
 "the quick brown fox"
 "syntax error at position 4 near 'the'"
 
+# Hex number is not treated as a simple value
+"select * from user where id = 0x04"
+{
+  "Original": "select * from user where id = 0x04",
+  "Instructions": {
+    "Opcode": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select * from user where id = 0x04",
+    "FieldQuery": "select * from user where 1 != 1"
+  }
+}
+
 # Sharding Key Condition in Parenthesis
 "select * from user where name ='abc' AND (id = 4) limit 5"
 {
@@ -393,6 +442,7 @@
   }
 }
 
+# Multiple parenthesized expressions
 "select * from user where (id = 4) AND (name ='abc') limit 5"
 {
   "Original": "select * from user where (id = 4) AND (name ='abc') limit 5",
@@ -440,5 +490,140 @@
     "FieldQuery": "select user0_.col as col0_ from user as user0_ where 1 != 1",
     "Vindex": "user_index",
     "Values": 1
+  }
+}
+
+# Booleans and parenthesis
+"select * from user where (id = 1) AND name = true limit 5"
+{
+  "Original": "select * from user where (id = 1) AND name = true limit 5",
+  "Instructions": {
+    "Opcode": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select * from user where (id = 1) and name = true limit 5",
+    "FieldQuery": "select * from user where 1 != 1",
+    "Vindex": "user_index",
+    "Values": 1
+  }
+}
+
+# Column as boolean-ish
+"select * from user where (id = 1) AND name limit 5"
+{
+  "Original": "select * from user where (id = 1) AND name limit 5",
+  "Instructions": {
+    "Opcode": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select * from user where (id = 1) and name limit 5",
+    "FieldQuery": "select * from user where 1 != 1",
+    "Vindex": "user_index",
+    "Values": 1
+  }
+}
+
+# PK as fake boolean, and column as boolean-ish
+"select * from user where (id = 5) AND name = true limit 5"
+{
+  "Original": "select * from user where (id = 5) AND name = true limit 5",
+  "Instructions": {
+    "Opcode": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select * from user where (id = 5) and name = true limit 5",
+    "FieldQuery": "select * from user where 1 != 1",
+    "Vindex": "user_index",
+    "Values": 5
+  }
+}
+
+"select * from (select col1, col2 from unsharded where id = 1 union select col1, col2 from unsharded where id = 3) a"
+{
+  "Original": "select * from (select col1, col2 from unsharded where id = 1 union select col1, col2 from unsharded where id = 3) a",
+  "Instructions": {
+    "Opcode": "SelectUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "select * from (select col1, col2 from unsharded where id = 1 union select col1, col2 from unsharded where id = 3) as a",
+    "FieldQuery": "select * from (select col1, col2 from unsharded where 1 != 1 union select col1, col2 from unsharded where 1 != 1) as a where 1 != 1"
+  }
+}
+
+"select id, name from unsharded where id in (select id from unsharded where id = 1 union select id from unsharded where id = 3)"
+{
+  "Original": "select id, name from unsharded where id in (select id from unsharded where id = 1 union select id from unsharded where id = 3)",
+  "Instructions": {
+    "Opcode": "SelectUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "select id, name from unsharded where id in (select id from unsharded where id = 1 union select id from unsharded where id = 3)",
+    "FieldQuery": "select id, name from unsharded where 1 != 1"
+  }
+}
+
+"(select id from unsharded) union (select id from unsharded_auto) order by id limit 5"
+{
+  "Original": "(select id from unsharded) union (select id from unsharded_auto) order by id limit 5",
+  "Instructions": {
+    "Opcode": "SelectUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "(select id from unsharded) union (select id from unsharded_auto) order by id asc limit 5",
+    "FieldQuery": "(select id from unsharded where 1 != 1) union (select id from unsharded_auto where 1 != 1)"
+  }
+}
+
+"select id from unsharded union select id from unsharded_auto union select id from unsharded_auto where id in (132)"
+{
+  "Original": "select id from unsharded union select id from unsharded_auto union select id from unsharded_auto where id in (132)",
+  "Instructions": {
+    "Opcode": "SelectUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "select id from unsharded union select id from unsharded_auto union select id from unsharded_auto where id in (132)",
+    "FieldQuery": "select id from unsharded where 1 != 1 union select id from unsharded_auto where 1 != 1 union select id from unsharded_auto where 1 != 1"
+  }
+}
+
+"(select id from unsharded union select id from unsharded_auto) union (select id from unsharded_auto union select name from unsharded)"
+{
+  "Original": "(select id from unsharded union select id from unsharded_auto) union (select id from unsharded_auto union select name from unsharded)",
+  "Instructions": {
+    "Opcode": "SelectUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "(select id from unsharded union select id from unsharded_auto) union (select id from unsharded_auto union select name from unsharded)",
+    "FieldQuery": "(select id from unsharded where 1 != 1 union select id from unsharded_auto where 1 != 1) union (select id from unsharded_auto where 1 != 1 union select name from unsharded where 1 != 1)"
+  }
+}
+
+"(select id from unsharded order by id asc limit 1) union (select id from unsharded order by id desc limit 1) order by id asc limit 1"
+{
+  "Original": "(select id from unsharded order by id asc limit 1) union (select id from unsharded order by id desc limit 1) order by id asc limit 1",
+  "Instructions": {
+    "Opcode": "SelectUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "(select id from unsharded order by id asc limit 1) union (select id from unsharded order by id desc limit 1) order by id asc limit 1",
+    "FieldQuery": "(select id from unsharded where 1 != 1) union (select id from unsharded where 1 != 1)"
   }
 }

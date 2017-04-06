@@ -11,8 +11,6 @@ import (
 	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
-	"github.com/youtube/vitess/go/vt/topo"
-
 	workflowpb "github.com/youtube/vitess/go/vt/proto/workflow"
 )
 
@@ -79,6 +77,14 @@ const (
 	ActionStyleTriggered ActionStyle = 4
 )
 
+// ActionListener is an interface for receiving notifications about actions triggered
+// from workflow UI.
+type ActionListener interface {
+	// Action is called when the user requests an action on a node.
+	// 'path' is the node's Path value and 'name' is the invoked action's name.
+	Action(ctx context.Context, path, name string) error
+}
+
 // Node is the UI representation of a Workflow toplevel object, or of
 // a Workflow task. It is just meant to be a tree, and the various
 // Workflow implementations can expose a tree of Nodes that represent
@@ -100,8 +106,8 @@ type Node struct {
 	// Any change to this node must take the Manager's lock.
 	nodeManager *NodeManager
 
-	// workflow is the workflow which owns this node.
-	workflow Workflow
+	// Listener will be notified about actions invoked on this node.
+	Listener ActionListener `json:"-"`
 
 	// Next are all the attributes that are exported to node.ts.
 	// Note that even though Path is publicly accessible it should be
@@ -165,15 +171,6 @@ func NewNode() *Node {
 	}
 }
 
-// AttachToWorkflow attaches the UI Node to the workflow and populates node's
-// path appropriately.
-func (n *Node) AttachToWorkflow(wi *topo.WorkflowInfo, w Workflow) {
-	n.workflow = w
-	n.Name = wi.Name
-	n.PathName = wi.Uuid
-	n.Path = "/" + n.PathName
-}
-
 // BroadcastChanges sends the new contents of the node to the watchers.
 func (n *Node) BroadcastChanges(updateChildren bool) error {
 	n.nodeManager.mu.Lock()
@@ -214,7 +211,6 @@ func (n *Node) deepCopyFrom(otherNode *Node, copyChildren bool) error {
 
 		// Populate a few values in case the otherChild is newly created by user.
 		otherChild.nodeManager = n.nodeManager
-		otherChild.workflow = n.workflow
 		otherChild.Path = path.Join(n.Path, otherChild.PathName)
 
 		child := NewNode()
@@ -222,6 +218,30 @@ func (n *Node) deepCopyFrom(otherNode *Node, copyChildren bool) error {
 		n.Children = append(n.Children, child)
 	}
 	return nil
+}
+
+// GetChildByPath returns the child node given the relative path to this node.
+// The caller must ensure that the node tree is not modified during the call.
+func (n *Node) GetChildByPath(subPath string) (*Node, error) {
+	// Find the subnode if needed.
+	parts := strings.Split(subPath, "/")
+
+	currentNode := n
+	for i := 0; i < len(parts); i++ {
+		childPathName := parts[i]
+		found := false
+		for _, child := range currentNode.Children {
+			if child.PathName == childPathName {
+				found = true
+				currentNode = child
+				break
+			}
+		}
+		if !found {
+			return nil, fmt.Errorf("node %v has no children named %v", currentNode.Path, childPathName)
+		}
+	}
+	return currentNode, nil
 }
 
 // ActionParameters describe an action initiated by the user.
@@ -359,6 +379,7 @@ func (m *NodeManager) updateNodeAndBroadcastLocked(userNode *Node, updateChildre
 	if err != nil {
 		return err
 	}
+
 	userNode.LastChanged = time.Now().Unix()
 	if err := savedNode.deepCopyFrom(userNode, updateChildren); err != nil {
 		return err
@@ -394,7 +415,17 @@ func (m *NodeManager) Action(ctx context.Context, ap *ActionParameters) error {
 	if err != nil {
 		return err
 	}
-	return n.workflow.Action(ctx, ap.Path, ap.Name)
+
+	m.mu.Lock()
+
+	if n.Listener == nil {
+		m.mu.Unlock()
+		return fmt.Errorf("Action %v is invoked on a node without listener (node path is %v)", ap.Name, ap.Path)
+	}
+	nodeListener := n.Listener
+	m.mu.Unlock()
+
+	return nodeListener.Action(ctx, ap.Path, ap.Name)
 }
 
 func (m *NodeManager) getNodeByPath(nodePath string) (*Node, error) {

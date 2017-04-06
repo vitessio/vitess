@@ -42,9 +42,9 @@ type fakeVTGateService struct {
 }
 
 const expectedErrMatch string = "test vtgate error"
-const expectedCode vtrpcpb.ErrorCode = vtrpcpb.ErrorCode_BAD_INPUT
+const expectedCode vtrpcpb.Code = vtrpcpb.Code_INVALID_ARGUMENT
 
-var errTestVtGateError = vterrors.FromError(expectedCode, errors.New(expectedErrMatch))
+var errTestVtGateError = vterrors.New(expectedCode, expectedErrMatch)
 
 func newContext() context.Context {
 	ctx := context.Background()
@@ -74,9 +74,9 @@ type queryExecute struct {
 }
 
 // Execute is part of the VTGateService interface
-func (f *fakeVTGateService) Execute(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, tabletType topodatapb.TabletType, session *vtgatepb.Session, notInTransaction bool, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
+func (f *fakeVTGateService) Execute(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, tabletType topodatapb.TabletType, session *vtgatepb.Session, notInTransaction bool, options *querypb.ExecuteOptions) (*vtgatepb.Session, *sqltypes.Result, error) {
 	if f.hasError {
-		return nil, errTestVtGateError
+		return session, nil, errTestVtGateError
 	}
 	if f.panics {
 		panic(fmt.Errorf("test forced panic"))
@@ -87,7 +87,7 @@ func (f *fakeVTGateService) Execute(ctx context.Context, sql string, bindVariabl
 	}
 	execCase, ok := execMap[sql]
 	if !ok {
-		return nil, fmt.Errorf("no match for: %s", sql)
+		return session, nil, fmt.Errorf("no match for: %s", sql)
 	}
 	query := &queryExecute{
 		SQL:              sql,
@@ -99,12 +99,58 @@ func (f *fakeVTGateService) Execute(ctx context.Context, sql string, bindVariabl
 	}
 	if !reflect.DeepEqual(query, execCase.execQuery) {
 		f.t.Errorf("Execute: %+v, want %+v", query, execCase.execQuery)
-		return nil, nil
+		return session, nil, nil
 	}
 	if execCase.outSession != nil {
 		*session = *execCase.outSession
 	}
-	return execCase.result, nil
+	return session, execCase.result, nil
+}
+
+// queryExecuteBatch contains all the fields we use to test ExecuteBatch
+type queryExecuteBatch struct {
+	SQLList           []string
+	BindVariablesList []map[string]interface{}
+	Keyspace          string
+	TabletType        topodatapb.TabletType
+	Session           *vtgatepb.Session
+	AsTransaction     bool
+}
+
+// ExecuteBatch is part of the VTGateService interface
+func (f *fakeVTGateService) ExecuteBatch(ctx context.Context, sqlList []string, bindVariablesList []map[string]interface{}, keyspace string, tabletType topodatapb.TabletType, session *vtgatepb.Session, options *querypb.ExecuteOptions) (*vtgatepb.Session, []sqltypes.QueryResponse, error) {
+	if f.hasError {
+		return session, nil, errTestVtGateError
+	}
+	if f.panics {
+		panic(fmt.Errorf("test forced panic"))
+	}
+	f.checkCallerID(ctx, "ExecuteBatch")
+	if !proto.Equal(options, testExecuteOptions) {
+		f.t.Errorf("wrong Execute options, got %+v, want %+v", options, testExecuteOptions)
+	}
+	execCase, ok := execMap[sqlList[0]]
+	if !ok {
+		return session, nil, fmt.Errorf("no match for: %s", sqlList)
+	}
+	query := &queryExecuteBatch{
+		SQLList:           sqlList,
+		BindVariablesList: bindVariablesList,
+		Keyspace:          keyspace,
+		TabletType:        tabletType,
+		Session:           session,
+	}
+	if !reflect.DeepEqual(query, execCase.execQuery) {
+		f.t.Errorf("Execute: %+v, want %+v", query, execCase.execQuery)
+		return session, nil, nil
+	}
+	if execCase.outSession != nil {
+		*session = *execCase.outSession
+	}
+	return session, []sqltypes.QueryResponse{{
+		QueryResult: execCase.result,
+		QueryError:  nil,
+	}}, nil
 }
 
 // queryExecuteShards contains all the fields we use to test ExecuteShards
@@ -386,7 +432,7 @@ func (f *fakeVTGateService) ExecuteBatchKeyspaceIds(ctx context.Context, queries
 }
 
 // StreamExecute is part of the VTGateService interface
-func (f *fakeVTGateService) StreamExecute(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, tabletType topodatapb.TabletType, options *querypb.ExecuteOptions, sendReply func(*sqltypes.Result) error) error {
+func (f *fakeVTGateService) StreamExecute(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, tabletType topodatapb.TabletType, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
 	if f.panics {
 		panic(fmt.Errorf("test forced panic"))
 	}
@@ -412,7 +458,7 @@ func (f *fakeVTGateService) StreamExecute(ctx context.Context, sql string, bindV
 		result := &sqltypes.Result{
 			Fields: execCase.result.Fields,
 		}
-		if err := sendReply(result); err != nil {
+		if err := callback(result); err != nil {
 			return err
 		}
 		if f.hasError {
@@ -426,7 +472,7 @@ func (f *fakeVTGateService) StreamExecute(ctx context.Context, sql string, bindV
 			result := &sqltypes.Result{
 				Rows: [][]sqltypes.Value{row},
 			}
-			if err := sendReply(result); err != nil {
+			if err := callback(result); err != nil {
 				return err
 			}
 		}
@@ -435,7 +481,7 @@ func (f *fakeVTGateService) StreamExecute(ctx context.Context, sql string, bindV
 }
 
 // StreamExecuteShards is part of the VTGateService interface
-func (f *fakeVTGateService) StreamExecuteShards(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, shards []string, tabletType topodatapb.TabletType, options *querypb.ExecuteOptions, sendReply func(*sqltypes.Result) error) error {
+func (f *fakeVTGateService) StreamExecuteShards(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, shards []string, tabletType topodatapb.TabletType, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
 	if f.panics {
 		panic(fmt.Errorf("test forced panic"))
 	}
@@ -462,7 +508,7 @@ func (f *fakeVTGateService) StreamExecuteShards(ctx context.Context, sql string,
 		result := &sqltypes.Result{
 			Fields: execCase.result.Fields,
 		}
-		if err := sendReply(result); err != nil {
+		if err := callback(result); err != nil {
 			return err
 		}
 		if f.hasError {
@@ -476,7 +522,7 @@ func (f *fakeVTGateService) StreamExecuteShards(ctx context.Context, sql string,
 			result := &sqltypes.Result{
 				Rows: [][]sqltypes.Value{row},
 			}
-			if err := sendReply(result); err != nil {
+			if err := callback(result); err != nil {
 				return err
 			}
 		}
@@ -485,7 +531,7 @@ func (f *fakeVTGateService) StreamExecuteShards(ctx context.Context, sql string,
 }
 
 // StreamExecuteKeyspaceIds is part of the VTGateService interface
-func (f *fakeVTGateService) StreamExecuteKeyspaceIds(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyspaceIds [][]byte, tabletType topodatapb.TabletType, options *querypb.ExecuteOptions, sendReply func(*sqltypes.Result) error) error {
+func (f *fakeVTGateService) StreamExecuteKeyspaceIds(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyspaceIds [][]byte, tabletType topodatapb.TabletType, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
 	if f.panics {
 		panic(fmt.Errorf("test forced panic"))
 	}
@@ -512,7 +558,7 @@ func (f *fakeVTGateService) StreamExecuteKeyspaceIds(ctx context.Context, sql st
 		result := &sqltypes.Result{
 			Fields: execCase.result.Fields,
 		}
-		if err := sendReply(result); err != nil {
+		if err := callback(result); err != nil {
 			return err
 		}
 		if f.hasError {
@@ -526,7 +572,7 @@ func (f *fakeVTGateService) StreamExecuteKeyspaceIds(ctx context.Context, sql st
 			result := &sqltypes.Result{
 				Rows: [][]sqltypes.Value{row},
 			}
-			if err := sendReply(result); err != nil {
+			if err := callback(result); err != nil {
 				return err
 			}
 		}
@@ -535,7 +581,7 @@ func (f *fakeVTGateService) StreamExecuteKeyspaceIds(ctx context.Context, sql st
 }
 
 // StreamExecuteKeyRanges is part of the VTGateService interface
-func (f *fakeVTGateService) StreamExecuteKeyRanges(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyRanges []*topodatapb.KeyRange, tabletType topodatapb.TabletType, options *querypb.ExecuteOptions, sendReply func(*sqltypes.Result) error) error {
+func (f *fakeVTGateService) StreamExecuteKeyRanges(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyRanges []*topodatapb.KeyRange, tabletType topodatapb.TabletType, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
 	if f.panics {
 		panic(fmt.Errorf("test forced panic"))
 	}
@@ -562,7 +608,7 @@ func (f *fakeVTGateService) StreamExecuteKeyRanges(ctx context.Context, sql stri
 		result := &sqltypes.Result{
 			Fields: execCase.result.Fields,
 		}
-		if err := sendReply(result); err != nil {
+		if err := callback(result); err != nil {
 			return err
 		}
 		if f.hasError {
@@ -576,7 +622,7 @@ func (f *fakeVTGateService) StreamExecuteKeyRanges(ctx context.Context, sql stri
 			result := &sqltypes.Result{
 				Rows: [][]sqltypes.Value{row},
 			}
-			if err := sendReply(result); err != nil {
+			if err := callback(result); err != nil {
 				return err
 			}
 		}
@@ -585,7 +631,7 @@ func (f *fakeVTGateService) StreamExecuteKeyRanges(ctx context.Context, sql stri
 }
 
 // Begin is part of the VTGateService interface
-func (f *fakeVTGateService) Begin(ctx context.Context) (*vtgatepb.Session, error) {
+func (f *fakeVTGateService) Begin(ctx context.Context, singledb bool) (*vtgatepb.Session, error) {
 	f.checkCallerID(ctx, "Begin")
 	switch {
 	case f.forceBeginSuccess:
@@ -595,17 +641,25 @@ func (f *fakeVTGateService) Begin(ctx context.Context) (*vtgatepb.Session, error
 		panic(fmt.Errorf("test forced panic"))
 	default:
 	}
+	if singledb {
+		// Communicate this as an error.
+		return nil, errors.New("single db")
+	}
 	return session1, nil
 }
 
 // Commit is part of the VTGateService interface
-func (f *fakeVTGateService) Commit(ctx context.Context, inSession *vtgatepb.Session) error {
+func (f *fakeVTGateService) Commit(ctx context.Context, twopc bool, inSession *vtgatepb.Session) error {
 	f.checkCallerID(ctx, "Commit")
 	if f.hasError {
 		return errTestVtGateError
 	}
 	if f.panics {
 		panic(fmt.Errorf("test forced panic"))
+	}
+	if twopc {
+		// Communicate this as an error.
+		return errors.New("twopc")
 	}
 	if !reflect.DeepEqual(inSession, session2) {
 		return errors.New("commit: session mismatch")
@@ -626,6 +680,50 @@ func (f *fakeVTGateService) Rollback(ctx context.Context, inSession *vtgatepb.Se
 		return errors.New("rollback: session mismatch")
 	}
 	return nil
+}
+
+// ResolveTransaction is part of the VTGateService interface
+func (f *fakeVTGateService) ResolveTransaction(ctx context.Context, dtid string) error {
+	if f.hasError {
+		return errTestVtGateError
+	}
+	if f.panics {
+		panic(fmt.Errorf("test forced panic"))
+	}
+	f.checkCallerID(ctx, "ResolveTransaction")
+	if dtid != dtid2 {
+		return errors.New("ResolveTransaction: dtid mismatch")
+	}
+	return nil
+}
+
+func (f *fakeVTGateService) MessageStream(ctx context.Context, keyspace string, shard string, keyRange *topodatapb.KeyRange, name string, callback func(*sqltypes.Result) error) error {
+	if f.hasError {
+		return errTestVtGateError
+	}
+	if f.panics {
+		panic(fmt.Errorf("test forced panic"))
+	}
+	f.checkCallerID(ctx, "ResolveTransaction")
+	if name != messageName {
+		return errors.New("MessageStream name mismatch")
+	}
+	callback(messageStreamResult)
+	return nil
+}
+
+func (f *fakeVTGateService) MessageAck(ctx context.Context, keyspace string, name string, ids []*querypb.Value) (int64, error) {
+	if f.hasError {
+		return 0, errTestVtGateError
+	}
+	if f.panics {
+		panic(fmt.Errorf("test forced panic"))
+	}
+	f.checkCallerID(ctx, "ResolveTransaction")
+	if !reflect.DeepEqual(ids, messageids) {
+		return 0, errors.New("MessageAck ids mismatch")
+	}
+	return messageAckRowsAffected, nil
 }
 
 // querySplitQuery contains all the fields we use to test SplitQuery
@@ -696,7 +794,7 @@ type queryUpdateStream struct {
 }
 
 // UpdateStream is part of the VTGateService interface
-func (f *fakeVTGateService) UpdateStream(ctx context.Context, keyspace string, shard string, keyRange *topodatapb.KeyRange, tabletType topodatapb.TabletType, timestamp int64, event *querypb.EventToken, sendReply func(*querypb.StreamEvent, int64) error) error {
+func (f *fakeVTGateService) UpdateStream(ctx context.Context, keyspace string, shard string, keyRange *topodatapb.KeyRange, tabletType topodatapb.TabletType, timestamp int64, event *querypb.EventToken, callback func(*querypb.StreamEvent, int64) error) error {
 	if f.panics {
 		panic(fmt.Errorf("test forced panic"))
 	}
@@ -726,7 +824,7 @@ func (f *fakeVTGateService) UpdateStream(ctx context.Context, keyspace string, s
 				},
 			},
 		}
-		if err := sendReply(result, int64(execCase.result.RowsAffected)); err != nil {
+		if err := callback(result, int64(execCase.result.RowsAffected)); err != nil {
 			return err
 		}
 		if f.hasError {
@@ -745,7 +843,7 @@ func (f *fakeVTGateService) UpdateStream(ctx context.Context, keyspace string, s
 					},
 				},
 			}
-			if err := sendReply(result, int64(execCase.result.RowsAffected)); err != nil {
+			if err := callback(result, int64(execCase.result.RowsAffected)); err != nil {
 				return err
 			}
 		}
@@ -790,6 +888,8 @@ func TestSuite(t *testing.T, impl vtgateconn.Impl, fakeServer vtgateservice.VTGa
 
 	fs := fakeServer.(*fakeVTGateService)
 
+	testBegin(t, conn)
+	testCommit(t, conn)
 	testExecute(t, conn)
 	testExecuteShards(t, conn)
 	testExecuteKeyspaceIds(t, conn)
@@ -802,7 +902,10 @@ func TestSuite(t *testing.T, impl vtgateconn.Impl, fakeServer vtgateservice.VTGa
 	testStreamExecuteKeyRanges(t, conn)
 	testStreamExecuteKeyspaceIds(t, conn)
 	testTxPass(t, conn)
+	testResolveTransaction(t, conn)
 	testTxFail(t, conn)
+	testMessageStream(t, conn)
+	testMessageAck(t, conn)
 	testSplitQuery(t, conn)
 	testGetSrvKeyspace(t, conn)
 	testUpdateStream(t, conn)
@@ -812,6 +915,7 @@ func TestSuite(t *testing.T, impl vtgateconn.Impl, fakeServer vtgateservice.VTGa
 	testBeginPanic(t, conn)
 	testCommitPanic(t, conn, fs)
 	testRollbackPanic(t, conn, fs)
+	testResolveTransactionPanic(t, conn, fs)
 	testExecutePanic(t, conn)
 	testExecuteShardsPanic(t, conn)
 	testExecuteKeyspaceIdsPanic(t, conn)
@@ -823,6 +927,8 @@ func TestSuite(t *testing.T, impl vtgateconn.Impl, fakeServer vtgateservice.VTGa
 	testStreamExecuteShardsPanic(t, conn)
 	testStreamExecuteKeyRangesPanic(t, conn)
 	testStreamExecuteKeyspaceIdsPanic(t, conn)
+	testMessageStreamPanic(t, conn)
+	testMessageAckPanic(t, conn)
 	testSplitQueryPanic(t, conn)
 	testGetSrvKeyspacePanic(t, conn)
 	testUpdateStreamPanic(t, conn)
@@ -843,6 +949,7 @@ func TestErrorSuite(t *testing.T, fakeServer vtgateservice.VTGateService) {
 	testBeginError(t, conn)
 	testCommitError(t, conn, fs)
 	testRollbackError(t, conn, fs)
+	testResolveTransactionError(t, conn, fs)
 	testExecuteError(t, conn, fs)
 	testExecuteShardsError(t, conn, fs)
 	testExecuteKeyspaceIdsError(t, conn, fs)
@@ -854,6 +961,8 @@ func TestErrorSuite(t *testing.T, fakeServer vtgateservice.VTGateService) {
 	testStreamExecuteShardsError(t, conn, fs)
 	testStreamExecuteKeyRangesError(t, conn, fs)
 	testStreamExecuteKeyspaceIdsError(t, conn, fs)
+	testMessageStreamError(t, conn)
+	testMessageAckError(t, conn)
 	testSplitQueryError(t, conn)
 	testGetSrvKeyspaceError(t, conn)
 	testUpdateStreamError(t, conn, fs)
@@ -875,13 +984,9 @@ func verifyError(t *testing.T, err error, method string) {
 		return
 	}
 	// verify error code
-	code := vterrors.RecoverVtErrorCode(err)
+	code := vterrors.Code(err)
 	if code != expectedCode {
 		t.Errorf("Unexpected error code from %s: got %v, wanted %v", method, code, expectedCode)
-	}
-	// verify error type
-	if _, ok := err.(*vterrors.VitessError); !ok {
-		t.Errorf("Unexpected error type from %s: got %v, wanted *vterrors.VitessError", method, reflect.TypeOf(err))
 	}
 	verifyErrorString(t, err, method)
 }
@@ -894,6 +999,28 @@ func verifyErrorString(t *testing.T, err error, method string) {
 
 	if !strings.Contains(err.Error(), expectedErrMatch) {
 		t.Errorf("Unexpected error from %s: got %v, wanted err containing: %v", method, err, errTestVtGateError.Error())
+	}
+}
+
+func testBegin(t *testing.T, conn *vtgateconn.VTGateConn) {
+	ctx := vtgateconn.WithAtomicity(newContext(), vtgateconn.AtomicitySingle)
+	_, err := conn.Begin(ctx)
+	want := "single db"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("Begin(singldb): %v, want %v", err, want)
+	}
+}
+
+func testCommit(t *testing.T, conn *vtgateconn.VTGateConn) {
+	ctx := vtgateconn.WithAtomicity(newContext(), vtgateconn.Atomicity2PC)
+	tx, err := conn.Begin(ctx)
+	if err != nil {
+		t.Error(err)
+	}
+	err = tx.Commit(ctx)
+	want := "twopc"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("Commit(twopc): %v, want %v", err, want)
 	}
 }
 
@@ -1559,6 +1686,12 @@ func testTxPass(t *testing.T, conn *vtgateconn.VTGateConn) {
 	}
 }
 
+func testResolveTransaction(t *testing.T, conn *vtgateconn.VTGateConn) {
+	if err := conn.ResolveTransaction(newContext(), dtid2); err != nil {
+		t.Error(err)
+	}
+}
+
 func testBeginError(t *testing.T, conn *vtgateconn.VTGateConn) {
 	ctx := newContext()
 	_, err := conn.Begin(ctx)
@@ -1593,6 +1726,11 @@ func testRollbackError(t *testing.T, conn *vtgateconn.VTGateConn, fake *fakeVTGa
 	verifyError(t, err, "Rollback")
 }
 
+func testResolveTransactionError(t *testing.T, conn *vtgateconn.VTGateConn, fake *fakeVTGateService) {
+	err := conn.ResolveTransaction(newContext(), "")
+	verifyError(t, err, "ResolveTransaction")
+}
+
 func testBeginPanic(t *testing.T, conn *vtgateconn.VTGateConn) {
 	ctx := newContext()
 	_, err := conn.Begin(ctx)
@@ -1624,6 +1762,11 @@ func testRollbackPanic(t *testing.T, conn *vtgateconn.VTGateConn, fake *fakeVTGa
 		t.Error(err)
 	}
 	err = tx.Rollback(ctx)
+	expectPanic(t, err)
+}
+
+func testResolveTransactionPanic(t *testing.T, conn *vtgateconn.VTGateConn, fake *fakeVTGateService) {
+	err := conn.ResolveTransaction(newContext(), "")
 	expectPanic(t, err)
 }
 
@@ -1701,6 +1844,58 @@ func testTxFail(t *testing.T, conn *vtgateconn.VTGateConn) {
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("Rollback: %v, want %v", err, want)
 	}
+}
+
+func testMessageStream(t *testing.T, conn *vtgateconn.VTGateConn) {
+	ctx := newContext()
+	err := conn.MessageStream(ctx, "", "", nil, messageName, func(qr *sqltypes.Result) error {
+		if !reflect.DeepEqual(qr, messageStreamResult) {
+			t.Errorf("reply: %v, want %v", qr, messageStreamResult)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Error(err)
+	}
+}
+
+func testMessageStreamError(t *testing.T, conn *vtgateconn.VTGateConn) {
+	ctx := newContext()
+	err := conn.MessageStream(ctx, "", "", nil, messageName, func(qr *sqltypes.Result) error {
+		return nil
+	})
+	verifyError(t, err, "MessageStream")
+}
+
+func testMessageStreamPanic(t *testing.T, conn *vtgateconn.VTGateConn) {
+	ctx := newContext()
+	err := conn.MessageStream(ctx, "", "", nil, messageName, func(qr *sqltypes.Result) error {
+		return nil
+	})
+	expectPanic(t, err)
+}
+
+func testMessageAck(t *testing.T, conn *vtgateconn.VTGateConn) {
+	ctx := newContext()
+	got, err := conn.MessageAck(ctx, "", messageName, messageids)
+	if got != messageAckRowsAffected {
+		t.Errorf("MessageAck: %d, want %d", got, messageAckRowsAffected)
+	}
+	if err != nil {
+		t.Error(err)
+	}
+}
+
+func testMessageAckError(t *testing.T, conn *vtgateconn.VTGateConn) {
+	ctx := newContext()
+	_, err := conn.MessageAck(ctx, "", messageName, messageids)
+	verifyError(t, err, "MessageAck")
+}
+
+func testMessageAckPanic(t *testing.T, conn *vtgateconn.VTGateConn) {
+	ctx := newContext()
+	_, err := conn.MessageAck(ctx, "", messageName, messageids)
+	expectPanic(t, err)
 }
 
 func testSplitQuery(t *testing.T, conn *vtgateconn.VTGateConn) {
@@ -1869,7 +2064,7 @@ var testCallerID = &vtrpcpb.CallerID{
 }
 
 var testExecuteOptions = &querypb.ExecuteOptions{
-	ExcludeFieldNames: true,
+	IncludedFields:    querypb.ExecuteOptions_TYPE_ONLY,
 	IncludeEventToken: true,
 	CompareEventToken: &querypb.EventToken{
 		Timestamp: 135,
@@ -1895,7 +2090,10 @@ var execMap = map[string]struct {
 		execQuery: &queryExecute{
 			SQL: "request1",
 			BindVariables: map[string]interface{}{
-				"bind1": int64(0),
+				"bind1": &querypb.BindVariable{
+					Type:  querypb.Type_INT64,
+					Value: []byte("0"),
+				},
 			},
 			Keyspace:   "connection_ks",
 			TabletType: topodatapb.TabletType_RDONLY,
@@ -1904,7 +2102,10 @@ var execMap = map[string]struct {
 		shardQuery: &queryExecuteShards{
 			SQL: "request1",
 			BindVariables: map[string]interface{}{
-				"bind1": int64(0),
+				"bind1": &querypb.BindVariable{
+					Type:  querypb.Type_INT64,
+					Value: []byte("0"),
+				},
 			},
 			Keyspace:   "ks",
 			Shards:     []string{"1", "2"},
@@ -1914,7 +2115,10 @@ var execMap = map[string]struct {
 		keyspaceIDQuery: &queryExecuteKeyspaceIds{
 			SQL: "request1",
 			BindVariables: map[string]interface{}{
-				"bind1": int64(0),
+				"bind1": &querypb.BindVariable{
+					Type:  querypb.Type_INT64,
+					Value: []byte("0"),
+				},
 			},
 			Keyspace: "ks",
 			KeyspaceIds: [][]byte{
@@ -1926,7 +2130,10 @@ var execMap = map[string]struct {
 		keyRangeQuery: &queryExecuteKeyRanges{
 			SQL: "request1",
 			BindVariables: map[string]interface{}{
-				"bind1": int64(0),
+				"bind1": &querypb.BindVariable{
+					Type:  querypb.Type_INT64,
+					Value: []byte("0"),
+				},
 			},
 			Keyspace: "ks",
 			KeyRanges: []*topodatapb.KeyRange{
@@ -1941,7 +2148,10 @@ var execMap = map[string]struct {
 		entityIdsQuery: &queryExecuteEntityIds{
 			SQL: "request1",
 			BindVariables: map[string]interface{}{
-				"bind1": int64(0),
+				"bind1": &querypb.BindVariable{
+					Type:  querypb.Type_INT64,
+					Value: []byte("0"),
+				},
 			},
 			Keyspace:         "ks",
 			EntityColumnName: "column",
@@ -2143,7 +2353,10 @@ var execMap = map[string]struct {
 		execQuery: &queryExecute{
 			SQL: "txRequest",
 			BindVariables: map[string]interface{}{
-				"bind1": int64(0),
+				"bind1": &querypb.BindVariable{
+					Type:  querypb.Type_INT64,
+					Value: []byte("0"),
+				},
 			},
 			Keyspace:   "connection_ks",
 			TabletType: topodatapb.TabletType_MASTER,
@@ -2152,7 +2365,10 @@ var execMap = map[string]struct {
 		shardQuery: &queryExecuteShards{
 			SQL: "txRequest",
 			BindVariables: map[string]interface{}{
-				"bind1": int64(0),
+				"bind1": &querypb.BindVariable{
+					Type:  querypb.Type_INT64,
+					Value: []byte("0"),
+				},
 			},
 			TabletType: topodatapb.TabletType_MASTER,
 			Keyspace:   "",
@@ -2162,7 +2378,10 @@ var execMap = map[string]struct {
 		keyspaceIDQuery: &queryExecuteKeyspaceIds{
 			SQL: "txRequest",
 			BindVariables: map[string]interface{}{
-				"bind1": int64(0),
+				"bind1": &querypb.BindVariable{
+					Type:  querypb.Type_INT64,
+					Value: []byte("0"),
+				},
 			},
 			Keyspace: "ks",
 			KeyspaceIds: [][]byte{
@@ -2174,7 +2393,10 @@ var execMap = map[string]struct {
 		keyRangeQuery: &queryExecuteKeyRanges{
 			SQL: "txRequest",
 			BindVariables: map[string]interface{}{
-				"bind1": int64(0),
+				"bind1": &querypb.BindVariable{
+					Type:  querypb.Type_INT64,
+					Value: []byte("0"),
+				},
 			},
 			Keyspace: "ks",
 			KeyRanges: []*topodatapb.KeyRange{
@@ -2189,7 +2411,10 @@ var execMap = map[string]struct {
 		entityIdsQuery: &queryExecuteEntityIds{
 			SQL: "txRequest",
 			BindVariables: map[string]interface{}{
-				"bind1": int64(0),
+				"bind1": &querypb.BindVariable{
+					Type:  querypb.Type_INT64,
+					Value: []byte("0"),
+				},
 			},
 			Keyspace:         "ks",
 			EntityColumnName: "column",
@@ -2322,11 +2547,16 @@ var session2 = &vtgatepb.Session{
 	},
 }
 
+var dtid2 = "aa"
+
 var splitQueryRequest = &querySplitQuery{
 	Keyspace: "ks2",
 	SQL:      "in for SplitQuery",
 	BindVariables: map[string]interface{}{
-		"bind2": int64(43),
+		"bind2": &querypb.BindVariable{
+			Type:  querypb.Type_INT64,
+			Value: []byte("43"),
+		},
 	},
 	SplitColumns:        []string{"split_column1", "split_column2"},
 	SplitCount:          145,
@@ -2384,3 +2614,23 @@ var getSrvKeyspaceResult = &topodatapb.SrvKeyspace{
 		},
 	},
 }
+
+var messageName = "vitess_message"
+var messageStreamResult = &sqltypes.Result{
+	Fields: []*querypb.Field{{
+		Name: "id",
+		Type: sqltypes.VarBinary,
+	}, {
+		Name: "message",
+		Type: sqltypes.VarBinary,
+	}},
+	Rows: [][]sqltypes.Value{{
+		sqltypes.MakeTrusted(sqltypes.VarBinary, []byte("2")),
+		sqltypes.MakeTrusted(sqltypes.VarBinary, []byte("3")),
+	}},
+}
+var messageids = []*querypb.Value{
+	sqltypes.MakeString([]byte("1")).ToProtoValue(),
+	sqltypes.MakeString([]byte("3")).ToProtoValue(),
+}
+var messageAckRowsAffected = int64(1)

@@ -112,6 +112,14 @@ message Configuration {
   // bad_rate_increase defines the percentage by which a bad rate will be
   // increased when it's aging out.
   double bad_rate_increase = 13;
+
+  // max_rate_approach_threshold is the fraction of the current rate limit that the actual
+  // rate must exceed for the throttler to increase the limit when the replication lag
+  // is below target_replication_lag_sec. For example, assuming the actual replication lag
+  // is below target_replication_lag_sec, if the current rate limit is 100, then the actual
+  // rate must exceed 100*max_rate_approach_threshold for the throttler to increase the current
+  // limit.
+  double max_rate_approach_threshold = 14;
 }
 
 // GetConfigurationRequest is the payload for the GetConfiguration RPC.

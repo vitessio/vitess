@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 """Define abstractions for various MySQL flavors."""
 
 import environment
@@ -10,12 +9,20 @@ import subprocess
 class MysqlFlavor(object):
   """Base class with default SQL statements."""
 
+  def demote_master_commands(self):
+    """Returns commands to stop the current master."""
+    return [
+        "SET GLOBAL read_only = ON",
+        "FLUSH TABLES WITH READ LOCK",
+        "UNLOCK TABLES",
+    ]
+
   def promote_slave_commands(self):
     """Returns commands to convert a slave to a master."""
     return [
         "STOP SLAVE",
         "RESET SLAVE ALL",
-        "RESET MASTER",
+        "SET GLOBAL read_only = OFF",
     ]
 
   def reset_replication_commands(self):
@@ -61,7 +68,7 @@ class MysqlFlavor(object):
   def enable_binlog_checksum(self, tablet):
     """Enables binlog_checksum and returns True if the flavor supports it.
 
-    Arg:
+    Args:
       tablet: A tablet.Tablet object.
 
     Returns:
@@ -139,25 +146,31 @@ class MySQL56(MysqlFlavor):
         (host, port)]
 
 
-__mysql_flavor = None
+# Map of registered MysqlFlavor classes (keyed by an identifier).
+flavor_map = {}
+
+MYSQL_FLAVOR = None
 
 
 # mysql_flavor is a function because we need something to import before the
-# actual __mysql_flavor is initialized, since that doesn't happen until after
+# variable MYSQL_FLAVOR is initialized, since that doesn't happen until after
 # the command-line options are parsed. If we make mysql_flavor a variable and
 # import it before it's initialized, the module that imported it won't get the
 # updated value when it's later initialized.
 def mysql_flavor():
-  return __mysql_flavor
+  return MYSQL_FLAVOR
 
 
 def set_mysql_flavor(flavor):
   """Set the object that will be returned by mysql_flavor().
 
   If flavor is not specified, set it based on MYSQL_FLAVOR environment variable.
+
+  Args:
+    flavor: String of the MySQL flavor e.g. "MariaDB" or "MySQL56".
   """
 
-  global __mysql_flavor
+  global MYSQL_FLAVOR
 
   if not flavor:
     flavor = os.environ.get("MYSQL_FLAVOR", "MariaDB")
@@ -165,16 +178,42 @@ def set_mysql_flavor(flavor):
     if not flavor:
       flavor = "MariaDB"
 
-  # Set the environment variable explicitly in case we're overriding it via
-  # command-line flag.
-  os.environ["MYSQL_FLAVOR"] = flavor
-
-  if flavor == "MariaDB":
-    __mysql_flavor = MariaDB()
-  elif flavor == "MySQL56":
-    __mysql_flavor = MySQL56()
-  else:
+  v = flavor_map.get(flavor, None)
+  if not v:
     logging.error("Unknown MYSQL_FLAVOR '%s'", flavor)
     exit(1)
 
-  logging.debug("Using MYSQL_FLAVOR=%s", str(flavor))
+  cls = v["cls"]
+  env = v["env"]
+  MYSQL_FLAVOR = cls()
+  # Set the environment variable explicitly in case we're overriding it via
+  # command-line flag.
+  os.environ["MYSQL_FLAVOR"] = env
+
+  logging.debug("Using MySQL flavor: %s, setting MYSQL_FLAVOR=%s (%s)",
+                str(flavor), env, cls)
+
+
+def register_flavor(flavor, cls, env):
+  """Register the available MySQL flavors.
+
+  Note: We need the 'env' argument because our internal implementation is
+  similar to 'MariaDB' (and hence requires MYSQL_FLAVOR=MariaDB) but has its own
+  flavor class.
+
+  Args:
+    flavor: Name of the flavor (must be passed to test flag --mysql-flavor).
+    cls: Class which inherits MysqlFlavor and provides the implementation.
+    env: Value which will be used for the environment variable MYSQL_FLAVOR.
+  """
+  if flavor in flavor_map:
+    old_cls = flavor_map[flavor]["cls"]
+    old_env = flavor_map[flavor]["env"]
+    logging.error("Cannot register MySQL flavor %s because class %s (env: %s)"
+                  " is already registered for it.", flavor, old_cls, old_env)
+    exit(1)
+
+  flavor_map[flavor] = {"cls": cls, "env": env}
+
+register_flavor("MariaDB", MariaDB, "MariaDB")
+register_flavor("MySQL56", MySQL56, "MySQL56")

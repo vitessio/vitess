@@ -36,10 +36,10 @@
 
     <!-- metadata -->
     <meta name="og:title" content="Vitess / GitHub Workflow"/>
-    <meta name="og:image" content="/images/vitess_logomark_cropped.svg"/>
+    <meta name="og:image" content="/images/vitess_logo_with_border.svg"/>
     <meta name="og:description" content="Vitess is a database clustering system for horizontal scaling of MySQL."/>
 
-    <link rel="icon" href="/images/vitess_icon.png" type="image/png">
+    <link rel="icon" href="/images/vitess_logo_icon_size.png" type="image/png">
 
     
     <script>
@@ -69,7 +69,7 @@
         <span class="icon-bar"></span>
       </button>
       <a class="navbar-brand" href="/">
-        <img class="logo" src="/images/vitess_logomark_cropped.svg" alt="Vitess">
+        <img class="logo" src="/images/vitess_logo_with_border.svg" alt="Vitess">
       </a>
     </div>
 
@@ -113,15 +113,22 @@
             <li><a href="/user-guide/reparenting.html">Reparenting</a></li>
             <li style="padding-bottom: 0"><a href="/user-guide/schema-management.html">Schema Management</a></li>
               <ul style="display: block">
-                <li style="padding-bottom: 0"><a href="/user-guide/pivot-schema-changes.html">Pivot Schema Changes (Tutorial)</a></li>
+                <li style="padding-bottom: 0"><a href="/user-guide/vschema.html">VSchema Guide</a></li>
+                <li style="padding-bottom: 0"><a href="/user-guide/schema-swap.html">Schema Swap (Tutorial)</a></li>
               </ul>
             <li style="padding-bottom: 0"><a href="/user-guide/sharding.html">Sharding</a>
               <ul style="display: block">
-                <li><a href="/user-guide/horizontal-sharding.html">Horizontal Sharding (Codelab)</a></li>
-                <li style="padding-bottom: 0"><a href="/user-guide/sharding-kubernetes.html">Sharding in Kubernetes (Codelab)</a></li>
+                <li><a href="/user-guide/horizontal-sharding-workflow.html">Horizontal Sharding (Tutorial, automated)</a></li>
+                <li><a href="/user-guide/horizontal-sharding.html">Horizontal Sharding (Tutorial, manual)</a></li>
+                <li><a href="/user-guide/sharding-kubernetes-workflow.html">Sharding in Kubernetes (Tutorial, automated)</a></li>
+                <li style="padding-bottom: 0"><a href="/user-guide/sharding-kubernetes.html">Sharding in Kubernetes (Tutorial, manual)</a></li>
               </ul>
             </li>
+            <li><a href="/user-guide/vitess-sequences.html">Vitess Sequences</a></li>
+            <li><a href="/user-guide/mysql-server-protocol.html">MySQL Server Protocol</a></li>
             <li><a href="/user-guide/vitess-replication.html">Vitess and Replication</a></li>
+            <li><a href="/user-guide/update-stream.html">Update Stream</a></li>
+            <li><a href="/user-guide/row-based-replication.html">Row Based Replication</a></li>
             <li><a href="/user-guide/topology-service.html">Topology Service</a></li>
             <li><a href="/user-guide/transport-security-model.html">Transport Security Model</a></li>
             <li style="padding-bottom: 0"><a href="/user-guide/launching.html">Launching</a>
@@ -129,6 +136,7 @@
                 <li><a href="/user-guide/scalability-philosophy.html">Scalability Philosophy</a></li>
                 <li><a href="/user-guide/production-planning.html">Production Planning</a></li>
                 <li><a href="/user-guide/server-configuration.html">Server Configuration</a></li>
+                <li><a href="/user-guide/twopc.html">2PC Guide</a></li>
                 <li style="padding-bottom: 0"><a href="/user-guide/troubleshooting.html">Troubleshooting</a></li>
               </ul>
             </li>
@@ -147,6 +155,7 @@
           <ul style="display: none">
             <li><a href="/resources/presentations.html">Presentations</a>
             <li><a href="http://blog.vitess.io/">Blog</a>
+            <li><a href="/resources/roadmap.html">Roadmap</a>
           </ul>
         </li>
         <li class="submenu">
@@ -214,15 +223,22 @@
             <li><a href="/user-guide/reparenting.html">Reparenting</a></li>
             <li style="padding-bottom: 0"><a href="/user-guide/schema-management.html">Schema Management</a></li>
               <ul style="display: block">
-                <li style="padding-bottom: 0"><a href="/user-guide/pivot-schema-changes.html">Pivot Schema Changes (Tutorial)</a></li>
+                <li style="padding-bottom: 0"><a href="/user-guide/vschema.html">VSchema Guide</a></li>
+                <li style="padding-bottom: 0"><a href="/user-guide/schema-swap.html">Schema Swap (Tutorial)</a></li>
               </ul>
             <li style="padding-bottom: 0"><a href="/user-guide/sharding.html">Sharding</a>
               <ul style="display: block">
-                <li><a href="/user-guide/horizontal-sharding.html">Horizontal Sharding (Codelab)</a></li>
-                <li style="padding-bottom: 0"><a href="/user-guide/sharding-kubernetes.html">Sharding in Kubernetes (Codelab)</a></li>
+                <li><a href="/user-guide/horizontal-sharding-workflow.html">Horizontal Sharding (Tutorial, automated)</a></li>
+                <li><a href="/user-guide/horizontal-sharding.html">Horizontal Sharding (Tutorial, manual)</a></li>
+                <li><a href="/user-guide/sharding-kubernetes-workflow.html">Sharding in Kubernetes (Tutorial, automated)</a></li>
+                <li style="padding-bottom: 0"><a href="/user-guide/sharding-kubernetes.html">Sharding in Kubernetes (Tutorial, manual)</a></li>
               </ul>
             </li>
+            <li><a href="/user-guide/vitess-sequences.html">Vitess Sequences</a></li>
+            <li><a href="/user-guide/mysql-server-protocol.html">MySQL Server Protocol</a></li>
             <li><a href="/user-guide/vitess-replication.html">Vitess and Replication</a></li>
+            <li><a href="/user-guide/update-stream.html">Update Stream</a></li>
+            <li><a href="/user-guide/row-based-replication.html">Row Based Replication</a></li>
             <li><a href="/user-guide/topology-service.html">Topology Service</a></li>
             <li><a href="/user-guide/transport-security-model.html">Transport Security Model</a></li>
             <li style="padding-bottom: 0"><a href="/user-guide/launching.html">Launching</a>
@@ -230,6 +246,7 @@
                 <li><a href="/user-guide/scalability-philosophy.html">Scalability Philosophy</a></li>
                 <li><a href="/user-guide/production-planning.html">Production Planning</a></li>
                 <li><a href="/user-guide/server-configuration.html">Server Configuration</a></li>
+                <li><a href="/user-guide/twopc.html">2PC Guide</a></li>
                 <li style="padding-bottom: 0"><a href="/user-guide/troubleshooting.html">Troubleshooting</a></li>
               </ul>
             </li>
@@ -248,6 +265,7 @@
           <ul style="display: none">
             <li><a href="/resources/presentations.html">Presentations</a>
             <li><a href="http://blog.vitess.io/">Blog</a>
+            <li><a href="/resources/roadmap.html">Roadmap</a>
           </ul>
         </li>
         <li class="submenu">
@@ -284,10 +302,11 @@
 
 <p><em>Image Source:</em> <a href="https://github.com/blog/2042-git-2-5-including-multiple-worktrees-and-triangular-workflows">https://github.com/blog/2042-git-2-5-including-multiple-worktrees-and-triangular-workflows</a></p>
 
-<p>You develop and commit your changes in a clone of our upstream repository
-(<code class="prettyprint">local</code>). Then you push your changes to your forked repository (<code class="prettyprint">origin</code>) and
-send us a pull request. Eventually, we will merge your pull request back into
-the <code class="prettyprint">upstream</code> repository.</p>
+<p>The Vitess code is hosted on GitHub (<a href="https://github.com/youtube/vitess">https://github.com/youtube/vitess</a>).
+This repository is called <em>upstream</em>.
+You develop and commit your changes in a clone of our upstream repository (shown as <em>local</em> in the image above).
+Then you push your changes to your forked repository (<em>origin</em>) and send us a pull request.
+Eventually, we will merge your pull request back into the <em>upstream</em> repository.</p>
 
 <h2 id="remotes">Remotes</h2>
 
@@ -329,7 +348,10 @@ this, run this command once:</p>
 (new-feature) $ # You are now in the new-feature branch.
 </code></pre></div>
 <p>Try to commit small pieces along the way as you finish them, with an explanation
-of the changes in the commit message. As you work in a package, you can run just
+of the changes in the commit message.
+Please see the <a href="/contributing/code-reviews.html">Code Review page</a> for more guidance.</p>
+
+<p>As you work in a package, you can run just
 the unit tests for that package by running <code class="prettyprint">go test</code> from within that package.</p>
 
 <p>When you&#39;re ready to test the whole system, run the full test suite with <code class="prettyprint">make
@@ -368,8 +390,12 @@ another commit on your branch and then push it again:</p>
 </code></pre></div>
 <p>That is because a pull request always mirrors all commits from your topic branch which are not in the master branch.</p>
 
-<p>After you merge, close the issue (if it wasn&#39;t automatically closed) and delete
-the topic branch.</p>
+<p>Once your pull request is merged:</p>
+
+<ul>
+<li> close the GitHub issue (if it wasn&#39;t automatically closed)</li>
+<li> delete your local topic branch (<code class="prettyprint">git branch -d new-feature</code>)</li>
+</ul>
 
       </div>
     </div>
@@ -383,7 +409,7 @@ the topic branch.</p>
     
     <a href="https://groups.google.com/forum/#!forum/vitess" target="_blank">Contact: vitess@googlegroups.com</a>&nbsp;&nbsp;<b>·</b>&nbsp;&nbsp;
     <a href="https://groups.google.com/forum/#!forum/vitess-announce" target="_blank">Announcements</a>&nbsp;&nbsp;<b>·</b>&nbsp;&nbsp;
-    &#169; 2016 <a href="/">Vitess</a> powered by <a href="https://developers.google.com/open-source/">Google Inc</a>
+    &#169; 2017 <a href="/">Vitess</a> powered by <a href="https://developers.google.com/open-source/">Google Inc</a>
   </nav>
 </footer>
 

@@ -8,31 +8,30 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/youtube/vitess/go/vt/logutil"
-	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
-	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
-	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/topo/topoproto"
-	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
-	"github.com/youtube/vitess/go/vt/wrangler"
-	"github.com/youtube/vitess/go/vt/zktopo/zktestserver"
 	"golang.org/x/net/context"
+
+	"github.com/youtube/vitess/go/mysqlconn/replication"
+	"github.com/youtube/vitess/go/vt/logutil"
+	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topo/memorytopo"
+	"github.com/youtube/vitess/go/vt/topo/topoproto"
+	"github.com/youtube/vitess/go/vt/vttablet/tmclient"
+	"github.com/youtube/vitess/go/vt/wrangler"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 func TestShardReplicationStatuses(t *testing.T) {
 	ctx := context.Background()
-	db := fakesqldb.Register()
-	ts := zktestserver.New(t, []string{"cell1", "cell2"})
+	ts := memorytopo.NewServer("cell1", "cell2")
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 
 	// create shard and tablets
 	if _, err := ts.GetOrCreateShard(ctx, "test_keyspace", "0"); err != nil {
 		t.Fatalf("GetOrCreateShard failed: %v", err)
 	}
-	master := NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_MASTER, db)
-	slave := NewFakeTablet(t, wr, "cell1", 2, topodatapb.TabletType_REPLICA, db)
+	master := NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_MASTER, nil)
+	slave := NewFakeTablet(t, wr, "cell1", 2, topodatapb.TabletType_REPLICA, nil)
 
 	// mark the master inside the shard
 	if _, err := ts.UpdateShardFields(ctx, "test_keyspace", "0", func(si *topo.ShardInfo) error {
@@ -90,16 +89,15 @@ func TestShardReplicationStatuses(t *testing.T) {
 
 func TestReparentTablet(t *testing.T) {
 	ctx := context.Background()
-	db := fakesqldb.Register()
-	ts := zktestserver.New(t, []string{"cell1", "cell2"})
+	ts := memorytopo.NewServer("cell1", "cell2")
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 
 	// create shard and tablets
 	if _, err := ts.GetOrCreateShard(ctx, "test_keyspace", "0"); err != nil {
 		t.Fatalf("CreateShard failed: %v", err)
 	}
-	master := NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_MASTER, db)
-	slave := NewFakeTablet(t, wr, "cell1", 2, topodatapb.TabletType_REPLICA, db)
+	master := NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_MASTER, nil)
+	slave := NewFakeTablet(t, wr, "cell1", 2, topodatapb.TabletType_REPLICA, nil)
 
 	// mark the master inside the shard
 	if _, err := ts.UpdateShardFields(ctx, "test_keyspace", "0", func(si *topo.ShardInfo) error {

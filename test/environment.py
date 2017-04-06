@@ -12,7 +12,10 @@ import protocols_flavor
 # --topo-server-flavor flag.
 # pylint: disable=unused-import
 import topo_flavor.zookeeper
+import topo_flavor.zk2
 import topo_flavor.etcd
+import topo_flavor.etcd2
+import topo_flavor.consul
 
 # This imports topo_server into this module, so clients can write
 # environment.topo_server().
@@ -23,6 +26,10 @@ from topo_flavor.server import topo_server
 # --gateway_implementation flag.
 # pylint: disable=unused-import
 import vtgate_gateway_flavor.discoverygateway
+
+from selenium import webdriver
+
+from vttest import mysql_flavor
 
 
 # sanity check the environment
@@ -202,3 +209,30 @@ def setup_protocol_flavor(flavor):
     exit(1)
 
   logging.debug('Using protocols flavor \'%s\'', flavor)
+
+
+def reset_mysql_flavor():
+  mysql_flavor.set_mysql_flavor(None)
+
+
+def create_webdriver():
+  """Creates a webdriver object (local or remote for Travis)."""
+  if os.environ.get('CI') == 'true' and os.environ.get('TRAVIS') == 'true':
+    username = os.environ['SAUCE_USERNAME']
+    access_key = os.environ['SAUCE_ACCESS_KEY']
+    capabilities = {}
+    capabilities['tunnel-identifier'] = os.environ['TRAVIS_JOB_NUMBER']
+    capabilities['build'] = os.environ['TRAVIS_BUILD_NUMBER']
+    capabilities['platform'] = 'Linux'
+    capabilities['browserName'] = 'chrome'
+    hub_url = '%s:%s@localhost:4445' % (username, access_key)
+    driver = webdriver.Remote(
+        desired_capabilities=capabilities,
+        command_executor='http://%s/wd/hub' % hub_url)
+  else:
+    os.environ['webdriver.chrome.driver'] = os.path.join(vtroot, 'dist')
+    # Only testing against Chrome for now
+    driver = webdriver.Chrome()
+    driver.set_window_position(0, 0)
+    driver.set_window_size(1280, 1024)
+  return driver

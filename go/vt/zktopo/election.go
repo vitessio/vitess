@@ -158,7 +158,7 @@ func (mp *zkMasterParticipation) Stop() {
 
 // GetCurrentMasterID is part of the topo.MasterParticipation interface.
 // We just read the smallest (first) node content, that is the id.
-func (mp *zkMasterParticipation) GetCurrentMasterID() (string, error) {
+func (mp *zkMasterParticipation) GetCurrentMasterID(ctx context.Context) (string, error) {
 	electionPath := path.Join(GlobalElectionPath, mp.name)
 
 	for {

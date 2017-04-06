@@ -15,9 +15,6 @@ namespace Vitess\Proto\Query {
     /**  @var int */
     public $time_created = null;
     
-    /**  @var int */
-    public $time_updated = null;
-    
     /**  @var \Vitess\Proto\Query\Target[]  */
     public $participants = array();
     
@@ -54,17 +51,9 @@ namespace Vitess\Proto\Query {
       $f->rule      = \DrSlump\Protobuf::RULE_OPTIONAL;
       $descriptor->addField($f);
 
-      // OPTIONAL INT64 time_updated = 4
+      // REPEATED MESSAGE participants = 4
       $f = new \DrSlump\Protobuf\Field();
       $f->number    = 4;
-      $f->name      = "time_updated";
-      $f->type      = \DrSlump\Protobuf::TYPE_INT64;
-      $f->rule      = \DrSlump\Protobuf::RULE_OPTIONAL;
-      $descriptor->addField($f);
-
-      // REPEATED MESSAGE participants = 5
-      $f = new \DrSlump\Protobuf\Field();
-      $f->number    = 5;
       $f->name      = "participants";
       $f->type      = \DrSlump\Protobuf::TYPE_MESSAGE;
       $f->rule      = \DrSlump\Protobuf::RULE_REPEATED;
@@ -190,49 +179,12 @@ namespace Vitess\Proto\Query {
     }
     
     /**
-     * Check if <time_updated> has a value
-     *
-     * @return boolean
-     */
-    public function hasTimeUpdated(){
-      return $this->_has(4);
-    }
-    
-    /**
-     * Clear <time_updated> value
-     *
-     * @return \Vitess\Proto\Query\TransactionMetadata
-     */
-    public function clearTimeUpdated(){
-      return $this->_clear(4);
-    }
-    
-    /**
-     * Get <time_updated> value
-     *
-     * @return int
-     */
-    public function getTimeUpdated(){
-      return $this->_get(4);
-    }
-    
-    /**
-     * Set <time_updated> value
-     *
-     * @param int $value
-     * @return \Vitess\Proto\Query\TransactionMetadata
-     */
-    public function setTimeUpdated( $value){
-      return $this->_set(4, $value);
-    }
-    
-    /**
      * Check if <participants> has a value
      *
      * @return boolean
      */
     public function hasParticipants(){
-      return $this->_has(5);
+      return $this->_has(4);
     }
     
     /**
@@ -241,7 +193,7 @@ namespace Vitess\Proto\Query {
      * @return \Vitess\Proto\Query\TransactionMetadata
      */
     public function clearParticipants(){
-      return $this->_clear(5);
+      return $this->_clear(4);
     }
     
     /**
@@ -251,7 +203,7 @@ namespace Vitess\Proto\Query {
      * @return \Vitess\Proto\Query\Target
      */
     public function getParticipants($idx = NULL){
-      return $this->_get(5, $idx);
+      return $this->_get(4, $idx);
     }
     
     /**
@@ -261,7 +213,7 @@ namespace Vitess\Proto\Query {
      * @return \Vitess\Proto\Query\TransactionMetadata
      */
     public function setParticipants(\Vitess\Proto\Query\Target $value, $idx = NULL){
-      return $this->_set(5, $value, $idx);
+      return $this->_set(4, $value, $idx);
     }
     
     /**
@@ -270,7 +222,7 @@ namespace Vitess\Proto\Query {
      * @return \Vitess\Proto\Query\Target[]
      */
     public function getParticipantsList(){
-     return $this->_get(5);
+     return $this->_get(4);
     }
     
     /**
@@ -280,7 +232,7 @@ namespace Vitess\Proto\Query {
      * @return \Vitess\Proto\Query\TransactionMetadata
      */
     public function addParticipants(\Vitess\Proto\Query\Target $value){
-     return $this->_add(5, $value);
+     return $this->_add(4, $value);
     }
   }
 }

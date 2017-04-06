@@ -34,13 +34,21 @@ func (vind *UnicodeLooseMD5) Cost() int {
 	return 1
 }
 
-// Verify returns true if id maps to ksid.
-func (vind *UnicodeLooseMD5) Verify(_ VCursor, id interface{}, ksid []byte) (bool, error) {
-	data, err := unicodeHash(id)
-	if err != nil {
-		return false, fmt.Errorf("UnicodeLooseMD5.Verify: %v", err)
+// Verify returns true if ids maps to ksids.
+func (vind *UnicodeLooseMD5) Verify(_ VCursor, ids []interface{}, ksids [][]byte) (bool, error) {
+	if len(ids) != len(ksids) {
+		return false, fmt.Errorf("UnicodeLooseMD5.Verify: length of ids %v doesn't match length of ksids %v", len(ids), len(ksids))
 	}
-	return bytes.Compare(data, ksid) == 0, nil
+	for rowNum := range ids {
+		data, err := unicodeHash(ids[rowNum])
+		if err != nil {
+			return false, fmt.Errorf("UnicodeLooseMD5.Verify: %v", err)
+		}
+		if bytes.Compare(data, ksids[rowNum]) != 0 {
+			return false, nil
+		}
+	}
+	return true, nil
 }
 
 // Map returns the corresponding keyspace id values for the given ids.

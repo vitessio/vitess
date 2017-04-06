@@ -7,13 +7,24 @@ package topo
 import (
 	"errors"
 	"flag"
-	"fmt"
 
 	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	vschemapb "github.com/youtube/vitess/go/vt/proto/vschema"
+)
+
+// Filenames for all object types.
+const (
+	CellInfoFile         = "CellInfo"
+	KeyspaceFile         = "Keyspace"
+	ShardFile            = "Shard"
+	VSchemaFile          = "VSchema"
+	ShardReplicationFile = "ShardReplication"
+	TabletFile           = "Tablet"
+	SrvVSchemaFile       = "SrvVSchema"
+	SrvKeyspaceFile      = "SrvKeyspace"
 )
 
 var (
@@ -53,7 +64,7 @@ var (
 // Impl is the interface used to talk to a persistent
 // backend storage server and locking service.
 //
-// Zookeeper is a good example of this, and zktopo contains the
+// Zookeeper is a good example of this, and go/vt/topo/zk2topo contains the
 // implementation for this using zookeeper.
 //
 // Inside Google, we use Chubby.
@@ -110,9 +121,7 @@ type Impl interface {
 	// Shard management, global.
 	//
 
-	// CreateShard creates an empty shard, assuming it doesn't exist
-	// yet. The contents of the shard will be a new Shard{} object,
-	// with KeyRange populated by the result of ValidateShardName().
+	// CreateShard creates a shard, assuming it doesn't exist yet.
 	// Can return ErrNodeExists if it already exists.
 	CreateShard(ctx context.Context, keyspace, shard string, value *topodatapb.Shard) error
 
@@ -124,15 +133,13 @@ type Impl interface {
 	// Do not use directly, but instead use topo.UpdateShardFields.
 	UpdateShard(ctx context.Context, keyspace, shard string, value *topodatapb.Shard, existingVersion int64) (newVersion int64, err error)
 
-	// ValidateShard performs routine checks on the shard.
-	ValidateShard(ctx context.Context, keyspace, shard string) error
-
 	// GetShard reads a shard and returns it, along with its version.
 	// Can return ErrNoNode
 	GetShard(ctx context.Context, keyspace, shard string) (*topodatapb.Shard, int64, error)
 
 	// GetShardNames returns the known shards in a keyspace.
 	// Can return ErrNoNode if the keyspace wasn't created.
+	// Will return an empty list if the keyspace has no shard.
 	// They shall be sorted.
 	GetShardNames(ctx context.Context, keyspace string) ([]string, error)
 
@@ -257,85 +264,12 @@ type Impl interface {
 	//
 	// Can return ErrNoNode
 	GetVSchema(ctx context.Context, keyspace string) (*vschemapb.Keyspace, error)
-
-	//
-	// Master election methods. This is meant to have a small
-	// number of processes elect a master within a group. The
-	// backend storage for this can either be the global topo
-	// server, or a resilient quorum of individual cells, to
-	// reduce the load / dependency on the global topo server.
-	//
-
-	// NewMasterParticipation creates a MasterParticipation
-	// object, used to become the Master in an election for the
-	// provided group name.  Id is the name of the local process,
-	// passing in the hostname:port of the current process as id
-	// is the common usage. Id must be unique for each process
-	// calling this, for a given name. Calling this function does
-	// not make the current process a candidate for the election.
-	NewMasterParticipation(name, id string) (MasterParticipation, error)
 }
 
 // Server is a wrapper type that can have extra methods.
 // Outside modules should just use the Server object.
 type Server struct {
 	Impl
-}
-
-// MasterParticipation is the object returned by NewMasterParticipation.
-// Sample usage:
-//
-// mp := server.NewMasterParticipation("vtctld", "hostname:8080")
-// job := NewJob()
-// go func() {
-//   for {
-//     ctx, err := mp.WaitForMastership()
-//     switch err {
-//     case nil:
-//       job.RunUntilContextDone(ctx)
-//     case topo.ErrInterrupted:
-//       return
-//     default:
-//       log.Errorf("Got error while waiting for master, will retry in 5s: %v", err)
-//       time.Sleep(5 * time.Second)
-//     }
-//   }
-// }()
-//
-// http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-//   if job.Running() {
-//     job.WriteStatus(w, r)
-//   } else {
-//     http.Redirect(w, r, mp.GetCurrentMasterID(), http.StatusFound)
-//   }
-// })
-//
-// servenv.OnTermSync(func() {
-//   mp.Stop()
-// })
-type MasterParticipation interface {
-	// WaitForMastership makes the current process a candidate
-	// for election, and waits until this process is the master.
-	// After we become the master, we may lose mastership. In that case,
-	// the returned context will be canceled. If Stop was called,
-	// WaitForMastership will return nil, ErrInterrupted.
-	WaitForMastership() (context.Context, error)
-
-	// Stop is called when we don't want to participate in the
-	// master election any more. Typically, that is when the
-	// hosting process is terminating.  We will relinquish
-	// mastership at that point, if we had it. Stop should
-	// not return until everything has been done.
-	// The MasterParticipation object should be discarded
-	// after Stop has been called. Any call to WaitForMastership
-	// after Stop() will return nil, ErrInterrupted.
-	// If WaitForMastership() was running, it will return
-	// nil, ErrInterrupted as soon as possible.
-	Stop()
-
-	// GetCurrentMasterID returns the current master id.
-	// This may not work after Stop has been called.
-	GetCurrentMasterID() (string, error)
 }
 
 // SrvTopoServer is a subset of the Server API that only contains the serving
@@ -348,52 +282,56 @@ type SrvTopoServer interface {
 	WatchSrvVSchema(ctx context.Context, cell string) (*WatchSrvVSchemaData, <-chan *WatchSrvVSchemaData, CancelFunc)
 }
 
-// Registry for Server implementations.
-var serverImpls = make(map[string]Impl)
+// Factory is a factory method to create Impl objects.
+type Factory func(serverAddr, root string) (Impl, error)
 
-// Which implementation to use
-var topoImplementation = flag.String("topo_implementation", "zookeeper", "the topology implementation to use")
+var (
+	// topoImplementation is the flag for which implementation to use.
+	topoImplementation = flag.String("topo_implementation", "zookeeper", "the topology implementation to use")
 
-// RegisterServer adds an implementation for a Server.
-// If an implementation with that name already exists, panics.
-// Call this in the 'init' function in your module.
-func RegisterServer(name string, ts Impl) {
-	if serverImpls[name] != nil {
-		panic(fmt.Errorf("Duplicate topo.Server registration for %v", name))
+	// topoGlobalServerAddress is the address of the global topology
+	// server.
+	topoGlobalServerAddress = flag.String("topo_global_server_address", "", "the address of the global topology server")
+
+	// topoGlobalRoot is the root path to use for the global topology
+	// server.
+	topoGlobalRoot = flag.String("topo_global_root", "", "the path of the global topology data in the global topology server")
+
+	// factories has the factories for the Impl objects.
+	factories = make(map[string]Factory)
+)
+
+// RegisterFactory registers a Factory for an implementation for a Server.
+// If an implementation with that name already exists, it log.Fatals out.
+// Call this in the 'init' function in your topology implementation module.
+func RegisterFactory(name string, factory Factory) {
+	if factories[name] != nil {
+		log.Fatalf("Duplicate topo.Factory registration for %v", name)
 	}
-	serverImpls[name] = ts
+	factories[name] = factory
 }
 
-// GetServerByName returns a specific Server by name, or nil.
-func GetServerByName(name string) Server {
-	return Server{Impl: serverImpls[name]}
+// OpenServer returns a Server using the provided implementation,
+// address and root.
+func OpenServer(implementation, serverAddress, root string) (Server, error) {
+	factory, ok := factories[implementation]
+	if !ok {
+		return Server{}, ErrNoNode
+	}
+
+	impl, err := factory(serverAddress, root)
+	if err != nil {
+		return Server{}, err
+	}
+	return Server{Impl: impl}, nil
 }
 
-// GetServer returns 'our' Server, going down this list:
-// - If only one is registered, that's the one.
-// - If more than one are registered, use the 'topo_implementation' flag
-//   (which defaults to zookeeper).
-// - Then panics.
-func GetServer() Server {
-	if len(serverImpls) == 1 {
-		for name, ts := range serverImpls {
-			log.V(6).Infof("Using only topo.Server: %v", name)
-			return Server{Impl: ts}
-		}
+// Open returns a Server using the command line parameter flags
+// for implementation, address and root. It log.Fatals out if an error occurs.
+func Open() Server {
+	ts, err := OpenServer(*topoImplementation, *topoGlobalServerAddress, *topoGlobalRoot)
+	if err != nil {
+		log.Fatalf("Failed to open topo server (%v,%v,%v): %v", *topoImplementation, *topoGlobalServerAddress, *topoGlobalRoot, err)
 	}
-
-	result := serverImpls[*topoImplementation]
-	if result == nil {
-		panic(fmt.Errorf("No topo.Server named %v", *topoImplementation))
-	}
-	log.V(6).Infof("Using topo.Server: %v", *topoImplementation)
-	return Server{Impl: result}
-}
-
-// CloseServers closes all registered Server.
-func CloseServers() {
-	for name, ts := range serverImpls {
-		log.V(6).Infof("Closing topo.Server: %v", name)
-		ts.Close()
-	}
+	return ts
 }

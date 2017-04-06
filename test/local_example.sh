@@ -24,7 +24,7 @@ teardown() {
   wait
   exit $exitcode
 }
-trap teardown SIGTERM SIGINT
+trap teardown SIGTERM SIGINT EXIT
 
 # Set up servers.
 timeout $timeout ./zk-up.sh || teardown

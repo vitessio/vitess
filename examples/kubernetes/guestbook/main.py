@@ -1,5 +1,6 @@
 """Main python file."""
 
+import argparse
 import os
 import time
 import json
@@ -15,6 +16,7 @@ app = Flask(__name__)
 
 # conn is the connection to vtgate.
 conn = None
+keyspace = None
 
 
 @app.route('/')
@@ -31,8 +33,7 @@ def view(page):
 @app.route('/lrange/guestbook/<int:page>')
 def list_guestbook(page):
   """Read the list from a replica."""
-  cursor = conn.cursor(
-      tablet_type='replica', keyspace='test_keyspace')
+  cursor = conn.cursor(tablet_type='replica', keyspace=keyspace)
 
   cursor.execute(
       'SELECT message, time_created_ns FROM messages WHERE page=:page'
@@ -47,8 +48,7 @@ def list_guestbook(page):
 @app.route('/rpush/guestbook/<int:page>/<value>')
 def add_entry(page, value):
   """Insert a row on the master."""
-  cursor = conn.cursor(
-      tablet_type='master', keyspace='test_keyspace', writable=True)
+  cursor = conn.cursor(tablet_type='master', keyspace=keyspace, writable=True)
 
   cursor.begin()
   cursor.execute(
@@ -77,13 +77,25 @@ def add_entry(page, value):
 def env():
   return json.dumps(dict(os.environ))
 
+
 if __name__ == '__main__':
-  timeout = 10  # connect timeout in seconds
+  parser = argparse.ArgumentParser(description='Run guestbook app')
+  parser.add_argument('--port', help='Port', default=8080, type=int)
+  parser.add_argument('--cell', help='Cell', default='test', type=str)
+  parser.add_argument(
+      '--keyspace', help='Keyspace', default='test_keyspace', type=str)
+  parser.add_argument(
+      '--timeout', help='Connect timeout (s)', default=10, type=int)
+  parser.add_argument(
+      '--vtgate_port', help='Vtgate Port', default=15991, type=int)
+  guestbook_args = parser.parse_args()
 
   # Get vtgate service address from Kubernetes DNS.
-  addr = 'vtgate-test:15991'
+  addr = 'vtgate-%s:%d' % (guestbook_args.cell, guestbook_args.vtgate_port)
 
   # Connect to vtgate.
-  conn = vtgate_client.connect('grpc', addr, timeout)
+  conn = vtgate_client.connect('grpc', addr, guestbook_args.timeout)
 
-  app.run(host='0.0.0.0', port=8080, debug=True)
+  keyspace = guestbook_args.keyspace
+
+  app.run(host='0.0.0.0', port=guestbook_args.port, debug=True)

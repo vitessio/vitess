@@ -45,7 +45,7 @@ class TestAutomationVerticalSplit(vertical_split.TestVerticalSplit):
     params = {'source_keyspace': 'source_keyspace',
               'dest_keyspace': 'destination_keyspace',
               'shard_list': '0',
-              'tables': 'moving.*,view1',
+              'tables': '/moving/,view1',
               'vtctld_endpoint': vtctld_endpoint,
               'vtworker_endpoint': vtworker_endpoint,
              }
@@ -54,20 +54,15 @@ class TestAutomationVerticalSplit(vertical_split.TestVerticalSplit):
     args.extend(['--param=' + k + '=' + v for k, v in params.items()])
     utils.run(environment.binary_args('automation_client') + args)
 
-    # One of the two source rdonly tablets went spare after the diff.
-    # Force a healthcheck on both to get them back to "rdonly".
-    for t in [vertical_split.source_rdonly1, vertical_split.source_rdonly2]:
-      utils.run_vtctl(['RunHealthCheck', t.tablet_alias])
-
     self._check_srv_keyspace('')
     self._check_blacklisted_tables(vertical_split.source_master,
-                                   ['moving.*', 'view1'])
+                                   ['/moving/', 'view1'])
     self._check_blacklisted_tables(vertical_split.source_replica,
-                                   ['moving.*', 'view1'])
+                                   ['/moving/', 'view1'])
     self._check_blacklisted_tables(vertical_split.source_rdonly1,
-                                   ['moving.*', 'view1'])
+                                   ['/moving/', 'view1'])
     self._check_blacklisted_tables(vertical_split.source_rdonly2,
-                                   ['moving.*', 'view1'])
+                                   ['/moving/', 'view1'])
 
     # check the binlog player is gone now
     vertical_split.destination_master.wait_for_binlog_player_count(0)

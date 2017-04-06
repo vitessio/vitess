@@ -289,10 +289,6 @@ func Validate(ctx context.Context, ts Server, tabletAlias *topodatapb.TabletAlia
 	}
 
 	// Validate the entry in the shard replication nodes
-	if err = ts.ValidateShard(ctx, tablet.Keyspace, tablet.Shard); err != nil {
-		return err
-	}
-
 	si, err := ts.GetShardReplication(ctx, tablet.Alias.Cell, tablet.Keyspace, tablet.Shard)
 	if err != nil {
 		return err

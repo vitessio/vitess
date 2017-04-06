@@ -30,12 +30,16 @@ endif
 build_web:
 	echo $$(date): Building web artifacts
 	cd web/vtctld2 && ng build -prod
+	cp -f web/vtctld2/src/{favicon.ico,plotly-latest.min.js,primeui-ng-all.min.css} web/vtctld2/dist/
 
 build:
 ifndef NOBANNER
 	echo $$(date): Building source tree
 endif
 	go install $(VT_GO_PARALLEL) -ldflags "$(tools/build_version_flags.sh)" ./go/...
+
+parser:
+	make -C go/vt/sqlparser
 
 # To pass extra flags, run test.go manually.
 # For example: go run test.go -docker=false -- --extra-flag
@@ -69,11 +73,6 @@ unit_test_cover: build
 unit_test_race: build
 	tools/unit_test_race.sh
 
-# Run coverage and upload to coveralls.io.
-# Requires the secret COVERALLS_TOKEN env variable to be set.
-unit_test_goveralls: build
-	travis/goveralls.sh
-
 .ONESHELL:
 SHELL = /bin/bash
 
@@ -105,7 +104,7 @@ PROTOC_EXISTS := $(shell type -p $(PROTOC_DIR)/protoc)
 ifeq (,$(PROTOC_EXISTS))
   PROTOC_BINARY := $(shell which protoc)
   ifeq (,$(PROTOC_BINARY))
-    $(error "Cannot find protoc binary. Did you execute 'source dev.env'?")
+    $(error "Cannot find protoc binary. Did bootstrap.sh succeed, and did you execute 'source dev.env'?")
   endif
   PROTOC_DIR := $(dir $(PROTOC_BINARY))
 endif
@@ -175,7 +174,7 @@ docker_base:
 
 docker_base_mysql56:
 	chmod -R o=g *
-	docker build -f Dockerfile.percona -t vitess/base:mysql56 .
+	docker build -f Dockerfile.mysql56 -t vitess/base:mysql56 .
 
 docker_base_mariadb:
 	chmod -R o=g *

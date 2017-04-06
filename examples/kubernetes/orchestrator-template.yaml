@@ -40,6 +40,9 @@ spec:
             limits:
               memory: "512Mi"
               cpu: "100m"
+          volumeMounts:
+            - mountPath: /orc/conf
+              name: config
         - name: mysql
           image: vitess/orchestrator
           resources:
@@ -47,4 +50,7 @@ spec:
               memory: "512Mi"
               cpu: "100m"
           command: ["mysqld"]
-
+      volumes:
+        - name: config
+          configMap:
+            name: orchestrator-conf

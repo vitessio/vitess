@@ -40,14 +40,14 @@ func CreateMysqld(tabletUID uint32, mysqlSocket string, mysqlPort int32, dbconfi
 		return nil, fmt.Errorf("couldn't Init dbconfigs: %v", err)
 	}
 
-	return NewMysqld(mycnf, &dbcfgs.Dba, &dbcfgs.AllPrivs, &dbcfgs.App, &dbcfgs.Repl, true /* enablePublishStats */), nil
+	return NewMysqld(mycnf, dbcfgs, dbconfigFlags), nil
 }
 
 // OpenMysqld returns a Mysqld object to use for working with a MySQL
 // installation that already exists. This will look for an existing my.cnf file
 // and use that to call NewMysqld().
 func OpenMysqld(tabletUID uint32, dbconfigFlags dbconfigs.DBConfigFlag) (*Mysqld, error) {
-	mycnf, err := ReadMycnf(mycnfFile(tabletUID))
+	mycnf, err := ReadMycnf(MycnfFile(tabletUID))
 	if err != nil {
 		return nil, fmt.Errorf("couldn't read my.cnf file: %v", err)
 	}
@@ -57,5 +57,5 @@ func OpenMysqld(tabletUID uint32, dbconfigFlags dbconfigs.DBConfigFlag) (*Mysqld
 		return nil, fmt.Errorf("couldn't Init dbconfigs: %v", err)
 	}
 
-	return NewMysqld(mycnf, &dbcfgs.Dba, &dbcfgs.AllPrivs, &dbcfgs.App, &dbcfgs.Repl, true /* enablePublishStats */), nil
+	return NewMysqld(mycnf, dbcfgs, dbconfigFlags), nil
 }

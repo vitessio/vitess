@@ -107,9 +107,9 @@ func InitVtctld(ts topo.Server) {
 			return "", wr.ReloadSchema(ctx, tabletAlias)
 		})
 
-	// Anything unrecognized gets redirected to the main app page.
+	// Anything unrecognized gets redirected to the main app2 page.
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, appPrefix, http.StatusFound)
+		http.Redirect(w, r, appPrefix2, http.StatusFound)
 	})
 
 	// Serve the static files for the vtctld web app.

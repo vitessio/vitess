@@ -10,6 +10,7 @@
 "select * from a join b"
 {
   "PlanID": "SELECT_STREAM",
+  "TableName": "",
   "FullQuery": "select * from a join b"
 }
 
@@ -21,6 +22,7 @@
 "select * from a union select * from b"
 {
   "PlanID": "SELECT_STREAM",
+  "TableName": "",
   "FullQuery": "select * from a union select * from b"
 }
 

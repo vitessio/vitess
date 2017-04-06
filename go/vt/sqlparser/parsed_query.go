@@ -11,6 +11,7 @@ import (
 	"fmt"
 
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/vt/utils"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
@@ -51,8 +52,9 @@ func (pq *ParsedQuery) GenerateQuery(bindVariables map[string]interface{}) ([]by
 }
 
 // MarshalJSON is a custom JSON marshaler for ParsedQuery.
+// Note that any queries longer that 512 bytes will be truncated.
 func (pq *ParsedQuery) MarshalJSON() ([]byte, error) {
-	return json.Marshal(pq.Query)
+	return json.Marshal(utils.TruncateQuery(pq.Query))
 }
 
 // EncodeValue encodes one bind variable value into the query.
@@ -132,7 +134,7 @@ func EncodeValue(buf *bytes.Buffer, value interface{}) error {
 // TupleEqualityList is for generating equality constraints
 // for tables that have composite primary keys.
 type TupleEqualityList struct {
-	Columns []string
+	Columns []ColIdent
 	Rows    [][]sqltypes.Value
 }
 
@@ -149,7 +151,7 @@ func (tpl *TupleEqualityList) Encode(buf *bytes.Buffer) error {
 }
 
 func (tpl *TupleEqualityList) encodeAsIN(buf *bytes.Buffer) error {
-	buf.WriteString(tpl.Columns[0])
+	Append(buf, tpl.Columns[0])
 	buf.WriteString(" in (")
 	for i, r := range tpl.Rows {
 		if len(r) != 1 {
@@ -174,7 +176,7 @@ func (tpl *TupleEqualityList) encodeAsEquality(buf *bytes.Buffer) error {
 			if j != 0 {
 				buf.WriteString(" and ")
 			}
-			buf.WriteString(c)
+			Append(buf, c)
 			buf.WriteString(" = ")
 			r[j].EncodeSQL(buf)
 		}

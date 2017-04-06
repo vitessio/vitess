@@ -36,10 +36,10 @@
 
     <!-- metadata -->
     <meta name="og:title" content="Vitess / Sharding"/>
-    <meta name="og:image" content="/images/vitess_logomark_cropped.svg"/>
+    <meta name="og:image" content="/images/vitess_logo_with_border.svg"/>
     <meta name="og:description" content="Vitess is a database clustering system for horizontal scaling of MySQL."/>
 
-    <link rel="icon" href="/images/vitess_icon.png" type="image/png">
+    <link rel="icon" href="/images/vitess_logo_icon_size.png" type="image/png">
 
     
     <script>
@@ -69,7 +69,7 @@
         <span class="icon-bar"></span>
       </button>
       <a class="navbar-brand" href="/">
-        <img class="logo" src="/images/vitess_logomark_cropped.svg" alt="Vitess">
+        <img class="logo" src="/images/vitess_logo_with_border.svg" alt="Vitess">
       </a>
     </div>
 
@@ -113,15 +113,22 @@
             <li><a href="/user-guide/reparenting.html">Reparenting</a></li>
             <li style="padding-bottom: 0"><a href="/user-guide/schema-management.html">Schema Management</a></li>
               <ul style="display: block">
-                <li style="padding-bottom: 0"><a href="/user-guide/pivot-schema-changes.html">Pivot Schema Changes (Tutorial)</a></li>
+                <li style="padding-bottom: 0"><a href="/user-guide/vschema.html">VSchema Guide</a></li>
+                <li style="padding-bottom: 0"><a href="/user-guide/schema-swap.html">Schema Swap (Tutorial)</a></li>
               </ul>
             <li style="padding-bottom: 0"><a href="/user-guide/sharding.html">Sharding</a>
               <ul style="display: block">
-                <li><a href="/user-guide/horizontal-sharding.html">Horizontal Sharding (Codelab)</a></li>
-                <li style="padding-bottom: 0"><a href="/user-guide/sharding-kubernetes.html">Sharding in Kubernetes (Codelab)</a></li>
+                <li><a href="/user-guide/horizontal-sharding-workflow.html">Horizontal Sharding (Tutorial, automated)</a></li>
+                <li><a href="/user-guide/horizontal-sharding.html">Horizontal Sharding (Tutorial, manual)</a></li>
+                <li><a href="/user-guide/sharding-kubernetes-workflow.html">Sharding in Kubernetes (Tutorial, automated)</a></li>
+                <li style="padding-bottom: 0"><a href="/user-guide/sharding-kubernetes.html">Sharding in Kubernetes (Tutorial, manual)</a></li>
               </ul>
             </li>
+            <li><a href="/user-guide/vitess-sequences.html">Vitess Sequences</a></li>
+            <li><a href="/user-guide/mysql-server-protocol.html">MySQL Server Protocol</a></li>
             <li><a href="/user-guide/vitess-replication.html">Vitess and Replication</a></li>
+            <li><a href="/user-guide/update-stream.html">Update Stream</a></li>
+            <li><a href="/user-guide/row-based-replication.html">Row Based Replication</a></li>
             <li><a href="/user-guide/topology-service.html">Topology Service</a></li>
             <li><a href="/user-guide/transport-security-model.html">Transport Security Model</a></li>
             <li style="padding-bottom: 0"><a href="/user-guide/launching.html">Launching</a>
@@ -129,6 +136,7 @@
                 <li><a href="/user-guide/scalability-philosophy.html">Scalability Philosophy</a></li>
                 <li><a href="/user-guide/production-planning.html">Production Planning</a></li>
                 <li><a href="/user-guide/server-configuration.html">Server Configuration</a></li>
+                <li><a href="/user-guide/twopc.html">2PC Guide</a></li>
                 <li style="padding-bottom: 0"><a href="/user-guide/troubleshooting.html">Troubleshooting</a></li>
               </ul>
             </li>
@@ -147,6 +155,7 @@
           <ul style="display: none">
             <li><a href="/resources/presentations.html">Presentations</a>
             <li><a href="http://blog.vitess.io/">Blog</a>
+            <li><a href="/resources/roadmap.html">Roadmap</a>
           </ul>
         </li>
         <li class="submenu">
@@ -214,15 +223,22 @@
             <li><a href="/user-guide/reparenting.html">Reparenting</a></li>
             <li style="padding-bottom: 0"><a href="/user-guide/schema-management.html">Schema Management</a></li>
               <ul style="display: block">
-                <li style="padding-bottom: 0"><a href="/user-guide/pivot-schema-changes.html">Pivot Schema Changes (Tutorial)</a></li>
+                <li style="padding-bottom: 0"><a href="/user-guide/vschema.html">VSchema Guide</a></li>
+                <li style="padding-bottom: 0"><a href="/user-guide/schema-swap.html">Schema Swap (Tutorial)</a></li>
               </ul>
             <li style="padding-bottom: 0"><a href="/user-guide/sharding.html">Sharding</a>
               <ul style="display: block">
-                <li><a href="/user-guide/horizontal-sharding.html">Horizontal Sharding (Codelab)</a></li>
-                <li style="padding-bottom: 0"><a href="/user-guide/sharding-kubernetes.html">Sharding in Kubernetes (Codelab)</a></li>
+                <li><a href="/user-guide/horizontal-sharding-workflow.html">Horizontal Sharding (Tutorial, automated)</a></li>
+                <li><a href="/user-guide/horizontal-sharding.html">Horizontal Sharding (Tutorial, manual)</a></li>
+                <li><a href="/user-guide/sharding-kubernetes-workflow.html">Sharding in Kubernetes (Tutorial, automated)</a></li>
+                <li style="padding-bottom: 0"><a href="/user-guide/sharding-kubernetes.html">Sharding in Kubernetes (Tutorial, manual)</a></li>
               </ul>
             </li>
+            <li><a href="/user-guide/vitess-sequences.html">Vitess Sequences</a></li>
+            <li><a href="/user-guide/mysql-server-protocol.html">MySQL Server Protocol</a></li>
             <li><a href="/user-guide/vitess-replication.html">Vitess and Replication</a></li>
+            <li><a href="/user-guide/update-stream.html">Update Stream</a></li>
+            <li><a href="/user-guide/row-based-replication.html">Row Based Replication</a></li>
             <li><a href="/user-guide/topology-service.html">Topology Service</a></li>
             <li><a href="/user-guide/transport-security-model.html">Transport Security Model</a></li>
             <li style="padding-bottom: 0"><a href="/user-guide/launching.html">Launching</a>
@@ -230,6 +246,7 @@
                 <li><a href="/user-guide/scalability-philosophy.html">Scalability Philosophy</a></li>
                 <li><a href="/user-guide/production-planning.html">Production Planning</a></li>
                 <li><a href="/user-guide/server-configuration.html">Server Configuration</a></li>
+                <li><a href="/user-guide/twopc.html">2PC Guide</a></li>
                 <li style="padding-bottom: 0"><a href="/user-guide/troubleshooting.html">Troubleshooting</a></li>
               </ul>
             </li>
@@ -248,6 +265,7 @@
           <ul style="display: none">
             <li><a href="/resources/presentations.html">Presentations</a>
             <li><a href="http://blog.vitess.io/">Blog</a>
+            <li><a href="/resources/roadmap.html">Roadmap</a>
           </ul>
         </li>
         <li class="submenu">
@@ -309,8 +327,9 @@ a different keyspace.</li>
 
 <p>With these features, you can start with a single keyspace that contains
 all of your data (in multiple tables). As your database grows, you can
-move tables to different keyspaces and shard some or all of those keyspaces
-without any real downtime for your application.</p>
+move tables to different keyspaces (vertical split) and shard some or
+all of those keyspaces (horizontal split) without any real downtime
+for your application.</p>
 
 <h2 id="range-based-sharding">Range-based Sharding</h2>
 
@@ -375,6 +394,7 @@ value equal to or higher than 0x80 are assigned to the other shard.</p>
 <span class="nv">Start</span><span class="o">=[]</span>, <span class="nv">End</span><span class="o">=[</span>0x80<span class="o">]</span>: Lower half of the Key Range.
 <span class="nv">Start</span><span class="o">=[</span>0x80<span class="o">]</span>, <span class="nv">End</span><span class="o">=[]</span>: Upper half of the Key Range.
 <span class="nv">Start</span><span class="o">=[</span>0x40<span class="o">]</span>, <span class="nv">End</span><span class="o">=[</span>0x80<span class="o">]</span>: Second quarter of the Key Range.
+<span class="nv">Start</span><span class="o">=[</span>0xFF00<span class="o">]</span>, <span class="nv">End</span><span class="o">=[</span>0xFF80<span class="o">]</span>: Second to last 1/512th of the Key Range.
 </code></pre></div>
 <p>Two key ranges are consecutive if the end value of one range equals the
 start value of the other range.</p>
@@ -395,6 +415,16 @@ full partition:</p>
 <li>40-80</li>
 <li>80-c0</li>
 <li>c0-</li>
+</ul>
+
+<p>Shards do not need to handle the same size portion of the key space. For example, the following five shards would also be a valid full partition, albeit with a highly uneven distribution of keys.</p>
+
+<ul>
+<li>-80</li>
+<li>80-c0</li>
+<li>c0-dc00</li>
+<li>dc00-dc80</li>
+<li>dc80-</li>
 </ul>
 
 <h2 id="resharding">Resharding</h2>
@@ -466,7 +496,7 @@ which are just regular SQL statements at this point.</li>
 <li>The <a href="/reference/vtctl.html">vtctl</a> command-line tool supports
 functions for managing keyspaces, shards, tablets, and more.</li>
 <li>Client APIs account for sharding operations.</li>
-<li>The <a href="https://github.com/youtube/vitess/blob/master/java/vtgate-client/src/main/java/com/youtube/vitess/vtgate/hadoop/README.md">MapReduce framework</a>
+<li>The <a href="https://github.com/youtube/vitess/tree/master/java/hadoop/src/main/java/io/vitess/hadoop">MapReduce framework</a>
 fully utilizes key ranges to read data as quickly as possible,
 concurrently from all shards and all replicas.</li>
 </ul>
@@ -495,7 +525,7 @@ a custom sharding scheme. Vitess&#39; tools and processes for automated
 resharding also do not support custom sharding schemes.</p>
 
 <p>If you use a custom sharding scheme, you can still use the
-<a href="https://github.com/youtube/vitess/blob/master/java/vtgate-client/src/main/java/com/youtube/vitess/vtgate/hadoop/README.md">MapReduce framework</a>
+<a href="https://github.com/youtube/vitess/tree/master/java/hadoop/src/main/java/io/vitess/hadoop">MapReduce framework</a>
 to iterate over the data on multiple shards.</p>
 
       </div>
@@ -510,7 +540,7 @@ to iterate over the data on multiple shards.</p>
     
     <a href="https://groups.google.com/forum/#!forum/vitess" target="_blank">Contact: vitess@googlegroups.com</a>&nbsp;&nbsp;<b>·</b>&nbsp;&nbsp;
     <a href="https://groups.google.com/forum/#!forum/vitess-announce" target="_blank">Announcements</a>&nbsp;&nbsp;<b>·</b>&nbsp;&nbsp;
-    &#169; 2016 <a href="/">Vitess</a> powered by <a href="https://developers.google.com/open-source/">Google Inc</a>
+    &#169; 2017 <a href="/">Vitess</a> powered by <a href="https://developers.google.com/open-source/">Google Inc</a>
   </nav>
 </footer>
 

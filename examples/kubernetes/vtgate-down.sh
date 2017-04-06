@@ -4,18 +4,16 @@
 
 set -e
 
-VITESS_NAME=${VITESS_NAME:-'default'}
-CELLS=${CELLS:-'test'}
-cells=`echo $CELLS | tr ',' ' '`
-
 script_root=`dirname "${BASH_SOURCE}"`
 source $script_root/env.sh
 
+cells=`echo $CELLS | tr ',' ' '`
+
 for cell in $cells; do
   echo "Stopping vtgate replicationcontroller in cell $cell..."
-  $KUBECTL delete replicationcontroller vtgate-$cell --namespace=$VITESS_NAME
+  $KUBECTL $KUBECTL_OPTIONS delete replicationcontroller vtgate-$cell
 
   echo "Deleting vtgate service in cell $cell..."
-  $KUBECTL delete service vtgate-$cell --namespace=$VITESS_NAME
+  $KUBECTL $KUBECTL_OPTIONS delete service vtgate-$cell
 done
 

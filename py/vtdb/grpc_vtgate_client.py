@@ -90,17 +90,17 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient,
     cursorclass = kwargs.pop('cursorclass', None) or vtgate_cursor.VTGateCursor
     return cursorclass(self, *pargs, **kwargs)
 
-  def begin(self, effective_caller_id=None):
+  def begin(self, effective_caller_id=None, single_db=False):
     try:
-      request = self.begin_request(effective_caller_id)
+      request = self.begin_request(effective_caller_id, single_db)
       response = self.stub.Begin(request, self.timeout)
       self.update_session(response)
     except (grpc.RpcError, vtgate_utils.VitessError) as e:
       raise _convert_exception(e, 'Begin')
 
-  def commit(self):
+  def commit(self, twopc=False):
     try:
-      request = self.commit_request()
+      request = self.commit_request(twopc)
       self.stub.Commit(request, self.timeout)
     except (grpc.RpcError, vtgate_utils.VitessError) as e:
       raise _convert_exception(e, 'Commit')
@@ -249,6 +249,57 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient,
 
     return row_generator()
 
+  @vtgate_utils.exponential_backoff_retry((dbexceptions.ThrottledError,
+                                           dbexceptions.TransientError))
+  def message_stream(
+      self, keyspace, name,
+      shard=None, key_range=None,
+      effective_caller_id=None,
+      **kwargs):
+
+    try:
+      request = self.message_stream_request(
+          keyspace, shard, key_range,
+          name, effective_caller_id)
+      it = self.stub.MessageStream(request, self.timeout)
+      first_response = it.next()
+    except (grpc.RpcError, vtgate_utils.VitessError) as e:
+      raise _convert_exception(
+          e, 'MessageStream', name=name,
+          keyspace=keyspace)
+
+    fields, convs = self.build_conversions(first_response.result.fields)
+
+    def row_generator():
+      try:
+        for response in it:
+          for row in response.result.rows:
+            yield tuple(proto3_encoding.make_row(row, convs))
+      except Exception:
+        logging.exception('gRPC low-level error')
+        raise
+
+    return row_generator(), fields
+
+  @vtgate_utils.exponential_backoff_retry((dbexceptions.ThrottledError,
+                                           dbexceptions.TransientError))
+  def message_ack(
+      self,
+      name, ids,
+      keyspace=None, effective_caller_id=None,
+      **kwargs):
+
+    try:
+      request = self.message_ack_request(
+          keyspace, name, ids, effective_caller_id)
+      response = self.stub.MessageAck(request, self.timeout)
+    except (grpc.RpcError, vtgate_utils.VitessError) as e:
+      raise _convert_exception(
+          e, 'MessageAck', name=name, ids=ids,
+          keyspace=keyspace)
+
+    return response.result.rows_affected
+
 
 def _convert_exception(exc, *args, **kwargs):
   """This parses the protocol exceptions to the api interface exceptions.
@@ -283,7 +334,7 @@ def _convert_exception(exc, *args, **kwargs):
         if vtgate_utils.throttler_err_re.search(details):
           return dbexceptions.ThrottledError(new_args)
         else:
-          return dbexceptions.TransientError(new_args)
+          return dbexceptions.TransientError(details, new_args)
       elif code == grpc.StatusCode.ALREADY_EXISTS:
         new_exc = _prune_integrity_error(details, new_args)
       elif code == grpc.StatusCode.FAILED_PRECONDITION:

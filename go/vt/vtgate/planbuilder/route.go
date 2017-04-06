@@ -27,7 +27,7 @@ type route struct {
 	IsRHS bool
 	// Select is the AST for the query fragment that will be
 	// executed by this route.
-	Select sqlparser.Select
+	Select sqlparser.SelectStatement
 	order  int
 	symtab *symtab
 	// Colsyms represent the columns returned by this route.
@@ -36,7 +36,7 @@ type route struct {
 	ERoute *engine.Route
 }
 
-func newRoute(from sqlparser.TableExprs, eroute *engine.Route, table *vindexes.Table, vschema VSchema, alias, astName sqlparser.TableIdent) *route {
+func newRoute(stmt sqlparser.SelectStatement, eroute *engine.Route, table *vindexes.Table, vschema VSchema, alias *sqlparser.TableName, astName sqlparser.TableIdent) *route {
 	// We have some circular pointer references here:
 	// The route points to the symtab idicating
 	// the symtab that should be used to resolve symbols
@@ -50,7 +50,7 @@ func newRoute(from sqlparser.TableExprs, eroute *engine.Route, table *vindexes.T
 	// be pointing to a different route. This information is used
 	// to determine if symbol references are local or not.
 	rb := &route{
-		Select: sqlparser.Select{From: from},
+		Select: stmt,
 		symtab: newSymtab(vschema),
 		order:  1,
 		ERoute: eroute,
@@ -113,6 +113,12 @@ func (rb *route) Join(rhs builder, ajoin *sqlparser.JoinTableExpr) (builder, err
 		return rb.merge(rRoute, ajoin)
 	}
 
+	// Both route are sharded routes. For ',' joins (ajoin==nil), don't
+	// analyze mergeability.
+	if ajoin == nil {
+		return newJoin(rb, rRoute, nil)
+	}
+
 	// Both route are sharded routes. Analyze join condition for merging.
 	for _, filter := range splitAndExpression(nil, ajoin.On) {
 		if rb.isSameRoute(rRoute, filter) {
@@ -137,20 +143,30 @@ func (rb *route) SetRHS() {
 
 // merge merges the two routes. The ON clause is also analyzed to
 // see if the primitive can be improved. The operation can fail if
-// the expression contains a non-pushable subquery.
+// the expression contains a non-pushable subquery. ajoin can be nil
+// if the join is on a ',' operator.
 func (rb *route) merge(rhs *route, ajoin *sqlparser.JoinTableExpr) (builder, error) {
-	rb.Select.From = sqlparser.TableExprs{ajoin}
-	if ajoin.Join == sqlparser.LeftJoinStr {
-		rhs.Symtab().SetRHS()
+	sel := rb.Select.(*sqlparser.Select)
+	if ajoin == nil {
+		rhsSel := rhs.Select.(*sqlparser.Select)
+		sel.From = append(sel.From, rhsSel.From...)
+	} else {
+		sel.From = sqlparser.TableExprs{ajoin}
+		if ajoin.Join == sqlparser.LeftJoinStr {
+			rhs.Symtab().SetRHS()
+		}
 	}
 	err := rb.Symtab().Merge(rhs.Symtab())
 	rhs.Redirect = rb
 	if err != nil {
 		return nil, err
 	}
+	if ajoin == nil {
+		return rb, nil
+	}
 	for _, filter := range splitAndExpression(nil, ajoin.On) {
 		// If VTGate evolves, this section should be rewritten
-		// to use processBoolExpr.
+		// to use processExpr.
 		_, err = findRoute(filter, rb)
 		if err != nil {
 			return nil, err
@@ -163,7 +179,7 @@ func (rb *route) merge(rhs *route, ajoin *sqlparser.JoinTableExpr) (builder, err
 // isSameRoute returns true if the join constraint makes the routes
 // mergeable by unique vindex. The constraint has to be an equality
 // like a.id = b.id where both columns have the same unique vindex.
-func (rb *route) isSameRoute(rhs *route, filter sqlparser.BoolExpr) bool {
+func (rb *route) isSameRoute(rhs *route, filter sqlparser.Expr) bool {
 	comparison, ok := filter.(*sqlparser.ComparisonExpr)
 	if !ok {
 		return false
@@ -193,15 +209,16 @@ func (rb *route) isSameRoute(rhs *route, filter sqlparser.BoolExpr) bool {
 
 // PushFilter pushes the filter into the route. The primitive will
 // be updated if the new filter improves it.
-func (rb *route) PushFilter(filter sqlparser.BoolExpr, whereType string) error {
+func (rb *route) PushFilter(filter sqlparser.Expr, whereType string) error {
 	if rb.IsRHS {
-		return errors.New("unsupported: complex left join and where claused")
+		return errors.New("unsupported: complex left join and where clause")
 	}
+	sel := rb.Select.(*sqlparser.Select)
 	switch whereType {
 	case sqlparser.WhereStr:
-		rb.Select.AddWhere(filter)
+		sel.AddWhere(filter)
 	case sqlparser.HavingStr:
-		rb.Select.AddHaving(filter)
+		sel.AddHaving(filter)
 	}
 	rb.UpdatePlan(filter)
 	return nil
@@ -213,7 +230,7 @@ func (rb *route) PushFilter(filter sqlparser.BoolExpr, whereType string) error {
 // the route. This function should only be used when merging
 // routes, where the ON clause gets implicitly pushed into
 // the merged route.
-func (rb *route) UpdatePlan(filter sqlparser.BoolExpr) {
+func (rb *route) UpdatePlan(filter sqlparser.Expr) {
 	opcode, vindex, values := rb.computePlan(filter)
 	if opcode == engine.SelectScatter {
 		return
@@ -256,7 +273,7 @@ func (rb *route) updateRoute(opcode engine.RouteOpcode, vindex vindexes.Vindex, 
 }
 
 // ComputePlan computes the plan for the specified filter.
-func (rb *route) computePlan(filter sqlparser.BoolExpr) (opcode engine.RouteOpcode, vindex vindexes.Vindex, values interface{}) {
+func (rb *route) computePlan(filter sqlparser.Expr) (opcode engine.RouteOpcode, vindex vindexes.Vindex, values interface{}) {
 	switch node := filter.(type) {
 	case *sqlparser.ComparisonExpr:
 		switch node.Operator {
@@ -265,7 +282,7 @@ func (rb *route) computePlan(filter sqlparser.BoolExpr) (opcode engine.RouteOpco
 		case sqlparser.InStr:
 			return rb.computeINPlan(node)
 		}
-	case *sqlparser.ParenBoolExpr:
+	case *sqlparser.ParenExpr:
 		return rb.computePlan(node.Expr)
 	}
 	return engine.SelectScatter, nil, nil
@@ -319,13 +336,8 @@ func (rb *route) PushSelect(expr *sqlparser.NonStarExpr, _ *route) (colsym *cols
 	if col, ok := expr.Expr.(*sqlparser.ColName); ok {
 		// If no alias was specified, then the base name
 		// of the column becomes the alias.
-		if colsym.Alias.Original() == "" {
+		if colsym.Alias.IsEmpty() {
 			colsym.Alias = col.Name
-		}
-		// We should always allow other parts of the query to reference
-		// the fully qualified name of the column.
-		if tab, ok := col.Metadata.(*tabsym); ok {
-			colsym.QualifiedName = sqlparser.NewColIdent(sqlparser.String(tab.Alias) + "." + col.Name.Original())
 		}
 		colsym.Vindex = rb.Symtab().Vindex(col, rb, true)
 		colsym.Underlying = newColref(col)
@@ -338,38 +350,31 @@ func (rb *route) PushSelect(expr *sqlparser.NonStarExpr, _ *route) (colsym *cols
 		// to reference such expressions. So, we leave the
 		// alias blank.
 	}
-	rb.Select.SelectExprs = append(rb.Select.SelectExprs, expr)
+	sel := rb.Select.(*sqlparser.Select)
+	sel.SelectExprs = append(sel.SelectExprs, expr)
 	rb.Colsyms = append(rb.Colsyms, colsym)
 	return colsym, len(rb.Colsyms) - 1, nil
 }
 
 // PushStar pushes the '*' expression into the route.
 func (rb *route) PushStar(expr *sqlparser.StarExpr) *colsym {
+	// We just create a place-holder colsym. It won't
+	// match anything.
 	colsym := newColsym(rb, rb.Symtab())
-	// This is not perfect, but it should be good enough.
-	// We'll match unqualified column names against Alias
-	// and qualified column names against QualifiedName.
-	// If someone uses 'select *' and then uses table.col
-	// in the HAVING clause, then things won't match. But
-	// such cases are easy to correct in the application.
-	if expr.TableName == "" {
-		colsym.Alias = sqlparser.NewColIdent(sqlparser.String(expr))
-	} else {
-		colsym.QualifiedName = sqlparser.NewColIdent(sqlparser.String(expr))
-	}
-	rb.Select.SelectExprs = append(rb.Select.SelectExprs, expr)
+	sel := rb.Select.(*sqlparser.Select)
+	sel.SelectExprs = append(sel.SelectExprs, expr)
 	rb.Colsyms = append(rb.Colsyms, colsym)
 	return colsym
 }
 
 // MakeDistinct sets the DISTINCT property to the select.
 func (rb *route) MakeDistinct() {
-	rb.Select.Distinct = sqlparser.DistinctStr
+	rb.Select.(*sqlparser.Select).Distinct = sqlparser.DistinctStr
 }
 
 // SetGroupBy sets the GROUP BY clause for the route.
 func (rb *route) SetGroupBy(groupBy sqlparser.GroupBy) {
-	rb.Select.GroupBy = groupBy
+	rb.Select.(*sqlparser.Select).GroupBy = groupBy
 }
 
 // AddOrder adds an ORDER BY expression to the route.
@@ -377,19 +382,24 @@ func (rb *route) AddOrder(order *sqlparser.Order) error {
 	if rb.IsRHS {
 		return errors.New("unsupported: complex left join and order by")
 	}
-	rb.Select.OrderBy = append(rb.Select.OrderBy, order)
+	rb.Select.AddOrder(order)
 	return nil
 }
 
 // SetLimit adds a LIMIT clause to the route.
 func (rb *route) SetLimit(limit *sqlparser.Limit) {
-	rb.Select.Limit = limit
+	rb.Select.SetLimit(limit)
+}
+
+// PushOrderByNull updates the comments & 'for update' sections of the route.
+func (rb *route) PushOrderByNull() {
+	rb.Select.(*sqlparser.Select).OrderBy = sqlparser.OrderBy{&sqlparser.Order{Expr: &sqlparser.NullVal{}}}
 }
 
 // PushMisc updates the comments & 'for update' sections of the route.
 func (rb *route) PushMisc(sel *sqlparser.Select) {
-	rb.Select.Comments = sel.Comments
-	rb.Select.Lock = sel.Lock
+	rb.Select.(*sqlparser.Select).Comments = sel.Comments
+	rb.Select.(*sqlparser.Select).Lock = sel.Lock
 }
 
 // Wireup performs the wire-up tasks.
@@ -419,7 +429,7 @@ func (rb *route) Wireup(bldr builder, jt *jointab) error {
 			if len(node.SelectExprs) == 0 {
 				node.SelectExprs = sqlparser.SelectExprs([]sqlparser.SelectExpr{
 					&sqlparser.NonStarExpr{
-						Expr: sqlparser.NumVal([]byte{'1'}),
+						Expr: sqlparser.NewIntVal([]byte{'1'}),
 					},
 				})
 			}
@@ -431,7 +441,7 @@ func (rb *route) Wireup(bldr builder, jt *jointab) error {
 			}
 		}
 		return true, nil
-	}, &rb.Select)
+	}, rb.Select)
 
 	// Generate query while simultaneously resolving values.
 	varFormatter := func(buf *sqlparser.TrackedBuffer, node sqlparser.SQLNode) {
@@ -450,9 +460,9 @@ func (rb *route) Wireup(bldr builder, jt *jointab) error {
 		node.Format(buf)
 	}
 	buf := sqlparser.NewTrackedBuffer(varFormatter)
-	varFormatter(buf, &rb.Select)
+	varFormatter(buf, rb.Select)
 	rb.ERoute.Query = buf.ParsedQuery().Query
-	rb.ERoute.FieldQuery = rb.generateFieldQuery(&rb.Select, jt)
+	rb.ERoute.FieldQuery = rb.generateFieldQuery(rb.Select, jt)
 	return nil
 }
 
@@ -478,7 +488,7 @@ func (rb *route) procureValues(bldr builder, jt *jointab, val interface{}) (inte
 		return ":" + joinVar, nil
 	case sqlparser.ListArg:
 		return string(val), nil
-	case sqlparser.ValExpr:
+	case sqlparser.Expr:
 		return valConvert(val)
 	}
 	panic("unrecognized symbol")
@@ -491,20 +501,9 @@ func (rb *route) isLocal(col *sqlparser.ColName) bool {
 // generateFieldQuery generates a query with an impossible where.
 // This will be used on the RHS node to fetch field info if the LHS
 // returns no result.
-func (rb *route) generateFieldQuery(sel *sqlparser.Select, jt *jointab) string {
+func (rb *route) generateFieldQuery(sel sqlparser.SelectStatement, jt *jointab) string {
 	formatter := func(buf *sqlparser.TrackedBuffer, node sqlparser.SQLNode) {
 		switch node := node.(type) {
-		case *sqlparser.Select:
-			buf.Myprintf("select %v from %v where 1 != 1", node.SelectExprs, node.From)
-			return
-		case *sqlparser.JoinTableExpr:
-			if node.Join == sqlparser.LeftJoinStr || node.Join == sqlparser.RightJoinStr {
-				// ON clause is requried
-				buf.Myprintf("%v %s %v on 1 != 1", node.LeftExpr, node.Join, node.RightExpr)
-			} else {
-				buf.Myprintf("%v %s %v", node.LeftExpr, node.Join, node.RightExpr)
-			}
-			return
 		case *sqlparser.ColName:
 			if !rb.isLocal(node) {
 				_, joinVar := jt.Lookup(node)
@@ -515,11 +514,10 @@ func (rb *route) generateFieldQuery(sel *sqlparser.Select, jt *jointab) string {
 			node.Name.Format(buf)
 			return
 		}
-		node.Format(buf)
+		sqlparser.FormatImpossibleQuery(buf, node)
 	}
-	buf := sqlparser.NewTrackedBuffer(formatter)
-	formatter(buf, sel)
-	return buf.ParsedQuery().Query
+
+	return sqlparser.NewTrackedBuffer(formatter).WriteNode(sel).ParsedQuery().Query
 }
 
 // SupplyVar should be unreachable.
@@ -536,18 +534,15 @@ func (rb *route) SupplyCol(ref colref) int {
 			return i
 		}
 	}
-	ts := ref.Meta.(*tabsym)
-	rb.Colsyms = append(rb.Colsyms, &colsym{
-		Alias:      sqlparser.NewColIdent(string(ts.Alias) + "." + ref.Name),
-		Underlying: ref,
-	})
-	rb.Select.SelectExprs = append(
-		rb.Select.SelectExprs,
+	rb.Colsyms = append(rb.Colsyms, &colsym{Underlying: ref})
+	sel := rb.Select.(*sqlparser.Select)
+	sel.SelectExprs = append(
+		sel.SelectExprs,
 		&sqlparser.NonStarExpr{
 			Expr: &sqlparser.ColName{
 				Metadata:  ref.Meta,
-				Qualifier: &sqlparser.TableName{Name: ts.ASTName},
-				Name:      sqlparser.NewColIdent(ref.Name),
+				Qualifier: &sqlparser.TableName{Name: ref.Meta.(*tabsym).ASTName},
+				Name:      ref.Name(),
 			},
 		},
 	)

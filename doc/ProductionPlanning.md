@@ -67,7 +67,7 @@ Here is a short list of all the basic workflows Vitess supports:
 
 * [Failover / Reparents](http://vitess.io/user-guide/reparenting.html)
 * [Backup/Restore](http://vitess.io/user-guide/backup-and-restore.html)
-* [Schema Management](http://vitess.io/user-guide/schema-management.html) / [Pivot Schema Changes](http://vitess.io/user-guide/pivot-schema-changes.html)
+* [Schema Management](http://vitess.io/user-guide/schema-management.html) / [Schema Swap](http://vitess.io/user-guide/schema-swap.html)
 * [Resharding](http://vitess.io/user-guide/sharding.html) / [Horizontal Resharding Tutorial](http://vitess.io/user-guide/horizontal-sharding.html)
 * [Upgrading](http://vitess.io/user-guide/upgrading.html)
 

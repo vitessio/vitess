@@ -124,7 +124,7 @@ class VTGateClient(object):
     cursorclass = kwargs.pop('cursorclass', None) or vtgate_cursor.VTGateCursor
     return cursorclass(self, *pargs, **kwargs)
 
-  def begin(self, effective_caller_id=None):
+  def begin(self, effective_caller_id=None, single_db=False):
     """Starts a transaction.
 
     FIXME(alainjobart): instead of storing the Session as member variable,
@@ -132,6 +132,7 @@ class VTGateClient(object):
 
     Args:
       effective_caller_id: CallerID Object.
+      single_db: True if single db transaction is needed.
 
     Raises:
       dbexceptions.TimeoutError: for connection timeout.
@@ -146,10 +147,13 @@ class VTGateClient(object):
     """
     raise NotImplementedError('Child class needs to implement this')
 
-  def commit(self):
+  def commit(self, twopc=False):
     """Commits the current transaction.
 
     FIXME(alainjobart): should take the session in.
+
+    Args:
+      twopc: perform 2-phase commit.
 
     Raises:
       dbexceptions.TimeoutError: for connection timeout.
@@ -376,6 +380,61 @@ class VTGateClient(object):
 
     Returns:
       A row generator that returns tuples (event, resume timestamp).
+
+    Raises:
+      dbexceptions.TimeoutError: for connection timeout.
+      dbexceptions.TransientError: the server is overloaded, and this query
+        is asked to back off.
+      dbexceptions.DatabaseError: generic database error.
+      dbexceptions.FatalError: this query should not be retried.
+    """
+    raise NotImplementedError('Child class needs to implement this')
+
+  def message_stream(self,
+                     keyspace, name,
+                     shard=None, key_range=None,
+                     effective_caller_id=None,
+                     **kwargs):
+    """Asks for a message stream.
+
+    Args:
+      keyspace: the keyspace of the message table.
+      name: the name of the message table.
+      shard: the shard name to listen for.
+        Incompatible with key_range.
+      key_range: the key range to listen for.
+        Incompatible with shard.
+      effective_caller_id: CallerID object.
+      **kwargs: implementation specific parameters.
+
+    Returns:
+      A (row generator, fields) pair.
+
+    Raises:
+      dbexceptions.TimeoutError: for connection timeout.
+      dbexceptions.TransientError: the server is overloaded, and this query
+        is asked to back off.
+      dbexceptions.DatabaseError: generic database error.
+      dbexceptions.FatalError: this query should not be retried.
+    """
+    raise NotImplementedError('Child class needs to implement this')
+
+  def message_ack(self,
+                  name, ids,
+                  keyspace=None, effective_caller_id=None,
+                  **kwargs):
+    """Acks a list of messages.
+
+    Args:
+      name: the name of the message table.
+      ids: list of message ids to ack.
+      keyspace: the keyspace of the message table.
+        Not required if table can be auto-resolved.
+      effective_caller_id: CallerID object.
+      **kwargs: implementation specific parameters.
+
+    Returns:
+      The number of rows acked.
 
     Raises:
       dbexceptions.TimeoutError: for connection timeout.

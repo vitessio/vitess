@@ -128,7 +128,7 @@ func TestParsedQuery(t *testing.T) {
 			"select * from a where b = :equality",
 			map[string]interface{}{
 				"equality": TupleEqualityList{
-					Columns: []string{"pk"},
+					Columns: []ColIdent{NewColIdent("pk")},
 					Rows: [][]sqltypes.Value{
 						{sqltypes.MakeTrusted(sqltypes.Int64, []byte("1"))},
 						{sqltypes.MakeString([]byte("aa"))},
@@ -141,7 +141,7 @@ func TestParsedQuery(t *testing.T) {
 			"select * from a where b = :equality",
 			map[string]interface{}{
 				"equality": TupleEqualityList{
-					Columns: []string{"pk1", "pk2"},
+					Columns: []ColIdent{NewColIdent("pk1"), NewColIdent("pk2")},
 					Rows: [][]sqltypes.Value{
 						{
 							sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")),
@@ -160,7 +160,7 @@ func TestParsedQuery(t *testing.T) {
 			"select * from a where b = :equality",
 			map[string]interface{}{
 				"equality": TupleEqualityList{
-					Columns: []string{"pk"},
+					Columns: []ColIdent{NewColIdent("pk")},
 					Rows:    [][]sqltypes.Value{},
 				},
 			},
@@ -170,7 +170,7 @@ func TestParsedQuery(t *testing.T) {
 			"select * from a where b = :equality",
 			map[string]interface{}{
 				"equality": TupleEqualityList{
-					Columns: []string{"pk"},
+					Columns: []ColIdent{NewColIdent("pk")},
 					Rows: [][]sqltypes.Value{
 						{
 							sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")),

@@ -10,16 +10,16 @@ import (
 	"testing"
 	"time"
 
+	"golang.org/x/net/context"
+
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
-	"github.com/youtube/vitess/go/vt/tabletserver/grpcqueryservice"
-	"github.com/youtube/vitess/go/vt/tabletserver/queryservice/fakes"
-	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
+	"github.com/youtube/vitess/go/vt/topo/memorytopo"
+	"github.com/youtube/vitess/go/vt/vttablet/grpcqueryservice"
+	"github.com/youtube/vitess/go/vt/vttablet/queryservice/fakes"
 	"github.com/youtube/vitess/go/vt/wrangler"
 	"github.com/youtube/vitess/go/vt/wrangler/testlib"
-	"github.com/youtube/vitess/go/vt/zktopo/zktestserver"
-	"golang.org/x/net/context"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
@@ -36,7 +36,7 @@ type destinationTabletServer struct {
 	excludedTable string
 }
 
-func (sq *destinationTabletServer) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, options *querypb.ExecuteOptions, sendReply func(reply *sqltypes.Result) error) error {
+func (sq *destinationTabletServer) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, options *querypb.ExecuteOptions, callback func(reply *sqltypes.Result) error) error {
 	if strings.Contains(sql, sq.excludedTable) {
 		sq.t.Errorf("Split Diff operation on destination should skip the excluded table: %v query: %v", sq.excludedTable, sql)
 	}
@@ -48,7 +48,7 @@ func (sq *destinationTabletServer) StreamExecute(ctx context.Context, target *qu
 	sq.t.Logf("destinationTabletServer: got query: %v", sql)
 
 	// Send the headers
-	if err := sendReply(&sqltypes.Result{
+	if err := callback(&sqltypes.Result{
 		Fields: []*querypb.Field{
 			{
 				Name: "id",
@@ -74,7 +74,7 @@ func (sq *destinationTabletServer) StreamExecute(ctx context.Context, target *qu
 		if i%2 == 1 {
 			continue
 		}
-		if err := sendReply(&sqltypes.Result{
+		if err := callback(&sqltypes.Result{
 			Rows: [][]sqltypes.Value{
 				{
 					sqltypes.MakeString([]byte(fmt.Sprintf("%v", i))),
@@ -98,14 +98,14 @@ type sourceTabletServer struct {
 	v3            bool
 }
 
-func (sq *sourceTabletServer) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, options *querypb.ExecuteOptions, sendReply func(reply *sqltypes.Result) error) error {
+func (sq *sourceTabletServer) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, options *querypb.ExecuteOptions, callback func(reply *sqltypes.Result) error) error {
 	if strings.Contains(sql, sq.excludedTable) {
 		sq.t.Errorf("Split Diff operation on source should skip the excluded table: %v query: %v", sq.excludedTable, sql)
 	}
 
 	// we test for a keyspace_id where clause, except for v3
 	if !sq.v3 {
-		if hasKeyspace := strings.Contains(sql, "WHERE `keyspace_id` < 0x4000000000000000"); hasKeyspace != true {
+		if hasKeyspace := strings.Contains(sql, "WHERE `keyspace_id` < 4611686018427387904"); hasKeyspace != true {
 			sq.t.Errorf("Sql query on source should contain a keyspace_id WHERE clause; query received: %v", sql)
 		}
 	}
@@ -113,7 +113,7 @@ func (sq *sourceTabletServer) StreamExecute(ctx context.Context, target *querypb
 	sq.t.Logf("sourceTabletServer: got query: %v", sql)
 
 	// Send the headers
-	if err := sendReply(&sqltypes.Result{
+	if err := callback(&sqltypes.Result{
 		Fields: []*querypb.Field{
 			{
 				Name: "id",
@@ -139,7 +139,7 @@ func (sq *sourceTabletServer) StreamExecute(ctx context.Context, target *querypb
 			// for v2, filtering is done at SQL layer
 			continue
 		}
-		if err := sendReply(&sqltypes.Result{
+		if err := callback(&sqltypes.Result{
 			Rows: [][]sqltypes.Value{
 				{
 					sqltypes.MakeString([]byte(fmt.Sprintf("%v", i))),
@@ -158,8 +158,7 @@ func (sq *sourceTabletServer) StreamExecute(ctx context.Context, target *querypb
 
 func testSplitDiff(t *testing.T, v3 bool) {
 	*useV3ReshardingMode = v3
-	db := fakesqldb.Register()
-	ts := zktestserver.New(t, []string{"cell1", "cell2"})
+	ts := memorytopo.NewServer("cell1", "cell2")
 	ctx := context.Background()
 	wi := NewInstance(ts, "cell1", time.Second)
 
@@ -199,18 +198,18 @@ func testSplitDiff(t *testing.T, v3 bool) {
 	}
 
 	sourceMaster := testlib.NewFakeTablet(t, wi.wr, "cell1", 0,
-		topodatapb.TabletType_MASTER, db, testlib.TabletKeyspaceShard(t, "ks", "-80"))
+		topodatapb.TabletType_MASTER, nil, testlib.TabletKeyspaceShard(t, "ks", "-80"))
 	sourceRdonly1 := testlib.NewFakeTablet(t, wi.wr, "cell1", 1,
-		topodatapb.TabletType_RDONLY, db, testlib.TabletKeyspaceShard(t, "ks", "-80"))
+		topodatapb.TabletType_RDONLY, nil, testlib.TabletKeyspaceShard(t, "ks", "-80"))
 	sourceRdonly2 := testlib.NewFakeTablet(t, wi.wr, "cell1", 2,
-		topodatapb.TabletType_RDONLY, db, testlib.TabletKeyspaceShard(t, "ks", "-80"))
+		topodatapb.TabletType_RDONLY, nil, testlib.TabletKeyspaceShard(t, "ks", "-80"))
 
 	leftMaster := testlib.NewFakeTablet(t, wi.wr, "cell1", 10,
-		topodatapb.TabletType_MASTER, db, testlib.TabletKeyspaceShard(t, "ks", "-40"))
+		topodatapb.TabletType_MASTER, nil, testlib.TabletKeyspaceShard(t, "ks", "-40"))
 	leftRdonly1 := testlib.NewFakeTablet(t, wi.wr, "cell1", 11,
-		topodatapb.TabletType_RDONLY, db, testlib.TabletKeyspaceShard(t, "ks", "-40"))
+		topodatapb.TabletType_RDONLY, nil, testlib.TabletKeyspaceShard(t, "ks", "-40"))
 	leftRdonly2 := testlib.NewFakeTablet(t, wi.wr, "cell1", 12,
-		topodatapb.TabletType_RDONLY, db, testlib.TabletKeyspaceShard(t, "ks", "-40"))
+		topodatapb.TabletType_RDONLY, nil, testlib.TabletKeyspaceShard(t, "ks", "-40"))
 
 	for _, ft := range []*testlib.FakeTablet{sourceMaster, sourceRdonly1, sourceRdonly2, leftMaster, leftRdonly1, leftRdonly2} {
 		ft.StartActionLoop(t, wi.wr)

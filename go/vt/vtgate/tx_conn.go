@@ -5,10 +5,6 @@
 package vtgate
 
 import (
-	"errors"
-	"fmt"
-	"strconv"
-	"strings"
 	"sync"
 
 	"golang.org/x/net/context"
@@ -16,11 +12,11 @@ import (
 	log "github.com/golang/glog"
 
 	"github.com/youtube/vitess/go/vt/concurrency"
+	"github.com/youtube/vitess/go/vt/dtids"
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vtgate/gateway"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	vtgatepb "github.com/youtube/vitess/go/vt/proto/vtgate"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
@@ -39,11 +35,13 @@ func NewTxConn(gw gateway.Gateway) *TxConn {
 // is used to ensure atomicity.
 func (txc *TxConn) Commit(ctx context.Context, twopc bool, session *SafeSession) error {
 	if session == nil {
-		return vterrors.FromError(vtrpcpb.ErrorCode_BAD_INPUT, errors.New("cannot commit: empty session"))
+		return vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "cannot commit: empty session")
 	}
 	if !session.InTransaction() {
-		return vterrors.FromError(vtrpcpb.ErrorCode_NOT_IN_TX, errors.New("cannot commit: not in transaction"))
+		return vterrors.New(vtrpcpb.Code_ABORTED, "cannot commit: not in transaction")
 	}
+	defer session.Reset()
+
 	if twopc {
 		return txc.commit2PC(ctx, session)
 	}
@@ -62,7 +60,6 @@ func (txc *TxConn) commitNormal(ctx context.Context, session *SafeSession) error
 			committing = false
 		}
 	}
-	session.Reset()
 	return err
 }
 
@@ -77,7 +74,7 @@ func (txc *TxConn) commit2PC(ctx context.Context, session *SafeSession) error {
 		participants = append(participants, s.Target)
 	}
 	mmShard := session.ShardSessions[0]
-	dtid := txc.generateDTID(mmShard)
+	dtid := dtids.New(mmShard)
 	err := txc.gateway.CreateTransaction(ctx, mmShard.Target, dtid, participants)
 	if err != nil {
 		// Normal rollback is safe because nothing was prepared yet.
@@ -91,7 +88,7 @@ func (txc *TxConn) commit2PC(ctx context.Context, session *SafeSession) error {
 	if err != nil {
 		// TODO(sougou): Perform a more fine-grained cleanup
 		// including unprepared transactions.
-		if resumeErr := txc.Resume(ctx, dtid); resumeErr != nil {
+		if resumeErr := txc.Resolve(ctx, dtid); resumeErr != nil {
 			log.Warningf("Rollback failed after Prepare failure: %v", resumeErr)
 		}
 		// Return the original error even if the previous operation fails.
@@ -110,34 +107,24 @@ func (txc *TxConn) commit2PC(ctx context.Context, session *SafeSession) error {
 		return err
 	}
 
-	return txc.gateway.ResolveTransaction(ctx, mmShard.Target, dtid)
+	return txc.gateway.ConcludeTransaction(ctx, mmShard.Target, dtid)
 }
 
 // Rollback rolls back the current transaction. There are no retries on this operation.
 func (txc *TxConn) Rollback(ctx context.Context, session *SafeSession) error {
-	if session == nil {
+	if !session.InTransaction() {
 		return nil
 	}
 	defer session.Reset()
+
 	return txc.runSessions(session.ShardSessions, func(s *vtgatepb.Session_ShardSession) error {
 		return txc.gateway.Rollback(ctx, s.Target, s.TransactionId)
 	})
 }
 
-// RollbackIfNeeded rolls back the current transaction if the error implies that the
-// transaction can never be completed.
-func (txc *TxConn) RollbackIfNeeded(ctx context.Context, err error, session *SafeSession) {
-	if session.InTransaction() {
-		ec := vterrors.RecoverVtErrorCode(err)
-		if ec == vtrpcpb.ErrorCode_RESOURCE_EXHAUSTED || ec == vtrpcpb.ErrorCode_NOT_IN_TX {
-			txc.Rollback(ctx, session)
-		}
-	}
-}
-
-// Resume resumes the specified 2PC transaction.
-func (txc *TxConn) Resume(ctx context.Context, dtid string) error {
-	mmShard, err := txc.dtidToShardSession(dtid)
+// Resolve resolves the specified 2PC transaction.
+func (txc *TxConn) Resolve(ctx context.Context, dtid string) error {
+	mmShard, err := dtids.ShardSession(dtid)
 	if err != nil {
 		return err
 	}
@@ -168,7 +155,7 @@ func (txc *TxConn) Resume(ctx context.Context, dtid string) error {
 		}
 	default:
 		// Should never happen.
-		return vterrors.FromError(vtrpcpb.ErrorCode_INTERNAL_ERROR, fmt.Errorf("invalid state: %v", transaction.State))
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid state: %v", transaction.State)
 	}
 	return nil
 }
@@ -180,7 +167,7 @@ func (txc *TxConn) resumeRollback(ctx context.Context, target *querypb.Target, t
 	if err != nil {
 		return err
 	}
-	return txc.gateway.ResolveTransaction(ctx, target, transaction.Dtid)
+	return txc.gateway.ConcludeTransaction(ctx, target, transaction.Dtid)
 }
 
 func (txc *TxConn) resumeCommit(ctx context.Context, target *querypb.Target, transaction *querypb.TransactionMetadata) error {
@@ -190,31 +177,7 @@ func (txc *TxConn) resumeCommit(ctx context.Context, target *querypb.Target, tra
 	if err != nil {
 		return err
 	}
-	return txc.gateway.ResolveTransaction(ctx, target, transaction.Dtid)
-}
-
-func (txc *TxConn) generateDTID(mmShard *vtgatepb.Session_ShardSession) string {
-	return fmt.Sprintf("%s:%s:0:%d", mmShard.Target.Keyspace, mmShard.Target.Shard, mmShard.TransactionId)
-}
-
-func (txc *TxConn) dtidToShardSession(dtid string) (*vtgatepb.Session_ShardSession, error) {
-	splits := strings.Split(dtid, ":")
-	if len(splits) != 4 {
-		return nil, vterrors.FromError(vtrpcpb.ErrorCode_BAD_INPUT, fmt.Errorf("invalid parts in dtid: %s", dtid))
-	}
-	target := &querypb.Target{
-		Keyspace:   splits[0],
-		Shard:      splits[1],
-		TabletType: topodatapb.TabletType_MASTER,
-	}
-	txid, err := strconv.ParseInt(splits[3], 10, 0)
-	if err != nil {
-		return nil, vterrors.FromError(vtrpcpb.ErrorCode_BAD_INPUT, fmt.Errorf("invalid transaction id in dtid: %s", dtid))
-	}
-	return &vtgatepb.Session_ShardSession{
-		Target:        target,
-		TransactionId: txid,
-	}, nil
+	return txc.gateway.ConcludeTransaction(ctx, target, transaction.Dtid)
 }
 
 // runSessions executes the action for all shardSessions in parallel and returns a consolildated error.
@@ -236,7 +199,7 @@ func (txc *TxConn) runSessions(shardSessions []*vtgatepb.Session_ShardSession, a
 		}(s)
 	}
 	wg.Wait()
-	return allErrors.AggrError(aggregateTxConnErrors)
+	return allErrors.AggrError(vterrors.Aggregate)
 }
 
 // runTargets executes the action for all targets in parallel and returns a consolildated error.
@@ -257,13 +220,5 @@ func (txc *TxConn) runTargets(targets []*querypb.Target, action func(*querypb.Ta
 		}(t)
 	}
 	wg.Wait()
-	return allErrors.AggrError(aggregateTxConnErrors)
-}
-
-func aggregateTxConnErrors(errors []error) error {
-	return &ScatterConnError{
-		Retryable:  false,
-		Errs:       errors,
-		serverCode: vterrors.AggregateVtGateErrorCodes(errors),
-	}
+	return allErrors.AggrError(vterrors.Aggregate)
 }

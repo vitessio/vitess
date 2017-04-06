@@ -39,24 +39,8 @@ def setUpModule():
 
     utils.run_vtctl(['CreateKeyspace', test_keyspace])
 
-    shard_0_master.init_tablet('replica', test_keyspace, '0')
-    shard_0_replica1.init_tablet('replica', test_keyspace, '0')
-    shard_0_replica2.init_tablet('replica', test_keyspace, '0')
-    shard_0_rdonly.init_tablet('rdonly', test_keyspace, '0')
-    shard_0_backup.init_tablet('backup', test_keyspace, '0')
-    shard_1_master.init_tablet('replica', test_keyspace, '1')
-    shard_1_replica1.init_tablet('replica', test_keyspace, '1')
-
     utils.Vtctld().start(enable_schema_change_dir=True)
 
-    # create databases, start the tablets
-    for t in initial_tablets:
-      t.create_db(db_name)
-      t.start_vttablet(wait_for_state=None)
-
-    # wait for the tablets to start
-    for t in initial_tablets:
-      t.wait_for_vttablet_state('NOT_SERVING')
   except Exception as setup_exception:  # pylint: disable=broad-except
     try:
       tearDownModule()
@@ -108,8 +92,6 @@ def tearDownModule():
   if utils.options.skip_teardown:
     return
 
-  tablet.kill_tablets(initial_tablets)
-
   teardown_procs = []
   for t in all_tablets:
     teardown_procs.append(t.teardown_mysql())
@@ -126,8 +108,22 @@ def tearDownModule():
 class TestSchema(unittest.TestCase):
 
   def setUp(self):
+    shard_0_master.init_tablet('replica', test_keyspace, '0')
+    shard_0_replica1.init_tablet('replica', test_keyspace, '0')
+    shard_0_replica2.init_tablet('replica', test_keyspace, '0')
+    shard_0_rdonly.init_tablet('rdonly', test_keyspace, '0')
+    shard_0_backup.init_tablet('backup', test_keyspace, '0')
+    shard_1_master.init_tablet('replica', test_keyspace, '1')
+    shard_1_replica1.init_tablet('replica', test_keyspace, '1')
+
+    # create databases, start the tablets
     for t in initial_tablets:
       t.create_db(db_name)
+      t.start_vttablet(wait_for_state=None)
+
+    # wait for the tablets to start
+    for t in initial_tablets:
+      t.wait_for_vttablet_state('NOT_SERVING')
 
     utils.run_vtctl(['InitShardMaster', '-force', test_keyspace + '/0',
                      shard_0_master.tablet_alias], auto_log=True)
@@ -135,12 +131,18 @@ class TestSchema(unittest.TestCase):
                      shard_1_master.tablet_alias], auto_log=True)
 
   def tearDown(self):
-    # This test assumes that it can reset the tablets by simply cleaning their
-    # databases without restarting the tablets.
+    # kill all tablets
+    tablet.kill_tablets(initial_tablets)
+
     for t in initial_tablets:
       t.reset_replication()
       t.set_semi_sync_enabled(master=False)
       t.clean_dbs()
+
+    utils.run_vtctl(['DeleteShard', '-recursive', '-even_if_serving',
+                     test_keyspace + '/0'], auto_log=True)
+    utils.run_vtctl(['DeleteShard', '-recursive', '-even_if_serving',
+                     test_keyspace + '/1'], auto_log=True)
 
   def _check_tables(self, tablet_obj, expected_count):
     tables = tablet_obj.mquery(db_name, 'show tables')

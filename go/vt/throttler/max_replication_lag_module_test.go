@@ -902,6 +902,33 @@ func TestMaxReplicationLagModule_EmergencyDoesNotChangeBadValues(t *testing.T) {
 	}
 }
 
+func TestMaxReplicationLagModule_NoIncreaseIfMaxRateWasNotApproached(t *testing.T) {
+	config := NewMaxReplicationLagModuleConfig(5)
+	tf, err := newTestFixture(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// r1 @  20s, 0s lag
+	// This lag record is required in the next step to correctly calculate how
+	// much r1 lags behind due to the rate increase.
+	tf.process(lagRecord(sinceZero(20*time.Second), r1, 0))
+	if err := tf.checkState(stateIncreaseRate, 100, sinceZero(1*time.Second)); err != nil {
+		t.Fatal(err)
+	}
+
+	// Master gets 10 QPS in second 69.
+	// r1 @  70s, 0s lag.
+	// Rate does not double to 200 as it does in the other tests because
+	// the actual rate is much smaller than the current rate of 100.
+	tf.ratesHistory.add(sinceZero(69*time.Second), 10)
+	tf.process(lagRecord(sinceZero(70*time.Second), r1, 0))
+	// r1 becomes the "replica under test".
+	if err := tf.checkState(stateIncreaseRate, 100, sinceZero(1*time.Second)); err != nil {
+		t.Fatal(err)
+	}
+}
+
 // lagRecord creates a fake record using a fake TabletStats object.
 func lagRecord(t time.Time, uid, lag uint32) replicationLagRecord {
 	return replicationLagRecord{t, tabletStats(uid, lag)}

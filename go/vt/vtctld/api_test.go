@@ -11,8 +11,8 @@ import (
 
 	"golang.org/x/net/context"
 
+	"github.com/youtube/vitess/go/vt/topo/memorytopo"
 	"github.com/youtube/vitess/go/vt/wrangler"
-	"github.com/youtube/vitess/go/vt/zktopo/zktestserver"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
@@ -26,7 +26,7 @@ func compactJSON(in []byte) string {
 func TestAPI(t *testing.T) {
 	ctx := context.Background()
 	cells := []string{"cell1", "cell2"}
-	ts := zktestserver.New(t, cells)
+	ts := memorytopo.NewServer(cells...)
 	actionRepo := NewActionRepository(ts)
 	server := httptest.NewServer(nil)
 	defer server.Close()
@@ -229,7 +229,7 @@ func TestAPI(t *testing.T) {
 		// vtctl RunCommand
 		{"POST", "vtctl/", `["GetKeyspace","ks1"]`, `{
 		   "Error": "",
-		   "Output": "{\n  \"sharding_column_name\": \"shardcol\"\n}\n\n"
+		   "Output": "{\n  \"sharding_column_name\": \"shardcol\",\n  \"sharding_column_type\": 0\n}\n\n"
 		}`},
 		{"POST", "vtctl/", `["GetKeyspace","does_not_exist"]`, `{
 		   "Error": "node doesn't exist",

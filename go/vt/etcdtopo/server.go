@@ -43,9 +43,6 @@ type Server struct {
 	// cell from the global cluster and create clients as needed.
 	_cells      map[string]*cellClient
 	_cellsMutex sync.Mutex
-
-	// newClient is the function this server uses to create a new Client.
-	newClient func(machines []string) Client
 }
 
 // Close implements topo.Server.
@@ -64,11 +61,12 @@ func (s *Server) GetKnownCells(ctx context.Context) ([]string, error) {
 // NewServer returns a new etcdtopo.Server.
 func NewServer() *Server {
 	return &Server{
-		_cells:    make(map[string]*cellClient),
-		newClient: newEtcdClient,
+		_cells: make(map[string]*cellClient),
 	}
 }
 
 func init() {
-	topo.RegisterServer("etcd", NewServer())
+	topo.RegisterFactory("etcd", func(serverAddr, root string) (topo.Impl, error) {
+		return NewServer(), nil
+	})
 }

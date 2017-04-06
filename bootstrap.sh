@@ -45,7 +45,7 @@ if [ -f $zk_dist/.build_finished ]; then
 else
   rm -rf $zk_dist
   (cd $VTROOT/dist && \
-    wget http://archive.apache.org/dist/zookeeper/zookeeper-$zk_ver/zookeeper-$zk_ver.tar.gz && \
+    wget http://apache.org/dist/zookeeper/zookeeper-$zk_ver/zookeeper-$zk_ver.tar.gz && \
     tar -xzf zookeeper-$zk_ver.tar.gz && \
     mkdir -p $zk_dist/lib && \
     cp zookeeper-$zk_ver/contrib/fatjar/zookeeper-$zk_ver-fatjar.jar $zk_dist/lib && \
@@ -53,6 +53,42 @@ else
   [ $? -eq 0 ] || fail "zookeeper build failed"
   touch $zk_dist/.build_finished
 fi
+
+# Download and install etcd, link etcd binary into our root.
+etcd_version=v3.1.0-rc.1
+etcd_dist=$VTROOT/dist/etcd
+etcd_version_file=$etcd_dist/version
+if [[ -f $etcd_version_file && "$(cat $etcd_version_file)" == "$etcd_version" ]]; then
+  echo "skipping etcd install. remove $etcd_version_file to force re-install."
+else
+  rm -rf $etcd_dist
+  mkdir -p $etcd_dist
+  download_url=https://github.com/coreos/etcd/releases/download
+  (cd $etcd_dist && \
+    wget ${download_url}/${etcd_version}/etcd-${etcd_version}-linux-amd64.tar.gz && \
+    tar xzf etcd-${etcd_version}-linux-amd64.tar.gz)
+  [ $? -eq 0 ] || fail "etcd download failed"
+  echo "$etcd_version" > $etcd_version_file
+fi
+ln -snf $etcd_dist/etcd-${etcd_version}-linux-amd64/etcd $VTROOT/bin/etcd
+
+# Download and install consul, link consul binary into our root.
+consul_version=0.7.2
+consul_dist=$VTROOT/dist/consul
+consul_version_file=$consul_dist/version
+if [[ -f $consul_version_file && "$(cat $consul_version_file)" == "$consul_version" ]]; then
+  echo "skipping consul install. remove $consul_version_file to force re-install."
+else
+  rm -rf $consul_dist
+  mkdir -p $consul_dist
+  download_url=https://releases.hashicorp.com/consul
+  (cd $consul_dist && \
+    wget ${download_url}/${consul_version}/consul_${consul_version}_linux_amd64.zip && \
+    unzip consul_${consul_version}_linux_amd64.zip)
+  [ $? -eq 0 ] || fail "consul download failed"
+  echo "$consul_version" > $consul_version_file
+fi
+ln -snf $consul_dist/consul $VTROOT/bin/consul
 
 # install gRPC C++ base, so we can install the python adapters.
 # this also installs protobufs
@@ -93,16 +129,17 @@ fi
 #
 # DO NOT ADD LIBRARY DEPENDENCIES HERE. Instead use govendor as described below.
 #
+# Note: We explicitly do not vendor the tools below because a) we want to stay
+# their latest version and b) it's easier to "go install" them this way.
 gotools=" \
        github.com/golang/lint/golint \
        github.com/golang/mock/mockgen \
        github.com/kardianos/govendor \
        golang.org/x/tools/cmd/goimports \
-       honnef.co/go/unused/cmd/unused \
+       golang.org/x/tools/cmd/goyacc \
+       honnef.co/go/tools/cmd/unused \
 "
 
-# Tools for uploading code coverage to coveralls.io (used by Travis CI).
-gotools+=" github.com/modocache/gover github.com/mattn/goveralls"
 # The cover tool needs to be installed into the Go toolchain, so it will fail
 # if Go is installed somewhere that requires root access.
 source tools/shell_functions.inc
@@ -135,6 +172,8 @@ ln -snf $VTTOP/data $VTROOT/data
 ln -snf $VTTOP/py $VTROOT/py-vtdb
 ln -snf $VTTOP/go/zk/zkctl/zksrv.sh $VTROOT/bin/zksrv.sh
 ln -snf $VTTOP/test/vthook-test.sh $VTROOT/vthook/test.sh
+ln -snf $VTTOP/test/vthook-test_backup_error $VTROOT/vthook/test_backup_error
+ln -snf $VTTOP/test/vthook-test_backup_transform $VTROOT/vthook/test_backup_transform
 
 # find mysql and prepare to use libmysqlclient
 if [ -z "$MYSQL_FLAVOR" ]; then
@@ -197,25 +236,29 @@ else
   cd $VTTOP/third_party/py && \
     tar -xzf mock-1.0.1.tar.gz && \
     cd mock-1.0.1 && \
-    python ./setup.py install --prefix=$mock_dist && \
+    $PYTHON ./setup.py install --prefix=$mock_dist && \
     touch $mock_dist/.build_finished && \
     cd .. && \
     rm -r mock-1.0.1
 fi
 
-# create pre-commit hooks
-echo "creating git pre-commit hooks"
+# Create the Git hooks.
+echo "creating git hooks"
 mkdir -p $VTTOP/.git/hooks
 ln -sf $VTTOP/misc/git/pre-commit $VTTOP/.git/hooks/pre-commit
+ln -sf $VTTOP/misc/git/prepare-commit-msg.bugnumber $VTTOP/.git/hooks/prepare-commit-msg
+ln -sf $VTTOP/misc/git/commit-msg.bugnumber $VTTOP/.git/hooks/commit-msg
+(cd $VTTOP && git config core.hooksPath $VTTOP/.git/hooks)
 
 # Download chromedriver
 echo "Installing selenium and chromedriver"
 selenium_dist=$VTROOT/dist/selenium
 mkdir -p $selenium_dist
-virtualenv $selenium_dist
-$selenium_dist/bin/pip install selenium
+$VIRTUALENV $selenium_dist
+PIP=$selenium_dist/bin/pip
+$PIP install selenium
 mkdir -p $VTROOT/dist/chromedriver
-curl -sL http://chromedriver.storage.googleapis.com/2.24/chromedriver_linux64.zip > chromedriver_linux64.zip
+curl -sL http://chromedriver.storage.googleapis.com/2.25/chromedriver_linux64.zip > chromedriver_linux64.zip
 unzip -o -q chromedriver_linux64.zip -d $VTROOT/dist/chromedriver
 rm chromedriver_linux64.zip
 

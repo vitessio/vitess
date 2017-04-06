@@ -6,6 +6,7 @@ package worker
 
 import (
 	"bytes"
+	"encoding/binary"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -19,10 +20,11 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/logutil"
-	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
+	"github.com/youtube/vitess/go/vt/vttablet/queryservice"
+	"github.com/youtube/vitess/go/vt/vttablet/tabletconn"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
@@ -36,7 +38,7 @@ import (
 type QueryResultReader struct {
 	output sqltypes.ResultStream
 	fields []*querypb.Field
-	conn   tabletconn.TabletConn
+	conn   queryservice.QueryService
 }
 
 // NewQueryResultReaderForTablet creates a new QueryResultReader for
@@ -54,14 +56,11 @@ func NewQueryResultReaderForTablet(ctx context.Context, ts topo.Server, tabletAl
 		return nil, err
 	}
 
-	stream, err := conn.StreamExecute(ctx, &querypb.Target{
+	stream := queryservice.ExecuteWithStreamer(ctx, conn, &querypb.Target{
 		Keyspace:   tablet.Tablet.Keyspace,
 		Shard:      tablet.Tablet.Shard,
 		TabletType: tablet.Tablet.Type,
 	}, sql, make(map[string]interface{}), nil)
-	if err != nil {
-		return nil, err
-	}
 
 	// read the columns, or grab the error
 	cols, err := stream.Recv()
@@ -165,11 +164,13 @@ func orderedColumnsHelper(td *tabletmanagerdatapb.TableDefinition, includePrimar
 	return result
 }
 
-// uint64FromKeyspaceID returns a 64 bits hex number as a string
-// (in the form of 0x0123456789abcdef) from the provided keyspaceId
-func uint64FromKeyspaceID(keyspaceID []byte) string {
-	hex := hex.EncodeToString(keyspaceID)
-	return "0x" + hex + strings.Repeat("0", 16-len(hex))
+// uint64FromKeyspaceID returns the 64 bit number representation
+// of the keyspaceID.
+func uint64FromKeyspaceID(keyspaceID []byte) uint64 {
+	// Copy into 8 bytes because keyspaceID could be shorter.
+	bits := make([]byte, 8)
+	copy(bits, keyspaceID)
+	return binary.BigEndian.Uint64(bits)
 }
 
 // TableScan returns a QueryResultReader that gets all the rows from a

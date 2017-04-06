@@ -89,11 +89,12 @@ func TestCopy(t *testing.T) {
 	}
 }
 
-func TestStripFieldNames(t *testing.T) {
+func TestStripMetaData(t *testing.T) {
 	testcases := []struct {
-		name     string
-		in       *Result
-		expected *Result
+		name           string
+		in             *Result
+		expected       *Result
+		includedFields querypb.ExecuteOptions_IncludedFields
 	}{{
 		name:     "no fields",
 		in:       &Result{},
@@ -107,7 +108,8 @@ func TestStripFieldNames(t *testing.T) {
 			Fields: []*querypb.Field{},
 		},
 	}, {
-		name: "no name",
+		name:           "no name",
+		includedFields: querypb.ExecuteOptions_TYPE_ONLY,
 		in: &Result{
 			Fields: []*querypb.Field{{
 				Type: Int64,
@@ -123,7 +125,8 @@ func TestStripFieldNames(t *testing.T) {
 			}},
 		},
 	}, {
-		name: "names",
+		name:           "names",
+		includedFields: querypb.ExecuteOptions_TYPE_ONLY,
 		in: &Result{
 			Fields: []*querypb.Field{{
 				Name: "field1",
@@ -140,22 +143,138 @@ func TestStripFieldNames(t *testing.T) {
 				Type: VarChar,
 			}},
 		},
+	}, {
+		name:           "all fields - strip to type",
+		includedFields: querypb.ExecuteOptions_TYPE_ONLY,
+		in: &Result{
+			Fields: []*querypb.Field{{
+				Name:         "field1",
+				Table:        "table1",
+				OrgTable:     "orgtable1",
+				OrgName:      "orgname1",
+				ColumnLength: 5,
+				Charset:      63,
+				Decimals:     0,
+				Flags:        2,
+				Type:         Int64,
+			}, {
+				Name:         "field2",
+				Table:        "table2",
+				OrgTable:     "orgtable2",
+				OrgName:      "orgname2",
+				ColumnLength: 5,
+				Charset:      63,
+				Decimals:     0,
+				Flags:        2,
+				Type:         VarChar,
+			}},
+		},
+		expected: &Result{
+			Fields: []*querypb.Field{{
+				Type: Int64,
+			}, {
+				Type: VarChar,
+			}},
+		},
+	}, {
+		name:           "all fields - not stripped",
+		includedFields: querypb.ExecuteOptions_ALL,
+		in: &Result{
+			Fields: []*querypb.Field{{
+				Name:         "field1",
+				Table:        "table1",
+				OrgTable:     "orgtable1",
+				OrgName:      "orgname1",
+				ColumnLength: 5,
+				Charset:      63,
+				Decimals:     0,
+				Flags:        2,
+				Type:         Int64,
+			}, {
+				Name:         "field2",
+				Table:        "table2",
+				OrgTable:     "orgtable2",
+				OrgName:      "orgname2",
+				ColumnLength: 5,
+				Charset:      63,
+				Decimals:     0,
+				Flags:        2,
+				Type:         VarChar,
+			}},
+		},
+		expected: &Result{
+			Fields: []*querypb.Field{{
+				Name:         "field1",
+				Table:        "table1",
+				OrgTable:     "orgtable1",
+				OrgName:      "orgname1",
+				ColumnLength: 5,
+				Charset:      63,
+				Decimals:     0,
+				Flags:        2,
+				Type:         Int64,
+			}, {
+				Name:         "field2",
+				Table:        "table2",
+				OrgTable:     "orgtable2",
+				OrgName:      "orgname2",
+				ColumnLength: 5,
+				Charset:      63,
+				Decimals:     0,
+				Flags:        2,
+				Type:         VarChar,
+			}},
+		},
+	}, {
+		name: "all fields - strip to type and name",
+		in: &Result{
+			Fields: []*querypb.Field{{
+				Name:         "field1",
+				Table:        "table1",
+				OrgTable:     "orgtable1",
+				OrgName:      "orgname1",
+				ColumnLength: 5,
+				Charset:      63,
+				Decimals:     0,
+				Flags:        2,
+				Type:         Int64,
+			}, {
+				Name:         "field2",
+				Table:        "table2",
+				OrgTable:     "orgtable2",
+				OrgName:      "orgname2",
+				ColumnLength: 5,
+				Charset:      63,
+				Decimals:     0,
+				Flags:        2,
+				Type:         VarChar,
+			}},
+		},
+		expected: &Result{
+			Fields: []*querypb.Field{{
+				Name: "field1",
+				Type: Int64,
+			}, {
+				Name: "field2",
+				Type: VarChar,
+			}},
+		},
 	}}
 	for _, tcase := range testcases {
 		inCopy := tcase.in.Copy()
-		out := inCopy.StripFieldNames()
+		out := inCopy.StripMetadata(tcase.includedFields)
 		if !reflect.DeepEqual(out, tcase.expected) {
-			t.Errorf("StripFieldNames unexpected result for %v: %v", tcase.name, out)
+			t.Errorf("StripMetaData unexpected result for %v: %v", tcase.name, out)
 		}
 		if len(tcase.in.Fields) > 0 {
 			// check the out array is different than the in array.
-			if out.Fields[0] == inCopy.Fields[0] {
-				t.Errorf("StripFieldNames modified original Field for %v", tcase.name)
+			if out.Fields[0] == inCopy.Fields[0] && tcase.includedFields != querypb.ExecuteOptions_ALL {
+				t.Errorf("StripMetaData modified original Field for %v", tcase.name)
 			}
 		}
 		// check we didn't change the original result.
 		if !reflect.DeepEqual(tcase.in, inCopy) {
-			t.Errorf("StripFieldNames modified original result")
+			t.Error("StripMetaData modified original result")
 		}
 	}
 }

@@ -5,7 +5,7 @@ syntax = "proto3";
 
 package query;
 
-option java_package="com.youtube.vitess.proto";
+option java_package="io.vitess.proto";
 
 import "topodata.proto";
 import "vtrpc.proto";
@@ -28,6 +28,7 @@ message Target {
 // by the Vitess client.
 message VTGateCallerID {
   string username = 1;
+  repeated string groups = 2;
 }
 
 // EventToken is a structure that describes a point in time in a
@@ -45,6 +46,32 @@ message EventToken {
   // The position on the replication stream after this statement was applied.
   // It is not the transaction ID / GTID, but the position / GTIDSet.
   string position = 3;
+}
+
+// Flags sent from the MySQL C API
+enum MySqlFlag {
+  EMPTY = 0;
+  NOT_NULL_FLAG = 1;
+  PRI_KEY_FLAG = 2;
+  UNIQUE_KEY_FLAG = 4;
+  MULTIPLE_KEY_FLAG = 8;
+  BLOB_FLAG = 16;
+  UNSIGNED_FLAG = 32;
+  ZEROFILL_FLAG = 64;
+  BINARY_FLAG = 128;
+  ENUM_FLAG = 256;
+  AUTO_INCREMENT_FLAG = 512;
+  TIMESTAMP_FLAG = 1024;
+  SET_FLAG = 2048;
+  NO_DEFAULT_VALUE_FLAG = 4096;
+  ON_UPDATE_NOW_FLAG = 8192;
+  NUM_FLAG = 32768;
+  PART_KEY_FLAG = 16384;
+  GROUP_FLAG = 32768;
+  UNIQUE_FLAG = 65536;
+  BINCMP_FLAG = 131072;
+
+  option allow_alias = true;
 }
 
 // Flag allows us to qualify types by their common properties.
@@ -149,6 +176,12 @@ enum Type {
   // be sent as a bind var.
   // Properties: 28, None.
   TUPLE = 28;
+  // GEOMETRY specifies a GEOMETRY type.
+  // Properties: 29, IsQuoted.
+  GEOMETRY = 2077;
+  // JSON specified a JSON type.
+  // Properties: 30, IsQuoted.
+  JSON = 2078;
 }
 
 // Value represents a typed value.
@@ -176,10 +209,9 @@ message BoundQuery {
 
 // ExecuteOptions is passed around for all Execute calls.
 message ExecuteOptions {
-  // If set, the resulting Field array won’t have a Name, just a Type.
-  // This is an optimization for high-QPS queries where the client knows
-  // what it's getting.
-  bool exclude_field_names = 1;
+  // This used to be exclude_field_names, which was replaced by
+  // IncludedFields enum below
+  reserved 1;
 
   // If set, we will try to include an EventToken with the responses.
   bool include_event_token = 2;
@@ -188,6 +220,17 @@ message ExecuteOptions {
   // This is a shortcut so the application doesn't need to care about
   // comparing EventTokens.
   EventToken compare_event_token = 3;
+
+  enum IncludedFields {
+    TYPE_AND_NAME = 0;
+    TYPE_ONLY = 1;
+    ALL = 2;
+  }
+
+  // Controls what fields are returned in Field message responses from mysql, i.e.
+  // field name, table name, etc. This is an optimization for high-QPS queries where
+  // the client knows what it's getting
+  IncludedFields included_fields = 4;
 }
 
 // Field describes a single column returned by a query
@@ -197,6 +240,26 @@ message Field {
 
   // vitess-defined type. Conversion function is in sqltypes package.
   Type type = 2;
+
+  // Remaining fields from mysql C API.
+  // These fields are only populated when ExecuteOptions.included_fields
+  // is set to IncludedFields.ALL.
+  string table = 3;
+  string org_table = 4;
+  string database = 5;
+  string org_name = 6;
+
+  // column_length is really a uint32. All 32 bits can be used.
+  uint32 column_length = 7;
+
+  // charset is actually a uint16. Only the lower 16 bits are used.
+  uint32 charset = 8;
+
+  // decimals is actualy a uint8. Only the lower 8 bits are used.
+  uint32 decimals = 9;
+
+  // flags is actually a uint16. Only the lower 16 bits are used.
+  uint32 flags = 10;
 }
 
 // Row is a database row.
@@ -283,6 +346,17 @@ message ExecuteRequest {
 // ExecuteResponse is the returned value from Execute
 message ExecuteResponse {
   QueryResult result = 1;
+}
+
+// ResultWithError represents a query response
+// in the form of result or error but not both.
+// TODO: To be used in ExecuteBatchResponse and BeginExecuteBatchResponse.
+message ResultWithError {
+  // error contains an query level error, only set if result is unset.
+  vtrpc.RPCError error = 1;
+
+  // result contains the query result, only set if error is unset.
+  query.QueryResult result = 2;
 }
 
 // ExecuteBatchRequest is the payload to ExecuteBatch
@@ -420,16 +494,16 @@ message SetRollbackRequest {
 // SetRollbackResponse is the returned value from SetRollback
 message SetRollbackResponse {}
 
-// ResolveTransactionRequest is the payload to ResolveTransaction
-message ResolveTransactionRequest {
+// ConcludeTransactionRequest is the payload to ConcludeTransaction
+message ConcludeTransactionRequest {
   vtrpc.CallerID effective_caller_id = 1;
   VTGateCallerID immediate_caller_id = 2;
   Target target = 3;
   string dtid = 4;
 }
 
-// ResolveTransactionResponse is the returned value from ResolveTransaction
-message ResolveTransactionResponse {}
+// ConcludeTransactionResponse is the returned value from ConcludeTransaction
+message ConcludeTransactionResponse {}
 
 // ReadTransactionRequest is the payload to ReadTransaction
 message ReadTransactionRequest {
@@ -487,6 +561,38 @@ message BeginExecuteBatchResponse {
 
   // transaction_id might be non-zero even if an error is present.
   int64 transaction_id = 3;
+}
+
+// MessageStreamRequest is the request payload for MessageStream.
+message MessageStreamRequest {
+  vtrpc.CallerID effective_caller_id = 1;
+  VTGateCallerID immediate_caller_id = 2;
+  Target target = 3;
+  // name is the message table name.
+  string name = 4;
+}
+
+// MessageStreamResponse is a response for MessageStream.
+message MessageStreamResponse {
+  QueryResult result = 1;
+}
+
+// MessageAckRequest is the request payload for MessageAck.
+message MessageAckRequest {
+  vtrpc.CallerID effective_caller_id = 1;
+  VTGateCallerID immediate_caller_id = 2;
+  Target target = 3;
+  // name is the message table name.
+  string name = 4;
+  repeated Value ids = 5;
+}
+
+// MessageAckResponse is the response for MessageAck.
+message MessageAckResponse {
+  // result contains the result of the ack operation.
+  // Since this acts like a DML, only
+  // RowsAffected is returned in the result.
+  QueryResult result = 1;
 }
 
 // SplitQueryRequest is the payload for SplitQuery sent by VTGate to a VTTablet.
@@ -622,6 +728,5 @@ message TransactionMetadata {
   string dtid = 1;
   TransactionState state = 2;
   int64 time_created = 3;
-  int64 time_updated = 4;
-  repeated Target participants = 5;
+  repeated Target participants = 4;
 }

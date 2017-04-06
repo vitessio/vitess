@@ -123,6 +123,10 @@ func BuildConverted(typ querypb.Type, goval interface{}) (v Value, err error) {
 			if goval.IsQuoted() {
 				return ValueFromBytes(typ, goval.Raw())
 			}
+		case *querypb.BindVariable:
+			if IsQuoted(goval.Type) {
+				return ValueFromBytes(typ, goval.Value)
+			}
 		}
 	}
 	return BuildValue(goval)
@@ -220,6 +224,14 @@ func (v Value) ToNative() interface{} {
 		panic(err)
 	}
 	return out
+}
+
+// ToProtoValue converts Value to a querypb.Value.
+func (v Value) ToProtoValue() *querypb.Value {
+	return &querypb.Value{
+		Type:  v.typ,
+		Value: v.val,
+	}
 }
 
 // ParseInt64 will parse a Value into an int64. It does

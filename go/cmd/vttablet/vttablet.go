@@ -9,25 +9,22 @@ import (
 	"flag"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/exit"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/tableacl"
 	"github.com/youtube/vitess/go/vt/tableacl/simpleacl"
-	"github.com/youtube/vitess/go/vt/tabletmanager"
-	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
+	"github.com/youtube/vitess/go/vt/vttablet/tabletmanager"
+	"github.com/youtube/vitess/go/vt/vttablet/tabletserver"
+	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"golang.org/x/net/context"
-
-	// import mysql to register mysql connection function
-	_ "github.com/youtube/vitess/go/mysql"
 )
 
 var (
 	enforceTableACLConfig = flag.Bool("enforce-tableacl-config", false, "if this flag is true, vttablet will fail to start if a valid tableacl config does not exist")
-	tableAclConfig        = flag.String("table-acl-config", "", "path to table access checker config file")
+	tableACLConfig        = flag.String("table-acl-config", "", "path to table access checker config file")
 	tabletPath            = flag.String("tablet-path", "", "tablet alias")
 
 	agent *tabletmanager.ActionAgent
@@ -38,45 +35,44 @@ func init() {
 }
 
 func main() {
-	defer exit.Recover()
-
-	flags := dbconfigs.AppConfig | dbconfigs.AllPrivsConfig | dbconfigs.DbaConfig |
+	dbconfigFlags := dbconfigs.AppConfig | dbconfigs.AllPrivsConfig | dbconfigs.DbaConfig |
 		dbconfigs.FilteredConfig | dbconfigs.ReplConfig
-	dbconfigs.RegisterFlags(flags)
+	dbconfigs.RegisterFlags(dbconfigFlags)
 	mysqlctl.RegisterFlags()
 	flag.Parse()
-	tabletserver.Init()
 	if len(flag.Args()) > 0 {
 		flag.Usage()
-		log.Errorf("vttablet doesn't take any positional arguments")
-		exit.Return(1)
+		log.Exit("vttablet doesn't take any positional arguments")
 	}
+	if err := tabletenv.VerifyConfig(); err != nil {
+		log.Exitf("invalid config: %v", err)
+	}
+
+	tabletenv.Init()
 
 	servenv.Init()
 
 	if *tabletPath == "" {
-		log.Errorf("tabletPath required")
-		exit.Return(1)
+		log.Exit("tabletPath required")
 	}
 	tabletAlias, err := topoproto.ParseTabletAlias(*tabletPath)
 	if err != nil {
-		log.Error(err)
-		exit.Return(1)
+		log.Exitf("failed to parse -tablet-path: %v", err)
 	}
 
 	mycnf, err := mysqlctl.NewMycnfFromFlags(tabletAlias.Uid)
 	if err != nil {
-		log.Errorf("mycnf read failed: %v", err)
-		exit.Return(1)
+		log.Exitf("mycnf read failed: %v", err)
 	}
 
-	dbcfgs, err := dbconfigs.Init(mycnf.SocketFile, flags)
+	dbcfgs, err := dbconfigs.Init(mycnf.SocketFile, dbconfigFlags)
 	if err != nil {
 		log.Warning(err)
 	}
 
 	// creates and registers the query service
-	qsc := tabletserver.NewServer()
+	ts := topo.Open()
+	qsc := tabletserver.NewServer(ts)
 	servenv.OnRun(func() {
 		qsc.Register()
 		addStatusParts(qsc)
@@ -87,16 +83,15 @@ func main() {
 		qsc.StopService()
 	})
 
-	if *tableAclConfig != "" {
+	if *tableACLConfig != "" {
 		// To override default simpleacl, other ACL plugins must set themselves to be default ACL factory
 		tableacl.Register("simpleacl", &simpleacl.Factory{})
 	} else if *enforceTableACLConfig {
-		log.Error("table acl config has to be specified with table-acl-config flag because enforce-tableacl-config is set.")
-		exit.Return(1)
+		log.Exit("table acl config has to be specified with table-acl-config flag because enforce-tableacl-config is set.")
 	}
-	// tabletacl.Init loads ACL from file if *tableAclConfig is not empty
+	// tabletacl.Init loads ACL from file if *tableACLConfig is not empty
 	err = tableacl.Init(
-		*tableAclConfig,
+		*tableACLConfig,
 		func() {
 			qsc.ClearQueryPlanCache()
 		},
@@ -104,15 +99,14 @@ func main() {
 	if err != nil {
 		log.Errorf("Fail to initialize Table ACL: %v", err)
 		if *enforceTableACLConfig {
-			log.Error("Need a valid initial Table ACL when enforce-tableacl-config is set, exiting.")
-			exit.Return(1)
+			log.Exit("Need a valid initial Table ACL when enforce-tableacl-config is set, exiting.")
 		}
 	}
 
 	// Create mysqld and register the health reporter (needs to be done
 	// before initializing the agent, so the initial health check
 	// done by the agent has the right reporter)
-	mysqld := mysqlctl.NewMysqld(mycnf, &dbcfgs.Dba, &dbcfgs.AllPrivs, &dbcfgs.App, &dbcfgs.Repl, true /* enablePublishStats */)
+	mysqld := mysqlctl.NewMysqld(mycnf, dbcfgs, dbconfigFlags)
 	servenv.OnClose(mysqld.Close)
 
 	// Depends on both query and updateStream.
@@ -120,16 +114,15 @@ func main() {
 	if servenv.GRPCPort != nil {
 		gRPCPort = int32(*servenv.GRPCPort)
 	}
-	agent, err = tabletmanager.NewActionAgent(context.Background(), mysqld, qsc, tabletAlias, dbcfgs, mycnf, int32(*servenv.Port), gRPCPort)
+	agent, err = tabletmanager.NewActionAgent(context.Background(), ts, mysqld, qsc, tabletAlias, *dbcfgs, mycnf, int32(*servenv.Port), gRPCPort)
 	if err != nil {
-		log.Error(err)
-		exit.Return(1)
+		log.Exitf("NewActionAgent() failed: %v", err)
 	}
 
 	servenv.OnClose(func() {
 		// We will still use the topo server during lameduck period
 		// to update our state, so closing it in OnClose()
-		topo.CloseServers()
+		ts.Close()
 	})
 	servenv.RunDefault()
 }

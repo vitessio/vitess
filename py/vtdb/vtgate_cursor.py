@@ -37,7 +37,8 @@ class VTGateCursor(base_cursor.BaseListCursor, VTGateCursorMixin):
   def __init__(
       self, connection, tablet_type, keyspace=None,
       shards=None, keyspace_ids=None, keyranges=None,
-      writable=False, as_transaction=False):
+      writable=False, as_transaction=False, single_db=False,
+      twopc=False):
     """Init VTGateCursor.
 
     Args:
@@ -49,8 +50,10 @@ class VTGateCursor(base_cursor.BaseListCursor, VTGateCursorMixin):
       keyranges: Str keyranges.
       writable: True if writable.
       as_transaction: True if an executemany call is its own transaction.
+      single_db: True if single db transaction is needed.
+      twopc: True if 2-phase commit is needed.
     """
-    super(VTGateCursor, self).__init__()
+    super(VTGateCursor, self).__init__(single_db=single_db, twopc=twopc)
     self._conn = connection
     self._writable = writable
     self.description = None
@@ -82,9 +85,9 @@ class VTGateCursor(base_cursor.BaseListCursor, VTGateCursorMixin):
     # here for completion.
     if write_query:
       if not self.is_writable():
-        raise dbexceptions.DatabaseError('DML on a non-writable cursor', sql)
+        raise dbexceptions.ProgrammingError('DML on a non-writable cursor', sql)
       if entity_keyspace_id_map:
-        raise dbexceptions.DatabaseError(
+        raise dbexceptions.ProgrammingError(
             'entity_keyspace_id_map is not allowed for write queries')
     # FIXME(alainjobart): the entity_keyspace_id_map should be in the
     # cursor, same as keyspace_ids, shards, keyranges, to avoid this hack.

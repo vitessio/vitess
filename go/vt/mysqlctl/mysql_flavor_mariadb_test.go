@@ -8,171 +8,13 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/youtube/vitess/go/mysql"
+	"github.com/youtube/vitess/go/mysqlconn/replication"
 	"github.com/youtube/vitess/go/sqldb"
-	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
 )
-
-func TestMariadbStandaloneGTIDEventHasGTID(t *testing.T) {
-	f, err := binlogEvent(mariadbFormatEvent).Format()
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-		return
-	}
-
-	input := mariadbBinlogEvent{binlogEvent: binlogEvent(mariadbStandaloneGTIDEvent)}
-	want := true
-	if got := input.HasGTID(f); got != want {
-		t.Errorf("%#v.HasGTID() = %v, want %v", input, got, want)
-	}
-}
-
-func TestMariadbBeginGTIDEventHasGTID(t *testing.T) {
-	f, err := binlogEvent(mariadbFormatEvent).Format()
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-		return
-	}
-
-	input := mariadbBinlogEvent{binlogEvent: binlogEvent(mariadbBeginGTIDEvent)}
-	want := true
-	if got := input.HasGTID(f); got != want {
-		t.Errorf("%#v.HasGTID() = %v, want %v", input, got, want)
-	}
-}
-
-func TestMariadbBinlogEventDoesntHaveGTID(t *testing.T) {
-	f, err := binlogEvent(mariadbFormatEvent).Format()
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-		return
-	}
-
-	input := mariadbBinlogEvent{binlogEvent: binlogEvent(mariadbInsertEvent)}
-	want := false
-	if got := input.HasGTID(f); got != want {
-		t.Errorf("%#v.HasGTID() = %v, want %v", input, got, want)
-	}
-}
-
-func TestMariadbNotBeginGTID(t *testing.T) {
-	f, err := binlogEvent(mariadbFormatEvent).Format()
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-		return
-	}
-
-	input := mariadbBinlogEvent{binlogEvent: binlogEvent(mariadbStandaloneGTIDEvent)}
-	want := false
-	if got := input.IsBeginGTID(f); got != want {
-		t.Errorf("%#v.IsBeginGTID() = %v, want %v", input, got, want)
-	}
-}
-
-func TestMariadbIsBeginGTID(t *testing.T) {
-	f, err := binlogEvent(mariadbFormatEvent).Format()
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-		return
-	}
-
-	input := mariadbBinlogEvent{binlogEvent: binlogEvent(mariadbBeginGTIDEvent)}
-	want := true
-	if got := input.IsBeginGTID(f); got != want {
-		t.Errorf("%#v.IsBeginGTID() = %v, want %v", input, got, want)
-	}
-}
-
-func TestMariadbBinlogEventGTID(t *testing.T) {
-	f, err := binlogEvent(mariadbFormatEvent).Format()
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-		return
-	}
-
-	input := mariadbBinlogEvent{binlogEvent: binlogEvent(mariadbBeginGTIDEvent)}
-	want := replication.MariadbGTID{Domain: 0, Server: 62344, Sequence: 10}
-	got, err := input.GTID(f)
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-	}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("%#v.GTID() = %#v, want %#v", input, got, want)
-	}
-}
-
-func TestMariadbBinlogEventFormat(t *testing.T) {
-	input := mariadbBinlogEvent{binlogEvent: binlogEvent(mariadbFormatEvent)}
-	want := replication.BinlogFormat{
-		FormatVersion:     4,
-		ServerVersion:     "10.0.13-MariaDB-1~precise-log",
-		HeaderLength:      19,
-		ChecksumAlgorithm: 0,
-	}
-	got, err := input.Format()
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-	}
-	if got != want {
-		t.Errorf("%#v.Format() = %v, want %v", input, got, want)
-	}
-}
-
-func TestMariadbBinlogEventChecksumFormat(t *testing.T) {
-	input := mariadbBinlogEvent{binlogEvent: binlogEvent(mariadbChecksumFormatEvent)}
-	want := replication.BinlogFormat{
-		FormatVersion:     4,
-		ServerVersion:     "10.0.13-MariaDB-1~precise-log",
-		HeaderLength:      19,
-		ChecksumAlgorithm: 1,
-	}
-	got, err := input.Format()
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-	}
-	if got != want {
-		t.Errorf("%#v.Format() = %v, want %v", input, got, want)
-	}
-}
-
-func TestMariadbBinlogEventStripChecksum(t *testing.T) {
-	f, err := (mariadbBinlogEvent{binlogEvent: binlogEvent(mariadbChecksumFormatEvent)}).Format()
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	input := mariadbBinlogEvent{binlogEvent: binlogEvent(mariadbChecksumQueryEvent)}
-	wantEvent := mariadbBinlogEvent{binlogEvent: binlogEvent(mariadbChecksumStrippedQueryEvent)}
-	wantChecksum := []byte{0xce, 0x49, 0x7a, 0x53}
-	gotEvent, gotChecksum, err := input.StripChecksum(f)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if !reflect.DeepEqual(gotEvent, wantEvent) || !reflect.DeepEqual(gotChecksum, wantChecksum) {
-		t.Errorf("%#v.StripChecksum() = (%v, %v), want (%v, %v)", input, gotEvent, gotChecksum, wantEvent, wantChecksum)
-	}
-}
-
-func TestMariadbBinlogEventStripChecksumNone(t *testing.T) {
-	f, err := (mariadbBinlogEvent{binlogEvent: binlogEvent(mariadbFormatEvent)}).Format()
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	input := mariadbBinlogEvent{binlogEvent: binlogEvent(mariadbStandaloneGTIDEvent)}
-	want := input
-	gotEvent, gotChecksum, err := input.StripChecksum(f)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if !reflect.DeepEqual(gotEvent, want) || gotChecksum != nil {
-		t.Errorf("%#v.StripChecksum() = (%v, %v), want (%v, nil)", input, gotEvent, gotChecksum, want)
-	}
-}
 
 func TestMariadbMakeBinlogEvent(t *testing.T) {
 	input := []byte{1, 2, 3}
-	want := mariadbBinlogEvent{binlogEvent: binlogEvent([]byte{1, 2, 3})}
+	want := replication.NewMariadbBinlogEvent([]byte{1, 2, 3})
 	if got := (&mariaDB10{}).MakeBinlogEvent(input); !reflect.DeepEqual(got, want) {
 		t.Errorf("(&mariaDB10{}).MakeBinlogEvent(%#v) = %#v, want %#v", input, got, want)
 	}
@@ -233,7 +75,7 @@ func TestMariadbSetMasterCommandsSSL(t *testing.T) {
 		SslCert:   "ssl-cert",
 		SslKey:    "ssl-key",
 	}
-	mysql.EnableSSL(params)
+	params.EnableSSL()
 	masterHost := "localhost"
 	masterPort := 123
 	masterConnectRetry := 1234
