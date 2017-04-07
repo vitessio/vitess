@@ -13,16 +13,10 @@
 package heartbeat
 
 import (
-	"flag"
-	"time"
-
 	"github.com/youtube/vitess/go/stats"
 )
 
 var (
-	enableHeartbeat = flag.Bool("enable_heartbeat", false, "If true, vttablet records (if master) or checks (if replica) the current time of a replication heartbeat in the table _vt.heartbeat. The result is used to inform the serving state of the vttablet via healthchecks.")
-	interval        = flag.Duration("heartbeat_interval", 1*time.Second, "How frequently to read and write replication heartbeat.")
-
 	// HeartbeatWrites keeps a count of the number of heartbeats written over time.
 	writes = stats.NewInt("HeartbeatWrites")
 	// HeartbeatWriteErrors keeps a count of errors encountered while writing heartbeats.

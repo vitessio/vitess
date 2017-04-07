@@ -123,7 +123,7 @@ type TabletServer struct {
 	qe               *QueryEngine
 	te               *TxEngine
 	hw               *heartbeat.Writer
-	hr               *heartbeat.Reporter
+	hr               *heartbeat.Reader
 	messager         *messager.Engine
 	watcher          *ReplicationWatcher
 	updateStreamList *binlog.StreamList
@@ -186,7 +186,7 @@ func NewTabletServer(config tabletenv.TabletConfig, topoServer topo.Server, alia
 	tsv.qe = NewQueryEngine(tsv, tsv.se, config)
 	tsv.te = NewTxEngine(tsv, config)
 	tsv.hw = heartbeat.NewWriter(tsv, alias, config)
-	tsv.hr = heartbeat.RegisterReporter(tsv, config)
+	tsv.hr = heartbeat.NewReader(tsv, config)
 	tsv.txThrottler = txthrottler.CreateTxThrottlerFromTabletConfig(topoServer)
 	tsv.messager = messager.NewEngine(tsv, tsv.se, config)
 	tsv.watcher = NewReplicationWatcher(tsv.se, config)
@@ -1563,6 +1563,12 @@ func (tsv *TabletServer) BroadcastHealth(terTimestamp int64, stats *querypb.Real
 		}
 	}
 	tsv.lastStreamHealthResponse = shr
+}
+
+// HeartbeatLag returns the current lag as calculated by the heartbeat
+// package, if heartbeat is enabled. Otherwise returns 0.
+func (tsv *TabletServer) HeartbeatLag() (time.Duration, error) {
+	return tsv.hr.GetLatest()
 }
 
 // UpdateStream streams binlog events.

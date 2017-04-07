@@ -85,9 +85,9 @@ func TestReaderReadHeartbeatError(t *testing.T) {
 }
 
 func newReader(db *fakesqldb.DB, nowFunc func() time.Time) *Reader {
-	*enableHeartbeat = true
 	randID := rand.Int63()
 	config := tabletenv.DefaultQsConfig
+	config.HeartbeatEnable = true
 	config.PoolNamePrefix = fmt.Sprintf("Pool-%d-", randID)
 	dbc := dbconfigs.DBConfigs{
 		App:           *db.ConnParams(),
