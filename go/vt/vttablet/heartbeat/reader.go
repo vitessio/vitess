@@ -8,17 +8,19 @@ import (
 
 	log "github.com/golang/glog"
 
+	"github.com/youtube/vitess/go/hack"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/timer"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/logutil"
+	"github.com/youtube/vitess/go/vt/proto/query"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/connpool"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
 const (
-	sqlFetchMostRecentHeartbeat = "SELECT ts FROM %s.heartbeat ORDER BY ts DESC LIMIT 1"
+	sqlFetchMostRecentHeartbeat = "SELECT ts FROM %s.heartbeat WHERE keyspaceShard=%a"
 )
 
 // Reader reads the heartbeat table at a configured interval in order
@@ -28,9 +30,10 @@ const (
 // table against the current time at read time. This value is reported in metrics and
 // also to the healthchecks.
 type Reader struct {
-	dbName   string
-	now      func() time.Time
-	errorLog *logutil.ThrottledLogger
+	keyspaceShard string
+	dbName        string
+	now           func() time.Time
+	errorLog      *logutil.ThrottledLogger
 
 	mu             sync.Mutex
 	isOpen         bool
@@ -51,8 +54,10 @@ func NewReader(checker connpool.MySQLChecker, config tabletenv.TabletConfig) *Re
 }
 
 // Init does last minute initialization of db settings, such as dbName
-func (r *Reader) Init(dbc dbconfigs.DBConfigs) {
+// and keyspaceShard
+func (r *Reader) Init(dbc dbconfigs.DBConfigs, target query.Target) {
 	r.dbName = sqlparser.Backtick(dbc.SidecarDBName)
+	r.keyspaceShard = fmt.Sprintf("%s:%s", target.Keyspace, target.Shard)
 }
 
 // Open starts the heartbeat ticker and opens the db pool. It may be called multiple
@@ -135,7 +140,26 @@ func (r *Reader) fetchMostRecentHeartbeat(ctx context.Context) (*sqltypes.Result
 		return nil, err
 	}
 	defer conn.Recycle()
-	return conn.Exec(ctx, fmt.Sprintf(sqlFetchMostRecentHeartbeat, r.dbName), 1, false)
+	sel, err := r.bindHeartbeatFetch()
+	if err != nil {
+		return nil, err
+	}
+	return conn.Exec(ctx, sel, 1, false)
+}
+
+// bindHeartbeatFetch takes a heartbeat read and adds the necessary
+// fields to the query as bind vars. This is done to protect ourselves
+// against a badly formed keyspace or shard name.
+func (r *Reader) bindHeartbeatFetch() (string, error) {
+	bindVars := map[string]interface{}{
+		"ks": sqltypes.MakeString([]byte(r.keyspaceShard)),
+	}
+	parsed := sqlparser.BuildParsedQuery(sqlFetchMostRecentHeartbeat, r.dbName, ":ks")
+	bound, err := parsed.GenerateQuery(bindVars)
+	if err != nil {
+		return "", err
+	}
+	return hack.String(bound), nil
 }
 
 // parseHeartbeatResult turns a raw result into the timestamp for processing.

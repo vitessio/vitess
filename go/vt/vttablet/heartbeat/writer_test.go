@@ -32,8 +32,9 @@ func TestCreateSchema(t *testing.T) {
 	defer tw.Close()
 	writes.Set(0)
 
+	db.AddQuery(sqlTurnoffBinlog, &sqltypes.Result{})
 	db.AddQuery(fmt.Sprintf(sqlCreateHeartbeatTable, tw.dbName), &sqltypes.Result{})
-	db.AddQuery(fmt.Sprintf(sqlInsertInitialRow, tw.dbName, 1111, now.UnixNano()), &sqltypes.Result{})
+	db.AddQuery(fmt.Sprintf("INSERT INTO %s.heartbeat (ts, tabletUid, keyspaceShard) VALUES (%d, %d, '%s') ON DUPLICATE KEY UPDATE ts=VALUES(ts)", tw.dbName, now.UnixNano(), tw.tabletAlias.Uid, tw.keyspaceShard), &sqltypes.Result{})
 	if err := tw.initializeTables(db.ConnParams()); err == nil {
 		t.Fatal("initializeTables() should not have succeeded")
 	}
@@ -55,7 +56,7 @@ func TestWriteHeartbeat(t *testing.T) {
 	defer db.Close()
 
 	tw := newTestWriter(db, mockNowFunc)
-	db.AddQuery(fmt.Sprintf(sqlUpdateHeartbeat, tw.dbName, now.UnixNano(), 1111), &sqltypes.Result{})
+	db.AddQuery(fmt.Sprintf("UPDATE %s.heartbeat SET ts=%d, tabletUid=%d WHERE keyspaceShard='%s'", tw.dbName, now.UnixNano(), tw.tabletAlias.Uid, tw.keyspaceShard), &sqltypes.Result{})
 
 	writes.Set(0)
 	writeErrors.Set(0)
@@ -100,8 +101,11 @@ func newTestWriter(db *fakesqldb.DB, nowFunc func() time.Time) *Writer {
 		SidecarDBName: "_vt",
 	}
 
-	tw := NewWriter(&fakeMysqlChecker{}, topodatapb.TabletAlias{Cell: "test", Uid: 1111}, config)
+	tw := NewWriter(&fakeMysqlChecker{},
+		topodatapb.TabletAlias{Cell: "test", Uid: 1111},
+		config)
 	tw.dbName = sqlparser.Backtick(dbc.SidecarDBName)
+	tw.keyspaceShard = "test:0"
 	tw.now = nowFunc
 	tw.pool.Open(&dbc.App, &dbc.Dba)
 

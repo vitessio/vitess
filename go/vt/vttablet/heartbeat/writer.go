@@ -12,31 +12,39 @@ import (
 	"github.com/youtube/vitess/go/vt/proto/topodata"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
+	"strconv"
+
 	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/hack"
 	"github.com/youtube/vitess/go/sqldb"
+	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/timer"
+	"github.com/youtube/vitess/go/vt/proto/query"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/connpool"
 )
 
 const (
+	sqlTurnoffBinlog        = "set @@session.sql_log_bin = 0"
 	sqlCreateSidecarDB      = "create database if not exists %s"
 	sqlCreateHeartbeatTable = `CREATE TABLE IF NOT EXISTS %s.heartbeat (
-  master_uid INT UNSIGNED NOT NULL PRIMARY KEY,
+  keyspaceShard VARBINARY(256) NOT NULL PRIMARY KEY,
+  tabletUid INT UNSIGNED NOT NULL,
   ts BIGINT UNSIGNED NOT NULL
         ) engine=InnoDB`
-	sqlInsertInitialRow = "INSERT INTO %s.heartbeat (master_uid, ts) VALUES (%d, %d) ON DUPLICATE KEY UPDATE ts=VALUES(ts)"
-	sqlUpdateHeartbeat  = "UPDATE %v.heartbeat SET ts=%d WHERE master_uid=%d"
+	sqlInsertInitialRow = "INSERT INTO %s.heartbeat (ts, tabletUid, keyspaceShard) VALUES (%a, %a, %a) ON DUPLICATE KEY UPDATE ts=VALUES(ts)"
+	sqlUpdateHeartbeat  = "UPDATE %s.heartbeat SET ts=%a, tabletUid=%a WHERE keyspaceShard=%a"
 )
 
 // Writer runs on master tablets and writes heartbeats to the _vt.heartbeat
 // table at a regular interval, defined by heartbeat_interval.
 type Writer struct {
-	tabletAlias topodata.TabletAlias
-	dbName      string
-	now         func() time.Time
-	errorLog    *logutil.ThrottledLogger
+	tabletAlias   topodata.TabletAlias
+	keyspaceShard string
+	dbName        string
+	now           func() time.Time
+	errorLog      *logutil.ThrottledLogger
 
 	mu     sync.Mutex
 	isOpen bool
@@ -55,8 +63,9 @@ func NewWriter(checker connpool.MySQLChecker, alias topodata.TabletAlias, config
 	}
 }
 
-// Init runs at tablet startup and creates the necessary tables for heartbeat.
-func (w *Writer) Init(dbc dbconfigs.DBConfigs) error {
+// Init runs at tablet startup and last minute initialization of db settings, and
+// creates the necessary tables for heartbeat.
+func (w *Writer) Init(dbc dbconfigs.DBConfigs, target query.Target) error {
 	if !*enableHeartbeat {
 		return nil
 	}
@@ -64,6 +73,7 @@ func (w *Writer) Init(dbc dbconfigs.DBConfigs) error {
 	defer w.mu.Unlock()
 	log.Info("Initializing heartbeat table.")
 	w.dbName = sqlparser.Backtick(dbc.SidecarDBName)
+	w.keyspaceShard = fmt.Sprintf("%s:%s", target.Keyspace, target.Shard)
 	err := w.initializeTables(&dbc.Dba)
 	if err != nil {
 		w.recordError(err)
@@ -108,7 +118,10 @@ func (w *Writer) Close() {
 }
 
 // initializeTables attempts to create the heartbeat tables and record an
-// initial row.
+// initial row. This happens on every tablet individually, regardless of slave
+// or master. For that reason, we use values that are common between them, such as keyspace:shard,
+// and we also execute them with an isolated connection that turns off the binlog and
+// is closed at the end.
 func (w *Writer) initializeTables(cp *sqldb.ConnParams) error {
 	conn, err := dbconnpool.NewDBConnection(cp, stats.NewTimings(""))
 	if err != nil {
@@ -116,17 +129,42 @@ func (w *Writer) initializeTables(cp *sqldb.ConnParams) error {
 	}
 	defer conn.Close()
 	statements := []string{
+		sqlTurnoffBinlog,
 		fmt.Sprintf(sqlCreateSidecarDB, w.dbName),
 		fmt.Sprintf(sqlCreateHeartbeatTable, w.dbName),
-		fmt.Sprintf(sqlInsertInitialRow, w.dbName, w.tabletAlias.Uid, w.now().UnixNano()),
 	}
 	for _, s := range statements {
 		if _, err := conn.ExecuteFetch(s, 0, false); err != nil {
 			return fmt.Errorf("Failed to execute heartbeat init query: %v", err)
 		}
 	}
+	insert, err := w.bindHeartbeatVars(sqlInsertInitialRow)
+	if err != nil {
+		return fmt.Errorf("Failed to bindHeartbeatVars initial heartbeat insert: %v", err)
+	}
+	_, err = conn.ExecuteFetch(insert, 0, false)
+	if err != nil {
+		return fmt.Errorf("Failed to execute initial heartbeat insert: %v", err)
+	}
 	writes.Add(1)
 	return nil
+}
+
+// bindHeartbeatVars takes a heartbeat write (insert or update) and
+// adds the necessary fields to the query as bind vars. This is done
+// to protect ourselves against a badly formed keyspace or shard name.
+func (w *Writer) bindHeartbeatVars(query string) (string, error) {
+	bindVars := map[string]interface{}{
+		"ks":  sqltypes.MakeString([]byte(w.keyspaceShard)),
+		"ts":  sqltypes.MakeTrusted(sqltypes.Uint64, strconv.AppendUint(nil, uint64(w.now().UnixNano()), 10)),
+		"uid": sqltypes.MakeTrusted(sqltypes.Uint32, strconv.AppendUint(nil, uint64(w.tabletAlias.Uid), 10)),
+	}
+	parsed := sqlparser.BuildParsedQuery(query, w.dbName, ":ts", ":uid", ":ks")
+	bound, err := parsed.GenerateQuery(bindVars)
+	if err != nil {
+		return "", err
+	}
+	return hack.String(bound), nil
 }
 
 // writeHeartbeat updates the heartbeat row for this tablet with the current time in nanoseconds.
@@ -134,7 +172,12 @@ func (w *Writer) writeHeartbeat() {
 	defer tabletenv.LogError()
 	ctx, cancel := context.WithDeadline(context.Background(), w.now().Add(*interval))
 	defer cancel()
-	err := w.exec(ctx, fmt.Sprintf(sqlUpdateHeartbeat, w.dbName, w.now().UnixNano(), w.tabletAlias.Uid))
+	update, err := w.bindHeartbeatVars(sqlUpdateHeartbeat)
+	if err != nil {
+		w.recordError(err)
+		return
+	}
+	err = w.exec(ctx, update)
 	if err != nil {
 		w.recordError(err)
 		return
