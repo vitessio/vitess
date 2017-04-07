@@ -90,9 +90,9 @@ func TestWriteHeartbeatError(t *testing.T) {
 }
 
 func newTestWriter(db *fakesqldb.DB, nowFunc func() time.Time) *Writer {
-	*enableHeartbeat = true
 	randID := rand.Int63()
 	config := tabletenv.DefaultQsConfig
+	config.HeartbeatEnable = true
 	config.PoolNamePrefix = fmt.Sprintf("Pool-%d-", randID)
 
 	dbc := dbconfigs.DBConfigs{

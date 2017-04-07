@@ -40,6 +40,8 @@ const (
 // Writer runs on master tablets and writes heartbeats to the _vt.heartbeat
 // table at a regular interval, defined by heartbeat_interval.
 type Writer struct {
+	enabled       bool
+	interval      time.Duration
 	tabletAlias   topodata.TabletAlias
 	keyspaceShard string
 	dbName        string
@@ -54,10 +56,15 @@ type Writer struct {
 
 // NewWriter creates a new Writer.
 func NewWriter(checker connpool.MySQLChecker, alias topodata.TabletAlias, config tabletenv.TabletConfig) *Writer {
+	if !config.HeartbeatEnable {
+		return &Writer{}
+	}
 	return &Writer{
+		enabled:     true,
 		tabletAlias: alias,
 		now:         time.Now,
-		ticks:       timer.NewTimer(*interval),
+		interval:    config.HeartbeatInterval,
+		ticks:       timer.NewTimer(config.HeartbeatInterval),
 		errorLog:    logutil.NewThrottledLogger("HeartbeatWriter", 60*time.Second),
 		pool:        connpool.New(config.PoolNamePrefix+"HeartbeatWritePool", 1, time.Duration(config.IdleTimeout*1e9), checker),
 	}
@@ -66,7 +73,7 @@ func NewWriter(checker connpool.MySQLChecker, alias topodata.TabletAlias, config
 // Init runs at tablet startup and last minute initialization of db settings, and
 // creates the necessary tables for heartbeat.
 func (w *Writer) Init(dbc dbconfigs.DBConfigs, target query.Target) error {
-	if !*enableHeartbeat {
+	if !w.enabled {
 		return nil
 	}
 	w.mu.Lock()
@@ -88,7 +95,7 @@ func (w *Writer) Init(dbc dbconfigs.DBConfigs, target query.Target) error {
 // Open may be called multiple times, as long as it was closed since
 // last invocation.
 func (w *Writer) Open(dbc dbconfigs.DBConfigs) {
-	if !*enableHeartbeat {
+	if !w.enabled {
 		return
 	}
 	w.mu.Lock()
@@ -106,6 +113,9 @@ func (w *Writer) Open(dbc dbconfigs.DBConfigs) {
 // Close closes the Writer's db connection and stops the periodic ticker. A writer
 // object can be re-opened after closing.
 func (w *Writer) Close() {
+	if !w.enabled {
+		return
+	}
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	if !w.isOpen {
@@ -170,7 +180,7 @@ func (w *Writer) bindHeartbeatVars(query string) (string, error) {
 // writeHeartbeat updates the heartbeat row for this tablet with the current time in nanoseconds.
 func (w *Writer) writeHeartbeat() {
 	defer tabletenv.LogError()
-	ctx, cancel := context.WithDeadline(context.Background(), w.now().Add(*interval))
+	ctx, cancel := context.WithDeadline(context.Background(), w.now().Add(w.interval))
 	defer cancel()
 	update, err := w.bindHeartbeatVars(sqlUpdateHeartbeat)
 	if err != nil {

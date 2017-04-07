@@ -30,6 +30,8 @@ const (
 // table against the current time at read time. This value is reported in metrics and
 // also to the healthchecks.
 type Reader struct {
+	enabled       bool
+	interval      time.Duration
 	keyspaceShard string
 	dbName        string
 	now           func() time.Time
@@ -45,9 +47,15 @@ type Reader struct {
 
 // NewReader returns a new heartbeat reader.
 func NewReader(checker connpool.MySQLChecker, config tabletenv.TabletConfig) *Reader {
+	if !config.HeartbeatEnable {
+		return &Reader{}
+	}
+
 	return &Reader{
+		enabled:  true,
 		now:      time.Now,
-		ticks:    timer.NewTimer(*interval),
+		interval: config.HeartbeatInterval,
+		ticks:    timer.NewTimer(config.HeartbeatInterval),
 		errorLog: logutil.NewThrottledLogger("HeartbeatReporter", 60*time.Second),
 		pool:     connpool.New(config.PoolNamePrefix+"HeartbeatReadPool", 1, time.Duration(config.IdleTimeout*1e9), checker),
 	}
@@ -56,6 +64,9 @@ func NewReader(checker connpool.MySQLChecker, config tabletenv.TabletConfig) *Re
 // Init does last minute initialization of db settings, such as dbName
 // and keyspaceShard
 func (r *Reader) Init(dbc dbconfigs.DBConfigs, target query.Target) {
+	if !r.enabled {
+		return
+	}
 	r.dbName = sqlparser.Backtick(dbc.SidecarDBName)
 	r.keyspaceShard = fmt.Sprintf("%s:%s", target.Keyspace, target.Shard)
 }
@@ -63,7 +74,7 @@ func (r *Reader) Init(dbc dbconfigs.DBConfigs, target query.Target) {
 // Open starts the heartbeat ticker and opens the db pool. It may be called multiple
 // times, as long as it was closed since last invocation.
 func (r *Reader) Open(dbc dbconfigs.DBConfigs) {
-	if !*enableHeartbeat {
+	if !r.enabled {
 		return
 	}
 	r.mu.Lock()
@@ -82,6 +93,9 @@ func (r *Reader) Open(dbc dbconfigs.DBConfigs) {
 // Close cancels the watchHeartbeat periodic ticker and closes the db pool.
 // A reader object can be re-opened after closing.
 func (r *Reader) Close() {
+	if !r.enabled {
+		return
+	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if !r.isOpen {
@@ -108,7 +122,7 @@ func (r *Reader) GetLatest() (time.Duration, error) {
 func (r *Reader) readHeartbeat() {
 	defer tabletenv.LogError()
 
-	ctx, cancel := context.WithDeadline(context.Background(), r.now().Add(*interval))
+	ctx, cancel := context.WithDeadline(context.Background(), r.now().Add(r.interval))
 	defer cancel()
 
 	res, err := r.fetchMostRecentHeartbeat(ctx)

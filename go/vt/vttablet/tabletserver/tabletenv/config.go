@@ -12,6 +12,8 @@ import (
 
 	"github.com/golang/protobuf/proto"
 
+	"time"
+
 	"github.com/youtube/vitess/go/flagutil"
 	"github.com/youtube/vitess/go/streamlog"
 	"github.com/youtube/vitess/go/vt/throttler"
@@ -65,6 +67,9 @@ func init() {
 	flag.BoolVar(&Config.EnableHotRowProtectionDryRun, "enable_hot_row_protection_dry_run", DefaultQsConfig.EnableHotRowProtectionDryRun, "If true, hot row protection is not enforced but logs if transactions would have been queued.")
 	flag.IntVar(&Config.HotRowProtectionMaxQueueSize, "hot_row_protection_max_queue_size", DefaultQsConfig.HotRowProtectionMaxQueueSize, "Maximum number of BeginExecute RPCs which will be queued for the same row (range).")
 	flag.IntVar(&Config.HotRowProtectionMaxGlobalQueueSize, "hot_row_protection_max_global_queue_size", DefaultQsConfig.HotRowProtectionMaxGlobalQueueSize, "Global queue limit across all row (ranges). Useful to prevent that the queue can grow unbounded.")
+
+	flag.BoolVar(&Config.HeartbeatEnable, "heartbeat_enable", DefaultQsConfig.HeartbeatEnable, "If true, vttablet records (if master) or checks (if replica) the current time of a replication heartbeat in the table _vt.heartbeat. The result is used to inform the serving state of the vttablet via healthchecks.")
+	flag.DurationVar(&Config.HeartbeatInterval, "heartbeat_interval", DefaultQsConfig.HeartbeatInterval, "How frequently to read and write replication heartbeat.")
 }
 
 // Init must be called after flag.Parse, and before doing any other operations.
@@ -109,6 +114,9 @@ type TabletConfig struct {
 	EnableHotRowProtectionDryRun       bool
 	HotRowProtectionMaxQueueSize       int
 	HotRowProtectionMaxGlobalQueueSize int
+
+	HeartbeatEnable   bool
+	HeartbeatInterval time.Duration
 }
 
 // DefaultQsConfig is the default value for the query service config.
@@ -154,6 +162,9 @@ var DefaultQsConfig = TabletConfig{
 	// Default value is the same as TransactionCap.
 	HotRowProtectionMaxQueueSize:       20,
 	HotRowProtectionMaxGlobalQueueSize: 1000,
+
+	HeartbeatEnable:   false,
+	HeartbeatInterval: 1 * time.Second,
 }
 
 // defaultTxThrottlerConfig formats the default throttlerdata.Configuration

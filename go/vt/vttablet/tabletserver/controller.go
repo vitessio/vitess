@@ -13,6 +13,8 @@ import (
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/rules"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/schema"
 
+	"time"
+
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
@@ -63,6 +65,10 @@ type Controller interface {
 
 	// BroadcastHealth sends the current health to all listeners
 	BroadcastHealth(terTimestamp int64, stats *querypb.RealtimeStats)
+
+	// HeartbeatLag returns the current lag as calculated by the heartbeat
+	// package, if heartbeat is enabled. Otherwise returns 0.
+	HeartbeatLag() (time.Duration, error)
 }
 
 // Ensure TabletServer satisfies Controller interface.
