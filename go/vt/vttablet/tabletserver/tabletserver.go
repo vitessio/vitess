@@ -422,10 +422,10 @@ func (tsv *TabletServer) fullStart() (err error) {
 	if err := tsv.te.Init(tsv.dbconfigs); err != nil {
 		return err
 	}
-	if err := tsv.hw.Init(tsv.dbconfigs); err != nil {
+	if err := tsv.hw.Init(tsv.dbconfigs, tsv.target); err != nil {
 		return err
 	}
-	tsv.hr.Init(tsv.dbconfigs)
+	tsv.hr.Init(tsv.dbconfigs, tsv.target)
 	tsv.updateStreamList.Init()
 	return tsv.serveNewType()
 }

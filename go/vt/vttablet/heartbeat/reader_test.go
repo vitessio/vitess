@@ -10,7 +10,7 @@ import (
 	"github.com/youtube/vitess/go/mysqlconn/fakesqldb"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
-	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	"github.com/youtube/vitess/go/vt/proto/query"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
@@ -23,14 +23,12 @@ func TestReaderReadHeartbeat(t *testing.T) {
 	tr := newReader(db, mockNowFunc)
 	defer tr.Close()
 
-	db.AddQuery(fmt.Sprintf(sqlFetchMostRecentHeartbeat, tr.dbName), &sqltypes.Result{
-		Fields: []*querypb.Field{
+	db.AddQuery(fmt.Sprintf("SELECT ts FROM %s.heartbeat WHERE keyspaceShard='%s'", tr.dbName, tr.keyspaceShard), &sqltypes.Result{
+		Fields: []*query.Field{
 			{Name: "ts", Type: sqltypes.Int64},
-			{Name: "master_uid", Type: sqltypes.Uint32},
 		},
 		Rows: [][]sqltypes.Value{{
 			sqltypes.MakeTrusted(sqltypes.Int64, []byte(fmt.Sprintf("%d", now.Add(-10*time.Second).UnixNano()))),
-			sqltypes.MakeTrusted(sqltypes.Int64, []byte("1111")),
 		}},
 	})
 
@@ -99,6 +97,7 @@ func newReader(db *fakesqldb.DB, nowFunc func() time.Time) *Reader {
 
 	tr := NewReader(&fakeMysqlChecker{}, config)
 	tr.dbName = sqlparser.Backtick(dbc.SidecarDBName)
+	tr.keyspaceShard = "test:0"
 	tr.now = nowFunc
 	tr.pool.Open(&dbc.App, &dbc.Dba)
 
