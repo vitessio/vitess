@@ -94,7 +94,11 @@ class TestVtctldWeb(unittest.TestCase):
 
   def _get_keyspace_element(self, keyspace_name):
     """Get a specific keyspace element given a keyspace name."""
-    return self.driver.find_element_by_id('%s-card' % keyspace_name)
+    element_id = '%s-card' % keyspace_name
+    wait = WebDriverWait(self.driver, 5)
+    wait.until(expected_conditions.visibility_of_element_located(
+        (By.ID, element_id)))
+    return self.driver.find_element_by_id(element_id)
 
   def _get_shards(self, keyspace_name):
     shard_grid = self.driver.find_element_by_id(
@@ -126,6 +130,9 @@ class TestVtctldWeb(unittest.TestCase):
         [(x.split(' ')[0], x.split(' ')[1][1:-1]) for x in tablet_titles])
 
   def _get_shard_record_keyspace_shard(self):
+    wait = WebDriverWait(self.driver, 5)
+    wait.until(expected_conditions.visibility_of_element_located(
+        (By.ID, 'keyspace-shard')))
     return self.driver.find_element_by_id('keyspace-shard').text
 
   def _get_shard_record_master_tablet(self):
