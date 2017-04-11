@@ -300,17 +300,29 @@
 
 <h2 id="compatibility">Compatibility</h2>
 
-<p>As of June 2016 we have not defined formal compatibility guarantees we will promise for future open-source releases. In general, we plan to follow industry standards e.g. compatibility when upgrading to a newer minor version is guaranteed. Upgrades to a higher major may require manual configuration changes and will be mentioned in the changelog.</p>
+<p>Our versioning strategy is based on <a href="http://semver.org/">Semantic Versioning</a>.</p>
+
+<p>Vitess version numbers follow the format <code class="prettyprint">MAJOR.MINOR.PATCH</code>.
+We guarantee compatibility when upgrading to a newer <strong>patch</strong> or <strong>minor</strong> version.
+Upgrades to a higher <strong>major</strong> version may require manual configuration changes.</p>
+
+<p>In general, always <strong>read the &#39;Upgrading&#39; section of the release notes</strong>.
+It will mention any incompatible changes and necessary manual steps.</p>
 
 <h2 id="upgrade-order">Upgrade Order</h2>
 
-<p>We recommend to upgrade the different components in the following order:</p>
+<p>We recommend to upgrade components in a bottom-to-top order such that &quot;old&quot; clients will talk to &quot;new&quot; servers during the transition.</p>
+
+<p>Please use this upgrade order (unless otherwise noted in the release notes):</p>
 
 <ul>
 <li>vtctld</li>
-<li>vtgate</li>
 <li>vttablet</li>
+<li>vtgate</li>
+<li>application code which links client libraries</li>
 </ul>
+
+<p><em>vtctld</em> is listed first to make sure that you can still adminstrate Vitess - or if not find out as soon as possible.</p>
 
 <h2 id="canary-testing">Canary Testing</h2>
 
@@ -326,7 +338,7 @@
 
 <h2 id="upgrading-the-master-tablet">Upgrading the Master Tablet</h2>
 
-<p>The <em>master</em> tablet of each shard should always be updated at last in the following manner:</p>
+<p>The <em>master</em> tablet of each shard should always be updated last in the following manner:</p>
 
 <ul>
 <li>verify that all <em>replica</em> tablets in the shard have been upgraded</li>
