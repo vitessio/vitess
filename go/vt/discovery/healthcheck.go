@@ -389,8 +389,6 @@ func (hcc *healthCheckConn) stream(hc *HealthCheckImpl, callback func(*querypb.S
 
 	if conn == nil {
 		var err error
-		// Keyspace, shard and tabletType are the ones from the tablet
-		// record, but they won't be used just yet.
 		conn, err = tabletconn.GetDialer()(hcc.tabletStats.Tablet, hc.connTimeout)
 		if err != nil {
 			hcc.mu.Lock()
