@@ -1,15 +1,15 @@
 #!/usr/bin/env python
 """Fixes served types for each keyspace.
 
-This is only useful in the scenario where multiple keyspaces with the same name
-are created. This will happen in resharding tests. Since helm brings up all
+This is only useful in the scenario where a set of overlapping shards is
+created. This will happen in resharding tests. Since helm brings up all
 vttablets at the same time, there is a race condition that determines which
-shards are considered serving. In a resharding test, the unsharded keyspace
-should be serving, and the sharded keyspace should not be.
+shards are considered serving. In a resharding test, the unsharded set
+should be serving, and the sharded set should not be.
 
 This script iterates through all keyspaces, and ensures that for any set of
-keyspaces that have the same name, the keyspace with the fewest shards will be
-set to serving.
+shards within the same keyspace, the set with the fewest shards will be set to
+serving.
 """
 
 import collections
@@ -40,13 +40,13 @@ def get_vtctl_commands(keyspace, shards):
   Returns:
     List of vtctl commands.
   """
-  # Skip keyspaces with non-overlapping sharding schemes.
   lowest_sharding_count = min([
       sharding_utils.get_shard_index(x)[1] for x in shards.keys()])
   if lowest_sharding_count == len(shards):
+    # Skip keyspaces with non-overlapping shards.
     return []
 
-  logging.info('Keyspace %s has overlapping sharding schemes', keyspace)
+  logging.info('Keyspace %s has overlapping shards', keyspace)
   vtctl_commands = []
   for shard_name, shard_info in shards.iteritems():
     served_tablet_types = [
@@ -56,8 +56,7 @@ def get_vtctl_commands(keyspace, shards):
 
     for tablet_type, tablet_type_name in tablet_types.iteritems():
       # Setting served types when a shard is already serving is allowable,
-      # but only remove served types from the more sharded keyspace shards if
-      # they are serving.
+      # but only remove served types from the sharded set if they are serving.
       if not (is_lowest_sharding or tablet_type in served_tablet_types):
         continue
 
@@ -73,7 +72,7 @@ def get_vtctl_commands(keyspace, shards):
 
 
 def fix_served_types(keyspaces, namespace):
-  """Ensures the least-sharded keyspace is serving.
+  """Ensures the smallest set of non-overlapping shards is serving.
 
   Args:
     keyspaces: [string], list of keyspaces to fix.
