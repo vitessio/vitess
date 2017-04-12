@@ -18,6 +18,11 @@ _no_master = dict(
         dict(tablet_type=topodata_pb2.RDONLY),
     ])
 
+_just_master = dict(
+    served_types=[
+        dict(tablet_type=topodata_pb2.MASTER),
+    ])
+
 
 class FixServedTypesTest(unittest.TestCase):
 
@@ -27,7 +32,7 @@ class FixServedTypesTest(unittest.TestCase):
         [('-80', _all_types), ('80-', _all_types), ('0', {})],
         [('-80', {}), ('80-', {}), ('0', _all_types)],
         [('-80', {}), ('80-', _all_types), ('0', _all_types)],
-        [('-80', {}), ('80-', _no_master), ('0', _all_types)]
+        [('-80', _no_master), ('80-', _no_master), ('0', _just_master)]
     ]]
 
     expected_results = [
@@ -59,7 +64,9 @@ class FixServedTypesTest(unittest.TestCase):
          ['SetShardServedTypes', 'foo/0', 'rdonly'],
          ['SetShardServedTypes', 'foo/0', 'master']],
 
-        [['SetShardServedTypes', '--remove', 'foo/80-', 'replica'],
+        [['SetShardServedTypes', '--remove', 'foo/-80', 'replica'],
+         ['SetShardServedTypes', '--remove', 'foo/-80', 'rdonly'],
+         ['SetShardServedTypes', '--remove', 'foo/80-', 'replica'],
          ['SetShardServedTypes', '--remove', 'foo/80-', 'rdonly'],
          ['SetShardServedTypes', 'foo/0', 'replica'],
          ['SetShardServedTypes', 'foo/0', 'rdonly'],

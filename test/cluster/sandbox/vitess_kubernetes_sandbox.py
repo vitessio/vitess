@@ -230,7 +230,7 @@ class VitessKubernetesSandbox(sandbox.Sandbox):
     helm_sandlet.components.add_component(wait_for_mysql_subprocess)
 
     # Add a subprocess task to ensure serving types are correct. This is useful
-    # for resharding sandboxes where multiple keyspaces share a name.
+    # for resharding sandboxes where keyspaces have overlapping sets of shards.
     fix_served_types_subprocess = subprocess_component.Subprocess(
         'fix_served_types', self.name, 'fix_served_types.py', self.log_dir,
         namespace=self.name,
