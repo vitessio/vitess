@@ -17,23 +17,34 @@ tags
 .pydevproject
 .settings/
 
-# Godeps files
-/Godeps/_workspace/pkg
-/Godeps/_workspace/bin
-
-# Go vendored libs
-/vendor/*/
+# intellij files
+*.iml
+.idea
 
 # C build dirs
 **/build
 
+# site-local example files
+/examples/kubernetes/config.sh
+
+# generated protobuf files
+/go/vt/.proto.tmp
+
+# Godeps files
+/Godeps/_workspace/pkg
+/Godeps/_workspace/bin
+
+# Eclipse Java CheckStyle plugin configuration.
+/java/*/.checkstyle
 # java target files
 /java/*/target/
 /java/*/bin/
+# pom generated file
+/java/jdbc/dependency-reduced-pom.xml
 
-# intellij files
-*.iml
-.idea
+# php downloaded dependencies
+/php/composer.phar
+/php/vendor
 
 ## vitess.io preview site
 /preview-vitess.io/
@@ -42,23 +53,11 @@ tags
 _test/
 /test/stats.json
 
-# php downloaded dependencies
-/php/composer.phar
-/php/vendor
-
-# site-local example files
-/examples/kubernetes/config.sh
-
-# pom generated file
-/java/jdbc/dependency-reduced-pom.xml
+# Go vendored libs
+/vendor/*/
 
 # Angular2 Bower Libs
 /web/vtctld2/.bowerrc~
 /web/vtctld2/bower.json~
 /web/vtctld2/public/bower_components/
 
-# generated protobuf files
-/go/vt/.proto.tmp
-
-# Eclipse Java CheckStyle plugin configuration.
-/java/*/.checkstyle
