@@ -27,9 +27,6 @@ tags
 # C build dirs
 **/build
 
-# mysql build dirs
-third_party/mysql
-
 # java target files
 /java/*/target/
 /java/*/bin/
