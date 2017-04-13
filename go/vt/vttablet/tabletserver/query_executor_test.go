@@ -23,10 +23,11 @@ import (
 	"github.com/youtube/vitess/go/vt/callinfo/fakecallinfo"
 	"github.com/youtube/vitess/go/vt/tableacl"
 	"github.com/youtube/vitess/go/vt/tableacl/simpleacl"
+	"github.com/youtube/vitess/go/vt/vterrors"
+	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/connpool"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/planbuilder"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/rules"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
-	"github.com/youtube/vitess/go/vt/vterrors"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	tableaclpb "github.com/youtube/vitess/go/vt/proto/tableacl"
@@ -293,6 +294,50 @@ func TestQueryExecutorPlanInsertSubQuery(t *testing.T) {
 	}
 }
 
+func TestQueryExecutorPlanInsertSubQueryRBR(t *testing.T) {
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+	query := "insert into test_table(pk) select pk from test_table where pk = 1 limit 1000"
+	want := &sqltypes.Result{}
+	db.AddQuery(query, want)
+	selectQuery := "select pk from test_table where pk = 1 limit 1000"
+	db.AddQuery(selectQuery, &sqltypes.Result{
+		Fields: []*querypb.Field{{
+			Name: "pk",
+			Type: sqltypes.Int32,
+		}},
+		RowsAffected: 1,
+		Rows: [][]sqltypes.Value{
+			{sqltypes.MakeTrusted(sqltypes.Int32, []byte("2"))},
+		},
+	})
+
+	insertQuery := "insert into test_table(pk) values (2)"
+
+	db.AddQuery(insertQuery, &sqltypes.Result{})
+	ctx := context.Background()
+	tsv := newTestTabletServer(ctx, enableStrict, db)
+	txid := newTransaction(tsv)
+	qre := newTestQueryExecutor(ctx, tsv, query, txid)
+	tsv.qe.binlogFormat = connpool.BinlogFormatRow
+
+	defer tsv.StopService()
+	defer testCommitHelper(t, tsv, qre)
+	checkPlanID(t, planbuilder.PlanInsertSubquery, qre.plan.PlanID)
+	got, err := qre.Execute()
+	if err != nil {
+		t.Fatalf("qre.Execute() = %v, want nil", err)
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got: %v, want: %v", got, want)
+	}
+	wantqueries := []string{"insert into test_table(pk) values (2)"}
+	gotqueries := fetchRecordedQueries(qre)
+	if !reflect.DeepEqual(gotqueries, wantqueries) {
+		t.Errorf("queries: %v, want %v", gotqueries, wantqueries)
+	}
+}
+
 func TestQueryExecutorPlanUpsertPk(t *testing.T) {
 	db := setUpQueryExecutorTest(t)
 	defer db.Close()
@@ -373,6 +418,34 @@ func TestQueryExecutorPlanUpsertPk(t *testing.T) {
 	}
 	wantqueries = []string{"update test_table set val = 1 where pk in (1) /* _stream test_table (pk ) (1 ); */"}
 	gotqueries = fetchRecordedQueries(qre)
+	if !reflect.DeepEqual(gotqueries, wantqueries) {
+		t.Errorf("queries: %v, want %v", gotqueries, wantqueries)
+	}
+}
+
+func TestQueryExecutorPlanUpsertPkRBR(t *testing.T) {
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+	query := "insert into test_table values (1) on duplicate key update val = 1"
+	db.AddQuery(query, &sqltypes.Result{})
+	want := &sqltypes.Result{}
+	ctx := context.Background()
+	tsv := newTestTabletServer(ctx, enableStrict, db)
+	txid := newTransaction(tsv)
+	qre := newTestQueryExecutor(ctx, tsv, query, txid)
+	tsv.qe.binlogFormat = connpool.BinlogFormatRow
+	defer tsv.StopService()
+	defer testCommitHelper(t, tsv, qre)
+	checkPlanID(t, planbuilder.PlanUpsertPK, qre.plan.PlanID)
+	got, err := qre.Execute()
+	if err != nil {
+		t.Fatalf("qre.Execute() = %v, want nil", err)
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got: %v, want: %v", got, want)
+	}
+	wantqueries := []string{query}
+	gotqueries := fetchRecordedQueries(qre)
 	if !reflect.DeepEqual(gotqueries, wantqueries) {
 		t.Errorf("queries: %v, want %v", gotqueries, wantqueries)
 	}
@@ -462,6 +535,34 @@ func TestQueryExecutorPlanDmlPk(t *testing.T) {
 	}
 }
 
+func TestQueryExecutorPlanDmlPkRBR(t *testing.T) {
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+	query := "update test_table set name = 2 where pk in (1)"
+	want := &sqltypes.Result{}
+	db.AddQuery(query, want)
+	ctx := context.Background()
+	tsv := newTestTabletServer(ctx, enableStrict, db)
+	txid := newTransaction(tsv)
+	qre := newTestQueryExecutor(ctx, tsv, query, txid)
+	tsv.qe.binlogFormat = connpool.BinlogFormatRow
+	defer tsv.StopService()
+	defer testCommitHelper(t, tsv, qre)
+	checkPlanID(t, planbuilder.PlanDMLPK, qre.plan.PlanID)
+	got, err := qre.Execute()
+	if err != nil {
+		t.Fatalf("qre.Execute() = %v, want nil", err)
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got: %v, want: %v", got, want)
+	}
+	wantqueries := []string{query}
+	gotqueries := fetchRecordedQueries(qre)
+	if !reflect.DeepEqual(gotqueries, wantqueries) {
+		t.Errorf("queries: %v, want %v", gotqueries, wantqueries)
+	}
+}
+
 func TestQueryExecutorPlanDmlMessage(t *testing.T) {
 	db := setUpQueryExecutorTest(t)
 	defer db.Close()
@@ -543,6 +644,46 @@ func TestQueryExecutorPlanDmlSubQuery(t *testing.T) {
 	tsv := newTestTabletServer(ctx, enableStrict, db)
 	txid := newTransaction(tsv)
 	qre := newTestQueryExecutor(ctx, tsv, query, txid)
+	defer tsv.StopService()
+	defer testCommitHelper(t, tsv, qre)
+	checkPlanID(t, planbuilder.PlanDMLSubquery, qre.plan.PlanID)
+	got, err := qre.Execute()
+	if err != nil {
+		t.Fatalf("qre.Execute() = %v, want nil", err)
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got: %v, want: %v", got, want)
+	}
+	wantqueries := []string{updateQuery}
+	gotqueries := fetchRecordedQueries(qre)
+	if !reflect.DeepEqual(gotqueries, wantqueries) {
+		t.Errorf("queries: %v, want %v", gotqueries, wantqueries)
+	}
+}
+
+func TestQueryExecutorPlanDmlSubQueryRBR(t *testing.T) {
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+	query := "update test_table set addr = 3 where name = 1 limit 1000"
+	expandedQuery := "select pk from test_table where name = 1 limit 1000 for update"
+	want := &sqltypes.Result{}
+	db.AddQuery(query, want)
+	db.AddQuery(expandedQuery, &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{Type: sqltypes.Int32},
+		},
+		RowsAffected: 1,
+		Rows: [][]sqltypes.Value{
+			{sqltypes.MakeTrusted(sqltypes.Int32, []byte("2"))},
+		},
+	})
+	updateQuery := "update test_table set addr = 3 where pk in (2)"
+	db.AddQuery(updateQuery, want)
+	ctx := context.Background()
+	tsv := newTestTabletServer(ctx, enableStrict, db)
+	txid := newTransaction(tsv)
+	qre := newTestQueryExecutor(ctx, tsv, query, txid)
+	tsv.qe.binlogFormat = connpool.BinlogFormatRow
 	defer tsv.StopService()
 	defer testCommitHelper(t, tsv, qre)
 	checkPlanID(t, planbuilder.PlanDMLSubquery, qre.plan.PlanID)
@@ -1417,6 +1558,18 @@ func getQueryExecutorSupportedQueries() map[string]*sqltypes.Result {
 			Rows: [][]sqltypes.Value{
 				{sqltypes.MakeString([]byte("1"))},
 			},
+		},
+		"show variables like 'binlog_format'": {
+			Fields: []*querypb.Field{{
+				Type: sqltypes.VarChar,
+			}, {
+				Type: sqltypes.VarChar,
+			}},
+			RowsAffected: 1,
+			Rows: [][]sqltypes.Value{{
+				sqltypes.MakeString([]byte("binlog_format")),
+				sqltypes.MakeString([]byte("STATEMENT")),
+			}},
 		},
 		mysqlconn.BaseShowTables: {
 			Fields:       mysqlconn.BaseShowTablesFields,

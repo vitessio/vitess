@@ -121,6 +121,7 @@ type QueryEngine struct {
 
 	// Vars
 	strictMode       sync2.AtomicBool
+	binlogFormat     connpool.BinlogFormat
 	autoCommit       sync2.AtomicBool
 	maxResultSize    sync2.AtomicInt64
 	maxDMLRows       sync2.AtomicInt64
@@ -232,19 +233,17 @@ func (qe *QueryEngine) Open(dbconfigs dbconfigs.DBConfigs) error {
 	qe.dbconfigs = dbconfigs
 	qe.conns.Open(&qe.dbconfigs.App, &qe.dbconfigs.Dba)
 
-	if qe.strictMode.Get() {
-		conn, err := qe.conns.Get(tabletenv.LocalContext())
-		if err != nil {
-			qe.conns.Close()
-			return err
-		}
-		err = conn.VerifyMode()
-		conn.Recycle()
+	conn, err := qe.conns.Get(tabletenv.LocalContext())
+	if err != nil {
+		qe.conns.Close()
+		return err
+	}
+	qe.binlogFormat, err = conn.VerifyMode()
+	conn.Recycle()
 
-		if err != nil {
-			qe.conns.Close()
-			return err
-		}
+	if err != nil {
+		qe.conns.Close()
+		return err
 	}
 
 	qe.streamConns.Open(&qe.dbconfigs.App, &qe.dbconfigs.Dba)
