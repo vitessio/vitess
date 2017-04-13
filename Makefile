@@ -188,8 +188,11 @@ docker_base_percona57:
 	chmod -R o=g *
 	docker build -f Dockerfile.percona57 -t vitess/base:percona57 .
 
-docker_lite: docker_base
-	cd docker/lite && ./build.sh
+# Run "make docker_lite PROMPT_NOTICE=false" to avoid that the script
+# prompts you to press ENTER and confirm that the vitess/base image is not
+# rebuild by this target as well.
+docker_lite:
+	cd docker/lite && ./build.sh --prompt=$(PROMPT_NOTICE)
 
 docker_lite_mysql56: docker_base_mysql56
 	cd docker/lite && ./build.sh mysql56
