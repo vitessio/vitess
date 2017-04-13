@@ -148,6 +148,9 @@ php_proto:
 	docker cp vitess_php-proto:/vt/src/github.com/youtube/vitess/php/src/Vitess/Proto/. php/src/Vitess/Proto/
 	docker rm vitess_php-proto
 
+# Helper targets for building Docker images.
+# Please read docker/README.md to understand the different available images.
+
 # This rule builds the bootstrap images for all flavors.
 DOCKER_IMAGES_FOR_TEST = mariadb mysql56 mysql57 percona percona57
 DOCKER_IMAGES = common $(DOCKER_IMAGES_FOR_TEST)
@@ -164,29 +167,26 @@ docker_bootstrap_push:
 docker_bootstrap_pull:
 	for i in $(DOCKER_IMAGES); do echo "pulling bootstrap image: $$i"; docker pull vitess/bootstrap:$$i || exit 1; done
 
-# Note: The default base and lite images (tag "latest") use MySQL 5.7.
-# Images with other MySQL/MariaDB versions get their own tag e.g. "mariadb".
-# We never push the non-"latest" tags though and only provide them for convenience for users who want to run something else than MySQL 5.7.
 docker_base:
 	# Fix permissions before copying files, to avoid AUFS bug.
 	chmod -R o=g *
-	docker build -t vitess/base .
+	docker build -f docker/base/Dockerfile -t vitess/base .
 
 docker_base_mysql56:
 	chmod -R o=g *
-	docker build -f Dockerfile.mysql56 -t vitess/base:mysql56 .
+	docker build -f docker/base/Dockerfile.mysql56 -t vitess/base:mysql56 .
 
 docker_base_mariadb:
 	chmod -R o=g *
-	docker build -f Dockerfile.mariadb -t vitess/base:mariadb .
+	docker build -f docker/base/Dockerfile.mariadb -t vitess/base:mariadb .
 
 docker_base_percona:
 	chmod -R o=g *
-	docker build -f Dockerfile.percona -t vitess/base:percona .
+	docker build -f docker/base/Dockerfile.percona -t vitess/base:percona .
 
 docker_base_percona57:
 	chmod -R o=g *
-	docker build -f Dockerfile.percona57 -t vitess/base:percona57 .
+	docker build -f docker/base/Dockerfile.percona57 -t vitess/base:percona57 .
 
 docker_lite: docker_base
 	cd docker/lite && ./build.sh
