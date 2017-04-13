@@ -120,7 +120,6 @@ type QueryEngine struct {
 	streamQList  *QueryList
 
 	// Vars
-	strictMode       sync2.AtomicBool
 	binlogFormat     connpool.BinlogFormat
 	autoCommit       sync2.AtomicBool
 	maxResultSize    sync2.AtomicInt64
@@ -171,7 +170,6 @@ func NewQueryEngine(checker connpool.MySQLChecker, se *schema.Engine, config tab
 		config.HotRowProtectionMaxQueueSize, config.HotRowProtectionMaxGlobalQueueSize)
 	qe.streamQList = NewQueryList()
 
-	qe.strictMode.Set(config.StrictMode)
 	qe.autoCommit.Set(config.EnableAutoCommit)
 	qe.strictTableACL = config.StrictTableACL
 	qe.enableTableACLDryRun = config.EnableTableACLDryRun

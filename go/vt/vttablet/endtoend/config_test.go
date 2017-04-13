@@ -12,9 +12,9 @@ import (
 	"time"
 
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
+	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vttablet/endtoend/framework"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
-	"github.com/youtube/vitess/go/vt/vterrors"
 )
 
 // compareIntDiff returns an error if end[tag] != start[tag]+diff.
@@ -327,58 +327,4 @@ func TestQueryTimeout(t *testing.T) {
 	if err := compareIntDiff(vend, "Kills/Queries", vstart, 1); err != nil {
 		t.Error(err)
 	}
-}
-
-func TestStrictMode(t *testing.T) {
-	queries := []string{
-		"insert into vitess_a(eid, id, name, foo) values (7, 1+1, '', '')",
-		"insert into vitess_d(eid, id) values (1, 1)",
-		"update vitess_a set eid = 1+1 where eid = 1 and id = 1",
-		"insert into vitess_d(eid, id) values (1, 1)",
-		"insert into upsert_test(id1, id2) values " +
-			"(1, 1), (2, 2) on duplicate key update id1 = 1",
-		"insert into upsert_test(id1, id2) select eid, id " +
-			"from vitess_a limit 1 on duplicate key update id2 = id1",
-		"insert into upsert_test(id1, id2) values " +
-			"(1, 1) on duplicate key update id1 = 2+1",
-	}
-
-	// Strict mode on.
-	func() {
-		client := framework.NewClient()
-		err := client.Begin()
-		if err != nil {
-			t.Error(err)
-			return
-		}
-		defer client.Rollback()
-
-		want := "DML too complex"
-		for _, query := range queries {
-			_, err = client.Execute(query, nil)
-			if err == nil || err.Error() != want {
-				t.Errorf("Execute(%s): %v, want %s", query, err, want)
-			}
-		}
-	}()
-
-	// Strict mode off.
-	func() {
-		framework.Server.SetStrictMode(false)
-		defer framework.Server.SetStrictMode(true)
-
-		for _, query := range queries {
-			client := framework.NewClient()
-			err := client.Begin()
-			if err != nil {
-				t.Error(err)
-				return
-			}
-			_, err = client.Execute(query, nil)
-			if err != nil {
-				t.Error(err)
-			}
-			client.Rollback()
-		}
-	}()
 }

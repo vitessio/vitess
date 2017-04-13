@@ -1781,14 +1781,6 @@ func (tsv *TabletServer) QueryCacheCap() int {
 	return int(tsv.qe.QueryCacheCap())
 }
 
-// SetStrictMode sets strict mode on or off.
-// This only sets the mode for QueryEngine, but not
-// for schema.Engine.
-// This function should only be used for testing.
-func (tsv *TabletServer) SetStrictMode(strict bool) {
-	tsv.qe.strictMode.Set(strict)
-}
-
 // SetAutoCommit sets autocommit on or off.
 // This function should only be used for testing.
 func (tsv *TabletServer) SetAutoCommit(auto bool) {

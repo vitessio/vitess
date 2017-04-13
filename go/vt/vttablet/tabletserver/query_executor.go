@@ -90,7 +90,7 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 		defer conn.Recycle()
 		switch qre.plan.PlanID {
 		case planbuilder.PlanPassDML:
-			if qre.tsv.qe.strictMode.Get() {
+			if qre.tsv.qe.binlogFormat != connpool.BinlogFormatRow {
 				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "DML too complex")
 			}
 			return qre.txFetch(conn, qre.plan.FullQuery, qre.bindVars, nil, false, true)
@@ -168,7 +168,7 @@ func (qre *QueryExecutor) execDmlAutoCommit() (reply *sqltypes.Result, err error
 	return qre.execAsTransaction(func(conn *TxConnection) (reply *sqltypes.Result, err error) {
 		switch qre.plan.PlanID {
 		case planbuilder.PlanPassDML:
-			if qre.tsv.qe.strictMode.Get() {
+			if qre.tsv.qe.binlogFormat != connpool.BinlogFormatRow {
 				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "DML too complex")
 			}
 			reply, err = qre.txFetch(conn, qre.plan.FullQuery, qre.bindVars, nil, false, true)

@@ -415,6 +415,5 @@ func newEngine(queryCacheSize int, reloadTime time.Duration, idleTimeout time.Du
 	config.QueryCacheSize = queryCacheSize
 	config.SchemaReloadTime = float64(reloadTime) / 1e9
 	config.IdleTimeout = float64(idleTimeout) / 1e9
-	config.StrictMode = strict
 	return NewEngine(DummyChecker, config)
 }

@@ -2273,11 +2273,6 @@ func TestConfigChanges(t *testing.T) {
 		t.Errorf("tsv.qe.QueryCacheCap: %d, want %d", val, newSize)
 	}
 
-	tsv.SetStrictMode(false)
-	if val := tsv.qe.strictMode.Get(); val {
-		t.Errorf("tsv.qe.strictMode.Get: %d, want false", val)
-	}
-
 	tsv.SetAutoCommit(true)
 	if val := tsv.qe.autoCommit.Get(); !val {
 		t.Errorf("tsv.qe.autoCommit.Get: %d, want true", val)
