@@ -2392,6 +2392,18 @@ func getSupportedQueries() map[string]*sqltypes.Result {
 				{sqltypes.MakeString([]byte("1"))},
 			},
 		},
+		"show variables like 'binlog_format'": {
+			Fields: []*querypb.Field{{
+				Type: sqltypes.VarChar,
+			}, {
+				Type: sqltypes.VarChar,
+			}},
+			RowsAffected: 1,
+			Rows: [][]sqltypes.Value{{
+				sqltypes.MakeString([]byte("binlog_format")),
+				sqltypes.MakeString([]byte("STATEMENT")),
+			}},
+		},
 		"select * from test_table where 1 != 1": {
 			Fields: []*querypb.Field{{
 				Name: "pk",

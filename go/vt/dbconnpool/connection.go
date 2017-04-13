@@ -6,7 +6,6 @@ package dbconnpool
 
 import (
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/youtube/vitess/go/sqldb"
@@ -102,37 +101,6 @@ func (dbc *DBConnection) ExecuteStreamFetch(query string, callback func(*sqltype
 		}
 	}
 
-	return nil
-}
-
-var (
-	getModeSQL    = "select @@global.sql_mode"
-	getAutocommit = "select @@autocommit"
-)
-
-// VerifyMode is a helper method to verify mysql is running with
-// sql_mode = STRICT_TRANS_TABLES and autocommit=ON.
-func (dbc *DBConnection) VerifyMode() error {
-	qr, err := dbc.ExecuteFetch(getModeSQL, 2, false)
-	if err != nil {
-		return fmt.Errorf("could not verify mode: %v", err)
-	}
-	if len(qr.Rows) != 1 {
-		return fmt.Errorf("incorrect rowcount received for %s: %d", getModeSQL, len(qr.Rows))
-	}
-	if !strings.Contains(qr.Rows[0][0].String(), "STRICT_TRANS_TABLES") {
-		return fmt.Errorf("require sql_mode to be STRICT_TRANS_TABLES: got %s", qr.Rows[0][0].String())
-	}
-	qr, err = dbc.ExecuteFetch(getAutocommit, 2, false)
-	if err != nil {
-		return fmt.Errorf("could not verify mode: %v", err)
-	}
-	if len(qr.Rows) != 1 {
-		return fmt.Errorf("incorrect rowcount received for %s: %d", getAutocommit, len(qr.Rows))
-	}
-	if !strings.Contains(qr.Rows[0][0].String(), "1") {
-		return fmt.Errorf("require autocommit to be 1: got %s", qr.Rows[0][0].String())
-	}
 	return nil
 }
 

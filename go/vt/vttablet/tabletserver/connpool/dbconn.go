@@ -6,6 +6,7 @@ package connpool
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -19,6 +20,16 @@ import (
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"golang.org/x/net/context"
+)
+
+// BinlogFormat is used for for specifying the binlog format.
+type BinlogFormat int
+
+// The following constants specify the possible binlog format values.
+const (
+	BinlogFormatStatement = BinlogFormat(iota)
+	BinlogFormatRow
+	BinlogFormatMixed
 )
 
 // DBConn is a db connection for tabletserver.
@@ -157,9 +168,55 @@ func (dbc *DBConn) streamOnce(ctx context.Context, query string, callback func(*
 	return dbc.conn.ExecuteStreamFetch(query, callback, streamBufferSize)
 }
 
-// VerifyMode returns an error if the connection mode is incorrect.
-func (dbc *DBConn) VerifyMode() error {
-	return dbc.conn.VerifyMode()
+var (
+	getModeSQL    = "select @@global.sql_mode"
+	getAutocommit = "select @@autocommit"
+	showBinlog    = "show variables like 'binlog_format'"
+)
+
+// VerifyMode is a helper method to verify mysql is running with
+// sql_mode = STRICT_TRANS_TABLES and autocommit=ON. It also returns
+// the current binlog format.
+func (dbc *DBConn) VerifyMode() (BinlogFormat, error) {
+	qr, err := dbc.conn.ExecuteFetch(getModeSQL, 2, false)
+	if err != nil {
+		return 0, fmt.Errorf("could not verify mode: %v", err)
+	}
+	if len(qr.Rows) != 1 {
+		return 0, fmt.Errorf("incorrect rowcount received for %s: %d", getModeSQL, len(qr.Rows))
+	}
+	if !strings.Contains(qr.Rows[0][0].String(), "STRICT_TRANS_TABLES") {
+		return 0, fmt.Errorf("require sql_mode to be STRICT_TRANS_TABLES: got %s", qr.Rows[0][0].String())
+	}
+	qr, err = dbc.conn.ExecuteFetch(getAutocommit, 2, false)
+	if err != nil {
+		return 0, fmt.Errorf("could not verify mode: %v", err)
+	}
+	if len(qr.Rows) != 1 {
+		return 0, fmt.Errorf("incorrect rowcount received for %s: %d", getAutocommit, len(qr.Rows))
+	}
+	if !strings.Contains(qr.Rows[0][0].String(), "1") {
+		return 0, fmt.Errorf("require autocommit to be 1: got %s", qr.Rows[0][0].String())
+	}
+	qr, err = dbc.conn.ExecuteFetch(showBinlog, 10, false)
+	if err != nil {
+		return 0, fmt.Errorf("could not fetch binlog format: %v", err)
+	}
+	if len(qr.Rows) != 1 {
+		return 0, fmt.Errorf("incorrect rowcount received for %s: %d", showBinlog, len(qr.Rows))
+	}
+	if len(qr.Rows[0]) != 2 {
+		return 0, fmt.Errorf("incorrect column count received for %s: %d", showBinlog, len(qr.Rows[0]))
+	}
+	switch qr.Rows[0][1].String() {
+	case "STATEMENT":
+		return BinlogFormatStatement, nil
+	case "ROW":
+		return BinlogFormatRow, nil
+	case "MIXED":
+		return BinlogFormatMixed, nil
+	}
+	return 0, fmt.Errorf("unexpected binlog format for %s: %s", showBinlog, qr.Rows[0][1].String())
 }
 
 // Close closes the DBConn.
