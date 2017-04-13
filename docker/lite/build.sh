@@ -14,7 +14,9 @@ fi
 
 # Extract files from vitess/base image
 mkdir base
-sudo docker run -ti --rm -v $PWD/base:/base -u root $base_image bash -c 'cp -R /vt /base/'
+# Ignore permission errors. They occur for directories we do not care e.g. ".git".
+# (Copying them fails because they are owned by root and not $UID and have stricter permissions.)
+docker run -ti --rm -v $PWD/base:/base -u $UID $base_image bash -c 'cp -R /vt /base/ 2>&1 | grep -v "Permission denied"'
 
 # Grab only what we need
 lite=$PWD/lite
@@ -33,7 +35,7 @@ mkdir -p $lite/$vttop/config
 cp -R base/$vttop/config/* $lite/$vttop/config/
 ln -s /$vttop/config $lite/vt/config
 
-sudo rm -rf base
+rm -rf base
 
 # Fix permissions for AUFS workaround
 chmod -R o=g lite
@@ -41,9 +43,9 @@ chmod -R o=g lite
 # Build vitess/lite image
 
 if [[ -n "$flavor" ]]; then
-	sudo docker build --no-cache -f Dockerfile.$flavor -t vitess/lite:$flavor .
+	docker build --no-cache -f Dockerfile.$flavor -t vitess/lite:$flavor .
 else
-	sudo docker build --no-cache -t vitess/lite .
+	docker build --no-cache -t vitess/lite .
 fi
 
 # Clean up temporary files
