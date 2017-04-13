@@ -47,7 +47,6 @@ func init() {
 	flag.Float64Var(&Config.QueryTimeout, "queryserver-config-query-timeout", DefaultQsConfig.QueryTimeout, "query server query timeout (in seconds), this is the query timeout in vttablet side. If a query takes more than this timeout, it will be killed.")
 	flag.Float64Var(&Config.TxPoolTimeout, "queryserver-config-txpool-timeout", DefaultQsConfig.TxPoolTimeout, "query server transaction pool timeout, it is how long vttablet waits if tx pool is full")
 	flag.Float64Var(&Config.IdleTimeout, "queryserver-config-idle-timeout", DefaultQsConfig.IdleTimeout, "query server idle timeout (in seconds), vttablet manages various mysql connection pools. This config means if a connection has not been used in given idle timeout, this connection will be removed from pool. This effectively manages number of connection objects and optimize the pool performance.")
-	flag.BoolVar(&Config.StrictMode, "queryserver-config-strict-mode", DefaultQsConfig.StrictMode, "allow only predictable DMLs and enforces MySQL's STRICT_TRANS_TABLES")
 	// tableacl related configurations.
 	flag.BoolVar(&Config.StrictTableACL, "queryserver-config-strict-table-acl", DefaultQsConfig.StrictTableACL, "only allow queries that pass table acl checks")
 	flag.BoolVar(&Config.EnableTableACLDryRun, "queryserver-config-enable-table-acl-dry-run", DefaultQsConfig.EnableTableACLDryRun, "If this flag is enabled, tabletserver will emit monitoring metrics and let the request pass regardless of table acl check results")
@@ -94,7 +93,6 @@ type TabletConfig struct {
 	QueryTimeout            float64
 	TxPoolTimeout           float64
 	IdleTimeout             float64
-	StrictMode              bool
 	StrictTableACL          bool
 	TerseErrors             bool
 	EnableAutoCommit        bool
@@ -141,7 +139,6 @@ var DefaultQsConfig = TabletConfig{
 	TxPoolTimeout:           1,
 	IdleTimeout:             30 * 60,
 	StreamBufferSize:        32 * 1024,
-	StrictMode:              true,
 	StrictTableACL:          false,
 	TerseErrors:             false,
 	EnableAutoCommit:        false,

@@ -20,26 +20,6 @@ import (
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
-func TestStrictMode(t *testing.T) {
-	db := fakesqldb.New(t)
-	defer db.Close()
-	for query, result := range schematest.Queries() {
-		db.AddQuery(query, result)
-	}
-	db.AddRejectedQuery("select @@global.sql_mode", errRejected)
-
-	qe := newTestQueryEngine(10, 10*time.Second, true)
-	testUtils := newTestUtils()
-	dbconfigs := testUtils.newDBConfigs(db)
-	qe.se.Open(db.ConnParams())
-
-	err := qe.Open(dbconfigs)
-	want := "could not verify mode"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("se.Open: %v, must contain %s", err, want)
-	}
-}
-
 func TestGetPlanPanicDuetoEmptyQuery(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
@@ -144,6 +124,5 @@ func newTestQueryEngine(queryCacheSize int, idleTimeout time.Duration, strict bo
 	config := tabletenv.DefaultQsConfig
 	config.QueryCacheSize = queryCacheSize
 	config.IdleTimeout = float64(idleTimeout) / 1e9
-	config.StrictMode = strict
 	return NewQueryEngine(DummyChecker, schema.NewEngine(DummyChecker, config), config)
 }
