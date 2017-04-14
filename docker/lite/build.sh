@@ -82,9 +82,9 @@ chmod -R o=g lite
 # Build vitess/lite image
 
 if [[ -n "$flavor" ]]; then
-	docker build --no-cache -f Dockerfile.$flavor -t vitess/lite:$flavor .
+  docker build --no-cache -f Dockerfile.$flavor -t vitess/lite:$flavor .
 else
-	docker build --no-cache -t vitess/lite .
+  docker build --no-cache -t vitess/lite .
 fi
 
 # Clean up temporary files
