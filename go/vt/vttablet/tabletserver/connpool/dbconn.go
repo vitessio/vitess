@@ -27,7 +27,7 @@ type BinlogFormat int
 
 // The following constants specify the possible binlog format values.
 const (
-	BinlogFormatStatement = BinlogFormat(iota)
+	BinlogFormatStatement BinlogFormat = iota
 	BinlogFormatRow
 	BinlogFormatMixed
 )
