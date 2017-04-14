@@ -42,7 +42,7 @@ func TestQueryExecutorPlanDDL(t *testing.T) {
 	want := &sqltypes.Result{}
 	db.AddQuery(query, want)
 	ctx := context.Background()
-	tsv := newTestTabletServer(ctx, 0, db)
+	tsv := newTestTabletServer(ctx, noFlags, db)
 	qre := newTestQueryExecutor(ctx, tsv, query, 0)
 	defer tsv.StopService()
 	checkPlanID(t, planbuilder.PlanDDL, qre.plan.PlanID)
@@ -85,8 +85,8 @@ func TestQueryExecutorPlanPassDmlRBR(t *testing.T) {
 	// Statement mode
 	tsv.qe.binlogFormat = connpool.BinlogFormatStatement
 	_, err = qre.Execute()
-	if code := vterrors.Code(err); code != vtrpcpb.Code_INVALID_ARGUMENT {
-		t.Fatalf("qre.Execute: %v, want %v", code, vtrpcpb.Code_INVALID_ARGUMENT)
+	if code := vterrors.Code(err); code != vtrpcpb.Code_UNIMPLEMENTED {
+		t.Errorf("qre.Execute: %v, want %v", code, vtrpcpb.Code_INVALID_ARGUMENT)
 	}
 	testCommitHelper(t, tsv, qre)
 }
@@ -115,8 +115,8 @@ func TestQueryExecutorPlanPassDmlAutoCommitRBR(t *testing.T) {
 	// Statement mode
 	tsv.qe.binlogFormat = connpool.BinlogFormatStatement
 	_, err = qre.Execute()
-	if code := vterrors.Code(err); code != vtrpcpb.Code_INVALID_ARGUMENT {
-		t.Fatalf("qre.Execute: %v, want %v", code, vtrpcpb.Code_INVALID_ARGUMENT)
+	if code := vterrors.Code(err); code != vtrpcpb.Code_UNIMPLEMENTED {
+		t.Errorf("qre.Execute: %v, want %v", code, vtrpcpb.Code_INVALID_ARGUMENT)
 	}
 }
 
@@ -127,7 +127,7 @@ func TestQueryExecutorPlanInsertPk(t *testing.T) {
 	want := &sqltypes.Result{}
 	query := "insert into test_table values(1)"
 	ctx := context.Background()
-	tsv := newTestTabletServer(ctx, 0, db)
+	tsv := newTestTabletServer(ctx, noFlags, db)
 	qre := newTestQueryExecutor(ctx, tsv, query, 0)
 	defer tsv.StopService()
 	checkPlanID(t, planbuilder.PlanInsertPK, qre.plan.PlanID)
@@ -165,7 +165,7 @@ func TestQueryExecutorPlanInsertMessage(t *testing.T) {
 	want := &sqltypes.Result{}
 	query := "insert into msg(time_scheduled, id, message) values(1, 2, 3)"
 	ctx := context.Background()
-	tsv := newTestTabletServer(ctx, 0, db)
+	tsv := newTestTabletServer(ctx, noFlags, db)
 	qre := newTestQueryExecutor(ctx, tsv, query, 0)
 	defer tsv.StopService()
 	checkPlanID(t, planbuilder.PlanInsertMessage, qre.plan.PlanID)
@@ -213,10 +213,10 @@ func TestQueryExecutorPlanInsertMessage(t *testing.T) {
 func TestQueryExecutorPlanInsertSubQueryAutoCommmit(t *testing.T) {
 	db := setUpQueryExecutorTest(t)
 	defer db.Close()
-	query := "insert into test_table(pk) select pk from test_table where pk = 1 limit 1000"
+	query := "insert into test_table(pk) select pk from test_table where pk = 2"
 	want := &sqltypes.Result{}
 	db.AddQuery(query, want)
-	selectQuery := "select pk from test_table where pk = 1 limit 1000"
+	selectQuery := "select pk from test_table where pk = 2 limit 10001"
 	db.AddQuery(selectQuery, &sqltypes.Result{
 		Fields: []*querypb.Field{{
 			Name: "pk",
@@ -232,7 +232,7 @@ func TestQueryExecutorPlanInsertSubQueryAutoCommmit(t *testing.T) {
 
 	db.AddQuery(insertQuery, &sqltypes.Result{})
 	ctx := context.Background()
-	tsv := newTestTabletServer(ctx, 0, db)
+	tsv := newTestTabletServer(ctx, noFlags, db)
 	qre := newTestQueryExecutor(ctx, tsv, query, 0)
 	defer tsv.StopService()
 	checkPlanID(t, planbuilder.PlanInsertSubquery, qre.plan.PlanID)
@@ -248,10 +248,10 @@ func TestQueryExecutorPlanInsertSubQueryAutoCommmit(t *testing.T) {
 func TestQueryExecutorPlanInsertSubQuery(t *testing.T) {
 	db := setUpQueryExecutorTest(t)
 	defer db.Close()
-	query := "insert into test_table(pk) select pk from test_table where pk = 1 limit 1000"
+	query := "insert into test_table(pk) select pk from test_table where pk = 2"
 	want := &sqltypes.Result{}
 	db.AddQuery(query, want)
-	selectQuery := "select pk from test_table where pk = 1 limit 1000"
+	selectQuery := "select pk from test_table where pk = 2 limit 10001"
 	db.AddQuery(selectQuery, &sqltypes.Result{
 		Fields: []*querypb.Field{{
 			Name: "pk",
@@ -267,7 +267,7 @@ func TestQueryExecutorPlanInsertSubQuery(t *testing.T) {
 
 	db.AddQuery(insertQuery, &sqltypes.Result{})
 	ctx := context.Background()
-	tsv := newTestTabletServer(ctx, 0, db)
+	tsv := newTestTabletServer(ctx, noFlags, db)
 	txid := newTransaction(tsv)
 	qre := newTestQueryExecutor(ctx, tsv, query, txid)
 
@@ -289,12 +289,14 @@ func TestQueryExecutorPlanInsertSubQuery(t *testing.T) {
 }
 
 func TestQueryExecutorPlanInsertSubQueryRBR(t *testing.T) {
+	// RBR test is almost identical to the non-RBR test, except that
+	// the _stream comments are suppressed for RBR.
 	db := setUpQueryExecutorTest(t)
 	defer db.Close()
-	query := "insert into test_table(pk) select pk from test_table where pk = 1 limit 1000"
+	query := "insert into test_table(pk) select pk from test_table where pk = 2"
 	want := &sqltypes.Result{}
 	db.AddQuery(query, want)
-	selectQuery := "select pk from test_table where pk = 1 limit 1000"
+	selectQuery := "select pk from test_table where pk = 2 limit 10001"
 	db.AddQuery(selectQuery, &sqltypes.Result{
 		Fields: []*querypb.Field{{
 			Name: "pk",
@@ -310,7 +312,7 @@ func TestQueryExecutorPlanInsertSubQueryRBR(t *testing.T) {
 
 	db.AddQuery(insertQuery, &sqltypes.Result{})
 	ctx := context.Background()
-	tsv := newTestTabletServer(ctx, 0, db)
+	tsv := newTestTabletServer(ctx, noFlags, db)
 	txid := newTransaction(tsv)
 	qre := newTestQueryExecutor(ctx, tsv, query, txid)
 	tsv.qe.binlogFormat = connpool.BinlogFormatRow
@@ -339,7 +341,7 @@ func TestQueryExecutorPlanUpsertPk(t *testing.T) {
 	want := &sqltypes.Result{}
 	query := "insert into test_table values(1) on duplicate key update val=1"
 	ctx := context.Background()
-	tsv := newTestTabletServer(ctx, 0, db)
+	tsv := newTestTabletServer(ctx, noFlags, db)
 	txid := newTransaction(tsv)
 	qre := newTestQueryExecutor(ctx, tsv, query, txid)
 	defer tsv.StopService()
@@ -418,13 +420,14 @@ func TestQueryExecutorPlanUpsertPk(t *testing.T) {
 }
 
 func TestQueryExecutorPlanUpsertPkRBR(t *testing.T) {
+	// For UPSERT, the query just becomes a pass-through in RBR mode.
 	db := setUpQueryExecutorTest(t)
 	defer db.Close()
 	query := "insert into test_table values (1) on duplicate key update val = 1"
 	db.AddQuery(query, &sqltypes.Result{})
 	want := &sqltypes.Result{}
 	ctx := context.Background()
-	tsv := newTestTabletServer(ctx, 0, db)
+	tsv := newTestTabletServer(ctx, noFlags, db)
 	txid := newTransaction(tsv)
 	qre := newTestQueryExecutor(ctx, tsv, query, txid)
 	tsv.qe.binlogFormat = connpool.BinlogFormatRow
@@ -452,7 +455,7 @@ func TestQueryExecutorPlanUpsertPkAutoCommit(t *testing.T) {
 	want := &sqltypes.Result{}
 	query := "insert into test_table values(1) on duplicate key update val=1"
 	ctx := context.Background()
-	tsv := newTestTabletServer(ctx, 0, db)
+	tsv := newTestTabletServer(ctx, noFlags, db)
 	qre := newTestQueryExecutor(ctx, tsv, query, 0)
 	defer tsv.StopService()
 	checkPlanID(t, planbuilder.PlanUpsertPK, qre.plan.PlanID)
@@ -509,7 +512,7 @@ func TestQueryExecutorPlanDmlPk(t *testing.T) {
 	want := &sqltypes.Result{}
 	db.AddQuery(query, want)
 	ctx := context.Background()
-	tsv := newTestTabletServer(ctx, 0, db)
+	tsv := newTestTabletServer(ctx, noFlags, db)
 	txid := newTransaction(tsv)
 	qre := newTestQueryExecutor(ctx, tsv, query, txid)
 	defer tsv.StopService()
@@ -530,13 +533,15 @@ func TestQueryExecutorPlanDmlPk(t *testing.T) {
 }
 
 func TestQueryExecutorPlanDmlPkRBR(t *testing.T) {
+	// RBR test is almost identical to the non-RBR test, except that
+	// the _stream comments are suppressed for RBR.
 	db := setUpQueryExecutorTest(t)
 	defer db.Close()
 	query := "update test_table set name = 2 where pk in (1)"
 	want := &sqltypes.Result{}
 	db.AddQuery(query, want)
 	ctx := context.Background()
-	tsv := newTestTabletServer(ctx, 0, db)
+	tsv := newTestTabletServer(ctx, noFlags, db)
 	txid := newTransaction(tsv)
 	qre := newTestQueryExecutor(ctx, tsv, query, txid)
 	tsv.qe.binlogFormat = connpool.BinlogFormatRow
@@ -575,7 +580,7 @@ func TestQueryExecutorPlanDmlMessage(t *testing.T) {
 	})
 	db.AddQuery("update msg set time_acked = 2, time_next = null where (time_scheduled = 12 and id = 1) /* _stream msg (time_scheduled id ) (12 1 ); */", want)
 	ctx := context.Background()
-	tsv := newTestTabletServer(ctx, 0, db)
+	tsv := newTestTabletServer(ctx, noFlags, db)
 	txid := newTransaction(tsv)
 	qre := newTestQueryExecutor(ctx, tsv, query, txid)
 	defer tsv.StopService()
@@ -603,7 +608,7 @@ func TestQueryExecutorPlanDmlAutoCommit(t *testing.T) {
 	want := &sqltypes.Result{}
 	db.AddQuery(query, want)
 	ctx := context.Background()
-	tsv := newTestTabletServer(ctx, 0, db)
+	tsv := newTestTabletServer(ctx, noFlags, db)
 	qre := newTestQueryExecutor(ctx, tsv, query, 0)
 	defer tsv.StopService()
 	checkPlanID(t, planbuilder.PlanDMLPK, qre.plan.PlanID)
@@ -619,8 +624,8 @@ func TestQueryExecutorPlanDmlAutoCommit(t *testing.T) {
 func TestQueryExecutorPlanDmlSubQuery(t *testing.T) {
 	db := setUpQueryExecutorTest(t)
 	defer db.Close()
-	query := "update test_table set addr = 3 where name = 1 limit 1000"
-	expandedQuery := "select pk from test_table where name = 1 limit 1000 for update"
+	query := "update test_table set addr = 3 where name = 1"
+	expandedQuery := "select pk from test_table where name = 1 limit 10001 for update"
 	want := &sqltypes.Result{}
 	db.AddQuery(query, want)
 	db.AddQuery(expandedQuery, &sqltypes.Result{
@@ -635,7 +640,7 @@ func TestQueryExecutorPlanDmlSubQuery(t *testing.T) {
 	updateQuery := "update test_table set addr = 3 where pk in (2) /* _stream test_table (pk ) (2 ); */"
 	db.AddQuery(updateQuery, want)
 	ctx := context.Background()
-	tsv := newTestTabletServer(ctx, 0, db)
+	tsv := newTestTabletServer(ctx, noFlags, db)
 	txid := newTransaction(tsv)
 	qre := newTestQueryExecutor(ctx, tsv, query, txid)
 	defer tsv.StopService()
@@ -656,10 +661,12 @@ func TestQueryExecutorPlanDmlSubQuery(t *testing.T) {
 }
 
 func TestQueryExecutorPlanDmlSubQueryRBR(t *testing.T) {
+	// RBR test is almost identical to the non-RBR test, except that
+	// the _stream comments are suppressed for RBR.
 	db := setUpQueryExecutorTest(t)
 	defer db.Close()
-	query := "update test_table set addr = 3 where name = 1 limit 1000"
-	expandedQuery := "select pk from test_table where name = 1 limit 1000 for update"
+	query := "update test_table set addr = 3 where name = 1"
+	expandedQuery := "select pk from test_table where name = 1 limit 10001 for update"
 	want := &sqltypes.Result{}
 	db.AddQuery(query, want)
 	db.AddQuery(expandedQuery, &sqltypes.Result{
@@ -674,7 +681,7 @@ func TestQueryExecutorPlanDmlSubQueryRBR(t *testing.T) {
 	updateQuery := "update test_table set addr = 3 where pk in (2)"
 	db.AddQuery(updateQuery, want)
 	ctx := context.Background()
-	tsv := newTestTabletServer(ctx, 0, db)
+	tsv := newTestTabletServer(ctx, noFlags, db)
 	txid := newTransaction(tsv)
 	qre := newTestQueryExecutor(ctx, tsv, query, txid)
 	tsv.qe.binlogFormat = connpool.BinlogFormatRow
@@ -698,13 +705,13 @@ func TestQueryExecutorPlanDmlSubQueryRBR(t *testing.T) {
 func TestQueryExecutorPlanDmlSubQueryAutoCommit(t *testing.T) {
 	db := setUpQueryExecutorTest(t)
 	defer db.Close()
-	query := "update test_table set addr = 3 where name = 1 limit 1000"
-	expandedQuery := "select pk from test_table where name = 1 limit 1000 for update"
+	query := "update test_table set addr = 3 where name = 1"
+	expandedQuery := "select pk from test_table where name = 1 limit 10001 for update"
 	want := &sqltypes.Result{}
 	db.AddQuery(query, want)
 	db.AddQuery(expandedQuery, want)
 	ctx := context.Background()
-	tsv := newTestTabletServer(ctx, 0, db)
+	tsv := newTestTabletServer(ctx, noFlags, db)
 	qre := newTestQueryExecutor(ctx, tsv, query, 0)
 	defer tsv.StopService()
 	checkPlanID(t, planbuilder.PlanDMLSubquery, qre.plan.PlanID)
@@ -726,7 +733,7 @@ func TestQueryExecutorPlanOtherWithinATransaction(t *testing.T) {
 	}
 	db.AddQuery(query, want)
 	ctx := context.Background()
-	tsv := newTestTabletServer(ctx, 0, db)
+	tsv := newTestTabletServer(ctx, noFlags, db)
 	txid := newTransaction(tsv)
 	qre := newTestQueryExecutor(ctx, tsv, query, txid)
 	defer tsv.StopService()
@@ -768,7 +775,7 @@ func TestQueryExecutorPlanPassSelectWithInATransaction(t *testing.T) {
 		Fields: fields,
 	})
 	ctx := context.Background()
-	tsv := newTestTabletServer(ctx, 0, db)
+	tsv := newTestTabletServer(ctx, noFlags, db)
 	txid := newTransaction(tsv)
 	qre := newTestQueryExecutor(ctx, tsv, query, txid)
 	defer tsv.StopService()
@@ -804,7 +811,7 @@ func TestQueryExecutorPlanPassSelectWithLockOutsideATransaction(t *testing.T) {
 		Fields: getTestTableFields(),
 	})
 	ctx := context.Background()
-	tsv := newTestTabletServer(ctx, 0, db)
+	tsv := newTestTabletServer(ctx, noFlags, db)
 	qre := newTestQueryExecutor(ctx, tsv, query, 0)
 	defer tsv.StopService()
 	checkPlanID(t, planbuilder.PlanSelectLock, qre.plan.PlanID)
@@ -826,7 +833,7 @@ func TestQueryExecutorPlanPassSelect(t *testing.T) {
 		Fields: getTestTableFields(),
 	})
 	ctx := context.Background()
-	tsv := newTestTabletServer(ctx, 0, db)
+	tsv := newTestTabletServer(ctx, noFlags, db)
 	qre := newTestQueryExecutor(ctx, tsv, query, 0)
 	defer tsv.StopService()
 	checkPlanID(t, planbuilder.PlanPassSelect, qre.plan.PlanID)
@@ -850,7 +857,7 @@ func TestQueryExecutorPlanSet(t *testing.T) {
 	setQuery := "set unknown_key = 1"
 	db.AddQuery(setQuery, &sqltypes.Result{})
 	ctx := context.Background()
-	tsv := newTestTabletServer(ctx, 0, db)
+	tsv := newTestTabletServer(ctx, noFlags, db)
 	defer tsv.StopService()
 	qre := newTestQueryExecutor(ctx, tsv, setQuery, 0)
 	checkPlanID(t, planbuilder.PlanSet, qre.plan.PlanID)
@@ -893,7 +900,7 @@ func TestQueryExecutorPlanOther(t *testing.T) {
 	}
 	db.AddQuery(query, want)
 	ctx := context.Background()
-	tsv := newTestTabletServer(ctx, 0, db)
+	tsv := newTestTabletServer(ctx, noFlags, db)
 	qre := newTestQueryExecutor(ctx, tsv, query, 0)
 	defer tsv.StopService()
 	checkPlanID(t, planbuilder.PlanOther, qre.plan.PlanID)
@@ -929,7 +936,7 @@ func TestQueryExecutorPlanNextval(t *testing.T) {
 	updateQuery := "update seq set next_id = 4 where id = 0"
 	db.AddQuery(updateQuery, &sqltypes.Result{})
 	ctx := context.Background()
-	tsv := newTestTabletServer(ctx, 0, db)
+	tsv := newTestTabletServer(ctx, noFlags, db)
 	defer tsv.StopService()
 	qre := newTestQueryExecutor(ctx, tsv, "select next value from seq", 0)
 	checkPlanID(t, planbuilder.PlanNextval, qre.plan.PlanID)
@@ -1073,7 +1080,7 @@ func TestQueryExecutorTableAcl(t *testing.T) {
 		t.Fatalf("unable to load tableacl config, error: %v", err)
 	}
 
-	tsv := newTestTabletServer(ctx, 0, db)
+	tsv := newTestTabletServer(ctx, noFlags, db)
 	qre := newTestQueryExecutor(ctx, tsv, query, 0)
 	defer tsv.StopService()
 	checkPlanID(t, planbuilder.PlanPassSelect, qre.plan.PlanID)
@@ -1123,7 +1130,7 @@ func TestQueryExecutorTableAclNoPermission(t *testing.T) {
 		t.Fatalf("unable to load tableacl config, error: %v", err)
 	}
 	// without enabling Config.StrictTableAcl
-	tsv := newTestTabletServer(ctx, 0, db)
+	tsv := newTestTabletServer(ctx, noFlags, db)
 	qre := newTestQueryExecutor(ctx, tsv, query, 0)
 	checkPlanID(t, planbuilder.PlanPassSelect, qre.plan.PlanID)
 	got, err := qre.Execute()
@@ -1316,7 +1323,7 @@ func TestQueryExecutorBlacklistQRFail(t *testing.T) {
 		User:   bannedUser,
 	}
 	ctx := callinfo.NewContext(context.Background(), callInfo)
-	tsv := newTestTabletServer(ctx, 0, db)
+	tsv := newTestTabletServer(ctx, noFlags, db)
 	tsv.qe.queryRuleSources.UnRegisterSource(rulesName)
 	tsv.qe.queryRuleSources.RegisterSource(rulesName)
 	defer tsv.qe.queryRuleSources.UnRegisterSource(rulesName)
@@ -1370,7 +1377,7 @@ func TestQueryExecutorBlacklistQRRetry(t *testing.T) {
 		User:   bannedUser,
 	}
 	ctx := callinfo.NewContext(context.Background(), callInfo)
-	tsv := newTestTabletServer(ctx, 0, db)
+	tsv := newTestTabletServer(ctx, noFlags, db)
 	tsv.qe.queryRuleSources.UnRegisterSource(rulesName)
 	tsv.qe.queryRuleSources.RegisterSource(rulesName)
 	defer tsv.qe.queryRuleSources.UnRegisterSource(rulesName)
