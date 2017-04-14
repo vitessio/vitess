@@ -194,16 +194,16 @@ docker_base_percona57:
 docker_lite:
 	cd docker/lite && ./build.sh --prompt=$(PROMPT_NOTICE)
 
-docker_lite_mysql56: docker_base_mysql56
+docker_lite_mysql56:
 	cd docker/lite && ./build.sh --prompt=$(PROMPT_NOTICE) mysql56
 
-docker_lite_mariadb: docker_base_mariadb
+docker_lite_mariadb:
 	cd docker/lite && ./build.sh --prompt=$(PROMPT_NOTICE) mariadb
 
-docker_lite_percona: docker_base_percona
+docker_lite_percona:
 	cd docker/lite && ./build.sh --prompt=$(PROMPT_NOTICE) percona
 
-docker_lite_percona57: docker_base_percona57
+docker_lite_percona57:
 	cd docker/lite && ./build.sh --prompt=$(PROMPT_NOTICE) percona57
 
 docker_guestbook:
