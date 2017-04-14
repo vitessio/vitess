@@ -15,8 +15,8 @@ import (
 
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/callerid"
-	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateservice"
+	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/querytypes"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -96,9 +96,9 @@ func echoQueryResult(vals map[string]interface{}) *sqltypes.Result {
 	return qr
 }
 
-func (c *echoClient) Execute(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, tabletType topodatapb.TabletType, session *vtgatepb.Session, notInTransaction bool, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
+func (c *echoClient) Execute(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, tabletType topodatapb.TabletType, session *vtgatepb.Session, notInTransaction bool, options *querypb.ExecuteOptions) (*vtgatepb.Session, *sqltypes.Result, error) {
 	if strings.HasPrefix(sql, EchoPrefix) {
-		return echoQueryResult(map[string]interface{}{
+		return session, echoQueryResult(map[string]interface{}{
 			"callerId":         callerid.EffectiveCallerIDFromContext(ctx),
 			"query":            sql,
 			"bindVars":         bindVariables,
@@ -181,6 +181,29 @@ func (c *echoClient) ExecuteEntityIds(ctx context.Context, sql string, bindVaria
 	return c.fallbackClient.ExecuteEntityIds(ctx, sql, bindVariables, keyspace, entityColumnName, entityKeyspaceIDs, tabletType, session, notInTransaction, options)
 }
 
+func (c *echoClient) ExecuteBatch(ctx context.Context, sqlList []string, bindVariablesList []map[string]interface{}, keyspace string, tabletType topodatapb.TabletType, session *vtgatepb.Session, options *querypb.ExecuteOptions) (*vtgatepb.Session, []sqltypes.QueryResponse, error) {
+	if len(sqlList) > 0 && strings.HasPrefix(sqlList[0], EchoPrefix) {
+		var queryResponse []sqltypes.QueryResponse
+		if bindVariablesList == nil {
+			bindVariablesList = make([]map[string]interface{}, len(sqlList))
+		}
+		for queryNum, query := range sqlList {
+			result := echoQueryResult(map[string]interface{}{
+				"callerId":   callerid.EffectiveCallerIDFromContext(ctx),
+				"query":      query,
+				"bindVars":   bindVariablesList[queryNum],
+				"keyspace":   keyspace,
+				"tabletType": tabletType,
+				"session":    session,
+				"options":    options,
+			})
+			queryResponse = append(queryResponse, sqltypes.QueryResponse{QueryResult: result, QueryError: nil})
+		}
+		return session, queryResponse, nil
+	}
+	return c.fallbackClient.ExecuteBatch(ctx, sqlList, bindVariablesList, keyspace, tabletType, session, options)
+}
+
 func (c *echoClient) ExecuteBatchShards(ctx context.Context, queries []*vtgatepb.BoundShardQuery, tabletType topodatapb.TabletType, asTransaction bool, session *vtgatepb.Session, options *querypb.ExecuteOptions) ([]sqltypes.Result, error) {
 	if len(queries) > 0 && strings.HasPrefix(queries[0].Query.Sql, EchoPrefix) {
 		var result []sqltypes.Result
@@ -223,9 +246,9 @@ func (c *echoClient) ExecuteBatchKeyspaceIds(ctx context.Context, queries []*vtg
 	return c.fallbackClient.ExecuteBatchKeyspaceIds(ctx, queries, tabletType, asTransaction, session, options)
 }
 
-func (c *echoClient) StreamExecute(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, tabletType topodatapb.TabletType, options *querypb.ExecuteOptions, sendReply func(*sqltypes.Result) error) error {
+func (c *echoClient) StreamExecute(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, tabletType topodatapb.TabletType, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
 	if strings.HasPrefix(sql, EchoPrefix) {
-		sendReply(echoQueryResult(map[string]interface{}{
+		callback(echoQueryResult(map[string]interface{}{
 			"callerId":   callerid.EffectiveCallerIDFromContext(ctx),
 			"query":      sql,
 			"bindVars":   bindVariables,
@@ -235,12 +258,12 @@ func (c *echoClient) StreamExecute(ctx context.Context, sql string, bindVariable
 		}))
 		return nil
 	}
-	return c.fallbackClient.StreamExecute(ctx, sql, bindVariables, keyspace, tabletType, options, sendReply)
+	return c.fallbackClient.StreamExecute(ctx, sql, bindVariables, keyspace, tabletType, options, callback)
 }
 
-func (c *echoClient) StreamExecuteShards(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, shards []string, tabletType topodatapb.TabletType, options *querypb.ExecuteOptions, sendReply func(*sqltypes.Result) error) error {
+func (c *echoClient) StreamExecuteShards(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, shards []string, tabletType topodatapb.TabletType, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
 	if strings.HasPrefix(sql, EchoPrefix) {
-		sendReply(echoQueryResult(map[string]interface{}{
+		callback(echoQueryResult(map[string]interface{}{
 			"callerId":   callerid.EffectiveCallerIDFromContext(ctx),
 			"query":      sql,
 			"bindVars":   bindVariables,
@@ -251,12 +274,12 @@ func (c *echoClient) StreamExecuteShards(ctx context.Context, sql string, bindVa
 		}))
 		return nil
 	}
-	return c.fallbackClient.StreamExecuteShards(ctx, sql, bindVariables, keyspace, shards, tabletType, options, sendReply)
+	return c.fallbackClient.StreamExecuteShards(ctx, sql, bindVariables, keyspace, shards, tabletType, options, callback)
 }
 
-func (c *echoClient) StreamExecuteKeyspaceIds(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyspaceIds [][]byte, tabletType topodatapb.TabletType, options *querypb.ExecuteOptions, sendReply func(*sqltypes.Result) error) error {
+func (c *echoClient) StreamExecuteKeyspaceIds(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyspaceIds [][]byte, tabletType topodatapb.TabletType, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
 	if strings.HasPrefix(sql, EchoPrefix) {
-		sendReply(echoQueryResult(map[string]interface{}{
+		callback(echoQueryResult(map[string]interface{}{
 			"callerId":    callerid.EffectiveCallerIDFromContext(ctx),
 			"query":       sql,
 			"bindVars":    bindVariables,
@@ -267,12 +290,12 @@ func (c *echoClient) StreamExecuteKeyspaceIds(ctx context.Context, sql string, b
 		}))
 		return nil
 	}
-	return c.fallbackClient.StreamExecuteKeyspaceIds(ctx, sql, bindVariables, keyspace, keyspaceIds, tabletType, options, sendReply)
+	return c.fallbackClient.StreamExecuteKeyspaceIds(ctx, sql, bindVariables, keyspace, keyspaceIds, tabletType, options, callback)
 }
 
-func (c *echoClient) StreamExecuteKeyRanges(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyRanges []*topodatapb.KeyRange, tabletType topodatapb.TabletType, options *querypb.ExecuteOptions, sendReply func(*sqltypes.Result) error) error {
+func (c *echoClient) StreamExecuteKeyRanges(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyRanges []*topodatapb.KeyRange, tabletType topodatapb.TabletType, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
 	if strings.HasPrefix(sql, EchoPrefix) {
-		sendReply(echoQueryResult(map[string]interface{}{
+		callback(echoQueryResult(map[string]interface{}{
 			"callerId":   callerid.EffectiveCallerIDFromContext(ctx),
 			"query":      sql,
 			"bindVars":   bindVariables,
@@ -283,7 +306,7 @@ func (c *echoClient) StreamExecuteKeyRanges(ctx context.Context, sql string, bin
 		}))
 		return nil
 	}
-	return c.fallbackClient.StreamExecuteKeyRanges(ctx, sql, bindVariables, keyspace, keyRanges, tabletType, options, sendReply)
+	return c.fallbackClient.StreamExecuteKeyRanges(ctx, sql, bindVariables, keyspace, keyRanges, tabletType, options, callback)
 }
 
 func (c *echoClient) SplitQuery(
@@ -325,7 +348,7 @@ func (c *echoClient) SplitQuery(
 		algorithm)
 }
 
-func (c *echoClient) UpdateStream(ctx context.Context, keyspace string, shard string, keyRange *topodatapb.KeyRange, tabletType topodatapb.TabletType, timestamp int64, event *querypb.EventToken, sendReply func(*querypb.StreamEvent, int64) error) error {
+func (c *echoClient) UpdateStream(ctx context.Context, keyspace string, shard string, keyRange *topodatapb.KeyRange, tabletType topodatapb.TabletType, timestamp int64, event *querypb.EventToken, callback func(*querypb.StreamEvent, int64) error) error {
 	if strings.HasPrefix(shard, EchoPrefix) {
 		m := map[string]interface{}{
 			"callerId":   callerid.EffectiveCallerIDFromContext(ctx),
@@ -337,12 +360,12 @@ func (c *echoClient) UpdateStream(ctx context.Context, keyspace string, shard st
 			"event":      event,
 		}
 		bytes := printSortedMap(reflect.ValueOf(m))
-		sendReply(&querypb.StreamEvent{
+		callback(&querypb.StreamEvent{
 			EventToken: &querypb.EventToken{
 				Position: string(bytes),
 			},
 		}, 0)
 		return nil
 	}
-	return c.fallbackClient.UpdateStream(ctx, keyspace, shard, keyRange, tabletType, timestamp, event, sendReply)
+	return c.fallbackClient.UpdateStream(ctx, keyspace, shard, keyRange, tabletType, timestamp, event, callback)
 }

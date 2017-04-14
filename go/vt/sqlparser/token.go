@@ -35,9 +35,20 @@ func NewStringTokenizer(sql string) *Tokenizer {
 	return &Tokenizer{InStream: strings.NewReader(sql)}
 }
 
+// keywords is a map of mysql keywords that fall into two categories:
+// 1) keywords considered reserved by MySQL
+// 2) keywords for us to handle specially in sql.y
+//
+// Those marked as UNUSED are likely reserved keywords. We add them here so that
+// when rewriting queries we can properly backtick quote them so they don't cause issues
+//
+// NOTE: If you add new keywords, add them also to the reserved_keywords or
+// non_reserved_keywords grammar in sql.y -- this will allow the keyword to be used
+// in identifiers. See the docs for each grammar to determine which one to put it into.
 var keywords = map[string]int{
 	"accessible":          UNUSED,
 	"add":                 UNUSED,
+	"against":             AGAINST,
 	"all":                 ALL,
 	"alter":               ALTER,
 	"analyze":             ANALYZE,
@@ -48,38 +59,39 @@ var keywords = map[string]int{
 	"before":              UNUSED,
 	"between":             BETWEEN,
 	"bigint":              UNUSED,
-	"binary":              UNUSED,
+	"binary":              BINARY,
 	"blob":                UNUSED,
+	"boolean":             BOOLEAN,
 	"both":                UNUSED,
 	"by":                  BY,
 	"call":                UNUSED,
 	"cascade":             UNUSED,
 	"case":                CASE,
+	"cast":                CAST,
 	"change":              UNUSED,
-	"char":                UNUSED,
-	"character":           UNUSED,
+	"character":           CHARACTER,
 	"check":               UNUSED,
-	"collate":             UNUSED,
+	"collate":             COLLATE,
 	"column":              UNUSED,
 	"condition":           UNUSED,
 	"constraint":          UNUSED,
 	"continue":            UNUSED,
-	"convert":             UNUSED,
+	"convert":             CONVERT,
 	"create":              CREATE,
 	"cross":               CROSS,
-	"current_date":        UNUSED,
-	"current_time":        UNUSED,
+	"current_date":        CURRENT_DATE,
+	"current_time":        CURRENT_TIME,
 	"current_timestamp":   CURRENT_TIMESTAMP,
 	"current_user":        UNUSED,
 	"cursor":              UNUSED,
 	"database":            DATABASE,
-	"databases":           UNUSED,
+	"databases":           DATABASES,
 	"day_hour":            UNUSED,
 	"day_microsecond":     UNUSED,
 	"day_minute":          UNUSED,
 	"day_second":          UNUSED,
+	"date":                DATE,
 	"dec":                 UNUSED,
-	"decimal":             UNUSED,
 	"declare":             UNUSED,
 	"default":             DEFAULT,
 	"delayed":             UNUSED,
@@ -89,7 +101,7 @@ var keywords = map[string]int{
 	"deterministic":       UNUSED,
 	"distinct":            DISTINCT,
 	"distinctrow":         UNUSED,
-	"div":                 UNUSED,
+	"div":                 DIV,
 	"double":              UNUSED,
 	"drop":                DROP,
 	"duplicate":           DUPLICATE,
@@ -98,10 +110,12 @@ var keywords = map[string]int{
 	"elseif":              UNUSED,
 	"enclosed":            UNUSED,
 	"end":                 END,
+	"escape":              ESCAPE,
 	"escaped":             UNUSED,
 	"exists":              EXISTS,
 	"exit":                UNUSED,
 	"explain":             EXPLAIN,
+	"expansion":           EXPANSION,
 	"false":               FALSE,
 	"fetch":               UNUSED,
 	"float":               UNUSED,
@@ -116,6 +130,7 @@ var keywords = map[string]int{
 	"get":                 UNUSED,
 	"grant":               UNUSED,
 	"group":               GROUP,
+	"group_concat":        GROUP_CONCAT,
 	"having":              HAVING,
 	"high_priority":       UNUSED,
 	"hour_microsecond":    UNUSED,
@@ -136,7 +151,7 @@ var keywords = map[string]int{
 	"int3":                UNUSED,
 	"int4":                UNUSED,
 	"int8":                UNUSED,
-	"integer":             UNUSED,
+	"integer":             INTEGER,
 	"interval":            INTERVAL,
 	"into":                INTO,
 	"io_after_gtids":      UNUSED,
@@ -146,6 +161,7 @@ var keywords = map[string]int{
 	"key":                 KEY,
 	"keys":                UNUSED,
 	"kill":                UNUSED,
+	"language":            LANGUAGE,
 	"last_insert_id":      LAST_INSERT_ID,
 	"leading":             UNUSED,
 	"leave":               UNUSED,
@@ -155,8 +171,8 @@ var keywords = map[string]int{
 	"linear":              UNUSED,
 	"lines":               UNUSED,
 	"load":                UNUSED,
-	"localtime":           UNUSED,
-	"localtimestamp":      UNUSED,
+	"localtime":           LOCALTIME,
+	"localtimestamp":      LOCALTIMESTAMP,
 	"lock":                LOCK,
 	"long":                UNUSED,
 	"longblob":            UNUSED,
@@ -164,7 +180,7 @@ var keywords = map[string]int{
 	"loop":                UNUSED,
 	"low_priority":        UNUSED,
 	"master_bind":         UNUSED,
-	"match":               UNUSED,
+	"match":               MATCH,
 	"maxvalue":            UNUSED,
 	"mediumblob":          UNUSED,
 	"mediumint":           UNUSED,
@@ -173,6 +189,7 @@ var keywords = map[string]int{
 	"minute_microsecond":  UNUSED,
 	"minute_second":       UNUSED,
 	"mod":                 MOD,
+	"mode":                MODE,
 	"modifies":            UNUSED,
 	"natural":             NATURAL,
 	"next":                NEXT,
@@ -180,8 +197,9 @@ var keywords = map[string]int{
 	"no_write_to_binlog":  UNUSED,
 	"null":                NULL,
 	"numeric":             UNUSED,
+	"offset":              OFFSET,
 	"on":                  ON,
-	"optimize":            UNUSED,
+	"optimize":            OPTIMIZE,
 	"optimizer_costs":     UNUSED,
 	"option":              UNUSED,
 	"optionally":          UNUSED,
@@ -194,6 +212,7 @@ var keywords = map[string]int{
 	"precision":           UNUSED,
 	"primary":             UNUSED,
 	"procedure":           UNUSED,
+	"query":               QUERY,
 	"range":               UNUSED,
 	"read":                UNUSED,
 	"reads":               UNUSED,
@@ -203,8 +222,9 @@ var keywords = map[string]int{
 	"regexp":              REGEXP,
 	"release":             UNUSED,
 	"rename":              RENAME,
+	"repair":              REPAIR,
 	"repeat":              UNUSED,
-	"replace":             UNUSED,
+	"replace":             REPLACE,
 	"require":             UNUSED,
 	"resignal":            UNUSED,
 	"restrict":            UNUSED,
@@ -217,8 +237,9 @@ var keywords = map[string]int{
 	"second_microsecond":  UNUSED,
 	"select":              SELECT,
 	"sensitive":           UNUSED,
-	"separator":           UNUSED,
+	"separator":           SEPARATOR,
 	"set":                 SET,
+	"share":               SHARE,
 	"show":                SHOW,
 	"signal":              UNUSED,
 	"smallint":            UNUSED,
@@ -229,13 +250,16 @@ var keywords = map[string]int{
 	"sqlstate":            UNUSED,
 	"sqlwarning":          UNUSED,
 	"sql_big_result":      UNUSED,
+	"sql_cache":           SQL_CACHE,
 	"sql_calc_found_rows": UNUSED,
+	"sql_no_cache":        SQL_NO_CACHE,
 	"sql_small_result":    UNUSED,
 	"ssl":                 UNUSED,
 	"starting":            UNUSED,
 	"stored":              UNUSED,
 	"straight_join":       STRAIGHT_JOIN,
 	"table":               TABLE,
+	"tables":              TABLES,
 	"terminated":          UNUSED,
 	"then":                THEN,
 	"tinyblob":            UNUSED,
@@ -245,18 +269,18 @@ var keywords = map[string]int{
 	"trailing":            UNUSED,
 	"trigger":             UNUSED,
 	"true":                TRUE,
+	"truncate":            TRUNCATE,
 	"undo":                UNUSED,
 	"union":               UNION,
 	"unique":              UNIQUE,
 	"unlock":              UNUSED,
-	"unsigned":            UNUSED,
 	"update":              UPDATE,
 	"usage":               UNUSED,
 	"use":                 USE,
 	"using":               USING,
-	"utc_date":            UNUSED,
-	"utc_time":            UNUSED,
-	"utc_timestamp":       UNUSED,
+	"utc_date":            UTC_DATE,
+	"utc_time":            UTC_TIME,
+	"utc_timestamp":       UTC_TIMESTAMP,
 	"values":              VALUES,
 	"varbinary":           UNUSED,
 	"varchar":             UNUSED,
@@ -264,10 +288,13 @@ var keywords = map[string]int{
 	"varying":             UNUSED,
 	"virtual":             UNUSED,
 	"view":                VIEW,
+	"vitess_keyspaces":    VITESS_KEYSPACES,
+	"vitess_shards":       VITESS_SHARDS,
+	"vschema_tables":      VSCHEMA_TABLES,
 	"when":                WHEN,
 	"where":               WHERE,
 	"while":               UNUSED,
-	"with":                UNUSED,
+	"with":                WITH,
 	"write":               UNUSED,
 	"xor":                 UNUSED,
 	"year_month":          UNUSED,
@@ -284,10 +311,7 @@ func (tkn *Tokenizer) Lex(lval *yySymType) int {
 		}
 		typ, val = tkn.Scan()
 	}
-	switch typ {
-	case ID, STRING, HEX, NUMBER, HEXNUM, VALUE_ARG, LIST_ARG, COMMENT:
-		lval.bytes = val
-	}
+	lval.bytes = val
 	tkn.lastToken = val
 	return typ
 }
@@ -333,7 +357,19 @@ func (tkn *Tokenizer) Scan() (int, []byte) {
 		switch ch {
 		case eofChar:
 			return 0, nil
-		case '=', ',', ';', '(', ')', '+', '*', '%', '&', '|', '^', '~':
+		case '=', ',', ';', '(', ')', '+', '*', '%', '^', '~':
+			return int(ch), nil
+		case '&':
+			if tkn.lastChar == '&' {
+				tkn.next()
+				return AND, nil
+			}
+			return int(ch), nil
+		case '|':
+			if tkn.lastChar == '|' {
+				tkn.next()
+				return OR, nil
+			}
 			return int(ch), nil
 		case '?':
 			tkn.posVarIndex++
@@ -356,6 +392,9 @@ func (tkn *Tokenizer) Scan() (int, []byte) {
 			default:
 				return int(ch), nil
 			}
+		case '#':
+			tkn.next()
+			return tkn.scanCommentType1("#")
 		case '-':
 			switch tkn.lastChar {
 			case '-':
@@ -406,7 +445,7 @@ func (tkn *Tokenizer) Scan() (int, []byte) {
 				tkn.next()
 				return NE, nil
 			}
-			return LEX_ERROR, []byte("!")
+			return int(ch), nil
 		case '\'', '"':
 			return tkn.scanString(ch, STRING)
 		case '`':
@@ -459,17 +498,32 @@ func (tkn *Tokenizer) scanHex() (int, []byte) {
 
 func (tkn *Tokenizer) scanLiteralIdentifier() (int, []byte) {
 	buffer := &bytes.Buffer{}
-	buffer.WriteByte(byte(tkn.lastChar))
-	if !isLetter(tkn.lastChar) {
+	backTickSeen := false
+	for {
+		if backTickSeen {
+			if tkn.lastChar != '`' {
+				break
+			}
+			backTickSeen = false
+			buffer.WriteByte('`')
+			tkn.next()
+			continue
+		}
+		// The previous char was not a backtick.
+		switch tkn.lastChar {
+		case '`':
+			backTickSeen = true
+		case eofChar:
+			// Premature EOF.
+			return LEX_ERROR, buffer.Bytes()
+		default:
+			buffer.WriteByte(byte(tkn.lastChar))
+		}
+		tkn.next()
+	}
+	if buffer.Len() == 0 {
 		return LEX_ERROR, buffer.Bytes()
 	}
-	for tkn.next(); isLetter(tkn.lastChar) || isDigit(tkn.lastChar); tkn.next() {
-		buffer.WriteByte(byte(tkn.lastChar))
-	}
-	if tkn.lastChar != '`' {
-		return LEX_ERROR, buffer.Bytes()
-	}
-	tkn.next()
 	return ID, buffer.Bytes()
 }
 
@@ -500,9 +554,10 @@ func (tkn *Tokenizer) scanMantissa(base int, buffer *bytes.Buffer) {
 }
 
 func (tkn *Tokenizer) scanNumber(seenDecimalPoint bool) (int, []byte) {
-	token := NUMBER
+	token := INTEGRAL
 	buffer := &bytes.Buffer{}
 	if seenDecimalPoint {
+		token = FLOAT
 		buffer.WriteByte('.')
 		tkn.scanMantissa(10, buffer)
 		goto exponent
@@ -522,12 +577,14 @@ func (tkn *Tokenizer) scanNumber(seenDecimalPoint bool) (int, []byte) {
 	tkn.scanMantissa(10, buffer)
 
 	if tkn.lastChar == '.' {
+		token = FLOAT
 		tkn.consumeNext(buffer)
 		tkn.scanMantissa(10, buffer)
 	}
 
 exponent:
 	if tkn.lastChar == 'e' || tkn.lastChar == 'E' {
+		token = FLOAT
 		tkn.consumeNext(buffer)
 		if tkn.lastChar == '+' || tkn.lastChar == '-' {
 			tkn.consumeNext(buffer)

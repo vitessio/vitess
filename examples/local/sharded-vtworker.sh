@@ -9,6 +9,7 @@ source $script_root/env.sh
 
 echo "Starting vtworker..."
 exec $VTROOT/bin/vtworker \
+  $TOPOLOGY_FLAGS \
   -cell test \
   -log_dir $VTDATAROOT/tmp \
   -alsologtostderr \

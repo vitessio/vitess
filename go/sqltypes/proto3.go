@@ -5,9 +5,34 @@
 package sqltypes
 
 import querypb "github.com/youtube/vitess/go/vt/proto/query"
+import "github.com/youtube/vitess/go/vt/vterrors"
 
 // This file contains the proto3 conversion functions for the structures
 // defined here.
+
+// RowToProto3 converts []Value to proto3.
+func RowToProto3(row []Value) *querypb.Row {
+	result := &querypb.Row{}
+	result.Lengths = make([]int64, 0, len(row))
+	total := 0
+	for _, c := range row {
+		if c.IsNull() {
+			result.Lengths = append(result.Lengths, -1)
+			continue
+		}
+		length := c.Len()
+		result.Lengths = append(result.Lengths, int64(length))
+		total += length
+	}
+	result.Values = make([]byte, 0, total)
+	for _, c := range row {
+		if c.IsNull() {
+			continue
+		}
+		result.Values = append(result.Values, c.Raw()...)
+	}
+	return result
+}
 
 // RowsToProto3 converts [][]Value to proto3.
 func RowsToProto3(rows [][]Value) []*querypb.Row {
@@ -17,26 +42,7 @@ func RowsToProto3(rows [][]Value) []*querypb.Row {
 
 	result := make([]*querypb.Row, len(rows))
 	for i, r := range rows {
-		row := &querypb.Row{}
-		result[i] = row
-		row.Lengths = make([]int64, 0, len(r))
-		total := 0
-		for _, c := range r {
-			if c.IsNull() {
-				row.Lengths = append(row.Lengths, -1)
-				continue
-			}
-			length := c.Len()
-			row.Lengths = append(row.Lengths, int64(length))
-			total += length
-		}
-		row.Values = make([]byte, 0, total)
-		for _, c := range r {
-			if c.IsNull() {
-				continue
-			}
-			row.Values = append(row.Values, c.Raw()...)
-		}
+		result[i] = RowToProto3(r)
 	}
 	return result
 }
@@ -122,6 +128,36 @@ func Proto3ToResults(qr []*querypb.QueryResult) []Result {
 	result := make([]Result, len(qr))
 	for i, q := range qr {
 		result[i] = *Proto3ToResult(q)
+	}
+	return result
+}
+
+// QueryResponsesToProto3 converts []QueryResponse to proto3.
+func QueryResponsesToProto3(qr []QueryResponse) []*querypb.ResultWithError {
+	if len(qr) == 0 {
+		return nil
+	}
+	result := make([]*querypb.ResultWithError, len(qr))
+	for i, q := range qr {
+		result[i] = &querypb.ResultWithError{
+			Result: ResultToProto3(q.QueryResult),
+			Error:  vterrors.ToVTRPC(q.QueryError),
+		}
+	}
+	return result
+}
+
+// Proto3ToQueryReponses converts proto3 queryResponse to []QueryResponse.
+func Proto3ToQueryReponses(qr []*querypb.ResultWithError) []QueryResponse {
+	if len(qr) == 0 {
+		return nil
+	}
+	result := make([]QueryResponse, len(qr))
+	for i, q := range qr {
+		result[i] = QueryResponse{
+			QueryResult: Proto3ToResult(q.Result),
+			QueryError:  vterrors.FromVTRPC(q.Error),
+		}
 	}
 	return result
 }

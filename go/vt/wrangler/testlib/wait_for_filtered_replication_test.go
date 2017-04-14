@@ -5,8 +5,6 @@
 package testlib
 
 import (
-	"fmt"
-	"math/rand"
 	"strings"
 	"testing"
 	"time"
@@ -14,13 +12,13 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/vt/logutil"
-	"github.com/youtube/vitess/go/vt/tabletmanager"
-	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
-	"github.com/youtube/vitess/go/vt/tabletserver"
-	"github.com/youtube/vitess/go/vt/tabletserver/grpcqueryservice"
-	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
+	"github.com/youtube/vitess/go/vt/topo/memorytopo"
+	"github.com/youtube/vitess/go/vt/vttablet/grpcqueryservice"
+	"github.com/youtube/vitess/go/vt/vttablet/tabletmanager"
+	"github.com/youtube/vitess/go/vt/vttablet/tabletserver"
+	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
+	"github.com/youtube/vitess/go/vt/vttablet/tmclient"
 	"github.com/youtube/vitess/go/vt/wrangler"
-	"github.com/youtube/vitess/go/vt/zktopo/zktestserver"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -78,8 +76,7 @@ func TestWaitForFilteredReplication_unhealthy(t *testing.T) {
 }
 
 func waitForFilteredReplication(t *testing.T, expectedErr string, initialStats *querypb.RealtimeStats, broadcastStatsFunc func() *querypb.RealtimeStats) {
-	db := fakesqldb.Register()
-	ts := zktestserver.New(t, []string{"cell1", "cell2"})
+	ts := memorytopo.NewServer("cell1", "cell2")
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 	vp := NewVtctlPipe(t, ts)
 	defer vp.Close()
@@ -93,10 +90,10 @@ func waitForFilteredReplication(t *testing.T, expectedErr string, initialStats *
 	}
 
 	// source of the filtered replication. We don't start its loop because we don't connect to it.
-	source := NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_MASTER, db,
+	source := NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_MASTER, nil,
 		TabletKeyspaceShard(t, keyspace, "0"))
 	// dest is the master of the dest shard which receives filtered replication events.
-	dest := NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_MASTER, db,
+	dest := NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_MASTER, nil,
 		TabletKeyspaceShard(t, keyspace, destShard))
 	dest.StartActionLoop(t, wr)
 	defer dest.StopActionLoop(t)
@@ -114,10 +111,7 @@ func waitForFilteredReplication(t *testing.T, expectedErr string, initialStats *
 	dest.Agent.BinlogPlayerMap = tabletmanager.NewBinlogPlayerMap(ts, nil, nil)
 
 	// Use real, but trimmed down QueryService.
-	testConfig := tabletserver.DefaultQsConfig
-	testConfig.EnablePublishStats = false
-	testConfig.DebugURLPrefix = fmt.Sprintf("TestWaitForFilteredReplication-%d-", rand.Int63())
-	qs := tabletserver.NewTabletServer(testConfig)
+	qs := tabletserver.NewTabletServerWithNilTopoServer(tabletenv.DefaultQsConfig)
 	grpcqueryservice.Register(dest.RPCServer, qs)
 
 	qs.BroadcastHealth(42, initialStats)

@@ -7,27 +7,25 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/vt/logutil"
-	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
 	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
+	"github.com/youtube/vitess/go/vt/topo/memorytopo"
+	"github.com/youtube/vitess/go/vt/vttablet/tmclient"
 	"github.com/youtube/vitess/go/vt/wrangler"
-	"github.com/youtube/vitess/go/vt/zktopo/zktestserver"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 func TestDeleteShardCleanup(t *testing.T) {
 	ctx := context.Background()
-	db := fakesqldb.Register()
-	ts := zktestserver.New(t, []string{"cell1", "cell2"})
+	ts := memorytopo.NewServer("cell1", "cell2")
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 	vp := NewVtctlPipe(t, ts)
 	defer vp.Close()
 
 	// Create a master, a couple good slaves
-	master := NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_MASTER, db)
-	slave := NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_REPLICA, db)
-	remoteSlave := NewFakeTablet(t, wr, "cell2", 2, topodatapb.TabletType_REPLICA, db)
+	master := NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_MASTER, nil)
+	slave := NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_REPLICA, nil)
+	remoteSlave := NewFakeTablet(t, wr, "cell2", 2, topodatapb.TabletType_REPLICA, nil)
 
 	// Delete the ShardReplication record in cell2
 	if err := ts.DeleteShardReplication(ctx, "cell2", remoteSlave.Tablet.Keyspace, remoteSlave.Tablet.Shard); err != nil {

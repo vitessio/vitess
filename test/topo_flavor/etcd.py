@@ -55,7 +55,7 @@ class EtcdTopoServer(server.TopoServer):
 
   clusters = {}
 
-  def setup(self, add_bad_host=False):
+  def setup(self):
     import utils  # pylint: disable=g-import-not-at-top
 
     for cell in ['global', 'test_ca', 'test_nj', 'test_ny']:

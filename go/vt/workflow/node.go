@@ -220,6 +220,30 @@ func (n *Node) deepCopyFrom(otherNode *Node, copyChildren bool) error {
 	return nil
 }
 
+// GetChildByPath returns the child node given the relative path to this node.
+// The caller must ensure that the node tree is not modified during the call.
+func (n *Node) GetChildByPath(subPath string) (*Node, error) {
+	// Find the subnode if needed.
+	parts := strings.Split(subPath, "/")
+
+	currentNode := n
+	for i := 0; i < len(parts); i++ {
+		childPathName := parts[i]
+		found := false
+		for _, child := range currentNode.Children {
+			if child.PathName == childPathName {
+				found = true
+				currentNode = child
+				break
+			}
+		}
+		if !found {
+			return nil, fmt.Errorf("node %v has no children named %v", currentNode.Path, childPathName)
+		}
+	}
+	return currentNode, nil
+}
+
 // ActionParameters describe an action initiated by the user.
 type ActionParameters struct {
 	// Path is the path of the Node the action was performed on.
@@ -355,6 +379,7 @@ func (m *NodeManager) updateNodeAndBroadcastLocked(userNode *Node, updateChildre
 	if err != nil {
 		return err
 	}
+
 	userNode.LastChanged = time.Now().Unix()
 	if err := savedNode.deepCopyFrom(userNode, updateChildren); err != nil {
 		return err
@@ -390,10 +415,17 @@ func (m *NodeManager) Action(ctx context.Context, ap *ActionParameters) error {
 	if err != nil {
 		return err
 	}
+
+	m.mu.Lock()
+
 	if n.Listener == nil {
+		m.mu.Unlock()
 		return fmt.Errorf("Action %v is invoked on a node without listener (node path is %v)", ap.Name, ap.Path)
 	}
-	return n.Listener.Action(ctx, ap.Path, ap.Name)
+	nodeListener := n.Listener
+	m.mu.Unlock()
+
+	return nodeListener.Action(ctx, ap.Path, ap.Name)
 }
 
 func (m *NodeManager) getNodeByPath(nodePath string) (*Node, error) {

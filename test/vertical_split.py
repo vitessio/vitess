@@ -38,7 +38,8 @@ all_tablets = [source_master, source_replica, source_rdonly1, source_rdonly2,
 def setUpModule():
   try:
     environment.topo_server().setup()
-    setup_procs = [t.init_mysql() for t in all_tablets]
+    setup_procs = [t.init_mysql(use_rbr=base_sharding.use_rbr)
+                   for t in all_tablets]
     utils.Vtctld().start()
     utils.wait_procs(setup_procs)
   except:
@@ -314,10 +315,10 @@ index by_msg (msg)
         'Mismatch in srv keyspace for cell %s keyspace %s, expected:\n'
         '%s\ngot:\n%s' % (
             cell, keyspace, expected, result))
-    self.assertNotIn('sharding_column_name', ks,
+    self.assertEqual('', ks.get('sharding_column_name', ''),
                      'Got a sharding_column_name in SrvKeyspace: %s' %
                      str(ks))
-    self.assertNotIn('sharding_column_type', ks,
+    self.assertEqual(0, ks.get('sharding_column_type', 0),
                      'Got a sharding_column_type in SrvKeyspace: %s' %
                      str(ks))
 
@@ -337,7 +338,7 @@ index by_msg (msg)
                                      'select count(1) from %s' % table],
                                     expect_fail=True)
         self.assertIn(
-            'retry: Query disallowed due to rule: enforce blacklisted tables',
+            'disallowed due to rule: enforce blacklisted tables',
             stderr)
       else:
         # table is not blacklisted, should just work
@@ -585,7 +586,8 @@ index by_msg (msg)
     self._assert_tablet_controls([topodata_pb2.MASTER, topodata_pb2.REPLICA])
 
     # re-add rdonly:
-    utils.run_vtctl(['SetShardTabletControl', '--tables=/moving/,view1',
+    utils.run_vtctl(['SetShardTabletControl',
+                     '--blacklisted_tables=/moving/,view1',
                      'source_keyspace/0', 'rdonly'], auto_log=True)
     self._assert_tablet_controls([topodata_pb2.MASTER, topodata_pb2.REPLICA,
                                   topodata_pb2.RDONLY])

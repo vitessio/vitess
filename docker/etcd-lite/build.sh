@@ -8,14 +8,14 @@ version="v2.0.13"
 set -e
 
 # Build a fresh base vitess/etcd image
-(cd ../etcd ; sudo docker build -t vitess/etcd:$version .)
+(cd ../etcd ; docker build -t vitess/etcd:$version .)
 
 # Extract files from vitess/etcd image
 mkdir base
-sudo docker run -ti --rm -v $PWD/base:/base -u root vitess/etcd:$version bash -c 'cp -R /go/bin/* /base/'
+docker run -ti --rm -v $PWD/base:/base -u $UID vitess/etcd:$version bash -c 'cp -R /go/bin/* /base/'
 
 # Build vitess/etcd-lite image
-sudo docker build -t vitess/etcd:$version-lite .
+docker build -t vitess/etcd:$version-lite .
 
 # Clean up temporary files
-sudo rm -rf base
+rm -rf base

@@ -16,10 +16,11 @@ import (
 
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/logutil"
-	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
-	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
+	"github.com/youtube/vitess/go/vt/topo/memorytopo"
+	"github.com/youtube/vitess/go/vt/vttablet/queryservice"
+	"github.com/youtube/vitess/go/vt/vttablet/tabletconn"
+	"github.com/youtube/vitess/go/vt/vttablet/tmclient"
 	"github.com/youtube/vitess/go/vt/wrangler"
-	"github.com/youtube/vitess/go/vt/zktopo/zktestserver"
 
 	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -171,7 +172,7 @@ func TestGenerateQuery(t *testing.T) {
 func TestNewRestartableResultReader(t *testing.T) {
 	wantErr := errors.New("restartable_result_reader_test.go: context canceled")
 
-	tabletconn.RegisterDialer("fake_dialer", func(tablet *topodatapb.Tablet, timeout time.Duration) (tabletconn.TabletConn, error) {
+	tabletconn.RegisterDialer("fake_dialer", func(tablet *topodatapb.Tablet, timeout time.Duration) (queryservice.QueryService, error) {
 		return nil, wantErr
 	})
 	protocol := flag.CommandLine.Lookup("tablet_protocol").Value.String()
@@ -180,7 +181,7 @@ func TestNewRestartableResultReader(t *testing.T) {
 	defer flag.Set("tablet_protocol", protocol)
 
 	// Create dependencies e.g. a "singleTabletProvider" instance.
-	ts := zktestserver.New(t, []string{"cell1"})
+	ts := memorytopo.NewServer("cell1")
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 	alias := &topodatapb.TabletAlias{
 		Cell: "cell1",

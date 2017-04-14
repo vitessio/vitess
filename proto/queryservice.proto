@@ -61,6 +61,12 @@ service Query {
   // BeginExecuteBatch executes a begin and a list of queries.
   rpc BeginExecuteBatch(query.BeginExecuteBatchRequest) returns (query.BeginExecuteBatchResponse) {};
 
+  // MessageStream streams messages from a message table.
+  rpc MessageStream(query.MessageStreamRequest) returns (stream query.MessageStreamResponse) {};
+
+  // MessageAck acks messages for a table.
+  rpc MessageAck(query.MessageAckRequest) returns (query.MessageAckResponse) {};
+
   // SplitQuery is the API to facilitate MapReduce-type iterations
   // over large data sets (like full table dumps).
   rpc SplitQuery(query.SplitQueryRequest) returns (query.SplitQueryResponse) {};

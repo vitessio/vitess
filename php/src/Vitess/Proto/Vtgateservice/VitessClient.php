@@ -40,6 +40,12 @@ namespace Vitess\Proto\Vtgateservice {
       return $this->_simpleRequest('/vtgateservice.Vitess/ExecuteEntityIds', $argument, '\Vitess\Proto\Vtgate\ExecuteEntityIdsResponse::deserialize', $metadata, $options);
     }
     /**
+     * @param Vitess\Proto\Vtgate\ExecuteBatchRequest $input
+     */
+    public function ExecuteBatch(\Vitess\Proto\Vtgate\ExecuteBatchRequest $argument, $metadata = array(), $options = array()) {
+      return $this->_simpleRequest('/vtgateservice.Vitess/ExecuteBatch', $argument, '\Vitess\Proto\Vtgate\ExecuteBatchResponse::deserialize', $metadata, $options);
+    }
+    /**
      * @param Vitess\Proto\Vtgate\ExecuteBatchShardsRequest $input
      */
     public function ExecuteBatchShards(\Vitess\Proto\Vtgate\ExecuteBatchShardsRequest $argument, $metadata = array(), $options = array()) {
@@ -92,6 +98,24 @@ namespace Vitess\Proto\Vtgateservice {
      */
     public function Rollback(\Vitess\Proto\Vtgate\RollbackRequest $argument, $metadata = array(), $options = array()) {
       return $this->_simpleRequest('/vtgateservice.Vitess/Rollback', $argument, '\Vitess\Proto\Vtgate\RollbackResponse::deserialize', $metadata, $options);
+    }
+    /**
+     * @param Vitess\Proto\Vtgate\ResolveTransactionRequest $input
+     */
+    public function ResolveTransaction(\Vitess\Proto\Vtgate\ResolveTransactionRequest $argument, $metadata = array(), $options = array()) {
+      return $this->_simpleRequest('/vtgateservice.Vitess/ResolveTransaction', $argument, '\Vitess\Proto\Vtgate\ResolveTransactionResponse::deserialize', $metadata, $options);
+    }
+    /**
+     * @param Vitess\Proto\Vtgate\MessageStreamRequest $input
+     */
+    public function MessageStream($argument, $metadata = array(), $options = array()) {
+      return $this->_serverStreamRequest('/vtgateservice.Vitess/MessageStream', $argument, '\Vitess\Proto\Query\MessageStreamResponse::deserialize', $metadata, $options);
+    }
+    /**
+     * @param Vitess\Proto\Vtgate\MessageAckRequest $input
+     */
+    public function MessageAck(\Vitess\Proto\Vtgate\MessageAckRequest $argument, $metadata = array(), $options = array()) {
+      return $this->_simpleRequest('/vtgateservice.Vitess/MessageAck', $argument, '\Vitess\Proto\Query\MessageAckResponse::deserialize', $metadata, $options);
     }
     /**
      * @param Vitess\Proto\Vtgate\SplitQueryRequest $input

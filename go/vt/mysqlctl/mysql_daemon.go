@@ -9,14 +9,14 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/youtube/vitess/go/sqldb"
+	"golang.org/x/net/context"
+
+	"github.com/youtube/vitess/go/mysqlconn/fakesqldb"
+	"github.com/youtube/vitess/go/mysqlconn/replication"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/dbconnpool"
-	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
 	"github.com/youtube/vitess/go/vt/mysqlctl/tmutils"
-	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
-	"golang.org/x/net/context"
 
 	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
 )
@@ -39,7 +39,7 @@ type MysqlDaemon interface {
 	GetMysqlPort() (int32, error)
 
 	// replication related methods
-	SlaveStatus() (replication.Status, error)
+	SlaveStatus() (Status, error)
 	SetSemiSyncEnabled(master, slave bool) error
 	SemiSyncEnabled() (master, slave bool)
 	SemiSyncSlaveStatus() (bool, error)
@@ -99,6 +99,7 @@ type MysqlDaemon interface {
 // FakeMysqlDaemon implements MysqlDaemon and allows the user to fake
 // everything.
 type FakeMysqlDaemon struct {
+	// The fake SQL DB we may use for some queries
 	db *fakesqldb.DB
 
 	// Mycnf will be returned by Cnf()
@@ -213,7 +214,8 @@ type FakeMysqlDaemon struct {
 }
 
 // NewFakeMysqlDaemon returns a FakeMysqlDaemon where mysqld appears
-// to be running
+// to be running, based on a fakesqldb.DB.
+// 'db' can be nil if the test doesn't use a database at all.
 func NewFakeMysqlDaemon(db *fakesqldb.DB) *FakeMysqlDaemon {
 	return &FakeMysqlDaemon{
 		db:      db,
@@ -273,11 +275,11 @@ func (fmd *FakeMysqlDaemon) GetMysqlPort() (int32, error) {
 }
 
 // SlaveStatus is part of the MysqlDaemon interface
-func (fmd *FakeMysqlDaemon) SlaveStatus() (replication.Status, error) {
+func (fmd *FakeMysqlDaemon) SlaveStatus() (Status, error) {
 	if fmd.SlaveStatusError != nil {
-		return replication.Status{}, fmd.SlaveStatusError
+		return Status{}, fmd.SlaveStatusError
 	}
-	return replication.Status{
+	return Status{
 		Position:            fmd.CurrentMasterPosition,
 		SecondsBehindMaster: fmd.SecondsBehindMaster,
 		SlaveIORunning:      fmd.Replicating,
@@ -468,12 +470,12 @@ func (fmd *FakeMysqlDaemon) GetAppConnection(ctx context.Context) (dbconnpool.Po
 
 // GetDbaConnection is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) GetDbaConnection() (*dbconnpool.DBConnection, error) {
-	return dbconnpool.NewDBConnection(&sqldb.ConnParams{Engine: fmd.db.Name}, stats.NewTimings(""))
+	return dbconnpool.NewDBConnection(fmd.db.ConnParams(), stats.NewTimings(""))
 }
 
 // GetAllPrivsConnection is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) GetAllPrivsConnection() (*dbconnpool.DBConnection, error) {
-	return dbconnpool.NewDBConnection(&sqldb.ConnParams{Engine: fmd.db.Name}, stats.NewTimings(""))
+	return dbconnpool.NewDBConnection(fmd.db.ConnParams(), stats.NewTimings(""))
 }
 
 // SetSemiSyncEnabled is part of the MysqlDaemon interface.

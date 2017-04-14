@@ -13,6 +13,7 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtctl"
 	"github.com/youtube/vitess/go/vt/workflow"
+	"github.com/youtube/vitess/go/vt/workflow/resharding"
 	"github.com/youtube/vitess/go/vt/workflow/topovalidator"
 )
 
@@ -28,6 +29,9 @@ func init() {
 
 func initWorkflowManager(ts topo.Server) {
 	if *workflowManagerInit {
+		// Uncomment this line to register the UI test validator.
+		// topovalidator.RegisterUITestValidator()
+
 		// Register the Topo Validators, and the workflow.
 		topovalidator.RegisterKeyspaceValidator()
 		topovalidator.RegisterShardValidator()
@@ -35,6 +39,9 @@ func initWorkflowManager(ts topo.Server) {
 
 		// Register the Schema Swap workflow.
 		schemaswap.RegisterWorkflowFactory()
+
+		// Register the Horizontal Resharding workflow.
+		resharding.Register()
 
 		// Unregister the blacklisted workflows.
 		for _, name := range workflowManagerDisable {
@@ -82,7 +89,8 @@ func runWorkflowManagerElection(ts topo.Server) {
 		// Set up a redirect host so when we are not the
 		// master, we can redirect traffic properly.
 		vtctl.WorkflowManager.SetRedirectFunc(func() (string, error) {
-			return mp.GetCurrentMasterID()
+			ctx := context.Background()
+			return mp.GetCurrentMasterID(ctx)
 		})
 
 		go func() {

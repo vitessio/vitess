@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	tableaclpb "github.com/youtube/vitess/go/vt/proto/tableacl"
 	"github.com/youtube/vitess/go/vt/tableacl"
 	"github.com/youtube/vitess/go/vt/tableacl/acl"
@@ -29,9 +30,7 @@ func TestSuite(t *testing.T, factory acl.Factory) {
 	testAllowUnmatchedTable(t)
 }
 
-func currentUser() string {
-	return "DummyUser"
-}
+var currentUser = "DummyUser"
 
 func testValidConfigs(t *testing.T) {
 	config := newConfigProto("group01", []string{"table1"}, []string{"u1"}, []string{"vt"}, []string{})
@@ -52,7 +51,7 @@ func testValidConfigs(t *testing.T) {
 
 func testDenyReaderInsert(t *testing.T) {
 	config := newConfigProto(
-		"group01", []string{"table%"}, []string{currentUser()}, []string{"u3"}, []string{})
+		"group01", []string{"table%"}, []string{currentUser}, []string{"u3"}, []string{})
 	if err := checkAccess(config, "table1", tableacl.WRITER, false); err != nil {
 		t.Fatal(err)
 	}
@@ -60,7 +59,7 @@ func testDenyReaderInsert(t *testing.T) {
 
 func testAllowReaderSelect(t *testing.T) {
 	config := newConfigProto(
-		"group01", []string{"table%"}, []string{currentUser()}, []string{"u3"}, []string{})
+		"group01", []string{"table%"}, []string{currentUser}, []string{"u3"}, []string{})
 	if err := checkAccess(config, "table1", tableacl.READER, true); err != nil {
 		t.Fatal(err)
 	}
@@ -68,7 +67,7 @@ func testAllowReaderSelect(t *testing.T) {
 
 func testDenyReaderDDL(t *testing.T) {
 	config := newConfigProto(
-		"group01", []string{"table%"}, []string{currentUser()}, []string{"u3"}, []string{})
+		"group01", []string{"table%"}, []string{currentUser}, []string{"u3"}, []string{})
 	if err := checkAccess(config, "table1", tableacl.ADMIN, false); err != nil {
 		t.Fatal(err)
 	}
@@ -76,7 +75,7 @@ func testDenyReaderDDL(t *testing.T) {
 
 func testAllowUnmatchedTable(t *testing.T) {
 	config := newConfigProto(
-		"group01", []string{"table%"}, []string{currentUser()}, []string{"u3"}, []string{})
+		"group01", []string{"table%"}, []string{currentUser}, []string{"u3"}, []string{})
 	if err := checkAccess(config, "UNMATCHED_TABLE", tableacl.ADMIN, false); err != nil {
 		t.Fatal(err)
 	}
@@ -110,7 +109,7 @@ func checkAccess(config *tableaclpb.Config, tableName string, role tableacl.Role
 	if err := checkLoad(config, true); err != nil {
 		return err
 	}
-	got := tableacl.Authorized(tableName, role).IsMember(currentUser())
+	got := tableacl.Authorized(tableName, role).IsMember(&querypb.VTGateCallerID{Username: currentUser})
 	if want != got {
 		return fmt.Errorf("got %v, want %v", got, want)
 	}

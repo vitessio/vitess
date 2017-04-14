@@ -5,8 +5,10 @@ import { Observable } from 'rxjs/Observable';
 
 import { DialogContent } from '../shared/dialog/dialog-content';
 import { DialogSettings } from '../shared/dialog/dialog-settings';
-import { DeleteShardFlags, InitShardMasterFlags, ValidateShardFlags, TabExtRepFlags,
-         PlanRepShardFlags, EmergencyRepShardFlags, ShardReplicationPosFlags, ValidateVerShardFlags } from '../shared/flags/shard.flags';
+import { DeleteShardFlags, InitShardMasterFlags, ValidateShardFlags,
+         TabExtRepFlags, PlanRepShardFlags, EmergencyRepShardFlags,
+         ShardReplicationPosFlags, ReloadSchemaShardFlags,
+         ValidateVerShardFlags } from '../shared/flags/shard.flags';
 import { DeleteTabletFlags, IgnoreHealthCheckFlags, PingTabletFlags, RefreshTabletFlags } from '../shared/flags/tablet.flags';
 import { FeaturesService } from '../api/features.service';
 import { KeyspaceService } from '../api/keyspace.service';
@@ -78,13 +80,16 @@ export class ShardComponent implements OnInit, OnDestroy {
         {label: 'Validate Versions', command: (event) => {this.openValidateVerShardDialog(); }},
         {label: 'Shard Replication Positions', command: (event) => {this.openShardReplicationPosDialog(); }},
       ]},
+      {label: 'Reload', items: [
+        {label: 'Reload Schema in Shard', command: (event) => {this.openReloadSchemaShardDialog(); }},
+      ]},
       {label: 'Change', items: [
         {label: 'Externally Reparent', command: (event) => {this.openTabExtRepDialog(); }},
       ]},
     ];
     if (this.featuresService.showTopologyCRUD) {
       // Push a new individual item into the 'Change' section.
-      result[1].items.push({label: 'Delete Shard', command: (event) => {this.openDeleteShardDialog(); }});
+      result[2].items.push({label: 'Delete Shard', command: (event) => {this.openDeleteShardDialog(); }});
     }
     if (this.featuresService.activeReparents) {
       // Push an entire new section.
@@ -419,6 +424,15 @@ export class ShardComponent implements OnInit, OnDestroy {
     this.dialogSettings.setMessage('Fetched Replication Positions for {{shard_ref}}');
     let flags = new ShardReplicationPosFlags(this.keyspaceName, this.shardName).flags;
     this.dialogContent = new DialogContent(this.shardName, flags, {}, undefined, 'ShardReplicationPositions');
+    this.dialogSettings.toggleModal();
+  }
+
+  openReloadSchemaShardDialog() {
+    this.dialogSettings = new DialogSettings('Reload Schema', `Reload Schema in ${this.keyspaceName}/${this.shardName}`, '',
+                                             'There was a problem reloading schema in shard {{shard_ref}}:');
+    this.dialogSettings.setMessage('Reloaded {{shard_ref}} Schema');
+    let flags = new ReloadSchemaShardFlags(this.keyspaceName, this.shardName).flags;
+    this.dialogContent = new DialogContent(this.shardName, flags, {}, undefined, 'ReloadSchemaShard');
     this.dialogSettings.toggleModal();
   }
 

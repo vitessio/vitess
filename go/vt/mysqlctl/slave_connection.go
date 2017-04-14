@@ -5,19 +5,17 @@
 package mysqlctl
 
 import (
-	"bytes"
-	"encoding/binary"
 	"fmt"
 	"sync"
 
 	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
-	"github.com/youtube/vitess/go/mysql"
+	"github.com/youtube/vitess/go/mysqlconn"
+	"github.com/youtube/vitess/go/mysqlconn/replication"
 	"github.com/youtube/vitess/go/pools"
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
-	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
 )
 
 var (
@@ -31,7 +29,7 @@ var (
 // mysqld with a server ID that is unique both among other SlaveConnections and
 // among actual slaves in the topology.
 type SlaveConnection struct {
-	sqldb.Conn
+	*mysqlconn.Conn
 	mysqld  *Mysqld
 	slaveID uint32
 	cancel  context.CancelFunc
@@ -61,13 +59,14 @@ func (mysqld *Mysqld) NewSlaveConnection() (*SlaveConnection, error) {
 }
 
 // connectForReplication create a MySQL connection ready to use for replication.
-func (mysqld *Mysqld) connectForReplication() (sqldb.Conn, error) {
+func (mysqld *Mysqld) connectForReplication() (*mysqlconn.Conn, error) {
 	params, err := dbconfigs.WithCredentials(&mysqld.dbcfgs.Dba)
 	if err != nil {
 		return nil, err
 	}
 
-	conn, err := sqldb.Connect(params)
+	ctx := context.Background()
+	conn, err := mysqlconn.Connect(ctx, &params)
 	if err != nil {
 		return nil, err
 	}
@@ -158,8 +157,8 @@ func (sc *SlaveConnection) StartBinlogDumpFromPosition(ctx context.Context, star
 
 			buf, err = sc.Conn.ReadPacket()
 			if err != nil {
-				if sqlErr, ok := err.(*sqldb.SQLError); ok && sqlErr.Number() == mysql.ErrServerLost {
-					// ErrServerLost = Lost connection to MySQL server during query
+				if sqlErr, ok := err.(*sqldb.SQLError); ok && sqlErr.Number() == mysqlconn.CRServerLost {
+					// CRServerLost = Lost connection to MySQL server during query
 					// This is not necessarily an error. It could just be that we closed
 					// the connection from outside.
 					log.Infof("connection closed during binlog stream (possibly intentional): %v", err)
@@ -231,8 +230,7 @@ func (sc *SlaveConnection) StartBinlogDumpFromBinlogBeforeTimestamp(ctx context.
 		// Binlog File Header. See this page for more info:
 		// https://dev.mysql.com/doc/internals/en/binlog-file.html
 		binlog := binlogs.Rows[binlogIndex][0].String()
-		cmd := makeBinlogDumpCommand(4, 0, sc.slaveID, binlog)
-		if err := sc.Conn.SendCommand(ComBinlogDump, cmd); err != nil {
+		if err := sc.Conn.WriteComBinlogDump(sc.slaveID, binlog, 4, 0); err != nil {
 			return nil, fmt.Errorf("failed to send the ComBinlogDump command: %v", err)
 		}
 
@@ -304,8 +302,8 @@ func (sc *SlaveConnection) StartBinlogDumpFromBinlogBeforeTimestamp(ctx context.
 
 			buf, err := sc.Conn.ReadPacket()
 			if err != nil {
-				if sqlErr, ok := err.(*sqldb.SQLError); ok && sqlErr.Number() == mysql.ErrServerLost {
-					// ErrServerLost = Lost connection to MySQL server during query
+				if sqlErr, ok := err.(*sqldb.SQLError); ok && sqlErr.Number() == mysqlconn.CRServerLost {
+					// CRServerLost = Lost connection to MySQL server during query
 					// This is not necessarily an error. It could just be that we closed
 					// the connection from outside.
 					log.Infof("connection closed during binlog stream (possibly intentional): %v", err)
@@ -335,37 +333,15 @@ func (sc *SlaveConnection) StartBinlogDumpFromBinlogBeforeTimestamp(ctx context.
 // The ID for the slave connection is recycled back into the pool.
 func (sc *SlaveConnection) Close() {
 	if sc.Conn != nil {
-		log.Infof("shutting down slave socket to unblock reads")
-		sc.Conn.Shutdown()
+		log.Infof("closing slave socket to unblock reads")
+		sc.Conn.Close()
 
 		log.Infof("waiting for slave dump thread to end")
 		sc.cancel()
 		sc.wg.Wait()
 
 		log.Infof("closing slave MySQL client, recycling slaveID %v", sc.slaveID)
-		sc.Conn.Close()
 		sc.Conn = nil
 		slaveIDPool.Put(sc.slaveID)
 	}
 }
-
-// makeBinlogDumpCommand builds a buffer containing the data for a MySQL
-// COM_BINLOG_DUMP command.
-func makeBinlogDumpCommand(pos uint32, flags uint16, serverID uint32, filename string) []byte {
-	var buf bytes.Buffer
-	buf.Grow(4 + 2 + 4 + len(filename))
-
-	// binlog_pos (4 bytes)
-	binary.Write(&buf, binary.LittleEndian, pos)
-	// binlog_flags (2 bytes)
-	binary.Write(&buf, binary.LittleEndian, flags)
-	// server_id of slave (4 bytes)
-	binary.Write(&buf, binary.LittleEndian, serverID)
-	// binlog_filename (string with no terminator and no length)
-	buf.WriteString(filename)
-
-	return buf.Bytes()
-}
-
-// ComBinlogDump is the command id for COM_BINLOG_DUMP.
-const ComBinlogDump = 0x12

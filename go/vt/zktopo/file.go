@@ -93,7 +93,7 @@ func (zkts *Server) Delete(ctx context.Context, cell, filePath string, version t
 
 func (zkts *Server) recursiveDeleteParentIfEmpty(ctx context.Context, cell, filePath string) error {
 	dir := path.Dir(filePath)
-	if dir == "" || dir == "/" {
+	if dir == "" || dir == "/" || dir == "." {
 		// we reached the top
 		return nil
 	}

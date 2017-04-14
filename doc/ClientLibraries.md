@@ -97,7 +97,7 @@ test your application against an actual instance.
 
 ### Java
 
-* [Java client](https://github.com/youtube/vitess/blob/master/java/client/src/main/java/com/youtube/vitess/client/VTGateConn.java)
+* [Java client](https://github.com/youtube/vitess/blob/master/java/client/src/main/java/io/vitess/client/VTGateConn.java)
 
 ### PHP
 

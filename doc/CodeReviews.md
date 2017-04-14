@@ -68,5 +68,5 @@ Internal team members can merge their **own** pull requests.
 ## Internal Bug Numbers
 
 Most of the bugs the team is working on are tracked internally.
-We reference to them as `b/########` or `B=########` in commit messages and comments.
+We reference to them as `b/########` or `BUG=########` in commit messages and comments.
 External users can ignore these.

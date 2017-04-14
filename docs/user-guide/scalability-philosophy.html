@@ -113,15 +113,22 @@
             <li><a href="/user-guide/reparenting.html">Reparenting</a></li>
             <li style="padding-bottom: 0"><a href="/user-guide/schema-management.html">Schema Management</a></li>
               <ul style="display: block">
+                <li style="padding-bottom: 0"><a href="/user-guide/vschema.html">VSchema Guide</a></li>
                 <li style="padding-bottom: 0"><a href="/user-guide/schema-swap.html">Schema Swap (Tutorial)</a></li>
               </ul>
             <li style="padding-bottom: 0"><a href="/user-guide/sharding.html">Sharding</a>
               <ul style="display: block">
-                <li><a href="/user-guide/horizontal-sharding.html">Horizontal Sharding (Codelab)</a></li>
-                <li style="padding-bottom: 0"><a href="/user-guide/sharding-kubernetes.html">Sharding in Kubernetes (Codelab)</a></li>
+                <li><a href="/user-guide/horizontal-sharding-workflow.html">Horizontal Sharding (Tutorial, automated)</a></li>
+                <li><a href="/user-guide/horizontal-sharding.html">Horizontal Sharding (Tutorial, manual)</a></li>
+                <li><a href="/user-guide/sharding-kubernetes-workflow.html">Sharding in Kubernetes (Tutorial, automated)</a></li>
+                <li style="padding-bottom: 0"><a href="/user-guide/sharding-kubernetes.html">Sharding in Kubernetes (Tutorial, manual)</a></li>
               </ul>
             </li>
+            <li><a href="/user-guide/vitess-sequences.html">Vitess Sequences</a></li>
+            <li><a href="/user-guide/mysql-server-protocol.html">MySQL Server Protocol</a></li>
             <li><a href="/user-guide/vitess-replication.html">Vitess and Replication</a></li>
+            <li><a href="/user-guide/update-stream.html">Update Stream</a></li>
+            <li><a href="/user-guide/row-based-replication.html">Row Based Replication</a></li>
             <li><a href="/user-guide/topology-service.html">Topology Service</a></li>
             <li><a href="/user-guide/transport-security-model.html">Transport Security Model</a></li>
             <li style="padding-bottom: 0"><a href="/user-guide/launching.html">Launching</a>
@@ -129,6 +136,7 @@
                 <li><a href="/user-guide/scalability-philosophy.html">Scalability Philosophy</a></li>
                 <li><a href="/user-guide/production-planning.html">Production Planning</a></li>
                 <li><a href="/user-guide/server-configuration.html">Server Configuration</a></li>
+                <li><a href="/user-guide/twopc.html">2PC Guide</a></li>
                 <li style="padding-bottom: 0"><a href="/user-guide/troubleshooting.html">Troubleshooting</a></li>
               </ul>
             </li>
@@ -215,15 +223,22 @@
             <li><a href="/user-guide/reparenting.html">Reparenting</a></li>
             <li style="padding-bottom: 0"><a href="/user-guide/schema-management.html">Schema Management</a></li>
               <ul style="display: block">
+                <li style="padding-bottom: 0"><a href="/user-guide/vschema.html">VSchema Guide</a></li>
                 <li style="padding-bottom: 0"><a href="/user-guide/schema-swap.html">Schema Swap (Tutorial)</a></li>
               </ul>
             <li style="padding-bottom: 0"><a href="/user-guide/sharding.html">Sharding</a>
               <ul style="display: block">
-                <li><a href="/user-guide/horizontal-sharding.html">Horizontal Sharding (Codelab)</a></li>
-                <li style="padding-bottom: 0"><a href="/user-guide/sharding-kubernetes.html">Sharding in Kubernetes (Codelab)</a></li>
+                <li><a href="/user-guide/horizontal-sharding-workflow.html">Horizontal Sharding (Tutorial, automated)</a></li>
+                <li><a href="/user-guide/horizontal-sharding.html">Horizontal Sharding (Tutorial, manual)</a></li>
+                <li><a href="/user-guide/sharding-kubernetes-workflow.html">Sharding in Kubernetes (Tutorial, automated)</a></li>
+                <li style="padding-bottom: 0"><a href="/user-guide/sharding-kubernetes.html">Sharding in Kubernetes (Tutorial, manual)</a></li>
               </ul>
             </li>
+            <li><a href="/user-guide/vitess-sequences.html">Vitess Sequences</a></li>
+            <li><a href="/user-guide/mysql-server-protocol.html">MySQL Server Protocol</a></li>
             <li><a href="/user-guide/vitess-replication.html">Vitess and Replication</a></li>
+            <li><a href="/user-guide/update-stream.html">Update Stream</a></li>
+            <li><a href="/user-guide/row-based-replication.html">Row Based Replication</a></li>
             <li><a href="/user-guide/topology-service.html">Topology Service</a></li>
             <li><a href="/user-guide/transport-security-model.html">Transport Security Model</a></li>
             <li style="padding-bottom: 0"><a href="/user-guide/launching.html">Launching</a>
@@ -231,6 +246,7 @@
                 <li><a href="/user-guide/scalability-philosophy.html">Scalability Philosophy</a></li>
                 <li><a href="/user-guide/production-planning.html">Production Planning</a></li>
                 <li><a href="/user-guide/server-configuration.html">Server Configuration</a></li>
+                <li><a href="/user-guide/twopc.html">2PC Guide</a></li>
                 <li style="padding-bottom: 0"><a href="/user-guide/troubleshooting.html">Troubleshooting</a></li>
               </ul>
             </li>
@@ -367,7 +383,7 @@ traffic.</p>
 <h4 id="mapreduce">MapReduce</h4>
 
 <p>Vitess supports MapReduce access to the data. Vitess provides a Hadoop
-connector, that can also be used with Apache Spark. See the <a href="https://github.com/youtube/vitess/tree/master/java/hadoop/src/main/java/com/youtube/vitess/hadoop">Hadoop package
+connector, that can also be used with Apache Spark. See the <a href="https://github.com/youtube/vitess/tree/master/java/hadoop/src/main/java/io/vitess/hadoop">Hadoop package
 documentation</a>
 for more information.</p>
 
@@ -564,7 +580,7 @@ know how to prioritize.</p>
     
     <a href="https://groups.google.com/forum/#!forum/vitess" target="_blank">Contact: vitess@googlegroups.com</a>&nbsp;&nbsp;<b>·</b>&nbsp;&nbsp;
     <a href="https://groups.google.com/forum/#!forum/vitess-announce" target="_blank">Announcements</a>&nbsp;&nbsp;<b>·</b>&nbsp;&nbsp;
-    &#169; 2016 <a href="/">Vitess</a> powered by <a href="https://developers.google.com/open-source/">Google Inc</a>
+    &#169; 2017 <a href="/">Vitess</a> powered by <a href="https://developers.google.com/open-source/">Google Inc</a>
   </nav>
 </footer>
 

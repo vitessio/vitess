@@ -96,6 +96,7 @@ Start=[], End=[]: Full Key Range
 Start=[], End=[0x80]: Lower half of the Key Range.
 Start=[0x80], End=[]: Upper half of the Key Range.
 Start=[0x40], End=[0x80]: Second quarter of the Key Range.
+Start=[0xFF00], End=[0xFF80]: Second to last 1/512th of the Key Range.
 ```
 
 Two key ranges are consecutive if the end value of one range equals the
@@ -116,6 +117,14 @@ full partition:
 * 40-80
 * 80-c0
 * c0-
+
+Shards do not need to handle the same size portion of the key space. For example, the following five shards would also be a valid full partition, albeit with a highly uneven distribution of keys.
+
+* -80
+* 80-c0
+* c0-dc00
+* dc00-dc80
+* dc80-
 
 ## Resharding
 
@@ -163,7 +172,7 @@ Vitess provides the following tools to help manage range-based shards:
 * The [vtctl](/reference/vtctl.html) command-line tool supports
     functions for managing keyspaces, shards, tablets, and more.
 * Client APIs account for sharding operations.
-* The [MapReduce framework](https://github.com/youtube/vitess/blob/master/java/vtgate-client/src/main/java/com/youtube/vitess/vtgate/hadoop/README.md)
+* The [MapReduce framework](https://github.com/youtube/vitess/tree/master/java/hadoop/src/main/java/io/vitess/hadoop)
     fully utilizes key ranges to read data as quickly as possible,
     concurrently from all shards and all replicas.
 
@@ -191,5 +200,5 @@ a custom sharding scheme. Vitess' tools and processes for automated
 resharding also do not support custom sharding schemes.
 
 If you use a custom sharding scheme, you can still use the
-[MapReduce framework](https://github.com/youtube/vitess/blob/master/java/vtgate-client/src/main/java/com/youtube/vitess/vtgate/hadoop/README.md)
+[MapReduce framework](https://github.com/youtube/vitess/tree/master/java/hadoop/src/main/java/io/vitess/hadoop)
 to iterate over the data on multiple shards.

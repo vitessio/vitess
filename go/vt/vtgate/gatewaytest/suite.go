@@ -14,11 +14,12 @@ import (
 
 	"golang.org/x/net/context"
 
-	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
-	"github.com/youtube/vitess/go/vt/tabletserver/tabletconntest"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topo/memorytopo"
 	"github.com/youtube/vitess/go/vt/vtgate/gateway"
-	"github.com/youtube/vitess/go/vt/zktopo/zktestserver"
+	"github.com/youtube/vitess/go/vt/vttablet/queryservice"
+	"github.com/youtube/vitess/go/vt/vttablet/tabletconn"
+	"github.com/youtube/vitess/go/vt/vttablet/tabletconntest"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -41,7 +42,7 @@ func CreateFakeServers(t *testing.T) (*tabletconntest.FakeQueryService, topo.Ser
 	}
 
 	// The topo server has a single SrvKeyspace
-	ts := zktestserver.New(t, []string{cell})
+	ts := memorytopo.NewServer(cell)
 	if err := ts.UpdateSrvKeyspace(context.Background(), cell, tabletconntest.TestTarget.Keyspace, &topodatapb.SrvKeyspace{
 		Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
 			{
@@ -79,7 +80,7 @@ func TestSuite(t *testing.T, name string, g gateway.Gateway, f *tabletconntest.F
 
 	protocolName := "gateway-test-" + name
 
-	tabletconn.RegisterDialer(protocolName, func(tablet *topodatapb.Tablet, timeout time.Duration) (tabletconn.TabletConn, error) {
+	tabletconn.RegisterDialer(protocolName, func(tablet *topodatapb.Tablet, timeout time.Duration) (queryservice.QueryService, error) {
 		return &gatewayAdapter{Gateway: g}, nil
 	})
 

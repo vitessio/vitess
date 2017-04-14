@@ -29,18 +29,18 @@ We do this by providing a VSchema definition as follows:
 
 ``` json
 {
-  "Sharded": true,
-  "Vindexes": {
+  "sharded": true,
+  "vindexes": {
     "hash": {
-      "Type": "hash"
+      "type": "hash"
     }
   },
-  "Tables": {
+  "tables": {
     "messages": {
-      "ColVindexes": [
+      "column_vindexes": [
         {
-          "Col": "page",
-          "Name": "hash"
+          "column": "page",
+          "name": "hash"
         }
       ]
     }

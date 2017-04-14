@@ -374,14 +374,87 @@
   }
 }
 
+# Join on weird columns.
+"select `weird``name`.a, unsharded.b from `weird``name` join unsharded on `weird``name`.`a``b*c` = unsharded.id"
+{
+  "Original": "select `weird``name`.a, unsharded.b from `weird``name` join unsharded on `weird``name`.`a``b*c` = unsharded.id",
+  "Instructions": {
+    "Opcode": "Join",
+    "Left": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select `weird``name`.a, `weird``name`.`a``b*c` from `weird``name`",
+      "FieldQuery": "select `weird``name`.a, `weird``name`.`a``b*c` from `weird``name` where 1 != 1"
+    },
+    "Right": {
+      "Opcode": "SelectUnsharded",
+      "Keyspace": {
+        "Name": "main",
+        "Sharded": false
+      },
+      "Query": "select unsharded.b from unsharded where unsharded.id = :weird_name_a_b_c",
+      "FieldQuery": "select unsharded.b from unsharded where 1 != 1",
+      "JoinVars": {
+        "weird_name_a_b_c": {}
+      }
+    },
+    "Cols": [
+      -1,
+      1
+    ],
+    "Vars": {
+      "weird_name_a_b_c": 1
+    }
+  }
+}
+
+# Join on weird column (col is not in select)
+"select unsharded.b from `weird``name` join unsharded on `weird``name`.`a``b*c` = unsharded.id"
+{
+  "Original": "select unsharded.b from `weird``name` join unsharded on `weird``name`.`a``b*c` = unsharded.id",
+  "Instructions": {
+    "Opcode": "Join",
+    "Left": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select `weird``name`.`a``b*c` from `weird``name`",
+      "FieldQuery": "select `weird``name`.`a``b*c` from `weird``name` where 1 != 1"
+    },
+    "Right": {
+      "Opcode": "SelectUnsharded",
+      "Keyspace": {
+        "Name": "main",
+        "Sharded": false
+      },
+      "Query": "select unsharded.b from unsharded where unsharded.id = :weird_name_a_b_c",
+      "FieldQuery": "select unsharded.b from unsharded where 1 != 1",
+      "JoinVars": {
+        "weird_name_a_b_c": {}
+      }
+    },
+    "Cols": [
+      1
+    ],
+    "Vars": {
+      "weird_name_a_b_c": 0
+    }
+  }
+}
+
 # Invalid value in IN clause
-"select id from user where id in (1.1, 1)"
-"strconv.ParseUint: parsing "1.1": invalid syntax"
+"select id from user where id in (18446744073709551616, 1)"
+"strconv.ParseUint: parsing "18446744073709551616": value out of range"
 
 # Invalid value in IN clause from LHS of join
-"select u1.id from user u1 join user u2 where u1.id = 1.1"
-"strconv.ParseUint: parsing "1.1": invalid syntax"
+"select u1.id from user u1 join user u2 where u1.id = 18446744073709551616"
+"strconv.ParseUint: parsing "18446744073709551616": value out of range"
 
 # Invalid value in IN clause from RHS of join
-"select u1.id from user u1 join user u2 where u2.id = 1.1"
-"strconv.ParseUint: parsing "1.1": invalid syntax"
+"select u1.id from user u1 join user u2 where u2.id = 18446744073709551616"
+"strconv.ParseUint: parsing "18446744073709551616": value out of range"

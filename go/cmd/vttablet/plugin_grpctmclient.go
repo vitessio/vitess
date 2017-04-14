@@ -7,5 +7,5 @@ package main
 // Imports and register the gRPC tabletmanager client
 
 import (
-	_ "github.com/youtube/vitess/go/vt/tabletmanager/grpctmclient"
+	_ "github.com/youtube/vitess/go/vt/vttablet/grpctmclient"
 )

@@ -1,1 +1,1 @@
-com.flipkart.vitess.jdbc.VitessDriver
+io.vitess.jdbc.VitessDriver

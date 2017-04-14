@@ -8,6 +8,7 @@
 {{- $uid := index . 5 -}}
 {{- with index . 6 -}}
 {{- $0 := $.Values.vttablet -}}
+{{- $controllerType := .controllerType | default $0.controllerType -}}
 containers:
   - name: vttablet
     image: {{.image | default $0.image | quote}}
@@ -50,8 +51,10 @@ containers:
           -grpc_port 16002
           -service_map "grpc-queryservice,grpc-tabletmanager,grpc-updatestream"
           -tablet-path "{{$cell.name}}-{{$uid}}"
-{{ if eq (.controllerType | default $0.controllerType) "None" }}
+{{ if eq $controllerType "None" }}
           -tablet_hostname "$(hostname -i)"
+{{ else }}
+          -tablet_hostname "$(hostname).vttablet"
 {{ end }}
           -init_keyspace {{$keyspace.name | quote}}
           -init_shard {{$shard.name | quote}}
@@ -107,7 +110,11 @@ containers:
         )
     env:
       - name: EXTRA_MY_CNF
+{{ if eq $controllerType "None" }}
         value: {{.extraMyCnf | default $0.extraMyCnf | quote}}
+{{ else }}
+        value: "/vt/vtdataroot/init/report-host.cnf:{{.extraMyCnf | default $0.extraMyCnf}}"
+{{ end }}
 volumes:
   - name: syslog
     hostPath: {path: /dev/log}
@@ -133,7 +140,8 @@ volumes:
   "command": ["bash", "-c", "
     set -ex\n
     # Split pod name (via hostname) into prefix and ordinal index.\n
-    [[ `hostname` =~ ^(.+)-([0-9]+)$ ]] || exit 1\n
+    hostname=$(hostname -s)\n
+    [[ $hostname =~ ^(.+)-([0-9]+)$ ]] || exit 1\n
     pod_prefix=${BASH_REMATCH[1]}\n
     pod_index=${BASH_REMATCH[2]}\n
     # Prepend cell name since tablet UIDs must be globally unique.\n
@@ -146,6 +154,9 @@ volumes:
     # Save UID for other containers to read.\n
     mkdir -p $VTDATAROOT/init\n
     echo $tablet_uid > $VTDATAROOT/init/tablet-uid\n
+    # Tell MySQL what hostname to report in SHOW SLAVE HOSTS.\n
+    # Orchestrator looks there, so it should match -tablet_hostname above.\n
+    echo report-host=$hostname.vttablet > $VTDATAROOT/init/report-host.cnf\n
   "],
   "volumeMounts": [
     {
@@ -165,12 +176,14 @@ volumes:
 {{- $tablet := index . 4 -}}
 {{- with $tablet.vttablet -}}
 {{- $0 := $.Values.vttablet -}}
-{{- $keyspaceClean := $keyspace.name | replace "_" "-" -}}
-{{- $setName := printf "%s-%s-%s" $keyspaceClean $shard.name $tablet.type | lower -}}
+{{- $cellClean := include "clean-label" $cell.name -}}
+{{- $keyspaceClean := include "clean-label" $keyspace.name -}}
+{{- $shardClean := include "clean-label" $shard.name -}}
+{{- $setName := printf "%s-%s-%s-%s" $cellClean $keyspaceClean $shardClean $tablet.type | lower -}}
 {{- $uid := "$(cat $VTDATAROOT/init/tablet-uid)" }}
 # vttablet StatefulSet
-apiVersion: apps/v1alpha1
-kind: PetSet
+apiVersion: apps/v1beta1
+kind: StatefulSet
 metadata:
   name: {{$setName | quote}}
 spec:
@@ -181,8 +194,9 @@ spec:
       labels:
         app: vitess
         component: vttablet
+        cell: {{$cellClean | quote}}
         keyspace: {{$keyspace.name | quote}}
-        shard: {{$shard.name | quote}}
+        shard: {{$shardClean | quote}}
         type: {{$tablet.type | quote}}
       annotations:
         pod.alpha.kubernetes.io/initialized: "true"
@@ -210,6 +224,7 @@ spec:
 {{- $cell := index . 1 -}}
 {{- $keyspace := index . 2 -}}
 {{- $shard := index . 3 -}}
+{{- $shardClean := include "clean-label" $shard.name -}}
 {{- $tablet := index . 4 -}}
 {{- $uid := index . 5 -}}
 {{- with $tablet.vttablet -}}
@@ -223,7 +238,7 @@ metadata:
     app: vitess
     component: vttablet
     keyspace: {{$keyspace.name | quote}}
-    shard: {{$shard.name | quote}}
+    shard: {{$shardClean | quote}}
     type: {{$tablet.type | quote}}
   annotations:
     pod.beta.kubernetes.io/init-containers: '[

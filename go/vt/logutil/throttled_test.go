@@ -24,7 +24,7 @@ func TestThrottledLogger(t *testing.T) {
 	start := time.Now()
 
 	go tl.Infof("test %v", 1)
-	if got, want := <-log, "name:test 1"; got != want {
+	if got, want := <-log, "name: test 1"; got != want {
 		t.Errorf("got %q, want %q", got, want)
 	}
 
@@ -40,7 +40,7 @@ func TestThrottledLogger(t *testing.T) {
 	}
 
 	go tl.Infof("test %v", 3)
-	if got, want := <-log, "name:test 3"; got != want {
+	if got, want := <-log, "name: test 3"; got != want {
 		t.Errorf("got %q, want %q", got, want)
 	}
 	if got, want := skippedCount(tl), 0; got != want {

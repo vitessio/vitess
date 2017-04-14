@@ -138,6 +138,7 @@ class VtcomboProcess(VtProcess):
         '-proto_topo', text_format.MessageToString(topology, as_one_line=True),
         '-mycnf_server_id', '1',
         '-mycnf_socket_file', mysql_db.unix_socket(),
+        '-normalize_queries',
     ] + self.QUERYSERVER_PARAMETERS + environment.extra_vtcombo_parameters()
     if schema_dir:
       self.extraparams.extend(['-schema_dir', schema_dir])
@@ -155,6 +156,10 @@ class VtcomboProcess(VtProcess):
            '-db-config-app-port', str(mysql_db.port()),
            '-db-config-dba-host', mysql_db.hostname(),
            '-db-config-dba-port', str(mysql_db.port())])
+    self.vtcombo_mysql_port = environment.get_port('vtcombo_mysql_port')
+    self.extraparams.extend(
+        ['-mysql_auth_server_impl', 'none',
+         '-mysql_server_port', str(self.vtcombo_mysql_port)])
 
 
 vtcombo_process = None

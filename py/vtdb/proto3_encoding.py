@@ -14,6 +14,7 @@ from decimal import Decimal
 from vtproto import query_pb2
 from vtproto import topodata_pb2
 from vtproto import vtgate_pb2
+from vtproto import vtrpc_pb2
 
 from vtdb import field_types
 from vtdb import keyrange_constants
@@ -56,6 +57,24 @@ conversions = {
     # query_pb2.TUPLE: no conversion
 }
 
+# legacy_code_to_code_map maps legacy error codes
+# to the new code that matches grpc's cannonical error codes.
+legacy_code_to_code_map = {
+    vtrpc_pb2.SUCCESS_LEGACY: vtrpc_pb2.OK,
+    vtrpc_pb2.CANCELLED_LEGACY: vtrpc_pb2.CANCELED,
+    vtrpc_pb2.UNKNOWN_ERROR_LEGACY: vtrpc_pb2.UNKNOWN,
+    vtrpc_pb2.BAD_INPUT_LEGACY: vtrpc_pb2.INVALID_ARGUMENT,
+    vtrpc_pb2.DEADLINE_EXCEEDED_LEGACY: vtrpc_pb2.DEADLINE_EXCEEDED,
+    vtrpc_pb2.INTEGRITY_ERROR_LEGACY: vtrpc_pb2.ALREADY_EXISTS,
+    vtrpc_pb2.PERMISSION_DENIED_LEGACY: vtrpc_pb2.PERMISSION_DENIED,
+    vtrpc_pb2.RESOURCE_EXHAUSTED_LEGACY: vtrpc_pb2.RESOURCE_EXHAUSTED,
+    vtrpc_pb2.QUERY_NOT_SERVED_LEGACY: vtrpc_pb2.FAILED_PRECONDITION,
+    vtrpc_pb2.NOT_IN_TX_LEGACY: vtrpc_pb2.ABORTED,
+    vtrpc_pb2.INTERNAL_ERROR_LEGACY: vtrpc_pb2.INTERNAL,
+    vtrpc_pb2.TRANSIENT_ERROR_LEGACY: vtrpc_pb2.UNAVAILABLE,
+    vtrpc_pb2.UNAUTHENTICATED_LEGACY: vtrpc_pb2.UNAUTHENTICATED,
+}
+
 
 INT_UPPERBOUND_PLUS_ONE = 1<<63
 
@@ -82,6 +101,13 @@ def make_row(row, convs):
       converted_row.append(row.values[offset:offset+l])
       offset += l
   return converted_row
+
+
+def build_value(v):
+  """Build a proto value from any valid input."""
+  val = query_pb2.Value()
+  convert_value(v, val)
+  return val
 
 
 def convert_value(value, proto_value, allow_lists=False):
@@ -250,6 +276,11 @@ class Proto3Connection(object):
     """
     if error.code:
       raise vtgate_utils.VitessError(exec_method, error.code, error.message)
+    elif error.legacy_code:
+      raise vtgate_utils.VitessError(
+          exec_method,
+          legacy_code_to_code_map[error.legacy_code],
+          error.message)
 
   def build_conversions(self, qr_fields):
     """Builds an array of fields and conversions from a result fields.
@@ -405,7 +436,7 @@ class Proto3Connection(object):
     else:
       request = vtgate_pb2.ExecuteRequest()
       if keyspace_name:
-        request.keyspace = keyspace_name
+        request.keyspace_shard = keyspace_name
       routing_kwargs = {}
       method_name = 'Execute'
 
@@ -547,6 +578,58 @@ class Proto3Connection(object):
     self._add_caller_id(request, effective_caller_id)
     return request
 
+  def message_stream_request(self,
+                             keyspace_name,
+                             shard,
+                             key_range,
+                             name,
+                             effective_caller_id):
+    """Builds the right vtgate_pb2 MessageStreamRequest.
+
+    Args:
+      keyspace_name: keyspace to apply the query to.
+      shard: shard to ask for.
+      key_range: keyrange.KeyRange object.
+      name: message table name.
+      effective_caller_id: optional vtgate_client.CallerID.
+
+    Returns:
+      A vtgate_pb2.MessageStreamRequest object.
+    """
+    request = vtgate_pb2.MessageStreamRequest(keyspace=keyspace_name,
+                                              name=name,
+                                              shard=shard)
+    if key_range:
+      request.key_range.start = key_range.Start
+      request.key_range.end = key_range.End
+    self._add_caller_id(request, effective_caller_id)
+    return request
+
+  def message_ack_request(self,
+                          keyspace_name,
+                          name,
+                          ids,
+                          effective_caller_id):
+    """Builds the right vtgate_pb2 MessageAckRequest.
+
+    Args:
+      keyspace_name: keyspace to apply the query to.
+      name: message table name.
+      ids: list of message ids.
+      effective_caller_id: optional vtgate_client.CallerID.
+
+    Returns:
+      A vtgate_pb2.MessageAckRequest object.
+    """
+    vals = []
+    for v in ids:
+      vals.append(build_value(v))
+    request = vtgate_pb2.MessageAckRequest(keyspace=keyspace_name,
+                                           name=name,
+                                           ids=vals)
+    self._add_caller_id(request, effective_caller_id)
+    return request
+
   def stream_execute_request_and_name(self, sql, bind_variables, tablet_type,
                                       keyspace_name,
                                       shards,
@@ -593,7 +676,7 @@ class Proto3Connection(object):
     else:
       request = vtgate_pb2.StreamExecuteRequest()
       if keyspace_name:
-        request.keyspace = keyspace_name
+        request.keyspace_shard = keyspace_name
       routing_kwargs = {}
       method_name = 'StreamExecute'
 

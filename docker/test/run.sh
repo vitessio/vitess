@@ -32,7 +32,7 @@ args="$args -v /tmp/mavencache:/home/vitess/.m2"
 
 # Mount in host VTDATAROOT if one exists, since it might be a RAM disk or SSD.
 if [[ -n "$VTDATAROOT" ]]; then
-  hostdir=`mktemp -d --tmpdir=$VTDATAROOT test-XXX`
+  hostdir=`mktemp -d $VTDATAROOT/test-XXX`
   testid=`basename $hostdir`
 
   chmod 777 $hostdir

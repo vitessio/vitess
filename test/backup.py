@@ -11,25 +11,90 @@ import environment
 import tablet
 import utils
 
-use_mysqlctld = True
+use_mysqlctld = False
 
-tablet_master = tablet.Tablet(use_mysqlctld=use_mysqlctld)
-tablet_replica1 = tablet.Tablet(use_mysqlctld=use_mysqlctld)
-tablet_replica2 = tablet.Tablet(use_mysqlctld=use_mysqlctld)
+tablet_master = None
+tablet_replica1 = None
+tablet_replica2 = None
 
-setup_procs = []
+new_init_db = ''
+db_credentials_file = ''
 
 
 def setUpModule():
+  global new_init_db, db_credentials_file
+  global tablet_master, tablet_replica1, tablet_replica2
+
+  tablet_master = tablet.Tablet(use_mysqlctld=use_mysqlctld,
+                                vt_dba_passwd='VtDbaPass')
+  tablet_replica1 = tablet.Tablet(use_mysqlctld=use_mysqlctld,
+                                  vt_dba_passwd='VtDbaPass')
+  tablet_replica2 = tablet.Tablet(use_mysqlctld=use_mysqlctld,
+                                  vt_dba_passwd='VtDbaPass')
+
   try:
     environment.topo_server().setup()
 
+    # Determine which column is used for user passwords in this MySQL version.
+    proc = tablet_master.init_mysql()
+    if use_mysqlctld:
+      tablet_master.wait_for_mysqlctl_socket()
+    else:
+      utils.wait_procs([proc])
+    try:
+      tablet_master.mquery('mysql', 'select password from mysql.user limit 0',
+                           user='root')
+      password_col = 'password'
+    except MySQLdb.DatabaseError:
+      password_col = 'authentication_string'
+    utils.wait_procs([tablet_master.teardown_mysql()])
+    tablet_master.remove_tree(ignore_options=True)
+
+    # Create a new init_db.sql file that sets up passwords for all users.
+    # Then we use a db-credentials-file with the passwords.
+    new_init_db = environment.tmproot + '/init_db_with_passwords.sql'
+    with open(environment.vttop + '/config/init_db.sql') as fd:
+      init_db = fd.read()
+    with open(new_init_db, 'w') as fd:
+      fd.write(init_db)
+      fd.write('''
+# Set real passwords for all users.
+UPDATE mysql.user SET %s = PASSWORD('RootPass')
+  WHERE User = 'root' AND Host = 'localhost';
+UPDATE mysql.user SET %s = PASSWORD('VtDbaPass')
+  WHERE User = 'vt_dba' AND Host = 'localhost';
+UPDATE mysql.user SET %s = PASSWORD('VtAppPass')
+  WHERE User = 'vt_app' AND Host = 'localhost';
+UPDATE mysql.user SET %s = PASSWORD('VtAllprivsPass')
+  WHERE User = 'vt_allprivs' AND Host = 'localhost';
+UPDATE mysql.user SET %s = PASSWORD('VtReplPass')
+  WHERE User = 'vt_repl' AND Host = '%%';
+UPDATE mysql.user SET %s = PASSWORD('VtFilteredPass')
+  WHERE User = 'vt_filtered' AND Host = 'localhost';
+FLUSH PRIVILEGES;
+''' % tuple([password_col] * 6))
+    credentials = {
+        'vt_dba': ['VtDbaPass'],
+        'vt_app': ['VtAppPass'],
+        'vt_allprivs': ['VtAllprivsPass'],
+        'vt_repl': ['VtReplPass'],
+        'vt_filtered': ['VtFilteredPass'],
+    }
+    db_credentials_file = environment.tmproot+'/db_credentials.json'
+    with open(db_credentials_file, 'w') as fd:
+      fd.write(json.dumps(credentials))
+
     # start mysql instance external to the test
-    global setup_procs
     setup_procs = [
-        tablet_master.init_mysql(),
-        tablet_replica1.init_mysql(),
-        tablet_replica2.init_mysql(),
+        tablet_master.init_mysql(init_db=new_init_db,
+                                 extra_args=['-db-credentials-file',
+                                             db_credentials_file]),
+        tablet_replica1.init_mysql(init_db=new_init_db,
+                                   extra_args=['-db-credentials-file',
+                                               db_credentials_file]),
+        tablet_replica2.init_mysql(init_db=new_init_db,
+                                   extra_args=['-db-credentials-file',
+                                               db_credentials_file]),
     ]
     if use_mysqlctld:
       tablet_master.wait_for_mysqlctl_socket()
@@ -47,17 +112,14 @@ def tearDownModule():
   if utils.options.skip_teardown:
     return
 
-  if use_mysqlctld:
-    # Try to terminate mysqlctld gracefully, so it kills its mysqld.
-    for proc in setup_procs:
-      utils.kill_sub_process(proc, soft=True)
-    teardown_procs = setup_procs
-  else:
-    teardown_procs = [
-        tablet_master.teardown_mysql(),
-        tablet_replica1.teardown_mysql(),
-        tablet_replica2.teardown_mysql(),
-    ]
+  teardown_procs = [
+      tablet_master.teardown_mysql(extra_args=['-db-credentials-file',
+                                               db_credentials_file]),
+      tablet_replica1.teardown_mysql(extra_args=['-db-credentials-file',
+                                                 db_credentials_file]),
+      tablet_replica2.teardown_mysql(extra_args=['-db-credentials-file',
+                                                 db_credentials_file]),
+  ]
   utils.wait_procs(teardown_procs, raise_on_error=False)
 
   environment.topo_server().teardown()
@@ -76,9 +138,13 @@ class TestBackup(unittest.TestCase):
       t.create_db('vt_test_keyspace')
 
     tablet_master.init_tablet('replica', 'test_keyspace', '0', start=True,
-                              supports_backups=True)
+                              supports_backups=True,
+                              extra_args=['-db-credentials-file',
+                                          db_credentials_file])
     tablet_replica1.init_tablet('replica', 'test_keyspace', '0', start=True,
-                                supports_backups=True)
+                                supports_backups=True,
+                                extra_args=['-db-credentials-file',
+                                            db_credentials_file])
     utils.run_vtctl(['InitShardMaster', '-force', 'test_keyspace/0',
                      tablet_master.tablet_alias])
 
@@ -132,7 +198,8 @@ class TestBackup(unittest.TestCase):
                      init_tablet_type=tablet_type,
                      init_keyspace='test_keyspace',
                      init_shard='0',
-                     supports_backups=True)
+                     supports_backups=True,
+                     extra_args=['-db-credentials-file', db_credentials_file])
 
     # check semi-sync is enabled for replica, disabled for rdonly.
     if tablet_type == 'replica':
@@ -144,11 +211,12 @@ class TestBackup(unittest.TestCase):
 
   def _reset_tablet_dir(self, t):
     """Stop mysql, delete everything including tablet dir, restart mysql."""
-    utils.wait_procs([t.teardown_mysql()])
+    extra_args = ['-db-credentials-file', db_credentials_file]
+    utils.wait_procs([t.teardown_mysql(extra_args=extra_args)])
     # Specify ignore_options because we want to delete the tree even
     # if the test's -k / --keep-logs was specified on the command line.
     t.remove_tree(ignore_options=True)
-    proc = t.init_mysql()
+    proc = t.init_mysql(init_db=new_init_db, extra_args=extra_args)
     if use_mysqlctld:
       t.wait_for_mysqlctl_socket()
     else:
@@ -168,11 +236,11 @@ class TestBackup(unittest.TestCase):
         ['RemoveBackup', 'test_keyspace/0', backup],
         auto_log=True, mode=utils.VTCTL_VTCTL)
 
-  def test_backup_replica(self):
-    self._test_backup('replica')
-
   def test_backup_rdonly(self):
     self._test_backup('rdonly')
+
+  def test_backup_replica(self):
+    self._test_backup('replica')
 
   def _test_backup(self, tablet_type):
     """Test backup flow.
@@ -353,7 +421,9 @@ class TestBackup(unittest.TestCase):
                                    extra_args=[
                                        '-backup_storage_hook',
                                        'test_backup_transform',
-                                       '-backup_storage_compress=false'])
+                                       '-backup_storage_compress=false',
+                                       '-db-credentials-file',
+                                       db_credentials_file])
 
     # Take a backup, it should work.
     utils.run_vtctl(['Backup', tablet_replica1.tablet_alias], auto_log=True)
@@ -392,7 +462,9 @@ class TestBackup(unittest.TestCase):
     tablet_replica1.kill_vttablet()
     tablet_replica1.start_vttablet(supports_backups=True,
                                    extra_args=['-backup_storage_hook',
-                                               'test_backup_error'])
+                                               'test_backup_error',
+                                               '-db-credentials-file',
+                                               db_credentials_file])
 
     # This will fail, make sure we get the right error.
     _, err = utils.run_vtctl(['Backup', tablet_replica1.tablet_alias],

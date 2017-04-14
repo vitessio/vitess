@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"path"
 	"sort"
-	"time"
 
 	zookeeper "github.com/samuel/go-zookeeper/zk"
 	"golang.org/x/net/context"
@@ -21,15 +20,8 @@ import (
 	vschemapb "github.com/youtube/vitess/go/vt/proto/vschema"
 )
 
-// WatchSleepDuration is how many seconds interval to poll for in case
-// the directory that contains a file to watch doesn't exist, or a watch
-// is broken. It is exported so individual test and main programs
-// can change it.
-var WatchSleepDuration = 30 * time.Second
+// This file contains the serving graph management code of zktopo.Server.
 
-/*
-This file contains the serving graph management code of zktopo.Server
-*/
 func zkPathForCell(cell string) string {
 	return fmt.Sprintf("/zk/%v/vt", cell)
 }

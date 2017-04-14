@@ -148,6 +148,10 @@ func sinceZero(sinceZero time.Duration) time.Time {
 	return time.Time{}.Add(sinceZero)
 }
 
+// Due to limitations of golang.org/x/time/rate.Limiter the 'now' parameter of
+// threadThrottler.throttle() must be at least 1 second. See the comment in
+// threadThrottler.newThreadThrottler() for more details.
+
 // newThrottlerWithClock should only be used for testing.
 func newThrottlerWithClock(name, unit string, threadCount int, maxRate int64, maxReplicationLag int64, nowFunc func() time.Time) (*Throttler, error) {
 	return newThrottler(GlobalManager, name, unit, threadCount, maxRate, maxReplicationLag, nowFunc)
@@ -159,36 +163,36 @@ func TestThrottle(t *testing.T) {
 	throttler, _ := newThrottlerWithClock("test", "queries", 1, 2, ReplicationLagModuleDisabled, fc.now)
 	defer throttler.Close()
 
+	fc.setNow(1000 * time.Millisecond)
 	// 2 QPS should divide the current second into two chunks of 500 ms:
-	// a) [0s, 500ms), b) [500ms, 1s)
+	// a) [1s, 1.5s), b) [1.5s, 2s)
 	// First call goes through since the chunk is not "used" yet.
-	fc.setNow(0 * time.Millisecond)
 	if gotBackoff := throttler.Throttle(0); gotBackoff != NotThrottled {
 		t.Fatalf("throttler should not have throttled us: backoff = %v", gotBackoff)
 	}
 
 	// Next call should tell us to backoff until we reach the second chunk.
-	fc.setNow(0 * time.Millisecond)
+	fc.setNow(1000 * time.Millisecond)
 	wantBackoff := 500 * time.Millisecond
 	if gotBackoff := throttler.Throttle(0); gotBackoff != wantBackoff {
 		t.Fatalf("throttler should have throttled us. got = %v, want = %v", gotBackoff, wantBackoff)
 	}
 
 	// Some time elpased, but we are still in the first chunk and must backoff.
-	fc.setNow(111 * time.Millisecond)
+	fc.setNow(1111 * time.Millisecond)
 	wantBackoff2 := 389 * time.Millisecond
 	if gotBackoff := throttler.Throttle(0); gotBackoff != wantBackoff2 {
 		t.Fatalf("throttler should have still throttled us. got = %v, want = %v", gotBackoff, wantBackoff2)
 	}
 
 	// Enough time elapsed that we are in the second chunk now.
-	fc.setNow(500 * time.Millisecond)
+	fc.setNow(1500 * time.Millisecond)
 	if gotBackoff := throttler.Throttle(0); gotBackoff != NotThrottled {
 		t.Fatalf("throttler should not have throttled us: backoff = %v", gotBackoff)
 	}
 
 	// We're in the third chunk and are allowed to issue the third request.
-	fc.setNow(1500 * time.Millisecond)
+	fc.setNow(2001 * time.Millisecond)
 	if gotBackoff := throttler.Throttle(0); gotBackoff != NotThrottled {
 		t.Fatalf("throttler should not have throttled us: backoff = %v", gotBackoff)
 	}
@@ -200,15 +204,15 @@ func TestThrottle_RateRemainderIsDistributedAcrossThreads(t *testing.T) {
 	throttler, _ := newThrottlerWithClock("test", "queries", 3, 5, ReplicationLagModuleDisabled, fc.now)
 	defer throttler.Close()
 
+	fc.setNow(1000 * time.Millisecond)
 	// Out of 5 QPS, each thread gets 1 and two threads get 1 query extra.
-	fc.setNow(0 * time.Millisecond)
 	for threadID := 0; threadID < 2; threadID++ {
 		if gotBackoff := throttler.Throttle(threadID); gotBackoff != NotThrottled {
 			t.Fatalf("throttler should not have throttled thread %d: backoff = %v", threadID, gotBackoff)
 		}
 	}
 
-	fc.setNow(500 * time.Millisecond)
+	fc.setNow(1500 * time.Millisecond)
 	// Find the thread which got one extra query.
 	threadsWithMoreThanOneQPS := 0
 	for threadID := 0; threadID < 2; threadID++ {
@@ -240,8 +244,8 @@ func TestThreadFinished(t *testing.T) {
 	throttler, _ := newThrottlerWithClock("test", "queries", 2, 2, ReplicationLagModuleDisabled, fc.now)
 	defer throttler.Close()
 
-	// First second: Each thread consumes their 1 QPS.
-	fc.setNow(0 * time.Millisecond)
+	// [1000ms, 2000ms):  Each thread consumes their 1 QPS.
+	fc.setNow(1000 * time.Millisecond)
 	for threadID := 0; threadID < 2; threadID++ {
 		if gotBackoff := throttler.Throttle(threadID); gotBackoff != NotThrottled {
 			t.Fatalf("throttler should not have throttled thread %d: backoff = %v", threadID, gotBackoff)
@@ -255,20 +259,20 @@ func TestThreadFinished(t *testing.T) {
 		}
 	}
 
-	// Second second: One thread finishes, other one gets remaining 1 QPS extra.
-	fc.setNow(1000 * time.Millisecond)
+	// [2000ms, 3000ms): One thread finishes, other one gets remaining 1 QPS extra.
+	fc.setNow(2000 * time.Millisecond)
 	throttler.ThreadFinished(1)
 
 	// Max rate update to threadThrottlers happens asynchronously. Wait for it.
 	timer := time.NewTimer(2 * time.Second)
 	for {
-		if throttler.threadThrottlers[0].maxRate.Get() == 2 {
+		if throttler.threadThrottlers[0].getMaxRate() == 2 {
 			timer.Stop()
 			break
 		}
 		select {
 		case <-timer.C:
-			t.Fatalf("max rate was not propapgated to threadThrottler[0] in time: %v", throttler.threadThrottlers[0].maxRate.Get())
+			t.Fatalf("max rate was not propapgated to threadThrottler[0] in time: %v", throttler.threadThrottlers[0].getMaxRate())
 		default:
 			// Timer not up yet. Try again.
 		}
@@ -278,7 +282,7 @@ func TestThreadFinished(t *testing.T) {
 	if gotBackoff := throttler.Throttle(0); gotBackoff != NotThrottled {
 		t.Fatalf("throttler should not have throttled us: backoff = %v", gotBackoff)
 	}
-	fc.setNow(1500 * time.Millisecond)
+	fc.setNow(2500 * time.Millisecond)
 	if gotBackoff := throttler.Throttle(0); gotBackoff != NotThrottled {
 		t.Fatalf("throttler should not have throttled us: backoff = %v", gotBackoff)
 	}
@@ -311,17 +315,17 @@ func TestThrottle_MaxRateIsZero(t *testing.T) {
 	throttler, _ := newThrottlerWithClock("test", "queries", 1, ZeroRateNoProgess, ReplicationLagModuleDisabled, fc.now)
 	defer throttler.Close()
 
-	fc.setNow(0 * time.Millisecond)
+	fc.setNow(1000 * time.Millisecond)
 	wantBackoff := 1000 * time.Millisecond
 	if gotBackoff := throttler.Throttle(0); gotBackoff != wantBackoff {
 		t.Fatalf("throttler should have throttled us. got = %v, want = %v", gotBackoff, wantBackoff)
 	}
-	fc.setNow(111 * time.Millisecond)
-	wantBackoff2 := 889 * time.Millisecond
+	fc.setNow(1111 * time.Millisecond)
+	wantBackoff2 := 1000 * time.Millisecond
 	if gotBackoff := throttler.Throttle(0); gotBackoff != wantBackoff2 {
 		t.Fatalf("throttler should have throttled us. got = %v, want = %v", gotBackoff, wantBackoff2)
 	}
-	fc.setNow(1000 * time.Millisecond)
+	fc.setNow(2000 * time.Millisecond)
 	wantBackoff3 := 1000 * time.Millisecond
 	if gotBackoff := throttler.Throttle(0); gotBackoff != wantBackoff3 {
 		t.Fatalf("throttler should have throttled us. got = %v, want = %v", gotBackoff, wantBackoff3)
@@ -333,7 +337,7 @@ func TestThrottle_MaxRateDisabled(t *testing.T) {
 	throttler, _ := newThrottlerWithClock("test", "queries", 1, MaxRateModuleDisabled, ReplicationLagModuleDisabled, fc.now)
 	defer throttler.Close()
 
-	fc.setNow(0 * time.Millisecond)
+	fc.setNow(1000 * time.Millisecond)
 	// No QPS set. 10 requests in a row are fine.
 	for i := 0; i < 10; i++ {
 		if gotBackoff := throttler.Throttle(0); gotBackoff != NotThrottled {
@@ -353,7 +357,7 @@ func TestThrottle_MaxRateLowerThanThreadCount(t *testing.T) {
 
 	// 2 QPS instead of configured 1 QPS allowed since there are 2 threads which
 	// must not starve.
-	fc.setNow(0 * time.Millisecond)
+	fc.setNow(1000 * time.Millisecond)
 	for threadID := 0; threadID < 1; threadID++ {
 		if gotBackoff := throttler.Throttle(threadID); gotBackoff != NotThrottled {
 			t.Fatalf("throttler should not have throttled thread %d: backoff = %v", threadID, gotBackoff)

@@ -39,19 +39,12 @@ type Conn interface {
 	IsClosed() bool
 	// CloseResult finishes the result set
 	CloseResult()
-	// Shutdown invokes the low-level shutdown call on the socket associated with
-	// a connection to stop ongoing communication.
-	Shutdown()
 	// Fields returns the current fields description for the query
 	Fields() ([]*querypb.Field, error)
 	// ID returns the connection id.
 	ID() int64
 	// FetchNext returns the next row for a query
 	FetchNext() ([]sqltypes.Value, error)
-	// ReadPacket reads a raw packet from the connection.
-	ReadPacket() ([]byte, error)
-	// SendCommand sends a raw command to the db server.
-	SendCommand(command uint32, data []byte) error
 }
 
 // RegisterDefault registers the default connection function.

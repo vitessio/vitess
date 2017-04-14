@@ -76,6 +76,7 @@ COMMAND ARGUMENT DEFINITIONS
 package vtctl
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -90,16 +91,18 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
+	"github.com/golang/protobuf/jsonpb"
+	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/flagutil"
+	"github.com/youtube/vitess/go/mysqlconn/replication"
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/sync2"
 	hk "github.com/youtube/vitess/go/vt/hook"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/logutil"
-	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
 	"github.com/youtube/vitess/go/vt/schemamanager"
-	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/topotools"
@@ -225,7 +228,10 @@ var commands = []commandGroup{
 				"Add or remove served type to/from a shard. This is meant as an emergency function. It does not rebuild any serving graph i.e. does not run 'RebuildKeyspaceGraph'."},
 			{"SetShardTabletControl", commandSetShardTabletControl,
 				"[--cells=c1,c2,...] [--blacklisted_tables=t1,t2,...] [--remove] [--disable_query_service] <keyspace/shard> <tablet type>",
-				"Sets the TabletControl record for a shard and type. Only use this for an emergency fix or after a finished vertical split. The *MigrateServedFrom* and *MigrateServedType* commands set this field appropriately already. Always specify the blacklisted_tables flag for vertical splits, but never for horizontal splits."},
+				"Sets the TabletControl record for a shard and type. Only use this for an emergency fix or after a finished vertical split. The *MigrateServedFrom* and *MigrateServedType* commands set this field appropriately already. Always specify the blacklisted_tables flag for vertical splits, but never for horizontal splits.\n" +
+					"To set the DisableQueryServiceFlag, keep 'blacklisted_tables' empty, and set 'disable_query_service' to true or false. Useful to fix horizontal splits gone wrong.\n" +
+					"To change the blacklisted tables list, specify the 'blacklisted_tables' parameter with the new list. Useful to fix tables that are being blocked after a vertical split.\n" +
+					"To just remove the ShardTabletControl entirely, use the 'remove' flag, useful after a vertical split is finished to remove serving restrictions."},
 			{"SourceShardDelete", commandSourceShardDelete,
 				"<keyspace/shard> <uid>",
 				"Deletes the SourceShard record with the provided index. This is meant as an emergency cleanup function. It does not call RefreshState for the shard master."},
@@ -321,6 +327,12 @@ var commands = []commandGroup{
 			{"ReloadSchema", commandReloadSchema,
 				"<tablet alias>",
 				"Reloads the schema on a remote tablet."},
+			{"ReloadSchemaShard", commandReloadSchemaShard,
+				"[-concurrency=10] [-include_master=false] <keyspace/shard>",
+				"Reloads the schema on all the tablets in a shard."},
+			{"ReloadSchemaKeyspace", commandReloadSchemaKeyspace,
+				"[-concurrency=10] [-include_master=false] <keyspace>",
+				"Reloads the schema on all the tablets in a keyspace."},
 			{"ValidateSchemaShard", commandValidateSchemaShard,
 				"[-exclude_tables=''] [-include-views] <keyspace/shard>",
 				"Validates that the master schema matches all of the slaves."},
@@ -444,8 +456,8 @@ func listTabletsByShard(ctx context.Context, wr *wrangler.Wrangler, keyspace, sh
 	return dumpTablets(ctx, wr, tabletAliases)
 }
 
-func dumpAllTablets(ctx context.Context, wr *wrangler.Wrangler, zkVtPath string) error {
-	tablets, err := topotools.GetAllTablets(ctx, wr.TopoServer(), zkVtPath)
+func dumpAllTablets(ctx context.Context, wr *wrangler.Wrangler, cell string) error {
+	tablets, err := topotools.GetAllTablets(ctx, wr.TopoServer(), cell)
 	if err != nil {
 		return err
 	}
@@ -657,7 +669,8 @@ func commandGetTablet(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag
 	if err != nil {
 		return err
 	}
-	return printJSON(wr.Logger(), tabletInfo)
+	// Pass the embedded proto directly or jsonpb will panic.
+	return printJSON(wr.Logger(), tabletInfo.Tablet)
 }
 
 func commandUpdateTabletAddrs(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -1118,7 +1131,8 @@ func commandGetShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.
 	if err != nil {
 		return err
 	}
-	return printJSON(wr.Logger(), shardInfo)
+	// Pass the embedded proto directly or jsonpb will panic.
+	return printJSON(wr.Logger(), shardInfo.Shard)
 }
 
 func commandTabletExternallyReparented(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -1230,9 +1244,9 @@ func commandSetShardServedTypes(ctx context.Context, wr *wrangler.Wrangler, subF
 
 func commandSetShardTabletControl(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	cellsStr := subFlags.String("cells", "", "Specifies a comma-separated list of cells to update")
-	tablesStr := subFlags.String("tables", "", "Specifies a comma-separated list of tables to replicate (used for vertical split). Each is either an exact match, or a regular expression of the form /regexp/")
-	remove := subFlags.Bool("remove", false, "Removes cells for vertical splits. This flag requires the *tables* flag to also be set.")
-	disableQueryService := subFlags.Bool("disable_query_service", false, "Disables query service on the provided nodes")
+	blacklistedTablesStr := subFlags.String("blacklisted_tables", "", "Specifies a comma-separated list of tables to blacklist (used for vertical split). Each is either an exact match, or a regular expression of the form '/regexp/'.")
+	remove := subFlags.Bool("remove", false, "Removes cells for vertical splits.")
+	disableQueryService := subFlags.Bool("disable_query_service", false, "Disables query service on the provided nodes. This flag requires 'blacklisted_tables' and 'remove' to be unset, otherwise it's ignored.")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -1247,16 +1261,16 @@ func commandSetShardTabletControl(ctx context.Context, wr *wrangler.Wrangler, su
 	if err != nil {
 		return err
 	}
-	var tables []string
-	if *tablesStr != "" {
-		tables = strings.Split(*tablesStr, ",")
+	var blacklistedTables []string
+	if *blacklistedTablesStr != "" {
+		blacklistedTables = strings.Split(*blacklistedTablesStr, ",")
 	}
 	var cells []string
 	if *cellsStr != "" {
 		cells = strings.Split(*cellsStr, ",")
 	}
 
-	return wr.SetShardTabletControl(ctx, keyspace, shard, tabletType, cells, *remove, *disableQueryService, tables)
+	return wr.SetShardTabletControl(ctx, keyspace, shard, tabletType, cells, *remove, *disableQueryService, blacklistedTables)
 }
 
 func commandSourceShardDelete(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -1367,7 +1381,7 @@ func commandShardReplicationFix(ctx context.Context, wr *wrangler.Wrangler, subF
 }
 
 func commandWaitForFilteredReplication(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	maxDelay := subFlags.Duration("max_delay", 30*time.Second,
+	maxDelay := subFlags.Duration("max_delay", wrangler.DefaultWaitForFilteredReplicationMaxDelay,
 		"Specifies the maximum delay, in seconds, the filtered replication of the"+
 			" given destination shard should lag behind the source shard. When"+
 			" higher, the command will block and wait for the delay to decrease.")
@@ -1382,72 +1396,7 @@ func commandWaitForFilteredReplication(ctx context.Context, wr *wrangler.Wrangle
 	if err != nil {
 		return err
 	}
-	shardInfo, err := wr.TopoServer().GetShard(ctx, keyspace, shard)
-	if err != nil {
-		return err
-	}
-	if len(shardInfo.SourceShards) == 0 {
-		return fmt.Errorf("shard %v/%v has no source shard", keyspace, shard)
-	}
-	if !shardInfo.HasMaster() {
-		return fmt.Errorf("shard %v/%v has no master", keyspace, shard)
-	}
-	alias := shardInfo.MasterAlias
-	tabletInfo, err := wr.TopoServer().GetTablet(ctx, alias)
-	if err != nil {
-		return err
-	}
-
-	// Always run an explicit healthcheck first to make sure we don't see any outdated values.
-	// This is especially true for tests and automation where there is no pause of multiple seconds
-	// between commands and the periodic healthcheck did not run again yet.
-	if err := wr.TabletManagerClient().RunHealthCheck(ctx, tabletInfo.Tablet); err != nil {
-		return fmt.Errorf("failed to run explicit healthcheck on tablet: %v err: %v", tabletInfo, err)
-	}
-
-	conn, err := tabletconn.GetDialer()(tabletInfo.Tablet, 30*time.Second)
-	if err != nil {
-		return fmt.Errorf("cannot connect to tablet %v: %v", alias, err)
-	}
-
-	stream, err := conn.StreamHealth(ctx)
-	if err != nil {
-		return fmt.Errorf("could not stream health records from tablet: %v err: %v", alias, err)
-	}
-	var lastSeenDelay int
-	for {
-		select {
-		case <-ctx.Done():
-			return fmt.Errorf("context was done before filtered replication did catch up. Last seen delay: %v context Error: %v", lastSeenDelay, ctx.Err())
-		default:
-		}
-
-		shr, err := stream.Recv()
-		if err != nil {
-			return fmt.Errorf("stream ended early: %v", err)
-		}
-		stats := shr.RealtimeStats
-		if stats == nil {
-			return fmt.Errorf("health record does not include RealtimeStats message. tablet: %v health record: %v", alias, shr)
-		}
-		if stats.HealthError != "" {
-			return fmt.Errorf("tablet is not healthy. tablet: %v health record: %v", alias, shr)
-		}
-		if stats.BinlogPlayersCount == 0 {
-			return fmt.Errorf("no filtered replication running on tablet: %v health record: %v", alias, shr)
-		}
-
-		delaySecs := stats.SecondsBehindMasterFilteredReplication
-		lastSeenDelay := time.Duration(delaySecs) * time.Second
-		if lastSeenDelay < 0 {
-			return fmt.Errorf("last seen delay should never be negative. tablet: %v delay: %v", alias, lastSeenDelay)
-		}
-		if lastSeenDelay <= *maxDelay {
-			wr.Logger().Printf("Filtered replication on tablet: %v has caught up. Last seen delay: %.1f seconds\n", alias, lastSeenDelay.Seconds())
-			return nil
-		}
-		wr.Logger().Printf("Waiting for filtered replication to catch up on tablet: %v Last seen delay: %.1f seconds\n", alias, lastSeenDelay.Seconds())
-	}
+	return wr.WaitForFilteredReplication(ctx, keyspace, shard, *maxDelay)
 }
 
 func commandRemoveShardCell(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -1575,7 +1524,8 @@ func commandGetKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 	if err != nil {
 		return err
 	}
-	return printJSON(wr.Logger(), keyspaceInfo)
+	// Pass the embedded proto directly or jsonpb will panic.
+	return printJSON(wr.Logger(), keyspaceInfo.Keyspace)
 }
 
 func commandGetKeyspaces(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -1848,6 +1798,37 @@ func commandReloadSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 	return wr.ReloadSchema(ctx, tabletAlias)
 }
 
+func commandReloadSchemaShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	concurrency := subFlags.Int("concurrency", 10, "How many tablets to reload in parallel")
+	includeMaster := subFlags.Bool("include_master", true, "Include the master tablet")
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+	if subFlags.NArg() != 1 {
+		return fmt.Errorf("the <keyspace/shard> argument is required for the ReloadSchemaShard command")
+	}
+	keyspace, shard, err := topoproto.ParseKeyspaceShard(subFlags.Arg(0))
+	if err != nil {
+		return err
+	}
+	sema := sync2.NewSemaphore(*concurrency, 0)
+	wr.ReloadSchemaShard(ctx, keyspace, shard, "" /* waitPosition */, sema, *includeMaster)
+	return nil
+}
+
+func commandReloadSchemaKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	concurrency := subFlags.Int("concurrency", 10, "How many tablets to reload in parallel")
+	includeMaster := subFlags.Bool("include_master", true, "Include the master tablet(s)")
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+	if subFlags.NArg() != 1 {
+		return fmt.Errorf("the <keyspace> argument is required for the ReloadSchemaKeyspace command")
+	}
+	sema := sync2.NewSemaphore(*concurrency, 0)
+	return wr.ReloadSchemaKeyspace(ctx, subFlags.Arg(0), sema, *includeMaster)
+}
+
 func commandValidateSchemaShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	excludeTables := subFlags.String("exclude_tables", "", "Specifies a comma-separated list of tables to exclude. Each is either an exact match, or a regular expression of the form /regexp/")
 	includeViews := subFlags.Bool("include-views", false, "Includes views in the validation")
@@ -1891,7 +1872,7 @@ func commandApplySchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 	allowLongUnavailability := subFlags.Bool("allow_long_unavailability", false, "Allow large schema changes which incur a longer unavailability of the database.")
 	sql := subFlags.String("sql", "", "A list of semicolon-delimited SQL commands")
 	sqlFile := subFlags.String("sql-file", "", "Identifies the file that contains the SQL commands")
-	waitSlaveTimeout := subFlags.Duration("wait_slave_timeout", 10*time.Second, "The amount of time to wait for slaves to receive the schema change via replication.")
+	waitSlaveTimeout := subFlags.Duration("wait_slave_timeout", wrangler.DefaultWaitSlaveTimeout, "The amount of time to wait for slaves to receive the schema change via replication.")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -2173,7 +2154,8 @@ func commandGetShardReplication(ctx context.Context, wr *wrangler.Wrangler, subF
 	if err != nil {
 		return err
 	}
-	return printJSON(wr.Logger(), shardReplication)
+	// Pass the embedded proto directly or jsonpb will panic.
+	return printJSON(wr.Logger(), shardReplication.ShardReplication)
 }
 
 func commandHelp(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -2255,12 +2237,49 @@ func sortReplicatingTablets(tablets []*topo.TabletInfo, stats []*replicationdata
 
 // printJSON will print the JSON version of the structure to the logger.
 func printJSON(logger logutil.Logger, val interface{}) error {
-	data, err := json.MarshalIndent(val, "", "  ")
+	data, err := MarshalJSON(val)
 	if err != nil {
 		return fmt.Errorf("cannot marshal data: %v", err)
 	}
 	logger.Printf("%v\n", string(data))
 	return nil
+}
+
+// MarshalJSON marshals "obj" to a JSON string. It uses the "jsonpb" marshaler
+// or Go's standard one.
+//
+// We use jsonpb for protobuf messages because it is the only supported
+// way to marshal protobuf messages to JSON.
+// In addition to that, it's the only way to emit zero values in the JSON
+// output.
+// Unfortunately, jsonpb works only for protobuf messages. Therefore, we use
+// the default marshaler for the remaining structs (which are possibly
+// mixed protobuf and non-protobuf).
+//
+// TODO(mberlin): Switch "EnumAsInts" to "false" once the frontend is
+//                updated and mixed types will use jsonpb as well.
+func MarshalJSON(obj interface{}) (data []byte, err error) {
+	switch obj := obj.(type) {
+	case proto.Message:
+		// Note: We also end up in this case if "obj" is NOT a proto.Message but
+		// has an anonymous (embedded) field of the type "proto.Message".
+		// In that case jsonpb may panic if the "obj" has non-exported fields.
+
+		// Marshal the protobuf message.
+		var b bytes.Buffer
+		m := jsonpb.Marshaler{EnumsAsInts: true, EmitDefaults: true, Indent: "  ", OrigName: true}
+		if err := m.Marshal(&b, obj); err != nil {
+			return nil, fmt.Errorf("jsonpb error: %v", err)
+		}
+		data = b.Bytes()
+	default:
+		data, err = json.MarshalIndent(obj, "", "  ")
+		if err != nil {
+			return nil, fmt.Errorf("json error: %v", err)
+		}
+	}
+
+	return data, nil
 }
 
 // RunCommand will execute the command using the provided wrangler.

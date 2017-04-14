@@ -5,6 +5,7 @@
 package binlog
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"strings"
@@ -12,10 +13,13 @@ import (
 	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
+	"github.com/youtube/vitess/go/mysqlconn/replication"
 	"github.com/youtube/vitess/go/sqldb"
+	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
-	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
+	"github.com/youtube/vitess/go/vt/sqlparser"
+	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/schema"
 
 	binlogdatapb "github.com/youtube/vitess/go/vt/proto/binlogdata"
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
@@ -37,9 +41,9 @@ var (
 		"begin":    binlogdatapb.BinlogTransaction_Statement_BL_BEGIN,
 		"commit":   binlogdatapb.BinlogTransaction_Statement_BL_COMMIT,
 		"rollback": binlogdatapb.BinlogTransaction_Statement_BL_ROLLBACK,
-		"insert":   binlogdatapb.BinlogTransaction_Statement_BL_DML,
-		"update":   binlogdatapb.BinlogTransaction_Statement_BL_DML,
-		"delete":   binlogdatapb.BinlogTransaction_Statement_BL_DML,
+		"insert":   binlogdatapb.BinlogTransaction_Statement_BL_INSERT,
+		"update":   binlogdatapb.BinlogTransaction_Statement_BL_UPDATE,
+		"delete":   binlogdatapb.BinlogTransaction_Statement_BL_DELETE,
 		"create":   binlogdatapb.BinlogTransaction_Statement_BL_DDL,
 		"alter":    binlogdatapb.BinlogTransaction_Statement_BL_DDL,
 		"drop":     binlogdatapb.BinlogTransaction_Statement_BL_DDL,
@@ -49,9 +53,20 @@ var (
 	}
 )
 
+// FullBinlogStatement has all the information we can gather for an event.
+// Some fields are only set if asked for, and if RBR is used.
+// Otherwise we'll revert back to using the SQL comments, for SBR.
+type FullBinlogStatement struct {
+	Statement  *binlogdatapb.BinlogTransaction_Statement
+	Table      string
+	KeyspaceID []byte
+	PKNames    []*querypb.Field
+	PKValues   []sqltypes.Value
+}
+
 // sendTransactionFunc is used to send binlog events.
 // reply is of type binlogdatapb.BinlogTransaction.
-type sendTransactionFunc func(trans *binlogdatapb.BinlogTransaction) error
+type sendTransactionFunc func(eventToken *querypb.EventToken, statements []FullBinlogStatement) error
 
 // getStatementCategory returns the binlogdatapb.BL_* category for a SQL statement.
 func getStatementCategory(sql string) binlogdatapb.BinlogTransaction_Statement_Category {
@@ -61,13 +76,57 @@ func getStatementCategory(sql string) binlogdatapb.BinlogTransaction_Statement_C
 	return statementPrefixes[strings.ToLower(sql)]
 }
 
+// tableCacheEntry contains everything we know about a table.
+// It is created when we get a TableMap event.
+type tableCacheEntry struct {
+	// tm is what we get from a TableMap event.
+	tm *replication.TableMap
+
+	// ti is the table descriptor we get from the schema engine.
+	ti *schema.Table
+
+	// The following fields are used if we want to extract the
+	// keyspace_id of a row.
+
+	// resolver is only set if Streamer.resolverFactory is set.
+	resolver keyspaceIDResolver
+
+	// keyspaceIDIndex is the index of the field that can be used
+	// to compute the keyspaceID. Set to -1 if no resolver is in used.
+	keyspaceIDIndex int
+
+	// The following fields are used if we want to extract the
+	// primary key of a row.
+
+	// pkNames contains an array of fields for the PK.
+	pkNames []*querypb.Field
+
+	// pkIndexes contains the index of a given column in the
+	// PK. It is -1 f the column is not in any PK. It contains as
+	// many fields as there are columns in the table.
+	// For instance, in a table defined like this:
+	//   field1 varchar()
+	//   pkpart2 int
+	//   pkpart1 int
+	// pkIndexes would contain: [
+	// -1      // field1 is not in the pk
+	// 1       // pkpart2 is the second part of the PK
+	// 0       // pkpart1 is the first part of the PK
+	// This array is built this way so when we extract the columns
+	// in a row, we can just save them in the PK array easily.
+	pkIndexes []int
+}
+
 // Streamer streams binlog events from MySQL by connecting as a slave.
 // A Streamer should only be used once. To start another stream, call
 // NewStreamer() again.
 type Streamer struct {
-	// dbname and mysqld are set at creation and immutable.
-	dbname string
-	mysqld mysqlctl.MysqlDaemon
+	// The following fields at set at creation and immutable.
+	dbname          string
+	mysqld          mysqlctl.MysqlDaemon
+	se              *schema.Engine
+	resolverFactory keyspaceIDResolverFactory
+	extractPK       bool
 
 	clientCharset    *binlogdatapb.Charset
 	startPos         replication.Position
@@ -86,10 +145,11 @@ type Streamer struct {
 // startPos is the position to start streaming at. Incompatible with timestamp.
 // timestamp is the timestamp to start streaming at. Incompatible with startPos.
 // sendTransaction is called each time a transaction is committed or rolled back.
-func NewStreamer(dbname string, mysqld mysqlctl.MysqlDaemon, clientCharset *binlogdatapb.Charset, startPos replication.Position, timestamp int64, sendTransaction sendTransactionFunc) *Streamer {
+func NewStreamer(dbname string, mysqld mysqlctl.MysqlDaemon, se *schema.Engine, clientCharset *binlogdatapb.Charset, startPos replication.Position, timestamp int64, sendTransaction sendTransactionFunc) *Streamer {
 	return &Streamer{
 		dbname:          dbname,
 		mysqld:          mysqld,
+		se:              se,
 		clientCharset:   clientCharset,
 		startPos:        startPos,
 		timestamp:       timestamp,
@@ -168,12 +228,16 @@ func (bls *Streamer) Stream(ctx context.Context) (err error) {
 // If the events channel is closed, parseEvents returns ErrServerEOF.
 // If the context is done, returns ctx.Err().
 func (bls *Streamer) parseEvents(ctx context.Context, events <-chan replication.BinlogEvent) (replication.Position, error) {
-	var statements []*binlogdatapb.BinlogTransaction_Statement
+	var statements []FullBinlogStatement
 	var format replication.BinlogFormat
 	var gtid replication.GTID
 	var pos = bls.startPos
 	var autocommit = true
 	var err error
+
+	// Remember the RBR state.
+	// tableMaps is indexed by tableID.
+	tableMaps := make(map[uint64]*tableCacheEntry)
 
 	// A begin can be triggered either by a BEGIN query, or by a GTID_EVENT.
 	begin := func() {
@@ -182,21 +246,18 @@ func (bls *Streamer) parseEvents(ctx context.Context, events <-chan replication.
 			log.Errorf("BEGIN in binlog stream while still in another transaction; dropping %d statements: %v", len(statements), statements)
 			binlogStreamerErrors.Add("ParseEvents", 1)
 		}
-		statements = make([]*binlogdatapb.BinlogTransaction_Statement, 0, 10)
+		statements = make([]FullBinlogStatement, 0, 10)
 		autocommit = false
 	}
 	// A commit can be triggered either by a COMMIT query, or by an XID_EVENT.
 	// Statements that aren't wrapped in BEGIN/COMMIT are committed immediately.
 	commit := func(timestamp uint32) error {
 		if int64(timestamp) >= bls.timestamp {
-			trans := &binlogdatapb.BinlogTransaction{
-				Statements: statements,
-				EventToken: &querypb.EventToken{
-					Timestamp: int64(timestamp),
-					Position:  replication.EncodePosition(pos),
-				},
+			eventToken := &querypb.EventToken{
+				Timestamp: int64(timestamp),
+				Position:  replication.EncodePosition(pos),
 			}
-			if err = bls.sendTransaction(trans); err != nil {
+			if err = bls.sendTransaction(eventToken, statements); err != nil {
 				if err == io.EOF {
 					return ErrClientEOF
 				}
@@ -259,20 +320,15 @@ func (bls *Streamer) parseEvents(ctx context.Context, events <-chan replication.
 			return pos, fmt.Errorf("can't strip checksum from binlog event: %v, event data: %#v", err, ev)
 		}
 
-		// Update the GTID if the event has one. The actual event type could be
-		// something special like GTID_EVENT (MariaDB, MySQL 5.6), or it could be
-		// an arbitrary event with a GTID in the header (Google MySQL).
-		if ev.HasGTID(format) {
-			gtid, err = ev.GTID(format)
+		switch {
+		case ev.IsGTID(): // GTID_EVENT: update current GTID, maybe BEGIN.
+			var hasBegin bool
+			gtid, hasBegin, err = ev.GTID(format)
 			if err != nil {
 				return pos, fmt.Errorf("can't get GTID from binlog event: %v, event data: %#v", err, ev)
 			}
 			pos = replication.AppendGTID(pos, gtid)
-		}
-
-		switch {
-		case ev.IsGTID(): // GTID_EVENT
-			if ev.IsBeginGTID(format) {
+			if hasBegin {
 				begin()
 			}
 		case ev.IsXID(): // XID_EVENT (equivalent to COMMIT)
@@ -280,22 +336,26 @@ func (bls *Streamer) parseEvents(ctx context.Context, events <-chan replication.
 				return pos, err
 			}
 		case ev.IsIntVar(): // INTVAR_EVENT
-			name, value, err := ev.IntVar(format)
+			typ, value, err := ev.IntVar(format)
 			if err != nil {
 				return pos, fmt.Errorf("can't parse INTVAR_EVENT: %v, event data: %#v", err, ev)
 			}
-			statements = append(statements, &binlogdatapb.BinlogTransaction_Statement{
-				Category: binlogdatapb.BinlogTransaction_Statement_BL_SET,
-				Sql:      []byte(fmt.Sprintf("SET %s=%d", name, value)),
+			statements = append(statements, FullBinlogStatement{
+				Statement: &binlogdatapb.BinlogTransaction_Statement{
+					Category: binlogdatapb.BinlogTransaction_Statement_BL_SET,
+					Sql:      []byte(fmt.Sprintf("SET %s=%d", replication.IntVarNames[typ], value)),
+				},
 			})
 		case ev.IsRand(): // RAND_EVENT
 			seed1, seed2, err := ev.Rand(format)
 			if err != nil {
 				return pos, fmt.Errorf("can't parse RAND_EVENT: %v, event data: %#v", err, ev)
 			}
-			statements = append(statements, &binlogdatapb.BinlogTransaction_Statement{
-				Category: binlogdatapb.BinlogTransaction_Statement_BL_SET,
-				Sql:      []byte(fmt.Sprintf("SET @@RAND_SEED1=%d, @@RAND_SEED2=%d", seed1, seed2)),
+			statements = append(statements, FullBinlogStatement{
+				Statement: &binlogdatapb.BinlogTransaction_Statement{
+					Category: binlogdatapb.BinlogTransaction_Statement_BL_SET,
+					Sql:      []byte(fmt.Sprintf("SET @@RAND_SEED1=%d, @@RAND_SEED2=%d", seed1, seed2)),
+				},
 			})
 		case ev.IsQuery(): // QUERY_EVENT
 			// Extract the query string and group into transactions.
@@ -317,7 +377,7 @@ func (bls *Streamer) parseEvents(ctx context.Context, events <-chan replication.
 				if err = commit(ev.Timestamp()); err != nil {
 					return pos, err
 				}
-			default: // BL_DDL, BL_DML, BL_SET, BL_UNRECOGNIZED
+			default: // BL_DDL, BL_SET, BL_INSERT, BL_UPDATE, BL_DELETE, BL_UNRECOGNIZED
 				if q.Database != "" && q.Database != bls.dbname {
 					// Skip cross-db statements.
 					continue
@@ -337,7 +397,11 @@ func (bls *Streamer) parseEvents(ctx context.Context, events <-chan replication.
 					setTimestamp.Charset = q.Charset
 					statement.Charset = q.Charset
 				}
-				statements = append(statements, setTimestamp, statement)
+				statements = append(statements, FullBinlogStatement{
+					Statement: setTimestamp,
+				}, FullBinlogStatement{
+					Statement: statement,
+				})
 				if autocommit {
 					if err = commit(ev.Timestamp()); err != nil {
 						return pos, err
@@ -361,6 +425,396 @@ func (bls *Streamer) parseEvents(ctx context.Context, events <-chan replication.
 			if err = commit(ev.Timestamp()); err != nil {
 				return pos, err
 			}
+		case ev.IsTableMap():
+			// Save all tables, even not in the same DB.
+			tableID := ev.TableID(format)
+			tm, err := ev.TableMap(format)
+			if err != nil {
+				return pos, err
+			}
+			// TODO(alainjobart) if table is already in map,
+			// just use it.
+
+			tce := &tableCacheEntry{
+				tm:              tm,
+				keyspaceIDIndex: -1,
+			}
+			tableMaps[tableID] = tce
+
+			// Check we're in the right database, and if so, fill
+			// in more data.
+			if tm.Database != "" && tm.Database != bls.dbname {
+				continue
+			}
+
+			// Find and fill in the table schema.
+			tce.ti = bls.se.GetTable(sqlparser.NewTableIdent(tm.Name))
+			if tce.ti == nil {
+				return pos, fmt.Errorf("unknown table %v in schema", tm.Name)
+			}
+
+			// Fill in the resolver if needed.
+			if bls.resolverFactory != nil {
+				tce.keyspaceIDIndex, tce.resolver, err = bls.resolverFactory(tce.ti)
+				if err != nil {
+					return pos, fmt.Errorf("cannot find column to use to find keyspace_id for table %v", tm.Name)
+				}
+			}
+
+			// Fill in PK indexes if necessary.
+			if bls.extractPK {
+				tce.pkNames = make([]*querypb.Field, len(tce.ti.PKColumns))
+				tce.pkIndexes = make([]int, len(tce.ti.Columns))
+				for i := range tce.pkIndexes {
+					// Put -1 as default in here.
+					tce.pkIndexes[i] = -1
+				}
+				for i, c := range tce.ti.PKColumns {
+					// Patch in every PK column index.
+					tce.pkIndexes[c] = i
+					// Fill in pknames
+					tce.pkNames[i] = &querypb.Field{
+						Name: tce.ti.Columns[c].Name.String(),
+						Type: tce.ti.Columns[c].Type,
+					}
+				}
+			}
+		case ev.IsWriteRows():
+			tableID := ev.TableID(format)
+			tce, ok := tableMaps[tableID]
+			if !ok {
+				return pos, fmt.Errorf("unknown tableID %v in WriteRows event", tableID)
+			}
+			if tce.ti == nil {
+				// Skip cross-db statements.
+				continue
+			}
+			setTimestamp := &binlogdatapb.BinlogTransaction_Statement{
+				Category: binlogdatapb.BinlogTransaction_Statement_BL_SET,
+				Sql:      []byte(fmt.Sprintf("SET TIMESTAMP=%d", ev.Timestamp())),
+			}
+			statements = append(statements, FullBinlogStatement{
+				Statement: setTimestamp,
+			})
+
+			rows, err := ev.Rows(format, tce.tm)
+			if err != nil {
+				return pos, err
+			}
+
+			statements = bls.appendInserts(statements, tce, &rows)
+
+			if autocommit {
+				if err = commit(ev.Timestamp()); err != nil {
+					return pos, err
+				}
+			}
+		case ev.IsUpdateRows():
+			tableID := ev.TableID(format)
+			tce, ok := tableMaps[tableID]
+			if !ok {
+				return pos, fmt.Errorf("unknown tableID %v in UpdateRows event", tableID)
+			}
+			if tce.ti == nil {
+				// Skip cross-db statements.
+				continue
+			}
+			setTimestamp := &binlogdatapb.BinlogTransaction_Statement{
+				Category: binlogdatapb.BinlogTransaction_Statement_BL_SET,
+				Sql:      []byte(fmt.Sprintf("SET TIMESTAMP=%d", ev.Timestamp())),
+			}
+			statements = append(statements, FullBinlogStatement{
+				Statement: setTimestamp,
+			})
+
+			rows, err := ev.Rows(format, tce.tm)
+			if err != nil {
+				return pos, err
+			}
+
+			statements = bls.appendUpdates(statements, tce, &rows)
+
+			if autocommit {
+				if err = commit(ev.Timestamp()); err != nil {
+					return pos, err
+				}
+			}
+		case ev.IsDeleteRows():
+			tableID := ev.TableID(format)
+			tce, ok := tableMaps[tableID]
+			if !ok {
+				return pos, fmt.Errorf("unknown tableID %v in DeleteRows event", tableID)
+			}
+			if tce.ti == nil {
+				// Skip cross-db statements.
+				continue
+			}
+			setTimestamp := &binlogdatapb.BinlogTransaction_Statement{
+				Category: binlogdatapb.BinlogTransaction_Statement_BL_SET,
+				Sql:      []byte(fmt.Sprintf("SET TIMESTAMP=%d", ev.Timestamp())),
+			}
+			statements = append(statements, FullBinlogStatement{
+				Statement: setTimestamp,
+			})
+
+			rows, err := ev.Rows(format, tce.tm)
+			if err != nil {
+				return pos, err
+			}
+
+			statements = bls.appendDeletes(statements, tce, &rows)
+
+			if autocommit {
+				if err = commit(ev.Timestamp()); err != nil {
+					return pos, err
+				}
+			}
 		}
 	}
+}
+
+func (bls *Streamer) appendInserts(statements []FullBinlogStatement, tce *tableCacheEntry, rows *replication.Rows) []FullBinlogStatement {
+	for i := range rows.Rows {
+		var sql bytes.Buffer
+
+		sql.WriteString("INSERT INTO ")
+		sql.WriteString(tce.tm.Name)
+		sql.WriteString(" SET ")
+
+		keyspaceIDCell, pkValues, err := writeValuesAsSQL(&sql, tce, rows, i, tce.pkNames != nil)
+		if err != nil {
+			log.Warningf("writeValuesAsSQL(%v) failed: %v", i, err)
+			continue
+		}
+
+		// Fill in keyspace id if needed.
+		var ksid []byte
+		if tce.resolver != nil {
+			var err error
+			ksid, err = tce.resolver.keyspaceID(keyspaceIDCell)
+			if err != nil {
+				log.Warningf("resolver(%v) failed: %v", err)
+			}
+		}
+
+		statement := &binlogdatapb.BinlogTransaction_Statement{
+			Category: binlogdatapb.BinlogTransaction_Statement_BL_INSERT,
+			Sql:      sql.Bytes(),
+		}
+		statements = append(statements, FullBinlogStatement{
+			Statement:  statement,
+			Table:      tce.tm.Name,
+			KeyspaceID: ksid,
+			PKNames:    tce.pkNames,
+			PKValues:   pkValues,
+		})
+	}
+	return statements
+}
+
+func (bls *Streamer) appendUpdates(statements []FullBinlogStatement, tce *tableCacheEntry, rows *replication.Rows) []FullBinlogStatement {
+	for i := range rows.Rows {
+		var sql bytes.Buffer
+
+		sql.WriteString("UPDATE ")
+		sql.WriteString(tce.tm.Name)
+		sql.WriteString(" SET ")
+
+		keyspaceIDCell, pkValues, err := writeValuesAsSQL(&sql, tce, rows, i, tce.pkNames != nil)
+		if err != nil {
+			log.Warningf("writeValuesAsSQL(%v) failed: %v", i, err)
+			continue
+		}
+
+		sql.WriteString(" WHERE ")
+
+		if _, _, err := writeIdentifiesAsSQL(&sql, tce, rows, i, false); err != nil {
+			log.Warningf("writeIdentifiesAsSQL(%v) failed: %v", i, err)
+			continue
+		}
+
+		// Fill in keyspace id if needed.
+		var ksid []byte
+		if tce.resolver != nil {
+			var err error
+			ksid, err = tce.resolver.keyspaceID(keyspaceIDCell)
+			if err != nil {
+				log.Warningf("resolver(%v) failed: %v", err)
+			}
+		}
+
+		update := &binlogdatapb.BinlogTransaction_Statement{
+			Category: binlogdatapb.BinlogTransaction_Statement_BL_UPDATE,
+			Sql:      sql.Bytes(),
+		}
+		statements = append(statements, FullBinlogStatement{
+			Statement:  update,
+			Table:      tce.tm.Name,
+			KeyspaceID: ksid,
+			PKNames:    tce.pkNames,
+			PKValues:   pkValues,
+		})
+	}
+	return statements
+}
+
+func (bls *Streamer) appendDeletes(statements []FullBinlogStatement, tce *tableCacheEntry, rows *replication.Rows) []FullBinlogStatement {
+	for i := range rows.Rows {
+		var sql bytes.Buffer
+
+		sql.WriteString("DELETE FROM ")
+		sql.WriteString(tce.tm.Name)
+		sql.WriteString(" WHERE ")
+
+		keyspaceIDCell, pkValues, err := writeIdentifiesAsSQL(&sql, tce, rows, i, tce.pkNames != nil)
+		if err != nil {
+			log.Warningf("writeIdentifiesAsSQL(%v) failed: %v", i, err)
+			continue
+		}
+
+		// Fill in keyspace id if needed.
+		var ksid []byte
+		if tce.resolver != nil {
+			var err error
+			ksid, err = tce.resolver.keyspaceID(keyspaceIDCell)
+			if err != nil {
+				log.Warningf("resolver(%v) failed: %v", err)
+			}
+		}
+
+		statement := &binlogdatapb.BinlogTransaction_Statement{
+			Category: binlogdatapb.BinlogTransaction_Statement_BL_DELETE,
+			Sql:      sql.Bytes(),
+		}
+		statements = append(statements, FullBinlogStatement{
+			Statement:  statement,
+			Table:      tce.tm.Name,
+			KeyspaceID: ksid,
+			PKNames:    tce.pkNames,
+			PKValues:   pkValues,
+		})
+	}
+	return statements
+}
+
+// writeValuesAsSQL is a helper method to print the values as SQL in the
+// provided bytes.Buffer. It also returns the value for the keyspaceIDColumn,
+// and the array of values for the PK, if necessary.
+func writeValuesAsSQL(sql *bytes.Buffer, tce *tableCacheEntry, rs *replication.Rows, rowIndex int, getPK bool) (sqltypes.Value, []sqltypes.Value, error) {
+	valueIndex := 0
+	data := rs.Rows[rowIndex].Data
+	pos := 0
+	var keyspaceIDCell sqltypes.Value
+	var pkValues []sqltypes.Value
+	if getPK {
+		pkValues = make([]sqltypes.Value, len(tce.pkNames))
+	}
+	for c := 0; c < rs.DataColumns.Count(); c++ {
+		if !rs.DataColumns.Bit(c) {
+			continue
+		}
+
+		// Print a separator if needed, then print the name.
+		if valueIndex > 0 {
+			sql.WriteString(", ")
+		}
+		sql.WriteString(tce.ti.Columns[c].Name.String())
+		sql.WriteByte('=')
+
+		if rs.Rows[rowIndex].NullColumns.Bit(valueIndex) {
+			// This column is represented, but its value is NULL.
+			sql.WriteString("NULL")
+			valueIndex++
+			continue
+		}
+
+		// We have real data.
+		value, l, err := replication.CellValue(data, pos, tce.tm.Types[c], tce.tm.Metadata[c], tce.ti.Columns[c].Type)
+		if err != nil {
+			return keyspaceIDCell, nil, err
+		}
+		if value.Type() == querypb.Type_TIMESTAMP && !bytes.HasPrefix(value.Raw(), replication.ZeroTimestamp) {
+			// Values in the binary log are UTC. Let's convert them
+			// to whatever timezone the connection is using,
+			// so MySQL properly converts them back to UTC.
+			sql.WriteString("convert_tz(")
+			value.EncodeSQL(sql)
+			sql.WriteString(", '+00:00', @@session.time_zone)")
+		} else {
+			value.EncodeSQL(sql)
+		}
+		if c == tce.keyspaceIDIndex {
+			keyspaceIDCell = value
+		}
+		if getPK {
+			if tce.pkIndexes[c] != -1 {
+				pkValues[tce.pkIndexes[c]] = value
+			}
+		}
+		pos += l
+		valueIndex++
+	}
+
+	return keyspaceIDCell, pkValues, nil
+}
+
+// writeIdentifiesAsSQL is a helper method to print the identifies as SQL in the
+// provided bytes.Buffer. It also returns the value for the keyspaceIDColumn,
+// and the array of values for the PK, if necessary.
+func writeIdentifiesAsSQL(sql *bytes.Buffer, tce *tableCacheEntry, rs *replication.Rows, rowIndex int, getPK bool) (sqltypes.Value, []sqltypes.Value, error) {
+	valueIndex := 0
+	data := rs.Rows[rowIndex].Identify
+	pos := 0
+	var keyspaceIDCell sqltypes.Value
+	var pkValues []sqltypes.Value
+	if getPK {
+		pkValues = make([]sqltypes.Value, len(tce.pkNames))
+	}
+	for c := 0; c < rs.IdentifyColumns.Count(); c++ {
+		if !rs.IdentifyColumns.Bit(c) {
+			continue
+		}
+
+		// Print a separator if needed, then print the name.
+		if valueIndex > 0 {
+			sql.WriteString(" AND ")
+		}
+		sql.WriteString(tce.ti.Columns[c].Name.String())
+		sql.WriteByte('=')
+
+		if rs.Rows[rowIndex].NullIdentifyColumns.Bit(valueIndex) {
+			// This column is represented, but its value is NULL.
+			sql.WriteString("NULL")
+			valueIndex++
+			continue
+		}
+
+		// We have real data.
+		value, l, err := replication.CellValue(data, pos, tce.tm.Types[c], tce.tm.Metadata[c], tce.ti.Columns[c].Type)
+		if err != nil {
+			return keyspaceIDCell, nil, err
+		}
+		if value.Type() == querypb.Type_TIMESTAMP && !bytes.HasPrefix(value.Raw(), replication.ZeroTimestamp) {
+			// Values in the binary log are UTC. Let's convert them
+			// to whatever timezone the connection is using,
+			// so MySQL properly converts them back to UTC.
+			sql.WriteString("convert_tz(")
+			value.EncodeSQL(sql)
+			sql.WriteString(", '+00:00', @@session.time_zone)")
+		} else {
+			value.EncodeSQL(sql)
+		}
+		if c == tce.keyspaceIDIndex {
+			keyspaceIDCell = value
+		}
+		if getPK {
+			if tce.pkIndexes[c] != -1 {
+				pkValues[tce.pkIndexes[c]] = value
+			}
+		}
+		pos += l
+		valueIndex++
+	}
+
+	return keyspaceIDCell, pkValues, nil
 }

@@ -5,7 +5,6 @@
 package mysqlctl
 
 import (
-	"encoding/binary"
 	"fmt"
 	"strings"
 	"time"
@@ -13,8 +12,8 @@ import (
 	"golang.org/x/net/context"
 
 	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/mysqlconn/replication"
 	"github.com/youtube/vitess/go/sqldb"
-	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
 )
 
 // mariaDB10 is the implementation of MysqlFlavor for MariaDB 10.0.10
@@ -41,21 +40,21 @@ func (flavor *mariaDB10) MasterPosition(mysqld *Mysqld) (rp replication.Position
 }
 
 // SlaveStatus implements MysqlFlavor.SlaveStatus().
-func (flavor *mariaDB10) SlaveStatus(mysqld *Mysqld) (replication.Status, error) {
+func (flavor *mariaDB10) SlaveStatus(mysqld *Mysqld) (Status, error) {
 	fields, err := mysqld.fetchSuperQueryMap(context.TODO(), "SHOW ALL SLAVES STATUS")
 	if err != nil {
-		return replication.Status{}, err
+		return Status{}, err
 	}
 	if len(fields) == 0 {
 		// The query returned no data, meaning the server
 		// is not configured as a slave.
-		return replication.Status{}, ErrNotSlave
+		return Status{}, ErrNotSlave
 	}
 	status := parseSlaveStatus(fields)
 
 	status.Position, err = flavor.ParseReplicationPosition(fields["Gtid_Slave_Pos"])
 	if err != nil {
-		return replication.Status{}, fmt.Errorf("SlaveStatus can't parse MariaDB GTID (Gtid_Slave_Pos: %#v): %v", fields["Gtid_Slave_Pos"], err)
+		return Status{}, fmt.Errorf("SlaveStatus can't parse MariaDB GTID (Gtid_Slave_Pos: %#v): %v", fields["Gtid_Slave_Pos"], err)
 	}
 	return status, nil
 }
@@ -177,13 +176,12 @@ func (*mariaDB10) SendBinlogDumpCommand(conn *SlaveConnection, startPos replicat
 	}
 
 	// Since we use @slave_connect_state, the file and position here are ignored.
-	buf := makeBinlogDumpCommand(0, 0, conn.slaveID, "")
-	return conn.SendCommand(ComBinlogDump, buf)
+	return conn.WriteComBinlogDump(conn.slaveID, "", 0, 0)
 }
 
 // MakeBinlogEvent implements MysqlFlavor.MakeBinlogEvent().
 func (*mariaDB10) MakeBinlogEvent(buf []byte) replication.BinlogEvent {
-	return NewMariadbBinlogEvent(buf)
+	return replication.NewMariadbBinlogEvent(buf)
 }
 
 // EnableBinlogPlayback implements MysqlFlavor.EnableBinlogPlayback().
@@ -194,82 +192,6 @@ func (*mariaDB10) EnableBinlogPlayback(mysqld *Mysqld) error {
 // DisableBinlogPlayback implements MysqlFlavor.DisableBinlogPlayback().
 func (*mariaDB10) DisableBinlogPlayback(mysqld *Mysqld) error {
 	return nil
-}
-
-// mariadbBinlogEvent wraps a raw packet buffer and provides methods to examine
-// it by implementing replication.BinlogEvent. Some methods are pulled in from
-// binlogEvent.
-type mariadbBinlogEvent struct {
-	binlogEvent
-}
-
-// NewMariadbBinlogEvent creates a BinlogEvent instance from given byte array
-func NewMariadbBinlogEvent(buf []byte) replication.BinlogEvent {
-	return mariadbBinlogEvent{binlogEvent: binlogEvent(buf)}
-}
-
-// HasGTID implements BinlogEvent.HasGTID().
-func (ev mariadbBinlogEvent) HasGTID(f replication.BinlogFormat) bool {
-	// MariaDB provides GTIDs in a separate event type GTID_EVENT.
-	return ev.IsGTID()
-}
-
-// IsGTID implements BinlogEvent.IsGTID().
-func (ev mariadbBinlogEvent) IsGTID() bool {
-	return ev.Type() == 162
-}
-
-// IsBeginGTID implements BinlogEvent.IsBeginGTID().
-//
-// Expected format:
-//   # bytes   field
-//   8         sequence number
-//   4         domain ID
-//   1         flags2
-func (ev mariadbBinlogEvent) IsBeginGTID(f replication.BinlogFormat) bool {
-	const FLStandalone = 1
-
-	data := ev.Bytes()[f.HeaderLength:]
-	flags2 := data[8+4]
-	return flags2&FLStandalone == 0
-}
-
-// GTID implements BinlogEvent.GTID().
-//
-// Expected format:
-//   # bytes   field
-//   8         sequence number
-//   4         domain ID
-//   1         flags2
-func (ev mariadbBinlogEvent) GTID(f replication.BinlogFormat) (replication.GTID, error) {
-	data := ev.Bytes()[f.HeaderLength:]
-
-	return replication.MariadbGTID{
-		Sequence: binary.LittleEndian.Uint64(data[:8]),
-		Domain:   binary.LittleEndian.Uint32(data[8 : 8+4]),
-		Server:   ev.ServerID(),
-	}, nil
-}
-
-// PreviousGTIDs implements BinlogEvent.PreviousGTIDs().
-func (ev mariadbBinlogEvent) PreviousGTIDs(f replication.BinlogFormat) (replication.Position, error) {
-	return replication.Position{}, fmt.Errorf("MariaDB should not provide PREVIOUS_GTIDS_EVENT events")
-}
-
-// StripChecksum implements BinlogEvent.StripChecksum().
-func (ev mariadbBinlogEvent) StripChecksum(f replication.BinlogFormat) (replication.BinlogEvent, []byte, error) {
-	switch f.ChecksumAlgorithm {
-	case BinlogChecksumAlgOff, BinlogChecksumAlgUndef:
-		// There is no checksum.
-		return ev, nil, nil
-	default:
-		// Checksum is the last 4 bytes of the event buffer.
-		data := ev.Bytes()
-		length := len(data)
-		checksum := data[length-4:]
-		data = data[:length-4]
-		return mariadbBinlogEvent{binlogEvent: binlogEvent(data)}, checksum, nil
-	}
 }
 
 func init() {

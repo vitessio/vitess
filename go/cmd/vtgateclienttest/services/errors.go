@@ -5,8 +5,6 @@
 package services
 
 import (
-	"errors"
-	"fmt"
 	"strings"
 
 	"golang.org/x/net/context"
@@ -80,65 +78,35 @@ func requestToPartialError(request string, session *vtgatepb.Session) error {
 func trimmedRequestToError(received string) error {
 	switch received {
 	case "bad input":
-		return vterrors.FromError(
-			vtrpcpb.ErrorCode_BAD_INPUT,
-			errors.New("vtgate test client forced error: bad input"),
-		)
+		return vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "vtgate test client forced error: bad input")
 	case "deadline exceeded":
-		return vterrors.FromError(
-			vtrpcpb.ErrorCode_DEADLINE_EXCEEDED,
-			errors.New("vtgate test client forced error: deadline exceeded"),
-		)
+		return vterrors.New(vtrpcpb.Code_DEADLINE_EXCEEDED, "vtgate test client forced error: deadline exceeded")
 	case "integrity error":
-		return vterrors.FromError(
-			vtrpcpb.ErrorCode_INTEGRITY_ERROR,
-			errors.New("vtgate test client forced error: integrity error (errno 1062) (sqlstate 23000)"),
-		)
+		return vterrors.New(vtrpcpb.Code_ALREADY_EXISTS, "vtgate test client forced error: integrity error (errno 1062) (sqlstate 23000)")
 	// request backlog and general throttling type errors
 	case "transient error":
-		return vterrors.FromError(
-			vtrpcpb.ErrorCode_TRANSIENT_ERROR,
-			errors.New("request_backlog: too many requests in flight: vtgate test client forced error: transient error"),
-		)
+		return vterrors.New(vtrpcpb.Code_UNAVAILABLE, "request_backlog: too many requests in flight: vtgate test client forced error: transient error")
 	case "throttled error":
-		return vterrors.FromError(
-			vtrpcpb.ErrorCode_TRANSIENT_ERROR,
-			errors.New("request_backlog: exceeded XXX quota, rate limiting: vtgate test client forced error: transient error"),
-		)
+		return vterrors.New(vtrpcpb.Code_UNAVAILABLE, "request_backlog: exceeded XXX quota, rate limiting: vtgate test client forced error: transient error")
 	case "unauthenticated":
-		return vterrors.FromError(
-			vtrpcpb.ErrorCode_UNAUTHENTICATED,
-			errors.New("vtgate test client forced error: unauthenticated"),
-		)
+		return vterrors.New(vtrpcpb.Code_UNAUTHENTICATED, "vtgate test client forced error: unauthenticated")
 	case "aborted":
-		return vterrors.FromError(
-			vtrpcpb.ErrorCode_NOT_IN_TX,
-			errors.New("vtgate test client forced error: aborted"),
-		)
+		return vterrors.New(vtrpcpb.Code_ABORTED, "vtgate test client forced error: aborted")
 	case "query not served":
-		return vterrors.FromError(
-			vtrpcpb.ErrorCode_QUERY_NOT_SERVED,
-			errors.New("vtgate test client forced error: query not served"),
-		)
+		return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "vtgate test client forced error: query not served")
 	case "unknown error":
-		return vterrors.FromError(
-			vtrpcpb.ErrorCode_UNKNOWN_ERROR,
-			errors.New("vtgate test client forced error: unknown error"),
-		)
+		return vterrors.New(vtrpcpb.Code_UNKNOWN, "vtgate test client forced error: unknown error")
 	default:
-		return vterrors.FromError(
-			vtrpcpb.ErrorCode_UNKNOWN_ERROR,
-			fmt.Errorf("vtgate test client error request unrecognized: %v", received),
-		)
+		return vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "vtgate test client error request unrecognized: %v", received)
 	}
 }
 
-func (c *errorClient) Execute(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, tabletType topodatapb.TabletType, session *vtgatepb.Session, notInTransaction bool, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
+func (c *errorClient) Execute(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, tabletType topodatapb.TabletType, session *vtgatepb.Session, notInTransaction bool, options *querypb.ExecuteOptions) (*vtgatepb.Session, *sqltypes.Result, error) {
 	if err := requestToPartialError(sql, session); err != nil {
-		return nil, err
+		return session, nil, err
 	}
 	if err := requestToError(sql); err != nil {
-		return nil, err
+		return session, nil, err
 	}
 	return c.fallbackClient.Execute(ctx, sql, bindVariables, keyspace, tabletType, session, notInTransaction, options)
 }
@@ -183,6 +151,18 @@ func (c *errorClient) ExecuteEntityIds(ctx context.Context, sql string, bindVari
 	return c.fallbackClient.ExecuteEntityIds(ctx, sql, bindVariables, keyspace, entityColumnName, entityKeyspaceIDs, tabletType, session, notInTransaction, options)
 }
 
+func (c *errorClient) ExecuteBatch(ctx context.Context, sqlList []string, bindVariablesList []map[string]interface{}, keyspace string, tabletType topodatapb.TabletType, session *vtgatepb.Session, options *querypb.ExecuteOptions) (*vtgatepb.Session, []sqltypes.QueryResponse, error) {
+	if len(sqlList) == 1 {
+		if err := requestToPartialError(sqlList[0], session); err != nil {
+			return session, nil, err
+		}
+		if err := requestToError(sqlList[0]); err != nil {
+			return session, nil, err
+		}
+	}
+	return c.fallbackClient.ExecuteBatch(ctx, sqlList, bindVariablesList, keyspace, tabletType, session, options)
+}
+
 func (c *errorClient) ExecuteBatchShards(ctx context.Context, queries []*vtgatepb.BoundShardQuery, tabletType topodatapb.TabletType, asTransaction bool, session *vtgatepb.Session, options *querypb.ExecuteOptions) ([]sqltypes.Result, error) {
 	if len(queries) == 1 {
 		if err := requestToPartialError(queries[0].Query.Sql, session); err != nil {
@@ -207,32 +187,32 @@ func (c *errorClient) ExecuteBatchKeyspaceIds(ctx context.Context, queries []*vt
 	return c.fallbackClient.ExecuteBatchKeyspaceIds(ctx, queries, tabletType, asTransaction, session, options)
 }
 
-func (c *errorClient) StreamExecute(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, tabletType topodatapb.TabletType, options *querypb.ExecuteOptions, sendReply func(*sqltypes.Result) error) error {
+func (c *errorClient) StreamExecute(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, tabletType topodatapb.TabletType, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
 	if err := requestToError(sql); err != nil {
 		return err
 	}
-	return c.fallbackClient.StreamExecute(ctx, sql, bindVariables, keyspace, tabletType, options, sendReply)
+	return c.fallbackClient.StreamExecute(ctx, sql, bindVariables, keyspace, tabletType, options, callback)
 }
 
-func (c *errorClient) StreamExecuteShards(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, shards []string, tabletType topodatapb.TabletType, options *querypb.ExecuteOptions, sendReply func(*sqltypes.Result) error) error {
+func (c *errorClient) StreamExecuteShards(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, shards []string, tabletType topodatapb.TabletType, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
 	if err := requestToError(sql); err != nil {
 		return err
 	}
-	return c.fallbackClient.StreamExecuteShards(ctx, sql, bindVariables, keyspace, shards, tabletType, options, sendReply)
+	return c.fallbackClient.StreamExecuteShards(ctx, sql, bindVariables, keyspace, shards, tabletType, options, callback)
 }
 
-func (c *errorClient) StreamExecuteKeyspaceIds(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyspaceIds [][]byte, tabletType topodatapb.TabletType, options *querypb.ExecuteOptions, sendReply func(*sqltypes.Result) error) error {
+func (c *errorClient) StreamExecuteKeyspaceIds(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyspaceIds [][]byte, tabletType topodatapb.TabletType, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
 	if err := requestToError(sql); err != nil {
 		return err
 	}
-	return c.fallbackClient.StreamExecuteKeyspaceIds(ctx, sql, bindVariables, keyspace, keyspaceIds, tabletType, options, sendReply)
+	return c.fallbackClient.StreamExecuteKeyspaceIds(ctx, sql, bindVariables, keyspace, keyspaceIds, tabletType, options, callback)
 }
 
-func (c *errorClient) StreamExecuteKeyRanges(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyRanges []*topodatapb.KeyRange, tabletType topodatapb.TabletType, options *querypb.ExecuteOptions, sendReply func(*sqltypes.Result) error) error {
+func (c *errorClient) StreamExecuteKeyRanges(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyRanges []*topodatapb.KeyRange, tabletType topodatapb.TabletType, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
 	if err := requestToError(sql); err != nil {
 		return err
 	}
-	return c.fallbackClient.StreamExecuteKeyRanges(ctx, sql, bindVariables, keyspace, keyRanges, tabletType, options, sendReply)
+	return c.fallbackClient.StreamExecuteKeyRanges(ctx, sql, bindVariables, keyspace, keyRanges, tabletType, options, callback)
 }
 
 func (c *errorClient) Begin(ctx context.Context, singledb bool) (*vtgatepb.Session, error) {
@@ -263,6 +243,24 @@ func (c *errorClient) Rollback(ctx context.Context, session *vtgatepb.Session) e
 		return err
 	}
 	return c.fallbackClient.Rollback(ctx, session)
+}
+
+func (c *errorClient) MessageStream(ctx context.Context, keyspace string, shard string, keyRange *topodatapb.KeyRange, name string, callback func(*sqltypes.Result) error) error {
+	cid := callerid.EffectiveCallerIDFromContext(ctx)
+	request := callerid.GetPrincipal(cid)
+	if err := requestToError(request); err != nil {
+		return err
+	}
+	return c.fallback.MessageStream(ctx, keyspace, shard, keyRange, name, callback)
+}
+
+func (c *errorClient) MessageAck(ctx context.Context, keyspace string, name string, ids []*querypb.Value) (int64, error) {
+	cid := callerid.EffectiveCallerIDFromContext(ctx)
+	request := callerid.GetPrincipal(cid)
+	if err := requestToError(request); err != nil {
+		return 0, err
+	}
+	return c.fallback.MessageAck(ctx, keyspace, name, ids)
 }
 
 func (c *errorClient) SplitQuery(
@@ -296,9 +294,9 @@ func (c *errorClient) GetSrvKeyspace(ctx context.Context, keyspace string) (*top
 	return c.fallbackClient.GetSrvKeyspace(ctx, keyspace)
 }
 
-func (c *errorClient) UpdateStream(ctx context.Context, keyspace string, shard string, keyRange *topodatapb.KeyRange, tabletType topodatapb.TabletType, timestamp int64, event *querypb.EventToken, sendReply func(*querypb.StreamEvent, int64) error) error {
+func (c *errorClient) UpdateStream(ctx context.Context, keyspace string, shard string, keyRange *topodatapb.KeyRange, tabletType topodatapb.TabletType, timestamp int64, event *querypb.EventToken, callback func(*querypb.StreamEvent, int64) error) error {
 	if err := requestToError(shard); err != nil {
 		return err
 	}
-	return c.fallbackClient.UpdateStream(ctx, keyspace, shard, keyRange, tabletType, timestamp, event, sendReply)
+	return c.fallbackClient.UpdateStream(ctx, keyspace, shard, keyRange, tabletType, timestamp, event, callback)
 }

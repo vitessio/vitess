@@ -22,12 +22,12 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/cgzip"
+	"github.com/youtube/vitess/go/mysqlconn/replication"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/hook"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/mysqlctl/backupstorage"
-	"github.com/youtube/vitess/go/vt/mysqlctl/replication"
 )
 
 // This file handles the backup and restore related code
@@ -289,7 +289,7 @@ func backup(ctx context.Context, mysqld MysqlDaemon, logger logutil.Logger, bh b
 		if err = StopSlave(mysqld, hookExtraEnv); err != nil {
 			return false, fmt.Errorf("can't stop slave: %v", err)
 		}
-		var slaveStatus replication.Status
+		var slaveStatus Status
 		slaveStatus, err = mysqld.SlaveStatus()
 		if err != nil {
 			return false, fmt.Errorf("can't get slave status: %v", err)
@@ -507,7 +507,7 @@ func backupFile(ctx context.Context, mysqld MysqlDaemon, logger logutil.Logger, 
 // checkNoDB makes sure there is no user data already there.
 // Used by Restore, as we do not want to destroy an existing DB.
 // The user's database name must be given since we ignore all others.
-// Returns true iff the specified DB either doesn't exist, or has no tables.
+// Returns true if the specified DB either doesn't exist, or has no tables.
 // Returns (false, nil) if the check succeeds but the condition is not
 // satisfied (there is a DB with tables).
 // Returns non-nil error if one occurs while trying to perform the check.
@@ -822,6 +822,7 @@ func Restore(
 	// without password, we are passing --skip-networking to greatly reduce the set
 	// of those who can connect.
 	logger.Infof("Restore: starting mysqld for mysql_upgrade")
+	// Note Start will use dba user for waiting, this is fine, it will be allowed.
 	err = mysqld.Start(context.Background(), "--skip-grant-tables", "--skip-networking")
 	if err != nil {
 		return replication.Position{}, err

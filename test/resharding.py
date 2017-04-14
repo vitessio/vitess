@@ -70,7 +70,8 @@ all_tablets = [shard_0_master, shard_0_replica, shard_0_ny_rdonly,
 def setUpModule():
   try:
     environment.topo_server().setup()
-    setup_procs = [t.init_mysql() for t in all_tablets]
+    setup_procs = [t.init_mysql(use_rbr=base_sharding.use_rbr)
+                   for t in all_tablets]
     utils.Vtctld().start()
     utils.wait_procs(setup_procs)
   except:
@@ -275,6 +276,113 @@ primary key (name)
                          'msg-range1-%d' % i, 0xA000000000000000 + base + i)
       self._insert_value(shard_1_master, 'resharding1', 20000 + base + i,
                          'msg-range2-%d' % i, 0xE000000000000000 + base + i)
+
+  def _exec_multi_shard_dmls(self):
+    mids = [10000001, 10000002, 10000003]
+    msg_ids = ['msg-id10000001', 'msg-id10000002', 'msg-id10000003']
+    keyspace_ids = [0x9000000000000000, 0xD000000000000000,
+                    0xE000000000000000]
+    self._insert_multi_value(shard_1_master, 'resharding1', mids,
+                             msg_ids, keyspace_ids)
+
+    mids = [10000004, 10000005]
+    msg_ids = ['msg-id10000004', 'msg-id10000005']
+    keyspace_ids = [0xD000000000000000, 0xE000000000000000]
+    self._insert_multi_value(shard_1_master, 'resharding1', mids,
+                             msg_ids, keyspace_ids)
+
+    mids = [10000011, 10000012, 10000013]
+    msg_ids = ['msg-id10000011', 'msg-id10000012', 'msg-id10000013']
+    keyspace_ids = [0x9000000000000000, 0xD000000000000000, 0xE000000000000000]
+    self._insert_multi_value(shard_1_master, 'resharding1', mids,
+                             msg_ids, keyspace_ids)
+    # This update targets two shards.
+    self._exec_non_annotated_update(shard_1_master, 'resharding1',
+                                    [10000011, 10000012], 'update1')
+    # This update targets one shard.
+    self._exec_non_annotated_update(shard_1_master, 'resharding1',
+                                    [10000013], 'update2')
+
+    mids = [10000014, 10000015, 10000016]
+    msg_ids = ['msg-id10000014', 'msg-id10000015', 'msg-id10000016']
+    keyspace_ids = [0x9000000000000000, 0xD000000000000000, 0xE000000000000000]
+    self._insert_multi_value(shard_1_master, 'resharding1', mids,
+                             msg_ids, keyspace_ids)
+    # This delete targets two shards.
+    self._exec_non_annotated_delete(shard_1_master, 'resharding1',
+                                    [10000014, 10000015])
+    # This delete targets one shard.
+    self._exec_non_annotated_delete(shard_1_master, 'resharding1', [10000016])
+
+  def _check_multi_shard_values(self):
+    self._check_multi_dbs(
+        [shard_2_master, shard_2_replica1, shard_2_replica2],
+        'resharding1', 10000001, 'msg-id10000001', 0x9000000000000000)
+    self._check_multi_dbs(
+        [shard_2_master, shard_2_replica1, shard_2_replica2],
+        'resharding1', 10000002, 'msg-id10000002', 0xD000000000000000,
+        should_be_here=False)
+    self._check_multi_dbs(
+        [shard_2_master, shard_2_replica1, shard_2_replica2],
+        'resharding1', 10000003, 'msg-id10000003', 0xE000000000000000,
+        should_be_here=False)
+    self._check_multi_dbs(
+        [shard_3_master, shard_3_replica],
+        'resharding1', 10000001, 'msg-id10000001', 0x9000000000000000,
+        should_be_here=False)
+    self._check_multi_dbs(
+        [shard_3_master, shard_3_replica],
+        'resharding1', 10000002, 'msg-id10000002', 0xD000000000000000)
+    self._check_multi_dbs(
+        [shard_3_master, shard_3_replica],
+        'resharding1', 10000003, 'msg-id10000003', 0xE000000000000000)
+
+    self._check_multi_dbs(
+        [shard_2_master, shard_2_replica1, shard_2_replica2],
+        'resharding1', 10000004, 'msg-id10000004', 0xD000000000000000,
+        should_be_here=False)
+    self._check_multi_dbs(
+        [shard_2_master, shard_2_replica1, shard_2_replica2],
+        'resharding1', 10000005, 'msg-id10000005', 0xE000000000000000,
+        should_be_here=False)
+    self._check_multi_dbs(
+        [shard_3_master, shard_3_replica],
+        'resharding1', 10000004, 'msg-id10000004', 0xD000000000000000)
+    self._check_multi_dbs(
+        [shard_3_master, shard_3_replica],
+        'resharding1', 10000005, 'msg-id10000005', 0xE000000000000000)
+
+    self._check_multi_dbs(
+        [shard_2_master, shard_2_replica1, shard_2_replica2],
+        'resharding1', 10000011, 'update1', 0x9000000000000000)
+    self._check_multi_dbs(
+        [shard_3_master, shard_3_replica],
+        'resharding1', 10000012, 'update1', 0xD000000000000000)
+    self._check_multi_dbs(
+        [shard_3_master, shard_3_replica],
+        'resharding1', 10000013, 'update2', 0xE000000000000000)
+
+    self._check_multi_dbs(
+        [shard_2_master, shard_2_replica1, shard_2_replica2,
+         shard_3_master, shard_3_replica],
+        'resharding1', 10000014, 'msg-id10000014', 0x9000000000000000,
+        should_be_here=False)
+    self._check_multi_dbs(
+        [shard_2_master, shard_2_replica1, shard_2_replica2,
+         shard_3_master, shard_3_replica],
+        'resharding1', 10000015, 'msg-id10000015', 0xD000000000000000,
+        should_be_here=False)
+    self._check_multi_dbs(
+        [shard_2_master, shard_2_replica1, shard_2_replica2,
+         shard_3_master, shard_3_replica],
+        'resharding1', 10000016, 'msg-id10000016', 0xF000000000000000,
+        should_be_here=False)
+
+  # _check_multi_dbs checks the row in multiple dbs.
+  def _check_multi_dbs(self, dblist, table, mid, msg, keyspace_id,
+                       should_be_here=True):
+    for db in dblist:
+      self._check_value(db, table, mid, msg, keyspace_id, should_be_here)
 
   # _check_lots returns how many of the values we have, in percents.
   def _check_lots(self, count, base=0):
@@ -583,6 +691,8 @@ primary key (name)
     # timeout, check we get all of it.
     logging.debug('Inserting lots of data on source shard')
     self._insert_lots(1000)
+    logging.debug('Executing MultiValue Insert Queries')
+    self._exec_multi_shard_dmls()
     logging.debug('Checking 80 percent of data is sent quickly')
     v = self._check_lots_timeout(1000, 80, 5)
     if v != 100:
@@ -592,6 +702,9 @@ primary key (name)
       self._check_lots_timeout(1000, 100, 20)
     logging.debug('Checking no data was sent the wrong way')
     self._check_lots_not_present(1000)
+
+    logging.debug('Checking MultiValue Insert Queries')
+    self._check_multi_shard_values()
     self.check_binlog_player_vars(shard_2_master, ['test_keyspace/80-'],
                                   seconds_behind_master_max=30)
     self.check_binlog_player_vars(shard_3_master, ['test_keyspace/80-'],
@@ -616,8 +729,17 @@ primary key (name)
     utils.pause('Good time to test vtworker for diffs')
 
     # get status for destination master tablets, make sure we have it all
-    self.check_running_binlog_player(shard_2_master, 4000, 2000)
-    self.check_running_binlog_player(shard_3_master, 4000, 2000)
+    if base_sharding.use_rbr:
+      # We submitted non-annotated DMLs, that are properly routed
+      # with RBR, but not with SBR. So the first shard counts
+      # are smaller. In the second shard, we submitted statements
+      # that affect more than one keyspace id. These will result
+      # in two queries with RBR. So the count there is higher.
+      self.check_running_binlog_player(shard_2_master, 4018, 2008)
+      self.check_running_binlog_player(shard_3_master, 4028, 2008)
+    else:
+      self.check_running_binlog_player(shard_2_master, 4022, 2008)
+      self.check_running_binlog_player(shard_3_master, 4024, 2008)
 
     # start a thread to insert data into shard_1 in the background
     # with current time, and monitor the delay

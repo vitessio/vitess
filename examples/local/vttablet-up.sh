@@ -98,6 +98,7 @@ for uid_index in $uids; do
 
   echo "Starting vttablet for $alias..."
   $VTROOT/bin/vttablet \
+    $TOPOLOGY_FLAGS \
     -log_dir $VTDATAROOT/tmp \
     -tablet-path $alias \
     -tablet_hostname "$tablet_hostname" \
@@ -114,6 +115,7 @@ for uid_index in $uids; do
     -grpc_port $grpc_port \
     -service_map 'grpc-queryservice,grpc-tabletmanager,grpc-updatestream' \
     -pid_file $VTDATAROOT/$tablet_dir/vttablet.pid \
+    -vtctld_addr http://$hostname:$vtctld_web_port/ \
     $dbconfig_flags \
     > $VTDATAROOT/$tablet_dir/vttablet.out 2>&1 &
 

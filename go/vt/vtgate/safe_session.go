@@ -5,7 +5,6 @@
 package vtgate
 
 import (
-	"fmt"
 	"sync"
 
 	"github.com/youtube/vitess/go/vt/vterrors"
@@ -63,7 +62,7 @@ func (session *SafeSession) Append(shardSession *vtgatepb.Session_ShardSession) 
 	session.ShardSessions = append(session.ShardSessions, shardSession)
 	if session.SingleDb && len(session.ShardSessions) > 1 {
 		session.mustRollback = true
-		return vterrors.FromError(vtrpcpb.ErrorCode_BAD_INPUT, fmt.Errorf("multi-db transaction attempted: %v", session.ShardSessions))
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "multi-db transaction attempted: %v", session.ShardSessions)
 	}
 	return nil
 }

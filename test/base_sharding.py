@@ -17,6 +17,7 @@ import utils
 
 
 keyspace_id_type = keyrange_constants.KIT_UINT64
+use_rbr = False
 pack_keyspace_id = struct.Struct('!Q').pack
 
 # fixed_parent_id is used as fixed value for the "parent_id" column in all rows.
@@ -48,6 +49,51 @@ class BaseShardingTest(object):
          'values(%d, %d, "%s", 0x%x) /* vtgate:: keyspace_id:%s */ '
          '/* id:%d */' %
          (table, fixed_parent_id, mid, msg, keyspace_id, k, mid),
+         'commit'],
+        write=True)
+
+  def _insert_multi_value(self, tablet_obj, table, mids, msgs, keyspace_ids):
+    """Generate multi-shard insert statements."""
+    comma_sep = ','
+    querystr = ('insert into %s(parent_id, id, msg, custom_ksid_col) values'
+                %(table))
+    values_str = ''
+    id_str = '/* id:'
+    ksid_str = ''
+
+    for mid, msg, keyspace_id in zip(mids, msgs, keyspace_ids):
+      ksid_str += utils.uint64_to_hex(keyspace_id)+comma_sep
+      values_str += ('(%d, %d, "%s", 0x%x)' %
+                     (fixed_parent_id, mid, msg, keyspace_id) + comma_sep)
+      id_str += '%d' % (mid) + comma_sep
+
+    values_str = values_str.rstrip(comma_sep)
+    values_str += '/* vtgate:: keyspace_id:%s */ ' %(ksid_str.rstrip(comma_sep))
+    values_str += id_str.rstrip(comma_sep) + '*/'
+
+    querystr += values_str
+    tablet_obj.mquery(
+        'vt_test_keyspace',
+        ['begin',
+         querystr,
+         'commit'],
+        write=True)
+
+  def _exec_non_annotated_update(self, tablet_obj, table, mids, new_val):
+    tablet_obj.mquery(
+        'vt_test_keyspace',
+        ['begin',
+         'update %s set msg = "%s" where parent_id = %d and id in (%s)' %
+         (table, new_val, fixed_parent_id, ','.join([str(i) for i in mids])),
+         'commit'],
+        write=True)
+
+  def _exec_non_annotated_delete(self, tablet_obj, table, mids):
+    tablet_obj.mquery(
+        'vt_test_keyspace',
+        ['begin',
+         'delete from %s where parent_id = %d and id in (%s)' %
+         (table, fixed_parent_id, ','.join([str(i) for i in mids])),
          'commit'],
         write=True)
 
@@ -320,7 +366,8 @@ class BaseShardingTest(object):
                                  'ignore_n_slowest_replicas:0 '
                                  'ignore_n_slowest_rdonlys:0 '
                                  'age_bad_rate_after_sec:12 '
-                                 'bad_rate_increase:0.13 '],
+                                 'bad_rate_increase:0.13 '
+                                 'max_rate_approach_threshold: 0.9 '],
                                 auto_log=True, trap_output=True)
     self.assertIn('%d active throttler(s)' % len(names), stdout)
     # Check the updated configuration.

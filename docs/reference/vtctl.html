@@ -113,15 +113,22 @@
             <li><a href="/user-guide/reparenting.html">Reparenting</a></li>
             <li style="padding-bottom: 0"><a href="/user-guide/schema-management.html">Schema Management</a></li>
               <ul style="display: block">
+                <li style="padding-bottom: 0"><a href="/user-guide/vschema.html">VSchema Guide</a></li>
                 <li style="padding-bottom: 0"><a href="/user-guide/schema-swap.html">Schema Swap (Tutorial)</a></li>
               </ul>
             <li style="padding-bottom: 0"><a href="/user-guide/sharding.html">Sharding</a>
               <ul style="display: block">
-                <li><a href="/user-guide/horizontal-sharding.html">Horizontal Sharding (Codelab)</a></li>
-                <li style="padding-bottom: 0"><a href="/user-guide/sharding-kubernetes.html">Sharding in Kubernetes (Codelab)</a></li>
+                <li><a href="/user-guide/horizontal-sharding-workflow.html">Horizontal Sharding (Tutorial, automated)</a></li>
+                <li><a href="/user-guide/horizontal-sharding.html">Horizontal Sharding (Tutorial, manual)</a></li>
+                <li><a href="/user-guide/sharding-kubernetes-workflow.html">Sharding in Kubernetes (Tutorial, automated)</a></li>
+                <li style="padding-bottom: 0"><a href="/user-guide/sharding-kubernetes.html">Sharding in Kubernetes (Tutorial, manual)</a></li>
               </ul>
             </li>
+            <li><a href="/user-guide/vitess-sequences.html">Vitess Sequences</a></li>
+            <li><a href="/user-guide/mysql-server-protocol.html">MySQL Server Protocol</a></li>
             <li><a href="/user-guide/vitess-replication.html">Vitess and Replication</a></li>
+            <li><a href="/user-guide/update-stream.html">Update Stream</a></li>
+            <li><a href="/user-guide/row-based-replication.html">Row Based Replication</a></li>
             <li><a href="/user-guide/topology-service.html">Topology Service</a></li>
             <li><a href="/user-guide/transport-security-model.html">Transport Security Model</a></li>
             <li style="padding-bottom: 0"><a href="/user-guide/launching.html">Launching</a>
@@ -129,6 +136,7 @@
                 <li><a href="/user-guide/scalability-philosophy.html">Scalability Philosophy</a></li>
                 <li><a href="/user-guide/production-planning.html">Production Planning</a></li>
                 <li><a href="/user-guide/server-configuration.html">Server Configuration</a></li>
+                <li><a href="/user-guide/twopc.html">2PC Guide</a></li>
                 <li style="padding-bottom: 0"><a href="/user-guide/troubleshooting.html">Troubleshooting</a></li>
               </ul>
             </li>
@@ -215,15 +223,22 @@
             <li><a href="/user-guide/reparenting.html">Reparenting</a></li>
             <li style="padding-bottom: 0"><a href="/user-guide/schema-management.html">Schema Management</a></li>
               <ul style="display: block">
+                <li style="padding-bottom: 0"><a href="/user-guide/vschema.html">VSchema Guide</a></li>
                 <li style="padding-bottom: 0"><a href="/user-guide/schema-swap.html">Schema Swap (Tutorial)</a></li>
               </ul>
             <li style="padding-bottom: 0"><a href="/user-guide/sharding.html">Sharding</a>
               <ul style="display: block">
-                <li><a href="/user-guide/horizontal-sharding.html">Horizontal Sharding (Codelab)</a></li>
-                <li style="padding-bottom: 0"><a href="/user-guide/sharding-kubernetes.html">Sharding in Kubernetes (Codelab)</a></li>
+                <li><a href="/user-guide/horizontal-sharding-workflow.html">Horizontal Sharding (Tutorial, automated)</a></li>
+                <li><a href="/user-guide/horizontal-sharding.html">Horizontal Sharding (Tutorial, manual)</a></li>
+                <li><a href="/user-guide/sharding-kubernetes-workflow.html">Sharding in Kubernetes (Tutorial, automated)</a></li>
+                <li style="padding-bottom: 0"><a href="/user-guide/sharding-kubernetes.html">Sharding in Kubernetes (Tutorial, manual)</a></li>
               </ul>
             </li>
+            <li><a href="/user-guide/vitess-sequences.html">Vitess Sequences</a></li>
+            <li><a href="/user-guide/mysql-server-protocol.html">MySQL Server Protocol</a></li>
             <li><a href="/user-guide/vitess-replication.html">Vitess and Replication</a></li>
+            <li><a href="/user-guide/update-stream.html">Update Stream</a></li>
+            <li><a href="/user-guide/row-based-replication.html">Row Based Replication</a></li>
             <li><a href="/user-guide/topology-service.html">Topology Service</a></li>
             <li><a href="/user-guide/transport-security-model.html">Transport Security Model</a></li>
             <li style="padding-bottom: 0"><a href="/user-guide/launching.html">Launching</a>
@@ -231,6 +246,7 @@
                 <li><a href="/user-guide/scalability-philosophy.html">Scalability Philosophy</a></li>
                 <li><a href="/user-guide/production-planning.html">Production Planning</a></li>
                 <li><a href="/user-guide/server-configuration.html">Server Configuration</a></li>
+                <li><a href="/user-guide/twopc.html">2PC Guide</a></li>
                 <li style="padding-bottom: 0"><a href="/user-guide/troubleshooting.html">Troubleshooting</a></li>
               </ul>
             </li>
@@ -281,6 +297,7 @@
 <p>Commands are listed in the following groups:</p>
 
 <ul>
+<li><a href="#cells">Cells</a></li>
 <li><a href="#generic">Generic</a></li>
 <li><a href="#keyspaces">Keyspaces</a></li>
 <li><a href="#queries">Queries</a></li>
@@ -291,6 +308,142 @@
 <li><a href="#shards">Shards</a></li>
 <li><a href="#tablets">Tablets</a></li>
 <li><a href="#workflows">Workflows</a></li>
+</ul>
+
+<h2 id="cells">Cells</h2>
+
+<ul>
+<li><a href="#addcellinfo">AddCellInfo</a></li>
+<li><a href="#deletecellinfo">DeleteCellInfo</a></li>
+<li><a href="#getcellinfo">GetCellInfo</a></li>
+<li><a href="#getcellinfonames">GetCellInfoNames</a></li>
+<li><a href="#updatecellinfo">UpdateCellInfo</a></li>
+</ul>
+
+<h3 id="addcellinfo">AddCellInfo</h3>
+
+<p>Registers a local topology service in a new cell by creating the CellInfo with the provided parameters. The address will be used to connect to the topology service, and we&#39;ll put Vitess data starting at the provided root.</p>
+
+<h4 id="example">Example</h4>
+
+<pre class="command-example">AddCellInfo [-server_address &lt;addr&gt;] [-root &lt;root&gt;] &lt;cell&gt;</pre>
+
+<h4 id="flags">Flags</h4>
+
+<table><thead>
+<tr>
+<th style="text-align: left">Name</th>
+<th style="text-align: left">Type</th>
+<th style="text-align: left">Definition</th>
+</tr>
+</thead><tbody>
+<tr>
+<td style="text-align: left">root</td>
+<td style="text-align: left">string</td>
+<td style="text-align: left">The root path the topology server is using for that cell.</td>
+</tr>
+<tr>
+<td style="text-align: left">server_address</td>
+<td style="text-align: left">string</td>
+<td style="text-align: left">The address the topology server is using for that cell.</td>
+</tr>
+</tbody></table>
+
+<h4 id="arguments">Arguments</h4>
+
+<ul>
+<li><code>&lt;addr&gt;</code> &ndash; Required.</li>
+<li><code>&lt;cell&gt;</code> &ndash; Required. A cell is a location for a service. Generally, a cell resides in only one cluster. In Vitess, the terms &quot;cell&quot; and &quot;data center&quot; are interchangeable. The argument value is a string that does not contain whitespace.</li>
+</ul>
+
+<h4 id="errors">Errors</h4>
+
+<ul>
+<li>the <code>&lt;cell&gt;</code> argument is required for the <code>&lt;AddCellInfo&gt;</code> command This error occurs if the command is not called with exactly one argument.</li>
+</ul>
+
+<h3 id="deletecellinfo">DeleteCellInfo</h3>
+
+<p>Deletes the CellInfo for the provided cell. The cell cannot be referenced by any Shard record.</p>
+
+<h4 id="example">Example</h4>
+
+<pre class="command-example">DeleteCellInfo &lt;cell&gt;</pre>
+
+<h4 id="errors">Errors</h4>
+
+<ul>
+<li>the <code>&lt;cell&gt;</code> argument is required for the <code>&lt;DeleteCellInfo&gt;</code> command This error occurs if the command is not called with exactly one argument.</li>
+</ul>
+
+<h3 id="getcellinfo">GetCellInfo</h3>
+
+<p>Prints a JSON representation of the CellInfo for a cell.</p>
+
+<h4 id="example">Example</h4>
+
+<pre class="command-example">GetCellInfo &lt;cell&gt;</pre>
+
+<h4 id="errors">Errors</h4>
+
+<ul>
+<li>the <code>&lt;cell&gt;</code> argument is required for the <code>&lt;GetCellInfo&gt;</code> command This error occurs if the command is not called with exactly one argument.</li>
+</ul>
+
+<h3 id="getcellinfonames">GetCellInfoNames</h3>
+
+<p>Lists all the cells for which we have a CellInfo object, meaning we have a local topology service registered.</p>
+
+<h4 id="example">Example</h4>
+
+<pre class="command-example">GetCellInfoNames </pre>
+
+<h4 id="errors">Errors</h4>
+
+<ul>
+<li><code>&lt;GetCellInfoNames&gt;</code> command takes no parameter This error occurs if the command is not called with exactly 0 arguments.</li>
+</ul>
+
+<h3 id="updatecellinfo">UpdateCellInfo</h3>
+
+<p>Updates the content of a CellInfo with the provided parameters. If a value is empty, it is not updated. The CellInfo will be created if it doesn&#39;t exist.</p>
+
+<h4 id="example">Example</h4>
+
+<pre class="command-example">UpdateCellInfo [-server_address &lt;addr&gt;] [-root &lt;root&gt;] &lt;cell&gt;</pre>
+
+<h4 id="flags">Flags</h4>
+
+<table><thead>
+<tr>
+<th style="text-align: left">Name</th>
+<th style="text-align: left">Type</th>
+<th style="text-align: left">Definition</th>
+</tr>
+</thead><tbody>
+<tr>
+<td style="text-align: left">root</td>
+<td style="text-align: left">string</td>
+<td style="text-align: left">The root path the topology server is using for that cell.</td>
+</tr>
+<tr>
+<td style="text-align: left">server_address</td>
+<td style="text-align: left">string</td>
+<td style="text-align: left">The address the topology server is using for that cell.</td>
+</tr>
+</tbody></table>
+
+<h4 id="arguments">Arguments</h4>
+
+<ul>
+<li><code>&lt;addr&gt;</code> &ndash; Required.</li>
+<li><code>&lt;cell&gt;</code> &ndash; Required. A cell is a location for a service. Generally, a cell resides in only one cluster. In Vitess, the terms &quot;cell&quot; and &quot;data center&quot; are interchangeable. The argument value is a string that does not contain whitespace.</li>
+</ul>
+
+<h4 id="errors">Errors</h4>
+
+<ul>
+<li>the <code>&lt;cell&gt;</code> argument is required for the <code>&lt;UpdateCellInfo&gt;</code> command This error occurs if the command is not called with exactly one argument.</li>
 </ul>
 
 <h2 id="generic">Generic</h2>
@@ -1252,7 +1405,7 @@
 
 <h4 id="example">Example</h4>
 
-<pre class="command-example">VtTabletBegin [-connect_timeout &lt;connect timeout&gt;] [-tablet_type &lt;tablet_type&gt;] -keyspace &lt;keyspace&gt; -shard &lt;shard&gt; &lt;tablet alias&gt;</pre>
+<pre class="command-example">VtTabletBegin [-username &lt;TableACL user&gt;] [-connect_timeout &lt;connect timeout&gt;] &lt;tablet alias&gt;</pre>
 
 <h4 id="flags">Flags</h4>
 
@@ -1268,14 +1421,17 @@
 <td style="text-align: left">Duration</td>
 <td style="text-align: left">Connection timeout for vttablet client</td>
 </tr>
+<tr>
+<td style="text-align: left">username</td>
+<td style="text-align: left">string</td>
+<td style="text-align: left">If set, value is set as immediate caller id in the request and used by vttablet for TableACL check</td>
+</tr>
 </tbody></table>
 
 <h4 id="arguments">Arguments</h4>
 
 <ul>
-<li><code>&lt;connect timeout&gt;</code> &ndash; Required.</li>
-<li><code>&lt;keyspace&gt;</code> &ndash; Required. The name of a sharded database that contains one or more tables. Vitess distributes keyspace shards into multiple machines and provides an SQL interface to query the data. The argument value must be a string that does not contain whitespace.</li>
-<li><code>&lt;shard&gt;</code> &ndash; Required. The name of a shard. The argument value is typically in the format <code>&lt;range start&gt;-&lt;range end&gt;</code>.</li>
+<li><code>&lt;TableACL user&gt;</code> &ndash; Required.</li>
 <li><code>&lt;tablet alias&gt;</code> &ndash; Required. A Tablet Alias uniquely identifies a vttablet. The argument value is in the format <code>&lt;cell name&gt;-&lt;uid&gt;</code>.</li>
 </ul>
 
@@ -1289,11 +1445,11 @@
 
 <h3 id="vttabletcommit">VtTabletCommit</h3>
 
-<p>Commits a transaction on the provided server.</p>
+<p>Commits the given transaction on the provided server.</p>
 
 <h4 id="example">Example</h4>
 
-<pre class="command-example">VtTabletCommit [-connect_timeout &lt;connect timeout&gt;] [-tablet_type &lt;tablet_type&gt;] -keyspace &lt;keyspace&gt; -shard &lt;shard&gt; &lt;tablet alias&gt; &lt;transaction_id&gt;</pre>
+<pre class="command-example">VtTabletCommit [-username &lt;TableACL user&gt;] [-connect_timeout &lt;connect timeout&gt;] &lt;transaction_id&gt;</pre>
 
 <h4 id="flags">Flags</h4>
 
@@ -1309,15 +1465,17 @@
 <td style="text-align: left">Duration</td>
 <td style="text-align: left">Connection timeout for vttablet client</td>
 </tr>
+<tr>
+<td style="text-align: left">username</td>
+<td style="text-align: left">string</td>
+<td style="text-align: left">If set, value is set as immediate caller id in the request and used by vttablet for TableACL check</td>
+</tr>
 </tbody></table>
 
 <h4 id="arguments">Arguments</h4>
 
 <ul>
-<li><code>&lt;connect timeout&gt;</code> &ndash; Required.</li>
-<li><code>&lt;keyspace&gt;</code> &ndash; Required. The name of a sharded database that contains one or more tables. Vitess distributes keyspace shards into multiple machines and provides an SQL interface to query the data. The argument value must be a string that does not contain whitespace.</li>
-<li><code>&lt;shard&gt;</code> &ndash; Required. The name of a shard. The argument value is typically in the format <code>&lt;range start&gt;-&lt;range end&gt;</code>.</li>
-<li><code>&lt;tablet alias&gt;</code> &ndash; Required. A Tablet Alias uniquely identifies a vttablet. The argument value is in the format <code>&lt;cell name&gt;-&lt;uid&gt;</code>.</li>
+<li><code>&lt;TableACL user&gt;</code> &ndash; Required.</li>
 <li><code>&lt;transaction_id&gt;</code> &ndash; Required.</li>
 </ul>
 
@@ -1330,11 +1488,11 @@
 
 <h3 id="vttabletexecute">VtTabletExecute</h3>
 
-<p>Executes the given query on the given tablet.</p>
+<p>Executes the given query on the given tablet. -transaction_id is optional. Use VtTabletBegin to start a transaction.</p>
 
 <h4 id="example">Example</h4>
 
-<pre class="command-example">VtTabletExecute [-bind_variables &lt;JSON map&gt;] [-connect_timeout &lt;connect timeout&gt;] [-transaction_id &lt;transaction_id&gt;] [-tablet_type &lt;tablet_type&gt;] [-options &lt;proto text options&gt;] [-json] -keyspace &lt;keyspace&gt; -shard &lt;shard&gt; &lt;tablet alias&gt; &lt;sql&gt;</pre>
+<pre class="command-example">VtTabletExecute [-username &lt;TableACL user&gt;] [-connect_timeout &lt;connect timeout&gt;] [-transaction_id &lt;transaction_id&gt;] [-options &lt;proto text options&gt;] [-json] &lt;tablet alias&gt; &lt;sql&gt;</pre>
 
 <h4 id="flags">Flags</h4>
 
@@ -1365,14 +1523,17 @@
 <td style="text-align: left">Int</td>
 <td style="text-align: left">transaction id to use, if inside a transaction.</td>
 </tr>
+<tr>
+<td style="text-align: left">username</td>
+<td style="text-align: left">string</td>
+<td style="text-align: left">If set, value is set as immediate caller id in the request and used by vttablet for TableACL check</td>
+</tr>
 </tbody></table>
 
 <h4 id="arguments">Arguments</h4>
 
 <ul>
-<li><code>&lt;JSON map&gt;</code> &ndash; Required.</li>
-<li><code>&lt;keyspace&gt;</code> &ndash; Required. The name of a sharded database that contains one or more tables. Vitess distributes keyspace shards into multiple machines and provides an SQL interface to query the data. The argument value must be a string that does not contain whitespace.</li>
-<li><code>&lt;shard&gt;</code> &ndash; Required. The name of a shard. The argument value is typically in the format <code>&lt;range start&gt;-&lt;range end&gt;</code>.</li>
+<li><code>&lt;TableACL user&gt;</code> &ndash; Required.</li>
 <li><code>&lt;tablet alias&gt;</code> &ndash; Required. A Tablet Alias uniquely identifies a vttablet. The argument value is in the format <code>&lt;cell name&gt;-&lt;uid&gt;</code>.</li>
 <li><code>&lt;sql&gt;</code> &ndash; Required.</li>
 </ul>
@@ -1387,11 +1548,11 @@
 
 <h3 id="vttabletrollback">VtTabletRollback</h3>
 
-<p>Rollbacks a transaction on the provided server.</p>
+<p>Rollbacks the given transaction on the provided server.</p>
 
 <h4 id="example">Example</h4>
 
-<pre class="command-example">VtTabletRollback [-connect_timeout &lt;connect timeout&gt;] [-tablet_type &lt;tablet_type&gt;] -keyspace &lt;keyspace&gt; -shard &lt;shard&gt; &lt;tablet alias&gt; &lt;transaction_id&gt;</pre>
+<pre class="command-example">VtTabletRollback [-username &lt;TableACL user&gt;] [-connect_timeout &lt;connect timeout&gt;] &lt;tablet alias&gt; &lt;transaction_id&gt;</pre>
 
 <h4 id="flags">Flags</h4>
 
@@ -1407,14 +1568,17 @@
 <td style="text-align: left">Duration</td>
 <td style="text-align: left">Connection timeout for vttablet client</td>
 </tr>
+<tr>
+<td style="text-align: left">username</td>
+<td style="text-align: left">string</td>
+<td style="text-align: left">If set, value is set as immediate caller id in the request and used by vttablet for TableACL check</td>
+</tr>
 </tbody></table>
 
 <h4 id="arguments">Arguments</h4>
 
 <ul>
-<li><code>&lt;connect timeout&gt;</code> &ndash; Required.</li>
-<li><code>&lt;keyspace&gt;</code> &ndash; Required. The name of a sharded database that contains one or more tables. Vitess distributes keyspace shards into multiple machines and provides an SQL interface to query the data. The argument value must be a string that does not contain whitespace.</li>
-<li><code>&lt;shard&gt;</code> &ndash; Required. The name of a shard. The argument value is typically in the format <code>&lt;range start&gt;-&lt;range end&gt;</code>.</li>
+<li><code>&lt;TableACL user&gt;</code> &ndash; Required.</li>
 <li><code>&lt;tablet alias&gt;</code> &ndash; Required. A Tablet Alias uniquely identifies a vttablet. The argument value is in the format <code>&lt;cell name&gt;-&lt;uid&gt;</code>.</li>
 <li><code>&lt;transaction_id&gt;</code> &ndash; Required.</li>
 </ul>
@@ -1465,9 +1629,8 @@
 <h4 id="errors">Errors</h4>
 
 <ul>
-<li>The <code>&lt;tablet alias&gt;</code> argument is required for the <code>&lt;VtTabletStreamHealth&gt;</code> command. This error occurs if the command is not called with exactly one argument.</li>
+<li>the <code>&lt;tablet alias&gt;</code> argument is required for the <code>&lt;VtTabletStreamHealth&gt;</code> command This error occurs if the command is not called with exactly one argument.</li>
 <li>cannot connect to tablet %v: %v</li>
-<li>stream ended early: %v</li>
 </ul>
 
 <h3 id="vttabletupdatestream">VtTabletUpdateStream</h3>
@@ -1519,9 +1682,8 @@
 <h4 id="errors">Errors</h4>
 
 <ul>
-<li>The <code>&lt;tablet alias&gt;</code> argument is required for the <code>&lt;VtTabletUpdateStream&gt;</code> command. This error occurs if the command is not called with exactly one argument.</li>
+<li>the <code>&lt;tablet alias&gt;</code> argument is required for the <code>&lt;VtTabletUpdateStream&gt;</code> command This error occurs if the command is not called with exactly one argument.</li>
 <li>cannot connect to tablet %v: %v</li>
-<li>stream ended early: %v</li>
 </ul>
 
 <h2 id="replication-graph">Replication Graph</h2>
@@ -1772,6 +1934,8 @@
 <li><a href="#getvschema">GetVSchema</a></li>
 <li><a href="#rebuildvschemagraph">RebuildVSchemaGraph</a></li>
 <li><a href="#reloadschema">ReloadSchema</a></li>
+<li><a href="#reloadschemakeyspace">ReloadSchemaKeyspace</a></li>
+<li><a href="#reloadschemashard">ReloadSchemaShard</a></li>
 <li><a href="#validatepermissionskeyspace">ValidatePermissionsKeyspace</a></li>
 <li><a href="#validatepermissionsshard">ValidatePermissionsShard</a></li>
 <li><a href="#validateschemakeyspace">ValidateSchemaKeyspace</a></li>
@@ -2074,6 +2238,88 @@
 
 <ul>
 <li>the <code>&lt;tablet alias&gt;</code> argument is required for the <code>&lt;ReloadSchema&gt;</code> command This error occurs if the command is not called with exactly one argument.</li>
+</ul>
+
+<h3 id="reloadschemakeyspace">ReloadSchemaKeyspace</h3>
+
+<p>Reloads the schema on all the tablets in a keyspace.</p>
+
+<h4 id="example">Example</h4>
+
+<pre class="command-example">ReloadSchemaKeyspace [-concurrency=10] [-include_master=false] &lt;keyspace&gt;</pre>
+
+<h4 id="flags">Flags</h4>
+
+<table><thead>
+<tr>
+<th style="text-align: left">Name</th>
+<th style="text-align: left">Type</th>
+<th style="text-align: left">Definition</th>
+</tr>
+</thead><tbody>
+<tr>
+<td style="text-align: left">concurrency</td>
+<td style="text-align: left">Int</td>
+<td style="text-align: left">How many tablets to reload in parallel</td>
+</tr>
+<tr>
+<td style="text-align: left">include_master</td>
+<td style="text-align: left">Boolean</td>
+<td style="text-align: left">Include the master tablet(s)</td>
+</tr>
+</tbody></table>
+
+<h4 id="arguments">Arguments</h4>
+
+<ul>
+<li><code>&lt;keyspace&gt;</code> &ndash; Required. The name of a sharded database that contains one or more tables. Vitess distributes keyspace shards into multiple machines and provides an SQL interface to query the data. The argument value must be a string that does not contain whitespace.</li>
+</ul>
+
+<h4 id="errors">Errors</h4>
+
+<ul>
+<li>the <code>&lt;keyspace&gt;</code> argument is required for the <code>&lt;ReloadSchemaKeyspace&gt;</code> command This error occurs if the command is not called with exactly one argument.</li>
+</ul>
+
+<h3 id="reloadschemashard">ReloadSchemaShard</h3>
+
+<p>Reloads the schema on all the tablets in a shard.</p>
+
+<h4 id="example">Example</h4>
+
+<pre class="command-example">ReloadSchemaShard [-concurrency=10] [-include_master=false] &lt;keyspace/shard&gt;</pre>
+
+<h4 id="flags">Flags</h4>
+
+<table><thead>
+<tr>
+<th style="text-align: left">Name</th>
+<th style="text-align: left">Type</th>
+<th style="text-align: left">Definition</th>
+</tr>
+</thead><tbody>
+<tr>
+<td style="text-align: left">concurrency</td>
+<td style="text-align: left">Int</td>
+<td style="text-align: left">How many tablets to reload in parallel</td>
+</tr>
+<tr>
+<td style="text-align: left">include_master</td>
+<td style="text-align: left">Boolean</td>
+<td style="text-align: left">Include the master tablet</td>
+</tr>
+</tbody></table>
+
+<h4 id="arguments">Arguments</h4>
+
+<ul>
+<li><code>&lt;keyspace/shard&gt;</code> &ndash; Required. The name of a sharded database that contains one or more tables as well as the shard associated with the command. The keyspace must be identified by a string that does not contain whitepace, while the shard is typically identified by a string in the format <code>&lt;range start&gt;-&lt;range end&gt;</code>.</li>
+</ul>
+
+<h4 id="errors">Errors</h4>
+
+<ul>
+<li>the <code>&lt;keyspace/shard&gt;</code> argument is required for the <code>&lt;ReloadSchemaShard&gt;</code> command This error occurs if the command is not called with exactly one argument.</li>
 </ul>
 
 <h3 id="validatepermissionskeyspace">ValidatePermissionsKeyspace</h3>
@@ -2716,7 +2962,7 @@
 
 <h3 id="setshardtabletcontrol">SetShardTabletControl</h3>
 
-<p>Sets the TabletControl record for a shard and type. Only use this for an emergency fix or after a finished vertical split. The <em>MigrateServedFrom</em> and <em>MigrateServedType</em> commands set this field appropriately already. Always specify the blacklisted_tables flag for vertical splits, but never for horizontal splits.</p>
+<p>Sets the TabletControl record for a shard and type. Only use this for an emergency fix or after a finished vertical split. The <em>MigrateServedFrom</em> and <em>MigrateServedType</em> commands set this field appropriately already. Always specify the blacklisted_tables flag for vertical splits, but never for horizontal splits.<br><br>To set the DisableQueryServiceFlag, keep &#39;blacklisted_tables&#39; empty, and set &#39;disable_query_service&#39; to true or false. Useful to fix horizontal splits gone wrong.<br><br>To change the blacklisted tables list, specify the &#39;blacklisted_tables&#39; parameter with the new list. Useful to fix tables that are being blocked after a vertical split.<br><br>To just remove the ShardTabletControl entirely, use the &#39;remove&#39; flag, useful after a vertical split is finished to remove serving restrictions.</p>
 
 <h4 id="example">Example</h4>
 
@@ -2732,6 +2978,11 @@
 </tr>
 </thead><tbody>
 <tr>
+<td style="text-align: left">blacklisted_tables</td>
+<td style="text-align: left">string</td>
+<td style="text-align: left">Specifies a comma-separated list of tables to blacklist (used for vertical split). Each is either an exact match, or a regular expression of the form &#39;/regexp/&#39;.</td>
+</tr>
+<tr>
 <td style="text-align: left">cells</td>
 <td style="text-align: left">string</td>
 <td style="text-align: left">Specifies a comma-separated list of cells to update</td>
@@ -2739,17 +2990,12 @@
 <tr>
 <td style="text-align: left">disable_query_service</td>
 <td style="text-align: left">Boolean</td>
-<td style="text-align: left">Disables query service on the provided nodes</td>
+<td style="text-align: left">Disables query service on the provided nodes. This flag requires &#39;blacklisted_tables&#39; and &#39;remove&#39; to be unset, otherwise it&#39;s ignored.</td>
 </tr>
 <tr>
 <td style="text-align: left">remove</td>
 <td style="text-align: left">Boolean</td>
-<td style="text-align: left">Removes cells for vertical splits. This flag requires the <em>tables</em> flag to also be set.</td>
-</tr>
-<tr>
-<td style="text-align: left">tables</td>
-<td style="text-align: left">string</td>
-<td style="text-align: left">Specifies a comma-separated list of tables to replicate (used for vertical split). Each is either an exact match, or a regular expression of the form /regexp/</td>
+<td style="text-align: left">Removes cells for vertical splits.</td>
 </tr>
 </tbody></table>
 
@@ -2959,17 +3205,6 @@
 
 <ul>
 <li>the <code>&lt;keyspace/shard&gt;</code> argument is required for the <code>&lt;WaitForFilteredReplication&gt;</code> command This error occurs if the command is not called with exactly one argument.</li>
-<li>shard %v/%v has no source shard</li>
-<li>shard %v/%v has no master</li>
-<li>failed to run explicit healthcheck on tablet: %v err: %v</li>
-<li>cannot connect to tablet %v: %v</li>
-<li>could not stream health records from tablet: %v err: %v</li>
-<li>context was done before filtered replication did catch up. Last seen delay: %v context Error: %v</li>
-<li>stream ended early: %v</li>
-<li>health record does not include RealtimeStats message. tablet: %v health record: %v</li>
-<li>tablet is not healthy. tablet: %v health record: %v</li>
-<li>no filtered replication running on tablet: %v health record: %v</li>
-<li>last seen delay should never be negative. tablet: %v delay: %v</li>
 </ul>
 
 <h2 id="tablets">Tablets</h2>
@@ -3781,7 +4016,7 @@
     
     <a href="https://groups.google.com/forum/#!forum/vitess" target="_blank">Contact: vitess@googlegroups.com</a>&nbsp;&nbsp;<b>·</b>&nbsp;&nbsp;
     <a href="https://groups.google.com/forum/#!forum/vitess-announce" target="_blank">Announcements</a>&nbsp;&nbsp;<b>·</b>&nbsp;&nbsp;
-    &#169; 2016 <a href="/">Vitess</a> powered by <a href="https://developers.google.com/open-source/">Google Inc</a>
+    &#169; 2017 <a href="/">Vitess</a> powered by <a href="https://developers.google.com/open-source/">Google Inc</a>
   </nav>
 </footer>
 

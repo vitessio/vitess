@@ -64,8 +64,32 @@ orchestrator:
       cpu: "100m"
   mysqlResources:
     limits:
-      memory: "512Mi"
+      memory: "1Gi"
       cpu: "100m"
+
+  # Currently supported data volume types:
+  #
+  # EmptyDir
+  #   Use local storage for Orchestrator data. If the Orchestrator pod gets
+  #   deleted (or its Node dies), it will start from scratch and repopulate
+  #   as tablets periodically self-register.
+  #
+  # PersistentVolume
+  #   Use PersistentVolume for Orchestrator data. These volumes survive pod
+  #   deletion and recreation, so most pod rescheduling events don't cause an
+  #   Orchestrator reset. The underlying storage used depends on your Kubernetes
+  #   cluster and your "storage-class" setting, but usually it is some kind of
+  #   network volume like EBS or PD.
+  dataVolumeType: EmptyDir
+
+  # The following are only used if dataVolumeType is "PersistentVolume".
+  dataVolumeClaimAnnotations:
+    volume.alpha.kubernetes.io/storage-class: anything
+  dataVolumeClaimSpec:
+    accessModes: ["ReadWriteOnce"]
+    resources:
+      requests:
+        storage: "1Gi"
 
 # Default values for vtctld resources defined in 'topology'.
 vtctld:
@@ -105,7 +129,7 @@ vttablet:
   #
   #   This is the recommended way to run vttablets, but some Kubernetes
   #   clusters may not have StatefulSet enabled yet during the feature's
-  #   alpha/beta phase.
+  #   beta phase.
   #
   #   NOTE: The "uidBase" setting in the topology map is ignored when using
   #     StatefulSet. Instead, the tablet UID is generated based on a hash

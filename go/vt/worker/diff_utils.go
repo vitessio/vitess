@@ -20,10 +20,11 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/logutil"
-	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
+	"github.com/youtube/vitess/go/vt/vttablet/queryservice"
+	"github.com/youtube/vitess/go/vt/vttablet/tabletconn"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
@@ -37,7 +38,7 @@ import (
 type QueryResultReader struct {
 	output sqltypes.ResultStream
 	fields []*querypb.Field
-	conn   tabletconn.TabletConn
+	conn   queryservice.QueryService
 }
 
 // NewQueryResultReaderForTablet creates a new QueryResultReader for
@@ -55,14 +56,11 @@ func NewQueryResultReaderForTablet(ctx context.Context, ts topo.Server, tabletAl
 		return nil, err
 	}
 
-	stream, err := conn.StreamExecute(ctx, &querypb.Target{
+	stream := queryservice.ExecuteWithStreamer(ctx, conn, &querypb.Target{
 		Keyspace:   tablet.Tablet.Keyspace,
 		Shard:      tablet.Tablet.Shard,
 		TabletType: tablet.Tablet.Type,
 	}, sql, make(map[string]interface{}), nil)
-	if err != nil {
-		return nil, err
-	}
 
 	// read the columns, or grab the error
 	cols, err := stream.Recv()

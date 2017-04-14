@@ -92,11 +92,6 @@ func (ft FakeTopo) UpdateShard(ctx context.Context, keyspace, shard string, valu
 	return 0, errNotImplemented
 }
 
-// ValidateShard is part of the topo.Server interface.
-func (ft FakeTopo) ValidateShard(ctx context.Context, keyspace, shard string) error {
-	return errNotImplemented
-}
-
 // GetShard is part of the topo.Server interface.
 func (ft FakeTopo) GetShard(ctx context.Context, keyspace, shard string) (*topodatapb.Shard, int64, error) {
 	return nil, 0, errNotImplemented

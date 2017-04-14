@@ -21,10 +21,15 @@ if [[ -x $node_dist/bin/node && `$node_dist/bin/node -v` == "$node_ver" ]]; then
 else
   echo "Downloading nodejs"
   rm -rf $node_dist
-  curl -sL https://nodejs.org/dist/$node_ver/node-$node_ver-linux-x64.tar.xz > node_linux64.xz
-  tar xf node_linux64.xz -C $VTROOT/dist
+  node_tar="node_linux64.tar.xz"
+  curl -sL https://nodejs.org/dist/$node_ver/node-$node_ver-linux-x64.tar.xz -o $node_tar
+  tar xf $node_tar -C $VTROOT/dist
   mv $VTROOT/dist/node-$node_ver-linux-x64 $node_dist
-  rm node_linux64.xz
+  rm $node_tar
+  # Add the node directory to PATH to make sure that the Angular
+  # installation below can find the "node" binary.
+  # (dev.env does actually append it to PATH.)
+  source $VTTOP/dev.env
 fi
 
 echo "Installing dependencies for building web UI"

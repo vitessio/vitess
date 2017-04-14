@@ -22,6 +22,7 @@ var (
 	flagInnodbDataHomeDir     *string
 	flagInnodbLogGroupHomeDir *string
 	flagSocketFile            *string
+	flagGeneralLogPath        *string
 	flagErrorLogPath          *string
 	flagSlowLogPath           *string
 	flagRelayLogPath          *string
@@ -47,6 +48,7 @@ func RegisterFlags() {
 	flagInnodbDataHomeDir = flag.String("mycnf_innodb_data_home_dir", "", "Innodb data home directory")
 	flagInnodbLogGroupHomeDir = flag.String("mycnf_innodb_log_group_home_dir", "", "Innodb log group home directory")
 	flagSocketFile = flag.String("mycnf_socket_file", "", "mysql socket file")
+	flagGeneralLogPath = flag.String("mycnf_general_log_path", "", "mysql general log path")
 	flagErrorLogPath = flag.String("mycnf_error_log_path", "", "mysql error log path")
 	flagSlowLogPath = flag.String("mycnf_slow_log_path", "", "mysql slow query log path")
 	flagRelayLogPath = flag.String("mycnf_relay_log_path", "", "mysql relay log path")
@@ -85,6 +87,7 @@ func NewMycnfFromFlags(uid uint32) (mycnf *Mycnf, err error) {
 			InnodbDataHomeDir:     *flagInnodbDataHomeDir,
 			InnodbLogGroupHomeDir: *flagInnodbLogGroupHomeDir,
 			SocketFile:            *flagSocketFile,
+			GeneralLogPath:        *flagGeneralLogPath,
 			ErrorLogPath:          *flagErrorLogPath,
 			SlowLogPath:           *flagSlowLogPath,
 			RelayLogPath:          *flagRelayLogPath,
@@ -99,7 +102,7 @@ func NewMycnfFromFlags(uid uint32) (mycnf *Mycnf, err error) {
 			// This is probably not going to be used by anybody,
 			// but fill in a default value. (Note it's used by
 			// mysqld.Start, in which case it is correct).
-			path: mycnfFile(uint32(*flagServerID)),
+			path: MycnfFile(uint32(*flagServerID)),
 		}, nil
 	}
 
@@ -107,7 +110,7 @@ func NewMycnfFromFlags(uid uint32) (mycnf *Mycnf, err error) {
 		if uid == 0 {
 			log.Fatalf("No mycnf_server_id, no mycnf-file, and no backup server id to use")
 		}
-		*flagMycnfFile = mycnfFile(uid)
+		*flagMycnfFile = MycnfFile(uid)
 		log.Infof("No mycnf_server_id, no mycnf-file specified, using default config for server id %v: %v", uid, *flagMycnfFile)
 	} else {
 		log.Infof("No mycnf_server_id specified, using mycnf-file file %v", *flagMycnfFile)

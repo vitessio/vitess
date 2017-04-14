@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="en" itemscope itemtype="https://schema.org/WebPage">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Vitess / Horizontal Sharding (Tutorial, automated)</title>
+
+        <!-- Webfont -->
+    <link href='http://fonts.googleapis.com/css?family=Roboto:400,100,100italic,300,300italic,400italic,500,500italic,700,700italic,900,900italic' rel='stylesheet' type='text/css'>
+    
+    <!--<link rel="shortcut icon" type="image/png" href="/favicon.png">-->
+
+    <!-- Bootstrap -->
+    <link href="/libs/bootstrap/css/bootstrap.min.css" rel="stylesheet">
+
+    <!-- HTML5 shim and Respond.js for IE8 support of HTML5 elements and media queries -->
+    <!-- WARNING: Respond.js doesn't work if you view the page via file:// -->
+    <!--[if lt IE 9]>
+      <script src="https://oss.maxcdn.com/html5shiv/3.7.2/html5shiv.min.js"></script>
+      <script src="https://oss.maxcdn.com/respond/1.4.2/respond.min.js"></script>
+    <![endif]-->
+
+    <!-- Styles -->
+    <link rel="stylesheet" type="text/css" href="/css/site.css" />
+    <!-- Font Awesome icons -->
+    <link href="/libs/font-awesome-4.4.0/css/font-awesome.min.css"
+          rel="stylesheet"
+          type="text/css">
+    
+    <!-- jQuery (necessary for Bootstrap's JavaScript plugins) -->
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.2/jquery.min.js"></script>
+    <!-- Include all compiled plugins (below), or include individual files as needed -->
+    <script src="/libs/bootstrap/js/bootstrap.min.js"></script>
+
+
+    <!-- metadata -->
+    <meta name="og:title" content="Vitess / Horizontal Sharding (Tutorial, automated)"/>
+    <meta name="og:image" content="/images/vitess_logo_with_border.svg"/>
+    <meta name="og:description" content="Vitess is a database clustering system for horizontal scaling of MySQL."/>
+
+    <link rel="icon" href="/images/vitess_logo_icon_size.png" type="image/png">
+
+    
+    <script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+  ga('create', 'UA-60219601-1', 'auto');
+  ga('send', 'pageview');
+</script>
+
+    
+  </head>
+  <body class="docs" id="top_of_page">
+
+    <span id="toc-depth" data-toc-depth="h2,h3"></span>
+
+
+    <nav id="common-nav" class="navbar navbar-fixed-top inverse">
+  <div class="container">
+    <!-- Brand and toggle get grouped for better mobile display -->
+    <div class="navbar-header">
+      <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#navbar-collapse-1">
+        <span class="sr-only">Toggle navigation</span>
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+      </button>
+      <a class="navbar-brand" href="/">
+        <img class="logo" src="/images/vitess_logo_with_border.svg" alt="Vitess">
+      </a>
+    </div>
+
+    <!-- Collect the nav links, forms, and other content for toggling -->
+    <div class="collapse navbar-collapse" id="navbar-collapse-1">
+      <ul class="nav navbar-nav navbar-right" id="standard-menu-links">
+        <li><a href="/overview/">Overview</a></li>
+        <li><a href="/user-guide/introduction.html">Guides</a></li>
+        <li><a href="/reference/vitess-api.html">Reference</a></li>
+        <li><a href="http://blog.vitess.io">Blog</a></li>
+        <li><a href="https://github.com/youtube/vitess"><i class="fa fa-github"></i> GitHub</a></li>
+        <!-- Hide link to blog unless we have actual posts -->
+        <!-- <li><a href="/blog/" title="">Blog</a></li> -->
+      </ul>
+      <ul class="nav nav-stacked mobile-left-nav-menu" id="collapsed-left-menu">
+                <li class="submenu">
+          <h4 class="arrow-r no-top-margin">Overview</h4>
+          <ul style="display: none">
+            <li><a href="/overview/">What is Vitess</a></li>
+            <li><a href="/overview/scaling-mysql.html">Scaling MySQL with Vitess</a></li>
+            <li><a href="/overview/concepts.html">Key Concepts</a></li>
+          </ul>
+        </li>
+        <li class="submenu">
+          <h4 class="arrow-r">Getting Started</h4>
+          <ul style="display: none">
+            <li style="padding-bottom: 0"><a href="/getting-started/">Run Vitess on Kubernetes</a>
+              <ul style="display: block">
+                <li style="padding-bottom: 0"><a href="/getting-started/docker-build.html">Custom Docker Build</a></li>
+              </ul>
+            </li>
+            <li><a href="/getting-started/local-instance.html">Run Vitess Locally</a></li>
+          </ul>
+        </li>
+        <li class="submenu">
+          <h4 class="arrow-r">User Guide</h4>
+          <ul style="display: none">
+            <li><a href="/user-guide/introduction.html">Introduction</a>
+            <li><a href="/user-guide/client-libraries.html">Client Libraries</a>
+            <li><a href="/user-guide/backup-and-restore.html">Backing Up Data</a>
+            <li><a href="/user-guide/reparenting.html">Reparenting</a></li>
+            <li style="padding-bottom: 0"><a href="/user-guide/schema-management.html">Schema Management</a></li>
+              <ul style="display: block">
+                <li style="padding-bottom: 0"><a href="/user-guide/vschema.html">VSchema Guide</a></li>
+                <li style="padding-bottom: 0"><a href="/user-guide/schema-swap.html">Schema Swap (Tutorial)</a></li>
+              </ul>
+            <li style="padding-bottom: 0"><a href="/user-guide/sharding.html">Sharding</a>
+              <ul style="display: block">
+                <li><a href="/user-guide/horizontal-sharding-workflow.html">Horizontal Sharding (Tutorial, automated)</a></li>
+                <li><a href="/user-guide/horizontal-sharding.html">Horizontal Sharding (Tutorial, manual)</a></li>
+                <li><a href="/user-guide/sharding-kubernetes-workflow.html">Sharding in Kubernetes (Tutorial, automated)</a></li>
+                <li style="padding-bottom: 0"><a href="/user-guide/sharding-kubernetes.html">Sharding in Kubernetes (Tutorial, manual)</a></li>
+              </ul>
+            </li>
+            <li><a href="/user-guide/vitess-sequences.html">Vitess Sequences</a></li>
+            <li><a href="/user-guide/mysql-server-protocol.html">MySQL Server Protocol</a></li>
+            <li><a href="/user-guide/vitess-replication.html">Vitess and Replication</a></li>
+            <li><a href="/user-guide/update-stream.html">Update Stream</a></li>
+            <li><a href="/user-guide/row-based-replication.html">Row Based Replication</a></li>
+            <li><a href="/user-guide/topology-service.html">Topology Service</a></li>
+            <li><a href="/user-guide/transport-security-model.html">Transport Security Model</a></li>
+            <li style="padding-bottom: 0"><a href="/user-guide/launching.html">Launching</a>
+              <ul style="display: block">
+                <li><a href="/user-guide/scalability-philosophy.html">Scalability Philosophy</a></li>
+                <li><a href="/user-guide/production-planning.html">Production Planning</a></li>
+                <li><a href="/user-guide/server-configuration.html">Server Configuration</a></li>
+                <li><a href="/user-guide/twopc.html">2PC Guide</a></li>
+                <li style="padding-bottom: 0"><a href="/user-guide/troubleshooting.html">Troubleshooting</a></li>
+              </ul>
+            </li>
+            <li><a href="/user-guide/upgrading.html">Upgrading</a></li>
+          </ul>
+        </li>
+        <li class="submenu">
+          <h4 class="arrow-r">Reference Guides</h4>
+          <ul style="display: none">
+            <li><a href="/reference/vitess-api.html">Vitess API</a>
+            <li><a href="/reference/vtctl.html">vtctl Commands</a>
+          </ul>
+        </li>
+        <li class="submenu">
+          <h4 class="arrow-r">Other Resources</h4>
+          <ul style="display: none">
+            <li><a href="/resources/presentations.html">Presentations</a>
+            <li><a href="http://blog.vitess.io/">Blog</a>
+            <li><a href="/resources/roadmap.html">Roadmap</a>
+          </ul>
+        </li>
+        <li class="submenu">
+          <h4 class="arrow-r">Contributing</h4>
+          <ul style="display: none">
+            <li><a href="/contributing/">Contributing to Vitess</a>
+            <li><a href="/contributing/github-workflow.html">GitHub Workflow</a>
+            <li><a href="/contributing/code-reviews.html">Code Reviews</a>
+          </ul>
+        </li>
+
+        <div>
+          <form method="get" action="/search/">
+            <input id="search-form" name="q" type="text" placeholder="Search">
+          </form>
+        </div>
+
+        <li><a href="https://github.com/youtube/vitess" id="collapsed-left-menu-repo-link"><i class="fa fa-github"></i> GitHub</a></li>
+      </ul>
+    </div><!-- /.navbar-collapse -->
+  </div><!-- /.container-fluid -->
+</nav>
+
+    
+<div id="masthead">
+  <div class="container">
+    <div class="row">
+      <div class="col-md-9">
+        <h1>Horizontal Sharding (Tutorial, automated)</h1>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<div class="container">
+    <div class="row scroll-margin" id="toc-content-row">
+    <div class="col-md-2" id="leftCol">
+      <ul class="nav nav-stacked mobile-left-nav-menu" id="sidebar">
+                <li class="submenu">
+          <h4 class="arrow-r no-top-margin">Overview</h4>
+          <ul style="display: none">
+            <li><a href="/overview/">What is Vitess</a></li>
+            <li><a href="/overview/scaling-mysql.html">Scaling MySQL with Vitess</a></li>
+            <li><a href="/overview/concepts.html">Key Concepts</a></li>
+          </ul>
+        </li>
+        <li class="submenu">
+          <h4 class="arrow-r">Getting Started</h4>
+          <ul style="display: none">
+            <li style="padding-bottom: 0"><a href="/getting-started/">Run Vitess on Kubernetes</a>
+              <ul style="display: block">
+                <li style="padding-bottom: 0"><a href="/getting-started/docker-build.html">Custom Docker Build</a></li>
+              </ul>
+            </li>
+            <li><a href="/getting-started/local-instance.html">Run Vitess Locally</a></li>
+          </ul>
+        </li>
+        <li class="submenu">
+          <h4 class="arrow-r">User Guide</h4>
+          <ul style="display: none">
+            <li><a href="/user-guide/introduction.html">Introduction</a>
+            <li><a href="/user-guide/client-libraries.html">Client Libraries</a>
+            <li><a href="/user-guide/backup-and-restore.html">Backing Up Data</a>
+            <li><a href="/user-guide/reparenting.html">Reparenting</a></li>
+            <li style="padding-bottom: 0"><a href="/user-guide/schema-management.html">Schema Management</a></li>
+              <ul style="display: block">
+                <li style="padding-bottom: 0"><a href="/user-guide/vschema.html">VSchema Guide</a></li>
+                <li style="padding-bottom: 0"><a href="/user-guide/schema-swap.html">Schema Swap (Tutorial)</a></li>
+              </ul>
+            <li style="padding-bottom: 0"><a href="/user-guide/sharding.html">Sharding</a>
+              <ul style="display: block">
+                <li><a href="/user-guide/horizontal-sharding-workflow.html">Horizontal Sharding (Tutorial, automated)</a></li>
+                <li><a href="/user-guide/horizontal-sharding.html">Horizontal Sharding (Tutorial, manual)</a></li>
+                <li><a href="/user-guide/sharding-kubernetes-workflow.html">Sharding in Kubernetes (Tutorial, automated)</a></li>
+                <li style="padding-bottom: 0"><a href="/user-guide/sharding-kubernetes.html">Sharding in Kubernetes (Tutorial, manual)</a></li>
+              </ul>
+            </li>
+            <li><a href="/user-guide/vitess-sequences.html">Vitess Sequences</a></li>
+            <li><a href="/user-guide/mysql-server-protocol.html">MySQL Server Protocol</a></li>
+            <li><a href="/user-guide/vitess-replication.html">Vitess and Replication</a></li>
+            <li><a href="/user-guide/update-stream.html">Update Stream</a></li>
+            <li><a href="/user-guide/row-based-replication.html">Row Based Replication</a></li>
+            <li><a href="/user-guide/topology-service.html">Topology Service</a></li>
+            <li><a href="/user-guide/transport-security-model.html">Transport Security Model</a></li>
+            <li style="padding-bottom: 0"><a href="/user-guide/launching.html">Launching</a>
+              <ul style="display: block">
+                <li><a href="/user-guide/scalability-philosophy.html">Scalability Philosophy</a></li>
+                <li><a href="/user-guide/production-planning.html">Production Planning</a></li>
+                <li><a href="/user-guide/server-configuration.html">Server Configuration</a></li>
+                <li><a href="/user-guide/twopc.html">2PC Guide</a></li>
+                <li style="padding-bottom: 0"><a href="/user-guide/troubleshooting.html">Troubleshooting</a></li>
+              </ul>
+            </li>
+            <li><a href="/user-guide/upgrading.html">Upgrading</a></li>
+          </ul>
+        </li>
+        <li class="submenu">
+          <h4 class="arrow-r">Reference Guides</h4>
+          <ul style="display: none">
+            <li><a href="/reference/vitess-api.html">Vitess API</a>
+            <li><a href="/reference/vtctl.html">vtctl Commands</a>
+          </ul>
+        </li>
+        <li class="submenu">
+          <h4 class="arrow-r">Other Resources</h4>
+          <ul style="display: none">
+            <li><a href="/resources/presentations.html">Presentations</a>
+            <li><a href="http://blog.vitess.io/">Blog</a>
+            <li><a href="/resources/roadmap.html">Roadmap</a>
+          </ul>
+        </li>
+        <li class="submenu">
+          <h4 class="arrow-r">Contributing</h4>
+          <ul style="display: none">
+            <li><a href="/contributing/">Contributing to Vitess</a>
+            <li><a href="/contributing/github-workflow.html">GitHub Workflow</a>
+            <li><a href="/contributing/code-reviews.html">Code Reviews</a>
+          </ul>
+        </li>
+
+        <div>
+          <form method="get" action="/search/">
+            <input id="search-form" name="q" type="text" placeholder="Search">
+          </form>
+        </div>
+
+      </ul>
+    </div>
+    <div class="col-md-3" id="rightCol">
+      <div class="nav nav-stacked" id="tocSidebar">
+        <div id="toc"></div>
+      </div>
+    </div>
+    <div class="col-md-7" id="centerCol">
+      <div id="centerTextCol">
+        <p>This guide shows you an example about how to apply range-based sharding
+process in an existing unsharded Vitess <a href="http://vitess.io/overview/concepts.html#keyspace">keyspace</a>
+using the horizontal resharding workflow. In this example, we will reshard
+from 1 shard &quot;0&quot; into 2 shards &quot;-80&quot; and &quot;80-&quot;.</p>
+
+<h2 id="overview">Overview</h2>
+
+<p>The horizontal resharding process mainly contains the following steps
+(each step is a phase in the workflow):</p>
+
+<ol>
+<li> Copy schema from original shards to destination shards.
+(<strong>Phase: CopySchemaShard</strong>) </li>
+<li> Copy the data with a batch process called <em>vtworker</em>
+(<strong>Phase: SplitClone</strong>).
+<a href="horizontal-sharding-workflow.html#details-in-splitclone-phase">more details</a></li>
+<li> Check filtered replication (<strong>Phase: WaitForFilteredReplication</strong>).
+<a href="horizontal-sharding-workflow.html#details-in-waitforfilteredreplication-phase">more details</a> </li>
+<li> Check copied data integrity using <em>vtworker</em> batch process in the mode
+to compare the source and destination data. (<strong>Phase: SplitDiff</strong>)</li>
+<li> Migrate all the serving rdonly tablets in the original shards.
+(<strong>Phase: MigrateServedTypeRdonly</strong>)</li>
+<li> Migrate all the serving replica tablets in the original shards.
+(<strong>Phase: MigrateServedTypeReplica</strong>)</li>
+<li> Migrate all the serving master tablets in the original shards.
+(<strong>Phase: MigrateServedTypeMaster</strong>)
+<a href="horizontal-sharding-workflow.html#details-in-migrateservedtypemaste-phase">more details</a> </li>
+</ol>
+
+<h2 id="prerequisites">Prerequisites</h2>
+
+<p>You should complete the <a href="http://vitess.io/getting-started/local-instance.html">Getting Started</a> guide
+(please finish all the steps before Try Vitess resharding) and have left
+the cluster running. Then, please follow these steps before running
+the resharding process:</p>
+
+<ol>
+<li><p>Configure sharding information. By running the command below, we tell
+Vitess to shard the data using the page column through the provided VSchema.</p>
+<div class="highlight"><pre><code class="language-sh" data-lang="sh">vitess/examples/local<span class="nv">$ </span>./lvtctl.sh ApplyVSchema -vschema <span class="s2">&quot;$(cat vschema.json)&quot;</span> test_keyspace
+</code></pre></div></li>
+<li><p>Bring up tablets for 2 additional shards:  <em>test_keyspace/-80</em> and
+<em>test_keyspace/80-</em> (you can learn more about sharding key range
+<a href="http://vitess.io/user-guide/sharding.html#key-ranges-and-partitions">here</a>):</p>
+<div class="highlight"><pre><code class="language-sh" data-lang="sh">vitess/examples/local<span class="nv">$ </span>./sharded-vttablet-up.sh
+</code></pre></div>
+<p>Initialize replication by electing the first master for each of the new shards:</p>
+<div class="highlight"><pre><code class="language-sh" data-lang="sh">vitess/examples/local<span class="nv">$ </span>./lvtctl.sh InitShardMaster -force test_keyspace/-80 <span class="nb">test</span>-200
+vitess/examples/local<span class="nv">$ </span>./lvtctl.sh InitShardMaster -force test_keyspace/80- <span class="nb">test</span>-300
+</code></pre></div>
+<p>After this set up, you should see the shards on Dashboard page of vtctld UI
+(<a href="http://localhost:15000">http://localhost:15000</a>). There should be 1 serving shard named &quot;0&quot; and
+2 non-serving shards named &quot;-80&quot; and &quot;80-&quot;. Click the shard node, you can
+inspect all its tablets information.</p></li>
+<li><p>Bring up a vtworker process, which can be connected through port 15033.
+(The number of <em>vtworker</em> should be the same of original shards,
+we start one vtworker process here since we have only one original shard
+in this example.)</p>
+<div class="highlight"><pre><code class="language-sh" data-lang="sh">vitess/examples/local<span class="nv">$ </span>./vtworker-up.sh
+</code></pre></div>
+<p>You can verify this <em>vtworker</em> process set up through <a href="http://localhost:15032/Debugging">http://localhost:15032/Debugging</a>.
+It should be pinged successfully. After you ping the vtworker, please click
+&quot;Reset Job&quot;. Otherwise, the vtworker is not ready for executing other tasks.</p></li>
+</ol>
+
+<h2 id="horizontal-resharding-workflow">Horizontal resharding workflow</h2>
+
+<h3 id="create-the-workflow">Create the workflow</h3>
+
+<ol>
+<li> Open the <em>Workflows</em> section on the left menu of vtctld UI (<a href="http://localhost:15000">http://localhost:15000</a>).
+Click the &quot;+&quot; button in the top right corner to open the &quot;Create
+a new Workflow&quot; dialog.</li>
+<li> Fill in the &quot;Create a new Workflow&quot; dialogue following the instructions
+below (you can checkout our example <a href="https://cloud.githubusercontent.com/assets/23492389/24314500/27f27988-109f-11e7-8e10-630bad14a286.png">here</a>):
+
+<ul>
+<li> Select the &quot;Skip Start&quot; checkbox if you don&#39;t want to start the workflow
+immediately after creation. If so, you need to click a &quot;Start&quot; button in
+the workflow bar later to run the workflow.</li>
+<li> Open the &quot;Factory Name&quot; menu and select &quot;Horizontal Resharding&quot;. This field
+defines the type of workflow you want to create.</li>
+<li> Fill in <em>test_keyspace</em> in the &quot;Keyspace&quot; slot.</li>
+<li> Fill in <em>localhost:15033</em> in the &quot;vtworker Addresses&quot; slot.</li>
+<li> Unselect the &quot;enable_approvals&quot; checkbox if you don&#39;t want to manually
+approve task executions for canarying. (We suggest you to keep the default
+selected choice since this will enable the canary feature)</li>
+</ul></li>
+<li> Click &quot;Create&quot; button at the bottom of the dialog. You will see a workflow
+node created in the <em>Workflows</em> page if the creation succeeds.
+The workflow has started running now if &quot;Skip Start&quot; is not selected.</li>
+</ol>
+
+<p>Another way to start the workflow is through the vtctlclient command, you can
+also visualize the workflow on vtctld UI <em>Workflows</em> section after executing
+the command:</p>
+<div class="highlight"><pre><code class="language-sh" data-lang="sh">vitess/examples/local<span class="nv">$ </span>./lvtctl.sh WorkflowCreate -skip_start<span class="o">=</span><span class="nb">false </span>horizontal_resharding -keyspace<span class="o">=</span>test_keyspace -vtworkers<span class="o">=</span>localhost:15033 -enable_approvals<span class="o">=</span><span class="nb">true</span>
+</code></pre></div>
+<p>When creating the resharding workflow, the program automatically detect the
+source shards and destination shards and create tasks for the resharding
+process. After the creation, click the workflow node, you can see a list of
+child nodes. Each child node represents a phase in the workflow (each phase
+represents a step mentioned in <a href="http://vitess.io/user-guide/horizontal-sharding-workflow.html#overview">Overview</a>).
+Further click a phase node, you can inspect tasks in this phase.
+For example, in the &quot;CopySchemaShard&quot; phase, it includes tasks to copy schema
+to 2 destination shards, therefore you can see task node &quot;Shard -80&quot; and
+&quot;Shard 80-&quot;. You should see a page similar to
+<a href="https://cloud.githubusercontent.com/assets/23492389/24313539/71c9c8ae-109a-11e7-9e4a-0c3e8ee8ba85.png">this</a>. </p>
+
+<h3 id="approvals-of-tasks-execution-canary-feature">Approvals of Tasks Execution (Canary feature)</h3>
+
+<p>Once the workflow start to run (click the &quot;Start&quot; button if you selected
+&quot;Skip Start&quot; and the workflow hasn&#39;t started yet.), you need to approve the
+task execution for each phase if &quot;enable_approvals&quot; is selected. The approvals
+include 2 stages. The first stage approves only the first task, which runs as
+canarying. The second stage approves the remaining tasks. </p>
+
+<p>The resharding workflow runs through phases sequentially. Once the phase starts,
+you can see the approval buttons for all the stages under the phase node (click
+the phase node if you didn&#39;t see the approval buttons, you should see a page
+like <a href="https://cloud.githubusercontent.com/assets/23492389/24313613/c9508ef0-109a-11e7-8848-75a1ae18a6c5.png">this</a>). The
+button is enabled when the corresponding task(s) are ready to run. Click the
+enabled button to approve task execution, then you can see approved message
+on the clicked button. The approval buttons are cleared after the phase has
+finished. The next phase will only starts if its previous phase has finished
+successfully.</p>
+
+<p>If the workflow is restored from a checkpoint, you will still see the the
+approval button with approved message when there are running tasks under this
+approval. But you don&#39;t need to approve the same tasks again for a restarted
+workflow.</p>
+
+<h3 id="retry">Retry</h3>
+
+<p>A &quot;Retry&quot; button will be enabled under the task node if the task failed (click
+the task node if your job get stuck but don&#39;t see the Retry button). Click this
+button if you have fixed the bugs and want to retry the failed task. You can
+retry as many times as you want if the task continuelly failed. The workflow
+can continue from your failure point once it is fixed.</p>
+
+<p>For example, you might forget to bring up a vtworker process. The task which
+requires that vtworker process in SplitClone phase will fail. After you fix
+this, click the retry button on the task node and the workflow will continue
+to run.</p>
+
+<p>When a task failed, the execution of other tasks under this phase won&#39;t be
+affected if this phase runs tasks in parallel (applied to phase
+&quot;CopySchemaShard&quot;, &quot;SplitClone&quot;, &quot;WaitForFilteredReplication&quot;). For phases
+that runs tasks sequentially, remaining unstarted tasks under this phase will
+no long be executed. The phases afterwards will no longer be executed.</p>
+
+<h3 id="checkpoint-and-recovery">Checkpoint and Recovery</h3>
+
+<p>The resharding workflow tracks the status for every task and checkpoint these
+status into topology server whenever there is a status update. When a workflow
+is stopped and restarted by loading the checkpoint in the topology, it can
+continue to run all the unfinished tasks. </p>
+
+<h2 id="verify-results-and-clean-up">Verify Results and Clean up</h2>
+
+<p>After the resharding process, data in the original shard is identically copied
+to new shards. Data updates will be visible on the new shards, but not on the
+original shard. You should then see in the vtctld UI <em>Dashboard</em> page that shard
+<em>0</em> becomes non-serving and shard <em>-80</em> and shard <em>80-</em> are serving shards.
+Verify this for yourself: inspect the database content using following commands,
+then add messages to the guestbook page (you can use script client.sh mentioned
+<a href="http://vitess.io/getting-started/local-instance.html#run-a-client-application">here</a>)
+and inspect using same commands:</p>
+<div class="highlight"><pre><code class="language-sh" data-lang="sh"><span class="c"># See what&#39;s on shard test_keyspace/0</span>
+<span class="c"># (no updates visible since we migrated away from it):</span>
+vitess/examples/local<span class="nv">$ </span>./lvtctl.sh ExecuteFetchAsDba <span class="nb">test</span>-100 <span class="s2">&quot;SELECT * FROM messages&quot;</span>
+<span class="c"># See what&#39;s on shard test_keyspace/-80:</span>
+vitess/examples/local<span class="nv">$ </span>./lvtctl.sh ExecuteFetchAsDba <span class="nb">test</span>-200 <span class="s2">&quot;SELECT * FROM messages&quot;</span>
+<span class="c"># See what&#39;s on shard test_keyspace/80-:</span>
+vitess/examples/local<span class="nv">$ </span>./lvtctl.sh ExecuteFetchAsDba <span class="nb">test</span>-300 <span class="s2">&quot;SELECT * FROM messages&quot;</span>
+</code></pre></div>
+<p>You can also checkout the <em>Topology</em> browser on vtctl UI. It shows you the
+information of the keyrange of shard and their serving status. Each shard
+should look like this</p>
+
+<p><a href="https://cloud.githubusercontent.com/assets/23492389/24313876/072f61e6-109c-11e7-938a-23b8398958aa.png">shard 0</a></p>
+
+<p><a href="https://cloud.githubusercontent.com/assets/23492389/24313813/bd11c824-109b-11e7-83d4-cca3f6093360.png">shard -80</a></p>
+
+<p><a href="https://cloud.githubusercontent.com/assets/23492389/24313743/7f9ae1c4-109b-11e7-997a-774f4f16e473.png">shard 80-</a></p>
+
+<p>After you verify the result, we can remove the
+original shard since all traffic is being served from the new shards:</p>
+<div class="highlight"><pre><code class="language-sh" data-lang="sh">vitess/examples/local<span class="nv">$ </span>./vttablet-down.sh
+</code></pre></div>
+<p>Then we can delete the now-empty shard:</p>
+<div class="highlight"><pre><code class="language-sh" data-lang="sh">vitess/examples/local<span class="nv">$ </span>./lvtctl.sh DeleteShard -recursive test_keyspace/0
+</code></pre></div>
+<p>You should then see in the vtctld UI <em>Dashboard</em> page that shard <em>0</em> is gone.</p>
+
+<h2 id="tear-down-and-clean-up">Tear down and clean up</h2>
+
+<p>Since you already cleaned up the tablets from the original unsharded example by
+running <code class="prettyprint">./vttablet-down.sh</code>, that step has been replaced with
+<code class="prettyprint">./sharded-vttablet-down.sh</code> to clean up the new sharded tablets.</p>
+<div class="highlight"><pre><code class="language-sh" data-lang="sh">vitess/examples/local<span class="nv">$ </span>./vtworker-down.sh
+vitess/examples/local<span class="nv">$ </span>./vtgate-down.sh
+vitess/examples/local<span class="nv">$ </span>./sharded-vttablet-down.sh
+vitess/examples/local<span class="nv">$ </span>./vtctld-down.sh
+vitess/examples/local<span class="nv">$ </span>./zk-down.sh
+</code></pre></div>
+<h2 id="reference">Reference</h2>
+
+<p>You can checkout the old version tutorial <a href="http://vitess.io/user-guide/horizontal-sharding.html">here</a>.
+It walks you through the resharding process by manually executing commands.</p>
+
+<h3 id="details-in-splitclone-phase">Details in SplitClone phase</h3>
+
+<p><em>vtworker</em> copies data from a paused snapshot. It will pause replication on
+one rdonly (offline processing) tablet to serve as a consistent snapshot of
+the data. The app can continue without downtime, since live traffic is served
+by replica and master tablets, which are unaffected. Other batch jobs will
+also be unaffected, since they will be served only by the remaining, un-paused
+rdonly tablets.</p>
+
+<p>During the data copying, <em>vtworker</em> streams the data from a single source to
+multiple destinations, routing each row based on its <em>keyspace_id</em>. It can
+automatically figure out which shards to use as the destinations based on the
+key range that needs to be covered. In our example, shard 0 covers the entire
+range, so it identifies -80 and 80- as the destination shards, since they
+combine to cover the same range.</p>
+
+<h3 id="details-in-waitforfilteredreplication-phase">Details in WaitForFilteredReplication phase</h3>
+
+<p>Once the copying from a paused snapshot (phase SplitClone) has finished,
+<em>vtworker</em> turns on <a href="http://vitess.io/user-guide/sharding.html#filtered-replication">filtered replication</a>,
+which allows the destination shards to catch up on updates that have continued
+to flow in from the app since the time of the snapshot. After the destination
+shards are caught up, they will continue to replicate new updates. </p>
+
+<h3 id="details-in-migrateservedtypemaster-phase">Details in MigrateServedTypeMaster phase</h3>
+
+<p>During the <em>master</em> migration, the original shard masters will first stop
+accepting updates. Then the process will wait for the new shard masters to
+fully catch up on filtered replication before allowing them to begin serving.
+After the master traffic is migrated, the filtered replication will be stopped.
+Data updates will be visible on the new shards, but not on the original shards.</p>
+
+      </div>
+    </div>
+  </div>
+
+</div>
+
+    <div class="page-spacer"></div>
+    <footer role="contentinfo" id="site-footer">
+  <nav role="navigation" class="menu bottom-menu">
+    
+    <a href="https://groups.google.com/forum/#!forum/vitess" target="_blank">Contact: vitess@googlegroups.com</a>&nbsp;&nbsp;<b>·</b>&nbsp;&nbsp;
+    <a href="https://groups.google.com/forum/#!forum/vitess-announce" target="_blank">Announcements</a>&nbsp;&nbsp;<b>·</b>&nbsp;&nbsp;
+    &#169; 2017 <a href="/">Vitess</a> powered by <a href="https://developers.google.com/open-source/">Google Inc</a>
+  </nav>
+</footer>
+
+
+        <!-- jQuery (necessary for Bootstrap's JavaScript plugins) -->
+<!--    <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.2/jquery.min.js"></script>   -->
+    <!-- Include all compiled plugins (below), or include individual files as needed -->
+<!--
+    <script src="/libs/bootstrap/js/bootstrap.min.js"></script>
+-->
+    <!-- Include the common site javascript -->
+    <script src="/js/common.js" type="text/javascript" charset="utf-8"></script>
+
+
+  </body>
+</html>

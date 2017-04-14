@@ -7,22 +7,20 @@ import (
 	"testing"
 
 	"github.com/youtube/vitess/go/vt/logutil"
-	"github.com/youtube/vitess/go/vt/zktopo"
-	"github.com/youtube/vitess/go/vt/zktopo/zktestserver"
+	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topo/memorytopo"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
-// This file contains tests for the shard.go file.  Note we use a
-// zktestserver, because memorytopo doesn't support all topo server
-// methods yet.
+// This file contains tests for the shard.go file.
 
 func TestShard(t *testing.T) {
 	cell := "cell1"
 	keyspace := "ks1"
 	shard := "sh1"
 	ctx := context.Background()
-	ts := zktestserver.New(t, []string{cell})
+	ts := memorytopo.NewServer(cell)
 
 	// Create a Keyspace / Shard
 	if err := ts.CreateKeyspace(ctx, keyspace, &topodatapb.Keyspace{}); err != nil {
@@ -33,8 +31,8 @@ func TestShard(t *testing.T) {
 	}
 
 	// Hack the zookeeper backend to create an error for GetShard.
-	zconn := ts.Impl.(*zktestserver.TestServer).Impl.(*zktopo.Server).GetZConn()
-	if _, err := zconn.Set(path.Join(zktopo.GlobalKeyspacesPath, keyspace, "shards", shard), []byte{}, -1); err != nil {
+	// 'a' is not a valid proto-encoded value.
+	if _, err := ts.Impl.Update(ctx, topo.GlobalCell, path.Join("/keyspaces", keyspace, "shards", shard, "Shard"), []byte{'a'}, nil); err != nil {
 		t.Fatalf("failed to hack the shard: %v", err)
 	}
 

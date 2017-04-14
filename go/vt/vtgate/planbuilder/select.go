@@ -6,6 +6,7 @@ package planbuilder
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vtgate/engine"
@@ -14,7 +15,7 @@ import (
 
 // buildSelectPlan is the new function to build a Select plan.
 func buildSelectPlan(sel *sqlparser.Select, vschema VSchema) (primitive engine.Primitive, err error) {
-	bindvars := getBindvars(sel)
+	bindvars := sqlparser.GetBindvars(sel)
 	builder, err := processSelect(sel, vschema, nil)
 	if err != nil {
 		return nil, err
@@ -25,21 +26,6 @@ func buildSelectPlan(sel *sqlparser.Select, vschema VSchema) (primitive engine.P
 		return nil, err
 	}
 	return builder.Primitive(), nil
-}
-
-// getBindvars returns a map of the bind vars referenced in the statement.
-func getBindvars(node sqlparser.SQLNode) map[string]struct{} {
-	bindvars := make(map[string]struct{})
-	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
-		switch node := node.(type) {
-		case sqlparser.ValArg:
-			bindvars[string(node[1:])] = struct{}{}
-		case sqlparser.ListArg:
-			bindvars[string(node[2:])] = struct{}{}
-		}
-		return true, nil
-	}, node)
-	return bindvars
 }
 
 // processSelect builds a primitive tree for the given query or subquery.
@@ -82,7 +68,7 @@ func processSelect(sel *sqlparser.Select, vschema VSchema, outer builder) (build
 // pushFilter identifies the target route for the specified bool expr,
 // pushes it down, and updates the route info if the new constraint improves
 // the primitive. This function can push to a WHERE or HAVING clause.
-func pushFilter(boolExpr sqlparser.BoolExpr, bldr builder, whereType string) error {
+func pushFilter(boolExpr sqlparser.Expr, bldr builder, whereType string) error {
 	filters := splitAndExpression(nil, boolExpr)
 	reorderBySubquery(filters)
 	for _, filter := range filters {
@@ -103,7 +89,7 @@ func pushFilter(boolExpr sqlparser.BoolExpr, bldr builder, whereType string) err
 // pushed first because they can potentially improve the routing
 // plan, which can later allow a filter containing a subquery
 // to successfully merge with the corresponding route.
-func reorderBySubquery(filters []sqlparser.BoolExpr) {
+func reorderBySubquery(filters []sqlparser.Expr) {
 	max := len(filters)
 	for i := 0; i < max; i++ {
 		if !hasSubquery(filters[i]) {
@@ -157,6 +143,9 @@ func checkAggregates(sel *sqlparser.Select, bldr builder) error {
 					hasAggregates = true
 					return false, errors.New("dummy")
 				}
+			case *sqlparser.GroupConcatExpr:
+				hasAggregates = true
+				return false, errors.New("dummy")
 			}
 			return true, nil
 		}, sel.SelectExprs)
@@ -207,6 +196,14 @@ func pushSelectRoutes(selectExprs sqlparser.SelectExprs, bldr builder) ([]*colsy
 			rb, ok := bldr.(*route)
 			if !ok {
 				return nil, errors.New("unsupported: '*' expression in complex join")
+			}
+			// Validate keyspace reference if any.
+			if !node.TableName.IsEmpty() {
+				if qual := node.TableName.Qualifier; !qual.IsEmpty() {
+					if qual.String() != rb.ERoute.Keyspace.Name {
+						return nil, fmt.Errorf("cannot resolve %s to keyspace %s", sqlparser.String(node), rb.ERoute.Keyspace.Name)
+					}
+				}
 			}
 			// We can push without validating the reference because
 			// MySQL will fail if it's invalid.

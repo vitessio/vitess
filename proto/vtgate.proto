@@ -4,7 +4,7 @@ syntax = "proto3";
 
 package vtgate;
 
-option java_package="com.youtube.vitess.proto";
+option java_package="io.vitess.proto";
 
 import "query.proto";
 import "topodata.proto";
@@ -25,6 +25,9 @@ message Session {
   // single_db specifies if the transaction should be restricted
   // to a single database.
   bool single_db = 3;
+
+  // autocommit specifies if the session is in autocommit mode.
+  bool autocommit = 4;
 }
 
 // ExecuteRequest is the payload to Execute.
@@ -46,8 +49,8 @@ message ExecuteRequest {
   // not_in_transaction is deprecated and should not be used.
   bool not_in_transaction = 5;
 
-  // keyspace to target the query to.
-  string keyspace = 6;
+  // keyspace_shard can be 'keyspace' or 'keyspace/shard'.
+  string keyspace_shard = 6;
 
   // options
   query.ExecuteOptions options = 7;
@@ -256,6 +259,49 @@ message ExecuteEntityIdsResponse {
   query.QueryResult result = 3;
 }
 
+// ExecuteBatchRequest is the payload to ExecuteBatch.
+message ExecuteBatchRequest {
+  // caller_id identifies the caller. This is the effective caller ID,
+  // set by the application to further identify the caller.
+  vtrpc.CallerID caller_id = 1;
+
+  // session carries the current transaction data. It is returned by Begin.
+  // Do not fill it in if outside of a transaction.
+  Session session = 2;
+
+  // queries is a list of query and bind variables to execute.
+  repeated query.BoundQuery queries = 3;
+
+  // tablet_type is the type of tablets that these queries is targeted to.
+  topodata.TabletType tablet_type = 4;
+
+  // as_transaction is deprecated.
+  // We cannot use the proto3 deprecated feature yet because
+  // the php compiler doesn't recognize that construct.
+  bool as_transaction = 5;
+
+  // keyspace_shard can be 'keyspace' or 'keyspace/shard'.
+  string keyspace_shard = 6;
+
+  // options
+  query.ExecuteOptions options = 7;
+}
+
+
+// ExecuteBatchResponse is the returned value from ExecuteBatch.
+message ExecuteBatchResponse {
+  // error contains an application level error if necessary. Note the
+  // session may have changed, even when an error is returned (for
+  // instance if a database integrity error happened).
+  vtrpc.RPCError error = 1;
+
+  // session is the updated session information (only returned inside a transaction).
+  Session session = 2;
+
+  // results contains the query results, only set if application level error is unset.
+  repeated query.ResultWithError results = 3;
+}
+
 // BoundShardQuery represents a single query request for the
 // specified list of shards. This is used in a list for
 // ExecuteBatchShardsRequest.
@@ -374,8 +420,8 @@ message StreamExecuteRequest {
   // tablet_type is the type of tablets that this query is targeted to.
   topodata.TabletType tablet_type = 3;
 
-  // keyspace to target the query to.
-  string keyspace = 4;
+  // keyspace_shard can be 'keyspace' or 'keyspace/shard'.
+  string keyspace_shard = 4;
 
   // options
   query.ExecuteOptions options = 5;
@@ -538,6 +584,40 @@ message ResolveTransactionRequest {
 
   // dtid is the dtid of the transaction to be resolved.
   string dtid = 2;
+}
+
+// MessageStreamRequest is the request payload for MessageStream.
+message MessageStreamRequest {
+  // caller_id identifies the caller. This is the effective caller ID,
+  // set by the application to further identify the caller.
+  vtrpc.CallerID caller_id = 1;
+
+  // keyspace to target the query to.
+  string keyspace = 2;
+
+  // shard to target the query to, for unsharded keyspaces.
+  string shard = 3;
+
+  // KeyRange to target the query to, for sharded keyspaces.
+  topodata.KeyRange key_range = 4;
+
+  // name is the message table name.
+  string name = 5;
+}
+
+// MessageAckRequest is the request payload for MessageAck.
+message MessageAckRequest {
+  // caller_id identifies the caller. This is the effective caller ID,
+  // set by the application to further identify the caller.
+  vtrpc.CallerID caller_id = 1;
+
+  // Optional keyspace for message table.
+  string keyspace = 2;
+
+  // name is the message table name.
+  string name = 3;
+  // ids is the list of ids to ack.
+  repeated query.Value ids = 4;
 }
 
 // ResolveTransactionResponse is the returned value from Rollback.

@@ -45,6 +45,15 @@ export class RebuildKeyspaceGraphFlags {
   }
 }
 
+export class ReloadSchemaKeyspaceFlags {
+  flags= {};
+  constructor(keyspaceName) {
+    this.flags['keyspace_name'] = new KeyspaceNameFlag(0, 'keyspace_name', keyspaceName, false);
+    this.flags['keyspace_name']['positional'] = true;
+    this.flags['concurrency'] = new ConcurrencyFlag(1, 'concurrency', '10');
+  }
+}
+
 export class RemoveKeyspaceCellFlags {
   flags= {};
   constructor(keyspaceName) {
@@ -99,6 +108,12 @@ export class CellsFlag extends InputFlag {
 export class CellNameFlag extends InputFlag {
   constructor(position: number, id: string, value= '', show= true) {
     super(position, id, 'Cell Name', ' Required. A cell is a location for a service.', value, show);
+  }
+}
+
+export class ConcurrencyFlag extends InputFlag {
+  constructor(position: number, id: string, value= '', show= true) {
+    super(position, id, 'Concurrency', 'How many tablets to work on concurrently.', value, show);
   }
 }
 

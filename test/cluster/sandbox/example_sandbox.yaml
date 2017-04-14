@@ -1,0 +1,46 @@
+# All sandbox configs start with sandbox.
+sandbox:
+  # sandbox_name is a special keyword replaced with a passed in command line
+  # parameter or by a randomly generated name.
+  name: {{sandbox_name}}
+  # cluster_type is a special keyword replaced with a passed in command line
+  # parameter designating what cluster environment to use, such as gke.
+  # The chosen cluster_type must be listed in the clusters entry.
+  cluster_type: {{cluster_type}}
+  # clusters is a list of supported cluster types, along with the parameters
+  # need in order to start the cluster. This typically will involve machine
+  # types and counts.
+  clusters:
+      # Currently only gke is supported
+    - type: gke
+      # cluster_name is a special keyword, like sandbox_name, replaced via
+      # command line or randomly generated name.
+      name: {{cluster_name}}
+      node_count: 5
+      machine_type: n1-standard-4
+  # Application is application-specific, used by the derived Sandbox class.
+  application:
+    vtgate_count: 1
+    enable_orchestrator: True
+    enable_guestbook: True
+    etcd_count: 3
+    cells:
+      - test1
+      - test2
+    keyspaces:
+      - name: {{sandbox_name}}
+        shard_count: 1
+        replica_count: 3
+        rdonly_count: 0
+    vtctld_image: vitess/root
+    vttablet_image: vitess/root
+    vtgate_image: vitess/root
+    vttablet_ram: 1Gi
+    vttablet_cpu: 500m
+    mysql_ram: 1Gi
+    mysql_cpu: 500m
+    vtgate_ram: 512Mi
+    vtgate_cpu: 500m
+    backup_flags:
+      backup_storage_implementation: gcs
+      gcs_backup_storage_bucket: 'my-builtin-backup'

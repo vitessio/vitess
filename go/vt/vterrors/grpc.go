@@ -18,120 +18,104 @@ import (
 // Use these methods to return an error through gRPC and still
 // retain its code.
 
-// GRPCServerErrPrefix is the string we prefix gRPC server errors with. This is
-// necessary because there is currently no good way, in gRPC, to differentiate
-// between an error from a server vs the client.
-// See: https://github.com/grpc/grpc-go/issues/319
-const GRPCServerErrPrefix = "gRPCServerError:"
-
-// GRPCCodeToErrorCode maps a gRPC codes.Code to a vtrpcpb.ErrorCode.
-func GRPCCodeToErrorCode(code codes.Code) vtrpcpb.ErrorCode {
+// CodeToLegacyErrorCode maps a vtrpcpb.Code to a vtrpcpb.LegacyErrorCode.
+func CodeToLegacyErrorCode(code vtrpcpb.Code) vtrpcpb.LegacyErrorCode {
 	switch code {
-	case codes.OK:
-		return vtrpcpb.ErrorCode_SUCCESS
-	case codes.Canceled:
-		return vtrpcpb.ErrorCode_CANCELLED
-	case codes.Unknown:
-		return vtrpcpb.ErrorCode_UNKNOWN_ERROR
-	case codes.InvalidArgument:
-		return vtrpcpb.ErrorCode_BAD_INPUT
-	case codes.DeadlineExceeded:
-		return vtrpcpb.ErrorCode_DEADLINE_EXCEEDED
-	case codes.AlreadyExists:
-		return vtrpcpb.ErrorCode_INTEGRITY_ERROR
-	case codes.PermissionDenied:
-		return vtrpcpb.ErrorCode_PERMISSION_DENIED
-	case codes.ResourceExhausted:
-		return vtrpcpb.ErrorCode_RESOURCE_EXHAUSTED
-	case codes.FailedPrecondition:
-		return vtrpcpb.ErrorCode_QUERY_NOT_SERVED
-	case codes.Aborted:
-		return vtrpcpb.ErrorCode_NOT_IN_TX
-	case codes.Internal:
-		return vtrpcpb.ErrorCode_INTERNAL_ERROR
-	case codes.Unavailable:
-		return vtrpcpb.ErrorCode_TRANSIENT_ERROR
-	case codes.Unauthenticated:
-		return vtrpcpb.ErrorCode_UNAUTHENTICATED
+	case vtrpcpb.Code_OK:
+		return vtrpcpb.LegacyErrorCode_SUCCESS_LEGACY
+	case vtrpcpb.Code_CANCELED:
+		return vtrpcpb.LegacyErrorCode_CANCELLED_LEGACY
+	case vtrpcpb.Code_UNKNOWN:
+		return vtrpcpb.LegacyErrorCode_UNKNOWN_ERROR_LEGACY
+	case vtrpcpb.Code_INVALID_ARGUMENT:
+		return vtrpcpb.LegacyErrorCode_BAD_INPUT_LEGACY
+	case vtrpcpb.Code_DEADLINE_EXCEEDED:
+		return vtrpcpb.LegacyErrorCode_DEADLINE_EXCEEDED_LEGACY
+	case vtrpcpb.Code_ALREADY_EXISTS:
+		return vtrpcpb.LegacyErrorCode_INTEGRITY_ERROR_LEGACY
+	case vtrpcpb.Code_PERMISSION_DENIED:
+		return vtrpcpb.LegacyErrorCode_PERMISSION_DENIED_LEGACY
+	case vtrpcpb.Code_RESOURCE_EXHAUSTED:
+		return vtrpcpb.LegacyErrorCode_RESOURCE_EXHAUSTED_LEGACY
+	case vtrpcpb.Code_FAILED_PRECONDITION:
+		return vtrpcpb.LegacyErrorCode_QUERY_NOT_SERVED_LEGACY
+	case vtrpcpb.Code_ABORTED:
+		return vtrpcpb.LegacyErrorCode_NOT_IN_TX_LEGACY
+	case vtrpcpb.Code_INTERNAL:
+		return vtrpcpb.LegacyErrorCode_INTERNAL_ERROR_LEGACY
+	case vtrpcpb.Code_UNAVAILABLE:
+		// Legacy code assumes Unavailable errors are sent as Internal.
+		return vtrpcpb.LegacyErrorCode_INTERNAL_ERROR_LEGACY
+	case vtrpcpb.Code_UNAUTHENTICATED:
+		return vtrpcpb.LegacyErrorCode_UNAUTHENTICATED_LEGACY
 	default:
-		return vtrpcpb.ErrorCode_UNKNOWN_ERROR
+		return vtrpcpb.LegacyErrorCode_UNKNOWN_ERROR_LEGACY
 	}
 }
 
-// ErrorCodeToGRPCCode maps a vtrpcpb.ErrorCode to a gRPC codes.Code.
-func ErrorCodeToGRPCCode(code vtrpcpb.ErrorCode) codes.Code {
+// LegacyErrorCodeToCode maps a vtrpcpb.LegacyErrorCode to a gRPC vtrpcpb.Code.
+func LegacyErrorCodeToCode(code vtrpcpb.LegacyErrorCode) vtrpcpb.Code {
 	switch code {
-	case vtrpcpb.ErrorCode_SUCCESS:
-		return codes.OK
-	case vtrpcpb.ErrorCode_CANCELLED:
-		return codes.Canceled
-	case vtrpcpb.ErrorCode_UNKNOWN_ERROR:
-		return codes.Unknown
-	case vtrpcpb.ErrorCode_BAD_INPUT:
-		return codes.InvalidArgument
-	case vtrpcpb.ErrorCode_DEADLINE_EXCEEDED:
-		return codes.DeadlineExceeded
-	case vtrpcpb.ErrorCode_INTEGRITY_ERROR:
-		return codes.AlreadyExists
-	case vtrpcpb.ErrorCode_PERMISSION_DENIED:
-		return codes.PermissionDenied
-	case vtrpcpb.ErrorCode_RESOURCE_EXHAUSTED:
-		return codes.ResourceExhausted
-	case vtrpcpb.ErrorCode_QUERY_NOT_SERVED:
-		return codes.FailedPrecondition
-	case vtrpcpb.ErrorCode_NOT_IN_TX:
-		return codes.Aborted
-	case vtrpcpb.ErrorCode_INTERNAL_ERROR:
-		return codes.Internal
-	case vtrpcpb.ErrorCode_TRANSIENT_ERROR:
-		return codes.Unavailable
-	case vtrpcpb.ErrorCode_UNAUTHENTICATED:
-		return codes.Unauthenticated
+	case vtrpcpb.LegacyErrorCode_SUCCESS_LEGACY:
+		return vtrpcpb.Code_OK
+	case vtrpcpb.LegacyErrorCode_CANCELLED_LEGACY:
+		return vtrpcpb.Code_CANCELED
+	case vtrpcpb.LegacyErrorCode_UNKNOWN_ERROR_LEGACY:
+		return vtrpcpb.Code_UNKNOWN
+	case vtrpcpb.LegacyErrorCode_BAD_INPUT_LEGACY:
+		return vtrpcpb.Code_INVALID_ARGUMENT
+	case vtrpcpb.LegacyErrorCode_DEADLINE_EXCEEDED_LEGACY:
+		return vtrpcpb.Code_DEADLINE_EXCEEDED
+	case vtrpcpb.LegacyErrorCode_INTEGRITY_ERROR_LEGACY:
+		return vtrpcpb.Code_ALREADY_EXISTS
+	case vtrpcpb.LegacyErrorCode_PERMISSION_DENIED_LEGACY:
+		return vtrpcpb.Code_PERMISSION_DENIED
+	case vtrpcpb.LegacyErrorCode_RESOURCE_EXHAUSTED_LEGACY:
+		return vtrpcpb.Code_RESOURCE_EXHAUSTED
+	case vtrpcpb.LegacyErrorCode_QUERY_NOT_SERVED_LEGACY:
+		return vtrpcpb.Code_FAILED_PRECONDITION
+	case vtrpcpb.LegacyErrorCode_NOT_IN_TX_LEGACY:
+		return vtrpcpb.Code_ABORTED
+	case vtrpcpb.LegacyErrorCode_INTERNAL_ERROR_LEGACY:
+		// Legacy code sends internal error instead of Unavailable.
+		return vtrpcpb.Code_UNAVAILABLE
+	case vtrpcpb.LegacyErrorCode_TRANSIENT_ERROR_LEGACY:
+		return vtrpcpb.Code_UNAVAILABLE
+	case vtrpcpb.LegacyErrorCode_UNAUTHENTICATED_LEGACY:
+		return vtrpcpb.Code_UNAUTHENTICATED
 	default:
-		return codes.Unknown
+		return vtrpcpb.Code_UNKNOWN
 	}
-}
-
-// toGRPCCode will attempt to determine the best gRPC code for a particular error.
-func toGRPCCode(err error) codes.Code {
-	if err == nil {
-		return codes.OK
-	}
-	if vtErr, ok := err.(VtError); ok {
-		return ErrorCodeToGRPCCode(vtErr.VtErrorCode())
-	}
-	// Returns the underlying gRPC Code, or codes.Unknown if one doesn't exist.
-	return grpc.Code(err)
 }
 
 // truncateError shortens errors because gRPC has a size restriction on them.
-func truncateError(err error) error {
+func truncateError(err error) string {
 	// For more details see: https://github.com/grpc/grpc-go/issues/443
 	// The gRPC spec says "Clients may limit the size of Response-Headers,
 	// Trailers, and Trailers-Only, with a default of 8 KiB each suggested."
 	// Therefore, we assume 8 KiB minus some headroom.
 	GRPCErrorLimit := 8*1024 - 512
 	if len(err.Error()) <= GRPCErrorLimit {
-		return err
+		return err.Error()
 	}
 	truncateInfo := "[...] [remainder of the error is truncated because gRPC has a size limit on errors.]"
 	truncatedErr := err.Error()[:GRPCErrorLimit]
-	return fmt.Errorf("%v %v", truncatedErr, truncateInfo)
+	return fmt.Sprintf("%v %v", truncatedErr, truncateInfo)
 }
 
-// ToGRPCError returns an error as a gRPC error, with the appropriate error code.
-func ToGRPCError(err error) error {
+// ToGRPC returns an error as a gRPC error, with the appropriate error code.
+func ToGRPC(err error) error {
 	if err == nil {
 		return nil
 	}
-	return grpc.Errorf(toGRPCCode(err), "%v %v", GRPCServerErrPrefix, truncateError(err))
+	return grpc.Errorf(codes.Code(Code(err)), "%v", truncateError(err))
 }
 
-// FromGRPCError returns a gRPC error as a VitessError, translating between error codes.
+// FromGRPC returns a gRPC error as a vtError, translating between error codes.
 // However, there are a few errors which are not translated and passed as they
 // are. For example, io.EOF since our code base checks for this error to find
 // out that a stream has finished.
-func FromGRPCError(err error) error {
+func FromGRPC(err error) error {
 	if err == nil {
 		return nil
 	}
@@ -139,8 +123,5 @@ func FromGRPCError(err error) error {
 		// Do not wrap io.EOF because we compare against it for finished streams.
 		return err
 	}
-	return &VitessError{
-		Code: GRPCCodeToErrorCode(grpc.Code(err)),
-		err:  err,
-	}
+	return New(vtrpcpb.Code(grpc.Code(err)), err.Error())
 }

@@ -11,9 +11,9 @@ cells=`echo $CELLS | tr ',' ' '`
 
 for cell in $cells; do
   echo "Stopping vtgate replicationcontroller in cell $cell..."
-  $KUBECTL delete replicationcontroller vtgate-$cell --namespace=$VITESS_NAME
+  $KUBECTL $KUBECTL_OPTIONS delete replicationcontroller vtgate-$cell
 
   echo "Deleting vtgate service in cell $cell..."
-  $KUBECTL delete service vtgate-$cell --namespace=$VITESS_NAME
+  $KUBECTL $KUBECTL_OPTIONS delete service vtgate-$cell
 done
 

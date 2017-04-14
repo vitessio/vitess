@@ -81,11 +81,11 @@ func checkKeyspaceLockUnblocks(ctx context.Context, t *testing.T, ts topo.Impl) 
 	// as soon as we're unblocked, we try to lock the keyspace
 	go func() {
 		<-unblock
-		lockPath, err := ts.LockKeyspaceForAction(ctx, "test_keyspace", "fake-content")
+		lockPath, err := ts.LockKeyspaceForAction(ctx, "test_keyspace", "fake-content-bg")
 		if err != nil {
 			t.Fatalf("LockKeyspaceForAction(test_keyspace) failed: %v", err)
 		}
-		if err = ts.UnlockKeyspaceForAction(ctx, "test_keyspace", lockPath, "fake-results"); err != nil {
+		if err = ts.UnlockKeyspaceForAction(ctx, "test_keyspace", lockPath, "fake-results-bg"); err != nil {
 			t.Fatalf("UnlockKeyspaceForAction(test_keyspace): %v", err)
 		}
 		close(finished)

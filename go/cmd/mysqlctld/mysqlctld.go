@@ -19,9 +19,6 @@ import (
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/servenv"
 	"golang.org/x/net/context"
-
-	// import mysql to register mysql connection function
-	_ "github.com/youtube/vitess/go/mysql"
 )
 
 var (
@@ -60,10 +57,10 @@ func main() {
 
 	// Start or Init mysqld as needed.
 	ctx, cancel := context.WithTimeout(context.Background(), *waitTime)
-	tabletDir := mysqlctl.TabletDir(uint32(*tabletUID))
-	if _, statErr := os.Stat(tabletDir); os.IsNotExist(statErr) {
+	mycnfFile := mysqlctl.MycnfFile(uint32(*tabletUID))
+	if _, statErr := os.Stat(mycnfFile); os.IsNotExist(statErr) {
 		// Generate my.cnf from scratch and use it to find mysqld.
-		log.Infof("tablet dir (%s) doesn't exist, initializing", tabletDir)
+		log.Infof("mycnf file (%s) doesn't exist, initializing", mycnfFile)
 
 		var err error
 		mysqld, err = mysqlctl.CreateMysqld(uint32(*tabletUID), *mysqlSocket, int32(*mysqlPort), dbconfigFlags)
@@ -79,7 +76,7 @@ func main() {
 		}
 	} else {
 		// There ought to be an existing my.cnf, so use it to find mysqld.
-		log.Infof("tablet dir (%s) already exists, starting without init", tabletDir)
+		log.Infof("mycnf file (%s) already exists, starting without init", mycnfFile)
 
 		var err error
 		mysqld, err = mysqlctl.OpenMysqld(uint32(*tabletUID), dbconfigFlags)
@@ -88,6 +85,12 @@ func main() {
 			exit.Return(1)
 		}
 		mysqld.OnTerm(onTermFunc)
+
+		err = mysqld.RefreshConfig()
+		if err != nil {
+			log.Errorf("failed to refresh config: %v", err)
+			exit.Return(1)
+		}
 
 		if err := mysqld.Start(ctx); err != nil {
 			log.Errorf("failed to start mysqld: %v", err)
@@ -100,10 +103,10 @@ func main() {
 	defer servenv.Close()
 
 	// Take mysqld down with us on SIGTERM before entering lame duck.
-	servenv.OnTerm(func() {
+	servenv.OnTermSync(func() {
 		log.Infof("mysqlctl received SIGTERM, shutting down mysqld first")
 		ctx := context.Background()
-		mysqld.Shutdown(ctx, false)
+		mysqld.Shutdown(ctx, true)
 	})
 
 	// Start RPC server and wait for SIGTERM.

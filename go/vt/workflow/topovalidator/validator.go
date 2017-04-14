@@ -115,14 +115,14 @@ func (w *Workflow) Run(ctx context.Context, manager *workflow.Manager, wi *topo.
 		if err != nil {
 			w.logger.Errorf("Validator %v failed: %v", name, err)
 		} else {
-			w.logger.Errorf("Validator %v successfully finished", name)
+			w.logger.Infof("Validator %v successfully finished", name)
 		}
 		w.runCount++
 	}
 
 	// Now for each Fixer, add a sub node.
 	if len(w.fixers) == 0 {
-		w.logger.Errorf("No problem found")
+		w.logger.Infof("No problem found")
 	}
 	for i, f := range w.fixers {
 		w.wg.Add(1)
@@ -134,7 +134,9 @@ func (w *Workflow) Run(ctx context.Context, manager *workflow.Manager, wi *topo.
 		f.node.Display = workflow.NodeDisplayIndeterminate
 		for _, action := range f.actions {
 			f.node.Actions = append(f.node.Actions, &workflow.Action{
-				Name: action,
+				Name:  action,
+				State: workflow.ActionStateEnabled,
+				Style: workflow.ActionStyleNormal,
 			})
 		}
 		f.node.Listener = f
@@ -191,7 +193,7 @@ func (f *workflowFixer) Action(ctx context.Context, path, name string) error {
 type WorkflowFactory struct{}
 
 // Init is part of the workflow.Factory interface.
-func (f *WorkflowFactory) Init(w *workflowpb.Workflow, args []string) error {
+func (f *WorkflowFactory) Init(_ *workflow.Manager, w *workflowpb.Workflow, args []string) error {
 	// No parameters to parse.
 	if len(args) > 0 {
 		return fmt.Errorf("%v doesn't take any parameter", topoValidatorFactoryName)
@@ -201,7 +203,7 @@ func (f *WorkflowFactory) Init(w *workflowpb.Workflow, args []string) error {
 }
 
 // Instantiate is part of the workflow.Factory interface.
-func (f *WorkflowFactory) Instantiate(w *workflowpb.Workflow, rootNode *workflow.Node) (workflow.Workflow, error) {
+func (f *WorkflowFactory) Instantiate(_ *workflow.Manager, w *workflowpb.Workflow, rootNode *workflow.Node) (workflow.Workflow, error) {
 	rootNode.Message = "Validates the Topology and proposes fixes for known issues."
 
 	return &Workflow{

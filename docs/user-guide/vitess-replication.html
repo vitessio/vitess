@@ -113,15 +113,22 @@
             <li><a href="/user-guide/reparenting.html">Reparenting</a></li>
             <li style="padding-bottom: 0"><a href="/user-guide/schema-management.html">Schema Management</a></li>
               <ul style="display: block">
+                <li style="padding-bottom: 0"><a href="/user-guide/vschema.html">VSchema Guide</a></li>
                 <li style="padding-bottom: 0"><a href="/user-guide/schema-swap.html">Schema Swap (Tutorial)</a></li>
               </ul>
             <li style="padding-bottom: 0"><a href="/user-guide/sharding.html">Sharding</a>
               <ul style="display: block">
-                <li><a href="/user-guide/horizontal-sharding.html">Horizontal Sharding (Codelab)</a></li>
-                <li style="padding-bottom: 0"><a href="/user-guide/sharding-kubernetes.html">Sharding in Kubernetes (Codelab)</a></li>
+                <li><a href="/user-guide/horizontal-sharding-workflow.html">Horizontal Sharding (Tutorial, automated)</a></li>
+                <li><a href="/user-guide/horizontal-sharding.html">Horizontal Sharding (Tutorial, manual)</a></li>
+                <li><a href="/user-guide/sharding-kubernetes-workflow.html">Sharding in Kubernetes (Tutorial, automated)</a></li>
+                <li style="padding-bottom: 0"><a href="/user-guide/sharding-kubernetes.html">Sharding in Kubernetes (Tutorial, manual)</a></li>
               </ul>
             </li>
+            <li><a href="/user-guide/vitess-sequences.html">Vitess Sequences</a></li>
+            <li><a href="/user-guide/mysql-server-protocol.html">MySQL Server Protocol</a></li>
             <li><a href="/user-guide/vitess-replication.html">Vitess and Replication</a></li>
+            <li><a href="/user-guide/update-stream.html">Update Stream</a></li>
+            <li><a href="/user-guide/row-based-replication.html">Row Based Replication</a></li>
             <li><a href="/user-guide/topology-service.html">Topology Service</a></li>
             <li><a href="/user-guide/transport-security-model.html">Transport Security Model</a></li>
             <li style="padding-bottom: 0"><a href="/user-guide/launching.html">Launching</a>
@@ -129,6 +136,7 @@
                 <li><a href="/user-guide/scalability-philosophy.html">Scalability Philosophy</a></li>
                 <li><a href="/user-guide/production-planning.html">Production Planning</a></li>
                 <li><a href="/user-guide/server-configuration.html">Server Configuration</a></li>
+                <li><a href="/user-guide/twopc.html">2PC Guide</a></li>
                 <li style="padding-bottom: 0"><a href="/user-guide/troubleshooting.html">Troubleshooting</a></li>
               </ul>
             </li>
@@ -215,15 +223,22 @@
             <li><a href="/user-guide/reparenting.html">Reparenting</a></li>
             <li style="padding-bottom: 0"><a href="/user-guide/schema-management.html">Schema Management</a></li>
               <ul style="display: block">
+                <li style="padding-bottom: 0"><a href="/user-guide/vschema.html">VSchema Guide</a></li>
                 <li style="padding-bottom: 0"><a href="/user-guide/schema-swap.html">Schema Swap (Tutorial)</a></li>
               </ul>
             <li style="padding-bottom: 0"><a href="/user-guide/sharding.html">Sharding</a>
               <ul style="display: block">
-                <li><a href="/user-guide/horizontal-sharding.html">Horizontal Sharding (Codelab)</a></li>
-                <li style="padding-bottom: 0"><a href="/user-guide/sharding-kubernetes.html">Sharding in Kubernetes (Codelab)</a></li>
+                <li><a href="/user-guide/horizontal-sharding-workflow.html">Horizontal Sharding (Tutorial, automated)</a></li>
+                <li><a href="/user-guide/horizontal-sharding.html">Horizontal Sharding (Tutorial, manual)</a></li>
+                <li><a href="/user-guide/sharding-kubernetes-workflow.html">Sharding in Kubernetes (Tutorial, automated)</a></li>
+                <li style="padding-bottom: 0"><a href="/user-guide/sharding-kubernetes.html">Sharding in Kubernetes (Tutorial, manual)</a></li>
               </ul>
             </li>
+            <li><a href="/user-guide/vitess-sequences.html">Vitess Sequences</a></li>
+            <li><a href="/user-guide/mysql-server-protocol.html">MySQL Server Protocol</a></li>
             <li><a href="/user-guide/vitess-replication.html">Vitess and Replication</a></li>
+            <li><a href="/user-guide/update-stream.html">Update Stream</a></li>
+            <li><a href="/user-guide/row-based-replication.html">Row Based Replication</a></li>
             <li><a href="/user-guide/topology-service.html">Topology Service</a></li>
             <li><a href="/user-guide/transport-security-model.html">Transport Security Model</a></li>
             <li style="padding-bottom: 0"><a href="/user-guide/launching.html">Launching</a>
@@ -231,6 +246,7 @@
                 <li><a href="/user-guide/scalability-philosophy.html">Scalability Philosophy</a></li>
                 <li><a href="/user-guide/production-planning.html">Production Planning</a></li>
                 <li><a href="/user-guide/server-configuration.html">Server Configuration</a></li>
+                <li><a href="/user-guide/twopc.html">2PC Guide</a></li>
                 <li style="padding-bottom: 0"><a href="/user-guide/troubleshooting.html">Troubleshooting</a></li>
               </ul>
             </li>
@@ -420,9 +436,10 @@ process!), this does not add much more complexity to a running system.</p>
 
 <h2 id="update-stream">Update Stream</h2>
 
-<p>Since the replication stream also contains comments of which primary key is
+<p>Since the SBR replication stream also contains comments of which primary key is
 affected by a change, it is possible to look at the replication stream and know
-exactly what objects have changed. This Vitess feature is called Update Stream.</p>
+exactly what objects have changed. This Vitess feature is
+called <a href="/user-guide/update-stream.html">Update Stream</a>.</p>
 
 <p>By subscribing to the Update Stream for a given shard, one can know what values
 change. This stream can be used to create a stream of data changes (export to an
@@ -432,8 +449,8 @@ Apache Kafka for instance), or even invalidate an application layer cache.</p>
 rows that have changed, not the actual values for all columns. To get these
 values, it is necessary to re-query the database.</p>
 
-<p>We have plans to make this Update Stream feature more consistent, very
-resilient, fast, and transparent to sharding.</p>
+<p>We have plans to make this <a href="/user-guide/update-stream.html">Update Stream</a>
+feature more consistent, very resilient, fast, and transparent to sharding.</p>
 
 <h2 id="semi-sync">Semi-Sync</h2>
 
@@ -475,6 +492,13 @@ strengthened slightly to preventing loss of any transactions that were ever
 <strong>committed</strong> on the original master, eliminating so-called
 <a href="http://bugs.mysql.com/bug.php?id=62174">phantom reads</a>.</p>
 
+<p>On the other hand these behaviors also give a requirement that each shard must
+have at least 2 tablets with type <em>replica</em> (with addition of the master that
+can be demoted to type <em>replica</em> this gives a minimum of 3 tablets with initial
+type <em>replica</em>). This will allow for the master to have a semi-sync acker when
+one of the <em>replica</em> tablets is down for any reason (for a version update,
+machine reboot, schema swap or anything else).</p>
+
 <p>With regard to replication lag, note that this does <strong>not</strong> guarantee there is
 always at least one <em>replica</em> type slave from which queries will always return
 up-to-date results. Semi-sync guarantees that at least one slave has the
@@ -484,68 +508,9 @@ master.</p>
 
 <h2 id="appendix-adding-support-for-rbr-in-vitess">Appendix: Adding support for RBR in Vitess</h2>
 
-<p>This part describe the extend of the work required to add support for Row-Based
-Replication to Vitess.</p>
+<p>We are in the process of adding support for RBR in Vitess.</p>
 
-<p>The main two places where we depend on SBR at the moment are Filtered
-Replication (used during resharding), and Update Stream.</p>
-
-<p>For query serving and reparenting, Vitess does not depend on SBR vs RBR, and can
-work as is now.</p>
-
-<p>Schema Swap (see description earlier) does not depend on RBR. However, the way
-it works, it may cause imcompatible schemas between master and slaves, when the
-change is not as simple as adding a column at the end of a table, or creating a
-new table. So it is not recommended in most cases.</p>
-
-<h3 id="filtered-replication">Filtered Replication</h3>
-
-<p>The purpose of Filtered Replication is to filter the SQL statements during
-horizontal or vertical resharding. To achieve this, when we commit any statement
-on a master, we also add a comment that describes the affected table, and the
-value of the affected sharding key. That way, to see if a statement needs to be
-applied, we just read the comment:</p>
-
-<ul>
-<li><p>For vertical splits, we extract the table name. We then see if that table is
-being moved.</p></li>
-<li><p>For horizontal splits, we extract the value of the sharding key, and see if it
-is in range for the destination.</p></li>
-</ul>
-
-<p>When using RBR the comments are gone. Instead, we just get the table name, the
-primary key of the modified row, and a binary description of the modified other
-columns for that row. The table name is perfectly enough for vertical splits to
-work. However, we don&#39;t have the sharding key for horizontal splits. Our current
-thinking is as follows:</p>
-
-<ul>
-<li><p>If the sharding key can be computed from the primary key columns (using a
-simple vindex), then we can get it back from the provided data.</p></li>
-<li><p>If not, we can still provide valuable workarounds:</p>
-
-<ul>
-<li>for INSERT statements, all the columns are specified, so we can compute the
-sharding key.</li>
-<li>for DELETE and UPDATE statements, we can just apply them all to all
-destination shards. If the data is not present, no harm will be done. If the
-data is there, then it will be updated correctly.</li>
-</ul></li>
-</ul>
-
-<h3 id="update-stream">Update Stream</h3>
-
-<p>The Update Stream feature provides a stream of the primary keys of the rows that
-are changing, along with an Event Token to describe the timing of the changes.</p>
-
-<p>The current feature reads the comments left by the Query Service on the master
-for each DML, and forwards them. Since the only thing we&#39;re interested in is the
-Primary Key, we could just as well extract the values from a RBR statement. This
-would not be a lot of work at all.</p>
-
-<p>Additionally, RBR statements contain the entire row that is changing. We could
-also add this as optional fields to the UpdateStream response, and then provide
-a full stream, containing both Primary Key and data.</p>
+<p>See <a href="/user-guide/row-based-replication.html">this document</a>) for more information.</p>
 
       </div>
     </div>
@@ -559,7 +524,7 @@ a full stream, containing both Primary Key and data.</p>
     
     <a href="https://groups.google.com/forum/#!forum/vitess" target="_blank">Contact: vitess@googlegroups.com</a>&nbsp;&nbsp;<b>·</b>&nbsp;&nbsp;
     <a href="https://groups.google.com/forum/#!forum/vitess-announce" target="_blank">Announcements</a>&nbsp;&nbsp;<b>·</b>&nbsp;&nbsp;
-    &#169; 2016 <a href="/">Vitess</a> powered by <a href="https://developers.google.com/open-source/">Google Inc</a>
+    &#169; 2017 <a href="/">Vitess</a> powered by <a href="https://developers.google.com/open-source/">Google Inc</a>
   </nav>
 </footer>
 

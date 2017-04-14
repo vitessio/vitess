@@ -30,13 +30,16 @@ endif
 build_web:
 	echo $$(date): Building web artifacts
 	cd web/vtctld2 && ng build -prod
-	cp -f web/vtctld2/src/{favicon.ico,plotly-latest.min.js,primeui-ng-all.min.css,font-awesome.min.css} web/vtctld2/dist/
+	cp -f web/vtctld2/src/{favicon.ico,plotly-latest.min.js,primeui-ng-all.min.css} web/vtctld2/dist/
 
 build:
 ifndef NOBANNER
 	echo $$(date): Building source tree
 endif
 	go install $(VT_GO_PARALLEL) -ldflags "$(tools/build_version_flags.sh)" ./go/...
+
+parser:
+	make -C go/vt/sqlparser
 
 # To pass extra flags, run test.go manually.
 # For example: go run test.go -docker=false -- --extra-flag
@@ -69,11 +72,6 @@ unit_test_cover: build
 
 unit_test_race: build
 	tools/unit_test_race.sh
-
-# Run coverage and upload to coveralls.io.
-# Requires the secret COVERALLS_TOKEN env variable to be set.
-unit_test_goveralls: build
-	travis/goveralls.sh
 
 .ONESHELL:
 SHELL = /bin/bash
@@ -150,6 +148,9 @@ php_proto:
 	docker cp vitess_php-proto:/vt/src/github.com/youtube/vitess/php/src/Vitess/Proto/. php/src/Vitess/Proto/
 	docker rm vitess_php-proto
 
+# Helper targets for building Docker images.
+# Please read docker/README.md to understand the different available images.
+
 # This rule builds the bootstrap images for all flavors.
 DOCKER_IMAGES_FOR_TEST = mariadb mysql56 mysql57 percona percona57
 DOCKER_IMAGES = common $(DOCKER_IMAGES_FOR_TEST)
@@ -166,32 +167,32 @@ docker_bootstrap_push:
 docker_bootstrap_pull:
 	for i in $(DOCKER_IMAGES); do echo "pulling bootstrap image: $$i"; docker pull vitess/bootstrap:$$i || exit 1; done
 
-# Note: The default base and lite images (tag "latest") use MySQL 5.7.
-# Images with other MySQL/MariaDB versions get their own tag e.g. "mariadb".
-# We never push the non-"latest" tags though and only provide them for convenience for users who want to run something else than MySQL 5.7.
 docker_base:
 	# Fix permissions before copying files, to avoid AUFS bug.
 	chmod -R o=g *
-	docker build -t vitess/base .
+	docker build -f docker/base/Dockerfile -t vitess/base .
 
 docker_base_mysql56:
 	chmod -R o=g *
-	docker build -f Dockerfile.percona -t vitess/base:mysql56 .
+	docker build -f docker/base/Dockerfile.mysql56 -t vitess/base:mysql56 .
 
 docker_base_mariadb:
 	chmod -R o=g *
-	docker build -f Dockerfile.mariadb -t vitess/base:mariadb .
+	docker build -f docker/base/Dockerfile.mariadb -t vitess/base:mariadb .
 
 docker_base_percona:
 	chmod -R o=g *
-	docker build -f Dockerfile.percona -t vitess/base:percona .
+	docker build -f docker/base/Dockerfile.percona -t vitess/base:percona .
 
 docker_base_percona57:
 	chmod -R o=g *
-	docker build -f Dockerfile.percona57 -t vitess/base:percona57 .
+	docker build -f docker/base/Dockerfile.percona57 -t vitess/base:percona57 .
 
-docker_lite: docker_base
-	cd docker/lite && ./build.sh
+# Run "make docker_lite PROMPT_NOTICE=false" to avoid that the script
+# prompts you to press ENTER and confirm that the vitess/base image is not
+# rebuild by this target as well.
+docker_lite:
+	cd docker/lite && ./build.sh --prompt=$(PROMPT_NOTICE)
 
 docker_lite_mysql56: docker_base_mysql56
 	cd docker/lite && ./build.sh mysql56

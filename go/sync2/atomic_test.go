@@ -30,3 +30,18 @@ func TestAtomicString(t *testing.T) {
 		t.Errorf("want c, got %s", s.Get())
 	}
 }
+
+func TestAtomicBool(t *testing.T) {
+	b := NewAtomicBool(true)
+	if !b.Get() {
+		t.Error("b.Get: false, want true")
+	}
+	b.Set(false)
+	if b.Get() {
+		t.Error("b.Get: true, want false")
+	}
+	b.Set(true)
+	if !b.Get() {
+		t.Error("b.Get: false, want true")
+	}
+}

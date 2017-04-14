@@ -14,12 +14,13 @@ import (
 
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/discovery"
-	"github.com/youtube/vitess/go/vt/tabletserver/querytypes"
-	"github.com/youtube/vitess/go/vt/tabletserver/sandboxconn"
 	_ "github.com/youtube/vitess/go/vt/vtgate/vindexes"
+	"github.com/youtube/vitess/go/vt/vttablet/sandboxconn"
+	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/querytypes"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 func TestUnsharded(t *testing.T) {
@@ -427,7 +428,7 @@ func TestSelectEqualFail(t *testing.T) {
 		t.Errorf("routerExec: %v, want %v", err, want)
 	}
 
-	sbclookup.MustFailServer = 1
+	sbclookup.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
 	_, err = routerExec(router, "select id from music where id = 1", nil)
 	want = "paramsSelectEqual: lookup.Map"
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
@@ -442,7 +443,7 @@ func TestSelectEqualFail(t *testing.T) {
 	}
 	s.ShardSpec = DefaultShardSpec
 
-	sbclookup.MustFailServer = 1
+	sbclookup.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
 	_, err = routerExec(router, "select id from user where name = 'foo'", nil)
 	want = "paramsSelectEqual: lookup.Map"
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
@@ -730,7 +731,7 @@ func TestSelectScatter(t *testing.T) {
 		sbc := hc.AddTestTablet(cell, shard, 1, "TestRouter", shard, topodatapb.TabletType_MASTER, true, 1, nil)
 		conns = append(conns, sbc)
 	}
-	router := NewRouter(context.Background(), serv, cell, "", scatterConn)
+	router := NewRouter(context.Background(), serv, cell, "", scatterConn, false)
 
 	_, err := routerExec(router, "select id from user", nil)
 	if err != nil {
@@ -762,7 +763,7 @@ func TestStreamSelectScatter(t *testing.T) {
 		sbc := hc.AddTestTablet(cell, shard, 1, "TestRouter", shard, topodatapb.TabletType_MASTER, true, 1, nil)
 		conns = append(conns, sbc)
 	}
-	router := NewRouter(context.Background(), serv, cell, "", scatterConn)
+	router := NewRouter(context.Background(), serv, cell, "", scatterConn, false)
 
 	sql := "select id from user"
 	result, err := routerStream(router, sql)
@@ -804,7 +805,7 @@ func TestSelectScatterFail(t *testing.T) {
 	}
 	serv := new(sandboxTopo)
 	scatterConn := newTestScatterConn(hc, serv, cell)
-	router := NewRouter(context.Background(), serv, cell, "", scatterConn)
+	router := NewRouter(context.Background(), serv, cell, "", scatterConn, false)
 
 	_, err := routerExec(router, "select id from user", nil)
 	want := "paramsSelectScatter: keyspace TestRouter fetch error: topo error GetSrvKeyspace"
@@ -916,8 +917,8 @@ func TestVarJoin(t *testing.T) {
 	router, sbc1, sbc2, _ := createRouterEnv()
 	result1 := []*sqltypes.Result{{
 		Fields: []*querypb.Field{
-			{"id", sqltypes.Int32},
-			{"col", sqltypes.Int32},
+			{Name: "id", Type: sqltypes.Int32},
+			{Name: "col", Type: sqltypes.Int32},
 		},
 		RowsAffected: 1,
 		InsertID:     0,
@@ -954,8 +955,8 @@ func TestVarJoinStream(t *testing.T) {
 	router, sbc1, sbc2, _ := createRouterEnv()
 	result1 := []*sqltypes.Result{{
 		Fields: []*querypb.Field{
-			{"id", sqltypes.Int32},
-			{"col", sqltypes.Int32},
+			{Name: "id", Type: sqltypes.Int32},
+			{Name: "col", Type: sqltypes.Int32},
 		},
 		RowsAffected: 1,
 		InsertID:     0,
@@ -992,8 +993,8 @@ func TestLeftJoin(t *testing.T) {
 	router, sbc1, sbc2, _ := createRouterEnv()
 	result1 := []*sqltypes.Result{{
 		Fields: []*querypb.Field{
-			{"id", sqltypes.Int32},
-			{"col", sqltypes.Int32},
+			{Name: "id", Type: sqltypes.Int32},
+			{Name: "col", Type: sqltypes.Int32},
 		},
 		RowsAffected: 1,
 		InsertID:     0,
@@ -1004,7 +1005,7 @@ func TestLeftJoin(t *testing.T) {
 	}}
 	emptyResult := []*sqltypes.Result{{
 		Fields: []*querypb.Field{
-			{"id", sqltypes.Int32},
+			{Name: "id", Type: sqltypes.Int32},
 		},
 	}}
 	sbc1.SetResults(result1)
@@ -1035,8 +1036,8 @@ func TestLeftJoinStream(t *testing.T) {
 	router, sbc1, sbc2, _ := createRouterEnv()
 	result1 := []*sqltypes.Result{{
 		Fields: []*querypb.Field{
-			{"id", sqltypes.Int32},
-			{"col", sqltypes.Int32},
+			{Name: "id", Type: sqltypes.Int32},
+			{Name: "col", Type: sqltypes.Int32},
 		},
 		RowsAffected: 1,
 		InsertID:     0,
@@ -1047,7 +1048,7 @@ func TestLeftJoinStream(t *testing.T) {
 	}}
 	emptyResult := []*sqltypes.Result{{
 		Fields: []*querypb.Field{
-			{"id", sqltypes.Int32},
+			{Name: "id", Type: sqltypes.Int32},
 		},
 	}}
 	sbc1.SetResults(result1)
@@ -1080,11 +1081,11 @@ func TestEmptyJoin(t *testing.T) {
 	// which is sent to shard 0.
 	sbc1.SetResults([]*sqltypes.Result{{
 		Fields: []*querypb.Field{
-			{"id", sqltypes.Int32},
+			{Name: "id", Type: sqltypes.Int32},
 		},
 	}, {
 		Fields: []*querypb.Field{
-			{"id", sqltypes.Int32},
+			{Name: "id", Type: sqltypes.Int32},
 		},
 	}})
 	result, err := routerExec(router, "select u1.id, u2.id from user u1 join user u2 on u2.id = u1.col where u1.id = 1", nil)
@@ -1105,8 +1106,8 @@ func TestEmptyJoin(t *testing.T) {
 	}
 	wantResult := &sqltypes.Result{
 		Fields: []*querypb.Field{
-			{"id", sqltypes.Int32},
-			{"id", sqltypes.Int32},
+			{Name: "id", Type: sqltypes.Int32},
+			{Name: "id", Type: sqltypes.Int32},
 		},
 	}
 	if !reflect.DeepEqual(result, wantResult) {
@@ -1120,11 +1121,11 @@ func TestEmptyJoinStream(t *testing.T) {
 	// which is sent to shard 0.
 	sbc1.SetResults([]*sqltypes.Result{{
 		Fields: []*querypb.Field{
-			{"id", sqltypes.Int32},
+			{Name: "id", Type: sqltypes.Int32},
 		},
 	}, {
 		Fields: []*querypb.Field{
-			{"id", sqltypes.Int32},
+			{Name: "id", Type: sqltypes.Int32},
 		},
 	}})
 	result, err := routerStream(router, "select u1.id, u2.id from user u1 join user u2 on u2.id = u1.col where u1.id = 1")
@@ -1145,8 +1146,8 @@ func TestEmptyJoinStream(t *testing.T) {
 	}
 	wantResult := &sqltypes.Result{
 		Fields: []*querypb.Field{
-			{"id", sqltypes.Int32},
-			{"id", sqltypes.Int32},
+			{Name: "id", Type: sqltypes.Int32},
+			{Name: "id", Type: sqltypes.Int32},
 		},
 	}
 	if !reflect.DeepEqual(result, wantResult) {
@@ -1159,16 +1160,16 @@ func TestEmptyJoinRecursive(t *testing.T) {
 	// Make sure it also works recursively.
 	sbc1.SetResults([]*sqltypes.Result{{
 		Fields: []*querypb.Field{
-			{"id", sqltypes.Int32},
+			{Name: "id", Type: sqltypes.Int32},
 		},
 	}, {
 		Fields: []*querypb.Field{
-			{"id", sqltypes.Int32},
-			{"col", sqltypes.Int32},
+			{Name: "id", Type: sqltypes.Int32},
+			{Name: "col", Type: sqltypes.Int32},
 		},
 	}, {
 		Fields: []*querypb.Field{
-			{"id", sqltypes.Int32},
+			{Name: "id", Type: sqltypes.Int32},
 		},
 	}})
 	result, err := routerExec(router, "select u1.id, u2.id, u3.id from user u1 join (user u2 join user u3 on u3.id = u2.col) where u1.id = 1", nil)
@@ -1192,9 +1193,9 @@ func TestEmptyJoinRecursive(t *testing.T) {
 	}
 	wantResult := &sqltypes.Result{
 		Fields: []*querypb.Field{
-			{"id", sqltypes.Int32},
-			{"id", sqltypes.Int32},
-			{"id", sqltypes.Int32},
+			{Name: "id", Type: sqltypes.Int32},
+			{Name: "id", Type: sqltypes.Int32},
+			{Name: "id", Type: sqltypes.Int32},
 		},
 	}
 	if !reflect.DeepEqual(result, wantResult) {
@@ -1207,16 +1208,16 @@ func TestEmptyJoinRecursiveStream(t *testing.T) {
 	// Make sure it also works recursively.
 	sbc1.SetResults([]*sqltypes.Result{{
 		Fields: []*querypb.Field{
-			{"id", sqltypes.Int32},
+			{Name: "id", Type: sqltypes.Int32},
 		},
 	}, {
 		Fields: []*querypb.Field{
-			{"id", sqltypes.Int32},
-			{"col", sqltypes.Int32},
+			{Name: "id", Type: sqltypes.Int32},
+			{Name: "col", Type: sqltypes.Int32},
 		},
 	}, {
 		Fields: []*querypb.Field{
-			{"id", sqltypes.Int32},
+			{Name: "id", Type: sqltypes.Int32},
 		},
 	}})
 	result, err := routerStream(router, "select u1.id, u2.id, u3.id from user u1 join (user u2 join user u3 on u3.id = u2.col) where u1.id = 1")
@@ -1240,9 +1241,9 @@ func TestEmptyJoinRecursiveStream(t *testing.T) {
 	}
 	wantResult := &sqltypes.Result{
 		Fields: []*querypb.Field{
-			{"id", sqltypes.Int32},
-			{"id", sqltypes.Int32},
-			{"id", sqltypes.Int32},
+			{Name: "id", Type: sqltypes.Int32},
+			{Name: "id", Type: sqltypes.Int32},
+			{Name: "id", Type: sqltypes.Int32},
 		},
 	}
 	if !reflect.DeepEqual(result, wantResult) {
@@ -1254,86 +1255,86 @@ func TestJoinErrors(t *testing.T) {
 	router, sbc1, sbc2, _ := createRouterEnv()
 
 	// First query fails
-	sbc1.MustFailServer = 1
+	sbc1.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
 	_, err := routerExec(router, "select u1.id, u2.id from user u1 join user u2 on u2.id = u1.col where u1.id = 1", nil)
-	want := "error: err"
+	want := "INVALID_ARGUMENT error"
 	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("err: %v, must start with %s", err, want)
+		t.Errorf("err: %v, must contain %s", err, want)
 	}
 
 	// Field query fails
 	sbc2.SetResults([]*sqltypes.Result{{
 		Fields: []*querypb.Field{
-			{"id", sqltypes.Int32},
+			{Name: "id", Type: sqltypes.Int32},
 		},
 	}})
-	sbc1.MustFailServer = 1
+	sbc1.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
 	_, err = routerExec(router, "select u1.id, u2.id from user u1 join user u2 on u2.id = u1.col where u1.id = 3", nil)
-	want = "error: err"
+	want = "INVALID_ARGUMENT error"
 	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("err: %v, must start with %s", err, want)
+		t.Errorf("err: %v, must contain %s", err, want)
 	}
 
 	// Second query fails
 	sbc1.SetResults([]*sqltypes.Result{{
 		Fields: []*querypb.Field{
-			{"id", sqltypes.Int32},
-			{"col", sqltypes.Int32},
+			{Name: "id", Type: sqltypes.Int32},
+			{Name: "col", Type: sqltypes.Int32},
 		},
 		Rows: [][]sqltypes.Value{{
 			sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
 			sqltypes.MakeTrusted(sqltypes.Int32, []byte("3")),
 		}},
 	}})
-	sbc2.MustFailServer = 1
+	sbc2.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
 	_, err = routerExec(router, "select u1.id, u2.id from user u1 join user u2 on u2.id = u1.col where u1.id = 1", nil)
-	want = "error: err"
+	want = "INVALID_ARGUMENT error"
 	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("err: %v, must start with %s", err, want)
+		t.Errorf("err: %v, must contain %s", err, want)
 	}
 
 	// Nested join query fails on get fields
 	sbc2.SetResults([]*sqltypes.Result{{
 		Fields: []*querypb.Field{
-			{"id", sqltypes.Int32},
-			{"col", sqltypes.Int32},
+			{Name: "id", Type: sqltypes.Int32},
+			{Name: "col", Type: sqltypes.Int32},
 		},
 	}})
-	sbc1.MustFailServer = 1
+	sbc1.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
 	_, err = routerExec(router, "select u1.id, u2.id from user u1 join (user u2 join user u3 on u3.id = u2.col) where u1.id = 3", nil)
-	want = "error: err"
+	want = "INVALID_ARGUMENT error"
 	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("err: %v, must start with %s", err, want)
+		t.Errorf("err: %v, must contain %s", err, want)
 	}
 
 	// Field query fails on stream join
 	sbc2.SetResults([]*sqltypes.Result{{
 		Fields: []*querypb.Field{
-			{"id", sqltypes.Int32},
+			{Name: "id", Type: sqltypes.Int32},
 		},
 	}})
-	sbc1.MustFailServer = 1
+	sbc1.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
 	_, err = routerStream(router, "select u1.id, u2.id from user u1 join user u2 on u2.id = u1.col where u1.id = 3")
-	want = "error: err"
+	want = "INVALID_ARGUMENT error"
 	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("err: %v, must start with %s", err, want)
+		t.Errorf("err: %v, must contain %s", err, want)
 	}
 
 	// Second query fails on stream join
 	sbc1.SetResults([]*sqltypes.Result{{
 		Fields: []*querypb.Field{
-			{"id", sqltypes.Int32},
-			{"col", sqltypes.Int32},
+			{Name: "id", Type: sqltypes.Int32},
+			{Name: "col", Type: sqltypes.Int32},
 		},
 		Rows: [][]sqltypes.Value{{
 			sqltypes.MakeTrusted(sqltypes.Int32, []byte("1")),
 			sqltypes.MakeTrusted(sqltypes.Int32, []byte("3")),
 		}},
 	}})
-	sbc2.MustFailServer = 1
+	sbc2.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
 	_, err = routerStream(router, "select u1.id, u2.id from user u1 join user u2 on u2.id = u1.col where u1.id = 1")
-	want = "error: err"
+	want = "INVALID_ARGUMENT error"
 	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("err: %v, must start with %s", err, want)
+		t.Errorf("err: %v, must contain %s", err, want)
 	}
 }

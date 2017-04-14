@@ -32,15 +32,21 @@ var defaultMaxReplicationLagModuleConfig = MaxReplicationLagModuleConfig{
 		// has less than 2 lag records available to calculate the actual slave rate.
 		MinDurationBetweenIncreasesSec: 2 * healthCheckInterval,
 		// MaxDurationBetweenIncreasesSec defaults to 60+2 seconds because this
-		// corresponds to three 3 broadcasts.
+		// corresponds to 3 broadcasts.
 		// The 2 extra seconds give us headroom to account for delay in the process.
 		MaxDurationBetweenIncreasesSec: 3*healthCheckInterval + 2,
 		MinDurationBetweenDecreasesSec: healthCheckInterval,
 		SpreadBacklogAcrossSec:         healthCheckInterval,
 
-		AgeBadRateAfterSec: 3 * 60,
-		BadRateIncrease:    0.10,
+		AgeBadRateAfterSec:       3 * 60,
+		BadRateIncrease:          0.10,
+		MaxRateApproachThreshold: 0.90,
 	},
+}
+
+// DefaultMaxReplicationLagModuleConfig returns a copy of the default config object.
+func DefaultMaxReplicationLagModuleConfig() MaxReplicationLagModuleConfig {
+	return defaultMaxReplicationLagModuleConfig
 }
 
 // NewMaxReplicationLagModuleConfig returns a default configuration where
@@ -95,6 +101,12 @@ func (c MaxReplicationLagModuleConfig) Verify() error {
 	}
 	if c.AgeBadRateAfterSec < 1 {
 		return fmt.Errorf("age_bad_rate_after_sec must be >= 1")
+	}
+	if c.MaxRateApproachThreshold < 0 {
+		return fmt.Errorf("max_rate_approach_threshold must be >=0")
+	}
+	if c.MaxRateApproachThreshold > 1 {
+		return fmt.Errorf("max_rate_approach_threshold must be <=1")
 	}
 	return nil
 }

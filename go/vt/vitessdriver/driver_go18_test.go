@@ -23,8 +23,7 @@ func TestBeginIsolation(t *testing.T) {
 		t.Error(err)
 	}
 	defer db.Close()
-	ctx := sql.IsolationContext(context.Background(), sql.LevelReadUncommitted)
-	_, err = db.BeginContext(ctx)
+	_, err = db.BeginTx(context.Background(), &sql.TxOptions{Isolation: sql.LevelRepeatableRead})
 	want := errIsolationUnsupported.Error()
 	if err == nil || err.Error() != want {
 		t.Errorf("Begin: %v, want %s", err, want)

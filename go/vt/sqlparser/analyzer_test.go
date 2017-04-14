@@ -33,7 +33,7 @@ func TestGetTableName(t *testing.T) {
 			continue
 		}
 		out := GetTableName(tree.(*Select).From[0].(*AliasedTableExpr).Expr)
-		if out != tc.out {
+		if out.String() != tc.out {
 			t.Errorf("GetTableName('%s'): %s, want %s", tc.in, out, tc.out)
 		}
 	}
@@ -41,13 +41,13 @@ func TestGetTableName(t *testing.T) {
 
 func TestIsColName(t *testing.T) {
 	testcases := []struct {
-		in  ValExpr
+		in  Expr
 		out bool
 	}{{
 		in:  &ColName{},
 		out: true,
 	}, {
-		in: HexVal(""),
+		in: newHexVal(""),
 	}}
 	for _, tc := range testcases {
 		out := IsColName(tc.in)
@@ -59,19 +59,19 @@ func TestIsColName(t *testing.T) {
 
 func TestIsValue(t *testing.T) {
 	testcases := []struct {
-		in  ValExpr
+		in  Expr
 		out bool
 	}{{
-		in:  StrVal(""),
+		in:  newStrVal(""),
 		out: true,
 	}, {
-		in:  HexVal(""),
+		in:  newHexVal(""),
 		out: true,
 	}, {
-		in:  NumVal(""),
+		in:  newIntVal(""),
 		out: true,
 	}, {
-		in:  ValArg(""),
+		in:  newValArg(""),
 		out: true,
 	}, {
 		in: &NullVal{},
@@ -86,13 +86,13 @@ func TestIsValue(t *testing.T) {
 
 func TestIsNull(t *testing.T) {
 	testcases := []struct {
-		in  ValExpr
+		in  Expr
 		out bool
 	}{{
 		in:  &NullVal{},
 		out: true,
 	}, {
-		in: StrVal(""),
+		in: newStrVal(""),
 	}}
 	for _, tc := range testcases {
 		out := IsNull(tc.in)
@@ -104,10 +104,10 @@ func TestIsNull(t *testing.T) {
 
 func TestIsSimpleTuple(t *testing.T) {
 	testcases := []struct {
-		in  ValExpr
+		in  Expr
 		out bool
 	}{{
-		in:  ValTuple{StrVal("")},
+		in:  ValTuple{newStrVal("")},
 		out: true,
 	}, {
 		in: ValTuple{&ColName{}},
@@ -127,41 +127,44 @@ func TestIsSimpleTuple(t *testing.T) {
 
 func TestAsInterface(t *testing.T) {
 	testcases := []struct {
-		in  ValExpr
+		in  Expr
 		out interface{}
 	}{{
-		in:  ValTuple{StrVal("aa")},
+		in:  ValTuple{newStrVal("aa")},
 		out: []interface{}{sqltypes.MakeString([]byte("aa"))},
 	}, {
 		in:  ValTuple{&ColName{}},
-		out: errors.New("unexpected node &{<nil>  <nil>}"),
+		out: errors.New("expression is too complex ''"),
 	}, {
-		in:  ValArg(":aa"),
+		in:  newValArg(":aa"),
 		out: ":aa",
 	}, {
 		in:  ListArg("::aa"),
 		out: "::aa",
 	}, {
-		in:  StrVal("aa"),
+		in:  newStrVal("aa"),
 		out: sqltypes.MakeString([]byte("aa")),
 	}, {
-		in:  HexVal("3131"),
+		in:  newHexVal("3131"),
 		out: sqltypes.MakeString([]byte("11")),
 	}, {
-		in:  HexVal("313"),
+		in:  newHexVal("313"),
 		out: errors.New("encoding/hex: odd length hex string"),
 	}, {
-		in:  NumVal("313"),
+		in:  newIntVal("313"),
 		out: sqltypes.MakeTrusted(sqltypes.Int64, []byte("313")),
 	}, {
-		in:  NumVal("1.2"),
-		out: errors.New("type mismatch: strconv.ParseUint: parsing \"1.2\": invalid syntax"),
+		in:  newIntVal("18446744073709551616"),
+		out: errors.New("type mismatch: strconv.ParseUint: parsing \"18446744073709551616\": value out of range"),
+	}, {
+		in:  newFloatVal("1.2"),
+		out: errors.New("expression is too complex '1.2'"),
 	}, {
 		in:  &NullVal{},
 		out: nil,
 	}, {
 		in:  &ColName{},
-		out: errors.New("unexpected node &{<nil>  <nil>}"),
+		out: errors.New("expression is too complex ''"),
 	}}
 	for _, tc := range testcases {
 		out, err := AsInterface(tc.in)
@@ -193,4 +196,111 @@ func TestStringIn(t *testing.T) {
 			t.Errorf("StringIn(%v,%v): %#v, want %#v", tc.in1, tc.in2, out, tc.out)
 		}
 	}
+}
+
+func TestExtractSetNums(t *testing.T) {
+	testcases := []struct {
+		sql string
+		out map[string]int64
+		err string
+	}{{
+		sql: "invalid",
+		err: "syntax error at position 8 near 'invalid'",
+	}, {
+		sql: "select * from t",
+		err: "ast did not yield *sqlparser.Set: *sqlparser.Select",
+	}, {
+		sql: "set a.autocommit=1",
+		err: "invalid syntax: a.autocommit",
+	}, {
+		sql: "set autocommit=1+1",
+		err: "invalid syntax: 1 + 1",
+	}, {
+		sql: "set autocommit='aa'",
+		err: "invalid value type: 'aa'",
+	}, {
+		sql: "set autocommit=1",
+		out: map[string]int64{"autocommit": 1},
+	}, {
+		sql: "set AUTOCOMMIT=1",
+		out: map[string]int64{"autocommit": 1},
+	}}
+	for _, tcase := range testcases {
+		out, err := ExtractSetNums(tcase.sql)
+		if tcase.err != "" {
+			if err == nil || err.Error() != tcase.err {
+				t.Errorf("ExtractSetNums(%s): %v, want '%s'", tcase.sql, err, tcase.err)
+			}
+		} else if err != nil {
+			t.Errorf("ExtractSetNums(%s): %v, want no error", tcase.sql, err)
+		}
+		if !reflect.DeepEqual(out, tcase.out) {
+			t.Errorf("ExtractSetNums(%s): %v, want '%v'", tcase.sql, out, tcase.out)
+		}
+	}
+}
+
+func TestHasPrefix(t *testing.T) {
+	testcases := []struct {
+		sql  string
+		want bool
+	}{
+		{"   update ...", true},
+		{"Update", true},
+		{"UPDATE ...", true},
+		{"\n\t    delete ...", true},
+		{"insert ...", true},
+		{"select ...", false},
+		{"    select ...", false},
+		{"", false},
+		{" ", false},
+	}
+	for _, tcase := range testcases {
+		if got := HasPrefix(tcase.sql, "insert", "update", "delete"); got != tcase.want {
+			t.Errorf("HasPrefix(%s): %v, want %v", tcase.sql, got, tcase.want)
+		}
+		if got := IsDML(tcase.sql); got != tcase.want {
+			t.Errorf("IsDML(%s): %v, want %v", tcase.sql, got, tcase.want)
+		}
+	}
+}
+
+func TestIsStatement(t *testing.T) {
+	testcases := []struct {
+		sql  string
+		want bool
+	}{
+		{"begin", true},
+		{" begin", true},
+		{" begin ", true},
+		{"begin ", true},
+		{"\n\t    begin ", true},
+		{"... begin", false},
+		{"begin ...", false},
+	}
+	for _, tcase := range testcases {
+		if got := IsStatement(tcase.sql, "begin"); got != tcase.want {
+			t.Errorf("IsStatement(%s): %v, want %v", tcase.sql, got, tcase.want)
+		}
+	}
+}
+
+func newStrVal(in string) *SQLVal {
+	return NewStrVal([]byte(in))
+}
+
+func newIntVal(in string) *SQLVal {
+	return NewIntVal([]byte(in))
+}
+
+func newFloatVal(in string) *SQLVal {
+	return NewFloatVal([]byte(in))
+}
+
+func newHexVal(in string) *SQLVal {
+	return NewHexVal([]byte(in))
+}
+
+func newValArg(in string) *SQLVal {
+	return NewValArg([]byte(in))
 }

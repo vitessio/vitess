@@ -11,8 +11,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/youtube/vitess/go/cistring"
 	vschemapb "github.com/youtube/vitess/go/vt/proto/vschema"
+	"github.com/youtube/vitess/go/vt/sqlparser"
 )
 
 // VSchema represents the denormalized version of SrvVSchema,
@@ -24,13 +24,13 @@ type VSchema struct {
 
 // Table represents a table in VSchema.
 type Table struct {
-	IsSequence     bool            `json:"is_sequence,omitempty"`
-	Name           string          `json:"name"`
-	Keyspace       *Keyspace       `json:"-"`
-	ColumnVindexes []*ColumnVindex `json:"column_vindexes,omitempty"`
-	Ordered        []*ColumnVindex `json:"ordered,omitempty"`
-	Owned          []*ColumnVindex `json:"owned,omitempty"`
-	AutoIncrement  *AutoIncrement  `json:"auto_increment,omitempty"`
+	IsSequence     bool                 `json:"is_sequence,omitempty"`
+	Name           sqlparser.TableIdent `json:"name"`
+	Keyspace       *Keyspace            `json:"-"`
+	ColumnVindexes []*ColumnVindex      `json:"column_vindexes,omitempty"`
+	Ordered        []*ColumnVindex      `json:"ordered,omitempty"`
+	Owned          []*ColumnVindex      `json:"owned,omitempty"`
+	AutoIncrement  *AutoIncrement       `json:"auto_increment,omitempty"`
 }
 
 // Keyspace contains the keyspcae info for each Table.
@@ -41,11 +41,11 @@ type Keyspace struct {
 
 // ColumnVindex contains the index info for each index of a table.
 type ColumnVindex struct {
-	Column cistring.CIString `json:"column"`
-	Type   string            `json:"type"`
-	Name   string            `json:"name"`
-	Owned  bool              `json:"owned,omitempty"`
-	Vindex Vindex            `json:"vindex"`
+	Column sqlparser.ColIdent `json:"column"`
+	Type   string             `json:"type"`
+	Name   string             `json:"name"`
+	Owned  bool               `json:"owned,omitempty"`
+	Vindex Vindex             `json:"vindex"`
 }
 
 // KeyspaceSchema contains the schema(table) for a keyspace.
@@ -67,8 +67,8 @@ func (ks *KeyspaceSchema) MarshalJSON() ([]byte, error) {
 
 // AutoIncrement contains the auto-inc information for a table.
 type AutoIncrement struct {
-	Column   cistring.CIString `json:"column"`
-	Sequence *Table            `json:"sequence"`
+	Column   sqlparser.ColIdent `json:"column"`
+	Sequence *Table             `json:"sequence"`
 	// ColumnVindexNum is the index of the ColumnVindex
 	// if the column is also a ColumnVindex. Otherwise, it's -1.
 	ColumnVindexNum int `json:"column_vindex_num"`
@@ -154,7 +154,7 @@ func buildTables(source *vschemapb.SrvVSchema, vschema *VSchema) error {
 		}
 		for tname, table := range ks.Tables {
 			t := &Table{
-				Name:     tname,
+				Name:     sqlparser.NewTableIdent(tname),
 				Keyspace: keyspace,
 			}
 			if _, ok := vschema.tables[tname]; ok {
@@ -180,7 +180,7 @@ func buildTables(source *vschemapb.SrvVSchema, vschema *VSchema) error {
 					owned = true
 				}
 				columnVindex := &ColumnVindex{
-					Column: cistring.New(ind.Column),
+					Column: sqlparser.NewColIdent(ind.Column),
 					Type:   vindexInfo.Type,
 					Name:   ind.Name,
 					Owned:  owned,
@@ -214,7 +214,7 @@ func resolveAutoIncrement(source *vschemapb.SrvVSchema, vschema *VSchema) error 
 			if table.AutoIncrement == nil {
 				continue
 			}
-			t.AutoIncrement = &AutoIncrement{Column: cistring.New(table.AutoIncrement.Column), ColumnVindexNum: -1}
+			t.AutoIncrement = &AutoIncrement{Column: sqlparser.NewColIdent(table.AutoIncrement.Column), ColumnVindexNum: -1}
 			seq, err := vschema.findQualified(table.AutoIncrement.Sequence)
 			if err != nil {
 				return fmt.Errorf("cannot resolve sequence %s: %v", table.AutoIncrement.Sequence, err)
@@ -265,7 +265,7 @@ func (vschema *VSchema) Find(keyspace, tablename string) (table *Table, err erro
 				if ks.Keyspace.Sharded {
 					return nil, fmt.Errorf("table %s not found", tablename)
 				}
-				return &Table{Name: tablename, Keyspace: ks.Keyspace}, nil
+				return &Table{Name: sqlparser.NewTableIdent(tablename), Keyspace: ks.Keyspace}, nil
 			}
 		}
 		return table, nil
@@ -279,7 +279,7 @@ func (vschema *VSchema) Find(keyspace, tablename string) (table *Table, err erro
 		if ks.Keyspace.Sharded {
 			return nil, fmt.Errorf("table %s not found", tablename)
 		}
-		return &Table{Name: tablename, Keyspace: ks.Keyspace}, nil
+		return &Table{Name: sqlparser.NewTableIdent(tablename), Keyspace: ks.Keyspace}, nil
 	}
 	return table, nil
 }

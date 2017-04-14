@@ -11,10 +11,6 @@ import (
 
 // This file contains the utility methods to manage SrvVSchema objects.
 
-const (
-	srvVSchemaFileName = "/SrvVSchema"
-)
-
 // WatchSrvVSchemaData is returned / streamed by WatchSrvVSchema.
 // The WatchSrvVSchema API guarantees exactly one of Value or Err will be set.
 type WatchSrvVSchemaData struct {
@@ -26,9 +22,7 @@ type WatchSrvVSchemaData struct {
 // It has the same contract as Backend.Watch, but it also unpacks the
 // contents into a SrvVSchema object.
 func (ts Server) WatchSrvVSchema(ctx context.Context, cell string) (*WatchSrvVSchemaData, <-chan *WatchSrvVSchemaData, CancelFunc) {
-	filePath := srvVSchemaFileName
-
-	current, wdChannel, cancel := ts.Watch(ctx, cell, filePath)
+	current, wdChannel, cancel := ts.Watch(ctx, cell, SrvVSchemaFile)
 	if current.Err != nil {
 		return &WatchSrvVSchemaData{Err: current.Err}, nil, nil
 	}

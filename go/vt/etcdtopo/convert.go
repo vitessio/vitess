@@ -62,13 +62,13 @@ func rawDataFromNodeValue(valueType dataType, value string) ([]byte, error) {
 func oldTypeAndFilePath(filePath string) (dataType, string) {
 	parts := strings.Split(filePath, "/")
 
-	// SrvKeyspace: local cell, /keyspaces/<keyspace>/SrvKeyspace
-	if len(parts) == 4 && parts[0] == "" && parts[1] == "keyspaces" && parts[3] == "SrvKeyspace" {
-		return srvKeyspaceType, srvKeyspaceFilePath(parts[2])
+	// SrvKeyspace: local cell, keyspaces/<keyspace>/SrvKeyspace
+	if len(parts) == 3 && parts[0] == "keyspaces" && parts[2] == "SrvKeyspace" {
+		return srvKeyspaceType, srvKeyspaceFilePath(parts[1])
 	}
 
-	// SrvVSchema: local cell, /SrvVSchema
-	if len(parts) == 2 && parts[1] == "SrvVSchema" {
+	// SrvVSchema: local cell, SrvVSchema
+	if len(parts) == 1 && parts[0] == "SrvVSchema" {
 		return srvVSchemaType, srvVSchemaFilePath()
 	}
 

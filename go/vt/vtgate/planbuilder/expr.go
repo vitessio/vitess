@@ -14,10 +14,10 @@ import (
 	"github.com/youtube/vitess/go/vt/vtgate/engine"
 )
 
-// splitAndExpression breaks up the BoolExpr into AND-separated conditions
+// splitAndExpression breaks up the Expr into AND-separated conditions
 // and appends them to filters, which can be shuffled and recombined
 // as needed.
-func splitAndExpression(filters []sqlparser.BoolExpr, node sqlparser.BoolExpr) []sqlparser.BoolExpr {
+func splitAndExpression(filters []sqlparser.Expr, node sqlparser.Expr) []sqlparser.Expr {
 	if node == nil {
 		return filters
 	}
@@ -61,11 +61,15 @@ func findRoute(expr sqlparser.Expr, bldr builder) (rb *route, err error) {
 				highestRoute = newRoute
 			}
 		case *sqlparser.Subquery:
-			sel, ok := node.Select.(*sqlparser.Select)
-			if !ok {
-				return false, errors.New("unsupported: union operator in subqueries")
+			var subplan builder
+			switch stmt := node.Select.(type) {
+			case *sqlparser.Select:
+				subplan, err = processSelect(stmt, bldr.Symtab().VSchema, bldr)
+			case *sqlparser.Union:
+				subplan, err = processUnion(stmt, bldr.Symtab().VSchema, bldr)
+			default:
+				panic("unreachable")
 			}
-			subplan, err := processSelect(sel, bldr.Symtab().VSchema, bldr)
 			if err != nil {
 				return false, err
 			}
@@ -89,7 +93,7 @@ func findRoute(expr sqlparser.Expr, bldr builder) (rb *route, err error) {
 		return nil, err
 	}
 	for _, subroute := range subroutes {
-		err = subqueryCanMerge(highestRoute, subroute)
+		err = routesCanMerge(highestRoute, subroute)
 		if err != nil {
 			return nil, err
 		}
@@ -100,10 +104,10 @@ func findRoute(expr sqlparser.Expr, bldr builder) (rb *route, err error) {
 	return highestRoute, nil
 }
 
-// subqueryCanMerge returns nil if the inner subquery
+// routesCanMerge returns nil if the inner subquery
 // can be merged with the specified outer route. If it
 // cannot, then it returns an appropriate error.
-func subqueryCanMerge(outer, inner *route) error {
+func routesCanMerge(outer, inner *route) error {
 	if outer.ERoute.Keyspace.Name != inner.ERoute.Keyspace.Name {
 		return errors.New("unsupported: subquery keyspace different from outer query")
 	}
@@ -144,7 +148,7 @@ func hasSubquery(node sqlparser.SQLNode) bool {
 
 // exprIsValue returns true if the expression can be treated as a value
 // for the current route. External references are treated as value.
-func exprIsValue(expr sqlparser.ValExpr, rb *route) bool {
+func exprIsValue(expr sqlparser.Expr, rb *route) bool {
 	if node, ok := expr.(*sqlparser.ColName); ok {
 		return node.Metadata.(sym).Route() != rb
 	}
@@ -157,37 +161,44 @@ func valEqual(a, b interface{}) bool {
 		if b, ok := b.(*sqlparser.ColName); ok {
 			return newColref(a) == newColref(b)
 		}
-	case sqlparser.ValArg:
-		if b, ok := b.(sqlparser.ValArg); ok {
-			return bytes.Equal([]byte(a), []byte(b))
+	case *sqlparser.SQLVal:
+		b, ok := b.(*sqlparser.SQLVal)
+		if !ok {
+			return false
 		}
-	case sqlparser.StrVal:
-		switch b := b.(type) {
+		switch a.Type {
+		case sqlparser.ValArg:
+			if b.Type == sqlparser.ValArg {
+				return bytes.Equal([]byte(a.Val), []byte(b.Val))
+			}
 		case sqlparser.StrVal:
-			return bytes.Equal([]byte(a), []byte(b))
+			switch b.Type {
+			case sqlparser.StrVal:
+				return bytes.Equal([]byte(a.Val), []byte(b.Val))
+			case sqlparser.HexVal:
+				return hexEqual(b, a)
+			}
 		case sqlparser.HexVal:
-			return hexEqual(b, a)
-		}
-	case sqlparser.HexVal:
-		return hexEqual(a, b)
-	case sqlparser.NumVal:
-		if b, ok := b.(sqlparser.NumVal); ok {
-			return bytes.Equal([]byte(a), []byte(b))
+			return hexEqual(a, b)
+		case sqlparser.IntVal:
+			if b.Type == (sqlparser.IntVal) {
+				return bytes.Equal([]byte(a.Val), []byte(b.Val))
+			}
 		}
 	}
 	return false
 }
 
-func hexEqual(a sqlparser.HexVal, b interface{}) bool {
-	v, err := a.Decode()
+func hexEqual(a, b *sqlparser.SQLVal) bool {
+	v, err := a.HexDecode()
 	if err != nil {
 		return false
 	}
-	switch b := b.(type) {
+	switch b.Type {
 	case sqlparser.StrVal:
-		return bytes.Equal(v, []byte(b))
+		return bytes.Equal(v, b.Val)
 	case sqlparser.HexVal:
-		v2, err := b.Decode()
+		v2, err := b.HexDecode()
 		if err != nil {
 			return false
 		}
@@ -197,25 +208,28 @@ func hexEqual(a sqlparser.HexVal, b interface{}) bool {
 }
 
 // valConvert converts an AST value to the Value field in the route.
-func valConvert(node sqlparser.ValExpr) (interface{}, error) {
+func valConvert(node sqlparser.Expr) (interface{}, error) {
 	switch node := node.(type) {
-	case sqlparser.ValArg:
-		return string(node), nil
-	case sqlparser.StrVal:
-		return []byte(node), nil
-	case sqlparser.HexVal:
-		return node.Decode()
-	case sqlparser.NumVal:
-		val := string(node)
-		signed, err := strconv.ParseInt(val, 0, 64)
-		if err == nil {
-			return signed, nil
+	case *sqlparser.SQLVal:
+		switch node.Type {
+		case sqlparser.ValArg:
+			return string(node.Val), nil
+		case sqlparser.StrVal:
+			return []byte(node.Val), nil
+		case sqlparser.HexVal:
+			return node.HexDecode()
+		case sqlparser.IntVal:
+			val := string(node.Val)
+			signed, err := strconv.ParseInt(val, 0, 64)
+			if err == nil {
+				return signed, nil
+			}
+			unsigned, err := strconv.ParseUint(val, 0, 64)
+			if err == nil {
+				return unsigned, nil
+			}
+			return nil, err
 		}
-		unsigned, err := strconv.ParseUint(val, 0, 64)
-		if err == nil {
-			return unsigned, nil
-		}
-		return nil, err
 	case *sqlparser.NullVal:
 		return nil, nil
 	}

@@ -1,0 +1,45 @@
+install:
+  dependencies:
+    - python-mysqldb
+  extra:
+    - apt-get update
+    - wget https://storage.googleapis.com/golang/go1.8.linux-amd64.tar.gz
+    - tar -C /usr/local -xzf go1.8.linux-amd64.tar.gz
+    - wget https://storage.googleapis.com/kubernetes-helm/helm-v2.1.3-linux-amd64.tar.gz
+    - tar -zxvf helm-v2.1.3-linux-amd64.tar.gz
+    - pip install numpy
+    - pip install selenium
+    - pip install --upgrade grpcio==1.0.4
+  path:
+    - /usr/local/go/bin
+    - /app/linux-amd64/
+  cluster_setup:
+    - type: gke
+      keyfile: /config/keyfile.json
+config:
+  - docker_image: vitess/root
+    github:
+      repo: youtube/vitess
+      repo_prefix: src/github.com/youtube/vitess
+    environment:
+      sandbox: test/cluster/sandbox/vitess_kubernetes_sandbox.py
+      config: test/cluster/sandbox/example_sandbox.yaml
+      cluster_type: gke
+      application_type: k8s
+    before_test:
+      - export VTTOP=$(pwd)
+      - export VTROOT="${VTROOT:-${VTTOP/\/src\/github.com\/youtube\/vitess/}}"
+      - export GOPATH=$VTROOT
+      - export PYTHONPATH=$VTTOP/py:$VTTOP/test:$VTTOP/test/cluster/sandbox:/usr/lib/python2.7/dist-packages:/env/lib/python2.7/site-packages
+      - go get github.com/youtube/vitess/go/cmd/vtctlclient
+      - export PATH=$GOPATH/bin:$PATH
+    tests:
+      - file: test/cluster/drain_test.py
+        params:
+          num_drains: 1
+      - file: test/cluster/backup_test.py
+        params:
+          num_backups: 1
+      - file: test/cluster/reparent_test.py
+        params:
+          num_reparents: 1

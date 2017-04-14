@@ -1,8 +1,3 @@
-// Package test contains utilities to test topo.Impl
-// implementations. If you are testing your implementation, you will
-// want to call all the check methods in your test methods. For an
-// example, look at the tests in
-// github.com/youtube/vitess/go/vt/zktopo.
 package test
 
 import (
@@ -35,6 +30,9 @@ func checkKeyspace(t *testing.T, ts topo.Impl) {
 	// Delete and re-create.
 	if err := ts.DeleteKeyspace(ctx, "test_keyspace"); err != nil {
 		t.Errorf("DeleteKeyspace: %v", err)
+	}
+	if err := ts.DeleteKeyspace(ctx, "test_keyspace"); err != topo.ErrNoNode {
+		t.Errorf("DeleteKeyspace(again): %v", err)
 	}
 	if err := ts.CreateKeyspace(ctx, "test_keyspace", &topodatapb.Keyspace{}); err != nil {
 		t.Errorf("CreateKeyspace: %v", err)

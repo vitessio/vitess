@@ -44,7 +44,6 @@ to the go clients (for vtgate -> vttablet link).
 
 import logging
 import os
-import subprocess
 import unittest
 
 from vtdb import vtgate_client
@@ -62,51 +61,15 @@ cert_dir = environment.tmproot + '/certs'
 table_acl_config = environment.tmproot + '/table_acl_config.json'
 
 
-def openssl(cmd):
-  result = subprocess.call(['openssl'] + cmd, stderr=utils.devnull)
-  if result != 0:
-    raise utils.TestError('OpenSSL command failed: %s' % ' '.join(cmd))
-
-
 def create_signed_cert(ca, serial, name, common_name):
   logging.info('Creating signed cert and key %s', common_name)
-  ca_key = cert_dir + '/' + ca + '-key.pem'
-  ca_cert = cert_dir + '/' + ca + '-cert.pem'
-  key = cert_dir + '/' + name + '-key.pem'
-  cert = cert_dir + '/' + name + '-cert.pem'
-  req = cert_dir + '/' + name + '-req.pem'
-  config = cert_dir + '/' + name + '.config'
-  with open(config, 'w') as fd:
-    fd.write("""
-[ req ]
- default_bits           = 1024
- default_keyfile        = keyfile.pem
- distinguished_name     = req_distinguished_name
- attributes             = req_attributes
- prompt                 = no
- output_password        = mypass
-[ req_distinguished_name ]
- C                      = US
- ST                     = California
- L                      = Mountain View
- O                      = Google
- OU                     = Vitess
- CN                     = %s
- emailAddress           = test@email.address
-[ req_attributes ]
- challengePassword      = A challenge password
-""" % common_name)
-  openssl(['req', '-newkey', 'rsa:2048', '-days', '3600', '-nodes', '-batch',
-           '-config', config,
-           '-keyout', key, '-out', req])
-  openssl(['rsa', '-in', key, '-out', key])
-  openssl(['x509', '-req',
-           '-in', req,
-           '-days', '3600',
-           '-CA', ca_cert,
-           '-CAkey', ca_key,
-           '-set_serial', serial,
-           '-out', cert])
+  utils.run(environment.binary_args('vttlstest') +
+            ['-root', cert_dir,
+             'CreateSignedCert',
+             '-parent', ca,
+             '-serial', serial,
+             '-common_name', common_name,
+             name])
 
 
 def server_extra_args(name, ca):
@@ -161,35 +124,9 @@ def setUpModule():
     os.makedirs(cert_dir)
 
     # Create CA certificate
-    logging.info('Creating root CA')
-    ca_key = cert_dir + '/ca-key.pem'
-    ca_cert = cert_dir + '/ca-cert.pem'
-    openssl(['genrsa', '-out', cert_dir + '/ca-key.pem'])
-    ca_config = cert_dir + '/ca.config'
-    with open(ca_config, 'w') as fd:
-      fd.write("""
-[ req ]
- default_bits           = 1024
- default_keyfile        = keyfile.pem
- distinguished_name     = req_distinguished_name
- attributes             = req_attributes
- prompt                 = no
- output_password        = mypass
-[ req_distinguished_name ]
- C                      = US
- ST                     = California
- L                      = Mountain View
- O                      = Google
- OU                     = Vitess
- CN                     = CA
- emailAddress           = test@email.address
-[ req_attributes ]
- challengePassword      = A challenge password
-""")
-    openssl(['req', '-new', '-x509', '-nodes', '-days', '3600', '-batch',
-             '-config', ca_config,
-             '-key', ca_key,
-             '-out', ca_cert])
+    utils.run(environment.binary_args('vttlstest') +
+              ['-root', cert_dir,
+               'CreateCA'])
 
     # create all certs
     create_signed_cert('ca', '01', 'vttablet-server', 'vttablet server CA')

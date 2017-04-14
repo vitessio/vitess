@@ -24,14 +24,14 @@ var (
 	errorPrefix        = "error://"
 	partialErrorPrefix = "partialerror://"
 
-	executeErrors = map[string]vtrpcpb.ErrorCode{
-		"bad input":         vtrpcpb.ErrorCode_BAD_INPUT,
-		"deadline exceeded": vtrpcpb.ErrorCode_DEADLINE_EXCEEDED,
-		"integrity error":   vtrpcpb.ErrorCode_INTEGRITY_ERROR,
-		"transient error":   vtrpcpb.ErrorCode_TRANSIENT_ERROR,
-		"unauthenticated":   vtrpcpb.ErrorCode_UNAUTHENTICATED,
-		"aborted":           vtrpcpb.ErrorCode_NOT_IN_TX,
-		"unknown error":     vtrpcpb.ErrorCode_UNKNOWN_ERROR,
+	executeErrors = map[string]vtrpcpb.Code{
+		"bad input":         vtrpcpb.Code_INVALID_ARGUMENT,
+		"deadline exceeded": vtrpcpb.Code_DEADLINE_EXCEEDED,
+		"integrity error":   vtrpcpb.Code_ALREADY_EXISTS,
+		"transient error":   vtrpcpb.Code_UNAVAILABLE,
+		"unauthenticated":   vtrpcpb.Code_UNAUTHENTICATED,
+		"aborted":           vtrpcpb.Code_ABORTED,
+		"unknown error":     vtrpcpb.Code_UNKNOWN,
 	}
 )
 
@@ -258,19 +258,12 @@ func checkTransactionExecuteErrors(t *testing.T, conn *vtgateconn.VTGateConn, ex
 	}
 }
 
-func checkError(t *testing.T, err error, query, errStr string, errCode vtrpcpb.ErrorCode) {
+func checkError(t *testing.T, err error, query, errStr string, errCode vtrpcpb.Code) {
 	if err == nil {
 		t.Errorf("[%v] expected error, got nil", query)
 		return
 	}
-	switch vtErr := err.(type) {
-	case *vterrors.VitessError:
-		if got, want := vtErr.VtErrorCode(), errCode; got != want {
-			t.Errorf("[%v] error code = %v, want %v", query, got, want)
-		}
-	default:
-		t.Errorf("[%v] unrecognized error type: %T, error: %#v", query, err, err)
-		return
+	if got, want := vterrors.Code(err), errCode; got != want {
+		t.Errorf("[%v] error code = %v, want %v", query, got, want)
 	}
-
 }

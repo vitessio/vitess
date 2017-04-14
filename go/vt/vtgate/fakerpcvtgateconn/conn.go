@@ -239,6 +239,11 @@ func (conn *FakeVTGateConn) ExecuteEntityIds(ctx context.Context, query string, 
 	panic("not implemented")
 }
 
+// ExecuteBatch please see vtgateconn.Impl.ExecuteBatch
+func (conn *FakeVTGateConn) ExecuteBatch(ctx context.Context, sqlList []string, bindVarsList []map[string]interface{}, keyspace string, tabletType topodatapb.TabletType, asTransaction bool, session interface{}, options *querypb.ExecuteOptions) ([]sqltypes.QueryResponse, interface{}, error) {
+	panic("not implemented")
+}
+
 // ExecuteBatchShards please see vtgateconn.Impl.ExecuteBatchShards
 func (conn *FakeVTGateConn) ExecuteBatchShards(ctx context.Context, queries []*vtgatepb.BoundShardQuery, tabletType topodatapb.TabletType, asTransaction bool, session interface{}, options *querypb.ExecuteOptions) ([]sqltypes.Result, interface{}, error) {
 	panic("not implemented")
@@ -338,6 +343,16 @@ func (conn *FakeVTGateConn) Rollback(ctx context.Context, session interface{}) e
 // ResolveTransaction please see vtgateconn.Impl.ResolveTransaction
 func (conn *FakeVTGateConn) ResolveTransaction(ctx context.Context, dtid string) error {
 	return nil
+}
+
+// MessageStream is part of the vtgate service API.
+func (conn *FakeVTGateConn) MessageStream(ctx context.Context, keyspace string, shard string, keyRange *topodatapb.KeyRange, name string, callback func(*sqltypes.Result) error) error {
+	panic("not implemented")
+}
+
+// MessageAck is part of the vtgate service API.
+func (conn *FakeVTGateConn) MessageAck(ctx context.Context, keyspace string, name string, ids []*querypb.Value) (int64, error) {
+	panic("not implemented")
 }
 
 // SplitQuery please see vtgateconn.Impl.SplitQuery

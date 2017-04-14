@@ -256,10 +256,9 @@ class TestReparent(unittest.TestCase):
 
     # Start up a master mysql and vttablet
     tablet_62344.init_tablet('replica', 'test_keyspace', shard_id, start=True)
-    if environment.topo_server().flavor() == 'zookeeper':
-      shard = utils.run_vtctl_json(['GetShard', 'test_keyspace/' + shard_id])
-      self.assertEqual(shard['cells'], ['test_nj'],
-                       'wrong list of cell in Shard: %s' % str(shard['cells']))
+    shard = utils.run_vtctl_json(['GetShard', 'test_keyspace/' + shard_id])
+    self.assertEqual(shard['cells'], ['test_nj'],
+                     'wrong list of cell in Shard: %s' % str(shard['cells']))
 
     # Create a few slaves for testing reparenting.
     tablet_62044.init_tablet('replica', 'test_keyspace', shard_id, start=True,
@@ -270,10 +269,9 @@ class TestReparent(unittest.TestCase):
                              wait_for_start=False)
     for t in [tablet_62044, tablet_41983, tablet_31981]:
       t.wait_for_vttablet_state('NOT_SERVING')
-    if environment.topo_server().flavor() == 'zookeeper':
-      shard = utils.run_vtctl_json(['GetShard', 'test_keyspace/' + shard_id])
-      self.assertEqual(shard['cells'], ['test_nj', 'test_ny'],
-                       'wrong list of cell in Shard: %s' % str(shard['cells']))
+    shard = utils.run_vtctl_json(['GetShard', 'test_keyspace/' + shard_id])
+    self.assertEqual(shard['cells'], ['test_nj', 'test_ny'],
+                     'wrong list of cell in Shard: %s' % str(shard['cells']))
 
     # Force the slaves to reparent assuming that all the datasets are
     # identical.
@@ -483,6 +481,15 @@ class TestReparent(unittest.TestCase):
     # now manually reparent 1 out of 2 tablets
     # 62044 will be the new master
     # 31981 won't be re-parented, so it will be busted
+
+    # Shutdown the old master first.
+    if not brutal:
+      tablet_62344.mquery('', mysql_flavor().demote_master_commands())
+
+      # Get the position of the old master and wait for the new one to catch up.
+      utils.wait_for_replication_pos(tablet_62344, tablet_62044)
+
+    # Promote the new master.
     tablet_62044.mquery('', mysql_flavor().promote_slave_commands())
     new_pos = mysql_flavor().master_position(tablet_62044)
     logging.debug('New master position: %s', str(new_pos))

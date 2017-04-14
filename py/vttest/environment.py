@@ -92,13 +92,13 @@ def get_port(name, protocol=None):
     ValueError: the port name is invalid.
   """
   if name == 'vtcombo':
-    port = base_port
+    if protocol == 'grpc':
+      # We can't use the base_port for grpc.
+      return base_port + 1
+    return base_port
   elif name == 'mysql':
-    port = base_port + 2
+    return base_port + 2
+  elif name == 'vtcombo_mysql_port':
+    return base_port + 3
   else:
     raise ValueError('name should be vtcombo or mysql, not %s' % name)
-
-  if protocol == 'grpc':
-    port += 1
-
-  return port

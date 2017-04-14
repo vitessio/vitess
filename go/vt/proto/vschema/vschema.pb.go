@@ -46,6 +46,13 @@ func (m *Keyspace) String() string            { return proto.CompactTextString(m
 func (*Keyspace) ProtoMessage()               {}
 func (*Keyspace) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{0} }
 
+func (m *Keyspace) GetSharded() bool {
+	if m != nil {
+		return m.Sharded
+	}
+	return false
+}
+
 func (m *Keyspace) GetVindexes() map[string]*Vindex {
 	if m != nil {
 		return m.Vindexes
@@ -82,11 +89,25 @@ func (m *Vindex) String() string            { return proto.CompactTextString(m) 
 func (*Vindex) ProtoMessage()               {}
 func (*Vindex) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{1} }
 
+func (m *Vindex) GetType() string {
+	if m != nil {
+		return m.Type
+	}
+	return ""
+}
+
 func (m *Vindex) GetParams() map[string]string {
 	if m != nil {
 		return m.Params
 	}
 	return nil
+}
+
+func (m *Vindex) GetOwner() string {
+	if m != nil {
+		return m.Owner
+	}
+	return ""
 }
 
 // Table is the table info for a Keyspace.
@@ -105,6 +126,13 @@ func (m *Table) Reset()                    { *m = Table{} }
 func (m *Table) String() string            { return proto.CompactTextString(m) }
 func (*Table) ProtoMessage()               {}
 func (*Table) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{2} }
+
+func (m *Table) GetType() string {
+	if m != nil {
+		return m.Type
+	}
+	return ""
+}
 
 func (m *Table) GetColumnVindexes() []*ColumnVindex {
 	if m != nil {
@@ -132,6 +160,20 @@ func (m *ColumnVindex) String() string            { return proto.CompactTextStri
 func (*ColumnVindex) ProtoMessage()               {}
 func (*ColumnVindex) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{3} }
 
+func (m *ColumnVindex) GetColumn() string {
+	if m != nil {
+		return m.Column
+	}
+	return ""
+}
+
+func (m *ColumnVindex) GetName() string {
+	if m != nil {
+		return m.Name
+	}
+	return ""
+}
+
 // Autoincrement is used to designate a column as auto-inc.
 type AutoIncrement struct {
 	Column string `protobuf:"bytes,1,opt,name=column" json:"column,omitempty"`
@@ -143,6 +185,20 @@ func (m *AutoIncrement) Reset()                    { *m = AutoIncrement{} }
 func (m *AutoIncrement) String() string            { return proto.CompactTextString(m) }
 func (*AutoIncrement) ProtoMessage()               {}
 func (*AutoIncrement) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{4} }
+
+func (m *AutoIncrement) GetColumn() string {
+	if m != nil {
+		return m.Column
+	}
+	return ""
+}
+
+func (m *AutoIncrement) GetSequence() string {
+	if m != nil {
+		return m.Sequence
+	}
+	return ""
+}
 
 // SrvVSchema is the roll-up of all the Keyspace schema for a cell.
 type SrvVSchema struct {
@@ -175,7 +231,7 @@ func init() { proto.RegisterFile("vschema.proto", fileDescriptor0) }
 
 var fileDescriptor0 = []byte{
 	// 436 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x09, 0x6e, 0x88, 0x02, 0xff, 0x74, 0x93, 0xd1, 0x6a, 0xd4, 0x40,
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x74, 0x93, 0xd1, 0x6a, 0xd4, 0x40,
 	0x14, 0x86, 0x99, 0xc4, 0x4d, 0xb3, 0x27, 0x26, 0xd5, 0xa1, 0x96, 0x10, 0x11, 0x97, 0xa0, 0xb8,
 	0x57, 0xb9, 0xd8, 0x22, 0x68, 0x45, 0x51, 0x8a, 0x17, 0x45, 0x41, 0x49, 0xa5, 0xb7, 0x65, 0x9a,
 	0x3d, 0xd0, 0xd2, 0xcd, 0x24, 0x66, 0x92, 0x68, 0x5e, 0xc5, 0x1b, 0xc1, 0x37, 0xf0, 0x0d, 0xa5,

@@ -495,6 +495,17 @@ func TestToNative(t *testing.T) {
 	}
 }
 
+func TestToProtoValue(t *testing.T) {
+	got := testVal(Int64, "1").ToProtoValue()
+	want := &querypb.Value{
+		Type:  Int64,
+		Value: []byte("1"),
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("bindvar: %v, want %v", got, want)
+	}
+}
+
 func TestPanics(t *testing.T) {
 	testcases := []struct {
 		in  Value

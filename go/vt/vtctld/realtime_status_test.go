@@ -2,7 +2,6 @@ package vtctld
 
 import (
 	"fmt"
-	"reflect"
 	"testing"
 	"time"
 
@@ -11,13 +10,12 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/youtube/vitess/go/vt/discovery"
 	"github.com/youtube/vitess/go/vt/logutil"
-	"github.com/youtube/vitess/go/vt/tabletmanager/tmclient"
-	"github.com/youtube/vitess/go/vt/tabletserver/grpcqueryservice"
-	"github.com/youtube/vitess/go/vt/tabletserver/queryservice/fakes"
-	"github.com/youtube/vitess/go/vt/vttest/fakesqldb"
+	"github.com/youtube/vitess/go/vt/topo/memorytopo"
+	"github.com/youtube/vitess/go/vt/vttablet/grpcqueryservice"
+	"github.com/youtube/vitess/go/vt/vttablet/queryservice/fakes"
+	"github.com/youtube/vitess/go/vt/vttablet/tmclient"
 	"github.com/youtube/vitess/go/vt/wrangler"
 	"github.com/youtube/vitess/go/vt/wrangler/testlib"
-	"github.com/youtube/vitess/go/vt/zktopo/zktestserver"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -29,8 +27,7 @@ func TestRealtimeStatsWithQueryService(t *testing.T) {
 	// Set up testing keyspace with 2 tablets within 2 cells.
 	keyspace := "ks"
 	shard := "-80"
-	db := fakesqldb.Register()
-	ts := zktestserver.New(t, []string{"cell1", "cell2"})
+	ts := memorytopo.NewServer("cell1", "cell2")
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 
 	if err := ts.CreateKeyspace(context.Background(), keyspace, &topodatapb.Keyspace{
@@ -40,9 +37,9 @@ func TestRealtimeStatsWithQueryService(t *testing.T) {
 		t.Fatalf("CreateKeyspace failed: %v", err)
 	}
 
-	t1 := testlib.NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_REPLICA, db,
+	t1 := testlib.NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_REPLICA, nil,
 		testlib.TabletKeyspaceShard(t, keyspace, shard))
-	t2 := testlib.NewFakeTablet(t, wr, "cell2", 1, topodatapb.TabletType_REPLICA, db,
+	t2 := testlib.NewFakeTablet(t, wr, "cell2", 1, topodatapb.TabletType_REPLICA, nil,
 		testlib.TabletKeyspaceShard(t, keyspace, shard))
 	for _, ft := range []*(testlib.FakeTablet){t1, t2} {
 		ft.StartActionLoop(t, wr)
@@ -108,7 +105,7 @@ func checkStats(realtimeStats *realtimeStats, tablet *testlib.FakeTablet, want *
 		if err != nil {
 			continue
 		}
-		if reflect.DeepEqual(result, discovery.TabletStats{}) {
+		if result.DeepEqual(&discovery.TabletStats{}) {
 			continue
 		}
 		got := result.Stats

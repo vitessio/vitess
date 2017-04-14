@@ -7,15 +7,8 @@ package planbuilder
 import (
 	"fmt"
 
-	"github.com/youtube/vitess/go/cistring"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
-)
-
-// These values dictate the state of the symtab.
-const (
-	symtabNormal = iota
-	symtabOrderBy
 )
 
 // symtab contains the symbols for a SELECT statement.
@@ -53,7 +46,6 @@ const (
 // keep track of every symtab created, and recursively chase them
 // down every time a subquery merges with an outer query.
 type symtab struct {
-	state   int
 	tables  []*tabsym
 	Colsyms []*colsym
 	Externs []*sqlparser.ColName
@@ -69,14 +61,8 @@ func newSymtab(vschema VSchema) *symtab {
 	}
 }
 
-// SetState updates the state and returns the previous state.
-func (st *symtab) SetState(state int) int {
-	state, st.state = st.state, state
-	return state
-}
-
 // AddAlias adds a table alias to symtab.
-func (st *symtab) AddAlias(alias, astName sqlparser.TableIdent, table *vindexes.Table, rb *route) {
+func (st *symtab) AddAlias(alias *sqlparser.TableName, astName sqlparser.TableIdent, table *vindexes.Table, rb *route) {
 	st.tables = append(st.tables, &tabsym{
 		Alias:          alias,
 		ASTName:        astName,
@@ -101,7 +87,7 @@ func (st *symtab) Merge(newsyms *symtab) error {
 	}
 	for _, t := range newsyms.tables {
 		if found := st.findTable(t.Alias); found != nil {
-			return fmt.Errorf("duplicate symbol: %s", t.Alias)
+			return fmt.Errorf("duplicate symbol: %s", sqlparser.String(t.Alias))
 		}
 		t.symtab = st
 		st.tables = append(st.tables, t)
@@ -109,9 +95,9 @@ func (st *symtab) Merge(newsyms *symtab) error {
 	return nil
 }
 
-func (st *symtab) findTable(alias sqlparser.TableIdent) *tabsym {
+func (st *symtab) findTable(alias *sqlparser.TableName) *tabsym {
 	for i, t := range st.tables {
-		if t.Alias == alias {
+		if t.Alias.Equal(alias) {
 			return st.tables[i]
 		}
 	}
@@ -147,21 +133,24 @@ func (st *symtab) Find(col *sqlparser.ColName, autoResolve bool) (rb *route, isL
 		return m.Route(), m.Symtab() == st, nil
 	}
 	if len(st.Colsyms) != 0 {
-		rb, err = st.searchColsyms(col)
-		switch {
-		case err != nil:
-			return nil, false, err
-		case rb != nil:
-			return rb, true, nil
-		case st.state == symtabNormal:
-			goto checkOuter
+		if col.Qualifier.IsEmpty() {
+			rb, err = st.searchColsyms(col)
+			switch {
+			case err != nil:
+				return nil, false, err
+			case rb != nil:
+				return rb, true, nil
+			}
 		}
+		if rb = st.searchTables(col, autoResolve); rb != nil {
+			return rb, true, nil
+		}
+		return nil, false, fmt.Errorf("symbol %s not found", sqlparser.String(col))
 	}
+
 	if rb = st.searchTables(col, autoResolve); rb != nil {
 		return rb, true, nil
 	}
-
-checkOuter:
 	if st.Outer == nil {
 		return nil, false, fmt.Errorf("symbol %s not found", sqlparser.String(col))
 	}
@@ -174,14 +163,9 @@ checkOuter:
 }
 
 func (st *symtab) searchColsyms(col *sqlparser.ColName) (rb *route, err error) {
-	name := sqlparser.String(col)
 	var cursym *colsym
 	for _, colsym := range st.Colsyms {
-		if colsym.Alias.EqualString("*") {
-			col.Metadata = colsym
-			return colsym.Route(), nil
-		}
-		if colsym.Alias.EqualString(name) {
+		if colsym.Alias.Equal(col.Name) {
 			if cursym != nil {
 				return nil, fmt.Errorf("ambiguous symbol reference: %v", sqlparser.String(col))
 			}
@@ -192,25 +176,21 @@ func (st *symtab) searchColsyms(col *sqlparser.ColName) (rb *route, err error) {
 	if cursym != nil {
 		return cursym.Route(), nil
 	}
-	starname := sqlparser.String(&sqlparser.ColName{
-		Name:      sqlparser.NewColIdent("*"),
-		Qualifier: col.Qualifier,
-	})
-	for _, colsym := range st.Colsyms {
-		if colsym.QualifiedName.EqualString(name) || colsym.QualifiedName.EqualString(starname) {
-			col.Metadata = colsym
-			return colsym.Route(), nil
-		}
-	}
 	return nil, nil
 }
 
 func (st *symtab) searchTables(col *sqlparser.ColName, autoResolve bool) *route {
-	qualifier := sqlparser.TableIdent(sqlparser.String(col.Qualifier))
-	if qualifier == "" && autoResolve && len(st.tables) == 1 {
-		qualifier = st.tables[0].Alias
+	if col.Qualifier.IsEmpty() {
+		if autoResolve && len(st.tables) == 1 {
+			col.Metadata = st.tables[0]
+			return st.tables[0].Route()
+		}
+		return nil
 	}
-	alias := st.findTable(qualifier)
+	// TODO(sougou): this search should ideally match the search
+	// style provided by VSchema, where the default keyspace must be
+	// used if one is not provided.
+	alias := st.findTable(col.Qualifier)
 	if alias == nil {
 		return nil
 	}
@@ -268,7 +248,7 @@ type sym interface {
 // from the table name, which is something that VTTablet and MySQL
 // can't recognize.
 type tabsym struct {
-	Alias          sqlparser.TableIdent
+	Alias          *sqlparser.TableName
 	ASTName        sqlparser.TableIdent
 	route          *route
 	symtab         *symtab
@@ -279,7 +259,7 @@ type tabsym struct {
 func (t *tabsym) newColRef(col *sqlparser.ColName) colref {
 	return colref{
 		Meta: t,
-		Name: col.Name.Lowered(),
+		name: col.Name.Lowered(),
 	}
 }
 
@@ -294,7 +274,7 @@ func (t *tabsym) Symtab() *symtab {
 // FindVindex returns the vindex if one was found for the column.
 func (t *tabsym) FindVindex(name sqlparser.ColIdent) vindexes.Vindex {
 	for _, colVindex := range t.ColumnVindexes {
-		if colVindex.Column.Equal(cistring.CIString(name)) {
+		if colVindex.Column.Equal(name) {
 			return colVindex.Vindex
 		}
 	}
@@ -314,16 +294,6 @@ type colsym struct {
 	// Otherwise, one will be generated. If the expression is a simple
 	// column, then the base name of the column will be used as the alias.
 	Alias sqlparser.ColIdent
-
-	// QualfiedName will represent the fully qualified column name,
-	// if the expression is a simple column reference. If the column
-	// expression does not reference a table (or alias), a fully
-	// qualified name will be generated based on the table alias
-	// the column references.
-	// Alias or QualifiedName or both could be blank if such names
-	// could not be generated. If so, those expressions cannot be
-	// referenced by other clauses of the SQL statement.
-	QualifiedName sqlparser.ColIdent
 
 	route      *route
 	symtab     *symtab
@@ -360,9 +330,11 @@ func (cs *colsym) Symtab() *symtab {
 // to scoping rules. Effectively, colref changes such references
 // to 'symbol.a', where symbol physically points to a tabsym
 // or colsym. This representation makes a colref unambiguous.
+// The name field must be relied upon only for comparison. Use
+// the Name method for generating SQL.
 type colref struct {
 	Meta sym
-	Name string
+	name string
 }
 
 // newColref builds a colref from a sqlparser.ColName that was
@@ -374,4 +346,9 @@ func newColref(col *sqlparser.ColName) colref {
 // Route returns the route for the colref.
 func (cr colref) Route() *route {
 	return cr.Meta.Route()
+}
+
+// Name returns the name of the colref.
+func (cr colref) Name() sqlparser.ColIdent {
+	return sqlparser.NewColIdent(cr.name)
 }

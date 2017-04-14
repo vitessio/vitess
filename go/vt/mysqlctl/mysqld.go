@@ -26,8 +26,9 @@ import (
 	"sync"
 	"time"
 
+	"bytes"
+
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
@@ -44,21 +45,24 @@ var (
 	appPoolSize    = flag.Int("app_pool_size", 40, "Size of the connection pool for app connections")
 	appIdleTimeout = flag.Duration("app_idle_timeout", time.Minute, "Idle timeout for app connections")
 
-	socketFile = flag.String("mysqlctl_socket", "", "socket file to use for remote mysqlctl actions (empty for local actions)")
+	socketFile        = flag.String("mysqlctl_socket", "", "socket file to use for remote mysqlctl actions (empty for local actions)")
+	mycnfTemplateFile = flag.String("mysqlctl_mycnf_template", "", "template file to use for generating the my.cnf file during server init")
 
 	// masterConnectRetry is used in 'SET MASTER' commands
 	masterConnectRetry = flag.Duration("master_connect_retry", 10*time.Second, "how long to wait in between slave -> connection attempts. Only precise to the second.")
+
+	dbaMysqlStats      = stats.NewTimings("MysqlDba")
+	allprivsMysqlStats = stats.NewTimings("MysqlAllPrivs")
+	appMysqlStats      = stats.NewTimings("MysqlApp")
 )
 
 // Mysqld is the object that represents a mysqld daemon running on this server.
 type Mysqld struct {
-	config             *Mycnf
-	dbcfgs             *dbconfigs.DBConfigs
-	dbaPool            *dbconnpool.ConnectionPool
-	appPool            *dbconnpool.ConnectionPool
-	dbaMysqlStats      *stats.Timings
-	allprivsMysqlStats *stats.Timings
-	tabletDir          string
+	config    *Mycnf
+	dbcfgs    *dbconfigs.DBConfigs
+	dbaPool   *dbconnpool.ConnectionPool
+	appPool   *dbconnpool.ConnectionPool
+	tabletDir string
 
 	// mutex protects the fields below.
 	mutex         sync.Mutex
@@ -69,7 +73,7 @@ type Mysqld struct {
 
 // NewMysqld creates a Mysqld object based on the provided configuration
 // and connection parameters.
-func NewMysqld(config *Mycnf, dbcfgs *dbconfigs.DBConfigs, dbconfigsFlags dbconfigs.DBConfigFlag, enablePublishStats bool) *Mysqld {
+func NewMysqld(config *Mycnf, dbcfgs *dbconfigs.DBConfigs, dbconfigsFlags dbconfigs.DBConfigFlag) *Mysqld {
 	result := &Mysqld{
 		config:    config,
 		dbcfgs:    dbcfgs,
@@ -78,36 +82,13 @@ func NewMysqld(config *Mycnf, dbcfgs *dbconfigs.DBConfigs, dbconfigsFlags dbconf
 
 	// Create and open the connection pool for dba access.
 	if dbconfigs.DbaConfig&dbconfigsFlags != 0 {
-		dbaMysqlStatsName := ""
-		dbaPoolName := ""
-		if enablePublishStats {
-			dbaMysqlStatsName = "MysqlDba"
-			dbaPoolName = "DbaConnPool"
-		}
-		result.dbaMysqlStats = stats.NewTimings(dbaMysqlStatsName)
-		result.dbaPool = dbconnpool.NewConnectionPool(dbaPoolName, *dbaPoolSize, *dbaIdleTimeout)
-		result.dbaPool.Open(dbconnpool.DBConnectionCreator(&dbcfgs.Dba, result.dbaMysqlStats))
-	}
-
-	// Configure the stats for the AllPrivs connections.
-	if dbconfigs.AllPrivsConfig&dbconfigsFlags != 0 {
-		allprivsMysqlStatsName := ""
-		if enablePublishStats {
-			allprivsMysqlStatsName = "MysqlAllPrivs"
-		}
-		result.allprivsMysqlStats = stats.NewTimings(allprivsMysqlStatsName)
+		result.dbaPool = dbconnpool.NewConnectionPool("DbaConnPool", *dbaPoolSize, *dbaIdleTimeout)
+		result.dbaPool.Open(dbconnpool.DBConnectionCreator(&dbcfgs.Dba, dbaMysqlStats))
 	}
 
 	// Create and open the connection pool for app access.
 	if dbconfigs.AppConfig&dbconfigsFlags != 0 {
-		appMysqlStatsName := ""
-		appPoolName := ""
-		if enablePublishStats {
-			appMysqlStatsName = "MysqlApp"
-			appPoolName = "AppConnPool"
-		}
-		appMysqlStats := stats.NewTimings(appMysqlStatsName)
-		result.appPool = dbconnpool.NewConnectionPool(appPoolName, *appPoolSize, *appIdleTimeout)
+		result.appPool = dbconnpool.NewConnectionPool("AppConnPool", *appPoolSize, *appIdleTimeout)
 		result.appPool.Open(dbconnpool.DBConnectionCreator(&dbcfgs.App, appMysqlStats))
 	}
 
@@ -140,7 +121,7 @@ func (mysqld *Mysqld) RunMysqlUpgrade() error {
 		return client.RunMysqlUpgrade(context.TODO())
 	}
 
-	// find mysql_upgrade. If not there, we do nothing.
+	// Find mysql_upgrade. If not there, we do nothing.
 	dir, err := vtenv.VtMysqlRoot()
 	if err != nil {
 		log.Warningf("VT_MYSQL_ROOT not set, skipping mysql_upgrade step: %v", err)
@@ -152,13 +133,28 @@ func (mysqld *Mysqld) RunMysqlUpgrade() error {
 		return nil
 	}
 
+	// Since we started mysql with --skip-grant-tables, we should
+	// be able to run mysql_upgrade without any valid user or
+	// password. However, mysql_upgrade executes a 'flush
+	// privileges' right in the middle, and then subsequent
+	// commands fail if we don't use valid credentials. So let's
+	// use dba credentials.
+	params, err := dbconfigs.WithCredentials(&mysqld.dbcfgs.Dba)
+	if err != nil {
+		return err
+	}
+	cnf, err := mysqld.defaultsExtraFile(&params)
+	if err != nil {
+		return err
+	}
+	defer os.Remove(cnf)
+
 	// Run the program, if it fails, we fail.  Note in this
 	// moment, mysqld is running with no grant tables on the local
 	// socket only, so this doesn't need any user or password.
 	args := []string{
 		// --defaults-file=* must be the first arg.
-		"--defaults-file=" + mysqld.config.path,
-		"--socket", mysqld.config.SocketFile,
+		"--defaults-file=" + cnf,
 		"--force", // Don't complain if it's already been upgraded.
 	}
 	cmd := exec.Command(name, args...)
@@ -168,9 +164,11 @@ func (mysqld *Mysqld) RunMysqlUpgrade() error {
 	return err
 }
 
-// Start will start the mysql daemon, either by running the 'mysqld_start'
-// hook, or by running mysqld_safe in the background.
-// If a mysqlctld address is provided in a flag, Start will run remotely.
+// Start will start the mysql daemon, either by running the
+// 'mysqld_start' hook, or by running mysqld_safe in the background.
+// If a mysqlctld address is provided in a flag, Start will run
+// remotely.  When waiting for mysqld to start, we will use
+// the dba user.
 func (mysqld *Mysqld) Start(ctx context.Context, mysqldArgs ...string) error {
 	// Execute as remote action on mysqlctld if requested.
 	if *socketFile != "" {
@@ -183,6 +181,15 @@ func (mysqld *Mysqld) Start(ctx context.Context, mysqldArgs ...string) error {
 		return client.Start(ctx, mysqldArgs...)
 	}
 
+	if err := mysqld.startNoWait(ctx, mysqldArgs...); err != nil {
+		return err
+	}
+
+	return mysqld.Wait(ctx)
+}
+
+// startNoWait is the internal version of Start, and it doesn't wait.
+func (mysqld *Mysqld) startNoWait(ctx context.Context, mysqldArgs ...string) error {
 	var name string
 	ts := fmt.Sprintf("Mysqld.Start(%v)", time.Now().Unix())
 
@@ -213,11 +220,11 @@ func (mysqld *Mysqld) Start(ctx context.Context, mysqldArgs ...string) error {
 		log.Infof("%v %#v", ts, cmd)
 		stderr, err := cmd.StderrPipe()
 		if err != nil {
-			return nil
+			return err
 		}
 		stdout, err := cmd.StdoutPipe()
 		if err != nil {
-			return nil
+			return err
 		}
 		go func() {
 			scanner := bufio.NewScanner(stderr)
@@ -233,7 +240,7 @@ func (mysqld *Mysqld) Start(ctx context.Context, mysqldArgs ...string) error {
 		}()
 		err = cmd.Start()
 		if err != nil {
-			return nil
+			return err
 		}
 
 		mysqld.mutex.Lock()
@@ -260,12 +267,25 @@ func (mysqld *Mysqld) Start(ctx context.Context, mysqldArgs ...string) error {
 		return fmt.Errorf("mysqld_start hook failed: %v", hr.String())
 	}
 
-	return mysqld.Wait(ctx)
+	return nil
 }
 
-// Wait returns nil when mysqld is up and accepting connections.
+// Wait returns nil when mysqld is up and accepting connections. It
+// will use the dba credentials to try to connect. Use wait() with
+// different credentials if needed.
 func (mysqld *Mysqld) Wait(ctx context.Context) error {
+	params, err := dbconfigs.WithCredentials(&mysqld.dbcfgs.Dba)
+	if err != nil {
+		return err
+	}
+
+	return mysqld.wait(ctx, params)
+}
+
+// wait is the internal version of Wait, that takes credentials.
+func (mysqld *Mysqld) wait(ctx context.Context, params sqldb.ConnParams) error {
 	log.Infof("Waiting for mysqld socket file (%v) to be ready...", mysqld.config.SocketFile)
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -276,12 +296,7 @@ func (mysqld *Mysqld) Wait(ctx context.Context) error {
 		_, statErr := os.Stat(mysqld.config.SocketFile)
 		if statErr == nil {
 			// Make sure the socket file isn't stale.
-			// Use a user that exists even before we apply the init_db_sql_file.
-			conn, connErr := mysql.Connect(sqldb.ConnParams{
-				Uname:      "root",
-				Charset:    "utf8",
-				UnixSocket: mysqld.config.SocketFile,
-			})
+			conn, connErr := sqldb.Connect(params)
 			if connErr == nil {
 				conn.Close()
 				return nil
@@ -452,7 +467,7 @@ func (mysqld *Mysqld) Init(ctx context.Context, initDBSQLFile string) error {
 	}
 
 	// Set up config files.
-	if err = mysqld.initConfig(root); err != nil {
+	if err = mysqld.initConfig(root, mysqld.config.path); err != nil {
 		log.Errorf("failed creating %v: %v", mysqld.config.path, err)
 		return err
 	}
@@ -462,9 +477,22 @@ func (mysqld *Mysqld) Init(ctx context.Context, initDBSQLFile string) error {
 		return err
 	}
 
-	// Start mysqld.
-	if err = mysqld.Start(ctx); err != nil {
+	// Start mysqld. We do not use Start, as we have to wait using
+	// the root user.
+	if err = mysqld.startNoWait(ctx); err != nil {
 		log.Errorf("failed starting mysqld (check %v for more info): %v", mysqld.config.ErrorLogPath, err)
+		return err
+	}
+
+	// Wait for mysqld to be ready, using root credentials, as no
+	// user is created yet.
+	params := sqldb.ConnParams{
+		Uname:      "root",
+		Charset:    "utf8",
+		UnixSocket: mysqld.config.SocketFile,
+	}
+	if err = mysqld.wait(ctx, params); err != nil {
+		log.Errorf("failed starting mysqld in time (check %v for more info): %v", mysqld.config.ErrorLogPath, err)
 		return err
 	}
 
@@ -474,7 +502,7 @@ func (mysqld *Mysqld) Init(ctx context.Context, initDBSQLFile string) error {
 		return fmt.Errorf("can't open init_db_sql_file (%v): %v", initDBSQLFile, err)
 	}
 	defer sqlFile.Close()
-	if err := mysqld.executeMysqlScript(&sqldb.ConnParams{Uname: "root", Pass: ""}, sqlFile); err != nil {
+	if err := mysqld.executeMysqlScript(&params, sqlFile); err != nil {
 		return fmt.Errorf("can't run init_db_sql_file (%v): %v", initDBSQLFile, err)
 	}
 
@@ -530,25 +558,14 @@ func (mysqld *Mysqld) installDataDir() error {
 	return nil
 }
 
-func (mysqld *Mysqld) initConfig(root string) error {
+func (mysqld *Mysqld) initConfig(root, outFile string) error {
 	var err error
 	var configData string
 
 	switch hr := hook.NewSimpleHook("make_mycnf").Execute(); hr.ExitStatus {
 	case hook.HOOK_DOES_NOT_EXIST:
-		log.Infof("make_mycnf hook doesn't exist, reading default template files")
-		cnfTemplatePaths := []string{
-			path.Join(root, "config/mycnf/default.cnf"),
-			path.Join(root, "config/mycnf/master.cnf"),
-			path.Join(root, "config/mycnf/replica.cnf"),
-		}
-
-		if extraCnf := os.Getenv("EXTRA_MY_CNF"); extraCnf != "" {
-			parts := strings.Split(extraCnf, ":")
-			cnfTemplatePaths = append(cnfTemplatePaths, parts...)
-		}
-
-		configData, err = mysqld.config.makeMycnf(cnfTemplatePaths)
+		log.Infof("make_mycnf hook doesn't exist, reading template files")
+		configData, err = mysqld.config.makeMycnf(getMycnfTemplates(root))
 	case hook.HOOK_SUCCESS:
 		configData, err = mysqld.config.fillMycnfTemplate(hr.Stdout)
 	default:
@@ -558,7 +575,74 @@ func (mysqld *Mysqld) initConfig(root string) error {
 		return err
 	}
 
-	return ioutil.WriteFile(mysqld.config.path, []byte(configData), 0664)
+	return ioutil.WriteFile(outFile, []byte(configData), 0664)
+}
+
+func getMycnfTemplates(root string) []string {
+	if *mycnfTemplateFile != "" {
+		return []string{*mycnfTemplateFile}
+	}
+
+	cnfTemplatePaths := []string{
+		path.Join(root, "config/mycnf/default.cnf"),
+		path.Join(root, "config/mycnf/master.cnf"),
+		path.Join(root, "config/mycnf/replica.cnf"),
+	}
+
+	if extraCnf := os.Getenv("EXTRA_MY_CNF"); extraCnf != "" {
+		parts := strings.Split(extraCnf, ":")
+		cnfTemplatePaths = append(cnfTemplatePaths, parts...)
+	}
+
+	return cnfTemplatePaths
+}
+
+// RefreshConfig attempts to recreate the my.cnf from templates, and log and
+// swap in to place if it's updated. It keeps a copy of the last version in case fallback is required.
+// Should be called from a stable replica, server_id is not regenerated.
+func (mysqld *Mysqld) RefreshConfig() error {
+	log.Info("Checking for updates to my.cnf")
+	root, err := vtenv.VtRoot()
+	if err != nil {
+		return err
+	}
+	f, err := ioutil.TempFile(path.Dir(mysqld.config.path), "my.cnf")
+	if err != nil {
+		return fmt.Errorf("Could not create temp file: %v", err)
+	}
+
+	defer os.Remove(f.Name())
+	err = mysqld.initConfig(root, f.Name())
+	if err != nil {
+		return fmt.Errorf("Could not initConfig in %v: %v", f.Name(), err)
+	}
+
+	existing, err := ioutil.ReadFile(mysqld.config.path)
+	if err != nil {
+		return fmt.Errorf("Could not read existing file %v: %v", mysqld.config.path, err)
+	}
+	updated, err := ioutil.ReadFile(f.Name())
+	if err != nil {
+		return fmt.Errorf("Could not read updated file %v: %v", f.Name(), err)
+	}
+
+	if bytes.Equal(existing, updated) {
+		log.Infof("No changes to my.cnf. Continuing.")
+		return nil
+	}
+
+	backupPath := mysqld.config.path + ".previous"
+	err = os.Rename(mysqld.config.path, backupPath)
+	if err != nil {
+		return fmt.Errorf("Could not back up existing %v: %v", mysqld.config.path, err)
+	}
+	err = os.Rename(f.Name(), mysqld.config.path)
+	if err != nil {
+		return fmt.Errorf("Could not move %v to %v: %v", f.Name(), mysqld.config.path, err)
+	}
+	log.Infof("Updated my.cnf. Backup of previous version available in %v", backupPath)
+
+	return nil
 }
 
 // ReinitConfig updates the config file as if Mysqld is initializing. At the
@@ -586,7 +670,7 @@ func (mysqld *Mysqld) ReinitConfig(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	return mysqld.initConfig(root)
+	return mysqld.initConfig(root, mysqld.config.path)
 }
 
 func (mysqld *Mysqld) createDirs() error {
@@ -753,12 +837,12 @@ func (mysqld *Mysqld) GetAppConnection(ctx context.Context) (dbconnpool.PoolConn
 
 // GetDbaConnection creates a new DBConnection.
 func (mysqld *Mysqld) GetDbaConnection() (*dbconnpool.DBConnection, error) {
-	return dbconnpool.NewDBConnection(&mysqld.dbcfgs.Dba, mysqld.dbaMysqlStats)
+	return dbconnpool.NewDBConnection(&mysqld.dbcfgs.Dba, dbaMysqlStats)
 }
 
 // GetAllPrivsConnection creates a new DBConnection.
 func (mysqld *Mysqld) GetAllPrivsConnection() (*dbconnpool.DBConnection, error) {
-	return dbconnpool.NewDBConnection(&mysqld.dbcfgs.AllPrivs, mysqld.allprivsMysqlStats)
+	return dbconnpool.NewDBConnection(&mysqld.dbcfgs.AllPrivs, allprivsMysqlStats)
 }
 
 // Close will close this instance of Mysqld. It will wait for all dba

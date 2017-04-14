@@ -7,7 +7,7 @@ package vtgate
 import (
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/discovery"
-	"github.com/youtube/vitess/go/vt/tabletserver/sandboxconn"
+	"github.com/youtube/vitess/go/vt/vttablet/sandboxconn"
 	"golang.org/x/net/context"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -179,7 +179,7 @@ func createRouterEnv() (router *Router, sbc1, sbc2, sbclookup *sandboxconn.Sandb
 
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
 
-	router = NewRouter(context.Background(), serv, cell, "", scatterConn)
+	router = NewRouter(context.Background(), serv, cell, "", scatterConn, false)
 	return router, sbc1, sbc2, sbclookup
 }
 

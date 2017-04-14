@@ -113,15 +113,22 @@
             <li><a href="/user-guide/reparenting.html">Reparenting</a></li>
             <li style="padding-bottom: 0"><a href="/user-guide/schema-management.html">Schema Management</a></li>
               <ul style="display: block">
+                <li style="padding-bottom: 0"><a href="/user-guide/vschema.html">VSchema Guide</a></li>
                 <li style="padding-bottom: 0"><a href="/user-guide/schema-swap.html">Schema Swap (Tutorial)</a></li>
               </ul>
             <li style="padding-bottom: 0"><a href="/user-guide/sharding.html">Sharding</a>
               <ul style="display: block">
-                <li><a href="/user-guide/horizontal-sharding.html">Horizontal Sharding (Codelab)</a></li>
-                <li style="padding-bottom: 0"><a href="/user-guide/sharding-kubernetes.html">Sharding in Kubernetes (Codelab)</a></li>
+                <li><a href="/user-guide/horizontal-sharding-workflow.html">Horizontal Sharding (Tutorial, automated)</a></li>
+                <li><a href="/user-guide/horizontal-sharding.html">Horizontal Sharding (Tutorial, manual)</a></li>
+                <li><a href="/user-guide/sharding-kubernetes-workflow.html">Sharding in Kubernetes (Tutorial, automated)</a></li>
+                <li style="padding-bottom: 0"><a href="/user-guide/sharding-kubernetes.html">Sharding in Kubernetes (Tutorial, manual)</a></li>
               </ul>
             </li>
+            <li><a href="/user-guide/vitess-sequences.html">Vitess Sequences</a></li>
+            <li><a href="/user-guide/mysql-server-protocol.html">MySQL Server Protocol</a></li>
             <li><a href="/user-guide/vitess-replication.html">Vitess and Replication</a></li>
+            <li><a href="/user-guide/update-stream.html">Update Stream</a></li>
+            <li><a href="/user-guide/row-based-replication.html">Row Based Replication</a></li>
             <li><a href="/user-guide/topology-service.html">Topology Service</a></li>
             <li><a href="/user-guide/transport-security-model.html">Transport Security Model</a></li>
             <li style="padding-bottom: 0"><a href="/user-guide/launching.html">Launching</a>
@@ -129,6 +136,7 @@
                 <li><a href="/user-guide/scalability-philosophy.html">Scalability Philosophy</a></li>
                 <li><a href="/user-guide/production-planning.html">Production Planning</a></li>
                 <li><a href="/user-guide/server-configuration.html">Server Configuration</a></li>
+                <li><a href="/user-guide/twopc.html">2PC Guide</a></li>
                 <li style="padding-bottom: 0"><a href="/user-guide/troubleshooting.html">Troubleshooting</a></li>
               </ul>
             </li>
@@ -215,15 +223,22 @@
             <li><a href="/user-guide/reparenting.html">Reparenting</a></li>
             <li style="padding-bottom: 0"><a href="/user-guide/schema-management.html">Schema Management</a></li>
               <ul style="display: block">
+                <li style="padding-bottom: 0"><a href="/user-guide/vschema.html">VSchema Guide</a></li>
                 <li style="padding-bottom: 0"><a href="/user-guide/schema-swap.html">Schema Swap (Tutorial)</a></li>
               </ul>
             <li style="padding-bottom: 0"><a href="/user-guide/sharding.html">Sharding</a>
               <ul style="display: block">
-                <li><a href="/user-guide/horizontal-sharding.html">Horizontal Sharding (Codelab)</a></li>
-                <li style="padding-bottom: 0"><a href="/user-guide/sharding-kubernetes.html">Sharding in Kubernetes (Codelab)</a></li>
+                <li><a href="/user-guide/horizontal-sharding-workflow.html">Horizontal Sharding (Tutorial, automated)</a></li>
+                <li><a href="/user-guide/horizontal-sharding.html">Horizontal Sharding (Tutorial, manual)</a></li>
+                <li><a href="/user-guide/sharding-kubernetes-workflow.html">Sharding in Kubernetes (Tutorial, automated)</a></li>
+                <li style="padding-bottom: 0"><a href="/user-guide/sharding-kubernetes.html">Sharding in Kubernetes (Tutorial, manual)</a></li>
               </ul>
             </li>
+            <li><a href="/user-guide/vitess-sequences.html">Vitess Sequences</a></li>
+            <li><a href="/user-guide/mysql-server-protocol.html">MySQL Server Protocol</a></li>
             <li><a href="/user-guide/vitess-replication.html">Vitess and Replication</a></li>
+            <li><a href="/user-guide/update-stream.html">Update Stream</a></li>
+            <li><a href="/user-guide/row-based-replication.html">Row Based Replication</a></li>
             <li><a href="/user-guide/topology-service.html">Topology Service</a></li>
             <li><a href="/user-guide/transport-security-model.html">Transport Security Model</a></li>
             <li style="padding-bottom: 0"><a href="/user-guide/launching.html">Launching</a>
@@ -231,6 +246,7 @@
                 <li><a href="/user-guide/scalability-philosophy.html">Scalability Philosophy</a></li>
                 <li><a href="/user-guide/production-planning.html">Production Planning</a></li>
                 <li><a href="/user-guide/server-configuration.html">Server Configuration</a></li>
+                <li><a href="/user-guide/twopc.html">2PC Guide</a></li>
                 <li style="padding-bottom: 0"><a href="/user-guide/troubleshooting.html">Troubleshooting</a></li>
               </ul>
             </li>
@@ -346,7 +362,7 @@ Create a table&quot;.</p>
 <li> Got to the Workflows section of vtctld UI (it will be at
 <a href="http://localhost:8001/api/v1/proxy/namespaces/default/services/vtctld:web/app2/workflows">http://localhost:8001/api/v1/proxy/namespaces/default/services/vtctld:web/app2/workflows</a>
 if you followed the Getting Started Guide as is) and press the &quot;+&quot; button in
-the bottom right corner. You will be presented with &quot;Create a new Workflow&quot;
+the top right corner. You will be presented with &quot;Create a new Workflow&quot;
 dialog.</li>
 <li> In the &quot;Factory Name&quot; list select &quot;Schema Swap&quot;.</li>
 <li> In the field &quot;Keyspace&quot; enter &quot;test_keyspace&quot; (without quotes).</li>
@@ -356,6 +372,9 @@ messages ADD views BIGINT(20) UNSIGNED NULL&quot;.</li>
 <li> Click &quot;Create&quot; button at the bottom of the dialog.</li>
 </ol>
 
+<p>Another way to start the schema swap is to execute vtctlclient command:</p>
+<div class="highlight"><pre><code class="language-sh" data-lang="sh">vitess/examples/local<span class="nv">$ </span>./lvtctl.sh WorkflowCreate schema_swap -keyspace<span class="o">=</span>test_keyspace -sql<span class="o">=</span><span class="s1">&#39;SQL statement&#39;</span>
+</code></pre></div>
 <p>From this point on all you need to do is watch how the schema swap process is
 progressing. Try expanding the displayed nodes in vtctld UI and look at the logs
 of all the actions that process is doing. Once the UI shows &quot;Schema swap is
@@ -374,7 +393,7 @@ tablets.</p>
     
     <a href="https://groups.google.com/forum/#!forum/vitess" target="_blank">Contact: vitess@googlegroups.com</a>&nbsp;&nbsp;<b>·</b>&nbsp;&nbsp;
     <a href="https://groups.google.com/forum/#!forum/vitess-announce" target="_blank">Announcements</a>&nbsp;&nbsp;<b>·</b>&nbsp;&nbsp;
-    &#169; 2016 <a href="/">Vitess</a> powered by <a href="https://developers.google.com/open-source/">Google Inc</a>
+    &#169; 2017 <a href="/">Vitess</a> powered by <a href="https://developers.google.com/open-source/">Google Inc</a>
   </nav>
 </footer>
 

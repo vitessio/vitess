@@ -3,95 +3,61 @@
   xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
   <parent>
-    <groupId>com.youtube.vitess</groupId>
+    <groupId>io.vitess</groupId>
     <artifactId>vitess-parent</artifactId>
-    <version>1.0-SNAPSHOT</version>
-    <relativePath>../pom.xml</relativePath>
+    <version>1.1.0-SNAPSHOT</version>
   </parent>
-  <artifactId>example</artifactId>
+  <artifactId>vitess-example</artifactId>
 
   <dependencies>
     <dependency>
-      <groupId>com.flipkart.vitess</groupId>
-      <artifactId>vitess-connector-java</artifactId>
-      <version>1.0-SNAPSHOT</version>
+      <groupId>com.google.guava</groupId>
+      <artifactId>guava</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>io.vitess</groupId>
+      <artifactId>vitess-client</artifactId>
     </dependency>
     <dependency>
-      <groupId>com.youtube.vitess</groupId>
-      <artifactId>client</artifactId>
-      <version>1.0-SNAPSHOT</version>
+      <groupId>io.vitess</groupId>
+      <artifactId>vitess-grpc-client</artifactId>
     </dependency>
+
     <dependency>
-      <groupId>com.youtube.vitess</groupId>
-      <artifactId>grpc-client</artifactId>
-      <version>1.0-SNAPSHOT</version>
+      <groupId>io.vitess</groupId>
+      <artifactId>vitess-jdbc</artifactId>
     </dependency>
-    <dependency>
-      <groupId>io.grpc</groupId>
-      <artifactId>grpc-all</artifactId>
-      <version>${grpc.version}</version>
-    </dependency>
+
     <dependency>
       <groupId>joda-time</groupId>
       <artifactId>joda-time</artifactId>
-      <version>2.5</version>
     </dependency>
+
+    <!-- Dependencies with limited scope. -->
     <!-- Only used to run the example from the command line. -->
     <dependency>
       <groupId>org.codehaus.mojo</groupId>
       <artifactId>exec-maven-plugin</artifactId>
-      <version>1.4.0</version>
       <type>maven-plugin</type>
+      <scope>test</scope>
     </dependency>
   </dependencies>
 
-  <pluginRepositories>
-    <pluginRepository>
-      <releases>
-        <updatePolicy>never</updatePolicy>
-      </releases>
-      <snapshots>
-        <enabled>false</enabled>
-      </snapshots>
-      <id>central</id>
-      <name>Central Repository</name>
-      <url>https://repo.maven.apache.org/maven2</url>
-    </pluginRepository>
-  </pluginRepositories>
   <build>
-    <extensions>
-      <extension>
-        <groupId>kr.motd.maven</groupId>
-        <artifactId>os-maven-plugin</artifactId>
-        <version>1.2.3.Final</version>
-      </extension>
-    </extensions>
     <plugins>
-      <plugin>
-        <groupId>org.xolstice.maven.plugins</groupId>
-        <artifactId>protobuf-maven-plugin</artifactId>
-        <version>0.5.0</version>
+     <!-- Exclusions for dependency:analyze: -->
+     <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-dependency-plugin</artifactId>
         <configuration>
-          <protocArtifact>com.google.protobuf:protoc:${protobuf.java.version}:exe:${os.detected.classifier}</protocArtifact>
-          <pluginId>grpc-java</pluginId>
-          <pluginArtifact>io.grpc:protoc-gen-grpc-java:${grpc.version}:exe:${os.detected.classifier}</pluginArtifact>
-          <protoSourceRoot>../../proto</protoSourceRoot>
-          <includes>
-            <include>query.proto</include>
-            <include>topodata.proto</include>
-            <include>vtgate.proto</include>
-            <include>vtrpc.proto</include>
-            <include>vtgateservice.proto</include>
-          </includes>
+          <usedDependencies>
+            <!-- JDBC driver is imported at runtime. -->
+            <usedDependency>io.vitess:vitess-jdbc</usedDependency>
+            <!-- This plugin is only used in scripts to run the main from the command line. -->
+            <usedDependency>org.codehaus.mojo:exec-maven-plugin</usedDependency>
+          </usedDependencies>
         </configuration>
-        <executions>
-          <execution>
-            <goals>
-              <goal>compile</goal>
-              <goal>compile-custom</goal>
-            </goals>
-          </execution>
-        </executions>
       </plugin>
     </plugins>
   </build>
