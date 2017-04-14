@@ -17,10 +17,12 @@ flavor=$1
 tag=latest
 if [[ -n "$flavor" ]]; then
   base_image=vitess/base:$flavor
+  lite_image=vitess/lite:$flavor
   tag=$flavor
 else
   echo "Flavor not specified as first argument. Building default image."
   base_image=vitess/base
+  lite_image=vitess/lite
 fi
 
 # Abort if base image does not exist.
@@ -33,7 +35,9 @@ fi
 if [[ "$prompt_notice" = true ]]; then
   cat <<END
 
-This script is going to repack and copy the existing *local* base image '$base_image' into a smaller image 'vitess/lite'.
+This script is going to repack and copy the existing *local* base image '$base_image' into a smaller image '$lite_image'.
+
+It does NOT recompile the Vitess binaries. For that you will have to rebuild or pull the base image.
 
 The 'docker images' output below shows you how old your local base image is:
 
