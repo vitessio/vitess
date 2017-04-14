@@ -14,20 +14,24 @@ fi
 
 flavor=$1
 
+base_image=vitess/base
+make_target=docker_base
+lite_image=vitess/lite
+dockerfile=Dockerfile
 tag=latest
 if [[ -n "$flavor" ]]; then
   base_image=vitess/base:$flavor
+  make_target=docker_base_$flavor
   lite_image=vitess/lite:$flavor
+  dockerfile=Dockerfile.$flavor
   tag=$flavor
 else
   echo "Flavor not specified as first argument. Building default image."
-  base_image=vitess/base
-  lite_image=vitess/lite
 fi
 
 # Abort if base image does not exist.
 if ! docker inspect $base_image &>/dev/null; then
-  echo "ERROR: Dependent image $base_image does not exist. Run 'make docker_base' to build it locally or 'docker pull $base_image' to fetch it from Docker Hub."
+  echo "ERROR: Dependent image $base_image does not exist. Run 'make $make_target' to build it locally or 'docker pull $base_image' to fetch it from Docker Hub (if it is published)."
   exit 1
 fi
 
@@ -43,10 +47,10 @@ The 'docker images' output below shows you how old your local base image is:
 
 $(docker images vitess/base | grep -E "(CREATED|$tag)")
 
-If you need a newer base image, you will have to manually run 'make docker_base' to build it locally
+If you need a newer base image, you will have to manually run 'make $make_target' to build it locally
 or 'docker pull $base_image' to fetch it from Docker Hub.
 
-Press ENTER to continue building 'vitess/lite' or Ctrl-C to cancel.
+Press ENTER to continue building '$lite_image' or Ctrl-C to cancel.
 END
   read
 fi
@@ -80,12 +84,7 @@ rm -rf base
 chmod -R o=g lite
 
 # Build vitess/lite image
-
-if [[ -n "$flavor" ]]; then
-  docker build --no-cache -f Dockerfile.$flavor -t vitess/lite:$flavor .
-else
-  docker build --no-cache -t vitess/lite .
-fi
+docker build --no-cache -f $dockerfile -t $lite_image .
 
 # Clean up temporary files
 rm -rf lite
