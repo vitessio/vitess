@@ -94,9 +94,9 @@ var (
 type VTGate struct {
 	transactionMode int
 
-	// router and resolver are top-level objects
+	// executor and resolver are top-level objects
 	// that make routing decisions.
-	router   *Router
+	executor *Executor
 	resolver *Resolver
 
 	// scatterConn and txConn are mid-level objects
@@ -158,7 +158,7 @@ func Init(ctx context.Context, hc discovery.HealthCheck, topoServer topo.Server,
 
 	rpcVTGate = &VTGate{
 		transactionMode: getTxMode(),
-		router:          NewRouter(ctx, serv, cell, "VTGateRouter", sc, *normalizeQueries),
+		executor:        NewExecutor(ctx, serv, cell, "VTGateExecutor", sc, *normalizeQueries),
 		resolver:        NewResolver(serv, cell, sc),
 		scatterConn:     sc,
 		txConn:          tc,
@@ -251,7 +251,7 @@ func (vtg *VTGate) Execute(ctx context.Context, sql string, bindVariables map[st
 		}
 		qr, err = vtg.resolver.Execute(ctx, sql, bindVariables, target.Keyspace, target.TabletType, session, f, false, session.Options)
 	} else {
-		qr, err = vtg.router.Execute(ctx, sql, bindVariables, target.Keyspace, target.TabletType, session)
+		qr, err = vtg.executor.Execute(ctx, sql, bindVariables, target.Keyspace, target.TabletType, session)
 	}
 	if err == nil && autocommit {
 		// Set the error if commit fails.
@@ -578,7 +578,7 @@ func (vtg *VTGate) StreamExecute(ctx context.Context, sql string, bindVariables 
 				return callback(reply)
 			})
 	} else {
-		err = vtg.router.StreamExecute(
+		err = vtg.executor.StreamExecute(
 			ctx,
 			sql,
 			bindVariables,
@@ -758,7 +758,7 @@ func (vtg *VTGate) isKeyspaceRangeBasedSharded(keyspace string, srvKeyspace *top
 		// providing the sharding key value.
 		return true
 	}
-	if vtg.router.IsKeyspaceRangeBasedSharded(keyspace) {
+	if vtg.executor.IsKeyspaceRangeBasedSharded(keyspace) {
 		// We are using range based sharding with the VSchema
 		// poviding the routing information
 		return true
@@ -924,7 +924,7 @@ func (vtg *VTGate) MessageStream(ctx context.Context, keyspace string, shard str
 }
 
 // MessageAck is part of the vtgate service API. This is a V3 level API that's sent
-// to the Router. The table name will be resolved using V3 rules, and the routing
+// to the executor. The table name will be resolved using V3 rules, and the routing
 // will make use of vindexes for sharded keyspaces.
 // TODO(sougou): Make this call use Session.
 func (vtg *VTGate) MessageAck(ctx context.Context, keyspace string, name string, ids []*querypb.Value) (int64, error) {
@@ -932,7 +932,7 @@ func (vtg *VTGate) MessageAck(ctx context.Context, keyspace string, name string,
 	ltt := topoproto.TabletTypeLString(topodatapb.TabletType_MASTER)
 	statsKey := []string{"MessageAck", keyspace, ltt}
 	defer vtg.timings.Record(statsKey, startTime)
-	count, err := vtg.router.MessageAck(ctx, keyspace, name, ids)
+	count, err := vtg.executor.MessageAck(ctx, keyspace, name, ids)
 	return count, formatError(err)
 }
 
@@ -973,7 +973,7 @@ func (vtg *VTGate) GetGatewayCacheStatus() gateway.TabletCacheStatusList {
 
 // VSchemaStats returns the loaded vschema stats.
 func (vtg *VTGate) VSchemaStats() *VSchemaStats {
-	return vtg.router.planner.VSchemaStats()
+	return vtg.executor.VSchemaStats()
 }
 
 func truncateErrorStrings(data map[string]interface{}) map[string]interface{} {

@@ -11,9 +11,9 @@ import (
 // TestVSchemaStats makes sure the building and displaying of the
 // VSchemaStats works.
 func TestVSchemaStats(t *testing.T) {
-	r, _, _, _ := createRouterEnv()
+	r, _, _, _ := createExecutorEnv()
 
-	stats := r.planner.VSchemaStats()
+	stats := r.VSchemaStats()
 
 	templ := template.New("")
 	templ, err := templ.Parse(VSchemaTemplate)
@@ -32,120 +32,120 @@ func TestVSchemaStats(t *testing.T) {
 }
 
 func TestGetPlanUnnormalized(t *testing.T) {
-	r, _, _, _ := createRouterEnv()
+	r, _, _, _ := createExecutorEnv()
 	query1 := "select * from music_user_map where id = 1"
-	plan1, err := r.planner.GetPlan(query1, "", map[string]interface{}{})
+	plan1, err := r.getPlan(query1, "", map[string]interface{}{})
 	if err != nil {
 		t.Error(err)
 	}
-	plan2, err := r.planner.GetPlan(query1, "", map[string]interface{}{})
+	plan2, err := r.getPlan(query1, "", map[string]interface{}{})
 	if err != nil {
 		t.Error(err)
 	}
 	if plan1 != plan2 {
-		t.Errorf("GetPlan(query1): plans must be equal: %p %p", plan1, plan2)
+		t.Errorf("getPlan(query1): plans must be equal: %p %p", plan1, plan2)
 	}
 	want := []string{
 		query1,
 	}
-	if keys := r.planner.plans.Keys(); !reflect.DeepEqual(keys, want) {
+	if keys := r.plans.Keys(); !reflect.DeepEqual(keys, want) {
 		t.Errorf("Plan keys: %s, want %s", keys, want)
 	}
-	plan3, err := r.planner.GetPlan(query1, KsTestUnsharded, map[string]interface{}{})
+	plan3, err := r.getPlan(query1, KsTestUnsharded, map[string]interface{}{})
 	if err != nil {
 		t.Error(err)
 	}
 	if plan1 == plan3 {
-		t.Errorf("GetPlan(query1, ks): plans must not be equal: %p %p", plan1, plan3)
+		t.Errorf("getPlan(query1, ks): plans must not be equal: %p %p", plan1, plan3)
 	}
-	plan4, err := r.planner.GetPlan(query1, KsTestUnsharded, map[string]interface{}{})
+	plan4, err := r.getPlan(query1, KsTestUnsharded, map[string]interface{}{})
 	if err != nil {
 		t.Error(err)
 	}
 	if plan3 != plan4 {
-		t.Errorf("GetPlan(query1, ks): plans must be equal: %p %p", plan3, plan4)
+		t.Errorf("getPlan(query1, ks): plans must be equal: %p %p", plan3, plan4)
 	}
 	want = []string{
 		KsTestUnsharded + ":" + query1,
 		query1,
 	}
-	if keys := r.planner.plans.Keys(); !reflect.DeepEqual(keys, want) {
+	if keys := r.plans.Keys(); !reflect.DeepEqual(keys, want) {
 		t.Errorf("Plan keys: %s, want %s", keys, want)
 	}
 }
 
 func TestGetPlanNormalized(t *testing.T) {
-	r, _, _, _ := createRouterEnv()
-	r.planner.normalize = true
+	r, _, _, _ := createExecutorEnv()
+	r.normalize = true
 	query1 := "select * from music_user_map where id = 1"
 	query2 := "select * from music_user_map where id = 2"
 	normalized := "select * from music_user_map where id = :vtg1"
-	plan1, err := r.planner.GetPlan(query1, "", map[string]interface{}{})
+	plan1, err := r.getPlan(query1, "", map[string]interface{}{})
 	if err != nil {
 		t.Error(err)
 	}
-	plan2, err := r.planner.GetPlan(query1, "", map[string]interface{}{})
+	plan2, err := r.getPlan(query1, "", map[string]interface{}{})
 	if err != nil {
 		t.Error(err)
 	}
 	if plan1 != plan2 {
-		t.Errorf("GetPlan(query1): plans must be equal: %p %p", plan1, plan2)
+		t.Errorf("getPlan(query1): plans must be equal: %p %p", plan1, plan2)
 	}
 	want := []string{
 		normalized,
 	}
-	if keys := r.planner.plans.Keys(); !reflect.DeepEqual(keys, want) {
+	if keys := r.plans.Keys(); !reflect.DeepEqual(keys, want) {
 		t.Errorf("Plan keys: %s, want %s", keys, want)
 	}
-	plan3, err := r.planner.GetPlan(query2, "", map[string]interface{}{})
+	plan3, err := r.getPlan(query2, "", map[string]interface{}{})
 	if err != nil {
 		t.Error(err)
 	}
 	if plan1 != plan3 {
-		t.Errorf("GetPlan(query2): plans must be equal: %p %p", plan1, plan3)
+		t.Errorf("getPlan(query2): plans must be equal: %p %p", plan1, plan3)
 	}
-	plan4, err := r.planner.GetPlan(normalized, "", map[string]interface{}{})
+	plan4, err := r.getPlan(normalized, "", map[string]interface{}{})
 	if err != nil {
 		t.Error(err)
 	}
 	if plan1 != plan4 {
-		t.Errorf("GetPlan(normalized): plans must be equal: %p %p", plan1, plan4)
+		t.Errorf("getPlan(normalized): plans must be equal: %p %p", plan1, plan4)
 	}
 
-	plan3, err = r.planner.GetPlan(query1, KsTestUnsharded, map[string]interface{}{})
+	plan3, err = r.getPlan(query1, KsTestUnsharded, map[string]interface{}{})
 	if err != nil {
 		t.Error(err)
 	}
 	if plan1 == plan3 {
-		t.Errorf("GetPlan(query1, ks): plans must not be equal: %p %p", plan1, plan3)
+		t.Errorf("getPlan(query1, ks): plans must not be equal: %p %p", plan1, plan3)
 	}
-	plan4, err = r.planner.GetPlan(query1, KsTestUnsharded, map[string]interface{}{})
+	plan4, err = r.getPlan(query1, KsTestUnsharded, map[string]interface{}{})
 	if err != nil {
 		t.Error(err)
 	}
 	if plan3 != plan4 {
-		t.Errorf("GetPlan(query1, ks): plans must be equal: %p %p", plan3, plan4)
+		t.Errorf("getPlan(query1, ks): plans must be equal: %p %p", plan3, plan4)
 	}
 	want = []string{
 		KsTestUnsharded + ":" + normalized,
 		normalized,
 	}
-	if keys := r.planner.plans.Keys(); !reflect.DeepEqual(keys, want) {
+	if keys := r.plans.Keys(); !reflect.DeepEqual(keys, want) {
 		t.Errorf("Plan keys: %s, want %s", keys, want)
 	}
 
 	// Errors
-	_, err = r.planner.GetPlan("syntax", "", map[string]interface{}{})
+	_, err = r.getPlan("syntax", "", map[string]interface{}{})
 	wantErr := "syntax error at position 7 near 'syntax'"
 	if err == nil || err.Error() != wantErr {
-		t.Errorf("GetPlan(syntax): %v, want %s", err, wantErr)
+		t.Errorf("getPlan(syntax): %v, want %s", err, wantErr)
 	}
-	_, err = r.planner.GetPlan("create table a(id int)", "", map[string]interface{}{})
+	_, err = r.getPlan("create table a(id int)", "", map[string]interface{}{})
 	wantErr = "unsupported construct: ddl"
 	if err == nil || err.Error() != wantErr {
-		t.Errorf("GetPlan(syntax): %v, want %s", err, wantErr)
+		t.Errorf("getPlan(syntax): %v, want %s", err, wantErr)
 	}
-	if keys := r.planner.plans.Keys(); !reflect.DeepEqual(keys, want) {
+	if keys := r.plans.Keys(); !reflect.DeepEqual(keys, want) {
 		t.Errorf("Plan keys: %s, want %s", keys, want)
 	}
 }
