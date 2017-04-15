@@ -13,15 +13,15 @@ import (
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
-func TestRouterMessageAckSharded(t *testing.T) {
-	router, sbc1, sbc2, _ := createRouterEnv()
+func TestExecutorMessageAckSharded(t *testing.T) {
+	executor, sbc1, sbc2, _ := createExecutorEnv()
 
 	// Constant in IN is just a number, not a bind variable.
 	ids := []*querypb.Value{{
 		Type:  sqltypes.VarChar,
 		Value: []byte("1"),
 	}}
-	count, err := router.MessageAck(context.Background(), "", "user", ids)
+	count, err := executor.MessageAck(context.Background(), "", "user", ids)
 	if err != nil {
 		t.Error(err)
 	}
@@ -46,7 +46,7 @@ func TestRouterMessageAckSharded(t *testing.T) {
 		Type:  sqltypes.VarChar,
 		Value: []byte("3"),
 	}}
-	count, err = router.MessageAck(context.Background(), "", "user", ids)
+	count, err = executor.MessageAck(context.Background(), "", "user", ids)
 	if err != nil {
 		t.Error(err)
 	}

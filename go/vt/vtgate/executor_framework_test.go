@@ -13,7 +13,7 @@ import (
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
-var routerVSchema = `
+var executorVSchema = `
 {
 	"sharded": true,
 	"vindexes": {
@@ -162,15 +162,15 @@ var unshardedVSchema = `
 }
 `
 
-func createRouterEnv() (router *Router, sbc1, sbc2, sbclookup *sandboxconn.SandboxConn) {
+func createExecutorEnv() (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn.SandboxConn) {
 	cell := "aa"
 	hc := discovery.NewFakeHealthCheck()
-	s := createSandbox("TestRouter")
-	s.VSchema = routerVSchema
+	s := createSandbox("TestExecutor")
+	s.VSchema = executorVSchema
 	serv := new(sandboxTopo)
 	scatterConn := newTestScatterConn(hc, serv, cell)
-	sbc1 = hc.AddTestTablet(cell, "-20", 1, "TestRouter", "-20", topodatapb.TabletType_MASTER, true, 1, nil)
-	sbc2 = hc.AddTestTablet(cell, "40-60", 1, "TestRouter", "40-60", topodatapb.TabletType_MASTER, true, 1, nil)
+	sbc1 = hc.AddTestTablet(cell, "-20", 1, "TestExecutor", "-20", topodatapb.TabletType_MASTER, true, 1, nil)
+	sbc2 = hc.AddTestTablet(cell, "40-60", 1, "TestExecutor", "40-60", topodatapb.TabletType_MASTER, true, 1, nil)
 
 	createSandbox(KsTestUnsharded)
 	sbclookup = hc.AddTestTablet(cell, "0", 1, KsTestUnsharded, "0", topodatapb.TabletType_MASTER, true, 1, nil)
@@ -180,12 +180,12 @@ func createRouterEnv() (router *Router, sbc1, sbc2, sbclookup *sandboxconn.Sandb
 
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
 
-	router = NewRouter(context.Background(), serv, cell, "", scatterConn, false)
-	return router, sbc1, sbc2, sbclookup
+	executor = NewExecutor(context.Background(), serv, cell, "", scatterConn, false)
+	return executor, sbc1, sbc2, sbclookup
 }
 
-func routerExec(router *Router, sql string, bv map[string]interface{}) (*sqltypes.Result, error) {
-	return router.Execute(context.Background(),
+func executorExec(executor *Executor, sql string, bv map[string]interface{}) (*sqltypes.Result, error) {
+	return executor.Execute(context.Background(),
 		sql,
 		bv,
 		"",
@@ -193,9 +193,9 @@ func routerExec(router *Router, sql string, bv map[string]interface{}) (*sqltype
 		masterSession)
 }
 
-func routerStream(router *Router, sql string) (qr *sqltypes.Result, err error) {
+func executorStream(executor *Executor, sql string) (qr *sqltypes.Result, err error) {
 	results := make(chan *sqltypes.Result, 10)
-	err = router.StreamExecute(context.Background(), sql, nil, "", topodatapb.TabletType_MASTER, masterSession, func(qr *sqltypes.Result) error {
+	err = executor.StreamExecute(context.Background(), sql, nil, "", topodatapb.TabletType_MASTER, masterSession, func(qr *sqltypes.Result) error {
 		results <- qr
 		return nil
 	})

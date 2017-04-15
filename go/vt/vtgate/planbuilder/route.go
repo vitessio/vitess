@@ -525,7 +525,7 @@ func (rb *route) SupplyVar(from, to int, col *sqlparser.ColName, varname string)
 	panic("unreachable")
 }
 
-// SupplyCol changes the router to supply the requested column
+// SupplyCol changes the executor to supply the requested column
 // name, and returns the result column number. If the column
 // is already in the list, it's reused.
 func (rb *route) SupplyCol(ref colref) int {
