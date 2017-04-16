@@ -15,6 +15,59 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 )
 
+// These constants are used to identify the SQL statement type.
+const (
+	StmtSelect = iota
+	StmtInsert
+	StmtUpdate
+	StmtDelete
+	StmtBegin
+	StmtCommit
+	StmtRollback
+	StmtSet
+	StmtUnknown
+)
+
+// Preview analyzes the beginning of the query and returns the
+// statement type.
+func Preview(sql string) int {
+	trimmed := strings.TrimFunc(sql, unicode.IsSpace)
+	prefix := trimmed
+	if end := strings.IndexFunc(trimmed, unicode.IsSpace); end != -1 {
+		prefix = trimmed[:end]
+	}
+	switch strings.ToLower(prefix) {
+	case "select":
+		return StmtSelect
+	case "insert":
+		return StmtInsert
+	case "update":
+		return StmtUpdate
+	case "delete":
+		return StmtDelete
+	case "set":
+		return StmtSet
+	}
+	switch strings.ToLower(trimmed) {
+	case "begin", "start transaction":
+		return StmtBegin
+	case "commit":
+		return StmtCommit
+	case "rollback":
+		return StmtRollback
+	}
+	return StmtUnknown
+}
+
+// IsDML returns true if the query is an INSERT, UPDATE or DELETE statement.
+func IsDML(sql string) bool {
+	switch Preview(sql) {
+	case StmtInsert, StmtUpdate, StmtDelete:
+		return true
+	}
+	return false
+}
+
 // GetTableName returns the table name from the SimpleTableExpr
 // only if it's a simple expression. Otherwise, it returns "".
 func GetTableName(node SimpleTableExpr) TableIdent {
@@ -166,34 +219,4 @@ func ExtractSetNums(sql string) (map[string]int64, error) {
 		result[key] = num
 	}
 	return result, nil
-}
-
-// HasPrefix returns true if the query has one of the specified
-// statement prefixes. For example, you can find out if a query
-// is a DML with HasPrefix(sql, "insert", "update", "delete").
-func HasPrefix(sql string, values ...string) bool {
-	sql = strings.TrimLeftFunc(sql, unicode.IsSpace)
-	end := strings.IndexFunc(sql, unicode.IsSpace)
-	word := sql
-	if end != -1 {
-		word = sql[:end]
-	}
-	for _, val := range values {
-		if strings.EqualFold(word, val) {
-			return true
-		}
-	}
-	return false
-}
-
-// IsDML returns true if the query is an INSERT, UPDATE or DELETE statement.
-func IsDML(sql string) bool {
-	return HasPrefix(sql, "insert", "update", "delete")
-}
-
-// IsStatement returns true if the sql matches a single-word
-// statement like begin, commit or rollback.
-func IsStatement(sql, statement string) bool {
-	sql = strings.TrimFunc(sql, unicode.IsSpace)
-	return strings.EqualFold(sql, statement)
 }
