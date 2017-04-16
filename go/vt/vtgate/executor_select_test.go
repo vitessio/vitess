@@ -724,14 +724,14 @@ func TestSelectScatter(t *testing.T) {
 	s.VSchema = executorVSchema
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
 	serv := new(sandboxTopo)
-	scatterConn := newTestScatterConn(hc, serv, cell)
+	resolver := newTestResolver(hc, serv, cell)
 	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
 	var conns []*sandboxconn.SandboxConn
 	for _, shard := range shards {
 		sbc := hc.AddTestTablet(cell, shard, 1, "TestExecutor", shard, topodatapb.TabletType_MASTER, true, 1, nil)
 		conns = append(conns, sbc)
 	}
-	executor := NewExecutor(context.Background(), serv, cell, "", scatterConn, false)
+	executor := NewExecutor(context.Background(), serv, cell, "", resolver, false)
 
 	_, err := executorExec(executor, "select id from user", nil)
 	if err != nil {
@@ -756,14 +756,14 @@ func TestStreamSelectScatter(t *testing.T) {
 	s.VSchema = executorVSchema
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
 	serv := new(sandboxTopo)
-	scatterConn := newTestScatterConn(hc, serv, cell)
+	resolver := newTestResolver(hc, serv, cell)
 	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
 	var conns []*sandboxconn.SandboxConn
 	for _, shard := range shards {
 		sbc := hc.AddTestTablet(cell, shard, 1, "TestExecutor", shard, topodatapb.TabletType_MASTER, true, 1, nil)
 		conns = append(conns, sbc)
 	}
-	executor := NewExecutor(context.Background(), serv, cell, "", scatterConn, false)
+	executor := NewExecutor(context.Background(), serv, cell, "", resolver, false)
 
 	sql := "select id from user"
 	result, err := executorStream(executor, sql)
@@ -804,8 +804,8 @@ func TestSelectScatterFail(t *testing.T) {
 		conns = append(conns, sbc)
 	}
 	serv := new(sandboxTopo)
-	scatterConn := newTestScatterConn(hc, serv, cell)
-	executor := NewExecutor(context.Background(), serv, cell, "", scatterConn, false)
+	resolver := newTestResolver(hc, serv, cell)
+	executor := NewExecutor(context.Background(), serv, cell, "", resolver, false)
 
 	_, err := executorExec(executor, "select id from user", nil)
 	want := "paramsSelectScatter: keyspace TestExecutor fetch error: topo error GetSrvKeyspace"

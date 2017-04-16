@@ -39,7 +39,7 @@ func newVCursorImpl(ctx context.Context, tabletType topodatapb.TabletType, sessi
 }
 
 func (vc *vcursorImpl) Execute(query string, bindvars map[string]interface{}) (*sqltypes.Result, error) {
-	return vc.executor.Execute(vc.ctx, query, bindvars, "", vc.tabletType, vc.session)
+	return vc.executor.Execute(vc.ctx, query, bindvars, vc.session)
 }
 
 func (vc *vcursorImpl) ExecuteMultiShard(keyspace string, shardQueries map[string]querytypes.BoundQuery) (*sqltypes.Result, error) {
