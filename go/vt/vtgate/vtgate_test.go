@@ -56,12 +56,12 @@ func init() {
 }
 
 func TestVTGateBegin(t *testing.T) {
-	save := rpcVTGate.transactionMode
+	save := rpcVTGate.txConn.mode
 	defer func() {
-		rpcVTGate.transactionMode = save
+		rpcVTGate.txConn.mode = save
 	}()
 
-	rpcVTGate.transactionMode = TxSingle
+	rpcVTGate.txConn.mode = vtgatepb.TransactionMode_SINGLE
 	got, err := rpcVTGate.Begin(context.Background(), true)
 	if err != nil {
 		t.Error(err)
@@ -80,7 +80,7 @@ func TestVTGateBegin(t *testing.T) {
 		t.Errorf("Begin(multi): %v, want %s", err, wantErr)
 	}
 
-	rpcVTGate.transactionMode = TxMulti
+	rpcVTGate.txConn.mode = vtgatepb.TransactionMode_MULTI
 	got, err = rpcVTGate.Begin(context.Background(), true)
 	if err != nil {
 		t.Error(err)
@@ -104,7 +104,7 @@ func TestVTGateBegin(t *testing.T) {
 		t.Errorf("Begin(single): %v, want %v", got, wantSession)
 	}
 
-	rpcVTGate.transactionMode = TxTwoPC
+	rpcVTGate.txConn.mode = vtgatepb.TransactionMode_TWOPC
 	got, err = rpcVTGate.Begin(context.Background(), true)
 	if err != nil {
 		t.Error(err)
@@ -130,18 +130,18 @@ func TestVTGateBegin(t *testing.T) {
 }
 
 func TestVTGateCommit(t *testing.T) {
-	save := rpcVTGate.transactionMode
+	save := rpcVTGate.txConn.mode
 	defer func() {
-		rpcVTGate.transactionMode = save
+		rpcVTGate.txConn.mode = save
 	}()
 
 	session := &vtgatepb.Session{
 		InTransaction: true,
 	}
 
-	rpcVTGate.transactionMode = TxSingle
+	rpcVTGate.txConn.mode = vtgatepb.TransactionMode_SINGLE
 	err := rpcVTGate.Commit(context.Background(), true, session)
-	wantErr := "2pc transaction disallowed"
+	wantErr := "vtgate: : 2pc transaction disallowed"
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("Begin(multi): %v, want %s", err, wantErr)
 	}
@@ -154,7 +154,7 @@ func TestVTGateCommit(t *testing.T) {
 		t.Error(err)
 	}
 
-	rpcVTGate.transactionMode = TxMulti
+	rpcVTGate.txConn.mode = vtgatepb.TransactionMode_MULTI
 	session = &vtgatepb.Session{
 		InTransaction: true,
 	}
@@ -171,7 +171,7 @@ func TestVTGateCommit(t *testing.T) {
 		t.Error(err)
 	}
 
-	rpcVTGate.transactionMode = TxTwoPC
+	rpcVTGate.txConn.mode = vtgatepb.TransactionMode_TWOPC
 	session = &vtgatepb.Session{
 		InTransaction: true,
 	}
@@ -311,150 +311,6 @@ func TestVTGateExecuteWithKeyspaceShard(t *testing.T) {
 	want = "vtgate: : target: TestUnsharded.noshard.master, no valid tablet"
 	if err == nil || err.Error() != want {
 		t.Errorf("Execute: %v, want %s", err, want)
-	}
-}
-
-func TestVTGateIntercept(t *testing.T) {
-	createSandbox(KsTestUnsharded)
-	hcVTGateTest.Reset()
-	sbc := hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, KsTestUnsharded, "0", topodatapb.TabletType_MASTER, true, 1, nil)
-
-	// begin.
-	session, _, err := rpcVTGate.Execute(context.Background(), "begin", nil, masterSession)
-	if err != nil {
-		t.Fatal(err)
-	}
-	wantSession := &vtgatepb.Session{InTransaction: true, TargetString: "@master"}
-	if !proto.Equal(session, wantSession) {
-		t.Errorf("begin: %v, want %v", session, wantSession)
-	}
-	if commitCount := sbc.CommitCount.Get(); commitCount != 0 {
-		t.Errorf("want 0, got %d", commitCount)
-	}
-
-	// Begin again should cause a commit and a new begin.
-	session, _, err = rpcVTGate.Execute(context.Background(), "select id from t1", nil, session)
-	if err != nil {
-		t.Fatal(err)
-	}
-	session, _, err = rpcVTGate.Execute(context.Background(), "begin", nil, session)
-	if err != nil {
-		t.Fatal(err)
-	}
-	wantSession = &vtgatepb.Session{InTransaction: true, TargetString: "@master"}
-	if !proto.Equal(session, wantSession) {
-		t.Errorf("begin: %v, want %v", session, wantSession)
-	}
-	if commitCount := sbc.CommitCount.Get(); commitCount != 1 {
-		t.Errorf("want 1, got %d", commitCount)
-	}
-
-	// commit.
-	session, _, err = rpcVTGate.Execute(context.Background(), "select id from t1", nil, session)
-	if err != nil {
-		t.Fatal(err)
-	}
-	session, _, err = rpcVTGate.Execute(context.Background(), "commit", nil, session)
-	if err != nil {
-		t.Fatal(err)
-	}
-	wantSession = &vtgatepb.Session{TargetString: "@master"}
-	if !proto.Equal(session, wantSession) {
-		t.Errorf("begin: %v, want %v", session, wantSession)
-	}
-	if commitCount := sbc.CommitCount.Get(); commitCount != 2 {
-		t.Errorf("want 2, got %d", commitCount)
-	}
-
-	// Commit again should be a no-op.
-	session, _, err = rpcVTGate.Execute(context.Background(), "select id from t1", nil, session)
-	if err != nil {
-		t.Fatal(err)
-	}
-	session, _, err = rpcVTGate.Execute(context.Background(), "Commit", nil, session)
-	if err != nil {
-		t.Fatal(err)
-	}
-	wantSession = &vtgatepb.Session{TargetString: "@master"}
-	if !proto.Equal(session, wantSession) {
-		t.Errorf("begin: %v, want %v", session, wantSession)
-	}
-	if commitCount := sbc.CommitCount.Get(); commitCount != 2 {
-		t.Errorf("want 2, got %d", commitCount)
-	}
-
-	// rollback
-	session, _, err = rpcVTGate.Execute(context.Background(), "begin", nil, session)
-	if err != nil {
-		t.Fatal(err)
-	}
-	session, _, err = rpcVTGate.Execute(context.Background(), "select id from t1", nil, session)
-	if err != nil {
-		t.Fatal(err)
-	}
-	session, _, err = rpcVTGate.Execute(context.Background(), "rollback", nil, session)
-	if err != nil {
-		t.Fatal(err)
-	}
-	wantSession = &vtgatepb.Session{TargetString: "@master"}
-	if !proto.Equal(session, wantSession) {
-		t.Errorf("begin: %v, want %v", session, wantSession)
-	}
-	if rollbackCount := sbc.RollbackCount.Get(); rollbackCount != 1 {
-		t.Errorf("want 1, got %d", rollbackCount)
-	}
-
-	// rollback again should be a no-op
-	session, _, err = rpcVTGate.Execute(context.Background(), "select id from t1", nil, session)
-	session, _, err = rpcVTGate.Execute(context.Background(), "RollBack", nil, session)
-	if err != nil {
-		t.Fatal(err)
-	}
-	wantSession = &vtgatepb.Session{TargetString: "@master"}
-	if !proto.Equal(session, wantSession) {
-		t.Errorf("begin: %v, want %v", session, wantSession)
-	}
-	if rollbackCount := sbc.RollbackCount.Get(); rollbackCount != 1 {
-		t.Errorf("want 1, got %d", rollbackCount)
-	}
-
-	// set.
-	session, _, err = rpcVTGate.Execute(context.Background(), "set autocommit=1", nil, session)
-	if err != nil {
-		t.Fatal(err)
-	}
-	wantSession = &vtgatepb.Session{Autocommit: true, TargetString: "@master"}
-	if !proto.Equal(session, wantSession) {
-		t.Errorf("begin: %v, want %v", session, wantSession)
-	}
-	session, _, err = rpcVTGate.Execute(context.Background(), "set AUTOCOMMIT = 0", nil, session)
-	if err != nil {
-		t.Fatal(err)
-	}
-	wantSession = &vtgatepb.Session{TargetString: "@master"}
-	if !proto.Equal(session, wantSession) {
-		t.Errorf("begin: %v, want %v", session, wantSession)
-	}
-
-	// complex set
-	_, _, err = rpcVTGate.Execute(context.Background(), "set autocommit=1+1", nil, session)
-	wantErr := "invalid syntax: 1 + 1"
-	if err == nil || err.Error() != wantErr {
-		t.Errorf("Execute: %v, want %s", err, wantErr)
-	}
-
-	// multi-set
-	_, _, err = rpcVTGate.Execute(context.Background(), "set autocommit=1, a = 2", nil, session)
-	wantErr = "too many set values: set autocommit=1, a = 2"
-	if err == nil || err.Error() != wantErr {
-		t.Errorf("Execute: %v, want %s", err, wantErr)
-	}
-
-	// unsupported set
-	_, _, err = rpcVTGate.Execute(context.Background(), "set a = 2", nil, session)
-	wantErr = "unsupported construct: set a = 2"
-	if err == nil || err.Error() != wantErr {
-		t.Errorf("Execute: %v, want %s", err, wantErr)
 	}
 }
 

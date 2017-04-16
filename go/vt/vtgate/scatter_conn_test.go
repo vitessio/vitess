@@ -302,7 +302,7 @@ func TestScatterConnQueryNotInTransaction(t *testing.T) {
 	if !proto.Equal(&wantSession, session.Session) {
 		t.Errorf("want\n%+v\ngot\n%+v", wantSession, *session.Session)
 	}
-	sc.txConn.Commit(context.Background(), false, session)
+	sc.txConn.Commit(context.Background(), session)
 	{
 		execCount0 := sbc0.ExecCount.Get()
 		execCount1 := sbc1.ExecCount.Get()
@@ -341,7 +341,7 @@ func TestScatterConnQueryNotInTransaction(t *testing.T) {
 	if !proto.Equal(&wantSession, session.Session) {
 		t.Errorf("want\n%+v\ngot\n%+v", wantSession, *session.Session)
 	}
-	sc.txConn.Commit(context.Background(), false, session)
+	sc.txConn.Commit(context.Background(), session)
 	{
 		execCount0 := sbc0.ExecCount.Get()
 		execCount1 := sbc1.ExecCount.Get()
@@ -380,7 +380,7 @@ func TestScatterConnQueryNotInTransaction(t *testing.T) {
 	if !proto.Equal(&wantSession, session.Session) {
 		t.Errorf("want\n%+v\ngot\n%+v", wantSession, *session.Session)
 	}
-	sc.txConn.Commit(context.Background(), false, session)
+	sc.txConn.Commit(context.Background(), session)
 	{
 		execCount0 := sbc0.ExecCount.Get()
 		execCount1 := sbc1.ExecCount.Get()
@@ -404,33 +404,53 @@ func TestScatterConnSingleDB(t *testing.T) {
 	sc := newTestScatterConn(hc, new(sandboxTopo), "aa")
 	hc.AddTestTablet("aa", "0", 1, "TestScatterConnSingleDB", "0", topodatapb.TabletType_MASTER, true, 1, nil)
 	hc.AddTestTablet("aa", "1", 1, "TestScatterConnSingleDB", "1", topodatapb.TabletType_MASTER, true, 1, nil)
+
+	want := "multi-db transaction attempted"
+
+	// SingleDb (legacy)
 	session := NewSafeSession(&vtgatepb.Session{InTransaction: true, SingleDb: true})
 	_, err := sc.Execute(context.Background(), "query1", nil, "TestScatterConnSingleDB", []string{"0"}, topodatapb.TabletType_MASTER, session, false, nil)
 	if err != nil {
 		t.Error(err)
 	}
 	_, err = sc.Execute(context.Background(), "query1", nil, "TestScatterConnSingleDB", []string{"1"}, topodatapb.TabletType_MASTER, session, false, nil)
-	want := "multi-db transaction attempted"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("Multi DB exec: %v, must contain %s", err, want)
 	}
 
-	session = NewSafeSession(&vtgatepb.Session{InTransaction: true, SingleDb: true})
-	queries := []*vtgatepb.BoundShardQuery{{
-		Query: &querypb.BoundQuery{
-			Sql:           "query",
-			BindVariables: nil,
-		},
-		Keyspace: "TestScatterConnSingleDB",
-		Shards:   []string{"0", "1"},
-	}}
-	scatterRequest, err := boundShardQueriesToScatterBatchRequest(queries)
+	// TransactionMode_SINGLE in session
+	session = NewSafeSession(&vtgatepb.Session{InTransaction: true, TransactionMode: vtgatepb.TransactionMode_SINGLE})
+	_, err = sc.Execute(context.Background(), "query1", nil, "TestScatterConnSingleDB", []string{"0"}, topodatapb.TabletType_MASTER, session, false, nil)
 	if err != nil {
 		t.Error(err)
 	}
-	_, err = sc.ExecuteBatch(context.Background(), scatterRequest, topodatapb.TabletType_MASTER, false, session, nil)
+	_, err = sc.Execute(context.Background(), "query1", nil, "TestScatterConnSingleDB", []string{"1"}, topodatapb.TabletType_MASTER, session, false, nil)
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("Multi DB exec: %v, must contain %s", err, want)
+	}
+
+	// TransactionMode_SINGLE in txconn
+	sc.txConn.mode = vtgatepb.TransactionMode_SINGLE
+	session = NewSafeSession(&vtgatepb.Session{InTransaction: true})
+	_, err = sc.Execute(context.Background(), "query1", nil, "TestScatterConnSingleDB", []string{"0"}, topodatapb.TabletType_MASTER, session, false, nil)
+	if err != nil {
+		t.Error(err)
+	}
+	_, err = sc.Execute(context.Background(), "query1", nil, "TestScatterConnSingleDB", []string{"1"}, topodatapb.TabletType_MASTER, session, false, nil)
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("Multi DB exec: %v, must contain %s", err, want)
+	}
+
+	// TransactionMode_MULTI in txconn. Should not fail.
+	sc.txConn.mode = vtgatepb.TransactionMode_MULTI
+	session = NewSafeSession(&vtgatepb.Session{InTransaction: true})
+	_, err = sc.Execute(context.Background(), "query1", nil, "TestScatterConnSingleDB", []string{"0"}, topodatapb.TabletType_MASTER, session, false, nil)
+	if err != nil {
+		t.Error(err)
+	}
+	_, err = sc.Execute(context.Background(), "query1", nil, "TestScatterConnSingleDB", []string{"1"}, topodatapb.TabletType_MASTER, session, false, nil)
+	if err != nil {
+		t.Error(err)
 	}
 }
 
@@ -528,6 +548,6 @@ func TestShuffleQueryParts(t *testing.T) {
 
 func newTestScatterConn(hc discovery.HealthCheck, serv topo.SrvTopoServer, cell string) *ScatterConn {
 	gw := gateway.GetCreator()(hc, topo.Server{}, serv, cell, 3)
-	tc := NewTxConn(gw)
+	tc := NewTxConn(gw, vtgatepb.TransactionMode_TWOPC)
 	return NewScatterConn("", tc, gw)
 }
