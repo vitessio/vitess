@@ -168,7 +168,7 @@ func createExecutorEnv() (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn
 	s := createSandbox("TestExecutor")
 	s.VSchema = executorVSchema
 	serv := new(sandboxTopo)
-	scatterConn := newTestScatterConn(hc, serv, cell)
+	resolver := newTestResolver(hc, serv, cell)
 	sbc1 = hc.AddTestTablet(cell, "-20", 1, "TestExecutor", "-20", topodatapb.TabletType_MASTER, true, 1, nil)
 	sbc2 = hc.AddTestTablet(cell, "40-60", 1, "TestExecutor", "40-60", topodatapb.TabletType_MASTER, true, 1, nil)
 
@@ -180,7 +180,7 @@ func createExecutorEnv() (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn
 
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
 
-	executor = NewExecutor(context.Background(), serv, cell, "", scatterConn, false)
+	executor = NewExecutor(context.Background(), serv, cell, "", resolver, false)
 	return executor, sbc1, sbc2, sbclookup
 }
 
@@ -188,8 +188,6 @@ func executorExec(executor *Executor, sql string, bv map[string]interface{}) (*s
 	return executor.Execute(context.Background(),
 		sql,
 		bv,
-		"",
-		topodatapb.TabletType_MASTER,
 		masterSession)
 }
 

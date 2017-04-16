@@ -19,8 +19,10 @@ import (
 	"github.com/youtube/vitess/go/acl"
 	"github.com/youtube/vitess/go/cache"
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/vt/sqlannotation"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vtgate/engine"
 	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
 	"github.com/youtube/vitess/go/vt/vtgate/queryinfo"
@@ -30,6 +32,7 @@ import (
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	vschemapb "github.com/youtube/vitess/go/vt/proto/vschema"
 	vtgatepb "github.com/youtube/vitess/go/vt/proto/vtgate"
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 // Executor is the engine that executes queries by utilizing
@@ -37,7 +40,9 @@ import (
 type Executor struct {
 	serv        topo.SrvTopoServer
 	cell        string
+	resolver    *Resolver
 	scatterConn *ScatterConn
+	txConn      *TxConn
 
 	mu           sync.Mutex
 	vschema      *vindexes.VSchema
@@ -49,11 +54,13 @@ type Executor struct {
 var executorOnce sync.Once
 
 // NewExecutor creates a new Executor.
-func NewExecutor(ctx context.Context, serv topo.SrvTopoServer, cell, statsName string, scatterConn *ScatterConn, normalize bool) *Executor {
+func NewExecutor(ctx context.Context, serv topo.SrvTopoServer, cell, statsName string, resolver *Resolver, normalize bool) *Executor {
 	exr := &Executor{
 		serv:        serv,
 		cell:        cell,
-		scatterConn: scatterConn,
+		resolver:    resolver,
+		scatterConn: resolver.scatterConn,
+		txConn:      resolver.scatterConn.txConn,
 		plans:       cache.NewLRUCache(10000),
 		normalize:   normalize,
 	}
@@ -66,13 +73,91 @@ func NewExecutor(ctx context.Context, serv topo.SrvTopoServer, cell, statsName s
 }
 
 // Execute executes a non-streaming query.
-func (exr *Executor) Execute(ctx context.Context, sql string, bindVars map[string]interface{}, keyspace string, tabletType topodatapb.TabletType, session *vtgatepb.Session) (*sqltypes.Result, error) {
+func (exr *Executor) Execute(ctx context.Context, sql string, bindVars map[string]interface{}, session *vtgatepb.Session) (*sqltypes.Result, error) {
+	intercepted, err := exr.intercept(ctx, sql, session)
+	if err != nil {
+		return nil, err
+	}
+	if intercepted {
+		return &sqltypes.Result{}, nil
+	}
+	nsf := NewSafeSession(session)
+
+	// Autocommit handling
+	autocommit := false
+	if session.Autocommit && !session.InTransaction && sqlparser.IsDML(sql) {
+		autocommit = true
+		if err := exr.txConn.Begin(ctx, nsf); err != nil {
+			return nil, err
+		}
+		defer exr.txConn.Rollback(ctx, nsf)
+	}
+
 	if bindVars == nil {
 		bindVars = make(map[string]interface{})
 	}
-	vcursor := newVCursorImpl(ctx, tabletType, session, exr)
-	queryConstruct := queryinfo.NewQueryConstruct(sql, keyspace, bindVars)
-	plan, err := exr.getPlan(sql, keyspace, bindVars)
+	qr, err := exr.innerExec(ctx, sql, bindVars, session)
+	if err == nil && autocommit {
+		// Set the error if commit fails.
+		err = exr.txConn.Commit(ctx, nsf)
+	}
+	return qr, err
+}
+
+// intercept checks for transactional or set statements. If they match then it performs the
+// necessary operation and returns a new session and true indicating that it's intercepted
+// the call. If so, the caller (Execute) should just return without proceeding further.
+func (exr *Executor) intercept(ctx context.Context, sql string, session *vtgatepb.Session) (bool, error) {
+	switch {
+	case sqlparser.IsStatement(sql, "begin"), sqlparser.IsStatement(sql, "start transaction"):
+		err := exr.txConn.Begin(ctx, NewSafeSession(session))
+		return true, err
+	case sqlparser.IsStatement(sql, "commit"):
+		err := exr.txConn.Commit(ctx, NewSafeSession(session))
+		return true, err
+	case sqlparser.IsStatement(sql, "rollback"):
+		if !session.InTransaction {
+			return true, nil
+		}
+		err := exr.txConn.Rollback(ctx, NewSafeSession(session))
+		return true, err
+	case sqlparser.HasPrefix(sql, "set"):
+		vals, err := sqlparser.ExtractSetNums(sql)
+		if err != nil {
+			return true, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, err.Error())
+		}
+		if len(vals) != 1 {
+			return true, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "too many set values: %s", sql)
+		}
+		val, ok := vals["autocommit"]
+		if !ok {
+			return true, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported construct: %s", sql)
+		}
+		if val != 0 {
+			session.Autocommit = true
+		} else {
+			session.Autocommit = false
+		}
+		return true, nil
+	}
+	return false, nil
+}
+
+func (exr *Executor) innerExec(ctx context.Context, sql string, bindVars map[string]interface{}, session *vtgatepb.Session) (*sqltypes.Result, error) {
+	target := parseTarget(session.TargetString)
+	if target.Shard != "" {
+		// V1 mode.
+		sql = sqlannotation.AnnotateIfDML(sql, nil)
+		f := func(keyspace string) (string, []string, error) {
+			return keyspace, []string{target.Shard}, nil
+		}
+		return exr.resolver.Execute(ctx, sql, bindVars, target.Keyspace, target.TabletType, session, f, false, session.Options)
+	}
+
+	// V3 mode.
+	vcursor := newVCursorImpl(ctx, target.TabletType, session, exr)
+	queryConstruct := queryinfo.NewQueryConstruct(sql, target.Keyspace, bindVars)
+	plan, err := exr.getPlan(sql, target.Keyspace, bindVars)
 	if err != nil {
 		return nil, err
 	}
