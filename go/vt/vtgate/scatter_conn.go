@@ -294,7 +294,7 @@ func (stc *ScatterConn) ExecuteBatch(
 					if appendErr := session.Append(&vtgatepb.Session_ShardSession{
 						Target:        target,
 						TransactionId: transactionID,
-					}); appendErr != nil {
+					}, stc.txConn.mode); appendErr != nil {
 						err = appendErr
 					}
 				}
@@ -633,7 +633,7 @@ func (stc *ScatterConn) multiGoTransaction(
 			if appendErr := session.Append(&vtgatepb.Session_ShardSession{
 				Target:        target,
 				TransactionId: transactionID,
-			}); appendErr != nil {
+			}, stc.txConn.mode); appendErr != nil {
 				err = appendErr
 			}
 		}

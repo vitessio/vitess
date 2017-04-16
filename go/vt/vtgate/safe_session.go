@@ -55,16 +55,22 @@ func (session *SafeSession) Find(keyspace, shard string, tabletType topodatapb.T
 }
 
 // Append adds a new ShardSession
-func (session *SafeSession) Append(shardSession *vtgatepb.Session_ShardSession) error {
+func (session *SafeSession) Append(shardSession *vtgatepb.Session_ShardSession, txMode vtgatepb.TransactionMode) error {
 	session.mu.Lock()
 	defer session.mu.Unlock()
 	// Always append, in order for rollback to succeed.
 	session.ShardSessions = append(session.ShardSessions, shardSession)
-	if session.SingleDb && len(session.ShardSessions) > 1 {
+	if session.isSingleDB(txMode) && len(session.ShardSessions) > 1 {
 		session.mustRollback = true
 		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "multi-db transaction attempted: %v", session.ShardSessions)
 	}
 	return nil
+}
+
+func (session *SafeSession) isSingleDB(txMode vtgatepb.TransactionMode) bool {
+	return session.SingleDb ||
+		session.TransactionMode == vtgatepb.TransactionMode_SINGLE ||
+		(session.TransactionMode == vtgatepb.TransactionMode_UNSPECIFIED && txMode == vtgatepb.TransactionMode_SINGLE)
 }
 
 // SetRollback sets the flag indicating that the transaction must be rolled back.
@@ -96,5 +102,6 @@ func (session *SafeSession) Reset() {
 	session.mu.Lock()
 	defer session.mu.Unlock()
 	session.Session.InTransaction = false
+	session.SingleDb = false
 	session.ShardSessions = nil
 }

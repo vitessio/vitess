@@ -24,24 +24,59 @@ import (
 // TxConn is used for executing transactional requests.
 type TxConn struct {
 	gateway gateway.Gateway
+	mode    vtgatepb.TransactionMode
 }
 
 // NewTxConn builds a new TxConn.
-func NewTxConn(gw gateway.Gateway) *TxConn {
-	return &TxConn{gateway: gw}
+func NewTxConn(gw gateway.Gateway, txMode vtgatepb.TransactionMode) *TxConn {
+	return &TxConn{
+		gateway: gw,
+		mode:    txMode,
+	}
 }
 
-// Commit commits the current transaction. If twopc is true, then the 2PC protocol
-// is used to ensure atomicity.
-func (txc *TxConn) Commit(ctx context.Context, twopc bool, session *SafeSession) error {
-	if session == nil {
-		return vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "cannot commit: empty session")
+// Begin begins a new transaction. If one is already in progress, it commmits it
+// and starts a new one.
+func (txc *TxConn) Begin(ctx context.Context, session *SafeSession) error {
+	if session.InTransaction() {
+		if err := txc.Commit(ctx, session); err != nil {
+			return err
+		}
 	}
-	if !session.InTransaction() {
-		return vterrors.New(vtrpcpb.Code_ABORTED, "cannot commit: not in transaction")
+	// UNSPECIFIED & SINGLE mode are always allowed.
+	switch session.TransactionMode {
+	case vtgatepb.TransactionMode_MULTI:
+		if txc.mode == vtgatepb.TransactionMode_SINGLE {
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "transaction mode %v disallowed: VTGate mode: %v", session.TransactionMode, txc.mode)
+		}
+	case vtgatepb.TransactionMode_TWOPC:
+		if txc.mode != vtgatepb.TransactionMode_TWOPC {
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "transaction mode %v disallowed: VTGate mode: %v", session.TransactionMode, txc.mode)
+		}
 	}
-	defer session.Reset()
+	session.Session.InTransaction = true
+	return nil
+}
 
+// Commit commits the current transaction. The type of commit can be
+// best effor or 2pc depending on the session setting.
+func (txc *TxConn) Commit(ctx context.Context, session *SafeSession) error {
+	defer session.Reset()
+	if !session.InTransaction() {
+		return nil
+	}
+
+	twopc := false
+	switch session.TransactionMode {
+	case vtgatepb.TransactionMode_TWOPC:
+		if txc.mode != vtgatepb.TransactionMode_TWOPC {
+			txc.Rollback(ctx, session)
+			return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "2pc transaction disallowed")
+		}
+		twopc = true
+	case vtgatepb.TransactionMode_UNSPECIFIED:
+		twopc = (txc.mode == vtgatepb.TransactionMode_TWOPC)
+	}
 	if twopc {
 		return txc.commit2PC(ctx, session)
 	}

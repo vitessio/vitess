@@ -10,6 +10,18 @@ import "query.proto";
 import "topodata.proto";
 import "vtrpc.proto";
 
+// TransactionMode specifies the type of transaction the session is in.
+enum TransactionMode {
+  // UNSPECIFIED uses the transaction mode set for VTGate.
+  UNSPECIFIED = 0;
+  // SINGLE disallows distributed transactions.
+  SINGLE = 1;
+  // MULTI allows distributed transactions with best effort commit.
+  MULTI = 2;
+  // TWOPC is for distributed transactions with atomitc commits.
+  TWOPC = 3;
+}
+
 // Session objects are exchanged like cookies through various
 // calls to VTGate. The behavior differs between V2 & V3 APIs.
 // V3 APIs are Execute, ExecuteBatch and StreamExecute. All
@@ -31,8 +43,9 @@ message Session {
   // shard_sessions keep track of per-shard transaction info.
   repeated ShardSession shard_sessions = 2;
 
-  // single_db specifies if the transaction should be restricted
-  // to a single database. This is deprecated.
+  // single_db is deprecated. Use transaction_mode instead.
+  // The value specifies if the transaction should be restricted
+  // to a single database.
   // TODO(sougou): remove in 3.1
   bool single_db = 3;
 
@@ -47,6 +60,9 @@ message Session {
 
   // options is used only for V3.
   query.ExecuteOptions options = 6;
+
+  // transaction_mode specifies the current transaction mode.
+  TransactionMode transaction_mode = 7;
 }
 
 // ExecuteRequest is the payload to Execute.
