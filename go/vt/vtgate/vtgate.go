@@ -25,7 +25,6 @@ import (
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/sqlannotation"
-	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/vterrors"
@@ -85,19 +84,11 @@ var (
 // VTGate is the rpc interface to vtgate. Only one instance
 // can be created. It implements vtgateservice.VTGateService
 type VTGate struct {
-	// executor and resolver are top-level objects
-	// that make routing decisions.
+	// Dependency: executor->resolver->scatterConn->txConn->gateway.
+	// VTGate still needs resolver and txConn to support legacy functions.
 	executor *Executor
 	resolver *Resolver
-
-	// scatterConn and txConn are mid-level objects
-	// that execute requests.
-	scatterConn *ScatterConn
-	txConn      *TxConn
-
-	// gateway is the low-level outgoing connection
-	// object to vttablet or l2vtgate.
-	gateway gateway.Gateway
+	txConn   *TxConn
 
 	// stats objects.
 	// TODO(sougou): This needs to be cleaned up. There
@@ -146,13 +137,12 @@ func Init(ctx context.Context, hc discovery.HealthCheck, topoServer topo.Server,
 	tc := NewTxConn(gw, getTxMode())
 	// ScatterConn depends on TxConn to perform forced rollbacks.
 	sc := NewScatterConn("VttabletCall", tc, gw)
+	resolver := NewResolver(serv, cell, sc)
 
 	rpcVTGate = &VTGate{
-		executor:     NewExecutor(ctx, serv, cell, "VTGateExecutor", sc, *normalizeQueries),
-		resolver:     NewResolver(serv, cell, sc),
-		scatterConn:  sc,
+		executor:     NewExecutor(ctx, serv, cell, "VTGateExecutor", resolver, *normalizeQueries),
+		resolver:     resolver,
 		txConn:       tc,
-		gateway:      gw,
 		timings:      stats.NewMultiTimings("VtgateApi", []string{"Operation", "Keyspace", "DbType"}),
 		rowsReturned: stats.NewMultiCounters("VtgateApiRowsReturned", []string{"Operation", "Keyspace", "DbType"}),
 
@@ -214,42 +204,10 @@ func (vtg *VTGate) IsHealthy() error {
 
 // Execute executes a non-streaming query by routing based on the values in the query.
 func (vtg *VTGate) Execute(ctx context.Context, sql string, bindVariables map[string]interface{}, session *vtgatepb.Session) (newSession *vtgatepb.Session, qr *sqltypes.Result, err error) {
-	session, intercepted, err := vtg.intercept(ctx, sql, session)
-	if err != nil {
-		return session, nil, err
-	}
-	if intercepted {
-		return session, &sqltypes.Result{}, nil
-	}
-
-	// Normal processing.
 	statsKey := []string{"Execute", session.TargetString, "NA"}
 	defer vtg.timings.Record(statsKey, time.Now())
 
-	// Autocommit handling
-	autocommit := false
-	if session.Autocommit && !session.InTransaction && sqlparser.IsDML(sql) {
-		autocommit = true
-		if err := vtg.txConn.Begin(ctx, NewSafeSession(session)); err != nil {
-			return session, nil, err
-		}
-		defer vtg.Rollback(ctx, session)
-	}
-
-	target := parseTarget(session.TargetString)
-	if target.Shard != "" {
-		sql = sqlannotation.AnnotateIfDML(sql, nil)
-		f := func(keyspace string) (string, []string, error) {
-			return keyspace, []string{target.Shard}, nil
-		}
-		qr, err = vtg.resolver.Execute(ctx, sql, bindVariables, target.Keyspace, target.TabletType, session, f, false, session.Options)
-	} else {
-		qr, err = vtg.executor.Execute(ctx, sql, bindVariables, target.Keyspace, target.TabletType, session)
-	}
-	if err == nil && autocommit {
-		// Set the error if commit fails.
-		err = vtg.Commit(ctx, vtg.txConn.mode == vtgatepb.TransactionMode_TWOPC, session)
-	}
+	qr, err = vtg.executor.Execute(ctx, sql, bindVariables, session)
 	if err == nil {
 		vtg.rowsReturned.Add(statsKey, int64(len(qr.Rows)))
 		return session, qr, nil
@@ -262,45 +220,6 @@ func (vtg *VTGate) Execute(ctx context.Context, sql string, bindVariables map[st
 	}
 	err = recordAndAnnotateError(err, statsKey, query, vtg.logExecute)
 	return session, nil, err
-}
-
-// intercept checks for transactional or set statements. If they match then it performs the
-// necessary operation and returns a new session and true indicating that it's intercepted
-// the call. If so, the caller (Execute) should just return without proceeding further.
-func (vtg *VTGate) intercept(ctx context.Context, sql string, session *vtgatepb.Session) (*vtgatepb.Session, bool, error) {
-	switch {
-	case sqlparser.IsStatement(sql, "begin"), sqlparser.IsStatement(sql, "start transaction"):
-		err := vtg.txConn.Begin(ctx, NewSafeSession(session))
-		return session, true, err
-	case sqlparser.IsStatement(sql, "commit"):
-		err := vtg.txConn.Commit(ctx, NewSafeSession(session))
-		return session, true, err
-	case sqlparser.IsStatement(sql, "rollback"):
-		if !session.InTransaction {
-			return session, true, nil
-		}
-		err := vtg.Rollback(ctx, session)
-		return session, true, err
-	case sqlparser.HasPrefix(sql, "set"):
-		vals, err := sqlparser.ExtractSetNums(sql)
-		if err != nil {
-			return session, true, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, err.Error())
-		}
-		if len(vals) != 1 {
-			return session, true, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "too many set values: %s", sql)
-		}
-		val, ok := vals["autocommit"]
-		if !ok {
-			return session, true, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported construct: %s", sql)
-		}
-		if val != 0 {
-			session.Autocommit = true
-		} else {
-			session.Autocommit = false
-		}
-		return session, true, nil
-	}
-	return session, false, nil
 }
 
 // ExecuteShards executes a non-streaming query on the specified shards.
