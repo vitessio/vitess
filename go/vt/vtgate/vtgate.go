@@ -47,24 +47,17 @@ var (
 	normalizeQueries = flag.Bool("normalize_queries", true, "Rewrite queries with bind vars. Turn this off if the app itself sends normalized queries with bind vars.")
 )
 
-// Transaction modes. The value specifies what's allowed.
-const (
-	TxSingle = iota
-	TxMulti
-	TxTwoPC
-)
-
-func getTxMode() int {
-	txMode := TxMulti
+func getTxMode() vtgatepb.TransactionMode {
+	txMode := vtgatepb.TransactionMode_MULTI
 	switch *transactionMode {
 	case "single":
 		log.Infof("Transaction mode: '%s'", *transactionMode)
-		txMode = TxSingle
+		txMode = vtgatepb.TransactionMode_SINGLE
 	case "multi":
 		log.Infof("Transaction mode: '%s'", *transactionMode)
 	case "twopc":
 		log.Infof("Transaction mode: '%s'", *transactionMode)
-		txMode = TxTwoPC
+		txMode = vtgatepb.TransactionMode_TWOPC
 	default:
 		log.Warningf("Unrecognized transactionMode '%s'. Continuing with default 'multi'", *transactionMode)
 	}
@@ -92,8 +85,6 @@ var (
 // VTGate is the rpc interface to vtgate. Only one instance
 // can be created. It implements vtgateservice.VTGateService
 type VTGate struct {
-	transactionMode int
-
 	// executor and resolver are top-level objects
 	// that make routing decisions.
 	executor *Executor
@@ -152,19 +143,18 @@ func Init(ctx context.Context, hc discovery.HealthCheck, topoServer topo.Server,
 	gw := gateway.GetCreator()(hc, topoServer, serv, cell, retryCount)
 	gateway.WaitForTablets(gw, tabletTypesToWait)
 
-	tc := NewTxConn(gw)
+	tc := NewTxConn(gw, getTxMode())
 	// ScatterConn depends on TxConn to perform forced rollbacks.
 	sc := NewScatterConn("VttabletCall", tc, gw)
 
 	rpcVTGate = &VTGate{
-		transactionMode: getTxMode(),
-		executor:        NewExecutor(ctx, serv, cell, "VTGateExecutor", sc, *normalizeQueries),
-		resolver:        NewResolver(serv, cell, sc),
-		scatterConn:     sc,
-		txConn:          tc,
-		gateway:         gw,
-		timings:         stats.NewMultiTimings("VtgateApi", []string{"Operation", "Keyspace", "DbType"}),
-		rowsReturned:    stats.NewMultiCounters("VtgateApiRowsReturned", []string{"Operation", "Keyspace", "DbType"}),
+		executor:     NewExecutor(ctx, serv, cell, "VTGateExecutor", sc, *normalizeQueries),
+		resolver:     NewResolver(serv, cell, sc),
+		scatterConn:  sc,
+		txConn:       tc,
+		gateway:      gw,
+		timings:      stats.NewMultiTimings("VtgateApi", []string{"Operation", "Keyspace", "DbType"}),
+		rowsReturned: stats.NewMultiCounters("VtgateApiRowsReturned", []string{"Operation", "Keyspace", "DbType"}),
 
 		logExecute:                  logutil.NewThrottledLogger("Execute", 5*time.Second),
 		logExecuteShards:            logutil.NewThrottledLogger("ExecuteShards", 5*time.Second),
@@ -240,7 +230,10 @@ func (vtg *VTGate) Execute(ctx context.Context, sql string, bindVariables map[st
 	autocommit := false
 	if session.Autocommit && !session.InTransaction && sqlparser.IsDML(sql) {
 		autocommit = true
-		vtg.localBegin(session)
+		if err := vtg.txConn.Begin(ctx, NewSafeSession(session)); err != nil {
+			return session, nil, err
+		}
+		defer vtg.Rollback(ctx, session)
 	}
 
 	target := parseTarget(session.TargetString)
@@ -255,17 +248,11 @@ func (vtg *VTGate) Execute(ctx context.Context, sql string, bindVariables map[st
 	}
 	if err == nil && autocommit {
 		// Set the error if commit fails.
-		err = vtg.Commit(ctx, vtg.transactionMode == TxTwoPC, session)
+		err = vtg.Commit(ctx, vtg.txConn.mode == vtgatepb.TransactionMode_TWOPC, session)
 	}
 	if err == nil {
 		vtg.rowsReturned.Add(statsKey, int64(len(qr.Rows)))
 		return session, qr, nil
-	}
-
-	// Error handling: Execute or Commit failed.
-	if autocommit {
-		// Rollback the transaction and ignore errors.
-		vtg.Rollback(ctx, session)
 	}
 
 	query := map[string]interface{}{
@@ -283,19 +270,10 @@ func (vtg *VTGate) Execute(ctx context.Context, sql string, bindVariables map[st
 func (vtg *VTGate) intercept(ctx context.Context, sql string, session *vtgatepb.Session) (*vtgatepb.Session, bool, error) {
 	switch {
 	case sqlparser.IsStatement(sql, "begin"), sqlparser.IsStatement(sql, "start transaction"):
-		if session.InTransaction {
-			// If we're in a transaction, commit and start a new one.
-			if err := vtg.Commit(ctx, vtg.transactionMode == TxTwoPC, session); err != nil {
-				return session, true, err
-			}
-		}
-		vtg.localBegin(session)
-		return session, true, nil
+		err := vtg.txConn.Begin(ctx, NewSafeSession(session))
+		return session, true, err
 	case sqlparser.IsStatement(sql, "commit"):
-		if !session.InTransaction {
-			return session, true, nil
-		}
-		err := vtg.Commit(ctx, vtg.transactionMode == TxTwoPC, session)
+		err := vtg.txConn.Commit(ctx, NewSafeSession(session))
 		return session, true, err
 	case sqlparser.IsStatement(sql, "rollback"):
 		if !session.InTransaction {
@@ -323,14 +301,6 @@ func (vtg *VTGate) intercept(ctx context.Context, sql string, session *vtgatepb.
 		return session, true, nil
 	}
 	return session, false, nil
-}
-
-// localBegin starts a transaction using the default settings of VTGate.
-// This is different from the exported Begin because there is no explicit
-// transaction mode when we implicitly begin a transaction.
-func (vtg *VTGate) localBegin(session *vtgatepb.Session) {
-	session.InTransaction = true
-	session.SingleDb = vtg.transactionMode == TxSingle
 }
 
 // ExecuteShards executes a non-streaming query on the specified shards.
@@ -716,9 +686,9 @@ func (vtg *VTGate) StreamExecuteShards(ctx context.Context, sql string, bindVari
 	return nil
 }
 
-// Begin begins a transaction. It has to be concluded by a Commit or Rollback.
+// Begin begins a transaction. This function is deprecated.
 func (vtg *VTGate) Begin(ctx context.Context, singledb bool) (*vtgatepb.Session, error) {
-	if !singledb && vtg.transactionMode == TxSingle {
+	if !singledb && vtg.txConn.mode == vtgatepb.TransactionMode_SINGLE {
 		return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "multi-db transaction disallowed")
 	}
 	return &vtgatepb.Session{
@@ -727,17 +697,21 @@ func (vtg *VTGate) Begin(ctx context.Context, singledb bool) (*vtgatepb.Session,
 	}, nil
 }
 
-// Commit commits a transaction.
+// Commit commits a transaction. This function is deprecated.
 func (vtg *VTGate) Commit(ctx context.Context, twopc bool, session *vtgatepb.Session) error {
-	if twopc && vtg.transactionMode != TxTwoPC {
-		// Rollback the transaction to prevent future deadlocks.
-		vtg.txConn.Rollback(ctx, NewSafeSession(session))
-		return vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "2pc transaction disallowed")
+	if session == nil {
+		return formatError(vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "cannot commit: empty session"))
 	}
-	return formatError(vtg.txConn.Commit(ctx, twopc, NewSafeSession(session)))
+	if !session.InTransaction {
+		return formatError(vterrors.New(vtrpcpb.Code_ABORTED, "cannot commit: not in transaction"))
+	}
+	if twopc {
+		session.TransactionMode = vtgatepb.TransactionMode_TWOPC
+	}
+	return formatError(vtg.txConn.Commit(ctx, NewSafeSession(session)))
 }
 
-// Rollback rolls back a transaction.
+// Rollback rolls back a transaction. This function is deprecated.
 func (vtg *VTGate) Rollback(ctx context.Context, session *vtgatepb.Session) error {
 	return formatError(vtg.txConn.Rollback(ctx, NewSafeSession(session)))
 }
