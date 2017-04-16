@@ -108,20 +108,20 @@ func (exr *Executor) Execute(ctx context.Context, sql string, bindVars map[strin
 // necessary operation and returns a new session and true indicating that it's intercepted
 // the call. If so, the caller (Execute) should just return without proceeding further.
 func (exr *Executor) intercept(ctx context.Context, sql string, session *vtgatepb.Session) (bool, error) {
-	switch {
-	case sqlparser.IsStatement(sql, "begin"), sqlparser.IsStatement(sql, "start transaction"):
+	switch sqlparser.Preview(sql) {
+	case sqlparser.StmtBegin:
 		err := exr.txConn.Begin(ctx, NewSafeSession(session))
 		return true, err
-	case sqlparser.IsStatement(sql, "commit"):
+	case sqlparser.StmtCommit:
 		err := exr.txConn.Commit(ctx, NewSafeSession(session))
 		return true, err
-	case sqlparser.IsStatement(sql, "rollback"):
+	case sqlparser.StmtRollback:
 		if !session.InTransaction {
 			return true, nil
 		}
 		err := exr.txConn.Rollback(ctx, NewSafeSession(session))
 		return true, err
-	case sqlparser.HasPrefix(sql, "set"):
+	case sqlparser.StmtSet:
 		vals, err := sqlparser.ExtractSetNums(sql)
 		if err != nil {
 			return true, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, err.Error())

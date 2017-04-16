@@ -12,6 +12,61 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 )
 
+func TestPreview(t *testing.T) {
+	testcases := []struct {
+		sql  string
+		want int
+	}{
+		{"select ...", StmtSelect},
+		{"    select ...", StmtSelect},
+		{"insert ...", StmtInsert},
+		{"   update ...", StmtUpdate},
+		{"Update", StmtUpdate},
+		{"UPDATE ...", StmtUpdate},
+		{"\n\t    delete ...", StmtDelete},
+		{"set", StmtSet},
+		{"", StmtUnknown},
+		{" ", StmtUnknown},
+		{"begin", StmtBegin},
+		{" begin", StmtBegin},
+		{" begin ", StmtBegin},
+		{"\n\t begin ", StmtBegin},
+		{"... begin ", StmtUnknown},
+		{"begin ...", StmtUnknown},
+		{"start transaction", StmtBegin},
+		{"commit", StmtCommit},
+		{"rollback", StmtRollback},
+		{"other", StmtUnknown},
+	}
+	for _, tcase := range testcases {
+		if got := Preview(tcase.sql); got != tcase.want {
+			t.Errorf("Preview(%s): %v, want %v", tcase.sql, got, tcase.want)
+		}
+	}
+}
+
+func TestIsDML(t *testing.T) {
+	testcases := []struct {
+		sql  string
+		want bool
+	}{
+		{"   update ...", true},
+		{"Update", true},
+		{"UPDATE ...", true},
+		{"\n\t    delete ...", true},
+		{"insert ...", true},
+		{"select ...", false},
+		{"    select ...", false},
+		{"", false},
+		{" ", false},
+	}
+	for _, tcase := range testcases {
+		if got := IsDML(tcase.sql); got != tcase.want {
+			t.Errorf("IsDML(%s): %v, want %v", tcase.sql, got, tcase.want)
+		}
+	}
+}
+
 func TestGetTableName(t *testing.T) {
 	testcases := []struct {
 		in, out string
@@ -236,51 +291,6 @@ func TestExtractSetNums(t *testing.T) {
 		}
 		if !reflect.DeepEqual(out, tcase.out) {
 			t.Errorf("ExtractSetNums(%s): %v, want '%v'", tcase.sql, out, tcase.out)
-		}
-	}
-}
-
-func TestHasPrefix(t *testing.T) {
-	testcases := []struct {
-		sql  string
-		want bool
-	}{
-		{"   update ...", true},
-		{"Update", true},
-		{"UPDATE ...", true},
-		{"\n\t    delete ...", true},
-		{"insert ...", true},
-		{"select ...", false},
-		{"    select ...", false},
-		{"", false},
-		{" ", false},
-	}
-	for _, tcase := range testcases {
-		if got := HasPrefix(tcase.sql, "insert", "update", "delete"); got != tcase.want {
-			t.Errorf("HasPrefix(%s): %v, want %v", tcase.sql, got, tcase.want)
-		}
-		if got := IsDML(tcase.sql); got != tcase.want {
-			t.Errorf("IsDML(%s): %v, want %v", tcase.sql, got, tcase.want)
-		}
-	}
-}
-
-func TestIsStatement(t *testing.T) {
-	testcases := []struct {
-		sql  string
-		want bool
-	}{
-		{"begin", true},
-		{" begin", true},
-		{" begin ", true},
-		{"begin ", true},
-		{"\n\t    begin ", true},
-		{"... begin", false},
-		{"begin ...", false},
-	}
-	for _, tcase := range testcases {
-		if got := IsStatement(tcase.sql, "begin"); got != tcase.want {
-			t.Errorf("IsStatement(%s): %v, want %v", tcase.sql, got, tcase.want)
 		}
 	}
 }
