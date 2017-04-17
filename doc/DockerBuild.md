@@ -1,8 +1,16 @@
 By default, the [Kubernetes configs](https://github.com/youtube/vitess/tree/master/examples/kubernetes)
 point to the `vitess/lite` image on [Docker Hub](https://hub.docker.com/u/vitess/).
-This image is built periodically from the master branch on GitHub.
 
-If you want to customize this image, you can build your own like this:
+We created the `lite` image as a stripped down version of our main image `base` such that Kubernetes pods can start faster.
+The `lite` image does not change very often and is updated manually by the Vitess team with every release.
+In contrast, the `base` image is updated automatically after every push to the GitHub master branch.
+For more information on the different images we provide, please read the [`docker/README.md` file](https://github.com/youtube/vitess/tree/master/docker).
+
+If your goal is run the latest Vitess code, the simplest solution is to use the bigger `base` image instead of `lite`.
+
+Another alternative is to customize our Docker images and build them yourselves.
+This is described below and involves building the `base` image first.
+Then you can run our build script for the `lite` image which extracts the Vitess binaries from the built `base` image.
 
 1.  Install [Docker](https://www.docker.com/) on your workstation.
 
@@ -34,14 +42,27 @@ If you want to customize this image, you can build your own like this:
     image on your machine before then it could be old, which may cause build
     failures. So it would be a good idea to always execute this step.
 
-1.  Build the `vitess/lite[:<flavor>]` image. This will build
-    `vitess/base[:<flavor>]` image and run a script that extracts only the files
-    needed to run Vitess (`vitess/base` contains everything needed for
-    development work). You will be asked to authenticate with `sudo`, which is
-    needed to fix up some file permissions.
+1.  Build the `vitess/base[:<flavor>]` image.
+    It will include the compiled the Vitess binaries.
+    (`vitess/base` also contains the source code and tests i.e. everything needed for development work.)
 
     Choose one of the following commands (the command without suffix builds
-    default image containing MySQL 5.7):
+    the default image containing MySQL 5.7):
+
+    ```sh
+    vitess$ make docker_base
+    vitess$ make docker_base_mysql56
+    vitess$ make docker_base_percona57
+    vitess$ make docker_base_percona
+    vitess$ make docker_base_mariadb
+    ```
+
+1.  Build the `vitess/lite[:<flavor>]` image.
+    This will run a script that extracts from `vitess/base` only the files
+    needed to run Vitess.
+
+    Choose one of the following commands (the command without suffix builds
+    the default image containing MySQL 5.7):
 
     ```sh
     vitess$ make docker_lite
@@ -58,7 +79,7 @@ If you want to customize this image, you can build your own like this:
     vitess$ docker push yourname/vitess
     ```
 
-    **Note:** If you chose non-default flavor above then change `vitess/lite` in
+    **Note:** If you chose a non-default flavor above, then change `vitess/lite` in
     the above command to `vitess/lite:<flavor>`.
 
 1.  Change the Kubernetes configs to point to your personal repository:
@@ -77,4 +98,3 @@ If you want to customize this image, you can build your own like this:
     so you can control when pods update.
 
 1.  Launch [Vitess on Kubernetes](http://vitess.io/getting-started/) as usual.
-
