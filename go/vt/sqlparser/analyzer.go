@@ -21,11 +21,13 @@ const (
 	StmtInsert
 	StmtUpdate
 	StmtDelete
+	StmtDDL
 	StmtBegin
 	StmtCommit
 	StmtRollback
 	StmtSet
 	StmtShow
+	StmtOther
 	StmtUnknown
 )
 
@@ -37,7 +39,9 @@ func Preview(sql string) int {
 	if end := strings.IndexFunc(trimmed, unicode.IsSpace); end != -1 {
 		prefix = trimmed[:end]
 	}
-	switch strings.ToLower(prefix) {
+	// Comparison is done in order of priority.
+	lprefix := strings.ToLower(prefix)
+	switch lprefix {
 	case "select":
 		return StmtSelect
 	case "insert":
@@ -46,10 +50,6 @@ func Preview(sql string) int {
 		return StmtUpdate
 	case "delete":
 		return StmtDelete
-	case "set":
-		return StmtSet
-	case "show":
-		return StmtShow
 	}
 	switch strings.ToLower(trimmed) {
 	case "begin", "start transaction":
@@ -58,6 +58,16 @@ func Preview(sql string) int {
 		return StmtCommit
 	case "rollback":
 		return StmtRollback
+	}
+	switch lprefix {
+	case "create", "alter", "rename", "drop":
+		return StmtDDL
+	case "set":
+		return StmtSet
+	case "show":
+		return StmtShow
+	case "analyze", "describe", "explain", "repair", "optimize", "truncate":
+		return StmtOther
 	}
 	return StmtUnknown
 }
