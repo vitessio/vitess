@@ -17,31 +17,33 @@ import (
 // vcursorImpl implements the VCursor functionality used by dependent
 // packages to call back into VTGate.
 type vcursorImpl struct {
-	ctx        context.Context
-	tabletType topodatapb.TabletType
-	session    *vtgatepb.Session
-	executor   *Executor
+	ctx              context.Context
+	tabletType       topodatapb.TabletType
+	session          *vtgatepb.Session
+	trailingComments string
+	executor         *Executor
 }
 
-func newVCursorImpl(ctx context.Context, tabletType topodatapb.TabletType, session *vtgatepb.Session, executor *Executor) *vcursorImpl {
+func newVCursorImpl(ctx context.Context, tabletType topodatapb.TabletType, session *vtgatepb.Session, trailingComments string, executor *Executor) *vcursorImpl {
 	return &vcursorImpl{
-		ctx:        ctx,
-		tabletType: tabletType,
-		session:    session,
-		executor:   executor,
+		ctx:              ctx,
+		tabletType:       tabletType,
+		session:          session,
+		trailingComments: trailingComments,
+		executor:         executor,
 	}
 }
 
 func (vc *vcursorImpl) Execute(query string, bindvars map[string]interface{}) (*sqltypes.Result, error) {
-	return vc.executor.Execute(vc.ctx, query, bindvars, vc.session)
+	return vc.executor.Execute(vc.ctx, query+vc.trailingComments, bindvars, vc.session)
 }
 
 func (vc *vcursorImpl) ExecuteMultiShard(keyspace string, shardQueries map[string]querytypes.BoundQuery) (*sqltypes.Result, error) {
-	return vc.executor.scatterConn.ExecuteMultiShard(vc.ctx, keyspace, shardQueries, vc.tabletType, NewSafeSession(vc.session), false, vc.session.Options)
+	return vc.executor.scatterConn.ExecuteMultiShard(vc.ctx, keyspace, commentedShardQueries(shardQueries, vc.trailingComments), vc.tabletType, NewSafeSession(vc.session), false, vc.session.Options)
 }
 
 func (vc *vcursorImpl) StreamExecuteMulti(query string, keyspace string, shardVars map[string]map[string]interface{}, callback func(reply *sqltypes.Result) error) error {
-	return vc.executor.scatterConn.StreamExecuteMulti(vc.ctx, query, keyspace, shardVars, vc.tabletType, vc.session.Options, callback)
+	return vc.executor.scatterConn.StreamExecuteMulti(vc.ctx, query+vc.trailingComments, keyspace, shardVars, vc.tabletType, vc.session.Options, callback)
 }
 
 func (vc *vcursorImpl) GetAnyShard(keyspace string) (ks, shard string, err error) {
@@ -49,7 +51,7 @@ func (vc *vcursorImpl) GetAnyShard(keyspace string) (ks, shard string, err error
 }
 
 func (vc *vcursorImpl) ScatterConnExecute(query string, bindVars map[string]interface{}, keyspace string, shards []string) (*sqltypes.Result, error) {
-	return vc.executor.scatterConn.Execute(vc.ctx, query, bindVars, keyspace, shards, vc.tabletType, NewSafeSession(vc.session), false, vc.session.Options)
+	return vc.executor.scatterConn.Execute(vc.ctx, query+vc.trailingComments, bindVars, keyspace, shards, vc.tabletType, NewSafeSession(vc.session), false, vc.session.Options)
 }
 
 func (vc *vcursorImpl) GetKeyspaceShards(keyspace string) (string, *topodatapb.SrvKeyspace, []*topodatapb.ShardReference, error) {
@@ -61,5 +63,19 @@ func (vc *vcursorImpl) GetShardForKeyspaceID(allShards []*topodatapb.ShardRefere
 }
 
 func (vc *vcursorImpl) ExecuteShard(keyspace string, shardQueries map[string]querytypes.BoundQuery) (*sqltypes.Result, error) {
-	return vc.executor.scatterConn.ExecuteMultiShard(vc.ctx, keyspace, shardQueries, vc.tabletType, NewSafeSession(nil), false, vc.session.Options)
+	return vc.executor.scatterConn.ExecuteMultiShard(vc.ctx, keyspace, commentedShardQueries(shardQueries, vc.trailingComments), vc.tabletType, NewSafeSession(nil), false, vc.session.Options)
+}
+
+func commentedShardQueries(shardQueries map[string]querytypes.BoundQuery, trailingComments string) map[string]querytypes.BoundQuery {
+	if trailingComments == "" {
+		return shardQueries
+	}
+	newQueries := make(map[string]querytypes.BoundQuery, len(shardQueries))
+	for k, v := range shardQueries {
+		newQueries[k] = querytypes.BoundQuery{
+			Sql:           v.Sql + trailingComments,
+			BindVariables: v.BindVariables,
+		}
+	}
+	return newQueries
 }
