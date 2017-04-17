@@ -7,7 +7,6 @@ package engine
 import (
 	"github.com/youtube/vitess/go/sqltypes"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
-	"github.com/youtube/vitess/go/vt/vtgate/queryinfo"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/querytypes"
 )
 
@@ -55,7 +54,7 @@ func (pln *Plan) Size() int {
 // Primitive is the interface that needs to be satisfied by
 // all primitives of a plan.
 type Primitive interface {
-	Execute(vcursor VCursor, queryConstruct *queryinfo.QueryConstruct, joinvars map[string]interface{}, wantfields bool) (*sqltypes.Result, error)
-	StreamExecute(vcursor VCursor, queryConstruct *queryinfo.QueryConstruct, joinvars map[string]interface{}, wantields bool, callback func(*sqltypes.Result) error) error
-	GetFields(vcursor VCursor, queryConstruct *queryinfo.QueryConstruct, joinvars map[string]interface{}) (*sqltypes.Result, error)
+	Execute(vcursor VCursor, bindVars, joinvars map[string]interface{}, wantfields bool) (*sqltypes.Result, error)
+	StreamExecute(vcursor VCursor, bindVars, joinvars map[string]interface{}, wantields bool, callback func(*sqltypes.Result) error) error
+	GetFields(vcursor VCursor, bindVars, joinvars map[string]interface{}) (*sqltypes.Result, error)
 }

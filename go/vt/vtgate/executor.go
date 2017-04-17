@@ -28,7 +28,6 @@ import (
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vtgate/engine"
 	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
-	"github.com/youtube/vitess/go/vt/vtgate/queryinfo"
 	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
@@ -134,13 +133,13 @@ func (exr *Executor) handleExec(ctx context.Context, sql string, bindVars map[st
 	}
 
 	// V3 mode.
-	vcursor := newVCursorImpl(ctx, target.TabletType, session, exr)
-	queryConstruct := queryinfo.NewQueryConstruct(sql, target.Keyspace, bindVars)
-	plan, err := exr.getPlan(sql, target.Keyspace, bindVars)
+	query, comments := sqlparser.SplitTrailingComments(sql)
+	vcursor := newVCursorImpl(ctx, target.TabletType, session, comments, exr)
+	plan, err := exr.getPlan(query, target.Keyspace, bindVars)
 	if err != nil {
 		return nil, err
 	}
-	return plan.Instructions.Execute(vcursor, queryConstruct, make(map[string]interface{}), true)
+	return plan.Instructions.Execute(vcursor, bindVars, make(map[string]interface{}), true)
 }
 
 func (exr *Executor) handleSet(ctx context.Context, sql string, bindVars map[string]interface{}, session *vtgatepb.Session) (*sqltypes.Result, error) {
@@ -250,13 +249,13 @@ func (exr *Executor) StreamExecute(ctx context.Context, sql string, bindVars map
 	if bindVars == nil {
 		bindVars = make(map[string]interface{})
 	}
-	vcursor := newVCursorImpl(ctx, tabletType, session, exr)
-	queryConstruct := queryinfo.NewQueryConstruct(sql, keyspace, bindVars)
-	plan, err := exr.getPlan(sql, keyspace, bindVars)
+	query, comments := sqlparser.SplitTrailingComments(sql)
+	vcursor := newVCursorImpl(ctx, tabletType, session, comments, exr)
+	plan, err := exr.getPlan(query, keyspace, bindVars)
 	if err != nil {
 		return err
 	}
-	return plan.Instructions.StreamExecute(vcursor, queryConstruct, make(map[string]interface{}), true, callback)
+	return plan.Instructions.StreamExecute(vcursor, bindVars, make(map[string]interface{}), true, callback)
 }
 
 // MessageAck acks messages.
@@ -270,7 +269,7 @@ func (exr *Executor) MessageAck(ctx context.Context, keyspace, name string, ids 
 		return 0, err
 	}
 	// TODO(sougou): Change this to use Session.
-	vcursor := newVCursorImpl(ctx, topodatapb.TabletType_MASTER, &vtgatepb.Session{}, exr)
+	vcursor := newVCursorImpl(ctx, topodatapb.TabletType_MASTER, &vtgatepb.Session{}, "", exr)
 	newKeyspace, _, allShards, err := getKeyspaceShards(ctx, exr.serv, exr.cell, table.Keyspace.Name, topodatapb.TabletType_MASTER)
 	shardIDs := make(map[string][]*querypb.Value)
 	if table.Keyspace.Sharded {
