@@ -289,7 +289,7 @@ func TestVTGateExecuteWithKeyspaceShard(t *testing.T) {
 
 	// Valid keyspace/shard.
 	_, qr, err = rpcVTGate.Execute(context.Background(),
-		"random statement",
+		"select id from none",
 		nil,
 		&vtgatepb.Session{
 			TargetString: KsTestUnsharded + ":0@master",
@@ -2390,11 +2390,11 @@ func TestVTGateShowMetadataUnsharded(t *testing.T) {
 	}
 
 	_, qr, err = rpcVTGate.Execute(context.Background(),
-		"show create databases",
+		"show 10",
 		nil,
 		masterSession)
 
-	expected = "vtgate: : unsupported show statement"
+	expected = "vtgate: : syntax error at position 8 near '10'"
 	if err == nil || err.Error() != expected {
 		t.Errorf("wanted %s, got %v", expected, err)
 	}

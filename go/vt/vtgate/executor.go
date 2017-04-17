@@ -10,6 +10,8 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -22,6 +24,7 @@ import (
 	"github.com/youtube/vitess/go/vt/sqlannotation"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vtgate/engine"
 	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
@@ -74,76 +77,52 @@ func NewExecutor(ctx context.Context, serv topo.SrvTopoServer, cell, statsName s
 
 // Execute executes a non-streaming query.
 func (exr *Executor) Execute(ctx context.Context, sql string, bindVars map[string]interface{}, session *vtgatepb.Session) (*sqltypes.Result, error) {
-	intercepted, err := exr.intercept(ctx, sql, session)
-	if err != nil {
-		return nil, err
-	}
-	if intercepted {
-		return &sqltypes.Result{}, nil
-	}
-	nsf := NewSafeSession(session)
-
-	// Autocommit handling
-	autocommit := false
-	if session.Autocommit && !session.InTransaction && sqlparser.IsDML(sql) {
-		autocommit = true
-		if err := exr.txConn.Begin(ctx, nsf); err != nil {
-			return nil, err
-		}
-		defer exr.txConn.Rollback(ctx, nsf)
-	}
-
 	if bindVars == nil {
 		bindVars = make(map[string]interface{})
 	}
-	qr, err := exr.innerExec(ctx, sql, bindVars, session)
-	if err == nil && autocommit {
-		// Set the error if commit fails.
-		err = exr.txConn.Commit(ctx, nsf)
-	}
-	return qr, err
-}
-
-// intercept checks for transactional or set statements. If they match then it performs the
-// necessary operation and returns a new session and true indicating that it's intercepted
-// the call. If so, the caller (Execute) should just return without proceeding further.
-func (exr *Executor) intercept(ctx context.Context, sql string, session *vtgatepb.Session) (bool, error) {
 	switch sqlparser.Preview(sql) {
+	case sqlparser.StmtSelect:
+		return exr.handleExec(ctx, sql, bindVars, session)
+	case sqlparser.StmtInsert, sqlparser.StmtUpdate, sqlparser.StmtDelete:
+		nsf := NewSafeSession(session)
+		autocommit := false
+		if session.Autocommit && !session.InTransaction && sqlparser.IsDML(sql) {
+			autocommit = true
+			if err := exr.txConn.Begin(ctx, nsf); err != nil {
+				return nil, err
+			}
+			defer exr.txConn.Rollback(ctx, nsf)
+		}
+
+		qr, err := exr.handleExec(ctx, sql, bindVars, session)
+		if err != nil {
+			return nil, err
+		}
+
+		if autocommit {
+			if err := exr.txConn.Commit(ctx, nsf); err != nil {
+				return nil, err
+			}
+		}
+		return qr, nil
 	case sqlparser.StmtBegin:
 		err := exr.txConn.Begin(ctx, NewSafeSession(session))
-		return true, err
+		return &sqltypes.Result{}, err
 	case sqlparser.StmtCommit:
 		err := exr.txConn.Commit(ctx, NewSafeSession(session))
-		return true, err
+		return &sqltypes.Result{}, err
 	case sqlparser.StmtRollback:
-		if !session.InTransaction {
-			return true, nil
-		}
 		err := exr.txConn.Rollback(ctx, NewSafeSession(session))
-		return true, err
+		return &sqltypes.Result{}, err
 	case sqlparser.StmtSet:
-		vals, err := sqlparser.ExtractSetNums(sql)
-		if err != nil {
-			return true, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, err.Error())
-		}
-		if len(vals) != 1 {
-			return true, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "too many set values: %s", sql)
-		}
-		val, ok := vals["autocommit"]
-		if !ok {
-			return true, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported construct: %s", sql)
-		}
-		if val != 0 {
-			session.Autocommit = true
-		} else {
-			session.Autocommit = false
-		}
-		return true, nil
+		return exr.handleSet(ctx, sql, bindVars, session)
+	case sqlparser.StmtShow:
+		return exr.handleShow(ctx, sql, bindVars, session)
 	}
-	return false, nil
+	return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unrecognized statement: %s", sql)
 }
 
-func (exr *Executor) innerExec(ctx context.Context, sql string, bindVars map[string]interface{}, session *vtgatepb.Session) (*sqltypes.Result, error) {
+func (exr *Executor) handleExec(ctx context.Context, sql string, bindVars map[string]interface{}, session *vtgatepb.Session) (*sqltypes.Result, error) {
 	target := parseTarget(session.TargetString)
 	if target.Shard != "" {
 		// V1 mode.
@@ -162,6 +141,108 @@ func (exr *Executor) innerExec(ctx context.Context, sql string, bindVars map[str
 		return nil, err
 	}
 	return plan.Instructions.Execute(vcursor, queryConstruct, make(map[string]interface{}), true)
+}
+
+func (exr *Executor) handleSet(ctx context.Context, sql string, bindVars map[string]interface{}, session *vtgatepb.Session) (*sqltypes.Result, error) {
+	vals, err := sqlparser.ExtractSetNums(sql)
+	if err != nil {
+		return &sqltypes.Result{}, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, err.Error())
+	}
+	if len(vals) != 1 {
+		return &sqltypes.Result{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "too many set values: %s", sql)
+	}
+	val, ok := vals["autocommit"]
+	if !ok {
+		return &sqltypes.Result{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported construct: %s", sql)
+	}
+	if val != 0 {
+		session.Autocommit = true
+	} else {
+		session.Autocommit = false
+	}
+	return &sqltypes.Result{}, nil
+}
+
+func (exr *Executor) handleShow(ctx context.Context, sql string, bindvars map[string]interface{}, session *vtgatepb.Session) (*sqltypes.Result, error) {
+	stmt, err := sqlparser.Parse(sql)
+	if err != nil {
+		return nil, err
+	}
+	show, ok := stmt.(*sqlparser.Show)
+	if !ok {
+		// This code is unreachable.
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unrecognized SHOW statement: %v", sql)
+	}
+	target := parseTarget(session.TargetString)
+
+	switch show.Type {
+	case sqlparser.ShowDatabasesStr, sqlparser.ShowKeyspacesStr:
+		keyspaces, err := getAllKeyspaces(ctx, exr.serv, exr.cell)
+		if err != nil {
+			return nil, err
+		}
+
+		rows := make([][]sqltypes.Value, len(keyspaces))
+		for i, v := range keyspaces {
+			rows[i] = buildVarCharRow(v)
+		}
+
+		return &sqltypes.Result{
+			Fields:       buildVarCharFields("Databases"),
+			Rows:         rows,
+			RowsAffected: uint64(len(rows)),
+		}, nil
+	case sqlparser.ShowShardsStr:
+		keyspaces, err := getAllKeyspaces(ctx, exr.serv, exr.cell)
+		if err != nil {
+			return nil, err
+		}
+
+		var rows [][]sqltypes.Value
+		for _, keyspace := range keyspaces {
+			_, _, shards, err := getKeyspaceShards(ctx, exr.serv, exr.cell, keyspace, target.TabletType)
+			if err != nil {
+				return nil, err
+			}
+
+			for _, shard := range shards {
+				rows = append(rows, buildVarCharRow(keyspace+"/"+shard.Name))
+			}
+		}
+
+		return &sqltypes.Result{
+			Fields:       buildVarCharFields("Shards"),
+			Rows:         rows,
+			RowsAffected: uint64(len(rows)),
+		}, nil
+	case sqlparser.ShowVSchemaTablesStr:
+		if target.Keyspace == "" {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "No keyspace selected")
+		}
+		ks, ok := exr.VSchema().Keyspaces[target.Keyspace]
+		if !ok {
+			return nil, vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "keyspace %s not found in vschema", target.Keyspace)
+		}
+
+		var tables []string
+		for name := range ks.Tables {
+			tables = append(tables, name)
+		}
+		sort.Strings(tables)
+
+		rows := make([][]sqltypes.Value, len(tables))
+		for i, v := range tables {
+			rows[i] = buildVarCharRow(v)
+		}
+
+		return &sqltypes.Result{
+			Fields:       buildVarCharFields("Tables"),
+			Rows:         rows,
+			RowsAffected: uint64(len(rows)),
+		}, nil
+	}
+
+	return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unimplemented metadata query: "+sql)
 }
 
 // StreamExecute executes a streaming query.
@@ -463,4 +544,43 @@ func (vs *wrappedVSchema) Find(keyspace, tablename sqlparser.TableIdent) (table 
 		keyspace = vs.keyspace
 	}
 	return vs.vschema.Find(keyspace.String(), tablename.String())
+}
+
+// parseTarget parses the string representation of a Target
+// of the form keyspace:shard@tablet_type. You can use a / instead of a :.
+func parseTarget(targetString string) querypb.Target {
+	// Default tablet type is master.
+	target := querypb.Target{
+		TabletType: topodatapb.TabletType_MASTER,
+	}
+	last := strings.LastIndexAny(targetString, "@")
+	if last != -1 {
+		// No need to check the error. UNKNOWN will be returned on
+		// error and it will fail downstream.
+		target.TabletType, _ = topoproto.ParseTabletType(targetString[last+1:])
+		targetString = targetString[:last]
+	}
+	last = strings.LastIndexAny(targetString, "/:")
+	if last != -1 {
+		target.Shard = targetString[last+1:]
+		targetString = targetString[:last]
+	}
+	target.Keyspace = targetString
+	return target
+}
+
+func buildVarCharFields(names ...string) []*querypb.Field {
+	fields := make([]*querypb.Field, len(names))
+	for i, v := range names {
+		fields[i] = &querypb.Field{Name: v, Type: sqltypes.VarChar}
+	}
+	return fields
+}
+
+func buildVarCharRow(values ...string) []sqltypes.Value {
+	row := make([]sqltypes.Value, len(values))
+	for i, v := range values {
+		row[i] = sqltypes.MakeTrusted(sqltypes.VarChar, []byte(v))
+	}
+	return row
 }
