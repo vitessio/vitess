@@ -250,7 +250,7 @@ func TestDeleteComments(t *testing.T) {
 		t.Error(err)
 	}
 	wantQueries := []querytypes.BoundQuery{{
-		Sql:           "select name from user where id = 1 for update",
+		Sql:           "select name from user where id = 1 for update /* trailing */",
 		BindVariables: map[string]interface{}{},
 	}, {
 		Sql:           "delete from user where id = 1 /* vtgate:: keyspace_id:166b40b44aba4bd6 */ /* trailing */",
@@ -261,7 +261,7 @@ func TestDeleteComments(t *testing.T) {
 	}
 
 	wantQueries = []querytypes.BoundQuery{{
-		Sql: "delete from name_user_map where name = :name and user_id = :user_id",
+		Sql: "delete from name_user_map where name = :name and user_id = :user_id /* trailing */",
 		BindVariables: map[string]interface{}{
 			"user_id": int64(1),
 			"name":    "myname",
@@ -396,7 +396,7 @@ func TestInsertComments(t *testing.T) {
 		t.Errorf("sbc2.Queries: %+v, want nil\n", sbc2.Queries)
 	}
 	wantQueries = []querytypes.BoundQuery{{
-		Sql: "insert into name_user_map(name, user_id) values (:name0, :user_id0)",
+		Sql: "insert into name_user_map(name, user_id) values (:name0, :user_id0) /* trailing */",
 		BindVariables: map[string]interface{}{
 			"name0":    []byte("myname"),
 			"user_id0": int64(1),
