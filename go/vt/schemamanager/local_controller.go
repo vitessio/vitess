@@ -62,11 +62,11 @@ func NewLocalController(schemaChangeDir string) *LocalController {
 
 // Open goes through the schema change dir and find a keyspace with a pending
 // schema change.
-func (controller *LocalController) Open(ctx context.Context) error {
+func (controller *LocalController) Open(ctx context.Context) (Status, error) {
 	// find all keyspace directories.
 	fileInfos, err := ioutil.ReadDir(controller.schemaChangeDir)
 	if err != nil {
-		return err
+		return StatusError, err
 	}
 	for _, fileinfo := range fileInfos {
 		if !fileinfo.IsDir() {
@@ -94,11 +94,10 @@ func (controller *LocalController) Open(ctx context.Context) error {
 			controller.errorDir = path.Join(dirpath, "error", datePart)
 			controller.completeDir = path.Join(dirpath, "complete", datePart)
 			controller.logDir = path.Join(dirpath, "log", datePart)
-			// the remaining schema changes will be picked by the next runs
-			break
+			return StatusHasSchemaChange, nil
 		}
 	}
-	return nil
+	return StatusNoSchemaChange, nil
 }
 
 // Read reads schema changes.

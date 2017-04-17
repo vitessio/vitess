@@ -346,11 +346,14 @@ func (controller *fakeController) SetKeyspace(keyspace string) {
 	controller.keyspace = keyspace
 }
 
-func (controller *fakeController) Open(ctx context.Context) error {
+func (controller *fakeController) Open(ctx context.Context) (Status, error) {
 	if controller.openFail {
-		return errControllerOpen
+		return StatusError, errControllerOpen
 	}
-	return nil
+	if len(controller.sqls) == 0 {
+		return StatusNoSchemaChange, nil
+	}
+	return StatusHasSchemaChange, nil
 }
 
 func (controller *fakeController) Read(ctx context.Context) ([]string, error) {

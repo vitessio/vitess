@@ -19,11 +19,13 @@ func TestUIController(t *testing.T) {
 	controller := NewUIController(sql, "test_keyspace", response)
 	ctx := context.Background()
 
-	err := controller.Open(ctx)
+	status, err := controller.Open(ctx)
 	if err != nil {
 		t.Fatalf("controller.Open should succeed, but got error: %v", err)
 	}
-
+	if status != StatusHasSchemaChange {
+		t.Fatalf("got status code: %v, want: %v", status, StatusHasSchemaChange)
+	}
 	keyspace := controller.Keyspace()
 	if keyspace != "test_keyspace" {
 		t.Fatalf("expect to get keyspace: 'test_keyspace', but got keyspace: '%s'", keyspace)

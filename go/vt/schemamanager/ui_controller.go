@@ -40,8 +40,11 @@ func NewUIController(
 }
 
 // Open is a no-op.
-func (controller *UIController) Open(ctx context.Context) error {
-	return nil
+func (controller *UIController) Open(ctx context.Context) (Status, error) {
+	if len(controller.sqls) == 0 {
+		return StatusNoSchemaChange, nil
+	}
+	return StatusHasSchemaChange, nil
 }
 
 // Read reads schema changes
