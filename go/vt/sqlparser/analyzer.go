@@ -25,6 +25,7 @@ const (
 	StmtCommit
 	StmtRollback
 	StmtSet
+	StmtShow
 	StmtUnknown
 )
 
@@ -47,6 +48,8 @@ func Preview(sql string) int {
 		return StmtDelete
 	case "set":
 		return StmtSet
+	case "show":
+		return StmtShow
 	}
 	switch strings.ToLower(trimmed) {
 	case "begin", "start transaction":

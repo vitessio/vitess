@@ -100,7 +100,6 @@ func TestPlan(t *testing.T) {
 	testFile(t, "postprocess_cases.txt", vschema)
 	testFile(t, "wireup_cases.txt", vschema)
 	testFile(t, "dml_cases.txt", vschema)
-	testFile(t, "show_cases.txt", vschema)
 	testFile(t, "unsupported_cases.txt", vschema)
 }
 

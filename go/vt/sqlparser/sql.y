@@ -391,17 +391,18 @@ show_statement_type:
   }
 | reserved_keyword
   {
-    if (string($1) == "databases"){
+    switch string($1) {
+    case "databases":
       $$ = ShowDatabasesStr
-    } else if (string($1) == "tables"){
+    case "tables":
       $$ = ShowTablesStr
-    } else if (string($1) == "vitess_keyspaces"){
+    case "vitess_keyspaces":
       $$ = ShowKeyspacesStr
-    } else if (string($1) == "vitess_shards"){
+    case "vitess_shards":
       $$ = ShowShardsStr
-    } else if (string($1) == "vschema_tables"){
+    case "vschema_tables":
       $$ = ShowVSchemaTablesStr
-    } else {
+    default:
       $$ = ShowUnsupportedStr
     }
   }
