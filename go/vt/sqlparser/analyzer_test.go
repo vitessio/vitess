@@ -36,6 +36,7 @@ func TestPreview(t *testing.T) {
 		{"start transaction", StmtBegin},
 		{"commit", StmtCommit},
 		{"rollback", StmtRollback},
+		{"show", StmtShow},
 		{"other", StmtUnknown},
 	}
 	for _, tcase := range testcases {

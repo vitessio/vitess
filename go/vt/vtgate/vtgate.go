@@ -34,8 +34,6 @@ import (
 	"github.com/youtube/vitess/go/vt/vtgate/gateway"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateservice"
 
-	"strings"
-
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	vtgatepb "github.com/youtube/vitess/go/vt/proto/vtgate"
@@ -935,27 +933,4 @@ func annotateBoundShardQueriesAsUnfriendly(queries []*vtgatepb.BoundShardQuery) 
 	for i, q := range queries {
 		queries[i].Query.Sql = sqlannotation.AnnotateIfDML(q.Query.Sql, nil)
 	}
-}
-
-// parseTarget parses the string representation of a Target
-// of the form keyspace:shard@tablet_type. You can use a / instead of a :.
-func parseTarget(targetString string) querypb.Target {
-	// Default tablet type is master.
-	target := querypb.Target{
-		TabletType: topodatapb.TabletType_MASTER,
-	}
-	last := strings.LastIndexAny(targetString, "@")
-	if last != -1 {
-		// No need to check the error. UNKNOWN will be returned on
-		// error and it will fail downstream.
-		target.TabletType, _ = topoproto.ParseTabletType(targetString[last+1:])
-		targetString = targetString[:last]
-	}
-	last = strings.LastIndexAny(targetString, "/:")
-	if last != -1 {
-		target.Shard = targetString[last+1:]
-		targetString = targetString[:last]
-	}
-	target.Keyspace = targetString
-	return target
 }

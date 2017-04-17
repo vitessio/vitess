@@ -6,6 +6,10 @@
 "set a=1"
 "unsupported construct: set"
 
+# SHOW
+"show create database"
+"unsupported construct: show"
+
 # DDL
 "create table a(id int)"
 "unsupported construct: ddl"
