@@ -117,6 +117,8 @@ func (exr *Executor) Execute(ctx context.Context, sql string, bindVars map[strin
 		return exr.handleSet(ctx, sql, bindVars, session)
 	case sqlparser.StmtShow:
 		return exr.handleShow(ctx, sql, bindVars, session)
+	case sqlparser.StmtOther:
+		return exr.handleOther(ctx, sql, bindVars, session)
 	}
 	return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unrecognized statement: %s", sql)
 }
@@ -126,10 +128,7 @@ func (exr *Executor) handleExec(ctx context.Context, sql string, bindVars map[st
 	if target.Shard != "" {
 		// V1 mode.
 		sql = sqlannotation.AnnotateIfDML(sql, nil)
-		f := func(keyspace string) (string, []string, error) {
-			return keyspace, []string{target.Shard}, nil
-		}
-		return exr.resolver.Execute(ctx, sql, bindVars, target.Keyspace, target.TabletType, session, f, false, session.Options)
+		return exr.shardExec(ctx, sql, bindVars, target, session)
 	}
 
 	// V3 mode.
@@ -140,6 +139,13 @@ func (exr *Executor) handleExec(ctx context.Context, sql string, bindVars map[st
 		return nil, err
 	}
 	return plan.Instructions.Execute(vcursor, bindVars, make(map[string]interface{}), true)
+}
+
+func (exr *Executor) shardExec(ctx context.Context, sql string, bindVars map[string]interface{}, target querypb.Target, session *vtgatepb.Session) (*sqltypes.Result, error) {
+	f := func(keyspace string) (string, []string, error) {
+		return keyspace, []string{target.Shard}, nil
+	}
+	return exr.resolver.Execute(ctx, sql, bindVars, target.Keyspace, target.TabletType, session, f, false, session.Options)
 }
 
 func (exr *Executor) handleSet(ctx context.Context, sql string, bindVars map[string]interface{}, session *vtgatepb.Session) (*sqltypes.Result, error) {
@@ -162,7 +168,7 @@ func (exr *Executor) handleSet(ctx context.Context, sql string, bindVars map[str
 	return &sqltypes.Result{}, nil
 }
 
-func (exr *Executor) handleShow(ctx context.Context, sql string, bindvars map[string]interface{}, session *vtgatepb.Session) (*sqltypes.Result, error) {
+func (exr *Executor) handleShow(ctx context.Context, sql string, bindVars map[string]interface{}, session *vtgatepb.Session) (*sqltypes.Result, error) {
 	stmt, err := sqlparser.Parse(sql)
 	if err != nil {
 		return nil, err
@@ -241,7 +247,23 @@ func (exr *Executor) handleShow(ctx context.Context, sql string, bindvars map[st
 		}, nil
 	}
 
-	return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unimplemented metadata query: "+sql)
+	// Any other show statement is passed through
+	return exr.handleOther(ctx, sql, bindVars, session)
+}
+
+func (exr *Executor) handleOther(ctx context.Context, sql string, bindVars map[string]interface{}, session *vtgatepb.Session) (*sqltypes.Result, error) {
+	target := parseTarget(session.TargetString)
+	if target.Keyspace == "" {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "No keyspace selected")
+	}
+	if target.Shard == "" {
+		var err error
+		target.Keyspace, target.Shard, err = getAnyShard(ctx, exr.serv, exr.cell, target.Keyspace, target.TabletType)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return exr.shardExec(ctx, sql, bindVars, target, session)
 }
 
 // StreamExecute executes a streaming query.
@@ -438,7 +460,7 @@ func (exr *Executor) VSchema() *vindexes.VSchema {
 
 // getPlan computes the plan for the given query. If one is in
 // the cache, it reuses it.
-func (exr *Executor) getPlan(sql, keyspace string, bindvars map[string]interface{}) (*engine.Plan, error) {
+func (exr *Executor) getPlan(sql, keyspace string, bindVars map[string]interface{}) (*engine.Plan, error) {
 	if exr.VSchema() == nil {
 		return nil, errors.New("vschema not initialized")
 	}
@@ -465,7 +487,7 @@ func (exr *Executor) getPlan(sql, keyspace string, bindvars map[string]interface
 	if err != nil {
 		return nil, err
 	}
-	sqlparser.Normalize(stmt, bindvars, "vtg")
+	sqlparser.Normalize(stmt, bindVars, "vtg")
 	normalized := sqlparser.String(stmt)
 	normkey := normalized
 	if keyspace != "" {

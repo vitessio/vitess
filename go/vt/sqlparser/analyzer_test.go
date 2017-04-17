@@ -24,7 +24,6 @@ func TestPreview(t *testing.T) {
 		{"Update", StmtUpdate},
 		{"UPDATE ...", StmtUpdate},
 		{"\n\t    delete ...", StmtDelete},
-		{"set", StmtSet},
 		{"", StmtUnknown},
 		{" ", StmtUnknown},
 		{"begin", StmtBegin},
@@ -36,8 +35,19 @@ func TestPreview(t *testing.T) {
 		{"start transaction", StmtBegin},
 		{"commit", StmtCommit},
 		{"rollback", StmtRollback},
+		{"create", StmtDDL},
+		{"alter", StmtDDL},
+		{"rename", StmtDDL},
+		{"drop", StmtDDL},
+		{"set", StmtSet},
 		{"show", StmtShow},
-		{"other", StmtUnknown},
+		{"analyze", StmtOther},
+		{"describe", StmtOther},
+		{"explain", StmtOther},
+		{"repair", StmtOther},
+		{"optimize", StmtOther},
+		{"truncate", StmtOther},
+		{"unknown", StmtUnknown},
 	}
 	for _, tcase := range testcases {
 		if got := Preview(tcase.sql); got != tcase.want {

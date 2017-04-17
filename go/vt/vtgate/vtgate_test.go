@@ -2398,15 +2398,11 @@ func TestVTGateShowMetadataUnsharded(t *testing.T) {
 	if err == nil || err.Error() != expected {
 		t.Errorf("wanted %s, got %v", expected, err)
 	}
+
 	_, qr, err = rpcVTGate.Execute(context.Background(),
 		"show tables",
 		nil,
 		masterSession)
-
-	expected = "vtgate: : unimplemented metadata query: show tables"
-	if err == nil || err.Error() != expected {
-		t.Errorf("wanted %s, got %v", expected, err)
-	}
 }
 
 func TestVTGateShowMetadataTwoShards(t *testing.T) {
@@ -2461,6 +2457,42 @@ func TestVTGateShowMetadataTwoShards(t *testing.T) {
 	shard1 := keyspace + "/20-40"
 	if !valuesContain(qr.Rows, shard1) {
 		t.Errorf("shard %s not found in Values \n%+v", shard1, qr.Rows)
+	}
+}
+
+func TestVTGateOther(t *testing.T) {
+	createSandbox(KsTestUnsharded)
+	hcVTGateTest.Reset()
+	hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, KsTestUnsharded, "0", topodatapb.TabletType_MASTER, true, 1, nil)
+
+	stmts := []string{
+		"show other",
+		"analyze",
+		"describe",
+		"explain",
+		"repair",
+		"optimize",
+		"truncate",
+	}
+	for _, stmt := range stmts {
+		_, _, err := rpcVTGate.Execute(context.Background(),
+			stmt,
+			nil,
+			&vtgatepb.Session{
+				TargetString: KsTestUnsharded,
+			})
+		if err != nil {
+			t.Error(err)
+		}
+	}
+
+	_, _, err := rpcVTGate.Execute(context.Background(),
+		"analyze",
+		nil,
+		masterSession)
+	want := "vtgate: : No keyspace selected"
+	if err == nil || err.Error() != want {
+		t.Errorf("Exec(no keyspace): %v, want %v", err, want)
 	}
 }
 
