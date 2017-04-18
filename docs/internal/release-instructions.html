@@ -478,11 +478,66 @@ automatically use the latest Docker images you pushed.</p>
 <p>TODO(mberlin): Describe how to launch our new cluster tests in <code class="prettyprint">test/cluster</code>
 instead.</p>
 
+<h2 id="java-packages">Java Packages</h2>
+
+<p>We publish binary packages for our <a href="https://search.maven.org/#search%7Cga%7C1%7Cg:%22io.vitess%22">JDBC driver and Java client on Maven Central</a>.</p>
+
+<p>To do so, we use the <a href="http://oss.sonatype.org/">http://oss.sonatype.org/</a> repository.
+New packages must be uploaded there (&quot;deployed&quot;) and will be automatically published (&quot;released&quot;).
+Once they are released there, they will be automatically synchronized with Maven Central.
+The synchronization takes only several minutes but the update on <a href="http://search.maven.org">http://search.maven.org</a> may take up to two hours.</p>
+
+<h3 id="access-to-oss-sonatype-org">Access to oss.sonatype.org</h3>
+
+<p><a href="https://issues.sonatype.org/secure/Signup!default.jspa">Sign up here.</a>
+Then you must be added as member to our <code class="prettyprint">io.vitess</code> namespace.
+Therefore, file a JIRA ticket with Sonatype to get added (<a href="https://issues.sonatype.org/browse/OSSRH-30604">example for a different namespace</a>).</p>
+
+<h3 id="one-time-setup">One-time setup</h3>
+
+<p><strong>Set up GPG</strong></p>
+
+<p>Follow <a href="http://central.sonatype.org/pages/working-with-pgp-signatures.html">Sonatype&#39;s GPG instructions</a>.</p>
+
+<p>Install <code class="prettyprint">gpg-agent</code> (needed below) e.g. on Ubuntu via: <code class="prettyprint">sudo apt-get install gnupg-agent</code></p>
+
+<p><strong>Login configuration</strong></p>
+
+<p>Create the <code class="prettyprint">settings.xml</code> in the <code class="prettyprint">$HOME/.m2/</code> directory as described in their <a href="http://central.sonatype.org/pages/apache-maven.html">instructions</a>.</p>
+
+<h3 id="deploy-amp-release">Deploy &amp; Release</h3>
+
+<ol>
+<li><p>Make sure you are in the release branch.</p></li>
+<li><p>Change the version number in all <code class="prettyprint">pom.xml</code> files with the &quot;versions&quot; plugin:</p>
+<div class="highlight"><pre><code class="language-bash" data-lang="bash"><span class="c"># The Java version must not have the leading &quot;v&quot;.</span>
+<span class="c"># Example: 2.1.0 and not v2.1.0.</span>
+<span class="nv">JAVA_VERSION</span><span class="o">=</span><span class="k">${</span><span class="nv">PATCH</span><span class="p">/v/</span><span class="k">}</span>
+<span class="nb">cd </span>java
+mvn versions:set -DnewVersion<span class="o">=</span><span class="nv">$JAVA_VERSION</span>
+</code></pre></div></li>
+<li><p>Run <code class="prettyprint">git diff java/</code> to double check that the version was updated correctly.</p></li>
+<li><p>Create a Git commit with the version change while you are in the <strong>release</strong> branch (not master). You will push it later.</p></li>
+<li><p>Run <code class="prettyprint">gpg-agent</code> to avoid that Maven will constantly prompt you for the password of your private key.</p>
+<div class="highlight"><pre><code class="language-bash" data-lang="bash"><span class="nb">eval</span> <span class="k">$(</span>gpg-agent --daemon --no-grab --write-env-file <span class="nv">$HOME</span>/.gpg-agent-info<span class="k">)</span>
+<span class="nb">export </span><span class="nv">GPG_TTY</span><span class="o">=</span><span class="k">$(</span>tty<span class="k">)</span>
+<span class="nb">export </span>GPG_AGENT_INFO
+</code></pre></div></li>
+<li><p>Deploy (upload) the Java code to the oss.sonatype.org repository:</p>
+
+<p class="warning"><b>Warning:</b> After the deployment, the Java packages will be automatically released. Once released, you cannot delete them. The only option is to upload a newer version (e.g. increment the patch level).</p>
+<div class="highlight"><pre><code class="language-bash" data-lang="bash">mvn clean deploy -P release
+<span class="nb">cd</span> ..
+</code></pre></div></li>
+</ol>
+
+<p>At the end of the release, you will also have to bump the SNAPSHOT version in the master branch (see <a href="#bump-java-snapshot-version">below</a>).</p>
+
 <h2 id="push-the-release-branch-and-tag-to-upstream">Push the release branch and tag to upstream</h2>
 
 <p>Note that we&#39;re pushing to upstream (youtube/vitess), not origin (your fork).</p>
 
-<p class="warning"><b>WARNING:</b> After the following push, there's no going
+<p class="warning"><b>Warning:</b> After the following push, there's no going
 back, since tags don't get updated if someone else has fetched them already.
 If you need to re-tag after this point, you MUST increment the version number.
 </p>
@@ -499,6 +554,27 @@ to see all the commits since the last release.</p>
 
 <p>Then send an announcement on the <a href="https://groups.google.com/forum/#!forum/vitess-announce">vitess-announce</a> list.</p>
 
+<h2 id="bump-java-snapshot-version">Bump Java SNAPSHOT version</h2>
+
+<p>The Java version in the <strong>master</strong> branch has the suffix <code class="prettyprint">-SNAPSHOT</code> and should always reference the <strong>next</strong> release number.
+For example, if you just released <code class="prettyprint">2.1.0</code>, you could bump it to <code class="prettyprint">2.1.1-SNAPSHOT</code>.</p>
+
+<p>Change the SNAPSHOT version as follows:</p>
+<div class="highlight"><pre><code class="language-bash" data-lang="bash">git checkout master
+git pull --ff-only upstream master
+
+<span class="c"># Example:</span>
+<span class="nv">JAVA_VERSION</span><span class="o">=</span>2.1.1-SNAPSHOT
+<span class="nb">cd </span>java
+mvn versions:set -DnewVersion<span class="o">=</span><span class="nv">$JAVA_VERSION</span>
+
+<span class="c"># Verify diff.</span>
+git diff
+
+git commit -a -m <span class="s2">&quot;java: Bump SNAPSHOT version to $JAVA_VERSION after Vitess release $PATCH.&quot;</span>
+
+git push upstream master
+</code></pre></div>
       </div>
     </div>
   </div>

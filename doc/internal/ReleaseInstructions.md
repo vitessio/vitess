@@ -174,11 +174,75 @@ automatically use the latest Docker images you pushed.
 TODO(mberlin): Describe how to launch our new cluster tests in `test/cluster`
 instead.
 
+## Java Packages
+
+We publish binary packages for our [JDBC driver and Java client on Maven Central](https://search.maven.org/#search|ga|1|g:"io.vitess").
+
+To do so, we use the http://oss.sonatype.org/ repository.
+New packages must be uploaded there ("deployed") and will be automatically published ("released").
+Once they are released there, they will be automatically synchronized with Maven Central.
+The synchronization takes only several minutes but the update on http://search.maven.org may take up to two hours.
+
+### Access to oss.sonatype.org
+
+[Sign up here.](https://issues.sonatype.org/secure/Signup!default.jspa)
+Then you must be added as member to our `io.vitess` namespace.
+Therefore, file a JIRA ticket with Sonatype to get added ([example for a different namespace](https://issues.sonatype.org/browse/OSSRH-30604)).
+
+### One-time setup
+
+**Set up GPG**
+
+Follow [Sonatype's GPG instructions](http://central.sonatype.org/pages/working-with-pgp-signatures.html).
+
+Install `gpg-agent` (needed below) e.g. on Ubuntu via: `sudo apt-get install gnupg-agent`
+
+**Login configuration**
+
+Create the `settings.xml` in the `$HOME/.m2/` directory as described in their [instructions](http://central.sonatype.org/pages/apache-maven.html).
+
+### Deploy & Release
+
+1.  Make sure you are in the release branch.
+
+1.  Change the version number in all `pom.xml` files with the "versions" plugin:
+
+    ```bash
+    # The Java version must not have the leading "v".
+    # Example: 2.1.0 and not v2.1.0.
+    JAVA_VERSION=${PATCH/v/}
+    cd java
+    mvn versions:set -DnewVersion=$JAVA_VERSION
+    ```
+
+1.  Run `git diff java/` to double check that the version was updated correctly.
+
+1.  Create a Git commit with the version change while you are in the **release** branch (not master). You will push it later.
+
+1.  Run `gpg-agent` to avoid that Maven will constantly prompt you for the password of your private key.
+
+    ```bash
+    eval $(gpg-agent --daemon --no-grab --write-env-file $HOME/.gpg-agent-info)
+    export GPG_TTY=$(tty)
+    export GPG_AGENT_INFO
+    ```
+
+1.  Deploy (upload) the Java code to the oss.sonatype.org repository:
+
+    <p class="warning"><b>Warning:</b> After the deployment, the Java packages will be automatically released. Once released, you cannot delete them. The only option is to upload a newer version (e.g. increment the patch level).</p>
+
+    ```bash
+    mvn clean deploy -P release
+    cd ..
+    ```
+
+At the end of the release, you will also have to bump the SNAPSHOT version in the master branch (see [below](#bump-java-snapshot-version)).
+
 ## Push the release branch and tag to upstream
 
 Note that we're pushing to upstream (youtube/vitess), not origin (your fork).
 
-<p class="warning"><b>WARNING:</b> After the following push, there's no going
+<p class="warning"><b>Warning:</b> After the following push, there's no going
 back, since tags don't get updated if someone else has fetched them already.
 If you need to re-tag after this point, you MUST increment the version number.
 </p>
@@ -198,3 +262,27 @@ to see all the commits since the last release.
 
 Then send an announcement on the [vitess-announce]
 (https://groups.google.com/forum/#!forum/vitess-announce) list.
+
+## Bump Java SNAPSHOT version
+
+The Java version in the **master** branch has the suffix `-SNAPSHOT` and should always reference the **next** release number.
+For example, if you just released `2.1.0`, you could bump it to `2.1.1-SNAPSHOT`.
+
+Change the SNAPSHOT version as follows:
+
+```bash
+git checkout master
+git pull --ff-only upstream master
+
+# Example:
+JAVA_VERSION=2.1.1-SNAPSHOT
+cd java
+mvn versions:set -DnewVersion=$JAVA_VERSION
+
+# Verify diff.
+git diff
+
+git commit -a -m "java: Bump SNAPSHOT version to $JAVA_VERSION after Vitess release $PATCH."
+
+git push upstream master
+```
