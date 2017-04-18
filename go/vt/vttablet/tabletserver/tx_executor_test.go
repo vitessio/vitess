@@ -13,15 +13,17 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/mysqlconn/fakesqldb"
 	"github.com/youtube/vitess/go/sqltypes"
-	querypb "github.com/youtube/vitess/go/vt/proto/query"
-	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
-	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"github.com/youtube/vitess/go/vt/vtgate/fakerpcvtgateconn"
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateconn"
+	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
+
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
 func TestTxExecutorEmptyPrepare(t *testing.T) {
@@ -317,7 +319,7 @@ func TestExecutorReadTransaction(t *testing.T) {
 		t.Error(err)
 	}
 	want := &querypb.TransactionMetadata{}
-	if !reflect.DeepEqual(got, want) {
+	if !proto.Equal(got, want) {
 		t.Errorf("ReadTransaction: %v, want %v", got, want)
 	}
 
@@ -365,7 +367,7 @@ func TestExecutorReadTransaction(t *testing.T) {
 			TabletType: topodatapb.TabletType_MASTER,
 		}},
 	}
-	if !reflect.DeepEqual(got, want) {
+	if !proto.Equal(got, want) {
 		t.Errorf("ReadTransaction: %v, want %v", got, want)
 	}
 
@@ -387,7 +389,7 @@ func TestExecutorReadTransaction(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	if !reflect.DeepEqual(got, want) {
+	if !proto.Equal(got, want) {
 		t.Errorf("ReadTransaction: %v, want %v", got, want)
 	}
 
@@ -409,7 +411,7 @@ func TestExecutorReadTransaction(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	if !reflect.DeepEqual(got, want) {
+	if !proto.Equal(got, want) {
 		t.Errorf("ReadTransaction: %v, want %v", got, want)
 	}
 }

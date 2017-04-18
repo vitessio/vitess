@@ -86,7 +86,7 @@ var TestExecuteOptions = &querypb.ExecuteOptions{
 const TestAsTransaction bool = true
 
 func (f *FakeQueryService) checkTargetCallerID(ctx context.Context, name string, target *querypb.Target) {
-	if !reflect.DeepEqual(target, TestTarget) {
+	if !proto.Equal(target, TestTarget) {
 		f.t.Errorf("invalid Target for %v: got %#v expected %#v", name, target, TestTarget)
 	}
 
@@ -94,7 +94,7 @@ func (f *FakeQueryService) checkTargetCallerID(ctx context.Context, name string,
 	if ef == nil {
 		f.t.Errorf("no effective caller id for %v", name)
 	} else {
-		if !reflect.DeepEqual(ef, TestCallerID) {
+		if !proto.Equal(ef, TestCallerID) {
 			f.t.Errorf("invalid effective caller id for %v: got %v expected %v", name, ef, TestCallerID)
 		}
 	}
@@ -103,7 +103,7 @@ func (f *FakeQueryService) checkTargetCallerID(ctx context.Context, name string,
 	if im == nil {
 		f.t.Errorf("no immediate caller id for %v", name)
 	} else {
-		if !reflect.DeepEqual(im, TestVTGateCallerID) {
+		if !proto.Equal(im, TestVTGateCallerID) {
 			f.t.Errorf("invalid immediate caller id for %v: got %v expected %v", name, im, TestVTGateCallerID)
 		}
 	}
@@ -218,6 +218,18 @@ var Participants = []*querypb.Target{{
 	Shard:    "1",
 }}
 
+func TargetsEqual(t1, t2 []*querypb.Target) bool {
+	if len(t1) != len(t2) {
+		return false
+	}
+	for i, t := range t1 {
+		if !proto.Equal(t, t2[i]) {
+			return false
+		}
+	}
+	return true
+}
+
 // CreateTransaction is part of the queryservice.QueryService interface
 func (f *FakeQueryService) CreateTransaction(ctx context.Context, target *querypb.Target, dtid string, participants []*querypb.Target) (err error) {
 	if f.HasError {
@@ -230,7 +242,7 @@ func (f *FakeQueryService) CreateTransaction(ctx context.Context, target *queryp
 	if dtid != Dtid {
 		f.t.Errorf("CreateTransaction: invalid dtid: got %s expected %s", dtid, Dtid)
 	}
-	if !reflect.DeepEqual(participants, Participants) {
+	if !TargetsEqual(participants, Participants) {
 		f.t.Errorf("invalid CreateTransaction participants: got %v, expected %v", participants, Participants)
 	}
 	return nil
@@ -648,7 +660,7 @@ func (f *FakeQueryService) MessageAck(ctx context.Context, target *querypb.Targe
 	if name != MessageName {
 		f.t.Errorf("name: %s, want %s", name, MessageName)
 	}
-	if !reflect.DeepEqual(ids, MessageIDs) {
+	if !sqltypes.Proto3ValuesEqual(ids, MessageIDs) {
 		f.t.Errorf("ids: %v, want %v", ids, MessageIDs)
 	}
 	return 1, nil

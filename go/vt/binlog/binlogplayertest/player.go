@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/vt/binlog/binlogplayer"
@@ -94,7 +95,9 @@ func (fake *FakeBinlogStreamer) StreamKeyRange(ctx context.Context, position str
 		KeyRange: keyRange,
 		Charset:  charset,
 	}
-	if !reflect.DeepEqual(req, testKeyRangeRequest) {
+	if position != testKeyRangeRequest.Position ||
+		!proto.Equal(keyRange, testKeyRangeRequest.KeyRange) ||
+		!proto.Equal(charset, testKeyRangeRequest.Charset) {
 		fake.t.Errorf("wrong StreamKeyRange parameter, got %+v want %+v", req, testKeyRangeRequest)
 	}
 	callback(testBinlogTransaction)
@@ -110,7 +113,7 @@ func testStreamKeyRange(t *testing.T, bpc binlogplayer.Client) {
 	if se, err := stream.Recv(); err != nil {
 		t.Fatalf("got error: %v", err)
 	} else {
-		if !reflect.DeepEqual(*se, *testBinlogTransaction) {
+		if !proto.Equal(se, testBinlogTransaction) {
 			t.Errorf("got wrong result, got %v expected %v", *se, *testBinlogTransaction)
 		}
 	}
@@ -158,7 +161,9 @@ func (fake *FakeBinlogStreamer) StreamTables(ctx context.Context, position strin
 		Tables:   tables,
 		Charset:  charset,
 	}
-	if !reflect.DeepEqual(req, testTablesRequest) {
+	if position != testTablesRequest.Position ||
+		!reflect.DeepEqual(tables, testTablesRequest.Tables) ||
+		!proto.Equal(charset, testTablesRequest.Charset) {
 		fake.t.Errorf("wrong StreamTables parameter, got %+v want %+v", req, testTablesRequest)
 	}
 	callback(testBinlogTransaction)

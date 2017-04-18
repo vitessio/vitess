@@ -1,8 +1,9 @@
 package dtids
 
 import (
-	"reflect"
 	"testing"
+
+	"github.com/golang/protobuf/proto"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -27,7 +28,7 @@ func TestDTID(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	if !reflect.DeepEqual(in, out) {
+	if !proto.Equal(in, out) {
 		t.Errorf("ShardSession: %+v, want %+v", out, in)
 	}
 	_, err = ShardSession("badParts")
