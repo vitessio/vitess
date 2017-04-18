@@ -6,6 +6,7 @@ package vtgate
 
 import (
 	"encoding/hex"
+	"sort"
 
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/key"
@@ -56,6 +57,7 @@ func getAllKeyspaces(ctx context.Context, topoServ topo.SrvTopoServer, cell stri
 	if err != nil {
 		return nil, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "keyspace names fetch error: %v", err)
 	}
+	sort.Strings(keyspaces)
 
 	return keyspaces, nil
 }

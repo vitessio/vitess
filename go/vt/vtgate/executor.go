@@ -85,7 +85,7 @@ func (exr *Executor) Execute(ctx context.Context, sql string, bindVars map[strin
 	case sqlparser.StmtInsert, sqlparser.StmtUpdate, sqlparser.StmtDelete:
 		nsf := NewSafeSession(session)
 		autocommit := false
-		if session.Autocommit && !session.InTransaction && sqlparser.IsDML(sql) {
+		if session.Autocommit && !session.InTransaction {
 			autocommit = true
 			if err := exr.txConn.Begin(ctx, nsf); err != nil {
 				return nil, err
@@ -104,6 +104,8 @@ func (exr *Executor) Execute(ctx context.Context, sql string, bindVars map[strin
 			}
 		}
 		return qr, nil
+	case sqlparser.StmtDDL:
+		return exr.handleDDL(ctx, sql, bindVars, session)
 	case sqlparser.StmtBegin:
 		err := exr.txConn.Begin(ctx, NewSafeSession(session))
 		return &sqltypes.Result{}, err
@@ -144,6 +146,31 @@ func (exr *Executor) handleExec(ctx context.Context, sql string, bindVars map[st
 func (exr *Executor) shardExec(ctx context.Context, sql string, bindVars map[string]interface{}, target querypb.Target, session *vtgatepb.Session) (*sqltypes.Result, error) {
 	f := func(keyspace string) (string, []string, error) {
 		return keyspace, []string{target.Shard}, nil
+	}
+	return exr.resolver.Execute(ctx, sql, bindVars, target.Keyspace, target.TabletType, session, f, false, session.Options)
+}
+
+func (exr *Executor) handleDDL(ctx context.Context, sql string, bindVars map[string]interface{}, session *vtgatepb.Session) (*sqltypes.Result, error) {
+	target := parseTarget(session.TargetString)
+	if target.Keyspace == "" {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "No keyspace selected")
+	}
+
+	f := func(keyspace string) (string, []string, error) {
+		var shards []string
+		if target.Shard == "" {
+			ks, _, allShards, err := getKeyspaceShards(ctx, exr.serv, exr.cell, keyspace, target.TabletType)
+			if err != nil {
+				return "", nil, err
+			}
+			keyspace = ks
+			for _, shard := range allShards {
+				shards = append(shards, shard.Name)
+			}
+		} else {
+			shards = []string{target.Shard}
+		}
+		return keyspace, shards, nil
 	}
 	return exr.resolver.Execute(ctx, sql, bindVars, target.Keyspace, target.TabletType, session, f, false, session.Options)
 }
@@ -282,11 +309,7 @@ func (exr *Executor) StreamExecute(ctx context.Context, sql string, bindVars map
 
 // MessageAck acks messages.
 func (exr *Executor) MessageAck(ctx context.Context, keyspace, name string, ids []*querypb.Value) (int64, error) {
-	vschema := exr.VSchema()
-	if vschema == nil {
-		return 0, errors.New("vschema not initialized")
-	}
-	table, err := vschema.Find(keyspace, name)
+	table, err := exr.VSchema().Find(keyspace, name)
 	if err != nil {
 		return 0, err
 	}
