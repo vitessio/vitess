@@ -15,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/sqldb"
@@ -81,7 +82,7 @@ func TestBinary(t *testing.T) {
 			},
 		},
 	}
-	if !reflect.DeepEqual(*qr, want) {
+	if !qr.Equal(&want) {
 		t.Errorf("Execute: \n%#v, want \n%#v", prettyPrint(*qr), prettyPrint(want))
 	}
 
@@ -99,7 +100,7 @@ func TestBinary(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	if !reflect.DeepEqual(*qr, want) {
+	if !qr.Equal(&want) {
 		t.Errorf("Execute: \n%#v, want \n%#v", prettyPrint(*qr), prettyPrint(want))
 	}
 }
@@ -334,7 +335,7 @@ func TestBindInSelect(t *testing.T) {
 			},
 		},
 	}
-	if !reflect.DeepEqual(qr, want) {
+	if !qr.Equal(want) {
 		t.Errorf("Execute: \n%#v, want \n%#v", prettyPrint(*qr), prettyPrint(*want))
 	}
 
@@ -363,7 +364,7 @@ func TestBindInSelect(t *testing.T) {
 			},
 		},
 	}
-	if !reflect.DeepEqual(qr, want) {
+	if !qr.Equal(want) {
 		t.Errorf("Execute: \n%#v, want \n%#v", prettyPrint(*qr), prettyPrint(*want))
 	}
 
@@ -392,7 +393,7 @@ func TestBindInSelect(t *testing.T) {
 			},
 		},
 	}
-	if !reflect.DeepEqual(qr, want) {
+	if !qr.Equal(want) {
 		t.Errorf("Execute: \n%#v, want \n%#v", prettyPrint(*qr), prettyPrint(*want))
 	}
 }
@@ -423,7 +424,7 @@ func TestStreamHealth(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(*health.Target, framework.Target) {
+	if !proto.Equal(health.Target, &framework.Target) {
 		t.Errorf("Health: %+v, want %+v", *health.Target, framework.Target)
 	}
 }

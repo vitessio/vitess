@@ -1,12 +1,13 @@
 package testsuite
 
 import (
-	"reflect"
 	"testing"
 
+	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/vt/callerid"
+
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
@@ -65,7 +66,7 @@ func RunTests(t *testing.T, im *querypb.VTGateCallerID, ef *vtrpcpb.CallerID, ne
 	ctx = newContext(ctx, ef, im)
 	ctxim = callerid.ImmediateCallerIDFromContext(ctx)
 	// retrieved immediate CallerID should be equal to the one we put into Context
-	if !reflect.DeepEqual(ctxim, im) {
+	if !proto.Equal(ctxim, im) {
 		t.Errorf("Expect %v from ImmediateCallerIDFromContext, but got %v", im, ctxim)
 	}
 	if u := callerid.GetUsername(im); u != FakeUsername {
@@ -74,7 +75,7 @@ func RunTests(t *testing.T, im *querypb.VTGateCallerID, ef *vtrpcpb.CallerID, ne
 
 	ctxef = callerid.EffectiveCallerIDFromContext(ctx)
 	// retrieved effective CallerID should be equal to the one we put into Context
-	if !reflect.DeepEqual(ctxef, ef) {
+	if !proto.Equal(ctxef, ef) {
 		t.Errorf("Expect %v from EffectiveCallerIDFromContext, but got %v", ef, ctxef)
 	}
 	if p := callerid.GetPrincipal(ef); p != FakePrincipal {

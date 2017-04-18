@@ -7,11 +7,11 @@ package binlog
 import (
 	"fmt"
 	"io"
-	"reflect"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/mysqlconn/replication"
@@ -41,6 +41,18 @@ func (bs *binlogStatements) sendTransaction(eventToken *querypb.EventToken, stat
 		EventToken: eventToken,
 	})
 	return nil
+}
+
+func (bs *binlogStatements) equal(bts []binlogdatapb.BinlogTransaction) bool {
+	if len(*bs) != len(bts) {
+		return false
+	}
+	for i, s := range *bs {
+		if !proto.Equal(&s, &bts[i]) {
+			return false
+		}
+	}
+	return true
 }
 
 func sendTestEvents(channel chan<- replication.BinlogEvent, events []replication.BinlogEvent) {
@@ -97,7 +109,7 @@ func TestStreamerParseEventsXID(t *testing.T) {
 		t.Errorf("unexpected error: %v", err)
 	}
 
-	if !reflect.DeepEqual(got, binlogStatements(want)) {
+	if !got.equal(want) {
 		t.Errorf("binlogConnStreamer.parseEvents(): got:\n%v\nwant:\n%v", got, want)
 	}
 }
@@ -151,7 +163,7 @@ func TestStreamerParseEventsCommit(t *testing.T) {
 		t.Errorf("unexpected error: %v", err)
 	}
 
-	if !reflect.DeepEqual(got, binlogStatements(want)) {
+	if !got.equal(want) {
 		t.Errorf("binlogConnStreamer.parseEvents(): got %v, want %v", got, want)
 	}
 }
@@ -513,7 +525,7 @@ func TestStreamerParseEventsRollback(t *testing.T) {
 		t.Errorf("unexpected error: %v", err)
 	}
 
-	if !reflect.DeepEqual(got, binlogStatements(want)) {
+	if !got.equal(want) {
 		t.Errorf("binlogConnStreamer.parseEvents(): got:\n%v\nwant:\n%v", got, want)
 	}
 }
@@ -574,7 +586,7 @@ func TestStreamerParseEventsDMLWithoutBegin(t *testing.T) {
 		t.Errorf("unexpected error: %v", err)
 	}
 
-	if !reflect.DeepEqual(got, binlogStatements(want)) {
+	if !got.equal(want) {
 		t.Errorf("binlogConnStreamer.parseEvents(): got:\n%v\nwant:\n%v", got, want)
 	}
 }
@@ -638,7 +650,7 @@ func TestStreamerParseEventsBeginWithoutCommit(t *testing.T) {
 		t.Errorf("unexpected error: %v", err)
 	}
 
-	if !reflect.DeepEqual(got, binlogStatements(want)) {
+	if !got.equal(want) {
 		t.Errorf("binlogConnStreamer.parseEvents(): got:\n%v\nwant:\n%v", got, want)
 	}
 }
@@ -691,7 +703,7 @@ func TestStreamerParseEventsSetInsertID(t *testing.T) {
 		t.Errorf("unexpected error: %v", err)
 	}
 
-	if !reflect.DeepEqual(got, binlogStatements(want)) {
+	if !got.equal(want) {
 		t.Errorf("binlogConnStreamer.parseEvents(): got %v, want %v", got, want)
 	}
 }
@@ -781,7 +793,7 @@ func TestStreamerParseEventsOtherDB(t *testing.T) {
 		t.Errorf("unexpected error: %v", err)
 	}
 
-	if !reflect.DeepEqual(got, binlogStatements(want)) {
+	if !got.equal(want) {
 		t.Errorf("binlogConnStreamer.parseEvents(): got %v, want %v", got, want)
 	}
 }
@@ -835,7 +847,7 @@ func TestStreamerParseEventsOtherDBBegin(t *testing.T) {
 		t.Errorf("unexpected error: %v", err)
 	}
 
-	if !reflect.DeepEqual(got, binlogStatements(want)) {
+	if !got.equal(want) {
 		t.Errorf("binlogConnStreamer.parseEvents(): got %v, want %v", got, want)
 	}
 }
@@ -931,7 +943,7 @@ func TestStreamerParseEventsMariadbBeginGTID(t *testing.T) {
 		t.Errorf("unexpected error: %v", err)
 	}
 
-	if !reflect.DeepEqual(got, binlogStatements(want)) {
+	if !got.equal(want) {
 		t.Errorf("binlogConnStreamer.parseEvents(): got:\n%v\nwant:\n%v", got, want)
 	}
 }
@@ -982,7 +994,7 @@ func TestStreamerParseEventsMariadbStandaloneGTID(t *testing.T) {
 		t.Errorf("unexpected error: %v", err)
 	}
 
-	if !reflect.DeepEqual(got, binlogStatements(want)) {
+	if !got.equal(want) {
 		t.Errorf("binlogConnStreamer.parseEvents(): got:\n%v\nwant:\n%v", got, want)
 	}
 }

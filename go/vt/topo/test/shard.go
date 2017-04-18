@@ -1,28 +1,16 @@
 package test
 
 import (
-	"encoding/json"
 	"testing"
 
 	"golang.org/x/net/context"
 
+	"github.com/golang/protobuf/proto"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/topo"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
-
-func shardEqual(left, right *topodatapb.Shard) (bool, error) {
-	lj, err := json.Marshal(left)
-	if err != nil {
-		return false, err
-	}
-	rj, err := json.Marshal(right)
-	if err != nil {
-		return false, err
-	}
-	return string(lj) == string(rj), nil
-}
 
 // checkShard verifies the Shard operations work correctly
 func checkShard(t *testing.T, ts topo.Impl) {
@@ -123,7 +111,7 @@ func checkShard(t *testing.T, ts topo.Impl) {
 	if err != nil {
 		t.Fatalf("GetShard: %v", err)
 	}
-	if *s.MasterAlias != *other {
+	if !proto.Equal(s.MasterAlias, other) {
 		t.Fatalf("shard.MasterAlias = %v, want %v", s.MasterAlias, other)
 	}
 
@@ -138,9 +126,7 @@ func checkShard(t *testing.T, ts topo.Impl) {
 		t.Fatalf("GetShard: %v", err)
 	}
 
-	if eq, err := shardEqual(shard, updatedShard); err != nil {
-		t.Errorf("cannot compare shards: %v", err)
-	} else if !eq {
+	if !proto.Equal(shard, updatedShard) {
 		t.Errorf("put and got shards are not identical:\n%#v\n%#v", shard, updatedShard)
 	}
 

@@ -17,9 +17,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/youtube/vitess/go/mysqlconn"
 	"github.com/youtube/vitess/go/mysqlconn/fakesqldb"
 	"github.com/youtube/vitess/go/sqldb"
@@ -836,7 +836,7 @@ func TestTabletServerReadTransaction(t *testing.T) {
 		t.Error(err)
 	}
 	want := &querypb.TransactionMetadata{}
-	if !reflect.DeepEqual(got, want) {
+	if !proto.Equal(got, want) {
 		t.Errorf("ReadTransaction: %v, want %v", got, want)
 	}
 
@@ -884,7 +884,7 @@ func TestTabletServerReadTransaction(t *testing.T) {
 			TabletType: topodatapb.TabletType_MASTER,
 		}},
 	}
-	if !reflect.DeepEqual(got, want) {
+	if !proto.Equal(got, want) {
 		t.Errorf("ReadTransaction: %v, want %v", got, want)
 	}
 
@@ -906,7 +906,7 @@ func TestTabletServerReadTransaction(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	if !reflect.DeepEqual(got, want) {
+	if !proto.Equal(got, want) {
 		t.Errorf("ReadTransaction: %v, want %v", got, want)
 	}
 
@@ -928,7 +928,7 @@ func TestTabletServerReadTransaction(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	if !reflect.DeepEqual(got, want) {
+	if !proto.Equal(got, want) {
 		t.Errorf("ReadTransaction: %v, want %v", got, want)
 	}
 }
@@ -1847,7 +1847,7 @@ func TestMessageStream(t *testing.T) {
 		}
 		select {
 		case got := <-ch:
-			if !reflect.DeepEqual(want, got) {
+			if !want.Equal(got) {
 				t.Errorf("Stream:\n%v, want\n%v", got, want)
 			}
 		default:

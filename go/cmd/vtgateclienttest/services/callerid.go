@@ -7,9 +7,9 @@ package services
 import (
 	"encoding/json"
 	"fmt"
-	"reflect"
 	"strings"
 
+	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/sqltypes"
@@ -58,7 +58,7 @@ func (c *callerIDClient) checkCallerID(ctx context.Context, received string) (bo
 		return true, fmt.Errorf("no callerid received in the query")
 	}
 
-	if !reflect.DeepEqual(receivedCallerID, expectedCallerID) {
+	if !proto.Equal(receivedCallerID, expectedCallerID) {
 		return true, fmt.Errorf("callerid mismatch, got %v expected %v", receivedCallerID, expectedCallerID)
 	}
 

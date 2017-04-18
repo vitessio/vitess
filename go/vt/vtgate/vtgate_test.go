@@ -65,7 +65,7 @@ func TestVTGateBegin(t *testing.T) {
 		InTransaction: true,
 		SingleDb:      true,
 	}
-	if !reflect.DeepEqual(got, wantSession) {
+	if !proto.Equal(got, wantSession) {
 		t.Errorf("Begin(single): %v, want %v", got, wantSession)
 	}
 
@@ -84,7 +84,7 @@ func TestVTGateBegin(t *testing.T) {
 		InTransaction: true,
 		SingleDb:      true,
 	}
-	if !reflect.DeepEqual(got, wantSession) {
+	if !proto.Equal(got, wantSession) {
 		t.Errorf("Begin(single): %v, want %v", got, wantSession)
 	}
 
@@ -95,7 +95,7 @@ func TestVTGateBegin(t *testing.T) {
 	wantSession = &vtgatepb.Session{
 		InTransaction: true,
 	}
-	if !reflect.DeepEqual(got, wantSession) {
+	if !proto.Equal(got, wantSession) {
 		t.Errorf("Begin(single): %v, want %v", got, wantSession)
 	}
 
@@ -108,7 +108,7 @@ func TestVTGateBegin(t *testing.T) {
 		InTransaction: true,
 		SingleDb:      true,
 	}
-	if !reflect.DeepEqual(got, wantSession) {
+	if !proto.Equal(got, wantSession) {
 		t.Errorf("Begin(single): %v, want %v", got, wantSession)
 	}
 
@@ -119,7 +119,7 @@ func TestVTGateBegin(t *testing.T) {
 	wantSession = &vtgatepb.Session{
 		InTransaction: true,
 	}
-	if !reflect.DeepEqual(got, wantSession) {
+	if !proto.Equal(got, wantSession) {
 		t.Errorf("Begin(single): %v, want %v", got, wantSession)
 	}
 }
@@ -236,7 +236,7 @@ func TestVTGateExecute(t *testing.T) {
 			TransactionId: 1,
 		}},
 	}
-	if !reflect.DeepEqual(wantSession, session) {
+	if !proto.Equal(wantSession, session) {
 		t.Errorf("want \n%+v, got \n%+v", wantSession, session)
 	}
 
@@ -337,7 +337,7 @@ func TestVTGateIntercept(t *testing.T) {
 		t.Fatal(err)
 	}
 	wantSession := &vtgatepb.Session{InTransaction: true}
-	if !reflect.DeepEqual(session, wantSession) {
+	if !proto.Equal(session, wantSession) {
 		t.Errorf("begin: %v, want %v", session, wantSession)
 	}
 	if commitCount := sbc.CommitCount.Get(); commitCount != 0 {
@@ -354,7 +354,7 @@ func TestVTGateIntercept(t *testing.T) {
 		t.Fatal(err)
 	}
 	wantSession = &vtgatepb.Session{InTransaction: true}
-	if !reflect.DeepEqual(session, wantSession) {
+	if !proto.Equal(session, wantSession) {
 		t.Errorf("begin: %v, want %v", session, wantSession)
 	}
 	if commitCount := sbc.CommitCount.Get(); commitCount != 1 {
@@ -371,7 +371,7 @@ func TestVTGateIntercept(t *testing.T) {
 		t.Fatal(err)
 	}
 	wantSession = &vtgatepb.Session{}
-	if !reflect.DeepEqual(session, wantSession) {
+	if !proto.Equal(session, wantSession) {
 		t.Errorf("begin: %v, want %v", session, wantSession)
 	}
 	if commitCount := sbc.CommitCount.Get(); commitCount != 2 {
@@ -388,7 +388,7 @@ func TestVTGateIntercept(t *testing.T) {
 		t.Fatal(err)
 	}
 	wantSession = &vtgatepb.Session{}
-	if !reflect.DeepEqual(session, wantSession) {
+	if !proto.Equal(session, wantSession) {
 		t.Errorf("begin: %v, want %v", session, wantSession)
 	}
 	if commitCount := sbc.CommitCount.Get(); commitCount != 2 {
@@ -409,7 +409,7 @@ func TestVTGateIntercept(t *testing.T) {
 		t.Fatal(err)
 	}
 	wantSession = &vtgatepb.Session{}
-	if !reflect.DeepEqual(session, wantSession) {
+	if !proto.Equal(session, wantSession) {
 		t.Errorf("begin: %v, want %v", session, wantSession)
 	}
 	if rollbackCount := sbc.RollbackCount.Get(); rollbackCount != 1 {
@@ -423,7 +423,7 @@ func TestVTGateIntercept(t *testing.T) {
 		t.Fatal(err)
 	}
 	wantSession = &vtgatepb.Session{}
-	if !reflect.DeepEqual(session, wantSession) {
+	if !proto.Equal(session, wantSession) {
 		t.Errorf("begin: %v, want %v", session, wantSession)
 	}
 	if rollbackCount := sbc.RollbackCount.Get(); rollbackCount != 1 {
@@ -436,7 +436,7 @@ func TestVTGateIntercept(t *testing.T) {
 		t.Fatal(err)
 	}
 	wantSession = &vtgatepb.Session{Autocommit: true}
-	if !reflect.DeepEqual(session, wantSession) {
+	if !proto.Equal(session, wantSession) {
 		t.Errorf("begin: %v, want %v", session, wantSession)
 	}
 	session, _, err = rpcVTGate.Execute(context.Background(), "set AUTOCOMMIT = 0", nil, "", topodatapb.TabletType_MASTER, session, false, nil)
@@ -444,7 +444,7 @@ func TestVTGateIntercept(t *testing.T) {
 		t.Fatal(err)
 	}
 	wantSession = &vtgatepb.Session{}
-	if !reflect.DeepEqual(session, wantSession) {
+	if !proto.Equal(session, wantSession) {
 		t.Errorf("begin: %v, want %v", session, wantSession)
 	}
 
@@ -481,7 +481,7 @@ func TestVTGateAutocommit(t *testing.T) {
 		t.Fatal(err)
 	}
 	wantSession := &vtgatepb.Session{}
-	if !reflect.DeepEqual(session, wantSession) {
+	if !proto.Equal(session, wantSession) {
 		t.Errorf("autocommit=0: %v, want %v", session, wantSession)
 	}
 
@@ -495,7 +495,7 @@ func TestVTGateAutocommit(t *testing.T) {
 		t.Fatal(err)
 	}
 	wantSession = &vtgatepb.Session{Autocommit: true}
-	if !reflect.DeepEqual(session, wantSession) {
+	if !proto.Equal(session, wantSession) {
 		t.Errorf("autocommit=1: %v, want %v", session, wantSession)
 	}
 	if commitCount := sbc.CommitCount.Get(); commitCount != 1 {
@@ -514,7 +514,7 @@ func TestVTGateAutocommit(t *testing.T) {
 	wantSession = &vtgatepb.Session{InTransaction: true, Autocommit: true}
 	testSession := *session
 	testSession.ShardSessions = nil
-	if !reflect.DeepEqual(&testSession, wantSession) {
+	if !proto.Equal(&testSession, wantSession) {
 		t.Errorf("autocommit=1: %v, want %v", &testSession, wantSession)
 	}
 	if commitCount := sbc.CommitCount.Get(); commitCount != 1 {
@@ -525,7 +525,7 @@ func TestVTGateAutocommit(t *testing.T) {
 		t.Fatal(err)
 	}
 	wantSession = &vtgatepb.Session{Autocommit: true}
-	if !reflect.DeepEqual(session, wantSession) {
+	if !proto.Equal(session, wantSession) {
 		t.Errorf("autocommit=1: %v, want %v", session, wantSession)
 	}
 	if commitCount := sbc.CommitCount.Get(); commitCount != 2 {
@@ -582,7 +582,7 @@ func TestVTGateExecuteShards(t *testing.T) {
 			TransactionId: 1,
 		}},
 	}
-	if !reflect.DeepEqual(wantSession, session) {
+	if !proto.Equal(wantSession, session) {
 		t.Errorf("want \n%+v, got \n%+v", wantSession, session)
 	}
 
@@ -662,7 +662,7 @@ func TestVTGateExecuteKeyspaceIds(t *testing.T) {
 			TransactionId: 1,
 		}},
 	}
-	if !reflect.DeepEqual(wantSession, session) {
+	if !proto.Equal(wantSession, session) {
 		t.Errorf("want \n%+v, got \n%+v", wantSession, session)
 	}
 	rpcVTGate.Commit(context.Background(), false, session)
@@ -745,7 +745,7 @@ func TestVTGateExecuteKeyRanges(t *testing.T) {
 			TransactionId: 1,
 		}},
 	}
-	if !reflect.DeepEqual(wantSession, session) {
+	if !proto.Equal(wantSession, session) {
 		t.Errorf("want \n%+v, got \n%+v", wantSession, session)
 	}
 	rpcVTGate.Commit(context.Background(), false, session)
@@ -838,7 +838,7 @@ func TestVTGateExecuteEntityIds(t *testing.T) {
 			TransactionId: 1,
 		}},
 	}
-	if !reflect.DeepEqual(wantSession, session) {
+	if !proto.Equal(wantSession, session) {
 		t.Errorf("want \n%+v, got \n%+v", wantSession, session)
 	}
 	rpcVTGate.Commit(context.Background(), false, session)
@@ -1427,7 +1427,7 @@ func TestVTGateMessageAckUnsharded(t *testing.T) {
 	if count != 2 {
 		t.Errorf("MessageAck: %d, want 2", count)
 	}
-	if !reflect.DeepEqual(sbc.MessageIDs, ids) {
+	if !sqltypes.Proto3ValuesEqual(sbc.MessageIDs, ids) {
 		t.Errorf("sbc1.MessageIDs: %v, want %v", sbc.MessageIDs, ids)
 	}
 }
@@ -2478,7 +2478,7 @@ func TestVTGateShowMetadataUnsharded(t *testing.T) {
 		Type: sqltypes.VarChar,
 	}}
 
-	if !reflect.DeepEqual(wantFields, qr.Fields) {
+	if !sqltypes.FieldsEqual(wantFields, qr.Fields) {
 		t.Errorf("want \n%+v, got \n%+v", wantFields, qr.Fields)
 	}
 
@@ -2504,7 +2504,7 @@ func TestVTGateShowMetadataUnsharded(t *testing.T) {
 		Type: sqltypes.VarChar,
 	}}
 
-	if !reflect.DeepEqual(wantFields, qr.Fields) {
+	if !sqltypes.FieldsEqual(wantFields, qr.Fields) {
 		t.Errorf("want \n%+v, got \n%+v", wantFields, qr.Fields)
 	}
 
@@ -2530,7 +2530,7 @@ func TestVTGateShowMetadataUnsharded(t *testing.T) {
 		Type: sqltypes.VarChar,
 	}}
 
-	if !reflect.DeepEqual(wantFields, qr.Fields) {
+	if !sqltypes.FieldsEqual(wantFields, qr.Fields) {
 		t.Errorf("want \n%+v, got \n%+v", wantFields, qr.Fields)
 	}
 
@@ -2585,7 +2585,7 @@ func TestVTGateShowMetadataUnsharded(t *testing.T) {
 		Type: sqltypes.VarChar,
 	}}
 
-	if !reflect.DeepEqual(wantFields, qr.Fields) {
+	if !sqltypes.FieldsEqual(wantFields, qr.Fields) {
 		t.Errorf("want \n%+v, got \n%+v", wantFields, qr.Fields)
 	}
 
@@ -2643,7 +2643,7 @@ func TestVTGateShowMetadataTwoShards(t *testing.T) {
 		Type: sqltypes.VarChar,
 	}}
 
-	if !reflect.DeepEqual(wantFields, qr.Fields) {
+	if !sqltypes.FieldsEqual(wantFields, qr.Fields) {
 		t.Errorf("want \n%+v, got \n%+v", wantFields, qr.Fields)
 	}
 
@@ -2669,7 +2669,7 @@ func TestVTGateShowMetadataTwoShards(t *testing.T) {
 		Type: sqltypes.VarChar,
 	}}
 
-	if !reflect.DeepEqual(wantFields, qr.Fields) {
+	if !sqltypes.FieldsEqual(wantFields, qr.Fields) {
 		t.Errorf("want \n%+v, got \n%+v", wantFields, qr.Fields)
 	}
 

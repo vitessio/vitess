@@ -11,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang/protobuf/proto"
+
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 )
 
@@ -501,7 +503,7 @@ func TestToProtoValue(t *testing.T) {
 		Type:  Int64,
 		Value: []byte("1"),
 	}
-	if !reflect.DeepEqual(got, want) {
+	if !proto.Equal(got, want) {
 		t.Errorf("bindvar: %v, want %v", got, want)
 	}
 }

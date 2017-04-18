@@ -13,10 +13,13 @@ import (
 	"testing"
 	"time"
 
-	querypb "github.com/youtube/vitess/go/vt/proto/query"
-	tableaclpb "github.com/youtube/vitess/go/vt/proto/tableacl"
+	"github.com/golang/protobuf/proto"
+
 	"github.com/youtube/vitess/go/vt/tableacl/acl"
 	"github.com/youtube/vitess/go/vt/tableacl/simpleacl"
+
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	tableaclpb "github.com/youtube/vitess/go/vt/proto/tableacl"
 )
 
 type fakeACLFactory struct{}
@@ -86,7 +89,7 @@ func TestInitFromProto(t *testing.T) {
 		t.Fatalf("tableacl init should succeed, but got error: %v", err)
 	}
 
-	if !reflect.DeepEqual(GetCurrentConfig(), config) {
+	if !proto.Equal(GetCurrentConfig(), config) {
 		t.Fatalf("GetCurrentConfig() = %v, want: %v", GetCurrentConfig(), config)
 	}
 
