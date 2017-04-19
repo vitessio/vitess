@@ -719,6 +719,15 @@ func TestValid(t *testing.T) {
 		input:  "show foobar",
 		output: "show unsupported",
 	}, {
+		input:  "use db",
+		output: "use db",
+	}, {
+		input:  "use duplicate",
+		output: "use `duplicate`",
+	}, {
+		input:  "use `ks:-80@master`",
+		output: "use `ks:-80@master`",
+	}, {
 		input:  "describe foobar",
 		output: "other",
 	}, {

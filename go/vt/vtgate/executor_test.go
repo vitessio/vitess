@@ -260,6 +260,36 @@ func TestExecutorShow(t *testing.T) {
 	}
 }
 
+func TestExecutorUse(t *testing.T) {
+	executor, _, _, _ := createExecutorEnv()
+	session := &vtgatepb.Session{TargetString: "@master"}
+
+	stmts := []string{
+		"use db",
+		"use `ks:-80@master`",
+	}
+	want := []string{
+		"db",
+		"ks:-80@master",
+	}
+	for i, stmt := range stmts {
+		_, err := executor.Execute(context.Background(), stmt, nil, session)
+		if err != nil {
+			t.Error(err)
+		}
+		wantSession := &vtgatepb.Session{TargetString: want[i]}
+		if !proto.Equal(session, wantSession) {
+			t.Errorf("%s: %v, want %v", stmt, session, wantSession)
+		}
+	}
+
+	_, err := executor.Execute(context.Background(), "use 1", nil, &vtgatepb.Session{})
+	wantErr := "syntax error at position 6 near '1'"
+	if err == nil || err.Error() != wantErr {
+		t.Errorf("use 1: %v, want %v", err, wantErr)
+	}
+}
+
 func TestExecutorOther(t *testing.T) {
 	executor, sbc1, sbc2, sbclookup := createExecutorEnv()
 
