@@ -486,6 +486,8 @@ func (tsv *TabletServer) StopService() {
 	tsv.waitForShutdown()
 	tsv.qe.Close()
 	tsv.se.Close()
+	tsv.hw.Close()
+	tsv.hr.Close()
 	log.Infof("Shutdown complete.")
 	tsv.transition(StateNotConnected)
 }
@@ -498,8 +500,6 @@ func (tsv *TabletServer) waitForShutdown() {
 	// transactions.
 	tsv.txRequests.Wait()
 	tsv.messager.Close()
-	tsv.hr.Close()
-	tsv.hw.Close()
 	tsv.te.Close(false)
 	tsv.qe.streamQList.TerminateAll()
 	tsv.updateStreamList.Stop()
