@@ -125,7 +125,7 @@ func (wr *Wrangler) validateShard(ctx context.Context, keyspace, shard string, p
 
 	var masterAlias *topodatapb.TabletAlias
 	for _, alias := range aliases {
-		tabletInfo, ok := tabletMap[*alias]
+		tabletInfo, ok := tabletMap[topoproto.TabletAliasString(alias)]
 		if !ok {
 			results <- fmt.Errorf("tablet %v not found in map", topoproto.TabletAliasString(alias))
 			continue
@@ -175,15 +175,16 @@ func normalizeIP(ip string) string {
 	return ip
 }
 
-func (wr *Wrangler) validateReplication(ctx context.Context, shardInfo *topo.ShardInfo, tabletMap map[topodatapb.TabletAlias]*topo.TabletInfo, results chan<- error) {
+func (wr *Wrangler) validateReplication(ctx context.Context, shardInfo *topo.ShardInfo, tabletMap map[string]*topo.TabletInfo, results chan<- error) {
 	if shardInfo.MasterAlias == nil {
 		results <- fmt.Errorf("no master in shard record %v/%v", shardInfo.Keyspace(), shardInfo.ShardName())
 		return
 	}
 
-	masterTabletInfo, ok := tabletMap[*shardInfo.MasterAlias]
+	shardInfoMasterAliasStr := topoproto.TabletAliasString(shardInfo.MasterAlias)
+	masterTabletInfo, ok := tabletMap[shardInfoMasterAliasStr]
 	if !ok {
-		results <- fmt.Errorf("master %v not in tablet map", topoproto.TabletAliasString(shardInfo.MasterAlias))
+		results <- fmt.Errorf("master %v not in tablet map", shardInfoMasterAliasStr)
 		return
 	}
 
@@ -193,7 +194,7 @@ func (wr *Wrangler) validateReplication(ctx context.Context, shardInfo *topo.Sha
 		return
 	}
 	if len(slaveList) == 0 {
-		results <- fmt.Errorf("no slaves of tablet %v found", topoproto.TabletAliasString(shardInfo.MasterAlias))
+		results <- fmt.Errorf("no slaves of tablet %v found", shardInfoMasterAliasStr)
 		return
 	}
 
@@ -223,14 +224,14 @@ func (wr *Wrangler) validateReplication(ctx context.Context, shardInfo *topo.Sha
 	}
 }
 
-func (wr *Wrangler) pingTablets(ctx context.Context, tabletMap map[topodatapb.TabletAlias]*topo.TabletInfo, wg *sync.WaitGroup, results chan<- error) {
+func (wr *Wrangler) pingTablets(ctx context.Context, tabletMap map[string]*topo.TabletInfo, wg *sync.WaitGroup, results chan<- error) {
 	for tabletAlias, tabletInfo := range tabletMap {
 		wg.Add(1)
-		go func(tabletAlias topodatapb.TabletAlias, tabletInfo *topo.TabletInfo) {
+		go func(tabletAlias string, tabletInfo *topo.TabletInfo) {
 			defer wg.Done()
 
 			if err := wr.tmc.Ping(ctx, tabletInfo.Tablet); err != nil {
-				results <- fmt.Errorf("Ping(%v) failed: %v tablet hostname: %v", topoproto.TabletAliasString(&tabletAlias), err, tabletInfo.Hostname)
+				results <- fmt.Errorf("Ping(%v) failed: %v tablet hostname: %v", tabletAlias, err, tabletInfo.Hostname)
 			}
 		}(tabletAlias, tabletInfo)
 	}

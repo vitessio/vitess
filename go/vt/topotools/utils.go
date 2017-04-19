@@ -19,13 +19,13 @@ import (
 )
 
 // FindTabletByIPAddrAndPort searches within a tablet map for tablets
-func FindTabletByIPAddrAndPort(tabletMap map[topodatapb.TabletAlias]*topo.TabletInfo, addr, portName string, port int32) (topodatapb.TabletAlias, error) {
-	for alias, ti := range tabletMap {
+func FindTabletByIPAddrAndPort(tabletMap map[string]*topo.TabletInfo, addr, portName string, port int32) (*topodatapb.TabletAlias, error) {
+	for _, ti := range tabletMap {
 		if ti.Ip == addr && ti.PortMap[portName] == port {
-			return alias, nil
+			return ti.Alias, nil
 		}
 	}
-	return topodatapb.TabletAlias{}, topo.ErrNoNode
+	return nil, topo.ErrNoNode
 }
 
 // GetAllTablets returns a sorted list of tablets.
@@ -43,7 +43,7 @@ func GetAllTablets(ctx context.Context, ts topo.Server, cell string) ([]*topo.Ta
 	}
 	tablets := make([]*topo.TabletInfo, 0, len(aliases))
 	for _, tabletAlias := range aliases {
-		tabletInfo, ok := tabletMap[*tabletAlias]
+		tabletInfo, ok := tabletMap[topoproto.TabletAliasString(tabletAlias)]
 		if !ok {
 			// tablet disappeared on us (GetTabletMap ignores
 			// topo.ErrNoNode), just echo a warning
@@ -94,9 +94,9 @@ func GetAllTabletsAcrossCells(ctx context.Context, ts topo.Server) ([]*topo.Tabl
 // - The masterMap contains all the tablets without parents
 //   (scrapped or not). This can be used to special case
 //   the old master, and any tablet in a weird state, left over, ...
-func SortedTabletMap(tabletMap map[topodatapb.TabletAlias]*topo.TabletInfo) (map[topodatapb.TabletAlias]*topo.TabletInfo, map[topodatapb.TabletAlias]*topo.TabletInfo) {
-	slaveMap := make(map[topodatapb.TabletAlias]*topo.TabletInfo)
-	masterMap := make(map[topodatapb.TabletAlias]*topo.TabletInfo)
+func SortedTabletMap(tabletMap map[string]*topo.TabletInfo) (map[string]*topo.TabletInfo, map[string]*topo.TabletInfo) {
+	slaveMap := make(map[string]*topo.TabletInfo)
+	masterMap := make(map[string]*topo.TabletInfo)
 	for alias, ti := range tabletMap {
 		if ti.Type == topodatapb.TabletType_MASTER {
 			masterMap[alias] = ti
