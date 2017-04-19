@@ -109,6 +109,7 @@ func (*Delete) iStatement() {}
 func (*Set) iStatement()    {}
 func (*DDL) iStatement()    {}
 func (*Show) iStatement()   {}
+func (*Use) iStatement()    {}
 func (*Other) iStatement()  {}
 
 // ParenSelect can actually not be a top level statement,
@@ -507,22 +508,37 @@ type Show struct {
 
 // The frollowing constants represent SHOW statements.
 const (
-	ShowDatabasesStr     = "show databases"
-	ShowKeyspacesStr     = "show vitess_keyspaces"
-	ShowShardsStr        = "show vitess_shards"
-	ShowTablesStr        = "show tables"
-	ShowVSchemaTablesStr = "show vschema_tables"
-	ShowUnsupportedStr   = "show unsupported"
+	ShowDatabasesStr     = "databases"
+	ShowKeyspacesStr     = "vitess_keyspaces"
+	ShowShardsStr        = "vitess_shards"
+	ShowTablesStr        = "tables"
+	ShowVSchemaTablesStr = "vschema_tables"
+	ShowUnsupportedStr   = "unsupported"
 )
 
 // Format formats the node.
 func (node *Show) Format(buf *TrackedBuffer) {
-	buf.Myprintf("%s", node.Type)
+	buf.Myprintf("show %s", node.Type)
 }
 
 // WalkSubtree walks the nodes of the subtree.
 func (node *Show) WalkSubtree(visit Visit) error {
 	return nil
+}
+
+// Use represents a use statement.
+type Use struct {
+	DBName TableIdent
+}
+
+// Format formats the node.
+func (node *Use) Format(buf *TrackedBuffer) {
+	buf.Myprintf("use %v", node.DBName)
+}
+
+// WalkSubtree walks the nodes of the subtree.
+func (node *Use) WalkSubtree(visit Visit) error {
+	return Walk(visit, node.DBName)
 }
 
 // Other represents a DESCRIBE, or EXPLAIN statement.

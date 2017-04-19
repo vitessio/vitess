@@ -119,6 +119,8 @@ func (exr *Executor) Execute(ctx context.Context, sql string, bindVars map[strin
 		return exr.handleSet(ctx, sql, bindVars, session)
 	case sqlparser.StmtShow:
 		return exr.handleShow(ctx, sql, bindVars, session)
+	case sqlparser.StmtUse:
+		return exr.handleUse(ctx, sql, bindVars, session)
 	case sqlparser.StmtOther:
 		return exr.handleOther(ctx, sql, bindVars, session)
 	}
@@ -276,6 +278,20 @@ func (exr *Executor) handleShow(ctx context.Context, sql string, bindVars map[st
 
 	// Any other show statement is passed through
 	return exr.handleOther(ctx, sql, bindVars, session)
+}
+
+func (exr *Executor) handleUse(ctx context.Context, sql string, bindVars map[string]interface{}, session *vtgatepb.Session) (*sqltypes.Result, error) {
+	stmt, err := sqlparser.Parse(sql)
+	if err != nil {
+		return nil, err
+	}
+	use, ok := stmt.(*sqlparser.Use)
+	if !ok {
+		// This code is unreachable.
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unrecognized USE statement: %v", sql)
+	}
+	session.TargetString = use.DBName.String()
+	return &sqltypes.Result{}, nil
 }
 
 func (exr *Executor) handleOther(ctx context.Context, sql string, bindVars map[string]interface{}, session *vtgatepb.Session) (*sqltypes.Result, error) {

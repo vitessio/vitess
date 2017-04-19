@@ -41,6 +41,7 @@ func TestPreview(t *testing.T) {
 		{"drop", StmtDDL},
 		{"set", StmtSet},
 		{"show", StmtShow},
+		{"use", StmtUse},
 		{"analyze", StmtOther},
 		{"describe", StmtOther},
 		{"explain", StmtOther},
