@@ -201,7 +201,7 @@ func (bs *S3BackupStorage) RemoveBackup(ctx context.Context, dir, name string) e
 
 	query := &s3.ListObjectsV2Input{
 		Bucket: bucket,
-		Prefix: objName(dir, ""),
+		Prefix: objName(dir, name),
 	}
 
 	for {
