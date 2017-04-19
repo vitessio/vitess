@@ -206,6 +206,7 @@ func waitForRequestsInFlight(b *Buffer, count int) error {
 		if time.Since(start) > 10*time.Second {
 			return fmt.Errorf("wrong buffered requests in flight: got = %v, want = %v", got, want)
 		}
+		time.Sleep(1 * time.Millisecond)
 	}
 }
 
@@ -223,6 +224,7 @@ func waitForState(b *Buffer, want bufferState) error {
 		if time.Since(start) > 10*time.Second {
 			return fmt.Errorf("wrong buffer state: got = %v, want = %v", got, want)
 		}
+		time.Sleep(1 * time.Millisecond)
 	}
 }
 
@@ -241,6 +243,7 @@ func waitForPoolSlots(b *Buffer, want int) error {
 		if time.Since(start) > 10*time.Second {
 			return fmt.Errorf("not all pool slots were returned: got = %v, want = %v", got, want)
 		}
+		time.Sleep(1 * time.Millisecond)
 	}
 }
 
@@ -740,6 +743,7 @@ func waitForRequestsExceededWindow(count int) error {
 		if time.Since(start) > 10*time.Second {
 			return fmt.Errorf("wrong number of requests which exceeded their buffering window: got = %v, want = %v", got, want)
 		}
+		time.Sleep(1 * time.Millisecond)
 	}
 }
 
