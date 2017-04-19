@@ -80,7 +80,6 @@ func (r *Reader) Open(dbc dbconfigs.DBConfigs) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.isOpen {
-		log.Fatalf("BUG: Reader object cannot be initialized twice without closing in between: %v", r)
 		return
 	}
 
