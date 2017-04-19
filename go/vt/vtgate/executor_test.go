@@ -26,7 +26,7 @@ func TestExecutorTransactions(t *testing.T) {
 		t.Fatal(err)
 	}
 	wantSession := &vtgatepb.Session{InTransaction: true, TargetString: "@master"}
-	if !reflect.DeepEqual(session, wantSession) {
+	if !proto.Equal(session, wantSession) {
 		t.Errorf("begin: %v, want %v", session, wantSession)
 	}
 	if commitCount := sbclookup.CommitCount.Get(); commitCount != 0 {
@@ -43,7 +43,7 @@ func TestExecutorTransactions(t *testing.T) {
 		t.Fatal(err)
 	}
 	wantSession = &vtgatepb.Session{TargetString: "@master"}
-	if !reflect.DeepEqual(session, wantSession) {
+	if !proto.Equal(session, wantSession) {
 		t.Errorf("begin: %v, want %v", session, wantSession)
 	}
 	if commitCount := sbclookup.CommitCount.Get(); commitCount != 1 {
@@ -64,7 +64,7 @@ func TestExecutorTransactions(t *testing.T) {
 		t.Fatal(err)
 	}
 	wantSession = &vtgatepb.Session{TargetString: "@master"}
-	if !reflect.DeepEqual(session, wantSession) {
+	if !proto.Equal(session, wantSession) {
 		t.Errorf("begin: %v, want %v", session, wantSession)
 	}
 	if rollbackCount := sbclookup.RollbackCount.Get(); rollbackCount != 1 {
@@ -82,7 +82,7 @@ func TestExecutorSet(t *testing.T) {
 		t.Fatal(err)
 	}
 	wantSession := &vtgatepb.Session{Autocommit: true, TargetString: "@master"}
-	if !reflect.DeepEqual(session, wantSession) {
+	if !proto.Equal(session, wantSession) {
 		t.Errorf("begin: %v, want %v", session, wantSession)
 	}
 	_, err = executor.Execute(context.Background(), "set AUTOCOMMIT = 0", nil, session)
@@ -90,7 +90,7 @@ func TestExecutorSet(t *testing.T) {
 		t.Fatal(err)
 	}
 	wantSession = &vtgatepb.Session{TargetString: "@master"}
-	if !reflect.DeepEqual(session, wantSession) {
+	if !proto.Equal(session, wantSession) {
 		t.Errorf("begin: %v, want %v", session, wantSession)
 	}
 
@@ -126,7 +126,7 @@ func TestExecutorAutocommit(t *testing.T) {
 		t.Fatal(err)
 	}
 	wantSession := &vtgatepb.Session{TargetString: "@master"}
-	if !reflect.DeepEqual(session, wantSession) {
+	if !proto.Equal(session, wantSession) {
 		t.Errorf("autocommit=0: %v, want %v", session, wantSession)
 	}
 
@@ -140,7 +140,7 @@ func TestExecutorAutocommit(t *testing.T) {
 		t.Fatal(err)
 	}
 	wantSession = &vtgatepb.Session{Autocommit: true, TargetString: "@master"}
-	if !reflect.DeepEqual(session, wantSession) {
+	if !proto.Equal(session, wantSession) {
 		t.Errorf("autocommit=1: %v, want %v", session, wantSession)
 	}
 	if commitCount := sbclookup.CommitCount.Get(); commitCount != 1 {
@@ -159,7 +159,7 @@ func TestExecutorAutocommit(t *testing.T) {
 	wantSession = &vtgatepb.Session{InTransaction: true, Autocommit: true, TargetString: "@master"}
 	testSession := *session
 	testSession.ShardSessions = nil
-	if !reflect.DeepEqual(&testSession, wantSession) {
+	if !proto.Equal(&testSession, wantSession) {
 		t.Errorf("autocommit=1: %v, want %v", &testSession, wantSession)
 	}
 	if commitCount := sbclookup.CommitCount.Get(); commitCount != 1 {
@@ -170,7 +170,7 @@ func TestExecutorAutocommit(t *testing.T) {
 		t.Fatal(err)
 	}
 	wantSession = &vtgatepb.Session{Autocommit: true, TargetString: "@master"}
-	if !reflect.DeepEqual(session, wantSession) {
+	if !proto.Equal(session, wantSession) {
 		t.Errorf("autocommit=1: %v, want %v", session, wantSession)
 	}
 	if commitCount := sbclookup.CommitCount.Get(); commitCount != 2 {
