@@ -153,7 +153,8 @@ func (wr *Wrangler) initShardMasterLocked(ctx context.Context, ev *events.Repare
 	}
 
 	// Check the master elect is in tabletMap
-	masterElectTabletInfo, ok := tabletMap[*masterElectTabletAlias]
+	masterElectTabletAliasStr := topoproto.TabletAliasString(masterElectTabletAlias)
+	masterElectTabletInfo, ok := tabletMap[masterElectTabletAliasStr]
 	if !ok {
 		return fmt.Errorf("master-elect tablet %v is not in the shard", topoproto.TabletAliasString(masterElectTabletAlias))
 	}
@@ -167,7 +168,7 @@ func (wr *Wrangler) initShardMasterLocked(ctx context.Context, ev *events.Repare
 		}
 		wr.logger.Warningf("master-elect tablet %v is not the shard master, proceeding anyway as -force was used", topoproto.TabletAliasString(masterElectTabletAlias))
 	}
-	if _, ok := masterTabletMap[*masterElectTabletAlias]; !ok {
+	if _, ok := masterTabletMap[masterElectTabletAliasStr]; !ok {
 		if !force {
 			return fmt.Errorf("master-elect tablet %v is not a master in the shard, use -force to proceed anyway", topoproto.TabletAliasString(masterElectTabletAlias))
 		}
@@ -175,7 +176,7 @@ func (wr *Wrangler) initShardMasterLocked(ctx context.Context, ev *events.Repare
 	}
 	haveOtherMaster := false
 	for alias := range masterTabletMap {
-		if !topoproto.TabletAliasEqual(&alias, masterElectTabletAlias) {
+		if masterElectTabletAliasStr != alias {
 			haveOtherMaster = true
 		}
 	}
@@ -195,11 +196,11 @@ func (wr *Wrangler) initShardMasterLocked(ctx context.Context, ev *events.Repare
 	rec := concurrency.AllErrorRecorder{}
 	for alias, tabletInfo := range tabletMap {
 		wg.Add(1)
-		go func(alias topodatapb.TabletAlias, tabletInfo *topo.TabletInfo) {
+		go func(alias string, tabletInfo *topo.TabletInfo) {
 			defer wg.Done()
-			wr.logger.Infof("resetting replication on tablet %v", topoproto.TabletAliasString(&alias))
+			wr.logger.Infof("resetting replication on tablet %v", alias)
 			if err := wr.tmc.ResetReplication(ctx, tabletInfo.Tablet); err != nil {
-				rec.RecordError(fmt.Errorf("Tablet %v ResetReplication failed (either fix it, or Scrap it): %v", topoproto.TabletAliasString(&alias), err))
+				rec.RecordError(fmt.Errorf("Tablet %v ResetReplication failed (either fix it, or Scrap it): %v", alias, err))
 			}
 		}(alias, tabletInfo)
 	}
@@ -234,20 +235,20 @@ func (wr *Wrangler) initShardMasterLocked(ctx context.Context, ev *events.Repare
 	wgSlaves := sync.WaitGroup{}
 	var masterErr error
 	for alias, tabletInfo := range tabletMap {
-		if topoproto.TabletAliasEqual(&alias, masterElectTabletAlias) {
+		if alias == masterElectTabletAliasStr {
 			wgMaster.Add(1)
-			go func(alias topodatapb.TabletAlias, tabletInfo *topo.TabletInfo) {
+			go func(alias string, tabletInfo *topo.TabletInfo) {
 				defer wgMaster.Done()
-				wr.logger.Infof("populating reparent journal on new master %v", topoproto.TabletAliasString(&alias))
-				masterErr = wr.tmc.PopulateReparentJournal(replCtx, tabletInfo.Tablet, now, initShardMasterOperation, &alias, rp)
+				wr.logger.Infof("populating reparent journal on new master %v", alias)
+				masterErr = wr.tmc.PopulateReparentJournal(replCtx, tabletInfo.Tablet, now, initShardMasterOperation, masterElectTabletAlias, rp)
 			}(alias, tabletInfo)
 		} else {
 			wgSlaves.Add(1)
-			go func(alias topodatapb.TabletAlias, tabletInfo *topo.TabletInfo) {
+			go func(alias string, tabletInfo *topo.TabletInfo) {
 				defer wgSlaves.Done()
-				wr.logger.Infof("initializing slave %v", topoproto.TabletAliasString(&alias))
+				wr.logger.Infof("initializing slave %v", alias)
 				if err := wr.tmc.InitSlave(replCtx, tabletInfo.Tablet, masterElectTabletAlias, rp, now); err != nil {
-					rec.RecordError(fmt.Errorf("Tablet %v InitSlave failed: %v", topoproto.TabletAliasString(&alias), err))
+					rec.RecordError(fmt.Errorf("Tablet %v InitSlave failed: %v", alias, err))
 				}
 			}(alias, tabletInfo)
 		}
@@ -356,18 +357,19 @@ func (wr *Wrangler) plannedReparentShardLocked(ctx context.Context, ev *events.R
 		wr.logger.Infof("elected new master candidate %v", topoproto.TabletAliasString(masterElectTabletAlias))
 		event.DispatchUpdate(ev, "elected new master candidate")
 	}
-	masterElectTabletInfo, ok := tabletMap[*masterElectTabletAlias]
+	masterElectTabletAliasStr := topoproto.TabletAliasString(masterElectTabletAlias)
+	masterElectTabletInfo, ok := tabletMap[masterElectTabletAliasStr]
 	if !ok {
-		return fmt.Errorf("master-elect tablet %v is not in the shard", topoproto.TabletAliasString(masterElectTabletAlias))
+		return fmt.Errorf("master-elect tablet %v is not in the shard", masterElectTabletAliasStr)
 	}
 	ev.NewMaster = *masterElectTabletInfo.Tablet
 	if topoproto.TabletAliasEqual(shardInfo.MasterAlias, masterElectTabletAlias) {
-		return fmt.Errorf("master-elect tablet %v is already the master", topoproto.TabletAliasString(masterElectTabletAlias))
+		return fmt.Errorf("master-elect tablet %v is already the master", masterElectTabletAliasStr)
 	}
 	if topoproto.TabletAliasIsZero(shardInfo.MasterAlias) {
 		return fmt.Errorf("the shard has no master, use EmergencyReparentShard")
 	}
-	oldMasterTabletInfo, ok := tabletMap[*shardInfo.MasterAlias]
+	oldMasterTabletInfo, ok := tabletMap[topoproto.TabletAliasString(shardInfo.MasterAlias)]
 	if !ok {
 		return fmt.Errorf("old master tablet %v is not in the shard", topoproto.TabletAliasString(shardInfo.MasterAlias))
 	}
@@ -383,11 +385,11 @@ func (wr *Wrangler) plannedReparentShardLocked(ctx context.Context, ev *events.R
 
 	// Wait on the master-elect tablet until it reaches that position,
 	// then promote it
-	wr.logger.Infof("promote slave %v", topoproto.TabletAliasString(masterElectTabletAlias))
+	wr.logger.Infof("promote slave %v", masterElectTabletAliasStr)
 	event.DispatchUpdate(ev, "promoting slave")
 	rp, err = wr.tmc.PromoteSlaveWhenCaughtUp(ctx, masterElectTabletInfo.Tablet, rp)
 	if err != nil {
-		return fmt.Errorf("master-elect tablet %v failed to catch up with replication or be upgraded to master: %v", topoproto.TabletAliasString(masterElectTabletAlias), err)
+		return fmt.Errorf("master-elect tablet %v failed to catch up with replication or be upgraded to master: %v", masterElectTabletAliasStr, err)
 	}
 
 	// Create a cancelable context for the following RPCs.
@@ -404,23 +406,24 @@ func (wr *Wrangler) plannedReparentShardLocked(ctx context.Context, ev *events.R
 	wgSlaves := sync.WaitGroup{}
 	rec := concurrency.AllErrorRecorder{}
 	var masterErr error
+	oldMasterTabletInfoAliasStr := topoproto.TabletAliasString(oldMasterTabletInfo.Alias)
 	for alias, tabletInfo := range tabletMap {
-		if topoproto.TabletAliasEqual(&alias, masterElectTabletAlias) {
+		if alias == masterElectTabletAliasStr {
 			wgMaster.Add(1)
-			go func(alias topodatapb.TabletAlias, tabletInfo *topo.TabletInfo) {
+			go func(alias string, tabletInfo *topo.TabletInfo) {
 				defer wgMaster.Done()
-				wr.logger.Infof("populating reparent journal on new master %v", topoproto.TabletAliasString(&alias))
-				masterErr = wr.tmc.PopulateReparentJournal(replCtx, tabletInfo.Tablet, now, plannedReparentShardOperation, &alias, rp)
+				wr.logger.Infof("populating reparent journal on new master %v", alias)
+				masterErr = wr.tmc.PopulateReparentJournal(replCtx, tabletInfo.Tablet, now, plannedReparentShardOperation, masterElectTabletAlias, rp)
 			}(alias, tabletInfo)
 		} else {
 			wgSlaves.Add(1)
-			go func(alias topodatapb.TabletAlias, tabletInfo *topo.TabletInfo) {
+			go func(alias string, tabletInfo *topo.TabletInfo) {
 				defer wgSlaves.Done()
-				wr.logger.Infof("setting new master on slave %v", topoproto.TabletAliasString(&alias))
+				wr.logger.Infof("setting new master on slave %v", alias)
 				// also restart replication on old master
-				forceStartSlave := topoproto.TabletAliasEqual(&alias, oldMasterTabletInfo.Alias)
+				forceStartSlave := alias == oldMasterTabletInfoAliasStr
 				if err := wr.tmc.SetMaster(replCtx, tabletInfo.Tablet, masterElectTabletAlias, now, forceStartSlave); err != nil {
-					rec.RecordError(fmt.Errorf("Tablet %v SetMaster failed: %v", topoproto.TabletAliasString(&alias), err))
+					rec.RecordError(fmt.Errorf("Tablet %v SetMaster failed: %v", alias, err))
 					return
 				}
 			}(alias, tabletInfo)
@@ -505,7 +508,7 @@ func (maxPosSearch *maxReplPosSearch) processTablet(tablet *topodatapb.Tablet) {
 func (wr *Wrangler) chooseNewMaster(
 	ctx context.Context,
 	shardInfo *topo.ShardInfo,
-	tabletMap map[topodatapb.TabletAlias]*topo.TabletInfo,
+	tabletMap map[string]*topo.TabletInfo,
 	avoidMasterTabletAlias *topodatapb.TabletAlias,
 	waitSlaveTimeout time.Duration) (*topodatapb.TabletAlias, error) {
 
@@ -524,9 +527,9 @@ func (wr *Wrangler) chooseNewMaster(
 		waitGroup:        sync.WaitGroup{},
 		maxPosLock:       sync.Mutex{},
 	}
-	for tabletAlias, tabletInfo := range tabletMap {
-		if (masterCell != "" && tabletAlias.Cell != masterCell) ||
-			topoproto.TabletAliasEqual(&tabletAlias, avoidMasterTabletAlias) ||
+	for _, tabletInfo := range tabletMap {
+		if (masterCell != "" && tabletInfo.Alias.Cell != masterCell) ||
+			topoproto.TabletAliasEqual(tabletInfo.Alias, avoidMasterTabletAlias) ||
 			tabletInfo.Tablet.Type != topodatapb.TabletType_REPLICA {
 			continue
 		}
@@ -578,9 +581,10 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events
 	}
 
 	// Check corner cases we're going to depend on
-	masterElectTabletInfo, ok := tabletMap[*masterElectTabletAlias]
+	masterElectTabletAliasStr := topoproto.TabletAliasString(masterElectTabletAlias)
+	masterElectTabletInfo, ok := tabletMap[masterElectTabletAliasStr]
 	if !ok {
-		return fmt.Errorf("master-elect tablet %v is not in the shard", topoproto.TabletAliasString(masterElectTabletAlias))
+		return fmt.Errorf("master-elect tablet %v is not in the shard", masterElectTabletAliasStr)
 	}
 	ev.NewMaster = *masterElectTabletInfo.Tablet
 	if topoproto.TabletAliasEqual(shardInfo.MasterAlias, masterElectTabletAlias) {
@@ -591,26 +595,27 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events
 	// truely dead we force-scrap it. Remove it from our map in any case.
 	if shardInfo.HasMaster() {
 		deleteOldMaster := true
-		oldMasterTabletInfo, ok := tabletMap[*shardInfo.MasterAlias]
+		shardInfoMasterAliasStr := topoproto.TabletAliasString(shardInfo.MasterAlias)
+		oldMasterTabletInfo, ok := tabletMap[shardInfoMasterAliasStr]
 		if ok {
-			delete(tabletMap, *shardInfo.MasterAlias)
+			delete(tabletMap, shardInfoMasterAliasStr)
 		} else {
 			oldMasterTabletInfo, err = wr.ts.GetTablet(ctx, shardInfo.MasterAlias)
 			if err != nil {
-				wr.logger.Warningf("cannot read old master tablet %v, won't touch it: %v", topoproto.TabletAliasString(shardInfo.MasterAlias), err)
+				wr.logger.Warningf("cannot read old master tablet %v, won't touch it: %v", shardInfoMasterAliasStr, err)
 				deleteOldMaster = false
 			}
 		}
 
 		if deleteOldMaster {
 			ev.OldMaster = *oldMasterTabletInfo.Tablet
-			wr.logger.Infof("deleting old master %v", topoproto.TabletAliasString(shardInfo.MasterAlias))
+			wr.logger.Infof("deleting old master %v", shardInfoMasterAliasStr)
 
 			ctx, cancel := context.WithTimeout(ctx, waitSlaveTimeout)
 			defer cancel()
 
 			if err := topotools.DeleteTablet(ctx, wr.ts, oldMasterTabletInfo.Tablet); err != nil {
-				wr.logger.Warningf("failed to delete old master tablet %v: %v", topoproto.TabletAliasString(shardInfo.MasterAlias), err)
+				wr.logger.Warningf("failed to delete old master tablet %v: %v", shardInfoMasterAliasStr, err)
 			}
 		}
 	}
@@ -620,17 +625,17 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events
 	event.DispatchUpdate(ev, "stop replication on all slaves")
 	wg := sync.WaitGroup{}
 	mu := sync.Mutex{}
-	statusMap := make(map[topodatapb.TabletAlias]*replicationdatapb.Status)
+	statusMap := make(map[string]*replicationdatapb.Status)
 	for alias, tabletInfo := range tabletMap {
 		wg.Add(1)
-		go func(alias topodatapb.TabletAlias, tabletInfo *topo.TabletInfo) {
+		go func(alias string, tabletInfo *topo.TabletInfo) {
 			defer wg.Done()
-			wr.logger.Infof("getting replication position from %v", topoproto.TabletAliasString(&alias))
+			wr.logger.Infof("getting replication position from %v", alias)
 			ctx, cancel := context.WithTimeout(ctx, waitSlaveTimeout)
 			defer cancel()
 			rp, err := wr.tmc.StopReplicationAndGetStatus(ctx, tabletInfo.Tablet)
 			if err != nil {
-				wr.logger.Warningf("failed to get replication status from %v, ignoring tablet: %v", topoproto.TabletAliasString(&alias), err)
+				wr.logger.Warningf("failed to get replication status from %v, ignoring tablet: %v", alias, err)
 				return
 			}
 			mu.Lock()
@@ -641,7 +646,7 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events
 	wg.Wait()
 
 	// Verify masterElect is alive and has the most advanced position
-	masterElectStatus, ok := statusMap[*masterElectTabletAlias]
+	masterElectStatus, ok := statusMap[masterElectTabletAliasStr]
 	if !ok {
 		return fmt.Errorf("couldn't get master elect %v replication position", topoproto.TabletAliasString(masterElectTabletAlias))
 	}
@@ -650,15 +655,15 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events
 		return fmt.Errorf("cannot decode master elect position %v: %v", masterElectStatus.Position, err)
 	}
 	for alias, status := range statusMap {
-		if topoproto.TabletAliasEqual(&alias, masterElectTabletAlias) {
+		if alias == masterElectTabletAliasStr {
 			continue
 		}
 		pos, err := replication.DecodePosition(status.Position)
 		if err != nil {
-			return fmt.Errorf("cannot decode slave %v position %v: %v", topoproto.TabletAliasString(&alias), status.Position, err)
+			return fmt.Errorf("cannot decode slave %v position %v: %v", alias, status.Position, err)
 		}
 		if !masterElectPos.AtLeast(pos) {
-			return fmt.Errorf("tablet %v is more advanced than master elect tablet %v: %v > %v", topoproto.TabletAliasString(&alias), topoproto.TabletAliasString(masterElectTabletAlias), status.Position, masterElectStatus)
+			return fmt.Errorf("tablet %v is more advanced than master elect tablet %v: %v > %v", alias, masterElectTabletAliasStr, status.Position, masterElectStatus)
 		}
 	}
 
@@ -687,24 +692,24 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events
 	rec := concurrency.AllErrorRecorder{}
 	var masterErr error
 	for alias, tabletInfo := range tabletMap {
-		if topoproto.TabletAliasEqual(&alias, masterElectTabletAlias) {
+		if alias == masterElectTabletAliasStr {
 			wgMaster.Add(1)
-			go func(alias topodatapb.TabletAlias, tabletInfo *topo.TabletInfo) {
+			go func(alias string, tabletInfo *topo.TabletInfo) {
 				defer wgMaster.Done()
-				wr.logger.Infof("populating reparent journal on new master %v", topoproto.TabletAliasString(&alias))
-				masterErr = wr.tmc.PopulateReparentJournal(replCtx, tabletInfo.Tablet, now, emergencyReparentShardOperation, &alias, rp)
+				wr.logger.Infof("populating reparent journal on new master %v", alias)
+				masterErr = wr.tmc.PopulateReparentJournal(replCtx, tabletInfo.Tablet, now, emergencyReparentShardOperation, masterElectTabletAlias, rp)
 			}(alias, tabletInfo)
 		} else {
 			wgSlaves.Add(1)
-			go func(alias topodatapb.TabletAlias, tabletInfo *topo.TabletInfo) {
+			go func(alias string, tabletInfo *topo.TabletInfo) {
 				defer wgSlaves.Done()
-				wr.logger.Infof("setting new master on slave %v", topoproto.TabletAliasString(&alias))
+				wr.logger.Infof("setting new master on slave %v", alias)
 				forceStartSlave := false
 				if status, ok := statusMap[alias]; ok {
 					forceStartSlave = status.SlaveIoRunning || status.SlaveSqlRunning
 				}
 				if err := wr.tmc.SetMaster(replCtx, tabletInfo.Tablet, masterElectTabletAlias, now, forceStartSlave); err != nil {
-					rec.RecordError(fmt.Errorf("Tablet %v SetMaster failed: %v", topoproto.TabletAliasString(&alias), err))
+					rec.RecordError(fmt.Errorf("Tablet %v SetMaster failed: %v", alias, err))
 				}
 			}(alias, tabletInfo)
 		}

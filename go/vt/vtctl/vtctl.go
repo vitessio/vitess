@@ -473,7 +473,7 @@ func dumpTablets(ctx context.Context, wr *wrangler.Wrangler, tabletAliases []*to
 		return err
 	}
 	for _, tabletAlias := range tabletAliases {
-		ti, ok := tabletMap[*tabletAlias]
+		ti, ok := tabletMap[topoproto.TabletAliasString(tabletAlias)]
 		if !ok {
 			log.Warningf("failed to load tablet %v", tabletAlias)
 		} else {
