@@ -137,7 +137,7 @@ func forceEOF(yylex interface{}) {
 %type <selStmt> select_statement base_select union_lhs union_rhs
 %type <statement> insert_statement update_statement delete_statement set_statement
 %type <statement> create_statement alter_statement rename_statement drop_statement
-%type <statement> analyze_statement show_statement other_statement
+%type <statement> analyze_statement show_statement use_statement other_statement
 %type <bytes2> comment_opt comment_list
 %type <str> union_op
 %type <str> distinct_opt straight_join_opt cache_opt match_option separator_opt
@@ -222,6 +222,7 @@ command:
 | drop_statement
 | analyze_statement
 | show_statement
+| use_statement
 | other_statement
 
 select_statement:
@@ -391,17 +392,9 @@ show_statement_type:
   }
 | reserved_keyword
   {
-    switch string($1) {
-    case "databases":
-      $$ = ShowDatabasesStr
-    case "tables":
-      $$ = ShowTablesStr
-    case "vitess_keyspaces":
-      $$ = ShowKeyspacesStr
-    case "vitess_shards":
-      $$ = ShowShardsStr
-    case "vschema_tables":
-      $$ = ShowVSchemaTablesStr
+    switch v := string($1); v {
+    case ShowDatabasesStr, ShowTablesStr, ShowKeyspacesStr, ShowShardsStr, ShowVSchemaTablesStr:
+      $$ = v
     default:
       $$ = ShowUnsupportedStr
     }
@@ -412,10 +405,16 @@ show_statement_type:
 }
 
 show_statement:
-SHOW show_statement_type force_eof
-{
-  $$ = &Show{Type: $2}
-}
+  SHOW show_statement_type force_eof
+  {
+    $$ = &Show{Type: $2}
+  }
+
+use_statement:
+  USE table_id
+  {
+    $$ = &Use{DBName: $2}
+  }
 
 other_statement:
   DESCRIBE force_eof

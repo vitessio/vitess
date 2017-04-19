@@ -27,6 +27,7 @@ const (
 	StmtRollback
 	StmtSet
 	StmtShow
+	StmtUse
 	StmtOther
 	StmtUnknown
 )
@@ -66,6 +67,8 @@ func Preview(sql string) int {
 		return StmtSet
 	case "show":
 		return StmtShow
+	case "use":
+		return StmtUse
 	case "analyze", "describe", "explain", "repair", "optimize", "truncate":
 		return StmtOther
 	}
