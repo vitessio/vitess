@@ -101,7 +101,6 @@ func (w *Writer) Open(dbc dbconfigs.DBConfigs) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	if w.isOpen {
-		log.Fatalf("BUG: Writer object cannot be initialized twice without closing in between: %v", w)
 		return
 	}
 	log.Info("Beginning heartbeat writes")
