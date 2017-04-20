@@ -73,27 +73,33 @@ var _ = math.Inf
 // proto package needs to be updated.
 const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
 
-// Session objects are session cookies and are invalidated on
-// use. Query results will contain updated session values.
-// For V2 APIs and below, Session only contains transaction
-// info. The rest of the parameters are exchanged through
-// request and response objects. For the V3 APIs: Execute,
-// ExecuteBatch and StreamExecute, target_string is used
-// instead of keyspace, shard and tablet_type, and options
-// is used instead of the one in the request. In the V3 API,
-// any Execute or ExecuteBatch request can update the session.
+// Session objects are exchanged like cookies through various
+// calls to VTGate. The behavior differs between V2 & V3 APIs.
+// V3 APIs are Execute, ExecuteBatch and StreamExecute. All
+// other APIs are V2. For the V3 APIs, the session
+// must be sent with every call to Execute or ExecuteBatch.
+// For the V2 APIs, Begin does not accept a session. It instead
+// returns a brand new one with in_transaction set to true.
+// After a call to Commit or Rollback, the session can be
+// discarded. If you're not in a transaction, Session is
+// an optional parameter for the V2 APIs.
 type Session struct {
-	InTransaction bool                    `protobuf:"varint,1,opt,name=in_transaction,json=inTransaction" json:"in_transaction,omitempty"`
+	// in_transaction is set to true if the session is in a transaction.
+	InTransaction bool `protobuf:"varint,1,opt,name=in_transaction,json=inTransaction" json:"in_transaction,omitempty"`
+	// shard_sessions keep track of per-shard transaction info.
 	ShardSessions []*Session_ShardSession `protobuf:"bytes,2,rep,name=shard_sessions,json=shardSessions" json:"shard_sessions,omitempty"`
 	// single_db specifies if the transaction should be restricted
-	// to a single database.
+	// to a single database. This is deprecated.
+	// TODO(sougou): remove in 3.1
 	SingleDb bool `protobuf:"varint,3,opt,name=single_db,json=singleDb" json:"single_db,omitempty"`
 	// autocommit specifies if the session is in autocommit mode.
+	// This is used only for V3.
 	Autocommit bool `protobuf:"varint,4,opt,name=autocommit" json:"autocommit,omitempty"`
 	// target_string is the target expressed as a string. Valid
 	// names are: keyspace:shard@target, keyspace@target or @target.
+	// This is used only for V3.
 	TargetString string `protobuf:"bytes,5,opt,name=target_string,json=targetString" json:"target_string,omitempty"`
-	// options
+	// options is used only for V3.
 	Options *query.ExecuteOptions `protobuf:"bytes,6,opt,name=options" json:"options,omitempty"`
 }
 
@@ -178,6 +184,7 @@ type ExecuteRequest struct {
 	// query is the query and bind variables to execute.
 	Query *query.BoundQuery `protobuf:"bytes,3,opt,name=query" json:"query,omitempty"`
 	// These values are deprecated. Use session instead.
+	// TODO(sougou): remove in 3.1
 	TabletType       topodata.TabletType   `protobuf:"varint,4,opt,name=tablet_type,json=tabletType,enum=topodata.TabletType" json:"tablet_type,omitempty"`
 	NotInTransaction bool                  `protobuf:"varint,5,opt,name=not_in_transaction,json=notInTransaction" json:"not_in_transaction,omitempty"`
 	KeyspaceShard    string                `protobuf:"bytes,6,opt,name=keyspace_shard,json=keyspaceShard" json:"keyspace_shard,omitempty"`
@@ -819,6 +826,7 @@ type ExecuteBatchRequest struct {
 	// queries is a list of query and bind variables to execute.
 	Queries []*query.BoundQuery `protobuf:"bytes,3,rep,name=queries" json:"queries,omitempty"`
 	// These values are deprecated. Use session instead.
+	// TODO(sougou): remove in 3.1
 	TabletType    topodata.TabletType   `protobuf:"varint,4,opt,name=tablet_type,json=tabletType,enum=topodata.TabletType" json:"tablet_type,omitempty"`
 	AsTransaction bool                  `protobuf:"varint,5,opt,name=as_transaction,json=asTransaction" json:"as_transaction,omitempty"`
 	KeyspaceShard string                `protobuf:"bytes,6,opt,name=keyspace_shard,json=keyspaceShard" json:"keyspace_shard,omitempty"`
@@ -1213,6 +1221,7 @@ type StreamExecuteRequest struct {
 	// query is the query and bind variables to execute.
 	Query *query.BoundQuery `protobuf:"bytes,2,opt,name=query" json:"query,omitempty"`
 	// These values are deprecated. Use session instead.
+	// TODO(sougou): remove in 3.1
 	TabletType    topodata.TabletType   `protobuf:"varint,3,opt,name=tablet_type,json=tabletType,enum=topodata.TabletType" json:"tablet_type,omitempty"`
 	KeyspaceShard string                `protobuf:"bytes,4,opt,name=keyspace_shard,json=keyspaceShard" json:"keyspace_shard,omitempty"`
 	Options       *query.ExecuteOptions `protobuf:"bytes,5,opt,name=options" json:"options,omitempty"`

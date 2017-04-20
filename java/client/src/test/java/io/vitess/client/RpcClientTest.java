@@ -339,7 +339,9 @@ public abstract class RpcClientTest {
     Assert.assertEquals(BIND_VARS_ECHO, echo.get("bindVars"));
     Assert.assertEquals(V3_SESSION_ECHO, echo.get("session"));
 
-    // Test V2 functionality independent of V3
+    // V3 returns additional session artifacts that V2
+    // doesn't care about. So, start with a new session
+    // before testing V2 functionality.
     tx.rollback(ctx);
     tx = conn.begin(ctx);
 
