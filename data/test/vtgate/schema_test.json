@@ -53,6 +53,22 @@
             "sequence": "seq"
           }
         },
+        "product": {
+          "column_vindexes": [
+            {
+              "column": "account_id",
+              "name": "user_index"
+            }
+          ]
+        },
+        "product_sku": {
+          "column_vindexes": [
+            {
+              "column": "account_id",
+              "name": "user_index"
+            }
+          ]
+        },
         "music": {
           "column_vindexes": [
             {
