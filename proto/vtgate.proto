@@ -10,36 +10,42 @@ import "query.proto";
 import "topodata.proto";
 import "vtrpc.proto";
 
-// Session objects are session cookies and are invalidated on
-// use. Query results will contain updated session values.
-// For V2 APIs and below, Session only contains transaction
-// info. The rest of the parameters are exchanged through
-// request and response objects. For the V3 APIs: Execute,
-// ExecuteBatch and StreamExecute, target_string is used
-// instead of keyspace, shard and tablet_type, and options
-// is used instead of the one in the request. In the V3 API,
-// any Execute or ExecuteBatch request can update the session.
+// Session objects are exchanged like cookies through various
+// calls to VTGate. The behavior differs between V2 & V3 APIs.
+// V3 APIs are Execute, ExecuteBatch and StreamExecute. All
+// other APIs are V2 (or below). For the V3 APIs, the session
+// must be sent to every call to Execute or ExecuteBatch.
+// For the V2 APIs, Begin does not accept a session. It instead
+// returns a brand new one with in_transaction set to true.
+// After a call to Commit or Rollback, the session can be
+// discarded. If you're not in a transaction, Session is
+// an optional parameter for the V2 APIs.
 message Session {
+  // in_transaction is set to true if the session is in a transaction.
   bool in_transaction = 1;
 
   message ShardSession {
     query.Target target = 1;
     int64 transaction_id = 2;
   }
+  // shard_sessions keep track of per-shard transaction info.
   repeated ShardSession shard_sessions = 2;
 
   // single_db specifies if the transaction should be restricted
-  // to a single database.
+  // to a single database. This is deprecated.
+  // TODO(sougou): remove in 3.1
   bool single_db = 3;
 
   // autocommit specifies if the session is in autocommit mode.
+  // This is used only for V3.
   bool autocommit = 4;
 
   // target_string is the target expressed as a string. Valid
   // names are: keyspace:shard@target, keyspace@target or @target.
+  // This is used only for V3.
   string target_string = 5;
 
-  // options
+  // options is used only for V3.
   query.ExecuteOptions options = 6;
 }
 
@@ -56,6 +62,7 @@ message ExecuteRequest {
   query.BoundQuery query = 3;
 
   // These values are deprecated. Use session instead.
+  // TODO(sougou): remove in 3.1
   topodata.TabletType tablet_type = 4;
   bool not_in_transaction = 5;
   string keyspace_shard = 6;
@@ -278,6 +285,7 @@ message ExecuteBatchRequest {
   repeated query.BoundQuery queries = 3;
 
   // These values are deprecated. Use session instead.
+  // TODO(sougou): remove in 3.1
   topodata.TabletType tablet_type = 4;
   bool as_transaction = 5;
   string keyspace_shard = 6;
@@ -415,6 +423,7 @@ message StreamExecuteRequest {
   query.BoundQuery query = 2;
 
   // These values are deprecated. Use session instead.
+  // TODO(sougou): remove in 3.1
   topodata.TabletType tablet_type = 3;
   string keyspace_shard = 4;
   query.ExecuteOptions options = 5;
