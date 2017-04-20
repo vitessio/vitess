@@ -12,7 +12,6 @@ shards within the same keyspace, the set with the fewest shards will be set to
 serving.
 """
 
-import collections
 import json
 import logging
 import optparse
@@ -21,12 +20,11 @@ from vtproto import topodata_pb2
 from vttest import sharding_utils
 import vtctl_sandbox
 
-# Use OrderedDict in order to ensure master is set last.
-tablet_types = collections.OrderedDict([
+TABLET_TYPES = [
     (topodata_pb2.REPLICA, 'replica'),
     (topodata_pb2.RDONLY, 'rdonly'),
     (topodata_pb2.MASTER, 'master'),
-])
+]
 
 
 def get_vtctl_commands(keyspace, shards):
@@ -34,14 +32,14 @@ def get_vtctl_commands(keyspace, shards):
 
   Args:
     keyspace: (string) Keyspace name to obtain commands for.
-    shards: (json) Struct containing sharding info from FindAllShardsInKeyspace
-            vtctl command.
+    shards: Dict from shard name to shard info object from
+            FindAllShardsInKeyspace vtctl command.
 
   Returns:
     List of vtctl commands.
   """
-  lowest_sharding_count = min([
-      sharding_utils.get_shard_index(x)[1] for x in shards.keys()])
+  lowest_sharding_count = min(
+      sharding_utils.get_shard_index(x)[1] for x in shards.keys())
   if lowest_sharding_count == len(shards):
     # Skip keyspaces with non-overlapping shards.
     return []
@@ -54,7 +52,7 @@ def get_vtctl_commands(keyspace, shards):
     _, num_shards = sharding_utils.get_shard_index(shard_name)
     is_lowest_sharding = num_shards == lowest_sharding_count
 
-    for tablet_type, tablet_type_name in tablet_types.iteritems():
+    for tablet_type, tablet_type_name in TABLET_TYPES:
       # Setting served types when a shard is already serving is allowable,
       # but only remove served types from the sharded set if they are serving.
       if not (is_lowest_sharding or tablet_type in served_tablet_types):
