@@ -78,7 +78,7 @@ func (q *queryExecute) equal(q2 *queryExecute) bool {
 }
 
 // Execute is part of the VTGateService interface
-func (f *fakeVTGateService) Execute(ctx context.Context, sql string, bindVariables map[string]interface{}, session *vtgatepb.Session) (*vtgatepb.Session, *sqltypes.Result, error) {
+func (f *fakeVTGateService) Execute(ctx context.Context, session *vtgatepb.Session, sql string, bindVariables map[string]interface{}) (*vtgatepb.Session, *sqltypes.Result, error) {
 	if f.hasError {
 		return session, nil, errTestVtGateError
 	}
@@ -106,7 +106,7 @@ func (f *fakeVTGateService) Execute(ctx context.Context, sql string, bindVariabl
 }
 
 // ExecuteBatch is part of the VTGateService interface
-func (f *fakeVTGateService) ExecuteBatch(ctx context.Context, sqlList []string, bindVariablesList []map[string]interface{}, session *vtgatepb.Session) (*vtgatepb.Session, []sqltypes.QueryResponse, error) {
+func (f *fakeVTGateService) ExecuteBatch(ctx context.Context, session *vtgatepb.Session, sqlList []string, bindVariablesList []map[string]interface{}) (*vtgatepb.Session, []sqltypes.QueryResponse, error) {
 	if f.hasError {
 		return session, nil, errTestVtGateError
 	}
@@ -134,6 +134,51 @@ func (f *fakeVTGateService) ExecuteBatch(ctx context.Context, sqlList []string, 
 		QueryResult: execCase.result,
 		QueryError:  nil,
 	}}, nil
+}
+
+// StreamExecute is part of the VTGateService interface
+func (f *fakeVTGateService) StreamExecute(ctx context.Context, session *vtgatepb.Session, sql string, bindVariables map[string]interface{}, callback func(*sqltypes.Result) error) error {
+	if f.panics {
+		panic(fmt.Errorf("test forced panic"))
+	}
+	execCase, ok := execMap[sql]
+	if !ok {
+		return fmt.Errorf("no match for: %s", sql)
+	}
+	f.checkCallerID(ctx, "StreamExecute")
+	query := &queryExecute{
+		SQL:           sql,
+		BindVariables: bindVariables,
+		Session:       session,
+	}
+	if !query.equal(execCase.execQuery) {
+		f.t.Errorf("StreamExecute:\n%+v, want\n%+v", query, execCase.execQuery)
+		return nil
+	}
+	if execCase.result != nil {
+		result := &sqltypes.Result{
+			Fields: execCase.result.Fields,
+		}
+		if err := callback(result); err != nil {
+			return err
+		}
+		if f.hasError {
+			// wait until the client has the response, since all streaming implementation may not
+			// send previous messages if an error has been triggered.
+			<-f.errorWait
+			f.errorWait = make(chan struct{}) // for next test
+			return errTestVtGateError
+		}
+		for _, row := range execCase.result.Rows {
+			result := &sqltypes.Result{
+				Rows: [][]sqltypes.Value{row},
+			}
+			if err := callback(result); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 // queryExecuteShards contains all the fields we use to test ExecuteShards
@@ -499,51 +544,6 @@ func (f *fakeVTGateService) ExecuteBatchKeyspaceIds(ctx context.Context, queries
 		return []sqltypes.Result{*execCase.result}, nil
 	}
 	return nil, nil
-}
-
-// StreamExecute is part of the VTGateService interface
-func (f *fakeVTGateService) StreamExecute(ctx context.Context, sql string, bindVariables map[string]interface{}, session *vtgatepb.Session, callback func(*sqltypes.Result) error) error {
-	if f.panics {
-		panic(fmt.Errorf("test forced panic"))
-	}
-	execCase, ok := execMap[sql]
-	if !ok {
-		return fmt.Errorf("no match for: %s", sql)
-	}
-	f.checkCallerID(ctx, "StreamExecute")
-	query := &queryExecute{
-		SQL:           sql,
-		BindVariables: bindVariables,
-		Session:       session,
-	}
-	if !query.equal(execCase.execQuery) {
-		f.t.Errorf("StreamExecute:\n%+v, want\n%+v", query, execCase.execQuery)
-		return nil
-	}
-	if execCase.result != nil {
-		result := &sqltypes.Result{
-			Fields: execCase.result.Fields,
-		}
-		if err := callback(result); err != nil {
-			return err
-		}
-		if f.hasError {
-			// wait until the client has the response, since all streaming implementation may not
-			// send previous messages if an error has been triggered.
-			<-f.errorWait
-			f.errorWait = make(chan struct{}) // for next test
-			return errTestVtGateError
-		}
-		for _, row := range execCase.result.Rows {
-			result := &sqltypes.Result{
-				Rows: [][]sqltypes.Value{row},
-			}
-			if err := callback(result); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
 }
 
 // StreamExecuteShards is part of the VTGateService interface

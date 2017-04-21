@@ -193,14 +193,14 @@ func createExecutorEnv() (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn
 
 func executorExec(executor *Executor, sql string, bv map[string]interface{}) (*sqltypes.Result, error) {
 	return executor.Execute(context.Background(),
+		masterSession,
 		sql,
-		bv,
-		masterSession)
+		bv)
 }
 
 func executorStream(executor *Executor, sql string) (qr *sqltypes.Result, err error) {
 	results := make(chan *sqltypes.Result, 10)
-	err = executor.StreamExecute(context.Background(), sql, nil, "", topodatapb.TabletType_MASTER, masterSession, func(qr *sqltypes.Result) error {
+	err = executor.StreamExecute(context.Background(), masterSession, sql, nil, "", topodatapb.TabletType_MASTER, func(qr *sqltypes.Result) error {
 		results <- qr
 		return nil
 	})

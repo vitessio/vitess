@@ -49,7 +49,7 @@ func (vh *vtgateHandler) ConnectionClosed(c *mysqlconn.Conn) {
 	// Rollback if there is an ongoing transaction. Ignore error.
 	ctx := context.Background()
 	session, _ := c.ClientData.(*vtgatepb.Session)
-	_, _, _ = vh.vtg.Execute(ctx, "rollback", make(map[string]interface{}), session)
+	_, _, _ = vh.vtg.Execute(ctx, session, "rollback", make(map[string]interface{}))
 }
 
 func (vh *vtgateHandler) ComQuery(c *mysqlconn.Conn, query string) (*sqltypes.Result, error) {
@@ -79,7 +79,7 @@ func (vh *vtgateHandler) ComQuery(c *mysqlconn.Conn, query string) (*sqltypes.Re
 	if c.SchemaName != "" {
 		session.TargetString = c.SchemaName
 	}
-	session, result, err := vh.vtg.Execute(ctx, query, make(map[string]interface{}), session)
+	session, result, err := vh.vtg.Execute(ctx, session, query, make(map[string]interface{}))
 	c.ClientData = session
 	return result, sqldb.NewSQLErrorFromError(err)
 }
