@@ -223,14 +223,6 @@ func cellLength(data []byte, pos int, typ byte, metadata uint16) (int, error) {
 		// metadata has number of decimals. One byte encodes
 		// two decimals.
 		return 3 + (int(metadata)+1)/2, nil
-	case TypeJSON:
-		// length in encoded in 'meta' bytes, but at least 2,
-		// and the value cannot be > 64k, so just read 2 bytes.
-		// (meta also should have '2' as value).
-		// (this weird logic is what event printing does).
-		l := int(uint64(data[pos]) |
-			uint64(data[pos+1])<<8)
-		return l + int(metadata), nil
 	case TypeNewDecimal:
 		precision := int(metadata >> 8)
 		scale := int(metadata & 0xff)
@@ -259,8 +251,8 @@ func cellLength(data []byte, pos int, typ byte, metadata uint16) (int, error) {
 		return intg0*4 + dig2bytes[intg0x] + frac0*4 + dig2bytes[frac0x], nil
 	case TypeEnum, TypeSet:
 		return int(metadata & 0xff), nil
-	case TypeTinyBlob, TypeMediumBlob, TypeLongBlob, TypeBlob, TypeGeometry:
-		// of the Blobs, only TypeBlob is used in binary logs,
+	case TypeJSON, TypeTinyBlob, TypeMediumBlob, TypeLongBlob, TypeBlob, TypeGeometry:
+		// Of the Blobs, only TypeBlob is used in binary logs,
 		// but supports others just in case.
 		switch metadata {
 		case 1:
@@ -625,20 +617,6 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, styp querypb.Typ
 		return sqltypes.MakeTrusted(querypb.Type_TIME,
 			[]byte(fmt.Sprintf("%v%02d:%02d:%02d%v", sign, hour, minute, second, fracStr))), 3 + (int(metadata)+1)/2, nil
 
-	case TypeJSON:
-		l := int(uint64(data[pos]) |
-			uint64(data[pos+1])<<8)
-		// length in encoded in 'meta' bytes, but at least 2,
-		// and the value cannot be > 64k, so just read 2 bytes.
-		// (meta also should have '2' as value).
-		// (this weird logic is what event printing does).
-
-		// TODO(alainjobart) the binary data for JSON should
-		// be parsed, and re-printed as JSON. This is a large
-		// project, as the binary version of the data is
-		// somewhat complex. For now, just return NULL.
-		return sqltypes.NULL, l + int(metadata), nil
-
 	case TypeNewDecimal:
 		precision := int(metadata >> 8) // total digits number
 		scale := int(metadata & 0xff)   // number of fractional digits
@@ -786,7 +764,7 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, styp querypb.Typ
 		return sqltypes.MakeTrusted(querypb.Type_SET,
 			data[pos:pos+l]), l, nil
 
-	case TypeTinyBlob, TypeMediumBlob, TypeLongBlob, TypeBlob:
+	case TypeJSON, TypeTinyBlob, TypeMediumBlob, TypeLongBlob, TypeBlob:
 		// Only TypeBlob is used in binary logs,
 		// but supports others just in case.
 		l := 0
@@ -809,6 +787,17 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, styp querypb.Typ
 			return sqltypes.NULL, 0, fmt.Errorf("unsupported blob metadata value %v (data: %v pos: %v)", metadata, data, pos)
 		}
 		pos += int(metadata)
+
+		// For JSON, we parse the data.
+		if typ == TypeJSON {
+			d, err := printJSONData(data[pos : pos+l])
+			if err != nil {
+				return sqltypes.NULL, 0, fmt.Errorf("error parsing JSON data %v: %v", data[pos:pos+l], err)
+			}
+			return sqltypes.MakeTrusted(querypb.Type_JSON,
+				d), l + int(metadata), nil
+		}
+
 		return sqltypes.MakeTrusted(querypb.Type_VARBINARY,
 			data[pos:pos+l]), l + int(metadata), nil
 

@@ -1021,17 +1021,139 @@ func testRowReplicationTypesWithRealDatabase(t *testing.T, params *sqldb.ConnPar
 	// JSON is only supported by MySQL 5.7+
 	// However the binary format is not just the text version.
 	// So it doesn't work as expected.
-	if false && strings.HasPrefix(conn.ServerVersion, "5.7") {
-		testcases = append(testcases, struct {
+	if strings.HasPrefix(conn.ServerVersion, "5.7") {
+		testcases = append(testcases, []struct {
 			name        string
 			createType  string
 			createValue string
-		}{
-			// JSON
+		}{{
 			name:        "json1",
 			createType:  "JSON",
-			createValue: "'{\"a\":\"b\"}'",
-		})
+			createValue: "'{\"a\": 2}'",
+		}, {
+			name:        "json2",
+			createType:  "JSON",
+			createValue: "'[1,2]'",
+		}, {
+			name:        "json3",
+			createType:  "JSON",
+			createValue: "'{\"a\":\"b\", \"c\":\"d\",\"ab\":\"abc\", \"bc\": [\"x\", \"y\"]}'",
+		}, {
+			name:        "json4",
+			createType:  "JSON",
+			createValue: "'[\"here\", [\"I\", \"am\"], \"!!!\"]'",
+		}, {
+			name:        "json5",
+			createType:  "JSON",
+			createValue: "'\"scalar string\"'",
+		}, {
+			name:        "json6",
+			createType:  "JSON",
+			createValue: "'true'",
+		}, {
+			name:        "json7",
+			createType:  "JSON",
+			createValue: "'false'",
+		}, {
+			name:        "json8",
+			createType:  "JSON",
+			createValue: "'null'",
+		}, {
+			name:        "json9",
+			createType:  "JSON",
+			createValue: "'-1'",
+		}, {
+			name:        "json10",
+			createType:  "JSON",
+			createValue: "CAST(CAST(1 AS UNSIGNED) AS JSON)",
+		}, {
+			name:        "json11",
+			createType:  "JSON",
+			createValue: "'32767'",
+		}, {
+			name:        "json12",
+			createType:  "JSON",
+			createValue: "'32768'",
+		}, {
+			name:        "json13",
+			createType:  "JSON",
+			createValue: "'-32768'",
+		}, {
+			name:        "json14",
+			createType:  "JSON",
+			createValue: "'-32769'",
+		}, {
+			name:        "json15",
+			createType:  "JSON",
+			createValue: "'2147483647'",
+		}, {
+			name:        "json16",
+			createType:  "JSON",
+			createValue: "'2147483648'",
+		}, {
+			name:        "json17",
+			createType:  "JSON",
+			createValue: "'-2147483648'",
+		}, {
+			name:        "json18",
+			createType:  "JSON",
+			createValue: "'-2147483649'",
+		}, {
+			name:        "json19",
+			createType:  "JSON",
+			createValue: "'18446744073709551615'",
+		}, {
+			name:        "json20",
+			createType:  "JSON",
+			createValue: "'18446744073709551616'",
+		}, {
+			name:        "json21",
+			createType:  "JSON",
+			createValue: "'3.14159'",
+		}, {
+			name:        "json22",
+			createType:  "JSON",
+			createValue: "'{}'",
+		}, {
+			name:        "json23",
+			createType:  "JSON",
+			createValue: "'[]'",
+		}, {
+			name:        "json24",
+			createType:  "JSON",
+			createValue: "CAST(CAST('2015-01-15 23:24:25' AS DATETIME) AS JSON)",
+		}, {
+			name:        "json25",
+			createType:  "JSON",
+			createValue: "CAST(CAST('23:24:25' AS TIME) AS JSON)",
+		}, {
+			name:        "json26",
+			createType:  "JSON",
+			createValue: "CAST(CAST('23:24:25.12' AS TIME(3)) AS JSON)",
+		}, {
+			name:        "json27",
+			createType:  "JSON",
+			createValue: "CAST(CAST('2015-01-15' AS DATE) AS JSON)",
+		}, {
+			name:        "json28",
+			createType:  "JSON",
+			createValue: "CAST(TIMESTAMP'2015-01-15 23:24:25' AS JSON)",
+		}, {
+			name:        "json29",
+			createType:  "JSON",
+			createValue: "CAST(ST_GeomFromText('POINT(1 1)') AS JSON)",
+		}, {
+			// Decimal has special treatment.
+			name:        "json30",
+			createType:  "JSON",
+			createValue: "CAST(CAST('123456789.1234' AS DECIMAL(13,4)) AS JSON)",
+			// FIXME(alainjobart) opaque types are complicated.
+			//		}, {
+			// This is a bit field. Opaque type in JSON.
+			//			name:        "json31",
+			//			createType:  "JSON",
+			//			createValue: "CAST(x'cafe' AS JSON)",
+		}}...)
 	}
 
 	ctx := context.Background()
@@ -1150,14 +1272,19 @@ func testRowReplicationTypesWithRealDatabase(t *testing.T, params *sqldb.ConnPar
 		sql.WriteString(", ")
 		sql.WriteString(tcase.name)
 		sql.WriteString(" = ")
-		if values[i+1].Type() == querypb.Type_TIMESTAMP && !bytes.HasPrefix(values[i+1].Raw(), replication.ZeroTimestamp) {
+		switch {
+		case values[i+1].Type() == querypb.Type_TIMESTAMP && !bytes.HasPrefix(values[i+1].Raw(), replication.ZeroTimestamp):
 			// Values in the binary log are UTC. Let's convert them
 			// to whatever timezone the connection is using,
 			// so MySQL properly converts them back to UTC.
 			sql.WriteString("convert_tz(")
 			values[i+1].EncodeSQL(&sql)
 			sql.WriteString(", '+00:00', @@session.time_zone)")
-		} else {
+		case values[i+1].Type() == querypb.Type_JSON:
+			// For JSON, we for now get the SQL statement.
+			// Just echo it as is.
+			sql.Write(values[i+1].Raw())
+		default:
 			values[i+1].EncodeSQL(&sql)
 		}
 	}
@@ -1185,7 +1312,7 @@ func testRowReplicationTypesWithRealDatabase(t *testing.T, params *sqldb.ConnPar
 	}
 	for i, tcase := range testcases {
 		if !reflect.DeepEqual(result.Rows[0][i+1], result.Rows[1][i+1]) {
-			t.Errorf("Field %v is not the same, got %v(%v) and %v(%v)", tcase.name, result.Rows[0][i+1], result.Rows[0][i+1].Type, result.Rows[1][i+1], result.Rows[1][i+1].Type)
+			t.Errorf("Field %v is not the same, got %v(%v) and %v(%v)", tcase.name, result.Rows[0][i+1], result.Rows[0][i+1].Type(), result.Rows[1][i+1], result.Rows[1][i+1].Type())
 		}
 	}
 
