@@ -5,6 +5,7 @@
 package endtoend
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -516,5 +517,41 @@ func TestDBAStatements(t *testing.T) {
 	}
 	if qr.RowsAffected != 4 {
 		t.Errorf("RowsAffected: %d, want 4", qr.RowsAffected)
+	}
+}
+
+func TestLongQueryErrorTruncation(t *testing.T) {
+	client := framework.NewClient()
+
+	buf := &bytes.Buffer{}
+	for i := 0; i < 100; i++ {
+	    fmt.Fprintf(buf, "%d: THIS IS A LONG LONG LONG LONG QUERY STRING\n", i)
+        }
+
+	// Test that the data too long error is not truncated by default
+	_, err := client.Execute(
+		"insert into vitess_test values(123, null, null, :data)",
+		map[string]interface{}{"data": buf.String()},
+	)
+	if (err == nil){
+		t.Error("expected data too long error")
+		return
+	}
+	if (len(err.Error()) < 1000 || strings.Contains(err.Error(), "[TRUNCATED]")){
+		t.Error("expected unmodified error string")
+	}
+
+	// Test that the data too long error is truncated once the option is set
+	sqldb.SQLErrorTruncateLen = 100;
+	_, err = client.Execute(
+		"insert into vitess_test values(123, null, null, :data)",
+		map[string]interface{}{"data": buf.String()},
+	)
+	if (err == nil){
+		t.Error("expected data too long error")
+		return
+	}
+	if (len(err.Error()) > 200 || !strings.Contains(err.Error(), "[TRUNCATED]")){
+		t.Error("expected truncated error string")
 	}
 }
