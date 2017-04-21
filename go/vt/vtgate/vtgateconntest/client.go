@@ -966,24 +966,25 @@ func TestSuite(t *testing.T, impl vtgateconn.Impl, fakeServer vtgateservice.VTGa
 	vtgateconn.RegisterDialer("test", func(ctx context.Context, address string, timeout time.Duration) (vtgateconn.Impl, error) {
 		return impl, nil
 	})
-	conn, err := vtgateconn.DialProtocol(context.Background(), "test", "", 0, "connection_ks@rdonly", testExecuteOptions)
+	conn, err := vtgateconn.DialProtocol(context.Background(), "test", "", 0)
 	if err != nil {
 		t.Fatalf("Got err: %v from vtgateconn.DialProtocol", err)
 	}
+	vsn := conn.Session("connection_ks@rdonly", testExecuteOptions)
 
 	fs := fakeServer.(*fakeVTGateService)
 
 	testBegin(t, conn)
 	testCommit(t, conn)
-	testExecute(t, conn)
-	testExecuteBatch(t, conn)
+	testExecute(t, vsn)
+	testExecuteBatch(t, vsn)
 	testExecuteShards(t, conn)
 	testExecuteKeyspaceIds(t, conn)
 	testExecuteKeyRanges(t, conn)
 	testExecuteEntityIds(t, conn)
 	testExecuteBatchShards(t, conn)
 	testExecuteBatchKeyspaceIds(t, conn)
-	testStreamExecute(t, conn)
+	testStreamExecute(t, vsn)
 	testStreamExecuteShards(t, conn)
 	testStreamExecuteKeyRanges(t, conn)
 	testStreamExecuteKeyspaceIds(t, conn)
@@ -1002,15 +1003,15 @@ func TestSuite(t *testing.T, impl vtgateconn.Impl, fakeServer vtgateservice.VTGa
 	testCommitPanic(t, conn, fs)
 	testRollbackPanic(t, conn, fs)
 	testResolveTransactionPanic(t, conn, fs)
-	testExecutePanic(t, conn)
-	testExecuteBatchPanic(t, conn)
+	testExecutePanic(t, vsn)
+	testExecuteBatchPanic(t, vsn)
 	testExecuteShardsPanic(t, conn)
 	testExecuteKeyspaceIdsPanic(t, conn)
 	testExecuteKeyRangesPanic(t, conn)
 	testExecuteEntityIdsPanic(t, conn)
 	testExecuteBatchShardsPanic(t, conn)
 	testExecuteBatchKeyspaceIdsPanic(t, conn)
-	testStreamExecutePanic(t, conn)
+	testStreamExecutePanic(t, vsn)
 	testStreamExecuteShardsPanic(t, conn)
 	testStreamExecuteKeyRangesPanic(t, conn)
 	testStreamExecuteKeyspaceIdsPanic(t, conn)
@@ -1024,10 +1025,11 @@ func TestSuite(t *testing.T, impl vtgateconn.Impl, fakeServer vtgateservice.VTGa
 
 // TestErrorSuite runs all the tests that expect errors
 func TestErrorSuite(t *testing.T, fakeServer vtgateservice.VTGateService) {
-	conn, err := vtgateconn.DialProtocol(context.Background(), "test", "", 0, "connection_ks@rdonly", testExecuteOptions)
+	conn, err := vtgateconn.DialProtocol(context.Background(), "test", "", 0)
 	if err != nil {
 		t.Fatalf("Got err: %v from vtgateconn.DialProtocol", err)
 	}
+	vsn := conn.Session("connection_ks@rdonly", testExecuteOptions)
 
 	fs := fakeServer.(*fakeVTGateService)
 
@@ -1037,15 +1039,15 @@ func TestErrorSuite(t *testing.T, fakeServer vtgateservice.VTGateService) {
 	testCommitError(t, conn, fs)
 	testRollbackError(t, conn, fs)
 	testResolveTransactionError(t, conn, fs)
-	testExecuteError(t, conn, fs)
-	testExecuteBatchError(t, conn, fs)
+	testExecuteError(t, vsn, fs)
+	testExecuteBatchError(t, vsn, fs)
 	testExecuteShardsError(t, conn, fs)
 	testExecuteKeyspaceIdsError(t, conn, fs)
 	testExecuteKeyRangesError(t, conn, fs)
 	testExecuteEntityIdsError(t, conn, fs)
 	testExecuteBatchShardsError(t, conn, fs)
 	testExecuteBatchKeyspaceIdsError(t, conn, fs)
-	testStreamExecuteError(t, conn, fs)
+	testStreamExecuteError(t, vsn, fs)
 	testStreamExecuteShardsError(t, conn, fs)
 	testStreamExecuteKeyRangesError(t, conn, fs)
 	testStreamExecuteKeyspaceIdsError(t, conn, fs)
@@ -1112,10 +1114,10 @@ func testCommit(t *testing.T, conn *vtgateconn.VTGateConn) {
 	}
 }
 
-func testExecute(t *testing.T, conn *vtgateconn.VTGateConn) {
+func testExecute(t *testing.T, vsn *vtgateconn.VTGateSession) {
 	ctx := newContext()
 	execCase := execMap["request1"]
-	qr, err := conn.Execute(ctx, execCase.execQuery.SQL, execCase.execQuery.BindVariables)
+	qr, err := vsn.Execute(ctx, execCase.execQuery.SQL, execCase.execQuery.BindVariables)
 	if err != nil {
 		t.Error(err)
 	}
@@ -1123,32 +1125,32 @@ func testExecute(t *testing.T, conn *vtgateconn.VTGateConn) {
 		t.Errorf("Unexpected result from Execute: got\n%#v want\n%#v", qr, execCase.result)
 	}
 
-	_, err = conn.Execute(ctx, "none", nil)
+	_, err = vsn.Execute(ctx, "none", nil)
 	want := "no match for: none"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("none request: %v, want %v", err, want)
 	}
 }
 
-func testExecuteError(t *testing.T, conn *vtgateconn.VTGateConn, fake *fakeVTGateService) {
+func testExecuteError(t *testing.T, vsn *vtgateconn.VTGateSession, fake *fakeVTGateService) {
 	ctx := newContext()
 	execCase := execMap["errorRequst"]
 
-	_, err := conn.Execute(ctx, execCase.execQuery.SQL, execCase.execQuery.BindVariables)
+	_, err := vsn.Execute(ctx, execCase.execQuery.SQL, execCase.execQuery.BindVariables)
 	verifyError(t, err, "Execute")
 }
 
-func testExecutePanic(t *testing.T, conn *vtgateconn.VTGateConn) {
+func testExecutePanic(t *testing.T, vsn *vtgateconn.VTGateSession) {
 	ctx := newContext()
 	execCase := execMap["request1"]
-	_, err := conn.Execute(ctx, execCase.execQuery.SQL, execCase.execQuery.BindVariables)
+	_, err := vsn.Execute(ctx, execCase.execQuery.SQL, execCase.execQuery.BindVariables)
 	expectPanic(t, err)
 }
 
-func testExecuteBatch(t *testing.T, conn *vtgateconn.VTGateConn) {
+func testExecuteBatch(t *testing.T, vsn *vtgateconn.VTGateSession) {
 	ctx := newContext()
 	execCase := execMap["request1"]
-	qr, err := conn.ExecuteBatch(ctx, []string{execCase.execQuery.SQL}, []map[string]interface{}{execCase.execQuery.BindVariables})
+	qr, err := vsn.ExecuteBatch(ctx, []string{execCase.execQuery.SQL}, []map[string]interface{}{execCase.execQuery.BindVariables})
 	if err != nil {
 		t.Error(err)
 	}
@@ -1156,25 +1158,25 @@ func testExecuteBatch(t *testing.T, conn *vtgateconn.VTGateConn) {
 		t.Errorf("Unexpected result from Execute: got\n%#v want\n%#v", qr, execCase.result)
 	}
 
-	_, err = conn.ExecuteBatch(ctx, []string{"none"}, nil)
+	_, err = vsn.ExecuteBatch(ctx, []string{"none"}, nil)
 	want := "no match for: none"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("none request: %v, want %v", err, want)
 	}
 }
 
-func testExecuteBatchError(t *testing.T, conn *vtgateconn.VTGateConn, fake *fakeVTGateService) {
+func testExecuteBatchError(t *testing.T, vsn *vtgateconn.VTGateSession, fake *fakeVTGateService) {
 	ctx := newContext()
 	execCase := execMap["errorRequst"]
 
-	_, err := conn.ExecuteBatch(ctx, []string{execCase.execQuery.SQL}, []map[string]interface{}{execCase.execQuery.BindVariables})
+	_, err := vsn.ExecuteBatch(ctx, []string{execCase.execQuery.SQL}, []map[string]interface{}{execCase.execQuery.BindVariables})
 	verifyError(t, err, "ExecuteBatch")
 }
 
-func testExecuteBatchPanic(t *testing.T, conn *vtgateconn.VTGateConn) {
+func testExecuteBatchPanic(t *testing.T, vsn *vtgateconn.VTGateSession) {
 	ctx := newContext()
 	execCase := execMap["request1"]
-	_, err := conn.ExecuteBatch(ctx, []string{execCase.execQuery.SQL}, []map[string]interface{}{execCase.execQuery.BindVariables})
+	_, err := vsn.ExecuteBatch(ctx, []string{execCase.execQuery.SQL}, []map[string]interface{}{execCase.execQuery.BindVariables})
 	expectPanic(t, err)
 }
 
@@ -1380,10 +1382,10 @@ func testExecuteBatchKeyspaceIdsPanic(t *testing.T, conn *vtgateconn.VTGateConn)
 	expectPanic(t, err)
 }
 
-func testStreamExecute(t *testing.T, conn *vtgateconn.VTGateConn) {
+func testStreamExecute(t *testing.T, vsn *vtgateconn.VTGateSession) {
 	ctx := newContext()
 	execCase := execMap["request1"]
-	stream, err := conn.StreamExecute(ctx, execCase.execQuery.SQL, execCase.execQuery.BindVariables)
+	stream, err := vsn.StreamExecute(ctx, execCase.execQuery.SQL, execCase.execQuery.BindVariables)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1411,7 +1413,7 @@ func testStreamExecute(t *testing.T, conn *vtgateconn.VTGateConn) {
 		t.Errorf("Unexpected result from StreamExecute: got %+v want %+v", qr, wantResult)
 	}
 
-	stream, err = conn.StreamExecute(ctx, "none", nil)
+	stream, err = vsn.StreamExecute(ctx, "none", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1422,10 +1424,10 @@ func testStreamExecute(t *testing.T, conn *vtgateconn.VTGateConn) {
 	}
 }
 
-func testStreamExecuteError(t *testing.T, conn *vtgateconn.VTGateConn, fake *fakeVTGateService) {
+func testStreamExecuteError(t *testing.T, vsn *vtgateconn.VTGateSession, fake *fakeVTGateService) {
 	ctx := newContext()
 	execCase := execMap["request1"]
-	stream, err := conn.StreamExecute(ctx, execCase.execQuery.SQL, execCase.execQuery.BindVariables)
+	stream, err := vsn.StreamExecute(ctx, execCase.execQuery.SQL, execCase.execQuery.BindVariables)
 	if err != nil {
 		t.Fatalf("StreamExecute failed: %v", err)
 	}
@@ -1447,10 +1449,10 @@ func testStreamExecuteError(t *testing.T, conn *vtgateconn.VTGateConn, fake *fak
 	verifyError(t, err, "StreamExecute")
 }
 
-func testStreamExecutePanic(t *testing.T, conn *vtgateconn.VTGateConn) {
+func testStreamExecutePanic(t *testing.T, vsn *vtgateconn.VTGateSession) {
 	ctx := newContext()
 	execCase := execMap["request1"]
-	stream, err := conn.StreamExecute(ctx, execCase.execQuery.SQL, execCase.execQuery.BindVariables)
+	stream, err := vsn.StreamExecute(ctx, execCase.execQuery.SQL, execCase.execQuery.BindVariables)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1708,22 +1710,8 @@ func testTxPass(t *testing.T, conn *vtgateconn.VTGateConn) {
 	ctx := newContext()
 	execCase := execMap["txRequest"]
 
-	// Execute
-	tx, err := conn.Begin(ctx)
-	if err != nil {
-		t.Error(err)
-	}
-	_, err = tx.Execute(ctx, execCase.execQuery.SQL, execCase.execQuery.BindVariables)
-	if err != nil {
-		t.Error(err)
-	}
-	err = tx.Commit(ctx)
-	if err != nil {
-		t.Error(err)
-	}
-
 	// ExecuteShards
-	tx, err = conn.Begin(ctx)
+	tx, err := conn.Begin(ctx)
 	if err != nil {
 		t.Error(err)
 	}
@@ -1901,12 +1889,6 @@ func testTxFail(t *testing.T, conn *vtgateconn.VTGateConn) {
 	want := "commit: session mismatch"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("Commit: %v, want %v", err, want)
-	}
-
-	_, err = tx.Execute(ctx, "", nil)
-	want = "execute: not in transaction"
-	if err == nil || err.Error() != want {
-		t.Errorf("Execute: %v, want %v", err, want)
 	}
 
 	_, err = tx.ExecuteShards(ctx, "", "", nil, nil, topodatapb.TabletType_REPLICA, testExecuteOptions)

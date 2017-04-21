@@ -93,7 +93,8 @@ func TestOpen(t *testing.T) {
 		wantc := tc.conn
 		newc := *(c.(*conn))
 		newc.Address = ""
-		newc.vtgateConn = nil
+		newc.conn = nil
+		newc.vsn = nil
 		if !reflect.DeepEqual(&newc, wantc) {
 			t.Errorf("%v: conn:\n%+v, want\n%+v", tc.desc, &newc, wantc)
 		}

@@ -70,7 +70,7 @@ func (c *conn) ExecContext(ctx context.Context, query string, args []driver.Name
 	if err != nil {
 		return nil, err
 	}
-	qr, err := c.vtgateConn.Execute(ctx, query, bv)
+	qr, err := c.vsn.Execute(ctx, query, bv)
 	if err != nil {
 		return nil, err
 	}
@@ -84,14 +84,14 @@ func (c *conn) QueryContext(ctx context.Context, query string, args []driver.Nam
 	}
 
 	if c.Streaming {
-		stream, err := c.vtgateConn.StreamExecute(ctx, query, bv)
+		stream, err := c.vsn.StreamExecute(ctx, query, bv)
 		if err != nil {
 			return nil, err
 		}
 		return newStreamingRows(stream, nil), nil
 	}
 
-	qr, err := c.vtgateConn.Execute(ctx, query, bv)
+	qr, err := c.vsn.Execute(ctx, query, bv)
 	if err != nil {
 		return nil, err
 	}

@@ -139,17 +139,22 @@ func (c *Configuration) setDefaults() {
 
 type conn struct {
 	Configuration
-	vtgateConn *vtgateconn.VTGateConn
+	conn *vtgateconn.VTGateConn
+	vsn  *vtgateconn.VTGateSession
 }
 
 func (c *conn) dial() error {
 	var err error
 	if c.Protocol == "" {
-		c.vtgateConn, err = vtgateconn.Dial(context.Background(), c.Address, c.Timeout, c.Target, nil)
+		c.conn, err = vtgateconn.Dial(context.Background(), c.Address, c.Timeout)
 	} else {
-		c.vtgateConn, err = vtgateconn.DialProtocol(context.Background(), c.Protocol, c.Address, c.Timeout, c.Target, nil)
+		c.conn, err = vtgateconn.DialProtocol(context.Background(), c.Protocol, c.Address, c.Timeout)
 	}
-	return err
+	if err != nil {
+		return err
+	}
+	c.vsn = c.conn.Session(c.Target, nil)
+	return nil
 }
 
 func (c *conn) Prepare(query string) (driver.Stmt, error) {
@@ -161,7 +166,7 @@ func (c *conn) PrepareContext(ctx context.Context, query string) (driver.Stmt, e
 }
 
 func (c *conn) Close() error {
-	c.vtgateConn.Close()
+	c.conn.Close()
 	return nil
 }
 
@@ -190,7 +195,7 @@ func (c *conn) Exec(query string, args []driver.Value) (driver.Result, error) {
 		return nil, errors.New("Exec not allowed for streaming connections")
 	}
 
-	qr, err := c.vtgateConn.Execute(ctx, query, bindVarsFromValues(args))
+	qr, err := c.vsn.Execute(ctx, query, bindVarsFromValues(args))
 	if err != nil {
 		return nil, err
 	}
@@ -202,7 +207,7 @@ func (c *conn) Query(query string, args []driver.Value) (driver.Rows, error) {
 	bindVars := bindVarsFromValues(args)
 
 	if c.Streaming {
-		stream, err := c.vtgateConn.StreamExecute(ctx, query, bindVars)
+		stream, err := c.vsn.StreamExecute(ctx, query, bindVars)
 		if err != nil {
 			cancel()
 			return nil, err
@@ -213,7 +218,7 @@ func (c *conn) Query(query string, args []driver.Value) (driver.Rows, error) {
 	// It will be called when streamingRows is closed later.
 	defer cancel()
 
-	qr, err := c.vtgateConn.Execute(ctx, query, bindVars)
+	qr, err := c.vsn.Execute(ctx, query, bindVars)
 	if err != nil {
 		return nil, err
 	}

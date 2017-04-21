@@ -270,7 +270,7 @@ func (te *TxEngine) startWatchdog() {
 			return
 		}
 
-		coordConn, err := vtgateconn.Dial(ctx, te.coordinatorAddress, te.abandonAge/4, "", nil)
+		coordConn, err := vtgateconn.Dial(ctx, te.coordinatorAddress, te.abandonAge/4)
 		if err != nil {
 			tabletenv.InternalErrors.Add("WatchdogFail", 1)
 			log.Errorf("Error connecting to coordinator '%v': %v", te.coordinatorAddress, err)

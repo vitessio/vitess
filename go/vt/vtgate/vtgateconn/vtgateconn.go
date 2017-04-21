@@ -50,18 +50,22 @@ func AtomicityFromContext(ctx context.Context) Atomicity {
 
 // VTGateConn is the client API object to talk to vtgate.
 // It is constructed using the Dial method. It supports
-// all versions of the API. It should not be used concurrently.
+// legacy V2 APIs. It can be used concurrently. To access
+// V3 functionality, use the Session function to build
+// VTGateSession objects.
 type VTGateConn struct {
-	session *vtgatepb.Session
-	impl    Impl
+	impl Impl
 }
 
-// Execute executes a non-streaming query on vtgate.
-// This is using v3 API.
-func (conn *VTGateConn) Execute(ctx context.Context, query string, bindVars map[string]interface{}) (*sqltypes.Result, error) {
-	session, res, err := conn.impl.Execute(ctx, query, bindVars, conn.session)
-	conn.session = session
-	return res, err
+// Session returns a VTGateSession that can be used to access V3 functions.
+func (conn *VTGateConn) Session(targetString string, options *querypb.ExecuteOptions) *VTGateSession {
+	return &VTGateSession{
+		session: &vtgatepb.Session{
+			TargetString: targetString,
+			Options:      options,
+		},
+		impl: conn.impl,
+	}
 }
 
 // ExecuteShards executes a non-streaming query for multiple shards on vtgate.
@@ -88,14 +92,6 @@ func (conn *VTGateConn) ExecuteEntityIds(ctx context.Context, query string, keys
 	return res, err
 }
 
-// ExecuteBatch executes a non-streaming list of queries on vtgate.
-// This is using v3 API.
-func (conn *VTGateConn) ExecuteBatch(ctx context.Context, queryList []string, bindVarsList []map[string]interface{}) ([]sqltypes.QueryResponse, error) {
-	session, res, err := conn.impl.ExecuteBatch(ctx, queryList, bindVarsList, conn.session)
-	conn.session = session
-	return res, err
-}
-
 // ExecuteBatchShards executes a set of non-streaming queries for multiple shards.
 // If "asTransaction" is true, vtgate will automatically create a transaction
 // (per shard) that encloses all the batch queries.
@@ -110,13 +106,6 @@ func (conn *VTGateConn) ExecuteBatchShards(ctx context.Context, queries []*vtgat
 func (conn *VTGateConn) ExecuteBatchKeyspaceIds(ctx context.Context, queries []*vtgatepb.BoundKeyspaceIdQuery, tabletType topodatapb.TabletType, asTransaction bool, options *querypb.ExecuteOptions) ([]sqltypes.Result, error) {
 	_, res, err := conn.impl.ExecuteBatchKeyspaceIds(ctx, queries, tabletType, asTransaction, nil, options)
 	return res, err
-}
-
-// StreamExecute executes a streaming query on vtgate. It returns a
-// ResultStream and an error. First check the error. Then you can
-// pull values from the ResultStream until io.EOF, or another error.
-func (conn *VTGateConn) StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}) (sqltypes.ResultStream, error) {
-	return conn.impl.StreamExecute(ctx, query, bindVars, conn.session)
 }
 
 // StreamExecuteShards executes a streaming query on vtgate, on a set
@@ -182,19 +171,8 @@ func (conn *VTGateConn) Close() {
 // SplitQuery splits a query into smaller queries. It is mostly used by batch job frameworks
 // such as MapReduce. See the documentation for the vtgate.SplitQueryRequest protocol buffer message
 // in 'proto/vtgate.proto'.
-func (conn *VTGateConn) SplitQuery(
-	ctx context.Context,
-	keyspace string,
-	query string,
-	bindVars map[string]interface{},
-	splitColumns []string,
-	splitCount int64,
-	numRowsPerQueryPart int64,
-	algorithm querypb.SplitQueryRequest_Algorithm,
-) ([]*vtgatepb.SplitQueryResponse_Part, error) {
-
-	return conn.impl.SplitQuery(
-		ctx, keyspace, query, bindVars, splitColumns, splitCount, numRowsPerQueryPart, algorithm)
+func (conn *VTGateConn) SplitQuery(ctx context.Context, keyspace string, query string, bindVars map[string]interface{}, splitColumns []string, splitCount int64, numRowsPerQueryPart int64, algorithm querypb.SplitQueryRequest_Algorithm) ([]*vtgatepb.SplitQueryResponse_Part, error) {
+	return conn.impl.SplitQuery(ctx, keyspace, query, bindVars, splitColumns, splitCount, numRowsPerQueryPart, algorithm)
 }
 
 // GetSrvKeyspace returns a topo.SrvKeyspace object.
@@ -217,22 +195,41 @@ func (conn *VTGateConn) UpdateStream(ctx context.Context, keyspace, shard string
 	return conn.impl.UpdateStream(ctx, keyspace, shard, keyRange, tabletType, timestamp, event)
 }
 
+// VTGateSession exposes the V3 API to the clients.
+// VTGateSession functions cannot be used concurrently.
+type VTGateSession struct {
+	session *vtgatepb.Session
+	impl    Impl
+}
+
+// Execute performs a VTGate Execute.
+func (vsn *VTGateSession) Execute(ctx context.Context, query string, bindVars map[string]interface{}) (*sqltypes.Result, error) {
+	session, res, err := vsn.impl.Execute(ctx, query, bindVars, vsn.session)
+	vsn.session = session
+	return res, err
+}
+
+// ExecuteBatch executes a list of queries on vtgate within the current transaction.
+func (vsn *VTGateSession) ExecuteBatch(ctx context.Context, query []string, bindVars []map[string]interface{}) ([]sqltypes.QueryResponse, error) {
+	session, res, errs := vsn.impl.ExecuteBatch(ctx, query, bindVars, vsn.session)
+	vsn.session = session
+	return res, errs
+}
+
+// StreamExecute executes a streaming query on vtgate.
+// It returns a ResultStream and an error. First check the
+// error. Then you can pull values from the ResultStream until io.EOF,
+// or another error.
+func (vsn *VTGateSession) StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}) (sqltypes.ResultStream, error) {
+	return vsn.impl.StreamExecute(ctx, query, bindVars, vsn.session)
+}
+
 // VTGateTx defines an ongoing transaction.
 // It should not be concurrently used across goroutines.
 type VTGateTx struct {
 	conn      *VTGateConn
 	session   *vtgatepb.Session
 	atomicity Atomicity
-}
-
-// Execute executes a query on vtgate within the current transaction.
-func (tx *VTGateTx) Execute(ctx context.Context, query string, bindVars map[string]interface{}) (*sqltypes.Result, error) {
-	if tx.session == nil {
-		return nil, fmt.Errorf("execute: not in transaction")
-	}
-	session, res, err := tx.conn.impl.Execute(ctx, query, bindVars, tx.session)
-	tx.session = session
-	return res, err
 }
 
 // ExecuteShards executes a query for multiple shards on vtgate within the current transaction.
@@ -273,16 +270,6 @@ func (tx *VTGateTx) ExecuteEntityIds(ctx context.Context, query string, keyspace
 	session, res, err := tx.conn.impl.ExecuteEntityIds(ctx, query, keyspace, entityColumnName, entityKeyspaceIDs, bindVars, tabletType, tx.session, options)
 	tx.session = session
 	return res, err
-}
-
-// ExecuteBatch executes a list of queries on vtgate within the current transaction.
-func (tx *VTGateTx) ExecuteBatch(ctx context.Context, query []string, bindVars []map[string]interface{}) ([]sqltypes.QueryResponse, error) {
-	if tx.session == nil {
-		return nil, fmt.Errorf("execute: not in transaction")
-	}
-	session, res, errs := tx.conn.impl.ExecuteBatch(ctx, query, bindVars, tx.session)
-	tx.session = session
-	return res, errs
 }
 
 // ExecuteBatchShards executes a set of non-streaming queries for multiple shards.
@@ -384,15 +371,7 @@ type Impl interface {
 	// SplitQuery splits a query into smaller queries. It is mostly used by batch job frameworks
 	// such as MapReduce. See the documentation for the vtgate.SplitQueryRequest protocol buffer
 	// message in 'proto/vtgate.proto'.
-	SplitQuery(
-		ctx context.Context,
-		keyspace string,
-		query string,
-		bindVars map[string]interface{},
-		splitColumns []string,
-		splitCount int64,
-		numRowsPerQueryPart int64,
-		algorithm querypb.SplitQueryRequest_Algorithm) ([]*vtgatepb.SplitQueryResponse_Part, error)
+	SplitQuery(ctx context.Context, keyspace string, query string, bindVars map[string]interface{}, splitColumns []string, splitCount int64, numRowsPerQueryPart int64, algorithm querypb.SplitQueryRequest_Algorithm) ([]*vtgatepb.SplitQueryResponse_Part, error)
 
 	// GetSrvKeyspace returns a topo.SrvKeyspace.
 	GetSrvKeyspace(ctx context.Context, keyspace string) (*topodatapb.SrvKeyspace, error)
@@ -420,7 +399,7 @@ func RegisterDialer(name string, dialer DialerFunc) {
 }
 
 // DialProtocol dials a specific protocol, and returns the *VTGateConn
-func DialProtocol(ctx context.Context, protocol string, address string, timeout time.Duration, targetString string, options *querypb.ExecuteOptions) (*VTGateConn, error) {
+func DialProtocol(ctx context.Context, protocol string, address string, timeout time.Duration) (*VTGateConn, error) {
 	dialer, ok := dialers[protocol]
 	if !ok {
 		return nil, fmt.Errorf("no dialer registered for VTGate protocol %s", protocol)
@@ -430,16 +409,12 @@ func DialProtocol(ctx context.Context, protocol string, address string, timeout 
 		return nil, err
 	}
 	return &VTGateConn{
-		session: &vtgatepb.Session{
-			TargetString: targetString,
-			Options:      options,
-		},
 		impl: impl,
 	}, nil
 }
 
 // Dial dials using the command-line specified protocol, and returns
 // the *VTGateConn.
-func Dial(ctx context.Context, address string, timeout time.Duration, targetString string, options *querypb.ExecuteOptions) (*VTGateConn, error) {
-	return DialProtocol(ctx, *VtgateProtocol, address, timeout, targetString, options)
+func Dial(ctx context.Context, address string, timeout time.Duration) (*VTGateConn, error) {
+	return DialProtocol(ctx, *VtgateProtocol, address, timeout)
 }

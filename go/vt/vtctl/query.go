@@ -173,12 +173,13 @@ func commandVtGateExecute(ctx context.Context, wr *wrangler.Wrangler, subFlags *
 		return err
 	}
 
-	vtgateConn, err := vtgateconn.Dial(ctx, *server, *connectTimeout, *targetString, executeOptions)
+	vtgateConn, err := vtgateconn.Dial(ctx, *server, *connectTimeout)
 	if err != nil {
 		return fmt.Errorf("error connecting to vtgate '%v': %v", *server, err)
 	}
+	vsn := vtgateConn.Session(*targetString, executeOptions)
 	defer vtgateConn.Close()
-	qr, err := vtgateConn.Execute(ctx, subFlags.Arg(0), *bindVariables)
+	qr, err := vsn.Execute(ctx, subFlags.Arg(0), *bindVariables)
 	if err != nil {
 		return fmt.Errorf("Execute failed: %v", err)
 	}
@@ -218,7 +219,7 @@ func commandVtGateExecuteShards(ctx context.Context, wr *wrangler.Wrangler, subF
 		return err
 	}
 
-	vtgateConn, err := vtgateconn.Dial(ctx, *server, *connectTimeout, "", nil)
+	vtgateConn, err := vtgateconn.Dial(ctx, *server, *connectTimeout)
 	if err != nil {
 		return fmt.Errorf("error connecting to vtgate '%v': %v", *server, err)
 	}
@@ -270,7 +271,7 @@ func commandVtGateExecuteKeyspaceIds(ctx context.Context, wr *wrangler.Wrangler,
 		return err
 	}
 
-	vtgateConn, err := vtgateconn.Dial(ctx, *server, *connectTimeout, "", nil)
+	vtgateConn, err := vtgateconn.Dial(ctx, *server, *connectTimeout)
 	if err != nil {
 		return fmt.Errorf("error connecting to vtgate '%v': %v", *server, err)
 	}
@@ -327,7 +328,7 @@ func commandVtGateSplitQuery(ctx context.Context, wr *wrangler.Wrangler, subFlag
 	if subFlags.NArg() != 1 {
 		return fmt.Errorf("the <sql> argument is required for the VtGateSplitQuery command")
 	}
-	vtgateConn, err := vtgateconn.Dial(ctx, *server, *connectTimeout, "", nil)
+	vtgateConn, err := vtgateconn.Dial(ctx, *server, *connectTimeout)
 	if err != nil {
 		return fmt.Errorf("error connecting to vtgate '%v': %v", *server, err)
 	}

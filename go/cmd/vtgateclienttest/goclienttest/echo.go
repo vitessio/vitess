@@ -107,21 +107,21 @@ var (
 )
 
 // testEcho exercises the test cases provided by the "echo" service.
-func testEcho(t *testing.T, conn *vtgateconn.VTGateConn) {
-	testEchoExecute(t, conn)
-	testEchoStreamExecute(t, conn)
+func testEcho(t *testing.T, conn *vtgateconn.VTGateConn, vsn *vtgateconn.VTGateSession) {
+	testEchoExecute(t, conn, vsn)
+	testEchoStreamExecute(t, conn, vsn)
 	testEchoTransactionExecute(t, conn)
 	testEchoSplitQuery(t, conn)
 	testEchoUpdateStream(t, conn)
 }
 
-func testEchoExecute(t *testing.T, conn *vtgateconn.VTGateConn) {
+func testEchoExecute(t *testing.T, conn *vtgateconn.VTGateConn, vsn *vtgateconn.VTGateSession) {
 	var qr *sqltypes.Result
 	var err error
 
 	ctx := callerid.NewContext(context.Background(), callerID, nil)
 
-	qr, err = conn.Execute(ctx, echoPrefix+query, bindVars)
+	qr, err = vsn.Execute(ctx, echoPrefix+query, bindVars)
 	checkEcho(t, "Execute", qr, err, map[string]string{
 		"callerId": callerIDEcho,
 		"query":    echoPrefix + query,
@@ -222,14 +222,14 @@ func testEchoExecute(t *testing.T, conn *vtgateconn.VTGateConn) {
 	})
 }
 
-func testEchoStreamExecute(t *testing.T, conn *vtgateconn.VTGateConn) {
+func testEchoStreamExecute(t *testing.T, conn *vtgateconn.VTGateConn, vsn *vtgateconn.VTGateSession) {
 	var stream sqltypes.ResultStream
 	var err error
 	var qr *sqltypes.Result
 
 	ctx := callerid.NewContext(context.Background(), callerID, nil)
 
-	stream, err = conn.StreamExecute(ctx, echoPrefix+query, bindVars)
+	stream, err = vsn.StreamExecute(ctx, echoPrefix+query, bindVars)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -296,14 +296,6 @@ func testEchoTransactionExecute(t *testing.T, conn *vtgateconn.VTGateConn) {
 	if err != nil {
 		t.Fatalf("Begin error: %v", err)
 	}
-
-	qr, err = tx.Execute(ctx, echoPrefix+query, bindVars)
-	checkEcho(t, "Execute", qr, err, map[string]string{
-		"callerId": callerIDEcho,
-		"query":    echoPrefix + query,
-		"bindVars": bindVarsP3Echo,
-		"session":  sessionEcho,
-	})
 
 	qr, err = tx.ExecuteShards(ctx, echoPrefix+query, keyspace, shards, bindVars, tabletType, options)
 	checkEcho(t, "ExecuteShards", qr, err, map[string]string{

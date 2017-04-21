@@ -36,18 +36,18 @@ var (
 )
 
 // testErrors exercises the test cases provided by the "errors" service.
-func testErrors(t *testing.T, conn *vtgateconn.VTGateConn) {
-	testExecuteErrors(t, conn)
-	testStreamExecuteErrors(t, conn)
+func testErrors(t *testing.T, conn *vtgateconn.VTGateConn, vsn *vtgateconn.VTGateSession) {
+	testExecuteErrors(t, conn, vsn)
+	testStreamExecuteErrors(t, conn, vsn)
 	testTransactionExecuteErrors(t, conn)
 	testUpdateStreamErrors(t, conn)
 }
 
-func testExecuteErrors(t *testing.T, conn *vtgateconn.VTGateConn) {
+func testExecuteErrors(t *testing.T, conn *vtgateconn.VTGateConn, vsn *vtgateconn.VTGateSession) {
 	ctx := context.Background()
 
 	checkExecuteErrors(t, func(query string) error {
-		_, err := conn.Execute(ctx, query, bindVars)
+		_, err := vsn.Execute(ctx, query, bindVars)
 		return err
 	})
 	checkExecuteErrors(t, func(query string) error {
@@ -94,11 +94,11 @@ func testExecuteErrors(t *testing.T, conn *vtgateconn.VTGateConn) {
 	})
 }
 
-func testStreamExecuteErrors(t *testing.T, conn *vtgateconn.VTGateConn) {
+func testStreamExecuteErrors(t *testing.T, conn *vtgateconn.VTGateConn, vsn *vtgateconn.VTGateSession) {
 	ctx := context.Background()
 
 	checkStreamExecuteErrors(t, func(query string) error {
-		return getStreamError(conn.StreamExecute(ctx, query, bindVars))
+		return getStreamError(vsn.StreamExecute(ctx, query, bindVars))
 	})
 	checkStreamExecuteErrors(t, func(query string) error {
 		return getStreamError(conn.StreamExecuteShards(ctx, query, keyspace, shards, bindVars, tabletType, nil))
@@ -122,10 +122,6 @@ func testUpdateStreamErrors(t *testing.T, conn *vtgateconn.VTGateConn) {
 func testTransactionExecuteErrors(t *testing.T, conn *vtgateconn.VTGateConn) {
 	ctx := context.Background()
 
-	checkTransactionExecuteErrors(t, conn, func(tx *vtgateconn.VTGateTx, query string) error {
-		_, err := tx.Execute(ctx, query, bindVars)
-		return err
-	})
 	checkTransactionExecuteErrors(t, conn, func(tx *vtgateconn.VTGateTx, query string) error {
 		_, err := tx.ExecuteShards(ctx, query, keyspace, shards, bindVars, tabletType, nil)
 		return err
