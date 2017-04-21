@@ -17,11 +17,14 @@ since 2011, and has grown to encompass tens of thousands of MySQL nodes.
 
 For more about Vitess, please visit [vitess.io](http://vitess.io).
 
+Vitess has a growing community. You can view the list of adopters
+[here](https://github.com/youtube/vitess/blob/master/ADOPTERS.md).
+
 ## Contact
 
 Ask questions in the
 [vitess@googlegroups.com](https://groups.google.com/forum/#!forum/vitess)
-discussion forum or on [Gitter](https://gitter.im/youtube/vitess).
+discussion forum. You may also request access to the Vitess Slack channel.
 
 Subscribe to
 [vitess-announce@googlegroups.com](https://groups.google.com/forum/#!forum/vitess-announce)
