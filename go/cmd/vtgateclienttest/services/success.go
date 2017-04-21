@@ -5,8 +5,6 @@
 package services
 
 import (
-	"errors"
-
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/vt/vtgate/vtgateservice"
@@ -29,9 +27,6 @@ func newSuccessClient(fallback vtgateservice.VTGateService) *successClient {
 }
 
 func (c *successClient) Begin(ctx context.Context, singledb bool) (*vtgatepb.Session, error) {
-	if singledb {
-		return nil, errors.New("single db")
-	}
 	return &vtgatepb.Session{
 		InTransaction: true,
 	}, nil
@@ -40,9 +35,6 @@ func (c *successClient) Begin(ctx context.Context, singledb bool) (*vtgatepb.Ses
 func (c *successClient) Commit(ctx context.Context, twopc bool, session *vtgatepb.Session) error {
 	if session != nil && session.InTransaction {
 		return nil
-	}
-	if twopc {
-		return errors.New("twopc")
 	}
 	return c.fallback.Commit(ctx, twopc, session)
 }

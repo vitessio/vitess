@@ -79,11 +79,6 @@ class TestErrors(TestPythonClientBase,
   """Test cases to verify that the Python client can handle errors correctly."""
 
 
-class TestTransactionFlags(TestPythonClientBase,
-                           vtgate_client_testsuite.TestTransactionFlags):
-  """Success test cases for the Python client."""
-
-
 class TestSuccess(TestPythonClientBase,
                   vtgate_client_testsuite.TestSuccess):
   """Success test cases for the Python client."""

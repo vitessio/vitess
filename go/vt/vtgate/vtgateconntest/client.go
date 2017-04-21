@@ -707,10 +707,6 @@ func (f *fakeVTGateService) Begin(ctx context.Context, singledb bool) (*vtgatepb
 		panic(fmt.Errorf("test forced panic"))
 	default:
 	}
-	if singledb {
-		// Communicate this as an error.
-		return nil, errors.New("single db")
-	}
 	return session1, nil
 }
 
@@ -722,10 +718,6 @@ func (f *fakeVTGateService) Commit(ctx context.Context, twopc bool, inSession *v
 	}
 	if f.panics {
 		panic(fmt.Errorf("test forced panic"))
-	}
-	if twopc {
-		// Communicate this as an error.
-		return errors.New("twopc")
 	}
 	if !proto.Equal(inSession, session2) {
 		return errors.New("commit: session mismatch")
@@ -975,7 +967,6 @@ func TestSuite(t *testing.T, impl vtgateconn.Impl, fakeServer vtgateservice.VTGa
 	fs := fakeServer.(*fakeVTGateService)
 
 	testBegin(t, conn)
-	testCommit(t, conn)
 	testExecute(t, vsn)
 	testExecuteBatch(t, vsn)
 	testExecuteShards(t, conn)
@@ -1093,24 +1084,9 @@ func verifyErrorString(t *testing.T, err error, method string) {
 }
 
 func testBegin(t *testing.T, conn *vtgateconn.VTGateConn) {
-	ctx := vtgateconn.WithAtomicity(newContext(), vtgateconn.AtomicitySingle)
-	_, err := conn.Begin(ctx)
-	want := "single db"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("Begin(singldb): %v, want %v", err, want)
-	}
-}
-
-func testCommit(t *testing.T, conn *vtgateconn.VTGateConn) {
-	ctx := vtgateconn.WithAtomicity(newContext(), vtgateconn.Atomicity2PC)
-	tx, err := conn.Begin(ctx)
+	_, err := conn.Begin(newContext())
 	if err != nil {
 		t.Error(err)
-	}
-	err = tx.Commit(ctx)
-	want := "twopc"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("Commit(twopc): %v, want %v", err, want)
 	}
 }
 

@@ -247,20 +247,6 @@ class TestErrors(TestPythonClientBase):
       self.conn.get_srv_keyspace(error_request)
 
 
-class TestTransactionFlags(TestPythonClientBase):
-  """Test transaction flags."""
-
-  def test_begin(self):
-    """Test begin transaction flags."""
-    self.conn.begin()
-    with self.assertRaisesRegexp(dbexceptions.DatabaseError, 'single db'):
-      self.conn.begin(single_db=True)
-
-    self.conn.commit()
-    with self.assertRaisesRegexp(dbexceptions.DatabaseError, 'twopc'):
-      self.conn.commit(twopc=True)
-
-
 class TestSuccess(TestPythonClientBase):
   """Success test cases for the Python client."""
 

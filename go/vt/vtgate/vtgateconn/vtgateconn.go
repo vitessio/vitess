@@ -23,31 +23,6 @@ var (
 	VtgateProtocol = flag.String("vtgate_protocol", "grpc", "how to talk to vtgate")
 )
 
-// Atomicity specifies atomicity level of a transaction.
-type Atomicity int
-
-const (
-	// AtomicityMulti is the default level. It allows distributed transactions
-	// with best effort commits. Partial commits are possible.
-	AtomicityMulti = Atomicity(iota)
-	// AtomicitySingle prevents a transaction from crossing the boundary of
-	// a single database.
-	AtomicitySingle
-	// Atomicity2PC allows distributed transactions, and performs 2PC commits.
-	Atomicity2PC
-)
-
-// WithAtomicity returns a context with the atomicity level set.
-func WithAtomicity(ctx context.Context, level Atomicity) context.Context {
-	return context.WithValue(ctx, Atomicity(0), level)
-}
-
-// AtomicityFromContext returns the atomicity of the context.
-func AtomicityFromContext(ctx context.Context) Atomicity {
-	v, _ := ctx.Value(Atomicity(0)).(Atomicity)
-	return v
-}
-
 // VTGateConn is the client API object to talk to vtgate.
 // It is constructed using the Dial method. It supports
 // legacy V2 APIs. It can be used concurrently. To access
@@ -149,16 +124,14 @@ func (conn *VTGateConn) MessageAck(ctx context.Context, keyspace string, name st
 
 // Begin starts a transaction and returns a VTGateTX.
 func (conn *VTGateConn) Begin(ctx context.Context) (*VTGateTx, error) {
-	atomicity := AtomicityFromContext(ctx)
-	session, err := conn.impl.Begin(ctx, atomicity == AtomicitySingle)
+	session, err := conn.impl.Begin(ctx, false)
 	if err != nil {
 		return nil, err
 	}
 
 	return &VTGateTx{
-		conn:      conn,
-		session:   session,
-		atomicity: atomicity,
+		conn:    conn,
+		session: session,
 	}, nil
 }
 
@@ -227,9 +200,8 @@ func (vsn *VTGateSession) StreamExecute(ctx context.Context, query string, bindV
 // VTGateTx defines an ongoing transaction.
 // It should not be concurrently used across goroutines.
 type VTGateTx struct {
-	conn      *VTGateConn
-	session   *vtgatepb.Session
-	atomicity Atomicity
+	conn    *VTGateConn
+	session *vtgatepb.Session
 }
 
 // ExecuteShards executes a query for multiple shards on vtgate within the current transaction.
@@ -297,7 +269,7 @@ func (tx *VTGateTx) Commit(ctx context.Context) error {
 	if tx.session == nil {
 		return fmt.Errorf("commit: not in transaction")
 	}
-	err := tx.conn.impl.Commit(ctx, tx.session, tx.atomicity == Atomicity2PC)
+	err := tx.conn.impl.Commit(ctx, tx.session, false)
 	tx.session = nil
 	return err
 }

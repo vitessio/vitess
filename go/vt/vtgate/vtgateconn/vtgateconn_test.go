@@ -33,14 +33,3 @@ func TestGetDialerWithProtocol(t *testing.T) {
 		t.Fatalf("dialerFunc has been registered, should not get nil: %v %v", err, c)
 	}
 }
-
-func TestAtomicity(t *testing.T) {
-	ctx := context.Background()
-	if v := AtomicityFromContext(ctx); v != AtomicityMulti {
-		t.Errorf("Atomicity: %v, want %d", v, AtomicityMulti)
-	}
-	ctx = WithAtomicity(ctx, Atomicity2PC)
-	if v := AtomicityFromContext(ctx); v != Atomicity2PC {
-		t.Errorf("Atomicity: %v, want %d", v, Atomicity2PC)
-	}
-}
