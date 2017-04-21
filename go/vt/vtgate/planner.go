@@ -336,7 +336,7 @@ func (plr *Planner) ServeHTTP(response http.ResponseWriter, request *http.Reques
 		response.Header().Set("Content-Type", "text/plain")
 		response.Write([]byte(fmt.Sprintf("Length: %d\n", len(keys))))
 		for _, v := range keys {
-			response.Write([]byte(fmt.Sprintf("%#v\n", utils.TruncateQuery(v))))
+			response.Write([]byte(fmt.Sprintf("%#v\n", utils.TruncateQuery(v, 512))))
 			if plan, ok := plr.plans.Peek(v); ok {
 				if b, err := json.MarshalIndent(plan, "", "  "); err != nil {
 					response.Write([]byte(err.Error()))
