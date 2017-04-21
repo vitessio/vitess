@@ -32,6 +32,7 @@ import (
 	"github.com/youtube/vitess/go/event"
 	"github.com/youtube/vitess/go/netutil"
 	"github.com/youtube/vitess/go/stats"
+	"github.com/youtube/vitess/go/sqldb"
 
 	// register the proper init and shutdown hooks for logging
 	_ "github.com/youtube/vitess/go/vt/logutil"
@@ -45,6 +46,8 @@ var (
 	lameduckPeriod = flag.Duration("lameduck-period", 50*time.Millisecond, "keep running at least this long after SIGTERM before stopping")
 	onTermTimeout  = flag.Duration("onterm_timeout", 10*time.Second, "wait no more than this for OnTermSync handlers before stopping")
 	memProfileRate = flag.Int("mem-profile-rate", 512*1024, "profile every n bytes allocated")
+
+	sqlErrorTruncateLen = flag.Int("sql-error-truncate", 0, "truncate queries in error logs to the given length")
 
 	// mutex used to protect the Init function
 	mu sync.Mutex
@@ -88,6 +91,7 @@ func Init() {
 	fdl := stats.NewInt("MaxFds")
 	fdl.Set(int64(fdLimit.Cur))
 
+	sqldb.SQLErrorTruncateLen = *sqlErrorTruncateLen
 	onInitHooks.Fire()
 }
 
