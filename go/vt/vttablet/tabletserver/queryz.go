@@ -138,7 +138,7 @@ func queryzHandler(qe *QueryEngine, w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		Value := &queryzRow{
-			Query:  logz.Wrappable(utils.TruncateQuery(v)),
+			Query:  logz.Wrappable(utils.TruncateQuery(v, 512)),
 			Table:  plan.TableName().String(),
 			Plan:   plan.PlanID,
 			Reason: plan.Reason,
