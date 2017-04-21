@@ -21,7 +21,7 @@ func TestExecutorTransactions(t *testing.T) {
 	session := &vtgatepb.Session{TargetString: "@master"}
 
 	// begin.
-	_, err := executor.Execute(context.Background(), "begin", nil, session)
+	_, err := executor.Execute(context.Background(), session, "begin", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -34,11 +34,11 @@ func TestExecutorTransactions(t *testing.T) {
 	}
 
 	// commit.
-	_, err = executor.Execute(context.Background(), "select id from main1", nil, session)
+	_, err = executor.Execute(context.Background(), session, "select id from main1", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = executor.Execute(context.Background(), "commit", nil, session)
+	_, err = executor.Execute(context.Background(), session, "commit", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -51,15 +51,15 @@ func TestExecutorTransactions(t *testing.T) {
 	}
 
 	// rollback.
-	_, err = executor.Execute(context.Background(), "begin", nil, session)
+	_, err = executor.Execute(context.Background(), session, "begin", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = executor.Execute(context.Background(), "select id from main1", nil, session)
+	_, err = executor.Execute(context.Background(), session, "select id from main1", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = executor.Execute(context.Background(), "rollback", nil, session)
+	_, err = executor.Execute(context.Background(), session, "rollback", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -77,7 +77,7 @@ func TestExecutorSet(t *testing.T) {
 	session := &vtgatepb.Session{TargetString: "@master"}
 
 	// set.
-	_, err := executor.Execute(context.Background(), "set autocommit=1", nil, session)
+	_, err := executor.Execute(context.Background(), session, "set autocommit=1", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -85,7 +85,7 @@ func TestExecutorSet(t *testing.T) {
 	if !proto.Equal(session, wantSession) {
 		t.Errorf("begin: %v, want %v", session, wantSession)
 	}
-	_, err = executor.Execute(context.Background(), "set AUTOCOMMIT = 0", nil, session)
+	_, err = executor.Execute(context.Background(), session, "set AUTOCOMMIT = 0", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -95,21 +95,21 @@ func TestExecutorSet(t *testing.T) {
 	}
 
 	// complex set
-	_, err = executor.Execute(context.Background(), "set autocommit=1+1", nil, session)
+	_, err = executor.Execute(context.Background(), session, "set autocommit=1+1", nil)
 	wantErr := "invalid syntax: 1 + 1"
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("Execute: %v, want %s", err, wantErr)
 	}
 
 	// multi-set
-	_, err = executor.Execute(context.Background(), "set autocommit=1, a = 2", nil, session)
+	_, err = executor.Execute(context.Background(), session, "set autocommit=1, a = 2", nil)
 	wantErr = "too many set values: set autocommit=1, a = 2"
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("Execute: %v, want %s", err, wantErr)
 	}
 
 	// unsupported set
-	_, err = executor.Execute(context.Background(), "set a = 2", nil, session)
+	_, err = executor.Execute(context.Background(), session, "set a = 2", nil)
 	wantErr = "unsupported construct: set a = 2"
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("Execute: %v, want %s", err, wantErr)
@@ -121,7 +121,7 @@ func TestExecutorAutocommit(t *testing.T) {
 	session := &vtgatepb.Session{TargetString: "@master"}
 
 	// autocommit = 0
-	_, err := executor.Execute(context.Background(), "select id from main1", nil, session)
+	_, err := executor.Execute(context.Background(), session, "select id from main1", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -131,11 +131,11 @@ func TestExecutorAutocommit(t *testing.T) {
 	}
 
 	// autocommit = 1
-	_, err = executor.Execute(context.Background(), "set autocommit=1", nil, session)
+	_, err = executor.Execute(context.Background(), session, "set autocommit=1", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = executor.Execute(context.Background(), "update main1 set id=1", nil, session)
+	_, err = executor.Execute(context.Background(), session, "update main1 set id=1", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -148,11 +148,11 @@ func TestExecutorAutocommit(t *testing.T) {
 	}
 
 	// autocommit = 1, "begin"
-	_, err = executor.Execute(context.Background(), "begin", nil, session)
+	_, err = executor.Execute(context.Background(), session, "begin", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = executor.Execute(context.Background(), "update main1 set id=1", nil, session)
+	_, err = executor.Execute(context.Background(), session, "update main1 set id=1", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -165,7 +165,7 @@ func TestExecutorAutocommit(t *testing.T) {
 	if commitCount := sbclookup.CommitCount.Get(); commitCount != 1 {
 		t.Errorf("want 1, got %d", commitCount)
 	}
-	_, err = executor.Execute(context.Background(), "commit", nil, session)
+	_, err = executor.Execute(context.Background(), session, "commit", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -183,7 +183,7 @@ func TestExecutorShow(t *testing.T) {
 	session := &vtgatepb.Session{TargetString: "@master"}
 
 	for _, query := range []string{"show databases", "show vitess_keyspaces"} {
-		qr, err := executor.Execute(context.Background(), query, nil, session)
+		qr, err := executor.Execute(context.Background(), session, query, nil)
 		if err != nil {
 			t.Error(err)
 		}
@@ -202,7 +202,7 @@ func TestExecutorShow(t *testing.T) {
 		}
 	}
 
-	qr, err := executor.Execute(context.Background(), "show vitess_shards", nil, session)
+	qr, err := executor.Execute(context.Background(), session, "show vitess_shards", nil)
 	if err != nil {
 		t.Error(err)
 	}
@@ -221,7 +221,7 @@ func TestExecutorShow(t *testing.T) {
 	}
 
 	session = &vtgatepb.Session{TargetString: KsTestUnsharded}
-	qr, err = executor.Execute(context.Background(), "show vschema_tables", nil, session)
+	qr, err = executor.Execute(context.Background(), session, "show vschema_tables", nil)
 	if err != nil {
 		t.Error(err)
 	}
@@ -241,20 +241,20 @@ func TestExecutorShow(t *testing.T) {
 	}
 
 	session = &vtgatepb.Session{}
-	qr, err = executor.Execute(context.Background(), "show vschema_tables", nil, session)
+	qr, err = executor.Execute(context.Background(), session, "show vschema_tables", nil)
 	want := noKeyspaceErr.Error()
 	if err == nil || err.Error() != want {
 		t.Errorf("show vschema_tables: %v, want %v", err, want)
 	}
 
-	qr, err = executor.Execute(context.Background(), "show 10", nil, session)
+	qr, err = executor.Execute(context.Background(), session, "show 10", nil)
 	want = "syntax error at position 8 near '10'"
 	if err == nil || err.Error() != want {
 		t.Errorf("show vschema_tables: %v, want %v", err, want)
 	}
 
 	session = &vtgatepb.Session{TargetString: "no_such_keyspace"}
-	qr, err = executor.Execute(context.Background(), "show vschema_tables", nil, session)
+	qr, err = executor.Execute(context.Background(), session, "show vschema_tables", nil)
 	want = "keyspace no_such_keyspace not found in vschema"
 	if err == nil || err.Error() != want {
 		t.Errorf("show vschema_tables: %v, want %v", err, want)
@@ -274,7 +274,7 @@ func TestExecutorUse(t *testing.T) {
 		"ks:-80@master",
 	}
 	for i, stmt := range stmts {
-		_, err := executor.Execute(context.Background(), stmt, nil, session)
+		_, err := executor.Execute(context.Background(), session, stmt, nil)
 		if err != nil {
 			t.Error(err)
 		}
@@ -284,7 +284,7 @@ func TestExecutorUse(t *testing.T) {
 		}
 	}
 
-	_, err := executor.Execute(context.Background(), "use 1", nil, &vtgatepb.Session{})
+	_, err := executor.Execute(context.Background(), &vtgatepb.Session{}, "use 1", nil)
 	wantErr := "syntax error at position 6 near '1'"
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("use 1: %v, want %v", err, wantErr)
@@ -305,7 +305,7 @@ func TestExecutorOther(t *testing.T) {
 	}
 	wantCount := []int64{0, 0, 0}
 	for _, stmt := range stmts {
-		_, err := executor.Execute(context.Background(), stmt, nil, &vtgatepb.Session{TargetString: KsTestUnsharded})
+		_, err := executor.Execute(context.Background(), &vtgatepb.Session{TargetString: KsTestUnsharded}, stmt, nil)
 		if err != nil {
 			t.Error(err)
 		}
@@ -319,7 +319,7 @@ func TestExecutorOther(t *testing.T) {
 			t.Errorf("Exec %s: %v, want %v", stmt, gotCount, wantCount)
 		}
 
-		_, err = executor.Execute(context.Background(), stmt, nil, &vtgatepb.Session{TargetString: "TestExecutor"})
+		_, err = executor.Execute(context.Background(), &vtgatepb.Session{TargetString: "TestExecutor"}, stmt, nil)
 		if err != nil {
 			t.Error(err)
 		}
@@ -334,7 +334,7 @@ func TestExecutorOther(t *testing.T) {
 		}
 	}
 
-	_, err := executor.Execute(context.Background(), "analyze", nil, &vtgatepb.Session{})
+	_, err := executor.Execute(context.Background(), &vtgatepb.Session{}, "analyze", nil)
 	want := noKeyspaceErr.Error()
 	if err == nil || err.Error() != want {
 		t.Errorf("show vschema_tables: %v, want %v", err, want)
@@ -352,7 +352,7 @@ func TestExecutorDDL(t *testing.T) {
 	}
 	wantCount := []int64{0, 0, 0}
 	for _, stmt := range stmts {
-		_, err := executor.Execute(context.Background(), stmt, nil, &vtgatepb.Session{TargetString: KsTestUnsharded})
+		_, err := executor.Execute(context.Background(), &vtgatepb.Session{TargetString: KsTestUnsharded}, stmt, nil)
 		if err != nil {
 			t.Error(err)
 		}
@@ -366,7 +366,7 @@ func TestExecutorDDL(t *testing.T) {
 			t.Errorf("Exec %s: %v, want %v", stmt, gotCount, wantCount)
 		}
 
-		_, err = executor.Execute(context.Background(), stmt, nil, &vtgatepb.Session{TargetString: "TestExecutor"})
+		_, err = executor.Execute(context.Background(), &vtgatepb.Session{TargetString: "TestExecutor"}, stmt, nil)
 		if err != nil {
 			t.Error(err)
 		}
@@ -381,7 +381,7 @@ func TestExecutorDDL(t *testing.T) {
 			t.Errorf("Exec %s: %v, want %v", stmt, gotCount, wantCount)
 		}
 
-		_, err = executor.Execute(context.Background(), stmt, nil, &vtgatepb.Session{TargetString: "TestExecutor/-20"})
+		_, err = executor.Execute(context.Background(), &vtgatepb.Session{TargetString: "TestExecutor/-20"}, stmt, nil)
 		if err != nil {
 			t.Error(err)
 		}
@@ -396,7 +396,7 @@ func TestExecutorDDL(t *testing.T) {
 		}
 	}
 
-	_, err := executor.Execute(context.Background(), "create", nil, &vtgatepb.Session{})
+	_, err := executor.Execute(context.Background(), &vtgatepb.Session{}, "create", nil)
 	want := noKeyspaceErr.Error()
 	if err == nil || err.Error() != want {
 		t.Errorf("show vschema_tables: %v, want %v", err, want)
@@ -405,7 +405,7 @@ func TestExecutorDDL(t *testing.T) {
 
 func TestExecutorUnrecognized(t *testing.T) {
 	executor, _, _, _ := createExecutorEnv()
-	_, err := executor.Execute(context.Background(), "invalid statement", nil, &vtgatepb.Session{})
+	_, err := executor.Execute(context.Background(), &vtgatepb.Session{}, "invalid statement", nil)
 	want := "unrecognized statement: invalid statement"
 	if err == nil || err.Error() != want {
 		t.Errorf("show vschema_tables: %v, want %v", err, want)

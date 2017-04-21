@@ -82,6 +82,13 @@ var (
 
 // VTGate is the rpc interface to vtgate. Only one instance
 // can be created. It implements vtgateservice.VTGateService
+// VTGate exposes multiple generations of interfaces. The V3
+// interface is the latest one, which is capable of processing
+// queries with no additional hints. V2 functions require
+// the keyspace id or keyrange to be specified. V1 functions
+// require shard info. V0 functions are informational that
+// return topo information. Often, 'V2' or 'legacy' is used
+// to refer to all legacy versions of the API (V2, V1 and V0).
 type VTGate struct {
 	// Dependency: executor->resolver->scatterConn->txConn->gateway.
 	// VTGate still needs resolver and txConn to support legacy functions.
@@ -97,13 +104,13 @@ type VTGate struct {
 
 	// the throttled loggers for all errors, one per API entry
 	logExecute                  *logutil.ThrottledLogger
+	logStreamExecute            *logutil.ThrottledLogger
 	logExecuteShards            *logutil.ThrottledLogger
 	logExecuteKeyspaceIds       *logutil.ThrottledLogger
 	logExecuteKeyRanges         *logutil.ThrottledLogger
 	logExecuteEntityIds         *logutil.ThrottledLogger
 	logExecuteBatchShards       *logutil.ThrottledLogger
 	logExecuteBatchKeyspaceIds  *logutil.ThrottledLogger
-	logStreamExecute            *logutil.ThrottledLogger
 	logStreamExecuteKeyspaceIds *logutil.ThrottledLogger
 	logStreamExecuteKeyRanges   *logutil.ThrottledLogger
 	logStreamExecuteShards      *logutil.ThrottledLogger
@@ -146,13 +153,13 @@ func Init(ctx context.Context, hc discovery.HealthCheck, topoServer topo.Server,
 		rowsReturned: stats.NewMultiCounters("VtgateApiRowsReturned", []string{"Operation", "Keyspace", "DbType"}),
 
 		logExecute:                  logutil.NewThrottledLogger("Execute", 5*time.Second),
+		logStreamExecute:            logutil.NewThrottledLogger("StreamExecute", 5*time.Second),
 		logExecuteShards:            logutil.NewThrottledLogger("ExecuteShards", 5*time.Second),
 		logExecuteKeyspaceIds:       logutil.NewThrottledLogger("ExecuteKeyspaceIds", 5*time.Second),
 		logExecuteKeyRanges:         logutil.NewThrottledLogger("ExecuteKeyRanges", 5*time.Second),
 		logExecuteEntityIds:         logutil.NewThrottledLogger("ExecuteEntityIds", 5*time.Second),
 		logExecuteBatchShards:       logutil.NewThrottledLogger("ExecuteBatchShards", 5*time.Second),
 		logExecuteBatchKeyspaceIds:  logutil.NewThrottledLogger("ExecuteBatchKeyspaceIds", 5*time.Second),
-		logStreamExecute:            logutil.NewThrottledLogger("StreamExecute", 5*time.Second),
 		logStreamExecuteKeyspaceIds: logutil.NewThrottledLogger("StreamExecuteKeyspaceIds", 5*time.Second),
 		logStreamExecuteKeyRanges:   logutil.NewThrottledLogger("StreamExecuteKeyRanges", 5*time.Second),
 		logStreamExecuteShards:      logutil.NewThrottledLogger("StreamExecuteShards", 5*time.Second),
@@ -201,12 +208,12 @@ func (vtg *VTGate) IsHealthy() error {
 	return nil
 }
 
-// Execute executes a non-streaming query by routing based on the values in the query.
-func (vtg *VTGate) Execute(ctx context.Context, sql string, bindVariables map[string]interface{}, session *vtgatepb.Session) (newSession *vtgatepb.Session, qr *sqltypes.Result, err error) {
+// Execute executes a non-streaming query. This is a V3 function.
+func (vtg *VTGate) Execute(ctx context.Context, session *vtgatepb.Session, sql string, bindVariables map[string]interface{}) (newSession *vtgatepb.Session, qr *sqltypes.Result, err error) {
 	statsKey := []string{"Execute", session.TargetString, "NA"}
 	defer vtg.timings.Record(statsKey, time.Now())
 
-	qr, err = vtg.executor.Execute(ctx, sql, bindVariables, session)
+	qr, err = vtg.executor.Execute(ctx, session, sql, bindVariables)
 	if err == nil {
 		vtg.rowsReturned.Add(statsKey, int64(len(qr.Rows)))
 		return session, qr, nil
@@ -221,7 +228,73 @@ func (vtg *VTGate) Execute(ctx context.Context, sql string, bindVariables map[st
 	return session, nil, err
 }
 
-// ExecuteShards executes a non-streaming query on the specified shards.
+// ExecuteBatch executes a batch of queries. This is a V3 function.
+func (vtg *VTGate) ExecuteBatch(ctx context.Context, session *vtgatepb.Session, sqlList []string, bindVariablesList []map[string]interface{}) (*vtgatepb.Session, []sqltypes.QueryResponse, error) {
+	statsKey := []string{"ExecuteBatch", session.TargetString, "NA"}
+	defer vtg.timings.Record(statsKey, time.Now())
+
+	qrl := make([]sqltypes.QueryResponse, len(sqlList))
+	for i, sql := range sqlList {
+		var bv map[string]interface{}
+		if len(bindVariablesList) != 0 {
+			bv = bindVariablesList[i]
+		}
+		session, qrl[i].QueryResult, qrl[i].QueryError = vtg.Execute(ctx, session, sql, bv)
+		if qr := qrl[i].QueryResult; qr != nil {
+			vtg.rowsReturned.Add(statsKey, int64(len(qr.Rows)))
+		}
+	}
+	return session, qrl, nil
+}
+
+// StreamExecute executes a streaming query. This is a V3 function.
+func (vtg *VTGate) StreamExecute(ctx context.Context, session *vtgatepb.Session, sql string, bindVariables map[string]interface{}, callback func(*sqltypes.Result) error) error {
+	statsKey := []string{"StreamExecute", session.TargetString, "NA"}
+	defer vtg.timings.Record(statsKey, time.Now())
+
+	target := parseTarget(session.TargetString)
+	var err error
+	if target.Shard != "" {
+		err = vtg.resolver.streamExecute(
+			ctx,
+			sql,
+			bindVariables,
+			target.Keyspace,
+			target.TabletType,
+			func(keyspace string) (string, []string, error) {
+				return keyspace, []string{target.Shard}, nil
+			},
+			session.Options,
+			func(reply *sqltypes.Result) error {
+				vtg.rowsReturned.Add(statsKey, int64(len(reply.Rows)))
+				return callback(reply)
+			})
+	} else {
+		err = vtg.executor.StreamExecute(
+			ctx,
+			session,
+			sql,
+			bindVariables,
+			target.Keyspace,
+			target.TabletType,
+			func(reply *sqltypes.Result) error {
+				vtg.rowsReturned.Add(statsKey, int64(len(reply.Rows)))
+				return callback(reply)
+			})
+	}
+
+	if err != nil {
+		query := map[string]interface{}{
+			"Sql":           sql,
+			"BindVariables": bindVariables,
+			"Session":       session,
+		}
+		return recordAndAnnotateError(err, statsKey, query, vtg.logStreamExecute)
+	}
+	return nil
+}
+
+// ExecuteShards executes a non-streaming query on the specified shards. This is a legacy function.
 func (vtg *VTGate) ExecuteShards(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, shards []string, tabletType topodatapb.TabletType, session *vtgatepb.Session, notInTransaction bool, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
 	startTime := time.Now()
 	ltt := topoproto.TabletTypeLString(tabletType)
@@ -262,7 +335,7 @@ func (vtg *VTGate) ExecuteShards(ctx context.Context, sql string, bindVariables 
 	return nil, err
 }
 
-// ExecuteKeyspaceIds executes a non-streaming query based on the specified keyspace ids.
+// ExecuteKeyspaceIds executes a non-streaming query based on the specified keyspace ids. This is a legacy function.
 func (vtg *VTGate) ExecuteKeyspaceIds(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyspaceIds [][]byte, tabletType topodatapb.TabletType, session *vtgatepb.Session, notInTransaction bool, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
 	startTime := time.Now()
 	ltt := topoproto.TabletTypeLString(tabletType)
@@ -291,7 +364,7 @@ func (vtg *VTGate) ExecuteKeyspaceIds(ctx context.Context, sql string, bindVaria
 	return nil, err
 }
 
-// ExecuteKeyRanges executes a non-streaming query based on the specified keyranges.
+// ExecuteKeyRanges executes a non-streaming query based on the specified keyranges. This is a legacy function.
 func (vtg *VTGate) ExecuteKeyRanges(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyRanges []*topodatapb.KeyRange, tabletType topodatapb.TabletType, session *vtgatepb.Session, notInTransaction bool, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
 	startTime := time.Now()
 	ltt := topoproto.TabletTypeLString(tabletType)
@@ -320,7 +393,7 @@ func (vtg *VTGate) ExecuteKeyRanges(ctx context.Context, sql string, bindVariabl
 	return nil, err
 }
 
-// ExecuteEntityIds excutes a non-streaming query based on given KeyspaceId map.
+// ExecuteEntityIds excutes a non-streaming query based on given KeyspaceId map. This is a legacy function.
 func (vtg *VTGate) ExecuteEntityIds(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, entityColumnName string, entityKeyspaceIDs []*vtgatepb.ExecuteEntityIdsRequest_EntityId, tabletType topodatapb.TabletType, session *vtgatepb.Session, notInTransaction bool, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
 	startTime := time.Now()
 	ltt := topoproto.TabletTypeLString(tabletType)
@@ -350,26 +423,7 @@ func (vtg *VTGate) ExecuteEntityIds(ctx context.Context, sql string, bindVariabl
 	return nil, err
 }
 
-// ExecuteBatch executes a non-streaming queries by routing based on the values in the query.
-func (vtg *VTGate) ExecuteBatch(ctx context.Context, sqlList []string, bindVariablesList []map[string]interface{}, session *vtgatepb.Session) (*vtgatepb.Session, []sqltypes.QueryResponse, error) {
-	statsKey := []string{"ExecuteBatch", session.TargetString, "NA"}
-	defer vtg.timings.Record(statsKey, time.Now())
-
-	qrl := make([]sqltypes.QueryResponse, len(sqlList))
-	for i, sql := range sqlList {
-		var bv map[string]interface{}
-		if len(bindVariablesList) != 0 {
-			bv = bindVariablesList[i]
-		}
-		session, qrl[i].QueryResult, qrl[i].QueryError = vtg.Execute(ctx, sql, bv, session)
-		if qr := qrl[i].QueryResult; qr != nil {
-			vtg.rowsReturned.Add(statsKey, int64(len(qr.Rows)))
-		}
-	}
-	return session, qrl, nil
-}
-
-// ExecuteBatchShards executes a group of queries on the specified shards.
+// ExecuteBatchShards executes a group of queries on the specified shards. This is a legacy function.
 func (vtg *VTGate) ExecuteBatchShards(ctx context.Context, queries []*vtgatepb.BoundShardQuery, tabletType topodatapb.TabletType, asTransaction bool, session *vtgatepb.Session, options *querypb.ExecuteOptions) ([]sqltypes.Result, error) {
 	startTime := time.Now()
 	ltt := topoproto.TabletTypeLString(tabletType)
@@ -407,7 +461,7 @@ func (vtg *VTGate) ExecuteBatchShards(ctx context.Context, queries []*vtgatepb.B
 	return nil, err
 }
 
-// ExecuteBatchKeyspaceIds executes a group of queries based on the specified keyspace ids.
+// ExecuteBatchKeyspaceIds executes a group of queries based on the specified keyspace ids. This is a legacy function.
 func (vtg *VTGate) ExecuteBatchKeyspaceIds(ctx context.Context, queries []*vtgatepb.BoundKeyspaceIdQuery, tabletType topodatapb.TabletType, asTransaction bool, session *vtgatepb.Session, options *querypb.ExecuteOptions) ([]sqltypes.Result, error) {
 	startTime := time.Now()
 	ltt := topoproto.TabletTypeLString(tabletType)
@@ -443,59 +497,12 @@ func (vtg *VTGate) ExecuteBatchKeyspaceIds(ctx context.Context, queries []*vtgat
 	return nil, err
 }
 
-// StreamExecute executes a streaming query by routing based on the values in the query.
-func (vtg *VTGate) StreamExecute(ctx context.Context, sql string, bindVariables map[string]interface{}, session *vtgatepb.Session, callback func(*sqltypes.Result) error) error {
-	statsKey := []string{"StreamExecute", session.TargetString, "NA"}
-	defer vtg.timings.Record(statsKey, time.Now())
-
-	target := parseTarget(session.TargetString)
-	var err error
-	if target.Shard != "" {
-		err = vtg.resolver.streamExecute(
-			ctx,
-			sql,
-			bindVariables,
-			target.Keyspace,
-			target.TabletType,
-			func(keyspace string) (string, []string, error) {
-				return keyspace, []string{target.Shard}, nil
-			},
-			session.Options,
-			func(reply *sqltypes.Result) error {
-				vtg.rowsReturned.Add(statsKey, int64(len(reply.Rows)))
-				return callback(reply)
-			})
-	} else {
-		err = vtg.executor.StreamExecute(
-			ctx,
-			sql,
-			bindVariables,
-			target.Keyspace,
-			target.TabletType,
-			session,
-			func(reply *sqltypes.Result) error {
-				vtg.rowsReturned.Add(statsKey, int64(len(reply.Rows)))
-				return callback(reply)
-			})
-	}
-
-	if err != nil {
-		query := map[string]interface{}{
-			"Sql":           sql,
-			"BindVariables": bindVariables,
-			"Session":       session,
-		}
-		return recordAndAnnotateError(err, statsKey, query, vtg.logStreamExecute)
-	}
-	return nil
-}
-
 // StreamExecuteKeyspaceIds executes a streaming query on the specified KeyspaceIds.
 // The KeyspaceIds are resolved to shards using the serving graph.
 // This function currently temporarily enforces the restriction of executing on
 // one shard since it cannot merge-sort the results to guarantee ordering of
 // response which is needed for checkpointing.
-// The api supports supplying multiple KeyspaceIds to make it future proof.
+// The api supports supplying multiple KeyspaceIds to make it future proof. This is a legacy function.
 func (vtg *VTGate) StreamExecuteKeyspaceIds(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyspaceIds [][]byte, tabletType topodatapb.TabletType, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
 	startTime := time.Now()
 	ltt := topoproto.TabletTypeLString(tabletType)
@@ -534,7 +541,7 @@ func (vtg *VTGate) StreamExecuteKeyspaceIds(ctx context.Context, sql string, bin
 // This function currently temporarily enforces the restriction of executing on
 // one shard since it cannot merge-sort the results to guarantee ordering of
 // response which is needed for checkpointing.
-// The api supports supplying multiple keyranges to make it future proof.
+// The api supports supplying multiple keyranges to make it future proof. This is a legacy function.
 func (vtg *VTGate) StreamExecuteKeyRanges(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, keyRanges []*topodatapb.KeyRange, tabletType topodatapb.TabletType, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
 	startTime := time.Now()
 	ltt := topoproto.TabletTypeLString(tabletType)
@@ -568,7 +575,7 @@ func (vtg *VTGate) StreamExecuteKeyRanges(ctx context.Context, sql string, bindV
 	return nil
 }
 
-// StreamExecuteShards executes a streaming query on the specified shards.
+// StreamExecuteShards executes a streaming query on the specified shards. This is a legacy function.
 func (vtg *VTGate) StreamExecuteShards(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspace string, shards []string, tabletType topodatapb.TabletType, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
 	startTime := time.Now()
 	ltt := topoproto.TabletTypeLString(tabletType)
@@ -604,7 +611,7 @@ func (vtg *VTGate) StreamExecuteShards(ctx context.Context, sql string, bindVari
 	return nil
 }
 
-// Begin begins a transaction. This function is deprecated.
+// Begin begins a transaction. This is a legacy function.
 func (vtg *VTGate) Begin(ctx context.Context, singledb bool) (*vtgatepb.Session, error) {
 	if !singledb && vtg.txConn.mode == vtgatepb.TransactionMode_SINGLE {
 		return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "multi-db transaction disallowed")
@@ -615,7 +622,7 @@ func (vtg *VTGate) Begin(ctx context.Context, singledb bool) (*vtgatepb.Session,
 	}, nil
 }
 
-// Commit commits a transaction. This function is deprecated.
+// Commit commits a transaction. This is a legacy function.
 func (vtg *VTGate) Commit(ctx context.Context, twopc bool, session *vtgatepb.Session) error {
 	if session == nil {
 		return formatError(vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "cannot commit: empty session"))
@@ -629,7 +636,7 @@ func (vtg *VTGate) Commit(ctx context.Context, twopc bool, session *vtgatepb.Ses
 	return formatError(vtg.txConn.Commit(ctx, NewSafeSession(session)))
 }
 
-// Rollback rolls back a transaction. This function is deprecated.
+// Rollback rolls back a transaction. This is a legacy function.
 func (vtg *VTGate) Rollback(ctx context.Context, session *vtgatepb.Session) error {
 	return formatError(vtg.txConn.Rollback(ctx, NewSafeSession(session)))
 }

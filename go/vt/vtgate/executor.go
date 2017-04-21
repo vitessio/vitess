@@ -77,14 +77,14 @@ func NewExecutor(ctx context.Context, serv topo.SrvTopoServer, cell, statsName s
 }
 
 // Execute executes a non-streaming query.
-func (exr *Executor) Execute(ctx context.Context, sql string, bindVars map[string]interface{}, session *vtgatepb.Session) (*sqltypes.Result, error) {
+func (exr *Executor) Execute(ctx context.Context, session *vtgatepb.Session, sql string, bindVars map[string]interface{}) (*sqltypes.Result, error) {
 	if bindVars == nil {
 		bindVars = make(map[string]interface{})
 	}
 
 	switch sqlparser.Preview(sql) {
 	case sqlparser.StmtSelect:
-		return exr.handleExec(ctx, sql, bindVars, session)
+		return exr.handleExec(ctx, session, sql, bindVars)
 	case sqlparser.StmtInsert, sqlparser.StmtUpdate, sqlparser.StmtDelete:
 		nsf := NewSafeSession(session)
 		autocommit := false
@@ -96,7 +96,7 @@ func (exr *Executor) Execute(ctx context.Context, sql string, bindVars map[strin
 			defer exr.txConn.Rollback(ctx, nsf)
 		}
 
-		qr, err := exr.handleExec(ctx, sql, bindVars, session)
+		qr, err := exr.handleExec(ctx, session, sql, bindVars)
 		if err != nil {
 			return nil, err
 		}
@@ -108,7 +108,7 @@ func (exr *Executor) Execute(ctx context.Context, sql string, bindVars map[strin
 		}
 		return qr, nil
 	case sqlparser.StmtDDL:
-		return exr.handleDDL(ctx, sql, bindVars, session)
+		return exr.handleDDL(ctx, session, sql, bindVars)
 	case sqlparser.StmtBegin:
 		err := exr.txConn.Begin(ctx, NewSafeSession(session))
 		return &sqltypes.Result{}, err
@@ -119,23 +119,23 @@ func (exr *Executor) Execute(ctx context.Context, sql string, bindVars map[strin
 		err := exr.txConn.Rollback(ctx, NewSafeSession(session))
 		return &sqltypes.Result{}, err
 	case sqlparser.StmtSet:
-		return exr.handleSet(ctx, sql, bindVars, session)
+		return exr.handleSet(ctx, session, sql, bindVars)
 	case sqlparser.StmtShow:
-		return exr.handleShow(ctx, sql, bindVars, session)
+		return exr.handleShow(ctx, session, sql, bindVars)
 	case sqlparser.StmtUse:
-		return exr.handleUse(ctx, sql, bindVars, session)
+		return exr.handleUse(ctx, session, sql, bindVars)
 	case sqlparser.StmtOther:
-		return exr.handleOther(ctx, sql, bindVars, session)
+		return exr.handleOther(ctx, session, sql, bindVars)
 	}
 	return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unrecognized statement: %s", sql)
 }
 
-func (exr *Executor) handleExec(ctx context.Context, sql string, bindVars map[string]interface{}, session *vtgatepb.Session) (*sqltypes.Result, error) {
+func (exr *Executor) handleExec(ctx context.Context, session *vtgatepb.Session, sql string, bindVars map[string]interface{}) (*sqltypes.Result, error) {
 	target := parseTarget(session.TargetString)
 	if target.Shard != "" {
 		// V1 mode.
 		sql = sqlannotation.AnnotateIfDML(sql, nil)
-		return exr.shardExec(ctx, sql, bindVars, target, session)
+		return exr.shardExec(ctx, session, sql, bindVars, target)
 	}
 
 	// V3 mode.
@@ -148,14 +148,14 @@ func (exr *Executor) handleExec(ctx context.Context, sql string, bindVars map[st
 	return plan.Instructions.Execute(vcursor, bindVars, make(map[string]interface{}), true)
 }
 
-func (exr *Executor) shardExec(ctx context.Context, sql string, bindVars map[string]interface{}, target querypb.Target, session *vtgatepb.Session) (*sqltypes.Result, error) {
+func (exr *Executor) shardExec(ctx context.Context, session *vtgatepb.Session, sql string, bindVars map[string]interface{}, target querypb.Target) (*sqltypes.Result, error) {
 	f := func(keyspace string) (string, []string, error) {
 		return keyspace, []string{target.Shard}, nil
 	}
 	return exr.resolver.Execute(ctx, sql, bindVars, target.Keyspace, target.TabletType, session, f, false, session.Options)
 }
 
-func (exr *Executor) handleDDL(ctx context.Context, sql string, bindVars map[string]interface{}, session *vtgatepb.Session) (*sqltypes.Result, error) {
+func (exr *Executor) handleDDL(ctx context.Context, session *vtgatepb.Session, sql string, bindVars map[string]interface{}) (*sqltypes.Result, error) {
 	target := parseTarget(session.TargetString)
 	if target.Keyspace == "" {
 		return nil, noKeyspaceErr
@@ -183,7 +183,7 @@ func (exr *Executor) handleDDL(ctx context.Context, sql string, bindVars map[str
 	return exr.resolver.Execute(ctx, sql, bindVars, target.Keyspace, target.TabletType, session, f, false, session.Options)
 }
 
-func (exr *Executor) handleSet(ctx context.Context, sql string, bindVars map[string]interface{}, session *vtgatepb.Session) (*sqltypes.Result, error) {
+func (exr *Executor) handleSet(ctx context.Context, session *vtgatepb.Session, sql string, bindVars map[string]interface{}) (*sqltypes.Result, error) {
 	vals, err := sqlparser.ExtractSetNums(sql)
 	if err != nil {
 		return &sqltypes.Result{}, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, err.Error())
@@ -203,7 +203,7 @@ func (exr *Executor) handleSet(ctx context.Context, sql string, bindVars map[str
 	return &sqltypes.Result{}, nil
 }
 
-func (exr *Executor) handleShow(ctx context.Context, sql string, bindVars map[string]interface{}, session *vtgatepb.Session) (*sqltypes.Result, error) {
+func (exr *Executor) handleShow(ctx context.Context, session *vtgatepb.Session, sql string, bindVars map[string]interface{}) (*sqltypes.Result, error) {
 	stmt, err := sqlparser.Parse(sql)
 	if err != nil {
 		return nil, err
@@ -283,10 +283,10 @@ func (exr *Executor) handleShow(ctx context.Context, sql string, bindVars map[st
 	}
 
 	// Any other show statement is passed through
-	return exr.handleOther(ctx, sql, bindVars, session)
+	return exr.handleOther(ctx, session, sql, bindVars)
 }
 
-func (exr *Executor) handleUse(ctx context.Context, sql string, bindVars map[string]interface{}, session *vtgatepb.Session) (*sqltypes.Result, error) {
+func (exr *Executor) handleUse(ctx context.Context, session *vtgatepb.Session, sql string, bindVars map[string]interface{}) (*sqltypes.Result, error) {
 	stmt, err := sqlparser.Parse(sql)
 	if err != nil {
 		return nil, err
@@ -300,7 +300,7 @@ func (exr *Executor) handleUse(ctx context.Context, sql string, bindVars map[str
 	return &sqltypes.Result{}, nil
 }
 
-func (exr *Executor) handleOther(ctx context.Context, sql string, bindVars map[string]interface{}, session *vtgatepb.Session) (*sqltypes.Result, error) {
+func (exr *Executor) handleOther(ctx context.Context, session *vtgatepb.Session, sql string, bindVars map[string]interface{}) (*sqltypes.Result, error) {
 	target := parseTarget(session.TargetString)
 	if target.Keyspace == "" {
 		return nil, noKeyspaceErr
@@ -312,11 +312,11 @@ func (exr *Executor) handleOther(ctx context.Context, sql string, bindVars map[s
 			return nil, err
 		}
 	}
-	return exr.shardExec(ctx, sql, bindVars, target, session)
+	return exr.shardExec(ctx, session, sql, bindVars, target)
 }
 
 // StreamExecute executes a streaming query.
-func (exr *Executor) StreamExecute(ctx context.Context, sql string, bindVars map[string]interface{}, keyspace string, tabletType topodatapb.TabletType, session *vtgatepb.Session, callback func(*sqltypes.Result) error) error {
+func (exr *Executor) StreamExecute(ctx context.Context, session *vtgatepb.Session, sql string, bindVars map[string]interface{}, keyspace string, tabletType topodatapb.TabletType, callback func(*sqltypes.Result) error) error {
 	if bindVars == nil {
 		bindVars = make(map[string]interface{})
 	}
