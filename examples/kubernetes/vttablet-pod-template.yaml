@@ -47,6 +47,16 @@ spec:
 
           chown -R vitess /vt
 
+          mysql_socket="$VTDATAROOT/{{tablet_subdir}}/mysql.sock"
+
+          while [ ! -e $mysql_socket ]; do
+          echo "[$(date)] waiting for $mysql_socket" ;
+          sleep 1 ;
+          done
+
+          su -p -s /bin/bash -c "mysql -u vt_dba -S $mysql_socket
+          -e 'CREATE DATABASE IF NOT EXISTS vt_{{keyspace}}'" vitess
+
           su -p -s /bin/bash -c "/vt/bin/vttablet
           -topo_implementation etcd
           -etcd_global_addrs http://etcd-global:4001

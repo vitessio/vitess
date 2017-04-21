@@ -8,7 +8,6 @@ script_root=`dirname "${BASH_SOURCE}"`
 source $script_root/env.sh
 
 # Create the pods for shard-0
-keyspace='test_keyspace'
 SHARDS=${SHARDS:-'0'}
 TABLETS_PER_SHARD=${TABLETS_PER_SHARD:-5}
 port=15002
