@@ -152,7 +152,7 @@ func (exr *Executor) shardExec(ctx context.Context, session *vtgatepb.Session, s
 	f := func(keyspace string) (string, []string, error) {
 		return keyspace, []string{target.Shard}, nil
 	}
-	return exr.resolver.Execute(ctx, sql, bindVars, target.Keyspace, target.TabletType, session, f, false, session.Options)
+	return exr.resolver.Execute(ctx, sql, bindVars, target.Keyspace, target.TabletType, session, f, false /* notInTransaction */, session.Options)
 }
 
 func (exr *Executor) handleDDL(ctx context.Context, session *vtgatepb.Session, sql string, bindVars map[string]interface{}) (*sqltypes.Result, error) {
@@ -180,7 +180,7 @@ func (exr *Executor) handleDDL(ctx context.Context, session *vtgatepb.Session, s
 		}
 		return keyspace, shards, nil
 	}
-	return exr.resolver.Execute(ctx, sql, bindVars, target.Keyspace, target.TabletType, session, f, false, session.Options)
+	return exr.resolver.Execute(ctx, sql, bindVars, target.Keyspace, target.TabletType, session, f, false /* notInTransaction */, session.Options)
 }
 
 func (exr *Executor) handleSet(ctx context.Context, session *vtgatepb.Session, sql string, bindVars map[string]interface{}) (*sqltypes.Result, error) {
