@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/golang/protobuf/proto"
+	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/discovery"
 	"github.com/youtube/vitess/go/vt/key"
@@ -2660,5 +2661,33 @@ func TestParseTarget(t *testing.T) {
 		if target := parseTarget(tcase.targetString); target != tcase.target {
 			t.Errorf("parseKeyspaceShard(%s): %v, want %v", tcase.targetString, target, tcase.target)
 		}
+	}
+}
+
+func TestErrorTruncation(t *testing.T) {
+	*sqldb.TruncateErrLen = 30
+
+	query := map[string]interface{}{
+		"Sql":              "THIS IS A LONG QUERY THAT WILL BE TRUNCATED AWAY",
+		"BindVariables":    map[string]interface{}{
+			"vtg1":	100,
+			"vtg2":	"short string",
+			"vtg3":	"this is a long bind variable that will be truncated away as well",
+			"vtg4":	"another string",
+		},
+	}
+
+	truncateErrorStrings(query)
+	errStr := fmt.Sprintf("request: %+v", query)
+	if !strings.Contains(errStr, "[TRUNCATED]") {
+		t.Errorf("Error was not truncated: %s", errStr)
+	}
+
+	if strings.Contains(errStr, "WILL BE TRUNCATED AWAY") {
+		t.Errorf("Error was not truncated: %s", errStr)
+	}
+
+	if strings.Contains(errStr, "will be truncated away as well") {
+		t.Errorf("Error was not truncated: %s", errStr)
 	}
 }
