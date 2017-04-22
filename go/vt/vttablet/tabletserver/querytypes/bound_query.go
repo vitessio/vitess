@@ -11,6 +11,7 @@ import (
 	"fmt"
 
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/sqldb"
 )
 
 // This file defines the BoundQuery type.
@@ -36,13 +37,13 @@ type BoundQuery struct {
 // and also truncates data if it's too long
 func QueryAsString(sql string, bindVariables map[string]interface{}) string {
 	buf := &bytes.Buffer{}
-	fmt.Fprintf(buf, "Sql: %q, BindVars: {", slimit(sql, 5000))
+	fmt.Fprintf(buf, "Sql: %q, BindVars: {", sqldb.TruncateForError(sql))
 	for k, v := range bindVariables {
 		switch val := v.(type) {
 		case []byte:
-			fmt.Fprintf(buf, "%s: %q, ", k, slimit(string(val), 256))
+			fmt.Fprintf(buf, "%s: %q, ", k, sqldb.TruncateForError(string(val)))
 		case string:
-			fmt.Fprintf(buf, "%s: %q, ", k, slimit(val, 256))
+			fmt.Fprintf(buf, "%s: %q, ", k, sqldb.TruncateForError(val))
 		default:
 			fmt.Fprintf(buf, "%s: %v, ", k, v)
 		}
