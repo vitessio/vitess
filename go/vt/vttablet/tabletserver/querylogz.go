@@ -15,9 +15,9 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/acl"
+	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/vt/logz"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
-	"github.com/youtube/vitess/go/vt/utils"
 )
 
 var (
@@ -47,7 +47,7 @@ var (
 	querylogzFuncMap = template.FuncMap{
 		"stampMicro":   func(t time.Time) string { return t.Format(time.StampMicro) },
 		"cssWrappable": logz.Wrappable,
-		"truncateQuery": utils.TruncateQuery,
+		"truncateQuery": sqldb.TruncateForUI,
 		"unquote":      func(s string) string { return strings.Trim(s, "\"") },
 	}
 	querylogzTmpl = template.Must(template.New("example").Funcs(querylogzFuncMap).Parse(`

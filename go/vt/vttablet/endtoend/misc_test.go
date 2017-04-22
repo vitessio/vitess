@@ -533,25 +533,25 @@ func TestLongQueryErrorTruncation(t *testing.T) {
 		"insert into vitess_test values(123, null, null, :data)",
 		map[string]interface{}{"data": buf.String()},
 	)
-	if (err == nil){
+	if err == nil {
 		t.Error("expected data too long error")
 		return
 	}
-	if (len(err.Error()) < 1000 || strings.Contains(err.Error(), "[TRUNCATED]")){
+	if len(err.Error()) < 1000 || strings.Contains(err.Error(), "[TRUNCATED]") {
 		t.Error("expected unmodified error string")
 	}
 
 	// Test that the data too long error is truncated once the option is set
-	sqldb.SQLErrorTruncateLen = 100;
+	*sqldb.TruncateErrLen = 100;
 	_, err = client.Execute(
 		"insert into vitess_test values(123, null, null, :data)",
 		map[string]interface{}{"data": buf.String()},
 	)
-	if (err == nil){
+	if err == nil {
 		t.Error("expected data too long error")
 		return
 	}
-	if (len(err.Error()) > 200 || !strings.Contains(err.Error(), "[TRUNCATED]")){
+	if len(err.Error()) > 200 || !strings.Contains(err.Error(), "[TRUNCATED]") {
 		t.Error("expected truncated error string")
 	}
 }
