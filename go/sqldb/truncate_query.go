@@ -10,13 +10,13 @@ import (
 
 var (
 	// Maximum length for a query in a sqlerror string. 0 means unlimited.
-	TruncateUILen = flag.Int("sql-max-length-ui", 512, "truncate queries in debug UIs to the given length (default 512)")
+	TruncateUILen  = flag.Int("sql-max-length-ui", 512, "truncate queries in debug UIs to the given length (default 512)")
 	TruncateErrLen = flag.Int("sql-max-length-errors", 0, "truncate queries in error logs to the given length (default unlimited)")
 )
 
 func truncateQuery(query string, max int) string {
 	if max == 0 || len(query) <= max {
-		return query;
+		return query
 	}
 
 	return query[:max-12] + " [TRUNCATED]"
