@@ -10,12 +10,3 @@ func CloneBindVariables(bindVariables map[string]interface{}) map[string]interfa
 	}
 	return result
 }
-
-// TruncateQuery all long query strings to a given maximum length to keep logs
-// and debug UI output to be a sane length.
-func TruncateQuery(query string, max int) string {
-	if len(query) <= max {
-		return query
-	}
-	return query[:max-12] + " [TRUNCATED]"
-}

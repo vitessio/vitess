@@ -18,6 +18,7 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/acl"
+	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/tb"
@@ -997,6 +998,23 @@ func (vtg *VTGate) VSchemaStats() *VSchemaStats {
 	return vtg.router.planner.VSchemaStats()
 }
 
+func truncateErrorStrings(data map[string]interface {}) {
+	for key, val := range data {
+		strVal, ok := val.(string)
+		if ok {
+			data[key] = sqldb.TruncateForError(strVal)
+			continue
+		}
+
+		mapVal, ok := val.(map[string]interface {})
+		if ok {
+			truncateErrorStrings(mapVal)
+			data[key] = mapVal
+			continue
+		}
+	}
+}
+
 func recordAndAnnotateError(err error, statsKey []string, request map[string]interface{}, logger *logutil.ThrottledLogger) error {
 	ec := vterrors.Code(err)
 	fullKey := []string{
@@ -1005,6 +1023,9 @@ func recordAndAnnotateError(err error, statsKey []string, request map[string]int
 		statsKey[2],
 		ec.String(),
 	}
+
+	truncateErrorStrings(request)
+
 	errorCounts.Add(fullKey, 1)
 	// Most errors are not logged by vtgate beecause they're either too spammy or logged elsewhere.
 	switch ec {
