@@ -2668,12 +2668,12 @@ func TestErrorTruncation(t *testing.T) {
 	*sqldb.TruncateErrLen = 30
 
 	query := map[string]interface{}{
-		"Sql":              "THIS IS A LONG QUERY THAT WILL BE TRUNCATED AWAY",
-		"BindVariables":    map[string]interface{}{
-			"vtg1":	100,
-			"vtg2":	"short string",
-			"vtg3":	"this is a long bind variable that will be truncated away as well",
-			"vtg4":	"another string",
+		"Sql": "THIS IS A LONG QUERY THAT WILL BE TRUNCATED AWAY",
+		"BindVariables": map[string]interface{}{
+			"vtg1": 100,
+			"vtg2": "short string",
+			"vtg3": "this is a long bind variable that will be truncated away as well",
+			"vtg4": "another string",
 		},
 	}
 
