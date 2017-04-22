@@ -202,10 +202,9 @@ func StringIn(str string, values ...string) bool {
 	return false
 }
 
-// ExtractSetNums returns a map of key-num pairs
-// if the query is a SET statement. Otherwise, it returns an
-// error.
-func ExtractSetNums(sql string) (map[string]int64, error) {
+// ExtractSetValues returns a map of key-value pairs
+// if the query is a SET statement. Values can be int64 or string.
+func ExtractSetValues(sql string) (map[string]interface{}, error) {
 	stmt, err := Parse(sql)
 	if err != nil {
 		return nil, err
@@ -214,7 +213,7 @@ func ExtractSetNums(sql string) (map[string]int64, error) {
 	if !ok {
 		return nil, fmt.Errorf("ast did not yield *sqlparser.Set: %T", stmt)
 	}
-	result := make(map[string]int64)
+	result := make(map[string]interface{})
 	for _, expr := range setStmt.Exprs {
 		if expr.Name.Qualifier != nil {
 			return nil, fmt.Errorf("invalid syntax: %v", String(expr.Name))
@@ -225,14 +224,18 @@ func ExtractSetNums(sql string) (map[string]int64, error) {
 		if !ok {
 			return nil, fmt.Errorf("invalid syntax: %s", String(expr.Expr))
 		}
-		if sqlval.Type != IntVal {
+		switch sqlval.Type {
+		case StrVal:
+			result[key] = string(sqlval.Val)
+		case IntVal:
+			num, err := strconv.ParseInt(string(sqlval.Val), 0, 64)
+			if err != nil {
+				return nil, err
+			}
+			result[key] = num
+		default:
 			return nil, fmt.Errorf("invalid value type: %v", String(expr.Expr))
 		}
-		num, err := strconv.ParseInt(string(sqlval.Val), 0, 64)
-		if err != nil {
-			return nil, err
-		}
-		result[key] = num
 	}
 	return result, nil
 }

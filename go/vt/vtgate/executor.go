@@ -184,21 +184,35 @@ func (exr *Executor) handleDDL(ctx context.Context, session *vtgatepb.Session, s
 }
 
 func (exr *Executor) handleSet(ctx context.Context, session *vtgatepb.Session, sql string, bindVars map[string]interface{}) (*sqltypes.Result, error) {
-	vals, err := sqlparser.ExtractSetNums(sql)
+	vals, err := sqlparser.ExtractSetValues(sql)
 	if err != nil {
 		return &sqltypes.Result{}, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, err.Error())
 	}
-	if len(vals) != 1 {
-		return &sqltypes.Result{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "too many set values: %s", sql)
-	}
-	val, ok := vals["autocommit"]
-	if !ok {
-		return &sqltypes.Result{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported construct: %s", sql)
-	}
-	if val != 0 {
-		session.Autocommit = true
-	} else {
-		session.Autocommit = false
+	for k, v := range vals {
+		switch k {
+		case "autocommit":
+			val, ok := v.(int64)
+			if !ok {
+				return &sqltypes.Result{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value type for autocommit: %T", v)
+			}
+			if val != 0 {
+				session.Autocommit = true
+			} else {
+				session.Autocommit = false
+			}
+		case "transaction_mode":
+			val, ok := v.(string)
+			if !ok {
+				return &sqltypes.Result{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value type for transaction_mode: %T", v)
+			}
+			out, ok := vtgatepb.TransactionMode_value[strings.ToUpper(val)]
+			if !ok {
+				return &sqltypes.Result{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid transaction_mode: %s", val)
+			}
+			session.TransactionMode = vtgatepb.TransactionMode(out)
+		default:
+			return &sqltypes.Result{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported construct: %s", sql)
+		}
 	}
 	return &sqltypes.Result{}, nil
 }
