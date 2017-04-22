@@ -998,7 +998,7 @@ func (vtg *VTGate) VSchemaStats() *VSchemaStats {
 	return vtg.router.planner.VSchemaStats()
 }
 
-func truncateErrorStrings(data map[string]interface {}) {
+func truncateErrorStrings(data map[string]interface{}) {
 	for key, val := range data {
 		strVal, ok := val.(string)
 		if ok {
@@ -1006,7 +1006,7 @@ func truncateErrorStrings(data map[string]interface {}) {
 			continue
 		}
 
-		mapVal, ok := val.(map[string]interface {})
+		mapVal, ok := val.(map[string]interface{})
 		if ok {
 			truncateErrorStrings(mapVal)
 			data[key] = mapVal
