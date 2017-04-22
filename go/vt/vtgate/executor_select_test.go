@@ -151,39 +151,15 @@ func TestStreamUnsharded(t *testing.T) {
 	}
 }
 
-func TestUnshardedFail(t *testing.T) {
+func TestShardFail(t *testing.T) {
 	executor, _, _, _ := createExecutorEnv()
 
 	getSandbox(KsTestUnsharded).SrvKeyspaceMustFail = 1
-	_, err := executorExec(executor, "select id from music_user_map where id = 1", nil)
-	want := "paramsUnsharded: keyspace TestUnsharded fetch error: topo error GetSrvKeyspace"
+
+	_, err := executorExec(executor, "select id from sharded_table where id = 1", nil)
+	want := "paramsAllShards: unsharded keyspace TestBadSharding has multiple shards"
 	if err == nil || err.Error() != want {
 		t.Errorf("executorExec: %v, want %v", err, want)
-	}
-
-	_, err = executorExec(executor, "select id from sharded_table where id = 1", nil)
-	want = "unsharded keyspace TestBadSharding has multiple shards"
-	if err == nil || err.Error() != want {
-		t.Errorf("executorExec: %v, want %v", err, want)
-	}
-}
-
-func TestStreamUnshardedFail(t *testing.T) {
-	executor, _, _, _ := createExecutorEnv()
-
-	getSandbox(KsTestUnsharded).SrvKeyspaceMustFail = 1
-	sql := "select id from music_user_map where id = 1"
-	_, err := executorStream(executor, sql)
-	want := "paramsUnsharded: keyspace TestUnsharded fetch error: topo error GetSrvKeyspace"
-	if err == nil || err.Error() != want {
-		t.Errorf("executorExec: %v, want %v", err, want)
-	}
-
-	sql = "update music_user_map set a = 1 where id = 1"
-	_, err = executorStream(executor, sql)
-	want = `query "update music_user_map set a = 1 where id = 1" cannot be used for streaming`
-	if err == nil || err.Error() != want {
-		t.Errorf("executorExec: \n%v, want \n%v", err, want)
 	}
 }
 
@@ -808,7 +784,7 @@ func TestSelectScatterFail(t *testing.T) {
 	executor := NewExecutor(context.Background(), serv, cell, "", resolver, false)
 
 	_, err := executorExec(executor, "select id from user", nil)
-	want := "paramsSelectScatter: keyspace TestExecutor fetch error: topo error GetSrvKeyspace"
+	want := "paramsAllShards: keyspace TestExecutor fetch error: topo error GetSrvKeyspace"
 	if err == nil || err.Error() != want {
 		t.Errorf("executorExec: %v, want %v", err, want)
 	}
