@@ -191,13 +191,6 @@ func (n *Node) deepCopyFrom(otherNode *Node, copyChildren bool) error {
 	*n = *otherNode
 	n.Children = oldChildren
 
-	n.Actions = []*Action{}
-	for _, otherAction := range otherNode.Actions {
-		action := &Action{}
-		*action = *otherAction
-		n.Actions = append(n.Actions, action)
-	}
-
 	if !copyChildren {
 		return nil
 	}
@@ -426,6 +419,11 @@ func (m *NodeManager) Action(ctx context.Context, ap *ActionParameters) error {
 	m.mu.Unlock()
 
 	return nodeListener.Action(ctx, ap.Path, ap.Name)
+}
+
+// GetNodeByPath returns the node using the path.
+func (m *NodeManager) GetNodeByPath(nodePath string) (*Node, error) {
+	return m.getNodeByPath(nodePath)
 }
 
 func (m *NodeManager) getNodeByPath(nodePath string) (*Node, error) {
