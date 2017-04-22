@@ -8,10 +8,13 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/vt/vterrors"
+	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/querytypes"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	vtgatepb "github.com/youtube/vitess/go/vt/proto/vtgate"
+	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
 // vcursorImpl implements the VCursor functionality used by dependent
@@ -38,36 +41,44 @@ func newVCursorImpl(ctx context.Context, tabletType topodatapb.TabletType, sessi
 	}
 }
 
-func (vc *vcursorImpl) Execute(query string, bindvars map[string]interface{}) (*sqltypes.Result, error) {
-	return vc.executor.Execute(vc.ctx, vc.session, query+vc.trailingComments, bindvars)
+func (vc *vcursorImpl) Execute(query string, BindVars map[string]interface{}) (*sqltypes.Result, error) {
+	return vc.executor.Execute(vc.ctx, vc.session, query+vc.trailingComments, BindVars)
 }
 
 func (vc *vcursorImpl) ExecuteMultiShard(keyspace string, shardQueries map[string]querytypes.BoundQuery) (*sqltypes.Result, error) {
 	return vc.executor.scatterConn.ExecuteMultiShard(vc.ctx, keyspace, commentedShardQueries(shardQueries, vc.trailingComments), vc.tabletType, NewSafeSession(vc.session), false, vc.session.Options)
 }
 
+func (vc *vcursorImpl) ExecuteStandalone(query string, BindVars map[string]interface{}, keyspace, shard string) (*sqltypes.Result, error) {
+	bq := map[string]querytypes.BoundQuery{
+		shard: {
+			Sql:           query + vc.trailingComments,
+			BindVariables: BindVars,
+		},
+	}
+	return vc.executor.scatterConn.ExecuteMultiShard(vc.ctx, keyspace, bq, vc.tabletType, NewSafeSession(nil), false, vc.session.Options)
+}
+
 func (vc *vcursorImpl) StreamExecuteMulti(query string, keyspace string, shardVars map[string]map[string]interface{}, callback func(reply *sqltypes.Result) error) error {
 	return vc.executor.scatterConn.StreamExecuteMulti(vc.ctx, query+vc.trailingComments, keyspace, shardVars, vc.tabletType, vc.session.Options, callback)
 }
 
-func (vc *vcursorImpl) GetAnyShard(keyspace string) (ks, shard string, err error) {
-	return getAnyShard(vc.ctx, vc.executor.serv, vc.executor.cell, keyspace, vc.tabletType)
-}
-
-func (vc *vcursorImpl) ScatterConnExecute(query string, bindVars map[string]interface{}, keyspace string, shards []string) (*sqltypes.Result, error) {
-	return vc.executor.scatterConn.Execute(vc.ctx, query+vc.trailingComments, bindVars, keyspace, shards, vc.tabletType, NewSafeSession(vc.session), false, vc.session.Options)
-}
-
-func (vc *vcursorImpl) GetKeyspaceShards(keyspace string) (string, *topodatapb.SrvKeyspace, []*topodatapb.ShardReference, error) {
-	return getKeyspaceShards(vc.ctx, vc.executor.serv, vc.executor.cell, keyspace, vc.tabletType)
+func (vc *vcursorImpl) GetKeyspaceShards(keyspace *vindexes.Keyspace) (string, []*topodatapb.ShardReference, error) {
+	ks, _, allShards, err := getKeyspaceShards(vc.ctx, vc.executor.serv, vc.executor.cell, keyspace.Name, vc.tabletType)
+	if err != nil {
+		return "", nil, err
+	}
+	if !keyspace.Sharded && len(allShards) != 1 {
+		return "", nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "unsharded keyspace %s has multiple shards", ks)
+	}
+	if len(allShards) == 0 {
+		return "", nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "keyspace %s has no shards", ks)
+	}
+	return ks, allShards, err
 }
 
 func (vc *vcursorImpl) GetShardForKeyspaceID(allShards []*topodatapb.ShardReference, keyspaceID []byte) (string, error) {
 	return getShardForKeyspaceID(allShards, keyspaceID)
-}
-
-func (vc *vcursorImpl) ExecuteShard(keyspace string, shardQueries map[string]querytypes.BoundQuery) (*sqltypes.Result, error) {
-	return vc.executor.scatterConn.ExecuteMultiShard(vc.ctx, keyspace, commentedShardQueries(shardQueries, vc.trailingComments), vc.tabletType, NewSafeSession(nil), false, vc.session.Options)
 }
 
 func commentedShardQueries(shardQueries map[string]querytypes.BoundQuery, trailingComments string) map[string]querytypes.BoundQuery {

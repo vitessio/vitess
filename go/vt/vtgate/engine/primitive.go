@@ -7,6 +7,7 @@ package engine
 import (
 	"github.com/youtube/vitess/go/sqltypes"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
+	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/querytypes"
 )
 
@@ -21,14 +22,12 @@ const ListVarName = "__vals"
 // VCursor defines the interface the engine will use
 // to execute routes.
 type VCursor interface {
-	ExecuteMultiShard(keyspace string, shardQueries map[string]querytypes.BoundQuery) (*sqltypes.Result, error)
-	StreamExecuteMulti(query string, keyspace string, shardVars map[string]map[string]interface{}, callback func(reply *sqltypes.Result) error) error
-	GetAnyShard(keyspace string) (ks, shard string, err error)
-	ScatterConnExecute(query string, bindVars map[string]interface{}, keyspace string, shards []string) (*sqltypes.Result, error)
-	GetKeyspaceShards(keyspace string) (string, *topodatapb.SrvKeyspace, []*topodatapb.ShardReference, error)
-	GetShardForKeyspaceID(allShards []*topodatapb.ShardReference, keyspaceID []byte) (string, error)
-	ExecuteShard(keyspace string, shardQueries map[string]querytypes.BoundQuery) (*sqltypes.Result, error)
 	Execute(query string, bindvars map[string]interface{}) (*sqltypes.Result, error)
+	ExecuteMultiShard(keyspace string, shardQueries map[string]querytypes.BoundQuery) (*sqltypes.Result, error)
+	ExecuteStandalone(query string, bindvars map[string]interface{}, keyspace, shard string) (*sqltypes.Result, error)
+	StreamExecuteMulti(query string, keyspace string, shardVars map[string]map[string]interface{}, callback func(reply *sqltypes.Result) error) error
+	GetKeyspaceShards(vkeyspace *vindexes.Keyspace) (string, []*topodatapb.ShardReference, error)
+	GetShardForKeyspaceID(allShards []*topodatapb.ShardReference, keyspaceID []byte) (string, error)
 }
 
 // Plan represents the execution strategy for a given query.
