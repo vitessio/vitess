@@ -7,7 +7,6 @@ package sqldb
 import (
 	"bytes"
 	"fmt"
-	"github.com/youtube/vitess/go/vt/utils"
 	"regexp"
 	"strconv"
 )
@@ -15,11 +14,6 @@ import (
 const (
 	// SQLStateGeneral is the SQLSTATE value for "general error".
 	SQLStateGeneral = "HY000"
-)
-
-var (
-	// Maximum length for a query in a sqlerror string. 0 means unlimited.
-	SQLErrorTruncateLen int = 0
 )
 
 // SQLError is the error structure returned from calling a db library function
@@ -55,11 +49,7 @@ func (se *SQLError) Error() string {
 	fmt.Fprintf(buf, " (errno %v) (sqlstate %v)", se.Num, se.State)
 
 	if se.Query != "" {
-		query := se.Query
-		if SQLErrorTruncateLen != 0 {
-			query = utils.TruncateQuery(query, SQLErrorTruncateLen)
-		}
-		fmt.Fprintf(buf, " during query: %s", query)
+		fmt.Fprintf(buf, " during query: %s", TruncateForError(se.Query))
 	}
 
 	return buf.String()

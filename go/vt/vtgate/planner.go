@@ -21,9 +21,9 @@ import (
 
 	"github.com/youtube/vitess/go/acl"
 	"github.com/youtube/vitess/go/cache"
+	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/utils"
 	"github.com/youtube/vitess/go/vt/vtgate/engine"
 	"github.com/youtube/vitess/go/vt/vtgate/planbuilder"
 	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
@@ -336,7 +336,7 @@ func (plr *Planner) ServeHTTP(response http.ResponseWriter, request *http.Reques
 		response.Header().Set("Content-Type", "text/plain")
 		response.Write([]byte(fmt.Sprintf("Length: %d\n", len(keys))))
 		for _, v := range keys {
-			response.Write([]byte(fmt.Sprintf("%#v\n", utils.TruncateQuery(v, 512))))
+			response.Write([]byte(fmt.Sprintf("%#v\n", sqldb.TruncateForUI(v))))
 			if plan, ok := plr.plans.Peek(v); ok {
 				if b, err := json.MarshalIndent(plan, "", "  "); err != nil {
 					response.Write([]byte(err.Error()))
