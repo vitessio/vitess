@@ -26,7 +26,7 @@ var (
 // VTGateConn is the client API object to talk to vtgate.
 // It is constructed using the Dial method. It supports
 // legacy V2 APIs. It can be used concurrently. To access
-// V3 functionality, use the Session function to build
+// V3 functionality, use the Session function to create a
 // VTGateSession objects.
 type VTGateConn struct {
 	impl Impl
@@ -124,7 +124,7 @@ func (conn *VTGateConn) MessageAck(ctx context.Context, keyspace string, name st
 
 // Begin starts a transaction and returns a VTGateTX.
 func (conn *VTGateConn) Begin(ctx context.Context) (*VTGateTx, error) {
-	session, err := conn.impl.Begin(ctx, false)
+	session, err := conn.impl.Begin(ctx, false /* singledb */)
 	if err != nil {
 		return nil, err
 	}
@@ -169,7 +169,11 @@ func (conn *VTGateConn) UpdateStream(ctx context.Context, keyspace, shard string
 }
 
 // VTGateSession exposes the V3 API to the clients.
-// VTGateSession functions cannot be used concurrently.
+// The object maintains client-side state and is comparable to a native MySQL connection.
+// For example, if you enable autocommit on a Session object, all subsequent calls will respect this.
+// Functions within an object must not be called concurrently.
+// You can create as many objects as you want.
+// All of them will share the underlying connection to vtgate ("VTGateConn" object).
 type VTGateSession struct {
 	session *vtgatepb.Session
 	impl    Impl
@@ -194,6 +198,9 @@ func (vsn *VTGateSession) ExecuteBatch(ctx context.Context, query []string, bind
 // error. Then you can pull values from the ResultStream until io.EOF,
 // or another error.
 func (vsn *VTGateSession) StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}) (sqltypes.ResultStream, error) {
+	// StreamExecute is only used for SELECT queries that don't change
+	// the session. So, the protocol doesn't return an updated session.
+	// This may change in the future.
 	return vsn.impl.StreamExecute(ctx, query, bindVars, vsn.session)
 }
 
@@ -269,7 +276,7 @@ func (tx *VTGateTx) Commit(ctx context.Context) error {
 	if tx.session == nil {
 		return fmt.Errorf("commit: not in transaction")
 	}
-	err := tx.conn.impl.Commit(ctx, tx.session, false)
+	err := tx.conn.impl.Commit(ctx, tx.session, false /* twopc */)
 	tx.session = nil
 	return err
 }

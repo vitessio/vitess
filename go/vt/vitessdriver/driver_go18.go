@@ -29,11 +29,12 @@ var (
 	_ driver.StmtExecContext  = &stmt{}
 )
 
-func (c *conn) BeginTx(ctx context.Context, opts driver.TxOptions) (driver.Tx, error) {
+func (c *conn) BeginTx(_ context.Context, opts driver.TxOptions) (driver.Tx, error) {
+	// We don't use the context. The function signature accepts the context
+	// to singal to the driver that it's allowed to call Rollback on Cancel.
 	if opts.Isolation != driver.IsolationLevel(0) || opts.ReadOnly {
 		return nil, errIsolationUnsupported
 	}
-	// Do not pass ctx down to the call. It's only used for rollbacks.
 	return c.Begin()
 }
 
