@@ -74,45 +74,60 @@ func TestExecutorTransactions(t *testing.T) {
 
 func TestExecutorSet(t *testing.T) {
 	executor, _, _, _ := createExecutorEnv()
-	session := &vtgatepb.Session{TargetString: "@master"}
 
-	// set.
-	_, err := executor.Execute(context.Background(), session, "set autocommit=1", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	wantSession := &vtgatepb.Session{Autocommit: true, TargetString: "@master"}
-	if !proto.Equal(session, wantSession) {
-		t.Errorf("begin: %v, want %v", session, wantSession)
-	}
-	_, err = executor.Execute(context.Background(), session, "set AUTOCOMMIT = 0", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	wantSession = &vtgatepb.Session{TargetString: "@master"}
-	if !proto.Equal(session, wantSession) {
-		t.Errorf("begin: %v, want %v", session, wantSession)
-	}
-
-	// complex set
-	_, err = executor.Execute(context.Background(), session, "set autocommit=1+1", nil)
-	wantErr := "invalid syntax: 1 + 1"
-	if err == nil || err.Error() != wantErr {
-		t.Errorf("Execute: %v, want %s", err, wantErr)
-	}
-
-	// multi-set
-	_, err = executor.Execute(context.Background(), session, "set autocommit=1, a = 2", nil)
-	wantErr = "too many set values: set autocommit=1, a = 2"
-	if err == nil || err.Error() != wantErr {
-		t.Errorf("Execute: %v, want %s", err, wantErr)
-	}
-
-	// unsupported set
-	_, err = executor.Execute(context.Background(), session, "set a = 2", nil)
-	wantErr = "unsupported construct: set a = 2"
-	if err == nil || err.Error() != wantErr {
-		t.Errorf("Execute: %v, want %s", err, wantErr)
+	testcases := []struct {
+		in  string
+		out *vtgatepb.Session
+		err string
+	}{{
+		in:  "set autocommit=1",
+		out: &vtgatepb.Session{Autocommit: true},
+	}, {
+		in:  "set AUTOCOMMIT = 0",
+		out: &vtgatepb.Session{},
+	}, {
+		in:  "set AUTOCOMMIT = 'aa'",
+		err: "unexpected value type for autocommit: string",
+	}, {
+		in:  "set transaction_mode = 'unspecified'",
+		out: &vtgatepb.Session{TransactionMode: vtgatepb.TransactionMode_UNSPECIFIED},
+	}, {
+		in:  "set transaction_mode = 'single'",
+		out: &vtgatepb.Session{TransactionMode: vtgatepb.TransactionMode_SINGLE},
+	}, {
+		in:  "set transaction_mode = 'multi'",
+		out: &vtgatepb.Session{TransactionMode: vtgatepb.TransactionMode_MULTI},
+	}, {
+		in:  "set transaction_mode = 'twopc'",
+		out: &vtgatepb.Session{TransactionMode: vtgatepb.TransactionMode_TWOPC},
+	}, {
+		in:  "set transaction_mode = 'aa'",
+		err: "invalid transaction_mode: aa",
+	}, {
+		in:  "set transaction_mode = 1",
+		err: "unexpected value type for transaction_mode: int64",
+	}, {
+		in:  "set transaction_mode = 'twopc', autocommit=1",
+		out: &vtgatepb.Session{Autocommit: true, TransactionMode: vtgatepb.TransactionMode_TWOPC},
+	}, {
+		in:  "set autocommit=1+1",
+		err: "invalid syntax: 1 + 1",
+	}, {
+		in:  "set foo=1",
+		err: "unsupported construct: set foo=1",
+	}}
+	for _, tcase := range testcases {
+		session := &vtgatepb.Session{}
+		_, err := executor.Execute(context.Background(), session, tcase.in, nil)
+		if err != nil {
+			if err.Error() != tcase.err {
+				t.Errorf("%s error: %v, want %s", tcase.in, err, tcase.err)
+			}
+			continue
+		}
+		if !proto.Equal(session, tcase.out) {
+			t.Errorf("%s: %v, want %s", tcase.in, session, tcase.out)
+		}
 	}
 }
 

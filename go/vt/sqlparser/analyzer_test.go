@@ -265,10 +265,10 @@ func TestStringIn(t *testing.T) {
 	}
 }
 
-func TestExtractSetNums(t *testing.T) {
+func TestExtractSetValues(t *testing.T) {
 	testcases := []struct {
 		sql string
-		out map[string]int64
+		out map[string]interface{}
 		err string
 	}{{
 		sql: "invalid",
@@ -283,17 +283,17 @@ func TestExtractSetNums(t *testing.T) {
 		sql: "set autocommit=1+1",
 		err: "invalid syntax: 1 + 1",
 	}, {
-		sql: "set autocommit='aa'",
-		err: "invalid value type: 'aa'",
+		sql: "set transaction_mode='single'",
+		out: map[string]interface{}{"transaction_mode": "single"},
 	}, {
 		sql: "set autocommit=1",
-		out: map[string]int64{"autocommit": 1},
+		out: map[string]interface{}{"autocommit": int64(1)},
 	}, {
 		sql: "set AUTOCOMMIT=1",
-		out: map[string]int64{"autocommit": 1},
+		out: map[string]interface{}{"autocommit": int64(1)},
 	}}
 	for _, tcase := range testcases {
-		out, err := ExtractSetNums(tcase.sql)
+		out, err := ExtractSetValues(tcase.sql)
 		if tcase.err != "" {
 			if err == nil || err.Error() != tcase.err {
 				t.Errorf("ExtractSetNums(%s): %v, want '%s'", tcase.sql, err, tcase.err)
