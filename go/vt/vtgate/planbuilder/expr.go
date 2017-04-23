@@ -111,20 +111,23 @@ func routesCanMerge(outer, inner *route) error {
 	if outer.ERoute.Keyspace.Name != inner.ERoute.Keyspace.Name {
 		return errors.New("unsupported: subquery keyspace different from outer query")
 	}
-	if !inner.IsSingle() {
+	switch inner.ERoute.Opcode {
+	case engine.SelectUnsharded:
+		return nil
+	case engine.SelectNext:
+		return errors.New("unsupported: use of sequence in subquery")
+	case engine.SelectEqualUnique:
+		switch vals := inner.ERoute.Values.(type) {
+		case *sqlparser.ColName:
+			outerVindex := outer.Symtab().Vindex(vals, outer, false)
+			if outerVindex == inner.ERoute.Vindex {
+				return nil
+			}
+		}
+	default:
 		return errors.New("unsupported: scatter subquery")
 	}
-	if inner.ERoute.Opcode == engine.SelectUnsharded {
-		return nil
-	}
 	// SelectEqualUnique
-	switch vals := inner.ERoute.Values.(type) {
-	case *sqlparser.ColName:
-		outerVindex := outer.Symtab().Vindex(vals, outer, false)
-		if outerVindex == inner.ERoute.Vindex {
-			return nil
-		}
-	}
 	if outer.ERoute.Opcode != engine.SelectEqualUnique {
 		return errors.New("unsupported: subquery does not depend on scatter outer query")
 	}

@@ -80,33 +80,29 @@ func (route *Route) MarshalJSON() ([]byte, error) {
 }
 
 // Generate represents the instruction to generate
-// a value from a sequence. We cannot reuse a Route
-// for this because this needs to be always executed
-// outside a transaction.
+// a value from a sequence.
+// TODO(sougou): we should eventually merge this with SelectNext
+// but it's not worth it right now.
 type Generate struct {
-	// Opcode can only be SelectUnsharded for now.
-	Opcode   RouteOpcode
 	Keyspace *vindexes.Keyspace
 	Query    string
-	// Value is the supplied value. A new value will be generated
-	// only if Value was NULL. Otherwise, the supplied value will
+	// Values are the supplied values. New values will be generated
+	// for NULL values. Otherwise, the supplied value will
 	// be used.
-	Value interface{}
+	Values interface{}
 }
 
 // MarshalJSON serializes Generate into a JSON representation.
 // It's used for testing and diagnostics.
 func (gen *Generate) MarshalJSON() ([]byte, error) {
 	jsongen := struct {
-		Opcode   RouteOpcode        `json:",omitempty"`
 		Keyspace *vindexes.Keyspace `json:",omitempty"`
 		Query    string             `json:",omitempty"`
-		Value    interface{}        `json:",omitempty"`
+		Values   interface{}        `json:",omitempty"`
 	}{
-		Opcode:   gen.Opcode,
 		Keyspace: gen.Keyspace,
 		Query:    gen.Query,
-		Value:    prettyValue(gen.Value),
+		Values:   prettyValue(gen.Values),
 	}
 	return json.Marshal(jsongen)
 }
@@ -167,6 +163,8 @@ const (
 	// SelectScatter is for routing a scatter query
 	// to all shards of a keyspace.
 	SelectScatter
+	// SelectNext is for fetching from a sequence.
+	SelectNext
 	// UpdateUnsharded is for routing an update statement
 	// to an unsharded keyspace.
 	UpdateUnsharded
@@ -202,6 +200,7 @@ var routeName = [NumCodes]string{
 	"SelectEqual",
 	"SelectIN",
 	"SelectScatter",
+	"SelectNext",
 	"UpdateUnsharded",
 	"UpdateEqual",
 	"DeleteUnsharded",
@@ -244,6 +243,8 @@ func (route *Route) Execute(vcursor VCursor, bindVars, joinVars map[string]inter
 	bindVars = combineVars(bindVars, joinVars)
 
 	switch route.Opcode {
+	case SelectNext:
+		return route.execSelectNext(vcursor, bindVars)
 	case UpdateEqual:
 		return route.execUpdateEqual(vcursor, bindVars)
 	case DeleteEqual:
@@ -264,6 +265,7 @@ func (route *Route) Execute(vcursor VCursor, bindVars, joinVars map[string]inter
 	case SelectIN:
 		params, err = route.paramsSelectIN(vcursor, bindVars)
 	default:
+		// Unreachable.
 		return nil, fmt.Errorf("unsupported query route: %v", route)
 	}
 	if err != nil {
@@ -365,6 +367,14 @@ func (route *Route) paramsSelectIN(vcursor VCursor, bindVars map[string]interfac
 		ks:        ks,
 		shardVars: routing.ShardVars(bindVars),
 	}, nil
+}
+
+func (route *Route) execSelectNext(vcursor VCursor, bindVars map[string]interface{}) (*sqltypes.Result, error) {
+	ks, shard, err := route.anyShard(vcursor, route.Keyspace)
+	if err != nil {
+		return nil, fmt.Errorf("execSelectNext: %v", err)
+	}
+	return vcursor.ExecuteStandalone(route.Query, bindVars, ks, shard)
 }
 
 func (route *Route) execUpdateEqual(vcursor VCursor, bindVars map[string]interface{}) (*sqltypes.Result, error) {
@@ -670,8 +680,8 @@ func (route *Route) handleGenerate(vcursor VCursor, bindVars map[string]interfac
 		return 0, nil
 	}
 	count := 0
-	resolved := make([]interface{}, len(route.Generate.Value.([]interface{})))
-	for i, val := range route.Generate.Value.([]interface{}) {
+	resolved := make([]interface{}, len(route.Generate.Values.([]interface{})))
+	for i, val := range route.Generate.Values.([]interface{}) {
 		if v, ok := val.(string); ok {
 			val, ok = bindVars[v[1:]]
 			if !ok {

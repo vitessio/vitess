@@ -23,6 +23,24 @@ import (
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
+func TestSelectNext(t *testing.T) {
+	executor, _, _, sbclookup := createExecutorEnv()
+
+	query := "select next :n values from user_seq"
+	bv := map[string]interface{}{"n": 2}
+	_, err := executorExec(executor, query, bv)
+	if err != nil {
+		t.Error(err)
+	}
+	wantQueries := []querytypes.BoundQuery{{
+		Sql:           query,
+		BindVariables: bv,
+	}}
+	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
+		t.Errorf("sbclookup.Queries: %+v, want %+v\n", sbclookup.Queries, wantQueries)
+	}
+}
+
 func TestUnsharded(t *testing.T) {
 	executor, _, _, sbclookup := createExecutorEnv()
 
