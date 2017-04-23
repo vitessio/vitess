@@ -10,6 +10,7 @@ import (
 	"github.com/youtube/vitess/go/vt/vttablet/sandboxconn"
 	"golang.org/x/net/context"
 
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
 
@@ -200,10 +201,19 @@ func executorExec(executor *Executor, sql string, bv map[string]interface{}) (*s
 
 func executorStream(executor *Executor, sql string) (qr *sqltypes.Result, err error) {
 	results := make(chan *sqltypes.Result, 10)
-	err = executor.StreamExecute(context.Background(), masterSession, sql, nil, "", topodatapb.TabletType_MASTER, func(qr *sqltypes.Result) error {
-		results <- qr
-		return nil
-	})
+	err = executor.StreamExecute(
+		context.Background(),
+		masterSession,
+		sql,
+		nil,
+		querypb.Target{
+			TabletType: topodatapb.TabletType_MASTER,
+		},
+		func(qr *sqltypes.Result) error {
+			results <- qr
+			return nil
+		},
+	)
 	close(results)
 	if err != nil {
 		return nil, err

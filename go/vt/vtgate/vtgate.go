@@ -277,8 +277,7 @@ func (vtg *VTGate) StreamExecute(ctx context.Context, session *vtgatepb.Session,
 			session,
 			sql,
 			bindVariables,
-			target.Keyspace,
-			target.TabletType,
+			target,
 			func(reply *sqltypes.Result) error {
 				vtg.rowsReturned.Add(statsKey, int64(len(reply.Rows)))
 				return callback(reply)

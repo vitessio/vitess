@@ -31,7 +31,7 @@ var (
 
 func (c *conn) BeginTx(_ context.Context, opts driver.TxOptions) (driver.Tx, error) {
 	// We don't use the context. The function signature accepts the context
-	// to singal to the driver that it's allowed to call Rollback on Cancel.
+	// to signal to the driver that it's allowed to call Rollback on Cancel.
 	if opts.Isolation != driver.IsolationLevel(0) || opts.ReadOnly {
 		return nil, errIsolationUnsupported
 	}
