@@ -1,6 +1,6 @@
 # Unions
 "select * from user union select * from user_extra"
-"unsupported: scatter subquery"
+"unsupported: UNION on multi-shard queries"
 
 # SET
 "set a=1"
@@ -29,11 +29,11 @@
 
 # union operations in subqueries (FROM)
 "select * from (select * from user union all select * from user_extra) as t"
-"unsupported: scatter subquery"
+"unsupported: UNION on multi-shard queries"
 
 # union operations in subqueries (expressions)
 "select * from user where id in (select * from user union select * from user_extra)"
-"unsupported: scatter subquery"
+"unsupported: UNION on multi-shard queries"
 
 # subquery with join primitive (FROM)
 "select * from (select user.id from user join user_extra) as t"
@@ -265,23 +265,27 @@
 
 # multi-shard union
 "(select id from user union select id from music) union select 1 from dual"
-"unsupported: scatter subquery"
+"unsupported: UNION on multi-shard queries"
 
 # multi-shard union
 "select 1 from music union (select id from user union all select name from unsharded)"
-"unsupported: subquery keyspace different from outer query"
+"unsupported: UNION on different keyspaces"
 
 # multi-shard union
 "select 1 from music union (select id from user union select name from unsharded)"
-"unsupported: subquery keyspace different from outer query"
+"unsupported: UNION on different keyspaces"
 
 # multi-shard union
 "select id from user union all select id from music"
-"unsupported: scatter subquery"
+"unsupported: UNION on multi-shard queries"
+
+# union with different target shards
+"select 1 from music where id = 1 union select 1 from music where id = 2"
+"unsupported: UNION queries with different target shards"
 
 # Union all
 "select col1, col2 from user union all select col1, col2 from user_extra"
-"unsupported: scatter subquery"
+"unsupported: UNION on multi-shard queries"
 
 "(select user.id, user.name from user join user_extra where user_extra.extra = 'asdf') union select 'b','c' from user"
 "unsupported construct: SELECT of UNION is non-trivial"
