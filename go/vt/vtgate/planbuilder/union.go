@@ -95,3 +95,25 @@ func unionRouteMerge(union *sqlparser.Union, left, right builder, vschema VSchem
 	rroute.Redirect = rtb
 	return rtb, nil
 }
+
+// routesCanMerge returns nil if the left and right route
+// can be merged. Otherwise, it returns an appropriate error.
+func routesCanMerge(left, right *route) error {
+	if left.ERoute.Opcode == engine.SelectNext || right.ERoute.Opcode == engine.SelectNext {
+		return errors.New("unsupported: UNION on sequence tables")
+	}
+	if left.ERoute.Keyspace.Name != right.ERoute.Keyspace.Name {
+		return errors.New("unsupported: UNION on different keyspaces")
+	}
+	if left.ERoute.Opcode == engine.SelectUnsharded {
+		// right will also be unsharded. So, we're good.
+		return nil
+	}
+	if left.ERoute.Opcode != engine.SelectEqualUnique || right.ERoute.Opcode != engine.SelectEqualUnique {
+		return errors.New("unsupported: UNION on multi-shard queries")
+	}
+	if !valEqual(left.ERoute.Values, right.ERoute.Values) {
+		return errors.New("unsupported: UNION queries with different target shards")
+	}
+	return nil
+}
