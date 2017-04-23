@@ -508,12 +508,15 @@ func TestVSchemaStats(t *testing.T) {
 
 func TestGetPlanUnnormalized(t *testing.T) {
 	r, _, _, _ := createExecutorEnv()
+	emptyvc := newVCursorImpl(context.Background(), nil, querypb.Target{}, "", r)
+	unshardedvc := newVCursorImpl(context.Background(), nil, querypb.Target{Keyspace: KsTestUnsharded}, "", r)
+
 	query1 := "select * from music_user_map where id = 1"
-	plan1, err := r.getPlan(query1, "", map[string]interface{}{})
+	plan1, err := r.getPlan(emptyvc, query1, map[string]interface{}{})
 	if err != nil {
 		t.Error(err)
 	}
-	plan2, err := r.getPlan(query1, "", map[string]interface{}{})
+	plan2, err := r.getPlan(emptyvc, query1, map[string]interface{}{})
 	if err != nil {
 		t.Error(err)
 	}
@@ -526,14 +529,14 @@ func TestGetPlanUnnormalized(t *testing.T) {
 	if keys := r.plans.Keys(); !reflect.DeepEqual(keys, want) {
 		t.Errorf("Plan keys: %s, want %s", keys, want)
 	}
-	plan3, err := r.getPlan(query1, KsTestUnsharded, map[string]interface{}{})
+	plan3, err := r.getPlan(unshardedvc, query1, map[string]interface{}{})
 	if err != nil {
 		t.Error(err)
 	}
 	if plan1 == plan3 {
 		t.Errorf("getPlan(query1, ks): plans must not be equal: %p %p", plan1, plan3)
 	}
-	plan4, err := r.getPlan(query1, KsTestUnsharded, map[string]interface{}{})
+	plan4, err := r.getPlan(unshardedvc, query1, map[string]interface{}{})
 	if err != nil {
 		t.Error(err)
 	}
@@ -552,14 +555,17 @@ func TestGetPlanUnnormalized(t *testing.T) {
 func TestGetPlanNormalized(t *testing.T) {
 	r, _, _, _ := createExecutorEnv()
 	r.normalize = true
+	emptyvc := newVCursorImpl(context.Background(), nil, querypb.Target{}, "", r)
+	unshardedvc := newVCursorImpl(context.Background(), nil, querypb.Target{Keyspace: KsTestUnsharded}, "", r)
+
 	query1 := "select * from music_user_map where id = 1"
 	query2 := "select * from music_user_map where id = 2"
 	normalized := "select * from music_user_map where id = :vtg1"
-	plan1, err := r.getPlan(query1, "", map[string]interface{}{})
+	plan1, err := r.getPlan(emptyvc, query1, map[string]interface{}{})
 	if err != nil {
 		t.Error(err)
 	}
-	plan2, err := r.getPlan(query1, "", map[string]interface{}{})
+	plan2, err := r.getPlan(emptyvc, query1, map[string]interface{}{})
 	if err != nil {
 		t.Error(err)
 	}
@@ -572,14 +578,14 @@ func TestGetPlanNormalized(t *testing.T) {
 	if keys := r.plans.Keys(); !reflect.DeepEqual(keys, want) {
 		t.Errorf("Plan keys: %s, want %s", keys, want)
 	}
-	plan3, err := r.getPlan(query2, "", map[string]interface{}{})
+	plan3, err := r.getPlan(emptyvc, query2, map[string]interface{}{})
 	if err != nil {
 		t.Error(err)
 	}
 	if plan1 != plan3 {
 		t.Errorf("getPlan(query2): plans must be equal: %p %p", plan1, plan3)
 	}
-	plan4, err := r.getPlan(normalized, "", map[string]interface{}{})
+	plan4, err := r.getPlan(emptyvc, normalized, map[string]interface{}{})
 	if err != nil {
 		t.Error(err)
 	}
@@ -587,14 +593,14 @@ func TestGetPlanNormalized(t *testing.T) {
 		t.Errorf("getPlan(normalized): plans must be equal: %p %p", plan1, plan4)
 	}
 
-	plan3, err = r.getPlan(query1, KsTestUnsharded, map[string]interface{}{})
+	plan3, err = r.getPlan(unshardedvc, query1, map[string]interface{}{})
 	if err != nil {
 		t.Error(err)
 	}
 	if plan1 == plan3 {
 		t.Errorf("getPlan(query1, ks): plans must not be equal: %p %p", plan1, plan3)
 	}
-	plan4, err = r.getPlan(query1, KsTestUnsharded, map[string]interface{}{})
+	plan4, err = r.getPlan(unshardedvc, query1, map[string]interface{}{})
 	if err != nil {
 		t.Error(err)
 	}
@@ -610,12 +616,12 @@ func TestGetPlanNormalized(t *testing.T) {
 	}
 
 	// Errors
-	_, err = r.getPlan("syntax", "", map[string]interface{}{})
+	_, err = r.getPlan(emptyvc, "syntax", map[string]interface{}{})
 	wantErr := "syntax error at position 7 near 'syntax'"
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("getPlan(syntax): %v, want %s", err, wantErr)
 	}
-	_, err = r.getPlan("create table a(id int)", "", map[string]interface{}{})
+	_, err = r.getPlan(emptyvc, "create table a(id int)", map[string]interface{}{})
 	wantErr = "unsupported construct: ddl"
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("getPlan(syntax): %v, want %s", err, wantErr)
