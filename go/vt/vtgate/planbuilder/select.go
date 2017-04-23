@@ -205,13 +205,18 @@ func pushSelectRoutes(selectExprs sqlparser.SelectExprs, bldr builder) ([]*colsy
 					}
 				}
 			}
-			// We can push without validating the reference because
-			// MySQL will fail if it's invalid.
-			colsyms[i] = rb.PushStar(node)
+			colsyms[i] = rb.PushAnonymous(node)
 		case sqlparser.Nextval:
-			// For now, this is only supported as an implicit feature
-			// for auto_inc in inserts.
-			return nil, errors.New("unsupported: NEXT VALUES construct")
+			rb, ok := bldr.(*route)
+			if !ok {
+				// This code is unreachable because the parser doesn't allow joins for next val statements.
+				return nil, errors.New("unsupported: SELECT NEXT query in complex join")
+			}
+			if rb.ERoute.Opcode != engine.SelectUnsharded {
+				return nil, errors.New("NEXT used on a sharded table")
+			}
+			rb.ERoute.Opcode = engine.SelectNext
+			colsyms[i] = rb.PushAnonymous(node)
 		}
 	}
 	return colsyms, nil

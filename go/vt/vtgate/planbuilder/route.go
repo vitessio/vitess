@@ -101,9 +101,15 @@ func (rb *route) Leftmost() *route {
 // Join joins with the RHS. This could produce a merged route
 // or a new join node.
 func (rb *route) Join(rhs builder, ajoin *sqlparser.JoinTableExpr) (builder, error) {
+	if rb.ERoute.Opcode == engine.SelectNext {
+		return nil, errors.New("unsupported: sequence join with another table")
+	}
 	rRoute, ok := rhs.(*route)
 	if !ok {
 		return newJoin(rb, rhs, ajoin)
+	}
+	if rRoute.ERoute.Opcode == engine.SelectNext {
+		return nil, errors.New("unsupported: sequence join with another table")
 	}
 	if rb.ERoute.Keyspace.Name != rRoute.ERoute.Keyspace.Name {
 		return newJoin(rb, rRoute, ajoin)
@@ -356,8 +362,9 @@ func (rb *route) PushSelect(expr *sqlparser.NonStarExpr, _ *route) (colsym *cols
 	return colsym, len(rb.Colsyms) - 1, nil
 }
 
-// PushStar pushes the '*' expression into the route.
-func (rb *route) PushStar(expr *sqlparser.StarExpr) *colsym {
+// PushAnonymous pushes an anonymous expression like '*' or NEXt VALUES
+// into the select expression list of the route.
+func (rb *route) PushAnonymous(expr sqlparser.SelectExpr) *colsym {
 	// We just create a place-holder colsym. It won't
 	// match anything.
 	colsym := newColsym(rb, rb.Symtab())
@@ -551,5 +558,11 @@ func (rb *route) SupplyCol(ref colref) int {
 
 // IsSingle returns true if the route targets only one database.
 func (rb *route) IsSingle() bool {
-	return rb.ERoute.Opcode == engine.SelectUnsharded || rb.ERoute.Opcode == engine.SelectEqualUnique
+	switch rb.ERoute.Opcode {
+	// Even thought SelectNext is a single-shard query, we don't
+	// include it here because it can't combine with any other construct.
+	case engine.SelectUnsharded, engine.SelectEqualUnique:
+		return true
+	}
+	return false
 }

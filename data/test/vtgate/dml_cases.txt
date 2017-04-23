@@ -234,13 +234,12 @@
     "Query": "insert into unsharded_auto(id, val) values (:__seq0, 'aa')",
     "Table": "unsharded_auto",
     "Generate": {
-      "Opcode": "SelectUnsharded",
       "Keyspace": {
         "Name": "main",
         "Sharded": false
       },
       "Query": "select next :n values from seq",
-      "Value": [
+      "Values": [
         1
       ]
     }
@@ -260,13 +259,12 @@
     "Query": "insert into unsharded_auto(val, id) values ('aa', :__seq0)",
     "Table": "unsharded_auto",
     "Generate": {
-      "Opcode": "SelectUnsharded",
       "Keyspace": {
         "Name": "main",
         "Sharded": false
       },
       "Query": "select next :n values from seq",
-      "Value": [
+      "Values": [
         null
       ]
     }
@@ -286,13 +284,12 @@
     "Query": "insert into unsharded_auto(val, id) values (false, :__seq0)",
     "Table": "unsharded_auto",
     "Generate": {
-      "Opcode": "SelectUnsharded",
       "Keyspace": {
         "Name": "main",
         "Sharded": false
       },
       "Query": "select next :n values from seq",
-      "Value": [
+      "Values": [
         null
       ]
     }
@@ -312,13 +309,12 @@
     "Query": "insert into unsharded_auto(id, val) values (:__seq0, 'aa'), (:__seq1, 'bb')",
     "Table": "unsharded_auto",
     "Generate": {
-      "Opcode": "SelectUnsharded",
       "Keyspace": {
         "Name": "main",
         "Sharded": false
       },
       "Query": "select next :n values from seq",
-      "Value": [
+      "Values": [
         1,
         null
       ]
@@ -356,13 +352,12 @@
     ]],
     "Table": "user",
     "Generate": {
-      "Opcode": "SelectUnsharded",
       "Keyspace": {
         "Name": "main",
         "Sharded": false
       },
       "Query": "select next :n values from seq",
-      "Value": [1]
+      "Values": [1]
     },
     "Prefix": "insert into user(id, Name, Costly) values ",
     "Mid":["(:_Id0, :_Name0, :_Costly0)"]
@@ -387,13 +382,12 @@
     ]],
     "Table": "user",
     "Generate": {
-      "Opcode": "SelectUnsharded",
       "Keyspace": {
         "Name": "main",
         "Sharded": false
       },
       "Query": "select next :n values from seq",
-      "Value": [null]
+      "Values": [null]
     },
     "Prefix": "insert into user(nonid, Id, Name, Costly) values ",
     "Mid": ["(2, :_Id0, :_Name0, :_Costly0)"]
@@ -418,13 +412,12 @@
     ]],
     "Table": "user",
     "Generate": {
-      "Opcode": "SelectUnsharded",
       "Keyspace": {
         "Name": "main",
         "Sharded": false
       },
       "Query": "select next :n values from seq",
-      "Value": [null]
+      "Values": [null]
     },
     "Prefix": "insert into user(nonid, Id, Name, Costly) values ",
     "Mid": ["(true, :_Id0, :_Name0, :_Costly0)"]
@@ -449,13 +442,12 @@
     ]],
     "Table": "user",
     "Generate": {
-      "Opcode": "SelectUnsharded",
       "Keyspace": {
         "Name": "main",
         "Sharded": false
       },
       "Query": "select next :n values from seq",
-      "Value": [1]
+      "Values": [1]
     },
     "Prefix": "insert into user(nonid, name, id, Costly) values ",
     "Mid": ["(2, :_Name0, :_Id0, :_Costly0)"]
@@ -478,13 +470,12 @@
     ]],
     "Table": "user_extra",
     "Generate": {
-      "Opcode": "SelectUnsharded",
       "Keyspace": {
         "Name": "main",
         "Sharded": false
       },
       "Query": "select next :n values from seq",
-      "Value": [null]
+      "Values": [null]
     },
     "Prefix": "insert into user_extra(nonid, user_id, extra_id) values ",
     "Mid": ["(2, :_user_id0, :__seq0)"]
@@ -556,13 +547,12 @@
     ],
     "Table": "user",
     "Generate": {
-      "Opcode": "SelectUnsharded",
       "Keyspace": {
         "Name": "main",
         "Sharded": false
       },
       "Query": "select next :n values from seq",
-      "Value": [1,2]
+      "Values": [1,2]
     },
     "Prefix": "insert into user(id, Name, Costly) values ",
     "Mid": ["(:_Id0, :_Name0, :_Costly0)","(:_Id1, :_Name1, :_Costly1)"]

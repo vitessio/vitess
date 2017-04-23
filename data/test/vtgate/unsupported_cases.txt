@@ -151,6 +151,10 @@
 "select col from user limit 1"
 "unsupported: limits with scatter"
 
+# sequence in subquery
+"select col from unsharded where id in (select next value from seq)"
+"unsupported: use of sequence in subquery"
+
 # subqueries in update
 "update user set col = (select id from unsharded)"
 "unsupported: subqueries in DML"
@@ -250,10 +254,6 @@
 # sharded insert subquery in insert value
 "insert into user(id, val) values((select 1), 1)"
 "unsupported: subquery in insert values"
-
-# nextval not supported yet
-"select next value from user"
-"unsupported: NEXT VALUES construct"
 
 # complex expression in parenthesis with limit not supported yet
 "select * from user where (id = 4 AND name ='abc') limit 5"

@@ -83,10 +83,9 @@ func buildInsertUnshardedPlan(ins *sqlparser.Insert, table *vindexes.Table, vsch
 	}
 	if eRoute.Table.AutoIncrement != nil {
 		eRoute.Generate = &engine.Generate{
-			Opcode:   engine.SelectUnsharded,
 			Keyspace: eRoute.Table.AutoIncrement.Sequence.Keyspace,
 			Query:    fmt.Sprintf("select next :n values from %s", sqlparser.String(eRoute.Table.AutoIncrement.Sequence.Name)),
-			Value:    autoIncValues,
+			Values:   autoIncValues,
 		}
 	}
 	eRoute.Query = generateQuery(ins)
@@ -144,10 +143,9 @@ func buildInsertShardedPlan(ins *sqlparser.Insert, table *vindexes.Table) (*engi
 	}
 	if eRoute.Table.AutoIncrement != nil {
 		eRoute.Generate = &engine.Generate{
-			Opcode:   engine.SelectUnsharded,
 			Keyspace: eRoute.Table.AutoIncrement.Sequence.Keyspace,
 			Query:    fmt.Sprintf("select next :n values from %s", sqlparser.String(eRoute.Table.AutoIncrement.Sequence.Name)),
-			Value:    autoIncValues,
+			Values:   autoIncValues,
 		}
 	}
 	eRoute.Values = routeValues
