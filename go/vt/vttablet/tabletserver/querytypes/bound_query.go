@@ -39,14 +39,17 @@ func QueryAsString(sql string, bindVariables map[string]interface{}) string {
 	buf := &bytes.Buffer{}
 	fmt.Fprintf(buf, "Sql: %q, BindVars: {", sqldb.TruncateForError(sql))
 	for k, v := range bindVariables {
+		var valString string;
 		switch val := v.(type) {
 		case []byte:
-			fmt.Fprintf(buf, "%s: %q, ", k, sqldb.TruncateForError(string(val)))
+			valString = string(val);
 		case string:
-			fmt.Fprintf(buf, "%s: %q, ", k, sqldb.TruncateForError(val))
+			valString = val;
 		default:
-			fmt.Fprintf(buf, "%s: %v, ", k, v)
+			valString = fmt.Sprintf("%v", v);
 		}
+
+		fmt.Fprintf(buf, "%s: %q", k, sqldb.TruncateForError(valString));
 	}
 	fmt.Fprintf(buf, "}")
 	return string(buf.Bytes())
