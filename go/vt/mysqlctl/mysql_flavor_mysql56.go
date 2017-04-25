@@ -107,6 +107,14 @@ func (*mysql56) ResetReplicationCommands() []string {
 	}
 }
 
+// ResetSlaveCommands implements MysqlFlavor.ResetSlaveCommands().
+func (*mysql56) ResetSlaveCommands() []string {
+	return []string{
+		"STOP SLAVE",
+		"RESET SLAVE ALL", // "ALL" makes it forget the master host:port.
+	}
+}
+
 // PromoteSlaveCommands implements MysqlFlavor.PromoteSlaveCommands().
 func (*mysql56) PromoteSlaveCommands() []string {
 	return []string{

@@ -102,6 +102,14 @@ func (*mariaDB10) ResetReplicationCommands() []string {
 	}
 }
 
+// ResetSlaveCommands implements MysqlFlavor.ResetSlaveCommands().
+func (*mariaDB10) ResetSlaveCommands() []string {
+	return []string{
+		"STOP SLAVE",
+		"RESET SLAVE ALL", // "ALL" makes it forget the master host:port.
+	}
+}
+
 // PromoteSlaveCommands implements MysqlFlavor.PromoteSlaveCommands().
 func (*mariaDB10) PromoteSlaveCommands() []string {
 	return []string{
