@@ -13,8 +13,8 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/acl"
-	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/vt/logz"
+	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/planbuilder"
 )
 
@@ -138,7 +138,7 @@ func queryzHandler(qe *QueryEngine, w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		Value := &queryzRow{
-			Query:  logz.Wrappable(sqldb.TruncateForUI(v)),
+			Query:  logz.Wrappable(sqlparser.TruncateForUI(v)),
 			Table:  plan.TableName().String(),
 			Plan:   plan.PlanID,
 			Reason: plan.Reason,

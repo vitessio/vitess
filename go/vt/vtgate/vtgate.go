@@ -18,7 +18,6 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/acl"
-	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/tb"
@@ -1006,7 +1005,7 @@ func truncateErrorStrings(data map[string]interface{}) map[string]interface{} {
 			ret[key] = truncateErrorStrings(mapVal)
 		} else {
 			strVal := fmt.Sprintf("%v", val)
-			ret[key] = sqldb.TruncateForError(strVal)
+			ret[key] = sqlparser.TruncateForError(strVal)
 		}
 	}
 	return ret
