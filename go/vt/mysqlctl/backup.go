@@ -853,15 +853,5 @@ func Restore(
 		return replication.Position{}, err
 	}
 
-	cmds, err := mysqld.ResetSlaveCommands()
-	if err != nil {
-		return replication.Position{}, err
-	}
-
-	err = mysqld.ExecuteSuperQueryList(ctx, cmds)
-	if err != nil {
-		return replication.Position{}, err
-	}
-
 	return bm.Position, nil
 }
