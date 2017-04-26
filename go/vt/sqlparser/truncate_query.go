@@ -15,11 +15,13 @@ var (
 )
 
 func truncateQuery(query string, max int) string {
-	if max == 0 || len(query) <= max {
-		return query
+	sql, comments := SplitTrailingComments(query)
+
+	if max == 0 || len(sql) <= max {
+		return sql + comments
 	}
 
-	return query[:max-12] + " [TRUNCATED]"
+	return sql[:max-12] + " [TRUNCATED] " + comments
 }
 
 // TruncateForUI is used when displaying queries on various Vitess status pages
