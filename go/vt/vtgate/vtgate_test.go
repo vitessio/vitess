@@ -13,10 +13,10 @@ import (
 	"testing"
 
 	"github.com/golang/protobuf/proto"
-	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/discovery"
 	"github.com/youtube/vitess/go/vt/key"
+	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vttablet/sandboxconn"
@@ -2665,7 +2665,7 @@ func TestParseTarget(t *testing.T) {
 }
 
 func TestErrorTruncation(t *testing.T) {
-	*sqldb.TruncateErrLen = 30
+	*sqlparser.TruncateErrLen = 30
 
 	query := map[string]interface{}{
 		"Sql": "THIS IS A LONG QUERY THAT WILL BE TRUNCATED AWAY",
@@ -2677,7 +2677,7 @@ func TestErrorTruncation(t *testing.T) {
 		},
 	}
 
-	truncateErrorStrings(query)
+	query = truncateErrorStrings(query)
 	errStr := fmt.Sprintf("request: %+v", query)
 	if !strings.Contains(errStr, "[TRUNCATED]") {
 		t.Errorf("Error was not truncated: %s", errStr)

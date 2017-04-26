@@ -21,6 +21,7 @@ import (
 
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vttablet/endtoend/framework"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
@@ -542,7 +543,7 @@ func TestLongQueryErrorTruncation(t *testing.T) {
 	}
 
 	// Test that the data too long error is truncated once the option is set
-	*sqldb.TruncateErrLen = 100;
+	*sqlparser.TruncateErrLen = 100;
 	_, err = client.Execute(
 		"insert into vitess_test values(123, null, null, :data)",
 		map[string]interface{}{"data": buf.String()},
