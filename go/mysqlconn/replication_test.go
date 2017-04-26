@@ -1272,19 +1272,14 @@ func testRowReplicationTypesWithRealDatabase(t *testing.T, params *sqldb.ConnPar
 		sql.WriteString(", ")
 		sql.WriteString(tcase.name)
 		sql.WriteString(" = ")
-		switch {
-		case values[i+1].Type() == querypb.Type_TIMESTAMP && !bytes.HasPrefix(values[i+1].Raw(), replication.ZeroTimestamp):
+		if values[i+1].Type() == querypb.Type_TIMESTAMP && !bytes.HasPrefix(values[i+1].Raw(), replication.ZeroTimestamp) {
 			// Values in the binary log are UTC. Let's convert them
 			// to whatever timezone the connection is using,
 			// so MySQL properly converts them back to UTC.
 			sql.WriteString("convert_tz(")
 			values[i+1].EncodeSQL(&sql)
 			sql.WriteString(", '+00:00', @@session.time_zone)")
-		case values[i+1].Type() == querypb.Type_JSON:
-			// For JSON, we for now get the SQL statement.
-			// Just echo it as is.
-			sql.Write(values[i+1].Raw())
-		default:
+		} else {
 			values[i+1].EncodeSQL(&sql)
 		}
 	}

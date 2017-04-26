@@ -389,14 +389,14 @@ func TestCellLengthAndData(t *testing.T) {
 		metadata: 2,
 		data: []byte{0x0f, 0x00,
 			0, 1, 0, 14, 0, 11, 0, 1, 0, 12, 12, 0, 97, 1, 98},
-		out: sqltypes.MakeTrusted(querypb.Type_JSON,
+		out: sqltypes.MakeTrusted(sqltypes.TypeSQL,
 			[]byte(`JSON_OBJECT('a','b')`)),
 	}, {
 		typ:      TypeJSON,
 		metadata: 4,
 		data: []byte{0x0f, 0x00, 0x00, 0x00,
 			0, 1, 0, 14, 0, 11, 0, 1, 0, 12, 12, 0, 97, 1, 98},
-		out: sqltypes.MakeTrusted(querypb.Type_JSON,
+		out: sqltypes.MakeTrusted(sqltypes.TypeSQL,
 			[]byte(`JSON_OBJECT('a','b')`)),
 	}, {
 		typ:      TypeEnum,
