@@ -526,7 +526,7 @@ func TestLongQueryErrorTruncation(t *testing.T) {
 
 	buf := &bytes.Buffer{}
 	for i := 0; i < 100; i++ {
-	    fmt.Fprintf(buf, "%d: THIS IS A LONG LONG LONG LONG QUERY STRING\n", i)
+	    fmt.Fprintf(buf, "%d: THIS IS A LONG LONG LONG LONG QUERY STRING THAT SHOULD BE SHORTENED\n", i)
         }
 
 	// Test that the data too long error is not truncated by default
@@ -552,7 +552,23 @@ func TestLongQueryErrorTruncation(t *testing.T) {
 		t.Error("expected data too long error")
 		return
 	}
-	if len(err.Error()) > 200 || !strings.Contains(err.Error(), "[TRUNCATED]") {
-		t.Error("expected truncated error string")
+	if strings.Contains(err.Error(), "SHORTENED") || !strings.Contains(err.Error(), "[TRUNCATED]") {
+		t.Error("expected truncated error string, got: " + err.Error())
+	}
+
+	// Test that trailing comments are preserved data too long error is truncated once the option is set
+	*sqlparser.TruncateErrLen = 100;
+	_, err = client.Execute(
+		"insert into vitess_test values(123, null, null, :data) /* KEEP ME */",
+		map[string]interface{}{"data": buf.String()},
+	)
+	if err == nil {
+		t.Error("expected data too long error")
+		return
+	}
+	if strings.Contains(err.Error(), "SHORTENED") ||
+		!strings.Contains(err.Error(), "[TRUNCATED]") ||
+		!strings.Contains(err.Error(), "/* KEEP ME */") {
+		t.Error("expected truncated error string, got: " + err.Error())
 	}
 }
