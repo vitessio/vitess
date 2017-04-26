@@ -5,6 +5,7 @@
 package endtoend
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -19,6 +20,7 @@ import (
 
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vttablet/endtoend/framework"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
@@ -515,5 +517,57 @@ func TestDBAStatements(t *testing.T) {
 	}
 	if qr.RowsAffected != 4 {
 		t.Errorf("RowsAffected: %d, want 4", qr.RowsAffected)
+	}
+}
+
+func TestLongQueryErrorTruncation(t *testing.T) {
+	client := framework.NewClient()
+
+	buf := &bytes.Buffer{}
+	for i := 0; i < 100; i++ {
+	    fmt.Fprintf(buf, "%d: THIS IS A LONG LONG LONG LONG QUERY STRING THAT SHOULD BE SHORTENED\n", i)
+        }
+
+	// Test that the data too long error is not truncated by default
+	_, err := client.Execute(
+		"insert into vitess_test values(123, null, null, :data)",
+		map[string]interface{}{"data": buf.String()},
+	)
+	if err == nil {
+		t.Error("expected data too long error")
+		return
+	}
+	if len(err.Error()) < 1000 || strings.Contains(err.Error(), "[TRUNCATED]") {
+		t.Error("expected unmodified error string")
+	}
+
+	// Test that the data too long error is truncated once the option is set
+	*sqlparser.TruncateErrLen = 100;
+	_, err = client.Execute(
+		"insert into vitess_test values(123, null, null, :data)",
+		map[string]interface{}{"data": buf.String()},
+	)
+	if err == nil {
+		t.Error("expected data too long error")
+		return
+	}
+	if strings.Contains(err.Error(), "SHORTENED") || !strings.Contains(err.Error(), "[TRUNCATED]") {
+		t.Error("expected truncated error string, got: " + err.Error())
+	}
+
+	// Test that trailing comments are preserved data too long error is truncated once the option is set
+	*sqlparser.TruncateErrLen = 100;
+	_, err = client.Execute(
+		"insert into vitess_test values(123, null, null, :data) /* KEEP ME */",
+		map[string]interface{}{"data": buf.String()},
+	)
+	if err == nil {
+		t.Error("expected data too long error")
+		return
+	}
+	if strings.Contains(err.Error(), "SHORTENED") ||
+		!strings.Contains(err.Error(), "[TRUNCATED]") ||
+		!strings.Contains(err.Error(), "/* KEEP ME */") {
+		t.Error("expected truncated error string, got: " + err.Error())
 	}
 }
