@@ -9,6 +9,8 @@ package querytypes
 import (
 	"bytes"
 	"fmt"
+
+	"github.com/youtube/vitess/go/sqltypes"
 )
 
 // This file defines the BoundQuery type.
@@ -54,4 +56,23 @@ func slimit(s string, max int) string {
 		return s[:max]
 	}
 	return s
+}
+
+// BoundQueriesEqual compares two slices of BoundQuery objects.
+func BoundQueriesEqual(x, y []BoundQuery) bool {
+	if len(x) != len(y) {
+		return false
+	}
+	for i := range x {
+		if !BoundQueryEqual(&x[i], &y[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+// BoundQueryEqual compares two BoundQuery objects.
+func BoundQueryEqual(x, y *BoundQuery) bool {
+	return x.Sql == y.Sql &&
+		sqltypes.BindVariablesEqual(x.BindVariables, y.BindVariables)
 }

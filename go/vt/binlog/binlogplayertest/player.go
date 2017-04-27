@@ -179,7 +179,7 @@ func testStreamTables(t *testing.T, bpc binlogplayer.Client) {
 	if se, err := stream.Recv(); err != nil {
 		t.Fatalf("got error: %v", err)
 	} else {
-		if !reflect.DeepEqual(*se, *testBinlogTransaction) {
+		if !proto.Equal(se, testBinlogTransaction) {
 			t.Errorf("got wrong result, got %v expected %v", *se, *testBinlogTransaction)
 		}
 	}
