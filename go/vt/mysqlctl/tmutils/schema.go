@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/golang/protobuf/proto"
 	"github.com/youtube/vitess/go/vt/concurrency"
 
 	tabletmanagerdatapb "github.com/youtube/vitess/go/vt/proto/tabletmanagerdata"
@@ -278,4 +279,13 @@ type SchemaChange struct {
 	AllowReplication bool
 	BeforeSchema     *tabletmanagerdatapb.SchemaDefinition
 	AfterSchema      *tabletmanagerdatapb.SchemaDefinition
+}
+
+// Equal compares two SchemaChange objects.
+func (s *SchemaChange) Equal(s2 *SchemaChange) bool {
+	return s.SQL == s2.SQL &&
+		s.Force == s2.Force &&
+		s.AllowReplication == s2.AllowReplication &&
+		proto.Equal(s.BeforeSchema, s2.BeforeSchema) &&
+		proto.Equal(s.AfterSchema, s2.AfterSchema)
 }

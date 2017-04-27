@@ -76,7 +76,7 @@ type queryExecute struct {
 
 func (q *queryExecute) equal(q2 *queryExecute) bool {
 	return q.SQL == q2.SQL &&
-		reflect.DeepEqual(q.BindVariables, q2.BindVariables) &&
+		sqltypes.BindVariablesEqual(q.BindVariables, q2.BindVariables) &&
 		q.Keyspace == q2.Keyspace &&
 		q.TabletType == q2.TabletType &&
 		proto.Equal(q.Session, q2.Session) &&
@@ -166,7 +166,7 @@ type queryExecuteShards struct {
 
 func (q *queryExecuteShards) equal(q2 *queryExecuteShards) bool {
 	return q.SQL == q2.SQL &&
-		reflect.DeepEqual(q.BindVariables, q2.BindVariables) &&
+		sqltypes.BindVariablesEqual(q.BindVariables, q2.BindVariables) &&
 		q.Keyspace == q2.Keyspace &&
 		reflect.DeepEqual(q.Shards, q2.Shards) &&
 		q.TabletType == q2.TabletType &&
@@ -223,7 +223,7 @@ type queryExecuteKeyspaceIds struct {
 
 func (q *queryExecuteKeyspaceIds) equal(q2 *queryExecuteKeyspaceIds) bool {
 	return q.SQL == q2.SQL &&
-		reflect.DeepEqual(q.BindVariables, q2.BindVariables) &&
+		sqltypes.BindVariablesEqual(q.BindVariables, q2.BindVariables) &&
 		q.Keyspace == q2.Keyspace &&
 		reflect.DeepEqual(q.KeyspaceIds, q2.KeyspaceIds) &&
 		q.TabletType == q2.TabletType &&
@@ -279,7 +279,7 @@ type queryExecuteKeyRanges struct {
 
 func (q *queryExecuteKeyRanges) equal(q2 *queryExecuteKeyRanges) bool {
 	if q.SQL != q2.SQL ||
-		!reflect.DeepEqual(q.BindVariables, q2.BindVariables) ||
+		!sqltypes.BindVariablesEqual(q.BindVariables, q2.BindVariables) ||
 		q.Keyspace != q2.Keyspace ||
 		len(q.KeyRanges) != len(q2.KeyRanges) ||
 		q.TabletType != q2.TabletType ||
@@ -344,7 +344,7 @@ type queryExecuteEntityIds struct {
 
 func (q *queryExecuteEntityIds) equal(q2 *queryExecuteEntityIds) bool {
 	if q.SQL != q2.SQL ||
-		!reflect.DeepEqual(q.BindVariables, q2.BindVariables) ||
+		!sqltypes.BindVariablesEqual(q.BindVariables, q2.BindVariables) ||
 		q.Keyspace != q2.Keyspace ||
 		q.EntityColumnName != q2.EntityColumnName ||
 		len(q.EntityKeyspaceIDs) != len(q2.EntityKeyspaceIDs) ||
@@ -824,6 +824,16 @@ type querySplitQuery struct {
 	Algorithm           querypb.SplitQueryRequest_Algorithm
 }
 
+func (q *querySplitQuery) equal(q2 *querySplitQuery) bool {
+	return q.Keyspace == q2.Keyspace &&
+		q.SQL == q2.SQL &&
+		sqltypes.BindVariablesEqual(q.BindVariables, q2.BindVariables) &&
+		reflect.DeepEqual(q.SplitColumns, q2.SplitColumns) &&
+		q.SplitCount == q2.SplitCount &&
+		q.NumRowsPerQueryPart == q2.NumRowsPerQueryPart &&
+		q.Algorithm == q2.Algorithm
+}
+
 // SplitQuery is part of the VTGateService interface
 func (f *fakeVTGateService) SplitQuery(
 	ctx context.Context,
@@ -850,7 +860,7 @@ func (f *fakeVTGateService) SplitQuery(
 		NumRowsPerQueryPart: numRowsPerQueryPart,
 		Algorithm:           algorithm,
 	}
-	if !reflect.DeepEqual(query, splitQueryRequest) {
+	if !query.equal(splitQueryRequest) {
 		f.t.Errorf("SplitQuery has wrong input: got %#v wanted %#v", query, splitQueryRequest)
 	}
 	return splitQueryResult, nil

@@ -376,7 +376,7 @@ func (f *FakeQueryService) Execute(ctx context.Context, target *querypb.Target, 
 	if sql != ExecuteQuery {
 		f.t.Errorf("invalid Execute.Query.Sql: got %v expected %v", sql, ExecuteQuery)
 	}
-	if !reflect.DeepEqual(bindVariables, ExecuteBindVars) {
+	if !sqltypes.BindVariablesEqual(bindVariables, ExecuteBindVars) {
 		f.t.Errorf("invalid Execute.BindVariables: got %v expected %v", bindVariables, ExecuteBindVars)
 	}
 	if !proto.Equal(options, TestExecuteOptions) {
@@ -432,7 +432,7 @@ func (f *FakeQueryService) StreamExecute(ctx context.Context, target *querypb.Ta
 	if sql != StreamExecuteQuery {
 		f.t.Errorf("invalid StreamExecute.Sql: got %v expected %v", sql, StreamExecuteQuery)
 	}
-	if !reflect.DeepEqual(bindVariables, StreamExecuteBindVars) {
+	if !sqltypes.BindVariablesEqual(bindVariables, StreamExecuteBindVars) {
 		f.t.Errorf("invalid StreamExecute.BindVariables: got %v expected %v", bindVariables, StreamExecuteBindVars)
 	}
 	if !proto.Equal(options, TestExecuteOptions) {
@@ -538,7 +538,7 @@ func (f *FakeQueryService) ExecuteBatch(ctx context.Context, target *querypb.Tar
 	if f.Panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
-	if !reflect.DeepEqual(queries, ExecuteBatchQueries) {
+	if !querytypes.BoundQueriesEqual(queries, ExecuteBatchQueries) {
 		f.t.Errorf("invalid ExecuteBatch.Queries: got %v expected %v", queries, ExecuteBatchQueries)
 	}
 	if !proto.Equal(options, TestExecuteOptions) {
@@ -684,7 +684,7 @@ func (f *FakeQueryService) SplitQuery(
 		panic(fmt.Errorf("test-triggered panic"))
 	}
 	f.checkTargetCallerID(ctx, "SplitQuery", target)
-	if !reflect.DeepEqual(query, SplitQueryBoundQuery) {
+	if !querytypes.BoundQueryEqual(&query, &SplitQueryBoundQuery) {
 		f.t.Errorf("invalid SplitQuery.SplitQueryRequest.Query: got %v expected %v",
 			querytypes.QueryAsString(query.Sql, query.BindVariables), SplitQueryBoundQuery)
 	}
