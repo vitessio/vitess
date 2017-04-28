@@ -177,9 +177,9 @@ func commandVtGateExecute(ctx context.Context, wr *wrangler.Wrangler, subFlags *
 	if err != nil {
 		return fmt.Errorf("error connecting to vtgate '%v': %v", *server, err)
 	}
-	vsn := vtgateConn.Session(*targetString, executeOptions)
+	session := vtgateConn.Session(*targetString, executeOptions)
 	defer vtgateConn.Close()
-	qr, err := vsn.Execute(ctx, subFlags.Arg(0), *bindVariables)
+	qr, err := session.Execute(ctx, subFlags.Arg(0), *bindVariables)
 	if err != nil {
 		return fmt.Errorf("Execute failed: %v", err)
 	}

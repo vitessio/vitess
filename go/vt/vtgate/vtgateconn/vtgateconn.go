@@ -180,16 +180,16 @@ type VTGateSession struct {
 }
 
 // Execute performs a VTGate Execute.
-func (vsn *VTGateSession) Execute(ctx context.Context, query string, bindVars map[string]interface{}) (*sqltypes.Result, error) {
-	session, res, err := vsn.impl.Execute(ctx, query, bindVars, vsn.session)
-	vsn.session = session
+func (sn *VTGateSession) Execute(ctx context.Context, query string, bindVars map[string]interface{}) (*sqltypes.Result, error) {
+	session, res, err := sn.impl.Execute(ctx, query, bindVars, sn.session)
+	sn.session = session
 	return res, err
 }
 
 // ExecuteBatch executes a list of queries on vtgate within the current transaction.
-func (vsn *VTGateSession) ExecuteBatch(ctx context.Context, query []string, bindVars []map[string]interface{}) ([]sqltypes.QueryResponse, error) {
-	session, res, errs := vsn.impl.ExecuteBatch(ctx, query, bindVars, vsn.session)
-	vsn.session = session
+func (sn *VTGateSession) ExecuteBatch(ctx context.Context, query []string, bindVars []map[string]interface{}) ([]sqltypes.QueryResponse, error) {
+	session, res, errs := sn.impl.ExecuteBatch(ctx, query, bindVars, sn.session)
+	sn.session = session
 	return res, errs
 }
 
@@ -197,11 +197,11 @@ func (vsn *VTGateSession) ExecuteBatch(ctx context.Context, query []string, bind
 // It returns a ResultStream and an error. First check the
 // error. Then you can pull values from the ResultStream until io.EOF,
 // or another error.
-func (vsn *VTGateSession) StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}) (sqltypes.ResultStream, error) {
+func (sn *VTGateSession) StreamExecute(ctx context.Context, query string, bindVars map[string]interface{}) (sqltypes.ResultStream, error) {
 	// StreamExecute is only used for SELECT queries that don't change
 	// the session. So, the protocol doesn't return an updated session.
 	// This may change in the future.
-	return vsn.impl.StreamExecute(ctx, query, bindVars, vsn.session)
+	return sn.impl.StreamExecute(ctx, query, bindVars, sn.session)
 }
 
 // VTGateTx defines an ongoing transaction.

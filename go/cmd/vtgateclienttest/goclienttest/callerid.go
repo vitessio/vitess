@@ -21,7 +21,7 @@ import (
 
 // testCallerID adds a caller ID to a context, and makes sure the server
 // gets it.
-func testCallerID(t *testing.T, conn *vtgateconn.VTGateConn, vsn *vtgateconn.VTGateSession) {
+func testCallerID(t *testing.T, conn *vtgateconn.VTGateConn, session *vtgateconn.VTGateSession) {
 	ctx := context.Background()
 	callerID := callerid.NewEffectiveCallerID("test_principal", "test_component", "test_subcomponent")
 	ctx = callerid.NewContext(ctx, callerID, nil)
@@ -34,7 +34,7 @@ func testCallerID(t *testing.T, conn *vtgateconn.VTGateConn, vsn *vtgateconn.VTG
 	query := services.CallerIDPrefix + string(data)
 
 	// test Execute calls forward the callerID
-	_, err = vsn.Execute(ctx, query, nil)
+	_, err = session.Execute(ctx, query, nil)
 	checkCallerIDError(t, "Execute", err)
 
 	_, err = conn.ExecuteShards(ctx, query, "", nil, nil, topodatapb.TabletType_MASTER, nil)
@@ -69,7 +69,7 @@ func testCallerID(t *testing.T, conn *vtgateconn.VTGateConn, vsn *vtgateconn.VTG
 	checkCallerIDError(t, "ExecuteBatchKeyspaceIds", err)
 
 	// test StreamExecute calls forward the callerID
-	err = getStreamError(vsn.StreamExecute(ctx, query, nil))
+	err = getStreamError(session.StreamExecute(ctx, query, nil))
 	checkCallerIDError(t, "StreamExecute", err)
 
 	err = getStreamError(conn.StreamExecuteShards(ctx, query, "", nil, nil, topodatapb.TabletType_MASTER, nil))

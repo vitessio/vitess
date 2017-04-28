@@ -107,21 +107,21 @@ var (
 )
 
 // testEcho exercises the test cases provided by the "echo" service.
-func testEcho(t *testing.T, conn *vtgateconn.VTGateConn, vsn *vtgateconn.VTGateSession) {
-	testEchoExecute(t, conn, vsn)
-	testEchoStreamExecute(t, conn, vsn)
+func testEcho(t *testing.T, conn *vtgateconn.VTGateConn, session *vtgateconn.VTGateSession) {
+	testEchoExecute(t, conn, session)
+	testEchoStreamExecute(t, conn, session)
 	testEchoTransactionExecute(t, conn)
 	testEchoSplitQuery(t, conn)
 	testEchoUpdateStream(t, conn)
 }
 
-func testEchoExecute(t *testing.T, conn *vtgateconn.VTGateConn, vsn *vtgateconn.VTGateSession) {
+func testEchoExecute(t *testing.T, conn *vtgateconn.VTGateConn, session *vtgateconn.VTGateSession) {
 	var qr *sqltypes.Result
 	var err error
 
 	ctx := callerid.NewContext(context.Background(), callerID, nil)
 
-	qr, err = vsn.Execute(ctx, echoPrefix+query, bindVars)
+	qr, err = session.Execute(ctx, echoPrefix+query, bindVars)
 	checkEcho(t, "Execute", qr, err, map[string]string{
 		"callerId": callerIDEcho,
 		"query":    echoPrefix + query,
@@ -222,14 +222,14 @@ func testEchoExecute(t *testing.T, conn *vtgateconn.VTGateConn, vsn *vtgateconn.
 	})
 }
 
-func testEchoStreamExecute(t *testing.T, conn *vtgateconn.VTGateConn, vsn *vtgateconn.VTGateSession) {
+func testEchoStreamExecute(t *testing.T, conn *vtgateconn.VTGateConn, session *vtgateconn.VTGateSession) {
 	var stream sqltypes.ResultStream
 	var err error
 	var qr *sqltypes.Result
 
 	ctx := callerid.NewContext(context.Background(), callerID, nil)
 
-	stream, err = vsn.StreamExecute(ctx, echoPrefix+query, bindVars)
+	stream, err = session.StreamExecute(ctx, echoPrefix+query, bindVars)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -139,8 +139,8 @@ func (c *Configuration) setDefaults() {
 
 type conn struct {
 	Configuration
-	conn *vtgateconn.VTGateConn
-	vsn  *vtgateconn.VTGateSession
+	conn    *vtgateconn.VTGateConn
+	session *vtgateconn.VTGateSession
 }
 
 func (c *conn) dial() error {
@@ -153,7 +153,7 @@ func (c *conn) dial() error {
 	if err != nil {
 		return err
 	}
-	c.vsn = c.conn.Session(c.Target, nil)
+	c.session = c.conn.Session(c.Target, nil)
 	return nil
 }
 
@@ -195,7 +195,7 @@ func (c *conn) Exec(query string, args []driver.Value) (driver.Result, error) {
 		return nil, errors.New("Exec not allowed for streaming connections")
 	}
 
-	qr, err := c.vsn.Execute(ctx, query, bindVarsFromValues(args))
+	qr, err := c.session.Execute(ctx, query, bindVarsFromValues(args))
 	if err != nil {
 		return nil, err
 	}
@@ -207,7 +207,7 @@ func (c *conn) Query(query string, args []driver.Value) (driver.Rows, error) {
 	bindVars := bindVarsFromValues(args)
 
 	if c.Streaming {
-		stream, err := c.vsn.StreamExecute(ctx, query, bindVars)
+		stream, err := c.session.StreamExecute(ctx, query, bindVars)
 		if err != nil {
 			cancel()
 			return nil, err
@@ -218,7 +218,7 @@ func (c *conn) Query(query string, args []driver.Value) (driver.Rows, error) {
 	// It will be called when streamingRows is closed later.
 	defer cancel()
 
-	qr, err := c.vsn.Execute(ctx, query, bindVars)
+	qr, err := c.session.Execute(ctx, query, bindVars)
 	if err != nil {
 		return nil, err
 	}

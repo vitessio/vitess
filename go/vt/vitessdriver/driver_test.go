@@ -94,7 +94,7 @@ func TestOpen(t *testing.T) {
 		newc := *(c.(*conn))
 		newc.Address = ""
 		newc.conn = nil
-		newc.vsn = nil
+		newc.session = nil
 		if !reflect.DeepEqual(&newc, wantc) {
 			t.Errorf("%v: conn:\n%+v, want\n%+v", tc.desc, &newc, wantc)
 		}
