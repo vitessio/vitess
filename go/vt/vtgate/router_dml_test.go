@@ -452,6 +452,36 @@ func TestInsertGeneratorSharded(t *testing.T) {
 	}
 }
 
+func TestInsertAutoincSharded(t *testing.T) {
+	router, sbc, _, _ := createRouterEnv()
+
+	// Fake a mysql auto-inc response.
+	wantResult := &sqltypes.Result{
+		Rows: [][]sqltypes.Value{{
+			sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")),
+		}},
+		RowsAffected: 2,
+		InsertID:     2,
+	}
+	sbc.SetResults([]*sqltypes.Result{wantResult})
+	result, err := routerExec(router, "insert into user_extra(user_id) values (2)", nil)
+	if err != nil {
+		t.Error(err)
+	}
+	wantQueries := []querytypes.BoundQuery{{
+		Sql: "insert into user_extra(user_id) values (:_user_id0) /* vtgate:: keyspace_id:06e7ea22ce92708f */",
+		BindVariables: map[string]interface{}{
+			"_user_id0": int64(2),
+		},
+	}}
+	if !reflect.DeepEqual(sbc.Queries, wantQueries) {
+		t.Errorf("sbc.Queries:\n%+v, want\n%+v\n", sbc.Queries, wantQueries)
+	}
+	if !reflect.DeepEqual(result, wantResult) {
+		t.Errorf("result: %+v, want %+v", result, wantResult)
+	}
+}
+
 func TestInsertGeneratorUnsharded(t *testing.T) {
 	router, _, _, sbclookup := createRouterEnv()
 	result, err := routerExec(router, "insert into main1(id, name) values (null, 'myname')", nil)
@@ -474,6 +504,36 @@ func TestInsertGeneratorUnsharded(t *testing.T) {
 	wantResult.InsertID = 1
 	if !reflect.DeepEqual(result, &wantResult) {
 		t.Errorf("result: %+v, want %+v", result, &wantResult)
+	}
+}
+
+func TestInsertAutoincUnsharded(t *testing.T) {
+	router, _, _, sbclookup := createRouterEnv()
+
+	// Fake a mysql auto-inc response.
+	query := "insert into simple(val) values ('val')"
+	wantResult := &sqltypes.Result{
+		Rows: [][]sqltypes.Value{{
+			sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")),
+		}},
+		RowsAffected: 2,
+		InsertID:     2,
+	}
+	sbclookup.SetResults([]*sqltypes.Result{wantResult})
+
+	result, err := routerExec(router, query, nil)
+	if err != nil {
+		t.Error(err)
+	}
+	wantQueries := []querytypes.BoundQuery{{
+		Sql:           query,
+		BindVariables: map[string]interface{}{},
+	}}
+	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
+		t.Errorf("sbclookup.Queries: \n%#v, want \n%#v\n", sbclookup.Queries, wantQueries)
+	}
+	if !reflect.DeepEqual(result, wantResult) {
+		t.Errorf("result: %+v, want %+v", result, wantResult)
 	}
 }
 
