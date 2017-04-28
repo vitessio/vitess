@@ -455,7 +455,10 @@ func (route *Route) execInsertUnsharded(vcursor VCursor, queryConstruct *queryin
 	if err != nil {
 		return nil, fmt.Errorf("execInsertUnsharded: %v", err)
 	}
-	result.InsertID = uint64(insertid)
+
+	if insertid != 0 {
+		result.InsertID = uint64(insertid)
+	}
 	return result, nil
 }
 
@@ -478,7 +481,6 @@ func (route *Route) execInsertSharded(vcursor VCursor, queryConstruct *queryinfo
 	if insertid != 0 {
 		result.InsertID = uint64(insertid)
 	}
-
 	return result, nil
 }
 

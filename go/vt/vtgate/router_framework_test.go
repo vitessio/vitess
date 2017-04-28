@@ -156,7 +156,8 @@ var unshardedVSchema = `
 				"column": "id",
 				"sequence": "user_seq"
 			}
-		}
+		},
+		"simple": {}
 	}
 }
 `
