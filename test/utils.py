@@ -686,16 +686,17 @@ class VtGate(object):
     protocol, addr = self.rpc_endpoint()
     args = environment.binary_args('vtclient') + [
         '-server', addr,
-        '-tablet_type', tablet_type,
         '-vtgate_protocol', protocol]
     if json_output:
       args.append('-json')
-    if keyspace:
-      args.extend(['-keyspace', keyspace])
     if bindvars:
       args.extend(['-bind_variables', json.dumps(bindvars)])
     if streaming:
       args.append('-streaming')
+    if keyspace:
+      args.extend(['-target', '%s@%s' % (keyspace, tablet_type)])
+    else:
+      args.extend(['-target', '@'+tablet_type])
     if verbose:
       args.append('-alsologtostderr')
     args.append(sql)
@@ -721,7 +722,7 @@ class VtGate(object):
     _, addr = self.rpc_endpoint()
     args = ['VtGateExecute', '-json',
             '-server', addr,
-            '-tablet_type', tablet_type]
+            '-target', '@'+tablet_type]
     if bindvars:
       args.extend(['-bind_variables', json.dumps(bindvars)])
     if execute_options:

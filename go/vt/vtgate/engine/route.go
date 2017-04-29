@@ -285,7 +285,7 @@ func (route *Route) Execute(vcursor VCursor, queryConstruct *queryinfo.QueryCons
 	}
 
 	shardQueries := route.getShardQueries(route.Query+queryConstruct.Comments, params)
-	return vcursor.ExecuteMultiShard(params.ks, shardQueries, queryConstruct.NotInTransaction)
+	return vcursor.ExecuteMultiShard(params.ks, shardQueries)
 }
 
 // StreamExecute performs a streaming exec.
@@ -333,7 +333,7 @@ func (route *Route) GetFields(vcursor VCursor, queryConstruct *queryinfo.QueryCo
 		return nil, err
 	}
 
-	return vcursor.ScatterConnExecute(route.FieldQuery, queryConstruct.BindVars, ks, []string{shard}, queryConstruct.NotInTransaction)
+	return vcursor.ScatterConnExecute(route.FieldQuery, queryConstruct.BindVars, ks, []string{shard})
 }
 
 func copyBindVars(bindVars map[string]interface{}) map[string]interface{} {
@@ -411,7 +411,7 @@ func (route *Route) execUpdateEqual(vcursor VCursor, queryConstruct *queryinfo.Q
 		return &sqltypes.Result{}, nil
 	}
 	rewritten := sqlannotation.AddKeyspaceIDs(route.Query, [][]byte{ksid}, queryConstruct.Comments)
-	return vcursor.ScatterConnExecute(rewritten, queryConstruct.BindVars, ks, []string{shard}, queryConstruct.NotInTransaction)
+	return vcursor.ScatterConnExecute(rewritten, queryConstruct.BindVars, ks, []string{shard})
 }
 
 func (route *Route) execShow(vcursor VCursor, queryConstruct *queryinfo.QueryConstruct) (*sqltypes.Result, error) {
@@ -437,7 +437,7 @@ func (route *Route) execDeleteEqual(vcursor VCursor, queryConstruct *queryinfo.Q
 		}
 	}
 	rewritten := sqlannotation.AddKeyspaceIDs(route.Query, [][]byte{ksid}, queryConstruct.Comments)
-	return vcursor.ScatterConnExecute(rewritten, queryConstruct.BindVars, ks, []string{shard}, queryConstruct.NotInTransaction)
+	return vcursor.ScatterConnExecute(rewritten, queryConstruct.BindVars, ks, []string{shard})
 }
 
 func (route *Route) execInsertUnsharded(vcursor VCursor, queryConstruct *queryinfo.QueryConstruct) (*sqltypes.Result, error) {
@@ -451,7 +451,7 @@ func (route *Route) execInsertUnsharded(vcursor VCursor, queryConstruct *queryin
 	}
 
 	shardQueries := route.getShardQueries(route.Query+queryConstruct.Comments, params)
-	result, err := vcursor.ExecuteMultiShard(params.ks, shardQueries, queryConstruct.NotInTransaction)
+	result, err := vcursor.ExecuteMultiShard(params.ks, shardQueries)
 	if err != nil {
 		return nil, fmt.Errorf("execInsertUnsharded: %v", err)
 	}
@@ -469,7 +469,7 @@ func (route *Route) execInsertSharded(vcursor VCursor, queryConstruct *queryinfo
 		return nil, fmt.Errorf("execInsertSharded: %v", err)
 	}
 
-	result, err := vcursor.ExecuteMultiShard(keyspace, shardQueries, queryConstruct.NotInTransaction)
+	result, err := vcursor.ExecuteMultiShard(keyspace, shardQueries)
 
 	if err != nil {
 		return nil, fmt.Errorf("execInsertSharded: %v", err)
@@ -658,7 +658,7 @@ func (route *Route) resolveSingleShard(vcursor VCursor, queryConstruct *queryinf
 }
 
 func (route *Route) deleteVindexEntries(vcursor VCursor, queryConstruct *queryinfo.QueryConstruct, ks, shard string, ksid []byte) error {
-	result, err := vcursor.ScatterConnExecute(route.Subquery, queryConstruct.BindVars, ks, []string{shard}, queryConstruct.NotInTransaction)
+	result, err := vcursor.ScatterConnExecute(route.Subquery, queryConstruct.BindVars, ks, []string{shard})
 	if err != nil {
 		return err
 	}

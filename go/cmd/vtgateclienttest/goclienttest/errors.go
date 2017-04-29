@@ -36,18 +36,18 @@ var (
 )
 
 // testErrors exercises the test cases provided by the "errors" service.
-func testErrors(t *testing.T, conn *vtgateconn.VTGateConn) {
-	testExecuteErrors(t, conn)
-	testStreamExecuteErrors(t, conn)
+func testErrors(t *testing.T, conn *vtgateconn.VTGateConn, session *vtgateconn.VTGateSession) {
+	testExecuteErrors(t, conn, session)
+	testStreamExecuteErrors(t, conn, session)
 	testTransactionExecuteErrors(t, conn)
 	testUpdateStreamErrors(t, conn)
 }
 
-func testExecuteErrors(t *testing.T, conn *vtgateconn.VTGateConn) {
+func testExecuteErrors(t *testing.T, conn *vtgateconn.VTGateConn, session *vtgateconn.VTGateSession) {
 	ctx := context.Background()
 
 	checkExecuteErrors(t, func(query string) error {
-		_, err := conn.Execute(ctx, query, bindVars, tabletType, nil)
+		_, err := session.Execute(ctx, query, bindVars)
 		return err
 	})
 	checkExecuteErrors(t, func(query string) error {
@@ -94,11 +94,11 @@ func testExecuteErrors(t *testing.T, conn *vtgateconn.VTGateConn) {
 	})
 }
 
-func testStreamExecuteErrors(t *testing.T, conn *vtgateconn.VTGateConn) {
+func testStreamExecuteErrors(t *testing.T, conn *vtgateconn.VTGateConn, session *vtgateconn.VTGateSession) {
 	ctx := context.Background()
 
 	checkStreamExecuteErrors(t, func(query string) error {
-		return getStreamError(conn.StreamExecute(ctx, query, bindVars, tabletType, nil))
+		return getStreamError(session.StreamExecute(ctx, query, bindVars))
 	})
 	checkStreamExecuteErrors(t, func(query string) error {
 		return getStreamError(conn.StreamExecuteShards(ctx, query, keyspace, shards, bindVars, tabletType, nil))
@@ -115,17 +115,13 @@ func testUpdateStreamErrors(t *testing.T, conn *vtgateconn.VTGateConn) {
 	ctx := context.Background()
 
 	checkStreamExecuteErrors(t, func(query string) error {
-		return getUpdateStreamError(conn.UpdateStream(ctx, query, nil, tabletType, 0, nil))
+		return getUpdateStreamError(conn.UpdateStream(ctx, "", query, nil, tabletType, 0, nil))
 	})
 }
 
 func testTransactionExecuteErrors(t *testing.T, conn *vtgateconn.VTGateConn) {
 	ctx := context.Background()
 
-	checkTransactionExecuteErrors(t, conn, func(tx *vtgateconn.VTGateTx, query string) error {
-		_, err := tx.Execute(ctx, query, bindVars, tabletType, nil)
-		return err
-	})
 	checkTransactionExecuteErrors(t, conn, func(tx *vtgateconn.VTGateTx, query string) error {
 		_, err := tx.ExecuteShards(ctx, query, keyspace, shards, bindVars, tabletType, nil)
 		return err

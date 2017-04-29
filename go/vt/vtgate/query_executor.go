@@ -24,16 +24,14 @@ type queryExecutor struct {
 	ctx        context.Context
 	tabletType topodatapb.TabletType
 	session    *vtgatepb.Session
-	options    *querypb.ExecuteOptions
 	router     *Router
 }
 
-func newQueryExecutor(ctx context.Context, tabletType topodatapb.TabletType, session *vtgatepb.Session, options *querypb.ExecuteOptions, router *Router) *queryExecutor {
+func newQueryExecutor(ctx context.Context, tabletType topodatapb.TabletType, session *vtgatepb.Session, router *Router) *queryExecutor {
 	return &queryExecutor{
 		ctx:        ctx,
 		tabletType: tabletType,
 		session:    session,
-		options:    options,
 		router:     router,
 	}
 }
@@ -42,17 +40,17 @@ func newQueryExecutor(ctx context.Context, tabletType topodatapb.TabletType, ses
 func (vc *queryExecutor) Execute(query string, bindvars map[string]interface{}) (*sqltypes.Result, error) {
 	// We have to use an empty keyspace here, becasue vindexes that call back can reference
 	// any table.
-	return vc.router.Execute(vc.ctx, query, bindvars, "", vc.tabletType, vc.session, false, vc.options)
+	return vc.router.Execute(vc.ctx, query, bindvars, "", vc.tabletType, vc.session)
 }
 
 // ExecuteMultiShard method call from engine call to vtgate.
-func (vc *queryExecutor) ExecuteMultiShard(keyspace string, shardQueries map[string]querytypes.BoundQuery, notInTransaction bool) (*sqltypes.Result, error) {
-	return vc.router.scatterConn.ExecuteMultiShard(vc.ctx, keyspace, shardQueries, vc.tabletType, NewSafeSession(vc.session), notInTransaction, vc.options)
+func (vc *queryExecutor) ExecuteMultiShard(keyspace string, shardQueries map[string]querytypes.BoundQuery) (*sqltypes.Result, error) {
+	return vc.router.scatterConn.ExecuteMultiShard(vc.ctx, keyspace, shardQueries, vc.tabletType, NewSafeSession(vc.session), false, vc.session.Options)
 }
 
 // StreamExecuteMulti method call from engine call to vtgate.
 func (vc *queryExecutor) StreamExecuteMulti(query string, keyspace string, shardVars map[string]map[string]interface{}, callback func(reply *sqltypes.Result) error) error {
-	return vc.router.scatterConn.StreamExecuteMulti(vc.ctx, query, keyspace, shardVars, vc.tabletType, vc.options, callback)
+	return vc.router.scatterConn.StreamExecuteMulti(vc.ctx, query, keyspace, shardVars, vc.tabletType, vc.session.Options, callback)
 }
 
 // GetAnyShard method call from engine call to vtgate.
@@ -61,8 +59,8 @@ func (vc *queryExecutor) GetAnyShard(keyspace string) (ks, shard string, err err
 }
 
 // ScatterConnExecute method call from engine call to vtgate.
-func (vc *queryExecutor) ScatterConnExecute(query string, bindVars map[string]interface{}, keyspace string, shards []string, notInTransaction bool) (*sqltypes.Result, error) {
-	return vc.router.scatterConn.Execute(vc.ctx, query, bindVars, keyspace, shards, vc.tabletType, NewSafeSession(vc.session), notInTransaction, vc.options)
+func (vc *queryExecutor) ScatterConnExecute(query string, bindVars map[string]interface{}, keyspace string, shards []string) (*sqltypes.Result, error) {
+	return vc.router.scatterConn.Execute(vc.ctx, query, bindVars, keyspace, shards, vc.tabletType, NewSafeSession(vc.session), false, vc.session.Options)
 }
 
 // GetKeyspaceShards method call from engine call to vtgate.
@@ -76,7 +74,7 @@ func (vc *queryExecutor) GetShardForKeyspaceID(allShards []*topodatapb.ShardRefe
 }
 
 func (vc *queryExecutor) ExecuteShard(keyspace string, shardQueries map[string]querytypes.BoundQuery) (*sqltypes.Result, error) {
-	return vc.router.scatterConn.ExecuteMultiShard(vc.ctx, keyspace, shardQueries, vc.tabletType, NewSafeSession(nil), false, vc.options)
+	return vc.router.scatterConn.ExecuteMultiShard(vc.ctx, keyspace, shardQueries, vc.tabletType, NewSafeSession(nil), false, vc.session.Options)
 }
 
 func (vc *queryExecutor) ExecuteShow(query string, bindvars map[string]interface{}, keyspace string) (*sqltypes.Result, error) {
@@ -154,7 +152,7 @@ func (vc *queryExecutor) ExecuteShow(query string, bindvars map[string]interface
 			return nil, vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "keyspace %s not found in vschema", keyspace)
 		}
 
-		var tables []string;
+		var tables []string
 		for name := range ks.Tables {
 			tables = append(tables, name)
 		}

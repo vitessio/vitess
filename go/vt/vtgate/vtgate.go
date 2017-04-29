@@ -223,12 +223,7 @@ func (vtg *VTGate) IsHealthy() error {
 }
 
 // Execute executes a non-streaming query by routing based on the values in the query.
-func (vtg *VTGate) Execute(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspaceShard string, tabletType topodatapb.TabletType, session *vtgatepb.Session, notInTransaction bool, options *querypb.ExecuteOptions) (newSession *vtgatepb.Session, qr *sqltypes.Result, err error) {
-	// We'll always return a non-nil session.
-	if session == nil {
-		session = &vtgatepb.Session{}
-	}
-
+func (vtg *VTGate) Execute(ctx context.Context, sql string, bindVariables map[string]interface{}, session *vtgatepb.Session) (newSession *vtgatepb.Session, qr *sqltypes.Result, err error) {
 	session, intercepted, err := vtg.intercept(ctx, sql, session)
 	if err != nil {
 		return session, nil, err
@@ -238,10 +233,8 @@ func (vtg *VTGate) Execute(ctx context.Context, sql string, bindVariables map[st
 	}
 
 	// Normal processing.
-	startTime := time.Now()
-	ltt := topoproto.TabletTypeLString(tabletType)
-	statsKey := []string{"Execute", "Any", ltt}
-	defer vtg.timings.Record(statsKey, startTime)
+	statsKey := []string{"Execute", session.TargetString, "NA"}
+	defer vtg.timings.Record(statsKey, time.Now())
 
 	// Autocommit handling
 	autocommit := false
@@ -250,15 +243,15 @@ func (vtg *VTGate) Execute(ctx context.Context, sql string, bindVariables map[st
 		vtg.localBegin(session)
 	}
 
-	keyspace, shard := parseKeyspaceOptionalShard(keyspaceShard)
-	if shard != "" {
+	target := parseTarget(session.TargetString)
+	if target.Shard != "" {
 		sql = sqlannotation.AnnotateIfDML(sql, nil)
 		f := func(keyspace string) (string, []string, error) {
-			return keyspace, []string{shard}, nil
+			return keyspace, []string{target.Shard}, nil
 		}
-		qr, err = vtg.resolver.Execute(ctx, sql, bindVariables, keyspace, tabletType, session, f, notInTransaction, options)
+		qr, err = vtg.resolver.Execute(ctx, sql, bindVariables, target.Keyspace, target.TabletType, session, f, false, session.Options)
 	} else {
-		qr, err = vtg.router.Execute(ctx, sql, bindVariables, keyspace, tabletType, session, notInTransaction, options)
+		qr, err = vtg.router.Execute(ctx, sql, bindVariables, target.Keyspace, target.TabletType, session)
 	}
 	if err == nil && autocommit {
 		// Set the error if commit fails.
@@ -276,13 +269,9 @@ func (vtg *VTGate) Execute(ctx context.Context, sql string, bindVariables map[st
 	}
 
 	query := map[string]interface{}{
-		"Sql":              sql,
-		"BindVariables":    bindVariables,
-		"KeyspaceShard":    keyspaceShard,
-		"TabletType":       ltt,
-		"Session":          session,
-		"NotInTransaction": notInTransaction,
-		"Options":          options,
+		"Sql":           sql,
+		"BindVariables": bindVariables,
+		"Session":       session,
 	}
 	err = recordAndAnnotateError(err, statsKey, query, vtg.logExecute)
 	return session, nil, err
@@ -474,16 +463,9 @@ func (vtg *VTGate) ExecuteEntityIds(ctx context.Context, sql string, bindVariabl
 }
 
 // ExecuteBatch executes a non-streaming queries by routing based on the values in the query.
-func (vtg *VTGate) ExecuteBatch(ctx context.Context, sqlList []string, bindVariablesList []map[string]interface{}, keyspaceShard string, tabletType topodatapb.TabletType, session *vtgatepb.Session, options *querypb.ExecuteOptions) (*vtgatepb.Session, []sqltypes.QueryResponse, error) {
-	// We'll always return a non-nil session.
-	if session == nil {
-		session = &vtgatepb.Session{}
-	}
-
-	startTime := time.Now()
-	ltt := topoproto.TabletTypeLString(tabletType)
-	statsKey := []string{"ExecuteBatch", "Any", ltt}
-	defer vtg.timings.Record(statsKey, startTime)
+func (vtg *VTGate) ExecuteBatch(ctx context.Context, sqlList []string, bindVariablesList []map[string]interface{}, session *vtgatepb.Session) (*vtgatepb.Session, []sqltypes.QueryResponse, error) {
+	statsKey := []string{"ExecuteBatch", session.TargetString, "NA"}
+	defer vtg.timings.Record(statsKey, time.Now())
 
 	qrl := make([]sqltypes.QueryResponse, len(sqlList))
 	for i, sql := range sqlList {
@@ -491,7 +473,7 @@ func (vtg *VTGate) ExecuteBatch(ctx context.Context, sqlList []string, bindVaria
 		if len(bindVariablesList) != 0 {
 			bv = bindVariablesList[i]
 		}
-		session, qrl[i].QueryResult, qrl[i].QueryError = vtg.Execute(ctx, sql, bv, keyspaceShard, tabletType, session, false, options)
+		session, qrl[i].QueryResult, qrl[i].QueryError = vtg.Execute(ctx, sql, bv, session)
 		if qr := qrl[i].QueryResult; qr != nil {
 			vtg.rowsReturned.Add(statsKey, int64(len(qr.Rows)))
 		}
@@ -574,25 +556,23 @@ func (vtg *VTGate) ExecuteBatchKeyspaceIds(ctx context.Context, queries []*vtgat
 }
 
 // StreamExecute executes a streaming query by routing based on the values in the query.
-func (vtg *VTGate) StreamExecute(ctx context.Context, sql string, bindVariables map[string]interface{}, keyspaceShard string, tabletType topodatapb.TabletType, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
-	startTime := time.Now()
-	ltt := topoproto.TabletTypeLString(tabletType)
-	statsKey := []string{"StreamExecute", "Any", ltt}
-	defer vtg.timings.Record(statsKey, startTime)
+func (vtg *VTGate) StreamExecute(ctx context.Context, sql string, bindVariables map[string]interface{}, session *vtgatepb.Session, callback func(*sqltypes.Result) error) error {
+	statsKey := []string{"StreamExecute", session.TargetString, "NA"}
+	defer vtg.timings.Record(statsKey, time.Now())
 
-	keyspace, shard := parseKeyspaceOptionalShard(keyspaceShard)
+	target := parseTarget(session.TargetString)
 	var err error
-	if shard != "" {
+	if target.Shard != "" {
 		err = vtg.resolver.streamExecute(
 			ctx,
 			sql,
 			bindVariables,
-			keyspace,
-			tabletType,
+			target.Keyspace,
+			target.TabletType,
 			func(keyspace string) (string, []string, error) {
-				return keyspace, []string{shard}, nil
+				return keyspace, []string{target.Shard}, nil
 			},
-			options,
+			session.Options,
 			func(reply *sqltypes.Result) error {
 				vtg.rowsReturned.Add(statsKey, int64(len(reply.Rows)))
 				return callback(reply)
@@ -602,9 +582,9 @@ func (vtg *VTGate) StreamExecute(ctx context.Context, sql string, bindVariables 
 			ctx,
 			sql,
 			bindVariables,
-			keyspace,
-			tabletType,
-			options,
+			target.Keyspace,
+			target.TabletType,
+			session,
 			func(reply *sqltypes.Result) error {
 				vtg.rowsReturned.Add(statsKey, int64(len(reply.Rows)))
 				return callback(reply)
@@ -615,9 +595,7 @@ func (vtg *VTGate) StreamExecute(ctx context.Context, sql string, bindVariables 
 		query := map[string]interface{}{
 			"Sql":           sql,
 			"BindVariables": bindVariables,
-			"KeyspaceShard": keyspaceShard,
-			"TabletType":    ltt,
-			"Options":       options,
+			"Session":       session,
 		}
 		return recordAndAnnotateError(err, statsKey, query, vtg.logStreamExecute)
 	}
@@ -948,6 +926,7 @@ func (vtg *VTGate) MessageStream(ctx context.Context, keyspace string, shard str
 // MessageAck is part of the vtgate service API. This is a V3 level API that's sent
 // to the Router. The table name will be resolved using V3 rules, and the routing
 // will make use of vindexes for sharded keyspaces.
+// TODO(sougou): Make this call use Session.
 func (vtg *VTGate) MessageAck(ctx context.Context, keyspace string, name string, ids []*querypb.Value) (int64, error) {
 	startTime := time.Now()
 	ltt := topoproto.TabletTypeLString(topodatapb.TabletType_MASTER)
@@ -1046,14 +1025,25 @@ func annotateBoundShardQueriesAsUnfriendly(queries []*vtgatepb.BoundShardQuery) 
 	}
 }
 
-// parseKeyspaceOptionalShard parses a "keyspace/shard" or "keyspace:shard" string
-// and extracts the parts. If a shard is not specified, it's
-// returned as empty string. We need to support : and / in vtgate because some clients
-// can't support our default of /. Everywhere else we only support /.
-func parseKeyspaceOptionalShard(keyspaceShard string) (string, string) {
-	last := strings.LastIndexAny(keyspaceShard, "/:")
-	if last == -1 {
-		return keyspaceShard, ""
+// parseTarget parses the string representation of a Target
+// of the form keyspace:shard@tablet_type. You can use a / instead of a :.
+func parseTarget(targetString string) querypb.Target {
+	// Default tablet type is master.
+	target := querypb.Target{
+		TabletType: topodatapb.TabletType_MASTER,
 	}
-	return keyspaceShard[:last], keyspaceShard[last+1:]
+	last := strings.LastIndexAny(targetString, "@")
+	if last != -1 {
+		// No need to check the error. UNKNOWN will be returned on
+		// error and it will fail downstream.
+		target.TabletType, _ = topoproto.ParseTabletType(targetString[last+1:])
+		targetString = targetString[:last]
+	}
+	last = strings.LastIndexAny(targetString, "/:")
+	if last != -1 {
+		target.Shard = targetString[last+1:]
+		targetString = targetString[:last]
+	}
+	target.Keyspace = targetString
+	return target
 }
