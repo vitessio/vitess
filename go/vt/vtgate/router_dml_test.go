@@ -460,7 +460,7 @@ func TestInsertAutoincSharded(t *testing.T) {
 		Rows: [][]sqltypes.Value{{
 			sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")),
 		}},
-		RowsAffected: 2,
+		RowsAffected: 1,
 		InsertID:     2,
 	}
 	sbc.SetResults([]*sqltypes.Result{wantResult})
@@ -516,7 +516,7 @@ func TestInsertAutoincUnsharded(t *testing.T) {
 		Rows: [][]sqltypes.Value{{
 			sqltypes.MakeTrusted(sqltypes.Int64, []byte("1")),
 		}},
-		RowsAffected: 2,
+		RowsAffected: 1,
 		InsertID:     2,
 	}
 	sbclookup.SetResults([]*sqltypes.Result{wantResult})
