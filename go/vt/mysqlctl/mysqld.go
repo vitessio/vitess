@@ -480,7 +480,7 @@ func (mysqld *Mysqld) Init(ctx context.Context, initDBSQLFile string) error {
 	// Start mysqld. We do not use Start, as we have to wait using
 	// the root user.
 	if err = mysqld.startNoWait(ctx); err != nil {
-		log.Errorf("failed starting mysqld (check %v for more info): %v", mysqld.config.ErrorLogPath, err)
+		log.Errorf("failed starting mysqld (check mysql error log %v for more info): %v", mysqld.config.ErrorLogPath, err)
 		return err
 	}
 
@@ -492,7 +492,7 @@ func (mysqld *Mysqld) Init(ctx context.Context, initDBSQLFile string) error {
 		UnixSocket: mysqld.config.SocketFile,
 	}
 	if err = mysqld.wait(ctx, params); err != nil {
-		log.Errorf("failed starting mysqld in time (check %v for more info): %v", mysqld.config.ErrorLogPath, err)
+		log.Errorf("failed starting mysqld in time (check mysyql error log %v for more info): %v", mysqld.config.ErrorLogPath, err)
 		return err
 	}
 

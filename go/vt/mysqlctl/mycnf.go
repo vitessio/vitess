@@ -174,7 +174,7 @@ func ReadMycnf(cnfFile string) (mycnf *Mycnf, err error) {
 	mycnf.InnodbLogGroupHomeDir = mycnf.lookupAndCheck("innodb_log_group_home_dir")
 	mycnf.SocketFile = mycnf.lookupAndCheck("socket")
 	mycnf.GeneralLogPath = mycnf.lookup("general_log_file")
-	mycnf.ErrorLogPath = mycnf.lookupAndCheck("log-error")
+	mycnf.ErrorLogPath = mycnf.lookup("log-error")
 	mycnf.SlowLogPath = mycnf.lookupAndCheck("slow-query-log-file")
 	mycnf.RelayLogPath = mycnf.lookupAndCheck("relay-log")
 	mycnf.RelayLogIndexPath = mycnf.lookupAndCheck("relay-log-index")
