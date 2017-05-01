@@ -5,7 +5,6 @@
 package endtoend
 
 import (
-	"bytes"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -521,54 +520,47 @@ func TestDBAStatements(t *testing.T) {
 	}
 }
 
-func TestLongQueryErrorTruncation(t *testing.T) {
+func TestLogTruncation(t *testing.T) {
 	client := framework.NewClient()
 
-	buf := &bytes.Buffer{}
-	for i := 0; i < 100; i++ {
-	    fmt.Fprintf(buf, "%d: THIS IS A LONG LONG LONG LONG QUERY STRING THAT SHOULD BE SHORTENED\n", i)
-        }
-
-	// Test that the data too long error is not truncated by default
+	// Test that a long error string is not truncated by default
 	_, err := client.Execute(
-		"insert into vitess_test values(123, null, null, :data)",
-		map[string]interface{}{"data": buf.String()},
+		"insert into vitess_test values(123, :data, null, null)",
+		map[string]interface{}{"data": "THIS IS A LONG LONG LONG LONG QUERY STRING THAT SHOULD BE SHORTENED"},
 	)
+	want := "Data truncated for column 'floatval' at row 1 (errno 1265) (sqlstate 01000) during query: insert into vitess_test values (123, 'THIS IS A LONG LONG LONG LONG QUERY STRING THAT SHOULD BE SHORTENED', null, null) /* _stream vitess_test (intval ) (123 ); */"
 	if err == nil {
-		t.Error("expected data too long error")
-		return
+		t.Errorf("query unexpectedly succeeded")
 	}
-	if len(err.Error()) < 1000 || strings.Contains(err.Error(), "[TRUNCATED]") {
-		t.Error("expected unmodified error string")
+	if err.Error() != want {
+		t.Errorf("log was unexpectedly truncated... got %s, wanted %s", err, want)
 	}
 
 	// Test that the data too long error is truncated once the option is set
-	*sqlparser.TruncateErrLen = 100;
+	*sqlparser.TruncateErrLen = 30;
 	_, err = client.Execute(
-		"insert into vitess_test values(123, null, null, :data)",
-		map[string]interface{}{"data": buf.String()},
+		"insert into vitess_test values(123, :data, null, null)",
+		map[string]interface{}{"data": "THIS IS A LONG LONG LONG LONG QUERY STRING THAT SHOULD BE SHORTENED"},
 	)
+	want = "Data truncated for column 'floatval' at row 1 (errno 1265) (sqlstate 01000) during query: insert into vitess [TRUNCATED] /* _stream vitess_test (intval ) (123 ); */"
 	if err == nil {
-		t.Error("expected data too long error")
-		return
+		t.Errorf("query unexpectedly succeeded")
 	}
-	if strings.Contains(err.Error(), "SHORTENED") || !strings.Contains(err.Error(), "[TRUNCATED]") {
-		t.Error("expected truncated error string, got: " + err.Error())
+	if err.Error() != want {
+		t.Errorf("log was not truncated properly... got %s, wanted %s", err, want)
 	}
 
 	// Test that trailing comments are preserved data too long error is truncated once the option is set
-	*sqlparser.TruncateErrLen = 100;
+	*sqlparser.TruncateErrLen = 30;
 	_, err = client.Execute(
-		"insert into vitess_test values(123, null, null, :data) /* KEEP ME */",
-		map[string]interface{}{"data": buf.String()},
+		"insert into vitess_test values(123, :data, null, null) /* KEEP ME */",
+		map[string]interface{}{"data": "THIS IS A LONG LONG LONG LONG QUERY STRING THAT SHOULD BE SHORTENED"},
 	)
+	want = "Data truncated for column 'floatval' at row 1 (errno 1265) (sqlstate 01000) during query: insert into vitess [TRUNCATED] /* _stream vitess_test (intval ) (123 ); */ /* KEEP ME */"
 	if err == nil {
-		t.Error("expected data too long error")
-		return
+		t.Errorf("query unexpectedly succeeded")
 	}
-	if strings.Contains(err.Error(), "SHORTENED") ||
-		!strings.Contains(err.Error(), "[TRUNCATED]") ||
-		!strings.Contains(err.Error(), "/* KEEP ME */") {
-		t.Error("expected truncated error string, got: " + err.Error())
+	if err.Error() != want {
+		t.Errorf("log was not truncated properly... got %s, wanted %s", err, want)
 	}
 }
