@@ -997,20 +997,6 @@ func (vtg *VTGate) VSchemaStats() *VSchemaStats {
 	return vtg.router.planner.VSchemaStats()
 }
 
-func truncateErrorStrings(data map[string]interface{}) map[string]interface{} {
-	ret := map[string]interface{}{}
-	for key, val := range data {
-		mapVal, ok := val.(map[string]interface{})
-		if ok {
-			ret[key] = truncateErrorStrings(mapVal)
-		} else {
-			strVal := fmt.Sprintf("%v", val)
-			ret[key] = sqlparser.TruncateForError(strVal)
-		}
-	}
-	return ret
-}
-
 func recordAndAnnotateError(err error, statsKey []string, request map[string]interface{}, logger *logutil.ThrottledLogger) error {
 	ec := vterrors.Code(err)
 	fullKey := []string{
@@ -1019,10 +1005,6 @@ func recordAndAnnotateError(err error, statsKey []string, request map[string]int
 		statsKey[2],
 		ec.String(),
 	}
-
-	// Traverse the request structure and truncate any long values
-	request = truncateErrorStrings(request)
-
 	errorCounts.Add(fullKey, 1)
 	// Most errors are not logged by vtgate beecause they're either too spammy or logged elsewhere.
 	switch ec {

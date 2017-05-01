@@ -473,7 +473,7 @@ func (qe *QueryEngine) handleHTTPQueryPlans(response http.ResponseWriter, reques
 	response.Header().Set("Content-Type", "text/plain")
 	response.Write([]byte(fmt.Sprintf("Length: %d\n", len(keys))))
 	for _, v := range keys {
-		response.Write([]byte(fmt.Sprintf("%#v\n", sqlparser.TruncateForUI(v))))
+		response.Write([]byte(fmt.Sprintf("%#v\n", utils.TruncateQuery(v))))
 		if plan := qe.peekQuery(v); plan != nil {
 			if b, err := json.MarshalIndent(plan.Plan, "", "  "); err != nil {
 				response.Write([]byte(err.Error()))
@@ -492,7 +492,7 @@ func (qe *QueryEngine) handleHTTPQueryStats(response http.ResponseWriter, reques
 	for _, v := range keys {
 		if plan := qe.peekQuery(v); plan != nil {
 			var pqstats perQueryStats
-			pqstats.Query = unicoded(sqlparser.TruncateForUI(v))
+			pqstats.Query = unicoded(utils.TruncateQuery(v))
 			pqstats.Table = plan.TableName().String()
 			pqstats.Plan = plan.PlanID
 			pqstats.QueryCount, pqstats.Time, pqstats.MysqlTime, pqstats.RowCount, pqstats.ErrorCount = plan.Stats()

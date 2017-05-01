@@ -9,8 +9,6 @@ import (
 	"fmt"
 	"regexp"
 	"strconv"
-
-	"github.com/youtube/vitess/go/vt/sqlparser"
 )
 
 const (
@@ -51,9 +49,8 @@ func (se *SQLError) Error() string {
 	fmt.Fprintf(buf, " (errno %v) (sqlstate %v)", se.Num, se.State)
 
 	if se.Query != "" {
-		fmt.Fprintf(buf, " during query: %s", sqlparser.TruncateForError(se.Query))
+		fmt.Fprintf(buf, " during query: %s", se.Query)
 	}
-
 	return buf.String()
 }
 

@@ -16,7 +16,6 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/discovery"
 	"github.com/youtube/vitess/go/vt/key"
-	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vttablet/sandboxconn"
@@ -2708,33 +2707,5 @@ func TestParseKeyspaceOptionalShard(t *testing.T) {
 		if keyspace, shard := parseKeyspaceOptionalShard(tcase.keyspaceShard); keyspace != tcase.keyspace || shard != tcase.shard {
 			t.Errorf("parseKeyspaceShard(%s): %s:%s, want %s:%s", tcase.keyspaceShard, keyspace, shard, tcase.keyspace, tcase.shard)
 		}
-	}
-}
-
-func TestErrorTruncation(t *testing.T) {
-	*sqlparser.TruncateErrLen = 30
-
-	query := map[string]interface{}{
-		"Sql": "THIS IS A LONG QUERY THAT WILL BE TRUNCATED AWAY",
-		"BindVariables": map[string]interface{}{
-			"vtg1": 100,
-			"vtg2": "short string",
-			"vtg3": "this is a long bind variable that will be truncated away as well",
-			"vtg4": "another string",
-		},
-	}
-
-	query = truncateErrorStrings(query)
-	errStr := fmt.Sprintf("request: %+v", query)
-	if !strings.Contains(errStr, "[TRUNCATED]") {
-		t.Errorf("Error was not truncated: %s", errStr)
-	}
-
-	if strings.Contains(errStr, "WILL BE TRUNCATED AWAY") {
-		t.Errorf("Error was not truncated: %s", errStr)
-	}
-
-	if strings.Contains(errStr, "will be truncated away as well") {
-		t.Errorf("Error was not truncated: %s", errStr)
 	}
 }
