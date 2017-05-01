@@ -72,7 +72,7 @@ func printJSONValue(typ byte, data []byte, toplevel bool, result *bytes.Buffer) 
 	case jsonTypeString:
 		printJSONString(data, toplevel, result)
 	case jsonTypeOpaque:
-		printJSONOpaque(data, toplevel, result)
+		return printJSONOpaque(data, toplevel, result)
 	default:
 		return fmt.Errorf("unknown object type in JSON: %v", typ)
 	}
@@ -345,17 +345,13 @@ func printJSONOpaque(data []byte, toplevel bool, result *bytes.Buffer) error {
 		return printJSONDecimal(data[pos:pos+size], toplevel, result)
 	}
 
-	// FIXME(alainjobart) this is broken for now. The lack of metadata
-	// makes the parsing fail. The MySQL source code is too obscure
-	// to make any sense of this.
-	val, pos, err := CellValue(data, pos, typ, 0, querypb.Type_INT8)
-	if err != nil {
-		return err
-	}
-	result.WriteString("CAST(")
-	val.EncodeSQL(result)
-	result.WriteString(" AS JSON)")
-	return nil
+	// Other types are encoded in somewhat weird ways. Since we
+	// have no metadata, it seems some types first provide the
+	// metadata, and then the values. But even that metadata is
+	// not straightforward (for instance, a bit field seems to
+	// have one byte as metadata, not two as would be expected).
+	// To be on the safer side, we just reject these cases for now.
+	return fmt.Errorf("opaque type %v is not supported yet, with data %v", typ, data[1:])
 }
 
 func printJSONDate(data []byte, toplevel bool, result *bytes.Buffer) error {

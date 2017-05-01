@@ -1,6 +1,9 @@
 package replication
 
-import "testing"
+import (
+	"fmt"
+	"testing"
+)
 
 func TestJSON(t *testing.T) {
 	testcases := []struct {
@@ -99,23 +102,21 @@ func TestJSON(t *testing.T) {
 		data:     []byte{15, 246, 8, 13, 4, 135, 91, 205, 21, 4, 210},
 		expected: `CAST(CAST('123456789.1234' AS DECIMAL(13,4)) AS JSON)`,
 	}, {
-		// opaque, bit field.
-		// FIXME(alainjobart) this is broken. It seems the '2'
-		// is the number of bytes (needed because there is no
-		// metadata), but I can't find how this works.
-		// So the parsing for now will produce an invalid string.
+		// opaque, bit field. Not yet implemented.
 		data:     []byte{15, 16, 2, 202, 254},
-		expected: `CAST('' AS JSON)`,
+		expected: `ERROR: opaque type 16 is not supported yet, with data [2 202 254]`,
 	}}
 
 	for _, tcase := range testcases {
 		r, err := printJSONData(tcase.data)
+		got := ""
 		if err != nil {
-			t.Errorf("unexpected error for %v: %v", tcase.data, err)
-			continue
+			got = fmt.Sprintf("ERROR: %v", err)
+		} else {
+			got = string(r)
 		}
-		if string(r) != tcase.expected {
-			t.Errorf("unexpected output for %v: got %v expected %v", tcase.data, string(r), tcase.expected)
+		if got != tcase.expected {
+			t.Errorf("unexpected output for %v: got %v expected %v", tcase.data, got, tcase.expected)
 		}
 	}
 }
