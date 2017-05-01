@@ -21,7 +21,7 @@ func truncateQuery(query string, max int) string {
 		return sql + comments
 	}
 
-	return sql[:max-12] + " [TRUNCATED] " + comments
+	return sql[:max-12] + " [TRUNCATED]" + comments
 }
 
 // TruncateForUI is used when displaying queries on various Vitess status pages
