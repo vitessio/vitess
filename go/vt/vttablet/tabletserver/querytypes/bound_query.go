@@ -37,7 +37,7 @@ type BoundQuery struct {
 // and also truncates data if it's too long
 func QueryAsString(sql string, bindVariables map[string]interface{}) string {
 	buf := &bytes.Buffer{}
-	fmt.Fprintf(buf, "Sql: %q, BindVars: {", sqlparser.TruncateForError(sql))
+	fmt.Fprintf(buf, "Sql: %q, BindVars: {", sqlparser.TruncateForLog(sql))
 	for k, v := range bindVariables {
 		var valString string;
 		switch val := v.(type) {
@@ -49,7 +49,7 @@ func QueryAsString(sql string, bindVariables map[string]interface{}) string {
 			valString = fmt.Sprintf("%v", v);
 		}
 
-		fmt.Fprintf(buf, "%s: %q", k, sqlparser.TruncateForError(valString));
+		fmt.Fprintf(buf, "%s: %q", k, sqlparser.TruncateForLog(valString));
 	}
 	fmt.Fprintf(buf, "}")
 	return string(buf.Bytes())

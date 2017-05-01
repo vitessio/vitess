@@ -30,9 +30,9 @@ func TruncateForUI(query string) string {
 	return truncateQuery(query, *TruncateUILen)
 }
 
-// TruncateForError is used when displaying queries as part of error logs
+// TruncateForLog is used when displaying queries as part of error logs
 // to avoid overwhelming logging systems with potentially long queries and
 // bind value data.
-func TruncateForError(query string) string {
+func TruncateForLog(query string) string {
 	return truncateQuery(query, *TruncateErrLen)
 }

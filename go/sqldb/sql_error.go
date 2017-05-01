@@ -51,7 +51,7 @@ func (se *SQLError) Error() string {
 	fmt.Fprintf(buf, " (errno %v) (sqlstate %v)", se.Num, se.State)
 
 	if se.Query != "" {
-		fmt.Fprintf(buf, " during query: %s", sqlparser.TruncateForError(se.Query))
+		fmt.Fprintf(buf, " during query: %s", sqlparser.TruncateForLog(se.Query))
 	}
 
 	return buf.String()
