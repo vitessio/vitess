@@ -182,6 +182,11 @@ enum Type {
   // JSON specified a JSON type.
   // Properties: 30, IsQuoted.
   JSON = 2078;
+
+  // SQL specifies a SQL expression. This is not exposed, as it is only
+  // used in binlog parsing. There is no way to reserve a value in enums,
+  // so just using a comment here.
+  // Properties: 245, None.
 }
 
 // Value represents a typed value.
