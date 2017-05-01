@@ -2664,7 +2664,7 @@ func TestParseTarget(t *testing.T) {
 	}
 }
 
-func TestErrorTruncation(t *testing.T) {
+func TestLogTruncation(t *testing.T) {
 	*sqlparser.TruncateErrLen = 30
 
 	query := map[string]interface{}{
@@ -2677,17 +2677,19 @@ func TestErrorTruncation(t *testing.T) {
 		},
 	}
 
-	query = truncateErrorStrings(query)
-	errStr := fmt.Sprintf("request: %+v", query)
-	if !strings.Contains(errStr, "[TRUNCATED]") {
-		t.Errorf("Error was not truncated: %s", errStr)
+	truncated := truncateErrorStrings(query)
+
+	expected := map[string]interface{}{
+		"Sql": "THIS IS A LONG QUE [TRUNCATED]",
+		"BindVariables": map[string]interface{}{
+			"vtg1": "100", // <== Truncating also converts to string
+			"vtg2": "short string",
+			"vtg3": "this is a long bin [TRUNCATED]",
+			"vtg4": "another string",
+		},
 	}
 
-	if strings.Contains(errStr, "WILL BE TRUNCATED AWAY") {
-		t.Errorf("Error was not truncated: %s", errStr)
-	}
-
-	if strings.Contains(errStr, "will be truncated away as well") {
-		t.Errorf("Error was not truncated: %s", errStr)
+	if (!reflect.DeepEqual(truncated, expected)){
+		t.Errorf("query was not truncated properly: got %v expected %v", truncated, expected)
 	}
 }
