@@ -61,11 +61,15 @@ func findRoute(expr sqlparser.Expr, bldr builder) (rb *route, err error) {
 				highestRoute = newRoute
 			}
 		case *sqlparser.Subquery:
-			sel, ok := node.Select.(*sqlparser.Select)
-			if !ok {
-				return false, errors.New("unsupported: union operator in subqueries")
+			var subplan builder
+			switch stmt := node.Select.(type) {
+			case *sqlparser.Select:
+				subplan, err = processSelect(stmt, bldr.Symtab().VSchema, bldr)
+			case *sqlparser.Union:
+				subplan, err = processUnion(stmt, bldr.Symtab().VSchema, bldr)
+			default:
+				panic("unreachable")
 			}
-			subplan, err := processSelect(sel, bldr.Symtab().VSchema, bldr)
 			if err != nil {
 				return false, err
 			}
@@ -89,7 +93,7 @@ func findRoute(expr sqlparser.Expr, bldr builder) (rb *route, err error) {
 		return nil, err
 	}
 	for _, subroute := range subroutes {
-		err = subqueryCanMerge(highestRoute, subroute)
+		err = routesCanMerge(highestRoute, subroute)
 		if err != nil {
 			return nil, err
 		}
@@ -100,10 +104,10 @@ func findRoute(expr sqlparser.Expr, bldr builder) (rb *route, err error) {
 	return highestRoute, nil
 }
 
-// subqueryCanMerge returns nil if the inner subquery
+// routesCanMerge returns nil if the inner subquery
 // can be merged with the specified outer route. If it
 // cannot, then it returns an appropriate error.
-func subqueryCanMerge(outer, inner *route) error {
+func routesCanMerge(outer, inner *route) error {
 	if outer.ERoute.Keyspace.Name != inner.ERoute.Keyspace.Name {
 		return errors.New("unsupported: subquery keyspace different from outer query")
 	}

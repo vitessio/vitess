@@ -7,6 +7,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/sqldb"
@@ -318,9 +319,9 @@ func checkQueryInternal(t *testing.T, query string, sConn, cConn *Conn, result *
 		if !wantfields {
 			expected.Fields = nil
 		}
-		if !reflect.DeepEqual(got, &expected) {
+		if !got.Equal(&expected) {
 			for i, f := range got.Fields {
-				if !reflect.DeepEqual(f, expected.Fields[i]) {
+				if i < len(expected.Fields) && !proto.Equal(f, expected.Fields[i]) {
 					t.Logf("Got      field(%v) = %v", i, f)
 					t.Logf("Expected field(%v) = %v", i, expected.Fields[i])
 				}
@@ -356,9 +357,9 @@ func checkQueryInternal(t *testing.T, query string, sConn, cConn *Conn, result *
 		}
 		cConn.CloseResult()
 
-		if !reflect.DeepEqual(got, &expected) {
+		if !got.Equal(&expected) {
 			for i, f := range got.Fields {
-				if i < len(expected.Fields) && !reflect.DeepEqual(f, expected.Fields[i]) {
+				if i < len(expected.Fields) && !proto.Equal(f, expected.Fields[i]) {
 					t.Logf("========== Got      field(%v) = %v", i, f)
 					t.Logf("========== Expected field(%v) = %v", i, expected.Fields[i])
 				}
@@ -474,10 +475,10 @@ func testQueriesWithRealDatabase(t *testing.T, params *sqldb.ConnParams) {
 		},
 		RowsAffected: 1,
 	}
-	if !reflect.DeepEqual(result, expectedResult) {
+	if !result.Equal(expectedResult) {
 		// MySQL 5.7 is adding the NO_DEFAULT_VALUE_FLAG to Flags.
 		expectedResult.Fields[0].Flags |= uint32(querypb.MySqlFlag_NO_DEFAULT_VALUE_FLAG)
-		if !reflect.DeepEqual(result, expectedResult) {
+		if !result.Equal(expectedResult) {
 			t.Errorf("unexpected result for select, got:\n%v\nexpected:\n%v\n", result, expectedResult)
 		}
 	}
@@ -545,10 +546,10 @@ func readRowsUsingStream(t *testing.T, conn *Conn, expectedCount int) {
 	if err != nil {
 		t.Fatalf("Fields failed: %v", err)
 	}
-	if !reflect.DeepEqual(fields, expectedFields) {
+	if !sqltypes.FieldsEqual(fields, expectedFields) {
 		// MySQL 5.7 is adding the NO_DEFAULT_VALUE_FLAG to Flags.
 		expectedFields[0].Flags |= uint32(querypb.MySqlFlag_NO_DEFAULT_VALUE_FLAG)
-		if !reflect.DeepEqual(fields, expectedFields) {
+		if !sqltypes.FieldsEqual(fields, expectedFields) {
 			t.Fatalf("fields are not right, got:\n%v\nexpected:\n%v", fields, expectedFields)
 		}
 	}

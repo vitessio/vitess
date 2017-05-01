@@ -121,6 +121,8 @@ type SelectStatement interface {
 	iSelectStatement()
 	iStatement()
 	iInsertRows()
+	AddOrder(*Order)
+	SetLimit(*Limit)
 	SQLNode
 }
 
@@ -161,6 +163,16 @@ const (
 	SQLCacheStr   = "sql_cache "
 	SQLNoCacheStr = "sql_no_cache "
 )
+
+// AddOrder adds an order by element
+func (node *Select) AddOrder(order *Order) {
+	node.OrderBy = append(node.OrderBy, order)
+}
+
+// SetLimit sets the limit clause
+func (node *Select) SetLimit(limit *Limit) {
+	node.Limit = limit
+}
 
 // Format formats the node.
 func (node *Select) Format(buf *TrackedBuffer) {
@@ -240,6 +252,16 @@ type ParenSelect struct {
 	Select SelectStatement
 }
 
+// AddOrder adds an order by element
+func (node *ParenSelect) AddOrder(order *Order) {
+	panic("unreachable")
+}
+
+// SetLimit sets the limit clause
+func (node *ParenSelect) SetLimit(limit *Limit) {
+	panic("unreachable")
+}
+
 // Format formats the node.
 func (node *ParenSelect) Format(buf *TrackedBuffer) {
 	buf.Myprintf("(%v)", node.Select)
@@ -271,6 +293,16 @@ const (
 	UnionAllStr      = "union all"
 	UnionDistinctStr = "union distinct"
 )
+
+// AddOrder adds an order by element
+func (node *Union) AddOrder(order *Order) {
+	node.OrderBy = append(node.OrderBy, order)
+}
+
+// SetLimit sets the limit clause
+func (node *Union) SetLimit(limit *Limit) {
+	node.Limit = limit
+}
 
 // Format formats the node.
 func (node *Union) Format(buf *TrackedBuffer) {
@@ -1710,7 +1742,7 @@ func (node *ConvertType) WalkSubtree(visit Visit) error {
 
 // MatchExpr represents a call to the MATCH function
 type MatchExpr struct {
-	Columns Columns
+	Columns SelectExprs
 	Expr    Expr
 	Option  string
 }
@@ -1725,7 +1757,7 @@ const (
 
 // Format formats the node
 func (node *MatchExpr) Format(buf *TrackedBuffer) {
-	buf.Myprintf("match%v against (%v%s)", node.Columns, node.Expr, node.Option)
+	buf.Myprintf("match(%v) against (%v%s)", node.Columns, node.Expr, node.Option)
 }
 
 // WalkSubtree walks the nodes of the subtree.

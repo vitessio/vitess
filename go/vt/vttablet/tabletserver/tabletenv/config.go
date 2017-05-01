@@ -12,6 +12,8 @@ import (
 
 	"github.com/golang/protobuf/proto"
 
+	"time"
+
 	"github.com/youtube/vitess/go/flagutil"
 	"github.com/youtube/vitess/go/streamlog"
 	"github.com/youtube/vitess/go/vt/throttler"
@@ -30,12 +32,6 @@ var (
 	StatsLogger = streamlog.New("TabletServer", 50)
 )
 
-// MySQLChecker defines the CheckMySQL interface that lower
-// level objects can use to call back into TabletServer.
-type MySQLChecker interface {
-	CheckMySQL()
-}
-
 func init() {
 	flag.IntVar(&Config.PoolSize, "queryserver-config-pool-size", DefaultQsConfig.PoolSize, "query server connection pool size, connection pool is used by regular queries (non streaming, not in a transaction)")
 	flag.IntVar(&Config.StreamPoolSize, "queryserver-config-stream-pool-size", DefaultQsConfig.StreamPoolSize, "query server stream connection pool size, stream pool is used by stream queries: queries that return results to client in a streaming fashion")
@@ -51,7 +47,6 @@ func init() {
 	flag.Float64Var(&Config.QueryTimeout, "queryserver-config-query-timeout", DefaultQsConfig.QueryTimeout, "query server query timeout (in seconds), this is the query timeout in vttablet side. If a query takes more than this timeout, it will be killed.")
 	flag.Float64Var(&Config.TxPoolTimeout, "queryserver-config-txpool-timeout", DefaultQsConfig.TxPoolTimeout, "query server transaction pool timeout, it is how long vttablet waits if tx pool is full")
 	flag.Float64Var(&Config.IdleTimeout, "queryserver-config-idle-timeout", DefaultQsConfig.IdleTimeout, "query server idle timeout (in seconds), vttablet manages various mysql connection pools. This config means if a connection has not been used in given idle timeout, this connection will be removed from pool. This effectively manages number of connection objects and optimize the pool performance.")
-	flag.BoolVar(&Config.StrictMode, "queryserver-config-strict-mode", DefaultQsConfig.StrictMode, "allow only predictable DMLs and enforces MySQL's STRICT_TRANS_TABLES")
 	// tableacl related configurations.
 	flag.BoolVar(&Config.StrictTableACL, "queryserver-config-strict-table-acl", DefaultQsConfig.StrictTableACL, "only allow queries that pass table acl checks")
 	flag.BoolVar(&Config.EnableTableACLDryRun, "queryserver-config-enable-table-acl-dry-run", DefaultQsConfig.EnableTableACLDryRun, "If this flag is enabled, tabletserver will emit monitoring metrics and let the request pass regardless of table acl check results")
@@ -71,6 +66,9 @@ func init() {
 	flag.BoolVar(&Config.EnableHotRowProtectionDryRun, "enable_hot_row_protection_dry_run", DefaultQsConfig.EnableHotRowProtectionDryRun, "If true, hot row protection is not enforced but logs if transactions would have been queued.")
 	flag.IntVar(&Config.HotRowProtectionMaxQueueSize, "hot_row_protection_max_queue_size", DefaultQsConfig.HotRowProtectionMaxQueueSize, "Maximum number of BeginExecute RPCs which will be queued for the same row (range).")
 	flag.IntVar(&Config.HotRowProtectionMaxGlobalQueueSize, "hot_row_protection_max_global_queue_size", DefaultQsConfig.HotRowProtectionMaxGlobalQueueSize, "Global queue limit across all row (ranges). Useful to prevent that the queue can grow unbounded.")
+
+	flag.BoolVar(&Config.HeartbeatEnable, "heartbeat_enable", DefaultQsConfig.HeartbeatEnable, "If true, vttablet records (if master) or checks (if replica) the current time of a replication heartbeat in the table _vt.heartbeat. The result is used to inform the serving state of the vttablet via healthchecks.")
+	flag.DurationVar(&Config.HeartbeatInterval, "heartbeat_interval", DefaultQsConfig.HeartbeatInterval, "How frequently to read and write replication heartbeat.")
 }
 
 // Init must be called after flag.Parse, and before doing any other operations.
@@ -95,7 +93,6 @@ type TabletConfig struct {
 	QueryTimeout            float64
 	TxPoolTimeout           float64
 	IdleTimeout             float64
-	StrictMode              bool
 	StrictTableACL          bool
 	TerseErrors             bool
 	EnableAutoCommit        bool
@@ -115,6 +112,9 @@ type TabletConfig struct {
 	EnableHotRowProtectionDryRun       bool
 	HotRowProtectionMaxQueueSize       int
 	HotRowProtectionMaxGlobalQueueSize int
+
+	HeartbeatEnable   bool
+	HeartbeatInterval time.Duration
 }
 
 // DefaultQsConfig is the default value for the query service config.
@@ -139,7 +139,6 @@ var DefaultQsConfig = TabletConfig{
 	TxPoolTimeout:           1,
 	IdleTimeout:             30 * 60,
 	StreamBufferSize:        32 * 1024,
-	StrictMode:              true,
 	StrictTableACL:          false,
 	TerseErrors:             false,
 	EnableAutoCommit:        false,
@@ -160,6 +159,9 @@ var DefaultQsConfig = TabletConfig{
 	// Default value is the same as TransactionCap.
 	HotRowProtectionMaxQueueSize:       20,
 	HotRowProtectionMaxGlobalQueueSize: 1000,
+
+	HeartbeatEnable:   false,
+	HeartbeatInterval: 1 * time.Second,
 }
 
 // defaultTxThrottlerConfig formats the default throttlerdata.Configuration

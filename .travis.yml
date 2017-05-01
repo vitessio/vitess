@@ -50,12 +50,14 @@ before_cache:
   - rm $HOME/gopath/bin/zksrv.sh
   # Delete these files because they keep changing (having the latest timestamp
   # of an update) and trigger a lengthy update of the cache (~25 seconds).
-  - rm $HOME/.m2/repository/com/youtube/vitess/*/maven-metadata-local.xml
-  - rm $HOME/.m2/repository/com/youtube/vitess/*/*-SNAPSHOT/*-SNAPSHOT.jar
-  - rm $HOME/.m2/repository/com/youtube/vitess/*/*-SNAPSHOT/_remote.repositories
-  - rm $HOME/.m2/repository/com/youtube/vitess/*/*-SNAPSHOT/maven-metadata-local.xml
-  - rm $HOME/.m2/repository/com/youtube/vitess/*/*-SNAPSHOT/resolver-status.properties
+  - rm $HOME/.m2/repository/io/vitess/*/maven-metadata-local.xml
+  - rm $HOME/.m2/repository/io/vitess/*/*-SNAPSHOT/*-SNAPSHOT*.jar
+  - rm $HOME/.m2/repository/io/vitess/*/*-SNAPSHOT/_remote.repositories
+  - rm $HOME/.m2/repository/io/vitess/*/*-SNAPSHOT/maven-metadata-local.xml
+  - rm $HOME/.m2/repository/io/vitess/*/*-SNAPSHOT/resolver-status.properties
+  - rm $HOME/.m2/repository/io/grpc/grpc-core/resolver-status.properties
   - rm $HOME/.m2/repository/io/grpc/protoc-gen-grpc-java/*/protoc-gen-grpc-java-*.pom.lastUpdated
+  - rm $HOME/.m2/repository/io/netty/netty-codec-http2/resolver-status.properties
   # Don't cache unnecessary PHP files.
   - rm $HOME/.phpenv/versions/*/sbin/*
   - rm $HOME/.phpenv/versions/*/bin/php-cgi
@@ -74,8 +76,13 @@ env:
     # As of 07/2015 this value works best in a Travis CI container.
     - VT_GO_PARALLEL_VALUE=4
     - PATH="$HOME/.phpenv/bin:$PATH"
-    # Add -follow to TEST_FLAGS below to print as the test runs, to diagnose stuck tests.
-    - TEST_FLAGS="-docker=false -timeout=5m -print-log -remote-stats=http://enisoc.com:15123/travis/stats"
+    # Note: The per test timeout must always be < 10 minutes because test.go
+    #       does not produce any log output while running and Travis kills a
+    #       build after 10 minutes without log output.
+    #       See: https://docs.travis-ci.com/user/customizing-the-build#Build-Timeouts
+    # To diagnose stuck tests, add "-follow" to TEST_FLAGS below. Then test.go
+    # will print the test's output.
+    - TEST_FLAGS="-docker=false -timeout=8m -print-log -remote-stats=http://enisoc.com:15123/travis/stats"
     - CC=gcc-4.8
     - CXX=g++-4.8
     # TODO: uncomment when php crashing is fixed

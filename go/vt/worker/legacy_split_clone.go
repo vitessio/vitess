@@ -82,7 +82,7 @@ type LegacySplitCloneWorker struct {
 	// aliases of tablets that need to have their state refreshed.
 	// Only populated once, read-only after that.
 	refreshAliases [][]*topodatapb.TabletAlias
-	refreshTablets []map[topodatapb.TabletAlias]*topo.TabletInfo
+	refreshTablets []map[string]*topo.TabletInfo
 
 	ev *events.SplitClone
 }
@@ -418,7 +418,7 @@ func (scw *LegacySplitCloneWorker) findTargets(ctx context.Context) error {
 // state on these tablets, to minimize the chances of the topo changing in between.
 func (scw *LegacySplitCloneWorker) findRefreshTargets(ctx context.Context) error {
 	scw.refreshAliases = make([][]*topodatapb.TabletAlias, len(scw.destinationShards))
-	scw.refreshTablets = make([]map[topodatapb.TabletAlias]*topo.TabletInfo, len(scw.destinationShards))
+	scw.refreshTablets = make([]map[string]*topo.TabletInfo, len(scw.destinationShards))
 
 	for shardIndex, si := range scw.destinationShards {
 		refreshAliases, refreshTablets, err := resolveRefreshTabletsForShard(ctx, si.Keyspace(), si.ShardName(), scw.wr)
@@ -673,7 +673,7 @@ func (scw *LegacySplitCloneWorker) copy(ctx context.Context) error {
 				if err != nil {
 					processError("RefreshState failed on tablet %v: %v", ti.AliasString(), err)
 				}
-			}(scw.refreshTablets[shardIndex][*tabletAlias])
+			}(scw.refreshTablets[shardIndex][topoproto.TabletAliasString(tabletAlias)])
 		}
 	}
 	destinationWaitGroup.Wait()

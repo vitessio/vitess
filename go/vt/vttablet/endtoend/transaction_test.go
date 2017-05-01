@@ -11,11 +11,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang/protobuf/proto"
+
 	"github.com/youtube/vitess/go/sqldb"
-	"github.com/youtube/vitess/go/vt/vttablet/tabletserver"
-	"github.com/youtube/vitess/go/vt/vttablet/endtoend/framework"
-	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"github.com/youtube/vitess/go/vt/vterrors"
+	"github.com/youtube/vitess/go/vt/vttablet/endtoend/framework"
+	"github.com/youtube/vitess/go/vt/vttablet/tabletserver"
+	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -588,7 +590,7 @@ func TestMMCommitFlow(t *testing.T) {
 			TabletType: topodatapb.TabletType_MASTER,
 		}},
 	}
-	if !reflect.DeepEqual(info, wantInfo) {
+	if !proto.Equal(info, wantInfo) {
 		t.Errorf("ReadTransaction: %#v, want %#v", info, wantInfo)
 	}
 
@@ -602,7 +604,7 @@ func TestMMCommitFlow(t *testing.T) {
 		t.Error(err)
 	}
 	wantInfo = &querypb.TransactionMetadata{}
-	if !reflect.DeepEqual(info, wantInfo) {
+	if !proto.Equal(info, wantInfo) {
 		t.Errorf("ReadTransaction: %#v, want %#v", info, wantInfo)
 	}
 }
@@ -657,7 +659,7 @@ func TestMMRollbackFlow(t *testing.T) {
 			TabletType: topodatapb.TabletType_MASTER,
 		}},
 	}
-	if !reflect.DeepEqual(info, wantInfo) {
+	if !proto.Equal(info, wantInfo) {
 		t.Errorf("ReadTransaction: %#v, want %#v", info, wantInfo)
 	}
 

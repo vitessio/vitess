@@ -34,8 +34,31 @@ type Handle struct {
 	cmd   *exec.Cmd
 	stdin io.WriteCloser
 
+	// schemaDir is the directory which will be passed as --schema_dir flag.
+	// We store it here because the VSchema() option must reference it.
+	schemaDir string
+
 	// dbname is valid only for LaunchMySQL.
 	dbname string
+}
+
+// VtgateAddress returns the address under which vtgate is reachable e.g.
+// "localhost:15991".
+// An error is returned if the data is not available.
+func (hdl *Handle) VtgateAddress() (string, error) {
+	if hdl.Data == nil {
+		return "", errors.New("Data field in Handle is empty")
+	}
+	portName := "port"
+	if vtgateProtocol() == "grpc" {
+		portName = "grpc_port"
+	}
+	fport, ok := hdl.Data[portName]
+	if !ok {
+		return "", fmt.Errorf("port %v not found in map", portName)
+	}
+	port := int(fport.(float64))
+	return fmt.Sprintf("localhost:%d", port), nil
 }
 
 // VitessOption is the type for generic options to be passed in to LaunchVitess.
@@ -74,11 +97,16 @@ func NoStderr() VitessOption {
 // SchemaDirectory is used to specify a directory to read schema from.
 // It cannot be used at the same time as Schema.
 func SchemaDirectory(dir string) VitessOption {
+	if dir == "" {
+		log.Fatal("BUG: provided directory must not be empty")
+	}
+
 	return VitessOption{
 		beforeRun: func(hdl *Handle) error {
-			if dir != "" {
-				hdl.cmd.Args = append(hdl.cmd.Args, "--schema_dir", dir)
+			if hdl.schemaDir != "" {
+				return fmt.Errorf("SchemaDirectory option (%v) would overwrite directory set by another option (%v)", dir, hdl.schemaDir)
 			}
+			hdl.schemaDir = dir
 			return nil
 		},
 	}
@@ -90,6 +118,13 @@ func SchemaDirectory(dir string) VitessOption {
 func ProtoTopo(topo *vttestpb.VTTestTopology) VitessOption {
 	return VitessOption{
 		beforeRun: func(hdl *Handle) error {
+			if hdl.dbname != "" {
+				return fmt.Errorf("duplicate MySQLOnly option or conflicting ProtoTopo option. You can only use one")
+			}
+
+			if len(topo.GetKeyspaces()) > 0 {
+				hdl.dbname = topo.GetKeyspaces()[0].Name
+			}
 			hdl.cmd.Args = append(hdl.cmd.Args, "--proto_topo", proto.CompactTextString(topo))
 			return nil
 		},
@@ -97,11 +132,14 @@ func ProtoTopo(topo *vttestpb.VTTestTopology) VitessOption {
 }
 
 // MySQLOnly is used to launch only a mysqld instance, with the specified db name.
-// Use it before Schema option.
 // It cannot be used at the same as ProtoTopo.
 func MySQLOnly(dbName string) VitessOption {
 	return VitessOption{
 		beforeRun: func(hdl *Handle) error {
+			if hdl.dbname != "" {
+				return fmt.Errorf("duplicate MySQLOnly option or conflicting ProtoTopo option. You can only use one")
+			}
+
 			// the way to pass the dbname for creation in
 			// is to provide a topology
 			topo := &vttestpb.VTTestTopology{
@@ -128,23 +166,29 @@ func MySQLOnly(dbName string) VitessOption {
 }
 
 // Schema is used to specify SQL commands to run at startup.
-// It conflicts with SchemaDirectory
+// It conflicts with SchemaDirectory.
+// This option requires a ProtoTopo or MySQLOnly option before.
 func Schema(schema string) VitessOption {
-	schemaDir := ""
+	if schema == "" {
+		log.Fatal("BUG: provided schema must not be empty")
+	}
+
+	tempSchemaDir := ""
 	return VitessOption{
 		beforeRun: func(hdl *Handle) error {
-			if schema == "" {
-				return nil
-			}
 			if hdl.dbname == "" {
 				return fmt.Errorf("Schema option requires a previously passed MySQLOnly option")
 			}
+			if hdl.schemaDir != "" {
+				return fmt.Errorf("Schema option would overwrite directory set by another option (%v)", hdl.schemaDir)
+			}
+
 			var err error
-			schemaDir, err = ioutil.TempDir("", "vt")
+			tempSchemaDir, err = ioutil.TempDir("", "vt")
 			if err != nil {
 				return err
 			}
-			ksDir := path.Join(schemaDir, hdl.dbname)
+			ksDir := path.Join(tempSchemaDir, hdl.dbname)
 			err = os.Mkdir(ksDir, os.ModeDir|0775)
 			if err != nil {
 				return err
@@ -165,13 +209,47 @@ func Schema(schema string) VitessOption {
 			if err != nil {
 				return err
 			}
-			hdl.cmd.Args = append(hdl.cmd.Args, "--schema_dir", schemaDir)
+			hdl.schemaDir = tempSchemaDir
 			return nil
 		},
 		afterRun: func() {
-			if schemaDir != "" {
-				os.RemoveAll(schemaDir)
+			if tempSchemaDir != "" {
+				os.RemoveAll(tempSchemaDir)
 			}
+		},
+	}
+}
+
+// VSchema is used to create a vschema.json file in the --schema_dir directory.
+// It must be used *after* the Schema or SchemaDirectory option was provided.
+func VSchema(vschema interface{}) VitessOption {
+	if vschema == "" {
+		log.Fatal("BUG: provided vschema object must not be nil")
+	}
+
+	vschemaFilePath := ""
+	return VitessOption{
+		beforeRun: func(hdl *Handle) error {
+			if hdl.schemaDir == "" {
+				return errors.New("VSchema option must be specified after a Schema or SchemaDirectory option")
+			}
+
+			vschemaFilePath := path.Join(hdl.schemaDir, "vschema.json")
+			if _, err := os.Stat(vschemaFilePath); err == nil {
+				return fmt.Errorf("temporary vschema.json already exists at %v. delete it first", vschemaFilePath)
+			}
+
+			vschemaJSON, err := json.Marshal(vschema)
+			if err != nil {
+				return err
+			}
+			if err := ioutil.WriteFile(vschemaFilePath, vschemaJSON, 0644); err != nil {
+				return err
+			}
+			return nil
+		},
+		afterRun: func() {
+			os.Remove(vschemaFilePath)
 		},
 	}
 }
@@ -314,6 +392,9 @@ func (hdl *Handle) run(
 		if option.afterRun != nil {
 			defer option.afterRun()
 		}
+	}
+	if hdl.schemaDir != "" {
+		hdl.cmd.Args = append(hdl.cmd.Args, "--schema_dir", hdl.schemaDir)
 	}
 
 	log.Infof("executing: %v", strings.Join(hdl.cmd.Args, " "))

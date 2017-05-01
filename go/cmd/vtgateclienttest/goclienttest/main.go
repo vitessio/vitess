@@ -26,14 +26,15 @@ const connectionKeyspace = "conn_ks"
 func TestGoClient(t *testing.T, protocol, addr string) {
 	// Create a client connecting to the server
 	ctx := context.Background()
-	conn, err := vtgateconn.DialProtocol(ctx, protocol, addr, 30*time.Second, connectionKeyspace)
+	conn, err := vtgateconn.DialProtocol(ctx, protocol, addr, 30*time.Second)
+	session := conn.Session(connectionKeyspace, nil)
 	if err != nil {
 		t.Fatalf("dial failed: %v", err)
 	}
 
-	testCallerID(t, conn)
-	testEcho(t, conn)
-	testErrors(t, conn)
+	testCallerID(t, conn, session)
+	testEcho(t, conn, session)
+	testErrors(t, conn, session)
 	testSuccess(t, conn)
 
 	// and clean up

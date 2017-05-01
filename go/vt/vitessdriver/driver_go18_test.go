@@ -18,7 +18,7 @@ import (
 )
 
 func TestBeginIsolation(t *testing.T) {
-	db, err := Open(testAddress, "", "master", 30*time.Second)
+	db, err := Open(testAddress, "@master", 30*time.Second)
 	if err != nil {
 		t.Error(err)
 	}

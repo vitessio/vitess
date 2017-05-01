@@ -6,6 +6,7 @@ package topo
 
 import (
 	log "github.com/golang/glog"
+	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/trace"
@@ -104,7 +105,7 @@ func RemoveShardReplicationRecord(ctx context.Context, ts Server, cell, keyspace
 	err := ts.UpdateShardReplicationFields(ctx, cell, keyspace, shard, func(sr *topodatapb.ShardReplication) error {
 		nodes := make([]*topodatapb.ShardReplication_Node, 0, len(sr.Nodes))
 		for _, node := range sr.Nodes {
-			if *node.TabletAlias != *tabletAlias {
+			if !proto.Equal(node.TabletAlias, tabletAlias) {
 				nodes = append(nodes, node)
 			}
 		}

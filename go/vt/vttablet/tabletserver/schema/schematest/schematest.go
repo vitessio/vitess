@@ -45,6 +45,18 @@ func Queries() map[string]*sqltypes.Result {
 				{sqltypes.MakeString([]byte("1"))},
 			},
 		},
+		"show variables like 'binlog_format'": {
+			Fields: []*querypb.Field{{
+				Type: sqltypes.VarChar,
+			}, {
+				Type: sqltypes.VarChar,
+			}},
+			RowsAffected: 1,
+			Rows: [][]sqltypes.Value{{
+				sqltypes.MakeString([]byte("binlog_format")),
+				sqltypes.MakeString([]byte("STATEMENT")),
+			}},
+		},
 		mysqlconn.BaseShowTables: {
 			Fields:       mysqlconn.BaseShowTablesFields,
 			RowsAffected: 3,

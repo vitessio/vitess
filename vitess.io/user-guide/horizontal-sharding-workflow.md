@@ -1,6 +1,6 @@
 ---
 layout: doc
-title: "Horizontal Sharding Workflow"
+title: "Horizontal Sharding (Tutorial, automated)"
 description:
 modified:
 excerpt:

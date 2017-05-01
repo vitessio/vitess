@@ -1,27 +1,15 @@
 package test
 
 import (
-	"encoding/json"
 	"testing"
 
+	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/vt/topo"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 )
-
-func tabletEqual(left, right *topodatapb.Tablet) (bool, error) {
-	lj, err := json.Marshal(left)
-	if err != nil {
-		return false, err
-	}
-	rj, err := json.Marshal(right)
-	if err != nil {
-		return false, err
-	}
-	return string(lj) == string(rj), nil
-}
 
 // checkTablet verifies the topo server API is correct for managing tablets.
 func checkTablet(t *testing.T, ts topo.Impl) {
@@ -58,9 +46,7 @@ func checkTablet(t *testing.T, ts topo.Impl) {
 	if err != nil {
 		t.Fatalf("GetTablet %v: %v", tablet.Alias, err)
 	}
-	if eq, err := tabletEqual(nt, tablet); err != nil {
-		t.Errorf("cannot compare tablets: %v", err)
-	} else if !eq {
+	if !proto.Equal(nt, tablet) {
 		t.Errorf("put and got tablets are not identical:\n%#v\n%#v", tablet, t)
 	}
 
@@ -72,7 +58,7 @@ func checkTablet(t *testing.T, ts topo.Impl) {
 	if err != nil {
 		t.Fatalf("GetTabletsByCell: %v", err)
 	}
-	if len(inCell) != 1 || *inCell[0] != *tablet.Alias {
+	if len(inCell) != 1 || !proto.Equal(inCell[0], tablet.Alias) {
 		t.Errorf("GetTabletsByCell: want [%v], got %v", tablet.Alias, inCell)
 	}
 

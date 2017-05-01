@@ -17,11 +17,12 @@ sandbox:
       # command line or randomly generated name.
       name: {{cluster_name}}
       node_count: 5
-      machine_type: n1-standard-8
+      machine_type: n1-standard-4
   # Application is application-specific, used by the derived Sandbox class.
   application:
     vtgate_count: 1
     enable_orchestrator: True
+    enable_guestbook: True
     etcd_count: 3
     cells:
       - test1
@@ -40,10 +41,6 @@ sandbox:
     mysql_cpu: 500m
     vtgate_ram: 512Mi
     vtgate_cpu: 500m
-    port_forwarding:
-      vtgate: 15001
-      vtctld: 15000
-      guestbook: 80
     backup_flags:
       backup_storage_implementation: gcs
       gcs_backup_storage_bucket: 'my-builtin-backup'

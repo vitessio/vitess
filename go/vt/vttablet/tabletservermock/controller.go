@@ -10,6 +10,8 @@ import (
 
 	"golang.org/x/net/context"
 
+	"time"
+
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
@@ -171,6 +173,11 @@ func (tqsc *Controller) BroadcastHealth(terTimestamp int64, stats *querypb.Realt
 		RealtimeStats: *stats,
 		Serving:       tqsc.queryServiceEnabled && (!tqsc.isInLameduck),
 	}
+}
+
+// HeartbeatLag is part of the tabletserver.Controller interface.
+func (tqsc *Controller) HeartbeatLag() (time.Duration, error) {
+	return 0, nil
 }
 
 // EnterLameduck implements tabletserver.Controller.

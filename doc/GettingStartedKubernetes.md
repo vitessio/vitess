@@ -600,8 +600,9 @@ provides more detail about how the app server interacts with Vitess.
 ## Try Vitess resharding
 
 Now that you have a full Vitess stack running, you may want to go on to the
-[Sharding in Kubernetes](http://vitess.io/user-guide/sharding-kubernetes.html)
-guide to try out
+[Sharding in Kubernetes workflow guide](http://vitess.io/user-guide/sharding-kubernetes.html)
+or [Sharding in Kubernetes codelab](http://vitess.io/user-guide/sharding-kubernetes.html)
+(if you prefer to run each step manually through commands) to try out
 [dynamic resharding](http://vitess.io/user-guide/sharding.html#resharding).
 
 If so, you can skip the tear-down since the sharding guide picks up right here.

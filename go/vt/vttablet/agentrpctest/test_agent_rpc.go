@@ -15,6 +15,7 @@ import (
 
 	"golang.org/x/net/context"
 
+	"github.com/golang/protobuf/proto"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/hook"
 	"github.com/youtube/vitess/go/vt/logutil"
@@ -59,10 +60,36 @@ func NewFakeRPCAgent(t *testing.T) tabletmanager.RPCAgent {
 // for each possible method of the interface.
 // This makes the implementations all in the same spot.
 
+var protoMessage = reflect.TypeOf((*proto.Message)(nil)).Elem()
+
 func compare(t *testing.T, name string, got, want interface{}) {
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("Unexpected %v: got %v expected %v", name, got, want)
+	typ := reflect.TypeOf(got)
+	if reflect.TypeOf(got) != reflect.TypeOf(want) {
+		goto fail
 	}
+	switch {
+	case typ.Implements(protoMessage):
+		if !proto.Equal(got.(proto.Message), want.(proto.Message)) {
+			goto fail
+		}
+	case typ.Kind() == reflect.Slice && typ.Elem().Implements(protoMessage):
+		vx, vy := reflect.ValueOf(got), reflect.ValueOf(want)
+		if vx.Len() != vy.Len() {
+			goto fail
+		}
+		for i := 0; i < vx.Len(); i++ {
+			if !proto.Equal(vx.Index(i).Interface().(proto.Message), vy.Index(i).Interface().(proto.Message)) {
+				goto fail
+			}
+		}
+	default:
+		if !reflect.DeepEqual(got, want) {
+			goto fail
+		}
+	}
+	return
+fail:
+	t.Errorf("Unexpected %v:\ngot  %#v\nwant %#v", name, got, want)
 }
 
 func compareBool(t *testing.T, name string, got bool) {
@@ -527,7 +554,9 @@ func (fra *fakeRPCAgent) ApplySchema(ctx context.Context, change *tmutils.Schema
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
-	compare(fra.t, "ApplySchema change", change, testSchemaChange)
+	if !change.Equal(testSchemaChange) {
+		fra.t.Errorf("Unexpected ApplySchema change:\ngot  %#v\nwant %#v", change, testSchemaChange)
+	}
 	return testSchemaChangeResult[0], nil
 }
 

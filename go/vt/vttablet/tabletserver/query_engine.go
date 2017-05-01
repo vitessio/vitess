@@ -34,7 +34,6 @@ import (
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/schema"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/txserializer"
-	"github.com/youtube/vitess/go/vt/utils"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
@@ -120,7 +119,7 @@ type QueryEngine struct {
 	streamQList  *QueryList
 
 	// Vars
-	strictMode       sync2.AtomicBool
+	binlogFormat     connpool.BinlogFormat
 	autoCommit       sync2.AtomicBool
 	maxResultSize    sync2.AtomicInt64
 	maxDMLRows       sync2.AtomicInt64
@@ -144,7 +143,7 @@ var (
 // NewQueryEngine creates a new QueryEngine.
 // This is a singleton class.
 // You must call this only once.
-func NewQueryEngine(checker MySQLChecker, se *schema.Engine, config tabletenv.TabletConfig) *QueryEngine {
+func NewQueryEngine(checker connpool.MySQLChecker, se *schema.Engine, config tabletenv.TabletConfig) *QueryEngine {
 	qe := &QueryEngine{
 		se:               se,
 		tables:           make(map[string]*schema.Table),
@@ -170,7 +169,6 @@ func NewQueryEngine(checker MySQLChecker, se *schema.Engine, config tabletenv.Ta
 		config.HotRowProtectionMaxQueueSize, config.HotRowProtectionMaxGlobalQueueSize)
 	qe.streamQList = NewQueryList()
 
-	qe.strictMode.Set(config.StrictMode)
 	qe.autoCommit.Set(config.EnableAutoCommit)
 	qe.strictTableACL = config.StrictTableACL
 	qe.enableTableACLDryRun = config.EnableTableACLDryRun
@@ -232,19 +230,17 @@ func (qe *QueryEngine) Open(dbconfigs dbconfigs.DBConfigs) error {
 	qe.dbconfigs = dbconfigs
 	qe.conns.Open(&qe.dbconfigs.App, &qe.dbconfigs.Dba)
 
-	if qe.strictMode.Get() {
-		conn, err := qe.conns.Get(tabletenv.LocalContext())
-		if err != nil {
-			qe.conns.Close()
-			return err
-		}
-		err = conn.VerifyMode()
-		conn.Recycle()
+	conn, err := qe.conns.Get(tabletenv.LocalContext())
+	if err != nil {
+		qe.conns.Close()
+		return err
+	}
+	qe.binlogFormat, err = conn.VerifyMode()
+	conn.Recycle()
 
-		if err != nil {
-			qe.conns.Close()
-			return err
-		}
+	if err != nil {
+		qe.conns.Close()
+		return err
 	}
 
 	qe.streamConns.Open(&qe.dbconfigs.App, &qe.dbconfigs.Dba)
@@ -473,7 +469,7 @@ func (qe *QueryEngine) handleHTTPQueryPlans(response http.ResponseWriter, reques
 	response.Header().Set("Content-Type", "text/plain")
 	response.Write([]byte(fmt.Sprintf("Length: %d\n", len(keys))))
 	for _, v := range keys {
-		response.Write([]byte(fmt.Sprintf("%#v\n", utils.TruncateQuery(v))))
+		response.Write([]byte(fmt.Sprintf("%#v\n", sqlparser.TruncateForUI(v))))
 		if plan := qe.peekQuery(v); plan != nil {
 			if b, err := json.MarshalIndent(plan.Plan, "", "  "); err != nil {
 				response.Write([]byte(err.Error()))
@@ -492,7 +488,7 @@ func (qe *QueryEngine) handleHTTPQueryStats(response http.ResponseWriter, reques
 	for _, v := range keys {
 		if plan := qe.peekQuery(v); plan != nil {
 			var pqstats perQueryStats
-			pqstats.Query = unicoded(utils.TruncateQuery(v))
+			pqstats.Query = unicoded(sqlparser.TruncateForUI(v))
 			pqstats.Table = plan.TableName().String()
 			pqstats.Plan = plan.PlanID
 			pqstats.QueryCount, pqstats.Time, pqstats.MysqlTime, pqstats.RowCount, pqstats.ErrorCount = plan.Stats()

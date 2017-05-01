@@ -15,10 +15,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vttablet/endtoend/framework"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
@@ -81,7 +83,7 @@ func TestBinary(t *testing.T) {
 			},
 		},
 	}
-	if !reflect.DeepEqual(*qr, want) {
+	if !qr.Equal(&want) {
 		t.Errorf("Execute: \n%#v, want \n%#v", prettyPrint(*qr), prettyPrint(want))
 	}
 
@@ -99,7 +101,7 @@ func TestBinary(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	if !reflect.DeepEqual(*qr, want) {
+	if !qr.Equal(&want) {
 		t.Errorf("Execute: \n%#v, want \n%#v", prettyPrint(*qr), prettyPrint(want))
 	}
 }
@@ -334,7 +336,7 @@ func TestBindInSelect(t *testing.T) {
 			},
 		},
 	}
-	if !reflect.DeepEqual(qr, want) {
+	if !qr.Equal(want) {
 		t.Errorf("Execute: \n%#v, want \n%#v", prettyPrint(*qr), prettyPrint(*want))
 	}
 
@@ -363,7 +365,7 @@ func TestBindInSelect(t *testing.T) {
 			},
 		},
 	}
-	if !reflect.DeepEqual(qr, want) {
+	if !qr.Equal(want) {
 		t.Errorf("Execute: \n%#v, want \n%#v", prettyPrint(*qr), prettyPrint(*want))
 	}
 
@@ -392,7 +394,7 @@ func TestBindInSelect(t *testing.T) {
 			},
 		},
 	}
-	if !reflect.DeepEqual(qr, want) {
+	if !qr.Equal(want) {
 		t.Errorf("Execute: \n%#v, want \n%#v", prettyPrint(*qr), prettyPrint(*want))
 	}
 }
@@ -423,7 +425,7 @@ func TestStreamHealth(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(*health.Target, framework.Target) {
+	if !proto.Equal(health.Target, &framework.Target) {
 		t.Errorf("Health: %+v, want %+v", *health.Target, framework.Target)
 	}
 }
@@ -515,5 +517,50 @@ func TestDBAStatements(t *testing.T) {
 	}
 	if qr.RowsAffected != 4 {
 		t.Errorf("RowsAffected: %d, want 4", qr.RowsAffected)
+	}
+}
+
+func TestLogTruncation(t *testing.T) {
+	client := framework.NewClient()
+
+	// Test that a long error string is not truncated by default
+	_, err := client.Execute(
+		"insert into vitess_test values(123, :data, null, null)",
+		map[string]interface{}{"data": "THIS IS A LONG LONG LONG LONG QUERY STRING THAT SHOULD BE SHORTENED"},
+	)
+	want := "Data truncated for column 'floatval' at row 1 (errno 1265) (sqlstate 01000) during query: insert into vitess_test values (123, 'THIS IS A LONG LONG LONG LONG QUERY STRING THAT SHOULD BE SHORTENED', null, null) /* _stream vitess_test (intval ) (123 ); */"
+	if err == nil {
+		t.Errorf("query unexpectedly succeeded")
+	}
+	if err.Error() != want {
+		t.Errorf("log was unexpectedly truncated... got %s, wanted %s", err, want)
+	}
+
+	// Test that the data too long error is truncated once the option is set
+	*sqlparser.TruncateErrLen = 30;
+	_, err = client.Execute(
+		"insert into vitess_test values(123, :data, null, null)",
+		map[string]interface{}{"data": "THIS IS A LONG LONG LONG LONG QUERY STRING THAT SHOULD BE SHORTENED"},
+	)
+	want = "Data truncated for column 'floatval' at row 1 (errno 1265) (sqlstate 01000) during query: insert into vitess [TRUNCATED] /* _stream vitess_test (intval ) (123 ); */"
+	if err == nil {
+		t.Errorf("query unexpectedly succeeded")
+	}
+	if err.Error() != want {
+		t.Errorf("log was not truncated properly... got %s, wanted %s", err, want)
+	}
+
+	// Test that trailing comments are preserved data too long error is truncated once the option is set
+	*sqlparser.TruncateErrLen = 30;
+	_, err = client.Execute(
+		"insert into vitess_test values(123, :data, null, null) /* KEEP ME */",
+		map[string]interface{}{"data": "THIS IS A LONG LONG LONG LONG QUERY STRING THAT SHOULD BE SHORTENED"},
+	)
+	want = "Data truncated for column 'floatval' at row 1 (errno 1265) (sqlstate 01000) during query: insert into vitess [TRUNCATED] /* _stream vitess_test (intval ) (123 ); */ /* KEEP ME */"
+	if err == nil {
+		t.Errorf("query unexpectedly succeeded")
+	}
+	if err.Error() != want {
+		t.Errorf("log was not truncated properly... got %s, wanted %s", err, want)
 	}
 }

@@ -27,30 +27,13 @@ class VitessKubernetesSandbox(sandbox.Sandbox):
   def __init__(self, sandbox_options):
     super(VitessKubernetesSandbox, self).__init__(sandbox_options)
 
-  def generate_firewall_sandlet(self):
-    """Generates sandlet for firewall rules."""
-    firewall_sandlet = sandlet.Sandlet('firewall')
-
-    if 'vtctld' in self.app_options.port_forwarding:
-      firewall_sandlet.components.add_component(
-          self.cluster_env.Port('%s-vtctld' % self.name,
-                                self.app_options.port_forwarding['vtctld']))
-    if 'vtgate' in self.app_options.port_forwarding:
-      for cell in self.app_options.cells:
-        firewall_sandlet.components.add_component(
-            self.cluster_env.Port('%s-vtgate-%s' % (self.name, cell),
-                                  self.app_options.port_forwarding['vtgate']))
-    if 'guestbook' in self.app_options.port_forwarding:
-      firewall_sandlet.components.add_component(
-          self.cluster_env.Port('%s-guestbook' % self.name,
-                                self.app_options.port_forwarding['guestbook']))
-    self.sandlets.add_component(firewall_sandlet)
-
   def generate_guestbook_sandlet(self):
     """Creates a sandlet encompassing the guestbook app built on Vitess."""
     guestbook_sandlet = sandlet.Sandlet('guestbook')
     guestbook_sandlet.dependencies = ['helm']
     template_dir = os.path.join(os.environ['VTTOP'], 'examples/kubernetes')
+    guestbook_sandlet.components.add_component(
+        self.cluster_env.Port('%s-guestbook' % self.name, 80))
     for keyspace in self.app_options.keyspaces:
       create_schema_subprocess = subprocess_component.Subprocess(
           'create_schema_%s' % keyspace['name'], self.name, 'create_schema.py',
@@ -144,7 +127,7 @@ class VitessKubernetesSandbox(sandbox.Sandbox):
                     cpu=self.app_options.mysql_cpu,
                 ),
             ),
-            controllerType='None',
+            controllerType='StatefulSet',
         ),
         vtgate=dict(
             serviceType='LoadBalancer',  # Allows port forwarding.
@@ -229,6 +212,15 @@ class VitessKubernetesSandbox(sandbox.Sandbox):
     wait_for_mysql_subprocess.dependencies = ['helm']
     helm_sandlet.components.add_component(wait_for_mysql_subprocess)
 
+    # Add a subprocess task to ensure serving types are correct. This is useful
+    # for resharding sandboxes where keyspaces have overlapping sets of shards.
+    fix_served_types_subprocess = subprocess_component.Subprocess(
+        'fix_served_types', self.name, 'fix_served_types.py', self.log_dir,
+        namespace=self.name,
+        keyspaces=','.join(ks['name'] for ks in self.app_options.keyspaces))
+    fix_served_types_subprocess.dependencies = ['wait_for_mysql']
+    helm_sandlet.components.add_component(fix_served_types_subprocess)
+
     # Add a subprocess task for each keyspace to perform the initial reparent.
     for keyspace in self.app_options.keyspaces:
       name = keyspace['name']
@@ -239,7 +231,9 @@ class VitessKubernetesSandbox(sandbox.Sandbox):
           keyspace=name, shard_count=shard_count,
           master_cell=self.app_options.cells[0])
       initial_reparent_subprocess.dependencies = [
-          wait_for_mysql_subprocess.name]
+          wait_for_mysql_subprocess.name,
+          fix_served_types_subprocess.name,
+      ]
       helm_sandlet.components.add_component(initial_reparent_subprocess)
     self.sandlets.add_component(helm_sandlet)
 
@@ -249,26 +243,21 @@ class VitessKubernetesSandbox(sandbox.Sandbox):
         'Struct', self.sandbox_options['application'].keys())(
             *self.sandbox_options['application'].values())
 
-    if any(k in self.app_options.port_forwarding
-           for k in ['vtgate', 'vtctld', 'guestbook']):
-      self.generate_firewall_sandlet()
     self.generate_helm_sandlet()
-    if 'guestbook' in self.app_options.port_forwarding:
+    if self.app_options.enable_guestbook:
       self.generate_guestbook_sandlet()
 
   def print_banner(self):
     logging.info('Fetching forwarded ports.')
     banner = '\nVitess Sandbox Info:\n'
-    vtctld_port = self.app_options.port_forwarding['vtctld']
-    vtgate_port = self.app_options.port_forwarding['vtgate']
     vtctld_ip = kubernetes_components.get_forwarded_ip(
         'vtctld', self.name)
-    banner += '  vtctld: http://%s:%d\n' % (vtctld_ip, vtctld_port)
+    banner += '  vtctld: http://%s:15000\n' % vtctld_ip
     for cell in self.app_options.cells:
       vtgate_ip = kubernetes_components.get_forwarded_ip(
           'vtgate-%s' % cell, self.name)
-      banner += '  vtgate-%s: http://%s:%d\n' % (cell, vtgate_ip, vtgate_port)
-    if 'guestbook' in self.app_options.port_forwarding:
+      banner += '  vtgate-%s: http://%s:15001\n' % (cell, vtgate_ip)
+    if self.app_options.enable_guestbook:
       guestbook_ip = kubernetes_components.get_forwarded_ip(
           'guestbook', self.name)
       banner += '  guestbook: http://%s:80\n' % guestbook_ip

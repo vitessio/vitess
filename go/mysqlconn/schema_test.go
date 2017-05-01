@@ -5,6 +5,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/sqldb"
@@ -35,16 +36,16 @@ func testDescribeTable(t *testing.T, params *sqldb.ConnParams) {
 		t.Fatal(err)
 	}
 
-	if !reflect.DeepEqual(result.Fields, DescribeTableFields) {
+	if !sqltypes.FieldsEqual(result.Fields, DescribeTableFields) {
 		// MariaDB has '81' instead of '90' of Extra ColumnLength.
 		// Just try it and see if it's the only difference.
 		if result.Fields[5].ColumnLength == 81 {
 			result.Fields[5].ColumnLength = 90
 		}
 
-		if !reflect.DeepEqual(result.Fields, DescribeTableFields) {
+		if !sqltypes.FieldsEqual(result.Fields, DescribeTableFields) {
 			for i, f := range result.Fields {
-				if !reflect.DeepEqual(f, DescribeTableFields[i]) {
+				if !proto.Equal(f, DescribeTableFields[i]) {
 					t.Logf("result.Fields[%v] = %v", i, f)
 					t.Logf("        expected = %v", DescribeTableFields[i])
 				}
@@ -83,9 +84,9 @@ func testShowIndexFromTable(t *testing.T, params *sqldb.ConnParams) {
 		t.Fatal(err)
 	}
 
-	if !reflect.DeepEqual(result.Fields, ShowIndexFromTableFields) {
+	if !sqltypes.FieldsEqual(result.Fields, ShowIndexFromTableFields) {
 		for i, f := range result.Fields {
-			if i < len(ShowIndexFromTableFields) && !reflect.DeepEqual(f, ShowIndexFromTableFields[i]) {
+			if i < len(ShowIndexFromTableFields) && !proto.Equal(f, ShowIndexFromTableFields[i]) {
 				t.Logf("result.Fields[%v] = %v", i, f)
 				t.Logf("        expected = %v", ShowIndexFromTableFields[i])
 			}
@@ -142,16 +143,16 @@ func testBaseShowTables(t *testing.T, params *sqldb.ConnParams) {
 		t.Fatal(err)
 	}
 
-	if !reflect.DeepEqual(result.Fields, BaseShowTablesFields) {
+	if !sqltypes.FieldsEqual(result.Fields, BaseShowTablesFields) {
 		// MariaDB has length 17 for unix_timestamp(create_time), see if that's the only difference.
 		if result.Fields[2].ColumnLength == 17 {
 			result.Fields[2].ColumnLength = 11
 		}
 
 		// And try again.
-		if !reflect.DeepEqual(result.Fields, BaseShowTablesFields) {
+		if !sqltypes.FieldsEqual(result.Fields, BaseShowTablesFields) {
 			for i, f := range result.Fields {
-				if !reflect.DeepEqual(f, BaseShowTablesFields[i]) {
+				if i < len(BaseShowTablesFields) && !proto.Equal(f, BaseShowTablesFields[i]) {
 					t.Logf("result.Fields[%v] = %v", i, f)
 					t.Logf("        expected = %v", BaseShowTablesFields[i])
 				}

@@ -188,10 +188,11 @@ func addStatusParts(qsc tabletserver.Controller) {
 		"github_com_youtube_vitess_health_html_name": healthHTMLName,
 	})
 	servenv.AddStatusPart("Health", healthTemplate, func() interface{} {
+		latest, _ := agent.History.Latest().(*tabletmanager.HealthRecord)
 		return &healthStatus{
 			Records: agent.History.Records(),
 			Config:  tabletmanager.ConfigHTML(),
-			current: agent.History.Latest().(*tabletmanager.HealthRecord),
+			current: latest,
 		}
 	})
 	qsc.AddStatusPart()

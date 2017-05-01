@@ -1,6 +1,6 @@
 ---
 layout: doc
-title: "Horizontal Sharding"
+title: "Horizontal Sharding (Tutorial, manual)"
 description:
 modified:
 excerpt:
