@@ -984,7 +984,7 @@ func truncateErrorStrings(data map[string]interface{}) map[string]interface{} {
 			ret[key] = truncateErrorStrings(mapVal)
 		} else {
 			strVal := fmt.Sprintf("%v", val)
-			ret[key] = sqlparser.TruncateForError(strVal)
+			ret[key] = sqlparser.TruncateForLog(strVal)
 		}
 	}
 	return ret
