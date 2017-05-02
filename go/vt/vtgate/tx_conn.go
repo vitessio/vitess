@@ -47,11 +47,11 @@ func (txc *TxConn) Begin(ctx context.Context, session *SafeSession) error {
 	switch session.TransactionMode {
 	case vtgatepb.TransactionMode_MULTI:
 		if txc.mode == vtgatepb.TransactionMode_SINGLE {
-			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "transaction mode %v disallowed: VTGate mode: %v", session.TransactionMode, txc.mode)
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "requested transaction mode %v disallowed: vtgate must be started with --transaction_mode=MULTI (or TWOPC). Current transaction mode: %v", session.TransactionMode, txc.mode)
 		}
 	case vtgatepb.TransactionMode_TWOPC:
 		if txc.mode != vtgatepb.TransactionMode_TWOPC {
-			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "transaction mode %v disallowed: VTGate mode: %v", session.TransactionMode, txc.mode)
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "requested transaction mode %v disallowed: vtgate must be started with --transaction_mode=TWOPC. Current transaction mode: %v", session.TransactionMode, txc.mode)
 		}
 	}
 	session.Session.InTransaction = true
@@ -59,7 +59,7 @@ func (txc *TxConn) Begin(ctx context.Context, session *SafeSession) error {
 }
 
 // Commit commits the current transaction. The type of commit can be
-// best effor or 2pc depending on the session setting.
+// best effort or 2pc depending on the session setting.
 func (txc *TxConn) Commit(ctx context.Context, session *SafeSession) error {
 	defer session.Reset()
 	if !session.InTransaction() {

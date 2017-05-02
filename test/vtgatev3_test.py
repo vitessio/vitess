@@ -326,7 +326,7 @@ def setUpModule():
     utils.apply_vschema(vschema)
     utils.VtGate().start(
         tablets=[shard_0_master, shard_1_master, lookup_master],
-        extra_args=['-transaction_mode', 'twopc'])
+        extra_args=['-transaction_mode', 'TWOPC'])
     utils.vtgate.wait_for_endpoints('user.-80.master', 1)
     utils.vtgate.wait_for_endpoints('user.80-.master', 1)
     utils.vtgate.wait_for_endpoints('lookup.0.master', 1)

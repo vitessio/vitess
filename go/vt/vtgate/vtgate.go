@@ -25,6 +25,7 @@ import (
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/sqlannotation"
+	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topo/topoproto"
 	"github.com/youtube/vitess/go/vt/vterrors"
@@ -42,25 +43,25 @@ import (
 )
 
 var (
-	transactionMode  = flag.String("transaction_mode", "multi", "single: disallow multi-db transactions, multi: allow multi-db transactions with best effort commit, twopc: allow multi-db transactions with 2pc commit")
+	transactionMode  = flag.String("transaction_mode", "MULTI", "SINGLE: disallow multi-db transactions, MULTI: allow multi-db transactions with best effort commit, TWOPC: allow multi-db transactions with 2pc commit")
 	normalizeQueries = flag.Bool("normalize_queries", true, "Rewrite queries with bind vars. Turn this off if the app itself sends normalized queries with bind vars.")
 )
 
 func getTxMode() vtgatepb.TransactionMode {
-	txMode := vtgatepb.TransactionMode_MULTI
 	switch *transactionMode {
-	case "single":
+	case "SINGLE":
 		log.Infof("Transaction mode: '%s'", *transactionMode)
-		txMode = vtgatepb.TransactionMode_SINGLE
-	case "multi":
+		return vtgatepb.TransactionMode_SINGLE
+	case "MULTI":
 		log.Infof("Transaction mode: '%s'", *transactionMode)
-	case "twopc":
+		return vtgatepb.TransactionMode_MULTI
+	case "TWOPC":
 		log.Infof("Transaction mode: '%s'", *transactionMode)
-		txMode = vtgatepb.TransactionMode_TWOPC
+		return vtgatepb.TransactionMode_TWOPC
 	default:
-		log.Warningf("Unrecognized transactionMode '%s'. Continuing with default 'multi'", *transactionMode)
+		log.Warningf("Unrecognized transactionMode '%s'. Continuing with default 'MULTI'", *transactionMode)
+		return vtgatepb.TransactionMode_MULTI
 	}
-	return txMode
 }
 
 var (

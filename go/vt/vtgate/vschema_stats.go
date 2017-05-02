@@ -15,7 +15,7 @@ import (
 // VSchemaStats contains a rollup of the VSchema stats.
 type VSchemaStats struct {
 	Error     string
-	Keyspaces VSchemaKeyspaceStatsList
+	Keyspaces []*VSchemaKeyspaceStats
 }
 
 // VSchemaKeyspaceStats contains a rollup of the VSchema stats for a keyspace.
@@ -25,24 +25,6 @@ type VSchemaKeyspaceStats struct {
 	Sharded     bool
 	TableCount  int
 	VindexCount int
-}
-
-// VSchemaKeyspaceStatsList is to sort VSchemaKeyspaceStats by keyspace.
-type VSchemaKeyspaceStatsList []*VSchemaKeyspaceStats
-
-// Len is part of sort.Interface
-func (l VSchemaKeyspaceStatsList) Len() int {
-	return len(l)
-}
-
-// Less is part of sort.Interface
-func (l VSchemaKeyspaceStatsList) Less(i, j int) bool {
-	return l[i].Keyspace < l[j].Keyspace
-}
-
-// Swap is part of sort.Interface
-func (l VSchemaKeyspaceStatsList) Swap(i, j int) {
-	l[i], l[j] = l[j], l[i]
 }
 
 // NewVSchemaStats returns a new VSchemaStats from a VSchema.
@@ -64,7 +46,7 @@ func NewVSchemaStats(vschema *vindexes.VSchema, errorMessage string) *VSchemaSta
 		}
 		stats.Keyspaces = append(stats.Keyspaces, s)
 	}
-	sort.Sort(stats.Keyspaces)
+	sort.Slice(stats.Keyspaces, func(i, j int) bool { return stats.Keyspaces[i].Keyspace < stats.Keyspaces[j].Keyspace })
 
 	return stats
 }

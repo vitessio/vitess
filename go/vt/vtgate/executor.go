@@ -417,7 +417,7 @@ func (exr *Executor) ServeHTTP(response http.ResponseWriter, request *http.Reque
 		response.Write([]byte(fmt.Sprintf("Length: %d\n", len(keys))))
 		for _, v := range keys {
 			response.Write([]byte(fmt.Sprintf("%#v\n", sqlparser.TruncateForUI(v))))
-			if plan, ok := plr.plans.Peek(v); ok {
+			if plan, ok := exr.plans.Peek(v); ok {
 				if b, err := json.MarshalIndent(plan, "", "  "); err != nil {
 					response.Write([]byte(err.Error()))
 				} else {

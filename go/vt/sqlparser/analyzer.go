@@ -28,8 +28,8 @@ const (
 	StmtUnknown
 )
 
-// Preview analyzes the beginning of the query and returns the
-// statement type.
+// Preview analyzes the beginning of the query using a simpler and faster
+// textual comparison to identify the statement type.
 func Preview(sql string) int {
 	trimmed := strings.TrimFunc(sql, unicode.IsSpace)
 	prefix := trimmed

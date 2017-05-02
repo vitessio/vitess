@@ -73,17 +73,18 @@ var _ = math.Inf
 // proto package needs to be updated.
 const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
 
-// TransactionMode specifies the type of transaction the session is in.
+// TransactionMode controls the execution of distributed transaction
+// across multiple shards.
 type TransactionMode int32
 
 const (
-	// UNSPECIFIED uses the transaction mode set for VTGate.
+	// UNSPECIFIED uses the transaction mode set by the VTGate flag 'transaction_mode'.
 	TransactionMode_UNSPECIFIED TransactionMode = 0
 	// SINGLE disallows distributed transactions.
 	TransactionMode_SINGLE TransactionMode = 1
 	// MULTI allows distributed transactions with best effort commit.
 	TransactionMode_MULTI TransactionMode = 2
-	// TWOPC is for distributed transactions with atomitc commits.
+	// TWOPC is for distributed transactions with atomic commits.
 	TransactionMode_TWOPC TransactionMode = 3
 )
 
@@ -122,7 +123,7 @@ type Session struct {
 	ShardSessions []*Session_ShardSession `protobuf:"bytes,2,rep,name=shard_sessions,json=shardSessions" json:"shard_sessions,omitempty"`
 	// single_db is deprecated. Use transaction_mode instead.
 	// The value specifies if the transaction should be restricted
-	// to a single database.
+	// to a single shard.
 	// TODO(sougou): remove in 3.1
 	SingleDb bool `protobuf:"varint,3,opt,name=single_db,json=singleDb" json:"single_db,omitempty"`
 	// autocommit specifies if the session is in autocommit mode.
@@ -1603,8 +1604,10 @@ type BeginRequest struct {
 	// caller_id identifies the caller. This is the effective caller ID,
 	// set by the application to further identify the caller.
 	CallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=caller_id,json=callerId" json:"caller_id,omitempty"`
-	// single_db specifies if the transaction should be restricted
+	// single_db is deprecated. Use transaction_mode instead.
+	// The value specifies if the transaction should be restricted
 	// to a single database.
+	// TODO(sougou): remove in 3.1
 	SingleDb bool `protobuf:"varint,2,opt,name=single_db,json=singleDb" json:"single_db,omitempty"`
 }
 
@@ -1652,8 +1655,10 @@ type CommitRequest struct {
 	CallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=caller_id,json=callerId" json:"caller_id,omitempty"`
 	// session carries the current transaction data to commit.
 	Session *Session `protobuf:"bytes,2,opt,name=session" json:"session,omitempty"`
-	// atomic specifies if the commit should go through the
+	// atomic is deprecated. Use transaction_mode instead.
+	// The value specifies if the commit should go through the
 	// 2PC workflow to ensure atomicity.
+	// TODO(sougou): remove in 3.1
 	Atomic bool `protobuf:"varint,3,opt,name=atomic" json:"atomic,omitempty"`
 }
 
