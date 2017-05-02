@@ -688,7 +688,7 @@ func TestTypeLimits(t *testing.T) {
 	}, {
 		query: "insert into vitess_ints(tiny) values(1.2)",
 		bv:    nil,
-		out:   "DML too complex",
+		out:   "unsupported: cannot identify primary key of statement",
 	}, {
 		query: "insert into vitess_ints(tiny) values(:fl)",
 		bv:    map[string]interface{}{"fl": 1.2},

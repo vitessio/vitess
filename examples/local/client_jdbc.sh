@@ -36,5 +36,5 @@ fi
 mvn -f $script_root/../../java/pom.xml -pl example -am install -DskipTests
 mvn -f $script_root/../../java/example/pom.xml exec:java \
     -Dexec.cleanupDaemonThreads=false \
-    -Dexec.mainClass="com.youtube.vitess.example.VitessJDBCExample" \
+    -Dexec.mainClass="io.vitess.example.VitessJDBCExample" \
     -Dexec.args="localhost:15991$optional_tls_args"

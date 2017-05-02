@@ -262,7 +262,7 @@ func (c *Conn) clientHandshake(characterSet uint8, params *sqldb.ConnParams) err
 		if err != nil {
 			return sqldb.NewSQLError(CRServerHandshakeErr, SSUnknownSQLState, "cannot parse auth switch request: %v", err)
 		}
-		if pluginName != mysqlClearPassword {
+		if pluginName != MysqlClearPassword {
 			return sqldb.NewSQLError(CRServerHandshakeErr, SSUnknownSQLState, "server asked for unsupported auth method: %v", pluginName)
 		}
 
@@ -437,8 +437,8 @@ func (c *Conn) parseInitialHandshakePacket(data []byte) (uint32, []byte, error) 
 			authPluginName = string(data[pos : len(data)-1])
 		}
 
-		if authPluginName != mysqlNativePassword {
-			return 0, nil, sqldb.NewSQLError(CRMalformedPacket, SSUnknownSQLState, "parseInitialHandshakePacket: only support %v auth plugin name, but got %v", mysqlNativePassword, authPluginName)
+		if authPluginName != MysqlNativePassword {
+			return 0, nil, sqldb.NewSQLError(CRMalformedPacket, SSUnknownSQLState, "parseInitialHandshakePacket: only support %v auth plugin name, but got %v", MysqlNativePassword, authPluginName)
 		}
 	}
 
@@ -572,7 +572,7 @@ func (c *Conn) writeHandshakeResponse41(capabilities uint32, salt []byte, charac
 	}
 
 	// Assume native client during response
-	pos = writeNullString(data, pos, mysqlNativePassword)
+	pos = writeNullString(data, pos, MysqlNativePassword)
 
 	// Sanity-check the length.
 	if pos != len(data) {

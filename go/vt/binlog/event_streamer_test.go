@@ -6,8 +6,9 @@ package binlog
 
 import (
 	"fmt"
-	"reflect"
 	"testing"
+
+	"github.com/golang/protobuf/proto"
 
 	binlogdatapb "github.com/youtube/vitess/go/vt/proto/binlogdata"
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
@@ -55,7 +56,7 @@ func TestEventErrors(t *testing.T) {
 				},
 			},
 		}
-		if !reflect.DeepEqual(got, want) {
+		if !proto.Equal(got, want) {
 			t.Errorf("error for SQL: '%v' got: %+v, want: %+v", sql, got, want)
 		}
 	}

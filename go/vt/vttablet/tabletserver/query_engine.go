@@ -119,7 +119,7 @@ type QueryEngine struct {
 	streamQList  *QueryList
 
 	// Vars
-	strictMode       sync2.AtomicBool
+	binlogFormat     connpool.BinlogFormat
 	autoCommit       sync2.AtomicBool
 	maxResultSize    sync2.AtomicInt64
 	maxDMLRows       sync2.AtomicInt64
@@ -143,7 +143,7 @@ var (
 // NewQueryEngine creates a new QueryEngine.
 // This is a singleton class.
 // You must call this only once.
-func NewQueryEngine(checker MySQLChecker, se *schema.Engine, config tabletenv.TabletConfig) *QueryEngine {
+func NewQueryEngine(checker connpool.MySQLChecker, se *schema.Engine, config tabletenv.TabletConfig) *QueryEngine {
 	qe := &QueryEngine{
 		se:               se,
 		tables:           make(map[string]*schema.Table),
@@ -169,7 +169,6 @@ func NewQueryEngine(checker MySQLChecker, se *schema.Engine, config tabletenv.Ta
 		config.HotRowProtectionMaxQueueSize, config.HotRowProtectionMaxGlobalQueueSize)
 	qe.streamQList = NewQueryList()
 
-	qe.strictMode.Set(config.StrictMode)
 	qe.autoCommit.Set(config.EnableAutoCommit)
 	qe.strictTableACL = config.StrictTableACL
 	qe.enableTableACLDryRun = config.EnableTableACLDryRun
@@ -231,19 +230,17 @@ func (qe *QueryEngine) Open(dbconfigs dbconfigs.DBConfigs) error {
 	qe.dbconfigs = dbconfigs
 	qe.conns.Open(&qe.dbconfigs.App, &qe.dbconfigs.Dba)
 
-	if qe.strictMode.Get() {
-		conn, err := qe.conns.Get(tabletenv.LocalContext())
-		if err != nil {
-			qe.conns.Close()
-			return err
-		}
-		err = conn.VerifyMode()
-		conn.Recycle()
+	conn, err := qe.conns.Get(tabletenv.LocalContext())
+	if err != nil {
+		qe.conns.Close()
+		return err
+	}
+	qe.binlogFormat, err = conn.VerifyMode()
+	conn.Recycle()
 
-		if err != nil {
-			qe.conns.Close()
-			return err
-		}
+	if err != nil {
+		qe.conns.Close()
+		return err
 	}
 
 	qe.streamConns.Open(&qe.dbconfigs.App, &qe.dbconfigs.Dba)

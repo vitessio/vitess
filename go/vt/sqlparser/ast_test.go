@@ -95,6 +95,66 @@ func TestSelect(t *testing.T) {
 	}
 }
 
+func TestAddOrder(t *testing.T) {
+	src, err := Parse("select foo, bar from baz order by foo")
+	if err != nil {
+		t.Error(err)
+	}
+	order := src.(*Select).OrderBy[0]
+	dst, err := Parse("select * from t")
+	if err != nil {
+		t.Error(err)
+	}
+	dst.(*Select).AddOrder(order)
+	buf := NewTrackedBuffer(nil)
+	dst.Format(buf)
+	want := "select * from t order by foo asc"
+	if buf.String() != want {
+		t.Errorf("order: %q, want %s", buf.String(), want)
+	}
+	dst, err = Parse("select * from t union select * from s")
+	if err != nil {
+		t.Error(err)
+	}
+	dst.(*Union).AddOrder(order)
+	buf = NewTrackedBuffer(nil)
+	dst.Format(buf)
+	want = "select * from t union select * from s order by foo asc"
+	if buf.String() != want {
+		t.Errorf("order: %q, want %s", buf.String(), want)
+	}
+}
+
+func TestSetLimit(t *testing.T) {
+	src, err := Parse("select foo, bar from baz limit 4")
+	if err != nil {
+		t.Error(err)
+	}
+	limit := src.(*Select).Limit
+	dst, err := Parse("select * from t")
+	if err != nil {
+		t.Error(err)
+	}
+	dst.(*Select).SetLimit(limit)
+	buf := NewTrackedBuffer(nil)
+	dst.Format(buf)
+	want := "select * from t limit 4"
+	if buf.String() != want {
+		t.Errorf("limit: %q, want %s", buf.String(), want)
+	}
+	dst, err = Parse("select * from t union select * from s")
+	if err != nil {
+		t.Error(err)
+	}
+	dst.(*Union).SetLimit(limit)
+	buf = NewTrackedBuffer(nil)
+	dst.Format(buf)
+	want = "select * from t union select * from s limit 4"
+	if buf.String() != want {
+		t.Errorf("order: %q, want %s", buf.String(), want)
+	}
+}
+
 func TestWhere(t *testing.T) {
 	var w *Where
 	buf := NewTrackedBuffer(nil)

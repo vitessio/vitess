@@ -171,18 +171,25 @@ export class SchemaComponent implements OnInit {
     return vindexes;
   }
 
-  parseColumns(table, vindexes= undefined) {
-    let pks = {};
-    let i = 1;
-    for (let pk of table.primary_key_columns) {
-      pks[pk] = i;
-      i++;
+  parseColumns(table, vindexes = undefined) {
+    // For each primary key column, store its index (position) within the
+    // primary key because we show this in the schema popup.
+    let pkColumnIndexes = {};
+    if ('primary_key_columns' in table) {
+      let i = 1;
+      for (let pkColumn of table.primary_key_columns) {
+        pkColumnIndexes[pkColumn] = i;
+        i++;
+      }
     }
+
+    // Generate column entries for schema popup.
     let columnIndex = 1;
     table['columns'] = table.columns.map(column => {
-      let pk_index = column in pks ?  pks[column].toString() : '~';
-      let newColumn = {name: column, pk: pk_index, index: columnIndex};
+      let pkColumnIndex = column in pkColumnIndexes ? pkColumnIndexes[column].toString() : '~';
+      let newColumn = {name: column, index: columnIndex, pk: pkColumnIndex};
       columnIndex++;
+
       if (vindexes) {
         if (vindexes[table.name]) {
           if (vindexes[table.name][column]) {
@@ -197,6 +204,7 @@ export class SchemaComponent implements OnInit {
       }
       return newColumn;
     });
+
     return table;
   }
 }

@@ -24,8 +24,8 @@ shard_0_master = tablet.Tablet()
 shard_0_slave = tablet.Tablet()
 
 table_acl_config = environment.tmproot + '/table_acl_config.json'
-mysql_auth_server_config = (environment.tmproot +
-                            '/mysql_auth_server_config.json')
+mysql_auth_server_static = (environment.tmproot +
+                            '/mysql_auth_server_static.json')
 
 
 def setUpModule():
@@ -101,7 +101,7 @@ class TestMySQL(unittest.TestCase):
 }
 """)
 
-    with open(mysql_auth_server_config, 'w') as fd:
+    with open(mysql_auth_server_static, 'w') as fd:
       fd.write("""{
       "testuser1": {
         "Password": "testpassword1",
@@ -130,8 +130,8 @@ class TestMySQL(unittest.TestCase):
 
     # start vtgate
     utils.VtGate(mysql_server=True).start(
-        extra_args=['-mysql_auth_server_impl', 'config',
-                    '-mysql_auth_server_config_file', mysql_auth_server_config])
+        extra_args=['-mysql_auth_server_impl', 'static',
+                    '-mysql_auth_server_static_file', mysql_auth_server_static])
     params = dict(host='::',
                   port=utils.vtgate.mysql_port,
                   user='testuser1',

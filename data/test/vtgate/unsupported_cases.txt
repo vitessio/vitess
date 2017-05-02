@@ -1,35 +1,35 @@
 # Unions
 "select * from user union select * from user_extra"
-"unsupported construct"
+"unsupported: scatter subquery"
 
 # SET
 "set a=1"
-"unsupported construct"
+"unsupported construct: set"
 
 # DDL
 "create table a(id int)"
-"unsupported construct"
+"unsupported construct: ddl"
 
 "create table a.b(id int)"
-"unsupported construct"
+"unsupported construct: ddl"
 
 "alter table a ADD id int"
-"unsupported construct"
+"unsupported construct: ddl"
 
 "alter table a.b ADD id int"
-"unsupported construct"
+"unsupported construct: ddl"
 
 # DBA statements
 "explain select * from user"
-"unsupported construct"
+"unsupported construct: other"
 
 # union operations in subqueries (FROM)
-"select * from (select * from user union select * from user_extra) as t"
-"unsupported: union operator in subqueries"
+"select * from (select * from user union all select * from user_extra) as t"
+"unsupported: scatter subquery"
 
 # union operations in subqueries (expressions)
 "select * from user where id in (select * from user union select * from user_extra)"
-"unsupported: union operator in subqueries"
+"unsupported: scatter subquery"
 
 # subquery with join primitive (FROM)
 "select * from (select user.id from user join user_extra) as t"
@@ -85,7 +85,7 @@
 
 # left join where clauses
 "select user.id from user left join user_extra on user.col = user_extra.col where user_extra.col = 5"
-"unsupported: complex left join and where claused"
+"unsupported: complex left join and where clause"
 
 # * expresson not allowed for complex joins
 "select * from user join user_extra"
@@ -235,7 +235,7 @@
 "insert into unsharded_auto values(1,1)"
 "column list required for tables with auto-inc columns"
 
-# unsharded insert, col list doesn't match values
+# unsharded insert, col list does not match values
 "insert into unsharded_auto(id, val) values(1)"
 "column list doesn't match values"
 
@@ -258,3 +258,29 @@
 # complex expression in parenthesis with order by not supported yet
 "select * from user where (id = 4 AND name ='abc') order by id"
 "unsupported: scatter and order by"
+
+# multi-shard union
+"(select id from user union select id from music) union select 1 from dual"
+"unsupported: scatter subquery"
+
+# multi-shard union
+"select 1 from music union (select id from user union all select name from unsharded)"
+"unsupported: subquery keyspace different from outer query"
+
+# multi-shard union
+"select 1 from music union (select id from user union select name from unsharded)"
+"unsupported: subquery keyspace different from outer query"
+
+# multi-shard union
+"select id from user union all select id from music"
+"unsupported: scatter subquery"
+
+# Union all
+"select col1, col2 from user union all select col1, col2 from user_extra"
+"unsupported: scatter subquery"
+
+"(select user.id, user.name from user join user_extra where user_extra.extra = 'asdf') union select 'b','c' from user"
+"unsupported construct: SELECT of UNION is non-trivial"
+
+"select 'b','c' from user union (select user.id, user.name from user join user_extra where user_extra.extra = 'asdf')"
+"unsupported construct: SELECT of UNION is non-trivial"

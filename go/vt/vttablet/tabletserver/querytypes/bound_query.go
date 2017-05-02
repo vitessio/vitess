@@ -10,6 +10,7 @@ import (
 	"bytes"
 	"fmt"
 
+	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 )
 
@@ -36,7 +37,7 @@ type BoundQuery struct {
 // and also truncates data if it's too long
 func QueryAsString(sql string, bindVariables map[string]interface{}) string {
 	buf := &bytes.Buffer{}
-	fmt.Fprintf(buf, "Sql: %q, BindVars: {", sqlparser.TruncateForError(sql))
+	fmt.Fprintf(buf, "Sql: %q, BindVars: {", sqlparser.TruncateForLog(sql))
 	for k, v := range bindVariables {
 		var valString string;
 		switch val := v.(type) {
@@ -48,7 +49,7 @@ func QueryAsString(sql string, bindVariables map[string]interface{}) string {
 			valString = fmt.Sprintf("%v", v);
 		}
 
-		fmt.Fprintf(buf, "%s: %q", k, sqlparser.TruncateForError(valString));
+		fmt.Fprintf(buf, "%s: %q", k, sqlparser.TruncateForLog(valString));
 	}
 	fmt.Fprintf(buf, "}")
 	return string(buf.Bytes())
@@ -59,4 +60,23 @@ func slimit(s string, max int) string {
 		return s[:max]
 	}
 	return s
+}
+
+// BoundQueriesEqual compares two slices of BoundQuery objects.
+func BoundQueriesEqual(x, y []BoundQuery) bool {
+	if len(x) != len(y) {
+		return false
+	}
+	for i := range x {
+		if !BoundQueryEqual(&x[i], &y[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+// BoundQueryEqual compares two BoundQuery objects.
+func BoundQueryEqual(x, y *BoundQuery) bool {
+	return x.Sql == y.Sql &&
+		sqltypes.BindVariablesEqual(x.BindVariables, y.BindVariables)
 }

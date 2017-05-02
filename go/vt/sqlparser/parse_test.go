@@ -94,6 +94,17 @@ func TestValid(t *testing.T) {
 	}, {
 		input: "select /* union with limit on lhs */ 1 from t limit 1 union select 1 from t",
 	}, {
+		input:  "(select id, a from t order by id limit 1) union (select id, b as a from s order by id limit 1) order by a limit 1",
+		output: "(select id, a from t order by id asc limit 1) union (select id, b as a from s order by id asc limit 1) order by a asc limit 1",
+	}, {
+		input: "select a from (select 1 as a from tbl1 union select 2 from tbl2) as t",
+	}, {
+		input: "select * from t1 join (select * from t2 union select * from t3) as t",
+	}, {
+		input: "select * from t1 where col in (select 1 from dual union select 2 from dual)",
+	}, {
+		input: "select * from t1 where exists (select a from t2 union select b from t3)",
+	}, {
 		input: "select /* distinct */ distinct 1 from t",
 	}, {
 		input: "select /* straight_join */ straight_join 1 from t",
@@ -774,6 +785,8 @@ func TestValid(t *testing.T) {
 	}, {
 		input: "select match(a1, a2) against ('foo' in natural language mode with query expansion) from t",
 	}, {
+		input: "select title from video as v where match(v.title, v.tag) against ('DEMO' in boolean mode)",
+	}, {
 		input: "select name, group_concat(score) from t group by name",
 	}, {
 		input: "select name, group_concat(distinct id, score order by id desc separator ':') from t group by name",
@@ -1193,6 +1206,9 @@ func TestErrors(t *testing.T) {
 	}, {
 		input:  "(select /* parenthesized select */ * from t)",
 		output: "syntax error at position 46",
+	}, {
+		input:  "select * from t where id = ((select a from t1 union select b from t2) order by a limit 1)",
+		output: "syntax error at position 76 near 'order'",
 	}}
 	for _, tcase := range invalidSQL {
 		if tcase.output == "" {

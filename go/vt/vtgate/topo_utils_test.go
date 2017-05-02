@@ -345,10 +345,10 @@ func TestBoundKeyspaceIdQueriesToBoundShardQueries(t *testing.T) {
 		for _, shardQuery := range shardQueries {
 			sort.Strings(shardQuery.Shards)
 		}
-		if !reflect.DeepEqual(testCase.shardQueries, shardQueries) {
-			got, _ := json.Marshal(shardQueries)
-			want, _ := json.Marshal(testCase.shardQueries)
-			t.Errorf("idQueries: %#v\nResponse:   %s\nExpecting: %s", testCase.idQueries, got, want)
+		got, _ := json.Marshal(shardQueries)
+		want, _ := json.Marshal(testCase.shardQueries)
+		if string(got) != string(want) {
+			t.Errorf("idQueries: %#v\nResponse:   %s\nExpecting: %s", testCase.idQueries, string(got), string(want))
 		}
 	}
 }

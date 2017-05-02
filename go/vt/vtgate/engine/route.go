@@ -285,7 +285,7 @@ func (route *Route) Execute(vcursor VCursor, queryConstruct *queryinfo.QueryCons
 	}
 
 	shardQueries := route.getShardQueries(route.Query+queryConstruct.Comments, params)
-	return vcursor.ExecuteMultiShard(params.ks, shardQueries, queryConstruct.NotInTransaction)
+	return vcursor.ExecuteMultiShard(params.ks, shardQueries)
 }
 
 // StreamExecute performs a streaming exec.
@@ -333,7 +333,7 @@ func (route *Route) GetFields(vcursor VCursor, queryConstruct *queryinfo.QueryCo
 		return nil, err
 	}
 
-	return vcursor.ScatterConnExecute(route.FieldQuery, queryConstruct.BindVars, ks, []string{shard}, queryConstruct.NotInTransaction)
+	return vcursor.ScatterConnExecute(route.FieldQuery, queryConstruct.BindVars, ks, []string{shard})
 }
 
 func copyBindVars(bindVars map[string]interface{}) map[string]interface{} {
@@ -411,7 +411,7 @@ func (route *Route) execUpdateEqual(vcursor VCursor, queryConstruct *queryinfo.Q
 		return &sqltypes.Result{}, nil
 	}
 	rewritten := sqlannotation.AddKeyspaceIDs(route.Query, [][]byte{ksid}, queryConstruct.Comments)
-	return vcursor.ScatterConnExecute(rewritten, queryConstruct.BindVars, ks, []string{shard}, queryConstruct.NotInTransaction)
+	return vcursor.ScatterConnExecute(rewritten, queryConstruct.BindVars, ks, []string{shard})
 }
 
 func (route *Route) execShow(vcursor VCursor, queryConstruct *queryinfo.QueryConstruct) (*sqltypes.Result, error) {
@@ -437,11 +437,11 @@ func (route *Route) execDeleteEqual(vcursor VCursor, queryConstruct *queryinfo.Q
 		}
 	}
 	rewritten := sqlannotation.AddKeyspaceIDs(route.Query, [][]byte{ksid}, queryConstruct.Comments)
-	return vcursor.ScatterConnExecute(rewritten, queryConstruct.BindVars, ks, []string{shard}, queryConstruct.NotInTransaction)
+	return vcursor.ScatterConnExecute(rewritten, queryConstruct.BindVars, ks, []string{shard})
 }
 
 func (route *Route) execInsertUnsharded(vcursor VCursor, queryConstruct *queryinfo.QueryConstruct) (*sqltypes.Result, error) {
-	insertid, err := route.handleGenerate(vcursor, queryConstruct)
+	insertID, err := route.handleGenerate(vcursor, queryConstruct)
 	if err != nil {
 		return nil, fmt.Errorf("execInsertUnsharded: %v", err)
 	}
@@ -451,16 +451,23 @@ func (route *Route) execInsertUnsharded(vcursor VCursor, queryConstruct *queryin
 	}
 
 	shardQueries := route.getShardQueries(route.Query+queryConstruct.Comments, params)
-	result, err := vcursor.ExecuteMultiShard(params.ks, shardQueries, queryConstruct.NotInTransaction)
+	result, err := vcursor.ExecuteMultiShard(params.ks, shardQueries)
 	if err != nil {
 		return nil, fmt.Errorf("execInsertUnsharded: %v", err)
 	}
-	result.InsertID = uint64(insertid)
+
+	// If handleGenerate generated new values, it supercedes
+	// any ids that MySQL might have generated. If both generated
+	// values, we don't return an error because this behavior
+	// is required to support migration.
+	if insertID != 0 {
+		result.InsertID = uint64(insertID)
+	}
 	return result, nil
 }
 
 func (route *Route) execInsertSharded(vcursor VCursor, queryConstruct *queryinfo.QueryConstruct) (*sqltypes.Result, error) {
-	insertid, err := route.handleGenerate(vcursor, queryConstruct)
+	insertID, err := route.handleGenerate(vcursor, queryConstruct)
 	if err != nil {
 		return nil, fmt.Errorf("execInsertSharded: %v", err)
 	}
@@ -469,16 +476,19 @@ func (route *Route) execInsertSharded(vcursor VCursor, queryConstruct *queryinfo
 		return nil, fmt.Errorf("execInsertSharded: %v", err)
 	}
 
-	result, err := vcursor.ExecuteMultiShard(keyspace, shardQueries, queryConstruct.NotInTransaction)
+	result, err := vcursor.ExecuteMultiShard(keyspace, shardQueries)
 
 	if err != nil {
 		return nil, fmt.Errorf("execInsertSharded: %v", err)
 	}
 
-	if insertid != 0 {
-		result.InsertID = uint64(insertid)
+	// If handleGenerate generated new values, it supercedes
+	// any ids that MySQL might have generated. If both generated
+	// values, we don't return an error because this behavior
+	// is required to support migration.
+	if insertID != 0 {
+		result.InsertID = uint64(insertID)
 	}
-
 	return result, nil
 }
 
@@ -658,7 +668,7 @@ func (route *Route) resolveSingleShard(vcursor VCursor, queryConstruct *queryinf
 }
 
 func (route *Route) deleteVindexEntries(vcursor VCursor, queryConstruct *queryinfo.QueryConstruct, ks, shard string, ksid []byte) error {
-	result, err := vcursor.ScatterConnExecute(route.Subquery, queryConstruct.BindVars, ks, []string{shard}, queryConstruct.NotInTransaction)
+	result, err := vcursor.ScatterConnExecute(route.Subquery, queryConstruct.BindVars, ks, []string{shard})
 	if err != nil {
 		return err
 	}
@@ -691,7 +701,9 @@ func (route *Route) deleteVindexEntries(vcursor VCursor, queryConstruct *queryin
 	return nil
 }
 
-func (route *Route) handleGenerate(vcursor VCursor, queryConstruct *queryinfo.QueryConstruct) (insertid int64, err error) {
+// handleGenerate generates new values using a sequence if necessary.
+// If no value was generated, it returns 0.
+func (route *Route) handleGenerate(vcursor VCursor, queryConstruct *queryinfo.QueryConstruct) (insertID int64, err error) {
 	if route.Generate == nil {
 		return 0, nil
 	}
@@ -731,12 +743,12 @@ func (route *Route) handleGenerate(vcursor VCursor, queryConstruct *queryinfo.Qu
 		}
 		// If no rows are returned, it's an internal error, and the code
 		// must panic, which will caught and reported.
-		insertid, err = qr.Rows[0][0].ParseInt64()
+		insertID, err = qr.Rows[0][0].ParseInt64()
 		if err != nil {
 			return 0, err
 		}
 	}
-	cur := insertid
+	cur := insertID
 	for i, v := range resolved {
 		if v != nil {
 			queryConstruct.BindVars[SeqVarName+strconv.Itoa(i)] = v
@@ -745,7 +757,7 @@ func (route *Route) handleGenerate(vcursor VCursor, queryConstruct *queryinfo.Qu
 			cur++
 		}
 	}
-	return insertid, nil
+	return insertID, nil
 }
 
 func (route *Route) handlePrimary(vcursor VCursor, vindexKeys []interface{}, colVindex *vindexes.ColumnVindex, bv map[string]interface{}) (keyspaceIDs [][]byte, err error) {

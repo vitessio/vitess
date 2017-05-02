@@ -152,7 +152,7 @@ func (t *TxSerializer) lockLocked(ctx context.Context, key, table string) (bool,
 	if q.size > q.max {
 		q.max = q.size
 	}
-	// Publish the number of waits at /hotrows.
+	// Publish the number of waits at /debug/hotrows.
 	t.Record(key)
 	if q.size == 2 {
 		// Include first transaction in the count. (It was not recorded on purpose

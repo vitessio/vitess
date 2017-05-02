@@ -1,6 +1,6 @@
 ---
 layout: doc
-title: "Sharding in Kubernetes Using Workflow"
+title: "Sharding in Kubernetes (Tutorial, automated)"
 description:
 modified:
 excerpt:

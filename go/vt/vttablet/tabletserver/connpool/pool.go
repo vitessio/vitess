@@ -13,8 +13,8 @@ import (
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/dbconnpool"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
-	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"github.com/youtube/vitess/go/vt/vterrors"
+	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"golang.org/x/net/context"
 )
 
@@ -28,7 +28,9 @@ var ErrConnPoolClosed = vterrors.New(vtrpcpb.Code_INTERNAL, "internal error: une
 // through non-test code.
 var usedNames = make(map[string]bool)
 
-type mysqlChecker interface {
+// MySQLChecker defines the CheckMySQL interface that lower
+// level objects can use to call back into TabletServer.
+type MySQLChecker interface {
 	CheckMySQL()
 }
 
@@ -44,7 +46,7 @@ type Pool struct {
 	capacity    int
 	idleTimeout time.Duration
 	dbaPool     *dbconnpool.ConnectionPool
-	checker     mysqlChecker
+	checker     MySQLChecker
 }
 
 // New creates a new Pool. The name is used
@@ -53,7 +55,7 @@ func New(
 	name string,
 	capacity int,
 	idleTimeout time.Duration,
-	checker mysqlChecker) *Pool {
+	checker MySQLChecker) *Pool {
 	cp := &Pool{
 		capacity:    capacity,
 		idleTimeout: idleTimeout,

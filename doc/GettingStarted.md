@@ -608,8 +608,9 @@ See the comments at the top of each sample file for usage instructions.
 ### Try Vitess resharding
 
 Now that you have a full Vitess stack running, you may want to go on to the
-[Horizontal Sharding](http://vitess.io/user-guide/horizontal-sharding.html)
-guide to try out
+[Horizontal Sharding workflow guide](http://vitess.io/user-guide/horizontal-sharding-workflow.html)
+or [Horizontal Sharding codelab](http://vitess.io/user-guide/horizontal-sharding.html)
+(if you prefer to run each step manually through commands) to try out
 [dynamic resharding](http://vitess.io/user-guide/sharding.html#resharding).
 
 If so, you can skip the tear-down since the sharding guide picks up right here.

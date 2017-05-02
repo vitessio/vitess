@@ -6,7 +6,6 @@ package key
 
 import (
 	"encoding/hex"
-	"reflect"
 	"strings"
 	"testing"
 
@@ -181,7 +180,7 @@ func TestParseShardingSpec(t *testing.T) {
 			continue
 		}
 		for i, w := range wanted {
-			if !reflect.DeepEqual(r[i], w) {
+			if !proto.Equal(r[i], w) {
 				t.Errorf("Wrong result: wanted %v, got %v", w, r[i])
 				break
 			}

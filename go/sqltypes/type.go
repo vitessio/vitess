@@ -96,6 +96,10 @@ const (
 	Tuple     = querypb.Type_TUPLE
 	Geometry  = querypb.Type_GEOMETRY
 	TypeJSON  = querypb.Type_JSON
+
+	// TypeSQL is exposed here in the code, but not in the proto file.
+	// This is an internal type used for binlogs only.
+	TypeSQL = querypb.Type(245)
 )
 
 // bit-shift the mysql flags by two byte so we

@@ -35,6 +35,7 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/utils"
 	"github.com/youtube/vitess/go/vt/vterrors"
+	"github.com/youtube/vitess/go/vt/vttablet/heartbeat"
 	"github.com/youtube/vitess/go/vt/vttablet/queryservice"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/connpool"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/messager"
@@ -121,6 +122,8 @@ type TabletServer struct {
 	se               *schema.Engine
 	qe               *QueryEngine
 	te               *TxEngine
+	hw               *heartbeat.Writer
+	hr               *heartbeat.Reader
 	messager         *messager.Engine
 	watcher          *ReplicationWatcher
 	updateStreamList *binlog.StreamList
@@ -153,15 +156,9 @@ type RegisterFunction func(Controller)
 // Register() on a TabletServer
 var RegisterFunctions []RegisterFunction
 
-// MySQLChecker defines the CheckMySQL interface that lower
-// level objects can use to call back into TabletServer.
-type MySQLChecker interface {
-	CheckMySQL()
-}
-
 // NewServer creates a new TabletServer based on the command line flags.
-func NewServer(topoServer topo.Server) *TabletServer {
-	return NewTabletServer(tabletenv.Config, topoServer)
+func NewServer(topoServer topo.Server, alias topodatapb.TabletAlias) *TabletServer {
+	return NewTabletServer(tabletenv.Config, topoServer, alias)
 }
 
 var tsOnce sync.Once
@@ -169,12 +166,12 @@ var tsOnce sync.Once
 // NewTabletServerWithNilTopoServer is typically used in tests that don't need a topoSever
 // member.
 func NewTabletServerWithNilTopoServer(config tabletenv.TabletConfig) *TabletServer {
-	return NewTabletServer(config, topo.Server{})
+	return NewTabletServer(config, topo.Server{}, topodatapb.TabletAlias{})
 }
 
 // NewTabletServer creates an instance of TabletServer. Only the first
 // instance of TabletServer will expose its state variables.
-func NewTabletServer(config tabletenv.TabletConfig, topoServer topo.Server) *TabletServer {
+func NewTabletServer(config tabletenv.TabletConfig, topoServer topo.Server, alias topodatapb.TabletAlias) *TabletServer {
 	tsv := &TabletServer{
 		QueryTimeout:           sync2.NewAtomicDuration(time.Duration(config.QueryTimeout * 1e9)),
 		BeginTimeout:           sync2.NewAtomicDuration(time.Duration(config.TxPoolTimeout * 1e9)),
@@ -188,6 +185,8 @@ func NewTabletServer(config tabletenv.TabletConfig, topoServer topo.Server) *Tab
 	tsv.se = schema.NewEngine(tsv, config)
 	tsv.qe = NewQueryEngine(tsv, tsv.se, config)
 	tsv.te = NewTxEngine(tsv, config)
+	tsv.hw = heartbeat.NewWriter(tsv, alias, config)
+	tsv.hr = heartbeat.NewReader(tsv, config)
 	tsv.txThrottler = txthrottler.CreateTxThrottlerFromTabletConfig(topoServer)
 	tsv.messager = messager.NewEngine(tsv, tsv.se, config)
 	tsv.watcher = NewReplicationWatcher(tsv.se, config)
@@ -423,6 +422,10 @@ func (tsv *TabletServer) fullStart() (err error) {
 	if err := tsv.te.Init(tsv.dbconfigs); err != nil {
 		return err
 	}
+	if err := tsv.hw.Init(tsv.dbconfigs, tsv.target); err != nil {
+		return err
+	}
+	tsv.hr.Init(tsv.dbconfigs, tsv.target)
 	tsv.updateStreamList.Init()
 	return tsv.serveNewType()
 }
@@ -435,8 +438,13 @@ func (tsv *TabletServer) serveNewType() (err error) {
 		tsv.watcher.Close()
 		tsv.te.Open(tsv.dbconfigs)
 		tsv.messager.Open(tsv.dbconfigs)
+		tsv.hr.Close()
+		tsv.hw.Open(tsv.dbconfigs)
 	} else {
 		tsv.messager.Close()
+		tsv.hr.Open(tsv.dbconfigs)
+		tsv.hw.Close()
+
 		// Wait for in-flight transactional requests to complete
 		// before rolling back everything. In this state new
 		// transactional requests are not allowed. So, we can
@@ -478,6 +486,8 @@ func (tsv *TabletServer) StopService() {
 	tsv.waitForShutdown()
 	tsv.qe.Close()
 	tsv.se.Close()
+	tsv.hw.Close()
+	tsv.hr.Close()
 	log.Infof("Shutdown complete.")
 	tsv.transition(StateNotConnected)
 }
@@ -502,6 +512,8 @@ func (tsv *TabletServer) waitForShutdown() {
 // It forcibly shuts down everything.
 func (tsv *TabletServer) closeAll() {
 	tsv.messager.Close()
+	tsv.hr.Close()
+	tsv.hw.Close()
 	tsv.te.Close(true)
 	tsv.watcher.Close()
 	tsv.updateStreamList.Stop()
@@ -966,8 +978,10 @@ func (tsv *TabletServer) beginWaitForSameRangeTransactions(ctx context.Context, 
 	var txDone txserializer.DoneFunc
 
 	err := tsv.execRequest(
-		ctx, tsv.BeginTimeout.Get(),
-		"waitForSameRangeTransactions", "waitForSameRangeTransactions", nil,
+		// Use (potentially longer) -queryserver-config-query-timeout and not
+		// -queryserver-config-txpool-timeout (defaults to 1s) to limit the waiting.
+		ctx, tsv.QueryTimeout.Get(),
+		"", "waitForSameRangeTransactions", nil,
 		target, true /* isTx */, false, /* allowOnShutdown */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
 			k, table := tsv.computeTxSerializerKey(ctx, logStats, sql, bindVariables)
@@ -1238,7 +1252,10 @@ func (tsv *TabletServer) handlePanicAndSendLogStats(
 			logStats.Error = terr
 		}
 	}
-	if logStats != nil {
+	// Examples where we don't send the log stats:
+	// - ExecuteBatch() (logStats == nil)
+	// - beginWaitForSameRangeTransactions() (Method == "")
+	if logStats != nil && logStats.Method != "" {
 		logStats.Send()
 	}
 }
@@ -1304,7 +1321,7 @@ func (tsv *TabletServer) convertError(sql string, bindVariables map[string]inter
 	case mysqlconn.CRServerLost:
 		// Query was killed.
 		errCode = vtrpcpb.Code_DEADLINE_EXCEEDED
-	case mysqlconn.CRServerGone:
+	case mysqlconn.CRServerGone, mysqlconn.ERServerShutdown:
 		errCode = vtrpcpb.Code_UNAVAILABLE
 	}
 
@@ -1320,7 +1337,7 @@ func (tsv *TabletServer) convertError(sql string, bindVariables map[string]inter
 	// If so, we don't want to suppress the error. This will allow VTGate to
 	// detect and perform buffering during failovers.
 	if tsv.TerseErrors && len(bindVariables) != 0 && errCode != vtrpcpb.Code_FAILED_PRECONDITION {
-		errstr = fmt.Sprintf("(errno %d) (sqlstate %s) during query: %s", errnum, sqlState, sqlparser.TruncateForError(sql))
+		errstr = fmt.Sprintf("(errno %d) (sqlstate %s) during query: %s", errnum, sqlState, sqlparser.TruncateForLog(sql))
 	}
 	return vterrors.New(errCode, errstr)
 }
@@ -1548,6 +1565,12 @@ func (tsv *TabletServer) BroadcastHealth(terTimestamp int64, stats *querypb.Real
 	tsv.lastStreamHealthResponse = shr
 }
 
+// HeartbeatLag returns the current lag as calculated by the heartbeat
+// package, if heartbeat is enabled. Otherwise returns 0.
+func (tsv *TabletServer) HeartbeatLag() (time.Duration, error) {
+	return tsv.hr.GetLatest()
+}
+
 // UpdateStream streams binlog events.
 func (tsv *TabletServer) UpdateStream(ctx context.Context, target *querypb.Target, position string, timestamp int64, callback func(*querypb.StreamEvent) error) error {
 	// Parse the position if needed.
@@ -1756,14 +1779,6 @@ func (tsv *TabletServer) SetQueryCacheCap(val int) {
 // QueryCacheCap returns the pool size.
 func (tsv *TabletServer) QueryCacheCap() int {
 	return int(tsv.qe.QueryCacheCap())
-}
-
-// SetStrictMode sets strict mode on or off.
-// This only sets the mode for QueryEngine, but not
-// for schema.Engine.
-// This function should only be used for testing.
-func (tsv *TabletServer) SetStrictMode(strict bool) {
-	tsv.qe.strictMode.Set(strict)
 }
 
 // SetAutoCommit sets autocommit on or off.

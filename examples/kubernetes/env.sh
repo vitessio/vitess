@@ -6,16 +6,18 @@
 # use cases just need KUBECTL=kubectl, we'll make that the default.
 KUBECTL=${KUBECTL:-kubectl}
 
-# Kubernetes api address for $KUBECTL 
-# The default value is 127.0.0.1:8080
-# When the Kubernetes api server is not local, We can easily access the api by edit KUBERNETES_API_SERVER's value
-KUBERNETES_API_SERVER=${KUBERNETES_API_SERVER:-'127.0.0.1:8080'}
+# Kubernetes API address for $KUBECTL. When the Kubernetes API server is not
+# local, We can easily access the API by editing KUBERNETES_API_SERVER's value
+KUBERNETES_API_SERVER=${KUBERNETES_API_SERVER:-""}
 
 # Kubernetes namespace for Vitess and components.
 VITESS_NAME=${VITESS_NAME:-'default'}
 
 # Kubernetes options config
-KUBECTL_OPTIONS="--namespace=$VITESS_NAME --server=$KUBERNETES_API_SERVER"
+KUBECTL_OPTIONS="--namespace=$VITESS_NAME"
+if [[ -n "$KUBERNETES_API_SERVER" ]]; then
+  KUBECTL_OPTIONS+=" --server=$KUBERNETES_API_SERVER"
+fi
 
 # CELLS should be a comma separated list of cells
 # the first cell listed will become local to vtctld.

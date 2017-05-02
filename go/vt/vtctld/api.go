@@ -1,7 +1,6 @@
 package vtctld
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -13,8 +12,6 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
-	"github.com/golang/protobuf/jsonpb"
-	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 
 	"github.com/youtube/vitess/go/acl"
@@ -83,33 +80,9 @@ func handleCollection(collection string, getFunc func(*http.Request) (interface{
 		}
 
 		// JSON encode response.
-		var data []byte
-		switch obj := obj.(type) {
-		case proto.Message:
-			// We use jsonpb for protobuf messages because it is the only supported
-			// way to marshal protobuf messages to JSON.
-			// In addition to that, it's the only way to emit zero values in the JSON
-			// output.
-			// Unfortunately, it works only for protobuf messages. Therefore, we use
-			// the default marshaler for the remaining structs (which are possibly
-			// mixed protobuf and non-protobuf).
-			// TODO(mberlin): Switch "EnumAsInts" to "false" once the frontend is
-			//                updated and mixed types will use jsonpb as well.
-			// Note: jsonpb may panic if the "proto.Message" is an embedded field
-			// of "obj" and "obj" has non-exported fields.
-
-			// Marshal the protobuf message.
-			var b bytes.Buffer
-			m := jsonpb.Marshaler{EnumsAsInts: true, EmitDefaults: true, Indent: "  ", OrigName: true}
-			if err := m.Marshal(&b, obj); err != nil {
-				return fmt.Errorf("jsonpb error: %v", err)
-			}
-			data = b.Bytes()
-		default:
-			data, err = json.MarshalIndent(obj, "", "  ")
-			if err != nil {
-				return fmt.Errorf("json error: %v", err)
-			}
+		data, err := vtctl.MarshalJSON(obj)
+		if err != nil {
+			return fmt.Errorf("cannot marshal data: %v", err)
 		}
 		w.Header().Set("Content-Type", jsonContentType)
 		w.Write(data)

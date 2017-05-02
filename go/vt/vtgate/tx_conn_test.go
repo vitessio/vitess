@@ -6,9 +6,10 @@ package vtgate
 
 import (
 	"context"
-	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/golang/protobuf/proto"
 
 	"github.com/youtube/vitess/go/vt/discovery"
 	"github.com/youtube/vitess/go/vt/vterrors"
@@ -58,7 +59,7 @@ func TestTxConnCommitSuccess(t *testing.T) {
 			TransactionId: 1,
 		}},
 	}
-	if !reflect.DeepEqual(*session.Session, wantSession) {
+	if !proto.Equal(session.Session, &wantSession) {
 		t.Errorf("Session:\n%+v, want\n%+v", *session.Session, wantSession)
 	}
 	sc.Execute(context.Background(), "query1", nil, "TestTxConn", []string{"0", "1"}, topodatapb.TabletType_MASTER, session, false, nil)
@@ -80,7 +81,7 @@ func TestTxConnCommitSuccess(t *testing.T) {
 			TransactionId: 1,
 		}},
 	}
-	if !reflect.DeepEqual(*session.Session, wantSession) {
+	if !proto.Equal(session.Session, &wantSession) {
 		t.Errorf("Session:\n%+v, want\n%+v", *session.Session, wantSession)
 	}
 
@@ -91,7 +92,7 @@ func TestTxConnCommitSuccess(t *testing.T) {
 		t.Errorf("Commit: %v, want %s", err, want)
 	}
 	wantSession = vtgatepb.Session{}
-	if !reflect.DeepEqual(*session.Session, wantSession) {
+	if !proto.Equal(session.Session, &wantSession) {
 		t.Errorf("Session:\n%+v, want\n%+v", *session.Session, wantSession)
 	}
 	if commitCount := sbc0.CommitCount.Get(); commitCount != 1 {
@@ -306,7 +307,7 @@ func TestTxConnRollback(t *testing.T) {
 		t.Error(err)
 	}
 	wantSession := vtgatepb.Session{}
-	if !reflect.DeepEqual(*session.Session, wantSession) {
+	if !proto.Equal(session.Session, &wantSession) {
 		t.Errorf("Session:\n%+v, want\n%+v", *session.Session, wantSession)
 	}
 	if c := sbc0.RollbackCount.Get(); c != 1 {

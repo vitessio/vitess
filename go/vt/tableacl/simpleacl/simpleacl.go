@@ -4,14 +4,25 @@
 
 package simpleacl
 
-import "github.com/youtube/vitess/go/vt/tableacl/acl"
+import (
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	"github.com/youtube/vitess/go/vt/tableacl/acl"
+)
 
-// SimpleAcl keeps all entries in a unique in-memory list
-type SimpleAcl map[string]bool
+// SimpleACL keeps all entries in a unique in-memory list
+type SimpleACL map[string]bool
 
 // IsMember checks the membership of a principal in this ACL
-func (sacl SimpleAcl) IsMember(principal string) bool {
-	return sacl[principal]
+func (sacl SimpleACL) IsMember(principal *querypb.VTGateCallerID) bool {
+	if sacl[principal.Username] {
+		return true
+	}
+	for _, grp := range principal.Groups {
+		if sacl[grp] {
+			return true
+		}
+	}
+	return false
 }
 
 // Factory is responsible to create new ACL instance.
@@ -19,7 +30,7 @@ type Factory struct{}
 
 // New creates a new ACL instance.
 func (factory *Factory) New(entries []string) (acl.ACL, error) {
-	acl := SimpleAcl(map[string]bool{})
+	acl := SimpleACL(map[string]bool{})
 	for _, e := range entries {
 		acl[e] = true
 	}

@@ -315,10 +315,10 @@ index by_msg (msg)
         'Mismatch in srv keyspace for cell %s keyspace %s, expected:\n'
         '%s\ngot:\n%s' % (
             cell, keyspace, expected, result))
-    self.assertNotIn('sharding_column_name', ks,
+    self.assertEqual('', ks.get('sharding_column_name', ''),
                      'Got a sharding_column_name in SrvKeyspace: %s' %
                      str(ks))
-    self.assertNotIn('sharding_column_type', ks,
+    self.assertEqual(0, ks.get('sharding_column_type', 0),
                      'Got a sharding_column_type in SrvKeyspace: %s' %
                      str(ks))
 

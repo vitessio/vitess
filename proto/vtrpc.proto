@@ -2,7 +2,7 @@
 
 syntax = "proto3";
 
-option java_package="com.youtube.vitess.proto";
+option java_package="io.vitess.proto";
 
 package vtrpc;
 

@@ -37,6 +37,10 @@ var executeOptions = &querypb.ExecuteOptions{
 	IncludedFields: querypb.ExecuteOptions_TYPE_ONLY,
 }
 
+var masterSession = &vtgatepb.Session{
+	TargetString: "@master",
+}
+
 func init() {
 	getSandbox(KsTestUnsharded).VSchema = `
 {
@@ -66,7 +70,7 @@ func TestVTGateBegin(t *testing.T) {
 		InTransaction: true,
 		SingleDb:      true,
 	}
-	if !reflect.DeepEqual(got, wantSession) {
+	if !proto.Equal(got, wantSession) {
 		t.Errorf("Begin(single): %v, want %v", got, wantSession)
 	}
 
@@ -85,7 +89,7 @@ func TestVTGateBegin(t *testing.T) {
 		InTransaction: true,
 		SingleDb:      true,
 	}
-	if !reflect.DeepEqual(got, wantSession) {
+	if !proto.Equal(got, wantSession) {
 		t.Errorf("Begin(single): %v, want %v", got, wantSession)
 	}
 
@@ -96,7 +100,7 @@ func TestVTGateBegin(t *testing.T) {
 	wantSession = &vtgatepb.Session{
 		InTransaction: true,
 	}
-	if !reflect.DeepEqual(got, wantSession) {
+	if !proto.Equal(got, wantSession) {
 		t.Errorf("Begin(single): %v, want %v", got, wantSession)
 	}
 
@@ -109,7 +113,7 @@ func TestVTGateBegin(t *testing.T) {
 		InTransaction: true,
 		SingleDb:      true,
 	}
-	if !reflect.DeepEqual(got, wantSession) {
+	if !proto.Equal(got, wantSession) {
 		t.Errorf("Begin(single): %v, want %v", got, wantSession)
 	}
 
@@ -120,7 +124,7 @@ func TestVTGateBegin(t *testing.T) {
 	wantSession = &vtgatepb.Session{
 		InTransaction: true,
 	}
-	if !reflect.DeepEqual(got, wantSession) {
+	if !proto.Equal(got, wantSession) {
 		t.Errorf("Begin(single): %v, want %v", got, wantSession)
 	}
 }
@@ -199,11 +203,10 @@ func TestVTGateExecute(t *testing.T) {
 	_, qr, err := rpcVTGate.Execute(context.Background(),
 		"select id from t1",
 		nil,
-		"",
-		topodatapb.TabletType_MASTER,
-		nil,
-		false,
-		executeOptions)
+		&vtgatepb.Session{
+			TargetString: "@master",
+			Options:      executeOptions,
+		})
 	if err != nil {
 		t.Errorf("want nil, got %v", err)
 	}
@@ -221,11 +224,7 @@ func TestVTGateExecute(t *testing.T) {
 	rpcVTGate.Execute(context.Background(),
 		"select id from t1",
 		nil,
-		"",
-		topodatapb.TabletType_MASTER,
-		session,
-		false,
-		nil)
+		session)
 	wantSession := &vtgatepb.Session{
 		InTransaction: true,
 		ShardSessions: []*vtgatepb.Session_ShardSession{{
@@ -237,7 +236,7 @@ func TestVTGateExecute(t *testing.T) {
 			TransactionId: 1,
 		}},
 	}
-	if !reflect.DeepEqual(wantSession, session) {
+	if !proto.Equal(wantSession, session) {
 		t.Errorf("want \n%+v, got \n%+v", wantSession, session)
 	}
 
@@ -250,11 +249,7 @@ func TestVTGateExecute(t *testing.T) {
 	rpcVTGate.Execute(context.Background(),
 		"select id from t1",
 		nil,
-		"",
-		topodatapb.TabletType_MASTER,
-		session,
-		false,
-		nil)
+		session)
 	rpcVTGate.Rollback(context.Background(), session)
 	if sbc.RollbackCount.Get() != 1 {
 		t.Errorf("want 1, got %d", sbc.RollbackCount.Get())
@@ -270,11 +265,9 @@ func TestVTGateExecuteWithKeyspaceShard(t *testing.T) {
 	_, qr, err := rpcVTGate.Execute(context.Background(),
 		"select id from none",
 		nil,
-		KsTestUnsharded,
-		topodatapb.TabletType_MASTER,
-		nil,
-		false,
-		nil)
+		&vtgatepb.Session{
+			TargetString: KsTestUnsharded,
+		})
 	if err != nil {
 		t.Errorf("want nil, got %v", err)
 	}
@@ -286,11 +279,9 @@ func TestVTGateExecuteWithKeyspaceShard(t *testing.T) {
 	_, _, err = rpcVTGate.Execute(context.Background(),
 		"select id from none",
 		nil,
-		"invalid_keyspace",
-		topodatapb.TabletType_MASTER,
-		nil,
-		false,
-		nil)
+		&vtgatepb.Session{
+			TargetString: "invalid_keyspace",
+		})
 	want := "vtgate: : keyspace invalid_keyspace not found in vschema"
 	if err == nil || err.Error() != want {
 		t.Errorf("Execute: %v, want %s", err, want)
@@ -300,11 +291,9 @@ func TestVTGateExecuteWithKeyspaceShard(t *testing.T) {
 	_, qr, err = rpcVTGate.Execute(context.Background(),
 		"random statement",
 		nil,
-		KsTestUnsharded+"/0",
-		topodatapb.TabletType_MASTER,
-		nil,
-		false,
-		nil)
+		&vtgatepb.Session{
+			TargetString: KsTestUnsharded + ":0@master",
+		})
 	if err != nil {
 		t.Errorf("want nil, got %v", err)
 	}
@@ -316,11 +305,9 @@ func TestVTGateExecuteWithKeyspaceShard(t *testing.T) {
 	_, _, err = rpcVTGate.Execute(context.Background(),
 		"select id from none",
 		nil,
-		KsTestUnsharded+"/noshard",
-		topodatapb.TabletType_MASTER,
-		nil,
-		false,
-		nil)
+		&vtgatepb.Session{
+			TargetString: KsTestUnsharded + ":noshard@master",
+		})
 	want = "vtgate: : target: TestUnsharded.noshard.master, no valid tablet"
 	if err == nil || err.Error() != want {
 		t.Errorf("Execute: %v, want %s", err, want)
@@ -333,12 +320,12 @@ func TestVTGateIntercept(t *testing.T) {
 	sbc := hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, KsTestUnsharded, "0", topodatapb.TabletType_MASTER, true, 1, nil)
 
 	// begin.
-	session, _, err := rpcVTGate.Execute(context.Background(), "begin", nil, "", topodatapb.TabletType_MASTER, nil, false, nil)
+	session, _, err := rpcVTGate.Execute(context.Background(), "begin", nil, masterSession)
 	if err != nil {
 		t.Fatal(err)
 	}
-	wantSession := &vtgatepb.Session{InTransaction: true}
-	if !reflect.DeepEqual(session, wantSession) {
+	wantSession := &vtgatepb.Session{InTransaction: true, TargetString: "@master"}
+	if !proto.Equal(session, wantSession) {
 		t.Errorf("begin: %v, want %v", session, wantSession)
 	}
 	if commitCount := sbc.CommitCount.Get(); commitCount != 0 {
@@ -346,16 +333,16 @@ func TestVTGateIntercept(t *testing.T) {
 	}
 
 	// Begin again should cause a commit and a new begin.
-	session, _, err = rpcVTGate.Execute(context.Background(), "select id from t1", nil, "", topodatapb.TabletType_MASTER, session, false, nil)
+	session, _, err = rpcVTGate.Execute(context.Background(), "select id from t1", nil, session)
 	if err != nil {
 		t.Fatal(err)
 	}
-	session, _, err = rpcVTGate.Execute(context.Background(), "begin", nil, "", topodatapb.TabletType_MASTER, session, false, nil)
+	session, _, err = rpcVTGate.Execute(context.Background(), "begin", nil, session)
 	if err != nil {
 		t.Fatal(err)
 	}
-	wantSession = &vtgatepb.Session{InTransaction: true}
-	if !reflect.DeepEqual(session, wantSession) {
+	wantSession = &vtgatepb.Session{InTransaction: true, TargetString: "@master"}
+	if !proto.Equal(session, wantSession) {
 		t.Errorf("begin: %v, want %v", session, wantSession)
 	}
 	if commitCount := sbc.CommitCount.Get(); commitCount != 1 {
@@ -363,16 +350,16 @@ func TestVTGateIntercept(t *testing.T) {
 	}
 
 	// commit.
-	session, _, err = rpcVTGate.Execute(context.Background(), "select id from t1", nil, "", topodatapb.TabletType_MASTER, session, false, nil)
+	session, _, err = rpcVTGate.Execute(context.Background(), "select id from t1", nil, session)
 	if err != nil {
 		t.Fatal(err)
 	}
-	session, _, err = rpcVTGate.Execute(context.Background(), "commit", nil, "", topodatapb.TabletType_MASTER, session, false, nil)
+	session, _, err = rpcVTGate.Execute(context.Background(), "commit", nil, session)
 	if err != nil {
 		t.Fatal(err)
 	}
-	wantSession = &vtgatepb.Session{}
-	if !reflect.DeepEqual(session, wantSession) {
+	wantSession = &vtgatepb.Session{TargetString: "@master"}
+	if !proto.Equal(session, wantSession) {
 		t.Errorf("begin: %v, want %v", session, wantSession)
 	}
 	if commitCount := sbc.CommitCount.Get(); commitCount != 2 {
@@ -380,16 +367,16 @@ func TestVTGateIntercept(t *testing.T) {
 	}
 
 	// Commit again should be a no-op.
-	session, _, err = rpcVTGate.Execute(context.Background(), "select id from t1", nil, "", topodatapb.TabletType_MASTER, session, false, nil)
+	session, _, err = rpcVTGate.Execute(context.Background(), "select id from t1", nil, session)
 	if err != nil {
 		t.Fatal(err)
 	}
-	session, _, err = rpcVTGate.Execute(context.Background(), "Commit", nil, "", topodatapb.TabletType_MASTER, session, false, nil)
+	session, _, err = rpcVTGate.Execute(context.Background(), "Commit", nil, session)
 	if err != nil {
 		t.Fatal(err)
 	}
-	wantSession = &vtgatepb.Session{}
-	if !reflect.DeepEqual(session, wantSession) {
+	wantSession = &vtgatepb.Session{TargetString: "@master"}
+	if !proto.Equal(session, wantSession) {
 		t.Errorf("begin: %v, want %v", session, wantSession)
 	}
 	if commitCount := sbc.CommitCount.Get(); commitCount != 2 {
@@ -397,20 +384,20 @@ func TestVTGateIntercept(t *testing.T) {
 	}
 
 	// rollback
-	session, _, err = rpcVTGate.Execute(context.Background(), "begin", nil, "", topodatapb.TabletType_MASTER, session, false, nil)
+	session, _, err = rpcVTGate.Execute(context.Background(), "begin", nil, session)
 	if err != nil {
 		t.Fatal(err)
 	}
-	session, _, err = rpcVTGate.Execute(context.Background(), "select id from t1", nil, "", topodatapb.TabletType_MASTER, session, false, nil)
+	session, _, err = rpcVTGate.Execute(context.Background(), "select id from t1", nil, session)
 	if err != nil {
 		t.Fatal(err)
 	}
-	session, _, err = rpcVTGate.Execute(context.Background(), "rollback", nil, "", topodatapb.TabletType_MASTER, session, false, nil)
+	session, _, err = rpcVTGate.Execute(context.Background(), "rollback", nil, session)
 	if err != nil {
 		t.Fatal(err)
 	}
-	wantSession = &vtgatepb.Session{}
-	if !reflect.DeepEqual(session, wantSession) {
+	wantSession = &vtgatepb.Session{TargetString: "@master"}
+	if !proto.Equal(session, wantSession) {
 		t.Errorf("begin: %v, want %v", session, wantSession)
 	}
 	if rollbackCount := sbc.RollbackCount.Get(); rollbackCount != 1 {
@@ -418,13 +405,13 @@ func TestVTGateIntercept(t *testing.T) {
 	}
 
 	// rollback again should be a no-op
-	session, _, err = rpcVTGate.Execute(context.Background(), "select id from t1", nil, "", topodatapb.TabletType_MASTER, session, false, nil)
-	session, _, err = rpcVTGate.Execute(context.Background(), "RollBack", nil, "", topodatapb.TabletType_MASTER, session, false, nil)
+	session, _, err = rpcVTGate.Execute(context.Background(), "select id from t1", nil, session)
+	session, _, err = rpcVTGate.Execute(context.Background(), "RollBack", nil, session)
 	if err != nil {
 		t.Fatal(err)
 	}
-	wantSession = &vtgatepb.Session{}
-	if !reflect.DeepEqual(session, wantSession) {
+	wantSession = &vtgatepb.Session{TargetString: "@master"}
+	if !proto.Equal(session, wantSession) {
 		t.Errorf("begin: %v, want %v", session, wantSession)
 	}
 	if rollbackCount := sbc.RollbackCount.Get(); rollbackCount != 1 {
@@ -432,39 +419,39 @@ func TestVTGateIntercept(t *testing.T) {
 	}
 
 	// set.
-	session, _, err = rpcVTGate.Execute(context.Background(), "set autocommit=1", nil, "", topodatapb.TabletType_MASTER, session, false, nil)
+	session, _, err = rpcVTGate.Execute(context.Background(), "set autocommit=1", nil, session)
 	if err != nil {
 		t.Fatal(err)
 	}
-	wantSession = &vtgatepb.Session{Autocommit: true}
-	if !reflect.DeepEqual(session, wantSession) {
+	wantSession = &vtgatepb.Session{Autocommit: true, TargetString: "@master"}
+	if !proto.Equal(session, wantSession) {
 		t.Errorf("begin: %v, want %v", session, wantSession)
 	}
-	session, _, err = rpcVTGate.Execute(context.Background(), "set AUTOCOMMIT = 0", nil, "", topodatapb.TabletType_MASTER, session, false, nil)
+	session, _, err = rpcVTGate.Execute(context.Background(), "set AUTOCOMMIT = 0", nil, session)
 	if err != nil {
 		t.Fatal(err)
 	}
-	wantSession = &vtgatepb.Session{}
-	if !reflect.DeepEqual(session, wantSession) {
+	wantSession = &vtgatepb.Session{TargetString: "@master"}
+	if !proto.Equal(session, wantSession) {
 		t.Errorf("begin: %v, want %v", session, wantSession)
 	}
 
 	// complex set
-	_, _, err = rpcVTGate.Execute(context.Background(), "set autocommit=1+1", nil, "", topodatapb.TabletType_MASTER, session, false, nil)
+	_, _, err = rpcVTGate.Execute(context.Background(), "set autocommit=1+1", nil, session)
 	wantErr := "invalid syntax: 1 + 1"
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("Execute: %v, want %s", err, wantErr)
 	}
 
 	// multi-set
-	_, _, err = rpcVTGate.Execute(context.Background(), "set autocommit=1, a = 2", nil, "", topodatapb.TabletType_MASTER, session, false, nil)
+	_, _, err = rpcVTGate.Execute(context.Background(), "set autocommit=1, a = 2", nil, session)
 	wantErr = "too many set values: set autocommit=1, a = 2"
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("Execute: %v, want %s", err, wantErr)
 	}
 
 	// unsupported set
-	_, _, err = rpcVTGate.Execute(context.Background(), "set a = 2", nil, "", topodatapb.TabletType_MASTER, session, false, nil)
+	_, _, err = rpcVTGate.Execute(context.Background(), "set a = 2", nil, session)
 	wantErr = "unsupported construct: set a = 2"
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("Execute: %v, want %s", err, wantErr)
@@ -477,26 +464,26 @@ func TestVTGateAutocommit(t *testing.T) {
 	sbc := hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, KsTestUnsharded, "0", topodatapb.TabletType_MASTER, true, 1, nil)
 
 	// autocommit = 0
-	session, _, err := rpcVTGate.Execute(context.Background(), "select id from t1", nil, "", topodatapb.TabletType_MASTER, nil, false, executeOptions)
+	session, _, err := rpcVTGate.Execute(context.Background(), "select id from t1", nil, masterSession)
 	if err != nil {
 		t.Fatal(err)
 	}
-	wantSession := &vtgatepb.Session{}
-	if !reflect.DeepEqual(session, wantSession) {
+	wantSession := &vtgatepb.Session{TargetString: "@master"}
+	if !proto.Equal(session, wantSession) {
 		t.Errorf("autocommit=0: %v, want %v", session, wantSession)
 	}
 
 	// autocommit = 1
-	session, _, err = rpcVTGate.Execute(context.Background(), "set autocommit=1", nil, "", topodatapb.TabletType_MASTER, session, false, executeOptions)
+	session, _, err = rpcVTGate.Execute(context.Background(), "set autocommit=1", nil, session)
 	if err != nil {
 		t.Fatal(err)
 	}
-	session, _, err = rpcVTGate.Execute(context.Background(), "update t1 set id=1", nil, "", topodatapb.TabletType_MASTER, session, false, executeOptions)
+	session, _, err = rpcVTGate.Execute(context.Background(), "update t1 set id=1", nil, session)
 	if err != nil {
 		t.Fatal(err)
 	}
-	wantSession = &vtgatepb.Session{Autocommit: true}
-	if !reflect.DeepEqual(session, wantSession) {
+	wantSession = &vtgatepb.Session{Autocommit: true, TargetString: "@master"}
+	if !proto.Equal(session, wantSession) {
 		t.Errorf("autocommit=1: %v, want %v", session, wantSession)
 	}
 	if commitCount := sbc.CommitCount.Get(); commitCount != 1 {
@@ -504,29 +491,29 @@ func TestVTGateAutocommit(t *testing.T) {
 	}
 
 	// autocommit = 1, "begin"
-	session, _, err = rpcVTGate.Execute(context.Background(), "begin", nil, "", topodatapb.TabletType_MASTER, session, false, executeOptions)
+	session, _, err = rpcVTGate.Execute(context.Background(), "begin", nil, session)
 	if err != nil {
 		t.Fatal(err)
 	}
-	session, _, err = rpcVTGate.Execute(context.Background(), "update t1 set id=1", nil, "", topodatapb.TabletType_MASTER, session, false, executeOptions)
+	session, _, err = rpcVTGate.Execute(context.Background(), "update t1 set id=1", nil, session)
 	if err != nil {
 		t.Fatal(err)
 	}
-	wantSession = &vtgatepb.Session{InTransaction: true, Autocommit: true}
+	wantSession = &vtgatepb.Session{InTransaction: true, Autocommit: true, TargetString: "@master"}
 	testSession := *session
 	testSession.ShardSessions = nil
-	if !reflect.DeepEqual(&testSession, wantSession) {
+	if !proto.Equal(&testSession, wantSession) {
 		t.Errorf("autocommit=1: %v, want %v", &testSession, wantSession)
 	}
 	if commitCount := sbc.CommitCount.Get(); commitCount != 1 {
 		t.Errorf("want 1, got %d", commitCount)
 	}
-	session, _, err = rpcVTGate.Execute(context.Background(), "commit", nil, "", topodatapb.TabletType_MASTER, session, false, executeOptions)
+	session, _, err = rpcVTGate.Execute(context.Background(), "commit", nil, session)
 	if err != nil {
 		t.Fatal(err)
 	}
-	wantSession = &vtgatepb.Session{Autocommit: true}
-	if !reflect.DeepEqual(session, wantSession) {
+	wantSession = &vtgatepb.Session{Autocommit: true, TargetString: "@master"}
+	if !proto.Equal(session, wantSession) {
 		t.Errorf("autocommit=1: %v, want %v", session, wantSession)
 	}
 	if commitCount := sbc.CommitCount.Get(); commitCount != 2 {
@@ -583,7 +570,7 @@ func TestVTGateExecuteShards(t *testing.T) {
 			TransactionId: 1,
 		}},
 	}
-	if !reflect.DeepEqual(wantSession, session) {
+	if !proto.Equal(wantSession, session) {
 		t.Errorf("want \n%+v, got \n%+v", wantSession, session)
 	}
 
@@ -663,7 +650,7 @@ func TestVTGateExecuteKeyspaceIds(t *testing.T) {
 			TransactionId: 1,
 		}},
 	}
-	if !reflect.DeepEqual(wantSession, session) {
+	if !proto.Equal(wantSession, session) {
 		t.Errorf("want \n%+v, got \n%+v", wantSession, session)
 	}
 	rpcVTGate.Commit(context.Background(), false, session)
@@ -746,7 +733,7 @@ func TestVTGateExecuteKeyRanges(t *testing.T) {
 			TransactionId: 1,
 		}},
 	}
-	if !reflect.DeepEqual(wantSession, session) {
+	if !proto.Equal(wantSession, session) {
 		t.Errorf("want \n%+v, got \n%+v", wantSession, session)
 	}
 	rpcVTGate.Commit(context.Background(), false, session)
@@ -839,7 +826,7 @@ func TestVTGateExecuteEntityIds(t *testing.T) {
 			TransactionId: 1,
 		}},
 	}
-	if !reflect.DeepEqual(wantSession, session) {
+	if !proto.Equal(wantSession, session) {
 		t.Errorf("want \n%+v, got \n%+v", wantSession, session)
 	}
 	rpcVTGate.Commit(context.Background(), false, session)
@@ -898,7 +885,7 @@ func TestVTGateExecuteBatch(t *testing.T) {
 		"select id from t1",
 	}
 
-	session, qrl, err := rpcVTGate.ExecuteBatch(context.Background(), sqlList, nil, "", topodatapb.TabletType_MASTER, nil, executeOptions)
+	session, qrl, err := rpcVTGate.ExecuteBatch(context.Background(), sqlList, nil, masterSession)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1064,9 +1051,10 @@ func TestVTGateStreamExecute(t *testing.T) {
 	err := rpcVTGate.StreamExecute(context.Background(),
 		"select id from t1",
 		nil,
-		"",
-		topodatapb.TabletType_MASTER,
-		executeOptions,
+		&vtgatepb.Session{
+			TargetString: "@master",
+			Options:      executeOptions,
+		},
 		func(r *sqltypes.Result) error {
 			qrs = append(qrs, r)
 			return nil
@@ -1093,9 +1081,10 @@ func TestVTGateStreamExecuteKeyspaceShard(t *testing.T) {
 	err := rpcVTGate.StreamExecute(context.Background(),
 		"random statement",
 		nil,
-		ks+"/"+shard,
-		topodatapb.TabletType_MASTER,
-		executeOptions,
+		&vtgatepb.Session{
+			TargetString: ks + "/" + shard + "@master",
+			Options:      executeOptions,
+		},
 		func(r *sqltypes.Result) error {
 			qrs = append(qrs, r)
 			return nil
@@ -1428,7 +1417,7 @@ func TestVTGateMessageAckUnsharded(t *testing.T) {
 	if count != 2 {
 		t.Errorf("MessageAck: %d, want 2", count)
 	}
-	if !reflect.DeepEqual(sbc.MessageIDs, ids) {
+	if !sqltypes.Proto3ValuesEqual(sbc.MessageIDs, ids) {
 		t.Errorf("sbc1.MessageIDs: %v, want %v", sbc.MessageIDs, ids)
 	}
 }
@@ -1875,11 +1864,7 @@ func testErrorPropagation(t *testing.T, sbcs []*sandboxconn.SandboxConn, before 
 	_, _, err := rpcVTGate.Execute(context.Background(),
 		"select id from t1",
 		nil,
-		"",
-		topodatapb.TabletType_MASTER,
-		nil,
-		false,
-		nil)
+		masterSession)
 	if err == nil {
 		t.Errorf("error %v not propagated for Execute", expected)
 	} else {
@@ -2080,9 +2065,7 @@ func testErrorPropagation(t *testing.T, sbcs []*sandboxconn.SandboxConn, before 
 	err = rpcVTGate.StreamExecute(context.Background(),
 		"select id from t1",
 		nil,
-		"",
-		topodatapb.TabletType_MASTER,
-		executeOptions,
+		masterSession,
 		func(r *sqltypes.Result) error {
 			return nil
 		})
@@ -2337,11 +2320,7 @@ func TestErrorIssuesRollback(t *testing.T) {
 	session, _, err = rpcVTGate.Execute(context.Background(),
 		"select id from t1",
 		nil,
-		"",
-		topodatapb.TabletType_MASTER,
-		session,
-		false,
-		nil)
+		session)
 	if err != nil {
 		t.Fatalf("want nil, got %v", err)
 	}
@@ -2352,11 +2331,7 @@ func TestErrorIssuesRollback(t *testing.T) {
 	session, _, err = rpcVTGate.Execute(context.Background(),
 		"select id from t1",
 		nil,
-		"",
-		topodatapb.TabletType_MASTER,
-		session,
-		false,
-		nil)
+		session)
 	if err == nil {
 		t.Fatalf("want error but got nil")
 	}
@@ -2376,11 +2351,7 @@ func TestErrorIssuesRollback(t *testing.T) {
 	session, _, err = rpcVTGate.Execute(context.Background(),
 		"select id from t1",
 		nil,
-		"",
-		topodatapb.TabletType_MASTER,
-		session,
-		false,
-		nil)
+		session)
 	if err != nil {
 		t.Fatalf("want nil, got %v", err)
 	}
@@ -2391,11 +2362,7 @@ func TestErrorIssuesRollback(t *testing.T) {
 	session, _, err = rpcVTGate.Execute(context.Background(),
 		"select id from t1",
 		nil,
-		"",
-		topodatapb.TabletType_MASTER,
-		session,
-		false,
-		nil)
+		session)
 	if err == nil {
 		t.Fatalf("want error but got nil")
 	}
@@ -2415,11 +2382,7 @@ func TestErrorIssuesRollback(t *testing.T) {
 	session, _, err = rpcVTGate.Execute(context.Background(),
 		"select id from t1",
 		nil,
-		"",
-		topodatapb.TabletType_MASTER,
-		session,
-		false,
-		nil)
+		session)
 	if err != nil {
 		t.Fatalf("want nil, got %v", err)
 	}
@@ -2430,11 +2393,7 @@ func TestErrorIssuesRollback(t *testing.T) {
 	session, _, err = rpcVTGate.Execute(context.Background(),
 		"select id from t1",
 		nil,
-		"",
-		topodatapb.TabletType_MASTER,
-		session,
-		false,
-		nil)
+		session)
 	if err == nil {
 		t.Fatalf("want error but got nil")
 	}
@@ -2464,11 +2423,7 @@ func TestVTGateShowMetadataUnsharded(t *testing.T) {
 	_, qr, err := rpcVTGate.Execute(context.Background(),
 		"show databases",
 		nil,
-		"",
-		topodatapb.TabletType_MASTER,
-		nil,
-		false,
-		executeOptions)
+		masterSession)
 
 	if err != nil {
 		t.Errorf("want nil, got %v", err)
@@ -2479,7 +2434,7 @@ func TestVTGateShowMetadataUnsharded(t *testing.T) {
 		Type: sqltypes.VarChar,
 	}}
 
-	if !reflect.DeepEqual(wantFields, qr.Fields) {
+	if !sqltypes.FieldsEqual(wantFields, qr.Fields) {
 		t.Errorf("want \n%+v, got \n%+v", wantFields, qr.Fields)
 	}
 
@@ -2490,11 +2445,7 @@ func TestVTGateShowMetadataUnsharded(t *testing.T) {
 	_, qr, err = rpcVTGate.Execute(context.Background(),
 		"show vitess_keyspaces",
 		nil,
-		"",
-		topodatapb.TabletType_MASTER,
-		nil,
-		false,
-		executeOptions)
+		masterSession)
 
 	if err != nil {
 		t.Errorf("want nil, got %v", err)
@@ -2505,7 +2456,7 @@ func TestVTGateShowMetadataUnsharded(t *testing.T) {
 		Type: sqltypes.VarChar,
 	}}
 
-	if !reflect.DeepEqual(wantFields, qr.Fields) {
+	if !sqltypes.FieldsEqual(wantFields, qr.Fields) {
 		t.Errorf("want \n%+v, got \n%+v", wantFields, qr.Fields)
 	}
 
@@ -2516,11 +2467,7 @@ func TestVTGateShowMetadataUnsharded(t *testing.T) {
 	_, qr, err = rpcVTGate.Execute(context.Background(),
 		"show vitess_shards",
 		nil,
-		"",
-		topodatapb.TabletType_MASTER,
-		nil,
-		false,
-		executeOptions)
+		masterSession)
 
 	if err != nil {
 		t.Errorf("want nil, got %v", err)
@@ -2531,7 +2478,7 @@ func TestVTGateShowMetadataUnsharded(t *testing.T) {
 		Type: sqltypes.VarChar,
 	}}
 
-	if !reflect.DeepEqual(wantFields, qr.Fields) {
+	if !sqltypes.FieldsEqual(wantFields, qr.Fields) {
 		t.Errorf("want \n%+v, got \n%+v", wantFields, qr.Fields)
 	}
 
@@ -2543,11 +2490,7 @@ func TestVTGateShowMetadataUnsharded(t *testing.T) {
 	_, qr, err = rpcVTGate.Execute(context.Background(),
 		"show vschema_tables",
 		nil,
-		"",
-		topodatapb.TabletType_MASTER,
-		nil,
-		false,
-		executeOptions)
+		masterSession)
 
 	expected := "vtgate: : No keyspace selected"
 	if err == nil || err.Error() != expected {
@@ -2557,11 +2500,9 @@ func TestVTGateShowMetadataUnsharded(t *testing.T) {
 	_, qr, err = rpcVTGate.Execute(context.Background(),
 		"show vschema_tables",
 		nil,
-		"no_such_keyspace",
-		topodatapb.TabletType_MASTER,
-		nil,
-		false,
-		executeOptions)
+		&vtgatepb.Session{
+			TargetString: "no_such_keyspace@master",
+		})
 
 	expected = "vtgate: : keyspace no_such_keyspace not found in vschema"
 	if err == nil || err.Error() != expected {
@@ -2571,11 +2512,9 @@ func TestVTGateShowMetadataUnsharded(t *testing.T) {
 	_, qr, err = rpcVTGate.Execute(context.Background(),
 		"show vschema_tables",
 		nil,
-		KsTestUnsharded,
-		topodatapb.TabletType_MASTER,
-		nil,
-		false,
-		executeOptions)
+		&vtgatepb.Session{
+			TargetString: KsTestUnsharded,
+		})
 
 	if err != nil {
 		t.Errorf("wanted nil, got %v", err)
@@ -2586,7 +2525,7 @@ func TestVTGateShowMetadataUnsharded(t *testing.T) {
 		Type: sqltypes.VarChar,
 	}}
 
-	if !reflect.DeepEqual(wantFields, qr.Fields) {
+	if !sqltypes.FieldsEqual(wantFields, qr.Fields) {
 		t.Errorf("want \n%+v, got \n%+v", wantFields, qr.Fields)
 	}
 
@@ -2597,11 +2536,7 @@ func TestVTGateShowMetadataUnsharded(t *testing.T) {
 	_, qr, err = rpcVTGate.Execute(context.Background(),
 		"show create databases",
 		nil,
-		"",
-		topodatapb.TabletType_MASTER,
-		nil,
-		false,
-		executeOptions)
+		masterSession)
 
 	expected = "vtgate: : unsupported show statement"
 	if err == nil || err.Error() != expected {
@@ -2610,11 +2545,7 @@ func TestVTGateShowMetadataUnsharded(t *testing.T) {
 	_, qr, err = rpcVTGate.Execute(context.Background(),
 		"show tables",
 		nil,
-		"",
-		topodatapb.TabletType_MASTER,
-		nil,
-		false,
-		executeOptions)
+		masterSession)
 
 	expected = "vtgate: : unimplemented metadata query: show tables"
 	if err == nil || err.Error() != expected {
@@ -2629,11 +2560,7 @@ func TestVTGateShowMetadataTwoShards(t *testing.T) {
 	_, qr, err := rpcVTGate.Execute(context.Background(),
 		"show databases",
 		nil,
-		"",
-		topodatapb.TabletType_MASTER,
-		nil,
-		false,
-		executeOptions)
+		masterSession)
 
 	if err != nil {
 		t.Errorf("want nil, got %v", err)
@@ -2644,7 +2571,7 @@ func TestVTGateShowMetadataTwoShards(t *testing.T) {
 		Type: sqltypes.VarChar,
 	}}
 
-	if !reflect.DeepEqual(wantFields, qr.Fields) {
+	if !sqltypes.FieldsEqual(wantFields, qr.Fields) {
 		t.Errorf("want \n%+v, got \n%+v", wantFields, qr.Fields)
 	}
 
@@ -2655,11 +2582,7 @@ func TestVTGateShowMetadataTwoShards(t *testing.T) {
 	_, qr, err = rpcVTGate.Execute(context.Background(),
 		"show vitess_shards",
 		nil,
-		"",
-		topodatapb.TabletType_MASTER,
-		nil,
-		false,
-		executeOptions)
+		masterSession)
 
 	if err != nil {
 		t.Errorf("want nil, got %v", err)
@@ -2670,7 +2593,7 @@ func TestVTGateShowMetadataTwoShards(t *testing.T) {
 		Type: sqltypes.VarChar,
 	}}
 
-	if !reflect.DeepEqual(wantFields, qr.Fields) {
+	if !sqltypes.FieldsEqual(wantFields, qr.Fields) {
 		t.Errorf("want \n%+v, got \n%+v", wantFields, qr.Fields)
 	}
 
@@ -2685,33 +2608,63 @@ func TestVTGateShowMetadataTwoShards(t *testing.T) {
 	}
 }
 
-func TestParseKeyspaceOptionalShard(t *testing.T) {
+func TestParseTarget(t *testing.T) {
 	testcases := []struct {
-		keyspaceShard string
-		keyspace      string
-		shard         string
+		targetString string
+		target       querypb.Target
 	}{{
-		keyspaceShard: "ks",
-		keyspace:      "ks",
-		shard:         "",
+		targetString: "ks",
+		target: querypb.Target{
+			Keyspace:   "ks",
+			TabletType: topodatapb.TabletType_MASTER,
+		},
 	}, {
-		keyspaceShard: "ks/-80",
-		keyspace:      "ks",
-		shard:         "-80",
+		targetString: "ks/-80",
+		target: querypb.Target{
+			Keyspace:   "ks",
+			Shard:      "-80",
+			TabletType: topodatapb.TabletType_MASTER,
+		},
 	}, {
-		keyspaceShard: "ks:-80",
-		keyspace:      "ks",
-		shard:         "-80",
+		targetString: "ks:-80",
+		target: querypb.Target{
+			Keyspace:   "ks",
+			Shard:      "-80",
+			TabletType: topodatapb.TabletType_MASTER,
+		},
+	}, {
+		targetString: "ks@replica",
+		target: querypb.Target{
+			Keyspace:   "ks",
+			TabletType: topodatapb.TabletType_REPLICA,
+		},
+	}, {
+		targetString: "ks:-80@replica",
+		target: querypb.Target{
+			Keyspace:   "ks",
+			Shard:      "-80",
+			TabletType: topodatapb.TabletType_REPLICA,
+		},
+	}, {
+		targetString: "@replica",
+		target: querypb.Target{
+			TabletType: topodatapb.TabletType_REPLICA,
+		},
+	}, {
+		targetString: "@bad",
+		target: querypb.Target{
+			TabletType: topodatapb.TabletType_UNKNOWN,
+		},
 	}}
 
 	for _, tcase := range testcases {
-		if keyspace, shard := parseKeyspaceOptionalShard(tcase.keyspaceShard); keyspace != tcase.keyspace || shard != tcase.shard {
-			t.Errorf("parseKeyspaceShard(%s): %s:%s, want %s:%s", tcase.keyspaceShard, keyspace, shard, tcase.keyspace, tcase.shard)
+		if target := parseTarget(tcase.targetString); target != tcase.target {
+			t.Errorf("parseKeyspaceShard(%s): %v, want %v", tcase.targetString, target, tcase.target)
 		}
 	}
 }
 
-func TestErrorTruncation(t *testing.T) {
+func TestLogTruncation(t *testing.T) {
 	*sqlparser.TruncateErrLen = 30
 
 	query := map[string]interface{}{
@@ -2724,17 +2677,19 @@ func TestErrorTruncation(t *testing.T) {
 		},
 	}
 
-	query = truncateErrorStrings(query)
-	errStr := fmt.Sprintf("request: %+v", query)
-	if !strings.Contains(errStr, "[TRUNCATED]") {
-		t.Errorf("Error was not truncated: %s", errStr)
+	truncated := truncateErrorStrings(query)
+
+	expected := map[string]interface{}{
+		"Sql": "THIS IS A LONG QUE [TRUNCATED]",
+		"BindVariables": map[string]interface{}{
+			"vtg1": "100", // <== Truncating also converts to string
+			"vtg2": "short string",
+			"vtg3": "this is a long bin [TRUNCATED]",
+			"vtg4": "another string",
+		},
 	}
 
-	if strings.Contains(errStr, "WILL BE TRUNCATED AWAY") {
-		t.Errorf("Error was not truncated: %s", errStr)
-	}
-
-	if strings.Contains(errStr, "will be truncated away as well") {
-		t.Errorf("Error was not truncated: %s", errStr)
+	if (!reflect.DeepEqual(truncated, expected)){
+		t.Errorf("query was not truncated properly: got %v expected %v", truncated, expected)
 	}
 }

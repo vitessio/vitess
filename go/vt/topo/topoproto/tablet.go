@@ -12,6 +12,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/golang/protobuf/proto"
+
 	"github.com/youtube/vitess/go/netutil"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
@@ -41,13 +43,7 @@ func TabletAliasIsZero(ta *topodatapb.TabletAlias) bool {
 
 // TabletAliasEqual returns true if two TabletAlias match
 func TabletAliasEqual(left, right *topodatapb.TabletAlias) bool {
-	if left == nil {
-		return right == nil
-	}
-	if right == nil {
-		return false
-	}
-	return *left == *right
+	return proto.Equal(left, right)
 }
 
 // TabletAliasString formats a TabletAlias
