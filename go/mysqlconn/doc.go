@@ -33,7 +33,7 @@ Send found rows instead of affected rows in EOF_Packet.
 Value
 0x00000002
 
-Not sure what needs to be done here. Ignored for now.
+We just pass it through to the server.
 
 --
 CLIENT_CONNECT_WITH_DB:

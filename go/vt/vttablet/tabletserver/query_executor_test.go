@@ -1491,7 +1491,7 @@ func newTestTabletServer(ctx context.Context, flags executorFlags, db *fakesqldb
 }
 
 func newTransaction(tsv *TabletServer) int64 {
-	transactionID, err := tsv.Begin(context.Background(), &tsv.target)
+	transactionID, err := tsv.Begin(context.Background(), &tsv.target, nil)
 	if err != nil {
 		panic(fmt.Errorf("failed to start a transaction: %v", err))
 	}

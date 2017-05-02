@@ -319,7 +319,7 @@ func TestQueryTimeout(t *testing.T) {
 	framework.Server.QueryTimeout.Set(100 * time.Millisecond)
 
 	client := framework.NewClient()
-	err := client.Begin()
+	err := client.Begin(false)
 	if err != nil {
 		t.Error(err)
 		return

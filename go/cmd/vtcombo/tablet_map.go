@@ -343,8 +343,8 @@ func (itc *internalTabletConn) StreamExecute(ctx context.Context, target *queryp
 }
 
 // Begin is part of queryservice.QueryService
-func (itc *internalTabletConn) Begin(ctx context.Context, target *querypb.Target) (int64, error) {
-	transactionID, err := itc.tablet.qsc.QueryService().Begin(ctx, target)
+func (itc *internalTabletConn) Begin(ctx context.Context, target *querypb.Target, options *querypb.ExecuteOptions) (int64, error) {
+	transactionID, err := itc.tablet.qsc.QueryService().Begin(ctx, target, options)
 	if err != nil {
 		return 0, tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
 	}
@@ -413,7 +413,7 @@ func (itc *internalTabletConn) ReadTransaction(ctx context.Context, target *quer
 
 // BeginExecute is part of queryservice.QueryService
 func (itc *internalTabletConn) BeginExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]interface{}, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, error) {
-	transactionID, err := itc.Begin(ctx, target)
+	transactionID, err := itc.Begin(ctx, target, options)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -423,7 +423,7 @@ func (itc *internalTabletConn) BeginExecute(ctx context.Context, target *querypb
 
 // BeginExecuteBatch is part of queryservice.QueryService
 func (itc *internalTabletConn) BeginExecuteBatch(ctx context.Context, target *querypb.Target, queries []querytypes.BoundQuery, asTransaction bool, options *querypb.ExecuteOptions) ([]sqltypes.Result, int64, error) {
-	transactionID, err := itc.Begin(ctx, target)
+	transactionID, err := itc.Begin(ctx, target, options)
 	if err != nil {
 		return nil, 0, err
 	}

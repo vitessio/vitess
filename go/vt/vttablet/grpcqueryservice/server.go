@@ -105,7 +105,7 @@ func (q *query) Begin(ctx context.Context, request *querypb.BeginRequest) (respo
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-	transactionID, err := q.server.Begin(ctx, request.Target)
+	transactionID, err := q.server.Begin(ctx, request.Target, request.Options)
 	if err != nil {
 		return nil, vterrors.ToGRPC(err)
 	}

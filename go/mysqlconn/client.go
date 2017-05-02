@@ -475,7 +475,9 @@ func (c *Conn) writeSSLRequest(capabilities uint32, characterSet uint8, params *
 		CapabilityClientSSL |
 		// If the server supported
 		// CapabilityClientDeprecateEOF, we also support it.
-		c.Capabilities&CapabilityClientDeprecateEOF
+		c.Capabilities&CapabilityClientDeprecateEOF |
+		// Pass-through ClientFoundRows flag.
+		CapabilityClientFoundRows&uint32(params.Flags)
 
 	length :=
 		4 + // Client capability flags.
@@ -523,7 +525,9 @@ func (c *Conn) writeHandshakeResponse41(capabilities uint32, salt []byte, charac
 		CapabilityClientPluginAuthLenencClientData |
 		// If the server supported
 		// CapabilityClientDeprecateEOF, we also support it.
-		c.Capabilities&CapabilityClientDeprecateEOF
+		c.Capabilities&CapabilityClientDeprecateEOF |
+		// Pass-through ClientFoundRows flag.
+		CapabilityClientFoundRows&uint32(params.Flags)
 
 	// FIXME(alainjobart) add multi statement, client found rows.
 

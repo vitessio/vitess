@@ -122,7 +122,7 @@ func TestStreamTerminate(t *testing.T) {
 }
 
 func populateBigData(client *framework.QueryClient) error {
-	err := client.Begin()
+	err := client.Begin(false)
 	if err != nil {
 		return err
 	}

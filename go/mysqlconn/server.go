@@ -415,7 +415,7 @@ func (l *Listener) parseClientHandshakePacket(c *Conn, firstTime bool, data []by
 	// later in the protocol. If we re-received the handshake packet
 	// after SSL negotiation, do not overwrite capabilities.
 	if firstTime {
-		c.Capabilities = clientFlags & (CapabilityClientDeprecateEOF)
+		c.Capabilities = clientFlags & (CapabilityClientDeprecateEOF | CapabilityClientFoundRows)
 	}
 
 	// Max packet size. Don't do anything with this now.

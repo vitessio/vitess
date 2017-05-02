@@ -217,7 +217,7 @@ func TestTrailingComment(t *testing.T) {
 
 func TestUpsertNonPKHit(t *testing.T) {
 	client := framework.NewClient()
-	err := client.Begin()
+	err := client.Begin(false)
 	if err != nil {
 		t.Error(err)
 		return
@@ -574,5 +574,43 @@ func TestLogTruncation(t *testing.T) {
 	}
 	if err.Error() != want {
 		t.Errorf("log was not truncated properly... got %s, wanted %s", err, want)
+	}
+}
+
+func TestClientFoundRows(t *testing.T) {
+	client := framework.NewClient()
+	if _, err := client.Execute("insert into vitess_test(intval, charval) values(124, 'aa')", nil); err != nil {
+		t.Fatal(err)
+	}
+	defer client.Execute("delete from vitess_test where intval= 124", nil)
+
+	// CLIENT_FOUND_ROWS flag is off.
+	if err := client.Begin(false); err != nil {
+		t.Error(err)
+	}
+	qr, err := client.Execute("update vitess_test set charval='aa' where intval=124", nil)
+	if err != nil {
+		t.Error(err)
+	}
+	if qr.RowsAffected != 0 {
+		t.Errorf("Execute(rowsFound==false): %d, want 0", qr.RowsAffected)
+	}
+	if err := client.Rollback(); err != nil {
+		t.Error(err)
+	}
+
+	// CLIENT_FOUND_ROWS flag is on.
+	if err := client.Begin(true); err != nil {
+		t.Error(err)
+	}
+	qr, err = client.Execute("update vitess_test set charval='aa' where intval=124", nil)
+	if err != nil {
+		t.Error(err)
+	}
+	if qr.RowsAffected != 1 {
+		t.Errorf("Execute(rowsFound==true): %d, want 1", qr.RowsAffected)
+	}
+	if err := client.Rollback(); err != nil {
+		t.Error(err)
 	}
 }

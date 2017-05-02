@@ -97,7 +97,7 @@ func testBegin(t *testing.T, conn queryservice.QueryService, f *FakeQueryService
 	t.Log("testBegin")
 	ctx := context.Background()
 	ctx = callerid.NewContext(ctx, TestCallerID, TestVTGateCallerID)
-	transactionID, err := conn.Begin(ctx, TestTarget)
+	transactionID, err := conn.Begin(ctx, TestTarget, TestExecuteOptions)
 	if err != nil {
 		t.Fatalf("Begin failed: %v", err)
 	}
@@ -110,7 +110,7 @@ func testBeginError(t *testing.T, conn queryservice.QueryService, f *FakeQuerySe
 	t.Log("testBeginError")
 	f.HasBeginError = true
 	testErrorHelper(t, f, "Begin", func(ctx context.Context) error {
-		_, err := conn.Begin(ctx, TestTarget)
+		_, err := conn.Begin(ctx, TestTarget, nil)
 		return err
 	})
 	f.HasBeginError = false
@@ -119,7 +119,7 @@ func testBeginError(t *testing.T, conn queryservice.QueryService, f *FakeQuerySe
 func testBeginPanics(t *testing.T, conn queryservice.QueryService, f *FakeQueryService) {
 	t.Log("testBeginPanics")
 	testPanicHelper(t, f, "Begin", func(ctx context.Context) error {
-		_, err := conn.Begin(ctx, TestTarget)
+		_, err := conn.Begin(ctx, TestTarget, nil)
 		return err
 	})
 }

@@ -61,12 +61,13 @@ var (
 
 // TxPool is the transaction pool for the query service.
 type TxPool struct {
-	conns      *connpool.Pool
-	activePool *pools.Numbered
-	lastID     sync2.AtomicInt64
-	timeout    sync2.AtomicDuration
-	ticks      *timer.Timer
-	checker    connpool.MySQLChecker
+	conns         *connpool.Pool
+	foundRowsPool *connpool.Pool
+	activePool    *pools.Numbered
+	lastID        sync2.AtomicInt64
+	timeout       sync2.AtomicDuration
+	ticks         *timer.Timer
+	checker       connpool.MySQLChecker
 	// Tracking culprits that cause tx pool full errors.
 	logMu   sync.Mutex
 	lastLog time.Time
@@ -74,23 +75,25 @@ type TxPool struct {
 
 // NewTxPool creates a new TxPool. It's not operational until it's Open'd.
 func NewTxPool(
-	name string,
+	prefix string,
 	capacity int,
+	foundRowsCapacity int,
 	timeout time.Duration,
 	idleTimeout time.Duration,
 	checker connpool.MySQLChecker) *TxPool {
 	axp := &TxPool{
-		conns:      connpool.New(name, capacity, idleTimeout, checker),
-		activePool: pools.NewNumbered(),
-		lastID:     sync2.NewAtomicInt64(time.Now().UnixNano()),
-		timeout:    sync2.NewAtomicDuration(timeout),
-		ticks:      timer.NewTimer(timeout / 10),
-		checker:    checker,
+		conns:         connpool.New(prefix+"TransactionPool", capacity, idleTimeout, checker),
+		foundRowsPool: connpool.New(prefix+"FoundRowsPool", foundRowsCapacity, idleTimeout, checker),
+		activePool:    pools.NewNumbered(),
+		lastID:        sync2.NewAtomicInt64(time.Now().UnixNano()),
+		timeout:       sync2.NewAtomicDuration(timeout),
+		ticks:         timer.NewTimer(timeout / 10),
+		checker:       checker,
 	}
 	txOnce.Do(func() {
 		// Careful: conns also exports name+"xxx" vars,
 		// but we know it doesn't export Timeout.
-		stats.Publish(name+"Timeout", stats.DurationFunc(axp.timeout.Get))
+		stats.Publish(prefix+"TransactionPoolTimeout", stats.DurationFunc(axp.timeout.Get))
 	})
 	return axp
 }
@@ -100,6 +103,9 @@ func NewTxPool(
 func (axp *TxPool) Open(appParams, dbaParams *sqldb.ConnParams) {
 	log.Infof("Starting transaction id: %d", axp.lastID)
 	axp.conns.Open(appParams, dbaParams)
+	foundRowsParam := *appParams
+	foundRowsParam.EnableClientFoundRows()
+	axp.foundRowsPool.Open(&foundRowsParam, dbaParams)
 	axp.ticks.Start(func() { axp.transactionKiller() })
 }
 
@@ -153,8 +159,14 @@ func (axp *TxPool) WaitForEmpty() {
 
 // Begin begins a transaction, and returns the associated transaction id.
 // Subsequent statements can access the connection through the transaction id.
-func (axp *TxPool) Begin(ctx context.Context) (int64, error) {
-	conn, err := axp.conns.Get(ctx)
+func (axp *TxPool) Begin(ctx context.Context, useFoundRows bool) (int64, error) {
+	var conn *connpool.DBConn
+	var err error
+	if useFoundRows {
+		conn, err = axp.foundRowsPool.Get(ctx)
+	} else {
+		conn, err = axp.conns.Get(ctx)
+	}
 	if err != nil {
 		switch err {
 		case connpool.ErrConnPoolClosed:
@@ -214,8 +226,8 @@ func (axp *TxPool) Get(transactionID int64, reason string) (*TxConnection, error
 // LocalBegin is equivalent to Begin->Get.
 // It's used for executing transactions within a request. It's safe
 // to always call LocalConclude at the end.
-func (axp *TxPool) LocalBegin(ctx context.Context) (*TxConnection, error) {
-	transactionID, err := axp.Begin(ctx)
+func (axp *TxPool) LocalBegin(ctx context.Context, useFoundRows bool) (*TxConnection, error) {
+	transactionID, err := axp.Begin(ctx, useFoundRows)
 	if err != nil {
 		return nil, err
 	}

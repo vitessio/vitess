@@ -83,10 +83,10 @@ type wrappedService struct {
 	wrapper WrapperFunc
 }
 
-func (ws *wrappedService) Begin(ctx context.Context, target *querypb.Target) (transactionID int64, err error) {
+func (ws *wrappedService) Begin(ctx context.Context, target *querypb.Target, options *querypb.ExecuteOptions) (transactionID int64, err error) {
 	err = ws.wrapper(ctx, target, ws.impl, "Begin", false, func(ctx context.Context, target *querypb.Target, conn QueryService) (error, bool) {
 		var innerErr error
-		transactionID, innerErr = conn.Begin(ctx, target)
+		transactionID, innerErr = conn.Begin(ctx, target, options)
 		return innerErr, canRetry(ctx, innerErr)
 	})
 	return transactionID, err

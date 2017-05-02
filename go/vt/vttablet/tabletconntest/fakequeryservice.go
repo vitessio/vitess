@@ -128,7 +128,7 @@ func (f *FakeQueryService) checkTargetCallerID(ctx context.Context, name string,
 const BeginTransactionID int64 = 9990
 
 // Begin is part of the queryservice.QueryService interface
-func (f *FakeQueryService) Begin(ctx context.Context, target *querypb.Target) (int64, error) {
+func (f *FakeQueryService) Begin(ctx context.Context, target *querypb.Target, options *querypb.ExecuteOptions) (int64, error) {
 	if f.HasBeginError {
 		return 0, f.TabletError
 	}
@@ -136,6 +136,9 @@ func (f *FakeQueryService) Begin(ctx context.Context, target *querypb.Target) (i
 		panic(fmt.Errorf("test-triggered panic"))
 	}
 	f.checkTargetCallerID(ctx, "Begin", target)
+	if !proto.Equal(options, TestExecuteOptions) {
+		f.t.Errorf("invalid Execute.ExecuteOptions: got %v expected %v", options, TestExecuteOptions)
+	}
 	return BeginTransactionID, nil
 }
 
@@ -606,7 +609,7 @@ var SplitQueryQuerySplitList = []querytypes.QuerySplit{
 
 // BeginExecute combines Begin and Execute.
 func (f *FakeQueryService) BeginExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]interface{}, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, error) {
-	transactionID, err := f.Begin(ctx, target)
+	transactionID, err := f.Begin(ctx, target, options)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -617,7 +620,7 @@ func (f *FakeQueryService) BeginExecute(ctx context.Context, target *querypb.Tar
 
 // BeginExecuteBatch combines Begin and ExecuteBatch.
 func (f *FakeQueryService) BeginExecuteBatch(ctx context.Context, target *querypb.Target, queries []querytypes.BoundQuery, asTransaction bool, options *querypb.ExecuteOptions) ([]sqltypes.Result, int64, error) {
-	transactionID, err := f.Begin(ctx, target)
+	transactionID, err := f.Begin(ctx, target, options)
 	if err != nil {
 		return nil, 0, err
 	}

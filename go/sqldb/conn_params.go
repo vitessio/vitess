@@ -37,9 +37,11 @@ type ConnParams struct {
 	SslKey    string `json:"ssl_key"`
 }
 
+// capabilityClientFoundRows is CLIENT_FOUND_ROWS.
 // capabilityClientSSL is CLIENT_SSL.
 // FIXME(alainjobart) when this package is merge with go/mysqlconn,
-// use the same constant.
+// use the same constants.
+const capabilityClientFoundRows = 1 << 1
 const capabilityClientSSL = 1 << 11
 
 // EnableSSL will set the right flag on the parameters.
@@ -50,4 +52,9 @@ func (cp *ConnParams) EnableSSL() {
 // SslEnabled returns if SSL is enabled.
 func (cp *ConnParams) SslEnabled() bool {
 	return (cp.Flags & capabilityClientSSL) > 0
+}
+
+// EnableClientFoundRows sets the flag for CLIENT_FOUND_ROWS.
+func (cp *ConnParams) EnableClientFoundRows() {
+	cp.Flags |= capabilityClientFoundRows
 }

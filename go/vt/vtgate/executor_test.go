@@ -105,6 +105,15 @@ func TestExecutorSet(t *testing.T) {
 		in:  "set AUTOCOMMIT = 'aa'",
 		err: "unexpected value type for autocommit: string",
 	}, {
+		in:  "set client_found_rows=1",
+		out: &vtgatepb.Session{Options: &querypb.ExecuteOptions{ClientFoundRows: true}},
+	}, {
+		in:  "set client_found_rows=0",
+		out: &vtgatepb.Session{},
+	}, {
+		in:  "set client_found_rows='aa'",
+		err: "unexpected value type for client_found_rows: string",
+	}, {
 		in:  "set transaction_mode = 'unspecified'",
 		out: &vtgatepb.Session{TransactionMode: vtgatepb.TransactionMode_UNSPECIFIED},
 	}, {
