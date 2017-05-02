@@ -14,8 +14,8 @@ import (
 
 	"github.com/youtube/vitess/go/sqltypes"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
-	"github.com/youtube/vitess/go/vt/vttablet/endtoend/framework"
 	"github.com/youtube/vitess/go/vt/vterrors"
+	"github.com/youtube/vitess/go/vt/vttablet/endtoend/framework"
 )
 
 func TestStreamUnion(t *testing.T) {
@@ -110,7 +110,7 @@ func TestStreamTerminate(t *testing.T) {
 }
 
 func populateBigData(client *framework.QueryClient) error {
-	err := client.Begin()
+	err := client.Begin(false)
 	if err != nil {
 		return err
 	}

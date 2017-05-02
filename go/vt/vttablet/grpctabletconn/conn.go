@@ -15,8 +15,8 @@ import (
 	"github.com/youtube/vitess/go/vt/callerid"
 	"github.com/youtube/vitess/go/vt/servenv/grpcutils"
 	"github.com/youtube/vitess/go/vt/vttablet/queryservice"
-	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/querytypes"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletconn"
+	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/querytypes"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 
@@ -199,7 +199,7 @@ func (conn *gRPCQueryClient) StreamExecute(ctx context.Context, target *querypb.
 }
 
 // Begin starts a transaction.
-func (conn *gRPCQueryClient) Begin(ctx context.Context, target *querypb.Target) (transactionID int64, err error) {
+func (conn *gRPCQueryClient) Begin(ctx context.Context, target *querypb.Target, options *querypb.ExecuteOptions) (transactionID int64, err error) {
 	conn.mu.RLock()
 	defer conn.mu.RUnlock()
 	if conn.cc == nil {
@@ -210,6 +210,7 @@ func (conn *gRPCQueryClient) Begin(ctx context.Context, target *querypb.Target) 
 		Target:            target,
 		EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
 		ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
+		Options:           options,
 	}
 	br, err := conn.c.Begin(ctx, req)
 	if err != nil {

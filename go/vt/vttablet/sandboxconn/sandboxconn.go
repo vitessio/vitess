@@ -11,9 +11,9 @@ import (
 
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/sync2"
+	"github.com/youtube/vitess/go/vt/vterrors"
 	"github.com/youtube/vitess/go/vt/vttablet/queryservice"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/querytypes"
-	"github.com/youtube/vitess/go/vt/vterrors"
 	"golang.org/x/net/context"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
@@ -160,7 +160,7 @@ func (sbc *SandboxConn) StreamExecute(ctx context.Context, target *querypb.Targe
 }
 
 // Begin is part of the QueryService interface.
-func (sbc *SandboxConn) Begin(ctx context.Context, target *querypb.Target) (int64, error) {
+func (sbc *SandboxConn) Begin(ctx context.Context, target *querypb.Target, options *querypb.ExecuteOptions) (int64, error) {
 	sbc.BeginCount.Add(1)
 	err := sbc.getError()
 	if err != nil {
@@ -270,7 +270,7 @@ func (sbc *SandboxConn) ReadTransaction(ctx context.Context, target *querypb.Tar
 
 // BeginExecute is part of the QueryService interface.
 func (sbc *SandboxConn) BeginExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]interface{}, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, error) {
-	transactionID, err := sbc.Begin(ctx, target)
+	transactionID, err := sbc.Begin(ctx, target, options)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -280,7 +280,7 @@ func (sbc *SandboxConn) BeginExecute(ctx context.Context, target *querypb.Target
 
 // BeginExecuteBatch is part of the QueryService interface.
 func (sbc *SandboxConn) BeginExecuteBatch(ctx context.Context, target *querypb.Target, queries []querytypes.BoundQuery, asTransaction bool, options *querypb.ExecuteOptions) ([]sqltypes.Result, int64, error) {
-	transactionID, err := sbc.Begin(ctx, target)
+	transactionID, err := sbc.Begin(ctx, target, options)
 	if err != nil {
 		return nil, 0, err
 	}

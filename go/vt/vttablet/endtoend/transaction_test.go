@@ -34,7 +34,7 @@ func TestCommit(t *testing.T) {
 
 	query := "insert into vitess_test (intval, floatval, charval, binval) " +
 		"values(4, null, null, null)"
-	err := client.Begin()
+	err := client.Begin(false)
 	if err != nil {
 		t.Error(err)
 		return
@@ -130,7 +130,7 @@ func TestRollback(t *testing.T) {
 	vstart := framework.DebugVars()
 
 	query := "insert into vitess_test values(4, null, null, null)"
-	err := client.Begin()
+	err := client.Begin(false)
 	if err != nil {
 		t.Error(err)
 		return
@@ -304,7 +304,7 @@ func TestTxPoolSize(t *testing.T) {
 	vstart := framework.DebugVars()
 
 	client1 := framework.NewClient()
-	err := client1.Begin()
+	err := client1.Begin(false)
 	if err != nil {
 		t.Error(err)
 		return
@@ -331,7 +331,7 @@ func TestTxPoolSize(t *testing.T) {
 	}
 
 	client2 := framework.NewClient()
-	err = client2.Begin()
+	err = client2.Begin(false)
 	want := "connection limit exceeded"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("%v, must contain %s", err, want)
@@ -353,7 +353,7 @@ func TestTxTimeout(t *testing.T) {
 	catcher := framework.NewTxCatcher()
 	defer catcher.Close()
 	client := framework.NewClient()
-	err := client.Begin()
+	err := client.Begin(false)
 	if err != nil {
 		t.Error(err)
 		return
@@ -388,7 +388,7 @@ func TestForUpdate(t *testing.T) {
 		}
 
 		// We should not get errors here
-		err = client.Begin()
+		err = client.Begin(false)
 		if err != nil {
 			t.Error(err)
 			return
@@ -412,7 +412,7 @@ func TestPrepareRollback(t *testing.T) {
 
 	query := "insert into vitess_test (intval, floatval, charval, binval) " +
 		"values(4, null, null, null)"
-	err := client.Begin()
+	err := client.Begin(false)
 	if err != nil {
 		t.Error(err)
 		return
@@ -449,7 +449,7 @@ func TestPrepareCommit(t *testing.T) {
 
 	query := "insert into vitess_test (intval, floatval, charval, binval) " +
 		"values(4, null, null, null)"
-	err := client.Begin()
+	err := client.Begin(false)
 	if err != nil {
 		t.Error(err)
 		return
@@ -486,7 +486,7 @@ func TestPrepareReparentCommit(t *testing.T) {
 
 	query := "insert into vitess_test (intval, floatval, charval, binval) " +
 		"values(4, null, null, null)"
-	err := client.Begin()
+	err := client.Begin(false)
 	if err != nil {
 		t.Error(err)
 		return
@@ -535,7 +535,7 @@ func TestMMCommitFlow(t *testing.T) {
 
 	query := "insert into vitess_test (intval, floatval, charval, binval) " +
 		"values(4, null, null, null)"
-	err := client.Begin()
+	err := client.Begin(false)
 	if err != nil {
 		t.Error(err)
 	}
@@ -615,7 +615,7 @@ func TestMMRollbackFlow(t *testing.T) {
 
 	query := "insert into vitess_test (intval, floatval, charval, binval) " +
 		"values(4, null, null, null)"
-	err := client.Begin()
+	err := client.Begin(false)
 	if err != nil {
 		t.Error(err)
 	}
@@ -674,7 +674,7 @@ func TestWatchdog(t *testing.T) {
 
 	query := "insert into vitess_test (intval, floatval, charval, binval) " +
 		"values(4, null, null, null)"
-	err := client.Begin()
+	err := client.Begin(false)
 	if err != nil {
 		t.Error(err)
 	}
@@ -737,7 +737,7 @@ func TestUnresolvedTracking(t *testing.T) {
 
 	query := "insert into vitess_test (intval, floatval, charval, binval) " +
 		"values(4, null, null, null)"
-	err := client.Begin()
+	err := client.Begin(false)
 	if err != nil {
 		t.Error(err)
 		return
@@ -776,7 +776,7 @@ func TestManualTwopcz(t *testing.T) {
 	defer conn.Close()
 
 	// Successful prepare.
-	err = client.Begin()
+	err = client.Begin(false)
 	if err != nil {
 		t.Error(err)
 		return
@@ -795,7 +795,7 @@ func TestManualTwopcz(t *testing.T) {
 	}
 
 	// Failed transaction.
-	err = client.Begin()
+	err = client.Begin(false)
 	if err != nil {
 		t.Error(err)
 		return

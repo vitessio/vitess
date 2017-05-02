@@ -77,7 +77,7 @@ func TestMessage(t *testing.T) {
 	}
 	runtime.Gosched()
 	defer func() { close(done) }()
-	err := client.Begin()
+	err := client.Begin(false)
 	if err != nil {
 		t.Error(err)
 		return
