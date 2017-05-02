@@ -47,11 +47,16 @@ func TestTxConnBegin(t *testing.T) {
 	if commitCount := sbc0.CommitCount.Get(); commitCount != 1 {
 		t.Errorf("want 1, got %d", commitCount)
 	}
+}
+
+func TestTxConnBeginDisallowed(t *testing.T) {
+	sc, _, _ := newTestTxConnEnv("TestTxConn")
+	session := &vtgatepb.Session{}
 
 	sc.txConn.mode = vtgatepb.TransactionMode_SINGLE
 	session = &vtgatepb.Session{TransactionMode: vtgatepb.TransactionMode_MULTI}
 	err := sc.txConn.Begin(context.Background(), NewSafeSession(session))
-	wantErr := "transaction mode MULTI disallowed: VTGate mode: SINGLE"
+	wantErr := "requested transaction mode MULTI disallowed: vtgate must be started with --transaction_mode=MULTI (or TWOPC). Current transaction mode: SINGLE"
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("txConn.Begin: %v, want %s", err, wantErr)
 	}
@@ -59,7 +64,7 @@ func TestTxConnBegin(t *testing.T) {
 	sc.txConn.mode = vtgatepb.TransactionMode_MULTI
 	session = &vtgatepb.Session{TransactionMode: vtgatepb.TransactionMode_TWOPC}
 	err = sc.txConn.Begin(context.Background(), NewSafeSession(session))
-	wantErr = "transaction mode TWOPC disallowed: VTGate mode: MULTI"
+	wantErr = "requested transaction mode TWOPC disallowed: vtgate must be started with --transaction_mode=TWOPC. Current transaction mode: MULTI"
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("txConn.Begin: %v, want %s", err, wantErr)
 	}

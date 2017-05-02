@@ -10,15 +10,16 @@ import "query.proto";
 import "topodata.proto";
 import "vtrpc.proto";
 
-// TransactionMode specifies the type of transaction the session is in.
+// TransactionMode controls the execution of distributed transaction
+// across multiple shards.
 enum TransactionMode {
-  // UNSPECIFIED uses the transaction mode set for VTGate.
+  // UNSPECIFIED uses the transaction mode set by the VTGate flag 'transaction_mode'.
   UNSPECIFIED = 0;
   // SINGLE disallows distributed transactions.
   SINGLE = 1;
   // MULTI allows distributed transactions with best effort commit.
   MULTI = 2;
-  // TWOPC is for distributed transactions with atomitc commits.
+  // TWOPC is for distributed transactions with atomic commits.
   TWOPC = 3;
 }
 
@@ -45,7 +46,7 @@ message Session {
 
   // single_db is deprecated. Use transaction_mode instead.
   // The value specifies if the transaction should be restricted
-  // to a single database.
+  // to a single shard.
   // TODO(sougou): remove in 3.1
   bool single_db = 3;
 
@@ -556,8 +557,10 @@ message BeginRequest {
   // set by the application to further identify the caller.
   vtrpc.CallerID caller_id = 1;
 
-  // single_db specifies if the transaction should be restricted
+  // single_db is deprecated. Use transaction_mode instead.
+  // The value specifies if the transaction should be restricted
   // to a single database.
+  // TODO(sougou): remove in 3.1
   bool single_db = 2;
 }
 
@@ -576,8 +579,10 @@ message CommitRequest {
   // session carries the current transaction data to commit.
   Session session = 2;
 
-  // atomic specifies if the commit should go through the
+  // atomic is deprecated. Use transaction_mode instead.
+  // The value specifies if the commit should go through the
   // 2PC workflow to ensure atomicity.
+  // TODO(sougou): remove in 3.1
   bool atomic = 3;
 }
 
