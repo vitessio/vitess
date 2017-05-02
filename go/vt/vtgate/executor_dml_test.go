@@ -447,7 +447,7 @@ func TestInsertGeneratorSharded(t *testing.T) {
 	}
 	wantResult := *sandboxconn.SingleRowResult
 	wantResult.InsertID = 1
-	if !reflect.DeepEqual(result, &wantResult) {
+	if !result.Equal(&wantResult) {
 		t.Errorf("result: %+v, want %+v", result, &wantResult)
 	}
 }
@@ -477,7 +477,7 @@ func TestInsertAutoincSharded(t *testing.T) {
 	if !reflect.DeepEqual(sbc.Queries, wantQueries) {
 		t.Errorf("sbc.Queries:\n%+v, want\n%+v\n", sbc.Queries, wantQueries)
 	}
-	if !reflect.DeepEqual(result, wantResult) {
+	if !result.Equal(wantResult) {
 		t.Errorf("result: %+v, want %+v", result, wantResult)
 	}
 }
@@ -502,7 +502,7 @@ func TestInsertGeneratorUnsharded(t *testing.T) {
 	}
 	wantResult := *sandboxconn.SingleRowResult
 	wantResult.InsertID = 1
-	if !reflect.DeepEqual(result, &wantResult) {
+	if !result.Equal(&wantResult) {
 		t.Errorf("result: %+v, want %+v", result, &wantResult)
 	}
 }
@@ -532,7 +532,7 @@ func TestInsertAutoincUnsharded(t *testing.T) {
 	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
 		t.Errorf("sbclookup.Queries: \n%#v, want \n%#v\n", sbclookup.Queries, wantQueries)
 	}
-	if !reflect.DeepEqual(result, wantResult) {
+	if !result.Equal(wantResult) {
 		t.Errorf("result: %+v, want %+v", result, wantResult)
 	}
 }
@@ -607,7 +607,7 @@ func TestInsertLookupOwnedGenerator(t *testing.T) {
 	}
 	wantResult := *sandboxconn.SingleRowResult
 	wantResult.InsertID = 4
-	if !reflect.DeepEqual(result, &wantResult) {
+	if !result.Equal(&wantResult) {
 		t.Errorf("result:\n%+v, want\n%+v", result, &wantResult)
 	}
 }
@@ -921,7 +921,7 @@ func TestMultiInsertGenerator(t *testing.T) {
 	}
 	wantResult := *sandboxconn.SingleRowResult
 	wantResult.InsertID = 1
-	if !reflect.DeepEqual(result, &wantResult) {
+	if !result.Equal(&wantResult) {
 		t.Errorf("result: %+v, want %+v", result, &wantResult)
 	}
 }
@@ -977,7 +977,7 @@ func TestMultiInsertGeneratorSparse(t *testing.T) {
 	}
 	wantResult := *sandboxconn.SingleRowResult
 	wantResult.InsertID = 1
-	if !reflect.DeepEqual(result, &wantResult) {
+	if !result.Equal(&wantResult) {
 		t.Errorf("result: %+v, want %+v", result, &wantResult)
 	}
 }

@@ -164,7 +164,7 @@ func TestStreamUnsharded(t *testing.T) {
 		t.Error(err)
 	}
 	wantResult := sandboxconn.SingleRowResult
-	if !reflect.DeepEqual(result, wantResult) {
+	if !result.Equal(wantResult) {
 		t.Errorf("result: %+v, want %+v", result, wantResult)
 	}
 }
@@ -370,7 +370,7 @@ func TestSelectEqualNotFound(t *testing.T) {
 		t.Error(err)
 	}
 	wantResult := &sqltypes.Result{}
-	if !reflect.DeepEqual(result, wantResult) {
+	if !result.Equal(wantResult) {
 		t.Errorf("result: %+v, want %+v", result, wantResult)
 	}
 
@@ -380,7 +380,7 @@ func TestSelectEqualNotFound(t *testing.T) {
 		t.Error(err)
 	}
 	wantResult = &sqltypes.Result{}
-	if !reflect.DeepEqual(result, wantResult) {
+	if !result.Equal(wantResult) {
 		t.Errorf("result: %+v, want %+v", result, wantResult)
 	}
 }
@@ -394,7 +394,7 @@ func TestStreamSelectEqual(t *testing.T) {
 		t.Error(err)
 	}
 	wantResult := sandboxconn.SingleRowResult
-	if !reflect.DeepEqual(result, wantResult) {
+	if !result.Equal(wantResult) {
 		t.Errorf("result: %+v, want %+v", result, wantResult)
 	}
 }
@@ -637,7 +637,7 @@ func TestStreamSelectIN(t *testing.T) {
 		t.Error(err)
 	}
 	wantResult := sandboxconn.SingleRowResult
-	if !reflect.DeepEqual(result, wantResult) {
+	if !result.Equal(wantResult) {
 		t.Errorf("result: %+v, want %+v", result, wantResult)
 	}
 
@@ -654,7 +654,7 @@ func TestStreamSelectIN(t *testing.T) {
 		},
 		RowsAffected: 2,
 	}
-	if !reflect.DeepEqual(result, wantResult) {
+	if !result.Equal(wantResult) {
 		t.Errorf("result: %+v, want %+v", result, wantResult)
 	}
 
@@ -664,7 +664,7 @@ func TestStreamSelectIN(t *testing.T) {
 		t.Error(err)
 	}
 	wantResult = sandboxconn.SingleRowResult
-	if !reflect.DeepEqual(result, wantResult) {
+	if !result.Equal(wantResult) {
 		t.Errorf("result: %+v, want %+v", result, wantResult)
 	}
 
@@ -778,7 +778,7 @@ func TestStreamSelectScatter(t *testing.T) {
 		},
 		RowsAffected: 8,
 	}
-	if !reflect.DeepEqual(result, wantResult) {
+	if !result.Equal(wantResult) {
 		t.Errorf("result: %+v, want %+v", result, wantResult)
 	}
 }
@@ -843,7 +843,7 @@ func TestSimpleJoin(t *testing.T) {
 		},
 		RowsAffected: 1,
 	}
-	if !reflect.DeepEqual(result, wantResult) {
+	if !result.Equal(wantResult) {
 		t.Errorf("result: %+v, want %+v", result, wantResult)
 	}
 }
@@ -902,7 +902,7 @@ func TestSimpleJoinStream(t *testing.T) {
 		},
 		RowsAffected: 0,
 	}
-	if !reflect.DeepEqual(result, wantResult) {
+	if !result.Equal(wantResult) {
 		t.Errorf("result: %+v, want %+v", result, wantResult)
 	}
 }
@@ -1021,7 +1021,7 @@ func TestLeftJoin(t *testing.T) {
 		},
 		RowsAffected: 1,
 	}
-	if !reflect.DeepEqual(result, wantResult) {
+	if !result.Equal(wantResult) {
 		t.Errorf("result: %+v, want %+v", result, wantResult)
 	}
 }
@@ -1064,7 +1064,7 @@ func TestLeftJoinStream(t *testing.T) {
 		},
 		RowsAffected: 0,
 	}
-	if !reflect.DeepEqual(result, wantResult) {
+	if !result.Equal(wantResult) {
 		t.Errorf("result: %+v, want %+v", result, wantResult)
 	}
 }
@@ -1104,7 +1104,7 @@ func TestEmptyJoin(t *testing.T) {
 			{Name: "id", Type: sqltypes.Int32},
 		},
 	}
-	if !reflect.DeepEqual(result, wantResult) {
+	if !result.Equal(wantResult) {
 		t.Errorf("result: %+v, want %+v", result, wantResult)
 	}
 }
@@ -1144,7 +1144,7 @@ func TestEmptyJoinStream(t *testing.T) {
 			{Name: "id", Type: sqltypes.Int32},
 		},
 	}
-	if !reflect.DeepEqual(result, wantResult) {
+	if !result.Equal(wantResult) {
 		t.Errorf("result: %+v, want %+v", result, wantResult)
 	}
 }
@@ -1192,7 +1192,7 @@ func TestEmptyJoinRecursive(t *testing.T) {
 			{Name: "id", Type: sqltypes.Int32},
 		},
 	}
-	if !reflect.DeepEqual(result, wantResult) {
+	if !result.Equal(wantResult) {
 		t.Errorf("result: %+v, want %+v", result, wantResult)
 	}
 }
@@ -1240,7 +1240,7 @@ func TestEmptyJoinRecursiveStream(t *testing.T) {
 			{Name: "id", Type: sqltypes.Int32},
 		},
 	}
-	if !reflect.DeepEqual(result, wantResult) {
+	if !result.Equal(wantResult) {
 		t.Errorf("result: %+v, want %+v", result, wantResult)
 	}
 }
