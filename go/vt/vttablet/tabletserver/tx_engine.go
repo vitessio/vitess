@@ -51,8 +51,9 @@ func NewTxEngine(checker connpool.MySQLChecker, config tabletenv.TabletConfig) *
 		shutdownGracePeriod: time.Duration(config.TxShutDownGracePeriod * 1e9),
 	}
 	te.txPool = NewTxPool(
-		config.PoolNamePrefix+"TransactionPool",
+		config.PoolNamePrefix,
 		config.TransactionCap,
+		config.FoundRowsPoolSize,
 		time.Duration(config.TransactionTimeout*1e9),
 		time.Duration(config.IdleTimeout*1e9),
 		checker,
@@ -202,7 +203,7 @@ outer:
 		if txid > maxid {
 			maxid = txid
 		}
-		conn, err := te.txPool.LocalBegin(ctx)
+		conn, err := te.txPool.LocalBegin(ctx, false)
 		if err != nil {
 			allErr.RecordError(err)
 			continue

@@ -68,7 +68,7 @@ func TestDiscoveryGatewayExecuteStream(t *testing.T) {
 
 func TestDiscoveryGatewayBegin(t *testing.T) {
 	testDiscoveryGatewayGeneric(t, false, func(dg Gateway, target *querypb.Target) error {
-		_, err := dg.Begin(context.Background(), target)
+		_, err := dg.Begin(context.Background(), target, nil)
 		return err
 	})
 }

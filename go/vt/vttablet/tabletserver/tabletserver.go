@@ -640,7 +640,7 @@ func (tsv *TabletServer) SchemaEngine() *schema.Engine {
 }
 
 // Begin starts a new transaction. This is allowed only if the state is StateServing.
-func (tsv *TabletServer) Begin(ctx context.Context, target *querypb.Target) (transactionID int64, err error) {
+func (tsv *TabletServer) Begin(ctx context.Context, target *querypb.Target, options *querypb.ExecuteOptions) (transactionID int64, err error) {
 	err = tsv.execRequest(
 		ctx, tsv.BeginTimeout.Get(),
 		"Begin", "begin", nil,
@@ -651,7 +651,7 @@ func (tsv *TabletServer) Begin(ctx context.Context, target *querypb.Target) (tra
 				// TODO(erez): I think this should be RESOURCE_EXHAUSTED.
 				return vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "Transaction throttled")
 			}
-			transactionID, err = tsv.te.txPool.Begin(ctx)
+			transactionID, err = tsv.te.txPool.Begin(ctx, options.GetClientFoundRows())
 			logStats.TransactionID = transactionID
 			return err
 		},
@@ -856,6 +856,7 @@ func (tsv *TabletServer) Execute(ctx context.Context, target *querypb.Target, sq
 				query:         sql,
 				bindVars:      bindVariables,
 				transactionID: transactionID,
+				options:       options,
 				plan:          plan,
 				ctx:           ctx,
 				logStats:      logStats,
@@ -894,12 +895,13 @@ func (tsv *TabletServer) StreamExecute(ctx context.Context, target *querypb.Targ
 			qre := &QueryExecutor{
 				query:    sql,
 				bindVars: bindVariables,
+				options:  options,
 				plan:     plan,
 				ctx:      ctx,
 				logStats: logStats,
 				tsv:      tsv,
 			}
-			return qre.Stream(sqltypes.IncludeFieldsOrDefault(options), callback)
+			return qre.Stream(callback)
 		},
 	)
 }
@@ -924,7 +926,7 @@ func (tsv *TabletServer) ExecuteBatch(ctx context.Context, target *querypb.Targe
 	defer tsv.handlePanicAndSendLogStats("batch", nil, &err, nil)
 
 	if asTransaction {
-		transactionID, err = tsv.Begin(ctx, target)
+		transactionID, err = tsv.Begin(ctx, target, options)
 		if err != nil {
 			return nil, tsv.convertAndLogError("batch", nil, err, nil)
 		}
@@ -966,7 +968,7 @@ func (tsv *TabletServer) BeginExecute(ctx context.Context, target *querypb.Targe
 		}
 	}
 
-	transactionID, err := tsv.Begin(ctx, target)
+	transactionID, err := tsv.Begin(ctx, target, options)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -1050,7 +1052,7 @@ func (tsv *TabletServer) computeTxSerializerKey(ctx context.Context, logStats *t
 
 // BeginExecuteBatch combines Begin and ExecuteBatch.
 func (tsv *TabletServer) BeginExecuteBatch(ctx context.Context, target *querypb.Target, queries []querytypes.BoundQuery, asTransaction bool, options *querypb.ExecuteOptions) ([]sqltypes.Result, int64, error) {
-	transactionID, err := tsv.Begin(ctx, target)
+	transactionID, err := tsv.Begin(ctx, target, options)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -1128,7 +1130,7 @@ func (tsv *TabletServer) execDML(ctx context.Context, target *querypb.Target, qu
 		return 0, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
 	}
 
-	transactionID, err := tsv.Begin(ctx, target)
+	transactionID, err := tsv.Begin(ctx, target, nil)
 	if err != nil {
 		return 0, err
 	}

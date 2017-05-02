@@ -574,7 +574,7 @@ func TestTabletServerTarget(t *testing.T) {
 
 	// Disallow tx statements if non-master.
 	tsv.SetServingType(topodatapb.TabletType_REPLICA, true, nil)
-	_, err = tsv.Begin(ctx, &target1)
+	_, err = tsv.Begin(ctx, &target1, nil)
 	want = "transactional statement disallowed on non-master tablet"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("err: %v, must contain %s", err, want)
@@ -599,7 +599,7 @@ func TestTabletServerStopWithPrepare(t *testing.T) {
 	defer db.Close()
 	ctx := context.Background()
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
-	transactionID, err := tsv.Begin(ctx, &target)
+	transactionID, err := tsv.Begin(ctx, &target, nil)
 	if err != nil {
 		t.Error(err)
 	}
@@ -642,7 +642,7 @@ func TestTabletServerMasterToReplica(t *testing.T) {
 	defer db.Close()
 	ctx := context.Background()
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
-	txid1, err := tsv.Begin(ctx, &target)
+	txid1, err := tsv.Begin(ctx, &target, nil)
 	if err != nil {
 		t.Error(err)
 	}
@@ -652,7 +652,7 @@ func TestTabletServerMasterToReplica(t *testing.T) {
 	if err = tsv.Prepare(ctx, &target, txid1, "aa"); err != nil {
 		t.Error(err)
 	}
-	txid2, err := tsv.Begin(ctx, &target)
+	txid2, err := tsv.Begin(ctx, &target, nil)
 	if err != nil {
 		t.Error(err)
 	}
@@ -976,8 +976,8 @@ func TestTabletServerBeginFail(t *testing.T) {
 	defer tsv.StopService()
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Nanosecond)
 	defer cancel()
-	tsv.Begin(ctx, &target)
-	_, err = tsv.Begin(ctx, &target)
+	tsv.Begin(ctx, &target, nil)
+	_, err = tsv.Begin(ctx, &target, nil)
 	want := "transaction pool connection limit exceeded"
 	if err == nil || err.Error() != want {
 		t.Fatalf("Begin err: %v, want %v", err, want)
@@ -1010,7 +1010,7 @@ func TestTabletServerCommitTransaction(t *testing.T) {
 	}
 	defer tsv.StopService()
 	ctx := context.Background()
-	transactionID, err := tsv.Begin(ctx, &target)
+	transactionID, err := tsv.Begin(ctx, &target, nil)
 	if err != nil {
 		t.Fatalf("call TabletServer.Begin failed: %v", err)
 	}
@@ -1073,7 +1073,7 @@ func TestTabletServerRollback(t *testing.T) {
 	}
 	defer tsv.StopService()
 	ctx := context.Background()
-	transactionID, err := tsv.Begin(ctx, &target)
+	transactionID, err := tsv.Begin(ctx, &target, nil)
 	if err != nil {
 		t.Fatalf("call TabletServer.Begin failed: %v", err)
 	}
@@ -1092,7 +1092,7 @@ func TestTabletServerPrepare(t *testing.T) {
 	defer tsv.StopService()
 	ctx := context.Background()
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
-	transactionID, err := tsv.Begin(ctx, &target)
+	transactionID, err := tsv.Begin(ctx, &target, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1112,7 +1112,7 @@ func TestTabletServerCommitPrepared(t *testing.T) {
 	defer tsv.StopService()
 	ctx := context.Background()
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
-	transactionID, err := tsv.Begin(ctx, &target)
+	transactionID, err := tsv.Begin(ctx, &target, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1135,7 +1135,7 @@ func TestTabletServerRollbackPrepared(t *testing.T) {
 	defer tsv.StopService()
 	ctx := context.Background()
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
-	transactionID, err := tsv.Begin(ctx, &target)
+	transactionID, err := tsv.Begin(ctx, &target, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

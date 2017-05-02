@@ -169,7 +169,7 @@ func TestBatchTransaction(t *testing.T) {
 
 	// In transaction, AsTransaction false
 	func() {
-		err = client.Begin()
+		err = client.Begin(false)
 		if err != nil {
 			t.Error(err)
 			return
@@ -187,7 +187,7 @@ func TestBatchTransaction(t *testing.T) {
 
 	// In transaction, AsTransaction true
 	func() {
-		err = client.Begin()
+		err = client.Begin(false)
 		if err != nil {
 			t.Error(err)
 			return

@@ -449,7 +449,7 @@ func commandVtTabletBegin(ctx context.Context, wr *wrangler.Wrangler, subFlags *
 		Keyspace:   tabletInfo.Tablet.Keyspace,
 		Shard:      tabletInfo.Tablet.Shard,
 		TabletType: tabletInfo.Tablet.Type,
-	})
+	}, nil)
 	if err != nil {
 		return fmt.Errorf("Begin failed: %v", err)
 	}

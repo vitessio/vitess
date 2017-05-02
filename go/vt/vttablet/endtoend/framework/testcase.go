@@ -161,7 +161,7 @@ func (tc *TestCase) Test(name string, client *QueryClient) error {
 func exec(client *QueryClient, query string, bv map[string]interface{}) (*sqltypes.Result, error) {
 	switch query {
 	case "begin":
-		return nil, client.Begin()
+		return nil, client.Begin(false)
 	case "commit":
 		return nil, client.Commit()
 	case "rollback":

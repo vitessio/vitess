@@ -54,11 +54,15 @@ func NewClient() *QueryClient {
 }
 
 // Begin begins a transaction.
-func (client *QueryClient) Begin() error {
+func (client *QueryClient) Begin(clientFoundRows bool) error {
 	if client.transactionID != 0 {
 		return errors.New("already in transaction")
 	}
-	transactionID, err := client.server.Begin(client.ctx, &client.target)
+	var options *querypb.ExecuteOptions
+	if clientFoundRows {
+		options = &querypb.ExecuteOptions{ClientFoundRows: clientFoundRows}
+	}
+	transactionID, err := client.server.Begin(client.ctx, &client.target, options)
 	if err != nil {
 		return err
 	}

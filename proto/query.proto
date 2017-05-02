@@ -252,6 +252,11 @@ message ExecuteOptions {
   // field name, table name, etc. This is an optimization for high-QPS queries where
   // the client knows what it's getting
   IncludedFields included_fields = 4;
+
+  // client_rows_found specifies if rows_affected should return
+  // rows found instead of rows affected. Behavior is defined
+  // by MySQL's CLIENT_FOUND_ROWS flag.
+  bool client_found_rows = 5;
 }
 
 // Field describes a single column returned by a query
@@ -415,6 +420,7 @@ message BeginRequest {
   vtrpc.CallerID effective_caller_id = 1;
   VTGateCallerID immediate_caller_id = 2;
   Target target = 3;
+  ExecuteOptions options = 4;
 }
 
 // BeginResponse is the returned value from Begin

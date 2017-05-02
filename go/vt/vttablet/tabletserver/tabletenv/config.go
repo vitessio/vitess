@@ -21,10 +21,9 @@ import (
 	"flag"
 	"fmt"
 	"net/url"
+	"time"
 
 	"github.com/golang/protobuf/proto"
-
-	"time"
 
 	"github.com/youtube/vitess/go/flagutil"
 	"github.com/youtube/vitess/go/streamlog"
@@ -49,6 +48,7 @@ func init() {
 	flag.IntVar(&Config.StreamPoolSize, "queryserver-config-stream-pool-size", DefaultQsConfig.StreamPoolSize, "query server stream connection pool size, stream pool is used by stream queries: queries that return results to client in a streaming fashion")
 	flag.IntVar(&Config.MessagePoolSize, "queryserver-config-message-conn-pool-size", DefaultQsConfig.MessagePoolSize, "query server message connection pool size, message pool is used by message managers: recommended value is one per message table")
 	flag.IntVar(&Config.TransactionCap, "queryserver-config-transaction-cap", DefaultQsConfig.TransactionCap, "query server transaction cap is the maximum number of transactions allowed to happen at any given point of a time for a single vttablet. E.g. by setting transaction cap to 100, there are at most 100 transactions will be processed by a vttablet and the 101th transaction will be blocked (and fail if it cannot get connection within specified timeout)")
+	flag.IntVar(&Config.FoundRowsPoolSize, "client-found-rows-pool-size", DefaultQsConfig.FoundRowsPoolSize, "size of a special pool that will be used if the client requests that statements be executed with the CLIENT_FOUND_ROWS option of MySQL.")
 	flag.Float64Var(&Config.TransactionTimeout, "queryserver-config-transaction-timeout", DefaultQsConfig.TransactionTimeout, "query server transaction timeout (in seconds), a transaction will be killed if it takes longer than this value")
 	flag.Float64Var(&Config.TxShutDownGracePeriod, "transaction_shutdown_grace_period", DefaultQsConfig.TxShutDownGracePeriod, "how long to wait (in seconds) for transactions to complete during graceful shutdown.")
 	flag.IntVar(&Config.MaxResultSize, "queryserver-config-max-result-size", DefaultQsConfig.MaxResultSize, "query server max result size, maximum number of rows allowed to return from vttablet for non-streaming queries.")
@@ -97,6 +97,7 @@ type TabletConfig struct {
 	StreamPoolSize          int
 	MessagePoolSize         int
 	TransactionCap          int
+	FoundRowsPoolSize       int
 	TransactionTimeout      float64
 	TxShutDownGracePeriod   float64
 	MaxResultSize           int
@@ -145,6 +146,7 @@ var DefaultQsConfig = TabletConfig{
 	StreamPoolSize:          200,
 	MessagePoolSize:         5,
 	TransactionCap:          20,
+	FoundRowsPoolSize:       20,
 	TransactionTimeout:      30,
 	TxShutDownGracePeriod:   0,
 	MaxResultSize:           10000,

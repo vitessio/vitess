@@ -49,7 +49,8 @@ const (
 	// We do not check this anywhere.
 	CapabilityClientLongPassword = 1
 
-	// CLIENT_FOUND_ROWS 1 << 1 See doc.go.
+	// CapabilityClientFoundRows is CLIENT_FOUND_ROWS.
+	CapabilityClientFoundRows = 1 << 1
 
 	// CapabilityClientLongFlag is CLIENT_LONG_FLAG.
 	// Longer flags in Protocol::ColumnDefinition320.

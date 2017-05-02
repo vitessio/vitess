@@ -41,7 +41,7 @@ type QueryService interface {
 	// Transaction management
 
 	// Begin returns the transaction id to use for further operations
-	Begin(ctx context.Context, target *querypb.Target) (int64, error)
+	Begin(ctx context.Context, target *querypb.Target, options *querypb.ExecuteOptions) (int64, error)
 
 	// Commit commits the current transaction
 	Commit(ctx context.Context, target *querypb.Target, transactionID int64) error

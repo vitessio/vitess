@@ -17,6 +17,7 @@ limitations under the License.
 package mysqlconn
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"net"
@@ -59,9 +60,12 @@ var selectRowsResult = &sqltypes.Result{
 	RowsAffected: 2,
 }
 
-type testHandler struct{}
+type testHandler struct {
+	lastConn *Conn
+}
 
 func (th *testHandler) NewConnection(c *Conn) {
+	th.lastConn = c
 }
 
 func (th *testHandler) ConnectionClosed(c *Conn) {
@@ -145,6 +149,58 @@ func (th *testHandler) ComQuery(c *Conn, query string) (*sqltypes.Result, error)
 	}
 
 	return &sqltypes.Result{}, nil
+}
+
+func TestClientFoundRows(t *testing.T) {
+	th := &testHandler{}
+
+	authServer := NewAuthServerStatic()
+	authServer.Entries["user1"] = &AuthServerStaticEntry{
+		Password: "password1",
+		UserData: "userData1",
+	}
+	l, err := NewListener("tcp", ":0", authServer, th)
+	if err != nil {
+		t.Fatalf("NewListener failed: %v", err)
+	}
+	defer l.Close()
+	go func() {
+		l.Accept()
+	}()
+
+	host := l.Addr().(*net.TCPAddr).IP.String()
+	port := l.Addr().(*net.TCPAddr).Port
+
+	// Setup the right parameters.
+	params := &sqldb.ConnParams{
+		Host:  host,
+		Port:  port,
+		Uname: "user1",
+		Pass:  "password1",
+	}
+
+	// Test without flag.
+	c, err := Connect(context.Background(), params)
+	if err != nil {
+		t.Fatal(err)
+	}
+	foundRows := th.lastConn.Capabilities & CapabilityClientFoundRows
+	if foundRows != 0 {
+		t.Errorf("FoundRows flag: %x, second bit must be 0", th.lastConn.Capabilities)
+	}
+	c.Close()
+
+	// Test with flag.
+	params.Flags |= CapabilityClientFoundRows
+	c, err = Connect(context.Background(), params)
+	if err != nil {
+		t.Fatal(err)
+	}
+	foundRows = th.lastConn.Capabilities & CapabilityClientFoundRows
+	if foundRows == 0 {
+		t.Errorf("FoundRows flag: %x, second bit must be set", th.lastConn.Capabilities)
+	}
+	c.Close()
 }
 
 func TestServer(t *testing.T) {
