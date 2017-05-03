@@ -132,6 +132,8 @@ type QueryEngine struct {
 	// TODO(sougou) There are two acl packages. Need to rename.
 	exemptACL tacl.ACL
 
+	strictTransTables bool
+
 	// Loggers
 	accessCheckerLogger *logutil.ThrottledLogger
 }
@@ -172,6 +174,8 @@ func NewQueryEngine(checker connpool.MySQLChecker, se *schema.Engine, config tab
 	qe.autoCommit.Set(config.EnableAutoCommit)
 	qe.strictTableACL = config.StrictTableACL
 	qe.enableTableACLDryRun = config.EnableTableACLDryRun
+
+	qe.strictTransTables = config.EnforceStrictTransTables
 
 	if config.TableACLExemptACL != "" {
 		if f, err := tableacl.GetCurrentAclFactory(); err == nil {
@@ -235,7 +239,7 @@ func (qe *QueryEngine) Open(dbconfigs dbconfigs.DBConfigs) error {
 		qe.conns.Close()
 		return err
 	}
-	qe.binlogFormat, err = conn.VerifyMode()
+	qe.binlogFormat, err = conn.VerifyMode(qe.strictTransTables)
 	conn.Recycle()
 
 	if err != nil {

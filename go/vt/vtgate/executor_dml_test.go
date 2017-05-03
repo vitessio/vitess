@@ -787,11 +787,14 @@ func TestInsertFail(t *testing.T) {
 	}
 }
 
-func TestInsertPartialFail(t *testing.T) {
-	executor, sbc1, _, sbclookup := createExecutorEnv()
+// If a statement gets broken up into two, and the first one fails,
+// then an error should be returned normally.
+func TestInsertPartialFail1(t *testing.T) {
+	executor, _, _, sbclookup := createExecutorEnv()
 
-	// If the first DML fails, there should be no rollback.
+	// Make the first DML fail, there should be no rollback.
 	sbclookup.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
+
 	_, err := executor.Execute(
 		context.Background(),
 		&vtgatepb.Session{InTransaction: true},
@@ -802,16 +805,24 @@ func TestInsertPartialFail(t *testing.T) {
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
 		t.Errorf("insert first DML fail: %v, must start with %s", err, want)
 	}
+}
 
-	// If the second DML fails, we should rollback.
+// If a statement gets broken up into two, and the second one fails
+// after successful execution of the first, then the transaction must
+// be rolled back due to partial execution.
+func TestInsertPartialFail2(t *testing.T) {
+	executor, sbc1, _, _ := createExecutorEnv()
+
+	// Make the second DML fail, it should result in a rollback.
 	sbc1.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
-	_, err = executor.Execute(
+
+	_, err := executor.Execute(
 		context.Background(),
 		&vtgatepb.Session{InTransaction: true},
 		"insert into user(id, v, name) values (1, 2, 'myname')",
 		nil,
 	)
-	want = "transaction rolled back"
+	want := "transaction rolled back"
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
 		t.Errorf("insert first DML fail: %v, must start with %s", err, want)
 	}
