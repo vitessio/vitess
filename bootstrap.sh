@@ -22,8 +22,6 @@ function fail() {
 
 [ -f bootstrap.sh ] || fail "bootstrap.sh must be run from its current directory"
 
-[ "$USER" != "root" ] || fail "Vitess cannot run as root. Please bootstrap with a non-root user."
-
 go version 2>&1 >/dev/null || fail "Go is not installed or is not on \$PATH"
 
 # Set up the proper GOPATH for go get below.
