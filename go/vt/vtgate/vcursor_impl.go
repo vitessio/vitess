@@ -27,6 +27,10 @@ type vcursorImpl struct {
 	target           querypb.Target
 	trailingComments string
 	executor         *Executor
+	// hasPartialDML is set to true if any DML was successfully
+	// executed. If there was a subsequent failure, the transaction
+	// must be forced to rollback.
+	hasPartialDML bool
 }
 
 // newVcursorImpl creates a vcursorImpl. Before creating this object, you have to separate out any trailingComments that came with
@@ -54,13 +58,21 @@ func (vc *vcursorImpl) Find(keyspace, tablename sqlparser.TableIdent) (table *vi
 }
 
 // Execute performs a V3 level execution of the query. It does not take any routing directives.
-func (vc *vcursorImpl) Execute(query string, BindVars map[string]interface{}) (*sqltypes.Result, error) {
-	return vc.executor.Execute(vc.ctx, vc.session, query+vc.trailingComments, BindVars)
+func (vc *vcursorImpl) Execute(query string, BindVars map[string]interface{}, isDML bool) (*sqltypes.Result, error) {
+	qr, err := vc.executor.Execute(vc.ctx, vc.session, query+vc.trailingComments, BindVars)
+	if err == nil {
+		vc.hasPartialDML = true
+	}
+	return qr, err
 }
 
 // ExecuteMultiShard executes different queries on different shards and returns the combined result.
-func (vc *vcursorImpl) ExecuteMultiShard(keyspace string, shardQueries map[string]querytypes.BoundQuery) (*sqltypes.Result, error) {
-	return vc.executor.scatterConn.ExecuteMultiShard(vc.ctx, keyspace, commentedShardQueries(shardQueries, vc.trailingComments), vc.target.TabletType, NewSafeSession(vc.session), false, vc.session.Options)
+func (vc *vcursorImpl) ExecuteMultiShard(keyspace string, shardQueries map[string]querytypes.BoundQuery, isDML bool) (*sqltypes.Result, error) {
+	qr, err := vc.executor.scatterConn.ExecuteMultiShard(vc.ctx, keyspace, commentedShardQueries(shardQueries, vc.trailingComments), vc.target.TabletType, NewSafeSession(vc.session), false, vc.session.Options)
+	if err == nil {
+		vc.hasPartialDML = true
+	}
+	return qr, err
 }
 
 // ExecuteStandalone executes the specified query on keyspace:shard, but outside of the current transaction, as an independent statement.
@@ -71,7 +83,11 @@ func (vc *vcursorImpl) ExecuteStandalone(query string, BindVars map[string]inter
 			BindVariables: BindVars,
 		},
 	}
-	return vc.executor.scatterConn.ExecuteMultiShard(vc.ctx, keyspace, bq, vc.target.TabletType, NewSafeSession(nil), false, vc.session.Options)
+	qr, err := vc.executor.scatterConn.ExecuteMultiShard(vc.ctx, keyspace, bq, vc.target.TabletType, NewSafeSession(nil), false, vc.session.Options)
+	if err == nil {
+		vc.hasPartialDML = true
+	}
+	return qr, err
 }
 
 // StreamExeculteMulti is the streaming version of ExecuteMultiShard.
