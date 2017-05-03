@@ -145,7 +145,13 @@ func (e *Executor) handleExec(ctx context.Context, session *vtgatepb.Session, sq
 	if err != nil {
 		return nil, err
 	}
-	return plan.Instructions.Execute(vcursor, bindVars, make(map[string]interface{}), true)
+	qr, err := plan.Instructions.Execute(vcursor, bindVars, make(map[string]interface{}), true)
+	// Check if there was partial DML execution. If so, rollback the transaction.
+	if err != nil && session.InTransaction && vcursor.hasPartialDML {
+		_ = e.txConn.Rollback(ctx, NewSafeSession(session))
+		err = vterrors.Errorf(vtrpcpb.Code_ABORTED, "transaction rolled back due to partial DML execution: %v", err)
+	}
+	return qr, err
 }
 
 func (e *Executor) shardExec(ctx context.Context, session *vtgatepb.Session, sql string, bindVars map[string]interface{}, target querypb.Target) (*sqltypes.Result, error) {
