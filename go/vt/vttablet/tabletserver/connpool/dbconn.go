@@ -177,18 +177,20 @@ var (
 // VerifyMode is a helper method to verify mysql is running with
 // sql_mode = STRICT_TRANS_TABLES and autocommit=ON. It also returns
 // the current binlog format.
-func (dbc *DBConn) VerifyMode() (BinlogFormat, error) {
-	qr, err := dbc.conn.ExecuteFetch(getModeSQL, 2, false)
-	if err != nil {
-		return 0, fmt.Errorf("could not verify mode: %v", err)
+func (dbc *DBConn) VerifyMode(strictTransTables bool) (BinlogFormat, error) {
+	if strictTransTables {
+		qr, err := dbc.conn.ExecuteFetch(getModeSQL, 2, false)
+		if err != nil {
+			return 0, fmt.Errorf("could not verify mode: %v", err)
+		}
+		if len(qr.Rows) != 1 {
+			return 0, fmt.Errorf("incorrect rowcount received for %s: %d", getModeSQL, len(qr.Rows))
+		}
+		if !strings.Contains(qr.Rows[0][0].String(), "STRICT_TRANS_TABLES") {
+			return 0, fmt.Errorf("require sql_mode to be STRICT_TRANS_TABLES: got '%s'", qr.Rows[0][0].String())
+		}
 	}
-	if len(qr.Rows) != 1 {
-		return 0, fmt.Errorf("incorrect rowcount received for %s: %d", getModeSQL, len(qr.Rows))
-	}
-	if !strings.Contains(qr.Rows[0][0].String(), "STRICT_TRANS_TABLES") {
-		return 0, fmt.Errorf("require sql_mode to be STRICT_TRANS_TABLES: got %s", qr.Rows[0][0].String())
-	}
-	qr, err = dbc.conn.ExecuteFetch(getAutocommit, 2, false)
+	qr, err := dbc.conn.ExecuteFetch(getAutocommit, 2, false)
 	if err != nil {
 		return 0, fmt.Errorf("could not verify mode: %v", err)
 	}
