@@ -257,8 +257,12 @@ func (route *Route) Execute(vcursor VCursor, bindVars, joinVars map[string]inter
 
 	var err error
 	var params *scatterParams
+	isDML := false
 	switch route.Opcode {
-	case SelectUnsharded, UpdateUnsharded, DeleteUnsharded, SelectScatter:
+	case SelectUnsharded, SelectScatter:
+		params, err = route.paramsAllShards(vcursor, bindVars)
+	case UpdateUnsharded, DeleteUnsharded:
+		isDML = true
 		params, err = route.paramsAllShards(vcursor, bindVars)
 	case SelectEqual, SelectEqualUnique:
 		params, err = route.paramsSelectEqual(vcursor, bindVars)
@@ -273,7 +277,7 @@ func (route *Route) Execute(vcursor VCursor, bindVars, joinVars map[string]inter
 	}
 
 	shardQueries := route.getShardQueries(route.Query, params)
-	return vcursor.ExecuteMultiShard(params.ks, shardQueries)
+	return vcursor.ExecuteMultiShard(params.ks, shardQueries, isDML)
 }
 
 // StreamExecute performs a streaming exec.
@@ -312,7 +316,7 @@ func (route *Route) GetFields(vcursor VCursor, bindVars, joinVars map[string]int
 		return nil, err
 	}
 
-	return route.execShard(vcursor, route.FieldQuery, bindVars, ks, shard)
+	return route.execShard(vcursor, route.FieldQuery, bindVars, ks, shard, false /* isDML */)
 }
 
 func combineVars(bv1, bv2 map[string]interface{}) map[string]interface{} {
@@ -390,7 +394,7 @@ func (route *Route) execUpdateEqual(vcursor VCursor, bindVars map[string]interfa
 		return &sqltypes.Result{}, nil
 	}
 	rewritten := sqlannotation.AddKeyspaceIDs(route.Query, [][]byte{ksid}, "")
-	return route.execShard(vcursor, rewritten, bindVars, ks, shard)
+	return route.execShard(vcursor, rewritten, bindVars, ks, shard, true /* isDML */)
 }
 
 func (route *Route) execDeleteEqual(vcursor VCursor, bindVars map[string]interface{}) (*sqltypes.Result, error) {
@@ -412,7 +416,7 @@ func (route *Route) execDeleteEqual(vcursor VCursor, bindVars map[string]interfa
 		}
 	}
 	rewritten := sqlannotation.AddKeyspaceIDs(route.Query, [][]byte{ksid}, "")
-	return route.execShard(vcursor, rewritten, bindVars, ks, shard)
+	return route.execShard(vcursor, rewritten, bindVars, ks, shard, true /* isDML */)
 }
 
 func (route *Route) execInsertUnsharded(vcursor VCursor, bindVars map[string]interface{}) (*sqltypes.Result, error) {
@@ -426,7 +430,7 @@ func (route *Route) execInsertUnsharded(vcursor VCursor, bindVars map[string]int
 	}
 
 	shardQueries := route.getShardQueries(route.Query, params)
-	result, err := vcursor.ExecuteMultiShard(params.ks, shardQueries)
+	result, err := vcursor.ExecuteMultiShard(params.ks, shardQueries, true /* isDML */)
 	if err != nil {
 		return nil, fmt.Errorf("execInsertUnsharded: %v", err)
 	}
@@ -451,7 +455,7 @@ func (route *Route) execInsertSharded(vcursor VCursor, bindVars map[string]inter
 		return nil, fmt.Errorf("execInsertSharded: %v", err)
 	}
 
-	result, err := vcursor.ExecuteMultiShard(keyspace, shardQueries)
+	result, err := vcursor.ExecuteMultiShard(keyspace, shardQueries, true /* isDML */)
 
 	if err != nil {
 		return nil, fmt.Errorf("execInsertSharded: %v", err)
@@ -640,7 +644,7 @@ func (route *Route) resolveSingleShard(vcursor VCursor, bindVars map[string]inte
 }
 
 func (route *Route) deleteVindexEntries(vcursor VCursor, bindVars map[string]interface{}, ks, shard string, ksid []byte) error {
-	result, err := route.execShard(vcursor, route.Subquery, bindVars, ks, shard)
+	result, err := route.execShard(vcursor, route.Subquery, bindVars, ks, shard, false /* isDML */)
 	if err != nil {
 		return err
 	}
@@ -807,13 +811,13 @@ func (route *Route) handleNonPrimary(vcursor VCursor, vindexKeys []interface{}, 
 	return nil
 }
 
-func (route *Route) execShard(vcursor VCursor, query string, bindVars map[string]interface{}, keyspace, shard string) (*sqltypes.Result, error) {
+func (route *Route) execShard(vcursor VCursor, query string, bindVars map[string]interface{}, keyspace, shard string, isDML bool) (*sqltypes.Result, error) {
 	return vcursor.ExecuteMultiShard(keyspace, map[string]querytypes.BoundQuery{
 		shard: {
 			Sql:           query,
 			BindVariables: bindVars,
 		},
-	})
+	}, isDML)
 }
 
 func (route *Route) anyShard(vcursor VCursor, keyspace *vindexes.Keyspace) (string, string, error) {

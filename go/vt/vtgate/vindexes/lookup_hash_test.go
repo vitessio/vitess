@@ -23,7 +23,7 @@ type vcursor struct {
 	bq       *querytypes.BoundQuery
 }
 
-func (vc *vcursor) Execute(query string, bindvars map[string]interface{}) (*sqltypes.Result, error) {
+func (vc *vcursor) Execute(query string, bindvars map[string]interface{}, isDML bool) (*sqltypes.Result, error) {
 	vc.bq = &querytypes.BoundQuery{
 		Sql:           query,
 		BindVariables: bindvars,

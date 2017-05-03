@@ -16,7 +16,7 @@ import (
 // in the current context and session of a VTGate request. Vindexes
 // can use this interface to execute lookup queries.
 type VCursor interface {
-	Execute(query string, bindvars map[string]interface{}) (*sqltypes.Result, error)
+	Execute(query string, bindvars map[string]interface{}, isDML bool) (*sqltypes.Result, error)
 }
 
 // Vindex defines the interface required to register a vindex.
