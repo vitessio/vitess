@@ -16,22 +16,24 @@
 
 package io.vitess.client;
 
-import com.google.gson.Gson;
-import com.google.gson.JsonSyntaxException;
-import com.google.gson.reflect.TypeToken;
-import io.vitess.proto.Query;
-import io.vitess.proto.Topodata.TabletType;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.lang.reflect.Type;
-import java.net.InetSocketAddress;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.joda.time.Duration;
 import org.junit.Assert;
+
+import com.google.gson.Gson;
+import com.google.gson.JsonSyntaxException;
+import com.google.gson.reflect.TypeToken;
+
+import io.vitess.proto.Query;
+import io.vitess.proto.Topodata.TabletType;
 import vttest.Vttest.VTTestTopology;
 
 public class TestUtil {
@@ -114,7 +116,7 @@ public class TestUtil {
     // Dial timeout
     Context ctx = Context.getDefault().withDeadlineAfter(Duration.millis(5000));
     return new VTGateBlockingConn(
-        getRpcClientFactory().create(ctx, new InetSocketAddress("localhost", testEnv.getPort())),
+        getRpcClientFactory().create(ctx, "localhost:" +  testEnv.getPort()),
         testEnv.getKeyspace());
   }
 
