@@ -432,7 +432,7 @@ func (route *Route) execInsertUnsharded(vcursor VCursor, bindVars map[string]int
 		return nil, fmt.Errorf("execInsertUnsharded: %v", err)
 	}
 
-	shardQueries := route.getShardQueries(route.Query+"", params)
+	shardQueries := route.getShardQueries(route.Query, params)
 	result, err := vcursor.ExecuteMultiShard(params.ks, shardQueries)
 	if err != nil {
 		return nil, fmt.Errorf("execInsertUnsharded: %v", err)
