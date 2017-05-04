@@ -20,6 +20,7 @@ import io.vitess.client.Context;
 import io.vitess.client.RpcClient;
 import io.vitess.client.VTGateConn;
 import io.vitess.client.grpc.GrpcClientFactory;
+import io.vitess.client.grpc.RetryingInterceptorConfig;
 import io.vitess.client.grpc.tls.TlsOptions;
 import io.vitess.util.CommonUtils;
 import io.vitess.util.Constants;
@@ -59,7 +60,7 @@ public class VitessVTGateManager {
                 String identifier = getIdentifer(hostInfo.getHostname(), hostInfo.getPort(), connection.getUsername());
                 synchronized (VitessVTGateManager.class) {
                     if (!vtGateConnHashMap.containsKey(identifier)) {
-                        updateVtGateConnHashMap(identifier, hostInfo.getHostname(), hostInfo.getPort(), connection);
+                        updateVtGateConnHashMap(identifier, hostInfo, connection);
                     }
                 }
                 vtGateIdentifiers.add(identifier);
@@ -89,43 +90,26 @@ public class VitessVTGateManager {
      * Create VTGateConn and update vtGateConnHashMap.
      *
      * @param identifier
-     * @param hostname
-     * @param port
+     * @param hostInfo
      * @param connection
      */
-    private static void updateVtGateConnHashMap(String identifier, String hostname, int port,
+    private static void updateVtGateConnHashMap(String identifier, VitessJDBCUrl.HostInfo hostInfo,
                                                 VitessConnection connection) {
-        vtGateConnHashMap.put(identifier, getVtGateConn(hostname, port, connection));
+        vtGateConnHashMap.put(identifier, getVtGateConn(hostInfo, connection));
     }
 
     /**
      * Create vtGateConn object with given identifier.
      *
-     * @param hostname
-     * @param port
-     * @param username
-     * @return
-     */
-    private static VTGateConn getVtGateConn(String hostname, int port, String username) {
-        Context context = CommonUtils.createContext(username, Constants.CONNECTION_TIMEOUT);
-        InetSocketAddress inetSocketAddress = new InetSocketAddress(hostname, port);
-        RpcClient client = new GrpcClientFactory().create(context, inetSocketAddress);
-        return (new VTGateConn(client));
-    }
-
-    /**
-     * Create vtGateConn object with given identifier.
-     *
-     * @param hostname
-     * @param port
+     * @param hostInfo
      * @param connection
      * @return
      */
-    private static VTGateConn getVtGateConn(String hostname, int port, VitessConnection connection) {
+    private static VTGateConn getVtGateConn(VitessJDBCUrl.HostInfo hostInfo, VitessConnection connection) {
         final String username = connection.getUsername();
         final String keyspace = connection.getKeyspace();
         final Context context = CommonUtils.createContext(username, Constants.CONNECTION_TIMEOUT);
-        final InetSocketAddress inetSocketAddress = new InetSocketAddress(hostname, port);
+        RetryingInterceptorConfig retryingConfig = getRetryingInterceptorConfig(connection);
         RpcClient client;
         if (connection.getUseSSL()) {
             final String keyStorePath = connection.getKeyStore() != null
@@ -152,14 +136,22 @@ public class VitessVTGateManager {
                     .trustStorePassword(trustStorePassword)
                     .trustAlias(trustAlias);
 
-            client = new GrpcClientFactory().createTls(context, inetSocketAddress, tlsOptions);
+            client = new GrpcClientFactory(retryingConfig).createTls(context, hostInfo.toString(), tlsOptions);
         } else {
-            client = new GrpcClientFactory().create(context, inetSocketAddress);
+            client = new GrpcClientFactory(retryingConfig).create(context, hostInfo.toString());
         }
         if (null == keyspace) {
             return (new VTGateConn(client));
         }
         return (new VTGateConn(client, keyspace));
+    }
+
+    private static RetryingInterceptorConfig getRetryingInterceptorConfig(VitessConnection conn) {
+        if (!conn.getGrpcRetriesEnabled()) {
+            return RetryingInterceptorConfig.noopConfig();
+        }
+
+        return RetryingInterceptorConfig.exponentialConfig(conn.getGrpcRetryInitialBackoffMillis(), conn.getGrpcRetryMaxBackoffMillis(), conn.getGrpcRetryBackoffMultiplier());
     }
 
     public static void close() throws SQLException {

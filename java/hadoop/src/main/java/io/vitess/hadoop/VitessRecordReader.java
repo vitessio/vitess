@@ -16,7 +16,18 @@
 
 package io.vitess.hadoop;
 
-import com.google.common.net.HostAndPort;
+import java.io.IOException;
+import java.sql.SQLException;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Random;
+
+import org.apache.hadoop.io.NullWritable;
+import org.apache.hadoop.mapreduce.InputSplit;
+import org.apache.hadoop.mapreduce.RecordReader;
+import org.apache.hadoop.mapreduce.TaskAttemptContext;
+import org.joda.time.Duration;
+
 import io.vitess.client.Context;
 import io.vitess.client.RpcClient;
 import io.vitess.client.RpcClientFactory;
@@ -27,17 +38,6 @@ import io.vitess.proto.Query;
 import io.vitess.proto.Query.BoundQuery;
 import io.vitess.proto.Topodata.TabletType;
 import io.vitess.proto.Vtgate.SplitQueryResponse;
-import java.io.IOException;
-import java.net.InetSocketAddress;
-import java.sql.SQLException;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Random;
-import org.apache.hadoop.io.NullWritable;
-import org.apache.hadoop.mapreduce.InputSplit;
-import org.apache.hadoop.mapreduce.RecordReader;
-import org.apache.hadoop.mapreduce.TaskAttemptContext;
-import org.joda.time.Duration;
 
 public class VitessRecordReader extends RecordReader<NullWritable, RowWritable> {
   private VitessInputSplit split;
@@ -62,11 +62,10 @@ public class VitessRecordReader extends RecordReader<NullWritable, RowWritable> 
           (Class<? extends RpcClientFactory>) Class.forName(conf.getRpcFactoryClass());
       List<String> addressList = Arrays.asList(conf.getHosts().split(","));
       int index = new Random().nextInt(addressList.size());
-      HostAndPort hostAndPort = HostAndPort.fromString(addressList.get(index));
 
       RpcClient rpcClient = rpcFactoryClass.newInstance().create(
           Context.getDefault().withDeadlineAfter(Duration.millis(conf.getTimeoutMs())),
-          new InetSocketAddress(hostAndPort.getHostText(), hostAndPort.getPort()));
+          addressList.get(index));
       vtgate = new VTGateBlockingConn(rpcClient);
       includedFields = conf.getIncludedFields();
     } catch (ClassNotFoundException | InstantiationException | IllegalAccessException e) {
