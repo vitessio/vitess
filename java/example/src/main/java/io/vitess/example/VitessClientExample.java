@@ -1,7 +1,6 @@
 package io.vitess.example;
 
 import com.google.common.collect.ImmutableMap;
-import com.google.common.net.HostAndPort;
 import com.google.common.primitives.UnsignedLong;
 import io.vitess.client.Context;
 import io.vitess.client.RpcClient;
@@ -31,12 +30,8 @@ public class VitessClientExample {
       System.exit(1);
     }
 
-    // Connect to vtgate.
-    HostAndPort hostAndPort = HostAndPort.fromString(args[0]);
-    InetSocketAddress addr =
-        new InetSocketAddress(hostAndPort.getHostText(), hostAndPort.getPort());
     Context ctx = Context.getDefault().withDeadlineAfter(Duration.millis(5 * 1000));
-    try (RpcClient client = new GrpcClientFactory().create(ctx, addr);
+    try (RpcClient client = new GrpcClientFactory().create(ctx, args[0]);
         VTGateBlockingConn conn = new VTGateBlockingConn(client)) {
       // Insert some messages on random pages.
       System.out.println("Inserting into master...");
