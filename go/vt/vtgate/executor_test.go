@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/golang/protobuf/proto"
 	"github.com/youtube/vitess/go/sqltypes"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
@@ -241,7 +242,7 @@ func TestExecutorShow(t *testing.T) {
 
 	session = &vtgatepb.Session{}
 	qr, err = executor.Execute(context.Background(), "show vschema_tables", nil, session)
-	want := "No keyspace selected"
+	want := noKeyspaceErr.Error()
 	if err == nil || err.Error() != want {
 		t.Errorf("show vschema_tables: %v, want %v", err, want)
 	}
@@ -334,7 +335,7 @@ func TestExecutorOther(t *testing.T) {
 	}
 
 	_, err := executor.Execute(context.Background(), "analyze", nil, &vtgatepb.Session{})
-	want := "No keyspace selected"
+	want := noKeyspaceErr.Error()
 	if err == nil || err.Error() != want {
 		t.Errorf("show vschema_tables: %v, want %v", err, want)
 	}
@@ -396,7 +397,7 @@ func TestExecutorDDL(t *testing.T) {
 	}
 
 	_, err := executor.Execute(context.Background(), "create", nil, &vtgatepb.Session{})
-	want := "No keyspace selected"
+	want := noKeyspaceErr.Error()
 	if err == nil || err.Error() != want {
 		t.Errorf("show vschema_tables: %v, want %v", err, want)
 	}

@@ -24,6 +24,10 @@ type vcursorImpl struct {
 	executor         *Executor
 }
 
+// newVcursorImpl creates a vcursorImpl. Before creating this object, you have to separate out any trailingComments that came with
+// the query and supply it here. Trailing comments are typically sent by the application for various reasons,
+// including as identifying markers. So, they have to be added back to all queries that are executed
+// on behalf of the original query.
 func newVCursorImpl(ctx context.Context, tabletType topodatapb.TabletType, session *vtgatepb.Session, trailingComments string, executor *Executor) *vcursorImpl {
 	return &vcursorImpl{
 		ctx:              ctx,

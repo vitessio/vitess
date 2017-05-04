@@ -36,13 +36,13 @@ const (
 // textual comparison to identify the statement type.
 func Preview(sql string) int {
 	trimmed := strings.TrimFunc(sql, unicode.IsSpace)
-	prefix := trimmed
+	firstWord := trimmed
 	if end := strings.IndexFunc(trimmed, unicode.IsSpace); end != -1 {
-		prefix = trimmed[:end]
+		firstWord = trimmed[:end]
 	}
 	// Comparison is done in order of priority.
-	lprefix := strings.ToLower(prefix)
-	switch lprefix {
+	loweredFirstWord := strings.ToLower(firstWord)
+	switch loweredFirstWord {
 	case "select":
 		return StmtSelect
 	case "insert":
@@ -60,7 +60,7 @@ func Preview(sql string) int {
 	case "rollback":
 		return StmtRollback
 	}
-	switch lprefix {
+	switch loweredFirstWord {
 	case "create", "alter", "rename", "drop":
 		return StmtDDL
 	case "set":

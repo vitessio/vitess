@@ -37,6 +37,8 @@ import (
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
+var noKeyspaceErr = vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "no keyspace in database name specified. Supported database name format: keyspace[:shard][@type]")
+
 // Executor is the engine that executes queries by utilizing
 // the abilities of the underlying vttablets.
 type Executor struct {
@@ -79,6 +81,7 @@ func (exr *Executor) Execute(ctx context.Context, sql string, bindVars map[strin
 	if bindVars == nil {
 		bindVars = make(map[string]interface{})
 	}
+
 	switch sqlparser.Preview(sql) {
 	case sqlparser.StmtSelect:
 		return exr.handleExec(ctx, sql, bindVars, session)
@@ -155,7 +158,7 @@ func (exr *Executor) shardExec(ctx context.Context, sql string, bindVars map[str
 func (exr *Executor) handleDDL(ctx context.Context, sql string, bindVars map[string]interface{}, session *vtgatepb.Session) (*sqltypes.Result, error) {
 	target := parseTarget(session.TargetString)
 	if target.Keyspace == "" {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "No keyspace selected")
+		return nil, noKeyspaceErr
 	}
 
 	f := func(keyspace string) (string, []string, error) {
@@ -165,6 +168,9 @@ func (exr *Executor) handleDDL(ctx context.Context, sql string, bindVars map[str
 			if err != nil {
 				return "", nil, err
 			}
+			// The usual keyspace resolution rules are applied.
+			// This means that the keyspace can be remapped to a new one
+			// if vertical resharding is in progress.
 			keyspace = ks
 			for _, shard := range allShards {
 				shards = append(shards, shard.Name)
@@ -205,7 +211,7 @@ func (exr *Executor) handleShow(ctx context.Context, sql string, bindVars map[st
 	show, ok := stmt.(*sqlparser.Show)
 	if !ok {
 		// This code is unreachable.
-		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unrecognized SHOW statement: %v", sql)
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unrecognized SHOW statement: %v", sql)
 	}
 	target := parseTarget(session.TargetString)
 
@@ -240,7 +246,7 @@ func (exr *Executor) handleShow(ctx context.Context, sql string, bindVars map[st
 			}
 
 			for _, shard := range shards {
-				rows = append(rows, buildVarCharRow(keyspace+"/"+shard.Name))
+				rows = append(rows, buildVarCharRow(topoproto.KeyspaceShardString(keyspace, shard.Name)))
 			}
 		}
 
@@ -251,7 +257,7 @@ func (exr *Executor) handleShow(ctx context.Context, sql string, bindVars map[st
 		}, nil
 	case sqlparser.ShowVSchemaTablesStr:
 		if target.Keyspace == "" {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "No keyspace selected")
+			return nil, noKeyspaceErr
 		}
 		ks, ok := exr.VSchema().Keyspaces[target.Keyspace]
 		if !ok {
@@ -288,7 +294,7 @@ func (exr *Executor) handleUse(ctx context.Context, sql string, bindVars map[str
 	use, ok := stmt.(*sqlparser.Use)
 	if !ok {
 		// This code is unreachable.
-		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unrecognized USE statement: %v", sql)
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unrecognized USE statement: %v", sql)
 	}
 	session.TargetString = use.DBName.String()
 	return &sqltypes.Result{}, nil
@@ -297,7 +303,7 @@ func (exr *Executor) handleUse(ctx context.Context, sql string, bindVars map[str
 func (exr *Executor) handleOther(ctx context.Context, sql string, bindVars map[string]interface{}, session *vtgatepb.Session) (*sqltypes.Result, error) {
 	target := parseTarget(session.TargetString)
 	if target.Keyspace == "" {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "No keyspace selected")
+		return nil, noKeyspaceErr
 	}
 	if target.Shard == "" {
 		var err error
