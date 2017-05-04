@@ -22,6 +22,15 @@ import io.grpc.MethodDescriptor;
 import io.grpc.Status;
 import io.grpc.internal.SharedResourceHolder;
 
+/**
+ * RetryingInterceptor is used for retrying certain classes of failed requests in the underlying gRPC connection.
+ * At this time it handles {@link MethodDescriptor.MethodType.UNARY} requests with status {@link Status.Code.UNAVAILABLE}, which is
+ * according to the spec meant to be a transient error. This class can be configured with {@link RetryingInterceptorConfig} to
+ * determine what level of exponential backoff to apply to the handled types of failing requests.
+ *
+ * When enabled, this interceptor will retry valid requests with an exponentially increasing backoff time up to the maximum
+ * time defined by the {@link io.grpc.Deadline} in the call's {@link CallOptions}.
+ */
 public class RetryingInterceptor implements ClientInterceptor {
   private static Logger logger = Logger.getLogger(RetryingInterceptor.class.getName());
 
