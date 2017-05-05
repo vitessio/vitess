@@ -37,7 +37,7 @@
 
   <licenses>
     <license>
-      <name>BSD-style license</name>
+      <name>Apache Version 2.0</name>
       <url>https://github.com/youtube/vitess/blob/master/LICENSE</url>
       <distribution>manual</distribution>
     </license>
