@@ -175,7 +175,7 @@ func TestShardFail(t *testing.T) {
 	getSandbox(KsTestUnsharded).SrvKeyspaceMustFail = 1
 
 	_, err := executorExec(executor, "select id from sharded_table where id = 1", nil)
-	want := "paramsAllShards: unsharded keyspace TestBadSharding has multiple shards"
+	want := "paramsAllShards: unsharded keyspace TestBadSharding has multiple shards: possible cause: sharded keyspace is marked as unsharded in vschema"
 	if err == nil || err.Error() != want {
 		t.Errorf("executorExec: %v, want %v", err, want)
 	}

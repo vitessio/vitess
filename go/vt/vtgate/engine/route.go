@@ -674,11 +674,15 @@ func (route *Route) deleteVindexEntries(vcursor VCursor, bindVars map[string]int
 }
 
 // handleGenerate generates new values using a sequence if necessary.
-// If no value was generated, it returns 0.
+// If no value was generated, it returns 0. Values are generated only
+// for cases where none are supplied.
 func (route *Route) handleGenerate(vcursor VCursor, bindVars map[string]interface{}) (insertID int64, err error) {
 	if route.Generate == nil {
 		return 0, nil
 	}
+
+	// Scan input values to compute the number of values to generate, and
+	// keep track of where they should be filled.
 	count := 0
 	resolved := make([]interface{}, len(route.Generate.Values.([]interface{})))
 	for i, val := range route.Generate.Values.([]interface{}) {
@@ -696,6 +700,8 @@ func (route *Route) handleGenerate(vcursor VCursor, bindVars map[string]interfac
 			resolved[i] = val
 		}
 	}
+
+	// If generation is needed, generate the requested number of values (as one call).
 	if count != 0 {
 		ks, shard, err := route.anyShard(vcursor, route.Generate.Keyspace)
 		if err != nil {
@@ -713,6 +719,8 @@ func (route *Route) handleGenerate(vcursor VCursor, bindVars map[string]interfac
 			return 0, err
 		}
 	}
+
+	// Fill the holes where no value was supplied.
 	cur := insertID
 	for i, v := range resolved {
 		if v != nil {

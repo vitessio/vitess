@@ -41,14 +41,17 @@ func newVCursorImpl(ctx context.Context, tabletType topodatapb.TabletType, sessi
 	}
 }
 
+// Execute performs a V3 level execution of the query. It does not take any routing directives.
 func (vc *vcursorImpl) Execute(query string, BindVars map[string]interface{}) (*sqltypes.Result, error) {
 	return vc.executor.Execute(vc.ctx, vc.session, query+vc.trailingComments, BindVars)
 }
 
+// ExecuteMultiShard executes different queries on different shards and returns the combined result.
 func (vc *vcursorImpl) ExecuteMultiShard(keyspace string, shardQueries map[string]querytypes.BoundQuery) (*sqltypes.Result, error) {
 	return vc.executor.scatterConn.ExecuteMultiShard(vc.ctx, keyspace, commentedShardQueries(shardQueries, vc.trailingComments), vc.tabletType, NewSafeSession(vc.session), false, vc.session.Options)
 }
 
+// ExecuteStandalone executes the specified query on keyspace:shard, but outside of the current transaction, as an independent statement.
 func (vc *vcursorImpl) ExecuteStandalone(query string, BindVars map[string]interface{}, keyspace, shard string) (*sqltypes.Result, error) {
 	bq := map[string]querytypes.BoundQuery{
 		shard: {
@@ -59,17 +62,19 @@ func (vc *vcursorImpl) ExecuteStandalone(query string, BindVars map[string]inter
 	return vc.executor.scatterConn.ExecuteMultiShard(vc.ctx, keyspace, bq, vc.tabletType, NewSafeSession(nil), false, vc.session.Options)
 }
 
+// StreamExeculteMulti is the streaming version of ExecuteMultiShard.
 func (vc *vcursorImpl) StreamExecuteMulti(query string, keyspace string, shardVars map[string]map[string]interface{}, callback func(reply *sqltypes.Result) error) error {
 	return vc.executor.scatterConn.StreamExecuteMulti(vc.ctx, query+vc.trailingComments, keyspace, shardVars, vc.tabletType, vc.session.Options, callback)
 }
 
+// GetKeyspaceShards returns the list of shards for a keyspace, and the mapped keyspace if an alias was used.
 func (vc *vcursorImpl) GetKeyspaceShards(keyspace *vindexes.Keyspace) (string, []*topodatapb.ShardReference, error) {
 	ks, _, allShards, err := getKeyspaceShards(vc.ctx, vc.executor.serv, vc.executor.cell, keyspace.Name, vc.tabletType)
 	if err != nil {
 		return "", nil, err
 	}
 	if !keyspace.Sharded && len(allShards) != 1 {
-		return "", nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "unsharded keyspace %s has multiple shards", ks)
+		return "", nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "unsharded keyspace %s has multiple shards: possible cause: sharded keyspace is marked as unsharded in vschema", ks)
 	}
 	if len(allShards) == 0 {
 		return "", nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "keyspace %s has no shards", ks)

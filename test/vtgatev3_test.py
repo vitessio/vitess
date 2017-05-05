@@ -930,6 +930,14 @@ class TestVTGateFunctions(unittest.TestCase):
         ([(4, 'test 4')], 1, 0,
          [('id', self.int_type),
           ('val', self.string_type)]))
+    
+    # Now test direct calls to sequence.
+    result = self.execute_on_master(
+        vtgate_conn, "select next 1 values from vt_main_seq", {})
+    self.assertEqual(
+        result,
+        ([(5,)], 1, 0,
+         [('nextval', self.int_type)]))
 
   def test_joins(self):
     vtgate_conn = get_connection()
