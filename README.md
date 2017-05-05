@@ -35,4 +35,4 @@ for low-frequency updates like new features and releases.
 ## License
 
 Unless otherwise noted, the Vitess source files are distributed
-under the BSD-style license found in the LICENSE file.
+under the Apache Version 2.0 license found in the LICENSE file.
