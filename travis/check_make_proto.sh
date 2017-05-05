@@ -18,6 +18,9 @@ function error() {
   exit 1
 }
 
+# Undo changes to vendor.json. govendor sometimes changes it, which is not necessary.
+git checkout vendor/vendor.json
+
 git diff --exit-code
 if [ $? -ne 0 ]; then
   error "We cannot check if 'make proto' is up to date because some files have already changed. Please see the diff above and fix any local modifications happening prior to this step."
