@@ -362,7 +362,7 @@ func (rb *route) PushSelect(expr *sqlparser.NonStarExpr, _ *route) (colsym *cols
 	return colsym, len(rb.Colsyms) - 1, nil
 }
 
-// PushAnonymous pushes an anonymous expression like '*' or NEXt VALUES
+// PushAnonymous pushes an anonymous expression like '*' or NEXT VALUES
 // into the select expression list of the route.
 func (rb *route) PushAnonymous(expr sqlparser.SelectExpr) *colsym {
 	// We just create a place-holder colsym. It won't
@@ -560,7 +560,7 @@ func (rb *route) SupplyCol(ref colref) int {
 func (rb *route) IsSingle() bool {
 	switch rb.ERoute.Opcode {
 	// Even thought SelectNext is a single-shard query, we don't
-	// include it here because it can't combine with any other construct.
+	// include it here because it can't be combined with any other construct.
 	case engine.SelectUnsharded, engine.SelectEqualUnique:
 		return true
 	}
