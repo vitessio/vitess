@@ -50,7 +50,7 @@ public class GrpcClientFactory implements RpcClientFactory {
   private RetryingInterceptorConfig config;
 
   public GrpcClientFactory() {
-    this(RetryingInterceptorConfig.noopConfig());
+    this(RetryingInterceptorConfig.noOpConfig());
   }
 
   public GrpcClientFactory(RetryingInterceptorConfig config) {

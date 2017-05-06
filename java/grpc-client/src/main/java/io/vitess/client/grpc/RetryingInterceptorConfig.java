@@ -2,7 +2,7 @@ package io.vitess.client.grpc;
 
 /**
  * This class defines what level of exponential backoff to apply in the {@link RetryingInterceptor}. It can be
- * disabled with the {@link #noopConfig()}.
+ * disabled with the {@link #noOpConfig()}.
  */
 public class RetryingInterceptorConfig {
 
@@ -21,7 +21,7 @@ public class RetryingInterceptorConfig {
   /**
    * Returns a no-op config which will not do any retries.
    */
-  public static RetryingInterceptorConfig noopConfig() {
+  public static RetryingInterceptorConfig noOpConfig() {
     return new RetryingInterceptorConfig(DISABLED, DISABLED, 0);
   }
 

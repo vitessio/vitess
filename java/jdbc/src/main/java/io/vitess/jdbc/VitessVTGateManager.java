@@ -25,7 +25,6 @@ import io.vitess.client.grpc.tls.TlsOptions;
 import io.vitess.util.CommonUtils;
 import io.vitess.util.Constants;
 import java.io.IOException;
-import java.net.InetSocketAddress;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
@@ -148,7 +147,7 @@ public class VitessVTGateManager {
 
     private static RetryingInterceptorConfig getRetryingInterceptorConfig(VitessConnection conn) {
         if (!conn.getGrpcRetriesEnabled()) {
-            return RetryingInterceptorConfig.noopConfig();
+            return RetryingInterceptorConfig.noOpConfig();
         }
 
         return RetryingInterceptorConfig.exponentialConfig(conn.getGrpcRetryInitialBackoffMillis(), conn.getGrpcRetryMaxBackoffMillis(), conn.getGrpcRetryBackoffMultiplier());
