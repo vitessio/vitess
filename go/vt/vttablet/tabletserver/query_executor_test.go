@@ -132,6 +132,42 @@ func TestQueryExecutorPlanPassDmlAutoCommitRBR(t *testing.T) {
 	}
 }
 
+func TestQueryExecutorPlanPassDmlReplaceInto(t *testing.T) {
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+	query := "replace into test_table values (1)"
+	want := &sqltypes.Result{}
+	db.AddQuery(query, want)
+	ctx := context.Background()
+	// RBR mode
+	tsv := newTestTabletServer(ctx, noFlags, db)
+	defer tsv.StopService()
+	txid := newTransaction(tsv)
+	qre := newTestQueryExecutor(ctx, tsv, query, txid)
+	tsv.qe.binlogFormat = connpool.BinlogFormatRow
+	checkPlanID(t, planbuilder.PlanPassDML, qre.plan.PlanID)
+	got, err := qre.Execute()
+	if err != nil {
+		t.Fatalf("qre.Execute() = %v, want nil", err)
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got: %v, want: %v", got, want)
+	}
+	wantqueries := []string{query}
+	gotqueries := fetchRecordedQueries(qre)
+	if !reflect.DeepEqual(gotqueries, wantqueries) {
+		t.Errorf("queries: %v, want %v", gotqueries, wantqueries)
+	}
+
+	// Statement mode
+	tsv.qe.binlogFormat = connpool.BinlogFormatStatement
+	_, err = qre.Execute()
+	if code := vterrors.Code(err); code != vtrpcpb.Code_UNIMPLEMENTED {
+		t.Errorf("qre.Execute: %v, want %v", code, vtrpcpb.Code_INVALID_ARGUMENT)
+	}
+	testCommitHelper(t, tsv, qre)
+}
+
 func TestQueryExecutorPlanInsertPk(t *testing.T) {
 	db := setUpQueryExecutorTest(t)
 	defer db.Close()

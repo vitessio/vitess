@@ -97,7 +97,7 @@ func (e *Executor) Execute(ctx context.Context, session *vtgatepb.Session, sql s
 	switch sqlparser.Preview(sql) {
 	case sqlparser.StmtSelect:
 		return e.handleExec(ctx, session, sql, bindVars)
-	case sqlparser.StmtInsert, sqlparser.StmtUpdate, sqlparser.StmtDelete:
+	case sqlparser.StmtInsert, sqlparser.StmtReplace, sqlparser.StmtUpdate, sqlparser.StmtDelete:
 		nsf := NewSafeSession(session)
 		autocommit := false
 		if session.Autocommit && !session.InTransaction {

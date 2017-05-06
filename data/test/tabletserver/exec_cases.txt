@@ -570,6 +570,42 @@
 "insert into msg(id) values(1)"
 "message must be specified for message insert"
 
+# multi-row
+"replace into b (eid, id) values (1, 2), (3, 4)"
+{
+  "PlanID": "PASS_DML",
+  "Reason":"REPLACE",
+  "TableName": "",
+  "FullQuery": "replace into b(eid, id) values (1, 2), (3, 4)"
+}
+
+# single-row with set
+"replace into b set eid = 1, id = 2"
+{
+  "PlanID": "PASS_DML",
+  "Reason":"REPLACE",
+  "TableName": "",
+  "FullQuery": "replace into b(eid, id) values (1, 2)"
+}
+
+# replace subquery
+"replace into b (eid, id) select * from a"
+{
+  "PlanID": "PASS_DML",
+  "Reason":"REPLACE",
+  "TableName": "",
+  "FullQuery": "replace into b(eid, id) select * from a"
+}
+
+# subquery with no column list
+"replace into b select * from a"
+{
+  "PlanID": "PASS_DML",
+  "Reason":"REPLACE",
+  "TableName": "",
+  "FullQuery": "replace into b select * from a"
+}
+
 # update cross-db
 "update b.a set name='foo' where eid=1 and id=1"
 {

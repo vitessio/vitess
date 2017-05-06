@@ -558,3 +558,117 @@
     "Mid": ["(:_Id0, :_Name0, :_Costly0)","(:_Id1, :_Name1, :_Costly1)"]
   }
 }
+
+# simple replace unsharded
+"replace into unsharded values(1, 2)"
+{
+  "Original": "replace into unsharded values(1, 2)",
+  "Instructions": {
+    "Opcode": "InsertUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "replace into unsharded values (1, 2)",
+    "Table": "unsharded"
+  }
+}
+
+# replace unsharded with select
+"replace into unsharded select id from unsharded_auto"
+{
+  "Original": "replace into unsharded select id from unsharded_auto",
+  "Instructions": {
+    "Opcode": "InsertUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "replace into unsharded select id from unsharded_auto",
+    "Table": "unsharded"
+  }
+}
+
+# replace unsharded, invalid value for auto-inc
+"replace into unsharded_auto(id, val) values(18446744073709551616, 'aa')"
+"could not convert val: 18446744073709551616, pos: 0: strconv.ParseUint: parsing "18446744073709551616": value out of range"
+
+# replace unsharded, column present
+"replace into unsharded_auto(id, val) values(1, 'aa')"
+{
+  "Original": "replace into unsharded_auto(id, val) values(1, 'aa')",
+  "Instructions": {
+    "Opcode": "InsertUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "replace into unsharded_auto(id, val) values (:__seq0, 'aa')",
+    "Table": "unsharded_auto",
+    "Generate": {
+      "Keyspace": {
+        "Name": "main",
+        "Sharded": false
+      },
+      "Query": "select next :n values from seq",
+      "Values": [
+        1
+      ]
+    }
+  }
+}
+
+# replace unsharded, column absent
+"replace into unsharded_auto(val) values('aa')"
+{
+  "Original": "replace into unsharded_auto(val) values('aa')",
+  "Instructions": {
+    "Opcode": "InsertUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "replace into unsharded_auto(val, id) values ('aa', :__seq0)",
+    "Table": "unsharded_auto",
+    "Generate": {
+      "Keyspace": {
+        "Name": "main",
+        "Sharded": false
+      },
+      "Query": "select next :n values from seq",
+      "Values": [
+        null
+      ]
+    }
+  }
+}
+
+# replace unsharded, multi-val
+"replace into unsharded_auto(id, val) values(1, 'aa'), (null, 'bb')"
+{
+  "Original": "replace into unsharded_auto(id, val) values(1, 'aa'), (null, 'bb')",
+  "Instructions": {
+    "Opcode": "InsertUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "replace into unsharded_auto(id, val) values (:__seq0, 'aa'), (:__seq1, 'bb')",
+    "Table": "unsharded_auto",
+    "Generate": {
+      "Keyspace": {
+        "Name": "main",
+        "Sharded": false
+      },
+      "Query": "select next :n values from seq",
+      "Values": [
+        1,
+        null
+      ]
+    }
+  }
+}
+
+# replace invalid table
+"replace into noexist(music_id, user_id) values(1, 18446744073709551616)"
+"table noexist not found"

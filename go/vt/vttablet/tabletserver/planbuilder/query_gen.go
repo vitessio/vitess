@@ -69,7 +69,8 @@ func GenerateLimitQuery(selStmt sqlparser.SelectStatement) *sqlparser.ParsedQuer
 // GenerateInsertOuterQuery generates the outer query for inserts.
 func GenerateInsertOuterQuery(ins *sqlparser.Insert) *sqlparser.ParsedQuery {
 	buf := sqlparser.NewTrackedBuffer(nil)
-	buf.Myprintf("insert %v%sinto %v%v values %a",
+	buf.Myprintf("%s %v%sinto %v%v values %a",
+		ins.Action,
 		ins.Comments,
 		ins.Ignore,
 		ins.Table,

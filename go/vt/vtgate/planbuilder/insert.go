@@ -35,6 +35,9 @@ func buildInsertPlan(ins *sqlparser.Insert, vschema VSchema) (*engine.Route, err
 	if !table.Keyspace.Sharded {
 		return buildInsertUnshardedPlan(ins, table, vschema)
 	}
+	if ins.Action == sqlparser.ReplaceStr {
+		return nil, errors.New("unsupported: REPLACE INTO with sharded schema")
+	}
 	return buildInsertShardedPlan(ins, table)
 }
 
@@ -130,6 +133,7 @@ func buildInsertShardedPlan(ins *sqlparser.Insert, table *vindexes.Table) (*engi
 			return nil, errors.New("column list doesn't match values")
 		}
 	}
+
 	colVindexes := eRoute.Table.ColumnVindexes
 	routeValues := make([]interface{}, 0, len(values))
 	autoIncValues := make([]interface{}, 0, len(values))
