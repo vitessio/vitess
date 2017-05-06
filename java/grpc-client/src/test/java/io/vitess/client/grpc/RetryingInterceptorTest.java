@@ -28,7 +28,7 @@ public class RetryingInterceptorTest {
   public void testNoopConfigPassesThrough() throws ExecutionException, InterruptedException {
     ForceRetryNTimesInterceptor forceRetryNTimesInterceptor = new ForceRetryNTimesInterceptor(3);
 
-    ManagedChannelImpl channel = InProcessChannelBuilder.forName("foo").intercept(new RetryingInterceptor(RetryingInterceptorConfig.noopConfig()), forceRetryNTimesInterceptor).build();
+    ManagedChannelImpl channel = InProcessChannelBuilder.forName("foo").intercept(new RetryingInterceptor(RetryingInterceptorConfig.noOpConfig()), forceRetryNTimesInterceptor).build();
     VitessGrpc.VitessFutureStub stub = VitessGrpc.newFutureStub(channel);
     ListenableFuture<Vtgate.ExecuteResponse> resp = stub.execute(Vtgate.ExecuteRequest.getDefaultInstance());
     try {

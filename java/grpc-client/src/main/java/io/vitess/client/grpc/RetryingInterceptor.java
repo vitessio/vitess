@@ -32,7 +32,6 @@ import io.grpc.internal.SharedResourceHolder;
  * time defined by the {@link io.grpc.Deadline} in the call's {@link CallOptions}.
  */
 public class RetryingInterceptor implements ClientInterceptor {
-  private static Logger logger = Logger.getLogger(RetryingInterceptor.class.getName());
 
   private final RetryingInterceptorConfig config;
 
@@ -166,7 +165,6 @@ public class RetryingInterceptor implements ClientInterceptor {
       }
 
       latestResponse = attempt;
-      logger.warning("Retrying after " + nextBackoffMillis + " millis");
       retryTask = scheduledExecutor.schedule(context.wrap(new Runnable() {
         @Override
         public void run() {
