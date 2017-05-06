@@ -949,8 +949,34 @@ func TestNocacheCases(t *testing.T) {
 						"insert into upsert_test(id1, id2) values (1, 2) /* _stream upsert_test (id1 ) (1 )",
 						"update upsert_test set id2 = 1 where id1 in (1) /* _stream upsert_test (id1 ) (1 )",
 					},
-                                },
-                        },
+				},
+				&framework.TestCase{
+					Query: "select * from upsert_test",
+					Result: [][]string{
+						{"1", "1"},
+					},
+				},
+				&framework.TestCase{
+					Query: "insert ignore into upsert_test(id1, id2) values (1, 3) on duplicate key update id2 = greatest(values(id1), values(id2))",
+					Rewritten: []string{
+						"insert into upsert_test(id1, id2) values (1, 3) /* _stream upsert_test (id1 ) (1 )",
+						"update upsert_test set id2 = greatest(1, 3) where id1 in (1) /* _stream upsert_test (id1 ) (1 )",
+					},
+					RowsAffected: 2,
+				},
+				&framework.TestCase{
+					Query: "select * from upsert_test",
+					Result: [][]string{
+						{"1", "3"},
+					},
+				},
+				framework.TestQuery("commit"),
+				framework.TestQuery("begin"),
+				framework.TestQuery("delete from upsert_test"),
+				framework.TestQuery("commit"),
+			},
+		},
+		&framework.MultiCase{
 			Name: "simple replace - no collision",
 			Cases: []framework.Testable{
 				framework.TestQuery("begin"),

@@ -569,7 +569,7 @@
 # message insert message missing
 "insert into msg(id) values(1)"
 "message must be specified for message insert"
-=======
+
 # multi-row
 "replace into b (eid, id) values (1, 2), (3, 4)"
 {
