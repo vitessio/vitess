@@ -573,45 +573,37 @@
 # multi-row
 "replace into b (eid, id) values (1, 2), (3, 4)"
 {
-  "PlanID": "INSERT_PK",
-  "TableName": "b",
-  "FullQuery": "replace into b(eid, id) values (1, 2), (3, 4)",
-  "OuterQuery": "replace into b(eid, id) values (1, 2), (3, 4)",
-  "PKValues": [[1, 3], [2, 4]]
+  "PlanID": "PASS_DML",
+  "Reason":"REPLACE",
+  "TableName": "",
+  "FullQuery": "replace into b(eid, id) values (1, 2), (3, 4)"
 }
 
 # single-row with set
 "replace into b set eid = 1, id = 2"
 {
-  "PlanID": "INSERT_PK",
-  "TableName": "b",
-  "FullQuery": "replace into b(eid, id) values (1, 2)",
-  "OuterQuery": "replace into b(eid, id) values (1, 2)",
-  "PKValues": [1, 2]
+  "PlanID": "PASS_DML",
+  "Reason":"REPLACE",
+  "TableName": "",
+  "FullQuery": "replace into b(eid, id) values (1, 2)"
 }
 
 # replace subquery
 "replace into b (eid, id) select * from a"
 {
-  "PlanID": "INSERT_SUBQUERY",
-  "TableName": "b",
-  "FullQuery": "replace into b(eid, id) select * from a",
-  "OuterQuery": "replace into b(eid, id) values :#values",
-  "Subquery": "select * from a limit :#maxLimit",
-  "ColumnNumbers": [0, 1],
-  "SubqueryPKColumns": [0, 1]
+  "PlanID": "PASS_DML",
+  "Reason":"REPLACE",
+  "TableName": "",
+  "FullQuery": "replace into b(eid, id) select * from a"
 }
 
 # subquery with no column list
 "replace into b select * from a"
 {
-  "PlanID": "INSERT_SUBQUERY",
-  "TableName": "b",
-  "FullQuery": "replace into b select * from a",
-  "OuterQuery": "replace into b values :#values",
-  "Subquery": "select * from a limit :#maxLimit",
-  "ColumnNumbers": [0, 1],
-  "SubqueryPKColumns": [0, 1]
+  "PlanID": "PASS_DML",
+  "Reason":"REPLACE",
+  "TableName": "",
+  "FullQuery": "replace into b select * from a"
 }
 
 # update cross-db
