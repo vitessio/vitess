@@ -606,13 +606,12 @@
     "Query": "replace into unsharded_auto(id, val) values (:__seq0, 'aa')",
     "Table": "unsharded_auto",
     "Generate": {
-      "Opcode": "SelectUnsharded",
       "Keyspace": {
         "Name": "main",
         "Sharded": false
       },
       "Query": "select next :n values from seq",
-      "Value": [
+      "Values": [
         1
       ]
     }
@@ -632,13 +631,12 @@
     "Query": "replace into unsharded_auto(val, id) values ('aa', :__seq0)",
     "Table": "unsharded_auto",
     "Generate": {
-      "Opcode": "SelectUnsharded",
       "Keyspace": {
         "Name": "main",
         "Sharded": false
       },
       "Query": "select next :n values from seq",
-      "Value": [
+      "Values": [
         null
       ]
     }
@@ -658,13 +656,12 @@
     "Query": "replace into unsharded_auto(id, val) values (:__seq0, 'aa'), (:__seq1, 'bb')",
     "Table": "unsharded_auto",
     "Generate": {
-      "Opcode": "SelectUnsharded",
       "Keyspace": {
         "Name": "main",
         "Sharded": false
       },
       "Query": "select next :n values from seq",
-      "Value": [
+      "Values": [
         1,
         null
       ]
