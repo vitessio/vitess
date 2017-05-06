@@ -31,6 +31,7 @@ import (
 const (
 	StmtSelect = iota
 	StmtInsert
+	StmtReplace
 	StmtUpdate
 	StmtDelete
 	StmtDDL
@@ -59,6 +60,8 @@ func Preview(sql string) int {
 		return StmtSelect
 	case "insert":
 		return StmtInsert
+	case "replace":
+		return StmtReplace
 	case "update":
 		return StmtUpdate
 	case "delete":
@@ -90,7 +93,7 @@ func Preview(sql string) int {
 // IsDML returns true if the query is an INSERT, UPDATE or DELETE statement.
 func IsDML(sql string) bool {
 	switch Preview(sql) {
-	case StmtInsert, StmtUpdate, StmtDelete:
+	case StmtInsert, StmtReplace, StmtUpdate, StmtDelete:
 		return true
 	}
 	return false
