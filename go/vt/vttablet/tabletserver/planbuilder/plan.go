@@ -156,6 +156,7 @@ const (
 	ReasonComplexExpr
 	ReasonUpsert
 	ReasonUpsertColMismatch
+	ReasonReplace
 )
 
 // Must exactly match order of reason constants.
@@ -167,6 +168,7 @@ var reasonName = []string{
 	"COMPLEX_EXPR",
 	"UPSERT",
 	"UPSERT_COL_MISMATCH",
+	"REPLACE",
 }
 
 // String returns a string representation of a ReasonType.

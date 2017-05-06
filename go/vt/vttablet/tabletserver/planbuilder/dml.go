@@ -265,6 +265,10 @@ func analyzeInsert(ins *sqlparser.Insert, tables map[string]*schema.Table) (plan
 		PlanID:    PlanPassDML,
 		FullQuery: GenerateFullQuery(ins),
 	}
+	if ins.Action == sqlparser.ReplaceStr {
+		plan.Reason = ReasonReplace
+		return plan, nil
+	}
 	tableName := sqlparser.GetTableName(ins.Table)
 	if tableName.IsEmpty() {
 		plan.Reason = ReasonTable
