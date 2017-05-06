@@ -1,6 +1,18 @@
-// Copyright 2014, Google Inc. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
+/*
+Copyright 2017 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
 package vtgate
 
@@ -27,6 +39,10 @@ type vcursorImpl struct {
 	target           querypb.Target
 	trailingComments string
 	executor         *Executor
+	// hasPartialDML is set to true if any DML was successfully
+	// executed. If there was a subsequent failure, the transaction
+	// must be forced to rollback.
+	hasPartialDML bool
 }
 
 // newVcursorImpl creates a vcursorImpl. Before creating this object, you have to separate out any trailingComments that came with
@@ -54,13 +70,21 @@ func (vc *vcursorImpl) Find(keyspace, tablename sqlparser.TableIdent) (table *vi
 }
 
 // Execute performs a V3 level execution of the query. It does not take any routing directives.
-func (vc *vcursorImpl) Execute(query string, BindVars map[string]interface{}) (*sqltypes.Result, error) {
-	return vc.executor.Execute(vc.ctx, vc.session, query+vc.trailingComments, BindVars)
+func (vc *vcursorImpl) Execute(query string, BindVars map[string]interface{}, isDML bool) (*sqltypes.Result, error) {
+	qr, err := vc.executor.Execute(vc.ctx, vc.session, query+vc.trailingComments, BindVars)
+	if err == nil {
+		vc.hasPartialDML = true
+	}
+	return qr, err
 }
 
 // ExecuteMultiShard executes different queries on different shards and returns the combined result.
-func (vc *vcursorImpl) ExecuteMultiShard(keyspace string, shardQueries map[string]querytypes.BoundQuery) (*sqltypes.Result, error) {
-	return vc.executor.scatterConn.ExecuteMultiShard(vc.ctx, keyspace, commentedShardQueries(shardQueries, vc.trailingComments), vc.target.TabletType, NewSafeSession(vc.session), false, vc.session.Options)
+func (vc *vcursorImpl) ExecuteMultiShard(keyspace string, shardQueries map[string]querytypes.BoundQuery, isDML bool) (*sqltypes.Result, error) {
+	qr, err := vc.executor.scatterConn.ExecuteMultiShard(vc.ctx, keyspace, commentedShardQueries(shardQueries, vc.trailingComments), vc.target.TabletType, NewSafeSession(vc.session), false, vc.session.Options)
+	if err == nil {
+		vc.hasPartialDML = true
+	}
+	return qr, err
 }
 
 // ExecuteStandalone executes the specified query on keyspace:shard, but outside of the current transaction, as an independent statement.
@@ -71,7 +95,11 @@ func (vc *vcursorImpl) ExecuteStandalone(query string, BindVars map[string]inter
 			BindVariables: BindVars,
 		},
 	}
-	return vc.executor.scatterConn.ExecuteMultiShard(vc.ctx, keyspace, bq, vc.target.TabletType, NewSafeSession(nil), false, vc.session.Options)
+	qr, err := vc.executor.scatterConn.ExecuteMultiShard(vc.ctx, keyspace, bq, vc.target.TabletType, NewSafeSession(nil), false, vc.session.Options)
+	if err == nil {
+		vc.hasPartialDML = true
+	}
+	return qr, err
 }
 
 // StreamExeculteMulti is the streaming version of ExecuteMultiShard.

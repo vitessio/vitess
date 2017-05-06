@@ -565,6 +565,23 @@
   }
 }
 
+# union with the same target shard
+"select * from music where user_id = 1 union select * from user where id = 1"
+{
+  "Original": "select * from music where user_id = 1 union select * from user where id = 1",
+  "Instructions": {
+    "Opcode": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select * from music where user_id = 1 union select * from user where id = 1",
+    "FieldQuery": "select * from music where 1 != 1 union select * from user where 1 != 1",
+    "Vindex": "user_index",
+    "Values": 1
+  }
+}
+
 "select * from (select col1, col2 from unsharded where id = 1 union select col1, col2 from unsharded where id = 3) a"
 {
   "Original": "select * from (select col1, col2 from unsharded where id = 1 union select col1, col2 from unsharded where id = 3) a",

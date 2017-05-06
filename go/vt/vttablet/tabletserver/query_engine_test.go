@@ -1,6 +1,18 @@
-// Copyright 2017, Google Inc. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
+/*
+Copyright 2017 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
 package tabletserver
 
@@ -15,10 +27,55 @@ import (
 
 	"github.com/youtube/vitess/go/mysqlconn/fakesqldb"
 	"github.com/youtube/vitess/go/sqltypes"
+	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/schema"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/schema/schematest"
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
+
+func TestStrictTransTables(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	for query, result := range schematest.Queries() {
+		db.AddQuery(query, result)
+	}
+	testUtils := newTestUtils()
+	dbconfigs := testUtils.newDBConfigs(db)
+
+	// Test default behavior.
+	config := tabletenv.DefaultQsConfig
+	// config.EnforceStrictTransTable is true by default.
+	qe := NewQueryEngine(DummyChecker, schema.NewEngine(DummyChecker, config), config)
+	qe.se.Open(db.ConnParams())
+	if err := qe.Open(dbconfigs); err != nil {
+		t.Error(err)
+	}
+	qe.Close()
+
+	// Check that we fail if STRICT_TRANS_TABLES is not set.
+	db.AddQuery(
+		"select @@global.sql_mode",
+		&sqltypes.Result{
+			Fields: []*querypb.Field{{Type: sqltypes.VarChar}},
+			Rows:   [][]sqltypes.Value{{sqltypes.MakeString([]byte(""))}},
+		},
+	)
+	qe = NewQueryEngine(DummyChecker, schema.NewEngine(DummyChecker, config), config)
+	err := qe.Open(dbconfigs)
+	wantErr := "require sql_mode to be STRICT_TRANS_TABLES: got ''"
+	if err == nil || err.Error() != wantErr {
+		t.Errorf("Open: %v, want %s", err, wantErr)
+	}
+	qe.Close()
+
+	// Test that we succeed if the enforcement flag is off.
+	config.EnforceStrictTransTables = false
+	qe = NewQueryEngine(DummyChecker, schema.NewEngine(DummyChecker, config), config)
+	if err := qe.Open(dbconfigs); err != nil {
+		t.Error(err)
+	}
+	qe.Close()
+}
 
 func TestGetPlanPanicDuetoEmptyQuery(t *testing.T) {
 	db := fakesqldb.New(t)

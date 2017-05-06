@@ -1,10 +1,23 @@
-// Copyright 2014, Google Inc. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
+/*
+Copyright 2017 Google Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
 package vtgate
 
 import (
+	"context"
 	"reflect"
 	"strings"
 	"testing"
@@ -15,6 +28,7 @@ import (
 	"github.com/youtube/vitess/go/vt/vttablet/tabletserver/querytypes"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
+	vtgatepb "github.com/youtube/vitess/go/vt/proto/vtgate"
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
@@ -782,6 +796,36 @@ func TestInsertFail(t *testing.T) {
 	want = "execInsertSharded: getInsertShardedRoute: value must be supplied for column name"
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
 		t.Errorf("executorExec: %v, want prefix %v", err, want)
+	}
+}
+
+func TestInsertPartialFail(t *testing.T) {
+	executor, sbc1, _, sbclookup := createExecutorEnv()
+
+	// If the first DML fails, there should be no rollback.
+	sbclookup.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
+	_, err := executor.Execute(
+		context.Background(),
+		&vtgatepb.Session{InTransaction: true},
+		"insert into user(id, v, name) values (1, 2, 'myname')",
+		nil,
+	)
+	want := "execInsertSharded:"
+	if err == nil || !strings.HasPrefix(err.Error(), want) {
+		t.Errorf("insert first DML fail: %v, must start with %s", err, want)
+	}
+
+	// If the second DML fails, we should rollback.
+	sbc1.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
+	_, err = executor.Execute(
+		context.Background(),
+		&vtgatepb.Session{InTransaction: true},
+		"insert into user(id, v, name) values (1, 2, 'myname')",
+		nil,
+	)
+	want = "transaction rolled back"
+	if err == nil || !strings.HasPrefix(err.Error(), want) {
+		t.Errorf("insert first DML fail: %v, must start with %s", err, want)
 	}
 }
 
