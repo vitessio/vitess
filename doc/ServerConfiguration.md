@@ -567,14 +567,14 @@ You will need to run some cron jobs to archive or purge log files periodically.
 
 ### Orchestrator
 
-[Orchestrator](https://github.com/outbrain/orchestrator) is a tool for
+[Orchestrator](https://github.com/github/orchestrator) is a tool for
 managing MySQL replication topologies, including automated failover.
 It can detect master failure and initiate a recovery in a matter of seconds.
 
 For the most part, Vitess is agnostic to the actions of Orchestrator,
 which operates below Vitess at the MySQL level. That means you can
 pretty much
-[set up Orchestrator](https://github.com/outbrain/orchestrator/wiki/Orchestrator-Manual)
+[set up Orchestrator](https://github.com/github/orchestrator/wiki/Orchestrator-Manual)
 in the normal way, with just a few additions as described below.
 
 For the [Kubernetes example](/getting-started/), we provide a
