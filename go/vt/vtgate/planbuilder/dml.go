@@ -27,7 +27,7 @@ import (
 // dmlFormatter strips out keyspace name from dmls.
 func dmlFormatter(buf *sqlparser.TrackedBuffer, node sqlparser.SQLNode) {
 	switch node := node.(type) {
-	case *sqlparser.TableName:
+	case sqlparser.TableName:
 		node.Name.Format(buf)
 		return
 	}
@@ -39,7 +39,7 @@ func buildUpdatePlan(upd *sqlparser.Update, vschema VSchema) (*engine.Route, err
 	route := &engine.Route{
 		Query: generateQuery(upd),
 	}
-	updateTable, _ := upd.Table.Expr.(*sqlparser.TableName)
+	updateTable, _ := upd.Table.Expr.(sqlparser.TableName)
 
 	var err error
 	route.Table, err = vschema.Find(updateTable.Qualifier, updateTable.Name)

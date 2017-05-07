@@ -102,7 +102,7 @@ func IsDML(sql string) bool {
 // GetTableName returns the table name from the SimpleTableExpr
 // only if it's a simple expression. Otherwise, it returns "".
 func GetTableName(node SimpleTableExpr) TableIdent {
-	if n, ok := node.(*TableName); ok && n.Qualifier.IsEmpty() {
+	if n, ok := node.(TableName); ok && n.Qualifier.IsEmpty() {
 		return n.Name
 	}
 	// sub-select or '.' expression
@@ -232,7 +232,7 @@ func ExtractSetValues(sql string) (map[string]interface{}, error) {
 	}
 	result := make(map[string]interface{})
 	for _, expr := range setStmt.Exprs {
-		if expr.Name.Qualifier != nil {
+		if !expr.Name.Qualifier.IsEmpty() {
 			return nil, fmt.Errorf("invalid syntax: %v", String(expr.Name))
 		}
 		key := expr.Name.Name.Lowered()

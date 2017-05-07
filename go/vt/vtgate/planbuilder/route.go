@@ -48,7 +48,7 @@ type route struct {
 	ERoute *engine.Route
 }
 
-func newRoute(stmt sqlparser.SelectStatement, eroute *engine.Route, table *vindexes.Table, vschema VSchema, alias *sqlparser.TableName, astName sqlparser.TableIdent) *route {
+func newRoute(stmt sqlparser.SelectStatement, eroute *engine.Route, table *vindexes.Table, vschema VSchema, alias sqlparser.TableName, astName sqlparser.TableIdent) *route {
 	// We have some circular pointer references here:
 	// The route points to the symtab idicating
 	// the symtab that should be used to resolve symbols
@@ -472,7 +472,7 @@ func (rb *route) Wireup(bldr builder, jt *jointab) error {
 				buf.Myprintf("%a", ":"+joinVar)
 				return
 			}
-		case *sqlparser.TableName:
+		case sqlparser.TableName:
 			node.Name.Format(buf)
 			return
 		}
@@ -529,7 +529,7 @@ func (rb *route) generateFieldQuery(sel sqlparser.SelectStatement, jt *jointab) 
 				buf.Myprintf("%a", ":"+joinVar)
 				return
 			}
-		case *sqlparser.TableName:
+		case sqlparser.TableName:
 			node.Name.Format(buf)
 			return
 		}
@@ -560,7 +560,7 @@ func (rb *route) SupplyCol(ref colref) int {
 		&sqlparser.NonStarExpr{
 			Expr: &sqlparser.ColName{
 				Metadata:  ref.Meta,
-				Qualifier: &sqlparser.TableName{Name: ref.Meta.(*tabsym).ASTName},
+				Qualifier: sqlparser.TableName{Name: ref.Meta.(*tabsym).ASTName},
 				Name:      ref.Name(),
 			},
 		},

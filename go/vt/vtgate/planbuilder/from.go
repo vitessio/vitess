@@ -80,7 +80,7 @@ func processTableExpr(tableExpr sqlparser.TableExpr, vschema VSchema) (builder, 
 // support complex joins in subqueries yet.
 func processAliasedTable(tableExpr *sqlparser.AliasedTableExpr, vschema VSchema) (builder, error) {
 	switch expr := tableExpr.Expr.(type) {
-	case *sqlparser.TableName:
+	case sqlparser.TableName:
 		eroute, table, err := getTablePlan(expr, vschema)
 		if err != nil {
 			return nil, err
@@ -88,7 +88,7 @@ func processAliasedTable(tableExpr *sqlparser.AliasedTableExpr, vschema VSchema)
 		alias := expr
 		astName := expr.Name
 		if !tableExpr.As.IsEmpty() {
-			alias = &sqlparser.TableName{Name: tableExpr.As}
+			alias = sqlparser.TableName{Name: tableExpr.As}
 			astName = tableExpr.As
 		}
 		return newRoute(
@@ -141,7 +141,7 @@ func processAliasedTable(tableExpr *sqlparser.AliasedTableExpr, vschema VSchema)
 			subroute.ERoute,
 			table,
 			vschema,
-			&sqlparser.TableName{Name: tableExpr.As},
+			sqlparser.TableName{Name: tableExpr.As},
 			tableExpr.As,
 		)
 		subroute.Redirect = rtb
@@ -153,7 +153,7 @@ func processAliasedTable(tableExpr *sqlparser.AliasedTableExpr, vschema VSchema)
 // getTablePlan produces the initial engine.Route for the specified TableName.
 // It also returns the associated vschema info (*Table) so that
 // it can be used to create the symbol table entry.
-func getTablePlan(tableName *sqlparser.TableName, vschema VSchema) (*engine.Route, *vindexes.Table, error) {
+func getTablePlan(tableName sqlparser.TableName, vschema VSchema) (*engine.Route, *vindexes.Table, error) {
 	table, err := vschema.Find(tableName.Qualifier, tableName.Name)
 	if err != nil {
 		return nil, nil, err

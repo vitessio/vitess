@@ -24,8 +24,8 @@ import (
 // DDLPlan provides a plan for DDLs.
 type DDLPlan struct {
 	Action    string
-	TableName *sqlparser.TableName
-	NewName   *sqlparser.TableName
+	TableName sqlparser.TableName
+	NewName   sqlparser.TableName
 }
 
 // DDLParse parses a DDL and produces a DDLPlan.
@@ -47,9 +47,8 @@ func DDLParse(sql string) (plan *DDLPlan) {
 
 func analyzeDDL(ddl *sqlparser.DDL, tables map[string]*schema.Table) *Plan {
 	// TODO(sougou): Add support for sequences.
-	plan := &Plan{PlanID: PlanDDL}
-	if ddl.Table != nil {
-		plan.Table = tables[ddl.Table.Name.String()]
+	return &Plan{
+		PlanID: PlanDDL,
+		Table:  tables[ddl.Table.Name.String()],
 	}
-	return plan
 }
