@@ -42,32 +42,20 @@ type route struct {
 	Select sqlparser.SelectStatement
 	order  int
 	symtab *symtab
-	// Colsyms represent the columns returned by this route.
-	Colsyms []*colsym
+	// ResultColumns represent the columns returned by this route.
+	ResultColumns []*resultColumn
 	// ERoute is the primitive being built.
 	ERoute *engine.Route
 }
 
-func newRoute(stmt sqlparser.SelectStatement, eroute *engine.Route, table *vindexes.Table, vschema VSchema, alias sqlparser.TableName, astName sqlparser.TableIdent) *route {
-	// We have some circular pointer references here:
-	// The route points to the symtab idicating
-	// the symtab that should be used to resolve symbols
-	// for it. This is same as the SELECT statement's symtab.
-	// This pointer is needed because each subquery will have
-	// its own symtab. Multiple routes can point to the same
-	// symtab.
-	// The tabelAlias, which is inside the symtab, points back
-	// to the route to indidcate that the symbol is produced
-	// by this route. A symbol referenced in a route can actually
-	// be pointing to a different route. This information is used
-	// to determine if symbol references are local or not.
+func newRoute(stmt sqlparser.SelectStatement, eroute *engine.Route, table *vindexes.Table, vschema VSchema, alias sqlparser.TableName) *route {
 	rb := &route{
 		Select: stmt,
 		symtab: newSymtab(vschema),
 		order:  1,
 		ERoute: eroute,
 	}
-	rb.symtab.AddAlias(alias, astName, table, rb)
+	rb.symtab.AddAlias(alias, table, rb)
 	return rb
 }
 
@@ -171,7 +159,7 @@ func (rb *route) merge(rhs *route, ajoin *sqlparser.JoinTableExpr) (builder, err
 	} else {
 		sel.From = sqlparser.TableExprs{ajoin}
 		if ajoin.Join == sqlparser.LeftJoinStr {
-			rhs.Symtab().SetRHS()
+			rhs.Symtab().ClearVindexes()
 		}
 	}
 	err := rb.Symtab().Merge(rhs.Symtab())
@@ -348,42 +336,31 @@ func (rb *route) computeINPlan(comparison *sqlparser.ComparisonExpr) (opcode eng
 }
 
 // PushSelect pushes the select expression into the route.
-func (rb *route) PushSelect(expr *sqlparser.NonStarExpr, _ *route) (colsym *colsym, colnum int, err error) {
-	colsym = newColsym(rb, rb.Symtab())
-	colsym.Alias = expr.As
-	if col, ok := expr.Expr.(*sqlparser.ColName); ok {
-		// If no alias was specified, then the base name
-		// of the column becomes the alias.
-		if colsym.Alias.IsEmpty() {
-			colsym.Alias = col.Name
-		}
-		colsym.Vindex = rb.Symtab().Vindex(col, rb, true)
-		colsym.Underlying = newColref(col)
-	} else {
-		if rb.IsRHS {
-			return nil, 0, errors.New("unsupported: complex left join and column expressions")
-		}
-		// We should ideally generate an alias based on the
-		// expression, but we currently don't have the ability
-		// to reference such expressions. So, we leave the
-		// alias blank.
+func (rb *route) PushSelect(expr *sqlparser.NonStarExpr, _ *route) (rc *resultColumn, colnum int, err error) {
+	// Pushing of non-trivial expressions not allowed for RHS of left joins.
+	if _, ok := expr.Expr.(*sqlparser.ColName); !ok && rb.IsRHS {
+		return nil, 0, errors.New("unsupported: complex left join and column expressions")
 	}
+
 	sel := rb.Select.(*sqlparser.Select)
 	sel.SelectExprs = append(sel.SelectExprs, expr)
-	rb.Colsyms = append(rb.Colsyms, colsym)
-	return colsym, len(rb.Colsyms) - 1, nil
+
+	rc = rb.Symtab().NewResultColumn(expr, rb)
+	rb.ResultColumns = append(rb.ResultColumns, rc)
+
+	return rc, len(rb.ResultColumns) - 1, nil
 }
 
 // PushAnonymous pushes an anonymous expression like '*' or NEXT VALUES
 // into the select expression list of the route.
-func (rb *route) PushAnonymous(expr sqlparser.SelectExpr) *colsym {
-	// We just create a place-holder colsym. It won't
+func (rb *route) PushAnonymous(expr sqlparser.SelectExpr) *resultColumn {
+	// We just create a place-holder resultColumn. It won't
 	// match anything.
-	colsym := newColsym(rb, rb.Symtab())
+	rc := &resultColumn{column: &column{route: rb}}
 	sel := rb.Select.(*sqlparser.Select)
 	sel.SelectExprs = append(sel.SelectExprs, expr)
-	rb.Colsyms = append(rb.Colsyms, colsym)
-	return colsym
+	rb.ResultColumns = append(rb.ResultColumns, rc)
+	return rc
 }
 
 // MakeDistinct sets the DISTINCT property to the select.
@@ -514,7 +491,7 @@ func (rb *route) procureValues(bldr builder, jt *jointab, val interface{}) (inte
 }
 
 func (rb *route) isLocal(col *sqlparser.ColName) bool {
-	return col.Metadata.(sym).Route() == rb
+	return col.Metadata.(*column).Route() == rb
 }
 
 // generateFieldQuery generates a query with an impossible where.
@@ -547,25 +524,19 @@ func (rb *route) SupplyVar(from, to int, col *sqlparser.ColName, varname string)
 // SupplyCol changes the executor to supply the requested column
 // name, and returns the result column number. If the column
 // is already in the list, it's reused.
-func (rb *route) SupplyCol(ref colref) int {
-	for i, colsym := range rb.Colsyms {
-		if colsym.Underlying == ref {
-			return i
+func (rb *route) SupplyCol(c *column) (rs *resultColumn, colnum int) {
+	for i, rs := range rb.ResultColumns {
+		if rs.column == c {
+			return rs, i
 		}
 	}
-	rb.Colsyms = append(rb.Colsyms, &colsym{Underlying: ref})
+
+	// A new result has to be returned.
+	rs = &resultColumn{column: c}
+	rb.ResultColumns = append(rb.ResultColumns, rs)
 	sel := rb.Select.(*sqlparser.Select)
-	sel.SelectExprs = append(
-		sel.SelectExprs,
-		&sqlparser.NonStarExpr{
-			Expr: &sqlparser.ColName{
-				Metadata:  ref.Meta,
-				Qualifier: sqlparser.TableName{Name: ref.Meta.(*tabsym).ASTName},
-				Name:      ref.Name(),
-			},
-		},
-	)
-	return len(rb.Colsyms) - 1
+	sel.SelectExprs = append(sel.SelectExprs, c.SelectExpr())
+	return rs, len(rb.ResultColumns) - 1
 }
 
 // IsSingle returns true if the route targets only one database.

@@ -25,7 +25,7 @@ import (
 // jointab manages procurement and naming of join
 // variables across primitives.
 type jointab struct {
-	refs map[colref]string
+	refs map[*column]string
 	vars map[string]struct{}
 }
 
@@ -35,7 +35,7 @@ type jointab struct {
 // it generates don't collide with those already in use.
 func newJointab(bindvars map[string]struct{}) *jointab {
 	return &jointab{
-		refs: make(map[colref]string),
+		refs: make(map[*column]string),
 		vars: bindvars,
 	}
 }
@@ -44,7 +44,7 @@ func newJointab(bindvars map[string]struct{}) *jointab {
 // and returns the join var name for it.
 func (jt *jointab) Procure(bldr builder, col *sqlparser.ColName, to int) string {
 	from, joinVar := jt.Lookup(col)
-	// If joinVar is empty, jterate a unique name.
+	// If joinVar is empty, generate a unique name.
 	if joinVar == "" {
 		suffix := ""
 		i := 0
@@ -61,7 +61,7 @@ func (jt *jointab) Procure(bldr builder, col *sqlparser.ColName, to int) string 
 			suffix = strconv.Itoa(i)
 		}
 		jt.vars[joinVar] = struct{}{}
-		jt.refs[newColref(col)] = joinVar
+		jt.refs[col.Metadata.(*column)] = joinVar
 	}
 	bldr.SupplyVar(from, to, col, joinVar)
 	return joinVar
@@ -70,6 +70,6 @@ func (jt *jointab) Procure(bldr builder, col *sqlparser.ColName, to int) string 
 // Lookup returns the order of the route that supplies the column and
 // the join var name if one has already been assigned for it.
 func (jt *jointab) Lookup(col *sqlparser.ColName) (order int, joinVar string) {
-	ref := newColref(col)
-	return ref.Route().Order(), jt.refs[ref]
+	c := col.Metadata.(*column)
+	return c.Route().Order(), jt.refs[c]
 }

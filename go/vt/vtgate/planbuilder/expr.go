@@ -165,7 +165,7 @@ func hasSubquery(node sqlparser.SQLNode) bool {
 // for the current route. External references are treated as value.
 func exprIsValue(expr sqlparser.Expr, rb *route) bool {
 	if node, ok := expr.(*sqlparser.ColName); ok {
-		return node.Metadata.(sym).Route() != rb
+		return node.Metadata.(*column).Route() != rb
 	}
 	return sqlparser.IsValue(expr)
 }
@@ -174,7 +174,7 @@ func valEqual(a, b interface{}) bool {
 	switch a := a.(type) {
 	case *sqlparser.ColName:
 		if b, ok := b.(*sqlparser.ColName); ok {
-			return newColref(a) == newColref(b)
+			return a.Metadata == b.Metadata
 		}
 	case *sqlparser.SQLVal:
 		b, ok := b.(*sqlparser.SQLVal)

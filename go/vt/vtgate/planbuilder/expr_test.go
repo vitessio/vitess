@@ -24,17 +24,26 @@ import (
 )
 
 func TestValEqual(t *testing.T) {
-	ts := &tabsym{}
+	c1 := &column{}
+	c2 := &column{}
 	testcases := []struct {
 		in1, in2 interface{}
 		out      bool
 	}{{
-		in1: &sqlparser.ColName{Metadata: ts, Name: sqlparser.NewColIdent("c1")},
-		in2: &sqlparser.ColName{Metadata: ts, Name: sqlparser.NewColIdent("c1")},
+		in1: &sqlparser.ColName{Metadata: c1, Name: sqlparser.NewColIdent("c1")},
+		in2: &sqlparser.ColName{Metadata: c1, Name: sqlparser.NewColIdent("c1")},
 		out: true,
 	}, {
-		in1: &sqlparser.ColName{Metadata: ts, Name: sqlparser.NewColIdent("c1")},
-		in2: &sqlparser.ColName{Metadata: ts, Name: sqlparser.NewColIdent("c2")},
+		// Objects that have the same name need not be the same because
+		// they might have appeared in different scopes and could have
+		// resolved to different columns.
+		in1: &sqlparser.ColName{Metadata: c1, Name: sqlparser.NewColIdent("c1")},
+		in2: &sqlparser.ColName{Metadata: c2, Name: sqlparser.NewColIdent("c1")},
+		out: false,
+	}, {
+		in1: newValArg(":aa"),
+		in2: &sqlparser.ColName{Metadata: c1, Name: sqlparser.NewColIdent("c1")},
+		out: false,
 	}, {
 		in1: newValArg(":aa"),
 		in2: newValArg(":aa"),
@@ -61,15 +70,23 @@ func TestValEqual(t *testing.T) {
 	}, {
 		in1: newHexVal("3131"),
 		in2: newHexVal("3132"),
+		out: false,
 	}, {
 		in1: newHexVal("313"),
 		in2: newHexVal("3132"),
+		out: false,
 	}, {
 		in1: newHexVal("3132"),
 		in2: newHexVal("313"),
+		out: false,
+	}, {
+		in1: newIntVal("313"),
+		in2: newHexVal("3132"),
+		out: false,
 	}, {
 		in1: newHexVal("3132"),
 		in2: newIntVal("313"),
+		out: false,
 	}, {
 		in1: newIntVal("313"),
 		in2: newIntVal("313"),
@@ -77,6 +94,7 @@ func TestValEqual(t *testing.T) {
 	}, {
 		in1: newIntVal("313"),
 		in2: newIntVal("314"),
+		out: false,
 	}}
 	for _, tc := range testcases {
 		out := valEqual(tc.in1, tc.in2)

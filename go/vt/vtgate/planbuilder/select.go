@@ -128,11 +128,11 @@ func pushSelectExprs(sel *sqlparser.Select, bldr builder) error {
 		// in the distant future.
 		bldr.(*route).MakeDistinct()
 	}
-	colsyms, err := pushSelectRoutes(sel.SelectExprs, bldr)
+	resultColumns, err := pushSelectRoutes(sel.SelectExprs, bldr)
 	if err != nil {
 		return err
 	}
-	bldr.Symtab().Colsyms = colsyms
+	bldr.Symtab().ResultColumns = resultColumns
 	err = pushGroupBy(sel.GroupBy, bldr)
 	if err != nil {
 		return err
@@ -189,9 +189,9 @@ func checkAggregates(sel *sqlparser.Select, bldr builder) error {
 }
 
 // pusheSelectRoutes is a convenience function that pushes all the select
-// expressions and returns the list of colsyms generated for it.
-func pushSelectRoutes(selectExprs sqlparser.SelectExprs, bldr builder) ([]*colsym, error) {
-	colsyms := make([]*colsym, len(selectExprs))
+// expressions and returns the list of resultColumns generated for it.
+func pushSelectRoutes(selectExprs sqlparser.SelectExprs, bldr builder) ([]*resultColumn, error) {
+	resultColumns := make([]*resultColumn, len(selectExprs))
 	for i, node := range selectExprs {
 		switch node := node.(type) {
 		case *sqlparser.NonStarExpr:
@@ -199,7 +199,7 @@ func pushSelectRoutes(selectExprs sqlparser.SelectExprs, bldr builder) ([]*colsy
 			if err != nil {
 				return nil, err
 			}
-			colsyms[i], _, err = bldr.PushSelect(node, rb)
+			resultColumns[i], _, err = bldr.PushSelect(node, rb)
 			if err != nil {
 				return nil, err
 			}
@@ -217,7 +217,7 @@ func pushSelectRoutes(selectExprs sqlparser.SelectExprs, bldr builder) ([]*colsy
 					}
 				}
 			}
-			colsyms[i] = rb.PushAnonymous(node)
+			resultColumns[i] = rb.PushAnonymous(node)
 		case sqlparser.Nextval:
 			rb, ok := bldr.(*route)
 			if !ok {
@@ -228,8 +228,8 @@ func pushSelectRoutes(selectExprs sqlparser.SelectExprs, bldr builder) ([]*colsy
 				return nil, errors.New("NEXT used on a sharded table")
 			}
 			rb.ERoute.Opcode = engine.SelectNext
-			colsyms[i] = rb.PushAnonymous(node)
+			resultColumns[i] = rb.PushAnonymous(node)
 		}
 	}
-	return colsyms, nil
+	return resultColumns, nil
 }
