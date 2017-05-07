@@ -115,7 +115,6 @@ sql_mode=NO_ENGINE_SUBSTITUTION,STRICT_TRANS_TABLES
     - python-mysqldb
     - libssl-dev
     - g++
-    - mercurial
     - git
     - pkg-config
     - bison
@@ -125,7 +124,7 @@ sql_mode=NO_ENGINE_SUBSTITUTION,STRICT_TRANS_TABLES
     These can be installed with the following apt-get command:
 
     ``` sh
-    $ sudo apt-get install make automake libtool python-dev python-virtualenv python-mysqldb libssl-dev g++ mercurial git pkg-config bison curl unzip
+    $ sudo apt-get install make automake libtool python-dev python-virtualenv python-mysqldb libssl-dev g++ git pkg-config bison curl unzip
     ```
 
 5.  If you decided to use ZooKeeper in step 3, you also need to install a
@@ -161,7 +160,7 @@ sql_mode=NO_ENGINE_SUBSTITUTION,STRICT_TRANS_TABLES
 5.  Run the following commands:
 
     ``` sh
-    brew install go automake libtool python mercurial git bison curl wget homebrew/versions/mysql56
+    brew install go automake libtool python git bison curl wget homebrew/versions/mysql56
     pip install --upgrade pip setuptools
     pip install virtualenv
     pip install MySQL-python
