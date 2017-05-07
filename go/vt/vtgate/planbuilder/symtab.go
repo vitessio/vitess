@@ -74,7 +74,7 @@ func newSymtab(vschema VSchema) *symtab {
 }
 
 // AddAlias adds a table alias to symtab.
-func (st *symtab) AddAlias(alias *sqlparser.TableName, astName sqlparser.TableIdent, table *vindexes.Table, rb *route) {
+func (st *symtab) AddAlias(alias sqlparser.TableName, astName sqlparser.TableIdent, table *vindexes.Table, rb *route) {
 	st.tables = append(st.tables, &tabsym{
 		Alias:          alias,
 		ASTName:        astName,
@@ -107,9 +107,9 @@ func (st *symtab) Merge(newsyms *symtab) error {
 	return nil
 }
 
-func (st *symtab) findTable(alias *sqlparser.TableName) *tabsym {
+func (st *symtab) findTable(alias sqlparser.TableName) *tabsym {
 	for i, t := range st.tables {
-		if t.Alias.Equal(alias) {
+		if t.Alias == alias {
 			return st.tables[i]
 		}
 	}
@@ -260,7 +260,7 @@ type sym interface {
 // from the table name, which is something that VTTablet and MySQL
 // can't recognize.
 type tabsym struct {
-	Alias          *sqlparser.TableName
+	Alias          sqlparser.TableName
 	ASTName        sqlparser.TableIdent
 	route          *route
 	symtab         *symtab

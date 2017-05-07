@@ -45,7 +45,7 @@ type yySymType struct {
 	colName          *ColName
 	tableExprs       TableExprs
 	tableExpr        TableExpr
-	tableName        *TableName
+	tableName        TableName
 	indexHints       *IndexHints
 	expr             Expr
 	exprs            Exprs
@@ -1918,13 +1918,13 @@ yydefault:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		//line ./go/vt/sqlparser/sql.y:557
 		{
-			yyVAL.selectExpr = &StarExpr{TableName: &TableName{Name: yyDollar[1].tableIdent}}
+			yyVAL.selectExpr = &StarExpr{TableName: TableName{Name: yyDollar[1].tableIdent}}
 		}
 	case 76:
 		yyDollar = yyS[yypt-5 : yypt+1]
 		//line ./go/vt/sqlparser/sql.y:561
 		{
-			yyVAL.selectExpr = &StarExpr{TableName: &TableName{Qualifier: yyDollar[1].tableIdent, Name: yyDollar[3].tableIdent}}
+			yyVAL.selectExpr = &StarExpr{TableName: TableName{Qualifier: yyDollar[1].tableIdent, Name: yyDollar[3].tableIdent}}
 		}
 	case 77:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -1954,7 +1954,7 @@ yydefault:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		//line ./go/vt/sqlparser/sql.y:586
 		{
-			yyVAL.tableExprs = TableExprs{&AliasedTableExpr{Expr: &TableName{Name: NewTableIdent("dual")}}}
+			yyVAL.tableExprs = TableExprs{&AliasedTableExpr{Expr: TableName{Name: NewTableIdent("dual")}}}
 		}
 	case 83:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -2138,13 +2138,13 @@ yydefault:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		//line ./go/vt/sqlparser/sql.y:740
 		{
-			yyVAL.tableName = &TableName{Name: yyDollar[1].tableIdent}
+			yyVAL.tableName = TableName{Name: yyDollar[1].tableIdent}
 		}
 	case 116:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		//line ./go/vt/sqlparser/sql.y:744
 		{
-			yyVAL.tableName = &TableName{Qualifier: yyDollar[1].tableIdent, Name: yyDollar[3].tableIdent}
+			yyVAL.tableName = TableName{Qualifier: yyDollar[1].tableIdent, Name: yyDollar[3].tableIdent}
 		}
 	case 117:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -2918,13 +2918,13 @@ yydefault:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		//line ./go/vt/sqlparser/sql.y:1341
 		{
-			yyVAL.colName = &ColName{Qualifier: &TableName{Name: yyDollar[1].tableIdent}, Name: yyDollar[3].colIdent}
+			yyVAL.colName = &ColName{Qualifier: TableName{Name: yyDollar[1].tableIdent}, Name: yyDollar[3].colIdent}
 		}
 	case 249:
 		yyDollar = yyS[yypt-5 : yypt+1]
 		//line ./go/vt/sqlparser/sql.y:1345
 		{
-			yyVAL.colName = &ColName{Qualifier: &TableName{Qualifier: yyDollar[1].tableIdent, Name: yyDollar[3].tableIdent}, Name: yyDollar[5].colIdent}
+			yyVAL.colName = &ColName{Qualifier: TableName{Qualifier: yyDollar[1].tableIdent, Name: yyDollar[3].tableIdent}, Name: yyDollar[5].colIdent}
 		}
 	case 250:
 		yyDollar = yyS[yypt-1 : yypt+1]

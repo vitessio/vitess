@@ -346,7 +346,7 @@ type Insert struct {
 	Action   string
 	Comments Comments
 	Ignore   string
-	Table    *TableName
+	Table    TableName
 	Columns  Columns
 	Rows     InsertRows
 	OnDup    OnDup
@@ -428,7 +428,7 @@ func (node *Update) WalkSubtree(visit Visit) error {
 // Delete represents a DELETE statement.
 type Delete struct {
 	Comments Comments
-	Table    *TableName
+	Table    TableName
 	Where    *Where
 	OrderBy  OrderBy
 	Limit    *Limit
@@ -484,8 +484,8 @@ func (node *Set) WalkSubtree(visit Visit) error {
 // NewName is set for AlterStr, CreateStr, RenameStr.
 type DDL struct {
 	Action   string
-	Table    *TableName
-	NewName  *TableName
+	Table    TableName
+	NewName  TableName
 	IfExists bool
 }
 
@@ -631,7 +631,7 @@ func (Nextval) iSelectExpr()      {}
 
 // StarExpr defines a '*' or 'table.*' expression.
 type StarExpr struct {
-	TableName *TableName
+	TableName TableName
 }
 
 // Format formats the node.
@@ -803,21 +803,21 @@ type SimpleTableExpr interface {
 	SQLNode
 }
 
-func (*TableName) iSimpleTableExpr() {}
-func (*Subquery) iSimpleTableExpr()  {}
+func (TableName) iSimpleTableExpr() {}
+func (*Subquery) iSimpleTableExpr() {}
 
 // TableName represents a table  name.
-// Qualifier, if specified, represents a database.
-// It's generally not supported because vitess has its own
-// rules about which database to send a query to.
+// Qualifier, if specified, represents a database or keyspace.
+// TableName is a value struct whose fields are case sensitive.
+// This means two TableName vars can be compared for equality
+// and a TableName can also be used as key in a map.
 type TableName struct {
 	Name, Qualifier TableIdent
 }
 
 // Format formats the node.
-func (node *TableName) Format(buf *TrackedBuffer) {
-	// node can be nil for unqualified column names.
-	if node == nil {
+func (node TableName) Format(buf *TrackedBuffer) {
+	if node.IsEmpty() {
 		return
 	}
 	if !node.Qualifier.IsEmpty() {
@@ -827,10 +827,7 @@ func (node *TableName) Format(buf *TrackedBuffer) {
 }
 
 // WalkSubtree walks the nodes of the subtree.
-func (node *TableName) WalkSubtree(visit Visit) error {
-	if node == nil {
-		return nil
-	}
+func (node TableName) WalkSubtree(visit Visit) error {
 	return Walk(
 		visit,
 		node.Name,
@@ -839,29 +836,16 @@ func (node *TableName) WalkSubtree(visit Visit) error {
 }
 
 // IsEmpty returns true if TableName is nil or empty.
-func (node *TableName) IsEmpty() bool {
-	return node == nil || (node.Qualifier.IsEmpty() && node.Name.IsEmpty())
-}
-
-// Equal returns true if the table names match.
-func (node *TableName) Equal(t *TableName) bool {
-	if node.IsEmpty() {
-		if t.IsEmpty() {
-			return true
-		}
-		return false
-	}
-	if t.IsEmpty() {
-		return false
-	}
-	return node.Name == t.Name && node.Qualifier == t.Qualifier
+func (node TableName) IsEmpty() bool {
+	// If Name is empty, Qualifer is also empty.
+	return node.Name.IsEmpty()
 }
 
 // ToViewName returns a TableName acceptable for use as a VIEW. VIEW names are
 // always lowercase, so ToViewName lowercasese the name. Databases are case-sensitive
 // so Qualifier is left untouched.
-func (node *TableName) ToViewName() *TableName {
-	return &TableName{
+func (node TableName) ToViewName() TableName {
+	return TableName{
 		Qualifier: node.Qualifier,
 		Name:      NewTableIdent(strings.ToLower(node.Name.v)),
 	}
@@ -1400,7 +1384,7 @@ type ColName struct {
 	// table or column this node references.
 	Metadata  interface{}
 	Name      ColIdent
-	Qualifier *TableName
+	Qualifier TableName
 }
 
 // Format formats the node.
@@ -1429,7 +1413,7 @@ func (node *ColName) Equal(c *ColName) bool {
 	if node == nil || c == nil {
 		return false
 	}
-	return node.Name.Equal(c.Name) && node.Qualifier.Equal(c.Qualifier)
+	return node.Name.Equal(c.Name) && node.Qualifier == c.Qualifier
 }
 
 // ColTuple represents a list of column values.
