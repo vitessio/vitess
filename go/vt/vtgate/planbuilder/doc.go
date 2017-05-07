@@ -52,36 +52,25 @@ the original request into a Route. If it's not possible,
 we see if we can build a primitive for it. If none exist,
 we return an error.
 
+The primitives are built as an execution tree.
+In order to traverse the tree
+to reach a certain node, we use a numbering system
+where every node is assigned an order. The lowest level
+nodes are assigned numbers based on their execution
+order. The higher level nodes inherit the highest
+order of the nodes they encompass, and this goes
+recursively up until the root node, whose order will
+always be the same as the last route. Primitives may
+themselves store additional information for efficient
+traversal. For example, join stores LeftOrder and
+RightOrder. Its usage is explained in the join type.
+
 The central design element for analyzing queries and
 building plans is the symbol table (symtab). This data
-structure contains tabsym and colsym elements.
-A tabsym element represents a table alias defined
-in the FROM clause. A tabsym must always point
-to a route, which is responsible for building
-the SELECT statement for that alias.
-A colsym represents a result column. It can optionally
-point to a tabsym if it's a plain column reference
-of that alias. A colsym must always point to a route.
-One symtab is created per SELECT statement. tabsym
-names must be unique within each symtab. Currently,
-duplicates are allowed among colsyms, just like MySQL
-does. Different databases implement different rules
-about whether colsym symbols can hide the tabsym
-symbols. The rules used by MySQL are not well documented.
-Therefore, we use the conservative rule that no
-tabsym can be seen if colsyms are present.
-
-The symbol table is modified as various sections of the
-query are parsed. The parsing of the FROM clause
-populates the table aliases. These are then used
-by the WHERE and SELECT clauses. The SELECT clause
-produces the colsyms, which are added to the
-symtab after the analysis is done. Consequently,
-the GROUP BY, HAVING and ORDER BY clauses can only
-see the colsyms. They're not allowed to reference
-the table aliases. These access rules transitively
-apply to subqueries in those clauses, which is the
-intended behavior.
+structure evolves as a query is analyzed. Therefore,
+searches are not repeatable. To resolve this, search
+results are persisted inside the ColName as 'Metadata',
+and reused as needed.
 
 The plan is built in two phases. In the
 first phase (break-up and push-down), the query is
@@ -90,47 +79,11 @@ Join or Route primitives. In the second phase (wire-up),
 external references are wired up using bind vars, and
 the individual ASTs are converted into actual queries.
 
-Since the symbol table evolved during the first phase,
-the wire-up phase cannot reuse it. In order to address
-this, we save a pointer to the resolved symbol inside
-every column reference, which we can reuse during
-the wire-up. The Route for each symbol is used to
-determine if a reference is local or not. Anything
-external is converted to a bind var.
-
-A route can be merged with another one. If this happens,
-we should ideally repoint all symbols of that route to the
-new one. This gets complicated because each route would
-need to know the symbols that point to it.
-Instead, we mark the current route as defunct
-by redirecting to point to the new one. During symbol resolution
-we chase this pointer until we reach a non-defunct route.
-
-The VSchema currently doesn't contain the full list of columns
-in the tables. For the sake of convenience, if a query
-references only one table, then we implicitly assume that
-all column references are against that table. However,
-in the case of a join, the query must qualify every
-column reference (table.col). Otherwise, we can't know which
-tables they're referring to. This same rule applies to subqueries.
-There is one possibility that's worth mentioning, because
-it may become relevant in the future: A subquery in the
-HAVING clause may refer to an unqualified symbol. If that
-subquery references only one table, then that symbol is
-automatically presumed to be part of that table. However,
-in reality, it may actually be a reference to a select
-expression of the outer query. Fortunately, such use cases
-are virtually non-exisitent. So, we don't have to worry
-about it right now.
-
-Due to the absence of the column list, we assume that
+In current architecture, VTGate does not know the
+underlying MySQL schema. Due to this, we assume that
 any qualified or implicit column reference of a table
-is valid. In terms of data structure, the Metadata
-only points to the table alias. Therefore, a unique
-column reference is a pointer to a table alias and a
-column name. This is the basis for the definition of the
-colref type. If the colref points to a colsym, then
-the column name is irrelevant.
+is valid and we rely on the underlying vttablet/MySQL
+to eventually validate such references.
 
 Variable naming: The AST, planbuilder and engine
 are three different worlds that use overloaded

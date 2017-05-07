@@ -247,8 +247,8 @@
         "Name": "user",
         "Sharded": true
       },
-      "Query": "select user.col1 as a, user.col2, user.id from user where user.id = 1 order by a asc, user.col2 desc",
-      "FieldQuery": "select user.col1 as a, user.col2, user.id from user where 1 != 1",
+      "Query": "select user.col1 as a, user.col2, user.Id from user where user.id = 1 order by a asc, user.col2 desc",
+      "FieldQuery": "select user.col1 as a, user.col2, user.Id from user where 1 != 1",
       "Vindex": "user_index",
       "Values": 1
     },
@@ -289,8 +289,8 @@
         "Name": "user",
         "Sharded": true
       },
-      "Query": "select user.col1 as a, user.col2, user.id from user where user.id = 1 order by null",
-      "FieldQuery": "select user.col1 as a, user.col2, user.id from user where 1 != 1",
+      "Query": "select user.col1 as a, user.col2, user.Id from user where user.id = 1 order by null",
+      "FieldQuery": "select user.col1 as a, user.col2, user.Id from user where 1 != 1",
       "Vindex": "user_index",
       "Values": 1
     },
@@ -331,8 +331,8 @@
         "Name": "user",
         "Sharded": true
       },
-      "Query": "select user.col1 as a, user.col2, user.id from user where user.id = 1 order by 1 asc, 2 desc",
-      "FieldQuery": "select user.col1 as a, user.col2, user.id from user where 1 != 1",
+      "Query": "select user.col1 as a, user.col2, user.Id from user where user.id = 1 order by 1 asc, 2 desc",
+      "FieldQuery": "select user.col1 as a, user.col2, user.Id from user where 1 != 1",
       "Vindex": "user_index",
       "Values": 1
     },

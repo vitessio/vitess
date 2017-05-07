@@ -105,7 +105,6 @@ func unionRouteMerge(union *sqlparser.Union, left, right builder, vschema VSchem
 		table,
 		vschema,
 		sqlparser.TableName{Name: sqlparser.NewTableIdent("")}, // Unions don't have an addressable table name.
-		sqlparser.NewTableIdent(""),
 	)
 	lroute.Redirect = rtb
 	rroute.Redirect = rtb

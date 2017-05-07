@@ -56,12 +56,12 @@ type builder interface {
 	// to subqueries.
 	SetRHS()
 	// PushSelect pushes the select expression through the tree
-	// all the way to the route that colsym points to.
+	// all the way to the route that resultColumn points to.
 	// PushSelect is similar to SupplyCol except that it always
 	// adds a new column, whereas SupplyCol can reuse an existing
-	// column. The function must return a colsym for the expression
+	// column. The function must return a resultColumn for the expression
 	// and the column number of the result.
-	PushSelect(expr *sqlparser.NonStarExpr, rb *route) (colsym *colsym, colnum int, err error)
+	PushSelect(expr *sqlparser.NonStarExpr, rb *route) (rc *resultColumn, colnum int, err error)
 	// PushOrderByNull pushes the special case ORDER By NULL to
 	// all routes. It's safe to push down this clause because it's
 	// just on optimization hint.
@@ -78,10 +78,10 @@ type builder interface {
 	SupplyVar(from, to int, col *sqlparser.ColName, varname string)
 	// SupplyCol will be used for the wire-up process. This function
 	// takes a column reference as input, changes the primitive
-	// to supply the requested column and returns the column number of
-	// the result for it. The request is passed down recursively
+	// to supply the requested column and returns the resultColumn and
+	// column number of the result. The request is passed down recursively
 	// as needed.
-	SupplyCol(ref colref) int
+	SupplyCol(c *column) (rc *resultColumn, colnum int)
 }
 
 // VSchema defines the interface for this package to fetch
