@@ -84,7 +84,7 @@ type Conn struct {
 	// It is set during the initial handshake.
 	//
 	// It is only used for CapabilityClientDeprecateEOF
-	// and CapabilityClientFoundRows
+	// and CapabilityClientFoundRows.
 	Capabilities uint32
 
 	// CharacterSet is the character set used by the other side of the

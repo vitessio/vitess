@@ -213,25 +213,31 @@ func (e *Executor) handleSet(ctx context.Context, session *vtgatepb.Session, sql
 			if !ok {
 				return &sqltypes.Result{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value type for autocommit: %T", v)
 			}
-			if val != 0 {
-				session.Autocommit = true
-			} else {
+			switch val {
+			case 0:
 				session.Autocommit = false
+			case 1:
+				session.Autocommit = true
+			default:
+				return &sqltypes.Result{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value for autocommit: %d", val)
 			}
 		case "client_found_rows":
 			val, ok := v.(int64)
 			if !ok {
 				return &sqltypes.Result{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value type for client_found_rows: %T", v)
 			}
-			if val != 0 {
+			switch val {
+			case 0:
+				if session.Options != nil {
+					session.Options.ClientFoundRows = false
+				}
+			case 1:
 				if session.Options == nil {
 					session.Options = &querypb.ExecuteOptions{}
 				}
 				session.Options.ClientFoundRows = true
-			} else {
-				if session.Options != nil {
-					session.Options.ClientFoundRows = false
-				}
+			default:
+				return &sqltypes.Result{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value for client_found_rows: %d", val)
 			}
 		case "transaction_mode":
 			val, ok := v.(string)
