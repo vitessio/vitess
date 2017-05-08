@@ -578,8 +578,8 @@ func (c *Conn) writeOKPacketWithEOFHeader(affectedRows, lastInsertID uint64, fla
 	pos = writeByte(data, pos, EOFPacket)
 	pos = writeLenEncInt(data, pos, affectedRows)
 	pos = writeLenEncInt(data, pos, lastInsertID)
-	pos = writeUint16(data, pos, flags)
 	pos = writeUint16(data, pos, warnings)
+	pos = writeUint16(data, pos, flags)
 
 	if err := c.writeEphemeralPacket(false); err != nil {
 		return err
