@@ -59,14 +59,6 @@ func newVtgateHandler(vtg *VTGate) *vtgateHandler {
 }
 
 func (vh *vtgateHandler) NewConnection(c *mysqlconn.Conn) {
-	// Set the session var if CLIENT_FOUND_ROWS is set.
-	if c.Capabilities&mysqlconn.CapabilityClientFoundRows != 0 {
-		c.ClientData = &vtgatepb.Session{
-			Options: &querypb.ExecuteOptions{
-				ClientFoundRows: true,
-			},
-		}
-	}
 }
 
 func (vh *vtgateHandler) ConnectionClosed(c *mysqlconn.Conn) {
@@ -98,6 +90,9 @@ func (vh *vtgateHandler) ComQuery(c *mysqlconn.Conn, query string) (*sqltypes.Re
 			Options: &querypb.ExecuteOptions{
 				IncludedFields: querypb.ExecuteOptions_ALL,
 			},
+		}
+		if c.Capabilities&mysqlconn.CapabilityClientFoundRows != 0 {
+			session.Options.ClientFoundRows = true
 		}
 	}
 	if c.SchemaName != "" {

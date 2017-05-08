@@ -142,6 +142,8 @@ func TestTxPoolClientRowsFound(t *testing.T) {
 	startNormalSize := txPool.conns.Available()
 	startFoundRowsSize := txPool.foundRowsPool.Available()
 
+	// Start a 'normal' transaction. It should take a connection
+	// for the normal 'conns' pool.
 	id1, err := txPool.Begin(ctx, false)
 	if err != nil {
 		t.Fatal(err)
@@ -153,6 +155,8 @@ func TestTxPoolClientRowsFound(t *testing.T) {
 		t.Errorf("foundRows pool size: %d, want %d", got, want)
 	}
 
+	// Start a 'foundRows' transaction. It should take a connection
+	// from the foundRows pool.
 	id2, err := txPool.Begin(ctx, true)
 	if err != nil {
 		t.Fatal(err)
@@ -164,6 +168,8 @@ func TestTxPoolClientRowsFound(t *testing.T) {
 		t.Errorf("foundRows pool size: %d, want %d", got, want)
 	}
 
+	// Rollback the first transaction. The conn should be returned to
+	// the conns pool.
 	txPool.Rollback(ctx, id1)
 	if got, want := txPool.conns.Available(), startNormalSize; got != want {
 		t.Errorf("Normal pool size: %d, want %d", got, want)
@@ -172,6 +178,8 @@ func TestTxPoolClientRowsFound(t *testing.T) {
 		t.Errorf("foundRows pool size: %d, want %d", got, want)
 	}
 
+	// Rollback the second transaction. The conn should be returned to
+	// the foundRows pool.
 	txPool.Rollback(ctx, id2)
 	if got, want := txPool.conns.Available(), startNormalSize; got != want {
 		t.Errorf("Normal pool size: %d, want %d", got, want)

@@ -61,7 +61,13 @@ var (
 
 // TxPool is the transaction pool for the query service.
 type TxPool struct {
-	conns         *connpool.Pool
+	// conns is the 'regular' pool. By default, connections
+	// are pulled from here for starting transactions.
+	conns *connpool.Pool
+	// foundRowsPool is the alternate pool that creates
+	// connections with CLIENT_FOUND_ROWS flag set. A separate
+	// pool is needed because this option can only be set at
+	// connection time.
 	foundRowsPool *connpool.Pool
 	activePool    *pools.Numbered
 	lastID        sync2.AtomicInt64

@@ -97,6 +97,7 @@ var TestExecuteOptions = &querypb.ExecuteOptions{
 		Shard:     "ssss",
 		Position:  "pppp",
 	},
+	ClientFoundRows: true,
 }
 
 const TestAsTransaction bool = true

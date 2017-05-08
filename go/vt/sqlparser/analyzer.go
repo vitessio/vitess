@@ -219,6 +219,8 @@ func StringIn(str string, values ...string) bool {
 
 // ExtractSetValues returns a map of key-value pairs
 // if the query is a SET statement. Values can be int64 or string.
+// Since set variable names are case insensitive, all keys are returned
+// as lower case.
 func ExtractSetValues(sql string) (map[string]interface{}, error) {
 	stmt, err := Parse(sql)
 	if err != nil {
