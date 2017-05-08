@@ -900,10 +900,9 @@ func (wr *Wrangler) DeleteKeyspace(ctx context.Context, keyspace string, recursi
 	return wr.ts.DeleteKeyspace(ctx, keyspace)
 }
 
-// RemoveKeyspaceCell will remove a cell from the Cells list in all shards of a keyspace.
-//
-// It is essentially a shortcut for calling RemoveShardCell on every shard,
-// reducing the potential for operator error when there are many shards.
+// RemoveKeyspaceCell will remove a cell from the Cells list in all
+// shards of a keyspace (by calling RemoveShardCell on every
+// shard). It will also remove the SrvKeyspace for that keyspace/cell.
 func (wr *Wrangler) RemoveKeyspaceCell(ctx context.Context, keyspace, cell string, force, recursive bool) error {
 	shards, err := wr.ts.GetShardNames(ctx, keyspace)
 	if err != nil {
@@ -915,5 +914,8 @@ func (wr *Wrangler) RemoveKeyspaceCell(ctx context.Context, keyspace, cell strin
 			return fmt.Errorf("can't remove cell %v from shard %v/%v: %v", cell, keyspace, shard, err)
 		}
 	}
-	return nil
+
+	// Now remove the SrvKeyspace object.
+	wr.Logger().Infof("Removing cell %v keyspace %v SrvKeyspace object", cell, keyspace)
+	return wr.ts.DeleteSrvKeyspace(ctx, cell, keyspace)
 }
