@@ -755,6 +755,7 @@ public class VitessPreparedStatement extends VitessStatement implements Prepared
         checkOpen();
         if (x.length() > Integer.MAX_VALUE) {
             throw new SQLFeatureNotSupportedException(
+                String.format("Clob size over %d not support", Integer.MAX_VALUE),
                 Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
         }
         // Clob uses 1-based indexing!
