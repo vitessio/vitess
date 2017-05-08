@@ -26,6 +26,7 @@ import java.util.Calendar;
 import java.util.List;
 import java.util.Map;
 import java.util.TimeZone;
+import javax.sql.rowset.serial.SerialClob;
 import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -505,6 +506,7 @@ import org.powermock.modules.junit4.PowerMockRunner;
         preparedStatement.setObject(39, dateValue, Types.DATE, 0);
         preparedStatement.setObject(40, timeValue, Types.TIME, 0);
         preparedStatement.setObject(41, timestampValue, Types.TIMESTAMP, 0);
+        preparedStatement.setClob(42, new SerialClob("clob".toCharArray()));
         try {
             preparedStatement.setObject(42, bytesValue);
             Assert.fail("Shown have thrown exception for not able to set byte[] parameter");
@@ -557,6 +559,7 @@ import org.powermock.modules.junit4.PowerMockRunner;
         Assert.assertEquals(dateValue.toString(), bindVariables.get("v39"));
         Assert.assertEquals(timeValue.toString(), bindVariables.get("v40"));
         Assert.assertEquals(timestampValue.toString(), bindVariables.get("v41"));
+        Assert.assertEquals("clob", bindVariables.get("v42"));
 
         preparedStatement.clearParameters();
     }
