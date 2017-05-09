@@ -626,7 +626,7 @@ type SelectExpr interface {
 }
 
 func (*StarExpr) iSelectExpr()    {}
-func (*NonStarExpr) iSelectExpr() {}
+func (*AliasedExpr) iSelectExpr() {}
 func (Nextval) iSelectExpr()      {}
 
 // StarExpr defines a '*' or 'table.*' expression.
@@ -653,14 +653,14 @@ func (node *StarExpr) WalkSubtree(visit Visit) error {
 	)
 }
 
-// NonStarExpr defines a non-'*' select expr.
-type NonStarExpr struct {
+// AliasedExpr defines an aliased SELECT expression.
+type AliasedExpr struct {
 	Expr Expr
 	As   ColIdent
 }
 
 // Format formats the node.
-func (node *NonStarExpr) Format(buf *TrackedBuffer) {
+func (node *AliasedExpr) Format(buf *TrackedBuffer) {
 	buf.Myprintf("%v", node.Expr)
 	if !node.As.IsEmpty() {
 		buf.Myprintf(" as %v", node.As)
@@ -668,7 +668,7 @@ func (node *NonStarExpr) Format(buf *TrackedBuffer) {
 }
 
 // WalkSubtree walks the nodes of the subtree.
-func (node *NonStarExpr) WalkSubtree(visit Visit) error {
+func (node *AliasedExpr) WalkSubtree(visit Visit) error {
 	if node == nil {
 		return nil
 	}

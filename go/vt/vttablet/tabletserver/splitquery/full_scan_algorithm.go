@@ -184,7 +184,7 @@ func convertColumnsToSelectExprs(columns []*schema.TableColumn) sqlparser.Select
 	result := make([]sqlparser.SelectExpr, 0, len(columns))
 	for _, column := range columns {
 		result = append(result,
-			&sqlparser.NonStarExpr{
+			&sqlparser.AliasedExpr{
 				Expr: &sqlparser.ColName{
 					Name: column.Name,
 				},

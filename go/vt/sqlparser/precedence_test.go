@@ -77,7 +77,7 @@ func TestPlusStarPrecedence(t *testing.T) {
 			t.Error(err)
 			continue
 		}
-		expr := readable(tree.(*Select).SelectExprs[0].(*NonStarExpr).Expr)
+		expr := readable(tree.(*Select).SelectExprs[0].(*AliasedExpr).Expr)
 		if expr != tcase.output {
 			t.Errorf("Parse: \n%s, want: \n%s", expr, tcase.output)
 		}

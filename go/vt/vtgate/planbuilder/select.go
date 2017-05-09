@@ -178,7 +178,7 @@ func checkAggregates(sel *sqlparser.Select, bldr builder) error {
 	// vindex in the select list.
 	for _, selectExpr := range sel.SelectExprs {
 		switch selectExpr := selectExpr.(type) {
-		case *sqlparser.NonStarExpr:
+		case *sqlparser.AliasedExpr:
 			vindex := bldr.Symtab().Vindex(selectExpr.Expr, rb, true)
 			if vindex != nil && vindexes.IsUnique(vindex) {
 				return nil
@@ -194,7 +194,7 @@ func pushSelectRoutes(selectExprs sqlparser.SelectExprs, bldr builder) ([]*resul
 	resultColumns := make([]*resultColumn, len(selectExprs))
 	for i, node := range selectExprs {
 		switch node := node.(type) {
-		case *sqlparser.NonStarExpr:
+		case *sqlparser.AliasedExpr:
 			rb, err := findRoute(node.Expr, bldr)
 			if err != nil {
 				return nil, err

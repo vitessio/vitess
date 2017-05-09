@@ -169,7 +169,7 @@ func (jb *join) SetRHS() {
 
 // PushSelect pushes the select expression into the join and
 // recursively down.
-func (jb *join) PushSelect(expr *sqlparser.NonStarExpr, rb *route) (rc *resultColumn, colnum int, err error) {
+func (jb *join) PushSelect(expr *sqlparser.AliasedExpr, rb *route) (rc *resultColumn, colnum int, err error) {
 	if jb.isOnLeft(rb.Order) {
 		rc, colnum, err = jb.Left.PushSelect(expr, rb)
 		if err != nil {
