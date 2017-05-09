@@ -31,7 +31,6 @@ pylint_script=$VTTOP/tools/pylint.sh
 # This script does not handle file names that contain spaces.
 pyfiles=$(git diff --cached --name-only --diff-filter=ACM | grep '.*\.py$' | grep -v '^py/vtproto/')
 if [ -z "$pyfiles" ] ; then
-  msg "No python files changed."
   exit 0
 fi
 
