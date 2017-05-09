@@ -2,10 +2,15 @@
 #
 # Precommit hook which runs 'tslint' to lint TypeScript code.
 #
+
+# By default diff against cached files for commit, but also support diff
+# against another base (e.g. origin/master)
+: ${GIT_BASE:="--cached"}
+
 # It gets only triggered when a file below $vtctld_web_src was changed.
 vtctld_web="web/vtctld2"
 
-git diff --cached --name-only --diff-filter=ACM | grep -q "^${vtctld_web}/src"
+git diff $GIT_BASE --name-only --diff-filter=ACM | grep -q "^${vtctld_web}/src"
 if [ $? -ne 0 ]; then
   # No potential TypeScript file changed. Return early.
   exit 0

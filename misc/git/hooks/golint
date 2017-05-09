@@ -13,6 +13,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# By default diff against cached files for commit, but also support diff
+# against another base (e.g. origin/master)
+: ${GIT_BASE:="--cached"}
+
 # git golint pre-commit hook
 #
 # To use, store as .git/hooks/pre-commit inside your repository and make sure
@@ -29,7 +33,7 @@ if [ -z "$(which golint)" ]; then
 fi
 
 # This script does not handle file names that contain spaces.
-gofiles=$(git diff --cached --name-only --diff-filter=ACM | grep '^go/.*\.go$' | grep -v '^go/vt/proto/' | grep -v 'go/vt/sqlparser/sql.go')
+gofiles=$(git diff $GIT_BASE --name-only --diff-filter=ACM | grep '^go/.*\.go$' | grep -v '^go/vt/proto/' | grep -v 'go/vt/sqlparser/sql.go')
 
 errors=
 
