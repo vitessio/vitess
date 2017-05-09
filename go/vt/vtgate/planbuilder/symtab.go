@@ -73,7 +73,7 @@ func (c *column) Route() *route {
 // SelectExpr returns a select expression that
 // can be added to the AST.
 func (c *column) SelectExpr() sqlparser.SelectExpr {
-	return &sqlparser.NonStarExpr{
+	return &sqlparser.AliasedExpr{
 		Expr: &sqlparser.ColName{
 			Metadata:  c,
 			Qualifier: sqlparser.TableName{Name: c.table.alias.Name},
@@ -275,7 +275,7 @@ func (st *symtab) searchTables(col *sqlparser.ColName, autoResolve bool) *route 
 // NewResultColumn creates a new resultColumn based on the supplied expression.
 // The created symbol is not remembered until it is later set as ResultColumns
 // after all select expressions are analyzed.
-func (st *symtab) NewResultColumn(expr *sqlparser.NonStarExpr, rb *route) *resultColumn {
+func (st *symtab) NewResultColumn(expr *sqlparser.AliasedExpr, rb *route) *resultColumn {
 	rc := &resultColumn{
 		alias: expr.As,
 	}

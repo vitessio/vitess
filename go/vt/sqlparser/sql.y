@@ -551,7 +551,7 @@ select_expression:
   }
 | expression as_ci_opt
   {
-    $$ = &NonStarExpr{Expr: $1, As: $2}
+    $$ = &AliasedExpr{Expr: $1, As: $2}
   }
 | table_id '.' '*'
   {

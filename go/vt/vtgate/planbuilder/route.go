@@ -336,7 +336,7 @@ func (rb *route) computeINPlan(comparison *sqlparser.ComparisonExpr) (opcode eng
 }
 
 // PushSelect pushes the select expression into the route.
-func (rb *route) PushSelect(expr *sqlparser.NonStarExpr, _ *route) (rc *resultColumn, colnum int, err error) {
+func (rb *route) PushSelect(expr *sqlparser.AliasedExpr, _ *route) (rc *resultColumn, colnum int, err error) {
 	// Pushing of non-trivial expressions not allowed for RHS of left joins.
 	if _, ok := expr.Expr.(*sqlparser.ColName); !ok && rb.IsRHS {
 		return nil, 0, errors.New("unsupported: complex left join and column expressions")
@@ -424,7 +424,7 @@ func (rb *route) Wireup(bldr builder, jt *jointab) error {
 		case *sqlparser.Select:
 			if len(node.SelectExprs) == 0 {
 				node.SelectExprs = sqlparser.SelectExprs([]sqlparser.SelectExpr{
-					&sqlparser.NonStarExpr{
+					&sqlparser.AliasedExpr{
 						Expr: sqlparser.NewIntVal([]byte{'1'}),
 					},
 				})

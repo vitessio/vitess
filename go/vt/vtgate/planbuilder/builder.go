@@ -64,7 +64,7 @@ type builder interface {
 	// adds a new column, whereas SupplyCol can reuse an existing
 	// column. The function must return a resultColumn for the expression
 	// and the column number of the result.
-	PushSelect(expr *sqlparser.NonStarExpr, rb *route) (rc *resultColumn, colnum int, err error)
+	PushSelect(expr *sqlparser.AliasedExpr, rb *route) (rc *resultColumn, colnum int, err error)
 	// PushOrderByNull pushes the special case ORDER By NULL to
 	// all routes. It's safe to push down this clause because it's
 	// just on optimization hint.
