@@ -50,7 +50,7 @@ func (vh *vtgateHandler) ConnectionClosed(c *mysqlconn.Conn) {
 	ctx := context.Background()
 	session, _ := c.ClientData.(*vtgatepb.Session)
 	if (session != nil) {
-		_, _, _ = vh.vtg.Execute(ctx, session, "rollback", make(map[string]interface{}))
+		_, _, _ = vh.vtg.Execute(ctx, "rollback", make(map[string]interface{}), session)
 	}
 }
 
