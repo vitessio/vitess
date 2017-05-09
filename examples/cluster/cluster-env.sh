@@ -1,18 +1,18 @@
 hostname=`hostname -f`
 vtctld_web_port=15000
+cell='applift'
 
-# Add all hosts here in a similar fashion 
-zkcfg=(\
-    "1@10.124.117.95:2181:2888:3888" \
-    "2@10.124.117.88:2181:2888:3888" \
-    )
+script_root=`dirname "${BASH_SOURCE}"`
+source $script_root/zk.cfg
+
 printf -v zkcfg ",%s" "${zkcfg[@]}"
 zkcfg=${zkcfg:1}
-ZK_SERVER=$(echo $zkcfg | awk -F'[@,:]' '{print $2":"$3","$7":"$8}')
-
+ZK_SERVER=$(echo $zkcfg | awk -F'[@,:]' '{out=""; for(i=2;i<=NF;i+=5){out=out","$i":"$(i+1)}; print substr(out,2)}')
 zkids=$(echo $zkcfg | awk 'gsub(/@[^,]*/,"")' | awk 'gsub(/,/," ")')
 
 # Set up environment.
+export VTROOT=/opt/vitess/
+export VTDATAROOT=/opt/vitess/vtdataroot
 export VTTOP=$VTROOT/src/github.com/youtube/vitess
 
 # Try to find mysqld_safe on PATH.
