@@ -4,9 +4,12 @@ import (
 	"crypto/tls"
 	"fmt"
 	"net"
+	"time"
 
 	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/proc"
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/tb"
 )
 
@@ -14,6 +17,13 @@ const (
 	// DefaultServerVersion is the default server version we're sending to the client.
 	// Can be changed.
 	DefaultServerVersion = "5.5.10-Vitess"
+
+	// Timing metric keys
+	AcceptTiming = "Accept"
+	HandshakeTiming = "Handshake"
+	AuthenticateTiming = "Authenticate"
+
+	QueryTiming = "Query"
 )
 
 // A Handler is an interface used by Listener to send queries.
@@ -71,10 +81,15 @@ type Listener struct {
 	// by the server when TLS is not in use.
 	AllowClearTextWithoutTLS bool
 
+	// Timing Stats
+	connectTimings *stats.Timings
+	queryTimings *stats.Timings
+
 	// The following parameters are changed by the Accept routine.
 
 	// Incrementing ID for connection id.
 	connectionID uint32
+
 }
 
 // NewListener creates a new Listener.
@@ -84,10 +99,15 @@ func NewListener(protocol, address string, authServer AuthServer, handler Handle
 		return nil, err
 	}
 
+	countingListener := proc.Published(listener, "MysqlServerConnCount", "MysqlServerConnAccepted")
+
 	return &Listener{
 		authServer: authServer,
 		handler:    handler,
-		listener:   listener,
+		listener:   countingListener,
+
+		connectTimings:    stats.NewTimings("MysqlServerConnTimings"),
+		queryTimings:    stats.NewTimings("MysqlServerQueryTimings"),
 
 		ServerVersion: DefaultServerVersion,
 		connectionID:  1,
@@ -108,17 +128,19 @@ func (l *Listener) Accept() {
 			return
 		}
 
+		acceptTime := time.Now()
+
 		connectionID := l.connectionID
 		l.connectionID++
 
-		go l.handle(conn, connectionID)
+		go l.handle(conn, connectionID, acceptTime)
 	}
 }
 
 // handle is called in a go routine for each client connection.
 // FIXME(alainjobart) handle per-connection logs in a way that makes sense.
 // FIXME(alainjobart) add an idle timeout for the connection.
-func (l *Listener) handle(conn net.Conn, connectionID uint32) {
+func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Time) {
 	c := newConn(conn)
 	c.ConnectionID = connectionID
 
@@ -133,6 +155,10 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32) {
 	// Tell the handler about the connection coming and going.
 	l.handler.NewConnection(c)
 	defer l.handler.ConnectionClosed(c)
+
+	// Record how long we took to accept the connection and start the handshake
+	l.connectTimings.Record(AcceptTiming, acceptTime)
+	startHandshake := time.Now()
 
 	// First build and send the server handshake packet.
 	salt, err := c.writeHandshakeV10(l.ServerVersion, l.authServer, l.TLSConfig != nil)
@@ -153,6 +179,7 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32) {
 		log.Errorf("Cannot parse client handshake response: %v", err)
 		return
 	}
+
 	if c.Capabilities&CapabilityClientSSL > 0 {
 		// SSL was enabled. We need to re-read the auth packet.
 		response, err = c.readEphemeralPacket()
@@ -167,6 +194,11 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32) {
 			return
 		}
 	}
+
+
+	// Record how long we took to execute the handshake
+	l.connectTimings.Record(HandshakeTiming, startHandshake)
+	startAuth := time.Now()
 
 	// See what auth method the AuthServer wants to use for that user.
 	authServerMethod, err := l.authServer.AuthMethod(user)
@@ -233,6 +265,9 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32) {
 		return
 	}
 
+	// Record how long we took to do the authentication handshake
+	l.connectTimings.Record(AuthenticateTiming, startAuth)
+
 	for {
 		c.sequence = 0
 		data, err := c.readEphemeralPacket()
@@ -252,6 +287,7 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32) {
 				return
 			}
 		case ComQuery:
+			queryStart := time.Now()
 			query := c.parseComQuery(data)
 			result, err := l.handler.ComQuery(c, query)
 			if err != nil {
@@ -266,6 +302,7 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32) {
 				log.Errorf("Error writing result to client %v: %v", c.ConnectionID, err)
 				return
 			}
+			l.queryTimings.Record(QueryTiming, queryStart)
 		case ComPing:
 			// No payload to that one, just return OKPacket.
 			if err := c.writeOKPacket(0, 0, c.StatusFlags, 0); err != nil {
