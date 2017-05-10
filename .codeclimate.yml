@@ -3,7 +3,7 @@ engines:
     enabled: true
   golint:
     enabled: true
-  golint:
+  govet:
     enabled: true
 
 ratings:
