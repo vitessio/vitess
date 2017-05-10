@@ -65,7 +65,7 @@ func (sri *ShardReplicationInfo) Shard() string {
 // GetShardReplicationNode finds a node for a given tablet.
 func (sri *ShardReplicationInfo) GetShardReplicationNode(tabletAlias *topodatapb.TabletAlias) (*topodatapb.ShardReplication_Node, error) {
 	for _, rl := range sri.Nodes {
-		if *rl.TabletAlias == *tabletAlias {
+		if proto.Equal(rl.TabletAlias, tabletAlias) {
 			return rl, nil
 		}
 	}
@@ -89,7 +89,7 @@ func UpdateShardReplicationRecord(ctx context.Context, ts Server, keyspace, shar
 		found := false
 		modified := false
 		for _, node := range sr.Nodes {
-			if *node.TabletAlias == *tabletAlias {
+			if proto.Equal(node.TabletAlias, tabletAlias) {
 				if found {
 					log.Warningf("Found a second ShardReplication_Node for tablet %v, deleting it", tabletAlias)
 					modified = true
