@@ -9,3 +9,9 @@ engines:
 ratings:
   paths:
     - "**.go"
+
+# Ignore generated code.
+exclude_paths:
+- "go/vt/proto/"
+- "go/vt/sqlparser/sql.go"
+
