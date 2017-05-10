@@ -4,19 +4,12 @@
 
 set -e
 
-keyspace='fcapdb'
 shard=${SHARD:-'0'}
 uid_base=${UID_BASE:-'100'}
 port_base=$[15000 + $uid_base]
 grpc_port_base=$[16000 + $uid_base]
 mysql_port_base=$[17000 + $uid_base]
-tablet_hostname=''
-
-# Travis hostnames are too long for MySQL, so we use IP.
-# Otherwise, blank hostname means the tablet auto-detects FQDN.
-if [ "$TRAVIS" == true ]; then
-  tablet_hostname=`hostname -i`
-fi
+tablet_hostname=`hostname`
 
 script_root=`dirname "${BASH_SOURCE}"`
 source $script_root/cluster-env.sh
@@ -54,9 +47,9 @@ esac
 
 mkdir -p $VTDATAROOT/backups
 
-# Start 5 vttablets by default.
+# Start 1 vttablet by default.
 # Pass a list of UID indices on the command line to override.
-uids=${@:-'0 1 2 3 4'}
+uids=${@:-'0'}
 
 # Start all mysqlds in background.
 for uid_index in $uids; do
@@ -108,13 +101,15 @@ for uid_index in $uids; do
     -enable_semi_sync \
     -enable_replication_reporter \
     -backup_storage_implementation file \
+    -orc_api_url $orc_api_url \
+    -orc_discover_interval $orc_discover_interval \
     -file_backup_storage_root $VTDATAROOT/backups \
     -restore_from_backup \
     -port $port \
     -grpc_port $grpc_port \
     -service_map 'grpc-queryservice,grpc-tabletmanager,grpc-updatestream' \
     -pid_file $VTDATAROOT/$tablet_dir/vttablet.pid \
-    -vtctld_addr http://$hostname:$vtctld_web_port/ \
+    -vtctld_addr http://$vtctld_host:$vtctld_web_port/ \
     $dbconfig_flags \
     > $VTDATAROOT/$tablet_dir/vttablet.out 2>&1 &
 
