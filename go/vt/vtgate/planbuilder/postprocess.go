@@ -41,7 +41,7 @@ func pushGroupBy(groupBy sqlparser.GroupBy, bldr builder) error {
 	err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 		switch node := node.(type) {
 		case *sqlparser.ColName:
-			_, _, err := bldr.Symtab().Find(node, true)
+			_, _, err := bldr.Symtab().Find(node)
 			if err != nil {
 				return false, err
 			}
@@ -60,7 +60,7 @@ func pushGroupBy(groupBy sqlparser.GroupBy, bldr builder) error {
 	// It's a scatter route. We can allow group by if it references a
 	// column with a unique vindex.
 	for _, expr := range groupBy {
-		vindex := bldr.Symtab().Vindex(expr, rb, true)
+		vindex := bldr.Symtab().Vindex(expr, rb)
 		if vindex != nil && vindexes.IsUnique(vindex) {
 			rb.SetGroupBy(groupBy)
 			return nil
@@ -128,7 +128,7 @@ func pushOrderBy(orderBy sqlparser.OrderBy, bldr builder) error {
 			err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 				switch node := node.(type) {
 				case *sqlparser.ColName:
-					curRoute, _, err := bldr.Symtab().Find(node, true)
+					curRoute, _, err := bldr.Symtab().Find(node)
 					if err != nil {
 						return false, err
 					}

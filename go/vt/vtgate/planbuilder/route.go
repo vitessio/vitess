@@ -162,8 +162,10 @@ func (rb *route) merge(rhs *route, ajoin *sqlparser.JoinTableExpr) (builder, err
 			rhs.Symtab().ClearVindexes()
 		}
 	}
-	err := rb.Symtab().Merge(rhs.Symtab())
+	// Redirect before merging the symtabs. Merge will use Redirect
+	// to check if rhs route matches lhs.
 	rhs.Redirect = rb
+	err := rb.Symtab().Merge(rhs.Symtab())
 	if err != nil {
 		return nil, err
 	}
@@ -195,15 +197,15 @@ func (rb *route) isSameRoute(rhs *route, filter sqlparser.Expr) bool {
 	}
 	left := comparison.Left
 	right := comparison.Right
-	lVindex := rb.Symtab().Vindex(left, rb, false)
+	lVindex := rb.Symtab().Vindex(left, rb)
 	if lVindex == nil {
 		left, right = right, left
-		lVindex = rb.Symtab().Vindex(left, rb, false)
+		lVindex = rb.Symtab().Vindex(left, rb)
 	}
 	if lVindex == nil || !vindexes.IsUnique(lVindex) {
 		return false
 	}
-	rVindex := rhs.Symtab().Vindex(right, rhs, false)
+	rVindex := rhs.Symtab().Vindex(right, rhs)
 	if rVindex == nil {
 		return false
 	}
@@ -298,10 +300,10 @@ func (rb *route) computePlan(filter sqlparser.Expr) (opcode engine.RouteOpcode, 
 func (rb *route) computeEqualPlan(comparison *sqlparser.ComparisonExpr) (opcode engine.RouteOpcode, vindex vindexes.Vindex, values interface{}) {
 	left := comparison.Left
 	right := comparison.Right
-	vindex = rb.Symtab().Vindex(left, rb, true)
+	vindex = rb.Symtab().Vindex(left, rb)
 	if vindex == nil {
 		left, right = right, left
-		vindex = rb.Symtab().Vindex(left, rb, true)
+		vindex = rb.Symtab().Vindex(left, rb)
 		if vindex == nil {
 			return engine.SelectScatter, nil, nil
 		}
@@ -317,7 +319,7 @@ func (rb *route) computeEqualPlan(comparison *sqlparser.ComparisonExpr) (opcode 
 
 // computeINPlan computes the plan for an IN constraint.
 func (rb *route) computeINPlan(comparison *sqlparser.ComparisonExpr) (opcode engine.RouteOpcode, vindex vindexes.Vindex, values interface{}) {
-	vindex = rb.Symtab().Vindex(comparison.Left, rb, true)
+	vindex = rb.Symtab().Vindex(comparison.Left, rb)
 	if vindex == nil {
 		return engine.SelectScatter, nil, nil
 	}
@@ -352,14 +354,17 @@ func (rb *route) PushSelect(expr *sqlparser.AliasedExpr, _ *route) (rc *resultCo
 }
 
 // PushAnonymous pushes an anonymous expression like '*' or NEXT VALUES
-// into the select expression list of the route.
+// into the select expression list of the route. This function is
+// similar to PushSelect.
 func (rb *route) PushAnonymous(expr sqlparser.SelectExpr) *resultColumn {
+	sel := rb.Select.(*sqlparser.Select)
+	sel.SelectExprs = append(sel.SelectExprs, expr)
+
 	// We just create a place-holder resultColumn. It won't
 	// match anything.
 	rc := &resultColumn{column: &column{route: rb}}
-	sel := rb.Select.(*sqlparser.Select)
-	sel.SelectExprs = append(sel.SelectExprs, expr)
 	rb.ResultColumns = append(rb.ResultColumns, rc)
+
 	return rc
 }
 

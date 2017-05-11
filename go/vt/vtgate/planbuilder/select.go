@@ -179,7 +179,7 @@ func checkAggregates(sel *sqlparser.Select, bldr builder) error {
 	for _, selectExpr := range sel.SelectExprs {
 		switch selectExpr := selectExpr.(type) {
 		case *sqlparser.AliasedExpr:
-			vindex := bldr.Symtab().Vindex(selectExpr.Expr, rb, true)
+			vindex := bldr.Symtab().Vindex(selectExpr.Expr, rb)
 			if vindex != nil && vindexes.IsUnique(vindex) {
 				return nil
 			}
