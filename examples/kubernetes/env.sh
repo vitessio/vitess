@@ -68,7 +68,7 @@ start_vtctld_forward() {
   fi
 
   tmpfile=`mktemp`
-  $KUBECTL $KUBECTL_OPTIONS port-forward -p $pod 0:15999 &> $tmpfile &
+  $KUBECTL $KUBECTL_OPTIONS port-forward $pod 0:15999 &> $tmpfile &
   vtctld_forward_pid=$!
 
   until [[ `cat $tmpfile` =~ :([0-9]+)\ -\> ]]; do :; done
