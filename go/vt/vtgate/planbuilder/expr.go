@@ -65,7 +65,7 @@ func findRoute(expr sqlparser.Expr, bldr builder) (rb *route, err error) {
 	err = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 		switch node := node.(type) {
 		case *sqlparser.ColName:
-			newRoute, isLocal, err := bldr.Symtab().Find(node, true)
+			newRoute, isLocal, err := bldr.Symtab().Find(node)
 			if err != nil {
 				return false, err
 			}
@@ -91,7 +91,7 @@ func findRoute(expr sqlparser.Expr, bldr builder) (rb *route, err error) {
 			}
 			for _, extern := range subroute.Symtab().Externs {
 				// No error expected. These are resolved externs.
-				newRoute, isLocal, _ := bldr.Symtab().Find(extern, false)
+				newRoute, isLocal, _ := bldr.Symtab().Find(extern)
 				if isLocal && newRoute.Order > highestRoute.Order {
 					highestRoute = newRoute
 				}
@@ -131,7 +131,7 @@ func subqueryCanMerge(outer, inner *route) error {
 	case engine.SelectEqualUnique:
 		switch vals := inner.ERoute.Values.(type) {
 		case *sqlparser.ColName:
-			outerVindex := outer.Symtab().Vindex(vals, outer, false)
+			outerVindex := outer.Symtab().Vindex(vals, outer)
 			if outerVindex == inner.ERoute.Vindex {
 				return nil
 			}
