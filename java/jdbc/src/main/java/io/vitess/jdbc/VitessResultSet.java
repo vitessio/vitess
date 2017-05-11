@@ -51,7 +51,7 @@ import java.util.Calendar;
 import java.util.List;
 import java.util.Map;
 import java.util.logging.Logger;
-
+import javax.sql.rowset.serial.SerialClob;
 
 /**
  * Created by harshit.gangal on 23/01/16.
@@ -1138,8 +1138,13 @@ public class VitessResultSet implements ResultSet {
     }
 
     public Clob getClob(int columnIndex) throws SQLException {
-        throw new SQLFeatureNotSupportedException(
-            Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
+        preAccessor(columnIndex);
+
+        if (isNull(columnIndex)) {
+            return null;
+        }
+
+        return new SerialClob(getString(columnIndex).toCharArray());
     }
 
     public Array getArray(int columnIndex) throws SQLException {
@@ -1163,8 +1168,8 @@ public class VitessResultSet implements ResultSet {
     }
 
     public Clob getClob(String columnLabel) throws SQLException {
-        throw new SQLFeatureNotSupportedException(
-            Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
+        int columnIndex = this.findColumn(columnLabel);
+        return getClob(columnIndex);
     }
 
     public Array getArray(String columnLabel) throws SQLException {

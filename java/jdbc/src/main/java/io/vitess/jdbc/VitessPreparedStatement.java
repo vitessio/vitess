@@ -768,8 +768,15 @@ public class VitessPreparedStatement extends VitessStatement implements Prepared
     }
 
     public void setClob(int parameterIndex, Clob x) throws SQLException {
-        throw new SQLFeatureNotSupportedException(
-            Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
+        checkOpen();
+        if (x.length() > Integer.MAX_VALUE) {
+            throw new SQLFeatureNotSupportedException(
+                String.format("Clob size over %d not support", Integer.MAX_VALUE),
+                Constants.SQLExceptionMessages.SQL_FEATURE_NOT_SUPPORTED);
+        }
+        // Clob uses 1-based indexing!
+        this.bindVariables.put(Constants.LITERAL_V + parameterIndex,
+            x.getSubString(1, (int) x.length()));
     }
 
     public void setArray(int parameterIndex, Array x) throws SQLException {

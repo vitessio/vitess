@@ -26,6 +26,7 @@ import io.vitess.util.charset.CharsetMapping;
 import java.io.UnsupportedEncodingException;
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.sql.Clob;
 import java.sql.SQLException;
 import java.sql.Time;
 import java.sql.Timestamp;
@@ -714,5 +715,19 @@ public class VitessResultSetTest extends BaseTest {
         Assert.assertArrayEquals(text, (byte[]) vitessResultSet.getObject(5));
 
         PowerMockito.verifyPrivate(vitessResultSet, VerificationModeFactory.times(0)).invoke("convertBytesIfPossible", Matchers.any(byte[].class), Matchers.any(FieldWithMetadata.class));
+    }
+
+    @Test public void testGetClob() throws SQLException {
+        VitessResultSet vitessResultSet = new VitessResultSet(
+            new String[]{"clob"}, new Query.Type[]{Query.Type.VARCHAR},
+            new String[][]{new String[] {"clobValue"}},
+            new ConnectionProperties());
+        Assert.assertTrue(vitessResultSet.next());
+
+        Clob clob = vitessResultSet.getClob(1);
+        Assert.assertEquals("clobValue", clob.getSubString(1, (int) clob.length()));
+
+        clob = vitessResultSet.getClob("clob");
+        Assert.assertEquals("clobValue", clob.getSubString(1, (int) clob.length()));
     }
 }
