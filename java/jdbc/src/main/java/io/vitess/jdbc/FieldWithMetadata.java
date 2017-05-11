@@ -16,15 +16,17 @@
 
 package io.vitess.jdbc;
 
+import java.sql.SQLException;
+import java.sql.Types;
+import java.util.regex.PatternSyntaxException;
+
 import com.google.common.annotations.VisibleForTesting;
+
 import io.vitess.proto.Query;
 import io.vitess.util.Constants;
 import io.vitess.util.MysqlDefs;
 import io.vitess.util.StringUtils;
 import io.vitess.util.charset.CharsetMapping;
-import java.sql.SQLException;
-import java.sql.Types;
-import java.util.regex.PatternSyntaxException;
 
 public class FieldWithMetadata {
 
@@ -110,11 +112,14 @@ public class FieldWithMetadata {
                     this.encoding = "UTF-8";
                 }
                 this.isSingleBit = this.javaType == Types.BIT && (field.getColumnLength() == 0 || field.getColumnLength() == 1);
-                // Re-map improperly typed binary types as non-binary counterparts if BINARY flag not set
-                boolean isBinary = isBinary();
-                if (javaType == Types.LONGVARBINARY && !isBinary) {
-                    this.javaType = Types.LONGVARCHAR;
-                } else if (javaType == Types.VARBINARY && !isBinary) {
+
+                // The server sends back a VARBINARY field whenever varchar/text data is stored on disk as binary, but
+                // that doesn't mean the data is actually binary. For instance, a field with collation ascii_bin
+                // gets stored on disk as bytes for case-sensitive comparison, but is still an ascii string.
+                // Re-map these VARBINARY types to VARCHAR when the data is not actually
+                // binary encoded
+                boolean isBinaryEncoded = isBinary() && collationIndex == CharsetMapping.MYSQL_COLLATION_INDEX_binary;
+                if (javaType == Types.VARBINARY && !isBinaryEncoded) {
                     this.javaType = Types.VARCHAR;
                 }
             } else {
