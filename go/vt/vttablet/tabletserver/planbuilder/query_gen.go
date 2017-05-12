@@ -90,7 +90,7 @@ func GenerateLoadMessagesQuery(ins *sqlparser.Insert) *sqlparser.ParsedQuery {
 // GenerateUpdateOuterQuery generates the outer query for updates.
 func GenerateUpdateOuterQuery(upd *sqlparser.Update) *sqlparser.ParsedQuery {
 	buf := sqlparser.NewTrackedBuffer(nil)
-	buf.Myprintf("update %v%v set %v where %a", upd.Comments, upd.Table, upd.Exprs, ":#pk")
+	buf.Myprintf("update %v%v set %v where %a", upd.Comments, upd.TableExprs, upd.Exprs, ":#pk")
 	return buf.ParsedQuery()
 }
 
@@ -101,11 +101,11 @@ func GenerateDeleteOuterQuery(del *sqlparser.Delete) *sqlparser.ParsedQuery {
 	return buf.ParsedQuery()
 }
 
-// GenerateUpdateSubquery generates the subquery for updats.
-func GenerateUpdateSubquery(upd *sqlparser.Update, table *schema.Table) *sqlparser.ParsedQuery {
+// GenerateUpdateSubquery generates the subquery for updates.
+func GenerateUpdateSubquery(upd *sqlparser.Update, table *schema.Table, aliased *sqlparser.AliasedTableExpr) *sqlparser.ParsedQuery {
 	return GenerateSubquery(
 		table.Indexes[0].Columns,
-		upd.Table,
+		aliased,
 		upd.Where,
 		upd.OrderBy,
 		upd.Limit,

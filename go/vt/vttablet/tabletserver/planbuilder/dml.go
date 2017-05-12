@@ -31,7 +31,18 @@ func analyzeUpdate(upd *sqlparser.Update, tables map[string]*schema.Table) (plan
 		FullQuery: GenerateFullQuery(upd),
 	}
 
-	tableName := sqlparser.GetTableName(upd.Table.Expr)
+	if len(upd.TableExprs) > 1 {
+		plan.Reason = ReasonMultiTable
+		return plan, nil
+	}
+
+	aliased, ok := upd.TableExprs[0].(*sqlparser.AliasedTableExpr)
+	if !ok {
+		plan.Reason = ReasonMultiTable
+		return plan, nil
+	}
+
+	tableName := sqlparser.GetTableName(aliased.Expr)
 	if tableName.IsEmpty() {
 		plan.Reason = ReasonTable
 		return plan, nil
@@ -70,7 +81,7 @@ func analyzeUpdate(upd *sqlparser.Update, tables map[string]*schema.Table) (plan
 	}
 
 	plan.PlanID = PlanDMLSubquery
-	plan.Subquery = GenerateUpdateSubquery(upd, table)
+	plan.Subquery = GenerateUpdateSubquery(upd, table, aliased)
 	return plan, nil
 }
 
@@ -362,9 +373,9 @@ func analyzeInsertNoType(ins *sqlparser.Insert, plan *Plan, table *schema.Table)
 	newins.OnDup = nil
 	plan.OuterQuery = sqlparser.GenerateParsedQuery(&newins)
 	upd := &sqlparser.Update{
-		Comments: ins.Comments,
-		Table:    &sqlparser.AliasedTableExpr{Expr: ins.Table},
-		Exprs:    updateExprs,
+		Comments:   ins.Comments,
+		TableExprs: sqlparser.TableExprs{&sqlparser.AliasedTableExpr{Expr: ins.Table}},
+		Exprs:      updateExprs,
 	}
 	plan.UpsertQuery = GenerateUpdateOuterQuery(upd)
 	return plan, nil
