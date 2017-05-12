@@ -1136,7 +1136,7 @@ var yyDef = [...]int{
 	0, 230, 0, 0, 0, 240, 209, 246, 0, 260,
 	83, 84, 86, 87, 88, 96, 0, 0, 292, 0,
 	-2, 0, 287, 286, 29, 0, 121, 0, 0, 33,
-	143, 0, 201, 204, 231, 0, 235, 0, 205, 206,
+	143, 0, 201, 204, 231, 0, 235, 0, 206, 205,
 	0, 0, 0, 244, 262, 0, 0, 0, 0, 0,
 	103, 0, 0, 106, 0, 0, 0, 0, 97, 0,
 	0, 0, 282, 21, 0, 118, 0, 119, 120, 76,
@@ -2678,19 +2678,19 @@ yydefault:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		//line ./go/vt/sqlparser/sql.y:1139
 		{
-			yyVAL.expr = &ConvertExpr{Expr: yyDollar[3].expr, Operator: CommaStr, Type: yyDollar[5].convertType}
+			yyVAL.expr = &ConvertExpr{Expr: yyDollar[3].expr, Type: yyDollar[5].convertType}
 		}
 	case 205:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		//line ./go/vt/sqlparser/sql.y:1143
 		{
-			yyVAL.expr = &ConvertExpr{Expr: yyDollar[3].expr, Operator: UsingStr, Type: &ConvertType{Type: yyDollar[5].str}}
+			yyVAL.expr = &ConvertExpr{Expr: yyDollar[3].expr, Type: yyDollar[5].convertType}
 		}
 	case 206:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		//line ./go/vt/sqlparser/sql.y:1147
 		{
-			yyVAL.expr = &ConvertExpr{Expr: yyDollar[3].expr, Operator: CommaStr, Type: yyDollar[5].convertType}
+			yyVAL.expr = &ConvertUsingExpr{Expr: yyDollar[3].expr, Type: yyDollar[5].str}
 		}
 	case 207:
 		yyDollar = yyS[yypt-9 : yypt+1]

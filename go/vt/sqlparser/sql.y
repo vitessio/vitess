@@ -1137,15 +1137,15 @@ function_call_keyword:
   }
 | CONVERT openb expression ',' convert_type closeb
   {
-    $$ = &ConvertExpr{Expr: $3, Operator: CommaStr, Type: $5}
-  }
-| CONVERT openb expression USING charset closeb
-  {
-    $$ = &ConvertExpr{Expr: $3, Operator: UsingStr, Type: &ConvertType{Type: $5}}
+    $$ = &ConvertExpr{Expr: $3, Type: $5}
   }
 | CAST openb expression AS convert_type closeb
   {
-    $$ = &ConvertExpr{Expr: $3, Operator: CommaStr, Type: $5}
+    $$ = &ConvertExpr{Expr: $3, Type: $5}
+  }
+| CONVERT openb expression USING charset closeb
+  {
+    $$ = &ConvertUsingExpr{Expr: $3, Type: $5}
   }
 | MATCH openb select_expression_list closeb AGAINST openb value_expression match_option closeb
   {
