@@ -1070,6 +1070,8 @@ func TestConvert(t *testing.T) {
 		input: "select convert('abc', datetime) from t",
 	}, {
 		input: "select convert('abc', json) from t",
+	}, {
+		input: "select convert('abc' using ascii) from t",
 	}}
 
 	for _, tcase := range validSQL {

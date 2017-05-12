@@ -1711,13 +1711,20 @@ func (node *ValuesFuncExpr) WalkSubtree(visit Visit) error {
 // ConvertExpr represents a call to CONVERT(expr, type)
 // CONVERT(expr USING transcoding_name) it not supported
 type ConvertExpr struct {
-	Expr Expr
-	Type *ConvertType
+	Expr     Expr
+	Operator string
+	Type     *ConvertType
 }
+
+// ConvertExpr.Operator
+const (
+	CommaStr = ", "
+	UsingStr = " using "
+)
 
 // Format formats the node.
 func (node *ConvertExpr) Format(buf *TrackedBuffer) {
-	buf.Myprintf("convert(%v, %v)", node.Expr, node.Type)
+	buf.Myprintf("convert(%v%s%v)", node.Expr, node.Operator, node.Type)
 }
 
 // WalkSubtree walks the nodes of the subtree.
