@@ -1139,13 +1139,13 @@ function_call_keyword:
   {
     $$ = &ConvertExpr{Expr: $3, Type: $5}
   }
-| CONVERT openb expression USING convert_type closeb
-  {
-    $$ = &ConvertExpr{Expr: $3, Type: $5}
-  }
 | CAST openb expression AS convert_type closeb
   {
     $$ = &ConvertExpr{Expr: $3, Type: $5}
+  }
+| CONVERT openb expression USING charset closeb
+  {
+    $$ = &ConvertUsingExpr{Expr: $3, Type: $5}
   }
 | MATCH openb select_expression_list closeb AGAINST openb value_expression match_option closeb
   {

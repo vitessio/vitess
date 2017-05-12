@@ -995,31 +995,32 @@ type Expr interface {
 	SQLNode
 }
 
-func (*AndExpr) iExpr()         {}
-func (*OrExpr) iExpr()          {}
-func (*NotExpr) iExpr()         {}
-func (*ParenExpr) iExpr()       {}
-func (*ComparisonExpr) iExpr()  {}
-func (*RangeCond) iExpr()       {}
-func (*IsExpr) iExpr()          {}
-func (*ExistsExpr) iExpr()      {}
-func (*SQLVal) iExpr()          {}
-func (*NullVal) iExpr()         {}
-func (BoolVal) iExpr()          {}
-func (*ColName) iExpr()         {}
-func (ValTuple) iExpr()         {}
-func (*Subquery) iExpr()        {}
-func (ListArg) iExpr()          {}
-func (*BinaryExpr) iExpr()      {}
-func (*UnaryExpr) iExpr()       {}
-func (*IntervalExpr) iExpr()    {}
-func (*CollateExpr) iExpr()     {}
-func (*FuncExpr) iExpr()        {}
-func (*CaseExpr) iExpr()        {}
-func (*ValuesFuncExpr) iExpr()  {}
-func (*ConvertExpr) iExpr()     {}
-func (*MatchExpr) iExpr()       {}
-func (*GroupConcatExpr) iExpr() {}
+func (*AndExpr) iExpr()          {}
+func (*OrExpr) iExpr()           {}
+func (*NotExpr) iExpr()          {}
+func (*ParenExpr) iExpr()        {}
+func (*ComparisonExpr) iExpr()   {}
+func (*RangeCond) iExpr()        {}
+func (*IsExpr) iExpr()           {}
+func (*ExistsExpr) iExpr()       {}
+func (*SQLVal) iExpr()           {}
+func (*NullVal) iExpr()          {}
+func (BoolVal) iExpr()           {}
+func (*ColName) iExpr()          {}
+func (ValTuple) iExpr()          {}
+func (*Subquery) iExpr()         {}
+func (ListArg) iExpr()           {}
+func (*BinaryExpr) iExpr()       {}
+func (*UnaryExpr) iExpr()        {}
+func (*IntervalExpr) iExpr()     {}
+func (*CollateExpr) iExpr()      {}
+func (*FuncExpr) iExpr()         {}
+func (*CaseExpr) iExpr()         {}
+func (*ValuesFuncExpr) iExpr()   {}
+func (*ConvertExpr) iExpr()      {}
+func (*ConvertUsingExpr) iExpr() {}
+func (*MatchExpr) iExpr()        {}
+func (*GroupConcatExpr) iExpr()  {}
 
 // Exprs represents a list of value expressions.
 // It's not a valid expression because it's not parenthesized.
@@ -1709,7 +1710,7 @@ func (node *ValuesFuncExpr) WalkSubtree(visit Visit) error {
 }
 
 // ConvertExpr represents a call to CONVERT(expr, type)
-// CONVERT(expr USING transcoding_name) it not supported
+// or it's equivalent CAST(expr AS type). Both are rewritten to the former.
 type ConvertExpr struct {
 	Expr Expr
 	Type *ConvertType
@@ -1729,6 +1730,28 @@ func (node *ConvertExpr) WalkSubtree(visit Visit) error {
 		visit,
 		node.Expr,
 		node.Type,
+	)
+}
+
+// ConvertUsingExpr represents a call to CONVERT(expr USING charset).
+type ConvertUsingExpr struct {
+	Expr Expr
+	Type string
+}
+
+// Format formats the node.
+func (node *ConvertUsingExpr) Format(buf *TrackedBuffer) {
+	buf.Myprintf("convert(%v using %s)", node.Expr, node.Type)
+}
+
+// WalkSubtree walks the nodes of the subtree.
+func (node *ConvertUsingExpr) WalkSubtree(visit Visit) error {
+	if node == nil {
+		return nil
+	}
+	return Walk(
+		visit,
+		node.Expr,
 	)
 }
 
