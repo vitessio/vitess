@@ -39,7 +39,17 @@ func buildUpdatePlan(upd *sqlparser.Update, vschema VSchema) (*engine.Route, err
 	route := &engine.Route{
 		Query: generateQuery(upd),
 	}
-	updateTable, _ := upd.Table.Expr.(sqlparser.TableName)
+	if len(upd.TableExprs) > 1 {
+		return nil, errors.New("unsupported: multi-table update")
+	}
+	aliased, ok := upd.TableExprs[0].(*sqlparser.AliasedTableExpr)
+	if !ok {
+		return nil, errors.New("unsupported: complex table reference in update")
+	}
+	updateTable, ok := aliased.Expr.(sqlparser.TableName)
+	if !ok {
+		return nil, errors.New("unsupported: complex table reference in update")
+	}
 
 	var err error
 	route.Table, err = vschema.Find(updateTable)

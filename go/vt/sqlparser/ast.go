@@ -394,18 +394,18 @@ func (*ParenSelect) iInsertRows() {}
 
 // Update represents an UPDATE statement.
 type Update struct {
-	Comments Comments
-	Table    *AliasedTableExpr
-	Exprs    UpdateExprs
-	Where    *Where
-	OrderBy  OrderBy
-	Limit    *Limit
+	Comments   Comments
+	TableExprs TableExprs
+	Exprs      UpdateExprs
+	Where      *Where
+	OrderBy    OrderBy
+	Limit      *Limit
 }
 
 // Format formats the node.
 func (node *Update) Format(buf *TrackedBuffer) {
 	buf.Myprintf("update %v%v set %v%v%v%v",
-		node.Comments, node.Table,
+		node.Comments, node.TableExprs,
 		node.Exprs, node.Where, node.OrderBy, node.Limit)
 }
 
@@ -417,7 +417,7 @@ func (node *Update) WalkSubtree(visit Visit) error {
 	return Walk(
 		visit,
 		node.Comments,
-		node.Table,
+		node.TableExprs,
 		node.Exprs,
 		node.Where,
 		node.OrderBy,

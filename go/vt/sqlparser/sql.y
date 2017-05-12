@@ -317,9 +317,9 @@ insert_or_replace:
   }
 
 update_statement:
-  UPDATE comment_opt aliased_table_name SET update_list where_expression_opt order_by_opt limit_opt
+  UPDATE comment_opt table_references SET update_list where_expression_opt order_by_opt limit_opt
   {
-    $$ = &Update{Comments: Comments($2), Table: $3, Exprs: $5, Where: NewWhere(WhereStr, $6), OrderBy: $7, Limit: $8}
+    $$ = &Update{Comments: Comments($2), TableExprs: $3, Exprs: $5, Where: NewWhere(WhereStr, $6), OrderBy: $7, Limit: $8}
   }
 
 delete_statement:
