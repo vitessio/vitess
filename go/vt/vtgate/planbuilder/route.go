@@ -554,3 +554,73 @@ func (rb *route) IsSingle() bool {
 	}
 	return false
 }
+
+// SubqueryCanMerge returns nil if the supplied route that represents
+// a subquery can be merged with the outer route. If not, it
+// returns an appropriate error.
+func (rb *route) SubqueryCanMerge(inner *route) error {
+	if rb.ERoute.Keyspace.Name != inner.ERoute.Keyspace.Name {
+		return errors.New("unsupported: subquery keyspace different from outer query")
+	}
+	switch inner.ERoute.Opcode {
+	case engine.SelectUnsharded:
+		return nil
+	case engine.SelectNext:
+		return errors.New("unsupported: use of sequence in subquery")
+	case engine.SelectEqualUnique:
+		switch vals := inner.ERoute.Values.(type) {
+		case *sqlparser.ColName:
+			if rb.Symtab().Vindex(vals, rb) == inner.ERoute.Vindex {
+				return nil
+			}
+		}
+	default:
+		return errors.New("unsupported: scatter subquery")
+	}
+	// SelectEqualUnique
+	if rb.ERoute.Opcode != engine.SelectEqualUnique {
+		return errors.New("unsupported: subquery does not depend on scatter outer query")
+	}
+	if !valEqual(rb.ERoute.Values, inner.ERoute.Values) {
+		return errors.New("unsupported: subquery and parent route to different shards")
+	}
+	return nil
+}
+
+// UnionCanMerge returns nil if the supplied route that represents
+// the RHS of a union can be merged with the current route. If not, it
+// returns an appropriate error.
+func (rb *route) UnionCanMerge(right *route) error {
+	if rb.ERoute.Opcode == engine.SelectNext || right.ERoute.Opcode == engine.SelectNext {
+		return errors.New("unsupported: UNION on sequence tables")
+	}
+	if rb.ERoute.Keyspace.Name != right.ERoute.Keyspace.Name {
+		return errors.New("unsupported: UNION on different keyspaces")
+	}
+	if rb.ERoute.Opcode == engine.SelectUnsharded {
+		// right will also be unsharded. So, we're good.
+		return nil
+	}
+	if rb.ERoute.Opcode != engine.SelectEqualUnique || right.ERoute.Opcode != engine.SelectEqualUnique {
+		return errors.New("unsupported: UNION on multi-shard queries")
+	}
+	if !valEqual(rb.ERoute.Values, right.ERoute.Values) {
+		return errors.New("unsupported: UNION queries with different target shards")
+	}
+	return nil
+}
+
+// SetOpcode changes the opcode to the specified value.
+// If the change is not allowed, it returns an error.
+func (rb *route) SetOpcode(code engine.RouteOpcode) error {
+	switch code {
+	case engine.SelectNext:
+		if rb.ERoute.Opcode != engine.SelectUnsharded {
+			return errors.New("NEXT used on a sharded table")
+		}
+	default:
+		panic("unreachable")
+	}
+	rb.ERoute.Opcode = code
+	return nil
+}

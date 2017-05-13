@@ -224,10 +224,9 @@ func pushSelectRoutes(selectExprs sqlparser.SelectExprs, bldr builder) ([]*resul
 				// This code is unreachable because the parser doesn't allow joins for next val statements.
 				return nil, errors.New("unsupported: SELECT NEXT query in complex join")
 			}
-			if rb.ERoute.Opcode != engine.SelectUnsharded {
-				return nil, errors.New("NEXT used on a sharded table")
+			if err := rb.SetOpcode(engine.SelectNext); err != nil {
+				return nil, err
 			}
-			rb.ERoute.Opcode = engine.SelectNext
 			resultColumns[i] = rb.PushAnonymous(node)
 		}
 	}

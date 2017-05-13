@@ -155,17 +155,9 @@ func getTablePlan(tableName sqlparser.TableName, vschema VSchema) (*engine.Route
 		return nil, nil, err
 	}
 	if table.Keyspace.Sharded {
-		return &engine.Route{
-			Opcode:   engine.SelectScatter,
-			Keyspace: table.Keyspace,
-			JoinVars: make(map[string]struct{}),
-		}, table, nil
+		return engine.NewRoute(engine.SelectScatter, table.Keyspace), table, nil
 	}
-	return &engine.Route{
-		Opcode:   engine.SelectUnsharded,
-		Keyspace: table.Keyspace,
-		JoinVars: make(map[string]struct{}),
-	}, table, nil
+	return engine.NewRoute(engine.SelectUnsharded, table.Keyspace), table, nil
 }
 
 // processJoin produces a builder subtree for the given Join.

@@ -23,7 +23,6 @@ import (
 	"strconv"
 
 	"github.com/youtube/vitess/go/vt/sqlparser"
-	"github.com/youtube/vitess/go/vt/vtgate/engine"
 )
 
 // splitAndExpression breaks up the Expr into AND-separated conditions
@@ -105,8 +104,7 @@ func findRoute(expr sqlparser.Expr, bldr builder) (rb *route, err error) {
 		return nil, err
 	}
 	for _, subroute := range subroutes {
-		err = subqueryCanMerge(highestRoute, subroute)
-		if err != nil {
+		if err := highestRoute.SubqueryCanMerge(subroute); err != nil {
 			return nil, err
 		}
 		// This should be moved out if we become capable of processing
@@ -114,39 +112,6 @@ func findRoute(expr sqlparser.Expr, bldr builder) (rb *route, err error) {
 		subroute.Redirect = highestRoute
 	}
 	return highestRoute, nil
-}
-
-// subqueryCanMerge returns nil if the inner subquery
-// can be merged with the specified outer route. If it
-// cannot, then it returns an appropriate error.
-func subqueryCanMerge(outer, inner *route) error {
-	if outer.ERoute.Keyspace.Name != inner.ERoute.Keyspace.Name {
-		return errors.New("unsupported: subquery keyspace different from outer query")
-	}
-	switch inner.ERoute.Opcode {
-	case engine.SelectUnsharded:
-		return nil
-	case engine.SelectNext:
-		return errors.New("unsupported: use of sequence in subquery")
-	case engine.SelectEqualUnique:
-		switch vals := inner.ERoute.Values.(type) {
-		case *sqlparser.ColName:
-			outerVindex := outer.Symtab().Vindex(vals, outer)
-			if outerVindex == inner.ERoute.Vindex {
-				return nil
-			}
-		}
-	default:
-		return errors.New("unsupported: scatter subquery")
-	}
-	// SelectEqualUnique
-	if outer.ERoute.Opcode != engine.SelectEqualUnique {
-		return errors.New("unsupported: subquery does not depend on scatter outer query")
-	}
-	if !valEqual(outer.ERoute.Values, inner.ERoute.Values) {
-		return errors.New("unsupported: subquery and parent route to different shards")
-	}
-	return nil
 }
 
 func hasSubquery(node sqlparser.SQLNode) bool {
