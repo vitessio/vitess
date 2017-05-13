@@ -49,6 +49,15 @@ type Route struct {
 	Suffix     string
 }
 
+// NewRoute creates a new Route.
+func NewRoute(opcode RouteOpcode, keyspace *vindexes.Keyspace) *Route {
+	return &Route{
+		Opcode:   opcode,
+		Keyspace: keyspace,
+		JoinVars: make(map[string]struct{}),
+	}
+}
+
 // MarshalJSON serializes the Route into a JSON representation.
 // It's used for testing and diagnostics.
 func (route *Route) MarshalJSON() ([]byte, error) {
