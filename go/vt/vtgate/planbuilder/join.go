@@ -25,10 +25,9 @@ import (
 // It's used to build a normal join or a left join
 // operation.
 type join struct {
-	// LeftOrder and RightOrder store the order
-	// of the left node and right node. The Order
-	// of this join will be the same as RightOrder.
-	// This information is used for traversal.
+	// leftMaxOrder and rightMaxOrder store the max order
+	// of the left node and right node. This is essentially
+	// used for a b-tree style traversal towards the target route.
 	// Let us assume the following execution tree:
 	//      Ja
 	//     /  \
@@ -43,20 +42,25 @@ type join struct {
 	// order: R1 is executed first, then it's R2, which will
 	// be joined at Jb, etc.
 	//
-	// The Order for the joins will be as follows:
-	// Jb: 2
-	// Jd: 4
-	// Jc: 5
-	// Ja: 5
+	// The values for left and right max order for the join
+	// nodes will be:
+	//     left right
+	// Jb: 1    2
+	// Jd: 3    4
+	// Jc: 4    5
+	// Ja: 2    5
 	// The route to R3 would be:
-	// Go right from Ja->Jc because Left(Ja)==Jb==2, which is <3.
-	// Go left from Jc->Jd because Left(Jc)==Jd==4, which is >=3.
-	// Go left from Jd->R3 because Left(Jd)==R3==3, the destination.
+	// Go right from Ja->Jc because Left(Ja)==2, which is <3.
+	// Go left from Jc->Jd because Left(Jc)==4, which is >=3.
+	// Go left from Jd->R3 because Left(Jd)==3, the destination.
 	//
 	// There are many use cases for these Orders. Look for 'isOnLeft'
 	// to see how these numbers are used. 'isOnLeft' is a convenience
 	// function to help with traversal.
-	LeftOrder, RightOrder int
+	// The MaxOrder for a join is the same as rightMaxOrder.
+	// A join can currently not be a destination. It therefore does
+	// not have its own Order.
+	leftMaxOrder, rightMaxOrder int
 	// Left and Right are the nodes for the join.
 	Left, Right builder
 	symtab      *symtab
@@ -80,17 +84,17 @@ func newJoin(lhs, rhs builder, ajoin *sqlparser.JoinTableExpr) (*join, error) {
 		return nil, err
 	}
 	rhs.SetSymtab(lhs.Symtab())
-	rhs.SetOrder(lhs.Order())
+	rhs.SetOrder(lhs.MaxOrder())
 	opcode := engine.NormalJoin
 	if ajoin != nil && ajoin.Join == sqlparser.LeftJoinStr {
 		opcode = engine.LeftJoin
 	}
 	jb := &join{
-		LeftOrder:  lhs.Order(),
-		RightOrder: rhs.Order(),
-		Left:       lhs,
-		Right:      rhs,
-		symtab:     lhs.Symtab(),
+		leftMaxOrder:  lhs.MaxOrder(),
+		rightMaxOrder: rhs.MaxOrder(),
+		Left:          lhs,
+		Right:         rhs,
+		symtab:        lhs.Symtab(),
 		ejoin: &engine.Join{
 			Opcode: opcode,
 			Left:   lhs.Primitive(),
@@ -129,17 +133,17 @@ func (jb *join) SetSymtab(symtab *symtab) {
 	jb.Right.SetSymtab(symtab)
 }
 
-// Order returns the order of the node.
-func (jb *join) Order() int {
-	return jb.RightOrder
+// MaxOrder returns the max order of the node.
+func (jb *join) MaxOrder() int {
+	return jb.rightMaxOrder
 }
 
 // SetOrder sets the order for the underlying routes.
 func (jb *join) SetOrder(order int) {
 	jb.Left.SetOrder(order)
-	jb.LeftOrder = jb.Left.Order()
-	jb.Right.SetOrder(jb.LeftOrder)
-	jb.RightOrder = jb.Right.Order()
+	jb.leftMaxOrder = jb.Left.MaxOrder()
+	jb.Right.SetOrder(jb.leftMaxOrder)
+	jb.rightMaxOrder = jb.Right.MaxOrder()
 }
 
 // Primitive returns the built primitive.
@@ -166,7 +170,7 @@ func (jb *join) SetRHS() {
 // PushSelect pushes the select expression into the join and
 // recursively down.
 func (jb *join) PushSelect(expr *sqlparser.NonStarExpr, rb *route) (rc *resultColumn, colnum int, err error) {
-	if jb.isOnLeft(rb.Order()) {
+	if jb.isOnLeft(rb.Order) {
 		rc, colnum, err = jb.Left.PushSelect(expr, rb)
 		if err != nil {
 			return nil, 0, err
@@ -243,7 +247,7 @@ func (jb *join) SupplyCol(c *column) (rs *resultColumn, colnum int) {
 		}
 	}
 
-	routeNumber := c.Route().Order()
+	routeNumber := c.Route().Order
 	var sourceCol int
 	if jb.isOnLeft(routeNumber) {
 		rs, sourceCol = jb.Left.SupplyCol(c)
@@ -256,11 +260,9 @@ func (jb *join) SupplyCol(c *column) (rs *resultColumn, colnum int) {
 	return rs, len(jb.ejoin.Cols) - 1
 }
 
-// isOnLeft returns true if the specified node number
+// isOnLeft returns true if the specified route number
 // is on the left side of the join. If false, it means
-// the node is the current one or to the right. Consequently,
-// if we're looking for a route, we can assume it's on
-// the right, because the current node is a join.
+// the node is on the right.
 func (jb *join) isOnLeft(nodeNum int) bool {
-	return nodeNum <= jb.LeftOrder
+	return nodeNum <= jb.leftMaxOrder
 }

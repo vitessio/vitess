@@ -34,13 +34,16 @@ type builder interface {
 	// SetSymtab sets the symtab for the current node and
 	// its non-subquery children.
 	SetSymtab(*symtab)
-	// Order is a number that signifies execution order.
-	// A lower Order number Route is executed before a
-	// higher one. For a node that contains other nodes,
-	// the Order represents the highest order of the leaf
-	// nodes. This function is used to travel from a root
-	// node to a target node.
-	Order() int
+	// MaxOrder must return the order number of the
+	// highest route within the current sub-tree.
+	// The routes are numbered by their execution order.
+	// When two trees are brought together into a join,
+	// the MaxOrder from the left is used as starting point
+	// to renumber the routes on the right. Execution order
+	// always goes from left to right. A node that contains
+	// sub-nodes (like a join), can cache these values
+	// and use them for efficient b-tree style traversal.
+	MaxOrder() int
 	// SetOrder sets the order for the underlying routes.
 	SetOrder(int)
 	// Primitve returns the underlying primitive.

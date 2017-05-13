@@ -69,7 +69,7 @@ func findRoute(expr sqlparser.Expr, bldr builder) (rb *route, err error) {
 			if err != nil {
 				return false, err
 			}
-			if isLocal && newRoute.Order() > highestRoute.Order() {
+			if isLocal && newRoute.Order > highestRoute.Order {
 				highestRoute = newRoute
 			}
 		case *sqlparser.Subquery:
@@ -92,7 +92,7 @@ func findRoute(expr sqlparser.Expr, bldr builder) (rb *route, err error) {
 			for _, extern := range subroute.Symtab().Externs {
 				// No error expected. These are resolved externs.
 				newRoute, isLocal, _ := bldr.Symtab().Find(extern, false)
-				if isLocal && newRoute.Order() > highestRoute.Order() {
+				if isLocal && newRoute.Order > highestRoute.Order {
 					highestRoute = newRoute
 				}
 			}
