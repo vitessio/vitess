@@ -147,14 +147,14 @@ func pushOrderBy(orderBy sqlparser.OrderBy, bldr builder) error {
 		if rb == nil {
 			return errors.New("unsupported: complex order by")
 		}
-		if rb.Order() < routeNumber {
+		if rb.Order < routeNumber {
 			return errors.New("unsupported: complex join and out of sequence order by")
 		}
 		if !rb.IsSingle() {
 			return errors.New("unsupported: scatter and order by")
 		}
-		routeNumber = rb.Order()
-		if err := rb.AddOrder(pushOrder); err != nil {
+		routeNumber = rb.Order
+		if err := rb.AddOrderBy(pushOrder); err != nil {
 			return err
 		}
 	}

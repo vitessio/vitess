@@ -52,19 +52,6 @@ the original request into a Route. If it's not possible,
 we see if we can build a primitive for it. If none exist,
 we return an error.
 
-The primitives are built as an execution tree.
-In order to traverse the tree
-to reach a certain node, we use a numbering system
-where every node is assigned an order. The lowest level
-nodes are assigned numbers based on their execution
-order. The higher level nodes inherit the highest
-order of the nodes they encompass, and this goes
-recursively up until the root node, whose order will
-always be the same as the last route. Primitives may
-themselves store additional information for efficient
-traversal. For example, join stores LeftOrder and
-RightOrder. Its usage is explained in the join type.
-
 The central design element for analyzing queries and
 building plans is the symbol table (symtab). This data
 structure evolves as a query is analyzed. Therefore,

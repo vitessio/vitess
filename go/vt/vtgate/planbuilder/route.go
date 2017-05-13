@@ -40,7 +40,7 @@ type route struct {
 	// Select is the AST for the query fragment that will be
 	// executed by this route.
 	Select sqlparser.SelectStatement
-	order  int
+	Order  int
 	symtab *symtab
 	// ResultColumns represent the columns returned by this route.
 	ResultColumns []*resultColumn
@@ -52,7 +52,7 @@ func newRoute(stmt sqlparser.SelectStatement, eroute *engine.Route, table *vinde
 	rb := &route{
 		Select: stmt,
 		symtab: newSymtab(vschema),
-		order:  1,
+		Order:  1,
 		ERoute: eroute,
 	}
 	rb.symtab.AddAlias(alias, table, rb)
@@ -78,14 +78,14 @@ func (rb *route) SetSymtab(symtab *symtab) {
 	rb.symtab = symtab
 }
 
-// Order returns the order of the node.
-func (rb *route) Order() int {
-	return rb.order
+// MaxOrder returns the max order of the node.
+func (rb *route) MaxOrder() int {
+	return rb.Order
 }
 
 // SetOrder sets the order to one above the specified number.
 func (rb *route) SetOrder(order int) {
-	rb.order = order + 1
+	rb.Order = order + 1
 }
 
 // Primitve returns the built primitive.
@@ -373,8 +373,8 @@ func (rb *route) SetGroupBy(groupBy sqlparser.GroupBy) {
 	rb.Select.(*sqlparser.Select).GroupBy = groupBy
 }
 
-// AddOrder adds an ORDER BY expression to the route.
-func (rb *route) AddOrder(order *sqlparser.Order) error {
+// AddOrderBy adds an ORDER BY expression to the route.
+func (rb *route) AddOrderBy(order *sqlparser.Order) error {
 	if rb.IsRHS {
 		return errors.New("unsupported: complex left join and order by")
 	}
@@ -444,7 +444,7 @@ func (rb *route) Wireup(bldr builder, jt *jointab) error {
 		switch node := node.(type) {
 		case *sqlparser.ColName:
 			if !rb.isLocal(node) {
-				joinVar := jt.Procure(bldr, node, rb.Order())
+				joinVar := jt.Procure(bldr, node, rb.Order)
 				rb.ERoute.JoinVars[joinVar] = struct{}{}
 				buf.Myprintf("%a", ":"+joinVar)
 				return
@@ -479,7 +479,7 @@ func (rb *route) procureValues(bldr builder, jt *jointab, val interface{}) (inte
 		}
 		return vals, nil
 	case *sqlparser.ColName:
-		joinVar := jt.Procure(bldr, val, rb.Order())
+		joinVar := jt.Procure(bldr, val, rb.Order)
 		rb.ERoute.JoinVars[joinVar] = struct{}{}
 		return ":" + joinVar, nil
 	case sqlparser.ListArg:

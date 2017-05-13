@@ -71,5 +71,5 @@ func (jt *jointab) Procure(bldr builder, col *sqlparser.ColName, to int) string 
 // the join var name if one has already been assigned for it.
 func (jt *jointab) Lookup(col *sqlparser.ColName) (order int, joinVar string) {
 	c := col.Metadata.(*column)
-	return c.Route().Order(), jt.refs[c]
+	return c.Route().Order, jt.refs[c]
 }
