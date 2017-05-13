@@ -97,7 +97,7 @@ func GenerateUpdateOuterQuery(upd *sqlparser.Update) *sqlparser.ParsedQuery {
 // GenerateDeleteOuterQuery generates the outer query for deletes.
 func GenerateDeleteOuterQuery(del *sqlparser.Delete) *sqlparser.ParsedQuery {
 	buf := sqlparser.NewTrackedBuffer(nil)
-	buf.Myprintf("delete %vfrom %v where %a", del.Comments, del.Table, ":#pk")
+	buf.Myprintf("delete %vfrom %v where %a", del.Comments, del.TableExprs, ":#pk")
 	return buf.ParsedQuery()
 }
 
@@ -114,10 +114,10 @@ func GenerateUpdateSubquery(upd *sqlparser.Update, table *schema.Table, aliased 
 }
 
 // GenerateDeleteSubquery generates the subquery for deletes.
-func GenerateDeleteSubquery(del *sqlparser.Delete, table *schema.Table) *sqlparser.ParsedQuery {
+func GenerateDeleteSubquery(del *sqlparser.Delete, table *schema.Table, aliased *sqlparser.AliasedTableExpr) *sqlparser.ParsedQuery {
 	return GenerateSubquery(
 		table.Indexes[0].Columns,
-		&sqlparser.AliasedTableExpr{Expr: del.Table},
+		aliased,
 		del.Where,
 		del.OrderBy,
 		del.Limit,

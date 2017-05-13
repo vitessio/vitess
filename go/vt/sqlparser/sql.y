@@ -44,40 +44,41 @@ func forceEOF(yylex interface{}) {
 %}
 
 %union {
-  empty       struct{}
-  statement   Statement
-  selStmt     SelectStatement
-  ins         *Insert
-  byt         byte
-  bytes       []byte
-  bytes2      [][]byte
-  str         string
-  selectExprs SelectExprs
-  selectExpr  SelectExpr
-  columns     Columns
-  colName     *ColName
-  tableExprs  TableExprs
-  tableExpr   TableExpr
-  tableName   TableName
-  indexHints  *IndexHints
-  expr        Expr
-  exprs       Exprs
-  boolVal     BoolVal
-  colTuple    ColTuple
-  values      Values
-  valTuple    ValTuple
-  subquery    *Subquery
-  whens       []*When
-  when        *When
-  orderBy     OrderBy
-  order       *Order
-  limit       *Limit
-  updateExprs UpdateExprs
-  updateExpr  *UpdateExpr
-  colIdent    ColIdent
-  colIdents   []ColIdent
-  tableIdent  TableIdent
-  convertType *ConvertType
+  empty         struct{}
+  statement     Statement
+  selStmt       SelectStatement
+  ins           *Insert
+  byt           byte
+  bytes         []byte
+  bytes2        [][]byte
+  str           string
+  selectExprs   SelectExprs
+  selectExpr    SelectExpr
+  columns       Columns
+  colName       *ColName
+  tableExprs    TableExprs
+  tableExpr     TableExpr
+  tableName     TableName
+  tableNames    TableNames
+  indexHints    *IndexHints
+  expr          Expr
+  exprs         Exprs
+  boolVal       BoolVal
+  colTuple      ColTuple
+  values        Values
+  valTuple      ValTuple
+  subquery      *Subquery
+  whens         []*When
+  when          *When
+  orderBy       OrderBy
+  order         *Order
+  limit         *Limit
+  updateExprs   UpdateExprs
+  updateExpr    *UpdateExpr
+  colIdent      ColIdent
+  colIdents     []ColIdent
+  tableIdent    TableIdent
+  convertType   *ConvertType
   aliasedTableName *AliasedTableExpr
 }
 
@@ -159,6 +160,7 @@ func forceEOF(yylex interface{}) {
 %type <expr> expression
 %type <tableExprs> from_opt table_references
 %type <tableExpr> table_reference table_factor join_table
+%type <tableNames> table_name_list
 %type <str> inner_join outer_join natural_join
 %type <tableName> table_name into_table_name
 %type <aliasedTableName> aliased_table_name
@@ -325,7 +327,25 @@ update_statement:
 delete_statement:
   DELETE comment_opt FROM table_name where_expression_opt order_by_opt limit_opt
   {
-    $$ = &Delete{Comments: Comments($2), Table: $4, Where: NewWhere(WhereStr, $5), OrderBy: $6, Limit: $7}
+    $$ = &Delete{Comments: Comments($2), TableExprs:  TableExprs{&AliasedTableExpr{Expr:$4}}, Where: NewWhere(WhereStr, $5), OrderBy: $6, Limit: $7}
+  }
+| DELETE comment_opt table_name_list from_or_using table_references where_expression_opt
+  {
+    $$ = &Delete{Comments: Comments($2), Targets: $3, TableExprs: $5, Where: NewWhere(WhereStr, $6)}
+  }
+
+from_or_using:
+  FROM {}
+| USING {}
+
+table_name_list:
+  table_name
+  {
+    $$ = TableNames{$1}
+  }
+| table_name_list ',' table_name
+  {
+    $$ = append($$, $3)
   }
 
 set_statement:

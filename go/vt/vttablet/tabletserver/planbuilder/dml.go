@@ -91,7 +91,16 @@ func analyzeDelete(del *sqlparser.Delete, tables map[string]*schema.Table) (plan
 		FullQuery: GenerateFullQuery(del),
 	}
 
-	tableName := sqlparser.GetTableName(del.Table)
+	if len(del.TableExprs) > 1 {
+		plan.Reason = ReasonMultiTable
+		return plan, nil
+	}
+	aliased, ok := del.TableExprs[0].(*sqlparser.AliasedTableExpr)
+	if !ok {
+		plan.Reason = ReasonMultiTable
+		return plan, nil
+	}
+	tableName := sqlparser.GetTableName(aliased.Expr)
 	if tableName.IsEmpty() {
 		plan.Reason = ReasonTable
 		return plan, nil
@@ -121,7 +130,7 @@ func analyzeDelete(del *sqlparser.Delete, tables map[string]*schema.Table) (plan
 	}
 
 	plan.PlanID = PlanDMLSubquery
-	plan.Subquery = GenerateDeleteSubquery(del, table)
+	plan.Subquery = GenerateDeleteSubquery(del, table, aliased)
 	return plan, nil
 }
 

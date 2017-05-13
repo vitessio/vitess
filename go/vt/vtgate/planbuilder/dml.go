@@ -100,8 +100,15 @@ func buildDeletePlan(del *sqlparser.Delete, vschema VSchema) (*engine.Route, err
 	route := &engine.Route{
 		Query: generateQuery(del),
 	}
+	if len(del.TableExprs) > 1 || del.Targets != nil {
+		return nil, errors.New("unsupported: multi-table delete")
+	}
+	// this has to resolve if Targets is not nil, enforced by grammar
+	aliased := del.TableExprs[0].(*sqlparser.AliasedTableExpr)
+	tableName, _ := aliased.Expr.(sqlparser.TableName)
+
 	var err error
-	route.Table, err = vschema.Find(del.Table)
+	route.Table, err = vschema.Find(tableName.Name)
 	if err != nil {
 		return nil, err
 	}

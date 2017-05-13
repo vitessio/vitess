@@ -609,6 +609,10 @@ func TestValid(t *testing.T) {
 	}, {
 		input: "delete /* limit */ from a limit b",
 	}, {
+		input: "delete a from a join b on a.id = b.id where b.name = 'test'",
+	}, {
+		input: "delete a, b from a, b where a.id = b.id and b.name = 'test'",
+	}, {
 		input: "set /* simple */ a = 3",
 	}, {
 		input: "set /* list */ a = 3, b = 4",
