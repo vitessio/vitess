@@ -615,6 +615,24 @@
   "FullQuery": "update b.a set name = 'foo' where eid = 1 and id = 1"
 }
 
+# multi-table update
+"update a, b set a.name = 'foo' where a.id = b.id and b.var = 'test'"
+{
+  "PlanID": "PASS_DML",
+  "Reason": "MULTI_TABLE",
+  "TableName": "",
+  "FullQuery": "update a, b set a.name = 'foo' where a.id = b.id and b.var = 'test'"
+}
+
+# multi-table update
+"update a join b on a.id = b.id set a.name = 'foo' where b.var = 'test'"
+{
+  "PlanID": "PASS_DML",
+  "Reason": "MULTI_TABLE",
+  "TableName": "",
+  "FullQuery": "update a join b on a.id = b.id set a.name = 'foo' where b.var = 'test'"
+}
+
 # pk changed
 "update b set eid=1"
 {
@@ -921,6 +939,24 @@
   "OuterQuery":"delete from a where :#pk",
   "Subquery":"select eid, id from a where eid = 1 and eid = 2 limit :#maxLimit for update",
   "WhereClause": " where eid = 1 and eid = 2"
+}
+
+# multi-table delete
+"delete a, b from a, b, c where a.id = b.id and b.id = c.id and c.name = 'foo'"
+{
+  "PlanID": "PASS_DML",
+  "Reason": "MULTI_TABLE",
+  "TableName": "",
+  "FullQuery": "delete a, b from a, b, c where a.id = b.id and b.id = c.id and c.name = 'foo'"
+}
+
+# multi-table delete with join
+"delete a  from a join b on a.id = b.id where a.name = 'foo'"
+{
+  "PlanID": "PASS_DML",
+  "Reason": "MULTI_TABLE",
+  "TableName": "",
+  "FullQuery": "delete a from a join b on a.id = b.id where a.name = 'foo'"
 }
 
 # single value sequence
