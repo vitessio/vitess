@@ -146,7 +146,20 @@
   }
 }
 
-
+# last_insert_id for unsharded route
+"select last_insert_id() from main.dual"
+{
+  "Original": "select last_insert_id() from main.dual",
+  "Instructions": {
+    "Opcode": "SelectUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "select last_insert_id() from dual",
+    "FieldQuery": "select last_insert_id() from dual where 1 != 1"
+  }
+}
 
 # RHS route referenced
 "select user_extra.id from user join user_extra"

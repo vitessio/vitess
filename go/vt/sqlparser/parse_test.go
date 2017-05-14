@@ -1158,9 +1158,6 @@ func TestErrors(t *testing.T) {
 		input:  "update a set c = values(1)",
 		output: "syntax error at position 26 near '1'",
 	}, {
-		input:  "update a set c = last_insert_id(1)",
-		output: "syntax error at position 32 near 'last_insert_id'",
-	}, {
 		input: "select(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F" +
 			"(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(" +
 			"F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F(F" +

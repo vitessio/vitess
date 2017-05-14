@@ -97,6 +97,14 @@ func findRoute(expr sqlparser.Expr, bldr builder) (rb *route, err error) {
 			}
 			subroutes = append(subroutes, subroute)
 			return false, nil
+		case *sqlparser.FuncExpr:
+			// If it's last_insert_id, ensure it's a single unsharded route.
+			if !node.Name.EqualString("last_insert_id") {
+				return true, nil
+			}
+			if rb, ok := bldr.(*route); !ok || rb.ERoute.Keyspace.Sharded {
+				return false, errors.New("unsupported: LAST_INSERT_ID is only allowed for unsharded keyspaces")
+			}
 		}
 		return true, nil
 	}, expr)
