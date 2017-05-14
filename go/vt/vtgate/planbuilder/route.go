@@ -24,6 +24,8 @@ import (
 	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
 )
 
+var errIntermixingUnsupported = errors.New("unsupported: intermixing of information_schema and regular tables")
+
 // route is used to build a Route primitive.
 // It's used to build one of the Select routes like
 // SelectScatter, etc. Portions of the original Select AST
@@ -113,9 +115,17 @@ func (rb *route) Join(rhs builder, ajoin *sqlparser.JoinTableExpr) (builder, err
 	if rb.ERoute.Keyspace.Name != rRoute.ERoute.Keyspace.Name {
 		return newJoin(rb, rRoute, ajoin)
 	}
-	if rb.ERoute.Opcode == engine.SelectUnsharded {
-		// Two Routes from the same unsharded keyspace can be merged.
-		return rb.merge(rRoute, ajoin)
+	switch rb.ERoute.Opcode {
+	case engine.SelectUnsharded:
+		if rRoute.ERoute.Opcode == engine.SelectUnsharded {
+			return rb.merge(rRoute, ajoin)
+		}
+		return nil, errIntermixingUnsupported
+	case engine.ExecDBA:
+		if rRoute.ERoute.Opcode == engine.ExecDBA {
+			return rb.merge(rRoute, ajoin)
+		}
+		return nil, errIntermixingUnsupported
 	}
 
 	// Both route are sharded routes. For ',' joins (ajoin==nil), don't
@@ -454,8 +464,10 @@ func (rb *route) Wireup(bldr builder, jt *jointab) error {
 				return
 			}
 		case sqlparser.TableName:
-			node.Name.Format(buf)
-			return
+			if node.Qualifier != infoSchema {
+				node.Name.Format(buf)
+				return
+			}
 		}
 		node.Format(buf)
 	}
@@ -511,8 +523,10 @@ func (rb *route) generateFieldQuery(sel sqlparser.SelectStatement, jt *jointab) 
 				return
 			}
 		case sqlparser.TableName:
-			node.Name.Format(buf)
-			return
+			if node.Qualifier != infoSchema {
+				node.Name.Format(buf)
+				return
+			}
 		}
 		sqlparser.FormatImpossibleQuery(buf, node)
 	}
@@ -548,7 +562,7 @@ func (rb *route) IsSingle() bool {
 	switch rb.ERoute.Opcode {
 	// Even thought SelectNext is a single-shard query, we don't
 	// include it here because it can't be combined with any other construct.
-	case engine.SelectUnsharded, engine.SelectEqualUnique:
+	case engine.SelectUnsharded, engine.ExecDBA, engine.SelectEqualUnique:
 		return true
 	}
 	return false
@@ -563,10 +577,23 @@ func (rb *route) SubqueryCanMerge(inner *route) error {
 	}
 	switch inner.ERoute.Opcode {
 	case engine.SelectUnsharded:
-		return nil
+		if rb.ERoute.Opcode == engine.SelectUnsharded {
+			return nil
+		}
+		return errIntermixingUnsupported
+	case engine.ExecDBA:
+		if rb.ERoute.Opcode == engine.ExecDBA {
+			return nil
+		}
+		return errIntermixingUnsupported
 	case engine.SelectNext:
 		return errors.New("unsupported: use of sequence in subquery")
 	case engine.SelectEqualUnique:
+		// This checks for the case where the subquery is dependent
+		// on the vindex column of the outer query:
+		// select ... from a where a.id = 5 ... (select ... from b where b.id = a.id).
+		// If b.id and a.id have the same vindex, it becomes a single-shard
+		// query: the subquery can merge with the outer query.
 		switch vals := inner.ERoute.Values.(type) {
 		case *sqlparser.ColName:
 			if rb.Symtab().Vindex(vals, rb) == inner.ERoute.Vindex {
@@ -576,7 +603,7 @@ func (rb *route) SubqueryCanMerge(inner *route) error {
 	default:
 		return errors.New("unsupported: scatter subquery")
 	}
-	// SelectEqualUnique
+
 	if rb.ERoute.Opcode != engine.SelectEqualUnique {
 		return errors.New("unsupported: subquery does not depend on scatter outer query")
 	}
@@ -596,10 +623,19 @@ func (rb *route) UnionCanMerge(right *route) error {
 	if rb.ERoute.Keyspace.Name != right.ERoute.Keyspace.Name {
 		return errors.New("unsupported: UNION on different keyspaces")
 	}
-	if rb.ERoute.Opcode == engine.SelectUnsharded {
-		// right will also be unsharded. So, we're good.
-		return nil
+	switch rb.ERoute.Opcode {
+	case engine.SelectUnsharded:
+		if right.ERoute.Opcode == engine.SelectUnsharded {
+			return nil
+		}
+		return errIntermixingUnsupported
+	case engine.ExecDBA:
+		if right.ERoute.Opcode == engine.ExecDBA {
+			return nil
+		}
+		return errIntermixingUnsupported
 	}
+
 	if rb.ERoute.Opcode != engine.SelectEqualUnique || right.ERoute.Opcode != engine.SelectEqualUnique {
 		return errors.New("unsupported: UNION on multi-shard queries")
 	}

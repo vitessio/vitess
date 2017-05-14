@@ -49,7 +49,7 @@ import (
 	vtrpcpb "github.com/youtube/vitess/go/vt/proto/vtrpc"
 )
 
-var noKeyspaceErr = vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "no keyspace in database name specified. Supported database name format: keyspace[:shard][@type]")
+var errNoKeyspace = vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "no keyspace in database name specified. Supported database name format: keyspace[:shard][@type]")
 
 // Executor is the engine that executes queries by utilizing
 // the abilities of the underlying vttablets.
@@ -176,7 +176,7 @@ func (e *Executor) shardExec(ctx context.Context, session *vtgatepb.Session, sql
 func (e *Executor) handleDDL(ctx context.Context, session *vtgatepb.Session, sql string, bindVars map[string]interface{}) (*sqltypes.Result, error) {
 	target := e.ParseTarget(session.TargetString)
 	if target.Keyspace == "" {
-		return nil, noKeyspaceErr
+		return nil, errNoKeyspace
 	}
 
 	f := func(keyspace string) (string, []string, error) {
@@ -310,7 +310,7 @@ func (e *Executor) handleShow(ctx context.Context, session *vtgatepb.Session, sq
 		}, nil
 	case sqlparser.ShowVSchemaTablesStr:
 		if target.Keyspace == "" {
-			return nil, noKeyspaceErr
+			return nil, errNoKeyspace
 		}
 		ks, ok := e.VSchema().Keyspaces[target.Keyspace]
 		if !ok {
@@ -356,7 +356,7 @@ func (e *Executor) handleUse(ctx context.Context, session *vtgatepb.Session, sql
 func (e *Executor) handleOther(ctx context.Context, session *vtgatepb.Session, sql string, bindVars map[string]interface{}) (*sqltypes.Result, error) {
 	target := e.ParseTarget(session.TargetString)
 	if target.Keyspace == "" {
-		return nil, noKeyspaceErr
+		return nil, errNoKeyspace
 	}
 	if target.Shard == "" {
 		var err error
@@ -567,8 +567,10 @@ func (e *Executor) VSchema() *vindexes.VSchema {
 
 // ParseTarget parses the string representation of a Target
 // of the form keyspace:shard@tablet_type. You can use a / instead of a :.
-// If the keyspace was not specified in the target, but the VSChema has
+// If the keyspace was not specified in the target, but the VSchema has
 // only one keyspace, then that name is assigned as the keyspace.
+// This is similar to how Find works for VSchema: if there's only
+// one keyspace, it's used as the default qualifier.
 func (e *Executor) ParseTarget(targetString string) querypb.Target {
 	// Default tablet type is master.
 	target := querypb.Target{

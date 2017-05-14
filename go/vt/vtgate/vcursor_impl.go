@@ -72,15 +72,15 @@ func (vc *vcursorImpl) Find(name sqlparser.TableName) (table *vindexes.Table, er
 // DefaultKeyspace returns the default keyspace of the current request
 // if there is one. If the keyspace specified in the target cannot be
 // identified, it returns an error.
-func (vc *vcursorImpl) DefaultKeyspace() (*vindexes.KeyspaceSchema, error) {
+func (vc *vcursorImpl) DefaultKeyspace() (*vindexes.Keyspace, error) {
 	if vc.target.Keyspace == "" {
-		return nil, noKeyspaceErr
+		return nil, errNoKeyspace
 	}
 	ks, ok := vc.executor.VSchema().Keyspaces[vc.target.Keyspace]
 	if !ok {
 		return nil, vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "keyspace %s not found in vschema", vc.target.Keyspace)
 	}
-	return ks, nil
+	return ks.Keyspace, nil
 }
 
 // Execute performs a V3 level execution of the query. It does not take any routing directives.

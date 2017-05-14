@@ -615,6 +615,21 @@
   }
 }
 
+# union of information_schema
+"select * from information_schema.a union select * from information_schema.b"
+{
+  "Original": "select * from information_schema.a union select * from information_schema.b",
+  "Instructions": {
+    "Opcode": "ExecDBA",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "select * from information_schema.a union select * from information_schema.b",
+    "FieldQuery": "select * from information_schema.a where 1 != 1 union select * from information_schema.b where 1 != 1"
+  }
+}
+
 # union with the same target shard
 "select * from music where user_id = 1 union select * from user where id = 1"
 {

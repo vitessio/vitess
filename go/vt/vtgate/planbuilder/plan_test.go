@@ -146,6 +146,10 @@ func (vw *vschemaWrapper) Find(tab sqlparser.TableName) (*vindexes.Table, error)
 	return vw.v.Find(tab.Qualifier.String(), tab.Name.String())
 }
 
+func (vw *vschemaWrapper) DefaultKeyspace() (*vindexes.Keyspace, error) {
+	return vw.v.Keyspaces["main"].Keyspace, nil
+}
+
 func testFile(t *testing.T, filename string, vschema *vindexes.VSchema) {
 	for tcase := range iterateExecFile(filename) {
 		plan, err := Build(tcase.input, &vschemaWrapper{

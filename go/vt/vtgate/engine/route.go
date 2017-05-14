@@ -186,6 +186,8 @@ const (
 	SelectScatter
 	// SelectNext is for fetching from a sequence.
 	SelectNext
+	// ExecDBA is for executing a DBA statement.
+	ExecDBA
 	// UpdateUnsharded is for routing an update statement
 	// to an unsharded keyspace.
 	UpdateUnsharded
@@ -222,6 +224,7 @@ var routeName = [NumCodes]string{
 	"SelectIN",
 	"SelectScatter",
 	"SelectNext",
+	"ExecDBA",
 	"UpdateUnsharded",
 	"UpdateEqual",
 	"DeleteUnsharded",
@@ -264,8 +267,8 @@ func (route *Route) Execute(vcursor VCursor, bindVars, joinVars map[string]inter
 	bindVars = combineVars(bindVars, joinVars)
 
 	switch route.Opcode {
-	case SelectNext:
-		return route.execSelectNext(vcursor, bindVars)
+	case SelectNext, ExecDBA:
+		return route.execAnyShard(vcursor, bindVars)
 	case UpdateEqual:
 		return route.execUpdateEqual(vcursor, bindVars)
 	case DeleteEqual:
@@ -394,10 +397,10 @@ func (route *Route) paramsSelectIN(vcursor VCursor, bindVars map[string]interfac
 	}, nil
 }
 
-func (route *Route) execSelectNext(vcursor VCursor, bindVars map[string]interface{}) (*sqltypes.Result, error) {
+func (route *Route) execAnyShard(vcursor VCursor, bindVars map[string]interface{}) (*sqltypes.Result, error) {
 	ks, shard, err := route.anyShard(vcursor, route.Keyspace)
 	if err != nil {
-		return nil, fmt.Errorf("execSelectNext: %v", err)
+		return nil, fmt.Errorf("execAnyShard: %v", err)
 	}
 	return vcursor.ExecuteStandalone(route.Query, bindVars, ks, shard)
 }
