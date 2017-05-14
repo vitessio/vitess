@@ -63,6 +63,10 @@
 "select id from user where id = 5 and id in (select user_id from user_extra where user_extra.user_id = 4)"
 "unsupported: subquery and parent route to different shards"
 
+# last_insert_id for sharded keyspace
+"select last_insert_id() from user"
+"unsupported: LAST_INSERT_ID is only allowed for unsharded keyspaces"
+
 # join of information_schema with normal table
 "select foo from information_schema.a join unsharded"
 "unsupported: intermixing of information_schema and regular tables"

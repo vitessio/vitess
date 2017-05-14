@@ -1812,6 +1812,7 @@ non_reserved_keyword:
 | UNUSED
 | VIEW
 | WITH
+| LAST_INSERT_ID
 
 openb:
   '('
