@@ -142,8 +142,8 @@ type vschemaWrapper struct {
 	v *vindexes.VSchema
 }
 
-func (vw *vschemaWrapper) Find(ks, tab sqlparser.TableIdent) (*vindexes.Table, error) {
-	return vw.v.Find(ks.String(), tab.String())
+func (vw *vschemaWrapper) Find(tab sqlparser.TableName) (*vindexes.Table, error) {
+	return vw.v.Find(tab.Qualifier.String(), tab.Name.String())
 }
 
 func testFile(t *testing.T, filename string, vschema *vindexes.VSchema) {

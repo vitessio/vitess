@@ -222,7 +222,7 @@ func (vtg *VTGate) IsHealthy() error {
 
 // Execute executes a non-streaming query. This is a V3 function.
 func (vtg *VTGate) Execute(ctx context.Context, session *vtgatepb.Session, sql string, bindVariables map[string]interface{}) (newSession *vtgatepb.Session, qr *sqltypes.Result, err error) {
-	target := parseTarget(session.TargetString)
+	target := vtg.executor.ParseTarget(session.TargetString)
 	statsKey := []string{"Execute", target.Keyspace, topoproto.TabletTypeLString(target.TabletType)}
 	defer vtg.timings.Record(statsKey, time.Now())
 
@@ -243,7 +243,7 @@ func (vtg *VTGate) Execute(ctx context.Context, session *vtgatepb.Session, sql s
 
 // ExecuteBatch executes a batch of queries. This is a V3 function.
 func (vtg *VTGate) ExecuteBatch(ctx context.Context, session *vtgatepb.Session, sqlList []string, bindVariablesList []map[string]interface{}) (*vtgatepb.Session, []sqltypes.QueryResponse, error) {
-	target := parseTarget(session.TargetString)
+	target := vtg.executor.ParseTarget(session.TargetString)
 	statsKey := []string{"ExecuteBatch", target.Keyspace, topoproto.TabletTypeLString(target.TabletType)}
 	defer vtg.timings.Record(statsKey, time.Now())
 
@@ -263,7 +263,7 @@ func (vtg *VTGate) ExecuteBatch(ctx context.Context, session *vtgatepb.Session, 
 
 // StreamExecute executes a streaming query. This is a V3 function.
 func (vtg *VTGate) StreamExecute(ctx context.Context, session *vtgatepb.Session, sql string, bindVariables map[string]interface{}, callback func(*sqltypes.Result) error) error {
-	target := parseTarget(session.TargetString)
+	target := vtg.executor.ParseTarget(session.TargetString)
 	statsKey := []string{"StreamExecute", target.Keyspace, topoproto.TabletTypeLString(target.TabletType)}
 	defer vtg.timings.Record(statsKey, time.Now())
 

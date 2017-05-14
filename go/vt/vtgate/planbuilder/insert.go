@@ -28,7 +28,7 @@ import (
 
 // buildInsertPlan builds the route for an INSERT statement.
 func buildInsertPlan(ins *sqlparser.Insert, vschema VSchema) (*engine.Route, error) {
-	table, err := vschema.Find(ins.Table.Qualifier, ins.Table.Name)
+	table, err := vschema.Find(ins.Table)
 	if err != nil {
 		return nil, err
 	}

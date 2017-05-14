@@ -30,6 +30,7 @@ import (
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	vtgatepb "github.com/youtube/vitess/go/vt/proto/vtgate"
+	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
 )
 
 func TestExecutorTransactions(t *testing.T) {
@@ -663,6 +664,8 @@ func TestGetPlanNormalized(t *testing.T) {
 }
 
 func TestParseTarget(t *testing.T) {
+	r, _, _, _ := createExecutorEnv()
+
 	testcases := []struct {
 		targetString string
 		target       querypb.Target
@@ -712,8 +715,27 @@ func TestParseTarget(t *testing.T) {
 	}}
 
 	for _, tcase := range testcases {
-		if target := parseTarget(tcase.targetString); target != tcase.target {
-			t.Errorf("parseKeyspaceShard(%s): %v, want %v", tcase.targetString, target, tcase.target)
+		if target := r.ParseTarget(tcase.targetString); target != tcase.target {
+			t.Errorf("ParseTarget(%s): %v, want %v", tcase.targetString, target, tcase.target)
 		}
+	}
+}
+
+func TestParseTargetSingleKeyspace(t *testing.T) {
+	r, _, _, _ := createExecutorEnv()
+	altVSchema := &vindexes.VSchema{
+		Keyspaces: map[string]*vindexes.KeyspaceSchema{
+			KsTestUnsharded: r.vschema.Keyspaces[KsTestUnsharded],
+		},
+	}
+	r.vschema = altVSchema
+
+	got := r.ParseTarget("@master")
+	want := querypb.Target{
+		Keyspace:   KsTestUnsharded,
+		TabletType: topodatapb.TabletType_MASTER,
+	}
+	if got != want {
+		t.Errorf("ParseTarget(%s): %v, want %v", "@master", got, want)
 	}
 }

@@ -61,12 +61,26 @@ func newVCursorImpl(ctx context.Context, session *vtgatepb.Session, target query
 
 // Find finds the specified table. If the keyspace what specified in the input, it gets used as qualifier.
 // Otherwise, the keyspace from the request is used, if one was provided.
-func (vc *vcursorImpl) Find(keyspace, tablename sqlparser.TableIdent) (table *vindexes.Table, err error) {
-	ks := keyspace.String()
+func (vc *vcursorImpl) Find(name sqlparser.TableName) (table *vindexes.Table, err error) {
+	ks := name.Qualifier.String()
 	if ks == "" {
 		ks = vc.target.Keyspace
 	}
-	return vc.executor.vschema.Find(ks, tablename.String())
+	return vc.executor.VSchema().Find(ks, name.Name.String())
+}
+
+// DefaultKeyspace returns the default keyspace of the current request
+// if there is one. If the keyspace specified in the target cannot be
+// identified, it returns an error.
+func (vc *vcursorImpl) DefaultKeyspace() (*vindexes.KeyspaceSchema, error) {
+	if vc.target.Keyspace == "" {
+		return nil, noKeyspaceErr
+	}
+	ks, ok := vc.executor.VSchema().Keyspaces[vc.target.Keyspace]
+	if !ok {
+		return nil, vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "keyspace %s not found in vschema", vc.target.Keyspace)
+	}
+	return ks, nil
 }
 
 // Execute performs a V3 level execution of the query. It does not take any routing directives.

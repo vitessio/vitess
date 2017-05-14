@@ -48,14 +48,13 @@ type route struct {
 	ERoute *engine.Route
 }
 
-func newRoute(stmt sqlparser.SelectStatement, eroute *engine.Route, table *vindexes.Table, vschema VSchema, alias sqlparser.TableName) *route {
+func newRoute(stmt sqlparser.SelectStatement, eroute *engine.Route, vschema VSchema) *route {
 	rb := &route{
 		Select: stmt,
-		symtab: newSymtab(vschema),
 		Order:  1,
 		ERoute: eroute,
 	}
-	rb.symtab.AddAlias(alias, table, rb)
+	rb.symtab = newSymtab(vschema, rb)
 	return rb
 }
 
