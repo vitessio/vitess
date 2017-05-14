@@ -26,11 +26,11 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
 
 	querypb "github.com/youtube/vitess/go/vt/proto/query"
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	vtgatepb "github.com/youtube/vitess/go/vt/proto/vtgate"
-	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
 )
 
 func TestExecutorTransactions(t *testing.T) {
@@ -289,7 +289,7 @@ func TestExecutorShow(t *testing.T) {
 
 	session = &vtgatepb.Session{}
 	qr, err = executor.Execute(context.Background(), session, "show vschema_tables", nil)
-	want := noKeyspaceErr.Error()
+	want := errNoKeyspace.Error()
 	if err == nil || err.Error() != want {
 		t.Errorf("show vschema_tables: %v, want %v", err, want)
 	}
@@ -382,7 +382,7 @@ func TestExecutorOther(t *testing.T) {
 	}
 
 	_, err := executor.Execute(context.Background(), &vtgatepb.Session{}, "analyze", nil)
-	want := noKeyspaceErr.Error()
+	want := errNoKeyspace.Error()
 	if err == nil || err.Error() != want {
 		t.Errorf("show vschema_tables: %v, want %v", err, want)
 	}
@@ -444,7 +444,7 @@ func TestExecutorDDL(t *testing.T) {
 	}
 
 	_, err := executor.Execute(context.Background(), &vtgatepb.Session{}, "create", nil)
-	want := noKeyspaceErr.Error()
+	want := errNoKeyspace.Error()
 	if err == nil || err.Error() != want {
 		t.Errorf("show vschema_tables: %v, want %v", err, want)
 	}

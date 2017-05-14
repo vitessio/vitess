@@ -91,6 +91,7 @@ type builder interface {
 // info about tables.
 type VSchema interface {
 	Find(tablename sqlparser.TableName) (table *vindexes.Table, err error)
+	DefaultKeyspace() (*vindexes.Keyspace, error)
 }
 
 // Build builds a plan for a query based on the specified vschema.

@@ -27,6 +27,8 @@ import (
 
 // This file has functions to analyze the FROM clause.
 
+var infoSchema = sqlparser.NewTableIdent("information_schema")
+
 // processTableExprs analyzes the FROM clause. It produces a builder
 // with all the routes identified.
 func processTableExprs(tableExprs sqlparser.TableExprs, vschema VSchema) (builder, error) {
@@ -85,16 +87,18 @@ func processAliasedTable(tableExpr *sqlparser.AliasedTableExpr, vschema VSchema)
 		if err != nil {
 			return nil, err
 		}
-		alias := expr
-		if !tableExpr.As.IsEmpty() {
-			alias = sqlparser.TableName{Name: tableExpr.As}
-		}
 		rb := newRoute(
 			&sqlparser.Select{From: sqlparser.TableExprs([]sqlparser.TableExpr{tableExpr})},
 			eroute,
 			vschema,
 		)
-		rb.symtab.InitWithAlias(alias, table, rb)
+		if table != nil {
+			alias := expr
+			if !tableExpr.As.IsEmpty() {
+				alias = sqlparser.TableName{Name: tableExpr.As}
+			}
+			rb.symtab.InitWithAlias(alias, table, rb)
+		}
 		return rb, nil
 	case *sqlparser.Subquery:
 		var err error
@@ -149,6 +153,14 @@ func processAliasedTable(tableExpr *sqlparser.AliasedTableExpr, vschema VSchema)
 // It also returns the associated vschema info (*Table) so that
 // it can be used to create the symbol table entry.
 func buildERoute(tableName sqlparser.TableName, vschema VSchema) (*engine.Route, *vindexes.Table, error) {
+	if tableName.Qualifier == infoSchema {
+		ks, err := vschema.DefaultKeyspace()
+		if err != nil {
+			return nil, nil, err
+		}
+		return engine.NewRoute(engine.ExecDBA, ks), nil, nil
+	}
+
 	table, err := vschema.Find(tableName)
 	if err != nil {
 		return nil, nil, err
