@@ -81,7 +81,7 @@ func processTableExpr(tableExpr sqlparser.TableExpr, vschema VSchema) (builder, 
 func processAliasedTable(tableExpr *sqlparser.AliasedTableExpr, vschema VSchema) (builder, error) {
 	switch expr := tableExpr.Expr.(type) {
 	case sqlparser.TableName:
-		eroute, table, err := getTablePlan(expr, vschema)
+		eroute, table, err := buildERoute(expr, vschema)
 		if err != nil {
 			return nil, err
 		}
@@ -89,13 +89,13 @@ func processAliasedTable(tableExpr *sqlparser.AliasedTableExpr, vschema VSchema)
 		if !tableExpr.As.IsEmpty() {
 			alias = sqlparser.TableName{Name: tableExpr.As}
 		}
-		return newRoute(
+		rb := newRoute(
 			&sqlparser.Select{From: sqlparser.TableExprs([]sqlparser.TableExpr{tableExpr})},
 			eroute,
-			table,
 			vschema,
-			alias,
-		), nil
+		)
+		rb.symtab.InitWithAlias(alias, table, rb)
+		return rb, nil
 	case *sqlparser.Subquery:
 		var err error
 		var subplan builder
@@ -133,24 +133,23 @@ func processAliasedTable(tableExpr *sqlparser.AliasedTableExpr, vschema VSchema)
 				Vindex: rc.column.Vindex,
 			})
 		}
-		rtb := newRoute(
+		rb := newRoute(
 			&sqlparser.Select{From: sqlparser.TableExprs([]sqlparser.TableExpr{tableExpr})},
 			subroute.ERoute,
-			table,
 			vschema,
-			sqlparser.TableName{Name: tableExpr.As},
 		)
-		subroute.Redirect = rtb
-		return rtb, nil
+		rb.symtab.InitWithAlias(sqlparser.TableName{Name: tableExpr.As}, table, rb)
+		subroute.Redirect = rb
+		return rb, nil
 	}
 	panic("unreachable")
 }
 
-// getTablePlan produces the initial engine.Route for the specified TableName.
+// buildERoute produces the initial engine.Route for the specified TableName.
 // It also returns the associated vschema info (*Table) so that
 // it can be used to create the symbol table entry.
-func getTablePlan(tableName sqlparser.TableName, vschema VSchema) (*engine.Route, *vindexes.Table, error) {
-	table, err := vschema.Find(tableName.Qualifier, tableName.Name)
+func buildERoute(tableName sqlparser.TableName, vschema VSchema) (*engine.Route, *vindexes.Table, error) {
+	table, err := vschema.Find(tableName)
 	if err != nil {
 		return nil, nil, err
 	}

@@ -90,7 +90,7 @@ type builder interface {
 // VSchema defines the interface for this package to fetch
 // info about tables.
 type VSchema interface {
-	Find(keyspace, tablename sqlparser.TableIdent) (table *vindexes.Table, err error)
+	Find(tablename sqlparser.TableName) (table *vindexes.Table, err error)
 }
 
 // Build builds a plan for a query based on the specified vschema.

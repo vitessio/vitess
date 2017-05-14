@@ -122,19 +122,23 @@ type symtab struct {
 }
 
 // newSymtab creates a new symtab initialized
-// to contain the provided table alias.
-func newSymtab(vschema VSchema) *symtab {
+// to containe just one route.
+func newSymtab(vschema VSchema, rb *route) *symtab {
 	return &symtab{
 		tables:        make(map[sqlparser.TableName]*table),
 		uniqueColumns: make(map[string]*column),
 		VSchema:       vschema,
+		singleRoute:   rb,
 	}
 }
 
-// AddAlias adds a table alias to symtab. Currently, this function
-// is only called to add the first table. Additional tables are
+// InitWithAlias initializes the symtab with a table alias.
+// It panics if symtab already contains tables. Additional tables are
 // added to the symtab through calls to Merge.
-func (st *symtab) AddAlias(alias sqlparser.TableName, vindexTable *vindexes.Table, rb *route) {
+func (st *symtab) InitWithAlias(alias sqlparser.TableName, vindexTable *vindexes.Table, rb *route) {
+	if len(st.tables) != 0 {
+		panic(fmt.Sprintf("BUG: symtab already contains tables: %v", st.tables))
+	}
 	table := &table{
 		alias:   alias,
 		columns: make(map[string]*column),

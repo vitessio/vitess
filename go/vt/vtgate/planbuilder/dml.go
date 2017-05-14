@@ -42,7 +42,7 @@ func buildUpdatePlan(upd *sqlparser.Update, vschema VSchema) (*engine.Route, err
 	updateTable, _ := upd.Table.Expr.(sqlparser.TableName)
 
 	var err error
-	route.Table, err = vschema.Find(updateTable.Qualifier, updateTable.Name)
+	route.Table, err = vschema.Find(updateTable)
 	if err != nil {
 		return nil, err
 	}
@@ -91,7 +91,7 @@ func buildDeletePlan(del *sqlparser.Delete, vschema VSchema) (*engine.Route, err
 		Query: generateQuery(del),
 	}
 	var err error
-	route.Table, err = vschema.Find(del.Table.Qualifier, del.Table.Name)
+	route.Table, err = vschema.Find(del.Table)
 	if err != nil {
 		return nil, err
 	}

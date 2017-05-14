@@ -21,7 +21,6 @@ import (
 
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/vtgate/engine"
-	"github.com/youtube/vitess/go/vt/vtgate/vindexes"
 )
 
 func buildUnionPlan(union *sqlparser.Union, vschema VSchema) (primitive engine.Primitive, err error) {
@@ -96,17 +95,12 @@ func unionRouteMerge(union *sqlparser.Union, left, right builder, vschema VSchem
 	if err := lroute.UnionCanMerge(rroute); err != nil {
 		return nil, err
 	}
-	table := &vindexes.Table{
-		Keyspace: lroute.ERoute.Keyspace,
-	}
-	rtb := newRoute(
+	rb := newRoute(
 		&sqlparser.Union{Type: union.Type, Left: union.Left, Right: union.Right, Lock: union.Lock},
 		lroute.ERoute,
-		table,
 		vschema,
-		sqlparser.TableName{Name: sqlparser.NewTableIdent("")}, // Unions don't have an addressable table name.
 	)
-	lroute.Redirect = rtb
-	rroute.Redirect = rtb
-	return rtb, nil
+	lroute.Redirect = rb
+	rroute.Redirect = rb
+	return rb, nil
 }

@@ -143,7 +143,7 @@ func (e *Executor) Execute(ctx context.Context, session *vtgatepb.Session, sql s
 }
 
 func (e *Executor) handleExec(ctx context.Context, session *vtgatepb.Session, sql string, bindVars map[string]interface{}) (*sqltypes.Result, error) {
-	target := parseTarget(session.TargetString)
+	target := e.ParseTarget(session.TargetString)
 	if target.Shard != "" {
 		// V1 mode.
 		sql = sqlannotation.AnnotateIfDML(sql, nil)
@@ -174,7 +174,7 @@ func (e *Executor) shardExec(ctx context.Context, session *vtgatepb.Session, sql
 }
 
 func (e *Executor) handleDDL(ctx context.Context, session *vtgatepb.Session, sql string, bindVars map[string]interface{}) (*sqltypes.Result, error) {
-	target := parseTarget(session.TargetString)
+	target := e.ParseTarget(session.TargetString)
 	if target.Keyspace == "" {
 		return nil, noKeyspaceErr
 	}
@@ -266,7 +266,7 @@ func (e *Executor) handleShow(ctx context.Context, session *vtgatepb.Session, sq
 		// This code is unreachable.
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unrecognized SHOW statement: %v", sql)
 	}
-	target := parseTarget(session.TargetString)
+	target := e.ParseTarget(session.TargetString)
 
 	switch show.Type {
 	case sqlparser.ShowDatabasesStr, sqlparser.ShowKeyspacesStr:
@@ -354,7 +354,7 @@ func (e *Executor) handleUse(ctx context.Context, session *vtgatepb.Session, sql
 }
 
 func (e *Executor) handleOther(ctx context.Context, session *vtgatepb.Session, sql string, bindVars map[string]interface{}) (*sqltypes.Result, error) {
-	target := parseTarget(session.TargetString)
+	target := e.ParseTarget(session.TargetString)
 	if target.Keyspace == "" {
 		return nil, noKeyspaceErr
 	}
@@ -565,6 +565,37 @@ func (e *Executor) VSchema() *vindexes.VSchema {
 	return e.vschema
 }
 
+// ParseTarget parses the string representation of a Target
+// of the form keyspace:shard@tablet_type. You can use a / instead of a :.
+// If the keyspace was not specified in the target, but the VSChema has
+// only one keyspace, then that name is assigned as the keyspace.
+func (e *Executor) ParseTarget(targetString string) querypb.Target {
+	// Default tablet type is master.
+	target := querypb.Target{
+		TabletType: topodatapb.TabletType_MASTER,
+	}
+	last := strings.LastIndexAny(targetString, "@")
+	if last != -1 {
+		// No need to check the error. UNKNOWN will be returned on
+		// error and it will fail downstream.
+		target.TabletType, _ = topoproto.ParseTabletType(targetString[last+1:])
+		targetString = targetString[:last]
+	}
+	last = strings.LastIndexAny(targetString, "/:")
+	if last != -1 {
+		target.Shard = targetString[last+1:]
+		targetString = targetString[:last]
+	}
+	if targetString == "" && len(e.VSchema().Keyspaces) == 1 {
+		// Loop to extract the only keyspace name.
+		for k := range e.VSchema().Keyspaces {
+			targetString = k
+		}
+	}
+	target.Keyspace = targetString
+	return target
+}
+
 // getPlan computes the plan for the given query. If one is in
 // the cache, it reuses it.
 func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, bindVars map[string]interface{}) (*engine.Plan, error) {
@@ -655,29 +686,6 @@ func (e *Executor) VSchemaStats() *VSchemaStats {
 		}
 	}
 	return e.vschemaStats
-}
-
-// parseTarget parses the string representation of a Target
-// of the form keyspace:shard@tablet_type. You can use a / instead of a :.
-func parseTarget(targetString string) querypb.Target {
-	// Default tablet type is master.
-	target := querypb.Target{
-		TabletType: topodatapb.TabletType_MASTER,
-	}
-	last := strings.LastIndexAny(targetString, "@")
-	if last != -1 {
-		// No need to check the error. UNKNOWN will be returned on
-		// error and it will fail downstream.
-		target.TabletType, _ = topoproto.ParseTabletType(targetString[last+1:])
-		targetString = targetString[:last]
-	}
-	last = strings.LastIndexAny(targetString, "/:")
-	if last != -1 {
-		target.Shard = targetString[last+1:]
-		targetString = targetString[:last]
-	}
-	target.Keyspace = targetString
-	return target
 }
 
 func buildVarCharFields(names ...string) []*querypb.Field {
