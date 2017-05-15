@@ -233,11 +233,11 @@
 
 # delete with multi-table targets
 "delete music from music where id = 1"
-"unsupported: delete statement spans multiple shards"
+"unsupported: multi-table delete statement in sharded keyspace"
 
 # multi delete multi table
 "delete user from user join user_extra on user.id = user_extra.id where user.name = 'foo'"
-"unsupported: delete statement spans multiple shards"
+"unsupported: multi-table delete statement in sharded keyspace"
 
 # update changes index column
 "update music set id = 1 where id = 1"
@@ -253,7 +253,7 @@
 
 # multiple tables in update
 "update user as u, user_extra as ue set u.name = 'foo' where u.id = ue.id"
-"unsupported: update statement spans multiple shards"
+"unsupported: multi-table update statement in sharded keyspace"
 
 # unsharded insert from union
 "insert into unsharded select 1 from dual union select 1 from dual"

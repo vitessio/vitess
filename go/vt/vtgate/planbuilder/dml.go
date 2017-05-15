@@ -45,7 +45,7 @@ func buildUpdatePlan(upd *sqlparser.Update, vschema VSchema) (*engine.Route, err
 			return nil, err
 		}
 		if rb, ok := bldr.(*route); !ok || rb.ERoute.Keyspace.Sharded {
-			return nil, errors.New("unsupported: update statement spans multiple shards")
+			return nil, errors.New("unsupported: multi-table update statement in sharded keyspace")
 		}
 		if hasSubquery(upd) {
 			return nil, errors.New("unsupported: subqueries in DML")
@@ -117,7 +117,7 @@ func buildDeletePlan(del *sqlparser.Delete, vschema VSchema) (*engine.Route, err
 			return nil, err
 		}
 		if rb, ok := bldr.(*route); !ok || rb.ERoute.Keyspace.Sharded {
-			return nil, errors.New("unsupported: delete statement spans multiple shards")
+			return nil, errors.New("unsupported: multi-table delete statement in sharded keyspace")
 		}
 		if hasSubquery(del) {
 			return nil, errors.New("unsupported: subqueries in DML")
