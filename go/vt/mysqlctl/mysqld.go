@@ -817,12 +817,23 @@ func (mysqld *Mysqld) executeMysqlScript(connParams *sqldb.ConnParams, sql io.Re
 // returned temporary file should be removed after use, typically in a
 // 'defer os.Remove()' statement.
 func (mysqld *Mysqld) defaultsExtraFile(connParams *sqldb.ConnParams) (string, error) {
-	contents := fmt.Sprintf(`
+	var contents string
+	if connParams.UnixSocket == "" {
+		contents = fmt.Sprintf(`
+[client]
+user=%v
+password=%v
+host=%v
+port=%v
+`, connParams.Uname, connParams.Pass, connParams.Host, connParams.Port)
+	} else {
+		contents = fmt.Sprintf(`
 [client]
 user=%v
 password=%v
 socket=%v
-`, connParams.Uname, connParams.Pass, mysqld.config.SocketFile)
+`, connParams.Uname, connParams.Pass, connParams.UnixSocket)
+	}
 
 	tmpfile, err := ioutil.TempFile("", "example")
 	if err != nil {
