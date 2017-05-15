@@ -35,7 +35,15 @@ import (
 
 // ExecuteStreamFetch is part of the sqldb.Conn interface.
 // Returns a sqldb.SQLError.
-func (c *Conn) ExecuteStreamFetch(query string) error {
+func (c *Conn) ExecuteStreamFetch(query string) (err error) {
+	defer func() {
+		if err != nil {
+			if sqlerr, ok := err.(*sqldb.SQLError); ok {
+				sqlerr.Query = query
+			}
+		}
+	}()
+
 	// Sanity check.
 	if c.fields != nil {
 		return sqldb.NewSQLError(CRCommandsOutOfSync, SSUnknownSQLState, "streaming query already in progress")
