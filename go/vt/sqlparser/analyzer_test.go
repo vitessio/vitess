@@ -62,6 +62,12 @@ func TestPreview(t *testing.T) {
 		{"optimize", StmtOther},
 		{"truncate", StmtOther},
 		{"unknown", StmtUnknown},
+
+		{"/* leading comment */ select ...", StmtSelect},
+		{"-- leading single line comment \n select ...", StmtSelect},
+
+		{"/* leading comment no end select ...", StmtUnknown},
+		{"-- leading single line comment no end select ...", StmtUnknown},
 	}
 	for _, tcase := range testcases {
 		if got := Preview(tcase.sql); got != tcase.want {
