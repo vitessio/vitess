@@ -36,31 +36,55 @@ func dmlFormatter(buf *sqlparser.TrackedBuffer, node sqlparser.SQLNode) {
 
 // buildUpdatePlan builds the instructions for an UPDATE statement.
 func buildUpdatePlan(upd *sqlparser.Update, vschema VSchema) (*engine.Route, error) {
-	bldr, err := processTableExprs(upd.TableExprs, vschema)
-	rb, ok := bldr.(*route)
+	er := &engine.Route{
+		Query: generateQuery(upd),
+	}
+	if len(upd.TableExprs) != 1 {
+		bldr, err := processTableExprs(upd.TableExprs, vschema)
+		if err != nil {
+			return nil, err
+		}
+		if rb, ok := bldr.(*route); !ok || rb.ERoute.Keyspace.Sharded {
+			return nil, errors.New("unsupported: update statement spans multiple shards")
+		}
+		if hasSubquery(upd) {
+			return nil, errors.New("unsupported: subqueries in DML")
+		}
+		er.Opcode = engine.UpdateUnsharded
+		return er, nil
+	}
+
+	aliased, ok := upd.TableExprs[0].(*sqlparser.AliasedTableExpr)
 	if !ok {
-		return nil, errors.New("unsupported: update statement spans multiple shards")
+		return nil, errors.New("unsupported: complex table reference in update")
 	}
-	if hasSubquery(upd) {
-		return nil, errors.New("unsupported: subqueries in DML")
+	updateTable, ok := aliased.Expr.(sqlparser.TableName)
+	if !ok {
+		return nil, errors.New("unsupported: complex table reference in update")
 	}
-	rb.ERoute.Query = generateQuery(upd)
-	if !rb.ERoute.Keyspace.Sharded {
-		rb.ERoute.Opcode = engine.UpdateUnsharded
-		return rb.ERoute, nil
-	}
-	if rb.ERoute.Opcode != engine.SelectEqualUnique {
-		return nil, errors.New("unsupported: update statement spans multiple shards")
-	}
-	err = getDMLRouting(upd.Where, rb.ERoute)
+
+	var err error
+	er.Table, err = vschema.Find(updateTable)
 	if err != nil {
 		return nil, err
 	}
-	rb.ERoute.Opcode = engine.UpdateEqual
-	if isIndexChanging(upd.Exprs, rb.ERoute.Table.ColumnVindexes) {
+	er.Keyspace = er.Table.Keyspace
+	if hasSubquery(upd) {
+		return nil, errors.New("unsupported: subqueries in DML")
+	}
+	if !er.Keyspace.Sharded {
+		er.Opcode = engine.UpdateUnsharded
+		return er, nil
+	}
+	err = getDMLRouting(upd.Where, er)
+	if err != nil {
+		return nil, err
+	}
+	er.Opcode = engine.UpdateEqual
+	if isIndexChanging(upd.Exprs, er.Table.ColumnVindexes) {
 		return nil, errors.New("unsupported: DML cannot change vindex column")
 	}
-	return rb.ERoute, nil
+	return er, nil
 }
 
 func generateQuery(statement sqlparser.Statement) string {
@@ -84,29 +108,52 @@ func isIndexChanging(setClauses sqlparser.UpdateExprs, colVindexes []*vindexes.C
 
 // buildUpdatePlan builds the instructions for a DELETE statement.
 func buildDeletePlan(del *sqlparser.Delete, vschema VSchema) (*engine.Route, error) {
-	bldr, err := processTableExprs(del.TableExprs, vschema)
-	rb, ok := bldr.(*route)
+	er := &engine.Route{
+		Query: generateQuery(del),
+	}
+	if del.Targets != nil || len(del.TableExprs) != 1 {
+		bldr, err := processTableExprs(del.TableExprs, vschema)
+		if err != nil {
+			return nil, err
+		}
+		if rb, ok := bldr.(*route); !ok || rb.ERoute.Keyspace.Sharded {
+			return nil, errors.New("unsupported: delete statement spans multiple shards")
+		}
+		if hasSubquery(del) {
+			return nil, errors.New("unsupported: subqueries in DML")
+		}
+		er.Opcode = engine.DeleteUnsharded
+		return er, nil
+	}
+	aliased, ok := del.TableExprs[0].(*sqlparser.AliasedTableExpr)
 	if !ok {
-		return nil, errors.New("unsupported: update statement spans multiple shards")
+		return nil, errors.New("unsupported: complex table reference in delete")
 	}
-	if hasSubquery(del) {
-		return nil, errors.New("unsupported: subqueries in DML")
+	updateTable, ok := aliased.Expr.(sqlparser.TableName)
+	if !ok {
+		return nil, errors.New("unsupported: complex table reference in delete")
 	}
-	rb.ERoute.Query = generateQuery(del)
-	if !rb.ERoute.Keyspace.Sharded {
-		rb.ERoute.Opcode = engine.DeleteUnsharded
-		return rb.ERoute, nil
-	}
-	if rb.ERoute.Opcode != engine.SelectEqualUnique {
-		return nil, errors.New("unsupported: update statement spans multiple shards")
-	}
-	err = getDMLRouting(del.Where, rb.ERoute)
+
+	var err error
+	er.Table, err = vschema.Find(updateTable)
 	if err != nil {
 		return nil, err
 	}
-	rb.ERoute.Opcode = engine.DeleteEqual
-	rb.ERoute.Subquery = generateDeleteSubquery(del, rb.ERoute.Table)
-	return rb.ERoute, nil
+	er.Keyspace = er.Table.Keyspace
+	if hasSubquery(del) {
+		return nil, errors.New("unsupported: subqueries in DML")
+	}
+	if !er.Keyspace.Sharded {
+		er.Opcode = engine.DeleteUnsharded
+		return er, nil
+	}
+	err = getDMLRouting(del.Where, er)
+	if err != nil {
+		return nil, err
+	}
+	er.Opcode = engine.DeleteEqual
+	er.Subquery = generateDeleteSubquery(del, er.Table)
+	return er, nil
 }
 
 // generateDeleteSubquery generates the query to fetch the rows
