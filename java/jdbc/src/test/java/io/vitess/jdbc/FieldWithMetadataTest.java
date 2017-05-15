@@ -247,14 +247,14 @@ public class FieldWithMetadataTest extends BaseTest {
             .setType(Query.Type.VARBINARY)
             .setName("foo")
             .setOrgName("foo")
-            .setCharset(/* binary */63)
+            .setCharset(CharsetMapping.MYSQL_COLLATION_INDEX_binary)
             .setFlags(Query.MySqlFlag.BINARY_FLAG_VALUE)
             .build();
 
         FieldWithMetadata fieldWithMetadata = new FieldWithMetadata(conn, raw);
         Assert.assertEquals("no remapping - base case", Types.VARBINARY, fieldWithMetadata.getJavaType());
 
-        raw = raw.toBuilder().setCharset(/* utf-8 */33).build();
+        raw = raw.toBuilder().setCharset(CharsetMapping.MYSQL_COLLATION_INDEX_utf8).build();
         fieldWithMetadata = new FieldWithMetadata(conn, raw);
         Assert.assertEquals("remap to varchar due to non-binary encoding", Types.VARCHAR, fieldWithMetadata.getJavaType());
     }
@@ -691,8 +691,8 @@ public class FieldWithMetadataTest extends BaseTest {
         Assert.assertEquals("greek", field.getEncodingForIndex(25));
 
         field.getConnectionProperties().setEncoding(null);
-        Assert.assertEquals("UTF-8", field.getEncodingForIndex(33));
-        Assert.assertEquals("ISO-8859-1", field.getEncodingForIndex(63));
+        Assert.assertEquals("UTF-8", field.getEncodingForIndex(CharsetMapping.MYSQL_COLLATION_INDEX_utf8));
+        Assert.assertEquals("ISO-8859-1", field.getEncodingForIndex(CharsetMapping.MYSQL_COLLATION_INDEX_binary));
 
         field.getConnectionProperties().setEncoding("NOT_REAL");
         // Same tests as the first one, but testing that when there is a default configured, it falls back to that regardless
