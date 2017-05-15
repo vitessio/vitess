@@ -39,24 +39,22 @@ func buildUpdatePlan(upd *sqlparser.Update, vschema VSchema) (*engine.Route, err
 	er := &engine.Route{
 		Query: generateQuery(upd),
 	}
-	if len(upd.TableExprs) != 1 {
+	aliased, ok := upd.TableExprs[0].(*sqlparser.AliasedTableExpr)
+	if !ok || len(upd.TableExprs) != 1 {
 		bldr, err := processTableExprs(upd.TableExprs, vschema)
 		if err != nil {
 			return nil, err
 		}
-		if rb, ok := bldr.(*route); !ok || rb.ERoute.Keyspace.Sharded {
+		rb, ok := bldr.(*route)
+		if !ok || rb.ERoute.Keyspace.Sharded {
 			return nil, errors.New("unsupported: multi-table update statement in sharded keyspace")
 		}
 		if hasSubquery(upd) {
 			return nil, errors.New("unsupported: subqueries in DML")
 		}
+		er.Keyspace = rb.ERoute.Keyspace
 		er.Opcode = engine.UpdateUnsharded
 		return er, nil
-	}
-
-	aliased, ok := upd.TableExprs[0].(*sqlparser.AliasedTableExpr)
-	if !ok {
-		return nil, errors.New("unsupported: complex table reference in update")
 	}
 	updateTable, ok := aliased.Expr.(sqlparser.TableName)
 	if !ok {
@@ -111,23 +109,22 @@ func buildDeletePlan(del *sqlparser.Delete, vschema VSchema) (*engine.Route, err
 	er := &engine.Route{
 		Query: generateQuery(del),
 	}
-	if del.Targets != nil || len(del.TableExprs) != 1 {
+	aliased, ok := del.TableExprs[0].(*sqlparser.AliasedTableExpr)
+	if !ok || del.Targets != nil || len(del.TableExprs) != 1 {
 		bldr, err := processTableExprs(del.TableExprs, vschema)
 		if err != nil {
 			return nil, err
 		}
-		if rb, ok := bldr.(*route); !ok || rb.ERoute.Keyspace.Sharded {
+		rb, ok := bldr.(*route)
+		if !ok || rb.ERoute.Keyspace.Sharded {
 			return nil, errors.New("unsupported: multi-table delete statement in sharded keyspace")
 		}
 		if hasSubquery(del) {
 			return nil, errors.New("unsupported: subqueries in DML")
 		}
+		er.Keyspace = rb.ERoute.Keyspace
 		er.Opcode = engine.DeleteUnsharded
 		return er, nil
-	}
-	aliased, ok := del.TableExprs[0].(*sqlparser.AliasedTableExpr)
-	if !ok {
-		return nil, errors.New("unsupported: complex table reference in delete")
 	}
 	updateTable, ok := aliased.Expr.(sqlparser.TableName)
 	if !ok {
