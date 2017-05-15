@@ -219,7 +219,12 @@ func (mysqld *Mysqld) startNoWait(ctx context.Context, mysqldArgs ...string) err
 		}
 		name, err = binaryPath(dir, "mysqld_safe")
 		if err != nil {
-			return err
+			log.Warningf("%v: trying to launch mysqld instead", err)
+			name, err = binaryPath(dir, "mysqld")
+			// If this also fails, return an error.
+			if err != nil {
+				return err
+			}
 		}
 		arg := []string{
 			"--defaults-file=" + mysqld.config.path}
