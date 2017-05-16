@@ -16,8 +16,7 @@
       "Name": "main",
       "Sharded": false
     },
-    "Query": "update m1 set val = 1",
-    "Table": "m1"
+    "Query": "update m1 set val = 1"
   }
 }
 
@@ -31,8 +30,7 @@
       "Name": "main",
       "Sharded": false
     },
-    "Query": "update unsharded set val = 1",
-    "Table": "unsharded"
+    "Query": "update unsharded set val = 1"
   }
 }
 
@@ -46,8 +44,7 @@
       "Name": "main",
       "Sharded": false
     },
-    "Query": "delete from unsharded",
-    "Table": "unsharded"
+    "Query": "delete from unsharded"
   }
 }
 

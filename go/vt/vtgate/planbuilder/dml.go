@@ -39,40 +39,32 @@ func buildUpdatePlan(upd *sqlparser.Update, vschema VSchema) (*engine.Route, err
 	er := &engine.Route{
 		Query: generateQuery(upd),
 	}
-	aliased, ok := upd.TableExprs[0].(*sqlparser.AliasedTableExpr)
-	if !ok || len(upd.TableExprs) != 1 {
-		bldr, err := processTableExprs(upd.TableExprs, vschema)
-		if err != nil {
-			return nil, err
-		}
-		rb, ok := bldr.(*route)
-		if !ok || rb.ERoute.Keyspace.Sharded {
-			return nil, errors.New("unsupported: multi-table update statement in sharded keyspace")
-		}
-		if hasSubquery(upd) {
-			return nil, errors.New("unsupported: subqueries in DML")
-		}
-		er.Keyspace = rb.ERoute.Keyspace
-		er.Opcode = engine.UpdateUnsharded
-		return er, nil
-	}
-	updateTable, ok := aliased.Expr.(sqlparser.TableName)
-	if !ok {
-		return nil, errors.New("unsupported: complex table reference in update")
-	}
-
-	var err error
-	er.Table, err = vschema.Find(updateTable)
+	bldr, err := processTableExprs(upd.TableExprs, vschema)
 	if err != nil {
 		return nil, err
 	}
-	er.Keyspace = er.Table.Keyspace
+	rb, ok := bldr.(*route)
+	if !ok {
+		return nil, errors.New("unsupported: multi-table update statement in sharded keyspace")
+	}
 	if hasSubquery(upd) {
 		return nil, errors.New("unsupported: subqueries in DML")
 	}
+	er.Keyspace = rb.ERoute.Keyspace
 	if !er.Keyspace.Sharded {
 		er.Opcode = engine.UpdateUnsharded
 		return er, nil
+	}
+	if len(rb.Symtab().tables) != 1 {
+		return nil, errors.New("unsupported: multi-table update statement in sharded keyspace")
+	}
+	var tableName sqlparser.TableName
+	for t := range rb.Symtab().tables {
+		tableName = t
+	}
+	er.Table, err = vschema.Find(tableName)
+	if err != nil {
+		return nil, err
 	}
 	err = getDMLRouting(upd.Where, er)
 	if err != nil {
@@ -109,40 +101,32 @@ func buildDeletePlan(del *sqlparser.Delete, vschema VSchema) (*engine.Route, err
 	er := &engine.Route{
 		Query: generateQuery(del),
 	}
-	aliased, ok := del.TableExprs[0].(*sqlparser.AliasedTableExpr)
-	if !ok || del.Targets != nil || len(del.TableExprs) != 1 {
-		bldr, err := processTableExprs(del.TableExprs, vschema)
-		if err != nil {
-			return nil, err
-		}
-		rb, ok := bldr.(*route)
-		if !ok || rb.ERoute.Keyspace.Sharded {
-			return nil, errors.New("unsupported: multi-table delete statement in sharded keyspace")
-		}
-		if hasSubquery(del) {
-			return nil, errors.New("unsupported: subqueries in DML")
-		}
-		er.Keyspace = rb.ERoute.Keyspace
-		er.Opcode = engine.DeleteUnsharded
-		return er, nil
-	}
-	updateTable, ok := aliased.Expr.(sqlparser.TableName)
-	if !ok {
-		return nil, errors.New("unsupported: complex table reference in delete")
-	}
-
-	var err error
-	er.Table, err = vschema.Find(updateTable)
+	bldr, err := processTableExprs(del.TableExprs, vschema)
 	if err != nil {
 		return nil, err
 	}
-	er.Keyspace = er.Table.Keyspace
+	rb, ok := bldr.(*route)
+	if !ok {
+		return nil, errors.New("unsupported: multi-table delete statement in sharded keyspace")
+	}
 	if hasSubquery(del) {
 		return nil, errors.New("unsupported: subqueries in DML")
 	}
+	er.Keyspace = rb.ERoute.Keyspace
 	if !er.Keyspace.Sharded {
 		er.Opcode = engine.DeleteUnsharded
 		return er, nil
+	}
+	if del.Targets != nil || len(rb.Symtab().tables) != 1 {
+		return nil, errors.New("unsupported: multi-table delete statement in sharded keyspace")
+	}
+	var tableName sqlparser.TableName
+	for t := range rb.Symtab().tables {
+		tableName = t
+	}
+	er.Table, err = vschema.Find(tableName)
+	if err != nil {
+		return nil, err
 	}
 	err = getDMLRouting(del.Where, er)
 	if err != nil {

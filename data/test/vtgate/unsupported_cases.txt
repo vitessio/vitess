@@ -245,7 +245,7 @@
 
 # complex update tables
 "update (select id from user) as u set id = 4"
-"unsupported: complex table reference in update"
+"unsupported: subqueries in DML"
 
 # join in update tables
 "update user join user_extra on user.id = user_extra.id set user.name = 'foo'"
