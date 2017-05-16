@@ -189,6 +189,9 @@ func TestClientFoundRows(t *testing.T) {
 		t.Errorf("FoundRows flag: %x, second bit must be 0", th.lastConn.Capabilities)
 	}
 	c.Close()
+	if !c.IsClosed() {
+		t.Errorf("IsClosed returned true on Close-d connection.")
+	}
 
 	// Test with flag.
 	params.Flags |= CapabilityClientFoundRows

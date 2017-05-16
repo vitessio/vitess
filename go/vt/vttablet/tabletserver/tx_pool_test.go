@@ -240,7 +240,7 @@ func TestTxPoolBeginWithPoolConnectionError_Errno2006_Permanent(t *testing.T) {
 	// DBConn.Exec() will return the reconnect error as final error and not the
 	// initial connection error.
 	_, err = txPool.LocalBegin(context.Background(), false)
-	if err == nil || !strings.Contains(err.Error(), "Lost connection to MySQL server") || !strings.Contains(err.Error(), "(errno 2013)") {
+	if err == nil || !strings.Contains(err.Error(), "(errno 2013)") {
 		t.Fatalf("Begin did not return the reconnect error: %v", err)
 	}
 	sqlErr, ok := err.(*sqldb.SQLError)

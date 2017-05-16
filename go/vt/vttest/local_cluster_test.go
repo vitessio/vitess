@@ -30,7 +30,7 @@ import (
 
 	// FIXME(alainjobart) remove this when it's the only option.
 	// Registers our implementation.
-	_ "github.com/youtube/vitess/go/mysql"
+	_ "github.com/youtube/vitess/go/mysqlconn"
 
 	topodatapb "github.com/youtube/vitess/go/vt/proto/topodata"
 	vschemapb "github.com/youtube/vitess/go/vt/proto/vschema"

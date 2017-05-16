@@ -35,7 +35,7 @@ import (
 )
 
 // assertSQLError makes sure we get the right error.
-func assertSQLError(t *testing.T, err error, code int, sqlState string, subtext string) {
+func assertSQLError(t *testing.T, err error, code int, sqlState string, subtext string, query string) {
 	if err == nil {
 		t.Fatalf("was expecting SQLError %v / %v / %v but got no error.", code, sqlState, subtext)
 	}
@@ -51,7 +51,9 @@ func assertSQLError(t *testing.T, err error, code int, sqlState string, subtext 
 	}
 	if subtext != "" && !strings.Contains(serr.Message, subtext) {
 		t.Fatalf("was expecting SQLError %v / %v / %v but got message %v", code, sqlState, subtext, serr.Message)
-
+	}
+	if serr.Query != query {
+		t.Fatalf("was expecting SQLError %v / %v / %v with Query '%v' but got query '%v'", code, sqlState, subtext, query, serr.Query)
 	}
 }
 
@@ -111,14 +113,14 @@ func TestConnectTimeout(t *testing.T) {
 	}()
 	ctx = context.Background()
 	_, err = Connect(ctx, params)
-	assertSQLError(t, err, CRServerLost, SSUnknownSQLState, "initial packet read failed")
+	assertSQLError(t, err, CRServerLost, SSUnknownSQLState, "initial packet read failed", "")
 
 	// Now close the listener. Connect should fail right away,
 	// check the error.
 	listener.Close()
 	wg.Wait()
 	_, err = Connect(ctx, params)
-	assertSQLError(t, err, CRConnHostError, SSUnknownSQLState, "connection refused")
+	assertSQLError(t, err, CRConnHostError, SSUnknownSQLState, "connection refused", "")
 
 	// Tests a connection where Dial to a unix socket fails
 	// properly returns the right error. To simulate exactly the
@@ -133,7 +135,7 @@ func TestConnectTimeout(t *testing.T) {
 	ctx = context.Background()
 	_, err = Connect(ctx, params)
 	os.Remove(name)
-	assertSQLError(t, err, CRConnectionError, SSUnknownSQLState, "connection refused")
+	assertSQLError(t, err, CRConnectionError, SSUnknownSQLState, "connection refused", "")
 }
 
 // testKillWithRealDatabase opens a connection, issues a command that
@@ -165,7 +167,7 @@ func testKillWithRealDatabase(t *testing.T, params *sqldb.ConnParams) {
 	}
 
 	err = <-errChan
-	assertSQLError(t, err, CRServerLost, SSUnknownSQLState, "EOF")
+	assertSQLError(t, err, CRServerLost, SSUnknownSQLState, "EOF", "select sleep(10) from dual")
 }
 
 // testKill2006WithRealDatabase opens a connection, kills the
@@ -193,7 +195,7 @@ func testKill2006WithRealDatabase(t *testing.T, params *sqldb.ConnParams) {
 	// unix socket, we will get a broken pipe when the server
 	// closes the connection and we are trying to write the command.
 	_, err = conn.ExecuteFetch("select sleep(10) from dual", 1000, false)
-	assertSQLError(t, err, CRServerGone, SSUnknownSQLState, "broken pipe")
+	assertSQLError(t, err, CRServerGone, SSUnknownSQLState, "broken pipe", "select sleep(10) from dual")
 }
 
 // testDupEntryWithRealDatabase tests a duplicate key is properly raised.
@@ -212,7 +214,7 @@ func testDupEntryWithRealDatabase(t *testing.T, params *sqldb.ConnParams) {
 		t.Fatalf("first insert failed: %v", err)
 	}
 	_, err = conn.ExecuteFetch("insert into dup_entry(id, name) values(2, 10)", 0, false)
-	assertSQLError(t, err, ERDupEntry, SSDupKey, "Duplicate entry")
+	assertSQLError(t, err, ERDupEntry, SSDupKey, "Duplicate entry", "insert into dup_entry(id, name) values(2, 10)")
 }
 
 // testClientFoundRows tests if the CLIENT_FOUND_ROWS flag works.

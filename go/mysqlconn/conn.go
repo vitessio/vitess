@@ -78,6 +78,9 @@ type Conn struct {
 	// - at accept time for the server.
 	ConnectionID uint32
 
+	// Closed is set to true when Close() is called on the connection.
+	Closed bool
+
 	// Capabilities is the current set of features this connection
 	// is using.  It is the features that are both supported by
 	// the client and the server, and currently in use.
@@ -535,6 +538,7 @@ func (c *Conn) RemoteAddr() net.Addr {
 // Close closes the connection. It can be called from a different go
 // routine to interrupt the current connection.
 func (c *Conn) Close() {
+	c.Closed = true
 	c.conn.Close()
 }
 

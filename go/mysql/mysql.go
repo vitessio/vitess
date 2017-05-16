@@ -45,10 +45,6 @@ func init() {
 	// This needs to be called before threads begin to spawn.
 	C.vt_library_init()
 	sqldb.Register("libmysqlclient", Connect)
-
-	// Comment this out and uncomment call to sqldb.RegisterDefault in
-	// go/mysqlconn/sqldb_conn.go to make it the default.
-	sqldb.RegisterDefault(Connect)
 }
 
 func handleError(err *error) {
@@ -65,6 +61,11 @@ type Connection struct {
 
 // Connect uses the connection parameters to connect and returns the connection
 func Connect(params sqldb.ConnParams) (sqldb.Conn, error) {
+	// FIXME(alainjobart) adding a panic to make sure this library is
+	// unused. Before the defer on purpose, so it actually panics.
+	if true {
+		panic("Added to make sure this library is unused.")
+	}
 	var err error
 	defer handleError(&err)
 

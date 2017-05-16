@@ -35,7 +35,15 @@ import (
 
 // ExecuteStreamFetch is part of the sqldb.Conn interface.
 // Returns a sqldb.SQLError.
-func (c *Conn) ExecuteStreamFetch(query string) error {
+func (c *Conn) ExecuteStreamFetch(query string) (err error) {
+	defer func() {
+		if err != nil {
+			if sqlerr, ok := err.(*sqldb.SQLError); ok {
+				sqlerr.Query = query
+			}
+		}
+	}()
+
 	// Sanity check.
 	if c.fields != nil {
 		return sqldb.NewSQLError(CRCommandsOutOfSync, SSUnknownSQLState, "streaming query already in progress")
@@ -160,13 +168,7 @@ func (c *Conn) CloseResult() {
 
 // IsClosed is part of the sqldb.Conn interface.
 func (c *Conn) IsClosed() bool {
-	return c.ConnectionID == 0
-}
-
-// Shutdown is part of the sqldb.Conn interface.
-func (c *Conn) Shutdown() {
-	c.ConnectionID = 0
-	c.conn.Close()
+	return c.Closed
 }
 
 // ID is part of the sqldb.Conn interface.
@@ -179,12 +181,8 @@ func init() {
 		ctx := context.Background()
 		return Connect(ctx, &params)
 	})
-
-	// Uncomment this and comment out the call to sqldb.RegisterDefault in
-	// go/mysql/mysql.go to make this the default.
-
-	//	sqldb.RegisterDefault(func(params sqldb.ConnParams) (sqldb.Conn, error) {
-	//		ctx := context.Background()
-	//		return Connect(ctx, &params)
-	//	})
+	sqldb.RegisterDefault(func(params sqldb.ConnParams) (sqldb.Conn, error) {
+		ctx := context.Background()
+		return Connect(ctx, &params)
+	})
 }

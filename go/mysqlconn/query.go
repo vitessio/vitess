@@ -273,7 +273,15 @@ func (c *Conn) parseRow(data []byte, fields []*querypb.Field) ([]sqltypes.Value,
 //
 // 2. if the server closes the connection when a command is in flight,
 //    readComQueryResponse will fail, and we'll return CRServerLost(2013).
-func (c *Conn) ExecuteFetch(query string, maxrows int, wantfields bool) (*sqltypes.Result, error) {
+func (c *Conn) ExecuteFetch(query string, maxrows int, wantfields bool) (result *sqltypes.Result, err error) {
+	defer func() {
+		if err != nil {
+			if sqlerr, ok := err.(*sqldb.SQLError); ok {
+				sqlerr.Query = query
+			}
+		}
+	}()
+
 	// This is a new command, need to reset the sequence.
 	c.sequence = 0
 
@@ -296,7 +304,7 @@ func (c *Conn) ExecuteFetch(query string, maxrows int, wantfields bool) (*sqltyp
 	}
 
 	fields := make([]querypb.Field, colNumber)
-	result := &sqltypes.Result{
+	result = &sqltypes.Result{
 		Fields: make([]*querypb.Field, colNumber),
 	}
 
@@ -369,7 +377,6 @@ func (c *Conn) ExecuteFetch(query string, maxrows int, wantfields bool) (*sqltyp
 			return nil, &sqldb.SQLError{
 				Num:     0,
 				Message: fmt.Sprintf("Row count exceeded %d", maxrows),
-				Query:   query,
 			}
 		}
 

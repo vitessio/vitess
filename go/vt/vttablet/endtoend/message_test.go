@@ -64,6 +64,7 @@ func TestMessage(t *testing.T) {
 		}); err != nil {
 			t.Fatal(err)
 		}
+		close(ch)
 	}()
 	// Once the test is done, consume any left-over pending
 	// messages. Some could make it into the pipeline and get
