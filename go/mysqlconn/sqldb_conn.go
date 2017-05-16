@@ -168,12 +168,11 @@ func (c *Conn) CloseResult() {
 
 // IsClosed is part of the sqldb.Conn interface.
 func (c *Conn) IsClosed() bool {
-	return c.ConnectionID == 0
+	return c.Closed
 }
 
 // Shutdown is part of the sqldb.Conn interface.
 func (c *Conn) Shutdown() {
-	c.ConnectionID = 0
 	c.conn.Close()
 }
 
