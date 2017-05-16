@@ -394,18 +394,18 @@ func (*ParenSelect) iInsertRows() {}
 
 // Update represents an UPDATE statement.
 type Update struct {
-	Comments Comments
-	Table    *AliasedTableExpr
-	Exprs    UpdateExprs
-	Where    *Where
-	OrderBy  OrderBy
-	Limit    *Limit
+	Comments   Comments
+	TableExprs TableExprs
+	Exprs      UpdateExprs
+	Where      *Where
+	OrderBy    OrderBy
+	Limit      *Limit
 }
 
 // Format formats the node.
 func (node *Update) Format(buf *TrackedBuffer) {
 	buf.Myprintf("update %v%v set %v%v%v%v",
-		node.Comments, node.Table,
+		node.Comments, node.TableExprs,
 		node.Exprs, node.Where, node.OrderBy, node.Limit)
 }
 
@@ -417,7 +417,7 @@ func (node *Update) WalkSubtree(visit Visit) error {
 	return Walk(
 		visit,
 		node.Comments,
-		node.Table,
+		node.TableExprs,
 		node.Exprs,
 		node.Where,
 		node.OrderBy,
@@ -427,18 +427,21 @@ func (node *Update) WalkSubtree(visit Visit) error {
 
 // Delete represents a DELETE statement.
 type Delete struct {
-	Comments Comments
-	Table    TableName
-	Where    *Where
-	OrderBy  OrderBy
-	Limit    *Limit
+	Comments   Comments
+	Targets    TableNames
+	TableExprs TableExprs
+	Where      *Where
+	OrderBy    OrderBy
+	Limit      *Limit
 }
 
 // Format formats the node.
 func (node *Delete) Format(buf *TrackedBuffer) {
-	buf.Myprintf("delete %vfrom %v%v%v%v",
-		node.Comments,
-		node.Table, node.Where, node.OrderBy, node.Limit)
+	buf.Myprintf("delete %v", node.Comments)
+	if node.Targets != nil {
+		buf.Myprintf("%v ", node.Targets)
+	}
+	buf.Myprintf("from %v%v%v%v", node.TableExprs, node.Where, node.OrderBy, node.Limit)
 }
 
 // WalkSubtree walks the nodes of the subtree.
@@ -449,7 +452,8 @@ func (node *Delete) WalkSubtree(visit Visit) error {
 	return Walk(
 		visit,
 		node.Comments,
-		node.Table,
+		node.Targets,
+		node.TableExprs,
 		node.Where,
 		node.OrderBy,
 		node.Limit,
@@ -805,6 +809,28 @@ type SimpleTableExpr interface {
 
 func (TableName) iSimpleTableExpr() {}
 func (*Subquery) iSimpleTableExpr() {}
+
+// TableNames is a list of TableName.
+type TableNames []TableName
+
+// Format formats the node.
+func (node TableNames) Format(buf *TrackedBuffer) {
+	var prefix string
+	for _, n := range node {
+		buf.Myprintf("%s%v", prefix, n)
+		prefix = ", "
+	}
+}
+
+// WalkSubtree walks the nodes of the subtree.
+func (node TableNames) WalkSubtree(visit Visit) error {
+	for _, n := range node {
+		if err := Walk(visit, n); err != nil {
+			return err
+		}
+	}
+	return nil
+}
 
 // TableName represents a table  name.
 // Qualifier, if specified, represents a database or keyspace.

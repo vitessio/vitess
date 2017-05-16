@@ -157,6 +157,7 @@ const (
 	ReasonUpsert
 	ReasonUpsertColMismatch
 	ReasonReplace
+	ReasonMultiTable
 )
 
 // Must exactly match order of reason constants.
@@ -169,6 +170,7 @@ var reasonName = []string{
 	"UPSERT",
 	"UPSERT_COL_MISMATCH",
 	"REPLACE",
+	"MULTI_TABLE",
 }
 
 // String returns a string representation of a ReasonType.

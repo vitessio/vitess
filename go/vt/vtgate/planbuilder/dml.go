@@ -36,34 +36,45 @@ func dmlFormatter(buf *sqlparser.TrackedBuffer, node sqlparser.SQLNode) {
 
 // buildUpdatePlan builds the instructions for an UPDATE statement.
 func buildUpdatePlan(upd *sqlparser.Update, vschema VSchema) (*engine.Route, error) {
-	route := &engine.Route{
+	er := &engine.Route{
 		Query: generateQuery(upd),
 	}
-	updateTable, _ := upd.Table.Expr.(sqlparser.TableName)
-
-	var err error
-	route.Table, err = vschema.Find(updateTable)
+	bldr, err := processTableExprs(upd.TableExprs, vschema)
 	if err != nil {
 		return nil, err
 	}
-	route.Keyspace = route.Table.Keyspace
+	rb, ok := bldr.(*route)
+	if !ok {
+		return nil, errors.New("unsupported: multi-table update statement in sharded keyspace")
+	}
 	if hasSubquery(upd) {
 		return nil, errors.New("unsupported: subqueries in DML")
 	}
-	if !route.Keyspace.Sharded {
-		route.Opcode = engine.UpdateUnsharded
-		return route, nil
+	er.Keyspace = rb.ERoute.Keyspace
+	if !er.Keyspace.Sharded {
+		er.Opcode = engine.UpdateUnsharded
+		return er, nil
 	}
-
-	err = getDMLRouting(upd.Where, route)
+	if len(rb.Symtab().tables) != 1 {
+		return nil, errors.New("unsupported: multi-table update statement in sharded keyspace")
+	}
+	var tableName sqlparser.TableName
+	for t := range rb.Symtab().tables {
+		tableName = t
+	}
+	er.Table, err = vschema.Find(tableName)
 	if err != nil {
 		return nil, err
 	}
-	route.Opcode = engine.UpdateEqual
-	if isIndexChanging(upd.Exprs, route.Table.ColumnVindexes) {
+	err = getDMLRouting(upd.Where, er)
+	if err != nil {
+		return nil, err
+	}
+	er.Opcode = engine.UpdateEqual
+	if isIndexChanging(upd.Exprs, er.Table.ColumnVindexes) {
 		return nil, errors.New("unsupported: DML cannot change vindex column")
 	}
-	return route, nil
+	return er, nil
 }
 
 func generateQuery(statement sqlparser.Statement) string {
@@ -87,30 +98,43 @@ func isIndexChanging(setClauses sqlparser.UpdateExprs, colVindexes []*vindexes.C
 
 // buildUpdatePlan builds the instructions for a DELETE statement.
 func buildDeletePlan(del *sqlparser.Delete, vschema VSchema) (*engine.Route, error) {
-	route := &engine.Route{
+	er := &engine.Route{
 		Query: generateQuery(del),
 	}
-	var err error
-	route.Table, err = vschema.Find(del.Table)
+	bldr, err := processTableExprs(del.TableExprs, vschema)
 	if err != nil {
 		return nil, err
 	}
-	route.Keyspace = route.Table.Keyspace
+	rb, ok := bldr.(*route)
+	if !ok {
+		return nil, errors.New("unsupported: multi-table delete statement in sharded keyspace")
+	}
 	if hasSubquery(del) {
 		return nil, errors.New("unsupported: subqueries in DML")
 	}
-	if !route.Keyspace.Sharded {
-		route.Opcode = engine.DeleteUnsharded
-		return route, nil
+	er.Keyspace = rb.ERoute.Keyspace
+	if !er.Keyspace.Sharded {
+		er.Opcode = engine.DeleteUnsharded
+		return er, nil
 	}
-
-	err = getDMLRouting(del.Where, route)
+	if del.Targets != nil || len(rb.Symtab().tables) != 1 {
+		return nil, errors.New("unsupported: multi-table delete statement in sharded keyspace")
+	}
+	var tableName sqlparser.TableName
+	for t := range rb.Symtab().tables {
+		tableName = t
+	}
+	er.Table, err = vschema.Find(tableName)
 	if err != nil {
 		return nil, err
 	}
-	route.Opcode = engine.DeleteEqual
-	route.Subquery = generateDeleteSubquery(del, route.Table)
-	return route, nil
+	err = getDMLRouting(del.Where, er)
+	if err != nil {
+		return nil, err
+	}
+	er.Opcode = engine.DeleteEqual
+	er.Subquery = generateDeleteSubquery(del, er.Table)
+	return er, nil
 }
 
 // generateDeleteSubquery generates the query to fetch the rows

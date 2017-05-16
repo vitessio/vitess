@@ -16,8 +16,7 @@
       "Name": "main",
       "Sharded": false
     },
-    "Query": "update m1 set val = 1",
-    "Table": "m1"
+    "Query": "update m1 set val = 1"
   }
 }
 
@@ -31,8 +30,7 @@
       "Name": "main",
       "Sharded": false
     },
-    "Query": "update unsharded set val = 1",
-    "Table": "unsharded"
+    "Query": "update unsharded set val = 1"
   }
 }
 
@@ -46,8 +44,7 @@
       "Name": "main",
       "Sharded": false
     },
-    "Query": "delete from unsharded",
-    "Table": "unsharded"
+    "Query": "delete from unsharded"
   }
 }
 
@@ -120,6 +117,34 @@
   }
 }
 
+# multi-table delete with comma join
+"delete a from unsharded_a a, unsharded_b b where a.id = b.id and b.val = 1"
+{
+  "Original": "delete a from unsharded_a a, unsharded_b b where a.id = b.id and b.val = 1",
+  "Instructions": {
+    "Opcode": "DeleteUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "delete a from unsharded_a as a, unsharded_b as b where a.id = b.id and b.val = 1"
+  }
+}
+
+# multi-table delete with ansi join
+"delete a from unsharded_a a join unsharded_b b on a.id = b.id where b.val = 1"
+{
+  "Original": "delete a from unsharded_a a join unsharded_b b on a.id = b.id where b.val = 1",
+  "Instructions": {
+    "Opcode": "DeleteUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "delete a from unsharded_a as a join unsharded_b as b on a.id = b.id where b.val = 1"
+  }
+}
+
 # update by lookup
 "update music set val = 1 where id = 1"
 {
@@ -134,6 +159,34 @@
     "Vindex": "music_user_map",
     "Values": 1,
     "Table": "music"
+  }
+}
+
+# update multi-table ansi join
+"update unsharded_a a join unsharded_b b on a.id = b.id set a.val = 'foo' where b.val = 1"
+{
+  "Original": "update unsharded_a a join unsharded_b b on a.id = b.id set a.val = 'foo' where b.val = 1",
+  "Instructions": {
+    "Opcode": "UpdateUnsharded",
+    "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+     },
+    "Query": "update unsharded_a as a join unsharded_b as b on a.id = b.id set a.val = 'foo' where b.val = 1"
+  }
+}
+
+# update multi-table comma join
+"update unsharded_a a, unsharded_b b set a.val = 'foo' where a.id = b.id and b.val = 1"
+{
+  "Original": "update unsharded_a a, unsharded_b b set a.val = 'foo' where a.id = b.id and b.val = 1",
+  "Instructions": {
+    "Opcode": "UpdateUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "update unsharded_a as a, unsharded_b as b set a.val = 'foo' where a.id = b.id and b.val = 1"
   }
 }
 
