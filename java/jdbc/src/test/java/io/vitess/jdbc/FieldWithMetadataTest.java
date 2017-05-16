@@ -16,11 +16,9 @@
 
 package io.vitess.jdbc;
 
-import io.vitess.proto.Query;
-import io.vitess.util.MysqlDefs;
-import io.vitess.util.charset.CharsetMapping;
 import java.sql.SQLException;
 import java.sql.Types;
+
 import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -29,6 +27,10 @@ import org.mockito.internal.verification.VerificationModeFactory;
 import org.powermock.api.mockito.PowerMockito;
 import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.modules.junit4.PowerMockRunner;
+
+import io.vitess.proto.Query;
+import io.vitess.util.MysqlDefs;
+import io.vitess.util.charset.CharsetMapping;
 
 @PrepareForTest(FieldWithMetadata.class)
 @RunWith(PowerMockRunner.class)
@@ -233,6 +235,28 @@ public class FieldWithMetadataTest extends BaseTest {
         Assert.assertEquals(false, fieldWithMetadata.isSingleBit());
         Assert.assertEquals(false, fieldWithMetadata.isBlob());
         Assert.assertEquals(false, fieldWithMetadata.isBinary());
+    }
+
+    @Test
+    public void testVarBinaryToVarCharRemapping() throws SQLException {
+        VitessConnection conn = getVitessConnection();
+
+        Query.Field raw = Query.Field.newBuilder()
+            .setTable("foo")
+            .setColumnLength(3)
+            .setType(Query.Type.VARBINARY)
+            .setName("foo")
+            .setOrgName("foo")
+            .setCharset(CharsetMapping.MYSQL_COLLATION_INDEX_binary)
+            .setFlags(Query.MySqlFlag.BINARY_FLAG_VALUE)
+            .build();
+
+        FieldWithMetadata fieldWithMetadata = new FieldWithMetadata(conn, raw);
+        Assert.assertEquals("no remapping - base case", Types.VARBINARY, fieldWithMetadata.getJavaType());
+
+        raw = raw.toBuilder().setCharset(CharsetMapping.MYSQL_COLLATION_INDEX_utf8).build();
+        fieldWithMetadata = new FieldWithMetadata(conn, raw);
+        Assert.assertEquals("remap to varchar due to non-binary encoding", Types.VARCHAR, fieldWithMetadata.getJavaType());
     }
 
     @Test
@@ -667,8 +691,8 @@ public class FieldWithMetadataTest extends BaseTest {
         Assert.assertEquals("greek", field.getEncodingForIndex(25));
 
         field.getConnectionProperties().setEncoding(null);
-        Assert.assertEquals("UTF-8", field.getEncodingForIndex(33));
-        Assert.assertEquals("ISO-8859-1", field.getEncodingForIndex(63));
+        Assert.assertEquals("UTF-8", field.getEncodingForIndex(CharsetMapping.MYSQL_COLLATION_INDEX_utf8));
+        Assert.assertEquals("ISO-8859-1", field.getEncodingForIndex(CharsetMapping.MYSQL_COLLATION_INDEX_binary));
 
         field.getConnectionProperties().setEncoding("NOT_REAL");
         // Same tests as the first one, but testing that when there is a default configured, it falls back to that regardless
