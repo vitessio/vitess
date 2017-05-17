@@ -515,6 +515,10 @@ func (c *Conn) RemoteAddr() net.Addr {
 	return c.conn.RemoteAddr()
 }
 
+func (c *Conn) Ident() string {
+	return fmt.Sprintf("client %v (%s)", c.ConnectionID, c.RemoteAddr().String())
+}
+
 // Close closes the connection. It can be called from a different go
 // routine to interrupt the current connection.
 func (c *Conn) Close() {
