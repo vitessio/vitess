@@ -27,7 +27,6 @@ import (
 	"github.com/youtube/vitess/go/sqldb"
 
 	// Include both current implementations.
-	_ "github.com/youtube/vitess/go/mysql"
 	_ "github.com/youtube/vitess/go/mysqlconn"
 )
 

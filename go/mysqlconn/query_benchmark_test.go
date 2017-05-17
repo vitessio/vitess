@@ -24,7 +24,6 @@ import (
 
 	"golang.org/x/net/context"
 
-	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/vt/vttest"
 )
@@ -59,9 +58,6 @@ func BenchmarkWithRealDatabase(b *testing.B) {
 	})
 	b.Run("ParallelReads", func(b *testing.B) {
 		benchmarkParallelReads(b, &params, 10)
-	})
-	b.Run("OldParallelReads", func(b *testing.B) {
-		benchmarkOldParallelReads(b, params, 10)
 	})
 }
 
@@ -100,29 +96,6 @@ func benchmarkParallelReads(b *testing.B, params *sqldb.ConnParams, parallelCoun
 			defer wg.Done()
 
 			conn, err := Connect(ctx, params)
-			if err != nil {
-				b.Fatal(err)
-			}
-
-			for j := 0; j < b.N; j++ {
-				if _, err := conn.ExecuteFetch("select * from a", 10000, true); err != nil {
-					b.Fatalf("ExecuteFetch(%v, %v) failed: %v", i, j, err)
-				}
-			}
-			conn.Close()
-		}(i)
-	}
-	wg.Wait()
-}
-
-func benchmarkOldParallelReads(b *testing.B, params sqldb.ConnParams, parallelCount int) {
-	wg := sync.WaitGroup{}
-	for i := 0; i < parallelCount; i++ {
-		wg.Add(1)
-		go func(i int) {
-			defer wg.Done()
-
-			conn, err := mysql.Connect(params)
 			if err != nil {
 				b.Fatal(err)
 			}
