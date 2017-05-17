@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package sqldb
+package mysql
 
 import (
 	"fmt"
@@ -23,11 +23,12 @@ import (
 	binlogdatapb "github.com/youtube/vitess/go/vt/proto/binlogdata"
 )
 
-// This file contains utility methods for Conn objects.
+// This file contains utility methods for Conn objects. Only useful on the client
+// side.
 
 // ExecuteFetchMap returns a map from column names to cell data for a query
 // that should return exactly 1 row.
-func ExecuteFetchMap(conn Conn, query string) (map[string]string, error) {
+func ExecuteFetchMap(conn *Conn, query string) (map[string]string, error) {
 	qr, err := conn.ExecuteFetch(query, 1, true)
 	if err != nil {
 		return nil, err
@@ -48,7 +49,7 @@ func ExecuteFetchMap(conn Conn, query string) (map[string]string, error) {
 
 // GetCharset returns the current numerical values of the per-session character
 // set variables.
-func GetCharset(conn Conn) (*binlogdatapb.Charset, error) {
+func GetCharset(conn *Conn) (*binlogdatapb.Charset, error) {
 	// character_set_client
 	row, err := ExecuteFetchMap(conn, "SHOW COLLATION WHERE `charset`=@@session.character_set_client AND `default`='Yes'")
 	if err != nil {
@@ -87,7 +88,7 @@ func GetCharset(conn Conn) (*binlogdatapb.Charset, error) {
 }
 
 // SetCharset changes the per-session character set variables.
-func SetCharset(conn Conn, cs *binlogdatapb.Charset) error {
+func SetCharset(conn *Conn, cs *binlogdatapb.Charset) error {
 	sql := fmt.Sprintf(
 		"SET @@session.character_set_client=%d, @@session.collation_connection=%d, @@session.collation_server=%d",
 		cs.Client, cs.Conn, cs.Server)

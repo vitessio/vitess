@@ -29,6 +29,7 @@ import (
 	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
+	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/mysql/replication"
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/sqltypes"
@@ -269,7 +270,7 @@ func (blp *BinlogPlayer) processTransaction(tx *binlogdatapb.BinlogTransaction) 
 				// proceeds, but in Vitess-land this usually means a misconfigured
 				// server or a misbehaving client, so we spam the logs with warnings.
 				log.Warningf("BinlogPlayer changing charset from %v to %v for statement %d in transaction %v", blp.currentCharset, stmtCharset, i, *tx)
-				err = sqldb.SetCharset(dbClient.dbConn, stmtCharset)
+				err = mysql.SetCharset(dbClient.dbConn, stmtCharset)
 				if err != nil {
 					return false, fmt.Errorf("can't set charset for statement %d in transaction %v: %v", i, *tx, err)
 				}
@@ -374,7 +375,7 @@ func (blp *BinlogPlayer) ApplyBinlogEvents(ctx context.Context) error {
 	// to check that they match. The streamer will also only send per-statement
 	// charset data if that statement's charset is different from what we specify.
 	if dbClient, ok := blp.dbClient.(*DBClient); ok {
-		blp.defaultCharset, err = sqldb.GetCharset(dbClient.dbConn)
+		blp.defaultCharset, err = mysql.GetCharset(dbClient.dbConn)
 		if err != nil {
 			return fmt.Errorf("can't get charset to request binlog stream: %v", err)
 		}
@@ -388,7 +389,7 @@ func (blp *BinlogPlayer) ApplyBinlogEvents(ctx context.Context) error {
 				return
 			}
 			log.Infof("restoring original charset %v", blp.defaultCharset)
-			if csErr := sqldb.SetCharset(dbClient.dbConn, blp.defaultCharset); csErr != nil {
+			if csErr := mysql.SetCharset(dbClient.dbConn, blp.defaultCharset); csErr != nil {
 				log.Errorf("can't restore original charset %v: %v", blp.defaultCharset, csErr)
 			}
 		}()

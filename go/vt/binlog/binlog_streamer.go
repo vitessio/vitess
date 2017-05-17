@@ -25,8 +25,8 @@ import (
 	log "github.com/golang/glog"
 	"golang.org/x/net/context"
 
+	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/mysql/replication"
-	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
@@ -192,7 +192,7 @@ func (bls *Streamer) Stream(ctx context.Context) (err error) {
 	// general doesn't support servers with different default charsets, so we
 	// treat it as a configuration error.
 	if bls.clientCharset != nil {
-		cs, err := sqldb.GetCharset(bls.conn)
+		cs, err := mysql.GetCharset(bls.conn.Conn)
 		if err != nil {
 			return fmt.Errorf("can't get charset to check binlog stream: %v", err)
 		}

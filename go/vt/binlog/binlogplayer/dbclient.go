@@ -17,18 +17,20 @@ limitations under the License.
 package binlogplayer
 
 import (
+	"context"
 	"fmt"
 
 	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/sqldb"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 )
 
-// DBClient is a real VtClient backed by a mysql connection
+// DBClient is a real VtClient backed by a mysql connection.
 type DBClient struct {
 	dbConfig *sqldb.ConnParams
-	dbConn   sqldb.Conn
+	dbConn   *mysql.Conn
 }
 
 // NewDbClient creates a DBClient instance
@@ -56,7 +58,8 @@ func (dc *DBClient) Connect() error {
 	if err != nil {
 		return err
 	}
-	dc.dbConn, err = sqldb.Connect(params)
+	ctx := context.Background()
+	dc.dbConn, err = mysql.Connect(ctx, &params)
 	if err != nil {
 		return fmt.Errorf("error in connecting to mysql db, err %v", err)
 	}
